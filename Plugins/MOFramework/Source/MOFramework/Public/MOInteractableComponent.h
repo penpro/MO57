@@ -1,28 +1,58 @@
-// Fill out your copyright notice in the Description page of Project Settings.
-
 #pragma once
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "MOInteractableComponent.generated.h"
 
+UENUM(BlueprintType)
+enum class EMOInteractionVerb : uint8
+{
+	Use     UMETA(DisplayName="Use"),
+	Pickup  UMETA(DisplayName="Pickup"),
+	Open    UMETA(DisplayName="Open"),
+	Talk    UMETA(DisplayName="Talk"),
+	Custom  UMETA(DisplayName="Custom")
+};
 
-UCLASS( ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(
+	FMOInteractableInteractedSignature,
+	AController*, InteractorController,
+	EMOInteractionVerb, Verb
+);
+
+UCLASS(ClassGroup=(MO), meta=(BlueprintSpawnableComponent))
 class MOFRAMEWORK_API UMOInteractableComponent : public UActorComponent
 {
 	GENERATED_BODY()
 
-public:	
-	// Sets default values for this component's properties
+public:
 	UMOInteractableComponent();
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Interaction")
+	FText DisplayName;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Interaction")
+	EMOInteractionVerb Verb = EMOInteractionVerb::Use;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Interaction", meta=(ClampMin="0.0"))
+	float MaxInteractionDistance = 250.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Interaction")
+	bool bDestroyOwnerOnInteract = false;
+
+	UPROPERTY(BlueprintAssignable, Category="MO|Interaction")
+	FMOInteractableInteractedSignature OnInteracted;
+
+	UFUNCTION(BlueprintCallable, Category="MO|Interaction")
+	bool CanInteract(AController* InteractorController) const;
+
+	/** Called by the subsystem on the server after validation. */
+	bool ExecuteInteraction(AController* InteractorController);
+
 protected:
-	// Called when the game starts
 	virtual void BeginPlay() override;
 
-public:	
-	// Called every frame
-	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
-
-		
+	UFUNCTION(BlueprintNativeEvent, Category="MO|Interaction")
+	bool K2_OnInteract(AController* InteractorController);
+	virtual bool K2_OnInteract_Implementation(AController* InteractorController);
 };
