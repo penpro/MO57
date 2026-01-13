@@ -20,11 +20,20 @@ void UMOIdentityComponent::BeginPlay()
 		return;
 	}
 
-	// Runtime safety net: server assigns if missing (spawned actors, restored actors that did not get seeded).
-	if (OwnerActor->HasAuthority() && !StableGuid.IsValid())
+	// Server owns identity lifecycle
+	if (OwnerActor->HasAuthority())
 	{
-		StableGuid = FGuid::NewGuid();
-		OnGuidAvailable.Broadcast(StableGuid);
+		// Ensure a GUID exists for runtime-spawned actors
+		EnsureGuidForAuthorityIfMissing(false);
+
+		// Broadcast once for server-side listeners (optional but useful)
+		if (StableGuid.IsValid())
+		{
+			OnGuidAvailable.Broadcast(StableGuid);
+		}
+
+		// Critical: hook actor destruction so we can broadcast OnOwnerDestroyedWithGuid
+		OwnerActor->OnDestroyed.AddDynamic(this, &UMOIdentityComponent::HandleOwnerDestroyed);
 	}
 }
 

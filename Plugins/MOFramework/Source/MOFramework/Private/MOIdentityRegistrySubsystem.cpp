@@ -164,30 +164,31 @@ void UMOIdentityRegistrySubsystem::RegisterGuidForActor(const FGuid& Guid, AActo
 		ActorToGuid.Remove(Actor);
 	}
 
-	// If the GUID is already owned by another live actor, you have a collision.
-	// Keep the first, but you should log this and decide policy later.
-	if (TWeakObjectPtr<AActor>* ExistingActorPtr = GuidToActor.Find(Guid))
+	// Check current mapping BEFORE we write.
+	const TWeakObjectPtr<AActor>* ExistingActorPtr = GuidToActor.Find(Guid);
+	const bool bWasAlreadyRegistered = ExistingActorPtr && (ExistingActorPtr->Get() == Actor);
+
+	// Collision policy: do not overwrite a live actor with the same GUID.
+	if (ExistingActorPtr)
 	{
 		if (AActor* ExistingActor = ExistingActorPtr->Get())
 		{
 			if (ExistingActor != Actor)
 			{
-				// Collision policy: do not overwrite by default.
 				return;
 			}
 		}
 	}
 
+	// Write mapping
 	GuidToActor.Add(Guid, Actor);
 	ActorToGuid.Add(Actor, Guid);
 
-	const bool bWasAlreadyRegistered = GuidToActor.Contains(Guid) && GuidToActor[Guid].Get() == Actor;
-
+	// Broadcast only on first registration
 	if (!bWasAlreadyRegistered)
 	{
 		OnIdentityRegistered.Broadcast(Guid, Actor);
 	}
-	
 }
 
 void UMOIdentityRegistrySubsystem::UnregisterActor(AActor* Actor)

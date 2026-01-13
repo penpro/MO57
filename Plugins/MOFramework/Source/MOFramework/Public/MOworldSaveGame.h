@@ -10,6 +10,8 @@ class MOFRAMEWORK_API UMOWorldSaveGame : public USaveGame
 	GENERATED_BODY()
 
 public:
-	UPROPERTY()
+	UPROPERTY(SaveGame)
 	TSet<FGuid> DestroyedGuids;
+
+
 };
