@@ -4,8 +4,6 @@
 #include "UObject/Interface.h"
 #include "MOInteractionInterface.generated.h"
 
-class AActor;
-
 UINTERFACE(BlueprintType)
 class MOFRAMEWORK_API UMOInteractionInterface : public UInterface
 {
@@ -13,15 +11,25 @@ class MOFRAMEWORK_API UMOInteractionInterface : public UInterface
 };
 
 /**
- * Implement this on an owning actor (usually PlayerController).
- * The plugin will call RequestServerInteract on clients, and your implementation
- * should forward to a Server RPC, then call the interaction subsystem on the server.
+ * Interface implemented by "interactors" (typically PlayerController).
+ * It provides a viewpoint for traces and a client entry point to request a server interaction.
  */
 class MOFRAMEWORK_API IMOInteractionInterface
 {
 	GENERATED_BODY()
 
 public:
-	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category="MO|Interaction")
+	/**
+	 * Provide the world-space viewpoint used for interaction traces.
+	 * Return true if OutWorldLocation/OutWorldRotation are valid.
+	 */
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category="MO|Interaction")
+	bool GetInteractionViewpoint(FVector& OutWorldLocation, FRotator& OutWorldRotation) const;
+
+	/**
+	 * Client-side entry point. Implementors typically forward to a Server RPC.
+	 * Return true if the request was accepted for processing.
+	 */
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category="MO|Interaction")
 	bool RequestServerInteract(AActor* TargetActor);
 };

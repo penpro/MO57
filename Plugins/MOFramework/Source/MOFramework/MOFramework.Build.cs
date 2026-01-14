@@ -38,6 +38,8 @@ public class MOFramework : ModuleRules
 				"Engine",
 				"Slate",
 				"SlateCore",
+				"NetCore",     // Required for FastArraySerializer + push model symbols
+				"Networking"   // Recommended when you are doing replication-heavy work
 				// ... add private dependencies that you statically link with here ...	
 			}
 			);

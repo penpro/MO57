@@ -4,21 +4,7 @@
 #include "Components/ActorComponent.h"
 #include "MOInteractableComponent.generated.h"
 
-UENUM(BlueprintType)
-enum class EMOInteractionVerb : uint8
-{
-	Use     UMETA(DisplayName="Use"),
-	Pickup  UMETA(DisplayName="Pickup"),
-	Open    UMETA(DisplayName="Open"),
-	Talk    UMETA(DisplayName="Talk"),
-	Custom  UMETA(DisplayName="Custom")
-};
-
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(
-	FMOInteractableInteractedSignature,
-	AController*, InteractorController,
-	EMOInteractionVerb, Verb
-);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOInteractEvent, AActor*, InteractableActor, AController*, InteractorController);
 
 UCLASS(ClassGroup=(MO), meta=(BlueprintSpawnableComponent))
 class MOFRAMEWORK_API UMOInteractableComponent : public UActorComponent
@@ -28,31 +14,25 @@ class MOFRAMEWORK_API UMOInteractableComponent : public UActorComponent
 public:
 	UMOInteractableComponent();
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Interaction")
-	FText DisplayName;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Interaction")
-	EMOInteractionVerb Verb = EMOInteractionVerb::Use;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Interaction", meta=(ClampMin="0.0"))
-	float MaxInteractionDistance = 250.0f;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Interaction")
+	// Simple default behavior for early testing.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Interactable")
 	bool bDestroyOwnerOnInteract = false;
 
-	UPROPERTY(BlueprintAssignable, Category="MO|Interaction")
-	FMOInteractableInteractedSignature OnInteracted;
+	// Event for Blueprints to react without coupling.
+	UPROPERTY(BlueprintAssignable, Category="MO|Interactable")
+	FMOInteractEvent OnInteracted;
 
-	UFUNCTION(BlueprintCallable, Category="MO|Interaction")
+	// Lightweight validation hook.
+	UFUNCTION(BlueprintCallable, Category="MO|Interactable")
 	bool CanInteract(AController* InteractorController) const;
 
-	/** Called by the subsystem on the server after validation. */
-	bool ExecuteInteraction(AController* InteractorController);
+	// Server-authoritative interaction entry point.
+	UFUNCTION(BlueprintCallable, Category="MO|Interactable")
+	bool ServerInteract(AController* InteractorController);
 
 protected:
-	virtual void BeginPlay() override;
-
-	UFUNCTION(BlueprintNativeEvent, Category="MO|Interaction")
-	bool K2_OnInteract(AController* InteractorController);
-	virtual bool K2_OnInteract_Implementation(AController* InteractorController);
+	// Override in Blueprint or C++ to implement behavior.
+	UFUNCTION(BlueprintNativeEvent, Category="MO|Interactable")
+	bool HandleInteract(AController* InteractorController);
+	virtual bool HandleInteract_Implementation(AController* InteractorController);
 };
