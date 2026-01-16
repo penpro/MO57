@@ -159,3 +159,4 @@ void UMOItemComponent::ApplyWorldItemActiveState()
 	OwnerActor->SetActorEnableCollision(bWorldItemActive);
 	OwnerActor->SetActorTickEnabled(bWorldItemActive);
 }
+

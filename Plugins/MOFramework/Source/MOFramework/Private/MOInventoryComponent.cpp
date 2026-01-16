@@ -13,6 +13,7 @@ void UMOInventoryComponent::BeginPlay()
 	Super::BeginPlay();
 
 	Inventory.SetOwner(this);
+	EnsureSlotsInitialized();
 }
 
 void UMOInventoryComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -20,6 +21,7 @@ void UMOInventoryComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
 	DOREPLIFETIME(UMOInventoryComponent, Inventory);
+	DOREPLIFETIME(UMOInventoryComponent, SlotItemGuids);
 }
 
 int32 UMOInventoryComponent::FindEntryIndexByGuid(const FGuid& ItemGuid) const
@@ -74,6 +76,8 @@ bool UMOInventoryComponent::AddItemByGuid(const FGuid& ItemGuid, const FName Ite
 	Inventory.MarkItemDirty(Inventory.Entries[NewIndex]);
 
 	BroadcastInventoryChanged();
+	TryAutoAssignGuidToEmptySlot(ItemGuid);
+	OnSlotsChanged.Broadcast();
 	return true;
 }
 
@@ -108,6 +112,10 @@ bool UMOInventoryComponent::RemoveItemByGuid(const FGuid& ItemGuid, int32 Quanti
 
 	ExistingEntry.Quantity -= QuantityToRemove;
 	Inventory.MarkItemDirty(ExistingEntry);
+	Inventory.Entries.RemoveAt(ExistingIndex);
+	Inventory.MarkArrayDirty();
+	RemoveGuidFromSlotsInternal(ItemGuid);
+	OnSlotsChanged.Broadcast();
 	BroadcastInventoryChanged();
 	return true;
 }
@@ -159,4 +167,266 @@ void FMOInventoryList::PostReplicatedRemove(const TArrayView<int32>& /*RemovedIn
 	{
 		OwnerComponent->OnInventoryChanged.Broadcast();
 	}
+}
+
+void UMOInventoryComponent::GetInventoryEntries(TArray<FMOInventoryEntry>& OutEntries) const
+{
+	OutEntries = Inventory.Entries;
+}
+
+FString UMOInventoryComponent::GetInventoryDebugString() const
+{
+	FString Result;
+
+	for (const FMOInventoryEntry& Entry : Inventory.Entries)
+	{
+		Result += FString::Printf(
+			TEXT("Guid=%s Def=%s Qty=%d\n"),
+			*Entry.ItemGuid.ToString(EGuidFormats::Short),
+			*Entry.ItemDefinitionId.ToString(),
+			Entry.Quantity
+		);
+	}
+
+	if (Result.IsEmpty())
+	{
+		Result = TEXT("(empty)");
+	}
+
+	return Result;
+}
+
+void UMOInventoryComponent::EnsureSlotsInitialized()
+{
+	AActor* OwnerActor = GetOwner();
+	if (!IsValid(OwnerActor))
+	{
+		return;
+	}
+
+	// Only the server should authoritatively size the array.
+	if (OwnerActor->HasAuthority())
+	{
+		if (SlotCount < 1)
+		{
+			SlotCount = 1;
+		}
+
+		if (SlotItemGuids.Num() != SlotCount)
+		{
+			SlotItemGuids.SetNum(SlotCount);
+		}
+	}
+}
+
+bool UMOInventoryComponent::IsSlotIndexValid(int32 SlotIndex) const
+{
+	return SlotIndex >= 0 && SlotIndex < SlotItemGuids.Num();
+}
+
+int32 UMOInventoryComponent::GetSlotCount() const
+{
+	return SlotItemGuids.Num() > 0 ? SlotItemGuids.Num() : SlotCount;
+}
+
+bool UMOInventoryComponent::TryGetSlotGuid(int32 SlotIndex, FGuid& OutGuid) const
+{
+	OutGuid.Invalidate();
+
+	if (!IsSlotIndexValid(SlotIndex))
+	{
+		return false;
+	}
+
+	OutGuid = SlotItemGuids[SlotIndex];
+	return OutGuid.IsValid();
+}
+
+bool UMOInventoryComponent::TryGetSlotEntry(int32 SlotIndex, FMOInventoryEntry& OutEntry) const
+{
+	OutEntry = FMOInventoryEntry();
+
+	FGuid SlotGuid;
+	if (!TryGetSlotGuid(SlotIndex, SlotGuid))
+	{
+		return false;
+	}
+
+	return TryGetEntryByGuid(SlotGuid, OutEntry);
+}
+
+bool UMOInventoryComponent::IsGuidInSlots(const FGuid& ItemGuid) const
+{
+	if (!ItemGuid.IsValid())
+	{
+		return false;
+	}
+
+	for (const FGuid& SlotGuid : SlotItemGuids)
+	{
+		if (SlotGuid == ItemGuid)
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+bool UMOInventoryComponent::FindFirstEmptySlot(int32& OutSlotIndex) const
+{
+	OutSlotIndex = INDEX_NONE;
+
+	for (int32 SlotIndex = 0; SlotIndex < SlotItemGuids.Num(); ++SlotIndex)
+	{
+		if (!SlotItemGuids[SlotIndex].IsValid())
+		{
+			OutSlotIndex = SlotIndex;
+			return true;
+		}
+	}
+
+	return false;
+}
+
+bool UMOInventoryComponent::FindSlotForGuid(const FGuid& ItemGuid, int32& OutSlotIndex) const
+{
+	OutSlotIndex = INDEX_NONE;
+
+	if (!ItemGuid.IsValid())
+	{
+		return false;
+	}
+
+	for (int32 SlotIndex = 0; SlotIndex < SlotItemGuids.Num(); ++SlotIndex)
+	{
+		if (SlotItemGuids[SlotIndex] == ItemGuid)
+		{
+			OutSlotIndex = SlotIndex;
+			return true;
+		}
+	}
+
+	return false;
+}
+
+bool UMOInventoryComponent::TryAutoAssignGuidToEmptySlot(const FGuid& ItemGuid)
+{
+	if (!bAutoAssignNewItemsToSlots)
+	{
+		return false;
+	}
+
+	if (!ItemGuid.IsValid())
+	{
+		return false;
+	}
+
+	if (IsGuidInSlots(ItemGuid))
+	{
+		return false;
+	}
+
+	int32 EmptySlotIndex = INDEX_NONE;
+	if (!FindFirstEmptySlot(EmptySlotIndex))
+	{
+		return false;
+	}
+
+	SlotItemGuids[EmptySlotIndex] = ItemGuid;
+	return true;
+}
+
+void UMOInventoryComponent::RemoveGuidFromSlotsInternal(const FGuid& ItemGuid)
+{
+	if (!ItemGuid.IsValid())
+	{
+		return;
+	}
+
+	for (FGuid& SlotGuid : SlotItemGuids)
+	{
+		if (SlotGuid == ItemGuid)
+		{
+			SlotGuid.Invalidate();
+		}
+	}
+}
+
+bool UMOInventoryComponent::SetSlotGuid(int32 SlotIndex, const FGuid& ItemGuid)
+{
+	AActor* OwnerActor = GetOwner();
+	if (!IsValid(OwnerActor) || !OwnerActor->HasAuthority())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[MOInventory] SetSlotGuid requires authority"));
+		return false;
+	}
+
+	EnsureSlotsInitialized();
+
+	if (!IsSlotIndexValid(SlotIndex))
+	{
+		return false;
+	}
+
+	// Allow clearing by passing invalid guid.
+	if (!ItemGuid.IsValid())
+	{
+		SlotItemGuids[SlotIndex].Invalidate();
+		OnSlotsChanged.Broadcast();
+		return true;
+	}
+
+	// Must exist in inventory to be slotted.
+	FMOInventoryEntry ExistingEntry;
+	if (!TryGetEntryByGuid(ItemGuid, ExistingEntry))
+	{
+		return false;
+	}
+
+	// Enforce uniqueness: remove the guid from any other slot first.
+	RemoveGuidFromSlotsInternal(ItemGuid);
+
+	SlotItemGuids[SlotIndex] = ItemGuid;
+	OnSlotsChanged.Broadcast();
+	return true;
+}
+
+bool UMOInventoryComponent::ClearSlot(int32 SlotIndex)
+{
+	return SetSlotGuid(SlotIndex, FGuid());
+}
+
+bool UMOInventoryComponent::SwapSlots(int32 SlotIndexA, int32 SlotIndexB)
+{
+	AActor* OwnerActor = GetOwner();
+	if (!IsValid(OwnerActor) || !OwnerActor->HasAuthority())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[MOInventory] SwapSlots requires authority"));
+		return false;
+	}
+
+	EnsureSlotsInitialized();
+
+	if (!IsSlotIndexValid(SlotIndexA) || !IsSlotIndexValid(SlotIndexB))
+	{
+		return false;
+	}
+
+	if (SlotIndexA == SlotIndexB)
+	{
+		return true;
+	}
+
+	const FGuid TempGuid = SlotItemGuids[SlotIndexA];
+	SlotItemGuids[SlotIndexA] = SlotItemGuids[SlotIndexB];
+	SlotItemGuids[SlotIndexB] = TempGuid;
+
+	OnSlotsChanged.Broadcast();
+	return true;
+}
+
+void UMOInventoryComponent::OnRep_SlotItemGuids()
+{
+	OnSlotsChanged.Broadcast();
 }

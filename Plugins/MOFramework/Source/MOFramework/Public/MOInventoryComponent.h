@@ -5,6 +5,8 @@
 #include "Net/Serialization/FastArraySerializer.h"
 #include "MOInventoryComponent.generated.h"
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOInventorySlotsChangedSignature);
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOInventoryChangedSignature);
 
 USTRUCT(BlueprintType)
@@ -83,6 +85,49 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Inventory")
 	int32 GetEntryCount() const;
 
+	UFUNCTION(BlueprintCallable, Category="MO|Inventory")
+	void GetInventoryEntries(TArray<FMOInventoryEntry>& OutEntries) const;
+
+	UFUNCTION(BlueprintCallable, Category="MO|Inventory")
+	FString GetInventoryDebugString() const;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Inventory|Slots", meta=(ClampMin="1"))
+	int32 SlotCount = 10;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Inventory|Slots")
+	bool bAutoAssignNewItemsToSlots = true;
+
+	UPROPERTY(ReplicatedUsing=OnRep_SlotItemGuids, VisibleAnywhere, BlueprintReadOnly, Category="MO|Inventory|Slots")
+	TArray<FGuid> SlotItemGuids;
+
+	UPROPERTY(BlueprintAssignable, Category="MO|Inventory|Slots")
+	FMOInventorySlotsChangedSignature OnSlotsChanged;
+
+	UFUNCTION(BlueprintCallable, Category="MO|Inventory|Slots")
+	int32 GetSlotCount() const;
+
+	UFUNCTION(BlueprintCallable, Category="MO|Inventory|Slots")
+	bool TryGetSlotGuid(int32 SlotIndex, FGuid& OutGuid) const;
+
+	UFUNCTION(BlueprintCallable, Category="MO|Inventory|Slots")
+	bool TryGetSlotEntry(int32 SlotIndex, FMOInventoryEntry& OutEntry) const;
+
+	UFUNCTION(BlueprintCallable, Category="MO|Inventory|Slots")
+	bool SetSlotGuid(int32 SlotIndex, const FGuid& ItemGuid);
+
+	UFUNCTION(BlueprintCallable, Category="MO|Inventory|Slots")
+	bool ClearSlot(int32 SlotIndex);
+
+	UFUNCTION(BlueprintCallable, Category="MO|Inventory|Slots")
+	bool SwapSlots(int32 SlotIndexA, int32 SlotIndexB);
+
+	UFUNCTION(BlueprintCallable, Category="MO|Inventory|Slots")
+	bool FindFirstEmptySlot(int32& OutSlotIndex) const;
+
+	UFUNCTION(BlueprintCallable, Category="MO|Inventory|Slots")
+	bool FindSlotForGuid(const FGuid& ItemGuid, int32& OutSlotIndex) const;
+
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
@@ -90,4 +135,13 @@ protected:
 private:
 	int32 FindEntryIndexByGuid(const FGuid& ItemGuid) const;
 	void BroadcastInventoryChanged();
+
+	UFUNCTION()
+	void OnRep_SlotItemGuids();
+
+	void EnsureSlotsInitialized();
+	bool IsSlotIndexValid(int32 SlotIndex) const;
+	bool IsGuidInSlots(const FGuid& ItemGuid) const;
+	void RemoveGuidFromSlotsInternal(const FGuid& ItemGuid);
+	bool TryAutoAssignGuidToEmptySlot(const FGuid& ItemGuid);
 };

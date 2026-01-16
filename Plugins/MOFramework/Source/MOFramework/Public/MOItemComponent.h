@@ -47,6 +47,8 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Item")
 	void SetWorldItemActive(bool bNewWorldItemActive);
 
+	
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;

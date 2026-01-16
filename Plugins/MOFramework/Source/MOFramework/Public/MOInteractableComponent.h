@@ -6,7 +6,8 @@
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOInteractEvent, AActor*, InteractableActor, AController*, InteractorController);
 
-UCLASS(ClassGroup=(MO), meta=(BlueprintSpawnableComponent))
+UCLASS(Blueprintable, BlueprintType, ClassGroup=(MO), meta=(BlueprintSpawnableComponent))
+
 class MOFRAMEWORK_API UMOInteractableComponent : public UActorComponent
 {
 	GENERATED_BODY()
