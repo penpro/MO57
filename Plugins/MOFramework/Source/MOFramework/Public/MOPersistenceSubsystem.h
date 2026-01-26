@@ -1,58 +1,147 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Engine/World.h" // for UWorld::InitializationValues
+#include "Engine/World.h" // UWorld::InitializationValues
 #include "Subsystems/GameInstanceSubsystem.h"
+#include "MOworldSaveGame.h"
 #include "MOPersistenceSubsystem.generated.h"
 
-
+class AActor;
+class APawn;
 class UMOIdentityComponent;
 class UMOIdentityRegistrySubsystem;
-class UMOWorldSaveGame;
+class UMOInventoryComponent;
+class UMOItemComponent;
+
+// Result of a load operation with detailed failure info
+USTRUCT(BlueprintType)
+struct FMOLoadResult
+{
+    GENERATED_BODY()
+
+    UPROPERTY(BlueprintReadOnly)
+    bool bSuccess = false;
+
+    UPROPERTY(BlueprintReadOnly)
+    int32 PawnsLoaded = 0;
+
+    UPROPERTY(BlueprintReadOnly)
+    int32 PawnsFailed = 0;
+
+    UPROPERTY(BlueprintReadOnly)
+    int32 ItemsLoaded = 0;
+
+    UPROPERTY(BlueprintReadOnly)
+    int32 ItemsFailed = 0;
+
+    UPROPERTY(BlueprintReadOnly)
+    TArray<FGuid> FailedPawnGuids;
+
+    UPROPERTY(BlueprintReadOnly)
+    FString ErrorMessage;
+};
 
 UCLASS()
 class MOFRAMEWORK_API UMOPersistenceSubsystem : public UGameInstanceSubsystem
 {
-	GENERATED_BODY()
+    GENERATED_BODY()
 
 public:
-	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
-	virtual void Deinitialize() override;
+    virtual void Initialize(FSubsystemCollectionBase& Collection) override;
+    virtual void Deinitialize() override;
 
-	UFUNCTION(BlueprintCallable, Category="MO|Persistence")
-	bool SaveWorldToSlot(const FString& SlotName);
+    UFUNCTION(BlueprintCallable, Category="MO|Persistence")
+    bool SaveWorldToSlot(const FString& SlotName);
 
-	UFUNCTION(BlueprintCallable, Category="MO|Persistence")
-	bool LoadWorldFromSlot(const FString& SlotName);
+    UFUNCTION(BlueprintCallable, Category="MO|Persistence")
+    bool LoadWorldFromSlot(const FString& SlotName);
 
-	UFUNCTION(BlueprintCallable, Category="MO|Persistence")
-	bool IsGuidDestroyed(const FGuid& Guid) const;
+    // Load with detailed result - use this to detect and handle pawn loss
+    UFUNCTION(BlueprintCallable, Category="MO|Persistence")
+    FMOLoadResult LoadWorldFromSlotWithResult(const FString& SlotName);
+
+    // Get the last load result (useful if you used LoadWorldFromSlot)
+    UFUNCTION(BlueprintPure, Category="MO|Persistence")
+    const FMOLoadResult& GetLastLoadResult() const { return LastLoadResult; }
+
+    // Check if any pawns failed to load in the last load operation
+    UFUNCTION(BlueprintPure, Category="MO|Persistence")
+    bool HasFailedPawns() const { return LastLoadResult.PawnsFailed > 0; }
+
+    UFUNCTION(BlueprintCallable, Category="MO|Persistence")
+    bool IsGuidDestroyed(const FGuid& Guid) const;
+
+    // Useful for drop logic later: if an item is re-instantiated into the world, remove it from DestroyedGuids.
+    UFUNCTION(BlueprintCallable, Category="MO|Persistence")
+    void ClearDestroyedGuid(const FGuid& Guid);
 
 private:
-	void HandlePostWorldInitialization(UWorld* World, const UWorld::InitializationValues IVS);
-	void BindToWorld(UWorld* World);
-	void UnbindFromWorld();
+    void HandlePostWorldInitialization(UWorld* World, const UWorld::InitializationValues IVS);
+    void BindToWorld(UWorld* World);
+    void UnbindFromWorld();
 
-	void ApplyDestroyedGuidsToWorld(UWorld* World);
+    void ApplyDestroyedGuidsToWorld(UWorld* World);
 
-	UFUNCTION()
-	void HandleIdentityRegistered(const FGuid& StableGuid, AActor* Actor);
+    UFUNCTION()
+    void HandleIdentityRegistered(const FGuid& StableGuid, AActor* Actor);
 
-	UFUNCTION()
-	void HandleIdentityDestroyed(const FGuid& StableGuid);
+    UFUNCTION()
+    void HandleIdentityDestroyed(const FGuid& StableGuid);
 
 private:
-	UPROPERTY()
-	TSet<FGuid> SessionDestroyedGuids;
+    // Save helpers
+    bool IsPersistedPawn(const APawn* Pawn) const;
+    void CapturePersistedPawnsAndInventories(UWorld* World, UMOWorldSaveGame* SaveObject) const;
 
-	UPROPERTY()
-	TObjectPtr<UMOWorldSaveGame> LoadedWorldSave;
+    bool IsPersistedWorldItemActor(const AActor* Actor) const;
+    void CaptureWorldItems(UWorld* World, UMOWorldSaveGame* SaveObject) const;
 
-	FDelegateHandle PostWorldInitHandle;
+    // Load helpers
+    void UnpossessAllControllers(UWorld* World) const;
 
-	UPROPERTY()
-	TWeakObjectPtr<UWorld> BoundWorld;
+    void DestroyAllPersistedPawns(UWorld* World);
+    void RespawnPersistedPawns(UWorld* World, const TArray<FMOPersistedPawnRecord>& PersistedPawns, FMOLoadResult& OutResult);
+    void ApplyInventoriesToSpawnedPawns(UWorld* World, const TMap<FGuid, FMOInventorySaveData>& PawnInventoriesByGuid);
 
-	UPROPERTY()
-	TWeakObjectPtr<UMOIdentityRegistrySubsystem> BoundRegistry;
+    void DestroyAllPersistedWorldItems(UWorld* World);
+    void RespawnWorldItems(UWorld* World, const TArray<FMOPersistedWorldItemRecord>& WorldItems, FMOLoadResult& OutResult);
+
+    void ClearLoadSuppression();
+
+private:
+    UPROPERTY(EditDefaultsOnly, Category="MO|Persistence")
+    TSoftClassPtr<APawn> DefaultPersistedPawnClass;
+
+    UPROPERTY()
+    TSet<FGuid> SessionDestroyedGuids;
+
+    UPROPERTY()
+    TObjectPtr<UMOWorldSaveGame> LoadedWorldSave;
+
+    UPROPERTY()
+    TSet<FGuid> PawnInventoryGuidsAppliedThisLoad;
+
+    FDelegateHandle PostWorldInitHandle;
+
+    UPROPERTY()
+    TWeakObjectPtr<UWorld> BoundWorld;
+
+    UPROPERTY()
+    TWeakObjectPtr<UMOIdentityRegistrySubsystem> BoundRegistry;
+
+    UPROPERTY()
+    bool bSuppressDestroyedGuidRecording = false;
+
+    // Guids of actors being replaced in the current load pass (pawns and items).
+    UPROPERTY()
+    TSet<FGuid> ReplacedGuidsThisLoad;
+
+    FTimerHandle ClearSuppressionTimerHandle;
+
+    // Result of the last load operation
+    UPROPERTY()
+    FMOLoadResult LastLoadResult;
+
+    // Time to suppress destroyed GUID recording after load (seconds)
+    static constexpr float LoadSuppressionDuration = 0.25f;
 };

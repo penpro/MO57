@@ -3,59 +3,60 @@
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "Net/Serialization/FastArraySerializer.h"
+#include "MOworldSaveGame.h"
 #include "MOInventoryComponent.generated.h"
 
-DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOInventorySlotsChangedSignature);
-
-DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOInventoryChangedSignature);
-
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOInventoryEntry : public FFastArraySerializerItem
+struct FMOInventoryEntry : public FFastArraySerializerItem
 {
 	GENERATED_BODY()
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Inventory")
+	UPROPERTY(BlueprintReadOnly, Category="MO|Inventory")
 	FGuid ItemGuid;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Inventory")
-	FName ItemDefinitionId = NAME_None;
+	UPROPERTY(BlueprintReadOnly, Category="MO|Inventory")
+	FName ItemDefinitionId;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Inventory", meta=(ClampMin="1"))
-	int32 Quantity = 1;
+	UPROPERTY(BlueprintReadOnly, Category="MO|Inventory")
+	int32 Quantity = 0;
 };
 
-USTRUCT()
-struct MOFRAMEWORK_API FMOInventoryList : public FFastArraySerializer
+USTRUCT(BlueprintType)
+struct FMOInventoryList : public FFastArraySerializer
 {
 	GENERATED_BODY()
 
+public:
 	UPROPERTY()
 	TArray<FMOInventoryEntry> Entries;
 
-	// Not replicated, runtime pointer.
-	class UMOInventoryComponent* OwnerComponent = nullptr;
+	UPROPERTY(Transient)
+	TObjectPtr<class UMOInventoryComponent> OwnerComponent;
 
-	void SetOwner(UMOInventoryComponent* InOwnerComponent)
-	{
-		OwnerComponent = InOwnerComponent;
-	}
+	void SetOwner(UMOInventoryComponent* InOwner) { OwnerComponent = InOwner; }
 
-	// FFastArraySerializer interface
+	// Replication callbacks
+	void PostReplicatedAdd(const TArrayView<int32>& AddedIndices, int32 FinalSize);
+	void PostReplicatedChange(const TArrayView<int32>& ChangedIndices, int32 FinalSize);
+	void PostReplicatedRemove(const TArrayView<int32>& RemovedIndices, int32 FinalSize);
+
 	bool NetDeltaSerialize(FNetDeltaSerializeInfo& DeltaParams)
 	{
 		return FFastArraySerializer::FastArrayDeltaSerialize<FMOInventoryEntry, FMOInventoryList>(Entries, DeltaParams, *this);
 	}
-
-	void PostReplicatedAdd(const TArrayView<int32>& AddedIndices, int32 FinalSize);
-	void PostReplicatedChange(const TArrayView<int32>& ChangedIndices, int32 FinalSize);
-	void PostReplicatedRemove(const TArrayView<int32>& RemovedIndices, int32 FinalSize);
 };
 
 template<>
 struct TStructOpsTypeTraits<FMOInventoryList> : public TStructOpsTypeTraitsBase2<FMOInventoryList>
 {
-	enum { WithNetDeltaSerializer = true };
+	enum
+	{
+		WithNetDeltaSerializer = true,
+	};
 };
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOInventoryChangedSignature);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOInventorySlotsChangedSignature);
 
 UCLASS(ClassGroup=(MO), meta=(BlueprintSpawnableComponent))
 class MOFRAMEWORK_API UMOInventoryComponent : public UActorComponent
@@ -65,14 +66,29 @@ class MOFRAMEWORK_API UMOInventoryComponent : public UActorComponent
 public:
 	UMOInventoryComponent();
 
-	// Replicated inventory list.
-	UPROPERTY(Replicated)
-	FMOInventoryList Inventory;
-
 	UPROPERTY(BlueprintAssignable, Category="MO|Inventory")
 	FMOInventoryChangedSignature OnInventoryChanged;
 
-	// Server authoritative add, keyed by stable GUID.
+	UPROPERTY(BlueprintAssignable, Category="MO|Inventory")
+	FMOInventorySlotsChangedSignature OnSlotsChanged;
+
+	// Inventory entries (replicated via FastArray)
+	UPROPERTY(Replicated)
+	FMOInventoryList Inventory;
+
+	// Desired number of slots (authority sizes SlotItemGuids to match this)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Inventory|Slots")
+	int32 SlotCount = 16;
+
+	// If true, newly added items auto-assign into the first empty slot if they are not already in any slot.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Inventory|Slots")
+	bool bAutoAssignNewItemsToSlots = true;
+
+	// Actual slot contents (Guid per slot, invalid = empty)
+	UPROPERTY(ReplicatedUsing=OnRep_SlotItemGuids)
+	TArray<FGuid> SlotItemGuids;
+
+	// Basic inventory operations
 	UFUNCTION(BlueprintCallable, Category="MO|Inventory")
 	bool AddItemByGuid(const FGuid& ItemGuid, const FName ItemDefinitionId, int32 QuantityToAdd);
 
@@ -91,18 +107,7 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Inventory")
 	FString GetInventoryDebugString() const;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Inventory|Slots", meta=(ClampMin="1"))
-	int32 SlotCount = 10;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Inventory|Slots")
-	bool bAutoAssignNewItemsToSlots = true;
-
-	UPROPERTY(ReplicatedUsing=OnRep_SlotItemGuids, VisibleAnywhere, BlueprintReadOnly, Category="MO|Inventory|Slots")
-	TArray<FGuid> SlotItemGuids;
-
-	UPROPERTY(BlueprintAssignable, Category="MO|Inventory|Slots")
-	FMOInventorySlotsChangedSignature OnSlotsChanged;
-
+	// Slots API
 	UFUNCTION(BlueprintCallable, Category="MO|Inventory|Slots")
 	int32 GetSlotCount() const;
 
@@ -121,12 +126,29 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Inventory|Slots")
 	bool SwapSlots(int32 SlotIndexA, int32 SlotIndexB);
 
-	UFUNCTION(BlueprintCallable, Category="MO|Inventory|Slots")
-	bool FindFirstEmptySlot(int32& OutSlotIndex) const;
+	/*
+	 * SAVE / RESTORE HELPERS (Authority-only)
+	 */
 
-	UFUNCTION(BlueprintCallable, Category="MO|Inventory|Slots")
-	bool FindSlotForGuid(const FGuid& ItemGuid, int32& OutSlotIndex) const;
+	// Clears inventory entries and clears all slots.
+	UFUNCTION(BlueprintCallable, Category="MO|Inventory|Save")
+	void ClearInventoryAndSlots();
 
+	// Ensures the authoritative slot array size matches NewSlotCount (min 1).
+	UFUNCTION(BlueprintCallable, Category="MO|Inventory|Save")
+	bool SetSlotCountAuthority(int32 NewSlotCount);
+
+	// Adds an entry but guarantees no slot auto-assignment happens (useful during restore).
+	UFUNCTION(BlueprintCallable, Category="MO|Inventory|Save")
+	bool AddItemByGuidWithoutSlotAutoAssign(const FGuid& ItemGuid, const FName ItemDefinitionId, int32 QuantityToAdd);
+
+	// Build a save snapshot (server or client can call, but it reflects local replicated state).
+	UFUNCTION(BlueprintCallable, Category="MO|Inventory|Save")
+	void BuildSaveData(FMOInventorySaveData& OutSaveData) const;
+
+	// Apply a save snapshot (authority only).
+	UFUNCTION(BlueprintCallable, Category="MO|Inventory|Save")
+	bool ApplySaveDataAuthority(const FMOInventorySaveData& InSaveData);
 
 protected:
 	virtual void BeginPlay() override;
@@ -134,14 +156,20 @@ protected:
 
 private:
 	int32 FindEntryIndexByGuid(const FGuid& ItemGuid) const;
-	void BroadcastInventoryChanged();
 
-	UFUNCTION()
-	void OnRep_SlotItemGuids();
+	void BroadcastInventoryChanged();
 
 	void EnsureSlotsInitialized();
 	bool IsSlotIndexValid(int32 SlotIndex) const;
+
 	bool IsGuidInSlots(const FGuid& ItemGuid) const;
-	void RemoveGuidFromSlotsInternal(const FGuid& ItemGuid);
+	bool FindFirstEmptySlot(int32& OutSlotIndex) const;
+
 	bool TryAutoAssignGuidToEmptySlot(const FGuid& ItemGuid);
+	void RemoveGuidFromSlotsInternal(const FGuid& ItemGuid);
+
+	void MarkSlotItemGuidsDirty();
+
+	UFUNCTION()
+	void OnRep_SlotItemGuids();
 };

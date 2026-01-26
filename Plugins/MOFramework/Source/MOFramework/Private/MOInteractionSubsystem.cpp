@@ -148,17 +148,20 @@ bool UMOInteractionSubsystem::FindServerInteractTarget(AController* InteractorCo
 	UWorld* World = GetWorld();
 	if (!World)
 	{
+		UE_LOG(LogTemp, Warning, TEXT("[MOInteract] FindServerInteractTarget: No world"));
 		return false;
 	}
 
 	if (!IsValid(InteractorController))
 	{
+		UE_LOG(LogTemp, Warning, TEXT("[MOInteract] FindServerInteractTarget: Invalid controller"));
 		return false;
 	}
 
 	APawn* InteractorPawn = InteractorController->GetPawn();
 	if (!IsValid(InteractorPawn))
 	{
+		UE_LOG(LogTemp, Warning, TEXT("[MOInteract] FindServerInteractTarget: No pawn"));
 		return false;
 	}
 
@@ -166,6 +169,7 @@ bool UMOInteractionSubsystem::FindServerInteractTarget(AController* InteractorCo
 	FRotator ViewRotation = FRotator::ZeroRotator;
 	if (!ResolveServerViewpoint(InteractorController, ViewLocation, ViewRotation))
 	{
+		UE_LOG(LogTemp, Warning, TEXT("[MOInteract] FindServerInteractTarget: Failed to resolve viewpoint"));
 		return false;
 	}
 
@@ -202,52 +206,63 @@ bool UMOInteractionSubsystem::FindServerInteractTarget(AController* InteractorCo
 
 	if (!bHit)
 	{
+		UE_LOG(LogTemp, Warning, TEXT("[MOInteract] FindServerInteractTarget: Server trace found no hit (channel=%d)"), (int32)TraceChannel);
 		return false;
 	}
 
 	AActor* HitActor = OutHit.GetActor();
 	if (!IsValid(HitActor))
 	{
+		UE_LOG(LogTemp, Warning, TEXT("[MOInteract] FindServerInteractTarget: Hit but no valid actor"));
 		return false;
 	}
 
 	UMOInteractableComponent* InteractableComponent = HitActor->FindComponentByClass<UMOInteractableComponent>();
 	if (!IsValid(InteractableComponent))
 	{
+		UE_LOG(LogTemp, Warning, TEXT("[MOInteract] FindServerInteractTarget: Hit actor '%s' has no InteractableComponent"), *HitActor->GetName());
 		return false;
 	}
 
 	if (!PassesViewCone(ViewLocation, ViewRotation, HitActor))
 	{
+		UE_LOG(LogTemp, Warning, TEXT("[MOInteract] FindServerInteractTarget: Hit actor '%s' failed view cone check"), *HitActor->GetName());
 		return false;
 	}
 
+	UE_LOG(LogTemp, Warning, TEXT("[MOInteract] FindServerInteractTarget: Found valid target '%s'"), *HitActor->GetName());
 	OutTargetActor = HitActor;
 	return true;
 }
 
 bool UMOInteractionSubsystem::ServerExecuteInteract(AController* InteractorController, AActor* TargetActor)
 {
+	UE_LOG(LogTemp, Error, TEXT("[MOInteract] *** ServerExecuteInteract ENTRY *** target='%s'"), *GetNameSafe(TargetActor));
+
 	UWorld* World = GetWorld();
 	if (!World)
 	{
+		UE_LOG(LogTemp, Warning, TEXT("[MOInteract] ServerExecuteInteract: No world"));
 		return false;
 	}
 
 	// Must run on server authority.
 	if (World->GetNetMode() == NM_Client)
 	{
+		UE_LOG(LogTemp, Warning, TEXT("[MOInteract] ServerExecuteInteract: Running on client, rejected"));
 		return false;
 	}
 
 	if (!IsValid(InteractorController))
 	{
+		UE_LOG(LogTemp, Warning, TEXT("[MOInteract] ServerExecuteInteract: Invalid controller"));
 		return false;
 	}
 
 	APawn* InteractorPawn = InteractorController->GetPawn();
 	if (!IsValid(InteractorPawn))
 	{
+		UE_LOG(LogTemp, Warning, TEXT("[MOInteract] ServerExecuteInteract: No pawn for controller"));
 		return false;
 	}
 
@@ -270,7 +285,7 @@ bool UMOInteractionSubsystem::ServerExecuteInteract(AController* InteractorContr
 	FHitResult ServerTargetHit;
 	if (!FindServerInteractTarget(InteractorController, ServerTargetActor, ServerTargetHit))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[MOInteract] Reject: server trace found no target"));
+		UE_LOG(LogTemp, Warning, TEXT("[MOInteract] Reject: server trace found no target (client wanted '%s')"), *GetNameSafe(TargetActor));
 		return false;
 	}
 

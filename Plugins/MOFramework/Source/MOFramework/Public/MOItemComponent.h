@@ -7,7 +7,9 @@
 class UMOIdentityComponent;
 class UMOInventoryComponent;
 
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOItemWorldActiveChangedSignature, bool, bIsWorldItemActive);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOItemDefinitionIdChangedSignature, FName, NewItemDefinitionId);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOWorldItemActiveChangedSignature, bool, bIsActive);
+
 
 UCLASS(ClassGroup=(MO), meta=(BlueprintSpawnableComponent))
 class MOFRAMEWORK_API UMOItemComponent : public UActorComponent
@@ -17,8 +19,8 @@ class MOFRAMEWORK_API UMOItemComponent : public UActorComponent
 public:
 	UMOItemComponent();
 
-	// Static item identifier (later: PrimaryAssetId/DataAsset).
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Replicated, Category="MO|Item")
+	// Static item identifier - references row in item database DataTable.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, ReplicatedUsing=OnRep_ItemDefinitionId, Category="MO|Item")
 	FName ItemDefinitionId = NAME_None;
 
 	// Current quantity represented by this world item instance.
@@ -32,9 +34,12 @@ public:
 	// Replicated world presence state so clients see picked-up items disappear without destroying the actor.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, ReplicatedUsing=OnRep_WorldItemActive, Category="MO|Item")
 	bool bWorldItemActive = true;
+	
+	UPROPERTY(BlueprintAssignable, Category="MO|Item")
+	FMOItemDefinitionIdChangedSignature OnItemDefinitionIdChanged;
 
 	UPROPERTY(BlueprintAssignable, Category="MO|Item")
-	FMOItemWorldActiveChangedSignature OnWorldItemActiveChanged;
+	FMOWorldItemActiveChangedSignature OnWorldItemActiveChanged;
 
 	UFUNCTION(BlueprintPure, Category="MO|Item")
 	bool IsWorldItemActive() const { return bWorldItemActive; }
@@ -46,6 +51,9 @@ public:
 	// Toggle active state in world (server sets, clients follow via replication).
 	UFUNCTION(BlueprintCallable, Category="MO|Item")
 	void SetWorldItemActive(bool bNewWorldItemActive);
+
+	UFUNCTION()
+	void OnRep_ItemDefinitionId();
 
 	
 

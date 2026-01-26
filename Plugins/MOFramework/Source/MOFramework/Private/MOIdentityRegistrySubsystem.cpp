@@ -14,9 +14,7 @@ void UMOIdentityRegistrySubsystem::Initialize(FSubsystemCollectionBase& Collecti
 	{
 		return;
 	}
-
-	// Register existing actors already in the world
-	RegisterExistingActors();
+	
 
 	// Track new spawns
 	ActorSpawnedHandle = World->AddOnActorSpawnedHandler(

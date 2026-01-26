@@ -27,7 +27,8 @@ public class MOFramework : ModuleRules
 			{
 				"Core",
 				"UMG",
-				"InputCore"
+				"InputCore",
+				"EnhancedInput"
 				// ... add other public dependencies that you statically link with here ...
 			}
 			);
@@ -41,8 +42,8 @@ public class MOFramework : ModuleRules
 				"Slate",
 				"SlateCore",
 				"NetCore",     // Required for FastArraySerializer + push model symbols
-				"Networking"   // Recommended when you are doing replication-heavy work
-				// ... add private dependencies that you statically link with here ...	
+				"Networking",  // Recommended when you are doing replication-heavy work
+				"DeveloperSettings" // Required for UDeveloperSettings (MOItemDatabaseSettings)
 			}
 			);
 		

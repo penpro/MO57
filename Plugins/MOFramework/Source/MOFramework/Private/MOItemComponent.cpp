@@ -21,6 +21,9 @@ void UMOItemComponent::BeginPlay()
 
 	// Ensure correct visual/collision state on both server and clients.
 	ApplyWorldItemActiveState();
+
+	// Make the initial definition available to listeners.
+	OnItemDefinitionIdChanged.Broadcast(ItemDefinitionId);
 }
 
 void UMOItemComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -61,9 +64,12 @@ UMOInventoryComponent* UMOItemComponent::FindInventoryComponentForController(ACo
 
 bool UMOItemComponent::GiveToInteractorInventory(AController* InteractorController)
 {
+	UE_LOG(LogTemp, Warning, TEXT("[MOItem] GiveToInteractorInventory called"));
+
 	AActor* OwnerActor = GetOwner();
 	if (!IsValid(OwnerActor))
 	{
+		UE_LOG(LogTemp, Warning, TEXT("[MOItem] GiveToInteractorInventory: Invalid owner"));
 		return false;
 	}
 
@@ -75,11 +81,19 @@ bool UMOItemComponent::GiveToInteractorInventory(AController* InteractorControll
 
 	if (!bWorldItemActive)
 	{
+		UE_LOG(LogTemp, Warning, TEXT("[MOItem] GiveToInteractorInventory: Item not active"));
 		return false;
 	}
 
-	if (ItemDefinitionId.IsNone() || Quantity <= 0)
+	if (ItemDefinitionId.IsNone())
 	{
+		UE_LOG(LogTemp, Warning, TEXT("[MOItem] GiveToInteractorInventory: ItemDefinitionId is None!"));
+		return false;
+	}
+
+	if (Quantity <= 0)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[MOItem] GiveToInteractorInventory: Quantity is %d"), Quantity);
 		return false;
 	}
 
@@ -160,3 +174,7 @@ void UMOItemComponent::ApplyWorldItemActiveState()
 	OwnerActor->SetActorTickEnabled(bWorldItemActive);
 }
 
+void UMOItemComponent::OnRep_ItemDefinitionId()
+{
+	OnItemDefinitionIdChanged.Broadcast(ItemDefinitionId);
+}

@@ -5,6 +5,7 @@
 #include "MOInteractableComponent.generated.h"
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOInteractEvent, AActor*, InteractableActor, AController*, InteractorController);
+DECLARE_DELEGATE_RetVal_OneParam(bool, FMOHandleInteractDelegate, AController*);
 
 UCLASS(Blueprintable, BlueprintType, ClassGroup=(MO), meta=(BlueprintSpawnableComponent))
 
@@ -19,9 +20,13 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Interactable")
 	bool bDestroyOwnerOnInteract = false;
 
-	// Event for Blueprints to react without coupling.
+	// Event for Blueprints to react without coupling (fires AFTER interaction handled).
 	UPROPERTY(BlueprintAssignable, Category="MO|Interactable")
 	FMOInteractEvent OnInteracted;
+
+	// C++ delegate for owners to handle interaction (called FROM HandleInteract).
+	// If bound and returns true, the interaction is considered handled.
+	FMOHandleInteractDelegate OnHandleInteract;
 
 	// Lightweight validation hook.
 	UFUNCTION(BlueprintCallable, Category="MO|Interactable")
