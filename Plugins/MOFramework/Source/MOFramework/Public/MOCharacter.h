@@ -7,6 +7,9 @@
 class UMOIdentityComponent;
 class UMOInventoryComponent;
 class UMOInteractorComponent;
+class UMOSurvivalStatsComponent;
+class UMOSkillsComponent;
+class UMOKnowledgeComponent;
 class USpringArmComponent;
 class UCameraComponent;
 class UInputMappingContext;
@@ -33,6 +36,15 @@ public:
 
 	UFUNCTION(BlueprintPure, Category="MO")
 	UMOInteractorComponent* GetInteractorComponent() const { return InteractorComponent; }
+
+	UFUNCTION(BlueprintPure, Category="MO")
+	UMOSurvivalStatsComponent* GetSurvivalStatsComponent() const { return SurvivalStatsComponent; }
+
+	UFUNCTION(BlueprintPure, Category="MO")
+	UMOSkillsComponent* GetSkillsComponent() const { return SkillsComponent; }
+
+	UFUNCTION(BlueprintPure, Category="MO")
+	UMOKnowledgeComponent* GetKnowledgeComponent() const { return KnowledgeComponent; }
 
 	UFUNCTION(BlueprintPure, Category="MO|Camera")
 	USpringArmComponent* GetCameraBoom() const { return CameraBoom; }
@@ -88,6 +100,15 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO")
 	TObjectPtr<UMOInteractorComponent> InteractorComponent;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO")
+	TObjectPtr<UMOSurvivalStatsComponent> SurvivalStatsComponent;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO")
+	TObjectPtr<UMOSkillsComponent> SkillsComponent;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO")
+	TObjectPtr<UMOKnowledgeComponent> KnowledgeComponent;
 
 	// Input - using soft references to avoid constructor issues in UE 5.7
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Input")

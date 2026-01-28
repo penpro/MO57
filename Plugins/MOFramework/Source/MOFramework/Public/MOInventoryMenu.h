@@ -9,6 +9,7 @@ class UMOInventoryGrid;
 class UMOItemInfoPanel;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOInventoryMenuRequestCloseSignature);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FMOInventoryMenuSlotRightClickedSignature, int32, SlotIndex, const FGuid&, ItemGuid, FVector2D, ScreenPosition);
 
 UCLASS()
 class MOFRAMEWORK_API UMOInventoryMenu : public UUserWidget
@@ -22,8 +23,16 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Inventory|UI")
 	void InitializeMenu(UMOInventoryComponent* InInventoryComponent);
 
+	/** Get the inventory component this menu is displaying. */
+	UFUNCTION(BlueprintPure, Category="MO|Inventory|UI")
+	UMOInventoryComponent* GetInventoryComponent() const { return InventoryComponent; }
+
 	UPROPERTY(BlueprintAssignable, Category="MO|Inventory|UI")
 	FMOInventoryMenuRequestCloseSignature OnRequestClose;
+
+	/** Called when a slot is right-clicked. UIManager uses this to show context menu. */
+	UPROPERTY(BlueprintAssignable, Category="MO|Inventory|UI")
+	FMOInventoryMenuSlotRightClickedSignature OnSlotRightClicked;
 
 protected:
 	virtual void NativeConstruct() override;
@@ -41,6 +50,9 @@ private:
 
 	UFUNCTION()
 	void HandleGridSlotClicked(int32 SlotIndex, const FGuid& ItemGuid);
+
+	UFUNCTION()
+	void HandleGridSlotRightClicked(int32 SlotIndex, const FGuid& ItemGuid, FVector2D ScreenPosition);
 
 	void RefreshAll();
 

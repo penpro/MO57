@@ -1,4 +1,5 @@
 #include "MOPossessionSubsystem.h"
+#include "MOFramework.h"
 
 #include "Engine/World.h"
 #include "EngineUtils.h"
@@ -159,7 +160,7 @@ AActor* UMOPossessionSubsystem::ServerSpawnActorNearController(APlayerController
 
 	if (!ActorClassToSpawn)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[MOPossess] SpawnActorNearController failed: no class set"));
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOPossess] SpawnActorNearController failed: no class set"));
 		return nullptr;
 	}
 
@@ -201,7 +202,7 @@ AActor* UMOPossessionSubsystem::ServerSpawnActorNearController(APlayerController
 
 	UGameplayStatics::FinishSpawningActor(DeferredActor, SpawnTransform);
 
-	UE_LOG(LogTemp, Warning, TEXT("[MOPossess] Spawned Actor=%s Class=%s"),
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOPossess] Spawned Actor=%s Class=%s"),
 		*GetNameSafe(DeferredActor),
 		*GetNameSafe(ActorClassToSpawn.Get()));
 

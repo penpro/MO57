@@ -1,4 +1,5 @@
 #include "MOInventoryGrid.h"
+#include "MOFramework.h"
 
 #include "Components/UniformGridPanel.h"
 #include "Components/UniformGridSlot.h"
@@ -40,13 +41,13 @@ void UMOInventoryGrid::RebuildGrid()
 {
 	if (!SlotsUniformGrid)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[MOInventoryGrid] Missing SlotsUniformGrid (BindWidget). Check the widget name and ensure it is marked as Variable."));
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventoryGrid] Missing SlotsUniformGrid (BindWidget). Check the widget name and ensure it is marked as Variable."));
 		return;
 	}
 
 	if (!SlotWidgetClass)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[MOInventoryGrid] SlotWidgetClass is not set. Set it in the WBP_InventoryGrid defaults to your WBP_InventorySlot."));
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventoryGrid] SlotWidgetClass is not set. Set it in the WBP_InventoryGrid defaults to your WBP_InventorySlot."));
 		SlotsUniformGrid->ClearChildren();
 		SlotWidgets.Reset();
 		return;
@@ -58,14 +59,14 @@ void UMOInventoryGrid::RebuildGrid()
 	const int32 SlotCount = GetDesiredSlotCount();
 	if (SlotCount <= 0)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[MOInventoryGrid] Computed SlotCount <= 0 (InventorySlotCount + MinimumVisibleSlotCount)."));
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventoryGrid] Computed SlotCount <= 0 (InventorySlotCount + MinimumVisibleSlotCount)."));
 		return;
 	}
 
 	APlayerController* OwningPlayerController = GetOwningPlayer();
 	if (!OwningPlayerController)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[MOInventoryGrid] No owning player yet. Grid will not build slots until it has an owning player."));
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventoryGrid] No owning player yet. Grid will not build slots until it has an owning player."));
 		return;
 	}
 
@@ -79,6 +80,7 @@ void UMOInventoryGrid::RebuildGrid()
 
 		NewSlotWidget->InitializeSlot(InventoryComponent, SlotIndex);
 		NewSlotWidget->OnSlotClicked.AddDynamic(this, &UMOInventoryGrid::HandleSlotClicked);
+		NewSlotWidget->OnSlotRightClicked.AddDynamic(this, &UMOInventoryGrid::HandleSlotRightClicked);
 
 		const int32 RowIndex = (Columns > 0) ? (SlotIndex / Columns) : SlotIndex;
 		const int32 ColumnIndex = (Columns > 0) ? (SlotIndex % Columns) : 0;
@@ -104,4 +106,9 @@ void UMOInventoryGrid::RefreshAllSlots()
 void UMOInventoryGrid::HandleSlotClicked(int32 SlotIndex, const FGuid& ItemGuid)
 {
 	OnGridSlotClicked.Broadcast(SlotIndex, ItemGuid);
+}
+
+void UMOInventoryGrid::HandleSlotRightClicked(int32 SlotIndex, const FGuid& ItemGuid, FVector2D ScreenPosition)
+{
+	OnGridSlotRightClicked.Broadcast(SlotIndex, ItemGuid, ScreenPosition);
 }

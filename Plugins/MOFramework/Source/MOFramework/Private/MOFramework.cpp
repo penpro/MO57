@@ -1,12 +1,23 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "MOFramework.h"
+#include "MOItemDatabaseSettings.h"
+#include "MOPersistenceSettings.h"
+
+// Define the log category
+DEFINE_LOG_CATEGORY(LogMOFramework);
 
 #define LOCTEXT_NAMESPACE "FMOFrameworkModule"
 
 void FMOFrameworkModule::StartupModule()
 {
-	// This code will execute after your module is loaded into memory; the exact timing is specified in the .uplugin file per-module
+	// Validate configuration settings - logs warnings if required settings aren't configured.
+	// Skip validation during commandlet runs (cooking, packaging, etc.) to avoid noise.
+	if (!IsRunningCommandlet())
+	{
+		UMOItemDatabaseSettings::ValidateConfiguration();
+		UMOPersistenceSettings::ValidateConfiguration();
+	}
 }
 
 void FMOFrameworkModule::ShutdownModule()

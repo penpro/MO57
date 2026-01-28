@@ -1,4 +1,5 @@
 #include "MOInteractableComponent.h"
+#include "MOFramework.h"
 #include "GameFramework/Actor.h"
 #include "GameFramework/Controller.h"
 
@@ -27,29 +28,29 @@ bool UMOInteractableComponent::CanInteract(AController* InteractorController) co
 bool UMOInteractableComponent::ServerInteract(AController* InteractorController)
 {
 	AActor* OwnerActor = GetOwner();
-	UE_LOG(LogTemp, Warning, TEXT("[MOInteractable] ServerInteract called on '%s'"), *GetNameSafe(OwnerActor));
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOInteractable] ServerInteract called on '%s'"), *GetNameSafe(OwnerActor));
 
 	if (!IsValid(OwnerActor))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[MOInteractable] ServerInteract: Invalid owner"));
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInteractable] ServerInteract: Invalid owner"));
 		return false;
 	}
 
 	if (!OwnerActor->HasAuthority())
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[MOInteractable] ServerInteract called without authority"));
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInteractable] ServerInteract called without authority"));
 		return false;
 	}
 
 	if (!CanInteract(InteractorController))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[MOInteractable] ServerInteract: CanInteract returned false"));
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInteractable] ServerInteract: CanInteract returned false"));
 		return false;
 	}
 
-	UE_LOG(LogTemp, Warning, TEXT("[MOInteractable] ServerInteract: Calling HandleInteract"));
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOInteractable] ServerInteract: Calling HandleInteract"));
 	const bool bHandled = HandleInteract(InteractorController);
-	UE_LOG(LogTemp, Warning, TEXT("[MOInteractable] ServerInteract: HandleInteract returned %s"), bHandled ? TEXT("true") : TEXT("false"));
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOInteractable] ServerInteract: HandleInteract returned %s"), bHandled ? TEXT("true") : TEXT("false"));
 
 	if (!bHandled)
 	{

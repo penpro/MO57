@@ -58,6 +58,27 @@ struct TStructOpsTypeTraits<FMOInventoryList> : public TStructOpsTypeTraitsBase2
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOInventoryChangedSignature);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOInventorySlotsChangedSignature);
 
+class UMOInventoryComponent;
+
+/** Editor-friendly struct for pre-populating inventory slots. */
+USTRUCT(BlueprintType)
+struct FMOStartingInventoryItem
+{
+	GENERATED_BODY()
+
+	/** Which item definition to add (dropdown from DataTable). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Inventory", meta=(GetOptions="GetItemDefinitionOptionsStatic"))
+	FName ItemDefinitionId = NAME_None;
+
+	/** How many of this item to add. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Inventory", meta=(ClampMin="1"))
+	int32 Quantity = 1;
+
+	/** Which slot to place this item in (-1 = auto-assign to first empty). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Inventory", meta=(ClampMin="-1"))
+	int32 SlotIndex = -1;
+};
+
 UCLASS(ClassGroup=(MO), meta=(BlueprintSpawnableComponent))
 class MOFRAMEWORK_API UMOInventoryComponent : public UActorComponent
 {
@@ -79,6 +100,10 @@ public:
 	// Desired number of slots (authority sizes SlotItemGuids to match this)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Inventory|Slots")
 	int32 SlotCount = 16;
+
+	/** Items to add to inventory when the game starts (server only). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Inventory|Starting")
+	TArray<FMOStartingInventoryItem> StartingItems;
 
 	// If true, newly added items auto-assign into the first empty slot if they are not already in any slot.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Inventory|Slots")
@@ -150,9 +175,32 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Inventory|Save")
 	bool ApplySaveDataAuthority(const FMOInventorySaveData& InSaveData);
 
+	/** Drop item from a slot into the world. Spawns the world actor and removes from inventory.
+	 *  @param SlotIndex - The slot to drop from
+	 *  @param DropLocation - World location to spawn the item
+	 *  @param DropRotation - World rotation for the spawned item
+	 *  @return The spawned actor, or nullptr on failure */
+	UFUNCTION(BlueprintCallable, Category="MO|Inventory|Drop")
+	AActor* DropItemFromSlot(int32 SlotIndex, const FVector& DropLocation, const FRotator& DropRotation);
+
+	/** Drop item by GUID into the world. Spawns the world actor and removes from inventory.
+	 *  @param ItemGuid - The item GUID to drop
+	 *  @param DropLocation - World location to spawn the item
+	 *  @param DropRotation - World rotation for the spawned item
+	 *  @return The spawned actor, or nullptr on failure */
+	UFUNCTION(BlueprintCallable, Category="MO|Inventory|Drop")
+	AActor* DropItemByGuid(const FGuid& ItemGuid, const FVector& DropLocation, const FRotator& DropRotation);
+
+	/** Returns available ItemDefinitionIds for dropdowns. */
+	UFUNCTION()
+	static TArray<FName> GetItemDefinitionOptionsStatic();
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
+	/** Called on server at BeginPlay to add StartingItems to inventory. */
+	void ApplyStartingItems();
 
 private:
 	int32 FindEntryIndexByGuid(const FGuid& ItemGuid) const;

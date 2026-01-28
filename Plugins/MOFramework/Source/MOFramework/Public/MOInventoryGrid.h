@@ -9,6 +9,7 @@ class UMOInventoryComponent;
 class UMOInventorySlot;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOInventoryGridSlotClickedSignature, int32, SlotIndex, const FGuid&, ItemGuid);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FMOInventoryGridSlotRightClickedSignature, int32, SlotIndex, const FGuid&, ItemGuid, FVector2D, ScreenPosition);
 
 UCLASS()
 class MOFRAMEWORK_API UMOInventoryGrid : public UUserWidget
@@ -27,8 +28,16 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Inventory|UI")
 	void RefreshAllSlots();
 
+	/** Get the inventory component this grid is displaying. */
+	UFUNCTION(BlueprintPure, Category="MO|Inventory|UI")
+	UMOInventoryComponent* GetInventoryComponent() const { return InventoryComponent; }
+
 	UPROPERTY(BlueprintAssignable, Category="MO|Inventory|UI")
 	FMOInventoryGridSlotClickedSignature OnGridSlotClicked;
+
+	/** Called when a slot is right-clicked. Use for context menu. */
+	UPROPERTY(BlueprintAssignable, Category="MO|Inventory|UI")
+	FMOInventoryGridSlotRightClickedSignature OnGridSlotRightClicked;
 
 protected:
 	virtual void NativeConstruct() override;
@@ -36,6 +45,9 @@ protected:
 private:
 	UFUNCTION()
 	void HandleSlotClicked(int32 SlotIndex, const FGuid& ItemGuid);
+
+	UFUNCTION()
+	void HandleSlotRightClicked(int32 SlotIndex, const FGuid& ItemGuid, FVector2D ScreenPosition);
 
 	int32 GetDesiredSlotCount() const;
 

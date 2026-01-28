@@ -1,13 +1,16 @@
 #include "MOItemComponent.h"
+#include "MOFramework.h"
 
 #include "GameFramework/Actor.h"
 #include "GameFramework/Controller.h"
 #include "GameFramework/Pawn.h"
 #include "Net/UnrealNetwork.h"
 #include "GameFramework/PlayerState.h"
+#include "Engine/DataTable.h"
 
 #include "MOIdentityComponent.h"
 #include "MOInventoryComponent.h"
+#include "MOItemDatabaseSettings.h"
 
 UMOItemComponent::UMOItemComponent()
 {
@@ -64,43 +67,43 @@ UMOInventoryComponent* UMOItemComponent::FindInventoryComponentForController(ACo
 
 bool UMOItemComponent::GiveToInteractorInventory(AController* InteractorController)
 {
-	UE_LOG(LogTemp, Warning, TEXT("[MOItem] GiveToInteractorInventory called"));
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOItem] GiveToInteractorInventory called"));
 
 	AActor* OwnerActor = GetOwner();
 	if (!IsValid(OwnerActor))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[MOItem] GiveToInteractorInventory: Invalid owner"));
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOItem] GiveToInteractorInventory: Invalid owner"));
 		return false;
 	}
 
 	if (!OwnerActor->HasAuthority())
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[MOItem] GiveToInteractorInventory called without authority"));
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOItem] GiveToInteractorInventory called without authority"));
 		return false;
 	}
 
 	if (!bWorldItemActive)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[MOItem] GiveToInteractorInventory: Item not active"));
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOItem] GiveToInteractorInventory: Item not active"));
 		return false;
 	}
 
 	if (ItemDefinitionId.IsNone())
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[MOItem] GiveToInteractorInventory: ItemDefinitionId is None!"));
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOItem] GiveToInteractorInventory: ItemDefinitionId is None!"));
 		return false;
 	}
 
 	if (Quantity <= 0)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[MOItem] GiveToInteractorInventory: Quantity is %d"), Quantity);
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOItem] GiveToInteractorInventory: Quantity is %d"), Quantity);
 		return false;
 	}
 
 	UMOIdentityComponent* IdentityComponent = FindIdentityComponent();
 	if (!IsValid(IdentityComponent))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[MOItem] Missing UMOIdentityComponent on %s"), *GetNameSafe(OwnerActor));
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOItem] Missing UMOIdentityComponent on %s"), *GetNameSafe(OwnerActor));
 		return false;
 	}
 
@@ -114,7 +117,7 @@ bool UMOItemComponent::GiveToInteractorInventory(AController* InteractorControll
 	UMOInventoryComponent* InventoryComponent = FindInventoryComponentForController(InteractorController);
 	if (!IsValid(InventoryComponent))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[MOItem] No inventory component found for controller %s"), *GetNameSafe(InteractorController));
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOItem] No inventory component found for controller %s"), *GetNameSafe(InteractorController));
 		return false;
 	}
 
@@ -177,4 +180,25 @@ void UMOItemComponent::ApplyWorldItemActiveState()
 void UMOItemComponent::OnRep_ItemDefinitionId()
 {
 	OnItemDefinitionIdChanged.Broadcast(ItemDefinitionId);
+}
+
+TArray<FName> UMOItemComponent::GetItemDefinitionOptions() const
+{
+	TArray<FName> Options;
+	Options.Add(NAME_None); // Allow clearing the selection
+
+	const UMOItemDatabaseSettings* Settings = GetDefault<UMOItemDatabaseSettings>();
+	if (!Settings)
+	{
+		return Options;
+	}
+
+	UDataTable* DataTable = Settings->GetItemDefinitionsDataTable();
+	if (!IsValid(DataTable))
+	{
+		return Options;
+	}
+
+	Options.Append(DataTable->GetRowNames());
+	return Options;
 }

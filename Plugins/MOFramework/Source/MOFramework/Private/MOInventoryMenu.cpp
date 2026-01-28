@@ -6,6 +6,7 @@
 #include "MOInventoryComponent.h"
 #include "MOInventoryGrid.h"
 #include "MOItemInfoPanel.h"
+#include "MOFramework.h"
 
 UMOInventoryMenu::UMOInventoryMenu(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -38,6 +39,11 @@ void UMOInventoryMenu::InitializeMenu(UMOInventoryComponent* InInventoryComponen
 {
 	InventoryComponent = InInventoryComponent;
 
+	UE_LOG(LogMOFramework, Warning, TEXT("[InventoryMenu] InitializeMenu - InventoryComponent=%s, InventoryGrid=%s, ItemInfoPanel=%s"),
+		IsValid(InventoryComponent) ? TEXT("valid") : TEXT("NULL"),
+		InventoryGrid ? TEXT("valid") : TEXT("NULL"),
+		ItemInfoPanel ? TEXT("valid") : TEXT("NULL"));
+
 	if (IsValid(InventoryComponent))
 	{
 		InventoryComponent->OnInventoryChanged.AddDynamic(this, &UMOInventoryMenu::HandleInventoryChanged);
@@ -48,6 +54,7 @@ void UMOInventoryMenu::InitializeMenu(UMOInventoryComponent* InInventoryComponen
 	{
 		InventoryGrid->InitializeGrid(InventoryComponent);
 		InventoryGrid->OnGridSlotClicked.AddDynamic(this, &UMOInventoryMenu::HandleGridSlotClicked);
+		InventoryGrid->OnGridSlotRightClicked.AddDynamic(this, &UMOInventoryMenu::HandleGridSlotRightClicked);
 	}
 
 	if (ItemInfoPanel)
@@ -86,14 +93,25 @@ void UMOInventoryMenu::HandleSlotsChanged()
 	RefreshAll();
 }
 
-void UMOInventoryMenu::HandleGridSlotClicked(int32 /*SlotIndex*/, const FGuid& ItemGuid)
+void UMOInventoryMenu::HandleGridSlotClicked(int32 SlotIndex, const FGuid& ItemGuid)
 {
+	UE_LOG(LogMOFramework, Warning, TEXT("[InventoryMenu] HandleGridSlotClicked - SlotIndex=%d, ItemGuid=%s, ItemInfoPanel=%s"),
+		SlotIndex,
+		*ItemGuid.ToString(EGuidFormats::Short),
+		ItemInfoPanel ? TEXT("valid") : TEXT("NULL"));
+
 	SelectedItemGuid = ItemGuid;
 
 	if (ItemInfoPanel)
 	{
 		ItemInfoPanel->SetSelectedItemGuid(SelectedItemGuid);
 	}
+}
+
+void UMOInventoryMenu::HandleGridSlotRightClicked(int32 SlotIndex, const FGuid& ItemGuid, FVector2D ScreenPosition)
+{
+	// Forward to whoever is listening (typically UIManager)
+	OnSlotRightClicked.Broadcast(SlotIndex, ItemGuid, ScreenPosition);
 }
 
 void UMOInventoryMenu::RefreshAll()

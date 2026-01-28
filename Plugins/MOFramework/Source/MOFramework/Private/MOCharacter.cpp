@@ -1,4 +1,5 @@
 #include "MOCharacter.h"
+#include "MOFramework.h"
 
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
@@ -12,6 +13,9 @@
 #include "MOIdentityComponent.h"
 #include "MOInteractorComponent.h"
 #include "MOInventoryComponent.h"
+#include "MOKnowledgeComponent.h"
+#include "MOSkillsComponent.h"
+#include "MOSurvivalStatsComponent.h"
 #include "UObject/SoftObjectPath.h"
 
 AMOCharacter::AMOCharacter()
@@ -49,22 +53,17 @@ AMOCharacter::AMOCharacter()
 	IdentityComponent = CreateDefaultSubobject<UMOIdentityComponent>(TEXT("IdentityComponent"));
 	InventoryComponent = CreateDefaultSubobject<UMOInventoryComponent>(TEXT("InventoryComponent"));
 	InteractorComponent = CreateDefaultSubobject<UMOInteractorComponent>(TEXT("InteractorComponent"));
+	SurvivalStatsComponent = CreateDefaultSubobject<UMOSurvivalStatsComponent>(TEXT("SurvivalStatsComponent"));
+	SkillsComponent = CreateDefaultSubobject<UMOSkillsComponent>(TEXT("SkillsComponent"));
+	KnowledgeComponent = CreateDefaultSubobject<UMOKnowledgeComponent>(TEXT("KnowledgeComponent"));
 
-	// Default mesh position (mesh itself loaded in BeginPlay)
+	// Default mesh position (mesh itself loaded in BeginPlay if DefaultMesh is set)
 	GetMesh()->SetRelativeLocation(FVector(0.0f, 0.0f, -96.0f));
 	GetMesh()->SetRelativeRotation(FRotator(0.0f, -90.0f, 0.0f));
 
-	// Default input assets and mesh/anim - using soft paths
-	DefaultMappingContext = TSoftObjectPtr<UInputMappingContext>(FSoftObjectPath(TEXT("/Game/Input/IMC_Default.IMC_Default")));
-	MoveAction = TSoftObjectPtr<UInputAction>(FSoftObjectPath(TEXT("/Game/Input/Actions/IA_Move.IA_Move")));
-	LookAction = TSoftObjectPtr<UInputAction>(FSoftObjectPath(TEXT("/Game/Input/Actions/IA_Look.IA_Look")));
-	MouseLookAction = TSoftObjectPtr<UInputAction>(FSoftObjectPath(TEXT("/Game/Input/Actions/IA_MouseLook.IA_MouseLook")));
-	JumpAction = TSoftObjectPtr<UInputAction>(FSoftObjectPath(TEXT("/Game/Input/Actions/IA_Jump.IA_Jump")));
-	InteractAction = TSoftObjectPtr<UInputAction>(FSoftObjectPath(TEXT("/Game/Input/Actions/IA_Interact.IA_Interact")));
-
-	// Default mesh and animation - using soft paths
-	DefaultMesh = TSoftObjectPtr<USkeletalMesh>(FSoftObjectPath(TEXT("/Game/Characters/Mannequins/Meshes/SKM_Manny.SKM_Manny")));
-	DefaultAnimBlueprint = TSoftClassPtr<UAnimInstance>(FSoftObjectPath(TEXT("/Game/Characters/Mannequins/Animations/ABP_Manny.ABP_Manny_C")));
+	// NOTE: Input actions, mesh, and animation are intentionally left unset for portability.
+	// Set these in child Blueprints or via Project Settings to avoid hard-coded asset paths.
+	// The character will work without these - it just won't have input/visuals until configured.
 }
 
 void AMOCharacter::BeginPlay()
@@ -72,7 +71,11 @@ void AMOCharacter::BeginPlay()
 	// Load and apply default mesh if not already set
 	if (!GetMesh()->GetSkeletalMeshAsset())
 	{
-		if (USkeletalMesh* LoadedMesh = DefaultMesh.LoadSynchronous())
+		if (DefaultMesh.IsNull())
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOCharacter] %s: No DefaultMesh configured. Set 'Default Mesh' in the Blueprint or leave skeletal mesh component empty."), *GetName());
+		}
+		else if (USkeletalMesh* LoadedMesh = DefaultMesh.LoadSynchronous())
 		{
 			GetMesh()->SetSkeletalMesh(LoadedMesh);
 		}
@@ -81,9 +84,12 @@ void AMOCharacter::BeginPlay()
 	// Load and apply default animation blueprint if not already set
 	if (!GetMesh()->GetAnimInstance() && !GetMesh()->GetAnimClass())
 	{
-		if (UClass* AnimClass = DefaultAnimBlueprint.LoadSynchronous())
+		if (!DefaultAnimBlueprint.IsNull())
 		{
-			GetMesh()->SetAnimInstanceClass(AnimClass);
+			if (UClass* AnimClass = DefaultAnimBlueprint.LoadSynchronous())
+			{
+				GetMesh()->SetAnimInstanceClass(AnimClass);
+			}
 		}
 	}
 
@@ -94,7 +100,11 @@ void AMOCharacter::BeginPlay()
 	{
 		if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PlayerController->GetLocalPlayer()))
 		{
-			if (UInputMappingContext* IMC = DefaultMappingContext.LoadSynchronous())
+			if (DefaultMappingContext.IsNull())
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOCharacter] %s: No DefaultMappingContext configured. Input will not work until set in child Blueprint."), *GetName());
+			}
+			else if (UInputMappingContext* IMC = DefaultMappingContext.LoadSynchronous())
 			{
 				Subsystem->AddMappingContext(IMC, 0);
 			}
@@ -108,26 +118,50 @@ void AMOCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
 
 	if (UEnhancedInputComponent* EnhancedInputComponent = Cast<UEnhancedInputComponent>(PlayerInputComponent))
 	{
-		if (UInputAction* Move = MoveAction.LoadSynchronous())
+		// Bind Move action
+		if (!MoveAction.IsNull())
 		{
-			EnhancedInputComponent->BindAction(Move, ETriggerEvent::Triggered, this, &AMOCharacter::Move);
+			if (UInputAction* Move = MoveAction.LoadSynchronous())
+			{
+				EnhancedInputComponent->BindAction(Move, ETriggerEvent::Triggered, this, &AMOCharacter::Move);
+			}
 		}
-		if (UInputAction* Look = LookAction.LoadSynchronous())
+
+		// Bind Look action (gamepad)
+		if (!LookAction.IsNull())
 		{
-			EnhancedInputComponent->BindAction(Look, ETriggerEvent::Triggered, this, &AMOCharacter::Look);
+			if (UInputAction* Look = LookAction.LoadSynchronous())
+			{
+				EnhancedInputComponent->BindAction(Look, ETriggerEvent::Triggered, this, &AMOCharacter::Look);
+			}
 		}
-		if (UInputAction* MouseLook = MouseLookAction.LoadSynchronous())
+
+		// Bind MouseLook action
+		if (!MouseLookAction.IsNull())
 		{
-			EnhancedInputComponent->BindAction(MouseLook, ETriggerEvent::Triggered, this, &AMOCharacter::Look);
+			if (UInputAction* MouseLook = MouseLookAction.LoadSynchronous())
+			{
+				EnhancedInputComponent->BindAction(MouseLook, ETriggerEvent::Triggered, this, &AMOCharacter::Look);
+			}
 		}
-		if (UInputAction* Jump = JumpAction.LoadSynchronous())
+
+		// Bind Jump action
+		if (!JumpAction.IsNull())
 		{
-			EnhancedInputComponent->BindAction(Jump, ETriggerEvent::Started, this, &AMOCharacter::StartJump);
-			EnhancedInputComponent->BindAction(Jump, ETriggerEvent::Completed, this, &AMOCharacter::StopJump);
+			if (UInputAction* Jump = JumpAction.LoadSynchronous())
+			{
+				EnhancedInputComponent->BindAction(Jump, ETriggerEvent::Started, this, &AMOCharacter::StartJump);
+				EnhancedInputComponent->BindAction(Jump, ETriggerEvent::Completed, this, &AMOCharacter::StopJump);
+			}
 		}
-		if (UInputAction* InteractInput = InteractAction.LoadSynchronous())
+
+		// Bind Interact action
+		if (!InteractAction.IsNull())
 		{
-			EnhancedInputComponent->BindAction(InteractInput, ETriggerEvent::Started, this, &AMOCharacter::Interact);
+			if (UInputAction* InteractInput = InteractAction.LoadSynchronous())
+			{
+				EnhancedInputComponent->BindAction(InteractInput, ETriggerEvent::Started, this, &AMOCharacter::Interact);
+			}
 		}
 	}
 }
@@ -206,13 +240,13 @@ void AMOCharacter::DoJumpEnd()
 
 void AMOCharacter::Interact()
 {
-	UE_LOG(LogTemp, Warning, TEXT("[MOCharacter] Interact() called, InteractorComponent=%s"),
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOCharacter] Interact() called, InteractorComponent=%s"),
 		InteractorComponent ? TEXT("Valid") : TEXT("NULL"));
 
 	if (InteractorComponent)
 	{
 		const bool bResult = InteractorComponent->TryInteract();
-		UE_LOG(LogTemp, Warning, TEXT("[MOCharacter] TryInteract returned %s"), bResult ? TEXT("true") : TEXT("false"));
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOCharacter] TryInteract returned %s"), bResult ? TEXT("true") : TEXT("false"));
 	}
 }
 

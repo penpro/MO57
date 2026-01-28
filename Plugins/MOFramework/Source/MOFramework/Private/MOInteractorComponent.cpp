@@ -1,4 +1,5 @@
 #include "MOInteractorComponent.h"
+#include "MOFramework.h"
 
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
@@ -87,7 +88,7 @@ bool UMOInteractorComponent::FindInteractTarget(AActor*& OutTargetActor, FHitRes
 	FRotator ViewRotation = FRotator::ZeroRotator;
 	if (!ResolveViewpoint(ViewLocation, ViewRotation))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[MOInteractor] FindInteractTarget: Failed to resolve viewpoint"));
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInteractor] FindInteractTarget: Failed to resolve viewpoint"));
 		return false;
 	}
 
@@ -97,44 +98,44 @@ bool UMOInteractorComponent::FindInteractTarget(AActor*& OutTargetActor, FHitRes
 
 	if (!TraceForHit(TraceStart, TraceEnd, OutHitResult))
 	{
-		UE_LOG(LogTemp, Log, TEXT("[MOInteractor] FindInteractTarget: No hit"));
+		UE_LOG(LogMOFramework, Log, TEXT("[MOInteractor] FindInteractTarget: No hit"));
 		return false;
 	}
 
 	AActor* HitActor = OutHitResult.GetActor();
 	if (!IsValid(HitActor))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[MOInteractor] FindInteractTarget: Hit but no valid actor"));
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInteractor] FindInteractTarget: Hit but no valid actor"));
 		return false;
 	}
 
 	UMOInteractableComponent* InteractableComponent = HitActor->FindComponentByClass<UMOInteractableComponent>();
 	if (!IsValid(InteractableComponent))
 	{
-		UE_LOG(LogTemp, Log, TEXT("[MOInteractor] FindInteractTarget: Hit actor '%s' has no InteractableComponent"), *HitActor->GetName());
+		UE_LOG(LogMOFramework, Log, TEXT("[MOInteractor] FindInteractTarget: Hit actor '%s' has no InteractableComponent"), *HitActor->GetName());
 		return false;
 	}
 
-	UE_LOG(LogTemp, Warning, TEXT("[MOInteractor] FindInteractTarget: Found target '%s'"), *HitActor->GetName());
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOInteractor] FindInteractTarget: Found target '%s'"), *HitActor->GetName());
 	OutTargetActor = HitActor;
 	return true;
 }
 
 bool UMOInteractorComponent::TryInteract()
 {
-	UE_LOG(LogTemp, Warning, TEXT("[MOInteractor] TryInteract called"));
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOInteractor] TryInteract called"));
 
 	AActor* OwnerActor = GetOwner();
 	APawn* OwnerPawn = Cast<APawn>(OwnerActor);
 	if (!IsValid(OwnerPawn))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[MOInteractor] TryInteract: Owner is not a valid pawn"));
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInteractor] TryInteract: Owner is not a valid pawn"));
 		return false;
 	}
 
 	if (!OwnerPawn->IsLocallyControlled())
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[MOInteractor] TryInteract: Pawn is not locally controlled"));
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInteractor] TryInteract: Pawn is not locally controlled"));
 		return false;
 	}
 
@@ -146,23 +147,23 @@ bool UMOInteractorComponent::TryInteract()
 
 	if (!bFoundTarget || !IsValid(TargetActor))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[MOInteractor] TryInteract: No valid target found"));
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInteractor] TryInteract: No valid target found"));
 		return false;
 	}
 
-	UE_LOG(LogTemp, Warning, TEXT("[MOInteractor] TryInteract: Sending ServerRequestInteract for '%s'"), *TargetActor->GetName());
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOInteractor] TryInteract: Sending ServerRequestInteract for '%s'"), *TargetActor->GetName());
 	ServerRequestInteract(TargetActor);
 	return true;
 }
 
 void UMOInteractorComponent::ServerRequestInteract_Implementation(AActor* TargetActor)
 {
-	UE_LOG(LogTemp, Warning, TEXT("[MOInteractor] ServerRequestInteract for '%s'"), *GetNameSafe(TargetActor));
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOInteractor] ServerRequestInteract for '%s'"), *GetNameSafe(TargetActor));
 
 	UWorld* World = GetWorld();
 	if (!World)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[MOInteractor] ServerRequestInteract: No world"));
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInteractor] ServerRequestInteract: No world"));
 		return;
 	}
 
@@ -171,18 +172,18 @@ void UMOInteractorComponent::ServerRequestInteract_Implementation(AActor* Target
 
 	if (!IsValid(InteractorController) || !IsValid(TargetActor))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[MOInteractor] ServerRequestInteract: Invalid controller or target"));
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInteractor] ServerRequestInteract: Invalid controller or target"));
 		return;
 	}
 
 	UMOInteractionSubsystem* InteractionSubsystem = World->GetSubsystem<UMOInteractionSubsystem>();
 	if (!InteractionSubsystem)
 	{
-		UE_LOG(LogTemp, Error, TEXT("[MOInteractor] ServerRequestInteract: No InteractionSubsystem!"));
+		UE_LOG(LogMOFramework, Error, TEXT("[MOInteractor] ServerRequestInteract: No InteractionSubsystem!"));
 		return;
 	}
 
-	UE_LOG(LogTemp, Error, TEXT("[MOInteractor] ServerRequestInteract: About to call ServerExecuteInteract, Subsystem=%p"), InteractionSubsystem);
+	UE_LOG(LogMOFramework, Error, TEXT("[MOInteractor] ServerRequestInteract: About to call ServerExecuteInteract, Subsystem=%p"), InteractionSubsystem);
 	const bool bResult = InteractionSubsystem->ServerExecuteInteract(InteractorController, TargetActor);
-	UE_LOG(LogTemp, Error, TEXT("[MOInteractor] ServerRequestInteract: ServerExecuteInteract returned %s"), bResult ? TEXT("true") : TEXT("false"));
+	UE_LOG(LogMOFramework, Error, TEXT("[MOInteractor] ServerRequestInteract: ServerExecuteInteract returned %s"), bResult ? TEXT("true") : TEXT("false"));
 }

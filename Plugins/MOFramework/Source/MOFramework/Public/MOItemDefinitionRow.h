@@ -55,6 +55,11 @@ struct MOFRAMEWORK_API FMOItemWorldVisual
 {
 	GENERATED_BODY()
 
+	/** Actor class to spawn when dropping this item into the world.
+	 *  Should be AMOWorldItem or a subclass. If not set, uses default AMOWorldItem. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|World")
+	TSoftClassPtr<AActor> WorldActorClass;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|World")
 	TSoftObjectPtr<UStaticMesh> StaticMesh;
 
@@ -79,6 +84,84 @@ struct MOFRAMEWORK_API FMOItemScalarProperty
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Props")
 	float Value = 0.f;
+};
+
+/**
+ * Nutrition data for consumable items.
+ * Models realistic macronutrients, vitamins, and minerals.
+ */
+USTRUCT(BlueprintType)
+struct MOFRAMEWORK_API FMOItemNutrition
+{
+	GENERATED_BODY()
+
+	// Macronutrients
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Nutrition")
+	float Calories = 0.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Nutrition")
+	float WaterContent = 0.0f;  // ml
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Nutrition")
+	float Protein = 0.0f;  // grams
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Nutrition")
+	float Carbohydrates = 0.0f;  // grams
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Nutrition")
+	float Fat = 0.0f;  // grams
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Nutrition")
+	float Fiber = 0.0f;  // grams
+
+	// Vitamins (percentage of daily value, 0-100+)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Nutrition|Vitamins")
+	float VitaminA = 0.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Nutrition|Vitamins")
+	float VitaminB = 0.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Nutrition|Vitamins")
+	float VitaminC = 0.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Nutrition|Vitamins")
+	float VitaminD = 0.0f;
+
+	// Minerals (percentage of daily value, 0-100+)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Nutrition|Minerals")
+	float Iron = 0.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Nutrition|Minerals")
+	float Calcium = 0.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Nutrition|Minerals")
+	float Potassium = 0.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Nutrition|Minerals")
+	float Sodium = 0.0f;
+};
+
+/**
+ * Inspection data - defines what skills gain XP and what knowledge can be learned
+ * when a player inspects this item.
+ */
+USTRUCT(BlueprintType)
+struct MOFRAMEWORK_API FMOItemInspection
+{
+	GENERATED_BODY()
+
+	/** Skills that gain XP when this item is inspected. Map of SkillId -> XP amount. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Inspection")
+	TMap<FName, float> SkillExperienceGrants;
+
+	/** Knowledge IDs that can be learned from inspecting this item. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Inspection")
+	TArray<FName> KnowledgeIds;
+
+	/** Minimum skill level required to learn specific knowledge from inspection.
+	 *  Map of KnowledgeId -> required skill level. Knowledge not in this map has no requirement. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Inspection")
+	TMap<FName, int32> KnowledgeSkillRequirements;
 };
 
 /**
@@ -147,4 +230,12 @@ struct MOFRAMEWORK_API FMOItemDefinitionRow : public FTableRowBase
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|World")
 	FMOItemWorldVisual WorldVisual;
+
+	/** Nutrition data for consumable items. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Nutrition")
+	FMOItemNutrition Nutrition;
+
+	/** Inspection and knowledge data. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Inspection")
+	FMOItemInspection Inspection;
 };

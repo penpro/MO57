@@ -4,6 +4,9 @@
 
 #include "Modules/ModuleManager.h"
 
+// Log category for the MOFramework plugin
+MOFRAMEWORK_API DECLARE_LOG_CATEGORY_EXTERN(LogMOFramework, Log, All);
+
 class FMOFrameworkModule : public IModuleInterface
 {
 public:

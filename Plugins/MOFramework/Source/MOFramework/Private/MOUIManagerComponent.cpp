@@ -1,10 +1,27 @@
 #include "MOUIManagerComponent.h"
+#include "MOFramework.h"
 
 #include "GameFramework/PlayerController.h"
+#include "GameFramework/Pawn.h"
 #include "Blueprint/UserWidget.h"
+#include "Engine/GameInstance.h"
+#include "Kismet/GameplayStatics.h"
+#include "Kismet/KismetSystemLibrary.h"
 
 #include "MOInventoryComponent.h"
 #include "MOInventoryMenu.h"
+#include "MOReticleWidget.h"
+#include "MOInGameMenu.h"
+#include "MOItemContextMenu.h"
+#include "MOConfirmationDialog.h"
+#include "MOPersistenceSubsystem.h"
+#include "MOSavePanel.h"
+#include "MOLoadPanel.h"
+#include "MOSurvivalStatsComponent.h"
+#include "MOItemDatabaseSettings.h"
+#include "MOWorldItem.h"
+#include "MOPlayerStatusWidget.h"
+#include "MOModalBackground.h"
 
 UMOUIManagerComponent::UMOUIManagerComponent()
 {
@@ -14,12 +31,46 @@ UMOUIManagerComponent::UMOUIManagerComponent()
 void UMOUIManagerComponent::BeginPlay()
 {
 	Super::BeginPlay();
+
+	if (IsLocalOwningPlayerController())
+	{
+		if (bCreateReticleOnBeginPlay)
+		{
+			CreateReticle();
+		}
+
+		if (bCreatePlayerStatusOnBeginPlay)
+		{
+			CreatePlayerStatus();
+		}
+	}
 }
 
 void UMOUIManagerComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	// Ensure we restore input mode on teardown if this component dies while menu is open.
 	CloseInventoryMenu();
+
+	// Clean up reticle widget
+	if (UMOReticleWidget* Reticle = ReticleWidget.Get())
+	{
+		Reticle->RemoveFromParent();
+	}
+	ReticleWidget.Reset();
+
+	// Clean up player status widget
+	if (UMOPlayerStatusWidget* Status = PlayerStatusWidget.Get())
+	{
+		Status->RemoveFromParent();
+	}
+	PlayerStatusWidget.Reset();
+
+	// Clean up modal background
+	if (UMOModalBackground* Background = ModalBackgroundWidget.Get())
+	{
+		Background->RemoveFromParent();
+	}
+	ModalBackgroundWidget.Reset();
 
 	Super::EndPlay(EndPlayReason);
 }
@@ -68,11 +119,17 @@ void UMOUIManagerComponent::ToggleInventoryMenu()
 	if (IsInventoryMenuOpen())
 	{
 		CloseInventoryMenu();
+		return;
 	}
-	else
+
+	// Close player status if visible (Tab closes any open UI)
+	if (IsPlayerStatusVisible())
 	{
-		OpenInventoryMenu();
+		SetPlayerStatusVisible(false);
+		return;
 	}
+
+	OpenInventoryMenu();
 }
 
 void UMOUIManagerComponent::OpenInventoryMenu()
@@ -90,14 +147,14 @@ void UMOUIManagerComponent::OpenInventoryMenu()
 
 	if (!InventoryMenuClass)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[MOUI] InventoryMenuClass not set on UI manager component."));
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] InventoryMenuClass not set on UI manager component."));
 		return;
 	}
 
 	UMOInventoryComponent* InventoryComponent = ResolveCurrentPawnInventoryComponent();
 	if (!IsValid(InventoryComponent))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[MOUI] No UMOInventoryComponent found on current pawn."));
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] No UMOInventoryComponent found on current pawn."));
 		return;
 	}
 
@@ -114,6 +171,9 @@ void UMOUIManagerComponent::OpenInventoryMenu()
 
 		// Bind Tab close (widget broadcasts, manager closes).
 		MenuWidget->OnRequestClose.AddDynamic(this, &UMOUIManagerComponent::HandleInventoryMenuRequestClose);
+
+		// Bind right-click for context menu
+		MenuWidget->OnSlotRightClicked.AddDynamic(this, &UMOUIManagerComponent::HandleInventoryMenuSlotRightClicked);
 	}
 
 	// Always re-initialize on open in case pawn changed.
@@ -121,9 +181,11 @@ void UMOUIManagerComponent::OpenInventoryMenu()
 
 	if (!MenuWidget->IsInViewport())
 	{
+		ShowModalBackground();
 		MenuWidget->AddToViewport(InventoryMenuZOrder);
 	}
 
+	UpdateReticleVisibility();
 	ApplyInputModeForMenuOpen(PlayerController, MenuWidget);
 }
 
@@ -140,13 +202,19 @@ void UMOUIManagerComponent::CloseInventoryMenu()
 		}
 	}
 
-	if (IsValid(PlayerController) && PlayerController->IsLocalController())
+	UpdateReticleVisibility();
+
+	if (!IsAnyMenuOpen())
 	{
-		ApplyInputModeForMenuClosed(PlayerController);
+		HideModalBackground();
+		if (IsValid(PlayerController) && PlayerController->IsLocalController())
+		{
+			ApplyInputModeForMenuClosed(PlayerController);
+		}
 	}
 }
 
-void UMOUIManagerComponent::ApplyInputModeForMenuOpen(APlayerController* PlayerController, UMOInventoryMenu* MenuWidget) const
+void UMOUIManagerComponent::ApplyInputModeForMenuOpen(APlayerController* PlayerController, UUserWidget* MenuWidget) const
 {
 	if (!IsValid(PlayerController) || !IsValid(MenuWidget))
 	{
@@ -190,4 +258,796 @@ void UMOUIManagerComponent::ApplyInputModeForMenuClosed(APlayerController* Playe
 void UMOUIManagerComponent::HandleInventoryMenuRequestClose()
 {
 	CloseInventoryMenu();
+}
+
+void UMOUIManagerComponent::HandleInventoryMenuSlotRightClicked(int32 SlotIndex, const FGuid& ItemGuid, FVector2D ScreenPosition)
+{
+	// Only show context menu if there's an item
+	if (!ItemGuid.IsValid())
+	{
+		return;
+	}
+
+	UMOInventoryMenu* MenuWidget = InventoryMenuWidget.Get();
+	if (!IsValid(MenuWidget))
+	{
+		return;
+	}
+
+	UMOInventoryComponent* InventoryComponent = MenuWidget->GetInventoryComponent();
+	if (!IsValid(InventoryComponent))
+	{
+		return;
+	}
+
+	ShowItemContextMenu(InventoryComponent, ItemGuid, SlotIndex, ScreenPosition);
+}
+
+void UMOUIManagerComponent::CreateReticle()
+{
+	APlayerController* PlayerController = ResolveOwningPlayerController();
+	if (!IsValid(PlayerController))
+	{
+		return;
+	}
+
+	// Use the configured class or default to UMOReticleWidget
+	TSubclassOf<UMOReticleWidget> ClassToUse = ReticleWidgetClass;
+	if (!ClassToUse)
+	{
+		ClassToUse = UMOReticleWidget::StaticClass();
+	}
+
+	UMOReticleWidget* NewReticle = CreateWidget<UMOReticleWidget>(PlayerController, ClassToUse);
+	if (!IsValid(NewReticle))
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] Failed to create reticle widget."));
+		return;
+	}
+
+	ReticleWidget = NewReticle;
+	NewReticle->AddToViewport(ReticleZOrder);
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Reticle widget created and added to viewport."));
+}
+
+void UMOUIManagerComponent::CreatePlayerStatus()
+{
+	APlayerController* PlayerController = ResolveOwningPlayerController();
+	if (!IsValid(PlayerController))
+	{
+		return;
+	}
+
+	if (!PlayerStatusWidgetClass)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] PlayerStatusWidgetClass not set on UI manager component."));
+		return;
+	}
+
+	UMOPlayerStatusWidget* NewStatus = CreateWidget<UMOPlayerStatusWidget>(PlayerController, PlayerStatusWidgetClass);
+	if (!IsValid(NewStatus))
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] Failed to create player status widget."));
+		return;
+	}
+
+	PlayerStatusWidget = NewStatus;
+	NewStatus->AddToViewport(PlayerStatusZOrder);
+
+	// Start hidden - user must toggle to show
+	NewStatus->SetVisibility(ESlateVisibility::Collapsed);
+
+	// Bind close request
+	NewStatus->OnRequestClose.AddDynamic(this, &UMOUIManagerComponent::HandlePlayerStatusRequestClose);
+
+	// Initialize with survival stats from current pawn
+	APawn* CurrentPawn = PlayerController->GetPawn();
+	if (IsValid(CurrentPawn))
+	{
+		UMOSurvivalStatsComponent* SurvivalStats = CurrentPawn->FindComponentByClass<UMOSurvivalStatsComponent>();
+		if (IsValid(SurvivalStats))
+		{
+			NewStatus->InitializeStatus(SurvivalStats);
+		}
+	}
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Player status widget created (hidden by default)."));
+}
+
+void UMOUIManagerComponent::TogglePlayerStatus()
+{
+	SetPlayerStatusVisible(!IsPlayerStatusVisible());
+}
+
+void UMOUIManagerComponent::HandlePlayerStatusRequestClose()
+{
+	SetPlayerStatusVisible(false);
+}
+
+UMOPlayerStatusWidget* UMOUIManagerComponent::GetPlayerStatusWidget() const
+{
+	return PlayerStatusWidget.Get();
+}
+
+void UMOUIManagerComponent::SetPlayerStatusVisible(bool bVisible)
+{
+	UMOPlayerStatusWidget* Status = PlayerStatusWidget.Get();
+	if (!IsValid(Status))
+	{
+		return;
+	}
+
+	APlayerController* PlayerController = ResolveOwningPlayerController();
+
+	if (bVisible)
+	{
+		ShowModalBackground();
+		Status->SetVisibility(ESlateVisibility::Visible);
+
+		// Set input mode for menu interaction
+		if (IsValid(PlayerController))
+		{
+			ApplyInputModeForMenuOpen(PlayerController, Status);
+		}
+
+		UpdateReticleVisibility();
+	}
+	else
+	{
+		Status->SetVisibility(ESlateVisibility::Collapsed);
+
+		UpdateReticleVisibility();
+
+		// Restore game input mode if no other menus open
+		if (!IsAnyMenuOpen())
+		{
+			HideModalBackground();
+			if (IsValid(PlayerController))
+			{
+				ApplyInputModeForMenuClosed(PlayerController);
+			}
+		}
+	}
+}
+
+bool UMOUIManagerComponent::IsPlayerStatusVisible() const
+{
+	const UMOPlayerStatusWidget* Status = PlayerStatusWidget.Get();
+	if (!IsValid(Status))
+	{
+		return false;
+	}
+
+	return Status->GetVisibility() != ESlateVisibility::Collapsed && Status->GetVisibility() != ESlateVisibility::Hidden;
+}
+
+void UMOUIManagerComponent::SetReticleVisible(bool bVisible)
+{
+	UMOReticleWidget* Reticle = ReticleWidget.Get();
+	if (!IsValid(Reticle))
+	{
+		return;
+	}
+
+	if (bVisible)
+	{
+		Reticle->SetVisibility(ESlateVisibility::HitTestInvisible);
+	}
+	else
+	{
+		Reticle->SetVisibility(ESlateVisibility::Collapsed);
+	}
+}
+
+bool UMOUIManagerComponent::IsReticleVisible() const
+{
+	const UMOReticleWidget* Reticle = ReticleWidget.Get();
+	if (!IsValid(Reticle))
+	{
+		return false;
+	}
+
+	return Reticle->GetVisibility() != ESlateVisibility::Collapsed && Reticle->GetVisibility() != ESlateVisibility::Hidden;
+}
+
+UMOReticleWidget* UMOUIManagerComponent::GetReticleWidget() const
+{
+	return ReticleWidget.Get();
+}
+
+// =============================================================================
+// In-Game Menu
+// =============================================================================
+
+void UMOUIManagerComponent::ToggleInGameMenu()
+{
+	if (!IsLocalOwningPlayerController())
+	{
+		return;
+	}
+
+	// If any other menu is open, close it first
+	if (IsInventoryMenuOpen())
+	{
+		CloseInventoryMenu();
+		return;
+	}
+
+	if (IsItemContextMenuOpen())
+	{
+		CloseItemContextMenu();
+		return;
+	}
+
+	if (IsPlayerStatusVisible())
+	{
+		SetPlayerStatusVisible(false);
+		return;
+	}
+
+	// Toggle in-game menu
+	if (IsInGameMenuOpen())
+	{
+		CloseInGameMenu();
+	}
+	else
+	{
+		OpenInGameMenu();
+	}
+}
+
+void UMOUIManagerComponent::OpenInGameMenu()
+{
+	if (!IsLocalOwningPlayerController())
+	{
+		return;
+	}
+
+	APlayerController* PlayerController = ResolveOwningPlayerController();
+	if (!IsValid(PlayerController))
+	{
+		return;
+	}
+
+	if (!InGameMenuClass)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] InGameMenuClass not set on UI manager component."));
+		return;
+	}
+
+	UMOInGameMenu* MenuWidget = InGameMenuWidget.Get();
+	if (!IsValid(MenuWidget))
+	{
+		MenuWidget = CreateWidget<UMOInGameMenu>(PlayerController, InGameMenuClass);
+		InGameMenuWidget = MenuWidget;
+
+		if (!IsValid(MenuWidget))
+		{
+			return;
+		}
+
+		MenuWidget->OnRequestClose.AddDynamic(this, &UMOUIManagerComponent::HandleInGameMenuRequestClose);
+		MenuWidget->OnExitToMainMenu.AddDynamic(this, &UMOUIManagerComponent::HandleInGameMenuExitToMainMenu);
+		MenuWidget->OnExitGame.AddDynamic(this, &UMOUIManagerComponent::HandleInGameMenuExitGame);
+	}
+
+	if (!MenuWidget->IsInViewport())
+	{
+		ShowModalBackground();
+		MenuWidget->AddToViewport(InGameMenuZOrder);
+	}
+
+	UpdateReticleVisibility();
+	ApplyInputModeForMenuOpen(PlayerController, MenuWidget);
+}
+
+void UMOUIManagerComponent::CloseInGameMenu()
+{
+	APlayerController* PlayerController = ResolveOwningPlayerController();
+
+	UMOInGameMenu* MenuWidget = InGameMenuWidget.Get();
+	if (IsValid(MenuWidget))
+	{
+		if (MenuWidget->IsInViewport())
+		{
+			MenuWidget->RemoveFromParent();
+		}
+	}
+
+	UpdateReticleVisibility();
+
+	if (!IsAnyMenuOpen())
+	{
+		HideModalBackground();
+		if (IsValid(PlayerController) && PlayerController->IsLocalController())
+		{
+			ApplyInputModeForMenuClosed(PlayerController);
+		}
+	}
+}
+
+bool UMOUIManagerComponent::IsInGameMenuOpen() const
+{
+	const UMOInGameMenu* MenuWidget = InGameMenuWidget.Get();
+	return IsValid(MenuWidget) && MenuWidget->IsInViewport();
+}
+
+void UMOUIManagerComponent::HandleInGameMenuRequestClose()
+{
+	CloseInGameMenu();
+}
+
+void UMOUIManagerComponent::HandleInGameMenuExitToMainMenu()
+{
+	PendingConfirmationContext = TEXT("ExitToMainMenu");
+	ShowConfirmationDialog(
+		NSLOCTEXT("MO", "ExitToMainMenuTitle", "Exit to Main Menu"),
+		NSLOCTEXT("MO", "ExitToMainMenuMessage", "Are you sure you want to exit to the main menu? Unsaved progress will be lost."),
+		NSLOCTEXT("MO", "Exit", "Exit"),
+		NSLOCTEXT("MO", "Cancel", "Cancel")
+	);
+}
+
+void UMOUIManagerComponent::HandleInGameMenuExitGame()
+{
+	PendingConfirmationContext = TEXT("ExitGame");
+	ShowConfirmationDialog(
+		NSLOCTEXT("MO", "ExitGameTitle", "Exit Game"),
+		NSLOCTEXT("MO", "ExitGameMessage", "Are you sure you want to quit the game? Unsaved progress will be lost."),
+		NSLOCTEXT("MO", "Quit", "Quit"),
+		NSLOCTEXT("MO", "Cancel", "Cancel")
+	);
+}
+
+void UMOUIManagerComponent::HandleSaveRequested(const FString& SlotName)
+{
+	// Check if slot exists for overwrite confirmation
+	UGameInstance* GameInstance = UGameplayStatics::GetGameInstance(this);
+	if (GameInstance)
+	{
+		UMOPersistenceSubsystem* Persistence = GameInstance->GetSubsystem<UMOPersistenceSubsystem>();
+		if (Persistence && Persistence->DoesSaveSlotExist(SlotName))
+		{
+			PendingConfirmationContext = FString::Printf(TEXT("Save:%s"), *SlotName);
+			ShowConfirmationDialog(
+				NSLOCTEXT("MO", "OverwriteSaveTitle", "Overwrite Save"),
+				FText::Format(NSLOCTEXT("MO", "OverwriteSaveMessage", "Are you sure you want to overwrite '{0}'?"), FText::FromString(SlotName)),
+				NSLOCTEXT("MO", "Overwrite", "Overwrite"),
+				NSLOCTEXT("MO", "Cancel", "Cancel")
+			);
+			return;
+		}
+
+		// New save - proceed directly
+		if (Persistence)
+		{
+			Persistence->SaveWorldToSlot(SlotName);
+			UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Saved to slot: %s"), *SlotName);
+		}
+	}
+}
+
+void UMOUIManagerComponent::HandleLoadRequested(const FString& SlotName)
+{
+	PendingConfirmationContext = FString::Printf(TEXT("Load:%s"), *SlotName);
+	ShowConfirmationDialog(
+		NSLOCTEXT("MO", "LoadGameTitle", "Load Game"),
+		NSLOCTEXT("MO", "LoadGameMessage", "Are you sure you want to load this save? Unsaved progress will be lost."),
+		NSLOCTEXT("MO", "Load", "Load"),
+		NSLOCTEXT("MO", "Cancel", "Cancel")
+	);
+}
+
+// =============================================================================
+// Item Context Menu
+// =============================================================================
+
+void UMOUIManagerComponent::ShowItemContextMenu(UMOInventoryComponent* InventoryComponent, const FGuid& ItemGuid, int32 SlotIndex, FVector2D ScreenPosition)
+{
+	if (!IsLocalOwningPlayerController())
+	{
+		return;
+	}
+
+	APlayerController* PlayerController = ResolveOwningPlayerController();
+	if (!IsValid(PlayerController))
+	{
+		return;
+	}
+
+	if (!ItemContextMenuClass)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] ItemContextMenuClass not set on UI manager component."));
+		return;
+	}
+
+	// Close existing context menu if any
+	CloseItemContextMenu();
+
+	UMOItemContextMenu* MenuWidget = CreateWidget<UMOItemContextMenu>(PlayerController, ItemContextMenuClass);
+	if (!IsValid(MenuWidget))
+	{
+		return;
+	}
+
+	ItemContextMenuWidget = MenuWidget;
+
+	MenuWidget->OnMenuClosed.AddDynamic(this, &UMOUIManagerComponent::HandleContextMenuClosed);
+	MenuWidget->OnActionSelected.AddDynamic(this, &UMOUIManagerComponent::HandleContextMenuAction);
+
+	MenuWidget->InitializeForItem(InventoryComponent, ItemGuid, SlotIndex);
+
+	// Add to viewport first, then position
+	MenuWidget->AddToViewport(ItemContextMenuZOrder);
+
+	// Position at mouse cursor using viewport slot positioning
+	MenuWidget->SetMenuPosition(ScreenPosition);
+}
+
+void UMOUIManagerComponent::CloseItemContextMenu()
+{
+	UMOItemContextMenu* MenuWidget = ItemContextMenuWidget.Get();
+	if (IsValid(MenuWidget))
+	{
+		if (MenuWidget->IsInViewport())
+		{
+			MenuWidget->RemoveFromParent();
+		}
+	}
+	ItemContextMenuWidget.Reset();
+}
+
+bool UMOUIManagerComponent::IsItemContextMenuOpen() const
+{
+	const UMOItemContextMenu* MenuWidget = ItemContextMenuWidget.Get();
+	return IsValid(MenuWidget) && MenuWidget->IsInViewport();
+}
+
+void UMOUIManagerComponent::HandleContextMenuClosed()
+{
+	ItemContextMenuWidget.Reset();
+}
+
+void UMOUIManagerComponent::HandleContextMenuAction(FName ActionId, const FGuid& ItemGuid)
+{
+	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Context menu action: %s for item %s"),
+		*ActionId.ToString(), *ItemGuid.ToString(EGuidFormats::DigitsWithHyphens));
+
+	UMOInventoryComponent* InventoryComponent = ResolveCurrentPawnInventoryComponent();
+	if (!IsValid(InventoryComponent))
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] No inventory component for context menu action"));
+		return;
+	}
+
+	if (ActionId == FName("Use"))
+	{
+		// Consume item - apply nutrition to survival stats
+		APlayerController* PC = ResolveOwningPlayerController();
+		if (IsValid(PC) && IsValid(PC->GetPawn()))
+		{
+			UMOSurvivalStatsComponent* SurvivalStats = PC->GetPawn()->FindComponentByClass<UMOSurvivalStatsComponent>();
+			if (IsValid(SurvivalStats))
+			{
+				if (SurvivalStats->ConsumeItem(InventoryComponent, ItemGuid))
+				{
+					UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Item consumed successfully"));
+				}
+				else
+				{
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] Failed to consume item"));
+				}
+			}
+			else
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] No SurvivalStatsComponent found on pawn"));
+			}
+		}
+	}
+	else if (ActionId == FName("Drop1"))
+	{
+		// Drop single item into world
+		DropItemToWorldByGuid(InventoryComponent, ItemGuid);
+	}
+	else if (ActionId == FName("DropAll"))
+	{
+		// Drop entire stack into world (DropItemByGuid drops the whole stack)
+		DropItemToWorldByGuid(InventoryComponent, ItemGuid);
+	}
+	else if (ActionId == FName("Inspect"))
+	{
+		// TODO: Implement inspection - show detailed item info, grant knowledge XP
+		UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Inspect action - not yet implemented"));
+	}
+	else if (ActionId == FName("SplitStack"))
+	{
+		// TODO: Implement stack splitting UI
+		UE_LOG(LogMOFramework, Log, TEXT("[MOUI] SplitStack action - not yet implemented"));
+	}
+	else if (ActionId == FName("Craft"))
+	{
+		// TODO: Implement crafting UI filtered to this item
+		UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Craft action - not yet implemented"));
+	}
+}
+
+// =============================================================================
+// Confirmation Dialog
+// =============================================================================
+
+void UMOUIManagerComponent::ShowConfirmationDialog(const FText& Title, const FText& Message, const FText& ConfirmText, const FText& CancelText)
+{
+	if (!IsLocalOwningPlayerController())
+	{
+		return;
+	}
+
+	APlayerController* PlayerController = ResolveOwningPlayerController();
+	if (!IsValid(PlayerController))
+	{
+		return;
+	}
+
+	if (!ConfirmationDialogClass)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] ConfirmationDialogClass not set on UI manager component."));
+		return;
+	}
+
+	UMOConfirmationDialog* DialogWidget = ConfirmationDialogWidget.Get();
+	if (!IsValid(DialogWidget))
+	{
+		DialogWidget = CreateWidget<UMOConfirmationDialog>(PlayerController, ConfirmationDialogClass);
+		ConfirmationDialogWidget = DialogWidget;
+
+		if (!IsValid(DialogWidget))
+		{
+			return;
+		}
+
+		DialogWidget->OnConfirmed.AddDynamic(this, &UMOUIManagerComponent::HandleConfirmationConfirmed);
+		DialogWidget->OnCancelled.AddDynamic(this, &UMOUIManagerComponent::HandleConfirmationCancelled);
+	}
+
+	DialogWidget->Setup(Title, Message, ConfirmText, CancelText);
+
+	if (!DialogWidget->IsInViewport())
+	{
+		DialogWidget->AddToViewport(ConfirmationDialogZOrder);
+	}
+}
+
+void UMOUIManagerComponent::HandleConfirmationConfirmed()
+{
+	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Confirmation confirmed: %s"), *PendingConfirmationContext);
+
+	if (PendingConfirmationContext == TEXT("ExitToMainMenu"))
+	{
+		// TODO: Implement return to main menu
+		UGameplayStatics::OpenLevel(this, TEXT("/Game/MainMenu"));
+	}
+	else if (PendingConfirmationContext == TEXT("ExitGame"))
+	{
+		UKismetSystemLibrary::QuitGame(this, nullptr, EQuitPreference::Quit, false);
+	}
+	else if (PendingConfirmationContext.StartsWith(TEXT("Save:")))
+	{
+		FString SlotName = PendingConfirmationContext.RightChop(5);
+		UGameInstance* GameInstance = UGameplayStatics::GetGameInstance(this);
+		if (GameInstance)
+		{
+			UMOPersistenceSubsystem* Persistence = GameInstance->GetSubsystem<UMOPersistenceSubsystem>();
+			if (Persistence)
+			{
+				Persistence->SaveWorldToSlot(SlotName);
+				UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Saved to slot: %s"), *SlotName);
+			}
+		}
+	}
+	else if (PendingConfirmationContext.StartsWith(TEXT("Load:")))
+	{
+		FString SlotName = PendingConfirmationContext.RightChop(5);
+		UGameInstance* GameInstance = UGameplayStatics::GetGameInstance(this);
+		if (GameInstance)
+		{
+			UMOPersistenceSubsystem* Persistence = GameInstance->GetSubsystem<UMOPersistenceSubsystem>();
+			if (Persistence)
+			{
+				CloseAllMenus();
+				Persistence->LoadWorldFromSlot(SlotName);
+				UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Loaded from slot: %s"), *SlotName);
+			}
+		}
+	}
+
+	PendingConfirmationContext.Empty();
+	OnConfirmationConfirmed.Broadcast();
+}
+
+void UMOUIManagerComponent::HandleConfirmationCancelled()
+{
+	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Confirmation cancelled: %s"), *PendingConfirmationContext);
+	PendingConfirmationContext.Empty();
+	OnConfirmationCancelled.Broadcast();
+}
+
+// =============================================================================
+// Menu Stack Helpers
+// =============================================================================
+
+bool UMOUIManagerComponent::IsAnyMenuOpen() const
+{
+	return IsInventoryMenuOpen() || IsInGameMenuOpen() || IsItemContextMenuOpen() || IsPlayerStatusVisible();
+}
+
+void UMOUIManagerComponent::CloseAllMenus()
+{
+	CloseItemContextMenu();
+
+	// Close player status
+	UMOPlayerStatusWidget* Status = PlayerStatusWidget.Get();
+	if (IsValid(Status))
+	{
+		Status->SetVisibility(ESlateVisibility::Collapsed);
+	}
+
+	// Close inventory (but don't recurse into CloseInventoryMenu's modal handling)
+	UMOInventoryMenu* InvMenu = InventoryMenuWidget.Get();
+	if (IsValid(InvMenu) && InvMenu->IsInViewport())
+	{
+		InvMenu->RemoveFromParent();
+	}
+
+	// Close in-game menu
+	UMOInGameMenu* GameMenu = InGameMenuWidget.Get();
+	if (IsValid(GameMenu) && GameMenu->IsInViewport())
+	{
+		GameMenu->RemoveFromParent();
+	}
+
+	// Close confirmation dialog
+	UMOConfirmationDialog* DialogWidget = ConfirmationDialogWidget.Get();
+	if (IsValid(DialogWidget) && DialogWidget->IsInViewport())
+	{
+		DialogWidget->RemoveFromParent();
+	}
+
+	// Hide modal background
+	HideModalBackground();
+
+	// Restore input mode
+	APlayerController* PlayerController = ResolveOwningPlayerController();
+	if (IsValid(PlayerController) && PlayerController->IsLocalController())
+	{
+		ApplyInputModeForMenuClosed(PlayerController);
+	}
+
+	UpdateReticleVisibility();
+}
+
+void UMOUIManagerComponent::UpdateReticleVisibility()
+{
+	const bool bMenuOpen = IsAnyMenuOpen();
+
+	if (bHideReticleWhenMenuOpen)
+	{
+		SetReticleVisible(!bMenuOpen);
+	}
+
+	if (bHidePlayerStatusWhenMenuOpen)
+	{
+		SetPlayerStatusVisible(!bMenuOpen);
+	}
+}
+
+void UMOUIManagerComponent::ShowModalBackground()
+{
+	APlayerController* PlayerController = ResolveOwningPlayerController();
+	if (!IsValid(PlayerController))
+	{
+		return;
+	}
+
+	UMOModalBackground* Background = ModalBackgroundWidget.Get();
+	if (!IsValid(Background))
+	{
+		Background = CreateWidget<UMOModalBackground>(PlayerController, UMOModalBackground::StaticClass());
+		if (!IsValid(Background))
+		{
+			return;
+		}
+
+		ModalBackgroundWidget = Background;
+		Background->OnBackgroundClicked.AddDynamic(this, &UMOUIManagerComponent::HandleModalBackgroundClicked);
+	}
+
+	if (!Background->IsInViewport())
+	{
+		Background->AddToViewport(ModalBackgroundZOrder);
+	}
+}
+
+void UMOUIManagerComponent::HideModalBackground()
+{
+	UMOModalBackground* Background = ModalBackgroundWidget.Get();
+	if (IsValid(Background) && Background->IsInViewport())
+	{
+		Background->RemoveFromParent();
+	}
+}
+
+void UMOUIManagerComponent::HandleModalBackgroundClicked()
+{
+	// Close all open menus when clicking outside
+	CloseAllMenus();
+}
+
+void UMOUIManagerComponent::DropItemToWorldByGuid(UMOInventoryComponent* InventoryComponent, const FGuid& ItemGuid)
+{
+	if (!IsValid(InventoryComponent) || !ItemGuid.IsValid())
+	{
+		return;
+	}
+
+	APlayerController* PC = ResolveOwningPlayerController();
+	if (!IsValid(PC))
+	{
+		return;
+	}
+
+	APawn* PlayerPawn = PC->GetPawn();
+	if (!IsValid(PlayerPawn))
+	{
+		return;
+	}
+
+	// Calculate drop location in front of player
+	FVector PlayerLocation = PlayerPawn->GetActorLocation();
+	FRotator PlayerRotation = PlayerPawn->GetActorRotation();
+	PlayerRotation.Pitch = 0.0f; // Flatten to horizontal
+
+	// Random offset in front of player
+	const float ForwardDistance = FMath::RandRange(150.0f, 250.0f);
+	const float SideOffset = FMath::RandRange(-50.0f, 50.0f);
+
+	FVector ForwardDir = PlayerRotation.Vector();
+	FVector RightDir = FRotationMatrix(PlayerRotation).GetScaledAxis(EAxis::Y);
+	FVector DropLocation = PlayerLocation + (ForwardDir * ForwardDistance) + (RightDir * SideOffset);
+
+	// Trace down to find ground
+	UWorld* World = GetWorld();
+	if (IsValid(World))
+	{
+		FHitResult HitResult;
+		FCollisionQueryParams QueryParams;
+		QueryParams.AddIgnoredActor(PlayerPawn);
+
+		const FVector TraceStart = DropLocation + FVector(0.0f, 0.0f, 200.0f);
+		const FVector TraceEnd = DropLocation - FVector(0.0f, 0.0f, 500.0f);
+
+		if (World->LineTraceSingleByChannel(HitResult, TraceStart, TraceEnd, ECC_Visibility, QueryParams))
+		{
+			DropLocation = HitResult.Location + FVector(0.0f, 0.0f, 100.0f);
+		}
+		else
+		{
+			DropLocation = DropLocation + FVector(0.0f, 0.0f, 100.0f);
+		}
+	}
+
+	const FRotator DropRotation(0.0f, FMath::RandRange(0.0f, 360.0f), 0.0f);
+
+	// Drop the item by GUID
+	AActor* DroppedActor = InventoryComponent->DropItemByGuid(ItemGuid, DropLocation, DropRotation);
+	if (IsValid(DroppedActor))
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Dropped item at %s"), *DropLocation.ToString());
+
+		// Enable physics for dropped item
+		if (AMOWorldItem* WorldItem = Cast<AMOWorldItem>(DroppedActor))
+		{
+			WorldItem->EnableDropPhysics();
+		}
+	}
 }

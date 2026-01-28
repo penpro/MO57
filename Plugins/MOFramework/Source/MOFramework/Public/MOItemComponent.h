@@ -20,8 +20,12 @@ public:
 	UMOItemComponent();
 
 	// Static item identifier - references row in item database DataTable.
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, ReplicatedUsing=OnRep_ItemDefinitionId, Category="MO|Item")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, ReplicatedUsing=OnRep_ItemDefinitionId, Category="MO|Item", meta=(GetOptions="GetItemDefinitionOptions"))
 	FName ItemDefinitionId = NAME_None;
+
+	// Returns all available ItemDefinitionIds from the configured DataTable (for dropdown).
+	UFUNCTION()
+	TArray<FName> GetItemDefinitionOptions() const;
 
 	// Current quantity represented by this world item instance.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Replicated, Category="MO|Item", meta=(ClampMin="1"))

@@ -1,6 +1,8 @@
 #include "MOPersistenceSubsystem.h"
+#include "MOFramework.h"
 
 #include "Engine/World.h"
+#include "HAL/FileManager.h"
 #include "EngineUtils.h"
 #include "Kismet/GameplayStatics.h"
 #include "TimerManager.h"
@@ -11,6 +13,7 @@
 #include "MOIdentityRegistrySubsystem.h"
 #include "MOInventoryComponent.h"
 #include "MOItemComponent.h"
+#include "MOPersistenceSettings.h"
 
 static FString StripUEDPIEPrefixes(const FString& InPath)
 {
@@ -161,7 +164,7 @@ bool UMOPersistenceSubsystem::SaveWorldToSlot(const FString& SlotName)
 
     if (!World || !World->IsGameWorld() || World->GetNetMode() == NM_Client)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[MOPersist] Save/Load ignored (no valid authority game world). World=%s NetMode=%d"),
+        UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] Save/Load ignored (no valid authority game world). World=%s NetMode=%d"),
             *GetNameSafe(World),
             World ? (int32)World->GetNetMode() : -1);
         return false;
@@ -184,7 +187,7 @@ bool UMOPersistenceSubsystem::SaveWorldToSlot(const FString& SlotName)
 
     const bool bOk = UGameplayStatics::SaveGameToSlot(SaveObject, SlotName, 0);
 
-    UE_LOG(LogTemp, Warning, TEXT("[MOPersist] Save slot=%s ok=%d destroyed=%d pawns=%d inventories=%d worldItems=%d netmode=%d"),
+    UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] Save slot=%s ok=%d destroyed=%d pawns=%d inventories=%d worldItems=%d netmode=%d"),
         *SlotName,
         bOk ? 1 : 0,
         SaveObject->DestroyedGuids.Num(),
@@ -217,7 +220,7 @@ FMOLoadResult UMOPersistenceSubsystem::LoadWorldFromSlotWithResult(const FString
         LastLoadResult.ErrorMessage = FString::Printf(TEXT("No valid authority game world. World=%s NetMode=%d"),
             *GetNameSafe(World),
             World ? (int32)World->GetNetMode() : -1);
-        UE_LOG(LogTemp, Warning, TEXT("[MOPersist] Save/Load ignored (%s)"), *LastLoadResult.ErrorMessage);
+        UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] Save/Load ignored (%s)"), *LastLoadResult.ErrorMessage);
         return LastLoadResult;
     }
 
@@ -226,7 +229,7 @@ FMOLoadResult UMOPersistenceSubsystem::LoadWorldFromSlotWithResult(const FString
     if (!LoadedTyped)
     {
         LastLoadResult.ErrorMessage = FString::Printf(TEXT("Failed to load save from slot '%s'"), *SlotName);
-        UE_LOG(LogTemp, Warning, TEXT("[MOPersist] %s"), *LastLoadResult.ErrorMessage);
+        UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] %s"), *LastLoadResult.ErrorMessage);
         return LastLoadResult;
     }
 
@@ -241,7 +244,7 @@ FMOLoadResult UMOPersistenceSubsystem::LoadWorldFromSlotWithResult(const FString
     PawnInventoryGuidsAppliedThisLoad.Reset();
     ReplacedGuidsThisLoad.Reset();
 
-    UE_LOG(LogTemp, Warning, TEXT("[MOPersist] LOAD: slot=%s destroyed=%d pawns=%d inventories=%d worldItems=%d netmode=%d"),
+    UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] LOAD: slot=%s destroyed=%d pawns=%d inventories=%d worldItems=%d netmode=%d"),
         *SlotName,
         LoadedTyped->DestroyedGuids.Num(),
         LoadedTyped->PersistedPawns.Num(),
@@ -253,7 +256,7 @@ FMOLoadResult UMOPersistenceSubsystem::LoadWorldFromSlotWithResult(const FString
     for (int32 i = 0; i < LoadedTyped->PersistedPawns.Num(); i++)
     {
         const FMOPersistedPawnRecord& Record = LoadedTyped->PersistedPawns[i];
-        UE_LOG(LogTemp, Warning, TEXT("[MOPersist] LOAD: PawnRecord[%d] GUID=%s Class=%s Location=%s"),
+        UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] LOAD: PawnRecord[%d] GUID=%s Class=%s Location=%s"),
             i,
             *Record.PawnGuid.ToString(EGuidFormats::DigitsWithHyphens),
             *Record.PawnClassPath.ToString(),
@@ -288,19 +291,19 @@ FMOLoadResult UMOPersistenceSubsystem::LoadWorldFromSlotWithResult(const FString
     if (LastLoadResult.PawnsFailed > 0)
     {
         LastLoadResult.ErrorMessage = FString::Printf(TEXT("Loaded with %d pawn(s) failed to spawn"), LastLoadResult.PawnsFailed);
-        UE_LOG(LogTemp, Error, TEXT("[MOPersist] WARNING: %s. Failed GUIDs: "), *LastLoadResult.ErrorMessage);
+        UE_LOG(LogMOFramework, Error, TEXT("[MOPersist] WARNING: %s. Failed GUIDs: "), *LastLoadResult.ErrorMessage);
         for (const FGuid& FailedGuid : LastLoadResult.FailedPawnGuids)
         {
-            UE_LOG(LogTemp, Error, TEXT("[MOPersist]   - %s"), *FailedGuid.ToString(EGuidFormats::DigitsWithHyphens));
+            UE_LOG(LogMOFramework, Error, TEXT("[MOPersist]   - %s"), *FailedGuid.ToString(EGuidFormats::DigitsWithHyphens));
         }
     }
 
     if (LastLoadResult.ItemsFailed > 0)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[MOPersist] %d world item(s) failed to spawn"), LastLoadResult.ItemsFailed);
+        UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] %d world item(s) failed to spawn"), LastLoadResult.ItemsFailed);
     }
 
-    UE_LOG(LogTemp, Log, TEXT("[MOPersist] Load complete: Pawns=%d/%d, Items=%d/%d"),
+    UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Load complete: Pawns=%d/%d, Items=%d/%d"),
         LastLoadResult.PawnsLoaded, LastLoadResult.PawnsLoaded + LastLoadResult.PawnsFailed,
         LastLoadResult.ItemsLoaded, LastLoadResult.ItemsLoaded + LastLoadResult.ItemsFailed);
 
@@ -338,7 +341,7 @@ void UMOPersistenceSubsystem::ApplyDestroyedGuidsToWorld(UWorld* World)
     int32 MatchesFound = 0;
     int32 DestroyIssued = 0;
 
-    UE_LOG(LogTemp, Warning, TEXT("[MOPersist] ApplyDestroyedGuidsToWorld World=%s NetMode=%d DestroyedCount=%d"),
+    UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] ApplyDestroyedGuidsToWorld World=%s NetMode=%d DestroyedCount=%d"),
         *World->GetName(), (int32)NetMode, SessionDestroyedGuids.Num());
 
     if (SessionDestroyedGuids.Num() == 0)
@@ -385,7 +388,7 @@ void UMOPersistenceSubsystem::ApplyDestroyedGuidsToWorld(UWorld* World)
         DestroyIssued++;
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("[MOPersist] Apply complete MatchesFound=%d DestroyIssued=%d"),
+    UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] Apply complete MatchesFound=%d DestroyIssued=%d"),
         MatchesFound, DestroyIssued);
 }
 
@@ -482,21 +485,21 @@ void UMOPersistenceSubsystem::CapturePersistedPawnsAndInventories(UWorld* World,
         if (!IsValid(IdentityComponent))
         {
             SkippedNoIdentity++;
-            UE_LOG(LogTemp, Warning, TEXT("[MOPersist] SAVE: Skipping pawn '%s' - no IdentityComponent"), *Pawn->GetName());
+            UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] SAVE: Skipping pawn '%s' - no IdentityComponent"), *Pawn->GetName());
             continue;
         }
 
         if (!IsValid(InventoryComponent))
         {
             SkippedNoInventory++;
-            UE_LOG(LogTemp, Warning, TEXT("[MOPersist] SAVE: Skipping pawn '%s' - no InventoryComponent"), *Pawn->GetName());
+            UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] SAVE: Skipping pawn '%s' - no InventoryComponent"), *Pawn->GetName());
             continue;
         }
 
         const FGuid PawnGuid = IdentityComponent->GetOrCreateGuid();
         if (!PawnGuid.IsValid())
         {
-            UE_LOG(LogTemp, Warning, TEXT("[MOPersist] SAVE: Skipping pawn '%s' - invalid GUID"), *Pawn->GetName());
+            UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] SAVE: Skipping pawn '%s' - invalid GUID"), *Pawn->GetName());
             continue;
         }
 
@@ -506,7 +509,7 @@ void UMOPersistenceSubsystem::CapturePersistedPawnsAndInventories(UWorld* World,
         const FSoftObjectPath PawnClassSoftPath(Pawn->GetClass());
         PawnRecord.PawnClassPath = FSoftClassPath(PawnClassSoftPath.ToString());
 
-        UE_LOG(LogTemp, Log, TEXT("[MOPersist] SAVE: Capturing pawn '%s' GUID=%s Class=%s Location=%s"),
+        UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] SAVE: Capturing pawn '%s' GUID=%s Class=%s Location=%s"),
             *Pawn->GetName(),
             *PawnGuid.ToString(EGuidFormats::DigitsWithHyphens),
             *PawnRecord.PawnClassPath.ToString(),
@@ -519,7 +522,7 @@ void UMOPersistenceSubsystem::CapturePersistedPawnsAndInventories(UWorld* World,
         SaveObject->PawnInventoriesByGuid.Add(PawnGuid, InventorySaveData);
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("[MOPersist] SAVE SUMMARY: TotalPawns=%d Captured=%d SkippedNoIdentity=%d SkippedNoInventory=%d"),
+    UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] SAVE SUMMARY: TotalPawns=%d Captured=%d SkippedNoIdentity=%d SkippedNoInventory=%d"),
         TotalPawns, SaveObject->PersistedPawns.Num(), SkippedNoIdentity, SkippedNoInventory);
 }
 
@@ -599,7 +602,7 @@ void UMOPersistenceSubsystem::RespawnPersistedPawns(UWorld* World, const TArray<
     {
         if (!PawnRecord.PawnGuid.IsValid())
         {
-            UE_LOG(LogTemp, Warning, TEXT("[MOPersist] Skipping pawn with invalid GUID"));
+            UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] Skipping pawn with invalid GUID"));
             continue;
         }
 
@@ -615,12 +618,13 @@ void UMOPersistenceSubsystem::RespawnPersistedPawns(UWorld* World, const TArray<
         UClass* PawnClassToSpawn = LoadedPawnClass;
         if (!PawnClassToSpawn)
         {
-            PawnClassToSpawn = DefaultPersistedPawnClass.Get();
+            // Try fallback from Project Settings
+            PawnClassToSpawn = UMOPersistenceSettings::GetDefaultPersistedPawnClass();
             bUsedFallback = true;
 
             if (PawnClassToSpawn)
             {
-                UE_LOG(LogTemp, Warning, TEXT("[MOPersist] Pawn class '%s' failed to load for Guid=%s, using fallback '%s'"),
+                UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] Pawn class '%s' failed to load for Guid=%s, using fallback '%s'"),
                     *PawnRecord.PawnClassPath.ToString(),
                     *PawnRecord.PawnGuid.ToString(EGuidFormats::DigitsWithHyphens),
                     *PawnClassToSpawn->GetName());
@@ -630,7 +634,7 @@ void UMOPersistenceSubsystem::RespawnPersistedPawns(UWorld* World, const TArray<
         if (!PawnClassToSpawn)
         {
             // CRITICAL: No class available - pawn will be lost!
-            UE_LOG(LogTemp, Error, TEXT("[MOPersist] PAWN LOST: No pawn class to spawn for Guid=%s (original class: %s, no fallback set)"),
+            UE_LOG(LogMOFramework, Error, TEXT("[MOPersist] PAWN LOST: No pawn class to spawn for Guid=%s (original class: %s). Configure 'DefaultPersistedPawnClass' in Project Settings > Plugins > MO Persistence to prevent data loss."),
                 *PawnRecord.PawnGuid.ToString(EGuidFormats::DigitsWithHyphens),
                 *PawnRecord.PawnClassPath.ToString());
             OutResult.PawnsFailed++;
@@ -648,7 +652,7 @@ void UMOPersistenceSubsystem::RespawnPersistedPawns(UWorld* World, const TArray<
 
         if (!IsValid(DeferredPawn))
         {
-            UE_LOG(LogTemp, Error, TEXT("[MOPersist] PAWN LOST: SpawnActorDeferred failed for Guid=%s class=%s"),
+            UE_LOG(LogMOFramework, Error, TEXT("[MOPersist] PAWN LOST: SpawnActorDeferred failed for Guid=%s class=%s"),
                 *PawnRecord.PawnGuid.ToString(EGuidFormats::DigitsWithHyphens),
                 *PawnClassToSpawn->GetName());
             OutResult.PawnsFailed++;
@@ -667,14 +671,14 @@ void UMOPersistenceSubsystem::RespawnPersistedPawns(UWorld* World, const TArray<
             if (IdentityComponent)
             {
                 IdentityComponent->RegisterComponent();
-                UE_LOG(LogTemp, Warning, TEXT("[MOPersist] Added missing IdentityComponent to pawn class=%s"),
+                UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] Added missing IdentityComponent to pawn class=%s"),
                     *PawnClassToSpawn->GetName());
             }
         }
 
         if (!IsValid(IdentityComponent))
         {
-            UE_LOG(LogTemp, Error, TEXT("[MOPersist] PAWN LOST: Failed to create IdentityComponent for Guid=%s class=%s"),
+            UE_LOG(LogMOFramework, Error, TEXT("[MOPersist] PAWN LOST: Failed to create IdentityComponent for Guid=%s class=%s"),
                 *PawnRecord.PawnGuid.ToString(EGuidFormats::DigitsWithHyphens),
                 *PawnClassToSpawn->GetName());
             DeferredPawn->Destroy();
@@ -691,14 +695,14 @@ void UMOPersistenceSubsystem::RespawnPersistedPawns(UWorld* World, const TArray<
             if (InventoryComponent)
             {
                 InventoryComponent->RegisterComponent();
-                UE_LOG(LogTemp, Warning, TEXT("[MOPersist] Added missing InventoryComponent to pawn class=%s"),
+                UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] Added missing InventoryComponent to pawn class=%s"),
                     *PawnClassToSpawn->GetName());
             }
         }
 
         if (!AssignGuidToIdentityComponent(IdentityComponent, PawnRecord.PawnGuid))
         {
-            UE_LOG(LogTemp, Error, TEXT("[MOPersist] PAWN LOST: Failed to assign GUID %s to pawn"),
+            UE_LOG(LogMOFramework, Error, TEXT("[MOPersist] PAWN LOST: Failed to assign GUID %s to pawn"),
                 *PawnRecord.PawnGuid.ToString(EGuidFormats::DigitsWithHyphens));
             DeferredPawn->Destroy();
             OutResult.PawnsFailed++;
@@ -711,7 +715,7 @@ void UMOPersistenceSubsystem::RespawnPersistedPawns(UWorld* World, const TArray<
 
         if (bUsedFallback)
         {
-            UE_LOG(LogTemp, Warning, TEXT("[MOPersist] Pawn Guid=%s spawned using fallback class"),
+            UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] Pawn Guid=%s spawned using fallback class"),
                 *PawnRecord.PawnGuid.ToString(EGuidFormats::DigitsWithHyphens));
         }
     }
@@ -837,7 +841,7 @@ void UMOPersistenceSubsystem::CaptureWorldItems(UWorld* World, UMOWorldSaveGame*
         const FGuid ItemGuid = IdentityComponent->GetOrCreateGuid();
         if (!ItemGuid.IsValid())
         {
-            UE_LOG(LogTemp, Warning, TEXT("[MOPersist] SAVE ITEMS: Skipping item '%s' - invalid GUID"), *Actor->GetName());
+            UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] SAVE ITEMS: Skipping item '%s' - invalid GUID"), *Actor->GetName());
             continue;
         }
 
@@ -845,7 +849,7 @@ void UMOPersistenceSubsystem::CaptureWorldItems(UWorld* World, UMOWorldSaveGame*
         if (SessionDestroyedGuids.Contains(ItemGuid))
         {
             SkippedDestroyed++;
-            UE_LOG(LogTemp, Log, TEXT("[MOPersist] SAVE ITEMS: Skipping destroyed item '%s' GUID=%s"),
+            UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] SAVE ITEMS: Skipping destroyed item '%s' GUID=%s"),
                 *Actor->GetName(), *ItemGuid.ToString(EGuidFormats::DigitsWithHyphens));
             continue;
         }
@@ -857,7 +861,7 @@ void UMOPersistenceSubsystem::CaptureWorldItems(UWorld* World, UMOWorldSaveGame*
         ItemRecord.ItemDefinitionId = ItemComponent->ItemDefinitionId;
         ItemRecord.Quantity = FMath::Max(1, ItemComponent->Quantity);
 
-        UE_LOG(LogTemp, Log, TEXT("[MOPersist] SAVE ITEMS: Capturing item '%s' GUID=%s Class=%s"),
+        UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] SAVE ITEMS: Capturing item '%s' GUID=%s Class=%s"),
             *Actor->GetName(),
             *ItemGuid.ToString(EGuidFormats::DigitsWithHyphens),
             *ItemRecord.ItemClassPath.ToString());
@@ -865,7 +869,7 @@ void UMOPersistenceSubsystem::CaptureWorldItems(UWorld* World, UMOWorldSaveGame*
         SaveObject->WorldItems.Add(ItemRecord);
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("[MOPersist] SAVE ITEMS SUMMARY: TotalActors=%d Captured=%d SkippedNoPersist=%d SkippedNoIdentity=%d SkippedNoItem=%d SkippedDestroyed=%d"),
+    UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] SAVE ITEMS SUMMARY: TotalActors=%d Captured=%d SkippedNoPersist=%d SkippedNoIdentity=%d SkippedNoItem=%d SkippedDestroyed=%d"),
         TotalActors, SaveObject->WorldItems.Num(), SkippedNoPersist, SkippedNoIdentity, SkippedNoItem, SkippedDestroyed);
 }
 
@@ -914,24 +918,24 @@ void UMOPersistenceSubsystem::RespawnWorldItems(UWorld* World, const TArray<FMOP
         return;
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("[MOPersist] LOAD ITEMS: Attempting to respawn %d world items"), WorldItems.Num());
+    UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] LOAD ITEMS: Attempting to respawn %d world items"), WorldItems.Num());
 
     for (const FMOPersistedWorldItemRecord& ItemRecord : WorldItems)
     {
         if (!ItemRecord.ItemGuid.IsValid())
         {
-            UE_LOG(LogTemp, Warning, TEXT("[MOPersist] LOAD ITEMS: Skipping world item with invalid GUID"));
+            UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] LOAD ITEMS: Skipping world item with invalid GUID"));
             continue;
         }
 
         if (SessionDestroyedGuids.Contains(ItemRecord.ItemGuid))
         {
-            UE_LOG(LogTemp, Log, TEXT("[MOPersist] LOAD ITEMS: Skipping destroyed item GUID=%s"),
+            UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] LOAD ITEMS: Skipping destroyed item GUID=%s"),
                 *ItemRecord.ItemGuid.ToString(EGuidFormats::DigitsWithHyphens));
             continue;
         }
 
-        UE_LOG(LogTemp, Log, TEXT("[MOPersist] LOAD ITEMS: Respawning item GUID=%s Class=%s"),
+        UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] LOAD ITEMS: Respawning item GUID=%s Class=%s"),
             *ItemRecord.ItemGuid.ToString(EGuidFormats::DigitsWithHyphens),
             *ItemRecord.ItemClassPath.ToString());
 
@@ -943,7 +947,7 @@ void UMOPersistenceSubsystem::RespawnWorldItems(UWorld* World, const TArray<FMOP
 
         if (!LoadedItemClass)
         {
-            UE_LOG(LogTemp, Warning, TEXT("[MOPersist] World item class failed to load for Guid=%s ClassPath=%s"),
+            UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] World item class failed to load for Guid=%s ClassPath=%s"),
                 *ItemRecord.ItemGuid.ToString(EGuidFormats::DigitsWithHyphens),
                 *ItemRecord.ItemClassPath.ToString());
             OutResult.ItemsFailed++;
@@ -960,7 +964,7 @@ void UMOPersistenceSubsystem::RespawnWorldItems(UWorld* World, const TArray<FMOP
 
         if (!IsValid(DeferredActor))
         {
-            UE_LOG(LogTemp, Warning, TEXT("[MOPersist] SpawnActorDeferred failed for world item Guid=%s"),
+            UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] SpawnActorDeferred failed for world item Guid=%s"),
                 *ItemRecord.ItemGuid.ToString(EGuidFormats::DigitsWithHyphens));
             OutResult.ItemsFailed++;
             continue;
@@ -971,7 +975,7 @@ void UMOPersistenceSubsystem::RespawnWorldItems(UWorld* World, const TArray<FMOP
 
         if (!IsValid(IdentityComponent) || !IsValid(ItemComponent))
         {
-            UE_LOG(LogTemp, Warning, TEXT("[MOPersist] Spawned world item missing required components for Guid=%s"),
+            UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] Spawned world item missing required components for Guid=%s"),
                 *ItemRecord.ItemGuid.ToString(EGuidFormats::DigitsWithHyphens));
             DeferredActor->Destroy();
             OutResult.ItemsFailed++;
@@ -986,4 +990,73 @@ void UMOPersistenceSubsystem::RespawnWorldItems(UWorld* World, const TArray<FMOP
         UGameplayStatics::FinishSpawningActor(DeferredActor, ItemRecord.Transform);
         OutResult.ItemsLoaded++;
     }
+}
+
+TArray<FString> UMOPersistenceSubsystem::GetAllSaveSlots() const
+{
+    TArray<FString> Result;
+
+    const FString SaveDir = FPaths::ProjectSavedDir() / TEXT("SaveGames");
+
+    IFileManager& FileManager = IFileManager::Get();
+    TArray<FString> FoundFiles;
+    FileManager.FindFiles(FoundFiles, *SaveDir, TEXT("*.sav"));
+
+    for (const FString& FileName : FoundFiles)
+    {
+        // Remove .sav extension
+        FString SlotName = FPaths::GetBaseFilename(FileName);
+        Result.Add(SlotName);
+    }
+
+    return Result;
+}
+
+TArray<FString> UMOPersistenceSubsystem::GetSaveSlotsForWorld(const FString& WorldIdentifier) const
+{
+    TArray<FString> AllSlots = GetAllSaveSlots();
+    TArray<FString> FilteredSlots;
+
+    for (const FString& Slot : AllSlots)
+    {
+        if (Slot.Contains(WorldIdentifier))
+        {
+            FilteredSlots.Add(Slot);
+        }
+    }
+
+    return FilteredSlots;
+}
+
+FString UMOPersistenceSubsystem::GetCurrentWorldIdentifier() const
+{
+    UWorld* World = BoundWorld.Get();
+    if (!World)
+    {
+        World = GetWorld();
+    }
+
+    if (!World)
+    {
+        return FString();
+    }
+
+    // Use the map name as the world identifier
+    FString MapName = World->GetMapName();
+
+    // Strip PIE prefixes if present
+    MapName = StripUEDPIEPrefixes(MapName);
+
+    // Remove path, keep just the map name
+    return FPaths::GetBaseFilename(MapName);
+}
+
+bool UMOPersistenceSubsystem::DeleteSaveSlot(const FString& SlotName)
+{
+    return UGameplayStatics::DeleteGameInSlot(SlotName, 0);
+}
+
+bool UMOPersistenceSubsystem::DoesSaveSlotExist(const FString& SlotName) const
+{
+    return UGameplayStatics::DoesSaveGameExist(SlotName, 0);
 }

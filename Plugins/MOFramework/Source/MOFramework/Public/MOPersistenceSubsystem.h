@@ -68,6 +68,26 @@ public:
     UFUNCTION(BlueprintPure, Category="MO|Persistence")
     bool HasFailedPawns() const { return LastLoadResult.PawnsFailed > 0; }
 
+    /** Get all save slot names (without extension). */
+    UFUNCTION(BlueprintCallable, Category="MO|Persistence")
+    TArray<FString> GetAllSaveSlots() const;
+
+    /** Get save slots filtered by world identifier. */
+    UFUNCTION(BlueprintCallable, Category="MO|Persistence")
+    TArray<FString> GetSaveSlotsForWorld(const FString& WorldIdentifier) const;
+
+    /** Get the current world's identifier (used for filtering saves). */
+    UFUNCTION(BlueprintPure, Category="MO|Persistence")
+    FString GetCurrentWorldIdentifier() const;
+
+    /** Delete a save slot. Returns true if deleted successfully. */
+    UFUNCTION(BlueprintCallable, Category="MO|Persistence")
+    bool DeleteSaveSlot(const FString& SlotName);
+
+    /** Check if a save slot exists. */
+    UFUNCTION(BlueprintPure, Category="MO|Persistence")
+    bool DoesSaveSlotExist(const FString& SlotName) const;
+
     UFUNCTION(BlueprintCallable, Category="MO|Persistence")
     bool IsGuidDestroyed(const FGuid& Guid) const;
 
@@ -109,9 +129,6 @@ private:
     void ClearLoadSuppression();
 
 private:
-    UPROPERTY(EditDefaultsOnly, Category="MO|Persistence")
-    TSoftClassPtr<APawn> DefaultPersistedPawnClass;
-
     UPROPERTY()
     TSet<FGuid> SessionDestroyedGuids;
 

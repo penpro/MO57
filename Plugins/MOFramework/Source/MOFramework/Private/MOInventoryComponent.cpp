@@ -1,7 +1,20 @@
 #include "MOInventoryComponent.h"
+#include "MOFramework.h"
 
 #include "Net/UnrealNetwork.h"
 #include "Net/Core/PushModel/PushModel.h"
+#include "Engine/DataTable.h"
+#include "Engine/GameInstance.h"
+#include "Engine/Engine.h"
+#include "MOItemDatabaseSettings.h"
+#include "MOItemDefinitionRow.h"
+#include "MOWorldItem.h"
+#include "MOItemComponent.h"
+#include "MOIdentityComponent.h"
+#include "MOPersistenceSubsystem.h"
+#include "UObject/UnrealType.h"
+#include "UObject/SoftObjectPtr.h"
+
 
 UMOInventoryComponent::UMOInventoryComponent()
 {
@@ -15,14 +28,21 @@ void UMOInventoryComponent::BeginPlay()
 
 	Inventory.SetOwner(this);
 	EnsureSlotsInitialized();
+
+	// Apply starting items on server
+	AActor* OwnerActor = GetOwner();
+	if (IsValid(OwnerActor) && OwnerActor->HasAuthority())
+	{
+		ApplyStartingItems();
+	}
 }
 
 void UMOInventoryComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
-	DOREPLIFETIME(UMOInventoryComponent, Inventory);
-	DOREPLIFETIME(UMOInventoryComponent, SlotItemGuids);
+	DOREPLIFETIME_CONDITION(UMOInventoryComponent, Inventory, COND_OwnerOnly);
+	DOREPLIFETIME_CONDITION(UMOInventoryComponent, SlotItemGuids, COND_OwnerOnly);
 }
 
 int32 UMOInventoryComponent::FindEntryIndexByGuid(const FGuid& ItemGuid) const
@@ -48,7 +68,7 @@ bool UMOInventoryComponent::AddItemByGuid(const FGuid& ItemGuid, const FName Ite
 	AActor* OwnerActor = GetOwner();
 	if (!IsValid(OwnerActor) || !OwnerActor->HasAuthority())
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[MOInventory] AddItemByGuid requires authority"));
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventory] AddItemByGuid requires authority"));
 		return false;
 	}
 
@@ -96,7 +116,7 @@ bool UMOInventoryComponent::RemoveItemByGuid(const FGuid& ItemGuid, int32 Quanti
 	AActor* OwnerActor = GetOwner();
 	if (!IsValid(OwnerActor) || !OwnerActor->HasAuthority())
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[MOInventory] RemoveItemByGuid requires authority"));
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventory] RemoveItemByGuid requires authority"));
 		return false;
 	}
 
@@ -364,7 +384,7 @@ bool UMOInventoryComponent::SetSlotGuid(int32 SlotIndex, const FGuid& ItemGuid)
 	AActor* OwnerActor = GetOwner();
 	if (!IsValid(OwnerActor) || !OwnerActor->HasAuthority())
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[MOInventory] SetSlotGuid requires authority"));
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventory] SetSlotGuid requires authority"));
 		return false;
 	}
 
@@ -410,7 +430,7 @@ bool UMOInventoryComponent::SwapSlots(int32 SlotIndexA, int32 SlotIndexB)
 	AActor* OwnerActor = GetOwner();
 	if (!IsValid(OwnerActor) || !OwnerActor->HasAuthority())
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[MOInventory] SwapSlots requires authority"));
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventory] SwapSlots requires authority"));
 		return false;
 	}
 
@@ -455,7 +475,7 @@ void UMOInventoryComponent::ClearInventoryAndSlots()
 	AActor* OwnerActor = GetOwner();
 	if (!IsValid(OwnerActor) || !OwnerActor->HasAuthority())
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[MOInventory] ClearInventoryAndSlots requires authority"));
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventory] ClearInventoryAndSlots requires authority"));
 		return;
 	}
 
@@ -480,7 +500,7 @@ bool UMOInventoryComponent::SetSlotCountAuthority(int32 NewSlotCount)
 	AActor* OwnerActor = GetOwner();
 	if (!IsValid(OwnerActor) || !OwnerActor->HasAuthority())
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[MOInventory] SetSlotCountAuthority requires authority"));
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventory] SetSlotCountAuthority requires authority"));
 		return false;
 	}
 
@@ -535,7 +555,7 @@ bool UMOInventoryComponent::ApplySaveDataAuthority(const FMOInventorySaveData& I
 	AActor* OwnerActor = GetOwner();
 	if (!IsValid(OwnerActor) || !OwnerActor->HasAuthority())
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[MOInventory] ApplySaveDataAuthority requires authority"));
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventory] ApplySaveDataAuthority requires authority"));
 		return false;
 	}
 
@@ -575,4 +595,377 @@ bool UMOInventoryComponent::ApplySaveDataAuthority(const FMOInventorySaveData& I
 
 	bAutoAssignNewItemsToSlots = bPreviousAutoAssign;
 	return true;
+}
+
+namespace
+{
+	static TSubclassOf<AActor> ResolveDropActorClassFromDataTable(const FName& ItemDefinitionId)
+	{
+		// First try using the strongly-typed item definition lookup
+		FMOItemDefinitionRow ItemDef;
+		if (UMOItemDatabaseSettings::GetItemDefinition(ItemDefinitionId, ItemDef))
+		{
+			// Check WorldVisual.WorldActorClass
+			if (!ItemDef.WorldVisual.WorldActorClass.IsNull())
+			{
+				UClass* LoadedClass = ItemDef.WorldVisual.WorldActorClass.LoadSynchronous();
+				if (LoadedClass && LoadedClass->IsChildOf(AActor::StaticClass()))
+				{
+					return LoadedClass;
+				}
+			}
+
+			// Fallback: use AMOWorldItem since we found the item definition but no custom class
+			return AMOWorldItem::StaticClass();
+		}
+
+		// If no item definition found, try generic property search for custom DataTable structures
+		const UMOItemDatabaseSettings* Settings = GetDefault<UMOItemDatabaseSettings>();
+		if (!Settings)
+		{
+			return AMOWorldItem::StaticClass();
+		}
+
+		UDataTable* DataTable = Settings->GetItemDefinitionsDataTable();
+		if (!IsValid(DataTable))
+		{
+			return AMOWorldItem::StaticClass();
+		}
+
+		const UScriptStruct* RowStruct = DataTable->GetRowStruct();
+		if (!RowStruct)
+		{
+			return AMOWorldItem::StaticClass();
+		}
+
+		const uint8* RowData = DataTable->FindRowUnchecked(ItemDefinitionId);
+		if (!RowData)
+		{
+			return AMOWorldItem::StaticClass();
+		}
+
+		// Fallback generic property search for custom row types
+		static const FName CandidateNames[] =
+		{
+			TEXT("WorldActorClass"),
+			TEXT("WorldItemActorClass"),
+			TEXT("PickupActorClass"),
+			TEXT("DropActorClass"),
+			TEXT("PickupClass"),
+			TEXT("ActorClass"),
+		};
+
+		for (const FName Candidate : CandidateNames)
+		{
+			const FProperty* Property = RowStruct->FindPropertyByName(Candidate);
+			if (!Property)
+			{
+				continue;
+			}
+
+			if (const FClassProperty* ClassProperty = CastField<FClassProperty>(Property))
+			{
+				UObject* ObjectValue = ClassProperty->GetObjectPropertyValue_InContainer(RowData);
+				UClass* ValueClass = Cast<UClass>(ObjectValue);
+
+				if (ValueClass && ValueClass->IsChildOf(AActor::StaticClass()))
+				{
+					return ValueClass;
+				}
+			}
+
+			if (const FSoftClassProperty* SoftClassProperty = CastField<FSoftClassProperty>(Property))
+			{
+				const FSoftObjectPtr SoftPtr = SoftClassProperty->GetPropertyValue_InContainer(RowData);
+				UClass* LoadedClass = Cast<UClass>(SoftPtr.LoadSynchronous());
+				if (LoadedClass && LoadedClass->IsChildOf(AActor::StaticClass()))
+				{
+					return LoadedClass;
+				}
+			}
+		}
+
+		// Fallback: use AMOWorldItem if no specific class is configured
+		return AMOWorldItem::StaticClass();
+	}
+
+	// Configure the spawned actor with the item data via components or direct properties.
+	static void TryWriteDroppedItemPayload(AActor* SpawnedActor, const FGuid& ItemGuid, int32 Quantity, const FName& ItemDefinitionId)
+	{
+		if (!IsValid(SpawnedActor))
+		{
+			return;
+		}
+
+		// First, try to find and configure MOIdentityComponent
+		UMOIdentityComponent* IdentityComp = SpawnedActor->FindComponentByClass<UMOIdentityComponent>();
+		if (IsValid(IdentityComp))
+		{
+			IdentityComp->SetGuid(ItemGuid);
+			UE_LOG(LogMOFramework, Log, TEXT("[MOInventory] Drop: Set IdentityComponent GUID to %s"), *ItemGuid.ToString(EGuidFormats::Short));
+		}
+
+		// Then, try to find and configure MOItemComponent
+		UMOItemComponent* ItemComp = SpawnedActor->FindComponentByClass<UMOItemComponent>();
+		if (IsValid(ItemComp))
+		{
+			ItemComp->ItemDefinitionId = ItemDefinitionId;
+			ItemComp->Quantity = Quantity;
+			UE_LOG(LogMOFramework, Log, TEXT("[MOInventory] Drop: Set ItemComponent ItemDefinitionId=%s, Quantity=%d"), *ItemDefinitionId.ToString(), Quantity);
+		}
+
+		// Also try direct property access for custom actors without MO components
+		UClass* ActorClass = SpawnedActor->GetClass();
+		if (!ActorClass)
+		{
+			return;
+		}
+
+		// Only write direct properties if we didn't have the corresponding component
+		if (!IsValid(IdentityComp))
+		{
+			if (FProperty* GuidProperty = ActorClass->FindPropertyByName(TEXT("ItemGuid")))
+			{
+				if (FStructProperty* StructProperty = CastField<FStructProperty>(GuidProperty))
+				{
+					if (StructProperty->Struct == TBaseStructure<FGuid>::Get())
+					{
+						void* Dest = StructProperty->ContainerPtrToValuePtr<void>(SpawnedActor);
+						*static_cast<FGuid*>(Dest) = ItemGuid;
+					}
+				}
+			}
+		}
+
+		if (!IsValid(ItemComp))
+		{
+			if (FProperty* QuantityProperty = ActorClass->FindPropertyByName(TEXT("Quantity")))
+			{
+				if (FIntProperty* IntProperty = CastField<FIntProperty>(QuantityProperty))
+				{
+					IntProperty->SetPropertyValue_InContainer(SpawnedActor, Quantity);
+				}
+			}
+
+			if (FProperty* DefIdProperty = ActorClass->FindPropertyByName(TEXT("ItemDefinitionId")))
+			{
+				if (FNameProperty* NameProperty = CastField<FNameProperty>(DefIdProperty))
+				{
+					NameProperty->SetPropertyValue_InContainer(SpawnedActor, ItemDefinitionId);
+				}
+			}
+		}
+	}
+}
+
+AActor* UMOInventoryComponent::DropItemFromSlot(int32 SlotIndex, const FVector& DropLocation, const FRotator& DropRotation)
+{
+	UE_LOG(LogMOFramework, Error, TEXT(">>>>> [MOInventory] DropItemFromSlot CALLED: Slot=%d, Location=%s <<<<<"),
+		SlotIndex, *DropLocation.ToString());
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Cyan, FString::Printf(TEXT("DropItemFromSlot slot=%d loc=%s"), SlotIndex, *DropLocation.ToString()));
+	}
+
+	AActor* OwnerActor = GetOwner();
+	if (!IsValid(OwnerActor) || !OwnerActor->HasAuthority())
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventory] DropItemFromSlot requires authority"));
+		return nullptr;
+	}
+
+	EnsureSlotsInitialized();
+
+	if (!IsSlotIndexValid(SlotIndex))
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventory] DropItemFromSlot: Invalid slot index %d"), SlotIndex);
+		return nullptr;
+	}
+
+	const FGuid ItemGuid = SlotItemGuids[SlotIndex];
+	if (!ItemGuid.IsValid())
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventory] DropItemFromSlot: No valid GUID at slot %d"), SlotIndex);
+		return nullptr;
+	}
+
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOInventory] DropItemFromSlot: Calling DropItemByGuid with GUID=%s"),
+		*ItemGuid.ToString(EGuidFormats::Short));
+
+	return DropItemByGuid(ItemGuid, DropLocation, DropRotation);
+}
+
+AActor* UMOInventoryComponent::DropItemByGuid(const FGuid& ItemGuid, const FVector& DropLocation, const FRotator& DropRotation)
+{
+	UE_LOG(LogMOFramework, Error, TEXT(">>>>> [MOInventory] DropItemByGuid CALLED Location=%s <<<<<"), *DropLocation.ToString());
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Magenta, FString::Printf(TEXT("DropItemByGuid loc=%s"), *DropLocation.ToString()));
+	}
+
+	AActor* OwnerActor = GetOwner();
+	if (!IsValid(OwnerActor) || !OwnerActor->HasAuthority())
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventory] DropItemByGuid requires authority"));
+		return nullptr;
+	}
+
+	if (!ItemGuid.IsValid())
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventory] DropItemByGuid: Invalid ItemGuid"));
+		return nullptr;
+	}
+
+	FMOInventoryEntry Entry;
+	if (!TryGetEntryByGuid(ItemGuid, Entry))
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventory] DropItemByGuid: entry not found %s"), *ItemGuid.ToString(EGuidFormats::Short));
+		return nullptr;
+	}
+
+	const TSubclassOf<AActor> DropActorClass = ResolveDropActorClassFromDataTable(Entry.ItemDefinitionId);
+	if (!DropActorClass)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventory] DropItemByGuid: no drop actor class for ItemDefinitionId=%s"), *Entry.ItemDefinitionId.ToString());
+		return nullptr;
+	}
+
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOInventory] DropItemByGuid: Spawning %s for ItemDefinitionId=%s at Location=%s"),
+		*DropActorClass->GetName(), *Entry.ItemDefinitionId.ToString(), *DropLocation.ToString());
+
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return nullptr;
+	}
+
+	// CRITICAL: Clear this GUID from the destroyed list before spawning.
+	// When items are picked up, their world actor is destroyed and the GUID is added to SessionDestroyedGuids.
+	// If we don't clear it here, the newly spawned actor will be immediately destroyed by the persistence system.
+	if (UGameInstance* GameInstance = World->GetGameInstance())
+	{
+		if (UMOPersistenceSubsystem* PersistenceSubsystem = GameInstance->GetSubsystem<UMOPersistenceSubsystem>())
+		{
+			if (PersistenceSubsystem->IsGuidDestroyed(Entry.ItemGuid))
+			{
+				UE_LOG(LogMOFramework, Log, TEXT("[MOInventory] DropItemByGuid: Clearing GUID %s from destroyed list"), *Entry.ItemGuid.ToString(EGuidFormats::Short));
+				PersistenceSubsystem->ClearDestroyedGuid(Entry.ItemGuid);
+			}
+		}
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.Owner = OwnerActor;
+	SpawnParams.Instigator = OwnerActor->GetInstigator();
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+
+	const FTransform SpawnTransform(DropRotation, DropLocation);
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOInventory] DropItemByGuid: SpawnTransform Location=%s, Rotation=%s"),
+		*SpawnTransform.GetLocation().ToString(), *SpawnTransform.GetRotation().Rotator().ToString());
+
+	AActor* SpawnedActor = World->SpawnActor<AActor>(DropActorClass, SpawnTransform, SpawnParams);
+	if (!IsValid(SpawnedActor))
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventory] DropItemByGuid: spawn failed for ItemDefinitionId=%s"), *Entry.ItemDefinitionId.ToString());
+		return nullptr;
+	}
+
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOInventory] DropItemByGuid: Actor spawned! Name=%s, ActualLocation=%s"),
+		*SpawnedActor->GetName(), *SpawnedActor->GetActorLocation().ToString());
+
+	TryWriteDroppedItemPayload(SpawnedActor, Entry.ItemGuid, Entry.Quantity, Entry.ItemDefinitionId);
+
+	// If this is an AMOWorldItem, trigger visual update from the item definition
+	// NOTE: ApplyItemDefinitionToWorldMesh sets RelativeTransform which can move the actor when ItemMesh is root
+	// So we preserve and restore the spawn location after applying visuals
+	if (AMOWorldItem* WorldItem = Cast<AMOWorldItem>(SpawnedActor))
+	{
+		const FVector PreservedLocation = SpawnedActor->GetActorLocation();
+		const FRotator PreservedRotation = SpawnedActor->GetActorRotation();
+
+		WorldItem->ApplyItemDefinitionToWorldMesh();
+
+		// Restore the spawn location (ApplyItemDefinitionToWorldMesh may have moved it via SetRelativeTransform)
+		SpawnedActor->SetActorLocationAndRotation(PreservedLocation, PreservedRotation);
+
+		UE_LOG(LogMOFramework, Log, TEXT("[MOInventory] DropItemByGuid: Applied item definition visuals, restored location to %s"),
+			*PreservedLocation.ToString());
+	}
+
+	// Remove the entire stack so the same GUID does not exist in two places.
+	RemoveItemByGuid(ItemGuid, Entry.Quantity);
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOInventory] DropItemByGuid: Successfully dropped item GUID=%s"), *ItemGuid.ToString(EGuidFormats::Short));
+
+	return SpawnedActor;
+}
+
+
+TArray<FName> UMOInventoryComponent::GetItemDefinitionOptionsStatic()
+{
+	TArray<FName> Options;
+	Options.Add(NAME_None);
+
+	const UMOItemDatabaseSettings* Settings = GetDefault<UMOItemDatabaseSettings>();
+	if (!Settings)
+	{
+		return Options;
+	}
+
+	UDataTable* DataTable = Settings->GetItemDefinitionsDataTable();
+	if (!IsValid(DataTable))
+	{
+		return Options;
+	}
+
+	Options.Append(DataTable->GetRowNames());
+	return Options;
+}
+
+void UMOInventoryComponent::ApplyStartingItems()
+{
+	if (StartingItems.Num() == 0)
+	{
+		return;
+	}
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOInventory] Applying %d starting items"), StartingItems.Num());
+
+	for (const FMOStartingInventoryItem& StartingItem : StartingItems)
+	{
+		if (StartingItem.ItemDefinitionId.IsNone() || StartingItem.Quantity <= 0)
+		{
+			continue;
+		}
+
+		// Generate a unique GUID for this starting item
+		const FGuid NewItemGuid = FGuid::NewGuid();
+
+		// Add to inventory (without auto-assign so we can control slot placement)
+		const bool bPreviousAutoAssign = bAutoAssignNewItemsToSlots;
+		bAutoAssignNewItemsToSlots = false;
+
+		const bool bAdded = AddItemByGuid(NewItemGuid, StartingItem.ItemDefinitionId, StartingItem.Quantity);
+
+		bAutoAssignNewItemsToSlots = bPreviousAutoAssign;
+
+		if (!bAdded)
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOInventory] Failed to add starting item: %s"), *StartingItem.ItemDefinitionId.ToString());
+			continue;
+		}
+
+		// Assign to specific slot or auto-assign
+		if (StartingItem.SlotIndex >= 0 && IsSlotIndexValid(StartingItem.SlotIndex))
+		{
+			SlotItemGuids[StartingItem.SlotIndex] = NewItemGuid;
+			MarkSlotItemGuidsDirty();
+		}
+		else if (bAutoAssignNewItemsToSlots)
+		{
+			TryAutoAssignGuidToEmptySlot(NewItemGuid);
+		}
+	}
+
+	OnSlotsChanged.Broadcast();
 }
