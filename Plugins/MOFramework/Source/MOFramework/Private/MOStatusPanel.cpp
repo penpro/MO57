@@ -91,19 +91,24 @@ void UMOStatusPanel::SwitchToCategory(EMOStatusCategory Category)
 	// Update widget switcher if available
 	if (CategorySwitcher)
 	{
-		int32 Index = 0;
+		// Get the actual scroll box widget for this category and set it active
+		UScrollBox* TargetScrollBox = nullptr;
 		switch (Category)
 		{
-		case EMOStatusCategory::Vitals:		Index = CategoryIndex_Vitals; break;
-		case EMOStatusCategory::Nutrition:	Index = CategoryIndex_Nutrition; break;
-		case EMOStatusCategory::Nutrients:	Index = CategoryIndex_Nutrients; break;
-		case EMOStatusCategory::Fitness:	Index = CategoryIndex_Fitness; break;
-		case EMOStatusCategory::Mental:		Index = CategoryIndex_Mental; break;
-		case EMOStatusCategory::Wounds:		Index = CategoryIndex_Wounds; break;
-		case EMOStatusCategory::Conditions:	Index = CategoryIndex_Conditions; break;
+		case EMOStatusCategory::Vitals:		TargetScrollBox = VitalsScrollBox; break;
+		case EMOStatusCategory::Nutrition:	TargetScrollBox = NutritionScrollBox; break;
+		case EMOStatusCategory::Nutrients:	TargetScrollBox = NutrientsScrollBox; break;
+		case EMOStatusCategory::Fitness:	TargetScrollBox = FitnessScrollBox; break;
+		case EMOStatusCategory::Mental:		TargetScrollBox = MentalScrollBox; break;
+		case EMOStatusCategory::Wounds:		TargetScrollBox = WoundsScrollBox; break;
+		case EMOStatusCategory::Conditions:	TargetScrollBox = ConditionsScrollBox; break;
 		default: break;
 		}
-		CategorySwitcher->SetActiveWidgetIndex(Index);
+
+		if (TargetScrollBox)
+		{
+			CategorySwitcher->SetActiveWidget(TargetScrollBox);
+		}
 	}
 	else
 	{
