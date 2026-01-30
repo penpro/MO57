@@ -194,7 +194,7 @@ private:
 	TSubclassOf<UMOStatusPanel> StatusPanelClass;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Status", meta=(ClampMin="0", AllowPrivateAccess="true"))
-	int32 StatusPanelZOrder = 5;
+	int32 StatusPanelZOrder = 50;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Status", meta=(AllowPrivateAccess="true"))
 	bool bCreateStatusPanelOnBeginPlay = false;
@@ -204,6 +204,9 @@ private:
 
 	UPROPERTY(Transient)
 	TWeakObjectPtr<UMOStatusPanel> StatusPanelWidget;
+
+	/** Tracks whether status panel is currently visible (avoids querying widget visibility) */
+	bool bStatusPanelVisible = false;
 
 	void CreateStatusPanel();
 

@@ -131,6 +131,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "MO|Status")
 	void ClearCategory(EMOStatusCategory Category);
 
+	/** Show "None" placeholder in Wounds/Conditions when empty */
+	UFUNCTION(BlueprintCallable, Category = "MO|Status")
+	void UpdateEmptyPlaceholders();
+
 	/** Bind to medical components for automatic updates */
 	UFUNCTION(BlueprintCallable, Category = "MO|Status")
 	void BindToMedicalComponents(UMOVitalsComponent* Vitals, UMOMetabolismComponent* Metabolism, UMOMentalStateComponent* MentalState);
@@ -183,6 +187,9 @@ protected:
 	/** Update tab button visual states */
 	void UpdateTabButtonStates();
 
+	/** Fallback: manually show/hide scroll boxes when CategorySwitcher isn't bound */
+	void UpdateScrollBoxVisibility(EMOStatusCategory ActiveCategory);
+
 	/** Medical component change handlers */
 	UFUNCTION()
 	void HandleVitalsChanged();
@@ -224,30 +231,37 @@ protected:
 	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
 	TObjectPtr<UMOCommonButton> BackButton;
 
-	/** Widget switcher for category content */
-	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
+	/** Widget switcher for category content - REQUIRED: Name must be "CategorySwitcher" */
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
 	TObjectPtr<UWidgetSwitcher> CategorySwitcher;
 
-	/** Scroll boxes for each category (children of CategorySwitcher) */
-	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
+	/** Scroll boxes for each category (children of CategorySwitcher in order 0-6) */
+	/** REQUIRED: Name must be "VitalsScrollBox" - Index 0 in CategorySwitcher */
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
 	TObjectPtr<UScrollBox> VitalsScrollBox;
 
-	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
+	/** REQUIRED: Name must be "NutritionScrollBox" - Index 1 in CategorySwitcher */
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
 	TObjectPtr<UScrollBox> NutritionScrollBox;
 
-	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
+	/** REQUIRED: Name must be "NutrientsScrollBox" - Index 2 in CategorySwitcher */
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
 	TObjectPtr<UScrollBox> NutrientsScrollBox;
 
-	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
+	/** REQUIRED: Name must be "FitnessScrollBox" - Index 3 in CategorySwitcher */
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
 	TObjectPtr<UScrollBox> FitnessScrollBox;
 
-	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
+	/** REQUIRED: Name must be "MentalScrollBox" - Index 4 in CategorySwitcher */
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
 	TObjectPtr<UScrollBox> MentalScrollBox;
 
-	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
+	/** REQUIRED: Name must be "WoundsScrollBox" - Index 5 in CategorySwitcher */
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
 	TObjectPtr<UScrollBox> WoundsScrollBox;
 
-	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
+	/** REQUIRED: Name must be "ConditionsScrollBox" - Index 6 in CategorySwitcher */
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
 	TObjectPtr<UScrollBox> ConditionsScrollBox;
 
 	/** Vertical box containers inside each scroll box */

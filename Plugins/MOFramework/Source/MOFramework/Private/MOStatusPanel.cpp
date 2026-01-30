@@ -8,6 +8,7 @@
 #include "Components/WidgetSwitcher.h"
 #include "Components/ScrollBox.h"
 #include "Components/VerticalBox.h"
+#include "Components/TextBlock.h"
 
 void UMOStatusPanel::NativeConstruct()
 {
@@ -87,7 +88,7 @@ void UMOStatusPanel::SwitchToCategory(EMOStatusCategory Category)
 
 	CurrentCategory = Category;
 
-	// Update widget switcher
+	// Update widget switcher if available
 	if (CategorySwitcher)
 	{
 		int32 Index = 0;
@@ -103,6 +104,12 @@ void UMOStatusPanel::SwitchToCategory(EMOStatusCategory Category)
 		default: break;
 		}
 		CategorySwitcher->SetActiveWidgetIndex(Index);
+	}
+	else
+	{
+		// Fallback: manually show/hide scroll boxes if CategorySwitcher isn't bound
+		UE_LOG(LogMOFramework, Log, TEXT("[MOStatusPanel] No CategorySwitcher bound - using manual scroll box visibility"));
+		UpdateScrollBoxVisibility(Category);
 	}
 
 	UpdateTabButtonStates();
@@ -237,17 +244,98 @@ void UMOStatusPanel::ClearCategory(EMOStatusCategory Category)
 
 UVerticalBox* UMOStatusPanel::GetCategoryContainer(EMOStatusCategory Category) const
 {
+	// First try to return the explicitly bound VerticalBox container
+	UVerticalBox* Container = nullptr;
+	UScrollBox* ScrollBox = nullptr;
+
 	switch (Category)
 	{
-	case EMOStatusCategory::Vitals:		return VitalsContainer;
-	case EMOStatusCategory::Nutrition:	return NutritionContainer;
-	case EMOStatusCategory::Nutrients:	return NutrientsContainer;
-	case EMOStatusCategory::Fitness:	return FitnessContainer;
-	case EMOStatusCategory::Mental:		return MentalContainer;
-	case EMOStatusCategory::Wounds:		return WoundsContainer;
-	case EMOStatusCategory::Conditions:	return ConditionsContainer;
-	default: return nullptr;
+	case EMOStatusCategory::Vitals:
+		Container = VitalsContainer;
+		ScrollBox = VitalsScrollBox;
+		break;
+	case EMOStatusCategory::Nutrition:
+		Container = NutritionContainer;
+		ScrollBox = NutritionScrollBox;
+		break;
+	case EMOStatusCategory::Nutrients:
+		Container = NutrientsContainer;
+		ScrollBox = NutrientsScrollBox;
+		break;
+	case EMOStatusCategory::Fitness:
+		Container = FitnessContainer;
+		ScrollBox = FitnessScrollBox;
+		break;
+	case EMOStatusCategory::Mental:
+		Container = MentalContainer;
+		ScrollBox = MentalScrollBox;
+		break;
+	case EMOStatusCategory::Wounds:
+		Container = WoundsContainer;
+		ScrollBox = WoundsScrollBox;
+		break;
+	case EMOStatusCategory::Conditions:
+		Container = ConditionsContainer;
+		ScrollBox = ConditionsScrollBox;
+		break;
+	default:
+		return nullptr;
 	}
+
+	// If we have an explicit container, use it
+	if (Container)
+	{
+		return Container;
+	}
+
+	// If we only have a ScrollBox, look for a VerticalBox child or create one
+	if (ScrollBox)
+	{
+		// Check if there's already a VerticalBox child
+		for (int32 i = 0; i < ScrollBox->GetChildrenCount(); ++i)
+		{
+			if (UVerticalBox* ExistingBox = Cast<UVerticalBox>(ScrollBox->GetChildAt(i)))
+			{
+				// Cache it for next time (const_cast needed since we're in a const method)
+				UMOStatusPanel* MutableThis = const_cast<UMOStatusPanel*>(this);
+				switch (Category)
+				{
+				case EMOStatusCategory::Vitals:		MutableThis->VitalsContainer = ExistingBox; break;
+				case EMOStatusCategory::Nutrition:	MutableThis->NutritionContainer = ExistingBox; break;
+				case EMOStatusCategory::Nutrients:	MutableThis->NutrientsContainer = ExistingBox; break;
+				case EMOStatusCategory::Fitness:	MutableThis->FitnessContainer = ExistingBox; break;
+				case EMOStatusCategory::Mental:		MutableThis->MentalContainer = ExistingBox; break;
+				case EMOStatusCategory::Wounds:		MutableThis->WoundsContainer = ExistingBox; break;
+				case EMOStatusCategory::Conditions:	MutableThis->ConditionsContainer = ExistingBox; break;
+				default: break;
+				}
+				return ExistingBox;
+			}
+		}
+
+		// No VerticalBox found - create one and add it to the ScrollBox
+		UVerticalBox* NewBox = NewObject<UVerticalBox>(ScrollBox);
+		ScrollBox->AddChild(NewBox);
+
+		// Cache it
+		UMOStatusPanel* MutableThis = const_cast<UMOStatusPanel*>(this);
+		switch (Category)
+		{
+		case EMOStatusCategory::Vitals:		MutableThis->VitalsContainer = NewBox; break;
+		case EMOStatusCategory::Nutrition:	MutableThis->NutritionContainer = NewBox; break;
+		case EMOStatusCategory::Nutrients:	MutableThis->NutrientsContainer = NewBox; break;
+		case EMOStatusCategory::Fitness:	MutableThis->FitnessContainer = NewBox; break;
+		case EMOStatusCategory::Mental:		MutableThis->MentalContainer = NewBox; break;
+		case EMOStatusCategory::Wounds:		MutableThis->WoundsContainer = NewBox; break;
+		case EMOStatusCategory::Conditions:	MutableThis->ConditionsContainer = NewBox; break;
+		default: break;
+		}
+
+		UE_LOG(LogMOFramework, Log, TEXT("[MOStatusPanel] Auto-created VerticalBox container for category %d"), static_cast<int32>(Category));
+		return NewBox;
+	}
+
+	return nullptr;
 }
 
 void UMOStatusPanel::BindTabButtons()
@@ -341,6 +429,26 @@ void UMOStatusPanel::UpdateTabButtonStates()
 	// For now, buttons don't show selected state visually
 }
 
+void UMOStatusPanel::UpdateScrollBoxVisibility(EMOStatusCategory ActiveCategory)
+{
+	// Helper to set visibility
+	auto SetScrollBoxVisible = [](UScrollBox* ScrollBox, bool bVisible)
+	{
+		if (ScrollBox)
+		{
+			ScrollBox->SetVisibility(bVisible ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed);
+		}
+	};
+
+	SetScrollBoxVisible(VitalsScrollBox, ActiveCategory == EMOStatusCategory::Vitals);
+	SetScrollBoxVisible(NutritionScrollBox, ActiveCategory == EMOStatusCategory::Nutrition);
+	SetScrollBoxVisible(NutrientsScrollBox, ActiveCategory == EMOStatusCategory::Nutrients);
+	SetScrollBoxVisible(FitnessScrollBox, ActiveCategory == EMOStatusCategory::Fitness);
+	SetScrollBoxVisible(MentalScrollBox, ActiveCategory == EMOStatusCategory::Mental);
+	SetScrollBoxVisible(WoundsScrollBox, ActiveCategory == EMOStatusCategory::Wounds);
+	SetScrollBoxVisible(ConditionsScrollBox, ActiveCategory == EMOStatusCategory::Conditions);
+}
+
 void UMOStatusPanel::PopulateFieldConfigs_Implementation()
 {
 	// If configs already set in Blueprint defaults, use those
@@ -420,7 +528,75 @@ void UMOStatusPanel::CreateFieldsFromConfigs()
 		AddField(Config);
 	}
 
+	// Add "None" placeholders for empty dynamic categories
+	UpdateEmptyPlaceholders();
+
 	UE_LOG(LogMOFramework, Log, TEXT("[MOStatusPanel] Created %d fields from configs"), FieldConfigs.Num());
+}
+
+void UMOStatusPanel::UpdateEmptyPlaceholders()
+{
+	// Check Wounds category
+	bool bHasWounds = false;
+	bool bHasConditions = false;
+
+	for (const auto& Pair : FieldConfigMap)
+	{
+		if (Pair.Value.Category == EMOStatusCategory::Wounds)
+		{
+			bHasWounds = true;
+		}
+		if (Pair.Value.Category == EMOStatusCategory::Conditions)
+		{
+			bHasConditions = true;
+		}
+	}
+
+	// Add placeholder text if no wounds
+	UVerticalBox* WoundsBox = GetCategoryContainer(EMOStatusCategory::Wounds);
+	if (WoundsBox)
+	{
+		// Remove existing placeholder TextBlocks (they won't be in FieldWidgets)
+		for (int32 i = WoundsBox->GetChildrenCount() - 1; i >= 0; --i)
+		{
+			if (UTextBlock* TextBlock = Cast<UTextBlock>(WoundsBox->GetChildAt(i)))
+			{
+				TextBlock->RemoveFromParent();
+			}
+		}
+
+		if (!bHasWounds)
+		{
+			UTextBlock* PlaceholderText = NewObject<UTextBlock>(WoundsBox);
+			PlaceholderText->SetText(NSLOCTEXT("MOStatus", "NoWounds", "No wounds"));
+			PlaceholderText->SetColorAndOpacity(FSlateColor(FLinearColor(0.5f, 0.5f, 0.5f, 1.0f)));
+			PlaceholderText->SetRenderOpacity(0.7f);
+			WoundsBox->AddChild(PlaceholderText);
+		}
+	}
+
+	// Add placeholder text if no conditions
+	UVerticalBox* ConditionsBox = GetCategoryContainer(EMOStatusCategory::Conditions);
+	if (ConditionsBox)
+	{
+		// Remove existing placeholder TextBlocks
+		for (int32 i = ConditionsBox->GetChildrenCount() - 1; i >= 0; --i)
+		{
+			if (UTextBlock* TextBlock = Cast<UTextBlock>(ConditionsBox->GetChildAt(i)))
+			{
+				TextBlock->RemoveFromParent();
+			}
+		}
+
+		if (!bHasConditions)
+		{
+			UTextBlock* PlaceholderText = NewObject<UTextBlock>(ConditionsBox);
+			PlaceholderText->SetText(NSLOCTEXT("MOStatus", "NoConditions", "No conditions"));
+			PlaceholderText->SetColorAndOpacity(FSlateColor(FLinearColor(0.5f, 0.5f, 0.5f, 1.0f)));
+			PlaceholderText->SetRenderOpacity(0.7f);
+			ConditionsBox->AddChild(PlaceholderText);
+		}
+	}
 }
 
 void UMOStatusPanel::BindToMedicalComponents(UMOVitalsComponent* Vitals, UMOMetabolismComponent* Metabolism, UMOMentalStateComponent* MentalState)

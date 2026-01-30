@@ -386,6 +386,8 @@ void UMOUIManagerComponent::SetPlayerStatusVisible(bool bVisible)
 
 	if (bVisible)
 	{
+		bStatusPanelVisible = true;
+
 		// Bind to current pawn's medical components before showing
 		RebindStatusPanelToCurrentPawn();
 
@@ -402,6 +404,8 @@ void UMOUIManagerComponent::SetPlayerStatusVisible(bool bVisible)
 	}
 	else
 	{
+		bStatusPanelVisible = false;
+
 		Status->SetVisibility(ESlateVisibility::Collapsed);
 
 		UpdateReticleVisibility();
@@ -420,13 +424,7 @@ void UMOUIManagerComponent::SetPlayerStatusVisible(bool bVisible)
 
 bool UMOUIManagerComponent::IsPlayerStatusVisible() const
 {
-	const UMOStatusPanel* Status = StatusPanelWidget.Get();
-	if (!IsValid(Status))
-	{
-		return false;
-	}
-
-	return Status->GetVisibility() != ESlateVisibility::Collapsed && Status->GetVisibility() != ESlateVisibility::Hidden;
+	return bStatusPanelVisible;
 }
 
 void UMOUIManagerComponent::SetReticleVisible(bool bVisible)
@@ -951,6 +949,7 @@ void UMOUIManagerComponent::CloseAllMenus()
 	CloseItemContextMenu();
 
 	// Close status panel
+	bStatusPanelVisible = false;
 	UMOStatusPanel* Status = StatusPanelWidget.Get();
 	if (IsValid(Status))
 	{
@@ -1000,10 +999,9 @@ void UMOUIManagerComponent::UpdateReticleVisibility()
 		SetReticleVisible(!bMenuOpen);
 	}
 
-	if (bHideStatusPanelWhenMenuOpen)
-	{
-		SetPlayerStatusVisible(!bMenuOpen);
-	}
+	// Note: bHideStatusPanelWhenMenuOpen is handled differently - the status panel
+	// IS a menu, so it shouldn't hide itself. This flag would be for hiding a
+	// persistent HUD-style status display, which we don't currently have.
 }
 
 void UMOUIManagerComponent::ShowModalBackground()
