@@ -532,7 +532,8 @@ The MOFramework has solid core systems but has accumulated technical debt in sev
 - [ ] `MOVitalsComponent.cpp:557` - Integrate lung damage from anatomy component
 
 #### Crafting System
-- [ ] `MOCraftingQueueComponent.cpp:658` - Apply tool quality modifiers when tool system is integrated
+- [ ] `MOCraftingQueueComponent.cpp:356` - Store active station GUID when AMOCraftingStationActor is implemented (Phase 3)
+- [ ] `MOCraftingQueueComponent.cpp:655` - Apply tool quality modifiers when tool system is integrated
 
 #### UI System
 - [ ] `MOUIManagerComponent.cpp:1114` - Implement inspection (show detailed item info, grant knowledge XP)
