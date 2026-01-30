@@ -322,6 +322,10 @@ private:
 
 	// --- No Pawn Notification ---
 
+	/** Optional custom widget class for no-pawn notification. If not set, uses default UMONotificationWidget. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|NoPawn", meta=(AllowPrivateAccess="true"))
+	TSubclassOf<UMONotificationWidget> NoPawnNotificationClass;
+
 	/** Message to display when trying to open a pawn-required menu without a pawn. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|NoPawn", meta=(AllowPrivateAccess="true"))
 	FText NoPawnMessage = NSLOCTEXT("MO", "NoPawnMessage", "Please select a character to view their information");

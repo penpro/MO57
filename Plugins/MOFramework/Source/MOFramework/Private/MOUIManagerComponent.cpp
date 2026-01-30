@@ -172,6 +172,7 @@ void UMOUIManagerComponent::OpenInventoryMenu()
 	// Check for valid pawn first
 	if (!HasValidPawn())
 	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOUI] OpenInventoryMenu - No valid pawn, showing notification"));
 		ShowNoPawnNotification();
 		return;
 	}
@@ -1199,22 +1200,35 @@ void UMOUIManagerComponent::ShowNoPawnNotification()
 	APlayerController* PlayerController = ResolveOwningPlayerController();
 	if (!IsValid(PlayerController))
 	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] ShowNoPawnNotification - No valid player controller"));
 		return;
 	}
 
 	// Hide any existing notification first
 	HideNoPawnNotification();
 
+	// Use configured class or default to UMONotificationWidget
+	TSubclassOf<UMONotificationWidget> WidgetClass = NoPawnNotificationClass;
+	if (!WidgetClass)
+	{
+		WidgetClass = UMONotificationWidget::StaticClass();
+	}
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Creating notification widget of class: %s"), *WidgetClass->GetName());
+
 	// Create notification widget
-	UMONotificationWidget* NotificationWidget = CreateWidget<UMONotificationWidget>(PlayerController, UMONotificationWidget::StaticClass());
+	UMONotificationWidget* NotificationWidget = CreateWidget<UMONotificationWidget>(PlayerController, WidgetClass);
 	if (!IsValid(NotificationWidget))
 	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] Failed to create notification widget"));
 		return;
 	}
 
 	NoPawnNotificationWidget = NotificationWidget;
 	NotificationWidget->SetMessage(NoPawnMessage);
 	NotificationWidget->AddToViewport(NoPawnNotificationZOrder);
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Notification widget added to viewport at Z-order %d"), NoPawnNotificationZOrder);
 
 	// Set timer to auto-hide
 	if (UWorld* World = GetWorld())
@@ -1231,7 +1245,7 @@ void UMOUIManagerComponent::ShowNoPawnNotification()
 	// Broadcast delegate so possession menu can hook in
 	OnNoPawnForMenu.Broadcast();
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Showing no-pawn notification"));
+	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Showing no-pawn notification: %s"), *NoPawnMessage.ToString());
 }
 
 void UMOUIManagerComponent::HideNoPawnNotification()
