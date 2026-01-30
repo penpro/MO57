@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
+#include "Widgets/Text/STextBlock.h"
 #include "MONotificationWidget.generated.h"
 
 class UTextBlock;
@@ -10,6 +11,7 @@ class UBorder;
 /**
  * Simple notification widget for displaying centered messages.
  * Used for "no pawn" notifications and other temporary messages.
+ * Can be used directly from C++ without a Blueprint.
  */
 UCLASS()
 class MOFRAMEWORK_API UMONotificationWidget : public UUserWidget
@@ -31,16 +33,20 @@ public:
 
 protected:
 	virtual void NativeConstruct() override;
+	virtual TSharedRef<SWidget> RebuildWidget() override;
 
-	/** The text block displaying the message. */
+	/** UMG text block (used if Blueprint provides one). */
 	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
 	TObjectPtr<UTextBlock> MessageText;
 
-	/** Optional background border. */
+	/** UMG background border (used if Blueprint provides one). */
 	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
 	TObjectPtr<UBorder> BackgroundBorder;
 
 private:
+	/** Slate text block for C++-only usage. */
+	TSharedPtr<STextBlock> SlateTextBlock;
+
 	/** Pending message to set after construct. */
 	FText PendingMessage;
 
