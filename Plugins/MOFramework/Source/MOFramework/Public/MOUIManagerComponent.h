@@ -17,6 +17,7 @@ class UMOModalBackground;
 class UMOVitalsComponent;
 class UMOMetabolismComponent;
 class UMOMentalStateComponent;
+class UTextBlock;
 
 UCLASS(ClassGroup=(MO), meta=(BlueprintSpawnableComponent))
 class MOFRAMEWORK_API UMOUIManagerComponent : public UActorComponent
@@ -115,6 +116,17 @@ public:
 	DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOConfirmationCancelledSignature);
 	UPROPERTY(BlueprintAssignable, Category="MO|UI|Confirmation")
 	FMOConfirmationCancelledSignature OnConfirmationCancelled;
+
+	// --- Pawn Requirement System ---
+
+	/** Called when a menu requires a pawn but none is possessed. Hook this to open possession menu. */
+	DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMONoPawnForMenuSignature);
+	UPROPERTY(BlueprintAssignable, Category="MO|UI")
+	FMONoPawnForMenuSignature OnNoPawnForMenu;
+
+	/** Check if the player controller currently has a valid pawn. */
+	UFUNCTION(BlueprintPure, Category="MO|UI")
+	bool HasValidPawn() const;
 
 	// --- Menu Stack ---
 
@@ -307,4 +319,31 @@ private:
 
 	UFUNCTION()
 	void HandleModalBackgroundClicked();
+
+	// --- No Pawn Notification ---
+
+	/** Message to display when trying to open a pawn-required menu without a pawn. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|NoPawn", meta=(AllowPrivateAccess="true"))
+	FText NoPawnMessage = NSLOCTEXT("MO", "NoPawnMessage", "Please select a character to view their information");
+
+	/** Duration to show the no-pawn notification (seconds). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|NoPawn", meta=(AllowPrivateAccess="true", ClampMin="0.5"))
+	float NoPawnNotificationDuration = 3.0f;
+
+	/** Z-order for the no-pawn notification. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|NoPawn", meta=(AllowPrivateAccess="true", ClampMin="0"))
+	int32 NoPawnNotificationZOrder = 250;
+
+	/** Shows a centered notification that a pawn is required. Broadcasts OnNoPawnForMenu. */
+	void ShowNoPawnNotification();
+
+	/** Hides the no-pawn notification if visible. */
+	void HideNoPawnNotification();
+
+	/** Timer handle for auto-hiding the notification. */
+	FTimerHandle NoPawnNotificationTimerHandle;
+
+	/** The notification widget (simple text display). */
+	UPROPERTY(Transient)
+	TWeakObjectPtr<UUserWidget> NoPawnNotificationWidget;
 };

@@ -7,6 +7,7 @@
 #include "Engine/GameInstance.h"
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetSystemLibrary.h"
+#include "TimerManager.h"
 
 #include "MOInventoryComponent.h"
 #include "MOInventoryMenu.h"
@@ -25,6 +26,10 @@
 #include "MOVitalsComponent.h"
 #include "MOMetabolismComponent.h"
 #include "MOMentalStateComponent.h"
+#include "Components/TextBlock.h"
+#include "Components/CanvasPanelSlot.h"
+#include "Components/CanvasPanel.h"
+#include "Blueprint/WidgetTree.h"
 
 UMOUIManagerComponent::UMOUIManagerComponent()
 {
@@ -75,6 +80,9 @@ void UMOUIManagerComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	}
 	ModalBackgroundWidget.Reset();
 
+	// Clean up no-pawn notification
+	HideNoPawnNotification();
+
 	Super::EndPlay(EndPlayReason);
 }
 
@@ -87,6 +95,16 @@ bool UMOUIManagerComponent::IsLocalOwningPlayerController() const
 {
 	const APlayerController* PlayerController = ResolveOwningPlayerController();
 	return IsValid(PlayerController) && PlayerController->IsLocalController();
+}
+
+bool UMOUIManagerComponent::HasValidPawn() const
+{
+	const APlayerController* PlayerController = ResolveOwningPlayerController();
+	if (!IsValid(PlayerController))
+	{
+		return false;
+	}
+	return IsValid(PlayerController->GetPawn());
 }
 
 bool UMOUIManagerComponent::IsInventoryMenuOpen() const
@@ -151,6 +169,13 @@ void UMOUIManagerComponent::OpenInventoryMenu()
 	APlayerController* PlayerController = ResolveOwningPlayerController();
 	if (!IsValid(PlayerController))
 	{
+		return;
+	}
+
+	// Check for valid pawn first
+	if (!HasValidPawn())
+	{
+		ShowNoPawnNotification();
 		return;
 	}
 
@@ -386,6 +411,13 @@ void UMOUIManagerComponent::SetPlayerStatusVisible(bool bVisible)
 
 	if (bVisible)
 	{
+		// Check for valid pawn first
+		if (!HasValidPawn())
+		{
+			ShowNoPawnNotification();
+			return;
+		}
+
 		bStatusPanelVisible = true;
 
 		// Bind to current pawn's medical components before showing
@@ -1159,4 +1191,91 @@ void UMOUIManagerComponent::RebindStatusPanelToCurrentPawn()
 		IsValid(Vitals) ? TEXT("Yes") : TEXT("No"),
 		IsValid(Metabolism) ? TEXT("Yes") : TEXT("No"),
 		IsValid(Mental) ? TEXT("Yes") : TEXT("No"));
+}
+
+// =============================================================================
+// No Pawn Notification
+// =============================================================================
+
+void UMOUIManagerComponent::ShowNoPawnNotification()
+{
+	APlayerController* PlayerController = ResolveOwningPlayerController();
+	if (!IsValid(PlayerController))
+	{
+		return;
+	}
+
+	// Hide any existing notification first
+	HideNoPawnNotification();
+
+	// Create a simple widget with centered text
+	UUserWidget* NotificationWidget = CreateWidget<UUserWidget>(PlayerController, UUserWidget::StaticClass());
+	if (!IsValid(NotificationWidget))
+	{
+		return;
+	}
+
+	NoPawnNotificationWidget = NotificationWidget;
+
+	// Create canvas panel as root
+	UCanvasPanel* Canvas = NotificationWidget->WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass());
+	NotificationWidget->WidgetTree->RootWidget = Canvas;
+
+	// Create text block
+	UTextBlock* TextBlock = NotificationWidget->WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass());
+	TextBlock->SetText(NoPawnMessage);
+	TextBlock->SetJustification(ETextJustify::Center);
+
+	// Style the text
+	FSlateFontInfo FontInfo = TextBlock->GetFont();
+	FontInfo.Size = 24;
+	TextBlock->SetFont(FontInfo);
+	TextBlock->SetColorAndOpacity(FSlateColor(FLinearColor(1.0f, 1.0f, 1.0f, 1.0f)));
+	TextBlock->SetShadowOffset(FVector2D(2.0f, 2.0f));
+	TextBlock->SetShadowColorAndOpacity(FLinearColor(0.0f, 0.0f, 0.0f, 0.8f));
+
+	// Add to canvas and center it
+	UCanvasPanelSlot* Slot = Canvas->AddChildToCanvas(TextBlock);
+	if (Slot)
+	{
+		Slot->SetAnchors(FAnchors(0.5f, 0.5f, 0.5f, 0.5f));
+		Slot->SetAlignment(FVector2D(0.5f, 0.5f));
+		Slot->SetAutoSize(true);
+	}
+
+	NotificationWidget->AddToViewport(NoPawnNotificationZOrder);
+
+	// Set timer to auto-hide
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().SetTimer(
+			NoPawnNotificationTimerHandle,
+			this,
+			&UMOUIManagerComponent::HideNoPawnNotification,
+			NoPawnNotificationDuration,
+			false
+		);
+	}
+
+	// Broadcast delegate so possession menu can hook in
+	OnNoPawnForMenu.Broadcast();
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Showing no-pawn notification"));
+}
+
+void UMOUIManagerComponent::HideNoPawnNotification()
+{
+	// Clear timer if active
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(NoPawnNotificationTimerHandle);
+	}
+
+	// Remove widget
+	UUserWidget* Widget = NoPawnNotificationWidget.Get();
+	if (IsValid(Widget))
+	{
+		Widget->RemoveFromParent();
+	}
+	NoPawnNotificationWidget.Reset();
 }
