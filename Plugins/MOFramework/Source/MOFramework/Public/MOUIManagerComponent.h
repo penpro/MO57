@@ -17,7 +17,7 @@ class UMOModalBackground;
 class UMOVitalsComponent;
 class UMOMetabolismComponent;
 class UMOMentalStateComponent;
-class UTextBlock;
+class UMONotificationWidget;
 
 UCLASS(ClassGroup=(MO), meta=(BlueprintSpawnableComponent))
 class MOFRAMEWORK_API UMOUIManagerComponent : public UActorComponent
@@ -345,5 +345,5 @@ private:
 
 	/** The notification widget (simple text display). */
 	UPROPERTY(Transient)
-	TWeakObjectPtr<UUserWidget> NoPawnNotificationWidget;
+	TWeakObjectPtr<UMONotificationWidget> NoPawnNotificationWidget;
 };

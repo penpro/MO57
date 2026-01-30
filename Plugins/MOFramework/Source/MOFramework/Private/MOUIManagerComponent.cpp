@@ -26,10 +26,7 @@
 #include "MOVitalsComponent.h"
 #include "MOMetabolismComponent.h"
 #include "MOMentalStateComponent.h"
-#include "Components/TextBlock.h"
-#include "Components/CanvasPanelSlot.h"
-#include "Components/CanvasPanel.h"
-#include "Blueprint/WidgetTree.h"
+#include "MONotificationWidget.h"
 
 UMOUIManagerComponent::UMOUIManagerComponent()
 {
@@ -1208,41 +1205,15 @@ void UMOUIManagerComponent::ShowNoPawnNotification()
 	// Hide any existing notification first
 	HideNoPawnNotification();
 
-	// Create a simple widget with centered text
-	UUserWidget* NotificationWidget = CreateWidget<UUserWidget>(PlayerController, UUserWidget::StaticClass());
+	// Create notification widget
+	UMONotificationWidget* NotificationWidget = CreateWidget<UMONotificationWidget>(PlayerController, UMONotificationWidget::StaticClass());
 	if (!IsValid(NotificationWidget))
 	{
 		return;
 	}
 
 	NoPawnNotificationWidget = NotificationWidget;
-
-	// Create canvas panel as root
-	UCanvasPanel* Canvas = NotificationWidget->WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass());
-	NotificationWidget->WidgetTree->RootWidget = Canvas;
-
-	// Create text block
-	UTextBlock* TextBlock = NotificationWidget->WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass());
-	TextBlock->SetText(NoPawnMessage);
-	TextBlock->SetJustification(ETextJustify::Center);
-
-	// Style the text
-	FSlateFontInfo FontInfo = TextBlock->GetFont();
-	FontInfo.Size = 24;
-	TextBlock->SetFont(FontInfo);
-	TextBlock->SetColorAndOpacity(FSlateColor(FLinearColor(1.0f, 1.0f, 1.0f, 1.0f)));
-	TextBlock->SetShadowOffset(FVector2D(2.0f, 2.0f));
-	TextBlock->SetShadowColorAndOpacity(FLinearColor(0.0f, 0.0f, 0.0f, 0.8f));
-
-	// Add to canvas and center it
-	UCanvasPanelSlot* Slot = Canvas->AddChildToCanvas(TextBlock);
-	if (Slot)
-	{
-		Slot->SetAnchors(FAnchors(0.5f, 0.5f, 0.5f, 0.5f));
-		Slot->SetAlignment(FVector2D(0.5f, 0.5f));
-		Slot->SetAutoSize(true);
-	}
-
+	NotificationWidget->SetMessage(NoPawnMessage);
 	NotificationWidget->AddToViewport(NoPawnNotificationZOrder);
 
 	// Set timer to auto-hide
