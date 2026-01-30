@@ -519,16 +519,33 @@ The MOFramework has solid core systems but has accumulated technical debt in sev
 - All 60+ classes in single `MOFramework` module
 - **Future**: Split into Core, Interaction, Inventory, Medical, UI submodules
 
-### Incomplete Implementations (TODOs)
+### Tracked TODOs
 
-| File | Issue |
-|------|-------|
-| `MOAnatomyComponent.cpp` | DataTable lookups for treatments/conditions |
-| `MOCraftingQueueComponent.cpp` | Tool quality modifiers |
-| `MOSavePanel.cpp` | Load actual metadata from save file |
-| `MOStatusPanel.cpp` | Multiple UI completion items |
-| `MOVitalsComponent.cpp` | Lung damage integration |
-| `MOUIManagerComponent.cpp` | Inspection, stack splitting, filtered crafting |
+*Last updated: 2026-01-30*
+
+#### Medical System
+- [ ] `MOAnatomyComponent.cpp:257` - Get treatment definition from DataTable and apply effects
+- [ ] `MOAnatomyComponent.cpp:737` - Add setter in VitalsComponent for external access
+- [ ] `MOAnatomyComponent.cpp:823` - Get condition definition from DataTable
+- [ ] `MOAnatomyComponent.cpp:968` - Implement DataTable lookup via MOMedicalSubsystem
+- [ ] `MOAnatomyComponent.cpp:975` - Implement DataTable lookup via MOMedicalSubsystem
+- [ ] `MOVitalsComponent.cpp:557` - Integrate lung damage from anatomy component
+
+#### Crafting System
+- [ ] `MOCraftingQueueComponent.cpp:658` - Apply tool quality modifiers when tool system is integrated
+
+#### UI System
+- [ ] `MOUIManagerComponent.cpp:1114` - Implement inspection (show detailed item info, grant knowledge XP)
+- [ ] `MOUIManagerComponent.cpp:1119` - Implement stack splitting UI
+- [ ] `MOUIManagerComponent.cpp:1124` - Implement crafting UI filtered to this item
+- [ ] `MOStatusPanel.cpp:190` - Expose threshold setters on UMOStatusField
+- [ ] `MOStatusPanel.cpp:439` - Add visual selected state to buttons
+- [ ] `MOStatusPanel.cpp:971` - Show an input dialog to change the value
+- [ ] `MOStatusPanel.cpp:980` - Show name change dialog
+
+#### Save/Load System
+- [ ] `MOSaveSlotEntry.cpp:72` - Load screenshot thumbnail from ScreenshotPath if available
+- [ ] `MOSavePanel.cpp:104` - Load actual metadata from save file
 
 ### Portability Score: 6.5/10
 
