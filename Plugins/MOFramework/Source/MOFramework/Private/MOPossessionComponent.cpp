@@ -90,3 +90,43 @@ void UMOPossessionComponent::ServerSpawnActorNearController_Implementation(TSubc
 
 	PossessionSubsystem->ServerSpawnActorNearController(PlayerController, ActorClassToSpawn, SpawnDistance, SpawnOffset, bUseViewRotation);
 }
+
+bool UMOPossessionComponent::TrySpawnAndPossessPawn(TSubclassOf<APawn> PawnClassToSpawn, float SpawnDistance, FVector SpawnOffset, bool bUseViewRotation)
+{
+	APlayerController* PlayerController = Cast<APlayerController>(GetOwner());
+	if (!IsValid(PlayerController) || !PlayerController->IsLocalController())
+	{
+		return false;
+	}
+
+	if (!PawnClassToSpawn)
+	{
+		return false;
+	}
+
+	ServerSpawnAndPossessPawn(PawnClassToSpawn, SpawnDistance, SpawnOffset, bUseViewRotation);
+	return true;
+}
+
+void UMOPossessionComponent::ServerSpawnAndPossessPawn_Implementation(TSubclassOf<APawn> PawnClassToSpawn, float SpawnDistance, FVector SpawnOffset, bool bUseViewRotation)
+{
+	APlayerController* PlayerController = Cast<APlayerController>(GetOwner());
+	if (!IsValid(PlayerController))
+	{
+		return;
+	}
+
+	UWorld* World = PlayerController->GetWorld();
+	if (!World || World->GetNetMode() == NM_Client)
+	{
+		return;
+	}
+
+	UMOPossessionSubsystem* PossessionSubsystem = World->GetSubsystem<UMOPossessionSubsystem>();
+	if (!PossessionSubsystem)
+	{
+		return;
+	}
+
+	PossessionSubsystem->ServerSpawnAndPossessPawn(PlayerController, PawnClassToSpawn, SpawnDistance, SpawnOffset, bUseViewRotation);
+}

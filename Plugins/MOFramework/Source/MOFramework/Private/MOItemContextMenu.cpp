@@ -183,26 +183,32 @@ void UMOItemContextMenu::BindButtonEvents()
 {
 	if (UseButton)
 	{
+		UseButton->OnClicked().RemoveAll(this);
 		UseButton->OnClicked().AddUObject(this, &UMOItemContextMenu::HandleUseClicked);
 	}
 	if (Drop1Button)
 	{
+		Drop1Button->OnClicked().RemoveAll(this);
 		Drop1Button->OnClicked().AddUObject(this, &UMOItemContextMenu::HandleDrop1Clicked);
 	}
 	if (DropAllButton)
 	{
+		DropAllButton->OnClicked().RemoveAll(this);
 		DropAllButton->OnClicked().AddUObject(this, &UMOItemContextMenu::HandleDropAllClicked);
 	}
 	if (InspectButton)
 	{
+		InspectButton->OnClicked().RemoveAll(this);
 		InspectButton->OnClicked().AddUObject(this, &UMOItemContextMenu::HandleInspectClicked);
 	}
 	if (SplitStackButton)
 	{
+		SplitStackButton->OnClicked().RemoveAll(this);
 		SplitStackButton->OnClicked().AddUObject(this, &UMOItemContextMenu::HandleSplitStackClicked);
 	}
 	if (CraftButton)
 	{
+		CraftButton->OnClicked().RemoveAll(this);
 		CraftButton->OnClicked().AddUObject(this, &UMOItemContextMenu::HandleCraftClicked);
 	}
 }

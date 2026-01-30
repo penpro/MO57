@@ -156,15 +156,18 @@ void UMOPersistenceSubsystem::UnbindFromWorld()
 
 bool UMOPersistenceSubsystem::SaveWorldToSlot(const FString& SlotName)
 {
+    UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] *** SaveWorldToSlot CALLED: %s ***"), *SlotName);
+
     UWorld* World = BoundWorld.Get();
     if (!World)
     {
         World = GetWorld();
+        UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Using GetWorld() fallback"));
     }
 
     if (!World || !World->IsGameWorld() || World->GetNetMode() == NM_Client)
     {
-        UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] Save/Load ignored (no valid authority game world). World=%s NetMode=%d"),
+        UE_LOG(LogMOFramework, Error, TEXT("[MOPersist] Save FAILED - no valid authority game world. World=%s NetMode=%d"),
             *GetNameSafe(World),
             World ? (int32)World->GetNetMode() : -1);
         return false;
@@ -647,7 +650,7 @@ void UMOPersistenceSubsystem::RespawnPersistedPawns(UWorld* World, const TArray<
             PawnRecord.Transform,
             nullptr,
             nullptr,
-            ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn
+            ESpawnActorCollisionHandlingMethod::AlwaysSpawn
         );
 
         if (!IsValid(DeferredPawn))
@@ -813,11 +816,26 @@ void UMOPersistenceSubsystem::CaptureWorldItems(UWorld* World, UMOWorldSaveGame*
     int32 SkippedNoIdentity = 0;
     int32 SkippedNoItem = 0;
     int32 SkippedDestroyed = 0;
+    int32 SkippedPawn = 0;
 
     for (TActorIterator<AActor> It(World); It; ++It)
     {
         AActor* Actor = *It;
         TotalActors++;
+
+        // Detailed check to see why items might be skipped
+        if (Actor->GetClass()->GetName().Contains(TEXT("WorldItem")) || Actor->GetClass()->GetName().Contains(TEXT("Apple")))
+        {
+            UMOIdentityComponent* DbgIdentity = Actor->FindComponentByClass<UMOIdentityComponent>();
+            UMOItemComponent* DbgItem = Actor->FindComponentByClass<UMOItemComponent>();
+            UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] WORLD ITEM CHECK: %s (Class: %s) at %s - Identity: %s, Item: %s, IsPawn: %s"),
+                *Actor->GetName(),
+                *Actor->GetClass()->GetName(),
+                *Actor->GetActorLocation().ToString(),
+                DbgIdentity ? TEXT("YES") : TEXT("NO"),
+                DbgItem ? TEXT("YES") : TEXT("NO"),
+                Cast<APawn>(Actor) ? TEXT("YES") : TEXT("NO"));
+        }
 
         if (!IsPersistedWorldItemActor(Actor))
         {
@@ -861,10 +879,11 @@ void UMOPersistenceSubsystem::CaptureWorldItems(UWorld* World, UMOWorldSaveGame*
         ItemRecord.ItemDefinitionId = ItemComponent->ItemDefinitionId;
         ItemRecord.Quantity = FMath::Max(1, ItemComponent->Quantity);
 
-        UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] SAVE ITEMS: Capturing item '%s' GUID=%s Class=%s"),
+        UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] SAVE ITEMS: Capturing item '%s' GUID=%s Class=%s Location=%s"),
             *Actor->GetName(),
             *ItemGuid.ToString(EGuidFormats::DigitsWithHyphens),
-            *ItemRecord.ItemClassPath.ToString());
+            *ItemRecord.ItemClassPath.ToString(),
+            *ItemRecord.Transform.GetLocation().ToString());
 
         SaveObject->WorldItems.Add(ItemRecord);
     }
@@ -935,9 +954,10 @@ void UMOPersistenceSubsystem::RespawnWorldItems(UWorld* World, const TArray<FMOP
             continue;
         }
 
-        UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] LOAD ITEMS: Respawning item GUID=%s Class=%s"),
+        UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] LOAD ITEMS: Respawning item GUID=%s Class=%s at Location=%s"),
             *ItemRecord.ItemGuid.ToString(EGuidFormats::DigitsWithHyphens),
-            *ItemRecord.ItemClassPath.ToString());
+            *ItemRecord.ItemClassPath.ToString(),
+            *ItemRecord.Transform.GetLocation().ToString());
 
         UClass* LoadedItemClass = nullptr;
         if (ItemRecord.ItemClassPath.IsValid())
@@ -959,7 +979,7 @@ void UMOPersistenceSubsystem::RespawnWorldItems(UWorld* World, const TArray<FMOP
             ItemRecord.Transform,
             nullptr,
             nullptr,
-            ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn
+            ESpawnActorCollisionHandlingMethod::AlwaysSpawn
         );
 
         if (!IsValid(DeferredActor))
@@ -988,7 +1008,15 @@ void UMOPersistenceSubsystem::RespawnWorldItems(UWorld* World, const TArray<FMOP
         ItemComponent->Quantity = FMath::Max(1, ItemRecord.Quantity);
 
         UGameplayStatics::FinishSpawningActor(DeferredActor, ItemRecord.Transform);
+
+        // Force set the transform after spawn - OnConstruction may have reset it
+        DeferredActor->SetActorTransform(ItemRecord.Transform);
+
         OutResult.ItemsLoaded++;
+
+        UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] LOAD ITEMS: Spawned item at final location %s (expected %s)"),
+            *DeferredActor->GetActorLocation().ToString(),
+            *ItemRecord.Transform.GetLocation().ToString());
     }
 }
 

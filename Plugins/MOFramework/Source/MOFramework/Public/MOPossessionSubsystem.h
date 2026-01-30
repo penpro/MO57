@@ -32,6 +32,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Possession")
 	AActor* ServerSpawnActorNearController(APlayerController* PlayerController, TSubclassOf<AActor> ActorClassToSpawn, float SpawnDistance = 300.0f, FVector SpawnOffset = FVector::ZeroVector, bool bUseViewRotation = true);
 
+	/** Spawn a pawn and immediately possess it (server only). */
+	UFUNCTION(BlueprintCallable, Category="MO|Possession")
+	APawn* ServerSpawnAndPossessPawn(APlayerController* PlayerController, TSubclassOf<APawn> PawnClassToSpawn, float SpawnDistance = 300.0f, FVector SpawnOffset = FVector::ZeroVector, bool bUseViewRotation = true);
+
 private:
 	bool ResolveViewpoint(APlayerController* PlayerController, FVector& OutViewLocation, FRotator& OutViewRotation) const;
 	bool HasLineOfSight(UWorld* World, const FVector& ViewLocation, const APawn* TargetPawn) const;

@@ -19,6 +19,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Possession")
 	bool TrySpawnActorNearController(TSubclassOf<AActor> ActorClassToSpawn, float SpawnDistance = 300.0f, FVector SpawnOffset = FVector::ZeroVector, bool bUseViewRotation = true);
 
+	/** Spawn a pawn and immediately possess it. */
+	UFUNCTION(BlueprintCallable, Category="MO|Possession")
+	bool TrySpawnAndPossessPawn(TSubclassOf<APawn> PawnClassToSpawn, float SpawnDistance = 300.0f, FVector SpawnOffset = FVector::ZeroVector, bool bUseViewRotation = true);
+
 protected:
 	virtual void BeginPlay() override;
 
@@ -27,4 +31,7 @@ protected:
 
 	UFUNCTION(Server, Reliable)
 	void ServerSpawnActorNearController(TSubclassOf<AActor> ActorClassToSpawn, float SpawnDistance, FVector SpawnOffset, bool bUseViewRotation);
+
+	UFUNCTION(Server, Reliable)
+	void ServerSpawnAndPossessPawn(TSubclassOf<APawn> PawnClassToSpawn, float SpawnDistance, FVector SpawnOffset, bool bUseViewRotation);
 };

@@ -3,6 +3,7 @@
 #include "MOFramework.h"
 #include "MOItemDatabaseSettings.h"
 #include "MOPersistenceSettings.h"
+#include "MOMedicalDatabaseSettings.h"
 
 // Define the log category
 DEFINE_LOG_CATEGORY(LogMOFramework);
@@ -17,6 +18,7 @@ void FMOFrameworkModule::StartupModule()
 	{
 		UMOItemDatabaseSettings::ValidateConfiguration();
 		UMOPersistenceSettings::ValidateConfiguration();
+		UMOMedicalDatabaseSettings::ValidateConfiguration();
 	}
 }
 

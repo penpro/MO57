@@ -12,8 +12,11 @@ class UMOInGameMenu;
 class UMOItemContextMenu;
 class UMOConfirmationDialog;
 class UCommonActivatableWidget;
-class UMOPlayerStatusWidget;
+class UMOStatusPanel;
 class UMOModalBackground;
+class UMOVitalsComponent;
+class UMOMetabolismComponent;
+class UMOMentalStateComponent;
 
 UCLASS(ClassGroup=(MO), meta=(BlueprintSpawnableComponent))
 class MOFRAMEWORK_API UMOUIManagerComponent : public UActorComponent
@@ -48,23 +51,27 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO|UI")
 	UMOReticleWidget* GetReticleWidget() const;
 
-	// --- Player Status HUD ---
+	// --- Player Status Panel ---
 
-	/** Toggle player status HUD visibility. */
+	/** Toggle player status panel visibility. */
 	UFUNCTION(BlueprintCallable, Category="MO|UI|Status")
 	void TogglePlayerStatus();
 
-	/** Get the player status widget (may be null if not created yet). */
+	/** Get the status panel widget (may be null if not created yet). */
 	UFUNCTION(BlueprintPure, Category="MO|UI|Status")
-	UMOPlayerStatusWidget* GetPlayerStatusWidget() const;
+	UMOStatusPanel* GetStatusPanel() const;
 
-	/** Show or hide the player status HUD. */
+	/** Show or hide the player status panel. */
 	UFUNCTION(BlueprintCallable, Category="MO|UI|Status")
 	void SetPlayerStatusVisible(bool bVisible);
 
-	/** Check if player status HUD is visible. */
+	/** Check if player status panel is visible. */
 	UFUNCTION(BlueprintPure, Category="MO|UI|Status")
 	bool IsPlayerStatusVisible() const;
+
+	/** Rebind the status panel to current pawn's medical components. Call after pawn changes. */
+	UFUNCTION(BlueprintCallable, Category="MO|UI|Status")
+	void RebindStatusPanelToCurrentPawn();
 
 	// --- In-Game Menu ---
 
@@ -181,27 +188,30 @@ private:
 
 	void CreateReticle();
 
-	// --- Player Status HUD ---
+	// --- Player Status Panel ---
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Status", meta=(AllowPrivateAccess="true"))
-	TSubclassOf<UMOPlayerStatusWidget> PlayerStatusWidgetClass;
+	TSubclassOf<UMOStatusPanel> StatusPanelClass;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Status", meta=(ClampMin="0", AllowPrivateAccess="true"))
-	int32 PlayerStatusZOrder = 5;
+	int32 StatusPanelZOrder = 5;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Status", meta=(AllowPrivateAccess="true"))
-	bool bCreatePlayerStatusOnBeginPlay = true;
+	bool bCreateStatusPanelOnBeginPlay = false;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Status", meta=(AllowPrivateAccess="true"))
-	bool bHidePlayerStatusWhenMenuOpen = false;
+	bool bHideStatusPanelWhenMenuOpen = false;
 
 	UPROPERTY(Transient)
-	TWeakObjectPtr<UMOPlayerStatusWidget> PlayerStatusWidget;
+	TWeakObjectPtr<UMOStatusPanel> StatusPanelWidget;
 
-	void CreatePlayerStatus();
+	void CreateStatusPanel();
 
 	UFUNCTION()
-	void HandlePlayerStatusRequestClose();
+	void HandleStatusPanelRequestClose();
+
+	/** Get medical components from current pawn (null-safe). */
+	void GetCurrentPawnMedicalComponents(UMOVitalsComponent*& OutVitals, UMOMetabolismComponent*& OutMetabolism, UMOMentalStateComponent*& OutMental) const;
 
 	// --- In-Game Menu ---
 
@@ -210,6 +220,10 @@ private:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|InGameMenu", meta=(ClampMin="0", AllowPrivateAccess="true"))
 	int32 InGameMenuZOrder = 100;
+
+	/** Level to open when exiting to main menu. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|InGameMenu", meta=(AllowPrivateAccess="true"))
+	FString MainMenuLevelPath = TEXT("/Game/Penumbra/Maps/LoadingLevel");
 
 	UPROPERTY(Transient)
 	TWeakObjectPtr<UMOInGameMenu> InGameMenuWidget;

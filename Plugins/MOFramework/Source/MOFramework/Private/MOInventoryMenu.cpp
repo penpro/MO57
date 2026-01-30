@@ -46,12 +46,18 @@ void UMOInventoryMenu::InitializeMenu(UMOInventoryComponent* InInventoryComponen
 
 	if (IsValid(InventoryComponent))
 	{
+		// Remove any existing bindings first to prevent duplicates
+		InventoryComponent->OnInventoryChanged.RemoveDynamic(this, &UMOInventoryMenu::HandleInventoryChanged);
+		InventoryComponent->OnSlotsChanged.RemoveDynamic(this, &UMOInventoryMenu::HandleSlotsChanged);
 		InventoryComponent->OnInventoryChanged.AddDynamic(this, &UMOInventoryMenu::HandleInventoryChanged);
 		InventoryComponent->OnSlotsChanged.AddDynamic(this, &UMOInventoryMenu::HandleSlotsChanged);
 	}
 
 	if (InventoryGrid)
 	{
+		// Remove any existing bindings first to prevent duplicates
+		InventoryGrid->OnGridSlotClicked.RemoveDynamic(this, &UMOInventoryMenu::HandleGridSlotClicked);
+		InventoryGrid->OnGridSlotRightClicked.RemoveDynamic(this, &UMOInventoryMenu::HandleGridSlotRightClicked);
 		InventoryGrid->InitializeGrid(InventoryComponent);
 		InventoryGrid->OnGridSlotClicked.AddDynamic(this, &UMOInventoryMenu::HandleGridSlotClicked);
 		InventoryGrid->OnGridSlotRightClicked.AddDynamic(this, &UMOInventoryMenu::HandleGridSlotRightClicked);

@@ -9,10 +9,12 @@ void UMOConfirmationDialog::NativeConstruct()
 
 	if (ConfirmButton)
 	{
+		ConfirmButton->OnClicked().RemoveAll(this);
 		ConfirmButton->OnClicked().AddUObject(this, &UMOConfirmationDialog::HandleConfirmClicked);
 	}
 	if (CancelButton)
 	{
+		CancelButton->OnClicked().RemoveAll(this);
 		CancelButton->OnClicked().AddUObject(this, &UMOConfirmationDialog::HandleCancelClicked);
 	}
 }

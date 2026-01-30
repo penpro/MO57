@@ -202,9 +202,55 @@ AActor* UMOPossessionSubsystem::ServerSpawnActorNearController(APlayerController
 
 	UGameplayStatics::FinishSpawningActor(DeferredActor, SpawnTransform);
 
-	UE_LOG(LogMOFramework, Warning, TEXT("[MOPossess] Spawned Actor=%s Class=%s"),
+	UE_LOG(LogMOFramework, Log, TEXT("[MOPossess] Spawned Actor=%s Class=%s"),
 		*GetNameSafe(DeferredActor),
 		*GetNameSafe(ActorClassToSpawn.Get()));
 
 	return DeferredActor;
+}
+
+APawn* UMOPossessionSubsystem::ServerSpawnAndPossessPawn(APlayerController* PlayerController, TSubclassOf<APawn> PawnClassToSpawn, float SpawnDistance, FVector SpawnOffset, bool bUseViewRotation)
+{
+	UWorld* World = GetWorld();
+	if (!World || !IsValid(PlayerController))
+	{
+		return nullptr;
+	}
+
+	if (World->GetNetMode() == NM_Client)
+	{
+		return nullptr;
+	}
+
+	if (!PawnClassToSpawn)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOPossess] SpawnAndPossessPawn failed: no pawn class set"));
+		return nullptr;
+	}
+
+	// Spawn the pawn using the existing spawn logic
+	AActor* SpawnedActor = ServerSpawnActorNearController(PlayerController, PawnClassToSpawn, SpawnDistance, SpawnOffset, bUseViewRotation);
+	APawn* SpawnedPawn = Cast<APawn>(SpawnedActor);
+
+	if (!IsValid(SpawnedPawn))
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOPossess] SpawnAndPossessPawn failed: spawned actor is not a pawn"));
+		return nullptr;
+	}
+
+	// Unpossess current pawn if any
+	APawn* CurrentPawn = PlayerController->GetPawn();
+	if (IsValid(CurrentPawn))
+	{
+		PlayerController->UnPossess();
+	}
+
+	// Possess the new pawn
+	PlayerController->Possess(SpawnedPawn);
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOPossess] Spawned and possessed Pawn=%s Class=%s"),
+		*GetNameSafe(SpawnedPawn),
+		*GetNameSafe(PawnClassToSpawn.Get()));
+
+	return SpawnedPawn;
 }

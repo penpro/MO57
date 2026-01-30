@@ -24,6 +24,8 @@ class UPanelWidget;
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOInGameMenuRequestCloseSignature);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOInGameMenuExitToMainMenuSignature);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOInGameMenuExitGameSignature);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOInGameMenuSaveRequestedSignature, const FString&, SlotName);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOInGameMenuLoadRequestedSignature, const FString&, SlotName);
 
 UCLASS()
 class MOFRAMEWORK_API UMOInGameMenu : public UCommonActivatableWidget
@@ -34,6 +36,14 @@ public:
 	/** Request to close the menu (broadcasts delegate). */
 	UFUNCTION(BlueprintCallable, Category="MO|UI|InGameMenu")
 	void RequestClose();
+
+	/** Refresh the save panel's list of saves. */
+	UFUNCTION(BlueprintCallable, Category="MO|UI|InGameMenu")
+	void RefreshSavePanelList();
+
+	/** Refresh the load panel's list of saves. */
+	UFUNCTION(BlueprintCallable, Category="MO|UI|InGameMenu")
+	void RefreshLoadPanelList();
 
 	/** Called when menu should close. */
 	UPROPERTY(BlueprintAssignable, Category="MO|UI|InGameMenu")
@@ -46,6 +56,14 @@ public:
 	/** Called when user confirms exit game. */
 	UPROPERTY(BlueprintAssignable, Category="MO|UI|InGameMenu")
 	FMOInGameMenuExitGameSignature OnExitGame;
+
+	/** Called when user requests to save to a slot. */
+	UPROPERTY(BlueprintAssignable, Category="MO|UI|InGameMenu")
+	FMOInGameMenuSaveRequestedSignature OnSaveRequested;
+
+	/** Called when user requests to load from a slot. */
+	UPROPERTY(BlueprintAssignable, Category="MO|UI|InGameMenu")
+	FMOInGameMenuLoadRequestedSignature OnLoadRequested;
 
 protected:
 	virtual void NativeConstruct() override;
@@ -83,6 +101,10 @@ private:
 
 	// Panel close handlers
 	UFUNCTION() void HandlePanelRequestClose();
+
+	// Save/Load forwarding handlers
+	UFUNCTION() void HandleSavePanelSaveRequested(const FString& SlotName);
+	UFUNCTION() void HandleLoadPanelLoadRequested(const FString& SlotName);
 
 private:
 	// ============================================================

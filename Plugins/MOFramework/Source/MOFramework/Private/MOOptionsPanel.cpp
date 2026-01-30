@@ -8,14 +8,17 @@ void UMOOptionsPanel::NativeConstruct()
 
 	if (ApplyButton)
 	{
+		ApplyButton->OnClicked().RemoveAll(this);
 		ApplyButton->OnClicked().AddUObject(this, &UMOOptionsPanel::HandleApplyClicked);
 	}
 	if (ResetButton)
 	{
+		ResetButton->OnClicked().RemoveAll(this);
 		ResetButton->OnClicked().AddUObject(this, &UMOOptionsPanel::HandleResetClicked);
 	}
 	if (BackButton)
 	{
+		BackButton->OnClicked().RemoveAll(this);
 		BackButton->OnClicked().AddUObject(this, &UMOOptionsPanel::HandleBackClicked);
 	}
 

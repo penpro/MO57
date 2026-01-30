@@ -30,7 +30,10 @@ public class MOFramework : ModuleRules
 				"InputCore",
 				"EnhancedInput",
 				"CommonUI",
-				"CommonInput"
+				"CommonInput",
+				"AIModule",
+				"NavigationSystem",
+				"GameplayTasks"
 			}
 			);
 			

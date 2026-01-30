@@ -188,7 +188,14 @@ bool AMOWorldItem::ApplyItemDefinitionToWorldMesh()
 		}
 	}
 
-	ItemMesh->SetRelativeTransform(ItemDefinitionRow->WorldVisual.RelativeTransform);
+	// Only apply scale and rotation from definition, NOT location
+	// Location would reset the actor position since ItemMesh is the root component
+	const FTransform& DefTransform = ItemDefinitionRow->WorldVisual.RelativeTransform;
+	ItemMesh->SetRelativeScale3D(DefTransform.GetScale3D());
+	ItemMesh->SetRelativeRotation(DefTransform.GetRotation().Rotator());
+	// Don't call: ItemMesh->SetRelativeLocation(DefTransform.GetLocation());
+	// This would move the entire actor since ItemMesh is root
+
 	// Don't set physics from definition here - let EnableDropPhysics control it when dropped
 	// ItemMesh->SetSimulatePhysics(ItemDefinitionRow->WorldVisual.bSimulatePhysics);
 

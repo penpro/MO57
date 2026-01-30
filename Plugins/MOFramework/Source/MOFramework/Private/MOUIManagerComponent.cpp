@@ -20,8 +20,11 @@
 #include "MOSurvivalStatsComponent.h"
 #include "MOItemDatabaseSettings.h"
 #include "MOWorldItem.h"
-#include "MOPlayerStatusWidget.h"
+#include "MOStatusPanel.h"
 #include "MOModalBackground.h"
+#include "MOVitalsComponent.h"
+#include "MOMetabolismComponent.h"
+#include "MOMentalStateComponent.h"
 
 UMOUIManagerComponent::UMOUIManagerComponent()
 {
@@ -39,9 +42,9 @@ void UMOUIManagerComponent::BeginPlay()
 			CreateReticle();
 		}
 
-		if (bCreatePlayerStatusOnBeginPlay)
+		if (bCreateStatusPanelOnBeginPlay)
 		{
-			CreatePlayerStatus();
+			CreateStatusPanel();
 		}
 	}
 }
@@ -58,12 +61,12 @@ void UMOUIManagerComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	}
 	ReticleWidget.Reset();
 
-	// Clean up player status widget
-	if (UMOPlayerStatusWidget* Status = PlayerStatusWidget.Get())
+	// Clean up status panel widget
+	if (UMOStatusPanel* Status = StatusPanelWidget.Get())
 	{
 		Status->RemoveFromParent();
 	}
-	PlayerStatusWidget.Reset();
+	StatusPanelWidget.Reset();
 
 	// Clean up modal background
 	if (UMOModalBackground* Background = ModalBackgroundWidget.Get())
@@ -112,6 +115,12 @@ UMOInventoryComponent* UMOUIManagerComponent::ResolveCurrentPawnInventoryCompone
 void UMOUIManagerComponent::ToggleInventoryMenu()
 {
 	if (!IsLocalOwningPlayerController())
+	{
+		return;
+	}
+
+	// Don't allow opening inventory while in-game menu is open
+	if (IsInGameMenuOpen())
 	{
 		return;
 	}
@@ -311,7 +320,7 @@ void UMOUIManagerComponent::CreateReticle()
 	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Reticle widget created and added to viewport."));
 }
 
-void UMOUIManagerComponent::CreatePlayerStatus()
+void UMOUIManagerComponent::CreateStatusPanel()
 {
 	APlayerController* PlayerController = ResolveOwningPlayerController();
 	if (!IsValid(PlayerController))
@@ -319,60 +328,55 @@ void UMOUIManagerComponent::CreatePlayerStatus()
 		return;
 	}
 
-	if (!PlayerStatusWidgetClass)
+	if (!StatusPanelClass)
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] PlayerStatusWidgetClass not set on UI manager component."));
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] StatusPanelClass not set on UI manager component."));
 		return;
 	}
 
-	UMOPlayerStatusWidget* NewStatus = CreateWidget<UMOPlayerStatusWidget>(PlayerController, PlayerStatusWidgetClass);
+	UMOStatusPanel* NewStatus = CreateWidget<UMOStatusPanel>(PlayerController, StatusPanelClass);
 	if (!IsValid(NewStatus))
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] Failed to create player status widget."));
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] Failed to create status panel widget."));
 		return;
 	}
 
-	PlayerStatusWidget = NewStatus;
-	NewStatus->AddToViewport(PlayerStatusZOrder);
+	StatusPanelWidget = NewStatus;
+	NewStatus->AddToViewport(StatusPanelZOrder);
 
 	// Start hidden - user must toggle to show
 	NewStatus->SetVisibility(ESlateVisibility::Collapsed);
 
 	// Bind close request
-	NewStatus->OnRequestClose.AddDynamic(this, &UMOUIManagerComponent::HandlePlayerStatusRequestClose);
+	NewStatus->OnRequestClose.AddDynamic(this, &UMOUIManagerComponent::HandleStatusPanelRequestClose);
 
-	// Initialize with survival stats from current pawn
-	APawn* CurrentPawn = PlayerController->GetPawn();
-	if (IsValid(CurrentPawn))
-	{
-		UMOSurvivalStatsComponent* SurvivalStats = CurrentPawn->FindComponentByClass<UMOSurvivalStatsComponent>();
-		if (IsValid(SurvivalStats))
-		{
-			NewStatus->InitializeStatus(SurvivalStats);
-		}
-	}
-
-	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Player status widget created (hidden by default)."));
+	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Status panel widget created (hidden by default)."));
 }
 
 void UMOUIManagerComponent::TogglePlayerStatus()
 {
+	// Don't allow opening player status while in-game menu is open
+	if (IsInGameMenuOpen() && !IsPlayerStatusVisible())
+	{
+		return;
+	}
+
 	SetPlayerStatusVisible(!IsPlayerStatusVisible());
 }
 
-void UMOUIManagerComponent::HandlePlayerStatusRequestClose()
+void UMOUIManagerComponent::HandleStatusPanelRequestClose()
 {
 	SetPlayerStatusVisible(false);
 }
 
-UMOPlayerStatusWidget* UMOUIManagerComponent::GetPlayerStatusWidget() const
+UMOStatusPanel* UMOUIManagerComponent::GetStatusPanel() const
 {
-	return PlayerStatusWidget.Get();
+	return StatusPanelWidget.Get();
 }
 
 void UMOUIManagerComponent::SetPlayerStatusVisible(bool bVisible)
 {
-	UMOPlayerStatusWidget* Status = PlayerStatusWidget.Get();
+	UMOStatusPanel* Status = StatusPanelWidget.Get();
 	if (!IsValid(Status))
 	{
 		return;
@@ -382,6 +386,9 @@ void UMOUIManagerComponent::SetPlayerStatusVisible(bool bVisible)
 
 	if (bVisible)
 	{
+		// Bind to current pawn's medical components before showing
+		RebindStatusPanelToCurrentPawn();
+
 		ShowModalBackground();
 		Status->SetVisibility(ESlateVisibility::Visible);
 
@@ -413,7 +420,7 @@ void UMOUIManagerComponent::SetPlayerStatusVisible(bool bVisible)
 
 bool UMOUIManagerComponent::IsPlayerStatusVisible() const
 {
-	const UMOPlayerStatusWidget* Status = PlayerStatusWidget.Get();
+	const UMOStatusPanel* Status = StatusPanelWidget.Get();
 	if (!IsValid(Status))
 	{
 		return false;
@@ -530,6 +537,9 @@ void UMOUIManagerComponent::OpenInGameMenu()
 		MenuWidget->OnRequestClose.AddDynamic(this, &UMOUIManagerComponent::HandleInGameMenuRequestClose);
 		MenuWidget->OnExitToMainMenu.AddDynamic(this, &UMOUIManagerComponent::HandleInGameMenuExitToMainMenu);
 		MenuWidget->OnExitGame.AddDynamic(this, &UMOUIManagerComponent::HandleInGameMenuExitGame);
+		MenuWidget->OnSaveRequested.AddDynamic(this, &UMOUIManagerComponent::HandleSaveRequested);
+		MenuWidget->OnLoadRequested.AddDynamic(this, &UMOUIManagerComponent::HandleLoadRequested);
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] InGameMenu delegates bound (OnSaveRequested, OnLoadRequested)"));
 	}
 
 	if (!MenuWidget->IsInViewport())
@@ -602,29 +612,56 @@ void UMOUIManagerComponent::HandleInGameMenuExitGame()
 
 void UMOUIManagerComponent::HandleSaveRequested(const FString& SlotName)
 {
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] *** HANDLE SAVE REQUESTED: %s ***"), *SlotName);
+
 	// Check if slot exists for overwrite confirmation
 	UGameInstance* GameInstance = UGameplayStatics::GetGameInstance(this);
 	if (GameInstance)
 	{
 		UMOPersistenceSubsystem* Persistence = GameInstance->GetSubsystem<UMOPersistenceSubsystem>();
-		if (Persistence && Persistence->DoesSaveSlotExist(SlotName))
-		{
-			PendingConfirmationContext = FString::Printf(TEXT("Save:%s"), *SlotName);
-			ShowConfirmationDialog(
-				NSLOCTEXT("MO", "OverwriteSaveTitle", "Overwrite Save"),
-				FText::Format(NSLOCTEXT("MO", "OverwriteSaveMessage", "Are you sure you want to overwrite '{0}'?"), FText::FromString(SlotName)),
-				NSLOCTEXT("MO", "Overwrite", "Overwrite"),
-				NSLOCTEXT("MO", "Cancel", "Cancel")
-			);
-			return;
-		}
-
-		// New save - proceed directly
 		if (Persistence)
 		{
-			Persistence->SaveWorldToSlot(SlotName);
-			UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Saved to slot: %s"), *SlotName);
+			const bool bSlotExists = Persistence->DoesSaveSlotExist(SlotName);
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] Slot '%s' exists: %s"), *SlotName, bSlotExists ? TEXT("YES") : TEXT("NO"));
+
+			if (bSlotExists)
+			{
+				UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Showing overwrite confirmation"));
+				PendingConfirmationContext = FString::Printf(TEXT("Save:%s"), *SlotName);
+				ShowConfirmationDialog(
+					NSLOCTEXT("MO", "OverwriteSaveTitle", "Overwrite Save"),
+					FText::Format(NSLOCTEXT("MO", "OverwriteSaveMessage", "Are you sure you want to overwrite '{0}'?"), FText::FromString(SlotName)),
+					NSLOCTEXT("MO", "Overwrite", "Overwrite"),
+					NSLOCTEXT("MO", "Cancel", "Cancel")
+				);
+				return;
+			}
+
+			// New save - proceed directly without confirmation
+			UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Saving to new slot (no confirmation needed): %s"), *SlotName);
+			bool bSaveSuccess = Persistence->SaveWorldToSlot(SlotName);
+			UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Save complete (success: %s)"), bSaveSuccess ? TEXT("YES") : TEXT("NO"));
+
+			// Refresh both panels to show the new save
+			if (bSaveSuccess)
+			{
+				UMOInGameMenu* MenuWidget = InGameMenuWidget.Get();
+				if (IsValid(MenuWidget))
+				{
+					MenuWidget->RefreshSavePanelList();
+					MenuWidget->RefreshLoadPanelList();
+					UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Save and load panels refreshed"));
+				}
+			}
 		}
+		else
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] Persistence subsystem is NULL"));
+		}
+	}
+	else
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] GameInstance is NULL in HandleSaveRequested"));
 	}
 }
 
@@ -822,13 +859,22 @@ void UMOUIManagerComponent::HandleConfirmationConfirmed()
 {
 	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Confirmation confirmed: %s"), *PendingConfirmationContext);
 
+	// Close the confirmation dialog
+	UMOConfirmationDialog* DialogWidget = ConfirmationDialogWidget.Get();
+	if (IsValid(DialogWidget) && DialogWidget->IsInViewport())
+	{
+		DialogWidget->RemoveFromParent();
+	}
+
 	if (PendingConfirmationContext == TEXT("ExitToMainMenu"))
 	{
-		// TODO: Implement return to main menu
-		UGameplayStatics::OpenLevel(this, TEXT("/Game/MainMenu"));
+		CloseAllMenus();
+		UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Exiting to main menu: %s"), *MainMenuLevelPath);
+		UGameplayStatics::OpenLevel(this, *MainMenuLevelPath);
 	}
 	else if (PendingConfirmationContext == TEXT("ExitGame"))
 	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Exiting game"));
 		UKismetSystemLibrary::QuitGame(this, nullptr, EQuitPreference::Quit, false);
 	}
 	else if (PendingConfirmationContext.StartsWith(TEXT("Save:")))
@@ -840,8 +886,19 @@ void UMOUIManagerComponent::HandleConfirmationConfirmed()
 			UMOPersistenceSubsystem* Persistence = GameInstance->GetSubsystem<UMOPersistenceSubsystem>();
 			if (Persistence)
 			{
-				Persistence->SaveWorldToSlot(SlotName);
-				UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Saved to slot: %s"), *SlotName);
+				bool bSaveSuccess = Persistence->SaveWorldToSlot(SlotName);
+				UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Saved to slot: %s (success: %s)"), *SlotName, bSaveSuccess ? TEXT("YES") : TEXT("NO"));
+
+				// Refresh panels to show updated save
+				if (bSaveSuccess)
+				{
+					UMOInGameMenu* MenuWidget = InGameMenuWidget.Get();
+					if (IsValid(MenuWidget))
+					{
+						MenuWidget->RefreshSavePanelList();
+						MenuWidget->RefreshLoadPanelList();
+					}
+				}
 			}
 		}
 	}
@@ -868,6 +925,14 @@ void UMOUIManagerComponent::HandleConfirmationConfirmed()
 void UMOUIManagerComponent::HandleConfirmationCancelled()
 {
 	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Confirmation cancelled: %s"), *PendingConfirmationContext);
+
+	// Close the confirmation dialog
+	UMOConfirmationDialog* DialogWidget = ConfirmationDialogWidget.Get();
+	if (IsValid(DialogWidget) && DialogWidget->IsInViewport())
+	{
+		DialogWidget->RemoveFromParent();
+	}
+
 	PendingConfirmationContext.Empty();
 	OnConfirmationCancelled.Broadcast();
 }
@@ -885,8 +950,8 @@ void UMOUIManagerComponent::CloseAllMenus()
 {
 	CloseItemContextMenu();
 
-	// Close player status
-	UMOPlayerStatusWidget* Status = PlayerStatusWidget.Get();
+	// Close status panel
+	UMOStatusPanel* Status = StatusPanelWidget.Get();
 	if (IsValid(Status))
 	{
 		Status->SetVisibility(ESlateVisibility::Collapsed);
@@ -935,7 +1000,7 @@ void UMOUIManagerComponent::UpdateReticleVisibility()
 		SetReticleVisible(!bMenuOpen);
 	}
 
-	if (bHidePlayerStatusWhenMenuOpen)
+	if (bHideStatusPanelWhenMenuOpen)
 	{
 		SetPlayerStatusVisible(!bMenuOpen);
 	}
@@ -1050,4 +1115,50 @@ void UMOUIManagerComponent::DropItemToWorldByGuid(UMOInventoryComponent* Invento
 			WorldItem->EnableDropPhysics();
 		}
 	}
+}
+
+void UMOUIManagerComponent::GetCurrentPawnMedicalComponents(UMOVitalsComponent*& OutVitals, UMOMetabolismComponent*& OutMetabolism, UMOMentalStateComponent*& OutMental) const
+{
+	OutVitals = nullptr;
+	OutMetabolism = nullptr;
+	OutMental = nullptr;
+
+	APlayerController* PlayerController = ResolveOwningPlayerController();
+	if (!IsValid(PlayerController))
+	{
+		return;
+	}
+
+	APawn* CurrentPawn = PlayerController->GetPawn();
+	if (!IsValid(CurrentPawn))
+	{
+		return;
+	}
+
+	OutVitals = CurrentPawn->FindComponentByClass<UMOVitalsComponent>();
+	OutMetabolism = CurrentPawn->FindComponentByClass<UMOMetabolismComponent>();
+	OutMental = CurrentPawn->FindComponentByClass<UMOMentalStateComponent>();
+}
+
+void UMOUIManagerComponent::RebindStatusPanelToCurrentPawn()
+{
+	UMOStatusPanel* Status = StatusPanelWidget.Get();
+	if (!IsValid(Status))
+	{
+		return;
+	}
+
+	UMOVitalsComponent* Vitals = nullptr;
+	UMOMetabolismComponent* Metabolism = nullptr;
+	UMOMentalStateComponent* Mental = nullptr;
+
+	GetCurrentPawnMedicalComponents(Vitals, Metabolism, Mental);
+
+	// Bind to medical components (null-safe - will unbind if any are null)
+	Status->BindToMedicalComponents(Vitals, Metabolism, Mental);
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Status panel rebound to current pawn (Vitals: %s, Metabolism: %s, Mental: %s)"),
+		IsValid(Vitals) ? TEXT("Yes") : TEXT("No"),
+		IsValid(Metabolism) ? TEXT("Yes") : TEXT("No"),
+		IsValid(Mental) ? TEXT("Yes") : TEXT("No"));
 }
