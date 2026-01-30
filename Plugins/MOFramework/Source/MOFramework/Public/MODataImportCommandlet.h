@@ -2,10 +2,9 @@
 
 #include "CoreMinimal.h"
 #include "Commandlets/Commandlet.h"
+#include "MOItemDefinitionRow.h"
+#include "MORecipeDefinitionRow.h"
 #include "MODataImportCommandlet.generated.h"
-
-struct FMOItemDefinitionRow;
-struct FMORecipeDefinitionRow;
 
 /**
  * Commandlet for importing item and recipe data from CSV files.

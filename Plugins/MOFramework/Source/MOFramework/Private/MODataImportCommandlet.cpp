@@ -66,7 +66,7 @@ int32 UMODataImportCommandlet::Main(const FString& Params)
 int32 UMODataImportCommandlet::ImportItemsFromCSV(const FString& CSVFilePath, bool bClearExisting)
 {
 	// Get the DataTable
-	UDataTable* ItemTable = UMOItemDatabaseSettings::GetItemDefinitionTable();
+	UDataTable* ItemTable = GetDefault<UMOItemDatabaseSettings>()->GetItemDefinitionsDataTable();
 	if (!ItemTable)
 	{
 		UE_LOG(LogMOFramework, Error, TEXT("[MODataImport] Item DataTable not configured in project settings!"));
@@ -128,7 +128,7 @@ int32 UMODataImportCommandlet::ImportItemsFromCSV(const FString& CSVFilePath, bo
 int32 UMODataImportCommandlet::ImportRecipesFromCSV(const FString& CSVFilePath, bool bClearExisting)
 {
 	// Get the DataTable
-	UDataTable* RecipeTable = UMORecipeDatabaseSettings::GetRecipeDefinitionTable();
+	UDataTable* RecipeTable = GetDefault<UMORecipeDatabaseSettings>()->GetRecipeDefinitionsDataTable();
 	if (!RecipeTable)
 	{
 		UE_LOG(LogMOFramework, Error, TEXT("[MODataImport] Recipe DataTable not configured in project settings!"));
@@ -224,7 +224,7 @@ int32 UMODataImportCommandlet::ImportAllFromDirectory(const FString& DirectoryPa
 
 bool UMODataImportCommandlet::ExportItemsToCSV(const FString& CSVFilePath)
 {
-	UDataTable* ItemTable = UMOItemDatabaseSettings::GetItemDefinitionTable();
+	UDataTable* ItemTable = GetDefault<UMOItemDatabaseSettings>()->GetItemDefinitionsDataTable();
 	if (!ItemTable)
 	{
 		UE_LOG(LogMOFramework, Error, TEXT("[MODataImport] Item DataTable not configured!"));
@@ -290,7 +290,7 @@ bool UMODataImportCommandlet::ExportItemsToCSV(const FString& CSVFilePath)
 
 bool UMODataImportCommandlet::ExportRecipesToCSV(const FString& CSVFilePath)
 {
-	UDataTable* RecipeTable = UMORecipeDatabaseSettings::GetRecipeDefinitionTable();
+	UDataTable* RecipeTable = GetDefault<UMORecipeDatabaseSettings>()->GetRecipeDefinitionsDataTable();
 	if (!RecipeTable)
 	{
 		UE_LOG(LogMOFramework, Error, TEXT("[MODataImport] Recipe DataTable not configured!"));
