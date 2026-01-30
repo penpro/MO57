@@ -88,33 +88,11 @@ void UMOStatusPanel::SwitchToCategory(EMOStatusCategory Category)
 
 	CurrentCategory = Category;
 
-	// Update widget switcher if available
+	// Update widget switcher using standard index-based switching
+	// Children must be ordered: Vitals(0), Nutrition(1), Nutrients(2), Fitness(3), Mental(4), Wounds(5), Conditions(6)
 	if (CategorySwitcher)
 	{
-		// Get the actual scroll box widget for this category and set it active
-		UScrollBox* TargetScrollBox = nullptr;
-		switch (Category)
-		{
-		case EMOStatusCategory::Vitals:		TargetScrollBox = VitalsScrollBox; break;
-		case EMOStatusCategory::Nutrition:	TargetScrollBox = NutritionScrollBox; break;
-		case EMOStatusCategory::Nutrients:	TargetScrollBox = NutrientsScrollBox; break;
-		case EMOStatusCategory::Fitness:	TargetScrollBox = FitnessScrollBox; break;
-		case EMOStatusCategory::Mental:		TargetScrollBox = MentalScrollBox; break;
-		case EMOStatusCategory::Wounds:		TargetScrollBox = WoundsScrollBox; break;
-		case EMOStatusCategory::Conditions:	TargetScrollBox = ConditionsScrollBox; break;
-		default: break;
-		}
-
-		if (TargetScrollBox)
-		{
-			CategorySwitcher->SetActiveWidget(TargetScrollBox);
-		}
-	}
-	else
-	{
-		// Fallback: manually show/hide scroll boxes if CategorySwitcher isn't bound
-		UE_LOG(LogMOFramework, Log, TEXT("[MOStatusPanel] No CategorySwitcher bound - using manual scroll box visibility"));
-		UpdateScrollBoxVisibility(Category);
+		CategorySwitcher->SetActiveWidgetIndex(static_cast<int32>(Category));
 	}
 
 	UpdateTabButtonStates();
