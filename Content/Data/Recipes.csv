@@ -1,0 +1,75 @@
+# MO57 Recipe Definitions
+# Format: RowName,DisplayName,CraftTime,Station,SkillId,SkillLevel,SkillXP,Category,bRequiresDiscovery,Ingredients,Outputs,Tools,Description
+#
+# Stations: None, Campfire, Workbench, Forge, Alchemy, Kitchen, Loom
+# Ingredients format: itemId:quantity|itemId:quantity
+# Outputs format: itemId:quantity|itemId:quantity:chance (chance is optional, defaults to 1.0)
+# Tools format: toolType:minQuality:durabilityUsed (minQuality and durability optional)
+#
+# SkillIds: Knapping, Woodworking, Leatherworking, Cooking, Firemaking, Foraging, Hunting, Fishing, Pottery, Medicine
+
+RowName,DisplayName,CraftTime,Station,SkillId,SkillLevel,SkillXP,Category,bRequiresDiscovery,Ingredients,Outputs,Tools,Description
+
+# === KNAPPING - Stone tool making ===
+knap_hand_axe,Knap Hand Axe,10.0,None,Knapping,0,15,Tools,false,stone:2,hand_axe:1,,Strike stones together to create a crude cutting edge.
+knap_flint_knife,Knap Flint Knife,8.0,None,Knapping,1,20,Tools,false,flint:1,flint_knife:1,,Carefully flake flint into a sharp blade.
+knap_flint_scraper,Knap Flint Scraper,6.0,None,Knapping,1,15,Tools,false,flint:1,flint_scraper:1,,Shape flint into a curved scraping tool.
+knap_stone_hammer,Knap Stone Hammer,5.0,None,Knapping,0,10,Tools,false,stone:1,stone_hammer:1,,Select and shape a hammerstone.
+knap_flint_spearhead,Knap Flint Spearhead,15.0,None,Knapping,2,30,Weapons,false,flint:2,flint_spearhead:1,,Careful pressure flaking creates a deadly point.
+
+# === WOODWORKING - Basic wood processing ===
+craft_stick,Craft Sticks,5.0,None,Woodworking,0,5,Materials,false,bark:1,stick:4,Knife,Strip bark branches into usable sticks.
+craft_digging_stick,Craft Digging Stick,10.0,None,Woodworking,0,10,Tools,false,stick:2,digging_stick:1,Knife,Sharpen and harden a wooden digging implement.
+craft_wooden_spear,Craft Wooden Spear,20.0,None,Woodworking,1,25,Weapons,false,stick:3,wooden_spear:1,Knife,Shape and fire-harden a simple spear.
+craft_fire_drill,Craft Fire Drill,15.0,None,Woodworking,1,20,Tools,false,stick:2|bark:1,fire_drill:1,Knife,Create a friction fire-starting kit.
+split_log,Split Log,30.0,None,Woodworking,1,15,Materials,false,log:1,plank:3|stick:2,Axe,Split a log into usable lumber.
+craft_kindling,Craft Kindling,5.0,None,Woodworking,0,5,Materials,false,stick:3,kindling:5,Knife,Split sticks into fine kindling.
+craft_firewood,Craft Firewood,15.0,None,Woodworking,0,10,Materials,false,log:1,firewood:4,Axe,Chop a log into firewood.
+
+# === HAFTING - Combining stone and wood ===
+craft_stone_axe,Craft Stone Axe,25.0,None,Woodworking,2,35,Tools,false,hand_axe:1|stick:2|cordage:2,stone_axe:1,,Bind a stone head to a wooden handle.
+craft_flint_spear,Craft Flint Spear,20.0,None,Woodworking,2,30,Weapons,false,stick:2|flint_spearhead:1|cordage:1|pitch:1,flint_spear:1,,Attach a flint point to create a lethal spear.
+
+# === FIBER WORK ===
+gather_fiber,Gather Plant Fiber,10.0,None,Foraging,0,10,Materials,false,bark:2,plant_fiber:5,,Strip fibrous material from bark.
+twist_cordage,Twist Cordage,15.0,None,Woodworking,0,15,Materials,false,plant_fiber:3,cordage:1,,Twist fibers into strong cordage.
+craft_sling,Craft Sling,20.0,None,Woodworking,1,20,Weapons,false,cordage:2|hide:1,sling:1|throwing_rock:5,Knife,Weave a simple projectile sling.
+craft_snare,Craft Snare,10.0,None,Hunting,1,15,Tools,false,cordage:2,snare:1,,Create a simple loop trap.
+craft_fish_trap,Craft Fish Trap,45.0,None,Fishing,2,40,Tools,false,stick:10|cordage:5,fish_trap:1,Knife,Weave a basket trap for catching fish.
+
+# === CONTAINERS ===
+craft_bark_container,Craft Bark Container,15.0,None,Woodworking,0,15,Containers,false,bark:3,bark_container:1,Knife,Fold bark into a simple container.
+craft_waterskin,Craft Waterskin,60.0,None,Leatherworking,3,50,Containers,false,hide:1|cordage:2|pitch:2,waterskin:1,Needle,Sew and seal a leather water carrier.
+
+# === FIREMAKING ===
+make_tinder,Prepare Tinder,5.0,None,Firemaking,0,5,Materials,false,bark:1,tinder:3,,Shred bark into fire-catching material.
+craft_torch,Craft Torch,10.0,None,Firemaking,1,15,Light,false,stick:1|pitch:1|plant_fiber:1,torch:1,,Create a pitch-soaked torch.
+
+# === COOKING - Campfire recipes ===
+cook_meat,Cook Meat,60.0,Campfire,Cooking,0,20,Food,false,raw_meat:1,cooked_meat:1,,Roast meat over the fire until done.
+cook_fish,Cook Fish,45.0,Campfire,Cooking,0,15,Food,false,raw_fish:1,cooked_fish:1,,Grill fish over hot coals.
+roast_berries,Roast Berries,20.0,Campfire,Cooking,0,10,Food,false,wild_berries:3,roasted_berries:2,,Warm berries to concentrate their sweetness.
+boil_water,Boil Water,30.0,Campfire,Cooking,0,10,Drinks,false,dirty_water:1,clean_water:1,,Boil water to kill harmful organisms.
+brew_tea,Brew Herbal Tea,45.0,Campfire,Cooking,1,20,Drinks,false,clean_water:1|medicinal_herbs:2,herbal_tea:1,,Steep herbs in hot water.
+make_ash_cakes,Make Ash Cakes,90.0,Campfire,Cooking,2,35,Food,false,acorn:5|clean_water:1,ash_cakes:3,,Process acorns and bake simple flatbread.
+render_fat,Render Fat,120.0,Campfire,Cooking,1,25,Materials,false,raw_meat:2,fat:1|cooked_meat:1:0.5,,Slowly heat meat to extract fat.
+make_charcoal,Make Charcoal,180.0,Campfire,Firemaking,2,40,Materials,false,firewood:5,charcoal:8,,Slowly burn wood with limited air.
+make_pitch,Make Pitch,120.0,Campfire,Firemaking,2,35,Materials,false,bark:5|charcoal:2,pitch:3,,Heat bark and charcoal to extract resin.
+
+# === LEATHERWORKING ===
+scrape_hide,Scrape Hide,90.0,None,Leatherworking,0,30,Materials,false,hide:1,scraped_hide:1,Scraper,Remove flesh and hair from raw hide.
+tan_hide,Tan Hide,180.0,None,Leatherworking,2,50,Materials,false,scraped_hide:1|bark:3|fat:1,tanned_leather:1,,Brain-tan or bark-tan the hide.
+craft_bone_needle,Craft Bone Needle,30.0,None,Leatherworking,1,25,Tools,false,bone:1,bone_needle:2,Knife,Carve and polish bone into fine needles.
+
+# === POTTERY ===
+gather_clay,Gather Clay,20.0,None,Foraging,0,10,Materials,false,dirty_water:1,clay:3,,Dig and process raw clay.
+shape_clay_pot,Shape Clay Pot,45.0,None,Pottery,1,30,Containers,false,clay:3,unfired_pot:1,,Hand-form a clay vessel.
+fire_clay_pot,Fire Clay Pot,180.0,Campfire,Pottery,2,45,Containers,false,unfired_pot:1,clay_pot:1|clay_pot:0:0.2,,Fire pottery in hot coals. Risk of breakage.
+
+# === MEDICINE ===
+make_poultice,Make Poultice,30.0,None,Medicine,1,25,Medicine,false,medicinal_herbs:3|clean_water:1|plant_fiber:1,poultice:2,,Crush herbs into a healing dressing.
+craft_splint,Craft Splint,15.0,None,Medicine,0,15,Medicine,false,stick:2|cordage:2,splint:1,,Prepare rigid splints for broken bones.
+
+# === BUTCHERING (hypothetical - assumes carcass items) ===
+# butcher_small_game,Butcher Small Game,60.0,None,Hunting,0,20,Materials,false,carcass_small:1,raw_meat:2|bone:2|hide:1:0.5,Knife,Process a small animal carcass.
+# butcher_large_game,Butcher Large Game,180.0,None,Hunting,2,50,Materials,false,carcass_large:1,raw_meat:8|bone:5|hide:2|sinew:3|fat:2,Knife,Butcher a large animal for maximum yield.

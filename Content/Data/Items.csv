@@ -1,0 +1,94 @@
+# MO57 Item Definitions
+# Format: RowName,DisplayName,ItemType,Rarity,MaxStackSize,Weight,bConsumable,bIsTool,ToolType,ToolQuality,MaxDurability,Calories,Water,Protein,Carbs,Fat,Fiber,Tags,Description
+#
+# ItemTypes: None, Consumable, Material, Tool, Weapon, Ammo, Armor, KeyItem, Quest, Currency, Misc
+# Rarities: Common, Uncommon, Rare, Epic, Legendary
+# Tags: Use pipe (|) to separate multiple tags
+# ToolTypes: Hammer, Knife, Axe, Saw, Pickaxe, Chisel, Needle, Pestle, Tongs, Shovel
+
+RowName,DisplayName,ItemType,Rarity,MaxStackSize,Weight,bConsumable,bIsTool,ToolType,ToolQuality,MaxDurability,Calories,Water,Protein,Carbs,Fat,Fiber,Tags,Description
+
+# === RAW MATERIALS - Stones & Minerals ===
+stone,Stone,Material,Common,50,1.0,false,false,,0,0,0,0,0,0,0,0,Material|Primitive|Stone,A common stone. Can be knapped into tools.
+flint,Flint,Material,Common,30,0.8,false,false,,0,0,0,0,0,0,0,0,Material|Primitive|Stone|Flint,Hard stone with sharp edges when broken. Ideal for primitive tools.
+limestone,Limestone,Material,Common,30,1.2,false,false,,0,0,0,0,0,0,0,0,Material|Stone|Construction,Calcium-rich stone useful for construction and lime production.
+clay,Clay,Material,Common,30,0.5,false,false,,0,0,0,0,0,0,0,0,Material|Primitive|Clay,Wet clay that can be shaped and fired into pottery.
+sand,Sand,Material,Common,50,0.8,false,false,,0,0,0,0,0,0,0,0,Material|Construction,Fine granular material for construction.
+charcoal,Charcoal,Material,Common,30,0.2,false,false,,0,0,0,0,0,0,0,0,Material|Fuel|Charcoal,Lightweight fuel that burns hotter than wood.
+
+# === RAW MATERIALS - Wood & Plant ===
+stick,Stick,Material,Common,50,0.2,false,false,,0,0,0,0,0,0,0,0,Material|Primitive|Wood,A small wooden stick. Useful for handles and kindling.
+log,Log,Material,Common,10,5.0,false,false,,0,0,0,0,0,0,0,0,Material|Wood|Heavy,A section of tree trunk. Must be processed before use.
+plank,Plank,Material,Common,20,2.0,false,false,,0,0,0,0,0,0,0,0,Material|Wood|Processed,A flat piece of sawn lumber.
+bark,Bark,Material,Common,30,0.3,false,false,,0,0,0,0,0,0,0,0,Material|Primitive|Wood|Bark,Tree bark. Can be used for cordage or containers.
+plant_fiber,Plant Fiber,Material,Common,50,0.1,false,false,,0,0,0,0,0,0,0,0,Material|Primitive|Fiber,Long plant fibers suitable for cordage.
+cordage,Cordage,Material,Common,30,0.15,false,false,,0,0,0,0,0,0,0,0,Material|Primitive|Fiber|Rope,Twisted plant fibers forming a simple rope.
+pitch,Pitch,Material,Uncommon,20,0.3,false,false,,0,0,0,0,0,0,0,0,Material|Primitive|Adhesive,Sticky tree resin processed into waterproof adhesive.
+
+# === RAW MATERIALS - Animal ===
+raw_meat,Raw Meat,Consumable,Common,20,0.5,true,false,,0,0,150,50,25,0,12,0,Food|Raw|Meat|Perishable,Raw meat from a hunted animal. Should be cooked.
+raw_fish,Raw Fish,Consumable,Common,20,0.4,true,false,,0,0,80,60,18,0,5,0,Food|Raw|Fish|Perishable,Fresh caught fish. Best cooked before eating.
+bone,Bone,Material,Common,30,0.3,false,false,,0,0,0,0,0,0,0,0,Material|Primitive|Bone,Animal bone. Can be shaped into tools and needles.
+hide,Hide,Material,Common,10,1.5,false,false,,0,0,0,0,0,0,0,0,Material|Primitive|Leather|Hide,Raw animal hide. Needs to be tanned.
+scraped_hide,Scraped Hide,Material,Common,10,1.2,false,false,,0,0,0,0,0,0,0,0,Material|Leather|Processed,Hide with flesh and hair removed. Ready for tanning.
+tanned_leather,Tanned Leather,Material,Uncommon,10,0.8,false,false,,0,0,0,0,0,0,0,0,Material|Leather|Processed,Properly tanned leather. Durable and flexible.
+sinew,Sinew,Material,Common,30,0.1,false,false,,0,0,0,0,0,0,0,0,Material|Primitive|Fiber|Strong,Animal tendon. Strong binding material.
+feather,Feather,Material,Common,50,0.02,false,false,,0,0,0,0,0,0,0,0,Material|Primitive|Arrow,Bird feather for fletching arrows.
+fat,Animal Fat,Material,Common,20,0.3,false,false,,0,0,0,0,0,0,0,0,Material|Primitive|Fat,Rendered animal fat for cooking and crafting.
+
+# === FOOD - Raw Vegetables & Fruits ===
+wild_berries,Wild Berries,Consumable,Common,30,0.1,true,false,,0,0,30,15,0.5,7,0.2,2,Food|Raw|Fruit|Foraged,A handful of wild berries. Small but nutritious.
+wild_mushroom,Wild Mushroom,Consumable,Common,20,0.1,true,false,,0,0,20,5,3,3,0.3,1,Food|Raw|Vegetable|Foraged,A foraged mushroom. Hopefully not poisonous.
+wild_onion,Wild Onion,Consumable,Common,30,0.15,true,false,,0,0,40,20,1,9,0.1,2,Food|Raw|Vegetable|Foraged,Wild onion bulb with a strong flavor.
+acorn,Acorn,Consumable,Common,50,0.05,true,false,,0,0,40,5,0.8,6,2.3,1,Food|Raw|Nut|Foraged,Oak tree nut. Bitter unless processed.
+cattail_root,Cattail Root,Consumable,Common,20,0.2,true,false,,0,0,60,30,1,14,0.2,3,Food|Raw|Root|Foraged,Starchy cattail root. Can be eaten raw or cooked.
+
+# === FOOD - Cooked ===
+cooked_meat,Cooked Meat,Consumable,Common,15,0.45,true,false,,0,0,200,20,28,0,9,0,Food|Cooked|Meat,Well-cooked meat. Safe and nutritious.
+cooked_fish,Cooked Fish,Consumable,Common,15,0.35,true,false,,0,0,130,25,22,0,4,0,Food|Cooked|Fish,Grilled fish with crispy skin.
+roasted_berries,Roasted Berries,Consumable,Common,25,0.08,true,false,,0,0,35,5,0.5,8,0.2,2,Food|Cooked|Fruit,Warm roasted berries. Concentrated flavor.
+ash_cakes,Ash Cakes,Consumable,Common,20,0.15,true,false,,0,0,80,5,2,16,0.5,2,Food|Cooked|Bread|Primitive,Simple flatbread cooked in ash.
+
+# === WATER & DRINKS ===
+dirty_water,Dirty Water,Consumable,Common,10,1.0,true,false,,0,0,0,200,0,0,0,0,Drink|Water|Unsafe,Untreated water. Risk of illness.
+clean_water,Clean Water,Consumable,Common,10,1.0,true,false,,0,0,0,250,0,0,0,0,Drink|Water|Safe,Boiled or filtered water. Safe to drink.
+herbal_tea,Herbal Tea,Consumable,Common,10,0.9,true,false,,0,0,5,230,0,1,0,0,Drink|Tea|Medicinal,Warm herbal infusion with mild healing properties.
+
+# === PRIMITIVE TOOLS ===
+hand_axe,Hand Axe,Tool,Common,1,0.8,false,true,Axe,0.5,50,0,0,0,0,0,0,Tool|Primitive|Axe,A crude stone axe. Better than nothing.
+flint_knife,Flint Knife,Tool,Common,1,0.3,false,true,Knife,0.6,40,0,0,0,0,0,0,Tool|Primitive|Knife,Sharp flint blade for cutting.
+stone_hammer,Stone Hammer,Tool,Common,1,1.2,false,true,Hammer,0.5,60,0,0,0,0,0,0,Tool|Primitive|Hammer,Heavy stone for hammering.
+bone_needle,Bone Needle,Tool,Common,5,0.02,false,true,Needle,0.4,20,0,0,0,0,0,0,Tool|Primitive|Needle|Sewing,Sharpened bone for sewing hides.
+digging_stick,Digging Stick,Tool,Common,1,0.5,false,true,Shovel,0.3,30,0,0,0,0,0,0,Tool|Primitive|Digging,Hardened wooden stick for digging roots.
+fire_drill,Fire Drill,Tool,Common,1,0.4,false,true,FireStarter,0.5,25,0,0,0,0,0,0,Tool|Primitive|Fire,Friction fire-starting kit.
+
+# === IMPROVED TOOLS ===
+stone_axe,Stone Axe,Tool,Common,1,1.5,false,true,Axe,1.0,100,0,0,0,0,0,0,Tool|Primitive|Axe|Hafted,Properly hafted stone axe. Much more effective.
+flint_scraper,Flint Scraper,Tool,Common,1,0.25,false,true,Scraper,0.8,50,0,0,0,0,0,0,Tool|Primitive|Scraper|Hide,Curved flint blade for scraping hides.
+mortar_pestle,Mortar and Pestle,Tool,Common,1,2.0,false,true,Pestle,1.0,200,0,0,0,0,0,0,Tool|Primitive|Grinding,Stone bowl and grinder for processing food.
+fish_trap,Fish Trap,Tool,Common,1,1.0,false,false,,0,0,0,0,0,0,0,0,Tool|Primitive|Fishing|Trap,Woven basket trap for catching fish.
+snare,Snare,Tool,Common,5,0.2,false,false,,0,0,0,0,0,0,0,0,Tool|Primitive|Hunting|Trap,Simple loop trap for small game.
+
+# === CONTAINERS ===
+bark_container,Bark Container,Misc,Common,5,0.3,false,false,,0,0,0,0,0,0,0,0,Container|Primitive|Bark,Folded bark container for carrying items.
+unfired_pot,Unfired Clay Pot,Misc,Common,3,1.8,false,false,,0,0,0,0,0,0,0,0,Container|Pottery|Unfired,Shaped clay pot ready for firing.
+clay_pot,Clay Pot,Misc,Common,3,1.5,false,false,,0,0,0,0,0,0,0,0,Container|Pottery|Cooking,Fired clay pot for cooking and storage.
+waterskin,Waterskin,Misc,Common,2,0.4,false,false,,0,0,0,0,0,0,0,0,Container|Leather|Water,Leather bag for carrying water.
+
+# === WEAPONS ===
+wooden_spear,Wooden Spear,Weapon,Common,1,1.5,false,false,,0,0,0,0,0,0,0,0,Weapon|Primitive|Spear|Melee,Fire-hardened wooden spear.
+flint_spearhead,Flint Spearhead,Material,Common,10,0.15,false,false,,0,0,0,0,0,0,0,0,Material|Primitive|Weapon|Point,Carefully knapped flint spear point.
+flint_spear,Flint Spear,Weapon,Common,1,1.8,false,false,,0,0,0,0,0,0,0,0,Weapon|Primitive|Spear|Melee,Spear with flint point. More lethal.
+throwing_rock,Throwing Rock,Ammo,Common,20,0.5,false,false,,0,0,0,0,0,0,0,0,Ammo|Primitive|Thrown,Smooth rock sized for throwing.
+sling,Sling,Weapon,Common,1,0.1,false,false,,0,0,0,0,0,0,0,0,Weapon|Primitive|Ranged,Woven sling for hurling stones.
+
+# === MEDICINE ===
+medicinal_herbs,Medicinal Herbs,Consumable,Common,30,0.1,true,false,,0,0,0,5,0,0,0,0,Medicine|Herb|Healing,Foraged herbs with healing properties.
+poultice,Poultice,Consumable,Common,10,0.2,true,false,,0,0,0,0,0,0,0,0,Medicine|Bandage|Healing,Herb-infused dressing for wounds.
+splint,Splint,Misc,Common,5,0.3,false,false,,0,0,0,0,0,0,0,0,Medicine|Splint|Bone,Rigid sticks for immobilizing broken bones.
+
+# === MISC ===
+tinder,Tinder,Material,Common,30,0.05,false,false,,0,0,0,0,0,0,0,0,Material|Primitive|Fire|Tinder,Dry material that catches fire easily.
+kindling,Kindling,Material,Common,30,0.15,false,false,,0,0,0,0,0,0,0,0,Material|Fuel|Wood,Small dry sticks for starting fires.
+firewood,Firewood,Material,Common,20,1.0,false,false,,0,0,0,0,0,0,0,0,Material|Fuel|Wood,Split wood for sustained burning.
+torch,Torch,Misc,Common,5,0.5,false,false,,0,0,0,0,0,0,0,0,Light|Primitive|Fire,Stick with pitch-soaked head for lighting.

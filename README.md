@@ -593,6 +593,84 @@ Good fundamentals with interface-based decoupling, but needs abstraction layer w
 
 ---
 
+## Data Import & Modding
+
+### CSV-Based Content Definition
+
+Items and recipes are defined in CSV files for easy bulk editing and modding support.
+
+**File Locations:**
+- `Content/Data/Items.csv` - Item definitions
+- `Content/Data/Recipes.csv` - Recipe definitions
+
+### CSV Formats
+
+#### Items.csv
+```csv
+RowName,DisplayName,ItemType,Rarity,MaxStackSize,Weight,bConsumable,bIsTool,ToolType,ToolQuality,MaxDurability,Calories,Water,Protein,Carbs,Fat,Fiber,Tags,Description
+stone,Stone,Material,Common,50,1.0,false,false,,0,0,0,0,0,0,0,0,Material|Primitive|Stone,A common stone.
+flint_knife,Flint Knife,Tool,Common,1,0.3,false,true,Knife,0.6,40,0,0,0,0,0,0,Tool|Primitive|Knife,Sharp flint blade.
+```
+
+| Field | Values |
+|-------|--------|
+| ItemType | None, Consumable, Material, Tool, Weapon, Ammo, Armor, KeyItem, Quest, Currency, Misc |
+| Rarity | Common, Uncommon, Rare, Epic, Legendary |
+| Tags | Pipe-separated: `Food\|Raw\|Meat` |
+
+#### Recipes.csv
+```csv
+RowName,DisplayName,CraftTime,Station,SkillId,SkillLevel,SkillXP,Category,bRequiresDiscovery,Ingredients,Outputs,Tools,Description
+cook_meat,Cook Meat,60.0,Campfire,Cooking,0,20,Food,false,raw_meat:1,cooked_meat:1,,Roast meat over fire.
+craft_stone_axe,Stone Axe,25.0,None,Woodworking,2,35,Tools,false,hand_axe:1|stick:2|cordage:2,stone_axe:1,,Haft a stone head.
+```
+
+| Field | Format |
+|-------|--------|
+| Station | None, Campfire, Workbench, Forge, Alchemy, Kitchen, Loom |
+| Ingredients | `itemId:quantity\|itemId:quantity` |
+| Outputs | `itemId:quantity\|itemId:quantity:chance` (chance optional, default 1.0) |
+| Tools | `toolType:minQuality:durability` (quality/durability optional) |
+
+### Import Commands
+
+**From Editor (Blueprint):**
+```cpp
+UMODataImportCommandlet::ImportItemsFromCSV("Data/Items.csv", false);
+UMODataImportCommandlet::ImportRecipesFromCSV("Data/Recipes.csv", false);
+UMODataImportCommandlet::ImportAllFromDirectory("Data/", false);
+```
+
+**From Command Line:**
+```powershell
+UE5Editor.exe MO57 -run=MODataImport -items=Content/Data/Items.csv -recipes=Content/Data/Recipes.csv
+UE5Editor.exe MO57 -run=MODataImport -dir=Content/Data
+```
+
+**Export (for templates):**
+```cpp
+UMODataImportCommandlet::ExportItemsToCSV("Content/Data/Items_Export.csv");
+UMODataImportCommandlet::ExportRecipesToCSV("Content/Data/Recipes_Export.csv");
+```
+
+### Modding Workflow
+
+1. **Create mod folder**: `Content/Mods/MyMod/Data/`
+2. **Copy template CSVs** or export existing data
+3. **Edit CSVs** in spreadsheet software (Excel, Google Sheets, LibreOffice)
+4. **Import** using commandlet or Editor Utility Blueprint
+5. **Save DataTables** in Editor
+
+### Tips for Modders
+
+- Row names must be unique across all imports
+- Use descriptive prefixes for mod content: `mymod_iron_sword`
+- Comments start with `#` or `//`
+- Empty rows are skipped
+- Fields with quotes can contain commas: `"A, B, C"`
+
+---
+
 ## Roadmap
 
 ### Development Phases
