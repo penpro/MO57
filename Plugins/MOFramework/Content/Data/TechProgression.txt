@@ -1,0 +1,578 @@
+================================================================================
+MOFramework Technology Progression
+================================================================================
+
+This document outlines the complete crafting and skill progression system.
+Generated from: Items.csv (200 items), Recipes.csv (92 recipes), Skills.csv (22 skills)
+
+================================================================================
+SKILLS OVERVIEW
+================================================================================
+
+Survival:
+  - Athletics (max level 100, 0 recipes)
+  - Cooking (max level 100, 1 recipes)
+  - Farming (max level 100, 1 recipes)
+  - Firemaking (max level 100, 3 recipes)
+  - Fishing (max level 100, 2 recipes)
+  - Foraging (max level 100, 0 recipes)
+  - Hunting (max level 100, 2 recipes)
+
+Crafting:
+  - Leatherworking (max level 100, 11 recipes)
+  - Pottery (max level 100, 6 recipes)
+  - Smithing (max level 100, 30 recipes)
+  - Stoneworking (max level 100, 12 recipes)
+  - Weaving (max level 100, 9 recipes)
+  - Woodworking (max level 100, 14 recipes)
+
+Combat:
+  - Defense (max level 100, 0 recipes)
+  - Melee Combat (max level 100, 1 recipes)
+  - Ranged Combat (max level 100, 0 recipes)
+
+Knowledge:
+  - Anatomy (max level 100, 0 recipes)
+  - Herbalism (max level 100, 0 recipes)
+  - Medicine (max level 100, 0 recipes)
+  - Nutrition (max level 100, 0 recipes)
+
+Social:
+  - Leadership (max level 100, 0 recipes)
+  - Trading (max level 100, 0 recipes)
+
+================================================================================
+RECIPE PROGRESSION BY SKILL
+================================================================================
+
+------------------------------------------------------------
+Cooking (1 recipes)
+------------------------------------------------------------
+
+  Level 0:
+    CookMeat [Campfire]
+      RawMeat01 x1 -> CookedMeat01 x1
+
+------------------------------------------------------------
+Farming (1 recipes)
+------------------------------------------------------------
+
+  Level 3:
+    MakeHoe
+      Branch01 x1, FlintFlake01 x2, Cordage01 x2 -> StoneHoe01 x1
+
+------------------------------------------------------------
+Firemaking (3 recipes)
+------------------------------------------------------------
+
+  Level 0:
+    GatherTinder
+      DriedGrass01 x3 -> DryTinder01 x1
+
+  Level 2:
+    MakeFireDrill (needs: FlintKnife01)
+      Hardwood01 x1, Softwood01 x1 -> FireDrill01 x1
+
+  Level 5:
+    MakeBowDrill (needs: FlintKnife01)
+      Hardwood01 x1, Softwood01 x1, Cordage01 x1, Branch01 x1 -> BowDrill01 x1
+
+------------------------------------------------------------
+Fishing (2 recipes)
+------------------------------------------------------------
+
+  Level 3:
+    MakeFishSpear (needs: FlintKnife01)
+      StraightBranch01 x1, FlintFlake01 x3, Cordage01 x1 -> FishSpear01 x1
+
+  Level 5:
+    WeaveFishTrap
+      Reeds01 x10, Cordage01 x3 -> FishTrap01 x1
+
+------------------------------------------------------------
+Hunting (2 recipes)
+------------------------------------------------------------
+
+  Level 4:
+    MakeSnare
+      Cordage01 x3, Branch01 x1 -> Snare01 x3
+
+  Level 6:
+    BuildDeadfall
+      LargeLog01 x1, Branch01 x3, Cordage01 x2 -> DeadfallTrap01 x1
+
+------------------------------------------------------------
+Leatherworking (11 recipes)
+------------------------------------------------------------
+
+  Level 0:
+    ScrapeHide (needs: StoneScraper01)
+      RawHide01 x1 -> ScrapedHide01 x1
+
+  Level 3:
+    MakeWaterSkin
+      AnimalBladder01 x1, Cordage01 x1 -> WaterSkin01 x1
+
+  Level 4:
+    MakeBoneNeedle (needs: StoneScraper01)
+      Bone01 x1 -> BoneNeedle01 x1
+
+  Level 5:
+    BrainTanHide [Campfire]
+      ScrapedHide01 x1, AnimalBrain01 x1 -> TannedLeather01 x1
+
+  Level 6:
+    MakeSimplePouch
+      TannedLeather01 x1, Cordage01 x1 -> SimplePouch01 x1
+    SewLeatherBoots (needs: BoneNeedle01)
+      TannedLeather01 x2, Cordage01 x1 -> LeatherBoots01 x1
+    MakeQuiver (needs: BoneNeedle01)
+      TannedLeather01 x2, Cordage01 x2 -> Quiver01 x1
+
+  Level 7:
+    SewLeatherTrousers (needs: BoneNeedle01)
+      TannedLeather01 x2, Cordage01 x2 -> LeatherTrousers01 x1
+
+  Level 8:
+    SewLeatherTunic (needs: BoneNeedle01)
+      TannedLeather01 x3, Cordage01 x2 -> LeatherTunic01 x1
+
+  Level 12:
+    MakeBellows (needs: BoneNeedle01)
+      TannedLeather01 x4, Plank01 x2, Cordage01 x2 -> Bellows01 x1
+
+  Level 15:
+    MakeLeatherArmor (needs: BoneNeedle01)
+      TannedLeather01 x5, Cordage01 x4 -> LeatherArmor01 x1
+
+------------------------------------------------------------
+Melee Combat (1 recipes)
+------------------------------------------------------------
+
+  Level 0:
+    SelectClub
+      Branch01 x1 -> CrudeClub01 x1
+
+------------------------------------------------------------
+Pottery (6 recipes)
+------------------------------------------------------------
+
+  Level 0:
+    ShapeCrudePottery [Campfire]
+      Clay01 x2, Sand01 x1 -> CrudePottery01 x1
+
+  Level 2:
+    MakeClayBowl [Campfire]
+      Clay01 x1, Sand01 x1 -> ClayBowl01 x2
+
+  Level 5:
+    MakeCookingPot [Campfire]
+      Clay01 x3, Sand01 x1 -> CookingPot01 x1
+
+  Level 8:
+    MakeStorageJar [Campfire]
+      Clay01 x5, Sand01 x2 -> StorageJar01 x1
+
+  Level 15:
+    ThrowWheelPot [Workbench]
+      Clay01 x2 -> WheelThrownPot01 x1
+
+  Level 18:
+    GlazePottery [Forge]
+      CrudePottery01 x1, MineralGlaze01 x1 -> GlazedPottery01 x1
+
+------------------------------------------------------------
+Smithing (30 recipes)
+------------------------------------------------------------
+
+  Level 0:
+    HammerNativeCopper (needs: Hammerstone01)
+      NativeCopper01 x2 -> CopperBead01 x3
+
+  Level 5:
+    CastCopperAwl [Forge]
+      NativeCopper01 x2 -> CopperAwl01 x1
+
+  Level 8:
+    MakeSmithHammer
+      Stone01 x2, Hardwood01 x1, Cordage01 x2 -> SmithHammer01 x1
+
+  Level 10:
+    SmeltCopperOre [Forge]
+      CopperOre01 x3, Charcoal01 x5 -> CopperIngot01 x1
+
+  Level 15:
+    AlloyBronze [Forge]
+      CopperIngot01 x3, TinIngot01 x1 -> BronzeIngot01 x3
+
+  Level 16:
+    ForgeBronzeSpearhead [Forge] (needs: SmithHammer01)
+      BronzeIngot01 x1, StraightBranch01 x1 -> BronzeSpear01 x1
+    ForgeBronzeKnife [Forge] (needs: SmithHammer01)
+      BronzeIngot01 x1, Hardwood01 x1 -> BronzeKnife01 x1
+
+  Level 18:
+    ForgeBronzeAxe [Forge] (needs: SmithHammer01)
+      BronzeIngot01 x2, Hardwood01 x1 -> BronzeAxe01 x1
+
+  Level 20:
+    ForgeBronzeSword [Forge] (needs: SmithHammer01)
+      BronzeIngot01 x3, TannedLeather01 x1 -> BronzeSword01 x1
+    ForgeBronzeShield [Forge] (needs: SmithHammer01)
+      BronzeIngot01 x4, Plank01 x1, TannedLeather01 x1 -> BronzeShield01 x1
+    ForgeBronzeGreaves [Forge] (needs: SmithHammer01)
+      BronzeIngot01 x2, TannedLeather01 x1 -> BronzeGreaves01 x1
+    MakeGlass [Forge]
+      Sand01 x3, SodaAsh01 x1 -> RawGlass01 x1
+
+  Level 22:
+    ForgeBronzeHelmet [Forge] (needs: SmithHammer01)
+      BronzeIngot01 x3, TannedLeather01 x1 -> BronzeHelmet01 x1
+    ShapeGlassBeads [Forge]
+      RawGlass01 x1 -> GlassBeads01 x5
+
+  Level 25:
+    MakeScaleArmor [Forge] (needs: SmithHammer01)
+      BronzeIngot01 x6, TannedLeather01 x3, Cordage01 x4 -> ScaleArmor01 x1
+    SmeltIronOre [Forge]
+      IronOre01 x4, Charcoal01 x8 -> IronBloom01 x1
+
+  Level 26:
+    RefineIronBloom [Forge] (needs: SmithHammer01)
+      IronBloom01 x1 -> WroughtIron01 x1
+    ForgeIronAxe [Forge] (needs: SmithHammer01)
+      WroughtIron01 x2, Hardwood01 x1 -> IronAxe01 x1
+    ForgeIronShield [Forge] (needs: SmithHammer01)
+      WroughtIron01 x2, Plank01 x2, TannedLeather01 x1 -> IronShield01 x1
+
+  Level 27:
+    ForgeIronSpear [Forge] (needs: SmithHammer01)
+      WroughtIron01 x1, StraightBranch01 x1 -> IronSpear01 x1
+    ForgeIronArrowheads [Forge] (needs: SmithHammer01)
+      WroughtIron01 x1 -> IronArrowhead01 x10
+    ForgeHorseshoe [Forge] (needs: SmithHammer01)
+      WroughtIron01 x1 -> Horseshoe01 x2
+    ForgeIronNails [Forge] (needs: SmithHammer01)
+      WroughtIron01 x1 -> IronNails01 x20
+    ForgeSmithTongs [Forge] (needs: SmithHammer01)
+      WroughtIron01 x2 -> SmithTongs01 x1
+
+  Level 28:
+    ForgeIronSword [Forge] (needs: SmithHammer01)
+      WroughtIron01 x2, TannedLeather01 x1 -> IronSword01 x1
+    ForgeIronHelmet [Forge] (needs: SmithHammer01)
+      WroughtIron01 x2, TannedLeather01 x1 -> IronHelmet01 x1
+
+  Level 30:
+    CarburizeSteel [Forge]
+      WroughtIron01 x1, Charcoal01 x3 -> SteelIngot01 x1
+    MakeChainMail [Forge] (needs: SmithHammer01)
+      WroughtIron01 x8 -> ChainMail01 x1
+    MakeAnvil [Forge] (needs: SmithHammer01)
+      WroughtIron01 x10 -> IronAnvil01 x1
+
+  Level 32:
+    ForgeSteelSword [Forge] (needs: SmithHammer01)
+      SteelIngot01 x2, TannedLeather01 x1 -> SteelSword01 x1
+
+------------------------------------------------------------
+Stoneworking (12 recipes)
+------------------------------------------------------------
+
+  Level 0:
+    SelectHammerstone
+      Stone01 x1 -> Hammerstone01 x1
+    StrikeFlakes (needs: Hammerstone01)
+      Stone01 x1 -> SharpFlake01 x3
+
+  Level 1:
+    ShapeChopper (needs: Hammerstone01)
+      Stone01 x1 -> CrudeChopper01 x1, SharpFlake01 x2
+
+  Level 2:
+    ShapeScraper (needs: Hammerstone01)
+      SharpFlake01 x1 -> StoneScraper01 x1
+
+  Level 3:
+    KnapFlintFlakes (needs: Hammerstone01)
+      Flint01 x1 -> FlintFlake01 x4
+    KnapFlintKnife (needs: Hammerstone01)
+      FlintFlake01 x1 -> FlintKnife01 x1
+
+  Level 4:
+    KnapBifacialHandaxe (needs: Hammerstone01)
+      Flint01 x2 -> HandAxe01 x1, FlintFlake01 x3
+    HaftFlintSpear
+      StraightBranch01 x1, FlintFlake01 x2, Cordage01 x1, Resin01 x1 -> FlintSpear01 x1
+
+  Level 5:
+    MakeGrindingStone (needs: Hammerstone01)
+      Sandstone01 x1 -> GrindingStone01 x1
+
+  Level 8:
+    KnapMicroliths (needs: Hammerstone01)
+      Flint01 x1 -> Microlith01 x6
+    MakeSickle
+      Branch01 x1, Microlith01 x4, Resin01 x1 -> StoneSickle01 x1
+
+  Level 10:
+    MakePolishedAxe
+      Greenstone01 x1, Sandstone01 x1 -> PolishedAxe01 x1
+
+------------------------------------------------------------
+Weaving (9 recipes)
+------------------------------------------------------------
+
+  Level 0:
+    ShredBark
+      Bark01 x2 -> PlantFiber01 x3
+    TwistCordage
+      PlantFiber01 x3 -> Cordage01 x1
+
+  Level 5:
+    WeaveBasket
+      Reeds01 x8 -> WovenBasket01 x1
+
+  Level 8:
+    MakeSpindle (needs: FlintKnife01)
+      Branch01 x1, Clay01 x1 -> DropSpindle01 x1
+
+  Level 10:
+    SpinWoolThread (needs: DropSpindle01)
+      WoolFleece01 x1 -> WoolThread01 x3
+    SpinFlaxThread (needs: DropSpindle01)
+      FlaxFiber01 x2 -> LinenThread01 x2
+    MakeSimpleLoom
+      Branch01 x4, Cordage01 x6 -> SimpleLoom01 x1
+
+  Level 12:
+    WeaveCloth (needs: SimpleLoom01)
+      WoolThread01 x6 -> WovenCloth01 x1
+
+  Level 14:
+    SewClothTunic (needs: BoneNeedle01)
+      WovenCloth01 x2, LinenThread01 x2 -> ClothTunic01 x1
+
+------------------------------------------------------------
+Woodworking (14 recipes)
+------------------------------------------------------------
+
+  Level 0:
+    StripBark
+      Stick01 x1 -> Bark01 x4, Stick02 x1
+    ShapeDiggingStick (needs: SharpFlake01)
+      Branch01 x1 -> DiggingStick01 x1
+
+  Level 2:
+    HaftSpear
+      StraightBranch01 x1, SharpFlake01 x1, Cordage01 x1 -> WoodenSpear01 x1
+
+  Level 4:
+    MakeBarkContainer
+      BirchBark01 x3, Cordage01 x1 -> BarkContainer01 x1
+
+  Level 5:
+    CraftAtlatlDart
+      StraightBranch01 x3, FlintFlake01 x3, Feathers01 x6, Cordage01 x1 -> AtlatlDart01 x3
+
+  Level 6:
+    FletchArrows
+      ArrowShaft01 x5, Feathers01 x5, FlintFlake01 x5, Resin01 x1 -> FlintArrow01 x5
+    CraftAtlatl (needs: FlintKnife01)
+      Hardwood01 x1 -> Atlatl01 x1
+
+  Level 8:
+    CraftSimpleBow (needs: FlintKnife01)
+      BowStave01 x1, Cordage01 x2 -> SimpleBow01 x1
+
+  Level 12:
+    MakeWoodenShield (needs: BronzeAxe01)
+      Plank01 x2, RawHide01 x1, Cordage01 x2 -> WoodenShield01 x1
+    FletchIronArrows
+      ArrowShaft01 x10, IronArrowhead01 x10, Feathers01 x10 -> IronArrow01 x10
+
+  Level 15:
+    CarveDugoutCanoe (needs: PolishedAxe01)
+      LargeLog01 x1 -> DugoutCanoe01 x1
+    MakePottersWheel (needs: BronzeAxe01)
+      Plank01 x3, Stone01 x1 -> PottersWheel01 x1
+
+  Level 18:
+    MakeCompositeBow (needs: FlintKnife01)
+      BowStave01 x1, Horn01 x2, Sinew01 x4, HideGlue01 x2 -> CompositeBow01 x1
+
+  Level 25:
+    BuildChariot (needs: BronzeAxe01)
+      Plank01 x8, BronzeIngot01 x4, TannedLeather01 x4, Cordage01 x10 -> Chariot01 x1
+
+================================================================================
+CRAFTING CHAINS
+================================================================================
+
+Items that are crafted and then used as ingredients in other recipes:
+
+Bark01 (Bark01)
+  Made by: StripBark
+  Used by: ShredBark
+
+BronzeIngot01 (BronzeIngot01)
+  Made by: AlloyBronze
+  Used by: ForgeBronzeAxe, ForgeBronzeSword, ForgeBronzeSpearhead, ForgeBronzeKnife, ForgeBronzeHelmet...
+
+CopperIngot01 (CopperIngot01)
+  Made by: SmeltCopperOre
+  Used by: AlloyBronze
+
+Cordage01 (Cordage01)
+  Made by: TwistCordage
+  Used by: MakeBowDrill, HaftSpear, HaftFlintSpear, MakeSimplePouch, CraftSimpleBow...
+
+CrudePottery01 (CrudePottery01)
+  Made by: ShapeCrudePottery
+  Used by: GlazePottery
+
+FlintFlake01 (FlintFlake01)
+  Made by: KnapBifacialHandaxe
+  Used by: KnapFlintKnife, HaftFlintSpear, FletchArrows, CraftAtlatlDart, MakeFishSpear...
+
+IronArrowhead01 (IronArrowhead01)
+  Made by: ForgeIronArrowheads
+  Used by: FletchIronArrows
+
+IronBloom01 (IronBloom01)
+  Made by: SmeltIronOre
+  Used by: RefineIronBloom
+
+LinenThread01 (LinenThread01)
+  Made by: SpinFlaxThread
+  Used by: SewClothTunic
+
+Microlith01 (Microlith01)
+  Made by: KnapMicroliths
+  Used by: MakeSickle
+
+PlantFiber01 (PlantFiber01)
+  Made by: ShredBark
+  Used by: TwistCordage
+
+RawGlass01 (RawGlass01)
+  Made by: MakeGlass
+  Used by: ShapeGlassBeads
+
+ScrapedHide01 (ScrapedHide01)
+  Made by: ScrapeHide
+  Used by: BrainTanHide
+
+SharpFlake01 (SharpFlake01)
+  Made by: ShapeChopper
+  Used by: ShapeScraper, HaftSpear
+
+SteelIngot01 (SteelIngot01)
+  Made by: CarburizeSteel
+  Used by: ForgeSteelSword
+
+TannedLeather01 (TannedLeather01)
+  Made by: BrainTanHide
+  Used by: MakeSimplePouch, SewLeatherTunic, SewLeatherTrousers, SewLeatherBoots, MakeQuiver...
+
+WoolThread01 (WoolThread01)
+  Made by: SpinWoolThread
+  Used by: WeaveCloth
+
+WovenCloth01 (WovenCloth01)
+  Made by: WeaveCloth
+  Used by: SewClothTunic
+
+WroughtIron01 (WroughtIron01)
+  Made by: RefineIronBloom
+  Used by: CarburizeSteel, ForgeIronSword, ForgeIronAxe, ForgeIronSpear, ForgeIronArrowheads...
+
+================================================================================
+RAW MATERIALS (Gathered, not crafted)
+================================================================================
+
+  AnimalBladder01 (AnimalBladder01) - Material
+  AnimalBrain01 (AnimalBrain01) - Consumable
+  ArrowShaft01 (ArrowShaft01) - Material
+  BirchBark01 (BirchBark01) - Material
+  Bone01 (Bone01) - Material
+  BowStave01 (BowStave01) - Material
+  Branch01 (Branch01) - Material
+  Charcoal01 (Charcoal01) - Material
+  Clay01 (Clay01) - Material
+  CopperOre01 (CopperOre01) - Material
+  DriedGrass01 (DriedGrass01) - Material
+  Feathers01 (Feathers01) - Material
+  FlaxFiber01 (FlaxFiber01) - Material
+  Flint01 (Flint01) - Material
+  Greenstone01 (Greenstone01) - Material
+  Hardwood01 (Hardwood01) - Material
+  HideGlue01 (HideGlue01) - Material
+  Horn01 (Horn01) - Material
+  IronOre01 (IronOre01) - Material
+  LargeLog01 (LargeLog01) - Material
+  MineralGlaze01 (MineralGlaze01) - Material
+  NativeCopper01 (NativeCopper01) - Material
+  Plank01 (Plank01) - Material
+  RawHide01 (RawHide01) - Material
+  RawMeat01 (RawMeat01) - Consumable
+  Reeds01 (Reeds01) - Material
+  Resin01 (Resin01) - Material
+  Sand01 (Sand01) - Material
+  Sandstone01 (Sandstone01) - Material
+  Sinew01 (Sinew01) - Material
+  SodaAsh01 (SodaAsh01) - Material
+  Softwood01 (Softwood01) - Material
+  Stick01 (Stick01) - Material
+  Stone01 (Stone01) - Material
+  StraightBranch01 (StraightBranch01) - Material
+  TinIngot01 (TinIngot01) - Material
+  WoolFleece01 (WoolFleece01) - Material
+
+================================================================================
+TECHNOLOGY ERAS
+================================================================================
+
+Era 1: Early Paleolithic (2.6M - 300K BCE)
+  - Hammerstones, sharp flakes, crude choppers
+  - Basic foraging and scavenging
+
+Era 2: Middle Paleolithic (300K - 50K BCE)
+  - Flint knapping, hand axes, scrapers
+  - Fire making, hide processing
+  - Hafted spears, digging sticks
+
+Era 3: Late Paleolithic (50K - 10K BCE)
+  - Bow and arrow, atlatl
+  - Bone tools, sewn leather clothing
+  - Fishing equipment, microliths
+
+Era 4: Mesolithic (10K - 6K BCE)
+  - Polished stone axes, dugout canoes
+  - Composite bows, advanced traps
+  - Basket weaving, bark containers
+
+Era 5: Early Neolithic (6K - 4K BCE)
+  - Pottery (hand-built)
+  - Grinding stones, sickles
+  - Early farming tools
+
+Era 6: Chalcolithic (4K - 3K BCE)
+  - Spinning and weaving
+  - Native copper working
+  - Cloth clothing
+
+Era 7: Early Bronze Age (3K - 2K BCE)
+  - Copper smelting, bronze alloying
+  - Bronze tools and weapons
+  - Leather armor, wooden shields
+
+Era 8: Late Bronze Age (2K - 1.2K BCE)
+  - Wheel-thrown pottery, kilns
+  - Bronze armor (helmets, greaves, scale)
+  - Chariots, glass making
+
+Era 9: Iron Age (1.2K BCE - 500 CE)
+  - Iron smelting (bloomery)
+  - Steel making (carburization)
+  - Chain mail, advanced smithing

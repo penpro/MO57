@@ -3,6 +3,8 @@
 #include "MOSkillsComponent.h"
 #include "MOInventoryComponent.h"
 #include "MORecipeDatabaseSettings.h"
+#include "MOItemDatabaseSettings.h"
+#include "MOItemDefinitionRow.h"
 #include "MOFramework.h"
 
 void UMOCraftingSubsystem::GetAvailableRecipes(
@@ -135,6 +137,15 @@ FMOCraftingValidation UMOCraftingSubsystem::CanCraftRecipe(
 		return Result;
 	}
 
+	// Check tools
+	TArray<FName> MissingTools;
+	if (!HasRequiredTools(Recipe, InventoryComponent, &MissingTools))
+	{
+		Result.MissingTools = MissingTools;
+		Result.FailureReason = FText::FromString(TEXT("Missing required tools."));
+		return Result;
+	}
+
 	Result.bCanCraft = true;
 	return Result;
 }
@@ -233,11 +244,75 @@ FMOCraftResult UMOCraftingSubsystem::ExecuteCraft(
 		Result.XPGranted.Add(Recipe->RequiredSkillId, Recipe->SkillXPReward);
 	}
 
+	// Degrade tools
+	DegradeToolsForRecipe(RecipeId, InventoryComponent);
+
 	Result.bSuccess = true;
 
 	OnCraftCompleted.Broadcast(RecipeId, Result);
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOCraftingSubsystem] Crafted '%s' successfully"), *RecipeId.ToString());
+
+	return Result;
+}
+
+FMOCraftResult UMOCraftingSubsystem::ProduceOutputsOnly(
+	FName RecipeId,
+	UMOInventoryComponent* InventoryComponent,
+	UMOSkillsComponent* SkillsComponent
+)
+{
+	FMOCraftResult Result;
+
+	if (!IsValid(InventoryComponent))
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOCraftingSubsystem] ProduceOutputsOnly: Invalid inventory component"));
+		return Result;
+	}
+
+	const FMORecipeDefinitionRow* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(RecipeId);
+	if (!Recipe)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOCraftingSubsystem] ProduceOutputsOnly: Recipe '%s' not found"), *RecipeId.ToString());
+		return Result;
+	}
+
+	// Produce outputs (no ingredient consumption)
+	for (const FMORecipeOutput& Output : Recipe->Outputs)
+	{
+		// Check chance
+		if (Output.Chance < 1.0f)
+		{
+			const float Roll = FMath::FRand();
+			if (Roll > Output.Chance)
+			{
+				continue;
+			}
+		}
+
+		// Add to inventory
+		const FGuid NewGuid = FGuid::NewGuid();
+		if (InventoryComponent->AddItemByGuid(NewGuid, Output.ItemDefinitionId, Output.Quantity))
+		{
+			Result.ProducedItems.FindOrAdd(Output.ItemDefinitionId) += Output.Quantity;
+		}
+	}
+
+	// Grant skill XP
+	if (IsValid(SkillsComponent) && !Recipe->RequiredSkillId.IsNone() && Recipe->SkillXPReward > 0.0f)
+	{
+		SkillsComponent->AddExperience(Recipe->RequiredSkillId, Recipe->SkillXPReward);
+		Result.XPGranted.Add(Recipe->RequiredSkillId, Recipe->SkillXPReward);
+	}
+
+	// Degrade tools
+	DegradeToolsForRecipe(RecipeId, InventoryComponent);
+
+	Result.bSuccess = true;
+
+	OnCraftCompleted.Broadcast(RecipeId, Result);
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOCraftingSubsystem] Produced outputs for '%s' successfully (ingredients pre-consumed)"), *RecipeId.ToString());
 
 	return Result;
 }
@@ -370,4 +445,189 @@ bool UMOCraftingSubsystem::HasIngredients(
 	}
 
 	return bHasAll;
+}
+
+bool UMOCraftingSubsystem::HasRequiredTools(
+	const FMORecipeDefinitionRow* Recipe,
+	UMOInventoryComponent* Inventory,
+	TArray<FName>* OutMissingTools
+) const
+{
+	if (!Recipe || Recipe->RequiredTools.Num() == 0)
+	{
+		return true;
+	}
+
+	if (!IsValid(Inventory))
+	{
+		if (OutMissingTools)
+		{
+			for (const FMOToolRequirement& Req : Recipe->RequiredTools)
+			{
+				OutMissingTools->Add(Req.ToolType);
+			}
+		}
+		return false;
+	}
+
+	bool bHasAll = true;
+	for (const FMOToolRequirement& ToolReq : Recipe->RequiredTools)
+	{
+		FGuid FoundGuid;
+		float FoundQuality;
+		if (!FindBestTool(Inventory, ToolReq.ToolType, ToolReq.MinQuality, FoundGuid, FoundQuality))
+		{
+			bHasAll = false;
+			if (OutMissingTools)
+			{
+				OutMissingTools->Add(ToolReq.ToolType);
+			}
+		}
+	}
+
+	return bHasAll;
+}
+
+bool UMOCraftingSubsystem::FindBestTool(
+	UMOInventoryComponent* Inventory,
+	FName ToolType,
+	float MinQuality,
+	FGuid& OutItemGuid,
+	float& OutQuality
+) const
+{
+	OutItemGuid.Invalidate();
+	OutQuality = 0.0f;
+
+	if (!IsValid(Inventory) || ToolType.IsNone())
+	{
+		return false;
+	}
+
+	TArray<FMOInventoryEntry> Entries;
+	Inventory->GetInventoryEntries(Entries);
+
+	for (const FMOInventoryEntry& Entry : Entries)
+	{
+		FMOItemDefinitionRow ItemDef;
+		if (!UMOItemDatabaseSettings::GetItemDefinition(Entry.ItemDefinitionId, ItemDef))
+		{
+			continue;
+		}
+
+		// Check if this is the right tool type
+		if (!ItemDef.bIsTool || ItemDef.ToolType != ToolType)
+		{
+			continue;
+		}
+
+		// Check quality threshold
+		if (ItemDef.ToolQuality < MinQuality)
+		{
+			continue;
+		}
+
+		// Check if tool has durability remaining (if applicable)
+		if (Entry.CurrentDurability == 0)
+		{
+			continue; // Tool is broken
+		}
+
+		// Track the best quality tool
+		if (ItemDef.ToolQuality > OutQuality)
+		{
+			OutItemGuid = Entry.ItemGuid;
+			OutQuality = ItemDef.ToolQuality;
+		}
+	}
+
+	return OutItemGuid.IsValid();
+}
+
+void UMOCraftingSubsystem::DegradeToolsForRecipe(FName RecipeId, UMOInventoryComponent* Inventory)
+{
+	if (!IsValid(Inventory))
+	{
+		return;
+	}
+
+	const FMORecipeDefinitionRow* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(RecipeId);
+	if (!Recipe || Recipe->RequiredTools.Num() == 0)
+	{
+		return;
+	}
+
+	for (const FMOToolRequirement& ToolReq : Recipe->RequiredTools)
+	{
+		if (ToolReq.DurabilityConsumed <= 0)
+		{
+			continue;
+		}
+
+		FGuid ToolGuid;
+		float ToolQuality;
+		if (FindBestTool(Inventory, ToolReq.ToolType, ToolReq.MinQuality, ToolGuid, ToolQuality))
+		{
+			bool bDestroyed = false;
+			Inventory->ReduceDurability(ToolGuid, ToolReq.DurabilityConsumed, bDestroyed);
+
+			if (bDestroyed)
+			{
+				UE_LOG(LogMOFramework, Log, TEXT("[MOCraftingSubsystem] Tool '%s' was destroyed during crafting"), *ToolReq.ToolType.ToString());
+			}
+		}
+	}
+}
+
+float UMOCraftingSubsystem::GetAdjustedCraftTime(FName RecipeId, UMOInventoryComponent* Inventory) const
+{
+	const FMORecipeDefinitionRow* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(RecipeId);
+	if (!Recipe)
+	{
+		return 0.0f;
+	}
+
+	float BaseCraftTime = Recipe->CraftTime;
+
+	// No tools required means no adjustment
+	if (Recipe->RequiredTools.Num() == 0 || !IsValid(Inventory))
+	{
+		return BaseCraftTime;
+	}
+
+	// Calculate average tool quality multiplier
+	// Higher quality = faster crafting
+	// Formula: CraftTime = BaseCraftTime / AverageToolQuality
+	float TotalQuality = 0.0f;
+	int32 ToolCount = 0;
+
+	for (const FMOToolRequirement& ToolReq : Recipe->RequiredTools)
+	{
+		FGuid ToolGuid;
+		float ToolQuality;
+		if (FindBestTool(Inventory, ToolReq.ToolType, ToolReq.MinQuality, ToolGuid, ToolQuality))
+		{
+			TotalQuality += ToolQuality;
+			ToolCount++;
+		}
+		else
+		{
+			// Missing tool - use minimum quality
+			TotalQuality += FMath::Max(ToolReq.MinQuality, 0.5f);
+			ToolCount++;
+		}
+	}
+
+	if (ToolCount == 0)
+	{
+		return BaseCraftTime;
+	}
+
+	const float AverageQuality = TotalQuality / ToolCount;
+
+	// Quality of 1.0 = base time, Quality of 2.0 = half time, etc.
+	// Clamp minimum to 0.5 to prevent unreasonably fast crafting
+	const float QualityMultiplier = FMath::Max(0.5f, 1.0f / AverageQuality);
+
+	return BaseCraftTime * QualityMultiplier;
 }

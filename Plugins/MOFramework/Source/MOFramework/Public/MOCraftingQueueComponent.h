@@ -132,6 +132,10 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO|Crafting|Queue")
 	float GetCurrentCraftProgress() const;
 
+	/** Get overall queue progress (0.0 - 1.0), accounting for all entries and repeats. */
+	UFUNCTION(BlueprintPure, Category="MO|Crafting|Queue")
+	float GetOverallQueueProgress() const;
+
 	// --- Save/Load ---
 
 	/** Build save data from current queue state. */

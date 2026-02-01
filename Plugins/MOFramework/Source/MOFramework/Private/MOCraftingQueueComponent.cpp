@@ -3,6 +3,7 @@
 #include "MOCraftingSubsystem.h"
 #include "MOInventoryComponent.h"
 #include "MORecipeDiscoveryComponent.h"
+#include "MOSkillsComponent.h"
 #include "MORecipeDatabaseSettings.h"
 #include "MOItemDatabaseSettings.h"
 #include "Net/UnrealNetwork.h"
@@ -343,6 +344,45 @@ float UMOCraftingQueueComponent::GetCurrentCraftProgress() const
 	return Queue.Entries[0].Progress;
 }
 
+float UMOCraftingQueueComponent::GetOverallQueueProgress() const
+{
+	if (Queue.Entries.Num() == 0)
+	{
+		return 0.0f;
+	}
+
+	float TotalTime = 0.0f;
+	float CompletedTime = 0.0f;
+
+	for (int32 i = 0; i < Queue.Entries.Num(); ++i)
+	{
+		const FMOCraftingQueueEntry& Entry = Queue.Entries[i];
+		float CraftDuration = GetEffectiveCraftDuration(Entry.RecipeId);
+
+		// Total time for all repeats in this entry
+		float EntryTotalTime = CraftDuration * Entry.Count;
+		TotalTime += EntryTotalTime;
+
+		// Time completed for this entry
+		float EntryCompletedTime = CraftDuration * Entry.CompletedCount;
+
+		// For the current craft (first entry), add partial progress
+		if (i == 0)
+		{
+			EntryCompletedTime += CraftDuration * Entry.Progress;
+		}
+
+		CompletedTime += EntryCompletedTime;
+	}
+
+	if (TotalTime <= 0.0f)
+	{
+		return 1.0f; // All instant crafts
+	}
+
+	return FMath::Clamp(CompletedTime / TotalTime, 0.0f, 1.0f);
+}
+
 // =============================================================================
 // Save/Load
 // =============================================================================
@@ -474,10 +514,17 @@ void UMOCraftingQueueComponent::CompletCurrentCraft()
 	}
 
 	// Generate outputs via crafting subsystem
+	// Use ProduceOutputsOnly since ingredients were already consumed at enqueue time
 	FMOCraftResult Result;
 	if (UMOCraftingSubsystem* CraftingSub = CachedCraftingSubsystem.Get())
 	{
-		Result = CraftingSub->ExecuteCraft(CurrentEntry.RecipeId, CachedInventory.Get(), nullptr);
+		// Get skills component from owner for XP rewards
+		UMOSkillsComponent* SkillsComp = nullptr;
+		if (AActor* Owner = GetOwner())
+		{
+			SkillsComp = Owner->FindComponentByClass<UMOSkillsComponent>();
+		}
+		Result = CraftingSub->ProduceOutputsOnly(CurrentEntry.RecipeId, CachedInventory.Get(), SkillsComp);
 	}
 	else
 	{

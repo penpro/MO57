@@ -27,6 +27,19 @@
 #include "MOMetabolismComponent.h"
 #include "MOMentalStateComponent.h"
 #include "MONotificationWidget.h"
+#include "MOPossessionMenu.h"
+#include "MOPawnEntryWidget.h"
+#include "MOPossessionSubsystem.h"
+#include "MOIdentityRegistrySubsystem.h"
+#include "MOIdentityComponent.h"
+#include "MOCraftingMenu.h"
+#include "MOSkillsPanel.h"
+#include "MOSkillsComponent.h"
+#include "MOKnowledgeComponent.h"
+#include "MOCraftingQueueComponent.h"
+#include "MORecipeDiscoveryComponent.h"
+#include "MOInspectionProgressWidget.h"
+#include "MORecipeDatabaseSettings.h"
 
 UMOUIManagerComponent::UMOUIManagerComponent()
 {
@@ -54,7 +67,7 @@ void UMOUIManagerComponent::BeginPlay()
 void UMOUIManagerComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	// Ensure we restore input mode on teardown if this component dies while menu is open.
-	CloseInventoryMenu();
+	CloseAllMenus();
 
 	// Clean up reticle widget
 	if (UMOReticleWidget* Reticle = ReticleWidget.Get())
@@ -134,25 +147,21 @@ void UMOUIManagerComponent::ToggleInventoryMenu()
 		return;
 	}
 
-	// Don't allow opening inventory while in-game menu is open
+	// Don't allow opening while in-game menu is open
 	if (IsInGameMenuOpen())
 	{
 		return;
 	}
 
+	// If already open, just close it
 	if (IsInventoryMenuOpen())
 	{
 		CloseInventoryMenu();
 		return;
 	}
 
-	// Close player status if visible (Tab closes any open UI)
-	if (IsPlayerStatusVisible())
-	{
-		SetPlayerStatusVisible(false);
-		return;
-	}
-
+	// Close other switchable menus and open this one
+	CloseAllSwitchableMenus();
 	OpenInventoryMenu();
 }
 
@@ -378,13 +387,22 @@ void UMOUIManagerComponent::CreateStatusPanel()
 
 void UMOUIManagerComponent::TogglePlayerStatus()
 {
-	// Don't allow opening player status while in-game menu is open
+	// Don't allow opening while in-game menu is open
 	if (IsInGameMenuOpen() && !IsPlayerStatusVisible())
 	{
 		return;
 	}
 
-	SetPlayerStatusVisible(!IsPlayerStatusVisible());
+	// If already visible, just close it
+	if (IsPlayerStatusVisible())
+	{
+		SetPlayerStatusVisible(false);
+		return;
+	}
+
+	// Close other switchable menus and open this one
+	CloseAllSwitchableMenus();
+	SetPlayerStatusVisible(true);
 }
 
 void UMOUIManagerComponent::HandleStatusPanelRequestClose()
@@ -492,6 +510,570 @@ UMOReticleWidget* UMOUIManagerComponent::GetReticleWidget() const
 }
 
 // =============================================================================
+// Possession Menu
+// =============================================================================
+
+void UMOUIManagerComponent::TogglePossessionMenu()
+{
+	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] TogglePossessionMenu called"));
+
+	if (!IsLocalOwningPlayerController())
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] TogglePossessionMenu - Not local owning player controller, aborting"));
+		return;
+	}
+
+	// If already open, just close it
+	if (IsPossessionMenuOpen())
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOUI] TogglePossessionMenu - Menu is open, closing"));
+		ClosePossessionMenu();
+		return;
+	}
+
+	// Possession menu can also close the in-game menu (special case)
+	if (IsInGameMenuOpen())
+	{
+		CloseInGameMenu();
+	}
+
+	// Close other switchable menus and open this one
+	CloseAllSwitchableMenus();
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] TogglePossessionMenu - Opening"));
+	OpenPossessionMenu();
+}
+
+void UMOUIManagerComponent::OpenPossessionMenu()
+{
+	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] OpenPossessionMenu called"));
+
+	if (!IsLocalOwningPlayerController())
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] OpenPossessionMenu - Not local owning player controller"));
+		return;
+	}
+
+	APlayerController* PlayerController = ResolveOwningPlayerController();
+	if (!IsValid(PlayerController))
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] OpenPossessionMenu - PlayerController invalid"));
+		return;
+	}
+
+	if (!PossessionMenuClass)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] PossessionMenuClass not set on UI manager component."));
+		return;
+	}
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] OpenPossessionMenu - All checks passed, creating menu"));
+
+	UMOPossessionMenu* MenuWidget = PossessionMenuWidget.Get();
+	if (!IsValid(MenuWidget))
+	{
+		MenuWidget = CreateWidget<UMOPossessionMenu>(PlayerController, PossessionMenuClass);
+		PossessionMenuWidget = MenuWidget;
+
+		if (!IsValid(MenuWidget))
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] Failed to create possession menu widget."));
+			return;
+		}
+
+		MenuWidget->OnRequestClose.AddDynamic(this, &UMOUIManagerComponent::HandlePossessionMenuRequestClose);
+		MenuWidget->OnPawnSelected.AddDynamic(this, &UMOUIManagerComponent::HandlePossessionMenuPawnSelected);
+		MenuWidget->OnCreateCharacter.AddDynamic(this, &UMOUIManagerComponent::HandlePossessionMenuCreateCharacter);
+	}
+
+	// Populate with pawn data
+	RefreshPossessionMenu();
+
+	if (!MenuWidget->IsInViewport())
+	{
+		ShowModalBackground();
+		MenuWidget->AddToViewport(PossessionMenuZOrder);
+	}
+
+	UpdateReticleVisibility();
+	ApplyInputModeForMenuOpen(PlayerController, MenuWidget);
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Possession menu opened"));
+}
+
+void UMOUIManagerComponent::ClosePossessionMenu()
+{
+	APlayerController* PlayerController = ResolveOwningPlayerController();
+
+	UMOPossessionMenu* MenuWidget = PossessionMenuWidget.Get();
+	if (IsValid(MenuWidget))
+	{
+		if (MenuWidget->IsInViewport())
+		{
+			MenuWidget->RemoveFromParent();
+		}
+	}
+
+	UpdateReticleVisibility();
+
+	if (!IsAnyMenuOpen())
+	{
+		HideModalBackground();
+		if (IsValid(PlayerController) && PlayerController->IsLocalController())
+		{
+			ApplyInputModeForMenuClosed(PlayerController);
+		}
+	}
+}
+
+bool UMOUIManagerComponent::IsPossessionMenuOpen() const
+{
+	const UMOPossessionMenu* MenuWidget = PossessionMenuWidget.Get();
+	return IsValid(MenuWidget) && MenuWidget->IsInViewport();
+}
+
+void UMOUIManagerComponent::RefreshPossessionMenu()
+{
+	UMOPossessionMenu* MenuWidget = PossessionMenuWidget.Get();
+	if (!IsValid(MenuWidget))
+	{
+		return;
+	}
+
+	// Get pawn records from persistence subsystem
+	TArray<FMOPersistedPawnRecord> PawnRecords;
+
+	UGameInstance* GameInstance = UGameplayStatics::GetGameInstance(this);
+	if (GameInstance)
+	{
+		UMOPersistenceSubsystem* Persistence = GameInstance->GetSubsystem<UMOPersistenceSubsystem>();
+		if (Persistence)
+		{
+			PawnRecords = Persistence->GetAllPawnRecords();
+		}
+	}
+
+	MenuWidget->PopulatePawnList(PawnRecords);
+}
+
+void UMOUIManagerComponent::HandlePossessionMenuRequestClose()
+{
+	ClosePossessionMenu();
+}
+
+void UMOUIManagerComponent::HandlePossessionMenuPawnSelected(const FGuid& PawnGuid)
+{
+	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Pawn selected for possession: %s"), *PawnGuid.ToString());
+
+	// Find and possess the pawn
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	APlayerController* PlayerController = ResolveOwningPlayerController();
+	if (!IsValid(PlayerController))
+	{
+		return;
+	}
+
+	// Try to find the pawn in the world via identity registry
+	UMOIdentityRegistrySubsystem* IdentityRegistry = World->GetSubsystem<UMOIdentityRegistrySubsystem>();
+	if (IdentityRegistry)
+	{
+		AActor* FoundActor = IdentityRegistry->ResolveActorOrNull(PawnGuid);
+		if (APawn* FoundPawn = Cast<APawn>(FoundActor))
+		{
+			PlayerController->Possess(FoundPawn);
+			ClosePossessionMenu();
+			UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Successfully possessed pawn %s"), *PawnGuid.ToString());
+			return;
+		}
+	}
+
+	// If pawn isn't in world, need to spawn it from save data
+	UGameInstance* GameInstance = UGameplayStatics::GetGameInstance(this);
+	if (GameInstance)
+	{
+		UMOPersistenceSubsystem* Persistence = GameInstance->GetSubsystem<UMOPersistenceSubsystem>();
+		if (Persistence)
+		{
+			APawn* SpawnedPawn = Persistence->SpawnPawnFromRecord(PawnGuid);
+			if (SpawnedPawn)
+			{
+				PlayerController->Possess(SpawnedPawn);
+				ClosePossessionMenu();
+				UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Spawned and possessed pawn %s"), *PawnGuid.ToString());
+				return;
+			}
+		}
+	}
+
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] Failed to find or spawn pawn %s"), *PawnGuid.ToString());
+}
+
+void UMOUIManagerComponent::HandlePossessionMenuCreateCharacter()
+{
+	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Create new character requested"));
+
+	APlayerController* PlayerController = ResolveOwningPlayerController();
+	if (!IsValid(PlayerController))
+	{
+		return;
+	}
+
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	// Spawn a new pawn using the possession subsystem
+	UMOPossessionSubsystem* PossessionSubsystem = World->GetSubsystem<UMOPossessionSubsystem>();
+	if (PossessionSubsystem && DefaultPawnClassForNewCharacter)
+	{
+		APawn* NewPawn = PossessionSubsystem->ServerSpawnAndPossessPawn(
+			PlayerController,
+			DefaultPawnClassForNewCharacter,
+			300.0f,
+			FVector::ZeroVector,
+			true
+		);
+
+		if (NewPawn)
+		{
+			// Register the new pawn with the persistence subsystem
+			UGameInstance* GameInstance = UGameplayStatics::GetGameInstance(this);
+			if (GameInstance)
+			{
+				UMOPersistenceSubsystem* Persistence = GameInstance->GetSubsystem<UMOPersistenceSubsystem>();
+				if (Persistence)
+				{
+					// Get the pawn's identity GUID
+					FGuid PawnGuid;
+					if (UMOIdentityComponent* IdentityComp = NewPawn->FindComponentByClass<UMOIdentityComponent>())
+					{
+						PawnGuid = IdentityComp->GetOrCreateGuid();
+					}
+
+					if (PawnGuid.IsValid())
+					{
+						// Create a new pawn record
+						FMOPersistedPawnRecord NewRecord;
+						NewRecord.PawnGuid = PawnGuid;
+						NewRecord.Transform = NewPawn->GetActorTransform();
+						NewRecord.PawnClassPath = FSoftClassPath(NewPawn->GetClass());
+						NewRecord.CharacterName = FString::Printf(TEXT("Character %d"), FMath::RandRange(1, 9999));
+						NewRecord.Gender = TEXT("Unknown");
+						NewRecord.AgeInDays = FMath::RandRange(18 * 365, 40 * 365); // 18-40 years old
+						NewRecord.bIsDeceased = false;
+						NewRecord.HealthPercent = 1.0f;
+						NewRecord.StatusText = TEXT("Healthy");
+						NewRecord.LastPlayedTime = FDateTime::Now();
+
+						Persistence->RegisterPawnRecord(NewRecord);
+						UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Registered new pawn record: %s (%s)"),
+							*NewRecord.CharacterName, *PawnGuid.ToString());
+					}
+				}
+			}
+
+			ClosePossessionMenu();
+			UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Created and possessed new character"));
+			return;
+		}
+	}
+
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] Failed to create new character. Check DefaultPawnClassForNewCharacter is set."));
+}
+
+// =============================================================================
+// Crafting Menu
+// =============================================================================
+
+void UMOUIManagerComponent::ToggleCraftingMenu()
+{
+	if (!IsLocalOwningPlayerController())
+	{
+		return;
+	}
+
+	// Don't allow opening crafting while in-game menu is open
+	if (IsInGameMenuOpen())
+	{
+		return;
+	}
+
+	// If crafting is already open, just close it
+	if (IsCraftingMenuOpen())
+	{
+		CloseCraftingMenu();
+		return;
+	}
+
+	// Close all switchable menus and open crafting
+	CloseAllSwitchableMenus();
+	OpenCraftingMenu();
+}
+
+void UMOUIManagerComponent::OpenCraftingMenu()
+{
+	if (!IsLocalOwningPlayerController())
+	{
+		return;
+	}
+
+	APlayerController* PlayerController = ResolveOwningPlayerController();
+	if (!IsValid(PlayerController))
+	{
+		return;
+	}
+
+	// Check for valid pawn first
+	if (!HasValidPawn())
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOUI] OpenCraftingMenu - No valid pawn, showing notification"));
+		ShowNoPawnNotification();
+		return;
+	}
+
+	if (!CraftingMenuClass)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] CraftingMenuClass not set on UI manager component."));
+		return;
+	}
+
+	APawn* CurrentPawn = PlayerController->GetPawn();
+	if (!IsValid(CurrentPawn))
+	{
+		return;
+	}
+
+	// Get required components from the pawn
+	UMOInventoryComponent* Inventory = CurrentPawn->FindComponentByClass<UMOInventoryComponent>();
+	if (!IsValid(Inventory))
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] No UMOInventoryComponent found on current pawn."));
+		return;
+	}
+
+	UMOCraftingMenu* MenuWidget = CraftingMenuWidget.Get();
+	if (!IsValid(MenuWidget))
+	{
+		MenuWidget = CreateWidget<UMOCraftingMenu>(PlayerController, CraftingMenuClass);
+		CraftingMenuWidget = MenuWidget;
+
+		if (!IsValid(MenuWidget))
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] Failed to create crafting menu widget."));
+			return;
+		}
+
+		MenuWidget->OnRequestClose.AddDynamic(this, &UMOUIManagerComponent::HandleCraftingMenuRequestClose);
+	}
+
+	// Get optional components
+	UMOSkillsComponent* Skills = CurrentPawn->FindComponentByClass<UMOSkillsComponent>();
+	UMOKnowledgeComponent* Knowledge = CurrentPawn->FindComponentByClass<UMOKnowledgeComponent>();
+	UMOCraftingQueueComponent* CraftingQueue = CurrentPawn->FindComponentByClass<UMOCraftingQueueComponent>();
+	UMORecipeDiscoveryComponent* Discovery = CurrentPawn->FindComponentByClass<UMORecipeDiscoveryComponent>();
+
+	// Initialize with components
+	MenuWidget->InitializeMenu(Inventory, Skills, Knowledge, CraftingQueue, Discovery);
+
+	if (!MenuWidget->IsInViewport())
+	{
+		ShowModalBackground();
+		MenuWidget->AddToViewport(CraftingMenuZOrder);
+	}
+
+	UpdateReticleVisibility();
+	ApplyInputModeForMenuOpen(PlayerController, MenuWidget);
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Crafting menu opened"));
+}
+
+void UMOUIManagerComponent::CloseCraftingMenu()
+{
+	APlayerController* PlayerController = ResolveOwningPlayerController();
+
+	UMOCraftingMenu* MenuWidget = CraftingMenuWidget.Get();
+	if (IsValid(MenuWidget))
+	{
+		if (MenuWidget->IsInViewport())
+		{
+			MenuWidget->RemoveFromParent();
+		}
+	}
+
+	UpdateReticleVisibility();
+
+	if (!IsAnyMenuOpen())
+	{
+		HideModalBackground();
+		if (IsValid(PlayerController) && PlayerController->IsLocalController())
+		{
+			ApplyInputModeForMenuClosed(PlayerController);
+		}
+	}
+}
+
+bool UMOUIManagerComponent::IsCraftingMenuOpen() const
+{
+	const UMOCraftingMenu* MenuWidget = CraftingMenuWidget.Get();
+	return IsValid(MenuWidget) && MenuWidget->IsInViewport();
+}
+
+UMOCraftingMenu* UMOUIManagerComponent::GetCraftingMenu() const
+{
+	return CraftingMenuWidget.Get();
+}
+
+void UMOUIManagerComponent::HandleCraftingMenuRequestClose()
+{
+	CloseCraftingMenu();
+}
+
+// =============================================================================
+// Skills Panel
+// =============================================================================
+
+void UMOUIManagerComponent::ToggleSkillsPanel()
+{
+	if (!IsLocalOwningPlayerController())
+	{
+		return;
+	}
+
+	// Don't allow opening while in-game menu is open
+	if (IsInGameMenuOpen())
+	{
+		return;
+	}
+
+	// If skills panel is already open, just close it
+	if (IsSkillsPanelOpen())
+	{
+		CloseSkillsPanel();
+		return;
+	}
+
+	// Close all switchable menus and open skills panel
+	CloseAllSwitchableMenus();
+	OpenSkillsPanel();
+}
+
+void UMOUIManagerComponent::OpenSkillsPanel()
+{
+	if (!IsLocalOwningPlayerController())
+	{
+		return;
+	}
+
+	APlayerController* PlayerController = ResolveOwningPlayerController();
+	if (!IsValid(PlayerController))
+	{
+		return;
+	}
+
+	// Check for valid pawn first
+	if (!HasValidPawn())
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOUI] OpenSkillsPanel - No valid pawn, showing notification"));
+		ShowNoPawnNotification();
+		return;
+	}
+
+	if (!SkillsPanelClass)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] SkillsPanelClass not set on UI manager component."));
+		return;
+	}
+
+	// Get current pawn
+	APawn* CurrentPawn = PlayerController->GetPawn();
+	if (!CurrentPawn)
+	{
+		return;
+	}
+
+	// Create widget if needed
+	UMOSkillsPanel* PanelWidget = SkillsPanelWidget.Get();
+	if (!PanelWidget)
+	{
+		PanelWidget = CreateWidget<UMOSkillsPanel>(PlayerController, SkillsPanelClass);
+		if (!PanelWidget)
+		{
+			UE_LOG(LogMOFramework, Error, TEXT("[MOUI] Failed to create Skills Panel widget."));
+			return;
+		}
+
+		SkillsPanelWidget = PanelWidget;
+		PanelWidget->OnRequestClose.AddDynamic(this, &UMOUIManagerComponent::HandleSkillsPanelRequestClose);
+	}
+
+	// Get skills component
+	UMOSkillsComponent* Skills = CurrentPawn->FindComponentByClass<UMOSkillsComponent>();
+
+	// Initialize with skills component
+	PanelWidget->InitializePanel(Skills);
+
+	if (!PanelWidget->IsInViewport())
+	{
+		ShowModalBackground();
+		PanelWidget->AddToViewport(SkillsPanelZOrder);
+	}
+
+	ApplyInputModeForMenuOpen(PlayerController, PanelWidget);
+	UpdateReticleVisibility();
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Skills Panel opened"));
+}
+
+void UMOUIManagerComponent::CloseSkillsPanel()
+{
+	UMOSkillsPanel* PanelWidget = SkillsPanelWidget.Get();
+	if (!PanelWidget)
+	{
+		return;
+	}
+
+	if (PanelWidget->IsInViewport())
+	{
+		PanelWidget->RemoveFromParent();
+	}
+
+	HideModalBackground();
+
+	APlayerController* PlayerController = ResolveOwningPlayerController();
+	if (IsValid(PlayerController))
+	{
+		ApplyInputModeForMenuClosed(PlayerController);
+	}
+
+	UpdateReticleVisibility();
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Skills Panel closed"));
+}
+
+bool UMOUIManagerComponent::IsSkillsPanelOpen() const
+{
+	UMOSkillsPanel* PanelWidget = SkillsPanelWidget.Get();
+	return PanelWidget && PanelWidget->IsInViewport();
+}
+
+UMOSkillsPanel* UMOUIManagerComponent::GetSkillsPanel() const
+{
+	return SkillsPanelWidget.Get();
+}
+
+void UMOUIManagerComponent::HandleSkillsPanelRequestClose()
+{
+	CloseSkillsPanel();
+}
+
+// =============================================================================
 // In-Game Menu
 // =============================================================================
 
@@ -518,6 +1100,12 @@ void UMOUIManagerComponent::ToggleInGameMenu()
 	if (IsPlayerStatusVisible())
 	{
 		SetPlayerStatusVisible(false);
+		return;
+	}
+
+	if (IsCraftingMenuOpen())
+	{
+		CloseCraftingMenu();
 		return;
 	}
 
@@ -822,8 +1410,18 @@ void UMOUIManagerComponent::HandleContextMenuAction(FName ActionId, const FGuid&
 	}
 	else if (ActionId == FName("Inspect"))
 	{
-		// TODO: Implement inspection - show detailed item info, grant knowledge XP
-		UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Inspect action - not yet implemented"));
+		// Close context menu first to ensure IsAnyMenuOpen() returns correct state
+		CloseItemContextMenu();
+		// Get item definition ID from inventory
+		FMOInventoryEntry Entry;
+		if (InventoryComponent->TryGetEntryByGuid(ItemGuid, Entry))
+		{
+			StartItemInspection(Entry.ItemDefinitionId, ItemGuid);
+		}
+		else
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] Inspect action - item not found in inventory"));
+		}
 	}
 	else if (ActionId == FName("SplitStack"))
 	{
@@ -832,8 +1430,12 @@ void UMOUIManagerComponent::HandleContextMenuAction(FName ActionId, const FGuid&
 	}
 	else if (ActionId == FName("Craft"))
 	{
-		// TODO: Implement crafting UI filtered to this item
-		UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Craft action - not yet implemented"));
+		// Close context menu first to ensure IsAnyMenuOpen() returns correct state
+		CloseItemContextMenu();
+		// Close inventory and open crafting menu
+		CloseInventoryMenu();
+		OpenCraftingMenu();
+		UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Craft action - opened crafting menu"));
 	}
 }
 
@@ -971,7 +1573,7 @@ void UMOUIManagerComponent::HandleConfirmationCancelled()
 
 bool UMOUIManagerComponent::IsAnyMenuOpen() const
 {
-	return IsInventoryMenuOpen() || IsInGameMenuOpen() || IsItemContextMenuOpen() || IsPlayerStatusVisible();
+	return IsInventoryMenuOpen() || IsInGameMenuOpen() || IsItemContextMenuOpen() || IsPlayerStatusVisible() || IsPossessionMenuOpen() || IsCraftingMenuOpen() || IsSkillsPanelOpen() || IsInspectionInProgress();
 }
 
 void UMOUIManagerComponent::CloseAllMenus()
@@ -1000,6 +1602,23 @@ void UMOUIManagerComponent::CloseAllMenus()
 		GameMenu->RemoveFromParent();
 	}
 
+	// Close crafting menu
+	UMOCraftingMenu* CraftMenu = CraftingMenuWidget.Get();
+	if (IsValid(CraftMenu) && CraftMenu->IsInViewport())
+	{
+		CraftMenu->RemoveFromParent();
+	}
+
+	// Close skills panel
+	UMOSkillsPanel* SkillsPanel = SkillsPanelWidget.Get();
+	if (IsValid(SkillsPanel) && SkillsPanel->IsInViewport())
+	{
+		SkillsPanel->RemoveFromParent();
+	}
+
+	// Cancel any active inspection
+	CancelItemInspection();
+
 	// Close confirmation dialog
 	UMOConfirmationDialog* DialogWidget = ConfirmationDialogWidget.Get();
 	if (IsValid(DialogWidget) && DialogWidget->IsInViewport())
@@ -1018,6 +1637,64 @@ void UMOUIManagerComponent::CloseAllMenus()
 	}
 
 	UpdateReticleVisibility();
+}
+
+void UMOUIManagerComponent::CloseAllSwitchableMenus()
+{
+	// Close all menus that participate in menu switching.
+	// These are the main gameplay menus that toggle between each other.
+	// NOT included: In-game menu (pause), confirmation dialogs, context menus, inspection.
+
+	// Close inventory
+	UMOInventoryMenu* InvMenu = InventoryMenuWidget.Get();
+	if (IsValid(InvMenu) && InvMenu->IsInViewport())
+	{
+		InvMenu->RemoveFromParent();
+	}
+
+	// Close crafting menu
+	UMOCraftingMenu* CraftMenu = CraftingMenuWidget.Get();
+	if (IsValid(CraftMenu) && CraftMenu->IsInViewport())
+	{
+		CraftMenu->RemoveFromParent();
+	}
+
+	// Close skills panel
+	UMOSkillsPanel* SkillsPanel = SkillsPanelWidget.Get();
+	if (IsValid(SkillsPanel) && SkillsPanel->IsInViewport())
+	{
+		SkillsPanel->RemoveFromParent();
+	}
+
+	// Close status panel
+	if (bStatusPanelVisible)
+	{
+		bStatusPanelVisible = false;
+		UMOStatusPanel* Status = StatusPanelWidget.Get();
+		if (IsValid(Status))
+		{
+			Status->SetVisibility(ESlateVisibility::Collapsed);
+		}
+	}
+
+	// Close possession menu
+	UMOPossessionMenu* PossMenu = PossessionMenuWidget.Get();
+	if (IsValid(PossMenu) && PossMenu->IsInViewport())
+	{
+		PossMenu->RemoveFromParent();
+	}
+
+	// Hide modal background if no menus remain open
+	if (!IsAnyMenuOpen())
+	{
+		HideModalBackground();
+
+		APlayerController* PlayerController = ResolveOwningPlayerController();
+		if (IsValid(PlayerController) && PlayerController->IsLocalController())
+		{
+			ApplyInputModeForMenuClosed(PlayerController);
+		}
+	}
 }
 
 void UMOUIManagerComponent::UpdateReticleVisibility()
@@ -1185,6 +1862,9 @@ void UMOUIManagerComponent::RebindStatusPanelToCurrentPawn()
 	// Bind to medical components (null-safe - will unbind if any are null)
 	Status->BindToMedicalComponents(Vitals, Metabolism, Mental);
 
+	// Refresh the Info tab with current pawn data
+	Status->RefreshCharacterInfo();
+
 	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Status panel rebound to current pawn (Vitals: %s, Metabolism: %s, Mental: %s)"),
 		IsValid(Vitals) ? TEXT("Yes") : TEXT("No"),
 		IsValid(Metabolism) ? TEXT("Yes") : TEXT("No"),
@@ -1263,4 +1943,321 @@ void UMOUIManagerComponent::HideNoPawnNotification()
 		Widget->RemoveFromParent();
 	}
 	NoPawnNotificationWidget.Reset();
+}
+
+// =============================================================================
+// Item Inspection
+// =============================================================================
+
+void UMOUIManagerComponent::StartItemInspection(FName ItemDefinitionId, const FGuid& ItemGuid)
+{
+	if (!IsLocalOwningPlayerController())
+	{
+		return;
+	}
+
+	APlayerController* PlayerController = ResolveOwningPlayerController();
+	if (!IsValid(PlayerController))
+	{
+		return;
+	}
+
+	// Cancel any existing inspection
+	if (IsInspectionInProgress())
+	{
+		CancelItemInspection();
+	}
+
+	// Close inventory menu while inspecting
+	CloseInventoryMenu();
+
+	// Get item display name from database
+	FText ItemDisplayName = UMOItemDatabaseSettings::GetItemDisplayName(ItemDefinitionId);
+	if (ItemDisplayName.IsEmpty())
+	{
+		ItemDisplayName = FText::FromName(ItemDefinitionId);
+	}
+
+	// Get knowledge and skills components from pawn
+	APawn* CurrentPawn = PlayerController->GetPawn();
+	if (!IsValid(CurrentPawn))
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] StartItemInspection - No pawn to inspect with"));
+		ShowNoPawnNotification();
+		return;
+	}
+
+	UMOKnowledgeComponent* KnowledgeComp = CurrentPawn->FindComponentByClass<UMOKnowledgeComponent>();
+	UMOSkillsComponent* SkillsComp = CurrentPawn->FindComponentByClass<UMOSkillsComponent>();
+
+	if (!IsValid(KnowledgeComp))
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] StartItemInspection - Pawn has no KnowledgeComponent"));
+		return;
+	}
+
+	// Create inspection widget if needed
+	if (!InspectionProgressWidgetClass)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] InspectionProgressWidgetClass not set on UI manager component"));
+		return;
+	}
+
+	UMOInspectionProgressWidget* InspectionWidget = InspectionProgressWidget.Get();
+	if (!IsValid(InspectionWidget))
+	{
+		InspectionWidget = CreateWidget<UMOInspectionProgressWidget>(PlayerController, InspectionProgressWidgetClass);
+		if (!IsValid(InspectionWidget))
+		{
+			UE_LOG(LogMOFramework, Error, TEXT("[MOUI] Failed to create inspection widget"));
+			return;
+		}
+
+		InspectionProgressWidget = InspectionWidget;
+
+		// Bind delegates (remove first to avoid duplicates)
+		InspectionWidget->OnInspectionCompleted.RemoveDynamic(this, &UMOUIManagerComponent::HandleInspectionCompleted);
+		InspectionWidget->OnInspectionCancelled.RemoveDynamic(this, &UMOUIManagerComponent::HandleInspectionCancelled);
+		InspectionWidget->OnInspectionCompleted.AddDynamic(this, &UMOUIManagerComponent::HandleInspectionCompleted);
+		InspectionWidget->OnInspectionCancelled.AddDynamic(this, &UMOUIManagerComponent::HandleInspectionCancelled);
+	}
+
+	// Store the item being inspected
+	InspectingItemGuid = ItemGuid;
+
+	// Show the widget
+	InspectionWidget->AddToViewport(InspectionProgressZOrder);
+
+	// Set up input mode for inspection (game and UI to allow ESC to cancel)
+	FInputModeGameAndUI InputMode;
+	InputMode.SetWidgetToFocus(InspectionWidget->TakeWidget());
+	InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+	PlayerController->SetInputMode(InputMode);
+	PlayerController->SetShowMouseCursor(true);
+
+	// Start the inspection
+	InspectionWidget->StartInspection(ItemDefinitionId, ItemDisplayName, KnowledgeComp, SkillsComp, InspectionDuration);
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Started inspection of item '%s' (GUID: %s)"),
+		*ItemDefinitionId.ToString(), *ItemGuid.ToString(EGuidFormats::DigitsWithHyphens));
+}
+
+void UMOUIManagerComponent::CancelItemInspection()
+{
+	UMOInspectionProgressWidget* InspectionWidget = InspectionProgressWidget.Get();
+	if (IsValid(InspectionWidget) && InspectionWidget->IsInspectionInProgress())
+	{
+		InspectionWidget->CancelInspection();
+	}
+}
+
+bool UMOUIManagerComponent::IsInspectionInProgress() const
+{
+	const UMOInspectionProgressWidget* InspectionWidget = InspectionProgressWidget.Get();
+	return IsValid(InspectionWidget) && InspectionWidget->IsInspectionInProgress();
+}
+
+void UMOUIManagerComponent::HandleInspectionCompleted(bool bCompleted, const FMOInspectionResult& Result)
+{
+	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Inspection completed: Success=%s, NewKnowledge=%d"),
+		bCompleted ? TEXT("true") : TEXT("false"),
+		Result.NewKnowledge.Num());
+
+	// Remove widget from viewport
+	UMOInspectionProgressWidget* InspectionWidget = InspectionProgressWidget.Get();
+	if (IsValid(InspectionWidget))
+	{
+		InspectionWidget->RemoveFromParent();
+	}
+
+	// Clear inspecting item
+	InspectingItemGuid.Invalidate();
+
+	// Restore input mode
+	APlayerController* PlayerController = ResolveOwningPlayerController();
+	if (IsValid(PlayerController))
+	{
+		ApplyInputModeForMenuClosed(PlayerController);
+	}
+
+	// Show notifications for inspection results
+	if (bCompleted && Result.bSuccess)
+	{
+		// Show skill XP notifications
+		for (const auto& SkillXP : Result.XPGranted)
+		{
+			if (SkillXP.Value > 0.0f)
+			{
+				ShowSkillIncreaseNotification(SkillXP.Key, SkillXP.Value);
+			}
+		}
+
+		// Show recipe unlock notifications for new knowledge
+		for (const FName& KnowledgeId : Result.NewKnowledge)
+		{
+			ShowRecipeUnlockedNotification(KnowledgeId);
+		}
+	}
+}
+
+void UMOUIManagerComponent::HandleInspectionCancelled()
+{
+	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Inspection cancelled"));
+
+	// Remove widget from viewport
+	UMOInspectionProgressWidget* InspectionWidget = InspectionProgressWidget.Get();
+	if (IsValid(InspectionWidget))
+	{
+		InspectionWidget->RemoveFromParent();
+	}
+
+	// Clear inspecting item
+	InspectingItemGuid.Invalidate();
+
+	// Restore input mode
+	APlayerController* PlayerController = ResolveOwningPlayerController();
+	if (IsValid(PlayerController))
+	{
+		ApplyInputModeForMenuClosed(PlayerController);
+	}
+}
+
+// =============================================================================
+// General Notifications
+// =============================================================================
+
+void UMOUIManagerComponent::ShowNotification(const FText& Message, float Duration)
+{
+	// Add to queue
+	FQueuedNotification Notification;
+	Notification.Message = Message;
+	Notification.Duration = Duration;
+	NotificationQueue.Add(Notification);
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Queued notification: %s (%.1fs)"), *Message.ToString(), Duration);
+
+	// If no notification showing, start processing
+	UMONotificationWidget* CurrentWidget = CurrentNotificationWidget.Get();
+	if (!IsValid(CurrentWidget) || !CurrentWidget->IsInViewport())
+	{
+		ProcessNextNotification();
+	}
+}
+
+void UMOUIManagerComponent::ShowSkillIncreaseNotification(FName SkillId, float XPAmount)
+{
+	// Get skill display name
+	FText SkillName = FText::FromName(SkillId);
+
+	// Try to get better name from skills database
+	// For now, just capitalize the skill ID
+	FString SkillString = SkillId.ToString();
+	if (SkillString.Len() > 0)
+	{
+		SkillString[0] = FChar::ToUpper(SkillString[0]);
+		SkillName = FText::FromString(SkillString);
+	}
+
+	FText Message = FText::Format(
+		NSLOCTEXT("MO", "SkillIncrease", "Your skill in {0} increased (+{1} XP)"),
+		SkillName,
+		FText::AsNumber(FMath::RoundToInt(XPAmount)));
+
+	ShowNotification(Message, 3.0f);
+}
+
+void UMOUIManagerComponent::ShowRecipeUnlockedNotification(FName RecipeId)
+{
+	// Get recipe display name from database
+	FText RecipeName = UMORecipeDatabaseSettings::GetRecipeDisplayName(RecipeId);
+	if (RecipeName.IsEmpty())
+	{
+		// Fallback: format the recipe ID nicely
+		FString RecipeString = RecipeId.ToString();
+		if (RecipeString.Len() > 0)
+		{
+			RecipeString[0] = FChar::ToUpper(RecipeString[0]);
+		}
+		RecipeName = FText::FromString(RecipeString);
+	}
+
+	FText Message = FText::Format(
+		NSLOCTEXT("MO", "RecipeUnlocked", "You can now craft: {0}"),
+		RecipeName);
+
+	ShowNotification(Message, 4.0f);
+}
+
+void UMOUIManagerComponent::ProcessNextNotification()
+{
+	if (NotificationQueue.Num() == 0)
+	{
+		return;
+	}
+
+	APlayerController* PlayerController = ResolveOwningPlayerController();
+	if (!IsValid(PlayerController))
+	{
+		return;
+	}
+
+	// Get next notification
+	FQueuedNotification Next = NotificationQueue[0];
+	NotificationQueue.RemoveAt(0);
+
+	// Create or reuse notification widget
+	UMONotificationWidget* NotificationWidget = CurrentNotificationWidget.Get();
+	if (!IsValid(NotificationWidget))
+	{
+		// Use NoPawnNotificationClass or default
+		TSubclassOf<UMONotificationWidget> WidgetClass = NoPawnNotificationClass;
+		if (!WidgetClass)
+		{
+			WidgetClass = UMONotificationWidget::StaticClass();
+		}
+
+		NotificationWidget = CreateWidget<UMONotificationWidget>(PlayerController, WidgetClass);
+		CurrentNotificationWidget = NotificationWidget;
+	}
+
+	if (!IsValid(NotificationWidget))
+	{
+		return;
+	}
+
+	// Set message and show
+	NotificationWidget->SetMessage(Next.Message);
+
+	if (!NotificationWidget->IsInViewport())
+	{
+		NotificationWidget->AddToViewport(NoPawnNotificationZOrder);
+	}
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Showing notification: %s"), *Next.Message.ToString());
+
+	// Set timer to hide and show next
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(NotificationTimerHandle);
+		World->GetTimerManager().SetTimer(
+			NotificationTimerHandle,
+			this,
+			&UMOUIManagerComponent::HideCurrentNotification,
+			Next.Duration,
+			false
+		);
+	}
+}
+
+void UMOUIManagerComponent::HideCurrentNotification()
+{
+	// Hide current notification
+	UMONotificationWidget* NotificationWidget = CurrentNotificationWidget.Get();
+	if (IsValid(NotificationWidget) && NotificationWidget->IsInViewport())
+	{
+		NotificationWidget->RemoveFromParent();
+	}
+
+	// Process next in queue
+	ProcessNextNotification();
 }

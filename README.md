@@ -521,7 +521,7 @@ The MOFramework has solid core systems but has accumulated technical debt in sev
 
 ### Tracked TODOs
 
-*Last updated: 2026-01-30*
+*Last updated: 2026-02-01*
 
 #### Medical System
 - [ ] `MOAnatomyComponent.cpp:257` - Get treatment definition from DataTable and apply effects
@@ -600,8 +600,28 @@ Good fundamentals with interface-based decoupling, but needs abstraction layer w
 Items and recipes are defined in CSV files for easy bulk editing and modding support.
 
 **File Locations:**
-- `Content/Data/Items.csv` - Item definitions
-- `Content/Data/Recipes.csv` - Recipe definitions
+- `Content/Data/Items.csv` - 200 item definitions
+- `Content/Data/Recipes.csv` - 92 recipe definitions
+- `Content/Data/Skills.csv` - 22 skill definitions
+- `Content/Data/TechProgression.txt` - Complete progression documentation
+
+### Technology Progression
+
+The game features a historical technology progression spanning 9 eras:
+
+| Era | Period | Key Technologies |
+|-----|--------|------------------|
+| 1 | Primitive | Knapping, basic cordage, fire-starting |
+| 2 | Early Stone Age | Stone tools, trapping, hide processing |
+| 3 | Late Stone Age | Bow-making, pottery, weaving basics |
+| 4 | Copper Age | Smelting, bronze tools, wheel |
+| 5 | Early Bronze | Alloys, advanced metalwork |
+| 6 | Late Bronze | Charcoal production, bellows |
+| 7 | Iron Age | Iron smelting, steel basics |
+| 8 | Early Medieval | Advanced smithing, textiles |
+| 9 | High Medieval | Complex machinery, refined crafts |
+
+See `TechProgression.txt` for complete crafting chains, skill requirements, and recipe dependencies.
 
 ### CSV Formats
 

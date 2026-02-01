@@ -1,0 +1,229 @@
+#include "MORecipeListWidget.h"
+#include "MOFramework.h"
+#include "MOInventoryComponent.h"
+#include "MOSkillsComponent.h"
+#include "MORecipeDiscoveryComponent.h"
+#include "MORecipeEntryWidget.h"
+#include "MORecipeDatabaseSettings.h"
+#include "MOItemDatabaseSettings.h"
+#include "Components/ScrollBox.h"
+#include "Components/VerticalBox.h"
+
+UMORecipeListWidget::UMORecipeListWidget(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+}
+
+void UMORecipeListWidget::InitializeList(
+	UMOInventoryComponent* InInventory,
+	UMOSkillsComponent* InSkills,
+	UMORecipeDiscoveryComponent* InDiscovery)
+{
+	InventoryComponent = InInventory;
+	SkillsComponent = InSkills;
+	DiscoveryComponent = InDiscovery;
+}
+
+void UMORecipeListWidget::PopulateRecipes(const TArray<FName>& RecipeIds)
+{
+	CurrentRecipeIds = RecipeIds;
+
+	// Clear existing entries
+	ClearRecipes();
+
+	// Get the container to add entries to
+	UPanelWidget* Container = RecipeScrollBox ? Cast<UPanelWidget>(RecipeScrollBox) : Cast<UPanelWidget>(RecipeContainer);
+	if (!Container)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MORecipeListWidget] No container widget bound"));
+		return;
+	}
+
+	// Check if we have a valid entry widget class
+	if (!RecipeEntryWidgetClass)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MORecipeListWidget] No RecipeEntryWidgetClass set"));
+		return;
+	}
+
+	// Create entry widgets
+	for (const FName& RecipeId : RecipeIds)
+	{
+		UMORecipeEntryWidget* EntryWidget = CreateWidget<UMORecipeEntryWidget>(this, RecipeEntryWidgetClass);
+		if (!EntryWidget)
+		{
+			continue;
+		}
+
+		// Build and set data
+		FMORecipeListEntryData EntryData = BuildEntryData(RecipeId);
+		EntryWidget->SetupEntry(EntryData);
+
+		// Bind click handler
+		EntryWidget->OnEntryClicked.AddDynamic(this, &UMORecipeListWidget::HandleEntryClicked);
+
+		// Add to container
+		Container->AddChild(EntryWidget);
+		EntryWidgets.Add(EntryWidget);
+	}
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MORecipeListWidget] Populated %d recipes"), RecipeIds.Num());
+}
+
+void UMORecipeListWidget::ClearRecipes()
+{
+	// Remove all entry widgets
+	for (UMORecipeEntryWidget* Entry : EntryWidgets)
+	{
+		if (Entry)
+		{
+			Entry->RemoveFromParent();
+		}
+	}
+	EntryWidgets.Empty();
+	SelectedRecipeId = NAME_None;
+}
+
+void UMORecipeListWidget::RefreshEntryStates()
+{
+	for (UMORecipeEntryWidget* Entry : EntryWidgets)
+	{
+		if (!Entry)
+		{
+			continue;
+		}
+
+		FName RecipeId = Entry->GetRecipeId();
+		bool bCanCraft = CanCraftRecipe(RecipeId);
+		bool bIsSelected = (RecipeId == SelectedRecipeId);
+
+		Entry->SetCanCraft(bCanCraft);
+		Entry->SetSelected(bIsSelected);
+	}
+}
+
+void UMORecipeListWidget::SelectRecipe(FName RecipeId)
+{
+	FName OldSelection = SelectedRecipeId;
+	SelectedRecipeId = RecipeId;
+
+	// Update visual state of affected entries
+	for (UMORecipeEntryWidget* Entry : EntryWidgets)
+	{
+		if (!Entry)
+		{
+			continue;
+		}
+
+		FName EntryRecipeId = Entry->GetRecipeId();
+		if (EntryRecipeId == OldSelection || EntryRecipeId == SelectedRecipeId)
+		{
+			Entry->SetSelected(EntryRecipeId == SelectedRecipeId);
+		}
+	}
+
+	// Broadcast selection
+	if (SelectedRecipeId != OldSelection)
+	{
+		OnRecipeSelected.Broadcast(SelectedRecipeId);
+	}
+}
+
+void UMORecipeListWidget::SetStationFilter(EMOCraftingStation Station)
+{
+	StationFilter = Station;
+	// Note: Caller should repopulate the list with filtered recipes
+}
+
+void UMORecipeListWidget::SetCategoryFilter(FName Category)
+{
+	CategoryFilter = Category;
+	// Note: Caller should repopulate the list with filtered recipes
+}
+
+void UMORecipeListWidget::SetShowOnlyCraftable(bool bOnlyCraftable)
+{
+	bShowOnlyCraftable = bOnlyCraftable;
+	// Note: Caller should repopulate the list with filtered recipes
+}
+
+void UMORecipeListWidget::NativeConstruct()
+{
+	Super::NativeConstruct();
+}
+
+void UMORecipeListWidget::HandleEntryClicked(FName RecipeId)
+{
+	SelectRecipe(RecipeId);
+}
+
+FMORecipeListEntryData UMORecipeListWidget::BuildEntryData(FName RecipeId) const
+{
+	FMORecipeListEntryData Data;
+	Data.RecipeId = RecipeId;
+	Data.bIsSelected = (RecipeId == SelectedRecipeId);
+	Data.bCanCraft = CanCraftRecipe(RecipeId);
+
+	// Check discovery
+	if (UMORecipeDiscoveryComponent* Discovery = DiscoveryComponent.Get())
+	{
+		Data.bIsDiscovered = Discovery->IsRecipeDiscovered(RecipeId);
+	}
+
+	// Get recipe definition for display info
+	const FMORecipeDefinitionRow* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(RecipeId);
+	if (Recipe)
+	{
+		Data.DisplayName = Recipe->DisplayName;
+		Data.Category = Recipe->Category;
+		Data.Icon = Recipe->Icon;
+	}
+	else
+	{
+		Data.DisplayName = FText::FromName(RecipeId);
+	}
+
+	return Data;
+}
+
+bool UMORecipeListWidget::CanCraftRecipe(FName RecipeId) const
+{
+	const FMORecipeDefinitionRow* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(RecipeId);
+	if (!Recipe)
+	{
+		return false;
+	}
+
+	UMOInventoryComponent* Inventory = InventoryComponent.Get();
+	if (!Inventory)
+	{
+		return false;
+	}
+
+	// Check all ingredients
+	for (const FMORecipeIngredient& Ingredient : Recipe->Ingredients)
+	{
+		if (!Inventory->HasItem(Ingredient.ItemDefinitionId, Ingredient.Quantity))
+		{
+			return false;
+		}
+	}
+
+	// Check skill requirements
+	if (!Recipe->RequiredSkillId.IsNone() && Recipe->RequiredSkillLevel > 0)
+	{
+		if (UMOSkillsComponent* Skills = SkillsComponent.Get())
+		{
+			if (!Skills->HasSkillLevel(Recipe->RequiredSkillId, Recipe->RequiredSkillLevel))
+			{
+				return false;
+			}
+		}
+		else
+		{
+			return false;
+		}
+	}
+
+	return true;
+}

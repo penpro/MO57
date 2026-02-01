@@ -45,6 +45,18 @@ struct MOFRAMEWORK_API FMOCraftingValidation
 	/** Whether the correct station is being used. */
 	UPROPERTY(BlueprintReadOnly, Category="MO|Crafting")
 	bool bCorrectStation = true;
+
+	/** Tool types that are missing. */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Crafting")
+	TArray<FName> MissingTools;
+
+	/** Whether the recipe has been discovered (only relevant if recipe requires discovery). */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Crafting")
+	bool bRecipeDiscovered = true;
+
+	/** Whether the station has fuel (only relevant for fuel-required stations). */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Crafting")
+	bool bHasFuel = true;
 };
 
 /**
@@ -149,12 +161,78 @@ public:
 	);
 
 	/**
+	 * Produce outputs for a recipe without consuming ingredients.
+	 * Use this when ingredients have already been consumed (e.g., from crafting queue).
+	 * @param RecipeId The recipe to produce outputs for
+	 * @param InventoryComponent Inventory to add outputs to
+	 * @param SkillsComponent Skills to grant XP to
+	 * @return Result of the production
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Crafting")
+	FMOCraftResult ProduceOutputsOnly(
+		FName RecipeId,
+		UMOInventoryComponent* InventoryComponent,
+		UMOSkillsComponent* SkillsComponent
+	);
+
+	/**
 	 * Get the crafting time for a recipe.
 	 * @param RecipeId The recipe to query
 	 * @return Craft time in seconds (0 if not found)
 	 */
 	UFUNCTION(BlueprintPure, Category="MO|Crafting")
 	float GetRecipeCraftTime(FName RecipeId) const;
+
+	// --- Tool System ---
+
+	/**
+	 * Check if the inventory has all required tools for a recipe.
+	 * @param Recipe The recipe to check
+	 * @param Inventory The inventory to search
+	 * @param OutMissingTools Optional array to fill with missing tool types
+	 * @return True if all tools are present with sufficient quality
+	 */
+	bool HasRequiredTools(
+		const FMORecipeDefinitionRow* Recipe,
+		UMOInventoryComponent* Inventory,
+		TArray<FName>* OutMissingTools = nullptr
+	) const;
+
+	/**
+	 * Degrade tools in the inventory based on recipe requirements.
+	 * Call this after a successful craft to reduce tool durability.
+	 * @param RecipeId The recipe that was crafted
+	 * @param Inventory The inventory containing the tools
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Crafting")
+	void DegradeToolsForRecipe(FName RecipeId, UMOInventoryComponent* Inventory);
+
+	/**
+	 * Get the adjusted craft time for a recipe based on tool quality.
+	 * Higher quality tools reduce craft time.
+	 * @param RecipeId The recipe to query
+	 * @param Inventory The inventory to check for tools
+	 * @return Adjusted craft time in seconds
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Crafting")
+	float GetAdjustedCraftTime(FName RecipeId, UMOInventoryComponent* Inventory) const;
+
+	/**
+	 * Find the best tool of a given type in the inventory.
+	 * @param Inventory The inventory to search
+	 * @param ToolType The tool type to find
+	 * @param MinQuality Minimum quality required
+	 * @param OutItemGuid The GUID of the best matching tool
+	 * @param OutQuality The quality of the found tool
+	 * @return True if a matching tool was found
+	 */
+	bool FindBestTool(
+		UMOInventoryComponent* Inventory,
+		FName ToolType,
+		float MinQuality,
+		FGuid& OutItemGuid,
+		float& OutQuality
+	) const;
 
 private:
 	/**

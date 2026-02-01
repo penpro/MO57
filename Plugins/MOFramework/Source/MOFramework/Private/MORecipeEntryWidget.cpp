@@ -40,6 +40,8 @@ void UMORecipeEntryWidget::NativeConstruct()
 
 	if (EntryButton)
 	{
+		// Remove first to avoid duplicate bindings when widget is re-added to viewport
+		EntryButton->OnClicked().RemoveAll(this);
 		EntryButton->OnClicked().AddUObject(this, &UMORecipeEntryWidget::HandleButtonClicked);
 	}
 }

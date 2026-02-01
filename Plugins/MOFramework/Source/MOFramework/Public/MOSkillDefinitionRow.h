@@ -38,6 +38,10 @@ struct MOFRAMEWORK_API FMOSkillDefinitionRow : public FTableRowBase
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Skill|Core", meta=(MultiLine=true))
 	FText Description;
 
+	/** Describes how to gain XP for this skill (displayed in UI). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Skill|Core", meta=(MultiLine=true))
+	FText HowToIncrease;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Skill|Core")
 	EMOSkillCategory Category = EMOSkillCategory::None;
 

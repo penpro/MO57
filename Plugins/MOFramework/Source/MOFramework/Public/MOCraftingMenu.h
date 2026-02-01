@@ -1,0 +1,173 @@
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Blueprint/UserWidget.h"
+#include "MORecipeDefinitionRow.h"
+#include "MOCraftingMenu.generated.h"
+
+class UMOInventoryComponent;
+class UMOSkillsComponent;
+class UMOKnowledgeComponent;
+class UMOCraftingQueueComponent;
+class UMORecipeDiscoveryComponent;
+class UMOCraftingSubsystem;
+class UMORecipeListWidget;
+class UMORecipeDetailPanel;
+class UMOCraftingQueueWidget;
+class UWidgetSwitcher;
+class UMOCommonButton;
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOCraftingMenuRequestCloseSignature);
+
+/**
+ * Main crafting menu widget that combines recipe list, detail panel, and queue.
+ *
+ * Requires a Blueprint implementation with the following bound widgets:
+ * - RecipeList (UMORecipeListWidget)
+ * - DetailPanel (UMORecipeDetailPanel)
+ * - QueueWidget (UMOCraftingQueueWidget) [optional]
+ */
+UCLASS(Abstract, Blueprintable)
+class MOFRAMEWORK_API UMOCraftingMenu : public UUserWidget
+{
+	GENERATED_BODY()
+
+public:
+	UMOCraftingMenu(const FObjectInitializer& ObjectInitializer);
+
+	// --- Initialization ---
+
+	/**
+	 * Initialize the crafting menu with required components.
+	 * @param InInventory Inventory component for ingredient checking
+	 * @param InSkills Skills component for level requirements
+	 * @param InKnowledge Knowledge component for recipe visibility
+	 * @param InCraftingQueue Crafting queue component (optional)
+	 * @param InDiscovery Recipe discovery component (optional)
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Crafting|UI")
+	void InitializeMenu(
+		UMOInventoryComponent* InInventory,
+		UMOSkillsComponent* InSkills,
+		UMOKnowledgeComponent* InKnowledge,
+		UMOCraftingQueueComponent* InCraftingQueue = nullptr,
+		UMORecipeDiscoveryComponent* InDiscovery = nullptr
+	);
+
+	/**
+	 * Set the crafting station type to filter recipes.
+	 * @param InStation Station type (None = show all hand-craftable recipes)
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Crafting|UI")
+	void SetCraftingStation(EMOCraftingStation InStation);
+
+	// --- Recipe Management ---
+
+	/** Refresh the recipe list from the crafting subsystem. */
+	UFUNCTION(BlueprintCallable, Category="MO|Crafting|UI")
+	void RefreshRecipeList();
+
+	/** Select a recipe to show in the detail panel. */
+	UFUNCTION(BlueprintCallable, Category="MO|Crafting|UI")
+	void SelectRecipe(FName RecipeId);
+
+	/** Get the currently selected recipe ID. */
+	UFUNCTION(BlueprintPure, Category="MO|Crafting|UI")
+	FName GetSelectedRecipeId() const { return SelectedRecipeId; }
+
+	// --- Crafting ---
+
+	/**
+	 * Attempt to craft the selected recipe.
+	 * @param Count Number of times to craft (default 1)
+	 * @return True if craft was enqueued successfully
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Crafting|UI")
+	bool CraftSelectedRecipe(int32 Count = 1);
+
+	// --- Filtering ---
+
+	/** Set the category filter for recipes. */
+	UFUNCTION(BlueprintCallable, Category="MO|Crafting|UI")
+	void SetCategoryFilter(FName Category);
+
+	/** Clear the category filter to show all recipes. */
+	UFUNCTION(BlueprintCallable, Category="MO|Crafting|UI")
+	void ClearCategoryFilter();
+
+	/** Set whether to show only craftable recipes. */
+	UFUNCTION(BlueprintCallable, Category="MO|Crafting|UI")
+	void SetShowOnlyCraftable(bool bOnlyCraftable);
+
+	// --- Delegates ---
+
+	UPROPERTY(BlueprintAssignable, Category="MO|Crafting|UI")
+	FMOCraftingMenuRequestCloseSignature OnRequestClose;
+
+	// --- Configuration ---
+
+	/** If true, automatically refresh when inventory changes. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Crafting|UI")
+	bool bAutoRefreshOnInventoryChange = true;
+
+protected:
+	virtual void NativeConstruct() override;
+	virtual void NativeDestruct() override;
+	virtual FReply NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
+
+	/** Called when a recipe is selected in the list. */
+	UFUNCTION()
+	void HandleRecipeSelected(FName RecipeId);
+
+	/** Called when the craft button is pressed. */
+	UFUNCTION()
+	void HandleCraftRequested(FName RecipeId, int32 Count);
+
+	/** Called when inventory changes. */
+	UFUNCTION()
+	void HandleInventoryChanged();
+
+	/** Called when close button is clicked. */
+	UFUNCTION()
+	void HandleCloseClicked();
+
+	// --- Widget Bindings ---
+
+	UPROPERTY(BlueprintReadOnly, meta=(BindWidget))
+	TObjectPtr<UMORecipeListWidget> RecipeList;
+
+	UPROPERTY(BlueprintReadOnly, meta=(BindWidget))
+	TObjectPtr<UMORecipeDetailPanel> DetailPanel;
+
+	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
+	TObjectPtr<UMOCraftingQueueWidget> QueueWidget;
+
+	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
+	TObjectPtr<UMOCommonButton> CloseButton;
+
+private:
+	// Cached component references
+	UPROPERTY()
+	TWeakObjectPtr<UMOInventoryComponent> InventoryComponent;
+
+	UPROPERTY()
+	TWeakObjectPtr<UMOSkillsComponent> SkillsComponent;
+
+	UPROPERTY()
+	TWeakObjectPtr<UMOKnowledgeComponent> KnowledgeComponent;
+
+	UPROPERTY()
+	TWeakObjectPtr<UMOCraftingQueueComponent> CraftingQueueComponent;
+
+	UPROPERTY()
+	TWeakObjectPtr<UMORecipeDiscoveryComponent> DiscoveryComponent;
+
+	UPROPERTY()
+	TWeakObjectPtr<UMOCraftingSubsystem> CraftingSubsystem;
+
+	// Current state
+	EMOCraftingStation CurrentStation = EMOCraftingStation::None;
+	FName SelectedRecipeId = NAME_None;
+	FName CategoryFilter = NAME_None;
+	bool bShowOnlyCraftable = false;
+};

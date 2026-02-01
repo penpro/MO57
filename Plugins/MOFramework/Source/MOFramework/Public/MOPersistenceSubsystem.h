@@ -88,6 +88,44 @@ public:
     UFUNCTION(BlueprintPure, Category="MO|Persistence")
     bool DoesSaveSlotExist(const FString& SlotName) const;
 
+    // --- Pawn Record Access (for Possession Menu) ---
+
+    /** Get all pawn records from the current save data. */
+    UFUNCTION(BlueprintCallable, Category="MO|Persistence")
+    TArray<FMOPersistedPawnRecord> GetAllPawnRecords() const;
+
+    /** Get a specific pawn record by GUID. */
+    UFUNCTION(BlueprintCallable, Category="MO|Persistence")
+    bool GetPawnRecord(const FGuid& PawnGuid, FMOPersistedPawnRecord& OutRecord) const;
+
+    /** Update a pawn record (e.g., when renaming). Optionally auto-saves to current slot. */
+    UFUNCTION(BlueprintCallable, Category="MO|Persistence")
+    bool UpdatePawnRecord(const FMOPersistedPawnRecord& Record, bool bAutoSave = true);
+
+    /** Get the current save slot name (empty if not loaded/saved yet). */
+    UFUNCTION(BlueprintPure, Category="MO|Persistence")
+    FString GetCurrentSlotName() const { return CurrentSlotName; }
+
+    /** Save to the current slot (must have loaded or saved previously). */
+    UFUNCTION(BlueprintCallable, Category="MO|Persistence")
+    bool SaveToCurrentSlot();
+
+    /** Spawn a pawn from a saved record (for possession). */
+    UFUNCTION(BlueprintCallable, Category="MO|Persistence")
+    APawn* SpawnPawnFromRecord(const FGuid& PawnGuid);
+
+    /** Register a new pawn record (when creating new character). */
+    UFUNCTION(BlueprintCallable, Category="MO|Persistence")
+    void RegisterPawnRecord(const FMOPersistedPawnRecord& Record);
+
+    /** Mark a pawn as deceased. */
+    UFUNCTION(BlueprintCallable, Category="MO|Persistence")
+    void MarkPawnDeceased(const FGuid& PawnGuid);
+
+    /** Check if any living (non-deceased) pawns exist. */
+    UFUNCTION(BlueprintPure, Category="MO|Persistence")
+    bool HasLivingPawns() const;
+
     UFUNCTION(BlueprintCallable, Category="MO|Persistence")
     bool IsGuidDestroyed(const FGuid& Guid) const;
 
@@ -128,6 +166,9 @@ private:
 
     void ClearLoadSuppression();
 
+    // Generate a unique slot name for auto-save when no slot has been set
+    FString GenerateAutoSaveSlotName() const;
+
 private:
     UPROPERTY()
     TSet<FGuid> SessionDestroyedGuids;
@@ -158,6 +199,10 @@ private:
     // Result of the last load operation
     UPROPERTY()
     FMOLoadResult LastLoadResult;
+
+    // Current save slot name (set on load or save)
+    UPROPERTY()
+    FString CurrentSlotName;
 
     // Time to suppress destroyed GUID recording after load (seconds)
     static constexpr float LoadSuppressionDuration = 0.25f;

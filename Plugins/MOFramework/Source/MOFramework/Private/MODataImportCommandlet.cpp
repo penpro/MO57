@@ -2,8 +2,10 @@
 #include "MOFramework.h"
 #include "MOItemDefinitionRow.h"
 #include "MORecipeDefinitionRow.h"
+#include "MOSkillDefinitionRow.h"
 #include "MOItemDatabaseSettings.h"
 #include "MORecipeDatabaseSettings.h"
+#include "MOSkillDatabaseSettings.h"
 #include "Engine/DataTable.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
@@ -49,6 +51,17 @@ int32 UMODataImportCommandlet::Main(const FString& Params)
 		if (Count >= 0)
 		{
 			UE_LOG(LogMOFramework, Log, TEXT("[MODataImport] Imported %d recipes from %s"), Count, **RecipesPath);
+			TotalImported += Count;
+		}
+	}
+
+	// Check for skills CSV
+	if (const FString* SkillsPath = ParamVals.Find(TEXT("skills")))
+	{
+		int32 Count = ImportSkillsFromCSV(*SkillsPath, false);
+		if (Count >= 0)
+		{
+			UE_LOG(LogMOFramework, Log, TEXT("[MODataImport] Imported %d skills from %s"), Count, **SkillsPath);
 			TotalImported += Count;
 		}
 	}
@@ -213,6 +226,17 @@ int32 UMODataImportCommandlet::ImportAllFromDirectory(const FString& DirectoryPa
 	if (FPaths::FileExists(RecipesCSV))
 	{
 		int32 Count = ImportRecipesFromCSV(RecipesCSV, bClearExisting);
+		if (Count >= 0)
+		{
+			TotalImported += Count;
+		}
+	}
+
+	// Look for Skills.csv
+	FString SkillsCSV = FullPath / TEXT("Skills.csv");
+	if (FPaths::FileExists(SkillsCSV))
+	{
+		int32 Count = ImportSkillsFromCSV(SkillsCSV, bClearExisting);
 		if (Count >= 0)
 		{
 			TotalImported += Count;
@@ -869,6 +893,196 @@ FString UMODataImportCommandlet::StationToString(EMOCraftingStation Station)
 		case EMOCraftingStation::Alchemy: return TEXT("Alchemy");
 		case EMOCraftingStation::Kitchen: return TEXT("Kitchen");
 		case EMOCraftingStation::Loom: return TEXT("Loom");
+		default: return TEXT("None");
+	}
+}
+
+// =============================================================================
+// Skills Import/Export
+// =============================================================================
+
+int32 UMODataImportCommandlet::ImportSkillsFromCSV(const FString& CSVFilePath, bool bClearExisting)
+{
+	// Get the DataTable
+	UDataTable* SkillTable = GetDefault<UMOSkillDatabaseSettings>()->GetSkillDefinitionsDataTable();
+	if (!SkillTable)
+	{
+		UE_LOG(LogMOFramework, Error, TEXT("[MODataImport] Skill DataTable not configured in project settings!"));
+		return -1;
+	}
+
+	// Parse CSV
+	TArray<TArray<FString>> Rows;
+	TArray<FString> Headers;
+	if (!ParseCSVFile(CSVFilePath, Rows, Headers))
+	{
+		return -1;
+	}
+
+	if (bClearExisting)
+	{
+		SkillTable->EmptyTable();
+	}
+
+	int32 ImportedCount = 0;
+
+	// Process each row
+	for (int32 i = 0; i < Rows.Num(); ++i)
+	{
+		const TArray<FString>& Values = Rows[i];
+		if (Values.Num() == 0)
+		{
+			continue;
+		}
+
+		// First column is always RowName
+		FName RowName = FName(*Values[0]);
+		if (RowName.IsNone())
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MODataImport] Skipping skill row %d - empty RowName"), i + 2);
+			continue;
+		}
+
+		FMOSkillDefinitionRow NewRow;
+		if (ParseSkillRow(Headers, Values, RowName, NewRow))
+		{
+			// Add or update row
+			SkillTable->AddRow(RowName, NewRow);
+			ImportedCount++;
+		}
+		else
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MODataImport] Failed to parse skill row: %s"), *RowName.ToString());
+		}
+	}
+
+	// Mark package dirty for saving
+	SkillTable->MarkPackageDirty();
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MODataImport] Imported %d skills from %s"), ImportedCount, *CSVFilePath);
+	return ImportedCount;
+}
+
+bool UMODataImportCommandlet::ExportSkillsToCSV(const FString& CSVFilePath)
+{
+	UDataTable* SkillTable = GetDefault<UMOSkillDatabaseSettings>()->GetSkillDefinitionsDataTable();
+	if (!SkillTable)
+	{
+		UE_LOG(LogMOFramework, Error, TEXT("[MODataImport] Skill DataTable not configured!"));
+		return false;
+	}
+
+	TArray<FString> Lines;
+
+	// Header row
+	Lines.Add(TEXT("RowName,DisplayName,Category,MaxLevel,BaseXPPerLevel,XPExponent,Description,HowToIncrease"));
+
+	// Data rows
+	TArray<FName> RowNames = SkillTable->GetRowNames();
+	for (const FName& RowName : RowNames)
+	{
+		const FMOSkillDefinitionRow* Row = SkillTable->FindRow<FMOSkillDefinitionRow>(RowName, TEXT("Export"));
+		if (!Row)
+		{
+			continue;
+		}
+
+		FString Line = FString::Printf(TEXT("%s,\"%s\",%s,%d,%.1f,%.2f,\"%s\",\"%s\""),
+			*RowName.ToString(),
+			*Row->DisplayName.ToString(),
+			*SkillCategoryToString(Row->Category),
+			Row->MaxLevel,
+			Row->BaseXPPerLevel,
+			Row->XPExponent,
+			*Row->Description.ToString().Replace(TEXT("\""), TEXT("\"\"")),
+			*Row->HowToIncrease.ToString().Replace(TEXT("\""), TEXT("\"\""))
+		);
+		Lines.Add(Line);
+	}
+
+	FString Output = FString::Join(Lines, TEXT("\n"));
+	if (!FFileHelper::SaveStringToFile(Output, *CSVFilePath))
+	{
+		UE_LOG(LogMOFramework, Error, TEXT("[MODataImport] Failed to write to %s"), *CSVFilePath);
+		return false;
+	}
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MODataImport] Exported %d skills to %s"), RowNames.Num(), *CSVFilePath);
+	return true;
+}
+
+bool UMODataImportCommandlet::ParseSkillRow(const TArray<FString>& Headers, const TArray<FString>& Values, FName RowName, FMOSkillDefinitionRow& OutRow)
+{
+	OutRow.SkillId = RowName;
+
+	int32 Idx = GetColumnIndex(Headers, TEXT("DisplayName"));
+	if (Idx >= 0)
+	{
+		OutRow.DisplayName = FText::FromString(GetColumnValue(Values, Idx));
+	}
+
+	Idx = GetColumnIndex(Headers, TEXT("Category"));
+	if (Idx >= 0)
+	{
+		OutRow.Category = ParseSkillCategory(GetColumnValue(Values, Idx));
+	}
+
+	Idx = GetColumnIndex(Headers, TEXT("MaxLevel"));
+	if (Idx >= 0)
+	{
+		OutRow.MaxLevel = FCString::Atoi(*GetColumnValue(Values, Idx));
+		if (OutRow.MaxLevel < 1) OutRow.MaxLevel = 100;
+	}
+
+	Idx = GetColumnIndex(Headers, TEXT("BaseXPPerLevel"));
+	if (Idx >= 0)
+	{
+		OutRow.BaseXPPerLevel = FCString::Atof(*GetColumnValue(Values, Idx));
+		if (OutRow.BaseXPPerLevel < 1.0f) OutRow.BaseXPPerLevel = 100.0f;
+	}
+
+	Idx = GetColumnIndex(Headers, TEXT("XPExponent"));
+	if (Idx >= 0)
+	{
+		OutRow.XPExponent = FCString::Atof(*GetColumnValue(Values, Idx));
+		if (OutRow.XPExponent < 1.0f) OutRow.XPExponent = 1.5f;
+	}
+
+	Idx = GetColumnIndex(Headers, TEXT("Description"));
+	if (Idx >= 0)
+	{
+		OutRow.Description = FText::FromString(GetColumnValue(Values, Idx));
+	}
+
+	Idx = GetColumnIndex(Headers, TEXT("HowToIncrease"));
+	if (Idx >= 0)
+	{
+		OutRow.HowToIncrease = FText::FromString(GetColumnValue(Values, Idx));
+	}
+
+	return true;
+}
+
+EMOSkillCategory UMODataImportCommandlet::ParseSkillCategory(const FString& CategoryString)
+{
+	FString Lower = CategoryString.ToLower();
+	if (Lower == TEXT("survival")) return EMOSkillCategory::Survival;
+	if (Lower == TEXT("crafting")) return EMOSkillCategory::Crafting;
+	if (Lower == TEXT("combat")) return EMOSkillCategory::Combat;
+	if (Lower == TEXT("knowledge")) return EMOSkillCategory::Knowledge;
+	if (Lower == TEXT("social")) return EMOSkillCategory::Social;
+	return EMOSkillCategory::None;
+}
+
+FString UMODataImportCommandlet::SkillCategoryToString(EMOSkillCategory Category)
+{
+	switch (Category)
+	{
+		case EMOSkillCategory::Survival: return TEXT("Survival");
+		case EMOSkillCategory::Crafting: return TEXT("Crafting");
+		case EMOSkillCategory::Combat: return TEXT("Combat");
+		case EMOSkillCategory::Knowledge: return TEXT("Knowledge");
+		case EMOSkillCategory::Social: return TEXT("Social");
 		default: return TEXT("None");
 	}
 }

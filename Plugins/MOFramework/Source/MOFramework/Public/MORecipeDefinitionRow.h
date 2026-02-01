@@ -21,6 +21,27 @@ enum class EMOCraftingStation : uint8
 };
 
 /**
+ * A tool required for a recipe (not consumed, just needs to be in inventory).
+ */
+USTRUCT(BlueprintType)
+struct MOFRAMEWORK_API FMOToolRequirement
+{
+	GENERATED_BODY()
+
+	/** Tool type required (matches FMOItemDefinitionRow::ToolType). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Recipe")
+	FName ToolType = NAME_None;
+
+	/** Minimum tool quality required (0 = any quality). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Recipe", meta=(ClampMin="0.0"))
+	float MinQuality = 0.0f;
+
+	/** Durability consumed per craft (0 = no consumption). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Recipe", meta=(ClampMin="0"))
+	int32 DurabilityConsumed = 1;
+};
+
+/**
  * A single ingredient required for a recipe.
  */
 USTRUCT(BlueprintType)
@@ -116,4 +137,28 @@ struct MOFRAMEWORK_API FMORecipeDefinitionRow : public FTableRowBase
 	/** Icon displayed in crafting UI. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Recipe|UI")
 	TSoftObjectPtr<UTexture2D> Icon;
+
+	/** Category for UI organization (e.g., "Food", "Tools", "Weapons"). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Recipe|UI")
+	FName Category = NAME_None;
+
+	// --- Tool Requirements ---
+
+	/** Tools required but not consumed (must be in inventory). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Recipe|Requirements")
+	TArray<FMOToolRequirement> RequiredTools;
+
+	// --- Discovery ---
+
+	/** If true, recipe starts hidden until discovered. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Recipe|Discovery")
+	bool bRequiresDiscovery = false;
+
+	/** Knowledge ID that, when learned, unlocks this recipe. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Recipe|Discovery")
+	FName DiscoveryKnowledgeId = NAME_None;
+
+	/** Skill level that auto-unlocks this recipe (0 = doesn't auto-unlock). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Recipe|Discovery", meta=(ClampMin="0"))
+	int32 DiscoverySkillLevel = 0;
 };

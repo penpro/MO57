@@ -18,6 +18,16 @@ class UMOVitalsComponent;
 class UMOMetabolismComponent;
 class UMOMentalStateComponent;
 class UMONotificationWidget;
+class UMOPossessionMenu;
+class UMOPawnEntryWidget;
+class UMOCraftingMenu;
+class UMOSkillsPanel;
+class UMOSkillsComponent;
+class UMOKnowledgeComponent;
+class UMOCraftingQueueComponent;
+class UMORecipeDiscoveryComponent;
+class UMOInspectionProgressWidget;
+struct FMOInspectionResult;
 
 UCLASS(ClassGroup=(MO), meta=(BlueprintSpawnableComponent))
 class MOFRAMEWORK_API UMOUIManagerComponent : public UActorComponent
@@ -89,6 +99,86 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO|UI|InGameMenu")
 	bool IsInGameMenuOpen() const;
 
+	// --- Possession Menu ---
+
+	/** Toggle possession menu visibility. */
+	UFUNCTION(BlueprintCallable, Category="MO|UI|Possession")
+	void TogglePossessionMenu();
+
+	/** Open the possession menu. */
+	UFUNCTION(BlueprintCallable, Category="MO|UI|Possession")
+	void OpenPossessionMenu();
+
+	/** Close the possession menu. */
+	UFUNCTION(BlueprintCallable, Category="MO|UI|Possession")
+	void ClosePossessionMenu();
+
+	/** Check if possession menu is open. */
+	UFUNCTION(BlueprintPure, Category="MO|UI|Possession")
+	bool IsPossessionMenuOpen() const;
+
+	/** Refresh the possession menu with current pawn data. */
+	UFUNCTION(BlueprintCallable, Category="MO|UI|Possession")
+	void RefreshPossessionMenu();
+
+	// --- Crafting Menu ---
+
+	/** Toggle crafting menu visibility. */
+	UFUNCTION(BlueprintCallable, Category="MO|UI|Crafting")
+	void ToggleCraftingMenu();
+
+	/** Open the crafting menu. */
+	UFUNCTION(BlueprintCallable, Category="MO|UI|Crafting")
+	void OpenCraftingMenu();
+
+	/** Close the crafting menu. */
+	UFUNCTION(BlueprintCallable, Category="MO|UI|Crafting")
+	void CloseCraftingMenu();
+
+	/** Check if crafting menu is open. */
+	UFUNCTION(BlueprintPure, Category="MO|UI|Crafting")
+	bool IsCraftingMenuOpen() const;
+
+	/** Get the crafting menu widget (may be null if not open). */
+	UFUNCTION(BlueprintPure, Category="MO|UI|Crafting")
+	UMOCraftingMenu* GetCraftingMenu() const;
+
+	// --- Skills Panel ---
+
+	/** Toggle skills panel visibility. */
+	UFUNCTION(BlueprintCallable, Category="MO|UI|Skills")
+	void ToggleSkillsPanel();
+
+	/** Open the skills panel. */
+	UFUNCTION(BlueprintCallable, Category="MO|UI|Skills")
+	void OpenSkillsPanel();
+
+	/** Close the skills panel. */
+	UFUNCTION(BlueprintCallable, Category="MO|UI|Skills")
+	void CloseSkillsPanel();
+
+	/** Check if skills panel is open. */
+	UFUNCTION(BlueprintPure, Category="MO|UI|Skills")
+	bool IsSkillsPanelOpen() const;
+
+	/** Get the skills panel widget (may be null if not open). */
+	UFUNCTION(BlueprintPure, Category="MO|UI|Skills")
+	UMOSkillsPanel* GetSkillsPanel() const;
+
+	// --- Inspection ---
+
+	/** Start inspecting an item. Shows progress widget and grants knowledge on completion. */
+	UFUNCTION(BlueprintCallable, Category="MO|UI|Inspection")
+	void StartItemInspection(FName ItemDefinitionId, const FGuid& ItemGuid);
+
+	/** Cancel any active inspection. */
+	UFUNCTION(BlueprintCallable, Category="MO|UI|Inspection")
+	void CancelItemInspection();
+
+	/** Check if an inspection is currently in progress. */
+	UFUNCTION(BlueprintPure, Category="MO|UI|Inspection")
+	bool IsInspectionInProgress() const;
+
 	// --- Item Context Menu ---
 
 	/** Show context menu for an inventory item at the given screen position. */
@@ -137,6 +227,14 @@ public:
 	/** Close all open menus. */
 	UFUNCTION(BlueprintCallable, Category="MO|UI")
 	void CloseAllMenus();
+
+	/**
+	 * Close all menus that participate in menu switching.
+	 * Menus flagged with bClosesOnSwitch will be closed.
+	 * Use this before opening a new switchable menu.
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|UI")
+	void CloseAllSwitchableMenus();
 
 protected:
 	virtual void BeginPlay() override;
@@ -258,6 +356,85 @@ private:
 	UFUNCTION()
 	void HandleLoadRequested(const FString& SlotName);
 
+	// --- Possession Menu ---
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Possession", meta=(AllowPrivateAccess="true"))
+	TSubclassOf<UMOPossessionMenu> PossessionMenuClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Possession", meta=(AllowPrivateAccess="true"))
+	TSubclassOf<UMOPawnEntryWidget> PawnEntryWidgetClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Possession", meta=(ClampMin="0", AllowPrivateAccess="true"))
+	int32 PossessionMenuZOrder = 100;
+
+	/** Default pawn class to spawn when creating new character. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Possession", meta=(AllowPrivateAccess="true"))
+	TSubclassOf<APawn> DefaultPawnClassForNewCharacter;
+
+	UPROPERTY(Transient)
+	TWeakObjectPtr<UMOPossessionMenu> PossessionMenuWidget;
+
+	UFUNCTION()
+	void HandlePossessionMenuRequestClose();
+
+	UFUNCTION()
+	void HandlePossessionMenuPawnSelected(const FGuid& PawnGuid);
+
+	UFUNCTION()
+	void HandlePossessionMenuCreateCharacter();
+
+	// --- Crafting Menu ---
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Crafting", meta=(AllowPrivateAccess="true"))
+	TSubclassOf<UMOCraftingMenu> CraftingMenuClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Crafting", meta=(ClampMin="0", AllowPrivateAccess="true"))
+	int32 CraftingMenuZOrder = 50;
+
+	UPROPERTY(Transient)
+	TWeakObjectPtr<UMOCraftingMenu> CraftingMenuWidget;
+
+	UFUNCTION()
+	void HandleCraftingMenuRequestClose();
+
+	// --- Skills Panel ---
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Skills", meta=(AllowPrivateAccess="true"))
+	TSubclassOf<UMOSkillsPanel> SkillsPanelClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Skills", meta=(ClampMin="0", AllowPrivateAccess="true"))
+	int32 SkillsPanelZOrder = 50;
+
+	UPROPERTY(Transient)
+	TWeakObjectPtr<UMOSkillsPanel> SkillsPanelWidget;
+
+	UFUNCTION()
+	void HandleSkillsPanelRequestClose();
+
+	// --- Inspection ---
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Inspection", meta=(AllowPrivateAccess="true"))
+	TSubclassOf<UMOInspectionProgressWidget> InspectionProgressWidgetClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Inspection", meta=(ClampMin="0", AllowPrivateAccess="true"))
+	int32 InspectionProgressZOrder = 200;
+
+	/** Duration of item inspection in seconds. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Inspection", meta=(ClampMin="1.0", AllowPrivateAccess="true"))
+	float InspectionDuration = 15.0f;
+
+	UPROPERTY(Transient)
+	TWeakObjectPtr<UMOInspectionProgressWidget> InspectionProgressWidget;
+
+	/** The item GUID currently being inspected. */
+	FGuid InspectingItemGuid;
+
+	UFUNCTION()
+	void HandleInspectionCompleted(bool bCompleted, const FMOInspectionResult& Result);
+
+	UFUNCTION()
+	void HandleInspectionCancelled();
+
 	// --- Item Context Menu ---
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|ContextMenu", meta=(AllowPrivateAccess="true"))
@@ -350,4 +527,41 @@ private:
 	/** The notification widget (simple text display). */
 	UPROPERTY(Transient)
 	TWeakObjectPtr<UMONotificationWidget> NoPawnNotificationWidget;
+
+	// --- General Notifications ---
+
+public:
+	/** Show a notification message for a duration. Queues if another is showing. */
+	UFUNCTION(BlueprintCallable, Category="MO|UI|Notifications")
+	void ShowNotification(const FText& Message, float Duration = 3.0f);
+
+	/** Show skill increase notification. */
+	UFUNCTION(BlueprintCallable, Category="MO|UI|Notifications")
+	void ShowSkillIncreaseNotification(FName SkillId, float XPAmount);
+
+	/** Show recipe unlocked notification. */
+	UFUNCTION(BlueprintCallable, Category="MO|UI|Notifications")
+	void ShowRecipeUnlockedNotification(FName RecipeId);
+
+private:
+	/** Queued notification messages. */
+	struct FQueuedNotification
+	{
+		FText Message;
+		float Duration;
+	};
+	TArray<FQueuedNotification> NotificationQueue;
+
+	/** Current notification widget. */
+	UPROPERTY(Transient)
+	TWeakObjectPtr<UMONotificationWidget> CurrentNotificationWidget;
+
+	/** Timer for notification display. */
+	FTimerHandle NotificationTimerHandle;
+
+	/** Process the next notification in queue. */
+	void ProcessNextNotification();
+
+	/** Hide current notification and process next. */
+	void HideCurrentNotification();
 };

@@ -5,6 +5,7 @@
 #include "MOStatusPanel.generated.h"
 
 class UMOStatusField;
+class UMOCharacterInfoEntry;
 class UMOCommonButton;
 class UWidgetSwitcher;
 class UScrollBox;
@@ -12,6 +13,7 @@ class UVerticalBox;
 class UMOVitalsComponent;
 class UMOMetabolismComponent;
 class UMOMentalStateComponent;
+class UMOPersistenceSubsystem;
 
 /**
  * Status category for organizing fields into tabs
@@ -19,13 +21,14 @@ class UMOMentalStateComponent;
 UENUM(BlueprintType)
 enum class EMOStatusCategory : uint8
 {
-	Vitals		UMETA(DisplayName = "Vitals"),
-	Nutrition	UMETA(DisplayName = "Nutrition"),
-	Nutrients	UMETA(DisplayName = "Nutrients"),
-	Fitness		UMETA(DisplayName = "Fitness"),
-	Mental		UMETA(DisplayName = "Mental"),
-	Wounds		UMETA(DisplayName = "Wounds"),
-	Conditions	UMETA(DisplayName = "Conditions"),
+	Info		UMETA(DisplayName = "Info"),       // Index 0 - Character info (name, age, gender, etc.)
+	Vitals		UMETA(DisplayName = "Vitals"),     // Index 1
+	Nutrition	UMETA(DisplayName = "Nutrition"),  // Index 2
+	Nutrients	UMETA(DisplayName = "Nutrients"),  // Index 3
+	Fitness		UMETA(DisplayName = "Fitness"),    // Index 4
+	Mental		UMETA(DisplayName = "Mental"),     // Index 5
+	Wounds		UMETA(DisplayName = "Wounds"),     // Index 6
+	Conditions	UMETA(DisplayName = "Conditions"), // Index 7
 
 	MAX			UMETA(Hidden)
 };
@@ -143,6 +146,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "MO|Status")
 	void UnbindFromMedicalComponents();
 
+	/** Refresh the Info tab with current pawn data. Call after pawn changes. */
+	UFUNCTION(BlueprintCallable, Category = "MO|Status")
+	void RefreshCharacterInfo();
+
 	/** Broadcast when category changes */
 	UPROPERTY(BlueprintAssignable, Category = "MO|Status")
 	FMOStatusCategoryChangedSignature OnCategoryChanged;
@@ -175,6 +182,7 @@ protected:
 	void BindTabButtons();
 
 	/** Tab button handlers */
+	void HandleInfoTabClicked();
 	void HandleVitalsTabClicked();
 	void HandleNutritionTabClicked();
 	void HandleNutrientsTabClicked();
@@ -183,6 +191,17 @@ protected:
 	void HandleWoundsTabClicked();
 	void HandleConditionsTabClicked();
 	void HandleBackClicked();
+
+	/** Populate the Info tab with character data */
+	void PopulateInfoTab();
+
+	/** Handle info entry change requests (enters edit mode) */
+	UFUNCTION()
+	void HandleInfoEntryChangeRequested(FName FieldId);
+
+	/** Handle info entry value changed (saves to persistence) */
+	UFUNCTION()
+	void HandleInfoEntryValueChanged(FName FieldId, const FString& NewValue);
 
 	/** Update tab button visual states */
 	void UpdateTabButtonStates();
@@ -207,6 +226,9 @@ protected:
 
 protected:
 	// Tab buttons - bind in Blueprint
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
+	TObjectPtr<UMOCommonButton> InfoTabButton;
+
 	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
 	TObjectPtr<UMOCommonButton> VitalsTabButton;
 
@@ -235,36 +257,43 @@ protected:
 	UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
 	TObjectPtr<UWidgetSwitcher> CategorySwitcher;
 
-	/** Scroll boxes for each category (children of CategorySwitcher in order 0-6) */
-	/** REQUIRED: Name must be "VitalsScrollBox" - Index 0 in CategorySwitcher */
+	/** Scroll boxes for each category (children of CategorySwitcher in order 0-7) */
+	/** REQUIRED: Name must be "InfoScrollBox" - Index 0 in CategorySwitcher */
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
+	TObjectPtr<UScrollBox> InfoScrollBox;
+
+	/** REQUIRED: Name must be "VitalsScrollBox" - Index 1 in CategorySwitcher */
 	UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
 	TObjectPtr<UScrollBox> VitalsScrollBox;
 
-	/** REQUIRED: Name must be "NutritionScrollBox" - Index 1 in CategorySwitcher */
+	/** REQUIRED: Name must be "NutritionScrollBox" - Index 2 in CategorySwitcher */
 	UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
 	TObjectPtr<UScrollBox> NutritionScrollBox;
 
-	/** REQUIRED: Name must be "NutrientsScrollBox" - Index 2 in CategorySwitcher */
+	/** REQUIRED: Name must be "NutrientsScrollBox" - Index 3 in CategorySwitcher */
 	UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
 	TObjectPtr<UScrollBox> NutrientsScrollBox;
 
-	/** REQUIRED: Name must be "FitnessScrollBox" - Index 3 in CategorySwitcher */
+	/** REQUIRED: Name must be "FitnessScrollBox" - Index 4 in CategorySwitcher */
 	UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
 	TObjectPtr<UScrollBox> FitnessScrollBox;
 
-	/** REQUIRED: Name must be "MentalScrollBox" - Index 4 in CategorySwitcher */
+	/** REQUIRED: Name must be "MentalScrollBox" - Index 5 in CategorySwitcher */
 	UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
 	TObjectPtr<UScrollBox> MentalScrollBox;
 
-	/** REQUIRED: Name must be "WoundsScrollBox" - Index 5 in CategorySwitcher */
+	/** REQUIRED: Name must be "WoundsScrollBox" - Index 6 in CategorySwitcher */
 	UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
 	TObjectPtr<UScrollBox> WoundsScrollBox;
 
-	/** REQUIRED: Name must be "ConditionsScrollBox" - Index 6 in CategorySwitcher */
+	/** REQUIRED: Name must be "ConditionsScrollBox" - Index 7 in CategorySwitcher */
 	UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
 	TObjectPtr<UScrollBox> ConditionsScrollBox;
 
 	/** Vertical box containers inside each scroll box */
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
+	TObjectPtr<UVerticalBox> InfoContainer;
+
 	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
 	TObjectPtr<UVerticalBox> VitalsContainer;
 
@@ -290,13 +319,25 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MO|Status")
 	TSubclassOf<UMOStatusField> StatusFieldClass;
 
+	/** Widget class to use for character info entries */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MO|Status")
+	TSubclassOf<UMOCharacterInfoEntry> CharacterInfoEntryClass;
+
+	/** Currently displayed pawn GUID (for info tab) */
+	UPROPERTY(BlueprintReadOnly, Category = "MO|Status")
+	FGuid DisplayedPawnGuid;
+
+	/** Created info entry widgets */
+	UPROPERTY()
+	TArray<TObjectPtr<UMOCharacterInfoEntry>> InfoEntryWidgets;
+
 	/** Field configurations - populate in Blueprint or via PopulateFieldConfigs */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MO|Status")
 	TArray<FMOStatusFieldConfig> FieldConfigs;
 
 	/** Currently active category */
 	UPROPERTY(BlueprintReadOnly, Category = "MO|Status")
-	EMOStatusCategory CurrentCategory = EMOStatusCategory::Vitals;
+	EMOStatusCategory CurrentCategory = EMOStatusCategory::Info;
 
 	/** Map of field ID to widget for quick lookup */
 	UPROPERTY()
@@ -306,13 +347,14 @@ protected:
 	TMap<FName, FMOStatusFieldConfig> FieldConfigMap;
 
 	/** Index mapping for widget switcher */
-	static constexpr int32 CategoryIndex_Vitals = 0;
-	static constexpr int32 CategoryIndex_Nutrition = 1;
-	static constexpr int32 CategoryIndex_Nutrients = 2;
-	static constexpr int32 CategoryIndex_Fitness = 3;
-	static constexpr int32 CategoryIndex_Mental = 4;
-	static constexpr int32 CategoryIndex_Wounds = 5;
-	static constexpr int32 CategoryIndex_Conditions = 6;
+	static constexpr int32 CategoryIndex_Info = 0;
+	static constexpr int32 CategoryIndex_Vitals = 1;
+	static constexpr int32 CategoryIndex_Nutrition = 2;
+	static constexpr int32 CategoryIndex_Nutrients = 3;
+	static constexpr int32 CategoryIndex_Fitness = 4;
+	static constexpr int32 CategoryIndex_Mental = 5;
+	static constexpr int32 CategoryIndex_Wounds = 6;
+	static constexpr int32 CategoryIndex_Conditions = 7;
 
 	/** Bound medical components for auto-updates */
 	UPROPERTY()

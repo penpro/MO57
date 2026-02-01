@@ -19,6 +19,10 @@ struct FMOInventoryEntry : public FFastArraySerializerItem
 
 	UPROPERTY(BlueprintReadOnly, Category="MO|Inventory")
 	int32 Quantity = 0;
+
+	/** Current durability for tools (-1 = not applicable/infinite). */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Inventory")
+	int32 CurrentDurability = -1;
 };
 
 USTRUCT(BlueprintType)
@@ -131,6 +135,44 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category="MO|Inventory")
 	FString GetInventoryDebugString() const;
+
+	/**
+	 * Get total quantity of items matching a specific definition ID.
+	 * Sums across all inventory entries with matching ItemDefinitionId.
+	 * @param ItemDefinitionId The item definition to count
+	 * @return Total quantity across all matching entries
+	 */
+	UFUNCTION(BlueprintPure, Category="MO|Inventory")
+	int32 GetItemCountByDefinitionId(FName ItemDefinitionId) const;
+
+	/**
+	 * Check if inventory contains at least a certain quantity of an item.
+	 * @param ItemDefinitionId The item definition to check
+	 * @param RequiredQuantity Minimum quantity needed
+	 * @return True if inventory has at least RequiredQuantity of the item
+	 */
+	UFUNCTION(BlueprintPure, Category="MO|Inventory")
+	bool HasItem(FName ItemDefinitionId, int32 RequiredQuantity = 1) const;
+
+	/**
+	 * Reduce durability on an item. Returns true if successful.
+	 * If durability reaches 0, the item is destroyed.
+	 * @param ItemGuid The item to degrade
+	 * @param Amount Amount of durability to remove
+	 * @param bOutDestroyed Set to true if the item was destroyed
+	 * @return True if durability was reduced, false if item not found or has infinite durability
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Inventory")
+	bool ReduceDurability(const FGuid& ItemGuid, int32 Amount, bool& bOutDestroyed);
+
+	/**
+	 * Get the current durability of an item.
+	 * @param ItemGuid The item to check
+	 * @param OutDurability Current durability (-1 if infinite)
+	 * @return True if item found
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Inventory")
+	bool GetItemDurability(const FGuid& ItemGuid, int32& OutDurability) const;
 
 	// Slots API
 	UFUNCTION(BlueprintCallable, Category="MO|Inventory|Slots")

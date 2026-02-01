@@ -134,9 +134,17 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Input|Actions|UI")
 	TSoftObjectPtr<UInputAction> InventoryAction;
 
+	/** Toggle crafting menu action. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Input|Actions|UI")
+	TSoftObjectPtr<UInputAction> CraftAction;
+
 	/** Toggle player status HUD action. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Input|Actions|UI")
 	TSoftObjectPtr<UInputAction> PlayerStatusAction;
+
+	/** Toggle skills panel action. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Input|Actions|UI")
+	TSoftObjectPtr<UInputAction> SkillsAction;
 
 	/** Pause/menu action. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Input|Actions|UI")
@@ -278,8 +286,14 @@ protected:
 	/** Handle inventory toggle. */
 	void HandleInventory(const FInputActionValue& Value);
 
+	/** Handle crafting menu toggle. */
+	void HandleCraft(const FInputActionValue& Value);
+
 	/** Handle player status toggle. */
 	void HandlePlayerStatus(const FInputActionValue& Value);
+
+	/** Handle skills panel toggle. */
+	void HandleSkills(const FInputActionValue& Value);
 
 	/** Handle pause/menu. */
 	void HandlePause(const FInputActionValue& Value);

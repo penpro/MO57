@@ -1,0 +1,391 @@
+#include "MOCraftingQueueWidget.h"
+#include "MOFramework.h"
+#include "MOCraftingQueueComponent.h"
+#include "MOCraftingQueueEntryWidget.h"
+#include "MORecipeDatabaseSettings.h"
+#include "MOCommonButton.h"
+#include "Components/ScrollBox.h"
+#include "Components/VerticalBox.h"
+#include "Components/TextBlock.h"
+#include "Components/ProgressBar.h"
+
+UMOCraftingQueueWidget::UMOCraftingQueueWidget(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+}
+
+void UMOCraftingQueueWidget::InitializeQueue(UMOCraftingQueueComponent* InQueueComponent)
+{
+	// Unbind from previous component
+	if (UMOCraftingQueueComponent* OldQueue = QueueComponent.Get())
+	{
+		OldQueue->OnQueueChanged.RemoveDynamic(this, &UMOCraftingQueueWidget::HandleQueueChanged);
+		OldQueue->OnCraftProgress.RemoveDynamic(this, &UMOCraftingQueueWidget::HandleCraftProgress);
+		OldQueue->OnCraftCompleted.RemoveDynamic(this, &UMOCraftingQueueWidget::HandleCraftCompleted);
+	}
+
+	QueueComponent = InQueueComponent;
+
+	// Bind to new component
+	if (InQueueComponent)
+	{
+		InQueueComponent->OnQueueChanged.AddDynamic(this, &UMOCraftingQueueWidget::HandleQueueChanged);
+		InQueueComponent->OnCraftProgress.AddDynamic(this, &UMOCraftingQueueWidget::HandleCraftProgress);
+		InQueueComponent->OnCraftCompleted.AddDynamic(this, &UMOCraftingQueueWidget::HandleCraftCompleted);
+	}
+
+	RefreshQueue();
+}
+
+void UMOCraftingQueueWidget::RefreshQueue()
+{
+	// Clear existing entries
+	for (UMOCraftingQueueEntryWidget* Entry : EntryWidgets)
+	{
+		if (Entry)
+		{
+			Entry->RemoveFromParent();
+		}
+	}
+	EntryWidgets.Empty();
+
+	UMOCraftingQueueComponent* Queue = QueueComponent.Get();
+	if (!Queue)
+	{
+		return;
+	}
+
+	// Get container
+	UPanelWidget* Container = QueueScrollBox ? Cast<UPanelWidget>(QueueScrollBox) : Cast<UPanelWidget>(QueueContainer);
+
+	// Get queue entries
+	TArray<FMOCraftingQueueEntry> QueueEntries;
+	Queue->GetAllQueueEntries(QueueEntries);
+
+	// Update empty state visibility
+	if (EmptyQueueText)
+	{
+		EmptyQueueText->SetVisibility(QueueEntries.Num() == 0 ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+	}
+
+	if (!Container || !QueueEntryWidgetClass)
+	{
+		OnQueueUpdated(QueueEntries.Num());
+		return;
+	}
+
+	// Create entry widgets
+	for (int32 i = 0; i < QueueEntries.Num(); ++i)
+	{
+		const FMOCraftingQueueEntry& Entry = QueueEntries[i];
+
+		UMOCraftingQueueEntryWidget* EntryWidget = CreateWidget<UMOCraftingQueueEntryWidget>(this, QueueEntryWidgetClass);
+		if (!EntryWidget)
+		{
+			continue;
+		}
+
+		// Build display data
+		FMOQueueEntryDisplayData DisplayData;
+		DisplayData.EntryId = Entry.EntryId;
+		DisplayData.RecipeId = Entry.RecipeId;
+		DisplayData.Progress = Entry.Progress;
+		DisplayData.bIsActive = (i == 0);
+
+		// Get recipe info
+		const FMORecipeDefinitionRow* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(Entry.RecipeId);
+		if (Recipe)
+		{
+			DisplayData.RecipeName = Recipe->DisplayName;
+			DisplayData.Icon = Recipe->Icon;
+		}
+		else
+		{
+			DisplayData.RecipeName = FText::FromName(Entry.RecipeId);
+		}
+
+		// Format count
+		DisplayData.CountText = FText::Format(
+			NSLOCTEXT("MOCrafting", "QueueCount", "{0}/{1}"),
+			FText::AsNumber(Entry.CompletedCount + 1),
+			FText::AsNumber(Entry.Count)
+		);
+
+		// Calculate time remaining
+		if (i == 0)
+		{
+			float TimeRemaining = Queue->GetCurrentCraftTimeRemaining();
+			DisplayData.TimeRemainingText = FormatTimeRemaining(TimeRemaining);
+		}
+		else
+		{
+			// Calculate time for queued entries
+			float CraftDuration = Recipe ? Recipe->CraftTime : 0.0f;
+			float TimeRemaining = CraftDuration * Entry.Count;
+			DisplayData.TimeRemainingText = FormatTimeRemaining(TimeRemaining);
+		}
+
+		EntryWidget->SetupEntry(DisplayData);
+		EntryWidget->OnCancelRequested.AddDynamic(this, &UMOCraftingQueueWidget::HandleEntryCancelRequested);
+
+		Container->AddChild(EntryWidget);
+		EntryWidgets.Add(EntryWidget);
+	}
+
+	// Update current craft display
+	if (QueueEntries.Num() > 0)
+	{
+		const FMOCraftingQueueEntry& CurrentEntry = QueueEntries[0];
+		const FMORecipeDefinitionRow* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(CurrentEntry.RecipeId);
+
+		if (CurrentCraftNameText && Recipe)
+		{
+			CurrentCraftNameText->SetText(Recipe->DisplayName);
+		}
+
+		// Use overall queue progress for the main progress bar
+		float OverallProgress = Queue->GetOverallQueueProgress();
+
+		if (CurrentProgressBar)
+		{
+			CurrentProgressBar->SetPercent(OverallProgress);
+		}
+
+		if (ProgressText)
+		{
+			ProgressText->SetText(FText::Format(
+				NSLOCTEXT("MOCrafting", "ProgressPercent", "{0}%"),
+				FText::AsNumber(FMath::RoundToInt(OverallProgress * 100))
+			));
+		}
+
+		if (TimeRemainingText)
+		{
+			TimeRemainingText->SetText(FormatTimeRemaining(Queue->GetTotalTimeRemaining()));
+		}
+
+		if (TotalTimeRemainingText)
+		{
+			TotalTimeRemainingText->SetText(FormatTimeRemaining(Queue->GetTotalTimeRemaining()));
+		}
+	}
+	else
+	{
+		// Queue is empty - clear the display
+		if (CurrentCraftNameText)
+		{
+			CurrentCraftNameText->SetText(FText::GetEmpty());
+		}
+
+		if (CurrentProgressBar)
+		{
+			CurrentProgressBar->SetPercent(0.0f);
+		}
+
+		if (ProgressText)
+		{
+			ProgressText->SetText(FText::GetEmpty());
+		}
+
+		if (TimeRemainingText)
+		{
+			TimeRemainingText->SetText(FText::GetEmpty());
+		}
+
+		if (TotalTimeRemainingText)
+		{
+			TotalTimeRemainingText->SetText(FText::GetEmpty());
+		}
+	}
+
+	OnQueueUpdated(QueueEntries.Num());
+}
+
+void UMOCraftingQueueWidget::UpdateProgress()
+{
+	UMOCraftingQueueComponent* Queue = QueueComponent.Get();
+	if (!Queue || Queue->IsQueueEmpty())
+	{
+		// Queue is empty, ensure display is cleared
+		if (CurrentProgressBar)
+		{
+			CurrentProgressBar->SetPercent(0.0f);
+		}
+		if (ProgressText)
+		{
+			ProgressText->SetText(FText::GetEmpty());
+		}
+		if (TimeRemainingText)
+		{
+			TimeRemainingText->SetText(FText::GetEmpty());
+		}
+		if (TotalTimeRemainingText)
+		{
+			TotalTimeRemainingText->SetText(FText::GetEmpty());
+		}
+		OnProgressUpdated(0.0f, FText::GetEmpty());
+		return;
+	}
+
+	// Use overall progress for the main display
+	float OverallProgress = Queue->GetOverallQueueProgress();
+	FText TotalTimeRemaining = FormatTimeRemaining(Queue->GetTotalTimeRemaining());
+
+	if (CurrentProgressBar)
+	{
+		CurrentProgressBar->SetPercent(OverallProgress);
+	}
+
+	if (ProgressText)
+	{
+		ProgressText->SetText(FText::Format(
+			NSLOCTEXT("MOCrafting", "ProgressPercent", "{0}%"),
+			FText::AsNumber(FMath::RoundToInt(OverallProgress * 100))
+		));
+	}
+
+	if (TimeRemainingText)
+	{
+		TimeRemainingText->SetText(TotalTimeRemaining);
+	}
+
+	if (TotalTimeRemainingText)
+	{
+		TotalTimeRemainingText->SetText(TotalTimeRemaining);
+	}
+
+	// Update first entry widget with current craft progress (not overall)
+	if (EntryWidgets.Num() > 0 && EntryWidgets[0])
+	{
+		float CurrentProgress = Queue->GetCurrentCraftProgress();
+		FText CurrentTimeRemaining = FormatTimeRemaining(Queue->GetCurrentCraftTimeRemaining());
+		EntryWidgets[0]->UpdateProgress(CurrentProgress, CurrentTimeRemaining);
+	}
+
+	OnProgressUpdated(OverallProgress, TotalTimeRemaining);
+}
+
+bool UMOCraftingQueueWidget::IsQueueEmpty() const
+{
+	UMOCraftingQueueComponent* Queue = QueueComponent.Get();
+	return !Queue || Queue->IsQueueEmpty();
+}
+
+int32 UMOCraftingQueueWidget::GetQueueLength() const
+{
+	UMOCraftingQueueComponent* Queue = QueueComponent.Get();
+	return Queue ? Queue->GetQueueLength() : 0;
+}
+
+float UMOCraftingQueueWidget::GetCurrentProgress() const
+{
+	UMOCraftingQueueComponent* Queue = QueueComponent.Get();
+	return Queue ? Queue->GetOverallQueueProgress() : 0.0f;
+}
+
+FText UMOCraftingQueueWidget::GetTimeRemainingText() const
+{
+	UMOCraftingQueueComponent* Queue = QueueComponent.Get();
+	if (!Queue)
+	{
+		return FText::GetEmpty();
+	}
+	return FormatTimeRemaining(Queue->GetTotalTimeRemaining());
+}
+
+void UMOCraftingQueueWidget::NativeConstruct()
+{
+	Super::NativeConstruct();
+
+	if (CancelAllButton)
+	{
+		CancelAllButton->OnClicked().AddUObject(this, &UMOCraftingQueueWidget::HandleCancelAllClicked);
+	}
+}
+
+void UMOCraftingQueueWidget::NativeDestruct()
+{
+	// Unbind from queue component
+	if (UMOCraftingQueueComponent* Queue = QueueComponent.Get())
+	{
+		Queue->OnQueueChanged.RemoveDynamic(this, &UMOCraftingQueueWidget::HandleQueueChanged);
+		Queue->OnCraftProgress.RemoveDynamic(this, &UMOCraftingQueueWidget::HandleCraftProgress);
+		Queue->OnCraftCompleted.RemoveDynamic(this, &UMOCraftingQueueWidget::HandleCraftCompleted);
+	}
+
+	Super::NativeDestruct();
+}
+
+void UMOCraftingQueueWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
+{
+	Super::NativeTick(MyGeometry, InDeltaTime);
+
+	// Periodic progress update
+	TimeSinceLastUpdate += InDeltaTime;
+	if (TimeSinceLastUpdate >= ProgressUpdateInterval)
+	{
+		TimeSinceLastUpdate = 0.0f;
+		UpdateProgress();
+	}
+}
+
+void UMOCraftingQueueWidget::HandleQueueChanged()
+{
+	RefreshQueue();
+}
+
+void UMOCraftingQueueWidget::HandleCraftProgress(const FGuid& EntryId, float Progress)
+{
+	// Progress is handled by tick-based updates for smoother display
+}
+
+void UMOCraftingQueueWidget::HandleCraftCompleted(const FGuid& EntryId, const FMOCraftResult& Result)
+{
+	RefreshQueue();
+}
+
+void UMOCraftingQueueWidget::HandleEntryCancelRequested(const FGuid& EntryId)
+{
+	if (UMOCraftingQueueComponent* Queue = QueueComponent.Get())
+	{
+		Queue->CancelCraft(EntryId, true); // true = refund ingredients
+	}
+}
+
+void UMOCraftingQueueWidget::HandleCancelAllClicked()
+{
+	if (UMOCraftingQueueComponent* Queue = QueueComponent.Get())
+	{
+		Queue->CancelAllCrafts(true); // true = refund ingredients
+	}
+}
+
+FText UMOCraftingQueueWidget::FormatTimeRemaining(float Seconds) const
+{
+	if (Seconds <= 0.0f)
+	{
+		return NSLOCTEXT("MOCrafting", "TimeNone", "--");
+	}
+
+	if (Seconds >= 86400.0f) // 24 hours
+	{
+		float Days = Seconds / 86400.0f;
+		return FText::Format(NSLOCTEXT("MOCrafting", "TimeDays", "{0}d"), FText::AsNumber(FMath::RoundToInt(Days * 10) / 10.0f));
+	}
+	else if (Seconds >= 3600.0f) // 1 hour
+	{
+		int32 Hours = FMath::FloorToInt(Seconds / 3600.0f);
+		int32 Minutes = FMath::FloorToInt(FMath::Fmod(Seconds, 3600.0f) / 60.0f);
+		return FText::Format(NSLOCTEXT("MOCrafting", "TimeHoursMinutes", "{0}h {1}m"), FText::AsNumber(Hours), FText::AsNumber(Minutes));
+	}
+	else if (Seconds >= 60.0f) // 1 minute
+	{
+		int32 Minutes = FMath::FloorToInt(Seconds / 60.0f);
+		int32 Secs = FMath::FloorToInt(FMath::Fmod(Seconds, 60.0f));
+		return FText::Format(NSLOCTEXT("MOCrafting", "TimeMinutesSeconds", "{0}m {1}s"), FText::AsNumber(Minutes), FText::AsNumber(Secs));
+	}
+	else
+	{
+		return FText::Format(NSLOCTEXT("MOCrafting", "TimeSecondsOnly", "{0}s"), FText::AsNumber(FMath::RoundToInt(Seconds)));
+	}
+}

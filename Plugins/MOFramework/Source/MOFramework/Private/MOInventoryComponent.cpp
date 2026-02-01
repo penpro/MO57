@@ -97,6 +97,17 @@ bool UMOInventoryComponent::AddItemByGuid(const FGuid& ItemGuid, const FName Ite
 	NewEntry.ItemDefinitionId = ItemDefinitionId;
 	NewEntry.Quantity = QuantityToAdd;
 
+	// Initialize durability for tools
+	FMOItemDefinitionRow ItemDef;
+	if (UMOItemDatabaseSettings::GetItemDefinition(ItemDefinitionId, ItemDef) && ItemDef.bIsTool && ItemDef.MaxDurability > 0)
+	{
+		NewEntry.CurrentDurability = ItemDef.MaxDurability;
+	}
+	else
+	{
+		NewEntry.CurrentDurability = -1; // Infinite/not applicable
+	}
+
 	const int32 NewIndex = Inventory.Entries.Add(NewEntry);
 	Inventory.MarkItemDirty(Inventory.Entries[NewIndex]);
 	BroadcastInventoryChanged();
@@ -197,6 +208,98 @@ FString UMOInventoryComponent::GetInventoryDebugString() const
 	}
 
 	return Result;
+}
+
+int32 UMOInventoryComponent::GetItemCountByDefinitionId(FName ItemDefinitionId) const
+{
+	if (ItemDefinitionId.IsNone())
+	{
+		return 0;
+	}
+
+	int32 TotalQuantity = 0;
+	for (const FMOInventoryEntry& Entry : Inventory.Entries)
+	{
+		if (Entry.ItemDefinitionId == ItemDefinitionId)
+		{
+			TotalQuantity += Entry.Quantity;
+		}
+	}
+	return TotalQuantity;
+}
+
+bool UMOInventoryComponent::HasItem(FName ItemDefinitionId, int32 RequiredQuantity) const
+{
+	return GetItemCountByDefinitionId(ItemDefinitionId) >= RequiredQuantity;
+}
+
+bool UMOInventoryComponent::ReduceDurability(const FGuid& ItemGuid, int32 Amount, bool& bOutDestroyed)
+{
+	bOutDestroyed = false;
+
+	AActor* OwnerActor = GetOwner();
+	if (!IsValid(OwnerActor) || !OwnerActor->HasAuthority())
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventory] ReduceDurability requires authority"));
+		return false;
+	}
+
+	if (!ItemGuid.IsValid() || Amount <= 0)
+	{
+		return false;
+	}
+
+	const int32 EntryIndex = FindEntryIndexByGuid(ItemGuid);
+	if (EntryIndex == INDEX_NONE)
+	{
+		return false;
+	}
+
+	FMOInventoryEntry& Entry = Inventory.Entries[EntryIndex];
+
+	// Check if item has finite durability
+	if (Entry.CurrentDurability < 0)
+	{
+		// Item has infinite durability
+		return false;
+	}
+
+	// Reduce durability
+	Entry.CurrentDurability = FMath::Max(0, Entry.CurrentDurability - Amount);
+
+	if (Entry.CurrentDurability == 0)
+	{
+		// Item is broken - destroy it
+		bOutDestroyed = true;
+		UE_LOG(LogMOFramework, Log, TEXT("[MOInventory] Tool %s broke! Removing from inventory."), *ItemGuid.ToString(EGuidFormats::Short));
+		RemoveItemByGuid(ItemGuid, Entry.Quantity);
+	}
+	else
+	{
+		Inventory.MarkItemDirty(Entry);
+		BroadcastInventoryChanged();
+	}
+
+	return true;
+}
+
+bool UMOInventoryComponent::GetItemDurability(const FGuid& ItemGuid, int32& OutDurability) const
+{
+	OutDurability = -1;
+
+	if (!ItemGuid.IsValid())
+	{
+		return false;
+	}
+
+	const int32 EntryIndex = FindEntryIndexByGuid(ItemGuid);
+	if (EntryIndex == INDEX_NONE)
+	{
+		return false;
+	}
+
+	OutDurability = Inventory.Entries[EntryIndex].CurrentDurability;
+	return true;
 }
 
 void UMOInventoryComponent::BroadcastInventoryChanged()
@@ -546,6 +649,7 @@ void UMOInventoryComponent::BuildSaveData(FMOInventorySaveData& OutSaveData) con
 		SaveEntry.ItemGuid = Entry.ItemGuid;
 		SaveEntry.ItemDefinitionId = Entry.ItemDefinitionId;
 		SaveEntry.Quantity = Entry.Quantity;
+		SaveEntry.CurrentDurability = Entry.CurrentDurability;
 		OutSaveData.Items.Add(SaveEntry);
 	}
 }
@@ -579,6 +683,7 @@ bool UMOInventoryComponent::ApplySaveDataAuthority(const FMOInventorySaveData& I
 		NewEntry.ItemGuid = ItemSaveEntry.ItemGuid;
 		NewEntry.ItemDefinitionId = ItemSaveEntry.ItemDefinitionId;
 		NewEntry.Quantity = ItemSaveEntry.Quantity;
+		NewEntry.CurrentDurability = ItemSaveEntry.CurrentDurability;
 		Inventory.Entries.Add(NewEntry);
 	}
 

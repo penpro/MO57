@@ -4,6 +4,7 @@
 #include "Commandlets/Commandlet.h"
 #include "MOItemDefinitionRow.h"
 #include "MORecipeDefinitionRow.h"
+#include "MOSkillDefinitionRow.h"
 #include "MODataImportCommandlet.generated.h"
 
 /**
@@ -54,7 +55,16 @@ public:
 	static int32 ImportRecipesFromCSV(const FString& CSVFilePath, bool bClearExisting = false);
 
 	/**
-	 * Import all CSVs from a directory (looks for Items.csv and Recipes.csv).
+	 * Import skills from a CSV file into the skill DataTable.
+	 * @param CSVFilePath Absolute or project-relative path to CSV file
+	 * @param bClearExisting If true, clears existing rows before import
+	 * @return Number of rows imported, -1 on error
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Data Import")
+	static int32 ImportSkillsFromCSV(const FString& CSVFilePath, bool bClearExisting = false);
+
+	/**
+	 * Import all CSVs from a directory (looks for Items.csv, Recipes.csv, Skills.csv).
 	 * @param DirectoryPath Path to directory containing CSV files
 	 * @param bClearExisting If true, clears existing rows before import
 	 * @return Total number of rows imported
@@ -78,6 +88,14 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Data Import")
 	static bool ExportRecipesToCSV(const FString& CSVFilePath);
 
+	/**
+	 * Export current skill DataTable to CSV.
+	 * @param CSVFilePath Output file path
+	 * @return True if export succeeded
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Data Import")
+	static bool ExportSkillsToCSV(const FString& CSVFilePath);
+
 private:
 	/** Parse a CSV file into rows. Returns false on error. */
 	static bool ParseCSVFile(const FString& FilePath, TArray<TArray<FString>>& OutRows, TArray<FString>& OutHeaders);
@@ -90,6 +108,9 @@ private:
 
 	/** Parse a recipe row from CSV columns. */
 	static bool ParseRecipeRow(const TArray<FString>& Headers, const TArray<FString>& Values, FName RowName, FMORecipeDefinitionRow& OutRow);
+
+	/** Parse a skill row from CSV columns. */
+	static bool ParseSkillRow(const TArray<FString>& Headers, const TArray<FString>& Values, FName RowName, FMOSkillDefinitionRow& OutRow);
 
 	/** Get column index by header name (case-insensitive). Returns -1 if not found. */
 	static int32 GetColumnIndex(const TArray<FString>& Headers, const FString& ColumnName);
@@ -106,6 +127,9 @@ private:
 	/** Parse EMOCraftingStation from string. */
 	static EMOCraftingStation ParseCraftingStation(const FString& StationString);
 
+	/** Parse EMOSkillCategory from string. */
+	static EMOSkillCategory ParseSkillCategory(const FString& CategoryString);
+
 	/** Convert item type to string for export. */
 	static FString ItemTypeToString(EMOItemType Type);
 
@@ -114,4 +138,7 @@ private:
 
 	/** Convert station to string for export. */
 	static FString StationToString(EMOCraftingStation Station);
+
+	/** Convert skill category to string for export. */
+	static FString SkillCategoryToString(EMOSkillCategory Category);
 };

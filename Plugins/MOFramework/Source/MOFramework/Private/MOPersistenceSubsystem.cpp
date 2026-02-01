@@ -14,6 +14,8 @@
 #include "MOInventoryComponent.h"
 #include "MOItemComponent.h"
 #include "MOPersistenceSettings.h"
+#include "MOCraftingQueueComponent.h"
+#include "MORecipeDiscoveryComponent.h"
 
 static FString StripUEDPIEPrefixes(const FString& InPath)
 {
@@ -190,6 +192,11 @@ bool UMOPersistenceSubsystem::SaveWorldToSlot(const FString& SlotName)
 
     const bool bOk = UGameplayStatics::SaveGameToSlot(SaveObject, SlotName, 0);
 
+    if (bOk)
+    {
+        CurrentSlotName = SlotName;
+    }
+
     UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] Save slot=%s ok=%d destroyed=%d pawns=%d inventories=%d worldItems=%d netmode=%d"),
         *SlotName,
         bOk ? 1 : 0,
@@ -200,6 +207,33 @@ bool UMOPersistenceSubsystem::SaveWorldToSlot(const FString& SlotName)
         (int32)World->GetNetMode());
 
     return bOk;
+}
+
+bool UMOPersistenceSubsystem::SaveToCurrentSlot()
+{
+    if (CurrentSlotName.IsEmpty())
+    {
+        // Auto-generate a slot name for new games that haven't been explicitly saved yet
+        CurrentSlotName = GenerateAutoSaveSlotName();
+        UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] SaveToCurrentSlot - Auto-generated slot name: %s"), *CurrentSlotName);
+    }
+    return SaveWorldToSlot(CurrentSlotName);
+}
+
+FString UMOPersistenceSubsystem::GenerateAutoSaveSlotName() const
+{
+    // Format: AutoSave_<WorldName>_<Timestamp>
+    FString WorldName = GetCurrentWorldIdentifier();
+    if (WorldName.IsEmpty())
+    {
+        WorldName = TEXT("Unknown");
+    }
+
+    // Use date-time for uniqueness: YYYYMMDD_HHMMSS
+    FDateTime Now = FDateTime::Now();
+    FString Timestamp = Now.ToString(TEXT("%Y%m%d_%H%M%S"));
+
+    return FString::Printf(TEXT("AutoSave_%s_%s"), *WorldName, *Timestamp);
 }
 
 bool UMOPersistenceSubsystem::LoadWorldFromSlot(const FString& SlotName)
@@ -288,6 +322,9 @@ FMOLoadResult UMOPersistenceSubsystem::LoadWorldFromSlotWithResult(const FString
 
     ApplyInventoriesToSpawnedPawns(World, LoadedTyped->PawnInventoriesByGuid);
 
+    // Track the current slot for auto-save support
+    CurrentSlotName = SlotName;
+
     // Determine overall success - we succeed even with partial failures, but log them
     LastLoadResult.bSuccess = true;
 
@@ -331,6 +368,207 @@ void UMOPersistenceSubsystem::ClearDestroyedGuid(const FGuid& Guid)
     {
         SessionDestroyedGuids.Remove(Guid);
     }
+}
+
+// =============================================================================
+// Pawn Record Access (for Possession Menu)
+// =============================================================================
+
+TArray<FMOPersistedPawnRecord> UMOPersistenceSubsystem::GetAllPawnRecords() const
+{
+    if (LoadedWorldSave)
+    {
+        return LoadedWorldSave->PersistedPawns;
+    }
+    return TArray<FMOPersistedPawnRecord>();
+}
+
+bool UMOPersistenceSubsystem::GetPawnRecord(const FGuid& PawnGuid, FMOPersistedPawnRecord& OutRecord) const
+{
+    if (!LoadedWorldSave || !PawnGuid.IsValid())
+    {
+        return false;
+    }
+
+    for (const FMOPersistedPawnRecord& Record : LoadedWorldSave->PersistedPawns)
+    {
+        if (Record.PawnGuid == PawnGuid)
+        {
+            OutRecord = Record;
+            return true;
+        }
+    }
+    return false;
+}
+
+bool UMOPersistenceSubsystem::UpdatePawnRecord(const FMOPersistedPawnRecord& Record, bool bAutoSave)
+{
+    if (!LoadedWorldSave || !Record.PawnGuid.IsValid())
+    {
+        return false;
+    }
+
+    for (FMOPersistedPawnRecord& ExistingRecord : LoadedWorldSave->PersistedPawns)
+    {
+        if (ExistingRecord.PawnGuid == Record.PawnGuid)
+        {
+            ExistingRecord = Record;
+
+            if (bAutoSave)
+            {
+                SaveToCurrentSlot();
+            }
+            return true;
+        }
+    }
+    return false;
+}
+
+APawn* UMOPersistenceSubsystem::SpawnPawnFromRecord(const FGuid& PawnGuid)
+{
+    if (!PawnGuid.IsValid())
+    {
+        return nullptr;
+    }
+
+    FMOPersistedPawnRecord Record;
+    if (!GetPawnRecord(PawnGuid, Record))
+    {
+        UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] SpawnPawnFromRecord: No record found for GUID %s"), *PawnGuid.ToString());
+        return nullptr;
+    }
+
+    if (Record.bIsDeceased)
+    {
+        UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] SpawnPawnFromRecord: Pawn %s is deceased"), *PawnGuid.ToString());
+        return nullptr;
+    }
+
+    UClass* PawnClass = TryLoadPawnClassFromSoftPath(Record.PawnClassPath);
+    if (!PawnClass)
+    {
+        UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] SpawnPawnFromRecord: Failed to load class %s"), *Record.PawnClassPath.ToString());
+        return nullptr;
+    }
+
+    UWorld* World = GetWorld();
+    if (!World)
+    {
+        return nullptr;
+    }
+
+    FActorSpawnParameters SpawnParams;
+    SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+
+    APawn* SpawnedPawn = World->SpawnActor<APawn>(PawnClass, Record.Transform, SpawnParams);
+    if (!SpawnedPawn)
+    {
+        UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] SpawnPawnFromRecord: Failed to spawn pawn"));
+        return nullptr;
+    }
+
+    // Apply GUID to the spawned pawn
+    UMOIdentityComponent* IdentityComp = SpawnedPawn->FindComponentByClass<UMOIdentityComponent>();
+    if (IdentityComp)
+    {
+        IdentityComp->SetGuid(PawnGuid);
+    }
+
+    // Apply inventory if available
+    if (LoadedWorldSave && LoadedWorldSave->PawnInventoriesByGuid.Contains(PawnGuid))
+    {
+        UMOInventoryComponent* InvComp = SpawnedPawn->FindComponentByClass<UMOInventoryComponent>();
+        if (InvComp)
+        {
+            const FMOInventorySaveData& InvData = LoadedWorldSave->PawnInventoriesByGuid[PawnGuid];
+            InvComp->ApplySaveDataAuthority(InvData);
+        }
+    }
+
+    // Apply crafting queue if available
+    if (LoadedWorldSave && LoadedWorldSave->PawnCraftingQueuesByGuid.Contains(PawnGuid))
+    {
+        UMOCraftingQueueComponent* CraftingQueue = SpawnedPawn->FindComponentByClass<UMOCraftingQueueComponent>();
+        if (CraftingQueue)
+        {
+            const FMOCraftingQueueSaveData& QueueData = LoadedWorldSave->PawnCraftingQueuesByGuid[PawnGuid];
+            CraftingQueue->ApplySaveData(QueueData, true); // true = calculate offline progress
+        }
+    }
+
+    // Apply recipe discovery if available
+    if (LoadedWorldSave && LoadedWorldSave->PawnDiscoveredRecipesByGuid.Contains(PawnGuid))
+    {
+        UMORecipeDiscoveryComponent* Discovery = SpawnedPawn->FindComponentByClass<UMORecipeDiscoveryComponent>();
+        if (Discovery)
+        {
+            const FMORecipeDiscoverySaveData& DiscoveryData = LoadedWorldSave->PawnDiscoveredRecipesByGuid[PawnGuid];
+            Discovery->ApplySaveData(DiscoveryData);
+        }
+    }
+
+    UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] SpawnPawnFromRecord: Spawned pawn %s (%s)"),
+        *Record.CharacterName, *PawnGuid.ToString());
+
+    return SpawnedPawn;
+}
+
+void UMOPersistenceSubsystem::RegisterPawnRecord(const FMOPersistedPawnRecord& Record)
+{
+    if (!LoadedWorldSave)
+    {
+        LoadedWorldSave = NewObject<UMOWorldSaveGame>(this);
+    }
+
+    // Check if already exists
+    for (FMOPersistedPawnRecord& ExistingRecord : LoadedWorldSave->PersistedPawns)
+    {
+        if (ExistingRecord.PawnGuid == Record.PawnGuid)
+        {
+            ExistingRecord = Record;
+            return;
+        }
+    }
+
+    LoadedWorldSave->PersistedPawns.Add(Record);
+    UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Registered new pawn record: %s (%s)"),
+        *Record.CharacterName, *Record.PawnGuid.ToString());
+}
+
+void UMOPersistenceSubsystem::MarkPawnDeceased(const FGuid& PawnGuid)
+{
+    if (!LoadedWorldSave || !PawnGuid.IsValid())
+    {
+        return;
+    }
+
+    for (FMOPersistedPawnRecord& Record : LoadedWorldSave->PersistedPawns)
+    {
+        if (Record.PawnGuid == PawnGuid)
+        {
+            Record.bIsDeceased = true;
+            Record.StatusText = TEXT("Deceased");
+            UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Marked pawn as deceased: %s"), *PawnGuid.ToString());
+            return;
+        }
+    }
+}
+
+bool UMOPersistenceSubsystem::HasLivingPawns() const
+{
+    if (!LoadedWorldSave)
+    {
+        return false;
+    }
+
+    for (const FMOPersistedPawnRecord& Record : LoadedWorldSave->PersistedPawns)
+    {
+        if (!Record.bIsDeceased)
+        {
+            return true;
+        }
+    }
+    return false;
 }
 
 void UMOPersistenceSubsystem::ApplyDestroyedGuidsToWorld(UWorld* World)
@@ -507,14 +745,40 @@ void UMOPersistenceSubsystem::CapturePersistedPawnsAndInventories(UWorld* World,
         }
 
         FMOPersistedPawnRecord PawnRecord;
+
+        // Try to preserve existing record data (CharacterName, Gender, etc.)
+        // This is important because UI edits update LoadedWorldSave but not the pawn itself
+        if (LoadedWorldSave)
+        {
+            for (const FMOPersistedPawnRecord& ExistingRecord : LoadedWorldSave->PersistedPawns)
+            {
+                if (ExistingRecord.PawnGuid == PawnGuid)
+                {
+                    PawnRecord = ExistingRecord;
+                    break;
+                }
+            }
+        }
+
+        // Update fields that come from the actual pawn state
         PawnRecord.PawnGuid = PawnGuid;
         PawnRecord.Transform = Pawn->GetActorTransform();
         const FSoftObjectPath PawnClassSoftPath(Pawn->GetClass());
         PawnRecord.PawnClassPath = FSoftClassPath(PawnClassSoftPath.ToString());
 
-        UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] SAVE: Capturing pawn '%s' GUID=%s Class=%s Location=%s"),
+        // Generate default name for new pawns without an existing record
+        if (PawnRecord.CharacterName.IsEmpty())
+        {
+            // Use last 4 hex digits of GUID for unique identifier
+            FString GuidStr = PawnGuid.ToString(EGuidFormats::DigitsWithHyphens);
+            FString ShortId = GuidStr.Right(4).ToUpper();
+            PawnRecord.CharacterName = FString::Printf(TEXT("Character %s"), *ShortId);
+        }
+
+        UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] SAVE: Capturing pawn '%s' GUID=%s Name='%s' Class=%s Location=%s"),
             *Pawn->GetName(),
             *PawnGuid.ToString(EGuidFormats::DigitsWithHyphens),
+            *PawnRecord.CharacterName,
             *PawnRecord.PawnClassPath.ToString(),
             *PawnRecord.Transform.GetLocation().ToString());
 
@@ -523,10 +787,27 @@ void UMOPersistenceSubsystem::CapturePersistedPawnsAndInventories(UWorld* World,
         FMOInventorySaveData InventorySaveData;
         InventoryComponent->BuildSaveData(InventorySaveData);
         SaveObject->PawnInventoriesByGuid.Add(PawnGuid, InventorySaveData);
+
+        // Capture crafting queue data
+        if (UMOCraftingQueueComponent* CraftingQueue = Pawn->FindComponentByClass<UMOCraftingQueueComponent>())
+        {
+            FMOCraftingQueueSaveData QueueSaveData;
+            CraftingQueue->BuildSaveData(QueueSaveData);
+            SaveObject->PawnCraftingQueuesByGuid.Add(PawnGuid, QueueSaveData);
+        }
+
+        // Capture recipe discovery data
+        if (UMORecipeDiscoveryComponent* Discovery = Pawn->FindComponentByClass<UMORecipeDiscoveryComponent>())
+        {
+            FMORecipeDiscoverySaveData DiscoverySaveData;
+            Discovery->BuildSaveData(DiscoverySaveData);
+            SaveObject->PawnDiscoveredRecipesByGuid.Add(PawnGuid, DiscoverySaveData);
+        }
     }
 
-    UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] SAVE SUMMARY: TotalPawns=%d Captured=%d SkippedNoIdentity=%d SkippedNoInventory=%d"),
-        TotalPawns, SaveObject->PersistedPawns.Num(), SkippedNoIdentity, SkippedNoInventory);
+    UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] SAVE SUMMARY: TotalPawns=%d Captured=%d SkippedNoIdentity=%d SkippedNoInventory=%d Queues=%d Discoveries=%d"),
+        TotalPawns, SaveObject->PersistedPawns.Num(), SkippedNoIdentity, SkippedNoInventory,
+        SaveObject->PawnCraftingQueuesByGuid.Num(), SaveObject->PawnDiscoveredRecipesByGuid.Num());
 }
 
 void UMOPersistenceSubsystem::UnpossessAllControllers(UWorld* World) const
@@ -771,6 +1052,31 @@ void UMOPersistenceSubsystem::ApplyInventoriesToSpawnedPawns(UWorld* World, cons
         if (InventoryComponent->ApplySaveDataAuthority(*FoundSaveData))
         {
             PawnInventoryGuidsAppliedThisLoad.Add(PawnGuid);
+        }
+
+        // Apply crafting queue data if available
+        if (LoadedWorldSave)
+        {
+            if (const FMOCraftingQueueSaveData* QueueData = LoadedWorldSave->PawnCraftingQueuesByGuid.Find(PawnGuid))
+            {
+                if (UMOCraftingQueueComponent* CraftingQueue = Pawn->FindComponentByClass<UMOCraftingQueueComponent>())
+                {
+                    CraftingQueue->ApplySaveData(*QueueData, true); // true = calculate offline progress
+                    UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Applied crafting queue data to pawn GUID=%s"),
+                        *PawnGuid.ToString(EGuidFormats::Short));
+                }
+            }
+
+            // Apply recipe discovery data if available
+            if (const FMORecipeDiscoverySaveData* DiscoveryData = LoadedWorldSave->PawnDiscoveredRecipesByGuid.Find(PawnGuid))
+            {
+                if (UMORecipeDiscoveryComponent* Discovery = Pawn->FindComponentByClass<UMORecipeDiscoveryComponent>())
+                {
+                    Discovery->ApplySaveData(*DiscoveryData);
+                    UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Applied recipe discovery data to pawn GUID=%s (%d recipes)"),
+                        *PawnGuid.ToString(EGuidFormats::Short), DiscoveryData->DiscoveredRecipes.Num());
+                }
+            }
         }
     }
 }

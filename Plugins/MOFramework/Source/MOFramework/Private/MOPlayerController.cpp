@@ -121,9 +121,30 @@ void AMOPlayerController::SetupInputComponent()
 		EnhancedInput->BindAction(Inventory, ETriggerEvent::Started, this, &AMOPlayerController::HandleInventory);
 	}
 
+	if (UInputAction* Craft = CraftAction.LoadSynchronous())
+	{
+		EnhancedInput->BindAction(Craft, ETriggerEvent::Started, this, &AMOPlayerController::HandleCraft);
+		UE_LOG(LogTemp, Log, TEXT("AMOPlayerController: Bound CraftAction"));
+	}
+
 	if (UInputAction* PlayerStatus = PlayerStatusAction.LoadSynchronous())
 	{
 		EnhancedInput->BindAction(PlayerStatus, ETriggerEvent::Started, this, &AMOPlayerController::HandlePlayerStatus);
+		UE_LOG(LogTemp, Log, TEXT("AMOPlayerController: Bound PlayerStatusAction"));
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("AMOPlayerController: PlayerStatusAction is NOT set!"));
+	}
+
+	if (UInputAction* Skills = SkillsAction.LoadSynchronous())
+	{
+		EnhancedInput->BindAction(Skills, ETriggerEvent::Started, this, &AMOPlayerController::HandleSkills);
+		UE_LOG(LogTemp, Log, TEXT("AMOPlayerController: Bound SkillsAction"));
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("AMOPlayerController: SkillsAction is NOT set!"));
 	}
 
 	if (UInputAction* Pause = PauseAction.LoadSynchronous())
@@ -134,6 +155,11 @@ void AMOPlayerController::SetupInputComponent()
 	if (UInputAction* Possess = PossessAction.LoadSynchronous())
 	{
 		EnhancedInput->BindAction(Possess, ETriggerEvent::Started, this, &AMOPlayerController::HandlePossess);
+		UE_LOG(LogTemp, Log, TEXT("AMOPlayerController: Bound PossessAction"));
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("AMOPlayerController: PossessAction is NOT set!"));
 	}
 }
 
@@ -446,11 +472,27 @@ void AMOPlayerController::HandleInventory(const FInputActionValue& Value)
 	}
 }
 
+void AMOPlayerController::HandleCraft(const FInputActionValue& Value)
+{
+	if (UIManagerComponent)
+	{
+		UIManagerComponent->ToggleCraftingMenu();
+	}
+}
+
 void AMOPlayerController::HandlePlayerStatus(const FInputActionValue& Value)
 {
 	if (UIManagerComponent)
 	{
 		UIManagerComponent->TogglePlayerStatus();
+	}
+}
+
+void AMOPlayerController::HandleSkills(const FInputActionValue& Value)
+{
+	if (UIManagerComponent)
+	{
+		UIManagerComponent->ToggleSkillsPanel();
 	}
 }
 
@@ -464,9 +506,16 @@ void AMOPlayerController::HandlePause(const FInputActionValue& Value)
 
 void AMOPlayerController::HandlePossess(const FInputActionValue& Value)
 {
-	if (PossessionComponent)
+	UE_LOG(LogTemp, Warning, TEXT("AMOPlayerController::HandlePossess - Input received"));
+
+	if (UIManagerComponent)
 	{
-		PossessionComponent->TryPossessNearestPawn();
+		UE_LOG(LogTemp, Log, TEXT("AMOPlayerController::HandlePossess - Calling TogglePossessionMenu"));
+		UIManagerComponent->TogglePossessionMenu();
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("AMOPlayerController::HandlePossess - UIManagerComponent is NULL!"));
 	}
 }
 

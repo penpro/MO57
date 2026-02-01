@@ -1,14 +1,20 @@
 #include "MOStatusPanel.h"
 #include "MOFramework.h"
 #include "MOStatusField.h"
+#include "MOCharacterInfoEntry.h"
 #include "MOCommonButton.h"
 #include "MOVitalsComponent.h"
 #include "MOMetabolismComponent.h"
 #include "MOMentalStateComponent.h"
+#include "MOPersistenceSubsystem.h"
+#include "MOIdentityComponent.h"
 #include "Components/WidgetSwitcher.h"
 #include "Components/ScrollBox.h"
 #include "Components/VerticalBox.h"
 #include "Components/TextBlock.h"
+#include "Engine/GameInstance.h"
+#include "Kismet/GameplayStatics.h"
+#include "GameFramework/Pawn.h"
 
 void UMOStatusPanel::NativeConstruct()
 {
@@ -22,8 +28,11 @@ void UMOStatusPanel::NativeConstruct()
 	// Create field widgets from configs
 	CreateFieldsFromConfigs();
 
-	// Start on vitals tab
-	SwitchToCategory(EMOStatusCategory::Vitals);
+	// Populate the Info tab with character data
+	PopulateInfoTab();
+
+	// Start on Info tab
+	SwitchToCategory(EMOStatusCategory::Info);
 }
 
 void UMOStatusPanel::NativeDestruct()
@@ -34,7 +43,11 @@ void UMOStatusPanel::NativeDestruct()
 
 UWidget* UMOStatusPanel::NativeGetDesiredFocusTarget() const
 {
-	// Focus the first tab button
+	// Focus the first tab button (Info)
+	if (InfoTabButton)
+	{
+		return InfoTabButton;
+	}
 	if (VitalsTabButton)
 	{
 		return VitalsTabButton;
@@ -89,7 +102,7 @@ void UMOStatusPanel::SwitchToCategory(EMOStatusCategory Category)
 	CurrentCategory = Category;
 
 	// Update widget switcher using standard index-based switching
-	// Children must be ordered: Vitals(0), Nutrition(1), Nutrients(2), Fitness(3), Mental(4), Wounds(5), Conditions(6)
+	// Children must be ordered: Info(0), Vitals(1), Nutrition(2), Nutrients(3), Fitness(4), Mental(5), Wounds(6), Conditions(7)
 	if (CategorySwitcher)
 	{
 		CategorySwitcher->SetActiveWidgetIndex(static_cast<int32>(Category));
@@ -233,6 +246,10 @@ UVerticalBox* UMOStatusPanel::GetCategoryContainer(EMOStatusCategory Category) c
 
 	switch (Category)
 	{
+	case EMOStatusCategory::Info:
+		Container = InfoContainer;
+		ScrollBox = InfoScrollBox;
+		break;
 	case EMOStatusCategory::Vitals:
 		Container = VitalsContainer;
 		ScrollBox = VitalsScrollBox;
@@ -283,6 +300,7 @@ UVerticalBox* UMOStatusPanel::GetCategoryContainer(EMOStatusCategory Category) c
 				UMOStatusPanel* MutableThis = const_cast<UMOStatusPanel*>(this);
 				switch (Category)
 				{
+				case EMOStatusCategory::Info:		MutableThis->InfoContainer = ExistingBox; break;
 				case EMOStatusCategory::Vitals:		MutableThis->VitalsContainer = ExistingBox; break;
 				case EMOStatusCategory::Nutrition:	MutableThis->NutritionContainer = ExistingBox; break;
 				case EMOStatusCategory::Nutrients:	MutableThis->NutrientsContainer = ExistingBox; break;
@@ -304,6 +322,7 @@ UVerticalBox* UMOStatusPanel::GetCategoryContainer(EMOStatusCategory Category) c
 		UMOStatusPanel* MutableThis = const_cast<UMOStatusPanel*>(this);
 		switch (Category)
 		{
+		case EMOStatusCategory::Info:		MutableThis->InfoContainer = NewBox; break;
 		case EMOStatusCategory::Vitals:		MutableThis->VitalsContainer = NewBox; break;
 		case EMOStatusCategory::Nutrition:	MutableThis->NutritionContainer = NewBox; break;
 		case EMOStatusCategory::Nutrients:	MutableThis->NutrientsContainer = NewBox; break;
@@ -323,6 +342,11 @@ UVerticalBox* UMOStatusPanel::GetCategoryContainer(EMOStatusCategory Category) c
 
 void UMOStatusPanel::BindTabButtons()
 {
+	if (InfoTabButton)
+	{
+		InfoTabButton->OnClicked().RemoveAll(this);
+		InfoTabButton->OnClicked().AddUObject(this, &UMOStatusPanel::HandleInfoTabClicked);
+	}
 	if (VitalsTabButton)
 	{
 		VitalsTabButton->OnClicked().RemoveAll(this);
@@ -363,6 +387,11 @@ void UMOStatusPanel::BindTabButtons()
 		BackButton->OnClicked().RemoveAll(this);
 		BackButton->OnClicked().AddUObject(this, &UMOStatusPanel::HandleBackClicked);
 	}
+}
+
+void UMOStatusPanel::HandleInfoTabClicked()
+{
+	SwitchToCategory(EMOStatusCategory::Info);
 }
 
 void UMOStatusPanel::HandleVitalsTabClicked()
@@ -423,6 +452,7 @@ void UMOStatusPanel::UpdateScrollBoxVisibility(EMOStatusCategory ActiveCategory)
 		}
 	};
 
+	SetScrollBoxVisible(InfoScrollBox, ActiveCategory == EMOStatusCategory::Info);
 	SetScrollBoxVisible(VitalsScrollBox, ActiveCategory == EMOStatusCategory::Vitals);
 	SetScrollBoxVisible(NutritionScrollBox, ActiveCategory == EMOStatusCategory::Nutrition);
 	SetScrollBoxVisible(NutrientsScrollBox, ActiveCategory == EMOStatusCategory::Nutrients);
@@ -769,4 +799,251 @@ void UMOStatusPanel::UpdateMentalStateFields()
 
 	// Energy
 	UpdateFieldValueFloat(FName("Energy"), MentalState->GetEnergyLevel() * 100.0f, MentalState->GetEnergyLevel());
+}
+
+void UMOStatusPanel::PopulateInfoTab()
+{
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOStatusPanel::PopulateInfoTab] Called"));
+
+	// Clear existing entries
+	for (UMOCharacterInfoEntry* Entry : InfoEntryWidgets)
+	{
+		if (Entry)
+		{
+			Entry->RemoveFromParent();
+		}
+	}
+	InfoEntryWidgets.Empty();
+
+	if (!CharacterInfoEntryClass)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOStatusPanel::PopulateInfoTab] CharacterInfoEntryClass not set! Set it in WBP_MOStatusPanel details panel."));
+		return;
+	}
+
+	APlayerController* PC = GetOwningPlayer();
+	if (!PC)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOStatusPanel::PopulateInfoTab] No owning player controller"));
+		return;
+	}
+
+	// Get the current pawn's GUID
+	APawn* CurrentPawn = PC->GetPawn();
+	if (!CurrentPawn)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOStatusPanel::PopulateInfoTab] No pawn possessed - Info tab will be empty"));
+		return;
+	}
+
+	UMOIdentityComponent* IdentityComp = CurrentPawn->FindComponentByClass<UMOIdentityComponent>();
+	if (!IdentityComp)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOStatusPanel::PopulateInfoTab] Pawn '%s' has no IdentityComponent"), *CurrentPawn->GetName());
+		return;
+	}
+
+	DisplayedPawnGuid = IdentityComp->GetOrCreateGuid();
+	if (!DisplayedPawnGuid.IsValid())
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOStatusPanel::PopulateInfoTab] Pawn GUID is invalid"));
+		return;
+	}
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOStatusPanel::PopulateInfoTab] Pawn GUID: %s"), *DisplayedPawnGuid.ToString());
+
+	// Get pawn record from persistence
+	UGameInstance* GameInstance = UGameplayStatics::GetGameInstance(this);
+	if (!GameInstance)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOStatusPanel::PopulateInfoTab] No GameInstance"));
+		return;
+	}
+
+	UMOPersistenceSubsystem* Persistence = GameInstance->GetSubsystem<UMOPersistenceSubsystem>();
+	if (!Persistence)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOStatusPanel::PopulateInfoTab] No PersistenceSubsystem"));
+		return;
+	}
+
+	FMOPersistedPawnRecord Record;
+	if (!Persistence->GetPawnRecord(DisplayedPawnGuid, Record))
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOStatusPanel::PopulateInfoTab] No pawn record found for GUID %s - creating default"), *DisplayedPawnGuid.ToString());
+		// Create a default record so we can still show something
+		Record.PawnGuid = DisplayedPawnGuid;
+		Record.CharacterName = TEXT("Unknown");
+		Record.Gender = TEXT("Unknown");
+		Record.AgeInDays = 365 * 25; // Default 25 years
+		Record.HealthPercent = 1.0f;
+		Record.StatusText = TEXT("Healthy");
+		Record.Transform = CurrentPawn->GetActorTransform();
+	}
+
+	UVerticalBox* Container = GetCategoryContainer(EMOStatusCategory::Info);
+	if (!Container)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOStatusPanel::PopulateInfoTab] No container for Info category - InfoScrollBox bound: %s"), InfoScrollBox ? TEXT("Yes") : TEXT("No"));
+		return;
+	}
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOStatusPanel::PopulateInfoTab] Creating info entries for '%s'"), *Record.CharacterName);
+
+	// Helper to create an info entry
+	auto CreateInfoEntry = [this, PC, Container](FName FieldId, const FText& Label, const FText& Value, bool bCanChange)
+	{
+		UMOCharacterInfoEntry* Entry = CreateWidget<UMOCharacterInfoEntry>(PC, CharacterInfoEntryClass);
+		if (Entry)
+		{
+			Entry->InitializeEntry(FieldId, Label, Value, bCanChange);
+			Entry->OnChangeRequested.AddDynamic(this, &UMOStatusPanel::HandleInfoEntryChangeRequested);
+			Entry->OnValueChanged.AddDynamic(this, &UMOStatusPanel::HandleInfoEntryValueChanged);
+			Container->AddChild(Entry);
+			InfoEntryWidgets.Add(Entry);
+		}
+		return Entry;
+	};
+
+	// Create entries for character info
+	// Name - editable
+	CreateInfoEntry(
+		FName("CharacterName"),
+		NSLOCTEXT("MOStatus", "CharName", "Name"),
+		FText::FromString(Record.CharacterName.IsEmpty() ? TEXT("Unknown") : Record.CharacterName),
+		true
+	);
+
+	// Gender - editable
+	CreateInfoEntry(
+		FName("Gender"),
+		NSLOCTEXT("MOStatus", "Gender", "Gender"),
+		FText::FromString(Record.Gender.IsEmpty() ? TEXT("Unknown") : Record.Gender),
+		true
+	);
+
+	// Age - not editable (calculated)
+	int32 AgeYears = Record.AgeInDays / 365;
+	CreateInfoEntry(
+		FName("Age"),
+		NSLOCTEXT("MOStatus", "Age", "Age"),
+		FText::Format(NSLOCTEXT("MOStatus", "AgeYears", "{0} years"), FText::AsNumber(AgeYears)),
+		false
+	);
+
+	// Health - not editable (display only)
+	CreateInfoEntry(
+		FName("Health"),
+		NSLOCTEXT("MOStatus", "Health", "Health"),
+		FText::Format(NSLOCTEXT("MOStatus", "HealthPercent", "{0}%"), FText::AsNumber(FMath::RoundToInt(Record.HealthPercent * 100.0f))),
+		false
+	);
+
+	// Status - not editable
+	CreateInfoEntry(
+		FName("Status"),
+		NSLOCTEXT("MOStatus", "Status", "Status"),
+		FText::FromString(Record.StatusText.IsEmpty() ? TEXT("Healthy") : Record.StatusText),
+		false
+	);
+
+	// Location - not editable
+	FString LocationStr = Record.LocationName;
+	if (LocationStr.IsEmpty())
+	{
+		FVector Pos = Record.Transform.GetLocation();
+		LocationStr = FString::Printf(TEXT("%.0f, %.0f"), Pos.X, Pos.Y);
+	}
+	CreateInfoEntry(
+		FName("Location"),
+		NSLOCTEXT("MOStatus", "Location", "Location"),
+		FText::FromString(LocationStr),
+		false
+	);
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOStatusPanel] Populated Info tab with %d entries for %s"), InfoEntryWidgets.Num(), *Record.CharacterName);
+}
+
+void UMOStatusPanel::HandleInfoEntryChangeRequested(FName FieldId)
+{
+	UE_LOG(LogMOFramework, Log, TEXT("[MOStatusPanel] Change requested for field: %s"), *FieldId.ToString());
+
+	// TODO: Show an input dialog to change the value
+	// For now, just log it. This would typically:
+	// 1. Show a text input dialog
+	// 2. Validate the input
+	// 3. Update the persistence subsystem
+	// 4. Call RefreshCharacterInfo()
+
+	if (FieldId == FName("CharacterName"))
+	{
+		// TODO: Show name change dialog
+	}
+	else if (FieldId == FName("Gender"))
+	{
+		// Edit mode handles this now
+	}
+}
+
+void UMOStatusPanel::HandleInfoEntryValueChanged(FName FieldId, const FString& NewValue)
+{
+	UE_LOG(LogMOFramework, Log, TEXT("[MOStatusPanel] Value changed for field '%s': '%s'"), *FieldId.ToString(), *NewValue);
+
+	if (!DisplayedPawnGuid.IsValid())
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOStatusPanel] Cannot save - no valid pawn GUID"));
+		return;
+	}
+
+	// Get persistence subsystem
+	UGameInstance* GameInstance = UGameplayStatics::GetGameInstance(this);
+	if (!GameInstance)
+	{
+		return;
+	}
+
+	UMOPersistenceSubsystem* Persistence = GameInstance->GetSubsystem<UMOPersistenceSubsystem>();
+	if (!Persistence)
+	{
+		return;
+	}
+
+	// Get current record
+	FMOPersistedPawnRecord Record;
+	if (!Persistence->GetPawnRecord(DisplayedPawnGuid, Record))
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOStatusPanel] Could not find pawn record to update"));
+		return;
+	}
+
+	// Update the appropriate field
+	if (FieldId == FName("CharacterName"))
+	{
+		Record.CharacterName = NewValue;
+	}
+	else if (FieldId == FName("Gender"))
+	{
+		Record.Gender = NewValue;
+	}
+	else
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOStatusPanel] Unknown editable field: %s"), *FieldId.ToString());
+		return;
+	}
+
+	// Save updated record
+	if (Persistence->UpdatePawnRecord(Record))
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOStatusPanel] Saved updated %s for pawn %s"), *FieldId.ToString(), *DisplayedPawnGuid.ToString());
+	}
+	else
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOStatusPanel] Failed to save updated %s"), *FieldId.ToString());
+	}
+}
+
+void UMOStatusPanel::RefreshCharacterInfo()
+{
+	// Re-populate the info tab with current data
+	PopulateInfoTab();
 }

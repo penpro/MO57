@@ -193,7 +193,7 @@ struct MOFRAMEWORK_API FMOWound : public FFastArraySerializerItem
 	GENERATED_BODY()
 
 	/** Unique identifier for this wound. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Medical|Wound")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Medical|Wound", meta=(IgnoreForMemberInitializationTest))
 	FGuid WoundId;
 
 	/** Which body part this wound is on. */
@@ -301,7 +301,7 @@ struct MOFRAMEWORK_API FMOCondition : public FFastArraySerializerItem
 	GENERATED_BODY()
 
 	/** Unique identifier for this condition. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Medical|Condition")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Medical|Condition", meta=(IgnoreForMemberInitializationTest))
 	FGuid ConditionId;
 
 	/** Type of condition. */
@@ -696,7 +696,7 @@ struct MOFRAMEWORK_API FMODigestingFood : public FFastArraySerializerItem
 	GENERATED_BODY()
 
 	/** Unique identifier. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Metabolism|Digestion")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Metabolism|Digestion", meta=(IgnoreForMemberInitializationTest))
 	FGuid DigestId;
 
 	/** Reference to item definition. */

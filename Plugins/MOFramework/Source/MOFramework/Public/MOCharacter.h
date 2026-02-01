@@ -24,6 +24,10 @@ class UMOSkillsComponent;
 class UMOKnowledgeComponent;
 class UMOVitalsComponent;
 class UMOMetabolismComponent;
+class UMOMentalStateComponent;
+class UMOAnatomyComponent;
+class UMOCraftingQueueComponent;
+class UMORecipeDiscoveryComponent;
 class USpringArmComponent;
 class UCameraComponent;
 class USkeletalMesh;
@@ -64,6 +68,24 @@ public:
 
 	UFUNCTION(BlueprintPure, Category="MO")
 	UMOKnowledgeComponent* GetKnowledgeComponent() const { return KnowledgeComponent; }
+
+	UFUNCTION(BlueprintPure, Category="MO")
+	UMOVitalsComponent* GetVitalsComponent() const { return VitalsComponent; }
+
+	UFUNCTION(BlueprintPure, Category="MO")
+	UMOMetabolismComponent* GetMetabolismComponent() const { return MetabolismComponent; }
+
+	UFUNCTION(BlueprintPure, Category="MO")
+	UMOMentalStateComponent* GetMentalStateComponent() const { return MentalStateComponent; }
+
+	UFUNCTION(BlueprintPure, Category="MO")
+	UMOAnatomyComponent* GetAnatomyComponent() const { return AnatomyComponent; }
+
+	UFUNCTION(BlueprintPure, Category="MO")
+	UMOCraftingQueueComponent* GetCraftingQueueComponent() const { return CraftingQueueComponent; }
+
+	UFUNCTION(BlueprintPure, Category="MO")
+	UMORecipeDiscoveryComponent* GetRecipeDiscoveryComponent() const { return RecipeDiscoveryComponent; }
 
 	UFUNCTION(BlueprintPure, Category="MO|Camera")
 	USpringArmComponent* GetCameraBoom() const { return CameraBoom; }
@@ -173,6 +195,30 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO")
 	TObjectPtr<UMOKnowledgeComponent> KnowledgeComponent;
 
+	/** Vitals component (blood, oxygen, body temperature). */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO")
+	TObjectPtr<UMOVitalsComponent> VitalsComponent;
+
+	/** Metabolism component (digestion, nutrition). */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO")
+	TObjectPtr<UMOMetabolismComponent> MetabolismComponent;
+
+	/** Mental state component (morale, stress). */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO")
+	TObjectPtr<UMOMentalStateComponent> MentalStateComponent;
+
+	/** Anatomy component (body parts, wounds). */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO")
+	TObjectPtr<UMOAnatomyComponent> AnatomyComponent;
+
+	/** Crafting queue component (timed crafting). */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO")
+	TObjectPtr<UMOCraftingQueueComponent> CraftingQueueComponent;
+
+	/** Recipe discovery component (unlockable recipes). */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO")
+	TObjectPtr<UMORecipeDiscoveryComponent> RecipeDiscoveryComponent;
+
 	// ============================================================================
 	// CONFIGURATION
 	// ============================================================================
@@ -236,6 +282,38 @@ protected:
 	/** Temperature increase per second while sprinting (°C). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Movement|Physiology")
 	float SprintingTempRisePerSec = 0.00133f; // ~0.08°C/min
+
+	// ============================================================================
+	// MOVEMENT SKILL & STAMINA CONFIG
+	// ============================================================================
+
+	/** Skill ID for athletics/fitness (gains XP from movement). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Movement|Skills")
+	FName AthleticsSkillId = TEXT("athletics");
+
+	/** XP gained per second while walking. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Movement|Skills")
+	float WalkingXPPerSecond = 0.1f;
+
+	/** XP gained per second while jogging. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Movement|Skills")
+	float JoggingXPPerSecond = 0.5f;
+
+	/** XP gained per second while sprinting. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Movement|Skills")
+	float SprintingXPPerSecond = 1.0f;
+
+	/** Stamina cost per second while jogging. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Movement|Stamina")
+	float JoggingStaminaCostPerSecond = 2.0f;
+
+	/** Stamina cost per second while sprinting. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Movement|Stamina")
+	float SprintingStaminaCostPerSecond = 8.0f;
+
+	/** Minimum stamina required to start sprinting. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Movement|Stamina")
+	float MinStaminaToSprint = 10.0f;
 
 	/** Look sensitivity multiplier. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Input", meta=(ClampMin="0.1", ClampMax="10.0"))
@@ -313,4 +391,16 @@ protected:
 
 	/** Stop physiology tracking. */
 	void StopMovementPhysiologyTracking();
+
+	// ============================================================================
+	// COMPONENT EVENT HANDLERS
+	// ============================================================================
+
+	/** Called when knowledge is learned - triggers recipe discovery. */
+	UFUNCTION()
+	void HandleKnowledgeLearned(FName KnowledgeId, FName FromItemId);
+
+	/** Called when a skill levels up - triggers recipe discovery. */
+	UFUNCTION()
+	void HandleSkillLevelUp(FName SkillId, int32 OldLevel, int32 NewLevel);
 };

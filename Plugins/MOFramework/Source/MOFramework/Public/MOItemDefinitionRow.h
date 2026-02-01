@@ -238,4 +238,22 @@ struct MOFRAMEWORK_API FMOItemDefinitionRow : public FTableRowBase
 	/** Inspection and knowledge data. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Inspection")
 	FMOItemInspection Inspection;
+
+	// --- Tool Properties ---
+
+	/** If true, this item can function as a crafting tool. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Tool")
+	bool bIsTool = false;
+
+	/** Tool type identifier (Hammer, Knife, Saw, etc.). Used to match recipe requirements. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Tool", meta=(EditCondition="bIsTool"))
+	FName ToolType = NAME_None;
+
+	/** Quality tier (affects craft speed/quality). 1.0 = standard. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Tool", meta=(EditCondition="bIsTool", ClampMin="0.1"))
+	float ToolQuality = 1.0f;
+
+	/** Maximum durability (0 = indestructible). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Tool", meta=(EditCondition="bIsTool", ClampMin="0"))
+	int32 MaxDurability = 0;
 };

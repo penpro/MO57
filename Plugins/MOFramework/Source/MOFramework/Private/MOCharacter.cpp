@@ -13,6 +13,10 @@
 #include "MOSurvivalStatsComponent.h"
 #include "MOVitalsComponent.h"
 #include "MOMetabolismComponent.h"
+#include "MOMentalStateComponent.h"
+#include "MOAnatomyComponent.h"
+#include "MOCraftingQueueComponent.h"
+#include "MORecipeDiscoveryComponent.h"
 
 AMOCharacter::AMOCharacter()
 {
@@ -45,13 +49,27 @@ AMOCharacter::AMOCharacter()
 	GetCharacterMovement()->BrakingDecelerationWalking = 2000.f;
 	GetCharacterMovement()->BrakingDecelerationFalling = 1500.0f;
 
-	// MO Components
+	// MO Components - Core Identity
 	IdentityComponent = CreateDefaultSubobject<UMOIdentityComponent>(TEXT("IdentityComponent"));
+
+	// MO Components - Inventory & Crafting
 	InventoryComponent = CreateDefaultSubobject<UMOInventoryComponent>(TEXT("InventoryComponent"));
+	CraftingQueueComponent = CreateDefaultSubobject<UMOCraftingQueueComponent>(TEXT("CraftingQueueComponent"));
+	RecipeDiscoveryComponent = CreateDefaultSubobject<UMORecipeDiscoveryComponent>(TEXT("RecipeDiscoveryComponent"));
+
+	// MO Components - Interaction
 	InteractorComponent = CreateDefaultSubobject<UMOInteractorComponent>(TEXT("InteractorComponent"));
-	SurvivalStatsComponent = CreateDefaultSubobject<UMOSurvivalStatsComponent>(TEXT("SurvivalStatsComponent"));
+
+	// MO Components - Skills & Knowledge
 	SkillsComponent = CreateDefaultSubobject<UMOSkillsComponent>(TEXT("SkillsComponent"));
 	KnowledgeComponent = CreateDefaultSubobject<UMOKnowledgeComponent>(TEXT("KnowledgeComponent"));
+
+	// MO Components - Survival Stats & Body Systems
+	SurvivalStatsComponent = CreateDefaultSubobject<UMOSurvivalStatsComponent>(TEXT("SurvivalStatsComponent"));
+	VitalsComponent = CreateDefaultSubobject<UMOVitalsComponent>(TEXT("VitalsComponent"));
+	MetabolismComponent = CreateDefaultSubobject<UMOMetabolismComponent>(TEXT("MetabolismComponent"));
+	MentalStateComponent = CreateDefaultSubobject<UMOMentalStateComponent>(TEXT("MentalStateComponent"));
+	AnatomyComponent = CreateDefaultSubobject<UMOAnatomyComponent>(TEXT("AnatomyComponent"));
 
 	// Default mesh position (mesh itself loaded in BeginPlay if DefaultMesh is set)
 	GetMesh()->SetRelativeLocation(FVector(0.0f, 0.0f, -96.0f));
@@ -100,6 +118,18 @@ void AMOCharacter::BeginPlay()
 
 	// Start movement physiology tracking
 	StartMovementPhysiologyTracking();
+
+	// Bind knowledge learning to recipe discovery
+	if (KnowledgeComponent && RecipeDiscoveryComponent)
+	{
+		KnowledgeComponent->OnKnowledgeLearned.AddDynamic(this, &AMOCharacter::HandleKnowledgeLearned);
+	}
+
+	// Bind skill level up to recipe discovery
+	if (SkillsComponent && RecipeDiscoveryComponent)
+	{
+		SkillsComponent->OnSkillLevelUp.AddDynamic(this, &AMOCharacter::HandleSkillLevelUp);
+	}
 
 	Super::BeginPlay();
 }
@@ -241,7 +271,22 @@ bool AMOCharacter::CanJump_Implementation() const
 
 bool AMOCharacter::CanSprint_Implementation() const
 {
-	return CanMove_Implementation() && !bIsCrouched;
+	if (!CanMove_Implementation() || bIsCrouched)
+	{
+		return false;
+	}
+
+	// Check stamina requirement
+	if (SurvivalStatsComponent)
+	{
+		float CurrentStamina = SurvivalStatsComponent->GetStatCurrent(TEXT("Stamina"));
+		if (CurrentStamina < MinStaminaToSprint)
+		{
+			return false;
+		}
+	}
+
+	return true;
 }
 
 // ============================================================================
@@ -484,19 +529,19 @@ void AMOCharacter::ApplyMovementPhysiologyEffects(float DeltaTime)
 	if (!GetCharacterMovement() || GetVelocity().Size2D() < 10.0f)
 	{
 		// Not moving - set exertion to resting
-		if (UMOVitalsComponent* Vitals = FindComponentByClass<UMOVitalsComponent>())
+		if (VitalsComponent)
 		{
 			// Gradually return to resting exertion (handled by vitals component)
-			Vitals->SetExertionLevel(0.0f);
+			VitalsComponent->SetExertionLevel(0.0f);
 		}
 		return;
 	}
 
 	// Get body weight for calorie calculation
 	float BodyWeightKg = 75.0f; // Default
-	if (UMOMetabolismComponent* Metabolism = FindComponentByClass<UMOMetabolismComponent>())
+	if (MetabolismComponent)
 	{
-		BodyWeightKg = Metabolism->BodyComposition.TotalWeight;
+		BodyWeightKg = MetabolismComponent->BodyComposition.TotalWeight;
 	}
 
 	// Calculate calories burned: MET × weight(kg) × 0.0175 × time(minutes)
@@ -505,28 +550,105 @@ void AMOCharacter::ApplyMovementPhysiologyEffects(float DeltaTime)
 	const float CaloriesBurned = CaloriesPerMinute * (DeltaTime / 60.0f);
 
 	// Apply to metabolism
-	if (UMOMetabolismComponent* Metabolism = FindComponentByClass<UMOMetabolismComponent>())
+	if (MetabolismComponent)
 	{
-		Metabolism->ApplyCalorieBurn(CaloriesBurned);
+		MetabolismComponent->ApplyCalorieBurn(CaloriesBurned);
 
 		// Also count as cardio training if jogging or sprinting
 		if (CurrentMovementMode != EMOMovementMode::Walking)
 		{
 			float Intensity = (CurrentMovementMode == EMOMovementMode::Sprinting) ? 0.9f : 0.5f;
-			Metabolism->ApplyCardioTraining(Intensity, DeltaTime);
+			MetabolismComponent->ApplyCardioTraining(Intensity, DeltaTime);
 		}
 	}
 
 	// Apply to vitals (exertion, temperature)
-	if (UMOVitalsComponent* Vitals = FindComponentByClass<UMOVitalsComponent>())
+	if (VitalsComponent)
 	{
 		// Set exertion level
-		Vitals->SetExertionLevel(GetCurrentExertionLevel());
+		VitalsComponent->SetExertionLevel(GetCurrentExertionLevel());
 
 		// Apply temperature increase
 		// Note: The vitals component handles temperature regulation,
 		// we just add heat generation from exercise
 		float TempRise = GetCurrentTempRiseRate() * DeltaTime;
-		Vitals->Vitals.BodyTemperature = FMath::Min(Vitals->Vitals.BodyTemperature + TempRise, 40.0f);
+		VitalsComponent->Vitals.BodyTemperature = FMath::Min(VitalsComponent->Vitals.BodyTemperature + TempRise, 40.0f);
+	}
+
+	// ============================================================================
+	// STAMINA CONSUMPTION
+	// ============================================================================
+	if (SurvivalStatsComponent)
+	{
+		float StaminaCost = 0.0f;
+		switch (CurrentMovementMode)
+		{
+		case EMOMovementMode::Jogging:
+			StaminaCost = JoggingStaminaCostPerSecond * DeltaTime;
+			break;
+		case EMOMovementMode::Sprinting:
+			StaminaCost = SprintingStaminaCostPerSecond * DeltaTime;
+			break;
+		default:
+			break;
+		}
+
+		if (StaminaCost > 0.0f)
+		{
+			SurvivalStatsComponent->ModifyStat(TEXT("Stamina"), -StaminaCost);
+
+			// Auto-stop sprinting if stamina depleted
+			if (bIsSprinting && SurvivalStatsComponent->GetStatCurrent(TEXT("Stamina")) <= 0.0f)
+			{
+				StopSprint();
+			}
+		}
+	}
+
+	// ============================================================================
+	// ATHLETICS SKILL XP
+	// ============================================================================
+	if (SkillsComponent && !AthleticsSkillId.IsNone())
+	{
+		float XPGained = 0.0f;
+		switch (CurrentMovementMode)
+		{
+		case EMOMovementMode::Walking:
+			XPGained = WalkingXPPerSecond * DeltaTime;
+			break;
+		case EMOMovementMode::Jogging:
+			XPGained = JoggingXPPerSecond * DeltaTime;
+			break;
+		case EMOMovementMode::Sprinting:
+			XPGained = SprintingXPPerSecond * DeltaTime;
+			break;
+		}
+
+		if (XPGained > 0.0f)
+		{
+			SkillsComponent->AddExperience(AthleticsSkillId, XPGained);
+		}
+	}
+}
+
+// ============================================================================
+// COMPONENT EVENT HANDLERS
+// ============================================================================
+
+void AMOCharacter::HandleKnowledgeLearned(FName KnowledgeId, FName FromItemId)
+{
+	if (RecipeDiscoveryComponent)
+	{
+		RecipeDiscoveryComponent->CheckDiscoveryFromKnowledge(KnowledgeId);
+		UE_LOG(LogMOFramework, Log, TEXT("[MOCharacter] Knowledge '%s' learned - checking for recipe discoveries"), *KnowledgeId.ToString());
+	}
+}
+
+void AMOCharacter::HandleSkillLevelUp(FName SkillId, int32 OldLevel, int32 NewLevel)
+{
+	if (RecipeDiscoveryComponent)
+	{
+		RecipeDiscoveryComponent->CheckDiscoveryFromSkillLevel(SkillId, NewLevel);
+		UE_LOG(LogMOFramework, Log, TEXT("[MOCharacter] Skill '%s' leveled up to %d - checking for recipe discoveries"), *SkillId.ToString(), NewLevel);
 	}
 }
