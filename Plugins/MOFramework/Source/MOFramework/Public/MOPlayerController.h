@@ -10,6 +10,7 @@ class UInputMappingContext;
 class UInputAction;
 class UMOUIManagerComponent;
 class UMOPossessionComponent;
+class UMONotificationComponent;
 class UEnhancedInputLocalPlayerSubsystem;
 
 /**
@@ -53,6 +54,10 @@ public:
 	/** Pawn possession component. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO|Components")
 	TObjectPtr<UMOPossessionComponent> PossessionComponent;
+
+	/** Notification display component. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO|Components")
+	TObjectPtr<UMONotificationComponent> NotificationComponent;
 
 	// ============================================================================
 	// INPUT MAPPING CONTEXTS
@@ -221,6 +226,10 @@ public:
 	/** Get the Possession component. */
 	UFUNCTION(BlueprintPure, Category="MO|Components")
 	UMOPossessionComponent* GetPossessionComponent() const { return PossessionComponent; }
+
+	/** Get the Notification component. */
+	UFUNCTION(BlueprintPure, Category="MO|Components")
+	UMONotificationComponent* GetNotificationComponent() const { return NotificationComponent; }
 
 protected:
 	// ============================================================================

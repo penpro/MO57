@@ -2,6 +2,7 @@
 #include "MOControllableInterface.h"
 #include "MOUIManagerComponent.h"
 #include "MOPossessionComponent.h"
+#include "MONotificationComponent.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "InputMappingContext.h"
@@ -14,6 +15,9 @@ AMOPlayerController::AMOPlayerController()
 
 	// Create Possession component
 	PossessionComponent = CreateDefaultSubobject<UMOPossessionComponent>(TEXT("PossessionComponent"));
+
+	// Create Notification component
+	NotificationComponent = CreateDefaultSubobject<UMONotificationComponent>(TEXT("NotificationComponent"));
 }
 
 void AMOPlayerController::BeginPlay()

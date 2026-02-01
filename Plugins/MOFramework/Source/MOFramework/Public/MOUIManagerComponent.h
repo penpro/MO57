@@ -27,6 +27,7 @@ class UMOKnowledgeComponent;
 class UMOCraftingQueueComponent;
 class UMORecipeDiscoveryComponent;
 class UMOInspectionProgressWidget;
+class UMONotificationComponent;
 struct FMOInspectionResult;
 
 UCLASS(ClassGroup=(MO), meta=(BlueprintSpawnableComponent))
@@ -528,40 +529,33 @@ private:
 	UPROPERTY(Transient)
 	TWeakObjectPtr<UMONotificationWidget> NoPawnNotificationWidget;
 
-	// --- General Notifications ---
+	// --- Notifications (delegated to UMONotificationComponent) ---
 
 public:
-	/** Show a notification message for a duration. Queues if another is showing. */
+	/**
+	 * Show a notification message. Delegates to UMONotificationComponent if available.
+	 * @note Prefer using UMONotificationComponent directly for new code.
+	 */
 	UFUNCTION(BlueprintCallable, Category="MO|UI|Notifications")
 	void ShowNotification(const FText& Message, float Duration = 3.0f);
 
-	/** Show skill increase notification. */
+	/** Show skill increase notification. Delegates to UMONotificationComponent. */
 	UFUNCTION(BlueprintCallable, Category="MO|UI|Notifications")
 	void ShowSkillIncreaseNotification(FName SkillId, float XPAmount);
 
-	/** Show recipe unlocked notification. */
+	/** Show recipe unlocked notification. Delegates to UMONotificationComponent. */
 	UFUNCTION(BlueprintCallable, Category="MO|UI|Notifications")
 	void ShowRecipeUnlockedNotification(FName RecipeId);
 
+	/** Get the notification component (may be null). */
+	UFUNCTION(BlueprintPure, Category="MO|UI|Notifications")
+	UMONotificationComponent* GetNotificationComponent() const;
+
 private:
-	/** Queued notification messages. */
-	struct FQueuedNotification
-	{
-		FText Message;
-		float Duration;
-	};
-	TArray<FQueuedNotification> NotificationQueue;
-
-	/** Current notification widget. */
+	/** Cached reference to notification component on same owner. */
 	UPROPERTY(Transient)
-	TWeakObjectPtr<UMONotificationWidget> CurrentNotificationWidget;
+	TWeakObjectPtr<UMONotificationComponent> CachedNotificationComponent;
 
-	/** Timer for notification display. */
-	FTimerHandle NotificationTimerHandle;
-
-	/** Process the next notification in queue. */
-	void ProcessNextNotification();
-
-	/** Hide current notification and process next. */
-	void HideCurrentNotification();
+	/** Find or cache the notification component. */
+	UMONotificationComponent* ResolveNotificationComponent() const;
 };

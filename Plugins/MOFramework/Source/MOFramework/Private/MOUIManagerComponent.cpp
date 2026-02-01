@@ -40,6 +40,7 @@
 #include "MORecipeDiscoveryComponent.h"
 #include "MOInspectionProgressWidget.h"
 #include "MORecipeDatabaseSettings.h"
+#include "MONotificationComponent.h"
 
 UMOUIManagerComponent::UMOUIManagerComponent()
 {
@@ -2123,141 +2124,74 @@ void UMOUIManagerComponent::HandleInspectionCancelled()
 }
 
 // =============================================================================
-// General Notifications
+// Notifications (Delegated to UMONotificationComponent)
 // =============================================================================
+
+UMONotificationComponent* UMOUIManagerComponent::ResolveNotificationComponent() const
+{
+	// Check cache first
+	UMONotificationComponent* Cached = CachedNotificationComponent.Get();
+	if (IsValid(Cached))
+	{
+		return Cached;
+	}
+
+	// Find on owner
+	AActor* Owner = GetOwner();
+	if (IsValid(Owner))
+	{
+		UMONotificationComponent* Found = Owner->FindComponentByClass<UMONotificationComponent>();
+		if (IsValid(Found))
+		{
+			// Cache it (const_cast needed for caching in const method)
+			const_cast<UMOUIManagerComponent*>(this)->CachedNotificationComponent = Found;
+			return Found;
+		}
+	}
+
+	return nullptr;
+}
+
+UMONotificationComponent* UMOUIManagerComponent::GetNotificationComponent() const
+{
+	return ResolveNotificationComponent();
+}
 
 void UMOUIManagerComponent::ShowNotification(const FText& Message, float Duration)
 {
-	// Add to queue
-	FQueuedNotification Notification;
-	Notification.Message = Message;
-	Notification.Duration = Duration;
-	NotificationQueue.Add(Notification);
-
-	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Queued notification: %s (%.1fs)"), *Message.ToString(), Duration);
-
-	// If no notification showing, start processing
-	UMONotificationWidget* CurrentWidget = CurrentNotificationWidget.Get();
-	if (!IsValid(CurrentWidget) || !CurrentWidget->IsInViewport())
+	UMONotificationComponent* NotificationComp = ResolveNotificationComponent();
+	if (IsValid(NotificationComp))
 	{
-		ProcessNextNotification();
+		NotificationComp->ShowNotification(Message, Duration);
+	}
+	else
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] ShowNotification called but no UMONotificationComponent found on owner. Add UMONotificationComponent to your PlayerController."));
 	}
 }
 
 void UMOUIManagerComponent::ShowSkillIncreaseNotification(FName SkillId, float XPAmount)
 {
-	// Get skill display name
-	FText SkillName = FText::FromName(SkillId);
-
-	// Try to get better name from skills database
-	// For now, just capitalize the skill ID
-	FString SkillString = SkillId.ToString();
-	if (SkillString.Len() > 0)
+	UMONotificationComponent* NotificationComp = ResolveNotificationComponent();
+	if (IsValid(NotificationComp))
 	{
-		SkillString[0] = FChar::ToUpper(SkillString[0]);
-		SkillName = FText::FromString(SkillString);
+		NotificationComp->ShowSkillIncreaseNotification(SkillId, XPAmount);
 	}
-
-	FText Message = FText::Format(
-		NSLOCTEXT("MO", "SkillIncrease", "Your skill in {0} increased (+{1} XP)"),
-		SkillName,
-		FText::AsNumber(FMath::RoundToInt(XPAmount)));
-
-	ShowNotification(Message, 3.0f);
+	else
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] ShowSkillIncreaseNotification called but no UMONotificationComponent found on owner."));
+	}
 }
 
 void UMOUIManagerComponent::ShowRecipeUnlockedNotification(FName RecipeId)
 {
-	// Get recipe display name from database
-	FText RecipeName = UMORecipeDatabaseSettings::GetRecipeDisplayName(RecipeId);
-	if (RecipeName.IsEmpty())
+	UMONotificationComponent* NotificationComp = ResolveNotificationComponent();
+	if (IsValid(NotificationComp))
 	{
-		// Fallback: format the recipe ID nicely
-		FString RecipeString = RecipeId.ToString();
-		if (RecipeString.Len() > 0)
-		{
-			RecipeString[0] = FChar::ToUpper(RecipeString[0]);
-		}
-		RecipeName = FText::FromString(RecipeString);
+		NotificationComp->ShowRecipeUnlockedNotification(RecipeId);
 	}
-
-	FText Message = FText::Format(
-		NSLOCTEXT("MO", "RecipeUnlocked", "You can now craft: {0}"),
-		RecipeName);
-
-	ShowNotification(Message, 4.0f);
-}
-
-void UMOUIManagerComponent::ProcessNextNotification()
-{
-	if (NotificationQueue.Num() == 0)
+	else
 	{
-		return;
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] ShowRecipeUnlockedNotification called but no UMONotificationComponent found on owner."));
 	}
-
-	APlayerController* PlayerController = ResolveOwningPlayerController();
-	if (!IsValid(PlayerController))
-	{
-		return;
-	}
-
-	// Get next notification
-	FQueuedNotification Next = NotificationQueue[0];
-	NotificationQueue.RemoveAt(0);
-
-	// Create or reuse notification widget
-	UMONotificationWidget* NotificationWidget = CurrentNotificationWidget.Get();
-	if (!IsValid(NotificationWidget))
-	{
-		// Use NoPawnNotificationClass or default
-		TSubclassOf<UMONotificationWidget> WidgetClass = NoPawnNotificationClass;
-		if (!WidgetClass)
-		{
-			WidgetClass = UMONotificationWidget::StaticClass();
-		}
-
-		NotificationWidget = CreateWidget<UMONotificationWidget>(PlayerController, WidgetClass);
-		CurrentNotificationWidget = NotificationWidget;
-	}
-
-	if (!IsValid(NotificationWidget))
-	{
-		return;
-	}
-
-	// Set message and show
-	NotificationWidget->SetMessage(Next.Message);
-
-	if (!NotificationWidget->IsInViewport())
-	{
-		NotificationWidget->AddToViewport(NoPawnNotificationZOrder);
-	}
-
-	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Showing notification: %s"), *Next.Message.ToString());
-
-	// Set timer to hide and show next
-	if (UWorld* World = GetWorld())
-	{
-		World->GetTimerManager().ClearTimer(NotificationTimerHandle);
-		World->GetTimerManager().SetTimer(
-			NotificationTimerHandle,
-			this,
-			&UMOUIManagerComponent::HideCurrentNotification,
-			Next.Duration,
-			false
-		);
-	}
-}
-
-void UMOUIManagerComponent::HideCurrentNotification()
-{
-	// Hide current notification
-	UMONotificationWidget* NotificationWidget = CurrentNotificationWidget.Get();
-	if (IsValid(NotificationWidget) && NotificationWidget->IsInViewport())
-	{
-		NotificationWidget->RemoveFromParent();
-	}
-
-	// Process next in queue
-	ProcessNextNotification();
 }
