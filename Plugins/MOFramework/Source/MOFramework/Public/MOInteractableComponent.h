@@ -32,6 +32,14 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Interactable")
 	bool CanInteract(AController* InteractorController) const;
 
+	// Enable or disable interaction with this component.
+	UFUNCTION(BlueprintCallable, Category="MO|Interactable")
+	void SetCanInteract(bool bCanInteract) { bInteractionEnabled = bCanInteract; }
+
+	// Check if interaction is currently enabled.
+	UFUNCTION(BlueprintPure, Category="MO|Interactable")
+	bool IsInteractionEnabled() const { return bInteractionEnabled; }
+
 	// Server-authoritative interaction entry point.
 	UFUNCTION(BlueprintCallable, Category="MO|Interactable")
 	bool ServerInteract(AController* InteractorController);
@@ -41,4 +49,9 @@ protected:
 	UFUNCTION(BlueprintNativeEvent, Category="MO|Interactable")
 	bool HandleInteract(AController* InteractorController);
 	virtual bool HandleInteract_Implementation(AController* InteractorController);
+
+private:
+	// Whether interaction is currently enabled.
+	UPROPERTY()
+	bool bInteractionEnabled = true;
 };

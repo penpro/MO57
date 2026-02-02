@@ -4,6 +4,7 @@
 #include "GameFramework/SaveGame.h"
 #include "UObject/SoftObjectPath.h"
 #include "MOCraftingTypes.h"
+#include "MOBuildingTypes.h"
 #include "MOworldSaveGame.generated.h"
 
 USTRUCT(BlueprintType)
@@ -110,6 +111,55 @@ struct FMOPersistedWorldItemRecord
     int32 Quantity = 1;
 };
 
+/**
+ * Save data for a persisted building in the world.
+ */
+USTRUCT(BlueprintType)
+struct MOFRAMEWORK_API FMOPersistedBuildingRecord
+{
+    GENERATED_BODY()
+
+    /** Unique identifier for this building. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save")
+    FGuid BuildingGuid;
+
+    /** World transform of the building. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save")
+    FTransform Transform;
+
+    /** Class path of the buildable actor. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save")
+    FSoftClassPath ActorClassPath;
+
+    /** Recipe ID used to create this building. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save")
+    FName RecipeId;
+
+    /** Current build progress state. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save")
+    FMOBuildProgress Progress;
+
+    /** Inventory data for containers/crafting stations. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save")
+    TArray<FMOInventoryItemSaveEntry> InventoryItems;
+
+    /** Slot count for inventory (to restore proper slot layout). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save")
+    int32 InventorySlotCount = 0;
+
+    /** Slot GUIDs for inventory order. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save")
+    TArray<FGuid> InventorySlotGuids;
+
+    /** Current fuel level (for crafting stations). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save")
+    float CurrentFuel = 0.0f;
+
+    /** Whether the station is currently active (for crafting stations). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save")
+    bool bIsActive = false;
+};
+
 UCLASS()
 class MOFRAMEWORK_API UMOWorldSaveGame : public USaveGame
 {
@@ -139,4 +189,10 @@ public:
     /** Discovered recipes per pawn (PawnGuid -> DiscoveryData). */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Crafting")
     TMap<FGuid, FMORecipeDiscoverySaveData> PawnDiscoveredRecipesByGuid;
+
+    // --- Building System Save Data ---
+
+    /** All placed buildings in the world (including ghosts and under-construction). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Building")
+    TArray<FMOPersistedBuildingRecord> Buildings;
 };

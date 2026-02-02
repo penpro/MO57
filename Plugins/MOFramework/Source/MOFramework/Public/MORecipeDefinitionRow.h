@@ -5,6 +5,8 @@
 
 #include "MORecipeDefinitionRow.generated.h"
 
+class AMOBuildableActor;
+
 /**
  * Types of crafting stations where recipes can be performed.
  */
@@ -18,6 +20,115 @@ enum class EMOCraftingStation : uint8
 	Alchemy UMETA(DisplayName="Alchemy"),
 	Kitchen UMETA(DisplayName="Kitchen"),
 	Loom UMETA(DisplayName="Loom"),
+};
+
+// ============================================================================
+// BUILDING PLACEMENT & CONSTRUCTION TYPES
+// ============================================================================
+
+/**
+ * Placement preferences for a building type.
+ * Controls what surfaces the building can be placed on and rotation constraints.
+ */
+USTRUCT(BlueprintType)
+struct MOFRAMEWORK_API FMOBuildingPlacementData
+{
+	GENERATED_BODY()
+
+	// --- Surface Preferences ---
+
+	/** If true, this building prefers placement on ground (upward-facing surfaces). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Building|Placement")
+	bool bPrefersGroundPlacement = true;
+
+	/** If true, this building prefers placement on walls (vertical surfaces). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Building|Placement")
+	bool bPrefersWallPlacement = false;
+
+	/** If true, this building prefers placement on ceilings (downward-facing surfaces). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Building|Placement")
+	bool bPrefersCeilingPlacement = false;
+
+	// --- Rotation Constraints ---
+
+	/** If true, player can rotate around Z axis (Q/E keys). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Building|Rotation")
+	bool bAllowZRotation = true;
+
+	/** If true, player can rotate around X axis (pitch, W/S keys). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Building|Rotation")
+	bool bAllowXRotation = false;
+
+	/** If true, player can rotate around Y axis (roll, A/D keys). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Building|Rotation")
+	bool bAllowYRotation = false;
+
+	/** Degrees per rotation key press. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Building|Rotation", meta=(ClampMin="1.0", ClampMax="90.0"))
+	float RotationIncrement = 15.0f;
+
+	// --- Collision ---
+
+	/** If true, placement is only valid when ghost doesn't overlap other actors. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Building|Collision")
+	bool bRequiresNoCollision = true;
+
+	// --- Visual ---
+
+	/** Static mesh to display as the ghost preview. If not set, uses the buildable actor's mesh. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Building|Visual")
+	TSoftObjectPtr<UStaticMesh> PreviewMesh;
+
+	/** Scale of the preview mesh. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Building|Visual")
+	FVector PreviewScale = FVector(1.0f, 1.0f, 1.0f);
+
+	// --- Actor ---
+
+	/** Actor class to spawn when this building is placed. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Building|Actor")
+	TSubclassOf<AMOBuildableActor> BuildableActorClass;
+};
+
+/**
+ * A single build part - either an item to consume or an action to perform.
+ * Used for weighted time distribution during construction.
+ */
+USTRUCT(BlueprintType)
+struct MOFRAMEWORK_API FMOBuildPart
+{
+	GENERATED_BODY()
+
+	/**
+	 * Item definition ID to consume. If set, this part consumes items.
+	 * If NAME_None, this is an action-based part (use ActionId).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Building|Part")
+	FName ItemDefinitionId = NAME_None;
+
+	/**
+	 * Action ID for non-item parts (e.g., "Dig", "Hammer", "Weave").
+	 * Used when ItemDefinitionId is NAME_None.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Building|Part")
+	FName ActionId = NAME_None;
+
+	/** How many items to consume OR how many action repetitions. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Building|Part", meta=(ClampMin="1"))
+	int32 Quantity = 1;
+
+	/**
+	 * Weight for time distribution. Higher weight = more time spent on this part.
+	 * Total build time is distributed proportionally by weight.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Building|Part", meta=(ClampMin="1"))
+	int32 Weight = 1;
+
+	/** Returns true if this is an item-based part. */
+	bool IsItemPart() const { return !ItemDefinitionId.IsNone(); }
+
+	/** Returns true if this is an action-based part. */
+	bool IsActionPart() const { return ItemDefinitionId.IsNone() && !ActionId.IsNone(); }
 };
 
 /**
@@ -161,4 +272,58 @@ struct MOFRAMEWORK_API FMORecipeDefinitionRow : public FTableRowBase
 	/** Skill level that auto-unlocks this recipe (0 = doesn't auto-unlock). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Recipe|Discovery", meta=(ClampMin="0"))
 	int32 DiscoverySkillLevel = 0;
+
+	// ============================================================================
+	// BUILDING SYSTEM (only used when bIsBuilding is true)
+	// ============================================================================
+
+	/** If true, this recipe is for a placeable building rather than a crafted item. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Recipe|Building")
+	bool bIsBuilding = false;
+
+	/** Placement preferences for this building (surfaces, rotation, collision). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Recipe|Building", meta=(EditCondition="bIsBuilding", EditConditionHides))
+	FMOBuildingPlacementData PlacementData;
+
+	/**
+	 * Weighted build parts for construction.
+	 * Each part is an item or action that contributes to the build.
+	 * Time is distributed proportionally by weight.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Recipe|Building", meta=(EditCondition="bIsBuilding", EditConditionHides))
+	TArray<FMOBuildPart> BuildParts;
+
+	/** Total time in seconds to complete construction. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Recipe|Building", meta=(EditCondition="bIsBuilding", EditConditionHides, ClampMin="0.0"))
+	float TotalBuildTime = 60.0f;
+
+	/** Range in Unreal Units for gathering materials during construction (~150 UU = 5 feet). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Recipe|Building", meta=(EditCondition="bIsBuilding", EditConditionHides, ClampMin="0.0"))
+	float BuildRange = 150.0f;
+
+	// --- Building-Specific Properties ---
+
+	/** For crafting station buildings: the station type this building provides. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Recipe|Building|Station", meta=(EditCondition="bIsBuilding", EditConditionHides))
+	EMOCraftingStation ProvidedStationType = EMOCraftingStation::None;
+
+	/** For container buildings: number of inventory slots. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Recipe|Building|Container", meta=(EditCondition="bIsBuilding", EditConditionHides, ClampMin="0"))
+	int32 ContainerSlotCount = 0;
+
+	/** For crafting stations: whether the station requires fuel to operate. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Recipe|Building|Station", meta=(EditCondition="bIsBuilding", EditConditionHides))
+	bool bRequiresFuel = false;
+
+	/** For crafting stations: max fuel capacity. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Recipe|Building|Station", meta=(EditCondition="bIsBuilding && bRequiresFuel", EditConditionHides, ClampMin="0.0"))
+	float MaxFuel = 100.0f;
+
+	/** For crafting stations: fuel consumption rate per second when active. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Recipe|Building|Station", meta=(EditCondition="bIsBuilding && bRequiresFuel", EditConditionHides, ClampMin="0.0"))
+	float FuelConsumptionRate = 1.0f;
+
+	/** For crafting stations: item IDs accepted as fuel. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Recipe|Building|Station", meta=(EditCondition="bIsBuilding && bRequiresFuel", EditConditionHides))
+	TArray<FName> AcceptedFuelItems;
 };

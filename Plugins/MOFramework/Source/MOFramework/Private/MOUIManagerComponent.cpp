@@ -41,6 +41,12 @@
 #include "MOInspectionProgressWidget.h"
 #include "MORecipeDatabaseSettings.h"
 #include "MONotificationComponent.h"
+#include "MOBuildingMenu.h"
+#include "MOBuildWidget.h"
+#include "MOBuildableActor.h"
+#include "MOBuildingComponent.h"
+#include "MOBuildProgressComponent.h"
+#include "MOPlayerController.h"
 
 UMOUIManagerComponent::UMOUIManagerComponent()
 {
@@ -1014,11 +1020,12 @@ void UMOUIManagerComponent::OpenSkillsPanel()
 		PanelWidget->OnRequestClose.AddDynamic(this, &UMOUIManagerComponent::HandleSkillsPanelRequestClose);
 	}
 
-	// Get skills component
+	// Get skills and knowledge components
 	UMOSkillsComponent* Skills = CurrentPawn->FindComponentByClass<UMOSkillsComponent>();
+	UMOKnowledgeComponent* Knowledge = CurrentPawn->FindComponentByClass<UMOKnowledgeComponent>();
 
-	// Initialize with skills component
-	PanelWidget->InitializePanel(Skills);
+	// Initialize with both components
+	PanelWidget->InitializePanelWithKnowledge(Skills, Knowledge);
 
 	if (!PanelWidget->IsInViewport())
 	{
@@ -1034,26 +1041,28 @@ void UMOUIManagerComponent::OpenSkillsPanel()
 
 void UMOUIManagerComponent::CloseSkillsPanel()
 {
-	UMOSkillsPanel* PanelWidget = SkillsPanelWidget.Get();
-	if (!PanelWidget)
-	{
-		return;
-	}
-
-	if (PanelWidget->IsInViewport())
-	{
-		PanelWidget->RemoveFromParent();
-	}
-
-	HideModalBackground();
-
 	APlayerController* PlayerController = ResolveOwningPlayerController();
-	if (IsValid(PlayerController))
+
+	UMOSkillsPanel* PanelWidget = SkillsPanelWidget.Get();
+	if (IsValid(PanelWidget))
 	{
-		ApplyInputModeForMenuClosed(PlayerController);
+		if (PanelWidget->IsInViewport())
+		{
+			PanelWidget->RemoveFromParent();
+		}
 	}
 
 	UpdateReticleVisibility();
+
+	// Only restore input mode if no other menus are open
+	if (!IsAnyMenuOpen())
+	{
+		HideModalBackground();
+		if (IsValid(PlayerController) && PlayerController->IsLocalController())
+		{
+			ApplyInputModeForMenuClosed(PlayerController);
+		}
+	}
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Skills Panel closed"));
 }
@@ -1574,7 +1583,7 @@ void UMOUIManagerComponent::HandleConfirmationCancelled()
 
 bool UMOUIManagerComponent::IsAnyMenuOpen() const
 {
-	return IsInventoryMenuOpen() || IsInGameMenuOpen() || IsItemContextMenuOpen() || IsPlayerStatusVisible() || IsPossessionMenuOpen() || IsCraftingMenuOpen() || IsSkillsPanelOpen() || IsInspectionInProgress();
+	return IsInventoryMenuOpen() || IsInGameMenuOpen() || IsItemContextMenuOpen() || IsPlayerStatusVisible() || IsPossessionMenuOpen() || IsCraftingMenuOpen() || IsSkillsPanelOpen() || IsBuildingMenuOpen() || IsBuildWidgetOpen() || IsInspectionInProgress();
 }
 
 void UMOUIManagerComponent::CloseAllMenus()
@@ -1616,6 +1625,21 @@ void UMOUIManagerComponent::CloseAllMenus()
 	{
 		SkillsPanel->RemoveFromParent();
 	}
+
+	// Close building menu
+	UMOBuildingMenu* BuildMenu = BuildingMenuWidget.Get();
+	if (IsValid(BuildMenu) && BuildMenu->IsInViewport())
+	{
+		BuildMenu->RemoveFromParent();
+	}
+
+	// Close build widget
+	UMOBuildWidget* BuildWidgetInst = BuildWidgetWidget.Get();
+	if (IsValid(BuildWidgetInst) && BuildWidgetInst->IsInViewport())
+	{
+		BuildWidgetInst->RemoveFromParent();
+	}
+	CurrentBuildTarget.Reset();
 
 	// Cancel any active inspection
 	CancelItemInspection();
@@ -1683,6 +1707,13 @@ void UMOUIManagerComponent::CloseAllSwitchableMenus()
 	if (IsValid(PossMenu) && PossMenu->IsInViewport())
 	{
 		PossMenu->RemoveFromParent();
+	}
+
+	// Close building menu
+	UMOBuildingMenu* BuildMenu = BuildingMenuWidget.Get();
+	if (IsValid(BuildMenu) && BuildMenu->IsInViewport())
+	{
+		BuildMenu->RemoveFromParent();
 	}
 
 	// Hide modal background if no menus remain open
@@ -2093,11 +2124,11 @@ void UMOUIManagerComponent::HandleInspectionCompleted(bool bCompleted, const FMO
 			}
 		}
 
-		// Show recipe unlock notifications for new knowledge
-		for (const FName& KnowledgeId : Result.NewKnowledge)
-		{
-			ShowRecipeUnlockedNotification(KnowledgeId);
-		}
+		// Note: Knowledge learned notifications and recipe unlock notifications
+		// are handled by MOCharacter via OnKnowledgeLearned -> HandleKnowledgeLearned
+		// which shows the knowledge notification and triggers recipe discovery.
+		// Recipe discovery then fires OnRecipeDiscovered -> HandleRecipeDiscovered
+		// which shows the recipe unlock notification.
 	}
 }
 
@@ -2194,4 +2225,305 @@ void UMOUIManagerComponent::ShowRecipeUnlockedNotification(FName RecipeId)
 	{
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] ShowRecipeUnlockedNotification called but no UMONotificationComponent found on owner."));
 	}
+}
+
+// =============================================================================
+// Building Menu
+// =============================================================================
+
+void UMOUIManagerComponent::ToggleBuildingMenu()
+{
+	if (!IsLocalOwningPlayerController())
+	{
+		return;
+	}
+
+	// Don't allow opening while in-game menu is open
+	if (IsInGameMenuOpen())
+	{
+		return;
+	}
+
+	// If building menu is already open, just close it
+	if (IsBuildingMenuOpen())
+	{
+		CloseBuildingMenu();
+		return;
+	}
+
+	// Close all switchable menus and open building menu
+	CloseAllSwitchableMenus();
+	OpenBuildingMenu();
+}
+
+void UMOUIManagerComponent::OpenBuildingMenu()
+{
+	if (!IsLocalOwningPlayerController())
+	{
+		return;
+	}
+
+	APlayerController* PlayerController = ResolveOwningPlayerController();
+	if (!IsValid(PlayerController))
+	{
+		return;
+	}
+
+	// Check for valid pawn first
+	if (!HasValidPawn())
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOUI] OpenBuildingMenu - No valid pawn, showing notification"));
+		ShowNoPawnNotification();
+		return;
+	}
+
+	if (!BuildingMenuClass)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] BuildingMenuClass not set on UI manager component."));
+		return;
+	}
+
+	// Create widget if needed
+	UMOBuildingMenu* MenuWidget = BuildingMenuWidget.Get();
+	if (!IsValid(MenuWidget))
+	{
+		MenuWidget = CreateWidget<UMOBuildingMenu>(PlayerController, BuildingMenuClass);
+		if (!IsValid(MenuWidget))
+		{
+			UE_LOG(LogMOFramework, Error, TEXT("[MOUI] Failed to create Building Menu widget"));
+			return;
+		}
+
+		BuildingMenuWidget = MenuWidget;
+
+		// Bind delegates
+		MenuWidget->OnRequestClose.RemoveDynamic(this, &UMOUIManagerComponent::HandleBuildingMenuRequestClose);
+		MenuWidget->OnBuildingSelected.RemoveDynamic(this, &UMOUIManagerComponent::HandleBuildingSelected);
+		MenuWidget->OnRequestClose.AddDynamic(this, &UMOUIManagerComponent::HandleBuildingMenuRequestClose);
+		MenuWidget->OnBuildingSelected.AddDynamic(this, &UMOUIManagerComponent::HandleBuildingSelected);
+	}
+
+	// Initialize menu with pawn data
+	APawn* CurrentPawn = PlayerController->GetPawn();
+	if (IsValid(CurrentPawn))
+	{
+		UMOKnowledgeComponent* Knowledge = CurrentPawn->FindComponentByClass<UMOKnowledgeComponent>();
+		UMORecipeDiscoveryComponent* Discovery = CurrentPawn->FindComponentByClass<UMORecipeDiscoveryComponent>();
+		MenuWidget->InitializeMenu(Knowledge, Discovery);
+	}
+
+	// Show modal background and menu
+	ShowModalBackground();
+	MenuWidget->AddToViewport(BuildingMenuZOrder);
+
+	// Set input mode
+	ApplyInputModeForMenuOpen(PlayerController, MenuWidget);
+
+	// Set focus for keyboard navigation
+	MenuWidget->SetFocus();
+
+	UpdateReticleVisibility();
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Building Menu opened"));
+}
+
+void UMOUIManagerComponent::CloseBuildingMenu()
+{
+	APlayerController* PlayerController = ResolveOwningPlayerController();
+
+	UMOBuildingMenu* MenuWidget = BuildingMenuWidget.Get();
+	if (IsValid(MenuWidget))
+	{
+		if (MenuWidget->IsInViewport())
+		{
+			MenuWidget->RemoveFromParent();
+		}
+	}
+
+	UpdateReticleVisibility();
+
+	// Only restore input mode if no other menus are open
+	if (!IsAnyMenuOpen())
+	{
+		HideModalBackground();
+		if (IsValid(PlayerController) && PlayerController->IsLocalController())
+		{
+			ApplyInputModeForMenuClosed(PlayerController);
+		}
+	}
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Building Menu closed"));
+}
+
+bool UMOUIManagerComponent::IsBuildingMenuOpen() const
+{
+	UMOBuildingMenu* MenuWidget = BuildingMenuWidget.Get();
+	return IsValid(MenuWidget) && MenuWidget->IsInViewport();
+}
+
+UMOBuildingMenu* UMOUIManagerComponent::GetBuildingMenu() const
+{
+	return BuildingMenuWidget.Get();
+}
+
+void UMOUIManagerComponent::HandleBuildingMenuRequestClose()
+{
+	CloseBuildingMenu();
+}
+
+void UMOUIManagerComponent::HandleBuildingSelected(FName RecipeId)
+{
+	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Building selected: %s"), *RecipeId.ToString());
+
+	// Close the building menu
+	CloseBuildingMenu();
+
+	// Enter placement mode via building component
+	AMOPlayerController* PC = Cast<AMOPlayerController>(ResolveOwningPlayerController());
+	if (IsValid(PC))
+	{
+		UMOBuildingComponent* BuildingComp = PC->GetBuildingComponent();
+		if (IsValid(BuildingComp))
+		{
+			BuildingComp->EnterPlacementMode(RecipeId);
+		}
+	}
+}
+
+// =============================================================================
+// Build Widget (Ghost Interaction)
+// =============================================================================
+
+void UMOUIManagerComponent::ShowBuildWidget(AMOBuildableActor* Target)
+{
+	if (!IsLocalOwningPlayerController())
+	{
+		return;
+	}
+
+	if (!IsValid(Target))
+	{
+		return;
+	}
+
+	APlayerController* PlayerController = ResolveOwningPlayerController();
+	if (!IsValid(PlayerController))
+	{
+		return;
+	}
+
+	if (!BuildWidgetClass)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] BuildWidgetClass not set on UI manager component."));
+		return;
+	}
+
+	// Create widget if needed
+	UMOBuildWidget* WidgetInst = BuildWidgetWidget.Get();
+	if (!IsValid(WidgetInst))
+	{
+		WidgetInst = CreateWidget<UMOBuildWidget>(PlayerController, BuildWidgetClass);
+		if (!IsValid(WidgetInst))
+		{
+			UE_LOG(LogMOFramework, Error, TEXT("[MOUI] Failed to create Build Widget"));
+			return;
+		}
+
+		BuildWidgetWidget = WidgetInst;
+
+		// Bind delegates
+		WidgetInst->OnRequestClose.RemoveDynamic(this, &UMOUIManagerComponent::HandleBuildWidgetRequestClose);
+		WidgetInst->OnStartBuild.RemoveDynamic(this, &UMOUIManagerComponent::HandleBuildWidgetStartBuild);
+		WidgetInst->OnRequestClose.AddDynamic(this, &UMOUIManagerComponent::HandleBuildWidgetRequestClose);
+		WidgetInst->OnStartBuild.AddDynamic(this, &UMOUIManagerComponent::HandleBuildWidgetStartBuild);
+	}
+
+	CurrentBuildTarget = Target;
+
+	// Initialize widget with target building data
+	WidgetInst->InitializeForBuilding(Target);
+
+	// Show modal background and widget
+	ShowModalBackground();
+	WidgetInst->AddToViewport(BuildWidgetZOrder);
+
+	// Set input mode
+	ApplyInputModeForMenuOpen(PlayerController, WidgetInst);
+
+	WidgetInst->SetFocus();
+
+	UpdateReticleVisibility();
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Build Widget opened for: %s"), *Target->GetName());
+}
+
+void UMOUIManagerComponent::HideBuildWidget()
+{
+	APlayerController* PlayerController = ResolveOwningPlayerController();
+
+	UMOBuildWidget* WidgetInst = BuildWidgetWidget.Get();
+	if (IsValid(WidgetInst))
+	{
+		if (WidgetInst->IsInViewport())
+		{
+			WidgetInst->RemoveFromParent();
+		}
+	}
+
+	CurrentBuildTarget.Reset();
+
+	UpdateReticleVisibility();
+
+	// Only restore input mode if no other menus are open
+	if (!IsAnyMenuOpen())
+	{
+		HideModalBackground();
+		if (IsValid(PlayerController) && PlayerController->IsLocalController())
+		{
+			ApplyInputModeForMenuClosed(PlayerController);
+		}
+	}
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Build Widget closed"));
+}
+
+bool UMOUIManagerComponent::IsBuildWidgetOpen() const
+{
+	UMOBuildWidget* WidgetInst = BuildWidgetWidget.Get();
+	return IsValid(WidgetInst) && WidgetInst->IsInViewport();
+}
+
+void UMOUIManagerComponent::HandleBuildWidgetRequestClose()
+{
+	HideBuildWidget();
+}
+
+void UMOUIManagerComponent::HandleBuildWidgetStartBuild()
+{
+	AMOBuildableActor* Target = CurrentBuildTarget.Get();
+	if (!IsValid(Target))
+	{
+		HideBuildWidget();
+		return;
+	}
+
+	// Get build options from widget
+	UMOBuildWidget* WidgetInst = BuildWidgetWidget.Get();
+	if (!IsValid(WidgetInst))
+	{
+		return;
+	}
+
+	// Start construction with widget's options
+	UMOBuildProgressComponent* BuildProgress = Target->FindComponentByClass<UMOBuildProgressComponent>();
+	if (IsValid(BuildProgress))
+	{
+		FMOBuildProgress Options = WidgetInst->GetBuildOptions();
+		BuildProgress->StartConstruction(Options);
+	}
+
+	// Close the widget
+	HideBuildWidget();
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Started construction on: %s"), *Target->GetName());
 }

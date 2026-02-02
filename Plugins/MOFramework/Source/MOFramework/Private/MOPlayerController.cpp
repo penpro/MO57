@@ -3,6 +3,7 @@
 #include "MOUIManagerComponent.h"
 #include "MOPossessionComponent.h"
 #include "MONotificationComponent.h"
+#include "MOBuildingComponent.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "InputMappingContext.h"
@@ -18,6 +19,9 @@ AMOPlayerController::AMOPlayerController()
 
 	// Create Notification component
 	NotificationComponent = CreateDefaultSubobject<UMONotificationComponent>(TEXT("NotificationComponent"));
+
+	// Create Building component
+	BuildingComponent = CreateDefaultSubobject<UMOBuildingComponent>(TEXT("BuildingComponent"));
 }
 
 void AMOPlayerController::BeginPlay()
@@ -149,6 +153,16 @@ void AMOPlayerController::SetupInputComponent()
 	else
 	{
 		UE_LOG(LogTemp, Warning, TEXT("AMOPlayerController: SkillsAction is NOT set!"));
+	}
+
+	if (UInputAction* Build = BuildAction.LoadSynchronous())
+	{
+		EnhancedInput->BindAction(Build, ETriggerEvent::Started, this, &AMOPlayerController::HandleBuild);
+		UE_LOG(LogTemp, Log, TEXT("AMOPlayerController: Bound BuildAction"));
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("AMOPlayerController: BuildAction is NOT set!"));
 	}
 
 	if (UInputAction* Pause = PauseAction.LoadSynchronous())
@@ -497,6 +511,22 @@ void AMOPlayerController::HandleSkills(const FInputActionValue& Value)
 	if (UIManagerComponent)
 	{
 		UIManagerComponent->ToggleSkillsPanel();
+	}
+}
+
+void AMOPlayerController::HandleBuild(const FInputActionValue& Value)
+{
+	// If in placement mode, cancel it
+	if (BuildingComponent && BuildingComponent->IsInPlacementMode())
+	{
+		BuildingComponent->ExitPlacementMode(true);
+		return;
+	}
+
+	// Otherwise toggle the building menu
+	if (UIManagerComponent)
+	{
+		UIManagerComponent->ToggleBuildingMenu();
 	}
 }
 

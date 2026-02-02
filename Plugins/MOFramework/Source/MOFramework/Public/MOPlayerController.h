@@ -5,16 +5,134 @@
 #include "InputActionValue.h"
 #include "MOPlayerController.generated.h"
 
+/**
+ * =============================================================================
+ * MOPlayerController - Central Input and Component Hub
+ * =============================================================================
+ *
+ * PURPOSE:
+ * The MOPlayerController is the central hub for all player-facing systems.
+ * It owns the key framework components and handles all player input, delegating
+ * to the appropriate subsystems and possessed pawns.
+ *
+ * -----------------------------------------------------------------------------
+ * COMPONENT OWNERSHIP
+ * -----------------------------------------------------------------------------
+ *
+ * This controller creates and owns these components as default subobjects:
+ *
+ *   UMOUIManagerComponent (UIManagerComponent)
+ *     - Manages all UI widgets (menus, panels, dialogs)
+ *     - Handles input mode switching for UI
+ *     - See MOUIManagerComponent.h for full documentation
+ *
+ *   UMOPossessionComponent (PossessionComponent)
+ *     - Manages pawn possession and switching
+ *     - Tracks available pawns for possession
+ *     - Handles possess/unpossess logic
+ *
+ *   UMONotificationComponent (NotificationComponent)
+ *     - Displays notification messages to player
+ *     - Manages notification queue and display duration
+ *
+ *   UMOBuildingComponent (BuildingComponent)
+ *     - Manages building placement mode
+ *     - Handles ghost preview positioning
+ *     - Validates placement and confirms building
+ *
+ * -----------------------------------------------------------------------------
+ * INPUT SYSTEM ARCHITECTURE
+ * -----------------------------------------------------------------------------
+ *
+ * Uses UE5 Enhanced Input System with multiple mapping contexts:
+ *
+ *   EMOInputContext::PawnControl
+ *     - Active during normal gameplay
+ *     - Movement (WASD), Look (Mouse), Jump, Sprint, Crouch
+ *     - Primary/Secondary actions
+ *     - UI toggles (Tab, I, B, etc.)
+ *
+ *   EMOInputContext::BaseBuilding
+ *     - Active during building placement mode
+ *     - Ghost rotation (Q/E for yaw)
+ *     - Placement confirm (Left Click)
+ *     - Cancel (Right Click, Escape)
+ *
+ *   EMOInputContext::Menu
+ *     - Active when UI menus are open
+ *     - Navigation and selection
+ *
+ * CONTEXT SWITCHING:
+ *   SetInputContext(EMOInputContext, bRemoveOthers)
+ *     - Adds the specified context
+ *     - If bRemoveOthers=true, removes all other contexts first
+ *     - Handles priority ordering
+ *
+ * -----------------------------------------------------------------------------
+ * INPUT HANDLING FLOW
+ * -----------------------------------------------------------------------------
+ *
+ * 1. Enhanced Input System binds actions to handler functions
+ * 2. Handler functions (HandleMove, HandleLook, etc.) are called
+ * 3. For pawn-related input:
+ *    a. Get possessed pawn
+ *    b. Check if pawn implements IMOControllableInterface
+ *    c. Call interface method (ReceiveMoveInput, ReceiveLookInput, etc.)
+ * 4. For UI input:
+ *    a. Call UIManagerComponent->Toggle*Menu()
+ * 5. For building input:
+ *    a. If in placement mode: BuildingComponent handles
+ *    b. Otherwise: UIManagerComponent->ToggleBuildingMenu()
+ *
+ * -----------------------------------------------------------------------------
+ * INPUT ACTION BINDINGS
+ * -----------------------------------------------------------------------------
+ *
+ * Movement/Camera:
+ *   IA_Move -> HandleMove() -> Pawn->ReceiveMoveInput()
+ *   IA_Look -> HandleLook() -> Pawn->ReceiveLookInput()
+ *   IA_Jump -> HandleJump() -> Pawn->ReceiveJumpInput()
+ *   IA_Sprint -> HandleSprint() -> Pawn->ReceiveSprintInput()
+ *   IA_Crouch -> HandleCrouch() -> Pawn->ReceiveCrouchInput()
+ *
+ * Actions:
+ *   IA_PrimaryAction -> HandlePrimaryAction()
+ *     -> If building mode: BuildingComponent->HandlePlacementPrimaryAction()
+ *     -> Else: Pawn->ReceivePrimaryActionInput()
+ *   IA_SecondaryAction -> HandleSecondaryAction()
+ *     -> If building mode: BuildingComponent->HandlePlacementSecondaryAction()
+ *     -> Else: Pawn->ReceiveSecondaryActionInput()
+ *   IA_Interact -> HandleInteract() -> Pawn->ReceiveInteractInput()
+ *
+ * UI:
+ *   IA_InGameMenu -> HandleInGameMenu() -> UIManager->ToggleInGameMenu()
+ *   IA_Inventory -> HandleInventory() -> UIManager->ToggleInventoryMenu()
+ *   IA_Crafting -> HandleCrafting() -> UIManager->ToggleCraftingMenu()
+ *   IA_Skills -> HandleSkills() -> UIManager->ToggleSkillsPanel()
+ *   IA_Build -> HandleBuild() -> UIManager->ToggleBuildingMenu()
+ *   IA_Possess -> HandlePossess() -> UIManager->TogglePossessionMenu()
+ *
+ * Building:
+ *   IA_RotateBuildingCW -> HandleRotateBuildingCW()
+ *     -> BuildingComponent->RotateGhostZ(+increment)
+ *   IA_RotateBuildingCCW -> HandleRotateBuildingCCW()
+ *     -> BuildingComponent->RotateGhostZ(-increment)
+ *
+ * =============================================================================
+ */
+
 class APawn;
 class UInputMappingContext;
 class UInputAction;
 class UMOUIManagerComponent;
 class UMOPossessionComponent;
 class UMONotificationComponent;
+class UMOBuildingComponent;
 class UEnhancedInputLocalPlayerSubsystem;
 
 /**
  * Input context types for mapping context management.
+ * Used with SetInputContext() to switch between input modes.
  */
 UENUM(BlueprintType)
 enum class EMOInputContext : uint8
@@ -29,11 +147,7 @@ enum class EMOInputContext : uint8
  * Base player controller for the MO Framework.
  * Centralizes all player input handling and delegates to possessed pawns via IMOControllableInterface.
  *
- * Responsibilities:
- * - Receives and processes all player input
- * - Manages input mapping contexts
- * - Delegates movement/action input to possessed pawn
- * - Hosts UI management and possession components
+ * See file header for full architecture documentation.
  */
 UCLASS()
 class MOFRAMEWORK_API AMOPlayerController : public APlayerController
@@ -58,6 +172,10 @@ public:
 	/** Notification display component. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO|Components")
 	TObjectPtr<UMONotificationComponent> NotificationComponent;
+
+	/** Building placement component. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO|Components")
+	TObjectPtr<UMOBuildingComponent> BuildingComponent;
 
 	// ============================================================================
 	// INPUT MAPPING CONTEXTS
@@ -151,6 +269,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Input|Actions|UI")
 	TSoftObjectPtr<UInputAction> SkillsAction;
 
+	/** Toggle building menu / placement mode action. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Input|Actions|UI")
+	TSoftObjectPtr<UInputAction> BuildAction;
+
 	/** Pause/menu action. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Input|Actions|UI")
 	TSoftObjectPtr<UInputAction> PauseAction;
@@ -231,6 +353,10 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO|Components")
 	UMONotificationComponent* GetNotificationComponent() const { return NotificationComponent; }
 
+	/** Get the Building component. */
+	UFUNCTION(BlueprintPure, Category="MO|Components")
+	UMOBuildingComponent* GetBuildingComponent() const { return BuildingComponent; }
+
 protected:
 	// ============================================================================
 	// OVERRIDES
@@ -303,6 +429,9 @@ protected:
 
 	/** Handle skills panel toggle. */
 	void HandleSkills(const FInputActionValue& Value);
+
+	/** Handle building menu toggle. */
+	void HandleBuild(const FInputActionValue& Value);
 
 	/** Handle pause/menu. */
 	void HandlePause(const FInputActionValue& Value);

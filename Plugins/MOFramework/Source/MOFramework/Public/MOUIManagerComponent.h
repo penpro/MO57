@@ -4,6 +4,123 @@
 #include "Components/ActorComponent.h"
 #include "MOUIManagerComponent.generated.h"
 
+/**
+ * =============================================================================
+ * MOUIManagerComponent - Central UI Controller for MOFramework
+ * =============================================================================
+ *
+ * PURPOSE:
+ * This component lives on the PlayerController and serves as the central hub
+ * for all UI operations. It manages menu creation, lifecycle, input modes,
+ * and coordinates between UI widgets and game systems.
+ *
+ * OWNERSHIP:
+ * - Owner: AMOPlayerController (created in constructor as default subobject)
+ * - Lifespan: Exists for the duration of the PlayerController
+ *
+ * -----------------------------------------------------------------------------
+ * UI ARCHITECTURE OVERVIEW
+ * -----------------------------------------------------------------------------
+ *
+ * MENU HIERARCHY (from bottom to top Z-order):
+ *   1. Modal Background (Z=10) - Click-to-close backdrop
+ *   2. Menus/Panels (Z=50-100) - Inventory, Crafting, Skills, Building, etc.
+ *   3. Context Menus (Z=150) - Item right-click menu
+ *   4. Dialogs (Z=200) - Confirmation dialogs, inspection progress
+ *   5. Notifications (Z=250) - Temporary notification messages
+ *
+ * MENU CATEGORIES:
+ *   - Switchable Menus: Inventory, Crafting, Skills, Building, Status
+ *     -> Opening one closes others (except in-game menu)
+ *     -> Tab/Escape closes to gameplay
+ *   - Overlay Menus: InGame, Possession
+ *     -> Can overlay on top of switchable menus
+ *     -> Escape closes hierarchically (focus panel first, then menu)
+ *   - Modal Widgets: Context menu, Confirmation dialog, Build widget
+ *     -> Block input to other widgets while open
+ *
+ * -----------------------------------------------------------------------------
+ * DELEGATE FLOW PATTERNS
+ * -----------------------------------------------------------------------------
+ *
+ * All menu widgets follow this delegate pattern:
+ *
+ *   Widget (OnRequestClose) --> UIManager (Handle*RequestClose) --> Close*()
+ *
+ * STANDARD DELEGATES USED BY WIDGETS:
+ *   - OnRequestClose: Widget wants to close (Tab/Escape/Close button)
+ *   - OnConfirmed/OnCancelled: Dialog result callbacks
+ *   - On[Action]Requested: Widget requests an action (Save, Load, Craft, etc.)
+ *
+ * DELEGATE BINDING PATTERN:
+ *   1. Remove any existing binding (prevents duplicates on re-open)
+ *   2. Add new binding
+ *   Example:
+ *     Widget->OnRequestClose.RemoveDynamic(this, &ThisClass::HandleClose);
+ *     Widget->OnRequestClose.AddDynamic(this, &ThisClass::HandleClose);
+ *
+ * -----------------------------------------------------------------------------
+ * INPUT MODE MANAGEMENT
+ * -----------------------------------------------------------------------------
+ *
+ * When menus open:
+ *   - Input mode: FInputModeUIOnly or FInputModeGameAndUI
+ *   - Mouse cursor: Shown
+ *   - Movement/Look: Optionally locked (configurable)
+ *
+ * When all menus close:
+ *   - Input mode: FInputModeGameOnly
+ *   - Mouse cursor: Hidden
+ *   - Movement/Look: Restored
+ *
+ * -----------------------------------------------------------------------------
+ * MENU OPEN/CLOSE FLOW
+ * -----------------------------------------------------------------------------
+ *
+ * OPEN FLOW:
+ *   1. ToggleMenu() or OpenMenu() called
+ *   2. Check if menu already open -> close if toggle
+ *   3. Close switchable menus if opening another (CloseAllSwitchableMenus)
+ *   4. Create widget if needed (CreateWidget<T>)
+ *   5. Bind delegates (remove then add)
+ *   6. Initialize widget with required components
+ *   7. Show modal background
+ *   8. Add to viewport
+ *   9. Set input mode for menu
+ *   10. Hide reticle
+ *
+ * CLOSE FLOW:
+ *   1. Widget broadcasts OnRequestClose (user pressed Escape/Tab/Close)
+ *   2. Handle*RequestClose() receives broadcast
+ *   3. CloseMenu() called
+ *   4. Remove from parent (not destroyed, cached)
+ *   5. Hide modal background if no menus open
+ *   6. Restore input mode if no menus open
+ *   7. Show reticle
+ *
+ * -----------------------------------------------------------------------------
+ * COMPONENT DEPENDENCIES
+ * -----------------------------------------------------------------------------
+ *
+ * This component retrieves data from pawn components:
+ *   - UMOInventoryComponent: Inventory data for menus
+ *   - UMOSkillsComponent: Skill data for crafting/skills panels
+ *   - UMOKnowledgeComponent: Knowledge for recipe filtering
+ *   - UMOVitalsComponent: Health/stamina for status panel
+ *   - UMOMetabolismComponent: Hunger/thirst for status panel
+ *   - UMOMentalStateComponent: Mental state for status panel
+ *   - UMOCraftingQueueComponent: Active crafts for crafting menu
+ *   - UMORecipeDiscoveryComponent: Discovered recipes
+ *
+ * This component coordinates with:
+ *   - UMONotificationComponent: Notification display (same owner)
+ *   - UMOBuildingComponent: Building placement mode (same owner)
+ *   - UMOPossessionSubsystem: Pawn possession system
+ *   - UMOPersistenceSubsystem: Save/load operations
+ *
+ * =============================================================================
+ */
+
 class APlayerController;
 class UMOInventoryComponent;
 class UMOInventoryMenu;
@@ -28,6 +145,9 @@ class UMOCraftingQueueComponent;
 class UMORecipeDiscoveryComponent;
 class UMOInspectionProgressWidget;
 class UMONotificationComponent;
+class UMOBuildingMenu;
+class UMOBuildWidget;
+class AMOBuildableActor;
 struct FMOInspectionResult;
 
 UCLASS(ClassGroup=(MO), meta=(BlueprintSpawnableComponent))
@@ -165,6 +285,42 @@ public:
 	/** Get the skills panel widget (may be null if not open). */
 	UFUNCTION(BlueprintPure, Category="MO|UI|Skills")
 	UMOSkillsPanel* GetSkillsPanel() const;
+
+	// --- Building Menu ---
+
+	/** Toggle building menu visibility. */
+	UFUNCTION(BlueprintCallable, Category="MO|UI|Building")
+	void ToggleBuildingMenu();
+
+	/** Open the building menu. */
+	UFUNCTION(BlueprintCallable, Category="MO|UI|Building")
+	void OpenBuildingMenu();
+
+	/** Close the building menu. */
+	UFUNCTION(BlueprintCallable, Category="MO|UI|Building")
+	void CloseBuildingMenu();
+
+	/** Check if building menu is open. */
+	UFUNCTION(BlueprintPure, Category="MO|UI|Building")
+	bool IsBuildingMenuOpen() const;
+
+	/** Get the building menu widget (may be null if not open). */
+	UFUNCTION(BlueprintPure, Category="MO|UI|Building")
+	UMOBuildingMenu* GetBuildingMenu() const;
+
+	// --- Build Widget (for ghost interaction) ---
+
+	/** Show the build widget for a ghost building. */
+	UFUNCTION(BlueprintCallable, Category="MO|UI|Building")
+	void ShowBuildWidget(AMOBuildableActor* Target);
+
+	/** Hide the build widget. */
+	UFUNCTION(BlueprintCallable, Category="MO|UI|Building")
+	void HideBuildWidget();
+
+	/** Check if build widget is open. */
+	UFUNCTION(BlueprintPure, Category="MO|UI|Building")
+	bool IsBuildWidgetOpen() const;
 
 	// --- Inspection ---
 
@@ -411,6 +567,43 @@ private:
 
 	UFUNCTION()
 	void HandleSkillsPanelRequestClose();
+
+	// --- Building Menu ---
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Building", meta=(AllowPrivateAccess="true"))
+	TSubclassOf<UMOBuildingMenu> BuildingMenuClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Building", meta=(ClampMin="0", AllowPrivateAccess="true"))
+	int32 BuildingMenuZOrder = 50;
+
+	UPROPERTY(Transient)
+	TWeakObjectPtr<UMOBuildingMenu> BuildingMenuWidget;
+
+	UFUNCTION()
+	void HandleBuildingMenuRequestClose();
+
+	UFUNCTION()
+	void HandleBuildingSelected(FName RecipeId);
+
+	// --- Build Widget ---
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Building", meta=(AllowPrivateAccess="true"))
+	TSubclassOf<UMOBuildWidget> BuildWidgetClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Building", meta=(ClampMin="0", AllowPrivateAccess="true"))
+	int32 BuildWidgetZOrder = 60;
+
+	UPROPERTY(Transient)
+	TWeakObjectPtr<UMOBuildWidget> BuildWidgetWidget;
+
+	UPROPERTY(Transient)
+	TWeakObjectPtr<AMOBuildableActor> CurrentBuildTarget;
+
+	UFUNCTION()
+	void HandleBuildWidgetRequestClose();
+
+	UFUNCTION()
+	void HandleBuildWidgetStartBuild();
 
 	// --- Inspection ---
 

@@ -10,6 +10,12 @@ UMOInteractableComponent::UMOInteractableComponent()
 
 bool UMOInteractableComponent::CanInteract(AController* InteractorController) const
 {
+	// Check if interaction is enabled
+	if (!bInteractionEnabled)
+	{
+		return false;
+	}
+
 	AActor* OwnerActor = GetOwner();
 	if (!IsValid(OwnerActor))
 	{
