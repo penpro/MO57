@@ -50,6 +50,20 @@ public class MOFramework : ModuleRules
 				"DeveloperSettings" // Required for UDeveloperSettings (MOItemDatabaseSettings)
 			}
 			);
+
+		// Editor-only dependencies
+		if (Target.bBuildEditor)
+		{
+			PrivateDependencyModuleNames.AddRange(
+				new string[]
+				{
+					"UnrealEd",        // Thumbnail rendering, asset tools
+					"ContentBrowser",  // Content browser selection
+					"AssetTools",      // Asset creation utilities
+					"ToolMenus"        // Context menu registration
+				}
+			);
+		}
 		
 		
 		DynamicallyLoadedModuleNames.AddRange(
