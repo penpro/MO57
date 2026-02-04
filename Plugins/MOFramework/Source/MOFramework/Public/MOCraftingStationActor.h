@@ -3,6 +3,8 @@
 #include "CoreMinimal.h"
 #include "MOBuildableActor.h"
 #include "MORecipeDefinitionRow.h"
+#include "MOInventoryHolderInterface.h"
+#include "MOMaterialSourceInterface.h"
 #include "MOCraftingStationActor.generated.h"
 
 class UMOInventoryComponent;
@@ -12,7 +14,9 @@ class UMOInventoryComponent;
  * When complete, interaction opens the crafting menu filtered to this station type.
  */
 UCLASS()
-class MOFRAMEWORK_API AMOCraftingStationActor : public AMOBuildableActor
+class MOFRAMEWORK_API AMOCraftingStationActor : public AMOBuildableActor,
+	public IMOInventoryHolderInterface,
+	public IMOMaterialSourceInterface
 {
 	GENERATED_BODY()
 
@@ -86,6 +90,22 @@ public:
 	/** Get the station type. */
 	UFUNCTION(BlueprintPure, Category="MO|CraftingStation")
 	EMOCraftingStation GetStationType() const { return StationType; }
+
+	// ============================================================================
+	// IMOInventoryHolderInterface IMPLEMENTATION
+	// ============================================================================
+
+	virtual UMOInventoryComponent* GetInventory_Implementation() const override;
+	virtual bool HasInventoryItem_Implementation(FName ItemDefinitionId, int32 Quantity) const override;
+	virtual int32 GetInventoryItemCount_Implementation(FName ItemDefinitionId) const override;
+
+	// ============================================================================
+	// IMOMaterialSourceInterface IMPLEMENTATION
+	// ============================================================================
+
+	virtual bool CanProvideMaterial_Implementation(FName MaterialId, int32 Quantity) const override;
+	virtual int32 GatherMaterial_Implementation(FName MaterialId, int32 Quantity) override;
+	virtual int32 GetMaterialSourcePriority_Implementation() const override;
 
 protected:
 	virtual void BeginPlay() override;

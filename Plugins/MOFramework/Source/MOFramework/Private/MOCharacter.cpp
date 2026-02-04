@@ -685,3 +685,78 @@ void AMOCharacter::HandleRecipeDiscovered(FName RecipeId, EMODiscoveryMethod Met
 		}
 	}
 }
+
+// ============================================================================
+// IMOInventoryHolderInterface IMPLEMENTATION
+// ============================================================================
+
+UMOInventoryComponent* AMOCharacter::GetInventory_Implementation() const
+{
+	return InventoryComponent;
+}
+
+bool AMOCharacter::HasInventoryItem_Implementation(FName ItemDefinitionId, int32 Quantity) const
+{
+	return InventoryComponent ? InventoryComponent->HasItem(ItemDefinitionId, Quantity) : false;
+}
+
+int32 AMOCharacter::GetInventoryItemCount_Implementation(FName ItemDefinitionId) const
+{
+	return InventoryComponent ? InventoryComponent->GetItemCountByDefinitionId(ItemDefinitionId) : 0;
+}
+
+// ============================================================================
+// IMOMaterialSourceInterface IMPLEMENTATION
+// ============================================================================
+
+bool AMOCharacter::CanProvideMaterial_Implementation(FName MaterialId, int32 Quantity) const
+{
+	return InventoryComponent ? InventoryComponent->HasItem(MaterialId, Quantity) : false;
+}
+
+int32 AMOCharacter::GatherMaterial_Implementation(FName MaterialId, int32 Quantity)
+{
+	if (!InventoryComponent)
+	{
+		return 0;
+	}
+
+	int32 Gathered = 0;
+	for (int32 i = 0; i < Quantity; ++i)
+	{
+		if (InventoryComponent->RemoveItemByDefinitionId(MaterialId, 1))
+		{
+			++Gathered;
+		}
+		else
+		{
+			break;
+		}
+	}
+	return Gathered;
+}
+
+int32 AMOCharacter::GetMaterialSourcePriority_Implementation() const
+{
+	// Player inventory has highest priority (100)
+	return 100;
+}
+
+// ============================================================================
+// IMOIdentifiableInterface IMPLEMENTATION
+// ============================================================================
+
+UMOIdentityComponent* AMOCharacter::GetIdentityComponent_Implementation() const
+{
+	return IdentityComponent;
+}
+
+FGuid AMOCharacter::GetPersistentGuid_Implementation() const
+{
+	return IdentityComponent ? IdentityComponent->GetGuid() : FGuid();
+}
+
+bool AMOCharacter::HasValidIdentity_Implementation() const
+{
+	return IdentityComponent && IdentityComponent->GetGuid().IsValid();
+}

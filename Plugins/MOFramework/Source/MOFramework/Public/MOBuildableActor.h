@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "MOBuildingTypes.h"
+#include "MOIdentifiableInterface.h"
 
 #include "MOBuildableActor.generated.h"
 
@@ -130,7 +131,7 @@ class UMaterialInstanceDynamic;
  * =============================================================================
  */
 UCLASS()
-class MOFRAMEWORK_API AMOBuildableActor : public AActor
+class MOFRAMEWORK_API AMOBuildableActor : public AActor, public IMOIdentifiableInterface
 {
 	GENERATED_BODY()
 
@@ -298,6 +299,14 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category="MO|Building|Save")
 	virtual void ApplySaveData(const FMOPersistedBuildingRecord& InRecord);
+
+	// ============================================================================
+	// IMOIdentifiableInterface IMPLEMENTATION
+	// ============================================================================
+
+	virtual UMOIdentityComponent* GetIdentityComponent_Implementation() const override;
+	virtual FGuid GetPersistentGuid_Implementation() const override;
+	virtual bool HasValidIdentity_Implementation() const override;
 
 protected:
 	// ============================================================================

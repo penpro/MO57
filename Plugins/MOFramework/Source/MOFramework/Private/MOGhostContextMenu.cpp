@@ -9,6 +9,7 @@
 #include "MOContainerActor.h"
 #include "MOBuildingTypes.h"
 #include "MOFramework.h"
+#include "MOMaterialSourceInterface.h"
 #include "Components/CheckBox.h"
 #include "Components/Button.h"
 #include "Components/VerticalBox.h"
@@ -412,21 +413,6 @@ bool UMOGhostContextMenu::TryGatherMaterial(FName ItemId)
 		return false;
 	}
 
-	// 1. Try player inventory first
-	if (InventoryCheckbox && InventoryCheckbox->IsChecked())
-	{
-		UMOInventoryComponent* Inventory = BuilderInventory.Get();
-		if (Inventory && Inventory->HasItem(ItemId, 1))
-		{
-			if (Inventory->RemoveItemByDefinitionId(ItemId, 1))
-			{
-				Progress->DepositMaterial(ItemId);
-				UE_LOG(LogMOFramework, Log, TEXT("[MOGhostContextMenu] Gathered %s from inventory"), *ItemId.ToString());
-				return true;
-			}
-		}
-	}
-
 	// Get gather range from progress
 	float GatherRange = Progress->GetProgressData().GatherRange;
 	if (GatherRange <= 0.0f)
@@ -434,71 +420,73 @@ bool UMOGhostContextMenu::TryGatherMaterial(FName ItemId)
 		GatherRange = 500.0f; // Default range
 	}
 
-	AMOBuildableActor* Building = TargetBuilding.Get();
-	if (!Building)
-	{
-		return false;
-	}
+	// Get all material sources and sort by priority
+	TArray<AActor*> Sources = Progress->FindMaterialSources(GatherRange);
 
-	FVector Origin = Building->GetActorLocation();
-
-	// 2. Try nearby containers
-	if (ContainersCheckbox && ContainersCheckbox->IsChecked())
+	// Add builder (player) as a potential source if checkbox is checked
+	if (InventoryCheckbox && InventoryCheckbox->IsChecked())
 	{
-		TArray<AActor*> Sources = Progress->FindMaterialSources(GatherRange);
-		for (AActor* Source : Sources)
+		UMOInventoryComponent* Inventory = BuilderInventory.Get();
+		if (Inventory)
 		{
-			AMOContainerActor* Container = Cast<AMOContainerActor>(Source);
-			if (Container)
+			AActor* OwnerActor = Inventory->GetOwner();
+			if (OwnerActor && !Sources.Contains(OwnerActor))
 			{
-				UMOInventoryComponent* ContainerInv = Container->GetContainerInventory();
-				if (ContainerInv && ContainerInv->HasItem(ItemId, 1))
-				{
-					if (ContainerInv->RemoveItemByDefinitionId(ItemId, 1))
-					{
-						Progress->DepositMaterial(ItemId);
-						UE_LOG(LogMOFramework, Log, TEXT("[MOGhostContextMenu] Gathered %s from container: %s"),
-							*ItemId.ToString(), *Container->GetName());
-						return true;
-					}
-				}
+				Sources.Add(OwnerActor);
 			}
 		}
 	}
 
-	// 3. Try surrounding world items
-	if (SurroundingCheckbox && SurroundingCheckbox->IsChecked())
-	{
-		TArray<AActor*> Sources = Progress->FindMaterialSources(GatherRange);
-		for (AActor* Source : Sources)
-		{
-			AMOWorldItem* WorldItem = Cast<AMOWorldItem>(Source);
-			if (WorldItem)
-			{
-				UMOItemComponent* ItemComp = WorldItem->GetItemComponent();
-				if (ItemComp && ItemComp->ItemDefinitionId == ItemId && ItemComp->bWorldItemActive)
-				{
-					int32 Available = ItemComp->Quantity;
-					if (Available > 0)
-					{
-						// Take one from the world item
-						if (Available == 1)
-						{
-							// Remove the world item
-							ItemComp->SetWorldItemActive(false);
-							WorldItem->Destroy();
-						}
-						else
-						{
-							ItemComp->Quantity = Available - 1;
-						}
+	// Sort by priority (highest first) using interface
+	Sources.Sort([](AActor* A, AActor* B) {
+		int32 PriorityA = A->Implements<UMOMaterialSourceInterface>()
+			? IMOMaterialSourceInterface::Execute_GetMaterialSourcePriority(A) : 0;
+		int32 PriorityB = B->Implements<UMOMaterialSourceInterface>()
+			? IMOMaterialSourceInterface::Execute_GetMaterialSourcePriority(B) : 0;
+		return PriorityA > PriorityB;
+	});
 
-						Progress->DepositMaterial(ItemId);
-						UE_LOG(LogMOFramework, Log, TEXT("[MOGhostContextMenu] Gathered %s from world item: %s"),
-							*ItemId.ToString(), *WorldItem->GetName());
-						return true;
-					}
-				}
+	// Filter sources based on checkbox states
+	for (AActor* Source : Sources)
+	{
+		if (!Source->Implements<UMOMaterialSourceInterface>())
+		{
+			continue;
+		}
+
+		// Determine source type and check if enabled
+		int32 Priority = IMOMaterialSourceInterface::Execute_GetMaterialSourcePriority(Source);
+
+		// Priority 100 = Inventory (player), 50 = Containers, 25 = World Items
+		bool bSourceEnabled = false;
+		if (Priority >= 100)
+		{
+			bSourceEnabled = InventoryCheckbox && InventoryCheckbox->IsChecked();
+		}
+		else if (Priority >= 50)
+		{
+			bSourceEnabled = ContainersCheckbox && ContainersCheckbox->IsChecked();
+		}
+		else
+		{
+			bSourceEnabled = SurroundingCheckbox && SurroundingCheckbox->IsChecked();
+		}
+
+		if (!bSourceEnabled)
+		{
+			continue;
+		}
+
+		// Try to gather from this source via interface
+		if (IMOMaterialSourceInterface::Execute_CanProvideMaterial(Source, ItemId, 1))
+		{
+			int32 Gathered = IMOMaterialSourceInterface::Execute_GatherMaterial(Source, ItemId, 1);
+			if (Gathered > 0)
+			{
+				Progress->DepositMaterial(ItemId);
+				UE_LOG(LogMOFramework, Log, TEXT("[MOGhostContextMenu] Gathered %s from %s (priority %d)"),
+					*ItemId.ToString(), *Source->GetName(), Priority);
+				return true;
 			}
 		}
 	}

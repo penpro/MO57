@@ -3,6 +3,9 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "MOControllableInterface.h"
+#include "MOInventoryHolderInterface.h"
+#include "MOMaterialSourceInterface.h"
+#include "MOIdentifiableInterface.h"
 #include "MOCraftingTypes.h"
 #include "MOCharacter.generated.h"
 
@@ -42,7 +45,11 @@ class UAnimInstance;
  * All player-controlled and AI-controlled pawns should inherit from this class.
  */
 UCLASS()
-class MOFRAMEWORK_API AMOCharacter : public ACharacter, public IMOControllableInterface
+class MOFRAMEWORK_API AMOCharacter : public ACharacter,
+	public IMOControllableInterface,
+	public IMOInventoryHolderInterface,
+	public IMOMaterialSourceInterface,
+	public IMOIdentifiableInterface
 {
 	GENERATED_BODY()
 
@@ -131,6 +138,30 @@ public:
 	virtual bool CanMove_Implementation() const override;
 	virtual bool CanJump_Implementation() const override;
 	virtual bool CanSprint_Implementation() const override;
+
+	// ============================================================================
+	// IMOInventoryHolderInterface IMPLEMENTATION
+	// ============================================================================
+
+	virtual UMOInventoryComponent* GetInventory_Implementation() const override;
+	virtual bool HasInventoryItem_Implementation(FName ItemDefinitionId, int32 Quantity) const override;
+	virtual int32 GetInventoryItemCount_Implementation(FName ItemDefinitionId) const override;
+
+	// ============================================================================
+	// IMOMaterialSourceInterface IMPLEMENTATION
+	// ============================================================================
+
+	virtual bool CanProvideMaterial_Implementation(FName MaterialId, int32 Quantity) const override;
+	virtual int32 GatherMaterial_Implementation(FName MaterialId, int32 Quantity) override;
+	virtual int32 GetMaterialSourcePriority_Implementation() const override;
+
+	// ============================================================================
+	// IMOIdentifiableInterface IMPLEMENTATION
+	// ============================================================================
+
+	virtual UMOIdentityComponent* GetIdentityComponent_Implementation() const override;
+	virtual FGuid GetPersistentGuid_Implementation() const override;
+	virtual bool HasValidIdentity_Implementation() const override;
 
 	// ============================================================================
 	// DIRECT INPUT (for Blueprint/UI virtual joysticks)

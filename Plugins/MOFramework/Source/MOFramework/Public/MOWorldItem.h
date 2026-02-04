@@ -3,6 +3,8 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "MOInteractableComponent.h"
+#include "MOMaterialSourceInterface.h"
+#include "MOIdentifiableInterface.h"
 #include "MOWorldItem.generated.h"
 
 class UDataTable;
@@ -16,7 +18,9 @@ class UStaticMeshComponent;
 class USphereComponent;
 
 UCLASS()
-class MOFRAMEWORK_API AMOWorldItem : public AActor
+class MOFRAMEWORK_API AMOWorldItem : public AActor,
+	public IMOMaterialSourceInterface,
+	public IMOIdentifiableInterface
 {
 	GENERATED_BODY()
 
@@ -63,6 +67,22 @@ public:
 	/** Velocity threshold below which the item is considered "at rest". */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="MO|Item|Drop")
 	float RestVelocityThreshold = 5.0f;
+
+	// ============================================================================
+	// IMOMaterialSourceInterface IMPLEMENTATION
+	// ============================================================================
+
+	virtual bool CanProvideMaterial_Implementation(FName MaterialId, int32 Quantity) const override;
+	virtual int32 GatherMaterial_Implementation(FName MaterialId, int32 Quantity) override;
+	virtual int32 GetMaterialSourcePriority_Implementation() const override;
+
+	// ============================================================================
+	// IMOIdentifiableInterface IMPLEMENTATION
+	// ============================================================================
+
+	virtual UMOIdentityComponent* GetIdentityComponent_Implementation() const override;
+	virtual FGuid GetPersistentGuid_Implementation() const override;
+	virtual bool HasValidIdentity_Implementation() const override;
 
 protected:
 	// Override interaction handling

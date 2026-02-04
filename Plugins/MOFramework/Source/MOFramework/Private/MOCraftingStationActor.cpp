@@ -123,3 +123,64 @@ void AMOCraftingStationActor::SetStationActive(bool bActive)
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOCraftingStationActor] Station %s"), bIsActive ? TEXT("activated") : TEXT("deactivated"));
 }
+
+// ============================================================================
+// IMOInventoryHolderInterface IMPLEMENTATION
+// ============================================================================
+
+UMOInventoryComponent* AMOCraftingStationActor::GetInventory_Implementation() const
+{
+	return StationInventory;
+}
+
+bool AMOCraftingStationActor::HasInventoryItem_Implementation(FName ItemDefinitionId, int32 Quantity) const
+{
+	return StationInventory ? StationInventory->HasItem(ItemDefinitionId, Quantity) : false;
+}
+
+int32 AMOCraftingStationActor::GetInventoryItemCount_Implementation(FName ItemDefinitionId) const
+{
+	return StationInventory ? StationInventory->GetItemCountByDefinitionId(ItemDefinitionId) : 0;
+}
+
+// ============================================================================
+// IMOMaterialSourceInterface IMPLEMENTATION
+// ============================================================================
+
+bool AMOCraftingStationActor::CanProvideMaterial_Implementation(FName MaterialId, int32 Quantity) const
+{
+	// Only provide materials if the station is fully built
+	if (!IsComplete())
+	{
+		return false;
+	}
+	return StationInventory ? StationInventory->HasItem(MaterialId, Quantity) : false;
+}
+
+int32 AMOCraftingStationActor::GatherMaterial_Implementation(FName MaterialId, int32 Quantity)
+{
+	if (!IsComplete() || !StationInventory)
+	{
+		return 0;
+	}
+
+	int32 Gathered = 0;
+	for (int32 i = 0; i < Quantity; ++i)
+	{
+		if (StationInventory->RemoveItemByDefinitionId(MaterialId, 1))
+		{
+			++Gathered;
+		}
+		else
+		{
+			break;
+		}
+	}
+	return Gathered;
+}
+
+int32 AMOCraftingStationActor::GetMaterialSourcePriority_Implementation() const
+{
+	// Crafting stations have same priority as containers (50)
+	return 50;
+}

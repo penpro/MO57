@@ -346,3 +346,80 @@ void AMOWorldItem::SettleOnGround()
 	// Keep collision enabled for interaction traces but disable physics response
 	ItemMesh->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
 }
+
+// ============================================================================
+// IMOMaterialSourceInterface IMPLEMENTATION
+// ============================================================================
+
+bool AMOWorldItem::CanProvideMaterial_Implementation(FName MaterialId, int32 Quantity) const
+{
+	if (!ItemComponent || !ItemComponent->bWorldItemActive)
+	{
+		return false;
+	}
+
+	// Check if this world item has the requested material
+	if (ItemComponent->ItemDefinitionId != MaterialId)
+	{
+		return false;
+	}
+
+	return ItemComponent->Quantity >= Quantity;
+}
+
+int32 AMOWorldItem::GatherMaterial_Implementation(FName MaterialId, int32 Quantity)
+{
+	if (!ItemComponent || !ItemComponent->bWorldItemActive)
+	{
+		return 0;
+	}
+
+	if (ItemComponent->ItemDefinitionId != MaterialId)
+	{
+		return 0;
+	}
+
+	int32 Available = ItemComponent->Quantity;
+	int32 ToGather = FMath::Min(Quantity, Available);
+
+	if (ToGather > 0)
+	{
+		if (Available == ToGather)
+		{
+			// Fully consumed - deactivate and destroy
+			ItemComponent->SetWorldItemActive(false);
+			Destroy();
+		}
+		else
+		{
+			ItemComponent->Quantity = Available - ToGather;
+		}
+	}
+
+	return ToGather;
+}
+
+int32 AMOWorldItem::GetMaterialSourcePriority_Implementation() const
+{
+	// World items have lowest priority (25)
+	return 25;
+}
+
+// ============================================================================
+// IMOIdentifiableInterface IMPLEMENTATION
+// ============================================================================
+
+UMOIdentityComponent* AMOWorldItem::GetIdentityComponent_Implementation() const
+{
+	return IdentityComponent;
+}
+
+FGuid AMOWorldItem::GetPersistentGuid_Implementation() const
+{
+	return IdentityComponent ? IdentityComponent->GetGuid() : FGuid();
+}
+
+bool AMOWorldItem::HasValidIdentity_Implementation() const
+{
+	return IdentityComponent && IdentityComponent->GetGuid().IsValid();
+}

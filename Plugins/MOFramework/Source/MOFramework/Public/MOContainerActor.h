@@ -2,6 +2,8 @@
 
 #include "CoreMinimal.h"
 #include "MOBuildableActor.h"
+#include "MOInventoryHolderInterface.h"
+#include "MOMaterialSourceInterface.h"
 #include "MOContainerActor.generated.h"
 
 class UMOInventoryComponent;
@@ -11,7 +13,9 @@ class UMOInventoryComponent;
  * When complete, interaction opens an inventory UI.
  */
 UCLASS()
-class MOFRAMEWORK_API AMOContainerActor : public AMOBuildableActor
+class MOFRAMEWORK_API AMOContainerActor : public AMOBuildableActor,
+	public IMOInventoryHolderInterface,
+	public IMOMaterialSourceInterface
 {
 	GENERATED_BODY()
 
@@ -41,6 +45,22 @@ public:
 	/** Get the container inventory component. */
 	UFUNCTION(BlueprintPure, Category="MO|Container")
 	UMOInventoryComponent* GetContainerInventory() const { return ContainerInventory; }
+
+	// ============================================================================
+	// IMOInventoryHolderInterface IMPLEMENTATION
+	// ============================================================================
+
+	virtual UMOInventoryComponent* GetInventory_Implementation() const override;
+	virtual bool HasInventoryItem_Implementation(FName ItemDefinitionId, int32 Quantity) const override;
+	virtual int32 GetInventoryItemCount_Implementation(FName ItemDefinitionId) const override;
+
+	// ============================================================================
+	// IMOMaterialSourceInterface IMPLEMENTATION
+	// ============================================================================
+
+	virtual bool CanProvideMaterial_Implementation(FName MaterialId, int32 Quantity) const override;
+	virtual int32 GatherMaterial_Implementation(FName MaterialId, int32 Quantity) override;
+	virtual int32 GetMaterialSourcePriority_Implementation() const override;
 
 protected:
 	virtual void BeginPlay() override;

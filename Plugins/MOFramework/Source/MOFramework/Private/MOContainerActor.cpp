@@ -53,3 +53,64 @@ void AMOContainerActor::OnCompleteInteracted_Implementation(AController* Control
 		UE_LOG(LogMOFramework, Log, TEXT("[MOContainerActor] Container interaction - would open inventory UI"));
 	}
 }
+
+// ============================================================================
+// IMOInventoryHolderInterface IMPLEMENTATION
+// ============================================================================
+
+UMOInventoryComponent* AMOContainerActor::GetInventory_Implementation() const
+{
+	return ContainerInventory;
+}
+
+bool AMOContainerActor::HasInventoryItem_Implementation(FName ItemDefinitionId, int32 Quantity) const
+{
+	return ContainerInventory ? ContainerInventory->HasItem(ItemDefinitionId, Quantity) : false;
+}
+
+int32 AMOContainerActor::GetInventoryItemCount_Implementation(FName ItemDefinitionId) const
+{
+	return ContainerInventory ? ContainerInventory->GetItemCountByDefinitionId(ItemDefinitionId) : 0;
+}
+
+// ============================================================================
+// IMOMaterialSourceInterface IMPLEMENTATION
+// ============================================================================
+
+bool AMOContainerActor::CanProvideMaterial_Implementation(FName MaterialId, int32 Quantity) const
+{
+	// Only provide materials if the container is fully built
+	if (!IsComplete())
+	{
+		return false;
+	}
+	return ContainerInventory ? ContainerInventory->HasItem(MaterialId, Quantity) : false;
+}
+
+int32 AMOContainerActor::GatherMaterial_Implementation(FName MaterialId, int32 Quantity)
+{
+	if (!IsComplete() || !ContainerInventory)
+	{
+		return 0;
+	}
+
+	int32 Gathered = 0;
+	for (int32 i = 0; i < Quantity; ++i)
+	{
+		if (ContainerInventory->RemoveItemByDefinitionId(MaterialId, 1))
+		{
+			++Gathered;
+		}
+		else
+		{
+			break;
+		}
+	}
+	return Gathered;
+}
+
+int32 AMOContainerActor::GetMaterialSourcePriority_Implementation() const
+{
+	// Containers have medium priority (50)
+	return 50;
+}

@@ -479,3 +479,22 @@ void AMOBuildableActor::RestoreOriginalMaterials()
 
 	GhostMaterialInstance = nullptr;
 }
+
+// ============================================================================
+// IMOIdentifiableInterface IMPLEMENTATION
+// ============================================================================
+
+UMOIdentityComponent* AMOBuildableActor::GetIdentityComponent_Implementation() const
+{
+	return IdentityComponent;
+}
+
+FGuid AMOBuildableActor::GetPersistentGuid_Implementation() const
+{
+	return IdentityComponent ? IdentityComponent->GetGuid() : FGuid();
+}
+
+bool AMOBuildableActor::HasValidIdentity_Implementation() const
+{
+	return IdentityComponent && IdentityComponent->GetGuid().IsValid();
+}
