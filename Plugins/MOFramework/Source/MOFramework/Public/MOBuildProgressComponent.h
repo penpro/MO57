@@ -165,6 +165,10 @@ public:
 	UPROPERTY(BlueprintAssignable, Category="MO|Building")
 	FMOOnMaterialNeededSignature OnMaterialNeeded;
 
+	/** Broadcast when construction state changes. */
+	UPROPERTY(BlueprintAssignable, Category="MO|Building")
+	FMOOnConstructionStateChangedSignature OnConstructionStateChanged;
+
 	// ============================================================================
 	// STATE ACCESS
 	// ============================================================================
@@ -193,6 +197,18 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO|Building")
 	const FMOBuildProgress& GetProgressData() const { return Progress; }
 
+	/**
+	 * Get the recipe ID for this building.
+	 */
+	UFUNCTION(BlueprintPure, Category="MO|Building")
+	FName GetRecipeId() const { return RecipeId; }
+
+	/**
+	 * Get the current build part index.
+	 */
+	UFUNCTION(BlueprintPure, Category="MO|Building")
+	int32 GetCurrentPartIndex() const { return Progress.CurrentPartIndex; }
+
 	// ============================================================================
 	// INITIALIZATION
 	// ============================================================================
@@ -208,11 +224,73 @@ public:
 	// ============================================================================
 
 	/**
-	 * Start construction with the specified options.
+	 * Start construction timer (requires all materials to be deposited first).
 	 * @param Options - Material sourcing options
+	 * @param InBuilderInventory - Inventory to draw materials from (optional)
 	 */
 	UFUNCTION(BlueprintCallable, Category="MO|Building")
-	void StartConstruction(const FMOBuildProgress& Options);
+	void StartConstruction(const FMOBuildProgress& Options, UMOInventoryComponent* InBuilderInventory = nullptr);
+
+	/**
+	 * Set the builder's inventory for material gathering.
+	 * @param InInventory - Inventory component to draw from
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Building")
+	void SetBuilderInventory(UMOInventoryComponent* InInventory);
+
+	// ============================================================================
+	// MATERIAL DEPOSIT SYSTEM
+	// ============================================================================
+
+	/**
+	 * Deposit one unit of a material into the building.
+	 * @param ItemId - The item to deposit
+	 * @return True if material was accepted (still needed)
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Building")
+	bool DepositMaterial(FName ItemId);
+
+	/**
+	 * Get how many of an item have been deposited.
+	 * @param ItemId - The item to check
+	 */
+	UFUNCTION(BlueprintPure, Category="MO|Building")
+	int32 GetDepositedCount(FName ItemId) const;
+
+	/**
+	 * Get how many of an item are required total.
+	 * @param ItemId - The item to check
+	 */
+	UFUNCTION(BlueprintPure, Category="MO|Building")
+	int32 GetRequiredCount(FName ItemId) const;
+
+	/**
+	 * Check if all required materials have been deposited.
+	 */
+	UFUNCTION(BlueprintPure, Category="MO|Building")
+	bool AreAllMaterialsDeposited() const;
+
+	/**
+	 * Get all unique material requirements.
+	 * @param OutItemIds - Array of required item IDs
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Building")
+	void GetRequiredMaterials(TArray<FName>& OutItemIds) const;
+
+	/**
+	 * Interrupt the build timer (e.g., player moved).
+	 * Applies the interruption penalty.
+	 * @param PenaltyPercent - Percentage of total build time to lose (default 10%)
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Building")
+	void InterruptBuild(float PenaltyPercent = 0.1f);
+
+	/**
+	 * Get all deposited materials for refund/drop.
+	 * @param OutMaterials - Map of ItemId to quantity deposited
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Building")
+	void GetDepositedMaterials(TMap<FName, int32>& OutMaterials) const;
 
 	/**
 	 * Pause construction.
@@ -284,6 +362,10 @@ private:
 	UPROPERTY()
 	FMOBuildProgress Progress;
 
+	/** Recipe ID for this building. */
+	UPROPERTY()
+	FName RecipeId = NAME_None;
+
 	/** Build parts from the recipe. */
 	UPROPERTY()
 	TArray<FMOBuildPart> BuildParts;
@@ -297,6 +379,10 @@ private:
 	/** Reference to builder's inventory (if drawing from inventory). */
 	UPROPERTY()
 	TWeakObjectPtr<UMOInventoryComponent> BuilderInventory;
+
+	/** Materials deposited into this building (ItemId -> Quantity). */
+	UPROPERTY()
+	TMap<FName, int32> DepositedMaterials;
 
 	// ============================================================================
 	// INTERNAL

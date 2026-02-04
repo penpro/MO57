@@ -64,98 +64,118 @@ FMOInspectionResult UMOKnowledgeComponent::InspectItem(FName ItemDefinitionId, U
 	Result.bSuccess = true;
 
 	// Get or create inspection progress
-	FMOItemKnowledgeProgress* Progress = FindItemKnowledge(ItemDefinitionId);
-	if (!Progress)
+	FMOItemKnowledgeProgress* ItemProgress = FindItemKnowledge(ItemDefinitionId);
+	if (!ItemProgress)
 	{
 		FMOItemKnowledgeProgress NewProgress;
 		NewProgress.ItemDefinitionId = ItemDefinitionId;
 		ItemKnowledge.Add(NewProgress);
-		Progress = &ItemKnowledge.Last();
+		ItemProgress = &ItemKnowledge.Last();
 	}
 
-	Result.bFirstInspection = (Progress->InspectionCount == 0);
+	Result.bFirstInspection = (ItemProgress->InspectionCount == 0);
+	ItemProgress->InspectionCount++;
 
-	// Increment inspection count
-	Progress->InspectionCount++;
+	UE_LOG(LogMOFramework, Log, TEXT("[MOKnowledge] InspectItem '%s': InspectionCount=%d, Grants=%d"),
+		*ItemDefinitionId.ToString(),
+		ItemProgress->InspectionCount,
+		ItemDef.Inspection.Grants.Num());
 
-	// Calculate XP multiplier based on diminishing returns
-	const float XPMultiplier = GetXPMultiplier(Progress->InspectionCount);
-
-	// Grant skill XP from inspection
-	if (XPMultiplier > 0.0f && IsValid(SkillsComponent))
+	// Process each grant entry (both skills and knowledge)
+	if (IsValid(SkillsComponent))
 	{
-		for (const auto& XPGrant : ItemDef.Inspection.SkillExperienceGrants)
+		for (const FMOInspectionGrant& Grant : ItemDef.Inspection.Grants)
 		{
-			const FName SkillId = XPGrant.Key;
-			const float BaseXP = XPGrant.Value;
-			const float ActualXP = BaseXP * XPMultiplier;
-
-			if (ActualXP > 0.0f)
+			if (Grant.Id.IsNone() || Grant.XPAmount <= 0.0f)
 			{
-				SkillsComponent->AddExperience(SkillId, ActualXP);
-				Result.XPGranted.Add(SkillId, ActualXP);
+				continue;
 			}
-		}
-	}
 
-	// Track skill level for gating checks
-	if (IsValid(SkillsComponent) && ItemDef.Inspection.KnowledgeSkillRequirements.Num() > 0)
-	{
-		// Find the primary skill for this item (first one in requirements)
-		for (const auto& Req : ItemDef.Inspection.KnowledgeSkillRequirements)
-		{
-			Progress->LastInspectionSkillLevel = static_cast<float>(SkillsComponent->GetSkillLevel(Req.Key));
-			break;
-		}
-	}
+			// Get current level for this entry
+			const int32 CurrentLevel = SkillsComponent->GetSkillLevel(Grant.Id);
 
-	// Check which knowledge can be unlocked
-	for (const FName& KnowledgeId : ItemDef.Inspection.KnowledgeIds)
-	{
-		// Skip if already known
-		if (AllLearnedKnowledge.Contains(KnowledgeId))
-		{
-			continue;
-		}
+			// Check if at max level for this item
+			const bool bAtMaxLevel = (Grant.MaxLevel > 0 && CurrentLevel >= Grant.MaxLevel);
 
-		// Check skill requirement
-		bool bMeetsRequirement = true;
-		if (const int32* RequiredLevel = ItemDef.Inspection.KnowledgeSkillRequirements.Find(KnowledgeId))
-		{
-			if (IsValid(SkillsComponent))
+			UE_LOG(LogMOFramework, Log, TEXT("[MOKnowledge]   Grant: Id='%s', bIsKnowledge=%s, XPAmount=%.1f, MaxLevel=%d, CurrentLevel=%d, bAtMaxLevel=%s"),
+				*Grant.Id.ToString(),
+				Grant.bIsKnowledge ? TEXT("true") : TEXT("false"),
+				Grant.XPAmount,
+				Grant.MaxLevel,
+				CurrentLevel,
+				bAtMaxLevel ? TEXT("true") : TEXT("false"));
+
+			if (!bAtMaxLevel)
 			{
-				// Find which skill is required (look for the first skill that grants XP for this item)
-				FName RequiredSkillId = NAME_None;
-				for (const auto& XPGrant : ItemDef.Inspection.SkillExperienceGrants)
+				// Grant XP (SkillsComponent handles both skills and knowledge)
+				SkillsComponent->AddExperience(Grant.Id, Grant.XPAmount);
+
+				// Get the new level after XP grant
+				const int32 NewLevel = SkillsComponent->GetSkillLevel(Grant.Id);
+
+				// Record this grant for notification cycling
+				FMOInspectionXPGrant XPGrant;
+				XPGrant.Id = Grant.Id;
+				XPGrant.bIsKnowledge = Grant.bIsKnowledge;
+				XPGrant.XPAmount = Grant.XPAmount;
+				XPGrant.LevelBefore = CurrentLevel;
+				XPGrant.LevelAfter = NewLevel;
+				XPGrant.bLeveledUp = (NewLevel > CurrentLevel);
+				Result.XPGrants.Add(XPGrant);
+
+				// Track knowledge in AllLearnedKnowledge for quick lookups (if it's knowledge and level > 0)
+				if (Grant.bIsKnowledge && NewLevel > 0 && !AllLearnedKnowledge.Contains(Grant.Id))
 				{
-					RequiredSkillId = XPGrant.Key;
-					break;
+					AllLearnedKnowledge.Add(Grant.Id);
+					ItemProgress->UnlockedKnowledge.AddUnique(Grant.Id);
+					OnKnowledgeLearned.Broadcast(Grant.Id, ItemDefinitionId);
+
+					UE_LOG(LogMOFramework, Log, TEXT("[MOKnowledgeComponent] Learned knowledge '%s' from inspecting '%s'"),
+						*Grant.Id.ToString(), *ItemDefinitionId.ToString());
 				}
 
-				if (!RequiredSkillId.IsNone())
-				{
-					bMeetsRequirement = SkillsComponent->HasSkillLevel(RequiredSkillId, *RequiredLevel);
-				}
-			}
-			else
-			{
-				// No skills component, can't meet skill requirements
-				bMeetsRequirement = (*RequiredLevel <= 0);
+				UE_LOG(LogMOFramework, Log, TEXT("[MOKnowledge]     -> XP granted, level %d -> %d"),
+					CurrentLevel, NewLevel);
 			}
 		}
+	}
 
-		if (bMeetsRequirement)
+	// Determine learning potential and set feedback message
+	Result.LearningPotential = GetLearningPotential(ItemDefinitionId, SkillsComponent);
+
+	if (Result.LearningPotential == EMOLearningPotential::None)
+	{
+		// Only show "nothing more" if we actually tried to learn something this inspection
+		// (i.e., there were grants defined but all were already maxed)
+		Result.bNothingMoreToLearn = true;
+		if (Result.XPGrants.Num() == 0)
 		{
-			// Learn this knowledge
-			AllLearnedKnowledge.Add(KnowledgeId);
-			Progress->UnlockedKnowledge.Add(KnowledgeId);
-			Result.NewKnowledge.Add(KnowledgeId);
-
-			OnKnowledgeLearned.Broadcast(KnowledgeId, ItemDefinitionId);
-
-			UE_LOG(LogMOFramework, Log, TEXT("[MOKnowledgeComponent] Learned knowledge '%s' from inspecting '%s'"),
-				*KnowledgeId.ToString(), *ItemDefinitionId.ToString());
+			// No XP was granted this inspection because everything was already maxed
+			Result.FeedbackMessage = NSLOCTEXT("MO", "InspectNothingMore", "There's nothing more you can learn from this item.");
 		}
+		else
+		{
+			// XP was granted but now everything is maxed (just hit the cap this inspection)
+			Result.FeedbackMessage = NSLOCTEXT("MO", "InspectMasteredItem", "You've learned everything this item can teach you.");
+		}
+	}
+	else if (Result.LearningPotential == EMOLearningPotential::Partial)
+	{
+		// Some grants are maxed, some aren't - only show message if nothing was learned this time
+		if (Result.XPGrants.Num() == 0)
+		{
+			Result.FeedbackMessage = NSLOCTEXT("MO", "InspectMoreToLearn", "Some skills can still be improved by inspecting this item.");
+		}
+		else
+		{
+			// XP was granted, the popups will inform the player - no need for extra message
+			Result.FeedbackMessage = FText::GetEmpty();
+		}
+	}
+	else
+	{
+		// Full potential - no message needed, popups show the progress
+		Result.FeedbackMessage = FText::GetEmpty();
 	}
 
 	OnItemInspected.Broadcast(ItemDefinitionId, Result);
@@ -233,18 +253,73 @@ bool UMOKnowledgeComponent::GrantKnowledge(FName KnowledgeId)
 	return true;
 }
 
-float UMOKnowledgeComponent::GetXPMultiplier(int32 InspectionCount) const
+bool UMOKnowledgeComponent::CanLearnMoreFromItem(FName ItemDefinitionId, UMOSkillsComponent* SkillsComponent) const
 {
-	if (InspectionCount <= 0 || InspectionCount > MaxInspectionsForXP)
+	return GetLearningPotential(ItemDefinitionId, SkillsComponent) != EMOLearningPotential::None;
+}
+
+EMOLearningPotential UMOKnowledgeComponent::GetLearningPotential(FName ItemDefinitionId, UMOSkillsComponent* SkillsComponent) const
+{
+	if (ItemDefinitionId.IsNone())
 	{
-		return 0.0f;
+		return EMOLearningPotential::None;
 	}
 
-	if (InspectionCount == 1)
+	// Get item definition
+	FMOItemDefinitionRow ItemDef;
+	if (!UMOItemDatabaseSettings::GetItemDefinition(ItemDefinitionId, ItemDef))
 	{
-		return 1.0f;  // Full XP on first inspection
+		return EMOLearningPotential::None;
 	}
 
-	// Diminishing returns: factor^(count-1)
-	return FMath::Pow(DiminishingReturnsFactor, static_cast<float>(InspectionCount - 1));
+	// No grants defined = nothing to learn
+	if (ItemDef.Inspection.Grants.Num() == 0)
+	{
+		return EMOLearningPotential::None;
+	}
+
+	int32 TotalGrants = 0;
+	int32 MaxedOutGrants = 0;
+
+	for (const FMOInspectionGrant& Grant : ItemDef.Inspection.Grants)
+	{
+		if (Grant.Id.IsNone() || Grant.XPAmount <= 0.0f)
+		{
+			continue;
+		}
+
+		TotalGrants++;
+
+		// Check if this grant is maxed out
+		if (Grant.MaxLevel > 0 && IsValid(SkillsComponent))
+		{
+			const int32 CurrentLevel = SkillsComponent->GetSkillLevel(Grant.Id);
+			if (CurrentLevel >= Grant.MaxLevel)
+			{
+				MaxedOutGrants++;
+			}
+		}
+		// If MaxLevel == 0, it's unlimited so never maxed out
+	}
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOKnowledge] GetLearningPotential for '%s': TotalGrants=%d, MaxedOutGrants=%d"),
+		*ItemDefinitionId.ToString(),
+		TotalGrants,
+		MaxedOutGrants);
+
+	// Determine learning potential
+	if (TotalGrants == 0)
+	{
+		return EMOLearningPotential::None;
+	}
+	else if (MaxedOutGrants >= TotalGrants)
+	{
+		return EMOLearningPotential::None;
+	}
+	else if (MaxedOutGrants > 0)
+	{
+		return EMOLearningPotential::Partial;
+	}
+
+	return EMOLearningPotential::Full;
 }

@@ -147,6 +147,7 @@ class UMOInspectionProgressWidget;
 class UMONotificationComponent;
 class UMOBuildingMenu;
 class UMOBuildWidget;
+class UMOGhostContextMenu;
 class AMOBuildableActor;
 struct FMOInspectionResult;
 
@@ -585,25 +586,28 @@ private:
 	UFUNCTION()
 	void HandleBuildingSelected(FName RecipeId);
 
-	// --- Build Widget ---
+	// --- Ghost Context Menu (for ghost interaction) ---
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Building", meta=(AllowPrivateAccess="true"))
-	TSubclassOf<UMOBuildWidget> BuildWidgetClass;
+	TSubclassOf<UMOGhostContextMenu> GhostContextMenuClass;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Building", meta=(ClampMin="0", AllowPrivateAccess="true"))
-	int32 BuildWidgetZOrder = 60;
+	int32 GhostContextMenuZOrder = 60;
 
 	UPROPERTY(Transient)
-	TWeakObjectPtr<UMOBuildWidget> BuildWidgetWidget;
+	TWeakObjectPtr<UMOGhostContextMenu> GhostContextMenuWidget;
 
 	UPROPERTY(Transient)
 	TWeakObjectPtr<AMOBuildableActor> CurrentBuildTarget;
 
 	UFUNCTION()
-	void HandleBuildWidgetRequestClose();
+	void HandleGhostContextMenuRequestClose();
 
 	UFUNCTION()
-	void HandleBuildWidgetStartBuild();
+	void HandleGhostContextMenuBuildStarted();
+
+	UFUNCTION()
+	void HandleGhostContextMenuCancelled();
 
 	// --- Inspection ---
 

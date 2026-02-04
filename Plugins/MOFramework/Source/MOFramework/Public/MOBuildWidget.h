@@ -1,134 +1,191 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "CommonActivatableWidget.h"
+#include "Blueprint/UserWidget.h"
+#include "MORecipeDefinitionRow.h"
 #include "MOBuildingTypes.h"
 #include "MOBuildWidget.generated.h"
 
-class AMOBuildableActor;
-class UTextBlock;
-class UImage;
-class UCheckBox;
+class UMOInventoryComponent;
+class UMOSkillsComponent;
+class UMOKnowledgeComponent;
+class UMORecipeDiscoveryComponent;
+class UMOCraftingSubsystem;
+class UMOBuildingRecipeListWidget;
+class UMOBuildingDetailPanel;
+class UMOBuildingQueueWidget;
+class UWidgetSwitcher;
 class UMOCommonButton;
-class UProgressBar;
+class AMOBuildableActor;
 
-/**
- * Delegate for when the build widget requests close.
- */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOBuildWidgetRequestCloseSignature);
-
-/**
- * Delegate for when the start build button is clicked.
- */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOBuildingSelectedSignature, FName, RecipeId);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOOnStartBuildSignature);
 
 /**
- * Widget shown when interacting with a ghost building.
- * Allows configuration of material sources and starting construction.
+ * Main building menu widget that combines recipe list, detail panel, and queue.
+ * Mirrors UMOCraftingMenu for crafting.
+ *
+ * Requires a Blueprint implementation with the following bound widgets:
+ * - RecipeList (UMOBuildingRecipeListWidget)
+ * - DetailPanel (UMOBuildingDetailPanel)
+ * - QueueWidget (UMOBuildingQueueWidget) [optional]
  */
-UCLASS()
-class MOFRAMEWORK_API UMOBuildWidget : public UCommonActivatableWidget
+UCLASS(Abstract, Blueprintable)
+class MOFRAMEWORK_API UMOBuildWidget : public UUserWidget
 {
 	GENERATED_BODY()
 
 public:
 	UMOBuildWidget(const FObjectInitializer& ObjectInitializer);
 
-	// ============================================================================
-	// DELEGATES
-	// ============================================================================
-
-	/** Broadcast when the widget should be closed. */
-	UPROPERTY(BlueprintAssignable, Category="MO|Building")
-	FMOBuildWidgetRequestCloseSignature OnRequestClose;
-
-	/** Broadcast when the start build button is clicked. */
-	UPROPERTY(BlueprintAssignable, Category="MO|Building")
-	FMOOnStartBuildSignature OnStartBuild;
-
-	// ============================================================================
-	// INITIALIZATION
-	// ============================================================================
+	// --- Initialization ---
 
 	/**
-	 * Initialize the widget for a specific building.
+	 * Initialize the building menu with required components.
+	 * @param InInventory Inventory component for material checking
+	 * @param InSkills Skills component for level requirements
+	 * @param InKnowledge Knowledge component for recipe visibility
+	 * @param InDiscovery Recipe discovery component (optional)
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Building|UI")
+	void InitializeMenu(
+		UMOInventoryComponent* InInventory,
+		UMOSkillsComponent* InSkills,
+		UMOKnowledgeComponent* InKnowledge,
+		UMORecipeDiscoveryComponent* InDiscovery = nullptr
+	);
+
+	/**
+	 * Initialize the widget for a specific ghost building (after placement).
+	 * This is for the build configuration popup when interacting with a placed ghost.
 	 * @param Target - The buildable actor to configure
 	 */
-	UFUNCTION(BlueprintCallable, Category="MO|Building")
+	UFUNCTION(BlueprintCallable, Category="MO|Building|UI")
 	void InitializeForBuilding(AMOBuildableActor* Target);
 
 	/**
 	 * Get the current build options based on checkbox states.
+	 * Used when starting construction on a ghost building.
 	 */
-	UFUNCTION(BlueprintPure, Category="MO|Building")
+	UFUNCTION(BlueprintPure, Category="MO|Building|UI")
 	FMOBuildProgress GetBuildOptions() const;
 
+	// --- Recipe Management ---
+
+	/** Refresh the recipe list from the crafting subsystem. */
+	UFUNCTION(BlueprintCallable, Category="MO|Building|UI")
+	void RefreshRecipeList();
+
+	/** Select a recipe to show in the detail panel. */
+	UFUNCTION(BlueprintCallable, Category="MO|Building|UI")
+	void SelectRecipe(FName RecipeId);
+
+	/** Get the currently selected recipe ID. */
+	UFUNCTION(BlueprintPure, Category="MO|Building|UI")
+	FName GetSelectedRecipeId() const { return SelectedRecipeId; }
+
+	// --- Building ---
+
+	/**
+	 * Attempt to start building the selected recipe.
+	 * @param Count Number of times to build (default 1)
+	 * @return True if build was started successfully
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Building|UI")
+	bool BuildSelectedRecipe(int32 Count = 1);
+
+	// --- Filtering ---
+
+	/** Set the category filter for recipes. */
+	UFUNCTION(BlueprintCallable, Category="MO|Building|UI")
+	void SetCategoryFilter(FName Category);
+
+	/** Clear the category filter to show all recipes. */
+	UFUNCTION(BlueprintCallable, Category="MO|Building|UI")
+	void ClearCategoryFilter();
+
+	/** Set whether to show only buildable recipes. */
+	UFUNCTION(BlueprintCallable, Category="MO|Building|UI")
+	void SetShowOnlyBuildable(bool bOnlyBuildable);
+
+	// --- Delegates ---
+
+	UPROPERTY(BlueprintAssignable, Category="MO|Building|UI")
+	FMOBuildWidgetRequestCloseSignature OnRequestClose;
+
+	/** Broadcast when a building is selected for placement. */
+	UPROPERTY(BlueprintAssignable, Category="MO|Building|UI")
+	FMOBuildingSelectedSignature OnBuildingSelected;
+
+	/** Broadcast when the start build button is clicked (for ghost configuration). */
+	UPROPERTY(BlueprintAssignable, Category="MO|Building|UI")
+	FMOOnStartBuildSignature OnStartBuild;
+
+	// --- Configuration ---
+
+	/** If true, automatically refresh when inventory changes. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Building|UI")
+	bool bAutoRefreshOnInventoryChange = true;
+
 protected:
-	// ============================================================================
-	// WIDGETS (Set in Blueprint)
-	// ============================================================================
-
-	/** Building name text. */
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<UTextBlock> BuildingNameText;
-
-	/** Building icon. */
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<UImage> BuildingIcon;
-
-	/** Build time text. */
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<UTextBlock> BuildTimeText;
-
-	/** Checkbox for drawing from inventory. */
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<UCheckBox> InventoryCheckbox;
-
-	/** Checkbox for drawing from nearby containers. */
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<UCheckBox> ContainersCheckbox;
-
-	/** Checkbox for drawing from surrounding area. */
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<UCheckBox> SurroundingCheckbox;
-
-	/** Start build button. */
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<UMOCommonButton> StartButton;
-
-	/** Cancel button. */
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<UMOCommonButton> CancelButton;
-
-	// ============================================================================
-	// OVERRIDES
-	// ============================================================================
-
 	virtual void NativeConstruct() override;
+	virtual void NativeDestruct() override;
 	virtual FReply NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
 
-private:
-	// ============================================================================
-	// STATE
-	// ============================================================================
+	/** Called when a recipe is selected in the list. */
+	UFUNCTION()
+	void HandleRecipeSelected(FName RecipeId);
 
-	/** The building being configured. */
+	/** Called when the build button is pressed. */
+	UFUNCTION()
+	void HandleBuildRequested(FName RecipeId, int32 Count);
+
+	/** Called when inventory changes. */
+	UFUNCTION()
+	void HandleInventoryChanged();
+
+	/** Called when close button is clicked. */
+	UFUNCTION()
+	void HandleCloseClicked();
+
+	// --- Widget Bindings (match MOCraftingMenu) ---
+
+	UPROPERTY(BlueprintReadOnly, meta=(BindWidget))
+	TObjectPtr<UMOBuildingRecipeListWidget> RecipeList;
+
+	UPROPERTY(BlueprintReadOnly, meta=(BindWidget))
+	TObjectPtr<UMOBuildingDetailPanel> DetailPanel;
+
+	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
+	TObjectPtr<UMOBuildingQueueWidget> QueueWidget;
+
+	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
+	TObjectPtr<UMOCommonButton> CloseButton;
+
+private:
+	// Cached component references
+	UPROPERTY()
+	TWeakObjectPtr<UMOInventoryComponent> InventoryComponent;
+
+	UPROPERTY()
+	TWeakObjectPtr<UMOSkillsComponent> SkillsComponent;
+
+	UPROPERTY()
+	TWeakObjectPtr<UMOKnowledgeComponent> KnowledgeComponent;
+
+	UPROPERTY()
+	TWeakObjectPtr<UMORecipeDiscoveryComponent> DiscoveryComponent;
+
+	UPROPERTY()
+	TWeakObjectPtr<UMOCraftingSubsystem> CraftingSubsystem;
+
+	/** Target building when used for ghost configuration. */
 	UPROPERTY()
 	TWeakObjectPtr<AMOBuildableActor> TargetBuilding;
 
-	/** Recipe ID of the target building. */
-	FName TargetRecipeId = NAME_None;
-
-	/** Cached gather range from recipe. */
-	float GatherRange = 150.0f;
-
-	// ============================================================================
-	// HANDLERS
-	// ============================================================================
-
-	UFUNCTION()
-	void HandleStartClicked();
-
-	UFUNCTION()
-	void HandleCancelClicked();
+	// Current state
+	FName SelectedRecipeId = NAME_None;
+	FName CategoryFilter = NAME_None;
+	bool bShowOnlyBuildable = false;
 };

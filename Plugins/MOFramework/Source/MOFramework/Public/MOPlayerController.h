@@ -282,6 +282,30 @@ public:
 	TSoftObjectPtr<UInputAction> PossessAction;
 
 	// ============================================================================
+	// INPUT ACTIONS - BUILDING
+	// ============================================================================
+
+	/** Place building ghost (Left Mouse). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Input|Actions|Building")
+	TSoftObjectPtr<UInputAction> PlaceBuildingAction;
+
+	/** Rotate building ghost clockwise (Q). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Input|Actions|Building")
+	TSoftObjectPtr<UInputAction> RotateBuildingCWAction;
+
+	/** Rotate building ghost counter-clockwise (E). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Input|Actions|Building")
+	TSoftObjectPtr<UInputAction> RotateBuildingCCWAction;
+
+	/** Cancel building placement (Escape/RMB). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Input|Actions|Building")
+	TSoftObjectPtr<UInputAction> CancelPlacementAction;
+
+	/** Rotation increment per keypress in degrees. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Input|Actions|Building")
+	float BuildingRotationIncrement = 15.0f;
+
+	// ============================================================================
 	// DEBUG
 	// ============================================================================
 
@@ -438,6 +462,22 @@ protected:
 
 	/** Handle possess action. */
 	void HandlePossess(const FInputActionValue& Value);
+
+	// ============================================================================
+	// INPUT HANDLERS - BUILDING
+	// ============================================================================
+
+	/** Handle place building (left click). */
+	void HandlePlaceBuilding(const FInputActionValue& Value);
+
+	/** Handle rotate building clockwise. */
+	void HandleRotateBuildingCW(const FInputActionValue& Value);
+
+	/** Handle rotate building counter-clockwise. */
+	void HandleRotateBuildingCCW(const FInputActionValue& Value);
+
+	/** Handle cancel placement. */
+	void HandleCancelPlacement(const FInputActionValue& Value);
 
 	// ============================================================================
 	// DEBUG INPUT HANDLERS

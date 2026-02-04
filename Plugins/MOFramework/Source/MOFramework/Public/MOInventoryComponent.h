@@ -155,6 +155,15 @@ public:
 	bool HasItem(FName ItemDefinitionId, int32 RequiredQuantity = 1) const;
 
 	/**
+	 * Remove items by definition ID. Removes from first matching entries found.
+	 * @param ItemDefinitionId The item definition to remove
+	 * @param QuantityToRemove How many to remove
+	 * @return True if at least some items were removed
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Inventory")
+	bool RemoveItemByDefinitionId(FName ItemDefinitionId, int32 QuantityToRemove);
+
+	/**
 	 * Reduce durability on an item. Returns true if successful.
 	 * If durability reaches 0, the item is destroyed.
 	 * @param ItemGuid The item to degrade

@@ -176,7 +176,20 @@ FMORecipeListEntryData UMORecipeListWidget::BuildEntryData(FName RecipeId) const
 	{
 		Data.DisplayName = Recipe->DisplayName;
 		Data.Category = Recipe->Category;
-		Data.Icon = Recipe->Icon;
+
+		// Use recipe icon if set, otherwise fall back to first output item's icon
+		if (!Recipe->Icon.IsNull())
+		{
+			Data.Icon = Recipe->Icon;
+		}
+		else if (Recipe->Outputs.Num() > 0)
+		{
+			FMOItemDefinitionRow ItemDef;
+			if (UMOItemDatabaseSettings::GetItemDefinition(Recipe->Outputs[0].ItemDefinitionId, ItemDef))
+			{
+				Data.Icon = ItemDef.UI.IconSmall;
+			}
+		}
 	}
 	else
 	{

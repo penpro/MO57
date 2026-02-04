@@ -179,6 +179,34 @@ void AMOPlayerController::SetupInputComponent()
 	{
 		UE_LOG(LogTemp, Warning, TEXT("AMOPlayerController: PossessAction is NOT set!"));
 	}
+
+	// ============================================================================
+	// BUILDING BINDINGS
+	// ============================================================================
+
+	if (UInputAction* PlaceBuilding = PlaceBuildingAction.LoadSynchronous())
+	{
+		EnhancedInput->BindAction(PlaceBuilding, ETriggerEvent::Started, this, &AMOPlayerController::HandlePlaceBuilding);
+		UE_LOG(LogTemp, Log, TEXT("AMOPlayerController: Bound PlaceBuildingAction"));
+	}
+
+	if (UInputAction* RotateCW = RotateBuildingCWAction.LoadSynchronous())
+	{
+		EnhancedInput->BindAction(RotateCW, ETriggerEvent::Started, this, &AMOPlayerController::HandleRotateBuildingCW);
+		UE_LOG(LogTemp, Log, TEXT("AMOPlayerController: Bound RotateBuildingCWAction"));
+	}
+
+	if (UInputAction* RotateCCW = RotateBuildingCCWAction.LoadSynchronous())
+	{
+		EnhancedInput->BindAction(RotateCCW, ETriggerEvent::Started, this, &AMOPlayerController::HandleRotateBuildingCCW);
+		UE_LOG(LogTemp, Log, TEXT("AMOPlayerController: Bound RotateBuildingCCWAction"));
+	}
+
+	if (UInputAction* CancelPlacement = CancelPlacementAction.LoadSynchronous())
+	{
+		EnhancedInput->BindAction(CancelPlacement, ETriggerEvent::Started, this, &AMOPlayerController::HandleCancelPlacement);
+		UE_LOG(LogTemp, Log, TEXT("AMOPlayerController: Bound CancelPlacementAction"));
+	}
 }
 
 void AMOPlayerController::OnPossess(APawn* InPawn)
@@ -550,6 +578,42 @@ void AMOPlayerController::HandlePossess(const FInputActionValue& Value)
 	else
 	{
 		UE_LOG(LogTemp, Warning, TEXT("AMOPlayerController::HandlePossess - UIManagerComponent is NULL!"));
+	}
+}
+
+// ============================================================================
+// INPUT HANDLERS - BUILDING
+// ============================================================================
+
+void AMOPlayerController::HandlePlaceBuilding(const FInputActionValue& Value)
+{
+	if (BuildingComponent && BuildingComponent->IsInPlacementMode())
+	{
+		BuildingComponent->TryPlaceGhost();
+	}
+}
+
+void AMOPlayerController::HandleRotateBuildingCW(const FInputActionValue& Value)
+{
+	if (BuildingComponent && BuildingComponent->IsInPlacementMode())
+	{
+		BuildingComponent->RotateGhostZ(BuildingRotationIncrement);
+	}
+}
+
+void AMOPlayerController::HandleRotateBuildingCCW(const FInputActionValue& Value)
+{
+	if (BuildingComponent && BuildingComponent->IsInPlacementMode())
+	{
+		BuildingComponent->RotateGhostZ(-BuildingRotationIncrement);
+	}
+}
+
+void AMOPlayerController::HandleCancelPlacement(const FInputActionValue& Value)
+{
+	if (BuildingComponent && BuildingComponent->IsInPlacementMode())
+	{
+		BuildingComponent->ExitPlacementMode(true); // true = cancel
 	}
 }
 

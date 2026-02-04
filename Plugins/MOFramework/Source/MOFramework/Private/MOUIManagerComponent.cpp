@@ -43,6 +43,7 @@
 #include "MONotificationComponent.h"
 #include "MOBuildingMenu.h"
 #include "MOBuildWidget.h"
+#include "MOGhostContextMenu.h"
 #include "MOBuildableActor.h"
 #include "MOBuildingComponent.h"
 #include "MOBuildProgressComponent.h"
@@ -1633,11 +1634,11 @@ void UMOUIManagerComponent::CloseAllMenus()
 		BuildMenu->RemoveFromParent();
 	}
 
-	// Close build widget
-	UMOBuildWidget* BuildWidgetInst = BuildWidgetWidget.Get();
-	if (IsValid(BuildWidgetInst) && BuildWidgetInst->IsInViewport())
+	// Close ghost context menu
+	UMOGhostContextMenu* GhostMenuInst = GhostContextMenuWidget.Get();
+	if (IsValid(GhostMenuInst) && GhostMenuInst->IsInViewport())
 	{
-		BuildWidgetInst->RemoveFromParent();
+		GhostMenuInst->RemoveFromParent();
 	}
 	CurrentBuildTarget.Reset();
 
@@ -2091,9 +2092,9 @@ bool UMOUIManagerComponent::IsInspectionInProgress() const
 
 void UMOUIManagerComponent::HandleInspectionCompleted(bool bCompleted, const FMOInspectionResult& Result)
 {
-	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Inspection completed: Success=%s, NewKnowledge=%d"),
+	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Inspection completed: Success=%s, XPGrants=%d"),
 		bCompleted ? TEXT("true") : TEXT("false"),
-		Result.NewKnowledge.Num());
+		Result.XPGrants.Num());
 
 	// Remove widget from viewport
 	UMOInspectionProgressWidget* InspectionWidget = InspectionProgressWidget.Get();
@@ -2105,28 +2106,49 @@ void UMOUIManagerComponent::HandleInspectionCompleted(bool bCompleted, const FMO
 	// Clear inspecting item
 	InspectingItemGuid.Invalidate();
 
-	// Restore input mode
-	APlayerController* PlayerController = ResolveOwningPlayerController();
-	if (IsValid(PlayerController))
+	// Only restore input mode if no other menus are open
+	// (e.g., inventory might still be open)
+	if (!IsAnyMenuOpen())
 	{
-		ApplyInputModeForMenuClosed(PlayerController);
+		APlayerController* PlayerController = ResolveOwningPlayerController();
+		if (IsValid(PlayerController))
+		{
+			ApplyInputModeForMenuClosed(PlayerController);
+		}
 	}
 
 	// Show notifications for inspection results
 	if (bCompleted && Result.bSuccess)
 	{
-		// Show skill XP notifications
-		for (const auto& SkillXP : Result.XPGranted)
+		UMONotificationComponent* NotificationComp = ResolveNotificationComponent();
+
+		// Cycle through showing popup for each affected entry (both skills and knowledge)
+		// Each entry gets its own popup that displays sequentially
+		for (const FMOInspectionXPGrant& Grant : Result.XPGrants)
 		{
-			if (SkillXP.Value > 0.0f)
+			if (Grant.XPAmount > 0.0f && NotificationComp)
 			{
-				ShowSkillIncreaseNotification(SkillXP.Key, SkillXP.Value);
+				// Both skills and knowledge use the same popup system
+				// The bIsKnowledge flag can be used by the widget to style differently if desired
+				NotificationComp->ShowSkillPopup(Grant.Id, 3.0f);
+
+				UE_LOG(LogMOFramework, Log, TEXT("[MOUI]   Showing popup for %s '%s': +%.0f XP, Level %d -> %d"),
+					Grant.bIsKnowledge ? TEXT("knowledge") : TEXT("skill"),
+					*Grant.Id.ToString(),
+					Grant.XPAmount,
+					Grant.LevelBefore,
+					Grant.LevelAfter);
 			}
 		}
 
-		// Note: Knowledge learned notifications and recipe unlock notifications
-		// are handled by MOCharacter via OnKnowledgeLearned -> HandleKnowledgeLearned
-		// which shows the knowledge notification and triggers recipe discovery.
+		// Show feedback message about learning potential (e.g., "more to learn" or "nothing more to learn")
+		if (!Result.FeedbackMessage.IsEmpty() && NotificationComp)
+		{
+			NotificationComp->ShowNotification(Result.FeedbackMessage, 4.0f);
+		}
+
+		// Note: Recipe unlock notifications are handled by MOCharacter via
+		// OnKnowledgeLearned -> HandleKnowledgeLearned which triggers recipe discovery.
 		// Recipe discovery then fires OnRecipeDiscovered -> HandleRecipeDiscovered
 		// which shows the recipe unlock notification.
 	}
@@ -2146,11 +2168,14 @@ void UMOUIManagerComponent::HandleInspectionCancelled()
 	// Clear inspecting item
 	InspectingItemGuid.Invalidate();
 
-	// Restore input mode
-	APlayerController* PlayerController = ResolveOwningPlayerController();
-	if (IsValid(PlayerController))
+	// Only restore input mode if no other menus are open
+	if (!IsAnyMenuOpen())
 	{
-		ApplyInputModeForMenuClosed(PlayerController);
+		APlayerController* PlayerController = ResolveOwningPlayerController();
+		if (IsValid(PlayerController))
+		{
+			ApplyInputModeForMenuClosed(PlayerController);
+		}
 	}
 }
 
@@ -2309,7 +2334,9 @@ void UMOUIManagerComponent::OpenBuildingMenu()
 	{
 		UMOKnowledgeComponent* Knowledge = CurrentPawn->FindComponentByClass<UMOKnowledgeComponent>();
 		UMORecipeDiscoveryComponent* Discovery = CurrentPawn->FindComponentByClass<UMORecipeDiscoveryComponent>();
-		MenuWidget->InitializeMenu(Knowledge, Discovery);
+		UMOInventoryComponent* Inventory = CurrentPawn->FindComponentByClass<UMOInventoryComponent>();
+		UMOSkillsComponent* Skills = CurrentPawn->FindComponentByClass<UMOSkillsComponent>();
+		MenuWidget->InitializeMenu(Knowledge, Discovery, Inventory, Skills);
 	}
 
 	// Show modal background and menu
@@ -2391,7 +2418,7 @@ void UMOUIManagerComponent::HandleBuildingSelected(FName RecipeId)
 }
 
 // =============================================================================
-// Build Widget (Ghost Interaction)
+// Ghost Context Menu (Ghost Interaction)
 // =============================================================================
 
 void UMOUIManagerComponent::ShowBuildWidget(AMOBuildableActor* Target)
@@ -2412,40 +2439,50 @@ void UMOUIManagerComponent::ShowBuildWidget(AMOBuildableActor* Target)
 		return;
 	}
 
-	if (!BuildWidgetClass)
+	if (!GhostContextMenuClass)
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] BuildWidgetClass not set on UI manager component."));
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] GhostContextMenuClass not set on UI manager component."));
 		return;
 	}
 
+	// Get the player's inventory for material sourcing
+	UMOInventoryComponent* BuilderInventory = nullptr;
+	APawn* Pawn = PlayerController->GetPawn();
+	if (IsValid(Pawn))
+	{
+		BuilderInventory = Pawn->FindComponentByClass<UMOInventoryComponent>();
+	}
+
 	// Create widget if needed
-	UMOBuildWidget* WidgetInst = BuildWidgetWidget.Get();
+	UMOGhostContextMenu* WidgetInst = GhostContextMenuWidget.Get();
 	if (!IsValid(WidgetInst))
 	{
-		WidgetInst = CreateWidget<UMOBuildWidget>(PlayerController, BuildWidgetClass);
+		WidgetInst = CreateWidget<UMOGhostContextMenu>(PlayerController, GhostContextMenuClass);
 		if (!IsValid(WidgetInst))
 		{
-			UE_LOG(LogMOFramework, Error, TEXT("[MOUI] Failed to create Build Widget"));
+			UE_LOG(LogMOFramework, Error, TEXT("[MOUI] Failed to create Ghost Context Menu"));
 			return;
 		}
 
-		BuildWidgetWidget = WidgetInst;
+		GhostContextMenuWidget = WidgetInst;
 
 		// Bind delegates
-		WidgetInst->OnRequestClose.RemoveDynamic(this, &UMOUIManagerComponent::HandleBuildWidgetRequestClose);
-		WidgetInst->OnStartBuild.RemoveDynamic(this, &UMOUIManagerComponent::HandleBuildWidgetStartBuild);
-		WidgetInst->OnRequestClose.AddDynamic(this, &UMOUIManagerComponent::HandleBuildWidgetRequestClose);
-		WidgetInst->OnStartBuild.AddDynamic(this, &UMOUIManagerComponent::HandleBuildWidgetStartBuild);
+		WidgetInst->OnRequestClose.RemoveDynamic(this, &UMOUIManagerComponent::HandleGhostContextMenuRequestClose);
+		WidgetInst->OnBuildStarted.RemoveDynamic(this, &UMOUIManagerComponent::HandleGhostContextMenuBuildStarted);
+		WidgetInst->OnCancelled.RemoveDynamic(this, &UMOUIManagerComponent::HandleGhostContextMenuCancelled);
+		WidgetInst->OnRequestClose.AddDynamic(this, &UMOUIManagerComponent::HandleGhostContextMenuRequestClose);
+		WidgetInst->OnBuildStarted.AddDynamic(this, &UMOUIManagerComponent::HandleGhostContextMenuBuildStarted);
+		WidgetInst->OnCancelled.AddDynamic(this, &UMOUIManagerComponent::HandleGhostContextMenuCancelled);
 	}
 
 	CurrentBuildTarget = Target;
 
-	// Initialize widget with target building data
-	WidgetInst->InitializeForBuilding(Target);
+	// Initialize widget with target building and player inventory
+	WidgetInst->InitializeForGhost(Target, BuilderInventory);
 
 	// Show modal background and widget
 	ShowModalBackground();
-	WidgetInst->AddToViewport(BuildWidgetZOrder);
+	WidgetInst->AddToViewport(GhostContextMenuZOrder);
 
 	// Set input mode
 	ApplyInputModeForMenuOpen(PlayerController, WidgetInst);
@@ -2454,14 +2491,14 @@ void UMOUIManagerComponent::ShowBuildWidget(AMOBuildableActor* Target)
 
 	UpdateReticleVisibility();
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Build Widget opened for: %s"), *Target->GetName());
+	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Ghost Context Menu opened for: %s"), *Target->GetName());
 }
 
 void UMOUIManagerComponent::HideBuildWidget()
 {
 	APlayerController* PlayerController = ResolveOwningPlayerController();
 
-	UMOBuildWidget* WidgetInst = BuildWidgetWidget.Get();
+	UMOGhostContextMenu* WidgetInst = GhostContextMenuWidget.Get();
 	if (IsValid(WidgetInst))
 	{
 		if (WidgetInst->IsInViewport())
@@ -2484,46 +2521,34 @@ void UMOUIManagerComponent::HideBuildWidget()
 		}
 	}
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Build Widget closed"));
+	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Ghost Context Menu closed"));
 }
 
 bool UMOUIManagerComponent::IsBuildWidgetOpen() const
 {
-	UMOBuildWidget* WidgetInst = BuildWidgetWidget.Get();
+	UMOGhostContextMenu* WidgetInst = GhostContextMenuWidget.Get();
 	return IsValid(WidgetInst) && WidgetInst->IsInViewport();
 }
 
-void UMOUIManagerComponent::HandleBuildWidgetRequestClose()
+void UMOUIManagerComponent::HandleGhostContextMenuRequestClose()
 {
 	HideBuildWidget();
 }
 
-void UMOUIManagerComponent::HandleBuildWidgetStartBuild()
+void UMOUIManagerComponent::HandleGhostContextMenuBuildStarted()
 {
-	AMOBuildableActor* Target = CurrentBuildTarget.Get();
-	if (!IsValid(Target))
-	{
-		HideBuildWidget();
-		return;
-	}
-
-	// Get build options from widget
-	UMOBuildWidget* WidgetInst = BuildWidgetWidget.Get();
-	if (!IsValid(WidgetInst))
-	{
-		return;
-	}
-
-	// Start construction with widget's options
-	UMOBuildProgressComponent* BuildProgress = Target->FindComponentByClass<UMOBuildProgressComponent>();
-	if (IsValid(BuildProgress))
-	{
-		FMOBuildProgress Options = WidgetInst->GetBuildOptions();
-		BuildProgress->StartConstruction(Options);
-	}
-
-	// Close the widget
+	// The context menu handles starting the build internally
+	// We just close the menu - the building will continue in the background
 	HideBuildWidget();
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Started construction on: %s"), *Target->GetName());
+	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Build started from Ghost Context Menu"));
+}
+
+void UMOUIManagerComponent::HandleGhostContextMenuCancelled()
+{
+	// The context menu handles cancellation and material dropping internally
+	// Just close the widget
+	HideBuildWidget();
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Build cancelled from Ghost Context Menu"));
 }

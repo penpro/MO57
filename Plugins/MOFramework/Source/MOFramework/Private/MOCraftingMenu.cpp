@@ -16,6 +16,8 @@
 UMOCraftingMenu::UMOCraftingMenu(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
+	// Enable keyboard input for this widget (needed for Tab/Escape to close)
+	SetIsFocusable(true);
 }
 
 void UMOCraftingMenu::InitializeMenu(
@@ -251,7 +253,10 @@ void UMOCraftingMenu::NativeDestruct()
 
 FReply UMOCraftingMenu::NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent)
 {
-	if (InKeyEvent.GetKey() == EKeys::Escape)
+	const FKey PressedKey = InKeyEvent.GetKey();
+
+	// Close on Tab or Escape
+	if (PressedKey == EKeys::Tab || PressedKey == EKeys::Escape)
 	{
 		OnRequestClose.Broadcast();
 		return FReply::Handled();

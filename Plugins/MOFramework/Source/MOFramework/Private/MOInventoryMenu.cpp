@@ -75,7 +75,9 @@ void UMOInventoryMenu::InitializeMenu(UMOInventoryComponent* InInventoryComponen
 FReply UMOInventoryMenu::NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent)
 {
 	const FKey PressedKey = InKeyEvent.GetKey();
-	if (PressedKey == EKeys::Tab)
+
+	// Close on Tab or Escape
+	if (PressedKey == EKeys::Tab || PressedKey == EKeys::Escape)
 	{
 		OnRequestClose.Broadcast();
 		return FReply::Handled();

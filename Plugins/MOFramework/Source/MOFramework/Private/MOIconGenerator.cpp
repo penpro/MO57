@@ -19,13 +19,8 @@
 #include "HAL/PlatformFileManager.h"
 #include "Misc/Paths.h"
 #include "Editor.h"
-#include "Slate/SceneViewport.h"
-#include "CanvasItem.h"
-#include "CanvasTypes.h"
-#include "Engine/TextureRenderTarget2D.h"
-#include "Kismet/KismetRenderingLibrary.h"
-#include "Components/SceneCaptureComponent2D.h"
-#include "Engine/SceneCapture2D.h"
+#include "Materials/Material.h"
+#include "Materials/MaterialInterface.h"
 #endif
 
 bool UMOIconGenerator::GenerateIconForMesh(UStaticMesh* Mesh, const FString& OutputPath, int32 Resolution)
@@ -126,9 +121,13 @@ bool UMOIconGenerator::GenerateIconForSelectedAsset(int32 Resolution)
 int32 UMOIconGenerator::GenerateIconsForSelectedAssets(int32 Resolution)
 {
 #if WITH_EDITOR
+	UE_LOG(LogMOFramework, Warning, TEXT("[IconGen] GenerateIconsForSelectedAssets called"));
+
 	FContentBrowserModule& ContentBrowserModule = FModuleManager::LoadModuleChecked<FContentBrowserModule>("ContentBrowser");
 	TArray<FAssetData> SelectedAssets;
 	ContentBrowserModule.Get().GetSelectedAssets(SelectedAssets);
+
+	UE_LOG(LogMOFramework, Warning, TEXT("[IconGen] Found %d selected assets"), SelectedAssets.Num());
 
 	int32 GeneratedCount = 0;
 
@@ -194,52 +193,62 @@ UTexture2D* UMOIconGenerator::RenderThumbnail(UObject* Asset, int32 Resolution)
 		return nullptr;
 	}
 
-	// Create a render target
-	UTextureRenderTarget2D* RenderTarget = NewObject<UTextureRenderTarget2D>();
-	RenderTarget->InitAutoFormat(Resolution, Resolution);
-	RenderTarget->UpdateResourceImmediate(true);
+	UE_LOG(LogMOFramework, Log, TEXT("[IconGen] Rendering thumbnail for %s"), *Asset->GetName());
 
-	// Get thumbnail renderer for this asset type
-	FThumbnailRenderingInfo* RenderInfo = UThumbnailManager::Get().GetRenderingInfo(Asset);
-	if (!RenderInfo || !RenderInfo->Renderer)
+	// Force load materials for static meshes before rendering
+	if (UStaticMesh* Mesh = Cast<UStaticMesh>(Asset))
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[IconGen] No thumbnail renderer for asset type: %s"), *Asset->GetClass()->GetName());
+		Mesh->ConditionalPostLoad();
+		for (const FStaticMaterial& StaticMaterial : Mesh->GetStaticMaterials())
+		{
+			if (StaticMaterial.MaterialInterface)
+			{
+				StaticMaterial.MaterialInterface->ConditionalPostLoad();
+				if (UMaterial* BaseMaterial = StaticMaterial.MaterialInterface->GetMaterial())
+				{
+					BaseMaterial->ConditionalPostLoad();
+				}
+			}
+		}
+		UE_LOG(LogMOFramework, Log, TEXT("[IconGen] Loaded %d materials for mesh"), Mesh->GetStaticMaterials().Num());
+	}
+
+	// Use FObjectThumbnail which is what the engine uses internally
+	FObjectThumbnail ObjectThumbnail;
+	ThumbnailTools::RenderThumbnail(
+		Asset,
+		Resolution,
+		Resolution,
+		ThumbnailTools::EThumbnailTextureFlushMode::AlwaysFlush,
+		nullptr,  // No render target - use FObjectThumbnail instead
+		&ObjectThumbnail
+	);
+
+	// Get the uncompressed image data
+	const TArray<uint8>& ImageData = ObjectThumbnail.GetUncompressedImageData();
+	int32 ThumbWidth = ObjectThumbnail.GetImageWidth();
+	int32 ThumbHeight = ObjectThumbnail.GetImageHeight();
+
+	UE_LOG(LogMOFramework, Log, TEXT("[IconGen] Thumbnail size: %dx%d, data size: %d bytes"),
+		ThumbWidth, ThumbHeight, ImageData.Num());
+
+	if (ImageData.Num() == 0 || ThumbWidth == 0 || ThumbHeight == 0)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[IconGen] Empty thumbnail data"));
 		return nullptr;
 	}
 
-	// Create canvas for rendering
-	FIntPoint TargetSize(Resolution, Resolution);
-
-	// Allocate buffer for pixel data
-	TArray<FColor> OutPixels;
-	OutPixels.SetNumZeroed(Resolution * Resolution);
-
-	// Use thumbnail manager to render
-	// This is a bit of a workaround - we draw to an off-screen buffer
-	FObjectThumbnail NewThumbnail;
-	ThumbnailTools::RenderThumbnail(Asset, Resolution, Resolution, ThumbnailTools::EThumbnailTextureFlushMode::NeverFlush, nullptr, &NewThumbnail);
-
-	if (NewThumbnail.GetImageWidth() == 0 || NewThumbnail.GetImageHeight() == 0)
-	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[IconGen] Thumbnail render returned empty image"));
-		return nullptr;
-	}
-
-	// Create texture from thumbnail data
-	const TArray<uint8>& ThumbnailData = NewThumbnail.AccessImageData();
-	int32 Width = NewThumbnail.GetImageWidth();
-	int32 Height = NewThumbnail.GetImageHeight();
-
-	UTexture2D* NewTexture = UTexture2D::CreateTransient(Width, Height, PF_B8G8R8A8);
+	// Create a transient texture with the thumbnail data
+	UTexture2D* NewTexture = UTexture2D::CreateTransient(ThumbWidth, ThumbHeight, PF_B8G8R8A8);
 	if (!NewTexture)
 	{
 		UE_LOG(LogMOFramework, Warning, TEXT("[IconGen] Failed to create transient texture"));
 		return nullptr;
 	}
 
-	// Copy thumbnail data to texture
+	// Copy image data to texture (FObjectThumbnail stores BGRA8 data)
 	void* TextureData = NewTexture->GetPlatformData()->Mips[0].BulkData.Lock(LOCK_READ_WRITE);
-	FMemory::Memcpy(TextureData, ThumbnailData.GetData(), ThumbnailData.Num());
+	FMemory::Memcpy(TextureData, ImageData.GetData(), ImageData.Num());
 	NewTexture->GetPlatformData()->Mips[0].BulkData.Unlock();
 	NewTexture->UpdateResource();
 
@@ -249,10 +258,10 @@ UTexture2D* UMOIconGenerator::RenderThumbnail(UObject* Asset, int32 Resolution)
 #endif
 }
 
-bool UMOIconGenerator::SaveTextureAsset(UTexture2D* Texture, const FString& PackagePath)
+bool UMOIconGenerator::SaveTextureAsset(UTexture2D* SourceTexture, const FString& PackagePath)
 {
 #if WITH_EDITOR
-	if (!IsValid(Texture))
+	if (!IsValid(SourceTexture))
 	{
 		return false;
 	}
@@ -279,23 +288,70 @@ bool UMOIconGenerator::SaveTextureAsset(UTexture2D* Texture, const FString& Pack
 		UE_LOG(LogMOFramework, Warning, TEXT("[IconGen] Failed to create package: %s"), *PackageName);
 		return false;
 	}
+	Package->FullyLoad();
 
-	// Duplicate texture into the package
-	UTexture2D* SavedTexture = DuplicateObject<UTexture2D>(Texture, Package, *AssetName);
-	if (!SavedTexture)
+	// Get source texture dimensions and data
+	int32 Width = SourceTexture->GetSizeX();
+	int32 Height = SourceTexture->GetSizeY();
+
+	// Read pixel data from source texture
+	TArray<FColor> Pixels;
+	Pixels.SetNum(Width * Height);
+
+	// Lock and copy the source data
+	const FColor* SourceData = reinterpret_cast<const FColor*>(SourceTexture->GetPlatformData()->Mips[0].BulkData.LockReadOnly());
+	if (SourceData)
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[IconGen] Failed to duplicate texture"));
+		FMemory::Memcpy(Pixels.GetData(), SourceData, Width * Height * sizeof(FColor));
+		SourceTexture->GetPlatformData()->Mips[0].BulkData.Unlock();
+	}
+	else
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[IconGen] Failed to lock source texture data"));
+		return false;
+	}
+
+	// Create new texture directly in target package
+	UTexture2D* NewTexture = NewObject<UTexture2D>(Package, *AssetName, RF_Public | RF_Standalone);
+	if (!NewTexture)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[IconGen] Failed to create texture in package"));
 		return false;
 	}
 
 	// Set texture properties for UI use
-	SavedTexture->MipGenSettings = TMGS_NoMipmaps;
-	SavedTexture->CompressionSettings = TC_EditorIcon;
-	SavedTexture->LODGroup = TEXTUREGROUP_UI;
-	SavedTexture->SRGB = true;
+	NewTexture->MipGenSettings = TMGS_NoMipmaps;
+	NewTexture->CompressionSettings = TC_EditorIcon;
+	NewTexture->LODGroup = TEXTUREGROUP_UI;
+	NewTexture->SRGB = true;
+	NewTexture->NeverStream = true;
 
-	// Mark package dirty and save
-	SavedTexture->MarkPackageDirty();
+	// Initialize platform data
+	FTexturePlatformData* PlatformData = new FTexturePlatformData();
+	PlatformData->SizeX = Width;
+	PlatformData->SizeY = Height;
+	PlatformData->PixelFormat = PF_B8G8R8A8;
+
+	// Create and populate mip level
+	FTexture2DMipMap* Mip = new FTexture2DMipMap();
+	Mip->SizeX = Width;
+	Mip->SizeY = Height;
+	Mip->BulkData.Lock(LOCK_READ_WRITE);
+	void* TextureData = Mip->BulkData.Realloc(Width * Height * 4);
+	FMemory::Memcpy(TextureData, Pixels.GetData(), Width * Height * 4);
+	Mip->BulkData.Unlock();
+
+	PlatformData->Mips.Add(Mip);
+	NewTexture->SetPlatformData(PlatformData);
+
+	// Initialize source data for editor (required for saving)
+	NewTexture->Source.Init(Width, Height, 1, 1, TSF_BGRA8, reinterpret_cast<const uint8*>(Pixels.GetData()));
+
+	// Update resource
+	NewTexture->UpdateResource();
+	NewTexture->PostEditChange();
+
+	// Mark package dirty
 	Package->MarkPackageDirty();
 
 	// Get the file path
@@ -314,12 +370,13 @@ bool UMOIconGenerator::SaveTextureAsset(UTexture2D* Texture, const FString& Pack
 	SaveArgs.TopLevelFlags = RF_Public | RF_Standalone;
 	SaveArgs.Error = GError;
 
-	bool bSaved = UPackage::SavePackage(Package, SavedTexture, *PackageFileName, SaveArgs);
+	bool bSaved = UPackage::SavePackage(Package, NewTexture, *PackageFileName, SaveArgs);
 
 	if (bSaved)
 	{
 		// Notify asset registry
-		FAssetRegistryModule::AssetCreated(SavedTexture);
+		FAssetRegistryModule::AssetCreated(NewTexture);
+		UE_LOG(LogMOFramework, Log, TEXT("[IconGen] Saved texture %dx%d to %s"), Width, Height, *PackageName);
 	}
 
 	return bSaved;

@@ -18,6 +18,9 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOOnBloodLossStageChanged, EMOBloo
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOOnCardiacArrest);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOOnRespiratoryFailure);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOOnVitalsChanged);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOOnActivityChanged, EMOActivityLevel, OldActivity, EMOActivityLevel, NewActivity);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOOnStaminaChanged, float, OldStamina, float, NewStamina);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOOnStaminaDepleted);
 
 // ============================================================================
 // SAVE DATA
@@ -33,6 +36,9 @@ struct MOFRAMEWORK_API FMOVitalsSaveData
 
 	UPROPERTY()
 	FMOExertionState Exertion;
+
+	UPROPERTY()
+	FMOActivityState Activity;
 };
 
 // ============================================================================
@@ -62,6 +68,10 @@ public:
 	/** Current exertion and stress state. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Replicated, Category="MO|Vitals")
 	FMOExertionState Exertion;
+
+	/** Current activity state. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Replicated, Category="MO|Vitals")
+	FMOActivityState Activity;
 
 	// ============================================================================
 	// CONFIGURATION
@@ -98,6 +108,18 @@ public:
 	/** Fired when any vital sign changes (for UI updates). */
 	UPROPERTY(BlueprintAssignable, Category="MO|Vitals|Events")
 	FMOOnVitalsChanged OnVitalsChanged;
+
+	/** Fired when activity level changes. UI can use this for stamina bar updates. */
+	UPROPERTY(BlueprintAssignable, Category="MO|Vitals|Events")
+	FMOOnActivityChanged OnActivityChanged;
+
+	/** Fired when stamina changes significantly. */
+	UPROPERTY(BlueprintAssignable, Category="MO|Vitals|Events")
+	FMOOnStaminaChanged OnStaminaChanged;
+
+	/** Fired when stamina is fully depleted. Movement system should respond by downgrading activity. */
+	UPROPERTY(BlueprintAssignable, Category="MO|Vitals|Events")
+	FMOOnStaminaDepleted OnStaminaDepleted;
 
 	// ============================================================================
 	// BLOOD API
@@ -156,6 +178,90 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category="MO|Vitals|Exertion")
 	void AddFatigue(float Amount);
+
+	// ============================================================================
+	// ACTIVITY API
+	// ============================================================================
+	// Integration Points:
+	// - Movement Component: Call SetActivityLevel() when movement speed changes
+	// - Crafting System: Call SetActivityLevel() when crafting starts/stops
+	// - Building System: Call SetActivityLevel() when construction activity changes
+	// - Combat System: Call SetActivityLevel(Combat) when entering combat
+	// ============================================================================
+
+	/**
+	 * Set current activity level.
+	 * This is the primary entry point for movement/action systems.
+	 *
+	 * @param NewActivity The new activity level
+	 *
+	 * Integration Example (in Character Movement Component):
+	 *   void UpdateMovementMode()
+	 *   {
+	 *       if (VitalsComp)
+	 *       {
+	 *           if (IsSprinting())
+	 *               VitalsComp->SetActivityLevel(EMOActivityLevel::Sprinting);
+	 *           else if (IsRunning())
+	 *               VitalsComp->SetActivityLevel(EMOActivityLevel::Jogging);
+	 *           else if (IsWalking())
+	 *               VitalsComp->SetActivityLevel(EMOActivityLevel::Walking);
+	 *           else
+	 *               VitalsComp->SetActivityLevel(EMOActivityLevel::Idle);
+	 *       }
+	 *   }
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Vitals|Activity")
+	void SetActivityLevel(EMOActivityLevel NewActivity);
+
+	/**
+	 * Get current activity level.
+	 */
+	UFUNCTION(BlueprintPure, Category="MO|Vitals|Activity")
+	EMOActivityLevel GetActivityLevel() const { return Activity.CurrentActivity; }
+
+	/**
+	 * Get current activity config (calorie multiplier, stamina drain, etc.).
+	 */
+	UFUNCTION(BlueprintPure, Category="MO|Vitals|Activity")
+	FMOActivityConfig GetCurrentActivityConfig() const;
+
+	/**
+	 * Check if current activity can be sustained (has enough stamina).
+	 */
+	UFUNCTION(BlueprintPure, Category="MO|Vitals|Activity")
+	bool CanSustainCurrentActivity() const;
+
+	/**
+	 * Check if a given activity can be started (meets minimum stamina requirement).
+	 */
+	UFUNCTION(BlueprintPure, Category="MO|Vitals|Activity")
+	bool CanStartActivity(EMOActivityLevel ActivityToCheck) const;
+
+	/**
+	 * Get current stamina as percentage (0-1).
+	 */
+	UFUNCTION(BlueprintPure, Category="MO|Vitals|Activity")
+	float GetStaminaPercent() const { return Activity.GetStaminaPercent(); }
+
+	/**
+	 * Check if stamina is depleted.
+	 */
+	UFUNCTION(BlueprintPure, Category="MO|Vitals|Activity")
+	bool IsStaminaDepleted() const { return Activity.IsStaminaDepleted(); }
+
+	/**
+	 * Manually modify stamina (for effects, items, etc.).
+	 * @param Amount Amount to add (negative to drain)
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Vitals|Activity")
+	void ModifyStamina(float Amount);
+
+	/**
+	 * Get current calorie burn multiplier (activity * fitness adjustments).
+	 */
+	UFUNCTION(BlueprintPure, Category="MO|Vitals|Activity")
+	float GetCurrentCalorieMultiplier() const;
 
 	// ============================================================================
 	// TEMPERATURE API
@@ -292,4 +398,16 @@ private:
 
 	/** Broadcast vital sign change if significant. */
 	void CheckAndBroadcastChange(FName VitalName, float OldValue, float NewValue, float Threshold = 1.0f);
+
+	/** Process activity-based calorie burn and stamina drain. */
+	void ProcessActivityEffects(float DeltaTime);
+
+	/** Update stamina based on current activity. */
+	void UpdateStamina(float DeltaTime);
+
+	/** Apply calorie burn to metabolism component. */
+	void ApplyActivityCalorieBurn(float DeltaTime);
+
+	/** Update maximum stamina based on fitness. */
+	void UpdateMaxStamina();
 };

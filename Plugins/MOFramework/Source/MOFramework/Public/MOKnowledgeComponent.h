@@ -33,6 +33,54 @@ struct MOFRAMEWORK_API FMOItemKnowledgeProgress
 };
 
 /**
+ * Enum describing the learning potential from an item.
+ */
+UENUM(BlueprintType)
+enum class EMOLearningPotential : uint8
+{
+	/** Full learning potential - first inspection or low skill level. */
+	Full,
+	/** Partial learning potential - approaching skill cap, diminishing returns. */
+	Partial,
+	/** No learning potential - skill cap reached or all knowledge learned. */
+	None
+};
+
+/**
+ * Represents XP granted to a single skill or knowledge entry during inspection.
+ * Used to cycle through showing each affected entry in notifications.
+ */
+USTRUCT(BlueprintType)
+struct MOFRAMEWORK_API FMOInspectionXPGrant
+{
+	GENERATED_BODY()
+
+	/** The skill or knowledge ID that received XP. */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Knowledge")
+	FName Id = NAME_None;
+
+	/** If true, this is a knowledge entry. If false, it's a skill. */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Knowledge")
+	bool bIsKnowledge = false;
+
+	/** Amount of XP granted. */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Knowledge")
+	float XPAmount = 0.0f;
+
+	/** The level before XP was granted. */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Knowledge")
+	int32 LevelBefore = 0;
+
+	/** The level after XP was granted. */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Knowledge")
+	int32 LevelAfter = 0;
+
+	/** True if this grant caused a level up. */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Knowledge")
+	bool bLeveledUp = false;
+};
+
+/**
  * Result of an inspection action.
  */
 USTRUCT(BlueprintType)
@@ -44,17 +92,26 @@ struct MOFRAMEWORK_API FMOInspectionResult
 	UPROPERTY(BlueprintReadOnly, Category="MO|Knowledge")
 	bool bSuccess = false;
 
-	/** New knowledge IDs learned from this inspection. */
+	/** All XP grants from this inspection (both skills and knowledge).
+	 *  Use this to cycle through notification displays. */
 	UPROPERTY(BlueprintReadOnly, Category="MO|Knowledge")
-	TArray<FName> NewKnowledge;
-
-	/** XP granted to each skill from this inspection. */
-	UPROPERTY(BlueprintReadOnly, Category="MO|Knowledge")
-	TMap<FName, float> XPGranted;
+	TArray<FMOInspectionXPGrant> XPGrants;
 
 	/** Whether this was the first time inspecting this item. */
 	UPROPERTY(BlueprintReadOnly, Category="MO|Knowledge")
 	bool bFirstInspection = false;
+
+	/** Learning potential remaining for this item. */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Knowledge")
+	EMOLearningPotential LearningPotential = EMOLearningPotential::Full;
+
+	/** Feedback message to display to the player. */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Knowledge")
+	FText FeedbackMessage;
+
+	/** True if there's nothing more to learn from this item. */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Knowledge")
+	bool bNothingMoreToLearn = false;
 };
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOOnKnowledgeLearned, FName, KnowledgeId, FName, FromItemId);
@@ -86,15 +143,6 @@ public:
 
 	UPROPERTY(BlueprintAssignable, Category="MO|Knowledge|Events")
 	FMOOnItemInspected OnItemInspected;
-
-	// Configuration
-	/** Multiplier applied to XP rewards on subsequent inspections (diminishing returns). */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Knowledge|Config", meta=(ClampMin="0.0", ClampMax="1.0"))
-	float DiminishingReturnsFactor = 0.5f;
-
-	/** After this many inspections, no more XP is granted for an item. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Knowledge|Config", meta=(ClampMin="1"))
-	int32 MaxInspectionsForXP = 5;
 
 	/**
 	 * Inspect an item, potentially learning knowledge and gaining skill XP.
@@ -160,6 +208,25 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Knowledge")
 	bool GrantKnowledge(FName KnowledgeId);
 
+	/**
+	 * Check if there is anything more to learn from inspecting an item.
+	 * Returns false if skill cap is reached and all knowledge is learned.
+	 * @param ItemDefinitionId The item to check
+	 * @param SkillsComponent The player's skills (for level checks)
+	 * @return True if inspection would provide some benefit
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Knowledge")
+	bool CanLearnMoreFromItem(FName ItemDefinitionId, UMOSkillsComponent* SkillsComponent) const;
+
+	/**
+	 * Get the learning potential for an item (Full, Partial, or None).
+	 * @param ItemDefinitionId The item to check
+	 * @param SkillsComponent The player's skills (for level checks)
+	 * @return Learning potential enum
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Knowledge")
+	EMOLearningPotential GetLearningPotential(FName ItemDefinitionId, UMOSkillsComponent* SkillsComponent) const;
+
 protected:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
@@ -169,9 +236,4 @@ private:
 	 */
 	FMOItemKnowledgeProgress* FindItemKnowledge(FName ItemDefinitionId);
 	const FMOItemKnowledgeProgress* FindItemKnowledge(FName ItemDefinitionId) const;
-
-	/**
-	 * Calculate XP multiplier based on inspection count (diminishing returns).
-	 */
-	float GetXPMultiplier(int32 InspectionCount) const;
 };

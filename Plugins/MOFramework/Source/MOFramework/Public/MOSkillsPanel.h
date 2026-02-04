@@ -7,6 +7,7 @@
 #include "MOSkillsPanel.generated.h"
 
 class UMOSkillsComponent;
+class UMOKnowledgeComponent;
 class UMOSkillEntryWidget;
 class UScrollBox;
 class UVerticalBox;
@@ -14,8 +15,19 @@ class UPanelWidget;
 class UTextBlock;
 class UMOCommonButton;
 
+/**
+ * Display mode for the skills/knowledge panel.
+ */
+UENUM(BlueprintType)
+enum class EMOSkillsPanelMode : uint8
+{
+	Skills,		// Show skills with XP progress
+	Knowledge	// Show learned knowledge/discoveries
+};
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOSkillsPanelRequestCloseSignature);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOSkillsPanelSkillSelectedSignature, FName, SkillId);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOSkillsPanelModeChangedSignature, EMOSkillsPanelMode, NewMode);
 
 /**
  * Panel widget that displays all skills with their levels and XP progress.
@@ -34,6 +46,28 @@ public:
 	/** Initialize with the player's skills component. */
 	UFUNCTION(BlueprintCallable, Category="MO|Skills|UI")
 	void InitializePanel(UMOSkillsComponent* InSkillsComponent);
+
+	/** Initialize with both skills and knowledge components. */
+	UFUNCTION(BlueprintCallable, Category="MO|Skills|UI")
+	void InitializePanelWithKnowledge(UMOSkillsComponent* InSkillsComponent, UMOKnowledgeComponent* InKnowledgeComponent);
+
+	// --- Display Mode ---
+
+	/** Set the display mode (Skills or Knowledge). */
+	UFUNCTION(BlueprintCallable, Category="MO|Skills|UI")
+	void SetDisplayMode(EMOSkillsPanelMode NewMode);
+
+	/** Get current display mode. */
+	UFUNCTION(BlueprintPure, Category="MO|Skills|UI")
+	EMOSkillsPanelMode GetDisplayMode() const { return CurrentDisplayMode; }
+
+	/** Switch to Skills mode. */
+	UFUNCTION(BlueprintCallable, Category="MO|Skills|UI")
+	void ShowSkills();
+
+	/** Switch to Knowledge mode. */
+	UFUNCTION(BlueprintCallable, Category="MO|Skills|UI")
+	void ShowKnowledge();
 
 	// --- Refresh ---
 
@@ -77,6 +111,9 @@ public:
 	UPROPERTY(BlueprintAssignable, Category="MO|Skills|UI")
 	FMOSkillsPanelSkillSelectedSignature OnSkillSelected;
 
+	UPROPERTY(BlueprintAssignable, Category="MO|Skills|UI")
+	FMOSkillsPanelModeChangedSignature OnModeChanged;
+
 	// --- Configuration ---
 
 	/** Widget class to use for skill entries. If not set, uses simple text entries. */
@@ -112,17 +149,44 @@ protected:
 	UFUNCTION()
 	void HandleCloseClicked();
 
+	/** Handle skills tab button clicked. */
+	UFUNCTION()
+	void HandleSkillsTabClicked();
+
+	/** Handle knowledge tab button clicked. */
+	UFUNCTION()
+	void HandleKnowledgeTabClicked();
+
+	/** Handle new knowledge learned. */
+	UFUNCTION()
+	void HandleKnowledgeLearned(FName KnowledgeId, FName FromItemId);
+
 	/** Build display data for a skill. */
 	FMOSkillDisplayData BuildSkillDisplayData(FName SkillId) const;
+
+	/** Build display data for knowledge (reuses FMOSkillDisplayData structure). */
+	FMOSkillDisplayData BuildKnowledgeDisplayData(FName KnowledgeId) const;
+
+	/** Format a knowledge ID into a readable display name. */
+	FText FormatKnowledgeName(FName KnowledgeId) const;
 
 	/** Populate the container with skill entries. */
 	void PopulateSkillContainer();
 
+	/** Populate the container with knowledge entries. */
+	void PopulateKnowledgeContainer();
+
 	/** Create a simple text entry for a skill (when no widget class set). */
 	UTextBlock* CreateSimpleSkillText(const FMOSkillDisplayData& Data);
 
-	/** Update the detail panel for selected skill. */
+	/** Create a simple text entry for knowledge. */
+	UTextBlock* CreateSimpleKnowledgeText(const FMOSkillDisplayData& Data);
+
+	/** Update the detail panel for selected skill or knowledge. */
 	void UpdateDetailPanel();
+
+	/** Update tab button visual states based on current mode. */
+	void UpdateTabButtonStates();
 
 	/** Blueprint event when skill list is updated. */
 	UFUNCTION(BlueprintImplementableEvent, Category="MO|Skills|UI")
@@ -131,6 +195,10 @@ protected:
 	/** Blueprint event when selected skill changes. */
 	UFUNCTION(BlueprintImplementableEvent, Category="MO|Skills|UI")
 	void OnSelectedSkillChanged(const FMOSkillDisplayData& SkillData);
+
+	/** Blueprint event when tab mode changes. Use this to update button visual styles. */
+	UFUNCTION(BlueprintImplementableEvent, Category="MO|Skills|UI")
+	void OnTabModeChanged(EMOSkillsPanelMode NewMode);
 
 	// --- Widget Bindings ---
 
@@ -146,7 +214,15 @@ protected:
 	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
 	TObjectPtr<UMOCommonButton> CloseButton;
 
-	// --- Detail Panel Bindings (for selected skill) ---
+	/** Tab button to switch to Skills view. */
+	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
+	TObjectPtr<UMOCommonButton> SkillsTabButton;
+
+	/** Tab button to switch to Knowledge view. */
+	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
+	TObjectPtr<UMOCommonButton> KnowledgeTabButton;
+
+	// --- Detail Panel Bindings (for selected skill/knowledge) ---
 
 	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
 	TObjectPtr<UTextBlock> DetailNameText;
@@ -175,11 +251,16 @@ private:
 	TWeakObjectPtr<UMOSkillsComponent> SkillsComponent;
 
 	UPROPERTY()
+	TWeakObjectPtr<UMOKnowledgeComponent> KnowledgeComponent;
+
+	UPROPERTY()
 	TArray<TObjectPtr<UMOSkillEntryWidget>> EntryWidgets;
 
 	UPROPERTY()
 	TArray<TObjectPtr<UTextBlock>> SimpleTextWidgets;
 
 	FName SelectedSkillId = NAME_None;
+	FName SelectedKnowledgeId = NAME_None;
 	EMOSkillCategory CategoryFilter = EMOSkillCategory::None;
+	EMOSkillsPanelMode CurrentDisplayMode = EMOSkillsPanelMode::Skills;
 };

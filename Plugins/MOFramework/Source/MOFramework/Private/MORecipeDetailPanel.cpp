@@ -58,19 +58,39 @@ void UMORecipeDetailPanel::DisplayRecipe(FName RecipeId)
 		RecipeDescriptionText->SetText(Recipe->Description);
 	}
 
-	// Update icon
-	if (RecipeIcon && !Recipe->Icon.IsNull())
+	// Update icon - use recipe icon if set, otherwise fall back to first output item's icon
+	if (RecipeIcon)
 	{
-		UTexture2D* IconTexture = Recipe->Icon.LoadSynchronous();
+		UTexture2D* IconTexture = nullptr;
+
+		// First try recipe's own icon
+		if (!Recipe->Icon.IsNull())
+		{
+			IconTexture = Recipe->Icon.LoadSynchronous();
+		}
+
+		// Fall back to first output item's icon
+		if (!IconTexture && Recipe->Outputs.Num() > 0)
+		{
+			FMOItemDefinitionRow ItemDef;
+			if (UMOItemDatabaseSettings::GetItemDefinition(Recipe->Outputs[0].ItemDefinitionId, ItemDef))
+			{
+				if (!ItemDef.UI.IconSmall.IsNull())
+				{
+					IconTexture = ItemDef.UI.IconSmall.LoadSynchronous();
+				}
+			}
+		}
+
 		if (IconTexture)
 		{
 			RecipeIcon->SetBrushFromTexture(IconTexture);
 			RecipeIcon->SetVisibility(ESlateVisibility::Visible);
 		}
-	}
-	else if (RecipeIcon)
-	{
-		RecipeIcon->SetVisibility(ESlateVisibility::Hidden);
+		else
+		{
+			RecipeIcon->SetVisibility(ESlateVisibility::Hidden);
+		}
 	}
 
 	// Update skill requirement text
@@ -148,14 +168,17 @@ void UMORecipeDetailPanel::DisplayRecipe(FName RecipeId)
 	PopulateOutputsContainer();
 
 	// Update craft amount controls
+	int32 MaxAmount = FMath::Max(1, GetMaxCraftableAmount());
+
 	if (CraftAmountSpinBox)
 	{
+		CraftAmountSpinBox->SetMaxValue(static_cast<float>(MaxAmount));
+		CraftAmountSpinBox->SetMaxSliderValue(static_cast<float>(MaxAmount));
 		CraftAmountSpinBox->SetValue(CraftAmount);
 	}
 	if (CraftAmountSlider)
 	{
-		int32 MaxAmount = GetMaxCraftableAmount();
-		CraftAmountSlider->SetMaxValue(FMath::Max(1.0f, static_cast<float>(MaxAmount)));
+		CraftAmountSlider->SetMaxValue(static_cast<float>(MaxAmount));
 		CraftAmountSlider->SetValue(static_cast<float>(CraftAmount));
 	}
 	if (CraftAmountText)
@@ -249,7 +272,8 @@ void UMORecipeDetailPanel::RefreshDisplay()
 
 void UMORecipeDetailPanel::SetCraftAmount(int32 Amount)
 {
-	CraftAmount = FMath::Max(1, Amount);
+	int32 MaxAmount = FMath::Max(1, GetMaxCraftableAmount());
+	CraftAmount = FMath::Clamp(Amount, 1, MaxAmount);
 
 	if (CraftAmountSpinBox)
 	{
@@ -339,16 +363,26 @@ void UMORecipeDetailPanel::NativeConstruct()
 		CraftButton->OnClicked().AddUObject(this, &UMORecipeDetailPanel::HandleCraftButtonClicked);
 	}
 
+	if (CraftMaxButton)
+	{
+		CraftMaxButton->OnClicked().RemoveAll(this);
+		CraftMaxButton->OnClicked().AddUObject(this, &UMORecipeDetailPanel::HandleCraftMaxButtonClicked);
+	}
+
 	if (CraftAmountSpinBox)
 	{
 		CraftAmountSpinBox->OnValueChanged.RemoveDynamic(this, &UMORecipeDetailPanel::HandleCraftAmountChanged);
 		CraftAmountSpinBox->OnValueChanged.AddDynamic(this, &UMORecipeDetailPanel::HandleCraftAmountChanged);
+		// Set minimum to 1
+		CraftAmountSpinBox->SetMinValue(1.0f);
+		CraftAmountSpinBox->SetMinSliderValue(1.0f);
 	}
 
 	if (CraftAmountSlider)
 	{
 		CraftAmountSlider->OnValueChanged.RemoveDynamic(this, &UMORecipeDetailPanel::HandleCraftAmountChanged);
 		CraftAmountSlider->OnValueChanged.AddDynamic(this, &UMORecipeDetailPanel::HandleCraftAmountChanged);
+		CraftAmountSlider->SetMinValue(1.0f);
 	}
 }
 
@@ -357,6 +391,15 @@ void UMORecipeDetailPanel::HandleCraftButtonClicked()
 	if (!DisplayedRecipeId.IsNone() && CanCraftCurrentRecipe())
 	{
 		OnCraftRequested.Broadcast(DisplayedRecipeId, CraftAmount);
+	}
+}
+
+void UMORecipeDetailPanel::HandleCraftMaxButtonClicked()
+{
+	int32 MaxAmount = GetMaxCraftableAmount();
+	if (MaxAmount > 0)
+	{
+		SetCraftAmount(MaxAmount);
 	}
 }
 

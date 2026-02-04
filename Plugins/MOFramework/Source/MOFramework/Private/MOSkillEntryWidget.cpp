@@ -4,6 +4,7 @@
 #include "Components/ProgressBar.h"
 #include "Components/Image.h"
 #include "Components/Button.h"
+#include "TimerManager.h"
 
 UMOSkillEntryWidget::UMOSkillEntryWidget(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -54,6 +55,12 @@ void UMOSkillEntryWidget::NativeDestruct()
 	if (SelectButton)
 	{
 		SelectButton->OnClicked.RemoveAll(this);
+	}
+
+	// Clear flash timer
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(FlashTimerHandle);
 	}
 
 	Super::NativeDestruct();
@@ -135,4 +142,79 @@ void UMOSkillEntryWidget::UpdateVisuals()
 void UMOSkillEntryWidget::HandleClicked()
 {
 	OnSkillSelected.Broadcast(SkillData.SkillId);
+}
+
+void UMOSkillEntryWidget::PlayFlashAnimation(float Duration)
+{
+	if (!XPProgressBar)
+	{
+		return;
+	}
+
+	// Store original color
+	OriginalFillColor = XPProgressBar->GetFillColorAndOpacity();
+
+	FlashDuration = FMath::Max(0.1f, Duration);
+	FlashElapsedTime = 0.0f;
+	bIsFlashing = true;
+
+	// Set initial flash color (bright yellow/gold)
+	XPProgressBar->SetFillColorAndOpacity(FLinearColor(1.0f, 0.85f, 0.0f, 1.0f));
+
+	// Start timer for animation
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(FlashTimerHandle);
+		World->GetTimerManager().SetTimer(
+			FlashTimerHandle,
+			this,
+			&UMOSkillEntryWidget::TickFlashAnimation,
+			0.03f, // ~30fps tick
+			true
+		);
+	}
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOSkillEntry] Playing flash animation for skill: %s"), *SkillData.SkillId.ToString());
+}
+
+void UMOSkillEntryWidget::TickFlashAnimation()
+{
+	if (!bIsFlashing || !XPProgressBar)
+	{
+		if (UWorld* World = GetWorld())
+		{
+			World->GetTimerManager().ClearTimer(FlashTimerHandle);
+		}
+		return;
+	}
+
+	FlashElapsedTime += 0.03f;
+
+	if (FlashElapsedTime >= FlashDuration)
+	{
+		// Animation complete - restore original color
+		XPProgressBar->SetFillColorAndOpacity(OriginalFillColor);
+		bIsFlashing = false;
+
+		if (UWorld* World = GetWorld())
+		{
+			World->GetTimerManager().ClearTimer(FlashTimerHandle);
+		}
+		return;
+	}
+
+	// Calculate flash effect - pulse between flash color and original
+	// Use a sine wave for smooth pulsing effect
+	float Alpha = FlashElapsedTime / FlashDuration;
+	float PulseFrequency = 3.0f; // Number of pulses during animation
+	float PulseValue = FMath::Sin(Alpha * PulseFrequency * PI * 2.0f) * 0.5f + 0.5f;
+
+	// Fade out the pulse intensity over time
+	float FadeOut = 1.0f - Alpha;
+	PulseValue *= FadeOut;
+
+	// Lerp between flash color (gold) and original
+	FLinearColor FlashColor(1.0f, 0.85f, 0.0f, 1.0f);
+	FLinearColor CurrentColor = FMath::Lerp(OriginalFillColor, FlashColor, PulseValue);
+	XPProgressBar->SetFillColorAndOpacity(CurrentColor);
 }

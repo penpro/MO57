@@ -2,8 +2,12 @@
 #include "MOInventoryComponent.h"
 #include "MORecipeDefinitionRow.h"
 #include "MOFramework.h"
+#include "MOWorldItem.h"
+#include "MOItemComponent.h"
+#include "MOContainerActor.h"
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
+#include "Kismet/KismetSystemLibrary.h"
 
 UMOBuildProgressComponent::UMOBuildProgressComponent()
 {
@@ -17,6 +21,7 @@ UMOBuildProgressComponent::UMOBuildProgressComponent()
 
 void UMOBuildProgressComponent::InitializeFromRecipe(const FMORecipeDefinitionRow& Recipe)
 {
+	RecipeId = Recipe.RecipeId;
 	BuildParts = Recipe.BuildParts;
 	Progress.TotalBuildTime = Recipe.TotalBuildTime;
 	Progress.GatherRange = Recipe.BuildRange;
@@ -60,28 +65,153 @@ void UMOBuildProgressComponent::CalculateTotalWeight()
 // CONSTRUCTION CONTROL
 // ============================================================================
 
-void UMOBuildProgressComponent::StartConstruction(const FMOBuildProgress& Options)
+void UMOBuildProgressComponent::StartConstruction(const FMOBuildProgress& Options, UMOInventoryComponent* InBuilderInventory)
 {
 	if (Progress.State == EMOBuildState::Constructing)
 	{
 		return;
 	}
 
-	// Apply material source options
+	// Check if all materials are deposited
+	if (!AreAllMaterialsDeposited())
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOBuildProgressComponent] Cannot start construction - not all materials deposited"));
+		return;
+	}
+
+	// Apply material source options (stored for reference)
 	Progress.bDrawFromInventory = Options.bDrawFromInventory;
 	Progress.bDrawFromNearbyContainers = Options.bDrawFromNearbyContainers;
 	Progress.bDrawFromSurroundingArea = Options.bDrawFromSurroundingArea;
 	Progress.GatherRange = Options.GatherRange;
 
-	// Start construction
+	// Set builder's inventory
+	if (InBuilderInventory)
+	{
+		BuilderInventory = InBuilderInventory;
+	}
+
+	// Start construction timer
 	Progress.State = EMOBuildState::Constructing;
 
 	// Enable tick
 	SetComponentTickEnabled(true);
 
 	OnConstructionStarted.Broadcast();
+	OnConstructionStateChanged.Broadcast(Progress.State);
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildProgressComponent] Construction started"));
+	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildProgressComponent] Construction started! Build time: %.1fs, Progress: %.1f%%"),
+		Progress.TotalBuildTime, Progress.GetOverallProgress() * 100.0f);
+}
+
+void UMOBuildProgressComponent::SetBuilderInventory(UMOInventoryComponent* InInventory)
+{
+	BuilderInventory = InInventory;
+}
+
+// ============================================================================
+// MATERIAL DEPOSIT SYSTEM
+// ============================================================================
+
+bool UMOBuildProgressComponent::DepositMaterial(FName ItemId)
+{
+	if (ItemId.IsNone())
+	{
+		return false;
+	}
+
+	// Check if this material is needed
+	int32 Required = GetRequiredCount(ItemId);
+	int32 Deposited = GetDepositedCount(ItemId);
+
+	if (Deposited >= Required)
+	{
+		// Already have enough of this material
+		return false;
+	}
+
+	// Accept the deposit
+	DepositedMaterials.FindOrAdd(ItemId)++;
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildProgressComponent] Deposited %s (%d/%d)"),
+		*ItemId.ToString(), Deposited + 1, Required);
+
+	return true;
+}
+
+int32 UMOBuildProgressComponent::GetDepositedCount(FName ItemId) const
+{
+	const int32* Count = DepositedMaterials.Find(ItemId);
+	return Count ? *Count : 0;
+}
+
+int32 UMOBuildProgressComponent::GetRequiredCount(FName ItemId) const
+{
+	int32 Total = 0;
+	for (const FMOBuildPart& Part : BuildParts)
+	{
+		if (Part.IsItemPart() && Part.ItemDefinitionId == ItemId)
+		{
+			Total += Part.Quantity;
+		}
+	}
+	return Total;
+}
+
+bool UMOBuildProgressComponent::AreAllMaterialsDeposited() const
+{
+	for (const FMOBuildPart& Part : BuildParts)
+	{
+		if (Part.IsItemPart())
+		{
+			int32 Required = Part.Quantity;
+			int32 Deposited = GetDepositedCount(Part.ItemDefinitionId);
+			if (Deposited < Required)
+			{
+				return false;
+			}
+		}
+	}
+	return true;
+}
+
+void UMOBuildProgressComponent::GetRequiredMaterials(TArray<FName>& OutItemIds) const
+{
+	OutItemIds.Empty();
+
+	for (const FMOBuildPart& Part : BuildParts)
+	{
+		if (Part.IsItemPart() && !OutItemIds.Contains(Part.ItemDefinitionId))
+		{
+			OutItemIds.Add(Part.ItemDefinitionId);
+		}
+	}
+}
+
+void UMOBuildProgressComponent::InterruptBuild(float PenaltyPercent)
+{
+	if (Progress.State != EMOBuildState::Constructing)
+	{
+		return;
+	}
+
+	// Apply penalty - lose percentage of total build time
+	float PenaltyTime = Progress.TotalBuildTime * FMath::Clamp(PenaltyPercent, 0.0f, 1.0f);
+	Progress.ElapsedTime = FMath::Max(0.0f, Progress.ElapsedTime - PenaltyTime);
+
+	// Pause construction
+	Progress.State = EMOBuildState::Paused;
+	SetComponentTickEnabled(false);
+
+	OnConstructionStateChanged.Broadcast(Progress.State);
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildProgressComponent] Build interrupted! Lost %.1f%% (%.1fs). Progress now at %.1f%%"),
+		PenaltyPercent * 100.0f, PenaltyTime, Progress.GetOverallProgress() * 100.0f);
+}
+
+void UMOBuildProgressComponent::GetDepositedMaterials(TMap<FName, int32>& OutMaterials) const
+{
+	OutMaterials = DepositedMaterials;
 }
 
 void UMOBuildProgressComponent::PauseConstruction()
@@ -93,6 +223,8 @@ void UMOBuildProgressComponent::PauseConstruction()
 
 	Progress.State = EMOBuildState::Paused;
 	SetComponentTickEnabled(false);
+
+	OnConstructionStateChanged.Broadcast(Progress.State);
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildProgressComponent] Construction paused at %.1f%%"),
 		Progress.GetOverallProgress() * 100.0f);
@@ -107,6 +239,8 @@ void UMOBuildProgressComponent::ResumeConstruction()
 
 	Progress.State = EMOBuildState::Constructing;
 	SetComponentTickEnabled(true);
+
+	OnConstructionStateChanged.Broadcast(Progress.State);
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildProgressComponent] Construction resumed"));
 }
@@ -133,6 +267,7 @@ void UMOBuildProgressComponent::CancelConstruction(bool bRefundMaterials)
 	SetComponentTickEnabled(false);
 
 	OnConstructionCancelled.Broadcast();
+	OnConstructionStateChanged.Broadcast(Progress.State);
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildProgressComponent] Construction cancelled"));
 }
@@ -171,14 +306,10 @@ TArray<AActor*> UMOBuildProgressComponent::FindMaterialSources(float Range) cons
 	FVector Origin = Owner->GetActorLocation();
 
 	// Find nearby actors that could provide materials
-	// This includes:
-	// - World items (AMOWorldItem)
-	// - Containers with inventory
-	// - Other buildable actors with inventory
-
 	TArray<AActor*> OverlappingActors;
 	TArray<TEnumAsByte<EObjectTypeQuery>> ObjectTypes;
 	ObjectTypes.Add(UEngineTypes::ConvertToObjectType(ECC_WorldDynamic));
+	ObjectTypes.Add(UEngineTypes::ConvertToObjectType(ECC_WorldStatic));
 
 	// Use a sphere overlap to find potential sources
 	UKismetSystemLibrary::SphereOverlapActors(
@@ -187,15 +318,36 @@ TArray<AActor*> UMOBuildProgressComponent::FindMaterialSources(float Range) cons
 		Range,
 		ObjectTypes,
 		nullptr,
-		TArray<AActor*>(),
+		TArray<AActor*>{Owner}, // Ignore self
 		OverlappingActors
 	);
 
 	for (AActor* Actor : OverlappingActors)
 	{
-		// Check if actor could provide materials
-		// For now, just add all actors - subclasses can filter further
-		Sources.Add(Actor);
+		if (!IsValid(Actor))
+		{
+			continue;
+		}
+
+		// World items
+		if (Actor->IsA<AMOWorldItem>())
+		{
+			Sources.Add(Actor);
+			continue;
+		}
+
+		// Containers with inventory
+		if (Actor->IsA<AMOContainerActor>())
+		{
+			Sources.Add(Actor);
+			continue;
+		}
+
+		// Any actor with inventory component
+		if (Actor->FindComponentByClass<UMOInventoryComponent>())
+		{
+			Sources.Add(Actor);
+		}
 	}
 
 	return Sources;
@@ -241,49 +393,8 @@ void UMOBuildProgressComponent::TickComponent(float DeltaTime, ELevelTick TickTy
 
 void UMOBuildProgressComponent::ProcessConstruction(float DeltaTime)
 {
-	if (BuildParts.Num() == 0 || TotalWeight == 0)
-	{
-		// No parts - instantly complete
-		FinalizeConstruction();
-		return;
-	}
-
-	// Advance time
+	// Materials are pre-deposited, so just advance the timer
 	Progress.ElapsedTime += DeltaTime;
-
-	// Find which part we're on
-	float AccumulatedTime = 0.0f;
-
-	for (int32 i = 0; i < BuildParts.Num(); ++i)
-	{
-		const FMOBuildPart& Part = BuildParts[i];
-		float PartTime = Part.Quantity * Part.Weight * TimePerWeight;
-
-		if (Progress.ElapsedTime < AccumulatedTime + PartTime)
-		{
-			// We're in this part
-			if (Progress.CurrentPartIndex != i)
-			{
-				// Moved to a new part
-				if (i > 0)
-				{
-					CompleteCurrentPart();
-				}
-				Progress.CurrentPartIndex = i;
-			}
-
-			// Calculate progress within this part
-			Progress.CurrentPartProgress = (Progress.ElapsedTime - AccumulatedTime) / PartTime;
-			Progress.CurrentPartProgress = FMath::Clamp(Progress.CurrentPartProgress, 0.0f, 1.0f);
-
-			// Check if we need to consume materials
-			CheckMaterialConsumption();
-
-			break;
-		}
-
-		AccumulatedTime += PartTime;
-	}
 
 	// Check for completion
 	if (Progress.ElapsedTime >= Progress.TotalBuildTime)
@@ -333,20 +444,96 @@ bool UMOBuildProgressComponent::TryConsumeMaterial(const FMOBuildPart& Part)
 {
 	if (Part.IsItemPart())
 	{
-		// Try to consume from available sources
-		// TODO: Implement proper material gathering from inventory/containers/world
+		FName ItemId = Part.ItemDefinitionId;
+		bool bConsumed = false;
 
-		// For now, just pretend we consumed it
-		// In production, this would check BuilderInventory, nearby containers, etc.
-
-		if (Progress.CurrentPartIndex < Progress.ConsumedPerPart.Num())
+		// 1. Try builder's inventory first (if enabled)
+		if (Progress.bDrawFromInventory)
 		{
-			Progress.ConsumedPerPart[Progress.CurrentPartIndex]++;
+			if (UMOInventoryComponent* Inventory = BuilderInventory.Get())
+			{
+				if (Inventory->HasItem(ItemId, 1))
+				{
+					if (Inventory->RemoveItemByDefinitionId(ItemId, 1))
+					{
+						bConsumed = true;
+						UE_LOG(LogMOFramework, Log, TEXT("[MOBuildProgressComponent] Consumed %s from player inventory"), *ItemId.ToString());
+					}
+				}
+			}
 		}
 
-		UE_LOG(LogMOFramework, Verbose, TEXT("[MOBuildProgressComponent] Consumed item: %s"),
-			*Part.ItemDefinitionId.ToString());
-		return true;
+		// 2. Try nearby containers (if enabled and not yet consumed)
+		if (!bConsumed && Progress.bDrawFromNearbyContainers)
+		{
+			TArray<AActor*> Sources = FindMaterialSources(Progress.GatherRange);
+			for (AActor* Source : Sources)
+			{
+				AMOContainerActor* Container = Cast<AMOContainerActor>(Source);
+				if (Container)
+				{
+					UMOInventoryComponent* ContainerInv = Container->GetContainerInventory();
+					if (ContainerInv && ContainerInv->HasItem(ItemId, 1))
+					{
+						if (ContainerInv->RemoveItemByDefinitionId(ItemId, 1))
+						{
+							bConsumed = true;
+							UE_LOG(LogMOFramework, Log, TEXT("[MOBuildProgressComponent] Consumed %s from container: %s"),
+								*ItemId.ToString(), *Container->GetName());
+							break;
+						}
+					}
+				}
+			}
+		}
+
+		// 3. Try surrounding world items (if enabled and not yet consumed)
+		if (!bConsumed && Progress.bDrawFromSurroundingArea)
+		{
+			TArray<AActor*> Sources = FindMaterialSources(Progress.GatherRange);
+			for (AActor* Source : Sources)
+			{
+				AMOWorldItem* WorldItem = Cast<AMOWorldItem>(Source);
+				if (WorldItem)
+				{
+					UMOItemComponent* ItemComp = WorldItem->GetItemComponent();
+					if (ItemComp && ItemComp->ItemDefinitionId == ItemId && ItemComp->bWorldItemActive)
+					{
+						int32 Available = ItemComp->Quantity;
+						if (Available > 0)
+						{
+							// Take one from the world item
+							if (Available == 1)
+							{
+								// Deactivate or destroy the world item
+								ItemComp->SetWorldItemActive(false);
+								WorldItem->Destroy();
+							}
+							else
+							{
+								ItemComp->Quantity = Available - 1;
+							}
+							bConsumed = true;
+							UE_LOG(LogMOFramework, Log, TEXT("[MOBuildProgressComponent] Consumed %s from world item: %s"),
+								*ItemId.ToString(), *WorldItem->GetName());
+							break;
+						}
+					}
+				}
+			}
+		}
+
+		if (bConsumed)
+		{
+			if (Progress.CurrentPartIndex < Progress.ConsumedPerPart.Num())
+			{
+				Progress.ConsumedPerPart[Progress.CurrentPartIndex]++;
+			}
+			return true;
+		}
+
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOBuildProgressComponent] Could not find item: %s"), *ItemId.ToString());
+		return false;
 	}
 	else if (Part.IsActionPart())
 	{
@@ -392,6 +579,7 @@ void UMOBuildProgressComponent::FinalizeConstruction()
 	SetComponentTickEnabled(false);
 
 	OnConstructionCompleted.Broadcast();
+	OnConstructionStateChanged.Broadcast(Progress.State);
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildProgressComponent] Construction complete!"));
 }

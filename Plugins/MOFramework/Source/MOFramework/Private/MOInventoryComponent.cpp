@@ -233,6 +233,43 @@ bool UMOInventoryComponent::HasItem(FName ItemDefinitionId, int32 RequiredQuanti
 	return GetItemCountByDefinitionId(ItemDefinitionId) >= RequiredQuantity;
 }
 
+bool UMOInventoryComponent::RemoveItemByDefinitionId(FName ItemDefinitionId, int32 QuantityToRemove)
+{
+	AActor* OwnerActor = GetOwner();
+	if (!IsValid(OwnerActor) || !OwnerActor->HasAuthority())
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventory] RemoveItemByDefinitionId requires authority"));
+		return false;
+	}
+
+	if (ItemDefinitionId.IsNone() || QuantityToRemove <= 0)
+	{
+		return false;
+	}
+
+	int32 RemainingToRemove = QuantityToRemove;
+
+	// Iterate through entries and remove from matching ones
+	for (int32 i = 0; i < Inventory.Entries.Num() && RemainingToRemove > 0; ++i)
+	{
+		FMOInventoryEntry& Entry = Inventory.Entries[i];
+		if (Entry.ItemDefinitionId == ItemDefinitionId)
+		{
+			int32 ToRemoveFromThis = FMath::Min(Entry.Quantity, RemainingToRemove);
+			if (ToRemoveFromThis > 0)
+			{
+				// Use RemoveItemByGuid for proper cleanup
+				RemoveItemByGuid(Entry.ItemGuid, ToRemoveFromThis);
+				RemainingToRemove -= ToRemoveFromThis;
+				// Entry may have been removed, decrement i to check same index again
+				--i;
+			}
+		}
+	}
+
+	return RemainingToRemove < QuantityToRemove;
+}
+
 bool UMOInventoryComponent::ReduceDurability(const FGuid& ItemGuid, int32 Amount, bool& bOutDestroyed)
 {
 	bOutDestroyed = false;

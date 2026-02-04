@@ -233,3 +233,6 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOOnConstructionCancelledSignature);
 
 /** Broadcast when a material is needed during construction. */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOOnMaterialNeededSignature, FName, ItemId, int32, Quantity);
+
+/** Broadcast when construction state changes. */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOOnConstructionStateChangedSignature, EMOBuildState, NewState);

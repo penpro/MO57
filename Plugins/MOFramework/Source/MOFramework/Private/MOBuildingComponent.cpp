@@ -57,11 +57,14 @@
 
 #include "MOBuildingComponent.h"
 #include "MOBuildableActor.h"
+#include "MOContainerActor.h"
+#include "MOCraftingStationActor.h"
 #include "MOPlayerController.h"
 #include "MORecipeDatabaseSettings.h"
 #include "MOFramework.h"
 #include "Kismet/KismetMathLibrary.h"
 #include "Engine/World.h"
+#include "Engine/StaticMesh.h"
 #include "GameFramework/PlayerController.h"
 #include "Components/StaticMeshComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
@@ -374,10 +377,31 @@ bool UMOBuildingComponent::SpawnGhostActor(const FMORecipeDefinitionRow& Recipe)
 
 	// Get the actor class to spawn
 	TSubclassOf<AMOBuildableActor> ActorClass = Recipe.PlacementData.BuildableActorClass;
+
+	// If no class specified, infer from recipe properties
 	if (!ActorClass)
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOBuildingComponent] No BuildableActorClass set for recipe: %s"), *Recipe.RecipeId.ToString());
-		return false;
+		if (Recipe.ContainerSlotCount > 0)
+		{
+			// Container building
+			ActorClass = AMOContainerActor::StaticClass();
+			UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingComponent] Inferred AMOContainerActor for recipe: %s (slots: %d)"),
+				*Recipe.RecipeId.ToString(), Recipe.ContainerSlotCount);
+		}
+		else if (Recipe.ProvidedStationType != EMOCraftingStation::None)
+		{
+			// Crafting station building
+			ActorClass = AMOCraftingStationActor::StaticClass();
+			UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingComponent] Inferred AMOCraftingStationActor for recipe: %s (station: %d)"),
+				*Recipe.RecipeId.ToString(), (int32)Recipe.ProvidedStationType);
+		}
+		else
+		{
+			// Default to base buildable actor
+			ActorClass = AMOBuildableActor::StaticClass();
+			UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingComponent] Using default AMOBuildableActor for recipe: %s"),
+				*Recipe.RecipeId.ToString());
+		}
 	}
 
 	// Spawn the ghost actor
@@ -389,6 +413,26 @@ bool UMOBuildingComponent::SpawnGhostActor(const FMORecipeDefinitionRow& Recipe)
 	{
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOBuildingComponent] Failed to spawn actor of class: %s"), *ActorClass->GetName());
 		return false;
+	}
+
+	// Apply preview mesh from recipe if specified
+	if (!Recipe.PlacementData.PreviewMesh.IsNull())
+	{
+		UStaticMesh* Mesh = Recipe.PlacementData.PreviewMesh.LoadSynchronous();
+		if (Mesh && CurrentGhost->MeshComponent)
+		{
+			CurrentGhost->MeshComponent->SetStaticMesh(Mesh);
+			CurrentGhost->MeshComponent->SetRelativeScale3D(Recipe.PlacementData.PreviewScale);
+			UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingComponent] Applied PreviewMesh: %s"), *Mesh->GetName());
+		}
+		else if (!Mesh)
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOBuildingComponent] Failed to load PreviewMesh for recipe: %s"), *Recipe.RecipeId.ToString());
+		}
+	}
+	else
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingComponent] No PreviewMesh specified for recipe: %s"), *Recipe.RecipeId.ToString());
 	}
 
 	// Set as ghost state

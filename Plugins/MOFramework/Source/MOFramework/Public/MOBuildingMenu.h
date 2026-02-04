@@ -6,8 +6,10 @@
 
 class UMOKnowledgeComponent;
 class UMORecipeDiscoveryComponent;
-class UScrollBox;
-class UMOBuildingEntryWidget;
+class UMOInventoryComponent;
+class UMOSkillsComponent;
+class UMOBuildingRecipeListWidget;
+class UMOBuildingDetailPanel;
 class UMOCommonButton;
 
 /**
@@ -16,7 +18,7 @@ class UMOCommonButton;
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOBuildingMenuRequestCloseSignature);
 
 /**
- * Delegate for when a building is selected from the menu.
+ * Delegate for when a building is selected to be placed (after clicking Build in detail panel).
  */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOOnBuildingSelectedSignature, FName, RecipeId);
 
@@ -52,9 +54,16 @@ public:
 	 * Initialize the menu with player components.
 	 * @param InKnowledge - Knowledge component for recipe filtering
 	 * @param InDiscovery - Discovery component for discovered recipes
+	 * @param InInventory - Inventory component for material checks
+	 * @param InSkills - Skills component for skill requirements
 	 */
 	UFUNCTION(BlueprintCallable, Category="MO|Building")
-	void InitializeMenu(UMOKnowledgeComponent* InKnowledge, UMORecipeDiscoveryComponent* InDiscovery);
+	void InitializeMenu(
+		UMOKnowledgeComponent* InKnowledge,
+		UMORecipeDiscoveryComponent* InDiscovery,
+		UMOInventoryComponent* InInventory = nullptr,
+		UMOSkillsComponent* InSkills = nullptr
+	);
 
 	/**
 	 * Refresh the building list.
@@ -67,17 +76,17 @@ protected:
 	// WIDGETS (Set in Blueprint)
 	// ============================================================================
 
-	/** Scroll box containing building entries. */
+	/** Recipe list widget containing building entries. */
 	UPROPERTY(BlueprintReadOnly, meta=(BindWidget))
-	TObjectPtr<UScrollBox> BuildingListScrollBox;
+	TObjectPtr<UMOBuildingRecipeListWidget> RecipeList;
+
+	/** Detail panel showing selected recipe info and Build button. */
+	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
+	TObjectPtr<UMOBuildingDetailPanel> DetailPanel;
 
 	/** Close button. */
 	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
 	TObjectPtr<UMOCommonButton> CloseButton;
-
-	/** Widget class for building entries. */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="MO|Building")
-	TSubclassOf<UMOBuildingEntryWidget> BuildingEntryWidgetClass;
 
 	// ============================================================================
 	// OVERRIDES
@@ -99,9 +108,13 @@ private:
 	UPROPERTY()
 	TWeakObjectPtr<UMORecipeDiscoveryComponent> DiscoveryComponent;
 
-	/** Created entry widgets. */
+	/** Cached inventory component. */
 	UPROPERTY()
-	TArray<TObjectPtr<UMOBuildingEntryWidget>> EntryWidgets;
+	TWeakObjectPtr<UMOInventoryComponent> InventoryComponent;
+
+	/** Cached skills component. */
+	UPROPERTY()
+	TWeakObjectPtr<UMOSkillsComponent> SkillsComponent;
 
 	// ============================================================================
 	// HANDLERS
@@ -110,9 +123,11 @@ private:
 	UFUNCTION()
 	void HandleCloseClicked();
 
+	/** Called when a recipe is selected in the list - shows it in detail panel. */
 	UFUNCTION()
-	void HandleBuildingEntryClicked(FName RecipeId);
+	void HandleRecipeSelected(FName RecipeId);
 
-	/** Clear the building list. */
-	void ClearBuildingList();
+	/** Called when Build is clicked in the detail panel - broadcasts OnBuildingSelected. */
+	UFUNCTION()
+	void HandleBuildRequested(FName RecipeId, int32 Count);
 };

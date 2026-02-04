@@ -31,6 +31,14 @@ public:
 	UPROPERTY(BlueprintAssignable, Category="MO|Inspection")
 	FMOInspectionCancelledSignature OnInspectionCancelled;
 
+	/**
+	 * Debug override for inspection duration.
+	 * If > 0, this value is used instead of the duration passed to StartInspection.
+	 * Set to 0 to use the normal duration from the item definition.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Inspection|Debug")
+	float DebugInspectionDuration = 0.0f;
+
 	/** Initialize the widget for inspecting a specific item. */
 	UFUNCTION(BlueprintCallable, Category="MO|Inspection")
 	void StartInspection(
@@ -86,6 +94,10 @@ private:
 	UFUNCTION()
 	void HandleCancelClicked();
 
+	/** Timer callback for real-time inspection progress (continues when tabbed out). */
+	UFUNCTION()
+	void TickInspection();
+
 	void CompleteInspection();
 
 	// Current inspection state
@@ -98,4 +110,10 @@ private:
 	float ElapsedTime = 0.0f;
 	float CurrentProgress = 0.0f;
 	bool bIsInspecting = false;
+
+	/** Wall-clock time when inspection started (for real-time tracking). */
+	double InspectionStartTime = 0.0;
+
+	/** Timer handle for display updates (progress still uses wall-clock time). */
+	FTimerHandle InspectionTimerHandle;
 };

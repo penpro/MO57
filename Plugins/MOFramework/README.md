@@ -268,9 +268,9 @@ Place-and-construct building system with ghost preview and timed construction.
 **Key Classes:**
 - `UMOBuildingComponent` - On PlayerController, manages placement mode
 - `AMOBuildableActor` - Base class for all placeable buildings
-- `UMOBuildProgressComponent` - Tracks construction progress
+- `UMOBuildProgressComponent` - Tracks construction progress with material deposits
 - `UMOBuildingMenu` - Building recipe selection UI
-- `UMOBuildWidget` - Ghost interaction/construction start UI
+- `UMOGhostContextMenu` - Simple context menu for ghost interaction (deposit materials, start build, cancel)
 
 **Build States:**
 1. **Ghost** - Placed but construction not started
@@ -283,10 +283,20 @@ Place-and-construct building system with ghost preview and timed construction.
 Player presses B → Building Menu opens
 Select building → Enter placement mode
 Ghost follows camera trace → Click to place
-Right-click ghost → Build Widget opens
-Configure sources + Start → Timed construction
+Interact with ghost → Ghost Context Menu opens
+Select material sources (checkboxes) → Click "Add" to deposit
+Materials deposited progressively → "Add" becomes "Build"
+Click "Build" → Timed construction begins
 Construction completes → Building functional
 ```
+
+**Ghost Context Menu Features:**
+- Checkboxes for material sources (inventory, containers, surrounding area)
+- Material list showing "Material Name X/Y" format (deposited/required)
+- "Add" button gathers materials from selected sources
+- "Build" button starts construction (available when all materials deposited)
+- "Cancel" button destroys ghost and drops deposited materials
+- 10% build time penalty for interrupting construction
 
 **Material Sources:**
 - Player inventory
@@ -330,6 +340,272 @@ Queue processes → Materials consumed over time
 Craft completes → Output added to inventory + XP granted
 ```
 
+### Medical System
+
+Comprehensive medical simulation with anatomy, vitals, metabolism, and mental state tracking.
+
+**Key Classes:**
+- `UMOVitalsComponent` - Vital signs, exertion, stamina, activity tracking
+- `UMOMetabolismComponent` - Nutrition, digestion, calorie expenditure, body composition
+- `UMOAnatomyComponent` - Body parts, wounds, conditions, healing
+- `UMOMentalStateComponent` - Consciousness, shock, stress, visual effects
+- `UMOMedicalSubsystem` - DataTable lookups for body parts, wounds, treatments
+
+**Components on Pawn:**
+```
+APawn (Character)
+├── UMOVitalsComponent      - Blood, heart rate, BP, SpO2, temperature, glucose
+├── UMOMetabolismComponent  - BMR, TDEE, digestion, glycogen, body fat
+├── UMOAnatomyComponent     - 55+ body parts, wounds, conditions
+└── UMOMentalStateComponent - Consciousness level, shock, visual impairment
+```
+
+**Activity Level System:**
+
+Activities drive calorie burn, stamina drain, and fatigue accumulation:
+
+| Activity | Calorie Multiplier | Stamina Drain | Use Case |
+|----------|-------------------|---------------|----------|
+| Resting | 0.9x BMR | Recovery | Sleep |
+| Idle | 1.0x BMR | Recovery | Standing |
+| Walking | 3.0x BMR | None | Normal movement |
+| Jogging | 7.5x BMR | 2/sec | Running |
+| Sprinting | 14x BMR | 10/sec | Sprint |
+| LightWork | 2.5x BMR | 0.5/sec | Weaving, carving |
+| MediumWork | 5x BMR | 1.5/sec | Hammering, cooking |
+| HeavyWork | 9x BMR | 4/sec | Mining, forging |
+| Combat | 12x BMR | 8/sec | Fighting |
+
+**Activity Integration:**
+```cpp
+// In your Character movement code:
+void AMyCharacter::UpdateMovementActivity()
+{
+    if (VitalsComponent)
+    {
+        float Speed = GetVelocity().Size();
+        if (bIsSprinting && Speed > SprintThreshold)
+            VitalsComponent->SetActivityLevel(EMOActivityLevel::Sprinting);
+        else if (Speed > JogThreshold)
+            VitalsComponent->SetActivityLevel(EMOActivityLevel::Jogging);
+        else if (Speed > WalkThreshold)
+            VitalsComponent->SetActivityLevel(EMOActivityLevel::Walking);
+        else
+            VitalsComponent->SetActivityLevel(EMOActivityLevel::Idle);
+    }
+}
+```
+
+**Stamina System:**
+- Stamina drains during intense activities (sprinting, combat, heavy work)
+- Recovers during rest/walking (faster with better cardiovascular fitness)
+- Depleted stamina forces activity downgrade (sprint → jog → walk)
+- Max stamina scales with cardiovascular fitness (70-130 range)
+
+**Delegates:**
+```
+UMOVitalsComponent:
+  OnActivityChanged(OldActivity, NewActivity)
+    → Listeners: UI activity indicator, animation system
+  OnStaminaChanged(OldValue, NewValue)
+    → Listeners: Stamina bar UI
+  OnStaminaDepleted()
+    → Listeners: Movement system (force downgrade)
+  OnVitalSignChanged(Name, OldValue, NewValue)
+    → Listeners: Health UI, warning systems
+```
+
+**Body Part Hierarchy:**
+- 55+ distinct body parts including fingers/toes
+- Vital organs (brain, heart, lungs) = instant/rapid death if destroyed
+- Limbs can be wounded, destroyed, or amputated
+- Wound types: laceration, puncture, blunt, burns, fracture, dislocation
+
+**Medical Conditions:**
+- Infection (local → sepsis progression)
+- Blood loss stages (Class 1-3)
+- Shock (hypovolemic/traumatic)
+- Temperature disorders (hypothermia/hyperthermia)
+- Nutrient deficiencies (scurvy, anemia, etc.)
+
+### Combat-Medical Integration
+
+The framework provides bridge types for integrating a combat system with the medical system.
+
+**Key Classes:**
+- `FMOCombatHitInfo` - Describes a combat hit (body part, damage, category)
+- `FMOCombatStaminaCosts` - Configurable stamina costs for combat actions
+- `UMOCombatMedicalHelpers` - Blueprint function library for integration
+
+**Damage Categories → Wound Types:**
+
+| Category | Wound Type | Characteristics |
+|----------|-----------|-----------------|
+| Slash | Laceration | Heavy bleeding |
+| Pierce | Puncture | High infection risk |
+| Blunt | Blunt | Internal damage, fractures |
+| Fire | BurnSecond | Pain, scarring |
+| Cold | Frostbite | Tissue damage |
+| Crush | Blunt + Fracture | Severe trauma |
+
+**Body Part Damage Multipliers:**
+
+| Part | Multiplier | Notes |
+|------|-----------|-------|
+| Brain | 5.0x | Instant death |
+| Heart | 4.0x | Instant death |
+| Lungs | 2.5x | ~3 min death timer |
+| Head | 2.0x | Concussion risk |
+| Spine | 1.8-2.5x | Paralysis risk |
+| Torso | 1.2x | Organ damage |
+| Limbs | 0.6-1.0x | Disabling |
+| Extremities | 0.4x | Low damage |
+
+**Combat Integration Example:**
+```cpp
+// In your combat system when a hit lands
+void AMyWeapon::OnHitConfirmed(AActor* Target, FHitResult& Hit)
+{
+    // Get medical components from target
+    UMOAnatomyComponent* AnatomyComp = Target->FindComponentByClass<UMOAnatomyComponent>();
+    UMOVitalsComponent* VitalsComp = Target->FindComponentByClass<UMOVitalsComponent>();
+    UMOMentalStateComponent* MentalComp = Target->FindComponentByClass<UMOMentalStateComponent>();
+
+    // Build hit info
+    FMOCombatHitInfo HitInfo;
+    HitInfo.TargetBodyPart = UMOCombatMedicalHelpers::BoneNameToBodyPart(Hit.BoneName);
+    HitInfo.BaseDamage = WeaponDamage;
+    HitInfo.DamageCategory = EMODamageCategory::Slash;  // Sword
+    HitInfo.ArmorPenetration = 0.8f;  // 80% pen
+    HitInfo.bCausesHeavyBleeding = bIsCriticalHit;
+
+    // Apply damage through medical system
+    UMOCombatMedicalHelpers::ApplyCombatDamage(HitInfo, AnatomyComp, VitalsComp, MentalComp);
+}
+
+// Stamina check before attack
+bool AMyCharacter::CanAttack() const
+{
+    return UMOCombatMedicalHelpers::CanPerformCombatAction(VitalsComp, CombatCosts.LightAttack);
+}
+```
+
+### Adrenaline System
+
+The adrenaline system models the fight-or-flight response, providing gameplay balance for permadeath survival:
+
+**Key Classes:**
+- `UMOAdrenalineComponent` - Component managing adrenaline state
+- `FMOAdrenalineState` - Current adrenaline level, phase, effects
+- `FMOAdrenalineConfig` - Configurable thresholds and rates
+- `FMOThreatInfo` - Threat assessment data
+
+**Adrenaline Phases:**
+```
+Baseline → Spiking → Sustained → Crashing → Baseline
+    ↑                              │
+    └──────── (combat) ────────────┘
+```
+
+**Effects During Active Adrenaline:**
+
+| Effect | At Max Adrenaline | Purpose |
+|--------|------------------|---------|
+| Pain Masking | 80% | Ignore wound pain during combat |
+| Bleed Reduction | 50% | Vasoconstriction slows blood loss |
+| Accuracy Penalty | 40% | Shaky hands from adrenaline |
+| Tunnel Vision | 60% | Reduced peripheral awareness |
+| Heart Rate | 2x | Physiological response |
+| Stamina Drain | 0.8x | Adrenaline push-through |
+
+**Crash Phase Effects:**
+- Stamina drain: 2x normal
+- Masked pain returns (shock/disorientation)
+- Bleed rate normalizes (wounds "open up")
+
+**Skill-Based Response:**
+
+Combat skill determines threat threshold and adrenaline dampening:
+
+| Skill Level | Threat Threshold | Max Adrenaline | Accuracy Penalty Reduction |
+|-------------|-----------------|----------------|---------------------------|
+| Novice (0) | 0% | 100 | 0% |
+| Trained (25) | 20% | 90 | 15% |
+| Experienced (50) | 50% | 75 | 35% |
+| Veteran (75) | 75% | 60 | 55% |
+| Master (100) | 90% | 40 | 75% |
+
+**Integration Example:**
+```cpp
+// In your combat system when entering combat
+void ACombatManager::OnCombatStarted(AActor* Enemy)
+{
+    if (UMOAdrenalineComponent* AdrenalineComp = Player->FindComponentByClass<UMOAdrenalineComponent>())
+    {
+        FMOThreatInfo ThreatInfo;
+        ThreatInfo.ThreatActor = Enemy;
+        ThreatInfo.ThreatPower = GetEnemyCombatPower(Enemy);
+        ThreatInfo.Distance = FVector::Dist(Player->GetActorLocation(), Enemy->GetActorLocation());
+        ThreatInfo.bIsAttacking = true;
+
+        AdrenalineComp->EnterCombat(ThreatInfo);
+    }
+}
+
+// Apply accuracy penalty to weapon
+float AMyWeapon::GetEffectiveAccuracy() const
+{
+    float BaseAccuracy = WeaponAccuracy;
+
+    if (UMOAdrenalineComponent* AdrenalineComp = GetOwner()->FindComponentByClass<UMOAdrenalineComponent>())
+    {
+        BaseAccuracy = AdrenalineComp->CalculateEffectiveAccuracy(BaseAccuracy);
+    }
+
+    return BaseAccuracy;
+}
+```
+
+### Skeleton Mapping System
+
+Maps skeletal mesh bone names to body parts for localized damage.
+
+**Key Classes:**
+- `UMOSkeletonMapping` - Static helper for bone lookups
+- `FMOSkeletonMappingConfig` - Complete skeleton mapping configuration
+- `FMOBoneMapping` - Single bone-to-body-part mapping
+
+**Supported Skeletons:**
+- UE5 Mannequin (89 bones)
+- MetaHuman (342 bones)
+- Custom skeletons via fuzzy matching
+
+**Usage:**
+```cpp
+// In your damage system
+void OnHitDetected(const FHitResult& Hit)
+{
+    EMOBodyPartType BodyPart = UMOSkeletonMapping::BoneToBodyPart(Hit.BoneName);
+    EMOBodyRegion Region = UMOSkeletonMapping::BoneToBodyRegion(Hit.BoneName);
+
+    // Apply damage to specific body part
+    AnatomyComp->InflictDamage(BodyPart, Damage, WoundType);
+}
+```
+
+**Physics Asset Setup:**
+
+For per-bone hit detection, configure your Physics Asset:
+
+1. Open Physics Asset Editor (double-click Physics Asset)
+2. Create collision bodies for each damage zone:
+   - Head: Sphere on `head` bone
+   - Torso: Capsule on `spine_03` to `spine_05`
+   - Arms: Capsules on `upperarm_*`, `lowerarm_*`
+   - Legs: Capsules on `thigh_*`, `calf_*`
+3. Enable "Simulation Generates Hit Events" on each body
+4. Set collision responses for `Projectile` and `Weapon` channels
+
 ---
 
 ## Architecture & Delegate Flows
@@ -353,6 +629,7 @@ APawn (Character)
 ├── UMOMetabolismComponent     - Hunger/thirst
 ├── UMOMentalStateComponent    - Mental state
 ├── UMOAnatomyComponent        - Body parts/injuries
+├── UMOAdrenalineComponent     - Combat stress response
 └── UMOInteractorComponent     - Interaction traces
 
 AMOBuildableActor
@@ -624,6 +901,392 @@ Based on research of popular survival games (Valheim, Rust, Subnautica, The Fore
 - [Survival Game Design Principles - Game Design Skills](https://gamedesignskills.com/game-design/survival/)
 - [Game UI/UX Design - Medium](https://medium.com/@brdelfino.work/ux-and-ui-in-game-design-exploring-hud-inventory-and-menus-5d8c189deb65)
 - [Inventory UX Best Practices - The Wingless](https://thewingless.com/index.php/2021/07/26/10-simple-ways-you-can-improve-your-videogame-inventory-screen-game-ui-ux-design-course/)
+
+---
+
+## Future Systems Roadmap
+
+Based on analysis of implemented systems versus typical survival game requirements (comparing to Valheim, Rust, Subnautica, The Forest, Green Hell), this section identifies missing systems and recommended additions.
+
+### Currently Implemented (✓)
+
+| System | Status | Key Components |
+|--------|--------|----------------|
+| Identity & Persistence | ✓ Complete | `UMOIdentityComponent`, `UMOPersistenceSubsystem` |
+| Inventory | ✓ Complete | `UMOInventoryComponent`, slots, stacking, drag-drop |
+| Crafting | ✓ Complete | `UMOCraftingSubsystem`, queues, stations, recipes |
+| Building | ✓ Complete | `UMOBuildingComponent`, placement, timed construction |
+| Medical - Vitals | ✓ Complete | Blood, heart rate, BP, SpO2, temperature, glucose |
+| Medical - Metabolism | ✓ Complete | Calories, macros, vitamins, digestion |
+| Medical - Anatomy | ✓ Complete | 55+ body parts, wounds, conditions |
+| Medical - Mental | ✓ Complete | Consciousness, shock, stress |
+| Activity Levels | ✓ Complete | Walk/jog/sprint/work/combat integration |
+| Combat-Medical Bridge | ✓ Complete | Damage→wound conversion helpers |
+| Survival Stats | ✓ Complete | Health, stamina, hunger, thirst, energy |
+| Skills & XP | ✓ Complete | `UMOSkillsComponent`, leveling, XP |
+| Knowledge | ✓ Complete | `UMOKnowledgeComponent`, discoveries |
+| Interaction | ✓ Complete | Line-trace, interactables |
+| Possession | ✓ Complete | Multi-character control |
+| UI Framework | ✓ Complete | CommonUI widgets, modals |
+
+### Missing Systems (Priority Order)
+
+#### Priority 1: Combat System
+**Gap:** Only bridge layer exists (`MOCombatMedicalTypes`), no actual combat mechanics.
+
+**Recommended Components:**
+```
+UMOWeaponComponent       - Weapon stats, attack execution
+UMOCombatComponent       - Hit detection, damage calculation
+FMOWeaponDefinitionRow   - DataTable for weapon definitions
+AMOProjectile            - Ranged projectile actor
+```
+
+**Features Needed:**
+- Melee attack states (light/heavy/combo)
+- Block/parry/dodge mechanics
+- Ranged weapon support (bow, thrown)
+- Hit detection (collision + line trace)
+- Stamina integration (already designed)
+
+---
+
+#### Priority 2: Equipment/Armor System
+**Gap:** No equipment slots, armor, or wearable clothing.
+
+**Recommended Components:**
+```
+UMOEquipmentComponent    - Equipment slot management
+FMOEquipmentSlot         - Individual slot data
+FMOEquipmentDefinitionRow- DataTable for equipment
+```
+
+**Equipment Slots:**
+- Head, Face, Neck
+- Chest, Back, Waist
+- Shoulders, Arms, Hands
+- Legs, Feet
+- Accessories (rings, amulets)
+
+**Features Needed:**
+- Armor value reducing damage
+- Temperature/insulation bonuses
+- Durability degradation
+- Set bonuses (optional)
+- Visual attachment (skeletal mesh sockets)
+
+---
+
+#### Priority 3: Status Effects/Buffs System
+**Gap:** No generic buff/debuff system (some conditions exist in medical).
+
+**Recommended Components:**
+```
+UMOStatusEffectComponent - Active effects on pawn
+FMOStatusEffect          - Effect definition (duration, stacking, ticks)
+UMOStatusEffectSubsystem - Effect application/removal
+```
+
+**Common Effects:**
+- Poisoned, Bleeding, Burning, Freezing (some exist in medical)
+- Well Fed, Rested, Inspired (buff states)
+- Encumbered, Exhausted, Dehydrated
+- Food buffs (stamina regen, damage boost)
+- Environmental (wet, cold, hot)
+
+**Integration:**
+- Metabolism provides nutrition-based buffs
+- Medical provides injury-based debuffs
+- Combat applies damage-over-time effects
+- Environment applies temperature effects
+
+---
+
+#### Priority 4: Weather/Environment System
+**Gap:** No weather, temperature zones, or environmental hazards.
+
+**Recommended Components:**
+```
+UMOWeatherSubsystem      - World weather state
+UMOEnvironmentZone       - Area-based temperature/hazards
+AMOWeatherController     - Weather transitions, effects
+```
+
+**Weather Types:**
+- Clear, Cloudy, Rain, Storm, Snow, Fog
+- Wind speed/direction
+- Temperature variation by time of day
+
+**Environmental Effects:**
+- Rain extinguishes campfires
+- Cold zones require warm clothing
+- Heat zones cause dehydration
+- Wet debuff from rain/swimming
+
+---
+
+#### Priority 5: Sleep/Rest System
+**Gap:** Fatigue exists in vitals but no dedicated sleep mechanics.
+
+**Recommended Components:**
+```
+AMOBed                   - Bed/bedroll buildable actor
+UMOSleepSubsystem        - Time skip, rest bonuses
+```
+
+**Features:**
+- Time-of-day requirement (night sleep)
+- Fatigue recovery during sleep
+- "Rested" buff after sleeping
+- Optional: time skip to morning
+- Dreams/nightmares (mental state integration)
+
+---
+
+#### Priority 6: Resource Nodes/Gathering
+**Gap:** Interaction exists but no dedicated harvestable resources.
+
+**Recommended Components:**
+```
+AMOResourceNode          - Trees, rocks, ore deposits
+UMOHarvestableComponent  - Harvest progress, tool requirements
+FMOResourceDefinitionRow - Resource spawn data
+```
+
+**Features:**
+- Tool-gated harvesting (axe for trees, pickaxe for ore)
+- Harvest progress (multiple hits)
+- Resource depletion and respawn
+- Yield based on skill level
+- Different gather actions (chop, mine, dig, pick)
+
+---
+
+#### Priority 7: Creature AI System
+**Gap:** Basic `MOAIController` exists but no behavior framework.
+
+**Recommended Components:**
+```
+UMOCreatureComponent     - Creature stats, behavior config
+UMOThreatComponent       - Aggro/threat tracking
+AMOCreatureCharacter     - Base creature pawn
+Behavior Trees           - Per-creature behavior
+```
+
+**Behavior Types:**
+- Passive (deer, rabbits) - flee when threatened
+- Neutral (boars) - attack when provoked
+- Aggressive (wolves) - hunt players
+- Territorial (bears) - guard areas
+- Pack (wolves) - coordinate attacks
+
+---
+
+#### Priority 8: Map/Exploration System
+**Gap:** No map, waypoints, or fog of war.
+
+**Recommended Components:**
+```
+UMOMapComponent          - Discovered areas, markers
+UMOMinimapWidget         - HUD minimap
+UMOWorldMapWidget        - Full-screen map
+```
+
+**Features:**
+- Fog of war revealing as explored
+- Player-placed markers/waypoints
+- Points of interest auto-discovery
+- Compass direction indicator
+
+---
+
+### Lower Priority Systems
+
+| System | Priority | Notes |
+|--------|----------|-------|
+| Quest/Objectives | Low | Many survival games work without formal quests |
+| Audio Manager | Medium | UE built-in sound cues may suffice initially |
+| World Events | Low | Boss encounters, waves - can add post-core |
+| Localization | Medium | Important for release, not for development |
+| Tutorial System | Medium | Can use notification system initially |
+| Photo Mode | Low | Nice-to-have feature |
+
+### Integration Dependencies
+
+```
+Combat System
+├── Requires: Medical System (damage→wounds) ✓
+├── Requires: Activity Levels (stamina costs) ✓
+├── Requires: Equipment System (weapon stats)
+└── Requires: Skills System (combat skills) ✓
+
+Equipment System
+├── Requires: Inventory System (equip from inventory) ✓
+├── Requires: Persistence (save equipped items) ✓
+└── Integrates: Medical System (armor reduces damage)
+
+Weather System
+├── Integrates: Medical System (temperature effects) ✓
+├── Integrates: Building System (shelter detection)
+├── Integrates: Status Effects (wet, cold buffs)
+└── Integrates: Crafting (fire extinguishing)
+
+Resource Nodes
+├── Requires: Interaction System ✓
+├── Requires: Inventory System (yield items) ✓
+├── Requires: Skills System (gathering skills) ✓
+├── Integrates: Activity Levels (gathering = work) ✓
+└── Integrates: Tools (equipment system)
+```
+
+### Recommended Implementation Order
+
+1. **Equipment System** - Enables armor, tools, weapons as equippable items
+2. **Combat System** - Core gameplay loop, uses medical + equipment
+3. **Status Effects** - Consolidates buffs/debuffs across systems
+4. **Resource Nodes** - Dedicated gathering gameplay
+5. **Weather System** - Environmental challenge layer
+6. **Sleep System** - Complete the survival loop
+7. **Creature AI** - Populate the world with threats
+8. **Map System** - Navigation and exploration tracking
+
+---
+
+## Technical Debt & Known Issues
+
+This section documents known technical debt identified through code audits for future improvement.
+
+### High Priority
+
+#### 1. Component Discovery Pattern Overuse
+**40+ instances of `FindComponentByClass` at runtime**
+
+Affected files:
+- `MOPersistenceSubsystem.cpp` (15 instances)
+- `MOUIManagerComponent.cpp` (9 instances)
+- `MOCraftingQueueComponent.cpp` (2 instances)
+
+**Recommendation:** Create component caching in BeginPlay or implement a `FMOComponentUtils` helper class.
+
+#### 2. Missing Interface Abstractions
+Several systems would benefit from formal UInterface definitions:
+
+| Interface | Classes That Would Implement | Benefit |
+|-----------|------------------------------|---------|
+| `IInventoryHolder` | Character, Container, Station | Consistent inventory access |
+| `IBuildable` | BuildableActor, future structures | Extensible building system |
+| `ISaveable` | All persistent actors/components | Centralized persistence |
+| `IMaterialSource` | Inventory, Container, WorldItem | Flexible material gathering |
+
+#### 3. Incomplete TODO Items
+13 TODO comments indicate unfinished features:
+- `MOBuildProgressComponent.cpp:255` - Material refund not implemented
+- `MOCraftingQueueComponent.cpp:699` - Tool quality modifiers missing
+- `MOUIManagerComponent.cpp:1439` - Stack splitting UI not implemented
+- Various medical system integrations
+
+### Medium Priority
+
+#### 4. Inconsistent Delegate Patterns
+- Mixed use of `DYNAMIC_MULTICAST_DELEGATE` and non-dynamic delegates in same components
+- Example: `MOInteractableComponent.h` uses both types
+
+**Recommendation:** Standardize to `DYNAMIC_MULTICAST_DELEGATE` for Blueprint accessibility.
+
+#### 5. Missing `const` Qualifiers
+Several query methods lack const:
+- `MOInteractionSubsystem.h` methods that don't modify state
+
+#### 6. UPROPERTY Category Inconsistency
+Category naming varies between files:
+- Some use `"MO|System|Section"` (good)
+- Some use inconsistent nesting levels
+
+**Recommendation:** Standardize to max 3 levels: `"MO|<System>|<Subsection>"`
+
+### Low Priority
+
+#### 7. Delegate Naming Inconsistency
+- Most follow `FMO<Component><Event>Signature` (good)
+- Some lack component name prefix
+- Event tense varies: `Changed` vs `Change`
+
+#### 8. Documentation Gaps
+- Many delegates lack detailed documentation on when they fire
+- Some public methods missing param documentation
+
+---
+
+## Interface Opportunities (Future Work)
+
+Based on code analysis, these interfaces would improve modularity and reduce coupling:
+
+### ISaveable Interface (Critical Priority)
+```cpp
+UINTERFACE(MinimalAPI)
+class UMOSaveableInterface : public UInterface { GENERATED_BODY() };
+
+class IMOSaveableInterface
+{
+    GENERATED_BODY()
+public:
+    virtual void BuildSaveData(FMOGenericSaveData& OutData) = 0;
+    virtual bool ApplySaveData(const FMOGenericSaveData& InData) = 0;
+    virtual FGuid GetPersistentId() const = 0;
+};
+```
+
+**Would implement:** Character, BuildableActor, WorldItem, InventoryComponent, VitalsComponent, MetabolismComponent, CraftingQueueComponent
+
+### IInventoryHolder Interface
+```cpp
+UINTERFACE(MinimalAPI, Blueprintable)
+class UMOInventoryHolderInterface : public UInterface { GENERATED_BODY() };
+
+class IMOInventoryHolderInterface
+{
+    GENERATED_BODY()
+public:
+    virtual UMOInventoryComponent* GetInventoryComponent() const = 0;
+    virtual bool HasItem(FName ItemId, int32 Quantity = 1) const = 0;
+};
+```
+
+**Would implement:** Character, ContainerActor, CraftingStationActor
+
+### IMaterialSource Interface
+```cpp
+UINTERFACE(MinimalAPI, Blueprintable)
+class UMOMaterialSourceInterface : public UInterface { GENERATED_BODY() };
+
+class IMOMaterialSourceInterface
+{
+    GENERATED_BODY()
+public:
+    virtual bool CanProvideMaterial(FName MaterialId, int32 Quantity) const = 0;
+    virtual bool GatherMaterial(FName MaterialId, int32 Quantity) = 0;
+    virtual TArray<FName> GetAvailableMaterials() const = 0;
+};
+```
+
+**Would implement:** InventoryComponent, ContainerActor, WorldItem
+
+---
+
+## Code Health Metrics
+
+**Last Audit:** 2026-02-03
+
+| Metric | Value | Status |
+|--------|-------|--------|
+| Public Headers | 94 files | Good |
+| Dynamic Delegates | 130+ | Good - event-driven |
+| TODO Comments | 13 | Needs attention |
+| FindComponentByClass calls | 40+ | Needs refactoring |
+| TObjectPtr usage | 50+ | Good - modern UE5 |
+| TSoftObjectPtr usage | 60+ | Excellent |
+
+**Overall Health Score:** 7.5/10
 
 ---
 

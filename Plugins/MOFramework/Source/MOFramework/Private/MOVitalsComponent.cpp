@@ -55,6 +55,7 @@ void UMOVitalsComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& O
 
 	DOREPLIFETIME_CONDITION(UMOVitalsComponent, Vitals, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(UMOVitalsComponent, Exertion, COND_OwnerOnly);
+	DOREPLIFETIME_CONDITION(UMOVitalsComponent, Activity, COND_OwnerOnly);
 }
 
 // ============================================================================
@@ -151,6 +152,126 @@ void UMOVitalsComponent::SetPainLevel(float NewPain)
 void UMOVitalsComponent::AddFatigue(float Amount)
 {
 	Exertion.Fatigue = FMath::Clamp(Exertion.Fatigue + Amount, 0.0f, 100.0f);
+}
+
+// ============================================================================
+// ACTIVITY API
+// ============================================================================
+
+void UMOVitalsComponent::SetActivityLevel(EMOActivityLevel NewActivity)
+{
+	if (Activity.CurrentActivity == NewActivity)
+	{
+		return;
+	}
+
+	// Check if we can start this activity
+	if (!CanStartActivity(NewActivity))
+	{
+		// Can't start this activity - stamina too low
+		// Downgrade to the highest activity we can sustain
+		if (NewActivity == EMOActivityLevel::Sprinting && CanStartActivity(EMOActivityLevel::Jogging))
+		{
+			NewActivity = EMOActivityLevel::Jogging;
+		}
+		else if ((NewActivity == EMOActivityLevel::Sprinting || NewActivity == EMOActivityLevel::Jogging)
+				 && CanStartActivity(EMOActivityLevel::Walking))
+		{
+			NewActivity = EMOActivityLevel::Walking;
+		}
+		else
+		{
+			NewActivity = EMOActivityLevel::Idle;
+		}
+
+		// If still can't do it, just go idle
+		if (!CanStartActivity(NewActivity))
+		{
+			NewActivity = EMOActivityLevel::Idle;
+		}
+	}
+
+	EMOActivityLevel OldActivity = Activity.CurrentActivity;
+	Activity.CurrentActivity = NewActivity;
+	Activity.TimeInCurrentActivity = 0.0f;
+
+	// Update exertion level based on new activity
+	FMOActivityConfig Config = FMOActivityConfig::GetDefaultConfig(NewActivity);
+	SetExertionLevel(Config.ExertionLevel);
+
+	// Broadcast the change
+	if (OldActivity != NewActivity)
+	{
+		OnActivityChanged.Broadcast(OldActivity, NewActivity);
+	}
+}
+
+FMOActivityConfig UMOVitalsComponent::GetCurrentActivityConfig() const
+{
+	return FMOActivityConfig::GetDefaultConfig(Activity.CurrentActivity);
+}
+
+bool UMOVitalsComponent::CanSustainCurrentActivity() const
+{
+	FMOActivityConfig Config = GetCurrentActivityConfig();
+
+	if (!Config.bRequiresStamina)
+	{
+		return true;
+	}
+
+	// Can sustain if we have any stamina left
+	return Activity.CurrentStamina > 0.0f;
+}
+
+bool UMOVitalsComponent::CanStartActivity(EMOActivityLevel ActivityToCheck) const
+{
+	FMOActivityConfig Config = FMOActivityConfig::GetDefaultConfig(ActivityToCheck);
+
+	if (!Config.bRequiresStamina)
+	{
+		return true;
+	}
+
+	// Check minimum stamina requirement
+	return Activity.GetStaminaPercent() >= Config.MinimumStaminaToStart;
+}
+
+void UMOVitalsComponent::ModifyStamina(float Amount)
+{
+	float OldStamina = Activity.CurrentStamina;
+	Activity.CurrentStamina = FMath::Clamp(Activity.CurrentStamina + Amount, 0.0f, Activity.MaxStamina);
+
+	// Check for significant change
+	if (FMath::Abs(Activity.CurrentStamina - OldStamina) >= 5.0f)
+	{
+		OnStaminaChanged.Broadcast(OldStamina, Activity.CurrentStamina);
+	}
+
+	// Check for depletion
+	if (Activity.CurrentStamina <= 0.0f && OldStamina > 0.0f)
+	{
+		OnStaminaDepleted.Broadcast();
+	}
+}
+
+float UMOVitalsComponent::GetCurrentCalorieMultiplier() const
+{
+	FMOActivityConfig Config = GetCurrentActivityConfig();
+	float Multiplier = Config.CalorieMultiplier;
+
+	// Fitness affects efficiency - fitter people burn slightly less for same activity
+	// But this effect is small (maybe 10% at peak fitness)
+	if (UMOMetabolismComponent* MetabComp = CachedMetabolismComp.Get())
+	{
+		float Fitness = MetabComp->BodyComposition.CardiovascularFitness;
+		// At fitness 100, reduce calorie burn by 10% (more efficient)
+		// At fitness 0, increase by 10% (less efficient)
+		float FitnessModifier = 1.0f - ((Fitness - 50.0f) / 500.0f);  // 0.9 to 1.1
+		Multiplier *= FitnessModifier;
+	}
+
+	return Multiplier;
 }
 
 // ============================================================================
@@ -302,6 +423,7 @@ void UMOVitalsComponent::BuildSaveData(FMOVitalsSaveData& OutSaveData) const
 {
 	OutSaveData.Vitals = Vitals;
 	OutSaveData.Exertion = Exertion;
+	OutSaveData.Activity = Activity;
 }
 
 bool UMOVitalsComponent::ApplySaveDataAuthority(const FMOVitalsSaveData& InSaveData)
@@ -313,6 +435,7 @@ bool UMOVitalsComponent::ApplySaveDataAuthority(const FMOVitalsSaveData& InSaveD
 
 	Vitals = InSaveData.Vitals;
 	Exertion = InSaveData.Exertion;
+	Activity = InSaveData.Activity;
 
 	// Update blood loss stage
 	PreviousBloodLossStage = GetBloodLossStage();
@@ -338,6 +461,9 @@ void UMOVitalsComponent::TickVitals()
 	{
 		SetPainLevel(AnatomyComp->GetTotalPainLevel());
 	}
+
+	// Process activity effects (stamina, calorie burn, fatigue)
+	ProcessActivityEffects(ScaledDeltaTime);
 
 	// Calculate all vital signs
 	CalculateHeartRate();
@@ -664,4 +790,194 @@ void UMOVitalsComponent::CheckAndBroadcastChange(FName VitalName, float OldValue
 	{
 		OnVitalSignChanged.Broadcast(VitalName, OldValue, NewValue);
 	}
+}
+
+// ============================================================================
+// ACTIVITY PROCESSING
+// ============================================================================
+
+void UMOVitalsComponent::ProcessActivityEffects(float DeltaTime)
+{
+	// Update time tracking
+	Activity.TimeInCurrentActivity += DeltaTime;
+
+	if (Activity.IsActive())
+	{
+		Activity.TotalActiveTimeToday += DeltaTime;
+	}
+
+	// Update max stamina based on fitness
+	UpdateMaxStamina();
+
+	// Process stamina drain/recovery
+	UpdateStamina(DeltaTime);
+
+	// Apply calorie burn to metabolism
+	ApplyActivityCalorieBurn(DeltaTime);
+
+	// Apply fatigue accumulation
+	FMOActivityConfig Config = GetCurrentActivityConfig();
+	if (Config.FatiguePerHour > 0.0f)
+	{
+		// FatiguePerHour is the fatigue gained over 1 hour of sustained activity
+		// Convert to per second: FatiguePerHour / 3600
+		float FatiguePerSecond = Config.FatiguePerHour / 3600.0f;
+		AddFatigue(FatiguePerSecond * DeltaTime);
+	}
+
+	// Apply training effects if applicable
+	if (Config.bIsCardioTraining || Config.bIsStrengthTraining)
+	{
+		if (UMOMetabolismComponent* MetabComp = CachedMetabolismComp.Get())
+		{
+			if (Config.bIsCardioTraining)
+			{
+				MetabComp->ApplyCardioTraining(Config.TrainingIntensity, DeltaTime);
+			}
+			if (Config.bIsStrengthTraining)
+			{
+				MetabComp->ApplyStrengthTraining(Config.TrainingIntensity, DeltaTime);
+			}
+		}
+	}
+
+	// Check if we can no longer sustain current activity
+	if (!CanSustainCurrentActivity())
+	{
+		// Force downgrade to a sustainable activity
+		if (Activity.CurrentActivity == EMOActivityLevel::Sprinting)
+		{
+			SetActivityLevel(EMOActivityLevel::Jogging);
+		}
+		else if (Activity.CurrentActivity == EMOActivityLevel::Jogging)
+		{
+			SetActivityLevel(EMOActivityLevel::Walking);
+		}
+		else if (Activity.CurrentActivity == EMOActivityLevel::HeavyWork)
+		{
+			SetActivityLevel(EMOActivityLevel::MediumWork);
+		}
+		else if (Activity.CurrentActivity == EMOActivityLevel::MediumWork)
+		{
+			SetActivityLevel(EMOActivityLevel::LightWork);
+		}
+		else if (Activity.CurrentActivity == EMOActivityLevel::Combat)
+		{
+			// Can't downgrade combat - stay in combat but at reduced effectiveness
+			// Combat system should check stamina for action costs
+		}
+		else
+		{
+			SetActivityLevel(EMOActivityLevel::Idle);
+		}
+	}
+}
+
+void UMOVitalsComponent::UpdateStamina(float DeltaTime)
+{
+	FMOActivityConfig Config = GetCurrentActivityConfig();
+
+	float OldStamina = Activity.CurrentStamina;
+
+	if (Config.StaminaDrainPerSecond > 0.0f)
+	{
+		// Drain stamina based on activity
+		float DrainRate = Config.StaminaDrainPerSecond;
+
+		// Fatigue increases stamina drain
+		float FatiguePenalty = 1.0f + (Exertion.Fatigue / 100.0f) * 0.5f;  // Up to 50% more drain when fatigued
+		DrainRate *= FatiguePenalty;
+
+		// Hydration affects stamina drain
+		if (UMOMetabolismComponent* MetabComp = CachedMetabolismComp.Get())
+		{
+			if (MetabComp->IsDehydrated())
+			{
+				DrainRate *= 1.5f;  // 50% faster drain when dehydrated
+			}
+		}
+
+		Activity.CurrentStamina = FMath::Max(0.0f, Activity.CurrentStamina - DrainRate * DeltaTime);
+	}
+	else
+	{
+		// Recover stamina when not draining
+		// Base recovery rate: recover full stamina in ~30 seconds at rest
+		float RecoveryRate = Activity.MaxStamina / 30.0f;
+
+		// Recovery is slower if fatigued
+		float FatigueModifier = 1.0f - (Exertion.Fatigue / 100.0f) * 0.5f;  // Up to 50% slower recovery
+		RecoveryRate *= FatigueModifier;
+
+		// Cardiovascular fitness improves recovery
+		if (UMOMetabolismComponent* MetabComp = CachedMetabolismComp.Get())
+		{
+			float Fitness = MetabComp->BodyComposition.CardiovascularFitness;
+			RecoveryRate *= (0.7f + (Fitness / 100.0f) * 0.6f);  // 0.7x to 1.3x based on fitness
+		}
+
+		// Only recover if resting or idle
+		if (Activity.CurrentActivity <= EMOActivityLevel::Walking)
+		{
+			Activity.CurrentStamina = FMath::Min(Activity.MaxStamina, Activity.CurrentStamina + RecoveryRate * DeltaTime);
+		}
+	}
+
+	// Check for significant change
+	if (FMath::Abs(Activity.CurrentStamina - OldStamina) >= 5.0f)
+	{
+		OnStaminaChanged.Broadcast(OldStamina, Activity.CurrentStamina);
+	}
+
+	// Check for depletion
+	if (Activity.CurrentStamina <= 0.0f && OldStamina > 0.0f)
+	{
+		OnStaminaDepleted.Broadcast();
+	}
+}
+
+void UMOVitalsComponent::ApplyActivityCalorieBurn(float DeltaTime)
+{
+	if (!CachedMetabolismComp)
+	{
+		return;
+	}
+
+	// Get base BMR in kcal/day and convert to kcal/second
+	float BMR = CachedMetabolismComp->GetCurrentBMR();
+	float BMRPerSecond = BMR / 86400.0f;
+
+	// Apply activity multiplier
+	float CalorieMultiplier = GetCurrentCalorieMultiplier();
+
+	// Calculate calories burned this tick
+	// We subtract 1.0 from multiplier because basal metabolism is already handled
+	// We only add the EXTRA calories from activity
+	float ExtraCalories = BMRPerSecond * (CalorieMultiplier - 1.0f) * DeltaTime;
+
+	if (ExtraCalories > 0.0f)
+	{
+		CachedMetabolismComp->ApplyCalorieBurn(ExtraCalories);
+	}
+}
+
+void UMOVitalsComponent::UpdateMaxStamina()
+{
+	// Max stamina is based on cardiovascular fitness
+	// Base: 100, Range: 70-130 based on fitness
+	float BaseMaxStamina = 100.0f;
+
+	if (UMOMetabolismComponent* MetabComp = CachedMetabolismComp.Get())
+	{
+		float Fitness = MetabComp->BodyComposition.CardiovascularFitness;
+		// Fitness 0 = 70 max stamina, Fitness 100 = 130 max stamina
+		Activity.MaxStamina = 70.0f + (Fitness / 100.0f) * 60.0f;
+	}
+	else
+	{
+		Activity.MaxStamina = BaseMaxStamina;
+	}
+
+	// Clamp current stamina to new max
+	Activity.CurrentStamina = FMath::Min(Activity.CurrentStamina, Activity.MaxStamina);
 }

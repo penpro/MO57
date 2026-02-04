@@ -1,6 +1,7 @@
 #include "MOSkillsPanel.h"
 #include "MOFramework.h"
 #include "MOSkillsComponent.h"
+#include "MOKnowledgeComponent.h"
 #include "MOSkillDatabaseSettings.h"
 #include "MOSkillEntryWidget.h"
 #include "MOCommonButton.h"
@@ -14,45 +15,110 @@
 UMOSkillsPanel::UMOSkillsPanel(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
+	// Enable keyboard input for this widget (needed for Tab/Escape to close)
+	SetIsFocusable(true);
 }
 
 void UMOSkillsPanel::InitializePanel(UMOSkillsComponent* InSkillsComponent)
 {
-	// Unbind from previous component
+	InitializePanelWithKnowledge(InSkillsComponent, nullptr);
+}
+
+void UMOSkillsPanel::InitializePanelWithKnowledge(UMOSkillsComponent* InSkillsComponent, UMOKnowledgeComponent* InKnowledgeComponent)
+{
+	// Unbind from previous skills component
 	if (UMOSkillsComponent* OldSkills = SkillsComponent.Get())
 	{
 		OldSkills->OnSkillLevelUp.RemoveDynamic(this, &UMOSkillsPanel::HandleSkillLevelUp);
 		OldSkills->OnExperienceGained.RemoveDynamic(this, &UMOSkillsPanel::HandleExperienceGained);
 	}
 
-	SkillsComponent = InSkillsComponent;
+	// Unbind from previous knowledge component
+	if (UMOKnowledgeComponent* OldKnowledge = KnowledgeComponent.Get())
+	{
+		OldKnowledge->OnKnowledgeLearned.RemoveDynamic(this, &UMOSkillsPanel::HandleKnowledgeLearned);
+	}
 
-	// Bind to new component
+	SkillsComponent = InSkillsComponent;
+	KnowledgeComponent = InKnowledgeComponent;
+
+	// Bind to new skills component
 	if (InSkillsComponent)
 	{
 		InSkillsComponent->OnSkillLevelUp.AddDynamic(this, &UMOSkillsPanel::HandleSkillLevelUp);
 		InSkillsComponent->OnExperienceGained.AddDynamic(this, &UMOSkillsPanel::HandleExperienceGained);
 	}
 
+	// Bind to new knowledge component
+	if (InKnowledgeComponent)
+	{
+		InKnowledgeComponent->OnKnowledgeLearned.AddDynamic(this, &UMOSkillsPanel::HandleKnowledgeLearned);
+	}
+
+	UpdateTabButtonStates();
 	RefreshSkillList();
+}
+
+void UMOSkillsPanel::SetDisplayMode(EMOSkillsPanelMode NewMode)
+{
+	if (CurrentDisplayMode == NewMode)
+	{
+		return;
+	}
+
+	CurrentDisplayMode = NewMode;
+	SelectedSkillId = NAME_None;
+	SelectedKnowledgeId = NAME_None;
+
+	UpdateTabButtonStates();
+
+	if (CurrentDisplayMode == EMOSkillsPanelMode::Skills)
+	{
+		PopulateSkillContainer();
+	}
+	else
+	{
+		PopulateKnowledgeContainer();
+	}
+
+	UpdateDetailPanel();
+	OnModeChanged.Broadcast(NewMode);
+}
+
+void UMOSkillsPanel::ShowSkills()
+{
+	SetDisplayMode(EMOSkillsPanelMode::Skills);
+}
+
+void UMOSkillsPanel::ShowKnowledge()
+{
+	SetDisplayMode(EMOSkillsPanelMode::Knowledge);
 }
 
 void UMOSkillsPanel::RefreshSkillList()
 {
-	PopulateSkillContainer();
-
-	// Select first skill if none selected
-	if (SelectedSkillId.IsNone() && (EntryWidgets.Num() > 0 || SimpleTextWidgets.Num() > 0))
+	if (CurrentDisplayMode == EMOSkillsPanelMode::Skills)
 	{
-		TArray<FName> AllSkillIds;
-		UMOSkillDatabaseSettings::GetAllSkillIds(AllSkillIds);
-		if (AllSkillIds.Num() > 0)
+		PopulateSkillContainer();
+
+		// Select first skill if none selected
+		if (SelectedSkillId.IsNone() && (EntryWidgets.Num() > 0 || SimpleTextWidgets.Num() > 0))
 		{
-			SelectSkill(AllSkillIds[0]);
+			TArray<FName> AllSkillIds;
+			UMOSkillDatabaseSettings::GetAllSkillIds(AllSkillIds);
+			if (AllSkillIds.Num() > 0)
+			{
+				SelectSkill(AllSkillIds[0]);
+			}
+		}
+		else
+		{
+			UpdateDetailPanel();
 		}
 	}
 	else
 	{
+		PopulateKnowledgeContainer();
 		UpdateDetailPanel();
 	}
 }
@@ -114,6 +180,20 @@ void UMOSkillsPanel::NativeConstruct()
 		CloseButton->OnClicked().RemoveAll(this);
 		CloseButton->OnClicked().AddUObject(this, &UMOSkillsPanel::HandleCloseClicked);
 	}
+
+	if (SkillsTabButton)
+	{
+		SkillsTabButton->OnClicked().RemoveAll(this);
+		SkillsTabButton->OnClicked().AddUObject(this, &UMOSkillsPanel::HandleSkillsTabClicked);
+	}
+
+	if (KnowledgeTabButton)
+	{
+		KnowledgeTabButton->OnClicked().RemoveAll(this);
+		KnowledgeTabButton->OnClicked().AddUObject(this, &UMOSkillsPanel::HandleKnowledgeTabClicked);
+	}
+
+	UpdateTabButtonStates();
 }
 
 void UMOSkillsPanel::NativeDestruct()
@@ -124,12 +204,20 @@ void UMOSkillsPanel::NativeDestruct()
 		Skills->OnExperienceGained.RemoveDynamic(this, &UMOSkillsPanel::HandleExperienceGained);
 	}
 
+	if (UMOKnowledgeComponent* Knowledge = KnowledgeComponent.Get())
+	{
+		Knowledge->OnKnowledgeLearned.RemoveDynamic(this, &UMOSkillsPanel::HandleKnowledgeLearned);
+	}
+
 	Super::NativeDestruct();
 }
 
 FReply UMOSkillsPanel::NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent)
 {
-	if (InKeyEvent.GetKey() == EKeys::Escape)
+	const FKey PressedKey = InKeyEvent.GetKey();
+
+	// Close on Escape or Tab (same key that opens it)
+	if (PressedKey == EKeys::Escape || PressedKey == EKeys::Tab)
 	{
 		OnRequestClose.Broadcast();
 		return FReply::Handled();
@@ -171,12 +259,13 @@ void UMOSkillsPanel::HandleExperienceGained(FName SkillId, float XPGained, float
 		return;
 	}
 
-	// Update the specific entry widget
+	// Update the specific entry widget and play flash animation
 	for (UMOSkillEntryWidget* Entry : EntryWidgets)
 	{
 		if (Entry && Entry->GetSkillId() == SkillId)
 		{
 			Entry->UpdateProgress(Progress.GetLevelProgress(), Progress.CurrentXP, Progress.XPToNextLevel);
+			Entry->PlayFlashAnimation(2.0f); // Flash for 2 seconds when XP is gained
 			break;
 		}
 	}
@@ -190,12 +279,71 @@ void UMOSkillsPanel::HandleExperienceGained(FName SkillId, float XPGained, float
 
 void UMOSkillsPanel::HandleSkillEntrySelected(FName SkillId)
 {
-	SelectSkill(SkillId);
+	if (CurrentDisplayMode == EMOSkillsPanelMode::Skills)
+	{
+		SelectSkill(SkillId);
+	}
+	else
+	{
+		// In knowledge mode, track selected knowledge
+		SelectedKnowledgeId = SkillId;
+		UpdateDetailPanel();
+		OnSkillSelected.Broadcast(SkillId); // Reuse the delegate for knowledge selection
+	}
 }
 
 void UMOSkillsPanel::HandleCloseClicked()
 {
 	OnRequestClose.Broadcast();
+}
+
+void UMOSkillsPanel::HandleSkillsTabClicked()
+{
+	ShowSkills();
+
+	// Return focus to the panel so Tab key still works
+	SetFocus();
+}
+
+void UMOSkillsPanel::HandleKnowledgeTabClicked()
+{
+	ShowKnowledge();
+
+	// Return focus to the panel so Tab key still works
+	SetFocus();
+}
+
+void UMOSkillsPanel::HandleKnowledgeLearned(FName KnowledgeId, FName FromItemId)
+{
+	// Refresh if we're showing knowledge
+	if (CurrentDisplayMode == EMOSkillsPanelMode::Knowledge)
+	{
+		PopulateKnowledgeContainer();
+
+		// Play flash animation on the newly added knowledge entry
+		for (UMOSkillEntryWidget* Entry : EntryWidgets)
+		{
+			if (Entry && Entry->GetSkillId() == KnowledgeId)
+			{
+				Entry->PlayFlashAnimation(2.0f);
+				break;
+			}
+		}
+	}
+}
+
+void UMOSkillsPanel::UpdateTabButtonStates()
+{
+	// Disable knowledge tab if no knowledge component is set
+	if (KnowledgeTabButton)
+	{
+		bool bHasKnowledge = KnowledgeComponent.IsValid();
+		KnowledgeTabButton->SetIsEnabled(bHasKnowledge);
+	}
+
+	// Call Blueprint event to update button visual states
+	// Blueprint should style buttons based on the current mode (highlight active tab, etc.)
+	OnTabModeChanged(CurrentDisplayMode);
 }
 
 FMOSkillDisplayData UMOSkillsPanel::BuildSkillDisplayData(FName SkillId) const
@@ -233,6 +381,83 @@ FMOSkillDisplayData UMOSkillsPanel::BuildSkillDisplayData(FName SkillId) const
 	}
 
 	return Data;
+}
+
+FMOSkillDisplayData UMOSkillsPanel::BuildKnowledgeDisplayData(FName KnowledgeId) const
+{
+	FMOSkillDisplayData Data;
+	Data.SkillId = KnowledgeId; // Reuse SkillId field for KnowledgeId
+	Data.DisplayName = FormatKnowledgeName(KnowledgeId);
+	Data.Description = NSLOCTEXT("MO", "KnowledgeDesc", "Knowledge gained through study and inspection of items.");
+	Data.HowToIncrease = NSLOCTEXT("MO", "KnowledgeHowTo", "Inspect items related to this topic to increase your understanding.");
+	Data.Category = EMOSkillCategory::Knowledge;
+
+	// Knowledge now uses the same XP/level system as skills
+	// Query actual progress from SkillsComponent
+	if (UMOSkillsComponent* Skills = SkillsComponent.Get())
+	{
+		FMOSkillProgress Progress;
+		if (Skills->GetSkillProgress(KnowledgeId, Progress))
+		{
+			Data.Level = Progress.Level;
+			Data.CurrentXP = Progress.CurrentXP;
+			Data.XPToNextLevel = Progress.XPToNextLevel;
+			Data.LevelProgress = Progress.GetLevelProgress();
+			Data.MaxLevel = 100; // Default max level for knowledge (could be looked up per-knowledge)
+		}
+		else
+		{
+			// Knowledge learned but not yet tracked in skills (shouldn't happen with new system)
+			Data.Level = 1;
+			Data.MaxLevel = 100;
+			Data.CurrentXP = 0.0f;
+			Data.XPToNextLevel = 100.0f;
+			Data.LevelProgress = 0.0f;
+		}
+	}
+	else
+	{
+		// No skills component, default values
+		Data.Level = 1;
+		Data.MaxLevel = 100;
+		Data.CurrentXP = 0.0f;
+		Data.XPToNextLevel = 100.0f;
+		Data.LevelProgress = 0.0f;
+	}
+
+	return Data;
+}
+
+FText UMOSkillsPanel::FormatKnowledgeName(FName KnowledgeId) const
+{
+	// Convert camelCase/PascalCase to "Title Case With Spaces"
+	FString KnowledgeString = KnowledgeId.ToString();
+
+	if (KnowledgeString.Len() > 0)
+	{
+		FString FormattedString;
+		for (int32 i = 0; i < KnowledgeString.Len(); i++)
+		{
+			TCHAR Char = KnowledgeString[i];
+
+			// Insert space before capitals (except first char)
+			if (i > 0 && FChar::IsUpper(Char))
+			{
+				FormattedString.AppendChar(TEXT(' '));
+			}
+
+			// Capitalize first character
+			if (i == 0)
+			{
+				Char = FChar::ToUpper(Char);
+			}
+
+			FormattedString.AppendChar(Char);
+		}
+		KnowledgeString = FormattedString;
+	}
+
+	return FText::FromString(KnowledgeString);
 }
 
 void UMOSkillsPanel::PopulateSkillContainer()
@@ -336,6 +561,105 @@ void UMOSkillsPanel::PopulateSkillContainer()
 	OnSkillListUpdated(DisplayList.Num());
 }
 
+void UMOSkillsPanel::PopulateKnowledgeContainer()
+{
+	// Clear existing widgets
+	for (UMOSkillEntryWidget* Entry : EntryWidgets)
+	{
+		if (Entry)
+		{
+			Entry->OnSkillSelected.RemoveDynamic(this, &UMOSkillsPanel::HandleSkillEntrySelected);
+			Entry->RemoveFromParent();
+		}
+	}
+	EntryWidgets.Empty();
+
+	for (UTextBlock* Text : SimpleTextWidgets)
+	{
+		if (Text)
+		{
+			Text->RemoveFromParent();
+		}
+	}
+	SimpleTextWidgets.Empty();
+
+	if (!SkillsContainer)
+	{
+		return;
+	}
+
+	UMOKnowledgeComponent* Knowledge = KnowledgeComponent.Get();
+	if (!Knowledge)
+	{
+		if (EmptyListText)
+		{
+			EmptyListText->SetVisibility(ESlateVisibility::Visible);
+			EmptyListText->SetText(NSLOCTEXT("MO", "NoKnowledgeComponent", "Knowledge tracking unavailable"));
+		}
+		OnSkillListUpdated(0);
+		return;
+	}
+
+	// Get all learned knowledge
+	TArray<FName> LearnedKnowledge;
+	Knowledge->GetAllLearnedKnowledge(LearnedKnowledge);
+
+	// Update empty state
+	if (EmptyListText)
+	{
+		if (LearnedKnowledge.Num() == 0)
+		{
+			EmptyListText->SetVisibility(ESlateVisibility::Visible);
+			EmptyListText->SetText(NSLOCTEXT("MO", "NoKnowledge", "No discoveries yet.\nInspect items to learn about the world."));
+		}
+		else
+		{
+			EmptyListText->SetVisibility(ESlateVisibility::Collapsed);
+		}
+	}
+
+	// Sort alphabetically by formatted name
+	LearnedKnowledge.Sort([this](const FName& A, const FName& B) {
+		return FormatKnowledgeName(A).ToString() < FormatKnowledgeName(B).ToString();
+	});
+
+	// Build display list
+	TArray<FMOSkillDisplayData> DisplayList;
+	for (const FName& KnowledgeId : LearnedKnowledge)
+	{
+		DisplayList.Add(BuildKnowledgeDisplayData(KnowledgeId));
+	}
+
+	// Create widgets
+	for (const FMOSkillDisplayData& Data : DisplayList)
+	{
+		if (SkillEntryWidgetClass)
+		{
+			// Use custom widget class (same as skills)
+			UMOSkillEntryWidget* Entry = CreateWidget<UMOSkillEntryWidget>(this, SkillEntryWidgetClass);
+			if (Entry)
+			{
+				Entry->SetupEntry(Data);
+				Entry->OnSkillSelected.AddDynamic(this, &UMOSkillsPanel::HandleSkillEntrySelected);
+				SkillsContainer->AddChild(Entry);
+				EntryWidgets.Add(Entry);
+			}
+		}
+		else
+		{
+			// Use simple text
+			UTextBlock* Text = CreateSimpleKnowledgeText(Data);
+			if (Text)
+			{
+				SkillsContainer->AddChild(Text);
+				SimpleTextWidgets.Add(Text);
+			}
+		}
+	}
+
+	OnSkillListUpdated(DisplayList.Num());
+}
+
 UTextBlock* UMOSkillsPanel::CreateSimpleSkillText(const FMOSkillDisplayData& Data)
 {
 	UTextBlock* TextWidget = NewObject<UTextBlock>(this);
@@ -366,9 +690,33 @@ UTextBlock* UMOSkillsPanel::CreateSimpleSkillText(const FMOSkillDisplayData& Dat
 	return TextWidget;
 }
 
+UTextBlock* UMOSkillsPanel::CreateSimpleKnowledgeText(const FMOSkillDisplayData& Data)
+{
+	UTextBlock* TextWidget = NewObject<UTextBlock>(this);
+	if (!TextWidget)
+	{
+		return nullptr;
+	}
+
+	// Knowledge just shows the name (no XP/levels)
+	TextWidget->SetText(Data.DisplayName);
+	TextWidget->SetAutoWrapText(true);
+
+	// Set font size to 12pt
+	FSlateFontInfo FontInfo = TextWidget->GetFont();
+	FontInfo.Size = 12;
+	TextWidget->SetFont(FontInfo);
+
+	TextWidget->SetColorAndOpacity(FSlateColor(FLinearColor::White));
+
+	return TextWidget;
+}
+
 void UMOSkillsPanel::UpdateDetailPanel()
 {
-	if (SelectedSkillId.IsNone())
+	FName SelectedId = (CurrentDisplayMode == EMOSkillsPanelMode::Skills) ? SelectedSkillId : SelectedKnowledgeId;
+
+	if (SelectedId.IsNone())
 	{
 		// Clear detail panel
 		if (DetailNameText) DetailNameText->SetText(FText::GetEmpty());
@@ -381,7 +729,15 @@ void UMOSkillsPanel::UpdateDetailPanel()
 		return;
 	}
 
-	FMOSkillDisplayData Data = BuildSkillDisplayData(SelectedSkillId);
+	FMOSkillDisplayData Data;
+	if (CurrentDisplayMode == EMOSkillsPanelMode::Skills)
+	{
+		Data = BuildSkillDisplayData(SelectedId);
+	}
+	else
+	{
+		Data = BuildKnowledgeDisplayData(SelectedId);
+	}
 
 	if (DetailNameText)
 	{
@@ -400,25 +756,31 @@ void UMOSkillsPanel::UpdateDetailPanel()
 
 	if (DetailLevelText)
 	{
+		// Both skills and knowledge now have levels
 		DetailLevelText->SetText(FText::Format(
 			NSLOCTEXT("MOSkills", "DetailLevel", "Level {0} / {1}"),
 			FText::AsNumber(Data.Level),
 			FText::AsNumber(Data.MaxLevel)
 		));
+		DetailLevelText->SetVisibility(ESlateVisibility::Visible);
 	}
 
 	if (DetailXPText)
 	{
+		// Both skills and knowledge now have XP
 		DetailXPText->SetText(FText::Format(
 			NSLOCTEXT("MOSkills", "DetailXP", "{0} / {1} XP"),
 			FText::AsNumber(FMath::RoundToInt(Data.CurrentXP)),
 			FText::AsNumber(FMath::RoundToInt(Data.XPToNextLevel))
 		));
+		DetailXPText->SetVisibility(ESlateVisibility::Visible);
 	}
 
 	if (DetailXPBar)
 	{
+		// Both skills and knowledge now have progress bars
 		DetailXPBar->SetPercent(Data.LevelProgress);
+		DetailXPBar->SetVisibility(ESlateVisibility::Visible);
 	}
 
 	if (DetailIcon && !Data.Icon.IsNull())

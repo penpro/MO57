@@ -31,6 +31,8 @@
 #include "MORecipeDatabaseSettings.h"
 #include "MOworldSaveGame.h"
 #include "MOFramework.h"
+#include "MOPlayerController.h"
+#include "MOUIManagerComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
 
@@ -145,10 +147,26 @@ void AMOBuildableActor::InitializeBuilding(FName InRecipeId)
 		BuildProgressComponent->InitializeFromRecipe(*Recipe);
 	}
 
-	// Exit ghost mode (now a real placed building)
-	SetGhostMode(false);
+	// Stay in ghost mode until construction completes - just enable interaction
+	// The ghost visual remains until OnConstructionCompleted is called
+	bIsGhost = false; // We're no longer in "placement preview" mode
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildableActor] Initialized building with recipe: %s"), *RecipeId.ToString());
+	// Enable collision for the placed building
+	if (MeshComponent)
+	{
+		MeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+	}
+
+	// Enable interaction so player can configure and start build
+	if (InteractableComponent)
+	{
+		InteractableComponent->SetCanInteract(true);
+	}
+
+	// Keep the ghost material - it will be restored when construction completes
+	// SetGhostMode(false) is NOT called here - we want to keep the translucent look
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildableActor] Initialized building with recipe: %s (ghost visual maintained until built)"), *RecipeId.ToString());
 }
 
 void AMOBuildableActor::SetGhostMode(bool bGhost)
@@ -325,9 +343,18 @@ void AMOBuildableActor::OnConstructionCompleted_Implementation()
 
 void AMOBuildableActor::OnGhostInteracted_Implementation(AController* Controller)
 {
-	// Base implementation - show build widget
-	// This should be handled by UI manager in production
-	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildableActor] Ghost interacted - should show build widget"));
+	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildableActor] Ghost interacted - showing build widget"));
+
+	// Get the UI manager from the player controller
+	AMOPlayerController* PC = Cast<AMOPlayerController>(Controller);
+	if (PC && PC->UIManagerComponent)
+	{
+		PC->UIManagerComponent->ShowBuildWidget(this);
+	}
+	else
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOBuildableActor] Could not find UIManager to show build widget"));
+	}
 }
 
 void AMOBuildableActor::OnCompleteInteracted_Implementation(AController* Controller)

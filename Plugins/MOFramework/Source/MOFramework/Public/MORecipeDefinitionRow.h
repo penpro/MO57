@@ -265,9 +265,13 @@ struct MOFRAMEWORK_API FMORecipeDefinitionRow : public FTableRowBase
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Recipe|Discovery")
 	bool bRequiresDiscovery = false;
 
-	/** Knowledge ID that, when learned, unlocks this recipe. */
+	/** Knowledge ID that, when reaching DiscoveryKnowledgeLevel, unlocks this recipe. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Recipe|Discovery")
 	FName DiscoveryKnowledgeId = NAME_None;
+
+	/** Knowledge level required to unlock this recipe (0 = unlocks when knowledge first learned, 1+ = specific level). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Recipe|Discovery", meta=(ClampMin="0"))
+	int32 DiscoveryKnowledgeLevel = 1;
 
 	/** Skill level that auto-unlocks this recipe (0 = doesn't auto-unlock). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Recipe|Discovery", meta=(ClampMin="0"))

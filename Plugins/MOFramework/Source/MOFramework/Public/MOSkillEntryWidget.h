@@ -75,6 +75,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Skills|UI")
 	void UpdateProgress(float NewProgress, float NewCurrentXP, float NewXPToNext);
 
+	/** Play a flash animation to highlight this entry (e.g., when skill/knowledge changes). */
+	UFUNCTION(BlueprintCallable, Category="MO|Skills|UI")
+	void PlayFlashAnimation(float Duration = 2.0f);
+
 	/** Get the skill ID for this entry. */
 	UFUNCTION(BlueprintPure, Category="MO|Skills|UI")
 	FName GetSkillId() const { return SkillData.SkillId; }
@@ -129,4 +133,18 @@ protected:
 
 private:
 	FMOSkillDisplayData SkillData;
+
+	/** Timer for flash animation. */
+	FTimerHandle FlashTimerHandle;
+
+	/** Flash animation state. */
+	float FlashElapsedTime = 0.0f;
+	float FlashDuration = 2.0f;
+	bool bIsFlashing = false;
+
+	/** Original progress bar fill color (to restore after flash). */
+	FLinearColor OriginalFillColor;
+
+	/** Tick the flash animation. */
+	void TickFlashAnimation();
 };

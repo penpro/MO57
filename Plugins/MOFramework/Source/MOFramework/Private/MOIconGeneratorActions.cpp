@@ -45,11 +45,9 @@ public:
 
 	static void ExecuteGenerateIcon(const FToolMenuContext& Context)
 	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[IconGen] Context menu action triggered!"));
 		int32 Count = UMOIconGenerator::GenerateIconsForSelectedAssets(256);
-		if (Count > 0)
-		{
-			UE_LOG(LogMOFramework, Log, TEXT("[IconGen] Generated %d icon(s) from context menu"), Count);
-		}
+		UE_LOG(LogMOFramework, Warning, TEXT("[IconGen] Generated %d icon(s) from context menu"), Count);
 	}
 };
 

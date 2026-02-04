@@ -18,7 +18,7 @@ struct MOFRAMEWORK_API FMOSkillProgress
 	FName SkillId = NAME_None;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Skill")
-	int32 Level = 1;
+	int32 Level = 0;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Skill")
 	float CurrentXP = 0.0f;
@@ -70,7 +70,7 @@ public:
 	/**
 	 * Get the current level of a skill.
 	 * @param SkillId The skill to query
-	 * @return Current level (1 if skill not found or not started)
+	 * @return Current level (0 if skill not found or not started)
 	 */
 	UFUNCTION(BlueprintPure, Category="MO|Skills")
 	int32 GetSkillLevel(FName SkillId) const;
@@ -126,8 +126,8 @@ private:
 	const FMOSkillProgress* FindSkillProgress(FName SkillId) const;
 
 	/**
-	 * Calculate XP required for a specific level using the skill's XP curve.
-	 * Formula: BaseXP * (Level ^ Exponent)
+	 * Calculate XP required to go from Level to Level+1.
+	 * Formula: BaseXP * ScaleFactor^Level
 	 */
 	float CalculateXPForLevel(const FMOSkillDefinitionRow* SkillDef, int32 Level) const;
 

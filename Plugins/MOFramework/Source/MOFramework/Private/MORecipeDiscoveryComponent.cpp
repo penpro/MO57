@@ -63,29 +63,17 @@ bool UMORecipeDiscoveryComponent::DiscoverRecipe(FName RecipeId, EMODiscoveryMet
 
 void UMORecipeDiscoveryComponent::CheckDiscoveryFromKnowledge(FName KnowledgeId)
 {
+	// NOTE: This is now handled by CheckDiscoveryFromSkillLevel which is called via OnSkillLevelUp.
+	// Knowledge entries are stored in SkillsComponent and trigger OnSkillLevelUp when they level up.
+	// This function is kept for backward compatibility and logging.
+
 	if (KnowledgeId.IsNone())
 	{
 		return;
 	}
 
-	// Get all recipe IDs and check which ones should be unlocked by this knowledge
-	TArray<FName> AllRecipeIds;
-	UMORecipeDatabaseSettings::GetAllRecipeIds(AllRecipeIds);
-
-	for (const FName& RecipeId : AllRecipeIds)
-	{
-		const FMORecipeDefinitionRow* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(RecipeId);
-		if (!Recipe)
-		{
-			continue;
-		}
-
-		// Check if this recipe requires discovery and is unlocked by this knowledge
-		if (Recipe->bRequiresDiscovery && Recipe->DiscoveryKnowledgeId == KnowledgeId)
-		{
-			DiscoverRecipe(RecipeId, EMODiscoveryMethod::Inspection);
-		}
-	}
+	UE_LOG(LogMOFramework, Log, TEXT("[MORecipeDiscovery] CheckDiscoveryFromKnowledge called with KnowledgeId: %s (note: level-based discovery handled by CheckDiscoveryFromSkillLevel)"),
+		*KnowledgeId.ToString());
 }
 
 void UMORecipeDiscoveryComponent::CheckDiscoveryFromSkillLevel(FName SkillId, int32 NewLevel)
@@ -95,27 +83,60 @@ void UMORecipeDiscoveryComponent::CheckDiscoveryFromSkillLevel(FName SkillId, in
 		return;
 	}
 
-	// Get all recipe IDs and check which ones should be unlocked at this skill level
+	UE_LOG(LogMOFramework, Log, TEXT("[MORecipeDiscovery] CheckDiscoveryFromSkillLevel: %s reached level %d"),
+		*SkillId.ToString(), NewLevel);
+
+	// Get all recipe IDs and check which ones should be unlocked at this skill/knowledge level
 	TArray<FName> AllRecipeIds;
 	UMORecipeDatabaseSettings::GetAllRecipeIds(AllRecipeIds);
 
+	UE_LOG(LogMOFramework, Log, TEXT("[MORecipeDiscovery]   Checking %d total recipes..."), AllRecipeIds.Num());
+
+	int32 MatchingRecipes = 0;
 	for (const FName& RecipeId : AllRecipeIds)
 	{
 		const FMORecipeDefinitionRow* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(RecipeId);
-		if (!Recipe)
+		if (!Recipe || !Recipe->bRequiresDiscovery)
 		{
 			continue;
 		}
 
-		// Check if this recipe requires discovery, uses this skill, and is unlocked at this level
-		if (Recipe->bRequiresDiscovery &&
-			Recipe->RequiredSkillId == SkillId &&
+		bool bShouldDiscover = false;
+		EMODiscoveryMethod Method = EMODiscoveryMethod::SkillLevel;
+
+		// Check skill-based discovery: RequiredSkillId + DiscoverySkillLevel
+		if (Recipe->RequiredSkillId == SkillId &&
 			Recipe->DiscoverySkillLevel > 0 &&
 			Recipe->DiscoverySkillLevel <= NewLevel)
 		{
-			DiscoverRecipe(RecipeId, EMODiscoveryMethod::SkillLevel);
+			bShouldDiscover = true;
+			Method = EMODiscoveryMethod::SkillLevel;
+			UE_LOG(LogMOFramework, Log, TEXT("[MORecipeDiscovery]   Recipe '%s' MATCHES via skill level (required: %d, current: %d)"),
+				*RecipeId.ToString(), Recipe->DiscoverySkillLevel, NewLevel);
+		}
+
+		// Check knowledge-based discovery: DiscoveryKnowledgeId + DiscoveryKnowledgeLevel
+		// Knowledge entries are also tracked in SkillsComponent, so SkillId could be a knowledge ID
+		if (!bShouldDiscover &&
+			Recipe->DiscoveryKnowledgeId == SkillId &&
+			Recipe->DiscoveryKnowledgeLevel > 0 &&
+			Recipe->DiscoveryKnowledgeLevel <= NewLevel)
+		{
+			bShouldDiscover = true;
+			Method = EMODiscoveryMethod::Inspection;  // Knowledge comes from inspection
+			UE_LOG(LogMOFramework, Log, TEXT("[MORecipeDiscovery]   Recipe '%s' MATCHES via knowledge '%s' level (required: %d, current: %d)"),
+				*RecipeId.ToString(), *Recipe->DiscoveryKnowledgeId.ToString(), Recipe->DiscoveryKnowledgeLevel, NewLevel);
+		}
+
+		if (bShouldDiscover)
+		{
+			MatchingRecipes++;
+			const bool bDiscovered = DiscoverRecipe(RecipeId, Method);
+			UE_LOG(LogMOFramework, Log, TEXT("[MORecipeDiscovery]   -> DiscoverRecipe returned %s"), bDiscovered ? TEXT("true (newly discovered)") : TEXT("false (already known or failed)"));
 		}
 	}
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MORecipeDiscovery]   Found %d matching recipes for '%s' level %d"), MatchingRecipes, *SkillId.ToString(), NewLevel);
 }
 
 bool UMORecipeDiscoveryComponent::TryExperiment(const TArray<FName>& Ingredients, FName& OutDiscoveredRecipe)

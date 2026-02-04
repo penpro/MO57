@@ -26,8 +26,8 @@ FReply UMOPossessionMenu::NativeOnKeyDown(const FGeometry& InGeometry, const FKe
 {
 	const FKey PressedKey = InKeyEvent.GetKey();
 
-	// Escape closes the menu (only if there are living pawns to return to)
-	if (PressedKey == EKeys::Escape && LivingPawnCount > 0)
+	// Tab or Escape closes the menu (only if there are living pawns to return to)
+	if ((PressedKey == EKeys::Tab || PressedKey == EKeys::Escape) && LivingPawnCount > 0)
 	{
 		OnRequestClose.Broadcast();
 		return FReply::Handled();

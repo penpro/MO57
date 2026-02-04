@@ -15,8 +15,11 @@
 #include "MOMetabolismComponent.h"
 #include "MOMentalStateComponent.h"
 #include "MOAnatomyComponent.h"
+#include "MOAdrenalineComponent.h"
 #include "MOCraftingQueueComponent.h"
 #include "MORecipeDiscoveryComponent.h"
+#include "MONotificationComponent.h"
+#include "MOCraftingTypes.h"
 
 AMOCharacter::AMOCharacter()
 {
@@ -70,6 +73,7 @@ AMOCharacter::AMOCharacter()
 	MetabolismComponent = CreateDefaultSubobject<UMOMetabolismComponent>(TEXT("MetabolismComponent"));
 	MentalStateComponent = CreateDefaultSubobject<UMOMentalStateComponent>(TEXT("MentalStateComponent"));
 	AnatomyComponent = CreateDefaultSubobject<UMOAnatomyComponent>(TEXT("AnatomyComponent"));
+	AdrenalineComponent = CreateDefaultSubobject<UMOAdrenalineComponent>(TEXT("AdrenalineComponent"));
 
 	// Default mesh position (mesh itself loaded in BeginPlay if DefaultMesh is set)
 	GetMesh()->SetRelativeLocation(FVector(0.0f, 0.0f, -96.0f));
@@ -129,6 +133,12 @@ void AMOCharacter::BeginPlay()
 	if (SkillsComponent && RecipeDiscoveryComponent)
 	{
 		SkillsComponent->OnSkillLevelUp.AddDynamic(this, &AMOCharacter::HandleSkillLevelUp);
+	}
+
+	// Bind recipe discovery to notifications
+	if (RecipeDiscoveryComponent)
+	{
+		RecipeDiscoveryComponent->OnRecipeDiscovered.AddDynamic(this, &AMOCharacter::HandleRecipeDiscovered);
 	}
 
 	Super::BeginPlay();
@@ -642,6 +652,15 @@ void AMOCharacter::HandleKnowledgeLearned(FName KnowledgeId, FName FromItemId)
 		RecipeDiscoveryComponent->CheckDiscoveryFromKnowledge(KnowledgeId);
 		UE_LOG(LogMOFramework, Log, TEXT("[MOCharacter] Knowledge '%s' learned - checking for recipe discoveries"), *KnowledgeId.ToString());
 	}
+
+	// Show notification via player controller's notification component
+	if (APlayerController* PC = Cast<APlayerController>(GetController()))
+	{
+		if (UMONotificationComponent* NotificationComp = PC->FindComponentByClass<UMONotificationComponent>())
+		{
+			NotificationComp->ShowKnowledgeLearnedNotification(KnowledgeId);
+		}
+	}
 }
 
 void AMOCharacter::HandleSkillLevelUp(FName SkillId, int32 OldLevel, int32 NewLevel)
@@ -650,5 +669,19 @@ void AMOCharacter::HandleSkillLevelUp(FName SkillId, int32 OldLevel, int32 NewLe
 	{
 		RecipeDiscoveryComponent->CheckDiscoveryFromSkillLevel(SkillId, NewLevel);
 		UE_LOG(LogMOFramework, Log, TEXT("[MOCharacter] Skill '%s' leveled up to %d - checking for recipe discoveries"), *SkillId.ToString(), NewLevel);
+	}
+}
+
+void AMOCharacter::HandleRecipeDiscovered(FName RecipeId, EMODiscoveryMethod Method)
+{
+	UE_LOG(LogMOFramework, Log, TEXT("[MOCharacter] Recipe '%s' discovered via method %d"), *RecipeId.ToString(), (int32)Method);
+
+	// Show notification via player controller's notification component
+	if (APlayerController* PC = Cast<APlayerController>(GetController()))
+	{
+		if (UMONotificationComponent* NotificationComp = PC->FindComponentByClass<UMONotificationComponent>())
+		{
+			NotificationComp->ShowRecipeUnlockedNotification(RecipeId);
+		}
 	}
 }

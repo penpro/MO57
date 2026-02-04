@@ -142,26 +142,45 @@ struct MOFRAMEWORK_API FMOItemNutrition
 };
 
 /**
- * Inspection data - defines what skills gain XP and what knowledge can be learned
- * when a player inspects this item.
+ * Defines XP granted to a skill or knowledge when inspecting an item.
+ * Both skills and knowledge use the same leveling system.
+ */
+USTRUCT(BlueprintType)
+struct MOFRAMEWORK_API FMOInspectionGrant
+{
+	GENERATED_BODY()
+
+	/** The skill or knowledge ID to grant XP to. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Inspection")
+	FName Id = NAME_None;
+
+	/** If true, this is a knowledge entry (shows in knowledge panel). If false, it's a skill. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Inspection")
+	bool bIsKnowledge = false;
+
+	/** Amount of XP to grant per inspection. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Inspection")
+	float XPAmount = 100.0f;
+
+	/** Maximum level this item can contribute XP towards for this entry.
+	 *  Once the level is at or above this, no more XP is granted from this item.
+	 *  0 = unlimited. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Inspection", meta=(ClampMin="0"))
+	int32 MaxLevel = 0;
+};
+
+/**
+ * Inspection data - defines what skills and knowledge gain XP when inspecting this item.
  */
 USTRUCT(BlueprintType)
 struct MOFRAMEWORK_API FMOItemInspection
 {
 	GENERATED_BODY()
 
-	/** Skills that gain XP when this item is inspected. Map of SkillId -> XP amount. */
+	/** Skills and knowledge that gain XP when this item is inspected.
+	 *  Each entry can be either a skill or knowledge with its own XP amount and max level cap. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Inspection")
-	TMap<FName, float> SkillExperienceGrants;
-
-	/** Knowledge IDs that can be learned from inspecting this item. */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Inspection")
-	TArray<FName> KnowledgeIds;
-
-	/** Minimum skill level required to learn specific knowledge from inspection.
-	 *  Map of KnowledgeId -> required skill level. Knowledge not in this map has no requirement. */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Inspection")
-	TMap<FName, int32> KnowledgeSkillRequirements;
+	TArray<FMOInspectionGrant> Grants;
 };
 
 /**

@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "MOControllableInterface.h"
+#include "MOCraftingTypes.h"
 #include "MOCharacter.generated.h"
 
 /**
@@ -26,6 +27,7 @@ class UMOVitalsComponent;
 class UMOMetabolismComponent;
 class UMOMentalStateComponent;
 class UMOAnatomyComponent;
+class UMOAdrenalineComponent;
 class UMOCraftingQueueComponent;
 class UMORecipeDiscoveryComponent;
 class USpringArmComponent;
@@ -80,6 +82,9 @@ public:
 
 	UFUNCTION(BlueprintPure, Category="MO")
 	UMOAnatomyComponent* GetAnatomyComponent() const { return AnatomyComponent; }
+
+	UFUNCTION(BlueprintPure, Category="MO")
+	UMOAdrenalineComponent* GetAdrenalineComponent() const { return AdrenalineComponent; }
 
 	UFUNCTION(BlueprintPure, Category="MO")
 	UMOCraftingQueueComponent* GetCraftingQueueComponent() const { return CraftingQueueComponent; }
@@ -210,6 +215,10 @@ protected:
 	/** Anatomy component (body parts, wounds). */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO")
 	TObjectPtr<UMOAnatomyComponent> AnatomyComponent;
+
+	/** Adrenaline component (combat stress response). */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO")
+	TObjectPtr<UMOAdrenalineComponent> AdrenalineComponent;
 
 	/** Crafting queue component (timed crafting). */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO")
@@ -403,4 +412,8 @@ protected:
 	/** Called when a skill levels up - triggers recipe discovery. */
 	UFUNCTION()
 	void HandleSkillLevelUp(FName SkillId, int32 OldLevel, int32 NewLevel);
+
+	/** Called when a recipe is discovered - shows notification. */
+	UFUNCTION()
+	void HandleRecipeDiscovered(FName RecipeId, EMODiscoveryMethod Method);
 };

@@ -3,9 +3,12 @@
 #include "MOCommonButton.h"
 #include "MOInventoryComponent.h"
 #include "MOItemDatabaseSettings.h"
+#include "MOKnowledgeComponent.h"
+#include "MOSkillsComponent.h"
 #include "Components/PanelWidget.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
 #include "GameFramework/PlayerController.h"
+#include "GameFramework/Pawn.h"
 #include "Framework/Application/SlateApplication.h"
 #include "TimerManager.h"
 
@@ -165,7 +168,26 @@ void UMOItemContextMenu::RefreshButtonVisibility_Implementation()
 
 	if (InspectButton)
 	{
-		InspectButton->SetVisibility(ESlateVisibility::Visible);
+		// Check if there's anything left to learn from this item
+		bool bCanInspect = true;
+
+		APlayerController* PC = GetOwningPlayer();
+		if (PC)
+		{
+			APawn* Pawn = PC->GetPawn();
+			if (Pawn)
+			{
+				UMOKnowledgeComponent* KnowledgeComp = Pawn->FindComponentByClass<UMOKnowledgeComponent>();
+				UMOSkillsComponent* SkillsComp = Pawn->FindComponentByClass<UMOSkillsComponent>();
+
+				if (KnowledgeComp)
+				{
+					bCanInspect = KnowledgeComp->CanLearnMoreFromItem(SlotEntry.ItemDefinitionId, SkillsComp);
+				}
+			}
+		}
+
+		InspectButton->SetVisibility(bCanInspect ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
 	}
 
 	if (SplitStackButton)

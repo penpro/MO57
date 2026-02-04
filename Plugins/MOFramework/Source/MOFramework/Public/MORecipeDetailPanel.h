@@ -155,6 +155,10 @@ protected:
 	UFUNCTION()
 	void HandleCraftButtonClicked();
 
+	/** Called when the craft max button is clicked. */
+	UFUNCTION()
+	void HandleCraftMaxButtonClicked();
+
 	/** Called when craft amount changes. */
 	UFUNCTION()
 	void HandleCraftAmountChanged(float Value);
@@ -205,6 +209,9 @@ protected:
 
 	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
 	TObjectPtr<UMOCommonButton> CraftButton;
+
+	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
+	TObjectPtr<UMOCommonButton> CraftMaxButton;
 
 	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
 	TObjectPtr<USpinBox> CraftAmountSpinBox;

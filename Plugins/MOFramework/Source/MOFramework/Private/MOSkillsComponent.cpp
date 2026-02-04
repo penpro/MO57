@@ -81,7 +81,7 @@ bool UMOSkillsComponent::AddExperience(FName SkillId, float XPAmount)
 int32 UMOSkillsComponent::GetSkillLevel(FName SkillId) const
 {
 	const FMOSkillProgress* Progress = FindSkillProgress(SkillId);
-	return Progress ? Progress->Level : 1;
+	return Progress ? Progress->Level : 0;
 }
 
 bool UMOSkillsComponent::GetSkillProgress(FName SkillId, FMOSkillProgress& OutProgress) const
@@ -120,23 +120,23 @@ void UMOSkillsComponent::InitializeSkill(FName SkillId)
 
 	FMOSkillProgress NewProgress;
 	NewProgress.SkillId = SkillId;
-	NewProgress.Level = 1;
+	NewProgress.Level = 0;  // Start at level 0, first XP gains get you to level 1
 	NewProgress.CurrentXP = 0.0f;
-	NewProgress.XPToNextLevel = CalculateXPForLevel(SkillDef, 2);
+	NewProgress.XPToNextLevel = CalculateXPForLevel(SkillDef, 0);  // XP needed to go from 0->1
 
 	Skills.Add(NewProgress);
 }
 
 void UMOSkillsComponent::SetSkillLevel(FName SkillId, int32 Level)
 {
-	if (SkillId.IsNone() || Level < 1)
+	if (SkillId.IsNone() || Level < 0)
 	{
 		return;
 	}
 
 	const FMOSkillDefinitionRow* SkillDef = GetSkillDefinition(SkillId);
 	const int32 MaxLevel = SkillDef ? SkillDef->MaxLevel : 100;
-	const int32 ClampedLevel = FMath::Clamp(Level, 1, MaxLevel);
+	const int32 ClampedLevel = FMath::Clamp(Level, 0, MaxLevel);
 
 	FMOSkillProgress* Progress = FindSkillProgress(SkillId);
 	if (!Progress)
@@ -151,7 +151,7 @@ void UMOSkillsComponent::SetSkillLevel(FName SkillId, int32 Level)
 
 	Progress->Level = ClampedLevel;
 	Progress->CurrentXP = 0.0f;
-	Progress->XPToNextLevel = (ClampedLevel < MaxLevel) ? CalculateXPForLevel(SkillDef, ClampedLevel + 1) : 0.0f;
+	Progress->XPToNextLevel = (ClampedLevel < MaxLevel) ? CalculateXPForLevel(SkillDef, ClampedLevel) : 0.0f;
 
 	if (OldLevel != ClampedLevel)
 	{
@@ -162,9 +162,11 @@ void UMOSkillsComponent::SetSkillLevel(FName SkillId, int32 Level)
 float UMOSkillsComponent::CalculateXPForLevel(const FMOSkillDefinitionRow* SkillDef, int32 Level) const
 {
 	const float BaseXP = SkillDef ? SkillDef->BaseXPPerLevel : 100.0f;
-	const float Exponent = SkillDef ? SkillDef->XPExponent : 1.5f;
+	const float ScaleFactor = SkillDef ? SkillDef->XPExponent : 1.25f;
 
-	return BaseXP * FMath::Pow(static_cast<float>(Level), Exponent);
+	// XP needed to go from Level to Level+1
+	// Level 0->1: BaseXP (100), Level 1->2: BaseXP*1.25 (125), Level 2->3: BaseXP*1.25^2 (156), etc.
+	return BaseXP * FMath::Pow(ScaleFactor, static_cast<float>(Level));
 }
 
 const FMOSkillDefinitionRow* UMOSkillsComponent::GetSkillDefinition(FName SkillId) const
@@ -182,10 +184,10 @@ void UMOSkillsComponent::ProcessLevelUps(FMOSkillProgress& Progress, const FMOSk
 		Progress.CurrentXP -= Progress.XPToNextLevel;
 		Progress.Level++;
 
-		// Calculate XP needed for next level
+		// Calculate XP needed for next level (based on current level after increment)
 		if (Progress.Level < MaxLevel)
 		{
-			Progress.XPToNextLevel = CalculateXPForLevel(SkillDef, Progress.Level + 1);
+			Progress.XPToNextLevel = CalculateXPForLevel(SkillDef, Progress.Level);
 		}
 		else
 		{

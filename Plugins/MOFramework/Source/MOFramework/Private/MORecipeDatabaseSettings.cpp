@@ -78,16 +78,19 @@ void UMORecipeDatabaseSettings::GetAllRecipeIds(TArray<FName>& OutRecipeIds)
 	const UMORecipeDatabaseSettings* Settings = GetDefault<UMORecipeDatabaseSettings>();
 	if (!Settings)
 	{
+		UE_LOG(LogTemp, Warning, TEXT("[MORecipeDatabaseSettings] GetAllRecipeIds - Settings is null"));
 		return;
 	}
 
 	UDataTable* DataTable = Settings->GetRecipeDefinitionsDataTable();
 	if (!IsValid(DataTable))
 	{
+		UE_LOG(LogTemp, Warning, TEXT("[MORecipeDatabaseSettings] GetAllRecipeIds - DataTable is not valid (check Project Settings -> MO Recipe Database)"));
 		return;
 	}
 
 	OutRecipeIds = DataTable->GetRowNames();
+	UE_LOG(LogTemp, Log, TEXT("[MORecipeDatabaseSettings] GetAllRecipeIds - Found %d recipes in DataTable"), OutRecipeIds.Num());
 }
 
 void UMORecipeDatabaseSettings::GetRecipesForStation(EMOCraftingStation Station, TArray<FName>& OutRecipeIds)
