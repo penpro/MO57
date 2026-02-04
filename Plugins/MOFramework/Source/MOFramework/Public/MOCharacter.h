@@ -59,9 +59,8 @@ public:
 	// ============================================================================
 	// COMPONENT ACCESSORS
 	// ============================================================================
-
-	UFUNCTION(BlueprintPure, Category="MO")
-	UMOIdentityComponent* GetIdentityComponent() const { return IdentityComponent; }
+	// Note: GetIdentityComponent() is provided by IMOIdentifiableInterface
+	// Note: GetInventory() is provided by IMOInventoryHolderInterface
 
 	UFUNCTION(BlueprintPure, Category="MO")
 	UMOInventoryComponent* GetInventoryComponent() const { return InventoryComponent; }

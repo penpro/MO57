@@ -29,8 +29,7 @@ public:
 
 	virtual void Tick(float DeltaTime) override;
 
-	UFUNCTION(BlueprintPure, Category="MO")
-	UMOIdentityComponent* GetIdentityComponent() const { return IdentityComponent; }
+	// Note: GetIdentityComponent() is provided by IMOIdentifiableInterface
 
 	UFUNCTION(BlueprintPure, Category="MO")
 	UMOItemComponent* GetItemComponent() const { return ItemComponent; }
