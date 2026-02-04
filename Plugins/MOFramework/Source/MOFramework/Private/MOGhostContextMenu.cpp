@@ -438,11 +438,11 @@ bool UMOGhostContextMenu::TryGatherMaterial(FName ItemId)
 	}
 
 	// Sort by priority (highest first) using interface
-	Sources.Sort([](AActor* A, AActor* B) {
-		int32 PriorityA = A->Implements<UMOMaterialSourceInterface>()
-			? IMOMaterialSourceInterface::Execute_GetMaterialSourcePriority(A) : 0;
-		int32 PriorityB = B->Implements<UMOMaterialSourceInterface>()
-			? IMOMaterialSourceInterface::Execute_GetMaterialSourcePriority(B) : 0;
+	Sources.Sort([](AActor& A, AActor& B) {
+		int32 PriorityA = A.Implements<UMOMaterialSourceInterface>()
+			? IMOMaterialSourceInterface::Execute_GetMaterialSourcePriority(&A) : 0;
+		int32 PriorityB = B.Implements<UMOMaterialSourceInterface>()
+			? IMOMaterialSourceInterface::Execute_GetMaterialSourcePriority(&B) : 0;
 		return PriorityA > PriorityB;
 	});
 
@@ -455,15 +455,15 @@ bool UMOGhostContextMenu::TryGatherMaterial(FName ItemId)
 		}
 
 		// Determine source type and check if enabled
-		int32 Priority = IMOMaterialSourceInterface::Execute_GetMaterialSourcePriority(Source);
+		int32 SourcePriority = IMOMaterialSourceInterface::Execute_GetMaterialSourcePriority(Source);
 
-		// Priority 100 = Inventory (player), 50 = Containers, 25 = World Items
+		// SourcePriority 100 = Inventory (player), 50 = Containers, 25 = World Items
 		bool bSourceEnabled = false;
-		if (Priority >= 100)
+		if (SourcePriority >= 100)
 		{
 			bSourceEnabled = InventoryCheckbox && InventoryCheckbox->IsChecked();
 		}
-		else if (Priority >= 50)
+		else if (SourcePriority >= 50)
 		{
 			bSourceEnabled = ContainersCheckbox && ContainersCheckbox->IsChecked();
 		}
@@ -485,7 +485,7 @@ bool UMOGhostContextMenu::TryGatherMaterial(FName ItemId)
 			{
 				Progress->DepositMaterial(ItemId);
 				UE_LOG(LogMOFramework, Log, TEXT("[MOGhostContextMenu] Gathered %s from %s (priority %d)"),
-					*ItemId.ToString(), *Source->GetName(), Priority);
+					*ItemId.ToString(), *Source->GetName(), SourcePriority);
 				return true;
 			}
 		}
