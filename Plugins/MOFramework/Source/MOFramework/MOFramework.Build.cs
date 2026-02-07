@@ -33,7 +33,11 @@ public class MOFramework : ModuleRules
 				"CommonInput",
 				"AIModule",
 				"NavigationSystem",
-				"GameplayTasks"
+				"GameplayTasks",
+				"Niagara",
+				"PCG",        // Procedural Content Generation
+				"Voxel",      // Voxel plugin - terrain sculpting
+				"VoxelCore"   // Voxel plugin - core types
 			}
 			);
 			
@@ -47,7 +51,9 @@ public class MOFramework : ModuleRules
 				"SlateCore",
 				"NetCore",     // Required for FastArraySerializer + push model symbols
 				"Networking",  // Recommended when you are doing replication-heavy work
-				"DeveloperSettings" // Required for UDeveloperSettings (MOItemDatabaseSettings)
+				"DeveloperSettings", // Required for UDeveloperSettings (MOItemDatabaseSettings)
+				"ImageWrapper", // Required for PNG encoding/decoding (save thumbnails)
+				"RenderCore"   // Required for viewport pixel reading
 			}
 			);
 

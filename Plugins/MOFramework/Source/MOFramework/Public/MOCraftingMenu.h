@@ -16,6 +16,9 @@ class UMORecipeDetailPanel;
 class UMOCraftingQueueWidget;
 class UWidgetSwitcher;
 class UMOCommonButton;
+class UTextBlock;
+class UCheckBox;
+class AMOCraftingStationActor;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOCraftingMenuRequestCloseSignature);
 
@@ -61,6 +64,19 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Crafting|UI")
 	void SetCraftingStation(EMOCraftingStation InStation);
 
+	/**
+	 * Set the active station actor for fuel time display.
+	 * @param InStation The crafting station actor (can be null for hand crafting)
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Crafting|UI")
+	void SetActiveStationActor(AMOCraftingStationActor* InStation);
+
+	/**
+	 * Get the current station display name.
+	 */
+	UFUNCTION(BlueprintPure, Category="MO|Crafting|UI")
+	FText GetStationDisplayName() const;
+
 	// --- Recipe Management ---
 
 	/** Refresh the recipe list from the crafting subsystem. */
@@ -99,6 +115,14 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Crafting|UI")
 	void SetShowOnlyCraftable(bool bOnlyCraftable);
 
+	/** Set whether to show all known recipes (ignores station filter). */
+	UFUNCTION(BlueprintCallable, Category="MO|Crafting|UI")
+	void SetShowAllKnown(bool bShowAll);
+
+	/** Get whether showing all known recipes. */
+	UFUNCTION(BlueprintPure, Category="MO|Crafting|UI")
+	bool IsShowingAllKnown() const { return bShowAllKnownRecipes; }
+
 	// --- Delegates ---
 
 	UPROPERTY(BlueprintAssignable, Category="MO|Crafting|UI")
@@ -113,6 +137,7 @@ public:
 protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
+	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 	virtual FReply NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
 
 	/** Called when a recipe is selected in the list. */
@@ -131,6 +156,13 @@ protected:
 	UFUNCTION()
 	void HandleCloseClicked();
 
+	/** Called when "Show All Known" checkbox state changes. */
+	UFUNCTION()
+	void HandleShowAllKnownChanged(bool bIsChecked);
+
+	/** Update the station display (name + fuel time). */
+	void UpdateStationDisplay();
+
 	// --- Widget Bindings ---
 
 	UPROPERTY(BlueprintReadOnly, meta=(BindWidget))
@@ -144,6 +176,18 @@ protected:
 
 	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
 	TObjectPtr<UMOCommonButton> CloseButton;
+
+	/** Station name display (e.g., "Campfire"). */
+	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
+	TObjectPtr<UTextBlock> StationNameText;
+
+	/** Fuel time remaining display (e.g., "5:32 remaining"). */
+	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
+	TObjectPtr<UTextBlock> FuelTimeText;
+
+	/** "Show All Known" checkbox to ignore station filter. */
+	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
+	TObjectPtr<UCheckBox> ShowAllKnownCheckbox;
 
 private:
 	// Cached component references
@@ -170,4 +214,9 @@ private:
 	FName SelectedRecipeId = NAME_None;
 	FName CategoryFilter = NAME_None;
 	bool bShowOnlyCraftable = false;
+	bool bShowAllKnownRecipes = false;
+
+	/** Active crafting station actor for fuel time display. */
+	UPROPERTY()
+	TWeakObjectPtr<AMOCraftingStationActor> ActiveStationActor;
 };

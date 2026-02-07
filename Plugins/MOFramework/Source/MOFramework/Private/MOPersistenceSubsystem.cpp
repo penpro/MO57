@@ -4,6 +4,8 @@
 #include "Engine/World.h"
 #include "HAL/FileManager.h"
 #include "EngineUtils.h"
+#include "Serialization/MemoryReader.h"
+#include "Serialization/MemoryWriter.h"
 #include "Kismet/GameplayStatics.h"
 #include "TimerManager.h"
 #include "GameFramework/Pawn.h"
@@ -16,6 +18,24 @@
 #include "MOPersistenceSettings.h"
 #include "MOCraftingQueueComponent.h"
 #include "MORecipeDiscoveryComponent.h"
+#include "MOBuildableActor.h"
+#include "MOBuildProgressComponent.h"
+#include "MOIdentifiableInterface.h"
+#include "MOInventoryHolderInterface.h"
+
+// Voxel plugin sculpt persistence
+#include "VoxelMinimal/Utilities/VoxelThreadingUtilities.h"
+#include "Sculpt/Height/VoxelHeightSculptActor.h"
+#include "Sculpt/Height/VoxelHeightSculptBlueprintLibrary.h"
+#include "Sculpt/Volume/VoxelVolumeSculptActor.h"
+#include "Sculpt/Volume/VoxelVolumeSculptBlueprintLibrary.h"
+#include "Sculpt/VoxelSculptSave.h"
+
+// For screenshot capture
+#include "Engine/GameViewportClient.h"
+#include "IImageWrapper.h"
+#include "IImageWrapperModule.h"
+#include "Modules/ModuleManager.h"
 
 static FString StripUEDPIEPrefixes(const FString& InPath)
 {
@@ -181,6 +201,39 @@ bool UMOPersistenceSubsystem::SaveWorldToSlot(const FString& SlotName)
         return false;
     }
 
+    // ============================================================================
+    // METADATA
+    // ============================================================================
+
+    // Display name - use slot name if not explicitly set
+    SaveObject->DisplayName = SlotName;
+
+    // Timestamp
+    SaveObject->SaveTimestamp = FDateTime::Now();
+
+    // Total play time - accumulate session time
+    // If we have a previous save loaded, use its total time as base
+    float BasePlayTime = 0.0f;
+    if (LoadedWorldSave)
+    {
+        BasePlayTime = LoadedWorldSave->TotalPlayTimeSeconds;
+    }
+    SaveObject->TotalPlayTimeSeconds = BasePlayTime + SessionPlayTimeSeconds;
+
+    // World name
+    SaveObject->WorldName = GetCurrentWorldIdentifier();
+
+    // Autosave flag
+    SaveObject->bIsAutosave = bNextSaveIsAutosave;
+    bNextSaveIsAutosave = false; // Reset after use
+
+    // Screenshot capture (80x80 thumbnail)
+    CaptureScreenshotForSave(SaveObject);
+
+    // ============================================================================
+    // WORLD DATA
+    // ============================================================================
+
     SaveObject->DestroyedGuids.Reset(SessionDestroyedGuids.Num());
     for (const FGuid& Guid : SessionDestroyedGuids)
     {
@@ -189,6 +242,8 @@ bool UMOPersistenceSubsystem::SaveWorldToSlot(const FString& SlotName)
 
     CapturePersistedPawnsAndInventories(World, SaveObject);
     CaptureWorldItems(World, SaveObject);
+    CaptureBuildings(World, SaveObject);
+    CaptureVoxelSculptData(World, SaveObject);
 
     const bool bOk = UGameplayStatics::SaveGameToSlot(SaveObject, SlotName, 0);
 
@@ -197,13 +252,14 @@ bool UMOPersistenceSubsystem::SaveWorldToSlot(const FString& SlotName)
         CurrentSlotName = SlotName;
     }
 
-    UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] Save slot=%s ok=%d destroyed=%d pawns=%d inventories=%d worldItems=%d netmode=%d"),
+    UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] Save slot=%s ok=%d destroyed=%d pawns=%d inventories=%d worldItems=%d buildings=%d netmode=%d"),
         *SlotName,
         bOk ? 1 : 0,
         SaveObject->DestroyedGuids.Num(),
         SaveObject->PersistedPawns.Num(),
         SaveObject->PawnInventoriesByGuid.Num(),
         SaveObject->WorldItems.Num(),
+        SaveObject->Buildings.Num(),
         (int32)World->GetNetMode());
 
     return bOk;
@@ -234,6 +290,108 @@ FString UMOPersistenceSubsystem::GenerateAutoSaveSlotName() const
     FString Timestamp = Now.ToString(TEXT("%Y%m%d_%H%M%S"));
 
     return FString::Printf(TEXT("AutoSave_%s_%s"), *WorldName, *Timestamp);
+}
+
+void UMOPersistenceSubsystem::CaptureScreenshotForSave(UMOWorldSaveGame* SaveObject) const
+{
+    if (!SaveObject)
+    {
+        return;
+    }
+
+    // Get game viewport
+    UGameViewportClient* ViewportClient = GEngine ? GEngine->GameViewport : nullptr;
+    if (!ViewportClient)
+    {
+        UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] Cannot capture screenshot - no viewport client"));
+        return;
+    }
+
+    FViewport* Viewport = ViewportClient->Viewport;
+    if (!Viewport)
+    {
+        UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] Cannot capture screenshot - no viewport"));
+        return;
+    }
+
+    // Read pixels from viewport
+    TArray<FColor> Bitmap;
+    FIntVector ViewportSize(Viewport->GetSizeXY().X, Viewport->GetSizeXY().Y, 0);
+
+    if (ViewportSize.X <= 0 || ViewportSize.Y <= 0)
+    {
+        UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] Cannot capture screenshot - invalid viewport size"));
+        return;
+    }
+
+    bool bReadSuccess = Viewport->ReadPixels(Bitmap, FReadSurfaceDataFlags(RCM_UNorm, CubeFace_MAX));
+    if (!bReadSuccess || Bitmap.Num() == 0)
+    {
+        UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] Failed to read pixels from viewport"));
+        return;
+    }
+
+    // Target thumbnail size
+    constexpr int32 ThumbnailSize = 80;
+
+    // Resize to 80x80 (simple bilinear-ish downsampling)
+    TArray<FColor> ResizedBitmap;
+    ResizedBitmap.SetNumUninitialized(ThumbnailSize * ThumbnailSize);
+
+    const float ScaleX = static_cast<float>(ViewportSize.X) / ThumbnailSize;
+    const float ScaleY = static_cast<float>(ViewportSize.Y) / ThumbnailSize;
+
+    for (int32 Y = 0; Y < ThumbnailSize; ++Y)
+    {
+        for (int32 X = 0; X < ThumbnailSize; ++X)
+        {
+            const int32 SrcX = FMath::Clamp(FMath::FloorToInt(X * ScaleX), 0, ViewportSize.X - 1);
+            const int32 SrcY = FMath::Clamp(FMath::FloorToInt(Y * ScaleY), 0, ViewportSize.Y - 1);
+            const int32 SrcIndex = SrcY * ViewportSize.X + SrcX;
+            const int32 DstIndex = Y * ThumbnailSize + X;
+
+            if (SrcIndex < Bitmap.Num())
+            {
+                ResizedBitmap[DstIndex] = Bitmap[SrcIndex];
+            }
+            else
+            {
+                ResizedBitmap[DstIndex] = FColor::Black;
+            }
+        }
+    }
+
+    // Compress to PNG using ImageWrapper module
+    IImageWrapperModule& ImageWrapperModule = FModuleManager::LoadModuleChecked<IImageWrapperModule>(FName("ImageWrapper"));
+    TSharedPtr<IImageWrapper> ImageWrapper = ImageWrapperModule.CreateImageWrapper(EImageFormat::PNG);
+
+    if (!ImageWrapper.IsValid())
+    {
+        UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] Failed to create image wrapper for PNG"));
+        return;
+    }
+
+    // SetRaw expects raw BGRA data
+    if (!ImageWrapper->SetRaw(ResizedBitmap.GetData(), ResizedBitmap.Num() * sizeof(FColor), ThumbnailSize, ThumbnailSize, ERGBFormat::BGRA, 8))
+    {
+        UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] Failed to set raw image data"));
+        return;
+    }
+
+    // Get compressed PNG data
+    TArray64<uint8> CompressedData = ImageWrapper->GetCompressed(90);
+    if (CompressedData.Num() == 0)
+    {
+        UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] Failed to compress image to PNG"));
+        return;
+    }
+
+    // Store in save object
+    SaveObject->ScreenshotData.Reset(CompressedData.Num());
+    SaveObject->ScreenshotData.Append(CompressedData.GetData(), CompressedData.Num());
+
+    UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Captured screenshot thumbnail: %dx%d -> %d bytes PNG"),
+        ViewportSize.X, ViewportSize.Y, SaveObject->ScreenshotData.Num());
 }
 
 bool UMOPersistenceSubsystem::LoadWorldFromSlot(const FString& SlotName)
@@ -272,6 +430,10 @@ FMOLoadResult UMOPersistenceSubsystem::LoadWorldFromSlotWithResult(const FString
 
     LoadedWorldSave = LoadedTyped;
 
+    // Reset session play time - we're starting a new play session
+    // The loaded save's TotalPlayTimeSeconds will be used as base for next save
+    SessionPlayTimeSeconds = 0.0f;
+
     SessionDestroyedGuids.Reset();
     for (const FGuid& Guid : LoadedTyped->DestroyedGuids)
     {
@@ -281,12 +443,13 @@ FMOLoadResult UMOPersistenceSubsystem::LoadWorldFromSlotWithResult(const FString
     PawnInventoryGuidsAppliedThisLoad.Reset();
     ReplacedGuidsThisLoad.Reset();
 
-    UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] LOAD: slot=%s destroyed=%d pawns=%d inventories=%d worldItems=%d netmode=%d"),
+    UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] LOAD: slot=%s destroyed=%d pawns=%d inventories=%d worldItems=%d buildings=%d netmode=%d"),
         *SlotName,
         LoadedTyped->DestroyedGuids.Num(),
         LoadedTyped->PersistedPawns.Num(),
         LoadedTyped->PawnInventoriesByGuid.Num(),
         LoadedTyped->WorldItems.Num(),
+        LoadedTyped->Buildings.Num(),
         (int32)World->GetNetMode());
 
     // Debug: Dump all pawn records from save
@@ -316,9 +479,12 @@ FMOLoadResult UMOPersistenceSubsystem::LoadWorldFromSlotWithResult(const FString
     // Bring runtime state in line with save.
     DestroyAllPersistedWorldItems(World);
     DestroyAllPersistedPawns(World);
+    DestroyAllPersistedBuildings(World);
 
     RespawnPersistedPawns(World, LoadedTyped->PersistedPawns, LastLoadResult);
     RespawnWorldItems(World, LoadedTyped->WorldItems, LastLoadResult);
+    RespawnBuildings(World, LoadedTyped->Buildings, LastLoadResult);
+    RestoreVoxelSculptData(World, LoadedTyped->VoxelSculptData);
 
     ApplyInventoriesToSpawnedPawns(World, LoadedTyped->PawnInventoriesByGuid);
 
@@ -343,9 +509,15 @@ FMOLoadResult UMOPersistenceSubsystem::LoadWorldFromSlotWithResult(const FString
         UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] %d world item(s) failed to spawn"), LastLoadResult.ItemsFailed);
     }
 
-    UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Load complete: Pawns=%d/%d, Items=%d/%d"),
+    if (LastLoadResult.BuildingsFailed > 0)
+    {
+        UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] %d building(s) failed to spawn"), LastLoadResult.BuildingsFailed);
+    }
+
+    UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Load complete: Pawns=%d/%d, Items=%d/%d, Buildings=%d/%d"),
         LastLoadResult.PawnsLoaded, LastLoadResult.PawnsLoaded + LastLoadResult.PawnsFailed,
-        LastLoadResult.ItemsLoaded, LastLoadResult.ItemsLoaded + LastLoadResult.ItemsFailed);
+        LastLoadResult.ItemsLoaded, LastLoadResult.ItemsLoaded + LastLoadResult.ItemsFailed,
+        LastLoadResult.BuildingsLoaded, LastLoadResult.BuildingsLoaded + LastLoadResult.BuildingsFailed);
 
     return LastLoadResult;
 }
@@ -680,14 +852,14 @@ bool UMOPersistenceSubsystem::IsPersistedPawn(const APawn* Pawn) const
         return false;
     }
 
-    const UMOIdentityComponent* IdentityComponent = Pawn->FindComponentByClass<UMOIdentityComponent>();
-    if (!IsValid(IdentityComponent))
+    // Use interfaces to check for required components
+    // A persisted pawn must implement both IMOIdentifiable and IMOInventoryHolder
+    if (!Pawn->Implements<UMOIdentifiableInterface>())
     {
         return false;
     }
 
-    const UMOInventoryComponent* InventoryComponent = Pawn->FindComponentByClass<UMOInventoryComponent>();
-    if (!IsValid(InventoryComponent))
+    if (!Pawn->Implements<UMOInventoryHolderInterface>())
     {
         return false;
     }
@@ -719,21 +891,35 @@ void UMOPersistenceSubsystem::CapturePersistedPawnsAndInventories(UWorld* World,
 
         TotalPawns++;
 
-        // Debug: Check why pawns might be skipped
-        UMOIdentityComponent* IdentityComponent = Pawn->FindComponentByClass<UMOIdentityComponent>();
-        UMOInventoryComponent* InventoryComponent = Pawn->FindComponentByClass<UMOInventoryComponent>();
+        // Use interfaces to access components
+        if (!Pawn->Implements<UMOIdentifiableInterface>())
+        {
+            SkippedNoIdentity++;
+            UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] SAVE: Skipping pawn '%s' - no IMOIdentifiable"), *Pawn->GetName());
+            continue;
+        }
+
+        if (!Pawn->Implements<UMOInventoryHolderInterface>())
+        {
+            SkippedNoInventory++;
+            UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] SAVE: Skipping pawn '%s' - no IMOInventoryHolder"), *Pawn->GetName());
+            continue;
+        }
+
+        UMOIdentityComponent* IdentityComponent = IMOIdentifiableInterface::Execute_GetIdentityComponent(Pawn);
+        UMOInventoryComponent* InventoryComponent = IMOInventoryHolderInterface::Execute_GetInventory(Pawn);
 
         if (!IsValid(IdentityComponent))
         {
             SkippedNoIdentity++;
-            UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] SAVE: Skipping pawn '%s' - no IdentityComponent"), *Pawn->GetName());
+            UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] SAVE: Skipping pawn '%s' - IdentityComponent invalid"), *Pawn->GetName());
             continue;
         }
 
         if (!IsValid(InventoryComponent))
         {
             SkippedNoInventory++;
-            UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] SAVE: Skipping pawn '%s' - no InventoryComponent"), *Pawn->GetName());
+            UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] SAVE: Skipping pawn '%s' - InventoryComponent invalid"), *Pawn->GetName());
             continue;
         }
 
@@ -855,12 +1041,10 @@ void UMOPersistenceSubsystem::DestroyAllPersistedPawns(UWorld* World)
             continue;
         }
 
-        if (UMOIdentityComponent* IdentityComponent = Pawn->FindComponentByClass<UMOIdentityComponent>())
+        // Use interface to access identity - IsPersistedPawn already verified it implements the interface
+        if (IMOIdentifiableInterface::Execute_HasValidIdentity(Pawn))
         {
-            if (IdentityComponent->HasValidGuid())
-            {
-                ReplacedGuidsThisLoad.Add(IdentityComponent->GetGuid());
-            }
+            ReplacedGuidsThisLoad.Add(IMOIdentifiableInterface::Execute_GetPersistentGuid(Pawn));
         }
 
         PawnsToDestroy.Add(Pawn);
@@ -1025,13 +1209,13 @@ void UMOPersistenceSubsystem::ApplyInventoriesToSpawnedPawns(UWorld* World, cons
             continue;
         }
 
-        UMOIdentityComponent* IdentityComponent = Pawn->FindComponentByClass<UMOIdentityComponent>();
-        if (!IsValid(IdentityComponent) || !IdentityComponent->HasValidGuid())
+        // Use interfaces - IsPersistedPawn already verified they're implemented
+        if (!IMOIdentifiableInterface::Execute_HasValidIdentity(Pawn))
         {
             continue;
         }
 
-        const FGuid PawnGuid = IdentityComponent->GetGuid();
+        const FGuid PawnGuid = IMOIdentifiableInterface::Execute_GetPersistentGuid(Pawn);
         if (PawnInventoryGuidsAppliedThisLoad.Contains(PawnGuid))
         {
             continue;
@@ -1043,7 +1227,7 @@ void UMOPersistenceSubsystem::ApplyInventoriesToSpawnedPawns(UWorld* World, cons
             continue;
         }
 
-        UMOInventoryComponent* InventoryComponent = Pawn->FindComponentByClass<UMOInventoryComponent>();
+        UMOInventoryComponent* InventoryComponent = IMOInventoryHolderInterface::Execute_GetInventory(Pawn);
         if (!IsValid(InventoryComponent))
         {
             continue;
@@ -1216,11 +1400,12 @@ void UMOPersistenceSubsystem::DestroyAllPersistedWorldItems(UWorld* World)
             continue;
         }
 
-        if (UMOIdentityComponent* IdentityComponent = Actor->FindComponentByClass<UMOIdentityComponent>())
+        // World items implement IMOIdentifiable, use the interface
+        if (Actor->Implements<UMOIdentifiableInterface>())
         {
-            if (IdentityComponent->HasValidGuid())
+            if (IMOIdentifiableInterface::Execute_HasValidIdentity(Actor))
             {
-                ReplacedGuidsThisLoad.Add(IdentityComponent->GetGuid());
+                ReplacedGuidsThisLoad.Add(IMOIdentifiableInterface::Execute_GetPersistentGuid(Actor));
             }
         }
 
@@ -1308,7 +1493,14 @@ void UMOPersistenceSubsystem::RespawnWorldItems(UWorld* World, const TArray<FMOP
             continue;
         }
 
-        AssignGuidToIdentityComponent(IdentityComponent, ItemRecord.ItemGuid);
+        if (!AssignGuidToIdentityComponent(IdentityComponent, ItemRecord.ItemGuid))
+        {
+            UE_LOG(LogMOFramework, Error, TEXT("[MOPersist] ITEM LOST: Failed to assign GUID %s to world item"),
+                *ItemRecord.ItemGuid.ToString(EGuidFormats::DigitsWithHyphens));
+            DeferredActor->Destroy();
+            OutResult.ItemsFailed++;
+            continue;
+        }
 
         ItemComponent->ItemDefinitionId = ItemRecord.ItemDefinitionId;
         ItemComponent->Quantity = FMath::Max(1, ItemRecord.Quantity);
@@ -1393,4 +1585,459 @@ bool UMOPersistenceSubsystem::DeleteSaveSlot(const FString& SlotName)
 bool UMOPersistenceSubsystem::DoesSaveSlotExist(const FString& SlotName) const
 {
     return UGameplayStatics::DoesSaveGameExist(SlotName, 0);
+}
+
+bool UMOPersistenceSubsystem::GetSaveSlotMetadata(const FString& SlotName, FMOSaveMetadata& OutMetadata) const
+{
+    // Load the save game to extract metadata
+    USaveGame* LoadedBase = UGameplayStatics::LoadGameFromSlot(SlotName, 0);
+    UMOWorldSaveGame* LoadedTyped = Cast<UMOWorldSaveGame>(LoadedBase);
+    if (!LoadedTyped)
+    {
+        return false;
+    }
+
+    OutMetadata.SlotName = SlotName;
+    OutMetadata.DisplayName = LoadedTyped->DisplayName.IsEmpty()
+        ? FText::FromString(SlotName)
+        : FText::FromString(LoadedTyped->DisplayName);
+    OutMetadata.Timestamp = LoadedTyped->SaveTimestamp;
+    OutMetadata.PlayTime = FTimespan::FromSeconds(LoadedTyped->TotalPlayTimeSeconds);
+    OutMetadata.WorldName = LoadedTyped->WorldName;
+    OutMetadata.bIsAutosave = LoadedTyped->bIsAutosave;
+
+    // Screenshot data (inline PNG bytes)
+    OutMetadata.ScreenshotData = LoadedTyped->ScreenshotData;
+    OutMetadata.ScreenshotPath = FString(); // Deprecated
+
+    return true;
+}
+
+/*
+ * BUILDINGS
+ */
+
+bool UMOPersistenceSubsystem::IsPersistedBuildingActor(const AActor* Actor) const
+{
+    if (!IsValid(Actor) || Actor->IsActorBeingDestroyed())
+    {
+        return false;
+    }
+
+    // Must be a buildable actor
+    const AMOBuildableActor* Building = Cast<AMOBuildableActor>(Actor);
+    if (!Building)
+    {
+        return false;
+    }
+
+    // Must have identity component
+    const UMOIdentityComponent* IdentityComponent = Building->IdentityComponent;
+    if (!IsValid(IdentityComponent))
+    {
+        return false;
+    }
+
+    return true;
+}
+
+void UMOPersistenceSubsystem::CaptureBuildings(UWorld* World, UMOWorldSaveGame* SaveObject) const
+{
+    if (!World || !SaveObject)
+    {
+        return;
+    }
+
+    SaveObject->Buildings.Reset();
+
+    int32 TotalBuildings = 0;
+    int32 SkippedNoIdentity = 0;
+    int32 SkippedDestroyed = 0;
+
+    for (TActorIterator<AMOBuildableActor> It(World); It; ++It)
+    {
+        AMOBuildableActor* Building = *It;
+        TotalBuildings++;
+
+        if (!IsPersistedBuildingActor(Building))
+        {
+            SkippedNoIdentity++;
+            continue;
+        }
+
+        UMOIdentityComponent* IdentityComponent = Building->IdentityComponent;
+        if (!IsValid(IdentityComponent))
+        {
+            SkippedNoIdentity++;
+            continue;
+        }
+
+        const FGuid BuildingGuid = IdentityComponent->GetOrCreateGuid();
+        if (!BuildingGuid.IsValid())
+        {
+            UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] SAVE BUILDINGS: Skipping building '%s' - invalid GUID"), *Building->GetName());
+            continue;
+        }
+
+        // Do not save buildings that are marked destroyed
+        if (SessionDestroyedGuids.Contains(BuildingGuid))
+        {
+            SkippedDestroyed++;
+            UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] SAVE BUILDINGS: Skipping destroyed building '%s' GUID=%s"),
+                *Building->GetName(), *BuildingGuid.ToString(EGuidFormats::DigitsWithHyphens));
+            continue;
+        }
+
+        FMOPersistedBuildingRecord BuildingRecord;
+        Building->BuildSaveData(BuildingRecord);
+
+        UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] SAVE BUILDINGS: Capturing building '%s' GUID=%s Recipe=%s State=%d Location=%s"),
+            *Building->GetName(),
+            *BuildingGuid.ToString(EGuidFormats::DigitsWithHyphens),
+            *BuildingRecord.RecipeId.ToString(),
+            (int32)Building->GetBuildState(),
+            *BuildingRecord.Transform.GetLocation().ToString());
+
+        SaveObject->Buildings.Add(BuildingRecord);
+    }
+
+    UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] SAVE BUILDINGS SUMMARY: TotalBuildings=%d Captured=%d SkippedNoIdentity=%d SkippedDestroyed=%d"),
+        TotalBuildings, SaveObject->Buildings.Num(), SkippedNoIdentity, SkippedDestroyed);
+}
+
+void UMOPersistenceSubsystem::DestroyAllPersistedBuildings(UWorld* World)
+{
+    if (!World || World->GetNetMode() == NM_Client)
+    {
+        return;
+    }
+
+    TArray<AActor*> BuildingsToDestroy;
+    BuildingsToDestroy.Reserve(64);
+
+    for (TActorIterator<AMOBuildableActor> It(World); It; ++It)
+    {
+        AMOBuildableActor* Building = *It;
+        if (!IsPersistedBuildingActor(Building))
+        {
+            continue;
+        }
+
+        if (UMOIdentityComponent* IdentityComponent = Building->IdentityComponent)
+        {
+            if (IdentityComponent->HasValidGuid())
+            {
+                ReplacedGuidsThisLoad.Add(IdentityComponent->GetGuid());
+            }
+        }
+
+        BuildingsToDestroy.Add(Building);
+    }
+
+    for (AActor* Building : BuildingsToDestroy)
+    {
+        if (IsValid(Building))
+        {
+            Building->Destroy();
+        }
+    }
+
+    UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Destroyed %d existing buildings for reload"), BuildingsToDestroy.Num());
+}
+
+void UMOPersistenceSubsystem::RespawnBuildings(UWorld* World, const TArray<FMOPersistedBuildingRecord>& Buildings, FMOLoadResult& OutResult)
+{
+    if (!World || World->GetNetMode() == NM_Client)
+    {
+        return;
+    }
+
+    UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] LOAD BUILDINGS: Attempting to respawn %d buildings"), Buildings.Num());
+
+    for (const FMOPersistedBuildingRecord& BuildingRecord : Buildings)
+    {
+        if (!BuildingRecord.BuildingGuid.IsValid())
+        {
+            UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] LOAD BUILDINGS: Skipping building with invalid GUID"));
+            continue;
+        }
+
+        if (SessionDestroyedGuids.Contains(BuildingRecord.BuildingGuid))
+        {
+            UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] LOAD BUILDINGS: Skipping destroyed building GUID=%s"),
+                *BuildingRecord.BuildingGuid.ToString(EGuidFormats::DigitsWithHyphens));
+            continue;
+        }
+
+        UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] LOAD BUILDINGS: Respawning building GUID=%s Class=%s at Location=%s"),
+            *BuildingRecord.BuildingGuid.ToString(EGuidFormats::DigitsWithHyphens),
+            *BuildingRecord.ActorClassPath.ToString(),
+            *BuildingRecord.Transform.GetLocation().ToString());
+
+        UClass* LoadedBuildingClass = nullptr;
+        if (BuildingRecord.ActorClassPath.IsValid())
+        {
+            LoadedBuildingClass = BuildingRecord.ActorClassPath.TryLoadClass<AMOBuildableActor>();
+        }
+
+        if (!LoadedBuildingClass)
+        {
+            UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] Building class failed to load for GUID=%s ClassPath=%s"),
+                *BuildingRecord.BuildingGuid.ToString(EGuidFormats::DigitsWithHyphens),
+                *BuildingRecord.ActorClassPath.ToString());
+            OutResult.BuildingsFailed++;
+            continue;
+        }
+
+        AActor* DeferredActor = World->SpawnActorDeferred<AActor>(
+            LoadedBuildingClass,
+            BuildingRecord.Transform,
+            nullptr,
+            nullptr,
+            ESpawnActorCollisionHandlingMethod::AlwaysSpawn
+        );
+
+        if (!IsValid(DeferredActor))
+        {
+            UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] SpawnActorDeferred failed for building GUID=%s"),
+                *BuildingRecord.BuildingGuid.ToString(EGuidFormats::DigitsWithHyphens));
+            OutResult.BuildingsFailed++;
+            continue;
+        }
+
+        AMOBuildableActor* BuildingActor = Cast<AMOBuildableActor>(DeferredActor);
+        if (!BuildingActor)
+        {
+            UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] Spawned actor is not AMOBuildableActor for GUID=%s"),
+                *BuildingRecord.BuildingGuid.ToString(EGuidFormats::DigitsWithHyphens));
+            DeferredActor->Destroy();
+            OutResult.BuildingsFailed++;
+            continue;
+        }
+
+        UMOIdentityComponent* IdentityComponent = BuildingActor->IdentityComponent;
+        if (!IsValid(IdentityComponent))
+        {
+            UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] Spawned building missing IdentityComponent for GUID=%s"),
+                *BuildingRecord.BuildingGuid.ToString(EGuidFormats::DigitsWithHyphens));
+            DeferredActor->Destroy();
+            OutResult.BuildingsFailed++;
+            continue;
+        }
+
+        // Assign the saved GUID
+        IdentityComponent->SetGuid(BuildingRecord.BuildingGuid);
+
+        // Finish spawning
+        UGameplayStatics::FinishSpawningActor(DeferredActor, BuildingRecord.Transform);
+
+        // Apply the rest of the save data (progress, materials, etc.)
+        BuildingActor->ApplySaveData(BuildingRecord);
+
+        OutResult.BuildingsLoaded++;
+
+        UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] LOAD BUILDINGS: Spawned building at %s (Recipe: %s, State: %d)"),
+            *DeferredActor->GetActorLocation().ToString(),
+            *BuildingRecord.RecipeId.ToString(),
+            (int32)BuildingActor->GetBuildState());
+    }
+}
+
+// ============================================================================
+// VOXEL SCULPT PERSISTENCE
+// ============================================================================
+
+void UMOPersistenceSubsystem::CaptureVoxelSculptData(UWorld* World, UMOWorldSaveGame* SaveObject) const
+{
+    if (!World || !SaveObject)
+    {
+        return;
+    }
+
+    SaveObject->VoxelSculptData.Reset();
+
+    // Capture height sculpt actors
+    TArray<AActor*> HeightActors;
+    UGameplayStatics::GetAllActorsOfClass(World, AVoxelHeightSculptActor::StaticClass(), HeightActors);
+
+    for (AActor* Actor : HeightActors)
+    {
+        AVoxelHeightSculptActor* HeightActor = Cast<AVoxelHeightSculptActor>(Actor);
+        if (!IsValid(HeightActor))
+        {
+            continue;
+        }
+
+        FMOVoxelSculptSaveRecord Record;
+        Record.ActorName = HeightActor->GetName();
+        Record.bIsVolumeSculpt = false;
+
+        // Use K2_GetSave with ExecuteSynchronously - the proper pattern for synchronous save
+        FVoxelHeightSculptSave SculptSave;
+        Voxel::ExecuteSynchronously([&]
+        {
+            return UVoxelHeightSculptBlueprintLibrary::K2_GetSave(SculptSave, HeightActor, true);
+        });
+
+        if (SculptSave.IsValid())
+        {
+            // Serialize the save data to bytes
+            FMemoryWriter Writer(Record.SculptData);
+            SculptSave.Serialize(Writer);
+            Record.bHasValidData = true;
+
+            UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Captured height sculpt '%s': %lld bytes"),
+                *Record.ActorName, Record.SculptData.Num());
+
+            SaveObject->VoxelSculptData.Add(Record);
+        }
+        else
+        {
+            UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Height sculpt '%s' has no modifications to save"),
+                *Record.ActorName);
+        }
+    }
+
+    // Capture volume sculpt actors
+    TArray<AActor*> VolumeActors;
+    UGameplayStatics::GetAllActorsOfClass(World, AVoxelVolumeSculptActor::StaticClass(), VolumeActors);
+
+    for (AActor* Actor : VolumeActors)
+    {
+        AVoxelVolumeSculptActor* VolumeActor = Cast<AVoxelVolumeSculptActor>(Actor);
+        if (!IsValid(VolumeActor))
+        {
+            continue;
+        }
+
+        FMOVoxelSculptSaveRecord Record;
+        Record.ActorName = VolumeActor->GetName();
+        Record.bIsVolumeSculpt = true;
+
+        // Use K2_GetSave with ExecuteSynchronously
+        FVoxelVolumeSculptSave SculptSave;
+        Voxel::ExecuteSynchronously([&]
+        {
+            return UVoxelVolumeSculptBlueprintLibrary::K2_GetSave(SculptSave, VolumeActor, true);
+        });
+
+        if (SculptSave.IsValid())
+        {
+            FMemoryWriter Writer(Record.SculptData);
+            SculptSave.Serialize(Writer);
+            Record.bHasValidData = true;
+
+            UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Captured volume sculpt '%s': %lld bytes"),
+                *Record.ActorName, Record.SculptData.Num());
+
+            SaveObject->VoxelSculptData.Add(Record);
+        }
+        else
+        {
+            UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Volume sculpt '%s' has no modifications to save"),
+                *Record.ActorName);
+        }
+    }
+
+    UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Captured %d voxel sculpt actor(s) with modifications"),
+        SaveObject->VoxelSculptData.Num());
+}
+
+void UMOPersistenceSubsystem::RestoreVoxelSculptData(UWorld* World, const TArray<FMOVoxelSculptSaveRecord>& SculptData)
+{
+    if (!World || SculptData.Num() == 0)
+    {
+        return;
+    }
+
+    UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Restoring %d voxel sculpt record(s)"), SculptData.Num());
+
+    for (const FMOVoxelSculptSaveRecord& Record : SculptData)
+    {
+        if (!Record.bHasValidData || Record.SculptData.Num() == 0)
+        {
+            UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] Skipping invalid sculpt record '%s'"),
+                *Record.ActorName);
+            continue;
+        }
+
+        if (Record.bIsVolumeSculpt)
+        {
+            // Find the volume sculpt actor by name
+            TArray<AActor*> VolumeActors;
+            UGameplayStatics::GetAllActorsOfClass(World, AVoxelVolumeSculptActor::StaticClass(), VolumeActors);
+
+            AVoxelVolumeSculptActor* FoundActor = nullptr;
+            for (AActor* Actor : VolumeActors)
+            {
+                if (Actor->GetName() == Record.ActorName)
+                {
+                    FoundActor = Cast<AVoxelVolumeSculptActor>(Actor);
+                    break;
+                }
+            }
+
+            if (!FoundActor)
+            {
+                UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] Volume sculpt actor '%s' not found in world"),
+                    *Record.ActorName);
+                continue;
+            }
+
+            // Deserialize the save data
+            FVoxelVolumeSculptSave SculptSave;
+            FMemoryReader Reader(Record.SculptData, true);
+            SculptSave.Serialize(Reader);
+
+            if (SculptSave.IsValid())
+            {
+                // Use ExecuteSynchronously to ensure the load completes before continuing
+                Voxel::ExecuteSynchronously([&]
+                {
+                    return UVoxelVolumeSculptBlueprintLibrary::LoadFromSave(FoundActor, SculptSave);
+                });
+                UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Restored volume sculpt '%s'"),
+                    *Record.ActorName);
+            }
+        }
+        else
+        {
+            // Find the height sculpt actor by name
+            TArray<AActor*> HeightActors;
+            UGameplayStatics::GetAllActorsOfClass(World, AVoxelHeightSculptActor::StaticClass(), HeightActors);
+
+            AVoxelHeightSculptActor* FoundActor = nullptr;
+            for (AActor* Actor : HeightActors)
+            {
+                if (Actor->GetName() == Record.ActorName)
+                {
+                    FoundActor = Cast<AVoxelHeightSculptActor>(Actor);
+                    break;
+                }
+            }
+
+            if (!FoundActor)
+            {
+                UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] Height sculpt actor '%s' not found in world"),
+                    *Record.ActorName);
+                continue;
+            }
+
+            // Deserialize the save data
+            FVoxelHeightSculptSave SculptSave;
+            FMemoryReader Reader(Record.SculptData, true);
+            SculptSave.Serialize(Reader);
+
+            if (SculptSave.IsValid())
+            {
+                // Use ExecuteSynchronously to ensure the load completes before continuing
+                Voxel::ExecuteSynchronously([&]
+                {
+                    return UVoxelHeightSculptBlueprintLibrary::LoadFromSave(FoundActor, SculptSave);
+                });
+                UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Restored height sculpt '%s'"),
+                    *Record.ActorName);
+            }
+        }
+    }
 }

@@ -12,6 +12,7 @@ class UWidget;
 class UBorder;
 class UMOInventoryComponent;
 class UMODragVisualWidget;
+class AMOWorldItem;
 
 /**
  * Drag-drop operation payload for inventory slot drag.
@@ -22,8 +23,13 @@ class MOFRAMEWORK_API UMOInventorySlotDragOperation : public UDragDropOperation
 	GENERATED_BODY()
 
 public:
+	/** Source inventory component (for inventory-to-inventory transfers). May be null for world item drags. */
 	UPROPERTY(BlueprintReadOnly, Category="MO|Inventory|UI")
 	TWeakObjectPtr<UMOInventoryComponent> SourceInventoryComponent;
+
+	/** Source world item (for nearby items panel drags). May be null for inventory drags. */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Inventory|UI")
+	TWeakObjectPtr<AMOWorldItem> SourceWorldItem;
 
 	UPROPERTY(BlueprintReadOnly, Category="MO|Inventory|UI")
 	int32 SourceSlotIndex = INDEX_NONE;
@@ -36,6 +42,12 @@ public:
 
 	UPROPERTY(BlueprintReadOnly, Category="MO|Inventory|UI")
 	int32 Quantity = 0;
+
+	/** Returns true if this drag originated from a world item (nearby items panel). */
+	bool IsFromWorldItem() const { return SourceWorldItem.IsValid(); }
+
+	/** Returns true if this drag originated from an inventory. */
+	bool IsFromInventory() const { return SourceInventoryComponent.IsValid(); }
 };
 
 USTRUCT(BlueprintType)
@@ -54,9 +66,14 @@ struct FMOInventorySlotVisualData
 
 	UPROPERTY(BlueprintReadOnly, Category="MO|Inventory|UI")
 	int32 Quantity = 0;
+
+	/** Optional: Source world item for nearby items display. Used for drag operations. */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Inventory|UI")
+	TWeakObjectPtr<AMOWorldItem> SourceWorldItem;
 };
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOInventorySlotClickedSignature, int32, SlotIndex, const FGuid&, ItemGuid);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOInventorySlotShiftClickedSignature, int32, SlotIndex, const FGuid&, ItemGuid);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FMOInventorySlotDroppedSignature, int32, TargetSlotIndex, int32, SourceSlotIndex, UMOInventoryComponent*, SourceInventory);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FMOInventorySlotRightClickedSignature, int32, SlotIndex, const FGuid&, ItemGuid, FVector2D, ScreenPosition);
 
@@ -83,8 +100,24 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Inventory|UI")
 	UMOInventoryComponent* GetInventoryComponent() const { return InventoryComponent; }
 
+	/**
+	 * Set visual data directly without an inventory component.
+	 * Used for displaying items that aren't in a standard inventory (e.g., nearby world items).
+	 * @param InVisualData The visual data to display
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Inventory|UI")
+	void SetVisualData(const FMOInventorySlotVisualData& InVisualData);
+
+	/** Clear the slot's visual data, showing empty state. */
+	UFUNCTION(BlueprintCallable, Category="MO|Inventory|UI")
+	void ClearVisualData();
+
 	UPROPERTY(BlueprintAssignable, Category="MO|Inventory|UI")
 	FMOInventorySlotClickedSignature OnSlotClicked;
+
+	/** Called when slot is Shift+Clicked for quick transfer. */
+	UPROPERTY(BlueprintAssignable, Category="MO|Inventory|UI")
+	FMOInventorySlotShiftClickedSignature OnSlotShiftClicked;
 
 	/** Called when slot is right-clicked (context menu). Provides screen position for menu placement. */
 	UPROPERTY(BlueprintAssignable, Category="MO|Inventory|UI")
@@ -100,6 +133,17 @@ public:
 	/** If true, dropping outside inventory slots will drop the item into the world. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Inventory|UI")
 	bool bEnableWorldDrop = true;
+
+	/**
+	 * Set the source world item for this slot (used by nearby items panel).
+	 * When set, drag operations will use this world item as the source instead of an inventory.
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Inventory|UI")
+	void SetSourceWorldItem(AMOWorldItem* InWorldItem);
+
+	/** Get the source world item (if any). */
+	UFUNCTION(BlueprintPure, Category="MO|Inventory|UI")
+	AMOWorldItem* GetSourceWorldItem() const;
 
 protected:
 	virtual void NativeConstruct() override;
@@ -167,6 +211,10 @@ private:
 
 	UPROPERTY()
 	FMOInventorySlotVisualData CachedVisualData;
+
+	/** Source world item for nearby items panel (alternative to InventoryComponent). */
+	UPROPERTY()
+	TWeakObjectPtr<AMOWorldItem> SourceWorldItem;
 
 	UPROPERTY(EditDefaultsOnly, Category="MO|Inventory|UI")
 	TObjectPtr<UTexture2D> DefaultItemIcon;

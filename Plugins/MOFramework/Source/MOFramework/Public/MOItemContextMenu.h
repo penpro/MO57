@@ -66,6 +66,8 @@ private:
 	UFUNCTION() void HandleInspectClicked();
 	UFUNCTION() void HandleSplitStackClicked();
 	UFUNCTION() void HandleCraftClicked();
+	UFUNCTION() void HandleDetailsClicked();
+	UFUNCTION() void HandleTransferClicked();
 
 private:
 	// ============================================================
@@ -99,6 +101,14 @@ private:
 	/** Craft button - opens crafting menu filtered to this item. */
 	UPROPERTY(meta=(BindWidget))
 	TObjectPtr<UMOCommonButton> CraftButton;
+
+	/** Details button - shows item in details panel. */
+	UPROPERTY(meta=(BindWidgetOptional))
+	TObjectPtr<UMOCommonButton> DetailsButton;
+
+	/** Transfer button - quick transfer to other inventory (visible when container open). */
+	UPROPERTY(meta=(BindWidgetOptional))
+	TObjectPtr<UMOCommonButton> TransferButton;
 
 	// ============================================================
 	// State

@@ -31,8 +31,7 @@
 #include "MORecipeDatabaseSettings.h"
 #include "MOworldSaveGame.h"
 #include "MOFramework.h"
-#include "MOPlayerController.h"
-#include "MOUIManagerComponent.h"
+#include "MOUIContractInterface.h"
 #include "Components/StaticMeshComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
 
@@ -87,6 +86,7 @@ void AMOBuildableActor::BeginPlay()
 	if (InteractableComponent)
 	{
 		InteractableComponent->OnHandleInteract.BindUObject(this, &AMOBuildableActor::HandleInteract);
+		InteractableComponent->OnHandleSecondaryInteract.BindUObject(this, &AMOBuildableActor::HandleSecondaryInteract);
 	}
 
 	// ==========================================================================
@@ -304,6 +304,32 @@ bool AMOBuildableActor::HandleInteract(AController* Controller)
 	}
 }
 
+bool AMOBuildableActor::HandleSecondaryInteract(AController* Controller)
+{
+	EMOBuildState State = GetBuildState();
+
+	switch (State)
+	{
+	case EMOBuildState::Ghost:
+	case EMOBuildState::Paused:
+		// Right-click on ghost opens the build context menu
+		OnGhostInteracted(Controller);
+		return true;
+
+	case EMOBuildState::Constructing:
+		// Could show status or allow pause
+		return true;
+
+	case EMOBuildState::Complete:
+		// Right-click on complete building could open context menu
+		OnCompleteInteracted(Controller);
+		return true;
+
+	default:
+		return false;
+	}
+}
+
 FText AMOBuildableActor::GetInteractionText() const
 {
 	EMOBuildState State = GetBuildState();
@@ -345,15 +371,14 @@ void AMOBuildableActor::OnGhostInteracted_Implementation(AController* Controller
 {
 	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildableActor] Ghost interacted - showing build widget"));
 
-	// Get the UI manager from the player controller
-	AMOPlayerController* PC = Cast<AMOPlayerController>(Controller);
-	if (PC && PC->UIManagerComponent)
+	// Use interface to request UI - decouples from specific controller type
+	if (Controller && Controller->Implements<UMOUIContractInterface>())
 	{
-		PC->UIManagerComponent->ShowBuildWidget(this);
+		IMOUIContractInterface::Execute_RequestShowBuildWidget(Controller, this);
 	}
 	else
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOBuildableActor] Could not find UIManager to show build widget"));
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOBuildableActor] Controller does not implement IMOUIContractInterface"));
 	}
 }
 
@@ -409,6 +434,25 @@ void AMOBuildableActor::ApplySaveData(const FMOPersistedBuildingRecord& InRecord
 	else if (State == EMOBuildState::Constructing)
 	{
 		SetConstructionVisual(InRecord.Progress.GetOverallProgress());
+	}
+	else if (State == EMOBuildState::Ghost || State == EMOBuildState::Paused)
+	{
+		// Restore ghost visual for incomplete buildings
+		// bIsGhost tracks placement preview mode, not build state
+		// We need ghost material but with collision/interaction enabled
+		CreateGhostMaterial();
+
+		// Enable collision and interaction for placed ghost
+		if (MeshComponent)
+		{
+			MeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+		}
+		if (InteractableComponent)
+		{
+			InteractableComponent->SetCanInteract(true);
+		}
+
+		UE_LOG(LogMOFramework, Log, TEXT("[MOBuildableActor] Restored ghost visual for building in state: %d"), (int32)State);
 	}
 }
 

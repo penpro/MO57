@@ -99,75 +99,47 @@ void UMOBuildingMenu::InitializeMenu(
 
 void UMOBuildingMenu::RefreshBuildingList()
 {
-	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingMenu] RefreshBuildingList called"));
-
 	if (!RecipeList)
 	{
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOBuildingMenu] RecipeList widget not bound"));
 		return;
 	}
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingMenu] RecipeList is valid: %s"), *RecipeList->GetName());
+	// Get pre-cached building recipes (O(1) instead of O(n) filtering)
+	TArray<FName> AllBuildingRecipes;
+	UMORecipeDatabaseSettings::GetBuildingRecipes(AllBuildingRecipes);
 
-	// Get all recipes
-	TArray<FName> AllRecipeIds;
-	UMORecipeDatabaseSettings::GetAllRecipeIds(AllRecipeIds);
+	// Filter by discovery requirements
+	TArray<FName> DiscoveredBuildingRecipes;
+	DiscoveredBuildingRecipes.Reserve(AllBuildingRecipes.Num());
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingMenu] Total recipes in database: %d"), AllRecipeIds.Num());
-
-	// Filter to building recipes that are discovered
-	TArray<FName> BuildingRecipeIds;
 	UMORecipeDiscoveryComponent* Discovery = DiscoveryComponent.Get();
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingMenu] Discovery component valid: %s"), IsValid(Discovery) ? TEXT("yes") : TEXT("no"));
-
-	// Debug: Check first few recipes for bIsBuilding value
-	int32 DebugCount = 0;
-	for (const FName& RecipeId : AllRecipeIds)
+	for (const FName& RecipeId : AllBuildingRecipes)
 	{
 		const FMORecipeDefinitionRow* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(RecipeId);
 		if (!Recipe)
 		{
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOBuildingMenu] Recipe %s - definition not found"), *RecipeId.ToString());
 			continue;
 		}
-
-		// Log first 5 recipes and any that contain "Build" in the name for debugging
-		if (DebugCount < 5 || RecipeId.ToString().Contains(TEXT("Build")))
-		{
-			UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingMenu] Recipe %s: bIsBuilding=%s"),
-				*RecipeId.ToString(), Recipe->bIsBuilding ? TEXT("true") : TEXT("false"));
-			DebugCount++;
-		}
-
-		if (!Recipe->bIsBuilding)
-		{
-			continue;
-		}
-
-		UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingMenu] Found building recipe: %s (RequiresDiscovery: %s)"),
-			*RecipeId.ToString(), Recipe->bRequiresDiscovery ? TEXT("yes") : TEXT("no"));
 
 		// Check discovery if required
 		if (Recipe->bRequiresDiscovery && IsValid(Discovery))
 		{
 			if (!Discovery->IsRecipeDiscovered(RecipeId))
 			{
-				UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingMenu] Recipe %s skipped - not discovered"), *RecipeId.ToString());
 				continue;
 			}
 		}
 
-		BuildingRecipeIds.Add(RecipeId);
-		UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingMenu] Recipe %s added to list"), *RecipeId.ToString());
+		DiscoveredBuildingRecipes.Add(RecipeId);
 	}
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingMenu] Calling PopulateRecipes with %d building recipes"), BuildingRecipeIds.Num());
-
 	// Populate the recipe list widget
-	RecipeList->PopulateRecipes(BuildingRecipeIds);
+	RecipeList->PopulateRecipes(DiscoveredBuildingRecipes);
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingMenu] Populated with %d buildings"), BuildingRecipeIds.Num());
+	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingMenu] Populated with %d/%d buildings (discovered/total)"),
+		DiscoveredBuildingRecipes.Num(), AllBuildingRecipes.Num());
 }
 
 void UMOBuildingMenu::HandleCloseClicked()

@@ -2,10 +2,13 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
+#include "Components/PrimitiveComponent.h"
 #include "MOControllableInterface.h"
 #include "MOInventoryHolderInterface.h"
 #include "MOMaterialSourceInterface.h"
 #include "MOIdentifiableInterface.h"
+#include "MOCraftingCapableInterface.h"
+#include "MOMedicalProviderInterface.h"
 #include "MOCraftingTypes.h"
 #include "MOCharacter.generated.h"
 
@@ -33,6 +36,7 @@ class UMOAnatomyComponent;
 class UMOAdrenalineComponent;
 class UMOCraftingQueueComponent;
 class UMORecipeDiscoveryComponent;
+class UMOTerraformingComponent;
 class USpringArmComponent;
 class UCameraComponent;
 class USkeletalMesh;
@@ -49,12 +53,41 @@ class MOFRAMEWORK_API AMOCharacter : public ACharacter,
 	public IMOControllableInterface,
 	public IMOInventoryHolderInterface,
 	public IMOMaterialSourceInterface,
-	public IMOIdentifiableInterface
+	public IMOIdentifiableInterface,
+	public IMOCraftingCapableInterface,
+	public IMOMedicalProviderInterface
 {
 	GENERATED_BODY()
 
 public:
 	AMOCharacter();
+
+	// ============================================================================
+	// VOXEL WORLD COMPATIBILITY
+	// ============================================================================
+	// Required for base replication to work properly with Voxel Plugin.
+	// Voxel actor components are generated at runtime & not replicated.
+	// Without this override, character may teleport when voxel world updates.
+
+	virtual void SetBase(UPrimitiveComponent* NewBase, const FName BoneName, const bool bNotifyActor) override
+	{
+		if (NewBase)
+		{
+			// LoadClass to not depend on the voxel module directly
+			static UClass* const VoxelWorldClass = LoadClass<UObject>(nullptr, TEXT("/Script/Voxel.VoxelWorld"));
+
+			const AActor* BaseOwner = NewBase->GetOwner();
+			if (ensure(VoxelWorldClass) &&
+				BaseOwner &&
+				BaseOwner->IsA(VoxelWorldClass))
+			{
+				NewBase = Cast<UPrimitiveComponent>(BaseOwner->GetRootComponent());
+				ensure(NewBase);
+			}
+		}
+
+		Super::SetBase(NewBase, BoneName, bNotifyActor);
+	}
 
 	// ============================================================================
 	// COMPONENT ACCESSORS
@@ -98,6 +131,9 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO")
 	UMORecipeDiscoveryComponent* GetRecipeDiscoveryComponent() const { return RecipeDiscoveryComponent; }
 
+	UFUNCTION(BlueprintPure, Category="MO")
+	UMOTerraformingComponent* GetTerraformingComponent() const { return TerraformingComponent; }
+
 	UFUNCTION(BlueprintPure, Category="MO|Camera")
 	USpringArmComponent* GetCameraBoom() const { return CameraBoom; }
 
@@ -129,10 +165,13 @@ public:
 	virtual void RequestToggleJog_Implementation() override;
 	virtual void RequestCrouchToggle_Implementation() override;
 	virtual void RequestInteract_Implementation() override;
+	virtual void RequestSecondaryInteract_Implementation() override;
 	virtual void RequestPrimaryAction_Implementation() override;
 	virtual void RequestPrimaryActionRelease_Implementation() override;
 	virtual void RequestSecondaryAction_Implementation() override;
 	virtual void RequestSecondaryActionRelease_Implementation() override;
+	virtual void RequestTerraformToggle_Implementation() override;
+	virtual void RequestTerraformCycleTool_Implementation() override;
 	virtual bool CanBeControlled_Implementation() const override;
 	virtual bool CanMove_Implementation() const override;
 	virtual bool CanJump_Implementation() const override;
@@ -163,6 +202,25 @@ public:
 	virtual bool HasValidIdentity_Implementation() const override;
 
 	// ============================================================================
+	// IMOCraftingCapableInterface IMPLEMENTATION
+	// ============================================================================
+
+	virtual UMOCraftingQueueComponent* GetCraftingQueue_Implementation() const override;
+	virtual UMORecipeDiscoveryComponent* GetRecipeDiscovery_Implementation() const override;
+	virtual void SetActiveCraftingStation_Implementation(AActor* StationActor) override;
+	virtual AActor* GetActiveCraftingStation_Implementation() const override;
+
+	// ============================================================================
+	// IMOMedicalProviderInterface IMPLEMENTATION
+	// ============================================================================
+
+	virtual UMOVitalsComponent* GetVitals_Implementation() const override;
+	virtual UMOAnatomyComponent* GetAnatomy_Implementation() const override;
+	virtual UMOMentalStateComponent* GetMentalState_Implementation() const override;
+	virtual UMOAdrenalineComponent* GetAdrenaline_Implementation() const override;
+	virtual UMOMetabolismComponent* GetMetabolism_Implementation() const override;
+
+	// ============================================================================
 	// DIRECT INPUT (for Blueprint/UI virtual joysticks)
 	// ============================================================================
 
@@ -189,6 +247,26 @@ public:
 	/** Check if currently sprinting. */
 	UFUNCTION(BlueprintPure, Category="MO|State")
 	bool IsSprinting() const { return bIsSprinting; }
+
+	// ============================================================================
+	// TERRAFORMING
+	// ============================================================================
+
+	/** Check if terraforming mode is active. */
+	UFUNCTION(BlueprintPure, Category="MO|Terraforming")
+	bool IsTerraformingMode() const { return bTerraformingMode; }
+
+	/** Toggle terraforming mode on/off. */
+	UFUNCTION(BlueprintCallable, Category="MO|Terraforming")
+	void ToggleTerraformMode();
+
+	/** Cycle to next terraforming tool. */
+	UFUNCTION(BlueprintCallable, Category="MO|Terraforming")
+	void CycleTerraformTool();
+
+	/** Perform terraform action at current aim location. */
+	UFUNCTION(BlueprintCallable, Category="MO|Terraforming")
+	bool DoTerraform();
 
 protected:
 	virtual void BeginPlay() override;
@@ -257,6 +335,10 @@ protected:
 	/** Recipe discovery component (unlockable recipes). */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO")
 	TObjectPtr<UMORecipeDiscoveryComponent> RecipeDiscoveryComponent;
+
+	/** Terraforming component for terrain modification. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO")
+	TObjectPtr<UMOTerraformingComponent> TerraformingComponent;
 
 	// ============================================================================
 	// CONFIGURATION
@@ -377,6 +459,10 @@ protected:
 	/** Whether the character can currently be controlled. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|State")
 	bool bCanBeControlled = true;
+
+	/** Whether terraforming mode is active. */
+	UPROPERTY(BlueprintReadOnly, Category="MO|State")
+	bool bTerraformingMode = false;
 
 	// ============================================================================
 	// MOVEMENT MODE API

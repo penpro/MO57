@@ -7,6 +7,7 @@
 
 class UTextBlock;
 class UImage;
+class UTexture2D;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOSaveSlotSelectedSignature, const FString&, SlotName);
 
@@ -86,4 +87,8 @@ private:
 
 	UPROPERTY()
 	FMOSaveMetadata Metadata;
+
+	/** Cached texture for screenshot (prevents GC). */
+	UPROPERTY()
+	TObjectPtr<UTexture2D> CachedScreenshotTexture;
 };

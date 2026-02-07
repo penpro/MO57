@@ -360,3 +360,89 @@ bool UMOInteractionSubsystem::ServerExecuteInteract(AController* InteractorContr
 
 	return InteractableComponent->ServerInteract(InteractorController);
 }
+
+bool UMOInteractionSubsystem::ServerExecuteSecondaryInteract(AController* InteractorController, AActor* TargetActor)
+{
+	UE_LOG(LogMOFramework, Log, TEXT("[MOInteract] ServerExecuteSecondaryInteract target='%s'"), *GetNameSafe(TargetActor));
+
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return false;
+	}
+
+	// Must run on server authority.
+	if (World->GetNetMode() == NM_Client)
+	{
+		return false;
+	}
+
+	if (!IsValid(InteractorController))
+	{
+		return false;
+	}
+
+	APawn* InteractorPawn = InteractorController->GetPawn();
+	if (!IsValid(InteractorPawn))
+	{
+		return false;
+	}
+
+	// Secondary interact (context menus) uses lighter validation than primary interact.
+	// We trust the client-supplied target if it's valid, in range, and has an interactable component.
+	// This avoids issues with trace blocking from floors/walls.
+
+	if (!IsValid(TargetActor))
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInteract] ServerExecuteSecondaryInteract: Invalid target actor"));
+		return false;
+	}
+
+	// Rate limit per controller (shared with primary interact).
+	const double CurrentTimeSeconds = World->GetTimeSeconds();
+	const FObjectKey ControllerKey(InteractorController);
+
+	if (const double* LastTimeSeconds = LastInteractTimeSeconds.Find(ControllerKey))
+	{
+		if ((CurrentTimeSeconds - *LastTimeSeconds) < MinimumSecondsBetweenInteract)
+		{
+			return false;
+		}
+	}
+	LastInteractTimeSeconds.Add(ControllerKey, CurrentTimeSeconds);
+
+	// Resolve viewpoint for distance check.
+	FVector ViewLocation = FVector::ZeroVector;
+	FRotator ViewRotation = FRotator::ZeroRotator;
+	if (!ResolveServerViewpoint(InteractorController, ViewLocation, ViewRotation))
+	{
+		return false;
+	}
+
+	// Distance check - target must be within interact range
+	// Use bounds center instead of actor origin for more accurate distance (surface vs center)
+	// Also add tolerance since client traces to surface but server checks to center
+	FVector BoundsOrigin;
+	FVector BoundsExtent;
+	TargetActor->GetActorBounds(true, BoundsOrigin, BoundsExtent);
+
+	const float DistanceSquared = FVector::DistSquared(ViewLocation, BoundsOrigin);
+	const float MaxRangeWithTolerance = MaximumInteractDistance + BoundsExtent.Size();
+	if (DistanceSquared > FMath::Square(MaxRangeWithTolerance))
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInteract] ServerExecuteSecondaryInteract: Target out of range (dist=%.1f, max=%.1f)"),
+			FMath::Sqrt(DistanceSquared), MaxRangeWithTolerance);
+		return false;
+	}
+
+	// Verify target has an interactable component
+	UMOInteractableComponent* InteractableComponent = TargetActor->FindComponentByClass<UMOInteractableComponent>();
+	if (!IsValid(InteractableComponent))
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInteract] ServerExecuteSecondaryInteract: Target '%s' has no InteractableComponent"), *TargetActor->GetName());
+		return false;
+	}
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOInteract] ServerExecuteSecondaryInteract: Executing on '%s'"), *TargetActor->GetName());
+	return InteractableComponent->ServerSecondaryInteract(InteractorController);
+}

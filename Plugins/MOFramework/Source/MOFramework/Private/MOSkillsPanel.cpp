@@ -487,25 +487,35 @@ void UMOSkillsPanel::PopulateSkillContainer()
 		return;
 	}
 
-	// Get all skill IDs
-	TArray<FName> AllSkillIds;
+	// Get skill IDs - use cached category lookup when possible
+	TArray<FName> SkillIds;
 	if (bShowAllSkills)
 	{
-		UMOSkillDatabaseSettings::GetAllSkillIds(AllSkillIds);
+		// Use cached category lookup if filtering - O(1) vs O(n) filtering
+		if (CategoryFilter != EMOSkillCategory::None)
+		{
+			UMOSkillDatabaseSettings::GetSkillsByCategory(CategoryFilter, SkillIds);
+		}
+		else
+		{
+			UMOSkillDatabaseSettings::GetAllSkillIds(SkillIds);
+		}
 	}
 	else if (UMOSkillsComponent* Skills = SkillsComponent.Get())
 	{
-		Skills->GetAllSkillIds(AllSkillIds);
+		Skills->GetAllSkillIds(SkillIds);
 	}
 
-	// Build display data and filter
+	// Build display data
 	TArray<FMOSkillDisplayData> DisplayList;
-	for (const FName& SkillId : AllSkillIds)
+	DisplayList.Reserve(SkillIds.Num());
+
+	for (const FName& SkillId : SkillIds)
 	{
 		FMOSkillDisplayData Data = BuildSkillDisplayData(SkillId);
 
-		// Filter by category
-		if (CategoryFilter != EMOSkillCategory::None && Data.Category != CategoryFilter)
+		// Filter by category (only needed when showing player skills, not when using cached category lookup)
+		if (!bShowAllSkills && CategoryFilter != EMOSkillCategory::None && Data.Category != CategoryFilter)
 		{
 			continue;
 		}

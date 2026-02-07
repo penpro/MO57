@@ -3,6 +3,13 @@
 #include "Engine/DataTable.h"
 #include "Engine/Texture2D.h"
 
+// Static cache members
+bool UMORecipeDatabaseSettings::bCachesDirty = true;
+TMap<EMOCraftingStation, TArray<FName>> UMORecipeDatabaseSettings::RecipesByStation;
+TArray<FName> UMORecipeDatabaseSettings::BuildingRecipeIds;
+TArray<FName> UMORecipeDatabaseSettings::CraftableRecipeIds;
+TMap<FName, TArray<FName>> UMORecipeDatabaseSettings::RecipesByCategory;
+
 UDataTable* UMORecipeDatabaseSettings::GetRecipeDefinitionsDataTable() const
 {
 	return RecipeDefinitionsDataTable.LoadSynchronous();
@@ -78,45 +85,55 @@ void UMORecipeDatabaseSettings::GetAllRecipeIds(TArray<FName>& OutRecipeIds)
 	const UMORecipeDatabaseSettings* Settings = GetDefault<UMORecipeDatabaseSettings>();
 	if (!Settings)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[MORecipeDatabaseSettings] GetAllRecipeIds - Settings is null"));
 		return;
 	}
 
 	UDataTable* DataTable = Settings->GetRecipeDefinitionsDataTable();
 	if (!IsValid(DataTable))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[MORecipeDatabaseSettings] GetAllRecipeIds - DataTable is not valid (check Project Settings -> MO Recipe Database)"));
 		return;
 	}
 
 	OutRecipeIds = DataTable->GetRowNames();
-	UE_LOG(LogTemp, Log, TEXT("[MORecipeDatabaseSettings] GetAllRecipeIds - Found %d recipes in DataTable"), OutRecipeIds.Num());
 }
 
 void UMORecipeDatabaseSettings::GetRecipesForStation(EMOCraftingStation Station, TArray<FName>& OutRecipeIds)
 {
-	OutRecipeIds.Empty();
+	EnsureCachesBuilt();
 
-	const UMORecipeDatabaseSettings* Settings = GetDefault<UMORecipeDatabaseSettings>();
-	if (!Settings)
+	if (const TArray<FName>* Found = RecipesByStation.Find(Station))
 	{
-		return;
+		OutRecipeIds = *Found;
 	}
-
-	UDataTable* DataTable = Settings->GetRecipeDefinitionsDataTable();
-	if (!IsValid(DataTable))
+	else
 	{
-		return;
+		OutRecipeIds.Empty();
 	}
+}
 
-	TArray<FName> AllRecipeIds = DataTable->GetRowNames();
-	for (const FName& RecipeId : AllRecipeIds)
+void UMORecipeDatabaseSettings::GetBuildingRecipes(TArray<FName>& OutRecipeIds)
+{
+	EnsureCachesBuilt();
+	OutRecipeIds = BuildingRecipeIds;
+}
+
+void UMORecipeDatabaseSettings::GetCraftableRecipes(TArray<FName>& OutRecipeIds)
+{
+	EnsureCachesBuilt();
+	OutRecipeIds = CraftableRecipeIds;
+}
+
+void UMORecipeDatabaseSettings::GetRecipesByCategory(FName Category, TArray<FName>& OutRecipeIds)
+{
+	EnsureCachesBuilt();
+
+	if (const TArray<FName>* Found = RecipesByCategory.Find(Category))
 	{
-		const FMORecipeDefinitionRow* Recipe = DataTable->FindRow<FMORecipeDefinitionRow>(RecipeId, TEXT("GetRecipesForStation"), false);
-		if (Recipe && Recipe->RequiredStation == Station)
-		{
-			OutRecipeIds.Add(RecipeId);
-		}
+		OutRecipeIds = *Found;
+	}
+	else
+	{
+		OutRecipeIds.Empty();
 	}
 }
 
@@ -129,4 +146,94 @@ bool UMORecipeDatabaseSettings::IsConfigured()
 	}
 
 	return !Settings->RecipeDefinitionsDataTable.IsNull();
+}
+
+void UMORecipeDatabaseSettings::InvalidateCache()
+{
+	bCachesDirty = true;
+	RecipesByStation.Empty();
+	BuildingRecipeIds.Empty();
+	CraftableRecipeIds.Empty();
+	RecipesByCategory.Empty();
+
+	UE_LOG(LogTemp, Log, TEXT("[MORecipeDatabaseSettings] Cache invalidated"));
+}
+
+void UMORecipeDatabaseSettings::EnsureCachesBuilt()
+{
+	if (!bCachesDirty)
+	{
+		return;
+	}
+
+	BuildCaches();
+}
+
+void UMORecipeDatabaseSettings::BuildCaches()
+{
+	// Clear existing caches
+	RecipesByStation.Empty();
+	BuildingRecipeIds.Empty();
+	CraftableRecipeIds.Empty();
+	RecipesByCategory.Empty();
+
+	const UMORecipeDatabaseSettings* Settings = GetDefault<UMORecipeDatabaseSettings>();
+	if (!Settings)
+	{
+		bCachesDirty = false;
+		return;
+	}
+
+	UDataTable* DataTable = Settings->GetRecipeDefinitionsDataTable();
+	if (!IsValid(DataTable))
+	{
+		bCachesDirty = false;
+		return;
+	}
+
+	// Single pass through all recipes to build all indexes
+	TArray<FName> AllRecipeIds = DataTable->GetRowNames();
+
+	// Pre-reserve capacity to avoid reallocations
+	BuildingRecipeIds.Reserve(AllRecipeIds.Num() / 4);  // Estimate ~25% are buildings
+	CraftableRecipeIds.Reserve(AllRecipeIds.Num());
+
+	for (const FName& RecipeId : AllRecipeIds)
+	{
+		const FMORecipeDefinitionRow* Recipe = DataTable->FindRow<FMORecipeDefinitionRow>(RecipeId, TEXT("BuildCaches"), false);
+		if (!Recipe)
+		{
+			continue;
+		}
+
+		// Index by station type
+		TArray<FName>& StationRecipes = RecipesByStation.FindOrAdd(Recipe->RequiredStation);
+		StationRecipes.Add(RecipeId);
+
+		// Index building vs craftable
+		if (Recipe->bIsBuilding)
+		{
+			BuildingRecipeIds.Add(RecipeId);
+		}
+		else
+		{
+			CraftableRecipeIds.Add(RecipeId);
+		}
+
+		// Index by category
+		if (!Recipe->Category.IsNone())
+		{
+			TArray<FName>& CategoryRecipes = RecipesByCategory.FindOrAdd(Recipe->Category);
+			CategoryRecipes.Add(RecipeId);
+		}
+	}
+
+	bCachesDirty = false;
+
+	UE_LOG(LogTemp, Log, TEXT("[MORecipeDatabaseSettings] Cache built: %d recipes, %d buildings, %d craftable, %d stations, %d categories"),
+		AllRecipeIds.Num(),
+		BuildingRecipeIds.Num(),
+		CraftableRecipeIds.Num(),
+		RecipesByStation.Num(),
+		RecipesByCategory.Num());
 }

@@ -84,3 +84,46 @@ bool UMOInteractableComponent::HandleInteract_Implementation(AController* Intera
 	// Default: treat as successful interaction.
 	return true;
 }
+
+bool UMOInteractableComponent::ServerSecondaryInteract(AController* InteractorController)
+{
+	AActor* OwnerActor = GetOwner();
+	UE_LOG(LogMOFramework, Log, TEXT("[MOInteractable] ServerSecondaryInteract called on '%s'"), *GetNameSafe(OwnerActor));
+
+	if (!IsValid(OwnerActor))
+	{
+		return false;
+	}
+
+	if (!OwnerActor->HasAuthority())
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInteractable] ServerSecondaryInteract called without authority"));
+		return false;
+	}
+
+	if (!CanInteract(InteractorController))
+	{
+		return false;
+	}
+
+	const bool bHandled = HandleSecondaryInteract(InteractorController);
+
+	if (bHandled)
+	{
+		OnSecondaryInteracted.Broadcast(OwnerActor, InteractorController);
+	}
+
+	return bHandled;
+}
+
+bool UMOInteractableComponent::HandleSecondaryInteract_Implementation(AController* InteractorController)
+{
+	// If a C++ handler is bound, use it
+	if (OnHandleSecondaryInteract.IsBound())
+	{
+		return OnHandleSecondaryInteract.Execute(InteractorController);
+	}
+
+	// Default: no secondary interaction handler, return false
+	return false;
+}

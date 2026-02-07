@@ -187,6 +187,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Inventory|Slots")
 	int32 GetSlotCount() const;
 
+	/** Check if there's at least one empty slot available. */
+	UFUNCTION(BlueprintPure, Category="MO|Inventory|Slots")
+	bool HasEmptySlot() const;
+
 	UFUNCTION(BlueprintCallable, Category="MO|Inventory|Slots")
 	bool TryGetSlotGuid(int32 SlotIndex, FGuid& OutGuid) const;
 
@@ -241,6 +245,84 @@ public:
 	 *  @return The spawned actor, or nullptr on failure */
 	UFUNCTION(BlueprintCallable, Category="MO|Inventory|Drop")
 	AActor* DropItemByGuid(const FGuid& ItemGuid, const FVector& DropLocation, const FRotator& DropRotation);
+
+	/**
+	 * Spawn a world item without removing from inventory. Used for split operations.
+	 * @param ItemDefinitionId The item type to spawn
+	 * @param Quantity Number of items in the stack
+	 * @param ItemGuid GUID for the spawned item
+	 * @param DropLocation World location for spawn
+	 * @param DropRotation World rotation for spawn
+	 * @return The spawned actor, or nullptr on failure
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Inventory|Drop")
+	AActor* SpawnWorldItem(FName ItemDefinitionId, int32 Quantity, const FGuid& ItemGuid, const FVector& DropLocation, const FRotator& DropRotation);
+
+	// ============================================================================
+	// TRANSFER OPERATIONS
+	// ============================================================================
+
+	/**
+	 * Transfer a single item to another inventory.
+	 * @param ItemGuid The item to transfer
+	 * @param TargetInventory The destination inventory
+	 * @return True if the transfer succeeded
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Inventory|Transfer")
+	bool TransferItem(const FGuid& ItemGuid, UMOInventoryComponent* TargetInventory);
+
+	/**
+	 * Transfer all items to another inventory.
+	 * @param TargetInventory The destination inventory
+	 * @return Number of items successfully transferred
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Inventory|Transfer")
+	int32 TransferAllTo(UMOInventoryComponent* TargetInventory);
+
+	/**
+	 * Transfer all items from another inventory to this one.
+	 * @param SourceInventory The source inventory to transfer from
+	 * @return Number of items successfully transferred
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Inventory|Transfer")
+	int32 TransferAllFrom(UMOInventoryComponent* SourceInventory);
+
+	// ============================================================================
+	// STACK MANAGEMENT
+	// ============================================================================
+
+	/**
+	 * Consolidate stacks and defragment inventory slots.
+	 * - Merges partial stacks of the same item
+	 * - Moves all items to lowest index slots
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Inventory|Stack")
+	void StackAndOrganize();
+
+	/**
+	 * Fill partial stacks in this inventory from another inventory.
+	 * Only completes existing stacks; doesn't transfer new item types.
+	 * @param SourceInventory The inventory to take items from
+	 * @return Number of items moved to complete stacks
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Inventory|Stack")
+	int32 FillStacksFrom(UMOInventoryComponent* SourceInventory);
+
+	/**
+	 * Get all item GUIDs in this inventory.
+	 * @return Array of item GUIDs
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Inventory")
+	TArray<FGuid> GetAllItemGuids() const;
+
+	/**
+	 * Get the entry at a specific slot index (same as TryGetSlotEntry but returns bool).
+	 * @param SlotIndex The slot to query
+	 * @param OutEntry The entry at that slot (if any)
+	 * @return True if slot has an item
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Inventory|Slots")
+	bool GetEntry(int32 SlotIndex, FMOInventoryEntry& OutEntry) const;
 
 	/** Returns available ItemDefinitionIds for dropdowns. */
 	UFUNCTION()

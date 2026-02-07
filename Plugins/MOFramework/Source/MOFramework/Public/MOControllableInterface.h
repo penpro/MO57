@@ -84,6 +84,12 @@ public:
 	void RequestInteract();
 
 	/**
+	 * Request secondary interaction with nearby interactable (right-click context menu, etc.).
+	 */
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category="MO|Controllable|Actions")
+	void RequestSecondaryInteract();
+
+	/**
 	 * Request primary action (attack, use tool, etc.).
 	 */
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category="MO|Controllable|Actions")
@@ -106,6 +112,22 @@ public:
 	 */
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category="MO|Controllable|Actions")
 	void RequestSecondaryActionRelease();
+
+	// ============================================================================
+	// TERRAFORMING
+	// ============================================================================
+
+	/**
+	 * Request toggle terraforming mode.
+	 */
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category="MO|Controllable|Terraforming")
+	void RequestTerraformToggle();
+
+	/**
+	 * Request cycle terraforming tool (Dig, Raise, Flatten, Smooth).
+	 */
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category="MO|Controllable|Terraforming")
+	void RequestTerraformCycleTool();
 
 	// ============================================================================
 	// QUERIES

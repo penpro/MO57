@@ -10,6 +10,10 @@ class UDataTable;
 
 /**
  * Project Settings entry to point the plugin at a skill definition DataTable.
+ *
+ * CACHING ARCHITECTURE:
+ * Maintains cached index of skills by category for O(1) filtering.
+ * Cache is lazily initialized on first access.
  */
 UCLASS(Config=Game, DefaultConfig, meta=(DisplayName="MO Skill Database"))
 class MOFRAMEWORK_API UMOSkillDatabaseSettings : public UDeveloperSettings
@@ -47,7 +51,22 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Skill Database")
 	static void GetAllSkillIds(TArray<FName>& OutSkillIds);
 
+	/** Get skills by category. O(1) cached lookup. */
+	UFUNCTION(BlueprintCallable, Category="MO|Skill Database")
+	static void GetSkillsByCategory(EMOSkillCategory Category, TArray<FName>& OutSkillIds);
+
 	/** Check if the Skill Database is properly configured. */
 	UFUNCTION(BlueprintCallable, Category="MO|Skill Database")
 	static bool IsConfigured();
+
+	/** Invalidate the cache. Call after modifying DataTable at runtime. */
+	UFUNCTION(BlueprintCallable, Category="MO|Skill Database")
+	static void InvalidateCache();
+
+private:
+	static void EnsureCachesBuilt();
+	static void BuildCaches();
+
+	static bool bCachesDirty;
+	static TMap<EMOSkillCategory, TArray<FName>> SkillsByCategory;
 };

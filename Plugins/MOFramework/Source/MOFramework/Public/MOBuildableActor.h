@@ -270,6 +270,15 @@ public:
 	bool HandleInteract(AController* Controller);
 
 	/**
+	 * Handle secondary interaction (right-click) with this building.
+	 * Called by the interactable component.
+	 * @param Controller - The controller that interacted
+	 * @return True if the interaction was handled
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Building")
+	virtual bool HandleSecondaryInteract(AController* Controller);
+
+	/**
 	 * Get the interaction text for this building.
 	 */
 	UFUNCTION(BlueprintPure, Category="MO|Building")

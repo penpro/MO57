@@ -199,6 +199,18 @@ void UMOItemContextMenu::RefreshButtonVisibility_Implementation()
 	{
 		CraftButton->SetVisibility(ESlateVisibility::Visible);
 	}
+
+	// Details button - always visible
+	if (DetailsButton)
+	{
+		DetailsButton->SetVisibility(ESlateVisibility::Visible);
+	}
+
+	// Transfer button - always visible (UIManager handles transfer logic)
+	if (TransferButton)
+	{
+		TransferButton->SetVisibility(ESlateVisibility::Visible);
+	}
 }
 
 void UMOItemContextMenu::BindButtonEvents()
@@ -232,6 +244,16 @@ void UMOItemContextMenu::BindButtonEvents()
 	{
 		CraftButton->OnClicked().RemoveAll(this);
 		CraftButton->OnClicked().AddUObject(this, &UMOItemContextMenu::HandleCraftClicked);
+	}
+	if (DetailsButton)
+	{
+		DetailsButton->OnClicked().RemoveAll(this);
+		DetailsButton->OnClicked().AddUObject(this, &UMOItemContextMenu::HandleDetailsClicked);
+	}
+	if (TransferButton)
+	{
+		TransferButton->OnClicked().RemoveAll(this);
+		TransferButton->OnClicked().AddUObject(this, &UMOItemContextMenu::HandleTransferClicked);
 	}
 }
 
@@ -303,6 +325,18 @@ void UMOItemContextMenu::HandleSplitStackClicked()
 void UMOItemContextMenu::HandleCraftClicked()
 {
 	OnActionSelected.Broadcast(TEXT("Craft"), ItemGuid);
+	CloseMenu();
+}
+
+void UMOItemContextMenu::HandleDetailsClicked()
+{
+	OnActionSelected.Broadcast(TEXT("Details"), ItemGuid);
+	CloseMenu();
+}
+
+void UMOItemContextMenu::HandleTransferClicked()
+{
+	OnActionSelected.Broadcast(TEXT("Transfer"), ItemGuid);
 	CloseMenu();
 }
 

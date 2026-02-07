@@ -6,6 +6,7 @@
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOInteractEvent, AActor*, InteractableActor, AController*, InteractorController);
 DECLARE_DELEGATE_RetVal_OneParam(bool, FMOHandleInteractDelegate, AController*);
+DECLARE_DELEGATE_RetVal_OneParam(bool, FMOHandleSecondaryInteractDelegate, AController*);
 
 UCLASS(Blueprintable, BlueprintType, ClassGroup=(MO), meta=(BlueprintSpawnableComponent))
 
@@ -28,6 +29,14 @@ public:
 	// If bound and returns true, the interaction is considered handled.
 	FMOHandleInteractDelegate OnHandleInteract;
 
+	// C++ delegate for owners to handle secondary interaction (right-click).
+	// If bound and returns true, the secondary interaction is considered handled.
+	FMOHandleSecondaryInteractDelegate OnHandleSecondaryInteract;
+
+	// Event for Blueprints to react to secondary interact.
+	UPROPERTY(BlueprintAssignable, Category="MO|Interactable")
+	FMOInteractEvent OnSecondaryInteracted;
+
 	// Lightweight validation hook.
 	UFUNCTION(BlueprintCallable, Category="MO|Interactable")
 	bool CanInteract(AController* InteractorController) const;
@@ -44,11 +53,20 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Interactable")
 	bool ServerInteract(AController* InteractorController);
 
+	// Server-authoritative secondary interaction entry point (right-click).
+	UFUNCTION(BlueprintCallable, Category="MO|Interactable")
+	bool ServerSecondaryInteract(AController* InteractorController);
+
 protected:
 	// Override in Blueprint or C++ to implement behavior.
 	UFUNCTION(BlueprintNativeEvent, Category="MO|Interactable")
 	bool HandleInteract(AController* InteractorController);
 	virtual bool HandleInteract_Implementation(AController* InteractorController);
+
+	// Override in Blueprint or C++ to implement secondary interaction behavior.
+	UFUNCTION(BlueprintNativeEvent, Category="MO|Interactable")
+	bool HandleSecondaryInteract(AController* InteractorController);
+	virtual bool HandleSecondaryInteract_Implementation(AController* InteractorController);
 
 private:
 	// Whether interaction is currently enabled.

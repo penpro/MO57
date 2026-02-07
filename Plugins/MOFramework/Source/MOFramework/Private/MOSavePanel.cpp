@@ -88,35 +88,51 @@ TArray<FMOSaveMetadata> UMOSavePanel::GetCurrentWorldSaves() const
 	{
 		UE_LOG(LogMOFramework, Log, TEXT("[MOSavePanel]   Checking slot: %s"), *SlotName);
 
-		// Filter to current world only (if world ID is available)
-		// Show all saves if world ID is empty or slot matches world
-		if (!CurrentWorldId.IsEmpty() && !SlotName.Contains(CurrentWorldId))
-		{
-			UE_LOG(LogMOFramework, Log, TEXT("[MOSavePanel]   Skipping (doesn't match world ID '%s')"), *CurrentWorldId);
-			continue;
-		}
-
+		// Load actual metadata from save file
 		FMOSaveMetadata Meta;
-		Meta.SlotName = SlotName;
-		Meta.DisplayName = FText::FromString(SlotName);
-		Meta.WorldName = CurrentWorldId;
-
-		// TODO: Load actual metadata from save file
-		// For now, use slot name and get file timestamp
-		const FString SavePath = FPaths::ProjectSavedDir() / TEXT("SaveGames") / (SlotName + TEXT(".sav"));
-		if (FPaths::FileExists(SavePath))
+		if (Persistence->GetSaveSlotMetadata(SlotName, Meta))
 		{
-			Meta.Timestamp = IFileManager::Get().GetTimeStamp(*SavePath);
+			// Filter to current world only (if world ID is available)
+			if (!CurrentWorldId.IsEmpty() && !Meta.WorldName.IsEmpty() && Meta.WorldName != CurrentWorldId)
+			{
+				UE_LOG(LogMOFramework, Log, TEXT("[MOSavePanel]   Skipping (world '%s' doesn't match current '%s')"), *Meta.WorldName, *CurrentWorldId);
+				continue;
+			}
+
+			Result.Add(Meta);
+			UE_LOG(LogMOFramework, Log, TEXT("[MOSavePanel]   Added save: %s (PlayTime: %.0f sec, Autosave: %s)"),
+				*SlotName, Meta.PlayTime.GetTotalSeconds(), Meta.bIsAutosave ? TEXT("Yes") : TEXT("No"));
 		}
 		else
 		{
-			Meta.Timestamp = FDateTime::Now();
+			// Fallback for saves without metadata (legacy saves)
+			Meta.SlotName = SlotName;
+			Meta.DisplayName = FText::FromString(SlotName);
+			Meta.WorldName = CurrentWorldId;
+
+			// Get file timestamp as fallback
+			const FString SavePath = FPaths::ProjectSavedDir() / TEXT("SaveGames") / (SlotName + TEXT(".sav"));
+			if (FPaths::FileExists(SavePath))
+			{
+				Meta.Timestamp = IFileManager::Get().GetTimeStamp(*SavePath);
+			}
+			else
+			{
+				Meta.Timestamp = FDateTime::Now();
+			}
+
+			Meta.bIsAutosave = SlotName.Contains(TEXT("AutoSave"));
+
+			// Filter legacy saves by slot name
+			if (!CurrentWorldId.IsEmpty() && !SlotName.Contains(CurrentWorldId))
+			{
+				UE_LOG(LogMOFramework, Log, TEXT("[MOSavePanel]   Skipping legacy save (doesn't match world ID '%s')"), *CurrentWorldId);
+				continue;
+			}
+
+			Result.Add(Meta);
+			UE_LOG(LogMOFramework, Log, TEXT("[MOSavePanel]   Added legacy save: %s"), *SlotName);
 		}
-
-		Meta.bIsAutosave = SlotName.Contains(TEXT("Autosave"));
-
-		Result.Add(Meta);
-		UE_LOG(LogMOFramework, Log, TEXT("[MOSavePanel]   Added save: %s"), *SlotName);
 	}
 
 	// Sort by timestamp (newest first)

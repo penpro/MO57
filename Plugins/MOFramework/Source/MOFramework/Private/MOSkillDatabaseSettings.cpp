@@ -3,6 +3,10 @@
 #include "Engine/DataTable.h"
 #include "Engine/Texture2D.h"
 
+// Static cache members
+bool UMOSkillDatabaseSettings::bCachesDirty = true;
+TMap<EMOSkillCategory, TArray<FName>> UMOSkillDatabaseSettings::SkillsByCategory;
+
 UDataTable* UMOSkillDatabaseSettings::GetSkillDefinitionsDataTable() const
 {
 	return SkillDefinitionsDataTable.LoadSynchronous();
@@ -90,6 +94,20 @@ void UMOSkillDatabaseSettings::GetAllSkillIds(TArray<FName>& OutSkillIds)
 	OutSkillIds = DataTable->GetRowNames();
 }
 
+void UMOSkillDatabaseSettings::GetSkillsByCategory(EMOSkillCategory Category, TArray<FName>& OutSkillIds)
+{
+	EnsureCachesBuilt();
+
+	if (const TArray<FName>* Found = SkillsByCategory.Find(Category))
+	{
+		OutSkillIds = *Found;
+	}
+	else
+	{
+		OutSkillIds.Empty();
+	}
+}
+
 bool UMOSkillDatabaseSettings::IsConfigured()
 {
 	const UMOSkillDatabaseSettings* Settings = GetDefault<UMOSkillDatabaseSettings>();
@@ -99,4 +117,60 @@ bool UMOSkillDatabaseSettings::IsConfigured()
 	}
 
 	return !Settings->SkillDefinitionsDataTable.IsNull();
+}
+
+void UMOSkillDatabaseSettings::InvalidateCache()
+{
+	bCachesDirty = true;
+	SkillsByCategory.Empty();
+
+	UE_LOG(LogTemp, Log, TEXT("[MOSkillDatabaseSettings] Cache invalidated"));
+}
+
+void UMOSkillDatabaseSettings::EnsureCachesBuilt()
+{
+	if (!bCachesDirty)
+	{
+		return;
+	}
+
+	BuildCaches();
+}
+
+void UMOSkillDatabaseSettings::BuildCaches()
+{
+	SkillsByCategory.Empty();
+
+	const UMOSkillDatabaseSettings* Settings = GetDefault<UMOSkillDatabaseSettings>();
+	if (!Settings)
+	{
+		bCachesDirty = false;
+		return;
+	}
+
+	UDataTable* DataTable = Settings->GetSkillDefinitionsDataTable();
+	if (!IsValid(DataTable))
+	{
+		bCachesDirty = false;
+		return;
+	}
+
+	TArray<FName> AllSkillIds = DataTable->GetRowNames();
+
+	for (const FName& SkillId : AllSkillIds)
+	{
+		const FMOSkillDefinitionRow* Skill = DataTable->FindRow<FMOSkillDefinitionRow>(SkillId, TEXT("BuildCaches"), false);
+		if (!Skill)
+		{
+			continue;
+		}
+
+		TArray<FName>& CategorySkills = SkillsByCategory.FindOrAdd(Skill->Category);
+		CategorySkills.Add(SkillId);
+	}
+
+	bCachesDirty = false;
+
+	UE_LOG(LogTemp, Log, TEXT("[MOSkillDatabaseSettings] Cache built: %d skills, %d categories"),
+		AllSkillIds.Num(), SkillsByCategory.Num());
 }

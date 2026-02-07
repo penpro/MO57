@@ -20,6 +20,9 @@
 #include "MORecipeDiscoveryComponent.h"
 #include "MONotificationComponent.h"
 #include "MOCraftingTypes.h"
+#include "MOTerraformingComponent.h"
+#include "MOUIManagerComponent.h"
+#include "MOModeIndicatorWidget.h"
 
 AMOCharacter::AMOCharacter()
 {
@@ -74,6 +77,9 @@ AMOCharacter::AMOCharacter()
 	MentalStateComponent = CreateDefaultSubobject<UMOMentalStateComponent>(TEXT("MentalStateComponent"));
 	AnatomyComponent = CreateDefaultSubobject<UMOAnatomyComponent>(TEXT("AnatomyComponent"));
 	AdrenalineComponent = CreateDefaultSubobject<UMOAdrenalineComponent>(TEXT("AdrenalineComponent"));
+
+	// MO Components - Terraforming
+	TerraformingComponent = CreateDefaultSubobject<UMOTerraformingComponent>(TEXT("TerraformingComponent"));
 
 	// Default mesh position (mesh itself loaded in BeginPlay if DefaultMesh is set)
 	GetMesh()->SetRelativeLocation(FVector(0.0f, 0.0f, -96.0f));
@@ -238,8 +244,23 @@ void AMOCharacter::RequestInteract_Implementation()
 	}
 }
 
+void AMOCharacter::RequestSecondaryInteract_Implementation()
+{
+	if (InteractorComponent)
+	{
+		InteractorComponent->TrySecondaryInteract();
+	}
+}
+
 void AMOCharacter::RequestPrimaryAction_Implementation()
 {
+	// If in terraforming mode, perform terraform action
+	if (bTerraformingMode)
+	{
+		DoTerraform();
+		return;
+	}
+
 	// Override in subclasses for weapon/tool use
 	UE_LOG(LogMOFramework, Verbose, TEXT("[MOCharacter] RequestPrimaryAction - Override in subclass"));
 }
@@ -260,6 +281,16 @@ void AMOCharacter::RequestSecondaryActionRelease_Implementation()
 {
 	// Override in subclasses
 	UE_LOG(LogMOFramework, Verbose, TEXT("[MOCharacter] RequestSecondaryActionRelease - Override in subclass"));
+}
+
+void AMOCharacter::RequestTerraformToggle_Implementation()
+{
+	ToggleTerraformMode();
+}
+
+void AMOCharacter::RequestTerraformCycleTool_Implementation()
+{
+	CycleTerraformTool();
 }
 
 bool AMOCharacter::CanBeControlled_Implementation() const
@@ -759,4 +790,142 @@ FGuid AMOCharacter::GetPersistentGuid_Implementation() const
 bool AMOCharacter::HasValidIdentity_Implementation() const
 {
 	return IdentityComponent && IdentityComponent->GetGuid().IsValid();
+}
+
+// ============================================================================
+// IMOCraftingCapableInterface IMPLEMENTATION
+// ============================================================================
+
+UMOCraftingQueueComponent* AMOCharacter::GetCraftingQueue_Implementation() const
+{
+	return CraftingQueueComponent;
+}
+
+UMORecipeDiscoveryComponent* AMOCharacter::GetRecipeDiscovery_Implementation() const
+{
+	return RecipeDiscoveryComponent;
+}
+
+void AMOCharacter::SetActiveCraftingStation_Implementation(AActor* StationActor)
+{
+	if (CraftingQueueComponent)
+	{
+		CraftingQueueComponent->SetActiveStation(StationActor);
+	}
+}
+
+AActor* AMOCharacter::GetActiveCraftingStation_Implementation() const
+{
+	if (CraftingQueueComponent)
+	{
+		return CraftingQueueComponent->GetActiveStation();
+	}
+	return nullptr;
+}
+
+// ============================================================================
+// IMOMedicalProviderInterface IMPLEMENTATION
+// ============================================================================
+
+UMOVitalsComponent* AMOCharacter::GetVitals_Implementation() const
+{
+	return VitalsComponent;
+}
+
+UMOAnatomyComponent* AMOCharacter::GetAnatomy_Implementation() const
+{
+	return AnatomyComponent;
+}
+
+UMOMentalStateComponent* AMOCharacter::GetMentalState_Implementation() const
+{
+	return MentalStateComponent;
+}
+
+UMOAdrenalineComponent* AMOCharacter::GetAdrenaline_Implementation() const
+{
+	return AdrenalineComponent;
+}
+
+UMOMetabolismComponent* AMOCharacter::GetMetabolism_Implementation() const
+{
+	return MetabolismComponent;
+}
+
+// ============================================================================
+// TERRAFORMING
+// ============================================================================
+
+void AMOCharacter::ToggleTerraformMode()
+{
+	bTerraformingMode = !bTerraformingMode;
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOCharacter] %s: Terraform mode %s"),
+		*GetName(),
+		bTerraformingMode ? TEXT("ENABLED") : TEXT("DISABLED"));
+
+	// Update UI via player controller
+	if (APlayerController* PC = Cast<APlayerController>(GetController()))
+	{
+		if (UMOUIManagerComponent* UIManager = PC->FindComponentByClass<UMOUIManagerComponent>())
+		{
+			if (bTerraformingMode)
+			{
+				// Set gameplay mode to Terraform
+				UIManager->SetGameplayMode(EMOGameplayMode::Terraform);
+
+				// Show current tool hint
+				if (TerraformingComponent)
+				{
+					UIManager->ShowToolHint(TerraformingComponent->GetModeDisplayName());
+				}
+			}
+			else
+			{
+				// Return to Explore mode
+				UIManager->SetGameplayMode(EMOGameplayMode::Explore);
+				UIManager->HideToolHint();
+			}
+		}
+	}
+
+	if (bTerraformingMode && TerraformingComponent)
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOCharacter] Current terraform tool: %s"),
+			*TerraformingComponent->GetModeDisplayName().ToString());
+	}
+}
+
+void AMOCharacter::CycleTerraformTool()
+{
+	if (TerraformingComponent)
+	{
+		TerraformingComponent->CycleMode();
+
+		// Show tool hint
+		if (APlayerController* PC = Cast<APlayerController>(GetController()))
+		{
+			if (UMOUIManagerComponent* UIManager = PC->FindComponentByClass<UMOUIManagerComponent>())
+			{
+				UIManager->ShowToolHint(TerraformingComponent->GetModeDisplayName());
+			}
+		}
+	}
+}
+
+bool AMOCharacter::DoTerraform()
+{
+	if (!TerraformingComponent)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOCharacter] DoTerraform: No TerraformingComponent"));
+		return false;
+	}
+
+	if (!bTerraformingMode)
+	{
+		UE_LOG(LogMOFramework, Verbose, TEXT("[MOCharacter] DoTerraform: Not in terraform mode"));
+		return false;
+	}
+
+	return TerraformingComponent->TryTerraform();
 }

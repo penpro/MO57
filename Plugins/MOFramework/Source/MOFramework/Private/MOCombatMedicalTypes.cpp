@@ -6,6 +6,54 @@
 #include "MOSkeletonMappingTypes.h"
 
 // ============================================================================
+// Combat Medical Constants
+// ============================================================================
+namespace MOCombatConstants
+{
+	// Damage and stress modifiers
+	constexpr float PainToSeverityRatio = 0.8f;
+	constexpr float DamageToStressRatio = 0.3f;
+
+	// Attack height thresholds (0.0 = feet, 1.0 = head)
+	constexpr float LowAttackThreshold = 0.25f;
+	constexpr float MidAttackThreshold = 0.6f;
+	constexpr float HighAttackThreshold = 0.85f;
+
+	// Body part damage multipliers
+	namespace DamageMultiplier
+	{
+		// Instant death parts
+		constexpr float Brain = 5.0f;
+		constexpr float Heart = 4.0f;
+
+		// Vital organs
+		constexpr float Lung = 2.5f;
+		constexpr float Liver = 2.0f;
+		constexpr float Intestines = 1.8f;
+		constexpr float Kidney = 1.8f;
+
+		// Head and spine
+		constexpr float Head = 2.0f;
+		constexpr float SpineCervical = 2.5f;
+		constexpr float SpineThoracolumbar = 1.8f;
+
+		// Torso
+		constexpr float Torso = 1.2f;
+
+		// Limbs - proximal
+		constexpr float ShoulderHip = 1.0f;
+		constexpr float UpperLimb = 0.9f;
+		constexpr float LowerLimb = 0.8f;
+
+		// Extremities
+		constexpr float HandFoot = 0.6f;
+		constexpr float Eyes = 1.5f;
+		constexpr float Ears = 0.7f;
+		constexpr float Default = 0.4f;
+	}
+}
+
+// ============================================================================
 // UMOCombatMedicalHelpers Implementation
 // ============================================================================
 
@@ -65,7 +113,7 @@ bool UMOCombatMedicalHelpers::ApplyCombatDamage(
 	// Notify adrenaline system of wound (triggers spike, pain masking)
 	if (AdrenalineComp)
 	{
-		float PainAmount = HitInfo.GetWoundSeverity() * 0.8f; // Pain proportional to severity
+		float PainAmount = HitInfo.GetWoundSeverity() * MOCombatConstants::PainToSeverityRatio;
 		AdrenalineComp->OnWoundReceived(HitInfo.GetWoundSeverity(), PainAmount, HitInfo.GetBleedRate());
 	}
 
@@ -87,7 +135,7 @@ bool UMOCombatMedicalHelpers::ApplyCombatDamage(
 	if (VitalsComp)
 	{
 		// Taking damage is stressful
-		VitalsComp->AddStress(HitInfo.GetFinalDamage() * 0.3f);
+		VitalsComp->AddStress(HitInfo.GetFinalDamage() * MOCombatConstants::DamageToStressRatio);
 
 		// Ensure combat activity level
 		if (VitalsComp->GetActivityLevel() != EMOActivityLevel::Combat)
@@ -126,17 +174,17 @@ EMOBodyPartType UMOCombatMedicalHelpers::GetTargetBodyPartFromAngle(
 	// 0.5 = mid (torso)
 	// 1.0 = high (head)
 
-	if (AttackHeight < 0.25f)
+	if (AttackHeight < MOCombatConstants::LowAttackThreshold)
 	{
 		// Low attack - legs
 		return EMOBodyPartType::ThighLeft;  // Could randomize left/right
 	}
-	else if (AttackHeight < 0.6f)
+	else if (AttackHeight < MOCombatConstants::MidAttackThreshold)
 	{
 		// Mid attack - torso/arms
 		return EMOBodyPartType::Torso;
 	}
-	else if (AttackHeight < 0.85f)
+	else if (AttackHeight < MOCombatConstants::HighAttackThreshold)
 	{
 		// Upper attack - chest/shoulders
 		return EMOBodyPartType::ShoulderLeft;
@@ -150,78 +198,81 @@ EMOBodyPartType UMOCombatMedicalHelpers::GetTargetBodyPartFromAngle(
 
 float UMOCombatMedicalHelpers::GetBodyPartDamageMultiplier(EMOBodyPartType BodyPart)
 {
+	using namespace MOCombatConstants::DamageMultiplier;
+
 	switch (BodyPart)
 	{
 	// Instant death parts - maximum damage multiplier
 	case EMOBodyPartType::Brain:
-		return 5.0f;
+		return Brain;
 	case EMOBodyPartType::Heart:
-		return 4.0f;
+		return Heart;
 
 	// Vital organs - high multiplier
 	case EMOBodyPartType::LungLeft:
 	case EMOBodyPartType::LungRight:
-		return 2.5f;
+		return Lung;
 	case EMOBodyPartType::Liver:
-		return 2.0f;
+		return Liver;
 	case EMOBodyPartType::Intestines:
+		return Intestines;
 	case EMOBodyPartType::KidneyLeft:
 	case EMOBodyPartType::KidneyRight:
-		return 1.8f;
+		return Kidney;
 
 	// Head (but not brain)
 	case EMOBodyPartType::Head:
-		return 2.0f;
+		return Head;
 
 	// Spine - high damage, risk of paralysis
 	case EMOBodyPartType::SpineCervical:
-		return 2.5f;
+		return SpineCervical;
 	case EMOBodyPartType::SpineThoracic:
 	case EMOBodyPartType::SpineLumbar:
-		return 1.8f;
+		return SpineThoracolumbar;
 
 	// Torso/core
 	case EMOBodyPartType::Torso:
 	case EMOBodyPartType::Stomach:
-		return 1.2f;
+		return Torso;
 
 	// Limbs - standard damage
 	case EMOBodyPartType::ShoulderLeft:
 	case EMOBodyPartType::ShoulderRight:
 	case EMOBodyPartType::HipLeft:
 	case EMOBodyPartType::HipRight:
-		return 1.0f;
+		return ShoulderHip;
 
 	case EMOBodyPartType::UpperArmLeft:
 	case EMOBodyPartType::UpperArmRight:
 	case EMOBodyPartType::ThighLeft:
 	case EMOBodyPartType::ThighRight:
-		return 0.9f;
+		return UpperLimb;
 
 	case EMOBodyPartType::ForearmLeft:
 	case EMOBodyPartType::ForearmRight:
 	case EMOBodyPartType::CalfLeft:
 	case EMOBodyPartType::CalfRight:
-		return 0.8f;
+		return LowerLimb;
 
 	// Extremities - low damage but disabling
 	case EMOBodyPartType::HandLeft:
 	case EMOBodyPartType::HandRight:
 	case EMOBodyPartType::FootLeft:
 	case EMOBodyPartType::FootRight:
-		return 0.6f;
+		return HandFoot;
 
 	// Sensory organs
 	case EMOBodyPartType::EyeLeft:
 	case EMOBodyPartType::EyeRight:
-		return 1.5f;  // Not lethal but important
+		return Eyes;
 	case EMOBodyPartType::EarLeft:
 	case EMOBodyPartType::EarRight:
-		return 0.7f;
+		return Ears;
 
 	// Fingers/toes - minimal damage
 	default:
-		return 0.4f;
+		return Default;
 	}
 }
 

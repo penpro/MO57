@@ -1,6 +1,8 @@
 #include "MOWorldItem.h"
 #include "MOFramework.h"
 #include "Engine/DataTable.h"
+#include "Engine/CollisionProfile.h"
+#include "PhysicsEngine/BodySetup.h"
 #include "MOItemDatabaseSettings.h"
 #include "MOItemDefinitionRow.h"
 
@@ -82,6 +84,40 @@ bool AMOWorldItem::OnHandleInteract(AController* InteractorController)
 
 	return bSuccess;
 }
+
+bool AMOWorldItem::IsPickupable() const
+{
+	// Not pickupable if hidden in game
+	if (IsHidden())
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOWorldItem] IsPickupable: %s is hidden"), *GetName());
+		return false;
+	}
+
+	// Not pickupable if collision is disabled (already picked up)
+	if (!GetActorEnableCollision())
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOWorldItem] IsPickupable: %s has collision disabled"), *GetName());
+		return false;
+	}
+
+	// Must have a valid item component with item data
+	if (!IsValid(ItemComponent))
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOWorldItem] IsPickupable: %s has invalid ItemComponent"), *GetName());
+		return false;
+	}
+
+	// Must have a valid item definition
+	if (ItemComponent->ItemDefinitionId.IsNone())
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOWorldItem] IsPickupable: %s has no ItemDefinitionId"), *GetName());
+		return false;
+	}
+
+	return true;
+}
+
 namespace
 {
 	UDataTable* ResolveItemDefinitionsDataTable(const TSoftObjectPtr<UDataTable>& ActorOverrideDataTable)
@@ -272,8 +308,87 @@ void AMOWorldItem::EnableDropPhysics()
 		IsValid(CurrentMesh) ? *CurrentMesh->GetName() : TEXT("NULL"),
 		ItemMesh->IsSimulatingPhysics() ? TEXT("true") : TEXT("false"));
 
-	// Enable physics simulation - collision is already set up in constructor
+	// Ensure the mesh has collision - use complex as simple if no simple collision exists
+	if (IsValid(CurrentMesh))
+	{
+		UBodySetup* BodySetup = CurrentMesh->GetBodySetup();
+		// Check if mesh has simple collision
+		if (!BodySetup || BodySetup->AggGeom.GetElementCount() == 0)
+		{
+			// No simple collision, use complex collision for physics
+			ItemMesh->SetCollisionProfileName(UCollisionProfile::BlockAllDynamic_ProfileName);
+			// In UE5, set complex as simple via the body setup collision type
+			if (BodySetup)
+			{
+				BodySetup->CollisionTraceFlag = CTF_UseComplexAsSimple;
+			}
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOWorldItem] EnableDropPhysics: Mesh has no simple collision, using complex as simple"));
+		}
+	}
+
+	// Ensure collision is enabled before physics
+	ItemMesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+	ItemMesh->SetCollisionResponseToAllChannels(ECR_Block);
+	ItemMesh->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
+	ItemMesh->SetCollisionObjectType(ECC_PhysicsBody);
+
+	// Find a safe spawn location - trace down to find ground and position above it
+	FVector CurrentLocation = GetActorLocation();
+	FHitResult GroundHit;
+	FCollisionQueryParams QueryParams;
+	QueryParams.AddIgnoredActor(this);
+
+	// Add random horizontal spread to prevent items stacking on each other
+	const float RandomSpreadRadius = 50.0f;  // 50cm spread radius
+	const float RandomAngle = FMath::RandRange(0.0f, 360.0f);
+	const float RandomDistance = FMath::RandRange(0.0f, RandomSpreadRadius);
+	const FVector RandomOffset(
+		FMath::Cos(FMath::DegreesToRadians(RandomAngle)) * RandomDistance,
+		FMath::Sin(FMath::DegreesToRadians(RandomAngle)) * RandomDistance,
+		0.0f
+	);
+
+	// Random drop height between 50cm and 100cm
+	const float RandomDropHeight = FMath::RandRange(50.0f, 100.0f);
+
+	// Trace down to find the ground (from the randomized horizontal position)
+	const FVector TraceStart = CurrentLocation + RandomOffset + FVector(0, 0, 150.0f);
+	const FVector TraceEnd = CurrentLocation + RandomOffset - FVector(0, 0, 500.0f);
+
+	if (World->LineTraceSingleByChannel(GroundHit, TraceStart, TraceEnd, ECC_WorldStatic, QueryParams))
+	{
+		// Position the item at random height above the ground
+		FVector SafeLocation = GroundHit.Location + FVector(0, 0, RandomDropHeight);
+		SetActorLocation(SafeLocation);
+		UE_LOG(LogMOFramework, Log, TEXT("[MOWorldItem] EnableDropPhysics: Positioned at %s (%.0fcm above ground, spread %.0fcm)"),
+			*SafeLocation.ToString(), RandomDropHeight, RandomDistance);
+	}
+	else
+	{
+		// No ground found, just apply random offset to current location
+		SetActorLocation(CurrentLocation + RandomOffset + FVector(0, 0, RandomDropHeight));
+	}
+
+	// Force recreation of physics state to ensure body is properly created with new collision settings
+	ItemMesh->RecreatePhysicsState();
+
+	// Enable physics simulation
 	ItemMesh->SetSimulatePhysics(true);
+
+	// Configure the physics body for reliable collision
+	if (FBodyInstance* BodyInstance = ItemMesh->GetBodyInstance())
+	{
+		// Enable CCD (Continuous Collision Detection) to prevent tunneling through geometry
+		BodyInstance->SetUseCCD(true);
+
+		// Wake the instance to ensure it starts simulating
+		BodyInstance->WakeInstance();
+
+		// Set linear damping to slow the fall slightly (helps with collision detection)
+		BodyInstance->LinearDamping = 0.5f;
+
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOWorldItem] EnableDropPhysics: CCD enabled, body awake"));
+	}
 
 	UE_LOG(LogMOFramework, Warning, TEXT("[MOWorldItem] EnableDropPhysics: After SetSimulatePhysics(true), IsSimulating=%s"),
 		ItemMesh->IsSimulatingPhysics() ? TEXT("true") : TEXT("false"));

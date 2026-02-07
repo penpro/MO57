@@ -18,6 +18,8 @@ A comprehensive Unreal Engine 5.7 plugin providing modular gameplay systems for 
   - [Skills & Knowledge System](#skills--knowledge-system)
   - [Building System](#building-system)
   - [Crafting System](#crafting-system)
+  - [Terraforming System](#terraforming-system)
+  - [PCG Integration](#pcg-integration)
 - [Architecture & Delegate Flows](#architecture--delegate-flows)
 - [Widget Setup Guide](#widget-setup-guide)
 - [Survival Game Design Considerations](#survival-game-design-considerations)
@@ -339,6 +341,60 @@ Click Craft → Recipe enqueued
 Queue processes → Materials consumed over time
 Craft completes → Output added to inventory + XP granted
 ```
+
+### Terraforming System
+
+Runtime terrain sculpting integrated with save/load using the Voxel plugin.
+
+**Key Classes:**
+- `UMOTerraformingComponent` - On PlayerController, manages terraform tool state
+- `MOPersistenceSubsystem` - Captures/restores Voxel sculpt data per actor
+
+**Features:**
+- Toggle terraforming mode (T key)
+- Cycle between Dig/Raise/Flatten/Smooth tools (R key)
+- Primary action applies terrain modification
+- Sculpt data persisted per VoxelHeightActor with GUID tracking
+
+**Voxel Integration Pattern:**
+```cpp
+// Capture sculpt data synchronously (required for Voxel plugin async API)
+FVoxelHeightSculptSave SculptSave;
+Voxel::ExecuteSynchronously([&]
+{
+    return UVoxelHeightSculptBlueprintLibrary::K2_GetSave(SculptSave, HeightActor, true);
+});
+```
+
+**Known Limitation:** The Voxel plugin's `GetSave()` async API causes assertion failures on unsculpted actors. Use `K2_GetSave` with `Voxel::ExecuteSynchronously` instead.
+
+### PCG Integration
+
+Procedural Content Generation for ground spawns with custom MOFramework nodes.
+
+**Key Classes:**
+- `UMOPCGItemSpawnerSettings` - Custom PCG node for item-driven spawning
+- `FMOPCGItemSpawnerElement` - PCG element executing the spawner logic
+- `UMOPCGInteractionSubsystem` - Manages PCG-spawned item interactions
+- `UMOHISMInteractableComponent` - Enables interaction with HISM instances
+
+**MO Item Spawner Node:**
+A custom PCG node that assigns item metadata to points:
+- Takes weighted item entries referencing datatable rows
+- Reads mesh from item's `WorldVisual.StaticMesh`
+- Outputs points with `MOItemId`, `MOQuantityMin`, `MOQuantityMax`, `StaticMesh` attributes
+- Feeds into Static Mesh Spawner for HISM creation
+
+**PCG Workflow:**
+```
+Surface Sampler → MO Item Spawner → Static Mesh Spawner → HISM
+                       ↓
+              Item DataTable lookup
+              (mesh, quantity, ID)
+```
+
+**HISM Interaction:**
+Players can interact with PCG-spawned items (rocks, sticks) via hit detection on HISM instances. The interaction subsystem tracks which HISM instance index was hit and provides item metadata.
 
 ### Medical System
 
@@ -928,6 +984,8 @@ Based on analysis of implemented systems versus typical survival game requiremen
 | Interaction | ✓ Complete | Line-trace, interactables |
 | Possession | ✓ Complete | Multi-character control |
 | UI Framework | ✓ Complete | CommonUI widgets, modals |
+| Terraforming | ✓ Complete | Voxel sculpting with persistence |
+| PCG Integration | ✓ Complete | Custom nodes, HISM interaction |
 
 ### Missing Systems (Priority Order)
 
@@ -1179,11 +1237,14 @@ Several systems would benefit from formal UInterface definitions:
 | `IMaterialSource` | Inventory, Container, WorldItem | Flexible material gathering |
 
 #### 3. Incomplete TODO Items
-13 TODO comments indicate unfinished features:
-- `MOBuildProgressComponent.cpp:255` - Material refund not implemented
-- `MOCraftingQueueComponent.cpp:699` - Tool quality modifiers missing
-- `MOUIManagerComponent.cpp:1439` - Stack splitting UI not implemented
-- Various medical system integrations
+Active TODO comments indicate unfinished features:
+- `MOAnatomyComponent.cpp:781` - Add setter in VitalsComponent for condition effects
+- `MOStatusPanel.cpp:190` - Expose threshold setters on UMOStatusField
+- `MOStatusPanel.cpp:439` - Add visual selected state to buttons
+- `MOStatusPanel.cpp:971` - Show input dialog for value changes
+- `MOStatusPanel.cpp:980` - Show name change dialog
+- `MOUnifiedInventoryMenu.cpp:835` - Visual indication of selected tab (highlight/underline)
+- `MOVitalsComponent.cpp:683` - Integrate lung damage with anatomy component
 
 ### Medium Priority
 
@@ -1275,18 +1336,19 @@ public:
 
 ## Code Health Metrics
 
-**Last Audit:** 2026-02-03
+**Last Audit:** 2026-02-07
 
 | Metric | Value | Status |
 |--------|-------|--------|
-| Public Headers | 94 files | Good |
-| Dynamic Delegates | 130+ | Good - event-driven |
-| TODO Comments | 13 | Needs attention |
+| Public Headers | 102 files | Good |
+| Dynamic Delegates | 140+ | Good - event-driven |
+| TODO Comments | 7 | Improved |
 | FindComponentByClass calls | 40+ | Needs refactoring |
-| TObjectPtr usage | 50+ | Good - modern UE5 |
-| TSoftObjectPtr usage | 60+ | Excellent |
+| TObjectPtr usage | 60+ | Good - modern UE5 |
+| TSoftObjectPtr usage | 70+ | Excellent |
+| Custom PCG Nodes | 1 | MO Item Spawner |
 
-**Overall Health Score:** 7.5/10
+**Overall Health Score:** 7.8/10
 
 ---
 

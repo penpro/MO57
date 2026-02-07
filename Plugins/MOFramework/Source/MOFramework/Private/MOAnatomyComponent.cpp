@@ -2,8 +2,11 @@
 #include "MOVitalsComponent.h"
 #include "MOMentalStateComponent.h"
 #include "MOBodyPartDefinitionRow.h"
+#include "MOMedicalSubsystem.h"
+#include "MOMedicalProviderInterface.h"
 #include "Net/UnrealNetwork.h"
 #include "Engine/DataTable.h"
+#include "Engine/GameInstance.h"
 #include "TimerManager.h"
 
 UMOAnatomyComponent::UMOAnatomyComponent()
@@ -19,11 +22,19 @@ void UMOAnatomyComponent::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// Cache sibling components
+	// Cache sibling components via interface - avoids FindComponentByClass chains
 	if (AActor* Owner = GetOwner())
 	{
-		CachedVitalsComp = Owner->FindComponentByClass<UMOVitalsComponent>();
-		CachedMentalComp = Owner->FindComponentByClass<UMOMentalStateComponent>();
+		if (Owner->Implements<UMOMedicalProviderInterface>())
+		{
+			CachedVitalsComp = IMOMedicalProviderInterface::Execute_GetVitals(Owner);
+			CachedMentalComp = IMOMedicalProviderInterface::Execute_GetMentalState(Owner);
+		}
+		else
+		{
+			CachedVitalsComp = Owner->FindComponentByClass<UMOVitalsComponent>();
+			CachedMentalComp = Owner->FindComponentByClass<UMOMentalStateComponent>();
+		}
 	}
 
 	// Initialize body parts on authority
@@ -254,20 +265,53 @@ bool UMOAnatomyComponent::ApplyTreatment(const FGuid& WoundId, FName TreatmentId
 		return false;
 	}
 
-	// TODO: Get treatment definition from DataTable and apply effects
-	// For now, apply basic treatment
+	// Get treatment definition from DataTable via MOMedicalSubsystem
+	FMOMedicalTreatmentRow TreatmentDef;
+	bool bHasDefinition = false;
 
-	float Quality = FMath::Clamp(static_cast<float>(MedicSkillLevel) / 100.0f, 0.1f, 1.0f);
-	if (bIsSelfTreatment)
+	if (UWorld* World = GetWorld())
 	{
-		Quality *= 0.7f;  // 30% penalty for self-treatment
+		if (UGameInstance* GameInstance = World->GetGameInstance())
+		{
+			if (UMOMedicalSubsystem* MedicalSubsystem = GameInstance->GetSubsystem<UMOMedicalSubsystem>())
+			{
+				bHasDefinition = MedicalSubsystem->GetTreatmentDefinition(TreatmentId, TreatmentDef);
+			}
+		}
 	}
 
-	// Reduce bleed rate
-	Wound->BleedRate *= (1.0f - (0.5f * Quality));
+	// Use DataTable values if available, otherwise use defaults
+	float BleedReduction = bHasDefinition ? TreatmentDef.BleedReduction : 0.5f;
+	float InfectionReduction = bHasDefinition ? TreatmentDef.InfectionReduction : 0.3f;
+	float SelfTreatmentPenalty = bHasDefinition ? TreatmentDef.SelfTreatmentPenalty : 0.3f;
+	float QualitySkillScaling = bHasDefinition ? TreatmentDef.QualitySkillScaling : 0.5f;
+	int32 MinimumSkillLevel = bHasDefinition ? TreatmentDef.MinimumSkillLevel : 1;
 
-	// Reduce infection risk
-	Wound->InfectionRisk *= (1.0f - (0.3f * Quality));
+	// Check minimum skill requirement
+	if (MedicSkillLevel < MinimumSkillLevel)
+	{
+		return false;
+	}
+
+	// Calculate quality based on skill and self-treatment
+	float Quality = FMath::Clamp(static_cast<float>(MedicSkillLevel) / 100.0f, 0.1f, 1.0f);
+	Quality += (MedicSkillLevel - MinimumSkillLevel) * QualitySkillScaling * 0.01f;
+
+	if (bIsSelfTreatment)
+	{
+		// Check if this body part can be self-treated
+		if (bHasDefinition && TreatmentDef.UnreachableForSelf.Contains(Wound->BodyPart))
+		{
+			return false;
+		}
+		Quality *= (1.0f - SelfTreatmentPenalty);
+	}
+
+	Quality = FMath::Clamp(Quality, 0.1f, 1.5f);
+
+	// Apply treatment effects
+	Wound->BleedRate *= (1.0f - (BleedReduction * Quality));
+	Wound->InfectionRisk *= (1.0f - (InfectionReduction * Quality));
 
 	Wounds.MarkItemDirty(*Wound);
 	return true;
@@ -820,43 +864,46 @@ void UMOAnatomyComponent::ProcessCondition(FMOCondition& Condition, float DeltaT
 {
 	Condition.Duration += DeltaTime;
 
-	// TODO: Get condition definition from DataTable
-	// For now, use basic progression
+	// Get condition definition from DataTable via MOMedicalSubsystem
+	FMOConditionDefinitionRow ConditionDef;
+	bool bHasDefinition = false;
+
+	if (UWorld* World = GetWorld())
+	{
+		if (UGameInstance* GameInstance = World->GetGameInstance())
+		{
+			if (UMOMedicalSubsystem* MedicalSubsystem = GameInstance->GetSubsystem<UMOMedicalSubsystem>())
+			{
+				bHasDefinition = MedicalSubsystem->GetConditionDefinition(Condition.ConditionType, ConditionDef);
+			}
+		}
+	}
+
+	// Use DataTable values if available, otherwise use defaults
+	float ProgressionRate = bHasDefinition ? ConditionDef.ProgressionRate : 0.1f;
+	float TreatedRecoveryRate = bHasDefinition ? ConditionDef.TreatedRecoveryRate : 0.05f;
+	float NaturalRecoveryRate = bHasDefinition ? ConditionDef.NaturalRecoveryRate : 0.0f;
+	EMOConditionType ProgressesTo = bHasDefinition ? ConditionDef.ProgressesTo : EMOConditionType::None;
+	float ProgressionThreshold = bHasDefinition ? ConditionDef.ProgressionThreshold : 80.0f;
 
 	if (!Condition.bIsTreated)
 	{
-		// Condition worsens if untreated
-		float ProgressionRate = 0.1f;  // Per second
-
-		switch (Condition.ConditionType)
-		{
-		case EMOConditionType::Infection:
-			ProgressionRate = 0.05f;
-			break;
-		case EMOConditionType::Sepsis:
-			ProgressionRate = 0.2f;  // Fast progression
-			break;
-		case EMOConditionType::Shock:
-			ProgressionRate = 0.15f;
-			break;
-		default:
-			break;
-		}
-
-		Condition.Severity = FMath::Min(100.0f, Condition.Severity + ProgressionRate * DeltaTime);
+		// Condition worsens if untreated (minus any natural recovery)
+		float NetRate = ProgressionRate - NaturalRecoveryRate;
+		Condition.Severity = FMath::Min(100.0f, Condition.Severity + NetRate * DeltaTime);
 	}
 	else
 	{
-		// Treated conditions slowly improve
-		Condition.Severity = FMath::Max(0.0f, Condition.Severity - 0.05f * DeltaTime);
+		// Treated conditions improve at treated recovery rate
+		Condition.Severity = FMath::Max(0.0f, Condition.Severity - TreatedRecoveryRate * DeltaTime);
 	}
 
-	// Check for condition progression (e.g., Infection -> Sepsis)
-	if (Condition.ConditionType == EMOConditionType::Infection && Condition.Severity >= 80.0f)
+	// Check for condition progression (defined in DataTable, e.g., Infection -> Sepsis)
+	if (ProgressesTo != EMOConditionType::None && Condition.Severity >= ProgressionThreshold)
 	{
-		if (!HasCondition(EMOConditionType::Sepsis))
+		if (!HasCondition(ProgressesTo))
 		{
-			AddCondition(EMOConditionType::Sepsis, EMOBodyPartType::None, 20.0f);
+			AddCondition(ProgressesTo, EMOBodyPartType::None, 20.0f);
 		}
 	}
 
@@ -965,14 +1012,32 @@ void UMOAnatomyComponent::ApplyShock(float Amount)
 
 bool UMOAnatomyComponent::GetBodyPartDefinition(EMOBodyPartType Part, FMOBodyPartDefinitionRow& OutDef) const
 {
-	// TODO: Implement DataTable lookup via MOMedicalSubsystem
-	// For now, return false to use defaults
+	// Look up via MOMedicalSubsystem
+	if (UWorld* World = GetWorld())
+	{
+		if (UGameInstance* GameInstance = World->GetGameInstance())
+		{
+			if (UMOMedicalSubsystem* MedicalSubsystem = GameInstance->GetSubsystem<UMOMedicalSubsystem>())
+			{
+				return MedicalSubsystem->GetBodyPartDefinition(Part, OutDef);
+			}
+		}
+	}
 	return false;
 }
 
 bool UMOAnatomyComponent::GetWoundTypeDefinition(EMOWoundType Type, FMOWoundTypeDefinitionRow& OutDef) const
 {
-	// TODO: Implement DataTable lookup via MOMedicalSubsystem
-	// For now, return false to use defaults
+	// Look up via MOMedicalSubsystem
+	if (UWorld* World = GetWorld())
+	{
+		if (UGameInstance* GameInstance = World->GetGameInstance())
+		{
+			if (UMOMedicalSubsystem* MedicalSubsystem = GameInstance->GetSubsystem<UMOMedicalSubsystem>())
+			{
+				return MedicalSubsystem->GetWoundTypeDefinition(Type, OutDef);
+			}
+		}
+	}
 	return false;
 }

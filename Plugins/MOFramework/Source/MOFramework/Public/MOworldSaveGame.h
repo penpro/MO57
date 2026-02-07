@@ -112,6 +112,31 @@ struct FMOPersistedWorldItemRecord
 };
 
 /**
+ * Save data for a voxel sculpt actor (terrain modifications).
+ */
+USTRUCT(BlueprintType)
+struct MOFRAMEWORK_API FMOVoxelSculptSaveRecord
+{
+    GENERATED_BODY()
+
+    /** Name of the sculpt actor in the level. Used to match on load. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save")
+    FString ActorName;
+
+    /** Whether this is volume (true) or height (false) sculpting. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save")
+    bool bIsVolumeSculpt = false;
+
+    /** Serialized sculpt data (compressed binary). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save")
+    TArray<uint8> SculptData;
+
+    /** Whether the data was successfully captured. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save")
+    bool bHasValidData = false;
+};
+
+/**
  * Save data for a persisted building in the world.
  */
 USTRUCT(BlueprintType)
@@ -166,6 +191,38 @@ class MOFRAMEWORK_API UMOWorldSaveGame : public USaveGame
     GENERATED_BODY()
 
 public:
+    // ============================================================================
+    // METADATA (for save slot display)
+    // ============================================================================
+
+    /** Display name for this save (if empty, uses slot name). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Metadata")
+    FString DisplayName;
+
+    /** Timestamp when this save was created. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Metadata")
+    FDateTime SaveTimestamp;
+
+    /** Total playtime at the time of save. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Metadata")
+    float TotalPlayTimeSeconds = 0.0f;
+
+    /** World/level name. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Metadata")
+    FString WorldName;
+
+    /** Whether this is an autosave. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Metadata")
+    bool bIsAutosave = false;
+
+    /** Screenshot thumbnail data (PNG compressed, 80x80). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Metadata")
+    TArray<uint8> ScreenshotData;
+
+    // ============================================================================
+    // WORLD DATA
+    // ============================================================================
+
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save")
     TArray<FGuid> DestroyedGuids;
 
@@ -195,4 +252,10 @@ public:
     /** All placed buildings in the world (including ghosts and under-construction). */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Building")
     TArray<FMOPersistedBuildingRecord> Buildings;
+
+    // --- Voxel Sculpt Save Data ---
+
+    /** All voxel sculpt actor states (terrain modifications). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Voxel")
+    TArray<FMOVoxelSculptSaveRecord> VoxelSculptData;
 };

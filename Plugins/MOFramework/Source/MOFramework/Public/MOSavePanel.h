@@ -44,9 +44,13 @@ struct MOFRAMEWORK_API FMOSaveMetadata
 	UPROPERTY(BlueprintReadOnly, Category="MO|Save")
 	bool bIsAutosave = false;
 
-	/** Path to screenshot thumbnail (if any). */
+	/** Path to screenshot thumbnail (if any). DEPRECATED - use ScreenshotData instead. */
 	UPROPERTY(BlueprintReadOnly, Category="MO|Save")
 	FString ScreenshotPath;
+
+	/** Screenshot thumbnail data (PNG compressed, 80x80). */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Save")
+	TArray<uint8> ScreenshotData;
 };
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOSavePanelRequestCloseSignature);

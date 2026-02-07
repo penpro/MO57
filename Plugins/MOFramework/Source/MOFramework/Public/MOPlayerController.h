@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
 #include "InputActionValue.h"
+#include "MOUIContractInterface.h"
 #include "MOPlayerController.generated.h"
 
 /**
@@ -89,10 +90,10 @@
  * -----------------------------------------------------------------------------
  *
  * Movement/Camera:
- *   IA_Move -> HandleMove() -> Pawn->ReceiveMoveInput()
- *   IA_Look -> HandleLook() -> Pawn->ReceiveLookInput()
- *   IA_Jump -> HandleJump() -> Pawn->ReceiveJumpInput()
- *   IA_Sprint -> HandleSprint() -> Pawn->ReceiveSprintInput()
+ *   IA_MOMove -> HandleMove() -> Pawn->ReceiveMoveInput()
+ *   IA_MOLook -> HandleLook() -> Pawn->ReceiveLookInput()
+ *   IA_MOJump -> HandleJump() -> Pawn->ReceiveJumpInput()
+ *   IA_Hustle -> HandleHustle() -> Pawn->ReceiveSprintInput() / ToggleJog()
  *   IA_Crouch -> HandleCrouch() -> Pawn->ReceiveCrouchInput()
  *
  * Actions:
@@ -150,7 +151,8 @@ enum class EMOInputContext : uint8
  * See file header for full architecture documentation.
  */
 UCLASS()
-class MOFRAMEWORK_API AMOPlayerController : public APlayerController
+class MOFRAMEWORK_API AMOPlayerController : public APlayerController,
+	public IMOUIContractInterface
 {
 	GENERATED_BODY()
 
@@ -306,6 +308,18 @@ public:
 	float BuildingRotationIncrement = 15.0f;
 
 	// ============================================================================
+	// INPUT ACTIONS - TERRAFORMING
+	// ============================================================================
+
+	/** Toggle terraforming mode action. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Input|Actions|Terraforming")
+	TSoftObjectPtr<UInputAction> TerraformToggleAction;
+
+	/** Cycle terraforming tool action. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Input|Actions|Terraforming")
+	TSoftObjectPtr<UInputAction> TerraformCycleToolAction;
+
+	// ============================================================================
 	// DEBUG
 	// ============================================================================
 
@@ -380,6 +394,16 @@ public:
 	/** Get the Building component. */
 	UFUNCTION(BlueprintPure, Category="MO|Components")
 	UMOBuildingComponent* GetBuildingComponent() const { return BuildingComponent; }
+
+	// ============================================================================
+	// IMOUIContractInterface IMPLEMENTATION
+	// ============================================================================
+
+	virtual void RequestShowBuildWidget_Implementation(AActor* BuildingActor) override;
+	virtual void RequestOpenContainerInventory_Implementation(AActor* ContainerActor) override;
+	virtual void RequestOpenCraftingMenu_Implementation(AActor* StationActor) override;
+	virtual void RequestShowGhostContextMenu_Implementation(AActor* GhostActor, FVector WorldPosition) override;
+	virtual void RequestShowStationContextMenu_Implementation(AActor* StationActor, FVector WorldPosition) override;
 
 protected:
 	// ============================================================================
@@ -478,6 +502,16 @@ protected:
 
 	/** Handle cancel placement. */
 	void HandleCancelPlacement(const FInputActionValue& Value);
+
+	// ============================================================================
+	// INPUT HANDLERS - TERRAFORMING
+	// ============================================================================
+
+	/** Handle terraforming mode toggle. */
+	void HandleTerraformToggle(const FInputActionValue& Value);
+
+	/** Handle terraforming tool cycle. */
+	void HandleTerraformCycleTool(const FInputActionValue& Value);
 
 	// ============================================================================
 	// DEBUG INPUT HANDLERS

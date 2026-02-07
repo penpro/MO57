@@ -119,6 +119,25 @@ void UMORecipeDetailPanel::DisplayRecipe(FName RecipeId)
 		}
 	}
 
+	// Update required station text
+	if (RequiredStationText)
+	{
+		if (Recipe->RequiredStation != EMOCraftingStation::None)
+		{
+			// Get station name from enum
+			FString StationName = UEnum::GetDisplayValueAsText(Recipe->RequiredStation).ToString();
+			RequiredStationText->SetText(FText::Format(
+				NSLOCTEXT("MOCrafting", "RequiresStation", "Requires: {0}"),
+				FText::FromString(StationName)
+			));
+			RequiredStationText->SetVisibility(ESlateVisibility::Visible);
+		}
+		else
+		{
+			RequiredStationText->SetVisibility(ESlateVisibility::Collapsed);
+		}
+	}
+
 	// Update craft time text
 	if (CraftTimeText)
 	{
@@ -235,6 +254,10 @@ void UMORecipeDetailPanel::ClearDisplay()
 	if (SkillRequirementText)
 	{
 		SkillRequirementText->SetVisibility(ESlateVisibility::Collapsed);
+	}
+	if (RequiredStationText)
+	{
+		RequiredStationText->SetVisibility(ESlateVisibility::Collapsed);
 	}
 	if (CraftTimeText)
 	{

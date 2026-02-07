@@ -204,6 +204,10 @@ protected:
 	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
 	TObjectPtr<UTextBlock> SkillRequirementText;
 
+	/** Shows required crafting station (e.g., "Requires: Campfire"). */
+	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
+	TObjectPtr<UTextBlock> RequiredStationText;
+
 	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
 	TObjectPtr<UTextBlock> CraftTimeText;
 

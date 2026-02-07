@@ -32,6 +32,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Interaction")
 	bool ServerExecuteInteract(AController* InteractorController, AActor* TargetActor);
 
+	// Server-only secondary interaction entry point (right-click).
+	UFUNCTION(BlueprintCallable, Category="MO|Interaction")
+	bool ServerExecuteSecondaryInteract(AController* InteractorController, AActor* TargetActor);
+
 	// Server authoritative targeting trace settings.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Interaction")
 	float ServerTraceRadius = 12.0f;

@@ -17,6 +17,7 @@
 #include "MOItemDatabaseSettings.h"
 #include "MODragVisualWidget.h"
 #include "MOWorldItem.h"
+#include "MOItemComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/Pawn.h"
 #include "CollisionQueryParams.h"
@@ -75,7 +76,19 @@ void UMOInventorySlot::NativeConstruct()
 		SlotBorder->SetBrushColor(NormalBorderColor);
 	}
 
-	RefreshFromInventory();
+	// If visual data was already set (e.g., via SetVisualData before NativeConstruct),
+	// just re-apply it now that the widget is fully constructed.
+	// Otherwise, refresh from the inventory component.
+	if (CachedVisualData.bHasItem)
+	{
+		// Visual data was pre-set, just apply it to the now-constructed widget
+		ApplyVisualDataToWidget();
+	}
+	else
+	{
+		// No pre-set data, try to load from inventory
+		RefreshFromInventory();
+	}
 }
 
 void UMOInventorySlot::InitializeSlot(UMOInventoryComponent* InInventoryComponent, int32 InSlotIndex)
@@ -108,6 +121,41 @@ void UMOInventorySlot::RefreshFromInventory()
 
 	ApplyVisualDataToWidget();
 	OnVisualDataUpdated(CachedVisualData);
+}
+
+void UMOInventorySlot::SetVisualData(const FMOInventorySlotVisualData& InVisualData)
+{
+	UE_LOG(LogMOFramework, Log, TEXT("[MOInventorySlot] SetVisualData: SlotIndex=%d, bHasItem=%s, ItemDefId=%s, Qty=%d, HasWorldItem=%s"),
+		SlotIndex,
+		InVisualData.bHasItem ? TEXT("true") : TEXT("false"),
+		*InVisualData.ItemDefinitionId.ToString(),
+		InVisualData.Quantity,
+		InVisualData.SourceWorldItem.IsValid() ? TEXT("yes") : TEXT("no"));
+
+	CachedVisualData = InVisualData;
+
+	// Extract world item reference for drag operations
+	SourceWorldItem = InVisualData.SourceWorldItem;
+
+	ApplyVisualDataToWidget();
+	OnVisualDataUpdated(CachedVisualData);
+}
+
+void UMOInventorySlot::ClearVisualData()
+{
+	CachedVisualData = FMOInventorySlotVisualData();
+	ApplyVisualDataToWidget();
+	OnVisualDataUpdated(CachedVisualData);
+}
+
+void UMOInventorySlot::SetSourceWorldItem(AMOWorldItem* InWorldItem)
+{
+	SourceWorldItem = InWorldItem;
+}
+
+AMOWorldItem* UMOInventorySlot::GetSourceWorldItem() const
+{
+	return SourceWorldItem.Get();
 }
 
 void UMOInventorySlot::ApplyVisualDataToWidget()
@@ -301,13 +349,23 @@ FReply UMOInventorySlot::NativeOnMouseButtonUp(const FGeometry& InGeometry, cons
 	// released before the drag threshold was exceeded, we need to manually fire the click
 	if (InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton && bButtonPressed && !bDragStarted)
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventorySlot] NativeOnMouseButtonUp - Firing manual click for slot %d"), SlotIndex);
 		bButtonPressed = false;
 
-		// Fire the click event
+		// Check if shift is held for quick transfer
+		const bool bShiftHeld = InMouseEvent.IsShiftDown();
+
 		if (CachedVisualData.bHasItem)
 		{
-			OnSlotClicked.Broadcast(SlotIndex, CachedVisualData.ItemGuid);
+			if (bShiftHeld)
+			{
+				UE_LOG(LogMOFramework, Log, TEXT("[MOInventorySlot] Shift+Click on slot %d - quick transfer"), SlotIndex);
+				OnSlotShiftClicked.Broadcast(SlotIndex, CachedVisualData.ItemGuid);
+			}
+			else
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOInventorySlot] Click on slot %d"), SlotIndex);
+				OnSlotClicked.Broadcast(SlotIndex, CachedVisualData.ItemGuid);
+			}
 		}
 		else
 		{
@@ -336,10 +394,15 @@ void UMOInventorySlot::NativeOnDragDetected(const FGeometry& InGeometry, const F
 	// Create the drag operation
 	UMOInventorySlotDragOperation* DragOp = NewObject<UMOInventorySlotDragOperation>();
 	DragOp->SourceInventoryComponent = InventoryComponent;
+	DragOp->SourceWorldItem = SourceWorldItem;  // Set world item source (for nearby items)
 	DragOp->SourceSlotIndex = SlotIndex;
 	DragOp->ItemGuid = CachedVisualData.ItemGuid;
 	DragOp->ItemDefinitionId = CachedVisualData.ItemDefinitionId;
 	DragOp->Quantity = CachedVisualData.Quantity;
+
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOInventorySlot] Creating drag op: FromInventory=%s, FromWorldItem=%s"),
+		DragOp->IsFromInventory() ? TEXT("yes") : TEXT("no"),
+		DragOp->IsFromWorldItem() ? TEXT("yes") : TEXT("no"));
 
 	// Create the drag visual - Unreal handles positioning automatically
 	DragOp->DefaultDragVisual = CreateDragVisual();
@@ -404,43 +467,155 @@ bool UMOInventorySlot::NativeOnDrop(const FGeometry& InGeometry, const FDragDrop
 		return false;
 	}
 
-	UMOInventoryComponent* SourceInventory = SlotDragOp->SourceInventoryComponent.Get();
-	if (!IsValid(SourceInventory) || !IsValid(InventoryComponent))
+	const int32 SourceSlot = SlotDragOp->SourceSlotIndex;
+	const int32 TargetSlot = SlotIndex;
+	const FGuid ItemGuid = SlotDragOp->ItemGuid;
+
+	// Handle drag from world item (nearby items panel)
+	if (SlotDragOp->IsFromWorldItem())
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventorySlot] Drop failed - invalid inventory components"));
+		AMOWorldItem* DraggedWorldItem = SlotDragOp->SourceWorldItem.Get();
+		if (!IsValid(DraggedWorldItem))
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOInventorySlot] Drop failed - world item no longer valid"));
+			return false;
+		}
+
+		// If target has no inventory, can't pick up
+		if (!IsValid(InventoryComponent))
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOInventorySlot] Drop failed - can't pick up world item to slot without inventory"));
+			return false;
+		}
+
+		// Pick up the world item into the target inventory
+		UMOItemComponent* ItemComp = DraggedWorldItem->GetItemComponent();
+		if (!IsValid(ItemComp))
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOInventorySlot] Drop failed - world item has no ItemComponent"));
+			return false;
+		}
+
+		// Generate a new GUID for the picked up item
+		FGuid NewItemGuid = FGuid::NewGuid();
+		bool bAdded = InventoryComponent->AddItemByGuid(NewItemGuid, ItemComp->ItemDefinitionId, ItemComp->Quantity);
+
+		if (bAdded)
+		{
+			UE_LOG(LogMOFramework, Log, TEXT("[MOInventorySlot] Picked up world item %s into inventory"),
+				*DraggedWorldItem->GetName());
+
+			// Destroy or hide the world item
+			if (DraggedWorldItem->bDestroyAfterPickup)
+			{
+				DraggedWorldItem->Destroy();
+			}
+			else
+			{
+				DraggedWorldItem->SetActorHiddenInGame(true);
+				DraggedWorldItem->SetActorEnableCollision(false);
+			}
+		}
+		else
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOInventorySlot] Failed to add world item to inventory (full?)"));
+		}
+
+		// Refresh this slot
+		RefreshFromInventory();
+
+		// Broadcast drop received so parent widgets can refresh (e.g., nearby items panel)
+		// Using nullptr for SourceInventory since this came from a world item
+		OnSlotDropReceived.Broadcast(TargetSlot, SourceSlot, nullptr);
+		return true;
+	}
+
+	// Handle drag from inventory
+	UMOInventoryComponent* SourceInventory = SlotDragOp->SourceInventoryComponent.Get();
+	if (!IsValid(SourceInventory))
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventorySlot] Drop failed - invalid source inventory"));
 		return false;
 	}
 
-	const int32 SourceSlot = SlotDragOp->SourceSlotIndex;
-	const int32 TargetSlot = SlotIndex;
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOInventorySlot] Drop: Source=%d -> Target=%d, ItemGuid=%s"),
+		SourceSlot, TargetSlot, *ItemGuid.ToString(EGuidFormats::Short));
 
-	UE_LOG(LogMOFramework, Warning, TEXT("[MOInventorySlot] Drop: Source=%d -> Target=%d"), SourceSlot, TargetSlot);
+	// Case 1: Target slot has no inventory (e.g., nearby items panel)
+	// Drop the item into the world from the source inventory
+	if (!IsValid(InventoryComponent))
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventorySlot] Target has no inventory, dropping item to world"));
 
-	// Same slot, no action needed
+		// Get drop location from player
+		APlayerController* PC = GetOwningPlayer();
+		if (IsValid(PC))
+		{
+			APawn* Pawn = PC->GetPawn();
+			if (IsValid(Pawn))
+			{
+				FVector DropLocation = Pawn->GetActorLocation() + Pawn->GetActorForwardVector() * 100.0f;
+				FRotator DropRotation = FRotator(0, FMath::RandRange(0.0f, 360.0f), 0);
+
+				AActor* DroppedActor = SourceInventory->DropItemByGuid(ItemGuid, DropLocation, DropRotation);
+				if (IsValid(DroppedActor))
+				{
+					UE_LOG(LogMOFramework, Log, TEXT("[MOInventorySlot] Dropped item to world: %s"), *DroppedActor->GetName());
+				}
+				else
+				{
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOInventorySlot] Failed to drop item to world"));
+				}
+			}
+		}
+
+		// Also broadcast for any additional handling
+		OnSlotDropReceived.Broadcast(TargetSlot, SourceSlot, SourceInventory);
+		return true;
+	}
+
+	// Case 2: Same slot in same inventory, no action needed
 	if (SourceInventory == InventoryComponent && SourceSlot == TargetSlot)
 	{
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventorySlot] Drop on same slot, ignoring"));
 		return true;
 	}
 
-	// Same inventory: swap slots
+	// Case 3: Same inventory - swap slots
 	if (SourceInventory == InventoryComponent)
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventorySlot] Swapping slots %d <-> %d"), SourceSlot, TargetSlot);
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventorySlot] Same inventory - swapping slots %d <-> %d"), SourceSlot, TargetSlot);
 		InventoryComponent->SwapSlots(SourceSlot, TargetSlot);
 	}
+	// Case 4: Different inventories - transfer item
 	else
 	{
-		// Different inventory - broadcast event for game-specific handling
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventorySlot] Cross-inventory drop, broadcasting event"));
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventorySlot] Cross-inventory transfer: %s from %s to %s"),
+			*ItemGuid.ToString(EGuidFormats::Short),
+			*SourceInventory->GetOwner()->GetName(),
+			*InventoryComponent->GetOwner()->GetName());
+
+		// Transfer the item from source to target inventory
+		bool bTransferred = SourceInventory->TransferItem(ItemGuid, InventoryComponent);
+
+		if (bTransferred)
+		{
+			UE_LOG(LogMOFramework, Log, TEXT("[MOInventorySlot] Cross-inventory transfer successful"));
+		}
+		else
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOInventorySlot] Cross-inventory transfer failed (inventory full?)"));
+		}
+
+		// Also broadcast for any additional handling
 		OnSlotDropReceived.Broadcast(TargetSlot, SourceSlot, SourceInventory);
 	}
 
-	// Refresh slots
-	RefreshFromInventory();
-
-	// Note: Source slot visual restoration happens in NativeOnDragCancelled or
-	// the source slot's own handling when it detects the drag ended
+	// Refresh this slot's visual
+	if (IsValid(InventoryComponent))
+	{
+		RefreshFromInventory();
+	}
 
 	return true;
 }
@@ -521,11 +696,7 @@ void UMOInventorySlot::SetDragHoverVisual(bool bHovered)
 
 void UMOInventorySlot::TryDropIntoWorld()
 {
-	UE_LOG(LogMOFramework, Error, TEXT(">>>>> [MOInventorySlot] TryDropIntoWorld: CALLED for slot %d <<<<<"), SlotIndex);
-	if (GEngine)
-	{
-		GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Red, FString::Printf(TEXT("TryDropIntoWorld CALLED slot %d"), SlotIndex));
-	}
+	UE_LOG(LogMOFramework, Verbose, TEXT("[MOInventorySlot] TryDropIntoWorld: slot %d"), SlotIndex);
 
 	// Cache values we need before any operations that might invalidate 'this'
 	UMOInventoryComponent* InvComp = InventoryComponent;
@@ -562,14 +733,6 @@ void UMOInventorySlot::TryDropIntoWorld()
 	// Get player forward direction (ignore pitch so items don't drop into ground/sky)
 	FVector PlayerLocation = PlayerPawn->GetActorLocation();
 	FRotator PlayerRotation = PlayerPawn->GetActorRotation();
-
-	UE_LOG(LogMOFramework, Error, TEXT(">>>>> [MOInventorySlot] Player at %s, rotation %s <<<<<"),
-		*PlayerLocation.ToString(), *PlayerRotation.ToString());
-	if (GEngine)
-	{
-		GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Yellow, FString::Printf(TEXT("Player at %s"), *PlayerLocation.ToString()));
-	}
-
 	PlayerRotation.Pitch = 0.0f; // Flatten to horizontal
 
 	// Random offset in front of player (150-250cm forward, -50 to +50cm sideways)
@@ -580,9 +743,6 @@ void UMOInventorySlot::TryDropIntoWorld()
 	FVector RightDir = FRotationMatrix(PlayerRotation).GetScaledAxis(EAxis::Y);
 
 	FVector DropBaseLocation = PlayerLocation + (ForwardDir * ForwardDistance) + (RightDir * SideOffset);
-
-	UE_LOG(LogMOFramework, Warning, TEXT("[MOInventorySlot] TryDropIntoWorld: ForwardDir=%s, RightDir=%s, DropBase=%s"),
-		*ForwardDir.ToString(), *RightDir.ToString(), *DropBaseLocation.ToString());
 
 	// Trace down from above to find the ground
 	FHitResult HitResult;
@@ -599,25 +759,15 @@ void UMOInventorySlot::TryDropIntoWorld()
 	{
 		// Spawn 100cm above the ground surface
 		DropLocation = HitResult.Location + FVector(0.0f, 0.0f, 100.0f);
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventorySlot] TryDropIntoWorld: Ground trace hit at %s, DropLocation=%s"),
-			*HitResult.Location.ToString(), *DropLocation.ToString());
 	}
 	else
 	{
 		// No ground found, just use base location + 100cm up
 		DropLocation = DropBaseLocation + FVector(0.0f, 0.0f, 100.0f);
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventorySlot] TryDropIntoWorld: No ground hit, using DropLocation=%s"),
-			*DropLocation.ToString());
 	}
 
 	// Random rotation for variety
 	const FRotator DropRotation(0.0f, FMath::RandRange(0.0f, 360.0f), 0.0f);
-
-	UE_LOG(LogMOFramework, Error, TEXT(">>>>> [MOInventorySlot] FINAL DROP Location=%s <<<<<"), *DropLocation.ToString());
-	if (GEngine)
-	{
-		GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Green, FString::Printf(TEXT("FINAL DROP at %s"), *DropLocation.ToString()));
-	}
 
 	// Call the inventory component to drop the item
 	// NOTE: This may trigger UI rebuild which could destroy 'this' widget
@@ -626,19 +776,12 @@ void UMOInventorySlot::TryDropIntoWorld()
 	// At this point 'this' might be invalid if the UI was rebuilt, but DroppedActor should still be valid
 	if (IsValid(DroppedActor))
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventorySlot] TryDropIntoWorld: Dropped actor '%s' at location %s"),
+		UE_LOG(LogMOFramework, Verbose, TEXT("[MOInventorySlot] TryDropIntoWorld: Dropped '%s' at %s"),
 			*DroppedActor->GetName(), *DroppedActor->GetActorLocation().ToString());
 
-		// Enable drop physics on the world item
-		if (AMOWorldItem* WorldItem = Cast<AMOWorldItem>(DroppedActor))
-		{
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOInventorySlot] TryDropIntoWorld: Calling EnableDropPhysics on %s"), *WorldItem->GetName());
-			WorldItem->EnableDropPhysics();
-		}
-		else
-		{
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOInventorySlot] TryDropIntoWorld: DroppedActor is NOT an AMOWorldItem"));
-		}
+		// Broadcast drop event so nearby panel can refresh
+		// Use nullptr for SourceInventory to indicate "dropped to world"
+		OnSlotDropReceived.Broadcast(CachedSlotIndex, CachedSlotIndex, nullptr);
 	}
 	else
 	{

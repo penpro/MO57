@@ -2,6 +2,10 @@
 #include "MOFramework.h"
 #include "Components/TextBlock.h"
 #include "Components/Image.h"
+#include "Engine/Texture2D.h"
+#include "IImageWrapper.h"
+#include "IImageWrapperModule.h"
+#include "Modules/ModuleManager.h"
 
 void UMOSaveSlotEntry::NativeConstruct()
 {
@@ -69,5 +73,45 @@ void UMOSaveSlotEntry::RefreshDisplay()
 		AutosaveIndicator->SetVisibility(Metadata.bIsAutosave ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
 	}
 
-	// TODO: Load screenshot thumbnail from ScreenshotPath if available
+	// Load screenshot from inline PNG data
+	if (ScreenshotImage && Metadata.ScreenshotData.Num() > 0)
+	{
+		// Decode PNG data
+		IImageWrapperModule& ImageWrapperModule = FModuleManager::LoadModuleChecked<IImageWrapperModule>(FName("ImageWrapper"));
+		TSharedPtr<IImageWrapper> ImageWrapper = ImageWrapperModule.CreateImageWrapper(EImageFormat::PNG);
+
+		if (ImageWrapper.IsValid() && ImageWrapper->SetCompressed(Metadata.ScreenshotData.GetData(), Metadata.ScreenshotData.Num()))
+		{
+			TArray64<uint8> RawData;
+			if (ImageWrapper->GetRaw(ERGBFormat::BGRA, 8, RawData))
+			{
+				const int32 Width = ImageWrapper->GetWidth();
+				const int32 Height = ImageWrapper->GetHeight();
+
+				// Create texture from raw data (store in UPROPERTY to prevent GC)
+				CachedScreenshotTexture = UTexture2D::CreateTransient(Width, Height, PF_B8G8R8A8);
+				if (CachedScreenshotTexture)
+				{
+					// Lock and copy data
+					FTexture2DMipMap& Mip = CachedScreenshotTexture->GetPlatformData()->Mips[0];
+					void* TextureData = Mip.BulkData.Lock(LOCK_READ_WRITE);
+					FMemory::Memcpy(TextureData, RawData.GetData(), RawData.Num());
+					Mip.BulkData.Unlock();
+
+					// Update resource
+					CachedScreenshotTexture->UpdateResource();
+
+					// Apply to image widget
+					ScreenshotImage->SetBrushFromTexture(CachedScreenshotTexture);
+					ScreenshotImage->SetVisibility(ESlateVisibility::Visible);
+				}
+			}
+		}
+	}
+	else if (ScreenshotImage)
+	{
+		// No screenshot data - hide the image or show placeholder
+		CachedScreenshotTexture = nullptr;
+		ScreenshotImage->SetVisibility(ESlateVisibility::Collapsed);
+	}
 }

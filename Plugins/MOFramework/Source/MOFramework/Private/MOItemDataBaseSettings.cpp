@@ -1,4 +1,4 @@
-﻿#include "MOItemDatabaseSettings.h"
+#include "MOItemDatabaseSettings.h"
 #include "MOFramework.h"
 
 #include "Engine/DataTable.h"

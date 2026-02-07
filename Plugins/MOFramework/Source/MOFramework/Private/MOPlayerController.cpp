@@ -4,6 +4,8 @@
 #include "MOPossessionComponent.h"
 #include "MONotificationComponent.h"
 #include "MOBuildingComponent.h"
+#include "MOBuildableActor.h"
+#include "MOInteractorComponent.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "InputMappingContext.h"
@@ -206,6 +208,22 @@ void AMOPlayerController::SetupInputComponent()
 	{
 		EnhancedInput->BindAction(CancelPlacement, ETriggerEvent::Started, this, &AMOPlayerController::HandleCancelPlacement);
 		UE_LOG(LogTemp, Log, TEXT("AMOPlayerController: Bound CancelPlacementAction"));
+	}
+
+	// ============================================================================
+	// TERRAFORMING BINDINGS
+	// ============================================================================
+
+	if (UInputAction* TerraformToggle = TerraformToggleAction.LoadSynchronous())
+	{
+		EnhancedInput->BindAction(TerraformToggle, ETriggerEvent::Started, this, &AMOPlayerController::HandleTerraformToggle);
+		UE_LOG(LogTemp, Log, TEXT("AMOPlayerController: Bound TerraformToggleAction"));
+	}
+
+	if (UInputAction* TerraformCycle = TerraformCycleToolAction.LoadSynchronous())
+	{
+		EnhancedInput->BindAction(TerraformCycle, ETriggerEvent::Started, this, &AMOPlayerController::HandleTerraformCycleTool);
+		UE_LOG(LogTemp, Log, TEXT("AMOPlayerController: Bound TerraformCycleToolAction"));
 	}
 }
 
@@ -494,6 +512,22 @@ void AMOPlayerController::HandleSecondaryAction(const FInputActionValue& Value)
 {
 	if (APawn* ControllablePawn = CachedControllablePawn.Get())
 	{
+		// Check if there's an interactable target - if so, trigger secondary interact (right-click menu)
+		// Otherwise, fall back to secondary action (block/aim)
+		UMOInteractorComponent* Interactor = ControllablePawn->FindComponentByClass<UMOInteractorComponent>();
+		if (Interactor)
+		{
+			AActor* TargetActor = nullptr;
+			FHitResult HitResult;
+			if (Interactor->FindInteractTarget(TargetActor, HitResult))
+			{
+				// Found an interactable target - use secondary interact
+				IMOControllableInterface::Execute_RequestSecondaryInteract(ControllablePawn);
+				return;
+			}
+		}
+
+		// No interactable target - fall back to regular secondary action (block/aim)
 		IMOControllableInterface::Execute_RequestSecondaryAction(ControllablePawn);
 	}
 }
@@ -618,6 +652,26 @@ void AMOPlayerController::HandleCancelPlacement(const FInputActionValue& Value)
 }
 
 // ============================================================================
+// INPUT HANDLERS - TERRAFORMING
+// ============================================================================
+
+void AMOPlayerController::HandleTerraformToggle(const FInputActionValue& Value)
+{
+	if (APawn* ControllablePawn = CachedControllablePawn.Get())
+	{
+		IMOControllableInterface::Execute_RequestTerraformToggle(ControllablePawn);
+	}
+}
+
+void AMOPlayerController::HandleTerraformCycleTool(const FInputActionValue& Value)
+{
+	if (APawn* ControllablePawn = CachedControllablePawn.Get())
+	{
+		IMOControllableInterface::Execute_RequestTerraformCycleTool(ControllablePawn);
+	}
+}
+
+// ============================================================================
 // DEBUG INPUT HANDLERS
 // ============================================================================
 
@@ -736,5 +790,56 @@ void AMOPlayerController::RemoveMappingContext(UInputMappingContext* Context)
 	if (UEnhancedInputLocalPlayerSubsystem* Subsystem = GetEnhancedInputSubsystem())
 	{
 		Subsystem->RemoveMappingContext(Context);
+	}
+}
+
+// ============================================================================
+// IMOUIContractInterface IMPLEMENTATION
+// ============================================================================
+
+void AMOPlayerController::RequestShowBuildWidget_Implementation(AActor* BuildingActor)
+{
+	if (UIManagerComponent)
+	{
+		if (AMOBuildableActor* Buildable = Cast<AMOBuildableActor>(BuildingActor))
+		{
+			UIManagerComponent->ShowBuildWidget(Buildable);
+		}
+	}
+}
+
+void AMOPlayerController::RequestOpenContainerInventory_Implementation(AActor* ContainerActor)
+{
+	if (UIManagerComponent)
+	{
+		UIManagerComponent->OpenInventoryWithContainer(ContainerActor);
+	}
+}
+
+void AMOPlayerController::RequestOpenCraftingMenu_Implementation(AActor* StationActor)
+{
+	if (UIManagerComponent)
+	{
+		UIManagerComponent->OpenCraftingMenu();
+	}
+}
+
+void AMOPlayerController::RequestShowGhostContextMenu_Implementation(AActor* GhostActor, FVector WorldPosition)
+{
+	// Ghost context menu is handled by ShowBuildWidget - it shows the context menu for ghost buildings
+	if (UIManagerComponent)
+	{
+		if (AMOBuildableActor* Buildable = Cast<AMOBuildableActor>(GhostActor))
+		{
+			UIManagerComponent->ShowBuildWidget(Buildable);
+		}
+	}
+}
+
+void AMOPlayerController::RequestShowStationContextMenu_Implementation(AActor* StationActor, FVector WorldPosition)
+{
+	if (UIManagerComponent)
+	{
+		UIManagerComponent->ShowStationContextMenu(StationActor, WorldPosition);
 	}
 }

@@ -2,6 +2,7 @@
 #include "MOBuildableActor.h"
 #include "MOBuildProgressComponent.h"
 #include "MOInventoryComponent.h"
+#include "MOSkillsComponent.h"
 #include "MOItemDatabaseSettings.h"
 #include "MOItemDefinitionRow.h"
 #include "MOWorldItem.h"
@@ -9,15 +10,17 @@
 #include "MOContainerActor.h"
 #include "MOBuildingTypes.h"
 #include "MOFramework.h"
+#include "MOCommonButton.h"
 #include "MOMaterialSourceInterface.h"
 #include "Components/CheckBox.h"
-#include "Components/Button.h"
 #include "Components/VerticalBox.h"
 #include "Components/TextBlock.h"
 #include "Components/ProgressBar.h"
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "Engine/World.h"
+
+const FName UMOGhostContextMenu::BuildingSkillId = FName("Construction");
 
 UMOGhostContextMenu::UMOGhostContextMenu(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -39,6 +42,19 @@ void UMOGhostContextMenu::InitializeForGhost(AMOBuildableActor* Target, UMOInven
 	TargetBuilding = Target;
 	BuilderInventory = InBuilderInventory;
 	BuildProgress = Target->BuildProgressComponent;
+
+	// Get skills component from the builder's owner
+	if (InBuilderInventory)
+	{
+		AActor* BuilderOwner = InBuilderInventory->GetOwner();
+		if (BuilderOwner)
+		{
+			BuilderSkills = BuilderOwner->FindComponentByClass<UMOSkillsComponent>();
+		}
+	}
+
+	// Clear any previous deposited materials tracking
+	DepositedMaterialsForRefund.Empty();
 
 	// Initialize checkboxes to default state
 	if (InventoryCheckbox)
@@ -173,46 +189,30 @@ void UMOGhostContextMenu::CancelBuild()
 
 	if (Progress && Building)
 	{
-		// Get deposited materials for dropping
-		TMap<FName, int32> DepositedMats;
-		Progress->GetDepositedMaterials(DepositedMats);
+		// Determine if build has started (construction in progress)
+		const bool bBuildStarted = (Progress->GetState() == EMOBuildState::Constructing ||
+			Progress->GetState() == EMOBuildState::Paused);
 
-		// Drop materials into the world
+		// Calculate refund based on build state and skill
+		const int32 TotalDeposited = DepositedMaterialsForRefund.Num();
+		const int32 RefundCount = CalculateRefundAmount(TotalDeposited, bBuildStarted);
+
+		// Drop refunded materials (highest rarity items are kept, lowest rarity lost first)
 		FVector DropLocation = Building->GetActorLocation() + FVector(0.0f, 0.0f, 50.0f);
-		for (const auto& Pair : DepositedMats)
-		{
-			// Spawn world items for each deposited material
-			for (int32 i = 0; i < Pair.Value; ++i)
-			{
-				// Get item definition for the world actor class
-				FMOItemDefinitionRow ItemDef;
-				if (UMOItemDatabaseSettings::GetItemDefinition(Pair.Key, ItemDef))
-				{
-					UClass* WorldActorClass = ItemDef.WorldVisual.WorldActorClass.LoadSynchronous();
-					if (WorldActorClass)
-					{
-						FVector SpawnLocation = DropLocation + FVector(
-							FMath::RandRange(-50.0f, 50.0f),
-							FMath::RandRange(-50.0f, 50.0f),
-							FMath::RandRange(0.0f, 30.0f)
-						);
-						FActorSpawnParameters SpawnParams;
-						SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+		DropRefundedMaterials(RefundCount, DropLocation);
 
-						AActor* SpawnedActor = GetWorld()->SpawnActor<AActor>(WorldActorClass, SpawnLocation, FRotator::ZeroRotator, SpawnParams);
-						UE_LOG(LogMOFramework, Verbose, TEXT("[MOGhostContextMenu] Dropped %s at %s"),
-							*Pair.Key.ToString(), *SpawnLocation.ToString());
-					}
-				}
-			}
-		}
+		UE_LOG(LogMOFramework, Log, TEXT("[MOGhostContextMenu] Cancel refund: %d/%d materials returned (build started: %s)"),
+			RefundCount, TotalDeposited, bBuildStarted ? TEXT("yes") : TEXT("no"));
 
 		// Cancel the construction
-		Progress->CancelConstruction(false); // Materials already dropped
+		Progress->CancelConstruction(false); // Materials already handled
 
 		// Destroy the ghost building
 		Building->Destroy();
 	}
+
+	// Clear tracking
+	DepositedMaterialsForRefund.Empty();
 
 	OnCancelled.Broadcast();
 	OnRequestClose.Broadcast();
@@ -258,19 +258,43 @@ void UMOGhostContextMenu::NativeConstruct()
 	Super::NativeConstruct();
 
 	// Bind button handlers
-	if (AddBuildButton)
+	if (AddMaterialsButton)
 	{
-		AddBuildButton->OnClicked.AddDynamic(this, &UMOGhostContextMenu::HandleAddBuildClicked);
+		AddMaterialsButton->OnClicked().AddUObject(this, &UMOGhostContextMenu::HandleAddMaterialsClicked);
+	}
+	if (BuildButton)
+	{
+		BuildButton->OnClicked().AddUObject(this, &UMOGhostContextMenu::HandleBuildClicked);
 	}
 	if (CancelButton)
 	{
-		CancelButton->OnClicked.AddDynamic(this, &UMOGhostContextMenu::HandleCancelClicked);
+		CancelButton->OnClicked().AddUObject(this, &UMOGhostContextMenu::HandleCancelClicked);
 	}
 }
 
 void UMOGhostContextMenu::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 {
 	Super::NativeTick(MyGeometry, InDeltaTime);
+
+	// Handle mouse leave grace timer
+	if (MouseLeaveTimer > 0.0f && !bIsMouseOver)
+	{
+		MouseLeaveTimer -= InDeltaTime;
+		if (MouseLeaveTimer <= 0.0f)
+		{
+			MouseLeaveTimer = 0.0f;
+			OnRequestClose.Broadcast();
+			return;
+		}
+	}
+
+	// Check for build completion
+	if (IsBuildComplete())
+	{
+		// Build finished - close and update ghost visual
+		OnRequestClose.Broadcast();
+		return;
+	}
 
 	// Update build progress UI if building
 	if (IsBuildTimerActive())
@@ -303,8 +327,8 @@ void UMOGhostContextMenu::NativeTick(const FGeometry& MyGeometry, float InDeltaT
 
 FReply UMOGhostContextMenu::NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent)
 {
-	// Close on Escape
-	if (InKeyEvent.GetKey() == EKeys::Escape)
+	// Close on Escape or Tab
+	if (InKeyEvent.GetKey() == EKeys::Escape || InKeyEvent.GetKey() == EKeys::Tab)
 	{
 		OnRequestClose.Broadcast();
 		return FReply::Handled();
@@ -313,19 +337,57 @@ FReply UMOGhostContextMenu::NativeOnKeyDown(const FGeometry& InGeometry, const F
 	return Super::NativeOnKeyDown(InGeometry, InKeyEvent);
 }
 
+void UMOGhostContextMenu::NativeOnMouseEnter(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
+{
+	Super::NativeOnMouseEnter(InGeometry, InMouseEvent);
+
+	bIsMouseOver = true;
+	MouseLeaveTimer = 0.0f; // Cancel any pending close
+}
+
+void UMOGhostContextMenu::NativeOnMouseLeave(const FPointerEvent& InMouseEvent)
+{
+	Super::NativeOnMouseLeave(InMouseEvent);
+
+	bIsMouseOver = false;
+
+	// Start grace timer - will close if mouse doesn't return
+	if (bCloseOnMouseLeave && !IsBuildTimerActive())
+	{
+		MouseLeaveTimer = MouseLeaveGraceTime;
+	}
+}
+
+void UMOGhostContextMenu::SetPopupPosition(FVector2D ScreenPosition)
+{
+	// Use SetPositionInViewport for reliable screen positioning
+	// Pass true to remove DPI scale since our coordinates are in screen pixels
+	SetPositionInViewport(ScreenPosition, true);
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOGhostContextMenu] SetPopupPosition called with (%.0f, %.0f)"),
+		ScreenPosition.X, ScreenPosition.Y);
+}
+
+bool UMOGhostContextMenu::IsBuildComplete() const
+{
+	UMOBuildProgressComponent* Progress = BuildProgress.Get();
+	return Progress && Progress->GetState() == EMOBuildState::Complete;
+}
+
 // ============================================================================
 // HANDLERS
 // ============================================================================
 
-void UMOGhostContextMenu::HandleAddBuildClicked()
+void UMOGhostContextMenu::HandleAddMaterialsClicked()
+{
+	AddMaterials();
+}
+
+void UMOGhostContextMenu::HandleBuildClicked()
 {
 	if (AreAllMaterialsDeposited())
 	{
 		StartBuild();
-	}
-	else
-	{
-		AddMaterials();
 	}
 }
 
@@ -340,25 +402,69 @@ void UMOGhostContextMenu::HandleCancelClicked()
 
 void UMOGhostContextMenu::UpdateButtonState()
 {
-	bool bShowBuild = AreAllMaterialsDeposited();
+	const bool bAllMaterialsReady = AreAllMaterialsDeposited();
+	const bool bBuildActive = IsBuildTimerActive();
 
-	if (AddBuildButtonText)
+	UE_LOG(LogMOFramework, Log, TEXT("[MOGhostContextMenu] UpdateButtonState: AllMaterials=%d, BuildActive=%d, HasProgressBar=%d, HasTimeText=%d"),
+		bAllMaterialsReady ? 1 : 0, bBuildActive ? 1 : 0,
+		BuildProgressBar != nullptr ? 1 : 0, BuildTimeText != nullptr ? 1 : 0);
+
+	// Build button - enabled only when all materials deposited and not already building
+	if (BuildButton)
 	{
-		AddBuildButtonText->SetText(bShowBuild ? FText::FromString(TEXT("Build")) : FText::FromString(TEXT("Add")));
+		BuildButton->SetIsEnabled(bAllMaterialsReady && !bBuildActive);
 	}
 
-	// Show/hide progress bar based on state
+	// Add Materials button - hidden when all materials deposited or when building
+	if (AddMaterialsButton)
+	{
+		AddMaterialsButton->SetVisibility((bAllMaterialsReady || bBuildActive)
+			? ESlateVisibility::Collapsed
+			: ESlateVisibility::Visible);
+	}
+
+	// Progress bar and time text are always visible
+	// They show 0% / 00:00 before build starts, then update during build
 	if (BuildProgressBar)
 	{
-		BuildProgressBar->SetVisibility(IsBuildTimerActive() ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+		BuildProgressBar->SetVisibility(ESlateVisibility::Visible);
+		if (!bBuildActive)
+		{
+			BuildProgressBar->SetPercent(0.0f);
+		}
 	}
+	else
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOGhostContextMenu] BuildProgressBar not bound! Add a ProgressBar named 'BuildProgressBar' to the widget."));
+	}
+
 	if (BuildTimeText)
 	{
-		BuildTimeText->SetVisibility(IsBuildTimerActive() ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+		BuildTimeText->SetVisibility(ESlateVisibility::Visible);
+		if (!bBuildActive)
+		{
+			// Show total build time before starting
+			UMOBuildProgressComponent* Progress = BuildProgress.Get();
+			if (Progress)
+			{
+				float TotalTime = Progress->GetProgressData().TotalBuildTime;
+				int32 Minutes = FMath::FloorToInt(TotalTime / 60.0f);
+				int32 Seconds = FMath::FloorToInt(FMath::Fmod(TotalTime, 60.0f));
+				BuildTimeText->SetText(FText::FromString(FString::Printf(TEXT("%02d:%02d"), Minutes, Seconds)));
+			}
+			else
+			{
+				BuildTimeText->SetText(FText::FromString(TEXT("--:--")));
+			}
+		}
+	}
+	else
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOGhostContextMenu] BuildTimeText not bound! Add a TextBlock named 'BuildTimeText' to the widget."));
 	}
 
 	// Blueprint callback
-	OnButtonStateChanged(bShowBuild);
+	OnButtonStateChanged(bAllMaterialsReady);
 }
 
 UTextBlock* UMOGhostContextMenu::CreateMaterialTextWidget(const FMOGhostMaterialEntry& Entry)
@@ -484,6 +590,19 @@ bool UMOGhostContextMenu::TryGatherMaterial(FName ItemId)
 			if (Gathered > 0)
 			{
 				Progress->DepositMaterial(ItemId);
+
+				// Track deposited material for potential refund
+				FMODepositedMaterial DepositedMat;
+				DepositedMat.ItemId = ItemId;
+
+				// Get rarity from item definition
+				FMOItemDefinitionRow ItemDef;
+				if (UMOItemDatabaseSettings::GetItemDefinition(ItemId, ItemDef))
+				{
+					DepositedMat.Rarity = ItemDef.Rarity;
+				}
+				DepositedMaterialsForRefund.Add(DepositedMat);
+
 				UE_LOG(LogMOFramework, Log, TEXT("[MOGhostContextMenu] Gathered %s from %s (priority %d)"),
 					*ItemId.ToString(), *Source->GetName(), SourcePriority);
 				return true;
@@ -496,8 +615,11 @@ bool UMOGhostContextMenu::TryGatherMaterial(FName ItemId)
 
 void UMOGhostContextMenu::PopulateMaterialList()
 {
+	UE_LOG(LogMOFramework, Log, TEXT("[MOGhostContextMenu] PopulateMaterialList called, MaterialEntries: %d"), MaterialEntries.Num());
+
 	if (!MaterialListContainer)
 	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOGhostContextMenu] MaterialListContainer is NULL - widget not bound! Make sure widget is named 'MaterialListContainer' and marked as variable."));
 		return;
 	}
 
@@ -513,6 +635,119 @@ void UMOGhostContextMenu::PopulateMaterialList()
 		{
 			MaterialListContainer->AddChild(TextWidget);
 			MaterialTextWidgets.Add(TextWidget);
+			UE_LOG(LogMOFramework, Log, TEXT("[MOGhostContextMenu] Added material: %s (%d/%d)"),
+				*Entry.ItemId.ToString(), Entry.Deposited, Entry.Required);
 		}
+	}
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOGhostContextMenu] PopulateMaterialList complete, added %d widgets"), MaterialTextWidgets.Num());
+}
+
+int32 UMOGhostContextMenu::CalculateRefundAmount(int32 TotalDeposited, bool bBuildStarted) const
+{
+	if (TotalDeposited <= 0)
+	{
+		return 0;
+	}
+
+	// Before build starts: 100% refund
+	if (!bBuildStarted)
+	{
+		return TotalDeposited;
+	}
+
+	// After build starts: 50% base + skill bonus (0-45% for skill 0-100)
+	constexpr float BaseRefundPercent = 0.50f;
+	constexpr float MaxSkillBonus = 0.45f;
+
+	float SkillBonus = 0.0f;
+	if (UMOSkillsComponent* Skills = BuilderSkills.Get())
+	{
+		const int32 SkillLevel = Skills->GetSkillLevel(BuildingSkillId);
+		// Clamp to 0-100 and calculate bonus
+		const float NormalizedSkill = FMath::Clamp(static_cast<float>(SkillLevel), 0.0f, 100.0f) / 100.0f;
+		SkillBonus = NormalizedSkill * MaxSkillBonus;
+	}
+
+	const float TotalRefundPercent = BaseRefundPercent + SkillBonus;
+	const int32 RefundAmount = FMath::FloorToInt(TotalDeposited * TotalRefundPercent);
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOGhostContextMenu] Refund calc: %d total, %.1f%% base + %.1f%% skill = %d returned"),
+		TotalDeposited, BaseRefundPercent * 100.0f, SkillBonus * 100.0f, RefundAmount);
+
+	return RefundAmount;
+}
+
+void UMOGhostContextMenu::DropRefundedMaterials(int32 RefundCount, const FVector& DropLocation)
+{
+	if (RefundCount <= 0 || DepositedMaterialsForRefund.Num() == 0)
+	{
+		return;
+	}
+
+	// Sort by rarity (lowest first) so we lose common items first, keep rarer items
+	DepositedMaterialsForRefund.Sort([](const FMODepositedMaterial& A, const FMODepositedMaterial& B) {
+		return static_cast<uint8>(A.Rarity) < static_cast<uint8>(B.Rarity);
+	});
+
+	// Materials to lose are at the front (lowest rarity)
+	// Materials to refund are at the back (highest rarity)
+	const int32 TotalDeposited = DepositedMaterialsForRefund.Num();
+	const int32 LoseCount = TotalDeposited - RefundCount;
+
+	// Spawn refunded materials (skip the first LoseCount items)
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	for (int32 i = LoseCount; i < TotalDeposited; ++i)
+	{
+		const FMODepositedMaterial& Mat = DepositedMaterialsForRefund[i];
+
+		FMOItemDefinitionRow ItemDef;
+		if (!UMOItemDatabaseSettings::GetItemDefinition(Mat.ItemId, ItemDef))
+		{
+			continue;
+		}
+
+		UClass* WorldActorClass = ItemDef.WorldVisual.WorldActorClass.LoadSynchronous();
+		if (!WorldActorClass)
+		{
+			continue;
+		}
+
+		// Scatter spawn locations slightly
+		FVector SpawnLocation = DropLocation + FVector(
+			FMath::RandRange(-50.0f, 50.0f),
+			FMath::RandRange(-50.0f, 50.0f),
+			FMath::RandRange(0.0f, 30.0f)
+		);
+
+		FActorSpawnParameters SpawnParams;
+		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+
+		AActor* SpawnedActor = World->SpawnActor<AActor>(WorldActorClass, SpawnLocation, FRotator::ZeroRotator, SpawnParams);
+
+		if (SpawnedActor)
+		{
+			// Apply item definition visuals if it's a world item
+			if (AMOWorldItem* WorldItem = Cast<AMOWorldItem>(SpawnedActor))
+			{
+				WorldItem->ApplyItemDefinitionToWorldMesh();
+				WorldItem->EnableDropPhysics();
+			}
+
+			UE_LOG(LogMOFramework, Verbose, TEXT("[MOGhostContextMenu] Refunded %s (%s rarity)"),
+				*Mat.ItemId.ToString(),
+				*UEnum::GetValueAsString(Mat.Rarity));
+		}
+	}
+
+	// Log what was lost
+	if (LoseCount > 0)
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOGhostContextMenu] Lost %d materials (lowest rarity first)"), LoseCount);
 	}
 }

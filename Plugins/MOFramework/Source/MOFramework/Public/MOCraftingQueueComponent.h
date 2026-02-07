@@ -136,6 +136,28 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO|Crafting|Queue")
 	float GetOverallQueueProgress() const;
 
+	// --- Station Tracking ---
+
+	/**
+	 * Set the active crafting station.
+	 * Called when player opens a crafting station to track which station they're using.
+	 * @param Station The crafting station actor (must implement IMOIdentifiableInterface)
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Crafting|Queue")
+	void SetActiveStation(AActor* Station);
+
+	/** Clear the active station reference. */
+	UFUNCTION(BlueprintCallable, Category="MO|Crafting|Queue")
+	void ClearActiveStation();
+
+	/** Get the GUID of the active station (invalid GUID if none). */
+	UFUNCTION(BlueprintPure, Category="MO|Crafting|Queue")
+	FGuid GetActiveStationGuid() const;
+
+	/** Get the active station actor (may be null). */
+	UFUNCTION(BlueprintPure, Category="MO|Crafting|Queue")
+	AActor* GetActiveStation() const;
+
 	// --- Save/Load ---
 
 	/** Build save data from current queue state. */
@@ -227,4 +249,8 @@ private:
 
 	UPROPERTY()
 	TWeakObjectPtr<UMORecipeDiscoveryComponent> CachedDiscovery;
+
+	/** The crafting station the player is currently using (for save/load). */
+	UPROPERTY()
+	TWeakObjectPtr<AActor> ActiveStation;
 };

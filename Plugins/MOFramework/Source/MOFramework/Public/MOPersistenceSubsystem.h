@@ -4,6 +4,7 @@
 #include "Engine/World.h" // UWorld::InitializationValues
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "MOworldSaveGame.h"
+#include "MOSavePanel.h" // FMOSaveMetadata
 #include "MOPersistenceSubsystem.generated.h"
 
 class AActor;
@@ -33,6 +34,12 @@ struct FMOLoadResult
 
     UPROPERTY(BlueprintReadOnly)
     int32 ItemsFailed = 0;
+
+    UPROPERTY(BlueprintReadOnly)
+    int32 BuildingsLoaded = 0;
+
+    UPROPERTY(BlueprintReadOnly)
+    int32 BuildingsFailed = 0;
 
     UPROPERTY(BlueprintReadOnly)
     TArray<FGuid> FailedPawnGuids;
@@ -87,6 +94,33 @@ public:
     /** Check if a save slot exists. */
     UFUNCTION(BlueprintPure, Category="MO|Persistence")
     bool DoesSaveSlotExist(const FString& SlotName) const;
+
+    /**
+     * Get metadata for a save slot without loading full save data.
+     * @param SlotName The save slot to query
+     * @param OutMetadata Filled with metadata if successful
+     * @return True if metadata was retrieved successfully
+     */
+    UFUNCTION(BlueprintCallable, Category="MO|Persistence")
+    bool GetSaveSlotMetadata(const FString& SlotName, FMOSaveMetadata& OutMetadata) const;
+
+    /**
+     * Set whether the next save should be marked as autosave.
+     * Resets after save completes.
+     */
+    UFUNCTION(BlueprintCallable, Category="MO|Persistence")
+    void SetNextSaveIsAutosave(bool bIsAutosave) { bNextSaveIsAutosave = bIsAutosave; }
+
+    /**
+     * Add session play time (call this periodically or before save).
+     * @param DeltaSeconds Time to add in seconds
+     */
+    UFUNCTION(BlueprintCallable, Category="MO|Persistence")
+    void AddSessionPlayTime(float DeltaSeconds) { SessionPlayTimeSeconds += DeltaSeconds; }
+
+    /** Get current session play time. */
+    UFUNCTION(BlueprintPure, Category="MO|Persistence")
+    float GetSessionPlayTime() const { return SessionPlayTimeSeconds; }
 
     // --- Pawn Record Access (for Possession Menu) ---
 
@@ -154,6 +188,9 @@ private:
     bool IsPersistedWorldItemActor(const AActor* Actor) const;
     void CaptureWorldItems(UWorld* World, UMOWorldSaveGame* SaveObject) const;
 
+    bool IsPersistedBuildingActor(const AActor* Actor) const;
+    void CaptureBuildings(UWorld* World, UMOWorldSaveGame* SaveObject) const;
+
     // Load helpers
     void UnpossessAllControllers(UWorld* World) const;
 
@@ -164,10 +201,20 @@ private:
     void DestroyAllPersistedWorldItems(UWorld* World);
     void RespawnWorldItems(UWorld* World, const TArray<FMOPersistedWorldItemRecord>& WorldItems, FMOLoadResult& OutResult);
 
+    void DestroyAllPersistedBuildings(UWorld* World);
+    void RespawnBuildings(UWorld* World, const TArray<FMOPersistedBuildingRecord>& Buildings, FMOLoadResult& OutResult);
+
+    // Voxel sculpt persistence
+    void CaptureVoxelSculptData(UWorld* World, UMOWorldSaveGame* SaveObject) const;
+    void RestoreVoxelSculptData(UWorld* World, const TArray<FMOVoxelSculptSaveRecord>& SculptData);
+
     void ClearLoadSuppression();
 
     // Generate a unique slot name for auto-save when no slot has been set
     FString GenerateAutoSaveSlotName() const;
+
+    // Capture a screenshot and store it in the save object
+    void CaptureScreenshotForSave(UMOWorldSaveGame* SaveObject) const;
 
 private:
     UPROPERTY()
@@ -206,4 +253,8 @@ private:
 
     // Time to suppress destroyed GUID recording after load (seconds)
     static constexpr float LoadSuppressionDuration = 0.25f;
+
+    // Metadata tracking
+    bool bNextSaveIsAutosave = false;
+    float SessionPlayTimeSeconds = 0.0f;
 };

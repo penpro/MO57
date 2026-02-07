@@ -81,34 +81,51 @@ void UMOLoadPanel::RefreshSaveList()
 	{
 		UE_LOG(LogMOFramework, Log, TEXT("[MOLoadPanel]   Checking slot: %s"), *SlotName);
 
-		// Filter to current world if enabled
-		if (bFilterToCurrentWorld && !CurrentWorldId.IsEmpty() && !SlotName.Contains(CurrentWorldId))
-		{
-			UE_LOG(LogMOFramework, Log, TEXT("[MOLoadPanel]   Skipping (doesn't match world ID)"));
-			continue;
-		}
-
+		// Load actual metadata from save file
 		FMOSaveMetadata Meta;
-		Meta.SlotName = SlotName;
-		Meta.DisplayName = FText::FromString(SlotName);
-
-		// Extract world name from slot name if possible
-		Meta.WorldName = CurrentWorldId;
-
-		const FString SavePath = FPaths::ProjectSavedDir() / TEXT("SaveGames") / (SlotName + TEXT(".sav"));
-		if (FPaths::FileExists(SavePath))
+		if (Persistence->GetSaveSlotMetadata(SlotName, Meta))
 		{
-			Meta.Timestamp = IFileManager::Get().GetTimeStamp(*SavePath);
+			// Filter to current world if enabled
+			if (bFilterToCurrentWorld && !CurrentWorldId.IsEmpty() && !Meta.WorldName.IsEmpty() && Meta.WorldName != CurrentWorldId)
+			{
+				UE_LOG(LogMOFramework, Log, TEXT("[MOLoadPanel]   Skipping (world '%s' doesn't match current '%s')"), *Meta.WorldName, *CurrentWorldId);
+				continue;
+			}
+
+			CachedSaves.Add(Meta);
+			UE_LOG(LogMOFramework, Log, TEXT("[MOLoadPanel]   Added save: %s (PlayTime: %.0f sec, Autosave: %s)"),
+				*SlotName, Meta.PlayTime.GetTotalSeconds(), Meta.bIsAutosave ? TEXT("Yes") : TEXT("No"));
 		}
 		else
 		{
-			Meta.Timestamp = FDateTime::Now();
+			// Fallback for saves without metadata (legacy saves)
+			Meta.SlotName = SlotName;
+			Meta.DisplayName = FText::FromString(SlotName);
+			Meta.WorldName = CurrentWorldId;
+
+			// Get file timestamp as fallback
+			const FString SavePath = FPaths::ProjectSavedDir() / TEXT("SaveGames") / (SlotName + TEXT(".sav"));
+			if (FPaths::FileExists(SavePath))
+			{
+				Meta.Timestamp = IFileManager::Get().GetTimeStamp(*SavePath);
+			}
+			else
+			{
+				Meta.Timestamp = FDateTime::Now();
+			}
+
+			Meta.bIsAutosave = SlotName.Contains(TEXT("AutoSave"));
+
+			// Filter legacy saves by slot name
+			if (bFilterToCurrentWorld && !CurrentWorldId.IsEmpty() && !SlotName.Contains(CurrentWorldId))
+			{
+				UE_LOG(LogMOFramework, Log, TEXT("[MOLoadPanel]   Skipping legacy save (doesn't match world ID)"));
+				continue;
+			}
+
+			CachedSaves.Add(Meta);
+			UE_LOG(LogMOFramework, Log, TEXT("[MOLoadPanel]   Added legacy save: %s"), *SlotName);
 		}
-
-		Meta.bIsAutosave = SlotName.Contains(TEXT("Autosave"));
-
-		CachedSaves.Add(Meta);
-		UE_LOG(LogMOFramework, Log, TEXT("[MOLoadPanel]   Added save: %s"), *SlotName);
 	}
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOLoadPanel] Found %d saves for display"), CachedSaves.Num());

@@ -5,6 +5,8 @@
 #include "MOWorldItem.h"
 #include "MOItemComponent.h"
 #include "MOContainerActor.h"
+#include "MOItemDatabaseSettings.h"
+#include "MOItemDefinitionRow.h"
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetSystemLibrary.h"
@@ -252,7 +254,74 @@ void UMOBuildProgressComponent::CancelConstruction(bool bRefundMaterials)
 		return;
 	}
 
-	// TODO: Implement material refund if bRefundMaterials is true
+	// Refund deposited materials by spawning them as world items
+	if (bRefundMaterials && DepositedMaterials.Num() > 0)
+	{
+		UWorld* World = GetWorld();
+		AActor* Owner = GetOwner();
+
+		if (World && Owner)
+		{
+			FVector DropLocation = Owner->GetActorLocation() + FVector(0.0f, 0.0f, 50.0f);
+
+			for (const auto& Pair : DepositedMaterials)
+			{
+				const FName& ItemId = Pair.Key;
+				const int32 Count = Pair.Value;
+
+				if (Count <= 0)
+				{
+					continue;
+				}
+
+				// Get item definition to find world actor class
+				FMOItemDefinitionRow ItemDef;
+				if (!UMOItemDatabaseSettings::GetItemDefinition(ItemId, ItemDef))
+				{
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOBuildProgressComponent] Cannot refund %s - item definition not found"), *ItemId.ToString());
+					continue;
+				}
+
+				UClass* WorldActorClass = ItemDef.WorldVisual.WorldActorClass.LoadSynchronous();
+				if (!WorldActorClass)
+				{
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOBuildProgressComponent] Cannot refund %s - no WorldActorClass"), *ItemId.ToString());
+					continue;
+				}
+
+				// Spawn world items for each deposited material
+				for (int32 i = 0; i < Count; ++i)
+				{
+					FVector SpawnLocation = DropLocation + FVector(
+						FMath::RandRange(-50.0f, 50.0f),
+						FMath::RandRange(-50.0f, 50.0f),
+						FMath::RandRange(0.0f, 30.0f)
+					);
+
+					FActorSpawnParameters SpawnParams;
+					SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+
+					AActor* SpawnedActor = World->SpawnActor<AActor>(WorldActorClass, SpawnLocation, FRotator::ZeroRotator, SpawnParams);
+					if (SpawnedActor)
+					{
+						// Enable drop physics if it's a world item
+						if (AMOWorldItem* WorldItem = Cast<AMOWorldItem>(SpawnedActor))
+						{
+							WorldItem->EnableDropPhysics();
+						}
+
+						UE_LOG(LogMOFramework, Verbose, TEXT("[MOBuildProgressComponent] Refunded %s at %s"),
+							*ItemId.ToString(), *SpawnLocation.ToString());
+					}
+				}
+			}
+
+			UE_LOG(LogMOFramework, Log, TEXT("[MOBuildProgressComponent] Refunded %d material types"), DepositedMaterials.Num());
+		}
+	}
+
+	// Clear deposited materials
+	DepositedMaterials.Empty();
 
 	Progress.State = EMOBuildState::Ghost;
 	Progress.ElapsedTime = 0.0f;
@@ -463,11 +532,19 @@ bool UMOBuildProgressComponent::TryConsumeMaterial(const FMOBuildPart& Part)
 			}
 		}
 
+		// Cache material sources once if either nearby option is enabled
+		TArray<AActor*> CachedSources;
+		const bool bNeedsSources = (!bConsumed && Progress.bDrawFromNearbyContainers) ||
+		                           (!bConsumed && Progress.bDrawFromSurroundingArea);
+		if (bNeedsSources)
+		{
+			CachedSources = FindMaterialSources(Progress.GatherRange);
+		}
+
 		// 2. Try nearby containers (if enabled and not yet consumed)
 		if (!bConsumed && Progress.bDrawFromNearbyContainers)
 		{
-			TArray<AActor*> Sources = FindMaterialSources(Progress.GatherRange);
-			for (AActor* Source : Sources)
+			for (AActor* Source : CachedSources)
 			{
 				AMOContainerActor* Container = Cast<AMOContainerActor>(Source);
 				if (Container)
@@ -490,8 +567,7 @@ bool UMOBuildProgressComponent::TryConsumeMaterial(const FMOBuildPart& Part)
 		// 3. Try surrounding world items (if enabled and not yet consumed)
 		if (!bConsumed && Progress.bDrawFromSurroundingArea)
 		{
-			TArray<AActor*> Sources = FindMaterialSources(Progress.GatherRange);
-			for (AActor* Source : Sources)
+			for (AActor* Source : CachedSources)
 			{
 				AMOWorldItem* WorldItem = Cast<AMOWorldItem>(Source);
 				if (WorldItem)

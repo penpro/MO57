@@ -2,16 +2,33 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
+#include "MOItemDefinitionRow.h"
 #include "MOGhostContextMenu.generated.h"
 
 class AMOBuildableActor;
 class UMOInventoryComponent;
 class UMOBuildProgressComponent;
+class UMOSkillsComponent;
+class UMOCommonButton;
 class UCheckBox;
-class UButton;
 class UVerticalBox;
 class UTextBlock;
 class UProgressBar;
+
+/**
+ * Tracks a single deposited material for refund purposes.
+ */
+USTRUCT()
+struct FMODepositedMaterial
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	FName ItemId = NAME_None;
+
+	UPROPERTY()
+	EMOItemRarity Rarity = EMOItemRarity::Common;
+};
 
 /**
  * Data for displaying a material requirement in the ghost context menu.
@@ -143,10 +160,25 @@ public:
 	UPROPERTY(BlueprintAssignable, Category="MO|Building|UI")
 	FMOGhostMenuBuildStartedSignature OnBuildStarted;
 
+	/**
+	 * Set the screen position for this popup menu.
+	 * @param ScreenPosition - Position in screen space
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Building|UI")
+	void SetPopupPosition(FVector2D ScreenPosition);
+
+	/**
+	 * Check if build is complete.
+	 */
+	UFUNCTION(BlueprintPure, Category="MO|Building|UI")
+	bool IsBuildComplete() const;
+
 protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 	virtual FReply NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
+	virtual void NativeOnMouseEnter(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
+	virtual void NativeOnMouseLeave(const FPointerEvent& InMouseEvent) override;
 
 	// ============================================================================
 	// WIDGET BINDINGS
@@ -168,17 +200,17 @@ protected:
 	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
 	TObjectPtr<UVerticalBox> MaterialListContainer;
 
-	/** Add/Build button - changes based on state */
+	/** Add Materials button */
 	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<UButton> AddBuildButton;
+	TObjectPtr<UMOCommonButton> AddMaterialsButton;
 
-	/** Text on the Add/Build button */
+	/** Build button - enabled only when all materials deposited */
 	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<UTextBlock> AddBuildButtonText;
+	TObjectPtr<UMOCommonButton> BuildButton;
 
 	/** Cancel button */
 	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<UButton> CancelButton;
+	TObjectPtr<UMOCommonButton> CancelButton;
 
 	/** Progress bar for build timer */
 	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
@@ -210,7 +242,10 @@ private:
 	// ============================================================================
 
 	UFUNCTION()
-	void HandleAddBuildClicked();
+	void HandleAddMaterialsClicked();
+
+	UFUNCTION()
+	void HandleBuildClicked();
 
 	UFUNCTION()
 	void HandleCancelClicked();
@@ -228,6 +263,9 @@ private:
 	UPROPERTY()
 	TWeakObjectPtr<UMOBuildProgressComponent> BuildProgress;
 
+	UPROPERTY()
+	TWeakObjectPtr<UMOSkillsComponent> BuilderSkills;
+
 	/** Cached material entries */
 	UPROPERTY()
 	TArray<FMOGhostMaterialEntry> MaterialEntries;
@@ -235,6 +273,22 @@ private:
 	/** Dynamically created text widgets for material list */
 	UPROPERTY()
 	TArray<TObjectPtr<UTextBlock>> MaterialTextWidgets;
+
+	/** Tracks all deposited materials for refund (sorted by rarity for loss order) */
+	UPROPERTY()
+	TArray<FMODepositedMaterial> DepositedMaterialsForRefund;
+
+	/** Whether to close menu when mouse leaves (disabled by default since we use click-outside). */
+	bool bCloseOnMouseLeave = false;
+
+	/** Time to wait before closing on mouse leave (grace period). */
+	float MouseLeaveGraceTime = 0.3f;
+
+	/** Timer for mouse leave grace period. */
+	float MouseLeaveTimer = 0.0f;
+
+	/** Whether mouse is currently over the widget. */
+	bool bIsMouseOver = false;
 
 	// ============================================================================
 	// INTERNAL
@@ -254,4 +308,20 @@ private:
 
 	/** Populate material list container with text widgets */
 	void PopulateMaterialList();
+
+	/** Calculate refund amount based on build state and skill level.
+	 * @param TotalDeposited - Total materials deposited
+	 * @param bBuildStarted - Whether construction has begun
+	 * @return Number of materials to refund
+	 */
+	int32 CalculateRefundAmount(int32 TotalDeposited, bool bBuildStarted) const;
+
+	/** Drop refunded materials to world, losing lowest rarity first.
+	 * @param RefundCount - Number of materials to return
+	 * @param DropLocation - Where to spawn the items
+	 */
+	void DropRefundedMaterials(int32 RefundCount, const FVector& DropLocation);
+
+	/** Skill ID used for calculating refund bonus (e.g., "Construction", "Building") */
+	static const FName BuildingSkillId;
 };

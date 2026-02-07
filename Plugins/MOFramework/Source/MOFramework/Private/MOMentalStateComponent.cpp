@@ -2,6 +2,7 @@
 #include "MOVitalsComponent.h"
 #include "MOAnatomyComponent.h"
 #include "MOMetabolismComponent.h"
+#include "MOMedicalProviderInterface.h"
 #include "Net/UnrealNetwork.h"
 #include "TimerManager.h"
 
@@ -15,12 +16,21 @@ void UMOMentalStateComponent::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// Cache sibling components
+	// Cache sibling components via interface - avoids FindComponentByClass chains
 	if (AActor* Owner = GetOwner())
 	{
-		CachedVitalsComp = Owner->FindComponentByClass<UMOVitalsComponent>();
-		CachedAnatomyComp = Owner->FindComponentByClass<UMOAnatomyComponent>();
-		CachedMetabolismComp = Owner->FindComponentByClass<UMOMetabolismComponent>();
+		if (Owner->Implements<UMOMedicalProviderInterface>())
+		{
+			CachedVitalsComp = IMOMedicalProviderInterface::Execute_GetVitals(Owner);
+			CachedAnatomyComp = IMOMedicalProviderInterface::Execute_GetAnatomy(Owner);
+			CachedMetabolismComp = IMOMedicalProviderInterface::Execute_GetMetabolism(Owner);
+		}
+		else
+		{
+			CachedVitalsComp = Owner->FindComponentByClass<UMOVitalsComponent>();
+			CachedAnatomyComp = Owner->FindComponentByClass<UMOAnatomyComponent>();
+			CachedMetabolismComp = Owner->FindComponentByClass<UMOMetabolismComponent>();
+		}
 	}
 
 	// Initialize previous state

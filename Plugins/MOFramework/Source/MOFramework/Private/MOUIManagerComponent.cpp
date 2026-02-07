@@ -1,6 +1,8 @@
 #include "MOUIManagerComponent.h"
 #include "MOFramework.h"
 
+#include "EngineUtils.h"
+#include "Engine/OverlapResult.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/Pawn.h"
 #include "Blueprint/UserWidget.h"
@@ -38,20 +40,30 @@
 #include "MOKnowledgeComponent.h"
 #include "MOCraftingQueueComponent.h"
 #include "MORecipeDiscoveryComponent.h"
+#include "MOInventoryHolderInterface.h"
+#include "MOIdentifiableInterface.h"
 #include "MOInspectionProgressWidget.h"
 #include "MORecipeDatabaseSettings.h"
 #include "MONotificationComponent.h"
 #include "MOBuildingMenu.h"
 #include "MOBuildWidget.h"
 #include "MOGhostContextMenu.h"
+#include "MOStationContextMenu.h"
 #include "MOBuildableActor.h"
+#include "MOCraftingStationActor.h"
+#include "MOCraftingCapableInterface.h"
 #include "MOBuildingComponent.h"
 #include "MOBuildProgressComponent.h"
 #include "MOPlayerController.h"
+#include "MOUnifiedInventoryMenu.h"
+#include "MOItemComponent.h"
+#include "MOModeIndicatorWidget.h"
+#include "MOToolHintWidget.h"
 
 UMOUIManagerComponent::UMOUIManagerComponent()
 {
 	PrimaryComponentTick.bCanEverTick = false;
+	CurrentGameplayMode = EMOGameplayMode::Explore;
 }
 
 void UMOUIManagerComponent::BeginPlay()
@@ -68,6 +80,16 @@ void UMOUIManagerComponent::BeginPlay()
 		if (bCreateStatusPanelOnBeginPlay)
 		{
 			CreateStatusPanel();
+		}
+
+		if (bCreateModeIndicatorOnBeginPlay)
+		{
+			CreateModeIndicator();
+		}
+
+		if (bCreateToolHintOnBeginPlay)
+		{
+			CreateToolHint();
 		}
 	}
 }
@@ -127,6 +149,14 @@ bool UMOUIManagerComponent::HasValidPawn() const
 
 bool UMOUIManagerComponent::IsInventoryMenuOpen() const
 {
+	// Check unified inventory menu first
+	const UMOUnifiedInventoryMenu* UnifiedMenu = UnifiedInventoryWidget.Get();
+	if (IsValid(UnifiedMenu) && UnifiedMenu->IsInViewport())
+	{
+		return true;
+	}
+
+	// Fall back to legacy inventory menu
 	const UMOInventoryMenu* MenuWidget = InventoryMenuWidget.Get();
 	return IsValid(MenuWidget) && MenuWidget->IsInViewport();
 }
@@ -145,7 +175,12 @@ UMOInventoryComponent* UMOUIManagerComponent::ResolveCurrentPawnInventoryCompone
 		return nullptr;
 	}
 
-	return CurrentPawn->FindComponentByClass<UMOInventoryComponent>();
+	// Use IMOInventoryHolder interface if available
+	if (CurrentPawn->Implements<UMOInventoryHolderInterface>())
+	{
+		return IMOInventoryHolderInterface::Execute_GetInventory(CurrentPawn);
+	}
+	return nullptr;
 }
 
 void UMOUIManagerComponent::ToggleInventoryMenu()
@@ -175,6 +210,15 @@ void UMOUIManagerComponent::ToggleInventoryMenu()
 
 void UMOUIManagerComponent::OpenInventoryMenu()
 {
+	// If unified inventory menu is configured, use it instead
+	if (UnifiedInventoryMenuClass)
+	{
+		// Open unified menu with current active container (may be null)
+		OpenInventoryWithContainer(GetActiveContainer());
+		return;
+	}
+
+	// Legacy: Fall back to old inventory menu if unified menu class not set
 	if (!IsLocalOwningPlayerController())
 	{
 		return;
@@ -251,6 +295,13 @@ void UMOUIManagerComponent::CloseInventoryMenu()
 		}
 	}
 
+	// Also close unified inventory menu if open
+	UMOUnifiedInventoryMenu* UnifiedMenu = UnifiedInventoryWidget.Get();
+	if (IsValid(UnifiedMenu) && UnifiedMenu->IsInViewport())
+	{
+		UnifiedMenu->RemoveFromParent();
+	}
+
 	UpdateReticleVisibility();
 
 	if (!IsAnyMenuOpen())
@@ -260,6 +311,386 @@ void UMOUIManagerComponent::CloseInventoryMenu()
 		{
 			ApplyInputModeForMenuClosed(PlayerController);
 		}
+	}
+}
+
+// =============================================================================
+// Unified Inventory Menu (Container Support)
+// =============================================================================
+
+void UMOUIManagerComponent::OpenInventoryWithContainer(AActor* ContainerActor)
+{
+	if (!IsLocalOwningPlayerController())
+	{
+		return;
+	}
+
+	APlayerController* PlayerController = ResolveOwningPlayerController();
+	if (!IsValid(PlayerController))
+	{
+		return;
+	}
+
+	// Check for valid pawn first
+	if (!HasValidPawn())
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOUI] OpenInventoryWithContainer - No valid pawn, showing notification"));
+		ShowNoPawnNotification();
+		return;
+	}
+
+	if (!UnifiedInventoryMenuClass)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] UnifiedInventoryMenuClass not set, falling back to regular inventory menu."));
+		// Fall back to regular inventory menu
+		SetActiveContainer(ContainerActor);
+		OpenInventoryMenu();
+		return;
+	}
+
+	UMOInventoryComponent* InventoryComponent = ResolveCurrentPawnInventoryComponent();
+	if (!IsValid(InventoryComponent))
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] No UMOInventoryComponent found on current pawn."));
+		return;
+	}
+
+	// Close other switchable menus
+	CloseAllSwitchableMenus();
+
+	// Set the active container
+	CurrentContainerActor = ContainerActor;
+
+	// Create or get the unified inventory widget
+	UMOUnifiedInventoryMenu* MenuWidget = UnifiedInventoryWidget.Get();
+	if (!IsValid(MenuWidget))
+	{
+		MenuWidget = CreateWidget<UMOUnifiedInventoryMenu>(PlayerController, UnifiedInventoryMenuClass);
+		UnifiedInventoryWidget = MenuWidget;
+
+		if (!IsValid(MenuWidget))
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] Failed to create unified inventory menu widget."));
+			return;
+		}
+
+		// Bind delegates
+		MenuWidget->OnRequestClose.RemoveAll(this);
+		MenuWidget->OnRequestClose.AddDynamic(this, &UMOUIManagerComponent::HandleUnifiedInventoryMenuRequestClose);
+
+		MenuWidget->OnContextMenuRequested.RemoveAll(this);
+		MenuWidget->OnContextMenuRequested.AddDynamic(this, &UMOUIManagerComponent::HandleUnifiedInventoryMenuContextMenuRequested);
+	}
+
+	// Initialize with player inventory and container
+	MenuWidget->InitializeMenu(InventoryComponent, ContainerActor);
+
+	// If container is provided, show the Other Inventory tab
+	if (IsValid(ContainerActor))
+	{
+		MenuWidget->ShowOtherInventoryTab();
+	}
+
+	if (!MenuWidget->IsInViewport())
+	{
+		ShowModalBackground();
+		MenuWidget->AddToViewport(UnifiedInventoryMenuZOrder);
+	}
+
+	UpdateReticleVisibility();
+	ApplyInputModeForMenuOpen(PlayerController, MenuWidget);
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Unified inventory menu opened with container: %s"),
+		IsValid(ContainerActor) ? *ContainerActor->GetName() : TEXT("None"));
+}
+
+void UMOUIManagerComponent::SetActiveContainer(AActor* ContainerActor)
+{
+	CurrentContainerActor = ContainerActor;
+
+	// If unified menu is open, update it
+	UMOUnifiedInventoryMenu* MenuWidget = UnifiedInventoryWidget.Get();
+	if (IsValid(MenuWidget) && MenuWidget->IsInViewport())
+	{
+		MenuWidget->SetSecondaryInventorySource(ContainerActor);
+		if (IsValid(ContainerActor))
+		{
+			MenuWidget->ShowOtherInventoryTab();
+		}
+	}
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Active container set to: %s"),
+		IsValid(ContainerActor) ? *ContainerActor->GetName() : TEXT("None"));
+}
+
+void UMOUIManagerComponent::ClearActiveContainer()
+{
+	CurrentContainerActor.Reset();
+
+	// If unified menu is open, clear its container
+	UMOUnifiedInventoryMenu* MenuWidget = UnifiedInventoryWidget.Get();
+	if (IsValid(MenuWidget) && MenuWidget->IsInViewport())
+	{
+		MenuWidget->ClearSecondaryInventorySource();
+	}
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Active container cleared"));
+}
+
+AActor* UMOUIManagerComponent::GetActiveContainer() const
+{
+	return CurrentContainerActor.Get();
+}
+
+bool UMOUIManagerComponent::HasActiveContainer() const
+{
+	return CurrentContainerActor.IsValid();
+}
+
+void UMOUIManagerComponent::HandleUnifiedInventoryMenuRequestClose()
+{
+	UMOUnifiedInventoryMenu* MenuWidget = UnifiedInventoryWidget.Get();
+	if (IsValid(MenuWidget) && MenuWidget->IsInViewport())
+	{
+		MenuWidget->RemoveFromParent();
+	}
+
+	UpdateReticleVisibility();
+
+	if (!IsAnyMenuOpen())
+	{
+		HideModalBackground();
+		APlayerController* PlayerController = ResolveOwningPlayerController();
+		if (IsValid(PlayerController) && PlayerController->IsLocalController())
+		{
+			ApplyInputModeForMenuClosed(PlayerController);
+		}
+	}
+}
+
+void UMOUIManagerComponent::HandleUnifiedInventoryMenuContextMenuRequested(UMOInventoryComponent* InventoryComponent, const FGuid& ItemGuid, int32 SlotIndex, FVector2D ScreenPosition)
+{
+	// Show the context menu for the item
+	ShowItemContextMenu(InventoryComponent, ItemGuid, SlotIndex, ScreenPosition);
+}
+
+// =============================================================================
+// Nearby World Items
+// =============================================================================
+
+TArray<AMOWorldItem*> UMOUIManagerComponent::QueryNearbyWorldItems() const
+{
+	TArray<AMOWorldItem*> Result;
+
+	APlayerController* PlayerController = ResolveOwningPlayerController();
+	if (!IsValid(PlayerController))
+	{
+		return Result;
+	}
+
+	APawn* Pawn = PlayerController->GetPawn();
+	if (!IsValid(Pawn))
+	{
+		return Result;
+	}
+
+	UWorld* World = GetWorld();
+	if (!IsValid(World))
+	{
+		return Result;
+	}
+
+	const FVector Origin = Pawn->GetActorLocation();
+	const float RadiusSquared = NearbyItemsQueryRadius * NearbyItemsQueryRadius;
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] QueryNearbyWorldItems starting from origin %s, radius=%.0f"),
+		*Origin.ToString(), NearbyItemsQueryRadius);
+
+	int32 TotalItemsInWorld = 0;
+	int32 ItemsInRange = 0;
+	int32 ItemsPickupable = 0;
+
+	// Iterate through all world items and check distance
+	// This is more reliable than overlap queries which can miss items with QueryOnly collision
+	for (TActorIterator<AMOWorldItem> It(World); It; ++It)
+	{
+		AMOWorldItem* WorldItem = *It;
+		TotalItemsInWorld++;
+
+		if (!IsValid(WorldItem))
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] QueryNearbyWorldItems: Found invalid WorldItem"));
+			continue;
+		}
+
+		// Check distance
+		const FVector ItemLocation = WorldItem->GetActorLocation();
+		const float DistanceSquared = FVector::DistSquared(Origin, ItemLocation);
+		const float Distance = FMath::Sqrt(DistanceSquared);
+
+		if (DistanceSquared > RadiusSquared)
+		{
+			UE_LOG(LogMOFramework, Verbose, TEXT("[MOUI] QueryNearbyWorldItems: %s at %s is too far (%.0fcm > %.0fcm)"),
+				*WorldItem->GetName(), *ItemLocation.ToString(), Distance, NearbyItemsQueryRadius);
+			continue;
+		}
+
+		ItemsInRange++;
+
+		// Check if pickupable with detailed logging
+		const bool bIsHidden = WorldItem->IsHidden();
+		const bool bHasCollision = WorldItem->GetActorEnableCollision();
+		UMOItemComponent* ItemComp = WorldItem->GetItemComponent();
+		const bool bHasItemComp = IsValid(ItemComp);
+		const FName ItemDefId = bHasItemComp ? ItemComp->ItemDefinitionId : NAME_None;
+		const bool bHasItemDef = !ItemDefId.IsNone();
+
+		UE_LOG(LogMOFramework, Log, TEXT("[MOUI] QueryNearbyWorldItems: %s at %.0fcm - Hidden=%s, Collision=%s, HasItemComp=%s, ItemDefId=%s"),
+			*WorldItem->GetName(), Distance,
+			bIsHidden ? TEXT("YES") : TEXT("no"),
+			bHasCollision ? TEXT("yes") : TEXT("NO"),
+			bHasItemComp ? TEXT("yes") : TEXT("NO"),
+			bHasItemDef ? *ItemDefId.ToString() : TEXT("NONE"));
+
+		if (WorldItem->IsPickupable())
+		{
+			ItemsPickupable++;
+			Result.AddUnique(WorldItem);
+		}
+	}
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] QueryNearbyWorldItems: TotalInWorld=%d, InRange=%d, Pickupable=%d"),
+		TotalItemsInWorld, ItemsInRange, ItemsPickupable);
+
+	return Result;
+}
+
+int32 UMOUIManagerComponent::LootAllNearbyItems()
+{
+	UMOInventoryComponent* InventoryComponent = ResolveCurrentPawnInventoryComponent();
+	if (!IsValid(InventoryComponent))
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] LootAllNearbyItems - No inventory component on pawn"));
+		return 0;
+	}
+
+	TArray<AMOWorldItem*> NearbyItems = QueryNearbyWorldItems();
+	int32 LootedCount = 0;
+
+	for (AMOWorldItem* WorldItem : NearbyItems)
+	{
+		if (!IsValid(WorldItem))
+		{
+			continue;
+		}
+
+		// Get item info from the world item
+		UMOItemComponent* ItemComp = WorldItem->GetItemComponent();
+		if (!IsValid(ItemComp))
+		{
+			continue;
+		}
+
+		// Get identity for GUID
+		FGuid ItemGuid;
+		if (WorldItem->Implements<UMOIdentifiableInterface>())
+		{
+			ItemGuid = IMOIdentifiableInterface::Execute_GetPersistentGuid(WorldItem);
+		}
+
+		if (!ItemGuid.IsValid())
+		{
+			// Generate a new GUID for this item
+			ItemGuid = FGuid::NewGuid();
+		}
+
+		// Add to inventory
+		bool bAdded = InventoryComponent->AddItemByGuid(
+			ItemGuid,
+			ItemComp->ItemDefinitionId,
+			ItemComp->Quantity
+		);
+
+		if (bAdded)
+		{
+			LootedCount++;
+
+			// Hide or destroy the world item based on its settings
+			if (WorldItem->bDestroyAfterPickup)
+			{
+				WorldItem->Destroy();
+			}
+			else if (WorldItem->bHideOnPickup)
+			{
+				WorldItem->SetActorHiddenInGame(true);
+				WorldItem->SetActorEnableCollision(false);
+			}
+		}
+	}
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] LootAllNearbyItems - Looted %d/%d items"),
+		LootedCount, NearbyItems.Num());
+
+	return LootedCount;
+}
+
+void UMOUIManagerComponent::HandleQuickTransfer(const FGuid& ItemGuid, UMOInventoryComponent* SourceInventory)
+{
+	if (!ItemGuid.IsValid() || !IsValid(SourceInventory))
+	{
+		return;
+	}
+
+	UMOInventoryComponent* PlayerInventory = ResolveCurrentPawnInventoryComponent();
+	if (!IsValid(PlayerInventory))
+	{
+		return;
+	}
+
+	// Determine target inventory (opposite of source)
+	UMOInventoryComponent* TargetInventory = nullptr;
+
+	if (SourceInventory == PlayerInventory)
+	{
+		// Source is player, target is container (if any)
+		AActor* Container = GetActiveContainer();
+		if (IsValid(Container) && Container->Implements<UMOInventoryHolderInterface>())
+		{
+			TargetInventory = IMOInventoryHolderInterface::Execute_GetInventory(Container);
+		}
+	}
+	else
+	{
+		// Source is container, target is player
+		TargetInventory = PlayerInventory;
+	}
+
+	if (!IsValid(TargetInventory))
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOUI] QuickTransfer - No valid target inventory"));
+		return;
+	}
+
+	// Perform transfer
+	bool bSuccess = SourceInventory->TransferItem(ItemGuid, TargetInventory);
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] QuickTransfer %s: %s"),
+		bSuccess ? TEXT("succeeded") : TEXT("failed"),
+		*ItemGuid.ToString(EGuidFormats::DigitsWithHyphens));
+}
+
+void UMOUIManagerComponent::HandleLootAllNearby()
+{
+	int32 LootedCount = LootAllNearbyItems();
+
+	if (LootedCount > 0)
+	{
+		// Show notification
+		FText Message = FText::Format(
+			NSLOCTEXT("MO", "LootedItemsFormat", "Looted {0} item(s)"),
+			FText::AsNumber(LootedCount)
+		);
+		ShowNotification(Message, 2.0f);
 	}
 }
 
@@ -758,11 +1189,14 @@ void UMOUIManagerComponent::HandlePossessionMenuCreateCharacter()
 				UMOPersistenceSubsystem* Persistence = GameInstance->GetSubsystem<UMOPersistenceSubsystem>();
 				if (Persistence)
 				{
-					// Get the pawn's identity GUID
+					// Get the pawn's identity GUID via interface
 					FGuid PawnGuid;
-					if (UMOIdentityComponent* IdentityComp = NewPawn->FindComponentByClass<UMOIdentityComponent>())
+					if (NewPawn->Implements<UMOIdentifiableInterface>())
 					{
-						PawnGuid = IdentityComp->GetOrCreateGuid();
+						if (UMOIdentityComponent* IdentityComp = IMOIdentifiableInterface::Execute_GetIdentityComponent(NewPawn))
+						{
+							PawnGuid = IdentityComp->GetOrCreateGuid();
+						}
 					}
 
 					if (PawnGuid.IsValid())
@@ -858,8 +1292,12 @@ void UMOUIManagerComponent::OpenCraftingMenu()
 		return;
 	}
 
-	// Get required components from the pawn
-	UMOInventoryComponent* Inventory = CurrentPawn->FindComponentByClass<UMOInventoryComponent>();
+	// Get required components from the pawn via interface
+	UMOInventoryComponent* Inventory = nullptr;
+	if (CurrentPawn->Implements<UMOInventoryHolderInterface>())
+	{
+		Inventory = IMOInventoryHolderInterface::Execute_GetInventory(CurrentPawn);
+	}
 	if (!IsValid(Inventory))
 	{
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] No UMOInventoryComponent found on current pawn."));
@@ -889,6 +1327,16 @@ void UMOUIManagerComponent::OpenCraftingMenu()
 
 	// Initialize with components
 	MenuWidget->InitializeMenu(Inventory, Skills, Knowledge, CraftingQueue, Discovery);
+
+	// Check for active crafting station and pass it to the menu
+	if (CurrentPawn->Implements<UMOCraftingCapableInterface>())
+	{
+		AActor* StationActor = IMOCraftingCapableInterface::Execute_GetActiveCraftingStation(CurrentPawn);
+		if (AMOCraftingStationActor* Station = Cast<AMOCraftingStationActor>(StationActor))
+		{
+			MenuWidget->SetActiveStationActor(Station);
+		}
+	}
 
 	if (!MenuWidget->IsInViewport())
 	{
@@ -1411,11 +1859,15 @@ void UMOUIManagerComponent::HandleContextMenuAction(FName ActionId, const FGuid&
 	}
 	else if (ActionId == FName("Drop1"))
 	{
+		// Close context menu first to ensure clean UI state
+		CloseItemContextMenu();
 		// Drop single item into world
 		DropItemToWorldByGuid(InventoryComponent, ItemGuid);
 	}
 	else if (ActionId == FName("DropAll"))
 	{
+		// Close context menu first to ensure clean UI state
+		CloseItemContextMenu();
 		// Drop entire stack into world (DropItemByGuid drops the whole stack)
 		DropItemToWorldByGuid(InventoryComponent, ItemGuid);
 	}
@@ -1436,8 +1888,68 @@ void UMOUIManagerComponent::HandleContextMenuAction(FName ActionId, const FGuid&
 	}
 	else if (ActionId == FName("SplitStack"))
 	{
-		// TODO: Implement stack splitting UI
-		UE_LOG(LogMOFramework, Log, TEXT("[MOUI] SplitStack action - not yet implemented"));
+		// Close context menu first
+		CloseItemContextMenu();
+
+		// Get the item entry
+		FMOInventoryEntry Entry;
+		if (!InventoryComponent->TryGetEntryByGuid(ItemGuid, Entry))
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] SplitStack - item not found"));
+			return;
+		}
+
+		// Can't split single items
+		if (Entry.Quantity <= 1)
+		{
+			UE_LOG(LogMOFramework, Log, TEXT("[MOUI] SplitStack - nothing to split (quantity=%d)"), Entry.Quantity);
+			return;
+		}
+
+		// Split in half (floor division)
+		const int32 SplitAmount = Entry.Quantity / 2;
+		const FName ItemDefId = Entry.ItemDefinitionId;
+
+		// Remove split amount from original stack
+		if (!InventoryComponent->RemoveItemByGuid(ItemGuid, SplitAmount))
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] SplitStack - failed to remove from original stack"));
+			return;
+		}
+
+		// Generate new GUID for split portion
+		const FGuid NewGuid = FGuid::NewGuid();
+
+		// Check if there's room in inventory (an empty slot)
+		if (InventoryComponent->HasEmptySlot())
+		{
+			// Add split portion to inventory
+			InventoryComponent->AddItemByGuid(NewGuid, ItemDefId, SplitAmount);
+			UE_LOG(LogMOFramework, Log, TEXT("[MOUI] SplitStack - split %d items into new stack"), SplitAmount);
+		}
+		else
+		{
+			// No room in inventory - drop to world
+			APlayerController* PC = ResolveOwningPlayerController();
+			APawn* PlayerPawn = PC ? PC->GetPawn() : nullptr;
+
+			if (IsValid(PlayerPawn))
+			{
+				// Calculate drop location in front of player
+				const FVector PlayerLocation = PlayerPawn->GetActorLocation();
+				const FVector ForwardVector = PlayerPawn->GetActorForwardVector();
+				const FVector DropLocation = PlayerLocation + ForwardVector * 100.0f;
+				const FRotator DropRotation(0.0f, FMath::RandRange(0.0f, 360.0f), 0.0f);
+
+				// Spawn world item for the split portion
+				InventoryComponent->SpawnWorldItem(ItemDefId, SplitAmount, NewGuid, DropLocation, DropRotation);
+				UE_LOG(LogMOFramework, Log, TEXT("[MOUI] SplitStack - dropped %d items to world (no room in inventory)"), SplitAmount);
+			}
+			else
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] SplitStack - no room and no pawn to drop items"));
+			}
+		}
 	}
 	else if (ActionId == FName("Craft"))
 	{
@@ -1447,6 +1959,27 @@ void UMOUIManagerComponent::HandleContextMenuAction(FName ActionId, const FGuid&
 		CloseInventoryMenu();
 		OpenCraftingMenu();
 		UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Craft action - opened crafting menu"));
+	}
+	else if (ActionId == FName("Details"))
+	{
+		// Close context menu first
+		CloseItemContextMenu();
+		// Switch to details tab in unified inventory menu
+		UMOUnifiedInventoryMenu* MenuWidget = UnifiedInventoryWidget.Get();
+		if (IsValid(MenuWidget))
+		{
+			MenuWidget->SetSelectedItem(ItemGuid, InventoryComponent);
+			MenuWidget->ShowDetailsTab();
+			UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Details action - switched to details panel for item %s"), *ItemGuid.ToString(EGuidFormats::DigitsWithHyphens));
+		}
+	}
+	else if (ActionId == FName("Transfer"))
+	{
+		// Close context menu first
+		CloseItemContextMenu();
+		// Quick transfer - handled by HandleQuickTransfer
+		HandleQuickTransfer(ItemGuid, InventoryComponent);
+		UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Transfer action - quick transferred item %s"), *ItemGuid.ToString(EGuidFormats::DigitsWithHyphens));
 	}
 }
 
@@ -1584,7 +2117,11 @@ void UMOUIManagerComponent::HandleConfirmationCancelled()
 
 bool UMOUIManagerComponent::IsAnyMenuOpen() const
 {
-	return IsInventoryMenuOpen() || IsInGameMenuOpen() || IsItemContextMenuOpen() || IsPlayerStatusVisible() || IsPossessionMenuOpen() || IsCraftingMenuOpen() || IsSkillsPanelOpen() || IsBuildingMenuOpen() || IsBuildWidgetOpen() || IsInspectionInProgress();
+	// Check unified inventory menu
+	const UMOUnifiedInventoryMenu* UnifiedMenu = UnifiedInventoryWidget.Get();
+	bool bUnifiedMenuOpen = IsValid(UnifiedMenu) && UnifiedMenu->IsInViewport();
+
+	return IsInventoryMenuOpen() || bUnifiedMenuOpen || IsInGameMenuOpen() || IsItemContextMenuOpen() || IsPlayerStatusVisible() || IsPossessionMenuOpen() || IsCraftingMenuOpen() || IsSkillsPanelOpen() || IsBuildingMenuOpen() || IsBuildWidgetOpen() || IsStationContextMenuOpen() || IsInspectionInProgress();
 }
 
 void UMOUIManagerComponent::CloseAllMenus()
@@ -1604,6 +2141,13 @@ void UMOUIManagerComponent::CloseAllMenus()
 	if (IsValid(InvMenu) && InvMenu->IsInViewport())
 	{
 		InvMenu->RemoveFromParent();
+	}
+
+	// Close unified inventory menu
+	UMOUnifiedInventoryMenu* UnifiedMenu = UnifiedInventoryWidget.Get();
+	if (IsValid(UnifiedMenu) && UnifiedMenu->IsInViewport())
+	{
+		UnifiedMenu->RemoveFromParent();
 	}
 
 	// Close in-game menu
@@ -1642,6 +2186,14 @@ void UMOUIManagerComponent::CloseAllMenus()
 	}
 	CurrentBuildTarget.Reset();
 
+	// Close station context menu
+	UMOStationContextMenu* StationMenuInst = StationContextMenuWidget.Get();
+	if (IsValid(StationMenuInst) && StationMenuInst->IsInViewport())
+	{
+		StationMenuInst->RemoveFromParent();
+	}
+	CurrentStationTarget.Reset();
+
 	// Cancel any active inspection
 	CancelItemInspection();
 
@@ -1676,6 +2228,13 @@ void UMOUIManagerComponent::CloseAllSwitchableMenus()
 	if (IsValid(InvMenu) && InvMenu->IsInViewport())
 	{
 		InvMenu->RemoveFromParent();
+	}
+
+	// Close unified inventory menu
+	UMOUnifiedInventoryMenu* UnifiedMenu = UnifiedInventoryWidget.Get();
+	if (IsValid(UnifiedMenu) && UnifiedMenu->IsInViewport())
+	{
+		UnifiedMenu->RemoveFromParent();
 	}
 
 	// Close crafting menu
@@ -1818,24 +2377,35 @@ void UMOUIManagerComponent::DropItemToWorldByGuid(UMOInventoryComponent* Invento
 	FVector RightDir = FRotationMatrix(PlayerRotation).GetScaledAxis(EAxis::Y);
 	FVector DropLocation = PlayerLocation + (ForwardDir * ForwardDistance) + (RightDir * SideOffset);
 
-	// Trace down to find ground
+	// Trace down to find ground - use WorldStatic channel for reliable floor detection
 	UWorld* World = GetWorld();
 	if (IsValid(World))
 	{
 		FHitResult HitResult;
 		FCollisionQueryParams QueryParams;
 		QueryParams.AddIgnoredActor(PlayerPawn);
+		QueryParams.bTraceComplex = false; // Use simple collision for speed
 
 		const FVector TraceStart = DropLocation + FVector(0.0f, 0.0f, 200.0f);
 		const FVector TraceEnd = DropLocation - FVector(0.0f, 0.0f, 500.0f);
 
-		if (World->LineTraceSingleByChannel(HitResult, TraceStart, TraceEnd, ECC_Visibility, QueryParams))
+		// Try WorldStatic first (floors, terrain), then Visibility as fallback
+		bool bHitGround = World->LineTraceSingleByChannel(HitResult, TraceStart, TraceEnd, ECC_WorldStatic, QueryParams);
+		if (!bHitGround)
 		{
-			DropLocation = HitResult.Location + FVector(0.0f, 0.0f, 100.0f);
+			bHitGround = World->LineTraceSingleByChannel(HitResult, TraceStart, TraceEnd, ECC_Visibility, QueryParams);
+		}
+
+		if (bHitGround)
+		{
+			// Place 30cm above ground - high enough to not clip, low enough for reliable physics
+			DropLocation = HitResult.Location + FVector(0.0f, 0.0f, 30.0f);
 		}
 		else
 		{
-			DropLocation = DropLocation + FVector(0.0f, 0.0f, 100.0f);
+			// No ground found - place at player height as fallback
+			DropLocation.Z = PlayerLocation.Z;
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] DropItem: No ground found at drop location, using player height"));
 		}
 	}
 
@@ -2334,7 +2904,8 @@ void UMOUIManagerComponent::OpenBuildingMenu()
 	{
 		UMOKnowledgeComponent* Knowledge = CurrentPawn->FindComponentByClass<UMOKnowledgeComponent>();
 		UMORecipeDiscoveryComponent* Discovery = CurrentPawn->FindComponentByClass<UMORecipeDiscoveryComponent>();
-		UMOInventoryComponent* Inventory = CurrentPawn->FindComponentByClass<UMOInventoryComponent>();
+		UMOInventoryComponent* Inventory = CurrentPawn->Implements<UMOInventoryHolderInterface>()
+			? IMOInventoryHolderInterface::Execute_GetInventory(CurrentPawn) : nullptr;
 		UMOSkillsComponent* Skills = CurrentPawn->FindComponentByClass<UMOSkillsComponent>();
 		MenuWidget->InitializeMenu(Knowledge, Discovery, Inventory, Skills);
 	}
@@ -2445,12 +3016,12 @@ void UMOUIManagerComponent::ShowBuildWidget(AMOBuildableActor* Target)
 		return;
 	}
 
-	// Get the player's inventory for material sourcing
+	// Get the player's inventory for material sourcing via interface
 	UMOInventoryComponent* BuilderInventory = nullptr;
 	APawn* Pawn = PlayerController->GetPawn();
-	if (IsValid(Pawn))
+	if (IsValid(Pawn) && Pawn->Implements<UMOInventoryHolderInterface>())
 	{
-		BuilderInventory = Pawn->FindComponentByClass<UMOInventoryComponent>();
+		BuilderInventory = IMOInventoryHolderInterface::Execute_GetInventory(Pawn);
 	}
 
 	// Create widget if needed
@@ -2480,14 +3051,70 @@ void UMOUIManagerComponent::ShowBuildWidget(AMOBuildableActor* Target)
 	// Initialize widget with target building and player inventory
 	WidgetInst->InitializeForGhost(Target, BuilderInventory);
 
-	// Show modal background and widget
+	// Show clickable modal background first (clicking it will close the menu)
 	ShowModalBackground();
+
+	// Bind modal click to close ghost menu (if not already bound)
+	if (UMOModalBackground* Modal = ModalBackgroundWidget.Get())
+	{
+		Modal->OnBackgroundClicked.RemoveDynamic(this, &UMOUIManagerComponent::HandleGhostContextMenuRequestClose);
+		Modal->OnBackgroundClicked.AddDynamic(this, &UMOUIManagerComponent::HandleGhostContextMenuRequestClose);
+	}
+
+	// Add menu to viewport above background
 	WidgetInst->AddToViewport(GhostContextMenuZOrder);
 
-	// Set input mode
-	ApplyInputModeForMenuOpen(PlayerController, WidgetInst);
+	// Get viewport size
+	int32 ViewportX, ViewportY;
+	PlayerController->GetViewportSize(ViewportX, ViewportY);
 
-	WidgetInst->SetFocus();
+	// Try to position near the target building by projecting world position to screen
+	FVector BoundsOrigin;
+	FVector BoundsExtent;
+	Target->GetActorBounds(true, BoundsOrigin, BoundsExtent);
+
+	// Use center of object for positioning
+	FVector WorldPosition = BoundsOrigin;
+
+	FVector2D ScreenPosition;
+	bool bProjected = PlayerController->ProjectWorldLocationToScreen(WorldPosition, ScreenPosition, false);
+
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] Projection: World(%.0f, %.0f, %.0f) -> Screen(%.0f, %.0f), success=%d, viewport=(%d, %d)"),
+		WorldPosition.X, WorldPosition.Y, WorldPosition.Z,
+		ScreenPosition.X, ScreenPosition.Y, bProjected ? 1 : 0,
+		ViewportX, ViewportY);
+
+	// Check if the projected position is valid (on screen)
+	bool bValidPosition = bProjected &&
+		ScreenPosition.X >= 0 && ScreenPosition.X <= ViewportX &&
+		ScreenPosition.Y >= 0 && ScreenPosition.Y <= ViewportY;
+
+	if (bValidPosition)
+	{
+		// Offset to the right so menu doesn't obscure object
+		ScreenPosition.X = FMath::Min(ScreenPosition.X + 50.0f, (float)ViewportX - 320.0f);
+		ScreenPosition.Y = FMath::Clamp(ScreenPosition.Y - 100.0f, 10.0f, (float)ViewportY - 420.0f);
+	}
+	else
+	{
+		// Fallback: center of screen
+		ScreenPosition.X = (ViewportX - 300.0f) * 0.5f;
+		ScreenPosition.Y = (ViewportY - 400.0f) * 0.5f;
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] Using center fallback position"));
+	}
+
+	WidgetInst->SetPopupPosition(ScreenPosition);
+	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Final menu position: (%.0f, %.0f)"), ScreenPosition.X, ScreenPosition.Y);
+
+	// Set input mode - use Game and UI so keyboard still works
+	FInputModeGameAndUI InputMode;
+	InputMode.SetWidgetToFocus(WidgetInst->TakeWidget());
+	InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+	InputMode.SetHideCursorDuringCapture(false);
+	PlayerController->SetInputMode(InputMode);
+	PlayerController->SetShowMouseCursor(true);
+
+	WidgetInst->SetKeyboardFocus();
 
 	UpdateReticleVisibility();
 
@@ -2497,6 +3124,12 @@ void UMOUIManagerComponent::ShowBuildWidget(AMOBuildableActor* Target)
 void UMOUIManagerComponent::HideBuildWidget()
 {
 	APlayerController* PlayerController = ResolveOwningPlayerController();
+
+	// Unbind modal background click
+	if (UMOModalBackground* Modal = ModalBackgroundWidget.Get())
+	{
+		Modal->OnBackgroundClicked.RemoveDynamic(this, &UMOUIManagerComponent::HandleGhostContextMenuRequestClose);
+	}
 
 	UMOGhostContextMenu* WidgetInst = GhostContextMenuWidget.Get();
 	if (IsValid(WidgetInst))
@@ -2511,14 +3144,11 @@ void UMOUIManagerComponent::HideBuildWidget()
 
 	UpdateReticleVisibility();
 
-	// Only restore input mode if no other menus are open
-	if (!IsAnyMenuOpen())
+	// Hide modal and restore input mode
+	HideModalBackground();
+	if (IsValid(PlayerController) && PlayerController->IsLocalController())
 	{
-		HideModalBackground();
-		if (IsValid(PlayerController) && PlayerController->IsLocalController())
-		{
-			ApplyInputModeForMenuClosed(PlayerController);
-		}
+		ApplyInputModeForMenuClosed(PlayerController);
 	}
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Ghost Context Menu closed"));
@@ -2537,10 +3167,8 @@ void UMOUIManagerComponent::HandleGhostContextMenuRequestClose()
 
 void UMOUIManagerComponent::HandleGhostContextMenuBuildStarted()
 {
-	// The context menu handles starting the build internally
-	// We just close the menu - the building will continue in the background
-	HideBuildWidget();
-
+	// Don't close the menu when build starts - let user watch progress
+	// The menu will auto-close when build completes or user moves mouse away
 	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Build started from Ghost Context Menu"));
 }
 
@@ -2551,4 +3179,291 @@ void UMOUIManagerComponent::HandleGhostContextMenuCancelled()
 	HideBuildWidget();
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Build cancelled from Ghost Context Menu"));
+}
+
+// ============================================================================
+// STATION CONTEXT MENU
+// ============================================================================
+
+void UMOUIManagerComponent::ShowStationContextMenu(AActor* StationActor, FVector WorldPosition)
+{
+	AMOCraftingStationActor* Station = Cast<AMOCraftingStationActor>(StationActor);
+	if (!Station)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] ShowStationContextMenu: Invalid station actor"));
+		return;
+	}
+
+	if (!StationContextMenuClass)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] ShowStationContextMenu: No StationContextMenuClass set"));
+		return;
+	}
+
+	APlayerController* PC = ResolveOwningPlayerController();
+	if (!PC)
+	{
+		return;
+	}
+
+	// Close any open menus first
+	CloseAllSwitchableMenus();
+	HideStationContextMenu();
+
+	// Create widget if needed
+	UMOStationContextMenu* WidgetInst = StationContextMenuWidget.Get();
+	if (!WidgetInst)
+	{
+		WidgetInst = CreateWidget<UMOStationContextMenu>(PC, StationContextMenuClass);
+		StationContextMenuWidget = WidgetInst;
+	}
+
+	if (!WidgetInst)
+	{
+		UE_LOG(LogMOFramework, Error, TEXT("[MOUI] Failed to create Station Context Menu widget"));
+		return;
+	}
+
+	// Bind delegates (remove first to avoid duplicates)
+	WidgetInst->OnRequestClose.RemoveDynamic(this, &UMOUIManagerComponent::HandleStationContextMenuRequestClose);
+	WidgetInst->OnOpenClicked.RemoveDynamic(this, &UMOUIManagerComponent::HandleStationContextMenuOpen);
+	WidgetInst->OnCraftClicked.RemoveDynamic(this, &UMOUIManagerComponent::HandleStationContextMenuCraft);
+	WidgetInst->OnLightClicked.RemoveDynamic(this, &UMOUIManagerComponent::HandleStationContextMenuLight);
+	WidgetInst->OnRequestClose.AddDynamic(this, &UMOUIManagerComponent::HandleStationContextMenuRequestClose);
+	WidgetInst->OnOpenClicked.AddDynamic(this, &UMOUIManagerComponent::HandleStationContextMenuOpen);
+	WidgetInst->OnCraftClicked.AddDynamic(this, &UMOUIManagerComponent::HandleStationContextMenuCraft);
+	WidgetInst->OnLightClicked.AddDynamic(this, &UMOUIManagerComponent::HandleStationContextMenuLight);
+
+	CurrentStationTarget = Station;
+
+	// Initialize widget with station
+	WidgetInst->InitializeForStation(Station);
+
+	// Show modal background
+	ShowModalBackground();
+
+	// Bind modal click to close station menu
+	if (UMOModalBackground* Modal = ModalBackgroundWidget.Get())
+	{
+		Modal->OnBackgroundClicked.RemoveDynamic(this, &UMOUIManagerComponent::HandleStationContextMenuRequestClose);
+		Modal->OnBackgroundClicked.AddDynamic(this, &UMOUIManagerComponent::HandleStationContextMenuRequestClose);
+	}
+
+	// Add to viewport
+	WidgetInst->AddToViewport(StationContextMenuZOrder);
+
+	// Position at screen location from world position
+	FVector2D ScreenPosition;
+	if (PC->ProjectWorldLocationToScreen(WorldPosition, ScreenPosition))
+	{
+		WidgetInst->SetPopupPosition(ScreenPosition);
+	}
+
+	// Set input mode
+	ApplyInputModeForMenuOpen(PC, WidgetInst);
+	UpdateReticleVisibility();
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Showing Station Context Menu for %s"), *Station->GetName());
+}
+
+void UMOUIManagerComponent::HideStationContextMenu()
+{
+	UMOStationContextMenu* WidgetInst = StationContextMenuWidget.Get();
+	if (!WidgetInst || !WidgetInst->IsInViewport())
+	{
+		return;
+	}
+
+	WidgetInst->RemoveFromParent();
+	CurrentStationTarget = nullptr;
+
+	// Check if we should hide modal background
+	if (!IsAnyMenuOpen())
+	{
+		HideModalBackground();
+		APlayerController* PC = ResolveOwningPlayerController();
+		if (PC)
+		{
+			ApplyInputModeForMenuClosed(PC);
+		}
+	}
+
+	UpdateReticleVisibility();
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Hiding Station Context Menu"));
+}
+
+bool UMOUIManagerComponent::IsStationContextMenuOpen() const
+{
+	UMOStationContextMenu* WidgetInst = StationContextMenuWidget.Get();
+	return WidgetInst && WidgetInst->IsInViewport();
+}
+
+void UMOUIManagerComponent::HandleStationContextMenuRequestClose()
+{
+	HideStationContextMenu();
+}
+
+void UMOUIManagerComponent::HandleStationContextMenuOpen()
+{
+	// Open unified inventory with the station as the container
+	AMOCraftingStationActor* Station = CurrentStationTarget.Get();
+	if (Station)
+	{
+		HideStationContextMenu();
+		OpenInventoryWithContainer(Station);
+	}
+}
+
+void UMOUIManagerComponent::HandleStationContextMenuCraft()
+{
+	// Open crafting menu (station is already set as active via interface)
+	AMOCraftingStationActor* Station = CurrentStationTarget.Get();
+	if (Station)
+	{
+		// Set active crafting station on pawn
+		APlayerController* PC = ResolveOwningPlayerController();
+		if (PC)
+		{
+			APawn* Pawn = PC->GetPawn();
+			if (Pawn && Pawn->Implements<UMOCraftingCapableInterface>())
+			{
+				IMOCraftingCapableInterface::Execute_SetActiveCraftingStation(Pawn, Station);
+			}
+		}
+
+		HideStationContextMenu();
+		OpenCraftingMenu();
+	}
+}
+
+void UMOUIManagerComponent::HandleStationContextMenuLight()
+{
+	// Station lighting is handled by the widget itself
+	// Just refresh the display in case we need to update anything
+	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Station lit via context menu"));
+}
+
+// =============================================================================
+// Mode Indicator
+// =============================================================================
+
+void UMOUIManagerComponent::CreateModeIndicator()
+{
+	if (!IsLocalOwningPlayerController())
+	{
+		return;
+	}
+
+	APlayerController* PlayerController = ResolveOwningPlayerController();
+	if (!IsValid(PlayerController))
+	{
+		return;
+	}
+
+	// Use configured class or default
+	TSubclassOf<UMOModeIndicatorWidget> WidgetClass = ModeIndicatorClass;
+	if (!WidgetClass)
+	{
+		WidgetClass = UMOModeIndicatorWidget::StaticClass();
+	}
+
+	UMOModeIndicatorWidget* WidgetInst = CreateWidget<UMOModeIndicatorWidget>(PlayerController, WidgetClass);
+	if (!IsValid(WidgetInst))
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] Failed to create Mode Indicator widget"));
+		return;
+	}
+
+	ModeIndicatorWidget = WidgetInst;
+	WidgetInst->AddToViewport(ModeIndicatorZOrder);
+
+	// Set initial mode
+	WidgetInst->SetMode(CurrentGameplayMode);
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Mode Indicator created"));
+}
+
+void UMOUIManagerComponent::SetGameplayMode(EMOGameplayMode NewMode)
+{
+	CurrentGameplayMode = NewMode;
+
+	UMOModeIndicatorWidget* WidgetInst = ModeIndicatorWidget.Get();
+	if (IsValid(WidgetInst))
+	{
+		WidgetInst->SetMode(NewMode);
+	}
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Gameplay mode set to: %s"),
+		*UMOModeIndicatorWidget::GetModeDisplayName(NewMode).ToString());
+}
+
+EMOGameplayMode UMOUIManagerComponent::GetGameplayMode() const
+{
+	return CurrentGameplayMode;
+}
+
+UMOModeIndicatorWidget* UMOUIManagerComponent::GetModeIndicator() const
+{
+	return ModeIndicatorWidget.Get();
+}
+
+// =============================================================================
+// Tool Hint
+// =============================================================================
+
+void UMOUIManagerComponent::CreateToolHint()
+{
+	if (!IsLocalOwningPlayerController())
+	{
+		return;
+	}
+
+	APlayerController* PlayerController = ResolveOwningPlayerController();
+	if (!IsValid(PlayerController))
+	{
+		return;
+	}
+
+	// Use configured class or default
+	TSubclassOf<UMOToolHintWidget> WidgetClass = ToolHintClass;
+	if (!WidgetClass)
+	{
+		WidgetClass = UMOToolHintWidget::StaticClass();
+	}
+
+	UMOToolHintWidget* WidgetInst = CreateWidget<UMOToolHintWidget>(PlayerController, WidgetClass);
+	if (!IsValid(WidgetInst))
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] Failed to create Tool Hint widget"));
+		return;
+	}
+
+	ToolHintWidget = WidgetInst;
+	WidgetInst->AddToViewport(ToolHintZOrder);
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Tool Hint created"));
+}
+
+void UMOUIManagerComponent::ShowToolHint(const FText& HintText, float Duration)
+{
+	UMOToolHintWidget* WidgetInst = ToolHintWidget.Get();
+	if (IsValid(WidgetInst))
+	{
+		WidgetInst->ShowHint(HintText, Duration);
+	}
+}
+
+void UMOUIManagerComponent::HideToolHint()
+{
+	UMOToolHintWidget* WidgetInst = ToolHintWidget.Get();
+	if (IsValid(WidgetInst))
+	{
+		WidgetInst->HideHint();
+	}
+}
+
+UMOToolHintWidget* UMOUIManagerComponent::GetToolHintWidget() const
+{
+	return ToolHintWidget.Get();
 }

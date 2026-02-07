@@ -3,6 +3,7 @@
 #include "MOAnatomyComponent.h"
 #include "MOMentalStateComponent.h"
 #include "MOSkillsComponent.h"
+#include "MOMedicalProviderInterface.h"
 #include "Net/UnrealNetwork.h"
 #include "TimerManager.h"
 
@@ -293,7 +294,10 @@ FMOAdrenalineSkillModifiers UMOAdrenalineComponent::GetInterpolatedSkillModifier
 	}
 	if (!Lower && !Upper)
 	{
-		return Config.SkillModifiers[0];
+		// Return first modifier if available, otherwise default
+		return Config.SkillModifiers.Num() > 0
+			? Config.SkillModifiers[0]
+			: FMOAdrenalineSkillModifiers();
 	}
 	if (Lower == Upper)
 	{
@@ -522,7 +526,9 @@ void UMOAdrenalineComponent::RecalculateEffects()
 	if (Level > Config.AccuracyPenaltyThreshold)
 	{
 		float PenaltyRange = 100.0f - Config.AccuracyPenaltyThreshold;
-		float PenaltyProgress = (Level - Config.AccuracyPenaltyThreshold) / PenaltyRange;
+		float PenaltyProgress = (PenaltyRange > KINDA_SMALL_NUMBER)
+			? (Level - Config.AccuracyPenaltyThreshold) / PenaltyRange
+			: 1.0f;
 		State.AccuracyPenalty = PenaltyProgress * Config.MaxAccuracyPenalty;
 	}
 	else
@@ -534,7 +540,9 @@ void UMOAdrenalineComponent::RecalculateEffects()
 	if (Level > Config.TunnelVisionThreshold)
 	{
 		float VisionRange = 100.0f - Config.TunnelVisionThreshold;
-		float VisionProgress = (Level - Config.TunnelVisionThreshold) / VisionRange;
+		float VisionProgress = (VisionRange > KINDA_SMALL_NUMBER)
+			? (Level - Config.TunnelVisionThreshold) / VisionRange
+			: 1.0f;
 		State.TunnelVisionIntensity = VisionProgress * Config.MaxTunnelVision;
 	}
 	else
@@ -577,9 +585,22 @@ void UMOAdrenalineComponent::RefreshCachedComponents()
 {
 	if (AActor* Owner = GetOwner())
 	{
-		CachedVitalsComp = Owner->FindComponentByClass<UMOVitalsComponent>();
-		CachedAnatomyComp = Owner->FindComponentByClass<UMOAnatomyComponent>();
-		CachedMentalComp = Owner->FindComponentByClass<UMOMentalStateComponent>();
+		// Use interface for medical components - avoids FindComponentByClass chains
+		if (Owner->Implements<UMOMedicalProviderInterface>())
+		{
+			CachedVitalsComp = IMOMedicalProviderInterface::Execute_GetVitals(Owner);
+			CachedAnatomyComp = IMOMedicalProviderInterface::Execute_GetAnatomy(Owner);
+			CachedMentalComp = IMOMedicalProviderInterface::Execute_GetMentalState(Owner);
+		}
+		else
+		{
+			// Fallback for actors that don't implement the interface
+			CachedVitalsComp = Owner->FindComponentByClass<UMOVitalsComponent>();
+			CachedAnatomyComp = Owner->FindComponentByClass<UMOAnatomyComponent>();
+			CachedMentalComp = Owner->FindComponentByClass<UMOMentalStateComponent>();
+		}
+
+		// Skills component not part of medical interface
 		CachedSkillsComp = Owner->FindComponentByClass<UMOSkillsComponent>();
 	}
 

@@ -37,6 +37,10 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO")
 	UMOInteractableComponent* GetInteractableComponent() const { return InteractableComponent; }
 
+	/** Check if this item can be picked up (not hidden, has valid item component). */
+	UFUNCTION(BlueprintPure, Category="MO")
+	bool IsPickupable() const;
+
 	UFUNCTION(BlueprintPure, Category="MO")
 	UStaticMeshComponent* GetItemMesh() const { return ItemMesh; }
 

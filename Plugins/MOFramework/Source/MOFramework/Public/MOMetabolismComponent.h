@@ -123,7 +123,7 @@ public:
 	float TimeScaleMultiplier = 1.0f;
 
 	/** Daily water requirement in mL (normal ~2500mL/day). */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Metabolism|Config")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Metabolism|Config", meta=(ClampMin="1.0"))
 	float DailyWaterRequirement = 2500.0f;
 
 	/** Daily calorie requirement (calculated from BMR + activity). */

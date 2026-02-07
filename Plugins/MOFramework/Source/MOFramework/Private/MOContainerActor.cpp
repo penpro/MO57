@@ -2,13 +2,26 @@
 #include "MOFramework.h"
 #include "MOInventoryComponent.h"
 #include "MORecipeDatabaseSettings.h"
-#include "MOUIManagerComponent.h"
-#include "MOPlayerController.h"
+#include "MOUIContractInterface.h"
+#include "MOworldSaveGame.h"
+#include "Components/AudioComponent.h"
+#include "Sound/SoundBase.h"
 
 AMOContainerActor::AMOContainerActor()
 {
 	// Create inventory component
 	ContainerInventory = CreateDefaultSubobject<UMOInventoryComponent>(TEXT("ContainerInventory"));
+
+	// Create audio components
+	OpenSoundComponent = CreateDefaultSubobject<UAudioComponent>(TEXT("OpenSoundComponent"));
+	OpenSoundComponent->SetupAttachment(RootComponent);
+	OpenSoundComponent->bAutoActivate = false;
+	OpenSoundComponent->bIsUISound = false;
+
+	CloseSoundComponent = CreateDefaultSubobject<UAudioComponent>(TEXT("CloseSoundComponent"));
+	CloseSoundComponent->SetupAttachment(RootComponent);
+	CloseSoundComponent->bAutoActivate = false;
+	CloseSoundComponent->bIsUISound = false;
 }
 
 void AMOContainerActor::BeginPlay()
@@ -44,13 +57,64 @@ void AMOContainerActor::OnCompleteInteracted_Implementation(AController* Control
 {
 	Super::OnCompleteInteracted_Implementation(Controller);
 
-	// Open container inventory UI
-	AMOPlayerController* PC = Cast<AMOPlayerController>(Controller);
-	if (PC && PC->UIManagerComponent)
+	// Play open sound
+	PlayOpenSound();
+
+	// Use interface to request UI - decouples from specific controller type
+	if (Controller && Controller->Implements<UMOUIContractInterface>())
 	{
-		// TODO: Open container-specific inventory UI
-		// For now, just log
-		UE_LOG(LogMOFramework, Log, TEXT("[MOContainerActor] Container interaction - would open inventory UI"));
+		IMOUIContractInterface::Execute_RequestOpenContainerInventory(Controller, this);
+		UE_LOG(LogMOFramework, Log, TEXT("[MOContainerActor] Opening container inventory UI"));
+	}
+	else
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOContainerActor] Controller does not implement IMOUIContractInterface"));
+	}
+}
+
+// ============================================================================
+// AUDIO CONTROL
+// ============================================================================
+
+void AMOContainerActor::PlayOpenSound()
+{
+	if (!OpenSoundComponent)
+	{
+		return;
+	}
+
+	// Load and play sound if configured
+	if (!OpenSound.IsNull())
+	{
+		USoundBase* Sound = OpenSound.LoadSynchronous();
+		if (Sound)
+		{
+			OpenSoundComponent->SetSound(Sound);
+			OpenSoundComponent->SetVolumeMultiplier(SoundVolume);
+			OpenSoundComponent->Play();
+			UE_LOG(LogMOFramework, Verbose, TEXT("[MOContainerActor] Playing OpenSound"));
+		}
+	}
+}
+
+void AMOContainerActor::PlayCloseSound()
+{
+	if (!CloseSoundComponent)
+	{
+		return;
+	}
+
+	// Load and play sound if configured
+	if (!CloseSound.IsNull())
+	{
+		USoundBase* Sound = CloseSound.LoadSynchronous();
+		if (Sound)
+		{
+			CloseSoundComponent->SetSound(Sound);
+			CloseSoundComponent->SetVolumeMultiplier(SoundVolume);
+			CloseSoundComponent->Play();
+			UE_LOG(LogMOFramework, Verbose, TEXT("[MOContainerActor] Playing CloseSound"));
+		}
 	}
 }
 
@@ -113,4 +177,54 @@ int32 AMOContainerActor::GetMaterialSourcePriority_Implementation() const
 {
 	// Containers have medium priority (50)
 	return 50;
+}
+
+// ============================================================================
+// SAVE/LOAD
+// ============================================================================
+
+void AMOContainerActor::BuildSaveData(FMOPersistedBuildingRecord& OutRecord) const
+{
+	// Call parent to save building state
+	Super::BuildSaveData(OutRecord);
+
+	// Save container inventory
+	if (ContainerInventory)
+	{
+		FMOInventorySaveData InventorySave;
+		ContainerInventory->BuildSaveData(InventorySave);
+
+		// Copy to building record format
+		OutRecord.InventorySlotCount = InventorySave.SlotCount;
+		OutRecord.InventorySlotGuids = InventorySave.SlotItemGuids;
+		OutRecord.InventoryItems = InventorySave.Items;
+
+		UE_LOG(LogMOFramework, Log, TEXT("[MOContainerActor] Saved %d items in %d slots"),
+			OutRecord.InventoryItems.Num(), OutRecord.InventorySlotCount);
+	}
+}
+
+void AMOContainerActor::ApplySaveData(const FMOPersistedBuildingRecord& InRecord)
+{
+	// Call parent to restore building state
+	Super::ApplySaveData(InRecord);
+
+	// Restore container inventory
+	if (ContainerInventory && InRecord.InventorySlotCount > 0)
+	{
+		// Build inventory save data from building record
+		FMOInventorySaveData InventorySave;
+		InventorySave.SlotCount = InRecord.InventorySlotCount;
+		InventorySave.SlotItemGuids = InRecord.InventorySlotGuids;
+		InventorySave.Items = InRecord.InventoryItems;
+
+		// Ensure slot count matches
+		ContainerInventory->SlotCount = InRecord.InventorySlotCount;
+
+		// Apply the save data
+		ContainerInventory->ApplySaveDataAuthority(InventorySave);
+
+		UE_LOG(LogMOFramework, Log, TEXT("[MOContainerActor] Restored %d items in %d slots"),
+			InRecord.InventoryItems.Num(), InRecord.InventorySlotCount);
+	}
 }

@@ -2,6 +2,7 @@
 #include "MOVitalsComponent.h"
 #include "MOAnatomyComponent.h"
 #include "MOItemDefinitionRow.h"
+#include "MOMedicalProviderInterface.h"
 #include "Net/UnrealNetwork.h"
 #include "TimerManager.h"
 
@@ -17,11 +18,19 @@ void UMOMetabolismComponent::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// Cache sibling components
+	// Cache sibling components via interface - avoids FindComponentByClass chains
 	if (AActor* Owner = GetOwner())
 	{
-		CachedVitalsComp = Owner->FindComponentByClass<UMOVitalsComponent>();
-		CachedAnatomyComp = Owner->FindComponentByClass<UMOAnatomyComponent>();
+		if (Owner->Implements<UMOMedicalProviderInterface>())
+		{
+			CachedVitalsComp = IMOMedicalProviderInterface::Execute_GetVitals(Owner);
+			CachedAnatomyComp = IMOMedicalProviderInterface::Execute_GetAnatomy(Owner);
+		}
+		else
+		{
+			CachedVitalsComp = Owner->FindComponentByClass<UMOVitalsComponent>();
+			CachedAnatomyComp = Owner->FindComponentByClass<UMOAnatomyComponent>();
+		}
 	}
 
 	// Start tick timer on authority
@@ -118,7 +127,8 @@ void UMOMetabolismComponent::DrinkWater(float AmountML)
 
 	// Direct hydration (water absorbs quickly)
 	// Normal daily need is ~2500mL, so each mL is ~0.04% of daily need
-	float HydrationGain = (AmountML / DailyWaterRequirement) * 100.0f;
+	const float SafeWaterReq = FMath::Max(1.0f, DailyWaterRequirement);
+	float HydrationGain = (AmountML / SafeWaterReq) * 100.0f;
 
 	float OldHydration = Nutrients.HydrationLevel;
 	Nutrients.HydrationLevel = FMath::Clamp(Nutrients.HydrationLevel + HydrationGain, 0.0f, 100.0f);
@@ -811,7 +821,8 @@ void UMOMetabolismComponent::AbsorbNutrients(float Carbs, float Protein, float F
 	// Water directly increases hydration
 	if (Water > 0.0f)
 	{
-		float HydrationGain = (Water / DailyWaterRequirement) * 100.0f;
+		const float SafeWaterReq = FMath::Max(1.0f, DailyWaterRequirement);
+		float HydrationGain = (Water / SafeWaterReq) * 100.0f;
 		Nutrients.HydrationLevel = FMath::Clamp(Nutrients.HydrationLevel + HydrationGain, 0.0f, 100.0f);
 	}
 

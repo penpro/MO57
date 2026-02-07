@@ -16,10 +16,13 @@ void UMOCraftingSubsystem::GetAvailableRecipes(
 {
 	OutRecipeIds.Empty();
 
-	TArray<FName> AllRecipeIds;
-	UMORecipeDatabaseSettings::GetAllRecipeIds(AllRecipeIds);
+	// Get pre-filtered craftable recipes (excludes buildings) - O(1) cached lookup
+	TArray<FName> CraftableRecipes;
+	UMORecipeDatabaseSettings::GetCraftableRecipes(CraftableRecipes);
 
-	for (const FName& RecipeId : AllRecipeIds)
+	OutRecipeIds.Reserve(CraftableRecipes.Num());
+
+	for (const FName& RecipeId : CraftableRecipes)
 	{
 		const FMORecipeDefinitionRow* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(RecipeId);
 		if (!Recipe)
@@ -28,6 +31,8 @@ void UMOCraftingSubsystem::GetAvailableRecipes(
 		}
 
 		// Check station requirement
+		// Recipes with RequiredStation == None can be crafted anywhere
+		// Recipes with a specific station only work at that station
 		if (Recipe->RequiredStation != EMOCraftingStation::None && Recipe->RequiredStation != Station)
 		{
 			continue;
@@ -627,7 +632,10 @@ float UMOCraftingSubsystem::GetAdjustedCraftTime(FName RecipeId, UMOInventoryCom
 
 	// Quality of 1.0 = base time, Quality of 2.0 = half time, etc.
 	// Clamp minimum to 0.5 to prevent unreasonably fast crafting
-	const float QualityMultiplier = FMath::Max(0.5f, 1.0f / AverageQuality);
+	// Guard against divide-by-zero if quality somehow ends up at 0
+	const float QualityMultiplier = (AverageQuality > KINDA_SMALL_NUMBER)
+		? FMath::Max(0.5f, 1.0f / AverageQuality)
+		: 1.0f;
 
 	return BaseCraftTime * QualityMultiplier;
 }

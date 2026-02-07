@@ -6,6 +6,7 @@
 #include "MOSkillsComponent.h"
 #include "MORecipeDatabaseSettings.h"
 #include "MOItemDatabaseSettings.h"
+#include "MOIdentifiableInterface.h"
 #include "Net/UnrealNetwork.h"
 #include "GameFramework/Pawn.h"
 
@@ -179,16 +180,38 @@ bool UMOCraftingQueueComponent::CancelCraft(const FGuid& EntryId, bool bRefundIn
 
 void UMOCraftingQueueComponent::CancelAllCrafts(bool bRefundIngredients)
 {
-	TArray<FGuid> EntryIds;
-	for (const FMOCraftingQueueEntry& Entry : Queue.Entries)
+	if (Queue.Entries.Num() == 0)
 	{
-		EntryIds.Add(Entry.EntryId);
+		return;
 	}
 
-	for (const FGuid& EntryId : EntryIds)
+	// Iterate backwards to avoid O(N²) from array shifting
+	for (int32 i = Queue.Entries.Num() - 1; i >= 0; --i)
 	{
-		CancelCraft(EntryId, bRefundIngredients);
+		FMOCraftingQueueEntry& Entry = Queue.Entries[i];
+
+		// Refund remaining ingredients if requested
+		if (bRefundIngredients && Entry.bIngredientsConsumed)
+		{
+			int32 RemainingCount = Entry.Count - Entry.CompletedCount;
+			if (RemainingCount > 0)
+			{
+				RefundIngredientsForCraft(Entry.RecipeId, RemainingCount);
+			}
+		}
+
+		FGuid CancelledId = Entry.EntryId;
+		Queue.Entries.RemoveAt(i);
+
+		UE_LOG(LogMOFramework, Log, TEXT("[MOCraftingQueue] Cancelled craft: %s (refunded: %s)"),
+			*CancelledId.ToString(EGuidFormats::DigitsWithHyphens), bRefundIngredients ? TEXT("yes") : TEXT("no"));
+
+		OnCraftCancelled.Broadcast(CancelledId, bRefundIngredients);
 	}
+
+	Queue.MarkArrayDirty();
+	OnQueueChanged.Broadcast();
+	PauseCrafting();
 }
 
 bool UMOCraftingQueueComponent::ReorderQueueEntry(const FGuid& EntryId, int32 NewIndex)
@@ -384,6 +407,55 @@ float UMOCraftingQueueComponent::GetOverallQueueProgress() const
 }
 
 // =============================================================================
+// Station Tracking
+// =============================================================================
+
+void UMOCraftingQueueComponent::SetActiveStation(AActor* Station)
+{
+	if (Station && !Station->Implements<UMOIdentifiableInterface>())
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOCraftingQueue] SetActiveStation: Actor does not implement IMOIdentifiableInterface, ignoring"));
+		return;
+	}
+
+	ActiveStation = Station;
+
+	if (Station)
+	{
+		FGuid StationGuid = IMOIdentifiableInterface::Execute_GetPersistentGuid(Station);
+		UE_LOG(LogMOFramework, Log, TEXT("[MOCraftingQueue] Active station set to: %s (GUID: %s)"),
+			*Station->GetName(), *StationGuid.ToString(EGuidFormats::DigitsWithHyphens));
+	}
+	else
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOCraftingQueue] Active station cleared"));
+	}
+}
+
+void UMOCraftingQueueComponent::ClearActiveStation()
+{
+	ActiveStation.Reset();
+	UE_LOG(LogMOFramework, Log, TEXT("[MOCraftingQueue] Active station cleared"));
+}
+
+FGuid UMOCraftingQueueComponent::GetActiveStationGuid() const
+{
+	if (AActor* Station = ActiveStation.Get())
+	{
+		if (Station->Implements<UMOIdentifiableInterface>())
+		{
+			return IMOIdentifiableInterface::Execute_GetPersistentGuid(Station);
+		}
+	}
+	return FGuid();
+}
+
+AActor* UMOCraftingQueueComponent::GetActiveStation() const
+{
+	return ActiveStation.Get();
+}
+
+// =============================================================================
 // Save/Load
 // =============================================================================
 
@@ -392,12 +464,12 @@ void UMOCraftingQueueComponent::BuildSaveData(FMOCraftingQueueSaveData& OutSaveD
 	OutSaveData.QueuedCrafts = Queue.Entries;
 	OutSaveData.PausedAt = FDateTime::UtcNow();
 	OutSaveData.bWasActive = bIsCraftingActive;
+	OutSaveData.ActiveStationGuid = GetActiveStationGuid();
 
-	// TODO: Store active station GUID when AMOCraftingStationActor is implemented (Phase 3)
-	OutSaveData.ActiveStationGuid = FGuid();
-
-	UE_LOG(LogMOFramework, Log, TEXT("[MOCraftingQueue] Built save data: %d entries, active: %s"),
-		OutSaveData.QueuedCrafts.Num(), OutSaveData.bWasActive ? TEXT("yes") : TEXT("no"));
+	UE_LOG(LogMOFramework, Log, TEXT("[MOCraftingQueue] Built save data: %d entries, active: %s, station: %s"),
+		OutSaveData.QueuedCrafts.Num(),
+		OutSaveData.bWasActive ? TEXT("yes") : TEXT("no"),
+		OutSaveData.ActiveStationGuid.IsValid() ? *OutSaveData.ActiveStationGuid.ToString(EGuidFormats::DigitsWithHyphens) : TEXT("none"));
 }
 
 bool UMOCraftingQueueComponent::ApplySaveData(const FMOCraftingQueueSaveData& InSaveData, bool bCalculateOfflineProgress)
@@ -600,16 +672,17 @@ bool UMOCraftingQueueComponent::ConsumeIngredientsForCraft(FName RecipeId, int32
 		return false;
 	}
 
+	// Cache inventory entries once - avoid repeated full copies
+	TArray<FMOInventoryEntry> CachedEntries;
+	Inventory->GetInventoryEntries(CachedEntries);
+
 	// First verify we have enough of all ingredients
 	for (const FMORecipeIngredient& Ingredient : Recipe->Ingredients)
 	{
 		int32 Required = Ingredient.Quantity * Count;
 		int32 Available = 0;
 
-		TArray<FMOInventoryEntry> Entries;
-		Inventory->GetInventoryEntries(Entries);
-
-		for (const FMOInventoryEntry& Entry : Entries)
+		for (const FMOInventoryEntry& Entry : CachedEntries)
 		{
 			if (Entry.ItemDefinitionId == Ingredient.ItemDefinitionId)
 			{
@@ -625,15 +698,14 @@ bool UMOCraftingQueueComponent::ConsumeIngredientsForCraft(FName RecipeId, int32
 		}
 	}
 
-	// Now consume the ingredients
+	// Now consume the ingredients (re-fetch entries since validation passed and we need current GUIDs)
+	Inventory->GetInventoryEntries(CachedEntries);
+
 	for (const FMORecipeIngredient& Ingredient : Recipe->Ingredients)
 	{
 		int32 ToConsume = Ingredient.Quantity * Count;
 
-		TArray<FMOInventoryEntry> Entries;
-		Inventory->GetInventoryEntries(Entries);
-
-		for (const FMOInventoryEntry& Entry : Entries)
+		for (const FMOInventoryEntry& Entry : CachedEntries)
 		{
 			if (Entry.ItemDefinitionId == Ingredient.ItemDefinitionId && ToConsume > 0)
 			{
@@ -694,11 +766,18 @@ float UMOCraftingQueueComponent::GetEffectiveCraftDuration(FName RecipeId) const
 		return 0.0f;
 	}
 
-	float BaseDuration = Recipe->CraftTime;
+	// Use crafting subsystem's tool quality calculation if available
+	UMOCraftingSubsystem* CraftingSubsystem = CachedCraftingSubsystem.Get();
+	UMOInventoryComponent* Inventory = CachedInventory.Get();
 
-	// TODO: Apply tool quality modifiers here when tool system is integrated
-	// For now, return base duration
-	return BaseDuration;
+	if (CraftingSubsystem && Inventory)
+	{
+		// GetAdjustedCraftTime applies tool quality modifiers
+		return CraftingSubsystem->GetAdjustedCraftTime(RecipeId, Inventory);
+	}
+
+	// Fallback to base duration if subsystem or inventory unavailable
+	return Recipe->CraftTime;
 }
 
 void UMOCraftingQueueComponent::AdvanceQueueByTime(float ElapsedSeconds)

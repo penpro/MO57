@@ -148,8 +148,15 @@ class UMONotificationComponent;
 class UMOBuildingMenu;
 class UMOBuildWidget;
 class UMOGhostContextMenu;
+class UMOStationContextMenu;
 class AMOBuildableActor;
+class AMOCraftingStationActor;
+class AMOWorldItem;
+class UMOUnifiedInventoryMenu;
+class UMOModeIndicatorWidget;
+class UMOToolHintWidget;
 struct FMOInspectionResult;
+enum class EMOGameplayMode : uint8;
 
 UCLASS(ClassGroup=(MO), meta=(BlueprintSpawnableComponent))
 class MOFRAMEWORK_API UMOUIManagerComponent : public UActorComponent
@@ -171,6 +178,46 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category="MO|UI")
 	bool IsInventoryMenuOpen() const;
+
+	// --- Unified Inventory Menu (with container support) ---
+
+	/** Open inventory with a specific container in the right panel. */
+	UFUNCTION(BlueprintCallable, Category="MO|UI|Inventory")
+	void OpenInventoryWithContainer(AActor* ContainerActor);
+
+	/** Set the active container without opening the menu. Container state persists across menu open/close. */
+	UFUNCTION(BlueprintCallable, Category="MO|UI|Inventory")
+	void SetActiveContainer(AActor* ContainerActor);
+
+	/** Clear the active container. */
+	UFUNCTION(BlueprintCallable, Category="MO|UI|Inventory")
+	void ClearActiveContainer();
+
+	/** Get the currently active container (may be null). */
+	UFUNCTION(BlueprintPure, Category="MO|UI|Inventory")
+	AActor* GetActiveContainer() const;
+
+	/** Check if there is an active container. */
+	UFUNCTION(BlueprintPure, Category="MO|UI|Inventory")
+	bool HasActiveContainer() const;
+
+	// --- Nearby World Items ---
+
+	/** Query for world items within the nearby radius. */
+	UFUNCTION(BlueprintCallable, Category="MO|UI|Inventory")
+	TArray<AMOWorldItem*> QueryNearbyWorldItems() const;
+
+	/** Loot all nearby world items into the player's inventory. */
+	UFUNCTION(BlueprintCallable, Category="MO|UI|Inventory")
+	int32 LootAllNearbyItems();
+
+	/** Get the radius used for nearby items query. */
+	UFUNCTION(BlueprintPure, Category="MO|UI|Inventory")
+	float GetNearbyItemsQueryRadius() const { return NearbyItemsQueryRadius; }
+
+	/** Set the radius used for nearby items query. */
+	UFUNCTION(BlueprintCallable, Category="MO|UI|Inventory")
+	void SetNearbyItemsQueryRadius(float NewRadius) { NearbyItemsQueryRadius = FMath::Max(0.0f, NewRadius); }
 
 	/** Show or hide the reticle. */
 	UFUNCTION(BlueprintCallable, Category="MO|UI")
@@ -323,6 +370,20 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO|UI|Building")
 	bool IsBuildWidgetOpen() const;
 
+	// --- Station Context Menu ---
+
+	/** Show the station context menu for a crafting station. */
+	UFUNCTION(BlueprintCallable, Category="MO|UI|CraftingStation")
+	void ShowStationContextMenu(AActor* StationActor, FVector WorldPosition);
+
+	/** Hide the station context menu. */
+	UFUNCTION(BlueprintCallable, Category="MO|UI|CraftingStation")
+	void HideStationContextMenu();
+
+	/** Check if station context menu is open. */
+	UFUNCTION(BlueprintPure, Category="MO|UI|CraftingStation")
+	bool IsStationContextMenuOpen() const;
+
 	// --- Inspection ---
 
 	/** Start inspecting an item. Shows progress widget and grants knowledge on completion. */
@@ -432,6 +493,40 @@ private:
 	// Weak pointer so we do not keep dead widgets alive.
 	UPROPERTY(Transient)
 	TWeakObjectPtr<UMOInventoryMenu> InventoryMenuWidget;
+
+	// --- Container and Unified Inventory ---
+
+	/** Currently active container actor. Persists across menu open/close. */
+	UPROPERTY(Transient)
+	TWeakObjectPtr<AActor> CurrentContainerActor;
+
+	/** Unified inventory menu widget (dual-panel with container support). */
+	UPROPERTY(Transient)
+	TWeakObjectPtr<UMOUnifiedInventoryMenu> UnifiedInventoryWidget;
+
+	/** Widget class for the unified inventory menu. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Inventory", meta=(AllowPrivateAccess="true"))
+	TSubclassOf<UMOUnifiedInventoryMenu> UnifiedInventoryMenuClass;
+
+	/** Z-order for the unified inventory menu. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Inventory", meta=(ClampMin="0", AllowPrivateAccess="true"))
+	int32 UnifiedInventoryMenuZOrder = 50;
+
+	/** Radius for nearby world items query (in Unreal units, 400cm = ~13 feet). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Inventory", meta=(ClampMin="0", AllowPrivateAccess="true"))
+	float NearbyItemsQueryRadius = 400.0f;
+
+	/** Handle quick transfer of items between inventories (Shift+Click). */
+	void HandleQuickTransfer(const FGuid& ItemGuid, UMOInventoryComponent* SourceInventory);
+
+	/** Handle loot all nearby request (F key). */
+	void HandleLootAllNearby();
+
+	UFUNCTION()
+	void HandleUnifiedInventoryMenuRequestClose();
+
+	UFUNCTION()
+	void HandleUnifiedInventoryMenuContextMenuRequested(UMOInventoryComponent* InventoryComponent, const FGuid& ItemGuid, int32 SlotIndex, FVector2D ScreenPosition);
 
 	// --- Reticle ---
 
@@ -609,6 +704,32 @@ private:
 	UFUNCTION()
 	void HandleGhostContextMenuCancelled();
 
+	// --- Station Context Menu ---
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|CraftingStation", meta=(AllowPrivateAccess="true"))
+	TSubclassOf<UMOStationContextMenu> StationContextMenuClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|CraftingStation", meta=(ClampMin="0", AllowPrivateAccess="true"))
+	int32 StationContextMenuZOrder = 60;
+
+	UPROPERTY(Transient)
+	TWeakObjectPtr<UMOStationContextMenu> StationContextMenuWidget;
+
+	UPROPERTY(Transient)
+	TWeakObjectPtr<AMOCraftingStationActor> CurrentStationTarget;
+
+	UFUNCTION()
+	void HandleStationContextMenuRequestClose();
+
+	UFUNCTION()
+	void HandleStationContextMenuOpen();
+
+	UFUNCTION()
+	void HandleStationContextMenuCraft();
+
+	UFUNCTION()
+	void HandleStationContextMenuLight();
+
 	// --- Inspection ---
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Inspection", meta=(AllowPrivateAccess="true"))
@@ -748,6 +869,34 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO|UI|Notifications")
 	UMONotificationComponent* GetNotificationComponent() const;
 
+	// --- Mode Indicator (bottom-right HUD showing current gameplay mode) ---
+
+	/** Set the current gameplay mode. Updates the mode indicator. */
+	UFUNCTION(BlueprintCallable, Category="MO|UI|Mode")
+	void SetGameplayMode(EMOGameplayMode NewMode);
+
+	/** Get the current gameplay mode. */
+	UFUNCTION(BlueprintPure, Category="MO|UI|Mode")
+	EMOGameplayMode GetGameplayMode() const;
+
+	/** Get the mode indicator widget (may be null if not created). */
+	UFUNCTION(BlueprintPure, Category="MO|UI|Mode")
+	UMOModeIndicatorWidget* GetModeIndicator() const;
+
+	// --- Tool Hint (small popup showing current tool) ---
+
+	/** Show a tool hint message. */
+	UFUNCTION(BlueprintCallable, Category="MO|UI|ToolHint")
+	void ShowToolHint(const FText& HintText, float Duration = 0.0f);
+
+	/** Hide the current tool hint. */
+	UFUNCTION(BlueprintCallable, Category="MO|UI|ToolHint")
+	void HideToolHint();
+
+	/** Get the tool hint widget (may be null if not created). */
+	UFUNCTION(BlueprintPure, Category="MO|UI|ToolHint")
+	UMOToolHintWidget* GetToolHintWidget() const;
+
 private:
 	/** Cached reference to notification component on same owner. */
 	UPROPERTY(Transient)
@@ -755,4 +904,44 @@ private:
 
 	/** Find or cache the notification component. */
 	UMONotificationComponent* ResolveNotificationComponent() const;
+
+	// --- Mode Indicator ---
+
+	/** Widget class for the mode indicator. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Mode", meta=(AllowPrivateAccess="true"))
+	TSubclassOf<UMOModeIndicatorWidget> ModeIndicatorClass;
+
+	/** Z-order for the mode indicator. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Mode", meta=(ClampMin="0", AllowPrivateAccess="true"))
+	int32 ModeIndicatorZOrder = 5;
+
+	/** Whether to create the mode indicator on BeginPlay. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Mode", meta=(AllowPrivateAccess="true"))
+	bool bCreateModeIndicatorOnBeginPlay = true;
+
+	UPROPERTY(Transient)
+	TWeakObjectPtr<UMOModeIndicatorWidget> ModeIndicatorWidget;
+
+	EMOGameplayMode CurrentGameplayMode;
+
+	void CreateModeIndicator();
+
+	// --- Tool Hint ---
+
+	/** Widget class for tool hints. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|ToolHint", meta=(AllowPrivateAccess="true"))
+	TSubclassOf<UMOToolHintWidget> ToolHintClass;
+
+	/** Z-order for tool hints. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|ToolHint", meta=(ClampMin="0", AllowPrivateAccess="true"))
+	int32 ToolHintZOrder = 5;
+
+	/** Whether to create the tool hint widget on BeginPlay. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|ToolHint", meta=(AllowPrivateAccess="true"))
+	bool bCreateToolHintOnBeginPlay = true;
+
+	UPROPERTY(Transient)
+	TWeakObjectPtr<UMOToolHintWidget> ToolHintWidget;
+
+	void CreateToolHint();
 };

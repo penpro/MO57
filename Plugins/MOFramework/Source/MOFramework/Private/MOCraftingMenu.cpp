@@ -11,7 +11,10 @@
 #include "MORecipeDetailPanel.h"
 #include "MOCraftingQueueWidget.h"
 #include "MOCommonButton.h"
+#include "MOCraftingStationActor.h"
 #include "Components/WidgetSwitcher.h"
+#include "Components/TextBlock.h"
+#include "Components/CheckBox.h"
 
 UMOCraftingMenu::UMOCraftingMenu(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -85,8 +88,51 @@ void UMOCraftingMenu::SetCraftingStation(EMOCraftingStation InStation)
 	if (CurrentStation != InStation)
 	{
 		CurrentStation = InStation;
+		UpdateStationDisplay();
 		RefreshRecipeList();
 	}
+}
+
+void UMOCraftingMenu::SetActiveStationActor(AMOCraftingStationActor* InStation)
+{
+	ActiveStationActor = InStation;
+
+	// Also update the station type if we have a valid station
+	if (InStation)
+	{
+		SetCraftingStation(InStation->GetStationType());
+	}
+
+	UpdateStationDisplay();
+}
+
+FText UMOCraftingMenu::GetStationDisplayName() const
+{
+	// Try to get name from active station actor
+	if (AMOCraftingStationActor* Station = ActiveStationActor.Get())
+	{
+		FName RecipeId = Station->GetRecipeId();
+		if (!RecipeId.IsNone())
+		{
+			const FMORecipeDefinitionRow* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(RecipeId);
+			if (Recipe)
+			{
+				return Recipe->DisplayName;
+			}
+		}
+
+		// Fallback to station type name
+		return FText::FromString(UEnum::GetValueAsString(Station->GetStationType()));
+	}
+
+	// No station = hand crafting
+	if (CurrentStation == EMOCraftingStation::None)
+	{
+		return NSLOCTEXT("MOCrafting", "HandCrafting", "Hand Crafting");
+	}
+
+	// Station type set but no actor
+	return FText::FromString(UEnum::GetValueAsString(CurrentStation));
 }
 
 void UMOCraftingMenu::RefreshRecipeList()
@@ -99,6 +145,10 @@ void UMOCraftingMenu::RefreshRecipeList()
 
 	TArray<FName> RecipeIds;
 
+	// When "Show All Known" is checked, ignore station filter
+	// This shows all discovered recipes but marks unavailable ones with "Requires: X"
+	EMOCraftingStation StationForQuery = bShowAllKnownRecipes ? EMOCraftingStation::None : CurrentStation;
+
 	// Get available recipes based on current settings
 	if (bShowOnlyCraftable)
 	{
@@ -106,7 +156,7 @@ void UMOCraftingMenu::RefreshRecipeList()
 			KnowledgeComponent.Get(),
 			SkillsComponent.Get(),
 			InventoryComponent.Get(),
-			CurrentStation,
+			StationForQuery,
 			RecipeIds
 		);
 	}
@@ -115,7 +165,7 @@ void UMOCraftingMenu::RefreshRecipeList()
 		CraftingSub->GetAvailableRecipes(
 			KnowledgeComponent.Get(),
 			SkillsComponent.Get(),
-			CurrentStation,
+			StationForQuery,
 			RecipeIds
 		);
 	}
@@ -223,6 +273,15 @@ void UMOCraftingMenu::SetShowOnlyCraftable(bool bOnlyCraftable)
 	}
 }
 
+void UMOCraftingMenu::SetShowAllKnown(bool bShowAll)
+{
+	if (bShowAllKnownRecipes != bShowAll)
+	{
+		bShowAllKnownRecipes = bShowAll;
+		RefreshRecipeList();
+	}
+}
+
 void UMOCraftingMenu::NativeConstruct()
 {
 	Super::NativeConstruct();
@@ -232,6 +291,33 @@ void UMOCraftingMenu::NativeConstruct()
 		// Remove first to avoid duplicate bindings when widget is re-added to viewport
 		CloseButton->OnClicked().RemoveAll(this);
 		CloseButton->OnClicked().AddUObject(this, &UMOCraftingMenu::HandleCloseClicked);
+	}
+
+	if (ShowAllKnownCheckbox)
+	{
+		ShowAllKnownCheckbox->OnCheckStateChanged.RemoveDynamic(this, &UMOCraftingMenu::HandleShowAllKnownChanged);
+		ShowAllKnownCheckbox->OnCheckStateChanged.AddDynamic(this, &UMOCraftingMenu::HandleShowAllKnownChanged);
+		ShowAllKnownCheckbox->SetIsChecked(bShowAllKnownRecipes);
+	}
+
+	UpdateStationDisplay();
+}
+
+void UMOCraftingMenu::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
+{
+	Super::NativeTick(MyGeometry, InDeltaTime);
+
+	// Update fuel time display if we have an active station
+	if (FuelTimeText && ActiveStationActor.IsValid())
+	{
+		AMOCraftingStationActor* Station = ActiveStationActor.Get();
+		if (Station && Station->bRequiresFuel)
+		{
+			float TimeRemaining = Station->GetFuelTimeRemaining();
+			int32 Minutes = FMath::FloorToInt(TimeRemaining / 60.0f);
+			int32 Seconds = FMath::FloorToInt(FMath::Fmod(TimeRemaining, 60.0f));
+			FuelTimeText->SetText(FText::FromString(FString::Printf(TEXT("%d:%02d remaining"), Minutes, Seconds)));
+		}
 	}
 }
 
@@ -293,5 +379,37 @@ void UMOCraftingMenu::HandleInventoryChanged()
 	if (DetailPanel)
 	{
 		DetailPanel->RefreshDisplay();
+	}
+}
+
+void UMOCraftingMenu::HandleShowAllKnownChanged(bool bIsChecked)
+{
+	SetShowAllKnown(bIsChecked);
+}
+
+void UMOCraftingMenu::UpdateStationDisplay()
+{
+	// Update station name
+	if (StationNameText)
+	{
+		StationNameText->SetText(GetStationDisplayName());
+	}
+
+	// Update fuel time
+	if (FuelTimeText)
+	{
+		AMOCraftingStationActor* Station = ActiveStationActor.Get();
+		if (Station && Station->bRequiresFuel)
+		{
+			float TimeRemaining = Station->GetFuelTimeRemaining();
+			int32 Minutes = FMath::FloorToInt(TimeRemaining / 60.0f);
+			int32 Seconds = FMath::FloorToInt(FMath::Fmod(TimeRemaining, 60.0f));
+			FuelTimeText->SetText(FText::FromString(FString::Printf(TEXT("%d:%02d remaining"), Minutes, Seconds)));
+			FuelTimeText->SetVisibility(ESlateVisibility::Visible);
+		}
+		else
+		{
+			FuelTimeText->SetVisibility(ESlateVisibility::Collapsed);
+		}
 	}
 }

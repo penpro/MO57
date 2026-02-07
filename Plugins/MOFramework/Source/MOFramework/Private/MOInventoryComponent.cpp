@@ -409,6 +409,12 @@ int32 UMOInventoryComponent::GetSlotCount() const
 	return (SlotItemGuids.Num() > 0) ? SlotItemGuids.Num() : FMath::Max(1, SlotCount);
 }
 
+bool UMOInventoryComponent::HasEmptySlot() const
+{
+	int32 EmptySlotIndex = INDEX_NONE;
+	return FindFirstEmptySlot(EmptySlotIndex);
+}
+
 bool UMOInventoryComponent::TryGetSlotGuid(int32 SlotIndex, FGuid& OutGuid) const
 {
 	OutGuid.Invalidate();
@@ -873,7 +879,10 @@ namespace
 					if (StructProperty->Struct == TBaseStructure<FGuid>::Get())
 					{
 						void* Dest = StructProperty->ContainerPtrToValuePtr<void>(SpawnedActor);
-						*static_cast<FGuid*>(Dest) = ItemGuid;
+						if (Dest)
+						{
+							*static_cast<FGuid*>(Dest) = ItemGuid;
+						}
 					}
 				}
 			}
@@ -902,12 +911,8 @@ namespace
 
 AActor* UMOInventoryComponent::DropItemFromSlot(int32 SlotIndex, const FVector& DropLocation, const FRotator& DropRotation)
 {
-	UE_LOG(LogMOFramework, Error, TEXT(">>>>> [MOInventory] DropItemFromSlot CALLED: Slot=%d, Location=%s <<<<<"),
+	UE_LOG(LogMOFramework, Verbose, TEXT("[MOInventory] DropItemFromSlot: Slot=%d, Location=%s"),
 		SlotIndex, *DropLocation.ToString());
-	if (GEngine)
-	{
-		GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Cyan, FString::Printf(TEXT("DropItemFromSlot slot=%d loc=%s"), SlotIndex, *DropLocation.ToString()));
-	}
 
 	AActor* OwnerActor = GetOwner();
 	if (!IsValid(OwnerActor) || !OwnerActor->HasAuthority())
@@ -931,19 +936,12 @@ AActor* UMOInventoryComponent::DropItemFromSlot(int32 SlotIndex, const FVector& 
 		return nullptr;
 	}
 
-	UE_LOG(LogMOFramework, Warning, TEXT("[MOInventory] DropItemFromSlot: Calling DropItemByGuid with GUID=%s"),
-		*ItemGuid.ToString(EGuidFormats::Short));
-
 	return DropItemByGuid(ItemGuid, DropLocation, DropRotation);
 }
 
 AActor* UMOInventoryComponent::DropItemByGuid(const FGuid& ItemGuid, const FVector& DropLocation, const FRotator& DropRotation)
 {
-	UE_LOG(LogMOFramework, Error, TEXT(">>>>> [MOInventory] DropItemByGuid CALLED Location=%s <<<<<"), *DropLocation.ToString());
-	if (GEngine)
-	{
-		GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Magenta, FString::Printf(TEXT("DropItemByGuid loc=%s"), *DropLocation.ToString()));
-	}
+	UE_LOG(LogMOFramework, Verbose, TEXT("[MOInventory] DropItemByGuid: Location=%s"), *DropLocation.ToString());
 
 	AActor* OwnerActor = GetOwner();
 	if (!IsValid(OwnerActor) || !OwnerActor->HasAuthority())
@@ -1030,7 +1028,10 @@ AActor* UMOInventoryComponent::DropItemByGuid(const FGuid& ItemGuid, const FVect
 		// Restore the spawn location (ApplyItemDefinitionToWorldMesh may have moved it via SetRelativeTransform)
 		SpawnedActor->SetActorLocationAndRotation(PreservedLocation, PreservedRotation);
 
-		UE_LOG(LogMOFramework, Log, TEXT("[MOInventory] DropItemByGuid: Applied item definition visuals, restored location to %s"),
+		// Enable drop physics so the item settles naturally on the ground
+		WorldItem->EnableDropPhysics();
+
+		UE_LOG(LogMOFramework, Log, TEXT("[MOInventory] DropItemByGuid: Applied item definition visuals, restored location to %s, enabled drop physics"),
 			*PreservedLocation.ToString());
 	}
 
@@ -1042,6 +1043,324 @@ AActor* UMOInventoryComponent::DropItemByGuid(const FGuid& ItemGuid, const FVect
 	return SpawnedActor;
 }
 
+AActor* UMOInventoryComponent::SpawnWorldItem(FName ItemDefinitionId, int32 Quantity, const FGuid& ItemGuid, const FVector& DropLocation, const FRotator& DropRotation)
+{
+	AActor* OwnerActor = GetOwner();
+	if (!IsValid(OwnerActor) || !OwnerActor->HasAuthority())
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventory] SpawnWorldItem requires authority"));
+		return nullptr;
+	}
+
+	if (ItemDefinitionId.IsNone() || Quantity <= 0 || !ItemGuid.IsValid())
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventory] SpawnWorldItem: Invalid parameters"));
+		return nullptr;
+	}
+
+	const TSubclassOf<AActor> DropActorClass = ResolveDropActorClassFromDataTable(ItemDefinitionId);
+	if (!DropActorClass)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventory] SpawnWorldItem: no drop actor class for %s"), *ItemDefinitionId.ToString());
+		return nullptr;
+	}
+
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return nullptr;
+	}
+
+	// Clear GUID from destroyed list if present
+	if (UGameInstance* GameInstance = World->GetGameInstance())
+	{
+		if (UMOPersistenceSubsystem* PersistenceSubsystem = GameInstance->GetSubsystem<UMOPersistenceSubsystem>())
+		{
+			if (PersistenceSubsystem->IsGuidDestroyed(ItemGuid))
+			{
+				PersistenceSubsystem->ClearDestroyedGuid(ItemGuid);
+			}
+		}
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.Owner = OwnerActor;
+	SpawnParams.Instigator = OwnerActor->GetInstigator();
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+
+	const FTransform SpawnTransform(DropRotation, DropLocation);
+	AActor* SpawnedActor = World->SpawnActor<AActor>(DropActorClass, SpawnTransform, SpawnParams);
+	if (!IsValid(SpawnedActor))
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventory] SpawnWorldItem: spawn failed for %s"), *ItemDefinitionId.ToString());
+		return nullptr;
+	}
+
+	TryWriteDroppedItemPayload(SpawnedActor, ItemGuid, Quantity, ItemDefinitionId);
+
+	if (AMOWorldItem* WorldItem = Cast<AMOWorldItem>(SpawnedActor))
+	{
+		const FVector PreservedLocation = SpawnedActor->GetActorLocation();
+		const FRotator PreservedRotation = SpawnedActor->GetActorRotation();
+
+		WorldItem->ApplyItemDefinitionToWorldMesh();
+		SpawnedActor->SetActorLocationAndRotation(PreservedLocation, PreservedRotation);
+		WorldItem->EnableDropPhysics();
+	}
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOInventory] SpawnWorldItem: Spawned %s x%d with GUID %s"),
+		*ItemDefinitionId.ToString(), Quantity, *ItemGuid.ToString(EGuidFormats::Short));
+
+	return SpawnedActor;
+}
+
+// ============================================================================
+// TRANSFER OPERATIONS
+// ============================================================================
+
+bool UMOInventoryComponent::TransferItem(const FGuid& ItemGuid, UMOInventoryComponent* TargetInventory)
+{
+	if (!IsValid(TargetInventory) || !ItemGuid.IsValid())
+	{
+		return false;
+	}
+
+	FMOInventoryEntry Entry;
+	if (!TryGetEntryByGuid(ItemGuid, Entry))
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventory] TransferItem: Item GUID %s not found"), *ItemGuid.ToString(EGuidFormats::Short));
+		return false;
+	}
+
+	// Try to add to target
+	FGuid NewGuid = FGuid::NewGuid();
+	if (!TargetInventory->AddItemByGuid(NewGuid, Entry.ItemDefinitionId, Entry.Quantity))
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventory] TransferItem: Failed to add to target inventory (full?)"));
+		return false;
+	}
+
+	// Remove from source
+	RemoveItemByGuid(ItemGuid, Entry.Quantity);
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOInventory] TransferItem: Transferred %s x%d"),
+		*Entry.ItemDefinitionId.ToString(), Entry.Quantity);
+
+	return true;
+}
+
+int32 UMOInventoryComponent::TransferAllTo(UMOInventoryComponent* TargetInventory)
+{
+	if (!IsValid(TargetInventory))
+	{
+		return 0;
+	}
+
+	int32 TransferredCount = 0;
+
+	// Get all GUIDs first (avoid modifying while iterating)
+	TArray<FGuid> ItemGuids = GetAllItemGuids();
+
+	for (const FGuid& ItemGuid : ItemGuids)
+	{
+		if (TransferItem(ItemGuid, TargetInventory))
+		{
+			++TransferredCount;
+		}
+	}
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOInventory] TransferAllTo: Transferred %d items"), TransferredCount);
+
+	return TransferredCount;
+}
+
+int32 UMOInventoryComponent::TransferAllFrom(UMOInventoryComponent* SourceInventory)
+{
+	if (!IsValid(SourceInventory))
+	{
+		return 0;
+	}
+
+	return SourceInventory->TransferAllTo(this);
+}
+
+// ============================================================================
+// STACK MANAGEMENT
+// ============================================================================
+
+void UMOInventoryComponent::StackAndOrganize()
+{
+	// Step 1: Consolidate stacks of the same item type
+	TMap<FName, TArray<int32>> ItemTypeToEntryIndices;
+
+	for (int32 i = 0; i < Inventory.Entries.Num(); ++i)
+	{
+		const FMOInventoryEntry& Entry = Inventory.Entries[i];
+		ItemTypeToEntryIndices.FindOrAdd(Entry.ItemDefinitionId).Add(i);
+	}
+
+	// For each item type with multiple entries, merge into first entry
+	TArray<int32> IndicesToRemove;
+
+	for (auto& Pair : ItemTypeToEntryIndices)
+	{
+		TArray<int32>& Indices = Pair.Value;
+		if (Indices.Num() <= 1)
+		{
+			continue;
+		}
+
+		// Sort so we process in order
+		Indices.Sort();
+
+		// Merge all into first entry
+		FMOInventoryEntry& FirstEntry = Inventory.Entries[Indices[0]];
+		int32 TotalQuantity = FirstEntry.Quantity;
+
+		for (int32 j = 1; j < Indices.Num(); ++j)
+		{
+			TotalQuantity += Inventory.Entries[Indices[j]].Quantity;
+			IndicesToRemove.Add(Indices[j]);
+		}
+
+		FirstEntry.Quantity = TotalQuantity;
+	}
+
+	// Remove merged entries (in reverse order to preserve indices)
+	IndicesToRemove.Sort();
+	for (int32 i = IndicesToRemove.Num() - 1; i >= 0; --i)
+	{
+		// Clear slot if assigned
+		FGuid GuidToRemove = Inventory.Entries[IndicesToRemove[i]].ItemGuid;
+		RemoveGuidFromSlotsInternal(GuidToRemove);
+
+		Inventory.Entries.RemoveAt(IndicesToRemove[i]);
+	}
+
+	// Step 2: Reassign all items to lowest index slots
+	SlotItemGuids.Init(FGuid(), SlotCount);
+
+	for (int32 i = 0; i < Inventory.Entries.Num() && i < SlotCount; ++i)
+	{
+		SlotItemGuids[i] = Inventory.Entries[i].ItemGuid;
+	}
+
+	MarkSlotItemGuidsDirty();
+	Inventory.MarkArrayDirty();
+	BroadcastInventoryChanged();
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOInventory] StackAndOrganize: Complete. %d entries remaining"),
+		Inventory.Entries.Num());
+}
+
+int32 UMOInventoryComponent::FillStacksFrom(UMOInventoryComponent* SourceInventory)
+{
+	if (!IsValid(SourceInventory))
+	{
+		return 0;
+	}
+
+	int32 TotalFilled = 0;
+
+	// For each item type in this inventory, check if we have partial stacks
+	for (FMOInventoryEntry& TargetEntry : Inventory.Entries)
+	{
+		// Get max stack size for this item
+		FMOItemDefinitionRow ItemDef;
+		if (!UMOItemDatabaseSettings::GetItemDefinition(TargetEntry.ItemDefinitionId, ItemDef))
+		{
+			continue;
+		}
+
+		int32 MaxStack = ItemDef.MaxStackSize;
+		if (MaxStack <= 0)
+		{
+			MaxStack = 1;  // Non-stackable
+		}
+
+		if (TargetEntry.Quantity >= MaxStack)
+		{
+			continue;  // Already full
+		}
+
+		int32 SpaceInStack = MaxStack - TargetEntry.Quantity;
+
+		// Find matching items in source inventory
+		for (FMOInventoryEntry& SourceEntry : SourceInventory->Inventory.Entries)
+		{
+			if (SourceEntry.ItemDefinitionId != TargetEntry.ItemDefinitionId)
+			{
+				continue;
+			}
+
+			if (SourceEntry.Quantity <= 0)
+			{
+				continue;
+			}
+
+			int32 ToTransfer = FMath::Min(SpaceInStack, SourceEntry.Quantity);
+			if (ToTransfer <= 0)
+			{
+				break;  // Target stack is full
+			}
+
+			TargetEntry.Quantity += ToTransfer;
+			SourceEntry.Quantity -= ToTransfer;
+			TotalFilled += ToTransfer;
+			SpaceInStack -= ToTransfer;
+
+			// Remove source entry if empty
+			if (SourceEntry.Quantity <= 0)
+			{
+				SourceInventory->RemoveGuidFromSlotsInternal(SourceEntry.ItemGuid);
+			}
+
+			if (SpaceInStack <= 0)
+			{
+				break;  // Target stack is full
+			}
+		}
+	}
+
+	// Clean up empty entries in source
+	for (int32 i = SourceInventory->Inventory.Entries.Num() - 1; i >= 0; --i)
+	{
+		if (SourceInventory->Inventory.Entries[i].Quantity <= 0)
+		{
+			SourceInventory->Inventory.Entries.RemoveAt(i);
+		}
+	}
+
+	if (TotalFilled > 0)
+	{
+		Inventory.MarkArrayDirty();
+		SourceInventory->Inventory.MarkArrayDirty();
+		BroadcastInventoryChanged();
+		SourceInventory->BroadcastInventoryChanged();
+	}
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOInventory] FillStacksFrom: Filled %d items into existing stacks"), TotalFilled);
+
+	return TotalFilled;
+}
+
+TArray<FGuid> UMOInventoryComponent::GetAllItemGuids() const
+{
+	TArray<FGuid> Result;
+	Result.Reserve(Inventory.Entries.Num());
+
+	for (const FMOInventoryEntry& Entry : Inventory.Entries)
+	{
+		Result.Add(Entry.ItemGuid);
+	}
+
+	return Result;
+}
+
+bool UMOInventoryComponent::GetEntry(int32 SlotIndex, FMOInventoryEntry& OutEntry) const
+{
+	return TryGetSlotEntry(SlotIndex, OutEntry);
+}
 
 TArray<FName> UMOInventoryComponent::GetItemDefinitionOptionsStatic()
 {
