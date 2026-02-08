@@ -415,6 +415,23 @@ bool UMOInventoryComponent::HasEmptySlot() const
 	return FindFirstEmptySlot(EmptySlotIndex);
 }
 
+bool UMOInventoryComponent::CanAddItem(const FGuid& ItemGuid) const
+{
+	if (!ItemGuid.IsValid())
+	{
+		return false;
+	}
+
+	// If the GUID already exists in inventory, it will stack - no new slot needed
+	if (FindEntryIndexByGuid(ItemGuid) != INDEX_NONE)
+	{
+		return true;
+	}
+
+	// Otherwise, we need an empty slot for this new item
+	return HasEmptySlot();
+}
+
 bool UMOInventoryComponent::TryGetSlotGuid(int32 SlotIndex, FGuid& OutGuid) const
 {
 	OutGuid.Invalidate();
@@ -1190,7 +1207,7 @@ int32 UMOInventoryComponent::TransferAllFrom(UMOInventoryComponent* SourceInvent
 
 void UMOInventoryComponent::StackAndOrganize()
 {
-	// Step 1: Consolidate stacks of the same item type
+	// Step 1: Consolidate stacks of the same item type, respecting max stack size
 	TMap<FName, TArray<int32>> ItemTypeToEntryIndices;
 
 	for (int32 i = 0; i < Inventory.Entries.Num(); ++i)
@@ -1199,7 +1216,7 @@ void UMOInventoryComponent::StackAndOrganize()
 		ItemTypeToEntryIndices.FindOrAdd(Entry.ItemDefinitionId).Add(i);
 	}
 
-	// For each item type with multiple entries, merge into first entry
+	// For each item type with multiple entries, consolidate respecting stack limits
 	TArray<int32> IndicesToRemove;
 
 	for (auto& Pair : ItemTypeToEntryIndices)
@@ -1210,20 +1227,45 @@ void UMOInventoryComponent::StackAndOrganize()
 			continue;
 		}
 
+		// Get max stack size for this item type
+		FMOItemDefinitionRow ItemDef;
+		int32 MaxStack = 99;  // Default fallback
+		if (UMOItemDatabaseSettings::GetItemDefinition(Pair.Key, ItemDef))
+		{
+			MaxStack = ItemDef.MaxStackSize > 0 ? ItemDef.MaxStackSize : 1;
+		}
+
 		// Sort so we process in order
 		Indices.Sort();
 
-		// Merge all into first entry
-		FMOInventoryEntry& FirstEntry = Inventory.Entries[Indices[0]];
-		int32 TotalQuantity = FirstEntry.Quantity;
-
-		for (int32 j = 1; j < Indices.Num(); ++j)
+		// Calculate total quantity across all stacks
+		int32 TotalQuantity = 0;
+		for (int32 Idx : Indices)
 		{
-			TotalQuantity += Inventory.Entries[Indices[j]].Quantity;
-			IndicesToRemove.Add(Indices[j]);
+			TotalQuantity += Inventory.Entries[Idx].Quantity;
 		}
 
-		FirstEntry.Quantity = TotalQuantity;
+		// Distribute quantity across entries, respecting max stack size
+		int32 RemainingQuantity = TotalQuantity;
+		int32 EntriesNeeded = (TotalQuantity + MaxStack - 1) / MaxStack;  // Ceiling division
+		int32 EntriesUsed = 0;
+
+		for (int32 j = 0; j < Indices.Num(); ++j)
+		{
+			if (EntriesUsed < EntriesNeeded && RemainingQuantity > 0)
+			{
+				// Keep this entry with proper stack amount
+				int32 StackAmount = FMath::Min(RemainingQuantity, MaxStack);
+				Inventory.Entries[Indices[j]].Quantity = StackAmount;
+				RemainingQuantity -= StackAmount;
+				EntriesUsed++;
+			}
+			else
+			{
+				// Remove excess entries
+				IndicesToRemove.Add(Indices[j]);
+			}
+		}
 	}
 
 	// Remove merged entries (in reverse order to preserve indices)

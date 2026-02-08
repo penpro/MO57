@@ -191,6 +191,15 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO|Inventory|Slots")
 	bool HasEmptySlot() const;
 
+	/**
+	 * Check if this item can be added to the inventory.
+	 * Returns true if the GUID already exists (will stack) or if there's an empty slot.
+	 * @param ItemGuid The item's GUID to check
+	 * @return True if the item can be added
+	 */
+	UFUNCTION(BlueprintPure, Category="MO|Inventory")
+	bool CanAddItem(const FGuid& ItemGuid) const;
+
 	UFUNCTION(BlueprintCallable, Category="MO|Inventory|Slots")
 	bool TryGetSlotGuid(int32 SlotIndex, FGuid& OutGuid) const;
 

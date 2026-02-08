@@ -80,7 +80,7 @@ struct MOFRAMEWORK_API FMOInteractionTraceConfig
 	float TraceDistance = 500.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Interaction")
-	float TraceRadius = 12.0f;
+	float TraceRadius = 30.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Interaction")
 	TEnumAsByte<ECollisionChannel> TraceChannel = ECC_Visibility;

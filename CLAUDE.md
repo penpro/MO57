@@ -1,5 +1,18 @@
 # MOFramework Project Memory
 
+## STOP - Check Before These Operations
+
+| Operation | Check This Section First |
+|-----------|-------------------------|
+| **Modify any CSV file** | "UE DataTable CSV Manipulation" - USE THE UTILITY |
+| **Add columns to DataTable** | Use `add-column` command, not direct CSV edit |
+| **Compile C++** | Prompt user to close UE Editor first |
+| **Git commit** | Only when user explicitly asks |
+
+**CSV files = NEVER edit directly. Always use `Tools/ue_csv_utils.py`**
+
+---
+
 ## Project Vision
 
 **MO57** is an ultra-realistic procedural open-world survival game with a fully destructible/mutable voxel terrain. Think Minecraft's freedom meets hardcore realism - no fantasy creatures, grounded physics, detailed medical/survival simulation.
@@ -299,6 +312,84 @@ bool ApplySaveDataAuthority(const FMOVitalsSaveData& InSaveData);  // Server onl
 - **Ultra Dynamic Weather** - Weather effects and systems
 - **Oceanology** - Ocean/water simulation
 - **Voxel Plugin Pro 2.0** - Voxel terrain/world generation
+
+---
+
+## UE DataTable CSV Manipulation
+
+**ALWAYS use `Tools/ue_csv_utils.py` when modifying CSV files!**
+
+See `Tools/UE_CSV_FORMAT.md` for full documentation.
+
+### IMPORTANT: Schema Changes
+
+**When modifying DataTable row structs (e.g., `FMOItemDefinitionRow`, `FMORecipeDefinitionRow`):**
+
+**ADDING new fields to struct:**
+```bash
+# 1. Add columns to database with defaults
+python Tools/ue_csv_utils.py add-column Tools/recipes.db recipes bIsBuilding False
+
+# 2. Export back to CSV
+python Tools/ue_csv_utils.py export Tools/recipes.db Plugins/MOFramework/Content/Data/Recipes.csv recipes
+
+# 3. Reimport in UE
+```
+
+**REMOVING or RENAMING fields:**
+```bash
+# 1. Use import-safe to preserve manual data (Icon, UI, WorldVisual)
+python Tools/ue_csv_utils.py import-safe Items.csv Tools/items.db items
+
+# 2. Export with new schema
+python Tools/ue_csv_utils.py export Tools/items.db Items.csv items
+```
+
+**Check for drift:**
+```bash
+python Tools/ue_csv_utils.py check <csv> <db> [table]
+```
+
+**Protected fields (preserved automatically by import-safe):**
+- `UI` - IconSmall, IconLarge, Tint
+- `WorldVisual` - StaticMesh, MaterialOverride, WorldActorClass
+- `Icon` - Recipe icons
+
+**Row struct files to watch:**
+- `MOItemDefinitionRow.h` → Items.csv → Tools/items.db
+- `MORecipeDefinitionRow.h` → Recipes.csv → Tools/recipes.db
+- `MOSkillDefinitionRow.h` → Skills.csv
+
+### Quick Reference
+
+```bash
+# Import CSV to SQLite database
+python Tools/ue_csv_utils.py import Plugins/MOFramework/Content/Data/Items.csv items.db
+
+# Query items
+python Tools/ue_csv_utils.py query items.db "SELECT ItemId, DisplayName FROM items WHERE Rarity='Rare'"
+
+# Update items
+python Tools/ue_csv_utils.py update items.db "UPDATE items SET MaxStackSize=50 WHERE ItemType='Resource'"
+
+# Export back to CSV
+python Tools/ue_csv_utils.py export items.db Plugins/MOFramework/Content/Data/Items.csv
+```
+
+### Critical CSV Rules
+1. **Encoding**: Usually `utf-8-sig`, always detect first
+2. **Field Size**: Set `csv.field_size_limit(sys.maxsize)`
+3. **Quoting**: UE uses `QUOTE_ALL` - every field is quoted
+4. **Quote Escaping**: Quotes inside quoted fields are doubled (`""`)
+   - Write single quotes in Python → CSV writer doubles them → UE reads as single
+   - NEVER manually double quotes or you get `""""` (broken)
+
+### Inspection Field Format (Current)
+```
+(Grants=((Id="SkillName",bIsKnowledge=False,XPAmount=5.0,MaxLevel=3),(Id="KnowledgeName",bIsKnowledge=True,XPAmount=100.0,MaxLevel=3)))
+```
+
+---
 
 ## CLI Commands
 

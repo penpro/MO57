@@ -83,6 +83,27 @@ public:
 	bool IsHISMHarvestable(UHierarchicalInstancedStaticMeshComponent* HISMComponent) const;
 
 	// ============================================================================
+	// TAG-BASED ITEM LOOKUP
+	// ============================================================================
+
+	/**
+	 * Register a tag-to-item mapping for PCG components.
+	 * When a component has this tag, interacting gives the specified item.
+	 * @param Tag The component tag to check for (e.g., "GivesStick")
+	 * @param ItemId The item to give when harvested (e.g., "stick01")
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|PCG")
+	void RegisterTagItemMapping(FName Tag, FName ItemId);
+
+	/**
+	 * Get the item ID for a component based on its tags.
+	 * @param Component The component to check tags on
+	 * @return The item ID if a tag matches, NAME_None otherwise
+	 */
+	UFUNCTION(BlueprintPure, Category="MO|PCG")
+	FName GetItemIdForComponentTags(UActorComponent* Component) const;
+
+	// ============================================================================
 	// CONFIGURATION
 	// ============================================================================
 
@@ -93,6 +114,15 @@ public:
 	/** Interaction prompt text for harvestable meshes. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|PCG")
 	FText DefaultInteractionPrompt = NSLOCTEXT("MO", "PickUp", "Pick Up");
+
+	/**
+	 * Tag-to-item mappings. When an ISM/HISM component has a matching tag,
+	 * harvesting gives the specified item instead of doing mesh lookup.
+	 * Key: Component tag (e.g., "GivesStick")
+	 * Value: Item definition ID (e.g., "stick01")
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|PCG")
+	TMap<FName, FName> TagToItemMap;
 
 	/**
 	 * Get the interaction prompt for a mesh.

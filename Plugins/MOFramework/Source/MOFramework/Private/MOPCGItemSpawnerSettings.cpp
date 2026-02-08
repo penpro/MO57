@@ -156,10 +156,10 @@ bool FMOPCGItemSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 				continue;
 			}
 
-			// Get mesh for this item
-			UStaticMesh* ItemMesh = GetMeshForItem(Settings->ItemDataTable, SelectedItem->ItemId);
+			// Get mesh path for this item (no sync load - PCG runs on worker threads)
+			FSoftObjectPath MeshPath = GetMeshPathForItem(Settings->ItemDataTable, SelectedItem->ItemId);
 
-			if (!ItemMesh && Settings->bDiscardInvalidPoints)
+			if (!MeshPath.IsValid() && Settings->bDiscardInvalidPoints)
 			{
 				UE_LOG(LogMOFramework, Verbose, TEXT("[MOPCGItemSpawner] Discarding point - no mesh for item '%s'"),
 					*SelectedItem->ItemId.ToString());
@@ -177,9 +177,9 @@ bool FMOPCGItemSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 			QuantityMinAttr->SetValue(OutputPoint.MetadataEntry, SelectedItem->MinQuantity);
 			QuantityMaxAttr->SetValue(OutputPoint.MetadataEntry, SelectedItem->MaxQuantity);
 
-			if (ItemMesh)
+			if (MeshPath.IsValid())
 			{
-				MeshAttr->SetValue(OutputPoint.MetadataEntry, FSoftObjectPath(ItemMesh));
+				MeshAttr->SetValue(OutputPoint.MetadataEntry, MeshPath);
 			}
 		}
 
@@ -215,13 +215,13 @@ const FMOPCGItemSpawnEntry* FMOPCGItemSpawnerElement::SelectWeightedItem(
 	return Items.Num() > 0 ? &Items.Last() : nullptr;
 }
 
-UStaticMesh* FMOPCGItemSpawnerElement::GetMeshForItem(
+FSoftObjectPath FMOPCGItemSpawnerElement::GetMeshPathForItem(
 	const UDataTable* DataTable,
 	FName ItemId) const
 {
 	if (!DataTable || ItemId.IsNone())
 	{
-		return nullptr;
+		return FSoftObjectPath();
 	}
 
 	const FMOItemDefinitionRow* Row = DataTable->FindRow<FMOItemDefinitionRow>(ItemId, TEXT("MOPCGItemSpawner"));
@@ -229,18 +229,18 @@ UStaticMesh* FMOPCGItemSpawnerElement::GetMeshForItem(
 	{
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOPCGItemSpawner] Item '%s' not found in datatable"),
 			*ItemId.ToString());
-		return nullptr;
+		return FSoftObjectPath();
 	}
 
-	// Load the mesh synchronously
+	// Return the path without loading - PCG runs on worker threads
 	if (Row->WorldVisual.StaticMesh.IsNull())
 	{
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOPCGItemSpawner] Item '%s' has no StaticMesh defined"),
 			*ItemId.ToString());
-		return nullptr;
+		return FSoftObjectPath();
 	}
 
-	return Row->WorldVisual.StaticMesh.LoadSynchronous();
+	return Row->WorldVisual.StaticMesh.ToSoftObjectPath();
 }
 
 #undef LOCTEXT_NAMESPACE

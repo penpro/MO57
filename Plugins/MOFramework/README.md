@@ -1169,6 +1169,103 @@ UMOWorldMapWidget        - Full-screen map
 | Tutorial System | Medium | Can use notification system initially |
 | Photo Mode | Low | Nice-to-have feature |
 
+---
+
+### Research Notes: Weather Integration (UDW Bridge)
+
+**Status:** Interface created, BP implementation pending
+
+**Files Created:**
+- `MOWeatherTypes.h` - Structs for weather/time data
+- `MOWeatherProviderInterface.h` - Interface for weather providers
+- `MOWeatherIntegrationSubsystem.h/.cpp` - World subsystem with delegates
+- `MOWeatherBlueprintLibrary.h/.cpp` - Helper functions for BP
+
+**BP Implementation Steps:**
+1. Create Actor BP `BP_UDWWeatherProvider` implementing `MOWeatherProviderInterface`
+2. Add variables: `UDS Reference` (Ultra_Dynamic_Sky), `UDW Reference` (Ultra_Dynamic_Weather)
+3. On BeginPlay: Get actors by class, then call `Register Weather Provider` on subsystem
+4. Implement interface functions using helper nodes:
+   - `Make Time Of Day (from UDS)` - Pass TimeValue, Season, bIsDaytime
+   - `Make Weather State (from UDW)` - Pass all Get* results
+   - `Make Weather Exposure (from UDW)` - Pass exposure test results
+
+**Subsystem provides:**
+- `GetTemperatureAtLocation()`, `GetFeelsLikeTemperature()`
+- `GetColdStress()`, `GetHeatStress()` (0-1 for medical integration)
+- Delegates: `OnRainChanged`, `OnSnowChanged`, `OnTemperatureThresholdCrossed`, `OnDayNightChanged`
+
+---
+
+### Research Notes: Procedural Water Generation
+
+**Status:** Research complete, awaiting implementation
+
+This section documents findings for procedural river/lake generation using the Voxel Plugin.
+
+#### Available Voxel Plugin Nodes
+
+| Node | Purpose | Usage |
+|------|---------|-------|
+| `GetGradient2D` | Calculate terrain slope direction | Identify downhill flow direction |
+| `GetGradient3D` | Full 3D gradient vector | More accurate for complex terrain |
+| `NormalToSlope` | Convert normal to slope angle | Threshold steep vs flat terrain |
+| `Voxel Spline System` | Built-in spline support | Designed for rivers/roads |
+
+#### Recommended Algorithm: Gradient-Based Flow Detection
+
+**Step 1: Find Valleys**
+- Sample terrain height at grid points
+- Calculate gradient (slope direction) at each point using `GetGradient2D`
+- Valleys are where gradient vectors converge (flow accumulates)
+
+**Step 2: Flow Accumulation**
+```
+For each point P:
+  1. Get gradient direction (downhill)
+  2. Trace downhill path until hitting:
+     - A local minimum (potential lake)
+     - Map edge
+     - Existing water body
+  3. Increment "flow count" for each cell along path
+  4. High flow count = river candidate
+```
+
+**Step 3: River Spline Generation**
+- Connect high-flow points into continuous paths
+- Use Voxel Plugin spline system for mesh generation
+- Width varies with flow accumulation value
+
+**Step 4: Lake Detection**
+- Local minima = potential lakes/ponds
+- Fill algorithm from minimum point up to spillover height
+- Lake size determined by basin volume
+
+#### Performance Considerations
+
+| Approach | Speed | Accuracy |
+|----------|-------|----------|
+| Full simulation (every cell) | Slow | Best |
+| Sampled + interpolation | Medium | Good |
+| Pre-computed at load | Fast | Fixed |
+
+**Recommendation:** Pre-compute major rivers at world generation time, use gradient sampling for small streams/details.
+
+#### Voxel Plugin Integration Points
+
+- **Voxel Height Actor:** Primary terrain source
+- **Sculpt data:** Respect player modifications when calculating flow
+- **Spline meshes:** Use for river geometry
+- **Material blending:** Blend water material at river edges
+
+#### Reference Games
+
+- **Dwarf Fortress:** Full flow simulation, computationally expensive
+- **Cities: Skylines:** Simplified heightmap-based water placement
+- **Valheim:** Pre-placed water at fixed elevation
+
+---
+
 ### Integration Dependencies
 
 ```
@@ -1349,6 +1446,129 @@ public:
 | Custom PCG Nodes | 1 | MO Item Spawner |
 
 **Overall Health Score:** 7.8/10
+
+---
+
+## Project Configuration Reference
+
+This section documents all config file settings required for MOFramework. Copy these when porting to a new project or UE version.
+
+### DefaultGame.ini
+
+```ini
+; =============================================================================
+; MOFramework Database Settings
+; Set these paths to your project's DataTables
+; =============================================================================
+
+[/Script/MOFramework.MOItemDatabaseSettings]
+ItemDefinitionsDataTable=/Game/Data/DT_Items.DT_Items
+
+[/Script/MOFramework.MORecipeDatabaseSettings]
+RecipeDefinitionsDataTable=/Game/Data/DT_Recipes.DT_Recipes
+
+[/Script/MOFramework.MOSkillDatabaseSettings]
+SkillDefinitionsDataTable=/Game/Data/DT_Skills.DT_Skills
+
+[/Script/MOFramework.MOMedicalDatabaseSettings]
+MedicalTreatmentsTable=/Game/Data/DT_MedicalTreatment.DT_MedicalTreatment
+BodyPartDefinitionsTable=/Game/Data/DT_BodyParts.DT_BodyParts
+WoundTypeDefinitionsTable=/Game/Data/DT_Wounds.DT_Wounds
+ConditionDefinitionsTable=/Game/Data/DT_Conditions.DT_Conditions
+
+[/Script/MOFramework.MOPersistenceSettings]
+DefaultPersistedPawnClass=/MOFramework/Characters/BP_MOCharacter.BP_MOCharacter_C
+
+; =============================================================================
+; Packaging Settings (CRITICAL for cooked builds)
+; These ensure soft-referenced assets are included in packaged games
+; =============================================================================
+
+[/Script/UnrealEd.ProjectPackagingSettings]
+; Add directories containing DataTables and assets referenced by them
++DirectoriesToAlwaysCook=(Path="/Game/Data")
++DirectoriesToAlwaysCook=(Path="/MOFramework")
+; Add additional directories as needed for your project:
+; +DirectoriesToAlwaysCook=(Path="/Game/Icons")
+; +DirectoriesToAlwaysCook=(Path="/Game/Art/Items")
+```
+
+### DefaultEngine.ini
+
+```ini
+; =============================================================================
+; Game Mode Settings
+; =============================================================================
+
+[/Script/EngineSettings.GameMapsSettings]
+GlobalDefaultGameMode=/MOFramework/BP_MOGameMode.BP_MOGameMode_C
+
+; =============================================================================
+; Custom Collision Channel for Interaction System
+; =============================================================================
+
+[/Script/Engine.CollisionProfile]
++DefaultChannelResponses=(Channel=ECC_GameTraceChannel1,DefaultResponse=ECR_Ignore,bTraceType=True,bStaticObject=False,Name="Interactable")
+```
+
+### DefaultInput.ini
+
+```ini
+; =============================================================================
+; Enhanced Input Settings (required for MOFramework input handling)
+; =============================================================================
+
+[/Script/Engine.InputSettings]
+DefaultPlayerInputClass=/Script/EnhancedInput.EnhancedPlayerInput
+DefaultInputComponentClass=/Script/EnhancedInput.EnhancedInputComponent
+```
+
+### Required Plugin Dependencies
+
+The MOFramework.uplugin requires these plugins:
+
+```json
+"Plugins": [
+  { "Name": "EnhancedInput", "Enabled": true },
+  { "Name": "CommonUI", "Enabled": true },
+  { "Name": "Niagara", "Enabled": true },
+  { "Name": "PCG", "Enabled": true }
+]
+```
+
+Optional (if using Voxel terrain):
+```json
+{ "Name": "Voxel", "Enabled": true }
+```
+
+### Packaging Checklist
+
+When packaging for distribution:
+
+1. **Verify DirectoriesToAlwaysCook** includes:
+   - `/Game/Data` (DataTables)
+   - `/MOFramework` (plugin content)
+   - Any folders containing icons, meshes, or other assets referenced by DataTable rows
+
+2. **Check output log during cook** for:
+   - `[MOFramework] Preloaded Item Database: ...`
+   - `[MOFramework] Preloaded X item definitions, Y soft-referenced assets`
+   - Any warnings about missing assets
+
+3. **Test packaged build** for:
+   - Item icons displaying correctly
+   - Picking up items works
+   - Crafting menu shows recipes
+   - Save/load functions
+
+### Common Packaging Issues
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| Default icons in packaged build | Icons not cooked | Add icon folder to DirectoriesToAlwaysCook |
+| Can't pick up items | DataTable not loaded | Check DefaultGame.ini paths, add /Game/Data to cook |
+| Inspect does nothing | Item definitions missing | Verify DT_Items is in cooked directory |
+| Recipe list empty | Recipe DataTable missing | Add recipe table path to cook directories |
 
 ---
 

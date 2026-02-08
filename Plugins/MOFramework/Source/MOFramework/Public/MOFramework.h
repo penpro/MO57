@@ -14,4 +14,12 @@ public:
 	/** IModuleInterface implementation */
 	virtual void StartupModule() override;
 	virtual void ShutdownModule() override;
+
+private:
+	/**
+	 * Force-load all database DataTables at module startup.
+	 * This ensures TSoftObjectPtr references in DeveloperSettings are cooked.
+	 * Without this, the cooker won't include soft-referenced assets from config files.
+	 */
+	void PreloadDatabaseTables();
 };

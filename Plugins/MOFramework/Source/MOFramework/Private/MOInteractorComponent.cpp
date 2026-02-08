@@ -195,11 +195,14 @@ bool UMOInteractorComponent::FindInteractionTarget(FMOInteractionTarget& OutTarg
 		}
 
 		// Check if this mesh is harvestable via the PCG subsystem (works for both HISM and ISM)
+		// First check tags, then fall back to mesh lookup
 		UWorld* World = GetWorld();
 		if (World)
 		{
 			UMOPCGInteractionSubsystem* PCGSubsystem = World->GetSubsystem<UMOPCGInteractionSubsystem>();
-			if (PCGSubsystem && PCGSubsystem->IsMeshHarvestable(ISMComp->GetStaticMesh()))
+			const bool bHasTagMapping = PCGSubsystem && !PCGSubsystem->GetItemIdForComponentTags(ISMComp).IsNone();
+			const bool bHasMeshMapping = PCGSubsystem && PCGSubsystem->IsMeshHarvestable(ISMComp->GetStaticMesh());
+			if (bHasTagMapping || bHasMeshMapping)
 			{
 				OutTarget.bIsInstancedMeshTarget = true;
 				OutTarget.ISMComponent = ISMComp;

@@ -125,6 +125,13 @@ bool UMOPCGInteractionSubsystem::IsHISMHarvestable(UHierarchicalInstancedStaticM
 		return false;
 	}
 
+	// Check tag-based mapping first
+	if (!GetItemIdForComponentTags(HISMComponent).IsNone())
+	{
+		return true;
+	}
+
+	// Fall back to mesh-based check
 	return IsMeshHarvestable(HISMComponent->GetStaticMesh());
 }
 
@@ -145,14 +152,20 @@ bool UMOPCGInteractionSubsystem::HarvestHISMInstance(UHierarchicalInstancedStati
 		return false;
 	}
 
-	// Get the mesh and find corresponding item
-	UStaticMesh* Mesh = HISMComponent->GetStaticMesh();
-	FName ItemId = GetItemIdForMesh(Mesh);
+	// First try tag-based lookup (for things like trees that give sticks)
+	FName ItemId = GetItemIdForComponentTags(HISMComponent);
+
+	// Fall back to mesh-based lookup
 	if (ItemId.IsNone())
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOPCGInteraction] HarvestHISMInstance: No item mapping for mesh '%s'"),
-			*GetNameSafe(Mesh));
-		return false;
+		UStaticMesh* Mesh = HISMComponent->GetStaticMesh();
+		ItemId = GetItemIdForMesh(Mesh);
+		if (ItemId.IsNone())
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOPCGInteraction] HarvestHISMInstance: No item mapping for mesh '%s' and no matching tags"),
+				*GetNameSafe(Mesh));
+			return false;
+		}
 	}
 
 	// Find harvester's inventory
@@ -167,12 +180,19 @@ bool UMOPCGInteractionSubsystem::HarvestHISMInstance(UHierarchicalInstancedStati
 	FTransform InstanceTransform;
 	HISMComponent->GetInstanceTransform(InstanceIndex, InstanceTransform, true);
 
-	// Remove the instance from HISM
-	const bool bRemoved = HISMComponent->RemoveInstance(InstanceIndex);
-	if (!bRemoved)
+	// Check if we should keep the instance (for trees, rocks, etc. that give resources without being destroyed)
+	const bool bKeepOnHarvest = HISMComponent->ComponentHasTag(TEXT("KeepOnHarvest")) ||
+		(HISMComponent->GetOwner() && HISMComponent->GetOwner()->ActorHasTag(TEXT("KeepOnHarvest")));
+
+	if (!bKeepOnHarvest)
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOPCGInteraction] HarvestHISMInstance: Failed to remove instance %d"), InstanceIndex);
-		return false;
+		// Remove the instance from HISM
+		const bool bRemoved = HISMComponent->RemoveInstance(InstanceIndex);
+		if (!bRemoved)
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOPCGInteraction] HarvestHISMInstance: Failed to remove instance %d"), InstanceIndex);
+			return false;
+		}
 	}
 
 	// Add item to inventory
@@ -209,14 +229,20 @@ bool UMOPCGInteractionSubsystem::HarvestISMInstance(UInstancedStaticMeshComponen
 		return false;
 	}
 
-	// Get the mesh and find corresponding item
-	UStaticMesh* Mesh = ISMComponent->GetStaticMesh();
-	FName ItemId = GetItemIdForMesh(Mesh);
+	// First try tag-based lookup (for things like trees that give sticks)
+	FName ItemId = GetItemIdForComponentTags(ISMComponent);
+
+	// Fall back to mesh-based lookup
 	if (ItemId.IsNone())
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOPCGInteraction] HarvestISMInstance: No item mapping for mesh '%s'"),
-			*GetNameSafe(Mesh));
-		return false;
+		UStaticMesh* Mesh = ISMComponent->GetStaticMesh();
+		ItemId = GetItemIdForMesh(Mesh);
+		if (ItemId.IsNone())
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOPCGInteraction] HarvestISMInstance: No item mapping for mesh '%s' and no matching tags"),
+				*GetNameSafe(Mesh));
+			return false;
+		}
 	}
 
 	// Find harvester's inventory
@@ -231,12 +257,19 @@ bool UMOPCGInteractionSubsystem::HarvestISMInstance(UInstancedStaticMeshComponen
 	FTransform InstanceTransform;
 	ISMComponent->GetInstanceTransform(InstanceIndex, InstanceTransform, true);
 
-	// Remove the instance from ISM
-	const bool bRemoved = ISMComponent->RemoveInstance(InstanceIndex);
-	if (!bRemoved)
+	// Check if we should keep the instance (for trees, rocks, etc. that give resources without being destroyed)
+	const bool bKeepOnHarvest = ISMComponent->ComponentHasTag(TEXT("KeepOnHarvest")) ||
+		(ISMComponent->GetOwner() && ISMComponent->GetOwner()->ActorHasTag(TEXT("KeepOnHarvest")));
+
+	if (!bKeepOnHarvest)
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOPCGInteraction] HarvestISMInstance: Failed to remove instance %d"), InstanceIndex);
-		return false;
+		// Remove the instance from ISM
+		const bool bRemoved = ISMComponent->RemoveInstance(InstanceIndex);
+		if (!bRemoved)
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOPCGInteraction] HarvestISMInstance: Failed to remove instance %d"), InstanceIndex);
+			return false;
+		}
 	}
 
 	// Add item to inventory
@@ -272,6 +305,83 @@ FText UMOPCGInteractionSubsystem::GetInteractionPromptForMesh(UStaticMesh* Mesh)
 	}
 
 	return DefaultInteractionPrompt;
+}
+
+void UMOPCGInteractionSubsystem::RegisterTagItemMapping(FName Tag, FName ItemId)
+{
+	if (Tag.IsNone() || ItemId.IsNone())
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOPCGInteraction] RegisterTagItemMapping: Invalid tag or item ID"));
+		return;
+	}
+
+	TagToItemMap.Add(Tag, ItemId);
+	UE_LOG(LogMOFramework, Log, TEXT("[MOPCGInteraction] Registered tag mapping: '%s' -> '%s'"),
+		*Tag.ToString(), *ItemId.ToString());
+}
+
+FName UMOPCGInteractionSubsystem::GetItemIdForComponentTags(UActorComponent* Component) const
+{
+	if (!IsValid(Component))
+	{
+		return NAME_None;
+	}
+
+	// Debug: Log all component tags and our mappings
+	UE_LOG(LogMOFramework, Log, TEXT("[MOPCGInteraction] Checking tags on component '%s'. ComponentTags count: %d, TagToItemMap count: %d"),
+		*GetNameSafe(Component), Component->ComponentTags.Num(), TagToItemMap.Num());
+
+	for (const FName& Tag : Component->ComponentTags)
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOPCGInteraction]   Component has tag: '%s'"), *Tag.ToString());
+	}
+
+	// Also check owner actor tags (PCG might put tags there)
+	AActor* Owner = Component->GetOwner();
+	if (Owner)
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOPCGInteraction]   Owner actor '%s' has %d tags"),
+			*GetNameSafe(Owner), Owner->Tags.Num());
+		for (const FName& Tag : Owner->Tags)
+		{
+			UE_LOG(LogMOFramework, Log, TEXT("[MOPCGInteraction]   Actor has tag: '%s'"), *Tag.ToString());
+		}
+	}
+
+	for (const auto& Pair : TagToItemMap)
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOPCGInteraction]   TagToItemMap entry: '%s' -> '%s'"),
+			*Pair.Key.ToString(), *Pair.Value.ToString());
+	}
+
+	// Check component tags against our tag-to-item map
+	for (const FName& Tag : Component->ComponentTags)
+	{
+		const FName* FoundItem = TagToItemMap.Find(Tag);
+		if (FoundItem)
+		{
+			UE_LOG(LogMOFramework, Log, TEXT("[MOPCGInteraction] Found tag '%s' -> item '%s'"),
+				*Tag.ToString(), *FoundItem->ToString());
+			return *FoundItem;
+		}
+	}
+
+	// Also check actor tags
+	if (Owner)
+	{
+		for (const FName& Tag : Owner->Tags)
+		{
+			const FName* FoundItem = TagToItemMap.Find(Tag);
+			if (FoundItem)
+			{
+				UE_LOG(LogMOFramework, Log, TEXT("[MOPCGInteraction] Found actor tag '%s' -> item '%s'"),
+					*Tag.ToString(), *FoundItem->ToString());
+				return *FoundItem;
+			}
+		}
+	}
+
+	return NAME_None;
 }
 
 UMOInventoryComponent* UMOPCGInteractionSubsystem::FindHarvesterInventory(AActor* Harvester) const

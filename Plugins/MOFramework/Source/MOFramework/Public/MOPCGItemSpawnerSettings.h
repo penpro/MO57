@@ -59,7 +59,7 @@ public:
 	virtual FName GetDefaultNodeName() const override { return FName(TEXT("MO Item Spawner")); }
 	virtual FText GetDefaultNodeTitle() const override { return NSLOCTEXT("MOFramework", "MOItemSpawnerTitle", "MO Item Spawner"); }
 	virtual FText GetNodeTooltipText() const override;
-	virtual EPCGSettingsType GetType() const override { return EPCGSettingsType::PointOps; }
+	virtual EPCGSettingsType GetType() const override { return EPCGSettingsType::Spawner; }
 #endif
 
 protected:
@@ -107,8 +107,8 @@ private:
 		float TotalWeight,
 		FRandomStream& RandomStream) const;
 
-	/** Get the static mesh for an item from the datatable. */
-	UStaticMesh* GetMeshForItem(
+	/** Get the static mesh path for an item from the datatable (no sync load). */
+	FSoftObjectPath GetMeshPathForItem(
 		const UDataTable* DataTable,
 		FName ItemId) const;
 };

@@ -121,6 +121,13 @@ bool UMOItemComponent::GiveToInteractorInventory(AController* InteractorControll
 		return false;
 	}
 
+	// Precheck: ensure there's room in the inventory before attempting to add
+	if (!InventoryComponent->CanAddItem(ItemGuid))
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOItem] GiveToInteractorInventory: Inventory is full, cannot add item"));
+		return false;
+	}
+
 	const bool bAdded = InventoryComponent->AddItemByGuid(ItemGuid, ItemDefinitionId, Quantity);
 	if (!bAdded)
 	{
