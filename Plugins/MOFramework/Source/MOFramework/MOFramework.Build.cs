@@ -35,9 +35,10 @@ public class MOFramework : ModuleRules
 				"NavigationSystem",
 				"GameplayTasks",
 				"Niagara",
-				"PCG",        // Procedural Content Generation
-				"Voxel",      // Voxel plugin - terrain sculpting
-				"VoxelCore"   // Voxel plugin - core types
+				"PCG",                      // Procedural Content Generation
+				"Voxel",                    // Voxel plugin - terrain sculpting
+				"VoxelCore",                // Voxel plugin - core types
+				"ProceduralMeshComponent"   // Water mesh generation
 			}
 			);
 			

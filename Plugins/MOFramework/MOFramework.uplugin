@@ -41,6 +41,10 @@
 		{
 			"Name": "Voxel",
 			"Enabled": true
+		},
+		{
+			"Name": "ProceduralMeshComponent",
+			"Enabled": true
 		}
 	]
 }

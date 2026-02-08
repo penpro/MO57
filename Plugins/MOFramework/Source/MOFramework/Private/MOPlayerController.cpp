@@ -1,4 +1,5 @@
 #include "MOPlayerController.h"
+#include "MOFramework.h"
 #include "MOControllableInterface.h"
 #include "MOUIManagerComponent.h"
 #include "MOPossessionComponent.h"
@@ -30,7 +31,7 @@ void AMOPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
 
-	UE_LOG(LogTemp, Log, TEXT("AMOPlayerController::BeginPlay - Setting up input context"));
+	UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController::BeginPlay - Setting up input context"));
 
 	// Setup default input context
 	SetupDefaultInputContext();
@@ -43,16 +44,16 @@ void AMOPlayerController::SetupInputComponent()
 {
 	Super::SetupInputComponent();
 
-	UE_LOG(LogTemp, Log, TEXT("AMOPlayerController::SetupInputComponent called"));
+	UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController::SetupInputComponent called"));
 
 	UEnhancedInputComponent* EnhancedInput = Cast<UEnhancedInputComponent>(InputComponent);
 	if (!EnhancedInput)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("AMOPlayerController: InputComponent is not UEnhancedInputComponent!"));
+		UE_LOG(LogMOFramework, Warning, TEXT("AMOPlayerController: InputComponent is not UEnhancedInputComponent!"));
 		return;
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("AMOPlayerController: EnhancedInputComponent is valid"));
+	UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: EnhancedInputComponent is valid"));
 
 	// ============================================================================
 	// MOVEMENT BINDINGS
@@ -61,21 +62,21 @@ void AMOPlayerController::SetupInputComponent()
 	if (UInputAction* Move = MoveAction.LoadSynchronous())
 	{
 		EnhancedInput->BindAction(Move, ETriggerEvent::Triggered, this, &AMOPlayerController::HandleMove);
-		UE_LOG(LogTemp, Log, TEXT("AMOPlayerController: Bound MoveAction"));
+		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound MoveAction"));
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("AMOPlayerController: MoveAction is NOT set!"));
+		UE_LOG(LogMOFramework, Warning, TEXT("AMOPlayerController: MoveAction is NOT set!"));
 	}
 
 	if (UInputAction* Look = LookAction.LoadSynchronous())
 	{
 		EnhancedInput->BindAction(Look, ETriggerEvent::Triggered, this, &AMOPlayerController::HandleLook);
-		UE_LOG(LogTemp, Log, TEXT("AMOPlayerController: Bound LookAction"));
+		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound LookAction"));
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("AMOPlayerController: LookAction is NOT set!"));
+		UE_LOG(LogMOFramework, Warning, TEXT("AMOPlayerController: LookAction is NOT set!"));
 	}
 
 	if (UInputAction* Jump = JumpAction.LoadSynchronous())
@@ -89,11 +90,11 @@ void AMOPlayerController::SetupInputComponent()
 		EnhancedInput->BindAction(Hustle, ETriggerEvent::Started, this, &AMOPlayerController::HandleHustleStart);
 		EnhancedInput->BindAction(Hustle, ETriggerEvent::Triggered, this, &AMOPlayerController::HandleHustleTriggered);
 		EnhancedInput->BindAction(Hustle, ETriggerEvent::Completed, this, &AMOPlayerController::HandleHustleEnd);
-		UE_LOG(LogTemp, Log, TEXT("AMOPlayerController: Bound HustleAction (tap=jog, hold=sprint)"));
+		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound HustleAction (tap=jog, hold=sprint)"));
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("AMOPlayerController: HustleAction is NOT set!"));
+		UE_LOG(LogMOFramework, Warning, TEXT("AMOPlayerController: HustleAction is NOT set!"));
 	}
 
 	if (UInputAction* Crouch = CrouchAction.LoadSynchronous())
@@ -134,37 +135,37 @@ void AMOPlayerController::SetupInputComponent()
 	if (UInputAction* Craft = CraftAction.LoadSynchronous())
 	{
 		EnhancedInput->BindAction(Craft, ETriggerEvent::Started, this, &AMOPlayerController::HandleCraft);
-		UE_LOG(LogTemp, Log, TEXT("AMOPlayerController: Bound CraftAction"));
+		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound CraftAction"));
 	}
 
 	if (UInputAction* PlayerStatus = PlayerStatusAction.LoadSynchronous())
 	{
 		EnhancedInput->BindAction(PlayerStatus, ETriggerEvent::Started, this, &AMOPlayerController::HandlePlayerStatus);
-		UE_LOG(LogTemp, Log, TEXT("AMOPlayerController: Bound PlayerStatusAction"));
+		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound PlayerStatusAction"));
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("AMOPlayerController: PlayerStatusAction is NOT set!"));
+		UE_LOG(LogMOFramework, Warning, TEXT("AMOPlayerController: PlayerStatusAction is NOT set!"));
 	}
 
 	if (UInputAction* Skills = SkillsAction.LoadSynchronous())
 	{
 		EnhancedInput->BindAction(Skills, ETriggerEvent::Started, this, &AMOPlayerController::HandleSkills);
-		UE_LOG(LogTemp, Log, TEXT("AMOPlayerController: Bound SkillsAction"));
+		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound SkillsAction"));
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("AMOPlayerController: SkillsAction is NOT set!"));
+		UE_LOG(LogMOFramework, Warning, TEXT("AMOPlayerController: SkillsAction is NOT set!"));
 	}
 
 	if (UInputAction* Build = BuildAction.LoadSynchronous())
 	{
 		EnhancedInput->BindAction(Build, ETriggerEvent::Started, this, &AMOPlayerController::HandleBuild);
-		UE_LOG(LogTemp, Log, TEXT("AMOPlayerController: Bound BuildAction"));
+		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound BuildAction"));
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("AMOPlayerController: BuildAction is NOT set!"));
+		UE_LOG(LogMOFramework, Warning, TEXT("AMOPlayerController: BuildAction is NOT set!"));
 	}
 
 	if (UInputAction* Pause = PauseAction.LoadSynchronous())
@@ -175,11 +176,11 @@ void AMOPlayerController::SetupInputComponent()
 	if (UInputAction* Possess = PossessAction.LoadSynchronous())
 	{
 		EnhancedInput->BindAction(Possess, ETriggerEvent::Started, this, &AMOPlayerController::HandlePossess);
-		UE_LOG(LogTemp, Log, TEXT("AMOPlayerController: Bound PossessAction"));
+		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound PossessAction"));
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("AMOPlayerController: PossessAction is NOT set!"));
+		UE_LOG(LogMOFramework, Warning, TEXT("AMOPlayerController: PossessAction is NOT set!"));
 	}
 
 	// ============================================================================
@@ -189,25 +190,25 @@ void AMOPlayerController::SetupInputComponent()
 	if (UInputAction* PlaceBuilding = PlaceBuildingAction.LoadSynchronous())
 	{
 		EnhancedInput->BindAction(PlaceBuilding, ETriggerEvent::Started, this, &AMOPlayerController::HandlePlaceBuilding);
-		UE_LOG(LogTemp, Log, TEXT("AMOPlayerController: Bound PlaceBuildingAction"));
+		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound PlaceBuildingAction"));
 	}
 
 	if (UInputAction* RotateCW = RotateBuildingCWAction.LoadSynchronous())
 	{
 		EnhancedInput->BindAction(RotateCW, ETriggerEvent::Started, this, &AMOPlayerController::HandleRotateBuildingCW);
-		UE_LOG(LogTemp, Log, TEXT("AMOPlayerController: Bound RotateBuildingCWAction"));
+		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound RotateBuildingCWAction"));
 	}
 
 	if (UInputAction* RotateCCW = RotateBuildingCCWAction.LoadSynchronous())
 	{
 		EnhancedInput->BindAction(RotateCCW, ETriggerEvent::Started, this, &AMOPlayerController::HandleRotateBuildingCCW);
-		UE_LOG(LogTemp, Log, TEXT("AMOPlayerController: Bound RotateBuildingCCWAction"));
+		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound RotateBuildingCCWAction"));
 	}
 
 	if (UInputAction* CancelPlacement = CancelPlacementAction.LoadSynchronous())
 	{
 		EnhancedInput->BindAction(CancelPlacement, ETriggerEvent::Started, this, &AMOPlayerController::HandleCancelPlacement);
-		UE_LOG(LogTemp, Log, TEXT("AMOPlayerController: Bound CancelPlacementAction"));
+		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound CancelPlacementAction"));
 	}
 
 	// ============================================================================
@@ -217,13 +218,13 @@ void AMOPlayerController::SetupInputComponent()
 	if (UInputAction* TerraformToggle = TerraformToggleAction.LoadSynchronous())
 	{
 		EnhancedInput->BindAction(TerraformToggle, ETriggerEvent::Started, this, &AMOPlayerController::HandleTerraformToggle);
-		UE_LOG(LogTemp, Log, TEXT("AMOPlayerController: Bound TerraformToggleAction"));
+		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound TerraformToggleAction"));
 	}
 
 	if (UInputAction* TerraformCycle = TerraformCycleToolAction.LoadSynchronous())
 	{
 		EnhancedInput->BindAction(TerraformCycle, ETriggerEvent::Started, this, &AMOPlayerController::HandleTerraformCycleTool);
-		UE_LOG(LogTemp, Log, TEXT("AMOPlayerController: Bound TerraformCycleToolAction"));
+		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound TerraformCycleToolAction"));
 	}
 }
 
@@ -235,18 +236,18 @@ void AMOPlayerController::OnPossess(APawn* InPawn)
 	if (InPawn && InPawn->Implements<UMOControllableInterface>())
 	{
 		CachedControllablePawn = InPawn;
-		UE_LOG(LogTemp, Log, TEXT("AMOPlayerController: Possessed %s - Implements IMOControllableInterface: YES"),
+		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Possessed %s - Implements IMOControllableInterface: YES"),
 			*InPawn->GetName());
 	}
 	else
 	{
 		CachedControllablePawn.Reset();
-		UE_LOG(LogTemp, Warning, TEXT("AMOPlayerController: Possessed %s - Implements IMOControllableInterface: NO (inputs will not work!)"),
+		UE_LOG(LogMOFramework, Warning, TEXT("AMOPlayerController: Possessed %s - Implements IMOControllableInterface: NO (inputs will not work!)"),
 			InPawn ? *InPawn->GetName() : TEXT("None"));
 
 		if (InPawn)
 		{
-			UE_LOG(LogTemp, Warning, TEXT("  Pawn class: %s - Make sure it inherits from AMOCharacter or implements IMOControllableInterface"),
+			UE_LOG(LogMOFramework, Warning, TEXT("  Pawn class: %s - Make sure it inherits from AMOCharacter or implements IMOControllableInterface"),
 				*InPawn->GetClass()->GetName());
 		}
 	}
@@ -374,11 +375,11 @@ void AMOPlayerController::SetupDefaultInputContext()
 	if (UInputMappingContext* Context = PawnControlContext.LoadSynchronous())
 	{
 		AddMappingContext(Context, PawnControlContextPriority);
-		UE_LOG(LogTemp, Log, TEXT("AMOPlayerController: Added PawnControlContext mapping context"));
+		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Added PawnControlContext mapping context"));
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("AMOPlayerController: PawnControlContext is NOT set! No input mapping context active."));
+		UE_LOG(LogMOFramework, Warning, TEXT("AMOPlayerController: PawnControlContext is NOT set! No input mapping context active."));
 	}
 }
 
@@ -395,7 +396,7 @@ void AMOPlayerController::HandleMove(const FInputActionValue& Value)
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("AMOPlayerController::HandleMove - No CachedControllablePawn! Current Pawn: %s"),
+		UE_LOG(LogMOFramework, Warning, TEXT("AMOPlayerController::HandleMove - No CachedControllablePawn! Current Pawn: %s"),
 			GetPawn() ? *GetPawn()->GetName() : TEXT("None"));
 	}
 }
@@ -602,16 +603,16 @@ void AMOPlayerController::HandlePause(const FInputActionValue& Value)
 
 void AMOPlayerController::HandlePossess(const FInputActionValue& Value)
 {
-	UE_LOG(LogTemp, Warning, TEXT("AMOPlayerController::HandlePossess - Input received"));
+	UE_LOG(LogMOFramework, Warning, TEXT("AMOPlayerController::HandlePossess - Input received"));
 
 	if (UIManagerComponent)
 	{
-		UE_LOG(LogTemp, Log, TEXT("AMOPlayerController::HandlePossess - Calling TogglePossessionMenu"));
+		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController::HandlePossess - Calling TogglePossessionMenu"));
 		UIManagerComponent->TogglePossessionMenu();
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("AMOPlayerController::HandlePossess - UIManagerComponent is NULL!"));
+		UE_LOG(LogMOFramework, Warning, TEXT("AMOPlayerController::HandlePossess - UIManagerComponent is NULL!"));
 	}
 }
 
@@ -679,7 +680,7 @@ void AMOPlayerController::SetupDebugInputBindings()
 {
 	if (!InputComponent)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("AMOPlayerController: Cannot setup debug bindings - no InputComponent"));
+		UE_LOG(LogMOFramework, Warning, TEXT("AMOPlayerController: Cannot setup debug bindings - no InputComponent"));
 		return;
 	}
 
@@ -687,7 +688,7 @@ void AMOPlayerController::SetupDebugInputBindings()
 	InputComponent->BindKey(EKeys::Zero, IE_Pressed, this, &AMOPlayerController::HandleDebugSpawnPawn);
 	InputComponent->BindKey(EKeys::F1, IE_Pressed, this, &AMOPlayerController::HandleDebugToggle);
 
-	UE_LOG(LogTemp, Log, TEXT("AMOPlayerController: Debug bindings set up (0=SpawnPawn, F1=ToggleDebug)"));
+	UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Debug bindings set up (0=SpawnPawn, F1=ToggleDebug)"));
 }
 
 void AMOPlayerController::HandleDebugSpawnPawn()
@@ -697,11 +698,11 @@ void AMOPlayerController::HandleDebugSpawnPawn()
 		return;
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("AMOPlayerController: Debug spawn pawn triggered"));
+	UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Debug spawn pawn triggered"));
 
 	if (!DebugSpawnPawnClass)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("AMOPlayerController: DebugSpawnPawnClass is not set! Set it in the Blueprint."));
+		UE_LOG(LogMOFramework, Warning, TEXT("AMOPlayerController: DebugSpawnPawnClass is not set! Set it in the Blueprint."));
 
 		if (GEngine)
 		{
@@ -723,7 +724,7 @@ void AMOPlayerController::HandleDebugSpawnPawn()
 
 		if (bSuccess)
 		{
-			UE_LOG(LogTemp, Log, TEXT("AMOPlayerController: Spawning and possessing debug pawn of class %s"), *DebugSpawnPawnClass->GetName());
+			UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Spawning and possessing debug pawn of class %s"), *DebugSpawnPawnClass->GetName());
 
 			if (GEngine)
 			{
@@ -733,7 +734,7 @@ void AMOPlayerController::HandleDebugSpawnPawn()
 		}
 		else
 		{
-			UE_LOG(LogTemp, Warning, TEXT("AMOPlayerController: Failed to spawn debug pawn"));
+			UE_LOG(LogMOFramework, Warning, TEXT("AMOPlayerController: Failed to spawn debug pawn"));
 
 			if (GEngine)
 			{
@@ -744,14 +745,14 @@ void AMOPlayerController::HandleDebugSpawnPawn()
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("AMOPlayerController: No PossessionComponent available"));
+		UE_LOG(LogMOFramework, Warning, TEXT("AMOPlayerController: No PossessionComponent available"));
 	}
 }
 
 void AMOPlayerController::HandleDebugToggle()
 {
 	bDebugModeEnabled = !bDebugModeEnabled;
-	UE_LOG(LogTemp, Log, TEXT("AMOPlayerController: Debug mode %s"), bDebugModeEnabled ? TEXT("ENABLED") : TEXT("DISABLED"));
+	UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Debug mode %s"), bDebugModeEnabled ? TEXT("ENABLED") : TEXT("DISABLED"));
 
 	// Could add on-screen message here
 	if (GEngine)

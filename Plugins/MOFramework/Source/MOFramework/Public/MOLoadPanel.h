@@ -2,7 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "CommonActivatableWidget.h"
-#include "MOSavePanel.h"
+#include "MOSaveGameTypes.h"
 #include "MOLoadPanel.generated.h"
 
 class UMOCommonButton;

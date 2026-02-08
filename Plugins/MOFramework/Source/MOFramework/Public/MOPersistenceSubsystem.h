@@ -4,7 +4,7 @@
 #include "Engine/World.h" // UWorld::InitializationValues
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "MOworldSaveGame.h"
-#include "MOSavePanel.h" // FMOSaveMetadata
+#include "MOSaveGameTypes.h"
 #include "MOPersistenceSubsystem.generated.h"
 
 class AActor;

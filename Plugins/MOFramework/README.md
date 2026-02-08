@@ -20,6 +20,7 @@ A comprehensive Unreal Engine 5.7 plugin providing modular gameplay systems for 
   - [Crafting System](#crafting-system)
   - [Terraforming System](#terraforming-system)
   - [PCG Integration](#pcg-integration)
+  - [Water System](#water-system)
 - [Architecture & Delegate Flows](#architecture--delegate-flows)
 - [Widget Setup Guide](#widget-setup-guide)
 - [Survival Game Design Considerations](#survival-game-design-considerations)
@@ -395,6 +396,181 @@ Surface Sampler → MO Item Spawner → Static Mesh Spawner → HISM
 
 **HISM Interaction:**
 Players can interact with PCG-spawned items (rocks, sticks) via hit detection on HISM instances. The interaction subsystem tracks which HISM instance index was hit and provides item metadata.
+
+### Water System
+
+Gerstner wave-based water simulation with ocean and lake actors, plus buoyancy physics.
+
+**Key Classes:**
+- `AMOWaterActorBase` - Base class with Gerstner wave math, procedural mesh, surface queries
+- `AMOInfiniteOceanActor` - Infinite ocean at Z=0, follows camera, large waves
+- `AMOLakeActor` - Bounded water body, optional voxel detection, elliptical shapes
+- `UMOBuoyancyComponent` - Applies buoyancy forces, supports multi-point for boats
+- `UMOWaterMaterialGenerator` - Editor utility to generate water materials
+
+**Gerstner Waves:**
+Realistic wave displacement with horizontal and vertical motion:
+```cpp
+// Per-wave displacement
+Displacement.XY = Direction * Steepness * Amplitude * cos(Phase);
+Displacement.Z  = Amplitude * sin(Phase);
+
+// Phase calculation
+Phase = dot(Direction, Position.XY) * Frequency + Time * Speed + PhaseOffset;
+```
+
+**Wave Configuration:**
+```cpp
+FMOGerstnerWave Wave;
+Wave.Direction = FVector2D(1.0f, 0.3f);  // Wave travel direction
+Wave.Amplitude = 50.0f;                   // Height from rest to peak (cm)
+Wave.Wavelength = 400.0f;                 // Distance between peaks (cm)
+Wave.Steepness = 0.5f;                    // Sharpness (0-1)
+Wave.Speed = 1.0f;                        // Animation speed multiplier
+Wave.PhaseOffset = 0.0f;                  // Phase offset for variety
+```
+
+**Ocean Actor Setup:**
+```cpp
+// Infinite ocean at sea level
+AMOInfiniteOceanActor* Ocean = World->SpawnActor<AMOInfiniteOceanActor>();
+Ocean->OceanLevel = 0.0f;           // Z height
+Ocean->OceanExtent = 50000.0f;      // Visible range (500m)
+Ocean->bFollowCamera = true;         // Mesh follows player
+Ocean->SnapGridSize = 1000.0f;       // Update frequency
+```
+
+**Lake Actor Setup:**
+```cpp
+// Bounded lake
+AMOLakeActor* Lake = World->SpawnActor<AMOLakeActor>();
+Lake->LakeSizeX = 2000.0f;          // Width
+Lake->LakeSizeY = 3000.0f;          // Length
+Lake->bEllipticalShape = true;       // Oval shape
+Lake->EdgeFalloffDistance = 200.0f;  // Wave dampening near shore
+
+// Auto-detect bounds from voxel terrain
+Lake->bAutoDetectFromVoxel = true;
+Lake->DetectBoundsFromVoxel();
+```
+
+**Surface Queries (for gameplay):**
+```cpp
+// Get water height at any location
+float Height = WaterActor->GetWaterHeightAtLocation(WorldPos);
+
+// Check if underwater
+bool bUnderwater = WaterActor->IsUnderwater(WorldPos);
+
+// Get full surface info
+FMOWaterSurfaceInfo Info = WaterActor->GetWaterSurfaceInfo(WorldPos);
+// Info.SurfaceHeight, Info.SurfaceNormal, Info.bIsInWaterBounds
+```
+
+**Buoyancy Component:**
+```cpp
+// Add to any physics-enabled actor
+UMOBuoyancyComponent* Buoyancy = Actor->CreateDefaultSubobject<UMOBuoyancyComponent>();
+Buoyancy->BuoyancyForce = 2000.0f;   // Upward force when submerged
+Buoyancy->WaterLinearDrag = 3.0f;     // Movement resistance
+Buoyancy->WaterAngularDrag = 1.0f;    // Rotation resistance
+
+// Multi-point for boats
+Buoyancy->bUseMultiplePoints = true;
+Buoyancy->BuoyancyPoints.Add(FMOBuoyancyPoint{FVector(100, -50, 0), 1.0f, 1.0f});
+Buoyancy->BuoyancyPoints.Add(FMOBuoyancyPoint{FVector(100, 50, 0), 1.0f, 1.0f});
+// ... etc for all pontoon positions
+```
+
+**Material Generation (Editor Console):**
+```
+MO.GenerateWaterMaterial   // Creates /MOFramework/Materials/M_Water
+MO.GenerateOceanMaterial   // Creates /MOFramework/Materials/M_Ocean
+```
+
+---
+
+#### Future: UE5 Built-in Water Integration
+
+**Recommendation:** Use UE5's built-in Water plugin for rendering, with custom voxel detection for lake boundaries.
+
+**UE5 Water Plugin Key Classes:**
+- `AWaterBodyOcean` - Infinite ocean (no spline needed)
+- `AWaterBodyLake` - Spline-defined lake boundaries
+- `AWaterBodyRiver` - Spline-based river
+- `UWaterBodyComponent` - Core water functionality
+- `UWaterSplineComponent` - Defines water body shape (can be modified at runtime)
+
+**Programmatic Spline Control:**
+```cpp
+// Get the water spline
+AWaterBodyLake* Lake = ...;
+UWaterSplineComponent* Spline = Lake->GetWaterSpline();
+
+// Clear and rebuild spline from detected voxel boundaries
+Spline->ClearSplinePoints();
+for (const FVector& Point : DetectedBoundaryPoints)
+{
+    Spline->AddSplinePoint(Point, ESplineCoordinateSpace::World);
+}
+Spline->UpdateSpline();
+Lake->OnWaterBodyChanged(); // Rebuild mesh
+```
+
+**Voxel Detection → Spline Generation Pattern:**
+1. Raycast down from grid to find terrain
+2. Flood-fill from lake center to find water-filled area
+3. Edge-detect to find boundary points
+4. Convert boundary to ordered spline points
+5. Update `UWaterSplineComponent`
+
+**Key UE5 Water Interfaces:**
+- `IWaterBrushActorInterface` - For actors that modify water
+- `AWaterBodyExclusionVolume` - Cuts holes in water
+- `AWaterBodyIsland` - Creates islands within water
+
+**Oceanology Plugin Reference (D:\UnrealEngine\UE_5.5):**
+- Uses Material Parameter Collection for wave sync
+- Gerstner formula: `k = (PI * 4.0) / WaveLength` (not 2*PI)
+- Direction as angle (0-1 range): `sin(Dir * 2*PI), cos(Dir * 2*PI)`
+- Quad-tree mesh with LOD for performance
+- Single Layer Water shading model for efficient rendering
+
+**Key Oceanology Files (for reference):**
+```
+Source/Oceanology_Plugin/Private/Components/Wave/OceanologyGerstnerWaveSolverComponent.cpp
+Source/Oceanology_Plugin/Public/Structs/OceanologyWaves.h
+Source/Oceanology_Plugin/Public/Components/QuadTree/OceanologyWaterMeshComponent.h
+```
+
+**Gerstner Wave Math (Oceanology pattern):**
+```cpp
+double DivideWave(double WaveLength) { return (PI * 4.0) / WaveLength; }
+double MultiplyWave(double Steepness) { return (PI * 2.0) * Steepness; }
+
+FVector DirectionWave(double Direction) {
+    double Angle = Direction * (PI * 2.0);
+    return FVector(FMath::Sin(Angle), FMath::Cos(Angle), 0);
+}
+
+FVector GerstnerWave(FVector Position, double Direction, double Speed,
+                     double WaveLength, double Amplitude, double Steepness, double NumWaves)
+{
+    double k = DivideWave(WaveLength);  // Wave number
+    double Q = MultiplyWave(Steepness) / (NumWaves * (PI * 2.0) * k * Amplitude);
+    FVector Dir = DirectionWave(Direction);
+
+    double Phase = FVector::DotProduct(k * Dir, Position) + GameTimeInSeconds * k * Speed;
+
+    FVector Result;
+    Result.X = Q * Amplitude * Dir.X * FMath::Cos(Phase);
+    Result.Y = Q * Amplitude * Dir.Y * FMath::Cos(Phase);
+    Result.Z = Amplitude * FMath::Sin(Phase);
+    return Result;
+}
+```
+
+---
 
 ### Medical System
 
@@ -1310,6 +1486,56 @@ Resource Nodes
 ## Technical Debt & Known Issues
 
 This section documents known technical debt identified through code audits for future improvement.
+
+### Critical Priority
+
+#### MOUIManagerComponent - God Class (3,469 lines)
+**Status:** Needs major refactoring
+
+The UI manager has grown to handle 15+ responsibilities:
+- Inventory menu, Unified inventory, Crafting menu, Skills panel
+- Building menu, Possession menu, In-game menu
+- Item/Station context menus, Ghost/build widget
+- Confirmation dialogs, Item inspection, Reticle
+- Status panel, Notifications, Mode indicators, Tool hints, Input modes
+
+**Suggested Split:**
+1. `UMOMenuManagerComponent` - Menu lifecycle (Open/Close/Toggle)
+2. `UMOInputModeManager` - Input mode switching
+3. `UMOUIStateManager` - Track open/closed state
+4. `UMOItemActionHandler` - Context menu actions
+5. `UMOBuildPlacementManager` - Ghost widget + positioning
+6. Keep `UMOUIManagerComponent` as lightweight facade
+
+**Problem function:** `HandleContextMenuAction()` is 160 lines with 8-way if/else chain.
+
+#### MOMedicalTypes.h - Type Monolith (1,088 lines)
+**Status:** Needs splitting
+
+All 44+ medical structs/enums in one file causes recompilation cascade.
+
+**Suggested Split:**
+1. `MOActivityTypes.h` - Activity level + config + state
+2. `MOBodyPartTypes.h` - Body part definitions
+3. `MOBleedingTypes.h` - Bleeding/wound structures
+4. `MONutritionTypes.h` - Nutrition/metabolism data
+5. `MOVitalityTypes.h` - Health/vitality structures
+6. Keep `MOMedicalTypes.h` as umbrella include
+
+#### Large File Summary (>800 lines)
+
+| File | Lines | Issue |
+|------|-------|-------|
+| `MOUIManagerComponent.cpp` | 3,469 | God class |
+| `MOPersistenceSubsystem.cpp` | 2,043 | Complex orchestration |
+| `MOInventoryComponent.cpp` | 1,474 | Multi-concern |
+| `MOMedicalTypes.h` | 1,088 | Type monolith |
+| `MODataImportCommandlet.cpp` | 1,088 | Monolithic import |
+| `MOStatusPanel.cpp` | 1,049 | Multi-component UI |
+| `MOAnatomyComponent.cpp` | 1,043 | Wound system |
+| `MOCharacter.cpp` | 931 | Component factory |
+| `MOMetabolismComponent.cpp` | 913 | Metabolism calculations |
+| `MOUnifiedInventoryMenu.cpp` | 885 | Complex UI |
 
 ### High Priority
 
