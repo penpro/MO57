@@ -1742,49 +1742,53 @@ Based on audit findings:
 
 This section documents known technical debt identified through code audits for future improvement.
 
-### Critical Priority
+### Recently Completed
 
-#### MOUIManagerComponent - God Class (3,469 lines)
-**Status:** Needs major refactoring
+#### ✅ MOMedicalTypes.h Split (Commit: 95a7e56)
+**Status:** COMPLETE - Split 1,088-line monolith into 6 focused headers
 
-The UI manager has grown to handle 15+ responsibilities:
-- Inventory menu, Unified inventory, Crafting menu, Skills panel
-- Building menu, Possession menu, In-game menu
-- Item/Station context menus, Ghost/build widget
-- Confirmation dialogs, Item inspection, Reticle
-- Status panel, Notifications, Mode indicators, Tool hints, Input modes
+| New File | Lines | Contents |
+|----------|-------|----------|
+| `MOActivityTypes.h` | 193 | Activity levels, stamina, exertion |
+| `MOBodyPartTypes.h` | 208 | Body parts, wound/condition enums |
+| `MOWoundTypes.h` | 193 | Wound/condition FastArray structs |
+| `MOVitalsTypes.h` | 130 | Vital signs (heart rate, BP, etc.) |
+| `MOMetabolismTypes.h` | 291 | Body composition, nutrients, digestion |
+| `MOMentalTypes.h` | 64 | Mental state, consciousness |
 
-**Suggested Split:**
-1. `UMOMenuManagerComponent` - Menu lifecycle (Open/Close/Toggle)
+`MOMedicalTypes.h` is now a 24-line umbrella include for backwards compatibility.
+
+#### ✅ Component Caching (Commit: 6f7733f)
+**Status:** COMPLETE - Eliminated repeated FindComponentByClass calls
+
+Added pawn component caching to `MOUIManagerComponent`:
+- `CachePawnComponents(APawn*)` called on possession
+- `ClearCachedPawnComponents()` called on unpossess
+- 9 components cached: Inventory, Skills, Knowledge, CraftingQueue, RecipeDiscovery, Vitals, Metabolism, MentalState, SurvivalStats
+- Replaced 11 FindComponentByClass calls with cached accessors
+
+### Deferred (Low Priority)
+
+#### MOUIManagerComponent - God Class (3,541 lines)
+**Status:** Deferred - Current state is acceptable
+
+The UI manager handles 15+ responsibilities but is well-organized with section comments.
+Each menu follows a consistent Open/Close/Toggle/Handle* pattern.
+
+**If splitting becomes needed:**
+1. `UMOItemActionHandler` - Extract context menu action strategy
 2. `UMOInputModeManager` - Input mode switching
-3. `UMOUIStateManager` - Track open/closed state
-4. `UMOItemActionHandler` - Context menu actions
-5. `UMOBuildPlacementManager` - Ghost widget + positioning
-6. Keep `UMOUIManagerComponent` as lightweight facade
+3. Per-menu sub-components
 
-**Problem function:** `HandleContextMenuAction()` is 160 lines with 8-way if/else chain.
+**Note:** `HandleContextMenuAction()` (160 lines) is tightly coupled to other UIManager methods, making clean extraction complex.
 
-#### MOMedicalTypes.h - Type Monolith (1,088 lines)
-**Status:** Needs splitting
+### Large File Summary (>800 lines)
 
-All 44+ medical structs/enums in one file causes recompilation cascade.
-
-**Suggested Split:**
-1. `MOActivityTypes.h` - Activity level + config + state
-2. `MOBodyPartTypes.h` - Body part definitions
-3. `MOBleedingTypes.h` - Bleeding/wound structures
-4. `MONutritionTypes.h` - Nutrition/metabolism data
-5. `MOVitalityTypes.h` - Health/vitality structures
-6. Keep `MOMedicalTypes.h` as umbrella include
-
-#### Large File Summary (>800 lines)
-
-| File | Lines | Issue |
-|------|-------|-------|
-| `MOUIManagerComponent.cpp` | 3,469 | God class |
+| File | Lines | Status |
+|------|-------|--------|
+| `MOUIManagerComponent.cpp` | 3,541 | Deferred - well-organized |
 | `MOPersistenceSubsystem.cpp` | 2,043 | Complex orchestration |
 | `MOInventoryComponent.cpp` | 1,474 | Multi-concern |
-| `MOMedicalTypes.h` | 1,088 | Type monolith |
 | `MODataImportCommandlet.cpp` | 1,088 | Monolithic import |
 | `MOStatusPanel.cpp` | 1,049 | Multi-component UI |
 | `MOAnatomyComponent.cpp` | 1,043 | Wound system |
@@ -1794,15 +1798,13 @@ All 44+ medical structs/enums in one file causes recompilation cascade.
 
 ### High Priority
 
-#### 1. Component Discovery Pattern Overuse
-**40+ instances of `FindComponentByClass` at runtime**
+#### 1. Remaining FindComponentByClass Calls
+**~30 remaining instances in non-UI code**
 
-Affected files:
-- `MOPersistenceSubsystem.cpp` (15 instances)
-- `MOUIManagerComponent.cpp` (9 instances)
+Affected files (not yet optimized):
+- `MOPersistenceSubsystem.cpp` (15 instances - save/load, acceptable)
 - `MOCraftingQueueComponent.cpp` (2 instances)
-
-**Recommendation:** Create component caching in BeginPlay or implement a `FMOComponentUtils` helper class.
+- Various other files (one-time lookups)
 
 #### 2. Missing Interface Abstractions
 Several systems would benefit from formal UInterface definitions:
