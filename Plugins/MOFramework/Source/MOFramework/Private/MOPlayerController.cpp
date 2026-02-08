@@ -251,10 +251,22 @@ void AMOPlayerController::OnPossess(APawn* InPawn)
 				*InPawn->GetClass()->GetName());
 		}
 	}
+
+	// Cache pawn components in UI manager for efficient access
+	if (UIManagerComponent)
+	{
+		UIManagerComponent->CachePawnComponents(InPawn);
+	}
 }
 
 void AMOPlayerController::OnUnPossess()
 {
+	// Clear cached pawn components before unpossessing
+	if (UIManagerComponent)
+	{
+		UIManagerComponent->ClearCachedPawnComponents();
+	}
+
 	CachedControllablePawn.Reset();
 	Super::OnUnPossess();
 }

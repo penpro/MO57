@@ -163,24 +163,8 @@ bool UMOUIManagerComponent::IsInventoryMenuOpen() const
 
 UMOInventoryComponent* UMOUIManagerComponent::ResolveCurrentPawnInventoryComponent() const
 {
-	APlayerController* PlayerController = ResolveOwningPlayerController();
-	if (!IsValid(PlayerController))
-	{
-		return nullptr;
-	}
-
-	APawn* CurrentPawn = PlayerController->GetPawn();
-	if (!IsValid(CurrentPawn))
-	{
-		return nullptr;
-	}
-
-	// Use IMOInventoryHolder interface if available
-	if (CurrentPawn->Implements<UMOInventoryHolderInterface>())
-	{
-		return IMOInventoryHolderInterface::Execute_GetInventory(CurrentPawn);
-	}
-	return nullptr;
+	// Use cached inventory component (populated in CachePawnComponents on possession)
+	return GetCachedInventory();
 }
 
 void UMOUIManagerComponent::ToggleInventoryMenu()
@@ -1319,11 +1303,11 @@ void UMOUIManagerComponent::OpenCraftingMenu()
 		MenuWidget->OnRequestClose.AddDynamic(this, &UMOUIManagerComponent::HandleCraftingMenuRequestClose);
 	}
 
-	// Get optional components
-	UMOSkillsComponent* Skills = CurrentPawn->FindComponentByClass<UMOSkillsComponent>();
-	UMOKnowledgeComponent* Knowledge = CurrentPawn->FindComponentByClass<UMOKnowledgeComponent>();
-	UMOCraftingQueueComponent* CraftingQueue = CurrentPawn->FindComponentByClass<UMOCraftingQueueComponent>();
-	UMORecipeDiscoveryComponent* Discovery = CurrentPawn->FindComponentByClass<UMORecipeDiscoveryComponent>();
+	// Get optional components from cache (avoids repeated FindComponentByClass)
+	UMOSkillsComponent* Skills = GetCachedSkills();
+	UMOKnowledgeComponent* Knowledge = GetCachedKnowledge();
+	UMOCraftingQueueComponent* CraftingQueue = GetCachedCraftingQueue();
+	UMORecipeDiscoveryComponent* Discovery = GetCachedRecipeDiscovery();
 
 	// Initialize with components
 	MenuWidget->InitializeMenu(Inventory, Skills, Knowledge, CraftingQueue, Discovery);
@@ -1469,9 +1453,9 @@ void UMOUIManagerComponent::OpenSkillsPanel()
 		PanelWidget->OnRequestClose.AddDynamic(this, &UMOUIManagerComponent::HandleSkillsPanelRequestClose);
 	}
 
-	// Get skills and knowledge components
-	UMOSkillsComponent* Skills = CurrentPawn->FindComponentByClass<UMOSkillsComponent>();
-	UMOKnowledgeComponent* Knowledge = CurrentPawn->FindComponentByClass<UMOKnowledgeComponent>();
+	// Get skills and knowledge components from cache
+	UMOSkillsComponent* Skills = GetCachedSkills();
+	UMOKnowledgeComponent* Knowledge = GetCachedKnowledge();
 
 	// Initialize with both components
 	PanelWidget->InitializePanelWithKnowledge(Skills, Knowledge);
@@ -1835,26 +1819,22 @@ void UMOUIManagerComponent::HandleContextMenuAction(FName ActionId, const FGuid&
 
 	if (ActionId == FName("Use"))
 	{
-		// Consume item - apply nutrition to survival stats
-		APlayerController* PC = ResolveOwningPlayerController();
-		if (IsValid(PC) && IsValid(PC->GetPawn()))
+		// Consume item - apply nutrition to survival stats (use cached component)
+		UMOSurvivalStatsComponent* SurvivalStats = GetCachedSurvivalStats();
+		if (IsValid(SurvivalStats))
 		{
-			UMOSurvivalStatsComponent* SurvivalStats = PC->GetPawn()->FindComponentByClass<UMOSurvivalStatsComponent>();
-			if (IsValid(SurvivalStats))
+			if (SurvivalStats->ConsumeItem(InventoryComponent, ItemGuid))
 			{
-				if (SurvivalStats->ConsumeItem(InventoryComponent, ItemGuid))
-				{
-					UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Item consumed successfully"));
-				}
-				else
-				{
-					UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] Failed to consume item"));
-				}
+				UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Item consumed successfully"));
 			}
 			else
 			{
-				UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] No SurvivalStatsComponent found on pawn"));
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] Failed to consume item"));
 			}
+		}
+		else
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] No SurvivalStatsComponent cached for pawn"));
 		}
 	}
 	else if (ActionId == FName("Drop1"))
@@ -2427,25 +2407,10 @@ void UMOUIManagerComponent::DropItemToWorldByGuid(UMOInventoryComponent* Invento
 
 void UMOUIManagerComponent::GetCurrentPawnMedicalComponents(UMOVitalsComponent*& OutVitals, UMOMetabolismComponent*& OutMetabolism, UMOMentalStateComponent*& OutMental) const
 {
-	OutVitals = nullptr;
-	OutMetabolism = nullptr;
-	OutMental = nullptr;
-
-	APlayerController* PlayerController = ResolveOwningPlayerController();
-	if (!IsValid(PlayerController))
-	{
-		return;
-	}
-
-	APawn* CurrentPawn = PlayerController->GetPawn();
-	if (!IsValid(CurrentPawn))
-	{
-		return;
-	}
-
-	OutVitals = CurrentPawn->FindComponentByClass<UMOVitalsComponent>();
-	OutMetabolism = CurrentPawn->FindComponentByClass<UMOMetabolismComponent>();
-	OutMental = CurrentPawn->FindComponentByClass<UMOMentalStateComponent>();
+	// Use cached components instead of FindComponentByClass
+	OutVitals = GetCachedVitals();
+	OutMetabolism = GetCachedMetabolism();
+	OutMental = GetCachedMentalState();
 }
 
 void UMOUIManagerComponent::RebindStatusPanelToCurrentPawn()
@@ -2472,6 +2437,118 @@ void UMOUIManagerComponent::RebindStatusPanelToCurrentPawn()
 		IsValid(Vitals) ? TEXT("Yes") : TEXT("No"),
 		IsValid(Metabolism) ? TEXT("Yes") : TEXT("No"),
 		IsValid(Mental) ? TEXT("Yes") : TEXT("No"));
+}
+
+// =============================================================================
+// Pawn Component Caching
+// =============================================================================
+
+void UMOUIManagerComponent::CachePawnComponents(APawn* NewPawn)
+{
+	// Clear any existing cached references
+	ClearCachedPawnComponents();
+
+	if (!IsValid(NewPawn))
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOUI] CachePawnComponents - No pawn, caches cleared"));
+		return;
+	}
+
+	CachedPawn = NewPawn;
+
+	// Cache all pawn components we frequently need
+	// Use interface if available for inventory, otherwise fall back to FindComponentByClass
+	if (NewPawn->Implements<UMOInventoryHolderInterface>())
+	{
+		CachedInventoryComponent = IMOInventoryHolderInterface::Execute_GetInventory(NewPawn);
+	}
+	else
+	{
+		CachedInventoryComponent = NewPawn->FindComponentByClass<UMOInventoryComponent>();
+	}
+
+	CachedSkillsComponent = NewPawn->FindComponentByClass<UMOSkillsComponent>();
+	CachedKnowledgeComponent = NewPawn->FindComponentByClass<UMOKnowledgeComponent>();
+	CachedCraftingQueueComponent = NewPawn->FindComponentByClass<UMOCraftingQueueComponent>();
+	CachedRecipeDiscoveryComponent = NewPawn->FindComponentByClass<UMORecipeDiscoveryComponent>();
+	CachedVitalsComponent = NewPawn->FindComponentByClass<UMOVitalsComponent>();
+	CachedMetabolismComponent = NewPawn->FindComponentByClass<UMOMetabolismComponent>();
+	CachedMentalStateComponent = NewPawn->FindComponentByClass<UMOMentalStateComponent>();
+	CachedSurvivalStatsComponent = NewPawn->FindComponentByClass<UMOSurvivalStatsComponent>();
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] CachePawnComponents - Cached %d components for pawn %s"),
+		(CachedInventoryComponent.IsValid() ? 1 : 0) +
+		(CachedSkillsComponent.IsValid() ? 1 : 0) +
+		(CachedKnowledgeComponent.IsValid() ? 1 : 0) +
+		(CachedCraftingQueueComponent.IsValid() ? 1 : 0) +
+		(CachedRecipeDiscoveryComponent.IsValid() ? 1 : 0) +
+		(CachedVitalsComponent.IsValid() ? 1 : 0) +
+		(CachedMetabolismComponent.IsValid() ? 1 : 0) +
+		(CachedMentalStateComponent.IsValid() ? 1 : 0) +
+		(CachedSurvivalStatsComponent.IsValid() ? 1 : 0),
+		*NewPawn->GetName());
+
+	// Auto-rebind status panel if it exists
+	RebindStatusPanelToCurrentPawn();
+}
+
+void UMOUIManagerComponent::ClearCachedPawnComponents()
+{
+	CachedPawn.Reset();
+	CachedInventoryComponent.Reset();
+	CachedSkillsComponent.Reset();
+	CachedKnowledgeComponent.Reset();
+	CachedCraftingQueueComponent.Reset();
+	CachedRecipeDiscoveryComponent.Reset();
+	CachedVitalsComponent.Reset();
+	CachedMetabolismComponent.Reset();
+	CachedMentalStateComponent.Reset();
+	CachedSurvivalStatsComponent.Reset();
+}
+
+UMOInventoryComponent* UMOUIManagerComponent::GetCachedInventory() const
+{
+	return CachedInventoryComponent.Get();
+}
+
+UMOSkillsComponent* UMOUIManagerComponent::GetCachedSkills() const
+{
+	return CachedSkillsComponent.Get();
+}
+
+UMOKnowledgeComponent* UMOUIManagerComponent::GetCachedKnowledge() const
+{
+	return CachedKnowledgeComponent.Get();
+}
+
+UMOCraftingQueueComponent* UMOUIManagerComponent::GetCachedCraftingQueue() const
+{
+	return CachedCraftingQueueComponent.Get();
+}
+
+UMORecipeDiscoveryComponent* UMOUIManagerComponent::GetCachedRecipeDiscovery() const
+{
+	return CachedRecipeDiscoveryComponent.Get();
+}
+
+UMOVitalsComponent* UMOUIManagerComponent::GetCachedVitals() const
+{
+	return CachedVitalsComponent.Get();
+}
+
+UMOMetabolismComponent* UMOUIManagerComponent::GetCachedMetabolism() const
+{
+	return CachedMetabolismComponent.Get();
+}
+
+UMOMentalStateComponent* UMOUIManagerComponent::GetCachedMentalState() const
+{
+	return CachedMentalStateComponent.Get();
+}
+
+UMOSurvivalStatsComponent* UMOUIManagerComponent::GetCachedSurvivalStats() const
+{
+	return CachedSurvivalStatsComponent.Get();
 }
 
 // =============================================================================
@@ -2590,8 +2667,8 @@ void UMOUIManagerComponent::StartItemInspection(FName ItemDefinitionId, const FG
 		return;
 	}
 
-	UMOKnowledgeComponent* KnowledgeComp = CurrentPawn->FindComponentByClass<UMOKnowledgeComponent>();
-	UMOSkillsComponent* SkillsComp = CurrentPawn->FindComponentByClass<UMOSkillsComponent>();
+	UMOKnowledgeComponent* KnowledgeComp = GetCachedKnowledge();
+	UMOSkillsComponent* SkillsComp = GetCachedSkills();
 
 	if (!IsValid(KnowledgeComp))
 	{
@@ -2898,17 +2975,12 @@ void UMOUIManagerComponent::OpenBuildingMenu()
 		MenuWidget->OnBuildingSelected.AddDynamic(this, &UMOUIManagerComponent::HandleBuildingSelected);
 	}
 
-	// Initialize menu with pawn data
-	APawn* CurrentPawn = PlayerController->GetPawn();
-	if (IsValid(CurrentPawn))
-	{
-		UMOKnowledgeComponent* Knowledge = CurrentPawn->FindComponentByClass<UMOKnowledgeComponent>();
-		UMORecipeDiscoveryComponent* Discovery = CurrentPawn->FindComponentByClass<UMORecipeDiscoveryComponent>();
-		UMOInventoryComponent* Inventory = CurrentPawn->Implements<UMOInventoryHolderInterface>()
-			? IMOInventoryHolderInterface::Execute_GetInventory(CurrentPawn) : nullptr;
-		UMOSkillsComponent* Skills = CurrentPawn->FindComponentByClass<UMOSkillsComponent>();
-		MenuWidget->InitializeMenu(Knowledge, Discovery, Inventory, Skills);
-	}
+	// Initialize menu with cached pawn component data
+	UMOKnowledgeComponent* Knowledge = GetCachedKnowledge();
+	UMORecipeDiscoveryComponent* Discovery = GetCachedRecipeDiscovery();
+	UMOInventoryComponent* Inventory = GetCachedInventory();
+	UMOSkillsComponent* Skills = GetCachedSkills();
+	MenuWidget->InitializeMenu(Knowledge, Discovery, Inventory, Skills);
 
 	// Show modal background and menu
 	ShowModalBackground();

@@ -143,6 +143,7 @@ class UMOSkillsComponent;
 class UMOKnowledgeComponent;
 class UMOCraftingQueueComponent;
 class UMORecipeDiscoveryComponent;
+class UMOSurvivalStatsComponent;
 class UMOInspectionProgressWidget;
 class UMONotificationComponent;
 class UMOBuildingMenu;
@@ -252,6 +253,20 @@ public:
 	/** Rebind the status panel to current pawn's medical components. Call after pawn changes. */
 	UFUNCTION(BlueprintCallable, Category="MO|UI|Status")
 	void RebindStatusPanelToCurrentPawn();
+
+	// --- Pawn Component Caching ---
+
+	/**
+	 * Cache component references from the possessed pawn.
+	 * Called automatically by MOPlayerController::OnPossess.
+	 * This eliminates repeated FindComponentByClass calls during gameplay.
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|UI")
+	void CachePawnComponents(APawn* NewPawn);
+
+	/** Clear all cached pawn component references. Called on unpossess. */
+	UFUNCTION(BlueprintCallable, Category="MO|UI")
+	void ClearCachedPawnComponents();
 
 	// --- In-Game Menu ---
 
@@ -944,4 +959,51 @@ private:
 	TWeakObjectPtr<UMOToolHintWidget> ToolHintWidget;
 
 	void CreateToolHint();
+
+	// ============================================================================
+	// CACHED PAWN COMPONENTS
+	// ============================================================================
+	// These are cached on possession change to avoid repeated FindComponentByClass calls.
+	// Use the accessor methods (GetCached*) which return nullptr if invalid.
+
+	UPROPERTY(Transient)
+	TWeakObjectPtr<APawn> CachedPawn;
+
+	UPROPERTY(Transient)
+	TWeakObjectPtr<UMOInventoryComponent> CachedInventoryComponent;
+
+	UPROPERTY(Transient)
+	TWeakObjectPtr<UMOSkillsComponent> CachedSkillsComponent;
+
+	UPROPERTY(Transient)
+	TWeakObjectPtr<UMOKnowledgeComponent> CachedKnowledgeComponent;
+
+	UPROPERTY(Transient)
+	TWeakObjectPtr<UMOCraftingQueueComponent> CachedCraftingQueueComponent;
+
+	UPROPERTY(Transient)
+	TWeakObjectPtr<UMORecipeDiscoveryComponent> CachedRecipeDiscoveryComponent;
+
+	UPROPERTY(Transient)
+	TWeakObjectPtr<UMOVitalsComponent> CachedVitalsComponent;
+
+	UPROPERTY(Transient)
+	TWeakObjectPtr<UMOMetabolismComponent> CachedMetabolismComponent;
+
+	UPROPERTY(Transient)
+	TWeakObjectPtr<UMOMentalStateComponent> CachedMentalStateComponent;
+
+	UPROPERTY(Transient)
+	TWeakObjectPtr<UMOSurvivalStatsComponent> CachedSurvivalStatsComponent;
+
+	// Accessors that validate the weak pointer before returning
+	UMOInventoryComponent* GetCachedInventory() const;
+	UMOSkillsComponent* GetCachedSkills() const;
+	UMOKnowledgeComponent* GetCachedKnowledge() const;
+	UMOCraftingQueueComponent* GetCachedCraftingQueue() const;
+	UMORecipeDiscoveryComponent* GetCachedRecipeDiscovery() const;
+	UMOVitalsComponent* GetCachedVitals() const;
+	UMOMetabolismComponent* GetCachedMetabolism() const;
+	UMOMentalStateComponent* GetCachedMentalState() const;
+	UMOSurvivalStatsComponent* GetCachedSurvivalStats() const;
 };
