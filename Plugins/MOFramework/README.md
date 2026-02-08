@@ -1483,6 +1483,261 @@ Resource Nodes
 
 ---
 
+## UI Architecture & Patterns
+
+This section documents the UI architecture, reusable patterns, and best practices gathered from codebase analysis and industry research.
+
+### Current Architecture Overview
+
+The MOFramework UI follows a **Manager-Widget-Delegate** pattern:
+
+```
+AMOPlayerController
+└── UMOUIManagerComponent (centralized orchestration)
+    ├── Creates/Destroys widgets
+    ├── Manages input modes (Game ↔ UI)
+    ├── Handles delegate callbacks from widgets
+    └── Coordinates cross-widget communication
+
+Widget Lifecycle:
+  UIManager::Show*() → CreateWidget → AddToViewport → SetKeyboardFocus
+  Widget::OnRequestClose → UIManager::Handle* → Close*() → RemoveFromParent
+```
+
+### Widget Categories (40+ Classes)
+
+| Category | Widgets | Z-Order |
+|----------|---------|---------|
+| HUD/Status | PlayerStatus, Reticle, ToolHint, ModeIndicator | 0-50 |
+| Panels | InventoryMenu, CraftingMenu, SkillsPanel, StatusPanel | 100 |
+| Menus | BuildingMenu, PossessionMenu, LoadPanel, SavePanel | 100-150 |
+| Context | ItemContextMenu, GhostContextMenu, StationContextMenu | 200 |
+| Modal | ConfirmDialog, ItemInspector, ModalBackground | 250 |
+
+### Reusable Widget Components
+
+#### MOInventorySlot
+Self-contained slot widget used across multiple menus:
+- Inventory grid (16x slot)
+- Crafting material display
+- Container inventory
+- Equipment slots
+
+**Features:** Drag-drop, hover effects, quantity display, context menu trigger
+
+#### MOStatusField
+Generic labeled value display with progress bar:
+- Survival stats (health, hunger, thirst)
+- Skill levels and XP
+- Crafting progress
+
+**Features:** Label, value text, optional progress bar, threshold coloring
+
+#### MORecipeEntryWidget
+Recipe display for crafting/building menus:
+- Shows icon, name, materials
+- "Can Craft" indicator
+- Click to select
+
+### Communication Patterns
+
+#### Widget → Manager (Recommended)
+```cpp
+// In Widget header
+UPROPERTY(BlueprintAssignable)
+FMOInventoryMenuRequestCloseSignature OnRequestClose;
+
+// In Widget implementation
+OnRequestClose.Broadcast();
+
+// In UIManager (bound in NativeConstruct or after creation)
+Widget->OnRequestClose.AddDynamic(this, &UMOUIManagerComponent::HandleInventoryMenuRequestClose);
+```
+
+#### Manager → Widget (Direct calls)
+```cpp
+// UIManager directly calls widget methods
+InventoryMenu->RefreshInventoryDisplay();
+CraftingMenu->SetActiveStation(StationActor);
+```
+
+#### Cross-Widget (Via Manager)
+```cpp
+// ItemContextMenu broadcasts action
+OnDropItem.Broadcast(ItemGuid);
+
+// UIManager handles and coordinates
+void HandleContextMenuDropItem(FGuid ItemGuid)
+{
+    CloseItemContextMenu();
+    InventoryComponent->DropItemByGuid(ItemGuid);
+    InventoryMenu->RefreshInventoryDisplay();
+}
+```
+
+### Performance Patterns
+
+#### Widget Pooling with FUserWidgetPool
+For frequently created/destroyed widgets (inventory slots, recipe entries):
+
+```cpp
+// In header
+UPROPERTY()
+FUserWidgetPool SlotWidgetPool;
+
+// In implementation
+void UMOInventoryGrid::RebuildSlots(int32 SlotCount)
+{
+    // Release all existing slots back to pool
+    SlotWidgetPool.ReleaseAll();
+
+    // Get or create slots from pool
+    for (int32 i = 0; i < SlotCount; ++i)
+    {
+        UMOInventorySlot* Slot = SlotWidgetPool.GetOrCreateInstance<UMOInventorySlot>(
+            SlotWidgetClass,
+            this
+        );
+        Slot->SetSlotIndex(i);
+        SlotsContainer->AddChild(Slot);
+    }
+}
+```
+
+**Benefits:** Eliminates GC churn, faster rebuilds, reduced memory fragmentation
+
+#### Invalidation Boxes
+For widgets with static content surrounded by dynamic content:
+
+```
+UInvalidationBox
+├── Static header/footer (rarely invalidates)
+└── Dynamic content area (frequently invalidates)
+```
+
+**Usage:** Wrap static portions in `SInvalidationBox` to prevent full widget rebuild on every tick.
+
+#### Lazy Loading
+Defer expensive widget creation until needed:
+
+```cpp
+void UMOUIManagerComponent::ShowSkillsPanel()
+{
+    if (!SkillsPanel)
+    {
+        // Create on first open, reuse thereafter
+        SkillsPanel = CreateWidget<UMOSkillsPanel>(GetOwningPlayerController(), SkillsPanelClass);
+    }
+    SkillsPanel->AddToViewport(100);
+}
+```
+
+### MVVM/ViewModel Pattern (Future Enhancement)
+
+For data-heavy displays (health bars, status panels), consider UE5's ViewModel system:
+
+```cpp
+// ViewModel - pure data container
+UCLASS()
+class UMOVitalsViewModel : public UMVVMViewModelBase
+{
+    GENERATED_BODY()
+
+    UPROPERTY(BlueprintReadOnly, FieldNotify)
+    float Health;
+
+    UPROPERTY(BlueprintReadOnly, FieldNotify)
+    float MaxHealth;
+
+    UPROPERTY(BlueprintReadOnly, FieldNotify)
+    float HealthPercent;
+};
+
+// In Widget Blueprint: bind HealthBar.Percent to HealthPercent
+// ViewModel updates automatically propagate to UI
+```
+
+**Benefits:**
+- Decouples UI from game logic
+- Testable view models
+- Automatic binding updates
+- Cleaner widget code
+
+### CommonUI Integration
+
+MOFramework uses CommonUI for input-aware widgets:
+
+#### Activatable Widget Stack
+```cpp
+// Widgets derive from UCommonActivatableWidget
+class UMOInventoryMenu : public UCommonActivatableWidget
+
+// Override activation hooks
+virtual void NativeOnActivated() override;
+virtual void NativeOnDeactivated() override;
+virtual UWidget* NativeGetDesiredFocusTarget() const override;
+```
+
+#### Input Routing
+CommonUI handles input routing automatically:
+- Focused widget receives input first
+- Back action (Escape/B button) automatically handled
+- Focus chains for gamepad navigation
+
+#### When to Use CommonUI vs Raw UMG
+
+| Use Case | Recommendation |
+|----------|----------------|
+| Main menus (inventory, crafting) | CommonUI - needs input management |
+| HUD elements (health bar) | Raw UMG - always visible, no input |
+| Context menus | CommonUI - modal focus |
+| Tooltips | Raw UMG - passive display |
+| Dialog confirmations | CommonUI - modal with focus |
+
+### UI Best Practices from Industry Research
+
+#### From Lyra Sample Project
+- Use CommonUI button styles for consistency
+- Implement `GetDesiredFocusTarget()` for gamepad support
+- Handle back navigation with `UCommonActivatableWidget::SetBindVisibilities()`
+
+#### From Dead Cells / Hades (Action Games)
+- Minimize menu time during gameplay
+- Quick-use hotbar for common items
+- Visual feedback on every interaction (flash, scale, sound)
+
+#### From Valheim / The Forest (Survival Games)
+- Single-window crafting with categories
+- Clear "have X / need Y" display
+- Queue system for multiple crafts
+- Auto-sort and filtering for inventory
+
+### Improvement Opportunities
+
+Based on audit findings:
+
+1. **Implement Widget Pooling** for MOInventorySlot, MORecipeEntryWidget
+   - Estimated performance gain: 30-50% on menu open/close
+
+2. **Add ViewModel Layer** for StatusPanel components
+   - Decouples VitalsComponent from UI
+   - Enables testing without gameplay
+
+3. **Consolidate Context Menu Actions** into action handler class
+   - Current: 160-line if/else chain in UIManager
+   - Target: Strategy pattern with action classes
+
+4. **Add Invalidation Boxes** to StatusPanel
+   - Header/tab bar is static
+   - Only body content changes
+
+5. **Implement Widget Animations**
+   - Fade in/out for menus
+   - Slide for context menus
+   - Scale pulse on item pickup
+
+---
+
 ## Technical Debt & Known Issues
 
 This section documents known technical debt identified through code audits for future improvement.
