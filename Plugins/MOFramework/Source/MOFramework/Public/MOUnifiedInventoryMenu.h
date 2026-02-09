@@ -6,6 +6,8 @@
 
 class UMOInventoryGrid;
 class UMOInventoryComponent;
+class UMOEquipmentComponent;
+class UMOEquipmentPanel;
 class UMOItemInfoPanel;
 class UMONearbyItemsPanel;
 class UMOCommonButton;
@@ -84,7 +86,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Inventory|Menu")
 	void ShowNearbyTab();
 
-	/** Get the current tab index (0=OtherInv, 1=Details, 2=Nearby). */
+	/** Switch to the Equipment tab. */
+	UFUNCTION(BlueprintCallable, Category="MO|Inventory|Menu")
+	void ShowEquipmentTab();
+
+	/** Get the current tab index (0=OtherInv, 1=Details, 2=Nearby, 3=Equipment). */
 	UFUNCTION(BlueprintPure, Category="MO|Inventory|Menu")
 	int32 GetCurrentTabIndex() const { return CurrentTabIndex; }
 
@@ -248,6 +254,10 @@ protected:
 	UPROPERTY(BlueprintReadOnly, meta=(BindWidget))
 	TObjectPtr<UMONearbyItemsPanel> NearbyPanel;
 
+	/** Right panel tab 3: Equipment panel. */
+	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
+	TObjectPtr<UMOEquipmentPanel> EquipmentPanel;
+
 	// --- Tab Buttons ---
 
 	UPROPERTY(BlueprintReadOnly, meta=(BindWidget))
@@ -258,6 +268,9 @@ protected:
 
 	UPROPERTY(BlueprintReadOnly, meta=(BindWidget))
 	TObjectPtr<UMOCommonButton> NearbyTabButton;
+
+	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
+	TObjectPtr<UMOCommonButton> EquipmentTabButton;
 
 	// --- Action Buttons ---
 
@@ -304,6 +317,9 @@ private:
 
 	UFUNCTION()
 	void HandleNearbyTabClicked();
+
+	UFUNCTION()
+	void HandleEquipmentTabClicked();
 
 	UFUNCTION()
 	void HandleStoreAllClicked();
@@ -361,11 +377,14 @@ private:
 	TWeakObjectPtr<UMOInventoryComponent> CachedPlayerInventory;
 
 	UPROPERTY()
+	TWeakObjectPtr<UMOEquipmentComponent> CachedEquipmentComponent;
+
+	UPROPERTY()
 	TWeakObjectPtr<AActor> CachedSecondarySource;
 
 	UPROPERTY()
 	TWeakObjectPtr<UMOInventoryComponent> CachedSecondaryInventory;
 
 	FGuid SelectedItemGuid;
-	int32 CurrentTabIndex = 1;  // Default to Details tab (0=OtherInv, 1=Details, 2=Nearby)
+	int32 CurrentTabIndex = 3;  // Default to Equipment tab (0=OtherInv, 1=Details, 2=Nearby, 3=Equipment)
 };

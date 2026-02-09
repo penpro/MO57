@@ -121,6 +121,16 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Inventory")
 	bool AddItemByGuid(const FGuid& ItemGuid, const FName ItemDefinitionId, int32 QuantityToAdd);
 
+	/**
+	 * Add an item with specific durability (for restoring equipped items).
+	 * @param ItemGuid The unique GUID for this item
+	 * @param ItemDefinitionId The item definition row name
+	 * @param QuantityToAdd Number of items to add
+	 * @param InitialDurability Initial durability (-1 for infinite/default)
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Inventory")
+	bool AddItemByGuidWithDurability(const FGuid& ItemGuid, const FName ItemDefinitionId, int32 QuantityToAdd, int32 InitialDurability);
+
 	UFUNCTION(BlueprintCallable, Category="MO|Inventory")
 	bool RemoveItemByGuid(const FGuid& ItemGuid, int32 QuantityToRemove);
 

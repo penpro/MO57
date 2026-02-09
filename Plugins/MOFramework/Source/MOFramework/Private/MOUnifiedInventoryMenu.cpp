@@ -2,6 +2,8 @@
 #include "MOFramework.h"
 #include "MOInventoryGrid.h"
 #include "MOInventoryComponent.h"
+#include "MOEquipmentComponent.h"
+#include "MOEquipmentPanel.h"
 #include "MOItemInfoPanel.h"
 #include "MONearbyItemsPanel.h"
 #include "MOCommonButton.h"
@@ -62,6 +64,12 @@ void UMOUnifiedInventoryMenu::BindButtonEvents()
 	{
 		NearbyTabButton->OnClicked().RemoveAll(this);
 		NearbyTabButton->OnClicked().AddUObject(this, &UMOUnifiedInventoryMenu::HandleNearbyTabClicked);
+	}
+
+	if (EquipmentTabButton)
+	{
+		EquipmentTabButton->OnClicked().RemoveAll(this);
+		EquipmentTabButton->OnClicked().AddUObject(this, &UMOUnifiedInventoryMenu::HandleEquipmentTabClicked);
 	}
 
 	// Action buttons
@@ -163,6 +171,10 @@ void UMOUnifiedInventoryMenu::UnbindButtonEvents()
 	{
 		NearbyTabButton->OnClicked().RemoveAll(this);
 	}
+	if (EquipmentTabButton)
+	{
+		EquipmentTabButton->OnClicked().RemoveAll(this);
+	}
 	if (StoreAllButton)
 	{
 		StoreAllButton->OnClicked().RemoveAll(this);
@@ -238,6 +250,23 @@ void UMOUnifiedInventoryMenu::InitializeMenu(UMOInventoryComponent* PlayerInvent
 		NearbyPanel->SetQuickPickupTarget(PlayerInventory);
 	}
 
+	// Initialize equipment panel
+	if (EquipmentPanel && PlayerInventory)
+	{
+		// Find equipment component on the pawn
+		APlayerController* PC = GetOwningPlayer();
+		if (PC && PC->GetPawn())
+		{
+			UMOEquipmentComponent* EquipComp = PC->GetPawn()->FindComponentByClass<UMOEquipmentComponent>();
+			if (EquipComp)
+			{
+				CachedEquipmentComponent = EquipComp;
+				EquipmentPanel->InitializePanel(EquipComp, PlayerInventory);
+				UE_LOG(LogMOFramework, Log, TEXT("[UnifiedInventoryMenu] Initialized equipment panel"));
+			}
+		}
+	}
+
 	// Set secondary source if provided
 	if (SecondarySource)
 	{
@@ -246,8 +275,8 @@ void UMOUnifiedInventoryMenu::InitializeMenu(UMOInventoryComponent* PlayerInvent
 	}
 	else
 	{
-		// Default to details tab when no container
-		ShowDetailsTab();
+		// Default to equipment tab when no container
+		ShowEquipmentTab();
 	}
 
 	UpdateTabButtonStates();
@@ -302,6 +331,27 @@ void UMOUnifiedInventoryMenu::ShowNearbyTab()
 	RefreshNearbyPanel();
 
 	UE_LOG(LogMOFramework, Log, TEXT("[UnifiedInventoryMenu] Switched to Nearby tab"));
+}
+
+void UMOUnifiedInventoryMenu::ShowEquipmentTab()
+{
+	CurrentTabIndex = 3;
+
+	if (RightPanelSwitcher)
+	{
+		RightPanelSwitcher->SetActiveWidgetIndex(3);
+	}
+
+	UpdateTabButtonStates();
+	UpdateActionButtonStates();
+
+	// Refresh equipment panel display
+	if (EquipmentPanel)
+	{
+		EquipmentPanel->RefreshDisplay();
+	}
+
+	UE_LOG(LogMOFramework, Log, TEXT("[UnifiedInventoryMenu] Switched to Equipment tab"));
 }
 
 // ============================================================================
@@ -613,6 +663,11 @@ void UMOUnifiedInventoryMenu::HandleDetailsTabClicked()
 void UMOUnifiedInventoryMenu::HandleNearbyTabClicked()
 {
 	ShowNearbyTab();
+}
+
+void UMOUnifiedInventoryMenu::HandleEquipmentTabClicked()
+{
+	ShowEquipmentTab();
 }
 
 void UMOUnifiedInventoryMenu::HandleStoreAllClicked()

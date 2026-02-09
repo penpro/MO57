@@ -122,6 +122,53 @@ bool UMOInventoryComponent::AddItemByGuid(const FGuid& ItemGuid, const FName Ite
 	return true;
 }
 
+bool UMOInventoryComponent::AddItemByGuidWithDurability(const FGuid& ItemGuid, const FName ItemDefinitionId, int32 QuantityToAdd, int32 InitialDurability)
+{
+	AActor* OwnerActor = GetOwner();
+	if (!IsValid(OwnerActor) || !OwnerActor->HasAuthority())
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventory] AddItemByGuidWithDurability requires authority"));
+		return false;
+	}
+
+	if (!ItemGuid.IsValid() || ItemDefinitionId.IsNone() || QuantityToAdd <= 0)
+	{
+		return false;
+	}
+
+	EnsureSlotsInitialized();
+
+	const int32 ExistingIndex = FindEntryIndexByGuid(ItemGuid);
+	if (ExistingIndex != INDEX_NONE)
+	{
+		FMOInventoryEntry& ExistingEntry = Inventory.Entries[ExistingIndex];
+		ExistingEntry.Quantity += QuantityToAdd;
+
+		Inventory.MarkItemDirty(ExistingEntry);
+		BroadcastInventoryChanged();
+
+		return true;
+	}
+
+	FMOInventoryEntry NewEntry;
+	NewEntry.ItemGuid = ItemGuid;
+	NewEntry.ItemDefinitionId = ItemDefinitionId;
+	NewEntry.Quantity = QuantityToAdd;
+	NewEntry.CurrentDurability = InitialDurability;
+
+	const int32 NewIndex = Inventory.Entries.Add(NewEntry);
+	Inventory.MarkItemDirty(Inventory.Entries[NewIndex]);
+	BroadcastInventoryChanged();
+
+	if (TryAutoAssignGuidToEmptySlot(ItemGuid))
+	{
+		MarkSlotItemGuidsDirty();
+		OnSlotsChanged.Broadcast();
+	}
+
+	return true;
+}
+
 bool UMOInventoryComponent::RemoveItemByGuid(const FGuid& ItemGuid, int32 QuantityToRemove)
 {
 	AActor* OwnerActor = GetOwner();
