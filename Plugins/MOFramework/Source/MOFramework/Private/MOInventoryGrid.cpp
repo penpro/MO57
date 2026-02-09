@@ -57,12 +57,13 @@ void UMOInventoryGrid::RebuildGrid()
 	{
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventoryGrid] SlotWidgetClass is not set. Set it in the WBP_InventoryGrid defaults to your WBP_InventorySlot."));
 		SlotsUniformGrid->ClearChildren();
-		SlotWidgets.Reset();
+		ReleaseAllSlotsToPool();
 		return;
 	}
 
+	// Release current slots to pool before rebuilding
 	SlotsUniformGrid->ClearChildren();
-	SlotWidgets.Reset();
+	ReleaseAllSlotsToPool();
 
 	const int32 SlotCount = GetDesiredSlotCount();
 	if (SlotCount <= 0)
@@ -80,7 +81,7 @@ void UMOInventoryGrid::RebuildGrid()
 
 	for (int32 SlotIndex = 0; SlotIndex < SlotCount; ++SlotIndex)
 	{
-		UMOInventorySlot* NewSlotWidget = CreateWidget<UMOInventorySlot>(OwningPlayerController, SlotWidgetClass);
+		UMOInventorySlot* NewSlotWidget = AcquireSlotWidget();
 		if (!IsValid(NewSlotWidget))
 		{
 			continue;
@@ -123,22 +124,12 @@ void UMOInventoryGrid::ClearGrid()
 		SlotsUniformGrid->ClearChildren();
 	}
 
-	// Unbind delegates from slots before clearing
-	for (UMOInventorySlot* SlotWidget : SlotWidgets)
-	{
-		if (IsValid(SlotWidget))
-		{
-			SlotWidget->OnSlotClicked.RemoveDynamic(this, &UMOInventoryGrid::HandleSlotClicked);
-			SlotWidget->OnSlotShiftClicked.RemoveDynamic(this, &UMOInventoryGrid::HandleSlotShiftClicked);
-			SlotWidget->OnSlotRightClicked.RemoveDynamic(this, &UMOInventoryGrid::HandleSlotRightClicked);
-			SlotWidget->OnSlotDropReceived.RemoveDynamic(this, &UMOInventoryGrid::HandleSlotDropReceived);
-		}
-	}
+	// Release all slots to pool (handles delegate unbinding)
+	ReleaseAllSlotsToPool();
 
-	SlotWidgets.Reset();
 	InventoryComponent = nullptr;
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOInventoryGrid] Grid cleared"));
+	UE_LOG(LogMOFramework, Log, TEXT("[MOInventoryGrid] Grid cleared (Pooled=%d)"), PooledSlotWidgets.Num());
 }
 
 void UMOInventoryGrid::SetSlotVisualData(const TArray<FMOInventorySlotVisualData>& VisualData)
@@ -164,29 +155,18 @@ void UMOInventoryGrid::SetSlotVisualData(const TArray<FMOInventorySlotVisualData
 		return;
 	}
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOInventoryGrid] SetSlotVisualData: All checks passed, creating slots..."));
+	UE_LOG(LogMOFramework, Log, TEXT("[MOInventoryGrid] SetSlotVisualData: All checks passed, acquiring slots from pool..."));
 
-	// Clear existing slots
+	// Release existing slots to pool
 	SlotsUniformGrid->ClearChildren();
+	ReleaseAllSlotsToPool();
 
-	for (UMOInventorySlot* SlotWidget : SlotWidgets)
-	{
-		if (IsValid(SlotWidget))
-		{
-			SlotWidget->OnSlotClicked.RemoveDynamic(this, &UMOInventoryGrid::HandleSlotClicked);
-			SlotWidget->OnSlotShiftClicked.RemoveDynamic(this, &UMOInventoryGrid::HandleSlotShiftClicked);
-			SlotWidget->OnSlotRightClicked.RemoveDynamic(this, &UMOInventoryGrid::HandleSlotRightClicked);
-			SlotWidget->OnSlotDropReceived.RemoveDynamic(this, &UMOInventoryGrid::HandleSlotDropReceived);
-		}
-	}
-	SlotWidgets.Reset();
-
-	// Create new slots based on visual data
+	// Acquire slots from pool based on visual data
 	const int32 SlotCount = FMath::Max(VisualData.Num(), MinimumVisibleSlotCount);
 
 	for (int32 SlotIndex = 0; SlotIndex < SlotCount; ++SlotIndex)
 	{
-		UMOInventorySlot* NewSlotWidget = CreateWidget<UMOInventorySlot>(OwningPlayerController, SlotWidgetClass);
+		UMOInventorySlot* NewSlotWidget = AcquireSlotWidget();
 		if (!IsValid(NewSlotWidget))
 		{
 			continue;
@@ -217,8 +197,8 @@ void UMOInventoryGrid::SetSlotVisualData(const TArray<FMOInventorySlotVisualData
 		SlotWidgets.Add(NewSlotWidget);
 	}
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOInventoryGrid] SetSlotVisualData: Created %d slots (SlotWidgets=%d) from %d visual data entries"),
-		SlotCount, SlotWidgets.Num(), VisualData.Num());
+	UE_LOG(LogMOFramework, Log, TEXT("[MOInventoryGrid] SetSlotVisualData: Acquired %d slots (SlotWidgets=%d, Pooled=%d) from %d visual data entries"),
+		SlotCount, SlotWidgets.Num(), PooledSlotWidgets.Num(), VisualData.Num());
 }
 
 void UMOInventoryGrid::HandleSlotClicked(int32 SlotIndex, const FGuid& ItemGuid)
@@ -270,4 +250,61 @@ void UMOInventoryGrid::UnbindInventoryDelegates()
 		InventoryComponent->OnInventoryChanged.RemoveDynamic(this, &UMOInventoryGrid::HandleInventoryChanged);
 		InventoryComponent->OnSlotsChanged.RemoveDynamic(this, &UMOInventoryGrid::HandleSlotsChanged);
 	}
+}
+
+// ============================================================================
+// WIDGET POOLING
+// ============================================================================
+
+UMOInventorySlot* UMOInventoryGrid::AcquireSlotWidget()
+{
+	// Try to get from pool first
+	if (PooledSlotWidgets.Num() > 0)
+	{
+		UMOInventorySlot* SlotWidget = PooledSlotWidgets.Pop();
+		if (IsValid(SlotWidget))
+		{
+			SlotWidget->SetVisibility(ESlateVisibility::Visible);
+			return SlotWidget;
+		}
+	}
+
+	// Create new widget if pool is empty
+	APlayerController* OwningPlayerController = GetOwningPlayer();
+	if (!OwningPlayerController || !SlotWidgetClass)
+	{
+		return nullptr;
+	}
+
+	return CreateWidget<UMOInventorySlot>(OwningPlayerController, SlotWidgetClass);
+}
+
+void UMOInventoryGrid::ReleaseSlotWidget(UMOInventorySlot* SlotWidget)
+{
+	if (!IsValid(SlotWidget))
+	{
+		return;
+	}
+
+	// Unbind event delegates
+	SlotWidget->OnSlotClicked.RemoveDynamic(this, &UMOInventoryGrid::HandleSlotClicked);
+	SlotWidget->OnSlotShiftClicked.RemoveDynamic(this, &UMOInventoryGrid::HandleSlotShiftClicked);
+	SlotWidget->OnSlotRightClicked.RemoveDynamic(this, &UMOInventoryGrid::HandleSlotRightClicked);
+	SlotWidget->OnSlotDropReceived.RemoveDynamic(this, &UMOInventoryGrid::HandleSlotDropReceived);
+
+	// Hide and clear data
+	SlotWidget->SetVisibility(ESlateVisibility::Collapsed);
+	SlotWidget->ClearVisualData();
+
+	// Return to pool
+	PooledSlotWidgets.Add(SlotWidget);
+}
+
+void UMOInventoryGrid::ReleaseAllSlotsToPool()
+{
+	for (UMOInventorySlot* SlotWidget : SlotWidgets)
+	{
+		ReleaseSlotWidget(SlotWidget);
+	}
+	SlotWidgets.Reset();
 }

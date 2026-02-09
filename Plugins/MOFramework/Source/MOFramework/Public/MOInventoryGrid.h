@@ -110,6 +110,24 @@ private:
 	UPROPERTY()
 	TObjectPtr<UMOInventoryComponent> InventoryComponent;
 
+	/** Active slot widgets currently displayed in the grid. */
 	UPROPERTY()
 	TArray<TObjectPtr<UMOInventorySlot>> SlotWidgets;
+
+	// ============================================================================
+	// WIDGET POOLING
+	// ============================================================================
+
+	/** Pool of inactive slot widgets available for reuse. */
+	UPROPERTY()
+	TArray<TObjectPtr<UMOInventorySlot>> PooledSlotWidgets;
+
+	/** Get a slot widget from the pool or create a new one. */
+	UMOInventorySlot* AcquireSlotWidget();
+
+	/** Release a slot widget back to the pool. */
+	void ReleaseSlotWidget(UMOInventorySlot* SlotWidget);
+
+	/** Release all active slots to the pool. */
+	void ReleaseAllSlotsToPool();
 };
