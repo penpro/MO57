@@ -7,10 +7,8 @@
 
 class UMOEquipmentComponent;
 class UMOInventoryComponent;
-class UImage;
-class UTextBlock;
+class UMOInventorySlot;
 class UProgressBar;
-class UBorder;
 
 /**
  * Delegate for when an item is dropped onto an equipment slot.
@@ -20,21 +18,24 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FMOOnEquipmentSlotDropReceived, E
 /**
  * Delegate for equipment slot clicks.
  */
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOOnEquipmentSlotClicked, EMOEquipmentSlot, Slot, const FMOEquippedItem&, Item);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOOnEquipmentSlotClicked, EMOEquipmentSlot, EquipSlot, const FMOEquippedItem&, Item);
 
 /**
  * Delegate for equipment slot right-clicks.
  */
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FMOOnEquipmentSlotRightClicked, EMOEquipmentSlot, Slot, const FMOEquippedItem&, Item, FVector2D, ScreenPosition);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FMOOnEquipmentSlotRightClicked, EMOEquipmentSlot, EquipSlot, const FMOEquippedItem&, Item, FVector2D, ScreenPosition);
 
 /**
- * Panel widget displaying left/right hand equipment slots.
+ * Panel widget displaying equipment slots using UMOInventorySlot widgets.
+ *
+ * Body Slots: Head, Chest, Hands, Legs, Feet, Back
+ * Hand Slots: LeftHand, RightHand (with swap progress)
  *
  * Supports:
  * - Drag/drop from inventory to equip items
  * - Click to unequip back to inventory
- * - Visual feedback for swap progress
- * - Durability display
+ * - Visual feedback for swap progress (hand slots only)
+ * - Reuses existing UMOInventorySlot widget for consistent look/feel
  */
 UCLASS()
 class MOFRAMEWORK_API UMOEquipmentPanel : public UUserWidget
@@ -51,7 +52,7 @@ public:
 	/**
 	 * Initialize the panel with equipment and inventory components.
 	 * @param InEquipment The equipment component to display/control
-	 * @param InInventory The inventory for drag-drop operations
+	 * @param InInventory The inventory for unequip operations
 	 */
 	UFUNCTION(BlueprintCallable, Category="MO|Equipment|UI")
 	void InitializePanel(UMOEquipmentComponent* InEquipment, UMOInventoryComponent* InInventory);
@@ -97,66 +98,53 @@ protected:
 	virtual void NativeDestruct() override;
 	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 
-	virtual bool NativeOnDrop(const FGeometry& InGeometry, const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation) override;
-	virtual FReply NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
-
 	// ============================================================================
-	// BIND WIDGETS
+	// BIND WIDGETS - Equipment Slots (use existing UMOInventorySlot widget)
 	// ============================================================================
 
-	// --- Left Hand Slot ---
-
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidget))
-	TObjectPtr<UBorder> LeftHandSlotBorder;
-
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidget))
-	TObjectPtr<UImage> LeftHandIcon;
-
+	/** Head slot (helmet, hat). */
 	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<UTextBlock> LeftHandLabel;
+	TObjectPtr<UMOInventorySlot> HeadSlot;
 
+	/** Chest slot (armor, tunic). */
+	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
+	TObjectPtr<UMOInventorySlot> ChestSlot;
+
+	/** Hands slot (gloves). */
+	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
+	TObjectPtr<UMOInventorySlot> HandsSlot;
+
+	/** Legs slot (pants, greaves). */
+	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
+	TObjectPtr<UMOInventorySlot> LegsSlot;
+
+	/** Feet slot (boots, shoes). */
+	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
+	TObjectPtr<UMOInventorySlot> FeetSlot;
+
+	/** Back slot (backpack, sack - container). */
+	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
+	TObjectPtr<UMOInventorySlot> BackSlot;
+
+	/** Left hand slot (held item). */
+	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
+	TObjectPtr<UMOInventorySlot> LeftHandSlot;
+
+	/** Right hand slot (held item). */
+	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
+	TObjectPtr<UMOInventorySlot> RightHandSlot;
+
+	// ============================================================================
+	// BIND WIDGETS - Swap Progress (optional, for hand slots)
+	// ============================================================================
+
+	/** Progress bar for left hand swap delay. */
 	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
 	TObjectPtr<UProgressBar> LeftHandSwapProgress;
 
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<UProgressBar> LeftHandDurability;
-
-	// --- Right Hand Slot ---
-
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidget))
-	TObjectPtr<UBorder> RightHandSlotBorder;
-
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidget))
-	TObjectPtr<UImage> RightHandIcon;
-
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<UTextBlock> RightHandLabel;
-
+	/** Progress bar for right hand swap delay. */
 	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
 	TObjectPtr<UProgressBar> RightHandSwapProgress;
-
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<UProgressBar> RightHandDurability;
-
-	// ============================================================================
-	// CONFIGURATION
-	// ============================================================================
-
-	/** Default icon when slot is empty. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Equipment|UI")
-	TSoftObjectPtr<UTexture2D> EmptySlotIcon;
-
-	/** Tint for empty slots. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Equipment|UI")
-	FLinearColor EmptySlotTint = FLinearColor(0.3f, 0.3f, 0.3f, 0.5f);
-
-	/** Tint for occupied slots. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Equipment|UI")
-	FLinearColor OccupiedSlotTint = FLinearColor::White;
-
-	/** Tint for slots during swap. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Equipment|UI")
-	FLinearColor SwappingSlotTint = FLinearColor(1.0f, 0.8f, 0.2f, 1.0f);
 
 private:
 	// ============================================================================
@@ -175,6 +163,12 @@ private:
 
 	void BindEquipmentEvents();
 	void UnbindEquipmentEvents();
+	void BindSlotEvents();
+	void UnbindSlotEvents();
+
+	UMOInventorySlot* GetSlotWidget(EMOEquipmentSlot EquipSlot) const;
+	void UpdateSlotDisplay(EMOEquipmentSlot EquipSlot);
+	void UpdateSwapProgress();
 
 	UFUNCTION()
 	void HandleEquipmentChanged(EMOEquipmentSlot EquipSlot, const FMOEquippedItem& Item);
@@ -185,8 +179,41 @@ private:
 	UFUNCTION()
 	void HandleSwapCompleted(EMOEquipmentSlot EquipSlot);
 
-	void UpdateSlotDisplay(EMOEquipmentSlot EquipSlot);
-	void UpdateSwapProgress();
+	// Slot event handlers (one per slot to know which slot triggered)
+	UFUNCTION()
+	void HandleHeadSlotClicked(int32 SlotIndex, const FGuid& ItemGuid);
+	UFUNCTION()
+	void HandleChestSlotClicked(int32 SlotIndex, const FGuid& ItemGuid);
+	UFUNCTION()
+	void HandleHandsSlotClicked(int32 SlotIndex, const FGuid& ItemGuid);
+	UFUNCTION()
+	void HandleLegsSlotClicked(int32 SlotIndex, const FGuid& ItemGuid);
+	UFUNCTION()
+	void HandleFeetSlotClicked(int32 SlotIndex, const FGuid& ItemGuid);
+	UFUNCTION()
+	void HandleBackSlotClicked(int32 SlotIndex, const FGuid& ItemGuid);
+	UFUNCTION()
+	void HandleLeftHandSlotClicked(int32 SlotIndex, const FGuid& ItemGuid);
+	UFUNCTION()
+	void HandleRightHandSlotClicked(int32 SlotIndex, const FGuid& ItemGuid);
 
-	EMOEquipmentSlot GetSlotAtPosition(const FGeometry& Geometry, const FVector2D& LocalPosition) const;
+	UFUNCTION()
+	void HandleHeadSlotDropReceived(int32 TargetSlotIndex, int32 SourceSlotIndex, UMOInventoryComponent* SourceInventory);
+	UFUNCTION()
+	void HandleChestSlotDropReceived(int32 TargetSlotIndex, int32 SourceSlotIndex, UMOInventoryComponent* SourceInventory);
+	UFUNCTION()
+	void HandleHandsSlotDropReceived(int32 TargetSlotIndex, int32 SourceSlotIndex, UMOInventoryComponent* SourceInventory);
+	UFUNCTION()
+	void HandleLegsSlotDropReceived(int32 TargetSlotIndex, int32 SourceSlotIndex, UMOInventoryComponent* SourceInventory);
+	UFUNCTION()
+	void HandleFeetSlotDropReceived(int32 TargetSlotIndex, int32 SourceSlotIndex, UMOInventoryComponent* SourceInventory);
+	UFUNCTION()
+	void HandleBackSlotDropReceived(int32 TargetSlotIndex, int32 SourceSlotIndex, UMOInventoryComponent* SourceInventory);
+	UFUNCTION()
+	void HandleLeftHandSlotDropReceived(int32 TargetSlotIndex, int32 SourceSlotIndex, UMOInventoryComponent* SourceInventory);
+	UFUNCTION()
+	void HandleRightHandSlotDropReceived(int32 TargetSlotIndex, int32 SourceSlotIndex, UMOInventoryComponent* SourceInventory);
+
+	void HandleSlotClickedInternal(EMOEquipmentSlot EquipSlot);
+	void HandleSlotDropReceivedInternal(EMOEquipmentSlot EquipSlot, int32 SourceSlotIndex, UMOInventoryComponent* SourceInventory);
 };

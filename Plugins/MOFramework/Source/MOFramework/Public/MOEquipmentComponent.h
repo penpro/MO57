@@ -7,13 +7,21 @@
 class UMOInventoryComponent;
 
 /**
- * Equipment slot identifiers.
+ * Equipment slot identifiers for body locations.
  */
 UENUM(BlueprintType)
 enum class EMOEquipmentSlot : uint8
 {
+	Head UMETA(DisplayName="Head"),
+	Chest UMETA(DisplayName="Chest"),
+	Hands UMETA(DisplayName="Hands"),
+	Legs UMETA(DisplayName="Legs"),
+	Feet UMETA(DisplayName="Feet"),
+	Back UMETA(DisplayName="Back"),        // Backpack/sack - container slot
 	LeftHand UMETA(DisplayName="Left Hand"),
 	RightHand UMETA(DisplayName="Right Hand"),
+
+	MAX UMETA(Hidden)
 };
 
 /**
@@ -46,10 +54,35 @@ struct MOFRAMEWORK_API FMOEquippedItem
 		ItemDefinitionId = NAME_None;
 		CurrentDurability = -1;
 	}
+
+	bool operator==(const FMOEquippedItem& Other) const
+	{
+		return ItemGuid == Other.ItemGuid;
+	}
+
+	bool operator!=(const FMOEquippedItem& Other) const
+	{
+		return !(*this == Other);
+	}
 };
 
 /**
- * Save data for equipment state.
+ * Save data for a single equipment slot.
+ */
+USTRUCT(BlueprintType)
+struct MOFRAMEWORK_API FMOEquipmentSlotSaveData
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save")
+	EMOEquipmentSlot Slot = EMOEquipmentSlot::MAX;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save")
+	FMOEquippedItem EquippedItem;
+};
+
+/**
+ * Save data for full equipment state.
  */
 USTRUCT(BlueprintType)
 struct MOFRAMEWORK_API FMOEquipmentSaveData
@@ -57,24 +90,26 @@ struct MOFRAMEWORK_API FMOEquipmentSaveData
 	GENERATED_BODY()
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save")
-	FMOEquippedItem LeftHand;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save")
-	FMOEquippedItem RightHand;
+	TArray<FMOEquipmentSlotSaveData> Slots;
 };
 
 // Delegates
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOOnEquipmentChanged, EMOEquipmentSlot, Slot, const FMOEquippedItem&, EquippedItem);
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOOnSwapStarted, EMOEquipmentSlot, Slot);
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOOnSwapCompleted, EMOEquipmentSlot, Slot);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOOnEquipmentChanged, EMOEquipmentSlot, EquipSlot, const FMOEquippedItem&, EquippedItem);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOOnSwapStarted, EMOEquipmentSlot, EquipSlot);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOOnSwapCompleted, EMOEquipmentSlot, EquipSlot);
 
 /**
- * Component that manages equipped items (left hand, right hand).
+ * Component that manages equipped items on body slots.
+ *
+ * Body Slots:
+ * - Head, Chest, Hands, Legs, Feet: Armor/clothing slots
+ * - Back: Container slot (backpack/sack) - contents only accessible when placed on ground
+ * - LeftHand, RightHand: Held item slots with swap delays
  *
  * Items are equipped FROM inventory - equipping moves the item out of inventory
  * into the equipment slot. Unequipping returns it to inventory.
  *
- * Swap delays are based on item weight tier:
+ * Hand slot swap delays are based on item weight tier:
  * - Light (knife, torch): 400ms
  * - Medium (hatchet, bow): 650ms
  * - Heavy (rifle, two-handed): 900ms
@@ -95,20 +130,20 @@ public:
 	 * Equip an item from inventory to a slot.
 	 * @param Inventory Source inventory containing the item
 	 * @param ItemGuid The item to equip
-	 * @param Slot Which hand slot to equip to
-	 * @return True if equip started (may have swap delay)
+	 * @param EquipSlot Which slot to equip to
+	 * @return True if equip started (may have swap delay for hand slots)
 	 */
 	UFUNCTION(BlueprintCallable, Category="MO|Equipment")
-	bool EquipFromInventory(UMOInventoryComponent* Inventory, const FGuid& ItemGuid, EMOEquipmentSlot Slot);
+	bool EquipFromInventory(UMOInventoryComponent* Inventory, const FGuid& ItemGuid, EMOEquipmentSlot EquipSlot);
 
 	/**
 	 * Unequip an item back to inventory.
-	 * @param Slot The slot to unequip
+	 * @param EquipSlot The slot to unequip
 	 * @param Inventory Target inventory to receive the item
 	 * @return True if unequip succeeded
 	 */
 	UFUNCTION(BlueprintCallable, Category="MO|Equipment")
-	bool UnequipToInventory(EMOEquipmentSlot Slot, UMOInventoryComponent* Inventory);
+	bool UnequipToInventory(EMOEquipmentSlot EquipSlot, UMOInventoryComponent* Inventory);
 
 	/**
 	 * Swap items between two slots.
@@ -120,15 +155,17 @@ public:
 
 	/**
 	 * Check if a slot is currently swapping (in cooldown).
+	 * Only applies to hand slots.
 	 */
 	UFUNCTION(BlueprintPure, Category="MO|Equipment")
-	bool IsSlotSwapping(EMOEquipmentSlot Slot) const;
+	bool IsSlotSwapping(EMOEquipmentSlot EquipSlot) const;
 
 	/**
 	 * Get the swap progress for a slot (0-1, 1 = ready).
+	 * Only applies to hand slots.
 	 */
 	UFUNCTION(BlueprintPure, Category="MO|Equipment")
-	float GetSwapProgress(EMOEquipmentSlot Slot) const;
+	float GetSwapProgress(EMOEquipmentSlot EquipSlot) const;
 
 	// ============================================================================
 	// ACCESSORS
@@ -136,19 +173,36 @@ public:
 
 	/** Get equipped item in a slot. */
 	UFUNCTION(BlueprintPure, Category="MO|Equipment")
-	FMOEquippedItem GetEquippedItem(EMOEquipmentSlot Slot) const;
+	FMOEquippedItem GetEquippedItem(EMOEquipmentSlot EquipSlot) const;
 
 	/** Check if a slot has an item. */
 	UFUNCTION(BlueprintPure, Category="MO|Equipment")
-	bool HasItemInSlot(EMOEquipmentSlot Slot) const;
+	bool HasItemInSlot(EMOEquipmentSlot EquipSlot) const;
 
-	/** Get the left hand item. */
+	/** Get all equipped items. */
 	UFUNCTION(BlueprintPure, Category="MO|Equipment")
-	FMOEquippedItem GetLeftHandItem() const { return LeftHandSlot; }
+	void GetAllEquippedItems(TArray<FMOEquippedItem>& OutItems) const;
 
-	/** Get the right hand item. */
+	/** Check if an item type can be equipped to a specific slot. */
 	UFUNCTION(BlueprintPure, Category="MO|Equipment")
-	FMOEquippedItem GetRightHandItem() const { return RightHandSlot; }
+	bool CanEquipToSlot(FName ItemDefinitionId, EMOEquipmentSlot EquipSlot) const;
+
+	// ============================================================================
+	// BACK SLOT (CONTAINER) SPECIFIC
+	// ============================================================================
+
+	/**
+	 * Check if the back slot has a container equipped.
+	 * Note: Container contents are only accessible when placed on ground.
+	 */
+	UFUNCTION(BlueprintPure, Category="MO|Equipment")
+	bool HasBackpackEquipped() const;
+
+	/**
+	 * Get the item definition ID of the equipped backpack.
+	 */
+	UFUNCTION(BlueprintPure, Category="MO|Equipment")
+	FName GetEquippedBackpackId() const;
 
 	// ============================================================================
 	// SWAP TIMING CONFIGURATION
@@ -200,17 +254,14 @@ protected:
 
 private:
 	// ============================================================================
-	// SLOT DATA
+	// SLOT DATA (indexed by EMOEquipmentSlot)
 	// ============================================================================
 
 	UPROPERTY(Replicated)
-	FMOEquippedItem LeftHandSlot;
-
-	UPROPERTY(Replicated)
-	FMOEquippedItem RightHandSlot;
+	TArray<FMOEquippedItem> EquippedSlots;
 
 	// ============================================================================
-	// SWAP TIMING STATE
+	// SWAP TIMING STATE (for hand slots only)
 	// ============================================================================
 
 	/** Time remaining on left hand swap. */
@@ -231,12 +282,11 @@ private:
 	// INTERNAL
 	// ============================================================================
 
-	FMOEquippedItem& GetSlotRef(EMOEquipmentSlot Slot);
-	const FMOEquippedItem& GetSlotRef(EMOEquipmentSlot Slot) const;
-
+	void EnsureSlotsInitialized();
+	bool IsHandSlot(EMOEquipmentSlot EquipSlot) const;
 	float GetSwapTimeForItem(FName ItemDefinitionId) const;
-	void StartSwap(EMOEquipmentSlot Slot, float Duration);
-	void CompleteSwap(EMOEquipmentSlot Slot);
+	void StartSwap(EMOEquipmentSlot EquipSlot, float Duration);
+	void CompleteSwap(EMOEquipmentSlot EquipSlot);
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 };

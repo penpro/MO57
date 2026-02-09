@@ -15,6 +15,21 @@ UMOEquipmentComponent::UMOEquipmentComponent()
 void UMOEquipmentComponent::BeginPlay()
 {
 	Super::BeginPlay();
+	EnsureSlotsInitialized();
+}
+
+void UMOEquipmentComponent::EnsureSlotsInitialized()
+{
+	const int32 NumSlots = static_cast<int32>(EMOEquipmentSlot::MAX);
+	if (EquippedSlots.Num() != NumSlots)
+	{
+		EquippedSlots.SetNum(NumSlots);
+	}
+}
+
+bool UMOEquipmentComponent::IsHandSlot(EMOEquipmentSlot EquipSlot) const
+{
+	return EquipSlot == EMOEquipmentSlot::LeftHand || EquipSlot == EMOEquipmentSlot::RightHand;
 }
 
 void UMOEquipmentComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
@@ -62,12 +77,15 @@ void UMOEquipmentComponent::TickComponent(float DeltaTime, ELevelTick TickType, 
 // EQUIPMENT OPERATIONS
 // ============================================================================
 
-bool UMOEquipmentComponent::EquipFromInventory(UMOInventoryComponent* Inventory, const FGuid& ItemGuid, EMOEquipmentSlot Slot)
+bool UMOEquipmentComponent::EquipFromInventory(UMOInventoryComponent* Inventory, const FGuid& ItemGuid, EMOEquipmentSlot EquipSlot)
 {
-	if (!IsValid(Inventory) || !ItemGuid.IsValid())
+	if (!IsValid(Inventory) || !ItemGuid.IsValid() || EquipSlot == EMOEquipmentSlot::MAX)
 	{
 		return false;
 	}
+
+	EnsureSlotsInitialized();
+	const int32 SlotIndex = static_cast<int32>(EquipSlot);
 
 	// Get the item from inventory
 	FMOInventoryEntry Entry;
@@ -77,7 +95,7 @@ bool UMOEquipmentComponent::EquipFromInventory(UMOInventoryComponent* Inventory,
 		return false;
 	}
 
-	// Get item definition for swap timing
+	// Get item definition for swap timing and slot validation
 	FMOItemDefinitionRow ItemDef;
 	if (!UMOItemDatabaseSettings::GetItemDefinition(Entry.ItemDefinitionId, ItemDef))
 	{
@@ -85,16 +103,15 @@ bool UMOEquipmentComponent::EquipFromInventory(UMOInventoryComponent* Inventory,
 		return false;
 	}
 
-	// Check if slot is currently swapping
-	if (IsSlotSwapping(Slot))
+	// Check if slot is currently swapping (only for hand slots)
+	if (IsHandSlot(EquipSlot) && IsSlotSwapping(EquipSlot))
 	{
-		UE_LOG(LogMOFramework, Verbose, TEXT("[MOEquipmentComponent] Slot is currently swapping, queuing equip"));
-		// Could queue here, for now just reject
+		UE_LOG(LogMOFramework, Verbose, TEXT("[MOEquipmentComponent] Slot is currently swapping, rejecting equip"));
 		return false;
 	}
 
 	// If slot already has an item, return it to inventory first
-	FMOEquippedItem& SlotRef = GetSlotRef(Slot);
+	FMOEquippedItem& SlotRef = EquippedSlots[SlotIndex];
 	if (SlotRef.IsValid())
 	{
 		// Return current item to inventory
@@ -119,47 +136,57 @@ bool UMOEquipmentComponent::EquipFromInventory(UMOInventoryComponent* Inventory,
 	NewEquipped.ItemDefinitionId = Entry.ItemDefinitionId;
 	NewEquipped.CurrentDurability = Entry.CurrentDurability;
 
-	// Calculate swap time
-	float SwapTime = GetSwapTimeForItem(Entry.ItemDefinitionId);
-
-	if (SwapTime > 0.0f)
+	// Hand slots have swap delay, other slots are instant
+	if (IsHandSlot(EquipSlot))
 	{
-		// Start swap with delay
-		if (Slot == EMOEquipmentSlot::LeftHand)
+		float SwapTime = GetSwapTimeForItem(Entry.ItemDefinitionId);
+
+		if (SwapTime > 0.0f)
 		{
-			PendingLeftHandItem = NewEquipped;
-			bHasPendingLeftHand = true;
+			// Start swap with delay
+			if (EquipSlot == EMOEquipmentSlot::LeftHand)
+			{
+				PendingLeftHandItem = NewEquipped;
+				bHasPendingLeftHand = true;
+			}
+			else
+			{
+				PendingRightHandItem = NewEquipped;
+				bHasPendingRightHand = true;
+			}
+			StartSwap(EquipSlot, SwapTime);
 		}
 		else
 		{
-			PendingRightHandItem = NewEquipped;
-			bHasPendingRightHand = true;
+			// Instant equip
+			SlotRef = NewEquipped;
+			OnEquipmentChanged.Broadcast(EquipSlot, SlotRef);
 		}
-		StartSwap(Slot, SwapTime);
 	}
 	else
 	{
-		// Instant equip
+		// Non-hand slots are always instant
 		SlotRef = NewEquipped;
-		OnEquipmentChanged.Broadcast(Slot, SlotRef);
+		OnEquipmentChanged.Broadcast(EquipSlot, SlotRef);
 	}
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOEquipmentComponent] Equipping %s to %s (swap time: %.2fs)"),
-		*Entry.ItemDefinitionId.ToString(),
-		Slot == EMOEquipmentSlot::LeftHand ? TEXT("LeftHand") : TEXT("RightHand"),
-		SwapTime);
+	UE_LOG(LogMOFramework, Log, TEXT("[MOEquipmentComponent] Equipping %s to slot %d"),
+		*Entry.ItemDefinitionId.ToString(), SlotIndex);
 
 	return true;
 }
 
-bool UMOEquipmentComponent::UnequipToInventory(EMOEquipmentSlot Slot, UMOInventoryComponent* Inventory)
+bool UMOEquipmentComponent::UnequipToInventory(EMOEquipmentSlot EquipSlot, UMOInventoryComponent* Inventory)
 {
-	if (!IsValid(Inventory))
+	if (!IsValid(Inventory) || EquipSlot == EMOEquipmentSlot::MAX)
 	{
 		return false;
 	}
 
-	FMOEquippedItem& SlotRef = GetSlotRef(Slot);
+	EnsureSlotsInitialized();
+	const int32 SlotIndex = static_cast<int32>(EquipSlot);
+	FMOEquippedItem& SlotRef = EquippedSlots[SlotIndex];
+
 	if (!SlotRef.IsValid())
 	{
 		return false; // Nothing to unequip
@@ -173,82 +200,129 @@ bool UMOEquipmentComponent::UnequipToInventory(EMOEquipmentSlot Slot, UMOInvento
 		return false;
 	}
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOEquipmentComponent] Unequipped %s from %s"),
-		*SlotRef.ItemDefinitionId.ToString(),
-		Slot == EMOEquipmentSlot::LeftHand ? TEXT("LeftHand") : TEXT("RightHand"));
+	UE_LOG(LogMOFramework, Log, TEXT("[MOEquipmentComponent] Unequipped %s from slot %d"),
+		*SlotRef.ItemDefinitionId.ToString(), SlotIndex);
 
 	// Clear the slot
 	SlotRef.Clear();
-	OnEquipmentChanged.Broadcast(Slot, SlotRef);
+	OnEquipmentChanged.Broadcast(EquipSlot, SlotRef);
 
 	return true;
 }
 
 void UMOEquipmentComponent::SwapSlots(EMOEquipmentSlot SlotA, EMOEquipmentSlot SlotB)
 {
-	if (SlotA == SlotB)
+	if (SlotA == SlotB || SlotA == EMOEquipmentSlot::MAX || SlotB == EMOEquipmentSlot::MAX)
 	{
 		return;
 	}
 
-	FMOEquippedItem Temp = GetSlotRef(SlotA);
-	GetSlotRef(SlotA) = GetSlotRef(SlotB);
-	GetSlotRef(SlotB) = Temp;
+	EnsureSlotsInitialized();
+	const int32 IndexA = static_cast<int32>(SlotA);
+	const int32 IndexB = static_cast<int32>(SlotB);
 
-	OnEquipmentChanged.Broadcast(SlotA, GetSlotRef(SlotA));
-	OnEquipmentChanged.Broadcast(SlotB, GetSlotRef(SlotB));
+	FMOEquippedItem Temp = EquippedSlots[IndexA];
+	EquippedSlots[IndexA] = EquippedSlots[IndexB];
+	EquippedSlots[IndexB] = Temp;
+
+	OnEquipmentChanged.Broadcast(SlotA, EquippedSlots[IndexA]);
+	OnEquipmentChanged.Broadcast(SlotB, EquippedSlots[IndexB]);
 }
 
-bool UMOEquipmentComponent::IsSlotSwapping(EMOEquipmentSlot Slot) const
+bool UMOEquipmentComponent::IsSlotSwapping(EMOEquipmentSlot EquipSlot) const
 {
-	if (Slot == EMOEquipmentSlot::LeftHand)
+	if (EquipSlot == EMOEquipmentSlot::LeftHand)
 	{
 		return LeftHandSwapTimeRemaining > 0.0f;
 	}
-	return RightHandSwapTimeRemaining > 0.0f;
+	if (EquipSlot == EMOEquipmentSlot::RightHand)
+	{
+		return RightHandSwapTimeRemaining > 0.0f;
+	}
+	return false;
 }
 
-float UMOEquipmentComponent::GetSwapProgress(EMOEquipmentSlot Slot) const
+float UMOEquipmentComponent::GetSwapProgress(EMOEquipmentSlot EquipSlot) const
 {
-	if (Slot == EMOEquipmentSlot::LeftHand)
+	if (EquipSlot == EMOEquipmentSlot::LeftHand)
 	{
 		if (LeftHandSwapTimeTotal <= 0.0f) return 1.0f;
 		return 1.0f - FMath::Clamp(LeftHandSwapTimeRemaining / LeftHandSwapTimeTotal, 0.0f, 1.0f);
 	}
-	else
+	else if (EquipSlot == EMOEquipmentSlot::RightHand)
 	{
 		if (RightHandSwapTimeTotal <= 0.0f) return 1.0f;
 		return 1.0f - FMath::Clamp(RightHandSwapTimeRemaining / RightHandSwapTimeTotal, 0.0f, 1.0f);
 	}
+	return 1.0f;
 }
 
 // ============================================================================
 // ACCESSORS
 // ============================================================================
 
-FMOEquippedItem UMOEquipmentComponent::GetEquippedItem(EMOEquipmentSlot Slot) const
+FMOEquippedItem UMOEquipmentComponent::GetEquippedItem(EMOEquipmentSlot EquipSlot) const
 {
-	return GetSlotRef(Slot);
+	if (EquipSlot == EMOEquipmentSlot::MAX)
+	{
+		return FMOEquippedItem();
+	}
+
+	const int32 SlotIndex = static_cast<int32>(EquipSlot);
+	if (SlotIndex < EquippedSlots.Num())
+	{
+		return EquippedSlots[SlotIndex];
+	}
+	return FMOEquippedItem();
 }
 
-bool UMOEquipmentComponent::HasItemInSlot(EMOEquipmentSlot Slot) const
+bool UMOEquipmentComponent::HasItemInSlot(EMOEquipmentSlot EquipSlot) const
 {
-	return GetSlotRef(Slot).IsValid();
+	return GetEquippedItem(EquipSlot).IsValid();
+}
+
+void UMOEquipmentComponent::GetAllEquippedItems(TArray<FMOEquippedItem>& OutItems) const
+{
+	OutItems.Reset();
+	for (const FMOEquippedItem& Item : EquippedSlots)
+	{
+		if (Item.IsValid())
+		{
+			OutItems.Add(Item);
+		}
+	}
+}
+
+bool UMOEquipmentComponent::CanEquipToSlot(FName ItemDefinitionId, EMOEquipmentSlot EquipSlot) const
+{
+	// TODO: Check item definition for slot compatibility tags
+	// For now, allow any equippable item to any slot
+	FMOItemDefinitionRow ItemDef;
+	if (!UMOItemDatabaseSettings::GetItemDefinition(ItemDefinitionId, ItemDef))
+	{
+		return false;
+	}
+	return ItemDef.bEquippable;
+}
+
+// ============================================================================
+// BACK SLOT (CONTAINER) SPECIFIC
+// ============================================================================
+
+bool UMOEquipmentComponent::HasBackpackEquipped() const
+{
+	return HasItemInSlot(EMOEquipmentSlot::Back);
+}
+
+FName UMOEquipmentComponent::GetEquippedBackpackId() const
+{
+	FMOEquippedItem BackItem = GetEquippedItem(EMOEquipmentSlot::Back);
+	return BackItem.IsValid() ? BackItem.ItemDefinitionId : NAME_None;
 }
 
 // ============================================================================
 // INTERNAL
 // ============================================================================
-
-FMOEquippedItem& UMOEquipmentComponent::GetSlotRef(EMOEquipmentSlot Slot)
-{
-	return (Slot == EMOEquipmentSlot::LeftHand) ? LeftHandSlot : RightHandSlot;
-}
-
-const FMOEquippedItem& UMOEquipmentComponent::GetSlotRef(EMOEquipmentSlot Slot) const
-{
-	return (Slot == EMOEquipmentSlot::LeftHand) ? LeftHandSlot : RightHandSlot;
-}
 
 float UMOEquipmentComponent::GetSwapTimeForItem(FName ItemDefinitionId) const
 {
@@ -276,50 +350,56 @@ float UMOEquipmentComponent::GetSwapTimeForItem(FName ItemDefinitionId) const
 	}
 }
 
-void UMOEquipmentComponent::StartSwap(EMOEquipmentSlot Slot, float Duration)
+void UMOEquipmentComponent::StartSwap(EMOEquipmentSlot EquipSlot, float Duration)
 {
-	if (Slot == EMOEquipmentSlot::LeftHand)
+	if (EquipSlot == EMOEquipmentSlot::LeftHand)
 	{
 		LeftHandSwapTimeRemaining = Duration;
 		LeftHandSwapTimeTotal = Duration;
 	}
-	else
+	else if (EquipSlot == EMOEquipmentSlot::RightHand)
 	{
 		RightHandSwapTimeRemaining = Duration;
 		RightHandSwapTimeTotal = Duration;
 	}
+	else
+	{
+		return; // Only hand slots have swap delays
+	}
 
 	SetComponentTickEnabled(true);
-	OnSwapStarted.Broadcast(Slot);
+	OnSwapStarted.Broadcast(EquipSlot);
 }
 
-void UMOEquipmentComponent::CompleteSwap(EMOEquipmentSlot Slot)
+void UMOEquipmentComponent::CompleteSwap(EMOEquipmentSlot EquipSlot)
 {
-	if (Slot == EMOEquipmentSlot::LeftHand)
+	EnsureSlotsInitialized();
+
+	if (EquipSlot == EMOEquipmentSlot::LeftHand)
 	{
 		LeftHandSwapTimeRemaining = 0.0f;
 		if (bHasPendingLeftHand)
 		{
-			LeftHandSlot = PendingLeftHandItem;
+			EquippedSlots[static_cast<int32>(EMOEquipmentSlot::LeftHand)] = PendingLeftHandItem;
 			bHasPendingLeftHand = false;
-			OnEquipmentChanged.Broadcast(Slot, LeftHandSlot);
+			OnEquipmentChanged.Broadcast(EquipSlot, EquippedSlots[static_cast<int32>(EMOEquipmentSlot::LeftHand)]);
 		}
 	}
-	else
+	else if (EquipSlot == EMOEquipmentSlot::RightHand)
 	{
 		RightHandSwapTimeRemaining = 0.0f;
 		if (bHasPendingRightHand)
 		{
-			RightHandSlot = PendingRightHandItem;
+			EquippedSlots[static_cast<int32>(EMOEquipmentSlot::RightHand)] = PendingRightHandItem;
 			bHasPendingRightHand = false;
-			OnEquipmentChanged.Broadcast(Slot, RightHandSlot);
+			OnEquipmentChanged.Broadcast(EquipSlot, EquippedSlots[static_cast<int32>(EMOEquipmentSlot::RightHand)]);
 		}
 	}
 
-	OnSwapCompleted.Broadcast(Slot);
+	OnSwapCompleted.Broadcast(EquipSlot);
 
-	UE_LOG(LogMOFramework, Verbose, TEXT("[MOEquipmentComponent] Swap completed for %s"),
-		Slot == EMOEquipmentSlot::LeftHand ? TEXT("LeftHand") : TEXT("RightHand"));
+	UE_LOG(LogMOFramework, Verbose, TEXT("[MOEquipmentComponent] Swap completed for slot %d"),
+		static_cast<int32>(EquipSlot));
 }
 
 // ============================================================================
@@ -328,18 +408,42 @@ void UMOEquipmentComponent::CompleteSwap(EMOEquipmentSlot Slot)
 
 void UMOEquipmentComponent::BuildSaveData(FMOEquipmentSaveData& OutData) const
 {
-	OutData.LeftHand = LeftHandSlot;
-	OutData.RightHand = RightHandSlot;
+	OutData.Slots.Reset();
+	for (int32 i = 0; i < EquippedSlots.Num(); ++i)
+	{
+		if (EquippedSlots[i].IsValid())
+		{
+			FMOEquipmentSlotSaveData SlotData;
+			SlotData.Slot = static_cast<EMOEquipmentSlot>(i);
+			SlotData.EquippedItem = EquippedSlots[i];
+			OutData.Slots.Add(SlotData);
+		}
+	}
 }
 
 void UMOEquipmentComponent::ApplySaveData(const FMOEquipmentSaveData& InData)
 {
-	LeftHandSlot = InData.LeftHand;
-	RightHandSlot = InData.RightHand;
+	EnsureSlotsInitialized();
 
-	// Broadcast changes
-	OnEquipmentChanged.Broadcast(EMOEquipmentSlot::LeftHand, LeftHandSlot);
-	OnEquipmentChanged.Broadcast(EMOEquipmentSlot::RightHand, RightHandSlot);
+	// Clear all slots first
+	for (FMOEquippedItem& Item : EquippedSlots)
+	{
+		Item.Clear();
+	}
+
+	// Apply saved data
+	for (const FMOEquipmentSlotSaveData& SlotData : InData.Slots)
+	{
+		if (SlotData.Slot != EMOEquipmentSlot::MAX)
+		{
+			const int32 SlotIndex = static_cast<int32>(SlotData.Slot);
+			if (SlotIndex < EquippedSlots.Num())
+			{
+				EquippedSlots[SlotIndex] = SlotData.EquippedItem;
+				OnEquipmentChanged.Broadcast(SlotData.Slot, EquippedSlots[SlotIndex]);
+			}
+		}
+	}
 }
 
 // ============================================================================
@@ -350,6 +454,5 @@ void UMOEquipmentComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
-	DOREPLIFETIME(UMOEquipmentComponent, LeftHandSlot);
-	DOREPLIFETIME(UMOEquipmentComponent, RightHandSlot);
+	DOREPLIFETIME(UMOEquipmentComponent, EquippedSlots);
 }
