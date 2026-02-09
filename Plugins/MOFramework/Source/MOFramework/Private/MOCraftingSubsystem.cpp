@@ -142,11 +142,45 @@ FMOCraftingValidation UMOCraftingSubsystem::CanCraftRecipe(
 		return Result;
 	}
 
-	// Check tools
-	TArray<FName> MissingTools;
-	if (!HasRequiredTools(Recipe, InventoryComponent, &MissingTools))
+	// Check tools - separate required vs optional
+	TArray<FName> MissingRequiredTools;
+	TArray<FName> MissingOptionalTools;
+	float TimeMultiplier = 1.0f;
+	float QualityMultiplier = 1.0f;
+
+	for (const FMOToolRequirement& ToolReq : Recipe->RequiredTools)
 	{
-		Result.MissingTools = MissingTools;
+		FGuid ToolGuid;
+		float ToolQuality;
+		if (!FindBestTool(InventoryComponent, ToolReq.ToolType, ToolReq.MinQuality, ToolGuid, ToolQuality))
+		{
+			if (ToolReq.bIsRequired)
+			{
+				// Absolutely required - blocks crafting
+				MissingRequiredTools.Add(ToolReq.ToolType);
+			}
+			else
+			{
+				// Optional - apply penalties
+				MissingOptionalTools.Add(ToolReq.ToolType);
+				TimeMultiplier *= ToolReq.MissingToolTimeMultiplier;
+				QualityMultiplier *= ToolReq.MissingToolQualityMultiplier;
+			}
+		}
+	}
+
+	// Store all missing tools info
+	Result.MissingRequiredTools = MissingRequiredTools;
+	Result.MissingOptionalTools = MissingOptionalTools;
+	Result.MissingToolTimeMultiplier = TimeMultiplier;
+	Result.MissingToolQualityMultiplier = QualityMultiplier;
+
+	// Backwards compatibility
+	Result.MissingTools = MissingRequiredTools;
+
+	// Only block if REQUIRED tools are missing
+	if (MissingRequiredTools.Num() > 0)
+	{
 		Result.FailureReason = FText::FromString(TEXT("Missing required tools."));
 		return Result;
 	}
@@ -469,28 +503,36 @@ bool UMOCraftingSubsystem::HasRequiredTools(
 		{
 			for (const FMOToolRequirement& Req : Recipe->RequiredTools)
 			{
-				OutMissingTools->Add(Req.ToolType);
+				// Only report truly required tools as missing
+				if (Req.bIsRequired)
+				{
+					OutMissingTools->Add(Req.ToolType);
+				}
 			}
 		}
 		return false;
 	}
 
-	bool bHasAll = true;
+	bool bHasAllRequired = true;
 	for (const FMOToolRequirement& ToolReq : Recipe->RequiredTools)
 	{
 		FGuid FoundGuid;
 		float FoundQuality;
 		if (!FindBestTool(Inventory, ToolReq.ToolType, ToolReq.MinQuality, FoundGuid, FoundQuality))
 		{
-			bHasAll = false;
-			if (OutMissingTools)
+			// Only fail for required tools, optional tools just get penalties
+			if (ToolReq.bIsRequired)
 			{
-				OutMissingTools->Add(ToolReq.ToolType);
+				bHasAllRequired = false;
+				if (OutMissingTools)
+				{
+					OutMissingTools->Add(ToolReq.ToolType);
+				}
 			}
 		}
 	}
 
-	return bHasAll;
+	return bHasAllRequired;
 }
 
 bool UMOCraftingSubsystem::FindBestTool(
@@ -600,11 +642,12 @@ float UMOCraftingSubsystem::GetAdjustedCraftTime(FName RecipeId, UMOInventoryCom
 		return BaseCraftTime;
 	}
 
-	// Calculate average tool quality multiplier
+	// Calculate tool quality multiplier and missing optional tool penalty
 	// Higher quality = faster crafting
-	// Formula: CraftTime = BaseCraftTime / AverageToolQuality
+	// Missing optional tools = time penalty (MissingToolTimeMultiplier)
 	float TotalQuality = 0.0f;
-	int32 ToolCount = 0;
+	int32 ToolsWithQuality = 0;
+	float MissingToolPenalty = 1.0f;
 
 	for (const FMOToolRequirement& ToolReq : Recipe->RequiredTools)
 	{
@@ -612,30 +655,32 @@ float UMOCraftingSubsystem::GetAdjustedCraftTime(FName RecipeId, UMOInventoryCom
 		float ToolQuality;
 		if (FindBestTool(Inventory, ToolReq.ToolType, ToolReq.MinQuality, ToolGuid, ToolQuality))
 		{
+			// Tool found - factor in its quality
 			TotalQuality += ToolQuality;
-			ToolCount++;
+			ToolsWithQuality++;
 		}
-		else
+		else if (!ToolReq.bIsRequired)
 		{
-			// Missing tool - use minimum quality
-			TotalQuality += FMath::Max(ToolReq.MinQuality, 0.5f);
-			ToolCount++;
+			// Optional tool missing - apply time penalty
+			MissingToolPenalty *= ToolReq.MissingToolTimeMultiplier;
 		}
+		// Required tools missing would have blocked crafting in CanCraftRecipe
 	}
 
-	if (ToolCount == 0)
+	// Calculate quality multiplier from tools that were found
+	float QualityMultiplier = 1.0f;
+	if (ToolsWithQuality > 0)
 	{
-		return BaseCraftTime;
+		const float AverageQuality = TotalQuality / ToolsWithQuality;
+		// Quality of 1.0 = base time, Quality of 2.0 = half time, etc.
+		// Clamp minimum to 0.5 to prevent unreasonably fast crafting
+		QualityMultiplier = (AverageQuality > KINDA_SMALL_NUMBER)
+			? FMath::Max(0.5f, 1.0f / AverageQuality)
+			: 1.0f;
 	}
 
-	const float AverageQuality = TotalQuality / ToolCount;
-
-	// Quality of 1.0 = base time, Quality of 2.0 = half time, etc.
-	// Clamp minimum to 0.5 to prevent unreasonably fast crafting
-	// Guard against divide-by-zero if quality somehow ends up at 0
-	const float QualityMultiplier = (AverageQuality > KINDA_SMALL_NUMBER)
-		? FMath::Max(0.5f, 1.0f / AverageQuality)
-		: 1.0f;
-
-	return BaseCraftTime * QualityMultiplier;
+	// Apply both quality bonus and missing tool penalty
+	// Example: Good knife (quality 1.5) but no shovel (5x penalty)
+	// Result: BaseCraftTime * (1/1.5) * 5.0 = BaseCraftTime * 3.33
+	return BaseCraftTime * QualityMultiplier * MissingToolPenalty;
 }

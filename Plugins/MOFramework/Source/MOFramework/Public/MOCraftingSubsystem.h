@@ -46,9 +46,31 @@ struct MOFRAMEWORK_API FMOCraftingValidation
 	UPROPERTY(BlueprintReadOnly, Category="MO|Crafting")
 	bool bCorrectStation = true;
 
-	/** Tool types that are missing. */
+	/** Tool types that are missing (deprecated - use MissingRequiredTools). */
 	UPROPERTY(BlueprintReadOnly, Category="MO|Crafting")
 	TArray<FName> MissingTools;
+
+	/** Tool types that are absolutely required and missing - blocks crafting. */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Crafting")
+	TArray<FName> MissingRequiredTools;
+
+	/** Tool types that are optional but missing - applies time/quality penalty. */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Crafting")
+	TArray<FName> MissingOptionalTools;
+
+	/**
+	 * Craft time multiplier from missing optional tools.
+	 * Multiply base craft time by this value. 1.0 = no penalty.
+	 */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Crafting")
+	float MissingToolTimeMultiplier = 1.0f;
+
+	/**
+	 * Quality multiplier from missing optional tools.
+	 * Multiply output quality by this value. 1.0 = no penalty.
+	 */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Crafting")
+	float MissingToolQualityMultiplier = 1.0f;
 
 	/** Whether the recipe has been discovered (only relevant if recipe requires discovery). */
 	UPROPERTY(BlueprintReadOnly, Category="MO|Crafting")

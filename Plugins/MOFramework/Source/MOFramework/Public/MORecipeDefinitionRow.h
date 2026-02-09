@@ -150,6 +150,34 @@ struct MOFRAMEWORK_API FMOToolRequirement
 	/** Durability consumed per craft (0 = no consumption). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Recipe", meta=(ClampMin="0"))
 	int32 DurabilityConsumed = 1;
+
+	// ---- Tool Requirement Flags ----
+
+	/**
+	 * If true, this tool is absolutely required - recipe cannot be done without it.
+	 * Example: Skinning REQUIRES a knife, no exceptions.
+	 * If false, tool is optional but provides benefits (faster, better quality, etc.).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Recipe|Requirement")
+	bool bIsRequired = true;
+
+	/**
+	 * When tool is NOT required (bIsRequired=false) but is missing, multiply craft time by this value.
+	 * Example: Digging with hands (no shovel) takes 5x longer, so set to 5.0.
+	 * Only applies when bIsRequired is false. Set to 1.0 for no penalty.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Recipe|Requirement",
+		meta=(ClampMin="1.0", EditCondition="!bIsRequired", EditConditionHides))
+	float MissingToolTimeMultiplier = 1.0f;
+
+	/**
+	 * When tool is NOT required but is missing, multiply output quality by this value.
+	 * Example: Crafting without proper tools yields lower quality results.
+	 * Only applies when bIsRequired is false. Set to 1.0 for no penalty.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Recipe|Requirement",
+		meta=(ClampMin="0.0", ClampMax="1.0", EditCondition="!bIsRequired", EditConditionHides))
+	float MissingToolQualityMultiplier = 1.0f;
 };
 
 /**
