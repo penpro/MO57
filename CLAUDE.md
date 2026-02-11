@@ -91,6 +91,13 @@
 - UI widgets use CommonUI (`UCommonActivatableWidget`, `UCommonButtonBase`)
 - Use Warning log level for important flow events, Log for routine events
 - **Input action handling always in C++** - All input action handlers go in `AMOPlayerController::SetupInputComponent()`, never in Blueprint. This keeps input logic centralized and debuggable.
+- **UHT Delegate Files**: Any header declaring `DECLARE_DYNAMIC_MULTICAST_DELEGATE` at file scope MUST have at least one `USTRUCT`/`UCLASS`/`UENUM` to force UHT processing. Without this, delegates won't be found by other headers.
+- **Template Methods Need Full Includes**: If a header uses a type in a template method, include the full header, not just a forward declaration. Templates instantiate at compile time and need complete type information.
+
+## Standard Utility Classes
+- **MOUIDelegates.h** - Standard UI delegate library. Prefer `FMOUIRequestClose`, `FMOUICraftRequest`, `FMOUIRecipeSelected` over per-widget delegate declarations.
+- **MOViewpointUtils** - Use for viewpoint resolution and line-of-sight checks. Handles player/AI controller differences consistently.
+- **MOUIUtils** - Use for formatting (`FormatQuantityDisplay`, `FormatDurationAsText`, etc.) and widget creation. Don't duplicate formatting patterns.
 
 ## Common UI Standards
 - **Always use Common UI features** for UI implementation
@@ -124,8 +131,21 @@
 ### Component Architecture
 
 **Player Controller Components (AMOPlayerController):**
-- `UMOUIManagerComponent` - All UI management (menus, dialogs, notifications)
+- `UMOUIManagerComponent` - UI orchestrator, delegates to specialized controllers
 - `UMOPossessionComponent` - Pawn possession state
+
+**UI Controller Components (Sibling components on AMOPlayerController):**
+| Controller | Responsibility |
+|------------|----------------|
+| `UMOUIControllerBase` | Base class: input mode, modal background, pawn caching |
+| `UMOCharacterUIController` | Skills panel, Status panel, Item inspection |
+| `UMOBuildingUIController` | Building menu, Ghost context menu, Build widget |
+| `UMOCraftingUIController` | Crafting menu, Station context, Harvest operations |
+| `UMOSystemMenuUIController` | In-game menu, Possession menu, Confirmations |
+| `UMOInventoryUIController` | Inventory menus, Item context, Nearby items, Drop |
+
+Controllers find siblings via `GetOwner()->FindComponentByClass<T>()` with weak pointer caching.
+UIManager maintains backward-compatible public API via delegation wrappers.
 
 **Pawn Components (AMOCharacter):**
 | Component | Responsibility | Tick Rate |
@@ -295,10 +315,11 @@ bool ApplySaveDataAuthority(const FMOVitalsSaveData& InSaveData);  // Server onl
 - Cannot possess pawns lacking these components
 - **Mitigation**: Make component requirements optional/configurable
 
-**HIGH - UIManager Orchestration Bottleneck:**
-- `MOUIManagerComponent` knows about Persistence, Possession, Inventory subsystems
-- Single point of failure for all UI operations
-- **Mitigation**: Break into specialized UI controllers per system
+**RESOLVED - UIManager Orchestration Bottleneck:**
+- Previously: `MOUIManagerComponent` was ~4000 lines handling all UI
+- **Fixed**: Split into 6 specialized controllers (Character, Building, Crafting, System, Inventory + Base)
+- UIManager now acts as thin orchestrator delegating to controllers
+- See `Docs/UIManagerSplit_TestingNotes.md` for testing checklist
 
 **MEDIUM - Monolithic Module Structure:**
 - All 60+ classes in single `MOFramework` module
@@ -383,6 +404,19 @@ python Tools/ue_csv_utils.py export items.db Plugins/MOFramework/Content/Data/It
 4. **Quote Escaping**: Quotes inside quoted fields are doubled (`""`)
    - Write single quotes in Python → CSV writer doubles them → UE reads as single
    - NEVER manually double quotes or you get `""""` (broken)
+5. **Row Name Column**: UE exports the first column (row name / `---`) WITHOUT quotes, but our utility quotes all fields. This can cause crashes when UE reimports.
+   - **Workaround**: After modifying data via the utility, make edits in DataTable editor and re-export from UE
+   - Complex struct arrays (like `TArray<FMOToolRequirement>`) should be set manually in the DataTable editor, not via CSV
+
+### Struct Array Format (TArray<FStructType>)
+- Empty array: `""` (empty string) or `()`
+- Single item: `((Field1=Value1,Field2=Value2))`
+- Multiple items: `((Field1=A,Field2=B),(Field1=C,Field2=D))`
+- All struct fields should be included with full precision floats (e.g., `1.000000`)
+- Example working format for `TArray<FMOToolRequirement>`:
+  ```
+  ((ToolType="Axe",MinQuality=1.000000,DurabilityConsumed=1,bIsRequired=True,MissingToolTimeMultiplier=1.000000,MissingToolQualityMultiplier=1.000000))
+  ```
 
 ### Inspection Field Format (Current)
 ```
