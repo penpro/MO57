@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "MOInteractorComponent.h"
 #include "MOUIManagerComponent.generated.h"
 
 /**
@@ -148,16 +149,29 @@ class UMOInspectionProgressWidget;
 class UMONotificationComponent;
 class UMOBuildingMenu;
 class UMOBuildWidget;
+class UMOFPSCounterWidget;
 class UMOGhostContextMenu;
 class UMOStationContextMenu;
+class UMOKeepOnHarvestContextMenu;
+class UMOHarvestProgressWidget;
 class AMOBuildableActor;
 class AMOCraftingStationActor;
+struct FMOInteractionTarget;
+struct FMOCraftResult;
 class AMOWorldItem;
 class UMOUnifiedInventoryMenu;
 class UMOModeIndicatorWidget;
 class UMOToolHintWidget;
+class UMOInteractorComponent;
 struct FMOInspectionResult;
 enum class EMOGameplayMode : uint8;
+
+// UI Controllers (specialized UI management)
+class UMOInventoryUIController;
+class UMOCraftingUIController;
+class UMOBuildingUIController;
+class UMOCharacterUIController;
+class UMOSystemMenuUIController;
 
 UCLASS(ClassGroup=(MO), meta=(BlueprintSpawnableComponent))
 class MOFRAMEWORK_API UMOUIManagerComponent : public UActorComponent
@@ -231,6 +245,10 @@ public:
 	/** Get the reticle widget (may be null if not created yet). */
 	UFUNCTION(BlueprintPure, Category="MO|UI")
 	UMOReticleWidget* GetReticleWidget() const;
+
+	/** Refresh FPS counter visibility based on game settings. Call after changing bShowFPSCounter. */
+	UFUNCTION(BlueprintCallable, Category="MO|UI")
+	void RefreshFPSCounter();
 
 	// --- Player Status Panel ---
 
@@ -399,6 +417,32 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO|UI|CraftingStation")
 	bool IsStationContextMenuOpen() const;
 
+	// --- KeepOnHarvest Context Menu ---
+
+	/** Show the keep-on-harvest context menu for an ISM/HISM target. */
+	UFUNCTION(BlueprintCallable, Category="MO|UI|Harvest")
+	void ShowKeepOnHarvestContextMenu(const FMOInteractionTarget& Target);
+
+	/** Hide the keep-on-harvest context menu. */
+	UFUNCTION(BlueprintCallable, Category="MO|UI|Harvest")
+	void HideKeepOnHarvestContextMenu();
+
+	/** Check if keep-on-harvest context menu is open. */
+	UFUNCTION(BlueprintPure, Category="MO|UI|Harvest")
+	bool IsKeepOnHarvestContextMenuOpen() const;
+
+	/** Start a harvest operation on the current target. */
+	UFUNCTION(BlueprintCallable, Category="MO|UI|Harvest")
+	void StartHarvestOperation(FName RecipeId);
+
+	/** Cancel any active harvest operation. */
+	UFUNCTION(BlueprintCallable, Category="MO|UI|Harvest")
+	void CancelHarvestOperation();
+
+	/** Check if a harvest operation is in progress. */
+	UFUNCTION(BlueprintPure, Category="MO|UI|Harvest")
+	bool IsHarvestInProgress() const;
+
 	// --- Inspection ---
 
 	/** Start inspecting an item. Shows progress widget and grants knowledge on completion. */
@@ -565,6 +609,25 @@ private:
 	TWeakObjectPtr<UMOReticleWidget> ReticleWidget;
 
 	void CreateReticle();
+
+	// --- FPS Counter ---
+
+	/** Widget class for the FPS counter. Must be set to display FPS. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|FPS", meta=(AllowPrivateAccess="true"))
+	TSubclassOf<UMOFPSCounterWidget> FPSCounterWidgetClass;
+
+	/** Z-order for the FPS counter widget. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|FPS", meta=(ClampMin="0", AllowPrivateAccess="true"))
+	int32 FPSCounterZOrder = 1000;
+
+	UPROPERTY(Transient)
+	TWeakObjectPtr<UMOFPSCounterWidget> FPSCounterWidget;
+
+	/** Create the FPS counter widget (called on BeginPlay if setting is enabled). */
+	void CreateFPSCounter();
+
+	/** Refresh FPS counter visibility based on current settings. */
+	void RefreshFPSCounterVisibility();
 
 	// --- Player Status Panel ---
 
@@ -745,6 +808,47 @@ private:
 	UFUNCTION()
 	void HandleStationContextMenuLight();
 
+	// --- KeepOnHarvest Context Menu ---
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Harvest", meta=(AllowPrivateAccess="true"))
+	TSubclassOf<UMOKeepOnHarvestContextMenu> KeepOnHarvestContextMenuClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Harvest", meta=(AllowPrivateAccess="true"))
+	TSubclassOf<UMOHarvestProgressWidget> HarvestProgressWidgetClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Harvest", meta=(ClampMin="0", AllowPrivateAccess="true"))
+	int32 KeepOnHarvestContextMenuZOrder = 60;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Harvest", meta=(ClampMin="0", AllowPrivateAccess="true"))
+	int32 HarvestProgressZOrder = 200;
+
+	UPROPERTY(Transient)
+	TWeakObjectPtr<UMOKeepOnHarvestContextMenu> KeepOnHarvestContextMenuWidget;
+
+	UPROPERTY(Transient)
+	TWeakObjectPtr<UMOHarvestProgressWidget> HarvestProgressWidget;
+
+	/** The current interaction target for harvest operations. */
+	FMOInteractionTarget CurrentHarvestTarget;
+
+	UFUNCTION()
+	void HandleKeepOnHarvestContextMenuRequestClose();
+
+	UFUNCTION()
+	void HandleKeepOnHarvestContextMenuInspectClicked();
+
+	UFUNCTION()
+	void HandleKeepOnHarvestContextMenuHarvestClicked(FName RecipeId);
+
+	UFUNCTION()
+	void HandleKeepOnHarvestContextMenuChopDownClicked();
+
+	UFUNCTION()
+	void HandleHarvestCompleted(bool bCompleted, const FMOCraftResult& Result);
+
+	UFUNCTION()
+	void HandleHarvestCancelled();
+
 	// --- Inspection ---
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Inspection", meta=(AllowPrivateAccess="true"))
@@ -884,6 +988,53 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO|UI|Notifications")
 	UMONotificationComponent* GetNotificationComponent() const;
 
+	// --- UI Controller Support ---
+	// These methods are exposed for use by specialized UI controllers (MOUIControllerBase subclasses).
+	// They provide access to shared UI operations that need to be centralized.
+
+	// --- Specialized UI Controllers ---
+	// These controllers handle specific UI subsystems and are created on BeginPlay.
+
+	/** Get the inventory UI controller. Handles inventory menu, containers, item context menus. */
+	UFUNCTION(BlueprintPure, Category="MO|UI|Controllers")
+	UMOInventoryUIController* GetInventoryController() const;
+
+	/** Get the crafting UI controller. Handles crafting menu, station context, harvest operations. */
+	UFUNCTION(BlueprintPure, Category="MO|UI|Controllers")
+	UMOCraftingUIController* GetCraftingController() const;
+
+	/** Get the building UI controller. Handles building menu, ghost context menu. */
+	UFUNCTION(BlueprintPure, Category="MO|UI|Controllers")
+	UMOBuildingUIController* GetBuildingController() const;
+
+	/** Get the character UI controller. Handles skills panel, status panel, inspection. */
+	UFUNCTION(BlueprintPure, Category="MO|UI|Controllers")
+	UMOCharacterUIController* GetCharacterController() const;
+
+	/** Get the system menu UI controller. Handles in-game menu, possession menu, confirmations. */
+	UFUNCTION(BlueprintPure, Category="MO|UI|Controllers")
+	UMOSystemMenuUIController* GetSystemMenuController() const;
+
+	/** Show the modal background. Used by UI controllers when opening menus. */
+	UFUNCTION(BlueprintCallable, Category="MO|UI|Internal")
+	void RequestShowModalBackground();
+
+	/** Hide the modal background. Used by UI controllers when closing menus. */
+	UFUNCTION(BlueprintCallable, Category="MO|UI|Internal")
+	void RequestHideModalBackground();
+
+	/** Request input mode update for menu open. Centralized to ensure consistency. */
+	UFUNCTION(BlueprintCallable, Category="MO|UI|Internal")
+	void RequestInputModeForMenuOpen(UUserWidget* MenuWidget);
+
+	/** Request input mode update for menu closed. Centralized to ensure consistency. */
+	UFUNCTION(BlueprintCallable, Category="MO|UI|Internal")
+	void RequestInputModeForMenuClosed();
+
+	/** Request reticle visibility update based on menu state. */
+	UFUNCTION(BlueprintCallable, Category="MO|UI|Internal")
+	void RequestUpdateReticleVisibility();
+
 	// --- Mode Indicator (bottom-right HUD showing current gameplay mode) ---
 
 	/** Set the current gameplay mode. Updates the mode indicator. */
@@ -912,6 +1063,20 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO|UI|ToolHint")
 	UMOToolHintWidget* GetToolHintWidget() const;
 
+	// --- Focus Hint (shows item name when looking at interactable objects) ---
+
+	/** Enable or disable the focus hint display. */
+	UFUNCTION(BlueprintCallable, Category="MO|UI|FocusHint")
+	void SetFocusHintEnabled(bool bEnabled);
+
+	/** Check if focus hint is enabled. */
+	UFUNCTION(BlueprintPure, Category="MO|UI|FocusHint")
+	bool IsFocusHintEnabled() const { return bFocusHintEnabled; }
+
+	/** Get the current focus hint text (what player is looking at). */
+	UFUNCTION(BlueprintPure, Category="MO|UI|FocusHint")
+	FText GetCurrentFocusHintText() const { return CurrentFocusHintText; }
+
 private:
 	/** Cached reference to notification component on same owner. */
 	UPROPERTY(Transient)
@@ -919,6 +1084,28 @@ private:
 
 	/** Find or cache the notification component. */
 	UMONotificationComponent* ResolveNotificationComponent() const;
+
+	// =========================================================================
+	// SPECIALIZED UI CONTROLLERS
+	// =========================================================================
+	// These controller components handle specific UI subsystems.
+	// They are sibling components on the same PlayerController owner.
+	// References are resolved on first access and cached.
+
+	/** Cached reference to inventory UI controller. */
+	mutable TWeakObjectPtr<UMOInventoryUIController> CachedInventoryController;
+
+	/** Cached reference to crafting UI controller. */
+	mutable TWeakObjectPtr<UMOCraftingUIController> CachedCraftingController;
+
+	/** Cached reference to building UI controller. */
+	mutable TWeakObjectPtr<UMOBuildingUIController> CachedBuildingController;
+
+	/** Cached reference to character UI controller. */
+	mutable TWeakObjectPtr<UMOCharacterUIController> CachedCharacterController;
+
+	/** Cached reference to system menu UI controller. */
+	mutable TWeakObjectPtr<UMOSystemMenuUIController> CachedSystemMenuController;
 
 	// --- Mode Indicator ---
 
@@ -960,6 +1147,35 @@ private:
 
 	void CreateToolHint();
 
+	// --- Focus Hint ---
+
+	/** Whether focus hint is enabled. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|FocusHint", meta=(AllowPrivateAccess="true"))
+	bool bFocusHintEnabled = true;
+
+	/** Update interval for focus hint line trace (in seconds). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|FocusHint", meta=(AllowPrivateAccess="true", ClampMin="0.05", ClampMax="1.0"))
+	float FocusHintUpdateInterval = 0.2f;
+
+	/** Timer handle for focus hint updates. */
+	FTimerHandle FocusHintTimerHandle;
+
+	/** Current focus hint text. */
+	FText CurrentFocusHintText;
+
+	/** Cached interactor component from pawn. */
+	UPROPERTY(Transient)
+	TWeakObjectPtr<class UMOInteractorComponent> CachedInteractorComponent;
+
+	/** Update focus hint based on what player is looking at. Called on timer. */
+	void UpdateFocusHint();
+
+	/** Start the focus hint timer. */
+	void StartFocusHintTimer();
+
+	/** Stop the focus hint timer. */
+	void StopFocusHintTimer();
+
 	// ============================================================================
 	// CACHED PAWN COMPONENTS
 	// ============================================================================
@@ -996,14 +1212,38 @@ private:
 	UPROPERTY(Transient)
 	TWeakObjectPtr<UMOSurvivalStatsComponent> CachedSurvivalStatsComponent;
 
-	// Accessors that validate the weak pointer before returning
+public:
+	// =========================================================================
+	// CACHED PAWN COMPONENT ACCESSORS
+	// =========================================================================
+	// Public accessors for UI controllers and other systems that need
+	// access to the cached pawn components. These validate the weak pointer
+	// before returning (returns nullptr if invalid).
+
+	UFUNCTION(BlueprintPure, Category="MO|UI|Components")
 	UMOInventoryComponent* GetCachedInventory() const;
+
+	UFUNCTION(BlueprintPure, Category="MO|UI|Components")
 	UMOSkillsComponent* GetCachedSkills() const;
+
+	UFUNCTION(BlueprintPure, Category="MO|UI|Components")
 	UMOKnowledgeComponent* GetCachedKnowledge() const;
+
+	UFUNCTION(BlueprintPure, Category="MO|UI|Components")
 	UMOCraftingQueueComponent* GetCachedCraftingQueue() const;
+
+	UFUNCTION(BlueprintPure, Category="MO|UI|Components")
 	UMORecipeDiscoveryComponent* GetCachedRecipeDiscovery() const;
+
+	UFUNCTION(BlueprintPure, Category="MO|UI|Components")
 	UMOVitalsComponent* GetCachedVitals() const;
+
+	UFUNCTION(BlueprintPure, Category="MO|UI|Components")
 	UMOMetabolismComponent* GetCachedMetabolism() const;
+
+	UFUNCTION(BlueprintPure, Category="MO|UI|Components")
 	UMOMentalStateComponent* GetCachedMentalState() const;
+
+	UFUNCTION(BlueprintPure, Category="MO|UI|Components")
 	UMOSurvivalStatsComponent* GetCachedSurvivalStats() const;
 };
