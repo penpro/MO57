@@ -1,5 +1,6 @@
 #include "MOInteractorComponent.h"
 #include "MOFramework.h"
+#include "MOViewpointUtils.h"
 
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
@@ -7,6 +8,7 @@
 #include "MOInteractableComponent.h"
 #include "MOHISMInteractableComponent.h"
 #include "MOPCGInteractionSubsystem.h"
+#include "MOUIManagerComponent.h"
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Components/HierarchicalInstancedStaticMeshComponent.h"
 
@@ -30,22 +32,20 @@ bool UMOInteractorComponent::ResolveViewpoint(FVector& OutViewLocation, FRotator
 	}
 
 	APawn* OwnerPawn = Cast<APawn>(OwnerActor);
-	AController* OwnerController = OwnerPawn ? OwnerPawn->GetController() : nullptr;
-
-	APlayerController* PlayerController = Cast<APlayerController>(OwnerController);
-	if (IsValid(PlayerController))
+	if (!IsValid(OwnerPawn))
 	{
-		PlayerController->GetPlayerViewPoint(OutViewLocation, OutViewRotation);
+		return false;
+	}
+
+	// Try controller first (handles both player and AI controllers)
+	AController* OwnerController = OwnerPawn->GetController();
+	if (UMOViewpointUtils::ResolveViewpointForController(OwnerController, OutViewLocation, OutViewRotation))
+	{
 		return true;
 	}
 
-	if (IsValid(OwnerPawn))
-	{
-		OwnerPawn->GetActorEyesViewPoint(OutViewLocation, OutViewRotation);
-		return true;
-	}
-
-	return false;
+	// Fall back to pawn eyes if no controller
+	return UMOViewpointUtils::ResolveViewpointForPawn(OwnerPawn, OutViewLocation, OutViewRotation);
 }
 
 void UMOInteractorComponent::BuildTrace(const FVector& ViewLocation, const FRotator& ViewRotation, FVector& OutTraceStart, FVector& OutTraceEnd) const
@@ -194,40 +194,44 @@ bool UMOInteractorComponent::FindInteractionTarget(FMOInteractionTarget& OutTarg
 			}
 		}
 
-		// Check if this mesh is harvestable via the PCG subsystem (works for both HISM and ISM)
-		// First check tags, then fall back to mesh lookup
-		UWorld* World = GetWorld();
-		if (World)
-		{
-			UMOPCGInteractionSubsystem* PCGSubsystem = World->GetSubsystem<UMOPCGInteractionSubsystem>();
-			const bool bHasTagMapping = PCGSubsystem && !PCGSubsystem->GetItemIdForComponentTags(ISMComp).IsNone();
-			const bool bHasMeshMapping = PCGSubsystem && PCGSubsystem->IsMeshHarvestable(ISMComp->GetStaticMesh());
-			if (bHasTagMapping || bHasMeshMapping)
-			{
-				OutTarget.bIsInstancedMeshTarget = true;
-				OutTarget.ISMComponent = ISMComp;
-				OutTarget.InstanceIndex = HitResult.Item;
+		// Check if this ISM/HISM is interactable via:
+		// 1. KeepOnHarvest tag on component or owner actor
+		// 2. PCG subsystem tag/mesh mapping
+		const bool bHasKeepOnHarvestTag = ISMComp->ComponentHasTag(TEXT("KeepOnHarvest")) ||
+			(HitActor && HitActor->ActorHasTag(TEXT("KeepOnHarvest")));
 
-				if (IsValid(HISMComp))
-				{
-					OutTarget.bIsHISM = true;
-					OutTarget.HISMComponent = HISMComp;
-					UE_LOG(LogMOFramework, Log, TEXT("[MOInteractor] Found HISM target (subsystem): Actor=%s, Instance=%d, Mesh=%s"),
-						*HitActor->GetName(), HitResult.Item, *GetNameSafe(HISMComp->GetStaticMesh()));
-				}
-				else
-				{
-					OutTarget.bIsHISM = false;
-					UE_LOG(LogMOFramework, Log, TEXT("[MOInteractor] Found ISM target (subsystem): Actor=%s, Instance=%d, Mesh=%s"),
-						*HitActor->GetName(), HitResult.Item, *GetNameSafe(ISMComp->GetStaticMesh()));
-				}
-				return true;
+		UWorld* World = GetWorld();
+		UMOPCGInteractionSubsystem* PCGSubsystem = World ? World->GetSubsystem<UMOPCGInteractionSubsystem>() : nullptr;
+		const bool bHasTagMapping = PCGSubsystem && !PCGSubsystem->GetItemIdForComponentTags(ISMComp).IsNone();
+		const bool bHasMeshMapping = PCGSubsystem && PCGSubsystem->IsMeshHarvestable(ISMComp->GetStaticMesh());
+
+		if (bHasKeepOnHarvestTag || bHasTagMapping || bHasMeshMapping)
+		{
+			OutTarget.bIsInstancedMeshTarget = true;
+			OutTarget.ISMComponent = ISMComp;
+			OutTarget.InstanceIndex = HitResult.Item;
+
+			if (IsValid(HISMComp))
+			{
+				OutTarget.bIsHISM = true;
+				OutTarget.HISMComponent = HISMComp;
+				UE_LOG(LogMOFramework, Log, TEXT("[MOInteractor] Found HISM target: Actor=%s, Instance=%d, Mesh=%s, KeepOnHarvest=%s"),
+					*HitActor->GetName(), HitResult.Item, *GetNameSafe(HISMComp->GetStaticMesh()),
+					bHasKeepOnHarvestTag ? TEXT("yes") : TEXT("no"));
 			}
 			else
 			{
-				UE_LOG(LogMOFramework, Log, TEXT("[MOInteractor] ISM mesh not harvestable: %s"),
-					*GetNameSafe(ISMComp->GetStaticMesh()));
+				OutTarget.bIsHISM = false;
+				UE_LOG(LogMOFramework, Log, TEXT("[MOInteractor] Found ISM target: Actor=%s, Instance=%d, Mesh=%s, KeepOnHarvest=%s"),
+					*HitActor->GetName(), HitResult.Item, *GetNameSafe(ISMComp->GetStaticMesh()),
+					bHasKeepOnHarvestTag ? TEXT("yes") : TEXT("no"));
 			}
+			return true;
+		}
+		else
+		{
+			UE_LOG(LogMOFramework, Log, TEXT("[MOInteractor] ISM not interactable: %s (no KeepOnHarvest tag or PCG mapping)"),
+				*GetNameSafe(ISMComp->GetStaticMesh()));
 		}
 	}
 	else if (IsValid(ISMComp))
@@ -389,15 +393,69 @@ bool UMOInteractorComponent::TrySecondaryInteract()
 		return false;
 	}
 
-	AActor* TargetActor = nullptr;
-	FHitResult HitResult;
-	const bool bFoundTarget = FindInteractTarget(TargetActor, HitResult);
+	// Use unified target finding (supports ISM/HISM)
+	FMOInteractionTarget Target;
+	const bool bFoundTarget = FindInteractionTarget(Target);
 
-	LastTracedActor = bFoundTarget ? TargetActor : nullptr;
+	// Update cached target
+	CurrentTarget = Target;
+	LastTracedActor = bFoundTarget ? Target.TargetActor.Get() : nullptr;
 
-	if (!bFoundTarget || !IsValid(TargetActor))
+	if (!bFoundTarget || !Target.IsValid())
 	{
 		UE_LOG(LogMOFramework, Log, TEXT("[MOInteractor] TrySecondaryInteract: No valid target found"));
+		return false;
+	}
+
+	// Handle ISM/HISM targets separately - they don't use actor-based interaction
+	if (Target.bIsInstancedMeshTarget)
+	{
+		UInstancedStaticMeshComponent* ISMComp = Target.ISMComponent.Get();
+		if (!IsValid(ISMComp))
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOInteractor] TrySecondaryInteract: ISM target but component is invalid"));
+			return false;
+		}
+
+		// Check for KeepOnHarvest tag on component or owner actor
+		const bool bHasKeepOnHarvestTag = ISMComp->ComponentHasTag(TEXT("KeepOnHarvest")) ||
+			(ISMComp->GetOwner() && ISMComp->GetOwner()->ActorHasTag(TEXT("KeepOnHarvest")));
+
+		UE_LOG(LogMOFramework, Log, TEXT("[MOInteractor] TrySecondaryInteract: ISM target, KeepOnHarvest=%s, Owner=%s"),
+			bHasKeepOnHarvestTag ? TEXT("yes") : TEXT("no"),
+			*GetNameSafe(ISMComp->GetOwner()));
+
+		if (!bHasKeepOnHarvestTag)
+		{
+			UE_LOG(LogMOFramework, Log, TEXT("[MOInteractor] TrySecondaryInteract: ISM has no KeepOnHarvest tag"));
+			return false;
+		}
+
+		// Get UIManager from player controller
+		APlayerController* PC = Cast<APlayerController>(OwnerPawn->GetController());
+		if (!IsValid(PC))
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOInteractor] TrySecondaryInteract: No player controller"));
+			return false;
+		}
+
+		UMOUIManagerComponent* UIManager = PC->FindComponentByClass<UMOUIManagerComponent>();
+		if (!IsValid(UIManager))
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOInteractor] TrySecondaryInteract: No UIManager on controller"));
+			return false;
+		}
+
+		UE_LOG(LogMOFramework, Log, TEXT("[MOInteractor] TrySecondaryInteract: Showing KeepOnHarvest context menu"));
+		UIManager->ShowKeepOnHarvestContextMenu(Target);
+		return true;
+	}
+
+	// Regular actor secondary interaction (NOT for ISM targets)
+	AActor* TargetActor = Target.TargetActor.Get();
+	if (!IsValid(TargetActor))
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOInteractor] TrySecondaryInteract: No valid actor target"));
 		return false;
 	}
 

@@ -1,23 +1,14 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Blueprint/UserWidget.h"
+#include "MORecipeDetailPanelBase.h"
 #include "MORecipeDefinitionRow.h"
+#include "MOUIDelegates.h"
 #include "MORecipeDetailPanel.generated.h"
 
-class UMOInventoryComponent;
-class UMOSkillsComponent;
-class UMORecipeDiscoveryComponent;
-class UMOCraftingSubsystem;
 class UTextBlock;
-class UImage;
-class UVerticalBox;
-class UPanelWidget;
-class UButton;
-class UMOCommonButton;
-class USpinBox;
-class USlider;
 
+// Legacy delegate - prefer FMOUICraftRequest from MOUIDelegates.h for new code
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOCraftRequestedSignature, FName, RecipeId, int32, Count);
 
 /**
@@ -72,67 +63,48 @@ struct MOFRAMEWORK_API FMOOutputDisplayData
 };
 
 /**
- * Panel that displays detailed information about a selected recipe.
+ * Panel that displays detailed information about a selected crafting recipe.
  *
  * Shows recipe name, description, ingredients with have/need counts,
- * outputs, skill requirements, and craft button.
+ * outputs, skill requirements, station requirements, and craft button.
+ *
+ * Inherits common functionality from UMORecipeDetailPanelBase.
  */
 UCLASS(Abstract, Blueprintable)
-class MOFRAMEWORK_API UMORecipeDetailPanel : public UUserWidget
+class MOFRAMEWORK_API UMORecipeDetailPanel : public UMORecipeDetailPanelBase
 {
 	GENERATED_BODY()
 
 public:
 	UMORecipeDetailPanel(const FObjectInitializer& ObjectInitializer);
 
-	// --- Initialization ---
+	// --- Delegates ---
 
+	/** Broadcast when the craft button is clicked. Uses standard delegate signature. */
+	UPROPERTY(BlueprintAssignable, Category="MO|Crafting|UI")
+	FMOUICraftRequest OnCraftAction;
+
+	/** @deprecated Use OnCraftAction instead. Broadcast for backward compatibility. */
+	UPROPERTY(BlueprintAssignable, Category="MO|Crafting|UI")
+	FMOCraftRequestedSignature OnCraftRequested;
+
+	// --- Legacy API (wrapper functions for backward compatibility) ---
+
+	/** Set the craft amount. Wraps SetActionAmount. */
 	UFUNCTION(BlueprintCallable, Category="MO|Crafting|UI")
-	void InitializePanel(
-		UMOInventoryComponent* InInventory,
-		UMOSkillsComponent* InSkills,
-		UMORecipeDiscoveryComponent* InDiscovery
-	);
+	void SetCraftAmount(int32 Amount) { SetActionAmount(Amount); }
 
-	// --- Recipe Display ---
-
-	/**
-	 * Display details for a recipe.
-	 * @param RecipeId Recipe to display (NAME_None to clear)
-	 */
-	UFUNCTION(BlueprintCallable, Category="MO|Crafting|UI")
-	void DisplayRecipe(FName RecipeId);
-
-	/** Clear the panel (show empty state). */
-	UFUNCTION(BlueprintCallable, Category="MO|Crafting|UI")
-	void ClearDisplay();
-
-	/** Refresh the display with current inventory state. */
-	UFUNCTION(BlueprintCallable, Category="MO|Crafting|UI")
-	void RefreshDisplay();
-
-	/** Get the currently displayed recipe ID. */
+	/** Get the current craft amount. Wraps GetActionAmount. */
 	UFUNCTION(BlueprintPure, Category="MO|Crafting|UI")
-	FName GetDisplayedRecipeId() const { return DisplayedRecipeId; }
-
-	// --- Craft Amount ---
-
-	/** Set the craft amount. */
-	UFUNCTION(BlueprintCallable, Category="MO|Crafting|UI")
-	void SetCraftAmount(int32 Amount);
-
-	/** Get the current craft amount. */
-	UFUNCTION(BlueprintPure, Category="MO|Crafting|UI")
-	int32 GetCraftAmount() const { return CraftAmount; }
+	int32 GetCraftAmount() const { return GetActionAmount(); }
 
 	/** Get the maximum amount that can be crafted with current resources. */
 	UFUNCTION(BlueprintPure, Category="MO|Crafting|UI")
-	int32 GetMaxCraftableAmount() const;
+	int32 GetMaxCraftableAmount() const { return GetMaxPerformableAmount(); }
 
-	// --- Delegates ---
-
-	UPROPERTY(BlueprintAssignable, Category="MO|Crafting|UI")
-	FMOCraftRequestedSignature OnCraftRequested;
+	/** Check if the current recipe can be crafted. */
+	UFUNCTION(BlueprintPure, Category="MO|Crafting|UI")
+	bool CanCraftCurrentRecipe() const { return CanPerformAction(); }
 
 	// --- Data Access for Blueprints ---
 
@@ -144,27 +116,18 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Crafting|UI")
 	void GetOutputs(TArray<FMOOutputDisplayData>& OutOutputs) const;
 
-	/** Check if the current recipe can be crafted. */
-	UFUNCTION(BlueprintPure, Category="MO|Crafting|UI")
-	bool CanCraftCurrentRecipe() const;
+	// --- Base Class Overrides ---
+
+	virtual void RefreshDisplay() override;
+	virtual int32 GetMaxPerformableAmount() const override;
+	virtual bool CanPerformAction() const override;
 
 protected:
-	virtual void NativeConstruct() override;
-
-	/** Called when the craft button is clicked. */
-	UFUNCTION()
-	void HandleCraftButtonClicked();
-
-	/** Called when the craft max button is clicked. */
-	UFUNCTION()
-	void HandleCraftMaxButtonClicked();
-
-	/** Called when craft amount changes. */
-	UFUNCTION()
-	void HandleCraftAmountChanged(float Value);
-
-	/** Update the craft button enabled state. */
-	void UpdateCraftButtonState();
+	virtual void OnDisplayRecipe(const FMORecipeDefinitionRow* Recipe) override;
+	virtual void PopulateRequirementsContainer() override;
+	virtual void PopulateOutputsContainer() override;
+	virtual void HandleActionButtonClicked() override;
+	virtual float GetRecipeTime(const FMORecipeDefinitionRow* Recipe) const override;
 
 	/** Build ingredient display data. */
 	FMOIngredientDisplayData BuildIngredientData(const FMORecipeIngredient& Ingredient) const;
@@ -184,80 +147,14 @@ protected:
 	UFUNCTION(BlueprintImplementableEvent, Category="MO|Crafting|UI")
 	void OnOutputsUpdated(const TArray<FMOOutputDisplayData>& Outputs);
 
-	// --- Widget Bindings ---
-
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<UTextBlock> RecipeNameText;
-
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<UTextBlock> RecipeDescriptionText;
-
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<UImage> RecipeIcon;
-
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<UPanelWidget> IngredientsContainer;
-
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<UPanelWidget> OutputsContainer;
-
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<UTextBlock> SkillRequirementText;
+	// --- Crafting-Specific Widget Bindings ---
 
 	/** Shows required crafting station (e.g., "Requires: Campfire"). */
 	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
 	TObjectPtr<UTextBlock> RequiredStationText;
 
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<UTextBlock> CraftTimeText;
-
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<UMOCommonButton> CraftButton;
-
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<UMOCommonButton> CraftMaxButton;
-
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<USpinBox> CraftAmountSpinBox;
-
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<USlider> CraftAmountSlider;
-
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<UTextBlock> CraftAmountText;
-
 private:
-	// Cached component references
-	UPROPERTY()
-	TWeakObjectPtr<UMOInventoryComponent> InventoryComponent;
-
-	UPROPERTY()
-	TWeakObjectPtr<UMOSkillsComponent> SkillsComponent;
-
-	UPROPERTY()
-	TWeakObjectPtr<UMORecipeDiscoveryComponent> DiscoveryComponent;
-
-	// Current state
-	FName DisplayedRecipeId = NAME_None;
-	int32 CraftAmount = 1;
-
-	// Cached recipe data
+	// Cached recipe data for Blueprint access
 	TArray<FMOIngredientDisplayData> CachedIngredients;
 	TArray<FMOOutputDisplayData> CachedOutputs;
-
-	// Dynamically created text widgets
-	UPROPERTY()
-	TArray<TObjectPtr<UTextBlock>> IngredientTextWidgets;
-
-	UPROPERTY()
-	TArray<TObjectPtr<UTextBlock>> OutputTextWidgets;
-
-	/** Populate ingredient container with text widgets. */
-	void PopulateIngredientsContainer();
-
-	/** Populate output container with text widgets. */
-	void PopulateOutputsContainer();
-
-	/** Create a simple text widget for ingredient/output display. */
-	UTextBlock* CreateSimpleTextWidget(const FText& Text, bool bHasEnough = true);
 };

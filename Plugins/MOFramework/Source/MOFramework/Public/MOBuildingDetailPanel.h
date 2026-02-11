@@ -1,25 +1,15 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Blueprint/UserWidget.h"
+#include "MORecipeDetailPanelBase.h"
 #include "MORecipeDefinitionRow.h"
 #include "MOBuildingTypes.h"
+#include "MOUIDelegates.h"
 #include "MOBuildingDetailPanel.generated.h"
 
-class UMOInventoryComponent;
-class UMOSkillsComponent;
-class UMORecipeDiscoveryComponent;
-class UMOCraftingSubsystem;
-class UTextBlock;
-class UImage;
-class UVerticalBox;
-class UPanelWidget;
-class UButton;
-class UMOCommonButton;
-class USpinBox;
-class USlider;
 class UCheckBox;
 
+// Legacy delegate - prefer FMOUICraftRequest from MOUIDelegates.h for new code
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOBuildRequestedSignature, FName, RecipeId, int32, Count);
 
 /**
@@ -85,69 +75,50 @@ struct MOFRAMEWORK_API FMOBuildOutputDisplayData
  *
  * Shows building name, description, build parts with have/need counts,
  * output (the building), skill requirements, and build button.
+ *
+ * Inherits common functionality from UMORecipeDetailPanelBase.
  */
 UCLASS(Abstract, Blueprintable)
-class MOFRAMEWORK_API UMOBuildingDetailPanel : public UUserWidget
+class MOFRAMEWORK_API UMOBuildingDetailPanel : public UMORecipeDetailPanelBase
 {
 	GENERATED_BODY()
 
 public:
 	UMOBuildingDetailPanel(const FObjectInitializer& ObjectInitializer);
 
-	// --- Initialization ---
+	// --- Delegates ---
 
+	/** Broadcast when the build button is clicked. Uses standard delegate signature. */
+	UPROPERTY(BlueprintAssignable, Category="MO|Building|UI")
+	FMOUICraftRequest OnBuildAction;
+
+	/** @deprecated Use OnBuildAction instead. Broadcast for backward compatibility. */
+	UPROPERTY(BlueprintAssignable, Category="MO|Building|UI")
+	FMOBuildRequestedSignature OnBuildRequested;
+
+	// --- Legacy API (wrapper functions for backward compatibility) ---
+
+	/** Set the build amount. Wraps SetActionAmount. */
 	UFUNCTION(BlueprintCallable, Category="MO|Building|UI")
-	void InitializePanel(
-		UMOInventoryComponent* InInventory,
-		UMOSkillsComponent* InSkills,
-		UMORecipeDiscoveryComponent* InDiscovery
-	);
+	void SetBuildAmount(int32 Amount) { SetActionAmount(Amount); }
 
-	// --- Recipe Display ---
-
-	/**
-	 * Display details for a building recipe.
-	 * @param RecipeId Recipe to display (NAME_None to clear)
-	 */
-	UFUNCTION(BlueprintCallable, Category="MO|Building|UI")
-	void DisplayRecipe(FName RecipeId);
-
-	/** Clear the panel (show empty state). */
-	UFUNCTION(BlueprintCallable, Category="MO|Building|UI")
-	void ClearDisplay();
-
-	/** Refresh the display with current inventory state. */
-	UFUNCTION(BlueprintCallable, Category="MO|Building|UI")
-	void RefreshDisplay();
-
-	/** Get the currently displayed recipe ID. */
+	/** Get the current build amount. Wraps GetActionAmount. */
 	UFUNCTION(BlueprintPure, Category="MO|Building|UI")
-	FName GetDisplayedRecipeId() const { return DisplayedRecipeId; }
-
-	// --- Build Amount ---
-
-	/** Set the build amount. */
-	UFUNCTION(BlueprintCallable, Category="MO|Building|UI")
-	void SetBuildAmount(int32 Amount);
-
-	/** Get the current build amount. */
-	UFUNCTION(BlueprintPure, Category="MO|Building|UI")
-	int32 GetBuildAmount() const { return BuildAmount; }
+	int32 GetBuildAmount() const { return GetActionAmount(); }
 
 	/** Get the maximum amount that can be built with current resources. */
 	UFUNCTION(BlueprintPure, Category="MO|Building|UI")
-	int32 GetMaxBuildableAmount() const;
+	int32 GetMaxBuildableAmount() const { return GetMaxPerformableAmount(); }
+
+	/** Check if the current recipe can be built. */
+	UFUNCTION(BlueprintPure, Category="MO|Building|UI")
+	bool CanBuildCurrentRecipe() const { return CanPerformAction(); }
 
 	// --- Build Options ---
 
 	/** Get the current material source options based on checkbox states. */
 	UFUNCTION(BlueprintPure, Category="MO|Building|UI")
 	FMOBuildProgress GetBuildOptions() const;
-
-	// --- Delegates ---
-
-	UPROPERTY(BlueprintAssignable, Category="MO|Building|UI")
-	FMOBuildRequestedSignature OnBuildRequested;
 
 	// --- Data Access for Blueprints ---
 
@@ -159,27 +130,18 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Building|UI")
 	void GetOutputs(TArray<FMOBuildOutputDisplayData>& OutOutputs) const;
 
-	/** Check if the current recipe can be built. */
-	UFUNCTION(BlueprintPure, Category="MO|Building|UI")
-	bool CanBuildCurrentRecipe() const;
+	// --- Base Class Overrides ---
+
+	virtual void RefreshDisplay() override;
+	virtual int32 GetMaxPerformableAmount() const override;
+	virtual bool CanPerformAction() const override;
 
 protected:
 	virtual void NativeConstruct() override;
-
-	/** Called when the build button is clicked. */
-	UFUNCTION()
-	void HandleBuildButtonClicked();
-
-	/** Called when the build max button is clicked. */
-	UFUNCTION()
-	void HandleBuildMaxButtonClicked();
-
-	/** Called when build amount changes. */
-	UFUNCTION()
-	void HandleBuildAmountChanged(float Value);
-
-	/** Update the build button enabled state. */
-	void UpdateBuildButtonState();
+	virtual void OnDisplayRecipe(const FMORecipeDefinitionRow* Recipe) override;
+	virtual void PopulateRequirementsContainer() override;
+	virtual void PopulateOutputsContainer() override;
+	virtual void HandleActionButtonClicked() override;
 
 	/** Build part display data. */
 	FMOBuildPartDisplayData BuildPartData(const FMOBuildPart& Part) const;
@@ -199,45 +161,7 @@ protected:
 	UFUNCTION(BlueprintImplementableEvent, Category="MO|Building|UI")
 	void OnOutputsUpdated(const TArray<FMOBuildOutputDisplayData>& Outputs);
 
-	// --- Widget Bindings (match MORecipeDetailPanel) ---
-
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<UTextBlock> RecipeNameText;
-
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<UTextBlock> RecipeDescriptionText;
-
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<UImage> RecipeIcon;
-
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<UPanelWidget> IngredientsContainer;
-
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<UPanelWidget> OutputsContainer;
-
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<UTextBlock> SkillRequirementText;
-
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<UTextBlock> CraftTimeText;
-
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<UMOCommonButton> CraftButton;
-
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<UMOCommonButton> CraftMaxButton;
-
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<USpinBox> CraftAmountSpinBox;
-
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<USlider> CraftAmountSlider;
-
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<UTextBlock> CraftAmountText;
-
-	// --- Additional Build-Specific Bindings ---
+	// --- Building-Specific Widget Bindings ---
 
 	/** Checkbox for drawing materials from inventory. */
 	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
@@ -252,38 +176,10 @@ protected:
 	TObjectPtr<UCheckBox> SurroundingCheckbox;
 
 private:
-	// Cached component references
-	UPROPERTY()
-	TWeakObjectPtr<UMOInventoryComponent> InventoryComponent;
-
-	UPROPERTY()
-	TWeakObjectPtr<UMOSkillsComponent> SkillsComponent;
-
-	UPROPERTY()
-	TWeakObjectPtr<UMORecipeDiscoveryComponent> DiscoveryComponent;
-
-	// Current state
-	FName DisplayedRecipeId = NAME_None;
-	int32 BuildAmount = 1;
+	// Building-specific state
 	float GatherRange = 150.0f;
 
-	// Cached recipe data
+	// Cached recipe data for Blueprint access
 	TArray<FMOBuildPartDisplayData> CachedBuildParts;
 	TArray<FMOBuildOutputDisplayData> CachedOutputs;
-
-	// Dynamically created text widgets
-	UPROPERTY()
-	TArray<TObjectPtr<UTextBlock>> IngredientTextWidgets;
-
-	UPROPERTY()
-	TArray<TObjectPtr<UTextBlock>> OutputTextWidgets;
-
-	/** Populate ingredients container with text widgets. */
-	void PopulateIngredientsContainer();
-
-	/** Populate output container with text widgets. */
-	void PopulateOutputsContainer();
-
-	/** Create a simple text widget for ingredient/output display. */
-	UTextBlock* CreateSimpleTextWidget(const FText& Text, bool bHasEnough = true);
 };

@@ -68,6 +68,7 @@ void UMOStatusField::SetStatusFromNormalizedValue(float NormalizedValue)
 
 	if (bInvertThresholds)
 	{
+		
 		// Higher values are worse (e.g., infection severity)
 		if (NormalizedValue >= (1.0f - CriticalThreshold))
 		{

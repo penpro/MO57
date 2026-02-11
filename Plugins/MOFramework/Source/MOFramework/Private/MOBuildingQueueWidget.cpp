@@ -4,6 +4,7 @@
 #include "MOBuildingQueueEntryWidget.h"
 #include "MORecipeDatabaseSettings.h"
 #include "MOCommonButton.h"
+#include "MOUIUtils.h"
 #include "Components/ScrollBox.h"
 #include "Components/VerticalBox.h"
 #include "Components/TextBlock.h"
@@ -109,7 +110,7 @@ void UMOBuildingQueueWidget::RefreshQueue()
 		);
 
 		// Calculate time remaining
-		DisplayData.TimeRemainingText = FormatTimeRemaining(Component->GetTimeRemaining());
+		DisplayData.TimeRemainingText = UMOUIUtils::FormatDurationAsText(Component->GetTimeRemaining());
 
 		EntryWidget->SetupEntry(DisplayData);
 		EntryWidget->OnCancelRequested.AddDynamic(this, &UMOBuildingQueueWidget::HandleEntryCancelRequested);
@@ -143,7 +144,7 @@ void UMOBuildingQueueWidget::RefreshQueue()
 			));
 		}
 
-		FText TimeRemaining = FormatTimeRemaining(Component->GetTimeRemaining());
+		FText TimeRemaining = UMOUIUtils::FormatDurationAsText(Component->GetTimeRemaining());
 
 		if (TimeRemainingText)
 		{
@@ -222,7 +223,7 @@ void UMOBuildingQueueWidget::UpdateProgress()
 	}
 
 	float Progress = Component->GetProgress();
-	FText TimeRemaining = FormatTimeRemaining(Component->GetTimeRemaining());
+	FText TimeRemaining = UMOUIUtils::FormatDurationAsText(Component->GetTimeRemaining());
 
 	if (CurrentProgressBar)
 	{
@@ -286,7 +287,7 @@ FText UMOBuildingQueueWidget::GetTimeRemainingText() const
 	{
 		return FText::GetEmpty();
 	}
-	return FormatTimeRemaining(Component->GetTimeRemaining());
+	return UMOUIUtils::FormatDurationAsText(Component->GetTimeRemaining());
 }
 
 void UMOBuildingQueueWidget::NativeConstruct()
@@ -353,35 +354,5 @@ void UMOBuildingQueueWidget::HandleCancelAllClicked()
 	if (UMOBuildProgressComponent* Component = ProgressComponent.Get())
 	{
 		Component->CancelConstruction(true); // true = refund materials
-	}
-}
-
-FText UMOBuildingQueueWidget::FormatTimeRemaining(float Seconds) const
-{
-	if (Seconds <= 0.0f)
-	{
-		return NSLOCTEXT("MOBuilding", "TimeNone", "--");
-	}
-
-	if (Seconds >= 86400.0f) // 24 hours
-	{
-		float Days = Seconds / 86400.0f;
-		return FText::Format(NSLOCTEXT("MOBuilding", "TimeDays", "{0}d"), FText::AsNumber(FMath::RoundToInt(Days * 10) / 10.0f));
-	}
-	else if (Seconds >= 3600.0f) // 1 hour
-	{
-		int32 Hours = FMath::FloorToInt(Seconds / 3600.0f);
-		int32 Minutes = FMath::FloorToInt(FMath::Fmod(Seconds, 3600.0f) / 60.0f);
-		return FText::Format(NSLOCTEXT("MOBuilding", "TimeHoursMinutes", "{0}h {1}m"), FText::AsNumber(Hours), FText::AsNumber(Minutes));
-	}
-	else if (Seconds >= 60.0f) // 1 minute
-	{
-		int32 Minutes = FMath::FloorToInt(Seconds / 60.0f);
-		int32 Secs = FMath::FloorToInt(FMath::Fmod(Seconds, 60.0f));
-		return FText::Format(NSLOCTEXT("MOBuilding", "TimeMinutesSeconds", "{0}m {1}s"), FText::AsNumber(Minutes), FText::AsNumber(Secs));
-	}
-	else
-	{
-		return FText::Format(NSLOCTEXT("MOBuilding", "TimeSecondsOnly", "{0}s"), FText::AsNumber(FMath::RoundToInt(Seconds)));
 	}
 }

@@ -1,5 +1,6 @@
 #include "MOBuildingEntryWidget.h"
 #include "MORecipeDefinitionRow.h"
+#include "MOUIUtils.h"
 #include "Components/TextBlock.h"
 #include "Components/Image.h"
 #include "Components/Button.h"
@@ -37,19 +38,7 @@ void UMOBuildingEntryWidget::InitializeEntry(FName InRecipeId, const FMORecipeDe
 	// Set build time
 	if (BuildTimeText)
 	{
-		int32 Minutes = FMath::FloorToInt(Recipe.TotalBuildTime / 60.0f);
-		int32 Seconds = FMath::FloorToInt(FMath::Fmod(Recipe.TotalBuildTime, 60.0f));
-
-		FText TimeText;
-		if (Minutes > 0)
-		{
-			TimeText = FText::Format(NSLOCTEXT("MO", "BuildTimeMinSec", "{0}m {1}s"), Minutes, Seconds);
-		}
-		else
-		{
-			TimeText = FText::Format(NSLOCTEXT("MO", "BuildTimeSec", "{0}s"), Seconds);
-		}
-		BuildTimeText->SetText(TimeText);
+		BuildTimeText->SetText(UMOUIUtils::FormatDurationAsText(Recipe.TotalBuildTime));
 	}
 
 	// Set materials summary

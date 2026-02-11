@@ -1,10 +1,8 @@
 #include "MONotificationWidget.h"
 #include "Components/TextBlock.h"
 #include "Components/Border.h"
-#include "Widgets/Layout/SBox.h"
-#include "Widgets/Text/STextBlock.h"
-#include "Widgets/Layout/SBorder.h"
-#include "Widgets/SBoxPanel.h"
+#include "Components/Image.h"
+#include "Engine/Texture2D.h"
 
 void UMONotificationWidget::NativeConstruct()
 {
@@ -14,56 +12,43 @@ void UMONotificationWidget::NativeConstruct()
 	SetIsFocusable(false);
 
 	// Apply pending message if set before construct
-	if (bHasPendingMessage)
+	if (bHasPendingMessage && MessageText)
 	{
-		if (SlateTextBlock.IsValid())
-		{
-			SlateTextBlock->SetText(PendingMessage);
-		}
+		MessageText->SetText(PendingMessage);
 		bHasPendingMessage = false;
+	}
+
+	// Apply pending type if set before construct
+	if (bHasPendingType)
+	{
+		CurrentType = PendingType;
+		ApplyTypeColors();
+		bHasPendingType = false;
+	}
+
+	// Hide icon by default if no icon is set
+	if (IconImage)
+	{
+		IconImage->SetVisibility(ESlateVisibility::Collapsed);
 	}
 }
 
-TSharedRef<SWidget> UMONotificationWidget::RebuildWidget()
+void UMONotificationWidget::SetupNotification(const FText& Message, EMONotificationType Type, UTexture2D* Icon)
 {
-	// Build a simple notification using Slate directly
-	// Positioned 400px from the bottom of the screen, centered horizontally
-	// Use HitTestInvisible so mouse clicks pass through to widgets below
-	FSlateFontInfo FontInfo = FCoreStyle::GetDefaultFontStyle("Bold", 24);
+	SetMessage(Message);
+	SetNotificationType(Type);
 
-	return SNew(SBox)
-		.HAlign(HAlign_Center)
-		.VAlign(VAlign_Bottom)
-		.Padding(FMargin(0.0f, 0.0f, 0.0f, 320.0f)) // Bottom padding to position ~400px from bottom (accounting for widget height)
-		.Visibility(EVisibility::HitTestInvisible) // Don't block mouse clicks
-		[
-			SNew(SBorder)
-			.BorderBackgroundColor(FLinearColor(0.0f, 0.0f, 0.0f, 0.7f))
-			.Padding(FMargin(40.0f, 20.0f))
-			.Visibility(EVisibility::HitTestInvisible) // Don't block mouse clicks
-			[
-				SAssignNew(SlateTextBlock, STextBlock)
-				.Text(PendingMessage.IsEmpty() ? FText::FromString(TEXT("Notification")) : PendingMessage)
-				.Font(FontInfo)
-				.ColorAndOpacity(FLinearColor::White)
-				.ShadowOffset(FVector2D(2.0f, 2.0f))
-				.ShadowColorAndOpacity(FLinearColor(0.0f, 0.0f, 0.0f, 0.8f))
-				.Justification(ETextJustify::Center)
-			]
-		];
+	if (Icon)
+	{
+		SetIcon(Icon);
+	}
 }
 
 void UMONotificationWidget::SetMessage(const FText& Message)
 {
 	PendingMessage = Message;
 
-	// Update Slate widget if available
-	if (SlateTextBlock.IsValid())
-	{
-		SlateTextBlock->SetText(Message);
-	}
-	// Update UMG widget if available (Blueprint usage)
-	else if (MessageText)
+	if (MessageText)
 	{
 		MessageText->SetText(Message);
 	}
@@ -73,13 +58,42 @@ void UMONotificationWidget::SetMessage(const FText& Message)
 	}
 }
 
+void UMONotificationWidget::SetNotificationType(EMONotificationType Type)
+{
+	CurrentType = Type;
+
+	if (IsConstructed())
+	{
+		ApplyTypeColors();
+	}
+	else
+	{
+		PendingType = Type;
+		bHasPendingType = true;
+	}
+}
+
+void UMONotificationWidget::SetIcon(UTexture2D* Icon)
+{
+	if (!IconImage)
+	{
+		return;
+	}
+
+	if (Icon)
+	{
+		IconImage->SetBrushFromTexture(Icon);
+		IconImage->SetVisibility(ESlateVisibility::HitTestInvisible);
+	}
+	else
+	{
+		IconImage->SetVisibility(ESlateVisibility::Collapsed);
+	}
+}
+
 void UMONotificationWidget::SetTextColor(FLinearColor Color)
 {
-	if (SlateTextBlock.IsValid())
-	{
-		SlateTextBlock->SetColorAndOpacity(Color);
-	}
-	else if (MessageText)
+	if (MessageText)
 	{
 		MessageText->SetColorAndOpacity(FSlateColor(Color));
 	}
@@ -87,10 +101,95 @@ void UMONotificationWidget::SetTextColor(FLinearColor Color)
 
 void UMONotificationWidget::SetBackgroundColor(FLinearColor Color)
 {
-	// Note: For Slate version, would need to store border reference
-	// For now, only works with Blueprint version
 	if (BackgroundBorder)
 	{
 		BackgroundBorder->SetBrushColor(Color);
 	}
+}
+
+FLinearColor UMONotificationWidget::GetColorForType(EMONotificationType Type)
+{
+	// Static default colors - instance colors can override via properties
+	switch (Type)
+	{
+	case EMONotificationType::Info:
+		return FLinearColor(0.2f, 0.6f, 1.0f, 1.0f);  // Blue
+	case EMONotificationType::Success:
+		return FLinearColor(0.2f, 0.8f, 0.2f, 1.0f);  // Green
+	case EMONotificationType::Warning:
+		return FLinearColor(1.0f, 0.8f, 0.2f, 1.0f);  // Yellow/Gold
+	case EMONotificationType::Error:
+		return FLinearColor(1.0f, 0.2f, 0.2f, 1.0f);  // Red
+	case EMONotificationType::ItemPickup:
+		return FLinearColor(0.8f, 0.8f, 0.8f, 1.0f);  // Light Gray
+	case EMONotificationType::SkillGain:
+		return FLinearColor(0.6f, 0.4f, 1.0f, 1.0f);  // Purple
+	case EMONotificationType::Custom:
+	default:
+		return FLinearColor::White;
+	}
+}
+
+void UMONotificationWidget::ApplyTypeColors()
+{
+	FLinearColor TypeColor;
+
+	switch (CurrentType)
+	{
+	case EMONotificationType::Info:
+		TypeColor = InfoColor;
+		break;
+	case EMONotificationType::Success:
+		TypeColor = SuccessColor;
+		break;
+	case EMONotificationType::Warning:
+		TypeColor = WarningColor;
+		break;
+	case EMONotificationType::Error:
+		TypeColor = ErrorColor;
+		break;
+	case EMONotificationType::ItemPickup:
+		TypeColor = ItemPickupColor;
+		break;
+	case EMONotificationType::SkillGain:
+		TypeColor = SkillGainColor;
+		break;
+	case EMONotificationType::Custom:
+	default:
+		TypeColor = FLinearColor::White;
+		break;
+	}
+
+	// Apply text color with full opacity
+	if (MessageText)
+	{
+		MessageText->SetColorAndOpacity(FSlateColor(TypeColor));
+	}
+
+	// Apply background color (use base background with type-tinted border if desired)
+	if (BackgroundBorder)
+	{
+		BackgroundBorder->SetBrushColor(BackgroundColorBase);
+	}
+}
+
+void UMONotificationWidget::PlayShowAnimation_Implementation()
+{
+	// Default implementation: just make visible immediately
+	// Override in Blueprint to add fade-in, slide-in, etc.
+	SetVisibility(ESlateVisibility::HitTestInvisible);
+}
+
+void UMONotificationWidget::PlayHideAnimation_Implementation()
+{
+	// Default implementation: hide immediately and broadcast
+	// Override in Blueprint to add fade-out, slide-out, etc.
+	// When animation completes, call OnHideAnimationComplete()
+	OnHideAnimationComplete();
+}
+
+void UMONotificationWidget::OnHideAnimationComplete()
+{
+	// Broadcast that the notification is fully hidden
+	OnNotificationHidden.Broadcast();
 }

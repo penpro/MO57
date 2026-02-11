@@ -12,6 +12,7 @@
 #include "MOCraftingQueueWidget.h"
 #include "MOCommonButton.h"
 #include "MOCraftingStationActor.h"
+#include "MOUIUtils.h"
 #include "Components/WidgetSwitcher.h"
 #include "Components/TextBlock.h"
 #include "Components/CheckBox.h"
@@ -314,15 +315,20 @@ void UMOCraftingMenu::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 		if (Station && Station->bRequiresFuel)
 		{
 			float TimeRemaining = Station->GetFuelTimeRemaining();
-			int32 Minutes = FMath::FloorToInt(TimeRemaining / 60.0f);
-			int32 Seconds = FMath::FloorToInt(FMath::Fmod(TimeRemaining, 60.0f));
-			FuelTimeText->SetText(FText::FromString(FString::Printf(TEXT("%d:%02d remaining"), Minutes, Seconds)));
+			FText TimeText = FText::Format(
+				NSLOCTEXT("MOCrafting", "FuelTimeRemaining", "{0} remaining"),
+				UMOUIUtils::FormatDurationAsTimeCode(TimeRemaining)
+			);
+			FuelTimeText->SetText(TimeText);
 		}
 	}
 }
 
 void UMOCraftingMenu::HandleCloseClicked()
 {
+	// Broadcast standard delegate (prefer this for new code)
+	OnCloseRequested.Broadcast();
+	// Broadcast legacy delegate for backward compatibility
 	OnRequestClose.Broadcast();
 }
 
@@ -344,6 +350,9 @@ FReply UMOCraftingMenu::NativeOnKeyDown(const FGeometry& InGeometry, const FKeyE
 	// Close on Tab or Escape
 	if (PressedKey == EKeys::Tab || PressedKey == EKeys::Escape)
 	{
+		// Broadcast standard delegate (prefer this for new code)
+		OnCloseRequested.Broadcast();
+		// Broadcast legacy delegate for backward compatibility
 		OnRequestClose.Broadcast();
 		return FReply::Handled();
 	}
@@ -402,9 +411,11 @@ void UMOCraftingMenu::UpdateStationDisplay()
 		if (Station && Station->bRequiresFuel)
 		{
 			float TimeRemaining = Station->GetFuelTimeRemaining();
-			int32 Minutes = FMath::FloorToInt(TimeRemaining / 60.0f);
-			int32 Seconds = FMath::FloorToInt(FMath::Fmod(TimeRemaining, 60.0f));
-			FuelTimeText->SetText(FText::FromString(FString::Printf(TEXT("%d:%02d remaining"), Minutes, Seconds)));
+			FText TimeText = FText::Format(
+				NSLOCTEXT("MOCrafting", "FuelTimeRemaining", "{0} remaining"),
+				UMOUIUtils::FormatDurationAsTimeCode(TimeRemaining)
+			);
+			FuelTimeText->SetText(TimeText);
 			FuelTimeText->SetVisibility(ESlateVisibility::Visible);
 		}
 		else

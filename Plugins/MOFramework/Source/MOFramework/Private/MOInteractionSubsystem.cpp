@@ -1,5 +1,6 @@
 #include "MOInteractionSubsystem.h"
 #include "MOFramework.h"
+#include "MOViewpointUtils.h"
 
 #include "Engine/World.h"
 #include "GameFramework/Controller.h"
@@ -13,26 +14,8 @@ UMOInteractionSubsystem::UMOInteractionSubsystem()
 
 bool UMOInteractionSubsystem::ResolveServerViewpoint(AController* InteractorController, FVector& OutViewLocation, FRotator& OutViewRotation) const
 {
-	if (!IsValid(InteractorController))
-	{
-		return false;
-	}
-
-	APlayerController* PlayerController = Cast<APlayerController>(InteractorController);
-	if (IsValid(PlayerController))
-	{
-		PlayerController->GetPlayerViewPoint(OutViewLocation, OutViewRotation);
-		return true;
-	}
-
-	APawn* Pawn = InteractorController->GetPawn();
-	if (IsValid(Pawn))
-	{
-		Pawn->GetActorEyesViewPoint(OutViewLocation, OutViewRotation);
-		return true;
-	}
-
-	return false;
+	// Delegate to shared utility
+	return UMOViewpointUtils::ResolveViewpointForController(InteractorController, OutViewLocation, OutViewRotation);
 }
 
 bool UMOInteractionSubsystem::HasServerLineOfSight(const FVector& ViewLocation, const AActor* InteractorPawnActor, const AActor* TargetActor) const
@@ -42,55 +25,13 @@ bool UMOInteractionSubsystem::HasServerLineOfSight(const FVector& ViewLocation, 
 		return true;
 	}
 
-	UWorld* World = GetWorld();
-	if (!World || !IsValid(TargetActor))
-	{
-		return false;
-	}
+	// Delegate to shared utility with options
+	UMOViewpointUtils::FLineOfSightOptions Options;
+	Options.TraceChannel = ValidationTraceChannel.GetValue();
+	Options.bAllowAttachedHits = true;
+	Options.IgnoredActor = InteractorPawnActor;
 
-	const FVector TargetLocation = TargetActor->GetActorLocation();
-
-	FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(MOInteractionLOS), true);
-	QueryParams.bReturnPhysicalMaterial = false;
-
-	if (IsValid(InteractorPawnActor))
-	{
-		QueryParams.AddIgnoredActor(InteractorPawnActor);
-	}
-
-	FHitResult HitResult;
-	const bool bHit = World->LineTraceSingleByChannel(
-		HitResult,
-		ViewLocation,
-		TargetLocation,
-		ValidationTraceChannel.GetValue(),
-		QueryParams
-	);
-
-	if (!bHit)
-	{
-		return true;
-	}
-
-	AActor* HitActor = HitResult.GetActor();
-	if (!IsValid(HitActor))
-	{
-		return false;
-	}
-
-	// Allow direct hit to the target.
-	if (HitActor == TargetActor)
-	{
-		return true;
-	}
-
-	// Allow components attached to the target to count as visible.
-	if (HitActor->IsAttachedTo(TargetActor))
-	{
-		return true;
-	}
-
-	return false;
+	return UMOViewpointUtils::HasLineOfSight(GetWorld(), ViewLocation, TargetActor, Options);
 }
 
 FVector UMOInteractionSubsystem::ComputeAimPoint(const AActor* TargetActor) const

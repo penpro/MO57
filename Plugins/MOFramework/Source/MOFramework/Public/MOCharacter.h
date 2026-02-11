@@ -37,6 +37,7 @@ class UMOAdrenalineComponent;
 class UMOCraftingQueueComponent;
 class UMORecipeDiscoveryComponent;
 class UMOTerraformingComponent;
+class UMOEquipmentComponent;
 class USpringArmComponent;
 class UCameraComponent;
 class USkeletalMesh;
@@ -139,6 +140,9 @@ public:
 
 	UFUNCTION(BlueprintPure, Category="MO|Camera")
 	UCameraComponent* GetFollowCamera() const { return FollowCamera; }
+
+	UFUNCTION(BlueprintPure, Category="MO")
+	UMOEquipmentComponent* GetEquipmentComponent() const { return EquipmentComponent; }
 
 	// ============================================================================
 	// APPEARANCE
@@ -339,6 +343,10 @@ protected:
 	/** Terraforming component for terrain modification. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO")
 	TObjectPtr<UMOTerraformingComponent> TerraformingComponent;
+
+	/** Equipment component for body/hand slots. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO")
+	TObjectPtr<UMOEquipmentComponent> EquipmentComponent;
 
 	// ============================================================================
 	// CONFIGURATION

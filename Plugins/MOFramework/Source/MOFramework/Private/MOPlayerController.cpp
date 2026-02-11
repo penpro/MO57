@@ -530,9 +530,9 @@ void AMOPlayerController::HandleSecondaryAction(const FInputActionValue& Value)
 		UMOInteractorComponent* Interactor = ControllablePawn->FindComponentByClass<UMOInteractorComponent>();
 		if (Interactor)
 		{
-			AActor* TargetActor = nullptr;
-			FHitResult HitResult;
-			if (Interactor->FindInteractTarget(TargetActor, HitResult))
+			// Use unified target finding (supports ISM/HISM and actors)
+			FMOInteractionTarget Target;
+			if (Interactor->FindInteractionTarget(Target))
 			{
 				// Found an interactable target - use secondary interact
 				IMOControllableInterface::Execute_RequestSecondaryInteract(ControllablePawn);

@@ -166,8 +166,7 @@ struct MOFRAMEWORK_API FMOToolRequirement
 	 * Example: Digging with hands (no shovel) takes 5x longer, so set to 5.0.
 	 * Only applies when bIsRequired is false. Set to 1.0 for no penalty.
 	 */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Recipe|Requirement",
-		meta=(ClampMin="1.0", EditCondition="!bIsRequired", EditConditionHides))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Recipe|Requirement", meta=(ClampMin="1.0"))
 	float MissingToolTimeMultiplier = 1.0f;
 
 	/**
@@ -175,8 +174,7 @@ struct MOFRAMEWORK_API FMOToolRequirement
 	 * Example: Crafting without proper tools yields lower quality results.
 	 * Only applies when bIsRequired is false. Set to 1.0 for no penalty.
 	 */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Recipe|Requirement",
-		meta=(ClampMin="0.0", ClampMax="1.0", EditCondition="!bIsRequired", EditConditionHides))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Recipe|Requirement", meta=(ClampMin="0.0", ClampMax="1.0"))
 	float MissingToolQualityMultiplier = 1.0f;
 };
 
@@ -358,4 +356,31 @@ struct MOFRAMEWORK_API FMORecipeDefinitionRow : public FTableRowBase
 	/** For crafting stations: item IDs accepted as fuel. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Recipe|Building|Station", meta=(EditCondition="bIsBuilding && bRequiresFuel", EditConditionHides))
 	TArray<FName> AcceptedFuelItems;
+
+	// ============================================================================
+	// HARVEST SYSTEM (only used when bIsHarvestRecipe is true)
+	// ============================================================================
+
+	/**
+	 * If true, this is a harvest recipe that extracts resources from world objects.
+	 * Harvest recipes don't consume Ingredients - instead they require a target object
+	 * with matching RequiredTargetTag.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Recipe|Harvest")
+	bool bIsHarvestRecipe = false;
+
+	/**
+	 * Required tag on target object for this harvest recipe to be available.
+	 * Example: "GivesBark" means this recipe only appears when targeting objects with that tag.
+	 * The tag should match component or actor tags on ISM/HISM components.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Recipe|Harvest", meta=(EditCondition="bIsHarvestRecipe", EditConditionHides))
+	FName RequiredTargetTag = NAME_None;
+
+	/**
+	 * If true, harvesting destroys/removes the target instance (e.g., chopping down a tree).
+	 * If false, the target remains after harvesting (e.g., stripping bark).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Recipe|Harvest", meta=(EditCondition="bIsHarvestRecipe", EditConditionHides))
+	bool bDestroysTarget = false;
 };

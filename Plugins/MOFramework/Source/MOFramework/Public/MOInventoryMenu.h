@@ -2,12 +2,14 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
+#include "MOUIDelegates.h"
 #include "MOInventoryMenu.generated.h"
 
 class UMOInventoryComponent;
 class UMOInventoryGrid;
 class UMOItemInfoPanel;
 
+// Legacy delegates - prefer standard delegates from MOUIDelegates.h for new code
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOInventoryMenuRequestCloseSignature);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FMOInventoryMenuSlotRightClickedSignature, int32, SlotIndex, const FGuid&, ItemGuid, FVector2D, ScreenPosition);
 
@@ -27,6 +29,11 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO|Inventory|UI")
 	UMOInventoryComponent* GetInventoryComponent() const { return InventoryComponent; }
 
+	/** Broadcast when the menu wants to close. Uses standard delegate signature. */
+	UPROPERTY(BlueprintAssignable, Category="MO|Inventory|UI")
+	FMOUIRequestClose OnCloseRequested;
+
+	/** @deprecated Use OnCloseRequested instead. Broadcast for backward compatibility. */
 	UPROPERTY(BlueprintAssignable, Category="MO|Inventory|UI")
 	FMOInventoryMenuRequestCloseSignature OnRequestClose;
 

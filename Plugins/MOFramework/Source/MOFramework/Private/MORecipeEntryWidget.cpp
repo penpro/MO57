@@ -110,5 +110,8 @@ void UMORecipeEntryWidget::UpdateVisuals()
 
 void UMORecipeEntryWidget::HandleButtonClicked()
 {
+	// Broadcast standard delegate (prefer this for new code)
+	OnEntrySelected.Broadcast(EntryData.RecipeId);
+	// Broadcast legacy delegate for backward compatibility
 	OnEntryClicked.Broadcast(EntryData.RecipeId);
 }

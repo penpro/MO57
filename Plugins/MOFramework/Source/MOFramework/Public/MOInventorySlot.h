@@ -130,6 +130,18 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Inventory|UI")
 	bool bEnableDragDrop = true;
 
+	/**
+	 * Set a custom empty slot icon for this specific slot.
+	 * Overrides the default EmptySlotIcon when this slot is empty.
+	 * @param InIcon The custom empty icon to use (nullptr to use default)
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Inventory|UI")
+	void SetCustomEmptyIcon(UTexture2D* InIcon);
+
+	/** Get the current empty slot icon (custom if set, otherwise default). */
+	UFUNCTION(BlueprintPure, Category="MO|Inventory|UI")
+	UTexture2D* GetEffectiveEmptyIcon() const;
+
 	/** If true, dropping outside inventory slots will drop the item into the world. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Inventory|UI")
 	bool bEnableWorldDrop = true;
@@ -219,8 +231,13 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category="MO|Inventory|UI")
 	TObjectPtr<UTexture2D> DefaultItemIcon;
 
+	/** Default empty slot icon (used when no custom icon is set). */
 	UPROPERTY(EditDefaultsOnly, Category="MO|Inventory|UI")
 	TObjectPtr<UTexture2D> EmptySlotIcon;
+
+	/** Custom empty slot icon (overrides EmptySlotIcon when set). */
+	UPROPERTY(Transient)
+	TObjectPtr<UTexture2D> CustomEmptyIcon;
 
 	/** Visual feedback when dragging over this slot. */
 	UPROPERTY(Transient)

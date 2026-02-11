@@ -1,5 +1,6 @@
 #include "MOTerraformingComponent.h"
 #include "MOFramework.h"
+#include "MOViewpointUtils.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
@@ -74,22 +75,20 @@ bool UMOTerraformingComponent::ResolveViewpoint(FVector& OutLocation, FRotator& 
 	}
 
 	APawn* OwnerPawn = Cast<APawn>(OwnerActor);
-	AController* OwnerController = OwnerPawn ? OwnerPawn->GetController() : nullptr;
-
-	APlayerController* PlayerController = Cast<APlayerController>(OwnerController);
-	if (IsValid(PlayerController))
+	if (!IsValid(OwnerPawn))
 	{
-		PlayerController->GetPlayerViewPoint(OutLocation, OutRotation);
+		return false;
+	}
+
+	// Try controller first (handles both player and AI controllers)
+	AController* OwnerController = OwnerPawn->GetController();
+	if (UMOViewpointUtils::ResolveViewpointForController(OwnerController, OutLocation, OutRotation))
+	{
 		return true;
 	}
 
-	if (IsValid(OwnerPawn))
-	{
-		OwnerPawn->GetActorEyesViewPoint(OutLocation, OutRotation);
-		return true;
-	}
-
-	return false;
+	// Fall back to pawn eyes if no controller
+	return UMOViewpointUtils::ResolveViewpointForPawn(OwnerPawn, OutLocation, OutRotation);
 }
 
 bool UMOTerraformingComponent::FindTerraformTarget(FVector& OutLocation, FVector& OutNormal) const

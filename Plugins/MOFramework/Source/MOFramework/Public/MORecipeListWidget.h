@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
 #include "MORecipeDefinitionRow.h"
+#include "MOUIDelegates.h"
 #include "MORecipeListWidget.generated.h"
 
 class UMOInventoryComponent;
@@ -12,6 +13,7 @@ class UMORecipeEntryWidget;
 class UScrollBox;
 class UVerticalBox;
 
+// Legacy delegate - prefer FMOUIRecipeSelected from MOUIDelegates.h for new code
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMORecipeSelectedSignature, FName, RecipeId);
 
 /**
@@ -116,6 +118,11 @@ public:
 
 	// --- Delegates ---
 
+	/** Broadcast when a recipe is selected. Uses standard delegate signature. */
+	UPROPERTY(BlueprintAssignable, Category="MO|Crafting|UI")
+	FMOUIRecipeSelected OnRecipeSelection;
+
+	/** @deprecated Use OnRecipeSelection instead. Broadcast for backward compatibility. */
 	UPROPERTY(BlueprintAssignable, Category="MO|Crafting|UI")
 	FMORecipeSelectedSignature OnRecipeSelected;
 

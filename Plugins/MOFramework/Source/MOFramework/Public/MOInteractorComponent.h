@@ -104,8 +104,12 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Interaction")
 	bool FindInteractionTarget(FMOInteractionTarget& OutTarget) const;
 
-	/** Legacy method - finds actor-based targets only. */
-	UFUNCTION(BlueprintCallable, Category="MO|Interaction")
+	/**
+	 * Legacy method - finds actor-based targets only.
+	 * @deprecated Use FindInteractionTarget() instead, which supports both actors and ISM/HISM instances.
+	 */
+	UE_DEPRECATED(5.7, "Use FindInteractionTarget() instead, which supports both actors and ISM/HISM instances.")
+	UFUNCTION(BlueprintCallable, Category="MO|Interaction", meta=(DeprecatedFunction, DeprecationMessage="Use FindInteractionTarget instead"))
 	bool FindInteractTarget(AActor*& OutTargetActor, FHitResult& OutHitResult) const;
 
 	/** Try to interact with whatever we're looking at. */

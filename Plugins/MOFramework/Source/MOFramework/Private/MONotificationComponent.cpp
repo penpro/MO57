@@ -68,15 +68,16 @@ APlayerController* UMONotificationComponent::GetOwningPlayerController() const
 	return Cast<APlayerController>(GetOwner());
 }
 
-void UMONotificationComponent::ShowNotification(const FText& Message, float Duration)
+void UMONotificationComponent::ShowNotification(const FText& Message, float Duration, EMONotificationType Type)
 {
 	// Add to queue
 	FQueuedNotification Notification;
 	Notification.Message = Message;
 	Notification.Duration = Duration;
+	Notification.Type = Type;
 	NotificationQueue.Add(Notification);
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MONotification] Queued: %s (%.1fs)"), *Message.ToString(), Duration);
+	UE_LOG(LogMOFramework, Log, TEXT("[MONotification] Queued: %s (%.1fs, type=%d)"), *Message.ToString(), Duration, static_cast<int32>(Type));
 
 	// If no notification showing, start processing
 	UMONotificationWidget* CurrentWidget = CurrentNotificationWidget.Get();
@@ -84,6 +85,54 @@ void UMONotificationComponent::ShowNotification(const FText& Message, float Dura
 	{
 		ProcessNextNotification();
 	}
+}
+
+void UMONotificationComponent::ShowInfoNotification(const FText& Message, float Duration)
+{
+	ShowNotification(Message, Duration, EMONotificationType::Info);
+}
+
+void UMONotificationComponent::ShowSuccessNotification(const FText& Message, float Duration)
+{
+	ShowNotification(Message, Duration, EMONotificationType::Success);
+}
+
+void UMONotificationComponent::ShowWarningNotification(const FText& Message, float Duration)
+{
+	ShowNotification(Message, Duration, EMONotificationType::Warning);
+}
+
+void UMONotificationComponent::ShowErrorNotification(const FText& Message, float Duration)
+{
+	ShowNotification(Message, Duration, EMONotificationType::Error);
+}
+
+void UMONotificationComponent::ShowItemPickupNotification(const FText& ItemName, int32 Quantity)
+{
+	FText Message;
+	if (Quantity > 1)
+	{
+		Message = FText::Format(
+			NSLOCTEXT("MO", "PickedUpMultiple", "Picked up {0} x{1}"),
+			ItemName,
+			FText::AsNumber(Quantity));
+	}
+	else
+	{
+		Message = FText::Format(
+			NSLOCTEXT("MO", "PickedUpSingle", "Picked up {0}"),
+			ItemName);
+	}
+
+	ShowNotification(Message, 2.0f, EMONotificationType::ItemPickup);
+}
+
+void UMONotificationComponent::ShowInventoryFullNotification()
+{
+	ShowNotification(
+		NSLOCTEXT("MO", "InventoryFull", "Inventory is full!"),
+		2.5f,
+		EMONotificationType::Warning);
 }
 
 void UMONotificationComponent::ShowSkillIncreaseNotification(FName SkillId, float XPAmount)
@@ -104,7 +153,7 @@ void UMONotificationComponent::ShowSkillIncreaseNotification(FName SkillId, floa
 		SkillName,
 		FText::AsNumber(FMath::RoundToInt(XPAmount)));
 
-	ShowNotification(Message, 3.0f);
+	ShowNotification(Message, 3.0f, EMONotificationType::SkillGain);
 }
 
 void UMONotificationComponent::ShowRecipeUnlockedNotification(FName RecipeId)
@@ -148,7 +197,7 @@ void UMONotificationComponent::ShowRecipeUnlockedNotification(FName RecipeId)
 		NSLOCTEXT("MO", "RecipeUnlocked", "You can now craft: {0}"),
 		RecipeName);
 
-	ShowNotification(Message, 4.0f);
+	ShowNotification(Message, 4.0f, EMONotificationType::Success);
 }
 
 void UMONotificationComponent::ShowKnowledgeLearnedNotification(FName KnowledgeId)
@@ -186,7 +235,7 @@ void UMONotificationComponent::ShowKnowledgeLearnedNotification(FName KnowledgeI
 		NSLOCTEXT("MO", "KnowledgeLearned", "You gained some knowledge of {0}"),
 		FText::FromString(KnowledgeString));
 
-	ShowNotification(Message, 3.5f);
+	ShowNotification(Message, 3.5f, EMONotificationType::SkillGain);
 }
 
 void UMONotificationComponent::ClearAllNotifications()
@@ -275,15 +324,18 @@ void UMONotificationComponent::ProcessNextNotification()
 	NotificationWidget->SetIsFocusable(false);
 	NotificationWidget->SetVisibility(ESlateVisibility::HitTestInvisible);
 
-	// Set message and show
-	NotificationWidget->SetMessage(Next.Message);
+	// Set up notification with message and type
+	NotificationWidget->SetupNotification(Next.Message, Next.Type);
 
 	if (!NotificationWidget->IsInViewport())
 	{
 		NotificationWidget->AddToViewport(NotificationZOrder);
 	}
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MONotification] Showing: %s"), *Next.Message.ToString());
+	// Play show animation
+	NotificationWidget->PlayShowAnimation();
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MONotification] Showing: %s (type=%d)"), *Next.Message.ToString(), static_cast<int32>(Next.Type));
 
 	// Set timer to hide and show next
 	if (UWorld* World = GetWorld())
@@ -301,14 +353,35 @@ void UMONotificationComponent::ProcessNextNotification()
 
 void UMONotificationComponent::HideCurrentNotification()
 {
-	// Hide current notification
+	// Hide current notification with animation
 	UMONotificationWidget* NotificationWidget = CurrentNotificationWidget.Get();
 	if (IsValid(NotificationWidget) && NotificationWidget->IsInViewport())
 	{
+		// Bind to hide animation completion
+		NotificationWidget->OnNotificationHidden.RemoveDynamic(this, &UMONotificationComponent::OnNotificationHideComplete);
+		NotificationWidget->OnNotificationHidden.AddDynamic(this, &UMONotificationComponent::OnNotificationHideComplete);
+
+		// Start hide animation (default implementation immediately calls OnHideAnimationComplete)
+		NotificationWidget->PlayHideAnimation();
+	}
+	else
+	{
+		// No widget to hide, just process next
+		ProcessNextNotification();
+	}
+}
+
+void UMONotificationComponent::OnNotificationHideComplete()
+{
+	// Remove widget from viewport after animation
+	UMONotificationWidget* NotificationWidget = CurrentNotificationWidget.Get();
+	if (IsValid(NotificationWidget))
+	{
+		NotificationWidget->OnNotificationHidden.RemoveDynamic(this, &UMONotificationComponent::OnNotificationHideComplete);
 		NotificationWidget->RemoveFromParent();
 	}
 
-	// Process next in queue
+	// Process next notification in queue
 	ProcessNextNotification();
 }
 

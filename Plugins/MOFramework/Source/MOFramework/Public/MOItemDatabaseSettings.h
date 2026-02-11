@@ -51,4 +51,20 @@ public:
 
 	/** Validate configuration and log warnings for any issues. Call at startup. */
 	static void ValidateConfiguration();
+
+	/**
+	 * Invalidate the item definition cache.
+	 * Call this if the DataTable is modified at runtime (rare).
+	 */
+	static void InvalidateCache();
+
+private:
+	/** Cached item definitions for fast lookup. */
+	static TMap<FName, FMOItemDefinitionRow> CachedItemDefinitions;
+
+	/** Whether the cache has been built. */
+	static bool bCacheBuilt;
+
+	/** Build the cache from the DataTable. */
+	static void BuildCacheIfNeeded();
 };

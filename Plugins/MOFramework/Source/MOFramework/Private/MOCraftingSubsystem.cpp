@@ -7,6 +7,111 @@
 #include "MOItemDefinitionRow.h"
 #include "MOFramework.h"
 
+// ============================================================================
+// CENTRALIZED AVAILABILITY CHECK
+// ============================================================================
+
+FMORecipeAvailability UMOCraftingSubsystem::IsRecipeAvailable(
+	FName RecipeId,
+	UMOKnowledgeComponent* KnowledgeComponent,
+	UMOSkillsComponent* SkillsComponent
+) const
+{
+	const FMORecipeDefinitionRow* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(RecipeId);
+	if (!Recipe)
+	{
+		FMORecipeAvailability Result;
+		Result.UnavailableReason = FText::FromString(TEXT("Recipe not found."));
+		return Result;
+	}
+
+	return IsRecipeAvailable(Recipe, KnowledgeComponent, SkillsComponent);
+}
+
+FMORecipeAvailability UMOCraftingSubsystem::IsRecipeAvailable(
+	const FMORecipeDefinitionRow* Recipe,
+	UMOKnowledgeComponent* KnowledgeComponent,
+	UMOSkillsComponent* SkillsComponent
+) const
+{
+	FMORecipeAvailability Result;
+
+	if (!Recipe)
+	{
+		Result.UnavailableReason = FText::FromString(TEXT("Invalid recipe."));
+		return Result;
+	}
+
+	// --- Check Discovery Requirements ---
+	if (Recipe->bRequiresDiscovery)
+	{
+		Result.DiscoveryKnowledgeId = Recipe->DiscoveryKnowledgeId;
+		Result.DiscoveryKnowledgeLevel = Recipe->DiscoveryKnowledgeLevel;
+
+		bool bDiscovered = false;
+
+		// Knowledge-based discovery (e.g., WoodProperties level 2 unlocks HarvestBark)
+		if (!Recipe->DiscoveryKnowledgeId.IsNone() && IsValid(SkillsComponent))
+		{
+			Result.CurrentDiscoveryKnowledgeLevel = SkillsComponent->GetSkillLevel(Recipe->DiscoveryKnowledgeId);
+			bDiscovered = Result.CurrentDiscoveryKnowledgeLevel >= Recipe->DiscoveryKnowledgeLevel;
+		}
+
+		// Skill-based discovery (alternative unlock path)
+		if (!bDiscovered && Recipe->DiscoverySkillLevel > 0 && !Recipe->RequiredSkillId.IsNone() && IsValid(SkillsComponent))
+		{
+			int32 SkillLevel = SkillsComponent->GetSkillLevel(Recipe->RequiredSkillId);
+			bDiscovered = SkillLevel >= Recipe->DiscoverySkillLevel;
+		}
+
+		Result.bIsDiscovered = bDiscovered;
+
+		if (!bDiscovered)
+		{
+			Result.UnavailableReason = FText::Format(
+				NSLOCTEXT("MOCrafting", "NotDiscovered", "Requires {0} level {1} (current: {2})"),
+				FText::FromName(Recipe->DiscoveryKnowledgeId),
+				FText::AsNumber(Recipe->DiscoveryKnowledgeLevel),
+				FText::AsNumber(Result.CurrentDiscoveryKnowledgeLevel)
+			);
+			return Result;
+		}
+	}
+
+	// --- Check Knowledge Requirements ---
+	TArray<FName> MissingKnowledge;
+	if (!HasRequiredKnowledge(Recipe, KnowledgeComponent, &MissingKnowledge))
+	{
+		Result.MissingKnowledge = MissingKnowledge;
+		Result.UnavailableReason = FText::FromString(TEXT("Missing required knowledge."));
+		return Result;
+	}
+
+	// --- Check Skill Requirements ---
+	int32 RequiredLevel = 0;
+	int32 CurrentLevel = 0;
+	if (!MeetsSkillRequirements(Recipe, SkillsComponent, &RequiredLevel, &CurrentLevel))
+	{
+		Result.RequiredSkillLevel = RequiredLevel;
+		Result.CurrentSkillLevel = CurrentLevel;
+		Result.UnavailableReason = FText::Format(
+			NSLOCTEXT("MOCrafting", "SkillTooLowAvail", "Requires {0} level {1} (current: {2})"),
+			FText::FromName(Recipe->RequiredSkillId),
+			FText::AsNumber(RequiredLevel),
+			FText::AsNumber(CurrentLevel)
+		);
+		return Result;
+	}
+
+	// All checks passed
+	Result.bIsAvailable = true;
+	return Result;
+}
+
+// ============================================================================
+// RECIPE QUERIES
+// ============================================================================
+
 void UMOCraftingSubsystem::GetAvailableRecipes(
 	UMOKnowledgeComponent* KnowledgeComponent,
 	UMOSkillsComponent* SkillsComponent,
@@ -30,22 +135,15 @@ void UMOCraftingSubsystem::GetAvailableRecipes(
 			continue;
 		}
 
-		// Check station requirement
-		// Recipes with RequiredStation == None can be crafted anywhere
-		// Recipes with a specific station only work at that station
+		// Check station requirement (context-specific)
 		if (Recipe->RequiredStation != EMOCraftingStation::None && Recipe->RequiredStation != Station)
 		{
 			continue;
 		}
 
-		// Check knowledge requirements
-		if (!HasRequiredKnowledge(Recipe, KnowledgeComponent))
-		{
-			continue;
-		}
-
-		// Check skill requirements
-		if (!MeetsSkillRequirements(Recipe, SkillsComponent))
+		// Use centralized availability check for discovery/knowledge/skill
+		FMORecipeAvailability Availability = IsRecipeAvailable(Recipe, KnowledgeComponent, SkillsComponent);
+		if (!Availability.bIsAvailable)
 		{
 			continue;
 		}
@@ -101,7 +199,22 @@ FMOCraftingValidation UMOCraftingSubsystem::CanCraftRecipe(
 		return Result;
 	}
 
-	// Check station
+	// --- Use centralized availability check for discovery/knowledge/skill ---
+	FMORecipeAvailability Availability = IsRecipeAvailable(Recipe, KnowledgeComponent, SkillsComponent);
+
+	// Copy availability results to validation struct
+	Result.bRecipeDiscovered = Availability.bIsDiscovered;
+	Result.MissingKnowledge = Availability.MissingKnowledge;
+	Result.RequiredSkillLevel = Availability.RequiredSkillLevel;
+	Result.CurrentSkillLevel = Availability.CurrentSkillLevel;
+
+	if (!Availability.bIsAvailable)
+	{
+		Result.FailureReason = Availability.UnavailableReason;
+		return Result;
+	}
+
+	// --- Station check (context-specific, not part of availability) ---
 	if (Recipe->RequiredStation != EMOCraftingStation::None && Recipe->RequiredStation != Station)
 	{
 		Result.bCorrectStation = false;
@@ -109,31 +222,7 @@ FMOCraftingValidation UMOCraftingSubsystem::CanCraftRecipe(
 		return Result;
 	}
 
-	// Check knowledge
-	TArray<FName> MissingKnowledge;
-	if (!HasRequiredKnowledge(Recipe, KnowledgeComponent, &MissingKnowledge))
-	{
-		Result.MissingKnowledge = MissingKnowledge;
-		Result.FailureReason = FText::FromString(TEXT("Missing required knowledge."));
-		return Result;
-	}
-
-	// Check skill
-	int32 RequiredLevel = 0;
-	int32 CurrentLevel = 0;
-	if (!MeetsSkillRequirements(Recipe, SkillsComponent, &RequiredLevel, &CurrentLevel))
-	{
-		Result.RequiredSkillLevel = RequiredLevel;
-		Result.CurrentSkillLevel = CurrentLevel;
-		Result.FailureReason = FText::Format(
-			NSLOCTEXT("MOCrafting", "SkillTooLow", "Skill level too low ({0}/{1})."),
-			FText::AsNumber(CurrentLevel),
-			FText::AsNumber(RequiredLevel)
-		);
-		return Result;
-	}
-
-	// Check ingredients
+	// --- Check ingredients (can craft NOW, not availability) ---
 	TMap<FName, int32> MissingIngredients;
 	if (!HasIngredients(Recipe, InventoryComponent, KnowledgeComponent, &MissingIngredients))
 	{
@@ -148,8 +237,14 @@ FMOCraftingValidation UMOCraftingSubsystem::CanCraftRecipe(
 	float TimeMultiplier = 1.0f;
 	float QualityMultiplier = 1.0f;
 
+	UE_LOG(LogMOFramework, Log, TEXT("[MOCrafting] CanCraftRecipe '%s': RequiredTools.Num()=%d"),
+		*RecipeId.ToString(), Recipe->RequiredTools.Num());
+
 	for (const FMOToolRequirement& ToolReq : Recipe->RequiredTools)
 	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOCrafting]   Checking tool: Type='%s', MinQuality=%.1f, bIsRequired=%s"),
+			*ToolReq.ToolType.ToString(), ToolReq.MinQuality, ToolReq.bIsRequired ? TEXT("yes") : TEXT("no"));
+
 		FGuid ToolGuid;
 		float ToolQuality;
 		if (!FindBestTool(InventoryComponent, ToolReq.ToolType, ToolReq.MinQuality, ToolGuid, ToolQuality))
@@ -334,6 +429,13 @@ FMOCraftResult UMOCraftingSubsystem::ProduceOutputsOnly(
 		if (InventoryComponent->AddItemByGuid(NewGuid, Output.ItemDefinitionId, Output.Quantity))
 		{
 			Result.ProducedItems.FindOrAdd(Output.ItemDefinitionId) += Output.Quantity;
+		}
+		else
+		{
+			// Inventory full - track failed item
+			Result.FailedItems.FindOrAdd(Output.ItemDefinitionId) += Output.Quantity;
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOCraftingSubsystem] ProduceOutputsOnly: Inventory full, couldn't add %d x '%s'"),
+				Output.Quantity, *Output.ItemDefinitionId.ToString());
 		}
 	}
 

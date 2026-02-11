@@ -4,6 +4,10 @@
 #include "Engine/DataTable.h"
 #include "Engine/Texture2D.h"
 
+// Static member initialization
+TMap<FName, FMOItemDefinitionRow> UMOItemDatabaseSettings::CachedItemDefinitions;
+bool UMOItemDatabaseSettings::bCacheBuilt = false;
+
 UDataTable* UMOItemDatabaseSettings::GetItemDefinitionsDataTable() const
 {
 	if (ItemDefinitionsDataTable.IsNull())
@@ -31,26 +35,63 @@ bool UMOItemDatabaseSettings::GetItemDefinition(FName ItemDefinitionId, FMOItemD
 		return false;
 	}
 
+	// Build cache if needed
+	BuildCacheIfNeeded();
+
+	// Look up in cache
+	const FMOItemDefinitionRow* CachedRow = CachedItemDefinitions.Find(ItemDefinitionId);
+	if (CachedRow)
+	{
+		OutDefinition = *CachedRow;
+		return true;
+	}
+
+	return false;
+}
+
+void UMOItemDatabaseSettings::BuildCacheIfNeeded()
+{
+	if (bCacheBuilt)
+	{
+		return;
+	}
+
 	const UMOItemDatabaseSettings* Settings = GetDefault<UMOItemDatabaseSettings>();
 	if (!Settings)
 	{
-		return false;
+		bCacheBuilt = true; // Mark as built to prevent repeated attempts
+		return;
 	}
 
 	UDataTable* DataTable = Settings->GetItemDefinitionsDataTable();
 	if (!IsValid(DataTable))
 	{
-		return false;
+		bCacheBuilt = true;
+		return;
 	}
 
-	const FMOItemDefinitionRow* FoundRow = DataTable->FindRow<FMOItemDefinitionRow>(ItemDefinitionId, TEXT("GetItemDefinition"), false);
-	if (!FoundRow)
+	// Build the cache from all rows
+	const TMap<FName, uint8*>& RowMap = DataTable->GetRowMap();
+	CachedItemDefinitions.Reserve(RowMap.Num());
+
+	for (const auto& Pair : RowMap)
 	{
-		return false;
+		const FMOItemDefinitionRow* Row = reinterpret_cast<const FMOItemDefinitionRow*>(Pair.Value);
+		if (Row)
+		{
+			CachedItemDefinitions.Add(Pair.Key, *Row);
+		}
 	}
 
-	OutDefinition = *FoundRow;
-	return true;
+	bCacheBuilt = true;
+	UE_LOG(LogMOFramework, Log, TEXT("[MOItemDatabase] Built cache with %d items"), CachedItemDefinitions.Num());
+}
+
+void UMOItemDatabaseSettings::InvalidateCache()
+{
+	CachedItemDefinitions.Empty();
+	bCacheBuilt = false;
+	UE_LOG(LogMOFramework, Log, TEXT("[MOItemDatabase] Cache invalidated"));
 }
 
 UTexture2D* UMOItemDatabaseSettings::GetItemIconSmall(FName ItemDefinitionId)

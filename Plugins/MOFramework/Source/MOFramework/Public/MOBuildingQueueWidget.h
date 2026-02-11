@@ -89,9 +89,6 @@ protected:
 	UFUNCTION()
 	void HandleCancelAllClicked();
 
-	/** Format time remaining as text. */
-	FText FormatTimeRemaining(float Seconds) const;
-
 	/** Blueprint event when queue is updated. */
 	UFUNCTION(BlueprintImplementableEvent, Category="MO|Building|UI")
 	void OnQueueUpdated(int32 QueueLength);

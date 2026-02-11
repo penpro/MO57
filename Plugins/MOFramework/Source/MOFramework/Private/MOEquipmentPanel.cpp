@@ -6,15 +6,27 @@
 #include "MOItemDatabaseSettings.h"
 #include "MOItemDefinitionRow.h"
 #include "Components/ProgressBar.h"
+#include "Engine/Texture2D.h"
 
 UMOEquipmentPanel::UMOEquipmentPanel(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
 }
 
+void UMOEquipmentPanel::NativePreConstruct()
+{
+	Super::NativePreConstruct();
+
+	// Apply custom empty icons in PreConstruct for editor preview
+	ApplyEmptyIconsToSlots();
+}
+
 void UMOEquipmentPanel::NativeConstruct()
 {
 	Super::NativeConstruct();
+
+	// Re-apply in Construct to ensure runtime correctness
+	ApplyEmptyIconsToSlots();
 
 	// Hide swap progress bars initially
 	if (LeftHandSwapProgress)
@@ -107,6 +119,44 @@ UMOInventorySlot* UMOEquipmentPanel::GetSlotWidget(EMOEquipmentSlot EquipSlot) c
 	case EMOEquipmentSlot::LeftHand:  return LeftHandSlot.Get();
 	case EMOEquipmentSlot::RightHand: return RightHandSlot.Get();
 	default: return nullptr;
+	}
+}
+
+UTexture2D* UMOEquipmentPanel::GetEmptyIconForSlot(EMOEquipmentSlot EquipSlot) const
+{
+	switch (EquipSlot)
+	{
+	case EMOEquipmentSlot::Head:      return HeadEmptyIcon.Get();
+	case EMOEquipmentSlot::Chest:     return ChestEmptyIcon.Get();
+	case EMOEquipmentSlot::Hands:     return HandsEmptyIcon.Get();
+	case EMOEquipmentSlot::Legs:      return LegsEmptyIcon.Get();
+	case EMOEquipmentSlot::Feet:      return FeetEmptyIcon.Get();
+	case EMOEquipmentSlot::Back:      return BackEmptyIcon.Get();
+	case EMOEquipmentSlot::LeftHand:  return LeftHandEmptyIcon.Get();
+	case EMOEquipmentSlot::RightHand: return RightHandEmptyIcon.Get();
+	default: return nullptr;
+	}
+}
+
+void UMOEquipmentPanel::ApplyEmptyIconsToSlots()
+{
+	for (int32 i = 0; i < static_cast<int32>(EMOEquipmentSlot::MAX); ++i)
+	{
+		EMOEquipmentSlot EquipSlot = static_cast<EMOEquipmentSlot>(i);
+		UMOInventorySlot* SlotWidget = GetSlotWidget(EquipSlot);
+
+		if (SlotWidget)
+		{
+			// Apply custom empty icon if configured
+			UTexture2D* EmptyIcon = GetEmptyIconForSlot(EquipSlot);
+			if (EmptyIcon)
+			{
+				SlotWidget->SetCustomEmptyIcon(EmptyIcon);
+			}
+
+			// Disable world drop on equipment slots - failed equips should do nothing
+			SlotWidget->bEnableWorldDrop = false;
+		}
 	}
 }
 

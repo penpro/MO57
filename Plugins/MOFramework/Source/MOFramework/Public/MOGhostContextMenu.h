@@ -1,7 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Blueprint/UserWidget.h"
+#include "MOContextMenuBase.h"
 #include "MOItemDefinitionRow.h"
 #include "MOGhostContextMenu.generated.h"
 
@@ -70,7 +70,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOGhostMenuBuildStartedSignature);
  * 7. "Cancel" destroys ghost and drops deposited materials
  */
 UCLASS(Abstract, Blueprintable)
-class MOFRAMEWORK_API UMOGhostContextMenu : public UUserWidget
+class MOFRAMEWORK_API UMOGhostContextMenu : public UMOContextMenuBase
 {
 	GENERATED_BODY()
 
@@ -160,12 +160,7 @@ public:
 	UPROPERTY(BlueprintAssignable, Category="MO|Building|UI")
 	FMOGhostMenuBuildStartedSignature OnBuildStarted;
 
-	/**
-	 * Set the screen position for this popup menu.
-	 * @param ScreenPosition - Position in screen space
-	 */
-	UFUNCTION(BlueprintCallable, Category="MO|Building|UI")
-	void SetPopupPosition(FVector2D ScreenPosition);
+	// SetPopupPosition is inherited from UMOContextMenuBase
 
 	/**
 	 * Check if build is complete.
@@ -173,12 +168,14 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO|Building|UI")
 	bool IsBuildComplete() const;
 
+	// Override to broadcast the legacy OnRequestClose delegate
+	virtual void RequestClose() override;
+
 protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
-	virtual FReply NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
-	virtual void NativeOnMouseEnter(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
-	virtual void NativeOnMouseLeave(const FPointerEvent& InMouseEvent) override;
+	// Key handling and mouse enter/leave inherited from UMOContextMenuBase
+	virtual bool ShouldCloseOnMouseLeave() const override;
 
 	// ============================================================================
 	// WIDGET BINDINGS
@@ -278,17 +275,7 @@ private:
 	UPROPERTY()
 	TArray<FMODepositedMaterial> DepositedMaterialsForRefund;
 
-	/** Whether to close menu when mouse leaves (disabled by default since we use click-outside). */
-	bool bCloseOnMouseLeave = false;
-
-	/** Time to wait before closing on mouse leave (grace period). */
-	float MouseLeaveGraceTime = 0.3f;
-
-	/** Timer for mouse leave grace period. */
-	float MouseLeaveTimer = 0.0f;
-
-	/** Whether mouse is currently over the widget. */
-	bool bIsMouseOver = false;
+	// Mouse leave handling is inherited from UMOContextMenuBase
 
 	// ============================================================================
 	// INTERNAL

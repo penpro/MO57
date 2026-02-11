@@ -5,12 +5,21 @@
 #include "MORecipeDatabaseSettings.h"
 #include "MONotificationComponent.h"
 #include "MOInventoryComponent.h"
+#include "MOUIUtils.h"
 #include "Components/TextBlock.h"
 #include "GameFramework/PlayerController.h"
 
 UMOStationContextMenu::UMOStationContextMenu(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
+}
+
+void UMOStationContextMenu::RequestClose()
+{
+	// Broadcast legacy delegate for backward compatibility
+	OnRequestClose.Broadcast();
+	// Also call base which broadcasts OnCloseRequested
+	Super::RequestClose();
 }
 
 // ============================================================================
@@ -70,7 +79,7 @@ void UMOStationContextMenu::OpenInventory()
 	}
 
 	OnOpenClicked.Broadcast();
-	OnRequestClose.Broadcast();
+	RequestClose();
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOStationContextMenu] Open inventory requested"));
 }
@@ -84,7 +93,7 @@ void UMOStationContextMenu::OpenCraftingMenu()
 	}
 
 	OnCraftClicked.Broadcast();
-	OnRequestClose.Broadcast();
+	RequestClose();
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOStationContextMenu] Open crafting menu requested"));
 }
@@ -203,9 +212,10 @@ FText UMOStationContextMenu::GetFuelTimeText() const
 		return FText::FromString(TEXT("No fuel needed"));
 	}
 
-	int32 Minutes = FMath::FloorToInt(TimeRemaining / 60.0f);
-	int32 Seconds = FMath::FloorToInt(FMath::Fmod(TimeRemaining, 60.0f));
-	return FText::FromString(FString::Printf(TEXT("%d:%02d remaining"), Minutes, Seconds));
+	return FText::Format(
+		NSLOCTEXT("MOStation", "FuelTimeRemaining", "{0} remaining"),
+		UMOUIUtils::FormatDurationAsTimeCode(TimeRemaining)
+	);
 }
 
 FText UMOStationContextMenu::GetStationName() const
@@ -231,17 +241,7 @@ FText UMOStationContextMenu::GetStationName() const
 	return FText::FromString(UEnum::GetValueAsString(Station->GetStationType()));
 }
 
-// ============================================================================
-// POSITIONING
-// ============================================================================
-
-void UMOStationContextMenu::SetPopupPosition(FVector2D ScreenPosition)
-{
-	SetPositionInViewport(ScreenPosition, true);
-
-	UE_LOG(LogMOFramework, Verbose, TEXT("[MOStationContextMenu] SetPopupPosition called with (%.0f, %.0f)"),
-		ScreenPosition.X, ScreenPosition.Y);
-}
+// SetPopupPosition is inherited from UMOContextMenuBase
 
 // ============================================================================
 // OVERRIDES
@@ -273,7 +273,7 @@ void UMOStationContextMenu::NativeTick(const FGeometry& MyGeometry, float InDelt
 	// Check if station is still valid
 	if (!TargetStation.IsValid())
 	{
-		OnRequestClose.Broadcast();
+		RequestClose();
 		return;
 	}
 
@@ -293,17 +293,7 @@ void UMOStationContextMenu::NativeTick(const FGeometry& MyGeometry, float InDelt
 	}
 }
 
-FReply UMOStationContextMenu::NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent)
-{
-	// Close on Escape or Tab
-	if (InKeyEvent.GetKey() == EKeys::Escape || InKeyEvent.GetKey() == EKeys::Tab)
-	{
-		OnRequestClose.Broadcast();
-		return FReply::Handled();
-	}
-
-	return Super::NativeOnKeyDown(InGeometry, InKeyEvent);
-}
+// NativeOnKeyDown is inherited from UMOContextMenuBase
 
 // ============================================================================
 // HANDLERS

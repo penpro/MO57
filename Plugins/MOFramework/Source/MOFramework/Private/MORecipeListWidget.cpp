@@ -125,6 +125,9 @@ void UMORecipeListWidget::SelectRecipe(FName RecipeId)
 	// Broadcast selection
 	if (SelectedRecipeId != OldSelection)
 	{
+		// Broadcast standard delegate (prefer this for new code)
+		OnRecipeSelection.Broadcast(SelectedRecipeId);
+		// Broadcast legacy delegate for backward compatibility
 		OnRecipeSelected.Broadcast(SelectedRecipeId);
 	}
 }

@@ -227,6 +227,10 @@ void UMOUnifiedInventoryMenu::UnbindButtonEvents()
 	{
 		NearbyPanel->OnNearbyItemsChanged.RemoveDynamic(this, &UMOUnifiedInventoryMenu::HandleNearbyItemsChanged);
 	}
+	if (EquipmentPanel)
+	{
+		EquipmentPanel->OnSlotDropReceived.RemoveDynamic(this, &UMOUnifiedInventoryMenu::HandleEquipmentSlotDropReceived);
+	}
 }
 
 // ============================================================================
@@ -262,6 +266,7 @@ void UMOUnifiedInventoryMenu::InitializeMenu(UMOInventoryComponent* PlayerInvent
 			{
 				CachedEquipmentComponent = EquipComp;
 				EquipmentPanel->InitializePanel(EquipComp, PlayerInventory);
+				EquipmentPanel->OnSlotDropReceived.AddDynamic(this, &UMOUnifiedInventoryMenu::HandleEquipmentSlotDropReceived);
 				UE_LOG(LogMOFramework, Log, TEXT("[UnifiedInventoryMenu] Initialized equipment panel"));
 			}
 		}
@@ -859,6 +864,21 @@ void UMOUnifiedInventoryMenu::HandlePlayerSlotDropReceived(int32 TargetSlotIndex
 			RefreshNearbyPanel();
 		}
 	}
+}
+
+void UMOUnifiedInventoryMenu::HandleEquipmentSlotDropReceived(EMOEquipmentSlot TargetSlot, const FGuid& ItemGuid, UMOInventoryComponent* SourceInventory)
+{
+	// When an item is dropped onto equipment, refresh both panels
+	// This ensures the UI reflects the current state whether equip succeeded or failed
+	if (PlayerInventoryGrid)
+	{
+		PlayerInventoryGrid->RefreshAllSlots();
+	}
+	if (EquipmentPanel)
+	{
+		EquipmentPanel->RefreshDisplay();
+	}
+	UE_LOG(LogMOFramework, Log, TEXT("[UnifiedInventoryMenu] Refreshed inventory and equipment after equipment drop"));
 }
 
 // ============================================================================

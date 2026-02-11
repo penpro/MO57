@@ -1,7 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Blueprint/UserWidget.h"
+#include "MOContextMenuBase.h"
 #include "MOStationContextMenu.generated.h"
 
 class AMOCraftingStationActor;
@@ -22,7 +22,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOStationMenuLightSignature);
  * - Light: Activates the station (grayed out if no fuel)
  */
 UCLASS(Abstract, Blueprintable)
-class MOFRAMEWORK_API UMOStationContextMenu : public UUserWidget
+class MOFRAMEWORK_API UMOStationContextMenu : public UMOContextMenuBase
 {
 	GENERATED_BODY()
 
@@ -96,16 +96,10 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO|CraftingStation|UI")
 	FText GetStationName() const;
 
-	// ============================================================================
-	// POSITIONING
-	// ============================================================================
+	// SetPopupPosition is inherited from UMOContextMenuBase
 
-	/**
-	 * Set the screen position for this popup menu.
-	 * @param ScreenPosition - Position in screen space
-	 */
-	UFUNCTION(BlueprintCallable, Category="MO|CraftingStation|UI")
-	void SetPopupPosition(FVector2D ScreenPosition);
+	// Override to broadcast legacy OnRequestClose delegate
+	virtual void RequestClose() override;
 
 	// ============================================================================
 	// DELEGATES
@@ -126,7 +120,7 @@ public:
 protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
-	virtual FReply NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
+	// NativeOnKeyDown is inherited from UMOContextMenuBase
 
 	// ============================================================================
 	// WIDGET BINDINGS

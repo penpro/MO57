@@ -103,6 +103,13 @@ bool UMOEquipmentComponent::EquipFromInventory(UMOInventoryComponent* Inventory,
 		return false;
 	}
 
+	// Check if item can be equipped to this slot
+	if (!CanEquipToSlot(Entry.ItemDefinitionId, EquipSlot))
+	{
+		UE_LOG(LogMOFramework, Verbose, TEXT("[MOEquipmentComponent] Item %s cannot be equipped to slot %d"), *Entry.ItemDefinitionId.ToString(), static_cast<int32>(EquipSlot));
+		return false;
+	}
+
 	// Check if slot is currently swapping (only for hand slots)
 	if (IsHandSlot(EquipSlot) && IsSlotSwapping(EquipSlot))
 	{
@@ -295,14 +302,39 @@ void UMOEquipmentComponent::GetAllEquippedItems(TArray<FMOEquippedItem>& OutItem
 
 bool UMOEquipmentComponent::CanEquipToSlot(FName ItemDefinitionId, EMOEquipmentSlot EquipSlot) const
 {
-	// TODO: Check item definition for slot compatibility tags
-	// For now, allow any equippable item to any slot
 	FMOItemDefinitionRow ItemDef;
 	if (!UMOItemDatabaseSettings::GetItemDefinition(ItemDefinitionId, ItemDef))
 	{
 		return false;
 	}
-	return ItemDef.bEquippable;
+
+	if (!ItemDef.bEquippable)
+	{
+		return false;
+	}
+
+	// Check if the item's equipment slot type matches the target slot
+	switch (ItemDef.EquipmentSlotType)
+	{
+	case EMOEquipmentSlotType::None:
+		return false;
+	case EMOEquipmentSlotType::Head:
+		return EquipSlot == EMOEquipmentSlot::Head;
+	case EMOEquipmentSlotType::Chest:
+		return EquipSlot == EMOEquipmentSlot::Chest;
+	case EMOEquipmentSlotType::Hands:
+		return EquipSlot == EMOEquipmentSlot::Hands;
+	case EMOEquipmentSlotType::Legs:
+		return EquipSlot == EMOEquipmentSlot::Legs;
+	case EMOEquipmentSlotType::Feet:
+		return EquipSlot == EMOEquipmentSlot::Feet;
+	case EMOEquipmentSlotType::Back:
+		return EquipSlot == EMOEquipmentSlot::Back;
+	case EMOEquipmentSlotType::Held:
+		return EquipSlot == EMOEquipmentSlot::LeftHand || EquipSlot == EMOEquipmentSlot::RightHand;
+	default:
+		return false;
+	}
 }
 
 // ============================================================================

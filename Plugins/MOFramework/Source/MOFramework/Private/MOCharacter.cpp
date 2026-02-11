@@ -18,6 +18,7 @@
 #include "MOAdrenalineComponent.h"
 #include "MOCraftingQueueComponent.h"
 #include "MORecipeDiscoveryComponent.h"
+#include "MOEquipmentComponent.h"
 #include "MONotificationComponent.h"
 #include "MOCraftingTypes.h"
 #include "MOTerraformingComponent.h"
@@ -80,6 +81,9 @@ AMOCharacter::AMOCharacter()
 
 	// MO Components - Terraforming
 	TerraformingComponent = CreateDefaultSubobject<UMOTerraformingComponent>(TEXT("TerraformingComponent"));
+
+	// MO Components - Equipment
+	EquipmentComponent = CreateDefaultSubobject<UMOEquipmentComponent>(TEXT("EquipmentComponent"));
 
 	// Default mesh position (mesh itself loaded in BeginPlay if DefaultMesh is set)
 	GetMesh()->SetRelativeLocation(FVector(0.0f, 0.0f, -96.0f));

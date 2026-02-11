@@ -35,6 +35,22 @@ enum class EMOItemRarity : uint8
 	Legendary UMETA(DisplayName="Legendary"),
 };
 
+/**
+ * Equipment slot type for items. Determines which equipment slot(s) the item can be equipped to.
+ */
+UENUM(BlueprintType)
+enum class EMOEquipmentSlotType : uint8
+{
+	None UMETA(DisplayName="None (Not Equippable)"),
+	Head UMETA(DisplayName="Head"),
+	Chest UMETA(DisplayName="Chest"),
+	Hands UMETA(DisplayName="Hands (Gloves)"),
+	Legs UMETA(DisplayName="Legs"),
+	Feet UMETA(DisplayName="Feet"),
+	Back UMETA(DisplayName="Back (Backpack)"),
+	Held UMETA(DisplayName="Held (Left/Right Hand)"),
+};
+
 USTRUCT(BlueprintType)
 struct MOFRAMEWORK_API FMOItemUIVisual
 {
@@ -230,6 +246,10 @@ struct MOFRAMEWORK_API FMOItemDefinitionRow : public FTableRowBase
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Flags")
 	bool bEquippable = false;
+
+	/** Which equipment slot type this item can be equipped to. Only used if bEquippable is true. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Flags", meta=(EditCondition="bEquippable"))
+	EMOEquipmentSlotType EquipmentSlotType = EMOEquipmentSlotType::None;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Flags")
 	bool bQuestItem = false;

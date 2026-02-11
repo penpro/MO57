@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
 #include "MORecipeDefinitionRow.h"
+#include "MOUIDelegates.h"
 #include "MOCraftingMenu.generated.h"
 
 class UMOInventoryComponent;
@@ -20,6 +21,7 @@ class UTextBlock;
 class UCheckBox;
 class AMOCraftingStationActor;
 
+// Legacy delegate - prefer FMOUIRequestClose from MOUIDelegates.h for new code
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOCraftingMenuRequestCloseSignature);
 
 /**
@@ -125,6 +127,11 @@ public:
 
 	// --- Delegates ---
 
+	/** Broadcast when the menu wants to close. Uses standard delegate signature. */
+	UPROPERTY(BlueprintAssignable, Category="MO|Crafting|UI")
+	FMOUIRequestClose OnCloseRequested;
+
+	/** @deprecated Use OnCloseRequested instead. Broadcast for backward compatibility. */
 	UPROPERTY(BlueprintAssignable, Category="MO|Crafting|UI")
 	FMOCraftingMenuRequestCloseSignature OnRequestClose;
 

@@ -8,7 +8,11 @@
 void UMOPossessionMenu::NativeConstruct()
 {
 	Super::NativeConstruct();
+	EnsureButtonBindings();
+}
 
+void UMOPossessionMenu::EnsureButtonBindings()
+{
 	if (CloseButton)
 	{
 		CloseButton->OnClicked().RemoveAll(this);
@@ -19,6 +23,11 @@ void UMOPossessionMenu::NativeConstruct()
 	{
 		CreateCharacterButton->OnClicked().RemoveAll(this);
 		CreateCharacterButton->OnClicked().AddUObject(this, &UMOPossessionMenu::HandleCreateCharacterClicked);
+		UE_LOG(LogMOFramework, Log, TEXT("[MOPossessionMenu] CreateCharacterButton binding ensured"));
+	}
+	else
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOPossessionMenu] CreateCharacterButton is NULL!"));
 	}
 }
 
@@ -153,6 +162,8 @@ void UMOPossessionMenu::HandleCloseClicked()
 
 void UMOPossessionMenu::HandleCreateCharacterClicked()
 {
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOPossessionMenu] HandleCreateCharacterClicked - broadcasting OnCreateCharacter (IsBound: %s)"),
+		OnCreateCharacter.IsBound() ? TEXT("YES") : TEXT("NO"));
 	OnCreateCharacter.Broadcast();
 }
 

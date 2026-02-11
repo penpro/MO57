@@ -1,5 +1,6 @@
 #include "MOPossessionSubsystem.h"
 #include "MOFramework.h"
+#include "MOViewpointUtils.h"
 
 #include "Engine/World.h"
 #include "EngineUtils.h"
@@ -12,13 +13,8 @@
 
 bool UMOPossessionSubsystem::ResolveViewpoint(APlayerController* PlayerController, FVector& OutViewLocation, FRotator& OutViewRotation) const
 {
-	if (!IsValid(PlayerController))
-	{
-		return false;
-	}
-
-	PlayerController->GetPlayerViewPoint(OutViewLocation, OutViewRotation);
-	return true;
+	// Delegate to shared utility
+	return UMOViewpointUtils::ResolveViewpointForPlayerController(PlayerController, OutViewLocation, OutViewRotation);
 }
 
 bool UMOPossessionSubsystem::HasLineOfSight(UWorld* World, const FVector& ViewLocation, const APawn* TargetPawn) const
@@ -33,15 +29,15 @@ bool UMOPossessionSubsystem::HasLineOfSight(UWorld* World, const FVector& ViewLo
 		return false;
 	}
 
-	const FVector TargetLocation = TargetPawn->GetActorLocation();
-
-	FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(MOPossessionLOS), true);
-	QueryParams.bReturnPhysicalMaterial = false;
-	QueryParams.AddIgnoredActor(TargetPawn);
-
-	FHitResult Hit;
-	const bool bHit = World->LineTraceSingleByChannel(Hit, ViewLocation, TargetLocation, LineOfSightTraceChannel.GetValue(), QueryParams);
-	return !bHit;
+	// Use simple line of sight check (no attached actor consideration for possession)
+	// We ignore the target pawn in the trace
+	return UMOViewpointUtils::HasLineOfSightSimple(
+		World,
+		ViewLocation,
+		TargetPawn->GetActorLocation(),
+		LineOfSightTraceChannel.GetValue(),
+		const_cast<APawn*>(TargetPawn)  // Safe to const_cast - only used for ignore list
+	);
 }
 
 APawn* UMOPossessionSubsystem::FindNearestUnpossessedPawn(APlayerController* PlayerController) const

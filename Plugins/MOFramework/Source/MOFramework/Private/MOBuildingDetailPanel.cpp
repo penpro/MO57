@@ -5,13 +5,7 @@
 #include "MORecipeDiscoveryComponent.h"
 #include "MORecipeDatabaseSettings.h"
 #include "MOItemDatabaseSettings.h"
-#include "MOCommonButton.h"
-#include "Components/TextBlock.h"
-#include "Components/Image.h"
-#include "Components/VerticalBox.h"
-#include "Components/PanelWidget.h"
-#include "Components/SpinBox.h"
-#include "Components/Slider.h"
+#include "MOUIUtils.h"
 #include "Components/CheckBox.h"
 
 UMOBuildingDetailPanel::UMOBuildingDetailPanel(const FObjectInitializer& ObjectInitializer)
@@ -19,158 +13,9 @@ UMOBuildingDetailPanel::UMOBuildingDetailPanel(const FObjectInitializer& ObjectI
 {
 }
 
-void UMOBuildingDetailPanel::InitializePanel(
-	UMOInventoryComponent* InInventory,
-	UMOSkillsComponent* InSkills,
-	UMORecipeDiscoveryComponent* InDiscovery)
+void UMOBuildingDetailPanel::NativeConstruct()
 {
-	InventoryComponent = InInventory;
-	SkillsComponent = InSkills;
-	DiscoveryComponent = InDiscovery;
-}
-
-void UMOBuildingDetailPanel::DisplayRecipe(FName RecipeId)
-{
-	DisplayedRecipeId = RecipeId;
-	BuildAmount = 1;
-
-	if (RecipeId.IsNone())
-	{
-		ClearDisplay();
-		return;
-	}
-
-	const FMORecipeDefinitionRow* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(RecipeId);
-	if (!Recipe || !Recipe->bIsBuilding)
-	{
-		ClearDisplay();
-		return;
-	}
-
-	GatherRange = Recipe->BuildRange;
-
-	// Update name
-	if (RecipeNameText)
-	{
-		RecipeNameText->SetText(Recipe->DisplayName);
-	}
-
-	// Update description
-	if (RecipeDescriptionText)
-	{
-		RecipeDescriptionText->SetText(Recipe->Description);
-	}
-
-	// Update icon
-	if (RecipeIcon)
-	{
-		UTexture2D* IconTexture = nullptr;
-
-		if (!Recipe->Icon.IsNull())
-		{
-			IconTexture = Recipe->Icon.LoadSynchronous();
-		}
-
-		if (IconTexture)
-		{
-			RecipeIcon->SetBrushFromTexture(IconTexture);
-			RecipeIcon->SetVisibility(ESlateVisibility::Visible);
-		}
-		else
-		{
-			RecipeIcon->SetVisibility(ESlateVisibility::Hidden);
-		}
-	}
-
-	// Update skill requirement text
-	if (SkillRequirementText)
-	{
-		if (!Recipe->RequiredSkillId.IsNone() && Recipe->RequiredSkillLevel > 0)
-		{
-			int32 CurrentLevel = 0;
-			if (UMOSkillsComponent* Skills = SkillsComponent.Get())
-			{
-				CurrentLevel = Skills->GetSkillLevel(Recipe->RequiredSkillId);
-			}
-
-			FText SkillText = FText::Format(
-				NSLOCTEXT("MOBuilding", "SkillReq", "{0}: {1}/{2}"),
-				FText::FromName(Recipe->RequiredSkillId),
-				FText::AsNumber(CurrentLevel),
-				FText::AsNumber(Recipe->RequiredSkillLevel)
-			);
-			SkillRequirementText->SetText(SkillText);
-			SkillRequirementText->SetVisibility(ESlateVisibility::Visible);
-		}
-		else
-		{
-			SkillRequirementText->SetVisibility(ESlateVisibility::Collapsed);
-		}
-	}
-
-	// Update build time text (uses CraftTimeText binding for compatibility)
-	if (CraftTimeText)
-	{
-		if (Recipe->TotalBuildTime > 0.0f)
-		{
-			FText TimeText;
-			if (Recipe->TotalBuildTime >= 3600.0f)
-			{
-				float Hours = Recipe->TotalBuildTime / 3600.0f;
-				TimeText = FText::Format(NSLOCTEXT("MOBuilding", "TimeHours", "{0}h"), FText::AsNumber(FMath::RoundToInt(Hours * 10) / 10.0f));
-			}
-			else if (Recipe->TotalBuildTime >= 60.0f)
-			{
-				float Minutes = Recipe->TotalBuildTime / 60.0f;
-				TimeText = FText::Format(NSLOCTEXT("MOBuilding", "TimeMinutes", "{0}m"), FText::AsNumber(FMath::RoundToInt(Minutes)));
-			}
-			else
-			{
-				TimeText = FText::Format(NSLOCTEXT("MOBuilding", "TimeSeconds", "{0}s"), FText::AsNumber(FMath::RoundToInt(Recipe->TotalBuildTime)));
-			}
-			CraftTimeText->SetText(TimeText);
-			CraftTimeText->SetVisibility(ESlateVisibility::Visible);
-		}
-		else
-		{
-			CraftTimeText->SetText(NSLOCTEXT("MOBuilding", "Instant", "Instant"));
-			CraftTimeText->SetVisibility(ESlateVisibility::Visible);
-		}
-	}
-
-	// Build part data (ingredients)
-	CachedBuildParts.Empty();
-	for (const FMOBuildPart& Part : Recipe->BuildParts)
-	{
-		CachedBuildParts.Add(BuildPartData(Part));
-	}
-
-	// Build output data
-	CachedOutputs.Empty();
-	CachedOutputs.Add(BuildOutputData(Recipe));
-
-	// Populate containers with text widgets
-	PopulateIngredientsContainer();
-	PopulateOutputsContainer();
-
-	// Update build amount controls
-	int32 MaxAmount = FMath::Max(1, GetMaxBuildableAmount());
-
-	if (CraftAmountSpinBox)
-	{
-		CraftAmountSpinBox->SetMaxValue(static_cast<float>(MaxAmount));
-		CraftAmountSpinBox->SetMaxSliderValue(static_cast<float>(MaxAmount));
-		CraftAmountSpinBox->SetValue(BuildAmount);
-	}
-	if (CraftAmountSlider)
-	{
-		CraftAmountSlider->SetMaxValue(static_cast<float>(MaxAmount));
-		CraftAmountSlider->SetValue(static_cast<float>(BuildAmount));
-	}
-	if (CraftAmountText)
-	{
-		CraftAmountText->SetText(FText::AsNumber(BuildAmount));
-	}
+	Super::NativeConstruct();
 
 	// Set default checkbox states
 	if (InventoryCheckbox)
@@ -185,73 +30,36 @@ void UMOBuildingDetailPanel::DisplayRecipe(FName RecipeId)
 	{
 		SurroundingCheckbox->SetIsChecked(true);
 	}
-
-	UpdateBuildButtonState();
-
-	// Notify Blueprint
-	OnRecipeDisplayed(RecipeId, Recipe->DisplayName, Recipe->Description);
-	OnBuildPartsUpdated(CachedBuildParts);
-	OnOutputsUpdated(CachedOutputs);
 }
 
-void UMOBuildingDetailPanel::ClearDisplay()
+FMOBuildProgress UMOBuildingDetailPanel::GetBuildOptions() const
 {
-	DisplayedRecipeId = NAME_None;
-	CachedBuildParts.Empty();
-	CachedOutputs.Empty();
+	FMOBuildProgress Options;
 
-	// Clear ingredient widgets
-	for (UTextBlock* TextWidget : IngredientTextWidgets)
-	{
-		if (TextWidget)
-		{
-			TextWidget->RemoveFromParent();
-		}
-	}
-	IngredientTextWidgets.Empty();
+	Options.bDrawFromInventory = InventoryCheckbox ? InventoryCheckbox->IsChecked() : true;
+	Options.bDrawFromNearbyContainers = ContainersCheckbox ? ContainersCheckbox->IsChecked() : true;
+	Options.bDrawFromSurroundingArea = SurroundingCheckbox ? SurroundingCheckbox->IsChecked() : true;
+	Options.GatherRange = GatherRange;
 
-	// Clear output widgets
-	for (UTextBlock* TextWidget : OutputTextWidgets)
-	{
-		if (TextWidget)
-		{
-			TextWidget->RemoveFromParent();
-		}
-	}
-	OutputTextWidgets.Empty();
+	return Options;
+}
 
-	if (RecipeNameText)
-	{
-		RecipeNameText->SetText(FText::GetEmpty());
-	}
-	if (RecipeDescriptionText)
-	{
-		RecipeDescriptionText->SetText(FText::GetEmpty());
-	}
-	if (RecipeIcon)
-	{
-		RecipeIcon->SetVisibility(ESlateVisibility::Hidden);
-	}
-	if (SkillRequirementText)
-	{
-		SkillRequirementText->SetVisibility(ESlateVisibility::Collapsed);
-	}
-	if (CraftTimeText)
-	{
-		CraftTimeText->SetVisibility(ESlateVisibility::Collapsed);
-	}
-	if (CraftButton)
-	{
-		CraftButton->SetIsEnabled(false);
-	}
+void UMOBuildingDetailPanel::GetBuildParts(TArray<FMOBuildPartDisplayData>& OutBuildParts) const
+{
+	OutBuildParts = CachedBuildParts;
+}
+
+void UMOBuildingDetailPanel::GetOutputs(TArray<FMOBuildOutputDisplayData>& OutOutputs) const
+{
+	OutOutputs = CachedOutputs;
 }
 
 void UMOBuildingDetailPanel::RefreshDisplay()
 {
 	if (!DisplayedRecipeId.IsNone())
 	{
-		// Rebuild part data with updated counts
-		const FMORecipeDefinitionRow* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(DisplayedRecipeId);
+		// Rebuild build part data with updated counts
+		const FMORecipeDefinitionRow* Recipe = GetDisplayedRecipe();
 		if (Recipe)
 		{
 			CachedBuildParts.Empty();
@@ -260,45 +68,22 @@ void UMOBuildingDetailPanel::RefreshDisplay()
 				CachedBuildParts.Add(BuildPartData(Part));
 			}
 
-			// Repopulate the container
-			PopulateIngredientsContainer();
-
 			OnBuildPartsUpdated(CachedBuildParts);
 		}
-
-		UpdateBuildButtonState();
 	}
+
+	// Call base class to populate container and update button state
+	Super::RefreshDisplay();
 }
 
-void UMOBuildingDetailPanel::SetBuildAmount(int32 Amount)
-{
-	int32 MaxAmount = FMath::Max(1, GetMaxBuildableAmount());
-	BuildAmount = FMath::Clamp(Amount, 1, MaxAmount);
-
-	if (CraftAmountSpinBox)
-	{
-		CraftAmountSpinBox->SetValue(BuildAmount);
-	}
-	if (CraftAmountSlider)
-	{
-		CraftAmountSlider->SetValue(static_cast<float>(BuildAmount));
-	}
-	if (CraftAmountText)
-	{
-		CraftAmountText->SetText(FText::AsNumber(BuildAmount));
-	}
-
-	UpdateBuildButtonState();
-}
-
-int32 UMOBuildingDetailPanel::GetMaxBuildableAmount() const
+int32 UMOBuildingDetailPanel::GetMaxPerformableAmount() const
 {
 	if (DisplayedRecipeId.IsNone())
 	{
 		return 0;
 	}
 
-	const FMORecipeDefinitionRow* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(DisplayedRecipeId);
+	const FMORecipeDefinitionRow* Recipe = GetDisplayedRecipe();
 	if (!Recipe)
 	{
 		return 0;
@@ -326,29 +111,7 @@ int32 UMOBuildingDetailPanel::GetMaxBuildableAmount() const
 	return MaxAmount == INT_MAX ? 0 : MaxAmount;
 }
 
-FMOBuildProgress UMOBuildingDetailPanel::GetBuildOptions() const
-{
-	FMOBuildProgress Options;
-
-	Options.bDrawFromInventory = InventoryCheckbox ? InventoryCheckbox->IsChecked() : true;
-	Options.bDrawFromNearbyContainers = ContainersCheckbox ? ContainersCheckbox->IsChecked() : true;
-	Options.bDrawFromSurroundingArea = SurroundingCheckbox ? SurroundingCheckbox->IsChecked() : true;
-	Options.GatherRange = GatherRange;
-
-	return Options;
-}
-
-void UMOBuildingDetailPanel::GetBuildParts(TArray<FMOBuildPartDisplayData>& OutBuildParts) const
-{
-	OutBuildParts = CachedBuildParts;
-}
-
-void UMOBuildingDetailPanel::GetOutputs(TArray<FMOBuildOutputDisplayData>& OutOutputs) const
-{
-	OutOutputs = CachedOutputs;
-}
-
-bool UMOBuildingDetailPanel::CanBuildCurrentRecipe() const
+bool UMOBuildingDetailPanel::CanPerformAction() const
 {
 	if (DisplayedRecipeId.IsNone())
 	{
@@ -361,7 +124,7 @@ bool UMOBuildingDetailPanel::CanBuildCurrentRecipe() const
 		// Only check items, not actions
 		if (!Part.bIsAction)
 		{
-			int32 TotalRequired = Part.RequiredQuantity * BuildAmount;
+			int32 TotalRequired = Part.RequiredQuantity * ActionAmount;
 			if (Part.AvailableQuantity < TotalRequired)
 			{
 				return false;
@@ -372,67 +135,107 @@ bool UMOBuildingDetailPanel::CanBuildCurrentRecipe() const
 	return true;
 }
 
-void UMOBuildingDetailPanel::NativeConstruct()
+void UMOBuildingDetailPanel::OnDisplayRecipe(const FMORecipeDefinitionRow* Recipe)
 {
-	Super::NativeConstruct();
-
-	// Remove first to avoid duplicate bindings when widget is re-added to viewport
-	if (CraftButton)
+	// Only accept building recipes
+	if (!Recipe->bIsBuilding)
 	{
-		CraftButton->OnClicked().RemoveAll(this);
-		CraftButton->OnClicked().AddUObject(this, &UMOBuildingDetailPanel::HandleBuildButtonClicked);
+		ClearDisplay();
+		return;
 	}
 
-	if (CraftMaxButton)
+	GatherRange = Recipe->BuildRange;
+
+	// Build part data (ingredients)
+	CachedBuildParts.Empty();
+	for (const FMOBuildPart& Part : Recipe->BuildParts)
 	{
-		CraftMaxButton->OnClicked().RemoveAll(this);
-		CraftMaxButton->OnClicked().AddUObject(this, &UMOBuildingDetailPanel::HandleBuildMaxButtonClicked);
+		CachedBuildParts.Add(BuildPartData(Part));
 	}
 
-	if (CraftAmountSpinBox)
+	// Build output data
+	CachedOutputs.Empty();
+	CachedOutputs.Add(BuildOutputData(Recipe));
+
+	// Notify Blueprint
+	OnRecipeDisplayed(DisplayedRecipeId, Recipe->DisplayName, Recipe->Description);
+	OnBuildPartsUpdated(CachedBuildParts);
+	OnOutputsUpdated(CachedOutputs);
+}
+
+void UMOBuildingDetailPanel::PopulateRequirementsContainer()
+{
+	// Clear existing widgets using base class helper
+	ClearTextWidgets(IngredientTextWidgets);
+
+	if (!IngredientsContainer)
 	{
-		CraftAmountSpinBox->OnValueChanged.RemoveDynamic(this, &UMOBuildingDetailPanel::HandleBuildAmountChanged);
-		CraftAmountSpinBox->OnValueChanged.AddDynamic(this, &UMOBuildingDetailPanel::HandleBuildAmountChanged);
-		// Set minimum to 1
-		CraftAmountSpinBox->SetMinValue(1.0f);
-		CraftAmountSpinBox->SetMinSliderValue(1.0f);
+		return;
 	}
 
-	if (CraftAmountSlider)
+	// Create text widget for each build part
+	for (const FMOBuildPartDisplayData& Part : CachedBuildParts)
 	{
-		CraftAmountSlider->OnValueChanged.RemoveDynamic(this, &UMOBuildingDetailPanel::HandleBuildAmountChanged);
-		CraftAmountSlider->OnValueChanged.AddDynamic(this, &UMOBuildingDetailPanel::HandleBuildAmountChanged);
-		CraftAmountSlider->SetMinValue(1.0f);
+		FText DisplayText;
+
+		if (Part.bIsAction)
+		{
+			// Action: "Dig x1"
+			DisplayText = UMOUIUtils::FormatActionDisplay(Part.DisplayName, Part.RequiredQuantity);
+		}
+		else
+		{
+			// Item: "Stone (have/need)"
+			DisplayText = UMOUIUtils::FormatQuantityDisplay(
+				Part.DisplayName,
+				Part.AvailableQuantity,
+				Part.RequiredQuantity
+			);
+		}
+
+		AddTextWidget(IngredientsContainer, IngredientTextWidgets, DisplayText, Part.bHasEnough);
 	}
 }
 
-void UMOBuildingDetailPanel::HandleBuildButtonClicked()
+void UMOBuildingDetailPanel::PopulateOutputsContainer()
 {
-	if (!DisplayedRecipeId.IsNone() && CanBuildCurrentRecipe())
+	// Clear existing widgets using base class helper
+	ClearTextWidgets(OutputTextWidgets);
+
+	if (!OutputsContainer)
 	{
-		OnBuildRequested.Broadcast(DisplayedRecipeId, BuildAmount);
+		return;
+	}
+
+	// Create text widget for each output
+	for (const FMOBuildOutputDisplayData& Output : CachedOutputs)
+	{
+		FText DisplayText;
+		if (Output.Quantity > 1)
+		{
+			DisplayText = FText::Format(
+				NSLOCTEXT("MOBuilding", "OutputFormatQty", "{0} x{1}"),
+				Output.DisplayName,
+				FText::AsNumber(Output.Quantity)
+			);
+		}
+		else
+		{
+			DisplayText = Output.DisplayName;
+		}
+
+		AddTextWidget(OutputsContainer, OutputTextWidgets, DisplayText, true);
 	}
 }
 
-void UMOBuildingDetailPanel::HandleBuildMaxButtonClicked()
+void UMOBuildingDetailPanel::HandleActionButtonClicked()
 {
-	int32 MaxAmount = GetMaxBuildableAmount();
-	if (MaxAmount > 0)
+	if (!DisplayedRecipeId.IsNone() && CanPerformAction())
 	{
-		SetBuildAmount(MaxAmount);
-	}
-}
-
-void UMOBuildingDetailPanel::HandleBuildAmountChanged(float Value)
-{
-	SetBuildAmount(FMath::RoundToInt(Value));
-}
-
-void UMOBuildingDetailPanel::UpdateBuildButtonState()
-{
-	if (CraftButton)
-	{
-		CraftButton->SetIsEnabled(CanBuildCurrentRecipe());
+		// Broadcast standard delegate (prefer this for new code)
+		OnBuildAction.Broadcast(DisplayedRecipeId, ActionAmount);
+		// Broadcast legacy delegate for backward compatibility
+		OnBuildRequested.Broadcast(DisplayedRecipeId, ActionAmount);
 	}
 }
 
@@ -490,127 +293,4 @@ FMOBuildOutputDisplayData UMOBuildingDetailPanel::BuildOutputData(const FMORecip
 	}
 
 	return Data;
-}
-
-void UMOBuildingDetailPanel::PopulateIngredientsContainer()
-{
-	// Clear existing widgets
-	for (UTextBlock* TextWidget : IngredientTextWidgets)
-	{
-		if (TextWidget)
-		{
-			TextWidget->RemoveFromParent();
-		}
-	}
-	IngredientTextWidgets.Empty();
-
-	if (!IngredientsContainer)
-	{
-		return;
-	}
-
-	// Create text widget for each build part
-	for (const FMOBuildPartDisplayData& Part : CachedBuildParts)
-	{
-		FText DisplayText;
-
-		if (Part.bIsAction)
-		{
-			// Action: "Dig x1"
-			DisplayText = FText::Format(
-				NSLOCTEXT("MOBuilding", "ActionFormat", "{0} x{1}"),
-				Part.DisplayName,
-				FText::AsNumber(Part.RequiredQuantity)
-			);
-		}
-		else
-		{
-			// Item: "Stone (have/need)"
-			DisplayText = FText::Format(
-				NSLOCTEXT("MOBuilding", "PartFormat", "{0} ({1}/{2})"),
-				Part.DisplayName,
-				FText::AsNumber(Part.AvailableQuantity),
-				FText::AsNumber(Part.RequiredQuantity)
-			);
-		}
-
-		UTextBlock* TextWidget = CreateSimpleTextWidget(DisplayText, Part.bHasEnough);
-		if (TextWidget)
-		{
-			IngredientsContainer->AddChild(TextWidget);
-			IngredientTextWidgets.Add(TextWidget);
-		}
-	}
-}
-
-void UMOBuildingDetailPanel::PopulateOutputsContainer()
-{
-	// Clear existing widgets
-	for (UTextBlock* TextWidget : OutputTextWidgets)
-	{
-		if (TextWidget)
-		{
-			TextWidget->RemoveFromParent();
-		}
-	}
-	OutputTextWidgets.Empty();
-
-	if (!OutputsContainer)
-	{
-		return;
-	}
-
-	// Create text widget for each output
-	for (const FMOBuildOutputDisplayData& Output : CachedOutputs)
-	{
-		FText DisplayText;
-		if (Output.Quantity > 1)
-		{
-			DisplayText = FText::Format(
-				NSLOCTEXT("MOBuilding", "OutputFormatQty", "{0} x{1}"),
-				Output.DisplayName,
-				FText::AsNumber(Output.Quantity)
-			);
-		}
-		else
-		{
-			DisplayText = Output.DisplayName;
-		}
-
-		UTextBlock* TextWidget = CreateSimpleTextWidget(DisplayText, true);
-		if (TextWidget)
-		{
-			OutputsContainer->AddChild(TextWidget);
-			OutputTextWidgets.Add(TextWidget);
-		}
-	}
-}
-
-UTextBlock* UMOBuildingDetailPanel::CreateSimpleTextWidget(const FText& Text, bool bHasEnough)
-{
-	UTextBlock* TextWidget = NewObject<UTextBlock>(this);
-	if (!TextWidget)
-	{
-		return nullptr;
-	}
-
-	TextWidget->SetText(Text);
-	TextWidget->SetAutoWrapText(true);
-
-	// Set font size to 12pt
-	FSlateFontInfo FontInfo = TextWidget->GetFont();
-	FontInfo.Size = 12;
-	TextWidget->SetFont(FontInfo);
-
-	// Set color based on whether we have enough
-	if (bHasEnough)
-	{
-		TextWidget->SetColorAndOpacity(FSlateColor(FLinearColor::White));
-	}
-	else
-	{
-		TextWidget->SetColorAndOpacity(FSlateColor(FLinearColor(1.0f, 0.3f, 0.3f, 1.0f))); // Red-ish
-	}
-
-	return TextWidget;
 }

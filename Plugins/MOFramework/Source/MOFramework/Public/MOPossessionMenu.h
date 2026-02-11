@@ -36,6 +36,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|UI|Possession")
 	void SetCreateCharacterVisible(bool bVisible);
 
+	/** Ensure internal button bindings are set up. Call when reopening cached menu. */
+	void EnsureButtonBindings();
+
 	/** Check if there are any living pawns in the list. */
 	UFUNCTION(BlueprintPure, Category="MO|UI|Possession")
 	bool HasLivingPawns() const { return LivingPawnCount > 0; }

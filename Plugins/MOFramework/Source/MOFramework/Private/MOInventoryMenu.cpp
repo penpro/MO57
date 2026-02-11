@@ -79,6 +79,9 @@ FReply UMOInventoryMenu::NativeOnKeyDown(const FGeometry& InGeometry, const FKey
 	// Close on Tab or Escape
 	if (PressedKey == EKeys::Tab || PressedKey == EKeys::Escape)
 	{
+		// Broadcast standard delegate (prefer this for new code)
+		OnCloseRequested.Broadcast();
+		// Broadcast legacy delegate for backward compatibility
 		OnRequestClose.Broadcast();
 		return FReply::Handled();
 	}

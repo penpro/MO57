@@ -2,6 +2,7 @@
 #include "MOFramework.h"
 #include "MOItemDatabaseSettings.h"
 #include "MOInventoryComponent.h"
+#include "MONotificationComponent.h"
 #include "Components/HierarchicalInstancedStaticMeshComponent.h"
 #include "Components/InstancedStaticMeshComponent.h"
 #include "GameFramework/Pawn.h"
@@ -180,6 +181,27 @@ bool UMOPCGInteractionSubsystem::HarvestHISMInstance(UHierarchicalInstancedStati
 	FTransform InstanceTransform;
 	HISMComponent->GetInstanceTransform(InstanceIndex, InstanceTransform, true);
 
+	// CRITICAL: Check if inventory has space BEFORE removing the instance
+	// Otherwise we destroy world items but can't pick them up
+	const FGuid NewItemGuid = FGuid::NewGuid();
+	if (!Inventory->CanAddItem(NewItemGuid))
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOPCGInteraction] HarvestHISMInstance: Inventory is full, cannot harvest"));
+
+		// Show notification to player
+		if (APawn* HarvesterPawn = Cast<APawn>(Harvester))
+		{
+			if (AController* Controller = HarvesterPawn->GetController())
+			{
+				if (UMONotificationComponent* NotificationComp = Controller->FindComponentByClass<UMONotificationComponent>())
+				{
+					NotificationComp->ShowInventoryFullNotification();
+				}
+			}
+		}
+		return false;
+	}
+
 	// Check if we should keep the instance (for trees, rocks, etc. that give resources without being destroyed)
 	const bool bKeepOnHarvest = HISMComponent->ComponentHasTag(TEXT("KeepOnHarvest")) ||
 		(HISMComponent->GetOwner() && HISMComponent->GetOwner()->ActorHasTag(TEXT("KeepOnHarvest")));
@@ -195,9 +217,8 @@ bool UMOPCGInteractionSubsystem::HarvestHISMInstance(UHierarchicalInstancedStati
 		}
 	}
 
-	// Add item to inventory
+	// Add item to inventory (we already verified space exists)
 	const int32 Quantity = DefaultHarvestQuantity;
-	const FGuid NewItemGuid = FGuid::NewGuid();
 	const bool bAdded = Inventory->AddItemByGuid(NewItemGuid, ItemId, Quantity);
 
 	OutItemId = ItemId;
@@ -257,6 +278,27 @@ bool UMOPCGInteractionSubsystem::HarvestISMInstance(UInstancedStaticMeshComponen
 	FTransform InstanceTransform;
 	ISMComponent->GetInstanceTransform(InstanceIndex, InstanceTransform, true);
 
+	// CRITICAL: Check if inventory has space BEFORE removing the instance
+	// Otherwise we destroy world items but can't pick them up
+	const FGuid NewItemGuid = FGuid::NewGuid();
+	if (!Inventory->CanAddItem(NewItemGuid))
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOPCGInteraction] HarvestISMInstance: Inventory is full, cannot harvest"));
+
+		// Show notification to player
+		if (APawn* HarvesterPawn = Cast<APawn>(Harvester))
+		{
+			if (AController* Controller = HarvesterPawn->GetController())
+			{
+				if (UMONotificationComponent* NotificationComp = Controller->FindComponentByClass<UMONotificationComponent>())
+				{
+					NotificationComp->ShowInventoryFullNotification();
+				}
+			}
+		}
+		return false;
+	}
+
 	// Check if we should keep the instance (for trees, rocks, etc. that give resources without being destroyed)
 	const bool bKeepOnHarvest = ISMComponent->ComponentHasTag(TEXT("KeepOnHarvest")) ||
 		(ISMComponent->GetOwner() && ISMComponent->GetOwner()->ActorHasTag(TEXT("KeepOnHarvest")));
@@ -272,9 +314,8 @@ bool UMOPCGInteractionSubsystem::HarvestISMInstance(UInstancedStaticMeshComponen
 		}
 	}
 
-	// Add item to inventory
+	// Add item to inventory (we already verified space exists)
 	const int32 Quantity = DefaultHarvestQuantity;
-	const FGuid NewItemGuid = FGuid::NewGuid();
 	const bool bAdded = Inventory->AddItemByGuid(NewItemGuid, ItemId, Quantity);
 
 	OutItemId = ItemId;

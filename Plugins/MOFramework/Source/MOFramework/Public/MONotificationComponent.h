@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "MONotificationWidget.h"
 #include "MONotificationComponent.generated.h"
 
 class UMONotificationWidget;
@@ -25,9 +26,29 @@ public:
 
 	// --- Public API ---
 
-	/** Show a notification message for a duration. Queues if another is showing. */
+	/** Show a notification message for a duration with optional type. Queues if another is showing. */
 	UFUNCTION(BlueprintCallable, Category="MO|Notifications")
-	void ShowNotification(const FText& Message, float Duration = 3.0f);
+	void ShowNotification(const FText& Message, float Duration = 3.0f, EMONotificationType Type = EMONotificationType::Info);
+
+	/** Show an info notification (blue). */
+	UFUNCTION(BlueprintCallable, Category="MO|Notifications")
+	void ShowInfoNotification(const FText& Message, float Duration = 3.0f);
+
+	/** Show a success notification (green). */
+	UFUNCTION(BlueprintCallable, Category="MO|Notifications")
+	void ShowSuccessNotification(const FText& Message, float Duration = 3.0f);
+
+	/** Show a warning notification (yellow). */
+	UFUNCTION(BlueprintCallable, Category="MO|Notifications")
+	void ShowWarningNotification(const FText& Message, float Duration = 3.0f);
+
+	/** Show an error notification (red). */
+	UFUNCTION(BlueprintCallable, Category="MO|Notifications")
+	void ShowErrorNotification(const FText& Message, float Duration = 3.0f);
+
+	/** Show an item pickup notification. */
+	UFUNCTION(BlueprintCallable, Category="MO|Notifications")
+	void ShowItemPickupNotification(const FText& ItemName, int32 Quantity = 1);
 
 	/** Show skill increase notification with formatted message. */
 	UFUNCTION(BlueprintCallable, Category="MO|Notifications")
@@ -40,6 +61,10 @@ public:
 	/** Show knowledge learned notification with formatted message. */
 	UFUNCTION(BlueprintCallable, Category="MO|Notifications")
 	void ShowKnowledgeLearnedNotification(FName KnowledgeId);
+
+	/** Show inventory full warning. */
+	UFUNCTION(BlueprintCallable, Category="MO|Notifications")
+	void ShowInventoryFullNotification();
 
 	/**
 	 * Show a skill entry popup widget with flashing progress bar.
@@ -95,6 +120,7 @@ private:
 	{
 		FText Message;
 		float Duration;
+		EMONotificationType Type = EMONotificationType::Info;
 	};
 
 	struct FQueuedSkillPopup
@@ -138,6 +164,10 @@ private:
 
 	/** Hide current notification and process next. */
 	void HideCurrentNotification();
+
+	/** Called when notification hide animation completes. */
+	UFUNCTION()
+	void OnNotificationHideComplete();
 
 	/** Hide current skill popup and process next in queue. */
 	void HideSkillPopup();

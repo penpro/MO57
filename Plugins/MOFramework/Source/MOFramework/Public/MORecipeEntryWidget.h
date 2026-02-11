@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
 #include "MORecipeListWidget.h"
+#include "MOUIDelegates.h"
 #include "MORecipeEntryWidget.generated.h"
 
 class UMOCommonButton;
@@ -10,6 +11,7 @@ class UTextBlock;
 class UImage;
 class UBorder;
 
+// Legacy delegate - prefer FMOUIRecipeSelected from MOUIDelegates.h for new code
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMORecipeEntryClickedSignature, FName, RecipeId);
 
 /**
@@ -58,6 +60,11 @@ public:
 
 	// --- Delegates ---
 
+	/** Broadcast when this entry is clicked. Uses standard delegate signature. */
+	UPROPERTY(BlueprintAssignable, Category="MO|Crafting|UI")
+	FMOUIRecipeSelected OnEntrySelected;
+
+	/** @deprecated Use OnEntrySelected instead. Broadcast for backward compatibility. */
 	UPROPERTY(BlueprintAssignable, Category="MO|Crafting|UI")
 	FMORecipeEntryClickedSignature OnEntryClicked;
 

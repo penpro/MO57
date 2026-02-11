@@ -29,6 +29,9 @@ namespace MOPCGAttributes
 
 UMOPCGItemSpawnerSettings::UMOPCGItemSpawnerSettings()
 {
+#if WITH_EDITOR
+	Category = LOCTEXT("Category", "MO");
+#endif
 }
 
 FPCGElementPtr UMOPCGItemSpawnerSettings::CreateElement() const

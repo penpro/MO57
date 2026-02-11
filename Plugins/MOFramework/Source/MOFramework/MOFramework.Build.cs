@@ -38,6 +38,7 @@ public class MOFramework : ModuleRules
 				"PCG",                      // Procedural Content Generation
 				"Voxel",                    // Voxel plugin - terrain sculpting
 				"VoxelCore",                // Voxel plugin - core types
+				"VoxelPCG",                 // Voxel plugin - PCG point nodes
 				"ProceduralMeshComponent"   // Water mesh generation
 			}
 			);

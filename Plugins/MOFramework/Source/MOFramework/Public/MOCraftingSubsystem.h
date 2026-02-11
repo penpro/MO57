@@ -11,6 +11,52 @@ class UMOSkillsComponent;
 class UMOInventoryComponent;
 
 /**
+ * Result of checking recipe availability (knowledge/skill/discovery requirements).
+ * This is the "can player ever do this" check, separate from "can they do it right now".
+ */
+USTRUCT(BlueprintType)
+struct MOFRAMEWORK_API FMORecipeAvailability
+{
+	GENERATED_BODY()
+
+	/** Whether the recipe is available to the player (meets all unlock requirements). */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Crafting")
+	bool bIsAvailable = false;
+
+	/** Whether the recipe has been discovered (if bRequiresDiscovery is true). */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Crafting")
+	bool bIsDiscovered = true;
+
+	/** Knowledge IDs that are missing. */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Crafting")
+	TArray<FName> MissingKnowledge;
+
+	/** Required skill level (0 if met or no requirement). */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Crafting")
+	int32 RequiredSkillLevel = 0;
+
+	/** Current skill level (only set if requirement not met). */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Crafting")
+	int32 CurrentSkillLevel = 0;
+
+	/** Discovery knowledge ID (for UI to show what unlocks this). */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Crafting")
+	FName DiscoveryKnowledgeId = NAME_None;
+
+	/** Discovery knowledge level required (for UI). */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Crafting")
+	int32 DiscoveryKnowledgeLevel = 0;
+
+	/** Current discovery knowledge level (for UI progress). */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Crafting")
+	int32 CurrentDiscoveryKnowledgeLevel = 0;
+
+	/** Human-readable reason if not available. */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Crafting")
+	FText UnavailableReason;
+};
+
+/**
  * Result of checking if a recipe can be crafted.
  */
 USTRUCT(BlueprintType)
@@ -97,9 +143,16 @@ struct MOFRAMEWORK_API FMOCraftResult
 	UPROPERTY(BlueprintReadOnly, Category="MO|Crafting")
 	TMap<FName, int32> ProducedItems;
 
+	/** Items that couldn't be added due to inventory full (ItemDefId -> quantity). */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Crafting")
+	TMap<FName, int32> FailedItems;
+
 	/** XP granted to skills (SkillId -> XP amount). */
 	UPROPERTY(BlueprintReadOnly, Category="MO|Crafting")
 	TMap<FName, float> XPGranted;
+
+	/** Returns true if any items couldn't be added to inventory. */
+	bool HasFailedItems() const { return FailedItems.Num() > 0; }
 };
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOOnCraftCompleted, FName, RecipeId, const FMOCraftResult&, Result);
@@ -116,6 +169,42 @@ public:
 	// Delegates
 	UPROPERTY(BlueprintAssignable, Category="MO|Crafting|Events")
 	FMOOnCraftCompleted OnCraftCompleted;
+
+	// =========================================================================
+	// CENTRALIZED AVAILABILITY CHECK
+	// =========================================================================
+
+	/**
+	 * Check if a recipe is available to the player (meets unlock requirements).
+	 * This checks discovery, knowledge, and skill requirements.
+	 * Does NOT check ingredients, tools, or station - use CanCraftRecipe for that.
+	 *
+	 * Use this as the single source of truth for "can player see/use this recipe".
+	 *
+	 * @param RecipeId The recipe to check
+	 * @param KnowledgeComponent Player's knowledge
+	 * @param SkillsComponent Player's skills
+	 * @return Availability result with details
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Crafting")
+	FMORecipeAvailability IsRecipeAvailable(
+		FName RecipeId,
+		UMOKnowledgeComponent* KnowledgeComponent,
+		UMOSkillsComponent* SkillsComponent
+	) const;
+
+	/**
+	 * Overload that takes a recipe pointer directly (for internal use).
+	 */
+	FMORecipeAvailability IsRecipeAvailable(
+		const FMORecipeDefinitionRow* Recipe,
+		UMOKnowledgeComponent* KnowledgeComponent,
+		UMOSkillsComponent* SkillsComponent
+	) const;
+
+	// =========================================================================
+	// RECIPE QUERIES
+	// =========================================================================
 
 	/**
 	 * Get all recipes that the player can potentially craft (meets knowledge/skill requirements).

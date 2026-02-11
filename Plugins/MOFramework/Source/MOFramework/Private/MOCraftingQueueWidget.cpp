@@ -4,6 +4,7 @@
 #include "MOCraftingQueueEntryWidget.h"
 #include "MORecipeDatabaseSettings.h"
 #include "MOCommonButton.h"
+#include "MOUIUtils.h"
 #include "Components/ScrollBox.h"
 #include "Components/VerticalBox.h"
 #include "Components/TextBlock.h"
@@ -115,14 +116,14 @@ void UMOCraftingQueueWidget::RefreshQueue()
 		if (i == 0)
 		{
 			float TimeRemaining = Queue->GetCurrentCraftTimeRemaining();
-			DisplayData.TimeRemainingText = FormatTimeRemaining(TimeRemaining);
+			DisplayData.TimeRemainingText = UMOUIUtils::FormatDurationAsText(TimeRemaining);
 		}
 		else
 		{
 			// Calculate time for queued entries
 			float CraftDuration = Recipe ? Recipe->CraftTime : 0.0f;
 			float TimeRemaining = CraftDuration * Entry.Count;
-			DisplayData.TimeRemainingText = FormatTimeRemaining(TimeRemaining);
+			DisplayData.TimeRemainingText = UMOUIUtils::FormatDurationAsText(TimeRemaining);
 		}
 
 		EntryWidget->SetupEntry(DisplayData);
@@ -161,12 +162,12 @@ void UMOCraftingQueueWidget::RefreshQueue()
 
 		if (TimeRemainingText)
 		{
-			TimeRemainingText->SetText(FormatTimeRemaining(Queue->GetTotalTimeRemaining()));
+			TimeRemainingText->SetText(UMOUIUtils::FormatDurationAsText(Queue->GetTotalTimeRemaining()));
 		}
 
 		if (TotalTimeRemainingText)
 		{
-			TotalTimeRemainingText->SetText(FormatTimeRemaining(Queue->GetTotalTimeRemaining()));
+			TotalTimeRemainingText->SetText(UMOUIUtils::FormatDurationAsText(Queue->GetTotalTimeRemaining()));
 		}
 	}
 	else
@@ -229,7 +230,7 @@ void UMOCraftingQueueWidget::UpdateProgress()
 
 	// Use overall progress for the main display
 	float OverallProgress = Queue->GetOverallQueueProgress();
-	FText TotalTimeRemaining = FormatTimeRemaining(Queue->GetTotalTimeRemaining());
+	FText TotalTimeRemaining = UMOUIUtils::FormatDurationAsText(Queue->GetTotalTimeRemaining());
 
 	if (CurrentProgressBar)
 	{
@@ -258,7 +259,7 @@ void UMOCraftingQueueWidget::UpdateProgress()
 	if (EntryWidgets.Num() > 0 && EntryWidgets[0])
 	{
 		float CurrentProgress = Queue->GetCurrentCraftProgress();
-		FText CurrentTimeRemaining = FormatTimeRemaining(Queue->GetCurrentCraftTimeRemaining());
+		FText CurrentTimeRemaining = UMOUIUtils::FormatDurationAsText(Queue->GetCurrentCraftTimeRemaining());
 		EntryWidgets[0]->UpdateProgress(CurrentProgress, CurrentTimeRemaining);
 	}
 
@@ -290,7 +291,7 @@ FText UMOCraftingQueueWidget::GetTimeRemainingText() const
 	{
 		return FText::GetEmpty();
 	}
-	return FormatTimeRemaining(Queue->GetTotalTimeRemaining());
+	return UMOUIUtils::FormatDurationAsText(Queue->GetTotalTimeRemaining());
 }
 
 void UMOCraftingQueueWidget::NativeConstruct()
@@ -357,35 +358,5 @@ void UMOCraftingQueueWidget::HandleCancelAllClicked()
 	if (UMOCraftingQueueComponent* Queue = QueueComponent.Get())
 	{
 		Queue->CancelAllCrafts(true); // true = refund ingredients
-	}
-}
-
-FText UMOCraftingQueueWidget::FormatTimeRemaining(float Seconds) const
-{
-	if (Seconds <= 0.0f)
-	{
-		return NSLOCTEXT("MOCrafting", "TimeNone", "--");
-	}
-
-	if (Seconds >= 86400.0f) // 24 hours
-	{
-		float Days = Seconds / 86400.0f;
-		return FText::Format(NSLOCTEXT("MOCrafting", "TimeDays", "{0}d"), FText::AsNumber(FMath::RoundToInt(Days * 10) / 10.0f));
-	}
-	else if (Seconds >= 3600.0f) // 1 hour
-	{
-		int32 Hours = FMath::FloorToInt(Seconds / 3600.0f);
-		int32 Minutes = FMath::FloorToInt(FMath::Fmod(Seconds, 3600.0f) / 60.0f);
-		return FText::Format(NSLOCTEXT("MOCrafting", "TimeHoursMinutes", "{0}h {1}m"), FText::AsNumber(Hours), FText::AsNumber(Minutes));
-	}
-	else if (Seconds >= 60.0f) // 1 minute
-	{
-		int32 Minutes = FMath::FloorToInt(Seconds / 60.0f);
-		int32 Secs = FMath::FloorToInt(FMath::Fmod(Seconds, 60.0f));
-		return FText::Format(NSLOCTEXT("MOCrafting", "TimeMinutesSeconds", "{0}m {1}s"), FText::AsNumber(Minutes), FText::AsNumber(Secs));
-	}
-	else
-	{
-		return FText::Format(NSLOCTEXT("MOCrafting", "TimeSecondsOnly", "{0}s"), FText::AsNumber(FMath::RoundToInt(Seconds)));
 	}
 }

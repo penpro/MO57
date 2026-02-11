@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "CommonActivatableWidget.h"
+#include "MOEquipmentComponent.h"
 #include "MOUnifiedInventoryMenu.generated.h"
 
 class UMOInventoryGrid;
@@ -365,6 +366,9 @@ private:
 
 	UFUNCTION()
 	void HandlePlayerSlotDropReceived(int32 TargetSlotIndex, int32 SourceSlotIndex, UMOInventoryComponent* SourceInventory);
+
+	UFUNCTION()
+	void HandleEquipmentSlotDropReceived(EMOEquipmentSlot TargetSlot, const FGuid& ItemGuid, UMOInventoryComponent* SourceInventory);
 
 	void UpdateTabButtonStates();
 	void UpdateActionButtonStates();

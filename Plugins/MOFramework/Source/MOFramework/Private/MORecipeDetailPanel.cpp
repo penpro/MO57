@@ -5,268 +5,22 @@
 #include "MORecipeDiscoveryComponent.h"
 #include "MORecipeDatabaseSettings.h"
 #include "MOItemDatabaseSettings.h"
-#include "MOCommonButton.h"
+#include "MOUIUtils.h"
 #include "Components/TextBlock.h"
-#include "Components/Image.h"
-#include "Components/VerticalBox.h"
-#include "Components/PanelWidget.h"
-#include "Components/SpinBox.h"
-#include "Components/Slider.h"
 
 UMORecipeDetailPanel::UMORecipeDetailPanel(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
 }
 
-void UMORecipeDetailPanel::InitializePanel(
-	UMOInventoryComponent* InInventory,
-	UMOSkillsComponent* InSkills,
-	UMORecipeDiscoveryComponent* InDiscovery)
+void UMORecipeDetailPanel::GetIngredients(TArray<FMOIngredientDisplayData>& OutIngredients) const
 {
-	InventoryComponent = InInventory;
-	SkillsComponent = InSkills;
-	DiscoveryComponent = InDiscovery;
+	OutIngredients = CachedIngredients;
 }
 
-void UMORecipeDetailPanel::DisplayRecipe(FName RecipeId)
+void UMORecipeDetailPanel::GetOutputs(TArray<FMOOutputDisplayData>& OutOutputs) const
 {
-	DisplayedRecipeId = RecipeId;
-	CraftAmount = 1;
-
-	if (RecipeId.IsNone())
-	{
-		ClearDisplay();
-		return;
-	}
-
-	const FMORecipeDefinitionRow* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(RecipeId);
-	if (!Recipe)
-	{
-		ClearDisplay();
-		return;
-	}
-
-	// Update name
-	if (RecipeNameText)
-	{
-		RecipeNameText->SetText(Recipe->DisplayName);
-	}
-
-	// Update description
-	if (RecipeDescriptionText)
-	{
-		RecipeDescriptionText->SetText(Recipe->Description);
-	}
-
-	// Update icon - use recipe icon if set, otherwise fall back to first output item's icon
-	if (RecipeIcon)
-	{
-		UTexture2D* IconTexture = nullptr;
-
-		// First try recipe's own icon
-		if (!Recipe->Icon.IsNull())
-		{
-			IconTexture = Recipe->Icon.LoadSynchronous();
-		}
-
-		// Fall back to first output item's icon
-		if (!IconTexture && Recipe->Outputs.Num() > 0)
-		{
-			FMOItemDefinitionRow ItemDef;
-			if (UMOItemDatabaseSettings::GetItemDefinition(Recipe->Outputs[0].ItemDefinitionId, ItemDef))
-			{
-				if (!ItemDef.UI.IconSmall.IsNull())
-				{
-					IconTexture = ItemDef.UI.IconSmall.LoadSynchronous();
-				}
-			}
-		}
-
-		if (IconTexture)
-		{
-			RecipeIcon->SetBrushFromTexture(IconTexture);
-			RecipeIcon->SetVisibility(ESlateVisibility::Visible);
-		}
-		else
-		{
-			RecipeIcon->SetVisibility(ESlateVisibility::Hidden);
-		}
-	}
-
-	// Update skill requirement text
-	if (SkillRequirementText)
-	{
-		if (!Recipe->RequiredSkillId.IsNone() && Recipe->RequiredSkillLevel > 0)
-		{
-			int32 CurrentLevel = 0;
-			if (UMOSkillsComponent* Skills = SkillsComponent.Get())
-			{
-				CurrentLevel = Skills->GetSkillLevel(Recipe->RequiredSkillId);
-			}
-
-			FText SkillText = FText::Format(
-				NSLOCTEXT("MOCrafting", "SkillReq", "{0}: {1}/{2}"),
-				FText::FromName(Recipe->RequiredSkillId),
-				FText::AsNumber(CurrentLevel),
-				FText::AsNumber(Recipe->RequiredSkillLevel)
-			);
-			SkillRequirementText->SetText(SkillText);
-			SkillRequirementText->SetVisibility(ESlateVisibility::Visible);
-		}
-		else
-		{
-			SkillRequirementText->SetVisibility(ESlateVisibility::Collapsed);
-		}
-	}
-
-	// Update required station text
-	if (RequiredStationText)
-	{
-		if (Recipe->RequiredStation != EMOCraftingStation::None)
-		{
-			// Get station name from enum
-			FString StationName = UEnum::GetDisplayValueAsText(Recipe->RequiredStation).ToString();
-			RequiredStationText->SetText(FText::Format(
-				NSLOCTEXT("MOCrafting", "RequiresStation", "Requires: {0}"),
-				FText::FromString(StationName)
-			));
-			RequiredStationText->SetVisibility(ESlateVisibility::Visible);
-		}
-		else
-		{
-			RequiredStationText->SetVisibility(ESlateVisibility::Collapsed);
-		}
-	}
-
-	// Update craft time text
-	if (CraftTimeText)
-	{
-		if (Recipe->CraftTime > 0.0f)
-		{
-			FText TimeText;
-			if (Recipe->CraftTime >= 3600.0f)
-			{
-				float Hours = Recipe->CraftTime / 3600.0f;
-				TimeText = FText::Format(NSLOCTEXT("MOCrafting", "TimeHours", "{0}h"), FText::AsNumber(FMath::RoundToInt(Hours * 10) / 10.0f));
-			}
-			else if (Recipe->CraftTime >= 60.0f)
-			{
-				float Minutes = Recipe->CraftTime / 60.0f;
-				TimeText = FText::Format(NSLOCTEXT("MOCrafting", "TimeMinutes", "{0}m"), FText::AsNumber(FMath::RoundToInt(Minutes)));
-			}
-			else
-			{
-				TimeText = FText::Format(NSLOCTEXT("MOCrafting", "TimeSeconds", "{0}s"), FText::AsNumber(FMath::RoundToInt(Recipe->CraftTime)));
-			}
-			CraftTimeText->SetText(TimeText);
-			CraftTimeText->SetVisibility(ESlateVisibility::Visible);
-		}
-		else
-		{
-			CraftTimeText->SetText(NSLOCTEXT("MOCrafting", "Instant", "Instant"));
-			CraftTimeText->SetVisibility(ESlateVisibility::Visible);
-		}
-	}
-
-	// Build ingredient data
-	CachedIngredients.Empty();
-	for (const FMORecipeIngredient& Ingredient : Recipe->Ingredients)
-	{
-		CachedIngredients.Add(BuildIngredientData(Ingredient));
-	}
-
-	// Build output data
-	CachedOutputs.Empty();
-	for (const FMORecipeOutput& Output : Recipe->Outputs)
-	{
-		CachedOutputs.Add(BuildOutputData(Output));
-	}
-
-	// Populate containers with text widgets
-	PopulateIngredientsContainer();
-	PopulateOutputsContainer();
-
-	// Update craft amount controls
-	int32 MaxAmount = FMath::Max(1, GetMaxCraftableAmount());
-
-	if (CraftAmountSpinBox)
-	{
-		CraftAmountSpinBox->SetMaxValue(static_cast<float>(MaxAmount));
-		CraftAmountSpinBox->SetMaxSliderValue(static_cast<float>(MaxAmount));
-		CraftAmountSpinBox->SetValue(CraftAmount);
-	}
-	if (CraftAmountSlider)
-	{
-		CraftAmountSlider->SetMaxValue(static_cast<float>(MaxAmount));
-		CraftAmountSlider->SetValue(static_cast<float>(CraftAmount));
-	}
-	if (CraftAmountText)
-	{
-		CraftAmountText->SetText(FText::AsNumber(CraftAmount));
-	}
-
-	UpdateCraftButtonState();
-
-	// Notify Blueprint
-	OnRecipeDisplayed(RecipeId, Recipe->DisplayName, Recipe->Description);
-	OnIngredientsUpdated(CachedIngredients);
-	OnOutputsUpdated(CachedOutputs);
-}
-
-void UMORecipeDetailPanel::ClearDisplay()
-{
-	DisplayedRecipeId = NAME_None;
-	CachedIngredients.Empty();
-	CachedOutputs.Empty();
-
-	// Clear ingredient widgets
-	for (UTextBlock* TextWidget : IngredientTextWidgets)
-	{
-		if (TextWidget)
-		{
-			TextWidget->RemoveFromParent();
-		}
-	}
-	IngredientTextWidgets.Empty();
-
-	// Clear output widgets
-	for (UTextBlock* TextWidget : OutputTextWidgets)
-	{
-		if (TextWidget)
-		{
-			TextWidget->RemoveFromParent();
-		}
-	}
-	OutputTextWidgets.Empty();
-
-	if (RecipeNameText)
-	{
-		RecipeNameText->SetText(FText::GetEmpty());
-	}
-	if (RecipeDescriptionText)
-	{
-		RecipeDescriptionText->SetText(FText::GetEmpty());
-	}
-	if (RecipeIcon)
-	{
-		RecipeIcon->SetVisibility(ESlateVisibility::Hidden);
-	}
-	if (SkillRequirementText)
-	{
-		SkillRequirementText->SetVisibility(ESlateVisibility::Collapsed);
-	}
-	if (RequiredStationText)
-	{
-		RequiredStationText->SetVisibility(ESlateVisibility::Collapsed);
-	}
-	if (CraftTimeText)
-	{
-		CraftTimeText->SetVisibility(ESlateVisibility::Collapsed);
-	}
-	if (CraftButton)
-	{
-		CraftButton->SetIsEnabled(false);
-	}
+	OutOutputs = CachedOutputs;
 }
 
 void UMORecipeDetailPanel::RefreshDisplay()
@@ -274,7 +28,7 @@ void UMORecipeDetailPanel::RefreshDisplay()
 	if (!DisplayedRecipeId.IsNone())
 	{
 		// Rebuild ingredient data with updated counts
-		const FMORecipeDefinitionRow* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(DisplayedRecipeId);
+		const FMORecipeDefinitionRow* Recipe = GetDisplayedRecipe();
 		if (Recipe)
 		{
 			CachedIngredients.Empty();
@@ -283,45 +37,22 @@ void UMORecipeDetailPanel::RefreshDisplay()
 				CachedIngredients.Add(BuildIngredientData(Ingredient));
 			}
 
-			// Repopulate the container
-			PopulateIngredientsContainer();
-
 			OnIngredientsUpdated(CachedIngredients);
 		}
-
-		UpdateCraftButtonState();
 	}
+
+	// Call base class to populate container and update button state
+	Super::RefreshDisplay();
 }
 
-void UMORecipeDetailPanel::SetCraftAmount(int32 Amount)
-{
-	int32 MaxAmount = FMath::Max(1, GetMaxCraftableAmount());
-	CraftAmount = FMath::Clamp(Amount, 1, MaxAmount);
-
-	if (CraftAmountSpinBox)
-	{
-		CraftAmountSpinBox->SetValue(CraftAmount);
-	}
-	if (CraftAmountSlider)
-	{
-		CraftAmountSlider->SetValue(static_cast<float>(CraftAmount));
-	}
-	if (CraftAmountText)
-	{
-		CraftAmountText->SetText(FText::AsNumber(CraftAmount));
-	}
-
-	UpdateCraftButtonState();
-}
-
-int32 UMORecipeDetailPanel::GetMaxCraftableAmount() const
+int32 UMORecipeDetailPanel::GetMaxPerformableAmount() const
 {
 	if (DisplayedRecipeId.IsNone())
 	{
 		return 0;
 	}
 
-	const FMORecipeDefinitionRow* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(DisplayedRecipeId);
+	const FMORecipeDefinitionRow* Recipe = GetDisplayedRecipe();
 	if (!Recipe)
 	{
 		return 0;
@@ -345,17 +76,7 @@ int32 UMORecipeDetailPanel::GetMaxCraftableAmount() const
 	return MaxAmount == INT_MAX ? 0 : MaxAmount;
 }
 
-void UMORecipeDetailPanel::GetIngredients(TArray<FMOIngredientDisplayData>& OutIngredients) const
-{
-	OutIngredients = CachedIngredients;
-}
-
-void UMORecipeDetailPanel::GetOutputs(TArray<FMOOutputDisplayData>& OutOutputs) const
-{
-	OutOutputs = CachedOutputs;
-}
-
-bool UMORecipeDetailPanel::CanCraftCurrentRecipe() const
+bool UMORecipeDetailPanel::CanPerformAction() const
 {
 	if (DisplayedRecipeId.IsNone())
 	{
@@ -365,7 +86,7 @@ bool UMORecipeDetailPanel::CanCraftCurrentRecipe() const
 	// Check all ingredients for requested amount
 	for (const FMOIngredientDisplayData& Ingredient : CachedIngredients)
 	{
-		int32 TotalRequired = Ingredient.RequiredQuantity * CraftAmount;
+		int32 TotalRequired = Ingredient.RequiredQuantity * ActionAmount;
 		if (Ingredient.AvailableQuantity < TotalRequired)
 		{
 			return false;
@@ -375,68 +96,108 @@ bool UMORecipeDetailPanel::CanCraftCurrentRecipe() const
 	return true;
 }
 
-void UMORecipeDetailPanel::NativeConstruct()
+void UMORecipeDetailPanel::OnDisplayRecipe(const FMORecipeDefinitionRow* Recipe)
 {
-	Super::NativeConstruct();
-
-	// Remove first to avoid duplicate bindings when widget is re-added to viewport
-	if (CraftButton)
+	// Update required station text (crafting-specific)
+	if (RequiredStationText)
 	{
-		CraftButton->OnClicked().RemoveAll(this);
-		CraftButton->OnClicked().AddUObject(this, &UMORecipeDetailPanel::HandleCraftButtonClicked);
+		if (Recipe->RequiredStation != EMOCraftingStation::None)
+		{
+			// Get station name from enum
+			FString StationName = UEnum::GetDisplayValueAsText(Recipe->RequiredStation).ToString();
+			RequiredStationText->SetText(FText::Format(
+				NSLOCTEXT("MOCrafting", "RequiresStation", "Requires: {0}"),
+				FText::FromString(StationName)
+			));
+			RequiredStationText->SetVisibility(ESlateVisibility::Visible);
+		}
+		else
+		{
+			RequiredStationText->SetVisibility(ESlateVisibility::Collapsed);
+		}
 	}
 
-	if (CraftMaxButton)
+	// Build ingredient data
+	CachedIngredients.Empty();
+	for (const FMORecipeIngredient& Ingredient : Recipe->Ingredients)
 	{
-		CraftMaxButton->OnClicked().RemoveAll(this);
-		CraftMaxButton->OnClicked().AddUObject(this, &UMORecipeDetailPanel::HandleCraftMaxButtonClicked);
+		CachedIngredients.Add(BuildIngredientData(Ingredient));
 	}
 
-	if (CraftAmountSpinBox)
+	// Build output data
+	CachedOutputs.Empty();
+	for (const FMORecipeOutput& Output : Recipe->Outputs)
 	{
-		CraftAmountSpinBox->OnValueChanged.RemoveDynamic(this, &UMORecipeDetailPanel::HandleCraftAmountChanged);
-		CraftAmountSpinBox->OnValueChanged.AddDynamic(this, &UMORecipeDetailPanel::HandleCraftAmountChanged);
-		// Set minimum to 1
-		CraftAmountSpinBox->SetMinValue(1.0f);
-		CraftAmountSpinBox->SetMinSliderValue(1.0f);
+		CachedOutputs.Add(BuildOutputData(Output));
 	}
 
-	if (CraftAmountSlider)
+	// Notify Blueprint
+	OnRecipeDisplayed(DisplayedRecipeId, Recipe->DisplayName, Recipe->Description);
+	OnIngredientsUpdated(CachedIngredients);
+	OnOutputsUpdated(CachedOutputs);
+}
+
+void UMORecipeDetailPanel::PopulateRequirementsContainer()
+{
+	// Clear existing widgets using base class helper
+	ClearTextWidgets(IngredientTextWidgets);
+
+	if (!IngredientsContainer)
 	{
-		CraftAmountSlider->OnValueChanged.RemoveDynamic(this, &UMORecipeDetailPanel::HandleCraftAmountChanged);
-		CraftAmountSlider->OnValueChanged.AddDynamic(this, &UMORecipeDetailPanel::HandleCraftAmountChanged);
-		CraftAmountSlider->SetMinValue(1.0f);
+		return;
+	}
+
+	// Create text widget for each ingredient
+	for (const FMOIngredientDisplayData& Ingredient : CachedIngredients)
+	{
+		FText DisplayText = UMOUIUtils::FormatQuantityDisplay(
+			Ingredient.DisplayName,
+			Ingredient.AvailableQuantity,
+			Ingredient.RequiredQuantity
+		);
+
+		AddTextWidget(IngredientsContainer, IngredientTextWidgets, DisplayText, Ingredient.bHasEnough);
 	}
 }
 
-void UMORecipeDetailPanel::HandleCraftButtonClicked()
+void UMORecipeDetailPanel::PopulateOutputsContainer()
 {
-	if (!DisplayedRecipeId.IsNone() && CanCraftCurrentRecipe())
+	// Clear existing widgets using base class helper
+	ClearTextWidgets(OutputTextWidgets);
+
+	if (!OutputsContainer)
 	{
-		OnCraftRequested.Broadcast(DisplayedRecipeId, CraftAmount);
+		return;
+	}
+
+	// Create text widget for each output
+	for (const FMOOutputDisplayData& Output : CachedOutputs)
+	{
+		FText DisplayText = UMOUIUtils::FormatOutputDisplay(
+			Output.DisplayName,
+			Output.Quantity,
+			Output.Chance
+		);
+
+		AddTextWidget(OutputsContainer, OutputTextWidgets, DisplayText, true);
 	}
 }
 
-void UMORecipeDetailPanel::HandleCraftMaxButtonClicked()
+void UMORecipeDetailPanel::HandleActionButtonClicked()
 {
-	int32 MaxAmount = GetMaxCraftableAmount();
-	if (MaxAmount > 0)
+	if (!DisplayedRecipeId.IsNone() && CanPerformAction())
 	{
-		SetCraftAmount(MaxAmount);
+		// Broadcast standard delegate (prefer this for new code)
+		OnCraftAction.Broadcast(DisplayedRecipeId, ActionAmount);
+		// Broadcast legacy delegate for backward compatibility
+		OnCraftRequested.Broadcast(DisplayedRecipeId, ActionAmount);
 	}
 }
 
-void UMORecipeDetailPanel::HandleCraftAmountChanged(float Value)
+float UMORecipeDetailPanel::GetRecipeTime(const FMORecipeDefinitionRow* Recipe) const
 {
-	SetCraftAmount(FMath::RoundToInt(Value));
-}
-
-void UMORecipeDetailPanel::UpdateCraftButtonState()
-{
-	if (CraftButton)
-	{
-		CraftButton->SetIsEnabled(CanCraftCurrentRecipe());
-	}
+	// Crafting uses CraftTime
+	return Recipe ? Recipe->CraftTime : 0.0f;
 }
 
 FMOIngredientDisplayData UMORecipeDetailPanel::BuildIngredientData(const FMORecipeIngredient& Ingredient) const
@@ -488,123 +249,4 @@ FMOOutputDisplayData UMORecipeDetailPanel::BuildOutputData(const FMORecipeOutput
 	}
 
 	return Data;
-}
-
-void UMORecipeDetailPanel::PopulateIngredientsContainer()
-{
-	// Clear existing widgets
-	for (UTextBlock* TextWidget : IngredientTextWidgets)
-	{
-		if (TextWidget)
-		{
-			TextWidget->RemoveFromParent();
-		}
-	}
-	IngredientTextWidgets.Empty();
-
-	if (!IngredientsContainer)
-	{
-		return;
-	}
-
-	// Create text widget for each ingredient
-	for (const FMOIngredientDisplayData& Ingredient : CachedIngredients)
-	{
-		// Format: "Item Name (have/need)"
-		FText DisplayText = FText::Format(
-			NSLOCTEXT("MOCrafting", "IngredientFormat", "{0} ({1}/{2})"),
-			Ingredient.DisplayName,
-			FText::AsNumber(Ingredient.AvailableQuantity),
-			FText::AsNumber(Ingredient.RequiredQuantity)
-		);
-
-		UTextBlock* TextWidget = CreateSimpleTextWidget(DisplayText, Ingredient.bHasEnough);
-		if (TextWidget)
-		{
-			IngredientsContainer->AddChild(TextWidget);
-			IngredientTextWidgets.Add(TextWidget);
-		}
-	}
-}
-
-void UMORecipeDetailPanel::PopulateOutputsContainer()
-{
-	// Clear existing widgets
-	for (UTextBlock* TextWidget : OutputTextWidgets)
-	{
-		if (TextWidget)
-		{
-			TextWidget->RemoveFromParent();
-		}
-	}
-	OutputTextWidgets.Empty();
-
-	if (!OutputsContainer)
-	{
-		return;
-	}
-
-	// Create text widget for each output
-	for (const FMOOutputDisplayData& Output : CachedOutputs)
-	{
-		FText DisplayText;
-		if (Output.Chance < 1.0f)
-		{
-			// Show chance if not 100%
-			DisplayText = FText::Format(
-				NSLOCTEXT("MOCrafting", "OutputFormatChance", "{0} x{1} ({2}%)"),
-				Output.DisplayName,
-				FText::AsNumber(Output.Quantity),
-				FText::AsNumber(FMath::RoundToInt(Output.Chance * 100))
-			);
-		}
-		else if (Output.Quantity > 1)
-		{
-			DisplayText = FText::Format(
-				NSLOCTEXT("MOCrafting", "OutputFormatQty", "{0} x{1}"),
-				Output.DisplayName,
-				FText::AsNumber(Output.Quantity)
-			);
-		}
-		else
-		{
-			DisplayText = Output.DisplayName;
-		}
-
-		UTextBlock* TextWidget = CreateSimpleTextWidget(DisplayText, true);
-		if (TextWidget)
-		{
-			OutputsContainer->AddChild(TextWidget);
-			OutputTextWidgets.Add(TextWidget);
-		}
-	}
-}
-
-UTextBlock* UMORecipeDetailPanel::CreateSimpleTextWidget(const FText& Text, bool bHasEnough)
-{
-	UTextBlock* TextWidget = NewObject<UTextBlock>(this);
-	if (!TextWidget)
-	{
-		return nullptr;
-	}
-
-	TextWidget->SetText(Text);
-	TextWidget->SetAutoWrapText(true);
-
-	// Set font size to 12pt
-	FSlateFontInfo FontInfo = TextWidget->GetFont();
-	FontInfo.Size = 12;
-	TextWidget->SetFont(FontInfo);
-
-	// Set color based on whether we have enough
-	if (bHasEnough)
-	{
-		TextWidget->SetColorAndOpacity(FSlateColor(FLinearColor::White));
-	}
-	else
-	{
-		TextWidget->SetColorAndOpacity(FSlateColor(FLinearColor(1.0f, 0.3f, 0.3f, 1.0f))); // Red-ish
-	}
-
-	return TextWidget;
 }

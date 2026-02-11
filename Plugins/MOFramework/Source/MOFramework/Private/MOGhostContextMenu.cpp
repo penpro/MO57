@@ -11,6 +11,7 @@
 #include "MOBuildingTypes.h"
 #include "MOFramework.h"
 #include "MOCommonButton.h"
+#include "MOUIUtils.h"
 #include "MOMaterialSourceInterface.h"
 #include "Components/CheckBox.h"
 #include "Components/VerticalBox.h"
@@ -25,6 +26,22 @@ const FName UMOGhostContextMenu::BuildingSkillId = FName("Construction");
 UMOGhostContextMenu::UMOGhostContextMenu(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
+	// Mouse leave closing is disabled by default (uses click-outside)
+	bCloseOnMouseLeave = false;
+}
+
+void UMOGhostContextMenu::RequestClose()
+{
+	// Broadcast legacy delegate for backward compatibility
+	OnRequestClose.Broadcast();
+	// Also call base which broadcasts OnCloseRequested
+	Super::RequestClose();
+}
+
+bool UMOGhostContextMenu::ShouldCloseOnMouseLeave() const
+{
+	// Don't close on mouse leave while build timer is active
+	return bCloseOnMouseLeave && !IsBuildTimerActive();
 }
 
 // ============================================================================
@@ -215,7 +232,7 @@ void UMOGhostContextMenu::CancelBuild()
 	DepositedMaterialsForRefund.Empty();
 
 	OnCancelled.Broadcast();
-	OnRequestClose.Broadcast();
+	RequestClose();
 }
 
 // ============================================================================
@@ -274,25 +291,14 @@ void UMOGhostContextMenu::NativeConstruct()
 
 void UMOGhostContextMenu::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 {
+	// Base class handles mouse leave timer
 	Super::NativeTick(MyGeometry, InDeltaTime);
-
-	// Handle mouse leave grace timer
-	if (MouseLeaveTimer > 0.0f && !bIsMouseOver)
-	{
-		MouseLeaveTimer -= InDeltaTime;
-		if (MouseLeaveTimer <= 0.0f)
-		{
-			MouseLeaveTimer = 0.0f;
-			OnRequestClose.Broadcast();
-			return;
-		}
-	}
 
 	// Check for build completion
 	if (IsBuildComplete())
 	{
 		// Build finished - close and update ghost visual
-		OnRequestClose.Broadcast();
+		RequestClose();
 		return;
 	}
 
@@ -314,9 +320,7 @@ void UMOGhostContextMenu::NativeTick(const FGeometry& MyGeometry, float InDeltaT
 			// Update time text
 			if (BuildTimeText)
 			{
-				int32 Minutes = FMath::FloorToInt(TimeRemaining / 60.0f);
-				int32 Seconds = FMath::FloorToInt(FMath::Fmod(TimeRemaining, 60.0f));
-				BuildTimeText->SetText(FText::FromString(FString::Printf(TEXT("%02d:%02d"), Minutes, Seconds)));
+				BuildTimeText->SetText(UMOUIUtils::FormatDurationAsTimeCode(TimeRemaining));
 			}
 
 			// Blueprint callback
@@ -325,48 +329,8 @@ void UMOGhostContextMenu::NativeTick(const FGeometry& MyGeometry, float InDeltaT
 	}
 }
 
-FReply UMOGhostContextMenu::NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent)
-{
-	// Close on Escape or Tab
-	if (InKeyEvent.GetKey() == EKeys::Escape || InKeyEvent.GetKey() == EKeys::Tab)
-	{
-		OnRequestClose.Broadcast();
-		return FReply::Handled();
-	}
-
-	return Super::NativeOnKeyDown(InGeometry, InKeyEvent);
-}
-
-void UMOGhostContextMenu::NativeOnMouseEnter(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
-{
-	Super::NativeOnMouseEnter(InGeometry, InMouseEvent);
-
-	bIsMouseOver = true;
-	MouseLeaveTimer = 0.0f; // Cancel any pending close
-}
-
-void UMOGhostContextMenu::NativeOnMouseLeave(const FPointerEvent& InMouseEvent)
-{
-	Super::NativeOnMouseLeave(InMouseEvent);
-
-	bIsMouseOver = false;
-
-	// Start grace timer - will close if mouse doesn't return
-	if (bCloseOnMouseLeave && !IsBuildTimerActive())
-	{
-		MouseLeaveTimer = MouseLeaveGraceTime;
-	}
-}
-
-void UMOGhostContextMenu::SetPopupPosition(FVector2D ScreenPosition)
-{
-	// Use SetPositionInViewport for reliable screen positioning
-	// Pass true to remove DPI scale since our coordinates are in screen pixels
-	SetPositionInViewport(ScreenPosition, true);
-
-	UE_LOG(LogMOFramework, Log, TEXT("[MOGhostContextMenu] SetPopupPosition called with (%.0f, %.0f)"),
-		ScreenPosition.X, ScreenPosition.Y);
-}
+// NativeOnKeyDown, NativeOnMouseEnter, NativeOnMouseLeave, SetPopupPosition
+// are now inherited from UMOContextMenuBase
 
 bool UMOGhostContextMenu::IsBuildComplete() const
 {
@@ -448,9 +412,7 @@ void UMOGhostContextMenu::UpdateButtonState()
 			if (Progress)
 			{
 				float TotalTime = Progress->GetProgressData().TotalBuildTime;
-				int32 Minutes = FMath::FloorToInt(TotalTime / 60.0f);
-				int32 Seconds = FMath::FloorToInt(FMath::Fmod(TotalTime, 60.0f));
-				BuildTimeText->SetText(FText::FromString(FString::Printf(TEXT("%02d:%02d"), Minutes, Seconds)));
+				BuildTimeText->SetText(UMOUIUtils::FormatDurationAsTimeCode(TotalTime));
 			}
 			else
 			{

@@ -32,6 +32,16 @@ UMOInventorySlot::UMOInventorySlot(const FObjectInitializer& ObjectInitializer)
 void UMOInventorySlot::NativePreConstruct()
 {
 	Super::NativePreConstruct();
+
+	// Apply empty icon in PreConstruct for editor preview
+	if (IsValid(ItemIconImage))
+	{
+		UTexture2D* EmptyIcon = GetEffectiveEmptyIcon();
+		if (EmptyIcon)
+		{
+			ItemIconImage->SetBrushFromTexture(EmptyIcon, true);
+		}
+	}
 }
 
 void UMOInventorySlot::NativeConstruct()
@@ -158,6 +168,22 @@ AMOWorldItem* UMOInventorySlot::GetSourceWorldItem() const
 	return SourceWorldItem.Get();
 }
 
+void UMOInventorySlot::SetCustomEmptyIcon(UTexture2D* InIcon)
+{
+	CustomEmptyIcon = InIcon;
+
+	// Re-apply visuals if currently empty to show new icon
+	if (!CachedVisualData.bHasItem)
+	{
+		ApplyVisualDataToWidget();
+	}
+}
+
+UTexture2D* UMOInventorySlot::GetEffectiveEmptyIcon() const
+{
+	return IsValid(CustomEmptyIcon) ? CustomEmptyIcon.Get() : EmptySlotIcon.Get();
+}
+
 void UMOInventorySlot::ApplyVisualDataToWidget()
 {
 	// Quantity: show the box only for stacks > 1.
@@ -192,7 +218,7 @@ void UMOInventorySlot::ApplyVisualDataToWidget()
 
 	if (IsValid(ItemIconImage))
 	{
-		UTexture2D* DesiredTexture = EmptySlotIcon;
+		UTexture2D* DesiredTexture = GetEffectiveEmptyIcon();
 
 		if (CachedVisualData.bHasItem)
 		{
@@ -541,10 +567,18 @@ bool UMOInventorySlot::NativeOnDrop(const FGeometry& InGeometry, const FDragDrop
 	UE_LOG(LogMOFramework, Warning, TEXT("[MOInventorySlot] Drop: Source=%d -> Target=%d, ItemGuid=%s"),
 		SourceSlot, TargetSlot, *ItemGuid.ToString(EGuidFormats::Short));
 
-	// Case 1: Target slot has no inventory (e.g., nearby items panel)
-	// Drop the item into the world from the source inventory
+	// Case 1: Target slot has no inventory (e.g., nearby items panel, equipment slots)
+	// Either drop to world or just broadcast for parent widget to handle
 	if (!IsValid(InventoryComponent))
 	{
+		// If world drop is disabled, just broadcast the event for parent handling (e.g., equipment panel)
+		if (!bEnableWorldDrop)
+		{
+			UE_LOG(LogMOFramework, Log, TEXT("[MOInventorySlot] Target has no inventory, world drop disabled - broadcasting for parent handling"));
+			OnSlotDropReceived.Broadcast(TargetSlot, SourceSlot, SourceInventory);
+			return true;
+		}
+
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventorySlot] Target has no inventory, dropping item to world"));
 
 		// Get drop location from player

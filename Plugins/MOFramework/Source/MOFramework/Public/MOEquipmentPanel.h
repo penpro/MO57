@@ -9,6 +9,7 @@ class UMOEquipmentComponent;
 class UMOInventoryComponent;
 class UMOInventorySlot;
 class UProgressBar;
+class UTexture2D;
 
 /**
  * Delegate for when an item is dropped onto an equipment slot.
@@ -94,6 +95,7 @@ public:
 	FMOOnEquipmentSlotRightClicked OnSlotRightClicked;
 
 protected:
+	virtual void NativePreConstruct() override;
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
 	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
@@ -146,6 +148,42 @@ protected:
 	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
 	TObjectPtr<UProgressBar> RightHandSwapProgress;
 
+	// ============================================================================
+	// EMPTY SLOT ICONS (Blueprint-configurable per slot)
+	// ============================================================================
+
+	/** Empty icon for head slot (helmet silhouette, etc). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Equipment|UI|Icons")
+	TObjectPtr<UTexture2D> HeadEmptyIcon;
+
+	/** Empty icon for chest slot (armor silhouette, etc). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Equipment|UI|Icons")
+	TObjectPtr<UTexture2D> ChestEmptyIcon;
+
+	/** Empty icon for hands slot (gloves silhouette, etc). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Equipment|UI|Icons")
+	TObjectPtr<UTexture2D> HandsEmptyIcon;
+
+	/** Empty icon for legs slot (pants silhouette, etc). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Equipment|UI|Icons")
+	TObjectPtr<UTexture2D> LegsEmptyIcon;
+
+	/** Empty icon for feet slot (boots silhouette, etc). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Equipment|UI|Icons")
+	TObjectPtr<UTexture2D> FeetEmptyIcon;
+
+	/** Empty icon for back slot (backpack silhouette, etc). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Equipment|UI|Icons")
+	TObjectPtr<UTexture2D> BackEmptyIcon;
+
+	/** Empty icon for left hand slot (hand/weapon silhouette, etc). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Equipment|UI|Icons")
+	TObjectPtr<UTexture2D> LeftHandEmptyIcon;
+
+	/** Empty icon for right hand slot (hand/weapon silhouette, etc). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Equipment|UI|Icons")
+	TObjectPtr<UTexture2D> RightHandEmptyIcon;
+
 private:
 	// ============================================================================
 	// STATE
@@ -167,6 +205,8 @@ private:
 	void UnbindSlotEvents();
 
 	UMOInventorySlot* GetSlotWidget(EMOEquipmentSlot EquipSlot) const;
+	UTexture2D* GetEmptyIconForSlot(EMOEquipmentSlot EquipSlot) const;
+	void ApplyEmptyIconsToSlots();
 	void UpdateSlotDisplay(EMOEquipmentSlot EquipSlot);
 	void UpdateSwapProgress();
 
