@@ -29,9 +29,14 @@ void UMOSystemMenuUIController::BeginPlay()
 
 void UMOSystemMenuUIController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	// Clean up in-game menu widget
+	// Clean up in-game menu widget - unbind delegates first to prevent callbacks during destruction
 	if (UMOInGameMenu* MenuWidget = InGameMenuWidget.Get())
 	{
+		MenuWidget->OnRequestClose.RemoveDynamic(this, &UMOSystemMenuUIController::HandleInGameMenuRequestClose);
+		MenuWidget->OnExitToMainMenu.RemoveDynamic(this, &UMOSystemMenuUIController::HandleInGameMenuExitToMainMenu);
+		MenuWidget->OnExitGame.RemoveDynamic(this, &UMOSystemMenuUIController::HandleInGameMenuExitGame);
+		MenuWidget->OnSaveRequested.RemoveDynamic(this, &UMOSystemMenuUIController::HandleSaveRequested);
+		MenuWidget->OnLoadRequested.RemoveDynamic(this, &UMOSystemMenuUIController::HandleLoadRequested);
 		if (MenuWidget->IsInViewport())
 		{
 			MenuWidget->RemoveFromParent();
@@ -39,9 +44,12 @@ void UMOSystemMenuUIController::EndPlay(const EEndPlayReason::Type EndPlayReason
 	}
 	InGameMenuWidget.Reset();
 
-	// Clean up possession menu widget
+	// Clean up possession menu widget - unbind delegates first
 	if (UMOPossessionMenu* PossessionWidget = PossessionMenuWidget.Get())
 	{
+		PossessionWidget->OnRequestClose.RemoveDynamic(this, &UMOSystemMenuUIController::HandlePossessionMenuRequestClose);
+		PossessionWidget->OnPawnSelected.RemoveDynamic(this, &UMOSystemMenuUIController::HandlePossessionMenuPawnSelected);
+		PossessionWidget->OnCreateCharacter.RemoveDynamic(this, &UMOSystemMenuUIController::HandlePossessionMenuCreateCharacter);
 		if (PossessionWidget->IsInViewport())
 		{
 			PossessionWidget->RemoveFromParent();
@@ -49,9 +57,11 @@ void UMOSystemMenuUIController::EndPlay(const EEndPlayReason::Type EndPlayReason
 	}
 	PossessionMenuWidget.Reset();
 
-	// Clean up confirmation dialog widget
+	// Clean up confirmation dialog widget - unbind delegates first
 	if (UMOConfirmationDialog* DialogWidget = ConfirmationDialogWidget.Get())
 	{
+		DialogWidget->OnConfirmed.RemoveDynamic(this, &UMOSystemMenuUIController::HandleConfirmationConfirmed);
+		DialogWidget->OnCancelled.RemoveDynamic(this, &UMOSystemMenuUIController::HandleConfirmationCancelled);
 		if (DialogWidget->IsInViewport())
 		{
 			DialogWidget->RemoveFromParent();

@@ -37,9 +37,10 @@ void UMOCharacterUIController::BeginPlay()
 
 void UMOCharacterUIController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	// Clean up skills panel widget
+	// Clean up skills panel widget - unbind delegates first
 	if (UMOSkillsPanel* SkillsWidget = SkillsPanelWidget.Get())
 	{
+		SkillsWidget->OnRequestClose.RemoveDynamic(this, &UMOCharacterUIController::HandleSkillsPanelRequestClose);
 		if (SkillsWidget->IsInViewport())
 		{
 			SkillsWidget->RemoveFromParent();
@@ -47,16 +48,19 @@ void UMOCharacterUIController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	}
 	SkillsPanelWidget.Reset();
 
-	// Clean up status panel widget
+	// Clean up status panel widget - unbind delegates first
 	if (UMOStatusPanel* StatusWidget = StatusPanelWidget.Get())
 	{
+		StatusWidget->OnRequestClose.RemoveDynamic(this, &UMOCharacterUIController::HandleStatusPanelRequestClose);
 		StatusWidget->RemoveFromParent();
 	}
 	StatusPanelWidget.Reset();
 
-	// Clean up inspection widget
+	// Clean up inspection widget - unbind delegates first
 	if (UMOInspectionProgressWidget* InspectionWidget = InspectionProgressWidget.Get())
 	{
+		InspectionWidget->OnInspectionCompleted.RemoveDynamic(this, &UMOCharacterUIController::HandleInspectionCompleted);
+		InspectionWidget->OnInspectionCancelled.RemoveDynamic(this, &UMOCharacterUIController::HandleInspectionCancelled);
 		InspectionWidget->RemoveFromParent();
 	}
 	InspectionProgressWidget.Reset();

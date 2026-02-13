@@ -79,8 +79,15 @@ void UMOEquipmentComponent::TickComponent(float DeltaTime, ELevelTick TickType, 
 
 bool UMOEquipmentComponent::EquipFromInventory(UMOInventoryComponent* Inventory, const FGuid& ItemGuid, EMOEquipmentSlot EquipSlot)
 {
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOEquipmentComponent] EquipFromInventory: ItemGuid=%s, EquipSlot=%d"),
+		*ItemGuid.ToString(EGuidFormats::Short), static_cast<int32>(EquipSlot));
+
 	if (!IsValid(Inventory) || !ItemGuid.IsValid() || EquipSlot == EMOEquipmentSlot::MAX)
 	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOEquipmentComponent] EquipFromInventory: Basic validation failed - Inventory=%s, GuidValid=%s, SlotValid=%s"),
+			IsValid(Inventory) ? TEXT("valid") : TEXT("NULL"),
+			ItemGuid.IsValid() ? TEXT("yes") : TEXT("no"),
+			EquipSlot != EMOEquipmentSlot::MAX ? TEXT("yes") : TEXT("no"));
 		return false;
 	}
 
@@ -91,24 +98,32 @@ bool UMOEquipmentComponent::EquipFromInventory(UMOInventoryComponent* Inventory,
 	FMOInventoryEntry Entry;
 	if (!Inventory->TryGetEntryByGuid(ItemGuid, Entry))
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOEquipmentComponent] Item not found in inventory: %s"), *ItemGuid.ToString());
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOEquipmentComponent] EquipFromInventory: Item not found in inventory: %s"), *ItemGuid.ToString());
 		return false;
 	}
+
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOEquipmentComponent] EquipFromInventory: Found item '%s' in inventory"), *Entry.ItemDefinitionId.ToString());
 
 	// Get item definition for swap timing and slot validation
 	FMOItemDefinitionRow ItemDef;
 	if (!UMOItemDatabaseSettings::GetItemDefinition(Entry.ItemDefinitionId, ItemDef))
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOEquipmentComponent] Item definition not found: %s"), *Entry.ItemDefinitionId.ToString());
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOEquipmentComponent] EquipFromInventory: Item definition not found: %s"), *Entry.ItemDefinitionId.ToString());
 		return false;
 	}
+
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOEquipmentComponent] EquipFromInventory: Item def found - bEquippable=%s, EquipmentSlotType=%d"),
+		ItemDef.bEquippable ? TEXT("true") : TEXT("false"),
+		static_cast<int32>(ItemDef.EquipmentSlotType));
 
 	// Check if item can be equipped to this slot
 	if (!CanEquipToSlot(Entry.ItemDefinitionId, EquipSlot))
 	{
-		UE_LOG(LogMOFramework, Verbose, TEXT("[MOEquipmentComponent] Item %s cannot be equipped to slot %d"), *Entry.ItemDefinitionId.ToString(), static_cast<int32>(EquipSlot));
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOEquipmentComponent] EquipFromInventory: Item %s cannot be equipped to slot %d"), *Entry.ItemDefinitionId.ToString(), static_cast<int32>(EquipSlot));
 		return false;
 	}
+
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOEquipmentComponent] EquipFromInventory: CanEquipToSlot passed"));
 
 	// Check if slot is currently swapping (only for hand slots)
 	if (IsHandSlot(EquipSlot) && IsSlotSwapping(EquipSlot))

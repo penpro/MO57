@@ -11,6 +11,30 @@ void UMOPossessionMenu::NativeConstruct()
 	EnsureButtonBindings();
 }
 
+void UMOPossessionMenu::NativeDestruct()
+{
+	// Clean up button bindings
+	if (CloseButton)
+	{
+		CloseButton->OnClicked().RemoveAll(this);
+	}
+	if (CreateCharacterButton)
+	{
+		CreateCharacterButton->OnClicked().RemoveAll(this);
+	}
+
+	// Clean up entry widget bindings
+	for (UMOPawnEntryWidget* Entry : EntryWidgets)
+	{
+		if (Entry)
+		{
+			Entry->OnPossessClicked.RemoveDynamic(this, &UMOPossessionMenu::HandlePawnEntryPossessClicked);
+		}
+	}
+
+	Super::NativeDestruct();
+}
+
 void UMOPossessionMenu::EnsureButtonBindings()
 {
 	if (CloseButton)

@@ -34,6 +34,30 @@ void UMOSavePanel::NativeConstruct()
 	RefreshSaveList();
 }
 
+void UMOSavePanel::NativeDestruct()
+{
+	// Clean up button bindings
+	if (NewSaveButton)
+	{
+		NewSaveButton->OnClicked().RemoveAll(this);
+	}
+	if (BackButton)
+	{
+		BackButton->OnClicked().RemoveAll(this);
+	}
+
+	// Clean up slot entry bindings
+	for (UMOSaveSlotEntry* Entry : SlotEntryWidgets)
+	{
+		if (Entry)
+		{
+			Entry->OnSlotSelected.RemoveDynamic(this, &UMOSavePanel::HandleSlotSelected);
+		}
+	}
+
+	Super::NativeDestruct();
+}
+
 UWidget* UMOSavePanel::NativeGetDesiredFocusTarget() const
 {
 	// Focus first save slot if any exist, otherwise the New Save button

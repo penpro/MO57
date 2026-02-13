@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
 #include "Blueprint/DragDropOperation.h"
+#include "MOEquipmentComponent.h"
 #include "MOInventorySlot.generated.h"
 
 class UButton;
@@ -11,6 +12,7 @@ class UTextBlock;
 class UWidget;
 class UBorder;
 class UMOInventoryComponent;
+class UMOEquipmentComponent;
 class UMODragVisualWidget;
 class AMOWorldItem;
 
@@ -23,13 +25,21 @@ class MOFRAMEWORK_API UMOInventorySlotDragOperation : public UDragDropOperation
 	GENERATED_BODY()
 
 public:
-	/** Source inventory component (for inventory-to-inventory transfers). May be null for world item drags. */
+	/** Source inventory component (for inventory-to-inventory transfers). May be null for world item or equipment drags. */
 	UPROPERTY(BlueprintReadOnly, Category="MO|Inventory|UI")
 	TWeakObjectPtr<UMOInventoryComponent> SourceInventoryComponent;
 
-	/** Source world item (for nearby items panel drags). May be null for inventory drags. */
+	/** Source world item (for nearby items panel drags). May be null for inventory or equipment drags. */
 	UPROPERTY(BlueprintReadOnly, Category="MO|Inventory|UI")
 	TWeakObjectPtr<AMOWorldItem> SourceWorldItem;
+
+	/** Source equipment component (for equipment slot drags). May be null for inventory or world item drags. */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Inventory|UI")
+	TWeakObjectPtr<UMOEquipmentComponent> SourceEquipmentComponent;
+
+	/** Source equipment slot (valid only if SourceEquipmentComponent is set). */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Inventory|UI")
+	EMOEquipmentSlot SourceEquipmentSlot = EMOEquipmentSlot::MAX;
 
 	UPROPERTY(BlueprintReadOnly, Category="MO|Inventory|UI")
 	int32 SourceSlotIndex = INDEX_NONE;
@@ -48,6 +58,9 @@ public:
 
 	/** Returns true if this drag originated from an inventory. */
 	bool IsFromInventory() const { return SourceInventoryComponent.IsValid(); }
+
+	/** Returns true if this drag originated from an equipment slot. */
+	bool IsFromEquipment() const { return SourceEquipmentComponent.IsValid() && SourceEquipmentSlot != EMOEquipmentSlot::MAX; }
 };
 
 USTRUCT(BlueprintType)
@@ -70,6 +83,14 @@ struct FMOInventorySlotVisualData
 	/** Optional: Source world item for nearby items display. Used for drag operations. */
 	UPROPERTY(BlueprintReadOnly, Category="MO|Inventory|UI")
 	TWeakObjectPtr<AMOWorldItem> SourceWorldItem;
+
+	/** Optional: Source equipment component for equipment slot display. Used for drag operations. */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Inventory|UI")
+	TWeakObjectPtr<UMOEquipmentComponent> SourceEquipmentComponent;
+
+	/** Optional: Source equipment slot type. Valid only if SourceEquipmentComponent is set. */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Inventory|UI")
+	EMOEquipmentSlot SourceEquipmentSlot = EMOEquipmentSlot::MAX;
 };
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOInventorySlotClickedSignature, int32, SlotIndex, const FGuid&, ItemGuid);
@@ -157,6 +178,21 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO|Inventory|UI")
 	AMOWorldItem* GetSourceWorldItem() const;
 
+	/**
+	 * Set the source equipment for this slot (used by equipment panel).
+	 * When set, drag operations will use this equipment slot as the source.
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Inventory|UI")
+	void SetEquipmentSource(UMOEquipmentComponent* InEquipment, EMOEquipmentSlot InSlot);
+
+	/** Get the source equipment component (if any). */
+	UFUNCTION(BlueprintPure, Category="MO|Inventory|UI")
+	UMOEquipmentComponent* GetSourceEquipmentComponent() const;
+
+	/** Get the source equipment slot type. */
+	UFUNCTION(BlueprintPure, Category="MO|Inventory|UI")
+	EMOEquipmentSlot GetSourceEquipmentSlot() const;
+
 protected:
 	virtual void NativeConstruct() override;
 	virtual void NativePreConstruct() override;
@@ -227,6 +263,14 @@ private:
 	/** Source world item for nearby items panel (alternative to InventoryComponent). */
 	UPROPERTY()
 	TWeakObjectPtr<AMOWorldItem> SourceWorldItem;
+
+	/** Source equipment component for equipment panel (alternative to InventoryComponent). */
+	UPROPERTY()
+	TWeakObjectPtr<UMOEquipmentComponent> SourceEquipmentComponent;
+
+	/** Source equipment slot type. */
+	UPROPERTY()
+	EMOEquipmentSlot SourceEquipmentSlot = EMOEquipmentSlot::MAX;
 
 	UPROPERTY(EditDefaultsOnly, Category="MO|Inventory|UI")
 	TObjectPtr<UTexture2D> DefaultItemIcon;

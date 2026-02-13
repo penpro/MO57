@@ -19,6 +19,21 @@ void UMOConfirmationDialog::NativeConstruct()
 	}
 }
 
+void UMOConfirmationDialog::NativeDestruct()
+{
+	// Clean up button bindings
+	if (ConfirmButton)
+	{
+		ConfirmButton->OnClicked().RemoveAll(this);
+	}
+	if (CancelButton)
+	{
+		CancelButton->OnClicked().RemoveAll(this);
+	}
+
+	Super::NativeDestruct();
+}
+
 UWidget* UMOConfirmationDialog::NativeGetDesiredFocusTarget() const
 {
 	// Default focus to Cancel (safer option)

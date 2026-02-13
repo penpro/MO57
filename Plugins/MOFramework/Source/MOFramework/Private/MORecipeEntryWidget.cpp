@@ -46,6 +46,17 @@ void UMORecipeEntryWidget::NativeConstruct()
 	}
 }
 
+void UMORecipeEntryWidget::NativeDestruct()
+{
+	// Clean up button bindings
+	if (EntryButton)
+	{
+		EntryButton->OnClicked().RemoveAll(this);
+	}
+
+	Super::NativeDestruct();
+}
+
 void UMORecipeEntryWidget::NativePreConstruct()
 {
 	Super::NativePreConstruct();

@@ -122,6 +122,9 @@ void UMOBuildingRecipeListWidget::RefreshEntryStates()
 
 void UMOBuildingRecipeListWidget::SelectRecipe(FName RecipeId)
 {
+	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingRecipeListWidget] SelectRecipe - RecipeId: %s (was: %s)"),
+		*RecipeId.ToString(), *SelectedRecipeId.ToString());
+
 	FName OldSelection = SelectedRecipeId;
 	SelectedRecipeId = RecipeId;
 
@@ -143,6 +146,7 @@ void UMOBuildingRecipeListWidget::SelectRecipe(FName RecipeId)
 	// Broadcast selection
 	if (SelectedRecipeId != OldSelection)
 	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingRecipeListWidget] Broadcasting OnRecipeSelected: %s"), *SelectedRecipeId.ToString());
 		OnRecipeSelected.Broadcast(SelectedRecipeId);
 	}
 }
@@ -166,6 +170,7 @@ void UMOBuildingRecipeListWidget::NativeConstruct()
 
 void UMOBuildingRecipeListWidget::HandleEntryClicked(FName RecipeId)
 {
+	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingRecipeListWidget] HandleEntryClicked - RecipeId: %s"), *RecipeId.ToString());
 	SelectRecipe(RecipeId);
 }
 

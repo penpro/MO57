@@ -35,7 +35,29 @@ bool UMOItemDatabaseSettings::GetItemDefinition(FName ItemDefinitionId, FMOItemD
 		return false;
 	}
 
-	// Build cache if needed
+#if WITH_EDITOR
+	// In editor builds, read directly from DataTable to always pick up changes
+	const UMOItemDatabaseSettings* Settings = GetDefault<UMOItemDatabaseSettings>();
+	if (!Settings)
+	{
+		return false;
+	}
+
+	UDataTable* DataTable = Settings->GetItemDefinitionsDataTable();
+	if (!IsValid(DataTable))
+	{
+		return false;
+	}
+
+	const FMOItemDefinitionRow* Row = DataTable->FindRow<FMOItemDefinitionRow>(ItemDefinitionId, TEXT("GetItemDefinition"));
+	if (Row)
+	{
+		OutDefinition = *Row;
+		return true;
+	}
+	return false;
+#else
+	// In packaged builds, use cache for performance
 	BuildCacheIfNeeded();
 
 	// Look up in cache
@@ -47,10 +69,17 @@ bool UMOItemDatabaseSettings::GetItemDefinition(FName ItemDefinitionId, FMOItemD
 	}
 
 	return false;
+#endif
 }
 
 void UMOItemDatabaseSettings::BuildCacheIfNeeded()
 {
+#if WITH_EDITOR
+	// In editor builds, skip caching entirely to always pick up DataTable changes
+	// Performance impact is negligible for development
+	return;
+#endif
+
 	if (bCacheBuilt)
 	{
 		return;

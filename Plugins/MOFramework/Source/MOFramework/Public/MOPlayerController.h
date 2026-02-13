@@ -131,6 +131,13 @@ class UMONotificationComponent;
 class UMOBuildingComponent;
 class UEnhancedInputLocalPlayerSubsystem;
 
+// UI Controllers
+class UMOInventoryUIController;
+class UMOCraftingUIController;
+class UMOBuildingUIController;
+class UMOCharacterUIController;
+class UMOSystemMenuUIController;
+
 /**
  * Input context types for mapping context management.
  * Used with SetInputContext() to switch between input modes.
@@ -178,6 +185,30 @@ public:
 	/** Building placement component. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO|Components")
 	TObjectPtr<UMOBuildingComponent> BuildingComponent;
+
+	// ============================================================================
+	// UI CONTROLLER COMPONENTS
+	// ============================================================================
+
+	/** Inventory UI controller - handles inventory menus, item context, looting. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO|UI Controllers")
+	TObjectPtr<UMOInventoryUIController> InventoryUIController;
+
+	/** Crafting UI controller - handles crafting menu, station context, harvest. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO|UI Controllers")
+	TObjectPtr<UMOCraftingUIController> CraftingUIController;
+
+	/** Building UI controller - handles building menu, ghost context. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO|UI Controllers")
+	TObjectPtr<UMOBuildingUIController> BuildingUIController;
+
+	/** Character UI controller - handles skills panel, status panel, inspection. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO|UI Controllers")
+	TObjectPtr<UMOCharacterUIController> CharacterUIController;
+
+	/** System menu UI controller - handles in-game menu, possession menu, confirmations. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO|UI Controllers")
+	TObjectPtr<UMOSystemMenuUIController> SystemMenuUIController;
 
 	// ============================================================================
 	// INPUT MAPPING CONTEXTS

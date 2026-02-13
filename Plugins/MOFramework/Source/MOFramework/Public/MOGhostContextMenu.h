@@ -173,6 +173,7 @@ public:
 
 protected:
 	virtual void NativeConstruct() override;
+	virtual void NativeDestruct() override;
 	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 	// Key handling and mouse enter/leave inherited from UMOContextMenuBase
 	virtual bool ShouldCloseOnMouseLeave() const override;
@@ -302,6 +303,11 @@ private:
 	 * @return Number of materials to refund
 	 */
 	int32 CalculateRefundAmount(int32 TotalDeposited, bool bBuildStarted) const;
+
+	/** Return refunded materials to builder's inventory, losing lowest rarity first.
+	 * @param RefundCount - Number of materials to return
+	 */
+	void RefundMaterialsToInventory(int32 RefundCount);
 
 	/** Drop refunded materials to world, losing lowest rarity first.
 	 * @param RefundCount - Number of materials to return

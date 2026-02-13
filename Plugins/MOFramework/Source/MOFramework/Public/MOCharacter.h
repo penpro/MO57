@@ -42,6 +42,9 @@ class USpringArmComponent;
 class UCameraComponent;
 class USkeletalMesh;
 class UAnimInstance;
+class UStaticMeshComponent;
+struct FMOEquippedItem;
+enum class EMOEquipmentSlot : uint8;
 
 /**
  * Base character class for the MO Framework.
@@ -349,6 +352,26 @@ protected:
 	TObjectPtr<UMOEquipmentComponent> EquipmentComponent;
 
 	// ============================================================================
+	// HELD ITEM VISUALS
+	// ============================================================================
+
+	/** Mesh component for left hand held item. Dynamically spawned based on equipped item. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO|HeldItems")
+	TObjectPtr<UStaticMeshComponent> LeftHandMesh;
+
+	/** Mesh component for right hand held item. Dynamically spawned based on equipped item. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO|HeldItems")
+	TObjectPtr<UStaticMeshComponent> RightHandMesh;
+
+	/** Socket name on the skeletal mesh for left hand attachment. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|HeldItems")
+	FName LeftHandSocketName = TEXT("hand_l");
+
+	/** Socket name on the skeletal mesh for right hand attachment. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|HeldItems")
+	FName RightHandSocketName = TEXT("hand_r");
+
+	// ============================================================================
 	// CONFIGURATION
 	// ============================================================================
 
@@ -540,4 +563,14 @@ protected:
 	/** Called when a recipe is discovered - shows notification. */
 	UFUNCTION()
 	void HandleRecipeDiscovered(FName RecipeId, EMODiscoveryMethod Method);
+
+	/** Called when equipment changes - updates held item visuals. */
+	UFUNCTION()
+	void HandleEquipmentChanged(EMOEquipmentSlot EquipSlot, const FMOEquippedItem& EquippedItem);
+
+	/** Update the held item mesh for a specific hand slot. */
+	void UpdateHeldItemMesh(EMOEquipmentSlot EquipSlot, const FMOEquippedItem& EquippedItem);
+
+	/** Clear the held item mesh for a specific hand slot. */
+	void ClearHeldItemMesh(EMOEquipmentSlot EquipSlot);
 };

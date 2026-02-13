@@ -24,6 +24,10 @@
 #include "MOTerraformingComponent.h"
 #include "MOUIManagerComponent.h"
 #include "MOModeIndicatorWidget.h"
+#include "MOItemDatabaseSettings.h"
+#include "MOItemDefinitionRow.h"
+#include "Components/StaticMeshComponent.h"
+#include "Engine/DataTable.h"
 
 AMOCharacter::AMOCharacter()
 {
@@ -84,6 +88,17 @@ AMOCharacter::AMOCharacter()
 
 	// MO Components - Equipment
 	EquipmentComponent = CreateDefaultSubobject<UMOEquipmentComponent>(TEXT("EquipmentComponent"));
+
+	// Held item mesh components (attached to hand sockets)
+	LeftHandMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("LeftHandMesh"));
+	LeftHandMesh->SetupAttachment(GetMesh(), LeftHandSocketName);
+	LeftHandMesh->SetVisibility(false);
+	LeftHandMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+	RightHandMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("RightHandMesh"));
+	RightHandMesh->SetupAttachment(GetMesh(), RightHandSocketName);
+	RightHandMesh->SetVisibility(false);
+	RightHandMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
 	// Default mesh position (mesh itself loaded in BeginPlay if DefaultMesh is set)
 	GetMesh()->SetRelativeLocation(FVector(0.0f, 0.0f, -96.0f));
@@ -149,6 +164,16 @@ void AMOCharacter::BeginPlay()
 	if (RecipeDiscoveryComponent)
 	{
 		RecipeDiscoveryComponent->OnRecipeDiscovered.AddDynamic(this, &AMOCharacter::HandleRecipeDiscovered);
+	}
+
+	// Bind equipment changes to held item visualization
+	if (EquipmentComponent)
+	{
+		EquipmentComponent->OnEquipmentChanged.AddDynamic(this, &AMOCharacter::HandleEquipmentChanged);
+
+		// Update held items for any already-equipped items (e.g., from save load)
+		UpdateHeldItemMesh(EMOEquipmentSlot::LeftHand, EquipmentComponent->GetEquippedItem(EMOEquipmentSlot::LeftHand));
+		UpdateHeldItemMesh(EMOEquipmentSlot::RightHand, EquipmentComponent->GetEquippedItem(EMOEquipmentSlot::RightHand));
 	}
 
 	Super::BeginPlay();
@@ -932,4 +957,156 @@ bool AMOCharacter::DoTerraform()
 	}
 
 	return TerraformingComponent->TryTerraform();
+}
+
+// ============================================================================
+// HELD ITEM VISUALS
+// ============================================================================
+
+void AMOCharacter::HandleEquipmentChanged(EMOEquipmentSlot EquipSlot, const FMOEquippedItem& EquippedItem)
+{
+	// Only handle hand slots for held item visuals
+	if (EquipSlot == EMOEquipmentSlot::LeftHand || EquipSlot == EMOEquipmentSlot::RightHand)
+	{
+		UpdateHeldItemMesh(EquipSlot, EquippedItem);
+	}
+}
+
+void AMOCharacter::UpdateHeldItemMesh(EMOEquipmentSlot EquipSlot, const FMOEquippedItem& EquippedItem)
+{
+	// Determine which mesh component to use
+	UStaticMeshComponent* TargetMesh = nullptr;
+	FName SocketName = NAME_None;
+
+	if (EquipSlot == EMOEquipmentSlot::LeftHand)
+	{
+		TargetMesh = LeftHandMesh;
+		SocketName = LeftHandSocketName;
+	}
+	else if (EquipSlot == EMOEquipmentSlot::RightHand)
+	{
+		TargetMesh = RightHandMesh;
+		SocketName = RightHandSocketName;
+	}
+	else
+	{
+		return; // Not a hand slot
+	}
+
+	if (!TargetMesh)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOCharacter] UpdateHeldItemMesh: No mesh component for slot"));
+		return;
+	}
+
+	// If slot is empty, hide the mesh
+	if (!EquippedItem.IsValid())
+	{
+		ClearHeldItemMesh(EquipSlot);
+		return;
+	}
+
+	// Look up item definition to get the mesh
+	const UMOItemDatabaseSettings* Settings = GetDefault<UMOItemDatabaseSettings>();
+	if (!Settings)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOCharacter] UpdateHeldItemMesh: No item database settings"));
+		return;
+	}
+
+	UDataTable* ItemTable = Settings->ItemDefinitionsDataTable.LoadSynchronous();
+	if (!ItemTable)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOCharacter] UpdateHeldItemMesh: Failed to load item DataTable"));
+		return;
+	}
+
+	const FMOItemDefinitionRow* ItemDef = ItemTable->FindRow<FMOItemDefinitionRow>(EquippedItem.ItemDefinitionId, TEXT("UpdateHeldItemMesh"));
+	if (!ItemDef)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOCharacter] UpdateHeldItemMesh: Item '%s' not found in DataTable"),
+			*EquippedItem.ItemDefinitionId.ToString());
+		ClearHeldItemMesh(EquipSlot);
+		return;
+	}
+
+	// Determine which mesh to use: HeldVisual.StaticMesh first, fall back to WorldVisual.StaticMesh
+	TSoftObjectPtr<UStaticMesh> MeshToLoad = ItemDef->HeldVisual.StaticMesh;
+	if (MeshToLoad.IsNull())
+	{
+		MeshToLoad = ItemDef->WorldVisual.StaticMesh;
+	}
+
+	if (MeshToLoad.IsNull())
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOCharacter] UpdateHeldItemMesh: Item '%s' has no StaticMesh defined (checked HeldVisual and WorldVisual)"),
+			*EquippedItem.ItemDefinitionId.ToString());
+		ClearHeldItemMesh(EquipSlot);
+		return;
+	}
+
+	UStaticMesh* LoadedMesh = MeshToLoad.LoadSynchronous();
+	if (!LoadedMesh)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOCharacter] UpdateHeldItemMesh: Failed to load mesh for '%s'"),
+			*EquippedItem.ItemDefinitionId.ToString());
+		ClearHeldItemMesh(EquipSlot);
+		return;
+	}
+
+	// Set the mesh and make it visible
+	TargetMesh->SetStaticMesh(LoadedMesh);
+
+	// Apply held transform for the appropriate hand
+	const bool bIsLeftHand = (EquipSlot == EMOEquipmentSlot::LeftHand);
+	TargetMesh->SetRelativeTransform(ItemDef->HeldVisual.GetTransformForHand(bIsLeftHand));
+
+	// Apply material override: HeldVisual first, fall back to WorldVisual
+	TSoftObjectPtr<UMaterialInterface> MaterialToLoad = ItemDef->HeldVisual.MaterialOverride;
+	if (MaterialToLoad.IsNull())
+	{
+		MaterialToLoad = ItemDef->WorldVisual.MaterialOverride;
+	}
+
+	if (!MaterialToLoad.IsNull())
+	{
+		if (UMaterialInterface* Material = MaterialToLoad.LoadSynchronous())
+		{
+			TargetMesh->SetMaterial(0, Material);
+		}
+	}
+
+	// Ensure it's attached to the correct socket
+	TargetMesh->AttachToComponent(GetMesh(), FAttachmentTransformRules::SnapToTargetNotIncludingScale, SocketName);
+
+	TargetMesh->SetVisibility(true);
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOCharacter] %s: Equipped '%s' to %s hand - mesh visible"),
+		*GetName(),
+		*EquippedItem.ItemDefinitionId.ToString(),
+		EquipSlot == EMOEquipmentSlot::LeftHand ? TEXT("left") : TEXT("right"));
+}
+
+void AMOCharacter::ClearHeldItemMesh(EMOEquipmentSlot EquipSlot)
+{
+	UStaticMeshComponent* TargetMesh = nullptr;
+
+	if (EquipSlot == EMOEquipmentSlot::LeftHand)
+	{
+		TargetMesh = LeftHandMesh;
+	}
+	else if (EquipSlot == EMOEquipmentSlot::RightHand)
+	{
+		TargetMesh = RightHandMesh;
+	}
+
+	if (TargetMesh)
+	{
+		TargetMesh->SetVisibility(false);
+		TargetMesh->SetStaticMesh(nullptr);
+
+		UE_LOG(LogMOFramework, Log, TEXT("[MOCharacter] %s: Cleared %s hand mesh"),
+			*GetName(),
+			EquipSlot == EMOEquipmentSlot::LeftHand ? TEXT("left") : TEXT("right"));
+	}
 }

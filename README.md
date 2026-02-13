@@ -149,6 +149,32 @@ Dehydration → Vitals (+HR, -BP, +Temp) → Performance penalties
 - Used by: `UMOInteractorComponent` to interact with world objects
 - Implementors: Items, doors, containers, NPCs
 
+### Main Menu & Game Flow
+
+**Level Structure:**
+- `LoadingLevel` - Main menu with intro video (BP_MainMenuGameMode)
+- `MOPCGScattering` - Gameplay world (BP_MOGameMode)
+
+**New Game Flow:**
+1. Main menu sets `PendingNewGame` flag in `UMOGameSettings`
+2. `OpenLevel()` transitions to gameplay level
+3. `AMOGameMode::BeginPlay()` detects pending new game
+4. Waits for voxel terrain via `AVoxelWorld::OnNextStateRendered()`
+5. `FindSafeSpawnLocation()` raycasts to find land above water
+6. Spawns and possesses initial pawn
+
+**Spawn Point Detection (`AMOGameMode`):**
+- Configurable `SpawnSearchCenter`, `SpawnSearchRadius`, `WaterLevelZ`
+- Uses `ECC_WorldStatic` channel for voxel terrain collision
+- Tracks best candidate (highest Z above water) across attempts
+- Detailed logging for debugging spawn issues
+
+**Intro Video:**
+- Uses UE Media Framework (`UMediaPlayer`, `UMediaTexture`, `UMediaSoundComponent`)
+- Controller creates media assets, passes material to widget
+- Skippable with any key press
+- `bPlayIntro` flag prevents replay after first run
+
 ### DataTable-Driven Design
 
 | Row Type | DataTable | Purpose |
@@ -176,11 +202,14 @@ The MOFramework plugin (`Plugins/MOFramework/`) provides all core gameplay syste
 ```
 Plugins/MOFramework/
 ├── Source/MOFramework/
-│   ├── Public/           # Headers (60+ classes)
+│   ├── Public/           # Headers (70+ classes)
 │   │   ├── MO*Component.h
 │   │   ├── MO*Subsystem.h
 │   │   ├── MO*Widget.h
-│   │   └── MO*Interface.h
+│   │   ├── MO*Interface.h
+│   │   ├── MOMainMenuPlayerController.h
+│   │   ├── MOMainMenuWidget.h
+│   │   └── MOIntroWidget.h
 │   └── Private/          # Implementations
 └── Content/
     └── UI/               # Widget Blueprints
@@ -446,6 +475,31 @@ Base button for all MOFramework UI. Override `UpdateButtonText` event to set you
 
 ### Menu Widgets
 
+#### WBP_MainMenu
+**Parent Class:** `UMOMainMenuWidget`
+
+| Widget | Type | Required |
+|--------|------|----------|
+| `NewGameButton` | UMOCommonButton | **Required** |
+| `LoadGameButton` | UMOCommonButton | **Required** |
+| `OptionsButton` | UMOCommonButton | **Required** |
+| `ExitButton` | UMOCommonButton | **Required** |
+| `FocusWindowSwitcher` | UWidgetSwitcher | **Required** |
+| `LoadPanel` | UMOLoadPanel | Optional |
+| `OptionsPanel` | UMOOptionsPanel | Optional |
+
+**Switcher Indices:** 0=None, 1=Load, 2=Options
+
+#### WBP_IntroVideo
+**Parent Class:** `UMOIntroWidget`
+
+| Widget | Type | Required |
+|--------|------|----------|
+| `VideoImage` | UImage | **Required** |
+| `SkipHintText` | UTextBlock | Optional |
+
+Receives video material from controller via `SetVideoMaterial()`. Press any key to skip.
+
 #### WBP_InGameMenu
 **Parent Class:** `UMOInGameMenu`
 
@@ -519,9 +573,31 @@ The MOFramework has solid core systems but has accumulated technical debt in sev
 - All 60+ classes in single `MOFramework` module
 - **Future**: Split into Core, Interaction, Inventory, Medical, UI submodules
 
+### Recent Changes
+
+*Last updated: 2026-02-12*
+
+#### Main Menu System
+- [x] Main menu widget with New Game/Load Game/Options/Exit
+- [x] Intro video playback with audio (UMediaPlayer-based)
+- [x] Skip intro with any key press
+- [x] Level transitions from LoadingLevel to gameplay
+- [x] Input mode management across level transitions
+
+#### Spawn System
+- [x] Voxel terrain ready detection via `OnNextStateRendered()`
+- [x] Safe spawn location finding with raycast (ECC_WorldStatic)
+- [x] Configurable spawn search center and radius
+- [x] Water level avoidance with MinSpawnHeightAboveWater
+
+#### Equipment System
+- [x] Full body slot equipment (head, chest, legs, feet, hands, back)
+- [x] Left/right hand weapon slots
+- [x] Equipment slot icons in UI
+
 ### Tracked TODOs
 
-*Last updated: 2026-02-01*
+*Last updated: 2026-02-12*
 
 #### Medical System
 - [ ] `MOAnatomyComponent.cpp:257` - Get treatment definition from DataTable and apply effects

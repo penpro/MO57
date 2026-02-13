@@ -124,47 +124,36 @@
 
 class APlayerController;
 class UMOInventoryComponent;
-class UMOInventoryMenu;
 class UMOReticleWidget;
-class UMOInGameMenu;
-class UMOItemContextMenu;
-class UMOConfirmationDialog;
 class UCommonActivatableWidget;
-class UMOStatusPanel;
 class UMOModalBackground;
-class UMOVitalsComponent;
-class UMOMetabolismComponent;
-class UMOMentalStateComponent;
 class UMONotificationWidget;
-class UMOPossessionMenu;
-class UMOPawnEntryWidget;
-class UMOCraftingMenu;
-class UMOSkillsPanel;
+class UMONotificationComponent;
+class UMOFPSCounterWidget;
+class UMOModeIndicatorWidget;
+class UMOToolHintWidget;
+class UMOInteractorComponent;
+enum class EMOGameplayMode : uint8;
+
+// Cached pawn components
 class UMOSkillsComponent;
 class UMOKnowledgeComponent;
 class UMOCraftingQueueComponent;
 class UMORecipeDiscoveryComponent;
+class UMOVitalsComponent;
+class UMOMetabolismComponent;
+class UMOMentalStateComponent;
 class UMOSurvivalStatsComponent;
-class UMOInspectionProgressWidget;
-class UMONotificationComponent;
+
+// Forward declarations for public API (widgets owned by controllers)
+class UUserWidget;
+class UMOCraftingMenu;
+class UMOSkillsPanel;
 class UMOBuildingMenu;
-class UMOBuildWidget;
-class UMOFPSCounterWidget;
-class UMOGhostContextMenu;
-class UMOStationContextMenu;
-class UMOKeepOnHarvestContextMenu;
-class UMOHarvestProgressWidget;
+class UMOStatusPanel;
 class AMOBuildableActor;
-class AMOCraftingStationActor;
-struct FMOInteractionTarget;
-struct FMOCraftResult;
 class AMOWorldItem;
-class UMOUnifiedInventoryMenu;
-class UMOModeIndicatorWidget;
-class UMOToolHintWidget;
-class UMOInteractorComponent;
-struct FMOInspectionResult;
-enum class EMOGameplayMode : uint8;
+struct FMOInteractionTarget;
 
 // UI Controllers (specialized UI management)
 class UMOInventoryUIController;
@@ -228,11 +217,11 @@ public:
 
 	/** Get the radius used for nearby items query. */
 	UFUNCTION(BlueprintPure, Category="MO|UI|Inventory")
-	float GetNearbyItemsQueryRadius() const { return NearbyItemsQueryRadius; }
+	float GetNearbyItemsQueryRadius() const;
 
 	/** Set the radius used for nearby items query. */
 	UFUNCTION(BlueprintCallable, Category="MO|UI|Inventory")
-	void SetNearbyItemsQueryRadius(float NewRadius) { NearbyItemsQueryRadius = FMath::Max(0.0f, NewRadius); }
+	void SetNearbyItemsQueryRadius(float NewRadius);
 
 	/** Show or hide the reticle. */
 	UFUNCTION(BlueprintCallable, Category="MO|UI")
@@ -526,67 +515,7 @@ private:
 
 	void ApplyInputModeForMenuClosed(APlayerController* PlayerController) const;
 
-	UFUNCTION()
-	void HandleInventoryMenuRequestClose();
-
-	UFUNCTION()
-	void HandleInventoryMenuSlotRightClicked(int32 SlotIndex, const FGuid& ItemGuid, FVector2D ScreenPosition);
-
 private:
-	// Set this in the component defaults (or on the component instance in your PlayerController BP).
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI", meta=(AllowPrivateAccess="true"))
-	TSubclassOf<UMOInventoryMenu> InventoryMenuClass;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI", meta=(ClampMin="0", AllowPrivateAccess="true"))
-	int32 InventoryMenuZOrder = 50;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI", meta=(AllowPrivateAccess="true"))
-	bool bShowMouseCursorWhileMenuOpen = true;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI", meta=(AllowPrivateAccess="true"))
-	bool bLockMovementWhileMenuOpen = true;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI", meta=(AllowPrivateAccess="true"))
-	bool bLockLookWhileMenuOpen = true;
-
-	// Weak pointer so we do not keep dead widgets alive.
-	UPROPERTY(Transient)
-	TWeakObjectPtr<UMOInventoryMenu> InventoryMenuWidget;
-
-	// --- Container and Unified Inventory ---
-
-	/** Currently active container actor. Persists across menu open/close. */
-	UPROPERTY(Transient)
-	TWeakObjectPtr<AActor> CurrentContainerActor;
-
-	/** Unified inventory menu widget (dual-panel with container support). */
-	UPROPERTY(Transient)
-	TWeakObjectPtr<UMOUnifiedInventoryMenu> UnifiedInventoryWidget;
-
-	/** Widget class for the unified inventory menu. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Inventory", meta=(AllowPrivateAccess="true"))
-	TSubclassOf<UMOUnifiedInventoryMenu> UnifiedInventoryMenuClass;
-
-	/** Z-order for the unified inventory menu. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Inventory", meta=(ClampMin="0", AllowPrivateAccess="true"))
-	int32 UnifiedInventoryMenuZOrder = 50;
-
-	/** Radius for nearby world items query (in Unreal units, 400cm = ~13 feet). */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Inventory", meta=(ClampMin="0", AllowPrivateAccess="true"))
-	float NearbyItemsQueryRadius = 400.0f;
-
-	/** Handle quick transfer of items between inventories (Shift+Click). */
-	void HandleQuickTransfer(const FGuid& ItemGuid, UMOInventoryComponent* SourceInventory);
-
-	/** Handle loot all nearby request (F key). */
-	void HandleLootAllNearby();
-
-	UFUNCTION()
-	void HandleUnifiedInventoryMenuRequestClose();
-
-	UFUNCTION()
-	void HandleUnifiedInventoryMenuContextMenuRequested(UMOInventoryComponent* InventoryComponent, const FGuid& ItemGuid, int32 SlotIndex, FVector2D ScreenPosition);
-
 	// --- Reticle ---
 
 	/** Widget class for the reticle. If not set, uses the default UMOReticleWidget. */
@@ -628,287 +557,6 @@ private:
 
 	/** Refresh FPS counter visibility based on current settings. */
 	void RefreshFPSCounterVisibility();
-
-	// --- Player Status Panel ---
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Status", meta=(AllowPrivateAccess="true"))
-	TSubclassOf<UMOStatusPanel> StatusPanelClass;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Status", meta=(ClampMin="0", AllowPrivateAccess="true"))
-	int32 StatusPanelZOrder = 50;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Status", meta=(AllowPrivateAccess="true"))
-	bool bCreateStatusPanelOnBeginPlay = false;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Status", meta=(AllowPrivateAccess="true"))
-	bool bHideStatusPanelWhenMenuOpen = false;
-
-	UPROPERTY(Transient)
-	TWeakObjectPtr<UMOStatusPanel> StatusPanelWidget;
-
-	/** Tracks whether status panel is currently visible (avoids querying widget visibility) */
-	bool bStatusPanelVisible = false;
-
-	void CreateStatusPanel();
-
-	UFUNCTION()
-	void HandleStatusPanelRequestClose();
-
-	/** Get medical components from current pawn (null-safe). */
-	void GetCurrentPawnMedicalComponents(UMOVitalsComponent*& OutVitals, UMOMetabolismComponent*& OutMetabolism, UMOMentalStateComponent*& OutMental) const;
-
-	// --- In-Game Menu ---
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|InGameMenu", meta=(AllowPrivateAccess="true"))
-	TSubclassOf<UMOInGameMenu> InGameMenuClass;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|InGameMenu", meta=(ClampMin="0", AllowPrivateAccess="true"))
-	int32 InGameMenuZOrder = 100;
-
-	/** Level to open when exiting to main menu. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|InGameMenu", meta=(AllowPrivateAccess="true"))
-	FString MainMenuLevelPath = TEXT("/Game/Penumbra/Maps/LoadingLevel");
-
-	UPROPERTY(Transient)
-	TWeakObjectPtr<UMOInGameMenu> InGameMenuWidget;
-
-	UFUNCTION()
-	void HandleInGameMenuRequestClose();
-
-	UFUNCTION()
-	void HandleInGameMenuExitToMainMenu();
-
-	UFUNCTION()
-	void HandleInGameMenuExitGame();
-
-	UFUNCTION()
-	void HandleSaveRequested(const FString& SlotName);
-
-	UFUNCTION()
-	void HandleLoadRequested(const FString& SlotName);
-
-	// --- Possession Menu ---
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Possession", meta=(AllowPrivateAccess="true"))
-	TSubclassOf<UMOPossessionMenu> PossessionMenuClass;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Possession", meta=(AllowPrivateAccess="true"))
-	TSubclassOf<UMOPawnEntryWidget> PawnEntryWidgetClass;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Possession", meta=(ClampMin="0", AllowPrivateAccess="true"))
-	int32 PossessionMenuZOrder = 100;
-
-	/** Default pawn class to spawn when creating new character. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Possession", meta=(AllowPrivateAccess="true"))
-	TSubclassOf<APawn> DefaultPawnClassForNewCharacter;
-
-	UPROPERTY(Transient)
-	TWeakObjectPtr<UMOPossessionMenu> PossessionMenuWidget;
-
-	UFUNCTION()
-	void HandlePossessionMenuRequestClose();
-
-	UFUNCTION()
-	void HandlePossessionMenuPawnSelected(const FGuid& PawnGuid);
-
-	UFUNCTION()
-	void HandlePossessionMenuCreateCharacter();
-
-	// --- Crafting Menu ---
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Crafting", meta=(AllowPrivateAccess="true"))
-	TSubclassOf<UMOCraftingMenu> CraftingMenuClass;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Crafting", meta=(ClampMin="0", AllowPrivateAccess="true"))
-	int32 CraftingMenuZOrder = 50;
-
-	UPROPERTY(Transient)
-	TWeakObjectPtr<UMOCraftingMenu> CraftingMenuWidget;
-
-	UFUNCTION()
-	void HandleCraftingMenuRequestClose();
-
-	// --- Skills Panel ---
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Skills", meta=(AllowPrivateAccess="true"))
-	TSubclassOf<UMOSkillsPanel> SkillsPanelClass;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Skills", meta=(ClampMin="0", AllowPrivateAccess="true"))
-	int32 SkillsPanelZOrder = 50;
-
-	UPROPERTY(Transient)
-	TWeakObjectPtr<UMOSkillsPanel> SkillsPanelWidget;
-
-	UFUNCTION()
-	void HandleSkillsPanelRequestClose();
-
-	// --- Building Menu ---
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Building", meta=(AllowPrivateAccess="true"))
-	TSubclassOf<UMOBuildingMenu> BuildingMenuClass;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Building", meta=(ClampMin="0", AllowPrivateAccess="true"))
-	int32 BuildingMenuZOrder = 50;
-
-	UPROPERTY(Transient)
-	TWeakObjectPtr<UMOBuildingMenu> BuildingMenuWidget;
-
-	UFUNCTION()
-	void HandleBuildingMenuRequestClose();
-
-	UFUNCTION()
-	void HandleBuildingSelected(FName RecipeId);
-
-	// --- Ghost Context Menu (for ghost interaction) ---
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Building", meta=(AllowPrivateAccess="true"))
-	TSubclassOf<UMOGhostContextMenu> GhostContextMenuClass;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Building", meta=(ClampMin="0", AllowPrivateAccess="true"))
-	int32 GhostContextMenuZOrder = 60;
-
-	UPROPERTY(Transient)
-	TWeakObjectPtr<UMOGhostContextMenu> GhostContextMenuWidget;
-
-	UPROPERTY(Transient)
-	TWeakObjectPtr<AMOBuildableActor> CurrentBuildTarget;
-
-	UFUNCTION()
-	void HandleGhostContextMenuRequestClose();
-
-	UFUNCTION()
-	void HandleGhostContextMenuBuildStarted();
-
-	UFUNCTION()
-	void HandleGhostContextMenuCancelled();
-
-	// --- Station Context Menu ---
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|CraftingStation", meta=(AllowPrivateAccess="true"))
-	TSubclassOf<UMOStationContextMenu> StationContextMenuClass;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|CraftingStation", meta=(ClampMin="0", AllowPrivateAccess="true"))
-	int32 StationContextMenuZOrder = 60;
-
-	UPROPERTY(Transient)
-	TWeakObjectPtr<UMOStationContextMenu> StationContextMenuWidget;
-
-	UPROPERTY(Transient)
-	TWeakObjectPtr<AMOCraftingStationActor> CurrentStationTarget;
-
-	UFUNCTION()
-	void HandleStationContextMenuRequestClose();
-
-	UFUNCTION()
-	void HandleStationContextMenuOpen();
-
-	UFUNCTION()
-	void HandleStationContextMenuCraft();
-
-	UFUNCTION()
-	void HandleStationContextMenuLight();
-
-	// --- KeepOnHarvest Context Menu ---
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Harvest", meta=(AllowPrivateAccess="true"))
-	TSubclassOf<UMOKeepOnHarvestContextMenu> KeepOnHarvestContextMenuClass;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Harvest", meta=(AllowPrivateAccess="true"))
-	TSubclassOf<UMOHarvestProgressWidget> HarvestProgressWidgetClass;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Harvest", meta=(ClampMin="0", AllowPrivateAccess="true"))
-	int32 KeepOnHarvestContextMenuZOrder = 60;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Harvest", meta=(ClampMin="0", AllowPrivateAccess="true"))
-	int32 HarvestProgressZOrder = 200;
-
-	UPROPERTY(Transient)
-	TWeakObjectPtr<UMOKeepOnHarvestContextMenu> KeepOnHarvestContextMenuWidget;
-
-	UPROPERTY(Transient)
-	TWeakObjectPtr<UMOHarvestProgressWidget> HarvestProgressWidget;
-
-	/** The current interaction target for harvest operations. */
-	FMOInteractionTarget CurrentHarvestTarget;
-
-	UFUNCTION()
-	void HandleKeepOnHarvestContextMenuRequestClose();
-
-	UFUNCTION()
-	void HandleKeepOnHarvestContextMenuInspectClicked();
-
-	UFUNCTION()
-	void HandleKeepOnHarvestContextMenuHarvestClicked(FName RecipeId);
-
-	UFUNCTION()
-	void HandleKeepOnHarvestContextMenuChopDownClicked();
-
-	UFUNCTION()
-	void HandleHarvestCompleted(bool bCompleted, const FMOCraftResult& Result);
-
-	UFUNCTION()
-	void HandleHarvestCancelled();
-
-	// --- Inspection ---
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Inspection", meta=(AllowPrivateAccess="true"))
-	TSubclassOf<UMOInspectionProgressWidget> InspectionProgressWidgetClass;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Inspection", meta=(ClampMin="0", AllowPrivateAccess="true"))
-	int32 InspectionProgressZOrder = 200;
-
-	/** Duration of item inspection in seconds. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Inspection", meta=(ClampMin="1.0", AllowPrivateAccess="true"))
-	float InspectionDuration = 15.0f;
-
-	UPROPERTY(Transient)
-	TWeakObjectPtr<UMOInspectionProgressWidget> InspectionProgressWidget;
-
-	/** The item GUID currently being inspected. */
-	FGuid InspectingItemGuid;
-
-	UFUNCTION()
-	void HandleInspectionCompleted(bool bCompleted, const FMOInspectionResult& Result);
-
-	UFUNCTION()
-	void HandleInspectionCancelled();
-
-	// --- Item Context Menu ---
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|ContextMenu", meta=(AllowPrivateAccess="true"))
-	TSubclassOf<UMOItemContextMenu> ItemContextMenuClass;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|ContextMenu", meta=(ClampMin="0", AllowPrivateAccess="true"))
-	int32 ItemContextMenuZOrder = 150;
-
-	UPROPERTY(Transient)
-	TWeakObjectPtr<UMOItemContextMenu> ItemContextMenuWidget;
-
-	UFUNCTION()
-	void HandleContextMenuClosed();
-
-	UFUNCTION()
-	void HandleContextMenuAction(FName ActionId, const FGuid& ItemGuid);
-
-	// --- Confirmation Dialog ---
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Confirmation", meta=(AllowPrivateAccess="true"))
-	TSubclassOf<UMOConfirmationDialog> ConfirmationDialogClass;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Confirmation", meta=(ClampMin="0", AllowPrivateAccess="true"))
-	int32 ConfirmationDialogZOrder = 200;
-
-	UPROPERTY(Transient)
-	TWeakObjectPtr<UMOConfirmationDialog> ConfirmationDialogWidget;
-
-	/** Stores context for pending confirmations. */
-	FString PendingConfirmationContext;
-
-	UFUNCTION()
-	void HandleConfirmationConfirmed();
-
-	UFUNCTION()
-	void HandleConfirmationCancelled();
 
 	// --- Helpers ---
 
@@ -1146,6 +794,20 @@ private:
 	TWeakObjectPtr<UMOToolHintWidget> ToolHintWidget;
 
 	void CreateToolHint();
+
+	// --- Input Mode Settings ---
+
+	/** Whether to show mouse cursor when a menu is open. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|InputMode", meta=(AllowPrivateAccess="true"))
+	bool bShowMouseCursorWhileMenuOpen = true;
+
+	/** Whether to lock movement input when a menu is open. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|InputMode", meta=(AllowPrivateAccess="true"))
+	bool bLockMovementWhileMenuOpen = true;
+
+	/** Whether to lock look input when a menu is open. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|InputMode", meta=(AllowPrivateAccess="true"))
+	bool bLockLookWhileMenuOpen = true;
 
 	// --- Focus Hint ---
 

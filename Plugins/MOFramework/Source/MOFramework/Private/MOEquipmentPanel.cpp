@@ -221,11 +221,13 @@ void UMOEquipmentPanel::BindSlotEvents()
 	{
 		LeftHandSlot->OnSlotClicked.AddDynamic(this, &UMOEquipmentPanel::HandleLeftHandSlotClicked);
 		LeftHandSlot->OnSlotDropReceived.AddDynamic(this, &UMOEquipmentPanel::HandleLeftHandSlotDropReceived);
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOEquipmentPanel] Bound LeftHandSlot drop events"));
 	}
 	if (RightHandSlot)
 	{
 		RightHandSlot->OnSlotClicked.AddDynamic(this, &UMOEquipmentPanel::HandleRightHandSlotClicked);
 		RightHandSlot->OnSlotDropReceived.AddDynamic(this, &UMOEquipmentPanel::HandleRightHandSlotDropReceived);
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOEquipmentPanel] Bound RightHandSlot drop events"));
 	}
 }
 
@@ -326,11 +328,16 @@ void UMOEquipmentPanel::UpdateSlotDisplay(EMOEquipmentSlot EquipSlot)
 		VisualData.ItemGuid = Item.ItemGuid;
 		VisualData.ItemDefinitionId = Item.ItemDefinitionId;
 		VisualData.Quantity = 1; // Equipment is always quantity 1
+		// Set equipment source for drag operations
+		VisualData.SourceEquipmentComponent = EquipmentComponent;
+		VisualData.SourceEquipmentSlot = EquipSlot;
 		SlotWidget->SetVisualData(VisualData);
 	}
 	else
 	{
 		SlotWidget->ClearVisualData();
+		// Still set equipment source for empty slots so drag operations know the slot type
+		SlotWidget->SetEquipmentSource(EquipmentComponent.Get(), EquipSlot);
 	}
 }
 
@@ -449,18 +456,27 @@ void UMOEquipmentPanel::HandleBackSlotDropReceived(int32 TargetSlotIndex, int32 
 
 void UMOEquipmentPanel::HandleLeftHandSlotDropReceived(int32 TargetSlotIndex, int32 SourceSlotIndex, UMOInventoryComponent* SourceInventory)
 {
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOEquipmentPanel] HandleLeftHandSlotDropReceived called! TargetSlot=%d, SourceSlot=%d"), TargetSlotIndex, SourceSlotIndex);
 	HandleSlotDropReceivedInternal(EMOEquipmentSlot::LeftHand, SourceSlotIndex, SourceInventory);
 }
 
 void UMOEquipmentPanel::HandleRightHandSlotDropReceived(int32 TargetSlotIndex, int32 SourceSlotIndex, UMOInventoryComponent* SourceInventory)
 {
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOEquipmentPanel] HandleRightHandSlotDropReceived called! TargetSlot=%d, SourceSlot=%d"), TargetSlotIndex, SourceSlotIndex);
 	HandleSlotDropReceivedInternal(EMOEquipmentSlot::RightHand, SourceSlotIndex, SourceInventory);
 }
 
 void UMOEquipmentPanel::HandleSlotDropReceivedInternal(EMOEquipmentSlot EquipSlot, int32 SourceSlotIndex, UMOInventoryComponent* SourceInventory)
 {
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOEquipmentPanel] HandleSlotDropReceivedInternal: EquipSlot=%d, SourceSlotIndex=%d, SourceInventory=%s, EquipmentComponent=%s"),
+		static_cast<int32>(EquipSlot),
+		SourceSlotIndex,
+		SourceInventory ? TEXT("valid") : TEXT("NULL"),
+		EquipmentComponent.IsValid() ? TEXT("valid") : TEXT("NULL"));
+
 	if (!EquipmentComponent.IsValid() || !IsValid(SourceInventory))
 	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOEquipmentPanel] HandleSlotDropReceivedInternal: Early return - missing component"));
 		return;
 	}
 
@@ -471,8 +487,12 @@ void UMOEquipmentPanel::HandleSlotDropReceivedInternal(EMOEquipmentSlot EquipSlo
 		SourceInventory->TryGetSlotGuid(SourceSlotIndex, ItemGuid);
 	}
 
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOEquipmentPanel] HandleSlotDropReceivedInternal: ItemGuid=%s"),
+		*ItemGuid.ToString(EGuidFormats::Short));
+
 	if (!ItemGuid.IsValid())
 	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOEquipmentPanel] HandleSlotDropReceivedInternal: Early return - invalid GUID"));
 		return;
 	}
 
@@ -480,5 +500,8 @@ void UMOEquipmentPanel::HandleSlotDropReceivedInternal(EMOEquipmentSlot EquipSlo
 	OnSlotDropReceived.Broadcast(EquipSlot, ItemGuid, SourceInventory);
 
 	// Try to equip
-	EquipmentComponent->EquipFromInventory(SourceInventory, ItemGuid, EquipSlot);
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOEquipmentPanel] HandleSlotDropReceivedInternal: Calling EquipFromInventory"));
+	bool bEquipped = EquipmentComponent->EquipFromInventory(SourceInventory, ItemGuid, EquipSlot);
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOEquipmentPanel] HandleSlotDropReceivedInternal: EquipFromInventory returned %s"),
+		bEquipped ? TEXT("true") : TEXT("false"));
 }

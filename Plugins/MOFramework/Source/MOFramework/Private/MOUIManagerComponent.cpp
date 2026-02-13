@@ -93,11 +93,6 @@ void UMOUIManagerComponent::BeginPlay()
 			CreateReticle();
 		}
 
-		if (bCreateStatusPanelOnBeginPlay)
-		{
-			CreateStatusPanel();
-		}
-
 		if (bCreateModeIndicatorOnBeginPlay)
 		{
 			CreateModeIndicator();
@@ -130,13 +125,6 @@ void UMOUIManagerComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 		Reticle->RemoveFromParent();
 	}
 	ReticleWidget.Reset();
-
-	// Clean up status panel widget
-	if (UMOStatusPanel* Status = StatusPanelWidget.Get())
-	{
-		Status->RemoveFromParent();
-	}
-	StatusPanelWidget.Reset();
 
 	// Clean up FPS counter widget
 	if (UMOFPSCounterWidget* FPSCounter = FPSCounterWidget.Get())
@@ -271,17 +259,6 @@ bool UMOUIManagerComponent::HasActiveContainer() const
 	return false;
 }
 
-void UMOUIManagerComponent::HandleUnifiedInventoryMenuRequestClose()
-{
-	// Delegated to controller - this handler is no longer used
-	CloseInventoryMenu();
-}
-
-void UMOUIManagerComponent::HandleUnifiedInventoryMenuContextMenuRequested(UMOInventoryComponent* InventoryComponent, const FGuid& ItemGuid, int32 SlotIndex, FVector2D ScreenPosition)
-{
-	// Delegated to controller - this handler is no longer used
-	ShowItemContextMenu(InventoryComponent, ItemGuid, SlotIndex, ScreenPosition);
-}
 
 // =============================================================================
 // Nearby World Items (Delegated to MOInventoryUIController)
@@ -305,18 +282,21 @@ int32 UMOUIManagerComponent::LootAllNearbyItems()
 	return 0;
 }
 
-void UMOUIManagerComponent::HandleQuickTransfer(const FGuid& ItemGuid, UMOInventoryComponent* SourceInventory)
+float UMOUIManagerComponent::GetNearbyItemsQueryRadius() const
 {
 	if (UMOInventoryUIController* InvController = GetInventoryController())
 	{
-		InvController->HandleQuickTransfer(ItemGuid, SourceInventory);
+		return InvController->GetNearbyItemsQueryRadius();
 	}
+	return 400.0f; // Default value
 }
 
-void UMOUIManagerComponent::HandleLootAllNearby()
+void UMOUIManagerComponent::SetNearbyItemsQueryRadius(float NewRadius)
 {
-	// Delegated to controller - this is called internally
-	LootAllNearbyItems();
+	if (UMOInventoryUIController* InvController = GetInventoryController())
+	{
+		InvController->SetNearbyItemsQueryRadius(NewRadius);
+	}
 }
 
 void UMOUIManagerComponent::ApplyInputModeForMenuOpen(APlayerController* PlayerController, UUserWidget* MenuWidget) const
@@ -358,17 +338,6 @@ void UMOUIManagerComponent::ApplyInputModeForMenuClosed(APlayerController* Playe
 
 	PlayerController->SetIgnoreMoveInput(false);
 	PlayerController->SetIgnoreLookInput(false);
-}
-
-void UMOUIManagerComponent::HandleInventoryMenuRequestClose()
-{
-	// Delegated to controller - this handler is no longer used
-	CloseInventoryMenu();
-}
-
-void UMOUIManagerComponent::HandleInventoryMenuSlotRightClicked(int32 SlotIndex, const FGuid& ItemGuid, FVector2D ScreenPosition)
-{
-	// Delegated to controller - this handler is no longer used
 }
 
 void UMOUIManagerComponent::CreateReticle()
@@ -457,27 +426,12 @@ void UMOUIManagerComponent::RefreshFPSCounterVisibility()
 // Status Panel (Delegated to MOCharacterUIController)
 // =============================================================================
 
-void UMOUIManagerComponent::CreateStatusPanel()
-{
-	// Delegated to CharacterUIController - this is now handled by the controller's BeginPlay
-	if (UMOCharacterUIController* CharController = GetCharacterController())
-	{
-		CharController->CreateStatusPanel();
-	}
-}
-
 void UMOUIManagerComponent::TogglePlayerStatus()
 {
 	if (UMOCharacterUIController* CharController = GetCharacterController())
 	{
 		CharController->TogglePlayerStatus();
 	}
-}
-
-void UMOUIManagerComponent::HandleStatusPanelRequestClose()
-{
-	// Delegated to controller - this handler is no longer used
-	SetPlayerStatusVisible(false);
 }
 
 UMOStatusPanel* UMOUIManagerComponent::GetStatusPanel() const
@@ -585,21 +539,6 @@ void UMOUIManagerComponent::RefreshPossessionMenu()
 	}
 }
 
-void UMOUIManagerComponent::HandlePossessionMenuRequestClose()
-{
-	// Kept as empty stub for backward compatibility
-}
-
-void UMOUIManagerComponent::HandlePossessionMenuPawnSelected(const FGuid& PawnGuid)
-{
-	// Kept as empty stub for backward compatibility
-}
-
-void UMOUIManagerComponent::HandlePossessionMenuCreateCharacter()
-{
-	// Kept as empty stub for backward compatibility
-}
-
 // =============================================================================
 // Crafting Menu (Delegated to MOCraftingUIController)
 // =============================================================================
@@ -646,11 +585,6 @@ UMOCraftingMenu* UMOUIManagerComponent::GetCraftingMenu() const
 	return nullptr;
 }
 
-void UMOUIManagerComponent::HandleCraftingMenuRequestClose()
-{
-	// Kept as empty stub for backward compatibility
-}
-
 // =============================================================================
 // Skills Panel (Delegated to MOCharacterUIController)
 // =============================================================================
@@ -695,12 +629,6 @@ UMOSkillsPanel* UMOUIManagerComponent::GetSkillsPanel() const
 		return CharController->GetSkillsPanel();
 	}
 	return nullptr;
-}
-
-void UMOUIManagerComponent::HandleSkillsPanelRequestClose()
-{
-	// Delegated to controller - this handler is no longer used
-	CloseSkillsPanel();
 }
 
 // =============================================================================
@@ -771,32 +699,6 @@ bool UMOUIManagerComponent::IsInGameMenuOpen() const
 	return false;
 }
 
-void UMOUIManagerComponent::HandleInGameMenuRequestClose()
-{
-	// Delegated to controller - this handler is no longer used
-	CloseInGameMenu();
-}
-
-void UMOUIManagerComponent::HandleInGameMenuExitToMainMenu()
-{
-	// Delegated to controller - this handler is no longer used
-}
-
-void UMOUIManagerComponent::HandleInGameMenuExitGame()
-{
-	// Delegated to controller - this handler is no longer used
-}
-
-void UMOUIManagerComponent::HandleSaveRequested(const FString& SlotName)
-{
-	// Delegated to controller - this handler is no longer used
-}
-
-void UMOUIManagerComponent::HandleLoadRequested(const FString& SlotName)
-{
-	// Delegated to controller - this handler is no longer used
-}
-
 // =============================================================================
 // Item Context Menu (Delegated to MOInventoryUIController)
 // =============================================================================
@@ -826,16 +728,6 @@ bool UMOUIManagerComponent::IsItemContextMenuOpen() const
 	return false;
 }
 
-void UMOUIManagerComponent::HandleContextMenuClosed()
-{
-	// Delegated to controller - this handler is no longer used
-}
-
-void UMOUIManagerComponent::HandleContextMenuAction(FName ActionId, const FGuid& ItemGuid)
-{
-	// Delegated to controller - this handler is no longer used
-}
-
 // =============================================================================
 // Confirmation Dialog (Delegated to MOSystemMenuUIController)
 // =============================================================================
@@ -848,120 +740,54 @@ void UMOUIManagerComponent::ShowConfirmationDialog(const FText& Title, const FTe
 	}
 }
 
-void UMOUIManagerComponent::HandleConfirmationConfirmed()
-{
-	// Delegated to controller - this handler is no longer used
-	OnConfirmationConfirmed.Broadcast();
-}
-
-void UMOUIManagerComponent::HandleConfirmationCancelled()
-{
-	// Delegated to controller - this handler is no longer used
-	OnConfirmationCancelled.Broadcast();
-}
-
 // =============================================================================
 // Menu Stack Helpers
 // =============================================================================
 
 bool UMOUIManagerComponent::IsAnyMenuOpen() const
 {
-	// Check unified inventory menu
-	const UMOUnifiedInventoryMenu* UnifiedMenu = UnifiedInventoryWidget.Get();
-	bool bUnifiedMenuOpen = IsValid(UnifiedMenu) && UnifiedMenu->IsInViewport();
-
-	return IsInventoryMenuOpen() || bUnifiedMenuOpen || IsInGameMenuOpen() || IsItemContextMenuOpen() || IsPlayerStatusVisible() || IsPossessionMenuOpen() || IsCraftingMenuOpen() || IsSkillsPanelOpen() || IsBuildingMenuOpen() || IsBuildWidgetOpen() || IsStationContextMenuOpen() || IsKeepOnHarvestContextMenuOpen() || IsInspectionInProgress() || IsHarvestInProgress();
+	// Delegate to controllers for their respective menus
+	return IsInventoryMenuOpen() || IsInGameMenuOpen() || IsItemContextMenuOpen() ||
+	       IsPlayerStatusVisible() || IsPossessionMenuOpen() || IsCraftingMenuOpen() ||
+	       IsSkillsPanelOpen() || IsBuildingMenuOpen() || IsBuildWidgetOpen() ||
+	       IsStationContextMenuOpen() || IsKeepOnHarvestContextMenuOpen() ||
+	       IsInspectionInProgress() || IsHarvestInProgress();
 }
 
 void UMOUIManagerComponent::CloseAllMenus()
 {
-	CloseItemContextMenu();
-
-	// Close status panel
-	bStatusPanelVisible = false;
-	UMOStatusPanel* Status = StatusPanelWidget.Get();
-	if (IsValid(Status))
+	// Delegate to each controller to close its menus
+	if (UMOInventoryUIController* InvController = GetInventoryController())
 	{
-		Status->SetVisibility(ESlateVisibility::Collapsed);
+		InvController->CloseInventoryMenu();
+		InvController->CloseItemContextMenu();
 	}
 
-	// Close inventory (but don't recurse into CloseInventoryMenu's modal handling)
-	UMOInventoryMenu* InvMenu = InventoryMenuWidget.Get();
-	if (IsValid(InvMenu) && InvMenu->IsInViewport())
+	if (UMOCharacterUIController* CharController = GetCharacterController())
 	{
-		InvMenu->RemoveFromParent();
+		CharController->CloseSkillsPanel();
+		CharController->SetPlayerStatusVisible(false);
+		CharController->CancelItemInspection();
 	}
 
-	// Close unified inventory menu
-	UMOUnifiedInventoryMenu* UnifiedMenu = UnifiedInventoryWidget.Get();
-	if (IsValid(UnifiedMenu) && UnifiedMenu->IsInViewport())
+	if (UMOCraftingUIController* CraftController = GetCraftingController())
 	{
-		UnifiedMenu->RemoveFromParent();
+		CraftController->CloseCraftingMenu();
+		CraftController->HideStationContextMenu();
+		CraftController->HideKeepOnHarvestContextMenu();
+		CraftController->CancelHarvestOperation();
 	}
 
-	// Close in-game menu
-	UMOInGameMenu* GameMenu = InGameMenuWidget.Get();
-	if (IsValid(GameMenu) && GameMenu->IsInViewport())
+	if (UMOBuildingUIController* BuildController = GetBuildingController())
 	{
-		GameMenu->RemoveFromParent();
+		BuildController->CloseBuildingMenu();
+		BuildController->HideBuildWidget();
 	}
 
-	// Close crafting menu
-	UMOCraftingMenu* CraftMenu = CraftingMenuWidget.Get();
-	if (IsValid(CraftMenu) && CraftMenu->IsInViewport())
+	if (UMOSystemMenuUIController* SysController = GetSystemMenuController())
 	{
-		CraftMenu->RemoveFromParent();
-	}
-
-	// Close skills panel
-	UMOSkillsPanel* SkillsPanel = SkillsPanelWidget.Get();
-	if (IsValid(SkillsPanel) && SkillsPanel->IsInViewport())
-	{
-		SkillsPanel->RemoveFromParent();
-	}
-
-	// Close building menu
-	UMOBuildingMenu* BuildMenu = BuildingMenuWidget.Get();
-	if (IsValid(BuildMenu) && BuildMenu->IsInViewport())
-	{
-		BuildMenu->RemoveFromParent();
-	}
-
-	// Close ghost context menu
-	UMOGhostContextMenu* GhostMenuInst = GhostContextMenuWidget.Get();
-	if (IsValid(GhostMenuInst) && GhostMenuInst->IsInViewport())
-	{
-		GhostMenuInst->RemoveFromParent();
-	}
-	CurrentBuildTarget.Reset();
-
-	// Close station context menu
-	UMOStationContextMenu* StationMenuInst = StationContextMenuWidget.Get();
-	if (IsValid(StationMenuInst) && StationMenuInst->IsInViewport())
-	{
-		StationMenuInst->RemoveFromParent();
-	}
-	CurrentStationTarget.Reset();
-
-	// Close keep-on-harvest context menu
-	UMOKeepOnHarvestContextMenu* HarvestMenuInst = KeepOnHarvestContextMenuWidget.Get();
-	if (IsValid(HarvestMenuInst) && HarvestMenuInst->IsInViewport())
-	{
-		HarvestMenuInst->RemoveFromParent();
-	}
-	CurrentHarvestTarget.Reset();
-
-	// Cancel any active harvest
-	CancelHarvestOperation();
-
-	// Cancel any active inspection
-	CancelItemInspection();
-
-	// Close confirmation dialog
-	UMOConfirmationDialog* DialogWidget = ConfirmationDialogWidget.Get();
-	if (IsValid(DialogWidget) && DialogWidget->IsInViewport())
-	{
-		DialogWidget->RemoveFromParent();
+		SysController->CloseInGameMenu();
+		SysController->ClosePossessionMenu();
 	}
 
 	// Hide modal background
@@ -983,57 +809,30 @@ void UMOUIManagerComponent::CloseAllSwitchableMenus()
 	// These are the main gameplay menus that toggle between each other.
 	// NOT included: In-game menu (pause), confirmation dialogs, context menus, inspection.
 
-	// Close inventory
-	UMOInventoryMenu* InvMenu = InventoryMenuWidget.Get();
-	if (IsValid(InvMenu) && InvMenu->IsInViewport())
+	if (UMOInventoryUIController* InvController = GetInventoryController())
 	{
-		InvMenu->RemoveFromParent();
+		InvController->CloseInventoryMenu();
 	}
 
-	// Close unified inventory menu
-	UMOUnifiedInventoryMenu* UnifiedMenu = UnifiedInventoryWidget.Get();
-	if (IsValid(UnifiedMenu) && UnifiedMenu->IsInViewport())
+	if (UMOCraftingUIController* CraftController = GetCraftingController())
 	{
-		UnifiedMenu->RemoveFromParent();
+		CraftController->CloseCraftingMenu();
 	}
 
-	// Close crafting menu
-	UMOCraftingMenu* CraftMenu = CraftingMenuWidget.Get();
-	if (IsValid(CraftMenu) && CraftMenu->IsInViewport())
+	if (UMOCharacterUIController* CharController = GetCharacterController())
 	{
-		CraftMenu->RemoveFromParent();
+		CharController->CloseSkillsPanel();
+		CharController->SetPlayerStatusVisible(false);
 	}
 
-	// Close skills panel
-	UMOSkillsPanel* SkillsPanel = SkillsPanelWidget.Get();
-	if (IsValid(SkillsPanel) && SkillsPanel->IsInViewport())
+	if (UMOSystemMenuUIController* SysController = GetSystemMenuController())
 	{
-		SkillsPanel->RemoveFromParent();
+		SysController->ClosePossessionMenu();
 	}
 
-	// Close status panel
-	if (bStatusPanelVisible)
+	if (UMOBuildingUIController* BuildController = GetBuildingController())
 	{
-		bStatusPanelVisible = false;
-		UMOStatusPanel* Status = StatusPanelWidget.Get();
-		if (IsValid(Status))
-		{
-			Status->SetVisibility(ESlateVisibility::Collapsed);
-		}
-	}
-
-	// Close possession menu
-	UMOPossessionMenu* PossMenu = PossessionMenuWidget.Get();
-	if (IsValid(PossMenu) && PossMenu->IsInViewport())
-	{
-		PossMenu->RemoveFromParent();
-	}
-
-	// Close building menu
-	UMOBuildingMenu* BuildMenu = BuildingMenuWidget.Get();
-	if (IsValid(BuildMenu) && BuildMenu->IsInViewport())
-	{
-		BuildMenu->RemoveFromParent();
+		BuildController->CloseBuildingMenu();
 	}
 
 	// Hide modal background if no menus remain open
@@ -1272,14 +1071,6 @@ void UMOUIManagerComponent::DropItemToWorldByGuid(UMOInventoryComponent* Invento
 	}
 }
 
-void UMOUIManagerComponent::GetCurrentPawnMedicalComponents(UMOVitalsComponent*& OutVitals, UMOMetabolismComponent*& OutMetabolism, UMOMentalStateComponent*& OutMental) const
-{
-	// Use cached components instead of FindComponentByClass
-	OutVitals = GetCachedVitals();
-	OutMetabolism = GetCachedMetabolism();
-	OutMental = GetCachedMentalState();
-}
-
 void UMOUIManagerComponent::RebindStatusPanelToCurrentPawn()
 {
 	// Delegated to CharacterUIController
@@ -1466,18 +1257,6 @@ bool UMOUIManagerComponent::IsInspectionInProgress() const
 	return false;
 }
 
-void UMOUIManagerComponent::HandleInspectionCompleted(bool bCompleted, const FMOInspectionResult& Result)
-{
-	// Delegated to CharacterUIController - this handler is no longer used
-	// Keeping empty stub for backward compatibility
-}
-
-void UMOUIManagerComponent::HandleInspectionCancelled()
-{
-	// Delegated to CharacterUIController - this handler is no longer used
-	// Keeping empty stub for backward compatibility
-}
-
 // =============================================================================
 // Notifications (Delegated to UMONotificationComponent)
 // =============================================================================
@@ -1597,17 +1376,6 @@ UMOBuildingMenu* UMOUIManagerComponent::GetBuildingMenu() const
 	return nullptr;
 }
 
-void UMOUIManagerComponent::HandleBuildingMenuRequestClose()
-{
-	// Delegated to controller - this handler is no longer used
-	CloseBuildingMenu();
-}
-
-void UMOUIManagerComponent::HandleBuildingSelected(FName RecipeId)
-{
-	// Delegated to controller - this handler is no longer used
-}
-
 // =============================================================================
 // Ghost Context Menu (Delegated to MOBuildingUIController)
 // =============================================================================
@@ -1637,23 +1405,6 @@ bool UMOUIManagerComponent::IsBuildWidgetOpen() const
 	return false;
 }
 
-void UMOUIManagerComponent::HandleGhostContextMenuRequestClose()
-{
-	// Delegated to controller - this handler is no longer used
-	HideBuildWidget();
-}
-
-void UMOUIManagerComponent::HandleGhostContextMenuBuildStarted()
-{
-	// Delegated to controller - this handler is no longer used
-}
-
-void UMOUIManagerComponent::HandleGhostContextMenuCancelled()
-{
-	// Delegated to controller - this handler is no longer used
-	HideBuildWidget();
-}
-
 // ============================================================================
 // STATION CONTEXT MENU (Delegated to MOCraftingUIController)
 // ============================================================================
@@ -1681,26 +1432,6 @@ bool UMOUIManagerComponent::IsStationContextMenuOpen() const
 		return CraftController->IsStationContextMenuOpen();
 	}
 	return false;
-}
-
-void UMOUIManagerComponent::HandleStationContextMenuRequestClose()
-{
-	// Kept as empty stub for backward compatibility
-}
-
-void UMOUIManagerComponent::HandleStationContextMenuOpen()
-{
-	// Kept as empty stub for backward compatibility
-}
-
-void UMOUIManagerComponent::HandleStationContextMenuCraft()
-{
-	// Kept as empty stub for backward compatibility
-}
-
-void UMOUIManagerComponent::HandleStationContextMenuLight()
-{
-	// Kept as empty stub for backward compatibility
 }
 
 // =============================================================================
@@ -1755,36 +1486,6 @@ bool UMOUIManagerComponent::IsHarvestInProgress() const
 		return CraftController->IsHarvestInProgress();
 	}
 	return false;
-}
-
-void UMOUIManagerComponent::HandleKeepOnHarvestContextMenuRequestClose()
-{
-	// Kept as empty stub for backward compatibility
-}
-
-void UMOUIManagerComponent::HandleKeepOnHarvestContextMenuInspectClicked()
-{
-	// Kept as empty stub for backward compatibility
-}
-
-void UMOUIManagerComponent::HandleKeepOnHarvestContextMenuHarvestClicked(FName RecipeId)
-{
-	// Kept as empty stub for backward compatibility
-}
-
-void UMOUIManagerComponent::HandleKeepOnHarvestContextMenuChopDownClicked()
-{
-	// Kept as empty stub for backward compatibility
-}
-
-void UMOUIManagerComponent::HandleHarvestCompleted(bool bCompleted, const FMOCraftResult& Result)
-{
-	// Kept as empty stub for backward compatibility
-}
-
-void UMOUIManagerComponent::HandleHarvestCancelled()
-{
-	// Kept as empty stub for backward compatibility
 }
 
 // =============================================================================

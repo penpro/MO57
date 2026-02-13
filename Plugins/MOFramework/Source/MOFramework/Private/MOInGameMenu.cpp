@@ -7,6 +7,49 @@
 #include "Components/PanelWidget.h"
 #include "Components/WidgetSwitcher.h"
 
+void UMOInGameMenu::NativeDestruct()
+{
+	// Clean up button bindings to prevent dangling delegates
+	if (OptionsButton)
+	{
+		OptionsButton->OnClicked().RemoveAll(this);
+	}
+	if (SaveButton)
+	{
+		SaveButton->OnClicked().RemoveAll(this);
+	}
+	if (LoadButton)
+	{
+		LoadButton->OnClicked().RemoveAll(this);
+	}
+	if (ExitToMainMenuButton)
+	{
+		ExitToMainMenuButton->OnClicked().RemoveAll(this);
+	}
+	if (ExitGameButton)
+	{
+		ExitGameButton->OnClicked().RemoveAll(this);
+	}
+
+	// Clean up panel delegate bindings
+	if (OptionsPanel)
+	{
+		OptionsPanel->OnRequestClose.RemoveDynamic(this, &UMOInGameMenu::HandlePanelRequestClose);
+	}
+	if (SavePanel)
+	{
+		SavePanel->OnRequestClose.RemoveDynamic(this, &UMOInGameMenu::HandlePanelRequestClose);
+		SavePanel->OnSaveRequested.RemoveDynamic(this, &UMOInGameMenu::HandleSavePanelSaveRequested);
+	}
+	if (LoadPanel)
+	{
+		LoadPanel->OnRequestClose.RemoveDynamic(this, &UMOInGameMenu::HandlePanelRequestClose);
+		LoadPanel->OnLoadRequested.RemoveDynamic(this, &UMOInGameMenu::HandleLoadPanelLoadRequested);
+	}
+
+	Super::NativeDestruct();
+}
+
 void UMOInGameMenu::NativeConstruct()
 {
 	Super::NativeConstruct();

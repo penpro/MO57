@@ -30,9 +30,11 @@ void UMOBuildingUIController::BeginPlay()
 
 void UMOBuildingUIController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	// Clean up building menu widget
+	// Clean up building menu widget - unbind delegates first
 	if (UMOBuildingMenu* MenuWidget = BuildingMenuWidget.Get())
 	{
+		MenuWidget->OnRequestClose.RemoveDynamic(this, &UMOBuildingUIController::HandleBuildingMenuRequestClose);
+		MenuWidget->OnBuildingSelected.RemoveDynamic(this, &UMOBuildingUIController::HandleBuildingSelected);
 		if (MenuWidget->IsInViewport())
 		{
 			MenuWidget->RemoveFromParent();
@@ -40,9 +42,12 @@ void UMOBuildingUIController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	}
 	BuildingMenuWidget.Reset();
 
-	// Clean up ghost context menu widget
+	// Clean up ghost context menu widget - unbind delegates first
 	if (UMOGhostContextMenu* GhostWidget = GhostContextMenuWidget.Get())
 	{
+		GhostWidget->OnRequestClose.RemoveDynamic(this, &UMOBuildingUIController::HandleGhostContextMenuRequestClose);
+		GhostWidget->OnBuildStarted.RemoveDynamic(this, &UMOBuildingUIController::HandleGhostContextMenuBuildStarted);
+		GhostWidget->OnCancelled.RemoveDynamic(this, &UMOBuildingUIController::HandleGhostContextMenuCancelled);
 		if (GhostWidget->IsInViewport())
 		{
 			GhostWidget->RemoveFromParent();

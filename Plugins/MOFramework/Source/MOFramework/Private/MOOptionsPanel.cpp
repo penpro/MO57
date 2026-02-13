@@ -10,6 +10,49 @@
 #include "Components/ComboBoxString.h"
 #include "GameFramework/PlayerController.h"
 
+void UMOOptionsPanel::NativeDestruct()
+{
+	// Clean up delegate bindings to prevent dangling references
+	if (ApplyButton)
+	{
+		ApplyButton->OnClicked().RemoveAll(this);
+	}
+	if (ResetButton)
+	{
+		ResetButton->OnClicked().RemoveAll(this);
+	}
+	if (BackButton)
+	{
+		BackButton->OnClicked().RemoveAll(this);
+	}
+	if (MasterVolumeSlider)
+	{
+		MasterVolumeSlider->OnValueChanged.RemoveDynamic(this, &UMOOptionsPanel::HandleMasterVolumeChanged);
+	}
+	if (MusicVolumeSlider)
+	{
+		MusicVolumeSlider->OnValueChanged.RemoveDynamic(this, &UMOOptionsPanel::HandleMusicVolumeChanged);
+	}
+	if (SFXVolumeSlider)
+	{
+		SFXVolumeSlider->OnValueChanged.RemoveDynamic(this, &UMOOptionsPanel::HandleSFXVolumeChanged);
+	}
+	if (AmbientVolumeSlider)
+	{
+		AmbientVolumeSlider->OnValueChanged.RemoveDynamic(this, &UMOOptionsPanel::HandleAmbientVolumeChanged);
+	}
+	if (CameraSensitivitySlider)
+	{
+		CameraSensitivitySlider->OnValueChanged.RemoveDynamic(this, &UMOOptionsPanel::HandleCameraSensitivityChanged);
+	}
+	if (ResolutionComboBox)
+	{
+		ResolutionComboBox->OnSelectionChanged.RemoveDynamic(this, &UMOOptionsPanel::HandleResolutionChanged);
+	}
+
+	Super::NativeDestruct();
+}
+
 void UMOOptionsPanel::NativeConstruct()
 {
 	Super::NativeConstruct();
@@ -325,6 +368,13 @@ void UMOOptionsPanel::ResetToDefaults()
 void UMOOptionsPanel::HandleApplyClicked()
 {
 	ApplySettings();
+
+	// Restore focus to this widget after applying settings
+	// Resolution changes can disrupt focus, so re-focus the back button
+	if (BackButton)
+	{
+		BackButton->SetFocus();
+	}
 }
 
 void UMOOptionsPanel::HandleResetClicked()

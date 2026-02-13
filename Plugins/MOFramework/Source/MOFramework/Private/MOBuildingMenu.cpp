@@ -40,6 +40,27 @@ void UMOBuildingMenu::NativeConstruct()
 	}
 }
 
+void UMOBuildingMenu::NativeDestruct()
+{
+	// Clean up button bindings
+	if (CloseButton)
+	{
+		CloseButton->OnClicked().RemoveAll(this);
+	}
+
+	// Clean up child widget bindings
+	if (RecipeList)
+	{
+		RecipeList->OnRecipeSelected.RemoveDynamic(this, &UMOBuildingMenu::HandleRecipeSelected);
+	}
+	if (DetailPanel)
+	{
+		DetailPanel->OnBuildRequested.RemoveDynamic(this, &UMOBuildingMenu::HandleBuildRequested);
+	}
+
+	Super::NativeDestruct();
+}
+
 FReply UMOBuildingMenu::NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent)
 {
 	const FKey PressedKey = InKeyEvent.GetKey();

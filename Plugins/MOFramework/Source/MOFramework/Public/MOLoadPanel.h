@@ -44,6 +44,7 @@ public:
 
 protected:
 	virtual void NativeConstruct() override;
+	virtual void NativeDestruct() override;
 	virtual UWidget* NativeGetDesiredFocusTarget() const override;
 
 	/** Called when the save list is updated. Override in BP to update custom UI. */

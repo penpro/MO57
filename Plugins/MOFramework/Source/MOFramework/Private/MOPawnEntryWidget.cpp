@@ -15,6 +15,17 @@ void UMOPawnEntryWidget::NativeConstruct()
 	}
 }
 
+void UMOPawnEntryWidget::NativeDestruct()
+{
+	// Clean up button bindings
+	if (PossessButton)
+	{
+		PossessButton->OnClicked().RemoveAll(this);
+	}
+
+	Super::NativeDestruct();
+}
+
 void UMOPawnEntryWidget::InitializeEntry(const FMOPersistedPawnRecord& PawnRecord)
 {
 	CachedPawnGuid = PawnRecord.PawnGuid;

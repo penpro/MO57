@@ -79,6 +79,7 @@ protected:
 	// ============================================================================
 
 	virtual void NativeConstruct() override;
+	virtual void NativeDestruct() override;
 
 private:
 	/** Recipe ID for this entry. */

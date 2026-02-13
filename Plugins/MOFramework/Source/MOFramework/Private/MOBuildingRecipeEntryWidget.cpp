@@ -38,11 +38,20 @@ void UMOBuildingRecipeEntryWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
 
+	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingRecipeEntryWidget] NativeConstruct for recipe: %s, EntryButton=%s"),
+		*EntryData.RecipeId.ToString(),
+		EntryButton ? TEXT("BOUND") : TEXT("NULL - widget not bound in Blueprint!"));
+
 	if (EntryButton)
 	{
 		// Remove first to avoid duplicate bindings when widget is re-added to viewport
 		EntryButton->OnClicked().RemoveAll(this);
 		EntryButton->OnClicked().AddUObject(this, &UMOBuildingRecipeEntryWidget::HandleButtonClicked);
+		UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingRecipeEntryWidget] Click handler bound for recipe: %s"), *EntryData.RecipeId.ToString());
+	}
+	else
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOBuildingRecipeEntryWidget] No EntryButton bound! Clicks will not work. Check that the Blueprint has a UMOCommonButton named 'EntryButton'."));
 	}
 }
 
@@ -110,5 +119,6 @@ void UMOBuildingRecipeEntryWidget::UpdateVisuals()
 
 void UMOBuildingRecipeEntryWidget::HandleButtonClicked()
 {
+	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingRecipeEntryWidget] HandleButtonClicked - Recipe: %s"), *EntryData.RecipeId.ToString());
 	OnEntryClicked.Broadcast(EntryData.RecipeId);
 }

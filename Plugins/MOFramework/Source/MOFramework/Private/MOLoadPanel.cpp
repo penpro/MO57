@@ -32,6 +32,26 @@ void UMOLoadPanel::NativeConstruct()
 	RefreshSaveList();
 }
 
+void UMOLoadPanel::NativeDestruct()
+{
+	// Clean up button bindings
+	if (BackButton)
+	{
+		BackButton->OnClicked().RemoveAll(this);
+	}
+
+	// Clean up slot entry bindings
+	for (UMOSaveSlotEntry* Entry : SlotEntryWidgets)
+	{
+		if (Entry)
+		{
+			Entry->OnSlotSelected.RemoveDynamic(this, &UMOLoadPanel::HandleSlotSelected);
+		}
+	}
+
+	Super::NativeDestruct();
+}
+
 UWidget* UMOLoadPanel::NativeGetDesiredFocusTarget() const
 {
 	// Focus first save slot if any exist

@@ -25,21 +25,27 @@ void UMOInventoryUIController::BeginPlay()
 
 void UMOInventoryUIController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	// Clean up widgets
+	// Clean up widgets - unbind delegates first to prevent callbacks during destruction
 	if (UMOInventoryMenu* InvMenu = InventoryMenuWidget.Get())
 	{
+		InvMenu->OnRequestClose.RemoveDynamic(this, &UMOInventoryUIController::HandleInventoryMenuRequestClose);
+		InvMenu->OnSlotRightClicked.RemoveDynamic(this, &UMOInventoryUIController::HandleInventoryMenuSlotRightClicked);
 		InvMenu->RemoveFromParent();
 	}
 	InventoryMenuWidget.Reset();
 
 	if (UMOUnifiedInventoryMenu* UnifiedMenu = UnifiedInventoryWidget.Get())
 	{
+		UnifiedMenu->OnRequestClose.RemoveDynamic(this, &UMOInventoryUIController::HandleUnifiedInventoryMenuRequestClose);
+		UnifiedMenu->OnContextMenuRequested.RemoveDynamic(this, &UMOInventoryUIController::HandleUnifiedInventoryMenuContextMenuRequested);
 		UnifiedMenu->RemoveFromParent();
 	}
 	UnifiedInventoryWidget.Reset();
 
 	if (UMOItemContextMenu* CtxMenu = ItemContextMenuWidget.Get())
 	{
+		CtxMenu->OnMenuClosed.RemoveDynamic(this, &UMOInventoryUIController::HandleContextMenuClosed);
+		CtxMenu->OnActionSelected.RemoveDynamic(this, &UMOInventoryUIController::HandleContextMenuAction);
 		CtxMenu->RemoveFromParent();
 	}
 	ItemContextMenuWidget.Reset();

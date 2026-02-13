@@ -48,6 +48,12 @@ void UMOGameSettings::SetToDefaults()
 	SFXVolume = 1.0f;
 	AmbientVolume = 1.0f;
 
+	// Main Menu / First Run
+	bPlayIntro = true;
+	bHasCompletedFirstRun = false;
+	bPendingNewGame = false;
+	PendingNewGameSlot.Empty();
+
 	// Gameplay
 	CameraSensitivity = 1.0f;
 	bInvertYAxis = false;
@@ -93,4 +99,12 @@ void UMOGameSettings::ApplyGraphicsSettings()
 	{
 		MotionBlurCVar->Set(bEnableMotionBlur ? 4 : 0);
 	}
+}
+
+void UMOGameSettings::ResetIntroPlayback()
+{
+	bPlayIntro = true;
+	bHasCompletedFirstRun = false;
+	SaveSettings();
+	UE_LOG(LogMOFramework, Log, TEXT("[MOGameSettings] Intro playback reset - will play on next launch"));
 }

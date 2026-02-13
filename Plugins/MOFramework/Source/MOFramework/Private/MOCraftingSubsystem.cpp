@@ -2,6 +2,7 @@
 #include "MOKnowledgeComponent.h"
 #include "MOSkillsComponent.h"
 #include "MOInventoryComponent.h"
+#include "MOEquipmentComponent.h"
 #include "MORecipeDatabaseSettings.h"
 #include "MOItemDatabaseSettings.h"
 #include "MOItemDefinitionRow.h"
@@ -131,6 +132,12 @@ void UMOCraftingSubsystem::GetAvailableRecipes(
 	{
 		const FMORecipeDefinitionRow* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(RecipeId);
 		if (!Recipe)
+		{
+			continue;
+		}
+
+		// Skip harvest recipes - they only appear in harvest context menus
+		if (Recipe->bIsHarvestRecipe)
 		{
 			continue;
 		}
@@ -648,47 +655,124 @@ bool UMOCraftingSubsystem::FindBestTool(
 	OutItemGuid.Invalidate();
 	OutQuality = 0.0f;
 
+	UE_LOG(LogMOFramework, Log, TEXT("[MOCrafting] FindBestTool: Looking for ToolType='%s', MinQuality=%.2f"),
+		*ToolType.ToString(), MinQuality);
+
 	if (!IsValid(Inventory) || ToolType.IsNone())
 	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOCrafting] FindBestTool: Invalid inventory or empty tool type"));
 		return false;
 	}
 
-	TArray<FMOInventoryEntry> Entries;
-	Inventory->GetInventoryEntries(Entries);
-
-	for (const FMOInventoryEntry& Entry : Entries)
+	// Helper lambda to check if an item matches tool requirements
+	auto CheckToolItem = [&](FName ItemDefinitionId, const FGuid& ItemGuid, int32 CurrentDurability, const TCHAR* Source) -> bool
 	{
 		FMOItemDefinitionRow ItemDef;
-		if (!UMOItemDatabaseSettings::GetItemDefinition(Entry.ItemDefinitionId, ItemDef))
+		if (!UMOItemDatabaseSettings::GetItemDefinition(ItemDefinitionId, ItemDef))
 		{
-			continue;
+			UE_LOG(LogMOFramework, Log, TEXT("[MOCrafting] FindBestTool: [%s] Item '%s' not in database"), Source, *ItemDefinitionId.ToString());
+			return false;
 		}
+
+		UE_LOG(LogMOFramework, Log, TEXT("[MOCrafting] FindBestTool: [%s] Checking '%s' - bIsTool=%s, ToolType='%s', ToolQuality=%.2f, Durability=%d"),
+			Source,
+			*ItemDefinitionId.ToString(),
+			ItemDef.bIsTool ? TEXT("yes") : TEXT("no"),
+			*ItemDef.ToolType.ToString(),
+			ItemDef.ToolQuality,
+			CurrentDurability);
 
 		// Check if this is the right tool type
 		if (!ItemDef.bIsTool || ItemDef.ToolType != ToolType)
 		{
-			continue;
+			UE_LOG(LogMOFramework, Log, TEXT("[MOCrafting] FindBestTool: [%s] '%s' - tool type mismatch (want '%s', has '%s')"),
+				Source, *ItemDefinitionId.ToString(), *ToolType.ToString(), *ItemDef.ToolType.ToString());
+			return false;
 		}
 
 		// Check quality threshold
 		if (ItemDef.ToolQuality < MinQuality)
 		{
-			continue;
+			UE_LOG(LogMOFramework, Log, TEXT("[MOCrafting] FindBestTool: [%s] '%s' - quality too low (%.2f < %.2f)"),
+				Source, *ItemDefinitionId.ToString(), ItemDef.ToolQuality, MinQuality);
+			return false;
 		}
 
 		// Check if tool has durability remaining (if applicable)
-		if (Entry.CurrentDurability == 0)
+		if (CurrentDurability == 0)
 		{
-			continue; // Tool is broken
+			UE_LOG(LogMOFramework, Log, TEXT("[MOCrafting] FindBestTool: [%s] '%s' - broken (durability=0)"), Source, *ItemDefinitionId.ToString());
+			return false; // Tool is broken
 		}
 
 		// Track the best quality tool
 		if (ItemDef.ToolQuality > OutQuality)
 		{
-			OutItemGuid = Entry.ItemGuid;
+			OutItemGuid = ItemGuid;
 			OutQuality = ItemDef.ToolQuality;
+			UE_LOG(LogMOFramework, Log, TEXT("[MOCrafting] FindBestTool: [%s] '%s' - MATCHED! Quality=%.2f"),
+				Source, *ItemDefinitionId.ToString(), ItemDef.ToolQuality);
+			return true;
+		}
+		UE_LOG(LogMOFramework, Log, TEXT("[MOCrafting] FindBestTool: [%s] '%s' - quality not better than current (%.2f vs %.2f)"),
+			Source, *ItemDefinitionId.ToString(), ItemDef.ToolQuality, OutQuality);
+		return false;
+	};
+
+	// First, check equipped items (hand slots) - these should have priority
+	AActor* Owner = Inventory->GetOwner();
+	if (IsValid(Owner))
+	{
+		UMOEquipmentComponent* EquipComp = Owner->FindComponentByClass<UMOEquipmentComponent>();
+		if (IsValid(EquipComp))
+		{
+			UE_LOG(LogMOFramework, Log, TEXT("[MOCrafting] FindBestTool: Found equipment component on '%s'"), *Owner->GetName());
+
+			// Check left hand
+			FMOEquippedItem LeftHand = EquipComp->GetEquippedItem(EMOEquipmentSlot::LeftHand);
+			if (LeftHand.IsValid())
+			{
+				CheckToolItem(LeftHand.ItemDefinitionId, LeftHand.ItemGuid, LeftHand.CurrentDurability, TEXT("LeftHand"));
+			}
+			else
+			{
+				UE_LOG(LogMOFramework, Log, TEXT("[MOCrafting] FindBestTool: LeftHand empty"));
+			}
+
+			// Check right hand
+			FMOEquippedItem RightHand = EquipComp->GetEquippedItem(EMOEquipmentSlot::RightHand);
+			if (RightHand.IsValid())
+			{
+				CheckToolItem(RightHand.ItemDefinitionId, RightHand.ItemGuid, RightHand.CurrentDurability, TEXT("RightHand"));
+			}
+			else
+			{
+				UE_LOG(LogMOFramework, Log, TEXT("[MOCrafting] FindBestTool: RightHand empty"));
+			}
+		}
+		else
+		{
+			UE_LOG(LogMOFramework, Log, TEXT("[MOCrafting] FindBestTool: No equipment component on '%s'"), *Owner->GetName());
 		}
 	}
+	else
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOCrafting] FindBestTool: Inventory has no valid owner"));
+	}
+
+	// Then check inventory for potentially better tools
+	TArray<FMOInventoryEntry> Entries;
+	Inventory->GetInventoryEntries(Entries);
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOCrafting] FindBestTool: Checking %d inventory entries"), Entries.Num());
+
+	for (const FMOInventoryEntry& Entry : Entries)
+	{
+		CheckToolItem(Entry.ItemDefinitionId, Entry.ItemGuid, Entry.CurrentDurability, TEXT("Inventory"));
+	}
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOCrafting] FindBestTool: Result - Found=%s, BestQuality=%.2f"),
+		OutItemGuid.IsValid() ? TEXT("yes") : TEXT("no"), OutQuality);
 
 	return OutItemGuid.IsValid();
 }

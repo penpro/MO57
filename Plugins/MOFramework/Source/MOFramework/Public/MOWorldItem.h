@@ -120,9 +120,9 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO")
 	TObjectPtr<USphereComponent> InteractionSphere;
 
-	/** Radius of the interaction collision sphere. */
+	/** Radius of the interaction collision sphere. Larger = easier to pick up. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="MO|Interaction")
-	float InteractionSphereRadius = 30.0f;
+	float InteractionSphereRadius = 60.0f;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO")
 	TObjectPtr<UMOIdentityComponent> IdentityComponent;

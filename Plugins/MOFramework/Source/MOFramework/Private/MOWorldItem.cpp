@@ -30,7 +30,7 @@ AMOWorldItem::AMOWorldItem()
 	InteractionSphere = CreateDefaultSubobject<USphereComponent>(TEXT("InteractionSphere"));
 	InteractionSphere->SetupAttachment(ItemMesh);
 	InteractionSphere->SetSphereRadius(InteractionSphereRadius);
-	InteractionSphere->SetRelativeLocation(FVector(0.0f, 0.0f, 0.0f)); // Centered on mesh
+	InteractionSphere->SetRelativeLocation(FVector(0.0f, 0.0f, 75.0f)); // Raised high above mesh to avoid terrain occlusion on slopes
 	InteractionSphere->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
 	InteractionSphere->SetCollisionResponseToAllChannels(ECR_Ignore);
 	InteractionSphere->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);

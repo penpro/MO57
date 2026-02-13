@@ -118,19 +118,10 @@ bool UMOBuildingDetailPanel::CanPerformAction() const
 		return false;
 	}
 
-	// Check all build parts for requested amount
-	for (const FMOBuildPartDisplayData& Part : CachedBuildParts)
-	{
-		// Only check items, not actions
-		if (!Part.bIsAction)
-		{
-			int32 TotalRequired = Part.RequiredQuantity * ActionAmount;
-			if (Part.AvailableQuantity < TotalRequired)
-			{
-				return false;
-			}
-		}
-	}
+	// For buildings, placement mode comes BEFORE material gathering.
+	// The ghost is placed first, then materials are deposited into it.
+	// So we don't check materials here - that's done in the ghost context menu.
+	// We could optionally check skill requirements here if desired.
 
 	return true;
 }
@@ -140,9 +131,13 @@ void UMOBuildingDetailPanel::OnDisplayRecipe(const FMORecipeDefinitionRow* Recip
 	// Only accept building recipes
 	if (!Recipe->bIsBuilding)
 	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOBuildingDetailPanel] Recipe %s is not a building recipe"), *DisplayedRecipeId.ToString());
 		ClearDisplay();
 		return;
 	}
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingDetailPanel] OnDisplayRecipe: %s, BuildParts.Num()=%d"),
+		*DisplayedRecipeId.ToString(), Recipe->BuildParts.Num());
 
 	GatherRange = Recipe->BuildRange;
 
@@ -150,8 +145,12 @@ void UMOBuildingDetailPanel::OnDisplayRecipe(const FMORecipeDefinitionRow* Recip
 	CachedBuildParts.Empty();
 	for (const FMOBuildPart& Part : Recipe->BuildParts)
 	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingDetailPanel]   BuildPart: ItemId=%s, ActionId=%s, Qty=%d"),
+			*Part.ItemDefinitionId.ToString(), *Part.ActionId.ToString(), Part.Quantity);
 		CachedBuildParts.Add(BuildPartData(Part));
 	}
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingDetailPanel] CachedBuildParts.Num()=%d after processing"), CachedBuildParts.Num());
 
 	// Build output data
 	CachedOutputs.Empty();
@@ -168,8 +167,12 @@ void UMOBuildingDetailPanel::PopulateRequirementsContainer()
 	// Clear existing widgets using base class helper
 	ClearTextWidgets(IngredientTextWidgets);
 
+	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingDetailPanel] PopulateRequirementsContainer: IngredientsContainer=%s, CachedBuildParts.Num()=%d"),
+		IngredientsContainer ? TEXT("valid") : TEXT("NULL"), CachedBuildParts.Num());
+
 	if (!IngredientsContainer)
 	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOBuildingDetailPanel] IngredientsContainer is NULL - widget not bound!"));
 		return;
 	}
 

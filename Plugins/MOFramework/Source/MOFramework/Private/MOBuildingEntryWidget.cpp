@@ -16,6 +16,17 @@ void UMOBuildingEntryWidget::NativeConstruct()
 	}
 }
 
+void UMOBuildingEntryWidget::NativeDestruct()
+{
+	// Clean up button bindings
+	if (EntryButton)
+	{
+		EntryButton->OnClicked.RemoveDynamic(this, &UMOBuildingEntryWidget::HandleButtonClicked);
+	}
+
+	Super::NativeDestruct();
+}
+
 void UMOBuildingEntryWidget::InitializeEntry(FName InRecipeId, const FMORecipeDefinitionRow& Recipe)
 {
 	RecipeId = InRecipeId;

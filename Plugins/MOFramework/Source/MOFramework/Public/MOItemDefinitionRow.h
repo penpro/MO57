@@ -90,6 +90,57 @@ struct MOFRAMEWORK_API FMOItemWorldVisual
 	bool bSimulatePhysics = false;
 };
 
+/**
+ * Visual data for how an item appears when held in hands.
+ * Separate from WorldVisual since held items need different positioning.
+ */
+USTRUCT(BlueprintType)
+struct MOFRAMEWORK_API FMOItemHeldVisual
+{
+	GENERATED_BODY()
+
+	/** Static mesh to display when held. If null, uses WorldVisual.StaticMesh. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Held")
+	TSoftObjectPtr<UStaticMesh> StaticMesh;
+
+	/** Material override for held mesh. If null, uses mesh default or WorldVisual.MaterialOverride. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Held")
+	TSoftObjectPtr<UMaterialInterface> MaterialOverride;
+
+	/** Transform offset for right hand. Position/rotation relative to hand socket. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Held")
+	FTransform RightHandTransform = FTransform::Identity;
+
+	/** Transform offset for left hand. If bMirrorForLeftHand is true, this is ignored. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Held", meta=(EditCondition="!bMirrorForLeftHand"))
+	FTransform LeftHandTransform = FTransform::Identity;
+
+	/** If true, mirror the right hand transform for left hand (flip X scale). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Held")
+	bool bMirrorForLeftHand = true;
+
+	/** Get the appropriate transform for a given hand. */
+	FTransform GetTransformForHand(bool bIsLeftHand) const
+	{
+		if (!bIsLeftHand)
+		{
+			return RightHandTransform;
+		}
+
+		if (bMirrorForLeftHand)
+		{
+			// Mirror the right hand transform
+			FTransform Mirrored = RightHandTransform;
+			FVector Scale = Mirrored.GetScale3D();
+			Scale.Y *= -1.0f; // Mirror on Y axis
+			Mirrored.SetScale3D(Scale);
+			return Mirrored;
+		}
+
+		return LeftHandTransform;
+	}
+};
+
 USTRUCT(BlueprintType)
 struct MOFRAMEWORK_API FMOItemScalarProperty
 {
@@ -269,6 +320,10 @@ struct MOFRAMEWORK_API FMOItemDefinitionRow : public FTableRowBase
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|World")
 	FMOItemWorldVisual WorldVisual;
+
+	/** Visual data for when item is held in hands. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Held")
+	FMOItemHeldVisual HeldVisual;
 
 	/** Nutrition data for consumable items. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Nutrition")

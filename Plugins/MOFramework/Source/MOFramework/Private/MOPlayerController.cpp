@@ -12,6 +12,13 @@
 #include "InputMappingContext.h"
 #include "InputAction.h"
 
+// UI Controllers
+#include "MOInventoryUIController.h"
+#include "MOCraftingUIController.h"
+#include "MOBuildingUIController.h"
+#include "MOCharacterUIController.h"
+#include "MOSystemMenuUIController.h"
+
 AMOPlayerController::AMOPlayerController()
 {
 	// Create UI Manager component
@@ -25,6 +32,13 @@ AMOPlayerController::AMOPlayerController()
 
 	// Create Building component
 	BuildingComponent = CreateDefaultSubobject<UMOBuildingComponent>(TEXT("BuildingComponent"));
+
+	// Create UI Controller components (these are sibling components that UIManager delegates to)
+	InventoryUIController = CreateDefaultSubobject<UMOInventoryUIController>(TEXT("InventoryUIController"));
+	CraftingUIController = CreateDefaultSubobject<UMOCraftingUIController>(TEXT("CraftingUIController"));
+	BuildingUIController = CreateDefaultSubobject<UMOBuildingUIController>(TEXT("BuildingUIController"));
+	CharacterUIController = CreateDefaultSubobject<UMOCharacterUIController>(TEXT("CharacterUIController"));
+	SystemMenuUIController = CreateDefaultSubobject<UMOSystemMenuUIController>(TEXT("SystemMenuUIController"));
 }
 
 void AMOPlayerController::BeginPlay()
@@ -32,6 +46,12 @@ void AMOPlayerController::BeginPlay()
 	Super::BeginPlay();
 
 	UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController::BeginPlay - Setting up input context"));
+
+	// Set input mode to game only (captures mouse for look controls)
+	// This is important when transitioning from main menu which uses UI-only mode
+	FInputModeGameOnly InputMode;
+	SetInputMode(InputMode);
+	bShowMouseCursor = false;
 
 	// Setup default input context
 	SetupDefaultInputContext();

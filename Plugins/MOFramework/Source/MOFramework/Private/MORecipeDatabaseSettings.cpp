@@ -113,8 +113,38 @@ void UMORecipeDatabaseSettings::GetRecipesForStation(EMOCraftingStation Station,
 
 void UMORecipeDatabaseSettings::GetBuildingRecipes(TArray<FName>& OutRecipeIds)
 {
+#if WITH_EDITOR
+	// In editor, always scan DataTable directly to pick up reimported changes
+	OutRecipeIds.Empty();
+
+	const UMORecipeDatabaseSettings* Settings = GetDefault<UMORecipeDatabaseSettings>();
+	if (!Settings)
+	{
+		return;
+	}
+
+	UDataTable* DataTable = Settings->GetRecipeDefinitionsDataTable();
+	if (!IsValid(DataTable))
+	{
+		return;
+	}
+
+	TArray<FName> AllRecipeIds = DataTable->GetRowNames();
+	OutRecipeIds.Reserve(AllRecipeIds.Num() / 4);
+
+	for (const FName& RecipeId : AllRecipeIds)
+	{
+		const FMORecipeDefinitionRow* Recipe = DataTable->FindRow<FMORecipeDefinitionRow>(RecipeId, TEXT("GetBuildingRecipes"), false);
+		if (Recipe && Recipe->bIsBuilding)
+		{
+			OutRecipeIds.Add(RecipeId);
+		}
+	}
+#else
+	// In packaged builds, use cache for performance
 	EnsureCachesBuilt();
 	OutRecipeIds = BuildingRecipeIds;
+#endif
 }
 
 void UMORecipeDatabaseSettings::GetCraftableRecipes(TArray<FName>& OutRecipeIds)

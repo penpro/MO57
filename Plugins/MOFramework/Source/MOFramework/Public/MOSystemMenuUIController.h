@@ -6,6 +6,7 @@
 
 class UMOInGameMenu;
 class UMOPossessionMenu;
+class UMOPawnEntryWidget;
 class UMOConfirmationDialog;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOOnConfirmationConfirmedDelegate);
@@ -141,6 +142,9 @@ private:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Possession", meta=(AllowPrivateAccess="true"))
 	TSubclassOf<APawn> DefaultPawnClassForNewCharacter;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Possession", meta=(AllowPrivateAccess="true"))
+	TSubclassOf<UMOPawnEntryWidget> PawnEntryWidgetClass;
 
 	UPROPERTY(Transient)
 	TWeakObjectPtr<UMOPossessionMenu> PossessionMenuWidget;

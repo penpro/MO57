@@ -71,6 +71,29 @@ public:
 	float AmbientVolume = 1.0f;
 
 	// ============================================================================
+	// MAIN MENU / FIRST RUN
+	// ============================================================================
+
+	/** Whether to play the intro video on game launch. Set to false after first playback. */
+	UPROPERTY(Config, BlueprintReadWrite, Category="MainMenu")
+	bool bPlayIntro = true;
+
+	/** Whether the user has completed their first run (seen intro, etc.). */
+	UPROPERTY(Config, BlueprintReadWrite, Category="MainMenu")
+	bool bHasCompletedFirstRun = false;
+
+	/**
+	 * Transient flag indicating a new game is pending after level load.
+	 * Set before loading gameplay level, cleared after spawning initial pawn.
+	 */
+	UPROPERTY(Config, BlueprintReadWrite, Category="MainMenu")
+	bool bPendingNewGame = false;
+
+	/** Slot name for pending new game save. */
+	UPROPERTY(Config, BlueprintReadWrite, Category="MainMenu")
+	FString PendingNewGameSlot;
+
+	// ============================================================================
 	// GAMEPLAY OPTIONS
 	// ============================================================================
 
@@ -99,6 +122,10 @@ public:
 	/** Apply MO-specific settings (called by ApplySettings). */
 	UFUNCTION(BlueprintCallable, Category="MO|Settings")
 	void ApplyMOSettings();
+
+	/** Reset the intro playback flag so the intro plays again on next launch. */
+	UFUNCTION(BlueprintCallable, Category="MO|Settings")
+	void ResetIntroPlayback();
 
 protected:
 	/** Apply audio settings to sound mix. */

@@ -214,9 +214,11 @@ void UMOGhostContextMenu::CancelBuild()
 		const int32 TotalDeposited = DepositedMaterialsForRefund.Num();
 		const int32 RefundCount = CalculateRefundAmount(TotalDeposited, bBuildStarted);
 
-		// Drop refunded materials (highest rarity items are kept, lowest rarity lost first)
-		FVector DropLocation = Building->GetActorLocation() + FVector(0.0f, 0.0f, 50.0f);
-		DropRefundedMaterials(RefundCount, DropLocation);
+		UE_LOG(LogMOFramework, Log, TEXT("[MOGhostContextMenu] CancelBuild: TotalDeposited=%d, RefundCount=%d, bBuildStarted=%s"),
+			TotalDeposited, RefundCount, bBuildStarted ? TEXT("yes") : TEXT("no"));
+
+		// Return refunded materials to builder's inventory (fallback to world drop if no inventory)
+		RefundMaterialsToInventory(RefundCount);
 
 		UE_LOG(LogMOFramework, Log, TEXT("[MOGhostContextMenu] Cancel refund: %d/%d materials returned (build started: %s)"),
 			RefundCount, TotalDeposited, bBuildStarted ? TEXT("yes") : TEXT("no"));
@@ -277,16 +279,38 @@ void UMOGhostContextMenu::NativeConstruct()
 	// Bind button handlers
 	if (AddMaterialsButton)
 	{
+		AddMaterialsButton->OnClicked().RemoveAll(this);
 		AddMaterialsButton->OnClicked().AddUObject(this, &UMOGhostContextMenu::HandleAddMaterialsClicked);
 	}
 	if (BuildButton)
 	{
+		BuildButton->OnClicked().RemoveAll(this);
 		BuildButton->OnClicked().AddUObject(this, &UMOGhostContextMenu::HandleBuildClicked);
 	}
 	if (CancelButton)
 	{
+		CancelButton->OnClicked().RemoveAll(this);
 		CancelButton->OnClicked().AddUObject(this, &UMOGhostContextMenu::HandleCancelClicked);
 	}
+}
+
+void UMOGhostContextMenu::NativeDestruct()
+{
+	// Clean up button bindings
+	if (AddMaterialsButton)
+	{
+		AddMaterialsButton->OnClicked().RemoveAll(this);
+	}
+	if (BuildButton)
+	{
+		BuildButton->OnClicked().RemoveAll(this);
+	}
+	if (CancelButton)
+	{
+		CancelButton->OnClicked().RemoveAll(this);
+	}
+
+	Super::NativeDestruct();
 }
 
 void UMOGhostContextMenu::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
@@ -638,6 +662,70 @@ int32 UMOGhostContextMenu::CalculateRefundAmount(int32 TotalDeposited, bool bBui
 		TotalDeposited, BaseRefundPercent * 100.0f, SkillBonus * 100.0f, RefundAmount);
 
 	return RefundAmount;
+}
+
+void UMOGhostContextMenu::RefundMaterialsToInventory(int32 RefundCount)
+{
+	if (RefundCount <= 0 || DepositedMaterialsForRefund.Num() == 0)
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOGhostContextMenu] RefundMaterialsToInventory: Nothing to refund (RefundCount=%d, Deposited=%d)"),
+			RefundCount, DepositedMaterialsForRefund.Num());
+		return;
+	}
+
+	UMOInventoryComponent* Inventory = BuilderInventory.Get();
+	if (!Inventory)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOGhostContextMenu] RefundMaterialsToInventory: No builder inventory, cannot refund!"));
+		return;
+	}
+
+	// Sort by rarity (lowest first) so we lose common items first, keep rarer items
+	DepositedMaterialsForRefund.Sort([](const FMODepositedMaterial& A, const FMODepositedMaterial& B) {
+		return static_cast<uint8>(A.Rarity) < static_cast<uint8>(B.Rarity);
+	});
+
+	// Materials to lose are at the front (lowest rarity)
+	// Materials to refund are at the back (highest rarity)
+	const int32 TotalDeposited = DepositedMaterialsForRefund.Num();
+	const int32 LoseCount = TotalDeposited - RefundCount;
+
+	// Consolidate materials to refund by ItemId (so stackable items stack properly)
+	TMap<FName, int32> ItemsToRefund;
+	for (int32 i = LoseCount; i < TotalDeposited; ++i)
+	{
+		const FMODepositedMaterial& Mat = DepositedMaterialsForRefund[i];
+		int32& Count = ItemsToRefund.FindOrAdd(Mat.ItemId);
+		Count++;
+	}
+
+	// Return consolidated materials to inventory
+	int32 RefundedCount = 0;
+	for (const auto& Pair : ItemsToRefund)
+	{
+		const FName& ItemId = Pair.Key;
+		const int32 Quantity = Pair.Value;
+
+		// Add stacked items with a single GUID
+		FGuid NewItemGuid = FGuid::NewGuid();
+		if (Inventory->AddItemByGuid(NewItemGuid, ItemId, Quantity))
+		{
+			RefundedCount += Quantity;
+			UE_LOG(LogMOFramework, Log, TEXT("[MOGhostContextMenu] Refunded %d x %s to inventory"), Quantity, *ItemId.ToString());
+		}
+		else
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOGhostContextMenu] Failed to add %d x %s to inventory (full?)"), Quantity, *ItemId.ToString());
+		}
+	}
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOGhostContextMenu] Refunded %d/%d materials to inventory"), RefundedCount, RefundCount);
+
+	// Log what was lost
+	if (LoseCount > 0)
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOGhostContextMenu] Lost %d materials (lowest rarity first)"), LoseCount);
+	}
 }
 
 void UMOGhostContextMenu::DropRefundedMaterials(int32 RefundCount, const FVector& DropLocation)

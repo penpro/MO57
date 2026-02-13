@@ -254,16 +254,38 @@ void UMOStationContextMenu::NativeConstruct()
 	// Bind button handlers
 	if (OpenButton)
 	{
+		OpenButton->OnClicked().RemoveAll(this);
 		OpenButton->OnClicked().AddUObject(this, &UMOStationContextMenu::HandleOpenClicked);
 	}
 	if (CraftButton)
 	{
+		CraftButton->OnClicked().RemoveAll(this);
 		CraftButton->OnClicked().AddUObject(this, &UMOStationContextMenu::HandleCraftClicked);
 	}
 	if (LightButton)
 	{
+		LightButton->OnClicked().RemoveAll(this);
 		LightButton->OnClicked().AddUObject(this, &UMOStationContextMenu::HandleLightClicked);
 	}
+}
+
+void UMOStationContextMenu::NativeDestruct()
+{
+	// Clean up button bindings
+	if (OpenButton)
+	{
+		OpenButton->OnClicked().RemoveAll(this);
+	}
+	if (CraftButton)
+	{
+		CraftButton->OnClicked().RemoveAll(this);
+	}
+	if (LightButton)
+	{
+		LightButton->OnClicked().RemoveAll(this);
+	}
+
+	Super::NativeDestruct();
 }
 
 void UMOStationContextMenu::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)

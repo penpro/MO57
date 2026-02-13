@@ -92,6 +92,7 @@ public:
 
 protected:
 	virtual void NativeConstruct() override;
+	virtual void NativeDestruct() override;
 	virtual void NativePreConstruct() override;
 
 	/** Update visual appearance based on current state. */

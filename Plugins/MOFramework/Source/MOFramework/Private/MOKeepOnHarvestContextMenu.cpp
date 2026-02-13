@@ -18,7 +18,7 @@ UMOKeepOnHarvestContextMenu::UMOKeepOnHarvestContextMenu(const FObjectInitialize
 void UMOKeepOnHarvestContextMenu::RequestClose()
 {
 	// Broadcast legacy delegate for backward compatibility
-	RequestClose();
+	OnRequestClose.Broadcast();
 	// Also call base which broadcasts OnCloseRequested
 	Super::RequestClose();
 }

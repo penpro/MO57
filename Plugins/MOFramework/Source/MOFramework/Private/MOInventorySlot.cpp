@@ -14,6 +14,7 @@
 #include "Widgets/SViewport.h"
 
 #include "MOInventoryComponent.h"
+#include "MOEquipmentComponent.h"
 #include "MOItemDatabaseSettings.h"
 #include "MODragVisualWidget.h"
 #include "MOWorldItem.h"
@@ -135,17 +136,22 @@ void UMOInventorySlot::RefreshFromInventory()
 
 void UMOInventorySlot::SetVisualData(const FMOInventorySlotVisualData& InVisualData)
 {
-	UE_LOG(LogMOFramework, Log, TEXT("[MOInventorySlot] SetVisualData: SlotIndex=%d, bHasItem=%s, ItemDefId=%s, Qty=%d, HasWorldItem=%s"),
+	UE_LOG(LogMOFramework, Log, TEXT("[MOInventorySlot] SetVisualData: SlotIndex=%d, bHasItem=%s, ItemDefId=%s, Qty=%d, HasWorldItem=%s, HasEquipment=%s"),
 		SlotIndex,
 		InVisualData.bHasItem ? TEXT("true") : TEXT("false"),
 		*InVisualData.ItemDefinitionId.ToString(),
 		InVisualData.Quantity,
-		InVisualData.SourceWorldItem.IsValid() ? TEXT("yes") : TEXT("no"));
+		InVisualData.SourceWorldItem.IsValid() ? TEXT("yes") : TEXT("no"),
+		InVisualData.SourceEquipmentComponent.IsValid() ? TEXT("yes") : TEXT("no"));
 
 	CachedVisualData = InVisualData;
 
 	// Extract world item reference for drag operations
 	SourceWorldItem = InVisualData.SourceWorldItem;
+
+	// Extract equipment source for drag operations
+	SourceEquipmentComponent = InVisualData.SourceEquipmentComponent;
+	SourceEquipmentSlot = InVisualData.SourceEquipmentSlot;
 
 	ApplyVisualDataToWidget();
 	OnVisualDataUpdated(CachedVisualData);
@@ -154,6 +160,9 @@ void UMOInventorySlot::SetVisualData(const FMOInventorySlotVisualData& InVisualD
 void UMOInventorySlot::ClearVisualData()
 {
 	CachedVisualData = FMOInventorySlotVisualData();
+	SourceWorldItem.Reset();
+	// Note: Equipment source is intentionally NOT cleared here
+	// Equipment slots call SetEquipmentSource after ClearVisualData to maintain their identity
 	ApplyVisualDataToWidget();
 	OnVisualDataUpdated(CachedVisualData);
 }
@@ -166,6 +175,22 @@ void UMOInventorySlot::SetSourceWorldItem(AMOWorldItem* InWorldItem)
 AMOWorldItem* UMOInventorySlot::GetSourceWorldItem() const
 {
 	return SourceWorldItem.Get();
+}
+
+void UMOInventorySlot::SetEquipmentSource(UMOEquipmentComponent* InEquipment, EMOEquipmentSlot InSlot)
+{
+	SourceEquipmentComponent = InEquipment;
+	SourceEquipmentSlot = InSlot;
+}
+
+UMOEquipmentComponent* UMOInventorySlot::GetSourceEquipmentComponent() const
+{
+	return SourceEquipmentComponent.Get();
+}
+
+EMOEquipmentSlot UMOInventorySlot::GetSourceEquipmentSlot() const
+{
+	return SourceEquipmentSlot;
 }
 
 void UMOInventorySlot::SetCustomEmptyIcon(UTexture2D* InIcon)
@@ -421,14 +446,17 @@ void UMOInventorySlot::NativeOnDragDetected(const FGeometry& InGeometry, const F
 	UMOInventorySlotDragOperation* DragOp = NewObject<UMOInventorySlotDragOperation>();
 	DragOp->SourceInventoryComponent = InventoryComponent;
 	DragOp->SourceWorldItem = SourceWorldItem;  // Set world item source (for nearby items)
+	DragOp->SourceEquipmentComponent = SourceEquipmentComponent;  // Set equipment source (for equipment panel)
+	DragOp->SourceEquipmentSlot = SourceEquipmentSlot;
 	DragOp->SourceSlotIndex = SlotIndex;
 	DragOp->ItemGuid = CachedVisualData.ItemGuid;
 	DragOp->ItemDefinitionId = CachedVisualData.ItemDefinitionId;
 	DragOp->Quantity = CachedVisualData.Quantity;
 
-	UE_LOG(LogMOFramework, Warning, TEXT("[MOInventorySlot] Creating drag op: FromInventory=%s, FromWorldItem=%s"),
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOInventorySlot] Creating drag op: FromInventory=%s, FromWorldItem=%s, FromEquipment=%s"),
 		DragOp->IsFromInventory() ? TEXT("yes") : TEXT("no"),
-		DragOp->IsFromWorldItem() ? TEXT("yes") : TEXT("no"));
+		DragOp->IsFromWorldItem() ? TEXT("yes") : TEXT("no"),
+		DragOp->IsFromEquipment() ? TEXT("yes") : TEXT("no"));
 
 	// Create the drag visual - Unreal handles positioning automatically
 	DragOp->DefaultDragVisual = CreateDragVisual();
@@ -556,6 +584,48 @@ bool UMOInventorySlot::NativeOnDrop(const FGeometry& InGeometry, const FDragDrop
 		return true;
 	}
 
+	// Handle drag from equipment slot
+	if (SlotDragOp->IsFromEquipment())
+	{
+		UMOEquipmentComponent* SourceEquipment = SlotDragOp->SourceEquipmentComponent.Get();
+		EMOEquipmentSlot EquipSlot = SlotDragOp->SourceEquipmentSlot;
+
+		if (!IsValid(SourceEquipment))
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOInventorySlot] Drop failed - equipment component no longer valid"));
+			return false;
+		}
+
+		// If target has no inventory, we can't unequip here
+		if (!IsValid(InventoryComponent))
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOInventorySlot] Drop failed - can't unequip to slot without inventory"));
+			// Broadcast drop event so parent widget (equipment panel) can handle equipment-to-equipment swaps
+			OnSlotDropReceived.Broadcast(TargetSlot, SourceSlot, nullptr);
+			return true;
+		}
+
+		// Unequip the item to the target inventory
+		UE_LOG(LogMOFramework, Log, TEXT("[MOInventorySlot] Unequipping from slot %d to inventory"), static_cast<int32>(EquipSlot));
+		bool bUnequipped = SourceEquipment->UnequipToInventory(EquipSlot, InventoryComponent);
+
+		if (bUnequipped)
+		{
+			UE_LOG(LogMOFramework, Log, TEXT("[MOInventorySlot] Successfully unequipped item to inventory"));
+		}
+		else
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOInventorySlot] Failed to unequip item (inventory full?)"));
+		}
+
+		// Refresh this slot
+		RefreshFromInventory();
+
+		// Broadcast drop received
+		OnSlotDropReceived.Broadcast(TargetSlot, SourceSlot, nullptr);
+		return true;
+	}
+
 	// Handle drag from inventory
 	UMOInventoryComponent* SourceInventory = SlotDragOp->SourceInventoryComponent.Get();
 	if (!IsValid(SourceInventory))
@@ -574,7 +644,9 @@ bool UMOInventorySlot::NativeOnDrop(const FGeometry& InGeometry, const FDragDrop
 		// If world drop is disabled, just broadcast the event for parent handling (e.g., equipment panel)
 		if (!bEnableWorldDrop)
 		{
-			UE_LOG(LogMOFramework, Log, TEXT("[MOInventorySlot] Target has no inventory, world drop disabled - broadcasting for parent handling"));
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOInventorySlot] Target has no inventory, world drop disabled - broadcasting OnSlotDropReceived (IsBound=%s, TargetSlot=%d, SourceSlot=%d)"),
+				OnSlotDropReceived.IsBound() ? TEXT("YES") : TEXT("NO"),
+				TargetSlot, SourceSlot);
 			OnSlotDropReceived.Broadcast(TargetSlot, SourceSlot, SourceInventory);
 			return true;
 		}

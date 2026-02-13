@@ -39,6 +39,7 @@ public:
 
 protected:
 	virtual void NativeConstruct() override;
+	virtual void NativeDestruct() override;
 
 	/** Blueprint event when entry is initialized. */
 	UFUNCTION(BlueprintImplementableEvent, Category="MO|UI|Possession")

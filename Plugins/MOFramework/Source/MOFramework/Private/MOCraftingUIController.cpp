@@ -37,9 +37,10 @@ void UMOCraftingUIController::BeginPlay()
 
 void UMOCraftingUIController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	// Clean up crafting menu widget
+	// Clean up crafting menu widget - unbind delegates first
 	if (UMOCraftingMenu* MenuWidget = CraftingMenuWidget.Get())
 	{
+		MenuWidget->OnRequestClose.RemoveDynamic(this, &UMOCraftingUIController::HandleCraftingMenuRequestClose);
 		if (MenuWidget->IsInViewport())
 		{
 			MenuWidget->RemoveFromParent();
@@ -47,9 +48,13 @@ void UMOCraftingUIController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	}
 	CraftingMenuWidget.Reset();
 
-	// Clean up station context menu widget
+	// Clean up station context menu widget - unbind delegates first
 	if (UMOStationContextMenu* StationWidget = StationContextMenuWidget.Get())
 	{
+		StationWidget->OnRequestClose.RemoveDynamic(this, &UMOCraftingUIController::HandleStationContextMenuRequestClose);
+		StationWidget->OnOpenClicked.RemoveDynamic(this, &UMOCraftingUIController::HandleStationContextMenuOpen);
+		StationWidget->OnCraftClicked.RemoveDynamic(this, &UMOCraftingUIController::HandleStationContextMenuCraft);
+		StationWidget->OnLightClicked.RemoveDynamic(this, &UMOCraftingUIController::HandleStationContextMenuLight);
 		if (StationWidget->IsInViewport())
 		{
 			StationWidget->RemoveFromParent();
@@ -58,9 +63,13 @@ void UMOCraftingUIController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	StationContextMenuWidget.Reset();
 	CurrentStationTarget.Reset();
 
-	// Clean up keep-on-harvest context menu widget
+	// Clean up keep-on-harvest context menu widget - unbind delegates first
 	if (UMOKeepOnHarvestContextMenu* HarvestMenuWidget = KeepOnHarvestContextMenuWidget.Get())
 	{
+		HarvestMenuWidget->OnRequestClose.RemoveDynamic(this, &UMOCraftingUIController::HandleKeepOnHarvestContextMenuRequestClose);
+		HarvestMenuWidget->OnInspectClicked.RemoveDynamic(this, &UMOCraftingUIController::HandleKeepOnHarvestContextMenuInspectClicked);
+		HarvestMenuWidget->OnHarvestClicked.RemoveDynamic(this, &UMOCraftingUIController::HandleKeepOnHarvestContextMenuHarvestClicked);
+		HarvestMenuWidget->OnChopDownClicked.RemoveDynamic(this, &UMOCraftingUIController::HandleKeepOnHarvestContextMenuChopDownClicked);
 		if (HarvestMenuWidget->IsInViewport())
 		{
 			HarvestMenuWidget->RemoveFromParent();
@@ -68,9 +77,11 @@ void UMOCraftingUIController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	}
 	KeepOnHarvestContextMenuWidget.Reset();
 
-	// Clean up harvest progress widget
+	// Clean up harvest progress widget - unbind delegates first
 	if (UMOHarvestProgressWidget* ProgressWidget = HarvestProgressWidget.Get())
 	{
+		ProgressWidget->OnHarvestCompleted.RemoveDynamic(this, &UMOCraftingUIController::HandleHarvestCompleted);
+		ProgressWidget->OnHarvestCancelled.RemoveDynamic(this, &UMOCraftingUIController::HandleHarvestCancelled);
 		if (ProgressWidget->IsInViewport())
 		{
 			ProgressWidget->RemoveFromParent();
@@ -720,6 +731,14 @@ void UMOCraftingUIController::HandleHarvestCompleted(bool bCompleted, const FMOC
 		}
 	}
 
+	// Restore input mode if no other menus are open
+	if (!IsAnyMenuOpen())
+	{
+		HideModalBackground();
+		ApplyInputModeForMenuClosed();
+	}
+	UpdateReticleVisibility();
+
 	UE_LOG(LogMOFramework, Log, TEXT("[MOCraftUI] Harvest completed: %s, FailedItems=%d"),
 		bCompleted ? TEXT("success") : TEXT("cancelled"),
 		Result.FailedItems.Num());
@@ -734,6 +753,14 @@ void UMOCraftingUIController::HandleHarvestCancelled()
 	}
 
 	CurrentHarvestTarget.Reset();
+
+	// Restore input mode if no other menus are open
+	if (!IsAnyMenuOpen())
+	{
+		HideModalBackground();
+		ApplyInputModeForMenuClosed();
+	}
+	UpdateReticleVisibility();
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOCraftUI] Harvest cancelled"));
 }

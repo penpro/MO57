@@ -55,7 +55,10 @@ public class MOFramework : ModuleRules
 				"Networking",  // Recommended when you are doing replication-heavy work
 				"DeveloperSettings", // Required for UDeveloperSettings (MOItemDatabaseSettings)
 				"ImageWrapper", // Required for PNG encoding/decoding (save thumbnails)
-				"RenderCore"   // Required for viewport pixel reading
+				"RenderCore",   // Required for viewport pixel reading
+				"Media",        // Required for UMediaPlayer (intro video)
+				"MediaAssets",  // Required for UMediaSource, UMediaTexture
+				"AudioMixer"    // Required for UMediaSoundComponent (inherits USynthComponent)
 			}
 			);
 
