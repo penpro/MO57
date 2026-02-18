@@ -53,6 +53,8 @@ void UMOGameSettings::SetToDefaults()
 	bHasCompletedFirstRun = false;
 	bPendingNewGame = false;
 	PendingNewGameSlot.Empty();
+	PendingWorldName.Empty();
+	PendingWorldSeed = 0;
 
 	// Gameplay
 	CameraSensitivity = 1.0f;
@@ -196,4 +198,43 @@ void UMOGameSettings::ClearAllCustomBindings()
 	const int32 Count = CustomKeyBindings.Num();
 	CustomKeyBindings.Empty();
 	UE_LOG(LogMOFramework, Log, TEXT("[MOGameSettings] Cleared %d custom key bindings"), Count);
+}
+
+// ============================================================================
+// WORLD SEED
+// ============================================================================
+
+int32 UMOGameSettings::GenerateRandomSeed()
+{
+	// Generate a random seed using current time and random int
+	PendingWorldSeed = FMath::Rand();
+	UE_LOG(LogMOFramework, Log, TEXT("[MOGameSettings] Generated random seed: %d"), PendingWorldSeed);
+	return PendingWorldSeed;
+}
+
+int32 UMOGameSettings::SeedFromString(const FString& SeedString)
+{
+	if (SeedString.IsEmpty())
+	{
+		return 0;
+	}
+
+	// Try to parse as integer first
+	if (SeedString.IsNumeric())
+	{
+		return FCString::Atoi(*SeedString);
+	}
+
+	// Otherwise hash the string
+	return GetTypeHash(SeedString);
+}
+
+int32 UMOGameSettings::GetWorldSeed()
+{
+	const UMOGameSettings* Settings = GetMOGameSettings();
+	if (Settings)
+	{
+		return Settings->PendingWorldSeed;
+	}
+	return 0;
 }

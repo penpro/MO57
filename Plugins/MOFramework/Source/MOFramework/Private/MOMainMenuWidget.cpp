@@ -1,6 +1,7 @@
 #include "MOMainMenuWidget.h"
 #include "MOFramework.h"
 #include "MOCommonButton.h"
+#include "MONewGamePanel.h"
 #include "MOLoadPanel.h"
 #include "MOOptionsPanel.h"
 #include "Components/PanelWidget.h"
@@ -33,6 +34,14 @@ void UMOMainMenuWidget::NativeConstruct()
 			}
 
 			// Try to find panels by type if BindWidgetOptional failed
+			if (!NewGamePanel)
+			{
+				if (UMONewGamePanel* FoundNewGamePanel = Cast<UMONewGamePanel>(Widget))
+				{
+					NewGamePanel = FoundNewGamePanel;
+					UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] Found NewGamePanel by type at index %d"), i);
+				}
+			}
 			if (!LoadPanel)
 			{
 				if (UMOLoadPanel* FoundLoadPanel = Cast<UMOLoadPanel>(Widget))
@@ -62,7 +71,8 @@ void UMOMainMenuWidget::NativeConstruct()
 
 	CurrentPanelIndex = PanelIndex_None;
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] Panels found: Load=%s, Options=%s"),
+	UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] Panels found: NewGame=%s, Load=%s, Options=%s"),
+		NewGamePanel ? TEXT("YES") : TEXT("NO"),
 		LoadPanel ? TEXT("YES") : TEXT("NO"),
 		OptionsPanel ? TEXT("YES") : TEXT("NO"));
 }
@@ -88,6 +98,11 @@ void UMOMainMenuWidget::NativeDestruct()
 	}
 
 	// Clean up panel delegate bindings
+	if (NewGamePanel)
+	{
+		NewGamePanel->OnRequestClose.RemoveDynamic(this, &UMOMainMenuWidget::HandlePanelRequestClose);
+		NewGamePanel->OnStartGameRequested.RemoveDynamic(this, &UMOMainMenuWidget::HandleNewGamePanelStartRequested);
+	}
 	if (LoadPanel)
 	{
 		LoadPanel->OnRequestClose.RemoveDynamic(this, &UMOMainMenuWidget::HandlePanelRequestClose);
@@ -137,6 +152,18 @@ FReply UMOMainMenuWidget::NativeOnKeyDown(const FGeometry& InGeometry, const FKe
 	}
 
 	return Super::NativeOnKeyDown(InGeometry, InKeyEvent);
+}
+
+void UMOMainMenuWidget::ShowNewGamePanel()
+{
+	UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] ShowNewGamePanel called"));
+	SwitchToPanel(PanelIndex_NewGame);
+
+	// Generate a fresh random seed when opening
+	if (NewGamePanel)
+	{
+		NewGamePanel->GenerateRandomSeed();
+	}
 }
 
 void UMOMainMenuWidget::ShowOptionsPanel()
@@ -234,6 +261,15 @@ void UMOMainMenuWidget::BindButtonEvents()
 	}
 
 	// Bind panel delegates
+	if (NewGamePanel)
+	{
+		NewGamePanel->OnRequestClose.RemoveDynamic(this, &UMOMainMenuWidget::HandlePanelRequestClose);
+		NewGamePanel->OnStartGameRequested.RemoveDynamic(this, &UMOMainMenuWidget::HandleNewGamePanelStartRequested);
+		NewGamePanel->OnRequestClose.AddDynamic(this, &UMOMainMenuWidget::HandlePanelRequestClose);
+		NewGamePanel->OnStartGameRequested.AddDynamic(this, &UMOMainMenuWidget::HandleNewGamePanelStartRequested);
+		UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] NewGamePanel bound"));
+	}
+
 	if (LoadPanel)
 	{
 		// Main menu shows ALL saves, not filtered to current world
@@ -258,7 +294,7 @@ void UMOMainMenuWidget::BindButtonEvents()
 
 void UMOMainMenuWidget::SwitchToPanel(int32 PanelIndex)
 {
-	UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] SwitchToPanel: %d (None=0, Load=1, Options=2)"), PanelIndex);
+	UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] SwitchToPanel: %d (None=0, NewGame=1, Load=2, Options=3)"), PanelIndex);
 
 	if (FocusWindowSwitcher)
 	{
@@ -270,7 +306,18 @@ void UMOMainMenuWidget::SwitchToPanel(int32 PanelIndex)
 void UMOMainMenuWidget::HandleNewGameClicked()
 {
 	UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] New Game button clicked"));
-	OnNewGameRequested.Broadcast();
+
+	// If we have a NewGamePanel, show it for seed configuration
+	// Otherwise fall back to immediate new game request
+	if (NewGamePanel)
+	{
+		ShowNewGamePanel();
+	}
+	else
+	{
+		// No panel - proceed directly (backwards compatibility)
+		OnNewGameRequested.Broadcast();
+	}
 }
 
 void UMOMainMenuWidget::HandleLoadGameClicked()
@@ -300,4 +347,15 @@ void UMOMainMenuWidget::HandleLoadPanelLoadRequested(const FString& SlotName)
 {
 	UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] Load requested for slot: %s"), *SlotName);
 	OnLoadGameRequested.Broadcast(SlotName);
+}
+
+void UMOMainMenuWidget::HandleNewGamePanelStartRequested()
+{
+	UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] New Game start requested from panel"));
+
+	// Close the panel first
+	CloseFocusPanel();
+
+	// Broadcast the new game request - controller will handle level load
+	OnNewGameRequested.Broadcast();
 }

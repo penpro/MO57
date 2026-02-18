@@ -100,9 +100,33 @@ public:
 	UPROPERTY(Config, BlueprintReadWrite, Category="MainMenu")
 	bool bPendingNewGame = false;
 
-	/** Slot name for pending new game save. */
+	/** Slot name for pending new game save (derived from world name). */
 	UPROPERTY(Config, BlueprintReadWrite, Category="MainMenu")
 	FString PendingNewGameSlot;
+
+	/** World name entered by user in New Game dialog. */
+	UPROPERTY(Config, BlueprintReadWrite, Category="MainMenu")
+	FString PendingWorldName;
+
+	/**
+	 * World seed for new game generation.
+	 * Set in New Game dialog, applied to VoxelWorld before generation.
+	 * 0 = use random seed.
+	 */
+	UPROPERTY(Config, BlueprintReadWrite, Category="MainMenu")
+	int32 PendingWorldSeed = 0;
+
+	/** Generate a random world seed. */
+	UFUNCTION(BlueprintCallable, Category="MO|Settings")
+	int32 GenerateRandomSeed();
+
+	/** Convert a seed string to integer (hashes non-numeric strings). */
+	UFUNCTION(BlueprintCallable, Category="MO|Settings")
+	static int32 SeedFromString(const FString& SeedString);
+
+	/** Get the current world seed (for voxel graphs to read). Returns 0 if not set. */
+	UFUNCTION(BlueprintPure, Category="MO|Settings")
+	static int32 GetWorldSeed();
 
 	// ============================================================================
 	// GAMEPLAY OPTIONS

@@ -726,9 +726,9 @@ public:
 	FText GetCurrentFocusHintText() const { return CurrentFocusHintText; }
 
 private:
-	/** Cached reference to notification component on same owner. */
+	/** Cached reference to notification component on same owner. Mutable to allow caching in const methods. */
 	UPROPERTY(Transient)
-	TWeakObjectPtr<UMONotificationComponent> CachedNotificationComponent;
+	mutable TWeakObjectPtr<UMONotificationComponent> CachedNotificationComponent;
 
 	/** Find or cache the notification component. */
 	UMONotificationComponent* ResolveNotificationComponent() const;

@@ -24,3 +24,15 @@ void AMOMainMenuGameMode::BeginPlay()
 	UE_LOG(LogMOFramework, Warning, TEXT("[MOMainMenuGameMode] DefaultPawnClass: %s"),
 		DefaultPawnClass ? *DefaultPawnClass->GetName() : TEXT("NULL (correct for menu)"));
 }
+
+APawn* AMOMainMenuGameMode::SpawnDefaultPawnFor_Implementation(AController* NewPlayer, AActor* StartSpot)
+{
+	// No pawn in menu mode - return nullptr without triggering engine warnings
+	return nullptr;
+}
+
+APawn* AMOMainMenuGameMode::SpawnDefaultPawnAtTransform_Implementation(AController* NewPlayer, const FTransform& SpawnTransform)
+{
+	// No pawn in menu mode - return nullptr without triggering engine warnings
+	return nullptr;
+}

@@ -30,6 +30,7 @@
 #include "MOBuildProgressComponent.h"
 #include "MOIdentifiableInterface.h"
 #include "MOInventoryHolderInterface.h"
+#include "MOCreature.h"
 
 // Voxel plugin sculpt persistence
 #include "VoxelMinimal/Utilities/VoxelThreadingUtilities.h"
@@ -1184,7 +1185,12 @@ void UMOPersistenceSubsystem::RespawnPersistedPawns(UWorld* World, const TArray<
             continue;
         }
 
-        DeferredPawn->AutoPossessAI = EAutoPossessAI::Disabled;
+        // Only disable auto-possession for player-controlled pawns, not AI creatures
+        // Creatures need their AutoPossessAI to spawn their AI controller
+        if (!DeferredPawn->IsA<AMOCreature>())
+        {
+            DeferredPawn->AutoPossessAI = EAutoPossessAI::Disabled;
+        }
         DeferredPawn->AutoPossessPlayer = EAutoReceiveInput::Disabled;
 
         UMOIdentityComponent* IdentityComponent = DeferredPawn->FindComponentByClass<UMOIdentityComponent>();

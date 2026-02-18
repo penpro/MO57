@@ -8,6 +8,7 @@ class UMOCommonButton;
 class UWidgetSwitcher;
 class UMOLoadPanel;
 class UMOOptionsPanel;
+class UMONewGamePanel;
 class UPanelWidget;
 
 /**
@@ -55,6 +56,10 @@ public:
 	// PANEL CONTROL
 	// ============================================================================
 
+	/** Show the new game panel in the focus window. */
+	UFUNCTION(BlueprintCallable, Category="MO|MainMenu")
+	void ShowNewGamePanel();
+
 	/** Show the options panel in the focus window. */
 	UFUNCTION(BlueprintCallable, Category="MO|MainMenu")
 	void ShowOptionsPanel();
@@ -97,6 +102,7 @@ private:
 
 	UFUNCTION() void HandlePanelRequestClose();
 	UFUNCTION() void HandleLoadPanelLoadRequested(const FString& SlotName);
+	UFUNCTION() void HandleNewGamePanelStartRequested();
 
 	// ============================================================================
 	// INTERNAL
@@ -132,8 +138,9 @@ private:
 	/**
 	 * Widget switcher for the focus window on the right side.
 	 * Index 0: Empty/None (shows nothing or placeholder)
-	 * Index 1: Load panel
-	 * Index 2: Options panel
+	 * Index 1: New Game panel (seed configuration)
+	 * Index 2: Load panel
+	 * Index 3: Options panel
 	 */
 	UPROPERTY(meta=(BindWidget))
 	TObjectPtr<UWidgetSwitcher> FocusWindowSwitcher;
@@ -141,6 +148,10 @@ private:
 	// ============================================================================
 	// OPTIONAL BIND WIDGETS
 	// ============================================================================
+
+	/** New game panel (optional - can be added directly to switcher in WBP). */
+	UPROPERTY(meta=(BindWidgetOptional))
+	TObjectPtr<UMONewGamePanel> NewGamePanel;
 
 	/** Load panel (optional - can be added directly to switcher in WBP). */
 	UPROPERTY(meta=(BindWidgetOptional))
@@ -159,6 +170,7 @@ private:
 
 	/** Panel indices. */
 	static constexpr int32 PanelIndex_None = 0;
-	static constexpr int32 PanelIndex_Load = 1;
-	static constexpr int32 PanelIndex_Options = 2;
+	static constexpr int32 PanelIndex_NewGame = 1;
+	static constexpr int32 PanelIndex_Load = 2;
+	static constexpr int32 PanelIndex_Options = 3;
 };

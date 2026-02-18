@@ -534,6 +534,40 @@ protected:
 	float TimeSinceLastNoise = 0.f;
 
 	// ============================================================================
+	// FALL-THROUGH SAFETY
+	// ============================================================================
+
+	/** Whether fall-through safety is enabled. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Safety")
+	bool bEnableFallThroughSafety = true;
+
+	/** How long to fall before triggering safety teleport (seconds). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Safety")
+	float FallThroughTimeThreshold = 2.0f;
+
+	/** Minimum Z velocity to be considered "falling through". */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Safety")
+	float FallThroughVelocityThreshold = -500.0f;
+
+	/** How far below to search for terrain when teleporting to safety. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Safety")
+	float SafetyTerrainSearchDistance = 50000.0f;
+
+	/** Height above found terrain to teleport to. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Safety")
+	float SafetyTeleportHeight = 200.0f;
+
+private:
+	/** How long we've been continuously falling. */
+	float ContinuousFallTime = 0.f;
+
+	/** Last Z position to detect if we're truly falling (not just jumping). */
+	float LastZPosition = 0.f;
+
+	/** Check for and handle falling through the world. */
+	void CheckFallThroughSafety(float DeltaTime);
+
+	// ============================================================================
 	// MOVEMENT MODE API
 	// ============================================================================
 

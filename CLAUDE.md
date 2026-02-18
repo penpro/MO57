@@ -345,6 +345,27 @@ The C++ infrastructure for creature activity states is complete, but Blueprint s
 - Resting/Sleeping → Locomotion: states become false OR `GroundSpeed > 10`
 - Any → Death: `IsDead == true`
 
+**New Game Panel Blueprint Setup:**
+The C++ widget `UMONewGamePanel` is complete but needs a Blueprint widget:
+
+1. **Create `WBP_NewGamePanel`** - Parent: `UMONewGamePanel`
+   - Add `SeedInputBox` (EditableTextBox) - for entering seed text/number
+   - Add `RandomSeedButton` (UMOCommonButton) - labeled "Random"
+   - Add `StartGameButton` (UMOCommonButton) - labeled "Start Game"
+   - Add `BackButton` (UMOCommonButton, optional) - labeled "Back"
+   - Add `SeedPreviewText` (TextBlock, optional) - shows computed seed integer
+
+2. **Update `WBP_MainMenu`** FocusWindowSwitcher:
+   - Index 0: Empty placeholder
+   - Index 1: WBP_NewGamePanel (NEW)
+   - Index 2: WBP_LoadPanel (shifted)
+   - Index 3: WBP_OptionsPanel (shifted)
+
+3. **Voxel Graph Seed Integration:**
+   - Voxel graphs can call `UMOGameSettings::GetWorldSeed()` (Blueprint Pure) to get the player-selected seed
+   - Use this seed in noise/random nodes for consistent world generation
+   - The global `FMath::RandInit()` is also set with this seed at game start
+
 ## Planned Plugins
 - **Ultra Dynamic Sky** - Dynamic sky/atmosphere system
 - **Ultra Dynamic Weather** - Weather effects and systems

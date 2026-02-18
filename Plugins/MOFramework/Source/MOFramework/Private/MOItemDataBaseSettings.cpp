@@ -10,20 +10,63 @@ bool UMOItemDatabaseSettings::bCacheBuilt = false;
 
 UDataTable* UMOItemDatabaseSettings::GetItemDefinitionsDataTable() const
 {
-	if (ItemDefinitionsDataTable.IsNull())
+	// Try loading from soft reference first
+	if (!ItemDefinitionsDataTable.IsNull())
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOItemDatabase] DataTable path is NULL - check DefaultGame.ini config"));
-		return nullptr;
+		UDataTable* Table = ItemDefinitionsDataTable.LoadSynchronous();
+		if (Table)
+		{
+			UE_LOG(LogMOFramework, Log, TEXT("[MOItemDatabase] Loaded DataTable from soft ref: %s (%d rows)"),
+				*Table->GetName(), Table->GetRowNames().Num());
+			return Table;
+		}
+		else
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOItemDatabase] Failed to load from soft ref: %s, trying fallback..."),
+				*ItemDefinitionsDataTable.GetLongPackageName());
+		}
+	}
+	else
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOItemDatabase] Soft ref is NULL, trying fallback path..."));
 	}
 
-	UDataTable* Table = ItemDefinitionsDataTable.LoadSynchronous();
-	if (!Table)
+	// Try fallback path for packaged builds
+	if (!FallbackItemsDataTablePath.IsEmpty())
 	{
-		UE_LOG(LogMOFramework, Error, TEXT("[MOItemDatabase] Failed to load DataTable from path: %s"),
-			*ItemDefinitionsDataTable.GetLongPackageName());
+		UDataTable* FallbackTable = Cast<UDataTable>(StaticLoadObject(UDataTable::StaticClass(), nullptr, *FallbackItemsDataTablePath));
+		if (FallbackTable)
+		{
+			UE_LOG(LogMOFramework, Log, TEXT("[MOItemDatabase] Loaded DataTable from fallback path: %s (%d rows)"),
+				*FallbackTable->GetName(), FallbackTable->GetRowNames().Num());
+			return FallbackTable;
+		}
+		else
+		{
+			UE_LOG(LogMOFramework, Error, TEXT("[MOItemDatabase] Failed to load from fallback path: %s"),
+				*FallbackItemsDataTablePath);
+		}
 	}
 
-	return Table;
+	// Try hardcoded common paths as last resort
+	static const TCHAR* CommonPaths[] = {
+		TEXT("/MOFramework/Data/DT_Items.DT_Items"),          // Plugin content
+		TEXT("/Game/Data/DT_Items.DT_Items"),                 // Game content
+	};
+
+	for (const TCHAR* Path : CommonPaths)
+	{
+		UDataTable* HardcodedTable = Cast<UDataTable>(StaticLoadObject(UDataTable::StaticClass(), nullptr, Path));
+		if (HardcodedTable)
+		{
+			UE_LOG(LogMOFramework, Log, TEXT("[MOItemDatabase] Loaded DataTable from hardcoded path: %s (%d rows)"),
+				Path, HardcodedTable->GetRowNames().Num());
+			return HardcodedTable;
+		}
+	}
+
+	UE_LOG(LogMOFramework, Error, TEXT("[MOItemDatabase] Could not load Items DataTable from any source!"));
+	return nullptr;
 }
 
 bool UMOItemDatabaseSettings::GetItemDefinition(FName ItemDefinitionId, FMOItemDefinitionRow& OutDefinition)

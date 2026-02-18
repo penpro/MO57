@@ -27,6 +27,13 @@ public:
 	UPROPERTY(EditAnywhere, Config, Category="Database")
 	TSoftObjectPtr<UDataTable> ItemDefinitionsDataTable;
 
+	/**
+	 * Fallback path for Items DataTable if soft reference fails in packaged builds.
+	 * Format: /Game/Path/To/DT_Items.DT_Items
+	 */
+	UPROPERTY(EditAnywhere, Config, Category="Database")
+	FString FallbackItemsDataTablePath;
+
 	UDataTable* GetItemDefinitionsDataTable() const;
 
 	/** Look up an item definition by ID. Returns true if found. */

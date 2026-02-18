@@ -1277,8 +1277,8 @@ UMONotificationComponent* UMOUIManagerComponent::ResolveNotificationComponent() 
 		UMONotificationComponent* Found = Owner->FindComponentByClass<UMONotificationComponent>();
 		if (IsValid(Found))
 		{
-			// Cache it (const_cast needed for caching in const method)
-			const_cast<UMOUIManagerComponent*>(this)->CachedNotificationComponent = Found;
+			// Cache it (member is mutable for caching in const method)
+			CachedNotificationComponent = Found;
 			return Found;
 		}
 	}
