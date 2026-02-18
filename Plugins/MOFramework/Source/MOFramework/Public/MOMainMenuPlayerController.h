@@ -45,9 +45,17 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category="MO|MainMenu")
 	TSubclassOf<UMOIntroWidget> IntroWidgetClass;
 
-	/** Media source for intro video. */
+	/** Media source for intro video (optional - if not set, uses IntroVideoFileName). */
 	UPROPERTY(EditDefaultsOnly, Category="MO|MainMenu")
 	TObjectPtr<UMediaSource> IntroVideoSource;
+
+	/**
+	 * Video filename relative to Content/Penumbra/Movies/ (e.g., "introfinal.mp4").
+	 * Used if IntroVideoSource is not set. This creates the media source at runtime
+	 * with the correct path for both editor and packaged builds.
+	 */
+	UPROPERTY(EditDefaultsOnly, Category="MO|MainMenu")
+	FString IntroVideoFileName = TEXT("introfinal.mp4");
 
 	/** Material to use for video display (must have a TextureParameter named "MediaTexture"). */
 	UPROPERTY(EditDefaultsOnly, Category="MO|MainMenu")
@@ -150,6 +158,9 @@ protected:
 	/** Cleanup media player and related components. */
 	void CleanupMediaPlayer();
 
+	/** Get or create the media source for the intro video. */
+	UMediaSource* GetOrCreateIntroMediaSource();
+
 private:
 	// ============================================================================
 	// WIDGETS
@@ -177,10 +188,17 @@ private:
 	UPROPERTY()
 	TObjectPtr<UMaterialInstanceDynamic> VideoMaterialInstance;
 
+	/** Runtime-created media source (when using IntroVideoFileName). */
+	UPROPERTY()
+	TObjectPtr<UMediaSource> RuntimeMediaSource;
+
 	// ============================================================================
 	// STATE
 	// ============================================================================
 
 	/** Whether intro video is currently playing. */
 	bool bIntroPlaying = false;
+
+	/** Timer handle for video fallback timeout. */
+	FTimerHandle VideoFallbackTimerHandle;
 };

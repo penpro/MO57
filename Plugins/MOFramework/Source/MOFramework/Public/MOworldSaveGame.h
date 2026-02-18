@@ -5,6 +5,13 @@
 #include "UObject/SoftObjectPath.h"
 #include "MOCraftingTypes.h"
 #include "MOBuildingTypes.h"
+#include "MOCharacterAppearance.h"
+#include "MOVitalsComponent.h"
+#include "MOAnatomyComponent.h"
+#include "MOMetabolismComponent.h"
+#include "MOMentalStateComponent.h"
+#include "MOSkillsComponent.h"
+#include "MOEquipmentComponent.h"
 #include "MOworldSaveGame.generated.h"
 
 USTRUCT(BlueprintType)
@@ -87,6 +94,42 @@ struct FMOPersistedPawnRecord
     // Portrait (asset path for now)
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save")
     FSoftObjectPath PortraitPath;
+
+    // Character appearance (MetaHuman customization data)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save")
+    FMOCharacterAppearance Appearance;
+
+    // ============================================================================
+    // COMPONENT STATE
+    // ============================================================================
+
+    /** Vitals component state (HR, BP, SpO2, blood volume, etc.) */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Components")
+    FMOVitalsSaveData VitalsData;
+
+    /** Anatomy component state (body parts, wounds, conditions) */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Components")
+    FMOAnatomySaveData AnatomyData;
+
+    /** Metabolism component state (nutrition, digestion, body composition) */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Components")
+    FMOMetabolismSaveData MetabolismData;
+
+    /** Mental state component (consciousness, shock, effects) */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Components")
+    FMOMentalStateSaveData MentalStateData;
+
+    /** Skills component state (skill levels, XP) */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Components")
+    FMOSkillsSaveData SkillsData;
+
+    /** Equipment component state (equipped items per slot) */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Components")
+    FMOEquipmentSaveData EquipmentData;
+
+    /** Flag to indicate if component data has been populated (for legacy save compatibility) */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Components")
+    bool bHasComponentData = false;
 };
 
 USTRUCT(BlueprintType)
@@ -218,6 +261,10 @@ public:
     /** Screenshot thumbnail data (PNG compressed, 80x80). */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Metadata")
     TArray<uint8> ScreenshotData;
+
+    /** GUID of the last possessed pawn (for camera positioning on load). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Metadata")
+    FGuid LastPossessedPawnGuid;
 
     // ============================================================================
     // WORLD DATA

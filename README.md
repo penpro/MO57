@@ -175,6 +175,39 @@ Dehydration → Vitals (+HR, -BP, +Temp) → Performance penalties
 - Skippable with any key press
 - `bPlayIntro` flag prevents replay after first run
 
+### Creature AI Architecture
+
+**Classes:**
+| Class | Purpose |
+|-------|---------|
+| `AMOCreature` | Base pawn for all AI creatures, inherits medical systems from AMOCharacter |
+| `AMOCreatureController` | AI controller with perception (sight + hearing), threat tracking |
+| `EMOCreatureActivityState` | Activity enum: Active, Resting, Sleeping, Fleeing, Fighting, Dead |
+
+**Behavior Tree Nodes:**
+| Node | Type | Purpose |
+|------|------|---------|
+| `BTTask_FleeFromThreat` | Task | Find safe location away from threat, sprint to it |
+| `BTTask_CreatureWander` | Task | Random wandering within home radius |
+| `BTTask_CreatureAttack` | Task | Attack current threat target |
+| `BTTask_CreatureRest` | Task | Play rest/sleep animation for duration |
+| `BTService_CreatureActivity` | Service | Manage rest/sleep based on time of day |
+| `BTService_UpdateCreatureState` | Service | Update blackboard with creature state |
+
+**AI Perception:**
+- Sight: Configurable radius, peripheral vision angle, lose-sight radius
+- Hearing: Footstep noise from `AMOCharacter::Tick()` via `MakeNoise()`
+- Threat memory: Creatures remember threats for configurable duration after losing sight
+
+**Activity State Flow:**
+```
+Active ──(night)──► Sleeping ──(day)──► Active
+   │                    │
+   │ (random chance)    │ (threat)
+   ▼                    ▼
+Resting ──(duration)──► Active ◄── Fleeing ◄── (threat detected)
+```
+
 ### DataTable-Driven Design
 
 | Row Type | DataTable | Purpose |
@@ -184,6 +217,7 @@ Dehydration → Vitals (+HR, -BP, +Temp) → Performance penalties
 | `FMORecipeDefinitionRow` | DT_RecipeDefinitions | Crafting recipes |
 | `FMOBodyPartDefinitionRow` | DT_BodyPartDefinitions | ~55 body parts |
 | `FMOMedicalTreatmentRow` | DT_MedicalTreatments | Wound treatments |
+| `FMOCreatureDefinitionRow` | DT_CreatureDefinitions | Creature stats, perception, loot |
 
 ### Replication Patterns
 
@@ -575,7 +609,24 @@ The MOFramework has solid core systems but has accumulated technical debt in sev
 
 ### Recent Changes
 
-*Last updated: 2026-02-12*
+*Last updated: 2026-02-18*
+
+#### Creature AI System (NEW)
+- [x] `MOCreature` base class for all AI creatures (prey/predators)
+- [x] `MOCreatureController` with AI perception (sight + hearing)
+- [x] Creature activity states: Active, Resting, Sleeping, Fleeing, Fighting, Dead
+- [x] Behavior tree tasks: Flee, Wander, Attack, Rest
+- [x] `BTService_CreatureActivity` for day/night rest/sleep cycles
+- [x] Footstep noise generation for AI hearing awareness
+- [x] Hit reaction and death animation montage support
+- [x] DataTable-driven creature definitions (stats, behavior, loot)
+
+#### Character Appearance System (NEW)
+- [x] `MOAppearanceSubsystem` for managing character visuals
+- [x] `MOCharacterAppearance` component for per-pawn appearance data
+- [x] `MOCustomizableCharacter` with MetaHuman integration
+- [x] Genesis 8 character model support
+- [x] MetaHuman common assets integration
 
 #### Main Menu System
 - [x] Main menu widget with New Game/Load Game/Options/Exit

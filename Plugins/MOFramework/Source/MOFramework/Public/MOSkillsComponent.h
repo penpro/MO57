@@ -32,6 +32,15 @@ struct MOFRAMEWORK_API FMOSkillProgress
 	}
 };
 
+USTRUCT(BlueprintType)
+struct MOFRAMEWORK_API FMOSkillsSaveData
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	TArray<FMOSkillProgress> Skills;
+};
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FMOOnSkillLevelUp, FName, SkillId, int32, OldLevel, int32, NewLevel);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FMOOnExperienceGained, FName, SkillId, float, XPGained, float, TotalXP);
 
@@ -114,6 +123,18 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category="MO|Skills")
 	void SetSkillLevel(FName SkillId, int32 Level);
+
+	// ============================================================================
+	// SAVE/LOAD
+	// ============================================================================
+
+	/** Build save data from current state. */
+	UFUNCTION(BlueprintCallable, Category="MO|Skills|Save")
+	void BuildSaveData(FMOSkillsSaveData& OutSaveData) const;
+
+	/** Apply loaded save data. Server only. */
+	UFUNCTION(BlueprintCallable, Category="MO|Skills|Save")
+	bool ApplySaveData(const FMOSkillsSaveData& InSaveData);
 
 protected:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;

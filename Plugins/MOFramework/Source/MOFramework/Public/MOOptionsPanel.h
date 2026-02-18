@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "CommonActivatableWidget.h"
+#include "MOKeyBindingTypes.h"
 #include "MOOptionsPanel.generated.h"
 
 class UCommonButtonBase;
@@ -10,6 +11,9 @@ class USlider;
 class UTextBlock;
 class USpinBox;
 class UComboBoxString;
+class UScrollBox;
+class UMOKeyBindingEntryWidget;
+class UInputMappingContext;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOOptionsPanelRequestCloseSignature);
 
@@ -189,4 +193,44 @@ private:
 	/** Enable camera shake effects. */
 	UPROPERTY(meta=(BindWidgetOptional))
 	TObjectPtr<UCheckBox> CameraShakeCheckbox;
+
+	// ============================================================
+	// KEY BINDINGS
+	// ============================================================
+
+	/** Scroll box containing key binding entries. */
+	UPROPERTY(meta=(BindWidgetOptional))
+	TObjectPtr<UScrollBox> KeyBindingsScrollBox;
+
+	/** Button to reset all key bindings to defaults. */
+	UPROPERTY(meta=(BindWidgetOptional))
+	TObjectPtr<UCommonButtonBase> ResetAllBindingsButton;
+
+	/** Entry widget class for key binding rows. */
+	UPROPERTY(EditAnywhere, Category="MO|UI|Options|KeyBindings")
+	TSubclassOf<UMOKeyBindingEntryWidget> KeyBindingEntryClass;
+
+	/** Primary input mapping context (for movement, UI, actions). */
+	UPROPERTY(EditAnywhere, Category="MO|UI|Options|KeyBindings")
+	TSoftObjectPtr<UInputMappingContext> PawnControlContext;
+
+	/** Building input mapping context. */
+	UPROPERTY(EditAnywhere, Category="MO|UI|Options|KeyBindings")
+	TSoftObjectPtr<UInputMappingContext> BuildingContext;
+
+	/** List of rebindable actions. Configure in Blueprint. */
+	UPROPERTY(EditAnywhere, Category="MO|UI|Options|KeyBindings")
+	TArray<FMOKeyBindingActionConfig> RebindableActions;
+
+private:
+	/** Populate the key bindings scroll box with entry widgets. */
+	void PopulateKeyBindings();
+
+	/** Handle when a key binding entry changes. */
+	UFUNCTION()
+	void HandleKeyBindingChanged(FName ActionId, FKey NewKey);
+
+	/** Handle reset all bindings button click. */
+	UFUNCTION()
+	void HandleResetAllBindingsClicked();
 };

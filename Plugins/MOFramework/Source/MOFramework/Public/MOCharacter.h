@@ -43,6 +43,7 @@ class UCameraComponent;
 class USkeletalMesh;
 class UAnimInstance;
 class UStaticMeshComponent;
+class UNavigationInvokerComponent;
 struct FMOEquippedItem;
 enum class EMOEquipmentSlot : uint8;
 
@@ -65,6 +66,8 @@ class MOFRAMEWORK_API AMOCharacter : public ACharacter,
 
 public:
 	AMOCharacter();
+
+	virtual void Tick(float DeltaTime) override;
 
 	// ============================================================================
 	// VOXEL WORLD COMPATIBILITY
@@ -143,6 +146,10 @@ public:
 
 	UFUNCTION(BlueprintPure, Category="MO|Camera")
 	UCameraComponent* GetFollowCamera() const { return FollowCamera; }
+
+	/** Apply game settings (FOV, sensitivity) to this character's camera. */
+	UFUNCTION(BlueprintCallable, Category="MO|Camera")
+	void ApplyGameSettings();
 
 	UFUNCTION(BlueprintPure, Category="MO")
 	UMOEquipmentComponent* GetEquipmentComponent() const { return EquipmentComponent; }
@@ -351,6 +358,10 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO")
 	TObjectPtr<UMOEquipmentComponent> EquipmentComponent;
 
+	/** Navigation invoker - tells voxel world to generate navmesh around this character. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO|Navigation")
+	TObjectPtr<UNavigationInvokerComponent> NavigationInvoker;
+
 	// ============================================================================
 	// HELD ITEM VISUALS
 	// ============================================================================
@@ -494,6 +505,33 @@ protected:
 	/** Whether terraforming mode is active. */
 	UPROPERTY(BlueprintReadOnly, Category="MO|State")
 	bool bTerraformingMode = false;
+
+	// ============================================================================
+	// AI PERCEPTION NOISE
+	// ============================================================================
+
+	/** Whether this character generates noise for AI perception. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|AIPerception")
+	bool bGeneratesMovementNoise = true;
+
+	/** Interval between noise events while moving (seconds). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|AIPerception", meta=(ClampMin="0.1"))
+	float NoiseInterval = 0.3f;
+
+	/** Noise loudness while walking (0-1). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|AIPerception", meta=(ClampMin="0", ClampMax="1"))
+	float WalkingNoiseLoudness = 0.3f;
+
+	/** Noise loudness while jogging (0-1). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|AIPerception", meta=(ClampMin="0", ClampMax="1"))
+	float JoggingNoiseLoudness = 0.6f;
+
+	/** Noise loudness while sprinting (0-1). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|AIPerception", meta=(ClampMin="0", ClampMax="1"))
+	float SprintingNoiseLoudness = 1.0f;
+
+	/** Time since last noise was generated. */
+	float TimeSinceLastNoise = 0.f;
 
 	// ============================================================================
 	// MOVEMENT MODE API

@@ -9,11 +9,16 @@
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "MediaSource.h"
+#include "FileMediaSource.h"
 #include "MediaPlayer.h"
 #include "MediaTexture.h"
 #include "MediaSoundComponent.h"
+#include "Misc/Paths.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
+#include "TimerManager.h"
+#include "Misc/PackageName.h"
+#include "Engine/Engine.h"
 
 AMOMainMenuPlayerController::AMOMainMenuPlayerController()
 {
@@ -30,16 +35,30 @@ void AMOMainMenuPlayerController::BeginPlay()
 		MainMenuWidgetClass ? *MainMenuWidgetClass->GetName() : TEXT("NULL"));
 	UE_LOG(LogMOFramework, Warning, TEXT("[MOMainMenuPlayerController] IntroWidgetClass: %s"),
 		IntroWidgetClass ? *IntroWidgetClass->GetName() : TEXT("NULL"));
-	UE_LOG(LogMOFramework, Warning, TEXT("[MOMainMenuPlayerController] IntroVideoSource: %s"),
-		IntroVideoSource ? *IntroVideoSource->GetName() : TEXT("NULL"));
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOMainMenuPlayerController] IntroVideoSource: %s, IntroVideoFileName: %s"),
+		IntroVideoSource ? *IntroVideoSource->GetName() : TEXT("NULL"),
+		*IntroVideoFileName);
 
-	// Set input mode to UI only for menu
-	FInputModeUIOnly InputMode;
+	// Set input mode to Game and UI so keyboard input works
+	FInputModeGameAndUI InputMode;
+	InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+	InputMode.SetHideCursorDuringCapture(false);
 	SetInputMode(InputMode);
 
-	// Always play intro - user can skip with any key
-	UE_LOG(LogMOFramework, Warning, TEXT("[MOMainMenuPlayerController] Playing intro video"));
-	PlayIntroVideo();
+	// Check if we should play the intro
+	UMOGameSettings* Settings = UMOGameSettings::GetMOGameSettings();
+	const bool bShouldPlayIntro = Settings ? Settings->bPlayIntro : true;
+
+	if (bShouldPlayIntro)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOMainMenuPlayerController] Playing intro video"));
+		PlayIntroVideo();
+	}
+	else
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuPlayerController] Skipping intro (bPlayIntro=false)"));
+		ShowMainMenu();
+	}
 }
 
 void AMOMainMenuPlayerController::SetupInputComponent()
@@ -95,9 +114,11 @@ void AMOMainMenuPlayerController::PlayIntroVideo()
 		return;
 	}
 
-	if (!IntroVideoSource)
+	// Get or create the media source (handles both asset and runtime creation)
+	UMediaSource* MediaSource = GetOrCreateIntroMediaSource();
+	if (!MediaSource)
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOMainMenuPlayerController] No IntroVideoSource set, skipping intro"));
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOMainMenuPlayerController] No media source available, skipping intro"));
 		HandleIntroComplete();
 		return;
 	}
@@ -110,6 +131,9 @@ void AMOMainMenuPlayerController::PlayIntroVideo()
 	}
 
 	bIntroPlaying = true;
+
+	// Hide mouse cursor during intro for cleaner presentation
+	bShowMouseCursor = false;
 
 	// Setup media player and components
 	SetupMediaPlayer();
@@ -124,6 +148,7 @@ void AMOMainMenuPlayerController::PlayIntroVideo()
 
 		// Set focus on intro widget so it can receive key input
 		IntroWidget->SetFocus();
+		IntroWidget->SetKeyboardFocus();
 
 		// Pass the video material to the widget
 		IntroWidget->SetVideoMaterial(VideoMaterialInstance);
@@ -131,8 +156,25 @@ void AMOMainMenuPlayerController::PlayIntroVideo()
 		// Open the media source - playback will start in HandleMediaOpened
 		if (MediaPlayer)
 		{
-			UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuPlayerController] Opening media source: %s"), *IntroVideoSource->GetName());
-			MediaPlayer->OpenSource(IntroVideoSource);
+			UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuPlayerController] Opening media source: %s"), *MediaSource->GetName());
+
+			// Set a fallback timer in case media fails to open
+			GetWorldTimerManager().SetTimer(VideoFallbackTimerHandle, [this]()
+			{
+				if (bIntroPlaying && MediaPlayer && !MediaPlayer->IsPlaying())
+				{
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOMainMenuPlayerController] Media failed to start after timeout, skipping intro"));
+					CleanupMediaPlayer();
+					HandleIntroComplete();
+				}
+			}, 5.0f, false);  // 5 second timeout
+
+			MediaPlayer->OpenSource(MediaSource);
+		}
+		else
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOMainMenuPlayerController] MediaPlayer is null"));
+			HandleIntroComplete();
 		}
 	}
 	else
@@ -165,6 +207,28 @@ void AMOMainMenuPlayerController::StartNewGame()
 {
 	UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuPlayerController] Starting new game"));
 
+	// Verify the gameplay level exists before attempting travel
+	FString LevelPackagePath = GameplayLevelPath;
+	if (!LevelPackagePath.StartsWith(TEXT("/Game/")))
+	{
+		LevelPackagePath = FString::Printf(TEXT("/Game/%s"), *GameplayLevelPath);
+	}
+
+	// Check if level package exists
+	if (!FPackageName::DoesPackageExist(LevelPackagePath))
+	{
+		UE_LOG(LogMOFramework, Error, TEXT("[MOMainMenuPlayerController] Gameplay level not found: %s"), *LevelPackagePath);
+		UE_LOG(LogMOFramework, Error, TEXT("[MOMainMenuPlayerController] Make sure the level is included in packaging settings (MapsToCook or DirectoriesToAlwaysCook)"));
+
+		// Show error to user via on-screen message
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 10.0f, FColor::Red,
+				FString::Printf(TEXT("ERROR: Level '%s' not found! Check packaging settings."), *GameplayLevelPath));
+		}
+		return;
+	}
+
 	// Set pending new game flags in settings
 	UMOGameSettings* Settings = UMOGameSettings::GetMOGameSettings();
 	if (Settings)
@@ -178,12 +242,34 @@ void AMOMainMenuPlayerController::StartNewGame()
 	}
 
 	// Load gameplay level
+	UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuPlayerController] Opening level: %s"), *GameplayLevelPath);
 	UGameplayStatics::OpenLevel(this, *GameplayLevelPath);
 }
 
 void AMOMainMenuPlayerController::LoadGame(const FString& SlotName)
 {
 	UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuPlayerController] Loading game from slot: %s"), *SlotName);
+
+	// Verify the gameplay level exists before attempting travel
+	FString LevelPackagePath = GameplayLevelPath;
+	if (!LevelPackagePath.StartsWith(TEXT("/Game/")))
+	{
+		LevelPackagePath = FString::Printf(TEXT("/Game/%s"), *GameplayLevelPath);
+	}
+
+	// Check if level package exists
+	if (!FPackageName::DoesPackageExist(LevelPackagePath))
+	{
+		UE_LOG(LogMOFramework, Error, TEXT("[MOMainMenuPlayerController] Gameplay level not found: %s"), *LevelPackagePath);
+
+		// Show error to user
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 10.0f, FColor::Red,
+				FString::Printf(TEXT("ERROR: Level '%s' not found! Check packaging settings."), *GameplayLevelPath));
+		}
+		return;
+	}
 
 	// Set pending load slot in settings
 	UMOGameSettings* Settings = UMOGameSettings::GetMOGameSettings();
@@ -195,6 +281,7 @@ void AMOMainMenuPlayerController::LoadGame(const FString& SlotName)
 	}
 
 	// Load gameplay level - the gameplay GameMode will handle loading the save
+	UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuPlayerController] Opening level: %s"), *GameplayLevelPath);
 	UGameplayStatics::OpenLevel(this, *GameplayLevelPath);
 }
 
@@ -226,6 +313,18 @@ void AMOMainMenuPlayerController::HandleIntroComplete()
 	UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuPlayerController] Intro complete"));
 
 	bIntroPlaying = false;
+
+	// Show mouse cursor again for main menu
+	bShowMouseCursor = true;
+
+	// Mark intro as played so it won't play again this session
+	if (UMOGameSettings* Settings = UMOGameSettings::GetMOGameSettings())
+	{
+		Settings->bPlayIntro = false;
+	}
+
+	// Clear fallback timer
+	GetWorldTimerManager().ClearTimer(VideoFallbackTimerHandle);
 
 	// Clean up media player
 	CleanupMediaPlayer();
@@ -323,13 +422,103 @@ void AMOMainMenuPlayerController::CleanupMediaPlayer()
 
 	MediaTexture = nullptr;
 	VideoMaterialInstance = nullptr;
+	RuntimeMediaSource = nullptr;
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuPlayerController] Media player cleaned up"));
+}
+
+UMediaSource* AMOMainMenuPlayerController::GetOrCreateIntroMediaSource()
+{
+	// In packaged builds, ALWAYS use runtime path resolution since asset paths don't work
+	// In editor, prefer the asset if set, otherwise use runtime path
+#if WITH_EDITOR
+	if (IntroVideoSource)
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuPlayerController] Using asset-based IntroVideoSource in editor"));
+		return IntroVideoSource;
+	}
+#endif
+
+	// Create a FileMediaSource at runtime with the correct absolute path
+	if (IntroVideoFileName.IsEmpty())
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOMainMenuPlayerController] No IntroVideoFileName set"));
+		// Fallback to asset in editor if filename is empty
+#if WITH_EDITOR
+		return IntroVideoSource;
+#else
+		return nullptr;
+#endif
+	}
+
+	// Build the correct path for both editor and packaged builds
+	// Videos are staged as non-UFS content at: Content/Penumbra/Movies/
+	FString VideoPath;
+
+	// Try multiple possible locations
+	TArray<FString> PossiblePaths;
+
+#if WITH_EDITOR
+	// In editor, try both standard and custom locations
+	PossiblePaths.Add(FPaths::Combine(FPaths::ProjectContentDir(), TEXT("Movies"), IntroVideoFileName));
+	PossiblePaths.Add(FPaths::Combine(FPaths::ProjectContentDir(), TEXT("Penumbra/Movies"), IntroVideoFileName));
+#else
+	// In packaged build, try several locations
+	// 1. Standard Content/Movies location (UE default for movies)
+	PossiblePaths.Add(FPaths::Combine(FPaths::ProjectDir(), TEXT("Content/Movies"), IntroVideoFileName));
+	// 2. Content/Movies relative to launch dir
+	PossiblePaths.Add(FPaths::Combine(FPaths::LaunchDir(), TEXT("Content/Movies"), IntroVideoFileName));
+	// 3. Legacy Penumbra location
+	PossiblePaths.Add(FPaths::Combine(FPaths::ProjectDir(), TEXT("Content/Penumbra/Movies"), IntroVideoFileName));
+	// 4. Just the Movies folder relative to the game (non-UFS staging)
+	PossiblePaths.Add(FPaths::Combine(FPaths::ProjectDir(), TEXT("Movies"), IntroVideoFileName));
+	// 5. Movies folder relative to launch dir
+	PossiblePaths.Add(FPaths::Combine(FPaths::LaunchDir(), TEXT("Movies"), IntroVideoFileName));
+#endif
+
+	// Find the first path that exists
+	bool bFoundVideo = false;
+	for (const FString& Path : PossiblePaths)
+	{
+		FString FullPath = FPaths::ConvertRelativePathToFull(Path);
+		UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuPlayerController] Checking video path: %s"), *FullPath);
+		if (FPaths::FileExists(FullPath))
+		{
+			VideoPath = FullPath;
+			bFoundVideo = true;
+			UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuPlayerController] Found video at: %s"), *VideoPath);
+			break;
+		}
+	}
+
+	if (!bFoundVideo)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOMainMenuPlayerController] Video file not found in any searched location"));
+		// Log all searched paths for debugging
+		for (const FString& Path : PossiblePaths)
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOMainMenuPlayerController]   Searched: %s"), *FPaths::ConvertRelativePathToFull(Path));
+		}
+		return nullptr;
+	}
+
+	// Create the FileMediaSource
+	RuntimeMediaSource = NewObject<UFileMediaSource>(this);
+	if (UFileMediaSource* FileSource = Cast<UFileMediaSource>(RuntimeMediaSource))
+	{
+		FileSource->SetFilePath(VideoPath);
+		UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuPlayerController] Created runtime FileMediaSource: %s"), *VideoPath);
+	}
+
+	return RuntimeMediaSource;
 }
 
 void AMOMainMenuPlayerController::HandleMediaOpened(FString OpenedUrl)
 {
 	UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuPlayerController] Media opened: %s"), *OpenedUrl);
+
+	// Clear the fallback timer since media opened successfully
+	GetWorldTimerManager().ClearTimer(VideoFallbackTimerHandle);
 
 	if (MediaPlayer)
 	{

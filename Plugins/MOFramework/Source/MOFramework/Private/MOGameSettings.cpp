@@ -58,6 +58,9 @@ void UMOGameSettings::SetToDefaults()
 	CameraSensitivity = 1.0f;
 	bInvertYAxis = false;
 	bEnableCameraShake = true;
+
+	// Key Bindings - Note: We don't clear custom bindings on SetToDefaults
+	// Use ClearAllCustomBindings() explicitly if needed
 }
 
 void UMOGameSettings::ApplyMOSettings()
@@ -71,9 +74,32 @@ void UMOGameSettings::ApplyMOSettings()
 
 void UMOGameSettings::ApplyAudioSettings()
 {
-	// Audio settings would typically be applied via Sound Mix or Audio Component volumes
-	// For now, just log the values - actual implementation depends on your audio setup
-	UE_LOG(LogMOFramework, Log, TEXT("[MOGameSettings] Audio - Master: %.2f, Music: %.2f, SFX: %.2f, Ambient: %.2f"),
+	// Get audio device to set master volume
+	if (FAudioDeviceHandle AudioDevice = GEngine ? GEngine->GetMainAudioDevice() : FAudioDeviceHandle())
+	{
+		// Set transient master volume (affects all audio output)
+		// This multiplies with all other volume settings
+		AudioDevice->SetTransientPrimaryVolume(MasterVolume);
+	}
+
+	// For Sound Class volumes, use the gameplay statics approach if you have sound classes set up.
+	// Create Sound Classes in content (SC_Music, SC_SFX, SC_Ambient) and assign them to sounds.
+	// Then load and apply mix overrides:
+	//
+	// Example setup (would require assets to be created):
+	// USoundClass* MusicClass = LoadObject<USoundClass>(nullptr, TEXT("/Game/Audio/SoundClasses/SC_Music.SC_Music"));
+	// USoundClass* SFXClass = LoadObject<USoundClass>(nullptr, TEXT("/Game/Audio/SoundClasses/SC_SFX.SC_SFX"));
+	// USoundClass* AmbientClass = LoadObject<USoundClass>(nullptr, TEXT("/Game/Audio/SoundClasses/SC_Ambient.SC_Ambient"));
+	//
+	// if (MusicClass)
+	// {
+	//     UGameplayStatics::SetSoundMixClassOverride(GEngine->GetWorld(), nullptr, MusicClass, MusicVolume, 1.0f, 0.0f, true);
+	// }
+	//
+	// For now, we rely on the master volume and individual sounds using audio components can check these values.
+	// Blueprint audio components can read MusicVolume, SFXVolume, AmbientVolume and apply them manually.
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOGameSettings] Audio applied - Master: %.2f, Music: %.2f, SFX: %.2f, Ambient: %.2f"),
 		MasterVolume, MusicVolume, SFXVolume, AmbientVolume);
 }
 
@@ -107,4 +133,67 @@ void UMOGameSettings::ResetIntroPlayback()
 	bHasCompletedFirstRun = false;
 	SaveSettings();
 	UE_LOG(LogMOFramework, Log, TEXT("[MOGameSettings] Intro playback reset - will play on next launch"));
+}
+
+void UMOGameSettings::MarkReturningFromGameplay()
+{
+	bPlayIntro = false;
+	UE_LOG(LogMOFramework, Log, TEXT("[MOGameSettings] Marked returning from gameplay - intro will NOT play"));
+}
+
+// ============================================================================
+// KEY BINDINGS
+// ============================================================================
+
+const FMOKeyBindingEntry* UMOGameSettings::FindCustomBinding(FName ActionId, int32 SlotIndex) const
+{
+	for (const FMOKeyBindingEntry& Entry : CustomKeyBindings)
+	{
+		if (Entry.ActionId == ActionId && Entry.SlotIndex == SlotIndex)
+		{
+			return &Entry;
+		}
+	}
+	return nullptr;
+}
+
+void UMOGameSettings::SetCustomBinding(FName ActionId, FKey NewKey, int32 SlotIndex)
+{
+	// Check if binding already exists
+	for (FMOKeyBindingEntry& Entry : CustomKeyBindings)
+	{
+		if (Entry.ActionId == ActionId && Entry.SlotIndex == SlotIndex)
+		{
+			Entry.OverrideKey = NewKey;
+			UE_LOG(LogMOFramework, Log, TEXT("[MOGameSettings] Updated key binding: %s -> %s"),
+				*ActionId.ToString(), *NewKey.ToString());
+			return;
+		}
+	}
+
+	// Add new binding
+	FMOKeyBindingEntry NewEntry(ActionId, NewKey, SlotIndex);
+	CustomKeyBindings.Add(NewEntry);
+	UE_LOG(LogMOFramework, Log, TEXT("[MOGameSettings] Added new key binding: %s -> %s"),
+		*ActionId.ToString(), *NewKey.ToString());
+}
+
+void UMOGameSettings::RemoveCustomBinding(FName ActionId, int32 SlotIndex)
+{
+	const int32 RemovedCount = CustomKeyBindings.RemoveAll([ActionId, SlotIndex](const FMOKeyBindingEntry& Entry)
+	{
+		return Entry.ActionId == ActionId && Entry.SlotIndex == SlotIndex;
+	});
+
+	if (RemovedCount > 0)
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOGameSettings] Removed custom binding for: %s"), *ActionId.ToString());
+	}
+}
+
+void UMOGameSettings::ClearAllCustomBindings()
+{
+	const int32 Count = CustomKeyBindings.Num();
+	CustomKeyBindings.Empty();
+	UE_LOG(LogMOFramework, Log, TEXT("[MOGameSettings] Cleared %d custom key bindings"), Count);
 }

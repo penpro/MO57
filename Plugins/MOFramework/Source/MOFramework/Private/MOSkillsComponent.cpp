@@ -201,3 +201,27 @@ void UMOSkillsComponent::ProcessLevelUps(FMOSkillProgress& Progress, const FMOSk
 			*Progress.SkillId.ToString(), OldLevel, Progress.Level);
 	}
 }
+
+// ============================================================================
+// SAVE/LOAD
+// ============================================================================
+
+void UMOSkillsComponent::BuildSaveData(FMOSkillsSaveData& OutSaveData) const
+{
+	OutSaveData.Skills = Skills;
+}
+
+bool UMOSkillsComponent::ApplySaveData(const FMOSkillsSaveData& InSaveData)
+{
+	AActor* Owner = GetOwner();
+	if (!Owner || !Owner->HasAuthority())
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOSkillsComponent] ApplySaveData called without authority"));
+		return false;
+	}
+
+	Skills = InSaveData.Skills;
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOSkillsComponent] Applied save data with %d skills"), Skills.Num());
+	return true;
+}

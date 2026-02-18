@@ -115,15 +115,6 @@ bool FMOPCGElevationBandsElement::ExecuteInternal(FPCGContext* Context) const
 		return true;
 	}
 
-	// Log band configuration for debugging (use Warning to ensure visibility)
-	UE_LOG(LogMOFramework, Warning, TEXT("[MOPCGElevationBands] === EXECUTING with %d bands, SeaLevelZ=%.1f ==="), NumBands, Settings->SeaLevelZ);
-	for (int32 i = 0; i < NumBands; ++i)
-	{
-		const FMOPCGElevationBand& Band = Settings->Bands[i];
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOPCGElevationBands] Band %d '%s': Height %.1f to %.1f, Falloff bottom=%.1f top=%.1f"),
-			i, *Band.BandName.ToString(), Band.MinHeight, Band.MaxHeight, Band.BottomFalloff, Band.TopFalloff);
-	}
-
 	// Cache sea level offset
 	const float SeaLevelZ = Settings->SeaLevelZ;
 
@@ -165,33 +156,6 @@ bool FMOPCGElevationBandsElement::ExecuteInternal(FPCGContext* Context) const
 			BandPoints[BandIdx]->Reserve(InputPoints.Num() / NumBands); // Rough estimate
 		}
 
-		// Debug: log height range of input points (use Warning for visibility)
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOPCGElevationBands] Processing %d input points"), InputPoints.Num());
-		if (InputPoints.Num() > 0 && InputPoints.Num() <= 10)
-		{
-			// Log each point if there are only a few
-			for (int32 i = 0; i < InputPoints.Num(); ++i)
-			{
-				FVector Pos = InputPoints[i].Transform.GetLocation();
-				float RelativeZ = Pos.Z - SeaLevelZ;
-				UE_LOG(LogMOFramework, Warning, TEXT("[MOPCGElevationBands] Point %d: WorldZ=%.1f, RelativeZ=%.1f"),
-					i, Pos.Z, RelativeZ);
-			}
-		}
-		else if (InputPoints.Num() > 10)
-		{
-			float MinZ = TNumericLimits<float>::Max();
-			float MaxZ = TNumericLimits<float>::Lowest();
-			for (int32 i = 0; i < FMath::Min(InputPoints.Num(), 100); ++i)
-			{
-				float Z = InputPoints[i].Transform.GetLocation().Z - SeaLevelZ;
-				MinZ = FMath::Min(MinZ, Z);
-				MaxZ = FMath::Max(MaxZ, Z);
-			}
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOPCGElevationBands] Relative height range: %.1f to %.1f (sampled %d points)"),
-				MinZ, MaxZ, FMath::Min(InputPoints.Num(), 100));
-		}
-
 		// Process each input point
 		for (const FPCGPoint& InputPoint : InputPoints)
 		{
@@ -229,10 +193,6 @@ bool FMOPCGElevationBandsElement::ExecuteInternal(FPCGContext* Context) const
 			FPCGTaggedData& Output = Context->OutputData.TaggedData.Add_GetRef(Input);
 			Output.Data = BandOutputs[BandIdx];
 			Output.Pin = MOPCGElevationPins::AllBands[BandIdx];
-
-			UE_LOG(LogMOFramework, Log, TEXT("[MOPCGElevationBands] Band %d (%s): %d points from %d input"),
-				BandIdx, *Settings->Bands[BandIdx].BandName.ToString(),
-				BandPoints[BandIdx]->Num(), InputPoints.Num());
 		}
 	}
 

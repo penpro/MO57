@@ -1,6 +1,7 @@
 #include "MOGameMode.h"
 #include "MOFramework.h"
 #include "MOPCGInteractionSubsystem.h"
+#include "MOPersistenceSubsystem.h"
 #include "MOGameSettings.h"
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
@@ -70,14 +71,37 @@ void AMOGameMode::HandlePendingNewGame()
 	}
 	else if (!Settings->PendingNewGameSlot.IsEmpty())
 	{
-		// Loading existing game - the persistence system will handle this
-		UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Loading existing game from slot: %s"), *Settings->PendingNewGameSlot);
+		// Loading existing game
+		FString SlotToLoad = Settings->PendingNewGameSlot;
+		UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Loading existing game from slot: %s"), *SlotToLoad);
 
-		// Clear the slot name after processing
+		// Clear the slot name after capturing it
 		Settings->PendingNewGameSlot.Empty();
 		Settings->SaveSettings();
 
-		// TODO: Trigger load through persistence subsystem
+		// Load through persistence subsystem
+		UGameInstance* GameInstance = GetGameInstance();
+		if (GameInstance)
+		{
+			UMOPersistenceSubsystem* Persistence = GameInstance->GetSubsystem<UMOPersistenceSubsystem>();
+			if (Persistence)
+			{
+				FMOLoadResult Result = Persistence->LoadWorldFromSlotWithResult(SlotToLoad);
+				if (Result.bSuccess)
+				{
+					UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Save loaded successfully: %d pawns, %d items, %d buildings"),
+						Result.PawnsLoaded, Result.ItemsLoaded, Result.BuildingsLoaded);
+				}
+				else
+				{
+					UE_LOG(LogMOFramework, Error, TEXT("[MOGameMode] Failed to load save: %s"), *Result.ErrorMessage);
+				}
+			}
+			else
+			{
+				UE_LOG(LogMOFramework, Error, TEXT("[MOGameMode] No persistence subsystem found!"));
+			}
+		}
 	}
 }
 

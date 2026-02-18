@@ -328,6 +328,23 @@ bool ApplySaveDataAuthority(const FMOVitalsSaveData& InSaveData);  // Server onl
 
 **Portability Score: 6.5/10** - Good fundamentals, needs abstraction layer work
 
+### Pending Implementation (Blueprint Setup Required)
+
+**Creature Animation Blueprint Setup:**
+The C++ infrastructure for creature activity states is complete, but Blueprint setup is pending:
+
+1. **Deer ABP State Machine** - Add states for: Locomotion, Resting (IdleRest anim), Sleeping (IdleSleep anim), Death
+2. **ABP Variables** - Add: `GroundSpeed` (float), `IsDead` (bool), `IsResting` (bool), `IsSleeping` (bool)
+3. **Blackboard Keys** - Add to creature blackboard: `ActivityState` (enum), `IsDead`, `IsResting`, `IsSleeping`
+4. **Animation Montages** - Create montages for HitReaction and Death, assign to BP_Deer's `HitReactionMontage` and `DeathMontage` properties
+5. **Behavior Tree** - Add `BTService_CreatureActivity` to BT_Prey root, add rest/sleep branches with decorators
+
+**State Machine Transitions:**
+- Locomotion → Resting: `IsResting == true AND GroundSpeed < 10`
+- Locomotion → Sleeping: `IsSleeping == true AND GroundSpeed < 10`
+- Resting/Sleeping → Locomotion: states become false OR `GroundSpeed > 10`
+- Any → Death: `IsDead == true`
+
 ## Planned Plugins
 - **Ultra Dynamic Sky** - Dynamic sky/atmosphere system
 - **Ultra Dynamic Weather** - Weather effects and systems

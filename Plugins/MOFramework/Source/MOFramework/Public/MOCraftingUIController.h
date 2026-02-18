@@ -37,23 +37,23 @@ public:
 	// ==========================================================================
 
 	/** Toggle crafting menu visibility. */
-	UFUNCTION(BlueprintCallable, Category="MO|UI|Crafting")
+	UFUNCTION(BlueprintCallable, Category="MO|Crafting")
 	void ToggleCraftingMenu();
 
 	/** Open the crafting menu. */
-	UFUNCTION(BlueprintCallable, Category="MO|UI|Crafting")
+	UFUNCTION(BlueprintCallable, Category="MO|Crafting")
 	void OpenCraftingMenu();
 
 	/** Close the crafting menu. */
-	UFUNCTION(BlueprintCallable, Category="MO|UI|Crafting")
+	UFUNCTION(BlueprintCallable, Category="MO|Crafting")
 	void CloseCraftingMenu();
 
 	/** Check if crafting menu is open. */
-	UFUNCTION(BlueprintPure, Category="MO|UI|Crafting")
+	UFUNCTION(BlueprintPure, Category="MO|Crafting")
 	bool IsCraftingMenuOpen() const;
 
 	/** Get the crafting menu widget (may be null if not open). */
-	UFUNCTION(BlueprintPure, Category="MO|UI|Crafting")
+	UFUNCTION(BlueprintPure, Category="MO|Crafting")
 	UMOCraftingMenu* GetCraftingMenu() const;
 
 	// ==========================================================================
@@ -61,15 +61,15 @@ public:
 	// ==========================================================================
 
 	/** Show the station context menu for a crafting station. */
-	UFUNCTION(BlueprintCallable, Category="MO|UI|CraftingStation")
+	UFUNCTION(BlueprintCallable, Category="MO|Crafting|Station")
 	void ShowStationContextMenu(AActor* StationActor, FVector WorldPosition);
 
 	/** Hide the station context menu. */
-	UFUNCTION(BlueprintCallable, Category="MO|UI|CraftingStation")
+	UFUNCTION(BlueprintCallable, Category="MO|Crafting|Station")
 	void HideStationContextMenu();
 
 	/** Check if station context menu is open. */
-	UFUNCTION(BlueprintPure, Category="MO|UI|CraftingStation")
+	UFUNCTION(BlueprintPure, Category="MO|Crafting|Station")
 	bool IsStationContextMenuOpen() const;
 
 	// ==========================================================================
@@ -77,15 +77,15 @@ public:
 	// ==========================================================================
 
 	/** Show the keep-on-harvest context menu for an ISM/HISM target. */
-	UFUNCTION(BlueprintCallable, Category="MO|UI|Harvest")
+	UFUNCTION(BlueprintCallable, Category="MO|Crafting|Harvest")
 	void ShowKeepOnHarvestContextMenu(const FMOInteractionTarget& Target);
 
 	/** Hide the keep-on-harvest context menu. */
-	UFUNCTION(BlueprintCallable, Category="MO|UI|Harvest")
+	UFUNCTION(BlueprintCallable, Category="MO|Crafting|Harvest")
 	void HideKeepOnHarvestContextMenu();
 
 	/** Check if keep-on-harvest context menu is open. */
-	UFUNCTION(BlueprintPure, Category="MO|UI|Harvest")
+	UFUNCTION(BlueprintPure, Category="MO|Crafting|Harvest")
 	bool IsKeepOnHarvestContextMenuOpen() const;
 
 	// ==========================================================================
@@ -93,15 +93,15 @@ public:
 	// ==========================================================================
 
 	/** Start a harvest operation on the current target. */
-	UFUNCTION(BlueprintCallable, Category="MO|UI|Harvest")
+	UFUNCTION(BlueprintCallable, Category="MO|Crafting|Harvest")
 	void StartHarvestOperation(FName RecipeId);
 
 	/** Cancel any active harvest operation. */
-	UFUNCTION(BlueprintCallable, Category="MO|UI|Harvest")
+	UFUNCTION(BlueprintCallable, Category="MO|Crafting|Harvest")
 	void CancelHarvestOperation();
 
 	/** Check if a harvest operation is in progress. */
-	UFUNCTION(BlueprintPure, Category="MO|UI|Harvest")
+	UFUNCTION(BlueprintPure, Category="MO|Crafting|Harvest")
 	bool IsHarvestInProgress() const;
 
 protected:
@@ -111,10 +111,10 @@ protected:
 private:
 	// --- Crafting Menu ---
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Crafting", meta=(AllowPrivateAccess="true"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Crafting", meta=(AllowPrivateAccess="true"))
 	TSubclassOf<UMOCraftingMenu> CraftingMenuClass;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Crafting", meta=(ClampMin="0", AllowPrivateAccess="true"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Crafting", meta=(ClampMin="0", AllowPrivateAccess="true"))
 	int32 CraftingMenuZOrder = 50;
 
 	UPROPERTY(Transient)
@@ -125,10 +125,10 @@ private:
 
 	// --- Station Context Menu ---
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|CraftingStation", meta=(AllowPrivateAccess="true"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Crafting|Station", meta=(AllowPrivateAccess="true"))
 	TSubclassOf<UMOStationContextMenu> StationContextMenuClass;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|CraftingStation", meta=(ClampMin="0", AllowPrivateAccess="true"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Crafting|Station", meta=(ClampMin="0", AllowPrivateAccess="true"))
 	int32 StationContextMenuZOrder = 60;
 
 	UPROPERTY(Transient)
@@ -151,16 +151,16 @@ private:
 
 	// --- KeepOnHarvest Context Menu ---
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Harvest", meta=(AllowPrivateAccess="true"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Crafting|Harvest", meta=(AllowPrivateAccess="true"))
 	TSubclassOf<UMOKeepOnHarvestContextMenu> KeepOnHarvestContextMenuClass;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Harvest", meta=(AllowPrivateAccess="true"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Crafting|Harvest", meta=(AllowPrivateAccess="true"))
 	TSubclassOf<UMOHarvestProgressWidget> HarvestProgressWidgetClass;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Harvest", meta=(ClampMin="0", AllowPrivateAccess="true"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Crafting|Harvest", meta=(ClampMin="0", AllowPrivateAccess="true"))
 	int32 KeepOnHarvestContextMenuZOrder = 60;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Harvest", meta=(ClampMin="0", AllowPrivateAccess="true"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Crafting|Harvest", meta=(ClampMin="0", AllowPrivateAccess="true"))
 	int32 HarvestProgressZOrder = 200;
 
 	UPROPERTY(Transient)

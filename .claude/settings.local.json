@@ -157,7 +157,10 @@
       "Bash(\"D:\\\\UnrealEngine\\\\UE_5.7\\\\Engine\\\\Binaries\\\\DotNET\\\\UnrealBuildTool\\\\UnrealBuildTool.exe\" MO57Editor Win64 Development -Project=\"D:\\\\UEProjects\\\\MO57\\\\MO57.uproject\" -WaitMutex)",
       "Bash(D:UnrealEngineUE_5.7EngineBinariesDotNETUnrealBuildToolUnrealBuildTool.exe MO57Editor Win64 Development -Project=\"D:\\\\UEProjects\\\\MO57\\\\MO57.uproject\" -WaitMutex)",
       "Bash(git reset:*)",
-      "Bash(\"D:\\\\UnrealEngine\\\\UE_5.7\\\\Engine\\\\Binaries\\\\DotNET\\\\UnrealBuildTool\\\\UnrealBuildTool.exe\" MO57Editor Win64 Development -Project=\"D:\\\\UEProjects\\\\MO57\\\\MO57.uproject\" -WaitMutex -FromMsBuild)"
+      "Bash(\"D:\\\\UnrealEngine\\\\UE_5.7\\\\Engine\\\\Binaries\\\\DotNET\\\\UnrealBuildTool\\\\UnrealBuildTool.exe\" MO57Editor Win64 Development -Project=\"D:\\\\UEProjects\\\\MO57\\\\MO57.uproject\" -WaitMutex -FromMsBuild)",
+      "WebFetch(domain:yelzkizi.org)",
+      "WebFetch(domain:zomgmoz.tv)",
+      "WebFetch(domain:medium.com)"
     ]
   }
 }

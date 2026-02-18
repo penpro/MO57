@@ -208,6 +208,9 @@ private:
     void CaptureVoxelSculptData(UWorld* World, UMOWorldSaveGame* SaveObject) const;
     void RestoreVoxelSculptData(UWorld* World, const TArray<FMOVoxelSculptSaveRecord>& SculptData);
 
+    // Setup spectator camera above last possessed pawn on load
+    void SetupSpectatorCameraForLoad(UWorld* World, const UMOWorldSaveGame* SaveData);
+
     void ClearLoadSuppression();
 
     // Generate a unique slot name for auto-save when no slot has been set

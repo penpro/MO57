@@ -33,23 +33,23 @@ public:
 	// ==========================================================================
 
 	/** Toggle building menu visibility. */
-	UFUNCTION(BlueprintCallable, Category="MO|UI|Building")
+	UFUNCTION(BlueprintCallable, Category="MO|Building")
 	void ToggleBuildingMenu();
 
 	/** Open the building menu. */
-	UFUNCTION(BlueprintCallable, Category="MO|UI|Building")
+	UFUNCTION(BlueprintCallable, Category="MO|Building")
 	void OpenBuildingMenu();
 
 	/** Close the building menu. */
-	UFUNCTION(BlueprintCallable, Category="MO|UI|Building")
+	UFUNCTION(BlueprintCallable, Category="MO|Building")
 	void CloseBuildingMenu();
 
 	/** Check if building menu is open. */
-	UFUNCTION(BlueprintPure, Category="MO|UI|Building")
+	UFUNCTION(BlueprintPure, Category="MO|Building")
 	bool IsBuildingMenuOpen() const;
 
 	/** Get the building menu widget (may be null if not open). */
-	UFUNCTION(BlueprintPure, Category="MO|UI|Building")
+	UFUNCTION(BlueprintPure, Category="MO|Building")
 	UMOBuildingMenu* GetBuildingMenu() const;
 
 	// ==========================================================================
@@ -57,15 +57,15 @@ public:
 	// ==========================================================================
 
 	/** Show the build widget for a ghost building. */
-	UFUNCTION(BlueprintCallable, Category="MO|UI|Building")
+	UFUNCTION(BlueprintCallable, Category="MO|Building")
 	void ShowBuildWidget(AMOBuildableActor* Target);
 
 	/** Hide the build widget. */
-	UFUNCTION(BlueprintCallable, Category="MO|UI|Building")
+	UFUNCTION(BlueprintCallable, Category="MO|Building")
 	void HideBuildWidget();
 
 	/** Check if build widget is open. */
-	UFUNCTION(BlueprintPure, Category="MO|UI|Building")
+	UFUNCTION(BlueprintPure, Category="MO|Building")
 	bool IsBuildWidgetOpen() const;
 
 protected:
@@ -75,10 +75,10 @@ protected:
 private:
 	// --- Building Menu ---
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Building", meta=(AllowPrivateAccess="true"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Building", meta=(AllowPrivateAccess="true"))
 	TSubclassOf<UMOBuildingMenu> BuildingMenuClass;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Building", meta=(ClampMin="0", AllowPrivateAccess="true"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Building", meta=(ClampMin="0", AllowPrivateAccess="true"))
 	int32 BuildingMenuZOrder = 50;
 
 	UPROPERTY(Transient)
@@ -92,10 +92,10 @@ private:
 
 	// --- Ghost Context Menu ---
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Building", meta=(AllowPrivateAccess="true"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Building", meta=(AllowPrivateAccess="true"))
 	TSubclassOf<UMOGhostContextMenu> GhostContextMenuClass;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Building", meta=(ClampMin="0", AllowPrivateAccess="true"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Building", meta=(ClampMin="0", AllowPrivateAccess="true"))
 	int32 GhostContextMenuZOrder = 60;
 
 	UPROPERTY(Transient)

@@ -36,23 +36,23 @@ public:
 	// ==========================================================================
 
 	/** Toggle skills panel visibility. */
-	UFUNCTION(BlueprintCallable, Category="MO|UI|Skills")
+	UFUNCTION(BlueprintCallable, Category="MO|Character|Skills")
 	void ToggleSkillsPanel();
 
 	/** Open the skills panel. */
-	UFUNCTION(BlueprintCallable, Category="MO|UI|Skills")
+	UFUNCTION(BlueprintCallable, Category="MO|Character|Skills")
 	void OpenSkillsPanel();
 
 	/** Close the skills panel. */
-	UFUNCTION(BlueprintCallable, Category="MO|UI|Skills")
+	UFUNCTION(BlueprintCallable, Category="MO|Character|Skills")
 	void CloseSkillsPanel();
 
 	/** Check if skills panel is open. */
-	UFUNCTION(BlueprintPure, Category="MO|UI|Skills")
+	UFUNCTION(BlueprintPure, Category="MO|Character|Skills")
 	bool IsSkillsPanelOpen() const;
 
 	/** Get the skills panel widget (may be null if not open). */
-	UFUNCTION(BlueprintPure, Category="MO|UI|Skills")
+	UFUNCTION(BlueprintPure, Category="MO|Character|Skills")
 	UMOSkillsPanel* GetSkillsPanel() const;
 
 	// ==========================================================================
@@ -60,23 +60,23 @@ public:
 	// ==========================================================================
 
 	/** Toggle player status panel visibility. */
-	UFUNCTION(BlueprintCallable, Category="MO|UI|Status")
+	UFUNCTION(BlueprintCallable, Category="MO|Character|Status")
 	void TogglePlayerStatus();
 
 	/** Show or hide the player status panel. */
-	UFUNCTION(BlueprintCallable, Category="MO|UI|Status")
+	UFUNCTION(BlueprintCallable, Category="MO|Character|Status")
 	void SetPlayerStatusVisible(bool bVisible);
 
 	/** Check if player status panel is visible. */
-	UFUNCTION(BlueprintPure, Category="MO|UI|Status")
+	UFUNCTION(BlueprintPure, Category="MO|Character|Status")
 	bool IsPlayerStatusVisible() const;
 
 	/** Get the status panel widget (may be null if not created yet). */
-	UFUNCTION(BlueprintPure, Category="MO|UI|Status")
+	UFUNCTION(BlueprintPure, Category="MO|Character|Status")
 	UMOStatusPanel* GetStatusPanel() const;
 
 	/** Rebind the status panel to current pawn's medical components. Call after pawn changes. */
-	UFUNCTION(BlueprintCallable, Category="MO|UI|Status")
+	UFUNCTION(BlueprintCallable, Category="MO|Character|Status")
 	void RebindStatusPanelToCurrentPawn();
 
 	// ==========================================================================
@@ -84,15 +84,15 @@ public:
 	// ==========================================================================
 
 	/** Start inspecting an item. Shows progress widget and grants knowledge on completion. */
-	UFUNCTION(BlueprintCallable, Category="MO|UI|Inspection")
+	UFUNCTION(BlueprintCallable, Category="MO|Character|Inspection")
 	void StartItemInspection(FName ItemDefinitionId, const FGuid& ItemGuid);
 
 	/** Cancel any active inspection. */
-	UFUNCTION(BlueprintCallable, Category="MO|UI|Inspection")
+	UFUNCTION(BlueprintCallable, Category="MO|Character|Inspection")
 	void CancelItemInspection();
 
 	/** Check if an inspection is currently in progress. */
-	UFUNCTION(BlueprintPure, Category="MO|UI|Inspection")
+	UFUNCTION(BlueprintPure, Category="MO|Character|Inspection")
 	bool IsInspectionInProgress() const;
 
 	// ==========================================================================
@@ -112,10 +112,10 @@ protected:
 private:
 	// --- Skills Panel ---
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Skills", meta=(AllowPrivateAccess="true"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Character|Skills", meta=(AllowPrivateAccess="true"))
 	TSubclassOf<UMOSkillsPanel> SkillsPanelClass;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Skills", meta=(ClampMin="0", AllowPrivateAccess="true"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Character|Skills", meta=(ClampMin="0", AllowPrivateAccess="true"))
 	int32 SkillsPanelZOrder = 50;
 
 	UPROPERTY(Transient)
@@ -126,16 +126,16 @@ private:
 
 	// --- Status Panel ---
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Status", meta=(AllowPrivateAccess="true"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Character|Status", meta=(AllowPrivateAccess="true"))
 	TSubclassOf<UMOStatusPanel> StatusPanelClass;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Status", meta=(ClampMin="0", AllowPrivateAccess="true"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Character|Status", meta=(ClampMin="0", AllowPrivateAccess="true"))
 	int32 StatusPanelZOrder = 50;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Status", meta=(AllowPrivateAccess="true"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Character|Status", meta=(AllowPrivateAccess="true"))
 	bool bCreateStatusPanelOnBeginPlay = false;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Status", meta=(AllowPrivateAccess="true"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Character|Status", meta=(AllowPrivateAccess="true"))
 	bool bHideStatusPanelWhenMenuOpen = false;
 
 	UPROPERTY(Transient)
@@ -152,14 +152,14 @@ private:
 
 	// --- Inspection ---
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Inspection", meta=(AllowPrivateAccess="true"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Character|Inspection", meta=(AllowPrivateAccess="true"))
 	TSubclassOf<UMOInspectionProgressWidget> InspectionProgressWidgetClass;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Inspection", meta=(ClampMin="0", AllowPrivateAccess="true"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Character|Inspection", meta=(ClampMin="0", AllowPrivateAccess="true"))
 	int32 InspectionProgressZOrder = 200;
 
 	/** Duration of item inspection in seconds. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Inspection", meta=(ClampMin="1.0", AllowPrivateAccess="true"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Character|Inspection", meta=(ClampMin="1.0", AllowPrivateAccess="true"))
 	float InspectionDuration = 15.0f;
 
 	UPROPERTY(Transient)

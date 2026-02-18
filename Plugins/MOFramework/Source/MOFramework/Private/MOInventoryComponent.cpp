@@ -79,6 +79,7 @@ bool UMOInventoryComponent::AddItemByGuid(const FGuid& ItemGuid, const FName Ite
 
 	EnsureSlotsInitialized();
 
+	// Check if this exact GUID already exists (stacking onto same item)
 	const int32 ExistingIndex = FindEntryIndexByGuid(ItemGuid);
 	if (ExistingIndex != INDEX_NONE)
 	{
@@ -92,31 +93,108 @@ bool UMOInventoryComponent::AddItemByGuid(const FGuid& ItemGuid, const FName Ite
 		return true;
 	}
 
-	FMOInventoryEntry NewEntry;
-	NewEntry.ItemGuid = ItemGuid;
-	NewEntry.ItemDefinitionId = ItemDefinitionId;
-	NewEntry.Quantity = QuantityToAdd;
-
-	// Initialize durability for tools
+	// Get item definition for max stack size
 	FMOItemDefinitionRow ItemDef;
-	if (UMOItemDatabaseSettings::GetItemDefinition(ItemDefinitionId, ItemDef) && ItemDef.bIsTool && ItemDef.MaxDurability > 0)
+	int32 MaxStackSize = 99; // Default fallback
+	bool bIsTool = false;
+	int32 MaxDurability = -1;
+
+	if (UMOItemDatabaseSettings::GetItemDefinition(ItemDefinitionId, ItemDef))
 	{
-		NewEntry.CurrentDurability = ItemDef.MaxDurability;
-	}
-	else
-	{
-		NewEntry.CurrentDurability = -1; // Infinite/not applicable
+		MaxStackSize = ItemDef.MaxStackSize > 0 ? ItemDef.MaxStackSize : 1;
+		bIsTool = ItemDef.bIsTool;
+		MaxDurability = ItemDef.MaxDurability;
 	}
 
-	const int32 NewIndex = Inventory.Entries.Add(NewEntry);
-	Inventory.MarkItemDirty(Inventory.Entries[NewIndex]);
-	BroadcastInventoryChanged();
+	int32 RemainingToAdd = QuantityToAdd;
+	bool bAnyChange = false;
 
-	// Optionally slot into first empty slot.
-	if (TryAutoAssignGuidToEmptySlot(ItemGuid))
+	// First, try to fill existing stacks of the same item type (only for stackable non-tools)
+	// Tools should not stack since they have individual durability
+	if (!bIsTool && MaxStackSize > 1)
 	{
-		MarkSlotItemGuidsDirty();
-		OnSlotsChanged.Broadcast();
+		for (FMOInventoryEntry& Entry : Inventory.Entries)
+		{
+			if (Entry.ItemDefinitionId != ItemDefinitionId)
+			{
+				continue;
+			}
+
+			// Check if this stack has room
+			int32 SpaceInStack = MaxStackSize - Entry.Quantity;
+			if (SpaceInStack <= 0)
+			{
+				continue;
+			}
+
+			// Add as much as we can to this stack
+			int32 ToAddToThisStack = FMath::Min(RemainingToAdd, SpaceInStack);
+			Entry.Quantity += ToAddToThisStack;
+			RemainingToAdd -= ToAddToThisStack;
+
+			Inventory.MarkItemDirty(Entry);
+			bAnyChange = true;
+
+			UE_LOG(LogMOFramework, Log, TEXT("[MOInventory] Stacked %d of %s into existing stack (now %d/%d)"),
+				ToAddToThisStack, *ItemDefinitionId.ToString(), Entry.Quantity, MaxStackSize);
+
+			if (RemainingToAdd <= 0)
+			{
+				break;
+			}
+		}
+	}
+
+	// If there's remaining quantity, create new entry(ies)
+	while (RemainingToAdd > 0)
+	{
+		// Check if we have an empty slot for new entries
+		int32 EmptySlotIndex = INDEX_NONE;
+		bool bHasEmptySlot = bAutoAssignNewItemsToSlots && FindFirstEmptySlot(EmptySlotIndex);
+
+		// For the first new entry, use the provided GUID; subsequent entries get new GUIDs
+		FGuid NewEntryGuid = bAnyChange ? FGuid::NewGuid() : ItemGuid;
+
+		// Make sure this GUID isn't already used
+		if (FindEntryIndexByGuid(NewEntryGuid) != INDEX_NONE)
+		{
+			NewEntryGuid = FGuid::NewGuid();
+		}
+
+		FMOInventoryEntry NewEntry;
+		NewEntry.ItemGuid = NewEntryGuid;
+		NewEntry.ItemDefinitionId = ItemDefinitionId;
+		NewEntry.Quantity = FMath::Min(RemainingToAdd, MaxStackSize);
+		RemainingToAdd -= NewEntry.Quantity;
+
+		// Initialize durability for tools
+		if (bIsTool && MaxDurability > 0)
+		{
+			NewEntry.CurrentDurability = MaxDurability;
+		}
+		else
+		{
+			NewEntry.CurrentDurability = -1; // Infinite/not applicable
+		}
+
+		const int32 NewIndex = Inventory.Entries.Add(NewEntry);
+		Inventory.MarkItemDirty(Inventory.Entries[NewIndex]);
+		bAnyChange = true;
+
+		UE_LOG(LogMOFramework, Log, TEXT("[MOInventory] Created new stack of %s with %d items"),
+			*ItemDefinitionId.ToString(), NewEntry.Quantity);
+
+		// Optionally slot into first empty slot
+		if (bAutoAssignNewItemsToSlots && TryAutoAssignGuidToEmptySlot(NewEntry.ItemGuid))
+		{
+			MarkSlotItemGuidsDirty();
+			OnSlotsChanged.Broadcast();
+		}
+	}
+
+	if (bAnyChange)
+	{
+		BroadcastInventoryChanged();
 	}
 
 	return true;
@@ -475,8 +553,88 @@ bool UMOInventoryComponent::CanAddItem(const FGuid& ItemGuid) const
 		return true;
 	}
 
-	// Otherwise, we need an empty slot for this new item
-	return HasEmptySlot();
+	// If there's an empty slot, we can always add
+	if (HasEmptySlot())
+	{
+		return true;
+	}
+
+	// No empty slots - this check is less useful without knowing the ItemDefinitionId
+	// since we can't check for stackable items. For safety, return false.
+	// The caller should use CanAddItemByDefinitionId for proper stack checking.
+	return false;
+}
+
+bool UMOInventoryComponent::CanAddItemByDefinitionId(FName ItemDefinitionId, int32 Quantity) const
+{
+	if (ItemDefinitionId.IsNone() || Quantity <= 0)
+	{
+		return false;
+	}
+
+	// Get item definition for max stack size
+	FMOItemDefinitionRow ItemDef;
+	int32 MaxStackSize = 99;
+	bool bIsTool = false;
+
+	if (UMOItemDatabaseSettings::GetItemDefinition(ItemDefinitionId, ItemDef))
+	{
+		MaxStackSize = ItemDef.MaxStackSize > 0 ? ItemDef.MaxStackSize : 1;
+		bIsTool = ItemDef.bIsTool;
+	}
+
+	int32 RemainingQuantity = Quantity;
+
+	// Tools don't stack, so check if we have enough empty slots
+	if (bIsTool || MaxStackSize <= 1)
+	{
+		int32 SlotsNeeded = Quantity; // Each tool needs its own slot
+		int32 EmptySlots = 0;
+
+		for (const FGuid& SlotGuid : SlotItemGuids)
+		{
+			if (!SlotGuid.IsValid())
+			{
+				EmptySlots++;
+			}
+		}
+
+		return EmptySlots >= SlotsNeeded;
+	}
+
+	// For stackable items, first check how much room exists in current stacks
+	for (const FMOInventoryEntry& Entry : Inventory.Entries)
+	{
+		if (Entry.ItemDefinitionId != ItemDefinitionId)
+		{
+			continue;
+		}
+
+		int32 SpaceInStack = MaxStackSize - Entry.Quantity;
+		if (SpaceInStack > 0)
+		{
+			RemainingQuantity -= SpaceInStack;
+			if (RemainingQuantity <= 0)
+			{
+				return true; // Fits entirely in existing stacks
+			}
+		}
+	}
+
+	// Calculate how many new slots we need for remaining quantity
+	int32 NewSlotsNeeded = (RemainingQuantity + MaxStackSize - 1) / MaxStackSize; // Ceiling division
+
+	// Count empty slots
+	int32 EmptySlots = 0;
+	for (const FGuid& SlotGuid : SlotItemGuids)
+	{
+		if (!SlotGuid.IsValid())
+		{
+			EmptySlots++;
+		}
+	}
+
+	return EmptySlots >= NewSlotsNeeded;
 }
 
 bool UMOInventoryComponent::TryGetSlotGuid(int32 SlotIndex, FGuid& OutGuid) const

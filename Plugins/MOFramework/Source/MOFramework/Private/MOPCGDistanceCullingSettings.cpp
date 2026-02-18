@@ -105,10 +105,6 @@ bool FMOPCGDistanceCullingElement::ExecuteInternal(FPCGContext* Context) const
 		return true;
 	}
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOPCGDistanceCulling] Reference position: (%.1f, %.1f, %.1f), NearDist=%.1f, FarDist=%.1f"),
-		ReferencePosition.X, ReferencePosition.Y, ReferencePosition.Z,
-		Settings->NearDistance, Settings->FarDistance);
-
 	// Validate distance settings
 	const float NearDistSq = FMath::Square(Settings->NearDistance);
 	const float FarDistSq = FMath::Square(Settings->FarDistance);
@@ -124,35 +120,18 @@ bool FMOPCGDistanceCullingElement::ExecuteInternal(FPCGContext* Context) const
 	int32 TotalNear = 0;
 	int32 TotalFar = 0;
 
-	UE_LOG(LogMOFramework, Warning, TEXT("[MOPCGDistanceCulling] Processing %d input tagged data entries"), Inputs.Num());
-
 	for (const FPCGTaggedData& Input : Inputs)
 	{
 		const UPCGPointData* InputPointData = Cast<UPCGPointData>(Input.Data);
 		if (!InputPointData)
 		{
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOPCGDistanceCulling] Input data is not UPCGPointData, type: %s"),
-				Input.Data ? *Input.Data->GetClass()->GetName() : TEXT("null"));
 			continue;
 		}
 
 		const TArray<FPCGPoint>& InputPoints = InputPointData->GetPoints();
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOPCGDistanceCulling] Input has %d points"), InputPoints.Num());
-
 		if (InputPoints.Num() == 0)
 		{
 			continue;
-		}
-
-		// Log sample point distances
-		if (InputPoints.Num() > 0)
-		{
-			const FVector& FirstPoint = InputPoints[0].Transform.GetLocation();
-			float SampleDist = Settings->bUse2DDistance
-				? FVector::DistXY(FirstPoint, ReferencePosition)
-				: FVector::Dist(FirstPoint, ReferencePosition);
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOPCGDistanceCulling] Sample point at (%.1f, %.1f, %.1f), dist=%.1f, NearDist=%.1f, FarDist=%.1f"),
-				FirstPoint.X, FirstPoint.Y, FirstPoint.Z, SampleDist, Settings->NearDistance, Settings->FarDistance);
 		}
 
 		// Create output point data
@@ -256,8 +235,6 @@ bool FMOPCGDistanceCullingElement::ExecuteInternal(FPCGContext* Context) const
 		TotalFar += FarPoints.Num();
 	}
 
-	UE_LOG(LogMOFramework, Warning, TEXT("[MOPCGDistanceCulling] Split complete: %d near, %d far"), TotalNear, TotalFar);
-
 	return true;
 }
 
@@ -337,8 +314,6 @@ bool FMOPCGDistanceCullingElement::GetExecutionSourcePosition(FPCGContext* Conte
 	{
 		// Use the execution source's transform (PCG component's world location)
 		OutPosition = Context->ExecutionSource->GetExecutionState().GetTransform().GetLocation();
-		UE_LOG(LogMOFramework, Log, TEXT("[MOPCGDistanceCulling] Using execution source position: (%.1f, %.1f, %.1f)"),
-			OutPosition.X, OutPosition.Y, OutPosition.Z);
 		return true;
 	}
 	return false;

@@ -216,15 +216,15 @@ public:
 
 	/** Mapping context for direct pawn control. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Input|Contexts")
-	TSoftObjectPtr<UInputMappingContext> PawnControlContext;
+	TObjectPtr<UInputMappingContext> PawnControlContext;
 
 	/** Mapping context for base building mode. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Input|Contexts")
-	TSoftObjectPtr<UInputMappingContext> BaseBuildingContext;
+	TObjectPtr<UInputMappingContext> BaseBuildingContext;
 
 	/** Mapping context for menu navigation. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Input|Contexts")
-	TSoftObjectPtr<UInputMappingContext> MenuContext;
+	TObjectPtr<UInputMappingContext> MenuContext;
 
 	/** Priority for pawn control context (higher = takes precedence). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Input|Contexts")
@@ -244,19 +244,19 @@ public:
 
 	/** Move action (WASD). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Input|Actions|Movement")
-	TSoftObjectPtr<UInputAction> MoveAction;
+	TObjectPtr<UInputAction> MoveAction;
 
 	/** Look action (mouse/gamepad). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Input|Actions|Movement")
-	TSoftObjectPtr<UInputAction> LookAction;
+	TObjectPtr<UInputAction> LookAction;
 
 	/** Jump action. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Input|Actions|Movement")
-	TSoftObjectPtr<UInputAction> JumpAction;
+	TObjectPtr<UInputAction> JumpAction;
 
 	/** Hustle action (tap=toggle jog, hold=sprint). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Input|Actions|Movement")
-	TSoftObjectPtr<UInputAction> HustleAction;
+	TObjectPtr<UInputAction> HustleAction;
 
 	/** Time threshold for hold vs tap (seconds). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Input|Actions|Movement")
@@ -264,7 +264,7 @@ public:
 
 	/** Crouch action. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Input|Actions|Movement")
-	TSoftObjectPtr<UInputAction> CrouchAction;
+	TObjectPtr<UInputAction> CrouchAction;
 
 	// ============================================================================
 	// INPUT ACTIONS - ACTIONS
@@ -272,15 +272,15 @@ public:
 
 	/** Interact action (E key). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Input|Actions|Actions")
-	TSoftObjectPtr<UInputAction> InteractAction;
+	TObjectPtr<UInputAction> InteractAction;
 
 	/** Primary action (left mouse). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Input|Actions|Actions")
-	TSoftObjectPtr<UInputAction> PrimaryAction;
+	TObjectPtr<UInputAction> PrimaryAction;
 
 	/** Secondary action (right mouse). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Input|Actions|Actions")
-	TSoftObjectPtr<UInputAction> SecondaryAction;
+	TObjectPtr<UInputAction> SecondaryAction;
 
 	// ============================================================================
 	// INPUT ACTIONS - UI/SYSTEM
@@ -288,31 +288,31 @@ public:
 
 	/** Toggle inventory action. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Input|Actions|UI")
-	TSoftObjectPtr<UInputAction> InventoryAction;
+	TObjectPtr<UInputAction> InventoryAction;
 
 	/** Toggle crafting menu action. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Input|Actions|UI")
-	TSoftObjectPtr<UInputAction> CraftAction;
+	TObjectPtr<UInputAction> CraftAction;
 
 	/** Toggle player status HUD action. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Input|Actions|UI")
-	TSoftObjectPtr<UInputAction> PlayerStatusAction;
+	TObjectPtr<UInputAction> PlayerStatusAction;
 
 	/** Toggle skills panel action. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Input|Actions|UI")
-	TSoftObjectPtr<UInputAction> SkillsAction;
+	TObjectPtr<UInputAction> SkillsAction;
 
 	/** Toggle building menu / placement mode action. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Input|Actions|UI")
-	TSoftObjectPtr<UInputAction> BuildAction;
+	TObjectPtr<UInputAction> BuildAction;
 
 	/** Pause/menu action. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Input|Actions|UI")
-	TSoftObjectPtr<UInputAction> PauseAction;
+	TObjectPtr<UInputAction> PauseAction;
 
 	/** Possess nearest pawn action. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Input|Actions|System")
-	TSoftObjectPtr<UInputAction> PossessAction;
+	TObjectPtr<UInputAction> PossessAction;
 
 	// ============================================================================
 	// INPUT ACTIONS - BUILDING
@@ -320,19 +320,19 @@ public:
 
 	/** Place building ghost (Left Mouse). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Input|Actions|Building")
-	TSoftObjectPtr<UInputAction> PlaceBuildingAction;
+	TObjectPtr<UInputAction> PlaceBuildingAction;
 
 	/** Rotate building ghost clockwise (Q). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Input|Actions|Building")
-	TSoftObjectPtr<UInputAction> RotateBuildingCWAction;
+	TObjectPtr<UInputAction> RotateBuildingCWAction;
 
 	/** Rotate building ghost counter-clockwise (E). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Input|Actions|Building")
-	TSoftObjectPtr<UInputAction> RotateBuildingCCWAction;
+	TObjectPtr<UInputAction> RotateBuildingCCWAction;
 
 	/** Cancel building placement (Escape/RMB). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Input|Actions|Building")
-	TSoftObjectPtr<UInputAction> CancelPlacementAction;
+	TObjectPtr<UInputAction> CancelPlacementAction;
 
 	/** Rotation increment per keypress in degrees. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Input|Actions|Building")
@@ -344,11 +344,11 @@ public:
 
 	/** Toggle terraforming mode action. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Input|Actions|Terraforming")
-	TSoftObjectPtr<UInputAction> TerraformToggleAction;
+	TObjectPtr<UInputAction> TerraformToggleAction;
 
 	/** Cycle terraforming tool action. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Input|Actions|Terraforming")
-	TSoftObjectPtr<UInputAction> TerraformCycleToolAction;
+	TObjectPtr<UInputAction> TerraformCycleToolAction;
 
 	// ============================================================================
 	// DEBUG
@@ -407,6 +407,66 @@ public:
 	EMOInputContext GetCurrentInputContext() const { return CurrentInputContext; }
 
 	// ============================================================================
+	// SPECTATOR / CAMERA CONTROL
+	// ============================================================================
+
+	/**
+	 * Position the spectator camera above a world location, looking down.
+	 * @param TargetLocation - The X,Y location to position above
+	 * @param Height - Height above the target location
+	 * @param PitchAngle - Pitch angle in degrees (negative = looking down)
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Spectator")
+	void SetSpectatorViewAboveLocation(FVector TargetLocation, float Height = 2000.0f, float PitchAngle = -60.0f);
+
+	/**
+	 * Get the GUID of the last possessed pawn (for save/load).
+	 */
+	UFUNCTION(BlueprintPure, Category="MO|Possession")
+	FGuid GetLastPossessedPawnGuid() const { return LastPossessedPawnGuid; }
+
+	/**
+	 * Set the last possessed pawn GUID (called by persistence on load).
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Possession")
+	void SetLastPossessedPawnGuid(const FGuid& InGuid) { LastPossessedPawnGuid = InGuid; }
+
+	/**
+	 * Enable or disable spectator movement controls.
+	 * When disabled, camera remains fixed until a pawn is possessed.
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Spectator")
+	void SetSpectatorInputEnabled(bool bEnabled);
+
+	/**
+	 * Check if spectator input is enabled.
+	 */
+	UFUNCTION(BlueprintPure, Category="MO|Spectator")
+	bool IsSpectatorInputEnabled() const { return bSpectatorInputEnabled; }
+
+	/**
+	 * Check if there's a pending spectator view to apply.
+	 */
+	UFUNCTION(BlueprintPure, Category="MO|Spectator")
+	bool HasPendingSpectatorView() const { return bHasPendingSpectatorView; }
+
+	/**
+	 * Get the pending spectator view location and rotation.
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Spectator")
+	void GetPendingSpectatorView(FVector& OutLocation, FRotator& OutRotation) const
+	{
+		OutLocation = PendingSpectatorLocation;
+		OutRotation = PendingSpectatorRotation;
+	}
+
+	/**
+	 * Clear the pending spectator view flag (called after applying).
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Spectator")
+	void ClearPendingSpectatorView() { bHasPendingSpectatorView = false; }
+
+	// ============================================================================
 	// COMPONENT ACCESSORS
 	// ============================================================================
 
@@ -445,6 +505,7 @@ protected:
 	virtual void SetupInputComponent() override;
 	virtual void OnPossess(APawn* InPawn) override;
 	virtual void OnUnPossess() override;
+	virtual void PlayerTick(float DeltaTime) override;
 
 	// ============================================================================
 	// INPUT HANDLERS - MOVEMENT
@@ -585,4 +646,19 @@ private:
 
 	/** Whether we've already started sprinting from holding hustle. */
 	bool bHustleHoldTriggered = false;
+
+	/** GUID of the last possessed pawn (for save/load camera positioning). */
+	FGuid LastPossessedPawnGuid;
+
+	/** Whether spectator input (movement/look) is enabled when no pawn is possessed. */
+	bool bSpectatorInputEnabled = false;
+
+	/** Pending spectator view location (applied when spectator pawn spawns). */
+	FVector PendingSpectatorLocation = FVector::ZeroVector;
+
+	/** Pending spectator view rotation (applied when spectator pawn spawns). */
+	FRotator PendingSpectatorRotation = FRotator::ZeroRotator;
+
+	/** Whether we have a pending spectator view to apply. */
+	bool bHasPendingSpectatorView = false;
 };

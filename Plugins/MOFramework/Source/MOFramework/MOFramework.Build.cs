@@ -39,7 +39,8 @@ public class MOFramework : ModuleRules
 				"Voxel",                    // Voxel plugin - terrain sculpting
 				"VoxelCore",                // Voxel plugin - core types
 				"VoxelPCG",                 // Voxel plugin - PCG point nodes
-				"ProceduralMeshComponent"   // Water mesh generation
+				"ProceduralMeshComponent",  // Water mesh generation
+				"HairStrandsCore"           // MetaHuman groom/hair components
 			}
 			);
 			

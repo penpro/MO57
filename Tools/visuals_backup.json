@@ -1,0 +1,802 @@
+{
+  "Apple01": {
+    "UI": "(IconSmall=\"/MOFramework/Items/Apple01/Apple01Icon.Apple01Icon\",IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=\"/MOFramework/Items/Apple01/Medium/tgzoahbpa_tier_2/StaticMeshes/tgzoahbpa_tier_2.tgzoahbpa_tier_2\",MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "Berries01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "EdibleRoot01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "Mushroom01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "Nuts01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "Acorns01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "BirdEgg01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "Stick01": {
+    "UI": "(IconSmall=\"/MOFramework/Items/Stick01/Stick01Icon.Stick01Icon\",IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=\"/MOFramework/Items/Stick01/Medium/uehjfcofa_tier_2/StaticMeshes/uehjfcofa_tier_2.uehjfcofa_tier_2\",MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "FallenBranch01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "StraightBranch01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "Bark01": {
+    "UI": "(IconSmall=\"/MOFramework/Items/Bark01/Bark01Icon.Bark01Icon\",IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=\"/MOFramework/Items/Bark01/Medium/wjhiecy_tier_2/StaticMeshes/wjhiecy_tier_2.wjhiecy_tier_2\",MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "PlantFiber01": {
+    "UI": "(IconSmall=\"/MOFramework/Items/PlantFiber01/PlantFiber01Icon.PlantFiber01Icon\",IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=\"/MOFramework/Items/PlantFiber01/Medium/vdknafgha_tier_2/StaticMeshes/SM_vdknafgha_VarA.SM_vdknafgha_VarA\",MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "RiverCobble01": {
+    "UI": "(IconSmall=\"/MOFramework/Items/RiverCobble01/RiverCobble01Icon.RiverCobble01Icon\",IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=\"/MOFramework/Items/RiverCobble01/Medium/wd5mbhd_tier_2/StaticMeshes/wd5mbhd_tier_2.wd5mbhd_tier_2\",MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "FlintNodule01": {
+    "UI": "(IconSmall=\"/MOFramework/Items/FlintNodule01/FlintNodule01Icon.FlintNodule01Icon\",IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "ChertNodule01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "QuartziteCobble01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "Hammerstone01": {
+    "UI": "(IconSmall=\"/MOFramework/Items/Hammerstone01/Hammerstone01Icon.Hammerstone01Icon\",IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=\"/MOFramework/Items/Hammerstone01/Medium/wc2hbfr_tier_2/StaticMeshes/wc2hbfr_tier_2.wc2hbfr_tier_2\",MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "OldowanChopper01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "SharpFlake01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "SimpleScraper01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "DiggingStick01": {
+    "UI": "(IconSmall=\"/MOFramework/Items/DiggingStick01/DiggingStick01Icon.DiggingStick01Icon\",IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=\"/MOFramework/Items/DiggingStick01/Medium/SM_xflicih_tier_2/StaticMeshes/SM_xflicih_tier_2.SM_xflicih_tier_2\",MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "CrudeClub01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "ThrowingStone01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "Cordage01": {
+    "UI": "(IconSmall=\"/MOFramework/Items/Cordage01/Cordage01Icon.Cordage01Icon\",IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=\"/MOFramework/Items/Cordage01/Medium/vhnofbds_tier_2/StaticMeshes/vhnofbds_tier_2.vhnofbds_tier_2\",MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "RawMeat01": {
+    "UI": "(IconSmall=\"/MOFramework/Items/RawMeat01/RawMeat01Icon.RawMeat01Icon\",IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=\"/MOFramework/Items/RawMeat01/Medium/weukfcwaa_tier_2/StaticMeshes/weukfcwaa_tier_2.weukfcwaa_tier_2\",MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "Bone01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=\"/MOFramework/Items/Bone01/Medium/vd4lejkaa_tier_2/StaticMeshes/vd4lejkaa_tier_2.vd4lejkaa_tier_2\",MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "Sinew01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "AnimalHide01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "DryTinder01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "Firewood01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "HandDrillSpindle01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "Fireboard01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "TinderBundle01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "HandAxe01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "FlintKnife01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "AntlerTine01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "PressureFlaker01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "BoneAwl01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "WoodenSpear01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "FireHardenedSpear01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "CookedMeat01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "RoastedRoot01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "SmokedMeat01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "ScrapedHide01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "SmokeTannedLeather01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "SimplePouch01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "BowDrillKit01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "BoneNeedle01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "Atlatl01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "AtlatlDart01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "SimpleBow01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "StoneArrow01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "FishingSpear01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "BoneHook01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "FishNet01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "FishTrap01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "RawFish01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "CookedFish01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "DriedFish01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "Microlith01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "MicrolithSickle01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "BrainTannedLeather01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "LeatherTunic01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "LeatherTrousers01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "LeatherBoots01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "HarpoonHead01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "DugoutCanoe01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "Paddle01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "GroundStoneAxe01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "HaftedAxe01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "Adze01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "WovenBasket01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "WaterSkin01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "BarkContainer01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "CompositeBow01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "SinewBackedBow01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "FletchedArrow01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "Quiver01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "SnareWire01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "Deadfall01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "CrudePottery01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "CookingPot01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "StorageJar01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "ClayBowl01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "DiggingHoe01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "PlantingStick01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "GrainStore01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "GrindingStone01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "FlatBread01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "Porridge01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "SpinningWhorl01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "LinenThread01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "WoolThread01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "WovenCloth01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "SimpleLoom01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "ClothTunic01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "NativeCopper01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "CopperAwl01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "CopperBead01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "BarkTannedLeather01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "LeatherArmor01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "WoodenShield01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "OilLamp01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "CopperOre01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "TinOre01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "Charcoal01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "Bellows01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "SmeltingCrucible01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "BronzeIngot01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "BronzeKnife01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "BronzeAxe01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "BronzeSword01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "BronzeSpearhead01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "BronzeArrowhead01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "BronzeHelmet01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "BronzeShield01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "PottersWheel01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "WheelThrownPot01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "Chariot01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "SpokedWheel01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "ScaleArmor01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "BronzeGreaves01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "GlazedPottery01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "GlassBeads01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "BronzeSaw01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "BronzeChisel01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "WritingTablet01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "Stylus01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "IronOre01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "IronBloom01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "WroughtIron01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "IronKnife01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "IronAxe01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "IronSword01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "IronSpearhead01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "SteelIngot01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "SteelSword01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "ChainMail01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "IronHelmet01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "IronShield01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "PlowShare01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "IronNails01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "Horseshoe01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "Anvil01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "Tongs01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "SmithHammer01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "Stone01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "Flint01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "Branch01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "Hardwood01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "Softwood01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "LargeLog01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "Plank01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "BowStave01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "ArrowShaft01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "Clay01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "Sand01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "Sandstone01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "Greenstone01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "Resin01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "BirchBark01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "OakBark01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "DriedGrass01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "Reeds01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "FlaxFiber01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "WoolFleece01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "Feathers01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "Horn01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "AnimalBrain01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "AnimalBladder01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "HideGlue01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "Water01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "SodaAsh01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "MineralGlaze01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "CrudeChopper01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "StoneScraper01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "FlintFlake01": {
+    "UI": "(IconSmall=\"/MOFramework/Items/FlintFlake01/FlintFlake01Icon.FlintFlake01Icon\",IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "RawHide01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "TannedLeather01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "Stick02": {
+    "UI": "(IconSmall=\"/MOFramework/Items/Stick02/Stick02Icon.Stick02Icon\",IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=\"/MOFramework/Items/Stick02/Medium/SM_xfekfgv_tier_2/StaticMeshes/SM_xfekfgv_tier_2.SM_xfekfgv_tier_2\",MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "FireDrill01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "BowDrill01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "FlintSpear01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "FlintArrow01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "FishSpear01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "PolishedAxe01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "DeadfallTrap01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "Snare01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "StoneHoe01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "StoneSickle01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "DropSpindle01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "CopperIngot01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "TinIngot01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "BronzeSpear01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "RawGlass01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "IronSpear01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "IronArrowhead01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "IronArrow01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "SmithTongs01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  },
+  "IronAnvil01": {
+    "UI": "(IconSmall=None,IconLarge=None,Tint=(R=1.000000,G=1.000000,B=1.000000,A=1.000000))",
+    "WorldVisual": "(WorldActorClass=None,StaticMesh=None,MaterialOverride=None,RelativeTransform=(Rotation=(X=0.000000,Y=0.000000,Z=0.000000,W=1.000000),Translation=(X=0.000000,Y=0.000000,Z=0.000000),Scale3D=(X=1.000000,Y=1.000000,Z=1.000000)),bSimulatePhysics=False)"
+  }
+}

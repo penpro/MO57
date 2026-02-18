@@ -26,8 +26,11 @@
 #include "MOModeIndicatorWidget.h"
 #include "MOItemDatabaseSettings.h"
 #include "MOItemDefinitionRow.h"
+#include "MOGameSettings.h"
 #include "Components/StaticMeshComponent.h"
+#include "NavigationInvokerComponent.h"
 #include "Engine/DataTable.h"
+#include "Perception/AISense_Hearing.h"
 
 AMOCharacter::AMOCharacter()
 {
@@ -89,6 +92,10 @@ AMOCharacter::AMOCharacter()
 	// MO Components - Equipment
 	EquipmentComponent = CreateDefaultSubobject<UMOEquipmentComponent>(TEXT("EquipmentComponent"));
 
+	// Navigation invoker - tells voxel world to generate navmesh around this character
+	NavigationInvoker = CreateDefaultSubobject<UNavigationInvokerComponent>(TEXT("NavigationInvoker"));
+	NavigationInvoker->SetGenerationRadii(3000.f, 5000.f); // Generate within 30m, remove beyond 50m
+
 	// Held item mesh components (attached to hand sockets)
 	LeftHandMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("LeftHandMesh"));
 	LeftHandMesh->SetupAttachment(GetMesh(), LeftHandSocketName);
@@ -145,6 +152,9 @@ void AMOCharacter::BeginPlay()
 		GetCharacterMovement()->MaxWalkSpeed = WalkSpeed;
 	}
 
+	// Apply FOV and sensitivity from game settings
+	ApplyGameSettings();
+
 	// Start movement physiology tracking
 	StartMovementPhysiologyTracking();
 
@@ -185,6 +195,39 @@ void AMOCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	Super::EndPlay(EndPlayReason);
 }
 
+void AMOCharacter::Tick(float DeltaTime)
+{
+	Super::Tick(DeltaTime);
+
+	// Generate movement noise for AI perception
+	if (bGeneratesMovementNoise)
+	{
+		TimeSinceLastNoise += DeltaTime;
+
+		// Check if character is moving
+		const float Speed = GetVelocity().Size();
+		if (Speed > 10.f && TimeSinceLastNoise >= NoiseInterval)
+		{
+			TimeSinceLastNoise = 0.f;
+
+			// Determine loudness based on movement mode
+			float Loudness = WalkingNoiseLoudness;
+			if (bIsSprinting)
+			{
+				Loudness = SprintingNoiseLoudness;
+			}
+			else if (CurrentMovementMode == EMOMovementMode::Jogging)
+			{
+				Loudness = JoggingNoiseLoudness;
+			}
+
+			// Report noise event to AI perception system
+			// MaxRange of 0 means use the loudness to determine range
+			MakeNoise(Loudness, this, GetActorLocation());
+		}
+	}
+}
+
 // ============================================================================
 // IMOControllableInterface IMPLEMENTATION
 // ============================================================================
@@ -218,8 +261,21 @@ void AMOCharacter::RequestLook_Implementation(FVector2D LookInput)
 
 	if (Controller)
 	{
-		AddControllerYawInput(LookInput.X * LookSensitivity);
-		AddControllerPitchInput(LookInput.Y * LookSensitivity);
+		// Apply sensitivity
+		float YawInput = LookInput.X * LookSensitivity;
+		float PitchInput = LookInput.Y * LookSensitivity;
+
+		// Check InvertY setting
+		if (UMOGameSettings* Settings = UMOGameSettings::GetMOGameSettings())
+		{
+			if (Settings->bInvertYAxis)
+			{
+				PitchInput = -PitchInput;
+			}
+		}
+
+		AddControllerYawInput(YawInput);
+		AddControllerPitchInput(PitchInput);
 	}
 }
 
@@ -381,6 +437,29 @@ void AMOCharacter::DoJumpStart()
 void AMOCharacter::DoJumpEnd()
 {
 	RequestJumpEnd_Implementation();
+}
+
+// ============================================================================
+// GAME SETTINGS
+// ============================================================================
+
+void AMOCharacter::ApplyGameSettings()
+{
+	UMOGameSettings* Settings = UMOGameSettings::GetMOGameSettings();
+	if (!Settings)
+	{
+		return;
+	}
+
+	// Apply FOV to camera
+	if (FollowCamera)
+	{
+		FollowCamera->SetFieldOfView(Settings->FieldOfView);
+		UE_LOG(LogMOFramework, Log, TEXT("[MOCharacter] Applied FOV: %.1f"), Settings->FieldOfView);
+	}
+
+	// Store sensitivity for use in look input
+	LookSensitivity = Settings->CameraSensitivity;
 }
 
 // ============================================================================

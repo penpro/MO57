@@ -16,6 +16,7 @@
 #include "MOIdentityRegistrySubsystem.h"
 #include "MOIdentityComponent.h"
 #include "MOIdentifiableInterface.h"
+#include "MOGameSettings.h"
 
 UMOSystemMenuUIController::UMOSystemMenuUIController()
 {
@@ -683,6 +684,13 @@ void UMOSystemMenuUIController::HandleConfirmationConfirmed()
 		{
 			UIManager->CloseAllMenus();
 		}
+
+		// Mark that we're returning from gameplay so the intro doesn't play
+		if (UMOGameSettings* Settings = UMOGameSettings::GetMOGameSettings())
+		{
+			Settings->MarkReturningFromGameplay();
+		}
+
 		UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] Exiting to main menu: %s"), *MainMenuLevelPath);
 		UGameplayStatics::OpenLevel(this, *MainMenuLevelPath);
 	}
@@ -719,21 +727,27 @@ void UMOSystemMenuUIController::HandleConfirmationConfirmed()
 	else if (PendingConfirmationContext.StartsWith(TEXT("Load:")))
 	{
 		FString SlotName = PendingConfirmationContext.RightChop(5);
-		UGameInstance* GameInstance = UGameplayStatics::GetGameInstance(this);
-		if (GameInstance)
+
+		// Close all menus via UIManager
+		if (UMOUIManagerComponent* UIManager = GetUIManager())
 		{
-			UMOPersistenceSubsystem* Persistence = GameInstance->GetSubsystem<UMOPersistenceSubsystem>();
-			if (Persistence)
-			{
-				// Close all menus via UIManager
-				if (UMOUIManagerComponent* UIManager = GetUIManager())
-				{
-					UIManager->CloseAllMenus();
-				}
-				Persistence->LoadWorldFromSlot(SlotName);
-				UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] Loaded from slot: %s"), *SlotName);
-			}
+			UIManager->CloseAllMenus();
 		}
+
+		// Store the pending load slot in settings (same approach as main menu loading)
+		// This ensures a clean level reload with proper state reset
+		UMOGameSettings* Settings = UMOGameSettings::GetMOGameSettings();
+		if (Settings)
+		{
+			Settings->bPendingNewGame = false;  // Not a new game, it's a load
+			Settings->PendingNewGameSlot = SlotName;  // Reuse field for load slot
+			Settings->SaveSettings();
+		}
+
+		// Reload the gameplay level to get a clean state
+		// The GameMode's BeginPlay will handle loading the save data
+		UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] Reloading level to load save: %s"), *SlotName);
+		UGameplayStatics::OpenLevel(this, *GameplayLevelPath);
 	}
 
 	PendingConfirmationContext.Empty();

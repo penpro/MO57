@@ -11,6 +11,8 @@
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
 
+#include "MOPlayerController.h"
+#include "MOSpectatorPawn.h"
 #include "MOIdentityComponent.h"
 #include "MOIdentityRegistrySubsystem.h"
 #include "MOInventoryComponent.h"
@@ -18,6 +20,12 @@
 #include "MOPersistenceSettings.h"
 #include "MOCraftingQueueComponent.h"
 #include "MORecipeDiscoveryComponent.h"
+#include "MOVitalsComponent.h"
+#include "MOAnatomyComponent.h"
+#include "MOMetabolismComponent.h"
+#include "MOMentalStateComponent.h"
+#include "MOSkillsComponent.h"
+#include "MOEquipmentComponent.h"
 #include "MOBuildableActor.h"
 #include "MOBuildProgressComponent.h"
 #include "MOIdentifiableInterface.h"
@@ -226,6 +234,18 @@ bool UMOPersistenceSubsystem::SaveWorldToSlot(const FString& SlotName)
     // Autosave flag
     SaveObject->bIsAutosave = bNextSaveIsAutosave;
     bNextSaveIsAutosave = false; // Reset after use
+
+    // Last possessed pawn GUID (for camera positioning on load)
+    if (UGameInstance* GI = GetGameInstance())
+    {
+        if (APlayerController* PC = GI->GetFirstLocalPlayerController(World))
+        {
+            if (AMOPlayerController* MOPC = Cast<AMOPlayerController>(PC))
+            {
+                SaveObject->LastPossessedPawnGuid = MOPC->GetLastPossessedPawnGuid();
+            }
+        }
+    }
 
     // Screenshot capture (80x80 thumbnail)
     CaptureScreenshotForSave(SaveObject);
@@ -518,6 +538,9 @@ FMOLoadResult UMOPersistenceSubsystem::LoadWorldFromSlotWithResult(const FString
         LastLoadResult.PawnsLoaded, LastLoadResult.PawnsLoaded + LastLoadResult.PawnsFailed,
         LastLoadResult.ItemsLoaded, LastLoadResult.ItemsLoaded + LastLoadResult.ItemsFailed,
         LastLoadResult.BuildingsLoaded, LastLoadResult.BuildingsLoaded + LastLoadResult.BuildingsFailed);
+
+    // Position camera above last possessed pawn's location (spectator view on load)
+    SetupSpectatorCameraForLoad(World, LoadedTyped);
 
     return LastLoadResult;
 }
@@ -961,12 +984,45 @@ void UMOPersistenceSubsystem::CapturePersistedPawnsAndInventories(UWorld* World,
             PawnRecord.CharacterName = FString::Printf(TEXT("Character %s"), *ShortId);
         }
 
-        UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] SAVE: Capturing pawn '%s' GUID=%s Name='%s' Class=%s Location=%s"),
+        // Capture component state data
+        if (UMOVitalsComponent* VitalsComp = Pawn->FindComponentByClass<UMOVitalsComponent>())
+        {
+            VitalsComp->BuildSaveData(PawnRecord.VitalsData);
+            PawnRecord.bHasComponentData = true;
+        }
+        if (UMOAnatomyComponent* AnatomyComp = Pawn->FindComponentByClass<UMOAnatomyComponent>())
+        {
+            AnatomyComp->BuildSaveData(PawnRecord.AnatomyData);
+            PawnRecord.bHasComponentData = true;
+        }
+        if (UMOMetabolismComponent* MetabolismComp = Pawn->FindComponentByClass<UMOMetabolismComponent>())
+        {
+            MetabolismComp->BuildSaveData(PawnRecord.MetabolismData);
+            PawnRecord.bHasComponentData = true;
+        }
+        if (UMOMentalStateComponent* MentalStateComp = Pawn->FindComponentByClass<UMOMentalStateComponent>())
+        {
+            MentalStateComp->BuildSaveData(PawnRecord.MentalStateData);
+            PawnRecord.bHasComponentData = true;
+        }
+        if (UMOSkillsComponent* SkillsComp = Pawn->FindComponentByClass<UMOSkillsComponent>())
+        {
+            SkillsComp->BuildSaveData(PawnRecord.SkillsData);
+            PawnRecord.bHasComponentData = true;
+        }
+        if (UMOEquipmentComponent* EquipmentComp = Pawn->FindComponentByClass<UMOEquipmentComponent>())
+        {
+            EquipmentComp->BuildSaveData(PawnRecord.EquipmentData);
+            PawnRecord.bHasComponentData = true;
+        }
+
+        UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] SAVE: Capturing pawn '%s' GUID=%s Name='%s' Class=%s Location=%s ComponentData=%s"),
             *Pawn->GetName(),
             *PawnGuid.ToString(EGuidFormats::DigitsWithHyphens),
             *PawnRecord.CharacterName,
             *PawnRecord.PawnClassPath.ToString(),
-            *PawnRecord.Transform.GetLocation().ToString());
+            *PawnRecord.Transform.GetLocation().ToString(),
+            PawnRecord.bHasComponentData ? TEXT("YES") : TEXT("NO"));
 
         SaveObject->PersistedPawns.Add(PawnRecord);
 
@@ -1259,6 +1315,48 @@ void UMOPersistenceSubsystem::ApplyInventoriesToSpawnedPawns(UWorld* World, cons
                     Discovery->ApplySaveData(*DiscoveryData);
                     UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Applied recipe discovery data to pawn GUID=%s (%d recipes)"),
                         *PawnGuid.ToString(EGuidFormats::Short), DiscoveryData->DiscoveredRecipes.Num());
+                }
+            }
+
+            // Apply component state data from pawn record
+            for (const FMOPersistedPawnRecord& PawnRecord : LoadedWorldSave->PersistedPawns)
+            {
+                if (PawnRecord.PawnGuid == PawnGuid && PawnRecord.bHasComponentData)
+                {
+                    // Apply vitals
+                    if (UMOVitalsComponent* VitalsComp = Pawn->FindComponentByClass<UMOVitalsComponent>())
+                    {
+                        VitalsComp->ApplySaveDataAuthority(PawnRecord.VitalsData);
+                    }
+                    // Apply anatomy
+                    if (UMOAnatomyComponent* AnatomyComp = Pawn->FindComponentByClass<UMOAnatomyComponent>())
+                    {
+                        AnatomyComp->ApplySaveDataAuthority(PawnRecord.AnatomyData);
+                    }
+                    // Apply metabolism
+                    if (UMOMetabolismComponent* MetabolismComp = Pawn->FindComponentByClass<UMOMetabolismComponent>())
+                    {
+                        MetabolismComp->ApplySaveDataAuthority(PawnRecord.MetabolismData);
+                    }
+                    // Apply mental state
+                    if (UMOMentalStateComponent* MentalStateComp = Pawn->FindComponentByClass<UMOMentalStateComponent>())
+                    {
+                        MentalStateComp->ApplySaveDataAuthority(PawnRecord.MentalStateData);
+                    }
+                    // Apply skills
+                    if (UMOSkillsComponent* SkillsComp = Pawn->FindComponentByClass<UMOSkillsComponent>())
+                    {
+                        SkillsComp->ApplySaveData(PawnRecord.SkillsData);
+                    }
+                    // Apply equipment
+                    if (UMOEquipmentComponent* EquipmentComp = Pawn->FindComponentByClass<UMOEquipmentComponent>())
+                    {
+                        EquipmentComp->ApplySaveData(PawnRecord.EquipmentData);
+                    }
+
+                    UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Applied component state data to pawn GUID=%s"),
+                        *PawnGuid.ToString(EGuidFormats::Short));
+                    break;
                 }
             }
         }
@@ -2040,4 +2138,87 @@ void UMOPersistenceSubsystem::RestoreVoxelSculptData(UWorld* World, const TArray
             }
         }
     }
+}
+
+// ============================================================================
+// SPECTATOR CAMERA SETUP
+// ============================================================================
+
+void UMOPersistenceSubsystem::SetupSpectatorCameraForLoad(UWorld* World, const UMOWorldSaveGame* SaveData)
+{
+    UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] SetupSpectatorCameraForLoad: CALLED"));
+
+    if (!World || !SaveData)
+    {
+        UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] SetupSpectatorCameraForLoad: World or SaveData null"));
+        return;
+    }
+
+    // Get the local player controller
+    UGameInstance* GI = GetGameInstance();
+    if (!GI)
+    {
+        UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] SetupSpectatorCameraForLoad: No GameInstance"));
+        return;
+    }
+
+    APlayerController* PC = GI->GetFirstLocalPlayerController(World);
+    AMOPlayerController* MOPC = Cast<AMOPlayerController>(PC);
+    if (!MOPC)
+    {
+        UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] SetupSpectatorCameraForLoad: No MOPlayerController found (PC=%s)"),
+            PC ? *PC->GetClass()->GetName() : TEXT("null"));
+        return;
+    }
+
+    // Find the pawn location from save data
+    FVector PawnLocation = FVector::ZeroVector;
+    bool bFoundLocation = false;
+
+    // Try to find the last possessed pawn's location from pawn records
+    if (SaveData->LastPossessedPawnGuid.IsValid())
+    {
+        for (const FMOPersistedPawnRecord& Record : SaveData->PersistedPawns)
+        {
+            if (Record.PawnGuid == SaveData->LastPossessedPawnGuid)
+            {
+                PawnLocation = Record.Transform.GetLocation();
+                bFoundLocation = true;
+                UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] SetupSpectatorCameraForLoad: Found last possessed pawn at %s"),
+                    *PawnLocation.ToString());
+                break;
+            }
+        }
+    }
+
+    // If not found, use the first living pawn
+    if (!bFoundLocation && SaveData->PersistedPawns.Num() > 0)
+    {
+        for (const FMOPersistedPawnRecord& Record : SaveData->PersistedPawns)
+        {
+            if (!Record.bIsDeceased)
+            {
+                PawnLocation = Record.Transform.GetLocation();
+                bFoundLocation = true;
+                UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] SetupSpectatorCameraForLoad: Using first living pawn at %s"),
+                    *PawnLocation.ToString());
+                break;
+            }
+        }
+    }
+
+    if (!bFoundLocation)
+    {
+        UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] SetupSpectatorCameraForLoad: No pawn found, using world origin"));
+    }
+
+    // Position camera above the pawn's X,Y at a fixed height, looking down
+    const float CameraHeight = 5000.0f;
+    const float PitchAngle = -60.0f;
+
+    UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] SetupSpectatorCameraForLoad: Setting camera above X=%.1f Y=%.1f at height %.1f"),
+        PawnLocation.X, PawnLocation.Y, CameraHeight);
+
+    // Store pending view on player controller (MOSpectatorPawn will pick this up in BeginPlay)
+    MOPC->SetSpectatorViewAboveLocation(PawnLocation, CameraHeight, PitchAngle);
 }

@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/GameUserSettings.h"
+#include "MOKeyBindingTypes.h"
 #include "MOGameSettings.generated.h"
 
 /**
@@ -74,13 +75,23 @@ public:
 	// MAIN MENU / FIRST RUN
 	// ============================================================================
 
-	/** Whether to play the intro video on game launch. Set to false after first playback. */
-	UPROPERTY(Config, BlueprintReadWrite, Category="MainMenu")
+	/**
+	 * Whether to play the intro video on main menu load.
+	 * Defaults to true on game launch, set to false after intro plays or when returning from gameplay.
+	 * NOT persisted - resets to true each session.
+	 */
+	UPROPERTY(BlueprintReadWrite, Category="MainMenu")
 	bool bPlayIntro = true;
 
 	/** Whether the user has completed their first run (seen intro, etc.). */
 	UPROPERTY(Config, BlueprintReadWrite, Category="MainMenu")
 	bool bHasCompletedFirstRun = false;
+
+	/**
+	 * Call this when returning to main menu from gameplay to suppress intro playback.
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Settings")
+	void MarkReturningFromGameplay();
 
 	/**
 	 * Transient flag indicating a new game is pending after level load.
@@ -108,6 +119,29 @@ public:
 	/** Enable camera shake effects. */
 	UPROPERTY(Config, BlueprintReadWrite, Category="Gameplay")
 	bool bEnableCameraShake = true;
+
+	// ============================================================================
+	// KEY BINDINGS
+	// ============================================================================
+
+	/** Custom key binding overrides. Stored per-action. */
+	UPROPERTY(Config, BlueprintReadWrite, Category="KeyBindings")
+	TArray<FMOKeyBindingEntry> CustomKeyBindings;
+
+	/** Find a custom binding for an action. Returns nullptr if using default. */
+	const FMOKeyBindingEntry* FindCustomBinding(FName ActionId, int32 SlotIndex = 0) const;
+
+	/** Set or update a custom binding. */
+	UFUNCTION(BlueprintCallable, Category="MO|Settings|KeyBindings")
+	void SetCustomBinding(FName ActionId, FKey NewKey, int32 SlotIndex = 0);
+
+	/** Remove a custom binding (reverts to default). */
+	UFUNCTION(BlueprintCallable, Category="MO|Settings|KeyBindings")
+	void RemoveCustomBinding(FName ActionId, int32 SlotIndex = 0);
+
+	/** Clear all custom bindings. */
+	UFUNCTION(BlueprintCallable, Category="MO|Settings|KeyBindings")
+	void ClearAllCustomBindings();
 
 	// ============================================================================
 	// METHODS

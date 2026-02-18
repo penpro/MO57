@@ -210,6 +210,16 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO|Inventory")
 	bool CanAddItem(const FGuid& ItemGuid) const;
 
+	/**
+	 * Check if an item can be added by definition ID (considers stacking).
+	 * Returns true if there's room in existing stacks or an empty slot.
+	 * @param ItemDefinitionId The item type to check
+	 * @param Quantity How many items to add
+	 * @return True if all items can be added
+	 */
+	UFUNCTION(BlueprintPure, Category="MO|Inventory")
+	bool CanAddItemByDefinitionId(FName ItemDefinitionId, int32 Quantity = 1) const;
+
 	UFUNCTION(BlueprintCallable, Category="MO|Inventory|Slots")
 	bool TryGetSlotGuid(int32 SlotIndex, FGuid& OutGuid) const;
 

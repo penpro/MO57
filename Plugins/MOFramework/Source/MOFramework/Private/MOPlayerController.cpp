@@ -1,12 +1,16 @@
 #include "MOPlayerController.h"
 #include "MOFramework.h"
 #include "MOControllableInterface.h"
+#include "MOSpectatorPawn.h"
+#include "GameFramework/PawnMovementComponent.h"
 #include "MOUIManagerComponent.h"
 #include "MOPossessionComponent.h"
 #include "MONotificationComponent.h"
 #include "MOBuildingComponent.h"
 #include "MOBuildableActor.h"
 #include "MOInteractorComponent.h"
+#include "MOIdentityComponent.h"
+#include "MOKeyBindingManager.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "InputMappingContext.h"
@@ -56,8 +60,74 @@ void AMOPlayerController::BeginPlay()
 	// Setup default input context
 	SetupDefaultInputContext();
 
+	// Apply any saved custom key bindings
+	FMOKeyBindingManager::ApplyAllBindingsFromSettings(this);
+
 	// Setup debug bindings (uses legacy input, always available)
 	SetupDebugInputBindings();
+}
+
+void AMOPlayerController::PlayerTick(float DeltaTime)
+{
+	Super::PlayerTick(DeltaTime);
+
+	// Apply pending spectator view if we now have a pawn
+	// Note: MOSpectatorPawn handles this in its BeginPlay, but this is a fallback for other pawn types
+	if (bHasPendingSpectatorView)
+	{
+		if (APawn* CurrentPawn = GetPawn())
+		{
+			// MOSpectatorPawn handles this itself in BeginPlay, so skip if it's that type
+			if (!Cast<AMOSpectatorPawn>(CurrentPawn))
+			{
+				CurrentPawn->SetActorLocation(PendingSpectatorLocation);
+				CurrentPawn->SetActorRotation(PendingSpectatorRotation);
+				SetControlRotation(PendingSpectatorRotation);
+
+				UE_LOG(LogMOFramework, Warning, TEXT("AMOPlayerController::PlayerTick - Applied pending spectator view at %s"),
+					*PendingSpectatorLocation.ToString());
+
+				if (!bSpectatorInputEnabled)
+				{
+					if (UPawnMovementComponent* MovementComp = CurrentPawn->GetMovementComponent())
+					{
+						MovementComp->Deactivate();
+					}
+				}
+
+				bHasPendingSpectatorView = false;
+			}
+		}
+	}
+
+	// Enforce spectator input blocking - ensure movement stays disabled
+	// This handles cases where the spectator pawn is spawned after we set the flag
+	if (!bSpectatorInputEnabled && !CachedControllablePawn.IsValid())
+	{
+		if (APawn* CurrentPawn = GetPawn())
+		{
+			// For MOSpectatorPawn, just ensure it's locked
+			if (AMOSpectatorPawn* MOSpectator = Cast<AMOSpectatorPawn>(CurrentPawn))
+			{
+				if (!MOSpectator->IsMovementLocked())
+				{
+					MOSpectator->SetMovementLocked(true);
+				}
+			}
+			else
+			{
+				// Fallback: deactivate movement component
+				if (UPawnMovementComponent* MovementComp = CurrentPawn->GetMovementComponent())
+				{
+					if (MovementComp->IsActive())
+					{
+						MovementComp->Deactivate();
+						UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController::PlayerTick - Deactivated spectator movement"));
+					}
+				}
+			}
+		}
+	}
 }
 
 void AMOPlayerController::SetupInputComponent()
@@ -79,9 +149,9 @@ void AMOPlayerController::SetupInputComponent()
 	// MOVEMENT BINDINGS
 	// ============================================================================
 
-	if (UInputAction* Move = MoveAction.LoadSynchronous())
+	if (MoveAction)
 	{
-		EnhancedInput->BindAction(Move, ETriggerEvent::Triggered, this, &AMOPlayerController::HandleMove);
+		EnhancedInput->BindAction(MoveAction, ETriggerEvent::Triggered, this, &AMOPlayerController::HandleMove);
 		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound MoveAction"));
 	}
 	else
@@ -89,9 +159,9 @@ void AMOPlayerController::SetupInputComponent()
 		UE_LOG(LogMOFramework, Warning, TEXT("AMOPlayerController: MoveAction is NOT set!"));
 	}
 
-	if (UInputAction* Look = LookAction.LoadSynchronous())
+	if (LookAction)
 	{
-		EnhancedInput->BindAction(Look, ETriggerEvent::Triggered, this, &AMOPlayerController::HandleLook);
+		EnhancedInput->BindAction(LookAction, ETriggerEvent::Triggered, this, &AMOPlayerController::HandleLook);
 		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound LookAction"));
 	}
 	else
@@ -99,17 +169,17 @@ void AMOPlayerController::SetupInputComponent()
 		UE_LOG(LogMOFramework, Warning, TEXT("AMOPlayerController: LookAction is NOT set!"));
 	}
 
-	if (UInputAction* Jump = JumpAction.LoadSynchronous())
+	if (JumpAction)
 	{
-		EnhancedInput->BindAction(Jump, ETriggerEvent::Started, this, &AMOPlayerController::HandleJumpStart);
-		EnhancedInput->BindAction(Jump, ETriggerEvent::Completed, this, &AMOPlayerController::HandleJumpEnd);
+		EnhancedInput->BindAction(JumpAction, ETriggerEvent::Started, this, &AMOPlayerController::HandleJumpStart);
+		EnhancedInput->BindAction(JumpAction, ETriggerEvent::Completed, this, &AMOPlayerController::HandleJumpEnd);
 	}
 
-	if (UInputAction* Hustle = HustleAction.LoadSynchronous())
+	if (HustleAction)
 	{
-		EnhancedInput->BindAction(Hustle, ETriggerEvent::Started, this, &AMOPlayerController::HandleHustleStart);
-		EnhancedInput->BindAction(Hustle, ETriggerEvent::Triggered, this, &AMOPlayerController::HandleHustleTriggered);
-		EnhancedInput->BindAction(Hustle, ETriggerEvent::Completed, this, &AMOPlayerController::HandleHustleEnd);
+		EnhancedInput->BindAction(HustleAction, ETriggerEvent::Started, this, &AMOPlayerController::HandleHustleStart);
+		EnhancedInput->BindAction(HustleAction, ETriggerEvent::Triggered, this, &AMOPlayerController::HandleHustleTriggered);
+		EnhancedInput->BindAction(HustleAction, ETriggerEvent::Completed, this, &AMOPlayerController::HandleHustleEnd);
 		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound HustleAction (tap=jog, hold=sprint)"));
 	}
 	else
@@ -117,50 +187,50 @@ void AMOPlayerController::SetupInputComponent()
 		UE_LOG(LogMOFramework, Warning, TEXT("AMOPlayerController: HustleAction is NOT set!"));
 	}
 
-	if (UInputAction* Crouch = CrouchAction.LoadSynchronous())
+	if (CrouchAction)
 	{
-		EnhancedInput->BindAction(Crouch, ETriggerEvent::Started, this, &AMOPlayerController::HandleCrouch);
+		EnhancedInput->BindAction(CrouchAction, ETriggerEvent::Started, this, &AMOPlayerController::HandleCrouch);
 	}
 
 	// ============================================================================
 	// ACTION BINDINGS
 	// ============================================================================
 
-	if (UInputAction* Interact = InteractAction.LoadSynchronous())
+	if (InteractAction)
 	{
-		EnhancedInput->BindAction(Interact, ETriggerEvent::Started, this, &AMOPlayerController::HandleInteract);
+		EnhancedInput->BindAction(InteractAction, ETriggerEvent::Started, this, &AMOPlayerController::HandleInteract);
 	}
 
-	if (UInputAction* Primary = PrimaryAction.LoadSynchronous())
+	if (PrimaryAction)
 	{
-		EnhancedInput->BindAction(Primary, ETriggerEvent::Started, this, &AMOPlayerController::HandlePrimaryAction);
-		EnhancedInput->BindAction(Primary, ETriggerEvent::Completed, this, &AMOPlayerController::HandlePrimaryActionRelease);
+		EnhancedInput->BindAction(PrimaryAction, ETriggerEvent::Started, this, &AMOPlayerController::HandlePrimaryAction);
+		EnhancedInput->BindAction(PrimaryAction, ETriggerEvent::Completed, this, &AMOPlayerController::HandlePrimaryActionRelease);
 	}
 
-	if (UInputAction* Secondary = SecondaryAction.LoadSynchronous())
+	if (SecondaryAction)
 	{
-		EnhancedInput->BindAction(Secondary, ETriggerEvent::Started, this, &AMOPlayerController::HandleSecondaryAction);
-		EnhancedInput->BindAction(Secondary, ETriggerEvent::Completed, this, &AMOPlayerController::HandleSecondaryActionRelease);
+		EnhancedInput->BindAction(SecondaryAction, ETriggerEvent::Started, this, &AMOPlayerController::HandleSecondaryAction);
+		EnhancedInput->BindAction(SecondaryAction, ETriggerEvent::Completed, this, &AMOPlayerController::HandleSecondaryActionRelease);
 	}
 
 	// ============================================================================
 	// UI/SYSTEM BINDINGS
 	// ============================================================================
 
-	if (UInputAction* Inventory = InventoryAction.LoadSynchronous())
+	if (InventoryAction)
 	{
-		EnhancedInput->BindAction(Inventory, ETriggerEvent::Started, this, &AMOPlayerController::HandleInventory);
+		EnhancedInput->BindAction(InventoryAction, ETriggerEvent::Started, this, &AMOPlayerController::HandleInventory);
 	}
 
-	if (UInputAction* Craft = CraftAction.LoadSynchronous())
+	if (CraftAction)
 	{
-		EnhancedInput->BindAction(Craft, ETriggerEvent::Started, this, &AMOPlayerController::HandleCraft);
+		EnhancedInput->BindAction(CraftAction, ETriggerEvent::Started, this, &AMOPlayerController::HandleCraft);
 		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound CraftAction"));
 	}
 
-	if (UInputAction* PlayerStatus = PlayerStatusAction.LoadSynchronous())
+	if (PlayerStatusAction)
 	{
-		EnhancedInput->BindAction(PlayerStatus, ETriggerEvent::Started, this, &AMOPlayerController::HandlePlayerStatus);
+		EnhancedInput->BindAction(PlayerStatusAction, ETriggerEvent::Started, this, &AMOPlayerController::HandlePlayerStatus);
 		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound PlayerStatusAction"));
 	}
 	else
@@ -168,9 +238,9 @@ void AMOPlayerController::SetupInputComponent()
 		UE_LOG(LogMOFramework, Warning, TEXT("AMOPlayerController: PlayerStatusAction is NOT set!"));
 	}
 
-	if (UInputAction* Skills = SkillsAction.LoadSynchronous())
+	if (SkillsAction)
 	{
-		EnhancedInput->BindAction(Skills, ETriggerEvent::Started, this, &AMOPlayerController::HandleSkills);
+		EnhancedInput->BindAction(SkillsAction, ETriggerEvent::Started, this, &AMOPlayerController::HandleSkills);
 		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound SkillsAction"));
 	}
 	else
@@ -178,9 +248,9 @@ void AMOPlayerController::SetupInputComponent()
 		UE_LOG(LogMOFramework, Warning, TEXT("AMOPlayerController: SkillsAction is NOT set!"));
 	}
 
-	if (UInputAction* Build = BuildAction.LoadSynchronous())
+	if (BuildAction)
 	{
-		EnhancedInput->BindAction(Build, ETriggerEvent::Started, this, &AMOPlayerController::HandleBuild);
+		EnhancedInput->BindAction(BuildAction, ETriggerEvent::Started, this, &AMOPlayerController::HandleBuild);
 		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound BuildAction"));
 	}
 	else
@@ -188,14 +258,14 @@ void AMOPlayerController::SetupInputComponent()
 		UE_LOG(LogMOFramework, Warning, TEXT("AMOPlayerController: BuildAction is NOT set!"));
 	}
 
-	if (UInputAction* Pause = PauseAction.LoadSynchronous())
+	if (PauseAction)
 	{
-		EnhancedInput->BindAction(Pause, ETriggerEvent::Started, this, &AMOPlayerController::HandlePause);
+		EnhancedInput->BindAction(PauseAction, ETriggerEvent::Started, this, &AMOPlayerController::HandlePause);
 	}
 
-	if (UInputAction* Possess = PossessAction.LoadSynchronous())
+	if (PossessAction)
 	{
-		EnhancedInput->BindAction(Possess, ETriggerEvent::Started, this, &AMOPlayerController::HandlePossess);
+		EnhancedInput->BindAction(PossessAction, ETriggerEvent::Started, this, &AMOPlayerController::HandlePossess);
 		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound PossessAction"));
 	}
 	else
@@ -207,43 +277,59 @@ void AMOPlayerController::SetupInputComponent()
 	// BUILDING BINDINGS
 	// ============================================================================
 
-	if (UInputAction* PlaceBuilding = PlaceBuildingAction.LoadSynchronous())
+	if (PlaceBuildingAction)
 	{
-		EnhancedInput->BindAction(PlaceBuilding, ETriggerEvent::Started, this, &AMOPlayerController::HandlePlaceBuilding);
+		EnhancedInput->BindAction(PlaceBuildingAction, ETriggerEvent::Started, this, &AMOPlayerController::HandlePlaceBuilding);
 		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound PlaceBuildingAction"));
 	}
-
-	if (UInputAction* RotateCW = RotateBuildingCWAction.LoadSynchronous())
+	else
 	{
-		EnhancedInput->BindAction(RotateCW, ETriggerEvent::Started, this, &AMOPlayerController::HandleRotateBuildingCW);
+		UE_LOG(LogMOFramework, Warning, TEXT("AMOPlayerController: PlaceBuildingAction is NOT set! Building placement will not work."));
+	}
+
+	if (RotateBuildingCWAction)
+	{
+		EnhancedInput->BindAction(RotateBuildingCWAction, ETriggerEvent::Started, this, &AMOPlayerController::HandleRotateBuildingCW);
 		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound RotateBuildingCWAction"));
 	}
-
-	if (UInputAction* RotateCCW = RotateBuildingCCWAction.LoadSynchronous())
+	else
 	{
-		EnhancedInput->BindAction(RotateCCW, ETriggerEvent::Started, this, &AMOPlayerController::HandleRotateBuildingCCW);
-		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound RotateBuildingCCWAction"));
+		UE_LOG(LogMOFramework, Warning, TEXT("AMOPlayerController: RotateBuildingCWAction is NOT set!"));
 	}
 
-	if (UInputAction* CancelPlacement = CancelPlacementAction.LoadSynchronous())
+	if (RotateBuildingCCWAction)
 	{
-		EnhancedInput->BindAction(CancelPlacement, ETriggerEvent::Started, this, &AMOPlayerController::HandleCancelPlacement);
+		EnhancedInput->BindAction(RotateBuildingCCWAction, ETriggerEvent::Started, this, &AMOPlayerController::HandleRotateBuildingCCW);
+		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound RotateBuildingCCWAction"));
+	}
+	else
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("AMOPlayerController: RotateBuildingCCWAction is NOT set!"));
+	}
+
+	if (CancelPlacementAction)
+	{
+		EnhancedInput->BindAction(CancelPlacementAction, ETriggerEvent::Started, this, &AMOPlayerController::HandleCancelPlacement);
 		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound CancelPlacementAction"));
+	}
+	else
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("AMOPlayerController: CancelPlacementAction is NOT set!"));
 	}
 
 	// ============================================================================
 	// TERRAFORMING BINDINGS
 	// ============================================================================
 
-	if (UInputAction* TerraformToggle = TerraformToggleAction.LoadSynchronous())
+	if (TerraformToggleAction)
 	{
-		EnhancedInput->BindAction(TerraformToggle, ETriggerEvent::Started, this, &AMOPlayerController::HandleTerraformToggle);
+		EnhancedInput->BindAction(TerraformToggleAction, ETriggerEvent::Started, this, &AMOPlayerController::HandleTerraformToggle);
 		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound TerraformToggleAction"));
 	}
 
-	if (UInputAction* TerraformCycle = TerraformCycleToolAction.LoadSynchronous())
+	if (TerraformCycleToolAction)
 	{
-		EnhancedInput->BindAction(TerraformCycle, ETriggerEvent::Started, this, &AMOPlayerController::HandleTerraformCycleTool);
+		EnhancedInput->BindAction(TerraformCycleToolAction, ETriggerEvent::Started, this, &AMOPlayerController::HandleTerraformCycleTool);
 		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound TerraformCycleToolAction"));
 	}
 }
@@ -258,6 +344,14 @@ void AMOPlayerController::OnPossess(APawn* InPawn)
 		CachedControllablePawn = InPawn;
 		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Possessed %s - Implements IMOControllableInterface: YES"),
 			*InPawn->GetName());
+
+		// Track this pawn's GUID as the last possessed (for save/load)
+		if (UMOIdentityComponent* IdentityComp = InPawn->FindComponentByClass<UMOIdentityComponent>())
+		{
+			LastPossessedPawnGuid = IdentityComp->GetGuid();
+			UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Tracking last possessed pawn GUID: %s"),
+				*LastPossessedPawnGuid.ToString());
+		}
 	}
 	else
 	{
@@ -277,6 +371,9 @@ void AMOPlayerController::OnPossess(APawn* InPawn)
 	{
 		UIManagerComponent->CachePawnComponents(InPawn);
 	}
+
+	// When we possess a pawn, we no longer need spectator input - the pawn handles input
+	bSpectatorInputEnabled = false;
 }
 
 void AMOPlayerController::OnUnPossess()
@@ -288,6 +385,11 @@ void AMOPlayerController::OnUnPossess()
 	}
 
 	CachedControllablePawn.Reset();
+
+	// Disable spectator input when unpossessing - camera stays fixed until a pawn is possessed
+	bSpectatorInputEnabled = false;
+	UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Unpossessed - spectator input disabled"));
+
 	Super::OnUnPossess();
 }
 
@@ -318,17 +420,17 @@ void AMOPlayerController::AddInputContext(EMOInputContext Context)
 	switch (Context)
 	{
 	case EMOInputContext::PawnControl:
-		MappingContext = PawnControlContext.LoadSynchronous();
+		MappingContext = PawnControlContext;
 		Priority = PawnControlContextPriority;
 		break;
 
 	case EMOInputContext::BaseBuilding:
-		MappingContext = BaseBuildingContext.LoadSynchronous();
+		MappingContext = BaseBuildingContext;
 		Priority = BaseBuildingContextPriority;
 		break;
 
 	case EMOInputContext::Menu:
-		MappingContext = MenuContext.LoadSynchronous();
+		MappingContext = MenuContext;
 		Priority = MenuContextPriority;
 		break;
 
@@ -349,15 +451,15 @@ void AMOPlayerController::RemoveInputContext(EMOInputContext Context)
 	switch (Context)
 	{
 	case EMOInputContext::PawnControl:
-		MappingContext = PawnControlContext.LoadSynchronous();
+		MappingContext = PawnControlContext;
 		break;
 
 	case EMOInputContext::BaseBuilding:
-		MappingContext = BaseBuildingContext.LoadSynchronous();
+		MappingContext = BaseBuildingContext;
 		break;
 
 	case EMOInputContext::Menu:
-		MappingContext = MenuContext.LoadSynchronous();
+		MappingContext = MenuContext;
 		break;
 
 	default:
@@ -383,15 +485,15 @@ bool AMOPlayerController::IsInputContextActive(EMOInputContext Context) const
 	switch (Context)
 	{
 	case EMOInputContext::PawnControl:
-		MappingContext = PawnControlContext.Get();
+		MappingContext = PawnControlContext;
 		break;
 
 	case EMOInputContext::BaseBuilding:
-		MappingContext = BaseBuildingContext.Get();
+		MappingContext = BaseBuildingContext;
 		break;
 
 	case EMOInputContext::Menu:
-		MappingContext = MenuContext.Get();
+		MappingContext = MenuContext;
 		break;
 
 	default:
@@ -404,15 +506,95 @@ bool AMOPlayerController::IsInputContextActive(EMOInputContext Context) const
 void AMOPlayerController::SetupDefaultInputContext()
 {
 	// Add default pawn control context
-	if (UInputMappingContext* Context = PawnControlContext.LoadSynchronous())
+	if (PawnControlContext)
 	{
-		AddMappingContext(Context, PawnControlContextPriority);
+		AddMappingContext(PawnControlContext, PawnControlContextPriority);
 		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Added PawnControlContext mapping context"));
 	}
 	else
 	{
 		UE_LOG(LogMOFramework, Warning, TEXT("AMOPlayerController: PawnControlContext is NOT set! No input mapping context active."));
 	}
+}
+
+// ============================================================================
+// SPECTATOR / CAMERA CONTROL
+// ============================================================================
+
+void AMOPlayerController::SetSpectatorViewAboveLocation(FVector TargetLocation, float Height, float PitchAngle)
+{
+	// Calculate camera position above the target
+	FVector CameraLocation = TargetLocation + FVector(0.0f, 0.0f, Height);
+
+	// Calculate rotation looking down at target
+	FRotator CameraRotation = FRotator(PitchAngle, 0.0f, 0.0f);
+
+	// Store for pending application (in case spectator pawn doesn't exist yet)
+	PendingSpectatorLocation = CameraLocation;
+	PendingSpectatorRotation = CameraRotation;
+	bHasPendingSpectatorView = true;
+
+	// Set the controller's view rotation
+	SetControlRotation(CameraRotation);
+
+	// If we have a pawn, apply immediately
+	if (APawn* CurrentPawn = GetPawn())
+	{
+		// Prefer using MOSpectatorPawn's method
+		if (AMOSpectatorPawn* MOSpectator = Cast<AMOSpectatorPawn>(CurrentPawn))
+		{
+			MOSpectator->SetViewAboveLocation(TargetLocation, Height, PitchAngle);
+			bHasPendingSpectatorView = false;
+			UE_LOG(LogMOFramework, Warning, TEXT("AMOPlayerController: Applied spectator view via MOSpectatorPawn at %s"),
+				*CameraLocation.ToString());
+		}
+		else
+		{
+			CurrentPawn->SetActorLocation(CameraLocation);
+			CurrentPawn->SetActorRotation(CameraRotation);
+			bHasPendingSpectatorView = false;
+			UE_LOG(LogMOFramework, Warning, TEXT("AMOPlayerController: Applied spectator view to generic pawn at %s"),
+				*CameraLocation.ToString());
+		}
+	}
+	else
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("AMOPlayerController: No pawn yet, storing pending spectator view at %s"),
+			*CameraLocation.ToString());
+	}
+}
+
+void AMOPlayerController::SetSpectatorInputEnabled(bool bEnabled)
+{
+	bSpectatorInputEnabled = bEnabled;
+
+	// Also disable/enable the spectator pawn's movement if one exists
+	if (APawn* CurrentPawn = GetPawn())
+	{
+		// Prefer MOSpectatorPawn's lock system
+		if (AMOSpectatorPawn* MOSpectator = Cast<AMOSpectatorPawn>(CurrentPawn))
+		{
+			MOSpectator->SetMovementLocked(!bEnabled);
+		}
+		else
+		{
+			// Fallback for non-MOSpectatorPawn
+			if (UPawnMovementComponent* MovementComp = CurrentPawn->GetMovementComponent())
+			{
+				if (bEnabled)
+				{
+					MovementComp->Activate();
+				}
+				else
+				{
+					MovementComp->Deactivate();
+				}
+			}
+		}
+	}
+
+	UE_LOG(LogMOFramework, Warning, TEXT("AMOPlayerController: Spectator input %s"),
+		bEnabled ? TEXT("ENABLED") : TEXT("DISABLED"));
 }
 
 // ============================================================================

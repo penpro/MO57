@@ -2,13 +2,19 @@
 #include "MOGameSettings.h"
 #include "MOUIManagerComponent.h"
 #include "MOFramework.h"
+#include "MOKeyBindingEntryWidget.h"
+#include "MOKeyBindingManager.h"
+#include "MOPlayerController.h"
 #include "CommonButtonBase.h"
 #include "Components/CheckBox.h"
 #include "Components/Slider.h"
 #include "Components/TextBlock.h"
 #include "Components/SpinBox.h"
 #include "Components/ComboBoxString.h"
+#include "Components/ScrollBox.h"
 #include "GameFramework/PlayerController.h"
+#include "InputAction.h"
+#include "InputMappingContext.h"
 
 void UMOOptionsPanel::NativeDestruct()
 {
@@ -48,6 +54,10 @@ void UMOOptionsPanel::NativeDestruct()
 	if (ResolutionComboBox)
 	{
 		ResolutionComboBox->OnSelectionChanged.RemoveDynamic(this, &UMOOptionsPanel::HandleResolutionChanged);
+	}
+	if (ResetAllBindingsButton)
+	{
+		ResetAllBindingsButton->OnClicked().RemoveAll(this);
 	}
 
 	Super::NativeDestruct();
@@ -108,6 +118,14 @@ void UMOOptionsPanel::NativeConstruct()
 		ResolutionComboBox->OnSelectionChanged.AddDynamic(this, &UMOOptionsPanel::HandleResolutionChanged);
 		PopulateResolutionOptions();
 	}
+
+	// Key bindings
+	if (ResetAllBindingsButton)
+	{
+		ResetAllBindingsButton->OnClicked().RemoveAll(this);
+		ResetAllBindingsButton->OnClicked().AddUObject(this, &UMOOptionsPanel::HandleResetAllBindingsClicked);
+	}
+	PopulateKeyBindings();
 
 	RefreshUIFromSettings();
 	OnRefreshSettings();
@@ -475,4 +493,143 @@ void UMOOptionsPanel::HandleResolutionChanged(FString SelectedItem, ESelectInfo:
 {
 	// Just log for now - actual change happens on Apply
 	UE_LOG(LogMOFramework, Log, TEXT("[MOOptionsPanel] Resolution selected: %s"), *SelectedItem);
+}
+
+// ============================================================================
+// KEY BINDINGS
+// ============================================================================
+
+void UMOOptionsPanel::PopulateKeyBindings()
+{
+	if (!KeyBindingsScrollBox || !KeyBindingEntryClass)
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOOptionsPanel] Key bindings scroll box or entry class not configured"));
+		return;
+	}
+
+	if (RebindableActions.Num() == 0)
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOOptionsPanel] No rebindable actions configured"));
+		return;
+	}
+
+	// Clear existing entries
+	KeyBindingsScrollBox->ClearChildren();
+
+	// Load mapping contexts
+	UInputMappingContext* PawnContext = PawnControlContext.LoadSynchronous();
+	UInputMappingContext* BuildContext = BuildingContext.LoadSynchronous();
+
+	if (!PawnContext)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOOptionsPanel] PawnControlContext not configured"));
+		return;
+	}
+
+	int32 EntryCount = 0;
+
+	for (const FMOKeyBindingActionConfig& ActionConfig : RebindableActions)
+	{
+		// Load the action
+		UInputAction* Action = ActionConfig.Action.LoadSynchronous();
+		if (!Action)
+		{
+			continue;
+		}
+
+		UMOKeyBindingEntryWidget* Entry = CreateWidget<UMOKeyBindingEntryWidget>(this, KeyBindingEntryClass);
+		if (!Entry)
+		{
+			continue;
+		}
+
+		// Determine which context to use
+		UInputMappingContext* ActionContext = ActionConfig.bUseBuildingContext ? BuildContext : PawnContext;
+		if (!ActionContext)
+		{
+			ActionContext = PawnContext;
+		}
+
+		FMOKeyBindingVisualData Data;
+		Data.DisplayName = ActionConfig.DisplayName;
+		Data.ActionId = FMOKeyBindingManager::GetActionId(Action);
+		Data.CurrentKey = FMOKeyBindingManager::GetCurrentBinding(Action, ActionContext);
+		Data.DefaultKey = FMOKeyBindingManager::GetDefaultBinding(Action, ActionContext);
+		Data.Category = ActionConfig.Category;
+
+		Entry->SetupEntry(Data);
+		Entry->OnKeyChanged.AddDynamic(this, &UMOOptionsPanel::HandleKeyBindingChanged);
+
+		KeyBindingsScrollBox->AddChild(Entry);
+		EntryCount++;
+	}
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOOptionsPanel] Populated %d key binding entries"), EntryCount);
+}
+
+void UMOOptionsPanel::HandleKeyBindingChanged(FName ActionId, FKey NewKey)
+{
+	UE_LOG(LogMOFramework, Log, TEXT("[MOOptionsPanel] Key binding changed: %s -> %s"),
+		*ActionId.ToString(), *NewKey.ToString());
+
+	// Save to settings - this persists to GameUserSettings.ini
+	UMOGameSettings* Settings = UMOGameSettings::GetMOGameSettings();
+	if (Settings)
+	{
+		Settings->SetCustomBinding(ActionId, NewKey);
+		Settings->SaveSettings();
+	}
+
+	// Try to apply the binding immediately if we have an MOPlayerController (in-game)
+	AMOPlayerController* PC = Cast<AMOPlayerController>(GetOwningPlayer());
+	if (!PC)
+	{
+		// Not in gameplay - binding will be applied when game starts via MOPlayerController::BeginPlay
+		UE_LOG(LogMOFramework, Log, TEXT("[MOOptionsPanel] No MOPlayerController - binding will apply on game start"));
+		return;
+	}
+
+	// Find the action config to determine context
+	for (const FMOKeyBindingActionConfig& ActionConfig : RebindableActions)
+	{
+		UInputAction* Action = ActionConfig.Action.LoadSynchronous();
+		if (!Action || FMOKeyBindingManager::GetActionId(Action) != ActionId)
+		{
+			continue;
+		}
+
+		// Get the appropriate context
+		UInputMappingContext* Context = ActionConfig.bUseBuildingContext
+			? PC->BaseBuildingContext
+			: PC->PawnControlContext;
+
+		if (Context)
+		{
+			FMOKeyBindingManager::ApplyBinding(Action, NewKey, Context, PC);
+		}
+		break;
+	}
+}
+
+void UMOOptionsPanel::HandleResetAllBindingsClicked()
+{
+	UE_LOG(LogMOFramework, Log, TEXT("[MOOptionsPanel] Reset all key bindings clicked"));
+
+	// Clear all custom bindings from settings
+	UMOGameSettings* Settings = UMOGameSettings::GetMOGameSettings();
+	if (Settings)
+	{
+		Settings->ClearAllCustomBindings();
+		Settings->SaveSettings();
+	}
+
+	// Restore all bindings to their cached defaults
+	AMOPlayerController* PC = Cast<AMOPlayerController>(GetOwningPlayer());
+	if (PC)
+	{
+		FMOKeyBindingManager::RestoreAllDefaults(PC);
+	}
+
+	// Repopulate the scroll box to show default keys
+	PopulateKeyBindings();
 }

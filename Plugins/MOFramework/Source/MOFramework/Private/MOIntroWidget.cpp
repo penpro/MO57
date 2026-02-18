@@ -20,8 +20,12 @@ void UMOIntroWidget::NativeConstruct()
 		SkipHintText->SetVisibility(ESlateVisibility::Collapsed);
 	}
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOIntroWidget] NativeConstruct - VideoImage: %s"),
-		VideoImage ? TEXT("OK") : TEXT("NULL"));
+	// Request keyboard focus immediately
+	SetKeyboardFocus();
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOIntroWidget] NativeConstruct - VideoImage: %s, IsFocusable: %s"),
+		VideoImage ? TEXT("OK") : TEXT("NULL"),
+		IsFocusable() ? TEXT("YES") : TEXT("NO"));
 }
 
 void UMOIntroWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
@@ -43,6 +47,19 @@ void UMOIntroWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 	}
 }
 
+FReply UMOIntroWidget::NativeOnPreviewKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent)
+{
+	// Preview handlers fire first and catch input that might be consumed elsewhere
+	if (bIsActive)
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOIntroWidget] Preview key pressed: %s - skipping intro"), *InKeyEvent.GetKey().ToString());
+		SkipIntro();
+		return FReply::Handled();
+	}
+
+	return Super::NativeOnPreviewKeyDown(InGeometry, InKeyEvent);
+}
+
 FReply UMOIntroWidget::NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent)
 {
 	if (bIsActive)
@@ -53,6 +70,18 @@ FReply UMOIntroWidget::NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEv
 	}
 
 	return Super::NativeOnKeyDown(InGeometry, InKeyEvent);
+}
+
+FReply UMOIntroWidget::NativeOnPreviewMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
+{
+	if (bIsActive)
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOIntroWidget] Preview mouse clicked - skipping intro"));
+		SkipIntro();
+		return FReply::Handled();
+	}
+
+	return Super::NativeOnPreviewMouseButtonDown(InGeometry, InMouseEvent);
 }
 
 FReply UMOIntroWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
