@@ -5,6 +5,7 @@
 #include "MOGameMode.generated.h"
 
 class APawn;
+class AVoxelWorld;
 
 /**
  * Entry for mapping PCG component tags to item IDs.
@@ -59,9 +60,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Spawn")
 	float MinSpawnHeightAboveWater = 100.0f;
 
-	/** Height offset above detected ground. */
+	/** Height offset above detected ground (higher = safer but longer fall). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Spawn")
-	float SpawnHeightOffset = 100.0f;
+	float SpawnHeightOffset = 200.0f;
 
 	/** Center point to search for spawn locations around. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Spawn")
@@ -79,6 +80,50 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Spawn")
 	TSubclassOf<APawn> DefaultNewGamePawnClass;
 
+	// ============================================================================
+	// VOXEL SEED INTEGRATION
+	// ============================================================================
+
+	/**
+	 * Apply the pending world seed to all voxel stamp components in the level.
+	 * Call this before VoxelWorld creates its runtime.
+	 *
+	 * IMPORTANT: For this to work, set VoxelWorld->bCreateRuntimeOnBeginPlay = false
+	 * in your level, then call this method followed by VoxelWorld->CreateRuntime().
+	 *
+	 * @param WorldSeed The seed value to apply (will be converted to FVoxelExposedSeed)
+	 * @return Number of stamp components updated
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Voxel")
+	int32 ApplySeedToVoxelStamps(int32 WorldSeed);
+
+	/**
+	 * Convert an integer seed to the 8-character string format used by Voxel Plugin.
+	 * Uses the same algorithm as FVoxelExposedSeed::Randomize().
+	 * @param Seed Integer seed value
+	 * @return 8-character uppercase string (A-Z)
+	 */
+	UFUNCTION(BlueprintPure, Category="MO|Voxel")
+	static FString IntSeedToVoxelSeedString(int32 Seed);
+
+	/**
+	 * Initialize the voxel world with the pending seed and start generation.
+	 * This is a convenience method that:
+	 * 1. Applies the seed from MOGameSettings to all stamp components
+	 * 2. Calls VoxelWorld->CreateRuntime() to start generation
+	 *
+	 * IMPORTANT: VoxelWorld must have bCreateRuntimeOnBeginPlay = false for this to work.
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Voxel")
+	void InitializeVoxelWorldWithSeed();
+
+	/**
+	 * Debug function to log all voxel stamp seeds in the level.
+	 * Call this after the world is generated to verify seeds are applied correctly.
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Voxel|Debug")
+	void DebugLogVoxelStampSeeds();
+
 protected:
 	virtual void BeginPlay() override;
 
@@ -94,6 +139,14 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|PCG")
 	TArray<FMOTagItemMapping> PCGTagItemMappings;
 
+	/**
+	 * If true, automatically apply seed from MOGameSettings to voxel stamps
+	 * and call CreateRuntime() on new game start.
+	 * Requires VoxelWorld->bCreateRuntimeOnBeginPlay = false.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Voxel")
+	bool bAutoInitializeVoxelWithSeed = false;
+
 private:
 	/** Register all configured tag mappings with the PCG interaction subsystem. */
 	void RegisterPCGTagMappings();
@@ -107,6 +160,21 @@ private:
 	/** Wait for voxel world to be ready, then spawn pawn. */
 	void WaitForVoxelWorldAndSpawn();
 
+	/** Timer callback to check voxel readiness. */
+	void CheckVoxelReadyAndSpawn();
+
+	/** Timer callback after collision delay - actually spawn the pawn. */
+	void OnCollisionDelayComplete();
+
 	/** Whether we're waiting for voxel world to spawn. */
 	bool bPendingSpawnAfterVoxelReady = false;
+
+	/** Timer handle for polling voxel world readiness. */
+	FTimerHandle VoxelReadyTimerHandle;
+
+	/** Timer handle for collision generation delay. */
+	FTimerHandle CollisionDelayTimerHandle;
+
+	/** Delay in seconds after voxel ready before searching for land (allows collision generation). */
+	static constexpr float CollisionGenerationDelay = 3.0f;
 };

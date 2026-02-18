@@ -199,6 +199,12 @@ void AMOCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
+	// Check for falling through the world
+	if (bEnableFallThroughSafety)
+	{
+		CheckFallThroughSafety(DeltaTime);
+	}
+
 	// Generate movement noise for AI perception
 	if (bGeneratesMovementNoise)
 	{
@@ -1188,4 +1194,116 @@ void AMOCharacter::ClearHeldItemMesh(EMOEquipmentSlot EquipSlot)
 			*GetName(),
 			EquipSlot == EMOEquipmentSlot::LeftHand ? TEXT("left") : TEXT("right"));
 	}
+}
+
+// ============================================================================
+// FALL-THROUGH SAFETY
+// ============================================================================
+
+void AMOCharacter::CheckFallThroughSafety(float DeltaTime)
+{
+	UCharacterMovementComponent* MovementComp = GetCharacterMovement();
+	if (!MovementComp)
+	{
+		return;
+	}
+
+	const FVector CurrentLocation = GetActorLocation();
+	const float CurrentZ = CurrentLocation.Z;
+	const float VerticalVelocity = GetVelocity().Z;
+
+	// Check if we're falling (in air with significant downward velocity)
+	const bool bIsFalling = MovementComp->IsFalling() && VerticalVelocity < FallThroughVelocityThreshold;
+
+	if (bIsFalling)
+	{
+		ContinuousFallTime += DeltaTime;
+
+		// Only check for fall-through after exceeding time threshold
+		if (ContinuousFallTime >= FallThroughTimeThreshold)
+		{
+			// Raycast downward to check if there's terrain below
+			FHitResult DownHit;
+			const FVector TraceStart = CurrentLocation;
+			const FVector TraceEnd = CurrentLocation - FVector(0.f, 0.f, SafetyTerrainSearchDistance);
+
+			FCollisionQueryParams QueryParams;
+			QueryParams.AddIgnoredActor(this);
+
+			const bool bFoundTerrainBelow = GetWorld()->LineTraceSingleByChannel(
+				DownHit,
+				TraceStart,
+				TraceEnd,
+				ECC_WorldStatic,
+				QueryParams
+			);
+
+			if (!bFoundTerrainBelow)
+			{
+				// No terrain below - we've likely fallen through the world
+				// Search upward for terrain to teleport to
+				FHitResult UpHit;
+				const FVector UpTraceStart = CurrentLocation;
+				const FVector UpTraceEnd = CurrentLocation + FVector(0.f, 0.f, SafetyTerrainSearchDistance);
+
+				const bool bFoundTerrainAbove = GetWorld()->LineTraceSingleByChannel(
+					UpHit,
+					UpTraceStart,
+					UpTraceEnd,
+					ECC_WorldStatic,
+					QueryParams
+				);
+
+				FVector SafeLocation;
+				if (bFoundTerrainAbove)
+				{
+					// Found terrain above - teleport to just above it
+					SafeLocation = UpHit.Location + FVector(0.f, 0.f, SafetyTeleportHeight);
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOCharacter] %s: Fall-through detected! Found terrain above at Z=%.0f, teleporting to Z=%.0f"),
+						*GetName(), UpHit.Location.Z, SafeLocation.Z);
+				}
+				else
+				{
+					// No terrain found anywhere - teleport to a default safe height
+					// Use world origin + safety height as fallback
+					SafeLocation = FVector(CurrentLocation.X, CurrentLocation.Y, SafetyTeleportHeight);
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOCharacter] %s: Fall-through detected! No terrain found, teleporting to default safe height Z=%.0f"),
+						*GetName(), SafeLocation.Z);
+				}
+
+				// Teleport to safety
+				SetActorLocation(SafeLocation, false, nullptr, ETeleportType::TeleportPhysics);
+
+				// Reset velocity to prevent continued falling
+				MovementComp->StopMovementImmediately();
+
+				// Reset fall tracking
+				ContinuousFallTime = 0.f;
+
+				// Log warning for debugging
+				if (GEngine)
+				{
+					GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Red,
+						FString::Printf(TEXT("Fall-through safety activated! Teleported to Z=%.0f"), SafeLocation.Z));
+				}
+			}
+			else
+			{
+				// There's terrain below - we're just falling normally, maybe from a high place
+				// Reset timer since we're above valid terrain
+				// But only if we're getting close to it (within 1000 units)
+				if (DownHit.Distance < 1000.f)
+				{
+					ContinuousFallTime = 0.f;
+				}
+			}
+		}
+	}
+	else
+	{
+		// Not falling (or not falling fast enough) - reset timer
+		ContinuousFallTime = 0.f;
+	}
+
+	LastZPosition = CurrentZ;
 }

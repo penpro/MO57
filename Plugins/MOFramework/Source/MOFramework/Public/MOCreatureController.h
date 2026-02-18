@@ -204,9 +204,21 @@ protected:
 	UPROPERTY()
 	TWeakObjectPtr<AActor> RememberedThreatActor;
 
+	/** Pending perception settings to apply after SetupPerception. */
+	float PendingSightRadius = -1.f;
+	float PendingLoseSightRadius = -1.f;
+	float PendingPeripheralVisionAngle = -1.f;
+	float PendingHearingRange = -1.f;
+
 private:
-	/** Setup perception component and sense configs. */
+	/** Setup perception component and sense configs (defers ConfigureSense to next tick). */
 	void SetupPerception();
+
+	/** Called next tick after SetupPerception to finalize when listener ID is valid. */
+	void FinalizePerceptionSetup();
+
+	/** Apply any pending perception settings that were requested before perception was ready. */
+	void ApplyPendingPerceptionSettings();
 
 	/** Called when perception detects or loses an actor. */
 	UFUNCTION()

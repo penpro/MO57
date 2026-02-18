@@ -57,7 +57,7 @@ void AMOCreatureController::SetupPerception()
 		return;
 	}
 
-	// Create and configure sight sense
+	// Create sense configs but don't call ConfigureSense yet - wait for listener registration
 	SightConfig = NewObject<UAISenseConfig_Sight>(this, UAISenseConfig_Sight::StaticClass(), TEXT("SightConfig"));
 	if (SightConfig)
 	{
@@ -69,11 +69,8 @@ void AMOCreatureController::SetupPerception()
 		SightConfig->DetectionByAffiliation.bDetectEnemies = true;
 		SightConfig->DetectionByAffiliation.bDetectNeutrals = true;
 		SightConfig->DetectionByAffiliation.bDetectFriendlies = false;
-
-		PerceptionComp->ConfigureSense(*SightConfig);
 	}
 
-	// Create and configure hearing sense
 	HearingConfig = NewObject<UAISenseConfig_Hearing>(this, UAISenseConfig_Hearing::StaticClass(), TEXT("HearingConfig"));
 	if (HearingConfig)
 	{
@@ -82,20 +79,67 @@ void AMOCreatureController::SetupPerception()
 		HearingConfig->DetectionByAffiliation.bDetectEnemies = true;
 		HearingConfig->DetectionByAffiliation.bDetectNeutrals = true;
 		HearingConfig->DetectionByAffiliation.bDetectFriendlies = false;
+	}
 
+	// Bind to perception updates
+	PerceptionComp->OnTargetPerceptionUpdated.AddDynamic(this, &AMOCreatureController::OnTargetPerceptionUpdated);
+
+	// Defer ConfigureSense to next frame when listener ID will be valid
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().SetTimerForNextTick(FTimerDelegate::CreateWeakLambda(this, [this]()
+		{
+			FinalizePerceptionSetup();
+		}));
+	}
+}
+
+void AMOCreatureController::FinalizePerceptionSetup()
+{
+	UAIPerceptionComponent* PerceptionComp = GetPerceptionComponent();
+	if (!PerceptionComp)
+	{
+		return;
+	}
+
+	// Now that listener ID is valid, configure the senses
+	if (SightConfig)
+	{
+		PerceptionComp->ConfigureSense(*SightConfig);
+	}
+
+	if (HearingConfig)
+	{
 		PerceptionComp->ConfigureSense(*HearingConfig);
 	}
 
 	// Set dominant sense to sight
 	PerceptionComp->SetDominantSense(UAISenseConfig_Sight::StaticClass());
 
-	// Bind to perception updates
-	PerceptionComp->OnTargetPerceptionUpdated.AddDynamic(this, &AMOCreatureController::OnTargetPerceptionUpdated);
+	// Apply any pending perception settings that were requested before perception was ready
+	ApplyPendingPerceptionSettings();
 }
 
 void AMOCreatureController::ApplyPerceptionSettings(const FMOCreatureDefinitionRow& Definition)
 {
 	UAIPerceptionComponent* PerceptionComp = GetPerceptionComponent();
+
+	// Check if perception is ready (sense configs created in SetupPerception during OnPossess)
+	bool bPerceptionReady = SightConfig != nullptr && HearingConfig != nullptr;
+
+	if (!bPerceptionReady)
+	{
+		// Store settings to apply later when perception is ready
+		PendingSightRadius = Definition.SightRadius;
+		PendingLoseSightRadius = Definition.LoseSightRadius;
+		PendingPeripheralVisionAngle = Definition.PeripheralVisionAngle;
+		PendingHearingRange = Definition.HearingRange;
+
+		// Still apply combat settings immediately
+		FleeHealthThreshold = Definition.FleeThreshold;
+		AttackRange = Definition.AttackRange;
+		return;
+	}
 
 	if (SightConfig)
 	{
@@ -124,6 +168,51 @@ void AMOCreatureController::ApplyPerceptionSettings(const FMOCreatureDefinitionR
 	AttackRange = Definition.AttackRange;
 
 	// Request perception system update
+	if (PerceptionComp)
+	{
+		PerceptionComp->RequestStimuliListenerUpdate();
+	}
+}
+
+void AMOCreatureController::ApplyPendingPerceptionSettings()
+{
+	// Check if there are pending settings (indicated by positive values)
+	if (PendingSightRadius < 0.f)
+	{
+		return;
+	}
+
+	UAIPerceptionComponent* PerceptionComp = GetPerceptionComponent();
+
+	if (SightConfig)
+	{
+		SightConfig->SightRadius = PendingSightRadius;
+		SightConfig->LoseSightRadius = PendingLoseSightRadius;
+		SightConfig->PeripheralVisionAngleDegrees = PendingPeripheralVisionAngle;
+
+		if (PerceptionComp)
+		{
+			PerceptionComp->ConfigureSense(*SightConfig);
+		}
+	}
+
+	if (HearingConfig && PendingHearingRange >= 0.f)
+	{
+		HearingConfig->HearingRange = PendingHearingRange;
+
+		if (PerceptionComp)
+		{
+			PerceptionComp->ConfigureSense(*HearingConfig);
+		}
+	}
+
+	// Clear pending flags
+	PendingSightRadius = -1.f;
+	PendingLoseSightRadius = -1.f;
+	PendingPeripheralVisionAngle = -1.f;
+	PendingHearingRange = -1.f;
+
+	// Request update now that everything is configured
 	if (PerceptionComp)
 	{
 		PerceptionComp->RequestStimuliListenerUpdate();

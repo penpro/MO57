@@ -30,6 +30,13 @@ public:
 	UPROPERTY(EditAnywhere, Config, Category="Database")
 	TSoftObjectPtr<UDataTable> SkillDefinitionsDataTable;
 
+	/**
+	 * Fallback path for Skills DataTable if soft reference fails in packaged builds.
+	 * Format: /Game/Path/To/DT_Skills.DT_Skills
+	 */
+	UPROPERTY(EditAnywhere, Config, Category="Database")
+	FString FallbackSkillsDataTablePath;
+
 	UDataTable* GetSkillDefinitionsDataTable() const;
 
 	/** Look up a skill definition by ID. Returns pointer or nullptr if not found. */
@@ -69,4 +76,7 @@ private:
 
 	static bool bCachesDirty;
 	static TMap<EMOSkillCategory, TArray<FName>> SkillsByCategory;
+
+	/** Cached pointer to loaded DataTable to avoid repeated loading. */
+	static TWeakObjectPtr<UDataTable> CachedDataTable;
 };
