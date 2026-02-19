@@ -14,12 +14,25 @@ Saved
 *.xcworkspace
 nul
 
+# Build artifacts
+*.dll
+*.pdb
+*.log
+Build/Windows/FileOpenOrder/
+
 # Build output
 Packaged/
 
-# Large asset packs (too big for GitHub - use Git LFS or download separately)
+# Large asset packs (re-downloadable from Fab/Marketplace)
 Content/BlackAlder/
 Content/CommonHazel/
 Content/MetaHumans/
 Content/UltraDynamicSky/
+Content/AnimalVarietyPack/
+Content/M5VFXVOL2/
+Content/Fab/
+Content/Characters/Genesis8/
 Plugins/MOFramework/Content/Characters/MetaHumans/
+
+# Duplicate content
+Content/Penumbra/Movies/
