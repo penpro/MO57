@@ -517,6 +517,7 @@ void AMOCharacter::SetMovementMode(EMOMovementMode NewMode)
 		*GetName(), *ModeName, ActualSpeed);
 
 	// On-screen debug message
+#if !UE_BUILD_SHIPPING
 	if (GEngine)
 	{
 		const FColor ModeColor = NewMode == EMOMovementMode::Walking ? FColor::White :
@@ -524,6 +525,7 @@ void AMOCharacter::SetMovementMode(EMOMovementMode NewMode)
 		GEngine->AddOnScreenDebugMessage(-1, 2.0f, ModeColor,
 			FString::Printf(TEXT("%s: %.0f"), *ModeName, ActualSpeed));
 	}
+#endif
 }
 
 void AMOCharacter::ToggleJog()
@@ -1280,12 +1282,14 @@ void AMOCharacter::CheckFallThroughSafety(float DeltaTime)
 				// Reset fall tracking
 				ContinuousFallTime = 0.f;
 
+#if !UE_BUILD_SHIPPING
 				// Log warning for debugging
 				if (GEngine)
 				{
 					GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Red,
 						FString::Printf(TEXT("Fall-through safety activated! Teleported to Z=%.0f"), SafeLocation.Z));
 				}
+#endif
 			}
 			else
 			{

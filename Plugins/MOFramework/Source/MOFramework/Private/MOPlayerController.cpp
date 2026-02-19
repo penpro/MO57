@@ -918,11 +918,13 @@ void AMOPlayerController::HandleDebugSpawnPawn()
 	{
 		UE_LOG(LogMOFramework, Warning, TEXT("AMOPlayerController: DebugSpawnPawnClass is not set! Set it in the Blueprint."));
 
+#if !UE_BUILD_SHIPPING
 		if (GEngine)
 		{
 			GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Red,
 				TEXT("Debug spawn failed: DebugSpawnPawnClass not set in BP_MOPlayerController"));
 		}
+#endif
 		return;
 	}
 
@@ -940,21 +942,24 @@ void AMOPlayerController::HandleDebugSpawnPawn()
 		{
 			UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Spawning and possessing debug pawn of class %s"), *DebugSpawnPawnClass->GetName());
 
+#if !UE_BUILD_SHIPPING
 			if (GEngine)
 			{
 				GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Green,
 					FString::Printf(TEXT("Spawned: %s"), *DebugSpawnPawnClass->GetName()));
 			}
+#endif
 		}
 		else
 		{
 			UE_LOG(LogMOFramework, Warning, TEXT("AMOPlayerController: Failed to spawn debug pawn"));
-
+#if !UE_BUILD_SHIPPING
 			if (GEngine)
 			{
 				GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Red,
 					TEXT("Failed to spawn debug pawn"));
 			}
+#endif
 		}
 	}
 	else
@@ -968,12 +973,14 @@ void AMOPlayerController::HandleDebugToggle()
 	bDebugModeEnabled = !bDebugModeEnabled;
 	UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Debug mode %s"), bDebugModeEnabled ? TEXT("ENABLED") : TEXT("DISABLED"));
 
-	// Could add on-screen message here
+#if !UE_BUILD_SHIPPING
+	// On-screen debug toggle feedback
 	if (GEngine)
 	{
 		GEngine->AddOnScreenDebugMessage(-1, 3.0f, bDebugModeEnabled ? FColor::Green : FColor::Red,
 			FString::Printf(TEXT("Debug Mode: %s"), bDebugModeEnabled ? TEXT("ON") : TEXT("OFF")));
 	}
+#endif
 }
 
 // ============================================================================

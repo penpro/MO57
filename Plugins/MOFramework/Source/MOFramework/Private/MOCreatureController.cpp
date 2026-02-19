@@ -1,4 +1,5 @@
 #include "MOCreatureController.h"
+#include "MOFramework.h"
 #include "MOCreatureDefinitionRow.h"
 #include "MOAnatomyComponent.h"
 #include "MOVitalsComponent.h"
@@ -255,7 +256,7 @@ void AMOCreatureController::OnTargetPerceptionUpdated(AActor* Actor, FAIStimulus
 		// Clear any pending "forget" timer since we can see the threat again
 		GetWorld()->GetTimerManager().ClearTimer(ThreatMemoryTimerHandle);
 
-		UE_LOG(LogTemp, Warning, TEXT("MOCreatureController: THREAT DETECTED - %s at distance %.1f"),
+		UE_LOG(LogMOFramework, Warning, TEXT("MOCreatureController: THREAT DETECTED - %s at distance %.1f"),
 			*Actor->GetName(), FVector::Dist(ControlledPawn->GetActorLocation(), Actor->GetActorLocation()));
 
 		// Update blackboard immediately
@@ -269,7 +270,7 @@ void AMOCreatureController::OnTargetPerceptionUpdated(AActor* Actor, FAIStimulus
 			// Update last known location
 			LastKnownThreatLocation = Actor->GetActorLocation();
 
-			UE_LOG(LogTemp, Warning, TEXT("MOCreatureController: Lost sight of %s - remembering for %.1f seconds"),
+			UE_LOG(LogMOFramework, Warning, TEXT("MOCreatureController: Lost sight of %s - remembering for %.1f seconds"),
 				*Actor->GetName(), ThreatMemoryDuration);
 
 			// Start timer to forget the threat after ThreatMemoryDuration
@@ -281,7 +282,7 @@ void AMOCreatureController::OnTargetPerceptionUpdated(AActor* Actor, FAIStimulus
 					// Only clear if this is still the remembered threat
 					if (RememberedThreatActor.Get() == Actor)
 					{
-						UE_LOG(LogTemp, Warning, TEXT("MOCreatureController: THREAT FORGOTTEN - %s"),
+						UE_LOG(LogMOFramework, Warning, TEXT("MOCreatureController: THREAT FORGOTTEN - %s"),
 							Actor ? *Actor->GetName() : TEXT("Unknown"));
 						CurrentThreatActor.Reset();
 						RememberedThreatActor.Reset();
@@ -300,14 +301,14 @@ void AMOCreatureController::UpdateThreatAssessment()
 	UAIPerceptionComponent* PerceptionComp = GetPerceptionComponent();
 	if (!PerceptionComp)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("MOCreatureController::UpdateThreatAssessment - No PerceptionComponent!"));
+		UE_LOG(LogMOFramework, Warning, TEXT("MOCreatureController::UpdateThreatAssessment - No PerceptionComponent!"));
 		return;
 	}
 
 	TArray<AActor*> PerceivedActors;
 	PerceptionComp->GetCurrentlyPerceivedActors(UAISense::StaticClass(), PerceivedActors);
 
-	UE_LOG(LogTemp, Log, TEXT("MOCreatureController: UpdateThreatAssessment - %d perceived actors"), PerceivedActors.Num());
+	UE_LOG(LogMOFramework, Log, TEXT("MOCreatureController: UpdateThreatAssessment - %d perceived actors"), PerceivedActors.Num());
 
 	// Find the closest perceived threat
 	AActor* ClosestThreat = nullptr;
@@ -369,7 +370,7 @@ void AMOCreatureController::UpdateBlackboardThreatInfo()
 {
 	if (!BlackboardComponent)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("MOCreatureController::UpdateBlackboardThreatInfo - No BlackboardComponent!"));
+		UE_LOG(LogMOFramework, Warning, TEXT("MOCreatureController::UpdateBlackboardThreatInfo - No BlackboardComponent!"));
 		return;
 	}
 
@@ -390,7 +391,7 @@ void AMOCreatureController::UpdateBlackboardThreatInfo()
 	BlackboardComponent->SetValueAsBool(TEXT("IsResting"), CurrentActivityState == EMOCreatureActivityState::Resting);
 	BlackboardComponent->SetValueAsBool(TEXT("IsSleeping"), CurrentActivityState == EMOCreatureActivityState::Sleeping);
 
-	UE_LOG(LogTemp, Warning, TEXT("MOCreatureController: Updated blackboard - HasTarget=%d, Target=%s, Distance=%.1f"),
+	UE_LOG(LogMOFramework, Warning, TEXT("MOCreatureController: Updated blackboard - HasTarget=%d, Target=%s, Distance=%.1f"),
 		bHasTarget ? 1 : 0,
 		CurrentThreatActor.IsValid() ? *CurrentThreatActor->GetName() : TEXT("None"),
 		GetDistanceToThreat());
@@ -472,7 +473,7 @@ void AMOCreatureController::SetActivityState(EMOCreatureActivityState NewState)
 	EMOCreatureActivityState OldState = CurrentActivityState;
 	CurrentActivityState = NewState;
 
-	UE_LOG(LogTemp, Warning, TEXT("MOCreatureController: Activity state changed from %d to %d"),
+	UE_LOG(LogMOFramework, Warning, TEXT("MOCreatureController: Activity state changed from %d to %d"),
 		static_cast<int32>(OldState), static_cast<int32>(NewState));
 
 	// Update blackboard with new state

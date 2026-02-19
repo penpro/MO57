@@ -1,4 +1,5 @@
 #include "BTTask_CreatureAttack.h"
+#include "MOFramework.h"
 #include "AIController.h"
 #include "BehaviorTree/BlackboardComponent.h"
 #include "GameFramework/Actor.h"
@@ -62,7 +63,7 @@ EBTNodeResult::Type UBTTask_CreatureAttack::ExecuteTask(UBehaviorTreeComponent& 
 	// }
 
 	// Simple damage application for now
-	UE_LOG(LogTemp, Log, TEXT("BTTask_CreatureAttack: %s attacking %s for %.1f damage"),
+	UE_LOG(LogMOFramework, Log, TEXT("BTTask_CreatureAttack: %s attacking %s for %.1f damage"),
 		*OwnerPawn->GetName(), *TargetActor->GetName(), BaseDamage);
 
 	// Apply damage to target (if it has a damage interface)

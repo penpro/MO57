@@ -1,4 +1,5 @@
 #include "BTTask_FleeFromThreat.h"
+#include "MOFramework.h"
 #include "AIController.h"
 #include "BehaviorTree/BlackboardComponent.h"
 #include "NavigationSystem.h"
@@ -19,19 +20,19 @@ UBTTask_FleeFromThreat::UBTTask_FleeFromThreat()
 
 EBTNodeResult::Type UBTTask_FleeFromThreat::ExecuteTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory)
 {
-	UE_LOG(LogTemp, Warning, TEXT("BTTask_FleeFromThreat: ExecuteTask called!"));
+	UE_LOG(LogMOFramework, Warning, TEXT("BTTask_FleeFromThreat: ExecuteTask called!"));
 
 	AAIController* AIController = OwnerComp.GetAIOwner();
 	if (!AIController)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("BTTask_FleeFromThreat: No AIController!"));
+		UE_LOG(LogMOFramework, Warning, TEXT("BTTask_FleeFromThreat: No AIController!"));
 		return EBTNodeResult::Failed;
 	}
 
 	APawn* OwnerPawn = AIController->GetPawn();
 	if (!OwnerPawn)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("BTTask_FleeFromThreat: No OwnerPawn!"));
+		UE_LOG(LogMOFramework, Warning, TEXT("BTTask_FleeFromThreat: No OwnerPawn!"));
 		return EBTNodeResult::Failed;
 	}
 
@@ -39,7 +40,7 @@ EBTNodeResult::Type UBTTask_FleeFromThreat::ExecuteTask(UBehaviorTreeComponent& 
 	UBlackboardComponent* BlackboardComp = OwnerComp.GetBlackboardComponent();
 	if (!BlackboardComp)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("BTTask_FleeFromThreat: No BlackboardComp!"));
+		UE_LOG(LogMOFramework, Warning, TEXT("BTTask_FleeFromThreat: No BlackboardComp!"));
 		return EBTNodeResult::Failed;
 	}
 
@@ -47,17 +48,17 @@ EBTNodeResult::Type UBTTask_FleeFromThreat::ExecuteTask(UBehaviorTreeComponent& 
 	if (!ThreatActor)
 	{
 		// No threat, nothing to flee from
-		UE_LOG(LogTemp, Warning, TEXT("BTTask_FleeFromThreat: No ThreatActor in blackboard key '%s'!"), *ThreatActorKey.SelectedKeyName.ToString());
+		UE_LOG(LogMOFramework, Warning, TEXT("BTTask_FleeFromThreat: No ThreatActor in blackboard key '%s'!"), *ThreatActorKey.SelectedKeyName.ToString());
 		return EBTNodeResult::Failed;
 	}
 
-	UE_LOG(LogTemp, Warning, TEXT("BTTask_FleeFromThreat: Fleeing from %s"), *ThreatActor->GetName());
+	UE_LOG(LogMOFramework, Warning, TEXT("BTTask_FleeFromThreat: Fleeing from %s"), *ThreatActor->GetName());
 
 	// Find flee location
 	FVector FleeLocation;
 	if (!FindFleeLocation(OwnerPawn, ThreatActor, FleeLocation))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("BTTask_FleeFromThreat: Could not find valid flee location for %s"),
+		UE_LOG(LogMOFramework, Warning, TEXT("BTTask_FleeFromThreat: Could not find valid flee location for %s"),
 			*OwnerPawn->GetName());
 		return EBTNodeResult::Failed;
 	}
@@ -88,7 +89,7 @@ EBTNodeResult::Type UBTTask_FleeFromThreat::ExecuteTask(UBehaviorTreeComponent& 
 	if (MoveResult.Code == EPathFollowingRequestResult::Failed)
 	{
 		// MoveTo failed - use direct movement
-		UE_LOG(LogTemp, Warning, TEXT("BTTask_FleeFromThreat: MoveTo failed, using direct movement"));
+		UE_LOG(LogMOFramework, Warning, TEXT("BTTask_FleeFromThreat: MoveTo failed, using direct movement"));
 		MyMemory->bUseDirectMovement = true;
 	}
 	else
@@ -122,12 +123,12 @@ EBTNodeResult::Type UBTTask_FleeFromThreat::ExecuteTask(UBehaviorTreeComponent& 
 			}
 
 			Movement->MaxWalkSpeed = FleeSpeed;
-			UE_LOG(LogTemp, Warning, TEXT("BTTask_FleeFromThreat: Set flee speed to %.1f (was %.1f)"),
+			UE_LOG(LogMOFramework, Warning, TEXT("BTTask_FleeFromThreat: Set flee speed to %.1f (was %.1f)"),
 				FleeSpeed, MyMemory->OriginalWalkSpeed);
 		}
 	}
 
-	UE_LOG(LogTemp, Warning, TEXT("BTTask_FleeFromThreat: %s fleeing to %s (direct=%d)"),
+	UE_LOG(LogMOFramework, Warning, TEXT("BTTask_FleeFromThreat: %s fleeing to %s (direct=%d)"),
 		*OwnerPawn->GetName(), *FleeLocation.ToString(), MyMemory->bUseDirectMovement ? 1 : 0);
 
 	return EBTNodeResult::InProgress;
@@ -290,7 +291,7 @@ bool UBTTask_FleeFromThreat::FindFleeLocation(APawn* OwnerPawn, AActor* ThreatAc
 		if (NewDistanceToThreat > CurrentDistanceToThreat)
 		{
 			OutLocation = TargetLocation;
-			UE_LOG(LogTemp, Warning, TEXT("BTTask_FleeFromThreat: Using direct location (no navmesh)"));
+			UE_LOG(LogMOFramework, Warning, TEXT("BTTask_FleeFromThreat: Using direct location (no navmesh)"));
 			return true;
 		}
 	}

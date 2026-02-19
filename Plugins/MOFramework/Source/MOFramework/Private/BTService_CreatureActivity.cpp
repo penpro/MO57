@@ -1,4 +1,5 @@
 #include "BTService_CreatureActivity.h"
+#include "MOFramework.h"
 #include "MOCreatureController.h"
 #include "MOCreatureTypes.h"
 #include "MOWeatherIntegrationSubsystem.h"
@@ -52,7 +53,7 @@ void UBTService_CreatureActivity::TickNode(UBehaviorTreeComponent& OwnerComp, ui
 		if (CurrentState == EMOCreatureActivityState::Resting ||
 			CurrentState == EMOCreatureActivityState::Sleeping)
 		{
-			UE_LOG(LogTemp, Warning, TEXT("BTService_CreatureActivity: Waking up due to threat!"));
+			UE_LOG(LogMOFramework, Warning, TEXT("BTService_CreatureActivity: Waking up due to threat!"));
 			Controller->SetActivityState(EMOCreatureActivityState::Active);
 			CurrentStateDuration = 0.f;
 		}
@@ -75,7 +76,7 @@ void UBTService_CreatureActivity::TickNode(UBehaviorTreeComponent& OwnerComp, ui
 		// Night time - should be sleeping
 		if (CurrentState != EMOCreatureActivityState::Sleeping)
 		{
-			UE_LOG(LogTemp, Log, TEXT("BTService_CreatureActivity: Night time, going to sleep"));
+			UE_LOG(LogMOFramework, Log, TEXT("BTService_CreatureActivity: Night time, going to sleep"));
 			Controller->SetActivityState(EMOCreatureActivityState::Sleeping);
 			CurrentStateDuration = 0.f;
 		}
@@ -87,7 +88,7 @@ void UBTService_CreatureActivity::TickNode(UBehaviorTreeComponent& OwnerComp, ui
 		{
 		case EMOCreatureActivityState::Sleeping:
 			// Wake up - it's daytime
-			UE_LOG(LogTemp, Log, TEXT("BTService_CreatureActivity: Daytime, waking up"));
+			UE_LOG(LogMOFramework, Log, TEXT("BTService_CreatureActivity: Daytime, waking up"));
 			Controller->SetActivityState(EMOCreatureActivityState::Active);
 			CurrentStateDuration = 0.f;
 			break;
@@ -97,7 +98,7 @@ void UBTService_CreatureActivity::TickNode(UBehaviorTreeComponent& OwnerComp, ui
 			CurrentStateDuration += DeltaSeconds;
 			if (CurrentStateDuration >= TargetRestDuration)
 			{
-				UE_LOG(LogTemp, Log, TEXT("BTService_CreatureActivity: Done resting (%.1f seconds)"), CurrentStateDuration);
+				UE_LOG(LogMOFramework, Log, TEXT("BTService_CreatureActivity: Done resting (%.1f seconds)"), CurrentStateDuration);
 				Controller->SetActivityState(EMOCreatureActivityState::Active);
 				CurrentStateDuration = 0.f;
 			}
@@ -116,7 +117,7 @@ void UBTService_CreatureActivity::TickNode(UBehaviorTreeComponent& OwnerComp, ui
 			{
 				// Start resting
 				TargetRestDuration = FMath::RandRange(RestDurationMin, RestDurationMax);
-				UE_LOG(LogTemp, Log, TEXT("BTService_CreatureActivity: Starting rest for %.1f seconds"), TargetRestDuration);
+				UE_LOG(LogMOFramework, Log, TEXT("BTService_CreatureActivity: Starting rest for %.1f seconds"), TargetRestDuration);
 				Controller->SetActivityState(EMOCreatureActivityState::Resting);
 				CurrentStateDuration = 0.f;
 			}

@@ -1,4 +1,5 @@
 #include "MOSkillDatabaseSettings.h"
+#include "MOFramework.h"
 
 #include "Engine/DataTable.h"
 #include "Engine/Texture2D.h"
@@ -24,20 +25,20 @@ UDataTable* UMOSkillDatabaseSettings::GetSkillDefinitionsDataTable() const
 		LoadedTable = SkillDefinitionsDataTable.LoadSynchronous();
 		if (LoadedTable)
 		{
-			UE_LOG(LogTemp, Log, TEXT("[MOSkillDatabaseSettings] Loaded DataTable from soft ref: %s (%d rows)"),
+			UE_LOG(LogMOFramework, Log, TEXT("[MOSkillDatabaseSettings] Loaded DataTable from soft ref: %s (%d rows)"),
 				*LoadedTable->GetName(), LoadedTable->GetRowNames().Num());
 			CachedDataTable = LoadedTable;
 			return LoadedTable;
 		}
 		else
 		{
-			UE_LOG(LogTemp, Warning, TEXT("[MOSkillDatabaseSettings] Failed to load from soft ref: %s, trying fallback..."),
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOSkillDatabaseSettings] Failed to load from soft ref: %s, trying fallback..."),
 				*SkillDefinitionsDataTable.ToString());
 		}
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[MOSkillDatabaseSettings] Soft ref is NULL, trying fallback path..."));
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOSkillDatabaseSettings] Soft ref is NULL, trying fallback path..."));
 	}
 
 	// Try fallback path for packaged builds
@@ -46,14 +47,14 @@ UDataTable* UMOSkillDatabaseSettings::GetSkillDefinitionsDataTable() const
 		LoadedTable = Cast<UDataTable>(StaticLoadObject(UDataTable::StaticClass(), nullptr, *FallbackSkillsDataTablePath));
 		if (LoadedTable)
 		{
-			UE_LOG(LogTemp, Log, TEXT("[MOSkillDatabaseSettings] Loaded DataTable from fallback path: %s (%d rows)"),
+			UE_LOG(LogMOFramework, Log, TEXT("[MOSkillDatabaseSettings] Loaded DataTable from fallback path: %s (%d rows)"),
 				*LoadedTable->GetName(), LoadedTable->GetRowNames().Num());
 			CachedDataTable = LoadedTable;
 			return LoadedTable;
 		}
 		else
 		{
-			UE_LOG(LogTemp, Error, TEXT("[MOSkillDatabaseSettings] Failed to load from fallback path: %s"),
+			UE_LOG(LogMOFramework, Error, TEXT("[MOSkillDatabaseSettings] Failed to load from fallback path: %s"),
 				*FallbackSkillsDataTablePath);
 		}
 	}
@@ -70,14 +71,14 @@ UDataTable* UMOSkillDatabaseSettings::GetSkillDefinitionsDataTable() const
 		LoadedTable = Cast<UDataTable>(StaticLoadObject(UDataTable::StaticClass(), nullptr, Path));
 		if (LoadedTable)
 		{
-			UE_LOG(LogTemp, Log, TEXT("[MOSkillDatabaseSettings] Loaded DataTable from hardcoded path: %s (%d rows)"),
+			UE_LOG(LogMOFramework, Log, TEXT("[MOSkillDatabaseSettings] Loaded DataTable from hardcoded path: %s (%d rows)"),
 				Path, LoadedTable->GetRowNames().Num());
 			CachedDataTable = LoadedTable;
 			return LoadedTable;
 		}
 	}
 
-	UE_LOG(LogTemp, Error, TEXT("[MOSkillDatabaseSettings] Could not load Skills DataTable from any source!"));
+	UE_LOG(LogMOFramework, Error, TEXT("[MOSkillDatabaseSettings] Could not load Skills DataTable from any source!"));
 	return nullptr;
 }
 
@@ -194,7 +195,7 @@ void UMOSkillDatabaseSettings::InvalidateCache()
 	SkillsByCategory.Empty();
 	CachedDataTable.Reset();
 
-	UE_LOG(LogTemp, Log, TEXT("[MOSkillDatabaseSettings] Cache invalidated"));
+	UE_LOG(LogMOFramework, Log, TEXT("[MOSkillDatabaseSettings] Cache invalidated"));
 }
 
 void UMOSkillDatabaseSettings::EnsureCachesBuilt()
@@ -241,6 +242,6 @@ void UMOSkillDatabaseSettings::BuildCaches()
 
 	bCachesDirty = false;
 
-	UE_LOG(LogTemp, Log, TEXT("[MOSkillDatabaseSettings] Cache built: %d skills, %d categories"),
+	UE_LOG(LogMOFramework, Log, TEXT("[MOSkillDatabaseSettings] Cache built: %d skills, %d categories"),
 		AllSkillIds.Num(), SkillsByCategory.Num());
 }

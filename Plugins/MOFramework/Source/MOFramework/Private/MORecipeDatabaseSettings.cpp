@@ -1,4 +1,5 @@
 #include "MORecipeDatabaseSettings.h"
+#include "MOFramework.h"
 
 #include "Engine/DataTable.h"
 #include "Engine/Texture2D.h"
@@ -186,7 +187,7 @@ void UMORecipeDatabaseSettings::InvalidateCache()
 	CraftableRecipeIds.Empty();
 	RecipesByCategory.Empty();
 
-	UE_LOG(LogTemp, Log, TEXT("[MORecipeDatabaseSettings] Cache invalidated"));
+	UE_LOG(LogMOFramework, Log, TEXT("[MORecipeDatabaseSettings] Cache invalidated"));
 }
 
 void UMORecipeDatabaseSettings::EnsureCachesBuilt()
@@ -260,7 +261,7 @@ void UMORecipeDatabaseSettings::BuildCaches()
 
 	bCachesDirty = false;
 
-	UE_LOG(LogTemp, Log, TEXT("[MORecipeDatabaseSettings] Cache built: %d recipes, %d buildings, %d craftable, %d stations, %d categories"),
+	UE_LOG(LogMOFramework, Log, TEXT("[MORecipeDatabaseSettings] Cache built: %d recipes, %d buildings, %d craftable, %d stations, %d categories"),
 		AllRecipeIds.Num(),
 		BuildingRecipeIds.Num(),
 		CraftableRecipeIds.Num(),

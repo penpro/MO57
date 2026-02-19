@@ -1,4 +1,5 @@
 #include "MOAIController.h"
+#include "MOFramework.h"
 #include "BehaviorTree/BehaviorTreeComponent.h"
 #include "BehaviorTree/BlackboardComponent.h"
 #include "BehaviorTree/BehaviorTree.h"
@@ -25,7 +26,7 @@ void AMOAIController::OnPossess(APawn* InPawn)
 {
 	Super::OnPossess(InPawn);
 
-	UE_LOG(LogTemp, Log, TEXT("AMOAIController: Possessed %s"), InPawn ? *InPawn->GetName() : TEXT("None"));
+	UE_LOG(LogMOFramework, Log, TEXT("AMOAIController: Possessed %s"), InPawn ? *InPawn->GetName() : TEXT("None"));
 
 	// Run default behavior tree if set and no task is active
 	if (IsIdle() && DefaultBehaviorTree.IsValid())
@@ -75,7 +76,7 @@ bool AMOAIController::AssignTask(const FString& TaskName, AActor* TargetActor,
 
 	if (!BTToRun)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("AMOAIController: No behavior tree available for task '%s'"), *TaskName);
+		UE_LOG(LogMOFramework, Warning, TEXT("AMOAIController: No behavior tree available for task '%s'"), *TaskName);
 		SetTaskState(EMOAITaskState::Failed);
 		return false;
 	}
@@ -86,14 +87,14 @@ bool AMOAIController::AssignTask(const FString& TaskName, AActor* TargetActor,
 	// Run the behavior tree
 	if (!RunBehaviorTree(BTToRun))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("AMOAIController: Failed to run behavior tree for task '%s'"), *TaskName);
+		UE_LOG(LogMOFramework, Warning, TEXT("AMOAIController: Failed to run behavior tree for task '%s'"), *TaskName);
 		SetTaskState(EMOAITaskState::Failed);
 		return false;
 	}
 
 	SetTaskState(EMOAITaskState::MovingToTarget);
 
-	UE_LOG(LogTemp, Log, TEXT("AMOAIController: Assigned task '%s' to %s"),
+	UE_LOG(LogMOFramework, Log, TEXT("AMOAIController: Assigned task '%s' to %s"),
 		*TaskName, GetPawn() ? *GetPawn()->GetName() : TEXT("None"));
 
 	return true;
@@ -127,7 +128,7 @@ void AMOAIController::CancelCurrentTask()
 	// Update state
 	SetTaskState(EMOAITaskState::Idle);
 
-	UE_LOG(LogTemp, Log, TEXT("AMOAIController: Cancelled task '%s'"), *CancelledTask);
+	UE_LOG(LogMOFramework, Log, TEXT("AMOAIController: Cancelled task '%s'"), *CancelledTask);
 }
 
 void AMOAIController::SetTaskState(EMOAITaskState NewState)
@@ -160,7 +161,7 @@ void AMOAIController::ReportTaskComplete(bool bSuccess)
 	// Broadcast completion
 	OnTaskCompleted.Broadcast(bSuccess, CompletedTask);
 
-	UE_LOG(LogTemp, Log, TEXT("AMOAIController: Task '%s' %s"),
+	UE_LOG(LogMOFramework, Log, TEXT("AMOAIController: Task '%s' %s"),
 		*CompletedTask, bSuccess ? TEXT("completed successfully") : TEXT("failed"));
 
 	// If we have a default behavior tree, restart it
@@ -224,7 +225,7 @@ void AMOAIController::OnMoveCompleted(FAIRequestID RequestID, const FPathFollowi
 	else if (Result.Code == EPathFollowingResult::Blocked || Result.Code == EPathFollowingResult::OffPath)
 	{
 		// Movement failed
-		UE_LOG(LogTemp, Warning, TEXT("AMOAIController: Movement failed for task '%s'"), *CurrentTaskName);
+		UE_LOG(LogMOFramework, Warning, TEXT("AMOAIController: Movement failed for task '%s'"), *CurrentTaskName);
 		// Don't immediately fail - behavior tree may handle recovery
 	}
 }

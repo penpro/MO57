@@ -1,4 +1,5 @@
 #include "BTTask_CreatureWander.h"
+#include "MOFramework.h"
 #include "AIController.h"
 #include "BehaviorTree/BlackboardComponent.h"
 #include "NavigationSystem.h"
@@ -63,13 +64,13 @@ EBTNodeResult::Type UBTTask_CreatureWander::ExecuteTask(UBehaviorTreeComponent& 
 
 	FPathFollowingRequestResult MoveResult = AIController->MoveTo(MoveRequest);
 
-	UE_LOG(LogTemp, Warning, TEXT("BTTask_CreatureWander: MoveTo result=%d (0=Failed, 1=AlreadyAtGoal, 2=RequestSuccessful)"),
+	UE_LOG(LogMOFramework, Warning, TEXT("BTTask_CreatureWander: MoveTo result=%d (0=Failed, 1=AlreadyAtGoal, 2=RequestSuccessful)"),
 		static_cast<int32>(MoveResult.Code));
 
 	if (MoveResult.Code == EPathFollowingRequestResult::Failed)
 	{
 		// MoveTo failed - try direct movement via character movement component
-		UE_LOG(LogTemp, Warning, TEXT("BTTask_CreatureWander: MoveTo failed, trying direct movement"));
+		UE_LOG(LogMOFramework, Warning, TEXT("BTTask_CreatureWander: MoveTo failed, trying direct movement"));
 
 		// Store target in node memory for tick-based movement
 		FBTWanderMemory* MyMemory = reinterpret_cast<FBTWanderMemory*>(NodeMemory);
@@ -202,7 +203,7 @@ bool UBTTask_CreatureWander::FindWanderLocation(APawn* OwnerPawn, const FVector&
 
 		// Fallback: use target location directly without navmesh validation
 		OutLocation = TargetLocation;
-		UE_LOG(LogTemp, Log, TEXT("BTTask_CreatureWander: Using direct location (no navmesh)"));
+		UE_LOG(LogMOFramework, Log, TEXT("BTTask_CreatureWander: Using direct location (no navmesh)"));
 		return true;
 	}
 

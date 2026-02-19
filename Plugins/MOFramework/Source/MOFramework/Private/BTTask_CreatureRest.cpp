@@ -1,4 +1,5 @@
 #include "BTTask_CreatureRest.h"
+#include "MOFramework.h"
 #include "MOCreatureController.h"
 #include "MOCreatureTypes.h"
 #include "AIController.h"
@@ -28,7 +29,7 @@ EBTNodeResult::Type UBTTask_CreatureRest::ExecuteTask(UBehaviorTreeComponent& Ow
 
 	Controller->SetActivityState(TargetState);
 
-	UE_LOG(LogTemp, Log, TEXT("BTTask_CreatureRest: Starting %s for %.1f seconds"),
+	UE_LOG(LogMOFramework, Log, TEXT("BTTask_CreatureRest: Starting %s for %.1f seconds"),
 		bIsSleeping ? TEXT("sleep") : TEXT("rest"),
 		MyMemory->TargetDuration);
 
@@ -50,7 +51,7 @@ void UBTTask_CreatureRest::TickTask(UBehaviorTreeComponent& OwnerComp, uint8* No
 			Controller->SetActivityState(EMOCreatureActivityState::Active);
 		}
 
-		UE_LOG(LogTemp, Log, TEXT("BTTask_CreatureRest: Finished resting after %.1f seconds"), MyMemory->ElapsedTime);
+		UE_LOG(LogMOFramework, Log, TEXT("BTTask_CreatureRest: Finished resting after %.1f seconds"), MyMemory->ElapsedTime);
 		FinishLatentTask(OwnerComp, EBTNodeResult::Succeeded);
 	}
 }
@@ -62,7 +63,7 @@ EBTNodeResult::Type UBTTask_CreatureRest::AbortTask(UBehaviorTreeComponent& Owne
 	{
 		// Wake up when aborted (threat detected, etc.)
 		Controller->SetActivityState(EMOCreatureActivityState::Active);
-		UE_LOG(LogTemp, Log, TEXT("BTTask_CreatureRest: Aborted - waking up!"));
+		UE_LOG(LogMOFramework, Log, TEXT("BTTask_CreatureRest: Aborted - waking up!"));
 	}
 
 	return EBTNodeResult::Aborted;

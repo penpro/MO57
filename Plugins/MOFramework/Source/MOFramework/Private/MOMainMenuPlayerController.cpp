@@ -220,12 +220,14 @@ void AMOMainMenuPlayerController::StartNewGame()
 		UE_LOG(LogMOFramework, Error, TEXT("[MOMainMenuPlayerController] Gameplay level not found: %s"), *LevelPackagePath);
 		UE_LOG(LogMOFramework, Error, TEXT("[MOMainMenuPlayerController] Make sure the level is included in packaging settings (MapsToCook or DirectoriesToAlwaysCook)"));
 
+#if !UE_BUILD_SHIPPING
 		// Show error to user via on-screen message
 		if (GEngine)
 		{
 			GEngine->AddOnScreenDebugMessage(-1, 10.0f, FColor::Red,
 				FString::Printf(TEXT("ERROR: Level '%s' not found! Check packaging settings."), *GameplayLevelPath));
 		}
+#endif
 		return;
 	}
 
@@ -262,12 +264,14 @@ void AMOMainMenuPlayerController::LoadGame(const FString& SlotName)
 	{
 		UE_LOG(LogMOFramework, Error, TEXT("[MOMainMenuPlayerController] Gameplay level not found: %s"), *LevelPackagePath);
 
+#if !UE_BUILD_SHIPPING
 		// Show error to user
 		if (GEngine)
 		{
 			GEngine->AddOnScreenDebugMessage(-1, 10.0f, FColor::Red,
 				FString::Printf(TEXT("ERROR: Level '%s' not found! Check packaging settings."), *GameplayLevelPath));
 		}
+#endif
 		return;
 	}
 

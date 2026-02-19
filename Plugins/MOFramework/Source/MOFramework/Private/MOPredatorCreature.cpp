@@ -1,4 +1,5 @@
 #include "MOPredatorCreature.h"
+#include "MOFramework.h"
 #include "MOCreatureController.h"
 #include "BehaviorTree/BehaviorTree.h"
 #include "BehaviorTree/BlackboardComponent.h"
@@ -65,7 +66,7 @@ void AMOPredatorCreature::AlertPack(AActor* Threat)
 		}
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("AMOPredatorCreature: %s alerted %d pack members of threat %s"),
+	UE_LOG(LogMOFramework, Log, TEXT("AMOPredatorCreature: %s alerted %d pack members of threat %s"),
 		*GetName(), PackMembers.Num() - 1, *Threat->GetName());
 }
 

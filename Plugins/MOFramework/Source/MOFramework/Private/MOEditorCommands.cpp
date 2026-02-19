@@ -1,4 +1,5 @@
 #include "CoreMinimal.h"
+#include "MOFramework.h"
 
 #if WITH_EDITOR
 
@@ -14,20 +15,20 @@
 
 static void SetupBuildingRecipes()
 {
-	UE_LOG(LogTemp, Log, TEXT("[MOEditorCommands] Setting up building recipes..."));
+	UE_LOG(LogMOFramework, Log, TEXT("[MOEditorCommands] Setting up building recipes..."));
 
 	// Get the recipe DataTable
 	const UMORecipeDatabaseSettings* Settings = GetDefault<UMORecipeDatabaseSettings>();
 	if (!Settings)
 	{
-		UE_LOG(LogTemp, Error, TEXT("[MOEditorCommands] Failed to get MORecipeDatabaseSettings"));
+		UE_LOG(LogMOFramework, Error, TEXT("[MOEditorCommands] Failed to get MORecipeDatabaseSettings"));
 		return;
 	}
 
 	UDataTable* DataTable = Settings->GetRecipeDefinitionsDataTable();
 	if (!IsValid(DataTable))
 	{
-		UE_LOG(LogTemp, Error, TEXT("[MOEditorCommands] Failed to get Recipe DataTable"));
+		UE_LOG(LogMOFramework, Error, TEXT("[MOEditorCommands] Failed to get Recipe DataTable"));
 		return;
 	}
 
@@ -40,14 +41,14 @@ static void SetupBuildingRecipes()
 		FMORecipeDefinitionRow* Row = DataTable->FindRow<FMORecipeDefinitionRow>(RecipeId, TEXT("SetupBuildingRecipes"), false);
 		if (!Row)
 		{
-			UE_LOG(LogTemp, Warning, TEXT("[MOEditorCommands] Recipe not found: %s"), *RecipeId.ToString());
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOEditorCommands] Recipe not found: %s"), *RecipeId.ToString());
 			return;
 		}
 
 		Row->BuildParts = BuildParts;
 		Row->AcceptedFuelItems = AcceptedFuelItems;
 
-		UE_LOG(LogTemp, Log, TEXT("[MOEditorCommands] Set up %s: %d BuildParts, %d FuelItems"),
+		UE_LOG(LogMOFramework, Log, TEXT("[MOEditorCommands] Set up %s: %d BuildParts, %d FuelItems"),
 			*RecipeId.ToString(), BuildParts.Num(), AcceptedFuelItems.Num());
 	};
 
@@ -203,7 +204,7 @@ static void SetupBuildingRecipes()
 	// Mark the DataTable as modified so it can be saved
 	DataTable->MarkPackageDirty();
 
-	UE_LOG(LogTemp, Log, TEXT("[MOEditorCommands] Building recipes setup complete. Remember to save the DataTable!"));
+	UE_LOG(LogMOFramework, Log, TEXT("[MOEditorCommands] Building recipes setup complete. Remember to save the DataTable!"));
 }
 
 // Register the console command

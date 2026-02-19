@@ -463,11 +463,7 @@ int32 AMOGameMode::ApplySeedToVoxelStamps(int32 WorldSeed)
 	// Convert integer seed to voxel seed string format
 	const FString VoxelSeedString = IntSeedToVoxelSeedString(WorldSeed);
 
-	UE_LOG(LogMOFramework, Warning, TEXT("========================================"));
-	UE_LOG(LogMOFramework, Warning, TEXT("[VOXEL SEED DEBUG] Applying seed..."));
-	UE_LOG(LogMOFramework, Warning, TEXT("[VOXEL SEED DEBUG]   Integer seed: %d"), WorldSeed);
-	UE_LOG(LogMOFramework, Warning, TEXT("[VOXEL SEED DEBUG]   String seed:  %s"), *VoxelSeedString);
-	UE_LOG(LogMOFramework, Warning, TEXT("========================================"));
+	UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Applying voxel seed: %d (%s)"), WorldSeed, *VoxelSeedString);
 
 	int32 StampsUpdated = 0;
 	int32 TotalStampsFound = 0;
@@ -505,22 +501,18 @@ int32 AMOGameMode::ApplySeedToVoxelStamps(int32 WorldSeed)
 				StampRef->StampSeed.Seed = VoxelSeedString;
 				StampsUpdated++;
 
-				UE_LOG(LogMOFramework, Warning, TEXT("[VOXEL SEED DEBUG] Stamp in '%s': '%s' -> '%s'"),
+				UE_LOG(LogMOFramework, Verbose, TEXT("[MOGameMode] Stamp in '%s': seed '%s' -> '%s'"),
 					*Actor->GetName(), *OldSeed, *VoxelSeedString);
 			}
 			else
 			{
-				UE_LOG(LogMOFramework, Warning, TEXT("[VOXEL SEED DEBUG] Stamp in '%s': INVALID (no stamp data)"),
+				UE_LOG(LogMOFramework, Verbose, TEXT("[MOGameMode] Stamp in '%s': no stamp data"),
 					*Actor->GetName());
 			}
 		}
 	}
 
-	UE_LOG(LogMOFramework, Warning, TEXT("========================================"));
-	UE_LOG(LogMOFramework, Warning, TEXT("[VOXEL SEED DEBUG] Summary:"));
-	UE_LOG(LogMOFramework, Warning, TEXT("[VOXEL SEED DEBUG]   Total stamps found: %d"), TotalStampsFound);
-	UE_LOG(LogMOFramework, Warning, TEXT("[VOXEL SEED DEBUG]   Stamps updated:     %d"), StampsUpdated);
-	UE_LOG(LogMOFramework, Warning, TEXT("========================================"));
+	UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Voxel seed applied to %d/%d stamps"), StampsUpdated, TotalStampsFound);
 
 	return StampsUpdated;
 }
