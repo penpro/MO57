@@ -161,7 +161,8 @@
       "WebFetch(domain:yelzkizi.org)",
       "WebFetch(domain:zomgmoz.tv)",
       "WebFetch(domain:medium.com)",
-      "WebFetch(domain:unrealcommunity.wiki)"
+      "WebFetch(domain:unrealcommunity.wiki)",
+      "Bash(git clean:*)"
     ]
   }
 }
