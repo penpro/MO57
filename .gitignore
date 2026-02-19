@@ -11,5 +11,15 @@ Saved
 *.sln
 *.suo
 *.xcodeproj
-*.xcworkspacenul
+*.xcworkspace
 nul
+
+# Build output
+Packaged/
+
+# Large asset packs (too big for GitHub - use Git LFS or download separately)
+Content/BlackAlder/
+Content/CommonHazel/
+Content/MetaHumans/
+Content/UltraDynamicSky/
+Plugins/MOFramework/Content/Characters/MetaHumans/
