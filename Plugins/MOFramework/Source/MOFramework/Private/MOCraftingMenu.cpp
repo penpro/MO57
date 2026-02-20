@@ -98,10 +98,15 @@ void UMOCraftingMenu::SetActiveStationActor(AMOCraftingStationActor* InStation)
 {
 	ActiveStationActor = InStation;
 
-	// Also update the station type if we have a valid station
+	// Update station type based on whether we have a valid station
 	if (InStation)
 	{
 		SetCraftingStation(InStation->GetStationType());
+	}
+	else
+	{
+		// Clear to hand crafting when station is removed
+		SetCraftingStation(EMOCraftingStation::None);
 	}
 
 	UpdateStationDisplay();

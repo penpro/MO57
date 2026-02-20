@@ -32,6 +32,7 @@ This file tracks changes, bug fixes, and new features. Updated incrementally to 
 - Fixed spawn algorithm preferring highest terrain instead of lowest
 - Fixed search loop exiting on first land hit instead of continuing to find beaches
 - Fixed fallback spawn using mountain peaks instead of lowest available terrain
+- Fixed crafting menu retaining station name and fuel display after closing (now properly resets to "Hand Crafting")
 
 ### Technical Notes
 

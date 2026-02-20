@@ -227,6 +227,9 @@ void UMOCraftingUIController::CloseCraftingMenu()
 	UMOCraftingMenu* MenuWidget = CraftingMenuWidget.Get();
 	if (IsValid(MenuWidget))
 	{
+		// Clear station reference to reset UI state
+		MenuWidget->SetActiveStationActor(nullptr);
+
 		if (MenuWidget->IsInViewport())
 		{
 			MenuWidget->RemoveFromParent();
