@@ -161,6 +161,7 @@ class UMOCraftingUIController;
 class UMOBuildingUIController;
 class UMOCharacterUIController;
 class UMOSystemMenuUIController;
+class UMOQuestUIController;
 
 UCLASS(ClassGroup=(MO), meta=(BlueprintSpawnableComponent))
 class MOFRAMEWORK_API UMOUIManagerComponent : public UActorComponent
@@ -355,6 +356,24 @@ public:
 	/** Get the skills panel widget (may be null if not open). */
 	UFUNCTION(BlueprintPure, Category="MO|UI|Skills")
 	UMOSkillsPanel* GetSkillsPanel() const;
+
+	// --- Quest Log ---
+
+	/** Toggle quest log visibility. */
+	UFUNCTION(BlueprintCallable, Category="MO|UI|Quest")
+	void ToggleQuestLog();
+
+	/** Open the quest log panel. */
+	UFUNCTION(BlueprintCallable, Category="MO|UI|Quest")
+	void OpenQuestLog();
+
+	/** Close the quest log panel. */
+	UFUNCTION(BlueprintCallable, Category="MO|UI|Quest")
+	void CloseQuestLog();
+
+	/** Check if quest log is open. */
+	UFUNCTION(BlueprintPure, Category="MO|UI|Quest")
+	bool IsQuestLogOpen() const;
 
 	// --- Building Menu ---
 
@@ -663,6 +682,10 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO|UI|Controllers")
 	UMOSystemMenuUIController* GetSystemMenuController() const;
 
+	/** Get the quest UI controller. Handles quest log panel and HUD tracker. */
+	UFUNCTION(BlueprintPure, Category="MO|UI|Controllers")
+	UMOQuestUIController* GetQuestController() const;
+
 	/** Show the modal background. Used by UI controllers when opening menus. */
 	UFUNCTION(BlueprintCallable, Category="MO|UI|Internal")
 	void RequestShowModalBackground();
@@ -754,6 +777,9 @@ private:
 
 	/** Cached reference to system menu UI controller. */
 	mutable TWeakObjectPtr<UMOSystemMenuUIController> CachedSystemMenuController;
+
+	/** Cached reference to quest UI controller. */
+	mutable TWeakObjectPtr<UMOQuestUIController> CachedQuestController;
 
 	// --- Mode Indicator ---
 

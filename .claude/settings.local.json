@@ -162,7 +162,22 @@
       "WebFetch(domain:zomgmoz.tv)",
       "WebFetch(domain:medium.com)",
       "WebFetch(domain:unrealcommunity.wiki)",
-      "Bash(git clean:*)"
+      "Bash(git clean:*)",
+      "Bash(FILTER_BRANCH_SQUELCH_WARNING=1 git filter-branch:*)",
+      "Bash(git fetch:*)",
+      "Bash(git lfs:*)",
+      "Bash(git count-objects:*)",
+      "Bash(xargs -0 -I{} sh -c 'wc -c < \"\"{}\"\"')",
+      "Bash(git ls-tree:*)",
+      "Bash(git reflog:*)",
+      "Bash(git gc:*)",
+      "Bash(sort:*)",
+      "Bash(for dir in AnimalVarietyPack M5VFXVOL2 MSPresets Penumbra CharacterCustomization Fab Characters)",
+      "Bash(do echo -n \"$dir: \")",
+      "Bash(uniq:*)",
+      "Bash(git rm:*)",
+      "Bash(git checkout:*)",
+      "Bash(xargs:*)"
     ]
   }
 }

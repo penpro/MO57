@@ -557,6 +557,25 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Safety")
 	float SafetyTeleportHeight = 200.0f;
 
+	/** Whether to only accept voxel terrain for safety teleport (rejects trees/meshes). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Safety")
+	bool bSafetyTeleportOnlyVoxelTerrain = true;
+
+	/**
+	 * Minimum Z component of surface normal for safety teleport (0-1).
+	 * If terrain is steeper than this, search laterally for flatter ground.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Safety", meta=(ClampMin="0.0", ClampMax="1.0"))
+	float SafetyMinSlopeNormalZ = 0.6f;
+
+	/** How far to search laterally for flat ground when terrain is too steep. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Safety")
+	float SafetyLateralSearchRadius = 2000.0f;
+
+	/** Number of samples to take when searching laterally for flat ground. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Safety")
+	int32 SafetyLateralSearchSamples = 16;
+
 private:
 	/** How long we've been continuously falling. */
 	float ContinuousFallTime = 0.f;
@@ -566,6 +585,14 @@ private:
 
 	/** Check for and handle falling through the world. */
 	void CheckFallThroughSafety(float DeltaTime);
+
+	/**
+	 * Find a safe location near the given position by searching for flat voxel terrain.
+	 * @param NearLocation The location to search around
+	 * @param OutSafeLocation The found safe location (if successful)
+	 * @return True if a safe location was found
+	 */
+	bool FindSafeTerrainNearLocation(const FVector& NearLocation, FVector& OutSafeLocation) const;
 
 	// ============================================================================
 	// MOVEMENT MODE API

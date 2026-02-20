@@ -32,6 +32,7 @@
 #include "MOIdentifiableInterface.h"
 #include "MOInventoryHolderInterface.h"
 #include "MOCreature.h"
+#include "MOQuestSubsystem.h"
 
 // Voxel plugin sculpt persistence
 #include "VoxelMinimal/Utilities/VoxelThreadingUtilities.h"
@@ -270,6 +271,7 @@ bool UMOPersistenceSubsystem::SaveWorldToSlot(const FString& SlotName)
     CaptureWorldItems(World, SaveObject);
     CaptureBuildings(World, SaveObject);
     CaptureVoxelSculptData(World, SaveObject);
+    CaptureQuestData(SaveObject);
 
     const bool bOk = UGameplayStatics::SaveGameToSlot(SaveObject, SlotName, 0);
 
@@ -511,6 +513,7 @@ FMOLoadResult UMOPersistenceSubsystem::LoadWorldFromSlotWithResult(const FString
     RespawnWorldItems(World, LoadedTyped->WorldItems, LastLoadResult);
     RespawnBuildings(World, LoadedTyped->Buildings, LastLoadResult);
     RestoreVoxelSculptData(World, LoadedTyped->VoxelSculptData);
+    RestoreQuestData(LoadedTyped->QuestData);
 
     ApplyInventoriesToSpawnedPawns(World, LoadedTyped->PawnInventoriesByGuid);
 
@@ -2242,4 +2245,45 @@ void UMOPersistenceSubsystem::SetupSpectatorCameraForLoad(UWorld* World, const U
 
     // Store pending view on player controller (MOSpectatorPawn will pick this up in BeginPlay)
     MOPC->SetSpectatorViewAboveLocation(PawnLocation, CameraHeight, PitchAngle);
+}
+
+// ============================================================================
+// QUEST PERSISTENCE
+// ============================================================================
+
+void UMOPersistenceSubsystem::CaptureQuestData(UMOWorldSaveGame* SaveObject) const
+{
+    if (!SaveObject)
+    {
+        return;
+    }
+
+    UMOQuestSubsystem* QuestSubsystem = GetGameInstance()->GetSubsystem<UMOQuestSubsystem>();
+    if (!QuestSubsystem)
+    {
+        UE_LOG(LogMOFramework, Verbose, TEXT("[MOPersist] CaptureQuestData: No quest subsystem"));
+        return;
+    }
+
+    QuestSubsystem->BuildSaveData(SaveObject->QuestData);
+
+    UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Captured quest data: %d active, %d completed"),
+        SaveObject->QuestData.ActiveQuests.Num(),
+        SaveObject->QuestData.CompletedQuestIds.Num());
+}
+
+void UMOPersistenceSubsystem::RestoreQuestData(const FMOQuestSaveData& QuestData)
+{
+    UMOQuestSubsystem* QuestSubsystem = GetGameInstance()->GetSubsystem<UMOQuestSubsystem>();
+    if (!QuestSubsystem)
+    {
+        UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] RestoreQuestData: No quest subsystem"));
+        return;
+    }
+
+    QuestSubsystem->ApplySaveData(QuestData);
+
+    UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Restored quest data: %d active, %d completed"),
+        QuestData.ActiveQuests.Num(),
+        QuestData.CompletedQuestIds.Num());
 }

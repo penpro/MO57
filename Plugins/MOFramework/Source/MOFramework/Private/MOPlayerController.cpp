@@ -22,6 +22,7 @@
 #include "MOBuildingUIController.h"
 #include "MOCharacterUIController.h"
 #include "MOSystemMenuUIController.h"
+#include "MOQuestUIController.h"
 
 AMOPlayerController::AMOPlayerController()
 {
@@ -43,6 +44,7 @@ AMOPlayerController::AMOPlayerController()
 	BuildingUIController = CreateDefaultSubobject<UMOBuildingUIController>(TEXT("BuildingUIController"));
 	CharacterUIController = CreateDefaultSubobject<UMOCharacterUIController>(TEXT("CharacterUIController"));
 	SystemMenuUIController = CreateDefaultSubobject<UMOSystemMenuUIController>(TEXT("SystemMenuUIController"));
+	QuestUIController = CreateDefaultSubobject<UMOQuestUIController>(TEXT("QuestUIController"));
 }
 
 void AMOPlayerController::BeginPlay()
@@ -62,9 +64,6 @@ void AMOPlayerController::BeginPlay()
 
 	// Apply any saved custom key bindings
 	FMOKeyBindingManager::ApplyAllBindingsFromSettings(this);
-
-	// Setup debug bindings (uses legacy input, always available)
-	SetupDebugInputBindings();
 }
 
 void AMOPlayerController::PlayerTick(float DeltaTime)
@@ -246,6 +245,16 @@ void AMOPlayerController::SetupInputComponent()
 	else
 	{
 		UE_LOG(LogMOFramework, Warning, TEXT("AMOPlayerController: SkillsAction is NOT set!"));
+	}
+
+	if (JournalAction)
+	{
+		EnhancedInput->BindAction(JournalAction, ETriggerEvent::Started, this, &AMOPlayerController::HandleJournal);
+		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound JournalAction"));
+	}
+	else
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("AMOPlayerController: JournalAction is NOT set!"));
 	}
 
 	if (BuildAction)
@@ -791,6 +800,14 @@ void AMOPlayerController::HandleSkills(const FInputActionValue& Value)
 	}
 }
 
+void AMOPlayerController::HandleJournal(const FInputActionValue& Value)
+{
+	if (UIManagerComponent)
+	{
+		UIManagerComponent->ToggleQuestLog();
+	}
+}
+
 void AMOPlayerController::HandleBuild(const FInputActionValue& Value)
 {
 	// If in placement mode, cancel it
@@ -884,103 +901,6 @@ void AMOPlayerController::HandleTerraformCycleTool(const FInputActionValue& Valu
 	{
 		IMOControllableInterface::Execute_RequestTerraformCycleTool(ControllablePawn);
 	}
-}
-
-// ============================================================================
-// DEBUG INPUT HANDLERS
-// ============================================================================
-
-void AMOPlayerController::SetupDebugInputBindings()
-{
-	if (!InputComponent)
-	{
-		UE_LOG(LogMOFramework, Warning, TEXT("AMOPlayerController: Cannot setup debug bindings - no InputComponent"));
-		return;
-	}
-
-	// Bind debug keys using legacy input (always works, no input actions needed)
-	InputComponent->BindKey(EKeys::Zero, IE_Pressed, this, &AMOPlayerController::HandleDebugSpawnPawn);
-	InputComponent->BindKey(EKeys::F1, IE_Pressed, this, &AMOPlayerController::HandleDebugToggle);
-
-	UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Debug bindings set up (0=SpawnPawn, F1=ToggleDebug)"));
-}
-
-void AMOPlayerController::HandleDebugSpawnPawn()
-{
-	if (!bDebugModeEnabled)
-	{
-		return;
-	}
-
-	UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Debug spawn pawn triggered"));
-
-	if (!DebugSpawnPawnClass)
-	{
-		UE_LOG(LogMOFramework, Warning, TEXT("AMOPlayerController: DebugSpawnPawnClass is not set! Set it in the Blueprint."));
-
-#if !UE_BUILD_SHIPPING
-		if (GEngine)
-		{
-			GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Red,
-				TEXT("Debug spawn failed: DebugSpawnPawnClass not set in BP_MOPlayerController"));
-		}
-#endif
-		return;
-	}
-
-	if (PossessionComponent)
-	{
-		// Spawn the pawn and possess it
-		bool bSuccess = PossessionComponent->TrySpawnAndPossessPawn(
-			DebugSpawnPawnClass,
-			DebugSpawnDistance,
-			FVector::ZeroVector,
-			true
-		);
-
-		if (bSuccess)
-		{
-			UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Spawning and possessing debug pawn of class %s"), *DebugSpawnPawnClass->GetName());
-
-#if !UE_BUILD_SHIPPING
-			if (GEngine)
-			{
-				GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Green,
-					FString::Printf(TEXT("Spawned: %s"), *DebugSpawnPawnClass->GetName()));
-			}
-#endif
-		}
-		else
-		{
-			UE_LOG(LogMOFramework, Warning, TEXT("AMOPlayerController: Failed to spawn debug pawn"));
-#if !UE_BUILD_SHIPPING
-			if (GEngine)
-			{
-				GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Red,
-					TEXT("Failed to spawn debug pawn"));
-			}
-#endif
-		}
-	}
-	else
-	{
-		UE_LOG(LogMOFramework, Warning, TEXT("AMOPlayerController: No PossessionComponent available"));
-	}
-}
-
-void AMOPlayerController::HandleDebugToggle()
-{
-	bDebugModeEnabled = !bDebugModeEnabled;
-	UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Debug mode %s"), bDebugModeEnabled ? TEXT("ENABLED") : TEXT("DISABLED"));
-
-#if !UE_BUILD_SHIPPING
-	// On-screen debug toggle feedback
-	if (GEngine)
-	{
-		GEngine->AddOnScreenDebugMessage(-1, 3.0f, bDebugModeEnabled ? FColor::Green : FColor::Red,
-			FString::Printf(TEXT("Debug Mode: %s"), bDebugModeEnabled ? TEXT("ON") : TEXT("OFF")));
-	}
-#endif
 }
 
 // ============================================================================

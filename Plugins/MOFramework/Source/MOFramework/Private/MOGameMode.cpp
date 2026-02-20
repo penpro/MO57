@@ -287,8 +287,8 @@ FVector AMOGameMode::FindSafeSpawnLocation() const
 	// Target beach spawn: between MinSpawnHeightAboveWater and MaxSpawnHeightAboveWater
 	const float IdealBeachMaxZ = WaterLevelZ + MaxSpawnHeightAboveWater;
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] FindSafeSpawnLocation: WaterLevelZ=%.1f, MinSpawnZ=%.1f, BeachMaxZ=%.1f"),
-		WaterLevelZ, MinSpawnZ, IdealBeachMaxZ);
+	UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] FindSafeSpawnLocation: WaterLevelZ=%.1f, MinSpawnZ=%.1f, BeachMaxZ=%.1f, MinSlopeNormalZ=%.2f, VoxelOnly=%d"),
+		WaterLevelZ, MinSpawnZ, IdealBeachMaxZ, MinSpawnSurfaceNormalZ, bSpawnOnlyOnVoxelTerrain ? 1 : 0);
 
 	// Track best beach candidate (lowest point within beach height range)
 	FVector BestBeachLocation = FVector::ZeroVector;
@@ -302,10 +302,37 @@ FVector AMOGameMode::FindSafeSpawnLocation() const
 
 	int32 TotalHits = 0;
 	int32 HitsAboveWater = 0;
+	int32 HitsRejectedNotVoxel = 0;
+	int32 HitsRejectedTooSteep = 0;
 
 	FCollisionQueryParams Params;
 	Params.bTraceComplex = false;  // Use simple collision for voxel terrain
 	Params.bReturnPhysicalMaterial = false;
+
+	// Helper lambda to validate a hit result
+	auto IsValidSpawnHit = [this, &HitsRejectedNotVoxel, &HitsRejectedTooSteep](const FHitResult& Hit) -> bool
+	{
+		// Check if we hit voxel terrain (AVoxelWorld)
+		if (bSpawnOnlyOnVoxelTerrain)
+		{
+			AActor* HitActor = Hit.GetActor();
+			if (!HitActor || !HitActor->IsA<AVoxelWorld>())
+			{
+				++HitsRejectedNotVoxel;
+				return false;
+			}
+		}
+
+		// Check slope - surface normal Z component must be above threshold
+		// Normal.Z of 1.0 = flat, 0.7 = ~45 degrees, 0.0 = vertical wall
+		if (Hit.ImpactNormal.Z < MinSpawnSurfaceNormalZ)
+		{
+			++HitsRejectedTooSteep;
+			return false;
+		}
+
+		return true;
+	};
 
 	// Search expanding rings until we find a BEACH (not just any land)
 	// Keep searching even after finding land - we want to find a beach
@@ -318,7 +345,7 @@ FVector AMOGameMode::FindSafeSpawnLocation() const
 		float InnerRadius = Ring * RingWidth;
 		float OuterRadius = (Ring + 1) * RingWidth;
 
-		UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Searching ring %d: %.0f - %.0f cm from center"),
+		UE_LOG(LogMOFramework, Verbose, TEXT("[MOGameMode] Searching ring %d: %.0f - %.0f cm from center"),
 			Ring, InnerRadius, OuterRadius);
 
 		for (int32 Sample = 0; Sample < SamplesPerRing; ++Sample)
@@ -338,11 +365,10 @@ FVector AMOGameMode::FindSafeSpawnLocation() const
 			{
 				TotalHits++;
 
-				// Log first few hits of each ring
-				if (Sample < 3)
+				// Validate this hit is on voxel terrain and not too steep
+				if (!IsValidSpawnHit(Hit))
 				{
-					UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Ring %d Hit: Z=%.1f at XY=(%.0f, %.0f)"),
-						Ring, Hit.Location.Z, Hit.Location.X, Hit.Location.Y);
+					continue;
 				}
 
 				// Check if above water level - this is LAND
@@ -365,8 +391,8 @@ FVector AMOGameMode::FindSafeSpawnLocation() const
 							if (Hit.Location.Z < WaterLevelZ + 200.0f)
 							{
 								FVector SpawnLocation = Hit.Location + FVector(0, 0, SpawnHeightOffset);
-								UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Found ideal beach spawn in ring %d: %s (Z=%.1f above water)"),
-									Ring, *SpawnLocation.ToString(), Hit.Location.Z - WaterLevelZ);
+								UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Found ideal beach spawn in ring %d: %s (Z=%.1f above water, slope=%.2f)"),
+									Ring, *SpawnLocation.ToString(), Hit.Location.Z - WaterLevelZ, Hit.ImpactNormal.Z);
 								return SpawnLocation;
 							}
 						}
@@ -403,6 +429,12 @@ FVector AMOGameMode::FindSafeSpawnLocation() const
 			{
 				TotalHits++;
 
+				// Validate this hit is on voxel terrain and not too steep
+				if (!IsValidSpawnHit(Hit))
+				{
+					continue;
+				}
+
 				if (Hit.Location.Z > MinSpawnZ && Hit.Location.Z < IdealBeachMaxZ && Hit.Location.Z < BestBeachZ)
 				{
 					BestBeachZ = Hit.Location.Z;
@@ -411,8 +443,8 @@ FVector AMOGameMode::FindSafeSpawnLocation() const
 
 					if (Hit.Location.Z < WaterLevelZ + 200.0f)
 					{
-						UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Found beach near land: %s (Z=%.1f above water)"),
-							*BestBeachLocation.ToString(), Hit.Location.Z - WaterLevelZ);
+						UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Found beach near land: %s (Z=%.1f above water, slope=%.2f)"),
+							*BestBeachLocation.ToString(), Hit.Location.Z - WaterLevelZ, Hit.ImpactNormal.Z);
 						return BestBeachLocation;
 					}
 				}
@@ -420,8 +452,8 @@ FVector AMOGameMode::FindSafeSpawnLocation() const
 		}
 	}
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Spawn search stats: TotalHits=%d, HitsAboveWater=%d, FoundBeach=%d, FoundLand=%d"),
-		TotalHits, HitsAboveWater, bFoundBeach ? 1 : 0, bFoundLand ? 1 : 0);
+	UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Spawn search stats: TotalHits=%d, AboveWater=%d, RejectedNotVoxel=%d, RejectedSteep=%d, FoundBeach=%d, FoundLand=%d"),
+		TotalHits, HitsAboveWater, HitsRejectedNotVoxel, HitsRejectedTooSteep, bFoundBeach ? 1 : 0, bFoundLand ? 1 : 0);
 
 	// Prefer beach location if found
 	if (bFoundBeach)

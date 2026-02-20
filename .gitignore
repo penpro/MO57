@@ -23,15 +23,11 @@ Build/Windows/FileOpenOrder/
 # Build output
 Packaged/
 
-# Large asset packs (re-downloadable from Fab/Marketplace)
+# Large asset packs NOT in git (re-download from Fab/Marketplace/Quixel)
 Content/BlackAlder/
 Content/CommonHazel/
 Content/MetaHumans/
 Content/UltraDynamicSky/
-Content/AnimalVarietyPack/
-Content/M5VFXVOL2/
-Content/Fab/
-Content/Characters/Genesis8/
 Plugins/MOFramework/Content/Characters/MetaHumans/
 
 # Duplicate content

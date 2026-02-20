@@ -1188,12 +1188,9 @@ AActor* UMOInventoryComponent::DropItemByGuid(const FGuid& ItemGuid, const FVect
 	const TSubclassOf<AActor> DropActorClass = ResolveDropActorClassFromDataTable(Entry.ItemDefinitionId);
 	if (!DropActorClass)
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventory] DropItemByGuid: no drop actor class for ItemDefinitionId=%s"), *Entry.ItemDefinitionId.ToString());
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventory] DropItemByGuid: no drop actor class for %s"), *Entry.ItemDefinitionId.ToString());
 		return nullptr;
 	}
-
-	UE_LOG(LogMOFramework, Warning, TEXT("[MOInventory] DropItemByGuid: Spawning %s for ItemDefinitionId=%s at Location=%s"),
-		*DropActorClass->GetName(), *Entry.ItemDefinitionId.ToString(), *DropLocation.ToString());
 
 	UWorld* World = GetWorld();
 	if (!World)
@@ -1210,7 +1207,6 @@ AActor* UMOInventoryComponent::DropItemByGuid(const FGuid& ItemGuid, const FVect
 		{
 			if (PersistenceSubsystem->IsGuidDestroyed(Entry.ItemGuid))
 			{
-				UE_LOG(LogMOFramework, Log, TEXT("[MOInventory] DropItemByGuid: Clearing GUID %s from destroyed list"), *Entry.ItemGuid.ToString(EGuidFormats::Short));
 				PersistenceSubsystem->ClearDestroyedGuid(Entry.ItemGuid);
 			}
 		}
@@ -1222,18 +1218,13 @@ AActor* UMOInventoryComponent::DropItemByGuid(const FGuid& ItemGuid, const FVect
 	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
 
 	const FTransform SpawnTransform(DropRotation, DropLocation);
-	UE_LOG(LogMOFramework, Warning, TEXT("[MOInventory] DropItemByGuid: SpawnTransform Location=%s, Rotation=%s"),
-		*SpawnTransform.GetLocation().ToString(), *SpawnTransform.GetRotation().Rotator().ToString());
 
 	AActor* SpawnedActor = World->SpawnActor<AActor>(DropActorClass, SpawnTransform, SpawnParams);
 	if (!IsValid(SpawnedActor))
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventory] DropItemByGuid: spawn failed for ItemDefinitionId=%s"), *Entry.ItemDefinitionId.ToString());
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventory] DropItemByGuid: spawn failed for %s"), *Entry.ItemDefinitionId.ToString());
 		return nullptr;
 	}
-
-	UE_LOG(LogMOFramework, Warning, TEXT("[MOInventory] DropItemByGuid: Actor spawned! Name=%s, ActualLocation=%s"),
-		*SpawnedActor->GetName(), *SpawnedActor->GetActorLocation().ToString());
 
 	TryWriteDroppedItemPayload(SpawnedActor, Entry.ItemGuid, Entry.Quantity, Entry.ItemDefinitionId);
 
@@ -1252,15 +1243,10 @@ AActor* UMOInventoryComponent::DropItemByGuid(const FGuid& ItemGuid, const FVect
 
 		// Enable drop physics so the item settles naturally on the ground
 		WorldItem->EnableDropPhysics();
-
-		UE_LOG(LogMOFramework, Log, TEXT("[MOInventory] DropItemByGuid: Applied item definition visuals, restored location to %s, enabled drop physics"),
-			*PreservedLocation.ToString());
 	}
 
 	// Remove the entire stack so the same GUID does not exist in two places.
 	RemoveItemByGuid(ItemGuid, Entry.Quantity);
-
-	UE_LOG(LogMOFramework, Log, TEXT("[MOInventory] DropItemByGuid: Successfully dropped item GUID=%s"), *ItemGuid.ToString(EGuidFormats::Short));
 
 	return SpawnedActor;
 }

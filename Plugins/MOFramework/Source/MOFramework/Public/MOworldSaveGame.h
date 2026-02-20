@@ -12,6 +12,7 @@
 #include "MOMentalStateComponent.h"
 #include "MOSkillsComponent.h"
 #include "MOEquipmentComponent.h"
+#include "MOQuestTypes.h"
 #include "MOworldSaveGame.generated.h"
 
 USTRUCT(BlueprintType)
@@ -266,6 +267,10 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Metadata")
     FGuid LastPossessedPawnGuid;
 
+    /** World seed used for procedural generation (voxel terrain, etc.). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Metadata")
+    int32 WorldSeed = 0;
+
     // ============================================================================
     // WORLD DATA
     // ============================================================================
@@ -305,4 +310,10 @@ public:
     /** All voxel sculpt actor states (terrain modifications). */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Voxel")
     TArray<FMOVoxelSculptSaveRecord> VoxelSculptData;
+
+    // --- Quest System Save Data ---
+
+    /** Quest progress (active quests, completed quest IDs). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Quest")
+    FMOQuestSaveData QuestData;
 };

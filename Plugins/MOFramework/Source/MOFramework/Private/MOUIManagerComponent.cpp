@@ -75,6 +75,7 @@
 #include "MOBuildingUIController.h"
 #include "MOCharacterUIController.h"
 #include "MOSystemMenuUIController.h"
+#include "MOQuestUIController.h"
 
 UMOUIManagerComponent::UMOUIManagerComponent()
 {
@@ -632,6 +633,43 @@ UMOSkillsPanel* UMOUIManagerComponent::GetSkillsPanel() const
 }
 
 // =============================================================================
+// Quest Log (Delegated to MOQuestUIController)
+// =============================================================================
+
+void UMOUIManagerComponent::ToggleQuestLog()
+{
+	if (UMOQuestUIController* QuestController = GetQuestController())
+	{
+		QuestController->ToggleQuestLog();
+	}
+}
+
+void UMOUIManagerComponent::OpenQuestLog()
+{
+	if (UMOQuestUIController* QuestController = GetQuestController())
+	{
+		QuestController->OpenQuestLog();
+	}
+}
+
+void UMOUIManagerComponent::CloseQuestLog()
+{
+	if (UMOQuestUIController* QuestController = GetQuestController())
+	{
+		QuestController->CloseQuestLog();
+	}
+}
+
+bool UMOUIManagerComponent::IsQuestLogOpen() const
+{
+	if (UMOQuestUIController* QuestController = GetQuestController())
+	{
+		return QuestController->IsQuestLogOpen();
+	}
+	return false;
+}
+
+// =============================================================================
 // In-Game Menu (Delegated to MOSystemMenuUIController)
 // =============================================================================
 
@@ -664,6 +702,12 @@ void UMOUIManagerComponent::ToggleInGameMenu()
 	if (IsCraftingMenuOpen())
 	{
 		CloseCraftingMenu();
+		return;
+	}
+
+	if (IsQuestLogOpen())
+	{
+		CloseQuestLog();
 		return;
 	}
 
@@ -749,7 +793,7 @@ bool UMOUIManagerComponent::IsAnyMenuOpen() const
 	// Delegate to controllers for their respective menus
 	return IsInventoryMenuOpen() || IsInGameMenuOpen() || IsItemContextMenuOpen() ||
 	       IsPlayerStatusVisible() || IsPossessionMenuOpen() || IsCraftingMenuOpen() ||
-	       IsSkillsPanelOpen() || IsBuildingMenuOpen() || IsBuildWidgetOpen() ||
+	       IsSkillsPanelOpen() || IsQuestLogOpen() || IsBuildingMenuOpen() || IsBuildWidgetOpen() ||
 	       IsStationContextMenuOpen() || IsKeepOnHarvestContextMenuOpen() ||
 	       IsInspectionInProgress() || IsHarvestInProgress();
 }
@@ -788,6 +832,11 @@ void UMOUIManagerComponent::CloseAllMenus()
 	{
 		SysController->CloseInGameMenu();
 		SysController->ClosePossessionMenu();
+	}
+
+	if (UMOQuestUIController* QuestController = GetQuestController())
+	{
+		QuestController->CloseQuestLog();
 	}
 
 	// Hide modal background
@@ -833,6 +882,11 @@ void UMOUIManagerComponent::CloseAllSwitchableMenus()
 	if (UMOBuildingUIController* BuildController = GetBuildingController())
 	{
 		BuildController->CloseBuildingMenu();
+	}
+
+	if (UMOQuestUIController* QuestController = GetQuestController())
+	{
+		QuestController->CloseQuestLog();
 	}
 
 	// Hide modal background if no menus remain open
@@ -1056,6 +1110,29 @@ UMOSystemMenuUIController* UMOUIManagerComponent::GetSystemMenuController() cons
 		if (Found)
 		{
 			CachedSystemMenuController = Found;
+			return Found;
+		}
+	}
+
+	return nullptr;
+}
+
+UMOQuestUIController* UMOUIManagerComponent::GetQuestController() const
+{
+	// Check cache first
+	if (UMOQuestUIController* Cached = CachedQuestController.Get())
+	{
+		return Cached;
+	}
+
+	// Find sibling component on same owner
+	AActor* Owner = GetOwner();
+	if (IsValid(Owner))
+	{
+		UMOQuestUIController* Found = Owner->FindComponentByClass<UMOQuestUIController>();
+		if (Found)
+		{
+			CachedQuestController = Found;
 			return Found;
 		}
 	}

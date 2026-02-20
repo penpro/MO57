@@ -31,6 +31,7 @@
 #include "NavigationInvokerComponent.h"
 #include "Engine/DataTable.h"
 #include "Perception/AISense_Hearing.h"
+#include "VoxelWorld.h"
 
 AMOCharacter::AMOCharacter()
 {
@@ -1202,6 +1203,104 @@ void AMOCharacter::ClearHeldItemMesh(EMOEquipmentSlot EquipSlot)
 // FALL-THROUGH SAFETY
 // ============================================================================
 
+bool AMOCharacter::FindSafeTerrainNearLocation(const FVector& NearLocation, FVector& OutSafeLocation) const
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return false;
+	}
+
+	FCollisionQueryParams QueryParams;
+	QueryParams.AddIgnoredActor(this);
+
+	// Helper lambda to check if a hit is valid voxel terrain with acceptable slope
+	auto IsValidTerrainHit = [this](const FHitResult& Hit) -> bool
+	{
+		// Check if voxel terrain only
+		if (bSafetyTeleportOnlyVoxelTerrain)
+		{
+			AActor* HitActor = Hit.GetActor();
+			if (!HitActor || !HitActor->IsA<AVoxelWorld>())
+			{
+				return false;
+			}
+		}
+
+		// Check slope - normal Z must be above threshold
+		if (Hit.ImpactNormal.Z < SafetyMinSlopeNormalZ)
+		{
+			return false;
+		}
+
+		return true;
+	};
+
+	const float RaycastStartZ = 50000.0f;
+
+	// First, try the immediate area directly above
+	{
+		FHitResult UpHit;
+		const FVector UpTraceStart = NearLocation;
+		const FVector UpTraceEnd = NearLocation + FVector(0.f, 0.f, SafetyTerrainSearchDistance);
+
+		if (World->LineTraceSingleByChannel(UpHit, UpTraceStart, UpTraceEnd, ECC_WorldStatic, QueryParams))
+		{
+			if (IsValidTerrainHit(UpHit))
+			{
+				// Calculate teleport height - higher for steeper slopes
+				// At normal.Z = 1.0 (flat), use SafetyTeleportHeight
+				// At normal.Z = 0.6 (steep), use 2x SafetyTeleportHeight
+				const float SlopeMultiplier = 1.0f + (1.0f - UpHit.ImpactNormal.Z) * 2.5f;
+				OutSafeLocation = UpHit.Location + FVector(0.f, 0.f, SafetyTeleportHeight * SlopeMultiplier);
+				return true;
+			}
+		}
+	}
+
+	// Search laterally for flat voxel terrain
+	FVector BestLocation = FVector::ZeroVector;
+	float BestSlopeZ = -1.0f;  // Track flattest surface found (highest normal.Z)
+	bool bFoundValid = false;
+
+	for (int32 Sample = 0; Sample < SafetyLateralSearchSamples; ++Sample)
+	{
+		const float Angle = (static_cast<float>(Sample) / SafetyLateralSearchSamples) * 2.0f * PI;
+		const float Radius = SafetyLateralSearchRadius;
+
+		const FVector SampleXY(
+			NearLocation.X + FMath::Cos(Angle) * Radius,
+			NearLocation.Y + FMath::Sin(Angle) * Radius,
+			RaycastStartZ
+		);
+		const FVector TraceEnd = SampleXY - FVector(0.f, 0.f, RaycastStartZ * 2.f);
+
+		FHitResult Hit;
+		if (World->LineTraceSingleByChannel(Hit, SampleXY, TraceEnd, ECC_WorldStatic, QueryParams))
+		{
+			if (IsValidTerrainHit(Hit))
+			{
+				// Prefer flatter terrain (higher normal.Z)
+				if (Hit.ImpactNormal.Z > BestSlopeZ)
+				{
+					BestSlopeZ = Hit.ImpactNormal.Z;
+					const float SlopeMultiplier = 1.0f + (1.0f - Hit.ImpactNormal.Z) * 2.5f;
+					BestLocation = Hit.Location + FVector(0.f, 0.f, SafetyTeleportHeight * SlopeMultiplier);
+					bFoundValid = true;
+				}
+			}
+		}
+	}
+
+	if (bFoundValid)
+	{
+		OutSafeLocation = BestLocation;
+		return true;
+	}
+
+	return false;
+}
+
 void AMOCharacter::CheckFallThroughSafety(float DeltaTime)
 {
 	UCharacterMovementComponent* MovementComp = GetCharacterMovement();
@@ -1224,7 +1323,21 @@ void AMOCharacter::CheckFallThroughSafety(float DeltaTime)
 		// Only check for fall-through after exceeding time threshold
 		if (ContinuousFallTime >= FallThroughTimeThreshold)
 		{
-			// Raycast downward to check if there's terrain below
+			// Helper lambda to check if a hit is valid voxel terrain
+			auto IsValidTerrainHit = [this](const FHitResult& Hit) -> bool
+			{
+				if (bSafetyTeleportOnlyVoxelTerrain)
+				{
+					AActor* HitActor = Hit.GetActor();
+					if (!HitActor || !HitActor->IsA<AVoxelWorld>())
+					{
+						return false;
+					}
+				}
+				return true;
+			};
+
+			// Raycast downward to check if there's valid terrain below
 			FHitResult DownHit;
 			const FVector TraceStart = CurrentLocation;
 			const FVector TraceEnd = CurrentLocation - FVector(0.f, 0.f, SafetyTerrainSearchDistance);
@@ -1232,44 +1345,26 @@ void AMOCharacter::CheckFallThroughSafety(float DeltaTime)
 			FCollisionQueryParams QueryParams;
 			QueryParams.AddIgnoredActor(this);
 
-			const bool bFoundTerrainBelow = GetWorld()->LineTraceSingleByChannel(
-				DownHit,
-				TraceStart,
-				TraceEnd,
-				ECC_WorldStatic,
-				QueryParams
-			);
-
-			if (!bFoundTerrainBelow)
+			bool bFoundValidTerrainBelow = false;
+			if (GetWorld()->LineTraceSingleByChannel(DownHit, TraceStart, TraceEnd, ECC_WorldStatic, QueryParams))
 			{
-				// No terrain below - we've likely fallen through the world
-				// Search upward for terrain to teleport to
-				FHitResult UpHit;
-				const FVector UpTraceStart = CurrentLocation;
-				const FVector UpTraceEnd = CurrentLocation + FVector(0.f, 0.f, SafetyTerrainSearchDistance);
+				bFoundValidTerrainBelow = IsValidTerrainHit(DownHit);
+			}
 
-				const bool bFoundTerrainAbove = GetWorld()->LineTraceSingleByChannel(
-					UpHit,
-					UpTraceStart,
-					UpTraceEnd,
-					ECC_WorldStatic,
-					QueryParams
-				);
-
+			if (!bFoundValidTerrainBelow)
+			{
+				// No valid terrain below - search for safe location
 				FVector SafeLocation;
-				if (bFoundTerrainAbove)
+				if (FindSafeTerrainNearLocation(CurrentLocation, SafeLocation))
 				{
-					// Found terrain above - teleport to just above it
-					SafeLocation = UpHit.Location + FVector(0.f, 0.f, SafetyTeleportHeight);
-					UE_LOG(LogMOFramework, Warning, TEXT("[MOCharacter] %s: Fall-through detected! Found terrain above at Z=%.0f, teleporting to Z=%.0f"),
-						*GetName(), UpHit.Location.Z, SafeLocation.Z);
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOCharacter] %s: Fall-through detected! Found safe terrain, teleporting to %s"),
+						*GetName(), *SafeLocation.ToString());
 				}
 				else
 				{
-					// No terrain found anywhere - teleport to a default safe height
-					// Use world origin + safety height as fallback
+					// No valid terrain found anywhere - teleport to a default safe height
 					SafeLocation = FVector(CurrentLocation.X, CurrentLocation.Y, SafetyTeleportHeight);
-					UE_LOG(LogMOFramework, Warning, TEXT("[MOCharacter] %s: Fall-through detected! No terrain found, teleporting to default safe height Z=%.0f"),
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOCharacter] %s: Fall-through detected! No valid terrain found, teleporting to default height Z=%.0f"),
 						*GetName(), SafeLocation.Z);
 				}
 
@@ -1287,15 +1382,14 @@ void AMOCharacter::CheckFallThroughSafety(float DeltaTime)
 				if (GEngine)
 				{
 					GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Red,
-						FString::Printf(TEXT("Fall-through safety activated! Teleported to Z=%.0f"), SafeLocation.Z));
+						FString::Printf(TEXT("Fall-through safety activated! Teleported to %s"), *SafeLocation.ToString()));
 				}
 #endif
 			}
 			else
 			{
-				// There's terrain below - we're just falling normally, maybe from a high place
-				// Reset timer since we're above valid terrain
-				// But only if we're getting close to it (within 1000 units)
+				// There's valid terrain below - we're just falling normally
+				// Reset timer only if we're getting close to it (within 1000 units)
 				if (DownHit.Distance < 1000.f)
 				{
 					ContinuousFallTime = 0.f;

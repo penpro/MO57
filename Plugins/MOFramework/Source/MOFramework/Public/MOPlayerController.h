@@ -110,6 +110,7 @@
  *   IA_Inventory -> HandleInventory() -> UIManager->ToggleInventoryMenu()
  *   IA_Crafting -> HandleCrafting() -> UIManager->ToggleCraftingMenu()
  *   IA_Skills -> HandleSkills() -> UIManager->ToggleSkillsPanel()
+ *   IA_Journal -> HandleJournal() -> UIManager->ToggleQuestLog()
  *   IA_Build -> HandleBuild() -> UIManager->ToggleBuildingMenu()
  *   IA_Possess -> HandlePossess() -> UIManager->TogglePossessionMenu()
  *
@@ -137,6 +138,7 @@ class UMOCraftingUIController;
 class UMOBuildingUIController;
 class UMOCharacterUIController;
 class UMOSystemMenuUIController;
+class UMOQuestUIController;
 
 /**
  * Input context types for mapping context management.
@@ -209,6 +211,10 @@ public:
 	/** System menu UI controller - handles in-game menu, possession menu, confirmations. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO|UI Controllers")
 	TObjectPtr<UMOSystemMenuUIController> SystemMenuUIController;
+
+	/** Quest UI controller - handles quest log panel, quest HUD tracker. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO|UI Controllers")
+	TObjectPtr<UMOQuestUIController> QuestUIController;
 
 	// ============================================================================
 	// INPUT MAPPING CONTEXTS
@@ -302,6 +308,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Input|Actions|UI")
 	TObjectPtr<UInputAction> SkillsAction;
 
+	/** Toggle quest/journal panel action. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Input|Actions|UI")
+	TObjectPtr<UInputAction> JournalAction;
+
 	/** Toggle building menu / placement mode action. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Input|Actions|UI")
 	TObjectPtr<UInputAction> BuildAction;
@@ -349,22 +359,6 @@ public:
 	/** Cycle terraforming tool action. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Input|Actions|Terraforming")
 	TObjectPtr<UInputAction> TerraformCycleToolAction;
-
-	// ============================================================================
-	// DEBUG
-	// ============================================================================
-
-	/** Enable debug mode for development commands. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Debug")
-	bool bDebugModeEnabled = true;
-
-	/** Pawn class to spawn with debug spawn command (0 key). */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Debug")
-	TSubclassOf<APawn> DebugSpawnPawnClass;
-
-	/** Distance to spawn debug pawn in front of camera. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Debug")
-	float DebugSpawnDistance = 300.0f;
 
 	// ============================================================================
 	// CONTEXT MANAGEMENT
@@ -570,6 +564,9 @@ protected:
 	/** Handle skills panel toggle. */
 	void HandleSkills(const FInputActionValue& Value);
 
+	/** Handle quest journal toggle. */
+	void HandleJournal(const FInputActionValue& Value);
+
 	/** Handle building menu toggle. */
 	void HandleBuild(const FInputActionValue& Value);
 
@@ -604,19 +601,6 @@ protected:
 
 	/** Handle terraforming tool cycle. */
 	void HandleTerraformCycleTool(const FInputActionValue& Value);
-
-	// ============================================================================
-	// DEBUG INPUT HANDLERS
-	// ============================================================================
-
-	/** Debug: Spawn a pawn and possess it (0 key). */
-	void HandleDebugSpawnPawn();
-
-	/** Debug: Toggle debug mode (F1 key). */
-	void HandleDebugToggle();
-
-	/** Setup debug key bindings (hard-coded, no input actions needed). */
-	void SetupDebugInputBindings();
 
 	// ============================================================================
 	// INTERNAL

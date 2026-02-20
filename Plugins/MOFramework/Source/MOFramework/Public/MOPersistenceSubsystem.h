@@ -212,6 +212,10 @@ private:
     void CaptureVoxelSculptData(UWorld* World, UMOWorldSaveGame* SaveObject) const;
     void RestoreVoxelSculptData(UWorld* World, const TArray<FMOVoxelSculptSaveRecord>& SculptData);
 
+    // Quest persistence
+    void CaptureQuestData(UMOWorldSaveGame* SaveObject) const;
+    void RestoreQuestData(const FMOQuestSaveData& QuestData);
+
     // Setup spectator camera above last possessed pawn on load
     void SetupSpectatorCameraForLoad(UWorld* World, const UMOWorldSaveGame* SaveData);
 

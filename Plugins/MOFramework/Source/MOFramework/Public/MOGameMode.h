@@ -80,6 +80,18 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Spawn")
 	int32 MaxSpawnAttempts = 100;
 
+	/**
+	 * Minimum Z component of surface normal (0-1).
+	 * 1.0 = perfectly flat, 0.7 = ~45 degrees, 0.5 = 60 degrees.
+	 * Surfaces steeper than this are rejected for spawning.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Spawn", meta=(ClampMin="0.0", ClampMax="1.0"))
+	float MinSpawnSurfaceNormalZ = 0.7f;
+
+	/** Whether to only spawn on voxel terrain (rejects trees, meshes, etc.). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Spawn")
+	bool bSpawnOnlyOnVoxelTerrain = true;
+
 	/** Pawn class to spawn for new games. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Spawn")
 	TSubclassOf<APawn> DefaultNewGamePawnClass;

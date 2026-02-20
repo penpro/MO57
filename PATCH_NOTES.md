@@ -4,6 +4,89 @@ This file tracks changes, bug fixes, and new features. Updated incrementally to 
 
 ---
 
+## [2026-02-20] Quest Framework
+
+### New Features
+
+**Quest System Core**
+- Added `UMOQuestSubsystem` - GameInstance subsystem for quest management
+- Data-driven quest definitions via `DT_Quests` DataTable
+- Event-based objective completion system
+- Support for sequential and parallel objectives
+- Auto-start quests when prerequisites are met
+- Quest state persistence (save/load support)
+
+**Quest Types**
+- `FMOQuestDefinitionRow` - DataTable row for quest definitions
+- `FMOQuestObjective` - Single objective with type, target, and count
+- `FMOQuestState` - Runtime quest progress tracking
+- `EMOObjectiveType` - Event, ItemCraft, ItemPickup, ItemDrop, SkillLevelUp, LocationReach, Custom
+
+**Quest UI Widgets**
+- `UMOQuestHUDWidget` - HUD objective tracker showing tracked quests
+- `UMOQuestTrackerEntry` - Single quest entry on HUD
+- `UMOQuestLogPanel` - Full quest log (Common UI panel)
+- `UMOQuestLogEntry` - Quest list entry with selection
+
+**Quest Delegates**
+- `OnQuestStarted`, `OnQuestCompleted`, `OnQuestAbandoned`
+- `OnObjectiveUpdated`, `OnObjectiveCompleted`
+- `FireGameEvent()` for custom event triggers
+
+### Integration
+
+- Quest data automatically saved/loaded with world saves
+- Hooks into crafting system (`OnCraftCompleted`)
+- Skill level up detection (`OnSkillLevelUp`)
+- Configurable via Project Settings > Game > Quest System
+
+### Blueprint Setup Required
+
+1. **Create `DT_Quests` DataTable** using `FMOQuestDefinitionRow` struct
+2. **Configure Quest Settings** in Project Settings > Game > Quest System
+   - Set `QuestDefinitionTable` path
+   - Set `MaxTrackedQuestsOnHUD` (default 3)
+   - Enable `bAutoStartTutorials` for tutorial quests
+3. **Create Blueprint Widgets**:
+   - `WBP_QuestTrackerEntry` (parent: `UMOQuestTrackerEntry`)
+   - `WBP_QuestHUDWidget` (parent: `UMOQuestHUDWidget`)
+   - `WBP_QuestLogEntry` (parent: `UMOQuestLogEntry`)
+   - `WBP_QuestLogPanel` (parent: `UMOQuestLogPanel`)
+4. **Add HUD Widget** to your HUD Blueprint
+
+### Example Tutorial Quest
+
+```
+Row Name: Tutorial_FirstCraft
+QuestId: Tutorial_FirstCraft
+DisplayName: "First Steps"
+Description: "Learn the basics of crafting."
+bIsTutorial: true
+bAutoStart: true
+Prerequisites: []
+Objectives:
+  - ObjectiveId: "OpenCraftMenu"
+    Description: "Open the crafting menu"
+    Type: Event
+    TargetEventOrId: "CraftingMenuOpened"
+    RequiredCount: 1
+  - ObjectiveId: "CraftStick"
+    Description: "Craft a stick"
+    Type: ItemCraft
+    TargetEventOrId: "Stick01"
+    RequiredCount: 1
+SortOrder: 1
+```
+
+### Technical Notes
+
+- Quest subsystem is GameInstance-scoped (persists across level loads)
+- UI widgets are abstract and require Blueprint children with bound widgets
+- Non-blocking design - players can ignore tutorials
+- FireGameEvent() enables custom objective triggers from Blueprint
+
+---
+
 ## [2026-02-19] Terrain-Aware Spawning, Voxel Seed System & PCG Optimization Tools
 
 ### New Features
