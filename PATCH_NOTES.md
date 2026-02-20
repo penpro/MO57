@@ -4,7 +4,7 @@ This file tracks changes, bug fixes, and new features. Updated incrementally to 
 
 ---
 
-## [2026-02-19] Terrain-Aware Spawning & PCG Optimization Tools
+## [2026-02-19] Terrain-Aware Spawning, Voxel Seed System & PCG Optimization Tools
 
 ### New Features
 
@@ -13,6 +13,12 @@ This file tracks changes, bug fixes, and new features. Updated incrementally to 
 - Configurable height range filters spawn locations to terrain between 100-3000cm above water level
 - Algorithm searches expanding rings to find the lowest valid terrain
 - Fallback system prefers lower elevations when no ideal beach is found
+
+**Voxel Height Graph Seed Parameter Support**
+- Added `ApplySeedToHeightGraphParameter()` - Sets seed parameter on Voxel height graphs before terrain generation
+- New `VoxelSeedParameterName` property (default "Seed") - Configurable parameter name to match your Voxel graph
+- Iterates loaded `UVoxelHeightGraph` assets and `UVoxelHeightLayer` layers to set seed values
+- Works with Voxel Plugin Pro 2.0's `FVoxelExposedSeed` type
 
 **PCG HISM Tools** *(Editor/PIE only)*
 - Added `UMOHISMCullingSubsystem` - World subsystem that periodically refreshes tagged PCG actors
@@ -41,6 +47,18 @@ This file tracks changes, bug fixes, and new features. Updated incrementally to 
 - PCG HISM refresh features use editor-only APIs and will not function in packaged builds
 - For runtime distance culling, use Voxel Plugin's scatter system with RenderDistance nodes or UE's built-in shadow distance settings
 - `InstanceMinDrawDistance` on HISM components does not work as documented - this is a known UE limitation
+
+**Voxel Graph Seed Setup:**
+To use dynamic world seeds with Voxel terrain:
+1. Open your Voxel heightmap graph in the editor
+2. Delete any hardcoded "Get Seed From Game Settings" nodes
+3. Create a new **Parameter** (right-click > Add Parameter):
+   - Name: `Seed` (or match `VoxelSeedParameterName` in game mode)
+   - Type: `Seed` (FVoxelExposedSeed)
+4. Connect this parameter output to your noise/generation nodes
+5. Ensure `VoxelWorld->bCreateRuntimeOnBeginPlay = false` in your level
+6. Enable `bAutoInitializeVoxelWithSeed = true` on your game mode
+7. The seed from New Game dialog will now affect terrain generation
 
 ---
 

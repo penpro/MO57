@@ -128,6 +128,25 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Voxel|Debug")
 	void DebugLogVoxelStampSeeds();
 
+	/**
+	 * Apply the world seed to the Voxel height graph's "Seed" parameter.
+	 * This sets the parameter BEFORE runtime creation so the terrain uses our seed.
+	 *
+	 * REQUIRES: The Voxel height graph must have a parameter named "Seed" of type FVoxelExposedSeed.
+	 *
+	 * @param WorldSeed Integer seed to apply
+	 * @return True if parameter was successfully set
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Voxel")
+	bool ApplySeedToHeightGraphParameter(int32 WorldSeed);
+
+	/**
+	 * Name of the seed parameter in the Voxel height graph.
+	 * Must match the parameter name you created in the Voxel graph editor.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Voxel")
+	FName VoxelSeedParameterName = TEXT("Seed");
+
 protected:
 	virtual void BeginPlay() override;
 

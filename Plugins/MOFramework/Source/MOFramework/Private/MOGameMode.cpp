@@ -8,7 +8,10 @@
 #include "VoxelWorld.h"
 #include "VoxelStampComponent.h"
 #include "VoxelExposedSeed.h"
+#include "Graphs/VoxelHeightGraph.h"
+#include "VoxelPinValue.h"
 #include "EngineUtils.h"
+#include "UObject/UObjectIterator.h"
 
 AMOGameMode::AMOGameMode()
 {
@@ -610,8 +613,11 @@ void AMOGameMode::InitializeVoxelWorldWithSeed()
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOGameMode] InitializeVoxelWorldWithSeed: No seed set in game settings"));
 	}
 
-	// Apply seed to all stamp components
+	// Apply seed to all stamp components (for runtime stamps)
 	const int32 StampsUpdated = ApplySeedToVoxelStamps(WorldSeed);
+
+	// Apply seed to height graph parameters (for base terrain generation)
+	const bool bGraphParameterSet = ApplySeedToHeightGraphParameter(WorldSeed);
 
 	// Find and initialize the voxel world
 	AVoxelWorld* VoxelWorld = nullptr;
@@ -636,7 +642,70 @@ void AMOGameMode::InitializeVoxelWorldWithSeed()
 	}
 
 	// Create the runtime to start generation with the new seed
-	UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Creating VoxelWorld runtime with seed %d (%d stamps updated)"),
-		WorldSeed, StampsUpdated);
+	UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Creating VoxelWorld runtime with seed %d (stamps=%d, graphParam=%s)"),
+		WorldSeed, StampsUpdated, bGraphParameterSet ? TEXT("SET") : TEXT("NOT SET"));
 	VoxelWorld->CreateRuntime();
+}
+
+bool AMOGameMode::ApplySeedToHeightGraphParameter(int32 WorldSeed)
+{
+	// Create the seed value in Voxel's expected format
+	FVoxelExposedSeed SeedValue;
+	SeedValue.Seed = IntSeedToVoxelSeedString(WorldSeed);
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Attempting to set seed parameter '%s' = '%s' on height graphs"),
+		*VoxelSeedParameterName.ToString(), *SeedValue.Seed);
+
+	int32 GraphsUpdated = 0;
+	int32 GraphsChecked = 0;
+
+	// Iterate through all loaded UVoxelHeightGraph assets and set the seed parameter
+	// UVoxelGraph (parent of UVoxelHeightGraph) implements IVoxelParameterOverridesObjectOwner
+	// which provides the SetParameter method
+	for (TObjectIterator<UVoxelHeightGraph> It; It; ++It)
+	{
+		UVoxelHeightGraph* Graph = *It;
+		if (!Graph)
+		{
+			continue;
+		}
+
+		// Skip transient/template objects
+		if (Graph->HasAnyFlags(RF_Transient | RF_ClassDefaultObject))
+		{
+			continue;
+		}
+
+		GraphsChecked++;
+
+		// Check if this graph has a parameter with the expected name
+		if (!Graph->HasParameter(VoxelSeedParameterName))
+		{
+			UE_LOG(LogMOFramework, Verbose, TEXT("[MOGameMode] Graph '%s' has no parameter named '%s'"),
+				*Graph->GetName(), *VoxelSeedParameterName.ToString());
+			continue;
+		}
+
+		// Set the parameter value
+		// UVoxelGraph implements IVoxelParameterOverridesObjectOwner which provides SetParameter
+		FString Error;
+		const FVoxelPinValue PinValue = FVoxelPinValue::Make(SeedValue);
+
+		if (Graph->SetParameter(VoxelSeedParameterName, PinValue, &Error))
+		{
+			GraphsUpdated++;
+			UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Set seed='%s' on HeightGraph '%s'"),
+				*SeedValue.Seed, *Graph->GetName());
+		}
+		else
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOGameMode] Failed to set seed on '%s': %s"),
+				*Graph->GetName(), *Error);
+		}
+	}
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Seed parameter set on %d/%d height graphs"),
+		GraphsUpdated, GraphsChecked);
+
+	return GraphsUpdated > 0;
 }
