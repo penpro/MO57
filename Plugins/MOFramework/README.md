@@ -21,6 +21,7 @@ A comprehensive Unreal Engine 5.7 plugin providing modular gameplay systems for 
   - [Terraforming System](#terraforming-system)
   - [PCG Integration](#pcg-integration)
   - [Water System](#water-system)
+- [Game Mode & Spawn System](#game-mode--spawn-system)
 - [Architecture & Delegate Flows](#architecture--delegate-flows)
 - [Widget Setup Guide](#widget-setup-guide)
 - [Survival Game Design Considerations](#survival-game-design-considerations)
@@ -837,6 +838,67 @@ For per-bone hit detection, configure your Physics Asset:
    - Legs: Capsules on `thigh_*`, `calf_*`
 3. Enable "Simulation Generates Hit Events" on each body
 4. Set collision responses for `Projectile` and `Weapon` channels
+
+### Game Mode & Spawn System
+
+Framework-level game mode with intelligent spawn point detection and Voxel Plugin integration.
+
+**Key Classes:**
+- `AMOGameMode` - Base game mode handling spawn, PCG mappings, voxel seed integration
+- `UMOGameSettings` - Global game settings (world seed, pending new game state)
+
+**Beach Spawn Detection:**
+
+The spawn system finds safe locations on beaches rather than spawning on mountains or underwater:
+
+```cpp
+// Configurable spawn parameters (exposed to Blueprint)
+UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Spawn")
+float WaterLevelZ = 0.0f;                    // Sea level Z coordinate
+
+UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Spawn")
+float MinSpawnHeightAboveWater = 100.0f;     // Beach floor (100cm above water)
+
+UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Spawn")
+float MaxSpawnHeightAboveWater = 3000.0f;    // Beach ceiling (anything higher is mountain)
+
+UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Spawn")
+float SpawnHeightOffset = 200.0f;            // Height above detected ground
+```
+
+**Spawn Algorithm:**
+1. Search expanding rings from `SpawnSearchCenter`
+2. Raycast downward to find terrain
+3. Filter hits to only include terrain between `MinSpawnHeightAboveWater` and `MaxSpawnHeightAboveWater`
+4. Prefer lowest valid point (closest to beach/water)
+5. Add `SpawnHeightOffset` above detected ground
+
+**Voxel Seed Integration:**
+
+For procedural worlds using Voxel Plugin, the game mode can apply a world seed to all voxel stamps:
+
+```cpp
+// In Blueprint or C++
+GameMode->InitializeVoxelWorldWithSeed();
+
+// Or manually control seed application
+int32 StampsUpdated = GameMode->ApplySeedToVoxelStamps(WorldSeed);
+VoxelWorld->CreateRuntime();
+```
+
+**Important:** For seed to work, set `VoxelWorld->bCreateRuntimeOnBeginPlay = false` in your level.
+
+**PCG Tag Mappings:**
+
+Configure tag-to-item mappings for PCG-spawned harvestables:
+
+```cpp
+// In Blueprint game mode defaults or C++
+PCGTagItemMappings.Add({ TEXT("GivesStick"), TEXT("Stick01") });
+PCGTagItemMappings.Add({ TEXT("GivesRock"), TEXT("Rock01") });
+```
+
+When a player harvests an HISM instance with matching component tag, they receive the configured item.
 
 ---
 

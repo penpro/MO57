@@ -272,8 +272,8 @@ FVector AMOGameMode::FindSafeSpawnLocation() const
 
 	const float RaycastStartZ = 50000.0f;  // Start high above terrain
 	const float MinSpawnZ = WaterLevelZ + MinSpawnHeightAboveWater;
-	// Target beach spawn: between MinSpawnHeightAboveWater and 500cm above water
-	const float IdealBeachMaxZ = WaterLevelZ + 500.0f;
+	// Target beach spawn: between MinSpawnHeightAboveWater and MaxSpawnHeightAboveWater
+	const float IdealBeachMaxZ = WaterLevelZ + MaxSpawnHeightAboveWater;
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] FindSafeSpawnLocation: WaterLevelZ=%.1f, MinSpawnZ=%.1f, BeachMaxZ=%.1f"),
 		WaterLevelZ, MinSpawnZ, IdealBeachMaxZ);

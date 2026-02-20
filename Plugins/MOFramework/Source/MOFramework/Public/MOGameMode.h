@@ -56,9 +56,13 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Spawn")
 	float WaterLevelZ = 0.0f;
 
-	/** Minimum spawn height above water level. */
+	/** Minimum spawn height above water level (beach floor). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Spawn")
 	float MinSpawnHeightAboveWater = 100.0f;
+
+	/** Maximum spawn height above water level (beach ceiling - anything higher is mountain). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Spawn")
+	float MaxSpawnHeightAboveWater = 3000.0f;
 
 	/** Height offset above detected ground (higher = safer but longer fall). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Spawn")
