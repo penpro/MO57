@@ -112,8 +112,17 @@ void AMOGameMode::HandlePendingNewGame()
 				FMOLoadResult Result = Persistence->LoadWorldFromSlotWithResult(SlotToLoad);
 				if (Result.bSuccess)
 				{
-					UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Save loaded successfully: %d pawns, %d items, %d buildings"),
-						Result.PawnsLoaded, Result.ItemsLoaded, Result.BuildingsLoaded);
+					UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Save loaded successfully: %d pawns, %d items, %d buildings, seed=%d"),
+						Result.PawnsLoaded, Result.ItemsLoaded, Result.BuildingsLoaded, Result.WorldSeed);
+
+					// Apply world seed and initialize voxel world if auto-initialization is enabled
+					if (bAutoInitializeVoxelWithSeed && Result.WorldSeed != 0)
+					{
+						Settings->PendingWorldSeed = Result.WorldSeed;
+						FMath::RandInit(Result.WorldSeed);
+						UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Applied loaded world seed: %d"), Result.WorldSeed);
+						InitializeVoxelWorldWithSeed();
+					}
 				}
 				else
 				{

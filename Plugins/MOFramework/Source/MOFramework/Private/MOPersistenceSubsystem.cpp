@@ -18,6 +18,7 @@
 #include "MOInventoryComponent.h"
 #include "MOItemComponent.h"
 #include "MOPersistenceSettings.h"
+#include "MOGameSettings.h"
 #include "MOCraftingQueueComponent.h"
 #include "MORecipeDiscoveryComponent.h"
 #include "MOVitalsComponent.h"
@@ -247,6 +248,10 @@ bool UMOPersistenceSubsystem::SaveWorldToSlot(const FString& SlotName)
             }
         }
     }
+
+    // World seed (for voxel terrain regeneration)
+    SaveObject->WorldSeed = UMOGameSettings::GetWorldSeed();
+    UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Saving world seed: %d"), SaveObject->WorldSeed);
 
     // Screenshot capture (80x80 thumbnail)
     CaptureScreenshotForSave(SaveObject);
@@ -511,6 +516,16 @@ FMOLoadResult UMOPersistenceSubsystem::LoadWorldFromSlotWithResult(const FString
 
     // Track the current slot for auto-save support
     CurrentSlotName = SlotName;
+
+    // Extract world seed from save and store it for voxel regeneration
+    LastLoadResult.WorldSeed = LoadedTyped->WorldSeed;
+    UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Loaded world seed: %d"), LastLoadResult.WorldSeed);
+
+    // Apply loaded seed to game settings so voxel world can use it
+    if (UMOGameSettings* Settings = UMOGameSettings::GetMOGameSettings())
+    {
+        Settings->PendingWorldSeed = LastLoadResult.WorldSeed;
+    }
 
     // Determine overall success - we succeed even with partial failures, but log them
     LastLoadResult.bSuccess = true;

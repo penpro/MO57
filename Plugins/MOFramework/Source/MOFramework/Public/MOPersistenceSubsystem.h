@@ -46,6 +46,10 @@ struct FMOLoadResult
 
     UPROPERTY(BlueprintReadOnly)
     FString ErrorMessage;
+
+    /** World seed from the loaded save (for voxel terrain regeneration). */
+    UPROPERTY(BlueprintReadOnly)
+    int32 WorldSeed = 0;
 };
 
 UCLASS()
