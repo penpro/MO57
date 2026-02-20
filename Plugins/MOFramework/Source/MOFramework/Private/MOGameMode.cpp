@@ -278,14 +278,14 @@ FVector AMOGameMode::FindSafeSpawnLocation() const
 	UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] FindSafeSpawnLocation: WaterLevelZ=%.1f, MinSpawnZ=%.1f, BeachMaxZ=%.1f"),
 		WaterLevelZ, MinSpawnZ, IdealBeachMaxZ);
 
-	// Track best beach candidate (closest to water but safely above it)
+	// Track best beach candidate (lowest point within beach height range)
 	FVector BestBeachLocation = FVector::ZeroVector;
 	float BestBeachZ = FLT_MAX;  // We want the LOWEST point above MinSpawnZ (beach)
 	bool bFoundBeach = false;
 
-	// Track any valid location as fallback (any land above water)
+	// Track lowest valid location as fallback (prefer low elevations even outside beach range)
 	FVector BestFallbackLocation = FVector::ZeroVector;
-	float BestFallbackZ = -FLT_MAX;
+	float BestFallbackZ = FLT_MAX;  // Track LOWEST land, not highest
 	bool bFoundLand = false;
 
 	int32 TotalHits = 0;
@@ -295,14 +295,13 @@ FVector AMOGameMode::FindSafeSpawnLocation() const
 	Params.bTraceComplex = false;  // Use simple collision for voxel terrain
 	Params.bReturnPhysicalMaterial = false;
 
-	// Multi-pass search: expand outward in rings until we find land
-	// Pass 1: Search expanding rings to find ANY land
-	// Pass 2: Once land found, focus search there for beach
+	// Search expanding rings until we find a BEACH (not just any land)
+	// Keep searching even after finding land - we want to find a beach
 	const int32 MaxRings = 20;  // Up to 20 rings expanding outward
 	const float RingWidth = SpawnSearchRadius;  // Each ring is this wide
 	const int32 SamplesPerRing = MaxSpawnAttempts / 2;  // Samples per ring
 
-	for (int32 Ring = 0; Ring < MaxRings && !bFoundLand; ++Ring)
+	for (int32 Ring = 0; Ring < MaxRings && !bFoundBeach; ++Ring)
 	{
 		float InnerRadius = Ring * RingWidth;
 		float OuterRadius = (Ring + 1) * RingWidth;
@@ -340,25 +339,29 @@ FVector AMOGameMode::FindSafeSpawnLocation() const
 					HitsAboveWater++;
 					bFoundLand = true;
 
-					// Check if this is a beach location (low elevation, close to water)
-					if (Hit.Location.Z < IdealBeachMaxZ && Hit.Location.Z < BestBeachZ)
+					// Check if this is a beach location (within height range)
+					if (Hit.Location.Z < IdealBeachMaxZ)
 					{
-						BestBeachZ = Hit.Location.Z;
-						BestBeachLocation = Hit.Location + FVector(0, 0, SpawnHeightOffset);
-						bFoundBeach = true;
-
-						// Ideal beach found - low enough to be a good beach
-						if (Hit.Location.Z < WaterLevelZ + 200.0f)
+						// Track best (lowest) beach location
+						if (Hit.Location.Z < BestBeachZ)
 						{
-							FVector SpawnLocation = Hit.Location + FVector(0, 0, SpawnHeightOffset);
-							UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Found ideal beach spawn in ring %d: %s (Z=%.1f above water)"),
-								Ring, *SpawnLocation.ToString(), Hit.Location.Z - WaterLevelZ);
-							return SpawnLocation;
+							BestBeachZ = Hit.Location.Z;
+							BestBeachLocation = Hit.Location + FVector(0, 0, SpawnHeightOffset);
+							bFoundBeach = true;
+
+							// Ideal beach found - low enough to be a good beach, return immediately
+							if (Hit.Location.Z < WaterLevelZ + 200.0f)
+							{
+								FVector SpawnLocation = Hit.Location + FVector(0, 0, SpawnHeightOffset);
+								UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Found ideal beach spawn in ring %d: %s (Z=%.1f above water)"),
+									Ring, *SpawnLocation.ToString(), Hit.Location.Z - WaterLevelZ);
+								return SpawnLocation;
+							}
 						}
 					}
 
-					// Track as fallback (any valid land)
-					if (Hit.Location.Z > BestFallbackZ)
+					// Track as fallback - prefer LOWER elevations (closer to beach)
+					if (Hit.Location.Z < BestFallbackZ)
 					{
 						BestFallbackZ = Hit.Location.Z;
 						BestFallbackLocation = Hit.Location + FVector(0, 0, SpawnHeightOffset);
@@ -368,8 +371,8 @@ FVector AMOGameMode::FindSafeSpawnLocation() const
 		}
 	}
 
-	// If we found land but no ideal beach, do a focused search around the best land we found
-	if (bFoundLand && !bFoundBeach && BestFallbackZ > MinSpawnZ)
+	// If we found land but no ideal beach, do a focused search around the lowest land we found
+	if (bFoundLand && !bFoundBeach && BestFallbackZ < FLT_MAX)
 	{
 		UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Found land at Z=%.1f, searching for nearby beach..."),
 			BestFallbackZ);
@@ -416,11 +419,11 @@ FVector AMOGameMode::FindSafeSpawnLocation() const
 		return BestBeachLocation;
 	}
 
-	// Use any valid land as fallback
-	if (bFoundLand && BestFallbackZ > MinSpawnZ)
+	// Use lowest valid land as fallback (even if above beach range, at least it's the lowest we found)
+	if (bFoundLand && BestFallbackZ < FLT_MAX)
 	{
-		UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Using fallback land spawn: %s (Z=%.1f)"),
-			*BestFallbackLocation.ToString(), BestFallbackZ);
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOGameMode] No beach found! Using lowest land at Z=%.1f (%.1f above water, max beach=%.1f)"),
+			BestFallbackZ, BestFallbackZ - WaterLevelZ, static_cast<double>(MaxSpawnHeightAboveWater));
 		return BestFallbackLocation;
 	}
 
