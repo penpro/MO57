@@ -128,6 +128,14 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO|Settings")
 	static int32 GetWorldSeed();
 
+	/**
+	 * Get the world seed as an 8-character string for Voxel Plugin.
+	 * Format matches FVoxelExposedSeed (8 uppercase letters A-Z).
+	 * Use this in Voxel graphs that need a seed string.
+	 */
+	UFUNCTION(BlueprintPure, Category="MO|Settings|Voxel")
+	static FString GetWorldSeedAsVoxelString();
+
 	// ============================================================================
 	// GAMEPLAY OPTIONS
 	// ============================================================================

@@ -34,6 +34,7 @@ This file tracks changes, bug fixes, and new features. Updated incrementally to 
 - Fixed fallback spawn using mountain peaks instead of lowest available terrain
 - Fixed crafting menu retaining station name and fuel display after closing (now properly resets to "Hand Crafting")
 - Fixed voxel terrain not regenerating when loading a saved game (world seed now persisted and applied on load)
+- Added `GetWorldSeedAsVoxelString()` Blueprint function for Voxel graphs (returns 8-char A-Z format)
 
 ### Technical Notes
 

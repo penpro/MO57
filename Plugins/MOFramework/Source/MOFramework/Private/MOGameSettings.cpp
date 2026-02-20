@@ -238,3 +238,21 @@ int32 UMOGameSettings::GetWorldSeed()
 	}
 	return 0;
 }
+
+FString UMOGameSettings::GetWorldSeedAsVoxelString()
+{
+	const int32 Seed = GetWorldSeed();
+
+	// Replicate the algorithm from FVoxelExposedSeed::Randomize()
+	// Generates an 8-character uppercase string (A-Z) from the seed
+	const FRandomStream Stream(Seed);
+
+	FString Result;
+	Result.Reserve(8);
+	for (int32 Index = 0; Index < 8; Index++)
+	{
+		Result += TCHAR(Stream.RandRange(TEXT('A'), TEXT('Z')));
+	}
+
+	return Result;
+}
