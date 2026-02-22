@@ -200,11 +200,14 @@ protected:
 	virtual FReply NativeOnPreviewMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
 	virtual FReply NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
 	virtual FReply NativeOnMouseButtonUp(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
+	virtual FReply NativeOnMouseButtonDoubleClick(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
 	virtual void NativeOnDragDetected(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent, UDragDropOperation*& OutOperation) override;
 	virtual void NativeOnDragCancelled(const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation) override;
 	virtual bool NativeOnDrop(const FGeometry& InGeometry, const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation) override;
 	virtual void NativeOnDragEnter(const FGeometry& InGeometry, const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation) override;
 	virtual void NativeOnDragLeave(const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation) override;
+	virtual void NativeOnMouseEnter(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
+	virtual void NativeOnMouseLeave(const FPointerEvent& InMouseEvent) override;
 
 	// Optional Blueprint hook to customize visuals.
 	UFUNCTION(BlueprintImplementableEvent, Category="MO|Inventory|UI")
@@ -287,6 +290,10 @@ private:
 	UPROPERTY(Transient)
 	bool bIsDragHovered = false;
 
+	/** Track if mouse is hovering over this slot. */
+	UPROPERTY(Transient)
+	bool bIsMouseHovered = false;
+
 	/** Track if we started a drag (to differentiate from click). */
 	UPROPERTY(Transient)
 	bool bDragStarted = false;
@@ -298,16 +305,6 @@ private:
 	/** Mouse position when button was pressed. */
 	UPROPERTY(Transient)
 	FVector2D PressedMousePosition = FVector2D::ZeroVector;
-
-	/** Time of last click for double-click detection. */
-	double LastClickTime = 0.0;
-
-	/** Slot index of last click for double-click detection (must be same slot). */
-	int32 LastClickSlotIndex = INDEX_NONE;
-
-	/** Threshold in seconds for double-click detection. Higher than Windows default (500ms) to account for UI button press/release time. */
-	UPROPERTY(EditDefaultsOnly, Category="MO|Inventory|UI")
-	float DoubleClickThreshold = 0.75f;
 
 	/** Border color when slot is in normal state. */
 	UPROPERTY(EditDefaultsOnly, Category="MO|Inventory|UI|Colors")

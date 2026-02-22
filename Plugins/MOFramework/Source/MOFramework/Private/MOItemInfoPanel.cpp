@@ -29,9 +29,24 @@ void UMOItemInfoPanel::InitializePanel(UMOInventoryComponent* InInventoryCompone
 void UMOItemInfoPanel::SetSelectedItemGuid(const FGuid& InSelectedGuid)
 {
 	SelectedGuid = InSelectedGuid;
+	// Clear direct mode when switching to GUID mode
+	DirectItemDefinitionId = NAME_None;
+	DirectQuantity = 0;
 	UE_LOG(LogMOFramework, Warning, TEXT("[ItemInfoPanel] SetSelectedItemGuid - Guid=%s, IsValid=%s"),
 		*SelectedGuid.ToString(EGuidFormats::Short),
 		SelectedGuid.IsValid() ? TEXT("true") : TEXT("false"));
+	RefreshPanel();
+}
+
+void UMOItemInfoPanel::SetItemByDefinitionId(FName InItemDefinitionId, int32 InQuantity)
+{
+	// Clear GUID mode when switching to direct mode
+	SelectedGuid.Invalidate();
+	InventoryComponent = nullptr;
+	DirectItemDefinitionId = InItemDefinitionId;
+	DirectQuantity = FMath::Max(1, InQuantity);
+	UE_LOG(LogMOFramework, Log, TEXT("[ItemInfoPanel] SetItemByDefinitionId - ItemId=%s, Quantity=%d"),
+		*InItemDefinitionId.ToString(), DirectQuantity);
 	RefreshPanel();
 }
 
@@ -118,13 +133,55 @@ FLinearColor UMOItemInfoPanel::GetRarityColor(EMOItemRarity Rarity) const
 
 void UMOItemInfoPanel::RefreshPanel()
 {
-	UE_LOG(LogMOFramework, Warning, TEXT("[ItemInfoPanel] RefreshPanel - SelectedGuid=%s, InventoryComponent=%s"),
+	UE_LOG(LogMOFramework, Verbose, TEXT("[ItemInfoPanel] RefreshPanel - SelectedGuid=%s, InventoryComponent=%s, DirectItemId=%s"),
 		*SelectedGuid.ToString(EGuidFormats::Short),
-		IsValid(InventoryComponent) ? TEXT("valid") : TEXT("NULL"));
+		IsValid(InventoryComponent) ? TEXT("valid") : TEXT("NULL"),
+		*DirectItemDefinitionId.ToString());
 
+	// Direct definition ID mode (for world items)
+	if (!DirectItemDefinitionId.IsNone())
+	{
+		// Hide placeholder, show detail widgets
+		if (PlaceholderText)
+		{
+			PlaceholderText->SetVisibility(ESlateVisibility::Collapsed);
+		}
+		SetDetailWidgetsVisibility(ESlateVisibility::SelfHitTestInvisible);
+
+		// Debug fields
+		if (DebugSelectedGuidText)
+		{
+			DebugSelectedGuidText->SetText(FText::FromString(TEXT("(world item)")));
+		}
+		if (DebugItemIdText)
+		{
+			DebugItemIdText->SetText(FText::FromName(DirectItemDefinitionId));
+		}
+		if (DebugQuantityText)
+		{
+			DebugQuantityText->SetText(FText::AsNumber(DirectQuantity));
+		}
+
+		// Get the item definition and display it
+		FMOItemDefinitionRow ItemDef;
+		if (!UMOItemDatabaseSettings::GetItemDefinition(DirectItemDefinitionId, ItemDef))
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[ItemInfoPanel] RefreshPanel - No item definition found for %s"),
+				*DirectItemDefinitionId.ToString());
+			if (ItemNameText) { ItemNameText->SetText(FText::FromName(DirectItemDefinitionId)); }
+			if (QuantityText) { QuantityText->SetText(FText::AsNumber(DirectQuantity)); }
+			return;
+		}
+
+		// Display item info using the definition
+		DisplayItemDefinition(ItemDef, DirectQuantity);
+		return;
+	}
+
+	// Standard GUID + Inventory mode
 	if (!SelectedGuid.IsValid() || !IsValid(InventoryComponent))
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[ItemInfoPanel] RefreshPanel - EARLY EXIT: GuidValid=%s, InvCompValid=%s"),
+		UE_LOG(LogMOFramework, Verbose, TEXT("[ItemInfoPanel] RefreshPanel - EARLY EXIT: GuidValid=%s, InvCompValid=%s"),
 			SelectedGuid.IsValid() ? TEXT("true") : TEXT("false"),
 			IsValid(InventoryComponent) ? TEXT("true") : TEXT("false"));
 		ClearAllFields();
@@ -159,7 +216,7 @@ void UMOItemInfoPanel::RefreshPanel()
 	}
 	SetDetailWidgetsVisibility(ESlateVisibility::SelfHitTestInvisible);
 
-	UE_LOG(LogMOFramework, Warning, TEXT("[ItemInfoPanel] RefreshPanel - Found entry: ItemDefId=%s, Quantity=%d"),
+	UE_LOG(LogMOFramework, Verbose, TEXT("[ItemInfoPanel] RefreshPanel - Found entry: ItemDefId=%s, Quantity=%d"),
 		*FoundEntry.ItemDefinitionId.ToString(), FoundEntry.Quantity);
 
 	// Debug fields (backwards compatibility)
@@ -188,13 +245,16 @@ void UMOItemInfoPanel::RefreshPanel()
 		return;
 	}
 
-	UE_LOG(LogMOFramework, Warning, TEXT("[ItemInfoPanel] RefreshPanel - Got item definition: DisplayName=%s"),
-		*ItemDef.DisplayName.ToString());
+	// Display item info using the definition
+	DisplayItemDefinition(ItemDef, FoundEntry.Quantity);
+}
 
+void UMOItemInfoPanel::DisplayItemDefinition(const FMOItemDefinitionRow& ItemDef, int32 Quantity)
+{
 	// Display Name
 	if (ItemNameText)
 	{
-		ItemNameText->SetText(ItemDef.DisplayName.IsEmpty() ? FText::FromName(FoundEntry.ItemDefinitionId) : ItemDef.DisplayName);
+		ItemNameText->SetText(ItemDef.DisplayName.IsEmpty() ? FText::FromString(TEXT("Unknown Item")) : ItemDef.DisplayName);
 		ItemNameText->SetColorAndOpacity(FSlateColor(GetRarityColor(ItemDef.Rarity)));
 	}
 
@@ -226,7 +286,7 @@ void UMOItemInfoPanel::RefreshPanel()
 	// Quantity
 	if (QuantityText)
 	{
-		QuantityText->SetText(FText::Format(NSLOCTEXT("MOItemInfo", "Quantity", "x{0}"), FText::AsNumber(FoundEntry.Quantity)));
+		QuantityText->SetText(FText::Format(NSLOCTEXT("MOItemInfo", "Quantity", "x{0}"), FText::AsNumber(Quantity)));
 	}
 
 	// Max Stack

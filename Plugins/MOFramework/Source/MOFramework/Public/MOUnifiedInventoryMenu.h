@@ -37,6 +37,13 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOOnQuickTransferRequested, const 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(FMOOnContextMenuRequested, UMOInventoryComponent*, InventoryComponent, const FGuid&, ItemGuid, int32, SlotIndex, FVector2D, ScreenPosition);
 
 /**
+ * Delegate for world item context menu requests (from nearby items panel).
+ * @param WorldItem The world item that was right-clicked
+ * @param ScreenPosition Screen position for menu placement
+ */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOOnWorldItemContextMenuRequested, AMOWorldItem*, WorldItem, FVector2D, ScreenPosition);
+
+/**
  * Unified inventory menu with dual-panel layout.
  *
  * Left Panel: Always shows player inventory
@@ -129,6 +136,14 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category="MO|Inventory|Menu")
 	void SetSelectedItem(const FGuid& ItemGuid, UMOInventoryComponent* SourceInventory);
+
+	/**
+	 * Set the item to display by definition ID (for world items).
+	 * @param ItemDefinitionId The item definition to display
+	 * @param Quantity The quantity to display
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Inventory|Menu")
+	void SetItemByDefinitionId(FName ItemDefinitionId, int32 Quantity);
 
 	/** Clear the current item selection. */
 	UFUNCTION(BlueprintCallable, Category="MO|Inventory|Menu")
@@ -225,6 +240,10 @@ public:
 	/** Broadcast when a context menu is requested (right-click). */
 	UPROPERTY(BlueprintAssignable, Category="MO|Inventory|Menu")
 	FMOOnContextMenuRequested OnContextMenuRequested;
+
+	/** Broadcast when a world item context menu is requested (right-click on nearby item). */
+	UPROPERTY(BlueprintAssignable, Category="MO|Inventory|Menu")
+	FMOOnWorldItemContextMenuRequested OnWorldItemContextMenuRequested;
 
 protected:
 	virtual void NativeConstruct() override;
@@ -363,6 +382,9 @@ private:
 
 	UFUNCTION()
 	void HandleNearbyItemsChanged();
+
+	UFUNCTION()
+	void HandleNearbyItemRightClicked(AMOWorldItem* WorldItem, FVector2D ScreenPosition);
 
 	UFUNCTION()
 	void HandlePlayerSlotDropReceived(int32 TargetSlotIndex, int32 SourceSlotIndex, UMOInventoryComponent* SourceInventory);

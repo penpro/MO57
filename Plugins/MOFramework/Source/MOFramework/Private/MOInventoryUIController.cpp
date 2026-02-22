@@ -38,6 +38,7 @@ void UMOInventoryUIController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	{
 		UnifiedMenu->OnRequestClose.RemoveDynamic(this, &UMOInventoryUIController::HandleUnifiedInventoryMenuRequestClose);
 		UnifiedMenu->OnContextMenuRequested.RemoveDynamic(this, &UMOInventoryUIController::HandleUnifiedInventoryMenuContextMenuRequested);
+		UnifiedMenu->OnWorldItemContextMenuRequested.RemoveDynamic(this, &UMOInventoryUIController::HandleUnifiedInventoryMenuWorldItemContextMenuRequested);
 		UnifiedMenu->RemoveFromParent();
 	}
 	UnifiedInventoryWidget.Reset();
@@ -281,6 +282,9 @@ void UMOInventoryUIController::OpenInventoryWithContainer(AActor* ContainerActor
 
 		MenuWidget->OnContextMenuRequested.RemoveAll(this);
 		MenuWidget->OnContextMenuRequested.AddDynamic(this, &UMOInventoryUIController::HandleUnifiedInventoryMenuContextMenuRequested);
+
+		MenuWidget->OnWorldItemContextMenuRequested.RemoveAll(this);
+		MenuWidget->OnWorldItemContextMenuRequested.AddDynamic(this, &UMOInventoryUIController::HandleUnifiedInventoryMenuWorldItemContextMenuRequested);
 	}
 
 	// Initialize with player inventory and container
@@ -374,6 +378,12 @@ void UMOInventoryUIController::HandleUnifiedInventoryMenuContextMenuRequested(UM
 {
 	// Show the context menu for the item
 	ShowItemContextMenu(InventoryComponent, ItemGuid, SlotIndex, ScreenPosition);
+}
+
+void UMOInventoryUIController::HandleUnifiedInventoryMenuWorldItemContextMenuRequested(AMOWorldItem* WorldItem, FVector2D ScreenPosition)
+{
+	// Show the context menu for the world item
+	ShowWorldItemContextMenu(WorldItem, ScreenPosition);
 }
 
 // =============================================================================
@@ -626,6 +636,59 @@ void UMOInventoryUIController::ShowItemContextMenu(UMOInventoryComponent* Invent
 	MenuWidget->SetMenuPosition(ScreenPosition);
 }
 
+void UMOInventoryUIController::ShowWorldItemContextMenu(AMOWorldItem* WorldItem, FVector2D ScreenPosition)
+{
+	if (!IsLocalOwningPlayerController())
+	{
+		return;
+	}
+
+	APlayerController* PlayerController = ResolveOwningPlayerController();
+	if (!IsValid(PlayerController))
+	{
+		return;
+	}
+
+	if (!ItemContextMenuClass)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventoryUI] ItemContextMenuClass not set on controller."));
+		return;
+	}
+
+	if (!IsValid(WorldItem))
+	{
+		return;
+	}
+
+	// Close existing context menu if any
+	CloseItemContextMenu();
+
+	// Store the world item for pickup action
+	ContextMenuWorldItem = WorldItem;
+
+	UMOItemContextMenu* MenuWidget = CreateWidget<UMOItemContextMenu>(PlayerController, ItemContextMenuClass);
+	if (!IsValid(MenuWidget))
+	{
+		return;
+	}
+
+	ItemContextMenuWidget = MenuWidget;
+
+	MenuWidget->OnMenuClosed.AddDynamic(this, &UMOInventoryUIController::HandleContextMenuClosed);
+	MenuWidget->OnActionSelected.AddDynamic(this, &UMOInventoryUIController::HandleContextMenuAction);
+
+	// Initialize for world item (shows Pickup instead of Drop)
+	MenuWidget->InitializeForWorldItem(WorldItem);
+
+	// Add to viewport first, then position
+	MenuWidget->AddToViewport(ItemContextMenuZOrder);
+
+	// Position at mouse cursor
+	MenuWidget->SetMenuPosition(ScreenPosition);
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOInventoryUI] Showing context menu for world item: %s"), *WorldItem->GetName());
+}
+
 void UMOInventoryUIController::CloseItemContextMenu()
 {
 	UMOItemContextMenu* MenuWidget = ItemContextMenuWidget.Get();
@@ -637,6 +700,7 @@ void UMOInventoryUIController::CloseItemContextMenu()
 		}
 	}
 	ItemContextMenuWidget.Reset();
+	ContextMenuWorldItem.Reset();
 }
 
 bool UMOInventoryUIController::IsItemContextMenuOpen() const
@@ -700,84 +764,162 @@ void UMOInventoryUIController::HandleContextMenuAction(FName ActionId, const FGu
 	}
 	else if (ActionId == FName("Inspect"))
 	{
+		// Cache world item BEFORE closing context menu (which resets ContextMenuWorldItem)
+		AMOWorldItem* WorldItem = ContextMenuWorldItem.Get();
+
 		// Close context menu first to ensure IsAnyMenuOpen() returns correct state
 		CloseItemContextMenu();
-		// Get item definition ID from inventory
-		FMOInventoryEntry Entry;
-		if (InventoryComponent->TryGetEntryByGuid(ItemGuid, Entry))
+
+		FName ItemDefinitionId;
+
+		// Check if this is a world item or inventory item
+		if (IsValid(WorldItem))
+		{
+			// World item inspection
+			UMOItemComponent* ItemComp = WorldItem->GetItemComponent();
+			if (IsValid(ItemComp))
+			{
+				ItemDefinitionId = ItemComp->ItemDefinitionId;
+			}
+		}
+		else if (IsValid(InventoryComponent))
+		{
+			// Inventory item inspection
+			FMOInventoryEntry Entry;
+			if (InventoryComponent->TryGetEntryByGuid(ItemGuid, Entry))
+			{
+				ItemDefinitionId = Entry.ItemDefinitionId;
+			}
+		}
+
+		if (!ItemDefinitionId.IsNone())
 		{
 			if (UIManager)
 			{
-				UIManager->StartItemInspection(Entry.ItemDefinitionId, ItemGuid);
+				UIManager->StartItemInspection(ItemDefinitionId, ItemGuid);
 			}
 		}
 		else
 		{
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOInventoryUI] Inspect action - item not found in inventory"));
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOInventoryUI] Inspect action - could not find item definition"));
 		}
 	}
 	else if (ActionId == FName("SplitStack"))
 	{
+		// Cache world item BEFORE closing context menu (which resets ContextMenuWorldItem)
+		AMOWorldItem* WorldItem = ContextMenuWorldItem.Get();
+
 		// Close context menu first
 		CloseItemContextMenu();
-
-		// Get the item entry
-		FMOInventoryEntry Entry;
-		if (!InventoryComponent->TryGetEntryByGuid(ItemGuid, Entry))
+		if (IsValid(WorldItem))
 		{
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOInventoryUI] SplitStack - item not found"));
-			return;
-		}
-
-		// Can't split single items
-		if (Entry.Quantity <= 1)
-		{
-			UE_LOG(LogMOFramework, Log, TEXT("[MOInventoryUI] SplitStack - nothing to split (quantity=%d)"), Entry.Quantity);
-			return;
-		}
-
-		// Split in half (floor division)
-		const int32 SplitAmount = Entry.Quantity / 2;
-		const FName ItemDefId = Entry.ItemDefinitionId;
-
-		// Remove split amount from original stack
-		if (!InventoryComponent->RemoveItemByGuid(ItemGuid, SplitAmount))
-		{
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOInventoryUI] SplitStack - failed to remove from original stack"));
-			return;
-		}
-
-		// Generate new GUID for split portion
-		const FGuid NewGuid = FGuid::NewGuid();
-
-		// Check if there's room in inventory (an empty slot)
-		if (InventoryComponent->HasEmptySlot())
-		{
-			// Add split portion to inventory - use NoStack to prevent it from merging back
-			InventoryComponent->AddItemByGuidNoStack(NewGuid, ItemDefId, SplitAmount);
-			UE_LOG(LogMOFramework, Log, TEXT("[MOInventoryUI] SplitStack - split %d items into new stack"), SplitAmount);
-		}
-		else
-		{
-			// No room in inventory - drop to world
-			APlayerController* PC = ResolveOwningPlayerController();
-			APawn* PlayerPawn = PC ? PC->GetPawn() : nullptr;
-
-			if (IsValid(PlayerPawn))
+			// World item split: take half into player inventory, leave rest in world
+			UMOItemComponent* ItemComp = WorldItem->GetItemComponent();
+			if (!IsValid(ItemComp))
 			{
-				// Calculate drop location in front of player
-				const FVector PlayerLocation = PlayerPawn->GetActorLocation();
-				const FVector ForwardVector = PlayerPawn->GetActorForwardVector();
-				const FVector DropLocation = PlayerLocation + ForwardVector * 100.0f;
-				const FRotator DropRotation(0.0f, FMath::RandRange(0.0f, 360.0f), 0.0f);
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOInventoryUI] SplitStack (world) - item has no ItemComponent"));
+				return;
+			}
 
-				// Spawn world item for the split portion
-				InventoryComponent->SpawnWorldItem(ItemDefId, SplitAmount, NewGuid, DropLocation, DropRotation);
-				UE_LOG(LogMOFramework, Log, TEXT("[MOInventoryUI] SplitStack - dropped %d items to world (no room in inventory)"), SplitAmount);
+			// Can't split single items
+			if (ItemComp->Quantity <= 1)
+			{
+				UE_LOG(LogMOFramework, Log, TEXT("[MOInventoryUI] SplitStack (world) - nothing to split (quantity=%d)"), ItemComp->Quantity);
+				return;
+			}
+
+			// Split in half
+			const int32 SplitAmount = ItemComp->Quantity / 2;
+			const int32 RemainingAmount = ItemComp->Quantity - SplitAmount;
+			const FName ItemDefId = ItemComp->ItemDefinitionId;
+
+			// Add split portion to player inventory
+			const FGuid NewGuid = FGuid::NewGuid();
+			bool bAdded = InventoryComponent->AddItemByGuidNoStack(NewGuid, ItemDefId, SplitAmount);
+
+			if (bAdded)
+			{
+				// Update world item quantity
+				ItemComp->Quantity = RemainingAmount;
+				UE_LOG(LogMOFramework, Log, TEXT("[MOInventoryUI] SplitStack (world) - picked up %d, left %d in world"),
+					SplitAmount, RemainingAmount);
+
+				// Refresh nearby panel to show updated quantity
+				UMOUnifiedInventoryMenu* MenuWidget = UnifiedInventoryWidget.Get();
+				if (IsValid(MenuWidget))
+				{
+					MenuWidget->RefreshNearbyPanel();
+				}
 			}
 			else
 			{
-				UE_LOG(LogMOFramework, Warning, TEXT("[MOInventoryUI] SplitStack - no room and no pawn to drop items"));
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOInventoryUI] SplitStack (world) - failed to add to inventory (full?)"));
+				if (UIManager)
+				{
+					UIManager->ShowNotification(NSLOCTEXT("MO", "InventoryFull", "Inventory full"), 2.0f);
+				}
+			}
+		}
+		else
+		{
+			// Inventory item split (original logic)
+			FMOInventoryEntry Entry;
+			if (!InventoryComponent->TryGetEntryByGuid(ItemGuid, Entry))
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOInventoryUI] SplitStack - item not found"));
+				return;
+			}
+
+			// Can't split single items
+			if (Entry.Quantity <= 1)
+			{
+				UE_LOG(LogMOFramework, Log, TEXT("[MOInventoryUI] SplitStack - nothing to split (quantity=%d)"), Entry.Quantity);
+				return;
+			}
+
+			// Split in half (floor division)
+			const int32 SplitAmount = Entry.Quantity / 2;
+			const FName ItemDefId = Entry.ItemDefinitionId;
+
+			// Remove split amount from original stack
+			if (!InventoryComponent->RemoveItemByGuid(ItemGuid, SplitAmount))
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOInventoryUI] SplitStack - failed to remove from original stack"));
+				return;
+			}
+
+			// Generate new GUID for split portion
+			const FGuid NewGuid = FGuid::NewGuid();
+
+			// Check if there's room in inventory (an empty slot)
+			if (InventoryComponent->HasEmptySlot())
+			{
+				// Add split portion to inventory - use NoStack to prevent it from merging back
+				InventoryComponent->AddItemByGuidNoStack(NewGuid, ItemDefId, SplitAmount);
+				UE_LOG(LogMOFramework, Log, TEXT("[MOInventoryUI] SplitStack - split %d items into new stack"), SplitAmount);
+			}
+			else
+			{
+				// No room in inventory - drop to world
+				APlayerController* PC = ResolveOwningPlayerController();
+				APawn* PlayerPawn = PC ? PC->GetPawn() : nullptr;
+
+				if (IsValid(PlayerPawn))
+				{
+					// Calculate drop location in front of player
+					const FVector PlayerLocation = PlayerPawn->GetActorLocation();
+					const FVector ForwardVector = PlayerPawn->GetActorForwardVector();
+					const FVector DropLocation = PlayerLocation + ForwardVector * 100.0f;
+					const FRotator DropRotation(0.0f, FMath::RandRange(0.0f, 360.0f), 0.0f);
+
+					// Spawn world item for the split portion
+					InventoryComponent->SpawnWorldItem(ItemDefId, SplitAmount, NewGuid, DropLocation, DropRotation);
+					UE_LOG(LogMOFramework, Log, TEXT("[MOInventoryUI] SplitStack - dropped %d items to world (no room in inventory)"), SplitAmount);
+				}
+				else
+				{
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOInventoryUI] SplitStack - no room and no pawn to drop items"));
+				}
 			}
 		}
 	}
@@ -795,15 +937,44 @@ void UMOInventoryUIController::HandleContextMenuAction(FName ActionId, const FGu
 	}
 	else if (ActionId == FName("Details"))
 	{
+		// Cache world item BEFORE closing context menu (which resets ContextMenuWorldItem)
+		AMOWorldItem* WorldItem = ContextMenuWorldItem.Get();
+
 		// Close context menu first
 		CloseItemContextMenu();
+
 		// Switch to details tab in unified inventory menu
 		UMOUnifiedInventoryMenu* MenuWidget = UnifiedInventoryWidget.Get();
-		if (IsValid(MenuWidget))
+		if (!IsValid(MenuWidget))
 		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOInventoryUI] Details action - unified inventory menu not available"));
+			return;
+		}
+
+		// Check if this is a world item or inventory item
+		if (IsValid(WorldItem))
+		{
+			// World item details
+			UMOItemComponent* ItemComp = WorldItem->GetItemComponent();
+			if (IsValid(ItemComp))
+			{
+				MenuWidget->SetItemByDefinitionId(ItemComp->ItemDefinitionId, ItemComp->Quantity);
+				MenuWidget->ShowDetailsTab();
+				UE_LOG(LogMOFramework, Log, TEXT("[MOInventoryUI] Details action - showing details for world item %s x%d"),
+					*ItemComp->ItemDefinitionId.ToString(), ItemComp->Quantity);
+			}
+			else
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOInventoryUI] Details action - world item has no ItemComponent"));
+			}
+		}
+		else
+		{
+			// Inventory item details
 			MenuWidget->SetSelectedItem(ItemGuid, InventoryComponent);
 			MenuWidget->ShowDetailsTab();
-			UE_LOG(LogMOFramework, Log, TEXT("[MOInventoryUI] Details action - switched to details panel for item %s"), *ItemGuid.ToString(EGuidFormats::DigitsWithHyphens));
+			UE_LOG(LogMOFramework, Log, TEXT("[MOInventoryUI] Details action - switched to details panel for item %s"),
+				*ItemGuid.ToString(EGuidFormats::DigitsWithHyphens));
 		}
 	}
 	else if (ActionId == FName("Transfer"))
@@ -813,6 +984,56 @@ void UMOInventoryUIController::HandleContextMenuAction(FName ActionId, const FGu
 		// Quick transfer - handled by HandleQuickTransfer
 		HandleQuickTransfer(ItemGuid, InventoryComponent);
 		UE_LOG(LogMOFramework, Log, TEXT("[MOInventoryUI] Transfer action - quick transferred item %s"), *ItemGuid.ToString(EGuidFormats::DigitsWithHyphens));
+	}
+	else if (ActionId == FName("Pickup"))
+	{
+		// Cache world item BEFORE closing context menu (which resets ContextMenuWorldItem)
+		AMOWorldItem* WorldItem = ContextMenuWorldItem.Get();
+
+		// Close context menu first
+		CloseItemContextMenu();
+
+		if (!IsValid(WorldItem))
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOInventoryUI] Pickup action - world item no longer valid"));
+			return;
+		}
+
+		UMOItemComponent* ItemComp = WorldItem->GetItemComponent();
+		if (!IsValid(ItemComp))
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOInventoryUI] Pickup action - world item has no item component"));
+			return;
+		}
+
+		// Add to player inventory
+		FGuid NewItemGuid = FGuid::NewGuid();
+		bool bAdded = InventoryComponent->AddItemByGuid(NewItemGuid, ItemComp->ItemDefinitionId, ItemComp->Quantity);
+
+		if (bAdded)
+		{
+			UE_LOG(LogMOFramework, Log, TEXT("[MOInventoryUI] Pickup action - picked up %s x%d"),
+				*ItemComp->ItemDefinitionId.ToString(), ItemComp->Quantity);
+
+			// Hide or destroy the world item
+			if (WorldItem->bDestroyAfterPickup)
+			{
+				WorldItem->Destroy();
+			}
+			else
+			{
+				WorldItem->SetActorHiddenInGame(true);
+				WorldItem->SetActorEnableCollision(false);
+			}
+		}
+		else
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOInventoryUI] Pickup action - failed to add item to inventory (full?)"));
+			if (UIManager)
+			{
+				UIManager->ShowNotification(NSLOCTEXT("MO", "InventoryFull", "Inventory full"), 2.0f);
+			}
+		}
 	}
 }
 

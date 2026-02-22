@@ -201,4 +201,13 @@ private:
 
 	/** Timer handle for video fallback timeout. */
 	FTimerHandle VideoFallbackTimerHandle;
+
+	/** Timer handle for delayed level load (lets loading screen render first). */
+	FTimerHandle DelayedLevelLoadTimerHandle;
+
+	/** Level path pending load (used with delayed load). */
+	FString PendingLevelPath;
+
+	/** Execute the delayed level load. */
+	void ExecuteDelayedLevelLoad();
 };

@@ -21,6 +21,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Inventory|UI")
 	void SetSelectedItemGuid(const FGuid& InSelectedGuid);
 
+	/** Display item info directly from definition (for world items without inventory). */
+	UFUNCTION(BlueprintCallable, Category="MO|Inventory|UI")
+	void SetItemByDefinitionId(FName InItemDefinitionId, int32 InQuantity = 1);
+
 	UFUNCTION(BlueprintCallable, Category="MO|Inventory|UI")
 	void ClearSelection();
 
@@ -31,6 +35,7 @@ private:
 	void RefreshPanel();
 	void ClearAllFields();
 	void SetDetailWidgetsVisibility(ESlateVisibility InVisibility);
+	void DisplayItemDefinition(const FMOItemDefinitionRow& ItemDef, int32 Quantity);
 	FString GetItemTypeString(EMOItemType ItemType) const;
 	FString GetRarityString(EMOItemRarity Rarity) const;
 	FLinearColor GetRarityColor(EMOItemRarity Rarity) const;
@@ -107,4 +112,12 @@ private:
 
 	UPROPERTY()
 	FGuid SelectedGuid;
+
+	/** When set, display info from this definition ID instead of looking up in inventory. */
+	UPROPERTY()
+	FName DirectItemDefinitionId;
+
+	/** Quantity override when using DirectItemDefinitionId. */
+	UPROPERTY()
+	int32 DirectQuantity = 0;
 };

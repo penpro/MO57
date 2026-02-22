@@ -177,7 +177,8 @@
       "Bash(uniq:*)",
       "Bash(git rm:*)",
       "Bash(git checkout:*)",
-      "Bash(xargs:*)"
+      "Bash(xargs:*)",
+      "Bash(git -C \"D:\\\\UEProjects\\\\MO57\" status)"
     ]
   }
 }

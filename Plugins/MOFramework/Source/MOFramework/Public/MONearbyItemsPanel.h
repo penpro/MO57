@@ -28,6 +28,13 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOOnNearbyItemPickedUp, AMOWorldIt
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOOnNearbyItemsChanged);
 
 /**
+ * Delegate broadcast when a nearby item is right-clicked.
+ * @param WorldItem The right-clicked world item
+ * @param ScreenPosition The screen position for context menu placement
+ */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOOnNearbyItemRightClicked, AMOWorldItem*, WorldItem, FVector2D, ScreenPosition);
+
+/**
  * Panel displaying nearby world items that can be picked up.
  *
  * Shows world items within range using an inventory grid display.
@@ -106,6 +113,10 @@ public:
 	/** Broadcast when nearby items list changes (item dropped to world, etc.). */
 	UPROPERTY(BlueprintAssignable, Category="MO|Inventory|Nearby")
 	FMOOnNearbyItemsChanged OnNearbyItemsChanged;
+
+	/** Broadcast when a nearby item is right-clicked (for context menu). */
+	UPROPERTY(BlueprintAssignable, Category="MO|Inventory|Nearby")
+	FMOOnNearbyItemRightClicked OnNearbyItemRightClicked;
 
 protected:
 	virtual void NativeConstruct() override;

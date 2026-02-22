@@ -5,6 +5,8 @@
 #include "MOItemDatabaseSettings.h"
 #include "MOKnowledgeComponent.h"
 #include "MOSkillsComponent.h"
+#include "MOWorldItem.h"
+#include "MOItemComponent.h"
 #include "Components/PanelWidget.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
 #include "GameFramework/PlayerController.h"
@@ -79,8 +81,27 @@ UWidget* UMOItemContextMenu::NativeGetDesiredFocusTarget() const
 void UMOItemContextMenu::InitializeForItem(UMOInventoryComponent* InInventoryComponent, const FGuid& InItemGuid, int32 InSlotIndex)
 {
 	InventoryComponent = InInventoryComponent;
+	SourceWorldItem.Reset();  // Clear world item mode
 	ItemGuid = InItemGuid;
 	SlotIndex = InSlotIndex;
+	bInitialized = true;
+
+	RefreshButtonVisibility();
+}
+
+void UMOItemContextMenu::InitializeForWorldItem(AMOWorldItem* InWorldItem)
+{
+	if (!IsValid(InWorldItem))
+	{
+		return;
+	}
+
+	SourceWorldItem = InWorldItem;
+	InventoryComponent = nullptr;  // Clear inventory mode
+	SlotIndex = INDEX_NONE;
+
+	// Generate a temporary GUID for action broadcasting
+	ItemGuid = FGuid::NewGuid();
 	bInitialized = true;
 
 	RefreshButtonVisibility();
@@ -124,51 +145,120 @@ void UMOItemContextMenu::SetMenuPosition(FVector2D ScreenPosition)
 
 void UMOItemContextMenu::RefreshButtonVisibility_Implementation()
 {
-	if (!bInitialized || !IsValid(InventoryComponent))
+	if (!bInitialized)
 	{
 		return;
 	}
 
-	// Get item info
-	FMOInventoryEntry SlotEntry;
-	if (!InventoryComponent->TryGetSlotEntry(SlotIndex, SlotEntry) || !SlotEntry.ItemGuid.IsValid())
+	// Check if we're in world item mode
+	const bool bIsWorldItemMode = SourceWorldItem.IsValid();
+
+	FName ItemDefinitionId;
+	int32 Quantity = 1;
+	bool bIsConsumable = false;
+	bool bHasMultiple = false;
+
+	if (bIsWorldItemMode)
 	{
-		CloseMenu();
-		return;
+		// Get item info from world item
+		AMOWorldItem* WorldItem = SourceWorldItem.Get();
+		if (!IsValid(WorldItem))
+		{
+			CloseMenu();
+			return;
+		}
+
+		UMOItemComponent* ItemComp = WorldItem->GetItemComponent();
+		if (!IsValid(ItemComp))
+		{
+			CloseMenu();
+			return;
+		}
+
+		ItemDefinitionId = ItemComp->ItemDefinitionId;
+		Quantity = ItemComp->Quantity;
+
+		// Lookup item definition
+		FMOItemDefinitionRow ItemDef;
+		const bool bFoundDef = UMOItemDatabaseSettings::GetItemDefinition(ItemDefinitionId, ItemDef);
+		bIsConsumable = bFoundDef ? ItemDef.bConsumable : false;
+		bHasMultiple = Quantity > 1;
+	}
+	else
+	{
+		// Original inventory mode
+		if (!IsValid(InventoryComponent))
+		{
+			return;
+		}
+
+		FMOInventoryEntry SlotEntry;
+		if (!InventoryComponent->TryGetSlotEntry(SlotIndex, SlotEntry) || !SlotEntry.ItemGuid.IsValid())
+		{
+			CloseMenu();
+			return;
+		}
+
+		ItemDefinitionId = SlotEntry.ItemDefinitionId;
+		Quantity = SlotEntry.Quantity;
+
+		// Lookup item definition
+		FMOItemDefinitionRow ItemDef;
+		const bool bFoundDef = UMOItemDatabaseSettings::GetItemDefinition(ItemDefinitionId, ItemDef);
+		bIsConsumable = bFoundDef ? ItemDef.bConsumable : false;
+		bHasMultiple = Quantity > 1;
 	}
 
-	// Lookup item definition
-	FMOItemDefinitionRow ItemDef;
-	const bool bFoundDef = UMOItemDatabaseSettings::GetItemDefinition(SlotEntry.ItemDefinitionId, ItemDef);
+	// ==========================================
+	// INVENTORY-ONLY BUTTONS (hide for world items)
+	// ==========================================
 
-	const bool bIsConsumable = bFoundDef ? ItemDef.bConsumable : false;
-	const bool bHasMultiple = SlotEntry.Quantity > 1;
-
-	// Show/hide buttons based on item properties
+	// Use/Consume - only for inventory items
 	if (UseButton)
 	{
-		UseButton->SetVisibility(bIsConsumable ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
-		// Set button text to "Consume" for consumable items
-		if (bIsConsumable)
+		const bool bShowUse = !bIsWorldItemMode && bIsConsumable;
+		UseButton->SetVisibility(bShowUse ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+		if (bShowUse)
 		{
 			UseButton->SetButtonText(NSLOCTEXT("MOContextMenu", "Consume", "Consume"));
 		}
 	}
 
+	// Drop buttons - only for inventory items (world items are already dropped)
 	if (Drop1Button)
 	{
-		Drop1Button->SetVisibility(ESlateVisibility::Visible);
+		Drop1Button->SetVisibility(bIsWorldItemMode ? ESlateVisibility::Collapsed : ESlateVisibility::Visible);
 	}
 
 	if (DropAllButton)
 	{
-		// Only show "Drop All" if we have more than 1
-		DropAllButton->SetVisibility(bHasMultiple ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+		const bool bShowDropAll = !bIsWorldItemMode && bHasMultiple;
+		DropAllButton->SetVisibility(bShowDropAll ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
 	}
 
+	// Transfer - only for inventory items
+	if (TransferButton)
+	{
+		TransferButton->SetVisibility(bIsWorldItemMode ? ESlateVisibility::Collapsed : ESlateVisibility::Visible);
+	}
+
+	// ==========================================
+	// WORLD ITEM BUTTONS
+	// ==========================================
+
+	// Pickup button - only for world items
+	if (PickupButton)
+	{
+		PickupButton->SetVisibility(bIsWorldItemMode ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+	}
+
+	// ==========================================
+	// SHARED BUTTONS (both modes)
+	// ==========================================
+
+	// Inspect button
 	if (InspectButton)
 	{
-		// Check if there's anything left to learn from this item
 		bool bCanInspect = true;
 
 		APlayerController* PC = GetOwningPlayer();
@@ -182,7 +272,7 @@ void UMOItemContextMenu::RefreshButtonVisibility_Implementation()
 
 				if (KnowledgeComp)
 				{
-					bCanInspect = KnowledgeComp->CanLearnMoreFromItem(SlotEntry.ItemDefinitionId, SkillsComp);
+					bCanInspect = KnowledgeComp->CanLearnMoreFromItem(ItemDefinitionId, SkillsComp);
 				}
 			}
 		}
@@ -190,11 +280,13 @@ void UMOItemContextMenu::RefreshButtonVisibility_Implementation()
 		InspectButton->SetVisibility(bCanInspect ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
 	}
 
+	// Split stack - available for both modes if multiple items
 	if (SplitStackButton)
 	{
 		SplitStackButton->SetVisibility(bHasMultiple ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
 	}
 
+	// Craft button
 	if (CraftButton)
 	{
 		CraftButton->SetVisibility(ESlateVisibility::Visible);
@@ -204,12 +296,6 @@ void UMOItemContextMenu::RefreshButtonVisibility_Implementation()
 	if (DetailsButton)
 	{
 		DetailsButton->SetVisibility(ESlateVisibility::Visible);
-	}
-
-	// Transfer button - always visible (UIManager handles transfer logic)
-	if (TransferButton)
-	{
-		TransferButton->SetVisibility(ESlateVisibility::Visible);
 	}
 }
 
@@ -254,6 +340,11 @@ void UMOItemContextMenu::BindButtonEvents()
 	{
 		TransferButton->OnClicked().RemoveAll(this);
 		TransferButton->OnClicked().AddUObject(this, &UMOItemContextMenu::HandleTransferClicked);
+	}
+	if (PickupButton)
+	{
+		PickupButton->OnClicked().RemoveAll(this);
+		PickupButton->OnClicked().AddUObject(this, &UMOItemContextMenu::HandlePickupClicked);
 	}
 }
 
@@ -337,6 +428,12 @@ void UMOItemContextMenu::HandleDetailsClicked()
 void UMOItemContextMenu::HandleTransferClicked()
 {
 	OnActionSelected.Broadcast(TEXT("Transfer"), ItemGuid);
+	CloseMenu();
+}
+
+void UMOItemContextMenu::HandlePickupClicked()
+{
+	OnActionSelected.Broadcast(TEXT("Pickup"), ItemGuid);
 	CloseMenu();
 }
 

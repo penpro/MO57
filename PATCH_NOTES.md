@@ -4,6 +4,41 @@ This file tracks changes, bug fixes, and new features. Updated incrementally to 
 
 ---
 
+## [2026-02-22] World Item Context Menu & Loading Screen UX
+
+### New Features
+
+**World Item Context Menu Actions**
+- **Split Stack for world items**: Right-click a stack in nearby panel → Split takes half into inventory, leaves rest in world
+- **Details for world items**: Right-click → Details now shows item info panel for world items
+- Added `UMOItemInfoPanel::SetItemByDefinitionId()` for displaying item info without inventory lookup
+- Added `UMOUnifiedInventoryMenu::SetItemByDefinitionId()` wrapper
+- Nearby panel refreshes after split to show updated quantity
+
+**Loading Screen Before Level Load**
+- Loading overlay now appears BEFORE level load begins (no more frozen menu)
+- 2 second delay lets player read loading screen before transition
+- Uses timer-based delayed `OpenLevel()` to ensure UI renders first
+- Applied to both New Game and Load Game flows
+
+### Bug Fixes
+
+- **Fixed context menu actions failing for world items**: Inspect, SplitStack, Details, and Pickup now correctly cache world item reference before closing context menu
+- **Fixed redundant ContextMenuWorldItem.Reset() calls**: Consolidated cleanup into `CloseItemContextMenu()`
+- **Fixed PCG distance culling not working**: Root cause was missing PCG Invoker component on player character - distance calculations were using PCG component origin instead of player position
+
+### Technical Notes
+
+**Loading Screen Flow:**
+1. User clicks Start Game / Load Game
+2. Settings configured, `bIsLoadingIntoGameplay = true`
+3. `ShowLoadingOverlay()` called immediately
+4. 2 second timer starts
+5. Timer fires → `OpenLevel()` called
+6. Player sees loading screen instead of frozen menu
+
+---
+
 ## [2026-02-21] Camera Shoulder Toggle, Loading Overlay & Inventory QOL
 
 ### New Features
@@ -31,7 +66,8 @@ This file tracks changes, bug fixes, and new features. Updated incrementally to 
 
 **Inventory Quality of Life**
 - Double-click items to transfer between inventories (same as shift-click)
-- Configurable double-click threshold (default 0.3s)
+- Uses Unreal's native `NativeOnMouseButtonDoubleClick` for reliable detection
+- Works on both inventory slots and nearby items panel
 
 ### Bug Fixes
 
@@ -41,6 +77,17 @@ This file tracks changes, bug fixes, and new features. Updated incrementally to 
 - **Fixed loading screen during intro**: Initial game launch now stays black until intro video starts (no loading screen flash)
 - **Fixed character mesh deformation around neck**: Resolved mesh distortion issue in the neck area of character models
 - **Fixed inventory grid showing too many slots**: Grid now shows exact slot count from inventory component instead of padding to MinimumVisibleSlotCount
+- **Fixed double-click requiring 3 clicks**: UButton was consuming mouse events internally before slot widget could detect them. Fixed by setting SlotButton to `HitTestInvisible` and handling all input at the slot widget level. Now uses Unreal's native `NativeOnMouseButtonDoubleClick` event for reliable 2-click detection
+
+**Nearby Items Context Menu**
+- Right-click items in the nearby items panel to show context menu
+- Available actions: Pickup, Inspect, Split Stack (if stackable), Craft, Details
+- Context menu reuses existing `UMOItemContextMenu` with world item mode
+- Added `PickupButton` to context menu widget (optional BindWidget)
+- **Split Stack for world items**: Takes half the quantity into inventory, leaves rest in world
+- **Details for world items**: Shows item info panel using `SetItemByDefinitionId()` without requiring inventory lookup
+- Added `UMOItemInfoPanel::SetItemByDefinitionId()` for displaying item info directly from definition ID
+- Added `UMOUnifiedInventoryMenu::SetItemByDefinitionId()` wrapper for details panel
 
 ### Technical Details
 

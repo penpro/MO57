@@ -15,15 +15,11 @@ void UMOGameInstance::Init()
 	if (UMOGameSettings* Settings = UMOGameSettings::GetMOGameSettings())
 	{
 		Settings->bPlayIntro = true;
-		UE_LOG(LogMOFramework, Log, TEXT("[MOGameInstance] Init - Reset bPlayIntro to true for fresh game launch"));
 	}
 
 	// Bind loading screen delegates
 	FCoreUObjectDelegates::PreLoadMap.AddUObject(this, &UMOGameInstance::BeginLoadingScreen);
 	FCoreUObjectDelegates::PostLoadMapWithWorld.AddUObject(this, &UMOGameInstance::EndLoadingScreen);
-
-	UE_LOG(LogMOFramework, Log, TEXT("[MOGameInstance] Initialized (LoadingOverlayClass=%s)"),
-		LoadingOverlayClass ? *LoadingOverlayClass->GetName() : TEXT("NOT SET"));
 }
 
 void UMOGameInstance::Shutdown()
@@ -44,9 +40,6 @@ void UMOGameInstance::Shutdown()
 
 void UMOGameInstance::ShowLoadingOverlay()
 {
-	UE_LOG(LogMOFramework, Warning, TEXT("[MOGameInstance] ShowLoadingOverlay called (LoadingOverlayClass=%s)"),
-		LoadingOverlayClass ? *LoadingOverlayClass->GetName() : TEXT("NULL"));
-
 	if (!LoadingOverlayClass)
 	{
 		UE_LOG(LogMOFramework, Error, TEXT("[MOGameInstance] ShowLoadingOverlay: LoadingOverlayClass not set in BP_MOGameInstance!"));
@@ -56,22 +49,15 @@ void UMOGameInstance::ShowLoadingOverlay()
 	// Remove any existing overlay
 	if (LoadingOverlayWidget)
 	{
-		UE_LOG(LogMOFramework, Log, TEXT("[MOGameInstance] Removing existing overlay widget"));
 		LoadingOverlayWidget->RemoveFromParent();
 		LoadingOverlayWidget = nullptr;
 	}
 
 	// Create new overlay
 	APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0);
-	UE_LOG(LogMOFramework, Warning, TEXT("[MOGameInstance] GetPlayerController returned: %s"),
-		PC ? *PC->GetName() : TEXT("NULL"));
-
 	if (PC)
 	{
 		LoadingOverlayWidget = CreateWidget<UMOLoadingOverlay>(PC, LoadingOverlayClass);
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOGameInstance] CreateWidget returned: %s"),
-			LoadingOverlayWidget ? *LoadingOverlayWidget->GetName() : TEXT("NULL"));
-
 		if (LoadingOverlayWidget)
 		{
 			// Set random loading tip if available
@@ -84,8 +70,6 @@ void UMOGameInstance::ShowLoadingOverlay()
 			// Add to viewport at highest Z-order
 			LoadingOverlayWidget->AddToViewport(9999);
 			LoadingOverlayWidget->ShowOverlay();
-
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOGameInstance] Loading overlay SHOWN successfully"));
 		}
 		else
 		{
@@ -94,18 +78,15 @@ void UMOGameInstance::ShowLoadingOverlay()
 	}
 	else
 	{
-		UE_LOG(LogMOFramework, Error, TEXT("[MOGameInstance] ShowLoadingOverlay: No player controller available"));
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOGameInstance] ShowLoadingOverlay: No player controller available yet"));
 	}
 }
 
 void UMOGameInstance::BeginLoadingScreen(const FString& MapName)
 {
-	UE_LOG(LogMOFramework, Warning, TEXT("[MOGameInstance] BeginLoadingScreen for map: %s"), *MapName);
-
 	// Skip loading screen for initial launch to intro
 	if (!ShouldShowLoadingScreen(MapName))
 	{
-		UE_LOG(LogMOFramework, Log, TEXT("[MOGameInstance] Skipping loading screen for: %s"), *MapName);
 		bWaitingForManualDismiss = false;
 		return;
 	}
@@ -119,32 +100,25 @@ void UMOGameInstance::BeginLoadingScreen(const FString& MapName)
 		// Just set the flag - we'll create the overlay in EndLoadingScreen
 		// after the new level loads (otherwise it gets destroyed with old level)
 		bWaitingForManualDismiss = true;
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOGameInstance] Will show loading overlay after level loads (manual-dismiss mode)"));
+		UE_LOG(LogMOFramework, Log, TEXT("[MOGameInstance] Loading into gameplay - will show overlay after level loads"));
 	}
 	else
 	{
 		bWaitingForManualDismiss = false;
-		UE_LOG(LogMOFramework, Log, TEXT("[MOGameInstance] Non-gameplay transition, no loading overlay"));
 	}
 }
 
 void UMOGameInstance::EndLoadingScreen(UWorld* InLoadedWorld)
 {
-	UE_LOG(LogMOFramework, Warning, TEXT("[MOGameInstance] EndLoadingScreen for world: %s (WaitingForManualDismiss=%s)"),
-		InLoadedWorld ? *InLoadedWorld->GetName() : TEXT("None"),
-		bWaitingForManualDismiss ? TEXT("true") : TEXT("false"));
-
 	if (bWaitingForManualDismiss)
 	{
 		// Create the overlay now in the new level's context
 		// (creating it in BeginLoadingScreen would destroy it with the old level)
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOGameInstance] EndLoadingScreen: Calling ShowLoadingOverlay for manual-dismiss mode"));
 		ShowLoadingOverlay();
 	}
 	else if (LoadingOverlayWidget)
 	{
 		// Not waiting for manual dismiss, hide the overlay now
-		UE_LOG(LogMOFramework, Log, TEXT("[MOGameInstance] EndLoadingScreen: Fading out overlay (not manual-dismiss)"));
 		LoadingOverlayWidget->FadeOutAndRemove();
 		LoadingOverlayWidget = nullptr;
 	}
@@ -162,7 +136,6 @@ bool UMOGameInstance::ShouldShowLoadingScreen(const FString& MapName) const
 	// The main menu level contains "LoadingLevel" in its name
 	if (Settings->bPlayIntro && MapName.Contains(TEXT("LoadingLevel")))
 	{
-		UE_LOG(LogMOFramework, Log, TEXT("[MOGameInstance] ShouldShowLoadingScreen: SKIP (intro + LoadingLevel)"));
 		return false;  // Just stay black until intro video starts
 	}
 
@@ -171,13 +144,8 @@ bool UMOGameInstance::ShouldShowLoadingScreen(const FString& MapName) const
 
 void UMOGameInstance::DismissLoadingScreen()
 {
-	UE_LOG(LogMOFramework, Warning, TEXT("[MOGameInstance] DismissLoadingScreen called (WaitingForManualDismiss=%s, HasWidget=%s)"),
-		bWaitingForManualDismiss ? TEXT("true") : TEXT("false"),
-		LoadingOverlayWidget ? TEXT("true") : TEXT("false"));
-
 	if (!bWaitingForManualDismiss)
 	{
-		UE_LOG(LogMOFramework, Log, TEXT("[MOGameInstance] Not waiting for manual dismiss, skipping"));
 		return;
 	}
 
@@ -194,8 +162,6 @@ void UMOGameInstance::DismissLoadingScreen()
 	{
 		Settings->bIsLoadingIntoGameplay = false;
 	}
-
-	UE_LOG(LogMOFramework, Warning, TEXT("[MOGameInstance] Loading screen dismissed (fading out)"));
 }
 
 bool UMOGameInstance::IsLoadingOverlayVisible() const

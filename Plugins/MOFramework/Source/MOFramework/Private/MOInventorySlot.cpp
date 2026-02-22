@@ -49,14 +49,13 @@ void UMOInventorySlot::NativeConstruct()
 {
 	Super::NativeConstruct();
 
-	// NOTE: We intentionally do NOT bind to SlotButton's OnClicked/OnPressed/OnReleased.
-	// All click handling is done via native widget events (NativeOnPreviewMouseButtonDown,
-	// NativeOnMouseButtonUp) which properly support shift-click and double-click detection.
-	// Binding to both UButton events AND native events causes conflicts where bButtonPressed
-	// gets reset by one handler before the other can check it.
+	// CRITICAL: Set the button to HitTestInvisible so it doesn't consume mouse events.
+	// All mouse input is handled at the UMOInventorySlot level via native widget events.
+	// This prevents the UButton from eating events and allows proper double-click detection.
 	if (IsValid(SlotButton))
 	{
-		// Clear any existing bindings
+		SlotButton->SetVisibility(ESlateVisibility::HitTestInvisible);
+		// Clear any existing bindings (safety measure)
 		SlotButton->OnClicked.RemoveAll(this);
 		SlotButton->OnPressed.RemoveAll(this);
 		SlotButton->OnReleased.RemoveAll(this);
@@ -319,25 +318,24 @@ void UMOInventorySlot::HandleSlotButtonReleased()
 void UMOInventorySlot::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 {
 	Super::NativeTick(MyGeometry, InDeltaTime);
-	// Native drag system handles everything via NativeOnPreviewMouseButtonDown -> DetectDrag
 }
 
 FReply UMOInventorySlot::NativeOnPreviewMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
 {
-	// Preview gets called BEFORE the button sees the event
-	// This is where we initiate drag detection for items
+	// Preview gets called BEFORE child widgets see the event (tunneling phase)
 	if (InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
 	{
-		// Always track button press for click detection
 		bButtonPressed = true;
+		bDragStarted = false;
 		PressedMousePosition = InMouseEvent.GetScreenSpacePosition();
 
-		// Only initiate drag detection if we have an item and drag is enabled
+		// Enable drag detection for items (NativeOnMouseButtonDoubleClick handles double-click separately)
 		if (bEnableDragDrop && CachedVisualData.bHasItem)
 		{
-			// Tell Unreal to detect drag - when threshold exceeded, NativeOnDragDetected is called
 			return FReply::Handled().DetectDrag(TakeWidget(), EKeys::LeftMouseButton);
 		}
+
+		return FReply::Handled();
 	}
 
 	return Super::NativeOnPreviewMouseButtonDown(InGeometry, InMouseEvent);
@@ -361,40 +359,34 @@ FReply UMOInventorySlot::NativeOnMouseButtonDown(const FGeometry& InGeometry, co
 
 FReply UMOInventorySlot::NativeOnMouseButtonUp(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
 {
-	// If we initiated drag detection in NativeOnPreviewMouseButtonDown but the user
-	// released before the drag threshold was exceeded, we need to manually fire the click
-	if (InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton && bButtonPressed && !bDragStarted)
+	// Handle left mouse button release
+	if (InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
 	{
+		const bool bWasPressed = bButtonPressed;
+		const bool bWasDragging = bDragStarted;
 		bButtonPressed = false;
 
-		// Check if shift is held for quick transfer
-		const bool bShiftHeld = InMouseEvent.IsShiftDown();
-
-		// Check for double-click (same slot clicked within threshold)
-		const double CurrentTime = FPlatformTime::Seconds();
-		const double TimeSinceLastClick = CurrentTime - LastClickTime;
-		const bool bIsDoubleClick = (SlotIndex == LastClickSlotIndex) &&
-			(TimeSinceLastClick <= DoubleClickThreshold);
-
-		// Update tracking for next click
-		LastClickTime = CurrentTime;
-		LastClickSlotIndex = SlotIndex;
-
-		if (CachedVisualData.bHasItem)
+		// If button was pressed and no drag occurred, this is a click
+		if (bWasPressed && !bWasDragging)
 		{
-			// Double-click or shift-click triggers quick transfer
-			if (bShiftHeld || bIsDoubleClick)
+			// Check if shift is held for quick transfer
+			const bool bShiftHeld = InMouseEvent.IsShiftDown();
+
+			if (CachedVisualData.bHasItem)
 			{
-				OnSlotShiftClicked.Broadcast(SlotIndex, CachedVisualData.ItemGuid);
+				if (bShiftHeld)
+				{
+					OnSlotShiftClicked.Broadcast(SlotIndex, CachedVisualData.ItemGuid);
+				}
+				else
+				{
+					OnSlotClicked.Broadcast(SlotIndex, CachedVisualData.ItemGuid);
+				}
 			}
 			else
 			{
-				OnSlotClicked.Broadcast(SlotIndex, CachedVisualData.ItemGuid);
+				OnSlotClicked.Broadcast(SlotIndex, FGuid());
 			}
-		}
-		else
-		{
-			OnSlotClicked.Broadcast(SlotIndex, FGuid());
 		}
 
 		return FReply::Handled();
@@ -402,6 +394,23 @@ FReply UMOInventorySlot::NativeOnMouseButtonUp(const FGeometry& InGeometry, cons
 
 	bButtonPressed = false;
 	return Super::NativeOnMouseButtonUp(InGeometry, InMouseEvent);
+}
+
+FReply UMOInventorySlot::NativeOnMouseButtonDoubleClick(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
+{
+	// Double-click triggers quick transfer (same as Shift+Click)
+	if (InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
+	{
+		if (CachedVisualData.bHasItem)
+		{
+			UE_LOG(LogMOFramework, Log, TEXT("[Slot %d] Double-click: transferring item %s"),
+				SlotIndex, *CachedVisualData.ItemDefinitionId.ToString());
+			OnSlotShiftClicked.Broadcast(SlotIndex, CachedVisualData.ItemGuid);
+		}
+		return FReply::Handled();
+	}
+
+	return Super::NativeOnMouseButtonDoubleClick(InGeometry, InMouseEvent);
 }
 
 void UMOInventorySlot::NativeOnDragDetected(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent, UDragDropOperation*& OutOperation)
@@ -634,6 +643,37 @@ void UMOInventorySlot::NativeOnDragLeave(const FDragDropEvent& InDragDropEvent, 
 	Super::NativeOnDragLeave(InDragDropEvent, InOperation);
 
 	SetDragHoverVisual(false);
+}
+
+void UMOInventorySlot::NativeOnMouseEnter(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
+{
+	Super::NativeOnMouseEnter(InGeometry, InMouseEvent);
+
+	bIsMouseHovered = true;
+
+	// Show hover visual on border (subtle highlight)
+	if (IsValid(SlotBorder) && !bIsDragHovered)
+	{
+		// Slight lightening of border on hover
+		FLinearColor HoverTint = NormalBorderColor;
+		HoverTint.R = FMath::Min(1.0f, HoverTint.R + 0.15f);
+		HoverTint.G = FMath::Min(1.0f, HoverTint.G + 0.15f);
+		HoverTint.B = FMath::Min(1.0f, HoverTint.B + 0.15f);
+		SlotBorder->SetBrushColor(HoverTint);
+	}
+}
+
+void UMOInventorySlot::NativeOnMouseLeave(const FPointerEvent& InMouseEvent)
+{
+	Super::NativeOnMouseLeave(InMouseEvent);
+
+	bIsMouseHovered = false;
+
+	// Restore normal border color (unless drag-hovering)
+	if (IsValid(SlotBorder) && !bIsDragHovered)
+	{
+		SlotBorder->SetBrushColor(NormalBorderColor);
+	}
 }
 
 UUserWidget* UMOInventorySlot::CreateDragVisual()

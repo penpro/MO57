@@ -3,6 +3,7 @@
 #include "MOMainMenuWidget.h"
 #include "MOIntroWidget.h"
 #include "MOGameSettings.h"
+#include "MOGameInstance.h"
 #include "Blueprint/UserWidget.h"
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetSystemLibrary.h"
@@ -244,9 +245,21 @@ void AMOMainMenuPlayerController::StartNewGame()
 		UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuPlayerController] Created pending new game slot: %s"), *Settings->PendingNewGameSlot);
 	}
 
-	// Load gameplay level
-	UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuPlayerController] Opening level: %s"), *GameplayLevelPath);
-	UGameplayStatics::OpenLevel(this, *GameplayLevelPath);
+	// Show loading overlay FIRST, then delay level load to let it render
+	if (UMOGameInstance* GameInstance = Cast<UMOGameInstance>(GetGameInstance()))
+	{
+		GameInstance->ShowLoadingOverlay();
+	}
+
+	// Store level path and delay the actual load so loading screen is visible
+	PendingLevelPath = GameplayLevelPath;
+	GetWorld()->GetTimerManager().SetTimer(
+		DelayedLevelLoadTimerHandle,
+		this,
+		&AMOMainMenuPlayerController::ExecuteDelayedLevelLoad,
+		2.0f,  // 2 second delay - let player read loading screen
+		false
+	);
 }
 
 void AMOMainMenuPlayerController::LoadGame(const FString& SlotName)
@@ -286,9 +299,21 @@ void AMOMainMenuPlayerController::LoadGame(const FString& SlotName)
 		Settings->SaveSettings();
 	}
 
-	// Load gameplay level - the gameplay GameMode will handle loading the save
-	UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuPlayerController] Opening level: %s"), *GameplayLevelPath);
-	UGameplayStatics::OpenLevel(this, *GameplayLevelPath);
+	// Show loading overlay FIRST, then delay level load to let it render
+	if (UMOGameInstance* GameInstance = Cast<UMOGameInstance>(GetGameInstance()))
+	{
+		GameInstance->ShowLoadingOverlay();
+	}
+
+	// Store level path and delay the actual load so loading screen is visible
+	PendingLevelPath = GameplayLevelPath;
+	GetWorld()->GetTimerManager().SetTimer(
+		DelayedLevelLoadTimerHandle,
+		this,
+		&AMOMainMenuPlayerController::ExecuteDelayedLevelLoad,
+		2.0f,  // 2 second delay - let player read loading screen
+		false
+	);
 }
 
 void AMOMainMenuPlayerController::ExitGame()
@@ -304,6 +329,19 @@ void AMOMainMenuPlayerController::ExitGame()
 
 	// Exit the game
 	UKismetSystemLibrary::QuitGame(this, this, EQuitPreference::Quit, false);
+}
+
+void AMOMainMenuPlayerController::ExecuteDelayedLevelLoad()
+{
+	if (PendingLevelPath.IsEmpty())
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOMainMenuPlayerController] ExecuteDelayedLevelLoad called with empty path"));
+		return;
+	}
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuPlayerController] Opening level: %s"), *PendingLevelPath);
+	UGameplayStatics::OpenLevel(this, *PendingLevelPath);
+	PendingLevelPath.Empty();
 }
 
 void AMOMainMenuPlayerController::HandleAnyKeyPressed()

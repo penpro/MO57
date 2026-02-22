@@ -84,6 +84,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Inventory")
 	void ShowItemContextMenu(UMOInventoryComponent* InventoryComponent, const FGuid& ItemGuid, int32 SlotIndex, FVector2D ScreenPosition);
 
+	/** Show the context menu for a world item (from nearby items panel). */
+	UFUNCTION(BlueprintCallable, Category="MO|Inventory")
+	void ShowWorldItemContextMenu(AMOWorldItem* WorldItem, FVector2D ScreenPosition);
+
 	/** Close the item context menu. */
 	UFUNCTION(BlueprintCallable, Category="MO|Inventory")
 	void CloseItemContextMenu();
@@ -166,6 +170,9 @@ private:
 	UFUNCTION()
 	void HandleUnifiedInventoryMenuContextMenuRequested(UMOInventoryComponent* InventoryComponent, const FGuid& ItemGuid, int32 SlotIndex, FVector2D ScreenPosition);
 
+	UFUNCTION()
+	void HandleUnifiedInventoryMenuWorldItemContextMenuRequested(AMOWorldItem* WorldItem, FVector2D ScreenPosition);
+
 	// --- Item Context Menu ---
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Inventory", meta=(AllowPrivateAccess="true"))
@@ -176,6 +183,10 @@ private:
 
 	UPROPERTY(Transient)
 	TWeakObjectPtr<UMOItemContextMenu> ItemContextMenuWidget;
+
+	/** World item currently being operated on via context menu (for pickup action). */
+	UPROPERTY(Transient)
+	TWeakObjectPtr<AMOWorldItem> ContextMenuWorldItem;
 
 	UFUNCTION()
 	void HandleContextMenuClosed();

@@ -7,6 +7,7 @@
 class UMOCommonButton;
 class UMOInventoryComponent;
 class UPanelWidget;
+class AMOWorldItem;
 
 /**
  * Context menu that appears when right-clicking an inventory slot.
@@ -24,11 +25,26 @@ class MOFRAMEWORK_API UMOItemContextMenu : public UCommonActivatableWidget
 
 public:
 	/**
-	 * Initialize the context menu for a specific item.
+	 * Initialize the context menu for a specific inventory item.
 	 * Call this after creating the widget and before adding to viewport.
 	 */
 	UFUNCTION(BlueprintCallable, Category="MO|UI|ContextMenu")
 	void InitializeForItem(UMOInventoryComponent* InInventoryComponent, const FGuid& InItemGuid, int32 InSlotIndex);
+
+	/**
+	 * Initialize the context menu for a world item (nearby items panel).
+	 * Shows Pickup/Inspect/Split options instead of Drop options.
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|UI|ContextMenu")
+	void InitializeForWorldItem(AMOWorldItem* InWorldItem);
+
+	/** Returns true if this menu is showing options for a world item. */
+	UFUNCTION(BlueprintPure, Category="MO|UI|ContextMenu")
+	bool IsWorldItemMode() const { return SourceWorldItem.IsValid(); }
+
+	/** Get the world item (if in world item mode). */
+	UFUNCTION(BlueprintPure, Category="MO|UI|ContextMenu")
+	AMOWorldItem* GetWorldItem() const { return SourceWorldItem.Get(); }
 
 	/**
 	 * Position the menu at the given screen location (typically slot position).
@@ -68,6 +84,7 @@ private:
 	UFUNCTION() void HandleCraftClicked();
 	UFUNCTION() void HandleDetailsClicked();
 	UFUNCTION() void HandleTransferClicked();
+	UFUNCTION() void HandlePickupClicked();
 
 private:
 	// ============================================================
@@ -110,12 +127,20 @@ private:
 	UPROPERTY(meta=(BindWidgetOptional))
 	TObjectPtr<UMOCommonButton> TransferButton;
 
+	/** Pickup button - pick up world item to inventory (visible for world items). */
+	UPROPERTY(meta=(BindWidgetOptional))
+	TObjectPtr<UMOCommonButton> PickupButton;
+
 	// ============================================================
 	// State
 	// ============================================================
 
 	UPROPERTY()
 	TObjectPtr<UMOInventoryComponent> InventoryComponent;
+
+	/** Source world item (alternative to InventoryComponent for nearby items). */
+	UPROPERTY()
+	TWeakObjectPtr<AMOWorldItem> SourceWorldItem;
 
 	UPROPERTY()
 	FGuid ItemGuid;

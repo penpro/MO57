@@ -60,8 +60,6 @@ void UMONearbyItemsPanel::SetQuickPickupTarget(UMOInventoryComponent* TargetInve
 
 void UMONearbyItemsPanel::RefreshNearbyItems(const TArray<AMOWorldItem*>& NearbyItems)
 {
-	UE_LOG(LogMOFramework, Log, TEXT("[NearbyItemsPanel] RefreshNearbyItems called with %d items"), NearbyItems.Num());
-
 	CachedNearbyItems.Empty();
 
 	for (AMOWorldItem* WorldItem : NearbyItems)
@@ -69,7 +67,6 @@ void UMONearbyItemsPanel::RefreshNearbyItems(const TArray<AMOWorldItem*>& Nearby
 		if (IsValid(WorldItem))
 		{
 			CachedNearbyItems.Add(WorldItem);
-			UE_LOG(LogMOFramework, Log, TEXT("[NearbyItemsPanel] Added world item: %s"), *WorldItem->GetName());
 		}
 	}
 
@@ -86,7 +83,6 @@ void UMONearbyItemsPanel::RefreshNearbyItems(const TArray<AMOWorldItem*>& Nearby
 			AMOWorldItem* WorldItem = CachedNearbyItems[i].Get();
 			if (!WorldItem)
 			{
-				UE_LOG(LogMOFramework, Warning, TEXT("[NearbyItemsPanel] WorldItem at index %d is invalid"), i);
 				continue;
 			}
 
@@ -104,22 +100,12 @@ void UMONearbyItemsPanel::RefreshNearbyItems(const TArray<AMOWorldItem*>& Nearby
 			SlotData.Quantity = ItemComp->Quantity;
 			SlotData.SourceWorldItem = WorldItem;  // Store reference for drag operations
 			VisualData.Add(SlotData);
-
-			UE_LOG(LogMOFramework, Log, TEXT("[NearbyItemsPanel] Created visual data for %s (ID=%s, Qty=%d)"),
-				*WorldItem->GetName(), *ItemComp->ItemDefinitionId.ToString(), ItemComp->Quantity);
 		}
 
-		UE_LOG(LogMOFramework, Log, TEXT("[NearbyItemsPanel] Calling SetSlotVisualData with %d entries"), VisualData.Num());
 		NearbyGrid->SetSlotVisualData(VisualData);
-	}
-	else
-	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[NearbyItemsPanel] NearbyGrid is NULL!"));
 	}
 
 	UpdateEmptyState();
-
-	UE_LOG(LogMOFramework, Log, TEXT("[NearbyItemsPanel] Refresh complete. CachedNearbyItems=%d"), CachedNearbyItems.Num());
 }
 
 void UMONearbyItemsPanel::ClearNearbyItems()
@@ -153,7 +139,6 @@ bool UMONearbyItemsPanel::PickupItem(AMOWorldItem* WorldItem, UMOInventoryCompon
 	UMOItemComponent* ItemComp = WorldItem->GetItemComponent();
 	if (!ItemComp)
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[NearbyItemsPanel] PickupItem: WorldItem has no ItemComponent"));
 		return false;
 	}
 
@@ -181,13 +166,6 @@ bool UMONearbyItemsPanel::PickupItem(AMOWorldItem* WorldItem, UMOInventoryCompon
 		}
 
 		UpdateEmptyState();
-
-		UE_LOG(LogMOFramework, Log, TEXT("[NearbyItemsPanel] Picked up %s x%d"),
-			*ItemComp->ItemDefinitionId.ToString(), ItemComp->Quantity);
-	}
-	else
-	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[NearbyItemsPanel] Failed to add item to inventory (full?)"));
 	}
 
 	return bSuccess;
@@ -214,8 +192,6 @@ int32 UMONearbyItemsPanel::LootAllToInventory(UMOInventoryComponent* TargetInven
 		}
 	}
 
-	UE_LOG(LogMOFramework, Log, TEXT("[NearbyItemsPanel] Looted %d items"), PickedUpCount);
-
 	return PickedUpCount;
 }
 
@@ -227,29 +203,14 @@ void UMONearbyItemsPanel::UpdateEmptyState()
 {
 	const bool bIsEmpty = CachedNearbyItems.Num() == 0;
 
-	UE_LOG(LogMOFramework, Log, TEXT("[NearbyItemsPanel] UpdateEmptyState: bIsEmpty=%s, CachedItems=%d"),
-		bIsEmpty ? TEXT("true") : TEXT("false"), CachedNearbyItems.Num());
-
 	if (EmptyMessageText)
 	{
 		EmptyMessageText->SetVisibility(bIsEmpty ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
-		UE_LOG(LogMOFramework, Log, TEXT("[NearbyItemsPanel] EmptyMessageText visibility set to %s"),
-			bIsEmpty ? TEXT("Visible") : TEXT("Collapsed"));
-	}
-	else
-	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[NearbyItemsPanel] EmptyMessageText is NULL"));
 	}
 
 	if (NearbyGrid)
 	{
 		NearbyGrid->SetVisibility(bIsEmpty ? ESlateVisibility::Collapsed : ESlateVisibility::Visible);
-		UE_LOG(LogMOFramework, Log, TEXT("[NearbyItemsPanel] NearbyGrid visibility set to %s"),
-			bIsEmpty ? TEXT("Collapsed") : TEXT("Visible"));
-	}
-	else
-	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[NearbyItemsPanel] NearbyGrid is NULL"));
 	}
 }
 
@@ -277,8 +238,6 @@ void UMONearbyItemsPanel::HandleSlotShiftClicked(int32 SlotIndex, const FGuid& I
 		{
 			if (PickupItem(WorldItem, TargetInv))
 			{
-				UE_LOG(LogMOFramework, Log, TEXT("[NearbyItemsPanel] Shift+Click: Picked up item to target inventory"));
-
 				// Refresh the grid display
 				TArray<AMOWorldItem*> RemainingItems;
 				for (const TWeakObjectPtr<AMOWorldItem>& WeakItem : CachedNearbyItems)
@@ -291,24 +250,24 @@ void UMONearbyItemsPanel::HandleSlotShiftClicked(int32 SlotIndex, const FGuid& I
 				RefreshNearbyItems(RemainingItems);
 			}
 		}
-		else
-		{
-			UE_LOG(LogMOFramework, Warning, TEXT("[NearbyItemsPanel] Shift+Click: No target inventory set or world item invalid"));
-		}
 	}
 }
 
 void UMONearbyItemsPanel::HandleSlotRightClicked(int32 SlotIndex, const FGuid& ItemGuid, FVector2D ScreenPosition)
 {
-	// For now, right-click on nearby item does the same as left-click (select)
-	// Could add a context menu later for "Pickup", "Inspect", etc.
-	HandleSlotClicked(SlotIndex, ItemGuid);
+	// Broadcast right-click event for context menu
+	if (SlotIndex >= 0 && SlotIndex < CachedNearbyItems.Num())
+	{
+		AMOWorldItem* WorldItem = CachedNearbyItems[SlotIndex].Get();
+		if (WorldItem)
+		{
+			OnNearbyItemRightClicked.Broadcast(WorldItem, ScreenPosition);
+		}
+	}
 }
 
 void UMONearbyItemsPanel::HandleSlotDropReceived(int32 TargetSlotIndex, int32 SourceSlotIndex, UMOInventoryComponent* SourceInventory)
 {
-	UE_LOG(LogMOFramework, Verbose, TEXT("[NearbyItemsPanel] HandleSlotDropReceived: slot %d from slot %d"), TargetSlotIndex, SourceSlotIndex);
-
 	// When an item is dropped on the nearby panel, it gets dropped to the world.
 	// Broadcast event so parent can trigger a refresh of nearby items.
 	OnNearbyItemsChanged.Broadcast();

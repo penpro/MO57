@@ -154,6 +154,9 @@ void UMOUnifiedInventoryMenu::BindButtonEvents()
 	{
 		NearbyPanel->OnNearbyItemsChanged.RemoveDynamic(this, &UMOUnifiedInventoryMenu::HandleNearbyItemsChanged);
 		NearbyPanel->OnNearbyItemsChanged.AddDynamic(this, &UMOUnifiedInventoryMenu::HandleNearbyItemsChanged);
+
+		NearbyPanel->OnNearbyItemRightClicked.RemoveDynamic(this, &UMOUnifiedInventoryMenu::HandleNearbyItemRightClicked);
+		NearbyPanel->OnNearbyItemRightClicked.AddDynamic(this, &UMOUnifiedInventoryMenu::HandleNearbyItemRightClicked);
 	}
 }
 
@@ -226,6 +229,7 @@ void UMOUnifiedInventoryMenu::UnbindButtonEvents()
 	if (NearbyPanel)
 	{
 		NearbyPanel->OnNearbyItemsChanged.RemoveDynamic(this, &UMOUnifiedInventoryMenu::HandleNearbyItemsChanged);
+		NearbyPanel->OnNearbyItemRightClicked.RemoveDynamic(this, &UMOUnifiedInventoryMenu::HandleNearbyItemRightClicked);
 	}
 	if (EquipmentPanel)
 	{
@@ -439,6 +443,19 @@ void UMOUnifiedInventoryMenu::SetSelectedItem(const FGuid& ItemGuid, UMOInventor
 	}
 
 	UE_LOG(LogMOFramework, Log, TEXT("[UnifiedInventoryMenu] Selected item %s"), *ItemGuid.ToString(EGuidFormats::DigitsWithHyphens));
+}
+
+void UMOUnifiedInventoryMenu::SetItemByDefinitionId(FName ItemDefinitionId, int32 Quantity)
+{
+	// Clear GUID selection - this is a world item
+	SelectedItemGuid.Invalidate();
+
+	if (DetailsPanel)
+	{
+		DetailsPanel->SetItemByDefinitionId(ItemDefinitionId, Quantity);
+	}
+
+	UE_LOG(LogMOFramework, Log, TEXT("[UnifiedInventoryMenu] Set item by definition: %s x%d"), *ItemDefinitionId.ToString(), Quantity);
 }
 
 void UMOUnifiedInventoryMenu::ClearSelectedItem()
@@ -834,6 +851,15 @@ void UMOUnifiedInventoryMenu::HandleNearbyItemsChanged()
 	{
 		// Fallback to immediate refresh if no world
 		RefreshNearbyPanel();
+	}
+}
+
+void UMOUnifiedInventoryMenu::HandleNearbyItemRightClicked(AMOWorldItem* WorldItem, FVector2D ScreenPosition)
+{
+	// Forward to parent controller via delegate
+	if (IsValid(WorldItem))
+	{
+		OnWorldItemContextMenuRequested.Broadcast(WorldItem, ScreenPosition);
 	}
 }
 
