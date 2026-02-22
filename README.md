@@ -609,42 +609,68 @@ The MOFramework has solid core systems but has accumulated technical debt in sev
 
 ### Recent Changes
 
-*Last updated: 2026-02-18*
+*Last updated: 2026-02-22*
 
-#### Creature AI System (NEW)
+#### World Item Interactions (NEW)
+- [x] Right-click context menu for nearby items panel
+- [x] Split Stack for world items - takes half into inventory, leaves rest in world
+- [x] Details panel for world items without picking them up
+- [x] `SetItemByDefinitionId()` for displaying item info without inventory lookup
+
+#### Loading Screen & UX Polish (NEW)
+- [x] Loading overlay appears BEFORE level load (no frozen menu)
+- [x] Timer-based delayed level load for readable loading screens
+- [x] Widget-based loading overlay with fade-out animation
+- [x] Pawn landing detection - loading screen persists until character is grounded
+- [x] Camera shoulder toggle with smooth animated transition
+
+#### PCG World Generation (NEW)
+- [x] PCG flower patch clustering using Copy Points node
+- [x] Distance culling with PCG Invoker component on player
+- [x] Flint nodules and branches added to ground spawns
+
+#### Weather Integration (NEW)
+- [x] `IMOWeatherProviderInterface` for UDS/UDW integration
+- [x] Weather save/load support with `FMOWeatherSaveData`
+- [x] DateTime and weather preset persistence
+- [x] Pending save data system for async provider registration
+
+#### Quest System (NEW)
+- [x] `UMOQuestSubsystem` for quest management
+- [x] DataTable-driven quest definitions
+- [x] Event-based objective completion
+- [x] Quest HUD tracker and full quest log panel
+- [x] Auto-start quests when prerequisites met
+
+#### Terrain-Aware Spawning
+- [x] Beach spawn system - characters spawn on beaches, not peaks
+- [x] Configurable height range filters (100-3000cm above water)
+- [x] Voxel height graph seed parameter support
+- [x] Mid-game save loading with terrain regeneration
+
+#### Creature AI System
 - [x] `MOCreature` base class for all AI creatures (prey/predators)
 - [x] `MOCreatureController` with AI perception (sight + hearing)
 - [x] Creature activity states: Active, Resting, Sleeping, Fleeing, Fighting, Dead
 - [x] Behavior tree tasks: Flee, Wander, Attack, Rest
 - [x] `BTService_CreatureActivity` for day/night rest/sleep cycles
-- [x] Footstep noise generation for AI hearing awareness
-- [x] Hit reaction and death animation montage support
-- [x] DataTable-driven creature definitions (stats, behavior, loot)
+- [x] Fall-through safety system for voxel terrain gaps
 
-#### Character Appearance System (NEW)
+#### Character Appearance System
 - [x] `MOAppearanceSubsystem` for managing character visuals
 - [x] `MOCharacterAppearance` component for per-pawn appearance data
 - [x] `MOCustomizableCharacter` with MetaHuman integration
-- [x] Genesis 8 character model support
-- [x] MetaHuman common assets integration
 
 #### Main Menu System
 - [x] Main menu widget with New Game/Load Game/Options/Exit
 - [x] Intro video playback with audio (UMediaPlayer-based)
 - [x] Skip intro with any key press
-- [x] Level transitions from LoadingLevel to gameplay
-- [x] Input mode management across level transitions
+- [x] New Game panel with world seed input
 
-#### Spawn System
-- [x] Voxel terrain ready detection via `OnNextStateRendered()`
-- [x] Safe spawn location finding with raycast (ECC_WorldStatic)
-- [x] Configurable spawn search center and radius
-- [x] Water level avoidance with MinSpawnHeightAboveWater
-
-#### Equipment System
-- [x] Full body slot equipment (head, chest, legs, feet, hands, back)
-- [x] Left/right hand weapon slots
-- [x] Equipment slot icons in UI
+#### Inventory QoL
+- [x] Double-click items to transfer between inventories
+- [x] Nearby panel auto-refresh after split operations
+- [x] Fixed inventory grid showing exact slot count
 
 ### Tracked TODOs
 
