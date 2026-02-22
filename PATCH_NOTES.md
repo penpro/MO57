@@ -4,12 +4,22 @@ This file tracks changes, bug fixes, and new features. Updated incrementally to 
 
 ---
 
-## [2026-02-21] Loading Screen Persistence & Pawn Landing Detection
+## [2026-02-21] Camera Shoulder Toggle, Loading Overlay & Inventory QOL
 
 ### New Features
 
-**Loading Screen Manual Dismissal**
-- Loading screen now persists until pawn has landed safely on terrain
+**Camera Shoulder Toggle**
+- New `IA_View` input action to toggle camera between left/right shoulder
+- Smooth animated transition (0.5s default, configurable via `CameraTransitionDuration`)
+- Camera Y offset now controlled via FollowCamera relative location (not CameraBoom SocketOffset)
+- Ease-out curve for polished transition feel
+- Supports interrupting mid-transition to reverse direction
+
+**Widget-Based Loading Overlay**
+- New `UMOLoadingOverlay` widget replaces MoviePlayer-based loading screen
+- Full-screen black overlay with optional loading text
+- Smooth fade-out animation when dismissed
+- Loading screen persists until pawn has landed safely on terrain
 - Added `bIsLoadingIntoGameplay` flag to `UMOGameSettings` for tracking gameplay transitions
 - Added `DismissLoadingScreen()` method to `UMOGameInstance` for manual dismissal
 - Added `ShouldShowLoadingScreen()` to skip loading screen during initial launch to intro
@@ -19,6 +29,10 @@ This file tracks changes, bug fixes, and new features. Updated incrementally to 
 - `OnPawnLandedSafely()` dismisses loading screen and clears transition flag
 - Works for both new game spawns and loaded game pawn re-grounding
 
+**Inventory Quality of Life**
+- Double-click items to transfer between inventories (same as shift-click)
+- Configurable double-click threshold (default 0.3s)
+
 ### Bug Fixes
 
 - **Fixed loading screen ending too early**: Loading screen now waits for pawn to land on ground instead of dismissing when map loads
@@ -26,15 +40,34 @@ This file tracks changes, bug fixes, and new features. Updated incrementally to 
 - **Fixed seeing pawn repositioning**: Loading screen now covers the re-grounding of loaded pawns after voxel regeneration
 - **Fixed loading screen during intro**: Initial game launch now stays black until intro video starts (no loading screen flash)
 - **Fixed character mesh deformation around neck**: Resolved mesh distortion issue in the neck area of character models
+- **Fixed inventory grid showing too many slots**: Grid now shows exact slot count from inventory component instead of padding to MinimumVisibleSlotCount
 
 ### Technical Details
 
-The loading screen flow is now:
+**Camera Transition:**
+- `ToggleCameraShoulder()` initiates transition by setting target Y and resetting alpha
+- `Tick()` lerps camera position using ease-out curve: `1 - (1 - alpha)²`
+- Transition state tracked via `bIsCameraTransitioning`, `CameraTargetY`, `CameraStartY`, `CameraTransitionAlpha`
+
+**Loading Screen Flow:**
 1. New Game/Load Game → set `bIsLoadingIntoGameplay = true`
-2. `BeginLoadingScreen()` detects flag → uses `bWaitForManualStop = true`
+2. `BeginLoadingScreen()` detects flag → shows `UMOLoadingOverlay` widget
 3. Map loads → `EndLoadingScreen()` does NOT dismiss (manual mode)
 4. GameMode waits for voxel → spawns pawn → starts landing check timer
-5. Pawn lands → `OnPawnLandedSafely()` → `DismissLoadingScreen()`
+5. Pawn lands → `OnPawnLandedSafely()` → `DismissLoadingScreen()` → fade out
+
+### Blueprint Setup Required
+
+**Loading Overlay:**
+1. Create `WBP_LoadingOverlay` (parent: `UMOLoadingOverlay`)
+2. Add `BackgroundImage` (Image widget, full screen black)
+3. Add `LoadingText` (TextBlock, optional)
+4. In `BP_MOGameInstance`, set `LoadingOverlayClass` to `WBP_LoadingOverlay`
+
+**Camera Toggle:**
+1. `IA_View` input action already created
+2. Bind to desired key in `IMC_MODefault` (e.g., V key)
+3. `ViewAction` property in `BP_MOPlayerController` should reference `IA_View`
 
 ---
 
