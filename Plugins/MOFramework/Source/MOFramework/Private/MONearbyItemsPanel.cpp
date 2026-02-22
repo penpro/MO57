@@ -267,9 +267,6 @@ void UMONearbyItemsPanel::HandleSlotClicked(int32 SlotIndex, const FGuid& ItemGu
 
 void UMONearbyItemsPanel::HandleSlotShiftClicked(int32 SlotIndex, const FGuid& ItemGuid)
 {
-	UE_LOG(LogMOFramework, Warning, TEXT("[NearbyItemsPanel] HandleSlotShiftClicked: SlotIndex=%d, CachedItems=%d, HasTarget=%s"),
-		SlotIndex, CachedNearbyItems.Num(), QuickPickupTargetInventory.IsValid() ? TEXT("true") : TEXT("false"));
-
 	// Shift+Click or Double-Click on nearby item = quick pickup to target inventory
 	if (SlotIndex >= 0 && SlotIndex < CachedNearbyItems.Num())
 	{

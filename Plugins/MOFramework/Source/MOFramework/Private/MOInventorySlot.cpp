@@ -328,10 +328,6 @@ FReply UMOInventorySlot::NativeOnPreviewMouseButtonDown(const FGeometry& InGeome
 	// This is where we initiate drag detection for items
 	if (InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
 	{
-		UE_LOG(LogMOFramework, Log, TEXT("[MOInventorySlot] MouseDown: SlotIndex=%d, HasItem=%s, DragEnabled=%s"),
-			SlotIndex, CachedVisualData.bHasItem ? TEXT("true") : TEXT("false"),
-			bEnableDragDrop ? TEXT("true") : TEXT("false"));
-
 		// Always track button press for click detection
 		bButtonPressed = true;
 		PressedMousePosition = InMouseEvent.GetScreenSpacePosition();
@@ -365,12 +361,6 @@ FReply UMOInventorySlot::NativeOnMouseButtonDown(const FGeometry& InGeometry, co
 
 FReply UMOInventorySlot::NativeOnMouseButtonUp(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
 {
-	if (InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
-	{
-		UE_LOG(LogMOFramework, Log, TEXT("[MOInventorySlot] MouseUp: SlotIndex=%d, bButtonPressed=%s, bDragStarted=%s"),
-			SlotIndex, bButtonPressed ? TEXT("true") : TEXT("false"), bDragStarted ? TEXT("true") : TEXT("false"));
-	}
-
 	// If we initiated drag detection in NativeOnPreviewMouseButtonDown but the user
 	// released before the drag threshold was exceeded, we need to manually fire the click
 	if (InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton && bButtonPressed && !bDragStarted)
@@ -386,10 +376,6 @@ FReply UMOInventorySlot::NativeOnMouseButtonUp(const FGeometry& InGeometry, cons
 		const bool bIsDoubleClick = (SlotIndex == LastClickSlotIndex) &&
 			(TimeSinceLastClick <= DoubleClickThreshold);
 
-		UE_LOG(LogMOFramework, Log, TEXT("[MOInventorySlot] Click detected: SlotIndex=%d, LastSlot=%d, TimeSince=%.3f, Threshold=%.3f, IsDouble=%s"),
-			SlotIndex, LastClickSlotIndex, TimeSinceLastClick, DoubleClickThreshold,
-			bIsDoubleClick ? TEXT("YES") : TEXT("NO"));
-
 		// Update tracking for next click
 		LastClickTime = CurrentTime;
 		LastClickSlotIndex = SlotIndex;
@@ -399,8 +385,6 @@ FReply UMOInventorySlot::NativeOnMouseButtonUp(const FGeometry& InGeometry, cons
 			// Double-click or shift-click triggers quick transfer
 			if (bShiftHeld || bIsDoubleClick)
 			{
-				UE_LOG(LogMOFramework, Warning, TEXT("[MOInventorySlot] Firing OnSlotShiftClicked (double-click=%s, shift=%s)"),
-					bIsDoubleClick ? TEXT("true") : TEXT("false"), bShiftHeld ? TEXT("true") : TEXT("false"));
 				OnSlotShiftClicked.Broadcast(SlotIndex, CachedVisualData.ItemGuid);
 			}
 			else
@@ -459,7 +443,6 @@ void UMOInventorySlot::NativeOnDragDetected(const FGeometry& InGeometry, const F
 
 void UMOInventorySlot::NativeOnDragCancelled(const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation)
 {
-	UE_LOG(LogMOFramework, Warning, TEXT("[MOInventorySlot] DragCancelled: SlotIndex=%d"), SlotIndex);
 	Super::NativeOnDragCancelled(InDragDropEvent, InOperation);
 
 	// Check if this is our drag operation

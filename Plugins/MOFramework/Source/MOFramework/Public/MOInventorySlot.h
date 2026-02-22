@@ -305,9 +305,9 @@ private:
 	/** Slot index of last click for double-click detection (must be same slot). */
 	int32 LastClickSlotIndex = INDEX_NONE;
 
-	/** Threshold in seconds for double-click detection (500ms is standard Windows default). */
+	/** Threshold in seconds for double-click detection. Higher than Windows default (500ms) to account for UI button press/release time. */
 	UPROPERTY(EditDefaultsOnly, Category="MO|Inventory|UI")
-	float DoubleClickThreshold = 0.5f;
+	float DoubleClickThreshold = 0.75f;
 
 	/** Border color when slot is in normal state. */
 	UPROPERTY(EditDefaultsOnly, Category="MO|Inventory|UI|Colors")
