@@ -21,6 +21,15 @@ This file tracks changes, bug fixes, and new features. Updated incrementally to 
 - Uses timer-based delayed `OpenLevel()` to ensure UI renders first
 - Applied to both New Game and Load Game flows
 
+**PCG Flower Patch Clustering**
+- Flower patches now spawn as natural-looking clusters instead of single scattered points
+- Uses Copy Points node: small grid pattern (Source) stamped at each patch center (Target)
+- Enable "Copy Each Source on Every Target" for proper cluster behavior
+
+**Ground Spawns**
+- Added flint nodules to ground spawn list (primitive tool crafting material)
+- Added branches to ground spawn list (fuel, primitive crafting)
+
 ### Bug Fixes
 
 - **Fixed context menu actions failing for world items**: Inspect, SplitStack, Details, and Pickup now correctly cache world item reference before closing context menu
