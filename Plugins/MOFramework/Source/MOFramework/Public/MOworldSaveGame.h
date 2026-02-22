@@ -13,6 +13,7 @@
 #include "MOSkillsComponent.h"
 #include "MOEquipmentComponent.h"
 #include "MOQuestTypes.h"
+#include "MOWeatherTypes.h"
 #include "MOworldSaveGame.generated.h"
 
 USTRUCT(BlueprintType)
@@ -64,6 +65,10 @@ struct FMOPersistedPawnRecord
     // Saved pawn class (soft) so we can respawn the same pawn type.
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save")
     FSoftClassPath PawnClassPath;
+
+    // Whether this pawn can be possessed by the player (false for creatures, NPCs, etc.)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save")
+    bool bIsPlayerControllable = true;
 
     // Character identity
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save")
@@ -316,4 +321,10 @@ public:
     /** Quest progress (active quests, completed quest IDs). */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Quest")
     FMOQuestSaveData QuestData;
+
+    // --- Weather/Time Save Data ---
+
+    /** Weather and time of day state (UDW/UDS integration). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Weather")
+    FMOWeatherSaveData WeatherData;
 };

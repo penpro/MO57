@@ -102,15 +102,14 @@ void UMOGameInstance::BeginLoadingScreen(const FString& MapName)
 
 	if (bToGameplay)
 	{
+		// Just set the flag - we'll create the overlay in EndLoadingScreen
+		// after the new level loads (otherwise it gets destroyed with old level)
 		bWaitingForManualDismiss = true;
-		ShowLoadingOverlay();
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOGameInstance] Using manual-dismiss mode for gameplay transition"));
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOGameInstance] Will show loading overlay after level loads (manual-dismiss mode)"));
 	}
 	else
 	{
 		bWaitingForManualDismiss = false;
-		// For non-gameplay transitions, we could show a brief loading screen
-		// but for now just skip it
 		UE_LOG(LogMOFramework, Log, TEXT("[MOGameInstance] Non-gameplay transition, no loading overlay"));
 	}
 }
@@ -121,9 +120,15 @@ void UMOGameInstance::EndLoadingScreen(UWorld* InLoadedWorld)
 		InLoadedWorld ? *InLoadedWorld->GetName() : TEXT("None"),
 		bWaitingForManualDismiss ? TEXT("true") : TEXT("false"));
 
-	// If not waiting for manual dismiss, hide the overlay now
-	if (!bWaitingForManualDismiss && LoadingOverlayWidget)
+	if (bWaitingForManualDismiss)
 	{
+		// Create the overlay now in the new level's context
+		// (creating it in BeginLoadingScreen would destroy it with the old level)
+		ShowLoadingOverlay();
+	}
+	else if (LoadingOverlayWidget)
+	{
+		// Not waiting for manual dismiss, hide the overlay now
 		LoadingOverlayWidget->FadeOutAndRemove();
 		LoadingOverlayWidget = nullptr;
 	}
