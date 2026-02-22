@@ -2,6 +2,7 @@
 #include "MOFramework.h"
 #include "MOControllableInterface.h"
 #include "MOSpectatorPawn.h"
+#include "MOCharacter.h"
 #include "GameFramework/PawnMovementComponent.h"
 #include "MOUIManagerComponent.h"
 #include "MOPossessionComponent.h"
@@ -341,6 +342,20 @@ void AMOPlayerController::SetupInputComponent()
 		EnhancedInput->BindAction(TerraformCycleToolAction, ETriggerEvent::Started, this, &AMOPlayerController::HandleTerraformCycleTool);
 		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound TerraformCycleToolAction"));
 	}
+
+	// ============================================================================
+	// CAMERA BINDINGS
+	// ============================================================================
+
+	if (ViewAction)
+	{
+		EnhancedInput->BindAction(ViewAction, ETriggerEvent::Started, this, &AMOPlayerController::HandleView);
+		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound ViewAction (camera shoulder toggle)"));
+	}
+	else
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("AMOPlayerController: ViewAction not set - camera shoulder toggle disabled. Set it in BP_MOPlayerController."));
+	}
 }
 
 void AMOPlayerController::OnPossess(APawn* InPawn)
@@ -635,6 +650,12 @@ void AMOPlayerController::HandleLook(const FInputActionValue& Value)
 
 void AMOPlayerController::HandleJumpStart(const FInputActionValue& Value)
 {
+	// Don't process jump input when a menu is open
+	if (UIManagerComponent && UIManagerComponent->IsAnyMenuOpen())
+	{
+		return;
+	}
+
 	if (APawn* ControllablePawn = CachedControllablePawn.Get())
 	{
 		IMOControllableInterface::Execute_RequestJumpStart(ControllablePawn);
@@ -643,6 +664,12 @@ void AMOPlayerController::HandleJumpStart(const FInputActionValue& Value)
 
 void AMOPlayerController::HandleJumpEnd(const FInputActionValue& Value)
 {
+	// Don't process jump input when a menu is open
+	if (UIManagerComponent && UIManagerComponent->IsAnyMenuOpen())
+	{
+		return;
+	}
+
 	if (APawn* ControllablePawn = CachedControllablePawn.Get())
 	{
 		IMOControllableInterface::Execute_RequestJumpEnd(ControllablePawn);
@@ -651,6 +678,12 @@ void AMOPlayerController::HandleJumpEnd(const FInputActionValue& Value)
 
 void AMOPlayerController::HandleHustleStart(const FInputActionValue& Value)
 {
+	// Don't process movement input when a menu is open
+	if (UIManagerComponent && UIManagerComponent->IsAnyMenuOpen())
+	{
+		return;
+	}
+
 	// Record when hustle was pressed for tap/hold detection
 	HustlePressTime = GetWorld()->GetTimeSeconds();
 	bHustleHoldTriggered = false;
@@ -658,6 +691,12 @@ void AMOPlayerController::HandleHustleStart(const FInputActionValue& Value)
 
 void AMOPlayerController::HandleHustleTriggered(const FInputActionValue& Value)
 {
+	// Don't process movement input when a menu is open
+	if (UIManagerComponent && UIManagerComponent->IsAnyMenuOpen())
+	{
+		return;
+	}
+
 	// Check if we've held long enough to trigger sprint
 	if (!bHustleHoldTriggered)
 	{
@@ -676,6 +715,13 @@ void AMOPlayerController::HandleHustleTriggered(const FInputActionValue& Value)
 
 void AMOPlayerController::HandleHustleEnd(const FInputActionValue& Value)
 {
+	// Don't process movement input when a menu is open
+	if (UIManagerComponent && UIManagerComponent->IsAnyMenuOpen())
+	{
+		bHustleHoldTriggered = false;
+		return;
+	}
+
 	if (bHustleHoldTriggered)
 	{
 		// Was a hold - stop sprinting
@@ -698,6 +744,12 @@ void AMOPlayerController::HandleHustleEnd(const FInputActionValue& Value)
 
 void AMOPlayerController::HandleCrouch(const FInputActionValue& Value)
 {
+	// Don't process movement input when a menu is open
+	if (UIManagerComponent && UIManagerComponent->IsAnyMenuOpen())
+	{
+		return;
+	}
+
 	if (APawn* ControllablePawn = CachedControllablePawn.Get())
 	{
 		IMOControllableInterface::Execute_RequestCrouchToggle(ControllablePawn);
@@ -710,6 +762,12 @@ void AMOPlayerController::HandleCrouch(const FInputActionValue& Value)
 
 void AMOPlayerController::HandleInteract(const FInputActionValue& Value)
 {
+	// Don't process gameplay input when a menu is open
+	if (UIManagerComponent && UIManagerComponent->IsAnyMenuOpen())
+	{
+		return;
+	}
+
 	if (APawn* ControllablePawn = CachedControllablePawn.Get())
 	{
 		IMOControllableInterface::Execute_RequestInteract(ControllablePawn);
@@ -718,6 +776,12 @@ void AMOPlayerController::HandleInteract(const FInputActionValue& Value)
 
 void AMOPlayerController::HandlePrimaryAction(const FInputActionValue& Value)
 {
+	// Don't process gameplay input when a menu is open
+	if (UIManagerComponent && UIManagerComponent->IsAnyMenuOpen())
+	{
+		return;
+	}
+
 	if (APawn* ControllablePawn = CachedControllablePawn.Get())
 	{
 		IMOControllableInterface::Execute_RequestPrimaryAction(ControllablePawn);
@@ -726,6 +790,12 @@ void AMOPlayerController::HandlePrimaryAction(const FInputActionValue& Value)
 
 void AMOPlayerController::HandlePrimaryActionRelease(const FInputActionValue& Value)
 {
+	// Don't process gameplay input when a menu is open
+	if (UIManagerComponent && UIManagerComponent->IsAnyMenuOpen())
+	{
+		return;
+	}
+
 	if (APawn* ControllablePawn = CachedControllablePawn.Get())
 	{
 		IMOControllableInterface::Execute_RequestPrimaryActionRelease(ControllablePawn);
@@ -734,6 +804,12 @@ void AMOPlayerController::HandlePrimaryActionRelease(const FInputActionValue& Va
 
 void AMOPlayerController::HandleSecondaryAction(const FInputActionValue& Value)
 {
+	// Don't process gameplay input when a menu is open
+	if (UIManagerComponent && UIManagerComponent->IsAnyMenuOpen())
+	{
+		return;
+	}
+
 	if (APawn* ControllablePawn = CachedControllablePawn.Get())
 	{
 		// Check if there's an interactable target - if so, trigger secondary interact (right-click menu)
@@ -758,6 +834,12 @@ void AMOPlayerController::HandleSecondaryAction(const FInputActionValue& Value)
 
 void AMOPlayerController::HandleSecondaryActionRelease(const FInputActionValue& Value)
 {
+	// Don't process gameplay input when a menu is open
+	if (UIManagerComponent && UIManagerComponent->IsAnyMenuOpen())
+	{
+		return;
+	}
+
 	if (APawn* ControllablePawn = CachedControllablePawn.Get())
 	{
 		IMOControllableInterface::Execute_RequestSecondaryActionRelease(ControllablePawn);
@@ -889,6 +971,12 @@ void AMOPlayerController::HandleCancelPlacement(const FInputActionValue& Value)
 
 void AMOPlayerController::HandleTerraformToggle(const FInputActionValue& Value)
 {
+	// Don't process gameplay input when a menu is open
+	if (UIManagerComponent && UIManagerComponent->IsAnyMenuOpen())
+	{
+		return;
+	}
+
 	if (APawn* ControllablePawn = CachedControllablePawn.Get())
 	{
 		IMOControllableInterface::Execute_RequestTerraformToggle(ControllablePawn);
@@ -897,9 +985,27 @@ void AMOPlayerController::HandleTerraformToggle(const FInputActionValue& Value)
 
 void AMOPlayerController::HandleTerraformCycleTool(const FInputActionValue& Value)
 {
+	// Don't process gameplay input when a menu is open
+	if (UIManagerComponent && UIManagerComponent->IsAnyMenuOpen())
+	{
+		return;
+	}
+
 	if (APawn* ControllablePawn = CachedControllablePawn.Get())
 	{
 		IMOControllableInterface::Execute_RequestTerraformCycleTool(ControllablePawn);
+	}
+}
+
+void AMOPlayerController::HandleView(const FInputActionValue& Value)
+{
+	// Toggle camera shoulder - works even with menus open
+	if (APawn* ControlledPawn = GetPawn())
+	{
+		if (AMOCharacter* MOChar = Cast<AMOCharacter>(ControlledPawn))
+		{
+			MOChar->ToggleCameraShoulder();
+		}
 	}
 }
 

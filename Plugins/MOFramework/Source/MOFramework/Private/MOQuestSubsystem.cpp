@@ -363,6 +363,8 @@ void UMOQuestSubsystem::HandleCraftCompleted(FName RecipeId, const FMOCraftResul
 
 void UMOQuestSubsystem::HandleItemPickedUp(FName ItemId, int32 Quantity)
 {
+	UE_LOG(LogMOFramework, Log, TEXT("[MOQuestSubsystem] HandleItemPickedUp: %s x%d (ActiveQuests=%d)"),
+		*ItemId.ToString(), Quantity, ActiveQuests.Num());
 	ProcessEventForObjectives(EMOObjectiveType::ItemPickup, ItemId, Quantity);
 }
 
@@ -435,8 +437,30 @@ bool UMOQuestSubsystem::ArePrerequisitesMet(const FMOQuestDefinitionRow& Quest) 
 	return true;
 }
 
+static const TCHAR* GetObjectiveTypeName(EMOObjectiveType Type)
+{
+	switch (Type)
+	{
+	case EMOObjectiveType::Event: return TEXT("Event");
+	case EMOObjectiveType::ItemCraft: return TEXT("ItemCraft");
+	case EMOObjectiveType::ItemPickup: return TEXT("ItemPickup");
+	case EMOObjectiveType::ItemDrop: return TEXT("ItemDrop");
+	case EMOObjectiveType::SkillLevelUp: return TEXT("SkillLevelUp");
+	case EMOObjectiveType::LocationReach: return TEXT("LocationReach");
+	case EMOObjectiveType::Custom: return TEXT("Custom");
+	default: return TEXT("Unknown");
+	}
+}
+
 void UMOQuestSubsystem::ProcessEventForObjectives(EMOObjectiveType Type, FName TargetId, int32 Count)
 {
+	UE_LOG(LogMOFramework, Log, TEXT("[MOQuestSubsystem] ProcessEvent: Type=%s, Target='%s', Count=%d, ActiveQuests=%d"),
+		GetObjectiveTypeName(Type), *TargetId.ToString(), Count, ActiveQuests.Num());
+
+	// Collect quests to check for completion after iteration
+	// (CheckQuestCompletion may remove from ActiveQuests, invalidating iteration)
+	TArray<FName> QuestsToCheck;
+
 	// Iterate all active quests
 	for (auto& Pair : ActiveQuests)
 	{
@@ -451,6 +475,8 @@ void UMOQuestSubsystem::ProcessEventForObjectives(EMOObjectiveType Type, FName T
 		{
 			continue;
 		}
+
+		bool bProgressMade = false;
 
 		// Check each objective
 		for (const FMOQuestObjective& Objective : Definition->Objectives)
@@ -475,11 +501,33 @@ void UMOQuestSubsystem::ProcessEventForObjectives(EMOObjectiveType Type, FName T
 			if (Objective.Type == Type && Objective.TargetEventOrId == TargetId)
 			{
 				UpdateObjectiveProgress(State, Objective, Count);
+				bProgressMade = true;
+			}
+			else if (Objective.Type == Type)
+			{
+				// Same type but different target - log at Verbose level
+				UE_LOG(LogMOFramework, Verbose, TEXT("[MOQuestSubsystem]   Quest '%s' obj '%s': target mismatch (want '%s', got '%s')"),
+					*State.QuestId.ToString(),
+					*Objective.ObjectiveId.ToString(),
+					*Objective.TargetEventOrId.ToString(),
+					*TargetId.ToString());
 			}
 		}
 
-		// Check if quest completed
-		CheckQuestCompletion(State);
+		// Queue for completion check if progress was made
+		if (bProgressMade)
+		{
+			QuestsToCheck.Add(State.QuestId);
+		}
+	}
+
+	// Now check completion outside the iteration (safe to remove from ActiveQuests)
+	for (const FName& QuestId : QuestsToCheck)
+	{
+		if (FMOQuestState* State = ActiveQuests.Find(QuestId))
+		{
+			CheckQuestCompletion(*State);
+		}
 	}
 }
 

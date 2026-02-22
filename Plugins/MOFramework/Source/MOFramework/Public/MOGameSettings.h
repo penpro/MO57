@@ -100,6 +100,13 @@ public:
 	UPROPERTY(Config, BlueprintReadWrite, Category="MainMenu")
 	bool bPendingNewGame = false;
 
+	/**
+	 * Set when transitioning to gameplay level (new game or load).
+	 * Cleared when pawn lands safely. Used to keep loading screen visible.
+	 */
+	UPROPERTY(BlueprintReadWrite, Category="MainMenu")
+	bool bIsLoadingIntoGameplay = false;
+
 	/** Slot name for pending new game save (derived from world name). */
 	UPROPERTY(Config, BlueprintReadWrite, Category="MainMenu")
 	FString PendingNewGameSlot;

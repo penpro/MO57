@@ -194,3 +194,36 @@ enum class EMOWeatherEventType : uint8
 	WeatherChanged,
 	TemperatureThresholdCrossed
 };
+
+/**
+ * Save data for weather and time of day state.
+ */
+USTRUCT(BlueprintType)
+struct MOFRAMEWORK_API FMOWeatherSaveData
+{
+	GENERATED_BODY()
+
+	/** Full date and time from UDS (includes year, month, day, hour, minute, second). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Weather|Save")
+	FDateTime DateTime;
+
+	/**
+	 * Current weather preset object reference (UDS_Weather_Settings from UDW).
+	 * Note: This is transient and not saved to disk. Use for runtime passing only.
+	 * For disk persistence, the Blueprint should get the object by other means (e.g., UDW's current weather).
+	 */
+	UPROPERTY(Transient, BlueprintReadWrite, Category="MO|Weather|Save")
+	TObjectPtr<UObject> WeatherPresetObject;
+
+	/** Cloud coverage override (0-1, -1 means use weather preset default). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Weather|Save")
+	float CloudCoverage = -1.0f;
+
+	/** Fog density override (0-1, -1 means use weather preset default). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Weather|Save")
+	float FogDensity = -1.0f;
+
+	/** Whether this save data is valid/populated. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Weather|Save")
+	bool bIsValid = false;
+};

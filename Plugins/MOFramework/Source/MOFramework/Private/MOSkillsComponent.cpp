@@ -1,7 +1,9 @@
 #include "MOSkillsComponent.h"
 #include "MOSkillDatabaseSettings.h"
 #include "MOFramework.h"
+#include "MOQuestSubsystem.h"
 #include "Net/UnrealNetwork.h"
+#include "Engine/GameInstance.h"
 
 UMOSkillsComponent::UMOSkillsComponent()
 {
@@ -156,6 +158,18 @@ void UMOSkillsComponent::SetSkillLevel(FName SkillId, int32 Level)
 	if (OldLevel != ClampedLevel)
 	{
 		OnSkillLevelUp.Broadcast(SkillId, OldLevel, ClampedLevel);
+
+		// Notify quest subsystem
+		if (UWorld* World = GetWorld())
+		{
+			if (UGameInstance* GI = World->GetGameInstance())
+			{
+				if (UMOQuestSubsystem* QuestSub = GI->GetSubsystem<UMOQuestSubsystem>())
+				{
+					QuestSub->HandleSkillLevelUp(SkillId, OldLevel, ClampedLevel);
+				}
+			}
+		}
 	}
 }
 
@@ -196,6 +210,18 @@ void UMOSkillsComponent::ProcessLevelUps(FMOSkillProgress& Progress, const FMOSk
 		}
 
 		OnSkillLevelUp.Broadcast(Progress.SkillId, OldLevel, Progress.Level);
+
+		// Notify quest subsystem
+		if (UWorld* World = GetWorld())
+		{
+			if (UGameInstance* GI = World->GetGameInstance())
+			{
+				if (UMOQuestSubsystem* QuestSub = GI->GetSubsystem<UMOQuestSubsystem>())
+				{
+					QuestSub->HandleSkillLevelUp(Progress.SkillId, OldLevel, Progress.Level);
+				}
+			}
+		}
 
 		UE_LOG(LogMOFramework, Log, TEXT("[MOSkillsComponent] Skill '%s' leveled up: %d -> %d"),
 			*Progress.SkillId.ToString(), OldLevel, Progress.Level);

@@ -1,77 +1,9 @@
 #include "MOGameInstance.h"
 #include "MOFramework.h"
 #include "MOGameSettings.h"
-#include "MoviePlayer.h"
-#include "Widgets/SCompoundWidget.h"
-#include "Widgets/Layout/SBox.h"
-#include "Widgets/Layout/SBorder.h"
-#include "Widgets/Images/SImage.h"
-#include "Widgets/Text/STextBlock.h"
-#include "Widgets/SOverlay.h"
-#include "Engine/Texture2D.h"
-#include "Styling/SlateBrush.h"
-#include "Slate/DeferredCleanupSlateBrush.h"
-
-// Simple loading screen Slate widget
-class SMOLoadingScreen : public SCompoundWidget
-{
-public:
-	SLATE_BEGIN_ARGS(SMOLoadingScreen) {}
-		SLATE_ARGUMENT(TSharedPtr<FDeferredCleanupSlateBrush>, DeferredBrush)
-		SLATE_ARGUMENT(FText, TipText)
-	SLATE_END_ARGS()
-
-	void Construct(const FArguments& InArgs)
-	{
-		// Store the deferred brush to keep it alive
-		DeferredBrush = InArgs._DeferredBrush;
-
-		// Get the actual brush pointer (or fallback)
-		const FSlateBrush* BrushToUse = FDeferredCleanupSlateBrush::TrySlateBrush(DeferredBrush);
-		const bool bHasBackground = (BrushToUse != nullptr);
-
-		ChildSlot
-		[
-			SNew(SOverlay)
-			// Background
-			+ SOverlay::Slot()
-			[
-				SNew(SBorder)
-				.BorderImage(bHasBackground ? BrushToUse : FCoreStyle::Get().GetBrush("GenericWhiteBox"))
-				.BorderBackgroundColor(bHasBackground ? FLinearColor::White : FLinearColor(0.02f, 0.02f, 0.02f, 1.0f))
-				.HAlign(HAlign_Fill)
-				.VAlign(VAlign_Fill)
-			]
-			// Loading text
-			+ SOverlay::Slot()
-			.HAlign(HAlign_Center)
-			.VAlign(VAlign_Center)
-			[
-				SNew(STextBlock)
-				.Text(NSLOCTEXT("MOLoading", "Loading", "Loading..."))
-				.Font(FCoreStyle::GetDefaultFontStyle("Bold", 24))
-				.ColorAndOpacity(FLinearColor::White)
-			]
-			// Tip text at bottom
-			+ SOverlay::Slot()
-			.HAlign(HAlign_Center)
-			.VAlign(VAlign_Bottom)
-			.Padding(FMargin(50.0f, 50.0f, 50.0f, 100.0f))
-			[
-				SNew(STextBlock)
-				.Text(InArgs._TipText)
-				.Font(FCoreStyle::GetDefaultFontStyle("Regular", 16))
-				.ColorAndOpacity(FLinearColor(0.7f, 0.7f, 0.7f, 1.0f))
-				.Justification(ETextJustify::Center)
-				.AutoWrapText(true)
-			]
-		];
-	}
-
-private:
-	// Keep the deferred brush alive for the lifetime of the widget
-	TSharedPtr<FDeferredCleanupSlateBrush> DeferredBrush;
-};
+#include "MOLoadingOverlay.h"
+#include "Blueprint/UserWidget.h"
+#include "Kismet/GameplayStatics.h"
 
 void UMOGameInstance::Init()
 {
@@ -90,7 +22,8 @@ void UMOGameInstance::Init()
 	FCoreUObjectDelegates::PreLoadMap.AddUObject(this, &UMOGameInstance::BeginLoadingScreen);
 	FCoreUObjectDelegates::PostLoadMapWithWorld.AddUObject(this, &UMOGameInstance::EndLoadingScreen);
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOGameInstance] Bound loading screen delegates"));
+	UE_LOG(LogMOFramework, Log, TEXT("[MOGameInstance] Initialized (LoadingOverlayClass=%s)"),
+		LoadingOverlayClass ? *LoadingOverlayClass->GetName() : TEXT("NOT SET"));
 }
 
 void UMOGameInstance::Shutdown()
@@ -99,68 +32,152 @@ void UMOGameInstance::Shutdown()
 	FCoreUObjectDelegates::PreLoadMap.RemoveAll(this);
 	FCoreUObjectDelegates::PostLoadMapWithWorld.RemoveAll(this);
 
+	// Clean up loading overlay
+	if (LoadingOverlayWidget)
+	{
+		LoadingOverlayWidget->RemoveFromParent();
+		LoadingOverlayWidget = nullptr;
+	}
+
 	Super::Shutdown();
+}
+
+void UMOGameInstance::ShowLoadingOverlay()
+{
+	if (!LoadingOverlayClass)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOGameInstance] ShowLoadingOverlay: LoadingOverlayClass not set in BP_MOGameInstance!"));
+		return;
+	}
+
+	// Remove any existing overlay
+	if (LoadingOverlayWidget)
+	{
+		LoadingOverlayWidget->RemoveFromParent();
+		LoadingOverlayWidget = nullptr;
+	}
+
+	// Create new overlay
+	APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0);
+	if (PC)
+	{
+		LoadingOverlayWidget = CreateWidget<UMOLoadingOverlay>(PC, LoadingOverlayClass);
+		if (LoadingOverlayWidget)
+		{
+			// Set random loading tip if available
+			if (LoadingTips.Num() > 0)
+			{
+				const int32 TipIndex = FMath::RandRange(0, LoadingTips.Num() - 1);
+				LoadingOverlayWidget->SetLoadingText(LoadingTips[TipIndex]);
+			}
+
+			// Add to viewport at highest Z-order
+			LoadingOverlayWidget->AddToViewport(9999);
+			LoadingOverlayWidget->ShowOverlay();
+
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOGameInstance] Loading overlay shown"));
+		}
+	}
+	else
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOGameInstance] ShowLoadingOverlay: No player controller available"));
+	}
 }
 
 void UMOGameInstance::BeginLoadingScreen(const FString& MapName)
 {
-	if (IsRunningDedicatedServer())
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOGameInstance] BeginLoadingScreen for map: %s"), *MapName);
+
+	// Skip loading screen for initial launch to intro
+	if (!ShouldShowLoadingScreen(MapName))
 	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOGameInstance] Skipping loading screen for: %s"), *MapName);
+		bWaitingForManualDismiss = false;
 		return;
 	}
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOGameInstance] BeginLoadingScreen for map: %s"), *MapName);
+	// Check if transitioning to gameplay (needs manual dismissal)
+	UMOGameSettings* Settings = UMOGameSettings::GetMOGameSettings();
+	const bool bToGameplay = Settings && Settings->bIsLoadingIntoGameplay;
 
-	// Set up loading screen attributes
-	FLoadingScreenAttributes LoadingScreen;
-	LoadingScreen.bAutoCompleteWhenLoadingCompletes = true;
-	LoadingScreen.bMoviesAreSkippable = false;
-	LoadingScreen.bWaitForManualStop = false;
-	LoadingScreen.MinimumLoadingScreenDisplayTime = MinLoadingScreenTime;
-	LoadingScreen.PlaybackType = EMoviePlaybackType::MT_Normal;
-
-	// Create and set loading widget
-	LoadingScreen.WidgetLoadingScreen = CreateLoadingScreenWidget();
-
-	GetMoviePlayer()->SetupLoadingScreen(LoadingScreen);
-	bLoadingScreenShowing = true;
+	if (bToGameplay)
+	{
+		bWaitingForManualDismiss = true;
+		ShowLoadingOverlay();
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOGameInstance] Using manual-dismiss mode for gameplay transition"));
+	}
+	else
+	{
+		bWaitingForManualDismiss = false;
+		// For non-gameplay transitions, we could show a brief loading screen
+		// but for now just skip it
+		UE_LOG(LogMOFramework, Log, TEXT("[MOGameInstance] Non-gameplay transition, no loading overlay"));
+	}
 }
 
 void UMOGameInstance::EndLoadingScreen(UWorld* InLoadedWorld)
 {
-	if (IsRunningDedicatedServer())
+	UE_LOG(LogMOFramework, Log, TEXT("[MOGameInstance] EndLoadingScreen for world: %s (WaitingForManualDismiss=%s)"),
+		InLoadedWorld ? *InLoadedWorld->GetName() : TEXT("None"),
+		bWaitingForManualDismiss ? TEXT("true") : TEXT("false"));
+
+	// If not waiting for manual dismiss, hide the overlay now
+	if (!bWaitingForManualDismiss && LoadingOverlayWidget)
 	{
+		LoadingOverlayWidget->FadeOutAndRemove();
+		LoadingOverlayWidget = nullptr;
+	}
+}
+
+bool UMOGameInstance::ShouldShowLoadingScreen(const FString& MapName) const
+{
+	UMOGameSettings* Settings = UMOGameSettings::GetMOGameSettings();
+	if (!Settings)
+	{
+		return true;
+	}
+
+	// Skip loading screen for initial launch to main menu (intro will play)
+	// The main menu level contains "LoadingLevel" in its name
+	if (Settings->bPlayIntro && MapName.Contains(TEXT("LoadingLevel")))
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOGameInstance] ShouldShowLoadingScreen: SKIP (intro + LoadingLevel)"));
+		return false;  // Just stay black until intro video starts
+	}
+
+	return true;
+}
+
+void UMOGameInstance::DismissLoadingScreen()
+{
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOGameInstance] DismissLoadingScreen called (WaitingForManualDismiss=%s, HasWidget=%s)"),
+		bWaitingForManualDismiss ? TEXT("true") : TEXT("false"),
+		LoadingOverlayWidget ? TEXT("true") : TEXT("false"));
+
+	if (!bWaitingForManualDismiss)
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOGameInstance] Not waiting for manual dismiss, skipping"));
 		return;
 	}
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOGameInstance] EndLoadingScreen for world: %s"),
-		InLoadedWorld ? *InLoadedWorld->GetName() : TEXT("None"));
+	if (LoadingOverlayWidget)
+	{
+		LoadingOverlayWidget->FadeOutAndRemove();
+		// Don't null the pointer - the widget will remove itself after fade
+	}
 
-	bLoadingScreenShowing = false;
+	bWaitingForManualDismiss = false;
+
+	// Clear the gameplay transition flag
+	if (UMOGameSettings* Settings = UMOGameSettings::GetMOGameSettings())
+	{
+		Settings->bIsLoadingIntoGameplay = false;
+	}
+
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOGameInstance] Loading screen dismissed (fading out)"));
 }
 
-TSharedRef<SWidget> UMOGameInstance::CreateLoadingScreenWidget()
+bool UMOGameInstance::IsLoadingOverlayVisible() const
 {
-	// Load background texture if specified
-	TSharedPtr<FDeferredCleanupSlateBrush> DeferredBrush;
-	if (!LoadingScreenBackground.IsNull())
-	{
-		if (UTexture2D* Texture = LoadingScreenBackground.LoadSynchronous())
-		{
-			// Create a deferred cleanup brush so it persists during loading
-			DeferredBrush = FDeferredCleanupSlateBrush::CreateBrush(Texture);
-		}
-	}
-
-	// Pick a random loading tip
-	FText TipText;
-	if (LoadingTips.Num() > 0)
-	{
-		const int32 TipIndex = FMath::RandRange(0, LoadingTips.Num() - 1);
-		TipText = LoadingTips[TipIndex];
-	}
-
-	return SNew(SMOLoadingScreen)
-		.DeferredBrush(DeferredBrush)
-		.TipText(TipText);
+	return LoadingOverlayWidget && LoadingOverlayWidget->IsOverlayVisible();
 }

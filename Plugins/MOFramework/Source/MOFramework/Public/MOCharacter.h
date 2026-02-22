@@ -151,6 +151,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Camera")
 	void ApplyGameSettings();
 
+	/** Toggle which shoulder the camera looks over (swaps Y offset between positive and negative). */
+	UFUNCTION(BlueprintCallable, Category="MO|Camera")
+	void ToggleCameraShoulder();
+
 	UFUNCTION(BlueprintPure, Category="MO")
 	UMOEquipmentComponent* GetEquipmentComponent() const { return EquipmentComponent; }
 
@@ -298,6 +302,28 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO|Camera")
 	TObjectPtr<UCameraComponent> FollowCamera;
 
+	/** Y offset for camera shoulder view (positive = right shoulder, negative = left shoulder). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Camera")
+	float CameraShoulderOffset = 80.0f;
+
+	/** Duration in seconds for camera shoulder transition. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Camera")
+	float CameraTransitionDuration = 0.5f;
+
+private:
+	/** Whether camera is currently transitioning between shoulders. */
+	bool bIsCameraTransitioning = false;
+
+	/** Target Y position for camera transition. */
+	float CameraTargetY = 0.0f;
+
+	/** Current transition progress (0 to 1). */
+	float CameraTransitionAlpha = 0.0f;
+
+	/** Starting Y position for camera transition. */
+	float CameraStartY = 0.0f;
+
+public:
 	/** Identity component for persistence. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO")
 	TObjectPtr<UMOIdentityComponent> IdentityComponent;

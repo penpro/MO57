@@ -236,6 +236,7 @@ void AMOMainMenuPlayerController::StartNewGame()
 	if (Settings)
 	{
 		Settings->bPendingNewGame = true;
+		Settings->bIsLoadingIntoGameplay = true;  // Keep loading screen until pawn lands
 		// Generate a slot name - this will be replaced with proper naming later
 		Settings->PendingNewGameSlot = FString::Printf(TEXT("World_%s"), *FDateTime::Now().ToString(TEXT("%Y%m%d_%H%M%S")));
 		Settings->SaveSettings();
@@ -280,6 +281,7 @@ void AMOMainMenuPlayerController::LoadGame(const FString& SlotName)
 	if (Settings)
 	{
 		Settings->bPendingNewGame = false;  // Not a new game
+		Settings->bIsLoadingIntoGameplay = true;  // Keep loading screen until pawn lands
 		Settings->PendingNewGameSlot = SlotName;  // Reuse field for load slot
 		Settings->SaveSettings();
 	}

@@ -60,6 +60,10 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO|Inspection")
 	float GetProgress() const { return CurrentProgress; }
 
+	/** Get the item definition ID being inspected. */
+	UFUNCTION(BlueprintPure, Category="MO|Inspection")
+	FName GetInspectingItemId() const { return ItemDefinitionId; }
+
 protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;

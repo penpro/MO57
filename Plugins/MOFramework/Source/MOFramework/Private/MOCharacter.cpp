@@ -48,11 +48,14 @@ AMOCharacter::AMOCharacter()
 	CameraBoom->SetupAttachment(RootComponent);
 	CameraBoom->TargetArmLength = 400.0f;
 	CameraBoom->bUsePawnControlRotation = true;
+	// Keep SocketOffset zeroed - shoulder offset is handled via FollowCamera relative location
 
 	// Follow camera
 	FollowCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FollowCamera"));
 	FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
 	FollowCamera->bUsePawnControlRotation = false;
+	// Default to right shoulder view - toggled via ToggleCameraShoulder()
+	FollowCamera->SetRelativeLocation(FVector(0.0f, 80.0f, 0.0f));
 
 	// Movement defaults (same as ThirdPerson template)
 	GetCharacterMovement()->bOrientRotationToMovement = true;
@@ -231,6 +234,33 @@ void AMOCharacter::Tick(float DeltaTime)
 			// Report noise event to AI perception system
 			// MaxRange of 0 means use the loudness to determine range
 			MakeNoise(Loudness, this, GetActorLocation());
+		}
+	}
+
+	// Handle smooth camera shoulder transition
+	if (bIsCameraTransitioning && FollowCamera)
+	{
+		CameraTransitionAlpha += DeltaTime / FMath::Max(CameraTransitionDuration, 0.01f);
+
+		if (CameraTransitionAlpha >= 1.0f)
+		{
+			// Transition complete
+			CameraTransitionAlpha = 1.0f;
+			bIsCameraTransitioning = false;
+
+			FVector FinalLocation = FollowCamera->GetRelativeLocation();
+			FinalLocation.Y = CameraTargetY;
+			FollowCamera->SetRelativeLocation(FinalLocation);
+		}
+		else
+		{
+			// Smooth interpolation using ease-out curve
+			const float EasedAlpha = 1.0f - FMath::Pow(1.0f - CameraTransitionAlpha, 2.0f);
+			const float NewY = FMath::Lerp(CameraStartY, CameraTargetY, EasedAlpha);
+
+			FVector CurrentLocation = FollowCamera->GetRelativeLocation();
+			CurrentLocation.Y = NewY;
+			FollowCamera->SetRelativeLocation(CurrentLocation);
 		}
 	}
 }
@@ -467,6 +497,36 @@ void AMOCharacter::ApplyGameSettings()
 
 	// Store sensitivity for use in look input
 	LookSensitivity = Settings->CameraSensitivity;
+}
+
+void AMOCharacter::ToggleCameraShoulder()
+{
+	if (!FollowCamera)
+	{
+		return;
+	}
+
+	// Get current Y position (use target if already transitioning)
+	const FVector CurrentLocation = FollowCamera->GetRelativeLocation();
+	CameraStartY = bIsCameraTransitioning ? FMath::Lerp(CameraStartY, CameraTargetY, CameraTransitionAlpha) : CurrentLocation.Y;
+
+	// Calculate new target: flip the sign
+	CameraTargetY = -CameraStartY;
+
+	// If the offset was 0, use the default shoulder offset
+	if (FMath::IsNearlyZero(CameraTargetY))
+	{
+		CameraTargetY = CameraShoulderOffset;
+	}
+
+	// Start the transition
+	CameraTransitionAlpha = 0.0f;
+	bIsCameraTransitioning = true;
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOCharacter] Camera shoulder transitioning from %.1f to %s (Y=%.1f)"),
+		CameraStartY,
+		CameraTargetY > 0 ? TEXT("right") : TEXT("left"),
+		CameraTargetY);
 }
 
 // ============================================================================

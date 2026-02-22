@@ -453,7 +453,7 @@ void UMOSystemMenuUIController::RefreshPossessionMenu()
 	}
 
 	// Get pawn records from persistence subsystem
-	TArray<FMOPersistedPawnRecord> PawnRecords;
+	TArray<FMOPersistedPawnRecord> AllPawnRecords;
 
 	UGameInstance* GameInstance = UGameplayStatics::GetGameInstance(this);
 	if (GameInstance)
@@ -461,11 +461,21 @@ void UMOSystemMenuUIController::RefreshPossessionMenu()
 		UMOPersistenceSubsystem* Persistence = GameInstance->GetSubsystem<UMOPersistenceSubsystem>();
 		if (Persistence)
 		{
-			PawnRecords = Persistence->GetAllPawnRecords();
+			AllPawnRecords = Persistence->GetAllPawnRecords();
 		}
 	}
 
-	MenuWidget->PopulatePawnList(PawnRecords);
+	// Filter to only player-controllable pawns (excludes creatures, NPCs, etc.)
+	TArray<FMOPersistedPawnRecord> PlayerPawns;
+	for (const FMOPersistedPawnRecord& Record : AllPawnRecords)
+	{
+		if (Record.bIsPlayerControllable)
+		{
+			PlayerPawns.Add(Record);
+		}
+	}
+
+	MenuWidget->PopulatePawnList(PlayerPawns);
 }
 
 UMOPossessionMenu* UMOSystemMenuUIController::GetPossessionMenu() const
@@ -740,6 +750,7 @@ void UMOSystemMenuUIController::HandleConfirmationConfirmed()
 		if (Settings)
 		{
 			Settings->bPendingNewGame = false;  // Not a new game, it's a load
+			Settings->bIsLoadingIntoGameplay = true;  // Keep loading screen until pawn lands
 			Settings->PendingNewGameSlot = SlotName;  // Reuse field for load slot
 			Settings->SaveSettings();
 		}

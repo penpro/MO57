@@ -216,6 +216,10 @@ private:
     void CaptureQuestData(UMOWorldSaveGame* SaveObject) const;
     void RestoreQuestData(const FMOQuestSaveData& QuestData);
 
+    // Weather/time persistence (UDS/UDW integration)
+    void CaptureWeatherData(UWorld* World, UMOWorldSaveGame* SaveObject) const;
+    void RestoreWeatherData(UWorld* World, const FMOWeatherSaveData& WeatherData);
+
     // Setup spectator camera above last possessed pawn on load
     void SetupSpectatorCameraForLoad(UWorld* World, const UMOWorldSaveGame* SaveData);
 

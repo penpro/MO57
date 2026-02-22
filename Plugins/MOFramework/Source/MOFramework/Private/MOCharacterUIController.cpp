@@ -4,6 +4,7 @@
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/Pawn.h"
 #include "Blueprint/UserWidget.h"
+#include "Engine/GameInstance.h"
 
 #include "MOUIManagerComponent.h"
 #include "MOSkillsPanel.h"
@@ -16,6 +17,7 @@
 #include "MOMentalStateComponent.h"
 #include "MOItemDatabaseSettings.h"
 #include "MONotificationComponent.h"
+#include "MOQuestSubsystem.h"
 
 UMOCharacterUIController::UMOCharacterUIController()
 {
@@ -568,6 +570,28 @@ void UMOCharacterUIController::HandleInspectionCompleted(bool bCompleted, const 
 		if (!Result.FeedbackMessage.IsEmpty() && NotificationComp)
 		{
 			NotificationComp->ShowNotification(Result.FeedbackMessage, 4.0f);
+		}
+
+		// Fire quest event for item inspection
+		if (UWorld* World = GetWorld())
+		{
+			if (UGameInstance* GI = World->GetGameInstance())
+			{
+				if (UMOQuestSubsystem* QuestSub = GI->GetSubsystem<UMOQuestSubsystem>())
+				{
+					// Get the item ID from the widget if still valid
+					if (IsValid(InspectionWidget))
+					{
+						const FName InspectedItemId = InspectionWidget->GetInspectingItemId();
+						if (!InspectedItemId.IsNone())
+						{
+							// Fire both a generic "ItemInspected" event and an item-specific event
+							QuestSub->FireGameEvent(FName(TEXT("ItemInspected")));
+							QuestSub->FireGameEvent(FName(*FString::Printf(TEXT("Inspected_%s"), *InspectedItemId.ToString())));
+						}
+					}
+				}
+			}
 		}
 	}
 }

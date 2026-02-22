@@ -299,6 +299,16 @@ private:
 	UPROPERTY(Transient)
 	FVector2D PressedMousePosition = FVector2D::ZeroVector;
 
+	/** Time of last click for double-click detection. */
+	double LastClickTime = 0.0;
+
+	/** Slot index of last click for double-click detection (must be same slot). */
+	int32 LastClickSlotIndex = INDEX_NONE;
+
+	/** Threshold in seconds for double-click detection. */
+	UPROPERTY(EditDefaultsOnly, Category="MO|Inventory|UI")
+	float DoubleClickThreshold = 0.3f;
+
 	/** Border color when slot is in normal state. */
 	UPROPERTY(EditDefaultsOnly, Category="MO|Inventory|UI|Colors")
 	FLinearColor NormalBorderColor = FLinearColor(0.1f, 0.1f, 0.1f, 1.0f);

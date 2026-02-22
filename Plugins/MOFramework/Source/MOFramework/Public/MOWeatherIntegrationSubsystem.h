@@ -24,7 +24,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOSnowChangedSignature, bool, bIsSn
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FMOTemperatureThresholdSignature, float, CurrentTemperature, float, Threshold, bool, bAboveThreshold);
 
 /** Fired when time of day changes significantly (dawn, dusk, etc.). */
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOTimeOfDayChangedSignature, bool, bIsDaytime, const FMOTimeOfDay&, TimeOfDay);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOTimeOfDayChangedSignature, bool, bIsDaytime, const FDateTime&, DateTime);
 
 /**
  * World subsystem that integrates weather data with MOFramework systems.
@@ -156,10 +156,10 @@ public:
 	// ============================================================================
 
 	/**
-	 * Get current time of day and season.
+	 * Get current date and time from UDS.
 	 */
 	UFUNCTION(BlueprintPure, Category="MO|Weather")
-	FMOTimeOfDay GetTimeOfDay() const;
+	FDateTime GetDateTime() const;
 
 	/**
 	 * Check if it's daytime.
@@ -235,6 +235,39 @@ public:
 	float DefaultTemperatureCelsius = 20.0f;
 
 	// ============================================================================
+	// PERSISTENCE
+	// ============================================================================
+
+	/**
+	 * Build save data from current weather and time state.
+	 * @return Weather save data (check bIsValid before using)
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Weather")
+	FMOWeatherSaveData BuildWeatherSaveData() const;
+
+	/**
+	 * Apply save data to restore weather and time state.
+	 * @param SaveData Previously saved weather state
+	 * @return True if successfully applied
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Weather")
+	bool ApplyWeatherSaveData(const FMOWeatherSaveData& SaveData);
+
+	/**
+	 * Set date and time directly.
+	 * @param DateTime Full date and time to set
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Weather")
+	void SetDateTime(const FDateTime& DateTime);
+
+	/**
+	 * Set weather preset by object reference.
+	 * @param PresetObject Weather preset object (UDS_Weather_Settings from UDW)
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Weather")
+	void SetWeatherPreset(UObject* PresetObject);
+
+	// ============================================================================
 	// DELEGATES
 	// ============================================================================
 
@@ -283,6 +316,12 @@ private:
 
 	/** Time since last weather check. */
 	float TimeSinceLastCheck = 0.0f;
+
+	/** Pending weather save data to apply when provider registers. */
+	FMOWeatherSaveData PendingSaveData;
+
+	/** Whether we have pending save data waiting for a provider. */
+	bool bHasPendingSaveData = false;
 
 	/** Check for weather changes and fire delegates. */
 	void CheckForWeatherChanges();

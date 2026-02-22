@@ -364,9 +364,19 @@ FReply UMOInventorySlot::NativeOnMouseButtonUp(const FGeometry& InGeometry, cons
 		// Check if shift is held for quick transfer
 		const bool bShiftHeld = InMouseEvent.IsShiftDown();
 
+		// Check for double-click (same slot clicked within threshold)
+		const double CurrentTime = FPlatformTime::Seconds();
+		const bool bIsDoubleClick = (SlotIndex == LastClickSlotIndex) &&
+			((CurrentTime - LastClickTime) <= DoubleClickThreshold);
+
+		// Update tracking for next click
+		LastClickTime = CurrentTime;
+		LastClickSlotIndex = SlotIndex;
+
 		if (CachedVisualData.bHasItem)
 		{
-			if (bShiftHeld)
+			// Double-click or shift-click triggers quick transfer
+			if (bShiftHeld || bIsDoubleClick)
 			{
 				OnSlotShiftClicked.Broadcast(SlotIndex, CachedVisualData.ItemGuid);
 			}

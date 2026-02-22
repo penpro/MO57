@@ -1,9 +1,12 @@
 #include "MOGameMode.h"
 #include "MOFramework.h"
+#include "MOCharacter.h"
 #include "MOPCGInteractionSubsystem.h"
 #include "MOPersistenceSubsystem.h"
 #include "MOGameSettings.h"
+#include "MOGameInstance.h"
 #include "GameFramework/PlayerController.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "VoxelWorld.h"
 #include "VoxelStampComponent.h"
@@ -125,6 +128,9 @@ void AMOGameMode::HandlePendingNewGame()
 						FMath::RandInit(Result.WorldSeed);
 						UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Applied loaded world seed: %d"), Result.WorldSeed);
 						InitializeVoxelWorldWithSeed();
+
+						// Wait for voxel terrain to generate, then re-ground all loaded pawns
+						WaitForVoxelAndRegroundPawns();
 					}
 				}
 				else
@@ -235,6 +241,131 @@ void AMOGameMode::OnCollisionDelayComplete()
 	SpawnInitialPawn();
 }
 
+void AMOGameMode::WaitForVoxelAndRegroundPawns()
+{
+	bPendingRegroundAfterVoxel = true;
+	UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Waiting for voxel world before re-grounding loaded pawns..."));
+
+	// Start polling for voxel readiness
+	UWorld* World = GetWorld();
+	if (World)
+	{
+		World->GetTimerManager().SetTimer(
+			RegroundPawnsTimerHandle,
+			this,
+			&AMOGameMode::CheckVoxelReadyAndReground,
+			0.5f,
+			true  // Looping until voxel is ready
+		);
+	}
+}
+
+void AMOGameMode::CheckVoxelReadyAndReground()
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	// Find the voxel world
+	AVoxelWorld* VoxelWorld = nullptr;
+	for (TActorIterator<AVoxelWorld> It(World); It; ++It)
+	{
+		VoxelWorld = *It;
+		break;
+	}
+
+	if (VoxelWorld && VoxelWorld->IsVoxelWorldReady())
+	{
+		// Stop the polling timer
+		World->GetTimerManager().ClearTimer(RegroundPawnsTimerHandle);
+
+		UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Voxel world ready, waiting %.1f seconds for collision generation before re-grounding..."),
+			CollisionGenerationDelay);
+
+		// Wait for collision generation, then re-ground
+		World->GetTimerManager().SetTimer(
+			RegroundPawnsTimerHandle,
+			this,
+			&AMOGameMode::RegroundAllPawns,
+			CollisionGenerationDelay,
+			false  // Not looping
+		);
+	}
+}
+
+void AMOGameMode::RegroundAllPawns()
+{
+	bPendingRegroundAfterVoxel = false;
+
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Re-grounding all loaded pawns to terrain..."));
+
+	int32 RegroundedCount = 0;
+
+	// Find all MOCharacters and adjust their Z to be on terrain
+	for (TActorIterator<AMOCharacter> It(World); It; ++It)
+	{
+		AMOCharacter* Character = *It;
+		if (!IsValid(Character))
+		{
+			continue;
+		}
+
+		FVector CurrentLocation = Character->GetActorLocation();
+
+		// Trace down from high above current position to find terrain
+		FVector TraceStart = FVector(CurrentLocation.X, CurrentLocation.Y, CurrentLocation.Z + 50000.0f);
+		FVector TraceEnd = FVector(CurrentLocation.X, CurrentLocation.Y, CurrentLocation.Z - 50000.0f);
+
+		FHitResult HitResult;
+		FCollisionQueryParams QueryParams;
+		QueryParams.AddIgnoredActor(Character);
+
+		if (World->LineTraceSingleByChannel(HitResult, TraceStart, TraceEnd, ECC_Visibility, QueryParams))
+		{
+			// Check if we hit voxel terrain
+			AActor* HitActor = HitResult.GetActor();
+			if (HitActor && HitActor->IsA<AVoxelWorld>())
+			{
+				// Position slightly above hit point
+				FVector NewLocation = HitResult.ImpactPoint + FVector(0.0f, 0.0f, 100.0f);
+
+				if (!FMath::IsNearlyEqual(CurrentLocation.Z, NewLocation.Z, 50.0f))
+				{
+					Character->SetActorLocation(NewLocation);
+					UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Re-grounded %s from Z=%.1f to Z=%.1f"),
+						*Character->GetName(), CurrentLocation.Z, NewLocation.Z);
+					RegroundedCount++;
+				}
+			}
+		}
+	}
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Re-grounded %d pawns to terrain"), RegroundedCount);
+
+	// Dismiss loading screen after re-grounding loaded pawns
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (UMOGameInstance* MOGI = Cast<UMOGameInstance>(GI))
+		{
+			MOGI->DismissLoadingScreen();
+		}
+	}
+
+	// Clear the gameplay transition flag
+	if (UMOGameSettings* Settings = UMOGameSettings::GetMOGameSettings())
+	{
+		Settings->bIsLoadingIntoGameplay = false;
+	}
+}
+
 void AMOGameMode::SpawnInitialPawn()
 {
 	if (!DefaultNewGamePawnClass)
@@ -271,6 +402,16 @@ void AMOGameMode::SpawnInitialPawn()
 	{
 		PC->Possess(NewPawn);
 		UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Player controller possessed initial pawn"));
+
+		// Start checking for pawn landing to dismiss loading screen
+		PendingLandingPawn = NewPawn;
+		GetWorld()->GetTimerManager().SetTimer(
+			PawnLandingTimerHandle,
+			this,
+			&AMOGameMode::CheckPawnLanded,
+			0.1f,  // Check every 100ms
+			true   // Loop until landed
+		);
 	}
 }
 
@@ -479,6 +620,61 @@ FVector AMOGameMode::FindSafeSpawnLocation() const
 }
 
 // ============================================================================
+// PAWN LANDING DETECTION
+// ============================================================================
+
+void AMOGameMode::CheckPawnLanded()
+{
+	APawn* Pawn = PendingLandingPawn.Get();
+	if (!Pawn)
+	{
+		GetWorld()->GetTimerManager().ClearTimer(PawnLandingTimerHandle);
+		return;
+	}
+
+	// Check if character is on ground (not falling)
+	if (ACharacter* Character = Cast<ACharacter>(Pawn))
+	{
+		UCharacterMovementComponent* Movement = Character->GetCharacterMovement();
+		if (Movement && !Movement->IsFalling() && Movement->IsMovingOnGround())
+		{
+			GetWorld()->GetTimerManager().ClearTimer(PawnLandingTimerHandle);
+			OnPawnLandedSafely();
+		}
+	}
+	else
+	{
+		// Not a character - just dismiss immediately
+		GetWorld()->GetTimerManager().ClearTimer(PawnLandingTimerHandle);
+		OnPawnLandedSafely();
+	}
+}
+
+void AMOGameMode::OnPawnLandedSafely()
+{
+	APawn* Pawn = PendingLandingPawn.Get();
+	PendingLandingPawn.Reset();
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Pawn landed safely at %s"),
+		Pawn ? *Pawn->GetActorLocation().ToString() : TEXT("NULL"));
+
+	// 1. Dismiss loading screen
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (UMOGameInstance* MOGI = Cast<UMOGameInstance>(GI))
+		{
+			MOGI->DismissLoadingScreen();
+		}
+	}
+
+	// 2. Clear the gameplay transition flag
+	if (UMOGameSettings* Settings = UMOGameSettings::GetMOGameSettings())
+	{
+		Settings->bIsLoadingIntoGameplay = false;
+	}
+}
+
+// ============================================================================
 // VOXEL SEED INTEGRATION
 // ============================================================================
 
@@ -665,12 +861,15 @@ void AMOGameMode::InitializeVoxelWorldWithSeed()
 		return;
 	}
 
-	// Check if runtime is already created
+	// Check if runtime is already created (mid-game load scenario)
 	if (VoxelWorld->IsRuntimeCreated())
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOGameMode] VoxelWorld runtime already created. "
-			"Set bCreateRuntimeOnBeginPlay = false on VoxelWorld for seed to apply before generation."));
-		return;
+		UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] VoxelWorld runtime already exists - destroying and recreating with seed %d"), WorldSeed);
+		VoxelWorld->DestroyRuntime();
+
+		// Re-apply seed parameters after destroying runtime (they may have been cleared)
+		ApplySeedToVoxelStamps(WorldSeed);
+		ApplySeedToHeightGraphParameter(WorldSeed);
 	}
 
 	// Create the runtime to start generation with the new seed

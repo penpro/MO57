@@ -4,6 +4,90 @@ This file tracks changes, bug fixes, and new features. Updated incrementally to 
 
 ---
 
+## [2026-02-21] Loading Screen Persistence & Pawn Landing Detection
+
+### New Features
+
+**Loading Screen Manual Dismissal**
+- Loading screen now persists until pawn has landed safely on terrain
+- Added `bIsLoadingIntoGameplay` flag to `UMOGameSettings` for tracking gameplay transitions
+- Added `DismissLoadingScreen()` method to `UMOGameInstance` for manual dismissal
+- Added `ShouldShowLoadingScreen()` to skip loading screen during initial launch to intro
+
+**Pawn Landing Detection**
+- `CheckPawnLanded()` polls pawn's movement component to detect when character is grounded
+- `OnPawnLandedSafely()` dismisses loading screen and clears transition flag
+- Works for both new game spawns and loaded game pawn re-grounding
+
+### Bug Fixes
+
+- **Fixed loading screen ending too early**: Loading screen now waits for pawn to land on ground instead of dismissing when map loads
+- **Fixed seeing terrain generation**: Players no longer see voxel terrain loading or pawn falling during new game start
+- **Fixed seeing pawn repositioning**: Loading screen now covers the re-grounding of loaded pawns after voxel regeneration
+- **Fixed loading screen during intro**: Initial game launch now stays black until intro video starts (no loading screen flash)
+- **Fixed character mesh deformation around neck**: Resolved mesh distortion issue in the neck area of character models
+
+### Technical Details
+
+The loading screen flow is now:
+1. New Game/Load Game → set `bIsLoadingIntoGameplay = true`
+2. `BeginLoadingScreen()` detects flag → uses `bWaitForManualStop = true`
+3. Map loads → `EndLoadingScreen()` does NOT dismiss (manual mode)
+4. GameMode waits for voxel → spawns pawn → starts landing check timer
+5. Pawn lands → `OnPawnLandedSafely()` → `DismissLoadingScreen()`
+
+---
+
+## [2026-02-21] Weather Integration, Mid-Game Load Fix & Input Lockout
+
+### New Features
+
+**Weather Provider Interface Overhaul**
+- Simplified `IMOWeatherProviderInterface` to use native UDS/UDW types directly
+- `GetDateTime()` returns `FDateTime` directly from UDS (replaces `GetTimeOfDay()`)
+- `GetCurrentWeatherPreset()` returns `UObject*` (actual UDS_Weather_Settings) instead of `FName`
+- `SetDateTime(FDateTime)` replaces separate `SetTimeOfDay()`, `SetSeason()`, `SetDayOfYear()` methods
+- `SetWeatherPreset(UObject*)` for direct weather preset application
+- Added `BuildWeatherSaveData()` and `ApplyWeatherSaveData()` for persistence
+
+**Weather Save/Load Support**
+- `FMOWeatherSaveData` struct for persisting weather and time state
+- Stores `FDateTime`, `CloudCoverage`, `FogDensity` overrides
+- `WeatherPresetObject` marked Transient (runtime only, not serialized to disk)
+- Integrated with `MOPersistenceSubsystem` for automatic save/load
+- Pending save data system: weather state queued if provider not yet registered, applied when provider registers
+
+**Mid-Game Save Loading**
+- Voxel world now properly regenerates when loading a save with a different seed
+- `InitializeVoxelWorldWithSeed()` destroys and recreates voxel runtime for mid-game loads
+- New `RegroundAllPawns()` function repositions all characters to terrain after voxel regeneration
+- Waits for voxel collision generation before re-grounding (3 second delay)
+
+### Bug Fixes
+
+- **Fixed Blueprint interface detection**: `TScriptInterface::GetInterface()` returns null for Blueprint-implemented interfaces - changed to `ImplementsInterface()` which works for both C++ and Blueprint implementations
+- **Fixed weather restore timing**: Weather save data now stored as pending if provider not registered yet, applied when `RegisterWeatherProvider()` is called
+- **Fixed mid-game load terrain mismatch**: Loading a save from a different world now regenerates voxel terrain with correct seed before repositioning pawns
+- **Fixed gameplay input during menus**: All gameplay actions now blocked when menus are open:
+  - Jump (start/end)
+  - Hustle/Sprint (start/triggered/end)
+  - Crouch
+  - Interact
+  - Primary action (press/release)
+  - Secondary action (press/release)
+  - Terraform (toggle/cycle)
+- **Fixed split stack not working**: Split stack was immediately re-stacking items because `AddItemByGuid` auto-stacks into existing entries of the same item type. Added `AddItemByGuidNoStack()` method that forces creation of a new stack entry without auto-stacking behavior.
+
+### Blueprint Setup (BP_WeatherBridge)
+
+1. Create actor implementing `IMOWeatherProviderInterface`
+2. In BeginPlay: Get UDS/UDW actors → store in variables → delay → register with subsystem
+3. Add validity checks in interface implementations (UDWActor and UDWActor.Weather may be null during init)
+4. `BuildWeatherSaveData`: Get DateTime from UDS, CloudCoverage/Fog from current state
+5. `ApplyWeatherSaveData`: Set DateTime on UDS, apply cloud/fog overrides to UDW
+
+---
+
 ## [2026-02-20] Quest Framework
 
 ### New Features
@@ -142,6 +226,59 @@ To use dynamic world seeds with Voxel terrain:
 5. Ensure `VoxelWorld->bCreateRuntimeOnBeginPlay = false` in your level
 6. Enable `bAutoInitializeVoxelWithSeed = true` on your game mode
 7. The seed from New Game dialog will now affect terrain generation
+
+---
+
+## [2026-02-18] Creature AI System & Character Appearance Framework
+
+### New Features
+
+**Creature AI System**
+- `AMOCreature` base class with full medical system inheritance (wounds, vitals, mortality)
+- `AMOCreatureController` with sight/hearing perception and threat memory
+- Activity states: Active, Resting, Sleeping, Fleeing, Fighting, Dead
+- Day/night behavioral cycles (creatures rest at dusk, sleep at night)
+- Footstep noise generation for AI hearing awareness
+- Hit reaction and death animation montage support
+
+**Behavior Tree Components**
+- `BTTask_FleeFromThreat` - Flee behavior with configurable distance
+- `BTTask_CreatureWander` - Random wandering with return-to-home radius
+- `BTTask_CreatureAttack` - Attack behavior with damage and cooldowns
+- `BTTask_CreatureRest` - Rest/sleep state management
+- `BTService_CreatureActivity` - Monitors time of day for rest/sleep cycles
+
+**Character Appearance Framework**
+- `UMOAppearanceSubsystem` - Centralized appearance management
+- `UMOCharacterAppearance` component for per-pawn visual customization
+- `AMOCustomizableCharacter` with MetaHuman integration support
+- Genesis 8 character model compatibility
+- MetaHuman common assets integration
+
+**Fall-Through Safety System**
+- `CheckFallThroughSafety()` in MOCharacter detects characters falling through terrain
+- Teleports character back above ground after 2 seconds of falling with no terrain below
+- Prevents soft-locks from voxel terrain loading gaps
+
+### Bug Fixes
+
+- Fixed AI perception ConfigureSense warnings by deferring calls to next tick
+- Added DataTable caching to `MOSkillDatabaseSettings` to prevent repeated load log spam
+- Increased spawn height offset to 200 units for safer terrain landing
+
+### Blueprint Setup Required
+
+**Creature Animation Blueprint:**
+1. Add states: Locomotion, Resting (IdleRest), Sleeping (IdleSleep), Death
+2. Add variables: `GroundSpeed` (float), `IsDead`, `IsResting`, `IsSleeping` (bool)
+3. State transitions based on activity state variables
+
+**Creature Blackboard:**
+- Add keys: `ActivityState` (enum), `IsDead`, `IsResting`, `IsSleeping`
+
+**Creature Behavior Tree:**
+- Add `BTService_CreatureActivity` to root
+- Add rest/sleep branches with time-of-day decorators
 
 ---
 

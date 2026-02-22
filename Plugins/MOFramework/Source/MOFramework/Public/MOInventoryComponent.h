@@ -61,6 +61,7 @@ struct TStructOpsTypeTraits<FMOInventoryList> : public TStructOpsTypeTraitsBase2
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOInventoryChangedSignature);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOInventorySlotsChangedSignature);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOItemAddedSignature, FName, ItemDefinitionId, int32, Quantity);
 
 class UMOInventoryComponent;
 
@@ -96,6 +97,10 @@ public:
 
 	UPROPERTY(BlueprintAssignable, Category="MO|Inventory")
 	FMOInventorySlotsChangedSignature OnSlotsChanged;
+
+	/** Fired when an item is added to inventory (after add completes). */
+	UPROPERTY(BlueprintAssignable, Category="MO|Inventory")
+	FMOItemAddedSignature OnItemAdded;
 
 	// Inventory entries (replicated via FastArray)
 	UPROPERTY(Replicated)
@@ -250,6 +255,17 @@ public:
 	// Adds an entry but guarantees no slot auto-assignment happens (useful during restore).
 	UFUNCTION(BlueprintCallable, Category="MO|Inventory|Save")
 	bool AddItemByGuidWithoutSlotAutoAssign(const FGuid& ItemGuid, const FName ItemDefinitionId, int32 QuantityToAdd);
+
+	/**
+	 * Add an item forcing creation of a new stack (no auto-stacking into existing entries).
+	 * Used for split stack operations where we explicitly want a separate stack.
+	 * @param ItemGuid The unique GUID for this new stack
+	 * @param ItemDefinitionId The item definition row name
+	 * @param QuantityToAdd Number of items in the new stack
+	 * @return True if the new stack was created
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Inventory")
+	bool AddItemByGuidNoStack(const FGuid& ItemGuid, const FName ItemDefinitionId, int32 QuantityToAdd);
 
 	// Build a save snapshot (server or client can call, but it reflects local replicated state).
 	UFUNCTION(BlueprintCallable, Category="MO|Inventory|Save")

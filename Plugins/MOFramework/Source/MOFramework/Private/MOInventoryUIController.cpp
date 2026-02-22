@@ -753,8 +753,8 @@ void UMOInventoryUIController::HandleContextMenuAction(FName ActionId, const FGu
 		// Check if there's room in inventory (an empty slot)
 		if (InventoryComponent->HasEmptySlot())
 		{
-			// Add split portion to inventory
-			InventoryComponent->AddItemByGuid(NewGuid, ItemDefId, SplitAmount);
+			// Add split portion to inventory - use NoStack to prevent it from merging back
+			InventoryComponent->AddItemByGuidNoStack(NewGuid, ItemDefId, SplitAmount);
 			UE_LOG(LogMOFramework, Log, TEXT("[MOInventoryUI] SplitStack - split %d items into new stack"), SplitAmount);
 		}
 		else

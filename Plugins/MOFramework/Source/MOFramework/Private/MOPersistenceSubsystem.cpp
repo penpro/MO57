@@ -27,12 +27,14 @@
 #include "MOMentalStateComponent.h"
 #include "MOSkillsComponent.h"
 #include "MOEquipmentComponent.h"
+#include "MOCreature.h"
 #include "MOBuildableActor.h"
 #include "MOBuildProgressComponent.h"
 #include "MOIdentifiableInterface.h"
 #include "MOInventoryHolderInterface.h"
 #include "MOCreature.h"
 #include "MOQuestSubsystem.h"
+#include "MOWeatherIntegrationSubsystem.h"
 
 // Voxel plugin sculpt persistence
 #include "VoxelMinimal/Utilities/VoxelThreadingUtilities.h"
@@ -272,6 +274,7 @@ bool UMOPersistenceSubsystem::SaveWorldToSlot(const FString& SlotName)
     CaptureBuildings(World, SaveObject);
     CaptureVoxelSculptData(World, SaveObject);
     CaptureQuestData(SaveObject);
+    CaptureWeatherData(World, SaveObject);
 
     const bool bOk = UGameplayStatics::SaveGameToSlot(SaveObject, SlotName, 0);
 
@@ -514,6 +517,7 @@ FMOLoadResult UMOPersistenceSubsystem::LoadWorldFromSlotWithResult(const FString
     RespawnBuildings(World, LoadedTyped->Buildings, LastLoadResult);
     RestoreVoxelSculptData(World, LoadedTyped->VoxelSculptData);
     RestoreQuestData(LoadedTyped->QuestData);
+    RestoreWeatherData(World, LoadedTyped->WeatherData);
 
     ApplyInventoriesToSpawnedPawns(World, LoadedTyped->PawnInventoriesByGuid);
 
@@ -993,6 +997,9 @@ void UMOPersistenceSubsystem::CapturePersistedPawnsAndInventories(UWorld* World,
         PawnRecord.Transform = Pawn->GetActorTransform();
         const FSoftObjectPath PawnClassSoftPath(Pawn->GetClass());
         PawnRecord.PawnClassPath = FSoftClassPath(PawnClassSoftPath.ToString());
+
+        // Creatures are not player-controllable (deer, wolves, etc.)
+        PawnRecord.bIsPlayerControllable = !Pawn->IsA<AMOCreature>();
 
         // Generate default name for new pawns without an existing record
         if (PawnRecord.CharacterName.IsEmpty())
@@ -2286,4 +2293,71 @@ void UMOPersistenceSubsystem::RestoreQuestData(const FMOQuestSaveData& QuestData
     UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Restored quest data: %d active, %d completed"),
         QuestData.ActiveQuests.Num(),
         QuestData.CompletedQuestIds.Num());
+}
+
+// ============================================================================
+// WEATHER/TIME PERSISTENCE
+// ============================================================================
+
+void UMOPersistenceSubsystem::CaptureWeatherData(UWorld* World, UMOWorldSaveGame* SaveObject) const
+{
+    if (!SaveObject)
+    {
+        return;
+    }
+
+    if (!World)
+    {
+        UE_LOG(LogMOFramework, Verbose, TEXT("[MOPersist] CaptureWeatherData: No world"));
+        return;
+    }
+
+    UMOWeatherIntegrationSubsystem* WeatherSubsystem = World->GetSubsystem<UMOWeatherIntegrationSubsystem>();
+    if (!WeatherSubsystem)
+    {
+        UE_LOG(LogMOFramework, Verbose, TEXT("[MOPersist] CaptureWeatherData: No weather integration subsystem"));
+        return;
+    }
+
+    if (!WeatherSubsystem->HasWeatherProvider())
+    {
+        UE_LOG(LogMOFramework, Verbose, TEXT("[MOPersist] CaptureWeatherData: No weather provider registered"));
+        return;
+    }
+
+    SaveObject->WeatherData = WeatherSubsystem->BuildWeatherSaveData();
+
+    UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Captured weather data: DateTime=%s, Weather=%s, Valid=%s"),
+        *SaveObject->WeatherData.DateTime.ToString(),
+        *GetNameSafe(SaveObject->WeatherData.WeatherPresetObject.Get()),
+        SaveObject->WeatherData.bIsValid ? TEXT("Yes") : TEXT("No"));
+}
+
+void UMOPersistenceSubsystem::RestoreWeatherData(UWorld* World, const FMOWeatherSaveData& WeatherData)
+{
+    if (!World)
+    {
+        UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] RestoreWeatherData: No world"));
+        return;
+    }
+
+    if (!WeatherData.bIsValid)
+    {
+        UE_LOG(LogMOFramework, Verbose, TEXT("[MOPersist] RestoreWeatherData: Save data is not valid (possibly old save or no weather provider when saved)"));
+        return;
+    }
+
+    UMOWeatherIntegrationSubsystem* WeatherSubsystem = World->GetSubsystem<UMOWeatherIntegrationSubsystem>();
+    if (!WeatherSubsystem)
+    {
+        UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] RestoreWeatherData: No weather integration subsystem"));
+        return;
+    }
+
+    // Always call ApplyWeatherSaveData - it will store as pending if no provider yet
+    const bool bApplied = WeatherSubsystem->ApplyWeatherSaveData(WeatherData);
+
+    UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Restored weather data: DateTime=%s, Applied=%s"),
+        *WeatherData.DateTime.ToString(),
+        bApplied ? TEXT("Yes") : TEXT("No"));
 }

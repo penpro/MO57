@@ -22,6 +22,7 @@
 #include "MONotificationComponent.h"
 #include "MOHarvestSubsystem.h"
 #include "MOCraftingSubsystem.h"
+#include "MOQuestSubsystem.h"
 #include "MORecipeDatabaseSettings.h"
 #include "MOItemDatabaseSettings.h"
 
@@ -652,6 +653,20 @@ void UMOCraftingUIController::HandleKeepOnHarvestContextMenuInspectClicked()
 	if (UMOUIManagerComponent* UIManager = GetUIManager())
 	{
 		UIManager->StartItemInspection(ItemId, FGuid());
+	}
+
+	// Fire TreeInspected event for quest objectives
+	// This triggers when inspecting via the harvest context menu (trees, rocks, etc.)
+	if (UWorld* World = GetWorld())
+	{
+		if (UGameInstance* GI = World->GetGameInstance())
+		{
+			if (UMOQuestSubsystem* QuestSub = GI->GetSubsystem<UMOQuestSubsystem>())
+			{
+				QuestSub->FireGameEvent(FName(TEXT("TreeInspected")));
+				UE_LOG(LogMOFramework, Log, TEXT("[MOCraftUI] Fired TreeInspected event for quest tracking"));
+			}
+		}
 	}
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOCraftUI] Starting smart inspection for '%s'"), *ItemId.ToString());

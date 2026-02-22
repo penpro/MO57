@@ -33,16 +33,15 @@ void UMOInventoryGrid::InitializeGrid(UMOInventoryComponent* InInventoryComponen
 
 int32 UMOInventoryGrid::GetDesiredSlotCount() const
 {
-	int32 SlotCountFromInventory = 0;
-
+	// Return the actual slot count from the inventory component
+	// Only use MinimumVisibleSlotCount as fallback when no inventory is bound
 	if (IsValid(InventoryComponent))
 	{
-		SlotCountFromInventory = InventoryComponent->GetSlotCount();
+		return InventoryComponent->GetSlotCount();
 	}
 
-	// Always show at least MinimumVisibleSlotCount so the user sees inventory size even when empty.
-	const int32 Desired = FMath::Max(SlotCountFromInventory, MinimumVisibleSlotCount);
-	return Desired;
+	// No inventory bound - use minimum for placeholder display
+	return MinimumVisibleSlotCount;
 }
 
 void UMOInventoryGrid::RebuildGrid()
@@ -161,8 +160,8 @@ void UMOInventoryGrid::SetSlotVisualData(const TArray<FMOInventorySlotVisualData
 	SlotsUniformGrid->ClearChildren();
 	ReleaseAllSlotsToPool();
 
-	// Acquire slots from pool based on visual data
-	const int32 SlotCount = FMath::Max(VisualData.Num(), MinimumVisibleSlotCount);
+	// Create exactly the number of slots needed for the visual data (no padding)
+	const int32 SlotCount = VisualData.Num();
 
 	for (int32 SlotIndex = 0; SlotIndex < SlotCount; ++SlotIndex)
 	{
@@ -175,15 +174,8 @@ void UMOInventoryGrid::SetSlotVisualData(const TArray<FMOInventorySlotVisualData
 		// Initialize without an inventory component
 		NewSlotWidget->InitializeSlot(nullptr, SlotIndex);
 
-		// Set visual data directly if available
-		if (SlotIndex < VisualData.Num())
-		{
-			NewSlotWidget->SetVisualData(VisualData[SlotIndex]);
-		}
-		else
-		{
-			NewSlotWidget->ClearVisualData();
-		}
+		// Set visual data directly
+		NewSlotWidget->SetVisualData(VisualData[SlotIndex]);
 
 		NewSlotWidget->OnSlotClicked.AddDynamic(this, &UMOInventoryGrid::HandleSlotClicked);
 		NewSlotWidget->OnSlotShiftClicked.AddDynamic(this, &UMOInventoryGrid::HandleSlotShiftClicked);

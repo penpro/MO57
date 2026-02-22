@@ -361,6 +361,14 @@ public:
 	TObjectPtr<UInputAction> TerraformCycleToolAction;
 
 	// ============================================================================
+	// INPUT ACTIONS - CAMERA
+	// ============================================================================
+
+	/** Toggle camera shoulder side (swap between left and right shoulder view). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Input|Actions|Camera")
+	TObjectPtr<UInputAction> ViewAction;
+
+	// ============================================================================
 	// CONTEXT MANAGEMENT
 	// ============================================================================
 
@@ -601,6 +609,13 @@ protected:
 
 	/** Handle terraforming tool cycle. */
 	void HandleTerraformCycleTool(const FInputActionValue& Value);
+
+	// ============================================================================
+	// INPUT HANDLERS - CAMERA
+	// ============================================================================
+
+	/** Handle camera shoulder toggle. */
+	void HandleView(const FInputActionValue& Value);
 
 	// ============================================================================
 	// INTERNAL

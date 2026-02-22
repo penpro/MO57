@@ -4,7 +4,7 @@
 #include "Engine/GameInstance.h"
 #include "MOGameInstance.generated.h"
 
-class UTexture2D;
+class UMOLoadingOverlay;
 
 /**
  * Game instance for MO57.
@@ -23,20 +23,34 @@ public:
 	virtual void Shutdown() override;
 
 	// ============================================================================
-	// LOADING SCREEN
+	// LOADING OVERLAY
 	// ============================================================================
 
-	/** Background image for loading screen (optional). */
+	/** Widget class to use for the loading overlay. Set in BP_MOGameInstance. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="MO|LoadingScreen")
-	TSoftObjectPtr<UTexture2D> LoadingScreenBackground;
+	TSubclassOf<UMOLoadingOverlay> LoadingOverlayClass;
 
 	/** Loading tip messages to display randomly. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="MO|LoadingScreen")
 	TArray<FText> LoadingTips;
 
-	/** Minimum time to show loading screen (seconds). Prevents flickering on fast loads. */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="MO|LoadingScreen")
-	float MinLoadingScreenTime = 1.0f;
+	/**
+	 * Show the loading overlay immediately.
+	 * Call this before starting a level transition.
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|LoadingScreen")
+	void ShowLoadingOverlay();
+
+	/**
+	 * Dismiss the loading overlay with a fade out.
+	 * Call this when pawn has landed safely after a gameplay transition.
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|LoadingScreen")
+	void DismissLoadingScreen();
+
+	/** Check if loading overlay is currently visible. */
+	UFUNCTION(BlueprintPure, Category="MO|LoadingScreen")
+	bool IsLoadingOverlayVisible() const;
 
 protected:
 	/** Called before a map starts loading. */
@@ -48,9 +62,13 @@ protected:
 	virtual void EndLoadingScreen(UWorld* InLoadedWorld);
 
 private:
-	/** Create the Slate widget for loading screen. */
-	TSharedRef<class SWidget> CreateLoadingScreenWidget();
+	/** Check if loading screen should be shown for this transition. */
+	bool ShouldShowLoadingScreen(const FString& MapName) const;
 
-	/** Track loading screen state. */
-	bool bLoadingScreenShowing = false;
+	/** The active loading overlay widget. */
+	UPROPERTY()
+	TObjectPtr<UMOLoadingOverlay> LoadingOverlayWidget;
+
+	/** Whether we're waiting for manual dismissal (gameplay transitions). */
+	bool bWaitingForManualDismiss = false;
 };

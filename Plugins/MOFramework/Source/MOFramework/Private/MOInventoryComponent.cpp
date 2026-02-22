@@ -12,6 +12,7 @@
 #include "MOItemComponent.h"
 #include "MOIdentityComponent.h"
 #include "MOPersistenceSubsystem.h"
+#include "MOQuestSubsystem.h"
 #include "UObject/UnrealType.h"
 #include "UObject/SoftObjectPtr.h"
 
@@ -195,6 +196,25 @@ bool UMOInventoryComponent::AddItemByGuid(const FGuid& ItemGuid, const FName Ite
 	if (bAnyChange)
 	{
 		BroadcastInventoryChanged();
+
+		// Notify that items were added (for quest system etc.)
+		const int32 ActuallyAdded = QuantityToAdd - RemainingToAdd;
+		if (ActuallyAdded > 0)
+		{
+			OnItemAdded.Broadcast(ItemDefinitionId, ActuallyAdded);
+
+			// Notify quest subsystem directly
+			if (UWorld* World = GetWorld())
+			{
+				if (UGameInstance* GI = World->GetGameInstance())
+				{
+					if (UMOQuestSubsystem* QuestSub = GI->GetSubsystem<UMOQuestSubsystem>())
+					{
+						QuestSub->HandleItemPickedUp(ItemDefinitionId, ActuallyAdded);
+					}
+				}
+			}
+		}
 	}
 
 	return true;
@@ -889,6 +909,80 @@ bool UMOInventoryComponent::AddItemByGuidWithoutSlotAutoAssign(const FGuid& Item
 
 	bAutoAssignNewItemsToSlots = bPreviousAutoAssign;
 	return bResult;
+}
+
+bool UMOInventoryComponent::AddItemByGuidNoStack(const FGuid& ItemGuid, const FName ItemDefinitionId, int32 QuantityToAdd)
+{
+	AActor* OwnerActor = GetOwner();
+	if (!IsValid(OwnerActor) || !OwnerActor->HasAuthority())
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventory] AddItemByGuidNoStack requires authority"));
+		return false;
+	}
+
+	if (!ItemGuid.IsValid() || ItemDefinitionId.IsNone() || QuantityToAdd <= 0)
+	{
+		return false;
+	}
+
+	EnsureSlotsInitialized();
+
+	// Check if this exact GUID already exists (would be an error - caller should use a new GUID)
+	const int32 ExistingIndex = FindEntryIndexByGuid(ItemGuid);
+	if (ExistingIndex != INDEX_NONE)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventory] AddItemByGuidNoStack: GUID already exists, use AddItemByGuid for stacking"));
+		return false;
+	}
+
+	// Get item definition for max stack size and durability
+	FMOItemDefinitionRow ItemDef;
+	int32 MaxStackSize = 99;
+	bool bIsTool = false;
+	int32 MaxDurability = -1;
+
+	if (UMOItemDatabaseSettings::GetItemDefinition(ItemDefinitionId, ItemDef))
+	{
+		MaxStackSize = ItemDef.MaxStackSize > 0 ? ItemDef.MaxStackSize : 1;
+		bIsTool = ItemDef.bIsTool;
+		MaxDurability = ItemDef.MaxDurability;
+	}
+
+	// Create new entry directly (no stacking into existing entries)
+	FMOInventoryEntry NewEntry;
+	NewEntry.ItemGuid = ItemGuid;
+	NewEntry.ItemDefinitionId = ItemDefinitionId;
+	NewEntry.Quantity = FMath::Min(QuantityToAdd, MaxStackSize);
+
+	// Initialize durability for tools
+	if (bIsTool && MaxDurability > 0)
+	{
+		NewEntry.CurrentDurability = MaxDurability;
+	}
+	else
+	{
+		NewEntry.CurrentDurability = -1;
+	}
+
+	const int32 NewIndex = Inventory.Entries.Add(NewEntry);
+	Inventory.MarkItemDirty(Inventory.Entries[NewIndex]);
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOInventory] AddItemByGuidNoStack: Created new stack of %s with %d items (no stacking)"),
+		*ItemDefinitionId.ToString(), NewEntry.Quantity);
+
+	// Auto-assign to slot if enabled
+	if (bAutoAssignNewItemsToSlots && TryAutoAssignGuidToEmptySlot(NewEntry.ItemGuid))
+	{
+		MarkSlotItemGuidsDirty();
+		OnSlotsChanged.Broadcast();
+	}
+
+	BroadcastInventoryChanged();
+
+	// Notify that items were added
+	OnItemAdded.Broadcast(ItemDefinitionId, NewEntry.Quantity);
+
+	return true;
 }
 
 void UMOInventoryComponent::BuildSaveData(FMOInventorySaveData& OutSaveData) const

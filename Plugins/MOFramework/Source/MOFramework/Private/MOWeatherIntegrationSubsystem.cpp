@@ -37,13 +37,38 @@ TStatId UMOWeatherIntegrationSubsystem::GetStatId() const
 
 void UMOWeatherIntegrationSubsystem::RegisterWeatherProvider(TScriptInterface<IMOWeatherProviderInterface> Provider)
 {
-	if (!Provider.GetInterface())
+	UObject* ProviderObject = Provider.GetObject();
+	if (!ProviderObject)
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOWeatherIntegration] Attempted to register null weather provider"));
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOWeatherIntegration] Attempted to register null weather provider (object is null)"));
+		return;
+	}
+
+	// Use ImplementsInterface() for Blueprint-implemented interfaces
+	// TScriptInterface::GetInterface() only works for native C++ implementations
+	if (!ProviderObject->GetClass()->ImplementsInterface(UMOWeatherProviderInterface::StaticClass()))
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOWeatherIntegration] Provider object '%s' does not implement IMOWeatherProviderInterface."),
+			*GetNameSafe(ProviderObject));
 		return;
 	}
 
 	WeatherProvider = Provider;
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOWeatherIntegration] Registered weather provider: %s"),
+		*GetNameSafe(Provider.GetObject()));
+
+	// Apply any pending save data that was waiting for a provider
+	if (bHasPendingSaveData && PendingSaveData.bIsValid)
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOWeatherIntegration] Applying pending save data: DateTime=%s"),
+			*PendingSaveData.DateTime.ToString());
+
+		IMOWeatherProviderInterface::Execute_ApplyWeatherSaveData(WeatherProvider.GetObject(), PendingSaveData);
+
+		bHasPendingSaveData = false;
+		PendingSaveData = FMOWeatherSaveData(); // Clear
+	}
 
 	// Initialize cached state
 	CachedWeatherState = GetCurrentWeatherState();
@@ -54,14 +79,11 @@ void UMOWeatherIntegrationSubsystem::RegisterWeatherProvider(TScriptInterface<IM
 	const float CurrentTemp = GetGlobalTemperature(EMOTemperatureUnit::Celsius);
 	bWasAboveHeatThreshold = CurrentTemp > HeatThresholdCelsius;
 	bWasBelowColdThreshold = CurrentTemp < ColdThresholdCelsius;
-
-	UE_LOG(LogMOFramework, Log, TEXT("[MOWeatherIntegration] Registered weather provider: %s"),
-		*GetNameSafe(Provider.GetObject()));
 }
 
 void UMOWeatherIntegrationSubsystem::UnregisterWeatherProvider()
 {
-	if (WeatherProvider.GetInterface())
+	if (WeatherProvider.GetObject())
 	{
 		UE_LOG(LogMOFramework, Log, TEXT("[MOWeatherIntegration] Unregistered weather provider"));
 	}
@@ -70,7 +92,8 @@ void UMOWeatherIntegrationSubsystem::UnregisterWeatherProvider()
 
 bool UMOWeatherIntegrationSubsystem::HasWeatherProvider() const
 {
-	return WeatherProvider.GetInterface() != nullptr;
+	// Check object exists - validation was done during registration
+	return WeatherProvider.GetObject() != nullptr;
 }
 
 // ============================================================================
@@ -182,14 +205,14 @@ bool UMOWeatherIntegrationSubsystem::IsSnowing() const
 // TIME OF DAY QUERIES
 // ============================================================================
 
-FMOTimeOfDay UMOWeatherIntegrationSubsystem::GetTimeOfDay() const
+FDateTime UMOWeatherIntegrationSubsystem::GetDateTime() const
 {
 	if (!HasWeatherProvider())
 	{
-		return FMOTimeOfDay();
+		return FDateTime::Now();
 	}
 
-	return IMOWeatherProviderInterface::Execute_GetTimeOfDay(
+	return IMOWeatherProviderInterface::Execute_GetDateTime(
 		WeatherProvider.GetObject());
 }
 
@@ -340,7 +363,7 @@ void UMOWeatherIntegrationSubsystem::CheckForWeatherChanges()
 	if (bIsDaytime != bCachedIsDaytime)
 	{
 		bCachedIsDaytime = bIsDaytime;
-		OnDayNightChanged.Broadcast(bIsDaytime, GetTimeOfDay());
+		OnDayNightChanged.Broadcast(bIsDaytime, GetDateTime());
 		UE_LOG(LogMOFramework, Log, TEXT("[MOWeatherIntegration] Transitioned to %s"),
 			bIsDaytime ? TEXT("day") : TEXT("night"));
 	}
@@ -373,4 +396,87 @@ void UMOWeatherIntegrationSubsystem::CheckForWeatherChanges()
 		UE_LOG(LogMOFramework, Log, TEXT("[MOWeatherIntegration] Weather changed to: %s"),
 			*NewWeatherState.DisplayName.ToString());
 	}
+}
+
+// ============================================================================
+// PERSISTENCE
+// ============================================================================
+
+FMOWeatherSaveData UMOWeatherIntegrationSubsystem::BuildWeatherSaveData() const
+{
+	FMOWeatherSaveData SaveData;
+
+	if (!HasWeatherProvider())
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOWeatherIntegration] BuildWeatherSaveData: No provider registered"));
+		SaveData.bIsValid = false;
+		return SaveData;
+	}
+
+	// Delegate to provider for full save data capture
+	SaveData = IMOWeatherProviderInterface::Execute_BuildWeatherSaveData(WeatherProvider.GetObject());
+	SaveData.bIsValid = true;
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOWeatherIntegration] Built save data: DateTime=%s, Weather=%s"),
+		*SaveData.DateTime.ToString(), *GetNameSafe(SaveData.WeatherPresetObject.Get()));
+
+	return SaveData;
+}
+
+bool UMOWeatherIntegrationSubsystem::ApplyWeatherSaveData(const FMOWeatherSaveData& SaveData)
+{
+	if (!SaveData.bIsValid)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOWeatherIntegration] ApplyWeatherSaveData: Invalid save data"));
+		return false;
+	}
+
+	if (!HasWeatherProvider())
+	{
+		// No provider yet - store as pending and apply when provider registers
+		PendingSaveData = SaveData;
+		bHasPendingSaveData = true;
+		UE_LOG(LogMOFramework, Log, TEXT("[MOWeatherIntegration] ApplyWeatherSaveData: No provider yet, storing as pending (DateTime=%s)"),
+			*SaveData.DateTime.ToString());
+		return true; // Return true because we've queued it
+	}
+
+	// Delegate to provider for full state restoration
+	IMOWeatherProviderInterface::Execute_ApplyWeatherSaveData(WeatherProvider.GetObject(), SaveData);
+
+	// Update cached state
+	CachedWeatherState = GetCurrentWeatherState();
+	bCachedIsDaytime = IsDaytime();
+	bWasRaining = CachedWeatherState.IsRaining();
+	bWasSnowing = CachedWeatherState.IsSnowing();
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOWeatherIntegration] Applied save data: DateTime=%s, Weather=%s"),
+		*SaveData.DateTime.ToString(), *GetNameSafe(SaveData.WeatherPresetObject.Get()));
+
+	return true;
+}
+
+void UMOWeatherIntegrationSubsystem::SetDateTime(const FDateTime& DateTime)
+{
+	if (!HasWeatherProvider())
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOWeatherIntegration] SetDateTime: No provider registered"));
+		return;
+	}
+
+	IMOWeatherProviderInterface::Execute_SetDateTime(WeatherProvider.GetObject(), DateTime);
+	UE_LOG(LogMOFramework, Log, TEXT("[MOWeatherIntegration] Set date/time to %s"), *DateTime.ToString());
+}
+
+void UMOWeatherIntegrationSubsystem::SetWeatherPreset(UObject* PresetObject)
+{
+	if (!HasWeatherProvider())
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOWeatherIntegration] SetWeatherPreset: No provider registered"));
+		return;
+	}
+
+	IMOWeatherProviderInterface::Execute_SetWeatherPreset(WeatherProvider.GetObject(), PresetObject);
+	UE_LOG(LogMOFramework, Log, TEXT("[MOWeatherIntegration] Set weather preset to '%s'"),
+		*GetNameSafe(PresetObject));
 }

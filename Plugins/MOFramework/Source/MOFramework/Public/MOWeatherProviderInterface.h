@@ -96,11 +96,11 @@ public:
 	// ============================================================================
 
 	/**
-	 * Get current time of day and season information.
-	 * @return Time and season data
+	 * Get current date and time directly from UDS.
+	 * @return FDateTime with full date/time information
 	 */
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category="MO|Weather")
-	FMOTimeOfDay GetTimeOfDay() const;
+	FDateTime GetDateTime() const;
 
 	/**
 	 * Check if it's currently daytime.
@@ -120,4 +120,43 @@ public:
 	 */
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category="MO|Weather")
 	FVector GetWindVelocityAtLocation(const FVector& Location) const;
+
+	// ============================================================================
+	// STATE SETTERS (for save/load)
+	// ============================================================================
+
+	/**
+	 * Set the date and time.
+	 * @param DateTime Full date and time to set
+	 */
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category="MO|Weather")
+	void SetDateTime(const FDateTime& DateTime);
+
+	/**
+	 * Set the weather preset by object reference.
+	 * @param PresetObject Weather preset object (UDS_Weather_Settings from UDW)
+	 */
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category="MO|Weather")
+	void SetWeatherPreset(UObject* PresetObject);
+
+	/**
+	 * Get the current weather preset object (UDS_Weather_Settings from UDW).
+	 * @return Weather preset object reference
+	 */
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category="MO|Weather")
+	UObject* GetCurrentWeatherPreset() const;
+
+	/**
+	 * Build save data from current weather/time state.
+	 * @return Save data structure
+	 */
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category="MO|Weather")
+	FMOWeatherSaveData BuildWeatherSaveData() const;
+
+	/**
+	 * Apply save data to restore weather/time state.
+	 * @param SaveData Previously saved weather state
+	 */
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category="MO|Weather")
+	void ApplyWeatherSaveData(const FMOWeatherSaveData& SaveData);
 };

@@ -228,9 +228,19 @@ public:
 	UPROPERTY(BlueprintAssignable, Category="MO|Quest|Events")
 	FMOOnObjectiveCompleted OnObjectiveCompleted;
 
+	// =========================================================================
+	// EVENT HANDLERS (Public for component callbacks)
+	// =========================================================================
+
+	/** Called when an item is picked up. Components should call this directly. */
+	void HandleItemPickedUp(FName ItemId, int32 Quantity);
+
+	/** Called when a skill levels up. Components should call this directly. */
+	void HandleSkillLevelUp(FName SkillId, int32 OldLevel, int32 NewLevel);
+
 private:
 	// =========================================================================
-	// EVENT HANDLERS
+	// INTERNAL EVENT HANDLERS
 	// =========================================================================
 
 	/** Called when the world initializes - binds to world subsystems. */
@@ -239,13 +249,6 @@ private:
 	/** Called when a craft completes. */
 	UFUNCTION()
 	void HandleCraftCompleted(FName RecipeId, const FMOCraftResult& Result);
-
-	/** Called when an item is picked up. */
-	void HandleItemPickedUp(FName ItemId, int32 Quantity);
-
-	/** Called when a skill levels up. */
-	UFUNCTION()
-	void HandleSkillLevelUp(FName SkillId, int32 OldLevel, int32 NewLevel);
 
 	// =========================================================================
 	// INTERNAL

@@ -210,6 +210,37 @@ private:
 	/** Timer handle for collision generation delay. */
 	FTimerHandle CollisionDelayTimerHandle;
 
+	/** Timer handle for re-grounding loaded pawns after voxel regeneration. */
+	FTimerHandle RegroundPawnsTimerHandle;
+
+	/** Wait for voxel world to be ready, then re-ground all loaded pawns. */
+	void WaitForVoxelAndRegroundPawns();
+
+	/** Timer callback to check voxel readiness for re-grounding. */
+	void CheckVoxelReadyAndReground();
+
+	/** Actually re-ground all MOCharacters to terrain level. */
+	void RegroundAllPawns();
+
+	/** Whether we need to re-ground pawns after voxel is ready. */
+	bool bPendingRegroundAfterVoxel = false;
+
 	/** Delay in seconds after voxel ready before searching for land (allows collision generation). */
 	static constexpr float CollisionGenerationDelay = 3.0f;
+
+	// ============================================================================
+	// PAWN LANDING DETECTION (for loading screen dismissal)
+	// ============================================================================
+
+	/** Check if possessed pawn has landed on the ground. */
+	void CheckPawnLanded();
+
+	/** Called when pawn has safely landed on ground - dismisses loading screen. */
+	void OnPawnLandedSafely();
+
+	/** Timer handle for pawn landing check. */
+	FTimerHandle PawnLandingTimerHandle;
+
+	/** Track the pawn we're waiting to land. */
+	TWeakObjectPtr<APawn> PendingLandingPawn;
 };
