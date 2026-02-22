@@ -326,13 +326,22 @@ FReply UMOInventorySlot::NativeOnPreviewMouseButtonDown(const FGeometry& InGeome
 {
 	// Preview gets called BEFORE the button sees the event
 	// This is where we initiate drag detection for items
-	if (InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton && bEnableDragDrop && CachedVisualData.bHasItem)
+	if (InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
 	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOInventorySlot] MouseDown: SlotIndex=%d, HasItem=%s, DragEnabled=%s"),
+			SlotIndex, CachedVisualData.bHasItem ? TEXT("true") : TEXT("false"),
+			bEnableDragDrop ? TEXT("true") : TEXT("false"));
+
+		// Always track button press for click detection
 		bButtonPressed = true;
 		PressedMousePosition = InMouseEvent.GetScreenSpacePosition();
 
-		// Tell Unreal to detect drag - when threshold exceeded, NativeOnDragDetected is called
-		return FReply::Handled().DetectDrag(TakeWidget(), EKeys::LeftMouseButton);
+		// Only initiate drag detection if we have an item and drag is enabled
+		if (bEnableDragDrop && CachedVisualData.bHasItem)
+		{
+			// Tell Unreal to detect drag - when threshold exceeded, NativeOnDragDetected is called
+			return FReply::Handled().DetectDrag(TakeWidget(), EKeys::LeftMouseButton);
+		}
 	}
 
 	return Super::NativeOnPreviewMouseButtonDown(InGeometry, InMouseEvent);
@@ -356,6 +365,12 @@ FReply UMOInventorySlot::NativeOnMouseButtonDown(const FGeometry& InGeometry, co
 
 FReply UMOInventorySlot::NativeOnMouseButtonUp(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
 {
+	if (InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOInventorySlot] MouseUp: SlotIndex=%d, bButtonPressed=%s, bDragStarted=%s"),
+			SlotIndex, bButtonPressed ? TEXT("true") : TEXT("false"), bDragStarted ? TEXT("true") : TEXT("false"));
+	}
+
 	// If we initiated drag detection in NativeOnPreviewMouseButtonDown but the user
 	// released before the drag threshold was exceeded, we need to manually fire the click
 	if (InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton && bButtonPressed && !bDragStarted)
@@ -444,6 +459,7 @@ void UMOInventorySlot::NativeOnDragDetected(const FGeometry& InGeometry, const F
 
 void UMOInventorySlot::NativeOnDragCancelled(const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation)
 {
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOInventorySlot] DragCancelled: SlotIndex=%d"), SlotIndex);
 	Super::NativeOnDragCancelled(InDragDropEvent, InOperation);
 
 	// Check if this is our drag operation
