@@ -366,8 +366,13 @@ FReply UMOInventorySlot::NativeOnMouseButtonUp(const FGeometry& InGeometry, cons
 
 		// Check for double-click (same slot clicked within threshold)
 		const double CurrentTime = FPlatformTime::Seconds();
+		const double TimeSinceLastClick = CurrentTime - LastClickTime;
 		const bool bIsDoubleClick = (SlotIndex == LastClickSlotIndex) &&
-			((CurrentTime - LastClickTime) <= DoubleClickThreshold);
+			(TimeSinceLastClick <= DoubleClickThreshold);
+
+		UE_LOG(LogMOFramework, Log, TEXT("[MOInventorySlot] Click detected: SlotIndex=%d, LastSlot=%d, TimeSince=%.3f, Threshold=%.3f, IsDouble=%s"),
+			SlotIndex, LastClickSlotIndex, TimeSinceLastClick, DoubleClickThreshold,
+			bIsDoubleClick ? TEXT("YES") : TEXT("NO"));
 
 		// Update tracking for next click
 		LastClickTime = CurrentTime;
@@ -378,6 +383,8 @@ FReply UMOInventorySlot::NativeOnMouseButtonUp(const FGeometry& InGeometry, cons
 			// Double-click or shift-click triggers quick transfer
 			if (bShiftHeld || bIsDoubleClick)
 			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOInventorySlot] Firing OnSlotShiftClicked (double-click=%s, shift=%s)"),
+					bIsDoubleClick ? TEXT("true") : TEXT("false"), bShiftHeld ? TEXT("true") : TEXT("false"));
 				OnSlotShiftClicked.Broadcast(SlotIndex, CachedVisualData.ItemGuid);
 			}
 			else
