@@ -49,16 +49,17 @@ void UMOInventorySlot::NativeConstruct()
 {
 	Super::NativeConstruct();
 
-	// Keep button visible and use its press/release events for drag detection
+	// NOTE: We intentionally do NOT bind to SlotButton's OnClicked/OnPressed/OnReleased.
+	// All click handling is done via native widget events (NativeOnPreviewMouseButtonDown,
+	// NativeOnMouseButtonUp) which properly support shift-click and double-click detection.
+	// Binding to both UButton events AND native events causes conflicts where bButtonPressed
+	// gets reset by one handler before the other can check it.
 	if (IsValid(SlotButton))
 	{
+		// Clear any existing bindings
 		SlotButton->OnClicked.RemoveAll(this);
 		SlotButton->OnPressed.RemoveAll(this);
 		SlotButton->OnReleased.RemoveAll(this);
-
-		SlotButton->OnClicked.AddDynamic(this, &UMOInventorySlot::HandleSlotButtonClicked);
-		SlotButton->OnPressed.AddDynamic(this, &UMOInventorySlot::HandleSlotButtonPressed);
-		SlotButton->OnReleased.AddDynamic(this, &UMOInventorySlot::HandleSlotButtonReleased);
 	}
 
 	// Default: hide quantity visuals until we have real data.
