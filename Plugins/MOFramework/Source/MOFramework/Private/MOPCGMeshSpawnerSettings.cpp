@@ -2,6 +2,7 @@
 #include "MOFramework.h"
 #include "MOItemDefinitionRow.h"
 #include "MOPCGInteractionSubsystem.h"
+#include "MOWeightedSelector.h"
 
 #include "PCGContext.h"
 #include "PCGPoint.h"
@@ -91,16 +92,12 @@ bool FMOPCGMeshSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 	// Build item data map (loads meshes)
 	TMap<FName, FItemSpawnData> ItemDataMap = BuildItemDataMap(Settings->ItemDataTable, Settings->ItemsToSpawn);
 
-	// Calculate total weight
-	float TotalWeight = 0.0f;
-	for (const FMOPCGItemSpawnEntry& Entry : Settings->ItemsToSpawn)
+	// Calculate total weight using utility (only count items with valid meshes)
+	auto HasValidMesh = [&ItemDataMap](const FMOPCGItemSpawnEntry& Entry) -> bool
 	{
-		// Only count items that have valid meshes
-		if (ItemDataMap.Contains(Entry.ItemId) && ItemDataMap[Entry.ItemId].Mesh)
-		{
-			TotalWeight += FMath::Max(0.0f, Entry.Weight);
-		}
-	}
+		return ItemDataMap.Contains(Entry.ItemId) && ItemDataMap[Entry.ItemId].Mesh != nullptr;
+	};
+	const float TotalWeight = FMOWeightedSelector::CalculateTotalWeightIf(Settings->ItemsToSpawn, HasValidMesh);
 
 	if (TotalWeight <= 0.0f)
 	{
@@ -128,9 +125,9 @@ bool FMOPCGMeshSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 
 		for (const FPCGPoint& Point : InputPoints)
 		{
-			// Select item for this point
-			const FMOPCGItemSpawnEntry* SelectedEntry = SelectWeightedItem(
-				Settings->ItemsToSpawn, TotalWeight, RandomStream);
+			// Select item for this point using weighted selector utility
+			const FMOPCGItemSpawnEntry* SelectedEntry = FMOWeightedSelector::SelectWeightedIf(
+				Settings->ItemsToSpawn, TotalWeight, RandomStream, HasValidMesh);
 
 			if (!SelectedEntry)
 			{
@@ -221,27 +218,6 @@ bool FMOPCGMeshSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 		InstancesAdded, ComponentsCreated, TotalPointsProcessed, TotalPointsDiscarded);
 
 	return true;
-}
-
-const FMOPCGItemSpawnEntry* FMOPCGMeshSpawnerElement::SelectWeightedItem(
-	const TArray<FMOPCGItemSpawnEntry>& Items,
-	float TotalWeight,
-	FRandomStream& RandomStream) const
-{
-	float RandomValue = RandomStream.FRand() * TotalWeight;
-	float AccumulatedWeight = 0.0f;
-
-	for (const FMOPCGItemSpawnEntry& Entry : Items)
-	{
-		AccumulatedWeight += FMath::Max(0.0f, Entry.Weight);
-		if (RandomValue <= AccumulatedWeight)
-		{
-			return &Entry;
-		}
-	}
-
-	// Fallback to last item
-	return Items.Num() > 0 ? &Items.Last() : nullptr;
 }
 
 TMap<FName, FMOPCGMeshSpawnerElement::FItemSpawnData> FMOPCGMeshSpawnerElement::BuildItemDataMap(

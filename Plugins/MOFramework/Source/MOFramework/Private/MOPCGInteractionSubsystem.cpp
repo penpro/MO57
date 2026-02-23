@@ -3,6 +3,7 @@
 #include "MOItemDatabaseSettings.h"
 #include "MOInventoryComponent.h"
 #include "MONotificationComponent.h"
+#include "MOHISMHarvestHelper.h"
 #include "Components/HierarchicalInstancedStaticMeshComponent.h"
 #include "Components/InstancedStaticMeshComponent.h"
 #include "GameFramework/Pawn.h"
@@ -199,9 +200,13 @@ bool UMOPCGInteractionSubsystem::HarvestHISMInstance(UHierarchicalInstancedStati
 		return false;
 	}
 
-	// Get instance transform for logging/effects
+	// Get instance transform using helper
 	FTransform InstanceTransform;
-	HISMComponent->GetInstanceTransform(InstanceIndex, InstanceTransform, true);
+	if (!FMOHISMHarvestHelper::GetInstanceTransform(HISMComponent, InstanceIndex, InstanceTransform))
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOPCGInteraction] HarvestHISMInstance: Failed to get instance transform"));
+		return false;
+	}
 
 	// CRITICAL: Check if inventory has space BEFORE removing the instance
 	// Otherwise we destroy world items but can't pick them up
@@ -224,19 +229,11 @@ bool UMOPCGInteractionSubsystem::HarvestHISMInstance(UHierarchicalInstancedStati
 		return false;
 	}
 
-	// Check if we should keep the instance (for trees, rocks, etc. that give resources without being destroyed)
-	const bool bKeepOnHarvest = HISMComponent->ComponentHasTag(TEXT("KeepOnHarvest")) ||
-		(HISMComponent->GetOwner() && HISMComponent->GetOwner()->ActorHasTag(TEXT("KeepOnHarvest")));
-
-	if (!bKeepOnHarvest)
+	// Remove instance using helper (handles KeepOnHarvest check automatically)
+	if (!FMOHISMHarvestHelper::RemoveInstance(HISMComponent, InstanceIndex, true))
 	{
-		// Remove the instance from HISM
-		const bool bRemoved = HISMComponent->RemoveInstance(InstanceIndex);
-		if (!bRemoved)
-		{
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOPCGInteraction] HarvestHISMInstance: Failed to remove instance %d"), InstanceIndex);
-			return false;
-		}
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOPCGInteraction] HarvestHISMInstance: Failed to remove instance %d"), InstanceIndex);
+		return false;
 	}
 
 	// Add item to inventory (we already verified space exists)
@@ -296,9 +293,13 @@ bool UMOPCGInteractionSubsystem::HarvestISMInstance(UInstancedStaticMeshComponen
 		return false;
 	}
 
-	// Get instance transform for logging/effects
+	// Get instance transform using helper
 	FTransform InstanceTransform;
-	ISMComponent->GetInstanceTransform(InstanceIndex, InstanceTransform, true);
+	if (!FMOHISMHarvestHelper::GetInstanceTransform(ISMComponent, InstanceIndex, InstanceTransform))
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOPCGInteraction] HarvestISMInstance: Failed to get instance transform"));
+		return false;
+	}
 
 	// CRITICAL: Check if inventory has space BEFORE removing the instance
 	// Otherwise we destroy world items but can't pick them up
@@ -321,19 +322,11 @@ bool UMOPCGInteractionSubsystem::HarvestISMInstance(UInstancedStaticMeshComponen
 		return false;
 	}
 
-	// Check if we should keep the instance (for trees, rocks, etc. that give resources without being destroyed)
-	const bool bKeepOnHarvest = ISMComponent->ComponentHasTag(TEXT("KeepOnHarvest")) ||
-		(ISMComponent->GetOwner() && ISMComponent->GetOwner()->ActorHasTag(TEXT("KeepOnHarvest")));
-
-	if (!bKeepOnHarvest)
+	// Remove instance using helper (handles KeepOnHarvest check automatically)
+	if (!FMOHISMHarvestHelper::RemoveInstance(ISMComponent, InstanceIndex, true))
 	{
-		// Remove the instance from ISM
-		const bool bRemoved = ISMComponent->RemoveInstance(InstanceIndex);
-		if (!bRemoved)
-		{
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOPCGInteraction] HarvestISMInstance: Failed to remove instance %d"), InstanceIndex);
-			return false;
-		}
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOPCGInteraction] HarvestISMInstance: Failed to remove instance %d"), InstanceIndex);
+		return false;
 	}
 
 	// Add item to inventory (we already verified space exists)

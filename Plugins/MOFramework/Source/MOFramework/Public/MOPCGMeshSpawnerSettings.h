@@ -121,12 +121,6 @@ private:
 		TArray<FTransform> Transforms;
 	};
 
-	/** Select an item based on weighted random. */
-	const FMOPCGItemSpawnEntry* SelectWeightedItem(
-		const TArray<FMOPCGItemSpawnEntry>& Items,
-		float TotalWeight,
-		FRandomStream& RandomStream) const;
-
 	/** Build item spawn data map from datatable. */
 	TMap<FName, FItemSpawnData> BuildItemDataMap(
 		const UDataTable* DataTable,

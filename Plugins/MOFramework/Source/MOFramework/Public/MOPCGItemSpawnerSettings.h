@@ -9,6 +9,7 @@ class UDataTable;
 
 /**
  * Entry defining an item to spawn with PCG.
+ * Implements GetWeight() for use with FMOWeightedSelector.
  */
 USTRUCT(BlueprintType)
 struct MOFRAMEWORK_API FMOPCGItemSpawnEntry
@@ -30,6 +31,9 @@ struct MOFRAMEWORK_API FMOPCGItemSpawnEntry
 	/** Maximum quantity per harvest. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|PCG", meta=(ClampMin="1"))
 	int32 MaxQuantity = 1;
+
+	/** Required by FMOWeightedSelector template. */
+	float GetWeight() const { return Weight; }
 };
 
 /**
@@ -101,12 +105,6 @@ protected:
 	virtual bool ExecuteInternal(FPCGContext* Context) const override;
 
 private:
-	/** Select an item based on weighted random. */
-	const FMOPCGItemSpawnEntry* SelectWeightedItem(
-		const TArray<FMOPCGItemSpawnEntry>& Items,
-		float TotalWeight,
-		FRandomStream& RandomStream) const;
-
 	/** Get the static mesh path for an item from the datatable (no sync load). */
 	FSoftObjectPath GetMeshPathForItem(
 		const UDataTable* DataTable,

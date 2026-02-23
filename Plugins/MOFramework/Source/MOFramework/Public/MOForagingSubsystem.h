@@ -186,16 +186,6 @@ public:
 
 private:
 	/**
-	 * Spawn a world item at the given location.
-	 * @param ItemId - Item definition ID
-	 * @param Quantity - Item quantity
-	 * @param Location - Spawn location
-	 * @param Rotation - Spawn rotation
-	 * @return Spawned world item actor, or nullptr on failure
-	 */
-	AMOWorldItem* SpawnWorldItem(FName ItemId, int32 Quantity, FVector Location, FRotator Rotation);
-
-	/**
 	 * Award foraging XP to a pawn.
 	 * @param Pawn - Pawn to award XP to
 	 * @param Amount - XP amount to award

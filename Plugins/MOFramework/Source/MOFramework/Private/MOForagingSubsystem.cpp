@@ -3,6 +3,8 @@
 #include "MOWorldItem.h"
 #include "MOItemComponent.h"
 #include "MOSkillsComponent.h"
+#include "MOWorldItemFactory.h"
+#include "MOHISMHarvestHelper.h"
 #include "Components/HierarchicalInstancedStaticMeshComponent.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
@@ -188,11 +190,19 @@ TArray<AMOWorldItem*> UMOForagingSubsystem::RevealHISMInstancesInRadius(FVector 
 		return SpawnedItems;
 	}
 
+	// Get the world item factory
+	UWorld* World = GetWorld();
+	UMOWorldItemFactory* ItemFactory = World ? World->GetSubsystem<UMOWorldItemFactory>() : nullptr;
+	if (!ItemFactory)
+	{
+		UE_LOG(LogMOForaging, Warning, TEXT("[MOForagingSubsystem] No WorldItemFactory subsystem available"));
+		return SpawnedItems;
+	}
+
 	// Cap the number of items
 	const int32 ItemsToReveal = FMath::Min(Instances.Num(), MaxItemsPerSearch);
 
-	// Group instances by HISM component for efficient removal
-	// Process in reverse index order per component to avoid index shifting
+	// Group instances by HISM component for efficient batch removal
 	TMap<UHierarchicalInstancedStaticMeshComponent*, TArray<int32>> ComponentToIndices;
 
 	for (int32 i = 0; i < ItemsToReveal; ++i)
@@ -209,12 +219,11 @@ TArray<AMOWorldItem*> UMOForagingSubsystem::RevealHISMInstancesInRadius(FVector 
 			ComponentToIndices.FindOrAdd(HISM).Add(Data.InstanceIndex);
 		}
 
-		// Spawn the world item
-		AMOWorldItem* WorldItem = SpawnWorldItem(
+		// Spawn the world item using factory
+		AMOWorldItem* WorldItem = ItemFactory->SpawnWorldItemAtTransform(
 			Data.ItemId,
-			1, // Default quantity, could be randomized
-			Data.InstanceTransform.GetLocation(),
-			Data.InstanceTransform.GetRotation().Rotator()
+			1, // Default quantity
+			Data.InstanceTransform
 		);
 
 		if (WorldItem)
@@ -223,28 +232,10 @@ TArray<AMOWorldItem*> UMOForagingSubsystem::RevealHISMInstancesInRadius(FVector 
 		}
 	}
 
-	// Remove instances from HISM components (in reverse order to avoid index shifting)
-	for (auto& Pair : ComponentToIndices)
-	{
-		UHierarchicalInstancedStaticMeshComponent* HISM = Pair.Key;
-		TArray<int32>& Indices = Pair.Value;
-
-		if (!HISM)
-		{
-			continue;
-		}
-
-		// Sort indices in descending order
-		Indices.Sort([](int32 A, int32 B) { return A > B; });
-
-		// Remove each instance
-		for (int32 Index : Indices)
-		{
-			HISM->RemoveInstance(Index);
-		}
-
-		UE_LOG(LogMOForaging, Verbose, TEXT("[MOForagingSubsystem] Removed %d instances from HISM"), Indices.Num());
-	}
+	// Remove instances using the HISM harvest helper (handles reverse-order automatically)
+	FMOHISMRemovalResult RemovalResult = FMOHISMHarvestHelper::RemoveInstancesBatch(ComponentToIndices, false);
+	UE_LOG(LogMOForaging, Verbose, TEXT("[MOForagingSubsystem] HISM removal: %d removed, %d failed"),
+		RemovalResult.RemovedCount, RemovalResult.FailedCount);
 
 	// Award XP
 	if (ForagingPawn && SpawnedItems.Num() > 0)
@@ -272,6 +263,15 @@ TArray<AMOWorldItem*> UMOForagingSubsystem::DigForSupplies(FVector Location, int
 		return SpawnedItems;
 	}
 
+	// Get the world item factory
+	UWorld* World = GetWorld();
+	UMOWorldItemFactory* ItemFactory = World ? World->GetSubsystem<UMOWorldItemFactory>() : nullptr;
+	if (!ItemFactory)
+	{
+		UE_LOG(LogMOForaging, Warning, TEXT("[MOForagingSubsystem] No WorldItemFactory subsystem available"));
+		return SpawnedItems;
+	}
+
 	// Roll each drop entry
 	for (const FMODigDropEntry& Entry : DigDropTable)
 	{
@@ -296,8 +296,8 @@ TArray<AMOWorldItem*> UMOForagingSubsystem::DigForSupplies(FVector Location, int
 		const FVector SpawnLocation = Location + FVector(RandomOffset.X, RandomOffset.Y, 10.0f);
 		const FRotator SpawnRotation = FRotator(0.0f, FMath::RandRange(0.0f, 360.0f), 0.0f);
 
-		// Spawn the item
-		AMOWorldItem* WorldItem = SpawnWorldItem(Entry.ItemId, Quantity, SpawnLocation, SpawnRotation);
+		// Spawn the item using factory
+		AMOWorldItem* WorldItem = ItemFactory->SpawnWorldItemSimple(Entry.ItemId, Quantity, SpawnLocation, SpawnRotation);
 		if (WorldItem)
 		{
 			SpawnedItems.Add(WorldItem);
@@ -346,38 +346,6 @@ int32 UMOForagingSubsystem::GetForagingLevel(APawn* Pawn) const
 // ============================================================================
 // PRIVATE HELPERS
 // ============================================================================
-
-AMOWorldItem* UMOForagingSubsystem::SpawnWorldItem(FName ItemId, int32 Quantity, FVector Location, FRotator Rotation)
-{
-	UWorld* World = GetWorld();
-	if (!World)
-	{
-		return nullptr;
-	}
-
-	FActorSpawnParameters SpawnParams;
-	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
-
-	AMOWorldItem* WorldItem = World->SpawnActor<AMOWorldItem>(AMOWorldItem::StaticClass(), Location, Rotation, SpawnParams);
-	if (!WorldItem)
-	{
-		UE_LOG(LogMOForaging, Warning, TEXT("[MOForagingSubsystem] Failed to spawn world item for %s"), *ItemId.ToString());
-		return nullptr;
-	}
-
-	// Set item data
-	UMOItemComponent* ItemComp = WorldItem->GetItemComponent();
-	if (ItemComp)
-	{
-		ItemComp->ItemDefinitionId = ItemId;
-		ItemComp->Quantity = Quantity;
-	}
-
-	// Apply visuals from item definition
-	WorldItem->ApplyItemDefinitionToWorldMesh();
-
-	return WorldItem;
-}
 
 void UMOForagingSubsystem::AwardForagingXP(APawn* Pawn, float Amount)
 {

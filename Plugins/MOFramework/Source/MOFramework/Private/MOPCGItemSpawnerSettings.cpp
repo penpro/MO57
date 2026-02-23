@@ -1,6 +1,7 @@
 #include "MOPCGItemSpawnerSettings.h"
 #include "MOFramework.h"
 #include "MOItemDefinitionRow.h"
+#include "MOWeightedSelector.h"
 
 #include "PCGContext.h"
 #include "PCGPoint.h"
@@ -90,13 +91,8 @@ bool FMOPCGItemSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 		return true;
 	}
 
-	// Calculate total weight
-	float TotalWeight = 0.0f;
-	for (const FMOPCGItemSpawnEntry& Entry : Settings->ItemsToSpawn)
-	{
-		TotalWeight += FMath::Max(0.0f, Entry.Weight);
-	}
-
+	// Calculate total weight using utility
+	const float TotalWeight = FMOWeightedSelector::CalculateTotalWeight(Settings->ItemsToSpawn);
 	if (TotalWeight <= 0.0f)
 	{
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOPCGItemSpawner] Total weight is zero or negative"));
@@ -150,8 +146,8 @@ bool FMOPCGItemSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 
 		for (const FPCGPoint& InputPoint : InputPoints)
 		{
-			// Select item for this point
-			const FMOPCGItemSpawnEntry* SelectedItem = SelectWeightedItem(
+			// Select item for this point using weighted selector utility
+			const FMOPCGItemSpawnEntry* SelectedItem = FMOWeightedSelector::SelectWeighted(
 				Settings->ItemsToSpawn, TotalWeight, RandomStream);
 
 			if (!SelectedItem)
@@ -195,27 +191,6 @@ bool FMOPCGItemSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 	}
 
 	return true;
-}
-
-const FMOPCGItemSpawnEntry* FMOPCGItemSpawnerElement::SelectWeightedItem(
-	const TArray<FMOPCGItemSpawnEntry>& Items,
-	float TotalWeight,
-	FRandomStream& RandomStream) const
-{
-	float RandomValue = RandomStream.FRand() * TotalWeight;
-	float AccumulatedWeight = 0.0f;
-
-	for (const FMOPCGItemSpawnEntry& Entry : Items)
-	{
-		AccumulatedWeight += FMath::Max(0.0f, Entry.Weight);
-		if (RandomValue <= AccumulatedWeight)
-		{
-			return &Entry;
-		}
-	}
-
-	// Fallback to last item
-	return Items.Num() > 0 ? &Items.Last() : nullptr;
 }
 
 FSoftObjectPath FMOPCGItemSpawnerElement::GetMeshPathForItem(
