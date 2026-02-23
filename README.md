@@ -103,6 +103,14 @@ Dehydration → Vitals (+HR, -BP, +Temp) → Performance penalties
 - **World dropping** - items can be dropped into the world
 - **GUID-based persistence** for stable cross-session references
 
+### Ground Foraging System
+
+- **Search Nearby**: Right-click ground to reveal PCG-spawned items within skill-scaled radius
+- **Dig for Supplies**: Chance-based spawning of roots, stones, flint based on Foraging skill
+- Revealed HISM instances convert to pickable AMOWorldItem actors
+- Foraging radius scales: Base 300 + (5 * SkillLevel), max 800 units
+- XP rewards: 2 XP per revealed item, 5 XP per dug item
+
 ---
 
 ## Architecture Overview
@@ -117,6 +125,8 @@ Dehydration → Vitals (+HR, -BP, +Temp) → Performance penalties
 | `UMOCraftingSubsystem` | World | Recipe validation, crafting operations |
 | `UMOPossessionSubsystem` | World | Pawn possession management |
 | `UMOMedicalSubsystem` | GameInstance | DataTable lookups for medical definitions |
+| `UMOForagingSubsystem` | World | HISM query, item reveal, dig mechanics |
+| `UMOPCGInteractionSubsystem` | World | Mesh-to-item lookup, tag-based harvesting |
 
 ### Component Architecture
 
@@ -218,6 +228,18 @@ Resting ──(duration)──► Active ◄── Fleeing ◄── (threat det
 | `FMOBodyPartDefinitionRow` | DT_BodyPartDefinitions | ~55 body parts |
 | `FMOMedicalTreatmentRow` | DT_MedicalTreatments | Wound treatments |
 | `FMOCreatureDefinitionRow` | DT_CreatureDefinitions | Creature stats, perception, loot |
+
+### PCG Nodes
+
+Custom PCG nodes for world generation:
+
+| Node | Purpose |
+|------|---------|
+| `MO Mesh Spawner` | All-in-one: selects items, spawns HISM, tags for foraging discovery |
+| `MO Item Spawner` | Assigns item metadata to points (use with Static Mesh Spawner) |
+| `MO HISM Tagger` | Tags existing HISM components for foraging discovery |
+
+**MO Mesh Spawner** is recommended for ground items - it combines item selection, mesh spawning, and tagging in one node. Items spawned this way are automatically discoverable by the Search Nearby foraging action.
 
 ### Replication Patterns
 
@@ -610,6 +632,18 @@ The MOFramework has solid core systems but has accumulated technical debt in sev
 ### Recent Changes
 
 *Last updated: 2026-02-22*
+
+#### Ground Foraging System (NEW)
+- [x] Right-click ground context menu with Search Nearby / Dig for Supplies
+- [x] `UMOForagingSubsystem` for HISM query and dig mechanics
+- [x] `MO Mesh Spawner` PCG node - all-in-one spawner with tagging
+- [x] Tag-based item discovery via `MOPCGInteractionSubsystem`
+- [x] Skill-scaled foraging radius and XP rewards
+
+#### Character Customization (NEW)
+- [x] Jiggle physics for character models
+- [x] Animation-based character customization stream started
+- [x] Morph target slider support
 
 #### World Item Interactions (NEW)
 - [x] Right-click context menu for nearby items panel

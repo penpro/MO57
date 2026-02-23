@@ -3,6 +3,8 @@
 #include "MOInventoryMenu.h"
 #include "MOUnifiedInventoryMenu.h"
 #include "MOItemContextMenu.h"
+#include "MOGroundContextMenu.h"
+#include "MOForagingSubsystem.h"
 #include "MOInventoryComponent.h"
 #include "MOWorldItem.h"
 #include "MOItemComponent.h"
@@ -50,6 +52,15 @@ void UMOInventoryUIController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 		CtxMenu->RemoveFromParent();
 	}
 	ItemContextMenuWidget.Reset();
+
+	if (UMOGroundContextMenu* GroundMenu = GroundContextMenuWidget.Get())
+	{
+		GroundMenu->OnCloseRequested.RemoveDynamic(this, &UMOInventoryUIController::HandleGroundContextMenuClosed);
+		GroundMenu->OnSearchComplete.RemoveDynamic(this, &UMOInventoryUIController::HandleForagingSearchComplete);
+		GroundMenu->OnDigComplete.RemoveDynamic(this, &UMOInventoryUIController::HandleForagingDigComplete);
+		GroundMenu->RemoveFromParent();
+	}
+	GroundContextMenuWidget.Reset();
 
 	CurrentContainerActor.Reset();
 
@@ -1145,6 +1156,213 @@ void UMOInventoryUIController::DropItemToWorldByGuid(UMOInventoryComponent* Inve
 		if (AMOWorldItem* WorldItem = Cast<AMOWorldItem>(DroppedActor))
 		{
 			WorldItem->EnableDropPhysics();
+		}
+	}
+}
+
+// =============================================================================
+// Ground Context Menu (Foraging)
+// =============================================================================
+
+void UMOInventoryUIController::ShowGroundContextMenu(FVector WorldLocation, FVector2D ScreenPosition)
+{
+	if (!IsLocalOwningPlayerController())
+	{
+		return;
+	}
+
+	APlayerController* PlayerController = ResolveOwningPlayerController();
+	if (!IsValid(PlayerController))
+	{
+		return;
+	}
+
+	if (!GroundContextMenuClass)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventoryUI] GroundContextMenuClass not set on controller."));
+		return;
+	}
+
+	// Close existing ground context menu if any
+	CloseGroundContextMenu();
+
+	// Also close item context menu if open
+	CloseItemContextMenu();
+
+	UMOGroundContextMenu* MenuWidget = CreateWidget<UMOGroundContextMenu>(PlayerController, GroundContextMenuClass);
+	if (!IsValid(MenuWidget))
+	{
+		return;
+	}
+
+	GroundContextMenuWidget = MenuWidget;
+
+	// Bind delegates
+	MenuWidget->OnCloseRequested.AddDynamic(this, &UMOInventoryUIController::HandleGroundContextMenuClosed);
+	MenuWidget->OnSearchComplete.AddDynamic(this, &UMOInventoryUIController::HandleForagingSearchComplete);
+	MenuWidget->OnDigComplete.AddDynamic(this, &UMOInventoryUIController::HandleForagingDigComplete);
+
+	// Initialize with location and pawn for skill lookup
+	APawn* ForagingPawn = PlayerController->GetPawn();
+	MenuWidget->InitializeForLocation(WorldLocation, ForagingPawn);
+
+	// Switch to UI mode FIRST so GetMousePosition works correctly
+	ApplyInputModeForMenuOpen(MenuWidget);
+
+	// Add to viewport
+	MenuWidget->AddToViewport(GroundContextMenuZOrder);
+
+	// Position at screen center (where reticle is)
+	MenuWidget->SetMenuPosition(ScreenPosition);
+
+	// Warp mouse cursor to the top of the menu so it doesn't auto-close
+	// The menu is positioned at screen center with offsets, so calculate that position
+	int32 ViewportX, ViewportY;
+	PlayerController->GetViewportSize(ViewportX, ViewportY);
+	const float CenterX = ViewportX / 2.0f;
+	const float CenterY = ViewportY / 2.0f;
+	// Position cursor slightly inside the menu (at top center of menu)
+	const float CursorX = CenterX;
+	const float CursorY = CenterY - 10.0f;  // Slightly above center, inside menu
+	PlayerController->SetMouseLocation(static_cast<int32>(CursorX), static_cast<int32>(CursorY));
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOInventoryUI] Showing ground context menu at world location %s, cursor at (%.0f, %.0f)"),
+		*WorldLocation.ToString(), CursorX, CursorY);
+}
+
+void UMOInventoryUIController::CloseGroundContextMenu()
+{
+	UMOGroundContextMenu* MenuWidget = GroundContextMenuWidget.Get();
+	if (IsValid(MenuWidget))
+	{
+		if (MenuWidget->IsInViewport())
+		{
+			MenuWidget->RemoveFromParent();
+		}
+	}
+	GroundContextMenuWidget.Reset();
+
+	// Restore input mode if no other menus are open
+	UMOUIManagerComponent* UIManager = GetUIManager();
+	if (UIManager && !UIManager->IsAnyMenuOpen())
+	{
+		APlayerController* PlayerController = ResolveOwningPlayerController();
+		if (IsValid(PlayerController) && PlayerController->IsLocalController())
+		{
+			ApplyInputModeForMenuClosed();
+		}
+	}
+}
+
+bool UMOInventoryUIController::IsGroundContextMenuOpen() const
+{
+	const UMOGroundContextMenu* MenuWidget = GroundContextMenuWidget.Get();
+	return IsValid(MenuWidget) && MenuWidget->IsInViewport();
+}
+
+void UMOInventoryUIController::HandleGroundContextMenuClosed()
+{
+	// Remove from viewport if still there
+	UMOGroundContextMenu* MenuWidget = GroundContextMenuWidget.Get();
+	if (IsValid(MenuWidget) && MenuWidget->IsInViewport())
+	{
+		MenuWidget->RemoveFromParent();
+	}
+
+	GroundContextMenuWidget.Reset();
+
+	// Restore input mode if no other menus are open
+	UMOUIManagerComponent* UIManager = GetUIManager();
+	if (UIManager && !UIManager->IsAnyMenuOpen())
+	{
+		APlayerController* PlayerController = ResolveOwningPlayerController();
+		if (IsValid(PlayerController) && PlayerController->IsLocalController())
+		{
+			ApplyInputModeForMenuClosed();
+		}
+	}
+}
+
+void UMOInventoryUIController::HandleForagingSearchComplete(const TArray<AMOWorldItem*>& RevealedItems)
+{
+	// Close the ground context menu
+	CloseGroundContextMenu();
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOInventoryUI] Foraging search complete - revealed %d items"), RevealedItems.Num());
+
+	// Open unified inventory menu to show nearby items
+	if (RevealedItems.Num() > 0)
+	{
+		// Open inventory (will auto-detect nearby items via QueryNearbyWorldItems)
+		OpenInventoryMenu();
+
+		// Show the nearby tab
+		UMOUnifiedInventoryMenu* MenuWidget = UnifiedInventoryWidget.Get();
+		if (IsValid(MenuWidget))
+		{
+			MenuWidget->ShowNearbyTab();
+		}
+
+		// Show notification
+		UMOUIManagerComponent* UIManager = GetUIManager();
+		if (UIManager)
+		{
+			FText Message = FText::Format(
+				NSLOCTEXT("MO", "ForagingFoundFormat", "Found {0} item(s) nearby"),
+				FText::AsNumber(RevealedItems.Num())
+			);
+			UIManager->ShowNotification(Message, 2.0f);
+		}
+	}
+	else
+	{
+		// Show "nothing found" notification
+		UMOUIManagerComponent* UIManager = GetUIManager();
+		if (UIManager)
+		{
+			UIManager->ShowNotification(NSLOCTEXT("MO", "ForagingNothingFound", "Nothing found nearby"), 2.0f);
+		}
+	}
+}
+
+void UMOInventoryUIController::HandleForagingDigComplete(const TArray<AMOWorldItem*>& DugItems)
+{
+	// Close the ground context menu
+	CloseGroundContextMenu();
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOInventoryUI] Foraging dig complete - found %d items"), DugItems.Num());
+
+	// Open unified inventory menu to show nearby items
+	if (DugItems.Num() > 0)
+	{
+		// Open inventory (will auto-detect nearby items via QueryNearbyWorldItems)
+		OpenInventoryMenu();
+
+		// Show the nearby tab
+		UMOUnifiedInventoryMenu* MenuWidget = UnifiedInventoryWidget.Get();
+		if (IsValid(MenuWidget))
+		{
+			MenuWidget->ShowNearbyTab();
+		}
+
+		// Show notification
+		UMOUIManagerComponent* UIManager = GetUIManager();
+		if (UIManager)
+		{
+			FText Message = FText::Format(
+				NSLOCTEXT("MO", "DiggingFoundFormat", "Dug up {0} item(s)"),
+				FText::AsNumber(DugItems.Num())
+			);
+			UIManager->ShowNotification(Message, 2.0f);
+		}
+	}
+	else
+	{
+		// Show "nothing found" notification
+		UMOUIManagerComponent* UIManager = GetUIManager();
+		if (UIManager)
+		{
+			UIManager->ShowNotification(NSLOCTEXT("MO", "DiggingNothingFound", "Nothing found in the ground"), 2.0f);
 		}
 	}
 }

@@ -4,6 +4,64 @@ This file tracks changes, bug fixes, and new features. Updated incrementally to 
 
 ---
 
+## [2026-02-22] Ground Foraging System, Character Customization & Physics
+
+### New Features
+
+**Ground Foraging System**
+- **Right-click on ground** to open foraging context menu (when no interactable target)
+- **Search Nearby**: Reveals PCG-spawned HISM items within skill-scaled radius, converts to pickable world items
+- **Dig for Supplies**: Chance-based spawning of roots, stones, flint based on Foraging skill level
+- Foraging radius scales with skill: Base 300 + (5 * SkillLevel), max 800 units
+- XP awarded per item found (2 XP per revealed item, 5 XP per dug item)
+- Menu auto-closes when mouse leaves with 0.15s grace period
+- Cursor warps to menu center to prevent immediate auto-close
+
+**MO PCG Mesh Spawner Node (All-in-One)**
+- New `MO Mesh Spawner` PCG node combines item selection, mesh spawning, and tagging
+- Replaces separate MO Item Spawner + Static Mesh Spawner + MO HISM Tagger workflow
+- Automatically tags HISM components with `MOItem_<ItemId>` for foraging system discovery
+- Registers tag mappings with `MOPCGInteractionSubsystem` at runtime
+- Configurable collision profile, shadow casting, and instances per cluster
+
+**Character Customization Stream**
+- Started animation-based character customization system
+- Morph target slider support for character appearance
+
+**Jiggle Physics**
+- Added jiggle physics to character models for realistic movement
+
+### Technical Notes
+
+**Foraging Architecture:**
+```
+Player RMB on ground → MOPlayerController::HandleSecondaryAction()
+    ↓ (no interactable, ground hit detected)
+MOInventoryUIController::ShowGroundContextMenu()
+    ↓
+UMOGroundContextMenu displayed at screen center
+    ↓ (player clicks action)
+UMOForagingSubsystem::RevealHISMInstancesInRadius() or DigForSupplies()
+    ↓ (spawns AMOWorldItem actors)
+Nearby panel auto-refreshes with found items
+```
+
+**New Files:**
+- `MOGroundContextMenu.h/cpp` - Context menu widget
+- `MOForagingSubsystem.h/cpp` - World subsystem for HISM query and dig mechanics
+- `MOPCGMeshSpawnerSettings.h/cpp` - All-in-one PCG spawner with tagging
+- `MOPCGHISMTaggerSettings.h/cpp` - Standalone HISM tagger (for existing PCG setups)
+
+**Blueprint Setup Required:**
+1. Create `WBP_GroundContextMenu` (parent: `UMOGroundContextMenu`)
+   - Add `ButtonContainer` (VerticalBox or PanelWidget)
+   - Add `SearchNearbyButton` (UMOCommonButton)
+   - Add `DigForSuppliesButton` (UMOCommonButton)
+   - Optional: `RadiusText`, `SkillLevelText` (TextBlock)
+2. Set `GroundContextMenuClass` on `MOInventoryUIController` component
+
+---
+
 ## [2026-02-22] World Item Context Menu & Loading Screen UX
 
 ### New Features

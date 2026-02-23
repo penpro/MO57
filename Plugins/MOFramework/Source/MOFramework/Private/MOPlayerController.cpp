@@ -827,7 +827,25 @@ void AMOPlayerController::HandleSecondaryAction(const FInputActionValue& Value)
 			}
 		}
 
-		// No interactable target - fall back to regular secondary action (block/aim)
+		// No interactable target - check for ground hit for foraging menu
+		FHitResult GroundHit;
+		if (GetHitResultUnderCursor(ECC_WorldStatic, true, GroundHit))
+		{
+			if (GroundHit.bBlockingHit)
+			{
+				FVector2D ScreenPosition;
+				if (ProjectWorldLocationToScreen(GroundHit.Location, ScreenPosition))
+				{
+					if (InventoryUIController)
+					{
+						InventoryUIController->ShowGroundContextMenu(GroundHit.Location, ScreenPosition);
+						return;
+					}
+				}
+			}
+		}
+
+		// No ground hit or no UI controller - fall back to regular secondary action (block/aim)
 		IMOControllableInterface::Execute_RequestSecondaryAction(ControllablePawn);
 	}
 }

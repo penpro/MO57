@@ -91,7 +91,7 @@ FName UMOPCGInteractionSubsystem::GetItemIdForMesh(UStaticMesh* Mesh) const
 		return *FoundItem;
 	}
 
-	// Also try by path in case the mesh was loaded differently
+	// Try by pointer comparison (if datatable mesh is loaded)
 	for (const auto& Pair : MeshToItemCache)
 	{
 		if (Pair.Key.Get() == Mesh)
@@ -102,13 +102,35 @@ FName UMOPCGInteractionSubsystem::GetItemIdForMesh(UStaticMesh* Mesh) const
 		}
 	}
 
-	// Log cache contents for debugging
-	UE_LOG(LogMOFramework, Warning, TEXT("[MOPCGInteraction] No item mapping for mesh '%s'. Cache has %d entries:"),
-		*MeshPath, MeshToItemCache.Num());
+	// Try by path comparison (handles soft reference format differences)
+	// Get the mesh's full path for string comparison
+	const FSoftObjectPath MeshSoftPath(Mesh);
+	const FString MeshAssetPath = MeshSoftPath.GetAssetPathString();
+
 	for (const auto& Pair : MeshToItemCache)
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOPCGInteraction]   - '%s' -> '%s'"),
-			*Pair.Key.GetLongPackageName(), *Pair.Value.ToString());
+		const FString CachedAssetPath = Pair.Key.ToSoftObjectPath().GetAssetPathString();
+		if (MeshAssetPath == CachedAssetPath)
+		{
+			UE_LOG(LogMOFramework, Log, TEXT("[MOPCGInteraction] Found mesh '%s' -> item '%s' (by path string)"),
+				*MeshPath, *Pair.Value.ToString());
+			return Pair.Value;
+		}
+	}
+
+	// Log cache contents for debugging (only on first miss to reduce spam)
+	static TSet<FString> LoggedMisses;
+	if (!LoggedMisses.Contains(MeshPath))
+	{
+		LoggedMisses.Add(MeshPath);
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOPCGInteraction] No item mapping for mesh '%s' (asset: %s). Cache has %d entries:"),
+			*MeshPath, *MeshAssetPath, MeshToItemCache.Num());
+		for (const auto& Pair : MeshToItemCache)
+		{
+			const FString CachedPath = Pair.Key.ToSoftObjectPath().GetAssetPathString();
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOPCGInteraction]   - '%s' -> '%s'"),
+				*CachedPath, *Pair.Value.ToString());
+		}
 	}
 
 	return NAME_None;
@@ -368,46 +390,20 @@ FName UMOPCGInteractionSubsystem::GetItemIdForComponentTags(UActorComponent* Com
 		return NAME_None;
 	}
 
-	// Debug: Log all component tags and our mappings
-	UE_LOG(LogMOFramework, Log, TEXT("[MOPCGInteraction] Checking tags on component '%s'. ComponentTags count: %d, TagToItemMap count: %d"),
-		*GetNameSafe(Component), Component->ComponentTags.Num(), TagToItemMap.Num());
-
-	for (const FName& Tag : Component->ComponentTags)
-	{
-		UE_LOG(LogMOFramework, Log, TEXT("[MOPCGInteraction]   Component has tag: '%s'"), *Tag.ToString());
-	}
-
-	// Also check owner actor tags (PCG might put tags there)
-	AActor* Owner = Component->GetOwner();
-	if (Owner)
-	{
-		UE_LOG(LogMOFramework, Log, TEXT("[MOPCGInteraction]   Owner actor '%s' has %d tags"),
-			*GetNameSafe(Owner), Owner->Tags.Num());
-		for (const FName& Tag : Owner->Tags)
-		{
-			UE_LOG(LogMOFramework, Log, TEXT("[MOPCGInteraction]   Actor has tag: '%s'"), *Tag.ToString());
-		}
-	}
-
-	for (const auto& Pair : TagToItemMap)
-	{
-		UE_LOG(LogMOFramework, Log, TEXT("[MOPCGInteraction]   TagToItemMap entry: '%s' -> '%s'"),
-			*Pair.Key.ToString(), *Pair.Value.ToString());
-	}
-
 	// Check component tags against our tag-to-item map
 	for (const FName& Tag : Component->ComponentTags)
 	{
 		const FName* FoundItem = TagToItemMap.Find(Tag);
 		if (FoundItem)
 		{
-			UE_LOG(LogMOFramework, Log, TEXT("[MOPCGInteraction] Found tag '%s' -> item '%s'"),
+			UE_LOG(LogMOFramework, Verbose, TEXT("[MOPCGInteraction] Found tag '%s' -> item '%s'"),
 				*Tag.ToString(), *FoundItem->ToString());
 			return *FoundItem;
 		}
 	}
 
-	// Also check actor tags
+	// Also check owner actor tags (PCG might put tags there)
+	AActor* Owner = Component->GetOwner();
 	if (Owner)
 	{
 		for (const FName& Tag : Owner->Tags)
@@ -415,7 +411,7 @@ FName UMOPCGInteractionSubsystem::GetItemIdForComponentTags(UActorComponent* Com
 			const FName* FoundItem = TagToItemMap.Find(Tag);
 			if (FoundItem)
 			{
-				UE_LOG(LogMOFramework, Log, TEXT("[MOPCGInteraction] Found actor tag '%s' -> item '%s'"),
+				UE_LOG(LogMOFramework, Verbose, TEXT("[MOPCGInteraction] Found actor tag '%s' -> item '%s'"),
 					*Tag.ToString(), *FoundItem->ToString());
 				return *FoundItem;
 			}

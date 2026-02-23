@@ -7,6 +7,7 @@
 class UMOInventoryMenu;
 class UMOUnifiedInventoryMenu;
 class UMOItemContextMenu;
+class UMOGroundContextMenu;
 class UMOInventoryComponent;
 class AMOWorldItem;
 
@@ -95,6 +96,26 @@ public:
 	/** Check if item context menu is open. */
 	UFUNCTION(BlueprintPure, Category="MO|Inventory")
 	bool IsItemContextMenuOpen() const;
+
+	// ==========================================================================
+	// GROUND CONTEXT MENU (FORAGING)
+	// ==========================================================================
+
+	/**
+	 * Show the ground context menu for foraging actions.
+	 * @param WorldLocation - Location in world space where player clicked
+	 * @param ScreenPosition - Screen position for menu placement
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Foraging")
+	void ShowGroundContextMenu(FVector WorldLocation, FVector2D ScreenPosition);
+
+	/** Close the ground context menu. */
+	UFUNCTION(BlueprintCallable, Category="MO|Foraging")
+	void CloseGroundContextMenu();
+
+	/** Check if ground context menu is open. */
+	UFUNCTION(BlueprintPure, Category="MO|Foraging")
+	bool IsGroundContextMenuOpen() const;
 
 	// ==========================================================================
 	// NEARBY WORLD ITEMS
@@ -193,6 +214,26 @@ private:
 
 	UFUNCTION()
 	void HandleContextMenuAction(FName ActionId, const FGuid& ItemGuid);
+
+	// --- Ground Context Menu (Foraging) ---
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Foraging", meta=(AllowPrivateAccess="true"))
+	TSubclassOf<UMOGroundContextMenu> GroundContextMenuClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Foraging", meta=(ClampMin="0", AllowPrivateAccess="true"))
+	int32 GroundContextMenuZOrder = 150;
+
+	UPROPERTY(Transient)
+	TWeakObjectPtr<UMOGroundContextMenu> GroundContextMenuWidget;
+
+	UFUNCTION()
+	void HandleGroundContextMenuClosed();
+
+	UFUNCTION()
+	void HandleForagingSearchComplete(const TArray<AMOWorldItem*>& RevealedItems);
+
+	UFUNCTION()
+	void HandleForagingDigComplete(const TArray<AMOWorldItem*>& DugItems);
 
 	// --- Nearby Items ---
 
