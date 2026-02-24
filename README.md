@@ -127,6 +127,7 @@ Dehydration → Vitals (+HR, -BP, +Temp) → Performance penalties
 | `UMOMedicalSubsystem` | GameInstance | DataTable lookups for medical definitions |
 | `UMOForagingSubsystem` | World | HISM query, item reveal, dig mechanics |
 | `UMOPCGInteractionSubsystem` | World | Mesh-to-item lookup, tag-based harvesting |
+| `UMOSpawnManagerSubsystem` | World | Spawn point registration and management |
 
 ### Component Architecture
 
@@ -148,6 +149,8 @@ Dehydration → Vitals (+HR, -BP, +Temp) → Performance penalties
 | `UMOKnowledgeComponent` | Known recipes/techniques | N/A |
 | `UMOCraftingQueueComponent` | Per-pawn crafting queue | Tick |
 | `UMORecipeDiscoveryComponent` | Discovered recipes tracking | N/A |
+| `UMOSurvivorJobQueueComponent` | Per-pawn survivor job queue | N/A |
+| `UMORecruitmentComponent` | Recruitment state tracking | N/A |
 
 ### Interface-Based Decoupling
 
@@ -218,6 +221,55 @@ Active ──(night)──► Sleeping ──(day)──► Active
 Resting ──(duration)──► Active ◄── Fleeing ◄── (threat detected)
 ```
 
+### Survivor AI Architecture
+
+**Overview:** Recruited survivors can be commanded and assigned jobs via right-click context menu.
+
+**Classes:**
+| Class | Purpose |
+|-------|---------|
+| `AMOSurvivorController` | AI controller for recruited survivors with Follow/Stay/GoHome commands |
+| `UMOSurvivorJobQueueComponent` | Per-pawn replicated job queue (like crafting queue) |
+| `UMORecruitmentComponent` | Tracks recruitment state and possession eligibility |
+
+**Job Types:**
+| Job Type | Behavior |
+|----------|----------|
+| `GatherWood` | Find trees with GivesStick tag, execute harvest recipe, collect sticks |
+| `GatherStone` | Find and collect stone resources |
+| `GatherFiber` | Find and collect plant fiber |
+| `ForageNearby` | Pick up ground spawns via PCG interaction |
+| `DigForSupplies` | Dig for random supplies based on skill |
+
+**Command Flow:**
+```
+Player RMB on Survivor
+    ↓
+MOSystemMenuUIController::ShowSurvivorContextMenu()
+    ↓
+UMOSurvivorContextMenu displayed
+    ├─ Follow Me → AMOSurvivorController::SetFollowTarget()
+    ├─ Stay Here → AMOSurvivorController::SetStayAtLocation()
+    ├─ Go Home → AMOSurvivorController::GoToHome()
+    └─ Open Tasks → UMOSurvivorTaskMenu displayed
+                        ↓
+                    UMOSurvivorJobQueueComponent::EnqueueJob()
+                        ↓
+                    AMOSurvivorController executes job
+```
+
+**Job Execution States:**
+```
+Queued → Active → MovingToTarget → Performing → Completed
+                                       ↓
+                              Award XP via UMOSkillsComponent
+```
+
+**Configuration:**
+- Job definitions stored in `DT_SurvivorJobs` DataTable
+- Search radius, duration, skill XP all configurable per job type
+- Centralized via `UMOSurvivorJobDatabaseSettings` (Project Settings)
+
 ### DataTable-Driven Design
 
 | Row Type | DataTable | Purpose |
@@ -228,6 +280,7 @@ Resting ──(duration)──► Active ◄── Fleeing ◄── (threat det
 | `FMOBodyPartDefinitionRow` | DT_BodyPartDefinitions | ~55 body parts |
 | `FMOMedicalTreatmentRow` | DT_MedicalTreatments | Wound treatments |
 | `FMOCreatureDefinitionRow` | DT_CreatureDefinitions | Creature stats, perception, loot |
+| `FMOSurvivorJobDefinitionRow` | DT_SurvivorJobs | Survivor job types, search radius, XP |
 
 ### PCG Nodes
 
@@ -631,9 +684,29 @@ The MOFramework has solid core systems but has accumulated technical debt in sev
 
 ### Recent Changes
 
-*Last updated: 2026-02-22*
+*Last updated: 2026-02-24*
 
-#### Ground Foraging System (NEW)
+#### Survivor AI & Task Assignment System (NEW)
+- [x] `AMOSurvivorController` - AI controller with Follow/Stay/GoHome commands
+- [x] `UMOSurvivorJobQueueComponent` - Replicated job queue per survivor
+- [x] Job types: GatherWood, GatherStone, GatherFiber, ForageNearby, DigForSupplies
+- [x] `UMOSurvivorContextMenu` - Right-click context menu for survivors
+- [x] `UMOSurvivorTaskMenu` - Full task assignment panel
+- [x] `UMOSurvivorJobDatabaseSettings` - Centralized job definitions via Project Settings
+- [x] GatherWood uses harvest recipes (trees → sticks)
+- [x] ForageNearby picks up ground spawns via PCG interaction
+- [x] XP awards for completed jobs via existing skill system
+- [x] `UMORecruitmentComponent` - Recruitment state tracking
+- [x] Behavior tree tasks: `BTTask_SurvivorGather`, `BTTask_SurvivorForage`
+- [x] `BTService_SurvivorJobProcessor` - Job queue monitoring service
+
+#### Spawn Management System (NEW)
+- [x] `UMOSpawnManagerSubsystem` - World subsystem for spawn points
+- [x] `AMOSpawnPoint` - Actor-based spawn points with visual debugging
+- [x] `UMOSpawnSettings` - UDeveloperSettings for spawn configuration
+- [x] PCG spawn point integration
+
+#### Ground Foraging System
 - [x] Right-click ground context menu with Search Nearby / Dig for Supplies
 - [x] `UMOForagingSubsystem` for HISM query and dig mechanics
 - [x] `MO Mesh Spawner` PCG node - all-in-one spawner with tagging

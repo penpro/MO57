@@ -7,7 +7,8 @@
 
 class UDataTable;
 class UStaticMesh;
-class UHierarchicalInstancedStaticMeshComponent;
+class UInstancedStaticMeshComponent;
+class UPCGComponent;
 
 /**
  * All-in-one PCG node that spawns item meshes as tagged HISM components.
@@ -126,10 +127,12 @@ private:
 		const UDataTable* DataTable,
 		const TArray<FMOPCGItemSpawnEntry>& Items) const;
 
-	/** Create or find HISM component for a mesh on the target actor. */
-	UHierarchicalInstancedStaticMeshComponent* GetOrCreateHISMComponent(
+	/** Create or find managed ISM component for a mesh on the target actor. */
+	UInstancedStaticMeshComponent* GetOrCreateManagedISMC(
+		FPCGContext* Context,
 		AActor* TargetActor,
 		UStaticMesh* Mesh,
 		const UMOPCGMeshSpawnerSettings* Settings,
-		FName ItemId) const;
+		FName ItemId,
+		const TArray<FName>& ComponentTags) const;
 };

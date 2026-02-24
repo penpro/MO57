@@ -1,6 +1,8 @@
 #include "MOGameMode.h"
 #include "MOFramework.h"
 #include "MOCharacter.h"
+#include "MORecruitmentComponent.h"
+#include "MOIdentityComponent.h"
 #include "MOPCGInteractionSubsystem.h"
 #include "MOPersistenceSubsystem.h"
 #include "MOGameSettings.h"
@@ -394,6 +396,40 @@ void AMOGameMode::SpawnInitialPawn()
 	{
 		UE_LOG(LogMOFramework, Error, TEXT("[MOGameMode] Failed to spawn initial pawn"));
 		return;
+	}
+
+	// Assign a random name to the initial character
+	if (UMOIdentityComponent* IdentityComp = NewPawn->FindComponentByClass<UMOIdentityComponent>())
+	{
+		if (IdentityComp->DisplayName.IsEmpty())
+		{
+			// Name pools for initial character
+			static const TArray<FString> FirstNames = {
+				TEXT("Alex"), TEXT("Sam"), TEXT("Jordan"), TEXT("Taylor"), TEXT("Morgan"),
+				TEXT("Casey"), TEXT("Riley"), TEXT("Quinn"), TEXT("Avery"), TEXT("Parker"),
+				TEXT("Emma"), TEXT("Liam"), TEXT("Olivia"), TEXT("Noah"), TEXT("Ava"),
+				TEXT("Sophia"), TEXT("Jackson"), TEXT("Isabella"), TEXT("Lucas"), TEXT("Mia")
+			};
+			static const TArray<FString> LastNames = {
+				TEXT("Smith"), TEXT("Johnson"), TEXT("Williams"), TEXT("Brown"), TEXT("Jones"),
+				TEXT("Garcia"), TEXT("Miller"), TEXT("Davis"), TEXT("Rodriguez"), TEXT("Martinez"),
+				TEXT("Anderson"), TEXT("Taylor"), TEXT("Thomas"), TEXT("Moore"), TEXT("Jackson")
+			};
+
+			const FString& FirstName = FirstNames[FMath::RandRange(0, FirstNames.Num() - 1)];
+			const FString& LastName = LastNames[FMath::RandRange(0, LastNames.Num() - 1)];
+			FString FullName = FString::Printf(TEXT("%s %s"), *FirstName, *LastName);
+
+			IdentityComp->SetDisplayName(FText::FromString(FullName));
+			UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Initial pawn assigned name: %s"), *FullName);
+		}
+	}
+
+	// Mark the initial pawn as recruited (bypasses normal recruitment flow)
+	if (UMORecruitmentComponent* RecruitComp = NewPawn->FindComponentByClass<UMORecruitmentComponent>())
+	{
+		RecruitComp->ForceRecruit();
+		UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Initial pawn marked as recruited"));
 	}
 
 	// Possess the pawn with player controller

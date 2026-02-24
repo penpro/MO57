@@ -4,9 +4,12 @@
 #include "MOPCGInteractionSubsystem.h"
 #include "MOWeightedSelector.h"
 
+#include "PCGComponent.h"
 #include "PCGContext.h"
 #include "PCGPoint.h"
 #include "Data/PCGPointData.h"
+#include "Helpers/PCGActorHelpers.h"
+#include "Components/InstancedStaticMeshComponent.h"
 #include "Components/HierarchicalInstancedStaticMeshComponent.h"
 #include "Engine/DataTable.h"
 #include "Engine/StaticMesh.h"
@@ -166,7 +169,7 @@ bool FMOPCGMeshSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 		}
 	}
 
-	// Create HISM components for each item type
+	// Create managed ISM components for each item type
 	int32 ComponentsCreated = 0;
 	int32 InstancesAdded = 0;
 
@@ -179,33 +182,30 @@ bool FMOPCGMeshSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 			continue;
 		}
 
-		// Get or create HISM component
-		UHierarchicalInstancedStaticMeshComponent* HISM = GetOrCreateHISMComponent(
-			TargetActor, ItemData.Mesh, Settings, ItemData.ItemId);
+		// Build component tags for this item
+		TArray<FName> ComponentTags;
+		const FName TagName(*FString::Printf(TEXT("%s%s"), *Settings->TagPrefix, *ItemData.ItemId.ToString()));
+		ComponentTags.Add(TagName);
 
-		if (!HISM)
+		// Get or create managed ISM component with tags (PCG handles cleanup on re-execution)
+		UInstancedStaticMeshComponent* ISM = GetOrCreateManagedISMC(
+			Context, TargetActor, ItemData.Mesh, Settings, ItemData.ItemId, ComponentTags);
+
+		if (!ISM)
 		{
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOMeshSpawner] Failed to create HISM for item '%s'"),
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOMeshSpawner] Failed to create ISM for item '%s'"),
 				*ItemData.ItemId.ToString());
 			continue;
 		}
 
-		// Add tag
-		const FName TagName(*FString::Printf(TEXT("%s%s"), *Settings->TagPrefix, *ItemData.ItemId.ToString()));
-		if (!HISM->ComponentHasTag(TagName))
+		// Register tag mapping with subsystem (for runtime lookup)
+		if (PCGSubsystem)
 		{
-			HISM->ComponentTags.Add(TagName);
-
-			// Register with subsystem
-			if (PCGSubsystem)
-			{
-				PCGSubsystem->RegisterTagItemMapping(TagName, ItemData.ItemId);
-			}
+			PCGSubsystem->RegisterTagItemMapping(TagName, ItemData.ItemId);
 		}
 
-		// Add instances
-		const int32 PreviousCount = HISM->GetInstanceCount();
-		HISM->AddInstances(ItemData.Transforms, false, true);
+		// Add instances (bWorldSpace=true to handle world-space transforms correctly)
+		ISM->AddInstances(ItemData.Transforms, false, true);
 		InstancesAdded += ItemData.Transforms.Num();
 
 		UE_LOG(LogMOFramework, Log, TEXT("[MOMeshSpawner] Added %d instances of '%s' (mesh: %s, tag: %s)"),
@@ -275,53 +275,43 @@ TMap<FName, FMOPCGMeshSpawnerElement::FItemSpawnData> FMOPCGMeshSpawnerElement::
 	return Result;
 }
 
-UHierarchicalInstancedStaticMeshComponent* FMOPCGMeshSpawnerElement::GetOrCreateHISMComponent(
+UInstancedStaticMeshComponent* FMOPCGMeshSpawnerElement::GetOrCreateManagedISMC(
+	FPCGContext* Context,
 	AActor* TargetActor,
 	UStaticMesh* Mesh,
 	const UMOPCGMeshSpawnerSettings* Settings,
-	FName ItemId) const
+	FName ItemId,
+	const TArray<FName>& ComponentTags) const
 {
-	if (!TargetActor || !Mesh)
+	if (!Context || !TargetActor || !Mesh)
 	{
 		return nullptr;
 	}
 
-	// Look for existing HISM with same mesh
-	TArray<UHierarchicalInstancedStaticMeshComponent*> ExistingHISMs;
-	TargetActor->GetComponents<UHierarchicalInstancedStaticMeshComponent>(ExistingHISMs);
-
-	for (UHierarchicalInstancedStaticMeshComponent* Existing : ExistingHISMs)
+	// Get the source PCG component for managed resource tracking
+	UPCGComponent* SourceComponent = Cast<UPCGComponent>(Context->ExecutionSource.Get());
+	if (!SourceComponent)
 	{
-		if (Existing && Existing->GetStaticMesh() == Mesh)
-		{
-			return Existing;
-		}
-	}
-
-	// Create new HISM component
-	const FName ComponentName(*FString::Printf(TEXT("HISM_%s"), *ItemId.ToString()));
-
-	UHierarchicalInstancedStaticMeshComponent* NewHISM = NewObject<UHierarchicalInstancedStaticMeshComponent>(
-		TargetActor, ComponentName, RF_Transactional);
-
-	if (!NewHISM)
-	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOMeshSpawner] No source PCG component found"));
 		return nullptr;
 	}
 
-	// Configure component
-	NewHISM->SetStaticMesh(Mesh);
-	NewHISM->SetCollisionProfileName(Settings->CollisionProfile.Name);
-	NewHISM->SetCastShadow(Settings->bCastShadows);
-	NewHISM->NumCustomDataFloats = 0;
-	NewHISM->SetCanEverAffectNavigation(false);
+	// Build ISM component descriptor with tags
+	FPCGISMComponentBuilderParams Params;
+	Params.Descriptor.StaticMesh = Mesh;
+	Params.Descriptor.ComponentClass = UHierarchicalInstancedStaticMeshComponent::StaticClass(); // Use HISM for better performance
+	Params.Descriptor.BodyInstance.SetCollisionProfileName(Settings->CollisionProfile.Name);
+	Params.Descriptor.bCastShadow = Settings->bCastShadows;
+	Params.Descriptor.bAffectDistanceFieldLighting = false;
+	Params.Descriptor.bAffectDynamicIndirectLighting = false;
+	Params.Descriptor.ComponentTags = ComponentTags; // Include tags in descriptor
+	Params.NumCustomDataFloats = 0;
 
-	// Attach to actor
-	NewHISM->AttachToComponent(TargetActor->GetRootComponent(), FAttachmentTransformRules::KeepRelativeTransform);
-	NewHISM->RegisterComponent();
-	TargetActor->AddInstanceComponent(NewHISM);
+	// Use PCG's managed component system - handles cleanup automatically on re-execution
+	UInstancedStaticMeshComponent* ISM = UPCGActorHelpers::GetOrCreateISMC(
+		TargetActor, SourceComponent, Params, Context);
 
-	return NewHISM;
+	return ISM;
 }
 
 #undef LOCTEXT_NAMESPACE

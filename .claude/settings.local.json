@@ -178,7 +178,10 @@
       "Bash(git rm:*)",
       "Bash(git checkout:*)",
       "Bash(xargs:*)",
-      "Bash(git -C \"D:\\\\UEProjects\\\\MO57\" status)"
+      "Bash(git -C \"D:\\\\UEProjects\\\\MO57\" status)",
+      "Bash(D:UnrealEngineUE_5.7EngineBinariesDotNETUnrealBuildToolUnrealBuildTool.exe MO57Editor Win64 Development -Project=\"D:\\\\UEProjects\\\\MO57\\\\MO57.uproject\" -WaitMutex -FromMsBuild)",
+      "Bash(D:\\\\UnrealEngine\\\\UE_5.7\\\\Engine\\\\Binaries\\\\DotNET\\\\UnrealBuildTool\\\\UnrealBuildTool.exe:*)",
+      "Bash(del \"D:\\\\UEProjects\\\\MO57\\\\Plugins\\\\MOFramework\\\\Content\\\\Data\\\\SurvivorJobs.csv\")"
     ]
   }
 }

@@ -72,6 +72,12 @@ private:
 	/** Whether the cache has been built. */
 	static bool bCacheBuilt;
 
+	/** Cached DataTable pointer to avoid repeated loading. */
+	static TWeakObjectPtr<UDataTable> CachedDataTable;
+
+	/** Whether we've logged the DataTable load (to avoid log spam). */
+	static bool bDataTableLoggedOnce;
+
 	/** Build the cache from the DataTable. */
 	static void BuildCacheIfNeeded();
 };

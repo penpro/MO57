@@ -8,6 +8,8 @@ class UMOInGameMenu;
 class UMOPossessionMenu;
 class UMOPawnEntryWidget;
 class UMOConfirmationDialog;
+class UMOSurvivorContextMenu;
+class UMOSurvivorTaskMenu;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOOnConfirmationConfirmedDelegate);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOOnConfirmationCancelledDelegate);
@@ -98,6 +100,34 @@ public:
 	UPROPERTY(BlueprintAssignable, Category="MO|System Menu|Events")
 	FMOOnConfirmationCancelledDelegate OnConfirmationCancelled;
 
+	// ==========================================================================
+	// SURVIVOR CONTEXT MENU
+	// ==========================================================================
+
+	/** Show the survivor context menu for a recruited survivor. */
+	UFUNCTION(BlueprintCallable, Category="MO|System Menu|Survivor")
+	void ShowSurvivorContextMenu(APawn* Survivor, FVector2D ScreenPosition);
+
+	/** Close the survivor context menu. */
+	UFUNCTION(BlueprintCallable, Category="MO|System Menu|Survivor")
+	void CloseSurvivorContextMenu();
+
+	/** Check if survivor context menu is open. */
+	UFUNCTION(BlueprintPure, Category="MO|System Menu|Survivor")
+	bool IsSurvivorContextMenuOpen() const;
+
+	/** Show the survivor task menu for assigning jobs. */
+	UFUNCTION(BlueprintCallable, Category="MO|System Menu|Survivor")
+	void ShowSurvivorTaskMenu(APawn* Survivor);
+
+	/** Close the survivor task menu. */
+	UFUNCTION(BlueprintCallable, Category="MO|System Menu|Survivor")
+	void CloseSurvivorTaskMenu();
+
+	/** Check if survivor task menu is open. */
+	UFUNCTION(BlueprintPure, Category="MO|System Menu|Survivor")
+	bool IsSurvivorTaskMenuOpen() const;
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
@@ -181,4 +211,36 @@ private:
 
 	UFUNCTION()
 	void HandleConfirmationCancelled();
+
+	// --- Survivor Context Menu ---
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|System Menu|Survivor", meta=(AllowPrivateAccess="true"))
+	TSubclassOf<UMOSurvivorContextMenu> SurvivorContextMenuClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|System Menu|Survivor", meta=(ClampMin="0", AllowPrivateAccess="true"))
+	int32 SurvivorContextMenuZOrder = 60;
+
+	UPROPERTY(Transient)
+	TWeakObjectPtr<UMOSurvivorContextMenu> SurvivorContextMenuWidget;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|System Menu|Survivor", meta=(AllowPrivateAccess="true"))
+	TSubclassOf<UMOSurvivorTaskMenu> SurvivorTaskMenuClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|System Menu|Survivor", meta=(ClampMin="0", AllowPrivateAccess="true"))
+	int32 SurvivorTaskMenuZOrder = 100;
+
+	UPROPERTY(Transient)
+	TWeakObjectPtr<UMOSurvivorTaskMenu> SurvivorTaskMenuWidget;
+
+	/** Current survivor being commanded. */
+	TWeakObjectPtr<APawn> CurrentSurvivorTarget;
+
+	UFUNCTION()
+	void HandleSurvivorContextMenuRequestClose();
+
+	UFUNCTION()
+	void HandleSurvivorContextMenuOpenTasks(APawn* Survivor);
+
+	UFUNCTION()
+	void HandleSurvivorTaskMenuRequestClose();
 };

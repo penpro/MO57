@@ -4,21 +4,23 @@
 #include "Subsystems/WorldSubsystem.h"
 #include "MOForagingSubsystem.generated.h"
 
+class UInstancedStaticMeshComponent;
 class UHierarchicalInstancedStaticMeshComponent;
 class AMOWorldItem;
 class UMOSkillsComponent;
 
 /**
- * Data for a single HISM instance that can be revealed/harvested.
+ * Data for a single ISM/HISM instance that can be revealed/harvested.
+ * Supports both UInstancedStaticMeshComponent and UHierarchicalInstancedStaticMeshComponent.
  */
 USTRUCT(BlueprintType)
 struct FMOHISMInstanceData
 {
 	GENERATED_BODY()
 
-	/** The HISM component containing the instance. */
+	/** The ISM/HISM component containing the instance. */
 	UPROPERTY(BlueprintReadOnly, Category="MO|Foraging")
-	TWeakObjectPtr<UHierarchicalInstancedStaticMeshComponent> HISMComponent;
+	TWeakObjectPtr<UInstancedStaticMeshComponent> HISMComponent;
 
 	/** The instance index within the HISM. */
 	UPROPERTY(BlueprintReadOnly, Category="MO|Foraging")
@@ -126,6 +128,28 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category="MO|Foraging")
 	TArray<AMOWorldItem*> DigForSupplies(FVector Location, int32 ForagingLevel, APawn* ForagingPawn = nullptr);
+
+	/**
+	 * Roll dig drops and add items directly to a pawn's inventory.
+	 * Used for NPC survivors doing dig jobs - avoids spawning world items.
+	 * @param Location - Dig location (used for level checks)
+	 * @param ForagingLevel - Pawn's foraging skill level
+	 * @param TargetPawn - Pawn whose inventory receives the items
+	 * @return Number of items added to inventory
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Foraging")
+	int32 DigForSuppliesToInventory(FVector Location, int32 ForagingLevel, APawn* TargetPawn);
+
+	/**
+	 * Harvest ISM instances and add items directly to a pawn's inventory.
+	 * Used for NPC survivors doing forage jobs - avoids spawning world items.
+	 * @param Origin - Center point for the search
+	 * @param Radius - Search radius in world units
+	 * @param TargetPawn - Pawn whose inventory receives the items
+	 * @return Number of items added to inventory
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Foraging")
+	int32 ForageToInventory(FVector Origin, float Radius, APawn* TargetPawn);
 
 	// ============================================================================
 	// SKILL INTEGRATION

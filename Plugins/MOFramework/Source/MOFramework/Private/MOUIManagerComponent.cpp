@@ -790,6 +790,15 @@ void UMOUIManagerComponent::ShowConfirmationDialog(const FText& Title, const FTe
 
 bool UMOUIManagerComponent::IsAnyMenuOpen() const
 {
+	// Check system menu controller for survivor menus
+	if (UMOSystemMenuUIController* SysController = GetSystemMenuController())
+	{
+		if (SysController->IsSurvivorContextMenuOpen() || SysController->IsSurvivorTaskMenuOpen())
+		{
+			return true;
+		}
+	}
+
 	// Delegate to controllers for their respective menus
 	return IsInventoryMenuOpen() || IsInGameMenuOpen() || IsItemContextMenuOpen() ||
 	       IsPlayerStatusVisible() || IsPossessionMenuOpen() || IsCraftingMenuOpen() ||
@@ -832,6 +841,8 @@ void UMOUIManagerComponent::CloseAllMenus()
 	{
 		SysController->CloseInGameMenu();
 		SysController->ClosePossessionMenu();
+		SysController->CloseSurvivorContextMenu();
+		SysController->CloseSurvivorTaskMenu();
 	}
 
 	if (UMOQuestUIController* QuestController = GetQuestController())

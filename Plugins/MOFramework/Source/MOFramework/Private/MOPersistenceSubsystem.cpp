@@ -27,6 +27,7 @@
 #include "MOMentalStateComponent.h"
 #include "MOSkillsComponent.h"
 #include "MOEquipmentComponent.h"
+#include "MORecruitmentComponent.h"
 #include "MOCreature.h"
 #include "MOBuildableActor.h"
 #include "MOBuildProgressComponent.h"
@@ -1041,6 +1042,11 @@ void UMOPersistenceSubsystem::CapturePersistedPawnsAndInventories(UWorld* World,
             EquipmentComp->BuildSaveData(PawnRecord.EquipmentData);
             PawnRecord.bHasComponentData = true;
         }
+        if (UMORecruitmentComponent* RecruitmentComp = Pawn->FindComponentByClass<UMORecruitmentComponent>())
+        {
+            RecruitmentComp->BuildSaveData(PawnRecord.RecruitmentData);
+            PawnRecord.bHasComponentData = true;
+        }
 
         UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] SAVE: Capturing pawn '%s' GUID=%s Name='%s' Class=%s Location=%s ComponentData=%s"),
             *Pawn->GetName(),
@@ -1383,6 +1389,11 @@ void UMOPersistenceSubsystem::ApplyInventoriesToSpawnedPawns(UWorld* World, cons
                     if (UMOEquipmentComponent* EquipmentComp = Pawn->FindComponentByClass<UMOEquipmentComponent>())
                     {
                         EquipmentComp->ApplySaveData(PawnRecord.EquipmentData);
+                    }
+                    // Apply recruitment state
+                    if (UMORecruitmentComponent* RecruitmentComp = Pawn->FindComponentByClass<UMORecruitmentComponent>())
+                    {
+                        RecruitmentComp->ApplySaveDataAuthority(PawnRecord.RecruitmentData);
                     }
 
                     UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Applied component state data to pawn GUID=%s"),

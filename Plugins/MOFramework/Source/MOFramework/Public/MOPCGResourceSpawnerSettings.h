@@ -7,7 +7,8 @@
 
 class UDataTable;
 class UStaticMesh;
-class UHierarchicalInstancedStaticMeshComponent;
+class UInstancedStaticMeshComponent;
+class UPCGComponent;
 
 /**
  * Configuration for a single harvestable resource (tree, bush, rock, etc.)
@@ -177,11 +178,13 @@ private:
 		const UDataTable* DataTable,
 		const TArray<FMOPCGResourceEntry>& Resources) const;
 
-	UHierarchicalInstancedStaticMeshComponent* GetOrCreateHISMComponent(
+	UInstancedStaticMeshComponent* GetOrCreateManagedISMC(
+		FPCGContext* Context,
 		AActor* TargetActor,
 		UStaticMesh* Mesh,
 		const UMOPCGResourceSpawnerSettings* Settings,
-		FName ItemId) const;
+		FName ItemId,
+		const TArray<FName>& ComponentTags) const;
 
 	FName GetResourceTypeTag(EMOResourceType Type) const;
 };
@@ -192,6 +195,7 @@ private:
 
 /**
  * Tree spawner with defaults optimized for tree resources.
+ * Includes tree-specific yield options that apply to ALL trees spawned by this node.
  */
 UCLASS(BlueprintType, ClassGroup=(MO))
 class MOFRAMEWORK_API UMOPCGTreeSpawnerSettings : public UMOPCGResourceSpawnerSettings
@@ -206,10 +210,50 @@ public:
 	virtual FText GetDefaultNodeTitle() const override { return NSLOCTEXT("MOFramework", "MOTreeSpawnerTitle", "MO Tree Spawner"); }
 	virtual FText GetNodeTooltipText() const override;
 #endif
+
+	// ============================================================================
+	// TREE YIELDS (applies to ALL trees spawned by this node)
+	// ============================================================================
+
+	/** If true, all trees yield bark when gathered. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tree Yields", meta=(PCG_Overridable))
+	bool bYieldsBark = true;
+
+	/** Item ID for bark yield. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tree Yields", meta=(PCG_Overridable, EditCondition="bYieldsBark"))
+	FName BarkItemId = FName("Bark");
+
+	/** If true, all trees yield sticks when gathered. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tree Yields", meta=(PCG_Overridable))
+	bool bYieldsSticks = true;
+
+	/** Item ID for sticks yield. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tree Yields", meta=(PCG_Overridable, EditCondition="bYieldsSticks"))
+	FName SticksItemId = FName("Stick");
+
+	/** If true, all trees yield wood when chopped. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tree Yields", meta=(PCG_Overridable))
+	bool bYieldsWood = false;
+
+	/** Item ID for wood yield. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tree Yields", meta=(PCG_Overridable, EditCondition="bYieldsWood"))
+	FName WoodItemId = FName("Wood");
+
+	/** If true, all trees yield leaves/foliage when gathered. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tree Yields", meta=(PCG_Overridable))
+	bool bYieldsLeaves = false;
+
+	/** Item ID for leaves yield. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tree Yields", meta=(PCG_Overridable, EditCondition="bYieldsLeaves"))
+	FName LeavesItemId = FName("Leaves");
+
+	/** Get all yield item tags for this tree spawner. */
+	TArray<FName> GetYieldTags() const;
 };
 
 /**
  * Bush spawner with defaults optimized for bush/shrub resources.
+ * Includes bush-specific yield options that apply to ALL bushes spawned by this node.
  */
 UCLASS(BlueprintType, ClassGroup=(MO))
 class MOFRAMEWORK_API UMOPCGBushSpawnerSettings : public UMOPCGResourceSpawnerSettings
@@ -224,6 +268,37 @@ public:
 	virtual FText GetDefaultNodeTitle() const override { return NSLOCTEXT("MOFramework", "MOBushSpawnerTitle", "MO Bush Spawner"); }
 	virtual FText GetNodeTooltipText() const override;
 #endif
+
+	// ============================================================================
+	// BUSH YIELDS (applies to ALL bushes spawned by this node)
+	// ============================================================================
+
+	/** If true, all bushes yield berries when gathered. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Bush Yields", meta=(PCG_Overridable))
+	bool bYieldsBerries = false;
+
+	/** Item ID for berry yield. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Bush Yields", meta=(PCG_Overridable, EditCondition="bYieldsBerries"))
+	FName BerriesItemId = FName("Berries");
+
+	/** If true, all bushes yield twigs/small sticks when gathered. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Bush Yields", meta=(PCG_Overridable))
+	bool bYieldsTwigs = true;
+
+	/** Item ID for twigs yield. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Bush Yields", meta=(PCG_Overridable, EditCondition="bYieldsTwigs"))
+	FName TwigsItemId = FName("Twig");
+
+	/** If true, all bushes yield leaves/foliage when gathered. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Bush Yields", meta=(PCG_Overridable))
+	bool bYieldsLeaves = false;
+
+	/** Item ID for leaves yield. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Bush Yields", meta=(PCG_Overridable, EditCondition="bYieldsLeaves"))
+	FName LeavesItemId = FName("Leaves");
+
+	/** Get all yield item tags for this bush spawner. */
+	TArray<FName> GetYieldTags() const;
 };
 
 /**

@@ -19,15 +19,21 @@
 #include "MOCraftingQueueComponent.h"
 #include "MORecipeDiscoveryComponent.h"
 #include "MOEquipmentComponent.h"
+#include "MORecruitmentComponent.h"
+#include "MOSurvivorJobQueueComponent.h"
+#include "MOInteractableComponent.h"
 #include "MONotificationComponent.h"
 #include "MOCraftingTypes.h"
 #include "MOTerraformingComponent.h"
+#include "MOSurvivorController.h"
+#include "AIController.h"
 #include "MOUIManagerComponent.h"
 #include "MOModeIndicatorWidget.h"
 #include "MOItemDatabaseSettings.h"
 #include "MOItemDefinitionRow.h"
 #include "MOGameSettings.h"
 #include "Components/StaticMeshComponent.h"
+#include "Components/SphereComponent.h"
 #include "NavigationInvokerComponent.h"
 #include "Engine/DataTable.h"
 #include "Perception/AISense_Hearing.h"
@@ -95,6 +101,26 @@ AMOCharacter::AMOCharacter()
 
 	// MO Components - Equipment
 	EquipmentComponent = CreateDefaultSubobject<UMOEquipmentComponent>(TEXT("EquipmentComponent"));
+
+	// MO Components - Recruitment
+	RecruitmentComponent = CreateDefaultSubobject<UMORecruitmentComponent>(TEXT("RecruitmentComponent"));
+
+	// MO Components - Survivor Job Queue (for task assignment when recruited)
+	JobQueueComponent = CreateDefaultSubobject<UMOSurvivorJobQueueComponent>(TEXT("JobQueueComponent"));
+
+	// MO Components - Interactable (allows other pawns to interact with this character)
+	InteractableComponent = CreateDefaultSubobject<UMOInteractableComponent>(TEXT("InteractableComponent"));
+
+	// Interaction collision sphere - blocks ECC_Visibility traces for interaction system
+	InteractionSphere = CreateDefaultSubobject<USphereComponent>(TEXT("InteractionSphere"));
+	InteractionSphere->SetupAttachment(GetCapsuleComponent());
+	InteractionSphere->SetSphereRadius(50.0f);
+	InteractionSphere->SetRelativeLocation(FVector(0.0f, 0.0f, 50.0f)); // Centered on torso
+	InteractionSphere->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+	InteractionSphere->SetCollisionResponseToAllChannels(ECR_Ignore);
+	InteractionSphere->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
+	InteractionSphere->SetCollisionObjectType(ECC_WorldDynamic);
+	InteractionSphere->SetGenerateOverlapEvents(false);
 
 	// Navigation invoker - tells voxel world to generate navmesh around this character
 	NavigationInvoker = CreateDefaultSubobject<UNavigationInvokerComponent>(TEXT("NavigationInvoker"));
@@ -190,6 +216,12 @@ void AMOCharacter::BeginPlay()
 		UpdateHeldItemMesh(EMOEquipmentSlot::RightHand, EquipmentComponent->GetEquippedItem(EMOEquipmentSlot::RightHand));
 	}
 
+	// Bind interactable component to recruitment system
+	if (InteractableComponent && RecruitmentComponent)
+	{
+		InteractableComponent->OnHandleInteract.BindUObject(this, &AMOCharacter::HandleRecruitmentInteraction);
+	}
+
 	Super::BeginPlay();
 }
 
@@ -197,6 +229,62 @@ void AMOCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	StopMovementPhysiologyTracking();
 	Super::EndPlay(EndPlayReason);
+}
+
+void AMOCharacter::UnPossessed()
+{
+	Super::UnPossessed();
+
+	// When player unpossesses this pawn, spawn survivor AI controller if this is a recruited survivor
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	// Don't spawn during world teardown
+	UWorld* World = GetWorld();
+	if (!World || World->bIsTearingDown)
+	{
+		return;
+	}
+
+	// Check if this is a recruited survivor
+	if (!RecruitmentComponent || !RecruitmentComponent->IsPossessable())
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOCharacter] %s: UnPossessed - not a possessable survivor, no AI controller needed"), *GetName());
+		return;
+	}
+
+	// Only spawn AI controller if we don't already have one
+	if (GetController() != nullptr)
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOCharacter] %s: UnPossessed - already has controller %s"), *GetName(), *GetController()->GetName());
+		return;
+	}
+
+	// Use the pawn's AIControllerClass if it's a survivor controller, otherwise use default
+	TSubclassOf<AController> ControllerClass = AIControllerClass;
+	if (!ControllerClass || !ControllerClass->IsChildOf(AMOSurvivorController::StaticClass()))
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOCharacter] %s: UnPossessed - using default AMOSurvivorController (AIControllerClass was %s)"),
+			*GetName(), ControllerClass ? *ControllerClass->GetName() : TEXT("None"));
+		ControllerClass = AMOSurvivorController::StaticClass();
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+	AAIController* NewController = World->SpawnActor<AAIController>(ControllerClass, GetActorLocation(), GetActorRotation(), SpawnParams);
+	if (NewController)
+	{
+		NewController->Possess(this);
+		UE_LOG(LogMOFramework, Log, TEXT("[MOCharacter] %s: UnPossessed - spawned and possessed by %s"),
+			*GetName(), *NewController->GetName());
+	}
+	else
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOCharacter] %s: UnPossessed - failed to spawn AI controller"), *GetName());
+	}
 }
 
 void AMOCharacter::Tick(float DeltaTime)
@@ -1118,6 +1206,48 @@ void AMOCharacter::HandleEquipmentChanged(EMOEquipmentSlot EquipSlot, const FMOE
 	{
 		UpdateHeldItemMesh(EquipSlot, EquippedItem);
 	}
+}
+
+bool AMOCharacter::HandleRecruitmentInteraction(AController* InteractorController)
+{
+	if (!RecruitmentComponent)
+	{
+		return false;
+	}
+
+	// Already recruited - no special interaction needed
+	if (RecruitmentComponent->IsPossessable())
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOCharacter] %s is already recruited"), *GetName());
+		return false;
+	}
+
+	// Get the interacting pawn
+	APawn* InteractingPawn = InteractorController ? InteractorController->GetPawn() : nullptr;
+	if (!InteractingPawn)
+	{
+		return false;
+	}
+
+	// Attempt recruitment interaction
+	const bool bResult = RecruitmentComponent->BeginInteraction(InteractingPawn);
+
+	if (bResult)
+	{
+		if (RecruitmentComponent->IsPossessable())
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOCharacter] %s has been recruited!"), *GetName());
+			// TODO: Show UI notification that survivor has been recruited
+		}
+		else if (RecruitmentComponent->HasActiveQuest())
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOCharacter] %s has a quest: %s"),
+				*GetName(), *RecruitmentComponent->GetQuestProgressText().ToString());
+			// TODO: Show UI with quest requirements
+		}
+	}
+
+	return bResult;
 }
 
 void AMOCharacter::UpdateHeldItemMesh(EMOEquipmentSlot EquipSlot, const FMOEquippedItem& EquippedItem)

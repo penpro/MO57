@@ -141,7 +141,6 @@ bool UMOInteractorComponent::FindInteractionTarget(FMOInteractionTarget& OutTarg
 	FHitResult HitResult;
 	if (!TraceForHit(TraceStart, TraceEnd, HitResult))
 	{
-		UE_LOG(LogMOFramework, Verbose, TEXT("[MOInteractor] FindInteractionTarget: No hit"));
 		return false;
 	}
 

@@ -26,6 +26,7 @@ enum class EMOMovementMode : uint8
 class UMOIdentityComponent;
 class UMOInventoryComponent;
 class UMOInteractorComponent;
+class UMOInteractableComponent;
 class UMOSurvivalStatsComponent;
 class UMOSkillsComponent;
 class UMOKnowledgeComponent;
@@ -38,11 +39,14 @@ class UMOCraftingQueueComponent;
 class UMORecipeDiscoveryComponent;
 class UMOTerraformingComponent;
 class UMOEquipmentComponent;
+class UMORecruitmentComponent;
+class UMOSurvivorJobQueueComponent;
 class USpringArmComponent;
 class UCameraComponent;
 class USkeletalMesh;
 class UAnimInstance;
 class UStaticMeshComponent;
+class USphereComponent;
 class UNavigationInvokerComponent;
 struct FMOEquippedItem;
 enum class EMOEquipmentSlot : uint8;
@@ -157,6 +161,15 @@ public:
 
 	UFUNCTION(BlueprintPure, Category="MO")
 	UMOEquipmentComponent* GetEquipmentComponent() const { return EquipmentComponent; }
+
+	UFUNCTION(BlueprintPure, Category="MO")
+	UMORecruitmentComponent* GetRecruitmentComponent() const { return RecruitmentComponent; }
+
+	UFUNCTION(BlueprintPure, Category="MO")
+	UMOSurvivorJobQueueComponent* GetJobQueueComponent() const { return JobQueueComponent; }
+
+	UFUNCTION(BlueprintPure, Category="MO")
+	UMOInteractableComponent* GetInteractableComponent() const { return InteractableComponent; }
 
 	// ============================================================================
 	// APPEARANCE
@@ -289,6 +302,7 @@ public:
 protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+	virtual void UnPossessed() override;
 
 	// ============================================================================
 	// COMPONENTS
@@ -383,6 +397,22 @@ public:
 	/** Equipment component for body/hand slots. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO")
 	TObjectPtr<UMOEquipmentComponent> EquipmentComponent;
+
+	/** Recruitment component for survivor recruitment state machine. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO")
+	TObjectPtr<UMORecruitmentComponent> RecruitmentComponent;
+
+	/** Job queue component for survivor task management. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO")
+	TObjectPtr<UMOSurvivorJobQueueComponent> JobQueueComponent;
+
+	/** Interactable component for other pawns to interact with this character. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO")
+	TObjectPtr<UMOInteractableComponent> InteractableComponent;
+
+	/** Collision sphere for interaction traces (blocks ECC_Visibility). */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO")
+	TObjectPtr<USphereComponent> InteractionSphere;
 
 	/** Navigation invoker - tells voxel world to generate navmesh around this character. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO|Navigation")
@@ -692,6 +722,9 @@ protected:
 	/** Called when equipment changes - updates held item visuals. */
 	UFUNCTION()
 	void HandleEquipmentChanged(EMOEquipmentSlot EquipSlot, const FMOEquippedItem& EquippedItem);
+
+	/** Handle interaction from another pawn for recruitment. */
+	bool HandleRecruitmentInteraction(AController* InteractorController);
 
 	/** Update the held item mesh for a specific hand slot. */
 	void UpdateHeldItemMesh(EMOEquipmentSlot EquipSlot, const FMOEquippedItem& EquippedItem);

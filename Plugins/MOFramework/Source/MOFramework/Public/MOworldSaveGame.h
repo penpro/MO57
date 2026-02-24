@@ -12,6 +12,7 @@
 #include "MOMentalStateComponent.h"
 #include "MOSkillsComponent.h"
 #include "MOEquipmentComponent.h"
+#include "MORecruitmentComponent.h"
 #include "MOQuestTypes.h"
 #include "MOWeatherTypes.h"
 #include "MOworldSaveGame.generated.h"
@@ -132,6 +133,10 @@ struct FMOPersistedPawnRecord
     /** Equipment component state (equipped items per slot) */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Components")
     FMOEquipmentSaveData EquipmentData;
+
+    /** Recruitment component state (for survivors) */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Components")
+    FMORecruitmentSaveData RecruitmentData;
 
     /** Flag to indicate if component data has been populated (for legacy save compatibility) */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Components")

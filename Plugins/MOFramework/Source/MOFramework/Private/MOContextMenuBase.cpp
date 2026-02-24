@@ -5,12 +5,17 @@
 UMOContextMenuBase::UMOContextMenuBase(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
+	// Enable keyboard input for this widget (needed for Tab/Escape to close)
+	SetIsFocusable(true);
 }
 
 void UMOContextMenuBase::SetPopupPosition(FVector2D ScreenPosition)
 {
 	// Use SetPositionInViewport for reliable screen positioning
 	// Pass true to remove DPI scale since our coordinates are in screen pixels
+	UE_LOG(LogMOFramework, Log, TEXT("[MOContextMenuBase] SetPopupPosition called: (%f, %f), IsInViewport: %s"),
+		ScreenPosition.X, ScreenPosition.Y, IsInViewport() ? TEXT("true") : TEXT("false"));
+
 	SetPositionInViewport(ScreenPosition, true);
 }
 

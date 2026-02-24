@@ -10,6 +10,7 @@
 
 #include "MOIdentityComponent.h"
 #include "MOInventoryComponent.h"
+#include "MORecruitmentComponent.h"
 
 bool UMOPossessionSubsystem::ResolveViewpoint(APlayerController* PlayerController, FVector& OutViewLocation, FRotator& OutViewRotation) const
 {
@@ -84,6 +85,15 @@ APawn* UMOPossessionSubsystem::FindNearestUnpossessedPawn(APlayerController* Pla
 		if (!CandidatePawn->FindComponentByClass<UMOInventoryComponent>())
 		{
 			continue;
+		}
+
+		// Check recruitment state - must be recruited (or not have recruitment component)
+		if (UMORecruitmentComponent* RecruitComp = CandidatePawn->FindComponentByClass<UMORecruitmentComponent>())
+		{
+			if (!RecruitComp->IsPossessable())
+			{
+				continue;
+			}
 		}
 
 		const float DistSq = FVector::DistSquared(ViewLocation, CandidatePawn->GetActorLocation());

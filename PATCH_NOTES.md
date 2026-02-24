@@ -4,6 +4,162 @@ This file tracks changes, bug fixes, and new features. Updated incrementally to 
 
 ---
 
+## [2026-02-24] Survivor AI & Task Assignment System
+
+### New Features
+
+**Survivor AI Controller**
+- `AMOSurvivorController` - Specialized AI controller for recruited survivors
+- **Follow Command**: Survivors follow player/target with configurable follow distance (200 default, 400 start threshold)
+- **Stay Command**: Survivors hold position at specified location
+- **Go Home Command**: Survivors return to assigned home location
+- Commands are immediate actions that override job processing
+- Smooth tick-based follow behavior with movement debugging
+
+**Job Queue System**
+- `UMOSurvivorJobQueueComponent` - Per-pawn replicated job queue (like crafting queue)
+- Jobs can be queued, reordered, cancelled, and tracked
+- Support for repeat counts (do job N times)
+- FastArraySerializer replication for efficient network sync
+- Home location storage with building GUID reference
+- Save/load support via `BuildSaveData()` / `ApplySaveDataAuthority()`
+
+**Job Types**
+- `EMOSurvivorJobType` enum: GatherWood, GatherStone, GatherFiber, ForageNearby, DigForSupplies
+- `FMOSurvivorJobEntry` - Individual job with ID, type, state, progress, repeat count, target location/actor
+- `FMOSurvivorJobDefinitionRow` - DataTable row for job configuration (display name, icon, skill XP, duration)
+- Job states: Queued, Active, MovingToTarget, Performing, Returning, Completed, Failed, Cancelled
+
+**Centralized Job Database**
+- `UMOSurvivorJobDatabaseSettings` - UDeveloperSettings for job definitions
+- Configure via Project Settings > Plugins > MO Survivor Job Database
+- Fallback path support for packaged builds
+- Static caching with O(1) lookup by job type
+- Separate retrieval for work tasks vs commands
+
+**Survivor Context Menu**
+- Right-click recruited survivors to open context menu
+- Quick access to Follow Me, Stay Here, Go Home commands
+- "Assign Tasks..." button opens full task menu
+- Shows survivor name and current job status
+- Auto-closes when clicking outside or pressing Escape
+
+**Survivor Task Menu**
+- Full task assignment panel (similar to crafting menu layout)
+- Left panel: Available tasks organized by category
+- Right panel: Current job queue with progress
+- Header: Survivor name and active command
+- Click task to enqueue, click job to cancel
+- Tab/Escape to close
+
+**Task Entry & Job Entry Widgets**
+- `UMOSurvivorTaskEntryWidget` - Displays available task with icon and name
+- `UMOSurvivorJobEntryWidget` - Displays queued job with progress and cancel button
+- Both support dynamic delegate binding for click/cancel events
+
+**Job Execution (Simple Jobs)**
+- Jobs execute without behavior tree for supported types
+- GatherWood: Finds trees with `GivesStick` tag, executes harvest recipe via `MOHarvestSubsystem`
+- ForageNearby: Picks up ground spawns via `MOPCGInteractionSubsystem`
+- DigForSupplies: Uses `MOForagingSubsystem::DigForSuppliesToInventory()`
+- Move-to-target → Perform action → Award XP → Next iteration or complete
+
+**XP Integration**
+- All completed jobs award skill XP based on job definition
+- XP amount and skill ID configured per job type in DataTable
+- Uses existing `UMOSkillsComponent::AddExperience()` system
+
+**Recruitment Component**
+- `UMORecruitmentComponent` - Marks pawns as recruitable/recruited
+- Possession eligibility checking
+- Foundation for future recruitment mechanics
+
+**Spawn Management System**
+- `UMOSpawnManagerSubsystem` - World subsystem for spawn point management
+- `AMOSpawnPoint` - Actor-based spawn point with visual debugging
+- `UMOSpawnSettings` - UDeveloperSettings for spawn configuration
+- `FMOSpawnPointData` - Spawn point data structure
+- PCG spawn point integration via `UMOPCGSpawnPointSettings`
+
+**Behavior Tree Support**
+- `UBTService_SurvivorJobProcessor` - Service that monitors job queue and updates blackboard
+- `UBTTask_SurvivorGather` - BT task for resource gathering
+- `UBTTask_SurvivorForage` - BT task for ground foraging
+- Blackboard keys: IsFollowing, ShouldStay, IsGoingHome, IsProcessingJob, CurrentJobType, etc.
+
+### Technical Notes
+
+**Survivor AI Architecture:**
+```
+Player RMB on Survivor
+    ↓
+MOPlayerController::HandleSecondaryAction()
+    ↓ (hit survivor, not self)
+MOSystemMenuUIController::ShowSurvivorContextMenu()
+    ↓
+UMOSurvivorContextMenu displayed
+    ├─ Follow Me → AMOSurvivorController::SetFollowTarget()
+    ├─ Stay Here → AMOSurvivorController::SetStayAtLocation()
+    ├─ Go Home → AMOSurvivorController::GoToHome()
+    └─ Open Tasks → MOSystemMenuUIController::ShowSurvivorTaskMenu()
+                        ↓
+                    UMOSurvivorTaskMenu displayed
+                        ↓ (player selects task)
+                    UMOSurvivorJobQueueComponent::EnqueueJob()
+                        ↓
+                    AMOSurvivorController executes job
+                        ↓
+                    UMOSkillsComponent::AddExperience()
+```
+
+**New Files:**
+- `MOSurvivorController.h/cpp` - AI controller with follow/stay/home commands
+- `MOSurvivorJobQueueComponent.h/cpp` - Replicated job queue
+- `MOSurvivorJobTypes.h/cpp` - Job enums, structs, FastArraySerializer
+- `MOSurvivorJobDatabaseSettings.h/cpp` - Centralized job definitions
+- `MOSurvivorContextMenu.h/cpp` - Right-click context menu
+- `MOSurvivorTaskMenu.h/cpp` - Full task assignment panel
+- `MOSurvivorTaskEntryWidget.h/cpp` - Task list entry widget
+- `MOSurvivorJobEntryWidget.h/cpp` - Job queue entry widget
+- `MORecruitmentComponent.h/cpp` - Recruitment state tracking
+- `MOSpawnManagerSubsystem.h/cpp` - Spawn point management
+- `MOSpawnPoint.h/cpp` - Spawn point actor
+- `MOSpawnSettings.h/cpp` - Spawn configuration
+- `MOSpawnTypes.h` - Spawn data structures
+- `BTService_SurvivorJobProcessor.h/cpp` - BT job queue service
+- `BTTask_SurvivorGather.h/cpp` - BT gather task
+- `BTTask_SurvivorForage.h/cpp` - BT forage task
+
+### Blueprint Setup Required
+
+1. **Create `DT_SurvivorJobs` DataTable** (FMOSurvivorJobDefinitionRow)
+   - Configure job types with display names, icons, skill rewards
+
+2. **Configure Job Database** in Project Settings > Plugins > MO Survivor Job Database
+   - Set `JobDefinitionsDataTable` to your DT_SurvivorJobs asset
+
+3. **Create `WBP_SurvivorContextMenu`** (parent: `UMOSurvivorContextMenu`)
+   - Add: `SurvivorNameText`, `CurrentJobText` (TextBlock)
+   - Add: `FollowMeButton`, `StayHereButton`, `GoHomeButton`, `OpenTasksButton` (UMOCommonButton)
+
+4. **Create `WBP_SurvivorTaskMenu`** (parent: `UMOSurvivorTaskMenu`)
+   - Add: `SurvivorNameText`, `CurrentJobText` (TextBlock)
+   - Add: `TaskListScrollBox`, `JobQueueScrollBox` (ScrollBox)
+   - Add: `CloseButton` (UMOCommonButton)
+   - Set `TaskEntryWidgetClass` and `JobEntryWidgetClass` properties
+
+5. **Create `WBP_SurvivorTaskEntry`** (parent: `UMOSurvivorTaskEntryWidget`)
+   - Add: `TaskNameText` (TextBlock), `TaskIcon` (Image), `TaskButton` (UMOCommonButton)
+
+6. **Create `WBP_SurvivorJobEntry`** (parent: `UMOSurvivorJobEntryWidget`)
+   - Add: `JobNameText`, `ProgressText` (TextBlock), `CancelButton` (UMOCommonButton)
+
+7. **Set widget classes** on `MOSystemMenuUIController` component:
+   - `SurvivorContextMenuClass` → WBP_SurvivorContextMenu
+   - `SurvivorTaskMenuClass` → WBP_SurvivorTaskMenu
+
+---
+
 ## [2026-02-22] Ground Foraging System, Character Customization & Physics
 
 ### New Features

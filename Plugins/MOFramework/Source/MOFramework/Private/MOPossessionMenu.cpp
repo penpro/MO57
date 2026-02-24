@@ -59,8 +59,8 @@ FReply UMOPossessionMenu::NativeOnKeyDown(const FGeometry& InGeometry, const FKe
 {
 	const FKey PressedKey = InKeyEvent.GetKey();
 
-	// Tab or Escape closes the menu (only if there are living pawns to return to)
-	if ((PressedKey == EKeys::Tab || PressedKey == EKeys::Escape) && LivingPawnCount > 0)
+	// Tab or Escape closes the menu
+	if (PressedKey == EKeys::Tab || PressedKey == EKeys::Escape)
 	{
 		OnRequestClose.Broadcast();
 		return FReply::Handled();
@@ -177,11 +177,8 @@ void UMOPossessionMenu::SetCreateCharacterVisible(bool bVisible)
 
 void UMOPossessionMenu::HandleCloseClicked()
 {
-	// Only allow close if there are living pawns
-	if (LivingPawnCount > 0)
-	{
-		OnRequestClose.Broadcast();
-	}
+	// Always allow close - the player can be in spectator mode or controlling any pawn
+	OnRequestClose.Broadcast();
 }
 
 void UMOPossessionMenu::HandleCreateCharacterClicked()

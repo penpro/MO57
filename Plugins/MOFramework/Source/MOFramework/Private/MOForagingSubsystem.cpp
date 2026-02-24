@@ -2,9 +2,11 @@
 #include "MOPCGInteractionSubsystem.h"
 #include "MOWorldItem.h"
 #include "MOItemComponent.h"
+#include "MOInventoryComponent.h"
 #include "MOSkillsComponent.h"
 #include "MOWorldItemFactory.h"
 #include "MOHISMHarvestHelper.h"
+#include "Components/InstancedStaticMeshComponent.h"
 #include "Components/HierarchicalInstancedStaticMeshComponent.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
@@ -91,11 +93,12 @@ TArray<FMOHISMInstanceData> UMOForagingSubsystem::QueryHISMInstancesInRadius(FVe
 	}
 
 	const float RadiusSq = Radius * Radius;
-	int32 TotalHISMComponentsFound = 0;
-	int32 TotalHISMComponentsWithMesh = 0;
+	int32 TotalISMComponentsFound = 0;
+	int32 TotalISMComponentsWithMesh = 0;
 	int32 TotalHarvestableComponents = 0;
 
-	// Iterate all actors looking for HISM components
+	// Iterate all actors looking for ISM/HISM components
+	// Using UInstancedStaticMeshComponent as base class catches both ISM and HISM
 	for (TActorIterator<AActor> It(World); It; ++It)
 	{
 		AActor* Actor = *It;
@@ -104,46 +107,55 @@ TArray<FMOHISMInstanceData> UMOForagingSubsystem::QueryHISMInstancesInRadius(FVe
 			continue;
 		}
 
-		// Get all HISM components on this actor
-		TArray<UHierarchicalInstancedStaticMeshComponent*> HISMComponents;
-		Actor->GetComponents<UHierarchicalInstancedStaticMeshComponent>(HISMComponents);
+		// Get all ISM components on this actor (includes HISM which inherits from ISM)
+		TArray<UInstancedStaticMeshComponent*> ISMComponents;
+		Actor->GetComponents<UInstancedStaticMeshComponent>(ISMComponents);
 
-		for (UHierarchicalInstancedStaticMeshComponent* HISM : HISMComponents)
+		for (UInstancedStaticMeshComponent* ISM : ISMComponents)
 		{
-			TotalHISMComponentsFound++;
+			TotalISMComponentsFound++;
 
-			if (!HISM || !HISM->GetStaticMesh())
+			if (!ISM || !ISM->GetStaticMesh())
 			{
 				continue;
 			}
 
-			TotalHISMComponentsWithMesh++;
-			UStaticMesh* HISMMesh = HISM->GetStaticMesh();
+			// Skip KeepOnHarvest components - these are resources (trees/bushes) that should be
+			// harvested via recipes, not picked up directly. They yield products like sticks/bark.
+			if (FMOHISMHarvestHelper::ShouldKeepOnHarvest(ISM))
+			{
+				UE_LOG(LogMOForaging, Verbose, TEXT("[MOForagingSubsystem] Skipping KeepOnHarvest component on '%s'"),
+					*GetNameSafe(Actor));
+				continue;
+			}
+
+			TotalISMComponentsWithMesh++;
+			UStaticMesh* ISMMesh = ISM->GetStaticMesh();
 
 			// Check if this mesh is harvestable
-			FName ItemId = PCGSubsystem->GetItemIdForMesh(HISMMesh);
+			FName ItemId = PCGSubsystem->GetItemIdForMesh(ISMMesh);
 			if (ItemId.IsNone())
 			{
 				// Try tag-based lookup
-				ItemId = PCGSubsystem->GetItemIdForComponentTags(HISM);
+				ItemId = PCGSubsystem->GetItemIdForComponentTags(ISM);
 			}
 
 			if (ItemId.IsNone())
 			{
 				// Not a harvestable mesh - log the mesh path for debugging
-				UE_LOG(LogMOForaging, Verbose, TEXT("[MOForagingSubsystem] HISM on '%s' has non-harvestable mesh: %s"),
-					*GetNameSafe(Actor), *HISMMesh->GetPathName());
+				UE_LOG(LogMOForaging, Verbose, TEXT("[MOForagingSubsystem] ISM on '%s' has non-harvestable mesh: %s"),
+					*GetNameSafe(Actor), *ISMMesh->GetPathName());
 				continue;
 			}
 
 			TotalHarvestableComponents++;
 
 			// Check each instance
-			const int32 InstanceCount = HISM->GetInstanceCount();
+			const int32 InstanceCount = ISM->GetInstanceCount();
 			for (int32 i = 0; i < InstanceCount; ++i)
 			{
 				FTransform InstanceTransform;
-				if (!HISM->GetInstanceTransform(i, InstanceTransform, true))
+				if (!ISM->GetInstanceTransform(i, InstanceTransform, true))
 				{
 					continue;
 				}
@@ -154,7 +166,7 @@ TArray<FMOHISMInstanceData> UMOForagingSubsystem::QueryHISMInstancesInRadius(FVe
 				if (DistSq <= RadiusSq)
 				{
 					FMOHISMInstanceData Data;
-					Data.HISMComponent = HISM;
+					Data.HISMComponent = ISM;
 					Data.InstanceIndex = i;
 					Data.InstanceTransform = InstanceTransform;
 					Data.ItemId = ItemId;
@@ -171,8 +183,8 @@ TArray<FMOHISMInstanceData> UMOForagingSubsystem::QueryHISMInstancesInRadius(FVe
 		return A.Distance < B.Distance;
 	});
 
-	UE_LOG(LogMOForaging, Log, TEXT("[MOForagingSubsystem] HISM Query: %d components found, %d with mesh, %d harvestable, %d instances within %.0f units"),
-		TotalHISMComponentsFound, TotalHISMComponentsWithMesh, TotalHarvestableComponents, Result.Num(), Radius);
+	UE_LOG(LogMOForaging, Log, TEXT("[MOForagingSubsystem] ISM Query: %d components found, %d with mesh, %d harvestable, %d instances within %.0f units"),
+		TotalISMComponentsFound, TotalISMComponentsWithMesh, TotalHarvestableComponents, Result.Num(), Radius);
 
 	return Result;
 }
@@ -202,8 +214,8 @@ TArray<AMOWorldItem*> UMOForagingSubsystem::RevealHISMInstancesInRadius(FVector 
 	// Cap the number of items
 	const int32 ItemsToReveal = FMath::Min(Instances.Num(), MaxItemsPerSearch);
 
-	// Group instances by HISM component for efficient batch removal
-	TMap<UHierarchicalInstancedStaticMeshComponent*, TArray<int32>> ComponentToIndices;
+	// Group instances by ISM component for efficient batch removal
+	TMap<UInstancedStaticMeshComponent*, TArray<int32>> ComponentToIndices;
 
 	for (int32 i = 0; i < ItemsToReveal; ++i)
 	{
@@ -213,10 +225,10 @@ TArray<AMOWorldItem*> UMOForagingSubsystem::RevealHISMInstancesInRadius(FVector 
 			continue;
 		}
 
-		UHierarchicalInstancedStaticMeshComponent* HISM = Data.HISMComponent.Get();
-		if (HISM)
+		UInstancedStaticMeshComponent* ISM = Data.HISMComponent.Get();
+		if (ISM)
 		{
-			ComponentToIndices.FindOrAdd(HISM).Add(Data.InstanceIndex);
+			ComponentToIndices.FindOrAdd(ISM).Add(Data.InstanceIndex);
 		}
 
 		// Spawn the world item using factory
@@ -232,10 +244,38 @@ TArray<AMOWorldItem*> UMOForagingSubsystem::RevealHISMInstancesInRadius(FVector 
 		}
 	}
 
-	// Remove instances using the HISM harvest helper (handles reverse-order automatically)
-	FMOHISMRemovalResult RemovalResult = FMOHISMHarvestHelper::RemoveInstancesBatch(ComponentToIndices, false);
-	UE_LOG(LogMOForaging, Verbose, TEXT("[MOForagingSubsystem] HISM removal: %d removed, %d failed"),
-		RemovalResult.RemovedCount, RemovalResult.FailedCount);
+	// Remove instances - handles both ISM and HISM components
+	// Must remove in reverse order to preserve valid indices
+	int32 RemovedCount = 0;
+	int32 FailedCount = 0;
+	for (auto& Pair : ComponentToIndices)
+	{
+		UInstancedStaticMeshComponent* ISM = Pair.Key;
+		TArray<int32>& Indices = Pair.Value;
+
+		if (!ISM)
+		{
+			FailedCount += Indices.Num();
+			continue;
+		}
+
+		// Sort indices in descending order to preserve valid indices during removal
+		Indices.Sort([](int32 A, int32 B) { return A > B; });
+
+		for (int32 Index : Indices)
+		{
+			if (ISM->RemoveInstance(Index))
+			{
+				RemovedCount++;
+			}
+			else
+			{
+				FailedCount++;
+			}
+		}
+	}
+	UE_LOG(LogMOForaging, Verbose, TEXT("[MOForagingSubsystem] ISM removal: %d removed, %d failed"),
+		RemovedCount, FailedCount);
 
 	// Award XP
 	if (ForagingPawn && SpawnedItems.Num() > 0)
@@ -300,6 +340,9 @@ TArray<AMOWorldItem*> UMOForagingSubsystem::DigForSupplies(FVector Location, int
 		AMOWorldItem* WorldItem = ItemFactory->SpawnWorldItemSimple(Entry.ItemId, Quantity, SpawnLocation, SpawnRotation);
 		if (WorldItem)
 		{
+			// Enable physics so item falls to ground
+			WorldItem->EnableDropPhysics();
+
 			SpawnedItems.Add(WorldItem);
 			UE_LOG(LogMOForaging, Verbose, TEXT("[MOForagingSubsystem] Dug up %s x%d"), *Entry.ItemId.ToString(), Quantity);
 		}
@@ -315,6 +358,160 @@ TArray<AMOWorldItem*> UMOForagingSubsystem::DigForSupplies(FVector Location, int
 		SpawnedItems.Num(), ForagingLevel);
 
 	return SpawnedItems;
+}
+
+int32 UMOForagingSubsystem::DigForSuppliesToInventory(FVector Location, int32 ForagingLevel, APawn* TargetPawn)
+{
+	if (!TargetPawn)
+	{
+		UE_LOG(LogMOForaging, Warning, TEXT("[MOForagingSubsystem] DigForSuppliesToInventory: No target pawn"));
+		return 0;
+	}
+
+	UMOInventoryComponent* Inventory = TargetPawn->FindComponentByClass<UMOInventoryComponent>();
+	if (!Inventory)
+	{
+		UE_LOG(LogMOForaging, Warning, TEXT("[MOForagingSubsystem] DigForSuppliesToInventory: Pawn has no inventory"));
+		return 0;
+	}
+
+	if (DigDropTable.Num() == 0)
+	{
+		UE_LOG(LogMOForaging, Warning, TEXT("[MOForagingSubsystem] Dig drop table is empty"));
+		return 0;
+	}
+
+	int32 ItemsAdded = 0;
+
+	// Roll each drop entry
+	for (const FMODigDropEntry& Entry : DigDropTable)
+	{
+		// Check level requirement
+		if (ForagingLevel < Entry.MinForagingLevel)
+		{
+			continue;
+		}
+
+		// Roll for drop
+		const float Roll = FMath::FRand();
+		if (Roll > Entry.DropChance)
+		{
+			continue;
+		}
+
+		// Determine quantity
+		const int32 Quantity = FMath::RandRange(Entry.MinQuantity, Entry.MaxQuantity);
+
+		// Add directly to inventory
+		const FGuid NewItemGuid = FGuid::NewGuid();
+		if (Inventory->AddItemByGuid(NewItemGuid, Entry.ItemId, Quantity))
+		{
+			ItemsAdded++;
+			UE_LOG(LogMOForaging, Verbose, TEXT("[MOForagingSubsystem] Added %s x%d to inventory"), *Entry.ItemId.ToString(), Quantity);
+		}
+	}
+
+	// Award XP
+	if (ItemsAdded > 0)
+	{
+		AwardForagingXP(TargetPawn, XPPerDugItem * ItemsAdded);
+	}
+
+	UE_LOG(LogMOForaging, Log, TEXT("[MOForagingSubsystem] Dug %d items directly to inventory at skill level %d"),
+		ItemsAdded, ForagingLevel);
+
+	return ItemsAdded;
+}
+
+int32 UMOForagingSubsystem::ForageToInventory(FVector Origin, float Radius, APawn* TargetPawn)
+{
+	if (!TargetPawn)
+	{
+		UE_LOG(LogMOForaging, Warning, TEXT("[MOForagingSubsystem] ForageToInventory: No target pawn"));
+		return 0;
+	}
+
+	UMOInventoryComponent* Inventory = TargetPawn->FindComponentByClass<UMOInventoryComponent>();
+	if (!Inventory)
+	{
+		UE_LOG(LogMOForaging, Warning, TEXT("[MOForagingSubsystem] ForageToInventory: Pawn has no inventory"));
+		return 0;
+	}
+
+	// Query ISM instances
+	TArray<FMOHISMInstanceData> Instances = QueryHISMInstancesInRadius(Origin, Radius);
+
+	if (Instances.Num() == 0)
+	{
+		UE_LOG(LogMOForaging, Log, TEXT("[MOForagingSubsystem] ForageToInventory: No items found"));
+		return 0;
+	}
+
+	// Cap the number of items
+	const int32 ItemsToReveal = FMath::Min(Instances.Num(), MaxItemsPerSearch);
+
+	// Group instances by ISM component for efficient batch removal
+	TMap<UInstancedStaticMeshComponent*, TArray<int32>> ComponentToIndices;
+	int32 ItemsAdded = 0;
+
+	for (int32 i = 0; i < ItemsToReveal; ++i)
+	{
+		const FMOHISMInstanceData& Data = Instances[i];
+		if (!Data.IsValid())
+		{
+			continue;
+		}
+
+		UInstancedStaticMeshComponent* ISM = Data.HISMComponent.Get();
+		if (ISM)
+		{
+			ComponentToIndices.FindOrAdd(ISM).Add(Data.InstanceIndex);
+		}
+
+		// Add directly to inventory
+		const FGuid NewItemGuid = FGuid::NewGuid();
+		if (Inventory->AddItemByGuid(NewItemGuid, Data.ItemId, 1))
+		{
+			ItemsAdded++;
+			UE_LOG(LogMOForaging, Verbose, TEXT("[MOForagingSubsystem] Foraged %s to inventory"), *Data.ItemId.ToString());
+		}
+	}
+
+	// Remove instances from ISM components using helper (respects KeepOnHarvest tag)
+	int32 RemovedCount = 0;
+	for (auto& Pair : ComponentToIndices)
+	{
+		UInstancedStaticMeshComponent* ISM = Pair.Key;
+		TArray<int32>& Indices = Pair.Value;
+
+		if (!ISM)
+		{
+			continue;
+		}
+
+		// Sort indices in descending order to preserve valid indices during removal
+		Indices.Sort([](int32 A, int32 B) { return A > B; });
+
+		for (int32 Index : Indices)
+		{
+			// Use helper to properly handle KeepOnHarvest components
+			if (FMOHISMHarvestHelper::RemoveInstance(ISM, Index, true))
+			{
+				RemovedCount++;
+			}
+		}
+	}
+
+	// Award XP
+	if (ItemsAdded > 0)
+	{
+		AwardForagingXP(TargetPawn, XPPerRevealedItem * ItemsAdded);
+	}
+
+	UE_LOG(LogMOForaging, Log, TEXT("[MOForagingSubsystem] Foraged %d items directly to inventory (removed %d instances)"),
+		ItemsAdded, RemovedCount);
+
+	return ItemsAdded;
 }
 
 // ============================================================================

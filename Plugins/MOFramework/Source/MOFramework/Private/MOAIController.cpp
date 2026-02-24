@@ -202,7 +202,34 @@ void AMOAIController::MoveToActorWithRadius(AActor* TargetActor, float Acceptanc
 	MoveRequest.SetGoalActor(TargetActor);
 	MoveRequest.SetAcceptanceRadius(Radius);
 
-	MoveTo(MoveRequest);
+	FPathFollowingRequestResult Result = MoveTo(MoveRequest);
+
+	// Log movement result for debugging
+	static float LastMoveLogTime = 0.f;
+	UWorld* World = GetWorld();
+	if (World && (World->GetTimeSeconds() - LastMoveLogTime) > 3.0f)
+	{
+		FString ResultStr;
+		switch (Result.Code)
+		{
+		case EPathFollowingRequestResult::Failed:
+			ResultStr = TEXT("FAILED (no path or navmesh?)");
+			break;
+		case EPathFollowingRequestResult::AlreadyAtGoal:
+			ResultStr = TEXT("AlreadyAtGoal");
+			break;
+		case EPathFollowingRequestResult::RequestSuccessful:
+			ResultStr = TEXT("RequestSuccessful");
+			break;
+		default:
+			ResultStr = TEXT("Unknown");
+			break;
+		}
+
+		UE_LOG(LogMOFramework, Log, TEXT("[MOAIController] MoveTo result: %s (target: %s)"),
+			*ResultStr, *TargetActor->GetName());
+		LastMoveLogTime = World->GetTimeSeconds();
+	}
 }
 
 void AMOAIController::StopCurrentMovement()

@@ -11,12 +11,16 @@
 #include "MOInGameMenu.h"
 #include "MOPossessionMenu.h"
 #include "MOConfirmationDialog.h"
+#include "MOSurvivorContextMenu.h"
+#include "MOSurvivorTaskMenu.h"
 #include "MOPersistenceSubsystem.h"
 #include "MOPossessionSubsystem.h"
 #include "MOIdentityRegistrySubsystem.h"
 #include "MOIdentityComponent.h"
 #include "MOIdentifiableInterface.h"
+#include "MORecruitmentComponent.h"
 #include "MOGameSettings.h"
+#include "EngineUtils.h"
 
 UMOSystemMenuUIController::UMOSystemMenuUIController()
 {
@@ -69,6 +73,31 @@ void UMOSystemMenuUIController::EndPlay(const EEndPlayReason::Type EndPlayReason
 		}
 	}
 	ConfirmationDialogWidget.Reset();
+
+	// Clean up survivor context menu widget - unbind delegates first
+	if (UMOSurvivorContextMenu* ContextWidget = SurvivorContextMenuWidget.Get())
+	{
+		ContextWidget->OnCloseRequested.RemoveDynamic(this, &UMOSystemMenuUIController::HandleSurvivorContextMenuRequestClose);
+		ContextWidget->OnOpenTasksRequested.RemoveDynamic(this, &UMOSystemMenuUIController::HandleSurvivorContextMenuOpenTasks);
+		if (ContextWidget->IsInViewport())
+		{
+			ContextWidget->RemoveFromParent();
+		}
+	}
+	SurvivorContextMenuWidget.Reset();
+
+	// Clean up survivor task menu widget - unbind delegates first
+	if (UMOSurvivorTaskMenu* TaskWidget = SurvivorTaskMenuWidget.Get())
+	{
+		TaskWidget->OnRequestClose.RemoveDynamic(this, &UMOSystemMenuUIController::HandleSurvivorTaskMenuRequestClose);
+		if (TaskWidget->IsInViewport())
+		{
+			TaskWidget->RemoveFromParent();
+		}
+	}
+	SurvivorTaskMenuWidget.Reset();
+
+	CurrentSurvivorTarget.Reset();
 
 	Super::EndPlay(EndPlayReason);
 }
@@ -454,6 +483,7 @@ void UMOSystemMenuUIController::RefreshPossessionMenu()
 
 	// Get pawn records from persistence subsystem
 	TArray<FMOPersistedPawnRecord> AllPawnRecords;
+	TSet<FGuid> KnownGuids;
 
 	UGameInstance* GameInstance = UGameplayStatics::GetGameInstance(this);
 	if (GameInstance)
@@ -462,6 +492,69 @@ void UMOSystemMenuUIController::RefreshPossessionMenu()
 		if (Persistence)
 		{
 			AllPawnRecords = Persistence->GetAllPawnRecords();
+			for (const FMOPersistedPawnRecord& Record : AllPawnRecords)
+			{
+				KnownGuids.Add(Record.PawnGuid);
+			}
+		}
+	}
+
+	// Also scan world for possessable pawns not yet in persistence (e.g. newly recruited)
+	UWorld* World = GetWorld();
+	if (World)
+	{
+		for (TActorIterator<APawn> It(World); It; ++It)
+		{
+			APawn* Pawn = *It;
+			if (!IsValid(Pawn) || Pawn->IsActorBeingDestroyed())
+			{
+				continue;
+			}
+
+			// Must have identity component
+			UMOIdentityComponent* IdentityComp = Pawn->FindComponentByClass<UMOIdentityComponent>();
+			if (!IdentityComp)
+			{
+				continue;
+			}
+
+			FGuid PawnGuid = IdentityComp->GetGuid();
+			if (!PawnGuid.IsValid() || KnownGuids.Contains(PawnGuid))
+			{
+				continue; // Already in persistence records
+			}
+
+			// Check if possessable via recruitment component
+			UMORecruitmentComponent* RecruitComp = Pawn->FindComponentByClass<UMORecruitmentComponent>();
+			if (RecruitComp && RecruitComp->IsPossessable())
+			{
+				// Create a temporary record for this world pawn
+				FMOPersistedPawnRecord WorldPawnRecord;
+				WorldPawnRecord.PawnGuid = PawnGuid;
+				WorldPawnRecord.Transform = Pawn->GetActorTransform();
+				WorldPawnRecord.PawnClassPath = FSoftClassPath(Pawn->GetClass());
+				WorldPawnRecord.bIsPlayerControllable = true;
+				WorldPawnRecord.bIsDeceased = false;
+
+				// Use display name from identity component, fall back to placeholder
+				FText DisplayName = IdentityComp->DisplayName;
+				if (DisplayName.IsEmpty())
+				{
+					WorldPawnRecord.CharacterName = FString::Printf(TEXT("Survivor_%s"), *PawnGuid.ToString().Right(4));
+				}
+				else
+				{
+					WorldPawnRecord.CharacterName = DisplayName.ToString();
+				}
+
+				WorldPawnRecord.StatusText = TEXT("Recruited");
+				WorldPawnRecord.LastPlayedTime = FDateTime::Now();
+
+				AllPawnRecords.Add(WorldPawnRecord);
+				KnownGuids.Add(PawnGuid);
+
+				UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] Added world pawn to possession menu: %s"), *WorldPawnRecord.CharacterName);
+			}
 		}
 	}
 
@@ -778,4 +871,232 @@ void UMOSystemMenuUIController::HandleConfirmationCancelled()
 
 	PendingConfirmationContext.Empty();
 	OnConfirmationCancelled.Broadcast();
+}
+
+// =============================================================================
+// Survivor Context Menu
+// =============================================================================
+
+void UMOSystemMenuUIController::ShowSurvivorContextMenu(APawn* Survivor, FVector2D ScreenPosition)
+{
+	UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] ShowSurvivorContextMenu called for %s at position (%f, %f)"),
+		Survivor ? *Survivor->GetName() : TEXT("nullptr"), ScreenPosition.X, ScreenPosition.Y);
+
+	if (!IsLocalOwningPlayerController())
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOSysUI] ShowSurvivorContextMenu - not local owning player controller"));
+		return;
+	}
+
+	if (!IsValid(Survivor))
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOSysUI] ShowSurvivorContextMenu called with invalid survivor"));
+		return;
+	}
+
+	APlayerController* PlayerController = ResolveOwningPlayerController();
+	if (!IsValid(PlayerController))
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOSysUI] ShowSurvivorContextMenu - PlayerController invalid"));
+		return;
+	}
+
+	if (!SurvivorContextMenuClass)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOSysUI] SurvivorContextMenuClass not set on SystemMenuUIController. Please set it in the Blueprint or C++ defaults."));
+		return;
+	}
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] Using SurvivorContextMenuClass: %s"), *SurvivorContextMenuClass->GetName());
+
+	// Store current target
+	CurrentSurvivorTarget = Survivor;
+
+	// Create widget if needed
+	UMOSurvivorContextMenu* MenuWidget = SurvivorContextMenuWidget.Get();
+	if (!IsValid(MenuWidget))
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] Creating new survivor context menu widget"));
+		MenuWidget = CreateWidget<UMOSurvivorContextMenu>(PlayerController, SurvivorContextMenuClass);
+		SurvivorContextMenuWidget = MenuWidget;
+
+		if (!IsValid(MenuWidget))
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOSysUI] Failed to create survivor context menu widget. Check if the Blueprint widget exists and inherits from UMOSurvivorContextMenu."));
+			return;
+		}
+		UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] Successfully created survivor context menu widget"));
+	}
+	else
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] Reusing existing survivor context menu widget"));
+	}
+
+	// Bind delegates
+	MenuWidget->OnCloseRequested.RemoveDynamic(this, &UMOSystemMenuUIController::HandleSurvivorContextMenuRequestClose);
+	MenuWidget->OnOpenTasksRequested.RemoveDynamic(this, &UMOSystemMenuUIController::HandleSurvivorContextMenuOpenTasks);
+	MenuWidget->OnCloseRequested.AddDynamic(this, &UMOSystemMenuUIController::HandleSurvivorContextMenuRequestClose);
+	MenuWidget->OnOpenTasksRequested.AddDynamic(this, &UMOSystemMenuUIController::HandleSurvivorContextMenuOpenTasks);
+
+	// Show modal background and add menu to viewport FIRST
+	// (SetPositionInViewport only works after widget is in viewport)
+	ShowModalBackground();
+	MenuWidget->AddToViewport(SurvivorContextMenuZOrder);
+
+	// THEN initialize for this survivor (which calls SetPopupPosition)
+	MenuWidget->InitializeForSurvivor(Survivor, ScreenPosition);
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] Widget added to viewport (ZOrder: %d, IsInViewport: %s)"),
+		SurvivorContextMenuZOrder,
+		MenuWidget->IsInViewport() ? TEXT("true") : TEXT("false"));
+
+	// Set input mode
+	ApplyInputModeForMenuOpen(MenuWidget);
+	UpdateReticleVisibility();
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] Survivor context menu opened for %s at screen position (%f, %f)"),
+		*Survivor->GetName(), ScreenPosition.X, ScreenPosition.Y);
+}
+
+void UMOSystemMenuUIController::CloseSurvivorContextMenu()
+{
+	APlayerController* PlayerController = ResolveOwningPlayerController();
+
+	UMOSurvivorContextMenu* MenuWidget = SurvivorContextMenuWidget.Get();
+	if (IsValid(MenuWidget))
+	{
+		if (MenuWidget->IsInViewport())
+		{
+			MenuWidget->RemoveFromParent();
+		}
+	}
+
+	UpdateReticleVisibility();
+
+	// Only restore input mode if no other menus are open
+	if (!IsAnyMenuOpen())
+	{
+		HideModalBackground();
+		if (IsValid(PlayerController) && PlayerController->IsLocalController())
+		{
+			ApplyInputModeForMenuClosed();
+		}
+	}
+}
+
+bool UMOSystemMenuUIController::IsSurvivorContextMenuOpen() const
+{
+	UMOSurvivorContextMenu* MenuWidget = SurvivorContextMenuWidget.Get();
+	return IsValid(MenuWidget) && MenuWidget->IsInViewport();
+}
+
+void UMOSystemMenuUIController::ShowSurvivorTaskMenu(APawn* Survivor)
+{
+	if (!IsLocalOwningPlayerController())
+	{
+		return;
+	}
+
+	if (!IsValid(Survivor))
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOSysUI] ShowSurvivorTaskMenu called with invalid survivor"));
+		return;
+	}
+
+	APlayerController* PlayerController = ResolveOwningPlayerController();
+	if (!IsValid(PlayerController))
+	{
+		return;
+	}
+
+	if (!SurvivorTaskMenuClass)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOSysUI] SurvivorTaskMenuClass not set on SystemMenuUIController."));
+		return;
+	}
+
+	// Store current target
+	CurrentSurvivorTarget = Survivor;
+
+	// Create widget if needed
+	UMOSurvivorTaskMenu* MenuWidget = SurvivorTaskMenuWidget.Get();
+	if (!IsValid(MenuWidget))
+	{
+		MenuWidget = CreateWidget<UMOSurvivorTaskMenu>(PlayerController, SurvivorTaskMenuClass);
+		SurvivorTaskMenuWidget = MenuWidget;
+
+		if (!IsValid(MenuWidget))
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOSysUI] Failed to create survivor task menu widget."));
+			return;
+		}
+	}
+
+	// Bind delegates
+	MenuWidget->OnRequestClose.RemoveDynamic(this, &UMOSystemMenuUIController::HandleSurvivorTaskMenuRequestClose);
+	MenuWidget->OnRequestClose.AddDynamic(this, &UMOSystemMenuUIController::HandleSurvivorTaskMenuRequestClose);
+
+	// Initialize for this survivor
+	MenuWidget->InitializeForSurvivor(Survivor);
+
+	// Show modal background and menu
+	ShowModalBackground();
+	MenuWidget->AddToViewport(SurvivorTaskMenuZOrder);
+
+	// Set input mode
+	ApplyInputModeForMenuOpen(MenuWidget);
+	UpdateReticleVisibility();
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] Survivor task menu opened for %s"), *Survivor->GetName());
+}
+
+void UMOSystemMenuUIController::CloseSurvivorTaskMenu()
+{
+	APlayerController* PlayerController = ResolveOwningPlayerController();
+
+	UMOSurvivorTaskMenu* MenuWidget = SurvivorTaskMenuWidget.Get();
+	if (IsValid(MenuWidget))
+	{
+		if (MenuWidget->IsInViewport())
+		{
+			MenuWidget->RemoveFromParent();
+		}
+	}
+
+	UpdateReticleVisibility();
+
+	// Only restore input mode if no other menus are open
+	if (!IsAnyMenuOpen())
+	{
+		HideModalBackground();
+		if (IsValid(PlayerController) && PlayerController->IsLocalController())
+		{
+			ApplyInputModeForMenuClosed();
+		}
+	}
+}
+
+bool UMOSystemMenuUIController::IsSurvivorTaskMenuOpen() const
+{
+	UMOSurvivorTaskMenu* MenuWidget = SurvivorTaskMenuWidget.Get();
+	return IsValid(MenuWidget) && MenuWidget->IsInViewport();
+}
+
+void UMOSystemMenuUIController::HandleSurvivorContextMenuRequestClose()
+{
+	CloseSurvivorContextMenu();
+}
+
+void UMOSystemMenuUIController::HandleSurvivorContextMenuOpenTasks(APawn* Survivor)
+{
+	// Close context menu first
+	CloseSurvivorContextMenu();
+
+	// Open task menu for the survivor
+	ShowSurvivorTaskMenu(Survivor);
+}
+
+void UMOSystemMenuUIController::HandleSurvivorTaskMenuRequestClose()
+{
+	CloseSurvivorTaskMenu();
 }

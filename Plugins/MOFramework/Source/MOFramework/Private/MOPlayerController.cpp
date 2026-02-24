@@ -25,6 +25,9 @@
 #include "MOSystemMenuUIController.h"
 #include "MOQuestUIController.h"
 
+// Survivor command system
+#include "MORecruitmentComponent.h"
+
 AMOPlayerController::AMOPlayerController()
 {
 	// Create UI Manager component
@@ -821,26 +824,71 @@ void AMOPlayerController::HandleSecondaryAction(const FInputActionValue& Value)
 			FMOInteractionTarget Target;
 			if (Interactor->FindInteractionTarget(Target))
 			{
-				// Found an interactable target - use secondary interact
+				// Check if the target is a recruited survivor - if so, show context menu instead
+				if (Target.TargetActor.IsValid())
+				{
+					if (APawn* TargetPawn = Cast<APawn>(Target.TargetActor.Get()))
+					{
+						// Don't show context menu for self
+						if (TargetPawn != ControllablePawn)
+						{
+							if (UMORecruitmentComponent* RecruitComp = TargetPawn->FindComponentByClass<UMORecruitmentComponent>())
+							{
+								if (RecruitComp->IsPossessable())
+								{
+									// This is a recruited survivor - show context menu instead of secondary interact
+									int32 ViewportSizeX, ViewportSizeY;
+									GetViewportSize(ViewportSizeX, ViewportSizeY);
+									FVector2D ScreenPosition(ViewportSizeX / 2.0f, ViewportSizeY / 2.0f);
+
+									if (SystemMenuUIController)
+									{
+										UE_LOG(LogMOFramework, Log, TEXT("[MOPlayerController] Opening survivor context menu for %s at screen center"), *TargetPawn->GetName());
+										SystemMenuUIController->ShowSurvivorContextMenu(TargetPawn, ScreenPosition);
+										return;
+									}
+									else
+									{
+										UE_LOG(LogMOFramework, Warning, TEXT("[MOPlayerController] SystemMenuUIController is null, cannot show survivor context menu"));
+									}
+								}
+							}
+						}
+					}
+				}
+
+				// Not a recruited survivor - use normal secondary interact
 				IMOControllableInterface::Execute_RequestSecondaryInteract(ControllablePawn);
 				return;
 			}
 		}
 
 		// No interactable target - check for ground hit for foraging menu
+		// Use camera-based trace since cursor is hidden in FPS mode
+		FVector CameraLocation;
+		FRotator CameraRotation;
+		GetPlayerViewPoint(CameraLocation, CameraRotation);
+
+		const FVector TraceStart = CameraLocation;
+		const FVector TraceEnd = CameraLocation + (CameraRotation.Vector() * 2000.0f);
+
 		FHitResult GroundHit;
-		if (GetHitResultUnderCursor(ECC_WorldStatic, true, GroundHit))
+		FCollisionQueryParams QueryParams;
+		QueryParams.AddIgnoredActor(ControllablePawn);
+
+		if (GetWorld()->LineTraceSingleByChannel(GroundHit, TraceStart, TraceEnd, ECC_WorldStatic, QueryParams))
 		{
 			if (GroundHit.bBlockingHit)
 			{
-				FVector2D ScreenPosition;
-				if (ProjectWorldLocationToScreen(GroundHit.Location, ScreenPosition))
+				// Use viewport center for screen position
+				int32 ViewportSizeX, ViewportSizeY;
+				GetViewportSize(ViewportSizeX, ViewportSizeY);
+				FVector2D ScreenPosition(ViewportSizeX / 2.0f, ViewportSizeY / 2.0f);
+
+				if (InventoryUIController)
 				{
-					if (InventoryUIController)
-					{
-						InventoryUIController->ShowGroundContextMenu(GroundHit.Location, ScreenPosition);
-						return;
-					}
+					InventoryUIController->ShowGroundContextMenu(GroundHit.Location, ScreenPosition);
+					return;
 				}
 			}
 		}

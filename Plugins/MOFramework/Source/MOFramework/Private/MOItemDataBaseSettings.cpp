@@ -7,17 +7,31 @@
 // Static member initialization
 TMap<FName, FMOItemDefinitionRow> UMOItemDatabaseSettings::CachedItemDefinitions;
 bool UMOItemDatabaseSettings::bCacheBuilt = false;
+TWeakObjectPtr<UDataTable> UMOItemDatabaseSettings::CachedDataTable;
+bool UMOItemDatabaseSettings::bDataTableLoggedOnce = false;
 
 UDataTable* UMOItemDatabaseSettings::GetItemDefinitionsDataTable() const
 {
+	// Return cached table if still valid
+	if (CachedDataTable.IsValid())
+	{
+		return CachedDataTable.Get();
+	}
+
 	// Try loading from soft reference first
 	if (!ItemDefinitionsDataTable.IsNull())
 	{
 		UDataTable* Table = ItemDefinitionsDataTable.LoadSynchronous();
 		if (Table)
 		{
-			UE_LOG(LogMOFramework, Log, TEXT("[MOItemDatabase] Loaded DataTable from soft ref: %s (%d rows)"),
-				*Table->GetName(), Table->GetRowNames().Num());
+			CachedDataTable = Table;
+			// Only log the first time we load
+			if (!bDataTableLoggedOnce)
+			{
+				UE_LOG(LogMOFramework, Log, TEXT("[MOItemDatabase] Loaded DataTable from soft ref: %s (%d rows)"),
+					*Table->GetName(), Table->GetRowNames().Num());
+				bDataTableLoggedOnce = true;
+			}
 			return Table;
 		}
 		else
@@ -37,8 +51,10 @@ UDataTable* UMOItemDatabaseSettings::GetItemDefinitionsDataTable() const
 		UDataTable* FallbackTable = Cast<UDataTable>(StaticLoadObject(UDataTable::StaticClass(), nullptr, *FallbackItemsDataTablePath));
 		if (FallbackTable)
 		{
+			CachedDataTable = FallbackTable;
 			UE_LOG(LogMOFramework, Log, TEXT("[MOItemDatabase] Loaded DataTable from fallback path: %s (%d rows)"),
 				*FallbackTable->GetName(), FallbackTable->GetRowNames().Num());
+			bDataTableLoggedOnce = true;
 			return FallbackTable;
 		}
 		else
@@ -59,8 +75,10 @@ UDataTable* UMOItemDatabaseSettings::GetItemDefinitionsDataTable() const
 		UDataTable* HardcodedTable = Cast<UDataTable>(StaticLoadObject(UDataTable::StaticClass(), nullptr, Path));
 		if (HardcodedTable)
 		{
+			CachedDataTable = HardcodedTable;
 			UE_LOG(LogMOFramework, Log, TEXT("[MOItemDatabase] Loaded DataTable from hardcoded path: %s (%d rows)"),
 				Path, HardcodedTable->GetRowNames().Num());
+			bDataTableLoggedOnce = true;
 			return HardcodedTable;
 		}
 	}
