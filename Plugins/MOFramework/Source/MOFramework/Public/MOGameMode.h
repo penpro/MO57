@@ -176,11 +176,13 @@ protected:
 
 	/**
 	 * If true, automatically apply seed from MOGameSettings to voxel stamps
-	 * and call CreateRuntime() on new game start.
+	 * and call CreateRuntime() on new game start / save load.
+	 * IMPORTANT: This MUST be true for save/load to work correctly!
+	 * The voxel world must regenerate with the saved seed for pawn positions to be correct.
 	 * Requires VoxelWorld->bCreateRuntimeOnBeginPlay = false.
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Voxel")
-	bool bAutoInitializeVoxelWithSeed = false;
+	bool bAutoInitializeVoxelWithSeed = true;
 
 private:
 	/** Register all configured tag mappings with the PCG interaction subsystem. */

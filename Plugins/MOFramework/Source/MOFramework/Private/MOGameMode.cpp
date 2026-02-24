@@ -124,15 +124,42 @@ void AMOGameMode::HandlePendingNewGame()
 						Result.PawnsLoaded, Result.ItemsLoaded, Result.BuildingsLoaded, Result.WorldSeed);
 
 					// Apply world seed and initialize voxel world if auto-initialization is enabled
-					if (bAutoInitializeVoxelWithSeed && Result.WorldSeed != 0)
+					if (bAutoInitializeVoxelWithSeed)
 					{
-						Settings->PendingWorldSeed = Result.WorldSeed;
-						FMath::RandInit(Result.WorldSeed);
-						UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Applied loaded world seed: %d"), Result.WorldSeed);
-						InitializeVoxelWorldWithSeed();
+						if (Result.WorldSeed != 0)
+						{
+							Settings->PendingWorldSeed = Result.WorldSeed;
+							FMath::RandInit(Result.WorldSeed);
+							UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Applied loaded world seed: %d"), Result.WorldSeed);
+							InitializeVoxelWorldWithSeed();
 
-						// Wait for voxel terrain to generate, then re-ground all loaded pawns
-						WaitForVoxelAndRegroundPawns();
+							// Wait for voxel terrain to generate, then re-ground all loaded pawns
+							WaitForVoxelAndRegroundPawns();
+						}
+						else
+						{
+							UE_LOG(LogMOFramework, Warning, TEXT("[MOGameMode] Save has no world seed (0)! Voxel terrain may not match saved positions. Re-save to fix."));
+							// Still dismiss loading screen since we're not waiting for voxel
+							if (UGameInstance* GI = GetGameInstance())
+							{
+								if (UMOGameInstance* MOGI = Cast<UMOGameInstance>(GI))
+								{
+									MOGI->DismissLoadingScreen();
+								}
+							}
+						}
+					}
+					else
+					{
+						UE_LOG(LogMOFramework, Warning, TEXT("[MOGameMode] bAutoInitializeVoxelWithSeed is FALSE! Voxel terrain will NOT be regenerated with saved seed. Pawns may fall through world!"));
+						// Still dismiss loading screen since we're not waiting for voxel
+						if (UGameInstance* GI = GetGameInstance())
+						{
+							if (UMOGameInstance* MOGI = Cast<UMOGameInstance>(GI))
+							{
+								MOGI->DismissLoadingScreen();
+							}
+						}
 					}
 				}
 				else

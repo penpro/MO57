@@ -529,16 +529,35 @@ void AMOSurvivorController::BroadcastCommandChange(FName CommandName)
 
 void AMOSurvivorController::HandleJobQueueChanged()
 {
-	// If we're not doing anything (idle), start processing the queue
-	if (!bIsFollowing && !bShouldStay && !bIsGoingHome && !bIsProcessingJob)
+	// Skip if already processing a job
+	if (bIsProcessingJob)
 	{
-		UMOSurvivorJobQueueComponent* JobQueue = GetJobQueue();
-		if (JobQueue && JobQueue->HasJobs())
-		{
-			UE_LOG(LogMOFramework, Log, TEXT("[MOSurvivorController] Queue changed while idle - starting job processing"));
-			ProcessNextJob();
-		}
+		return;
 	}
+
+	UMOSurvivorJobQueueComponent* JobQueue = GetJobQueue();
+	if (!JobQueue || !JobQueue->HasJobs())
+	{
+		return;
+	}
+
+	// If following/staying/going home, clear those commands to start job processing
+	// Jobs explicitly assigned via task menu should override commands
+	if (bIsFollowing || bShouldStay || bIsGoingHome)
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOSurvivorController] Queue changed while in command state - clearing commands to process jobs"));
+
+		// Clear command states (ProcessNextJob will also do this, but be explicit)
+		bIsFollowing = false;
+		FollowTarget.Reset();
+		bShouldStay = false;
+		StayLocation = FVector::ZeroVector;
+		bIsGoingHome = false;
+		StopCurrentMovement();
+	}
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOSurvivorController] Queue changed - starting job processing"));
+	ProcessNextJob();
 }
 
 bool AMOSurvivorController::CanExecuteSimply(EMOSurvivorJobType JobType) const

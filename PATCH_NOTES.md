@@ -160,6 +160,48 @@ UMOSurvivorContextMenu displayed
 
 ---
 
+## [2026-02-24] Save/Load System Fixes
+
+### Bug Fixes
+
+**Critical: Voxel World Seed on Load**
+- Fixed `bAutoInitializeVoxelWithSeed` defaulting to `false`, causing voxel terrain to generate with wrong seed on load
+- Pawns would spawn at saved positions but terrain was different, causing them to fall through the world
+- Now defaults to `true` - terrain regenerates with correct saved seed
+
+**Unrecruited Survivors Appearing Possessable**
+- Fixed `bIsPlayerControllable` only checking creature status, not recruitment state
+- Now checks both `!IsA<AMOCreature>()` AND `RecruitmentComponent->IsPossessable()`
+- Unrecruited survivors no longer appear in possession menu
+
+**Character Names Not Preserved**
+- Fixed `CharacterName` not being applied to `IdentityComponent.DisplayName` on load
+- Fixed save not capturing live `DisplayName` from `IdentityComponent` (was only reusing old record)
+- Names now properly round-trip through save/load
+
+**Recruited Pawns Missing AI Controller**
+- Added `EnsureSurvivorAIController()` called when Recruited state is loaded
+- Previously, `ApplySaveDataAuthority` set state but didn't spawn AI controller like `ForceRecruit()` does
+- Loaded recruited pawns now have autonomous behavior
+
+### Technical Changes
+
+**MOGameMode.h/cpp:**
+- `bAutoInitializeVoxelWithSeed` default changed from `false` to `true`
+- Added warning logs when voxel initialization is skipped or seed is zero
+
+**MOPersistenceSubsystem.cpp:**
+- `bIsPlayerControllable` now checks recruitment state via `IsPossessable()`
+- `RespawnPersistedPawns` applies `CharacterName` to `IdentityComponent`
+- Save captures `DisplayName` from `IdentityComponent` instead of only using existing record
+- Added detailed recruitment state logging on save and load
+
+**MORecruitmentComponent.h/cpp:**
+- Added `EnsureSurvivorAIController()` private method
+- `ApplySaveDataAuthority()` calls `EnsureSurvivorAIController()` when loading Recruited state
+
+---
+
 ## [2026-02-22] Ground Foraging System, Character Customization & Physics
 
 ### New Features

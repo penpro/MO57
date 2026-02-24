@@ -186,4 +186,10 @@ private:
 	bool CheckQuestRequirements(APawn* InteractingPawn, bool bConsumeItems) const;
 	bool HasRequiredItem(UMOInventoryComponent* Inventory) const;
 	bool HasRequiredSkill(UMOSkillsComponent* Skills) const;
+
+	/**
+	 * Ensure the pawn has a survivor AI controller if recruited.
+	 * Called after applying save data when the Recruited state is loaded.
+	 */
+	void EnsureSurvivorAIController();
 };

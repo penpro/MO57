@@ -449,6 +449,7 @@ bool UMORecruitmentComponent::ApplySaveDataAuthority(const FMORecruitmentSaveDat
 		return false;
 	}
 
+	const EMORecruitmentState OldState = RecruitmentState;
 	RecruitmentState = InSaveData.RecruitmentState;
 	ActiveQuest = InSaveData.ActiveQuest;
 	QuestStartTime = FDateTime(InSaveData.QuestStartTimeTicks);
@@ -456,5 +457,67 @@ bool UMORecruitmentComponent::ApplySaveDataAuthority(const FMORecruitmentSaveDat
 	UE_LOG(LogMOFramework, Log, TEXT("[Recruitment] ApplySaveDataAuthority: State=%d, QuestType=%d, TimeRemaining=%.1f sec"),
 		(int32)RecruitmentState, (int32)ActiveQuest.QuestType, GetQuestTimeRemaining());
 
+	// If we loaded a Recruited state, ensure the AI controller is spawned
+	// This replicates the behavior from ForceRecruit() but without changing state
+	if (RecruitmentState == EMORecruitmentState::Recruited && OldState != EMORecruitmentState::Recruited)
+	{
+		EnsureSurvivorAIController();
+	}
+
 	return true;
+}
+
+void UMORecruitmentComponent::EnsureSurvivorAIController()
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	APawn* OwnerPawn = Cast<APawn>(GetOwner());
+	if (!OwnerPawn || !OwnerPawn->HasAuthority())
+	{
+		return;
+	}
+
+	// Check if pawn already has a valid survivor controller
+	AController* ExistingController = OwnerPawn->GetController();
+	if (ExistingController && ExistingController->IsA<AMOSurvivorController>())
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[Recruitment] Pawn already has survivor controller: %s"), *ExistingController->GetName());
+		return;
+	}
+
+	// Get the AI controller class from the pawn (set in Blueprint or defaults)
+	TSubclassOf<AController> AIControllerClass = OwnerPawn->AIControllerClass;
+
+	// Ensure we use a survivor controller class - fallback if not set or wrong type
+	if (!AIControllerClass || !AIControllerClass->IsChildOf(AMOSurvivorController::StaticClass()))
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[Recruitment] Using default AMOSurvivorController (pawn AIControllerClass was %s)"),
+			AIControllerClass ? *AIControllerClass->GetName() : TEXT("None"));
+		AIControllerClass = AMOSurvivorController::StaticClass();
+	}
+
+	// Unpossess from any existing controller
+	if (ExistingController)
+	{
+		ExistingController->UnPossess();
+	}
+
+	// Spawn the new AI controller
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+	AAIController* NewController = World->SpawnActor<AAIController>(AIControllerClass, OwnerPawn->GetActorLocation(), OwnerPawn->GetActorRotation(), SpawnParams);
+	if (NewController)
+	{
+		NewController->Possess(OwnerPawn);
+		UE_LOG(LogMOFramework, Log, TEXT("[Recruitment] Loaded recruited pawn - spawned AI controller: %s"), *NewController->GetName());
+	}
+	else
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[Recruitment] Failed to spawn AI controller for loaded recruited pawn %s"), *OwnerPawn->GetName());
+	}
 }

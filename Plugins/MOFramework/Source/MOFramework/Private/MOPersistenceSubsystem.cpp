@@ -999,17 +999,34 @@ void UMOPersistenceSubsystem::CapturePersistedPawnsAndInventories(UWorld* World,
         const FSoftObjectPath PawnClassSoftPath(Pawn->GetClass());
         PawnRecord.PawnClassPath = FSoftClassPath(PawnClassSoftPath.ToString());
 
-        // Creatures are not player-controllable (deer, wolves, etc.)
-        PawnRecord.bIsPlayerControllable = !Pawn->IsA<AMOCreature>();
-
-        // Generate default name for new pawns without an existing record
-        if (PawnRecord.CharacterName.IsEmpty())
+        // Determine if pawn is player-controllable:
+        // - Must not be a creature (deer, wolves, etc.)
+        // - Must be recruited (via RecruitmentComponent)
+        bool bCanControl = !Pawn->IsA<AMOCreature>();
+        if (bCanControl)
         {
-            // Use last 4 hex digits of GUID for unique identifier
+            if (UMORecruitmentComponent* RecruitComp = Pawn->FindComponentByClass<UMORecruitmentComponent>())
+            {
+                bCanControl = RecruitComp->IsPossessable();
+            }
+            // If no recruitment component, assume controllable (legacy support)
+        }
+        PawnRecord.bIsPlayerControllable = bCanControl;
+
+        // Get character name: prefer IdentityComponent's DisplayName, then existing record, then generate default
+        FText CurrentDisplayName = IdentityComponent->DisplayName;
+        if (!CurrentDisplayName.IsEmpty())
+        {
+            PawnRecord.CharacterName = CurrentDisplayName.ToString();
+        }
+        else if (PawnRecord.CharacterName.IsEmpty())
+        {
+            // No name on component or in existing record - generate default
             FString GuidStr = PawnGuid.ToString(EGuidFormats::DigitsWithHyphens);
             FString ShortId = GuidStr.Right(4).ToUpper();
             PawnRecord.CharacterName = FString::Printf(TEXT("Character %s"), *ShortId);
         }
+        // else: keep the name from the existing record
 
         // Capture component state data
         if (UMOVitalsComponent* VitalsComp = Pawn->FindComponentByClass<UMOVitalsComponent>())
@@ -1046,6 +1063,11 @@ void UMOPersistenceSubsystem::CapturePersistedPawnsAndInventories(UWorld* World,
         {
             RecruitmentComp->BuildSaveData(PawnRecord.RecruitmentData);
             PawnRecord.bHasComponentData = true;
+
+            UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] SAVE: Recruitment state for '%s': State=%d, HasValidData=%d"),
+                *Pawn->GetName(),
+                static_cast<int32>(PawnRecord.RecruitmentData.RecruitmentState),
+                PawnRecord.RecruitmentData.bHasValidData ? 1 : 0);
         }
 
         UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] SAVE: Capturing pawn '%s' GUID=%s Name='%s' Class=%s Location=%s ComponentData=%s"),
@@ -1271,6 +1293,14 @@ void UMOPersistenceSubsystem::RespawnPersistedPawns(UWorld* World, const TArray<
             continue;
         }
 
+        // Apply the saved character name to the identity component
+        if (!PawnRecord.CharacterName.IsEmpty())
+        {
+            IdentityComponent->SetDisplayName(FText::FromString(PawnRecord.CharacterName));
+            UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Applied saved name '%s' to pawn GUID=%s"),
+                *PawnRecord.CharacterName, *PawnRecord.PawnGuid.ToString(EGuidFormats::Short));
+        }
+
         UGameplayStatics::FinishSpawningActor(DeferredPawn, PawnRecord.Transform);
         OutResult.PawnsLoaded++;
 
@@ -1393,7 +1423,18 @@ void UMOPersistenceSubsystem::ApplyInventoriesToSpawnedPawns(UWorld* World, cons
                     // Apply recruitment state
                     if (UMORecruitmentComponent* RecruitmentComp = Pawn->FindComponentByClass<UMORecruitmentComponent>())
                     {
-                        RecruitmentComp->ApplySaveDataAuthority(PawnRecord.RecruitmentData);
+                        const bool bHadValidData = PawnRecord.RecruitmentData.bHasValidData;
+                        const int32 SavedState = static_cast<int32>(PawnRecord.RecruitmentData.RecruitmentState);
+                        const bool bApplied = RecruitmentComp->ApplySaveDataAuthority(PawnRecord.RecruitmentData);
+                        const int32 FinalState = static_cast<int32>(RecruitmentComp->RecruitmentState);
+
+                        UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Recruitment state: GUID=%s, SavedValid=%d, SavedState=%d, Applied=%d, FinalState=%d"),
+                            *PawnGuid.ToString(EGuidFormats::Short), bHadValidData ? 1 : 0, SavedState, bApplied ? 1 : 0, FinalState);
+                    }
+                    else
+                    {
+                        UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] No RecruitmentComponent on pawn GUID=%s"),
+                            *PawnGuid.ToString(EGuidFormats::Short));
                     }
 
                     UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Applied component state data to pawn GUID=%s"),

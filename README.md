@@ -700,6 +700,14 @@ The MOFramework has solid core systems but has accumulated technical debt in sev
 - [x] Behavior tree tasks: `BTTask_SurvivorGather`, `BTTask_SurvivorForage`
 - [x] `BTService_SurvivorJobProcessor` - Job queue monitoring service
 
+#### Save/Load System Fixes
+- [x] Fixed voxel terrain generating with wrong seed on load (critical)
+- [x] Fixed unrecruited survivors appearing possessable in possession menu
+- [x] Fixed character names not preserved across save/load
+- [x] Fixed recruited pawns missing AI controller after load
+- [x] `bAutoInitializeVoxelWithSeed` now defaults to `true`
+- [x] `EnsureSurvivorAIController()` spawns AI on recruited state load
+
 #### Spawn Management System (NEW)
 - [x] `UMOSpawnManagerSubsystem` - World subsystem for spawn points
 - [x] `AMOSpawnPoint` - Actor-based spawn points with visual debugging
