@@ -706,6 +706,7 @@ The MOFramework has solid core systems but has accumulated technical debt in sev
 - [x] Fixed character names not preserved across save/load
 - [x] Fixed recruited pawns missing AI controller after load
 - [x] `bAutoInitializeVoxelWithSeed` now defaults to `true`
+- [x] Fixed creatures (deer, wolves) incorrectly recruitable via `bIsRecruitable` flag
 - [x] `EnsureSurvivorAIController()` spawns AI on recruited state load
 
 #### Spawn Management System (NEW)

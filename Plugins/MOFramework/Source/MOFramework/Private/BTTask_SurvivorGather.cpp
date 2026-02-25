@@ -6,6 +6,7 @@
 #include "MOForagingSubsystem.h"
 #include "MOPCGInteractionSubsystem.h"
 #include "MOItemDatabaseSettings.h"
+#include "MOSurvivorJobDatabaseSettings.h"
 #include "BehaviorTree/BlackboardComponent.h"
 #include "AIController.h"
 #include "Navigation/PathFollowingComponent.h"
@@ -313,6 +314,14 @@ bool UBTTask_SurvivorGather::FindNearestHISMResource(APawn* Pawn, EMOSurvivorJob
 
 TArray<FName> UBTTask_SurvivorGather::GetItemTagsForJobType(EMOSurvivorJobType JobType) const
 {
+	// First try to get tags from job definition DataTable
+	const FMOSurvivorJobDefinitionRow* JobDef = UMOSurvivorJobDatabaseSettings::GetJobDefinition(JobType);
+	if (JobDef && JobDef->RequiredResourceTags.Num() > 0)
+	{
+		return JobDef->RequiredResourceTags;
+	}
+
+	// Fallback to hardcoded tags if DataTable not configured
 	TArray<FName> MatchTags;
 
 	switch (JobType)
@@ -321,24 +330,16 @@ TArray<FName> UBTTask_SurvivorGather::GetItemTagsForJobType(EMOSurvivorJobType J
 		MatchTags.Add(FName(TEXT("Wood")));
 		MatchTags.Add(FName(TEXT("Stick")));
 		MatchTags.Add(FName(TEXT("Branch")));
-		MatchTags.Add(FName(TEXT("Log")));
-		MatchTags.Add(FName(TEXT("Firewood")));
 		break;
 
 	case EMOSurvivorJobType::GatherStone:
 		MatchTags.Add(FName(TEXT("Stone")));
 		MatchTags.Add(FName(TEXT("Rock")));
-		MatchTags.Add(FName(TEXT("Pebble")));
-		MatchTags.Add(FName(TEXT("Flint")));
-		MatchTags.Add(FName(TEXT("Cobble")));
 		break;
 
 	case EMOSurvivorJobType::GatherFiber:
 		MatchTags.Add(FName(TEXT("Fiber")));
 		MatchTags.Add(FName(TEXT("Plant")));
-		MatchTags.Add(FName(TEXT("Grass")));
-		MatchTags.Add(FName(TEXT("Vine")));
-		MatchTags.Add(FName(TEXT("Reed")));
 		break;
 
 	default:
@@ -355,58 +356,32 @@ bool UBTTask_SurvivorGather::DoesItemMatchJobType(FName ItemId, EMOSurvivorJobTy
 		return false;
 	}
 
-	// Get item definition to check tags
-	FMOItemDefinitionRow ItemDef;
-	if (!UMOItemDatabaseSettings::GetItemDefinition(ItemId, ItemDef))
+	// Get the required tags for this job type (from DataTable or fallback)
+	TArray<FName> RequiredTags = GetItemTagsForJobType(JobType);
+	if (RequiredTags.Num() == 0)
 	{
-		// If we can't find the definition, try matching by ItemId name containing keywords
-		FString ItemIdString = ItemId.ToString().ToLower();
-
-		switch (JobType)
-		{
-		case EMOSurvivorJobType::GatherWood:
-			return ItemIdString.Contains(TEXT("wood")) ||
-			       ItemIdString.Contains(TEXT("stick")) ||
-			       ItemIdString.Contains(TEXT("branch")) ||
-			       ItemIdString.Contains(TEXT("log"));
-
-		case EMOSurvivorJobType::GatherStone:
-			return ItemIdString.Contains(TEXT("stone")) ||
-			       ItemIdString.Contains(TEXT("rock")) ||
-			       ItemIdString.Contains(TEXT("pebble")) ||
-			       ItemIdString.Contains(TEXT("flint")) ||
-			       ItemIdString.Contains(TEXT("cobble"));
-
-		case EMOSurvivorJobType::GatherFiber:
-			return ItemIdString.Contains(TEXT("fiber")) ||
-			       ItemIdString.Contains(TEXT("plant")) ||
-			       ItemIdString.Contains(TEXT("grass")) ||
-			       ItemIdString.Contains(TEXT("vine"));
-
-		default:
-			return false;
-		}
+		// No requirements = matches anything
+		return true;
 	}
 
-	// Check item tags against job type tags
-	TArray<FName> JobTags = GetItemTagsForJobType(JobType);
-
-	for (const FName& ItemTag : ItemDef.Tags)
+	// First try to get item definition to check item tags
+	FMOItemDefinitionRow ItemDef;
+	if (UMOItemDatabaseSettings::GetItemDefinition(ItemId, ItemDef))
 	{
-		for (const FName& JobTag : JobTags)
+		for (const FName& ItemTag : ItemDef.Tags)
 		{
-			if (ItemTag == JobTag)
+			if (RequiredTags.Contains(ItemTag))
 			{
 				return true;
 			}
 		}
 	}
 
-	// Also check the ItemId itself as a fallback
-	FString ItemIdString = ItemId.ToString().ToLower();
-	for (const FName& JobTag : JobTags)
+	// Also check the ItemId itself as a fallback (e.g., "Stick" matches "Stick" tag)
+	FString ItemIdString = ItemId.ToString();
+	for (const FName& RequiredTag : RequiredTags)
 	{
-		if (ItemIdString.Contains(JobTag.ToString().ToLower()))
+		if (ItemIdString.Contains(RequiredTag.ToString()))
 		{
 			return true;
 		}

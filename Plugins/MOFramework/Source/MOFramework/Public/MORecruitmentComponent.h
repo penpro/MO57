@@ -69,6 +69,14 @@ public:
 	// CONFIGURATION
 	// ============================================================================
 
+	/**
+	 * Whether this pawn can be recruited at all.
+	 * Set to false for creatures (deer, wolves) that shouldn't be recruitable.
+	 * Can be used later for tameable animals by enabling this flag.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Recruitment")
+	bool bIsRecruitable = true;
+
 	/** Possible quests this survivor can have (random selection on spawn) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Recruitment")
 	TArray<FMORecruitmentQuest> PossibleQuests;
@@ -132,6 +140,10 @@ public:
 	// ============================================================================
 	// QUERIES
 	// ============================================================================
+
+	/** Check if this pawn can be recruited (not a creature, or a tameable animal) */
+	UFUNCTION(BlueprintPure, Category = "Recruitment")
+	bool IsRecruitable() const { return bIsRecruitable; }
 
 	/** Check if this survivor is possessable (fully recruited) */
 	UFUNCTION(BlueprintPure, Category = "Recruitment")

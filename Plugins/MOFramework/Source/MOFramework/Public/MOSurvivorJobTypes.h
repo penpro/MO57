@@ -209,6 +209,15 @@ struct MOFRAMEWORK_API FMOSurvivorJobDefinitionRow : public FTableRowBase
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Job", meta = (ClampMin = "0"))
 	float SearchRadius = 500.0f;
 
+	/**
+	 * Resource tags to match when finding resources for this job.
+	 * Resources must have AT LEAST ONE of these tags to qualify.
+	 * These match against the ResourceTags defined in DT_ResourceNodes.
+	 * Example: ["Wood", "Stick"] for GatherWood, ["Stone", "Rock"] for GatherStone
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Resources")
+	TArray<FName> RequiredResourceTags;
+
 	/** Skill ID that gains experience from this job. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Skills")
 	FName SkillId;
@@ -232,6 +241,27 @@ struct MOFRAMEWORK_API FMOSurvivorJobDefinitionRow : public FTableRowBase
 	/** Priority level for sorting in UI (higher = appears first). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI")
 	int32 UIPriority = 0;
+
+	/** Check if a set of component tags matches this job's requirements. */
+	bool DoesMatchResourceTags(const TArray<FName>& ComponentTags) const
+	{
+		if (RequiredResourceTags.Num() == 0)
+		{
+			// No tag requirements - matches anything
+			return true;
+		}
+
+		// Check if any required tag is present in component tags
+		for (const FName& RequiredTag : RequiredResourceTags)
+		{
+			if (ComponentTags.Contains(RequiredTag))
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
 };
 
 /**

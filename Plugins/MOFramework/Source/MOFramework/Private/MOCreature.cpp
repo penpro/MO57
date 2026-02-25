@@ -6,6 +6,7 @@
 #include "MOAnatomyComponent.h"
 #include "MOVitalsComponent.h"
 #include "MOInventoryComponent.h"
+#include "MORecruitmentComponent.h"
 #include "MOWorldItem.h"
 #include "BehaviorTree/BehaviorTree.h"
 #include "BehaviorTree/BlackboardComponent.h"
@@ -28,6 +29,12 @@ AMOCreature::AMOCreature()
 void AMOCreature::BeginPlay()
 {
 	Super::BeginPlay();
+
+	// Creatures are not recruitable by default (use bIsRecruitable for future animal taming)
+	if (UMORecruitmentComponent* RecruitComp = FindComponentByClass<UMORecruitmentComponent>())
+	{
+		RecruitComp->bIsRecruitable = false;
+	}
 
 	UE_LOG(LogMOFramework, Warning, TEXT("=== MOCreature::BeginPlay START for %s ==="), *GetName());
 

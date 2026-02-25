@@ -2,7 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "PCGSettings.h"
-#include "MOPCGItemSpawnerSettings.h"
+#include "MOResourceNodeDefinitionRow.h"
 #include "MOPCGResourceSpawnerSettings.generated.h"
 
 class UDataTable;
@@ -11,60 +11,95 @@ class UInstancedStaticMeshComponent;
 class UPCGComponent;
 
 /**
- * Configuration for a single harvestable resource (tree, bush, rock, etc.)
- * Extends FMOPCGItemSpawnEntry with visual and harvest behavior settings.
+ * Entry for spawning a resource from the ResourceNode DataTable.
+ * Select a resource via dropdown, optionally override spawn weight.
  */
 USTRUCT(BlueprintType)
 struct MOFRAMEWORK_API FMOPCGResourceEntry
 {
 	GENERATED_BODY()
 
-	/** Base item spawn entry (ItemId, Weight, Quantity) */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|PCG")
-	FMOPCGItemSpawnEntry ItemEntry;
+	/**
+	 * Reference to a row in DT_ResourceNodes.
+	 * Use the dropdown to select the resource type (e.g., "BlackAlder", "IronOre").
+	 * All tags, meshes, and yields come from the DataTable definition.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|PCG", meta=(RowType="/Script/MOFramework.MOResourceNodeDefinitionRow"))
+	FDataTableRowHandle ResourceNodeRow;
 
-	/** Static mesh to use for this resource (overrides datatable mesh if set) */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|PCG")
-	TSoftObjectPtr<UStaticMesh> OverrideMesh;
+	/**
+	 * Spawn weight for random selection among entries (higher = more common).
+	 * This allows different spawn ratios even if resources have equal weights in their definitions.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|PCG", meta=(ClampMin="0.01"))
+	float SpawnWeight = 1.0f;
 
-	/** Scale range for random variation */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|PCG")
-	FVector MinScale = FVector(0.9f);
+	/** Override scale min (if zero vector, uses DataTable value). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|PCG|Override", AdvancedDisplay)
+	FVector ScaleOverrideMin = FVector::ZeroVector;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|PCG")
-	FVector MaxScale = FVector(1.1f);
-
-	/** If true, this resource keeps its HISM instance after harvest (yields resources without destroying) */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|PCG")
-	bool bKeepOnHarvest = false;
+	/** Override scale max (if zero vector, uses DataTable value). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|PCG|Override", AdvancedDisplay)
+	FVector ScaleOverrideMax = FVector::ZeroVector;
 
 	/** Required by FMOWeightedSelector */
-	float GetWeight() const { return ItemEntry.Weight; }
-};
+	float GetWeight() const { return SpawnWeight; }
 
-/**
- * Resource type enum for specialized spawner behavior.
- */
-UENUM(BlueprintType)
-enum class EMOResourceType : uint8
-{
-	Generic UMETA(DisplayName = "Generic"),
-	Tree UMETA(DisplayName = "Tree"),
-	Bush UMETA(DisplayName = "Bush"),
-	Rock UMETA(DisplayName = "Rock"),
-	Ore UMETA(DisplayName = "Ore Deposit"),
-	Plant UMETA(DisplayName = "Plant/Herb")
+	/** Get the resource definition from the DataTable. Returns nullptr if invalid. */
+	const FMOResourceNodeDefinitionRow* GetResourceDefinition() const
+	{
+		if (!ResourceNodeRow.DataTable || ResourceNodeRow.RowName.IsNone())
+		{
+			return nullptr;
+		}
+		return ResourceNodeRow.DataTable->FindRow<FMOResourceNodeDefinitionRow>(
+			ResourceNodeRow.RowName, TEXT("FMOPCGResourceEntry::GetResourceDefinition"));
+	}
+
+	/** Get effective min scale (override if non-zero, else from DataTable). */
+	FVector GetEffectiveMinScale() const
+	{
+		if (!ScaleOverrideMin.IsNearlyZero())
+		{
+			return ScaleOverrideMin;
+		}
+		if (const FMOResourceNodeDefinitionRow* Def = GetResourceDefinition())
+		{
+			return Def->MinScale;
+		}
+		return FVector(0.9f);
+	}
+
+	/** Get effective max scale (override if non-zero, else from DataTable). */
+	FVector GetEffectiveMaxScale() const
+	{
+		if (!ScaleOverrideMax.IsNearlyZero())
+		{
+			return ScaleOverrideMax;
+		}
+		if (const FMOResourceNodeDefinitionRow* Def = GetResourceDefinition())
+		{
+			return Def->MaxScale;
+		}
+		return FVector(1.1f);
+	}
 };
 
 /**
  * Base PCG settings for spawning harvestable resources.
  * Provides common functionality for trees, bushes, rocks, etc.
  *
+ * DataTable-Driven Architecture:
+ * - Resources are defined in DT_ResourceNodes (FMOResourceNodeDefinitionRow)
+ * - ResourcesToSpawn entries select resources via dropdown
+ * - All tags, meshes, and yields come from the DataTable
+ * - Node-level AdditionalTags are combined with DataTable tags
+ *
  * Features:
  * - Weighted random resource selection
  * - Scale randomization per instance
  * - KeepOnHarvest tagging for renewable resources
- * - Automatic tag registration for foraging discovery
+ * - Automatic tag generation from DataTable definitions
  */
 UCLASS(BlueprintType, ClassGroup=(MO))
 class MOFRAMEWORK_API UMOPCGResourceSpawnerSettings : public UPCGSettings
@@ -91,31 +126,23 @@ protected:
 
 public:
 	// ============================================================================
-	// RESOURCE TYPE
+	// RESOURCE CONFIGURATION
 	// ============================================================================
 
-	/** Type of resource being spawned (affects tags and behavior) */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Resource", meta=(PCG_Overridable))
-	EMOResourceType ResourceType = EMOResourceType::Generic;
-
-	// ============================================================================
-	// ITEM CONFIGURATION
-	// ============================================================================
-
-	/** Item datatable containing FMOItemDefinitionRow entries. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Items", meta=(PCG_Overridable))
-	TObjectPtr<UDataTable> ItemDataTable;
-
-	/** Resources to spawn with their weights and settings. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Items", meta=(PCG_Overridable))
+	/**
+	 * Resources to spawn. Each entry references a row in DT_ResourceNodes.
+	 * Use the dropdown to select resource types (e.g., "BlackAlder", "IronOre").
+	 * All tags, meshes, and yields are automatically read from the DataTable.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Resources", meta=(PCG_Overridable, TitleProperty="ResourceNodeRow"))
 	TArray<FMOPCGResourceEntry> ResourcesToSpawn;
 
 	/** Random seed offset for selection. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Items", meta=(PCG_Overridable))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Resources", meta=(PCG_Overridable))
 	int32 SeedOffset = 0;
 
 	/** If true, removes points that don't have a valid mesh. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Items", meta=(PCG_Overridable))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Resources", meta=(PCG_Overridable))
 	bool bDiscardInvalidPoints = true;
 
 	// ============================================================================
@@ -130,29 +157,26 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Mesh", meta=(PCG_Overridable))
 	bool bCastShadows = true;
 
-	/** If true, apply random rotation on Z axis. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Mesh", meta=(PCG_Overridable))
-	bool bRandomizeRotation = true;
-
 	// ============================================================================
 	// TAGGING
 	// ============================================================================
-
-	/** Tag prefix for item tags. Default: "MOItem_" */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tagging", meta=(PCG_Overridable))
-	FString TagPrefix = TEXT("MOItem_");
 
 	/** If true, registers tag mappings with MOPCGInteractionSubsystem. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tagging", meta=(PCG_Overridable))
 	bool bRegisterWithSubsystem = true;
 
-	/** Additional tags to add to all spawned HISM components. */
+	/**
+	 * Additional tags to add to ALL spawned resources from this node.
+	 * Combined with tags from each resource's DataTable definition.
+	 * Useful for location-specific tags like "ForestZone" or "MiningArea".
+	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tagging", meta=(PCG_Overridable))
 	TArray<FName> AdditionalTags;
 };
 
 /**
  * PCG Element for resource spawning.
+ * Reads resource definitions from DataTable and spawns HISM components with auto-generated tags.
  */
 class FMOPCGResourceSpawnerElement : public IPCGElement
 {
@@ -164,29 +188,51 @@ protected:
 	virtual bool ExecuteInternal(FPCGContext* Context) const override;
 
 private:
+	/**
+	 * Runtime data for spawning a specific resource.
+	 * Populated from DataTable definitions at execution time.
+	 */
 	struct FResourceSpawnData
 	{
-		FName ItemId;
+		/** Row name from the ResourceNode DataTable */
+		FName ResourceNodeId;
+		/** Display name from DataTable */
+		FText DisplayName;
+		/** Selected mesh for this instance */
 		UStaticMesh* Mesh = nullptr;
-		bool bKeepOnHarvest = false;
+		/** Optional material override */
+		UMaterialInterface* MaterialOverride = nullptr;
+		/** Resource type from DataTable */
+		EMOResourceType ResourceType = EMOResourceType::Generic;
+		/** Scale range from DataTable or override */
 		FVector MinScale = FVector(0.9f);
 		FVector MaxScale = FVector(1.1f);
+		/** Rotation randomization from DataTable */
+		bool bRandomizeRotation = true;
+		/** All auto-generated tags from DataTable definition */
+		TArray<FName> AllTags;
+		/** Accumulated transforms for this resource */
 		TArray<FTransform> Transforms;
 	};
 
+	/**
+	 * Build spawn data map from ResourcesToSpawn entries.
+	 * Each entry looks up its DataTable definition and populates FResourceSpawnData.
+	 */
 	TMap<FName, FResourceSpawnData> BuildResourceDataMap(
-		const UDataTable* DataTable,
-		const TArray<FMOPCGResourceEntry>& Resources) const;
+		const TArray<FMOPCGResourceEntry>& Resources,
+		FRandomStream& RandomStream) const;
 
+	/**
+	 * Get or create a managed HISM component for spawning instances.
+	 */
 	UInstancedStaticMeshComponent* GetOrCreateManagedISMC(
 		FPCGContext* Context,
 		AActor* TargetActor,
 		UStaticMesh* Mesh,
 		const UMOPCGResourceSpawnerSettings* Settings,
-		FName ItemId,
+		FName ResourceNodeId,
 		const TArray<FName>& ComponentTags) const;
-
-	FName GetResourceTypeTag(EMOResourceType Type) const;
 };
 
 // ============================================================================
@@ -194,8 +240,9 @@ private:
 // ============================================================================
 
 /**
- * Tree spawner with defaults optimized for tree resources.
- * Includes tree-specific yield options that apply to ALL trees spawned by this node.
+ * Tree spawner - convenience class with tree-appropriate defaults.
+ * All yields and tags are now defined in the DataTable (DT_ResourceNodes).
+ * This class primarily exists for node name/tooltip clarity in the PCG graph.
  */
 UCLASS(BlueprintType, ClassGroup=(MO))
 class MOFRAMEWORK_API UMOPCGTreeSpawnerSettings : public UMOPCGResourceSpawnerSettings
@@ -210,50 +257,11 @@ public:
 	virtual FText GetDefaultNodeTitle() const override { return NSLOCTEXT("MOFramework", "MOTreeSpawnerTitle", "MO Tree Spawner"); }
 	virtual FText GetNodeTooltipText() const override;
 #endif
-
-	// ============================================================================
-	// TREE YIELDS (applies to ALL trees spawned by this node)
-	// ============================================================================
-
-	/** If true, all trees yield bark when gathered. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tree Yields", meta=(PCG_Overridable))
-	bool bYieldsBark = true;
-
-	/** Item ID for bark yield. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tree Yields", meta=(PCG_Overridable, EditCondition="bYieldsBark"))
-	FName BarkItemId = FName("Bark");
-
-	/** If true, all trees yield sticks when gathered. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tree Yields", meta=(PCG_Overridable))
-	bool bYieldsSticks = true;
-
-	/** Item ID for sticks yield. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tree Yields", meta=(PCG_Overridable, EditCondition="bYieldsSticks"))
-	FName SticksItemId = FName("Stick");
-
-	/** If true, all trees yield wood when chopped. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tree Yields", meta=(PCG_Overridable))
-	bool bYieldsWood = false;
-
-	/** Item ID for wood yield. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tree Yields", meta=(PCG_Overridable, EditCondition="bYieldsWood"))
-	FName WoodItemId = FName("Wood");
-
-	/** If true, all trees yield leaves/foliage when gathered. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tree Yields", meta=(PCG_Overridable))
-	bool bYieldsLeaves = false;
-
-	/** Item ID for leaves yield. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tree Yields", meta=(PCG_Overridable, EditCondition="bYieldsLeaves"))
-	FName LeavesItemId = FName("Leaves");
-
-	/** Get all yield item tags for this tree spawner. */
-	TArray<FName> GetYieldTags() const;
 };
 
 /**
- * Bush spawner with defaults optimized for bush/shrub resources.
- * Includes bush-specific yield options that apply to ALL bushes spawned by this node.
+ * Bush spawner - convenience class with bush-appropriate defaults.
+ * All yields and tags are now defined in the DataTable (DT_ResourceNodes).
  */
 UCLASS(BlueprintType, ClassGroup=(MO))
 class MOFRAMEWORK_API UMOPCGBushSpawnerSettings : public UMOPCGResourceSpawnerSettings
@@ -268,41 +276,11 @@ public:
 	virtual FText GetDefaultNodeTitle() const override { return NSLOCTEXT("MOFramework", "MOBushSpawnerTitle", "MO Bush Spawner"); }
 	virtual FText GetNodeTooltipText() const override;
 #endif
-
-	// ============================================================================
-	// BUSH YIELDS (applies to ALL bushes spawned by this node)
-	// ============================================================================
-
-	/** If true, all bushes yield berries when gathered. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Bush Yields", meta=(PCG_Overridable))
-	bool bYieldsBerries = false;
-
-	/** Item ID for berry yield. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Bush Yields", meta=(PCG_Overridable, EditCondition="bYieldsBerries"))
-	FName BerriesItemId = FName("Berries");
-
-	/** If true, all bushes yield twigs/small sticks when gathered. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Bush Yields", meta=(PCG_Overridable))
-	bool bYieldsTwigs = true;
-
-	/** Item ID for twigs yield. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Bush Yields", meta=(PCG_Overridable, EditCondition="bYieldsTwigs"))
-	FName TwigsItemId = FName("Twig");
-
-	/** If true, all bushes yield leaves/foliage when gathered. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Bush Yields", meta=(PCG_Overridable))
-	bool bYieldsLeaves = false;
-
-	/** Item ID for leaves yield. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Bush Yields", meta=(PCG_Overridable, EditCondition="bYieldsLeaves"))
-	FName LeavesItemId = FName("Leaves");
-
-	/** Get all yield item tags for this bush spawner. */
-	TArray<FName> GetYieldTags() const;
 };
 
 /**
- * Rock spawner with defaults optimized for rock/mineral resources.
+ * Rock spawner - convenience class with rock-appropriate defaults.
+ * All yields and tags are now defined in the DataTable (DT_ResourceNodes).
  */
 UCLASS(BlueprintType, ClassGroup=(MO))
 class MOFRAMEWORK_API UMOPCGRockSpawnerSettings : public UMOPCGResourceSpawnerSettings

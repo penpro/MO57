@@ -4,6 +4,123 @@ This file tracks changes, bug fixes, and new features. Updated incrementally to 
 
 ---
 
+## [2026-02-24] DataTable-Driven Resource Node System
+
+### Overview
+
+Complete refactoring of the PCG resource spawning system to use DataTables as the single source of truth for resource definitions. All tags, meshes, and yields are now automatically generated from DataTable entries, eliminating manual tag configuration in PCG nodes.
+
+### New Files
+
+**MOResourceNodeDefinitionRow.h**
+- `EMOResourceType` enum: Generic, Tree, Bush, Rock, Ore, Plant
+- `FMOResourceMeshVariation` - Mesh variation with weight and optional material override
+- `FMOResourceNodeDefinitionRow` - DataTable row for harvestable resources
+  - DisplayName, Description, ResourceType
+  - YieldsItems array for `Gives_{ItemId}` tag generation
+  - ResourceTags for job system matching (Wood, Stone, Fiber, etc.)
+  - MeshVariations array with weighted random selection
+  - MinScale/MaxScale for instance variation
+  - `GetAllTags()` method for automatic tag generation
+
+**MOTagSchema.h**
+- Centralized tag schema constants and utilities
+- Tag prefixes: `Name `, `MOResource_`, `Gives_`
+- Tag generation: `MakeDisplayNameTag()`, `MakeYieldTag()`, `MakeResourceTypeTag()`
+- Tag parsing: `ParseDisplayNameTag()`, `ParseYieldTag()`, `ParseResourceTypeTag()`
+- Tag queries: `HasResourceType()`, `HasKeepOnHarvest()`, `ExtractYieldItems()`
+
+### Modified Files
+
+**MOPCGResourceSpawnerSettings.h/cpp**
+- `FMOPCGResourceEntry` now uses `FDataTableRowHandle` for resource selection
+- Resources selected via dropdown from DT_ResourceNodes DataTable
+- Scale overrides available per-entry (uses DataTable value if not set)
+- Removed `ItemDataTable` property (meshes come from ResourceNode definition)
+- Removed `TagPrefix` property (tags are auto-generated)
+- Simplified specialized spawners (Tree, Bush, Rock) - they now just set defaults
+- Tag generation reads all data from DataTable definition
+
+**MOSurvivorJobTypes.h**
+- Added `RequiredResourceTags` to `FMOSurvivorJobDefinitionRow`
+- Added `DoesMatchResourceTags()` method for tag-based resource filtering
+- Job definitions now specify which resource tags they accept
+
+**BTTask_SurvivorGather.cpp**
+- Updated `GetItemTagsForJobType()` to use DataTable's `RequiredResourceTags`
+- Fallback to hardcoded tags if DataTable not configured
+- Resource matching uses job definition tags instead of hardcoded values
+
+### Auto-Generated Tags
+
+From `FMOResourceNodeDefinitionRow::GetAllTags()`:
+- `"Name {DisplayName}"` - For harvest context menu display
+- `"MOResource_{Type}"` - Type classification (Tree, Rock, etc.)
+- `"Gives_{ItemId}"` - For each entry in YieldsItems array
+- `"KeepOnHarvest"` - If bKeepOnHarvest is true
+- Direct ResourceTags - For job system matching
+
+### Usage
+
+**Defining Resources (DT_ResourceNodes):**
+```
+RowName: BlackAlder
+DisplayName: "Black Alder"
+ResourceType: Tree
+YieldsItems: [Bark, Stick, Acorn]
+ResourceTags: [Wood, Harvestable]
+MeshVariations: [{Mesh: SM_BlackAlder, Weight: 1.0}]
+bKeepOnHarvest: true
+```
+
+**PCG Spawner Node:**
+1. Add "MO Resource Spawner" node
+2. In ResourcesToSpawn, click + to add entry
+3. Select resource from dropdown (e.g., "BlackAlder")
+4. Optionally override scale range
+5. All tags automatically applied from DataTable
+
+**Job Definition (DT_SurvivorJobs):**
+```
+RowName: GatherWood
+JobType: GatherWood
+RequiredResourceTags: [Wood, Stick, Branch]
+```
+
+### Benefits
+
+1. **Single Source of Truth**: All resource data in DataTables, not scattered across PCG nodes
+2. **Dropdown Selection**: No manual ItemId entry, select from existing definitions
+3. **Automatic Tags**: No manual tag configuration, everything generated from definitions
+4. **Job System Integration**: Resources matched by DataTable tags, not hardcoded lists
+5. **Easier Maintenance**: Change resource yields/tags in one place, affects all spawners
+6. **Designer Friendly**: Non-programmers can add/modify resources via DataTable editor
+
+### Migration
+
+Existing PCG nodes using the old `FMOPCGResourceEntry` format need updating:
+1. Create entries in DT_ResourceNodes for each resource type
+2. Update PCG node ResourcesToSpawn entries to use new dropdown selection
+3. Remove manual tag configuration (now auto-generated)
+
+---
+
+## [2026-02-24] Creature Recruitment Fix
+
+**The Great Deer Unionization Prevention Act of 2026**
+
+After discovering that local wildlife had formed a labor union and were demanding paid time off, dental coverage, and the right to unionize against predators, we've implemented emergency legislation:
+
+- Added `bIsRecruitable` boolean to `UMORecruitmentComponent`
+- `AMOCreature::BeginPlay()` now auto-sets `bIsRecruitable = false`
+- Deer can no longer be recruited to gather sticks (they were frankly terrible at it anyway)
+- Wolves have been denied collective bargaining rights
+- Bears remain unemployable due to ongoing "mauling the interviewer" incidents
+
+*This patch brought to you by: The Committee Against Employing Animals That Will Definitely Eat Your Inventory*
+
+---
+
 ## [2026-02-24] Survivor AI & Task Assignment System
 
 ### New Features
@@ -184,6 +301,14 @@ UMOSurvivorContextMenu displayed
 - Previously, `ApplySaveDataAuthority` set state but didn't spawn AI controller like `ForceRecruit()` does
 - Loaded recruited pawns now have autonomous behavior
 
+**Creatures Incorrectly Recruitable**
+- Added `bIsRecruitable` property to `UMORecruitmentComponent` (defaults to `true`)
+- Creatures (deer, wolves) inherit from `AMOCharacter` which has recruitment component
+- `AMOCreature::BeginPlay()` now sets `bIsRecruitable = false` to prevent recruitment
+- `BeginInteraction()` and `ForceRecruit()` check this flag and abort if not recruitable
+- Future use: Can set `bIsRecruitable = true` on specific animals for taming mechanics
+- Deer can no longer be recruited to gather wood. Their union rep was very persuasive. They will, however, still accept treats and aggressive head pats (taming system coming soon)
+
 ### Technical Changes
 
 **MOGameMode.h/cpp:**
@@ -199,6 +324,13 @@ UMOSurvivorContextMenu displayed
 **MORecruitmentComponent.h/cpp:**
 - Added `EnsureSurvivorAIController()` private method
 - `ApplySaveDataAuthority()` calls `EnsureSurvivorAIController()` when loading Recruited state
+- Added `bIsRecruitable` property with `IsRecruitable()` query function
+- `BeginInteraction()` returns false if not recruitable
+- `ForceRecruit()` returns early with warning if not recruitable
+
+**MOCreature.cpp:**
+- Added include for `MORecruitmentComponent.h`
+- `BeginPlay()` sets `bIsRecruitable = false` on inherited recruitment component
 
 ---
 

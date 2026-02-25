@@ -70,6 +70,13 @@ bool UMORecruitmentComponent::BeginInteraction(APawn* InteractingPawn)
 		return false;
 	}
 
+	// Check if this pawn can be recruited at all (e.g., creatures like deer cannot)
+	if (!bIsRecruitable)
+	{
+		UE_LOG(LogMOFramework, Verbose, TEXT("[Recruitment] %s is not recruitable"), *GetOwner()->GetName());
+		return false;
+	}
+
 	if (RecruitmentState == EMORecruitmentState::Recruited)
 	{
 		// Already recruited
@@ -145,6 +152,13 @@ bool UMORecruitmentComponent::TryCompleteQuest(APawn* InteractingPawn)
 
 void UMORecruitmentComponent::ForceRecruit()
 {
+	// Check if this pawn can be recruited at all
+	if (!bIsRecruitable)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[Recruitment] ForceRecruit called on non-recruitable pawn: %s"), *GetOwner()->GetName());
+		return;
+	}
+
 	SetRecruitmentState(EMORecruitmentState::Recruited);
 
 	UWorld* World = GetWorld();
