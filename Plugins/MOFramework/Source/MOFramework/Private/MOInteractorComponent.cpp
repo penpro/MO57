@@ -159,6 +159,15 @@ bool UMOInteractorComponent::FindInteractionTarget(FMOInteractionTarget& OutTarg
 	UInstancedStaticMeshComponent* ISMComp = Cast<UInstancedStaticMeshComponent>(HitResult.GetComponent());
 	UHierarchicalInstancedStaticMeshComponent* HISMComp = Cast<UHierarchicalInstancedStaticMeshComponent>(HitResult.GetComponent());
 
+	// Debug: Log what we hit
+	UPrimitiveComponent* HitComp = HitResult.GetComponent();
+	UE_LOG(LogMOFramework, Log, TEXT("[MOInteractor] Hit: Actor='%s', Component='%s' (ISM:%d, HISM:%d, Item:%d)"),
+		*HitActor->GetName(),
+		HitComp ? *HitComp->GetName() : TEXT("null"),
+		IsValid(ISMComp) ? 1 : 0,
+		IsValid(HISMComp) ? 1 : 0,
+		HitResult.Item);
+
 	if (IsValid(ISMComp) && HitResult.Item != INDEX_NONE)
 	{
 		// For HISM, check for explicit HISM interactable component first
