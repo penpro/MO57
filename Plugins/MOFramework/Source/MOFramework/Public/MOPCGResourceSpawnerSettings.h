@@ -277,10 +277,6 @@ private:
 		FName ResourceNodeId;
 		/** Display name from DataTable */
 		FText DisplayName;
-		/** Selected mesh for this instance */
-		UStaticMesh* Mesh = nullptr;
-		/** Optional material override */
-		UMaterialInterface* MaterialOverride = nullptr;
 		/** Resource type from DataTable */
 		EMOResourceType ResourceType = EMOResourceType::Generic;
 		/** Scale range from DataTable or override */
@@ -290,7 +286,25 @@ private:
 		bool bRandomizeRotation = true;
 		/** All auto-generated tags from DataTable definition */
 		TArray<FName> AllTags;
-		/** Accumulated transforms for this resource */
+		/** Pointer to the definition row for mesh variation selection */
+		const FMOResourceNodeDefinitionRow* Definition = nullptr;
+	};
+
+	/**
+	 * Per-mesh spawn data for accumulating transforms.
+	 * Each unique (ResourceRowName, Mesh) pair gets its own entry.
+	 */
+	struct FMeshSpawnData
+	{
+		/** The mesh to spawn */
+		UStaticMesh* Mesh = nullptr;
+		/** Optional material override */
+		UMaterialInterface* MaterialOverride = nullptr;
+		/** Resource node ID for tagging */
+		FName ResourceNodeId;
+		/** All tags from the resource definition */
+		TArray<FName> AllTags;
+		/** Accumulated transforms for this mesh */
 		TArray<FTransform> Transforms;
 	};
 

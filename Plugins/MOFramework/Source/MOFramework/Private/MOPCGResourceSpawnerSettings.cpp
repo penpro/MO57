@@ -117,26 +117,24 @@ bool FMOPCGResourceSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 	const UDataTable* DataTable = Settings->ResourceNodeDataTable;
 	TMap<FName, FResourceSpawnData> ResourceDataMap = BuildResourceDataMap(Settings->ResourcesToSpawn, DataTable, RandomStream);
 
-	// Calculate total weight using utility (only count valid resources with meshes)
+	// Calculate total weight using utility (only count valid resources with definitions)
 	auto HasValidResource = [&ResourceDataMap, DataTable](const FMOPCGResourceEntry& Entry) -> bool
 	{
-		const FMOResourceNodeDefinitionRow* Def = Entry.GetResourceDefinition(DataTable);
-		if (!Def)
-		{
-			return false;
-		}
-		// Check that the row name is valid and has data in our map
 		const FName RowName = Entry.ResourceRowName;
-		return !RowName.IsNone() && ResourceDataMap.Contains(RowName) && ResourceDataMap[RowName].Mesh != nullptr;
+		return !RowName.IsNone() && ResourceDataMap.Contains(RowName) && ResourceDataMap[RowName].Definition != nullptr;
 	};
 
 	const float TotalWeight = FMOWeightedSelector::CalculateTotalWeightIf(Settings->ResourcesToSpawn, HasValidResource);
 
 	if (TotalWeight <= 0.0f)
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOResourceSpawner] No valid resources with meshes found (map has %d entries)"), ResourceDataMap.Num());
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOResourceSpawner] No valid resources found (map has %d entries)"), ResourceDataMap.Num());
 		return true;
 	}
+
+	// Map to accumulate transforms per (resource + mesh) combination
+	// Key format: "ResourceRowName::MeshName"
+	TMap<FName, FMeshSpawnData> MeshSpawnMap;
 
 	// Get input points
 	TArray<FPCGTaggedData> Inputs = Context->InputData.GetInputsByPin(PCGPinConstants::DefaultInputLabel);
@@ -168,38 +166,71 @@ bool FMOPCGResourceSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 			// Get resource data
 			const FName RowName = SelectedEntry->ResourceRowName;
 			FResourceSpawnData* ResourceData = ResourceDataMap.Find(RowName);
-			if (!ResourceData || !ResourceData->Mesh)
+			if (!ResourceData || !ResourceData->Definition)
 			{
 				if (Settings->bDiscardInvalidPoints)
 				{
 					continue;
 				}
+				continue;
 			}
 
-			if (ResourceData && ResourceData->Mesh)
+			// Select a random mesh variation for THIS instance
+			const FMOResourceMeshVariation* SelectedVariation = ResourceData->Definition->SelectMeshVariation(RandomStream);
+			if (!SelectedVariation)
 			{
-				// Create transform with optional randomization
-				FTransform InstanceTransform = Point.Transform;
+				continue;
+			}
 
-				// Random rotation on Z (from DataTable definition)
-				if (ResourceData->bRandomizeRotation)
+			// Load the mesh
+			UStaticMesh* Mesh = SelectedVariation->Mesh.LoadSynchronous();
+			if (!Mesh)
+			{
+				continue;
+			}
+
+			// Create a unique key for this (resource, mesh) combination
+			const FName MeshKey = FName(*FString::Printf(TEXT("%s::%s"), *RowName.ToString(), *Mesh->GetName()));
+
+			// Get or create mesh spawn data entry
+			FMeshSpawnData* MeshData = MeshSpawnMap.Find(MeshKey);
+			if (!MeshData)
+			{
+				FMeshSpawnData& NewMeshData = MeshSpawnMap.Add(MeshKey);
+				NewMeshData.Mesh = Mesh;
+				NewMeshData.ResourceNodeId = RowName;
+				NewMeshData.AllTags = ResourceData->AllTags;
+
+				// Load material override if specified
+				if (!SelectedVariation->MaterialOverride.IsNull())
 				{
-					FRotator CurrentRotation = InstanceTransform.GetRotation().Rotator();
-					CurrentRotation.Yaw = RandomStream.FRandRange(0.0f, 360.0f);
-					InstanceTransform.SetRotation(CurrentRotation.Quaternion());
+					NewMeshData.MaterialOverride = SelectedVariation->MaterialOverride.LoadSynchronous();
 				}
 
-				// Random scale (from DataTable definition or entry override)
-				const FVector RandomScale = FVector(
-					RandomStream.FRandRange(ResourceData->MinScale.X, ResourceData->MaxScale.X),
-					RandomStream.FRandRange(ResourceData->MinScale.Y, ResourceData->MaxScale.Y),
-					RandomStream.FRandRange(ResourceData->MinScale.Z, ResourceData->MaxScale.Z)
-				);
-				InstanceTransform.SetScale3D(InstanceTransform.GetScale3D() * RandomScale);
-
-				ResourceData->Transforms.Add(InstanceTransform);
-				TotalPointsProcessed++;
+				MeshData = &NewMeshData;
 			}
+
+			// Create transform with optional randomization
+			FTransform InstanceTransform = Point.Transform;
+
+			// Random rotation on Z (from DataTable definition)
+			if (ResourceData->bRandomizeRotation)
+			{
+				FRotator CurrentRotation = InstanceTransform.GetRotation().Rotator();
+				CurrentRotation.Yaw = RandomStream.FRandRange(0.0f, 360.0f);
+				InstanceTransform.SetRotation(CurrentRotation.Quaternion());
+			}
+
+			// Random scale (from DataTable definition or entry override)
+			const FVector RandomScale = FVector(
+				RandomStream.FRandRange(ResourceData->MinScale.X, ResourceData->MaxScale.X),
+				RandomStream.FRandRange(ResourceData->MinScale.Y, ResourceData->MaxScale.Y),
+				RandomStream.FRandRange(ResourceData->MinScale.Z, ResourceData->MaxScale.Z)
+			);
+			InstanceTransform.SetScale3D(InstanceTransform.GetScale3D() * RandomScale);
+
+			MeshData->Transforms.Add(InstanceTransform);
+			TotalPointsProcessed++;
 		}
 	}
 
@@ -214,21 +245,21 @@ bool FMOPCGResourceSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 		}
 	}
 
-	// Create managed ISM components for each resource type
+	// Create managed ISM components for each (resource, mesh) combination
 	int32 ComponentsCreated = 0;
 	int32 InstancesAdded = 0;
 
-	for (auto& Pair : ResourceDataMap)
+	for (auto& Pair : MeshSpawnMap)
 	{
-		FResourceSpawnData& ResourceData = Pair.Value;
+		FMeshSpawnData& MeshData = Pair.Value;
 
-		if (ResourceData.Transforms.Num() == 0 || !ResourceData.Mesh)
+		if (MeshData.Transforms.Num() == 0 || !MeshData.Mesh)
 		{
 			continue;
 		}
 
 		// Build component tags - start with all tags from DataTable
-		TArray<FName> ComponentTags = ResourceData.AllTags;
+		TArray<FName> ComponentTags = MeshData.AllTags;
 
 		// Add node-level additional tags
 		for (const FName& AdditionalTag : Settings->AdditionalTags)
@@ -241,12 +272,12 @@ bool FMOPCGResourceSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 
 		// Get or create managed ISM component with tags (PCG handles cleanup on re-execution)
 		UInstancedStaticMeshComponent* ISM = GetOrCreateManagedISMC(
-			Context, TargetActor, ResourceData.Mesh, Settings, ResourceData.ResourceNodeId, ComponentTags);
+			Context, TargetActor, MeshData.Mesh, Settings, MeshData.ResourceNodeId, ComponentTags);
 
 		if (!ISM)
 		{
 			UE_LOG(LogMOFramework, Warning, TEXT("[MOResourceSpawner] Failed to create ISM for resource '%s'"),
-				*ResourceData.ResourceNodeId.ToString());
+				*MeshData.ResourceNodeId.ToString());
 			continue;
 		}
 
@@ -254,17 +285,17 @@ bool FMOPCGResourceSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 		if (PCGSubsystem)
 		{
 			// Register the resource node ID as a tag mapping
-			const FName ResourceTag = FName(*FString::Printf(TEXT("MOResource_%s"), *ResourceData.ResourceNodeId.ToString()));
-			PCGSubsystem->RegisterTagItemMapping(ResourceTag, ResourceData.ResourceNodeId);
+			const FName ResourceTag = FName(*FString::Printf(TEXT("MOResource_%s"), *MeshData.ResourceNodeId.ToString()));
+			PCGSubsystem->RegisterTagItemMapping(ResourceTag, MeshData.ResourceNodeId);
 		}
 
 		// Add instances (bWorldSpace=true to handle world-space transforms correctly)
-		ISM->AddInstances(ResourceData.Transforms, false, true);
-		InstancesAdded += ResourceData.Transforms.Num();
+		ISM->AddInstances(MeshData.Transforms, false, true);
+		InstancesAdded += MeshData.Transforms.Num();
 
 		UE_LOG(LogMOFramework, Verbose, TEXT("[MOResourceSpawner] Added %d instances of '%s' (mesh: %s, tags: %d)"),
-			ResourceData.Transforms.Num(), *ResourceData.ResourceNodeId.ToString(),
-			*ResourceData.Mesh->GetName(), ComponentTags.Num());
+			MeshData.Transforms.Num(), *MeshData.ResourceNodeId.ToString(),
+			*MeshData.Mesh->GetName(), ComponentTags.Num());
 
 		ComponentsCreated++;
 	}
@@ -302,45 +333,29 @@ TMap<FName, FMOPCGResourceSpawnerElement::FResourceSpawnData> FMOPCGResourceSpaw
 
 		const FName RowName = Entry.ResourceRowName;
 
-		// Select a mesh variation
-		const FMOResourceMeshVariation* SelectedVariation = Definition->SelectMeshVariation(RandomStream);
-		if (!SelectedVariation)
+		// Check that at least one mesh variation exists
+		if (Definition->MeshVariations.Num() == 0)
 		{
 			UE_LOG(LogMOFramework, Warning, TEXT("[MOResourceSpawner] No mesh variations defined for resource '%s'"),
 				*RowName.ToString());
 			continue;
 		}
 
-		// Load the mesh
-		UStaticMesh* Mesh = SelectedVariation->Mesh.LoadSynchronous();
-		if (!Mesh)
-		{
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOResourceSpawner] Failed to load mesh for resource '%s'"),
-				*RowName.ToString());
-			continue;
-		}
-
-		// Create spawn data
+		// Create spawn data - but don't select a specific mesh yet (that happens per-instance)
 		FResourceSpawnData& ResourceData = Result.Add(RowName);
 		ResourceData.ResourceNodeId = RowName;
 		ResourceData.DisplayName = Definition->DisplayName;
-		ResourceData.Mesh = Mesh;
 		ResourceData.ResourceType = Definition->ResourceType;
 		ResourceData.MinScale = Entry.GetEffectiveMinScale(DataTable);
 		ResourceData.MaxScale = Entry.GetEffectiveMaxScale(DataTable);
 		ResourceData.bRandomizeRotation = Definition->bRandomizeRotation;
-
-		// Load material override if specified
-		if (!SelectedVariation->MaterialOverride.IsNull())
-		{
-			ResourceData.MaterialOverride = SelectedVariation->MaterialOverride.LoadSynchronous();
-		}
+		ResourceData.Definition = Definition;  // Store pointer for per-instance mesh selection
 
 		// Get all auto-generated tags from the DataTable definition
 		ResourceData.AllTags = Definition->GetAllTags();
 
-		UE_LOG(LogMOFramework, Verbose, TEXT("[MOResourceSpawner] Loaded resource '%s' with %d tags, mesh '%s'"),
-			*RowName.ToString(), ResourceData.AllTags.Num(), *Mesh->GetName());
+		UE_LOG(LogMOFramework, Verbose, TEXT("[MOResourceSpawner] Loaded resource '%s' with %d tags, %d mesh variations"),
+			*RowName.ToString(), ResourceData.AllTags.Num(), Definition->MeshVariations.Num());
 	}
 
 	return Result;
