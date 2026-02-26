@@ -177,18 +177,39 @@ bool UMOInteractorComponent::FindInteractionTarget(FMOInteractionTarget& OutTarg
 			}
 		}
 
-		// Check if this ISM/HISM is interactable via:
-		// 1. KeepOnHarvest tag on component or owner actor
-		// 2. PCG subsystem tag/mesh mapping
+		// Check if this ISM/HISM is interactable via harvestable indicators:
+		// 1. KeepOnHarvest tag (trees/bushes that persist after harvest)
+		// 2. Harvestable tag (generic harvestable resources)
+		// 3. MOResource_* tag (typed resources like Rock, Ore, Tree)
+		// 4. PCG subsystem tag/mesh mapping
 		const bool bHasKeepOnHarvestTag = ISMComp->ComponentHasTag(TEXT("KeepOnHarvest")) ||
 			(HitActor && HitActor->ActorHasTag(TEXT("KeepOnHarvest")));
+		const bool bHasHarvestableTag = ISMComp->ComponentHasTag(TEXT("Harvestable")) ||
+			(HitActor && HitActor->ActorHasTag(TEXT("Harvestable")));
+
+		// Check for MOResource_* tags (Rock, Ore, Tree, Bush, Plant)
+		bool bHasResourceTypeTag = false;
+		for (const FName& Tag : ISMComp->ComponentTags)
+		{
+			if (Tag.ToString().StartsWith(TEXT("MOResource_")))
+			{
+				bHasResourceTypeTag = true;
+				break;
+			}
+		}
 
 		UWorld* World = GetWorld();
 		UMOPCGInteractionSubsystem* PCGSubsystem = World ? World->GetSubsystem<UMOPCGInteractionSubsystem>() : nullptr;
 		const bool bHasTagMapping = PCGSubsystem && !PCGSubsystem->GetItemIdForComponentTags(ISMComp).IsNone();
 		const bool bHasMeshMapping = PCGSubsystem && PCGSubsystem->IsMeshHarvestable(ISMComp->GetStaticMesh());
 
-		if (bHasKeepOnHarvestTag || bHasTagMapping || bHasMeshMapping)
+		const bool bIsHarvestable = bHasKeepOnHarvestTag || bHasHarvestableTag || bHasResourceTypeTag || bHasTagMapping || bHasMeshMapping;
+
+		UE_LOG(LogMOFramework, Verbose, TEXT("[MOInteractor] ISM Target Check - KeepOnHarvest:%d Harvestable:%d ResourceType:%d TagMap:%d MeshMap:%d = %s"),
+			bHasKeepOnHarvestTag, bHasHarvestableTag, bHasResourceTypeTag, bHasTagMapping, bHasMeshMapping,
+			bIsHarvestable ? TEXT("HARVESTABLE") : TEXT("not harvestable"));
+
+		if (bIsHarvestable)
 		{
 			OutTarget.bIsInstancedMeshTarget = true;
 			OutTarget.ISMComponent = ISMComp;
@@ -204,6 +225,15 @@ bool UMOInteractorComponent::FindInteractionTarget(FMOInteractionTarget& OutTarg
 				OutTarget.bIsHISM = false;
 			}
 			return true;
+		}
+		else
+		{
+			// Log component tags for debugging
+			UE_LOG(LogMOFramework, Log, TEXT("[MOInteractor] ISM not harvestable. Tags on component:"));
+			for (const FName& Tag : ISMComp->ComponentTags)
+			{
+				UE_LOG(LogMOFramework, Log, TEXT("[MOInteractor]   - %s"), *Tag.ToString());
+			}
 		}
 	}
 
