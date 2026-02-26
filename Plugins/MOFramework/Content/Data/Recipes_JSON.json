@@ -6640,6 +6640,192 @@
 		"bDestroysTarget": true
 	},
 	{
+		"Name": "GatherHammerstones",
+		"RecipeId": "GatherHammerstones",
+		"DisplayName": "NSLOCTEXT(\"Recipes\", \"GatherHammerstones_DisplayName\", \"Gather Loose Stones\")",
+		"Description": "NSLOCTEXT(\"Recipes\", \"GatherHammerstones_Description\", \"Search around the boulder for loose stones suitable for use as tools.\")",
+		"Ingredients": [],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "Hammerstone01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 3,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Foraging",
+		"RequiredSkillLevel": 0,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 5,
+		"Icon": "None",
+		"Category": "Harvest",
+		"RequiredTools": [],
+		"bRequiresDiscovery": false,
+		"DiscoveryKnowledgeId": "None",
+		"DiscoveryKnowledgeLevel": 0,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 0,
+		"BuildRange": 0,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 0,
+		"FuelConsumptionRate": 0,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": true,
+		"RequiredTargetTag": "Gives_Hammerstone01",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "GatherRiverCobbles",
+		"RecipeId": "GatherRiverCobbles",
+		"DisplayName": "NSLOCTEXT(\"Recipes\", \"GatherRiverCobbles_DisplayName\", \"Gather Cobbles\")",
+		"Description": "NSLOCTEXT(\"Recipes\", \"GatherRiverCobbles_Description\", \"Collect smooth river cobbles from around the boulder.\")",
+		"Ingredients": [],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "RiverCobble01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 2,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Foraging",
+		"RequiredSkillLevel": 0,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 3,
+		"Icon": "None",
+		"Category": "Harvest",
+		"RequiredTools": [],
+		"bRequiresDiscovery": false,
+		"DiscoveryKnowledgeId": "None",
+		"DiscoveryKnowledgeLevel": 0,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 0,
+		"BuildRange": 0,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 0,
+		"FuelConsumptionRate": 0,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": true,
+		"RequiredTargetTag": "Gives_RiverCobble01",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "MineRock",
+		"RecipeId": "MineRock",
+		"DisplayName": "NSLOCTEXT(\"Recipes\", \"MineRock_DisplayName\", \"Mine Stone\")",
+		"Description": "NSLOCTEXT(\"Recipes\", \"MineRock_Description\", \"Break apart the boulder to extract usable stone. Much faster with a pickaxe.\")",
+		"Ingredients": [],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "Stone01",
+				"Quantity": 3,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 45,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Mining",
+		"RequiredSkillLevel": 0,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 25,
+		"Icon": "None",
+		"Category": "Harvest",
+		"RequiredTools": [
+			{
+				"ToolType": "Pickaxe",
+				"MinQuality": 0,
+				"DurabilityConsumed": 1,
+				"bIsRequired": false,
+				"MissingToolTimeMultiplier": 5,
+				"MissingToolQualityMultiplier": 1
+			}
+		],
+		"bRequiresDiscovery": false,
+		"DiscoveryKnowledgeId": "None",
+		"DiscoveryKnowledgeLevel": 0,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 0,
+		"BuildRange": 0,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 0,
+		"FuelConsumptionRate": 0,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": true,
+		"RequiredTargetTag": "Gives_Stone01",
+		"bDestroysTarget": true
+	},
+	{
 		"Name": "BuildCampfire",
 		"RecipeId": "BuildCampfire",
 		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"BuildCampfire_DisplayName\", \"Build Campfire\")",
