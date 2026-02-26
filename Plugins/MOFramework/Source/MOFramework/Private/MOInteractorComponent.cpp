@@ -354,11 +354,38 @@ bool UMOInteractorComponent::TrySecondaryInteract()
 			return false;
 		}
 
-		// Check for KeepOnHarvest tag on component or owner actor
+		// Check if this is a harvestable resource (any of these conditions):
+		// 1. Has KeepOnHarvest tag (trees, bushes that persist after partial harvest)
+		// 2. Has Harvestable tag (generic harvestable resources)
+		// 3. Has MOResource_* tag (typed resources like Rock, Ore, Tree)
+		// 4. Has PCG subsystem tag/mesh mapping
+		AActor* ISMOwner = ISMComp->GetOwner();
 		const bool bHasKeepOnHarvestTag = ISMComp->ComponentHasTag(TEXT("KeepOnHarvest")) ||
-			(ISMComp->GetOwner() && ISMComp->GetOwner()->ActorHasTag(TEXT("KeepOnHarvest")));
+			(ISMOwner && ISMOwner->ActorHasTag(TEXT("KeepOnHarvest")));
+		const bool bHasHarvestableTag = ISMComp->ComponentHasTag(TEXT("Harvestable")) ||
+			(ISMOwner && ISMOwner->ActorHasTag(TEXT("Harvestable")));
 
-		if (!bHasKeepOnHarvestTag)
+		// Check for MOResource_* tags (Rock, Ore, Tree, Bush, Plant)
+		bool bHasResourceTypeTag = false;
+		for (const FName& Tag : ISMComp->ComponentTags)
+		{
+			if (Tag.ToString().StartsWith(TEXT("MOResource_")))
+			{
+				bHasResourceTypeTag = true;
+				break;
+			}
+		}
+
+		// Also check PCG subsystem mappings
+		UWorld* World = GetWorld();
+		UMOPCGInteractionSubsystem* PCGSubsystem = World ? World->GetSubsystem<UMOPCGInteractionSubsystem>() : nullptr;
+		const bool bHasTagMapping = PCGSubsystem && !PCGSubsystem->GetItemIdForComponentTags(ISMComp).IsNone();
+		const bool bHasMeshMapping = PCGSubsystem && PCGSubsystem->IsMeshHarvestable(ISMComp->GetStaticMesh());
+
+		const bool bIsHarvestable = bHasKeepOnHarvestTag || bHasHarvestableTag ||
+			bHasResourceTypeTag || bHasTagMapping || bHasMeshMapping;
+
+		if (!bIsHarvestable)
 		{
 			return false;
 		}
@@ -376,6 +403,8 @@ bool UMOInteractorComponent::TrySecondaryInteract()
 			return false;
 		}
 
+		// ShowKeepOnHarvestContextMenu works for any harvestable resource
+		// (the name is historical - it handles all ISM harvest targets)
 		UIManager->ShowKeepOnHarvestContextMenu(Target);
 		return true;
 	}
