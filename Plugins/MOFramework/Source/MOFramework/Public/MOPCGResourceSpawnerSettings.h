@@ -88,8 +88,10 @@ struct MOFRAMEWORK_API FMOPCGResourceEntry
 	 * Row name in the shared ResourceNodeDataTable.
 	 * Use the dropdown to select the resource type (e.g., "BlackAlder", "IronOre").
 	 * All tags, meshes, and yields come from the DataTable definition.
+	 *
+	 * NOTE: The dropdown is populated from the ResourceNodeDataTable on the parent settings.
 	 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|PCG")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|PCG", meta=(GetOptions="GetResourceRowNames"))
 	FName ResourceRowName = NAME_None;
 
 	/**
@@ -177,6 +179,10 @@ public:
 	// UPCGSettings interface
 	virtual FPCGElementPtr CreateElement() const override;
 	virtual bool UseSeed() const override { return true; }
+
+	/** Returns list of row names from ResourceNodeDataTable for dropdown menus. */
+	UFUNCTION()
+	TArray<FName> GetResourceRowNames() const;
 
 #if WITH_EDITOR
 	virtual FName GetDefaultNodeName() const override { return FName(TEXT("MO Resource Spawner")); }

@@ -27,6 +27,21 @@ UMOPCGResourceSpawnerSettings::UMOPCGResourceSpawnerSettings()
 #endif
 }
 
+TArray<FName> UMOPCGResourceSpawnerSettings::GetResourceRowNames() const
+{
+	TArray<FName> RowNames;
+
+	if (ResourceNodeDataTable)
+	{
+		RowNames = ResourceNodeDataTable->GetRowNames();
+	}
+
+	// Always include None as an option
+	RowNames.Insert(NAME_None, 0);
+
+	return RowNames;
+}
+
 FPCGElementPtr UMOPCGResourceSpawnerSettings::CreateElement() const
 {
 	return MakeShared<FMOPCGResourceSpawnerElement>();
