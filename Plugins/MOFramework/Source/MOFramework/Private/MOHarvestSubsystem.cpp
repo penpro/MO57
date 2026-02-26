@@ -101,25 +101,32 @@ TArray<FName> UMOHarvestSubsystem::CollectTargetTags(UInstancedStaticMeshCompone
 
 FName UMOHarvestSubsystem::GetItemIdForGivesTag(FName Tag) const
 {
-	// Parse "GivesX" format to extract item ID
+	// Parse "Gives_X" or "GivesX" format to extract item ID
 	FString TagString = Tag.ToString();
+
+	// Use PCG interaction subsystem's tag mapping first
+	if (UMOPCGInteractionSubsystem* PCGSubsystem = GetWorld()->GetSubsystem<UMOPCGInteractionSubsystem>())
+	{
+		const FName* MappedItem = PCGSubsystem->TagToItemMap.Find(Tag);
+		if (MappedItem)
+		{
+			return *MappedItem;
+		}
+	}
+
+	// Handle "Gives_ItemId" format (e.g., "Gives_Stick01" -> "Stick01")
+	// This is the current format from GetYieldTags() in MOResourceNodeDefinitionRow
+	if (TagString.StartsWith(TEXT("Gives_")))
+	{
+		// Strip "Gives_" prefix (6 chars) - the remainder IS the item ID
+		return FName(*TagString.RightChop(6));
+	}
+
+	// Handle legacy "GivesX" format (e.g., "GivesBark" -> "Bark01")
 	if (TagString.StartsWith(TEXT("Gives")))
 	{
-		// Strip "Gives" prefix to get item suffix
 		FString ItemSuffix = TagString.RightChop(5);
-
-		// Use PCG interaction subsystem's tag mapping
-		if (UMOPCGInteractionSubsystem* PCGSubsystem = GetWorld()->GetSubsystem<UMOPCGInteractionSubsystem>())
-		{
-			const FName* MappedItem = PCGSubsystem->TagToItemMap.Find(Tag);
-			if (MappedItem)
-			{
-				return *MappedItem;
-			}
-		}
-
 		// Fallback: assume tag "GivesFoo" maps to "Foo01"
-		// This is a convention - actual mapping should be registered in PCG subsystem
 		return FName(*FString::Printf(TEXT("%s01"), *ItemSuffix));
 	}
 

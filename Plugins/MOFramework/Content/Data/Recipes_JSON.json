@@ -6445,7 +6445,7 @@
 		"FuelConsumptionRate": 0,
 		"AcceptedFuelItems": [],
 		"bIsHarvestRecipe": true,
-		"RequiredTargetTag": "GivesBark",
+		"RequiredTargetTag": "Gives_Bark01",
 		"bDestroysTarget": false
 	},
 	{
@@ -6504,7 +6504,7 @@
 		"FuelConsumptionRate": 0,
 		"AcceptedFuelItems": [],
 		"bIsHarvestRecipe": true,
-		"RequiredTargetTag": "GivesStick",
+		"RequiredTargetTag": "Gives_Stick01",
 		"bDestroysTarget": false
 	},
 	{
@@ -6563,7 +6563,7 @@
 		"FuelConsumptionRate": 0,
 		"AcceptedFuelItems": [],
 		"bIsHarvestRecipe": true,
-		"RequiredTargetTag": "GivesSap",
+		"RequiredTargetTag": "Gives_Resin01",
 		"bDestroysTarget": false
 	},
 	{
@@ -6594,7 +6594,7 @@
 		"Category": "Harvest",
 		"RequiredTools": [
 			{
-				"ToolType": "None",
+				"ToolType": "Axe",
 				"MinQuality": 0.5,
 				"DurabilityConsumed": 1,
 				"bIsRequired": true,
