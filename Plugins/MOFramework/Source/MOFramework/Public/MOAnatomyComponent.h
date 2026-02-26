@@ -1,3 +1,81 @@
+/**
+ * =============================================================================
+ * MOAnatomyComponent.h - Body Parts, Wounds, and Conditions System
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE THIS HEADER when issues arise or patterns change
+ *
+ * PURPOSE:
+ * Pawn component managing physical body structure with ~55 body parts at
+ * finger/toe-level granularity. Tracks wounds, conditions, damage cascades,
+ * and death conditions. Central hub for the medical system.
+ *
+ * KEY RESPONSIBILITIES:
+ * 1. Track body part status (Healthy/Damaged/Severed/Destroyed)
+ * 2. Manage wounds with bleeding, infection, healing progression
+ * 3. Manage conditions (hypothermia, infection, shock, etc.)
+ * 4. Apply treatments (bandages, sutures, medications)
+ * 5. Detect death conditions (instant death for brain/heart, timers for lungs)
+ * 6. Feed data to Vitals/Mental components
+ *
+ * ARCHITECTURE NOTES:
+ * - Uses FastArraySerializer for Wounds and Conditions (efficient replication)
+ * - Tick interval 1.0s (configurable via TickInterval)
+ * - Caches references to VitalsComponent and MentalStateComponent
+ * - All modifications server-authoritative
+ *
+ * MEDICAL CASCADE (from CLAUDE.md):
+ * Wounds (bleed) -> Vitals (blood volume) -> Mental (consciousness)
+ *        |
+ * Heart/Lung damage -> SpO2/BP -> Death timers
+ *
+ * CRITICAL PATTERNS:
+ * 1. Wound Processing:
+ *    InflictDamage() -> Create FMOWound -> Add to Wounds array
+ *    TickAnatomy() -> ProcessWound() per wound -> Apply bleed/heal
+ *
+ * 2. Death Conditions:
+ *    Brain/Heart destroyed -> OnInstantDeath broadcast
+ *    Lungs destroyed -> StartDeathTimer() -> Player has X seconds
+ *
+ * 3. Treatment Application:
+ *    ApplyTreatment() -> Check skill/requirements -> Modify wound state
+ *    -> Reduce bleed rate, infection risk based on effectiveness
+ *
+ * KNOWN PITFALLS:
+ * 1. BODY PART ENUM SYNC: EMOBodyPartType must match DT_BodyParts row names.
+ *    Adding new parts requires both enum and DataTable updates.
+ *
+ * 2. WOUND ID UNIQUENESS: FGuid WoundId must be unique. Use FGuid::NewGuid()
+ *    when creating wounds, never reuse IDs.
+ *
+ * 3. HEALING VS REMOVAL: HealWound() adds progress. When progress >= 100,
+ *    wound should be removed from array. Check ProcessWound() logic.
+ *
+ * 4. INFECTION CASCADE: Untreated wounds gain InfectionSeverity over time.
+ *    High infection -> Sepsis condition -> Vitals decline.
+ *
+ * RELATED FILES:
+ * - MOMedicalTypes.h - FMOWound, FMOCondition, FMOBodyPartState structs
+ * - MOMedicalSubsystem.h - DataTable lookups for body parts, wounds
+ * - MOVitalsComponent.h - Receives blood loss, updates HR/BP
+ * - MOMentalStateComponent.h - Receives shock, affects consciousness
+ * - MOBodyPartDefinitionRow.h - DataTable row struct
+ *
+ * TESTING CHECKLIST:
+ * [ ] Damage creates wound and reduces body part HP
+ * [ ] Wound bleeding applies blood loss to VitalsComponent
+ * [ ] Bandage reduces bleed rate
+ * [ ] Infection progression over time if untreated
+ * [ ] Death timer starts when lungs destroyed
+ * [ ] Instant death when brain/heart destroyed
+ * [ ] Save/load preserves all wound and condition state
+ *
+ * LAST UPDATED: 2026-02-24 - Initial audit header
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

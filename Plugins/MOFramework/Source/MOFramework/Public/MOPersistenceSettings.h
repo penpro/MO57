@@ -1,3 +1,38 @@
+/**
+ * =============================================================================
+ * MOPersistenceSettings.h - Persistence System Project Settings
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Project Settings for the persistence/save system. Configures fallback
+ * behavior when loading saves with missing pawn classes.
+ * Accessible via Project Settings -> Plugins -> MO Persistence.
+ *
+ * KEY SETTINGS:
+ * - DefaultPersistedPawnClass: Fallback when original pawn class not found
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] FALLBACK CLASS: DefaultPersistedPawnClass MUST have
+ *   UMOIdentityComponent and UMOInventoryComponent or data will be lost.
+ *
+ * [2024-02] SOFT CLASS PTR: Uses TSoftClassPtr for deferred loading. Call
+ *   GetDefaultPersistedPawnClass() to load synchronously.
+ *
+ * [2024-02] VALIDATION: Call ValidateConfiguration() at startup to log
+ *   warnings if not properly configured.
+ *
+ * =============================================================================
+ * RELATED FILES: MOPersistenceSubsystem.h, MOWorldSaveGame.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

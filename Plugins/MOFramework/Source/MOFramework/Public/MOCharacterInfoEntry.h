@@ -1,3 +1,44 @@
+/**
+ * =============================================================================
+ * MOCharacterInfoEntry.h - Character Info Field Widget
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Widget displaying a single character info field (name, age, gender) with
+ * optional inline editing. Used in character sheets and possession menus.
+ * Shows label + value in display mode, switches to text input in edit mode.
+ *
+ * DISPLAY MODE:
+ * - LabelText: Field name (e.g., "Name:")
+ * - ValueText: Current value (e.g., "John Smith")
+ * - ChangeButton: Enters edit mode (hidden if !bCanChange)
+ *
+ * EDIT MODE:
+ * - EditTextBox: Text input for new value
+ * - ConfirmButton: Saves changes, broadcasts OnValueChanged
+ * - CancelButton: Reverts to display mode without saving
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] OPTIONAL WIDGETS: All widgets are BindWidgetOptional. Check null
+ *   before use. Minimal Blueprint can have just LabelText + ValueText.
+ *
+ * [2024-02] TEXT COMMIT: HandleTextCommitted fires on Enter key or focus loss.
+ *   OnEnter commits, OnClear cancels. Other commit types are ignored.
+ *
+ * [2024-02] ABSTRACT CLASS: Must create Blueprint subclass with widget layout.
+ *
+ * =============================================================================
+ * RELATED FILES: MOCharacterUIController.h, MOPossessionMenu.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

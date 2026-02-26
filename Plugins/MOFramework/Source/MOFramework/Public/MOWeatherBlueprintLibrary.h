@@ -1,3 +1,41 @@
+/**
+ * =============================================================================
+ * MOWeatherBlueprintLibrary.h - Weather Blueprint Function Library
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Blueprint function library for constructing weather structs from external
+ * weather plugins (Ultra Dynamic Sky, Ultra Dynamic Weather). Provides helper
+ * functions to convert UDS/UDW values to MOFramework weather types.
+ *
+ * FUNCTIONS:
+ * - MakeTimeOfDayFromUDS: Create FMOTimeOfDay from UDS values
+ * - MakeWeatherStateFromUDW: Create FMOWeatherState from UDW values
+ * - MakeWeatherExposureFromUDW: Create FMOWeatherExposure from UDW exposure test
+ *
+ * INTEGRATION:
+ * These functions are designed to be called from Blueprint event graphs in
+ * weather integration actors that bridge UDS/UDW with MOFramework.
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] UDS TIME FORMAT: UDS TimeValue is 0-2400 (not 0-24). Function
+ *   converts internally to hour/minute.
+ *
+ * [2024-02] SEASON FLOAT: UDS Season is 0-4 float (0=Winter, 1=Spring, etc).
+ *   Fractional values indicate transition between seasons.
+ *
+ * =============================================================================
+ * RELATED FILES: MOWeatherTypes.h, MOWeatherIntegrationSubsystem.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

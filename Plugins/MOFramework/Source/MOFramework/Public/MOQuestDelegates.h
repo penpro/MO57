@@ -1,3 +1,36 @@
+/**
+ * =============================================================================
+ * MOQuestDelegates.h - Quest System Delegate Declarations
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Centralized delegate declarations for the quest system. Includes quest
+ * lifecycle events, objective updates, and game event delegates.
+ *
+ * DELEGATE CATEGORIES:
+ * - Quest Lifecycle: OnQuestStarted, OnQuestCompleted, OnQuestAbandoned
+ * - Objectives: OnObjectiveUpdated, OnObjectiveCompleted
+ * - Game Events: OnGameEvent, OnItemEvent, OnSkillEvent, OnLocationEvent
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] UHT DUMMY: FMOQuestDelegatesUHTDummy exists because file-scope
+ *   DECLARE_DYNAMIC_MULTICAST_DELEGATE requires at least one USTRUCT/UCLASS.
+ *
+ * [2024-02] BROADCAST VS CALL: Quest subsystem broadcasts delegates. Components
+ *   call HandleXxx() methods directly on the subsystem (not via delegate).
+ *
+ * =============================================================================
+ * RELATED FILES: MOQuestSubsystem.h, MOQuestTypes.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

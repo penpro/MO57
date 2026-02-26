@@ -1,3 +1,48 @@
+/**
+ * =============================================================================
+ * MOKeepOnHarvestContextMenu.h - Resource Node Context Menu
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Context menu for interacting with harvestable resource nodes (trees, bushes,
+ * rocks) that use KeepOnHarvest ISM/HISM instances. Dynamically builds button
+ * list based on available harvest recipes.
+ *
+ * OPTIONS:
+ * - Inspect: Smart inspect (picks first learnable product)
+ * - Harvest [X]: Dynamic buttons per available recipe (e.g., "Harvest Berries")
+ * - Chop Down: Destroy the resource (if applicable recipe exists)
+ * - Search for Insects: Future expansion feature
+ *
+ * SMART INSPECT:
+ * Examines resource's potential products and picks the first one the player
+ * hasn't learned yet. If all known, picks the primary output.
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] DYNAMIC BUTTONS: Buttons are created at runtime based on available
+ *   recipes. Must set ButtonClass in Blueprint defaults.
+ *
+ * [2024-02] RECIPE LOOKUP: Uses FMOInteractionTarget tags to find applicable
+ *   recipes. Tags come from MOHISMInteractableComponent or mesh data.
+ *
+ * [2024-02] TOOL REQUIREMENTS: CanChopDown checks if player has required tools.
+ *   Uses MOCraftingSubsystem.CanExecuteRecipe() for validation.
+ *
+ * [2024-02] CLEANUP: ClearButtons() must remove all created widgets to prevent
+ *   memory leaks when menu closes.
+ *
+ * =============================================================================
+ * RELATED FILES: MOInteractorComponent.h, MOHarvestSubsystem.h, MOContextMenuBase.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"
@@ -17,16 +62,6 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOKeepOnHarvestMenuInspectClicked);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOKeepOnHarvestMenuHarvestClicked, FName, RecipeId);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOKeepOnHarvestMenuChopDownClicked);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOKeepOnHarvestMenuSearchInsectsClicked);
-
-/**
- * Context menu for interacting with KeepOnHarvest-tagged ISM/HISM instances.
- *
- * Options:
- * - Inspect: Smart inspect the target (picks first learnable item)
- * - Harvest [X]: Dynamic buttons for each available harvest recipe
- * - Chop Down: Destroy the target (if recipe available)
- * - Search for Insects: Future feature
- */
 UCLASS(Abstract, Blueprintable)
 class MOFRAMEWORK_API UMOKeepOnHarvestContextMenu : public UMOContextMenuBase
 {

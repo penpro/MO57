@@ -1,3 +1,41 @@
+/**
+ * =============================================================================
+ * MOKeyBindingManager.h - Runtime Key Binding Operations
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Static helper class for key binding operations at runtime. Handles getting,
+ * setting, and applying key bindings to InputMappingContexts. Used by
+ * options panel and player controller to manage custom bindings.
+ *
+ * KEY OPERATIONS:
+ * - GetCurrentBinding: Returns active binding (custom or default)
+ * - GetDefaultBinding: Returns original mapping from context
+ * - ApplyBinding: Modifies context and refreshes input subsystem
+ * - ApplyAllBindingsFromSettings: Bulk apply at game start
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] CONTEXT MODIFICATION: ApplyBinding modifies the InputMappingContext
+ *   at runtime. Changes are NOT persisted to asset - use MOGameSettings.
+ *
+ * [2024-02] SUBSYSTEM REFRESH: After modifying context, must remove and re-add
+ *   to UEnhancedInputLocalPlayerSubsystem for changes to take effect.
+ *
+ * [2024-02] SLOT INDEX: Enhanced Input supports multiple keys per action.
+ *   SlotIndex 0 = primary, 1 = secondary. Default is 0.
+ *
+ * =============================================================================
+ * RELATED FILES: MOGameSettings.h, MOKeyBindingTypes.h, MOPlayerController.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"
@@ -10,7 +48,7 @@ class AMOPlayerController;
 
 /**
  * Static helper class for key binding operations.
- * Provides centralized logic for getting, setting, and applying key bindings.
+ * See file header for operations and pitfalls.
  */
 class MOFRAMEWORK_API FMOKeyBindingManager
 {

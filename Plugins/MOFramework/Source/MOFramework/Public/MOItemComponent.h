@@ -1,3 +1,64 @@
+/**
+ * =============================================================================
+ * MOItemComponent.h - Per-Item Instance Data Component
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE THIS HEADER when issues arise or patterns change
+ *
+ * PURPOSE:
+ * Component attached to item actors that holds instance-specific data.
+ * References item definition from DataTable via ItemDefinitionId. Manages
+ * quantity, stack size, and world presence state for pickup/drop behavior.
+ *
+ * KEY RESPONSIBILITIES:
+ * 1. Store ItemDefinitionId referencing DT_Items row
+ * 2. Track Quantity for stackable items
+ * 3. Manage bWorldItemActive state for pickup visibility
+ * 4. Handle GiveToInteractorInventory for pickup action
+ *
+ * ARCHITECTURE NOTES:
+ * - ItemDefinitionId is replicated for multiplayer
+ * - bWorldItemActive controls visibility without destroying actor
+ * - Uses OnRep_ functions for client-side state changes
+ * - Delegates notify listeners of state changes
+ *
+ * CRITICAL PATTERNS:
+ * 1. Item Pickup Flow:
+ *    Interact -> GiveToInteractorInventory() -> Find inventory
+ *    -> Add to inventory -> SetWorldItemActive(false) -> Hide mesh
+ *
+ * 2. Definition Options:
+ *    GetItemDefinitionOptions() provides dropdown list for editor
+ *    -> Reads from MOItemDatabaseSettings DataTable
+ *
+ * KNOWN PITFALLS:
+ * 1. DEFINITION ID SYNC: ItemDefinitionId must exist in DataTable.
+ *    Invalid IDs will fail silently. Validate in BeginPlay if needed.
+ *
+ * 2. QUANTITY VS STACK: Quantity can exceed MaxStackSize if set manually.
+ *    GiveToInteractorInventory handles splitting, but direct access doesn't.
+ *
+ * 3. WORLD ACTIVE STATE: Setting bWorldItemActive false hides but doesn't
+ *    destroy. Item remains in memory. Use Destroy() for permanent removal.
+ *
+ * RELATED FILES:
+ * - MOWorldItem.h - Actor class that owns this component
+ * - MOInventoryComponent.h - Target for pickup operations
+ * - MOItemDefinitionRow.h - DataTable row struct
+ * - MOItemDatabaseSettings.h - Project settings for DataTable path
+ *
+ * TESTING CHECKLIST:
+ * [ ] ItemDefinitionId dropdown shows DataTable entries
+ * [ ] Pickup adds item to inventory correctly
+ * [ ] bWorldItemActive false hides item mesh
+ * [ ] Quantity replicates to clients
+ * [ ] OnItemDefinitionIdChanged fires on change
+ *
+ * LAST UPDATED: 2026-02-24 - Initial audit header
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

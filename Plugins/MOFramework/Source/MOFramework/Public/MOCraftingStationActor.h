@@ -1,3 +1,74 @@
+/**
+ * =============================================================================
+ * MOCraftingStationActor.h - Buildable Crafting Station
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE THIS HEADER when issues arise or patterns change
+ *
+ * PURPOSE:
+ * Buildable actor that functions as a crafting station (campfire, forge, etc.).
+ * Extends MOBuildableActor with fuel system, station inventory, audio/visual
+ * effects, and interaction handling to open filtered crafting menus.
+ *
+ * KEY RESPONSIBILITIES:
+ * 1. Provide station-specific crafting (EMOCraftingStation type)
+ * 2. Manage fuel consumption and inventory
+ * 3. Control audio/visual effects for active state
+ * 4. Store items being processed in StationInventory
+ * 5. Implement IMOInventoryHolderInterface and IMOMaterialSourceInterface
+ *
+ * OWNERSHIP:
+ * - Owner: World (spawned by building system or persistence)
+ * - Lifespan: Persists until destroyed
+ *
+ * FUEL SYSTEM:
+ * - bRequiresFuel: If true, station needs fuel to operate
+ * - CurrentFuel/MaxFuel: Current fuel level (0-100)
+ * - FuelConsumptionRate: Rate per second when active
+ * - AcceptedFuelItems: Item IDs that count as fuel
+ * - ConsumeFuelFromInventory(): Converts items to fuel
+ *
+ * INTERACTION FLOW:
+ * Primary interact (complete) -> OnCompleteInteracted_Implementation()
+ * -> Open crafting menu filtered by StationType
+ * Secondary interact -> HandleSecondaryInteract()
+ * -> Show station context menu (fuel, transfer, etc.)
+ *
+ * AUDIO/VISUAL:
+ * - OnSound: Loop while station is active (fire crackling)
+ * - UseSound: Loop while player is crafting
+ * - ActiveParticleSystem: Niagara particles when active
+ * - SetStationActive() controls all effects
+ *
+ * CRITICAL PATTERNS:
+ * 1. INITIALIZATION: StationType set from recipe in InitializeBuilding()
+ * 2. PERSISTENCE: BuildSaveData/ApplySaveData save fuel + inventory
+ * 3. FUEL CHECK: IsStationActive() requires fuel if bRequiresFuel
+ *
+ * KNOWN PITFALLS:
+ * 1. STATION TYPE: Must match EMOCraftingStation in recipe filter
+ * 2. FUEL DEPLETION: Active crafts may stall if fuel runs out
+ * 3. SOFT POINTERS: Audio/particle assets use TSoftObjectPtr
+ *
+ * RELATED FILES:
+ * - MOBuildableActor.h - Base buildable class
+ * - MOCraftingUIController.h - Opens filtered crafting menu
+ * - MOCraftingSubsystem.h - Validates station requirements
+ * - MORecipeDefinitionRow.h - Recipes with station requirements
+ *
+ * TESTING CHECKLIST:
+ * [ ] Station builds from ghost correctly
+ * [ ] Interaction opens crafting menu
+ * [ ] Fuel system consumes and depletes
+ * [ ] Audio/visual effects play when active
+ * [ ] Save/load preserves fuel and inventory
+ * [ ] Recipes filter by station type
+ *
+ * LAST UPDATED: 2026-02-24 - Initial audit header
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"
@@ -11,11 +82,6 @@ class UMOInventoryComponent;
 class UAudioComponent;
 class UNiagaraComponent;
 class UNiagaraSystem;
-
-/**
- * A buildable crafting station actor (campfire, forge, etc.).
- * When complete, interaction opens the crafting menu filtered to this station type.
- */
 UCLASS()
 class MOFRAMEWORK_API AMOCraftingStationActor : public AMOBuildableActor,
 	public IMOInventoryHolderInterface,

@@ -1,3 +1,40 @@
+/**
+ * =============================================================================
+ * MOMedicalDatabaseSettings.h - Medical System Project Settings
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Project Settings entry for configuring medical system DataTables.
+ * Accessible via Project Settings -> Plugins -> MO Medical Database.
+ *
+ * DATATABLE REFERENCES:
+ * - BodyPartDefinitionsTable: ~55 body parts with hierarchy
+ * - WoundTypeDefinitionsTable: Wound types (cut, burn, fracture, etc.)
+ * - ConditionDefinitionsTable: Medical conditions (infection, shock, etc.)
+ * - MedicalTreatmentsTable: Treatments and required items
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] SOFT REFERENCES: All tables use TSoftObjectPtr. Call
+ *   Get*Table() which loads synchronously on first access.
+ *
+ * [2024-02] VALIDATION: Call ValidateConfiguration() at startup to log
+ *   warnings for missing/misconfigured tables.
+ *
+ * [2024-02] ROW STRUCTURE TAGS: RequiredAssetDataTags ensures DataTable
+ *   picker only shows tables with correct row type.
+ *
+ * =============================================================================
+ * RELATED FILES: MOMedicalSubsystem.h, MOBodyPartDefinitionRow.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

@@ -1,3 +1,45 @@
+/**
+ * =============================================================================
+ * MOWeatherIntegrationSubsystem.h - Weather Integration World Subsystem
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * World subsystem that integrates weather data with MOFramework systems.
+ * Holds reference to active weather provider, provides convenient access
+ * to weather data, monitors weather changes and fires delegates.
+ *
+ * USAGE:
+ * 1. Create Blueprint implementing IMOWeatherProviderInterface
+ * 2. Call RegisterWeatherProvider() with your provider instance
+ * 3. Query weather data via this subsystem's functions
+ * 4. Bind to delegates for weather change events
+ *
+ * MEDICAL INTEGRATION:
+ * - GetFeelsLikeTemperature(): Accounts for wind chill and heat index
+ * - GetColdStress()/GetHeatStress(): Normalized stress values (0-1)
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] SINGLE PROVIDER: Only one weather provider can be active at a time.
+ *   RegisterWeatherProvider() replaces any existing provider.
+ *
+ * [2024-02] DEFAULT VALUES: When no provider is registered, returns
+ *   DefaultTemperatureCelsius (20.0) for temperature queries.
+ *
+ * [2024-02] PENDING SAVE DATA: If ApplyWeatherSaveData() is called before
+ *   provider registration, data is queued in PendingSaveData.
+ *
+ * =============================================================================
+ * RELATED FILES: MOWeatherProviderInterface.h, MOWeatherTypes.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

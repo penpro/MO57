@@ -1,3 +1,70 @@
+/**
+ * =============================================================================
+ * MOIdentityRegistrySubsystem.h - GUID-to-Actor Mapping System
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE THIS HEADER when issues arise or patterns change
+ *
+ * PURPOSE:
+ * WorldSubsystem that maintains a bidirectional mapping between persistent
+ * GUIDs and their corresponding Actors. Essential for save/load, inventory
+ * references, and any cross-session actor identification.
+ *
+ * KEY RESPONSIBILITIES:
+ * 1. Register actors with UMOIdentityComponent on spawn/BeginPlay
+ * 2. Maintain GuidToActor and ActorToGuid maps
+ * 3. Unregister actors on destruction
+ * 4. Broadcast registration/unregistration events
+ *
+ * ARCHITECTURE NOTES:
+ * - WorldSubsystem: One per UWorld, recreated on level load
+ * - Uses TWeakObjectPtr for actor references (avoids dangling pointers)
+ * - Tracks actors in TrackedActors set to prevent double-binding
+ * - OnIdentityRegistered fires when GUID becomes available (may be deferred)
+ *
+ * CRITICAL PATTERNS:
+ * 1. Actor Registration:
+ *    ActorSpawned -> TryTrackActor -> Bind to OnGuidAvailable
+ *    -> HandleGuidAvailable -> RegisterGuidForActor -> Broadcast
+ *
+ * 2. GUID Resolution:
+ *    TryResolveActor(Guid) -> Check GuidToActor map -> Return Actor or null
+ *    TryGetGuidFromActor(Actor) -> Check ActorToGuid map -> Return Guid
+ *
+ * 3. Cleanup:
+ *    Actor destroyed -> HandleActorDestroyed -> UnregisterActor
+ *    -> Remove from maps -> Broadcast OnIdentityUnregistered
+ *
+ * KNOWN PITFALLS:
+ * 1. DEFERRED GUID: UMOIdentityComponent may not have GUID immediately
+ *    (e.g., loaded from save). Always check IsGuidValid() before registering.
+ *
+ * 2. LEVEL TRANSITIONS: WorldSubsystem destroyed on level change. All
+ *    registrations lost. New level re-registers all actors on BeginPlay.
+ *
+ * 3. RACE CONDITIONS: Actor may be destroyed before GUID registration
+ *    completes. Always check Actor validity in HandleGuidAvailable.
+ *
+ * 4. DELEGATE BINDING: Uses AddUObject for delegates - will auto-unbind
+ *    on object destruction, but manual cleanup in Deinitialize recommended.
+ *
+ * RELATED FILES:
+ * - MOIdentityComponent.h - Per-actor component that owns the GUID
+ * - MOPersistenceSubsystem.h - Uses this for GUID-based save/load
+ * - MOInventoryComponent.h - References items by GUID
+ *
+ * TESTING CHECKLIST:
+ * [ ] New actors get registered automatically
+ * [ ] Destroyed actors removed from maps
+ * [ ] Level transition re-registers existing actors
+ * [ ] GetRegisteredCount() matches expected actor count
+ * [ ] No duplicate registrations (check TrackedActors)
+ *
+ * LAST UPDATED: 2026-02-24 - Initial audit header
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

@@ -1,3 +1,45 @@
+/**
+ * =============================================================================
+ * MOWorldSaveGame.h - World Save/Load Data Structure
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Main save game class containing all world state data. Stores pawn records,
+ * inventories, world items, buildings, voxel terrain modifications, quest
+ * progress, weather state, and metadata for save slot display.
+ *
+ * DATA SECTIONS:
+ * - Metadata: DisplayName, SaveTimestamp, PlayTime, Screenshot, WorldSeed
+ * - Pawns: PersistedPawns with full component state
+ * - Inventories: PawnInventoriesByGuid
+ * - World Items: WorldItems dropped in world
+ * - Buildings: Buildings array with progress/inventory
+ * - Voxel: VoxelSculptData for terrain modifications
+ * - Quests: QuestData (active/completed)
+ * - Weather: WeatherData for UDW/UDS state
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] GUID CONSISTENCY: All GUIDs must come from UMOIdentityComponent.
+ *   Never generate new GUIDs for existing entities during save.
+ *
+ * [2024-02] COMPONENT DATA FLAG: bHasComponentData in FMOPersistedPawnRecord
+ *   indicates if component save data is populated (for legacy save compat).
+ *
+ * [2024-02] WORLD SEED: WorldSeed must match voxel generation seed.
+ *   Stored in metadata for restoration on load.
+ *
+ * =============================================================================
+ * RELATED FILES: MOPersistenceSubsystem.h, MOIdentityComponent.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

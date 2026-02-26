@@ -1,14 +1,10 @@
-#pragma once
-
-#include "CoreMinimal.h"
-#include "MORecipeDefinitionRow.h"
-
-#include "MOBuildingTypes.generated.h"
-
 /**
  * =============================================================================
- * MOBuildingTypes - Building System Type Definitions
+ * MOBuildingTypes.h - Building System Type Definitions
  * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
  *
  * PURPOSE:
  * Contains all enums, structs, and delegates used by the building system.
@@ -87,7 +83,40 @@
  *     -> Listeners: UI for material needed notification
  *
  * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] GHOST LIFETIME: Ghost buildings persist until started or cancelled.
+ *   They save/load with the world. Don't assume they're temporary.
+ *
+ * [2024-02] MATERIAL SOURCE PRIORITY: Sources are checked by priority.
+ *   Inventory (100) before Containers (50) before WorldItems (25).
+ *   See MOMaterialSourceInterface.h for details.
+ *
+ * [2024-02] PART ORDERING: Build parts execute in array order. Weighted parts
+ *   consume proportionally - if part has Weight=2 and total is 10, it takes
+ *   20% of total build time and materials.
+ *
+ * [2024-02] GATHER RANGE: GatherRange is in Unreal Units. 150 UU ≈ 5 feet.
+ *   This affects which containers and world items can be used.
+ *
+ * =============================================================================
+ * RELATED FILES
+ * =============================================================================
+ * - MOBuildingComponent.h - Placement mode management
+ * - MOBuildProgressComponent.h - Construction progress
+ * - MOBuildableActor.h - Base class for buildings
+ * - MOMaterialSourceInterface.h - Material gathering
+ *
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
  */
+
+#pragma once
+
+#include "CoreMinimal.h"
+#include "MORecipeDefinitionRow.h"
+#include "MOBuildingTypes.generated.h"
 
 class AMOBuildableActor;
 

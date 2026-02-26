@@ -1,3 +1,43 @@
+/**
+ * =============================================================================
+ * MOWaterTypes.h - Water System Data Structures
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Defines data structures for the water system. Includes Gerstner wave
+ * configuration and water surface query results. Used by MOWaterActorBase
+ * for wave simulation and buoyancy calculations.
+ *
+ * KEY TYPES:
+ * - FMOGerstnerWave: Single wave configuration (direction, amplitude, etc.)
+ * - FMOWaterSurfaceInfo: Result of water surface queries
+ *
+ * GERSTNER WAVES:
+ * Gerstner waves provide realistic ocean-like surface displacement. Multiple
+ * waves are summed for complex, natural-looking water motion.
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] UNITS: All values are in CENTIMETERS (Unreal units).
+ *   Amplitude 50 = 50cm peak height. Wavelength 500 = 5 meters.
+ *
+ * [2024-02] STEEPNESS RANGE: Steepness > 1.0 causes wave self-intersection.
+ *   Keep clamped to 0-1 range. Engine enforces via meta=(ClampMax).
+ *
+ * [2024-02] DIRECTION NORMALIZATION: Direction is normalized internally.
+ *   Non-normalized input is acceptable.
+ *
+ * =============================================================================
+ * RELATED FILES: MOWaterActorBase.h, MOWaterMaterialGenerator.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

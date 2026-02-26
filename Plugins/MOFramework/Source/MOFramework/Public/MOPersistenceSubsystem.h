@@ -1,3 +1,80 @@
+/**
+ * =============================================================================
+ * MOPersistenceSubsystem.h - World Save/Load System
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE THIS HEADER when issues arise or patterns change
+ *
+ * PURPOSE:
+ * GameInstanceSubsystem managing world save/load operations. Persists pawns,
+ * inventories, world items, buildings, voxel sculpts, quests, and weather.
+ * Maintains GUID-based identity across save sessions.
+ *
+ * KEY RESPONSIBILITIES:
+ * 1. Save/load full world state to USaveGame objects
+ * 2. Track pawn records (living, deceased, spawned status)
+ * 3. Track destroyed GUIDs to prevent respawning deleted items
+ * 4. Manage current save slot and metadata (playtime, screenshots)
+ * 5. Spawn pawns from saved records for possession system
+ *
+ * ARCHITECTURE NOTES:
+ * - GameInstanceSubsystem: Survives level transitions, one per game instance
+ * - Binds to UMOIdentityRegistrySubsystem to track destroyed actors
+ * - LoadedWorldSave holds in-memory copy of save state
+ * - Suppression system prevents recording false destroys during load
+ *
+ * CRITICAL PATTERNS:
+ * 1. Save/Load Flow:
+ *    Save: CaptureX() methods -> SaveObject -> USaveGame::SaveGameToSlot()
+ *    Load: LoadGameFromSlot() -> RespawnX() methods -> ApplyX() methods
+ *
+ * 2. Destroyed GUID Tracking:
+ *    - SessionDestroyedGuids: GUIDs destroyed this session
+ *    - IsGuidDestroyed(): Check before spawning items
+ *    - ClearDestroyedGuid(): When item re-enters world
+ *
+ * 3. Load Suppression:
+ *    - During load, many actors get destroyed/respawned
+ *    - bSuppressDestroyedGuidRecording prevents false positives
+ *    - Clears after LoadSuppressionDuration (0.25s)
+ *
+ * KNOWN PITFALLS:
+ * 1. CIRCULAR DEPENDENCY: MOInventoryComponent.DropItemByGuid() calls
+ *    IsGuidDestroyed() creating runtime dependency. If decoupling needed,
+ *    create IMOPersistenceProvider interface.
+ *
+ * 2. PAWN CLASS MISMATCH: If saved PawnClass changed or deleted, spawn
+ *    fails. Check FMOPersistedPawnRecord::PawnClass before spawn.
+ *
+ * 3. WORLD CONTEXT: This is GameInstance subsystem but binds to World.
+ *    Must handle world transitions - Deinitialize unbinds, new world
+ *    triggers HandlePostWorldInitialization.
+ *
+ * 4. VOXEL SCULPT DATA: Large sculpts can bloat save files. Consider
+ *    chunking or compression for large worlds.
+ *
+ * 5. SCREENSHOT CAPTURE: CaptureScreenshotForSave() may fail silently
+ *    if no viewport is rendering. Check for null/empty data.
+ *
+ * RELATED FILES:
+ * - MOWorldSaveGame.h - USaveGame class holding all persisted data
+ * - MOSaveGameTypes.h - Struct definitions for persisted records
+ * - MOIdentityComponent.h - Per-actor GUID identity
+ * - MOIdentityRegistrySubsystem.h - GUID-to-Actor mapping
+ * - MOInventoryComponent.h - Inventory serialization (circular dep)
+ *
+ * TESTING CHECKLIST:
+ * [ ] New game -> save -> load maintains state
+ * [ ] Deleted item stays deleted after save/load
+ * [ ] Pawn possession restored correctly
+ * [ ] Level transition doesn't lose data
+ * [ ] Failed pawn loads reported in LastLoadResult
+ *
+ * LAST UPDATED: 2026-02-24 - Initial audit header
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

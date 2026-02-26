@@ -1,3 +1,39 @@
+/**
+ * =============================================================================
+ * MOHISMHarvestHelper.h - HISM/ISM Instance Harvesting Utility
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Utility class for HISM/ISM instance harvesting and removal. Consolidates
+ * duplicate HISM removal logic from ForagingSubsystem and PCGInteractionSubsystem.
+ *
+ * KEY FEATURES:
+ * - Batch removal with automatic reverse-order processing (avoids index shifting)
+ * - Tag-based "KeepOnHarvest" support for persistent resources
+ * - Safe null checks and logging
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] REVERSE ORDER: RemoveInstances() sorts indices in descending order
+ *   before removal to prevent index shifting issues.
+ *
+ * [2024-02] KEEP ON HARVEST: ShouldKeepOnHarvest() checks both component
+ *   and owning actor for "KeepOnHarvest" tag.
+ *
+ * [2024-02] TRANSFORM RETRIEVAL: GetInstanceTransform returns world transform.
+ *   Check return value before using OutTransform.
+ *
+ * =============================================================================
+ * RELATED FILES: MOForagingSubsystem.h, MOPCGInteractionSubsystem.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

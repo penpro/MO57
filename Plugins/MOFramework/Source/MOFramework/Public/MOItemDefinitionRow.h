@@ -1,5 +1,107 @@
 #pragma once
 
+/**
+ * =============================================================================
+ * MOItemDefinitionRow.h
+ * =============================================================================
+ *
+ * PURPOSE:
+ *   DataTable row structure for item definitions (DT_Items).
+ *   Central definition for all item properties, visuals, and behaviors.
+ *
+ * RESPONSIBILITIES:
+ *   - Item identification (ItemId, DisplayName, Description)
+ *   - Item classification (EMOItemType, Tags, Rarity)
+ *   - Physical properties (Weight, MaxStackSize, BaseValue)
+ *   - Tool capabilities (ToolCapabilities array with effectiveness)
+ *   - Weapon properties (WeaponProfileId linking to DT_Weapons)
+ *   - Visual data (UI icons, world mesh, held transform)
+ *   - Nutrition data for consumables
+ *   - Inspection/knowledge grants
+ *
+ * =============================================================================
+ * BEST PRACTICES
+ * =============================================================================
+ *
+ * 1. TOOL CAPABILITIES (Multi-Tool System):
+ *    - Items can have multiple tool types via TArray<FMOToolCapability>
+ *    - Each capability has ToolType + Effectiveness (0.0 - 1.0)
+ *    - Use HasToolCapability() and GetToolEffectiveness() helpers
+ *    - Example: Claw hammer = [{Hammer, 1.0}, {Pickaxe, 0.6}]
+ *
+ * 2. ENUM USAGE:
+ *    - Use EMOToolType enum, NOT FName strings for tool types
+ *    - Use EMOItemType for broad categorization, Tags for specifics
+ *    - StaticEnum<EMOToolType>() for enum-to-string conversion
+ *
+ * 3. WEAPON INTEGRATION:
+ *    - Set bIsWeapon = true for combat items
+ *    - Set WeaponProfileId to reference row in DT_Weapons
+ *    - Weapon damage profiles are in FMOWeaponDamageProfileRow
+ *
+ * 4. JSON IMPORT/EXPORT:
+ *    - UE exports JSON as UTF-16 encoding
+ *    - ToolCapabilities format: [{"ToolType":"Hammer","Effectiveness":0.8}]
+ *    - Use Tools/update_tool_capabilities.py for batch updates
+ *
+ * 5. VISUAL DATA:
+ *    - UI.IconSmall/IconLarge: Soft references (TSoftObjectPtr)
+ *    - WorldVisual: Mesh for dropped items
+ *    - HeldVisual: Mesh and transform for held items
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] Hatchet Removed: EMOToolType::Hatchet was merged into Axe.
+ *           All items/recipes using Hatchet must use Axe instead.
+ *
+ * [2024-02] ToolType vs ToolCapabilities: OLD format used single ToolType
+ *           and ToolQuality fields. NEW format uses ToolCapabilities array.
+ *           Use the Python migration script for conversion.
+ *
+ * [2024-02] Effectiveness Values: 1.0 = purpose-built tool, 0.5 = adequate
+ *           substitute, 0.3 = barely usable. Don't exceed 1.0.
+ *
+ * [2024-01] NSLOCTEXT in JSON: Display names use NSLOCTEXT format. Extract
+ *           readable text via regex: NSLOCTEXT\([^,]+,\s*[^,]+,\s*"([^"]+)"
+ *
+ * =============================================================================
+ * DATA TABLE NOTES
+ * =============================================================================
+ *
+ * DT_Items DataTable:
+ * - Row name = canonical ItemDefinitionId (e.g., "Hammerstone01")
+ * - ItemId field is optional sanity check (row name is authoritative)
+ * - Import from JSON recommended over CSV for complex structs
+ *
+ * =============================================================================
+ * RELATED FILES
+ * =============================================================================
+ *
+ * - MOInventoryComponent.h      : Inventory storage using these definitions
+ * - MOCraftingSubsystem.h       : Tool requirement checking
+ * - MOWeaponTypes.h             : Weapon damage profile definitions
+ * - MORecipeDefinitionRow.h     : Recipe ingredient references
+ * - Tools/update_tool_capabilities.py : JSON migration script
+ *
+ * =============================================================================
+ * CLAUDE: UPDATE THIS HEADER
+ * =============================================================================
+ *
+ * When you encounter issues with this file:
+ * 1. Add a dated entry to KNOWN PITFALLS section
+ * 2. Include the symptom and solution
+ * 3. Update BEST PRACTICES if a new pattern emerges
+ *
+ * When adding new item properties:
+ * - Add UPROPERTY with appropriate EditCondition
+ * - Update JSON export/import scripts if needed
+ * - Add helper methods for complex lookups
+ *
+ * =============================================================================
+ */
+
 #include "CoreMinimal.h"
 #include "Engine/DataTable.h"
 
@@ -23,6 +125,80 @@ enum class EMOItemType : uint8
 	Quest UMETA(DisplayName="Quest"),
 	Currency UMETA(DisplayName="Currency"),
 	Misc UMETA(DisplayName="Misc"),
+};
+
+/**
+ * Tool types for crafting and harvesting.
+ * Use this enum instead of FName strings to avoid typos and enable dropdown selection.
+ * Items can have multiple tool capabilities with different effectiveness ratings.
+ */
+UENUM(BlueprintType)
+enum class EMOToolType : uint8
+{
+	None UMETA(DisplayName="None (No Tool)"),
+
+	// Cutting/Chopping
+	Axe UMETA(DisplayName="Axe"),           // Includes hatchets (small axes)
+	Saw UMETA(DisplayName="Saw"),
+
+	// Mining/Breaking
+	Pickaxe UMETA(DisplayName="Pickaxe"),
+	Hammer UMETA(DisplayName="Hammer"),
+	Chisel UMETA(DisplayName="Chisel"),
+
+	// Cutting/Slicing
+	Knife UMETA(DisplayName="Knife"),
+	Cleaver UMETA(DisplayName="Cleaver"),
+	Scissors UMETA(DisplayName="Scissors"),
+
+	// Digging/Farming
+	Shovel UMETA(DisplayName="Shovel"),
+	Hoe UMETA(DisplayName="Hoe"),
+	Sickle UMETA(DisplayName="Sickle"),
+
+	// Crafting
+	Needle UMETA(DisplayName="Needle"),
+	Awl UMETA(DisplayName="Awl"),
+	Tongs UMETA(DisplayName="Tongs"),
+	Mallet UMETA(DisplayName="Mallet"),
+
+	// Containers (for crafting that needs liquid/heat containment)
+	Pot UMETA(DisplayName="Pot/Cauldron"),
+	Crucible UMETA(DisplayName="Crucible"),
+	Mortar UMETA(DisplayName="Mortar & Pestle"),
+
+	// Misc
+	Rope UMETA(DisplayName="Rope"),
+	Firestarter UMETA(DisplayName="Firestarter"),
+};
+
+/**
+ * Represents an item's capability to function as a specific tool type.
+ * An item can have multiple tool capabilities (e.g., a claw hammer can be Hammer + Pickaxe).
+ */
+USTRUCT(BlueprintType)
+struct MOFRAMEWORK_API FMOToolCapability
+{
+	GENERATED_BODY()
+
+	/** The tool type this item can function as. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Tool")
+	EMOToolType ToolType = EMOToolType::None;
+
+	/**
+	 * How effective this item is as this tool type (0.0 - 1.0).
+	 * 1.0 = purpose-built tool (steel pickaxe as Pickaxe)
+	 * 0.7 = good alternative (claw hammer as Pickaxe)
+	 * 0.5 = makeshift (rock as Hammer)
+	 * 0.3 = barely usable (stick as Hammer)
+	 * Affects craft time and output quality.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Tool", meta=(ClampMin="0.0", ClampMax="1.0"))
+	float Effectiveness = 1.0f;
+
+	FMOToolCapability() = default;
+	FMOToolCapability(EMOToolType InType, float InEffectiveness = 1.0f)
+		: ToolType(InType), Effectiveness(InEffectiveness) {}
 };
 
 UENUM(BlueprintType)
@@ -339,15 +515,78 @@ struct MOFRAMEWORK_API FMOItemDefinitionRow : public FTableRowBase
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Tool")
 	bool bIsTool = false;
 
-	/** Tool type identifier (Hammer, Knife, Saw, etc.). Used to match recipe requirements. */
+	/**
+	 * Tool capabilities this item has. An item can function as multiple tool types.
+	 * Example: A claw hammer has [{Hammer, 1.0}, {Pickaxe, 0.6}]
+	 * Example: A sharp rock has [{Knife, 0.4}, {Hammer, 0.3}]
+	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Tool", meta=(EditCondition="bIsTool"))
-	FName ToolType = NAME_None;
-
-	/** Quality tier (affects craft speed/quality). 1.0 = standard. */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Tool", meta=(EditCondition="bIsTool", ClampMin="0.1"))
-	float ToolQuality = 1.0f;
+	TArray<FMOToolCapability> ToolCapabilities;
 
 	/** Maximum durability (0 = indestructible). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Tool", meta=(EditCondition="bIsTool", ClampMin="0"))
 	int32 MaxDurability = 0;
+
+	// --- Weapon Properties ---
+
+	/** If true, this item can be used as a weapon in combat. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Weapon")
+	bool bIsWeapon = false;
+
+	/**
+	 * Row name in DT_Weapons referencing this weapon's damage profile.
+	 * Links to FMOWeaponDamageProfileRow for attack stats, grip type, etc.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Weapon", meta=(EditCondition="bIsWeapon"))
+	FName WeaponProfileId = NAME_None;
+
+	// --- Helper Functions ---
+
+	/** Check if this item can function as the specified tool type. */
+	bool HasToolCapability(EMOToolType InToolType) const
+	{
+		for (const FMOToolCapability& Cap : ToolCapabilities)
+		{
+			if (Cap.ToolType == InToolType)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/** Get the effectiveness of this item as the specified tool type. Returns 0 if not capable. */
+	float GetToolEffectiveness(EMOToolType InToolType) const
+	{
+		for (const FMOToolCapability& Cap : ToolCapabilities)
+		{
+			if (Cap.ToolType == InToolType)
+			{
+				return Cap.Effectiveness;
+			}
+		}
+		return 0.0f;
+	}
+
+	/** Get the primary (most effective) tool type. Returns None if not a tool. */
+	EMOToolType GetPrimaryToolType() const
+	{
+		EMOToolType Best = EMOToolType::None;
+		float BestEffectiveness = 0.0f;
+		for (const FMOToolCapability& Cap : ToolCapabilities)
+		{
+			if (Cap.Effectiveness > BestEffectiveness)
+			{
+				Best = Cap.ToolType;
+				BestEffectiveness = Cap.Effectiveness;
+			}
+		}
+		return Best;
+	}
+
+	/** Check if this item has a valid weapon profile for combat. */
+	bool HasWeaponProfile() const
+	{
+		return bIsWeapon && !WeaponProfileId.IsNone();
+	}
 };

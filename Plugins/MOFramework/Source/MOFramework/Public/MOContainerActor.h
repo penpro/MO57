@@ -1,3 +1,84 @@
+/**
+ * =============================================================================
+ * MOContainerActor.h - Buildable Storage Container with Inventory
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE THIS HEADER when issues arise or patterns change
+ *
+ * PURPOSE:
+ * Buildable container actor providing storage slots. Extends MOBuildableActor
+ * with inventory functionality. Interaction opens container UI for item transfer.
+ * Can serve as material source for nearby crafting operations.
+ *
+ * KEY RESPONSIBILITIES:
+ * 1. Provide storage inventory via UMOInventoryComponent
+ * 2. Handle container open/close audio feedback
+ * 3. Implement IMOInventoryHolderInterface for inventory queries
+ * 4. Implement IMOMaterialSourceInterface for crafting material gathering
+ * 5. Save/load container contents with building persistence
+ *
+ * ARCHITECTURE NOTES:
+ * - Inherits from AMOBuildableActor for construction phases
+ * - ContainerInventory component created in constructor
+ * - SlotCount configured from recipe data in InitializeBuilding()
+ * - Two audio components for open/close sounds (soft refs for lazy loading)
+ *
+ * INTERACTION FLOW:
+ * Player interacts with complete container
+ * -> OnCompleteInteracted_Implementation() -> Open container UI
+ * -> PlayOpenSound() -> Transfer items -> Close UI -> PlayCloseSound()
+ *
+ * CRAFTING INTEGRATION:
+ * IMOMaterialSourceInterface allows crafting system to pull materials:
+ * CraftingSubsystem->GatherMaterials() -> Container->CanProvideMaterial()
+ * -> Container->GatherMaterial() removes from inventory
+ *
+ * CRITICAL PATTERNS:
+ * 1. Slot Count Configuration:
+ *    InitializeBuilding() reads SlotCount from recipe's OutputSlotCount
+ *    Sets ContainerInventory->SetSlotCountAuthority()
+ *
+ * 2. Save/Load:
+ *    BuildSaveData() -> Inventory.BuildSaveData() into PersistedBuildingRecord
+ *    ApplySaveData() -> Inventory.ApplySaveDataAuthority() from record
+ *
+ * 3. Material Source Priority:
+ *    GetMaterialSourcePriority_Implementation() returns order in gather queue
+ *    Lower = gathered first. Containers typically return 10.
+ *
+ * KNOWN PITFALLS:
+ * 1. AUDIO SOFT REFS: OpenSound/CloseSound are TSoftObjectPtr.
+ *    Use LoadSynchronous() before playing. Don't call in tight loops.
+ *
+ * 2. CONSTRUCTION STATE: Container UI only available when IsComplete().
+ *    Don't call GetContainerInventory() during construction phase.
+ *
+ * 3. SLOT COUNT TIMING: SlotCount set in InitializeBuilding(), not constructor.
+ *    If spawning manually without recipe, set SlotCount explicitly.
+ *
+ * 4. REPLICATION: ContainerInventory uses FastArraySerializer.
+ *    Inventory changes replicate automatically. Don't duplicate logic.
+ *
+ * RELATED FILES:
+ * - MOBuildableActor.h - Base class for construction phases
+ * - MOInventoryComponent.h - Storage component
+ * - MOInventoryUIController.h - Opens container UI
+ * - MOCraftingSubsystem.h - Material gathering interface
+ * - MORecipeDefinitionRow.h - OutputSlotCount configuration
+ *
+ * TESTING CHECKLIST:
+ * [ ] Container interaction opens inventory UI
+ * [ ] Open/close sounds play correctly
+ * [ ] SlotCount matches recipe configuration
+ * [ ] Items persist across save/load
+ * [ ] Crafting can pull materials from container
+ * [ ] Container UI shows correct slot count
+ *
+ * LAST UPDATED: 2026-02-24 - Initial audit header
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

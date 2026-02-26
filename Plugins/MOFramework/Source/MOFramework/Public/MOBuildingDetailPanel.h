@@ -1,3 +1,42 @@
+/**
+ * =============================================================================
+ * MOBuildingDetailPanel.h - Building Recipe Detail UI Panel
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Panel that displays detailed information about a selected building recipe.
+ * Mirrors UMORecipeDetailPanel for crafting. Shows building name, description,
+ * required parts with have/need counts, material source checkboxes, and
+ * build button.
+ *
+ * DISPLAY DATA STRUCTS:
+ * - FMOBuildPartDisplayData: Part requirements with availability
+ * - FMOBuildOutputDisplayData: The completed building info
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] CHECKBOX STATE: InventoryCheckbox, ContainersCheckbox, and
+ *   SurroundingCheckbox control material sources. GetBuildOptions() reads
+ *   current state - call after user interaction.
+ *
+ * [2024-02] DUAL DELEGATES: OnBuildAction (preferred) and OnBuildRequested
+ *   (legacy) both fire. Use OnBuildAction for new code.
+ *
+ * [2024-02] GATHER RANGE: GatherRange (150cm default) determines nearby
+ *   material search radius. Not exposed to Blueprint.
+ *
+ * =============================================================================
+ * RELATED FILES: MORecipeDetailPanelBase.h, MOBuildingRecipeListWidget.h,
+ *                MOBuildingUIController.h, MOBuildingTypes.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

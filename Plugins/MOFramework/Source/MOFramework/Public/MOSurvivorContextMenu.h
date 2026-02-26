@@ -1,3 +1,40 @@
+/**
+ * =============================================================================
+ * MOSurvivorContextMenu.h - Survivor Right-Click Context Menu
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Context menu shown when right-clicking a recruited survivor. Provides
+ * quick access to command survivors (Follow, Stay, Go Home, Open Tasks).
+ *
+ * BUTTONS:
+ * - FollowMeButton: Survivor follows the player
+ * - StayHereButton: Survivor stays at current location
+ * - GoHomeButton: Survivor returns to assigned home (disabled if no home)
+ * - OpenTasksButton: Opens full task assignment menu
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] GO HOME BUTTON: UpdateButtonStates() disables GoHomeButton if
+ *   survivor has no home assigned.
+ *
+ * [2024-02] WEAK POINTERS: TargetSurvivor, CachedController, CachedJobQueue
+ *   are weak pointers. Check .IsValid() before use in handlers.
+ *
+ * [2024-02] DELEGATE: OnOpenTasksRequested fires BEFORE menu closes.
+ *   Caller should close menu after handling if needed.
+ *
+ * =============================================================================
+ * RELATED FILES: MOContextMenuBase.h, MOSurvivorController.h, MOSurvivorTaskMenu.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

@@ -1,3 +1,39 @@
+/**
+ * =============================================================================
+ * MOQuestTrackerEntry.h - HUD Quest Tracker Entry Widget
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Widget representing a single tracked quest entry on the HUD. Shows quest
+ * name, current objective description, and progress. Used by MOQuestHUDWidget.
+ *
+ * DISPLAY DATA:
+ * FMOQuestTrackerDisplayData contains QuestName, CurrentObjectiveText,
+ * CurrentProgress, RequiredProgress, ProgressPercent, and bIsComplete.
+ *
+ * ANIMATIONS:
+ * - PlayUpdateAnimation(): Progress changed (BlueprintNativeEvent)
+ * - PlayCompletionAnimation(): Quest completed (BlueprintNativeEvent)
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] PROGRESS PERCENT: ProgressPercent is 0.0-1.0 for progress bars,
+ *   calculated from CurrentProgress / RequiredProgress.
+ *
+ * [2024-02] BLUEPRINT ANIMATIONS: Override PlayUpdateAnimation_Implementation
+ *   and PlayCompletionAnimation_Implementation in Blueprint for custom effects.
+ *
+ * =============================================================================
+ * RELATED FILES: MOQuestHUDWidget.h, MOQuestTypes.h, MOQuestSubsystem.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

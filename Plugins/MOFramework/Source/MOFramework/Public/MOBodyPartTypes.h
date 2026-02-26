@@ -1,3 +1,58 @@
+/**
+ * =============================================================================
+ * MOBodyPartTypes.h - Anatomical Body Part System
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Defines the ~55 distinct body parts for the medical/anatomy system. Used
+ * for wound targeting, damage localization, and medical treatment. Includes
+ * vital organs that cause death when destroyed.
+ *
+ * BODY REGIONS:
+ * - Head (Brain, Eyes, Ears, Jaw) - Brain is VITAL
+ * - Torso (Heart, Lungs, Liver, etc.) - Heart/Lungs are VITAL
+ * - Spine (Cervical, Thoracic, Lumbar) - Paralysis on damage
+ * - Arms (Shoulder → Hand → Fingers) - Dexterity loss
+ * - Legs (Hip → Foot → Toes) - Mobility loss
+ *
+ * VITAL ORGANS:
+ * - Brain: Instant death
+ * - Heart: Instant death
+ * - Lungs: Death in ~3 minutes (hypoxia)
+ * - Intestines: Death in hours (sepsis)
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-01] ENUM STABILITY: Body part enum values are serialized in saves.
+ *   NEVER reorder or remove values. Add new parts at the end only.
+ *
+ * [2024-02] LEFT VS RIGHT: Most parts have Left/Right variants. Combat system
+ *   should randomly select side or use hit location to determine.
+ *
+ * [2024-02] HIERARCHY: Parts have implicit hierarchy (Hand contains Fingers).
+ *   Damage to parent doesn't automatically damage children, but loss of
+ *   parent (amputation) removes children.
+ *
+ * [2024-02] WOUND TYPE COMPATIBILITY: Not all wound types apply to all parts.
+ *   Brain can't have "Bruise" (blunt trauma kills), use lookup table.
+ *
+ * =============================================================================
+ * RELATED FILES
+ * =============================================================================
+ * - MOAnatomyComponent.h - Manages body parts and wounds
+ * - MOWoundTypes.h - Wound definitions targeting body parts
+ * - MOBodyPartDefinitionRow.h - DataTable row for part properties
+ * - DT_BodyPartDefinitions - DataTable with part configs
+ *
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"
@@ -5,7 +60,7 @@
 
 /**
  * Hierarchical body part identification.
- * ~55 distinct body parts including individual fingers and toes.
+ * See file header for vital organs and usage notes.
  */
 UENUM(BlueprintType)
 enum class EMOBodyPartType : uint8

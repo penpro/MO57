@@ -8,6 +8,9 @@
  * MOAdrenalineTypes.h - Adrenaline/Stress Response System Types
  * =============================================================================
  *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
  * PURPOSE:
  * Models the physiological adrenaline (epinephrine) response during combat
  * and high-stress situations. Provides gameplay balance between:
@@ -55,6 +58,22 @@
  * - Veteran (skill 50-80): Most single enemies don't trigger
  * - Master (skill 80-100): Only serious threats or wounds trigger
  *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] SKILL LOOKUP: CombatSkillId must match skill ID in DT_Skills.
+ *   Default "combat" must exist or GetDefault() fails silently.
+ *
+ * [2024-02] MASKING DEBT: MaskedPainDebt accumulates during combat. If pawn
+ *   dies during crash phase, debt was never "paid" - intended behavior.
+ *
+ * [2024-02] INTERPOLATION: SkillModifiers array must have entries sorted
+ *   by SkillLevel for proper interpolation between breakpoints.
+ *
+ * =============================================================================
+ * RELATED FILES: MOAdrenalineComponent.h, MOVitalsComponent.h, MOSkillsComponent.h
+ * LAST UPDATED: 2026-02-25
  * =============================================================================
  */
 

@@ -1,3 +1,70 @@
+/**
+ * =============================================================================
+ * MOInventoryGrid.h - Slot-Based Inventory Display Widget
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Visual grid display for inventory slots. Creates UMOInventorySlot widgets
+ * in a UniformGridPanel, handles click/drag interactions, and broadcasts
+ * events for item manipulation.
+ *
+ * USAGE:
+ * 1. Create in Blueprint (WBP_InventoryGrid)
+ * 2. Call InitializeGrid(InventoryComponent) to bind
+ * 3. Listen to delegate events for interactions
+ * 4. Call RebuildGrid() when inventory size changes
+ *
+ * DELEGATES:
+ * - OnSlotClicked: Left-click on slot (select item)
+ * - OnSlotShiftClicked: Shift+click (quick transfer)
+ * - OnSlotRightClicked: Right-click (context menu)
+ * - OnSlotDrop: Drag-drop completed
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] SLOT POOLING: Pooling is implemented via AcquireSlotWidget() and
+ *   ReleaseSlotWidget(). Slots are reset and reused, not destroyed/recreated.
+ *
+ * [2024-02] GUID VS INDEX: Delegates pass both SlotIndex and ItemGuid. Use
+ *   GUID for item operations (stable across slot moves), index for UI only.
+ *
+ * [2024-02] DRAG VISUAL: Drag-drop creates MODragVisualWidget. Grid does NOT
+ *   destroy it - MOInventoryDragDropOperation owns and cleans up the visual.
+ *
+ * [2024-02] INITIALIZATION ORDER: Call InitializeGrid() before RebuildGrid().
+ *   InitializeGrid() binds to inventory events, RebuildGrid() creates slots.
+ *   Calling RebuildGrid() with null InventoryComponent uses MinimumVisibleSlotCount.
+ *
+ * [2024-02] DELEGATE BINDING: BindInventoryDelegates() uses RemoveAll(this)
+ *   before binding. Safe to call InitializeGrid() multiple times (e.g., on
+ *   possession change to different pawn).
+ *
+ * [2024-02] VISUAL DATA MODE: SetSlotVisualData() populates grid without an
+ *   inventory component. Used for "nearby items" display. Clears any existing
+ *   inventory binding when called.
+ *
+ * [2024-02] SLOT WIDGET CLASS: SlotWidgetClass must be set in Blueprint
+ *   defaults or RebuildGrid() will fail silently (no slots created).
+ *
+ * [2024-02] STRUCT REFERENCE: FMOInventorySlotVisualData defined in
+ *   MOInventoryTypes.h. Contains: Icon, Quantity, bIsEmpty, ItemGuid, etc.
+ *
+ * =============================================================================
+ * RELATED FILES
+ * =============================================================================
+ * - MOInventorySlot.h - Individual slot widget (not in git, may be Blueprint)
+ * - MOInventoryMenu.h - Parent container that hosts this grid
+ * - MOInventoryDragDropOperation.h - Drag data payload
+ *
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

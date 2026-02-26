@@ -1,3 +1,72 @@
+/**
+ * =============================================================================
+ * MOWorldItemFactory.h - Centralized World Item Spawning
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE THIS HEADER when issues arise or patterns change
+ *
+ * PURPOSE:
+ * WorldSubsystem consolidating all world item spawning logic. Replaces
+ * duplicate spawning code in MOForagingSubsystem, MOInventoryComponent, etc.
+ * Handles item definition lookup, mesh application, physics, and GUID setup.
+ *
+ * KEY RESPONSIBILITIES:
+ * 1. Spawn AMOWorldItem actors with consistent configuration
+ * 2. Apply item definition data to spawned items
+ * 3. Handle drop physics for dropped items
+ * 4. Manage GUIDs for persistence
+ * 5. Support batch spawning for performance
+ *
+ * ARCHITECTURE NOTES:
+ * - WorldSubsystem: One per UWorld
+ * - FMOWorldItemSpawnParams encapsulates all spawn options
+ * - DefaultWorldItemClass can be overridden for custom item actors
+ * - SpawnWorldItemInternal is the core implementation
+ *
+ * SPAWN METHODS:
+ * - SpawnWorldItem(Params) - Full control with params struct
+ * - SpawnWorldItemSimple() - Minimal params for quick spawning
+ * - SpawnWorldItemAtTransform() - For PCG/HISM conversions
+ * - SpawnDroppedItem() - With physics enabled for inventory drops
+ * - SpawnWorldItemsBatch() - Multiple items efficiently
+ *
+ * CRITICAL PATTERNS:
+ * 1. Spawn Flow:
+ *    SpawnWorldItem(Params) -> SpawnWorldItemInternal()
+ *    -> SpawnActorDeferred() -> ApplyItemData() -> FinishSpawning()
+ *
+ * 2. Data Application:
+ *    ApplyItemData() -> Set ItemComponent fields
+ *    -> ApplyItemDefinitionToWorldMesh() -> Load/set mesh
+ *
+ * KNOWN PITFALLS:
+ * 1. MESH LOADING: Item definition meshes load synchronously. For spawning
+ *    many items at once, consider async loading or preloading.
+ *
+ * 2. GUID COLLISION: If ItemGuid is not provided, a new one is generated.
+ *    Ensure GUIDs from save data are passed correctly for persistence.
+ *
+ * 3. PHYSICS STATE: EnableDropPhysics only works if mesh has collision.
+ *    Items without proper collision will fall through world.
+ *
+ * RELATED FILES:
+ * - MOWorldItem.h - Actor class being spawned
+ * - MOItemComponent.h - Item data component
+ * - MOInventoryComponent.h - Uses this for drops
+ * - MOForagingSubsystem.h - Uses this for forage spawns
+ *
+ * TESTING CHECKLIST:
+ * [ ] SpawnWorldItemSimple creates item at correct location
+ * [ ] SpawnDroppedItem enables physics and item falls
+ * [ ] Batch spawning works without performance issues
+ * [ ] GUID is preserved through spawn process
+ * [ ] Item mesh displays correctly from definition
+ *
+ * LAST UPDATED: 2026-02-24 - Initial audit header
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

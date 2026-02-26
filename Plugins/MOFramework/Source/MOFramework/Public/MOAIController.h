@@ -1,3 +1,71 @@
+/**
+ * =============================================================================
+ * MOAIController.h - Base AI Controller for Framework Pawns
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE THIS HEADER when issues arise or patterns change
+ *
+ * PURPOSE:
+ * Base AI controller for all autonomous pawns in the MO Framework. Provides
+ * behavior tree execution, task state management, blackboard integration,
+ * and movement helpers. Extended by MOSurvivorController and MOCreatureController.
+ *
+ * KEY RESPONSIBILITIES:
+ * 1. Execute behavior trees for autonomous task execution
+ * 2. Track and report task state (Idle, Moving, Performing, Failed)
+ * 3. Manage blackboard data for behavior tree decisions
+ * 4. Provide movement commands with configurable acceptance radius
+ * 5. Broadcast task state changes and completions
+ *
+ * OWNERSHIP:
+ * - Owner: Possesses autonomous pawns (not player-controlled)
+ * - Lifespan: Exists while pawn is under AI control
+ *
+ * TASK STATE MACHINE:
+ * Idle -> MovingToTarget -> PerformingTask -> Returning -> Idle
+ *                      \-> Failed (on error)
+ *
+ * BEHAVIOR TREE INTEGRATION:
+ * - BehaviorTreeComponent: Executes behavior trees
+ * - BlackboardComponent: Shared memory for BT decisions
+ * - DefaultBehaviorTree: Loaded on BeginPlay if set
+ * - SetupBlackboardForTask(): Writes task data to blackboard
+ *
+ * TASK ASSIGNMENT FLOW:
+ * AssignTask(Name, Target, Location, BT)
+ * -> SetupBlackboardForTask()
+ * -> RunBehaviorTree(BT or Default)
+ * -> BT nodes update state via SetTaskState()
+ * -> ReportTaskComplete() when done
+ * -> OnTaskCompleted broadcast
+ *
+ * CRITICAL PATTERNS:
+ * 1. TASK STATE: Always update via SetTaskState() for broadcasts
+ * 2. MOVEMENT: Use MoveToLocationWithRadius/MoveToActorWithRadius
+ * 3. COMPLETION: Call ReportTaskComplete(success) from BT tasks
+ *
+ * KNOWN PITFALLS:
+ * 1. BLACKBOARD SETUP: Must call SetupBlackboardForTask() before BT runs
+ * 2. MOVEMENT CALLBACK: OnMoveCompleted may fire multiple times
+ * 3. BEHAVIOR TREE: BT must exist and be properly configured
+ *
+ * RELATED FILES:
+ * - MOSurvivorController.h - Extends for recruited survivors
+ * - MOCreatureController.h - Extends for creatures with perception
+ * - BTTask_*.h - Behavior tree tasks using this controller
+ *
+ * TESTING CHECKLIST:
+ * [ ] Task assignment runs behavior tree
+ * [ ] Task state changes broadcast correctly
+ * [ ] Movement completion triggers state change
+ * [ ] CancelCurrentTask stops BT and clears state
+ * [ ] Task completion broadcasts with success/fail
+ *
+ * LAST UPDATED: 2026-02-24 - Initial audit header
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

@@ -1,3 +1,38 @@
+/**
+ * =============================================================================
+ * MOCraftingQueueEntryWidget.h - Single Crafting Queue Entry Widget
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Widget representing a single entry in the crafting queue. Displays recipe
+ * name, icon, progress bar, count, time remaining, and cancel button.
+ *
+ * DISPLAY DATA:
+ * - FMOQueueEntryDisplayData: Visual data for queue entries
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] DUAL CANCEL BUTTONS: Both CancelButton (UMOCommonButton) and
+ *   CancelButtonSimple (UButton) are supported. Bind only one in Blueprint.
+ *
+ * [2024-02] ACTIVE COLOR: ActiveColor vs QueuedColor backgrounds distinguish
+ *   currently crafting entry from queued entries.
+ *
+ * [2024-02] PROGRESS UPDATES: Call UpdateProgress() frequently (each tick)
+ *   for smooth progress bar. SetupEntry() for full refresh only.
+ *
+ * =============================================================================
+ * RELATED FILES: MOCraftingQueueWidget.h, MOCraftingQueueComponent.h,
+ *                MOCraftingTypes.h, MOBuildingQueueEntryWidget.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

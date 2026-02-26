@@ -1,3 +1,86 @@
+/**
+ * =============================================================================
+ * MOMentalStateComponent.h - Consciousness and Cognitive State
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE THIS HEADER when issues arise or patterns change
+ *
+ * PURPOSE:
+ * Pawn component managing mental and cognitive state including consciousness
+ * levels, shock accumulation, visual effects (tunnel vision, blur), and motor
+ * effects (stumbling, aim shake). Determines if character can act.
+ *
+ * KEY RESPONSIBILITIES:
+ * 1. Track consciousness levels (Alert/Drowsy/Confused/Unconscious/Coma)
+ * 2. Accumulate and recover shock from trauma
+ * 3. Track traumatic stress and morale fatigue
+ * 4. Calculate visual impairments (tunnel vision, blur)
+ * 5. Calculate motor impairments (aim shake, stumble chance)
+ * 6. Provide action capability queries
+ *
+ * ARCHITECTURE NOTES:
+ * - Tick interval 0.5s (configurable via TickInterval)
+ * - Consciousness determined by shock thresholds
+ * - Natural shock/stress recovery over time
+ * - Forced consciousness override available for scripted events
+ *
+ * CONSCIOUSNESS LEVELS (thresholds configurable):
+ * - Alert: Shock < 30 - Full capacity
+ * - Drowsy: Shock 30-50 - Mild impairment
+ * - Confused: Shock 50-70 - Significant impairment
+ * - Unconscious: Shock 70-90 - Cannot act
+ * - Coma: Shock > 90 - Near death
+ *
+ * MEDICAL CASCADE (from CLAUDE.md):
+ * Wounds -> Pain -> Shock accumulation
+ * Blood loss -> Hypovolemic shock
+ * Low glucose -> Confusion
+ * Combined factors -> Consciousness decline
+ *
+ * CRITICAL PATTERNS:
+ * 1. Shock Processing:
+ *    AddShock() -> Update MentalState.CurrentShock
+ *    -> TickMentalState() -> CalculateConsciousnessLevel()
+ *    -> Broadcast OnConsciousnessChanged if level changed
+ *
+ * 2. Visual Effects:
+ *    High shock -> GetTunnelVisionIntensity() returns 0-1
+ *    -> PostProcess material reads this for vignette effect
+ *
+ * 3. Motor Effects:
+ *    RollForStumble() -> Random chance based on GetStumblingChance()
+ *    -> Movement system applies stumble animation/physics
+ *
+ * KNOWN PITFALLS:
+ * 1. FORCED CONSCIOUSNESS: bConsciousnessForced overrides calculated level.
+ *    Remember to clear it when scripted event ends.
+ *
+ * 2. RECOVERY RATE BALANCE: ShockRecoveryRate affects game pacing. Too fast
+ *    makes injuries trivial, too slow makes gameplay frustrating.
+ *
+ * 3. UI INTEGRATION: OnMentalStateChanged fires frequently. UI should
+ *    debounce or only update on significant changes.
+ *
+ * RELATED FILES:
+ * - MOMedicalTypes.h - FMOMentalState, EMOConsciousnessLevel
+ * - MOVitalsComponent.h - Blood loss contributes to shock
+ * - MOAnatomyComponent.h - Wounds contribute pain/shock
+ * - MOMetabolismComponent.h - Glucose affects clarity
+ *
+ * TESTING CHECKLIST:
+ * [ ] High shock reduces consciousness level
+ * [ ] Shock recovers over time when stable
+ * [ ] Visual effects scale with consciousness
+ * [ ] Motor effects (stumble) trigger appropriately
+ * [ ] CanPerformActions() returns false when unconscious
+ * [ ] ForceConsciousnessLevel() overrides calculated level
+ * [ ] AttemptWakeUp() works when shock is low enough
+ *
+ * LAST UPDATED: 2026-02-24 - Initial audit header
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

@@ -1,3 +1,80 @@
+/**
+ * =============================================================================
+ * MORecruitmentComponent.h - Survivor Recruitment State & Quests
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE THIS HEADER when issues arise or patterns change
+ *
+ * PURPOSE:
+ * Manages survivor recruitment state and quest requirements. Survivors spawn
+ * in Wandering state and transition through quest completion to Recruited,
+ * at which point they become possessable by the player.
+ *
+ * KEY RESPONSIBILITIES:
+ * 1. Track recruitment state (Wandering, QuestActive, Recruited)
+ * 2. Manage recruitment quests (item delivery, skill checks)
+ * 3. Handle quest timeout and failure
+ * 4. Notify spawn manager when survivors become persistent
+ * 5. Support save/load of recruitment state
+ *
+ * OWNERSHIP:
+ * - Owner: Survivor pawn (AMOCharacter)
+ * - Lifespan: Exists for pawn lifetime
+ *
+ * RECRUITMENT STATE MACHINE:
+ * Wandering -> (player interaction) -> QuestActive (if quest) or Recruited
+ * QuestActive -> (quest complete) -> Recruited
+ * QuestActive -> (timeout/fail) -> Wandering or despawn
+ *
+ * QUEST TYPES:
+ * - None: Immediate recruitment on interaction
+ * - ItemDelivery: Requires specific item(s) from player inventory
+ * - SkillCheck: Requires player to have skill at level
+ * - Custom: Blueprint-defined requirements
+ *
+ * INTERACTION FLOW:
+ * Player interacts -> BeginInteraction(InteractingPawn)
+ * -> If no quest required: ForceRecruit()
+ * -> Else: RollRandomQuest() -> Set QuestActive
+ * Player returns -> TryCompleteQuest(Pawn)
+ * -> CheckQuestRequirements() -> If pass: Recruit, else: show requirements
+ *
+ * PERSISTENCE INTEGRATION:
+ * - QuestActive survivors become tracked in persistence
+ * - NotifySpawnManagerOfInteraction() marks as persistent
+ * - BuildSaveData/ApplySaveDataAuthority for save/load
+ * - EnsureSurvivorAIController() sets controller after load
+ *
+ * CRITICAL PATTERNS:
+ * 1. STATE CHANGE: Use SetRecruitmentState() for broadcasts
+ * 2. QUEST ROLL: RollRandomQuest() uses QuestChance and PossibleQuests
+ * 3. ITEM CONSUMPTION: CheckQuestRequirements can optionally consume
+ *
+ * KNOWN PITFALLS:
+ * 1. REPLICATION: RecruitmentState replicated, OnRep updates locally
+ * 2. QUEST TIMEOUT: CheckQuestTimeout runs in Tick, may despawn survivor
+ * 3. AI CONTROLLER: EnsureSurvivorAIController needed after load
+ *
+ * RELATED FILES:
+ * - MOSpawnTypes.h - EMORecruitmentState, FMORecruitmentQuest
+ * - MOSurvivorController.h - AI controller for recruited pawns
+ * - MOPossessionSubsystem.h - Possession of recruited pawns
+ * - MOSpawnManager.h - Tracks persistent survivors
+ *
+ * TESTING CHECKLIST:
+ * [ ] Wandering survivor shows recruitment prompt
+ * [ ] Quest assigned correctly based on QuestChance
+ * [ ] Item requirements check player inventory
+ * [ ] Skill requirements check player skills
+ * [ ] Quest timeout fails recruitment
+ * [ ] Recruited survivor is possessable
+ * [ ] Save/load preserves recruitment state
+ *
+ * LAST UPDATED: 2026-02-24 - Initial audit header
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

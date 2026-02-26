@@ -1,13 +1,46 @@
+/**
+ * =============================================================================
+ * MOSpectatorPawn.h - Lockable Spectator Camera Pawn
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Custom spectator pawn used when player is between possessions (possession
+ * menu, death, etc.). Can be locked in place or given free movement.
+ *
+ * FEATURES:
+ * - SetMovementLocked(): Lock/unlock camera movement
+ * - SetViewAboveLocation(): Position camera looking down at a point
+ * - Overrides MoveForward/Right/Up to respect lock state
+ *
+ * USAGE:
+ * - Assign in GameMode's SpectatorClass property
+ * - Controller possesses this when unpossessing gameplay pawn
+ * - Lock movement during possession menu
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] DEFAULT LOCKED: Spawns with bMovementLocked=true. Remember to
+ *   unlock if free-fly spectator mode is desired.
+ *
+ * [2024-02] GAMEMODE SETUP: Must be set as SpectatorClass in GameMode BP.
+ *   Default SpectatorPawn has free movement.
+ *
+ * =============================================================================
+ * RELATED FILES: MOPlayerController.h, MOPossessionSubsystem.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"
 #include "GameFramework/SpectatorPawn.h"
 #include "MOSpectatorPawn.generated.h"
-
-/**
- * Custom spectator pawn that can be locked in place when no gameplay pawn is possessed.
- * Assign this in your GameMode's SpectatorClass property.
- */
 UCLASS()
 class MOFRAMEWORK_API AMOSpectatorPawn : public ASpectatorPawn
 {

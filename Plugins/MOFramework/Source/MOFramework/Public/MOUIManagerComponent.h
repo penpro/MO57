@@ -1,3 +1,34 @@
+/**
+ * =============================================================================
+ * MOUIManagerComponent.h - Central UI Controller Orchestrator
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] CONTROLLER DELEGATION: Most UI operations now delegate to specialized
+ *   UI controllers (Inventory, Crafting, Building, Character, System). UIManager
+ *   acts as orchestrator, not direct implementor.
+ *
+ * [2024-02] PAWN CACHING: CachePawnComponents() must be called on possession change.
+ *   UI controllers access components via GetCached* methods.
+ *
+ * [2024-02] MODAL BACKGROUND: Reference counting for modal. Multiple menus can
+ *   be open simultaneously. Background hides only when all close.
+ *
+ * [2024-02] FOCUS HINT: Timer-based update can cause issues if pawn changes.
+ *   CachedInteractorComponent updated in CachePawnComponents().
+ *
+ * =============================================================================
+ * RELATED FILES: MOUIControllerBase.h, MOInventoryUIController.h, etc.
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

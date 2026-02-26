@@ -1,3 +1,44 @@
+/**
+ * =============================================================================
+ * MOSkillDatabaseSettings.h - Skill Database Project Settings
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Project Settings for the skill database system. Points to the central
+ * skill definitions DataTable and provides cached lookups by category.
+ * Accessible via Project Settings > Plugins > MO Skill Database.
+ *
+ * CACHING:
+ * - SkillsByCategory: Map of EMOSkillCategory -> array of skill IDs
+ * - CachedDataTable: Weak pointer to loaded DataTable
+ * - Lazy initialization via EnsureCachesBuilt()
+ *
+ * FALLBACK PATH:
+ * FallbackSkillsDataTablePath is used if soft reference fails in packaged
+ * builds. Format: /Game/Path/To/DT_Skills.DT_Skills
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] CACHE INVALIDATION: Call InvalidateCache() after runtime
+ *   DataTable modifications.
+ *
+ * [2024-02] STATIC CACHES: Cache data is static. Safe for read, not for
+ *   concurrent writes.
+ *
+ * [2024-02] SYNC LOADING: GetSkillIcon() loads textures synchronously.
+ *   Avoid in tight loops.
+ *
+ * =============================================================================
+ * RELATED FILES: MOSkillDefinitionRow.h, MOSkillsComponent.h, DT_Skills
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

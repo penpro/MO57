@@ -1,8 +1,57 @@
+/**
+ * =============================================================================
+ * MOSurvivorJobTypes.h - Survivor Job System Type Definitions
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Type definitions for the survivor job system. Includes job type enum, job
+ * state enum, job entry struct, job queue FastArray, job definition row,
+ * and save data structures.
+ *
+ * KEY TYPES:
+ * - EMOSurvivorJobType: Job types (GatherWood, ForageNearby, FollowTarget, etc.)
+ * - EMOSurvivorJobState: Job states (Queued, Active, Performing, Completed, etc.)
+ * - FMOSurvivorJobEntry: Single job in queue (FastArraySerializerItem)
+ * - FMOSurvivorJobList: FastArraySerializer container for replication
+ * - FMOSurvivorJobDefinitionRow: DataTable row for job definitions
+ * - FMOSurvivorJobQueueSaveData: Save data structure
+ *
+ * JOB TYPES:
+ * - Gathering: GatherWood, GatherStone, GatherFiber
+ * - Foraging: ForageNearby, DigForSupplies
+ * - Commands: FollowTarget, StayAtLocation, GoHome (immediate, not queued)
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] FAST ARRAY: FMOSurvivorJobEntry inherits FFastArraySerializerItem.
+ *   Must mark ReplicationID dirty on change.
+ *
+ * [2024-02] COMMAND VS WORK: bIsCommand=true jobs are immediate. Don't add
+ *   to queue - execute directly via AI controller.
+ *
+ * [2024-02] RESOURCE TAGS: RequiredResourceTags in job definition matches
+ *   against ResourceTags in DT_ResourceNodes. DoesMatchResourceTags() checks.
+ *
+ * [2024-02] TARGET ACTOR: TargetActor is TWeakObjectPtr (not replicated).
+ *   Use TargetActorGuid for replication/persistence.
+ *
+ * =============================================================================
+ * RELATED FILES: MOSurvivorJobQueueComponent.h, MOSurvivorController.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"
 #include "Engine/DataTable.h"
 #include "Net/Serialization/FastArraySerializer.h"
+#include "MOItemDefinitionRow.h"
 #include "MOSurvivorJobTypes.generated.h"
 
 /**
@@ -228,7 +277,7 @@ struct MOFRAMEWORK_API FMOSurvivorJobDefinitionRow : public FTableRowBase
 
 	/** Tools required for this job (optional). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Requirements")
-	TArray<FName> RequiredTools;
+	TArray<EMOToolType> RequiredTools;
 
 	/** Whether this job can be repeated (added multiple times to queue). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Job")

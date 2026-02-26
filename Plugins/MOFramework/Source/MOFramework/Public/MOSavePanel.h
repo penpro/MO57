@@ -1,3 +1,40 @@
+/**
+ * =============================================================================
+ * MOSavePanel.h - Save Game Slot Selection Widget
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Panel for displaying save slots and creating new saves. Shows all saves
+ * for the current world in a scrollable list with entry widgets.
+ *
+ * FEATURES:
+ * - Lists existing saves for current world
+ * - Create new save button
+ * - Overwrite confirmation for existing slots
+ * - Broadcasts OnSaveRequested when slot is selected
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] WORLD FILTERING: Only shows saves from current world. Don't show
+ *   saves from other worlds in the in-game save panel.
+ *
+ * [2024-02] OVERWRITE FLOW: SaveToSlot should trigger confirmation dialog
+ *   before actually overwriting. Panel broadcasts request, caller confirms.
+ *
+ * [2024-02] ENTRY WIDGETS: Uses UMOSaveSlotEntry for each save. Set
+ *   SaveSlotEntryClass in Blueprint defaults.
+ *
+ * =============================================================================
+ * RELATED FILES: MOLoadPanel.h, MOSaveSlotEntry.h, MOPersistenceSubsystem.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

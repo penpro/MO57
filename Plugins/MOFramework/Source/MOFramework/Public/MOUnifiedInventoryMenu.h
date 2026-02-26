@@ -1,3 +1,53 @@
+/**
+ * =============================================================================
+ * MOUnifiedInventoryMenu.h - Main Inventory Menu Widget
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Dual-panel inventory interface with tabbed right panel. Primary inventory
+ * UI for player interaction with items, containers, equipment, and nearby
+ * world items.
+ *
+ * LAYOUT:
+ * +------------------+------------------------+
+ * |    Player        |    Right Panel Tabs    |
+ * |   Inventory      | 0: Other Inventory     |
+ * |     Grid         | 1: Item Details        |
+ * |                  | 2: Nearby Items        |
+ * |                  | 3: Equipment           |
+ * +------------------+------------------------+
+ *
+ * FEATURES:
+ * - Drag/drop between all panels
+ * - Shift+Click quick transfer
+ * - Bulk operations (Store All, Take All, Loot All)
+ * - Stack management (organize, fill stacks)
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] TAB INDICES: RightPanelSwitcher indices must match:
+ *   0=OtherInventory, 1=Details, 2=Nearby, 3=Equipment.
+ *
+ * [2024-02] SECONDARY SOURCE: SetSecondaryInventorySource() expects actor
+ *   implementing IMOInventoryHolderInterface. Cast failure = no secondary.
+ *
+ * [2024-02] EQUIPMENT PANEL: BindWidgetOptional. If absent, equipment tab
+ *   button should be hidden.
+ *
+ * [2024-02] QUICK TRANSFER: OnQuickTransferRequested broadcasts but doesn't
+ *   perform transfer. Caller (UIController) handles actual logic.
+ *
+ * =============================================================================
+ * RELATED FILES: MOInventoryUIController.h, MOInventoryGrid.h, MOInventorySlot.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

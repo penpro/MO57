@@ -1,3 +1,38 @@
+/**
+ * =============================================================================
+ * MOLakeActor.h - Bounded Lake/Pond Water Body
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Bounded rectangular water body for lakes and ponds. Extends MOWaterActorBase
+ * with configurable size and optional voxel-based automatic bounds detection.
+ *
+ * SIZING MODES:
+ * - Manual: Set LakeSizeX/LakeSizeY directly
+ * - Auto: Set bAutoDetectFromVoxel = true to detect water boundaries
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] VOXEL DETECTION: Auto-detection raycasts from center outward.
+ *   Works best with voxel terrain that has clear water/land boundaries.
+ *
+ * [2024-02] DETECTION RADIUS: MaxDetectionRadius limits search distance.
+ *   Very large lakes may need higher values (performance cost).
+ *
+ * [2024-02] MESH GENERATION: Size changes trigger GenerateWaterMesh().
+ *   Avoid changing size every frame.
+ *
+ * =============================================================================
+ * RELATED FILES: MOWaterActorBase.h, MOInfiniteOceanActor.h, MOWaterTypes.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"
@@ -6,7 +41,7 @@
 
 /**
  * Bounded lake/pond water body.
- * Can be manually sized or automatically detect bounds from voxel world.
+ * See file header for sizing modes and pitfalls.
  */
 UCLASS(Blueprintable)
 class MOFRAMEWORK_API AMOLakeActor : public AMOWaterActorBase

@@ -1,3 +1,44 @@
+/**
+ * =============================================================================
+ * MOToolHintWidget.h - Tool/Action Hint Popup Widget
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Small popup widget showing current tool or action hint. Fades in/out when
+ * tool changes. Used for contextual UI feedback like "Dig", "Raise", etc.
+ *
+ * FEATURES:
+ * - ShowHint/ShowHintWithIcon: Display text with optional icon
+ * - Auto-fade after configurable duration
+ * - Blueprint-overridable fade animations (PlayFadeIn/PlayFadeOut)
+ * - Events for hint shown/hidden
+ *
+ * BLUEPRINT SETUP:
+ * - Bind TextBlock named "HintText" (BindWidgetOptional)
+ * - Override PlayFadeIn_Implementation/PlayFadeOut_Implementation for animations
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] TIMER HANDLE: HideTimerHandle must be cleared in NativeDestruct
+ *   to prevent callbacks on destroyed widget.
+ *
+ * [2024-02] FADE ANIMATION: Default PlayFadeIn/PlayFadeOut are empty.
+ *   Must implement in Blueprint for visual feedback.
+ *
+ * [2024-02] VISIBILITY STATE: bIsVisible tracks logical visibility, not
+ *   widget visibility. Check both if needed.
+ *
+ * =============================================================================
+ * RELATED FILES: MOTerraformingComponent.h (uses for mode hints)
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

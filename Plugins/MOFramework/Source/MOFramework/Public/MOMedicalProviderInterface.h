@@ -1,3 +1,60 @@
+/**
+ * =============================================================================
+ * MOMedicalProviderInterface.h - Medical Component Access Contract
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Standardized access to medical/health components without FindComponentByClass.
+ * Decouples medical systems from specific character implementations.
+ *
+ * WHO IMPLEMENTS THIS:
+ * - AMOCharacter - Has all medical components
+ * - AMOCreature - Has subset of medical components (Vitals, Anatomy)
+ *
+ * WHO USES THIS:
+ * - UMOMedicalSubsystem - Medical calculations
+ * - Combat system - Apply damage to body parts
+ * - UI - Display health status
+ *
+ * MEDICAL COMPONENT CASCADE:
+ * The medical components interact in a cascade:
+ *
+ *   Wounds (Anatomy) → Blood loss → Vitals (HR, BP, SpO2)
+ *                                        ↓
+ *   Metabolism (glucose, hydration) → Vitals → Mental (consciousness)
+ *                                        ↓
+ *   Adrenaline (combat stress) → Vitals → Performance modifiers
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-01] CREATURE SUBSET: AMOCreature only has Vitals and Anatomy.
+ *   GetMentalState(), GetAdrenaline(), GetMetabolism() return nullptr for
+ *   creatures. Always null-check results.
+ *
+ * [2024-02] COMPONENT DEPENDENCIES: Medical components depend on each other
+ *   via tick updates. Don't call medical methods during construction.
+ *
+ * [2024-02] REPLICATION: Medical state is server-authoritative. Clients
+ *   receive replicated values but shouldn't modify directly.
+ *
+ * =============================================================================
+ * RELATED FILES
+ * =============================================================================
+ * - MOVitalsComponent.h - Blood, O2, temp, heart rate
+ * - MOAnatomyComponent.h - Body parts, wounds
+ * - MOMentalStateComponent.h - Consciousness, morale
+ * - MOMetabolismComponent.h - Hunger, thirst, digestion
+ * - MOAdrenalineComponent.h - Combat stress response
+ *
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"
@@ -11,9 +68,8 @@ class UMOAdrenalineComponent;
 class UMOMetabolismComponent;
 
 /**
- * Interface for actors that provide medical/health components.
- * Decouples medical systems from specific character types and eliminates
- * FindComponentByClass chains.
+ * Interface for medical component access.
+ * See file header for usage patterns and pitfalls.
  */
 UINTERFACE(MinimalAPI, Blueprintable)
 class UMOMedicalProviderInterface : public UInterface

@@ -1,3 +1,39 @@
+/**
+ * =============================================================================
+ * MOGroundContextMenu.h - Ground Right-Click Context Menu
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Context menu shown when right-clicking on ground (no interactable target).
+ * Provides options for searching nearby items and digging for supplies.
+ * Uses foraging skill level to determine search radius.
+ *
+ * BUTTONS:
+ * - SearchNearbyButton: Search for nearby items
+ * - DigForSuppliesButton: Dig for buried supplies
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] SCREEN POSITION: SetMenuPosition() ignores parameter and uses
+ *   actual mouse position for accuracy.
+ *
+ * [2024-02] FORAGING PAWN: ForagingPawn weak pointer must be valid when
+ *   button handlers execute. Check .IsValid() before use.
+ *
+ * [2024-02] MOUSE TRACKING: Uses timer-based mouse check like MOItemContextMenu.
+ *   AutoCloseDelay determines hover-out-to-close delay.
+ *
+ * =============================================================================
+ * RELATED FILES: MOContextMenuBase.h, MOForagingSubsystem.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

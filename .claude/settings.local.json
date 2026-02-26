@@ -181,7 +181,14 @@
       "Bash(git -C \"D:\\\\UEProjects\\\\MO57\" status)",
       "Bash(D:UnrealEngineUE_5.7EngineBinariesDotNETUnrealBuildToolUnrealBuildTool.exe MO57Editor Win64 Development -Project=\"D:\\\\UEProjects\\\\MO57\\\\MO57.uproject\" -WaitMutex -FromMsBuild)",
       "Bash(D:\\\\UnrealEngine\\\\UE_5.7\\\\Engine\\\\Binaries\\\\DotNET\\\\UnrealBuildTool\\\\UnrealBuildTool.exe:*)",
-      "Bash(del \"D:\\\\UEProjects\\\\MO57\\\\Plugins\\\\MOFramework\\\\Content\\\\Data\\\\SurvivorJobs.csv\")"
+      "Bash(del \"D:\\\\UEProjects\\\\MO57\\\\Plugins\\\\MOFramework\\\\Content\\\\Data\\\\SurvivorJobs.csv\")",
+      "Bash(for file in Plugins/MOFramework/Source/MOFramework/Public/*.h)",
+      "Bash(do if ! head -5 \"$file\")",
+      "Bash(then echo \"$file\")",
+      "Bash(fi)",
+      "Bash(for:*)",
+      "Bash(do if ! grep -q \"CLAUDE: READ THIS HEADER\" \"$f\")",
+      "Bash(then echo \"$f\")"
     ]
   }
 }

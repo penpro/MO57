@@ -1,3 +1,49 @@
+/**
+ * =============================================================================
+ * MOSurvivorJobQueueComponent.h - Survivor Job Queue Management
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Manages a survivor's job queue. Each recruited survivor has this component
+ * to track queued work tasks (gather wood, forage, etc.), home location
+ * assignment, and job progress/state. Similar pattern to MOCraftingQueueComponent.
+ *
+ * JOB QUEUE FEATURES:
+ * - EnqueueJob: Add job by type with repeat count
+ * - EnqueueJobAtLocation: Add location-based job
+ * - EnqueueJobWithTarget: Add actor-targeted job
+ * - CancelJob/CancelAllJobs: Remove jobs
+ * - ReorderJob: Move job in queue
+ * - SetJobState/UpdateJobProgress: State management
+ * - CompleteCurrentJob/CompleteCurrentIteration: Completion handling
+ *
+ * HOME LOCATION:
+ * - HomeLocation: World position
+ * - HomeBuildingGuid: Optional building assignment
+ * - SetHome/ClearHome/HasHome: Home management
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] FAST ARRAY: JobQueue uses FastArraySerializer for efficient
+ *   network replication. Call MarkQueueDirty() after modifications.
+ *
+ * [2024-02] JOB DEFINITIONS: Uses UMOSurvivorJobDatabaseSettings for lookups.
+ *   GetJobDefinitionPtr() returns nullptr if job type not in DataTable.
+ *
+ * [2024-02] ITERATION TRACKING: RepeatCount vs CompletedCount determines
+ *   remaining iterations. Use ShouldRepeat() to check.
+ *
+ * =============================================================================
+ * RELATED FILES: MOSurvivorJobTypes.h, MOSurvivorController.h, MOSurvivorTaskMenu.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

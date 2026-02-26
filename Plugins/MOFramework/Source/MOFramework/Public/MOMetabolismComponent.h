@@ -1,3 +1,84 @@
+/**
+ * =============================================================================
+ * MOMetabolismComponent.h - Nutrition, Digestion, and Body Composition
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE THIS HEADER when issues arise or patterns change
+ *
+ * PURPOSE:
+ * Pawn component managing metabolism simulation including food digestion,
+ * calorie expenditure, body composition (fat/muscle/bone), hydration, and
+ * nutrient tracking (vitamins, minerals). Provides wound healing multipliers.
+ *
+ * KEY RESPONSIBILITIES:
+ * 1. Process food digestion (carbs, protein, fat, water, vitamins)
+ * 2. Track calorie balance (consumed vs burned)
+ * 3. Manage body composition (fat %, muscle mass, body weight)
+ * 4. Track nutrient levels (vitamins A/B/C/D, iron, calcium, etc.)
+ * 5. Calculate BMR (Basal Metabolic Rate) and TDEE
+ * 6. Apply training effects (strength, cardio)
+ * 7. Provide wound healing multiplier based on nutrition
+ *
+ * ARCHITECTURE NOTES:
+ * - Tick interval 1.0s (configurable via TickInterval)
+ * - DigestingFood uses FastArraySerializer for replication
+ * - Food digests over time, nutrients absorbed gradually
+ * - Caches references to VitalsComponent and AnatomyComponent
+ *
+ * MEDICAL CASCADE (from CLAUDE.md):
+ * Nutrition -> WoundHealingMultiplier -> AnatomyComponent healing
+ * Glucose -> VitalsComponent blood glucose -> Mental clarity
+ * Dehydration -> VitalsComponent (+HR, -BP, +Temp)
+ *
+ * CRITICAL PATTERNS:
+ * 1. Food Consumption:
+ *    ConsumeFood(Nutrition) -> Create FMODigestingFood entry
+ *    -> TickMetabolism() -> ProcessDigestion() over duration
+ *    -> AbsorbNutrients() -> Update levels
+ *
+ * 2. Calorie Balance:
+ *    Activity level (from Vitals) -> ApplyCalorieBurn()
+ *    Net positive -> Fat storage
+ *    Net negative -> Fat/muscle consumption (starvation)
+ *
+ * 3. Starvation Cascade:
+ *    Glycogen depleted -> IsStarving() true -> Fat consumption
+ *    -> Fat depleted -> Muscle consumption -> Death
+ *
+ * KNOWN PITFALLS:
+ * 1. SCUM-STYLE COMPLEXITY: Vitamin/mineral tracking can feel tedious.
+ *    Consider "good enough" thresholds vs micromanagement per CLAUDE.md.
+ *
+ * 2. TIME SCALE SYNC: TimeScaleMultiplier must match other medical
+ *    components or digestion/calorie math will be inconsistent.
+ *
+ * 3. NEGATIVE NUTRITION: FMOItemNutrition can have negative values
+ *    (poison, spoiled food). Handle gracefully in AbsorbNutrients().
+ *
+ * 4. WOUND HEALING DEPENDENCY: AnatomyComponent calls GetWoundHealingMultiplier().
+ *    Zero hydration or severe malnutrition should heavily penalize healing.
+ *
+ * RELATED FILES:
+ * - MOMedicalTypes.h - FMOBodyComposition, FMONutrientLevels, FMODigestingFood
+ * - MOItemDefinitionRow.h - FMOItemNutrition struct for food items
+ * - MOVitalsComponent.h - Receives glucose, affected by hydration
+ * - MOAnatomyComponent.h - Uses healing multiplier for wound recovery
+ *
+ * TESTING CHECKLIST:
+ * [ ] ConsumeFood adds to DigestingFood list
+ * [ ] Food digests over time, not instant
+ * [ ] Nutrients absorb and update levels
+ * [ ] Calorie burn from activity reduces balance
+ * [ ] Starvation detected when glycogen depleted
+ * [ ] Dehydration detected when water low
+ * [ ] Body weight changes with calorie balance over time
+ * [ ] WoundHealingMultiplier affected by nutrition state
+ *
+ * LAST UPDATED: 2026-02-24 - Initial audit header
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

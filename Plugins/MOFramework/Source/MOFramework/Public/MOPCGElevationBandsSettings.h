@@ -1,3 +1,44 @@
+/**
+ * =============================================================================
+ * MOPCGElevationBandsSettings.h - PCG Elevation-Based Point Filtering
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * PCG node that splits input points into elevation bands with configurable
+ * falloff. Useful for biome distribution based on altitude.
+ *
+ * FEATURES:
+ * - Up to 8 elevation bands with named outputs
+ * - Smooth falloff at band boundaries
+ * - Density-based probabilistic filtering in transition zones
+ * - Sea level reference for height calculations
+ *
+ * BAND STRUCTURE:
+ * Each band defines: MinHeight, MaxHeight, BottomFalloff, TopFalloff
+ * Points in falloff zones get density 0-1, used for probabilistic selection.
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] BAND OVERLAP: Points CAN appear in multiple bands if falloff
+ *   zones overlap. Design bands with gaps if exclusive output needed.
+ *
+ * [2024-02] SEA LEVEL Z: Heights are relative to SeaLevelZ. Default is 0.
+ *   Adjust for your terrain's world-space elevation.
+ *
+ * [2024-02] MAX 8 BANDS: OutputPinProperties generates pins for bands 0-7.
+ *   Adding more bands will have no output.
+ *
+ * =============================================================================
+ * RELATED FILES: MOPCGDistanceCullingSettings.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

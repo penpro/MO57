@@ -1,3 +1,46 @@
+/**
+ * =============================================================================
+ * MOIntroWidget.h - Game Launch Intro Video Widget
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Displays intro video on game launch (studio logo, title sequence). Handles
+ * skip input and broadcasts completion events to transition to main menu.
+ *
+ * FEATURES:
+ * - Full-screen video display via material
+ * - "Press any key to skip" hint (delayed appearance)
+ * - Keyboard/mouse input for skipping
+ * - OnIntroCompleted/OnIntroSkipped events
+ *
+ * VIDEO SETUP:
+ * 1. PlayerController creates MediaPlayer and MediaTexture
+ * 2. Creates UMaterialInstanceDynamic with video texture
+ * 3. Calls SetVideoMaterial() on this widget
+ * 4. Widget displays via VideoImage
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] INPUT FOCUS: Widget must have keyboard focus to receive skip input.
+ *   Set focus in NativeConstruct() after adding to viewport.
+ *
+ * [2024-02] SKIP DELAY: SkipHintDelay prevents accidental skip on fast key
+ *   presses. Default 2 seconds before skip is allowed.
+ *
+ * [2024-02] MEDIA PLAYER LIFECYCLE: PlayerController owns MediaPlayer. Widget
+ *   only holds material reference - don't try to control playback directly.
+ *
+ * =============================================================================
+ * RELATED FILES: MOMainMenuPlayerController.h, MOGameInstance.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"
@@ -7,18 +50,6 @@
 class UImage;
 class UTextBlock;
 class UMaterialInstanceDynamic;
-
-/**
- * Widget for playing intro video on game launch.
- *
- * Features:
- * - Full-screen video playback
- * - "Press any key to skip" hint
- * - Broadcasts completion/skip events
- *
- * Note: Video playback is managed by the owning player controller.
- * This widget just displays the video texture and handles skip input.
- */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOIntroCompletedSignature);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOIntroSkippedSignature);
 

@@ -1,3 +1,83 @@
+/**
+ * =============================================================================
+ * MOInventoryUIController.h - Inventory Menus and Item Operations UI
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE THIS HEADER when issues arise or patterns change
+ *
+ * PURPOSE:
+ * Specialized UI controller for inventory management interfaces. Handles
+ * inventory menus, item context menus, container interaction, nearby items,
+ * and ground foraging menus. Part of the UIManager split architecture.
+ *
+ * KEY RESPONSIBILITIES:
+ * 1. Manage Inventory and Unified Inventory menus
+ * 2. Show item context menus for inventory/world items
+ * 3. Show ground context menus for foraging actions
+ * 4. Handle nearby world item queries and looting
+ * 5. Manage quick transfer between player and container
+ *
+ * UI WIDGETS MANAGED:
+ * - InventoryMenu: Basic inventory grid
+ * - UnifiedInventoryMenu: Player + container side-by-side
+ * - ItemContextMenu: Right-click actions (drop, inspect, consume)
+ * - GroundContextMenu: Foraging actions (search, dig)
+ *
+ * CONTAINER INTERACTION FLOW:
+ * Player interacts with container -> OpenInventoryWithContainer(Actor)
+ * -> SetActiveContainer() -> Show UnifiedInventoryMenu
+ * -> Player transfers items -> Close menu -> ClearActiveContainer()
+ *
+ * CRITICAL PATTERNS:
+ * 1. Context Menu Sources:
+ *    ShowItemContextMenu() - from inventory slot
+ *    ShowWorldItemContextMenu() - from nearby items panel
+ *    Track source for action handling
+ *
+ * 2. Quick Transfer:
+ *    HandleQuickTransfer(Guid, SourceInventory)
+ *    -> If source is player: transfer to container
+ *    -> If source is container: transfer to player
+ *
+ * 3. Nearby Items:
+ *    QueryNearbyWorldItems() -> Sphere overlap query
+ *    LootAllNearbyItems() -> Add all to inventory
+ *    NearbyItemsQueryRadius configurable
+ *
+ * KNOWN PITFALLS:
+ * 1. CONTAINER WEAK REFERENCE: CurrentContainerActor is weak pointer.
+ *    Container can be destroyed while menu is open - check validity.
+ *
+ * 2. WORLD ITEM CONTEXT: ContextMenuWorldItem tracks world item target.
+ *    Must clear when context menu closes to avoid stale reference.
+ *
+ * 3. FORAGING COMPLETION: HandleForagingSearchComplete/DigComplete receive
+ *    item arrays. Items may spawn at player feet - avoid overlap.
+ *
+ * 4. INVENTORY FULL: Transfer/loot operations may fail if inventory full.
+ *    Show notification to player.
+ *
+ * RELATED FILES:
+ * - MOUIControllerBase.h - Base class with shared utilities
+ * - MOInventoryMenu.h - Basic inventory widget
+ * - MOUnifiedInventoryMenu.h - Dual inventory widget
+ * - MOItemContextMenu.h - Item action menu widget
+ * - MOForagingSubsystem.h - Handles foraging operations
+ *
+ * TESTING CHECKLIST:
+ * [ ] Inventory menu opens/closes correctly
+ * [ ] Container opens unified inventory with both panels
+ * [ ] Item context menu shows correct actions
+ * [ ] Quick transfer moves items between inventories
+ * [ ] Nearby items query returns correct items
+ * [ ] Loot all picks up all nearby items
+ * [ ] Ground context menu shows foraging options
+ *
+ * LAST UPDATED: 2026-02-24 - Initial audit header
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

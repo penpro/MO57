@@ -1,3 +1,40 @@
+/**
+ * =============================================================================
+ * MOQuestHUDWidget.h - Quest Tracker HUD Widget
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * HUD widget that displays tracked quest objectives. Shows a compact list
+ * of active objectives for quick reference during gameplay. Automatically
+ * updates when quest progress changes.
+ *
+ * FEATURES:
+ * - Displays up to MaxTrackedQuestsOnHUD quests (from MOQuestSettings)
+ * - Auto-updates on objective progress/completion
+ * - Creates/removes tracker entries as quests are tracked/untracked
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] ENTRY CLASS: TrackerEntryClass must be set before widget works.
+ *   Set in Blueprint defaults or call SetTrackerEntryClass() first.
+ *
+ * [2024-02] SUBSYSTEM BINDING: Binds to all quest events in NativeConstruct.
+ *   Must unbind in NativeDestruct to prevent stale delegate references.
+ *
+ * [2024-02] MAX ENTRIES: Respects MaxTrackedQuestsOnHUD from MOQuestSettings.
+ *   Entries beyond this limit are not displayed.
+ *
+ * =============================================================================
+ * RELATED FILES: MOQuestUIController.h, MOQuestTrackerEntry.h, MOQuestSubsystem.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

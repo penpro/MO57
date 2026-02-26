@@ -1,3 +1,67 @@
+/**
+ * =============================================================================
+ * MOPCGResourceSpawnerSettings.h - PCG Resource Node Spawner
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * PCG (Procedural Content Generation) settings for spawning harvestable resources
+ * like trees, bushes, and rocks. Creates HISM components with auto-generated tags
+ * for interaction system integration.
+ *
+ * DATATABLE-DRIVEN ARCHITECTURE:
+ * - Resources defined in DT_ResourceNodes (FMOResourceNodeDefinitionRow)
+ * - ResourcesToSpawn entries select rows via FName dropdown
+ * - All meshes, scales, and yields come from DataTable definitions
+ * - AdditionalTags combined with DataTable tags at spawn time
+ *
+ * KEY STRUCTS:
+ * - FMOPCGResourceEntry: Selects a resource row + optional scale override
+ * - FResourceSpawnData (private): Runtime data populated from DataTable
+ *
+ * EXECUTION FLOW:
+ * 1. CreateElement() returns FMOPCGResourceSpawnerElement
+ * 2. ExecuteInternal() builds FResourceSpawnData from DataTable
+ * 3. Per-point: Select weighted resource, randomize scale/rotation
+ * 4. GetOrCreateManagedISMC() creates tagged HISM component
+ * 5. If bRegisterWithSubsystem: Register tags with MOPCGInteractionSubsystem
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] DATATABLE NULL: GetResourceDefinition() returns nullptr if row
+ *   not found. Always check return value before using.
+ *
+ * [2024-02] SCALE OVERRIDE ZERO: Zero vector means "use DataTable value".
+ *   Use FVector::One() if you want scale 1.0. IsNearlyZero() threshold is
+ *   KINDA_SMALL_NUMBER (1e-4).
+ *
+ * [2024-02] SEED DETERMINISM: UseSeed()=true, SeedOffset affects random stream.
+ *   Same inputs produce same spawns. Change SeedOffset for variation.
+ *
+ * [2024-02] MAIN THREAD ONLY: CanExecuteOnlyOnMainThread()=true. Don't expect
+ *   async execution.
+ *
+ * [2024-02] NOT CACHEABLE: IsCacheable()=false. PCG will re-execute on changes.
+ *
+ * [2024-02] TAG REGISTRATION: bRegisterWithSubsystem registers with
+ *   MOPCGInteractionSubsystem. Required for interaction/harvest system to
+ *   find spawned resources.
+ *
+ * =============================================================================
+ * RELATED FILES:
+ * - MOResourceNodeDefinitionRow.h - FMOResourceNodeDefinitionRow struct
+ * - MOPCGInteractionSubsystem.h - Tag registry for interactions
+ * - MOHarvestSubsystem.h - Uses tags to identify harvestable resources
+ * - DT_ResourceNodes.uasset - DataTable with resource definitions
+ *
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"
@@ -12,7 +76,8 @@ class UPCGComponent;
 
 /**
  * Entry for spawning a resource from the ResourceNode DataTable.
- * Select a resource via dropdown, optionally override spawn weight.
+ * Select a resource via row name dropdown, optionally override spawn weight.
+ * The DataTable is specified once at the spawner settings level.
  */
 USTRUCT(BlueprintType)
 struct MOFRAMEWORK_API FMOPCGResourceEntry
@@ -20,12 +85,12 @@ struct MOFRAMEWORK_API FMOPCGResourceEntry
 	GENERATED_BODY()
 
 	/**
-	 * Reference to a row in DT_ResourceNodes.
+	 * Row name in the shared ResourceNodeDataTable.
 	 * Use the dropdown to select the resource type (e.g., "BlackAlder", "IronOre").
 	 * All tags, meshes, and yields come from the DataTable definition.
 	 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|PCG", meta=(RowType="/Script/MOFramework.MOResourceNodeDefinitionRow"))
-	FDataTableRowHandle ResourceNodeRow;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|PCG")
+	FName ResourceRowName = NAME_None;
 
 	/**
 	 * Spawn weight for random selection among entries (higher = more common).
@@ -45,25 +110,25 @@ struct MOFRAMEWORK_API FMOPCGResourceEntry
 	/** Required by FMOWeightedSelector */
 	float GetWeight() const { return SpawnWeight; }
 
-	/** Get the resource definition from the DataTable. Returns nullptr if invalid. */
-	const FMOResourceNodeDefinitionRow* GetResourceDefinition() const
+	/** Get the resource definition from the provided DataTable. Returns nullptr if invalid. */
+	const FMOResourceNodeDefinitionRow* GetResourceDefinition(const UDataTable* DataTable) const
 	{
-		if (!ResourceNodeRow.DataTable || ResourceNodeRow.RowName.IsNone())
+		if (!DataTable || ResourceRowName.IsNone())
 		{
 			return nullptr;
 		}
-		return ResourceNodeRow.DataTable->FindRow<FMOResourceNodeDefinitionRow>(
-			ResourceNodeRow.RowName, TEXT("FMOPCGResourceEntry::GetResourceDefinition"));
+		return DataTable->FindRow<FMOResourceNodeDefinitionRow>(
+			ResourceRowName, TEXT("FMOPCGResourceEntry::GetResourceDefinition"));
 	}
 
 	/** Get effective min scale (override if non-zero, else from DataTable). */
-	FVector GetEffectiveMinScale() const
+	FVector GetEffectiveMinScale(const UDataTable* DataTable) const
 	{
 		if (!ScaleOverrideMin.IsNearlyZero())
 		{
 			return ScaleOverrideMin;
 		}
-		if (const FMOResourceNodeDefinitionRow* Def = GetResourceDefinition())
+		if (const FMOResourceNodeDefinitionRow* Def = GetResourceDefinition(DataTable))
 		{
 			return Def->MinScale;
 		}
@@ -71,13 +136,13 @@ struct MOFRAMEWORK_API FMOPCGResourceEntry
 	}
 
 	/** Get effective max scale (override if non-zero, else from DataTable). */
-	FVector GetEffectiveMaxScale() const
+	FVector GetEffectiveMaxScale(const UDataTable* DataTable) const
 	{
 		if (!ScaleOverrideMax.IsNearlyZero())
 		{
 			return ScaleOverrideMax;
 		}
-		if (const FMOResourceNodeDefinitionRow* Def = GetResourceDefinition())
+		if (const FMOResourceNodeDefinitionRow* Def = GetResourceDefinition(DataTable))
 		{
 			return Def->MaxScale;
 		}
@@ -130,11 +195,19 @@ public:
 	// ============================================================================
 
 	/**
-	 * Resources to spawn. Each entry references a row in DT_ResourceNodes.
+	 * DataTable containing resource node definitions (FMOResourceNodeDefinitionRow).
+	 * All ResourcesToSpawn entries reference rows from this table.
+	 * Set once here to avoid redundant DataTable references per entry.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Resources", meta=(RowType="/Script/MOFramework.MOResourceNodeDefinitionRow"))
+	TObjectPtr<UDataTable> ResourceNodeDataTable;
+
+	/**
+	 * Resources to spawn. Each entry references a row name in ResourceNodeDataTable.
 	 * Use the dropdown to select resource types (e.g., "BlackAlder", "IronOre").
 	 * All tags, meshes, and yields are automatically read from the DataTable.
 	 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Resources", meta=(PCG_Overridable, TitleProperty="ResourceNodeRow"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Resources", meta=(PCG_Overridable, TitleProperty="ResourceRowName"))
 	TArray<FMOPCGResourceEntry> ResourcesToSpawn;
 
 	/** Random seed offset for selection. */
@@ -221,6 +294,7 @@ private:
 	 */
 	TMap<FName, FResourceSpawnData> BuildResourceDataMap(
 		const TArray<FMOPCGResourceEntry>& Resources,
+		const UDataTable* DataTable,
 		FRandomStream& RandomStream) const;
 
 	/**

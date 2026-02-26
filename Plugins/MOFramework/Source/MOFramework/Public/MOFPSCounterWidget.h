@@ -1,3 +1,44 @@
+/**
+ * =============================================================================
+ * MOFPSCounterWidget.h - Debug FPS Counter Display
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Debug widget displaying current FPS and frame time. Color-coded for
+ * performance status. Visibility controlled by game settings.
+ *
+ * DISPLAY:
+ * - FPS text: "60 FPS" with color (green/yellow/red based on threshold)
+ * - Frame time: Optional "16.6 ms" display
+ *
+ * BLUEPRINT SETUP:
+ * 1. Create WBP_FPSCounter based on this class
+ * 2. Add TextBlock named "FPSText" (required)
+ * 3. Add TextBlock named "FrameTimeText" (optional)
+ * 4. Add to HUD layer
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] SETTINGS BINDING: Visibility tied to UMOGameSettings::bShowFPSCounter.
+ *   Call RefreshVisibility() if settings change at runtime.
+ *
+ * [2024-02] UPDATE INTERVAL: Lower values = more responsive but more string
+ *   allocations. 0.25s is good balance for display.
+ *
+ * [2024-02] SMOOTHING: SmoothedFPS provides visual stability. Raw FPS may
+ *   fluctuate frame-to-frame.
+ *
+ * =============================================================================
+ * RELATED FILES: MOGameSettings.h, MOHUDWidget.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"
@@ -8,13 +49,7 @@ class UTextBlock;
 
 /**
  * Simple FPS counter widget that displays current framerate.
- * Visibility is controlled by UMOGameSettings::bShowFPSCounter.
- *
- * Widget Setup:
- * 1. Create WBP_FPSCounter based on this class
- * 2. Add a TextBlock named "FPSText"
- * 3. Mark as "Is Variable"
- * 4. Add to your HUD or Game layer
+ * See file header for setup and pitfalls.
  */
 UCLASS()
 class MOFRAMEWORK_API UMOFPSCounterWidget : public UUserWidget

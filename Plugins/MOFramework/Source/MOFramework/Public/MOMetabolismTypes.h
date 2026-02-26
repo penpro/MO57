@@ -1,3 +1,60 @@
+/**
+ * =============================================================================
+ * MOMetabolismTypes.h - Nutrition & Body Composition Types
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Defines types for the metabolism simulation: body composition, nutrition
+ * tracking, digestion, and energy balance. Drives hunger/thirst systems
+ * and long-term fitness progression.
+ *
+ * KEY TYPES:
+ * - FMOBodyComposition: Weight, muscle, fat, fitness levels
+ * - FMONutritionState: Macro/micronutrient status
+ * - FMODigestionEntry: Food in digestive tract
+ *
+ * ENERGY FLOW:
+ * Food → Stomach → Digestion → Nutrients → Blood Glucose → Cells
+ *                                       ↓
+ *                              Fat/Glycogen (storage)
+ *
+ * BODY COMPOSITION:
+ * - TotalWeight = Muscle + Fat + Bone + Water + Organs
+ * - MuscleMass: Increases with strength training, decreases with starvation
+ * - BodyFatPercent: Increases with calorie surplus, decreases with deficit
+ * - CardiovascularFitness: Increases with cardio, affects stamina recovery
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] WEIGHT UNITS: All weights are in KILOGRAMS, not pounds.
+ *   Average adult male: 70-80 kg. Don't use imperial units.
+ *
+ * [2024-02] FAT MINIMUM: BodyFatPercent has ClampMin=3. Below 3% is lethal
+ *   in real life. Don't allow it to go lower.
+ *
+ * [2024-02] TRAINING ACCUMULATORS: StrengthTrainingAccum/CardioTrainingAccum
+ *   are transient authority-only values. They reset on save/load. This is
+ *   intentional - only completed training sessions persist.
+ *
+ * [2024-02] CALORIE BALANCE: Positive balance = weight gain, negative = loss.
+ *   ~7700 kcal = 1 kg of body fat. Use this for weight change calculations.
+ *
+ * =============================================================================
+ * RELATED FILES
+ * =============================================================================
+ * - MOMetabolismComponent.h - Uses these types for simulation
+ * - MOVitalsComponent.h - Blood glucose affects vitals
+ * - MOActivityTypes.h - Activity level affects calorie burn
+ *
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"
@@ -9,6 +66,7 @@ class UMOMetabolismComponent;
 
 /**
  * Body composition metrics.
+ * See file header for energy flow and body composition details.
  */
 USTRUCT(BlueprintType)
 struct MOFRAMEWORK_API FMOBodyComposition

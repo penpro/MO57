@@ -1,3 +1,41 @@
+/**
+ * =============================================================================
+ * MOHISMInteractableComponent.h - HISM Instance Interaction Handler
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Component enabling interaction with PCG-spawned HISM instances. Handles
+ * item harvesting from hierarchical instanced static meshes. Attach to actors
+ * that have HISM components needing player interaction.
+ *
+ * HARVEST FLOW:
+ * 1. Player interacts with HISM instance
+ * 2. HandlesHISMComponent() checks if this component manages the HISM
+ * 3. HarvestInstance() removes instance and adds item to inventory
+ * 4. OnInstanceHarvested fires for effects (particles, sounds)
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] TARGET COMPONENT: If TargetHISMComponent is set, only that HISM
+ *   is handled. Otherwise ALL HISMs on the actor are handled.
+ *
+ * [2024-02] QUANTITY RANGE: MinQuantity/MaxQuantity control random drops.
+ *   Both should be >= 1. Set equal for fixed quantity.
+ *
+ * [2024-02] INVENTORY REQUIRED: HarvestInstance() requires inventory component
+ *   on harvester. Returns false if no inventory found.
+ *
+ * =============================================================================
+ * RELATED FILES: MOHarvestSubsystem.h, MOHISMHarvestHelper.h, MOForagingSubsystem.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"
@@ -9,6 +47,7 @@ class UMOInventoryComponent;
 
 /**
  * Delegate fired when an HISM instance is harvested.
+ * See file header for harvest flow.
  * @param InstanceIndex The index of the harvested instance
  * @param ItemId The item definition ID that was harvested
  * @param Quantity The quantity harvested

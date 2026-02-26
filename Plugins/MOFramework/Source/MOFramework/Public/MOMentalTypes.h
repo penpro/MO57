@@ -1,3 +1,63 @@
+/**
+ * =============================================================================
+ * MOMentalTypes.h - Consciousness & Mental State Types
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Defines types for the mental state simulation: consciousness levels, shock,
+ * trauma, and cognitive effects. Drives visual impairment, motor control loss,
+ * and unconsciousness states.
+ *
+ * CONSCIOUSNESS CASCADE:
+ * Trauma → Shock → Consciousness drop → Motor control loss → Death
+ *
+ * CONSCIOUSNESS LEVELS (from MOBodyPartTypes.h):
+ * - Alert: Normal function
+ * - Drowsy: Mild impairment
+ * - Confused: Moderate impairment, stumbling
+ * - Stuporous: Severe impairment, requires assistance
+ * - Unconscious: No motor control, vulnerable
+ * - Coma: Requires medical intervention
+ * - Dead: Terminal state
+ *
+ * VISUAL/MOTOR EFFECTS:
+ * - AimShakeIntensity: Weapon sway (affects accuracy)
+ * - TunnelVisionIntensity: Peripheral vision loss (affects awareness)
+ * - BlurredVisionIntensity: Central vision blur (affects identification)
+ * - StumblingChance: Random stumble events (affects movement)
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] INTENSITY RANGE: All effect intensities are 0-1, NOT 0-100.
+ *   1.0 = maximum effect (complete tunnel vision, constant stumbling).
+ *
+ * [2024-02] SHOCK VS TRAUMA: ShockAccumulation is physical shock (blood loss,
+ *   pain). TraumaticStress is psychological (witnessing death). Both affect
+ *   consciousness but recover differently.
+ *
+ * [2024-02] MOTOR CONTROL: HasMotorControl() returns false at Unconscious or
+ *   worse. Use this to block player input, not just movement speed penalties.
+ *
+ * [2024-02] MORALE FATIGUE: Long-term stat that accumulates over days. Doesn't
+ *   reset with sleep. Requires rest, good food, positive events to recover.
+ *
+ * =============================================================================
+ * RELATED FILES
+ * =============================================================================
+ * - MOMentalStateComponent.h - Uses these types for simulation
+ * - MOVitalsComponent.h - Blood loss contributes to shock
+ * - MOAnatomyComponent.h - Wounds contribute to shock/trauma
+ * - MOAdrenalineComponent.h - Combat stress affects mental state
+ *
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"
@@ -6,6 +66,7 @@
 
 /**
  * Mental and cognitive state.
+ * See file header for consciousness cascade and effect details.
  */
 USTRUCT(BlueprintType)
 struct MOFRAMEWORK_API FMOMentalState

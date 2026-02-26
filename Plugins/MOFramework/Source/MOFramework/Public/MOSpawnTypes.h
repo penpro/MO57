@@ -1,3 +1,65 @@
+/**
+ * =============================================================================
+ * MOSpawnTypes.h - Dynamic Entity Spawning Types
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Defines types for the dynamic spawn system that spawns survivors, prey,
+ * and predators around the player. Handles spawn cooldowns, FIFO despawning,
+ * and recruitment persistence.
+ *
+ * SPAWN CATEGORIES:
+ * - Survivor: Recruitable NPCs with quests
+ * - Prey: Huntable animals (deer, rabbits)
+ * - Predator: Dangerous animals (wolves, bears)
+ * - Ambient: Background wildlife (birds, squirrels)
+ * - Custom: User-defined categories
+ *
+ * RECRUITMENT WORKFLOW:
+ * 1. Survivor spawns in Wandering state (can despawn)
+ * 2. Player interacts → Interacted state (persistence timer starts)
+ * 3. Quest assigned → QuestActive state
+ * 4. Quest completed → Recruited state (possessable)
+ * 5. Quest failed → Dead state (becomes corpse)
+ *
+ * FIFO DESPAWNING:
+ * When MaxSpawnedCount reached, oldest non-persistent entity despawns.
+ * Persistent entities (interacted survivors) are protected until expiry.
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] PERSISTENCE EXPIRY: Interacted survivors have PersistenceExpiry
+ *   timestamp. After expiry, they can despawn again. Default is 1 hour.
+ *
+ * [2024-02] WEAK REFERENCES: FMOSpawnedEntityRecord uses TWeakObjectPtr.
+ *   Always check IsValid() before accessing SpawnedPawn.
+ *
+ * [2024-02] STRUCTURE AVOIDANCE: MinDistanceFromStructure uses any actor
+ *   with UMOBuildProgressComponent. Player buildings deter spawns.
+ *
+ * [2024-02] GROUP SPAWNING: Min/MaxGroupSize spawn multiple pawns at once.
+ *   They share a spawn point with slight offset. Used for deer herds.
+ *
+ * [2024-02] RECRUITMENT SAVE: EMORecruitmentState is saved per-pawn. On
+ *   load, recruited survivors restore their state. See MOPersistenceSubsystem.
+ *
+ * =============================================================================
+ * RELATED FILES
+ * =============================================================================
+ * - MOSpawnManagerSubsystem.h - Uses these types for spawn management
+ * - MOSpawnSettings.h - Project settings for spawn configuration
+ * - MORecruitmentComponent.h - Component storing recruitment state
+ * - MOPersistenceSubsystem.h - Saves/loads recruitment state
+ *
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"
@@ -7,6 +69,7 @@ class APawn;
 
 /**
  * Category of spawnable entity.
+ * See file header for spawn system overview.
  */
 UENUM(BlueprintType)
 enum class EMOSpawnCategory : uint8

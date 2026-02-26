@@ -1,3 +1,46 @@
+/**
+ * =============================================================================
+ * MORecipeDatabaseSettings.h - Recipe Database Project Settings
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Project Settings for the recipe database system. Points to the central
+ * recipe DataTable and provides O(1) cached lookups by station, category,
+ * and building/craftable type. Accessible via Project Settings > Plugins >
+ * MO Recipe Database.
+ *
+ * CACHING ARCHITECTURE:
+ * - RecipesByStation: Pre-sorted by EMOCraftingStation enum
+ * - BuildingRecipeIds: bIsBuilding=true recipes
+ * - CraftableRecipeIds: bIsBuilding=false recipes
+ * - RecipesByCategory: Grouped by FName category
+ *
+ * Caches are lazy-built on first access. Call InvalidateCache() after
+ * runtime DataTable modifications.
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] CACHE INVALIDATION: If you modify recipes at runtime (adding rows,
+ *   changing categories), you MUST call InvalidateCache() or lookups will
+ *   return stale data.
+ *
+ * [2024-02] STATIC CACHES: All cache data is static. Thread-safe lazy init
+ *   via EnsureCachesBuilt() but not thread-safe for writes.
+ *
+ * [2024-02] SYNC LOADING: GetRecipeIcon() loads textures synchronously.
+ *   Avoid calling in tight loops.
+ *
+ * =============================================================================
+ * RELATED FILES: MORecipeDefinitionRow.h, MOCraftingSubsystem.h, Recipes.csv
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

@@ -1,3 +1,84 @@
+/**
+ * =============================================================================
+ * MOEquipmentComponent.h - Body Slot Equipment System
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE THIS HEADER when issues arise or patterns change
+ *
+ * PURPOSE:
+ * Pawn component managing equipped items in body slots. Items are equipped
+ * FROM inventory (moved out, not copied). Hand slots have swap delays based
+ * on item weight tier. Back slot is special container slot.
+ *
+ * KEY RESPONSIBILITIES:
+ * 1. Manage 8 equipment slots (Head, Chest, Hands, Legs, Feet, Back, L/R Hand)
+ * 2. Handle equip/unequip with inventory integration
+ * 3. Implement hand slot swap delays by weight tier
+ * 4. Support back slot as container (backpack)
+ * 5. Broadcast equipment change events
+ *
+ * EQUIPMENT SLOTS:
+ * - Head, Chest, Hands, Legs, Feet: Armor/clothing (instant equip)
+ * - Back: Container slot - contents only accessible when placed on ground
+ * - LeftHand, RightHand: Held items with swap delays
+ *
+ * SWAP TIMING (hand slots only):
+ * - Light (knife, torch): 400ms
+ * - Medium (hatchet, bow): 650ms
+ * - Heavy (rifle, two-handed): 900ms
+ *
+ * ARCHITECTURE NOTES:
+ * - EquippedSlots array indexed by EMOEquipmentSlot enum
+ * - Items move out of inventory when equipped (not duplicated)
+ * - Swap timing uses Tick with countdown timers
+ * - Pending items held until swap completes
+ *
+ * CRITICAL PATTERNS:
+ * 1. Equip Flow:
+ *    EquipFromInventory() -> Check CanEquipToSlot() -> Remove from inventory
+ *    -> For hand slots: StartSwap() with delay
+ *    -> On complete: Set slot data -> Broadcast OnEquipmentChanged
+ *
+ * 2. Unequip Flow:
+ *    UnequipToInventory() -> Check inventory has space -> Add to inventory
+ *    -> Clear slot -> Broadcast OnEquipmentChanged
+ *
+ * 3. Swap Timing:
+ *    StartSwap() -> Set PendingItem + timer -> Tick decrements
+ *    -> Timer hits 0 -> CompleteSwap() -> Apply pending item
+ *
+ * KNOWN PITFALLS:
+ * 1. ITEM MOVE NOT COPY: Equipping removes item from inventory. If equip
+ *    fails mid-way, item could be lost. Ensure atomic operations.
+ *
+ * 2. BACKPACK CONTENTS: Back slot container contents only accessible when
+ *    placed on ground. Don't allow direct access to backpack inventory.
+ *
+ * 3. SWAP INTERRUPTION: If player is interrupted during swap, pending item
+ *    state may be inconsistent. Consider cancel/rollback logic.
+ *
+ * 4. SLOT VALIDATION: CanEquipToSlot() must check item's EquipSlot field.
+ *    Don't allow equipping weapons to armor slots or vice versa.
+ *
+ * RELATED FILES:
+ * - MOInventoryComponent.h - Source/target for equip/unequip
+ * - MOItemDefinitionRow.h - Item's EquipSlot and WeightTier
+ * - MOEquipmentPanel.h - UI for equipment display
+ *
+ * TESTING CHECKLIST:
+ * [ ] Equip from inventory removes item from inventory
+ * [ ] Unequip returns item to inventory
+ * [ ] Hand slot swap has correct delay based on weight
+ * [ ] IsSlotSwapping returns true during swap
+ * [ ] OnEquipmentChanged fires correctly
+ * [ ] Save/load preserves equipment state
+ * [ ] Cannot equip incompatible items to slots
+ *
+ * LAST UPDATED: 2026-02-24 - Initial audit header
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

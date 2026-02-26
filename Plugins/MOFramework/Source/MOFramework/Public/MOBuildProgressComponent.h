@@ -1,3 +1,33 @@
+/**
+ * =============================================================================
+ * MOBuildProgressComponent.h - Construction Progress Tracker
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] WEIGHTED PARTS: Parts have Weight field. TimePerWeight distributes
+ *   total build time. Don't assume parts take equal time.
+ *
+ * [2024-02] MATERIAL GATHERING: Uses MOMaterialSourceInterface. Sources checked
+ *   by priority. If materials unavailable, construction pauses (not fails).
+ *
+ * [2024-02] STATE PERSISTENCE: FMOBuildProgress is saved. On load, construction
+ *   resumes from ElapsedTime. Ensure CurrentPartIndex is correct.
+ *
+ * [2024-02] AUTHORITY: Construction tick only runs on server. Clients receive
+ *   replicated progress values.
+ *
+ * =============================================================================
+ * RELATED FILES: MOBuildableActor.h, MOBuildingComponent.h, MOBuildingTypes.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

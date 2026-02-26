@@ -1,0 +1,7058 @@
+[
+	{
+		"Name": "SelectHammerstone",
+		"RecipeId": "SelectHammerstone",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"SelectHammerstone_DisplayName\", \"Select Hammerstone\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"SelectHammerstone_Description\", \"Examine river cobbles to find one with the right weight and shape to fit comfortably in your palm. Our ancestors spent two million years perfecting this selection - a good hammerstone becomes an extension of the arm.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "RiverCobble01",
+				"Quantity": 3,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "Hammerstone01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 8,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Stoneworking",
+		"RequiredSkillLevel": 0,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 20,
+		"Icon": "None",
+		"Category": "Tools",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "StoneSelection",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "StrikeFlakes",
+		"RecipeId": "StrikeFlakes",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"StrikeFlakes_DisplayName\", \"Strike Sharp Flakes\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"StrikeFlakes_Description\", \"Strike one stone against another at the correct angle to detach thin, sharp flakes. This simple act - discovered 2.6 million years ago - was humanitys first deliberate tool creation. The flakes produced are waste to the toolmaker but treasure to those who recognize their cutting potential.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "Stone01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "SharpFlake01",
+				"Quantity": 3,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 12,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Stoneworking",
+		"RequiredSkillLevel": 0,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 25,
+		"Icon": "None",
+		"Category": "Tools",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "PercussionFlaking",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "ShapeChopper",
+		"RecipeId": "ShapeChopper",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"ShapeChopper_DisplayName\", \"Shape Crude Chopper\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"ShapeChopper_Description\", \"Remove flakes from one end of a cobble to create a rough chopping edge - the defining tool of Oldowan technology. For over a million years, this was the height of human innovation.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "Stone01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "CrudeChopper01",
+				"Quantity": 1,
+				"Chance": 1
+			},
+			{
+				"ItemDefinitionId": "SharpFlake01",
+				"Quantity": 2,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 20,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Stoneworking",
+		"RequiredSkillLevel": 1,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 30,
+		"Icon": "None",
+		"Category": "Tools",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "PercussionFlaking",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "ShapeScraper",
+		"RecipeId": "ShapeScraper",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"ShapeScraper_DisplayName\", \"Shape Stone Scraper\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"ShapeScraper_Description\", \"Carefully retouch a sharp flake to create a steep, sturdy scraping edge. The Oldowan knappers discovered that different angles served different purposes - the scraper was one of humanitys first specialized tools.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "SharpFlake01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "StoneScraper01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 15,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Stoneworking",
+		"RequiredSkillLevel": 2,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 25,
+		"Icon": "None",
+		"Category": "Tools",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "ScraperUse",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "KnapFlintFlakes",
+		"RecipeId": "KnapFlintFlakes",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"KnapFlintFlakes_DisplayName\", \"Knap Flint Flakes\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"KnapFlintFlakes_Description\", \"Strike flakes from a flint nodule. Flint fractures according to precise physical laws, producing edges sharper than surgical steel - a vast improvement over common stone.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "Flint01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "FlintFlake01",
+				"Quantity": 4,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 15,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Stoneworking",
+		"RequiredSkillLevel": 3,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 35,
+		"Icon": "None",
+		"Category": "Tools",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "FlintKnapping",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "KnapFlintKnife",
+		"RecipeId": "KnapFlintKnife",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"KnapFlintKnife_DisplayName\", \"Knap Flint Knife\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"KnapFlintKnife_Description\", \"Carefully retouch a flint flake to create a durable blade with one sharp edge and one blunt edge for safe handling. The conchoidal fracture of flint produces edges only molecules thick.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "FlintFlake01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "FlintKnife01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 20,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Stoneworking",
+		"RequiredSkillLevel": 3,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 40,
+		"Icon": "None",
+		"Category": "Tools",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "FlintKnapping",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "KnapBifacialHandaxe",
+		"RecipeId": "KnapBifacialHandaxe",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"KnapBifacialHandaxe_DisplayName\", \"Knap Bifacial Hand Axe\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"KnapBifacialHandaxe_Description\", \"Shape a large flint nodule from both faces to create a symmetrical teardrop form - the hallmark of Acheulean technology. This elegant design produces four times more cutting edge than Oldowan choppers.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "Flint01",
+				"Quantity": 2,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "HandAxe01",
+				"Quantity": 1,
+				"Chance": 1
+			},
+			{
+				"ItemDefinitionId": "FlintFlake01",
+				"Quantity": 3,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 45,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Stoneworking",
+		"RequiredSkillLevel": 4,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 60,
+		"Icon": "None",
+		"Category": "Tools",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "FlintKnapping",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "CookMeat",
+		"RecipeId": "CookMeat",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"CookMeat_DisplayName\", \"Cook Meat\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"CookMeat_Description\", \"Roast meat over the fire until done. The control of fire transformed human nutrition - cooking breaks down proteins, kills parasites, and releases more calories.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "RawMeat01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "CookedMeat01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 60,
+		"RequiredStation": "Campfire",
+		"RequiredSkillId": "Cooking",
+		"RequiredSkillLevel": 0,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 20,
+		"Icon": "None",
+		"Category": "Food",
+		"RequiredTools": [],
+		"bRequiresDiscovery": false,
+		"DiscoveryKnowledgeId": "None",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "StripBark",
+		"RecipeId": "StripBark",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"StripBark_DisplayName\", \"Strip Birch Bark\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"StripBark_Description\", \"Carefully peel thin layers of papery bark from a birch branch. The bark separates most easily in early spring when the sap rises - a technique humans have used for over fifty thousand years.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "Stick01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "Bark01",
+				"Quantity": 4,
+				"Chance": 1
+			},
+			{
+				"ItemDefinitionId": "Stick02",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 12,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Woodworking",
+		"RequiredSkillLevel": 0,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 8,
+		"Icon": "None",
+		"Category": "Materials",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "BarkFiber",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "ShredBark",
+		"RecipeId": "ShredBark",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"ShredBark_DisplayName\", \"Shred Bark to Fiber\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"ShredBark_Description\", \"Tear and shred birch bark to separate the inner bast fibers. These long, flexible strands were the basis of Neanderthal cordage technology - evidence of which dates back at least 50,000 years.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "Bark01",
+				"Quantity": 2,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "PlantFiber01",
+				"Quantity": 3,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 10,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Weaving",
+		"RequiredSkillLevel": 0,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 12,
+		"Icon": "None",
+		"Category": "Materials",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "BarkFiber",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "TwistCordage",
+		"RecipeId": "TwistCordage",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"TwistCordage_DisplayName\", \"Twist Cordage\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"TwistCordage_Description\", \"Twist fibers clockwise into yarn, then twist two yarns counter-clockwise together. This opposing twist locks the fibers in tension - a deceptively complex technique that enabled snares, hafted tools, and countless other technologies.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "PlantFiber01",
+				"Quantity": 3,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "Cordage01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 15,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Weaving",
+		"RequiredSkillLevel": 0,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 15,
+		"Icon": "None",
+		"Category": "Materials",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "TwistCordage",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "ShapeDiggingStick",
+		"RecipeId": "ShapeDiggingStick",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"ShapeDiggingStick_DisplayName\", \"Shape Digging Stick\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"ShapeDiggingStick_Description\", \"Select a hardwood branch and sharpen one end to a point using a stone flake. This most basic of tools unlocks the calories stored in underground tubers.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "Branch01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "DiggingStick01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 15,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Woodworking",
+		"RequiredSkillLevel": 0,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 10,
+		"Icon": "None",
+		"Category": "Tools",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "WoodProperties",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "SelectClub",
+		"RecipeId": "SelectClub",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"SelectClub_DisplayName\", \"Select Crude Club\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"SelectClub_Description\", \"Find a heavy branch with good heft for striking. Sometimes the simplest weapon is best.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "Branch01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "CrudeClub01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 5,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Melee",
+		"RequiredSkillLevel": 0,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 5,
+		"Icon": "None",
+		"Category": "Weapons",
+		"RequiredTools": [],
+		"bRequiresDiscovery": false,
+		"DiscoveryKnowledgeId": "None",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "GatherTinder",
+		"RecipeId": "GatherTinder",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"GatherTinder_DisplayName\", \"Gather Dry Tinder\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"GatherTinder_Description\", \"Collect fine, dry materials that will catch a spark - shredded bark, dried grass, or fungal amadou.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "DriedGrass01",
+				"Quantity": 3,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "DryTinder01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 10,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Firemaking",
+		"RequiredSkillLevel": 0,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 8,
+		"Icon": "None",
+		"Category": "Materials",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "TinderGathering",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "MakeFireDrill",
+		"RecipeId": "MakeFireDrill",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"MakeFireDrill_DisplayName\", \"Make Fire Drill\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"MakeFireDrill_Description\", \"Carve a straight hardwood spindle and prepare a softwood fireboard with a notched depression. The hand drill is one of humanitys oldest fire-starting methods.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "Hardwood01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "Softwood01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "FireDrill01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 30,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Firemaking",
+		"RequiredSkillLevel": 2,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 25,
+		"Icon": "None",
+		"Category": "Tools",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "HandDrill",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "MakeBowDrill",
+		"RecipeId": "MakeBowDrill",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"MakeBowDrill_DisplayName\", \"Make Bow Drill\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"MakeBowDrill_Description\", \"A bow-driven spindle generates more heat with less effort than a hand drill. The addition of a bearing block and bow transforms fire-making from exhausting work to reliable technique.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "Cordage01",
+				"Quantity": 2,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "Branch01",
+				"Quantity": 2,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "BowDrill01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 45,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Firemaking",
+		"RequiredSkillLevel": 5,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 40,
+		"Icon": "None",
+		"Category": "Tools",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "BowDrill",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "ScrapeHide",
+		"RecipeId": "ScrapeHide",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"ScrapeHide_DisplayName\", \"Scrape Raw Hide\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"ScrapeHide_Description\", \"Remove flesh and fat from a fresh hide using a stone scraper. Speed is essential - an untreated hide begins rotting within hours.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "RawHide01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "ScrapedHide01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 60,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Leatherworking",
+		"RequiredSkillLevel": 0,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 20,
+		"Icon": "None",
+		"Category": "Materials",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "HideProcessing",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "BrainTanHide",
+		"RecipeId": "BrainTanHide",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"BrainTanHide_DisplayName\", \"Brain Tan Hide\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"BrainTanHide_Description\", \"Work animal brains into a scraped hide, then smoke it to produce soft, washable buckskin. Every animal has just enough brain to tan its own hide.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "ScrapedHide01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "AnimalBrain01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "TannedLeather01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 180,
+		"RequiredStation": "Campfire",
+		"RequiredSkillId": "Leatherworking",
+		"RequiredSkillLevel": 5,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 50,
+		"Icon": "None",
+		"Category": "Materials",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "BrainTanning",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "HaftSpear",
+		"RecipeId": "HaftSpear",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"HaftSpear_DisplayName\", \"Haft Wooden Spear\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"HaftSpear_Description\", \"Bind a sharpened point to a straight shaft using cordage. The first composite tools combined materials with different properties.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "StraightBranch01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "SharpFlake01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "Cordage01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "WoodenSpear01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 25,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Woodworking",
+		"RequiredSkillLevel": 2,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 20,
+		"Icon": "None",
+		"Category": "Weapons",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "FireHardening",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "HaftFlintSpear",
+		"RecipeId": "HaftFlintSpear",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"HaftFlintSpear_DisplayName\", \"Haft Flint-Tipped Spear\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"HaftFlintSpear_Description\", \"Attach a carefully knapped flint point to a spear shaft. The flint tip penetrates far deeper than wood alone.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "StraightBranch01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "FlintFlake01",
+				"Quantity": 2,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "Cordage01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "Resin01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "FlintSpear01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 35,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Stoneworking",
+		"RequiredSkillLevel": 4,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 35,
+		"Icon": "None",
+		"Category": "Weapons",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "AxeHafting",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "MakeSimplePouch",
+		"RecipeId": "MakeSimplePouch",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"MakeSimplePouch_DisplayName\", \"Make Simple Pouch\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"MakeSimplePouch_Description\", \"Gather a single piece of leather and tie it with sinew to create a basic container.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "TannedLeather01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "Cordage01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "SimplePouch01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 20,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Leatherworking",
+		"RequiredSkillLevel": 6,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 15,
+		"Icon": "None",
+		"Category": "Equipment",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "HideProcessing",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "CraftSimpleBow",
+		"RecipeId": "CraftSimpleBow",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"CraftSimpleBow_DisplayName\", \"Craft Simple Bow\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"CraftSimpleBow_Description\", \"Shape a bow stave and string it with twisted sinew or plant fiber. The bow stores energy for instant release.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "BowStave01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "Cordage01",
+				"Quantity": 2,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "SimpleBow01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 90,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Woodworking",
+		"RequiredSkillLevel": 8,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 50,
+		"Icon": "None",
+		"Category": "Weapons",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "BowMaking",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "FletchArrows",
+		"RecipeId": "FletchArrows",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"FletchArrows_DisplayName\", \"Fletch Arrows\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"FletchArrows_Description\", \"Attach fletching and points to straight shafts. Fletching stabilizes flight through drag.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "ArrowShaft01",
+				"Quantity": 5,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "Feathers01",
+				"Quantity": 5,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "FlintFlake01",
+				"Quantity": 5,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "Resin01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "FlintArrow01",
+				"Quantity": 5,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 45,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Woodworking",
+		"RequiredSkillLevel": 6,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 35,
+		"Icon": "None",
+		"Category": "Ammo",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "Fletching",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "CraftAtlatl",
+		"RecipeId": "CraftAtlatl",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"CraftAtlatl_DisplayName\", \"Craft Atlatl\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"CraftAtlatl_Description\", \"Carve a hooked throwing stick that effectively extends the arm, doubling spear velocity.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "Hardwood01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "Atlatl01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 60,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Woodworking",
+		"RequiredSkillLevel": 6,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 40,
+		"Icon": "None",
+		"Category": "Weapons",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "AtlatlMaking",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "CraftAtlatlDart",
+		"RecipeId": "CraftAtlatlDart",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"CraftAtlatlDart_DisplayName\", \"Craft Atlatl Darts\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"CraftAtlatlDart_Description\", \"Make lightweight darts designed for atlatl throwing - longer and more flexible than hand-thrown spears.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "StraightBranch01",
+				"Quantity": 3,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "FlintFlake01",
+				"Quantity": 3,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "Feathers01",
+				"Quantity": 6,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "Cordage01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "AtlatlDart01",
+				"Quantity": 3,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 40,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Woodworking",
+		"RequiredSkillLevel": 5,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 30,
+		"Icon": "None",
+		"Category": "Ammo",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "AtlatlMaking",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "MakeFishSpear",
+		"RecipeId": "MakeFishSpear",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"MakeFishSpear_DisplayName\", \"Make Fish Spear\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"MakeFishSpear_Description\", \"Create a multi-pronged spear for fishing in shallows. The spread of points compensates for light refraction in water.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "StraightBranch01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "FlintFlake01",
+				"Quantity": 3,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "Cordage01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "FishSpear01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 35,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Fishing",
+		"RequiredSkillLevel": 3,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 25,
+		"Icon": "None",
+		"Category": "Tools",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "FishSpearing",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "WeaveFishTrap",
+		"RecipeId": "WeaveFishTrap",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"WeaveFishTrap_DisplayName\", \"Weave Fish Trap\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"WeaveFishTrap_Description\", \"Weave a conical basket trap that allows fish to enter but not escape.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "Reeds01",
+				"Quantity": 10,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "Cordage01",
+				"Quantity": 3,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "FishTrap01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 90,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Fishing",
+		"RequiredSkillLevel": 5,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 40,
+		"Icon": "None",
+		"Category": "Tools",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "TrapFishing",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "KnapMicroliths",
+		"RecipeId": "KnapMicroliths",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"KnapMicroliths_DisplayName\", \"Knap Microliths\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"KnapMicroliths_Description\", \"Create tiny, geometric stone bladelets for composite tools. These small pieces maximize cutting edge per unit of precious stone.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "Flint01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "Microlith01",
+				"Quantity": 6,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 30,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Stoneworking",
+		"RequiredSkillLevel": 8,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 45,
+		"Icon": "None",
+		"Category": "Materials",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "MicrolithMaking",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "SewLeatherTunic",
+		"RecipeId": "SewLeatherTunic",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"SewLeatherTunic_DisplayName\", \"Sew Leather Tunic\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"SewLeatherTunic_Description\", \"Cut and stitch leather pieces into a garment covering the torso. Sewn clothing enabled human expansion into cold climates.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "TannedLeather01",
+				"Quantity": 3,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "Cordage01",
+				"Quantity": 2,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "LeatherTunic01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 120,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Leatherworking",
+		"RequiredSkillLevel": 8,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 60,
+		"Icon": "None",
+		"Category": "Equipment",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "LeatherClothing",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "SewLeatherTrousers",
+		"RecipeId": "SewLeatherTrousers",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"SewLeatherTrousers_DisplayName\", \"Sew Leather Trousers\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"SewLeatherTrousers_Description\", \"Stitch leather leg coverings for travel through brush and cold weather.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "TannedLeather01",
+				"Quantity": 2,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "Cordage01",
+				"Quantity": 2,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "LeatherTrousers01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 100,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Leatherworking",
+		"RequiredSkillLevel": 7,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 50,
+		"Icon": "None",
+		"Category": "Equipment",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "LeatherClothing",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "SewLeatherBoots",
+		"RecipeId": "SewLeatherBoots",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"SewLeatherBoots_DisplayName\", \"Sew Leather Boots\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"SewLeatherBoots_Description\", \"Create foot coverings from thick leather with sewn soles.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "TannedLeather01",
+				"Quantity": 2,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "Cordage01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "LeatherBoots01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 80,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Leatherworking",
+		"RequiredSkillLevel": 6,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 40,
+		"Icon": "None",
+		"Category": "Equipment",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "LeatherClothing",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "MakeBoneNeedle",
+		"RecipeId": "MakeBoneNeedle",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"MakeBoneNeedle_DisplayName\", \"Make Bone Needle\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"MakeBoneNeedle_Description\", \"Grind and polish a bone splinter into a fine needle with a drilled eye. This tiny tool enabled the revolution of sewn clothing.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "Bone01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "BoneNeedle01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 45,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Leatherworking",
+		"RequiredSkillLevel": 4,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 30,
+		"Icon": "None",
+		"Category": "Tools",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "BoneTools",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "CarveDugoutCanoe",
+		"RecipeId": "CarveDugoutCanoe",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"CarveDugoutCanoe_DisplayName\", \"Carve Dugout Canoe\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"CarveDugoutCanoe_Description\", \"Hollow a large log using fire and stone adzes. This labor-intensive process creates humanitys first true watercraft.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "LargeLog01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "DugoutCanoe01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 600,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Woodworking",
+		"RequiredSkillLevel": 15,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 100,
+		"Icon": "None",
+		"Category": "Equipment",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "CanoeMaking",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "MakePolishedAxe",
+		"RecipeId": "MakePolishedAxe",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"MakePolishedAxe_DisplayName\", \"Make Polished Stone Axe\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"MakePolishedAxe_Description\", \"Grind and polish a greenstone blank against sandstone until smooth. Polished axes cut faster and last longer than flaked tools.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "Greenstone01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "Sandstone01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "PolishedAxe01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 180,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Stoneworking",
+		"RequiredSkillLevel": 10,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 80,
+		"Icon": "None",
+		"Category": "Tools",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "GroundStone",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "MakeCompositeBow",
+		"RecipeId": "MakeCompositeBow",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"MakeCompositeBow_DisplayName\", \"Make Composite Bow\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"MakeCompositeBow_Description\", \"Layer horn, wood, and sinew to create a bow more powerful than its size suggests. A masterwork of materials science.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "BowStave01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "Horn01",
+				"Quantity": 2,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "Sinew01",
+				"Quantity": 4,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "HideGlue01",
+				"Quantity": 2,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "CompositeBow01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 300,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Woodworking",
+		"RequiredSkillLevel": 18,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 120,
+		"Icon": "None",
+		"Category": "Weapons",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "CompositeBow",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "BuildDeadfall",
+		"RecipeId": "BuildDeadfall",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"BuildDeadfall_DisplayName\", \"Build Deadfall Trap\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"BuildDeadfall_Description\", \"Construct a triggered trap that drops a heavy weight on prey. Passive hunting that works while you sleep.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "LargeLog01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "Branch01",
+				"Quantity": 3,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "Cordage01",
+				"Quantity": 2,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "DeadfallTrap01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 45,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Hunting",
+		"RequiredSkillLevel": 6,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 35,
+		"Icon": "None",
+		"Category": "Tools",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "DeadfallMaking",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "MakeSnare",
+		"RecipeId": "MakeSnare",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"MakeSnare_DisplayName\", \"Make Snare\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"MakeSnare_Description\", \"Create a noose trap that tightens when triggered. Snares catch small game with minimal effort.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "Cordage01",
+				"Quantity": 3,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "Branch01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "Snare01",
+				"Quantity": 3,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 20,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Hunting",
+		"RequiredSkillLevel": 4,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 20,
+		"Icon": "None",
+		"Category": "Tools",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "SnareSetting",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "WeaveBasket",
+		"RecipeId": "WeaveBasket",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"WeaveBasket_DisplayName\", \"Weave Basket\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"WeaveBasket_Description\", \"Interlace flexible plant materials into a lightweight container for gathering and storage.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "Reeds01",
+				"Quantity": 8,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "WovenBasket01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 60,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Weaving",
+		"RequiredSkillLevel": 5,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 30,
+		"Icon": "None",
+		"Category": "Equipment",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "BasketWeaving",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "MakeWaterSkin",
+		"RecipeId": "MakeWaterSkin",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"MakeWaterSkin_DisplayName\", \"Make Water Skin\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"MakeWaterSkin_Description\", \"Clean an animal bladder or stomach for use as a water container.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "AnimalBladder01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "Cordage01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "WaterSkin01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 30,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Leatherworking",
+		"RequiredSkillLevel": 3,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 20,
+		"Icon": "None",
+		"Category": "Equipment",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "HideProcessing",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "MakeBarkContainer",
+		"RecipeId": "MakeBarkContainer",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"MakeBarkContainer_DisplayName\", \"Make Bark Container\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"MakeBarkContainer_Description\", \"Fold and stitch birch bark into a waterproof vessel.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "BirchBark01",
+				"Quantity": 3,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "Cordage01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "BarkContainer01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 25,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Woodworking",
+		"RequiredSkillLevel": 4,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 15,
+		"Icon": "None",
+		"Category": "Equipment",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "BarkWorking",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "MakeQuiver",
+		"RecipeId": "MakeQuiver",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"MakeQuiver_DisplayName\", \"Make Quiver\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"MakeQuiver_Description\", \"Construct a leather container for carrying and protecting arrows.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "TannedLeather01",
+				"Quantity": 2,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "Cordage01",
+				"Quantity": 2,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "Quiver01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 50,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Leatherworking",
+		"RequiredSkillLevel": 6,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 30,
+		"Icon": "None",
+		"Category": "Equipment",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "HideProcessing",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "ShapeCrudePottery",
+		"RecipeId": "ShapeCrudePottery",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"ShapeCrudePottery_DisplayName\", \"Shape Crude Pottery\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"ShapeCrudePottery_Description\", \"Pinch and coil clay into a simple vessel, then fire it in an open fire.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "Clay01",
+				"Quantity": 2,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "Sand01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "CrudePottery01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 120,
+		"RequiredStation": "Campfire",
+		"RequiredSkillId": "Pottery",
+		"RequiredSkillLevel": 0,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 40,
+		"Icon": "None",
+		"Category": "Equipment",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "HandBuilding",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "MakeCookingPot",
+		"RecipeId": "MakeCookingPot",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"MakeCookingPot_DisplayName\", \"Make Cooking Pot\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"MakeCookingPot_Description\", \"Create a thick-walled ceramic vessel designed to withstand direct flame.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "Clay01",
+				"Quantity": 3,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "Sand01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "CookingPot01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 150,
+		"RequiredStation": "Campfire",
+		"RequiredSkillId": "Pottery",
+		"RequiredSkillLevel": 5,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 55,
+		"Icon": "None",
+		"Category": "Equipment",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "PotMaking",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "MakeStorageJar",
+		"RecipeId": "MakeStorageJar",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"MakeStorageJar_DisplayName\", \"Make Storage Jar\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"MakeStorageJar_Description\", \"Build a large ceramic container for storing grain and other goods.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "Clay01",
+				"Quantity": 5,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "Sand01",
+				"Quantity": 2,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "StorageJar01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 180,
+		"RequiredStation": "Campfire",
+		"RequiredSkillId": "Pottery",
+		"RequiredSkillLevel": 8,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 65,
+		"Icon": "None",
+		"Category": "Equipment",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "StorageVessels",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "MakeClayBowl",
+		"RecipeId": "MakeClayBowl",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"MakeClayBowl_DisplayName\", \"Make Clay Bowl\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"MakeClayBowl_Description\", \"Form a shallow ceramic vessel for serving and eating.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "Clay01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "Sand01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "ClayBowl01",
+				"Quantity": 2,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 60,
+		"RequiredStation": "Campfire",
+		"RequiredSkillId": "Pottery",
+		"RequiredSkillLevel": 2,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 25,
+		"Icon": "None",
+		"Category": "Equipment",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "HandBuilding",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "MakeGrindingStone",
+		"RecipeId": "MakeGrindingStone",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"MakeGrindingStone_DisplayName\", \"Make Grinding Stone\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"MakeGrindingStone_Description\", \"Shape a flat stone for grinding grain into flour.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "Sandstone01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "GrindingStone01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 90,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Stoneworking",
+		"RequiredSkillLevel": 5,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 40,
+		"Icon": "None",
+		"Category": "Tools",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "GrainGrinding",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "MakeSickle",
+		"RecipeId": "MakeSickle",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"MakeSickle_DisplayName\", \"Make Stone Sickle\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"MakeSickle_Description\", \"Set sharp flint bladelets into a curved wooden handle for harvesting grain.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "Branch01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "Microlith01",
+				"Quantity": 4,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "Resin01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "StoneSickle01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 60,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Stoneworking",
+		"RequiredSkillLevel": 8,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 45,
+		"Icon": "None",
+		"Category": "Tools",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "SickleMaking",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "MakeHoe",
+		"RecipeId": "MakeHoe",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"MakeHoe_DisplayName\", \"Make Stone Hoe\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"MakeHoe_Description\", \"Attach a flat stone blade to a wooden handle for tilling soil.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "Branch01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "FlintFlake01",
+				"Quantity": 2,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "Cordage01",
+				"Quantity": 2,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "StoneHoe01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 45,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Farming",
+		"RequiredSkillLevel": 3,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 30,
+		"Icon": "None",
+		"Category": "Tools",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "HoeFarming",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "MakeSpindle",
+		"RecipeId": "MakeSpindle",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"MakeSpindle_DisplayName\", \"Make Drop Spindle\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"MakeSpindle_Description\", \"Create a weighted spindle for spinning fiber into thread.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "Branch01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "Clay01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "DropSpindle01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 40,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Weaving",
+		"RequiredSkillLevel": 8,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 30,
+		"Icon": "None",
+		"Category": "Tools",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "ThreadSpinning",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "SpinWoolThread",
+		"RecipeId": "SpinWoolThread",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"SpinWoolThread_DisplayName\", \"Spin Wool Thread\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"SpinWoolThread_Description\", \"Draw out and twist wool fibers into continuous thread.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "WoolFleece01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "WoolThread01",
+				"Quantity": 3,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 60,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Weaving",
+		"RequiredSkillLevel": 10,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 35,
+		"Icon": "None",
+		"Category": "Materials",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "WoolSpinning",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "SpinFlaxThread",
+		"RecipeId": "SpinFlaxThread",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"SpinFlaxThread_DisplayName\", \"Spin Flax Thread\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"SpinFlaxThread_Description\", \"Spin processed flax fibers into linen thread.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "FlaxFiber01",
+				"Quantity": 2,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "LinenThread01",
+				"Quantity": 2,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 60,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Weaving",
+		"RequiredSkillLevel": 10,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 35,
+		"Icon": "None",
+		"Category": "Materials",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "ThreadSpinning",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "WeaveCloth",
+		"RecipeId": "WeaveCloth",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"WeaveCloth_DisplayName\", \"Weave Cloth\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"WeaveCloth_Description\", \"Interlace threads on a loom to create fabric.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "WoolThread01",
+				"Quantity": 6,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "WovenCloth01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 180,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Weaving",
+		"RequiredSkillLevel": 12,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 60,
+		"Icon": "None",
+		"Category": "Materials",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "LoomWeaving",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "MakeSimpleLoom",
+		"RecipeId": "MakeSimpleLoom",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"MakeSimpleLoom_DisplayName\", \"Make Simple Loom\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"MakeSimpleLoom_Description\", \"Construct a basic frame loom for weaving cloth.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "Branch01",
+				"Quantity": 4,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "Cordage01",
+				"Quantity": 6,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "SimpleLoom01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 90,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Weaving",
+		"RequiredSkillLevel": 10,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 50,
+		"Icon": "None",
+		"Category": "Tools",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "LoomWeaving",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "SewClothTunic",
+		"RecipeId": "SewClothTunic",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"SewClothTunic_DisplayName\", \"Sew Cloth Tunic\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"SewClothTunic_Description\", \"Cut and stitch cloth into a comfortable garment.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "WovenCloth01",
+				"Quantity": 2,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "LinenThread01",
+				"Quantity": 2,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "ClothTunic01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 100,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Weaving",
+		"RequiredSkillLevel": 14,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 55,
+		"Icon": "None",
+		"Category": "Equipment",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "Weaving",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "HammerNativeCopper",
+		"RecipeId": "HammerNativeCopper",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"HammerNativeCopper_DisplayName\", \"Hammer Native Copper\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"HammerNativeCopper_Description\", \"Cold-work native copper into simple shapes through hammering.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "NativeCopper01",
+				"Quantity": 2,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "CopperBead01",
+				"Quantity": 3,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 60,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Smithing",
+		"RequiredSkillLevel": 0,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 40,
+		"Icon": "None",
+		"Category": "Materials",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "CopperWorking",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "CastCopperAwl",
+		"RecipeId": "CastCopperAwl",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"CastCopperAwl_DisplayName\", \"Cast Copper Awl\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"CastCopperAwl_Description\", \"Melt copper in a crucible and cast a pointed tool for leather working.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "NativeCopper01",
+				"Quantity": 2,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "CopperAwl01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 90,
+		"RequiredStation": "Forge",
+		"RequiredSkillId": "Smithing",
+		"RequiredSkillLevel": 5,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 50,
+		"Icon": "None",
+		"Category": "Tools",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "CopperWorking",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "SmeltCopperOre",
+		"RecipeId": "SmeltCopperOre",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"SmeltCopperOre_DisplayName\", \"Smelt Copper Ore\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"SmeltCopperOre_Description\", \"Extract copper from malachite ore using high-temperature smelting.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "CopperOre01",
+				"Quantity": 3,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "Charcoal01",
+				"Quantity": 5,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "CopperIngot01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 120,
+		"RequiredStation": "Forge",
+		"RequiredSkillId": "Smithing",
+		"RequiredSkillLevel": 10,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 70,
+		"Icon": "None",
+		"Category": "Materials",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "Smelting",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "AlloyBronze",
+		"RecipeId": "AlloyBronze",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"AlloyBronze_DisplayName\", \"Alloy Bronze\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"AlloyBronze_Description\", \"Combine copper and tin to create bronze - harder than either metal alone.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "CopperIngot01",
+				"Quantity": 3,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "TinIngot01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "BronzeIngot01",
+				"Quantity": 3,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 90,
+		"RequiredStation": "Forge",
+		"RequiredSkillId": "Smithing",
+		"RequiredSkillLevel": 15,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 85,
+		"Icon": "None",
+		"Category": "Materials",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "BronzeCasting",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "ForgeBronzeAxe",
+		"RecipeId": "ForgeBronzeAxe",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"ForgeBronzeAxe_DisplayName\", \"Forge Bronze Axe\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"ForgeBronzeAxe_Description\", \"Cast and hammer a bronze axe head, then haft it to a wooden handle.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "BronzeIngot01",
+				"Quantity": 2,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "Hardwood01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "BronzeAxe01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 120,
+		"RequiredStation": "Forge",
+		"RequiredSkillId": "Smithing",
+		"RequiredSkillLevel": 18,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 90,
+		"Icon": "None",
+		"Category": "Tools",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "BronzeAxe",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "ForgeBronzeSword",
+		"RecipeId": "ForgeBronzeSword",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"ForgeBronzeSword_DisplayName\", \"Forge Bronze Sword\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"ForgeBronzeSword_Description\", \"Craft a leaf-shaped bronze blade - the first true swords.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "BronzeIngot01",
+				"Quantity": 3,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "TannedLeather01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "BronzeSword01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 180,
+		"RequiredStation": "Forge",
+		"RequiredSkillId": "Smithing",
+		"RequiredSkillLevel": 20,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 110,
+		"Icon": "None",
+		"Category": "Weapons",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "SwordFighting",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "ForgeBronzeSpearhead",
+		"RecipeId": "ForgeBronzeSpearhead",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"ForgeBronzeSpearhead_DisplayName\", \"Forge Bronze Spearhead\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"ForgeBronzeSpearhead_Description\", \"Cast a socketed bronze spearhead for mounting on a wooden shaft.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "BronzeIngot01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "StraightBranch01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "BronzeSpear01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 90,
+		"RequiredStation": "Forge",
+		"RequiredSkillId": "Smithing",
+		"RequiredSkillLevel": 16,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 75,
+		"Icon": "None",
+		"Category": "Weapons",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "SwordFighting",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "ForgeBronzeKnife",
+		"RecipeId": "ForgeBronzeKnife",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"ForgeBronzeKnife_DisplayName\", \"Forge Bronze Knife\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"ForgeBronzeKnife_Description\", \"Hammer out a bronze knife blade and fit it with a handle.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "BronzeIngot01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "Hardwood01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "BronzeKnife01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 75,
+		"RequiredStation": "Forge",
+		"RequiredSkillId": "Smithing",
+		"RequiredSkillLevel": 16,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 60,
+		"Icon": "None",
+		"Category": "Tools",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "BronzeAxe",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "MakeSmithHammer",
+		"RecipeId": "MakeSmithHammer",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"MakeSmithHammer_DisplayName\", \"Make Smith Hammer\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"MakeSmithHammer_Description\", \"Craft a heavy hammer for metalworking.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "Stone01",
+				"Quantity": 2,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "Hardwood01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "Cordage01",
+				"Quantity": 2,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "SmithHammer01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 60,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Smithing",
+		"RequiredSkillLevel": 8,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 45,
+		"Icon": "None",
+		"Category": "Tools",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "AnvilWork",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "MakeLeatherArmor",
+		"RecipeId": "MakeLeatherArmor",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"MakeLeatherArmor_DisplayName\", \"Make Leather Armor\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"MakeLeatherArmor_Description\", \"Layer and harden leather into protective body armor.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "TannedLeather01",
+				"Quantity": 5,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "Cordage01",
+				"Quantity": 4,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "LeatherArmor01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 180,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Leatherworking",
+		"RequiredSkillLevel": 15,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 80,
+		"Icon": "None",
+		"Category": "Equipment",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "LeatherArmor",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "MakeWoodenShield",
+		"RecipeId": "MakeWoodenShield",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"MakeWoodenShield_DisplayName\", \"Make Wooden Shield\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"MakeWoodenShield_Description\", \"Construct a wooden shield faced with rawhide for protection in combat.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "Plank01",
+				"Quantity": 2,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "RawHide01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "Cordage01",
+				"Quantity": 2,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "WoodenShield01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 120,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Woodworking",
+		"RequiredSkillLevel": 12,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 60,
+		"Icon": "None",
+		"Category": "Equipment",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "ShieldUse",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "ForgeBronzeHelmet",
+		"RecipeId": "ForgeBronzeHelmet",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"ForgeBronzeHelmet_DisplayName\", \"Forge Bronze Helmet\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"ForgeBronzeHelmet_Description\", \"Hammer sheet bronze into a protective helmet.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "BronzeIngot01",
+				"Quantity": 3,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "TannedLeather01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "BronzeHelmet01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 240,
+		"RequiredStation": "Forge",
+		"RequiredSkillId": "Smithing",
+		"RequiredSkillLevel": 22,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 120,
+		"Icon": "None",
+		"Category": "Equipment",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "BronzeArmor",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "ForgeBronzeShield",
+		"RecipeId": "ForgeBronzeShield",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"ForgeBronzeShield_DisplayName\", \"Forge Bronze Shield\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"ForgeBronzeShield_Description\", \"Create a shield with bronze facing for superior protection.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "BronzeIngot01",
+				"Quantity": 4,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "Plank01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "TannedLeather01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "BronzeShield01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 200,
+		"RequiredStation": "Forge",
+		"RequiredSkillId": "Smithing",
+		"RequiredSkillLevel": 20,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 100,
+		"Icon": "None",
+		"Category": "Equipment",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "BronzeArmor",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "ThrowWheelPot",
+		"RecipeId": "ThrowWheelPot",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"ThrowWheelPot_DisplayName\", \"Throw Wheel Pottery\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"ThrowWheelPot_Description\", \"Shape clay on a potters wheel for uniform, thin-walled vessels.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "Clay01",
+				"Quantity": 2,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "WheelThrownPot01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 45,
+		"RequiredStation": "Workbench",
+		"RequiredSkillId": "Pottery",
+		"RequiredSkillLevel": 15,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 50,
+		"Icon": "None",
+		"Category": "Equipment",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "WheelThrowing",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "MakePottersWheel",
+		"RecipeId": "MakePottersWheel",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"MakePottersWheel_DisplayName\", \"Make Potters Wheel\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"MakePottersWheel_Description\", \"Construct a rotating platform for throwing pottery.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "Plank01",
+				"Quantity": 3,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "Stone01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "PottersWheel01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 180,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Woodworking",
+		"RequiredSkillLevel": 15,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 80,
+		"Icon": "None",
+		"Category": "Tools",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "WheelThrowing",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "BuildChariot",
+		"RecipeId": "BuildChariot",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"BuildChariot_DisplayName\", \"Build Chariot\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"BuildChariot_Description\", \"Construct a two-wheeled war chariot - the ultimate Bronze Age weapon platform.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "Plank01",
+				"Quantity": 8,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "BronzeIngot01",
+				"Quantity": 4,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "TannedLeather01",
+				"Quantity": 4,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "Cordage01",
+				"Quantity": 10,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "Chariot01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 600,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Woodworking",
+		"RequiredSkillLevel": 25,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 200,
+		"Icon": "None",
+		"Category": "Equipment",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "ChariotBuilding",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "MakeScaleArmor",
+		"RecipeId": "MakeScaleArmor",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"MakeScaleArmor_DisplayName\", \"Make Scale Armor\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"MakeScaleArmor_Description\", \"Assemble overlapping bronze scales onto a leather backing.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "BronzeIngot01",
+				"Quantity": 6,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "TannedLeather01",
+				"Quantity": 3,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "Cordage01",
+				"Quantity": 4,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "ScaleArmor01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 360,
+		"RequiredStation": "Forge",
+		"RequiredSkillId": "Smithing",
+		"RequiredSkillLevel": 25,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 150,
+		"Icon": "None",
+		"Category": "Equipment",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "ScaleArmor",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "ForgeBronzeGreaves",
+		"RecipeId": "ForgeBronzeGreaves",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"ForgeBronzeGreaves_DisplayName\", \"Forge Bronze Greaves\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"ForgeBronzeGreaves_Description\", \"Hammer bronze into shin guards for leg protection.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "BronzeIngot01",
+				"Quantity": 2,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "TannedLeather01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "BronzeGreaves01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 150,
+		"RequiredStation": "Forge",
+		"RequiredSkillId": "Smithing",
+		"RequiredSkillLevel": 20,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 90,
+		"Icon": "None",
+		"Category": "Equipment",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "BronzeArmor",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "GlazePottery",
+		"RecipeId": "GlazePottery",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"GlazePottery_DisplayName\", \"Glaze Pottery\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"GlazePottery_Description\", \"Apply mineral glazes to pottery before firing for a waterproof finish.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "CrudePottery01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "MineralGlaze01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "GlazedPottery01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 90,
+		"RequiredStation": "Forge",
+		"RequiredSkillId": "Pottery",
+		"RequiredSkillLevel": 18,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 60,
+		"Icon": "None",
+		"Category": "Equipment",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "Glazing",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "MakeGlass",
+		"RecipeId": "MakeGlass",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"MakeGlass_DisplayName\", \"Make Glass\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"MakeGlass_Description\", \"Fuse sand and soda ash at high temperature to create glass.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "Sand01",
+				"Quantity": 3,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "SodaAsh01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "RawGlass01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 120,
+		"RequiredStation": "Forge",
+		"RequiredSkillId": "Smithing",
+		"RequiredSkillLevel": 20,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 80,
+		"Icon": "None",
+		"Category": "Materials",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "GlassMaking",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "ShapeGlassBeads",
+		"RecipeId": "ShapeGlassBeads",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"ShapeGlassBeads_DisplayName\", \"Shape Glass Beads\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"ShapeGlassBeads_Description\", \"Form molten glass into decorative beads.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "RawGlass01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "GlassBeads01",
+				"Quantity": 5,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 60,
+		"RequiredStation": "Forge",
+		"RequiredSkillId": "Smithing",
+		"RequiredSkillLevel": 22,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 50,
+		"Icon": "None",
+		"Category": "Equipment",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "GlassMaking",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "SmeltIronOre",
+		"RecipeId": "SmeltIronOre",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"SmeltIronOre_DisplayName\", \"Smelt Iron Ore\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"SmeltIronOre_Description\", \"Reduce iron ore to metal in a bloomery furnace.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "IronOre01",
+				"Quantity": 4,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "Charcoal01",
+				"Quantity": 8,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "IronBloom01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 180,
+		"RequiredStation": "Forge",
+		"RequiredSkillId": "Smithing",
+		"RequiredSkillLevel": 25,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 100,
+		"Icon": "None",
+		"Category": "Materials",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "IronSmelting",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "RefineIronBloom",
+		"RecipeId": "RefineIronBloom",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"RefineIronBloom_DisplayName\", \"Refine Iron Bloom\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"RefineIronBloom_Description\", \"Hammer slag from iron bloom to produce wrought iron.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "IronBloom01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "WroughtIron01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 90,
+		"RequiredStation": "Forge",
+		"RequiredSkillId": "Smithing",
+		"RequiredSkillLevel": 26,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 80,
+		"Icon": "None",
+		"Category": "Materials",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "IronSmelting",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "CarburizeSteel",
+		"RecipeId": "CarburizeSteel",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"CarburizeSteel_DisplayName\", \"Carburize Steel\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"CarburizeSteel_Description\", \"Pack iron with charcoal and heat to absorb carbon, creating steel.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "WroughtIron01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "Charcoal01",
+				"Quantity": 3,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "SteelIngot01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 240,
+		"RequiredStation": "Forge",
+		"RequiredSkillId": "Smithing",
+		"RequiredSkillLevel": 30,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 120,
+		"Icon": "None",
+		"Category": "Materials",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "SteelMaking",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "ForgeIronSword",
+		"RecipeId": "ForgeIronSword",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"ForgeIronSword_DisplayName\", \"Forge Iron Sword\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"ForgeIronSword_Description\", \"Hammer wrought iron into a sword blade.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "WroughtIron01",
+				"Quantity": 2,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "TannedLeather01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "IronSword01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 180,
+		"RequiredStation": "Forge",
+		"RequiredSkillId": "Smithing",
+		"RequiredSkillLevel": 28,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 110,
+		"Icon": "None",
+		"Category": "Weapons",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "IronForging",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "ForgeSteelSword",
+		"RecipeId": "ForgeSteelSword",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"ForgeSteelSword_DisplayName\", \"Forge Steel Sword\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"ForgeSteelSword_Description\", \"Create a superior sword from steel - harder and more resilient than iron.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "SteelIngot01",
+				"Quantity": 2,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "TannedLeather01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "SteelSword01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 240,
+		"RequiredStation": "Forge",
+		"RequiredSkillId": "Smithing",
+		"RequiredSkillLevel": 32,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 140,
+		"Icon": "None",
+		"Category": "Weapons",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "SteelForging",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "ForgeIronAxe",
+		"RecipeId": "ForgeIronAxe",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"ForgeIronAxe_DisplayName\", \"Forge Iron Axe\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"ForgeIronAxe_Description\", \"Hammer iron into an axe head.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "WroughtIron01",
+				"Quantity": 2,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "Hardwood01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "IronAxe01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 120,
+		"RequiredStation": "Forge",
+		"RequiredSkillId": "Smithing",
+		"RequiredSkillLevel": 26,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 85,
+		"Icon": "None",
+		"Category": "Tools",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "IronForging",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "ForgeIronSpear",
+		"RecipeId": "ForgeIronSpear",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"ForgeIronSpear_DisplayName\", \"Forge Iron Spear\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"ForgeIronSpear_Description\", \"Create a socketed iron spearhead.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "WroughtIron01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "StraightBranch01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "IronSpear01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 90,
+		"RequiredStation": "Forge",
+		"RequiredSkillId": "Smithing",
+		"RequiredSkillLevel": 27,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 70,
+		"Icon": "None",
+		"Category": "Weapons",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "IronForging",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "ForgeIronArrowheads",
+		"RecipeId": "ForgeIronArrowheads",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"ForgeIronArrowheads_DisplayName\", \"Forge Iron Arrowheads\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"ForgeIronArrowheads_Description\", \"Hammer small iron points for arrows.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "WroughtIron01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "IronArrowhead01",
+				"Quantity": 10,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 60,
+		"RequiredStation": "Forge",
+		"RequiredSkillId": "Smithing",
+		"RequiredSkillLevel": 27,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 50,
+		"Icon": "None",
+		"Category": "Materials",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "IronForging",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "FletchIronArrows",
+		"RecipeId": "FletchIronArrows",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"FletchIronArrows_DisplayName\", \"Fletch Iron Arrows\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"FletchIronArrows_Description\", \"Attach iron arrowheads and fletching to shafts.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "ArrowShaft01",
+				"Quantity": 10,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "IronArrowhead01",
+				"Quantity": 10,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "Feathers01",
+				"Quantity": 10,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "IronArrow01",
+				"Quantity": 10,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 60,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Woodworking",
+		"RequiredSkillLevel": 12,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 45,
+		"Icon": "None",
+		"Category": "Ammo",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "Fletching",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "MakeChainMail",
+		"RecipeId": "MakeChainMail",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"MakeChainMail_DisplayName\", \"Make Chain Mail\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"MakeChainMail_Description\", \"Interlink iron rings into flexible armor.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "WroughtIron01",
+				"Quantity": 8,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "ChainMail01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 480,
+		"RequiredStation": "Forge",
+		"RequiredSkillId": "Smithing",
+		"RequiredSkillLevel": 30,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 180,
+		"Icon": "None",
+		"Category": "Equipment",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "MailMaking",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "ForgeIronHelmet",
+		"RecipeId": "ForgeIronHelmet",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"ForgeIronHelmet_DisplayName\", \"Forge Iron Helmet\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"ForgeIronHelmet_Description\", \"Shape iron into a protective helmet.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "WroughtIron01",
+				"Quantity": 2,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "TannedLeather01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "IronHelmet01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 180,
+		"RequiredStation": "Forge",
+		"RequiredSkillId": "Smithing",
+		"RequiredSkillLevel": 28,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 100,
+		"Icon": "None",
+		"Category": "Equipment",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "IronArmor",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "ForgeIronShield",
+		"RecipeId": "ForgeIronShield",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"ForgeIronShield_DisplayName\", \"Forge Iron Shield\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"ForgeIronShield_Description\", \"Create a shield with iron boss and rim.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "WroughtIron01",
+				"Quantity": 2,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "Plank01",
+				"Quantity": 2,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "TannedLeather01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "IronShield01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 150,
+		"RequiredStation": "Forge",
+		"RequiredSkillId": "Smithing",
+		"RequiredSkillLevel": 26,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 90,
+		"Icon": "None",
+		"Category": "Equipment",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "IronArmor",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "ForgeHorseshoe",
+		"RecipeId": "ForgeHorseshoe",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"ForgeHorseshoe_DisplayName\", \"Forge Horseshoe\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"ForgeHorseshoe_Description\", \"Hammer iron into a U-shaped shoe to protect horse hooves.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "WroughtIron01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "Horseshoe01",
+				"Quantity": 2,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 45,
+		"RequiredStation": "Forge",
+		"RequiredSkillId": "Smithing",
+		"RequiredSkillLevel": 27,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 35,
+		"Icon": "None",
+		"Category": "Equipment",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "IronForging",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "ForgeIronNails",
+		"RecipeId": "ForgeIronNails",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"ForgeIronNails_DisplayName\", \"Forge Iron Nails\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"ForgeIronNails_Description\", \"Draw iron into nails for construction.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "WroughtIron01",
+				"Quantity": 1,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "IronNails01",
+				"Quantity": 20,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 60,
+		"RequiredStation": "Forge",
+		"RequiredSkillId": "Smithing",
+		"RequiredSkillLevel": 27,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 40,
+		"Icon": "None",
+		"Category": "Materials",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "IronForging",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "MakeAnvil",
+		"RecipeId": "MakeAnvil",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"MakeAnvil_DisplayName\", \"Make Iron Anvil\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"MakeAnvil_Description\", \"Cast and shape a heavy iron anvil for smithing.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "WroughtIron01",
+				"Quantity": 10,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "IronAnvil01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 300,
+		"RequiredStation": "Forge",
+		"RequiredSkillId": "Smithing",
+		"RequiredSkillLevel": 30,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 160,
+		"Icon": "None",
+		"Category": "Tools",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "AnvilWork",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "MakeBellows",
+		"RecipeId": "MakeBellows",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"MakeBellows_DisplayName\", \"Make Bellows\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"MakeBellows_Description\", \"Construct leather bellows for increasing forge temperature.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "TannedLeather01",
+				"Quantity": 4,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "Plank01",
+				"Quantity": 2,
+				"bRequiresKnowledge": false
+			},
+			{
+				"ItemDefinitionId": "Cordage01",
+				"Quantity": 2,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "Bellows01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 120,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Leatherworking",
+		"RequiredSkillLevel": 12,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 70,
+		"Icon": "None",
+		"Category": "Tools",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "AnvilWork",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "ForgeSmithTongs",
+		"RecipeId": "ForgeSmithTongs",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"ForgeSmithTongs_DisplayName\", \"Forge Smith Tongs\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"ForgeSmithTongs_Description\", \"Create iron tongs for handling hot metal.\")",
+		"Ingredients": [
+			{
+				"ItemDefinitionId": "WroughtIron01",
+				"Quantity": 2,
+				"bRequiresKnowledge": false
+			}
+		],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "SmithTongs01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 90,
+		"RequiredStation": "Forge",
+		"RequiredSkillId": "Smithing",
+		"RequiredSkillLevel": 27,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 60,
+		"Icon": "None",
+		"Category": "Tools",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "AnvilWork",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "HarvestBark",
+		"RecipeId": "HarvestBark",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"HarvestBark_DisplayName\", \"Harvest Bark\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"HarvestBark_Description\", \"Strip bark from a tree.\")",
+		"Ingredients": [],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "Bark01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 5,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Foraging",
+		"RequiredSkillLevel": 0,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 10,
+		"Icon": "None",
+		"Category": "Harvest",
+		"RequiredTools": [],
+		"bRequiresDiscovery": true,
+		"DiscoveryKnowledgeId": "WoodProperties",
+		"DiscoveryKnowledgeLevel": 2,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 0,
+		"BuildRange": 0,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 0,
+		"FuelConsumptionRate": 0,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": true,
+		"RequiredTargetTag": "GivesBark",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "HarvestStick",
+		"RecipeId": "HarvestStick",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"HarvestStick_DisplayName\", \"Gather Sticks\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"HarvestStick_Description\", \"Collect fallen branches and sticks.\")",
+		"Ingredients": [],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "Stick01",
+				"Quantity": 2,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 3,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Foraging",
+		"RequiredSkillLevel": 0,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 5,
+		"Icon": "None",
+		"Category": "Harvest",
+		"RequiredTools": [],
+		"bRequiresDiscovery": false,
+		"DiscoveryKnowledgeId": "None",
+		"DiscoveryKnowledgeLevel": 0,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 0,
+		"BuildRange": 0,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 0,
+		"FuelConsumptionRate": 0,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": true,
+		"RequiredTargetTag": "GivesStick",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "HarvestSap",
+		"RecipeId": "HarvestSap",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"HarvestSap_DisplayName\", \"Collect Sap\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"HarvestSap_Description\", \"Tap the tree for sticky resin.\")",
+		"Ingredients": [],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "Resin01",
+				"Quantity": 1,
+				"Chance": 1
+			}
+		],
+		"CraftTime": 8,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Foraging",
+		"RequiredSkillLevel": 1,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 15,
+		"Icon": "None",
+		"Category": "Harvest",
+		"RequiredTools": [],
+		"bRequiresDiscovery": false,
+		"DiscoveryKnowledgeId": "None",
+		"DiscoveryKnowledgeLevel": 0,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 0,
+		"BuildRange": 0,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 0,
+		"FuelConsumptionRate": 0,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": true,
+		"RequiredTargetTag": "GivesSap",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "ChopDownTree",
+		"RecipeId": "ChopDownTree",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"ChopDownTree_DisplayName\", \"Chop Down\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"ChopDownTree_Description\", \"Fell the tree with an axe.\")",
+		"Ingredients": [],
+		"Outputs": [
+			{
+				"ItemDefinitionId": "Log01",
+				"Quantity": 3,
+				"Chance": 1
+			},
+			{
+				"ItemDefinitionId": "Stick01",
+				"Quantity": 5,
+				"Chance": 0.8
+			}
+		],
+		"CraftTime": 30,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Woodworking",
+		"RequiredSkillLevel": 1,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 50,
+		"Icon": "None",
+		"Category": "Harvest",
+		"RequiredTools": [
+			{
+				"ToolType": "None",
+				"MinQuality": 0.5,
+				"DurabilityConsumed": 1,
+				"bIsRequired": true,
+				"MissingToolTimeMultiplier": 1,
+				"MissingToolQualityMultiplier": 1
+			}
+		],
+		"bRequiresDiscovery": false,
+		"DiscoveryKnowledgeId": "None",
+		"DiscoveryKnowledgeLevel": 0,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": false,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [],
+		"TotalBuildTime": 0,
+		"BuildRange": 0,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 0,
+		"FuelConsumptionRate": 0,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": true,
+		"RequiredTargetTag": "KeepOnHarvest",
+		"bDestroysTarget": true
+	},
+	{
+		"Name": "BuildCampfire",
+		"RecipeId": "BuildCampfire",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"BuildCampfire_DisplayName\", \"Build Campfire\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"BuildCampfire_Description\", \"Arrange stones in a ring and prepare a fire pit. The campfire is humanitys oldest technology - warmth, light, protection from predators, and the ability to cook food.\")",
+		"Ingredients": [],
+		"Outputs": [],
+		"CraftTime": 30,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Firemaking",
+		"RequiredSkillLevel": 0,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 50,
+		"Icon": "None",
+		"Category": "Buildings",
+		"RequiredTools": [],
+		"bRequiresDiscovery": false,
+		"DiscoveryKnowledgeId": "None",
+		"DiscoveryKnowledgeLevel": 0,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": true,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "/Game/Fab/Megascans/3D/Canyon_Sandstone_Campfire_ulqteek/Medium/ulqteek_tier_2/StaticMeshes/ulqteek_tier_2.ulqteek_tier_2",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "/Script/Engine.BlueprintGeneratedClass'/MOFramework/BP_Campfire.BP_Campfire_C'"
+		},
+		"BuildParts": [
+			{
+				"ItemDefinitionId": "RiverCobble01",
+				"ActionId": "None",
+				"Quantity": 10,
+				"Weight": 2
+			}
+		],
+		"TotalBuildTime": 30,
+		"BuildRange": 200,
+		"ProvidedStationType": "Campfire",
+		"ContainerSlotCount": 5,
+		"bRequiresFuel": true,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 0.1,
+		"AcceptedFuelItems": [
+			"Firewood01",
+			"Charcoal01",
+			"Stick01"
+		],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "BuildForge",
+		"RecipeId": "BuildForge",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"BuildForge_DisplayName\", \"Build Forge\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"BuildForge_Description\", \"Construct a proper forge with stone walls, clay lining, and bellows for forced air. This enables working with copper and bronze - the metals that transformed human civilization.\")",
+		"Ingredients": [],
+		"Outputs": [],
+		"CraftTime": 0,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Smithing",
+		"RequiredSkillLevel": 30,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 150,
+		"Icon": "None",
+		"Category": "Buildings",
+		"RequiredTools": [],
+		"bRequiresDiscovery": false,
+		"DiscoveryKnowledgeId": "None",
+		"DiscoveryKnowledgeLevel": 0,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": true,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [
+			{
+				"ItemDefinitionId": "Stone01",
+				"ActionId": "None",
+				"Quantity": 20,
+				"Weight": 3
+			},
+			{
+				"ItemDefinitionId": "Clay01",
+				"ActionId": "None",
+				"Quantity": 15,
+				"Weight": 2
+			},
+			{
+				"ItemDefinitionId": "Bellows01",
+				"ActionId": "None",
+				"Quantity": 1,
+				"Weight": 1
+			}
+		],
+		"TotalBuildTime": 120,
+		"BuildRange": 200,
+		"ProvidedStationType": "Forge",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": true,
+		"MaxFuel": 200,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [
+			"Charcoal01"
+		],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "BuildBloomery",
+		"RecipeId": "BuildBloomery",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"BuildBloomery_DisplayName\", \"Build Bloomery Furnace\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"BuildBloomery_Description\", \"Construct a tall clay furnace for smelting iron ore. The bloomery produces a spongy mass of iron bloom that must be hammered to remove impurities.\")",
+		"Ingredients": [],
+		"Outputs": [],
+		"CraftTime": 0,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Smithing",
+		"RequiredSkillLevel": 75,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 300,
+		"Icon": "None",
+		"Category": "Buildings",
+		"RequiredTools": [],
+		"bRequiresDiscovery": false,
+		"DiscoveryKnowledgeId": "None",
+		"DiscoveryKnowledgeLevel": 0,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": true,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [
+			{
+				"ItemDefinitionId": "Stone01",
+				"ActionId": "None",
+				"Quantity": 40,
+				"Weight": 3
+			},
+			{
+				"ItemDefinitionId": "Clay01",
+				"ActionId": "None",
+				"Quantity": 30,
+				"Weight": 3
+			},
+			{
+				"ItemDefinitionId": "Bellows01",
+				"ActionId": "None",
+				"Quantity": 2,
+				"Weight": 1
+			}
+		],
+		"TotalBuildTime": 300,
+		"BuildRange": 200,
+		"ProvidedStationType": "Forge",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": true,
+		"MaxFuel": 300,
+		"FuelConsumptionRate": 1.5,
+		"AcceptedFuelItems": [
+			"Charcoal01"
+		],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "BuildWorkbench",
+		"RecipeId": "BuildWorkbench",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"BuildWorkbench_DisplayName\", \"Build Workbench\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"BuildWorkbench_Description\", \"Construct a sturdy work surface from logs and planks. A proper workbench provides stability for detailed crafting work and keeps tools organized.\")",
+		"Ingredients": [],
+		"Outputs": [],
+		"CraftTime": 0,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Woodworking",
+		"RequiredSkillLevel": 15,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 75,
+		"Icon": "None",
+		"Category": "Buildings",
+		"RequiredTools": [],
+		"bRequiresDiscovery": false,
+		"DiscoveryKnowledgeId": "None",
+		"DiscoveryKnowledgeLevel": 0,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": true,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [
+			{
+				"ItemDefinitionId": "Hardwood01",
+				"ActionId": "None",
+				"Quantity": 6,
+				"Weight": 2
+			},
+			{
+				"ItemDefinitionId": "Plank01",
+				"ActionId": "None",
+				"Quantity": 4,
+				"Weight": 2
+			},
+			{
+				"ItemDefinitionId": "Cordage01",
+				"ActionId": "None",
+				"Quantity": 3,
+				"Weight": 1
+			}
+		],
+		"TotalBuildTime": 90,
+		"BuildRange": 200,
+		"ProvidedStationType": "Workbench",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 0,
+		"FuelConsumptionRate": 0,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "BuildLoom",
+		"RecipeId": "BuildLoom",
+		"DisplayName": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"BuildLoom_DisplayName\", \"Build Simple Loom\")",
+		"Description": "NSLOCTEXT(\"Recipes [40E94CAC0878528FA6EFADE17AF8FFE7]\", \"BuildLoom_Description\", \"Construct a basic warp-weighted loom for weaving cloth. The loom enables production of textiles from plant fibers or wool.\")",
+		"Ingredients": [],
+		"Outputs": [],
+		"CraftTime": 0,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Weaving",
+		"RequiredSkillLevel": 20,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 100,
+		"Icon": "None",
+		"Category": "Buildings",
+		"RequiredTools": [],
+		"bRequiresDiscovery": false,
+		"DiscoveryKnowledgeId": "None",
+		"DiscoveryKnowledgeLevel": 0,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": true,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "None",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "None"
+		},
+		"BuildParts": [
+			{
+				"ItemDefinitionId": "Hardwood01",
+				"ActionId": "None",
+				"Quantity": 8,
+				"Weight": 2
+			},
+			{
+				"ItemDefinitionId": "Cordage01",
+				"ActionId": "None",
+				"Quantity": 10,
+				"Weight": 2
+			},
+			{
+				"ItemDefinitionId": "Stone01",
+				"ActionId": "None",
+				"Quantity": 6,
+				"Weight": 1
+			}
+		],
+		"TotalBuildTime": 120,
+		"BuildRange": 200,
+		"ProvidedStationType": "Loom",
+		"ContainerSlotCount": 0,
+		"bRequiresFuel": false,
+		"MaxFuel": 0,
+		"FuelConsumptionRate": 0,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	},
+	{
+		"Name": "BuildBasketContainer01",
+		"RecipeId": "BuildBasketContainer01",
+		"DisplayName": "NSLOCTEXT(\"[40E94CAC0878528FA6EFADE17AF8FFE7]\", \"D1129AD94E75D4B08CC3E98D26C78125\", \"Woven Basket\")",
+		"Description": "NSLOCTEXT(\"[40E94CAC0878528FA6EFADE17AF8FFE7]\", \"A2129C6C4B76F53A4A66F1A697C5AC90\", \"A shallow basket woven from twisted plant cordage, built up in tight spirals where every pass shows the slight unevenness of hand tension. The fibers shift from sun-bleached tan to deeper brown, as if gathered from different plants or seasons, then split and rolled into cord by rubbing and twisting. A thicker braided rim stiffens the edge so it can be carried without collapsing, and small gaps between coils let grit fall through while still holding berries, nuts, or kindling.\\r\\n\\r\\nHistorically, baskets like this belong to the oldest layer of everyday technology. Fiber work often predates pottery because it needs no kiln and rarely survives unless preserved by extreme dryness or waterlogging. Cordage was a core survival skill for lines and lashings, and coiled basketry turned that same know-how into durable containers for carrying, storing, and processing food long before metal tools or written records.\")",
+		"Ingredients": [],
+		"Outputs": [],
+		"CraftTime": 30,
+		"RequiredStation": "None",
+		"RequiredSkillId": "Weaving",
+		"RequiredSkillLevel": 1,
+		"RequiredKnowledge": [],
+		"SkillXPReward": 25,
+		"Icon": "None",
+		"Category": "None",
+		"RequiredTools": [],
+		"bRequiresDiscovery": false,
+		"DiscoveryKnowledgeId": "None",
+		"DiscoveryKnowledgeLevel": 1,
+		"DiscoverySkillLevel": 0,
+		"bIsBuilding": true,
+		"PlacementData":
+		{
+			"bPrefersGroundPlacement": true,
+			"bPrefersWallPlacement": false,
+			"bPrefersCeilingPlacement": false,
+			"bAllowZRotation": true,
+			"bAllowXRotation": false,
+			"bAllowYRotation": false,
+			"RotationIncrement": 15,
+			"bRequiresNoCollision": true,
+			"PreviewMesh": "/MOFramework/Items/WovenBasket01/Medium/ukqpfhsaw_tier_2/StaticMeshes/ukqpfhsaw_tier_2.ukqpfhsaw_tier_2",
+			"PreviewScale":
+			{
+				"X": 1,
+				"Y": 1,
+				"Z": 1
+			},
+			"BuildableActorClass": "/Script/Engine.BlueprintGeneratedClass'/MOFramework/BP_WovenBasket.BP_WovenBasket_C'"
+		},
+		"BuildParts": [
+			{
+				"ItemDefinitionId": "Cordage01",
+				"ActionId": "None",
+				"Quantity": 10,
+				"Weight": 2
+			}
+		],
+		"TotalBuildTime": 60,
+		"BuildRange": 150,
+		"ProvidedStationType": "None",
+		"ContainerSlotCount": 2,
+		"bRequiresFuel": false,
+		"MaxFuel": 100,
+		"FuelConsumptionRate": 1,
+		"AcceptedFuelItems": [],
+		"bIsHarvestRecipe": false,
+		"RequiredTargetTag": "None",
+		"bDestroysTarget": false
+	}
+]

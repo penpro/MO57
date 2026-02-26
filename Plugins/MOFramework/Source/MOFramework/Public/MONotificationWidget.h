@@ -1,3 +1,47 @@
+/**
+ * =============================================================================
+ * MONotificationWidget.h - Temporary Notification Display Widget
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Widget for displaying temporary notification messages. Supports multiple
+ * notification types (Info, Success, Warning, Error, ItemPickup, SkillGain)
+ * with color-coded styling.
+ *
+ * BLUEPRINT SETUP:
+ * 1. Create WBP inheriting from this class
+ * 2. Add MessageText (TextBlock) - Required for message display
+ * 3. Add BackgroundBorder (Border) - Optional for background styling
+ * 4. Add IconImage (Image) - Optional for icon display
+ * 5. Implement PlayShowAnimation/PlayHideAnimation for transitions
+ *
+ * ANIMATION PATTERN:
+ * - PlayShowAnimation() called when notification appears
+ * - PlayHideAnimation() called when notification should disappear
+ * - Call OnHideAnimationComplete() from Blueprint when hide animation ends
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] BLUEPRINT NATIVE EVENT: PlayShowAnimation/PlayHideAnimation are
+ *   BlueprintNativeEvent. Override in Blueprint for custom animations.
+ *
+ * [2024-02] PENDING MESSAGE: If SetupNotification called before NativeConstruct,
+ *   message is stored in PendingMessage and applied after construct.
+ *
+ * [2024-02] HIDE COMPLETE CALLBACK: You MUST call OnHideAnimationComplete()
+ *   when your Blueprint hide animation finishes to properly chain notifications.
+ *
+ * =============================================================================
+ * RELATED FILES: MONotificationComponent.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

@@ -1,3 +1,47 @@
+/**
+ * =============================================================================
+ * MOItemInfoPanel.h - Item Detail Display Panel
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Panel showing detailed item information when an item is selected in
+ * inventory. Displays name, type, rarity, stats, flags, tags, and properties.
+ *
+ * DISPLAY MODES:
+ * - Inventory Mode: SetSelectedItemGuid() looks up item in inventory
+ * - Direct Mode: SetItemByDefinitionId() displays from definition only
+ *
+ * DISPLAYED INFO:
+ * - Name, Type, Rarity (with color coding)
+ * - Description (short and full)
+ * - Icon image
+ * - Quantity, Max Stack, Weight, Value
+ * - Item flags (bConsumable, bEquippable, etc.)
+ * - Tags array
+ * - Scalar properties map
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] DUAL MODE: DirectItemDefinitionId takes precedence over inventory
+ *   lookup. Clear with ClearSelection() before switching modes.
+ *
+ * [2024-02] BIND WIDGET OPTIONAL: All display widgets are BindWidgetOptional.
+ *   Panel works with partial binding - only shows what's bound.
+ *
+ * [2024-02] PLACEHOLDER STATE: PlaceholderText shown when no item selected.
+ *   InfoGrid hidden via SetDetailWidgetsVisibility().
+ *
+ * =============================================================================
+ * RELATED FILES: MOUnifiedInventoryMenu.h, MOItemDefinitionRow.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

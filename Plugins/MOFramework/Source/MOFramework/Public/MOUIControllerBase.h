@@ -1,3 +1,78 @@
+/**
+ * =============================================================================
+ * MOUIControllerBase.h - Abstract Base for Specialized UI Controllers
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE THIS HEADER when issues arise or patterns change
+ *
+ * PURPOSE:
+ * Abstract base class for UI controller components. Provides shared utilities
+ * for controller resolution, UIManager delegation, and cached pawn component
+ * access. Part of the UIManager split architecture.
+ *
+ * KEY RESPONSIBILITIES:
+ * 1. Provide PlayerController resolution utilities
+ * 2. Delegate shared UI operations to UIManager (modal, input mode)
+ * 3. Provide cached access to current pawn's components
+ * 4. Serve as base class for specialized controllers
+ *
+ * ARCHITECTURE NOTES:
+ * - All UI controllers live as sibling components on PlayerController
+ * - Controllers find each other via GetOwner()->FindComponentByClass<T>()
+ * - UIManager is the orchestrator - controllers delegate shared ops to it
+ * - Component caching handled by UIManager, controllers access via getters
+ *
+ * CONTROLLER HIERARCHY:
+ *   PlayerController
+ *   +-- MOUIManagerComponent (orchestrator)
+ *   +-- MOInventoryUIController
+ *   +-- MOCraftingUIController
+ *   +-- MOBuildingUIController
+ *   +-- MOCharacterUIController
+ *   +-- MOSystemMenuUIController
+ *
+ * CRITICAL PATTERNS:
+ * 1. UIManager Access:
+ *    GetUIManager() returns cached weak pointer to UIManager
+ *    Use for delegation, not direct operation
+ *
+ * 2. Modal Background:
+ *    ShowModalBackground() / HideModalBackground() delegate to UIManager
+ *    UIManager tracks modal reference count
+ *
+ * 3. Pawn Component Access:
+ *    GetCachedInventory(), GetCachedSkills(), etc.
+ *    All delegate to UIManager's cached component pointers
+ *    Components refreshed on possession change
+ *
+ * KNOWN PITFALLS:
+ * 1. TIMING: UIManager may not be available in constructor.
+ *    Use GetUIManager() only after BeginPlay.
+ *
+ * 2. CIRCULAR REFERENCE: Don't cache strong references to sibling controllers.
+ *    Use weak pointers or call FindComponentByClass each time.
+ *
+ * 3. LOCAL PLAYER: IsLocalOwningPlayerController() required for UI operations.
+ *    Remote controllers should not spawn UI.
+ *
+ * RELATED FILES:
+ * - MOUIManagerComponent.h - Orchestrator that controllers delegate to
+ * - MOInventoryUIController.h - Inventory UI specialization
+ * - MOCraftingUIController.h - Crafting UI specialization
+ * - MOCharacterUIController.h - Character/skills UI specialization
+ * - MOSystemMenuUIController.h - Menus/system UI specialization
+ *
+ * TESTING CHECKLIST:
+ * [ ] GetUIManager() returns valid pointer after BeginPlay
+ * [ ] Modal background shows/hides correctly
+ * [ ] Cached pawn components update on possession
+ * [ ] IsLocalOwningPlayerController() correct for multiplayer
+ *
+ * LAST UPDATED: 2026-02-24 - Initial audit header
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

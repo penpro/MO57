@@ -1,3 +1,71 @@
+/**
+ * =============================================================================
+ * MOMaterialSourceInterface.h - Building Material Provider Contract
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Contract for actors that can provide materials for the building system.
+ * The building system queries nearby material sources by priority to gather
+ * required materials for construction.
+ *
+ * WHO IMPLEMENTS THIS:
+ * - AMOCharacter - Priority 100 (checked first)
+ * - AMOContainerActor - Priority 50
+ * - AMOCraftingStationActor - Priority 50
+ * - AMOWorldItem - Priority 25 (checked last)
+ *
+ * WHO USES THIS:
+ * - Building system - Gathers materials for construction
+ * - MOBuildProgressComponent - Consumes materials during build
+ *
+ * PRIORITY SYSTEM:
+ * Higher priority sources are checked FIRST. This ensures:
+ * 1. Player inventory is used before containers
+ * 2. Containers are used before loose world items
+ * 3. Can customize priority for special cases
+ *
+ * =============================================================================
+ * IMPLEMENTATION REQUIREMENTS
+ * =============================================================================
+ *
+ * 1. CanProvideMaterial: Return true if source has enough of the material.
+ *    Don't consume anything - this is a query only.
+ *
+ * 2. GatherMaterial: Actually remove materials from source.
+ *    Return actual quantity gathered (may be less than requested).
+ *    MUST be authority-only for replicated sources.
+ *
+ * 3. GetMaterialSourcePriority: Return priority (higher = checked first).
+ *    Standard values: Inventory=100, Container=50, WorldItem=25
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] PARTIAL GATHER: GatherMaterial may return less than requested if
+ *   source doesn't have enough. Caller must handle partial fulfillment and
+ *   query next source for remainder.
+ *
+ * [2024-02] AUTHORITY CHECK: GatherMaterial modifies state. For replicated
+ *   actors, ensure it only runs on server/authority.
+ *
+ * [2024-02] WORLD ITEM DESTRUCTION: When AMOWorldItem provides all its
+ *   materials, it should destroy itself. Handle this in GatherMaterial.
+ *
+ * =============================================================================
+ * RELATED FILES
+ * =============================================================================
+ * - MOInventoryHolderInterface.h - Related interface for inventory access
+ * - MOBuildProgressComponent.h - Uses this to gather build materials
+ * - MOWorldItem.h - Implements this for dropped items
+ *
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"
@@ -11,15 +79,8 @@ class UMOMaterialSourceInterface : public UInterface
 };
 
 /**
- * Interface for actors that can provide materials for the building system.
- * Implemented by inventory holders, world items, and containers.
- *
- * Priority system determines gather order:
- * - Player Inventory: 100 (checked first)
- * - Containers: 50
- * - World Items: 25 (checked last)
- *
- * Implementers: AMOCharacter, AMOContainerActor, AMOCraftingStationActor, AMOWorldItem
+ * Interface for material providers in the building system.
+ * See file header for implementation requirements and pitfalls.
  */
 class MOFRAMEWORK_API IMOMaterialSourceInterface
 {

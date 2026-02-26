@@ -1,3 +1,43 @@
+/**
+ * =============================================================================
+ * MORecipeEntryWidget.h - Crafting Recipe List Entry Widget
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Individual recipe entry in a recipe list. Shows recipe name, icon, and
+ * visual state (selected, craftable, unavailable). Used by MORecipeListWidget.
+ *
+ * VISUAL STATES:
+ * - Selected: SelectedColor background
+ * - Craftable: CraftableColor background, white text
+ * - Unavailable: UncraftableColor background, gray text
+ *
+ * DELEGATES:
+ * - OnEntrySelected (FMOUIRecipeSelected): Standard delegate, preferred
+ * - OnEntryClicked (legacy): Deprecated, use OnEntrySelected
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] BUTTON TYPE: Uses UMOCommonButton (CommonUI). Bind click with
+ *   OnClicked().AddUObject(), NOT OnClicked.AddDynamic().
+ *
+ * [2024-02] ENTRY DATA: SetupEntry() caches FMORecipeListEntryData. Partial
+ *   updates (SetSelected, SetCanCraft) modify cache and call UpdateVisuals().
+ *
+ * [2024-02] DUAL DELEGATES: OnEntrySelected is preferred. OnEntryClicked
+ *   exists for backward compatibility - both are broadcast on click.
+ *
+ * =============================================================================
+ * RELATED FILES: MORecipeListWidget.h, MOCraftingMenu.h, MOUIDelegates.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"
@@ -13,12 +53,6 @@ class UBorder;
 
 // Legacy delegate - prefer FMOUIRecipeSelected from MOUIDelegates.h for new code
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMORecipeEntryClickedSignature, FName, RecipeId);
-
-/**
- * Widget representing a single recipe entry in the recipe list.
- *
- * Requires a Blueprint implementation with bound widgets.
- */
 UCLASS(Abstract, Blueprintable)
 class MOFRAMEWORK_API UMORecipeEntryWidget : public UUserWidget
 {

@@ -1,3 +1,49 @@
+/**
+ * =============================================================================
+ * MOGameMode.h - Base Game Mode with Voxel Integration
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Base game mode for MO Framework. Handles voxel world seed initialization,
+ * safe spawn point detection above terrain, PCG tag-to-item mappings, and
+ * new game / save load coordination.
+ *
+ * VOXEL INTEGRATION:
+ * - ApplySeedToVoxelStamps(): Sets seed on all stamp components
+ * - ApplySeedToHeightGraphParameter(): Sets seed in voxel graph
+ * - InitializeVoxelWorldWithSeed(): Full initialization sequence
+ * - bAutoInitializeVoxelWithSeed: Enable auto-init on level load
+ *
+ * SPAWN SYSTEM:
+ * - FindSafeSpawnLocation(): Raycasts for valid terrain
+ * - WaterLevelZ: Spawns must be above water
+ * - MinSpawnSurfaceNormalZ: Rejects steep slopes
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] VOXEL TIMING: VoxelWorld->bCreateRuntimeOnBeginPlay must be FALSE
+ *   for seed to apply correctly. Game mode calls CreateRuntime() after seed.
+ *
+ * [2024-02] SPAWN TIMING: After voxel CreateRuntime(), wait CollisionGenerationDelay
+ *   (3s default) for collision meshes to generate before spawning pawns.
+ *
+ * [2024-02] RE-GROUND PAWNS: On save load, voxel regenerates asynchronously.
+ *   Pawns may spawn above terrain. RegroundAllPawns() adjusts Z after ready.
+ *
+ * [2024-02] TAG MAPPINGS: PCGTagItemMappings must be configured for ISM/HISM
+ *   harvesting to return correct items.
+ *
+ * =============================================================================
+ * RELATED FILES: MOGameSettings.h, MOPersistenceSubsystem.h, MOCharacter.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

@@ -1,3 +1,77 @@
+/**
+ * =============================================================================
+ * MOCombatComponent.h - Combat System Orchestration
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] STATE MACHINE INVARIANTS: EMOCombatState is mutually exclusive.
+ *   Cannot be Attacking AND Blocking simultaneously. State machine in Tick:
+ *   Idle/Ready -> WindingUp -> Attacking -> Recovering -> Ready
+ *   Ready -> Blocking/Parrying (defense)
+ *   Any -> Stunned (on damage received while vulnerable)
+ *   Any -> Dodging (on dodge input if stamina available)
+ *   SetCombatState() broadcasts OnCombatStateChanged for animation.
+ *
+ * [2024-02] REPLICATION: CombatState, bInCombat, MainHandWeapon, OffHandWeapon
+ *   are REPLICATED properties. CurrentAttackType is NOT replicated - it's
+ *   cosmetic and set locally from attack input. For networked hit detection,
+ *   use ReceiveAttack() which validates on authority.
+ *
+ * [2024-02] ATTACK COOLDOWN: Full attack cycle is WindUpTime + AttackTime +
+ *   RecoveryTime (from weapon profile). IsAttacking() returns true for
+ *   WindingUp, Attacking, or Recovering states. CancelAttack() only works
+ *   during WindingUp phase. GetAttackCooldownRemaining() returns StateTimeRemaining.
+ *
+ * [2024-02] HIT DETECTION TIMING: ExecuteAttack() called when transitioning
+ *   from WindingUp to Attacking state. Performs sphere trace for targets in
+ *   range. ApplyHitToTarget() routes to target's ReceiveAttack(). If no
+ *   CachedAnatomyComp on target, damage is ignored (components required).
+ *
+ * [2024-02] STAMINA CHECK: CanAttack() checks CachedVitalsComp->GetCurrentStamina()
+ *   against attack profile's StaminaCost. ConsumeStamina() called in StartAttack.
+ *   If insufficient, attack fails. Heavy attacks cost more stamina than light.
+ *
+ * [2024-02] COMPONENT CACHING: CacheComponents() called in BeginPlay() populates
+ *   CachedAnatomyComp, CachedVitalsComp, CachedMentalComp, CachedAdrenalineComp,
+ *   CachedEquipmentComp, CachedSkillsComp via GetOwner()->FindComponentByClass.
+ *   All cached as raw TObjectPtr (not weak). If owner lacks component, pointer
+ *   is null and related features disabled (e.g., no stamina = infinite stamina).
+ *
+ * [2024-02] WEAPON PROFILE LOADING: LoadWeaponProfile() loads from
+ *   WeaponProfilesDataTable soft reference. If DataTable not set or row not
+ *   found, GetCurrentWeaponProfile() fails and unarmed profile used instead.
+ *   Check return value before using OutProfile.
+ *
+ * [2024-02] COMBAT EXIT DELAY: bInCombat stays true for CombatExitDelay (5s)
+ *   after last combat action. TimeSinceLastAction tracked in Tick. ExitCombat()
+ *   broadcasts OnCombatEngaged(false) and resets adrenaline activity level.
+ *
+ * [2024-02] DODGE I-FRAMES: bInDodgeIFrames true for first DodgeIFrames (0.3s)
+ *   of DodgeDuration (0.6s). During i-frames, ReceiveAttack() returns Dodged
+ *   without applying damage. After i-frames, still in Dodging state but vulnerable.
+ *
+ * [2024-02] PARRY WINDOW: AttemptParry() sets state to Parrying for brief window.
+ *   If ReceiveAttack() during Parrying, returns Parried, broadcasts OnParrySuccess,
+ *   and staggers attacker. Parry timing is tight - use for skilled play.
+ *
+ * =============================================================================
+ * RELATED FILES
+ * =============================================================================
+ * - MOWeaponTypes.h - Weapon and attack profile definitions
+ * - MOCombatMedicalTypes.h - Combat damage types
+ * - MOAnatomyComponent.h - Receives damage
+ * - MOAdrenalineComponent.h - Combat stress response
+ *
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

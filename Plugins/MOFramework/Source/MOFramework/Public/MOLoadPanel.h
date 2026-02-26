@@ -1,3 +1,40 @@
+/**
+ * =============================================================================
+ * MOLoadPanel.h - Load Game Slot Selection Widget
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Panel for displaying and selecting saves to load. Can filter to current
+ * world only (in-game) or show all saves (main menu).
+ *
+ * FEATURES:
+ * - Lists saves with metadata (date, playtime, etc.)
+ * - Optional world filtering for in-game use
+ * - Load confirmation before switching
+ * - Broadcasts OnLoadRequested when slot selected
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] IN-GAME VS MAIN MENU: bFilterToCurrentWorld is true by default.
+ *   Main menu load panel should set this to false to show all worlds.
+ *
+ * [2024-02] LEVEL TRANSITION: Loading triggers level change. Caller must
+ *   handle cleanup and show loading screen.
+ *
+ * [2024-02] ENTRY WIDGETS: Uses same UMOSaveSlotEntry as save panel.
+ *   Ensure SaveSlotEntryClass is set in Blueprint.
+ *
+ * =============================================================================
+ * RELATED FILES: MOSavePanel.h, MOSaveSlotEntry.h, MOPersistenceSubsystem.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

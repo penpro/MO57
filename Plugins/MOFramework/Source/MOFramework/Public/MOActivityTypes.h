@@ -1,3 +1,43 @@
+/**
+ * =============================================================================
+ * MOActivityTypes.h - Physical Activity & Stamina System Types
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Defines activity levels that drive the stamina/metabolism simulation. Maps
+ * player actions (walking, sprinting, crafting) to physiological effects
+ * (calorie burn, stamina drain, fatigue).
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] ACTIVITY VS STAMINA: Activity level determines stamina DRAIN rate.
+ *   CurrentStamina is the current value. Don't confuse them.
+ *
+ * [2024-02] FORCED DOWNGRADE: When stamina depletes during Sprint, system
+ *   auto-downgrades to Jogging. Handle this in UI to avoid jarring transitions.
+ *
+ * [2024-02] COMBAT ACTIVITY: Combat has highest stamina drain. Ensure combat
+ *   system sets Combat activity level during fights, restores after.
+ *
+ * [2024-02] STAMINA RECOVERY: Only happens at Walking or below. Jogging and
+ *   above always drain (or maintain). Check StaminaDrainPerSecond sign.
+ *
+ * =============================================================================
+ * RELATED FILES
+ * =============================================================================
+ * - MOVitalsComponent.h - Manages stamina and activity state
+ * - MOMetabolismComponent.h - Uses CalorieMultiplier for energy burn
+ * - MOCharacter.h - Sets activity level based on movement
+ *
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

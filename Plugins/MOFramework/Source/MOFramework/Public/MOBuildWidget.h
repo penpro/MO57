@@ -1,3 +1,42 @@
+/**
+ * =============================================================================
+ * MOBuildWidget.h - Main Building Configuration Menu Widget
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Main building menu widget combining recipe list, detail panel, and queue.
+ * Mirrors UMOCraftingMenu for crafting. Supports two modes:
+ * 1. Recipe browser: Shows all building recipes for selection
+ * 2. Ghost configuration: Configures a placed ghost building before construction
+ *
+ * WIDGET BINDINGS (required in Blueprint):
+ * - RecipeList (UMOBuildingRecipeListWidget) - Scrollable recipe list
+ * - DetailPanel (UMOBuildingDetailPanel) - Selected recipe details
+ * - QueueWidget (UMOBuildingQueueWidget) - Optional construction queue
+ * - CloseButton (UMOCommonButton) - Optional close button
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] DUAL MODES: InitializeMenu() for recipe browsing, InitializeForBuilding()
+ *   for ghost configuration. Don't mix - reinitialize when switching modes.
+ *
+ * [2024-02] AUTO REFRESH: If bAutoRefreshOnInventoryChange=true, binds to inventory
+ *   changes. Remember to unbind in NativeDestruct.
+ *
+ * [2024-02] ABSTRACT CLASS: Must create Blueprint subclass with bound widgets.
+ *   C++ class provides logic, Blueprint provides layout.
+ *
+ * =============================================================================
+ * RELATED FILES: MOBuildingMenu.h, MOBuildingDetailPanel.h, MOBuildingUIController.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

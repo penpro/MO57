@@ -1,3 +1,64 @@
+/**
+ * =============================================================================
+ * MOForagingSubsystem.h - Ground Foraging & HISM Instance Detection
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * World subsystem handling ground foraging (finding items hidden in terrain).
+ * Detects HISM instances within search radius, converts them to world items
+ * that can be picked up, and handles dig mechanics for underground items.
+ *
+ * KEY RESPONSIBILITIES:
+ * 1. HISM instance detection within search radius
+ * 2. Instance-to-WorldItem conversion (reveal hidden items)
+ * 3. Dig mechanics with skill-based drop tables
+ * 4. Mesh-to-ItemId mapping for PCG-spawned items
+ *
+ * FORAGING WORKFLOW:
+ * 1. Player looks at ground, presses forage key
+ * 2. MOGroundContextMenu shows forage options
+ * 3. "Search Area" -> FindNearbyForageables() -> Lists HISM instances
+ * 4. "Pick Up" specific item -> ConvertToWorldItem() -> Spawns AMOWorldItem
+ * 5. Or "Dig" -> RollDigDropTable() -> Random underground items
+ *
+ * MESH MAPPING:
+ * PCG spawns ISM/HISM with meshes. This subsystem maps mesh -> item ID:
+ * - SM_Stick_01 -> "Stick01"
+ * - SM_FlintNodule -> "FlintNodule01"
+ * Mapping configured in MOItemDatabaseSettings.
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] HISM VS ISM: Both are supported. FMOHISMInstanceData uses
+ *   UInstancedStaticMeshComponent as base class (HISM inherits from it).
+ *
+ * [2024-02] INSTANCE REMOVAL: When converting HISM instance to WorldItem,
+ *   the HISM instance is REMOVED. This changes indices of other instances.
+ *   Don't cache indices across conversion calls.
+ *
+ * [2024-02] SKILL DEPENDENCY: Dig drop table entries have MinForagingLevel.
+ *   Pass player's skill component to RollDigDropTable() for filtering.
+ *
+ * [2024-02] DUPLICATE DETECTION: FindNearbyForageables() returns unique
+ *   instances. The same HISM instance won't appear twice.
+ *
+ * =============================================================================
+ * RELATED FILES
+ * =============================================================================
+ * - MOGroundContextMenu.h - UI for forage/dig options
+ * - MOPCGItemSpawnerSettings.h - PCG node that spawns forageable items
+ * - MOItemDatabaseSettings.h - Mesh-to-ItemId mapping
+ * - MOHISMHarvestHelper.h - Helper for HISM operations
+ *
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"
@@ -11,7 +72,7 @@ class UMOSkillsComponent;
 
 /**
  * Data for a single ISM/HISM instance that can be revealed/harvested.
- * Supports both UInstancedStaticMeshComponent and UHierarchicalInstancedStaticMeshComponent.
+ * See file header for foraging workflow details.
  */
 USTRUCT(BlueprintType)
 struct FMOHISMInstanceData

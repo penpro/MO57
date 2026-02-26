@@ -1,3 +1,39 @@
+/**
+ * =============================================================================
+ * MOQuestUIController.h - Quest UI Controller Component
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Specialized UI controller for quest-related UI. Manages quest log panel
+ * (full quest list/details) and quest HUD widget (tracked objectives).
+ * Sibling component on player controller alongside other UI controllers.
+ *
+ * MANAGED WIDGETS:
+ * - MOQuestLogPanel: Full quest log (toggle via ToggleQuestLog)
+ * - MOQuestHUDWidget: HUD tracker (auto-created on BeginPlay if configured)
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] HUD AUTO-CREATE: bCreateQuestHUDOnBeginPlay controls whether
+ *   quest HUD is created automatically. Set false for main menu.
+ *
+ * [2024-02] Z-ORDER: QuestLogPanelZOrder (50) and QuestHUDZOrder (5) set
+ *   widget layer ordering. HUD should be lower to appear behind menus.
+ *
+ * [2024-02] CONTROLLER BASE: Inherits from MOUIControllerBase, not
+ *   UActorComponent. Has access to GetPawn, GetPlayerController, etc.
+ *
+ * =============================================================================
+ * RELATED FILES: MOUIControllerBase.h, MOQuestLogPanel.h, MOQuestHUDWidget.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

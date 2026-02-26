@@ -60,10 +60,12 @@ void UMOHarvestSubsystem::BuildHarvestRecipeCache()
 				Recipe->DiscoveryKnowledgeLevel);
 
 			// Log tool requirements
+			const UEnum* ToolTypeEnum = StaticEnum<EMOToolType>();
 			for (const FMOToolRequirement& Tool : Recipe->RequiredTools)
 			{
+				FString ToolTypeName = ToolTypeEnum->GetNameStringByValue(static_cast<int64>(Tool.ToolType));
 				UE_LOG(LogMOFramework, Log, TEXT("[MOHarvest]   Tool: '%s', Required=%s"),
-					*Tool.ToolType.ToString(),
+					*ToolTypeName,
 					Tool.bIsRequired ? TEXT("yes") : TEXT("no"));
 			}
 
@@ -242,7 +244,7 @@ void UMOHarvestSubsystem::GetHarvestRecipesForTags(
 		}
 
 		// Check tool requirements (harvest recipes may need tools like axes)
-		TArray<FName> MissingTools;
+		TArray<EMOToolType> MissingTools;
 		bool bHasTools = CraftingSubsystem->HasRequiredTools(Recipe, Inventory, &MissingTools);
 
 		if (!bHasTools)
@@ -296,7 +298,7 @@ FName UMOHarvestSubsystem::GetDestroyRecipeForTags(
 		}
 
 		// Check tool requirements
-		TArray<FName> MissingTools;
+		TArray<EMOToolType> MissingTools;
 		bool bHasTools = CraftingSubsystem->HasRequiredTools(Recipe, Inventory, &MissingTools);
 		if (!bHasTools)
 		{
@@ -366,15 +368,17 @@ bool UMOHarvestSubsystem::CanExecuteDestroyRecipe(FName RecipeId, UMOInventoryCo
 		return false;
 	}
 
-	TArray<FName> MissingTools;
+	TArray<EMOToolType> MissingTools;
 	bool bHasTools = CraftingSubsystem->HasRequiredTools(Recipe, Inventory, &MissingTools);
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOHarvest] CanExecuteDestroyRecipe '%s': RequiredTools=%d, HasTools=%s, MissingTools=%d"),
 		*RecipeId.ToString(), Recipe->RequiredTools.Num(), bHasTools ? TEXT("yes") : TEXT("no"), MissingTools.Num());
 
-	for (const FName& MissingTool : MissingTools)
+	const UEnum* ToolTypeEnum = StaticEnum<EMOToolType>();
+	for (const EMOToolType& MissingTool : MissingTools)
 	{
-		UE_LOG(LogMOFramework, Log, TEXT("[MOHarvest]   Missing tool: %s"), *MissingTool.ToString());
+		FString ToolName = ToolTypeEnum->GetNameStringByValue(static_cast<int64>(MissingTool));
+		UE_LOG(LogMOFramework, Log, TEXT("[MOHarvest]   Missing tool: %s"), *ToolName);
 	}
 
 	return bHasTools;

@@ -1,3 +1,44 @@
+/**
+ * =============================================================================
+ * MOStationContextMenu.h - Crafting Station Interaction Menu
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Context menu for interacting with completed crafting stations (forge, kiln,
+ * campfire, etc.). Provides quick actions without opening full inventory.
+ *
+ * OPTIONS:
+ * - Open: Opens unified inventory with station inventory as secondary
+ * - Craft: Opens crafting menu filtered to this station's recipes
+ * - Light: Activates/ignites the station (fuel required)
+ *
+ * FUEL SYSTEM:
+ * - Stations can require fuel (wood, coal) to operate
+ * - Light button disabled if no fuel
+ * - FuelTimeText shows remaining burn time
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] STATION FILTERING: Craft button should filter recipes to ones
+ *   requiring this station type. Pass StationType to CraftingMenu.
+ *
+ * [2024-02] FUEL TIME UPDATE: NativeTick updates fuel display. Only tick
+ *   when station is active to save performance.
+ *
+ * [2024-02] LIGHT STATE TOGGLE: Light button may need to toggle between
+ *   "Light" and "Extinguish" based on IsStationActive().
+ *
+ * =============================================================================
+ * RELATED FILES: MOCraftingStationActor.h, MOContextMenuBase.h, MOCraftingMenu.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"
@@ -12,15 +53,6 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOStationMenuRequestCloseSignature);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOStationMenuOpenSignature);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOStationMenuCraftSignature);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOStationMenuLightSignature);
-
-/**
- * Context menu for interacting with completed crafting stations.
- *
- * Options:
- * - Open: Opens unified inventory with station inventory as secondary
- * - Craft: Opens crafting menu filtered to this station type
- * - Light: Activates the station (grayed out if no fuel)
- */
 UCLASS(Abstract, Blueprintable)
 class MOFRAMEWORK_API UMOStationContextMenu : public UMOContextMenuBase
 {

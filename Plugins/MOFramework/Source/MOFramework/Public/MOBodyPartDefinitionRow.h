@@ -1,3 +1,44 @@
+/**
+ * =============================================================================
+ * MOBodyPartDefinitionRow.h - Medical System DataTable Definitions
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * DataTable row structs for the medical system. Defines body parts (~55),
+ * wound types, medical conditions, and treatments. All loaded from DataTables
+ * via MOMedicalSubsystem for data-driven medical simulation.
+ *
+ * ROW TYPES:
+ * - FMOBodyPartDefinitionRow: Body part properties (HP, criticality, function)
+ * - FMOWoundTypeDefinitionRow: Wound characteristics (bleed, heal time)
+ * - FMOConditionDefinitionRow: Medical conditions (progression, vital effects)
+ * - FMOMedicalTreatmentRow: Treatment definitions (requirements, effects)
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] BODY PART HIERARCHY: ParentPart creates tree structure. Damage
+ *   to child can propagate to parent. Ensure no cycles in hierarchy.
+ *
+ * [2024-02] INSTANT DEATH: bInstantDeathOnDestruction=true for Brain/Heart.
+ *   DeathTimerOnDestruction only used if bInstantDeathOnDestruction=false.
+ *
+ * [2024-02] CONDITION PROGRESSION: ProgressesTo chains conditions (Infection
+ *   -> Sepsis). Check for circular progressions in DataTable.
+ *
+ * [2024-02] SELF TREATMENT: UnreachableForSelf array defines body parts
+ *   that cannot be self-treated (back wounds, etc.).
+ *
+ * =============================================================================
+ * RELATED FILES: MOMedicalTypes.h, MOMedicalSubsystem.h, MOAnatomyComponent.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

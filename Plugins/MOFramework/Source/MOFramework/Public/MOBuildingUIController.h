@@ -1,3 +1,77 @@
+/**
+ * =============================================================================
+ * MOBuildingUIController.h - Building Menu and Construction UI
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE THIS HEADER when issues arise or patterns change
+ *
+ * PURPOSE:
+ * Specialized UI controller for building system interfaces. Manages building
+ * menu for recipe selection, ghost context menus for placed ghosts, and
+ * build widgets showing construction progress. Part of UIManager split.
+ *
+ * KEY RESPONSIBILITIES:
+ * 1. Manage Building menu (open/close/toggle)
+ * 2. Show ghost context menus for placed building ghosts
+ * 3. Display build widget during construction
+ * 4. Track current build target actor
+ *
+ * UI WIDGETS MANAGED:
+ * - BuildingMenu: Recipe browser and selection interface
+ * - GhostContextMenu: Actions for building ghost (build, cancel)
+ * - BuildWidget: Construction progress display
+ *
+ * BUILDING FLOW:
+ * Player opens Building menu -> Selects recipe -> Ghost spawned
+ * -> Player places ghost -> ShowBuildWidget(Ghost)
+ * -> Player clicks build -> HandleGhostContextMenuBuildStarted()
+ * -> Construction progress -> Complete or cancelled
+ *
+ * CRITICAL PATTERNS:
+ * 1. Building Menu:
+ *    ToggleBuildingMenu() -> HandleBuildingSelected(RecipeId)
+ *    -> Spawn ghost via MOBuildingSubsystem
+ *
+ * 2. Build Widget:
+ *    ShowBuildWidget(Target) -> Track CurrentBuildTarget
+ *    -> Display construction requirements and progress
+ *    -> HideBuildWidget() on cancel or complete
+ *
+ * 3. Ghost Lifecycle:
+ *    HandleGhostContextMenuBuildStarted() -> Start construction
+ *    HandleGhostContextMenuCancelled() -> Remove ghost
+ *
+ * KNOWN PITFALLS:
+ * 1. GHOST WEAK REFERENCE: CurrentBuildTarget is weak pointer.
+ *    Ghost can be destroyed (cancelled) while widget is open.
+ *
+ * 2. RECIPE VALIDATION: Recipe may require materials player doesn't have.
+ *    Ghost spawns anyway, but build button should be disabled.
+ *
+ * 3. GHOST CONTEXT POSITIONING: Context menu appears at ghost location.
+ *    May need world-to-screen conversion for proper placement.
+ *
+ * RELATED FILES:
+ * - MOUIControllerBase.h - Base class with shared utilities
+ * - MOBuildingMenu.h - Recipe selection widget
+ * - MOBuildWidget.h - Construction progress widget
+ * - MOGhostContextMenu.h - Ghost action menu widget
+ * - MOBuildingSubsystem.h - Building logic subsystem
+ * - MOBuildableActor.h - Building ghost and complete actors
+ *
+ * TESTING CHECKLIST:
+ * [ ] Building menu opens and shows recipes
+ * [ ] Recipe selection spawns correct ghost
+ * [ ] Build widget appears when approaching ghost
+ * [ ] Build button starts construction
+ * [ ] Cancel removes ghost properly
+ * [ ] Construction progress displays correctly
+ *
+ * LAST UPDATED: 2026-02-24 - Initial audit header
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

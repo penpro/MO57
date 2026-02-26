@@ -1,3 +1,40 @@
+/**
+ * =============================================================================
+ * MOSpawnSettings.h - Spawn Manager Project Settings
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Project Settings for the Spawn Manager system. Configures spawn behavior
+ * for different entity categories (Survivor, Prey, Predator, Ambient).
+ * Accessible via Project Settings > Game > MO Spawn Manager.
+ *
+ * SETTINGS:
+ * - Per-category configs: Max population, cooldowns, spawn rules
+ * - Global settings: Persistence hours, check interval, query distance
+ * - Debug: Cooldown multiplier, verbose logging
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] TIME MULTIPLIER: CooldownTimeMultiplier affects ALL spawn
+ *   cooldowns globally. Use for testing (0.1 = 10x faster).
+ *
+ * [2024-02] QUERY DISTANCE: MaxSpawnPointQueryDistance in cm (200000 = 2km).
+ *   Points beyond this distance from player are not considered.
+ *
+ * [2024-02] PERSISTENCE: SurvivorPersistenceHours determines how long
+ *   interacted survivors stay in world before being cleaned up.
+ *
+ * =============================================================================
+ * RELATED FILES: MOSpawnTypes.h, MOSpawnManagerSubsystem.h, MOSpawnPoint.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

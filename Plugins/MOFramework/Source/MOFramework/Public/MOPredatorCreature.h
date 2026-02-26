@@ -1,3 +1,47 @@
+/**
+ * =============================================================================
+ * MOPredatorCreature.h - Predator Creature AI Base Class
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Base class for predator creatures that hunt and attack. Flees when
+ * severely wounded. Supports pack behavior.
+ *
+ * BEHAVIOR PRIORITY:
+ * 1. Flee when health < FleeHealthThreshold
+ * 2. Attack when target is in range
+ * 3. Chase target when detected
+ * 4. Hunt (investigate last known position) when target is lost
+ * 5. Patrol/wander when idle
+ *
+ * PACK BEHAVIOR:
+ * - AlertPack() notifies nearby pack members within PackAlertRange
+ * - IsInPack()/GetPackSize() check for allies within PackDetectionRange
+ *
+ * EXAMPLES: wolf, bear, big cat
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] PACK DETECTION: Only same-class predators count as pack members.
+ *   FindPackMembers() uses Cast<AMOPredatorCreature>().
+ *
+ * [2024-02] AGGRO MEMORY: AggroMemoryDuration keeps predator aggressive after
+ *   losing sight. Resets when target is re-acquired or timer expires.
+ *
+ * [2024-02] FLEE VS ATTACK: ShouldFlee() takes priority over ShouldAttack().
+ *   Check order in behavior tree matters.
+ *
+ * =============================================================================
+ * RELATED FILES: MOCreature.h, MOPreyCreature.h, MOCreatureDefinitionRow.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

@@ -1,3 +1,46 @@
+/**
+ * =============================================================================
+ * MOGameInstance.h - Game Instance (Session-Persistent State)
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Core game instance handling session-wide state and loading screens.
+ * Persists across level transitions. Owns GameInstance subsystems like
+ * MOPersistenceSubsystem and MOMedicalSubsystem.
+ *
+ * FEATURES:
+ * - ShowLoadingOverlay(): Shows loading screen for transitions
+ * - DismissLoadingScreen(): Fades out after gameplay ready
+ * - LoadingTips: Random tips displayed during loading
+ *
+ * LOADING SCREEN FLOW:
+ * 1. Call ShowLoadingOverlay() before OpenLevel
+ * 2. BeginLoadingScreen() triggered automatically
+ * 3. EndLoadingScreen() called when map loads
+ * 4. Call DismissLoadingScreen() when pawn is ready
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] LOADING OVERLAY CLASS: Must set LoadingOverlayClass in
+ *   BP_MOGameInstance defaults. Null class = no loading screen.
+ *
+ * [2024-02] MANUAL DISMISS: Gameplay transitions use bWaitingForManualDismiss.
+ *   Must call DismissLoadingScreen() or screen stays up forever.
+ *
+ * [2024-02] MAP FILTERING: ShouldShowLoadingScreen() checks map name.
+ *   Some transitions (e.g., to main menu) may skip loading screen.
+ *
+ * =============================================================================
+ * RELATED FILES: MOLoadingOverlay.h, MOPersistenceSubsystem.h, MOGameSettings.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"
@@ -5,11 +48,6 @@
 #include "MOGameInstance.generated.h"
 
 class UMOLoadingOverlay;
-
-/**
- * Game instance for MO57.
- * Handles one-time initialization and loading screens.
- */
 UCLASS()
 class MOFRAMEWORK_API UMOGameInstance : public UGameInstance
 {

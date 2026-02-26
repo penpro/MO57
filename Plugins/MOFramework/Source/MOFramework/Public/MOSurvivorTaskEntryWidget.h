@@ -1,3 +1,38 @@
+/**
+ * =============================================================================
+ * MOSurvivorTaskEntryWidget.h - Task List Entry Widget
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Individual task entry widget for display in the task selection list (left
+ * side of task menu). Shows task name, description, icon, and add button.
+ * Clicking the entry fires OnTaskClicked delegate to add job to queue.
+ *
+ * DISPLAY ELEMENTS:
+ * - TaskNameText: Job display name
+ * - TaskDescriptionText: Brief description
+ * - TaskIcon: Job category icon
+ * - AddButton: Button to add job to queue
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] COMMON BUTTON: AddButton is UMOCommonButton. Bind click with
+ *   OnClicked().AddUObject().
+ *
+ * [2024-02] CACHED DATA: CachedJobDef stores job definition. Call
+ *   InitializeFromJobDefinition() to update.
+ *
+ * =============================================================================
+ * RELATED FILES: MOSurvivorTaskMenu.h, MOSurvivorJobTypes.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

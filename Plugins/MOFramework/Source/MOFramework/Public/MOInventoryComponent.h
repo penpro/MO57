@@ -1,5 +1,100 @@
 #pragma once
 
+/**
+ * =============================================================================
+ * MOInventoryComponent.h
+ * =============================================================================
+ *
+ * PURPOSE:
+ *   Slot-based inventory system for pawns and containers.
+ *   Handles item storage, stacking, replication, and persistence.
+ *
+ * RESPONSIBILITIES:
+ *   - Item storage with quantity and durability tracking
+ *   - FastArraySerializer replication for efficient networking
+ *   - GUID-based item identification for persistence
+ *   - Item addition, removal, stacking, splitting
+ *   - Starting inventory initialization
+ *
+ * =============================================================================
+ * BEST PRACTICES
+ * =============================================================================
+ *
+ * 1. ALWAYS use FGuid for item references, not array indices.
+ *    Indices change; GUIDs are stable across operations.
+ *
+ * 2. Use FastArraySerializer pattern for replicated arrays:
+ *    - FMOInventoryEntry inherits from FFastArraySerializerItem
+ *    - FMOInventoryList inherits from FFastArraySerializer
+ *    - TStructOpsTypeTraits registers WithNetDeltaSerializer
+ *
+ * 3. When modifying inventory on server:
+ *    - Call MarkItemDirty(Entry) after changes
+ *    - Or use MarkArrayDirty() for bulk changes
+ *
+ * 4. Durability tracking:
+ *    - CurrentDurability = -1 means "not applicable" (infinite)
+ *    - Initialize from ItemDefinition.MaxDurability when adding tools
+ *
+ * 5. Item lookup:
+ *    - GetItemByGuid() for specific item
+ *    - GetItemsByDefinitionId() for all of a type
+ *    - HasItem() for existence check with quantity
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-01] Circular Dependency: DropItemByGuid() calls
+ *           MOPersistenceSubsystem.IsGuidDestroyed(). Be aware of this
+ *           runtime coupling during drop operations.
+ *
+ * [2024-01] Starting Inventory: Uses StartingItems array processed in
+ *           BeginPlay(). Ensure ItemDefinitionId exists in DataTable.
+ *
+ * [2024-02] Tool Durability: When adding a tool item, copy MaxDurability
+ *           from FMOItemDefinitionRow to FMOInventoryEntry.CurrentDurability.
+ *           Don't leave it at -1 for items that should have durability.
+ *
+ * =============================================================================
+ * REPLICATION NOTES
+ * =============================================================================
+ *
+ * FastArraySerializer efficiently replicates only changed entries:
+ * - PostReplicatedAdd: Called on clients when new items arrive
+ * - PostReplicatedChange: Called on clients when items change (quantity/durability)
+ * - PostReplicatedRemove: Called on clients before items are removed
+ *
+ * All three callbacks broadcast OnInventoryChanged for UI updates.
+ *
+ * =============================================================================
+ * RELATED FILES
+ * =============================================================================
+ *
+ * - MOItemDefinitionRow.h       : Item definitions with ToolCapabilities
+ * - MOWorldItem.h               : Dropped item world representation
+ * - MOEquipmentComponent.h      : Equipped items (worn/held)
+ * - MOContainerActor.h          : Containers that hold inventories
+ * - MOPersistenceSubsystem.h    : Save/load of inventory state
+ * - MOInventoryUIController.h   : UI for inventory management
+ *
+ * =============================================================================
+ * CLAUDE: UPDATE THIS HEADER
+ * =============================================================================
+ *
+ * When you encounter issues with this file:
+ * 1. Add a dated entry to KNOWN PITFALLS section
+ * 2. Include the symptom and solution
+ * 3. Update BEST PRACTICES if a new pattern emerges
+ *
+ * Common issues to watch for:
+ * - Replication not working: Check MarkItemDirty() calls
+ * - Items disappearing: Check GUID handling
+ * - Stacking bugs: Verify MaxStackSize in item definition
+ *
+ * =============================================================================
+ */
+
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "Net/Serialization/FastArraySerializer.h"

@@ -1,3 +1,85 @@
+/**
+ * =============================================================================
+ * MONotificationComponent.h - Queued Notification Display System
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE THIS HEADER when issues arise or patterns change
+ *
+ * PURPOSE:
+ * Manages queued notification display on the player's screen. Supports text
+ * notifications, skill XP popups, recipe unlock messages, and item pickup
+ * feedback. Notifications are queued and displayed sequentially.
+ *
+ * KEY RESPONSIBILITIES:
+ * 1. Queue and display text notifications with type-based styling
+ * 2. Show skill increase popups with progress bar flash
+ * 3. Show recipe/knowledge unlock notifications
+ * 4. Show item pickup notifications
+ * 5. Manage notification timing and transitions
+ *
+ * OWNERSHIP:
+ * - Owner: AMOPlayerController (sibling to UMOUIManagerComponent)
+ * - Lifespan: Exists for duration of PlayerController
+ *
+ * NOTIFICATION TYPES:
+ * - Info (blue): General information messages
+ * - Success (green): Successful operations
+ * - Warning (yellow): Warnings and cautions
+ * - Error (red): Errors and failures
+ *
+ * QUEUE SYSTEM:
+ * - Text notifications queued in NotificationQueue
+ * - Skill popups queued in SkillPopupQueue
+ * - Separate queues allow both to display simultaneously
+ * - Each queue processes one item at a time
+ *
+ * DISPLAY FLOW:
+ * ShowNotification(Message, Duration, Type)
+ * -> Add to NotificationQueue
+ * -> If no current notification: ProcessNextNotification()
+ * -> Create widget, show for Duration
+ * -> Timer fires HideCurrentNotification()
+ * -> OnNotificationHideComplete() -> ProcessNextNotification()
+ *
+ * SKILL POPUP FLOW:
+ * ShowSkillPopup(SkillId, Duration)
+ * -> Add to SkillPopupQueue
+ * -> If no current popup: ProcessNextSkillPopup()
+ * -> ShowSkillPopupInternal() creates widget
+ * -> Timer fires HideSkillPopup()
+ * -> ProcessNextSkillPopup() for next in queue
+ *
+ * CRITICAL PATTERNS:
+ * 1. SEQUENTIAL DISPLAY: Only one notification at a time per queue
+ * 2. DURATION TIMER: FTimerHandle controls display duration
+ * 3. WIDGET REUSE: Widgets may be reused or recreated per notification
+ *
+ * KNOWN PITFALLS:
+ * 1. WIDGET CLASS REQUIRED: SkillNotificationWidgetClass must be set for
+ *    ShowSkillPopup/ShowKnowledgePopup to work.
+ * 2. Z-ORDER OVERLAP: Skill popup Z-order (260) higher than text (250)
+ * 3. CLEAR ALL: ClearAllNotifications clears queues AND hides current
+ *
+ * RELATED FILES:
+ * - MOUIManagerComponent.h - Delegates to this for notifications
+ * - MONotificationWidget.h - Text notification widget
+ * - MOSkillEntryWidget.h - Skill popup widget
+ * - MOSkillsComponent.h - Source of skill XP events
+ * - MORecipeDiscoveryComponent.h - Source of recipe unlock events
+ *
+ * TESTING CHECKLIST:
+ * [ ] Text notifications display with correct styling
+ * [ ] Multiple notifications queue and display sequentially
+ * [ ] Skill popups show with progress bar
+ * [ ] Recipe unlock notifications display correctly
+ * [ ] ClearAllNotifications stops current and clears queue
+ * [ ] Notifications work after pawn possession change
+ *
+ * LAST UPDATED: 2026-02-24 - Initial audit header
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"
@@ -8,14 +90,6 @@
 class UMONotificationWidget;
 class UMOSkillEntryWidget;
 struct FMOSkillDisplayData;
-
-/**
- * Component that manages queued notification display.
- * Attach to PlayerController alongside UMOUIManagerComponent.
- *
- * Notifications are queued and displayed one at a time with configurable duration.
- * Supports skill increase and recipe unlock notifications with formatted messages.
- */
 UCLASS(ClassGroup=(MO), meta=(BlueprintSpawnableComponent))
 class MOFRAMEWORK_API UMONotificationComponent : public UActorComponent
 {

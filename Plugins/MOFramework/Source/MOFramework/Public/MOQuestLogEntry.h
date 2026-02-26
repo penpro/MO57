@@ -1,3 +1,36 @@
+/**
+ * =============================================================================
+ * MOQuestLogEntry.h - Quest Log List Entry Widget
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Widget representing a single quest entry in the quest log list. Shows
+ * quest name, status, and progress summary. Selectable to show full details
+ * in the details panel.
+ *
+ * DISPLAY DATA:
+ * FMOQuestLogDisplayData contains QuestId, DisplayName, Category, bIsComplete,
+ * bIsTracked, bIsTutorial, CompletedObjectives, TotalObjectives.
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] NATIVE DELEGATE: OnQuestSelected is a native (non-dynamic) delegate.
+ *   Cannot be bound in Blueprint; use OnSelectionChanged event instead.
+ *
+ * [2024-02] SELECTION STATE: bIsSelected is visual only. Parent panel tracks
+ *   actual selection via SelectedQuestId.
+ *
+ * =============================================================================
+ * RELATED FILES: MOQuestLogPanel.h, MOQuestTypes.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

@@ -1,3 +1,45 @@
+/**
+ * =============================================================================
+ * MOUIContractInterface.h - UI Operation Contract Interface
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Interface for controllers/actors that can provide UI operations. Decouples
+ * building/container/crafting systems from specific controller types. Any
+ * controller implementing this can show build widgets, open containers, etc.
+ *
+ * INTERFACE METHODS:
+ * - RequestShowBuildWidget: Show UI for ghost building placement
+ * - RequestOpenContainerInventory: Open inventory with container
+ * - RequestOpenCraftingMenu: Open crafting (hand or station)
+ * - RequestShowGhostContextMenu: Show context menu for ghost
+ * - RequestShowStationContextMenu: Show context menu for station
+ *
+ * IMPLEMENTORS:
+ * - AMOPlayerController: Primary implementor
+ * - AI controllers may implement for NPC UI (future)
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] BLUEPRINT NATIVE EVENT: All interface methods use BlueprintNativeEvent.
+ *   Implement as virtual with _Implementation suffix in C++.
+ *
+ * [2024-02] WORLD POSITION: Context menu methods take WorldPosition, not screen
+ *   position. Caller converts to screen space as needed.
+ *
+ * [2024-02] NULL STATION: RequestOpenCraftingMenu with nullptr = hand crafting.
+ *
+ * =============================================================================
+ * RELATED FILES: MOPlayerController.h, MOBuildableActor.h, MOCraftingStationActor.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

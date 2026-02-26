@@ -1,3 +1,38 @@
+/**
+ * =============================================================================
+ * MODragVisualWidget.h - Drag Visual for Inventory Operations
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Widget displayed under cursor during inventory drag operations. Shows the
+ * item icon being dragged. Uses pure Slate rendering for reliability.
+ *
+ * USAGE:
+ * Created by MOInventoryDragDropOperation. Set icon via SetIcon() and size
+ * via SetVisualSize(). Widget follows cursor automatically.
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] PURE SLATE: Uses SImage instead of UImage widget. RebuildWidget()
+ *   creates Slate hierarchy directly. Don't add Blueprint widget bindings.
+ *
+ * [2024-02] NULL TEXTURE: SetIcon(nullptr) clears the visual. IconTexture
+ *   may be null if item has no icon.
+ *
+ * [2024-02] SIZE SYNC: VisualSize is cached. Call SetVisualSize() to update
+ *   if widget size should change during drag.
+ *
+ * =============================================================================
+ * RELATED FILES: MOInventoryDragDropOperation.h, MOInventorySlot.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"
@@ -10,9 +45,7 @@ class SImage;
 
 /**
  * Simple widget used to display a drag visual during inventory drag operations.
- *
- * This widget renders using pure Slate for reliability - no Blueprint bindings required.
- * Just set the icon texture and it will display.
+ * See file header for pitfalls.
  */
 UCLASS(Blueprintable)
 class MOFRAMEWORK_API UMODragVisualWidget : public UUserWidget

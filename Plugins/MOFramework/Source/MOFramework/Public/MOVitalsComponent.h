@@ -1,3 +1,92 @@
+/**
+ * =============================================================================
+ * MOVitalsComponent.h - Vital Signs and Physiological State
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE THIS HEADER when issues arise or patterns change
+ *
+ * PURPOSE:
+ * Pawn component managing vital signs (HR, BP, SpO2, temp, glucose) and
+ * physiological states (exertion, stress, fatigue, activity level). Central
+ * integration point between medical, metabolism, and activity systems.
+ *
+ * KEY RESPONSIBILITIES:
+ * 1. Track vital signs: HeartRate, BloodPressure, SpO2, Temperature, Glucose
+ * 2. Track blood volume and blood loss stages (Class I-IV hemorrhage)
+ * 3. Manage exertion state (stress, pain, fatigue)
+ * 4. Manage activity levels and stamina (Idle/Walking/Jogging/Sprinting/Combat)
+ * 5. Coordinate calorie burn with MetabolismComponent
+ * 6. Detect critical conditions (cardiac arrest, respiratory failure)
+ *
+ * ARCHITECTURE NOTES:
+ * - Tick interval 0.5s (configurable via TickInterval)
+ * - Activity system uses EMOActivityLevel enum
+ * - Stamina drains/recovers based on current activity
+ * - Caches references to Anatomy, Metabolism, MentalState components
+ *
+ * MEDICAL CASCADE (from CLAUDE.md):
+ * Blood loss -> BloodLossStage -> HR/BP changes -> Shock
+ * Dehydration -> HR increase, BP decrease, Temp increase
+ * Activity -> Calorie burn -> Glucose consumption
+ *
+ * CRITICAL PATTERNS:
+ * 1. Blood Loss Processing:
+ *    ApplyBloodLoss() -> Update BloodVolume -> Check stage thresholds
+ *    -> Broadcast OnBloodLossStageChanged -> Adjust HR/BP automatically
+ *
+ * 2. Activity Integration:
+ *    SetActivityLevel(Sprint) -> Update stamina drain rate
+ *    -> ProcessActivityEffects() per tick -> Drain stamina, burn calories
+ *    -> OnStaminaDepleted -> Movement system should downgrade activity
+ *
+ * 3. Vital Sign Calculation:
+ *    TickVitals() -> CalculateHeartRate() based on:
+ *    - Base HR
+ *    - Blood loss modifier
+ *    - Exertion modifier
+ *    - Pain modifier
+ *    - Temperature modifier
+ *
+ * KNOWN PITFALLS:
+ * 1. ACTIVITY LEVEL SYNC: Movement system must call SetActivityLevel()
+ *    when movement speed changes. Mismatched state causes wrong calorie burn.
+ *
+ * 2. STAMINA DEPLETION: When stamina hits 0, OnStaminaDepleted fires.
+ *    Movement system MUST respond by reducing activity level. If not handled,
+ *    character continues at high activity with no stamina.
+ *
+ * 3. BLOOD LOSS STAGES: Class IV (>40% loss) is immediately life-threatening.
+ *    Ensure UI shows urgent warnings at Class III/IV.
+ *
+ * 4. TIME SCALE: TimeScaleMultiplier affects blood regeneration and recovery.
+ *    Must match across all medical components for consistent simulation.
+ *
+ * RELATED FILES:
+ * - MOMedicalTypes.h - FMOVitalSigns, FMOExertionState, FMOActivityState
+ * - MOAnatomyComponent.h - Provides blood loss from wounds
+ * - MOMetabolismComponent.h - Consumes calories from activity
+ * - MOMentalStateComponent.h - Affected by vital sign changes
+ *
+ * INTEGRATION POINTS (call SetActivityLevel from):
+ * - Character movement component when speed changes
+ * - Crafting system when crafting starts/stops
+ * - Building system when construction activity changes
+ * - Combat system when entering/exiting combat
+ *
+ * TESTING CHECKLIST:
+ * [ ] Blood loss progresses through stages correctly
+ * [ ] HR/BP respond to blood loss
+ * [ ] Activity level changes drain stamina at correct rates
+ * [ ] Stamina depleted fires delegate
+ * [ ] Calorie burn applies to metabolism
+ * [ ] Blood regenerates over time when stable
+ * [ ] Save/load preserves vital state
+ *
+ * LAST UPDATED: 2026-02-24 - Initial audit header
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

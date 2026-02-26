@@ -1,3 +1,45 @@
+/**
+ * =============================================================================
+ * MOSurvivorTaskMenu.h - Full Survivor Task Assignment Panel
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Full task assignment panel for survivors. Left side shows available tasks
+ * organized by category. Right side shows current job queue with progress.
+ * Header shows survivor name and current status. Similar layout to crafting
+ * menu with recipe list and queue display.
+ *
+ * LAYOUT:
+ * - Header: SurvivorNameText, CurrentJobText
+ * - Left: TaskListScrollBox (available tasks)
+ * - Right: JobQueueScrollBox (queued/active jobs)
+ * - Footer: CloseButton
+ *
+ * WIDGET CLASSES:
+ * - TaskEntryWidgetClass: Widget for task entries (left)
+ * - JobEntryWidgetClass: Widget for job entries (right)
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] COMMON UI: Inherits UCommonActivatableWidget. Use activation
+ *   patterns for focus management.
+ *
+ * [2024-02] WEAK POINTERS: TargetSurvivor and CachedJobQueue are weak.
+ *   Check .IsValid() before use.
+ *
+ * [2024-02] ESC KEY: NativeOnKeyDown handles Escape to close menu.
+ *
+ * =============================================================================
+ * RELATED FILES: MOSurvivorContextMenu.h, MOSurvivorJobQueueComponent.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

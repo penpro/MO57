@@ -1,3 +1,48 @@
+/**
+ * =============================================================================
+ * MOSurvivalStatsComponent.h - Basic Survival Stats (Legacy)
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Simplified survival stats component tracking health, hunger, thirst, stamina,
+ * temperature, and energy. Also tracks nutrition from consumed food items.
+ *
+ * NOTE: This is a LEGACY component. For the full medical simulation, use:
+ * - MOVitalsComponent (HR, BP, SpO2, blood, glucose)
+ * - MOMetabolismComponent (nutrition, digestion, body composition)
+ * - MOAnatomyComponent (body parts, wounds)
+ *
+ * STATS TRACKED:
+ * - Health, Stamina, Hunger, Thirst, Temperature, Energy
+ * - Each stat has: Current, Max, RegenRate, DecayRate
+ *
+ * NUTRITION TRACKING:
+ * - Macros: Calories, Hydration, Protein, Carbohydrates, Fat
+ * - Vitamins: A, B, C, D (0-100%)
+ * - Minerals: Iron, Calcium, Potassium, Sodium (0-100%)
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] REPLICATED: Stats are individually replicated. Batch changes
+ *   may cause multiple OnRep calls.
+ *
+ * [2024-02] TICK INTERVAL: TickStats runs on timer (default 1s). Not tied
+ *   to actor tick.
+ *
+ * [2024-02] NUTRITION FROM ITEMS: ConsumeItem() gets nutrition from
+ *   FMOItemNutrition in item definition. Requires valid inventory GUID.
+ *
+ * =============================================================================
+ * RELATED FILES: MOVitalsComponent.h, MOMetabolismComponent.h, MOItemDefinitionRow.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

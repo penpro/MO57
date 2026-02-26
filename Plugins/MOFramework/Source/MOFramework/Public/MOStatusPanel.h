@@ -1,3 +1,44 @@
+/**
+ * =============================================================================
+ * MOStatusPanel.h - Character Status & Vitals Display
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Comprehensive character status display with tabbed categories. Shows vital
+ * signs, nutrition, fitness, mental state, and wounds. Used for detailed
+ * health monitoring.
+ *
+ * CATEGORIES (tabs):
+ * - Info: Character name, age, gender
+ * - Vitals: Heart rate, BP, SpO2, temperature
+ * - Nutrition: Calories, hydration, recent meals
+ * - Nutrients: Vitamins, minerals, macros
+ * - Fitness: Body composition, strength, cardio
+ * - Mental: Stress, morale, consciousness
+ * - Wounds: Active injuries and treatment state
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] TAB INDICES: EMOStatusCategory enum values must match widget
+ *   switcher indices. Update both when adding/removing categories.
+ *
+ * [2024-02] COMPONENT ACCESS: Uses MOMedicalProviderInterface to get
+ *   components. Some categories may be null for creatures.
+ *
+ * [2024-02] REFRESH RATE: Don't refresh every frame. Use timer or bind to
+ *   component change events.
+ *
+ * =============================================================================
+ * RELATED FILES: MOVitalsComponent.h, MOMetabolismComponent.h, MOMentalStateComponent.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"
@@ -16,7 +57,8 @@ class UMOMentalStateComponent;
 class UMOPersistenceSubsystem;
 
 /**
- * Status category for organizing fields into tabs
+ * Status category for organizing fields into tabs.
+ * See file header for category descriptions.
  */
 UENUM(BlueprintType)
 enum class EMOStatusCategory : uint8

@@ -1,3 +1,78 @@
+/**
+ * =============================================================================
+ * MOCraftingUIController.h - Crafting Menu and Harvest Operations UI
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE THIS HEADER when issues arise or patterns change
+ *
+ * PURPOSE:
+ * Specialized UI controller for crafting system interfaces. Manages crafting
+ * menu, station context menus, harvest context menus for PCG foliage, and
+ * harvest progress widgets. Part of the UIManager split architecture.
+ *
+ * KEY RESPONSIBILITIES:
+ * 1. Manage Crafting menu (open/close/toggle)
+ * 2. Show station context menus for crafting stations
+ * 3. Show harvest context menus for ISM/HISM targets (trees, rocks)
+ * 4. Handle harvest operations with progress tracking
+ *
+ * UI WIDGETS MANAGED:
+ * - CraftingMenu: Full crafting interface with recipe selection
+ * - StationContextMenu: Quick actions for crafting stations
+ * - KeepOnHarvestContextMenu: Actions for harvestable PCG instances
+ * - HarvestProgressWidget: Circular progress during harvesting
+ *
+ * CONTEXT MENU TARGETS:
+ * - StationContextMenu: AMOCraftingStationActor (campfire, forge, etc.)
+ * - KeepOnHarvestContextMenu: FMOInteractionTarget (ISM/HISM instances)
+ *
+ * CRITICAL PATTERNS:
+ * 1. Crafting Menu:
+ *    ToggleCraftingMenu() -> Check if open -> Open or Close
+ *    Uses modal background + UI input mode
+ *
+ * 2. Station Context:
+ *    ShowStationContextMenu(Actor, WorldPos) -> Create widget at screen pos
+ *    -> User clicks Open/Craft/Light -> Handler methods
+ *
+ * 3. Harvest Flow:
+ *    ShowKeepOnHarvestContextMenu(Target) -> User selects recipe
+ *    -> StartHarvestOperation(RecipeId) -> Show progress widget
+ *    -> HandleHarvestCompleted() -> Award items, remove instance
+ *
+ * KNOWN PITFALLS:
+ * 1. TARGET VALIDITY: FMOInteractionTarget can become invalid if ISM changes.
+ *    Validate target before starting harvest operation.
+ *
+ * 2. HARVEST INTERRUPTION: Moving or being attacked cancels harvest.
+ *    HandleHarvestCancelled() must clean up UI properly.
+ *
+ * 3. CONTEXT MENU POSITIONING: WorldPosition -> ScreenPosition conversion.
+ *    Menu may appear offscreen if position is behind camera.
+ *
+ * 4. STATION REFERENCE: CurrentStationTarget is weak pointer.
+ *    Station can be destroyed while context menu is open.
+ *
+ * RELATED FILES:
+ * - MOUIControllerBase.h - Base class with shared utilities
+ * - MOCraftingMenu.h - Full crafting interface widget
+ * - MOStationContextMenu.h - Station quick-action widget
+ * - MOKeepOnHarvestContextMenu.h - Harvest quick-action widget
+ * - MOPCGInteractionSubsystem.h - Handles ISM/HISM harvest logic
+ *
+ * TESTING CHECKLIST:
+ * [ ] Crafting menu toggles correctly
+ * [ ] Station context menu appears at correct position
+ * [ ] Harvest context menu shows available recipes
+ * [ ] Harvest progress completes and awards items
+ * [ ] Harvest cancellation cleans up UI
+ * [ ] Station destruction hides context menu
+ *
+ * LAST UPDATED: 2026-02-24 - Initial audit header
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

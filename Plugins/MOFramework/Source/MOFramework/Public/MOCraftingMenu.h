@@ -1,3 +1,52 @@
+/**
+ * =============================================================================
+ * MOCraftingMenu.h - Main Crafting Interface Widget
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Main crafting interface combining recipe list, detail panel, and crafting
+ * queue. Used for both hand-crafting and crafting station interactions.
+ *
+ * COMPOSITION:
+ * - RecipeListWidget: Scrollable list of available recipes
+ * - RecipeDetailPanel: Selected recipe info, ingredients, craft button
+ * - CraftingQueueWidget: Active/queued crafts with progress
+ *
+ * FILTERING:
+ * Recipes filtered by:
+ * - Knowledge (player must know recipe)
+ * - Skills (minimum skill level requirements)
+ * - Station (recipe must match current station or be hand-craftable)
+ * - Discovery state (experimental recipes hidden until discovered)
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] STATION CONTEXT: Menu can be opened standalone (hand crafting) or
+ *   at a station. Check CurrentStation != nullptr to determine mode.
+ *
+ * [2024-02] LEGACY DELEGATES: FMOCraftingMenuRequestCloseSignature is legacy.
+ *   New code should use FMOUIRequestClose from MOUIDelegates.h.
+ *
+ * [2024-02] QUEUE BINDING: Queue widget must bind to same pawn's queue
+ *   component. On possession change, rebind or close menu.
+ *
+ * =============================================================================
+ * RELATED FILES
+ * =============================================================================
+ * - MORecipeListWidget.h - Recipe list subwidget
+ * - MORecipeDetailPanel.h - Recipe details subwidget
+ * - MOCraftingQueueWidget.h - Queue display subwidget
+ * - MOCraftingSubsystem.h - Crafting validation and execution
+ *
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"
@@ -25,9 +74,8 @@ class AMOCraftingStationActor;
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOCraftingMenuRequestCloseSignature);
 
 /**
- * Main crafting menu widget that combines recipe list, detail panel, and queue.
- *
- * Requires a Blueprint implementation with the following bound widgets:
+ * Main crafting menu widget.
+ * See file header for composition and pitfalls.
  * - RecipeList (UMORecipeListWidget)
  * - DetailPanel (UMORecipeDetailPanel)
  * - QueueWidget (UMOCraftingQueueWidget) [optional]

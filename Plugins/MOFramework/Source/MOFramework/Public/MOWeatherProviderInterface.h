@@ -1,3 +1,43 @@
+/**
+ * =============================================================================
+ * MOWeatherProviderInterface.h - Weather System Provider Interface
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Interface for weather system providers. Implement this in a Blueprint or C++
+ * class that bridges to your weather system (e.g., Ultra Dynamic Weather).
+ * MOFramework survival/medical systems query this interface for weather data
+ * without being coupled to any specific implementation.
+ *
+ * IMPLEMENTATION STEPS:
+ * 1. Create Blueprint Actor implementing this interface
+ * 2. Add reference to your UDW actor
+ * 3. Implement each function by calling corresponding UDW function
+ * 4. Place one instance in your level
+ * 5. Register with MOWeatherIntegrationSubsystem
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] BLUEPRINT NATIVE EVENT: All interface methods are BlueprintNativeEvent.
+ *   Override with _Implementation suffix in C++ or via Event in Blueprint.
+ *
+ * [2024-02] LOCATION PARAM: Use FVector::ZeroVector for global queries when
+ *   location-specific data isn't needed.
+ *
+ * [2024-02] SAVE DATA: BuildWeatherSaveData() and ApplyWeatherSaveData() must
+ *   properly serialize/deserialize weather preset references.
+ *
+ * =============================================================================
+ * RELATED FILES: MOWeatherIntegrationSubsystem.h, MOWeatherTypes.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

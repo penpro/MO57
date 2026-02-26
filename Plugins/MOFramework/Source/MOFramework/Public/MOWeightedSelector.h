@@ -1,3 +1,42 @@
+/**
+ * =============================================================================
+ * MOWeightedSelector.h - Weighted Random Selection Utility
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Utility class for weighted random selection. Consolidates duplicate weighted
+ * selection logic from PCG nodes and subsystems.
+ *
+ * USAGE:
+ *   TArray<FMyWeightedEntry> Items;
+ *   float TotalWeight = FMOWeightedSelector::CalculateTotalWeight(Items);
+ *   FRandomStream RandomStream(Seed);
+ *   const FMyWeightedEntry* Selected = FMOWeightedSelector::SelectWeighted(Items, TotalWeight, RandomStream);
+ *
+ * REQUIRES: Entry types must have GetWeight() method returning float.
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] NEGATIVE WEIGHTS: Negative weights are clamped to 0 in calculations.
+ *   Use positive weights only.
+ *
+ * [2024-02] FLOATING POINT FALLBACK: SelectWeighted returns last entry on
+ *   floating point edge cases where accumulated weight doesn't reach target.
+ *
+ * [2024-02] TEMPLATE REQUIREMENT: Entry type must implement GetWeight() const
+ *   returning float. See FMOWeightedEntry for base implementation.
+ *
+ * =============================================================================
+ * RELATED FILES: MOPCGItemSpawnerSettings.h, MOForagingSubsystem.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

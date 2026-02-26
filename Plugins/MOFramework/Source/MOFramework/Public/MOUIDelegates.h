@@ -1,3 +1,60 @@
+/**
+ * =============================================================================
+ * MOUIDelegates.h - Standard UI Delegate Library
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Centralized delegate declarations for all UI widgets. Use these standard
+ * delegates instead of declaring per-widget delegates to reduce duplication
+ * and make binding patterns consistent across the UI system.
+ *
+ * KEY RESPONSIBILITIES:
+ * 1. Provide standard delegate types for common UI operations
+ * 2. Eliminate duplicate delegate declarations across widgets
+ * 3. Simplify UI manager orchestration with consistent signatures
+ *
+ * WHEN TO USE:
+ * - FMOUIRequestClose: Any menu/panel/popup that needs to close
+ * - FMOUICraftRequest: Recipe crafting with quantity
+ * - FMOUIRecipeSelected: Recipe selection in any list
+ * - FMOUISlotClicked: Inventory grid interactions
+ * - FMOUIConfirmationResult: Dialog confirmations
+ *
+ * MIGRATION PATTERN:
+ *   Old: DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMyWidgetCloseSignature);
+ *   New: Use FMOUIRequestClose from this file
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [CRITICAL] UHT REQUIREMENT: This file declares delegates at file scope.
+ *   Without FMOUIDelegatesModule USTRUCT, UHT won't process this file and
+ *   delegates won't be visible to other headers. NEVER REMOVE the dummy struct.
+ *
+ * [2024-01] DELEGATE VISIBILITY: If a new delegate isn't found by other files,
+ *   check that MOUIDelegates.h is included BEFORE the file that uses it.
+ *   Delegate forward declarations don't work like class forward declarations.
+ *
+ * [2024-02] BINDING ORDER: When binding to these delegates, always call
+ *   RemoveAll(this) before AddUObject/AddDynamic to prevent duplicate bindings
+ *   during widget reconstruction (NativeConstruct called multiple times).
+ *
+ * =============================================================================
+ * RELATED FILES
+ * =============================================================================
+ * - MOUIControllerBase.h - Uses these delegates for controller communication
+ * - MOCraftingMenu.h - Uses FMOUIRecipeSelected, FMOUICraftRequest
+ * - MOInventoryMenu.h - Uses FMOUISlotClicked, FMOUIDragStarted
+ * - MOConfirmationDialog.h - Uses FMOUIConfirmationResult
+ *
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"
@@ -5,7 +62,8 @@
 
 /**
  * Dummy struct to force UHT to process this file.
- * Required for delegate declarations to be visible to other headers.
+ * CRITICAL: Required for delegate declarations to be visible to other headers.
+ * See "KNOWN PITFALLS" above - DO NOT REMOVE.
  */
 USTRUCT()
 struct FMOUIDelegatesModule

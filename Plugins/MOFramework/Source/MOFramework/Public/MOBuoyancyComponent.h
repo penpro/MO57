@@ -1,3 +1,46 @@
+/**
+ * =============================================================================
+ * MOBuoyancyComponent.h - Physics Buoyancy for Water Bodies
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Component that applies buoyancy forces to physics actors based on water
+ * surface queries from MOWaterActorBase. Supports single-point or multi-point
+ * buoyancy for realistic boat/object physics.
+ *
+ * FEATURES:
+ * - Single-point buoyancy (actor center)
+ * - Multi-point buoyancy (configurable sample points for boats)
+ * - Depth-based force calculation
+ * - Water drag (linear and angular)
+ * - Submersion percentage tracking
+ * - Enter/exit water events
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] PHYSICS COMPONENT: PhysicsComponent must be set or auto-found.
+ *   If null, no forces are applied. Check GetPhysicsComponent() return.
+ *
+ * [2024-02] WATER ACTOR: WaterActor is weak pointer. If water actor is destroyed,
+ *   buoyancy stops. Use bAutoFindWater=true to automatically find new water.
+ *
+ * [2024-02] TICK FREQUENCY: Ticks every frame for smooth physics. Consider
+ *   substepping or reducing tick rate for many buoyant objects.
+ *
+ * [2024-02] FORCE SCALE: BuoyancyForce is in Newtons. Default 2000 works for
+ *   ~100kg objects. Scale proportionally for mass.
+ *
+ * =============================================================================
+ * RELATED FILES: MOWaterActorBase.h, MOWaterTypes.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

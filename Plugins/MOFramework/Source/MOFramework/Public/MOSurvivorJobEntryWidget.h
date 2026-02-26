@@ -1,3 +1,40 @@
+/**
+ * =============================================================================
+ * MOSurvivorJobEntryWidget.h - Job Queue Entry Widget
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Individual job entry widget for display in the job queue (right side of
+ * task menu). Shows job name, state, repeat count, progress bar, and cancel
+ * button. Fires OnJobCancelled when cancel is clicked.
+ *
+ * DISPLAY ELEMENTS:
+ * - JobNameText: Job display name
+ * - JobStateText: Current state (Queued, Active, Performing, etc.)
+ * - RepeatCountText: "1/5" style iteration display
+ * - JobIcon: Job category icon
+ * - ProgressBar: Current iteration progress
+ * - CancelButton: Button to cancel this job
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] STATE TEXT: GetStateDisplayText() maps EMOSurvivorJobState to
+ *   human-readable text. Update if states are added.
+ *
+ * [2024-02] COMMON BUTTON: CancelButton is UMOCommonButton. Bind click with
+ *   OnClicked().AddUObject().
+ *
+ * =============================================================================
+ * RELATED FILES: MOSurvivorTaskMenu.h, MOSurvivorJobTypes.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

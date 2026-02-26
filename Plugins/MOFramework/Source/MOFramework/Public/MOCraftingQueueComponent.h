@@ -1,3 +1,77 @@
+/**
+ * =============================================================================
+ * MOCraftingQueueComponent.h - Per-Pawn Crafting Queue with Timed Progression
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE THIS HEADER when issues arise or patterns change
+ *
+ * PURPOSE:
+ * Manages a per-pawn crafting queue with real-time progression tracking. Supports
+ * long craft durations (hours/days), offline progress calculation, background
+ * crafting, and queue management with cancel/refund support.
+ *
+ * KEY RESPONSIBILITIES:
+ * 1. Maintain ordered queue of crafting entries (FMOCraftingQueueList)
+ * 2. Track craft progress using real timestamps (not delta time)
+ * 3. Consume ingredients on enqueue, refund on cancel
+ * 4. Produce outputs via MOCraftingSubsystem::ProduceOutputsOnly()
+ * 5. Support offline progress calculation on save load
+ * 6. Track active station for station-specific recipes
+ *
+ * OWNERSHIP:
+ * - Owner: AMOCharacter pawn (crafting-capable actors)
+ * - Lifespan: Exists for pawn lifetime
+ *
+ * QUEUE ENTRY LIFECYCLE:
+ * EnqueueCraft(RecipeId, Count, Station)
+ * -> ConsumeIngredientsForCraft()
+ * -> Add FMOCraftingQueueEntry to Queue
+ * -> OnQueueChanged broadcast
+ * -> Tick processes active entry
+ * -> CompletCurrentCraft() -> ProduceOutputsOnly()
+ * -> Entry removed, next started
+ *
+ * TIMESTAMP-BASED PROGRESS:
+ * - CurrentCraftStartTime stores DateTime when craft began
+ * - Progress = (Now - StartTime) / CraftDuration
+ * - Allows accurate offline progress calculation
+ * - AdvanceQueueByTime() handles save/load catch-up
+ *
+ * STATION TRACKING:
+ * - SetActiveStation(Actor) stores reference and GUID
+ * - GetActiveStationGuid() used for save/load
+ * - ClearActiveStation() when leaving station range
+ *
+ * CRITICAL PATTERNS:
+ * 1. INGREDIENTS: Consumed on ENQUEUE, not completion
+ * 2. REFUND: CancelCraft(bRefundIngredients) returns materials
+ * 3. OFFLINE: ApplySaveData with bCalculateOfflineProgress=true
+ * 4. FASTARRAY: Queue uses FFastArraySerializer for replication
+ *
+ * KNOWN PITFALLS:
+ * 1. STATION REFERENCE: ActiveStation may become invalid if destroyed
+ * 2. CRAFT DURATION: Uses GetEffectiveCraftDuration() for tool bonuses
+ * 3. QUEUE SIZE: MaxQueueSize limits entries (default 20)
+ *
+ * RELATED FILES:
+ * - MOCraftingTypes.h - FMOCraftingQueueEntry, FMOCraftingQueueList
+ * - MOCraftingSubsystem.h - Validation and output production
+ * - MOCraftingCapableInterface.h - Interface for pawns
+ * - MOCraftingUIController.h - UI integration
+ *
+ * TESTING CHECKLIST:
+ * [ ] EnqueueCraft consumes ingredients
+ * [ ] Progress updates during tick
+ * [ ] Craft completion produces outputs
+ * [ ] Cancel refunds ingredients
+ * [ ] Save/load preserves queue state
+ * [ ] Offline progress calculates correctly
+ *
+ * LAST UPDATED: 2026-02-24 - Initial audit header
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"
@@ -8,16 +82,6 @@
 class UMOCraftingSubsystem;
 class UMOInventoryComponent;
 class UMORecipeDiscoveryComponent;
-
-/**
- * Component that manages a per-pawn crafting queue with timed progression.
- *
- * Supports long craft times (hours/days) with:
- * - Real timestamp tracking for accurate progress across save/load
- * - Offline progress calculation when loading a save
- * - Background crafting (continues when UI is closed)
- * - Queue management with cancel/refund support
- */
 UCLASS(ClassGroup=(MO), meta=(BlueprintSpawnableComponent))
 class MOFRAMEWORK_API UMOCraftingQueueComponent : public UActorComponent
 {

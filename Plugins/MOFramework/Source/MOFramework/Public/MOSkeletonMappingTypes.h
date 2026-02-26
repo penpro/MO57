@@ -1,13 +1,10 @@
-#pragma once
-
-#include "CoreMinimal.h"
-#include "MOMedicalTypes.h"
-#include "MOSkeletonMappingTypes.generated.h"
-
 /**
  * =============================================================================
  * MOSkeletonMappingTypes.h - Skeleton Bone to Body Part Mapping
  * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
  *
  * PURPOSE:
  * Maps skeletal mesh bone names to EMOBodyPartType for localized damage.
@@ -95,6 +92,15 @@
  *
  * =============================================================================
  */
+
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Kismet/BlueprintFunctionLibrary.h"
+#include "MOBodyPartTypes.h"
+#include "MOSkeletonMappingTypes.generated.h"
+
+class USkeleton;
 
 /**
  * Skeleton type presets for automatic mapping configuration.

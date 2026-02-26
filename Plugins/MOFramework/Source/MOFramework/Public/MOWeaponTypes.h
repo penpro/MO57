@@ -1,3 +1,99 @@
+/**
+ * =============================================================================
+ * MOWeaponTypes.h - Weapon Data Structures for Combat System
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * =============================================================================
+ *
+ * PURPOSE:
+ *   Defines weapon properties, damage profiles, and attack data for combat.
+ *   DataTable-driven to allow easy tuning and modding.
+ *
+ * RESPONSIBILITIES:
+ *   - Weapon type classification (EMOWeaponType)
+ *   - Attack type definitions (EMOAttackType)
+ *   - Weapon properties (grip, material, durability)
+ *   - Damage profiles (base damage, penetration, bleed, bone break)
+ *   - Projectile data for ranged weapons
+ *   - Runtime weapon state tracking
+ *
+ * =============================================================================
+ * BEST PRACTICES
+ * =============================================================================
+ *
+ * 1. WEAPON TYPE vs TOOL TYPE:
+ *    - EMOWeaponType = combat categorization (Sword, Spear, Bow)
+ *    - EMOToolType = crafting/harvesting (Axe, Hammer, Knife)
+ *    - An item can be BOTH (a hand axe is Tool:Axe + Weapon:Axe)
+ *
+ * 2. ITEM INTEGRATION:
+ *    - FMOItemDefinitionRow has bIsWeapon + WeaponProfileId
+ *    - WeaponProfileId references row name in DT_Weapons
+ *    - Use HasWeaponProfile() helper to check
+ *
+ * 3. ATTACK PROFILES:
+ *    - Each weapon has TArray<FMOAttackDamageProfile>
+ *    - Different attacks (Light, Heavy, Charge) have different profiles
+ *    - Use GetAttackProfile(EMOAttackType) to lookup
+ *
+ * 4. DAMAGE CALCULATION:
+ *    - BaseDamage * QualityModifier = effective damage
+ *    - ArmorPenetration reduces armor effectiveness
+ *    - CriticalChance/Multiplier for critical hits
+ *
+ * 5. GRIP TYPE affects:
+ *    - Animation selection (one-handed vs two-handed)
+ *    - Attack speed and stamina cost
+ *    - Shield compatibility
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] WeaponType Added: FMOWeaponDamageProfileRow now has WeaponType
+ *           field. Update DT_Weapons JSON to include this field.
+ *
+ * [2024-02] Dual Purpose Items: Combat axes can be both weapons AND tools.
+ *           Check both bIsWeapon and bIsTool flags on items.
+ *
+ * =============================================================================
+ * DATA TABLE NOTES
+ * =============================================================================
+ *
+ * DT_Weapons DataTable:
+ * - Uses FMOWeaponDamageProfileRow
+ * - Row name = WeaponProfileId (referenced by items)
+ * - AttackProfiles array contains attack-specific data
+ *
+ * =============================================================================
+ * RELATED FILES
+ * =============================================================================
+ *
+ * - MOItemDefinitionRow.h     : Items reference weapon profiles
+ * - MOCombatComponent.h       : Combat system using weapon data
+ * - MOCombatMedicalTypes.h    : Damage categories, hit info
+ * - Weapons_JSON.json         : JSON export of DT_Weapons
+ *
+ * =============================================================================
+ * CLAUDE: UPDATE THIS HEADER
+ * =============================================================================
+ *
+ * When you encounter issues with this file:
+ * 1. Add a dated entry to KNOWN PITFALLS section
+ * 2. Include the symptom and solution
+ * 3. Update BEST PRACTICES if a new pattern emerges
+ *
+ * When adding new weapon properties:
+ * - Consider combat balance implications
+ * - Update JSON export format documentation
+ * - Ensure animation system can handle new types
+ *
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"
@@ -6,16 +102,101 @@
 #include "MOWeaponTypes.generated.h"
 
 /**
- * =============================================================================
- * MOWeaponTypes.h - Weapon Data Structures for Combat System
- * =============================================================================
- *
- * PURPOSE:
- * Defines weapon properties, damage profiles, and attack data for the combat
- * system. DataTable-driven to allow easy tuning and modding.
- *
- * =============================================================================
+ * Weapon type enumeration for weapon categorization.
+ * Used for skill requirements, animations, and UI filtering.
  */
+UENUM(BlueprintType)
+enum class EMOWeaponType : uint8
+{
+	/** No weapon / unarmed */
+	None,
+
+	// === MELEE - ONE-HANDED ===
+
+	/** Short blade (knife, dagger) */
+	Dagger,
+
+	/** One-handed sword */
+	Sword,
+
+	/** One-handed axe (combat axe, hatchet) */
+	Axe,
+
+	/** One-handed mace/club */
+	Mace,
+
+	/** One-handed hammer (war hammer) */
+	Hammer,
+
+	// === MELEE - TWO-HANDED ===
+
+	/** Two-handed sword (greatsword, claymore) */
+	Greatsword,
+
+	/** Two-handed axe (battleaxe) */
+	Greataxe,
+
+	/** Two-handed hammer (maul, sledge) */
+	Greathammer,
+
+	/** Spear (one or two-handed) */
+	Spear,
+
+	/** Polearm (halberd, glaive, pike) */
+	Polearm,
+
+	/** Staff/quarterstaff */
+	Staff,
+
+	// === RANGED ===
+
+	/** Bow (shortbow, longbow) */
+	Bow,
+
+	/** Crossbow */
+	Crossbow,
+
+	/** Sling */
+	Sling,
+
+	// === THROWN ===
+
+	/** Throwing knife/dagger */
+	ThrowingKnife,
+
+	/** Throwing axe */
+	ThrowingAxe,
+
+	/** Javelin */
+	Javelin,
+
+	/** Thrown rock/stone */
+	ThrowingStone,
+
+	// === SHIELDS (defensive weapons) ===
+
+	/** Small shield (buckler) */
+	Buckler,
+
+	/** Medium shield */
+	Shield,
+
+	/** Large/tower shield */
+	TowerShield,
+
+	// === PRIMITIVE ===
+
+	/** Simple club/stick */
+	Club,
+
+	/** Stone tool used as weapon */
+	StoneWeapon,
+
+	/** Bone weapon */
+	BoneWeapon,
+
+	MAX UMETA(Hidden)
+};
 
 /**
  * Attack type enumeration for different attack styles.
@@ -197,6 +378,10 @@ struct MOFRAMEWORK_API FMOWeaponDamageProfileRow : public FTableRowBase
 	/** Display name of this weapon. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Weapon")
 	FText DisplayName;
+
+	/** Weapon type category. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Weapon")
+	EMOWeaponType WeaponType = EMOWeaponType::None;
 
 	/** Weapon grip type. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Weapon")

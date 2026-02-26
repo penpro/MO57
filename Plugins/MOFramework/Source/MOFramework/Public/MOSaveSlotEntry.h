@@ -1,3 +1,44 @@
+/**
+ * =============================================================================
+ * MOSaveSlotEntry.h - Save/Load Slot Entry Widget
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Individual save slot entry widget for display in save/load panel scroll box.
+ * Shows save name, timestamp, playtime, world name, character info, and
+ * optional screenshot thumbnail. Inherits CommonButtonBase for click handling.
+ *
+ * DISPLAY ELEMENTS:
+ * - SaveNameText: Display name of save
+ * - TimestampText: When saved (e.g., "Jan 27, 2026 3:05 PM")
+ * - PlayTimeText: Total playtime (e.g., "2h 35m")
+ * - WorldNameText: World/location name
+ * - CharacterInfoText: Character summary
+ * - ScreenshotImage: Thumbnail preview
+ * - AutosaveIndicator: Visible only for autosaves
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] SCREENSHOT TEXTURE: CachedScreenshotTexture prevents GC of
+ *   dynamically created texture. Cleared when entry is reused.
+ *
+ * [2024-02] COMMON BUTTON: Inherits UCommonButtonBase. Use NativeOnClicked()
+ *   override, not OnClicked delegate.
+ *
+ * [2024-02] METADATA SOURCE: InitializeFromMetadata() takes FMOSaveMetadata
+ *   from MOSavePanel.h. Ensure panel populates metadata before passing.
+ *
+ * =============================================================================
+ * RELATED FILES: MOSavePanel.h, MOPersistenceSubsystem.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

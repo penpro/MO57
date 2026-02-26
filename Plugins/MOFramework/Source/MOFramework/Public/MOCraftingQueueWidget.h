@@ -1,3 +1,40 @@
+/**
+ * =============================================================================
+ * MOCraftingQueueWidget.h - Crafting Queue Display Widget
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Widget that displays the crafting queue and current craft progress. Shows
+ * active craft, progress bar, time remaining, and queued entries with cancel
+ * options.
+ *
+ * BINDINGS:
+ * - Binds to UMOCraftingQueueComponent for state updates
+ * - Uses UMOCraftingQueueEntryWidget for individual queue entries
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] TICK UPDATE: NativeTick updates progress at ProgressUpdateInterval
+ *   (default 0.1s). RefreshQueue() rebuilds entire list - use sparingly.
+ *
+ * [2024-02] ENTRY WIDGET CLASS: QueueEntryWidgetClass must be set in Blueprint
+ *   or entries won't spawn. Defaults to null.
+ *
+ * [2024-02] WEAK POINTER: QueueComponent is TWeakObjectPtr. Check validity
+ *   before use in all handlers.
+ *
+ * =============================================================================
+ * RELATED FILES: MOCraftingQueueEntryWidget.h, MOCraftingQueueComponent.h,
+ *                MOCraftingUIController.h, MOBuildingQueueWidget.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

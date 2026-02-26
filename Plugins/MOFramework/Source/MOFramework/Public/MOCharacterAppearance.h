@@ -1,3 +1,45 @@
+/**
+ * =============================================================================
+ * MOCharacterAppearance.h - Character Appearance Data Structures
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Data structures for storing character appearance (face, body, colors, morphs).
+ * Supports two character systems: MetaHuman (modular meshes) and Daz Genesis 8
+ * (single mesh with morph targets). Designed for save/load compatibility.
+ *
+ * KEY STRUCTS:
+ * - FMOMorphTargetValue: Single morph name + value pair
+ * - FMOMorphTargetDefinition: UI/DataTable morph definition
+ * - FMOCharacterAppearance: Complete character appearance data
+ * - FMOAppearanceAssetEntry: Catalog entry for discoverable assets
+ *
+ * SUPPORTED SYSTEMS:
+ * - MetaHuman: FaceAssetPath, BodyAssetPath, TorsoAssetPath, etc.
+ * - Genesis 8: BodyAssetPath + MorphTargets array
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] ASSET PATHS: Stored as FString for mod support. Must be full
+ *   content paths (e.g., "/Game/Characters/Faces/Face_01").
+ *
+ * [2024-02] MORPH VALUE RANGE: Some morphs use 0-1, others use -1 to 1.
+ *   FMOMorphTargetDefinition specifies MinValue/MaxValue.
+ *
+ * [2024-02] VALIDITY CHECK: FMOCharacterAppearance::IsValid() only checks
+ *   BodyAssetPath. Additional fields may be required for specific systems.
+ *
+ * =============================================================================
+ * RELATED FILES: MOCustomizableCharacter.h, MOMetaHumanCharacter.h, MOAppearanceSubsystem.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

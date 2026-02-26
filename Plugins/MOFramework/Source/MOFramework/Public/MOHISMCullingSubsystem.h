@@ -1,4 +1,39 @@
-// Copyright MO57. All Rights Reserved.
+/**
+ * =============================================================================
+ * MOHISMCullingSubsystem.h - HISM Distance Culling Refresh System
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * World subsystem that periodically refreshes PCG-spawned HISM components to
+ * ensure InstanceMinDrawDistance culling works correctly. Required because
+ * HISM culling state can become stale after PCG generation.
+ *
+ * USAGE:
+ * 1. Add PCGActorTag (default "FarTreesPCG") to PCG actors needing refresh
+ * 2. Set bEnabled = true
+ * 3. Configure RefreshInterval (default 10s)
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] EDITOR ONLY: Uses PCG APIs that are editor-only. Won't function
+ *   in packaged builds. Consider alternative for shipping games.
+ *
+ * [2024-02] PERFORMANCE: RefreshAllHISMComponents can be expensive with many
+ *   instances. Don't refresh too frequently.
+ *
+ * [2024-02] DISABLED BY DEFAULT: bEnabled = false. Must explicitly enable
+ *   in code or Blueprint.
+ *
+ * =============================================================================
+ * RELATED FILES: MOPCGResourceSpawnerSettings.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
 
 #pragma once
 
@@ -9,13 +44,8 @@
 class UPCGComponent;
 
 /**
- * World subsystem that automatically refreshes PCG-spawned HISM components to ensure
- * InstanceMinDrawDistance culling works correctly.
- *
- * To use: Add the tag specified in PCGActorTag (default "FarTreesPCG") to any PCG actor
- * that needs periodic refresh for distance culling to work.
- *
- * Note: This uses editor-only PCG APIs and won't function in packaged builds.
+ * World subsystem that automatically refreshes PCG-spawned HISM components.
+ * See file header for usage and pitfalls.
  */
 UCLASS()
 class MOFRAMEWORK_API UMOHISMCullingSubsystem : public UTickableWorldSubsystem

@@ -1,3 +1,45 @@
+/**
+ * =============================================================================
+ * MOPlayerStatusWidget.h - Player Survival Stats HUD Widget
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * HUD widget displaying player survival stats (health, stamina, hunger, thirst,
+ * energy, temperature). Binds to MOSurvivalStatsComponent on the player's pawn.
+ *
+ * BLUEPRINT SETUP:
+ * 1. Create WBP_PlayerStatus based on this class
+ * 2. Add ProgressBars: HealthBar, StaminaBar, HungerBar, ThirstBar, EnergyBar
+ * 3. Optionally add TextBlocks: HealthText, StaminaText, etc.
+ * 4. All bindings are optional (BindWidgetOptional)
+ *
+ * FEATURES:
+ * - Color-coded bars (healthy/warning/critical thresholds)
+ * - Optional numeric text display
+ * - Auto-updates via stat changed delegate
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] INITIALIZATION ORDER: Call InitializeStatus() AFTER creating
+ *   widget but BEFORE adding to viewport.
+ *
+ * [2024-02] COLOR THRESHOLDS: WarningThreshold=0.5, CriticalThreshold=0.25.
+ *   Colors change based on stat percent, not absolute value.
+ *
+ * [2024-02] WEAK POINTER: SurvivalStats is weak pointer. Check validity
+ *   before access in handlers.
+ *
+ * =============================================================================
+ * RELATED FILES: MOSurvivalStatsComponent.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

@@ -1,3 +1,110 @@
+/**
+ * =============================================================================
+ * MOSurvivorController.h - Recruited Survivor AI Controller
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE THIS HEADER when issues arise or patterns change
+ *
+ * PURPOSE:
+ * AI Controller for recruited survivors. Extends MOAIController with survivor-
+ * specific commands (Follow, Stay, GoHome) and job queue processing. Coordinates
+ * with UMOSurvivorJobQueueComponent for task execution.
+ *
+ * KEY RESPONSIBILITIES:
+ * 1. Execute immediate commands (Follow, Stay, GoHome)
+ * 2. Process job queue from UMOSurvivorJobQueueComponent
+ * 3. Execute simple jobs without full behavior tree
+ * 4. Award XP for completed jobs
+ * 5. Find and harvest HISM/ISM resources
+ *
+ * OWNERSHIP:
+ * - Owner: Possesses recruited survivor pawns
+ * - Lifespan: Exists while survivor is under AI control
+ *
+ * COMMAND PRIORITY:
+ * Commands override job processing:
+ * 1. Follow target (highest) - follows until StopFollowing()
+ * 2. Stay at location - idles at position
+ * 3. Go home - moves to home location once
+ * 4. Job queue (lowest) - process when no commands active
+ *
+ * JOB EXECUTION FLOW:
+ * ProcessNextJob()
+ * -> GetJobQueue()->GetCurrentJob()
+ * -> If CanExecuteSimply(): StartSimpleJobExecution()
+ * -> Else: Run behavior tree
+ * -> On complete: AwardJobExperience() + CompleteSimpleJob()
+ *
+ * SIMPLE JOB EXECUTION:
+ * For basic jobs (Forage, Gather) that don't need full BT:
+ * - SimpleJobState: 0=idle, 1=moving, 2=performing
+ * - UpdateSimpleJobExecution() runs in Tick
+ * - PerformSimpleJobAction() executes the work
+ *
+ * GATHER JOB TARGETING:
+ * FindNearestGatherResource() - Search for ISM/HISM instances
+ * FindNearestHarvestTarget() - Search for harvestable actors
+ * Uses GatherSearchRadius for range
+ * Stores target in GatherTargetHISMComponent + GatherTargetInstanceIndex
+ *
+ * CRITICAL PATTERNS:
+ * 1. COMMAND CHANGE: Always call BroadcastCommandChange() when state changes
+ * 2. JOB QUEUE BINDING: Bind to OnQueueChanged in OnPossess
+ * 3. CACHED COMPONENTS: Use CachedJobQueue and CachedSkillsComponent
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] NULL JOB QUEUE: Pawn must have UMOSurvivorJobQueueComponent.
+ *   GetJobQueue() returns cached pointer, null if component missing.
+ *   ProcessNextJob() checks for null and returns early.
+ *
+ * [2024-02] GATHER TARGET STALE: GatherTargetHISMComponent is TWeakObjectPtr.
+ *   HISM instance may be removed mid-job (harvested by player). Check
+ *   .IsValid() before accessing. PerformSimpleJobAction() handles this.
+ *
+ * [2024-02] HOME LOCATION: GoToHome() reads home from pawn's identity
+ *   component. If no home location set, logs warning and does nothing.
+ *   Check HasHomeLocation() before calling.
+ *
+ * [2024-02] COMMAND PRIORITY: Commands override job processing. If bIsFollowing
+ *   or bShouldStay is true, ProcessNextJob() won't execute. Clear commands
+ *   with ClearAllCommands() before expecting job execution.
+ *
+ * [2024-02] SIMPLE JOB STATE: SimpleJobState values: 0=idle, 1=moving to
+ *   target, 2=performing action. UpdateSimpleJobExecution() in Tick handles
+ *   state transitions. Don't modify SimpleJobState directly.
+ *
+ * [2024-02] COMPONENT CACHING: CachedJobQueue and CachedSkillsComponent are
+ *   populated in OnPossess(). If accessing before possession, they're null.
+ *   OnUnPossess() clears these caches.
+ *
+ * [2024-02] BROADCAST PATTERN: Always call BroadcastCommandChange() when
+ *   command state changes. UI binds to OnCommandChanged to update display.
+ *
+ * [2024-02] XP AWARD: AwardJobExperience() maps EMOSurvivorJobType to skill
+ *   category and grants XP. Requires CachedSkillsComponent to be valid.
+ *
+ * RELATED FILES:
+ * - MOAIController.h - Base class
+ * - MOSurvivorJobQueueComponent.h - Job queue on pawn
+ * - MOSurvivorJobTypes.h - Job entry struct and enums
+ * - MOSystemMenuUIController.h - Shows survivor menus
+ *
+ * TESTING CHECKLIST:
+ * [ ] Follow command tracks player movement
+ * [ ] Stay command keeps survivor at location
+ * [ ] GoHome moves to home location
+ * [ ] Job queue processes when no commands
+ * [ ] Gather jobs find and harvest resources
+ * [ ] XP awarded on job completion
+ *
+ * LAST UPDATED: 2026-02-24 - Initial audit header
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"
@@ -13,19 +120,6 @@ class UInstancedStaticMeshComponent;
  * Delegate fired when survivor command state changes.
  */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOSurvivorCommandChanged, FName, CommandName);
-
-/**
- * AI Controller for recruited survivors.
- *
- * Extends AMOAIController with survivor-specific behaviors:
- * - Follow target (player or other pawn)
- * - Stay at location
- * - Go to home
- * - Process job queue
- *
- * The controller coordinates with UMOSurvivorJobQueueComponent on the pawn
- * to execute assigned jobs.
- */
 UCLASS()
 class MOFRAMEWORK_API AMOSurvivorController : public AMOAIController
 {

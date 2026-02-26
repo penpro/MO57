@@ -1,5 +1,109 @@
 #pragma once
 
+/**
+ * =============================================================================
+ * MOCraftingSubsystem.h
+ * =============================================================================
+ *
+ * PURPOSE:
+ *   World subsystem handling all crafting validation and execution.
+ *   Single source of truth for "can this recipe be crafted" checks.
+ *
+ * RESPONSIBILITIES:
+ *   - Recipe availability checks (knowledge, skills, discovery)
+ *   - Crafting validation (ingredients, tools, station)
+ *   - Craft execution (consume inputs, produce outputs, grant XP)
+ *   - Tool effectiveness and degradation
+ *
+ * =============================================================================
+ * BEST PRACTICES
+ * =============================================================================
+ *
+ * 1. ALWAYS use IsRecipeAvailable() as the single source of truth for
+ *    whether a player can see/access a recipe. Don't duplicate this logic.
+ *
+ * 2. Tool system uses TArray<FMOToolCapability> - items can have multiple
+ *    tool types with different effectiveness ratings. Use FindBestTool()
+ *    to search for matching tools, not direct ToolType comparisons.
+ *
+ * 3. Recipe DataTable uses EMOToolType enum (NOT FName strings).
+ *    - Hatchet was merged into Axe (no separate Hatchet type)
+ *    - Use StaticEnum<EMOToolType>() for enum-to-string conversion
+ *
+ * 4. Two-phase crafting: CanCraftRecipe() validates, ExecuteCraft() executes.
+ *    Never skip validation before execution.
+ *
+ * 5. For queued crafting, use ProduceOutputsOnly() when ingredients were
+ *    already consumed at queue time.
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] TOOL TYPE ARRAYS: Changed from TArray<FName> to TArray<EMOToolType>.
+ *   WHY: Type safety - FName allowed typos that compiled but failed silently.
+ *   SYMPTOM: Compile error "cannot convert FName to EMOToolType".
+ *   FIX: Replace FName("Hammer") with EMOToolType::Hammer.
+ *   SEARCH: "MissingTools" in code for all affected callsites.
+ *
+ * [2024-02] MULTI-TOOL ITEMS: Items have ToolCapabilities array, not single ToolType.
+ *   WHY: Realism - a hammerstone is both Hammer(0.8) and Chisel(0.5).
+ *   SYMPTOM if using direct comparison: Multi-tool items not found, recipes
+ *   requiring hammer fail even when hammerstone is in inventory.
+ *   FIX: Use GetToolEffectiveness(Item, ToolType) instead of Item.ToolType==X.
+ *   Also use FindBestTool() to search inventory for matching tools.
+ *
+ * [2024-02] HATCHET REMOVED: Merged into Axe enum value.
+ *   WHY: Hatchet and Axe had identical functionality, redundant enum.
+ *   SYMPTOM: Compile error "EMOToolType::Hatchet not found".
+ *   FIX: Replace EMOToolType::Hatchet with EMOToolType::Axe in code and DataTables.
+ *   SEARCH: Grep for "Hatchet" in .cpp, .h, and CSV/JSON recipe files.
+ *
+ * [2024-02] DEPRECATED MISSINGTOOLS FIELD: FMOCraftingValidation.MissingTools is
+ *   deprecated. Use MissingRequiredTools + MissingOptionalTools instead.
+ *   SYMPTOM: Warning in IDE, field may be removed in future.
+ *   FIX: Access MissingRequiredTools for blocking tools, MissingOptionalTools
+ *   for penalty-only tools. Both are TArray<EMOToolType>.
+ *
+ * [2024-02] VALIDATION BEFORE EXECUTION: Never call ExecuteCraft() without
+ *   calling CanCraftRecipe() first.
+ *   SYMPTOM if skipped: Ingredients consumed even when tools/station missing,
+ *   player loses resources with no output.
+ *   FIX: Always if (CanCraftRecipe(...)) { ExecuteCraft(...); }
+ *
+ * [SEVERITY GUIDE]
+ *   TOOL TYPE ARRAYS: Compile-time error (cannot ship)
+ *   MULTI-TOOL ITEMS: Logic bug (recipes fail unexpectedly)
+ *   HATCHET REMOVED: Compile-time error (cannot ship)
+ *   VALIDATION SKIP: Critical runtime bug (resource loss)
+ *
+ * =============================================================================
+ * RELATED FILES
+ * =============================================================================
+ *
+ * - MORecipeDefinitionRow.h    : Recipe DataTable row structure
+ * - MOItemDefinitionRow.h      : Item definitions with ToolCapabilities
+ * - MOCraftingUIController.h   : UI controller for crafting menu
+ * - MOCraftingQueueComponent.h : Per-pawn crafting queue
+ * - DT_Recipes                 : Recipe DataTable asset
+ *
+ * =============================================================================
+ * CLAUDE: UPDATE THIS HEADER
+ * =============================================================================
+ *
+ * When you encounter issues with this file:
+ * 1. Add a dated entry to KNOWN PITFALLS section
+ * 2. Include the symptom and solution
+ * 3. Update BEST PRACTICES if a new pattern emerges
+ *
+ * When compile errors occur related to this file:
+ * - Check if enum values changed (EMOToolType, EMOCraftingStation)
+ * - Check if component interfaces changed
+ * - Verify DataTable row structure matches expectations
+ *
+ * =============================================================================
+ */
+
 #include "CoreMinimal.h"
 #include "Subsystems/WorldSubsystem.h"
 #include "MORecipeDefinitionRow.h"
@@ -94,15 +198,15 @@ struct MOFRAMEWORK_API FMOCraftingValidation
 
 	/** Tool types that are missing (deprecated - use MissingRequiredTools). */
 	UPROPERTY(BlueprintReadOnly, Category="MO|Crafting")
-	TArray<FName> MissingTools;
+	TArray<EMOToolType> MissingTools;
 
 	/** Tool types that are absolutely required and missing - blocks crafting. */
 	UPROPERTY(BlueprintReadOnly, Category="MO|Crafting")
-	TArray<FName> MissingRequiredTools;
+	TArray<EMOToolType> MissingRequiredTools;
 
 	/** Tool types that are optional but missing - applies time/quality penalty. */
 	UPROPERTY(BlueprintReadOnly, Category="MO|Crafting")
-	TArray<FName> MissingOptionalTools;
+	TArray<EMOToolType> MissingOptionalTools;
 
 	/**
 	 * Craft time multiplier from missing optional tools.
@@ -306,7 +410,7 @@ public:
 	bool HasRequiredTools(
 		const FMORecipeDefinitionRow* Recipe,
 		UMOInventoryComponent* Inventory,
-		TArray<FName>* OutMissingTools = nullptr
+		TArray<EMOToolType>* OutMissingTools = nullptr
 	) const;
 
 	/**
@@ -330,19 +434,20 @@ public:
 
 	/**
 	 * Find the best tool of a given type in the inventory.
+	 * Searches through items with matching tool capabilities.
 	 * @param Inventory The inventory to search
 	 * @param ToolType The tool type to find
-	 * @param MinQuality Minimum quality required
+	 * @param MinEffectiveness Minimum effectiveness required (0.0 - 1.0)
 	 * @param OutItemGuid The GUID of the best matching tool
-	 * @param OutQuality The quality of the found tool
+	 * @param OutEffectiveness The effectiveness of the found tool for this type
 	 * @return True if a matching tool was found
 	 */
 	bool FindBestTool(
 		UMOInventoryComponent* Inventory,
-		FName ToolType,
-		float MinQuality,
+		EMOToolType ToolType,
+		float MinEffectiveness,
 		FGuid& OutItemGuid,
-		float& OutQuality
+		float& OutEffectiveness
 	) const;
 
 private:

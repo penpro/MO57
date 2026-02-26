@@ -1,3 +1,75 @@
+/**
+ * =============================================================================
+ * MOCharacterUIController.h - Skills, Status, and Inspection UI
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE THIS HEADER when issues arise or patterns change
+ *
+ * PURPOSE:
+ * Specialized UI controller for character-related panels. Manages skills panel,
+ * status panel (vitals/metabolism), and item inspection progress. Part of the
+ * UIManager split architecture.
+ *
+ * KEY RESPONSIBILITIES:
+ * 1. Manage Skills panel (open/close/toggle)
+ * 2. Manage Status panel with medical component bindings
+ * 3. Handle item inspection flow with progress widget
+ * 4. Rebind UI to current pawn on possession changes
+ *
+ * UI WIDGETS MANAGED:
+ * - SkillsPanel: Shows skill levels and XP progress
+ * - StatusPanel: Shows vitals, metabolism, mental state bars
+ * - InspectionProgressWidget: Circular progress during item inspection
+ *
+ * INSPECTION FLOW:
+ * StartItemInspection(ItemId, Guid) -> Create progress widget
+ * -> Player holds inspect -> Progress fills -> HandleInspectionCompleted()
+ * -> KnowledgeComponent.InspectItem() -> Show XP grants
+ *
+ * CRITICAL PATTERNS:
+ * 1. Status Panel Binding:
+ *    RebindStatusPanelToCurrentPawn() -> Get medical components
+ *    -> StatusPanel.BindToComponents(Vitals, Metabolism, Mental)
+ *    Called by OnPawnChanged() from UIManager
+ *
+ * 2. Skills Panel:
+ *    ToggleSkillsPanel() -> Open or close based on current state
+ *    Uses modal background + UI input mode when open
+ *
+ * 3. Inspection Cancellation:
+ *    Player moves or releases key -> CancelItemInspection()
+ *    Clears progress widget, no XP granted
+ *
+ * KNOWN PITFALLS:
+ * 1. STATUS PANEL PERSISTENCE: StatusPanel may persist across pawn changes.
+ *    Always call RebindStatusPanelToCurrentPawn() after possession.
+ *
+ * 2. INSPECTION GUID: InspectingItemGuid tracks which item is being inspected.
+ *    If item is moved/dropped during inspection, cancel inspection.
+ *
+ * 3. MEDICAL COMPONENT NULL: GetCurrentPawnMedicalComponents() can return nulls.
+ *    StatusPanel must handle null bindings gracefully.
+ *
+ * RELATED FILES:
+ * - MOUIControllerBase.h - Base class with shared utilities
+ * - MOSkillsPanel.h - Skills display widget
+ * - MOStatusPanel.h - Medical status display widget
+ * - MOInspectionProgressWidget.h - Circular progress widget
+ * - MOKnowledgeComponent.h - Receives inspection results
+ *
+ * TESTING CHECKLIST:
+ * [ ] Skills panel toggles correctly
+ * [ ] Status panel shows current pawn's vitals
+ * [ ] Status panel rebinds on possession change
+ * [ ] Inspection progress completes and awards XP
+ * [ ] Inspection cancellation clears progress
+ * [ ] Multiple inspections don't stack
+ *
+ * LAST UPDATED: 2026-02-24 - Initial audit header
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

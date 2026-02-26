@@ -1,3 +1,74 @@
+/**
+ * =============================================================================
+ * MOWorldItem.h - Physical Item Actor in World
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE THIS HEADER when issues arise or patterns change
+ *
+ * PURPOSE:
+ * Actor class representing physical items in the world. Combines identity,
+ * item data, interaction, and mesh display. Supports pickup, drop physics,
+ * and serving as material source for crafting.
+ *
+ * KEY RESPONSIBILITIES:
+ * 1. Display item mesh based on ItemDefinitionId
+ * 2. Handle interaction for pickup via MOInteractableComponent
+ * 3. Implement drop physics (enable physics, settle, disable)
+ * 4. Implement IMOMaterialSourceInterface for crafting material gathering
+ * 5. Implement IMOIdentifiableInterface for GUID-based persistence
+ *
+ * ARCHITECTURE NOTES:
+ * - SceneRoot -> ItemMesh (StaticMesh) + InteractionSphere (collision)
+ * - IdentityComponent provides GUID for save/load
+ * - ItemComponent stores ItemDefinitionId, Quantity
+ * - InteractableComponent handles interaction events
+ * - Drop physics uses mesh simulation with timeout/rest detection
+ *
+ * CRITICAL PATTERNS:
+ * 1. Pickup Flow:
+ *    Player interacts -> OnHandleInteract() -> ItemComponent.GiveToInteractorInventory()
+ *    -> bAddToInventoryOnInteract -> bHideOnPickup/bDestroyAfterPickup
+ *
+ * 2. Drop Physics:
+ *    EnableDropPhysics() -> Simulate -> Tick checks velocity
+ *    -> Below RestVelocityThreshold or timeout -> SettleOnGround()
+ *
+ * 3. Mesh Update:
+ *    ItemDefinitionId changes -> HandleItemDefinitionIdChanged()
+ *    -> ApplyItemDefinitionToWorldMesh() -> Load mesh from DataTable
+ *
+ * KNOWN PITFALLS:
+ * 1. MESH LOADING: ApplyItemDefinitionToWorldMesh() loads synchronously.
+ *    For many items spawning at once, consider async loading.
+ *
+ * 2. PHYSICS TIMEOUT: DropPhysicsTimeout (3s default) may not be enough
+ *    for items falling long distances. Adjust per use case.
+ *
+ * 3. INTERACTION SPHERE: InteractionSphereRadius (60u) affects pickup ease.
+ *    Too small = frustrating, too large = picking up wrong items.
+ *
+ * 4. DESTROY VS HIDE: bDestroyAfterPickup = true destroys actor.
+ *    bHideOnPickup = true only hides. For respawning items, use hide.
+ *
+ * RELATED FILES:
+ * - MOItemComponent.h - Item data component
+ * - MOInteractableComponent.h - Interaction handling
+ * - MOIdentityComponent.h - GUID identity
+ * - MOWorldItemFactory.h - Spawns world items
+ * - MOItemDefinitionRow.h - DataTable row with mesh reference
+ *
+ * TESTING CHECKLIST:
+ * [ ] Item mesh displays correctly from DataTable
+ * [ ] Pickup adds to inventory and hides/destroys item
+ * [ ] Drop physics enables and settles correctly
+ * [ ] GUID persists across save/load
+ * [ ] Material source interface returns correct materials
+ *
+ * LAST UPDATED: 2026-02-24 - Initial audit header
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

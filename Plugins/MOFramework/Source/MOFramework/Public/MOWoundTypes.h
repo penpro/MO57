@@ -1,3 +1,66 @@
+/**
+ * =============================================================================
+ * MOWoundTypes.h - Medical Wound System Types
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Defines wound data structures for the medical system. Wounds are tracked
+ * per body part, have severity, bleeding rate, infection risk, and treatment
+ * state. Uses FastArraySerializer for efficient network replication.
+ *
+ * WOUND LIFECYCLE:
+ * 1. Wound inflicted → FMOWound created with WoundId
+ * 2. Bleeding → BleedRate drains blood volume via MOVitalsComponent
+ * 3. Treatment → Bandage stops bleeding, suture enables healing
+ * 4. Healing → HealingProgress increases over time
+ * 5. Complete → Wound removed when HealingProgress >= 100
+ *
+ * INFECTION SYSTEM:
+ * - InfectionRisk rolls each tick for untreated wounds
+ * - bIsInfected triggers systemic effects (fever, etc.)
+ * - InfectionSeverity increases without antibiotics
+ * - Severe infection → sepsis → death
+ *
+ * TREATMENT FLAGS:
+ * - bIsBandaged: Reduces BleedRate by ~90%
+ * - bIsSutured: Required for deep wounds to heal properly
+ * - bIsInfected: Requires antibiotics to clear
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-01] GUID UNIQUENESS: WoundId must be unique per pawn. Generated in
+ *   ApplyWound(). Don't manually assign unless loading from save.
+ *
+ * [2024-02] BLEED RATE UNITS: BleedRate is mL/second, not mL/tick. Multiply
+ *   by DeltaTime in tick updates.
+ *
+ * [2024-02] SEVERITY VS HEALING: Severity is initial wound severity (affects
+ *   healing time). HealingProgress is 0-100% completion. Don't confuse them.
+ *
+ * [2024-02] FASTARRAY PATTERN: FMOWoundList uses FastArraySerializer.
+ *   Call MarkItemDirty() after modifying a wound. See MOInventoryComponent
+ *   for detailed FastArray documentation.
+ *
+ * [2024-02] WOUND TYPE EFFECTS: Different EMOWoundType have different base
+ *   BleedRate and InfectionRisk. Laceration bleeds more than contusion.
+ *
+ * =============================================================================
+ * RELATED FILES
+ * =============================================================================
+ * - MOAnatomyComponent.h - Owns and manages wounds
+ * - MOVitalsComponent.h - Blood volume affected by bleed
+ * - MOBodyPartTypes.h - EMOBodyPartType enum
+ * - MOMedicalSubsystem.h - Treatment definitions
+ *
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"
@@ -10,7 +73,7 @@ class UMOAnatomyComponent;
 
 /**
  * Represents an active wound on a body part.
- * Uses FFastArraySerializerItem for efficient replication.
+ * See file header for wound lifecycle and treatment details.
  */
 USTRUCT(BlueprintType)
 struct MOFRAMEWORK_API FMOWound : public FFastArraySerializerItem

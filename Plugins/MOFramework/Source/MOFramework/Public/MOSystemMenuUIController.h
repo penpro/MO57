@@ -1,3 +1,87 @@
+/**
+ * =============================================================================
+ * MOSystemMenuUIController.h - System Menus and Dialogs UI
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE THIS HEADER when issues arise or patterns change
+ *
+ * PURPOSE:
+ * Specialized UI controller for system-level interfaces. Manages in-game menu
+ * (pause/save/load), possession menu for pawn selection, confirmation dialogs,
+ * and survivor command menus. Part of the UIManager split architecture.
+ *
+ * KEY RESPONSIBILITIES:
+ * 1. Manage In-Game menu (pause, save, load, options, exit)
+ * 2. Manage Possession menu for pawn selection/creation
+ * 3. Display confirmation dialogs with callback delegates
+ * 4. Show survivor context menus and task assignment menus
+ *
+ * UI WIDGETS MANAGED:
+ * - InGameMenu: Pause menu with save/load/exit options
+ * - PossessionMenu: Pawn list with selection and create buttons
+ * - ConfirmationDialog: Generic yes/no dialog
+ * - SurvivorContextMenu: Right-click commands for survivors
+ * - SurvivorTaskMenu: Full task assignment panel
+ *
+ * CONFIRMATION DIALOG PATTERN:
+ * ShowConfirmationDialog(Title, Message, ConfirmText, CancelText)
+ * -> User clicks confirm -> OnConfirmationConfirmed broadcast
+ * -> User clicks cancel -> OnConfirmationCancelled broadcast
+ * PendingConfirmationContext tracks which action requested it
+ *
+ * CRITICAL PATTERNS:
+ * 1. In-Game Menu:
+ *    ToggleInGameMenu() -> ESC key binding
+ *    HandleSaveRequested/LoadRequested -> PersistenceSubsystem
+ *    HandleExitToMainMenu -> Level transition
+ *
+ * 2. Possession Menu:
+ *    OpenPossessionMenu() -> Query possessable pawns
+ *    HandlePossessionMenuPawnSelected(Guid) -> PossessionSubsystem
+ *    HandlePossessionMenuCreateCharacter() -> Spawn new pawn
+ *
+ * 3. Survivor Context Menu:
+ *    ShowSurvivorContextMenu(Pawn, ScreenPos)
+ *    -> Follow Me, Stay Here, Go Home, Open Tasks
+ *    -> HandleSurvivorContextMenuOpenTasks() -> ShowSurvivorTaskMenu()
+ *
+ * KNOWN PITFALLS:
+ * 1. CONFIRMATION CONTEXT: PendingConfirmationContext must be set before
+ *    showing dialog. Handlers check context to determine action.
+ *
+ * 2. LEVEL PATHS: MainMenuLevelPath and GameplayLevelPath are configurable.
+ *    Incorrect paths will cause level load failures.
+ *
+ * 3. POSSESSION TIMING: Possession menu refresh may conflict with
+ *    ongoing possession. Wait for possession complete.
+ *
+ * 4. SURVIVOR WEAK REF: CurrentSurvivorTarget is weak pointer.
+ *    Survivor can die while menu is open.
+ *
+ * RELATED FILES:
+ * - MOUIControllerBase.h - Base class with shared utilities
+ * - MOInGameMenu.h - Pause menu widget
+ * - MOPossessionMenu.h - Pawn selection widget
+ * - MOConfirmationDialog.h - Generic dialog widget
+ * - MOSurvivorContextMenu.h - Survivor command widget
+ * - MOSurvivorTaskMenu.h - Task assignment widget
+ * - MOPossessionSubsystem.h - Pawn possession logic
+ *
+ * TESTING CHECKLIST:
+ * [ ] ESC opens in-game menu
+ * [ ] Save/load work from menu
+ * [ ] Exit to main menu transitions correctly
+ * [ ] Possession menu shows all possessable pawns
+ * [ ] Pawn selection possesses correctly
+ * [ ] Confirmation dialog callbacks fire
+ * [ ] Survivor context menu shows commands
+ * [ ] Task menu opens from context menu
+ *
+ * LAST UPDATED: 2026-02-24 - Initial audit header
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

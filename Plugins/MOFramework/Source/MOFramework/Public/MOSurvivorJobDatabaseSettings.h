@@ -1,3 +1,39 @@
+/**
+ * =============================================================================
+ * MOSurvivorJobDatabaseSettings.h - Survivor Job Database Project Settings
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Project Settings for the survivor job database. Points to the job
+ * definitions DataTable and provides cached lookups by category and type.
+ * Accessible via Project Settings > Plugins > MO Survivor Job Database.
+ *
+ * CACHING:
+ * - JobsByCategory: Map of FName -> array of job definitions
+ * - JobsByType: Map of EMOSurvivorJobType -> job definition
+ * - CachedDataTable: Weak pointer to loaded DataTable
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] CACHE INVALIDATION: Call InvalidateCache() after runtime
+ *   DataTable modifications.
+ *
+ * [2024-02] FALLBACK PATH: FallbackJobsDataTablePath used if soft reference
+ *   fails. Format: /MOFramework/Data/DT_SurvivorJobs.DT_SurvivorJobs
+ *
+ * [2024-02] WORK TASKS: GetAllWorkTasks() excludes bIsCommand=true jobs.
+ *
+ * =============================================================================
+ * RELATED FILES: MOSurvivorJobTypes.h, MOSurvivorJobQueueComponent.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

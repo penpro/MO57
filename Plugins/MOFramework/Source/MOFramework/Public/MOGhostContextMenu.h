@@ -1,3 +1,51 @@
+/**
+ * =============================================================================
+ * MOGhostContextMenu.h - Building Ghost Interaction Menu
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Context menu for interacting with ghost (unbuilt) buildings. Handles
+ * material deposition, build timer, and cancellation with refunds.
+ *
+ * CONSTRUCTION FLOW:
+ * 1. Player interacts with ghost -> Menu opens
+ * 2. Player selects material sources (checkboxes)
+ * 3. "Add" deposits materials from sources
+ * 4. Material list shows "Cordage 3/5" style progress
+ * 5. Once all deposited, "Add" becomes "Build"
+ * 6. "Build" starts construction timer
+ * 7. "Cancel" destroys ghost, refunds materials (skill-based %)
+ *
+ * REFUND SYSTEM:
+ * - Cancellation refunds based on Building skill level
+ * - Lowest rarity items lost first
+ * - DepositedMaterialsForRefund tracks order for loss
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] MATERIAL SOURCES: Checkboxes control where to pull from.
+ *   Default: Inventory only. Can add nearby containers, ground items.
+ *
+ * [2024-02] RARITY LOSS ORDER: When refund < 100%, lose lowest rarity first.
+ *   DepositedMaterialsForRefund is sorted by rarity for this.
+ *
+ * [2024-02] BUILD TIMER TICK: NativeTick updates progress bar during build.
+ *   Don't tick when not building to save performance.
+ *
+ * [2024-02] MOUSE LEAVE: Inherits from MOContextMenuBase. Override
+ *   ShouldCloseOnMouseLeave() - returns false to prevent accidental close.
+ *
+ * =============================================================================
+ * RELATED FILES: MOBuildableActor.h, MOBuildProgressComponent.h, MOContextMenuBase.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

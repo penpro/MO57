@@ -1,3 +1,55 @@
+/**
+ * =============================================================================
+ * MOCreature.h - Base Wildlife/Monster Class
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Base class for all AI-controlled wildlife (prey, predators). Inherits from
+ * AMOCharacter for full medical/combat integration. DataTable-driven for
+ * easy balancing and configuration.
+ *
+ * CREATURE TYPES:
+ * - Prey (AMOPreyCreature): Flees from threats, can be hunted
+ * - Predator (AMOPredatorCreature): Attacks players/prey
+ *
+ * FEATURES:
+ * - DataTable-driven stats (DT_CreatureDefinitions)
+ * - Behavior tree AI (flee, attack, rest, wander)
+ * - Perception-based threat detection
+ * - Loot drops on death (configurable in DataTable)
+ * - Activity state machine (Active, Resting, Sleeping, Fleeing, Fighting)
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] SUBSET COMPONENTS: Creatures have Vitals and Anatomy but NOT full
+ *   mental/metabolism components. Check null before accessing.
+ *
+ * [2024-02] AI CONTROLLER: Creatures use AMOCreatureController. Set in
+ *   defaults or DataTable. Wrong controller = no AI behavior.
+ *
+ * [2024-02] BEHAVIOR TREE: BehaviorTree reference must be set. Check
+ *   CreatureDefinition.BehaviorTree in DataTable row.
+ *
+ * [2024-02] DEATH HANDLING: OnCreatureDeath fires BEFORE actor is destroyed.
+ *   Use this for loot spawning and death effects.
+ *
+ * =============================================================================
+ * RELATED FILES
+ * =============================================================================
+ * - MOPreyCreature.h / MOPredatorCreature.h - Subclasses
+ * - MOCreatureController.h - AI controller
+ * - MOCreatureDefinitionRow.h - DataTable row
+ * - MOCreatureTypes.h - Activity state enum
+ *
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"
@@ -9,20 +61,11 @@ class AMOCreatureController;
 class UBehaviorTree;
 struct FMOCreatureDefinitionRow;
 
-/**
- * Delegate fired when a creature dies.
- */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOOnCreatureDeath, AMOCreature*, Creature, AActor*, Killer);
 
 /**
- * Base class for all creatures (prey and predators).
- * Inherits full medical/combat systems from AMOCharacter.
- *
- * Creatures are AI-controlled pawns with:
- * - DataTable-driven stats and behavior
- * - Perception-based threat detection
- * - Behavior tree AI
- * - Loot drops on death
+ * Base class for all creatures.
+ * See file header for features and pitfalls.
  */
 UCLASS()
 class MOFRAMEWORK_API AMOCreature : public AMOCharacter

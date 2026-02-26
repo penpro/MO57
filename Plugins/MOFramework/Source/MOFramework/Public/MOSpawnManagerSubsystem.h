@@ -1,3 +1,58 @@
+/**
+ * =============================================================================
+ * MOSpawnManagerSubsystem.h - Dynamic Entity Spawn Manager
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * World subsystem that manages dynamic spawning of creatures and survivors
+ * around the player. Handles spawn cooldowns, population caps, FIFO
+ * despawning, and structure avoidance.
+ *
+ * SPAWN CATEGORIES:
+ * - Survivor: Recruitable NPCs (protected after interaction)
+ * - Prey: Huntable wildlife (deer, rabbits)
+ * - Predator: Hostile wildlife (wolves, bears)
+ * - Ambient: Background wildlife (birds, squirrels)
+ *
+ * SPAWN ALGORITHM:
+ * 1. Timer fires based on category cooldown
+ * 2. Find spawn point in valid range (min/max distance from player)
+ * 3. Check structure avoidance (not near buildings)
+ * 4. Spawn group (1-N pawns based on config)
+ * 5. Track in FMOSpawnedEntityRecord
+ * 6. If over cap, FIFO despawn oldest non-persistent
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] PERSISTENCE: Interacted survivors become persistent (won't FIFO
+ *   despawn until PersistenceExpiry). Check bPersistent flag.
+ *
+ * [2024-02] STRUCTURE CHECK: MinDistanceFromStructure checks for any actor
+ *   with UMOBuildProgressComponent. Completed buildings block spawns.
+ *
+ * [2024-02] SPAWN POINT VALIDATION: Uses AMOSpawnPoint actors for positions.
+ *   If no spawn points, falls back to random positions.
+ *
+ * [2024-02] WEAK REFERENCES: FMOSpawnedEntityRecord uses TWeakObjectPtr.
+ *   If pawn destroyed externally, record becomes invalid. Clean up on tick.
+ *
+ * =============================================================================
+ * RELATED FILES
+ * =============================================================================
+ * - MOSpawnTypes.h - Spawn category configs and records
+ * - MOSpawnSettings.h - Project settings for spawn
+ * - MOSpawnPoint.h - Spawn point actors
+ * - MORecruitmentComponent.h - Survivor recruitment state
+ *
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"
@@ -9,25 +64,12 @@ class AMOSpawnPoint;
 class APawn;
 class AMOBuildableActor;
 
-/**
- * Delegate fired when an entity is spawned.
- */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOOnEntitySpawned, APawn*, SpawnedPawn, EMOSpawnCategory, Category);
-
-/**
- * Delegate fired when an entity is despawned by the manager.
- */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOOnEntityDespawned, APawn*, DespawnedPawn, EMOSpawnCategory, Category);
 
 /**
- * World Subsystem that manages spawning and despawning of mobs and survivors.
- *
- * Features:
- * - Timer-based spawning with configurable cooldowns per category
- * - FIFO despawning when max caps are reached
- * - Structure avoidance (respects BuildableComponent)
- * - Persistence for interacted survivors
- * - Skill-based spawn notifications
+ * World subsystem managing dynamic entity spawning.
+ * See file header for spawn algorithm and pitfalls.
  */
 UCLASS()
 class MOFRAMEWORK_API UMOSpawnManagerSubsystem : public UTickableWorldSubsystem

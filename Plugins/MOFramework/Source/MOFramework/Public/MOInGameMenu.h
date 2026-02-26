@@ -1,3 +1,50 @@
+/**
+ * =============================================================================
+ * MOInGameMenu.h - Pause/System Menu Widget
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Main pause menu with navigation buttons on left and content panel on right.
+ * Provides access to options, save, load, and exit functions.
+ *
+ * LAYOUT:
+ * +------------------+------------------------+
+ * | Resume           |                        |
+ * | Options          |     Focus Window       |
+ * | Save             |   (contextual panel)   |
+ * | Load             |                        |
+ * | Exit to Main     |                        |
+ * | Exit Game        |                        |
+ * +------------------+------------------------+
+ *
+ * CONTENT PANELS:
+ * - Options: Graphics, audio, keybinds
+ * - Save: Save slot selection
+ * - Load: Load slot selection
+ * - Exit dialogs: Confirmation before exit
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] WIDGET SWITCHER: FocusWindowSwitcher manages panel visibility.
+ *   Index must match button order. Update both when adding panels.
+ *
+ * [2024-02] EXIT CONFIRMATION: Exit actions show confirmation dialog first.
+ *   Don't execute exit immediately on button click.
+ *
+ * [2024-02] ACTIVATABLE: Extends UCommonActivatableWidget. Menu pauses game
+ *   and captures input. Resume closes menu.
+ *
+ * =============================================================================
+ * RELATED FILES: MOSavePanel.h, MOLoadPanel.h, MOOptionsPanel.h, MOConfirmationDialog.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"
@@ -11,16 +58,6 @@ class UMOSavePanel;
 class UMOLoadPanel;
 class UMOOptionsPanel;
 class UPanelWidget;
-
-/**
- * In-game menu with button list on the left and focus window on the right.
- *
- * The focus window displays different content based on which button is selected:
- * - Options panel
- * - Save panel
- * - Load panel
- * - Confirmation dialogs for exit actions
- */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOInGameMenuRequestCloseSignature);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOInGameMenuExitToMainMenuSignature);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOInGameMenuExitGameSignature);

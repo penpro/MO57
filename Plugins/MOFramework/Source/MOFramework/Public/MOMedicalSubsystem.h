@@ -1,3 +1,89 @@
+/**
+ * =============================================================================
+ * MOMedicalSubsystem.h - Medical System DataTable Lookups
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE THIS HEADER when issues arise or patterns change
+ *
+ * PURPOSE:
+ * GameInstanceSubsystem providing DataTable lookups and calculations for the
+ * medical system. Caches body part, wound, condition, and treatment definitions
+ * for efficient access. Provides calculation helpers for wound parameters,
+ * treatment effectiveness, and healing rates.
+ *
+ * KEY RESPONSIBILITIES:
+ * 1. Load and cache medical DataTables (body parts, wounds, conditions, treatments)
+ * 2. Provide lookup functions by enum type or ID
+ * 3. Calculate wound parameters (bleed rate, infection risk, pain)
+ * 4. Calculate treatment effectiveness with skill modifiers
+ * 5. Calculate healing rate multipliers
+ * 6. Provide display names for medical enums
+ *
+ * ARCHITECTURE NOTES:
+ * - GameInstanceSubsystem: Survives level transitions, one per game instance
+ * - Uses TSoftObjectPtr for async-friendly DataTable references
+ * - Builds caches on first access (lazy initialization)
+ * - Caches keyed by enum type for O(1) lookup
+ *
+ * CRITICAL PATTERNS:
+ * 1. Cache Building:
+ *    First lookup -> BuildCaches() -> Load all tables -> Populate TMaps
+ *    Subsequent lookups hit cache directly
+ *
+ * 2. Treatment Effectiveness:
+ *    Base effectiveness * skill modifier * self-treatment penalty * body part access
+ *
+ * 3. Healing Rate Calculation:
+ *    Base rate * nutrition * infection penalty * bandage bonus * suture bonus
+ *
+ * MEDICAL SYSTEM CASCADE (from CLAUDE.md):
+ * Wounds (bleed) -> Vitals (blood volume) -> Mental (consciousness)
+ *                         |
+ *                 Heart/Lung damage -> SpO2/BP -> Death timers
+ *                         |
+ * Metabolism (glucose) -> Vitals (blood glucose) -> Mental (confusion)
+ *                         |
+ * Dehydration -> Vitals (+HR, -BP, +Temp) -> Performance penalties
+ *
+ * KNOWN PITFALLS:
+ * 1. DATATABLE PATH: TSoftObjectPtr paths must be set in project settings
+ *    or via UDeveloperSettings. Missing tables cause nullptr returns.
+ *
+ * 2. CACHE INVALIDATION: Caches not invalidated on DataTable reimport.
+ *    Restart editor or call BuildCaches() manually after changes.
+ *
+ * 3. ENUM SYNC: EMOBodyPartType, EMOWoundType, etc. must match DataTable
+ *    row names. If enum changes, update DataTable row names.
+ *
+ * 4. TREATMENT STACKING: GetTreatmentsForWoundType returns multiple matches.
+ *    UI should present choices; don't auto-apply all.
+ *
+ * RELATED FILES:
+ * - MOMedicalTypes.h - Enum definitions (wound, condition, consciousness)
+ * - MOBodyPartDefinitionRow.h - Body part DataTable row struct
+ * - MOAnatomyComponent.h - Per-pawn body parts and wounds
+ * - MOVitalsComponent.h - Heart rate, blood pressure, etc.
+ * - MOMetabolismComponent.h - Nutrition affecting healing
+ * - MOMentalStateComponent.h - Consciousness and shock
+ *
+ * DATATABLES:
+ * - DT_BodyParts (~55 parts) - Body part hierarchy and properties
+ * - DT_Wounds - Wound type definitions (bleed rates, infection)
+ * - DT_Conditions - Condition effects and triggers
+ * - DT_MedicalTreatments - Treatment requirements and effects
+ *
+ * TESTING CHECKLIST:
+ * [ ] GetBodyPartDefinition returns valid data for all part types
+ * [ ] GetWoundTypeDefinition returns valid bleed/infection params
+ * [ ] GetTreatmentsForWoundType returns appropriate treatments
+ * [ ] CalculateTreatmentEffectiveness scales with skill level
+ * [ ] Cache survives level transitions
+ *
+ * LAST UPDATED: 2026-02-24 - Initial audit header
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"
@@ -7,11 +93,6 @@
 #include "MOMedicalSubsystem.generated.h"
 
 class UDataTable;
-
-/**
- * GameInstance subsystem providing medical system DataTable lookups and utility functions.
- * Caches DataTable references and provides efficient lookup methods.
- */
 UCLASS()
 class MOFRAMEWORK_API UMOMedicalSubsystem : public UGameInstanceSubsystem
 {

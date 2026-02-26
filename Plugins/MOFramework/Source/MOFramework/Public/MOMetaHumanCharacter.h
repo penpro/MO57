@@ -1,3 +1,42 @@
+/**
+ * =============================================================================
+ * MOMetaHumanCharacter.h - MetaHuman-Compatible Character Class
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Extends AMOCharacter with MetaHuman mesh support. Uses 2 skeletal meshes:
+ * - Body (inherited Mesh component) - Main skeleton, acts as LEADER
+ * - Face (FaceMesh component) - Head with facial rig, follows Body
+ *
+ * BLUEPRINT SETUP:
+ * 1. Create Blueprint child of this class
+ * 2. Set Body mesh on inherited Mesh component
+ * 3. Set Face mesh on FaceMesh component
+ * 4. Add Groom components for hair/eyebrows as needed
+ * 5. Configure Animation Blueprint on Body mesh
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] LEADER POSE: Face mesh uses SetLeaderPoseComponent to follow Body.
+ *   Set bAutoSetupLeaderPose=true (default) or call SetupLeaderPoseComponents().
+ *
+ * [2024-02] APPEARANCE APPLY ORDER: Appearance must be applied AFTER meshes
+ *   are set up. bAutoApplyAppearance handles this in BeginPlay.
+ *
+ * [2024-02] GROOMS IN BLUEPRINT: Groom components for hair must be added in
+ *   Blueprint, not C++. They need specific binding groups per MetaHuman.
+ *
+ * =============================================================================
+ * RELATED FILES: MOCharacter.h, MOCharacterAppearance.h, MOMorphDefinitionRow.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

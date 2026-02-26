@@ -1,3 +1,43 @@
+/**
+ * =============================================================================
+ * MOMorphDefinitionRow.h - Character Morph Target DataTable Definitions
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * DataTable row definitions for morph targets used in character customization.
+ * Defines available morphs (sliders) and presets for the customization UI.
+ *
+ * ROW TYPES:
+ * - FMOMorphDefinitionRow: Individual morph target (slider definition)
+ * - FMOMorphPresetRow: Saved combination of morph values (body type presets)
+ *
+ * MORPH CATEGORIES:
+ * Face (Shape, Eyes, Nose, Mouth, Ears, Jaw, Brows, Cheeks, Forehead)
+ * Body (Type, Torso, Arms, Hands, Legs, Feet, Breasts, Hips, Glutes)
+ * Other (Age, Details, Custom)
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] ROW NAME = MORPH NAME: The DataTable row name must exactly match
+ *   the morph target name on the skeletal mesh (e.g., "BreastsEnlarge").
+ *
+ * [2024-02] GENDER FILTERING: bMale/bFemale flags control which morphs appear
+ *   in the UI based on character gender. Both can be true.
+ *
+ * [2024-02] LINKED MORPHS: Format is "MorphName:Multiplier". When parent morph
+ *   is set to 1.0, linked morphs are set to their multiplier value.
+ *
+ * =============================================================================
+ * RELATED FILES: MOCharacterAppearance.h, MOMetaHumanCharacter.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

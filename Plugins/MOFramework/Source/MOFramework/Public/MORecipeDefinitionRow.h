@@ -1,7 +1,145 @@
 #pragma once
 
+/**
+ * =============================================================================
+ * MORecipeDefinitionRow.h
+ * =============================================================================
+ *
+ * PURPOSE:
+ *   DataTable row structure for recipe definitions (DT_Recipes).
+ *   Defines crafting recipes including inputs, outputs, requirements, and building data.
+ *
+ * RESPONSIBILITIES:
+ *   - Recipe identification and display (RecipeId, DisplayName, Description)
+ *   - Ingredient requirements (items, knowledge, skill levels)
+ *   - Output production (items, quantities, chances)
+ *   - Tool requirements (required vs optional, effectiveness thresholds)
+ *   - Crafting station requirements
+ *   - Building placement data (for buildable recipes)
+ *   - Discovery/unlock requirements
+ *
+ * =============================================================================
+ * BEST PRACTICES
+ * =============================================================================
+ *
+ * 1. TOOL REQUIREMENTS:
+ *    - RequiredTools uses TArray<FMOToolRequirement>
+ *    - Each requirement has: ToolType (enum), MinEffectiveness, bIsRequired
+ *    - bIsRequired=true blocks crafting if missing
+ *    - bIsRequired=false applies time/quality penalty if missing
+ *
+ * 2. ENUM USAGE:
+ *    - EMOToolType for tool requirements (NOT FName strings)
+ *    - EMOCraftingStation for station requirements
+ *    - Use None for hand-craftable recipes
+ *
+ * 3. INGREDIENT KNOWLEDGE:
+ *    - bRequiresKnowledge on ingredients = advanced substitutions
+ *    - Example: "Any edible plant" requires Foraging knowledge
+ *
+ * 4. BUILDING RECIPES:
+ *    - Set bIsBuilding = true
+ *    - Fill PlacementData with positioning rules
+ *    - BuildParts array defines construction phases
+ *
+ * 5. DISCOVERY SYSTEM:
+ *    - bRequiresDiscovery = true hides recipe until discovered
+ *    - DiscoveryKnowledgeId/Level = what knowledge unlocks it
+ *    - Check via UMOCraftingSubsystem::IsRecipeAvailable()
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] HATCHET REMOVED: EMOToolType::Hatchet merged into Axe.
+ *   SYMPTOM: Compile error or DataTable import failure mentioning "Hatchet".
+ *   FIX: Replace "Hatchet" with "Axe" in RequiredTools arrays.
+ *   SEARCH: Grep recipe JSON/CSV files for "Hatchet" string.
+ *
+ * [2024-02] TOOL EFFECTIVENESS RANGE: MinEffectiveness is 0.0-1.0 float.
+ *   SYMPTOM: Recipe always fails tool check even with correct tool.
+ *   WHY: Value >1.0 is impossible to meet (max tool effectiveness is 1.0).
+ *   FIX: Ensure MinEffectiveness <= 1.0. Example: Stone hammer at 0.4
+ *   effectiveness meets requirement of 0.3 (0.4 >= 0.3).
+ *
+ * [2024-01] JSON STRUCT ARRAYS: RequiredTools exports as JSON array.
+ *   FORMAT: [{"ToolType":"Hammer","MinEffectiveness":0.5,"bIsRequired":true}]
+ *   SYMPTOM if malformed: DataTable import fails silently, array stays empty.
+ *   FIX: Use DataTable editor GUI for complex struct arrays, not CSV editing.
+ *   See CLAUDE.md "UE DataTable CSV Manipulation" section.
+ *
+ * [2024-01] NSLOCTEXT PRESERVATION: DisplayName/Description use NSLOCTEXT.
+ *   FORMAT: NSLOCTEXT("[Namespace]", "[Key]", "[Text]")
+ *   SYMPTOM if stripped: Text displays as empty or key string at runtime.
+ *   FIX: Never remove NSLOCTEXT wrapper in JSON edits. UE localization needs it.
+ *
+ * [2024-02] EMPTY OUTPUTS ARRAY: Recipe with no outputs consumes ingredients.
+ *   SYMPTOM: Player loses resources, receives nothing, no error shown.
+ *   WHY: ExecuteCraft() consumes inputs before checking outputs.
+ *   FIX: Ensure Outputs.Num() > 0 for all recipes. Add editor validation
+ *   to catch this during DataTable save.
+ *
+ * [2024-02] MISSING ITEM REFERENCES: Ingredient with invalid ItemDefinitionId.
+ *   SYMPTOM: Recipe appears in UI but CanCraftRecipe returns false silently.
+ *   WHY: Item lookup returns nullptr, ingredient count check fails.
+ *   FIX: Validate all Ingredients[].ItemDefinitionId exist in DT_Items.
+ *   DEBUG: Enable verbose crafting logs to see "Item not found" warnings.
+ *
+ * [2024-02] DISCOVERY HIERARCHY: bRequiresDiscovery + DiscoveryKnowledgeId.
+ *   LOGIC: If bRequiresDiscovery=true, recipe hidden until:
+ *   - Player has DiscoveryKnowledgeId knowledge, OR
+ *   - Player has skill >= DiscoverySkillLevel in DiscoverySkillId
+ *   SYMPTOM: Recipe never appears even with knowledge.
+ *   FIX: Check both DiscoveryKnowledgeId AND DiscoverySkillId/Level are set
+ *   correctly. Empty DiscoveryKnowledgeId with bRequiresDiscovery=true means
+ *   skill check is the only unlock path.
+ *
+ * [SEVERITY GUIDE]
+ *   EMPTY OUTPUTS: Critical runtime bug (resource loss)
+ *   MISSING ITEM REFS: Logic bug (recipe unusable)
+ *   NSLOCTEXT: UX bug (missing text)
+ *   TOOL EFFECTIVENESS: Logic bug (recipe fails unexpectedly)
+ *
+ * =============================================================================
+ * CRAFTING FLOW
+ * =============================================================================
+ *
+ * 1. UI calls GetAvailableRecipes() - filtered by station + knowledge
+ * 2. UI displays recipes, calls CanCraftRecipe() for each
+ * 3. Player selects recipe, UI validates with CanCraftRecipe()
+ * 4. UI calls ExecuteCraft() or adds to crafting queue
+ * 5. On completion, ProduceOutputsOnly() if queue, or ExecuteCraft() direct
+ *
+ * =============================================================================
+ * RELATED FILES
+ * =============================================================================
+ *
+ * - MOCraftingSubsystem.h       : Recipe validation and execution
+ * - MOItemDefinitionRow.h       : Item definitions (ToolCapabilities)
+ * - MOCraftingQueueComponent.h  : Per-pawn crafting queue
+ * - MOBuildableActor.h          : Building actor base class
+ * - MOCraftingUIController.h    : Crafting menu UI controller
+ *
+ * =============================================================================
+ * CLAUDE: UPDATE THIS HEADER
+ * =============================================================================
+ *
+ * When you encounter issues with this file:
+ * 1. Add a dated entry to KNOWN PITFALLS section
+ * 2. Include the symptom and solution
+ * 3. Update BEST PRACTICES if a new pattern emerges
+ *
+ * When adding new recipe fields:
+ * - Consider if it affects CanCraftRecipe() logic
+ * - Update JSON import/export handling
+ * - Add UI support in recipe detail panels
+ *
+ * =============================================================================
+ */
+
 #include "CoreMinimal.h"
 #include "Engine/DataTable.h"
+#include "MOItemDefinitionRow.h"
 
 #include "MORecipeDefinitionRow.generated.h"
 
@@ -139,12 +277,12 @@ struct MOFRAMEWORK_API FMOToolRequirement
 {
 	GENERATED_BODY()
 
-	/** Tool type required (matches FMOItemDefinitionRow::ToolType). */
+	/** Tool type required (matches against FMOItemDefinitionRow::ToolCapabilities). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Recipe")
-	FName ToolType = NAME_None;
+	EMOToolType ToolType = EMOToolType::None;
 
-	/** Minimum tool quality required (0 = any quality). */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Recipe", meta=(ClampMin="0.0"))
+	/** Minimum tool effectiveness required (0 = any). Items must have this capability at this level or higher. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Recipe", meta=(ClampMin="0.0", ClampMax="1.0"))
 	float MinQuality = 0.0f;
 
 	/** Durability consumed per craft (0 = no consumption). */

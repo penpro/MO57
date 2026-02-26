@@ -1,3 +1,44 @@
+/**
+ * =============================================================================
+ * MOQuestLogPanel.h - Full Quest Log Panel Widget
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Full quest log panel showing all active and completed quests. Two-column
+ * layout: quest list on left, details/objectives on right. Opens from
+ * in-game menu or keybind via MOQuestUIController.
+ *
+ * LAYOUT:
+ * +------------------+------------------------+
+ * |   Quest List     |    Quest Details       |
+ * |   (ScrollBox)    |    - Title             |
+ * |                  |    - Description       |
+ * |   [Entry]        |    - Objectives        |
+ * |   [Entry]        |    [Track] [Abandon]   |
+ * +------------------+------------------------+
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] ENTRY CLASS: QuestEntryClass must be set before RefreshQuestList().
+ *   Either set in Blueprint defaults or call SetQuestEntryClass() first.
+ *
+ * [2024-02] SUBSYSTEM BINDING: Binds to quest subsystem events in NativeConstruct.
+ *   Must unbind in NativeDestruct to prevent stale delegate references.
+ *
+ * [2024-02] TRACK BUTTON TEXT: Updates dynamically ("Track"/"Untrack") based
+ *   on quest's bIsTracked state.
+ *
+ * =============================================================================
+ * RELATED FILES: MOQuestUIController.h, MOQuestLogEntry.h, MOQuestSubsystem.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

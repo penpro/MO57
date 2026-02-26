@@ -1,3 +1,69 @@
+/**
+ * =============================================================================
+ * MOUIUtils.h - UI Formatting & Widget Creation Utilities
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Centralized formatting and widget creation for UI. Use these utilities
+ * instead of duplicating formatting logic in individual widgets. Ensures
+ * consistent display of quantities, durations, and skill requirements.
+ *
+ * KEY RESPONSIBILITIES:
+ * 1. Time/duration formatting (seconds -> "5s", "2m 30s", etc.)
+ * 2. Quantity display formatting ("Stone (5/10)", "Wood x3")
+ * 3. Skill requirement display
+ * 4. Simple text widget creation with color coding
+ * 5. Icon loading with fallbacks
+ *
+ * WHEN TO USE:
+ * - FormatDurationAsText(): Crafting time, build time display
+ * - FormatQuantityDisplay(): Ingredient lists (have/need)
+ * - FormatOutputDisplay(): Recipe output preview
+ * - CreateSimpleTextWidget(): Dynamic text for panels
+ * - LoadRecipeIcon(): Recipe list icons with fallback
+ *
+ * =============================================================================
+ * BEST PRACTICES
+ * =============================================================================
+ *
+ * 1. ALWAYS use these formatters instead of FString::Printf for UI text.
+ *    This ensures consistent formatting across all UI elements.
+ *
+ * 2. Use ColorAvailable/ColorInsufficient/ColorDisabled constants for
+ *    consistent color coding across the UI.
+ *
+ * 3. LoadRecipeIcon() handles fallback logic - don't duplicate it.
+ *    It checks recipe icon first, then first output item's icon.
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] WIDGET OWNERSHIP: CreateSimpleTextWidget() requires valid Outer.
+ *   Pass the parent widget or owning UObject. Passing nullptr causes GC issues.
+ *
+ * [2024-02] ICON SOFT REFERENCES: Icon paths in DataTables are TSoftObjectPtr.
+ *   LoadRecipeIcon/LoadItemIconSmall handle synchronous loading internally.
+ *   For async loading, use different approach.
+ *
+ * [2024-02] CHANCE DISPLAY: FormatOutputDisplay only shows chance if < 1.0.
+ *   100% chance items don't show "(100%)" - this is intentional.
+ *
+ * =============================================================================
+ * RELATED FILES
+ * =============================================================================
+ * - MORecipeDetailPanel.h - Uses formatters for recipe display
+ * - MOCraftingQueueEntryWidget.h - Uses duration formatting
+ * - MOInventoryMenu.h - Uses quantity display
+ * - MOSkillsPanel.h - Uses skill requirement formatting
+ *
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"
@@ -11,7 +77,7 @@ struct FMOItemDefinitionRow;
 
 /**
  * Utility functions for MO UI widgets.
- * Centralizes common formatting and widget creation logic.
+ * See file header for usage guide and pitfalls.
  */
 UCLASS()
 class MOFRAMEWORK_API UMOUIUtils : public UBlueprintFunctionLibrary

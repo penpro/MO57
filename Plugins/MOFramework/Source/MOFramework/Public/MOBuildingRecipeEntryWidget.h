@@ -1,3 +1,41 @@
+/**
+ * =============================================================================
+ * MOBuildingRecipeEntryWidget.h - Building Recipe List Entry Widget
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Widget representing a single building recipe entry in the recipe list.
+ * Mirrors UMORecipeEntryWidget for crafting. Shows recipe name, icon,
+ * selection state, and buildability status with appropriate coloring.
+ *
+ * VISUAL STATES:
+ * - Selected: SelectedColor background
+ * - Buildable (not selected): BuildableColor background
+ * - Unbuildable: UnbuildableColor background + dimmed text
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] BUTTON BINDING: EntryButton click triggers HandleButtonClicked().
+ *   Fires OnEntryClicked delegate with RecipeId.
+ *
+ * [2024-02] TEXT COLORS: TextColorBuildable and TextColorUnbuildable control
+ *   recipe name color. UpdateVisuals() applies based on bCanBuild.
+ *
+ * [2024-02] ABSTRACT CLASS: Must create Blueprint subclass with bound widgets.
+ *   EntryButton is optional but required for click functionality.
+ *
+ * =============================================================================
+ * RELATED FILES: MOBuildingRecipeListWidget.h, MOBuildingDetailPanel.h,
+ *                MOBuildingUIController.h, MORecipeEntryWidget.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

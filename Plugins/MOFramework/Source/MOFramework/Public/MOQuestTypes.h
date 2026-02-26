@@ -1,3 +1,41 @@
+/**
+ * =============================================================================
+ * MOQuestTypes.h - Quest Data Structures
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Data structures for the quest system. Defines objective types, quest
+ * definitions (DataTable rows), runtime quest state, and save data.
+ *
+ * KEY TYPES:
+ * - EMOObjectiveType: Event, ItemCraft, ItemPickup, SkillLevelUp, etc.
+ * - FMOQuestObjective: Single objective within a quest
+ * - FMOQuestDefinitionRow: DataTable row defining a quest
+ * - FMOQuestState: Runtime state tracking progress
+ * - FMOQuestSaveData: Persistence structure
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] OBJECTIVE TYPE MATCHING: Each EMOObjectiveType has specific
+ *   TargetEventOrId semantics. See TargetEventOrId comment in FMOQuestObjective.
+ *
+ * [2024-02] OPTIONAL VS SEQUENTIAL: bOptional objectives don't block completion.
+ *   bSequential objectives must be completed in order within the quest.
+ *
+ * [2024-02] CUSTOM OBJECTIVES: EMOObjectiveType::Custom requires manual
+ *   ReportObjectiveProgress() calls - no automatic event matching.
+ *
+ * =============================================================================
+ * RELATED FILES: MOQuestSubsystem.h, MOQuestDelegates.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

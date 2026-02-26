@@ -1,3 +1,82 @@
+/**
+ * =============================================================================
+ * MOKnowledgeComponent.h - Item Inspection & Knowledge Discovery System
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE THIS HEADER when issues arise or patterns change
+ *
+ * PURPOSE:
+ * Pawn component tracking item knowledge learned through inspection.
+ * Implements skill-gated knowledge discovery with diminishing returns.
+ * Items grant XP to skills and unlock knowledge entries based on inspection.
+ *
+ * KEY RESPONSIBILITIES:
+ * 1. Track inspection progress per ItemDefinitionId
+ * 2. Award skill XP and knowledge from item inspection
+ * 3. Implement diminishing returns based on skill level
+ * 4. Provide knowledge queries for recipe/action gating
+ * 5. Support direct knowledge grants (quests, tutorials)
+ *
+ * ARCHITECTURE NOTES:
+ * - ItemKnowledge array stores per-item inspection progress
+ * - AllLearnedKnowledge is flat array for fast HasKnowledge() lookups
+ * - Requires UMOSkillsComponent for XP grants and level checks
+ * - Item inspection data comes from FMOItemDefinitionRow.Inspection field
+ *
+ * INSPECTION FLOW:
+ * Player inspects item -> InspectItem(ItemDefId, SkillsComp)
+ * -> Find/create FMOItemKnowledgeProgress -> Check skill level gates
+ * -> Calculate XP based on learning potential -> Award XP to skills
+ * -> Unlock knowledge if skill requirements met -> Return FMOInspectionResult
+ *
+ * LEARNING POTENTIAL (diminishing returns):
+ * - Full: First inspection or skill level well below cap
+ * - Partial: Approaching skill cap, reduced XP per inspection
+ * - None: Skill cap reached or all knowledge unlocked
+ *
+ * CRITICAL PATTERNS:
+ * 1. Inspection:
+ *    InspectItem() -> Increment InspectionCount -> Check skill gates
+ *    -> Award XP to SkillsComponent -> Unlock eligible knowledge
+ *    -> Broadcast OnItemInspected with result
+ *
+ * 2. Knowledge Check:
+ *    HasKnowledge(KnowledgeId) uses AllLearnedKnowledge for O(n) lookup
+ *    HasAllKnowledge() for recipe requirements
+ *
+ * KNOWN PITFALLS:
+ * 1. SKILL COMPONENT REQUIRED: InspectItem() requires SkillsComponent.
+ *    Pass nullptr only for knowledge-only items (no XP grants).
+ *
+ * 2. KNOWLEDGE ID FORMAT: Knowledge IDs are FNames from DataTable.
+ *    Case-sensitive. Typos create orphan knowledge entries.
+ *
+ * 3. DUAL STORAGE: Knowledge stored both in ItemKnowledge[].UnlockedKnowledge
+ *    AND AllLearnedKnowledge. Keep in sync - GrantKnowledge() handles this.
+ *
+ * 4. INSPECTION COUNT: InspectionCount tracks raw inspections, not
+ *    successful learning. Use for analytics, not progression.
+ *
+ * RELATED FILES:
+ * - MOItemDefinitionRow.h - Item's Inspection field defines XP grants
+ * - MOSkillsComponent.h - Receives XP from inspection
+ * - MOCharacterUIController.h - Shows inspection UI
+ * - MOInventoryComponent.h - Source of items to inspect
+ *
+ * TESTING CHECKLIST:
+ * [ ] InspectItem grants correct XP to skills
+ * [ ] Knowledge unlocks when skill requirements met
+ * [ ] HasKnowledge returns true after learning
+ * [ ] Diminishing returns reduce XP appropriately
+ * [ ] GrantKnowledge works for direct grants
+ * [ ] OnItemInspected fires with correct result
+ * [ ] Save/load preserves knowledge state
+ *
+ * LAST UPDATED: 2026-02-24 - Initial audit header
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

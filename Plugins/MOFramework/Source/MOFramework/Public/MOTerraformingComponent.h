@@ -1,3 +1,59 @@
+/**
+ * =============================================================================
+ * MOTerraformingComponent.h - Voxel Terrain Modification
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Component that enables voxel terrain modification (dig, raise, flatten,
+ * smooth). Interfaces with Voxel Plugin Pro 2.0 sculpt actors to modify
+ * the destructible terrain.
+ *
+ * TERRAFORMING MODES:
+ * - Dig: Lower terrain at brush location
+ * - Raise: Elevate terrain at brush location
+ * - Flatten: Level terrain to a target height
+ * - Smooth: Reduce terrain roughness
+ *
+ * VOXEL INTEGRATION:
+ * Uses AVoxelHeightSculptActor and AVoxelVolumeSculptActor from Voxel Plugin.
+ * The component manages sculpt actor lifecycle and applies modifications
+ * based on player input.
+ *
+ * BRUSH CONFIGURATION:
+ * - Radius: Size of affected area (Unreal Units)
+ * - Strength: Intensity of modification (0-1)
+ * - Falloff: Edge softness for flatten (0-1)
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] VOXEL PLUGIN DEPENDENCY: Requires Voxel Plugin Pro 2.0. If plugin
+ *   not loaded, sculpt actors will be null. Check before use.
+ *
+ * [2024-02] SCULPT PERSISTENCE: Voxel modifications are saved via the Voxel
+ *   Plugin's own save system, NOT MOPersistenceSubsystem. Ensure both save.
+ *
+ * [2024-02] PERFORMANCE: Large radius operations can be expensive. Consider
+ *   throttling or chunking for very large modifications.
+ *
+ * [2024-02] UNDO SUPPORT: Voxel Plugin may have undo support. Check if
+ *   modifications should integrate with it.
+ *
+ * =============================================================================
+ * RELATED FILES
+ * =============================================================================
+ * - MOPlayerController.h - Owns this component
+ * - Voxel Plugin sculpt actors - External dependency
+ * - MOPersistenceSubsystem.h - World save (separate from voxel save)
+ *
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"
@@ -9,6 +65,7 @@ class AVoxelVolumeSculptActor;
 
 /**
  * Terraforming operation mode.
+ * See file header for mode descriptions.
  */
 UENUM(BlueprintType)
 enum class EMOTerraformMode : uint8

@@ -1,3 +1,65 @@
+/**
+ * =============================================================================
+ * MOBuildableActor.h - Base Class for Placeable Buildings
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] GHOST STATE: Ghost uses translucent material via SetGhostMode(true).
+ *   Ghost buildings are interactable but not functional. SetGhostVisual(Color)
+ *   sets tint (green=valid, red=invalid placement). Ghost material created from
+ *   GhostMaterialBase soft reference - ensure asset path is valid.
+ *
+ * [2024-02] IDENTITY COMPONENT: All buildables have MOIdentityComponent for
+ *   persistence. GUID assigned on spawn in IdentityComponent::BeginPlay().
+ *   Don't access GetPersistentGuid() in constructor - returns invalid GUID.
+ *
+ * [2024-02] COMPONENT INIT ORDER: In constructor, components created as:
+ *   RootSceneComponent -> MeshComponent -> IdentityComponent ->
+ *   InteractableComponent -> BuildProgressComponent. In BeginPlay(),
+ *   InteractableComponent.OnHandleInteract bound to HandleInteract().
+ *   BuildProgressComponent.OnConstructionCompleted bound to OnConstructionCompleted.
+ *
+ * [2024-02] RECIPE ID CONTRACT: RecipeId must be valid row name in building
+ *   recipes DataTable (see MOBuildingTypes.h for FMOBuildingRecipeRow).
+ *   InitializeBuilding(RecipeId) sets this. If invalid, BuildProgressComponent
+ *   won't have material requirements and construction will instant-complete.
+ *
+ * [2024-02] SUBCLASS OVERRIDE PATTERN: When subclassing:
+ *   - Override OnGhostInteracted_Implementation() for custom ghost interaction
+ *     (default shows build widget via player controller)
+ *   - Override OnCompleteInteracted_Implementation() for completed building use
+ *     (default does nothing - subclass must implement)
+ *   - Override OnConstructionCompleted_Implementation() to init functionality
+ *     (e.g., crafting stations enable crafting queue here)
+ *   Always call Super:: version to maintain base behavior.
+ *
+ * [2024-02] MATERIAL RESTORATION: SaveOriginalMaterials() caches mesh materials
+ *   in OriginalMaterials array. RestoreOriginalMaterials() applies them back.
+ *   Called automatically on SetGhostMode(false) and SetCompletedVisual().
+ *   If original materials array empty, no restoration occurs (stays ghost).
+ *
+ * [2024-02] STATE MACHINE TRANSITIONS: Only valid transitions are:
+ *   Ghost -> Constructing (via StartConstruction on BuildProgressComponent)
+ *   Constructing <-> Paused (via Pause/Resume)
+ *   Constructing -> Complete (auto when progress reaches 100%)
+ *   Check GetBuildState() before attempting state-dependent operations.
+ *
+ * [2024-02] COLLISION VALIDATION: IsOverlappingBlockingActors() used for
+ *   placement validation. Returns true if overlapping actors with blocking
+ *   collision. Ghost mode sets collision to Overlap, Complete sets to Block.
+ *
+ * =============================================================================
+ * RELATED FILES: MOBuildingComponent.h, MOBuildProgressComponent.h, MOBuildingTypes.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

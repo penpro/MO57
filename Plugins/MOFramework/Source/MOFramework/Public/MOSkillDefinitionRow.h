@@ -1,3 +1,46 @@
+/**
+ * =============================================================================
+ * MOSkillDefinitionRow.h - Skill DataTable Row Definition
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * DataTable row struct defining a skill. Skills have levels, XP requirements,
+ * categories, and can gate recipe access and provide bonuses.
+ *
+ * SKILL SYSTEM:
+ * - SkillId = Row name in DT_SkillDefinitions
+ * - MaxLevel = Skill cap (typically 100)
+ * - XPPerLevel = XP curve for leveling
+ * - Category = Grouping (Survival, Crafting, Combat, etc.)
+ *
+ * SKILL USAGE:
+ * - Recipe requirements: "Requires Woodworking 5"
+ * - Crafting quality bonuses
+ * - Harvest efficiency
+ * - Combat effectiveness
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] ROW NAME = SKILL ID: The DataTable row name IS the SkillId.
+ *   Don't add a separate SkillId field.
+ *
+ * [2024-02] XP CURVE: XPPerLevel may be a flat value or array. Check the
+ *   struct definition for how leveling XP scales.
+ *
+ * [2024-02] CATEGORY ENUM: EMOSkillCategory is used for UI grouping only.
+ *   Gameplay logic uses SkillId, not category.
+ *
+ * =============================================================================
+ * RELATED FILES: MOSkillsComponent.h, MOSkillsPanel.h, DT_SkillDefinitions
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

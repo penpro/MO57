@@ -1,3 +1,40 @@
+/**
+ * =============================================================================
+ * MOBuildingEntryWidget.h - Building Recipe List Entry Widget
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Individual building entry in the building menu list. Shows building name,
+ * preview image, build time, and material summary.
+ *
+ * DISPLAYS:
+ * - NameText: Building name from recipe
+ * - PreviewImage: Building thumbnail/icon
+ * - BuildTimeText: Construction duration
+ * - MaterialsText: Summary of required materials
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] BUTTON TYPE: Uses standard UButton (not CommonUI). Consider
+ *   migrating to UMOCommonButton for consistency.
+ *
+ * [2024-02] RECIPE DATA: InitializeEntry receives full FMORecipeDefinitionRow.
+ *   Extract display info but don't cache the entire struct.
+ *
+ * [2024-02] PREVIEW IMAGE: May need async loading for thumbnails. Use
+ *   TSoftObjectPtr and StreamableManager for large icon sets.
+ *
+ * =============================================================================
+ * RELATED FILES: MOBuildingMenu.h, MOBuildingRecipeListWidget.h, MORecipeDefinitionRow.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"
@@ -13,10 +50,6 @@ struct FMORecipeDefinitionRow;
  * Delegate for when a building entry is clicked.
  */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOOnBuildingEntryClickedSignature, FName, RecipeId);
-
-/**
- * Widget representing a single building entry in the building menu.
- */
 UCLASS()
 class MOFRAMEWORK_API UMOBuildingEntryWidget : public UUserWidget
 {

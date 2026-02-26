@@ -1,3 +1,44 @@
+/**
+ * =============================================================================
+ * MOBuildingRecipeListWidget.h - Building Recipe List Widget
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Scrollable list widget displaying available building recipes. Mirrors
+ * UMORecipeListWidget for crafting. Supports filtering by category and
+ * buildability, selection, and visual state updates.
+ *
+ * DISPLAY DATA:
+ * - FMOBuildRecipeListEntryData: Visual data per recipe entry
+ *
+ * COMPONENTS USED:
+ * - UMOInventoryComponent: For material availability check
+ * - UMOSkillsComponent: For skill requirements (future)
+ * - UMORecipeDiscoveryComponent: For discovered recipe filtering
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] ENTRY WIDGET CLASS: RecipeEntryWidgetClass must be set or no
+ *   entries will spawn. Set in Blueprint details panel.
+ *
+ * [2024-02] WEAK POINTERS: InventoryComponent, SkillsComponent, DiscoveryComponent
+ *   are weak pointers. Verify validity before use in CanBuildRecipe().
+ *
+ * [2024-02] FILTERING: CategoryFilter and bShowOnlyBuildable work independently.
+ *   Both filters must pass for recipe to be shown.
+ *
+ * =============================================================================
+ * RELATED FILES: MOBuildingRecipeEntryWidget.h, MOBuildingDetailPanel.h,
+ *                MOBuildingUIController.h, MORecipeListWidget.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

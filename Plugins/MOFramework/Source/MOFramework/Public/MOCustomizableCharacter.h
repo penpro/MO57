@@ -1,3 +1,52 @@
+/**
+ * =============================================================================
+ * MOCustomizableCharacter.h - Morph Target-Based Character Customization
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Character class supporting morph target customization (Daz Genesis 8 style).
+ * Single skeletal mesh with morph targets for face/body, groom components for
+ * strand-based hair, and dynamic material instances for colors.
+ *
+ * CHARACTER SYSTEMS SUPPORTED:
+ * - Daz Genesis 8: Single mesh with many morph targets
+ * - Custom meshes: Any skeletal mesh with morph targets
+ *
+ * FEATURES:
+ * - SetMorphTargetValue(): Individual morph control
+ * - SetSkinTone/HairColor/EyeColor(): Material parameter control
+ * - Groom components: Hair, Eyebrows, Eyelashes, Beard
+ * - Full FMOCharacterAppearance save/load support
+ *
+ * BLUEPRINT SETUP:
+ * 1. Create BP child of this class
+ * 2. Set skeletal mesh on inherited Mesh component
+ * 3. Assign groom assets to Hair/Eyebrows/Eyelashes/Beard
+ * 4. Configure material parameter names (defaults: SkinTone, HairColor, EyeColor)
+ * 5. Set SkinMaterialSlots/EyeMaterialSlots for material targeting
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] DYNAMIC MATERIALS: CreateDynamicMaterials() called in BeginPlay.
+ *   Must have materials assigned on mesh before play starts.
+ *
+ * [2024-02] MORPH TARGET NAMES: Must match exactly between mesh and stored
+ *   appearance. Case-sensitive FName comparison.
+ *
+ * [2024-02] GROOM ATTACHMENT: Grooms attach to head bone. Ensure skeleton has
+ *   correct bone hierarchy for attachment.
+ *
+ * =============================================================================
+ * RELATED FILES: MOCharacterAppearance.h, MOAppearanceSubsystem.h, MOMetaHumanCharacter.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"
@@ -8,24 +57,6 @@
 class UGroomComponent;
 class USkeletalMeshComponent;
 class UMaterialInstanceDynamic;
-
-/**
- * Character with morph target-based customization.
- * Designed for Daz Genesis 8 style characters (single mesh with many morph targets)
- * but works with any skeletal mesh that has morph targets.
- *
- * Key features:
- * - Single skeletal mesh with morph targets for face/body customization
- * - Dynamic material instances for skin tone, hair color, eye color
- * - Groom components for strand-based hair
- * - Full save/load support via FMOCharacterAppearance
- *
- * Usage:
- * 1. Create a Blueprint child of this class
- * 2. Set the skeletal mesh on the inherited Mesh component
- * 3. Assign groom assets for hair
- * 4. Configure materials with "SkinTone", "HairColor", "EyeColor" parameters
- */
 UCLASS()
 class MOFRAMEWORK_API AMOCustomizableCharacter : public AMOCharacter
 {

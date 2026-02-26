@@ -1,3 +1,79 @@
+/**
+ * =============================================================================
+ * MOControllableInterface.h - Controller-to-Pawn Input Delegation
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE THIS HEADER when issues arise or patterns change
+ *
+ * PURPOSE:
+ * Interface for pawns that can receive input from AMOPlayerController.
+ * Provides standardized delegation allowing the controller to work with
+ * any pawn type (characters, vehicles, turrets) without hard coupling.
+ *
+ * KEY RESPONSIBILITIES:
+ * 1. Define standardized input methods for movement
+ * 2. Define standardized input methods for actions
+ * 3. Define standardized input methods for terraforming
+ * 4. Provide capability queries (CanMove, CanSprint, etc.)
+ *
+ * ARCHITECTURE NOTES:
+ * - All methods are BlueprintNativeEvent (C++ overridable + BP callable)
+ * - Controller calls interface methods, pawn implements behavior
+ * - Pawn capabilities checked before applying input
+ * - Supports both player and AI control patterns
+ *
+ * INPUT DELEGATION FLOW:
+ * Player input -> AMOPlayerController::HandleMove()
+ * -> Get possessed pawn -> Cast to IMOControllableInterface
+ * -> Call RequestMove(MovementVector)
+ * -> Pawn::RequestMove_Implementation() applies movement
+ *
+ * METHOD CATEGORIES:
+ * - Movement: RequestMove, RequestLook, RequestJump*, RequestSprint*, etc.
+ * - Actions: RequestInteract, RequestPrimaryAction, RequestSecondaryAction
+ * - Terraforming: RequestTerraformToggle, RequestTerraformCycleTool
+ * - Queries: CanBeControlled, CanMove, CanJump, CanSprint
+ *
+ * CRITICAL PATTERNS:
+ * 1. Continuous Input (Move, Look):
+ *    Called every frame while input active
+ *    Values are normalized -1 to 1
+ *
+ * 2. Press/Release Input (Jump, Sprint, Actions):
+ *    Separate Start/End methods for press and release
+ *    Pawn tracks state internally
+ *
+ * 3. Toggle Input (Jog, Crouch, Terraform):
+ *    Single method that toggles state
+ *    Pawn maintains toggle state
+ *
+ * KNOWN PITFALLS:
+ * 1. QUERY BEFORE ACTION: Always check CanMove() before RequestMove().
+ *    Controller is responsible for capability checking.
+ *
+ * 2. IMPLEMENTATION REQUIRED: _Implementation suffix required on
+ *    implementing class methods (BlueprintNativeEvent pattern).
+ *
+ * 3. INTERFACE CAST: Use TScriptInterface<IMOControllableInterface> or
+ *    Cast<IMOControllableInterface>(Pawn) for safe access.
+ *
+ * RELATED FILES:
+ * - MOPlayerController.h - Calls interface methods for input
+ * - MOCharacter.h - Primary implementer of this interface
+ * - MOVehicle.h - Vehicle implementation (if applicable)
+ *
+ * TESTING CHECKLIST:
+ * [ ] All movement inputs delegate to pawn correctly
+ * [ ] All action inputs delegate to pawn correctly
+ * [ ] Capability queries return correct values
+ * [ ] Non-controllable pawn rejects input gracefully
+ * [ ] AI controller can also call interface methods
+ *
+ * LAST UPDATED: 2026-02-24 - Initial audit header
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

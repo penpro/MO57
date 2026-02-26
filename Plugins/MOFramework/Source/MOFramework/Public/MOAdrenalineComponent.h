@@ -1,3 +1,93 @@
+/**
+ * =============================================================================
+ * MOAdrenalineComponent.h - Combat Stress Response System
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE THIS HEADER when issues arise or patterns change
+ *
+ * PURPOSE:
+ * Pawn component simulating adrenaline/fight-or-flight response during combat.
+ * Provides pain masking, bleed reduction (vasoconstriction), accuracy penalties
+ * (shaky hands), and post-combat crash effects. Skill progression dampens
+ * response for experienced fighters.
+ *
+ * KEY RESPONSIBILITIES:
+ * 1. Track adrenaline level (0-100) and phase (Baseline/Spiking/Sustained/Crashing)
+ * 2. Calculate pain masking effect (wounds hurt less during combat)
+ * 3. Calculate bleed reduction (vasoconstriction slows blood loss)
+ * 4. Calculate accuracy penalty (shaky hands reduce weapon accuracy)
+ * 5. Apply heart rate modifier to VitalsComponent
+ * 6. Handle crash phase (masked effects return when adrenaline fades)
+ *
+ * ARCHITECTURE NOTES:
+ * - Tick interval 0.1s (fast for smooth adrenaline curves)
+ * - Combat skill affects response magnitude (experienced = calmer)
+ * - Caches skill level for performance (refreshes periodically)
+ * - ActiveThreats array tracks multiple simultaneous threats
+ *
+ * ADRENALINE PHASES:
+ * - Baseline: Normal state, level ~0
+ * - Spiking: Combat started, rapidly increasing
+ * - Sustained: In active combat, maintains high level
+ * - Crashing: Combat ended, decreasing with negative effects
+ *
+ * KEY GAMEPLAY EFFECTS:
+ * - Pain Masking: High adrenaline -> wounds feel less painful
+ *   Crash reveals true pain level suddenly
+ * - Bleed Reduction: Vasoconstriction slows bleeding during fight
+ *   Crash may accelerate bleeding as vessels dilate
+ * - Accuracy Penalty: Shaky hands at high adrenaline
+ *   Reduces weapon accuracy, affects crafting precision
+ * - Tunnel Vision: PostProcess effect narrows FOV
+ *
+ * CRITICAL PATTERNS:
+ * 1. Combat Entry:
+ *    EnterCombat(ThreatInfo) -> Spike adrenaline based on threat
+ *    -> TransitionToPhase(Spiking) -> RecalculateEffects()
+ *
+ * 2. Combat Sustained:
+ *    RefreshCombatTimer() called on attacks/hits
+ *    -> Maintains Sustained phase, prevents decay
+ *
+ * 3. Combat Exit and Crash:
+ *    ExitCombat() -> After timeout -> TransitionToPhase(Crashing)
+ *    -> Pain returns, accuracy improves, fatigue sets in
+ *
+ * KNOWN PITFALLS:
+ * 1. SKILL SYNC: Combat skill cached for performance. If skill system
+ *    changes skill values, cached value may be stale until refresh.
+ *
+ * 2. CRASH TIMING: Crash phase can be dangerous - pain returns suddenly.
+ *    Player should be warned or have recovery period.
+ *
+ * 3. ACCURACY INTEGRATION: Combat/weapon system must call GetAccuracyPenalty()
+ *    and apply it. Not automatic.
+ *
+ * 4. HEART RATE MODIFIER: Applied to VitalsComponent. Ensure no double
+ *    application if both systems modify HR independently.
+ *
+ * RELATED FILES:
+ * - MOAdrenalineTypes.h - FMOAdrenalineState, EMOAdrenalinePhase, FMOThreatInfo
+ * - MOVitalsComponent.h - Receives heart rate modifier
+ * - MOAnatomyComponent.h - Provides wound info, receives bleed reduction
+ * - MOMentalStateComponent.h - Shock/trauma interaction
+ * - MOSkillsComponent.h - Combat skill affects response
+ *
+ * TESTING CHECKLIST:
+ * [ ] EnterCombat() spikes adrenaline appropriately
+ * [ ] RefreshCombatTimer() maintains sustained phase
+ * [ ] ExitCombat() leads to crash after timeout
+ * [ ] Pain masking reduces effective pain during combat
+ * [ ] Bleed reduction applies to wound bleed rates
+ * [ ] Accuracy penalty affects weapon spread
+ * [ ] High combat skill dampens adrenaline response
+ * [ ] Crash phase returns masked effects
+ *
+ * LAST UPDATED: 2026-02-24 - Initial audit header
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

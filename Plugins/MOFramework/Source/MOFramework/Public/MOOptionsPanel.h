@@ -1,3 +1,65 @@
+/**
+ * =============================================================================
+ * MOOptionsPanel.h - Game Settings/Options Widget
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Comprehensive settings panel for display, graphics, audio, gameplay, and
+ * key bindings. Used in both main menu and in-game menu. All settings
+ * persist via UMOGameSettings.
+ *
+ * SECTIONS:
+ * - Display: FPS counter, frame time
+ * - Graphics: Resolution, fullscreen, FOV, max FPS, motion blur
+ * - Audio: Master, Music, SFX, Ambient volume sliders
+ * - Gameplay: Camera sensitivity, invert Y, camera shake
+ * - Key Bindings: Rebindable input actions
+ *
+ * WIDGET SETUP:
+ * 1. Create WBP_OptionsPanel based on this class
+ * 2. Add control widgets with matching names (see BindWidget properties)
+ * 3. All widgets are BindWidgetOptional - add only what you need
+ * 4. Set KeyBindingEntryClass for rebinding UI
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] APPLY VS INSTANT: Volume sliders apply instantly via
+ *   HandleXxxVolumeChanged() for real-time audio feedback. Resolution,
+ *   fullscreen, and other graphics settings require Apply button.
+ *
+ * [2024-02] RESOLUTION REVERT: Resolution changes need confirmation with
+ *   15-second timeout. If user doesn't confirm, revert to previous resolution.
+ *   Prevents player being locked out with unusable display settings.
+ *
+ * [2024-02] KEY BINDING CONFLICTS: HandleKeyBindingChanged() should check for
+ *   duplicates via MOKeyBindingManager. Either warn user or auto-swap bindings.
+ *
+ * [2024-02] SOFT OBJECT LOADING: PawnControlContext and BuildingContext are
+ *   TSoftObjectPtr. Call .LoadSynchronous() in NativeConstruct() or before
+ *   PopulateKeyBindings(). Returns nullptr if asset path invalid.
+ *
+ * [2024-02] DELEGATE BINDING: NativeConstruct() binds all slider/button
+ *   handlers. Uses RemoveAll(this) pattern before binding to prevent
+ *   duplicate callbacks on widget reuse.
+ *
+ * [2024-02] SETTINGS PERSISTENCE: All changes go to UMOGameSettings. Call
+ *   UMOGameSettings::Get()->SaveSettings() after ApplySettings() to persist
+ *   to disk. RefreshUIFromSettings() reads current values on open.
+ *
+ * [2024-02] NULL WIDGETS: All widgets use BindWidgetOptional. Check for
+ *   nullptr before accessing. Missing widgets are safely skipped.
+ *
+ * =============================================================================
+ * RELATED FILES: MOGameSettings.h, MOKeyBindingEntryWidget.h, MOKeyBindingManager.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"
@@ -16,19 +78,6 @@ class UMOKeyBindingEntryWidget;
 class UInputMappingContext;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOOptionsPanelRequestCloseSignature);
-
-/**
- * Options/Settings panel for the in-game menu.
- *
- * Provides UI bindings for common game settings including display,
- * graphics, audio, and gameplay options. All settings are persisted
- * via UMOGameSettings.
- *
- * Widget Setup:
- * 1. Create WBP_OptionsPanel based on this class
- * 2. Add the control widgets with matching names (see BindWidget properties)
- * 3. Mark them as "Is Variable"
- */
 UCLASS()
 class MOFRAMEWORK_API UMOOptionsPanel : public UCommonActivatableWidget
 {

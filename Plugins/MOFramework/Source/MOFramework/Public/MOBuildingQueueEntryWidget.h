@@ -1,3 +1,39 @@
+/**
+ * =============================================================================
+ * MOBuildingQueueEntryWidget.h - Single Build Queue Entry Widget
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Widget representing a single entry in the building construction queue.
+ * Mirrors UMOCraftingQueueEntryWidget for crafting. Shows recipe name, icon,
+ * progress bar, time remaining, and cancel button.
+ *
+ * DISPLAY DATA:
+ * - FMOBuildQueueEntryDisplayData: Visual data for queue entries
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] DUAL CANCEL BUTTONS: Both CancelButton (UMOCommonButton) and
+ *   CancelButtonSimple (UButton) are supported. Bind only one in Blueprint.
+ *
+ * [2024-02] STATE COLORS: ActiveColor, QueuedColor, PausedColor control
+ *   background based on EMOBuildState. UpdateVisuals() applies them.
+ *
+ * [2024-02] PROGRESS UPDATES: Call UpdateProgress() frequently for smooth
+ *   progress bar animation. SetupEntry() for full refresh.
+ *
+ * =============================================================================
+ * RELATED FILES: MOBuildingQueueWidget.h, MOBuildProgressComponent.h,
+ *                MOBuildingTypes.h, MOCraftingQueueEntryWidget.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

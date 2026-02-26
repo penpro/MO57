@@ -1,16 +1,56 @@
+/**
+ * =============================================================================
+ * MOGameSettings.h - Persistent User Settings
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Extends UGameUserSettings with MO57-specific options. Persists to GameUserSettings.ini.
+ * Access via UMOGameSettings::GetMOGameSettings().
+ *
+ * SETTING CATEGORIES:
+ * - Display: FPS counter, frame time
+ * - Graphics: FOV, max frame rate, motion blur
+ * - Audio: Master/Music/SFX/Ambient volumes
+ * - Gameplay: Camera sensitivity, invert Y, camera shake
+ * - Key Bindings: Custom input overrides
+ * - Main Menu: Intro playback, new game state
+ *
+ * WORLD SEED:
+ * - PendingWorldSeed: Set in New Game dialog
+ * - GetWorldSeed(): Blueprint-callable for voxel graphs
+ * - GetWorldSeedAsVoxelString(): 8-char format for Voxel Plugin
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] TRANSIENT FLAGS: bPlayIntro and bIsLoadingIntoGameplay are NOT
+ *   persisted (no Config specifier). Reset each session.
+ *
+ * [2024-02] APPLY SETTINGS: Call ApplySettings() after changing values for
+ *   them to take effect. ApplyMOSettings() handles MO-specific application.
+ *
+ * [2024-02] SEED HASHING: SeedFromString() hashes non-numeric text. Same
+ *   text always produces same integer seed.
+ *
+ * [2024-02] KEY BINDINGS: CustomKeyBindings stores overrides only. Defaults
+ *   come from InputMappingContext assets.
+ *
+ * =============================================================================
+ * RELATED FILES: MOOptionsPanel.h, MOKeyBindingTypes.h, MONewGamePanel.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"
 #include "GameFramework/GameUserSettings.h"
 #include "MOKeyBindingTypes.h"
 #include "MOGameSettings.generated.h"
-
-/**
- * Game user settings for MO57.
- * Extends UGameUserSettings with game-specific options.
- *
- * Access via UMOGameSettings::GetMOGameSettings()
- */
 UCLASS()
 class MOFRAMEWORK_API UMOGameSettings : public UGameUserSettings
 {

@@ -1,3 +1,52 @@
+/**
+ * =============================================================================
+ * MOPossessionMenu.h - Pawn Selection Interface
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Menu for selecting which pawn to possess. Shows all player-controlled pawns
+ * with status info. Allows switching control between pawns or creating new
+ * characters.
+ *
+ * DISPLAY:
+ * - List of possessed pawns (recruited survivors)
+ * - Status indicators (health, location, activity)
+ * - "Create New Character" button (if enabled)
+ *
+ * WORKFLOW:
+ * 1. Player opens possession menu (Tab key or in-game menu)
+ * 2. Menu populated from MOPersistenceSubsystem pawn records
+ * 3. Player selects pawn -> OnPawnSelected fires
+ * 4. MOPossessionSubsystem handles actual possession switch
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] PAWN RECORDS: Uses FMOPersistedPawnRecord from save system. May
+ *   include dead pawns (greyed out, not selectable).
+ *
+ * [2024-02] SPAWNED VS RECORD: Some pawns may be in records but not spawned
+ *   in world. Possession system handles spawning if needed.
+ *
+ * [2024-02] ACTIVATABLE WIDGET: Extends UCommonActivatableWidget. Uses
+ *   activation stack for input mode management.
+ *
+ * =============================================================================
+ * RELATED FILES
+ * =============================================================================
+ * - MOPossessionSubsystem.h - Handles possession switching
+ * - MOPersistenceSubsystem.h - Provides pawn records
+ * - MOPawnEntryWidget.h - Individual pawn list entry
+ * - MOSystemMenuUIController.h - Opens this menu
+ *
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"
@@ -16,7 +65,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOPossessionMenuCreateCharacterSignature);
 
 /**
  * Menu for selecting which pawn to possess.
- * Shows all player-owned pawns with their status.
+ * See file header for workflow and pitfalls.
  */
 UCLASS(Abstract, Blueprintable)
 class MOFRAMEWORK_API UMOPossessionMenu : public UCommonActivatableWidget

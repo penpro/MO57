@@ -1,3 +1,39 @@
+/**
+ * =============================================================================
+ * MOMainMenuPlayerController.h - Main Menu Level Player Controller
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Player controller for the main menu level. Shows intro video on first launch,
+ * displays and manages main menu widget, handles menu input, and triggers
+ * level transitions for New Game / Load Game.
+ *
+ * Does NOT create gameplay components (inventory, possession, etc.) since
+ * there's no pawn or gameplay in the menu level.
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] VIDEO SOURCE: IntroVideoFileName creates FileMediaSource at runtime.
+ *   Path must be relative to Content/Penumbra/Movies/. IntroVideoSource takes
+ *   precedence if set.
+ *
+ * [2024-02] DELAYED LOAD: Level transitions use DelayedLevelLoadTimerHandle
+ *   to allow loading screen to render before actual load begins.
+ *
+ * [2024-02] VIDEO FALLBACK: VideoFallbackTimerHandle auto-skips intro if
+ *   media fails to play (prevents soft lock).
+ *
+ * =============================================================================
+ * RELATED FILES: MOMainMenuWidget.h, MOIntroWidget.h, MOGameInstance.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

@@ -1,7 +1,58 @@
+/**
+ * =============================================================================
+ * MOResourceNodeDefinitionRow.h - Resource Node DataTable Definitions
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * DataTable row structure for harvestable resource nodes (trees, rocks, ore,
+ * plants). Defines mesh variations, harvest actions with tool requirements,
+ * yields, and auto-generated tags for PCG spawning and job system matching.
+ *
+ * KEY STRUCTURES:
+ * - EMOResourceType: Classification enum (Tree, Rock, Ore, Bush, Plant, Generic)
+ * - FMOResourceMeshVariation: Mesh/material with weighted random selection
+ * - FMOResourceHarvestAction: Action with tool req, yields, timing, skill XP
+ * - FMOResourceNodeDefinitionRow: Main row with identity, actions, visuals, tags
+ *
+ * TAG GENERATION (via GetAllTags):
+ * - "Name {DisplayName}" - For context menu display
+ * - "MOResource_{Type}" - Classification (Tree, Rock, etc.)
+ * - "Action_{ActionId}" - Per-action (ChopDown, Mine, etc.)
+ * - "Gives_{ItemId}" - Per-yield item
+ * - "RequiresTool_{ToolType}" - Per-action tool requirement
+ * - "KeepOnHarvest" - If bKeepOnHarvest=true
+ * - Direct tags from ResourceTags array
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] TOOL TYPES: RequiredToolType uses EMOToolType from MOItemDefinitionRow.h.
+ *   Must match item ToolCapabilities for tool checks to work.
+ *
+ * [2024-02] DUAL YIELD SYSTEM: HarvestActions.YieldsItems is preferred.
+ *   Top-level YieldsItems array is legacy for simple resources.
+ *
+ * [2024-02] TAG DEDUPLICATION: GetAllTags() deduplicates but order is not
+ *   guaranteed. Use Contains() for tag checks.
+ *
+ * [2024-02] MESH SELECTION: SelectMeshVariation() requires FRandomStream.
+ *   Weight=0 entries are never selected.
+ *
+ * =============================================================================
+ * RELATED FILES: MOPCGResourceSpawnerSettings.h, MOHarvestSubsystem.h, DT_Resources
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"
 #include "Engine/DataTable.h"
+#include "MOItemDefinitionRow.h"
 #include "MOResourceNodeDefinitionRow.generated.h"
 
 /**
@@ -80,12 +131,12 @@ struct MOFRAMEWORK_API FMOResourceHarvestAction
 	// ============================================================================
 
 	/**
-	 * Tool type required for this action (e.g., "Axe", "Pickaxe", "Hammer").
-	 * Leave as NAME_None for actions that don't require a tool.
+	 * Tool type required for this action.
+	 * Leave as None for actions that don't require a tool.
 	 * Matches against FMOItemDefinitionRow::ToolType.
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|ResourceNode|Harvest|Tool")
-	FName RequiredToolType = NAME_None;
+	EMOToolType RequiredToolType = EMOToolType::None;
 
 	/**
 	 * If true, the tool is absolutely required - action cannot be performed without it.
@@ -144,10 +195,10 @@ struct MOFRAMEWORK_API FMOResourceHarvestAction
 	// ============================================================================
 
 	/** Returns true if this action requires a tool. */
-	bool RequiresTool() const { return !RequiredToolType.IsNone(); }
+	bool RequiresTool() const { return RequiredToolType != EMOToolType::None; }
 
 	/** Returns true if this action can be performed without a tool (optionally with penalties). */
-	bool CanPerformWithoutTool() const { return RequiredToolType.IsNone() || !bToolRequired; }
+	bool CanPerformWithoutTool() const { return RequiredToolType == EMOToolType::None || !bToolRequired; }
 
 	/** Get all "Gives_{ItemId}" tags for this action. */
 	TArray<FName> GetYieldTags() const
@@ -176,11 +227,14 @@ struct MOFRAMEWORK_API FMOResourceHarvestAction
 	/** Get the required tool tag (e.g., "RequiresTool_Axe"). */
 	FName GetToolRequirementTag() const
 	{
-		if (RequiredToolType.IsNone())
+		if (RequiredToolType == EMOToolType::None)
 		{
 			return FName("RequiresTool_None");
 		}
-		return FName(*FString::Printf(TEXT("RequiresTool_%s"), *RequiredToolType.ToString()));
+		// Get enum value name for tag generation
+		const UEnum* EnumPtr = StaticEnum<EMOToolType>();
+		FString ToolName = EnumPtr->GetNameStringByValue(static_cast<int64>(RequiredToolType));
+		return FName(*FString::Printf(TEXT("RequiresTool_%s"), *ToolName));
 	}
 };
 
@@ -389,7 +443,7 @@ struct MOFRAMEWORK_API FMOResourceNodeDefinitionRow : public FTableRowBase
 	}
 
 	/** Get all harvest actions that require a specific tool type. */
-	TArray<FMOResourceHarvestAction> GetActionsForTool(FName ToolType) const
+	TArray<FMOResourceHarvestAction> GetActionsForTool(EMOToolType ToolType) const
 	{
 		TArray<FMOResourceHarvestAction> Result;
 		for (const FMOResourceHarvestAction& Action : HarvestActions)

@@ -1,3 +1,45 @@
+/**
+ * =============================================================================
+ * MOPCGDistanceCullingSettings.h - PCG Distance-Based LOD Filtering
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * PCG node that splits input points based on distance from a reference point.
+ * Used for LOD systems where nearby objects get full detail and distant objects
+ * get reduced detail (e.g., full meshes vs. billboard imposters).
+ *
+ * OUTPUTS:
+ * - Near: Points within NearDistance
+ * - Transition: Points between NearDistance and FarDistance (probabilistic)
+ * - Far: Points beyond FarDistance
+ *
+ * DISTANCE SOURCES:
+ * - FirstLocalPlayer: Uses player pawn location (most performant)
+ * - NearestGenSource: Uses nearest PCG generation source
+ * - ManualLocation: Uses specified world location
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] NOT CACHEABLE: Returns IsCacheable=false because distance depends
+ *   on player position. Re-evaluates each graph execution.
+ *
+ * [2024-02] EDITOR FALLBACK: In editor without player, falls back to PCG
+ *   component location via GetExecutionSourcePosition().
+ *
+ * [2024-02] 2D DISTANCE: bUse2DDistance ignores Z. Good for flat terrain,
+ *   but may give unexpected results in hilly areas.
+ *
+ * =============================================================================
+ * RELATED FILES: MOPCGElevationBandsSettings.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

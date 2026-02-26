@@ -1,3 +1,73 @@
+/**
+ * =============================================================================
+ * MONewGamePanel.h - New Game Configuration Widget
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Panel for configuring a new game - world name and seed. Part of the main
+ * menu flow before starting a fresh world.
+ *
+ * FEATURES:
+ * - World name input (used for save folder naming)
+ * - Seed input (numeric or string, hashed if non-numeric)
+ * - Random seed generation
+ * - Start Game triggers level transition
+ *
+ * INTEGRATION:
+ * - Appears in MainMenuWidget's focus window (index 1)
+ * - Stores settings in UMOGameSettings pending values
+ * - Voxel graphs can read seed via UMOGameSettings::GetWorldSeed()
+ *
+ * BLUEPRINT SETUP:
+ * 1. Create WBP_NewGamePanel with parent UMONewGamePanel
+ * 2. Add WorldNameInputBox (EditableTextBox)
+ * 3. Add SeedInputBox (EditableTextBox)
+ * 4. Add RandomSeedButton, StartGameButton (UMOCommonButton)
+ * 5. Optional: BackButton, SeedPreviewText
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] SEED HASHING: GetCurrentSeed() parses text as int32. If not purely
+ *   numeric, uses GetTypeHash(FString) for deterministic hash. Same text
+ *   always produces same seed (e.g., "MyWorld" -> consistent int32).
+ *
+ * [2024-02] WORLD NAME VALIDATION: GetWorldName() returns raw input. Caller
+ *   should sanitize for filesystem before creating save folder. Invalid chars:
+ *   \ / : * ? " < > |
+ *
+ * [2024-02] FOCUS WINDOW INDEX: Panel must be index 1 in MainMenuWidget's
+ *   FocusWindowSwitcher. Index 0=empty, 1=NewGame, 2=Load, 3=Options.
+ *
+ * [2024-02] ENTER KEY: NativeOnKeyDown() handles Enter to trigger Start Game.
+ *   Equivalent to clicking StartGameButton. Escape triggers Back.
+ *
+ * [2024-02] DEFAULT WORLD NAME: GenerateDefaultWorldName() counts existing
+ *   save folders via UMOGameSettings::GetSaveSlotCount(). Names are
+ *   "World 1", "World 2", etc. based on count + 1.
+ *
+ * [2024-02] SETTINGS STORAGE: HandleStartGameClicked() stores seed and world
+ *   name in UMOGameSettings before broadcasting OnStartGameRequested.
+ *   Voxel graphs read via UMOGameSettings::GetWorldSeed().
+ *
+ * [2024-02] DELEGATE BINDING: NativeConstruct() binds button handlers with
+ *   RemoveAll(this) pattern. Also calls GenerateRandomSeed() and
+ *   GenerateDefaultWorldName() for initial values.
+ *
+ * [2024-02] REQUIRED WIDGETS: WorldNameInputBox, SeedInputBox, RandomSeedButton,
+ *   StartGameButton are required (BindWidget). BackButton and SeedPreviewText
+ *   are optional.
+ *
+ * =============================================================================
+ * RELATED FILES: MOMainMenuWidget.h, MOGameSettings.h, MOGameInstance.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"
@@ -7,22 +77,6 @@
 class UMOCommonButton;
 class UEditableTextBox;
 class UTextBlock;
-
-/**
- * New Game panel for configuring world name and seed before starting a new game.
- *
- * Features:
- * - World name input (used for save file naming)
- * - Seed text input (numeric or string, hashed if non-numeric)
- * - Random seed button
- * - Start Game button
- *
- * Integration:
- * - Appears in MainMenuWidget's focus window when New Game is clicked
- * - Stores world name in UMOGameSettings::PendingWorldName
- * - Stores seed in UMOGameSettings::PendingWorldSeed
- * - Broadcasts OnStartGameRequested when Start Game is clicked
- */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMONewGameStartSignature);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMONewGameCloseSignature);
 

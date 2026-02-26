@@ -257,11 +257,13 @@ bool UMODataImportCommandlet::ExportItemsToCSV(const FString& CSVFilePath)
 
 	TArray<FString> Lines;
 
-	// Header row
-	Lines.Add(TEXT("RowName,DisplayName,ItemType,Rarity,MaxStackSize,Weight,bConsumable,bIsTool,ToolType,ToolQuality,MaxDurability,Calories,Water,Protein,Carbs,Fat,Fiber,Tags"));
+	// Header row - simplified for CSV (use JSON for full ToolCapabilities export)
+	Lines.Add(TEXT("RowName,DisplayName,ItemType,Rarity,MaxStackSize,Weight,bConsumable,bIsTool,ToolCapabilities,MaxDurability,Calories,Water,Protein,Carbs,Fat,Fiber,Tags"));
 
 	// Data rows
 	TArray<FName> RowNames = ItemTable->GetRowNames();
+	const UEnum* ToolTypeEnum = StaticEnum<EMOToolType>();
+
 	for (const FName& RowName : RowNames)
 	{
 		const FMOItemDefinitionRow* Row = ItemTable->FindRow<FMOItemDefinitionRow>(RowName, TEXT("Export"));
@@ -278,7 +280,16 @@ bool UMODataImportCommandlet::ExportItemsToCSV(const FString& CSVFilePath)
 			TagsStr += Row->Tags[i].ToString();
 		}
 
-		FString Line = FString::Printf(TEXT("%s,\"%s\",%s,%s,%d,%.2f,%s,%s,%s,%.2f,%d,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,\"%s\""),
+		// Build tool capabilities string: "Type:Effectiveness|Type:Effectiveness"
+		FString ToolCapsStr;
+		for (int32 i = 0; i < Row->ToolCapabilities.Num(); ++i)
+		{
+			if (i > 0) ToolCapsStr += TEXT("|");
+			FString ToolTypeName = ToolTypeEnum->GetNameStringByValue(static_cast<int64>(Row->ToolCapabilities[i].ToolType));
+			ToolCapsStr += FString::Printf(TEXT("%s:%.2f"), *ToolTypeName, Row->ToolCapabilities[i].Effectiveness);
+		}
+
+		FString Line = FString::Printf(TEXT("%s,\"%s\",%s,%s,%d,%.2f,%s,%s,\"%s\",%d,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,\"%s\""),
 			*RowName.ToString(),
 			*Row->DisplayName.ToString(),
 			*ItemTypeToString(Row->ItemType),
@@ -287,8 +298,7 @@ bool UMODataImportCommandlet::ExportItemsToCSV(const FString& CSVFilePath)
 			Row->Weight,
 			Row->bConsumable ? TEXT("true") : TEXT("false"),
 			Row->bIsTool ? TEXT("true") : TEXT("false"),
-			*Row->ToolType.ToString(),
-			Row->ToolQuality,
+			*ToolCapsStr,
 			Row->MaxDurability,
 			Row->Nutrition.Calories,
 			Row->Nutrition.WaterContent,
@@ -368,11 +378,13 @@ bool UMODataImportCommandlet::ExportRecipesToCSV(const FString& CSVFilePath)
 
 		// Build tools string: "toolType:minQuality:durability|..."
 		FString ToolsStr;
+		const UEnum* ToolTypeEnum = StaticEnum<EMOToolType>();
 		for (int32 i = 0; i < Row->RequiredTools.Num(); ++i)
 		{
 			if (i > 0) ToolsStr += TEXT("|");
+			FString ToolTypeName = ToolTypeEnum->GetNameStringByValue(static_cast<int64>(Row->RequiredTools[i].ToolType));
 			ToolsStr += FString::Printf(TEXT("%s:%.1f:%d"),
-				*Row->RequiredTools[i].ToolType.ToString(),
+				*ToolTypeName,
 				Row->RequiredTools[i].MinQuality,
 				Row->RequiredTools[i].DurabilityConsumed);
 		}
@@ -567,17 +579,64 @@ bool UMODataImportCommandlet::ParseItemRow(const TArray<FString>& Headers, const
 		OutRow.bIsTool = (Val == TEXT("true") || Val == TEXT("1") || Val == TEXT("yes"));
 	}
 
-	Idx = GetColumnIndex(Headers, TEXT("ToolType"));
+	// Parse ToolCapabilities: "Type:Effectiveness|Type:Effectiveness" or legacy "ToolType" + "ToolQuality"
+	Idx = GetColumnIndex(Headers, TEXT("ToolCapabilities"));
 	if (Idx >= 0)
 	{
-		OutRow.ToolType = FName(*GetColumnValue(Values, Idx));
-	}
+		FString ToolCapsStr = GetColumnValue(Values, Idx);
+		if (!ToolCapsStr.IsEmpty())
+		{
+			const UEnum* ToolTypeEnum = StaticEnum<EMOToolType>();
+			TArray<FString> CapParts;
+			ToolCapsStr.ParseIntoArray(CapParts, TEXT("|"), true);
 
-	Idx = GetColumnIndex(Headers, TEXT("ToolQuality"));
-	if (Idx >= 0)
+			for (const FString& CapStr : CapParts)
+			{
+				TArray<FString> TypeEffParts;
+				CapStr.ParseIntoArray(TypeEffParts, TEXT(":"), true);
+				if (TypeEffParts.Num() >= 1)
+				{
+					FString ToolTypeName = TypeEffParts[0].TrimStartAndEnd();
+					int64 EnumValue = ToolTypeEnum->GetValueByNameString(ToolTypeName);
+					if (EnumValue != INDEX_NONE && EnumValue != static_cast<int64>(EMOToolType::None))
+					{
+						FMOToolCapability Cap;
+						Cap.ToolType = static_cast<EMOToolType>(EnumValue);
+						Cap.Effectiveness = (TypeEffParts.Num() >= 2) ? FCString::Atof(*TypeEffParts[1]) : 1.0f;
+						if (Cap.Effectiveness < 0.01f) Cap.Effectiveness = 1.0f;
+						OutRow.ToolCapabilities.Add(Cap);
+					}
+				}
+			}
+		}
+	}
+	else
 	{
-		OutRow.ToolQuality = FCString::Atof(*GetColumnValue(Values, Idx));
-		if (OutRow.ToolQuality < 0.1f) OutRow.ToolQuality = 1.0f;
+		// Legacy: Try single ToolType + ToolQuality columns
+		Idx = GetColumnIndex(Headers, TEXT("ToolType"));
+		if (Idx >= 0)
+		{
+			FString ToolTypeStr = GetColumnValue(Values, Idx);
+			if (!ToolTypeStr.IsEmpty() && ToolTypeStr != TEXT("None"))
+			{
+				const UEnum* ToolTypeEnum = StaticEnum<EMOToolType>();
+				int64 EnumValue = ToolTypeEnum->GetValueByNameString(ToolTypeStr);
+				if (EnumValue != INDEX_NONE)
+				{
+					FMOToolCapability Cap;
+					Cap.ToolType = static_cast<EMOToolType>(EnumValue);
+
+					// Get quality from ToolQuality column
+					int32 QualIdx = GetColumnIndex(Headers, TEXT("ToolQuality"));
+					if (QualIdx >= 0)
+					{
+						Cap.Effectiveness = FCString::Atof(*GetColumnValue(Values, QualIdx));
+						if (Cap.Effectiveness < 0.1f) Cap.Effectiveness = 1.0f;
+					}
+					OutRow.ToolCapabilities.Add(Cap);
+				}
+			}
+		}
 	}
 
 	Idx = GetColumnIndex(Headers, TEXT("MaxDurability"));
@@ -758,6 +817,7 @@ bool UMODataImportCommandlet::ParseRecipeRow(const TArray<FString>& Headers, con
 	Idx = GetColumnIndex(Headers, TEXT("Tools"));
 	if (Idx >= 0)
 	{
+		const UEnum* ToolTypeEnum = StaticEnum<EMOToolType>();
 		TArray<FString> ToolStrings = ParsePipeDelimitedArray(GetColumnValue(Values, Idx));
 		for (const FString& ToolStr : ToolStrings)
 		{
@@ -767,7 +827,17 @@ bool UMODataImportCommandlet::ParseRecipeRow(const TArray<FString>& Headers, con
 			if (Parts.Num() >= 1 && !Parts[0].IsEmpty())
 			{
 				FMOToolRequirement Tool;
-				Tool.ToolType = FName(*Parts[0].TrimStartAndEnd());
+				FString ToolTypeName = Parts[0].TrimStartAndEnd();
+				int64 EnumValue = ToolTypeEnum->GetValueByNameString(ToolTypeName);
+				if (EnumValue != INDEX_NONE)
+				{
+					Tool.ToolType = static_cast<EMOToolType>(EnumValue);
+				}
+				else
+				{
+					UE_LOG(LogMOFramework, Warning, TEXT("[DataImport] Unknown ToolType '%s' in recipe tools - skipping"), *ToolTypeName);
+					continue;
+				}
 
 				if (Parts.Num() >= 2)
 				{

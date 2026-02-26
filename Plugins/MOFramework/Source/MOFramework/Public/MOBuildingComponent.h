@@ -1,3 +1,30 @@
+/**
+ * =============================================================================
+ * MOBuildingComponent.h - Building Placement Controller
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] INPUT CONTEXT: Placement mode switches to BaseBuilding input
+ *   context. Must restore previous context on exit. See ExitPlacementMode().
+ *
+ * [2024-02] GHOST CLEANUP: If placement cancelled, ghost must be destroyed.
+ *   Check DestroyGhostActor() is called in all exit paths.
+ *
+ * [2024-02] ROTATION: Ghost rotation uses Q/E keys. Rotation snap configurable.
+ *   Rotation stored in PlacementRotation, applied to ghost each tick.
+ *
+ * =============================================================================
+ * RELATED FILES: MOBuildableActor.h, MOBuildProgressComponent.h, MOBuildingTypes.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

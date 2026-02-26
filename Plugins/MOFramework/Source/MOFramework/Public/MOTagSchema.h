@@ -1,3 +1,52 @@
+/**
+ * =============================================================================
+ * MOTagSchema.h - Centralized Tag Schema Definitions
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Centralized tag schema for MOFramework. Defines standard tag formats used
+ * throughout the framework for PCG spawning, harvesting, job system resource
+ * matching, and UI display. Tags are stored as component tags on HISM
+ * components spawned by PCG.
+ *
+ * TAG FORMATS:
+ * - Display Name:     "Name {DisplayName}"     e.g., "Name Black Alder"
+ * - Resource Type:    "MOResource_{Type}"      e.g., "MOResource_Tree"
+ * - Yield Item:       "Gives_{ItemId}"         e.g., "Gives_Bark"
+ * - Keep on Harvest:  "KeepOnHarvest"          (flag, no suffix)
+ * - Resource Tags:    Direct names             e.g., "Wood", "Stone"
+ *
+ * UTILITIES PROVIDED:
+ * - MakeDisplayNameTag, MakeYieldTag, MakeResourceTypeTag: Tag generation
+ * - ParseDisplayNameTag, ParseYieldTag, ParseResourceTypeTag: Tag parsing
+ * - HasResourceType, HasKeepOnHarvest, ExtractYieldItems: Tag queries
+ * - HasAnyTag, HasAllTags: Tag matching
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] INLINE FUNCTIONS: All functions are inline for header-only usage.
+ *   No .cpp file - changes require full recompile of dependents.
+ *
+ * [2024-02] STATIC STRINGS: Prefix strings are static const FString. Be
+ *   careful with initialization order in static contexts.
+ *
+ * [2024-02] ENUM PARSING: ParseResourceTypeTag uses string comparison.
+ *   Must update if EMOResourceType values change.
+ *
+ * [2024-02] TOOL TYPE ENUM: ParseToolRequirementTag uses StaticEnum<>().
+ *   Requires EMOToolType to be a UENUM.
+ *
+ * =============================================================================
+ * RELATED FILES: MOResourceNodeDefinitionRow.h, MOHarvestSubsystem.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"
@@ -151,17 +200,33 @@ namespace MOTagSchema
 	}
 
 	/**
-	 * Create a tool requirement tag.
-	 * @param ToolType - The tool type (e.g., "Axe", "Pickaxe"). NAME_None for no tool.
+	 * Create a tool requirement tag from enum.
+	 * @param ToolType - The tool type enum value
 	 * @return Tag in format "RequiresTool_{ToolType}" or "RequiresTool_None"
 	 */
-	inline FName MakeToolRequirementTag(FName ToolType)
+	inline FName MakeToolRequirementTag(EMOToolType ToolType)
 	{
-		if (ToolType.IsNone())
+		if (ToolType == EMOToolType::None)
 		{
 			return NoToolRequiredTag;
 		}
-		return FName(*(ToolRequirementPrefix + ToolType.ToString()));
+		const UEnum* EnumPtr = StaticEnum<EMOToolType>();
+		FString ToolName = EnumPtr->GetNameStringByValue(static_cast<int64>(ToolType));
+		return FName(*(ToolRequirementPrefix + ToolName));
+	}
+
+	/**
+	 * Create a tool requirement tag from FName (legacy support).
+	 * @param ToolTypeName - The tool type name string
+	 * @return Tag in format "RequiresTool_{ToolType}" or "RequiresTool_None"
+	 */
+	inline FName MakeToolRequirementTagFromName(FName ToolTypeName)
+	{
+		if (ToolTypeName.IsNone())
+		{
+			return NoToolRequiredTag;
+		}
+		return FName(*(ToolRequirementPrefix + ToolTypeName.ToString()));
 	}
 
 	// ============================================================================
@@ -245,12 +310,12 @@ namespace MOTagSchema
 	}
 
 	/**
-	 * Parse the tool type from a "RequiresTool_X" tag.
+	 * Parse the tool type from a "RequiresTool_X" tag into enum.
 	 * @param Tag - The tag to parse
-	 * @param OutToolType - Extracted tool type if valid (NAME_None if "RequiresTool_None")
+	 * @param OutToolType - Extracted tool type enum if valid
 	 * @return true if tag was a valid tool requirement tag
 	 */
-	inline bool ParseToolRequirementTag(FName Tag, FName& OutToolType)
+	inline bool ParseToolRequirementTag(FName Tag, EMOToolType& OutToolType)
 	{
 		FString TagStr = Tag.ToString();
 		if (TagStr.StartsWith(ToolRequirementPrefix))
@@ -258,11 +323,41 @@ namespace MOTagSchema
 			FString ToolStr = TagStr.Mid(ToolRequirementPrefix.Len());
 			if (ToolStr == TEXT("None"))
 			{
-				OutToolType = NAME_None;
+				OutToolType = EMOToolType::None;
+				return true;
+			}
+
+			// Try to find the enum value by name
+			const UEnum* EnumPtr = StaticEnum<EMOToolType>();
+			int64 EnumValue = EnumPtr->GetValueByNameString(ToolStr);
+			if (EnumValue != INDEX_NONE)
+			{
+				OutToolType = static_cast<EMOToolType>(EnumValue);
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Parse the tool type from a "RequiresTool_X" tag into FName (legacy support).
+	 * @param Tag - The tag to parse
+	 * @param OutToolTypeName - Extracted tool type name if valid (NAME_None if "RequiresTool_None")
+	 * @return true if tag was a valid tool requirement tag
+	 */
+	inline bool ParseToolRequirementTagAsName(FName Tag, FName& OutToolTypeName)
+	{
+		FString TagStr = Tag.ToString();
+		if (TagStr.StartsWith(ToolRequirementPrefix))
+		{
+			FString ToolStr = TagStr.Mid(ToolRequirementPrefix.Len());
+			if (ToolStr == TEXT("None"))
+			{
+				OutToolTypeName = NAME_None;
 			}
 			else
 			{
-				OutToolType = FName(*ToolStr);
+				OutToolTypeName = FName(*ToolStr);
 			}
 			return true;
 		}

@@ -75,6 +75,12 @@ bool FMOPCGResourceSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 	check(Settings);
 
 	// Validate settings
+	if (!Settings->ResourceNodeDataTable)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOResourceSpawner] No ResourceNodeDataTable specified"));
+		return true;
+	}
+
 	if (Settings->ResourcesToSpawn.Num() == 0)
 	{
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOResourceSpawner] No resources specified"));
@@ -93,18 +99,19 @@ bool FMOPCGResourceSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 	FRandomStream RandomStream(Context->GetSeed() + Settings->SeedOffset);
 
 	// Build resource data map (loads meshes from DataTable)
-	TMap<FName, FResourceSpawnData> ResourceDataMap = BuildResourceDataMap(Settings->ResourcesToSpawn, RandomStream);
+	const UDataTable* DataTable = Settings->ResourceNodeDataTable;
+	TMap<FName, FResourceSpawnData> ResourceDataMap = BuildResourceDataMap(Settings->ResourcesToSpawn, DataTable, RandomStream);
 
 	// Calculate total weight using utility (only count valid resources with meshes)
-	auto HasValidResource = [&ResourceDataMap](const FMOPCGResourceEntry& Entry) -> bool
+	auto HasValidResource = [&ResourceDataMap, DataTable](const FMOPCGResourceEntry& Entry) -> bool
 	{
-		const FMOResourceNodeDefinitionRow* Def = Entry.GetResourceDefinition();
+		const FMOResourceNodeDefinitionRow* Def = Entry.GetResourceDefinition(DataTable);
 		if (!Def)
 		{
 			return false;
 		}
 		// Check that the row name is valid and has data in our map
-		const FName RowName = Entry.ResourceNodeRow.RowName;
+		const FName RowName = Entry.ResourceRowName;
 		return !RowName.IsNone() && ResourceDataMap.Contains(RowName) && ResourceDataMap[RowName].Mesh != nullptr;
 	};
 
@@ -144,7 +151,7 @@ bool FMOPCGResourceSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 			}
 
 			// Get resource data
-			const FName RowName = SelectedEntry->ResourceNodeRow.RowName;
+			const FName RowName = SelectedEntry->ResourceRowName;
 			FResourceSpawnData* ResourceData = ResourceDataMap.Find(RowName);
 			if (!ResourceData || !ResourceData->Mesh)
 			{
@@ -255,30 +262,30 @@ bool FMOPCGResourceSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 
 TMap<FName, FMOPCGResourceSpawnerElement::FResourceSpawnData> FMOPCGResourceSpawnerElement::BuildResourceDataMap(
 	const TArray<FMOPCGResourceEntry>& Resources,
+	const UDataTable* DataTable,
 	FRandomStream& RandomStream) const
 {
 	TMap<FName, FResourceSpawnData> Result;
 
+	if (!DataTable)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOResourceSpawner] No DataTable provided to BuildResourceDataMap"));
+		return Result;
+	}
+
 	for (const FMOPCGResourceEntry& Entry : Resources)
 	{
 		// Get the resource definition from DataTable
-		const FMOResourceNodeDefinitionRow* Definition = Entry.GetResourceDefinition();
+		const FMOResourceNodeDefinitionRow* Definition = Entry.GetResourceDefinition(DataTable);
 		if (!Definition)
 		{
-			if (Entry.ResourceNodeRow.DataTable)
-			{
-				UE_LOG(LogMOFramework, Warning, TEXT("[MOResourceSpawner] Resource row '%s' not found in DataTable '%s'"),
-					*Entry.ResourceNodeRow.RowName.ToString(),
-					*Entry.ResourceNodeRow.DataTable->GetName());
-			}
-			else
-			{
-				UE_LOG(LogMOFramework, Warning, TEXT("[MOResourceSpawner] No DataTable specified for resource entry"));
-			}
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOResourceSpawner] Resource row '%s' not found in DataTable '%s'"),
+				*Entry.ResourceRowName.ToString(),
+				*DataTable->GetName());
 			continue;
 		}
 
-		const FName RowName = Entry.ResourceNodeRow.RowName;
+		const FName RowName = Entry.ResourceRowName;
 
 		// Select a mesh variation
 		const FMOResourceMeshVariation* SelectedVariation = Definition->SelectMeshVariation(RandomStream);
@@ -304,8 +311,8 @@ TMap<FName, FMOPCGResourceSpawnerElement::FResourceSpawnData> FMOPCGResourceSpaw
 		ResourceData.DisplayName = Definition->DisplayName;
 		ResourceData.Mesh = Mesh;
 		ResourceData.ResourceType = Definition->ResourceType;
-		ResourceData.MinScale = Entry.GetEffectiveMinScale();
-		ResourceData.MaxScale = Entry.GetEffectiveMaxScale();
+		ResourceData.MinScale = Entry.GetEffectiveMinScale(DataTable);
+		ResourceData.MaxScale = Entry.GetEffectiveMaxScale(DataTable);
 		ResourceData.bRandomizeRotation = Definition->bRandomizeRotation;
 
 		// Load material override if specified

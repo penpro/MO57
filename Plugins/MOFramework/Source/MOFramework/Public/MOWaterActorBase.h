@@ -1,3 +1,50 @@
+/**
+ * =============================================================================
+ * MOWaterActorBase.h - Water Body Actor Base Class
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Abstract base class for water bodies with Gerstner wave simulation. Provides
+ * wave calculation, surface queries for buoyancy, and procedural mesh generation.
+ * Subclass for specific water body types (ocean, lake, river).
+ *
+ * FEATURES:
+ * - Multiple Gerstner wave summation
+ * - Surface queries (height, normal, underwater check)
+ * - Procedural mesh with configurable resolution
+ * - Optional CPU vertex updates (expensive) or WPO material
+ *
+ * SURFACE QUERIES:
+ * - GetWaterSurfaceInfo: Full surface data at location
+ * - GetWaterHeightAtLocation: Just Z height (faster)
+ * - IsUnderwater: Check if location is below surface
+ * - GetDepthAtLocation: Distance below surface
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] CPU VERTEX UPDATE: bUpdateMeshVertices=true is expensive. Prefer
+ *   WPO (World Position Offset) in material for visual displacement.
+ *
+ * [2024-02] MESH RESOLUTION: MeshResolution affects performance significantly.
+ *   64 is reasonable, 256+ causes frame drops.
+ *
+ * [2024-02] WAVE TIME: WaveTime accumulates each tick. Consider wrapping to
+ *   prevent float precision issues over long play sessions.
+ *
+ * [2024-02] ABSTRACT CLASS: Cannot spawn directly. Subclass and implement
+ *   IsInWaterBounds() and GetMeshSize() for specific water body shapes.
+ *
+ * =============================================================================
+ * RELATED FILES: MOWaterTypes.h, MOWaterMaterialGenerator.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

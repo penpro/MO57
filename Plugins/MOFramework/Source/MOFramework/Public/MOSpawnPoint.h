@@ -1,3 +1,40 @@
+/**
+ * =============================================================================
+ * MOSpawnPoint.h - Spawn Point Actor for Entity Spawning
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Spawn point actor placed by PCG or manually to mark valid spawn locations.
+ * The SpawnManagerSubsystem queries these points when spawning entities.
+ *
+ * FEATURES:
+ * - Category filtering (Prey, Predator, Survivor, Ambient)
+ * - Spawn radius for position randomization
+ * - Per-point cooldown system
+ * - Selection weight for spawn probability
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] COOLDOWN: PointCooldownSeconds starts when MarkUsed() is called.
+ *   IsAvailable() returns false until cooldown expires.
+ *
+ * [2024-02] CATEGORY MATCHING: CanSpawnCategory() checks exact match.
+ *   Points cannot spawn multiple categories currently.
+ *
+ * [2024-02] EDITOR ONLY: SpriteComponent and RadiusVisualization are
+ *   WITH_EDITORONLY_DATA - not available in packaged builds.
+ *
+ * =============================================================================
+ * RELATED FILES: MOSpawnTypes.h, MOSpawnManagerSubsystem.h, MOPCGSpawnPointSettings.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

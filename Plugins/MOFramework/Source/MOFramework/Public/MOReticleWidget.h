@@ -1,3 +1,40 @@
+/**
+ * =============================================================================
+ * MOReticleWidget.h - HUD Crosshair/Reticle Display
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Simple reticle/crosshair widget for targeting. Uses Slate SConstraintCanvas
+ * for custom drawing of crosshair lines and center dot. Can be subclassed in
+ * Blueprint for custom designs.
+ *
+ * CUSTOMIZATION:
+ * - ReticleColor: Line and dot color
+ * - ReticleSize: Distance from center to line ends
+ * - ReticleThickness: Line width in pixels
+ * - ReticleGap: Space between center and line start
+ * - CenterDotSize: Size of optional center dot
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] SLATE REBUILD: RebuildReticle() is called when properties change.
+ *   The widget uses RebuildWidget() override for Slate construction.
+ *
+ * [2024-02] PROPERTY CHANGES: SetReticleX functions modify properties and
+ *   call RebuildReticle(). Changes are immediate but may cause flicker if
+ *   called frequently.
+ *
+ * =============================================================================
+ * RELATED FILES: MOPlayerController.h (adds to viewport)
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

@@ -1,3 +1,39 @@
+/**
+ * =============================================================================
+ * MOKeyBindingEntryWidget.h - Single Key Binding Row Widget
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Widget representing a single rebindable key entry. Shows action name,
+ * current key with capture selector, and reset button. Used in options panel.
+ *
+ * WIDGET BINDINGS (required in Blueprint):
+ * - ActionNameText (UTextBlock) - Display name of the action
+ * - KeySelector (UInputKeySelector) - Captures new key input
+ * - ResetButton (UCommonButtonBase) - Reverts to default key
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] KEY CAPTURE: UInputKeySelector captures ALL input during capture
+ *   mode. Escape cancels capture, any other key sets the binding.
+ *
+ * [2024-02] CONFLICT CHECK: OnKeyChanged fires BEFORE conflict checking.
+ *   Parent panel should validate for duplicate bindings.
+ *
+ * [2024-02] DEFAULT KEY: ResetToDefault() uses cached default, not from
+ *   InputMappingContext. Ensure defaults are cached at setup time.
+ *
+ * =============================================================================
+ * RELATED FILES: MOKeyBindingTypes.h, MOOptionsPanel.h, MOKeyBindingManager.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"
@@ -13,14 +49,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOKeyBindingChangedSignature, FNam
 
 /**
  * Entry widget for a single key binding row.
- * Displays action name, current key selector, and reset button.
- *
- * Widget Setup in Blueprint:
- * 1. Create WBP_KeyBindingEntry based on this class
- * 2. Add widgets with matching names:
- *    - ActionNameText (UTextBlock) - displays the action display name
- *    - KeySelector (UInputKeySelector) - handles key capture
- *    - ResetButton (UCommonButtonBase) - resets to default
+ * See file header for widget bindings and pitfalls.
  */
 UCLASS(Abstract, Blueprintable)
 class MOFRAMEWORK_API UMOKeyBindingEntryWidget : public UUserWidget

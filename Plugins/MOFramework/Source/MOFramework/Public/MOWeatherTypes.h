@@ -1,3 +1,41 @@
+/**
+ * =============================================================================
+ * MOWeatherTypes.h - Weather System Data Structures
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Data structures for the weather system. Defines weather exposure, weather
+ * state, time of day, temperature units, and save data structures.
+ *
+ * KEY TYPES:
+ * - FMOWeatherExposure: Rain/snow/wind/dust exposure values (0-1)
+ * - FMOWeatherState: Global weather conditions (cloud, fog, rain, wind)
+ * - FMOTimeOfDay: Time and season information
+ * - EMOTemperatureUnit: Celsius vs Fahrenheit
+ * - FMOWeatherSaveData: Persistence structure
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] UDS TIME FORMAT: TimeValue uses UDS format 0-2400 where last two
+ *   digits are minutes (1230 = 12:30, 600 = 6:00). Use CalculateHourMinuteFromTimeValue().
+ *
+ * [2024-02] EXPOSURE VALUES: All exposure values are 0.0-1.0 normalized.
+ *   Use HasSignificantExposure() with threshold for meaningful checks.
+ *
+ * [2024-02] SAVE DATA PRESET: WeatherPresetObject is Transient and won't
+ *   serialize to disk. Blueprint must handle preset restoration separately.
+ *
+ * =============================================================================
+ * RELATED FILES: MOWeatherProviderInterface.h, MOWeatherIntegrationSubsystem.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

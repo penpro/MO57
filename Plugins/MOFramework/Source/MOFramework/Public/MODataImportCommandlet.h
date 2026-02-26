@@ -1,3 +1,49 @@
+/**
+ * =============================================================================
+ * MODataImportCommandlet.h - CSV Data Import/Export for DataTables
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Commandlet for bulk importing/exporting items, recipes, and skills between
+ * CSV files and Unreal DataTables. Supports command-line and Blueprint usage.
+ *
+ * USAGE (Command Line):
+ *   UE5Editor.exe Project -run=MODataImport -items=Items.csv -recipes=Recipes.csv
+ *
+ * USAGE (Blueprint/Editor Utility):
+ *   UMODataImportCommandlet::ImportItemsFromCSV(FilePath, bClearExisting);
+ *
+ * CSV FORMAT:
+ *   Items: RowName,DisplayName,ItemType,Rarity,MaxStackSize,...
+ *   Recipes: RowName,DisplayName,CraftTime,Station,SkillId,...
+ *   Array fields use pipe delimiter: "stone:2|stick:1"
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] CSV ENCODING: Files must be UTF-8 (with or without BOM). Other
+ *   encodings cause parsing errors on non-ASCII characters.
+ *
+ * [2024-02] CLEAR EXISTING: bClearExisting=true deletes ALL existing rows
+ *   before import. Use false to add/update without deleting.
+ *
+ * [2024-02] PIPE DELIMITER: Use | for arrays (not comma). Commas are CSV
+ *   field separators and will break parsing.
+ *
+ * [2024-02] COLUMN ORDER: Header row must match expected column names.
+ *   Column order doesn't matter - names are matched case-insensitively.
+ *
+ * =============================================================================
+ * RELATED FILES: MOItemDefinitionRow.h, MORecipeDefinitionRow.h,
+ *                MOSkillDefinitionRow.h, MOItemDatabaseSettings.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"
@@ -9,6 +55,7 @@
 
 /**
  * Commandlet for importing item and recipe data from CSV files.
+ * See file header for usage and CSV format.
  *
  * Usage:
  *   UE5Editor.exe ProjectName -run=MODataImport -items=Path/To/Items.csv -recipes=Path/To/Recipes.csv

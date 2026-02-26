@@ -1,3 +1,61 @@
+/**
+ * =============================================================================
+ * MOVitalsTypes.h - Medical Vital Signs Data Structures
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Defines the vital signs data structures used by the medical system. These
+ * represent realistic physiological measurements that drive the medical
+ * simulation.
+ *
+ * MEDICAL REALISM REFERENCE:
+ * All values use real-world medical units and normal ranges:
+ * - Blood Volume: 4500-5500 mL (adult normal)
+ * - Heart Rate: 60-100 BPM (resting normal)
+ * - Blood Pressure: 120/80 mmHg (normal)
+ * - SpO2: 95-100% (normal oxygen saturation)
+ * - Body Temperature: 36.5-37.5°C (normal)
+ * - Blood Glucose: 70-110 mg/dL (fasting normal)
+ *
+ * VITAL CASCADE:
+ * Blood loss → Low BP → High HR → Low SpO2 → Consciousness drop
+ * Dehydration → High HR → High Temp → Performance penalties
+ * Low glucose → Confusion → Unconsciousness
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-01] BLOOD VOLUME ZERO: If BloodVolume reaches 0, character should die.
+ *   Check GetBloodLossPercent() > 0.4 for Class III hemorrhage.
+ *
+ * [2024-02] TEMPERATURE UNITS: Body temperature is in CELSIUS, not Fahrenheit.
+ *   37°C = 98.6°F. Don't mix units in calculations.
+ *
+ * [2024-02] HEART RATE BASELINE: BaseHeartRate is per-character (fitness level).
+ *   HeartRate is the current dynamic value. Don't confuse them.
+ *
+ * [2024-02] HEMORRHAGE CLASSES:
+ *   Class I: <15% blood loss - minimal symptoms
+ *   Class II: 15-30% - HR up, anxiety
+ *   Class III: 30-40% - HR very high, confusion, cold/clammy
+ *   Class IV: >40% - lethal without intervention
+ *
+ * =============================================================================
+ * RELATED FILES
+ * =============================================================================
+ * - MOVitalsComponent.h - Uses these types, manages vital simulation
+ * - MOAnatomyComponent.h - Wounds affect blood volume
+ * - MOMentalStateComponent.h - Consciousness based on vitals
+ * - MOMetabolismComponent.h - Affects blood glucose
+ *
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"
@@ -5,6 +63,7 @@
 
 /**
  * Complete vital signs reading.
+ * See file header for normal ranges and medical context.
  */
 USTRUCT(BlueprintType)
 struct MOFRAMEWORK_API FMOVitalSigns

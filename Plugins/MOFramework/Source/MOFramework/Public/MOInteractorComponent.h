@@ -1,3 +1,123 @@
+/**
+ * =============================================================================
+ * MOInteractorComponent.h - Player Interaction Initiation Component
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE THIS HEADER when issues arise or patterns change
+ *
+ * PURPOSE:
+ * Pawn component that initiates interactions. Traces from player viewpoint,
+ * finds interactable targets (actors or ISM/HISM instances), and sends
+ * server requests. The "active" half of the interaction system.
+ *
+ * KEY RESPONSIBILITIES:
+ * 1. Trace from player viewpoint to find interaction targets
+ * 2. Support both actor-based and ISM/HISM instance targets
+ * 3. Send server RPCs for interaction requests
+ * 4. Provide current target info for UI prompts
+ * 5. Handle interaction config (distance, radius, channel)
+ *
+ * ARCHITECTURE NOTES:
+ * - Traces from camera/viewpoint, not pawn location
+ * - Uses FMOInteractionTarget to unify actor and ISM/HISM results
+ * - Server RPCs ensure authoritative interaction handling
+ * - TraceConfig controls trace parameters
+ *
+ * INTERACTION TYPES:
+ * - Actor: Normal actors with UMOInteractableComponent
+ * - ISM: Instanced Static Mesh instances (PCG foliage)
+ * - HISM: Hierarchical ISM instances (harvestable trees)
+ *
+ * INTERACTION FLOW:
+ * Player input -> TryInteract() -> FindInteractionTarget()
+ * -> If actor: ServerRequestInteract()
+ * -> If HISM: ServerRequestHISMInteract(owner, comp, index)
+ * -> If ISM: ServerRequestISMInteract(owner, comp, index)
+ *
+ * CRITICAL PATTERNS:
+ * 1. Finding Targets:
+ *    FindInteractionTarget(OutTarget) fills FMOInteractionTarget
+ *    Check OutTarget.bIsInstancedMeshTarget for ISM/HISM
+ *
+ * 2. UI Prompts:
+ *    GetCurrentInteractionPrompt() returns appropriate text
+ *    CurrentTarget updated by FindInteractionTarget()
+ *
+ * 3. Viewpoint Resolution:
+ *    ResolveViewpoint() handles both player and AI controllers
+ *    Uses MOViewpointUtils internally
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] VIEWPOINT TIMING: Camera may not be ready in early BeginPlay.
+ *   SYMPTOM: FindInteractionTarget() returns false, no interaction possible.
+ *   WHY: Camera component initializes asynchronously in PIE.
+ *   FIX: Don't call TryInteract() in BeginPlay. Use player input callbacks
+ *   which fire after camera is ready. Check log for "Failed to resolve viewpoint".
+ *
+ * [2024-02] ISM INDEX VALIDITY: Instance index can become stale.
+ *   SYMPTOM: ServerRequestISMInteract fails silently, no interaction occurs.
+ *   WHY: Another player harvested the ISM instance between trace and RPC.
+ *   FIX: Server validates index against current ISM instance count. If invalid,
+ *   interaction gracefully fails. Client should re-trace on next input.
+ *
+ * [2024-02] TRACE CHANNEL: Default ECC_Visibility may miss custom collision.
+ *   SYMPTOM: Can't interact with certain objects (doors, vehicles).
+ *   WHY: Objects using custom collision channels aren't hit by visibility trace.
+ *   FIX: Configure TraceConfig.TraceChannel to match your collision setup.
+ *   DEBUG: Enable "Show Collision" in viewport to visualize trace hits.
+ *
+ * [2024-02] DEPRECATED API: FindInteractTarget() -> FindInteractionTarget().
+ *   WHY: Old API was actor-only, new API supports ISM/HISM instances.
+ *   SYMPTOM: Deprecation warning in compile output.
+ *   FIX: Replace FindInteractTarget(Actor) with FindInteractionTarget(Target).
+ *
+ * [2024-02] TARGET STALING: CurrentTarget cached between frames.
+ *   SYMPTOM: GetCurrentInteractionPrompt() shows stale target info.
+ *   WHY: CurrentTarget updated only when TryInteract/TrySecondaryInteract called.
+ *   FIX: For real-time prompts, call FindInteractionTarget() each frame in Tick,
+ *   or use a timer to refresh every 0.1s. Don't rely on cached CurrentTarget.
+ *
+ * [2024-02] ISM OWNER MISMATCH: Trace must hit ISM's owning actor.
+ *   SYMPTOM: ServerRequestISMInteract fails even with valid instance index.
+ *   WHY: RPC passes OwnerActor from trace. If trace hits Actor A but ISM belongs
+ *   to Actor B, server validation fails.
+ *   FIX: Ensure ISM is attached to same actor that has collision. Check
+ *   HitResult.GetActor() == ISMComponent->GetOwner().
+ *
+ * [2024-02] VIEW OFFSET EDGE CASE: ViewStartForwardOffset (15u default).
+ *   SYMPTOM: Can't interact while standing inside large interactable.
+ *   WHY: Offset moves trace start forward to avoid self-intersection.
+ *   If inside object, trace starts past it.
+ *   FIX: Reduce ViewStartForwardOffset or use sphere trace instead of line.
+ *
+ * [SEVERITY GUIDE]
+ *   VIEWPOINT TIMING: Runtime bug (interaction fails at game start)
+ *   ISM INDEX VALIDITY: Expected edge case (handled gracefully)
+ *   TRACE CHANNEL: Configuration issue (fixable in editor)
+ *   TARGET STALING: UX bug (stale prompts)
+ *
+ * RELATED FILES:
+ * - MOInteractableComponent.h - Receives interaction requests
+ * - MOHISMInteractableComponent.h - HISM-specific interaction handling
+ * - MOInteractionSubsystem.h - Server-side validation
+ * - MOPCGInteractionSubsystem.h - PCG/HISM interaction processing
+ *
+ * TESTING CHECKLIST:
+ * [ ] TryInteract triggers interaction on actor target
+ * [ ] TryInteract triggers interaction on HISM target
+ * [ ] TrySecondaryInteract works for right-click
+ * [ ] FindInteractionTarget returns correct target type
+ * [ ] GetCurrentInteractionPrompt shows correct text
+ * [ ] TraceConfig.TraceDistance limits interaction range
+ *
+ * LAST UPDATED: 2026-02-24 - Initial audit header
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

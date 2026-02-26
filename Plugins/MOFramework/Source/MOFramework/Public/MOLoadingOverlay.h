@@ -1,3 +1,40 @@
+/**
+ * =============================================================================
+ * MOLoadingOverlay.h - Loading Screen Overlay Widget
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Full-screen loading overlay widget. Shows during level transitions and
+ * fades out when gameplay is ready. Used by MOGameInstance during map loads.
+ *
+ * FEATURES:
+ * - Full-screen black background
+ * - Optional loading text
+ * - Configurable fade-out animation
+ * - Auto-removes from viewport when fade completes
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] TICK-BASED FADE: Fade animation uses NativeTick, not UMG animation.
+ *   Requires SetVisibility(Visible) and tick enabled during fade.
+ *
+ * [2024-02] AUTO-REMOVE: FadeOutAndRemove() removes widget from viewport when
+ *   opacity reaches 0. Don't cache pointer after calling this.
+ *
+ * [2024-02] Z-ORDER: Should be added at very high Z-order (9999) to appear
+ *   above all other widgets during loading.
+ *
+ * =============================================================================
+ * RELATED FILES: MOGameInstance.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

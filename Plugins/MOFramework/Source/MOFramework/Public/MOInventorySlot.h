@@ -1,3 +1,49 @@
+/**
+ * =============================================================================
+ * MOInventorySlot.h - Inventory Slot Widget with Drag-Drop Support
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Individual inventory slot widget supporting display, click, and drag-drop.
+ * Used by MOInventoryGrid for inventory display, MOEquipmentPanel for equipment
+ * slots, and MONearbyItemsPanel for world items.
+ *
+ * DRAG SOURCES:
+ * - Inventory: SourceInventoryComponent set
+ * - World Item: SourceWorldItem set (nearby items panel)
+ * - Equipment: SourceEquipmentComponent + SourceEquipmentSlot set
+ *
+ * INTERACTIONS:
+ * - Click: OnSlotClicked delegate
+ * - Shift+Click: OnSlotShiftClicked (quick transfer)
+ * - Right-Click: OnSlotRightClicked (context menu)
+ * - Drag-Drop: Creates UMOInventorySlotDragOperation
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] BUTTON VS DRAG: Uses standard UButton, not UMOCommonButton. Drag
+ *   detection happens in NativeOnMouseButtonDown/NativeOnDragDetected.
+ *
+ * [2024-02] WORLD DROP: bEnableWorldDrop controls whether dropping outside
+ *   slots drops item to world. TryDropIntoWorld() handles this.
+ *
+ * [2024-02] CUSTOM EMPTY ICON: SetCustomEmptyIcon() overrides EmptySlotIcon
+ *   for equipment slots with specific silhouettes.
+ *
+ * [2024-02] DRAG VISUAL: CreateDragVisual() creates UMODragVisualWidget. Must
+ *   have DragVisualWidget class assigned in project settings or widget fails.
+ *
+ * =============================================================================
+ * RELATED FILES: MOInventoryGrid.h, MOUnifiedInventoryMenu.h, MODragVisualWidget.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

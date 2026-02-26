@@ -1,3 +1,68 @@
+/**
+ * =============================================================================
+ * MOHarvestSubsystem.h - Resource Harvesting System
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * World subsystem managing harvesting of PCG-spawned resources (trees, rocks,
+ * plants via ISM/HISM components). Handles timed harvest operations, tool
+ * requirements, skill checks, and output spawning.
+ *
+ * KEY RESPONSIBILITIES:
+ * 1. Validate harvest operations (tools, skills, tags)
+ * 2. Track harvest progress with FMOHarvestContext
+ * 3. Execute harvests (remove ISM instance, spawn outputs)
+ * 4. Grant XP and discovery unlocks
+ *
+ * HARVEST WORKFLOW:
+ * 1. Player interacts with ISM/HISM instance
+ * 2. MOKeepOnHarvestContextMenu shows available recipes (filtered by tags)
+ * 3. Player selects recipe -> StartHarvest()
+ * 4. Progress ticks -> OnHarvestProgress broadcasts
+ * 5. Complete -> OnHarvestComplete, instance removed, items spawned
+ *
+ * TAG SYSTEM:
+ * Harvest recipes match via SourceTags (e.g., "Wood", "Tree", "Hardwood").
+ * ISM components are tagged by MOPCGResourceSpawnerSettings.
+ * Recipe shows only if ALL its SourceTags exist on the target.
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] ISM VS HISM: Both are supported. Use ISMComponent or HISMComponent
+ *   WeakObjectPtr - only one will be valid per context.
+ *
+ * [2024-02] INSTANCE INDEX STABILITY: ISM instance indices can change when
+ *   other instances are removed. Store transform at harvest start for
+ *   validation. If instance moves, harvest fails.
+ *
+ * [2024-02] TAG INHERITANCE: Tags come from both the ISM component AND its
+ *   owner actor. Check TargetTags array in FMOHarvestContext.
+ *
+ * [2024-02] TOOL DEGRADATION: Tool durability is consumed during harvest.
+ *   If tool breaks mid-harvest, operation continues (tool required only
+ *   to START harvest).
+ *
+ * [2024-02] KEEP-ON-HARVEST: Some recipes have bKeepOnHarvest=true (e.g.,
+ *   gather sticks doesn't destroy tree). Instance is only removed if
+ *   recipe's bDestroysResource=true.
+ *
+ * =============================================================================
+ * RELATED FILES
+ * =============================================================================
+ * - MOPCGResourceSpawnerSettings.h - PCG node that spawns tagged resources
+ * - MOKeepOnHarvestContextMenu.h - UI for selecting harvest recipe
+ * - MORecipeDefinitionRow.h - Recipe definitions with SourceTags
+ * - MOHISMHarvestHelper.h - Helper for HISM operations
+ *
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"
@@ -15,7 +80,7 @@ struct FMOCraftResult;
 
 /**
  * Context for an in-progress harvest operation.
- * Stores the target ISM/HISM reference and operation state.
+ * See file header for harvest workflow details.
  */
 USTRUCT(BlueprintType)
 struct MOFRAMEWORK_API FMOHarvestContext

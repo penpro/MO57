@@ -1,3 +1,46 @@
+/**
+ * =============================================================================
+ * MOQuestSubsystem.h - Quest Management Subsystem
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * GameInstance subsystem for managing quests. Loads quest definitions from
+ * DataTable, tracks active/completed quest states, subscribes to game events
+ * (crafting, skills, items), checks objective completion, broadcasts quest
+ * state changes, and handles save/load.
+ *
+ * QUEST FLOW:
+ * 1. Quest definitions loaded from DT_Quests on Initialize()
+ * 2. StartQuest() activates a quest, creating its state
+ * 3. Game events fire -> HandleXxx() methods check objectives
+ * 4. Objective completion triggers OnObjectiveUpdated/Completed
+ * 5. All required objectives done -> OnQuestCompleted
+ *
+ * SETTINGS:
+ * UMOQuestSettings provides project settings for quest system configuration.
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] WORLD SUBSYSTEM BINDING: Binds to crafting subsystem in
+ *   HandleWorldInitialized(). World subsystems not available at Initialize().
+ *
+ * [2024-02] EVENT HANDLERS: Components call HandleItemPickedUp/HandleSkillLevelUp
+ *   directly. Crafting is bound via delegate in HandleWorldInitialized.
+ *
+ * [2024-02] SEQUENTIAL OBJECTIVES: bSequential objectives must be completed
+ *   in order. GetCurrentSequentialObjective() finds the first incomplete one.
+ *
+ * =============================================================================
+ * RELATED FILES: MOQuestTypes.h, MOQuestDelegates.h, MOCraftingSubsystem.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

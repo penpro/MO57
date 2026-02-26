@@ -1,13 +1,10 @@
-#pragma once
-
-#include "CoreMinimal.h"
-#include "MOMedicalTypes.h"
-#include "MOCombatMedicalTypes.generated.h"
-
 /**
  * =============================================================================
  * MOCombatMedicalTypes.h - Combat ↔ Medical System Integration Types
  * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
  *
  * PURPOSE:
  * Provides types and utilities for integrating a combat system with the
@@ -66,7 +63,30 @@
  *    // Stress will gradually recover
  *
  * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] WOUND TYPE MAPPING: GetWoundType() maps damage category to wound type.
+ *   Fire defaults to 2nd degree burn. Adjust in HitInfo for severity.
+ *
+ * [2024-02] SHOCK CALCULATION: GetShockAmount() is empirically tuned. Critical hits
+ *   and vital organ hits multiply shock. May need adjustment after playtesting.
+ *
+ * [2024-02] STAMINA COSTS: FMOCombatStaminaCosts values are placeholder.
+ *   Tune based on combat pacing requirements.
+ *
+ * =============================================================================
+ * RELATED FILES: MOMedicalTypes.h, MOAnatomyComponent.h, MOVitalsComponent.h,
+ *                MOCombatComponent.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
  */
+
+#pragma once
+
+#include "CoreMinimal.h"
+#include "MOMedicalTypes.h"
+#include "MOCombatMedicalTypes.generated.h"
 
 // Forward declarations
 class UMOAnatomyComponent;

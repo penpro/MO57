@@ -1,3 +1,63 @@
+/**
+ * =============================================================================
+ * MOPCGItemSpawnerSettings.h - PCG Node for Spawning Forageable Items
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * PCG node that assigns item metadata to points for HISM spawning. Takes input
+ * points, randomly selects items from weighted table, assigns mesh and item
+ * attributes. Output feeds into PCG Static Mesh Spawner.
+ *
+ * PCG WORKFLOW:
+ * 1. Input points from terrain sampler, scatter, etc.
+ * 2. This node processes each point:
+ *    - Selects item from weighted spawn entries
+ *    - Reads item's WorldVisual.StaticMesh
+ *    - Adds PCG attributes: MOItemId, MOQuantityMin, MOQuantityMax
+ * 3. Output points → Static Mesh Spawner → HISM components
+ *
+ * INTEGRATION WITH FORAGING:
+ * - HISM instances have MOItemId attribute
+ * - MOForagingSubsystem reads MOItemId to map mesh → item
+ * - Player picks up → HISM instance removed → WorldItem spawned
+ *
+ * WEIGHTED SELECTION:
+ * Uses FMOWeightedSelector for random selection:
+ * - Weight=1.0 is baseline
+ * - Weight=2.0 is twice as common
+ * - All weights are relative within the spawn entries
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] MESH REQUIREMENT: Items must have WorldVisual.StaticMesh set in
+ *   DT_Items. If null, the point is skipped (no mesh to spawn).
+ *
+ * [2024-02] ATTRIBUTE NAMES: PCG attributes are strings. Use exact names:
+ *   "MOItemId", "MOQuantityMin", "MOQuantityMax". Typos cause silent failures.
+ *
+ * [2024-02] SEED USAGE: UseSeed() returns true. Different seeds = different
+ *   item distributions. Pass consistent seed for reproducible worlds.
+ *
+ * [2024-02] DATATABLE LOADING: ItemDataTable is TSoftObjectPtr. Ensure it's
+ *   loaded before PCG execution (usually handled automatically).
+ *
+ * =============================================================================
+ * RELATED FILES
+ * =============================================================================
+ * - MOForagingSubsystem.h - Uses MOItemId attribute for pickup
+ * - MOItemDefinitionRow.h - Item definitions with WorldVisual
+ * - MOItemDatabaseSettings.h - Global item datatable reference
+ * - MOWeightedSelector.h - Template for weighted random selection
+ *
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"
@@ -9,7 +69,7 @@ class UDataTable;
 
 /**
  * Entry defining an item to spawn with PCG.
- * Implements GetWeight() for use with FMOWeightedSelector.
+ * See file header for PCG workflow details.
  */
 USTRUCT(BlueprintType)
 struct MOFRAMEWORK_API FMOPCGItemSpawnEntry

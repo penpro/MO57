@@ -1,3 +1,48 @@
+/**
+ * =============================================================================
+ * MORecipeDetailPanelBase.h - Base Recipe Detail Panel Widget
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Abstract base class for recipe detail panels (crafting and building).
+ * Provides common UI elements and logic for displaying recipe name, description,
+ * icon, skill requirements, time, ingredients, and outputs with amount controls.
+ *
+ * SUBCLASS INTERFACE (must override):
+ * - GetDisplayedRecipe() - Look up recipe from DisplayedRecipeId
+ * - CanPerformAction() - Check if action is valid
+ * - GetMaxPerformableAmount() - Calculate max craftable/buildable
+ * - PopulateRequirementsContainer() - Add ingredient/part widgets
+ * - PopulateOutputsContainer() - Add output widgets
+ * - HandleActionButtonClicked() - Execute craft/build action
+ *
+ * WIDGET BINDINGS:
+ * RecipeNameText, RecipeDescriptionText, RecipeIcon, IngredientsContainer,
+ * OutputsContainer, SkillRequirementText, CraftTimeText, CraftButton,
+ * CraftMaxButton, CraftAmountSpinBox, CraftAmountSlider, CraftAmountText
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] WIDGET OPTIONAL: All widget bindings are BindWidgetOptional.
+ *   Always null-check before use.
+ *
+ * [2024-02] WEAK POINTERS: InventoryComponent, SkillsComponent, DiscoveryComponent
+ *   are weak pointers. Validate before use in handlers.
+ *
+ * [2024-02] DYNAMIC WIDGETS: IngredientTextWidgets and OutputTextWidgets are
+ *   dynamically created. ClearTextWidgets() removes them from container too.
+ *
+ * =============================================================================
+ * RELATED FILES: MORecipeDetailPanel.h (crafting), MOBuildDetailPanel.h (building)
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

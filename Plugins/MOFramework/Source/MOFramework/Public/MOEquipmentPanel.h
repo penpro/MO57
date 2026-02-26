@@ -1,3 +1,63 @@
+/**
+ * =============================================================================
+ * MOEquipmentPanel.h - Character Equipment Display
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Visual display of equipped items (weapons, armor, accessories). Shows slots
+ * for each equipment position with drag-drop support for equipping items.
+ *
+ * EQUIPMENT SLOTS:
+ * - Head, Chest, Legs, Feet (armor)
+ * - MainHand, OffHand (weapons/tools)
+ * - Back (backpack/quiver)
+ * - Accessory slots
+ *
+ * INTERACTIONS:
+ * - Left-click: Select slot, show item details
+ * - Right-click: Context menu (unequip, inspect)
+ * - Drag-drop: Equip item from inventory
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] SLOT MAPPING: EMOEquipmentSlot enum (in MOEquipmentComponent.h)
+ *   values must match GetSlotWidget() switch cases. Enum: Head=0, Chest=1,
+ *   Hands=2, Legs=3, Feet=4, Back=5, LeftHand=6, RightHand=7.
+ *
+ * [2024-02] EQUIP VALIDATION: OnSlotDropReceived broadcasts ItemGuid +
+ *   SourceInventory. Caller (UIController) must call MOEquipmentComponent::
+ *   TryEquipItem() which validates slot compatibility.
+ *
+ * [2024-02] WEAK POINTER SAFETY: EquipmentComponent and InventoryComponent
+ *   are TWeakObjectPtr. All handlers check .IsValid() before access.
+ *   InitializePanel() with null is safe (display remains empty).
+ *
+ * [2024-02] DELEGATE BINDING: BindSlotEvents() calls RemoveAll(this) before
+ *   binding slot click/drop handlers. Safe to call InitializePanel() multiple
+ *   times (e.g., on possession change).
+ *
+ * [2024-02] SWAP PROGRESS: UpdateSwapProgress() runs in NativeTick. Only
+ *   active when LeftHandSwapProgress or RightHandSwapProgress widgets exist.
+ *   Progress bar shows equipment component's swap delay countdown.
+ *
+ * [2024-02] EMPTY ICONS: GetEmptyIconForSlot() returns slot-specific empty
+ *   icons (configurable in Blueprint). Falls back to nullptr if not set.
+ *
+ * [2024-02] SLOT HANDLERS: 8 separate handlers per slot (HandleHeadSlotClicked,
+ *   etc.) because UMOInventorySlot delegate doesn't include slot type. Each
+ *   handler calls HandleSlotClickedInternal(EMOEquipmentSlot) for unified logic.
+ *
+ * =============================================================================
+ * RELATED FILES: MOEquipmentComponent.h, MOInventorySlot.h, MOInventoryMenu.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"
@@ -11,23 +71,13 @@ class UMOInventorySlot;
 class UProgressBar;
 class UTexture2D;
 
-/**
- * Delegate for when an item is dropped onto an equipment slot.
- */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FMOOnEquipmentSlotDropReceived, EMOEquipmentSlot, TargetSlot, const FGuid&, ItemGuid, UMOInventoryComponent*, SourceInventory);
-
-/**
- * Delegate for equipment slot clicks.
- */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOOnEquipmentSlotClicked, EMOEquipmentSlot, EquipSlot, const FMOEquippedItem&, Item);
-
-/**
- * Delegate for equipment slot right-clicks.
- */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FMOOnEquipmentSlotRightClicked, EMOEquipmentSlot, EquipSlot, const FMOEquippedItem&, Item, FVector2D, ScreenPosition);
 
 /**
- * Panel widget displaying equipment slots using UMOInventorySlot widgets.
+ * Panel widget displaying equipment slots.
+ * See file header for slot layout and pitfalls.
  *
  * Body Slots: Head, Chest, Hands, Legs, Feet, Back
  * Hand Slots: LeftHand, RightHand (with swap progress)

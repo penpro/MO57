@@ -1,3 +1,157 @@
+/**
+ * =============================================================================
+ * MOCharacter.h - Base Character with Framework Components
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE THIS HEADER when issues arise or patterns change
+ *
+ * PURPOSE:
+ * Base character class with all framework components attached. Implements
+ * multiple interfaces for controllability, inventory, crafting, medical,
+ * identity, and material sourcing. Both player and AI pawns inherit from this.
+ *
+ * KEY RESPONSIBILITIES:
+ * 1. Create and own all standard framework components
+ * 2. Implement IMOControllableInterface for controller delegation
+ * 3. Handle movement modes (walk/jog/sprint) with physiology effects
+ * 4. Manage held item visuals based on equipment
+ * 5. Handle terraforming mode and tool cycling
+ *
+ * COMPONENT OWNERSHIP (created in constructor):
+ * - IdentityComponent: GUID-based persistence identity
+ * - InventoryComponent: Item storage
+ * - InteractorComponent: Interaction traces
+ * - SurvivalStatsComponent: Basic survival needs
+ * - SkillsComponent: Skill levels and XP
+ * - KnowledgeComponent: Learned knowledge
+ * - VitalsComponent: Blood, O2, temp, etc.
+ * - MetabolismComponent: Digestion, nutrition
+ * - MentalStateComponent: Morale, stress
+ * - AnatomyComponent: Body parts, wounds
+ * - AdrenalineComponent: Combat stress
+ * - CraftingQueueComponent: Timed crafting
+ * - RecipeDiscoveryComponent: Recipe unlocks
+ * - EquipmentComponent: Body/hand slots
+ * - RecruitmentComponent: NPC recruitment state
+ * - JobQueueComponent: Survivor task queue
+ * - TerraformingComponent: Terrain modification
+ *
+ * INTERFACES IMPLEMENTED:
+ * - IMOControllableInterface: Controller input delegation
+ * - IMOInventoryHolderInterface: Inventory access
+ * - IMOMaterialSourceInterface: Crafting material gathering
+ * - IMOIdentifiableInterface: GUID identity
+ * - IMOCraftingCapableInterface: Crafting queue access
+ * - IMOMedicalProviderInterface: Medical component access
+ *
+ * CRITICAL PATTERNS:
+ * 1. Movement Modes:
+ *    Walking (default) -> ToggleJog() -> Jogging
+ *    Hold Hustle -> StartSprint() -> Sprinting
+ *    Release -> StopSprint() -> Back to Jog/Walk
+ *
+ * 2. Physiology Integration:
+ *    Movement mode -> MET value -> Metabolism calorie burn
+ *    Movement mode -> Exertion -> Vitals stamina drain
+ *    Movement mode -> Temp rise -> Body temperature
+ *
+ * 3. Equipment Visuals:
+ *    EquipmentComponent.OnEquipmentChanged -> HandleEquipmentChanged()
+ *    -> UpdateHeldItemMesh() -> Attach mesh to hand socket
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] VOXEL COMPATIBILITY: SetBase() override required for Voxel Plugin.
+ *   Without it, character teleports when voxel world updates. Loads VoxelWorld
+ *   class dynamically to avoid hard module dependency.
+ *
+ * [2024-02] COMPONENT INIT ORDER: Components created in constructor must follow
+ *   this order (dependencies flow downward):
+ *   1. IdentityComponent (no deps - provides GUID for all others)
+ *   2. InventoryComponent (no deps)
+ *   3. InteractorComponent (no deps)
+ *   4. SkillsComponent (no deps)
+ *   5. KnowledgeComponent (no deps)
+ *   6. VitalsComponent (no deps)
+ *   7. MetabolismComponent (reads from VitalsComponent in Tick)
+ *   8. AnatomyComponent (writes to VitalsComponent)
+ *   9. MentalStateComponent (reads VitalsComponent)
+ *   10. AdrenalineComponent (reads MentalStateComponent)
+ *   11. EquipmentComponent (reads InventoryComponent)
+ *   If reordering, verify component Tick dependencies in .cpp.
+ *
+ * [2024-02] DELEGATE BINDING: In BeginPlay(), delegates are bound for:
+ *   - KnowledgeComponent->OnKnowledgeLearned -> HandleKnowledgeLearned()
+ *   - SkillsComponent->OnSkillLevelUp -> HandleSkillLevelUp()
+ *   - RecipeDiscoveryComponent->OnRecipeDiscovered -> HandleRecipeDiscovered()
+ *   - EquipmentComponent->OnEquipmentChanged -> HandleEquipmentChanged()
+ *   SYMPTOM if duplicate binding: Handler fires multiple times per event,
+ *   causing duplicate recipe notifications, double XP awards, etc.
+ *   FIX: Use RemoveAll(this) before AddDynamic in BeginPlay.
+ *
+ * [2024-02] NETWORK AUTHORITY: IMOControllableInterface methods (RequestMove,
+ *   RequestJump, etc.) are called on the owning client only. DoMove/DoLook are
+ *   direct input methods also called client-side.
+ *   SYMPTOM if called on server for remote pawns: Character movement desyncs,
+ *   pawn rubber-bands back to last valid position, or input is ignored entirely.
+ *   Movement replication handled by CharacterMovementComponent automatically.
+ *   RULE: Only call input methods from owning client's PlayerController.
+ *
+ * [2024-02] FALL-THROUGH SAFETY: Character can fall through voxel terrain.
+ *   Safety teleport activates after FallThroughTimeThreshold (2s default) of
+ *   continuous falling below FallThroughVelocityThreshold (-500 default).
+ *   FindSafeTerrainNearLocation() searches for valid voxel surface.
+ *
+ * [2024-02] SPRINT STAMINA: CanSprint_Implementation() checks stamina via
+ *   VitalsComponent->GetCurrentStamina(). If below MinStaminaToSprint (10.0),
+ *   sprint fails to start. StopSprint() called automatically when stamina
+ *   depletes during sprint (checked in ApplyMovementPhysiologyEffects).
+ *
+ * [2024-02] HELD ITEM VISUALS: LeftHandMesh/RightHandMesh are StaticMeshComponents
+ *   attached to sockets (hand_l/hand_r). HandleEquipmentChanged() updates these
+ *   via UpdateHeldItemMesh(). If mesh doesn't appear, verify socket names match
+ *   skeleton and item definition has valid StaticMesh set.
+ *
+ * [2024-02] SOFT OBJECT LOADING: DefaultMesh and DefaultAnimBlueprint are
+ *   TSoftObjectPtr/TSoftClassPtr. Call LoadSynchronous() before use. BeginPlay
+ *   loads these if set.
+ *   SYMPTOM if asset path invalid: Character appears as gray capsule (no mesh)
+ *   or T-poses (no anim). Check Output Log for "Failed to load" warnings.
+ *   DEBUG: Log DefaultMesh.GetAssetName() to verify path before loading.
+ *   Null asset path (not set) is valid - uses inherited mesh from Blueprint.
+ *
+ * [2024-02] INTERFACE NULL SAFETY: All interface methods assume components exist.
+ *   GetInventory_Implementation() returns InventoryComponent directly (no null check).
+ *   SYMPTOM if component null: Hard crash on interface call.
+ *   Components are created in constructor, so null only occurs if subclass
+ *   removes component or constructor fails. Check ensure() in constructor.
+ *
+ * [2024-02] BEGINPLAY TIMING: Components are available in BeginPlay but may not
+ *   have completed their own BeginPlay yet. Cross-component queries in BeginPlay
+ *   may return stale/default data. Use timers or delegate binding for init that
+ *   depends on other components being fully initialized.
+ *
+ * RELATED FILES:
+ * - MOPlayerController.h - Controls this character
+ * - MOControllableInterface.h - Input delegation interface
+ * - All medical components (Vitals, Anatomy, etc.)
+ * - MOEquipmentComponent.h - Equipment slots
+ *
+ * TESTING CHECKLIST:
+ * [ ] Movement modes switch correctly
+ * [ ] Physiology effects apply during movement
+ * [ ] Equipment changes update held item meshes
+ * [ ] Fall-through safety teleports character
+ * [ ] All interface methods work correctly
+ * [ ] Component delegates wire up in BeginPlay
+ *
+ * LAST UPDATED: 2026-02-24 - Initial audit header
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

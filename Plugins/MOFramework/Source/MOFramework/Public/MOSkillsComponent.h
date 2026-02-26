@@ -1,3 +1,81 @@
+/**
+ * =============================================================================
+ * MOSkillsComponent.h - Skill Levels and Experience System
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE THIS HEADER when issues arise or patterns change
+ *
+ * PURPOSE:
+ * Pawn component managing skill levels and XP progression. Skills are defined
+ * in DataTable with XP curves. XP is gained through actions (crafting, combat,
+ * gathering). Level determines recipe/action availability.
+ *
+ * KEY RESPONSIBILITIES:
+ * 1. Track skill levels and current XP for each skill
+ * 2. Calculate XP requirements from DataTable curves
+ * 3. Process level ups when XP threshold reached
+ * 4. Provide skill level queries for recipe/action gating
+ * 5. Broadcast level up events for UI/achievements
+ *
+ * ARCHITECTURE NOTES:
+ * - Skills array stores FMOSkillProgress entries
+ * - XP curve formula: BaseXP * ScaleFactor^Level
+ * - Skills are lazy-initialized on first XP gain
+ * - Skill definitions from DT_Skills DataTable
+ *
+ * SKILL PROGRESSION:
+ * Action performed -> AddExperience(SkillId, XP)
+ * -> Find/create skill progress -> Add XP
+ * -> ProcessLevelUps() -> Broadcast OnSkillLevelUp
+ *
+ * INTEGRATION POINTS (call AddExperience from):
+ * - Crafting completion (CraftingSubsystem)
+ * - Combat actions (CombatComponent)
+ * - Harvesting (ForagingSubsystem, HarvestSubsystem)
+ * - Building (BuildingComponent)
+ * - Survivor jobs (SurvivorJobQueueComponent)
+ *
+ * CRITICAL PATTERNS:
+ * 1. XP Addition:
+ *    AddExperience() -> Find skill (create if missing)
+ *    -> Add XP -> Check level threshold -> ProcessLevelUps()
+ *
+ * 2. Level Check:
+ *    HasSkillLevel(SkillId, Level) returns true if skill >= Level
+ *    Used by recipes, actions, UI for gating
+ *
+ * KNOWN PITFALLS:
+ * 1. SKILL ID SYNC: SkillId must match DataTable row name exactly.
+ *    Case-sensitive, typos will create orphan skills.
+ *
+ * 2. XP CURVE BALANCE: BaseXP and ScaleFactor in DataTable affect
+ *    progression speed. Test thoroughly when adjusting.
+ *
+ * 3. MAX LEVEL: DataTable should define MaxLevel. Check before
+ *    allowing XP addition to prevent overflow.
+ *
+ * 4. REPLICATION: Skills array is replicated. Large skill sets may
+ *    cause replication overhead. Consider delta compression.
+ *
+ * RELATED FILES:
+ * - MOSkillDefinitionRow.h - DataTable row struct with XP curves
+ * - MOKnowledgeComponent.h - Inspection grants skill XP
+ * - MOCraftingSubsystem.h - Crafting grants skill XP
+ * - MOAdrenalineComponent.h - Combat skill affects adrenaline
+ *
+ * TESTING CHECKLIST:
+ * [ ] AddExperience increases XP correctly
+ * [ ] Level up triggers when threshold reached
+ * [ ] OnSkillLevelUp delegate fires on level up
+ * [ ] GetSkillLevel returns correct value
+ * [ ] HasSkillLevel gates correctly
+ * [ ] Save/load preserves skill state
+ *
+ * LAST UPDATED: 2026-02-24 - Initial audit header
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

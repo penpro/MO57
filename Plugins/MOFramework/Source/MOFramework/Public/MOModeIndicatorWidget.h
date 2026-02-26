@@ -1,3 +1,36 @@
+/**
+ * =============================================================================
+ * MOModeIndicatorWidget.h - HUD Gameplay Mode Display
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Simple HUD widget showing current gameplay mode in bottom-right corner.
+ * Displays mode name with color coding: Explore, Build, Terraform, Combat.
+ *
+ * BLUEPRINT SETUP:
+ * 1. Create WBP inheriting from this class
+ * 2. Add TextBlock named "ModeText" (BindWidgetOptional)
+ * 3. Style colors per mode using the Color properties
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] BLUEPRINT EVENT: UpdateDisplay is BlueprintNativeEvent.
+ *   Override in Blueprint to add animations/sound effects on mode change.
+ *
+ * [2024-02] MODE TEXT OPTIONAL: ModeText uses BindWidgetOptional.
+ *   Widget still functions without it (for pure Blueprint display).
+ *
+ * =============================================================================
+ * RELATED FILES: MOPlayerController.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

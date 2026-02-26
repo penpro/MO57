@@ -1,3 +1,36 @@
+/**
+ * =============================================================================
+ * MOPCGSpawnPointSettings.h - PCG Node for Spawn Point Placement
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * PCG Settings for placing spawn point actors at input point locations.
+ * These spawn points are used by MOSpawnManagerSubsystem to spawn mobs/survivors.
+ *
+ * Creates AMOSpawnPoint actors (or subclass) at each input point with
+ * configurable category, radius, cooldown, and selection weight.
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] MAIN THREAD: Element runs on main thread only for actor spawning.
+ *
+ * [2024-02] NOT CACHEABLE: IsCacheable returns false. Spawn points must be
+ *   re-placed each PCG graph execution.
+ *
+ * [2024-02] CLASS REQUIREMENT: SpawnPointClass must be AMOSpawnPoint or
+ *   subclass. Null class will fail silently.
+ *
+ * =============================================================================
+ * RELATED FILES: MOSpawnPoint.h, MOSpawnTypes.h, MOSpawnManagerSubsystem.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

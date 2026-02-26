@@ -1,3 +1,47 @@
+/**
+ * =============================================================================
+ * MOBuildingMenu.h - Building Selection Menu Widget
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Menu for selecting buildings/structures to place. Displays discovered
+ * building recipes with detail panel showing requirements and Build button.
+ *
+ * FLOW:
+ * 1. Player opens building menu (B key or menu button)
+ * 2. RecipeList shows discovered building recipes
+ * 3. Clicking recipe shows DetailPanel with requirements
+ * 4. Build button broadcasts OnBuildingSelected
+ * 5. BuildingUIController spawns ghost at cursor
+ *
+ * COMPONENTS REQUIRED:
+ * - UMOKnowledgeComponent: Recipe filtering
+ * - UMORecipeDiscoveryComponent: What's been discovered
+ * - UMOInventoryComponent (optional): Material availability
+ * - UMOSkillsComponent (optional): Skill requirement checks
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] RECIPE FILTERING: Only shows recipes where bIsBuilding=true.
+ *   Regular crafting recipes go in CraftingMenu.
+ *
+ * [2024-02] DISCOVERY CHECK: Must have recipe in KnowledgeComponent to see it.
+ *   Use RecipeDiscoveryComponent for initial unlock logic.
+ *
+ * [2024-02] GHOST SPAWNING: This menu doesn't spawn ghosts - it broadcasts
+ *   OnBuildingSelected. MOBuildingUIController handles ghost placement.
+ *
+ * =============================================================================
+ * RELATED FILES: MOBuildingUIController.h, MOBuildingDetailPanel.h, MOBuildingRecipeListWidget.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"
@@ -21,11 +65,6 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOBuildingMenuRequestCloseSignature);
  * Delegate for when a building is selected to be placed (after clicking Build in detail panel).
  */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOOnBuildingSelectedSignature, FName, RecipeId);
-
-/**
- * Menu for selecting buildings to place.
- * Shows available building recipes filtered by discovery.
- */
 UCLASS()
 class MOFRAMEWORK_API UMOBuildingMenu : public UCommonActivatableWidget
 {

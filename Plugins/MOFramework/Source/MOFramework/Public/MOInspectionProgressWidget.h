@@ -1,3 +1,40 @@
+/**
+ * =============================================================================
+ * MOInspectionProgressWidget.h - Item Inspection Progress Display
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Widget displaying inspection progress with countdown timer. Shows item name,
+ * progress bar, and time remaining. Grants knowledge/XP on completion.
+ *
+ * FEATURES:
+ * - Real-time countdown (uses wall clock, continues when tabbed out)
+ * - Progress bar visualization
+ * - Cancel button for early termination
+ * - Debug override for inspection duration
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] REAL-TIME TRACKING: Uses wall clock (InspectionStartTime) not
+ *   game delta time. Progress continues even when game is paused/minimized.
+ *
+ * [2024-02] DEBUG DURATION: DebugInspectionDuration > 0 overrides the
+ *   duration passed to StartInspection(). Use 0 for normal behavior.
+ *
+ * [2024-02] COMPONENT REFS: KnowledgeComponent and SkillsComponent are weak
+ *   pointers. Must be valid when CompleteInspection() is called.
+ *
+ * =============================================================================
+ * RELATED FILES: MOCharacterUIController.h, MOKnowledgeComponent.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

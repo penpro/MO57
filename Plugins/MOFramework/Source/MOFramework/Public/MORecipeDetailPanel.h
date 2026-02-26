@@ -1,3 +1,45 @@
+/**
+ * =============================================================================
+ * MORecipeDetailPanel.h - Crafting Recipe Detail Panel
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Specialized recipe detail panel for crafting (not building). Displays
+ * recipe ingredients with have/need counts, outputs with quantities/chances,
+ * required crafting station, and craft button. Fires OnCraftAction delegate
+ * when craft is requested.
+ *
+ * DELEGATES:
+ * - OnCraftAction (FMOUICraftRequest) - Preferred, from MOUIDelegates.h
+ * - OnCraftRequested (deprecated) - Legacy delegate for backward compatibility
+ *
+ * BLUEPRINT EVENTS:
+ * - OnRecipeDisplayed - Called when recipe changes
+ * - OnIngredientsUpdated - Called with ingredient display data
+ * - OnOutputsUpdated - Called with output display data
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] DUAL DELEGATES: Both OnCraftAction and OnCraftRequested are fired
+ *   for backward compatibility. New code should use OnCraftAction.
+ *
+ * [2024-02] CACHED DATA: CachedIngredients and CachedOutputs are rebuilt on
+ *   each RefreshDisplay(). GetIngredients/GetOutputs return cached data.
+ *
+ * [2024-02] STATION TEXT: RequiredStationText shows "Requires: X" only if
+ *   recipe.RequiredStation != Hand.
+ *
+ * =============================================================================
+ * RELATED FILES: MORecipeDetailPanelBase.h, MOCraftingUIController.h, MOUIDelegates.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

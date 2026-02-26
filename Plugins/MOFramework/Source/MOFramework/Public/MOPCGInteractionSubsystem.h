@@ -1,3 +1,44 @@
+/**
+ * =============================================================================
+ * MOPCGInteractionSubsystem.h - PCG Instance Interaction System
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * World subsystem that handles interaction with PCG-spawned HISM/ISM instances.
+ * Automatically maps static meshes to item definitions via reverse lookup.
+ *
+ * WORKFLOW:
+ * 1. Player interacts with HISM instance
+ * 2. Subsystem gets static mesh from HISM component
+ * 3. Finds item definition that uses that mesh (cached)
+ * 4. Removes instance and adds item to player inventory
+ *
+ * LOOKUP METHODS:
+ * - MeshToItemCache: Automatic lookup from item database
+ * - TagToItemMap: Manual component tag to item mapping
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] CACHE REBUILD: RebuildMeshLookupCache() called on Initialize.
+ *   Call manually if item database changes at runtime.
+ *
+ * [2024-02] TAG PRIORITY: TagToItemMap checked BEFORE mesh lookup. Use for
+ *   overrides when mesh is shared between different items.
+ *
+ * [2024-02] SOFT OBJECT PTR: MeshToItemCache uses TSoftObjectPtr keys.
+ *   Mesh must be the same object, not just same path.
+ *
+ * =============================================================================
+ * RELATED FILES: MOHarvestSubsystem.h, MOInventoryComponent.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

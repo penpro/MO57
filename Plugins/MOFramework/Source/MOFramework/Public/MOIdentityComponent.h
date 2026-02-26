@@ -1,3 +1,78 @@
+/**
+ * =============================================================================
+ * MOIdentityComponent.h - GUID-Based Actor Identity for Persistence
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE THIS HEADER when issues arise or patterns change
+ *
+ * PURPOSE:
+ * Provides stable GUID identity for actors across save/load cycles.
+ * Essential for persistence - GUIDs survive level transitions, serialization,
+ * and PIE/runtime transitions. Foundation of the identity registry system.
+ *
+ * KEY RESPONSIBILITIES:
+ * 1. Generate and store stable FGuid for actor identity
+ * 2. Register/unregister with MOIdentityRegistrySubsystem
+ * 3. Replicate GUID to clients for multiplayer consistency
+ * 4. Support editor-placed instances with persistent GUIDs
+ * 5. Broadcast events when GUID becomes available or owner destroyed
+ *
+ * ARCHITECTURE NOTES:
+ * - StableGuid is EditInstanceOnly to survive editor sessions
+ * - GUID auto-generated in BeginPlay if not set
+ * - Registration with IdentityRegistrySubsystem happens in BeginPlay
+ * - Supports both runtime-spawned and editor-placed actors
+ *
+ * GUID LIFECYCLE:
+ * Editor-placed: OnRegister() -> EnsureGuidForEditorInstanceIfMissing()
+ * Runtime-spawned: BeginPlay() -> EnsureGuidForAuthorityIfMissing()
+ * -> RegisterWithSubsystem() -> OnGuidAvailable broadcast
+ *
+ * CRITICAL PATTERNS:
+ * 1. Getting GUID:
+ *    GetGuid() returns current (may be invalid early)
+ *    GetOrCreateGuid() ensures valid GUID exists
+ *
+ * 2. Setting GUID (load/spawn):
+ *    SetGuid() sets and broadcasts OnGuidAvailable
+ *    Used during persistence restore
+ *
+ * 3. Editor Instances:
+ *    EditInstanceOnly + SaveGame ensures GUID persists
+ *    PostEditImport() handles copy/duplicate operations
+ *
+ * KNOWN PITFALLS:
+ * 1. TIMING: GUID may not be valid until after BeginPlay.
+ *    Use OnGuidAvailable delegate if you need GUID early.
+ *
+ * 2. DUPLICATION: Copy-pasting actors in editor must regenerate GUID.
+ *    PostEditImport() handles this, but verify in new scenarios.
+ *
+ * 3. REPLICATION: StableGuid replicates via OnRep_StableGuid.
+ *    Clients receive GUID after server generates it. Account for delay.
+ *
+ * 4. REGISTRY SYNC: Actor must register with IdentityRegistrySubsystem.
+ *    If registration fails, GUID lookups won't find this actor.
+ *
+ * RELATED FILES:
+ * - MOIdentityRegistrySubsystem.h - GUID-to-Actor registry
+ * - MOIdentifiableInterface.h - Interface for identity queries
+ * - MOPersistenceSubsystem.h - Uses GUIDs for save/load
+ * - MOInventoryComponent.h - Items identified by GUID
+ *
+ * TESTING CHECKLIST:
+ * [ ] Runtime-spawned actors get valid GUID in BeginPlay
+ * [ ] Editor-placed actors preserve GUID across sessions
+ * [ ] Copy/paste generates new GUID
+ * [ ] OnGuidAvailable fires when GUID becomes valid
+ * [ ] GUID replicates to clients
+ * [ ] IdentityRegistry can find actor by GUID
+ *
+ * LAST UPDATED: 2026-02-24 - Initial audit header
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

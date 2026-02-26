@@ -1,3 +1,83 @@
+/**
+ * =============================================================================
+ * MOCreatureController.h - Wildlife AI Controller with Perception
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE THIS HEADER when issues arise or patterns change
+ *
+ * PURPOSE:
+ * AI Controller for wildlife creatures (prey and predators). Extends MOAIController
+ * with AI perception for sight/hearing, threat assessment, combat decisions, and
+ * activity states (Active, Resting, Sleeping, Dead).
+ *
+ * KEY RESPONSIBILITIES:
+ * 1. Configure AI perception (sight, hearing) from creature definition
+ * 2. Detect and track threats (players, predators)
+ * 3. Decide flee vs fight based on health threshold
+ * 4. Manage activity states and blackboard sync
+ * 5. Support rest/sleep behaviors based on time of day
+ *
+ * OWNERSHIP:
+ * - Owner: Possesses creature pawns (deer, wolves, etc.)
+ * - Lifespan: Exists while creature is alive
+ *
+ * PERCEPTION SYSTEM:
+ * - SightConfig: Configurable radius, lose sight radius, peripheral angle
+ * - HearingConfig: Range-based hearing for player sounds
+ * - OnTargetPerceptionUpdated(): Callback when actors detected/lost
+ * - UpdateThreatAssessment(): Evaluates threat priority
+ *
+ * THREAT ASSESSMENT:
+ * OnTargetPerceptionUpdated()
+ * -> UpdateThreatAssessment()
+ * -> Set CurrentThreatActor if hostile detected
+ * -> Start ThreatMemoryTimerHandle for memory
+ * -> UpdateBlackboardThreatInfo()
+ *
+ * ACTIVITY STATES:
+ * EMOCreatureActivityState:
+ * - Active: Normal wandering/foraging
+ * - Resting: Brief rest (daytime chance)
+ * - Sleeping: Night sleep (if bSleepsAtNight)
+ * - Fleeing: Running from threat
+ * - Fighting: Engaged in combat
+ * - Dead: Creature died
+ *
+ * COMBAT DECISION FLOW:
+ * ShouldFlee() - Check if health below FleeHealthThreshold
+ * IsInCombat() - Check if CurrentThreatActor valid
+ * IsInAttackRange() - Check if threat within AttackRange
+ *
+ * CRITICAL PATTERNS:
+ * 1. PERCEPTION SETUP: Call SetupPerception() in BeginPlay
+ * 2. DEFERRED CONFIG: Perception finalized next tick via FinalizePerceptionSetup
+ * 3. THREAT MEMORY: ThreatMemoryDuration keeps threat after losing sight
+ * 4. BLACKBOARD SYNC: UpdateBlackboardThreatInfo() after threat changes
+ *
+ * KNOWN PITFALLS:
+ * 1. PERCEPTION TIMING: Perception not ready until next tick after setup
+ * 2. PENDING SETTINGS: ApplyPerceptionSettings before setup stores to Pending*
+ * 3. NULL VITALS: GetHealthPercent returns 1.0 if no vitals component
+ *
+ * RELATED FILES:
+ * - MOAIController.h - Base class
+ * - MOCreatureTypes.h - EMOCreatureActivityState
+ * - MOCreatureDefinitionRow.h - Definition with perception settings
+ * - BTService_CreatureActivity.h - Updates activity state in BT
+ *
+ * TESTING CHECKLIST:
+ * [ ] Creature detects player via sight
+ * [ ] Creature reacts to hearing stimuli
+ * [ ] Threat memory expires after duration
+ * [ ] Flee behavior triggers at health threshold
+ * [ ] Rest/sleep states work with time of day
+ * [ ] Death state stops all AI behavior
+ *
+ * LAST UPDATED: 2026-02-24 - Initial audit header
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"
@@ -10,11 +90,6 @@ class UAIPerceptionComponent;
 class UAISenseConfig_Sight;
 class UAISenseConfig_Hearing;
 struct FMOCreatureDefinitionRow;
-
-/**
- * AI Controller for creatures (prey and predators).
- * Extends MOAIController with perception capabilities and creature-specific helpers.
- */
 UCLASS()
 class MOFRAMEWORK_API AMOCreatureController : public AMOAIController
 {

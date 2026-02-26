@@ -1,3 +1,42 @@
+/**
+ * =============================================================================
+ * MOPCGMeshSpawnerSettings.h - All-in-One PCG Item Mesh Spawner
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * All-in-one PCG node that spawns item meshes as tagged HISM components.
+ * Combines functionality of MO Item Spawner, Static Mesh Spawner, and
+ * MO HISM Tagger into single efficient node.
+ *
+ * PROCESS:
+ * 1. Selects item based on weighted random
+ * 2. Gets mesh from item's WorldVisual.StaticMesh
+ * 3. Groups points by mesh, creates HISM components
+ * 4. Tags each HISM with "MOItem_<ItemId>"
+ * 5. Registers with MOPCGInteractionSubsystem
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] MAIN THREAD: Element runs on main thread only. Required for
+ *   component spawning and subsystem access.
+ *
+ * [2024-02] DISCARD INVALID: bDiscardInvalidPoints removes points without
+ *   valid item/mesh assignment from output.
+ *
+ * [2024-02] MANAGED ISM: Creates managed ISM components via PCG system.
+ *   Component lifetime tied to PCG component.
+ *
+ * =============================================================================
+ * RELATED FILES: MOPCGItemSpawnerSettings.h, MOPCGHISMTaggerSettings.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

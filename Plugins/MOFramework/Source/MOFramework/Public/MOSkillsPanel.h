@@ -1,3 +1,85 @@
+/**
+ * =============================================================================
+ * MOSkillsPanel.h - Skills & Knowledge Display Widget
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Displays player skills with XP progress, or learned knowledge/discoveries.
+ * Toggleable between Skills and Knowledge modes.
+ *
+ * SKILLS MODE:
+ * - List of all skills with current level
+ * - XP progress bar to next level
+ * - Category grouping (Survival, Crafting, Combat, etc.)
+ *
+ * KNOWLEDGE MODE:
+ * - List of learned recipes/techniques
+ * - Discovery method (Manual, Inspection, Experimentation)
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] MODE TOGGLE: Skills vs Knowledge are separate tabs. Use
+ *   SetDisplayMode() to switch. PopulateSkillContainer() vs
+ *   PopulateKnowledgeContainer() handle the different data sources.
+ *
+ * [2024-02] XP BINDING: InitializePanel() binds to SkillsComponent's
+ *   OnSkillLevelUp and OnExperienceGained delegates. Unbinds in NativeDestruct().
+ *   Uses RemoveAll(this) pattern for safe rebinding.
+ *
+ * [2024-02] ENTRY CREATION: Creates MOSkillEntryWidget per skill. For 50+
+ *   skills, consider widget pooling (not currently implemented).
+ *
+ * [2024-02] COMPONENT REFERENCES: SkillsComponent and KnowledgeComponent are
+ *   TWeakObjectPtr. Handlers check .IsValid() before access. Safe if component
+ *   is destroyed while panel is open.
+ *
+ * [2024-02] DISPLAY DATA STRUCT: FMOSkillDisplayData (in MOSkillEntryWidget.h)
+ *   contains: SkillId, DisplayName, Description, Level, CurrentXP, XPToNext,
+ *   Progress (0-1), Category, Icon. Used by both skills and knowledge modes.
+ *
+ * [2024-02] CATEGORY FILTER: EMOSkillCategory enum (in MOSkillDefinitionRow.h).
+ *   Values: None (show all), Survival, Crafting, Combat, Social, Knowledge.
+ *   SetCategoryFilter() + RefreshSkillList() to apply.
+ *
+ * [2024-02] WIDGET CLASS FALLBACK: If SkillEntryWidgetClass not set, panel
+ *   uses CreateSimpleSkillText() to show basic text entries (UTextBlock).
+ *
+ * [2024-02] INITIALIZATION ORDER: InitializePanel() or InitializePanelWithKnowledge()
+ *   first, then SetDisplayMode() if not default. RefreshSkillList() called
+ *   automatically by initialization.
+ *
+ * [2024-02] DOUBLE INITIALIZATION: Calling InitializePanel() twice is SAFE.
+ *   Uses RemoveAll(this) before rebinding delegates. Use case: possession change
+ *   to different pawn requires reinitializing with new SkillsComponent.
+ *   SYMPTOM if not reinitialized: Panel shows old pawn's skills.
+ *
+ * [2024-02] NULL COMPONENT HANDLING: If SkillsComponent is nullptr:
+ *   - PopulateSkillContainer() shows empty list (no crash)
+ *   - XP/level delegates not bound (nothing to bind to)
+ *   - Panel is functional but shows no skills
+ *   If KnowledgeComponent is nullptr in Knowledge mode: empty list, no crash.
+ *   SYMPTOM: Empty skills panel with no error. Check component validity first.
+ *
+ * [2024-02] PERFORMANCE AT SCALE: Creates one UMOSkillEntryWidget per skill.
+ *   At 50+ skills, initial population causes frame hitch (~50-100ms).
+ *   MITIGATION: Consider lazy loading (populate visible only) or widget pooling.
+ *   Currently no pooling implemented - widgets destroyed on mode switch.
+ *
+ * [2024-02] FILTER + SHOW ALL INTERACTION: bShowAllSkills=true shows level 0
+ *   skills. SetCategoryFilter() applies ON TOP of this. Both conditions must
+ *   pass: (bShowAllSkills OR Level>0) AND (CategoryFilter==None OR matches).
+ *
+ * =============================================================================
+ * RELATED FILES: MOSkillsComponent.h, MOKnowledgeComponent.h, MOSkillEntryWidget.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

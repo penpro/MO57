@@ -1,3 +1,47 @@
+/**
+ * =============================================================================
+ * MOMainMenuWidget.h - Title Screen / Main Menu
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Main menu displayed on game launch. Provides New Game, Load Game, Options,
+ * and Exit buttons. Layout mirrors MOInGameMenu for consistency.
+ *
+ * LAYOUT:
+ * +------------------+------------------------+
+ * | New Game         |                        |
+ * | Load Game        |     Focus Window       |
+ * | Options          |   (contextual panel)   |
+ * | Exit Game        |                        |
+ * +------------------+------------------------+
+ *
+ * CONTENT PANELS:
+ * - NewGamePanel: World seed, game settings
+ * - LoadPanel: Save slot selection
+ * - OptionsPanel: Settings (shared with in-game)
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] GAME MODE: Main menu uses MOMainMenuGameMode, not the play mode.
+ *   Different PlayerController and HUD setup.
+ *
+ * [2024-02] LEVEL TRANSITION: New Game and Load transition to play level.
+ *   Handle cleanup before OpenLevel.
+ *
+ * [2024-02] PANEL INDICES: Widget switcher indices must match button order.
+ *   See CLAUDE.md "New Game Panel Blueprint Setup" for index mapping.
+ *
+ * =============================================================================
+ * RELATED FILES: MOMainMenuGameMode.h, MONewGamePanel.h, MOLoadPanel.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"
@@ -10,20 +54,6 @@ class UMOLoadPanel;
 class UMOOptionsPanel;
 class UMONewGamePanel;
 class UPanelWidget;
-
-/**
- * Main menu widget displayed on the loading/title screen.
- *
- * Layout mirrors the in-game menu:
- * - Button list on the left
- * - Focus window (panel switcher) on the right
- *
- * Buttons:
- * - New Game: Start a new world
- * - Load Game: Load existing world (shows LoadPanel)
- * - Options: Game settings (shows OptionsPanel)
- * - Exit Game: Quit application
- */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOMainMenuNewGameSignature);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOMainMenuLoadGameSignature, const FString&, SlotName);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOMainMenuExitGameSignature);

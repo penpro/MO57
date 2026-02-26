@@ -1,3 +1,41 @@
+/**
+ * =============================================================================
+ * MOHarvestProgressWidget.h - Harvest Progress UI Widget
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Widget displaying harvest operation progress. Shows action name, progress
+ * bar, time remaining, and cancel option. Used when harvesting resources
+ * like chopping trees or gathering materials.
+ *
+ * WIDGET BINDINGS (required in Blueprint):
+ * - ProgressBar (UProgressBar) - Visual progress
+ * - ActionNameText (UTextBlock) - "Chopping Tree"
+ * - TimeRemainingText (UTextBlock) - "3.2s"
+ * - CancelButton (optional) - Abort harvest
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] REAL-TIME TRACKING: Uses wall-clock time (FPlatformTime::Seconds)
+ *   for accurate progress even if frame rate drops.
+ *
+ * [2024-02] TICK-BASED: Uses NativeTick for progress updates, not timers.
+ *   Ensure widget is tickable when harvest is active.
+ *
+ * [2024-02] DELEGATE CLEANUP: OnHarvestCompleted/OnHarvestCancelled persist.
+ *   Clear bindings after use if reusing widget instance.
+ *
+ * =============================================================================
+ * RELATED FILES: MOHarvestSubsystem.h, MOCraftingUIController.h, MOCraftResult.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"
@@ -15,8 +53,7 @@ struct FMOCraftResult;
 
 /**
  * Widget displaying harvest progress with a countdown timer.
- * Shows action name, progress bar, and time remaining.
- * Works with the MOHarvestSubsystem to execute harvest recipes.
+ * See file header for widget bindings and pitfalls.
  */
 UCLASS(Abstract, Blueprintable)
 class MOFRAMEWORK_API UMOHarvestProgressWidget : public UCommonActivatableWidget

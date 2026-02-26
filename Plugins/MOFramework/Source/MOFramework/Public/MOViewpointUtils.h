@@ -1,3 +1,70 @@
+/**
+ * =============================================================================
+ * MOViewpointUtils.h - Viewpoint Resolution & Line-of-Sight Utilities
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Centralized viewpoint resolution for the entire framework. Use this instead
+ * of implementing viewpoint logic in each component. Handles the differences
+ * between PlayerController camera viewpoints and AI pawn eye viewpoints.
+ *
+ * KEY RESPONSIBILITIES:
+ * 1. Resolve view location/rotation for any controller type
+ * 2. Provide line-of-sight checking with configurable options
+ * 3. View cone checks for AI perception
+ *
+ * WHY THIS EXISTS:
+ * Before this utility, these subsystems each had duplicate viewpoint code:
+ * - UMOInteractionSubsystem::ResolveServerViewpoint()
+ * - UMOPossessionSubsystem::ResolveViewpoint()
+ * - UMOInteractorComponent::ResolveViewpoint()
+ * - UMOTerraformingComponent::ResolveViewpoint()
+ *
+ * USE THIS UTILITY INSTEAD OF WRITING NEW VIEWPOINT CODE.
+ *
+ * =============================================================================
+ * BEST PRACTICES
+ * =============================================================================
+ *
+ * 1. For player interactions, use ResolveViewpointForController() - it handles
+ *    both player camera and AI pawn eyes automatically.
+ *
+ * 2. For AI-only code, use ResolveViewpointForPawn() directly for performance.
+ *
+ * 3. For line-of-sight checks, use the Options struct to configure trace
+ *    channel and whether to allow hits on attached actors (important for
+ *    characters with equipment).
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-01] CAMERA VS EYES: Player controllers return CAMERA position, not
+ *   pawn eye position. This is intentional for interactions - players click
+ *   what they see on screen. AI pawns return eye socket position.
+ *
+ * [2024-02] ATTACHED ACTORS: When checking LOS to a character with equipment
+ *   (held items, backpacks), set bAllowAttachedHits=true or the trace may
+ *   hit the equipment instead of the character and return false.
+ *
+ * [2024-02] NULL WORLD: HasLineOfSight requires valid World pointer. If called
+ *   during actor destruction, World may be null. Always null-check.
+ *
+ * =============================================================================
+ * RELATED FILES
+ * =============================================================================
+ * - MOInteractionSubsystem.h - Uses this for interaction traces
+ * - MOInteractorComponent.h - Uses this for hover detection
+ * - MOTerraformingComponent.h - Uses this for terraforming raycast
+ * - MOPossessionSubsystem.h - Uses this for possession range checks
+ *
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"
@@ -11,11 +78,7 @@ class UWorld;
 
 /**
  * Static utility functions for resolving viewpoints and performing line-of-sight checks.
- * Consolidates duplicate implementations from:
- * - UMOInteractionSubsystem::ResolveServerViewpoint()
- * - UMOPossessionSubsystem::ResolveViewpoint()
- * - UMOInteractorComponent::ResolveViewpoint()
- * - UMOTerraformingComponent::ResolveViewpoint()
+ * See file header for usage guide and pitfalls.
  */
 UCLASS()
 class MOFRAMEWORK_API UMOViewpointUtils : public UObject

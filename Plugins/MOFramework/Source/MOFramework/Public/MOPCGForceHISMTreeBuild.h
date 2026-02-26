@@ -1,3 +1,42 @@
+/**
+ * =============================================================================
+ * MOPCGForceHISMTreeBuild.h - Force HISM Tree Rebuild After PCG Spawn
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * PCG node that forces HISM tree rebuilding after StaticMeshSpawner nodes.
+ * Fixes issue where InstanceMinDrawDistance and other tree-dependent properties
+ * aren't applied until a tree rebuild occurs.
+ *
+ * WHY NEEDED:
+ * PCG's StaticMeshSpawner calls AddInstances() but never BuildTreeIfOutdated().
+ * This means HISM properties are ignored until something else triggers rebuild.
+ *
+ * PLACEMENT:
+ * Place this node AFTER StaticMeshSpawner nodes in your PCG graph.
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] FORCE UPDATE: bForceUpdate=true (default) forces rebuild even if
+ *   tree appears up-to-date. Recommended to leave enabled.
+ *
+ * [2024-02] EXECUTION ORDER: Must come AFTER mesh spawners in the graph.
+ *   Connect input to spawner outputs or use Dependencies pin.
+ *
+ * [2024-02] PERFORMANCE: Rebuilding trees can be expensive with many instances.
+ *   Use sparingly in runtime generation.
+ *
+ * =============================================================================
+ * RELATED FILES: MOPCGMeshSpawnerSettings.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 // Copyright MO57. All Rights Reserved.
 
 #pragma once

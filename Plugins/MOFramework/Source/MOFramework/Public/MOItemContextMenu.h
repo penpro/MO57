@@ -1,3 +1,51 @@
+/**
+ * =============================================================================
+ * MOItemContextMenu.h - Item Right-Click Context Menu
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Context menu for item interactions (right-click). Shows action buttons
+ * based on item properties. Supports both inventory items and world items.
+ *
+ * INVENTORY MODE BUTTONS:
+ * - Use: Consume/equip (if consumable/equippable)
+ * - Drop 1 / Drop All: Drop items to world
+ * - Inspect: Learn about item (grants XP/knowledge)
+ * - Split Stack: Split stackable items
+ * - Craft: Open crafting filtered to this item
+ * - Transfer: Quick transfer to other inventory
+ * - Details: Show in detail panel
+ *
+ * WORLD ITEM MODE BUTTONS:
+ * - Pickup: Add to inventory
+ * - Inspect: Same as above
+ * - (Drop buttons hidden)
+ *
+ * AUTO-CLOSE:
+ * Menu auto-closes when mouse leaves ButtonContainer for AutoCloseDelay.
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] MOUSE TRACKING: Uses timer-based mouse check, not NativeOnMouseLeave.
+ *   ButtonContainer bounds used for IsMouseOverMenu().
+ *
+ * [2024-02] BUTTON VISIBILITY: RefreshButtonVisibility() is BlueprintNativeEvent.
+ *   Base implementation checks item flags. Override in BP for custom logic.
+ *
+ * [2024-02] WORLD ITEM MODE: InitializeForWorldItem() sets SourceWorldItem.
+ *   Check IsWorldItemMode() before accessing InventoryComponent.
+ *
+ * =============================================================================
+ * RELATED FILES: MOInventoryUIController.h, MOInventorySlot.h, MOUnifiedInventoryMenu.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"
@@ -8,13 +56,6 @@ class UMOCommonButton;
 class UMOInventoryComponent;
 class UPanelWidget;
 class AMOWorldItem;
-
-/**
- * Context menu that appears when right-clicking an inventory slot.
- * Displays available actions based on the item's properties.
- *
- * Auto-hides when mouse leaves the menu area.
- */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOContextMenuClosedSignature);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOContextMenuActionSignature, FName, ActionId, const FGuid&, ItemGuid);
 

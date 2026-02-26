@@ -1,3 +1,73 @@
+/**
+ * =============================================================================
+ * MOContextMenuBase.h - Base Class for Popup Context Menus
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Abstract base class for all popup context menus. Provides standardized
+ * positioning, keyboard handling, and close behavior. Subclass this for
+ * any right-click or interaction popup menus.
+ *
+ * SUBCLASSES:
+ * - UMOGhostContextMenu - Building ghost interactions
+ * - UMOStationContextMenu - Crafting station interactions
+ * - UMOKeepOnHarvestContextMenu - ISM/HISM resource harvesting
+ * - UMOGroundContextMenu - Ground foraging interactions
+ * - UMOSurvivorContextMenu - Survivor/NPC interactions
+ *
+ * FEATURES PROVIDED:
+ * 1. SetPopupPosition() - Screen-space positioning
+ * 2. Escape/Tab key closes menu
+ * 3. OnCloseRequested delegate for cleanup
+ * 4. Optional mouse-leave closing with grace period
+ * 5. BindButtonClick() helper for safe button binding
+ *
+ * =============================================================================
+ * BEST PRACTICES
+ * =============================================================================
+ *
+ * 1. Use BindButtonClick() helper instead of manual binding:
+ *    BindButtonClick(MyButton, this, &UMyMenu::HandleClick);
+ *    This automatically removes existing bindings first.
+ *
+ * 2. Always broadcast OnCloseRequested when menu should close.
+ *    Don't call RemoveFromParent() directly.
+ *
+ * 3. Context menus are NOT activatable widgets (no input mode change).
+ *    They overlay the game world and disappear on interaction.
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] POSITION CLAMPING: SetPopupPosition should clamp to viewport
+ *   bounds. If menu appears off-screen, check the implementation.
+ *
+ * [2024-02] MOUSE LEAVE TIMING: MouseLeaveGraceTime prevents accidental
+ *   closes. If menu closes too quickly, increase this value (default 0.3s).
+ *
+ * [2024-02] KEY HANDLING: NativeOnKeyDown returns FReply::Handled() for
+ *   Escape/Tab. This prevents key from propagating to game. If you need
+ *   different keys, override NativeOnKeyDown.
+ *
+ * [2024-02] DELEGATE CLEANUP: OnCloseRequested bindings are NOT auto-cleared.
+ *   If UI manager has weak refs, this is fine. Otherwise, unbind on destroy.
+ *
+ * =============================================================================
+ * RELATED FILES
+ * =============================================================================
+ * - MOUIControllerBase.h - May spawn context menus
+ * - MOGhostContextMenu.h - Building ghost subclass
+ * - MOStationContextMenu.h - Crafting station subclass
+ * - MOCommonButton.h - Button class used in menus
+ *
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"
@@ -7,22 +77,12 @@
 
 /**
  * Standard close request delegate used by all context menus.
- * Consolidates FMOGhostMenuRequestCloseSignature, FMOStationMenuRequestCloseSignature, etc.
  */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOContextMenuCloseRequested);
 
 /**
  * Base class for all context menu widgets.
- * Provides common functionality:
- * - SetPopupPosition() for screen positioning
- * - Escape/Tab key handling to close the menu
- * - OnCloseRequested delegate
- * - Mouse leave behavior with grace period
- *
- * Subclasses:
- * - UMOGhostContextMenu (building ghosts)
- * - UMOStationContextMenu (crafting stations)
- * - UMOKeepOnHarvestContextMenu (ISM/HISM harvest targets)
+ * See file header for usage guide and pitfalls.
  */
 UCLASS(Abstract)
 class MOFRAMEWORK_API UMOContextMenuBase : public UUserWidget

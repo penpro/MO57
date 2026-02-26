@@ -1,3 +1,43 @@
+/**
+ * =============================================================================
+ * MOCreatureDefinitionRow.h - Creature DataTable Definition
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * DataTable row structure for creature definitions. Defines stats, behavior,
+ * perception, and loot for all creature types.
+ *
+ * SECTIONS:
+ * - Identity: DisplayName, Description
+ * - Stats: HealthModifier, WalkSpeed, RunSpeed
+ * - Combat: BaseDamage, AttackRange, AttackCooldown
+ * - Behavior: AggroRange, FleeThreshold, bIsPredator
+ * - AI: BehaviorTree asset reference
+ * - Perception: SightRadius, HearingRange, etc.
+ * - Loot: TArray<FMOLootEntry> for death drops
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] HEALTH MODIFIER: Multiplied with anatomy component base health,
+ *   not absolute health value. 1.0 = normal, 2.0 = double health.
+ *
+ * [2024-02] PREDATOR FLAG: bIsPredator determines base AI class behavior.
+ *   True = AMOPredatorCreature behaviors, False = AMOPreyCreature behaviors.
+ *
+ * [2024-02] LOOT CHANCE: FMOLootEntry.DropChance is 0.0-1.0 probability,
+ *   not percentage. 1.0 = guaranteed drop.
+ *
+ * =============================================================================
+ * RELATED FILES: MOCreature.h, MOPreyCreature.h, MOPredatorCreature.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

@@ -1,3 +1,47 @@
+/**
+ * =============================================================================
+ * MONearbyItemsPanel.h - World Items Pickup Panel
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Panel displaying world items within pickup range. Uses inventory grid
+ * display but sources from AMOWorldItem actors instead of inventory.
+ *
+ * FEATURES:
+ * - Grid display of nearby world items
+ * - Click to select/inspect
+ * - Shift+Click to quick pickup to target inventory
+ * - Right-click for context menu
+ * - Drag items to inventory grids
+ * - LootAllToInventory() for bulk pickup
+ *
+ * USAGE:
+ * - Parent widget calls RefreshNearbyItems() with world items in range
+ * - SetQuickPickupTarget() sets destination for Shift+Click
+ * - Delegates broadcast for selection/pickup events
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] WORLD ITEM CACHING: CachedNearbyItems parallel to grid slots.
+ *   Index in cache matches slot index for lookup.
+ *
+ * [2024-02] SLOT VISUAL DATA: Slots set via SetVisualData() with
+ *   SourceWorldItem, not via InitializeSlot().
+ *
+ * [2024-02] EMPTY STATE: UpdateEmptyState() shows/hides EmptyMessageText
+ *   based on CachedNearbyItems count.
+ *
+ * =============================================================================
+ * RELATED FILES: MOUnifiedInventoryMenu.h, MOInventoryGrid.h, MOWorldItem.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

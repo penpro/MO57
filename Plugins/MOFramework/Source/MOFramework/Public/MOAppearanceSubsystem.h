@@ -1,3 +1,46 @@
+/**
+ * =============================================================================
+ * MOAppearanceSubsystem.h - Character Appearance Asset Manager
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * GameInstance subsystem for discovering and managing character appearance
+ * assets (faces, hair, bodies). Scans content folders including mod paths
+ * and builds a catalog for character customization UI.
+ *
+ * FEATURES:
+ * - DiscoverAppearanceAssets(): Scans configured paths
+ * - GetAssetsForCategory(): Returns discovered assets by type
+ * - ApplyAppearance(): Applies FMOCharacterAppearance to character
+ * - GenerateRandomAppearance(): Creates random valid appearance
+ *
+ * MOD SUPPORT:
+ * - Scans AdditionalModPaths for modded assets
+ * - Assets tagged bIsModded=true in catalog
+ * - Supports runtime asset discovery
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] DISCOVERY TIMING: Call DiscoverAppearanceAssets() early (game
+ *   start or mod load). Character creation UI depends on populated catalog.
+ *
+ * [2024-02] ASYNC LOADING: LoadSkeletalMesh/LoadGroomAsset are synchronous.
+ *   Consider async loading for large asset sets.
+ *
+ * [2024-02] TAG INFERENCE: InferTagsFromAssetName() uses naming conventions.
+ *   Assets should follow "Gender_Type_Name" pattern for proper tagging.
+ *
+ * =============================================================================
+ * RELATED FILES: MOCharacterAppearance.h, MOMetaHumanCharacter.h, MOCustomizableCharacter.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"
@@ -8,12 +51,6 @@
 class AMOMetaHumanCharacter;
 class USkeletalMesh;
 class UGroomAsset;
-
-/**
- * Subsystem for managing character appearance assets.
- * Discovers available faces, hair, bodies from content folders (including mods).
- * Handles applying appearances to MetaHuman characters.
- */
 UCLASS()
 class MOFRAMEWORK_API UMOAppearanceSubsystem : public UGameInstanceSubsystem
 {

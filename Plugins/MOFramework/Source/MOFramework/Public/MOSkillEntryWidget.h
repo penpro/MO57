@@ -1,3 +1,48 @@
+/**
+ * =============================================================================
+ * MOSkillEntryWidget.h - Skill List Entry Widget
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Individual skill entry widget for display in skills panel. Shows skill name,
+ * level, XP progress, and icon. Supports flash animation for skill/knowledge
+ * changes and click selection.
+ *
+ * DISPLAY ELEMENTS:
+ * - SkillNameText: Skill display name
+ * - LevelText: Current level
+ * - XPText: XP / XP to next level
+ * - XPProgressBar: Visual XP progress within current level
+ * - SkillIcon: Skill category icon
+ * - CategoryText: Category name
+ * - SelectButton: Optional button for selection
+ *
+ * FLASH ANIMATION:
+ * PlayFlashAnimation() pulses the progress bar fill color to highlight
+ * changes. Used when skills/knowledge are gained or leveled up.
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] BUTTON OPTIONAL: SelectButton is BindWidgetOptional. If not bound,
+ *   click handling won't work from C++. Use Blueprint OnClicked instead.
+ *
+ * [2024-02] PROGRESS BAR COLOR: Flash animation modifies fill color. If bar
+ *   has custom styling, OriginalFillColor may not restore correctly.
+ *
+ * [2024-02] TIMER HANDLE: FlashTimerHandle cleared on destruct. Safe for
+ *   widget pooling.
+ *
+ * =============================================================================
+ * RELATED FILES: MOSkillsPanel.h, MOSkillsComponent.h, MOSkillDefinitionRow.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

@@ -1,3 +1,39 @@
+/**
+ * =============================================================================
+ * MOPCGHISMTaggerSettings.h - PCG Node for HISM Item Tagging
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * PCG node that tags HISM components with their corresponding item IDs.
+ * Place AFTER Static Mesh Spawner in PCG graph. Finds all HISM components
+ * created by PCG and adds tags based on mesh-to-item lookup.
+ *
+ * TAG FORMAT: "MOItem_<ItemId>" (e.g., "MOItem_FlintNodule01")
+ *
+ * Also registers mappings with MOPCGInteractionSubsystem for runtime lookup.
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] MAIN THREAD: Element runs on main thread only (CanExecuteOnlyOnMainThread).
+ *   Required for world subsystem access and component modification.
+ *
+ * [2024-02] NOT CACHEABLE: IsCacheable returns false. Tags must be reapplied
+ *   each time PCG graph executes.
+ *
+ * [2024-02] MESH LOOKUP: Uses WorldVisual.StaticMesh from FMOItemDefinitionRow
+ *   to build mesh-to-item mapping.
+ *
+ * =============================================================================
+ * RELATED FILES: MOPCGInteractionSubsystem.h, MOItemDefinitionRow.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

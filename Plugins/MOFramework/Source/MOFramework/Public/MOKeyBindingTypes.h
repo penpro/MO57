@@ -1,3 +1,39 @@
+/**
+ * =============================================================================
+ * MOKeyBindingTypes.h - Key Binding Data Structures
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Data structures for the key binding/rebinding system. Defines storage
+ * for persisted key overrides, visual data for UI, and action configuration.
+ *
+ * KEY TYPES:
+ * - FMOKeyBindingEntry: Persisted key override (saved to GameUserSettings.ini)
+ * - FMOKeyBindingVisualData: UI display data for key binding entries
+ * - FMOKeyBindingActionConfig: Configuration for rebindable actions
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] SLOT INDEX: SlotIndex 0 = primary key, 1 = secondary key.
+ *   Equality compares ActionId + SlotIndex, not the key itself.
+ *
+ * [2024-02] CONTEXT SELECTION: bUseBuildingContext determines which
+ *   InputMappingContext the action belongs to (PawnControl vs Building).
+ *
+ * [2024-02] SOFT REFERENCES: FMOKeyBindingActionConfig uses TSoftObjectPtr
+ *   so it can be configured in Blueprint without loading the action asset.
+ *
+ * =============================================================================
+ * RELATED FILES: MOGameSettings.h, MOOptionsPanel.h, MOKeyBindingEntryWidget.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

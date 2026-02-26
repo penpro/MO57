@@ -1,3 +1,70 @@
+/**
+ * =============================================================================
+ * MOCraftingTypes.h - Crafting System Type Definitions
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Contains all enums, structs, delegates for the crafting system. Separates
+ * type definitions from implementation for clean include dependencies.
+ *
+ * CRAFTING WORKFLOW:
+ * 1. Player opens crafting menu (station or hand crafting)
+ * 2. Recipes filtered by: knowledge, skill level, station type
+ * 3. Player queues craft -> FMOCraftingQueueEntry created
+ * 4. Queue ticks -> Ingredients consumed -> Progress updates
+ * 5. Craft completes -> Outputs spawned -> XP granted
+ *
+ * KEY TYPES:
+ * - EMODiscoveryMethod: How a recipe was learned
+ * - FMOCraftingQueueEntry: Single item in crafting queue
+ * - FMOCraftingQueueList: FastArray replicated queue
+ * - FMOCraftingQueueSaveData: Persistence for queue
+ * - FMORecipeDiscoverySaveData: Persistence for discoveries
+ *
+ * =============================================================================
+ * BEST PRACTICES
+ * =============================================================================
+ *
+ * 1. Use EntryId (GUID) to reference queue entries, not array indices.
+ *    Indices change during replication; GUIDs are stable.
+ *
+ * 2. bIngredientsConsumed flag is critical for crash recovery. If true,
+ *    don't consume ingredients again on resume.
+ *
+ * 3. FastArraySerializer pattern is used for efficient replication.
+ *    See MOInventoryComponent.h for detailed FastArray documentation.
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-01] ENTRY ID GENERATION: FMOCraftingQueueEntry generates its own
+ *   GUID in the default constructor. Don't overwrite it unless loading.
+ *
+ * [2024-02] STATION VALIDATION: Station enum is stored in queue entry to
+ *   validate on resume. If player moves away from station, craft may fail.
+ *
+ * [2024-02] PROGRESS TIMING: Progress is 0.0-1.0 normalized. StartTime is
+ *   world time when craft started. Don't use wall clock time.
+ *
+ * [2024-02] SAVE/LOAD TIMING: PausedAt timestamp in save data is used to
+ *   calculate offline crafting progress. Uses FDateTime, not game time.
+ *
+ * =============================================================================
+ * RELATED FILES
+ * =============================================================================
+ * - MOCraftingQueueComponent.h - Uses FMOCraftingQueueEntry/List
+ * - MORecipeDiscoveryComponent.h - Uses FMORecipeDiscoverySaveData
+ * - MOCraftingSubsystem.h - Defines FMOCraftingValidation, FMOCraftResult
+ * - MORecipeDefinitionRow.h - Defines FMOToolRequirement (included here)
+ *
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

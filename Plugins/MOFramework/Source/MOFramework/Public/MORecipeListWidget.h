@@ -1,3 +1,66 @@
+/**
+ * =============================================================================
+ * MORecipeListWidget.h - Scrollable Recipe List
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Scrollable list of recipe entries. Used in crafting menu and building menu.
+ * Filters and displays recipes based on knowledge, skills, and station.
+ *
+ * ENTRY DATA:
+ * Each entry shows:
+ * - Recipe icon
+ * - Display name
+ * - Craftability status (has ingredients, meets requirements)
+ * - Lock status (unknown recipe greyed out)
+ *
+ * FILTERING:
+ * - By station type (hand craft, workbench, forge, etc.)
+ * - By discovery state (known vs unknown)
+ * - By search text (optional)
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] LEGACY DELEGATE: FMORecipeSelectedSignature is legacy. New code
+ *   should use FMOUIRecipeSelected from MOUIDelegates.h.
+ *
+ * [2024-02] ENTRY POOLING: List creates MORecipeEntryWidget per recipe.
+ *   For 100+ recipes, consider widget pooling to reduce allocation.
+ *
+ * [2024-02] REFRESH TIMING: Call RefreshEntryStates() when inventory changes
+ *   or skills level up. Ingredient availability affects bCanCraft state.
+ *
+ * [2024-02] FILTER APPLICATION: SetStationFilter(), SetCategoryFilter(), and
+ *   SetShowOnlyCraftable() store values but don't refresh. Call
+ *   RefreshEntryStates() after changing filters to update visibility.
+ *
+ * [2024-02] NULL COMPONENTS: InventoryComponent, SkillsComponent, and
+ *   DiscoveryComponent are TWeakObjectPtr. BuildEntryData() and
+ *   CanCraftRecipe() handle null gracefully (assume can't craft, discovered).
+ *
+ * [2024-02] DELEGATE BINDING: NativeConstruct() does NOT autobind to
+ *   component events. Caller must call RefreshEntryStates() when inventory
+ *   or skills change. This is intentional for performance control.
+ *
+ * [2024-02] ENTRY CLICK HANDLING: Entry widgets call HandleEntryClicked()
+ *   which broadcasts both OnRecipeSelection (new) and OnRecipeSelected
+ *   (legacy) for backward compatibility. Both receive same RecipeId.
+ *
+ * [2024-02] ENTRY DATA STRUCT: FMORecipeListEntryData contains:
+ *   RecipeId, DisplayName, Category, Icon (TSoftObjectPtr), bCanCraft,
+ *   bIsDiscovered, bIsSelected. Use for custom entry widget display.
+ *
+ * =============================================================================
+ * RELATED FILES: MORecipeEntryWidget.h, MOCraftingMenu.h, MOBuildingMenu.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"

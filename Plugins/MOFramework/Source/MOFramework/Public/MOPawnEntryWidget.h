@@ -1,3 +1,43 @@
+/**
+ * =============================================================================
+ * MOPawnEntryWidget.h - Pawn Selection Entry Widget
+ * =============================================================================
+ *
+ * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
+ * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
+ *
+ * PURPOSE:
+ * Individual pawn entry in the possession menu. Shows pawn info (name, age,
+ * health, status) and allows possession via button click.
+ *
+ * DISPLAYS:
+ * - NameText: Character name
+ * - AgeText: Character age
+ * - GenderText: Gender display
+ * - HealthBar: Current health percentage
+ * - StatusText: Current activity/status
+ * - LocationText: Where the pawn currently is
+ * - LastPlayedText: When this pawn was last possessed
+ * - PortraitImage: Character portrait/thumbnail
+ *
+ * =============================================================================
+ * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
+ * =============================================================================
+ *
+ * [2024-02] DECEASED PAWNS: bIsDeceased flag disables possess button. May still
+ *   show in list for memorial/history purposes.
+ *
+ * [2024-02] GUID IDENTITY: Uses FGuid from FMOPersistedPawnRecord, not actor
+ *   pointers. Pawn may not be spawned when entry is created.
+ *
+ * [2024-02] BUTTON BINDING: Uses UMOCommonButton. Bind with OnClicked().AddUObject().
+ *
+ * =============================================================================
+ * RELATED FILES: MOPossessionMenu.h, MOPossessionSubsystem.h, MOWorldSaveGame.h
+ * LAST UPDATED: 2026-02-25
+ * =============================================================================
+ */
+
 #pragma once
 
 #include "CoreMinimal.h"
@@ -11,10 +51,6 @@ class UImage;
 class UProgressBar;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOPawnEntryPossessSignature, const FGuid&, PawnGuid);
-
-/**
- * Widget representing a single pawn entry in the possession menu.
- */
 UCLASS(Abstract, Blueprintable)
 class MOFRAMEWORK_API UMOPawnEntryWidget : public UUserWidget
 {
