@@ -9,13 +9,16 @@
  * PURPOSE:
  * Context menu for interacting with harvestable resource nodes (trees, bushes,
  * rocks) that use KeepOnHarvest ISM/HISM instances. Dynamically builds button
- * list based on available harvest recipes.
+ * list based on HarvestActions defined in the Resource DataTable (DT_Resources).
+ *
+ * SINGLE SOURCE OF TRUTH:
+ * The Resource DataTable (FMOResourceNodeDefinitionRow) is the single source
+ * of truth for all resource harvest operations. No separate recipe lookup.
  *
  * OPTIONS:
  * - Inspect: Smart inspect (picks first learnable product)
- * - Harvest [X]: Dynamic buttons per available recipe (e.g., "Harvest Berries")
- * - Chop Down: Destroy the resource (if applicable recipe exists)
- * - Search for Insects: Future expansion feature
+ * - Harvest [X]: Dynamic buttons per HarvestAction (e.g., "Gather Sticks")
+ * - Chop Down/Mine: Destroy action if bDestroysResource=true
  *
  * SMART INSPECT:
  * Examines resource's potential products and picks the first one the player
@@ -25,20 +28,21 @@
  * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
  * =============================================================================
  *
- * [2024-02] DYNAMIC BUTTONS: Buttons are created at runtime based on available
- *   recipes. Must set ButtonClass in Blueprint defaults.
+ * [2024-02] DYNAMIC BUTTONS: Buttons are created at runtime based on HarvestActions
+ *   from the resource definition. Must set ButtonClass in Blueprint defaults.
  *
- * [2024-02] RECIPE LOOKUP: Uses FMOInteractionTarget tags to find applicable
- *   recipes. Tags come from MOHISMInteractableComponent or mesh data.
+ * [2026-02] RESOURCE LOOKUP: Uses ResourceNode_{RowName} tag from ISM component
+ *   to look up FMOResourceNodeDefinitionRow in DT_Resources via Project Settings.
  *
- * [2024-02] TOOL REQUIREMENTS: CanChopDown checks if player has required tools.
- *   Uses MOCraftingSubsystem.CanExecuteRecipe() for validation.
+ * [2024-02] TOOL REQUIREMENTS: Each HarvestAction specifies RequiredToolType.
+ *   Button is disabled if tool is required but player doesn't have it.
  *
  * [2024-02] CLEANUP: ClearButtons() must remove all created widgets to prevent
  *   memory leaks when menu closes.
  *
  * =============================================================================
- * RELATED FILES: MOInteractorComponent.h, MOHarvestSubsystem.h, MOContextMenuBase.h
+ * RELATED FILES: MOResourceNodeDefinitionRow.h, MOHarvestSubsystem.h,
+ *   MOResourceDatabaseSettings.h, MOContextMenuBase.h
  * LAST UPDATED: 2026-02-25
  * =============================================================================
  */
@@ -48,6 +52,7 @@
 #include "CoreMinimal.h"
 #include "MOContextMenuBase.h"
 #include "MOInteractorComponent.h"
+#include "MOResourceNodeDefinitionRow.h"
 #include "MOKeepOnHarvestContextMenu.generated.h"
 
 class UMOCommonButton;
@@ -59,7 +64,7 @@ class UMOInventoryComponent;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOKeepOnHarvestMenuRequestClose);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOKeepOnHarvestMenuInspectClicked);
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOKeepOnHarvestMenuHarvestClicked, FName, RecipeId);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOKeepOnHarvestMenuHarvestClicked, FName, ActionId);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOKeepOnHarvestMenuChopDownClicked);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOKeepOnHarvestMenuSearchInsectsClicked);
 UCLASS(Abstract, Blueprintable)
@@ -124,16 +129,28 @@ public:
 	bool CanInspect() const { return !SmartInspectItemId.IsNone(); }
 
 	/**
-	 * Check if chop down recipe exists for this target.
+	 * Check if a destroy action (chop down, mine, etc.) exists for this target.
 	 */
 	UFUNCTION(BlueprintPure, Category="MO|Harvest|UI")
-	bool HasChopDownRecipe() const { return !ChopDownRecipeId.IsNone(); }
+	bool HasDestroyAction() const { return DestroyActionIndex != INDEX_NONE; }
 
 	/**
-	 * Check if chop down can be executed (has required tools).
+	 * Check if the destroy action can be executed (has required tools).
 	 */
 	UFUNCTION(BlueprintPure, Category="MO|Harvest|UI")
-	bool CanChopDown() const { return bCanExecuteChopDown; }
+	bool CanExecuteDestroyAction() const { return bCanExecuteDestroyAction; }
+
+	/**
+	 * Get the ResourceNodeId extracted from target tags.
+	 */
+	UFUNCTION(BlueprintPure, Category="MO|Harvest|UI")
+	FName GetResourceNodeId() const { return CachedResourceNodeId; }
+
+	/**
+	 * Check if player has a tool of the specified type in their inventory.
+	 */
+	UFUNCTION(BlueprintPure, Category="MO|Harvest|UI")
+	bool HasToolOfType(EMOToolType ToolType) const;
 
 	// SetPopupPosition is inherited from UMOContextMenuBase
 
@@ -215,14 +232,17 @@ private:
 	/** Item ID for smart inspect. */
 	FName SmartInspectItemId = NAME_None;
 
-	/** Recipe ID for chop down action. */
-	FName ChopDownRecipeId = NAME_None;
+	/** ResourceNodeId extracted from target tags. */
+	FName CachedResourceNodeId = NAME_None;
 
-	/** Whether the chop down recipe can be executed (has required tools). */
-	bool bCanExecuteChopDown = false;
+	/** Index of the destroy action in AvailableHarvestActions, or INDEX_NONE. */
+	int32 DestroyActionIndex = INDEX_NONE;
 
-	/** Available harvest recipe IDs. */
-	TArray<FName> AvailableHarvestRecipes;
+	/** Whether the destroy action can be executed (has required tools). */
+	bool bCanExecuteDestroyAction = false;
+
+	/** Available harvest actions from the resource definition. */
+	TArray<FMOResourceHarvestAction> AvailableHarvestActions;
 
 	/** Tags collected from the target. */
 	TArray<FName> TargetTags;
@@ -239,4 +259,7 @@ private:
 
 	/** Helper to create and add a button with a label. */
 	UMOCommonButton* CreateButton(const FText& Label);
+
+	/** Check if player can perform a specific harvest action (has required tool). */
+	bool CanPerformAction(const FMOResourceHarvestAction& Action) const;
 };

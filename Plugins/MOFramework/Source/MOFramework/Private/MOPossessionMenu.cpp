@@ -5,6 +5,13 @@
 #include "Components/ScrollBox.h"
 #include "Components/TextBlock.h"
 
+UMOPossessionMenu::UMOPossessionMenu(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+	// Enable keyboard input for this widget (needed for Tab/Escape to close)
+	SetIsFocusable(true);
+}
+
 void UMOPossessionMenu::NativeConstruct()
 {
 	Super::NativeConstruct();

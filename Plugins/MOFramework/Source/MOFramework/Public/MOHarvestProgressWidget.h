@@ -75,8 +75,8 @@ public:
 	 * Start a harvest operation with progress display.
 	 * @param InISMComponent The ISM/HISM component to harvest from
 	 * @param InInstanceIndex The instance index to harvest
-	 * @param InRecipeId The harvest recipe to execute
-	 * @param InActionDisplayName Display name for the action (e.g., "Harvesting Bark")
+	 * @param InActionId The harvest action ID (from resource definition's HarvestActions)
+	 * @param InActionDisplayName Display name for the action (e.g., "Gathering Sticks")
 	 * @param InInventory Player's inventory (for time calculation and output)
 	 * @param InSkills Player's skills (for XP)
 	 */
@@ -84,7 +84,7 @@ public:
 	void StartHarvest(
 		UInstancedStaticMeshComponent* InISMComponent,
 		int32 InInstanceIndex,
-		FName InRecipeId,
+		FName InActionId,
 		const FText& InActionDisplayName,
 		UMOInventoryComponent* InInventory,
 		UMOSkillsComponent* InSkills
@@ -102,9 +102,9 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO|Harvest")
 	float GetProgress() const { return CurrentProgress; }
 
-	/** Get the recipe being harvested. */
+	/** Get the action ID being executed. */
 	UFUNCTION(BlueprintPure, Category="MO|Harvest")
-	FName GetCurrentRecipeId() const { return RecipeId; }
+	FName GetCurrentActionId() const { return ActionId; }
 
 protected:
 	virtual void NativeConstruct() override;
@@ -147,7 +147,7 @@ private:
 	void CompleteHarvest();
 
 	// Current harvest state
-	FName RecipeId = NAME_None;
+	FName ActionId = NAME_None;
 	FText ActionDisplayName;
 	TWeakObjectPtr<UMOInventoryComponent> InventoryComponent;
 	TWeakObjectPtr<UMOSkillsComponent> SkillsComponent;

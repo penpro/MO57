@@ -87,23 +87,17 @@ bool UMOCombatMedicalHelpers::ApplyCombatDamage(
 		return false;
 	}
 
-	// Create wound from hit info
-	FMOWound Wound = HitInfoToWound(HitInfo);
-
-	// Check for adrenaline component to apply bleed reduction
+	// Get adrenaline component for later effects
 	AActor* Owner = AnatomyComp->GetOwner();
 	UMOAdrenalineComponent* AdrenalineComp = Owner ? Owner->FindComponentByClass<UMOAdrenalineComponent>() : nullptr;
 
-	// Apply adrenaline-based bleed reduction
-	float EffectiveBleedRate = Wound.BleedRate;
-	if (AdrenalineComp && AdrenalineComp->IsAdrenalineActive())
-	{
-		EffectiveBleedRate = AdrenalineComp->CalculateEffectiveBleedRate(Wound.BleedRate);
-	}
-	Wound.BleedRate = EffectiveBleedRate;
-
-	// Apply the wound
-	bool bApplied = AnatomyComp->InflictWound(Wound);
+	// Apply damage to body part HP and create wound
+	// InflictDamage reduces HP, creates wound, and checks death conditions
+	bool bApplied = AnatomyComp->InflictDamage(
+		HitInfo.TargetBodyPart,
+		HitInfo.GetFinalDamage(),
+		HitInfo.GetWoundType()
+	);
 
 	if (!bApplied)
 	{

@@ -270,6 +270,13 @@ bool FMOPCGResourceSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 			}
 		}
 
+		// Add ResourceNodeId tag for direct resource definition lookup
+		// This allows the harvest system to find the original DataTable row
+		if (!MeshData.ResourceNodeId.IsNone())
+		{
+			ComponentTags.Add(FName(*FString::Printf(TEXT("ResourceNode_%s"), *MeshData.ResourceNodeId.ToString())));
+		}
+
 		// Get or create managed ISM component with tags (PCG handles cleanup on re-execution)
 		UInstancedStaticMeshComponent* ISM = GetOrCreateManagedISMC(
 			Context, TargetActor, MeshData.Mesh, Settings, MeshData.ResourceNodeId, ComponentTags);
@@ -300,7 +307,7 @@ bool FMOPCGResourceSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 		ComponentsCreated++;
 	}
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOResourceSpawner] Spawned %d instances across %d components (%d points processed)"),
+	UE_LOG(LogMOFramework, Verbose, TEXT("[MOResourceSpawner] Spawned %d instances across %d components (%d points processed)"),
 		InstancesAdded, ComponentsCreated, TotalPointsProcessed);
 
 	return true;

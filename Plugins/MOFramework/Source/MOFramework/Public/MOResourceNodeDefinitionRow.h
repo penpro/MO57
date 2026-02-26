@@ -127,6 +127,19 @@ struct MOFRAMEWORK_API FMOResourceHarvestAction
 	TArray<FName> YieldsItems;
 
 	// ============================================================================
+	// KNOWLEDGE REQUIREMENT
+	// ============================================================================
+
+	/**
+	 * Knowledge/recipe ID required to perform this action.
+	 * If set, the action button will be grayed out until the player has this knowledge.
+	 * Leave as NAME_None for actions that don't require knowledge (always available).
+	 * Example: "StripBark" action might require "Knowledge_BarkHarvesting"
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|ResourceNode|Harvest|Knowledge")
+	FName RequiredKnowledgeId = NAME_None;
+
+	// ============================================================================
 	// TOOL REQUIREMENT
 	// ============================================================================
 
@@ -193,6 +206,9 @@ struct MOFRAMEWORK_API FMOResourceHarvestAction
 	// ============================================================================
 	// HELPERS
 	// ============================================================================
+
+	/** Returns true if this action requires knowledge to be unlocked. */
+	bool RequiresKnowledge() const { return !RequiredKnowledgeId.IsNone(); }
 
 	/** Returns true if this action requires a tool. */
 	bool RequiresTool() const { return RequiredToolType != EMOToolType::None; }

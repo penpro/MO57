@@ -169,10 +169,18 @@ struct MOFRAMEWORK_API FMOCreatureDefinitionRow : public FTableRowBase
 	float HearingRange = 2000.f;
 
 	// ============================================================================
-	// LOOT
+	// CARCASS / LOOT
 	// ============================================================================
 
-	/** Items dropped when creature dies. */
+	/** Carcass definition row name (in DT_CarcassDefinitions). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Carcass")
+	FName CarcassDefinitionId;
+
+	/** Carcass definitions DataTable reference. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Carcass")
+	TSoftObjectPtr<UDataTable> CarcassDataTable;
+
+	/** DEPRECATED: Use carcass system instead. Items dropped when creature dies. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Loot")
 	TArray<FMOLootEntry> LootEntries;
 };

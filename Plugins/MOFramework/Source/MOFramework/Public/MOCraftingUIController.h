@@ -169,7 +169,7 @@ public:
 
 	/** Start a harvest operation on the current target. */
 	UFUNCTION(BlueprintCallable, Category="MO|Crafting|Harvest")
-	void StartHarvestOperation(FName RecipeId);
+	void StartHarvestOperation(FName ActionId);
 
 	/** Cancel any active harvest operation. */
 	UFUNCTION(BlueprintCallable, Category="MO|Crafting|Harvest")
@@ -254,7 +254,7 @@ private:
 	void HandleKeepOnHarvestContextMenuInspectClicked();
 
 	UFUNCTION()
-	void HandleKeepOnHarvestContextMenuHarvestClicked(FName RecipeId);
+	void HandleKeepOnHarvestContextMenuHarvestClicked(FName ActionId);
 
 	UFUNCTION()
 	void HandleKeepOnHarvestContextMenuChopDownClicked();

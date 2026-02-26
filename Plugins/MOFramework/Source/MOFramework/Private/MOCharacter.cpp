@@ -19,6 +19,7 @@
 #include "MOCraftingQueueComponent.h"
 #include "MORecipeDiscoveryComponent.h"
 #include "MOEquipmentComponent.h"
+#include "MOCombatComponent.h"
 #include "MORecruitmentComponent.h"
 #include "MOSurvivorJobQueueComponent.h"
 #include "MOInteractableComponent.h"
@@ -471,8 +472,16 @@ void AMOCharacter::RequestPrimaryAction_Implementation()
 		return;
 	}
 
-	// Override in subclasses for weapon/tool use
-	UE_LOG(LogMOFramework, Verbose, TEXT("[MOCharacter] RequestPrimaryAction - Override in subclass"));
+	// Try to start a combat attack via CombatComponent
+	if (UMOCombatComponent* CombatComp = FindComponentByClass<UMOCombatComponent>())
+	{
+		if (CombatComp->StartLightAttack())
+		{
+			return;
+		}
+	}
+
+	UE_LOG(LogMOFramework, Verbose, TEXT("[MOCharacter] RequestPrimaryAction - No combat component or attack failed"));
 }
 
 void AMOCharacter::RequestPrimaryActionRelease_Implementation()
@@ -580,7 +589,7 @@ void AMOCharacter::ApplyGameSettings()
 	if (FollowCamera)
 	{
 		FollowCamera->SetFieldOfView(Settings->FieldOfView);
-		UE_LOG(LogMOFramework, Log, TEXT("[MOCharacter] Applied FOV: %.1f"), Settings->FieldOfView);
+		UE_LOG(LogMOFramework, Verbose, TEXT("[MOCharacter] Applied FOV: %.1f"), Settings->FieldOfView);
 	}
 
 	// Store sensitivity for use in look input
@@ -611,7 +620,7 @@ void AMOCharacter::ToggleCameraShoulder()
 	CameraTransitionAlpha = 0.0f;
 	bIsCameraTransitioning = true;
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOCharacter] Camera shoulder transitioning from %.1f to %s (Y=%.1f)"),
+	UE_LOG(LogMOFramework, Verbose, TEXT("[MOCharacter] Camera shoulder transitioning from %.1f to %s (Y=%.1f)"),
 		CameraStartY,
 		CameraTargetY > 0 ? TEXT("right") : TEXT("left"),
 		CameraTargetY);
@@ -662,7 +671,7 @@ void AMOCharacter::SetMovementMode(EMOMovementMode NewMode)
 	const FString ModeName = NewMode == EMOMovementMode::Walking ? TEXT("Walking") :
 							 NewMode == EMOMovementMode::Jogging ? TEXT("Jogging") : TEXT("Sprinting");
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOCharacter] %s: Movement mode -> %s (Speed: %.0f)"),
+	UE_LOG(LogMOFramework, Verbose, TEXT("[MOCharacter] %s: Movement mode -> %s (Speed: %.0f)"),
 		*GetName(), *ModeName, ActualSpeed);
 
 	// On-screen debug message
@@ -687,13 +696,13 @@ void AMOCharacter::ToggleJog()
 	// If currently sprinting, don't toggle jog
 	if (bIsSprinting)
 	{
-		UE_LOG(LogMOFramework, Log, TEXT("[MOCharacter] %s: Cannot toggle jog while sprinting"), *GetName());
+		UE_LOG(LogMOFramework, Verbose, TEXT("[MOCharacter] %s: Cannot toggle jog while sprinting"), *GetName());
 		return;
 	}
 
 	bJogToggled = !bJogToggled;
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOCharacter] %s: Jog toggled %s"), *GetName(), bJogToggled ? TEXT("ON") : TEXT("OFF"));
+	UE_LOG(LogMOFramework, Verbose, TEXT("[MOCharacter] %s: Jog toggled %s"), *GetName(), bJogToggled ? TEXT("ON") : TEXT("OFF"));
 
 	if (bJogToggled)
 	{
@@ -709,11 +718,11 @@ void AMOCharacter::StartSprint()
 {
 	if (!CanSprint_Implementation())
 	{
-		UE_LOG(LogMOFramework, Log, TEXT("[MOCharacter] %s: Cannot sprint (CanSprint returned false)"), *GetName());
+		UE_LOG(LogMOFramework, Verbose, TEXT("[MOCharacter] %s: Cannot sprint (CanSprint returned false)"), *GetName());
 		return;
 	}
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOCharacter] %s: Sprint START (hold detected)"), *GetName());
+	UE_LOG(LogMOFramework, Verbose, TEXT("[MOCharacter] %s: Sprint START (hold detected)"), *GetName());
 	bIsSprinting = true;
 	SetMovementMode(EMOMovementMode::Sprinting);
 }
@@ -725,7 +734,7 @@ void AMOCharacter::StopSprint()
 		return;
 	}
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOCharacter] %s: Sprint STOP (returning to %s)"),
+	UE_LOG(LogMOFramework, Verbose, TEXT("[MOCharacter] %s: Sprint STOP (returning to %s)"),
 		*GetName(), bJogToggled ? TEXT("Jogging") : TEXT("Walking"));
 
 	bIsSprinting = false;
@@ -1359,7 +1368,7 @@ void AMOCharacter::UpdateHeldItemMesh(EMOEquipmentSlot EquipSlot, const FMOEquip
 
 	TargetMesh->SetVisibility(true);
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOCharacter] %s: Equipped '%s' to %s hand - mesh visible"),
+	UE_LOG(LogMOFramework, Verbose, TEXT("[MOCharacter] %s: Equipped '%s' to %s hand - mesh visible"),
 		*GetName(),
 		*EquippedItem.ItemDefinitionId.ToString(),
 		EquipSlot == EMOEquipmentSlot::LeftHand ? TEXT("left") : TEXT("right"));
@@ -1383,7 +1392,7 @@ void AMOCharacter::ClearHeldItemMesh(EMOEquipmentSlot EquipSlot)
 		TargetMesh->SetVisibility(false);
 		TargetMesh->SetStaticMesh(nullptr);
 
-		UE_LOG(LogMOFramework, Log, TEXT("[MOCharacter] %s: Cleared %s hand mesh"),
+		UE_LOG(LogMOFramework, Verbose, TEXT("[MOCharacter] %s: Cleared %s hand mesh"),
 			*GetName(),
 			EquipSlot == EMOEquipmentSlot::LeftHand ? TEXT("left") : TEXT("right"));
 	}

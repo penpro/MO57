@@ -1,4 +1,5 @@
 #include "MOAnatomyComponent.h"
+#include "MOFramework.h"
 #include "MOVitalsComponent.h"
 #include "MOMentalStateComponent.h"
 #include "MOBodyPartDefinitionRow.h"
@@ -146,10 +147,15 @@ bool UMOAnatomyComponent::InflictDamage(EMOBodyPartType Part, float Damage, EMOW
 	float OldHP = PartState->CurrentHP;
 	PartState->CurrentHP = FMath::Max(0.0f, PartState->CurrentHP - ActualDamage);
 
+	UE_LOG(LogMOFramework, Log, TEXT("[MOAnatomy] InflictDamage: Part=%d, Damage=%.1f (actual=%.1f), HP %.1f -> %.1f"),
+		static_cast<int32>(Part), Damage, ActualDamage, OldHP, PartState->CurrentHP);
+
 	// Update status
 	if (PartState->CurrentHP <= 0.0f)
 	{
 		PartState->Status = EMOBodyPartStatus::Destroyed;
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOAnatomy] Body part %d DESTROYED! Checking death conditions..."),
+			static_cast<int32>(Part));
 	}
 	else if (PartState->CurrentHP < PartState->MaxHP)
 	{

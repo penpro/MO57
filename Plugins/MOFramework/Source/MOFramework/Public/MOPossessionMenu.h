@@ -73,6 +73,8 @@ class MOFRAMEWORK_API UMOPossessionMenu : public UCommonActivatableWidget
 	GENERATED_BODY()
 
 public:
+	UMOPossessionMenu(const FObjectInitializer& ObjectInitializer);
+
 	/** Populate the menu with pawn records. */
 	UFUNCTION(BlueprintCallable, Category="MO|UI|Possession")
 	void PopulatePawnList(const TArray<FMOPersistedPawnRecord>& PawnRecords);

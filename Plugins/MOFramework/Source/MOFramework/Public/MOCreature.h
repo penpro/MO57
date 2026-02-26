@@ -58,6 +58,7 @@
 #include "MOCreature.generated.h"
 
 class AMOCreatureController;
+class AMOCarcassActor;
 class UBehaviorTree;
 struct FMOCreatureDefinitionRow;
 
@@ -151,9 +152,13 @@ protected:
 	void OnDeath(AActor* Killer);
 	virtual void OnDeath_Implementation(AActor* Killer);
 
-	/** Spawn loot items based on definition. */
+	/** Spawn loot items based on definition. DEPRECATED: Use carcass system. */
 	UFUNCTION(BlueprintCallable, Category="MO|Creature")
 	void SpawnLoot();
+
+	/** Spawn a carcass actor at this creature's location. */
+	UFUNCTION(BlueprintCallable, Category="MO|Creature")
+	AMOCarcassActor* SpawnCarcass();
 
 	/** Delay before destroying actor after death (for ragdoll/decay). */
 	UPROPERTY(EditDefaultsOnly, Category="MO|Creature")
@@ -178,6 +183,10 @@ private:
 	/** Handle instant death from anatomy component. */
 	UFUNCTION()
 	void HandleInstantDeath(EMOBodyPartType CausePart);
+
+	/** Handle body part destruction - creatures die when vital parts are destroyed. */
+	UFUNCTION()
+	void HandleBodyPartDestroyed(EMOBodyPartType Part, bool bInstantDeath);
 
 	/** Timer handle for delayed destroy after death. */
 	FTimerHandle DestroyTimerHandle;

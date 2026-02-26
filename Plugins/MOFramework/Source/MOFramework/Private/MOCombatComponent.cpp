@@ -11,6 +11,13 @@
 #include "Engine/DataTable.h"
 #include "Net/UnrealNetwork.h"
 #include "GameFramework/Character.h"
+#include "GameFramework/Controller.h"
+#include "GameFramework/PlayerController.h"
+#include "Camera/PlayerCameraManager.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "Components/StaticMeshComponent.h"
+#include "Animation/AnimInstance.h"
+#include "Animation/AnimMontage.h"
 
 // ============================================================================
 // CONSTRUCTOR
@@ -167,6 +174,9 @@ bool UMOCombatComponent::StartAttack(EMOAttackType AttackType)
 	TimeSinceLastAction = 0.0f;
 
 	OnAttackStarted.Broadcast(AttackType);
+
+	// Play attack animation montage
+	PlayAttackAnimation();
 
 	UE_LOG(LogMOFramework, Verbose, TEXT("[MOCombat] Started %s attack, wind-up: %.2fs"),
 		AttackType == EMOAttackType::Light ? TEXT("light") : TEXT("heavy"),
@@ -374,9 +384,32 @@ EMOAttackResult UMOCombatComponent::ReceiveAttack(AActor* Attacker, const FMOCom
 	}
 
 	// Full damage
-	if (CachedAnatomyComp)
+	UMOAnatomyComponent* AnatomyToUse = CachedAnatomyComp;
+
+	// Fallback: try to find anatomy component if not cached
+	if (!AnatomyToUse)
 	{
-		UMOCombatMedicalHelpers::ApplyCombatDamage(HitInfo, CachedAnatomyComp, CachedVitalsComp, CachedMentalComp);
+		AActor* Owner = GetOwner();
+		if (Owner)
+		{
+			AnatomyToUse = Owner->FindComponentByClass<UMOAnatomyComponent>();
+			if (AnatomyToUse)
+			{
+				// Cache for future use
+				CachedAnatomyComp = AnatomyToUse;
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOCombat] AnatomyComponent was not cached, found dynamically on %s"),
+					*Owner->GetName());
+			}
+		}
+	}
+
+	if (AnatomyToUse)
+	{
+		UMOCombatMedicalHelpers::ApplyCombatDamage(HitInfo, AnatomyToUse, CachedVitalsComp, CachedMentalComp);
+	}
+	else
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOCombat] ReceiveAttack: No AnatomyComponent found, damage not applied!"));
 	}
 
 	// Enter combat if not already
@@ -791,13 +824,69 @@ void UMOCombatComponent::ExecuteAttack()
 	// Apply durability loss
 	ApplyWeaponDurabilityLoss(1);
 
-	// TODO: Actual hit detection would go here
-	// For now this is scaffolding - the actual hit detection would be:
-	// 1. Trace or overlap in attack arc
-	// 2. For each hit actor with CombatComponent, call their ReceiveAttack()
-	// 3. Handle results
+	// Perform hit detection via sphere trace
+	AActor* Owner = GetOwner();
+	if (!Owner)
+	{
+		return;
+	}
 
-	UE_LOG(LogMOFramework, Verbose, TEXT("[MOCombat] Attack executed"));
+	// For player-controlled pawns, use camera trace (where the reticle is aiming)
+	// For AI, use traditional hand-based trace
+	FVector TraceStart;
+	FVector TraceDirection;
+
+	APawn* OwnerPawn = Cast<APawn>(Owner);
+	APlayerController* PC = OwnerPawn ? Cast<APlayerController>(OwnerPawn->GetController()) : nullptr;
+
+	if (PC && PC->PlayerCameraManager)
+	{
+		// Player-controlled: trace from camera center (like target reticle)
+		TraceStart = PC->PlayerCameraManager->GetCameraLocation();
+		TraceDirection = PC->PlayerCameraManager->GetCameraRotation().Vector();
+
+		UE_LOG(LogMOFramework, Verbose, TEXT("[MOCombat] Using camera trace for player attack"));
+	}
+	else
+	{
+		// AI-controlled: trace from hand/weapon socket
+		TraceStart = GetAttackOrigin();
+		TraceDirection = Owner->GetActorForwardVector();
+	}
+
+	const FVector TraceEnd = TraceStart + TraceDirection * Profile->Range;
+
+	TArray<FHitResult> HitResults;
+	FCollisionQueryParams QueryParams;
+	QueryParams.AddIgnoredActor(Owner);
+	QueryParams.bReturnPhysicalMaterial = true;
+	QueryParams.bTraceComplex = true; // For accurate bone detection
+
+	// Sphere trace for hits
+	const bool bHit = GetWorld()->SweepMultiByChannel(
+		HitResults,
+		TraceStart,
+		TraceEnd,
+		FQuat::Identity,
+		ECC_Pawn, // Hit pawns and physics bodies
+		FCollisionShape::MakeSphere(30.0f), // Weapon/fist radius
+		QueryParams
+	);
+
+	if (bHit)
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOCombat] Attack hit %d targets"), HitResults.Num());
+
+		// Process each hit
+		for (const FHitResult& Hit : HitResults)
+		{
+			ProcessHit(Hit, *Profile);
+		}
+	}
+	else
+	{
+		UE_LOG(LogMOFramework, Verbose, TEXT("[MOCombat] Attack missed (no hits)"));
+	}
 }
 
 EMOAttackResult UMOCombatComponent::ApplyHitToTarget(AActor* Target, const FMOCombatHitInfo& HitInfo)
@@ -877,6 +966,167 @@ void UMOCombatComponent::ApplyWeaponDurabilityLoss(int32 Amount)
 	{
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOCombat] Main hand weapon broke!"));
 		// TODO: Broadcast weapon broke event
+	}
+}
+
+void UMOCombatComponent::ProcessHit(const FHitResult& Hit, const FMOAttackDamageProfile& Profile)
+{
+	AActor* HitActor = Hit.GetActor();
+	if (!HitActor)
+	{
+		return;
+	}
+
+	AActor* Owner = GetOwner();
+	if (!Owner)
+	{
+		return;
+	}
+
+	// Check if hit is within attack arc
+	const FVector ToTarget = (Hit.ImpactPoint - Owner->GetActorLocation()).GetSafeNormal();
+	const float DotProduct = FVector::DotProduct(Owner->GetActorForwardVector(), ToTarget);
+	const float AngleToTarget = FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(DotProduct, -1.0f, 1.0f)));
+
+	if (AngleToTarget > Profile.ArcAngle * 0.5f)
+	{
+		UE_LOG(LogMOFramework, Verbose, TEXT("[MOCombat] Hit outside attack arc (%.1f° > %.1f°)"),
+			AngleToTarget, Profile.ArcAngle * 0.5f);
+		return; // Outside attack arc
+	}
+
+	// Determine body part from bone name (skeletal mesh)
+	EMOBodyPartType HitBodyPart = EMOBodyPartType::Torso; // Default to torso
+	if (Hit.BoneName != NAME_None)
+	{
+		HitBodyPart = UMOCombatMedicalHelpers::BoneNameToBodyPart(Hit.BoneName);
+		UE_LOG(LogMOFramework, Log, TEXT("[MOCombat] Hit bone '%s' -> body part %d"),
+			*Hit.BoneName.ToString(), static_cast<int32>(HitBodyPart));
+	}
+
+	// Check for combat component on target
+	UMOCombatComponent* TargetCombat = HitActor->FindComponentByClass<UMOCombatComponent>();
+	if (TargetCombat)
+	{
+		// Calculate damage with distance falloff
+		const float Distance = FVector::Dist(Owner->GetActorLocation(), Hit.ImpactPoint);
+		const float DamageMult = 1.0f - FMath::Clamp(Distance / Profile.Range, 0.0f, 1.0f) * 0.3f;
+
+		FMOCombatHitInfo HitInfo;
+		HitInfo.BaseDamage = Profile.BaseDamage * DamageMult;
+		HitInfo.DamageCategory = Profile.PrimaryDamageType;
+		HitInfo.TargetBodyPart = HitBodyPart;
+		HitInfo.ArmorPenetration = Profile.ArmorPenetration;
+		HitInfo.bCausesHeavyBleeding = Profile.bCausesHeavyBleeding;
+
+		EMOAttackResult Result = TargetCombat->ReceiveAttack(Owner, HitInfo);
+		OnAttackHit.Broadcast(HitActor, Result, HitInfo);
+
+		UE_LOG(LogMOFramework, Log, TEXT("[MOCombat] Applied %.1f damage to %s (result: %d)"),
+			HitInfo.BaseDamage, *HitActor->GetName(), static_cast<int32>(Result));
+	}
+	else
+	{
+		// Non-combat actor (resources, world objects)
+		UE_LOG(LogMOFramework, Log, TEXT("[MOCombat] Hit non-combat actor: %s at bone '%s'"),
+			*HitActor->GetName(), *Hit.BoneName.ToString());
+
+		OnHitNonCombatActor.Broadcast(HitActor, Hit.ImpactPoint, Hit.ImpactNormal, Hit.BoneName);
+	}
+}
+
+FVector UMOCombatComponent::GetAttackOrigin() const
+{
+	AActor* Owner = GetOwner();
+	if (!Owner)
+	{
+		return FVector::ZeroVector;
+	}
+
+	// If we have an equipment component with a weapon, try to get its socket
+	if (CachedEquipmentComp)
+	{
+		// Try to get weapon actor's "AttackOrigin" socket
+		// This would be set up on weapon meshes
+		// For now, we fall through to character mesh check
+	}
+
+	// Try to get character's right hand socket for unarmed attacks
+	if (const ACharacter* CharOwner = Cast<ACharacter>(Owner))
+	{
+		if (USkeletalMeshComponent* Mesh = CharOwner->GetMesh())
+		{
+			// Try common hand socket names
+			static const FName HandSocketNames[] = {
+				FName(TEXT("hand_r")),
+				FName(TEXT("Hand_R")),
+				FName(TEXT("RightHand")),
+				FName(TEXT("hand_rSocket"))
+			};
+
+			for (const FName& SocketName : HandSocketNames)
+			{
+				if (Mesh->DoesSocketExist(SocketName))
+				{
+					return Mesh->GetSocketLocation(SocketName);
+				}
+			}
+		}
+	}
+
+	// Final fallback: actor location + forward offset
+	return Owner->GetActorLocation() + Owner->GetActorForwardVector() * 50.0f;
+}
+
+void UMOCombatComponent::PlayAttackAnimation()
+{
+	ACharacter* CharOwner = Cast<ACharacter>(GetOwner());
+	if (!CharOwner)
+	{
+		return;
+	}
+
+	USkeletalMeshComponent* Mesh = CharOwner->GetMesh();
+	if (!Mesh)
+	{
+		return;
+	}
+
+	UAnimInstance* AnimInstance = Mesh->GetAnimInstance();
+	if (!AnimInstance)
+	{
+		return;
+	}
+
+	// Select montage based on attack type
+	UAnimMontage* MontageToPlay = nullptr;
+
+	// TODO: If weapon is equipped, get weapon's attack montage from item definition
+	// For now, use unarmed montages
+	switch (CurrentAttackType)
+	{
+	case EMOAttackType::Light:
+		MontageToPlay = UnarmedLightAttackMontage;
+		break;
+
+	case EMOAttackType::Heavy:
+		MontageToPlay = UnarmedHeavyAttackMontage;
+		break;
+
+	default:
+		MontageToPlay = UnarmedLightAttackMontage;
+		break;
+	}
+
+	if (MontageToPlay)
+	{
+		AnimInstance->Montage_Play(MontageToPlay);
+		UE_LOG(LogMOFramework, Log, TEXT("[MOCombat] Playing attack montage: %s"), *MontageToPlay->GetName());
+	}
+	else
+	{
+		UE_LOG(LogMOFramework, Verbose, TEXT("[MOCombat] No attack montage set for attack type %d"),
+			static_cast<int32>(CurrentAttackType));
 	}
 }
 

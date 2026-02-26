@@ -1,600 +1,953 @@
 [
 	{
 		"Name": "BlackLocust",
-		"DisplayName": "Black Locust Tree",
-		"Description": "A hardy deciduous tree with deeply furrowed bark and pinnate leaves. Black locust is exceptionally durable when used for tool handles and construction, naturally resistant to rot.",
+		"DisplayName": "NSLOCTEXT(\"DT_Resources [64587ECAB7AC7FA76B9DD0E74FE1F63D]\", \"BlackLocust_DisplayName\", \"Black Locust Tree\")",
+		"Description": "NSLOCTEXT(\"DT_Resources [64587ECAB7AC7FA76B9DD0E74FE1F63D]\", \"BlackLocust_Description\", \"A hardy deciduous tree with deeply furrowed bark and pinnate leaves. Black locust is exceptionally durable when used for tool handles and construction, naturally resistant to rot.\")",
 		"ResourceType": "Tree",
 		"HarvestActions": [
 			{
 				"ActionId": "GatherSticks",
-				"DisplayName": "Gather Sticks",
-				"YieldsItems": ["Stick01", "Stick01"],
+				"DisplayName": "NSLOCTEXT(\"DT_Resources [64587ECAB7AC7FA76B9DD0E74FE1F63D]\", \"BlackLocust_HarvestActions_Index0_DisplayName\", \"Gather Sticks\")",
+				"YieldsItems": [
+					"Stick01",
+					"Stick01"
+				],
+				"RequiredKnowledgeId": "None",
 				"RequiredToolType": "None",
 				"bToolRequired": false,
-				"MinToolQuality": 0.0,
-				"MissingToolTimeMultiplier": 1.0,
+				"MinToolQuality": 0,
+				"MissingToolTimeMultiplier": 1,
 				"bDestroysResource": false,
-				"BaseActionTime": 3.0,
+				"BaseActionTime": 3,
 				"SkillId": "Foraging",
-				"SkillXPReward": 3.0
+				"SkillXPReward": 3
 			},
 			{
 				"ActionId": "StripBark",
-				"DisplayName": "Strip Bark",
-				"YieldsItems": ["Bark01"],
+				"DisplayName": "NSLOCTEXT(\"DT_Resources [64587ECAB7AC7FA76B9DD0E74FE1F63D]\", \"BlackLocust_HarvestActions_Index1_DisplayName\", \"Strip Bark\")",
+				"YieldsItems": [
+					"Bark01"
+				],
+				"RequiredKnowledgeId": "Bark01",
 				"RequiredToolType": "None",
 				"bToolRequired": false,
-				"MinToolQuality": 0.0,
-				"MissingToolTimeMultiplier": 1.0,
+				"MinToolQuality": 0,
+				"MissingToolTimeMultiplier": 1,
 				"bDestroysResource": false,
-				"BaseActionTime": 5.0,
+				"BaseActionTime": 5,
 				"SkillId": "Foraging",
-				"SkillXPReward": 5.0
+				"SkillXPReward": 5
 			},
 			{
 				"ActionId": "ChopDown",
-				"DisplayName": "Chop Down",
-				"YieldsItems": ["Log01", "Log01", "Stick01", "Bark01"],
+				"DisplayName": "NSLOCTEXT(\"DT_Resources [64587ECAB7AC7FA76B9DD0E74FE1F63D]\", \"BlackLocust_HarvestActions_Index2_DisplayName\", \"Chop Down\")",
+				"YieldsItems": [
+					"Log01",
+					"Log01",
+					"Stick01",
+					"Bark01"
+				],
+				"RequiredKnowledgeId": "None",
 				"RequiredToolType": "Axe",
 				"bToolRequired": true,
-				"MinToolQuality": 0.0,
-				"MissingToolTimeMultiplier": 1.0,
+				"MinToolQuality": 0,
+				"MissingToolTimeMultiplier": 1,
 				"bDestroysResource": true,
-				"BaseActionTime": 30.0,
+				"BaseActionTime": 30,
 				"SkillId": "Woodcutting",
-				"SkillXPReward": 25.0
+				"SkillXPReward": 25
 			}
 		],
 		"bKeepOnHarvest": true,
 		"YieldsItems": [],
-		"ResourceTags": ["Wood", "Hardwood", "Harvestable"],
+		"ResourceTags": [
+			"Wood",
+			"Hardwood",
+			"Harvestable"
+		],
 		"MeshVariations": [],
-		"MinScale": { "X": 0.85, "Y": 0.85, "Z": 0.85 },
-		"MaxScale": { "X": 1.15, "Y": 1.15, "Z": 1.15 },
+		"MinScale":
+		{
+			"X": 0.84999999999999998,
+			"Y": 0.84999999999999998,
+			"Z": 0.84999999999999998
+		},
+		"MaxScale":
+		{
+			"X": 1.1499999999999999,
+			"Y": 1.1499999999999999,
+			"Z": 1.1499999999999999
+		},
 		"bRandomizeRotation": true
 	},
 	{
 		"Name": "CommonSpruce",
-		"DisplayName": "Common Spruce",
-		"Description": "A tall coniferous tree with short, stiff needles arranged spirally on the twigs. Spruce provides excellent straight-grained wood for construction and crafting.",
+		"DisplayName": "NSLOCTEXT(\"DT_Resources [64587ECAB7AC7FA76B9DD0E74FE1F63D]\", \"CommonSpruce_DisplayName\", \"Common Spruce\")",
+		"Description": "NSLOCTEXT(\"DT_Resources [64587ECAB7AC7FA76B9DD0E74FE1F63D]\", \"CommonSpruce_Description\", \"A tall coniferous tree with short, stiff needles arranged spirally on the twigs. Spruce provides excellent straight-grained wood for construction and crafting.\")",
 		"ResourceType": "Tree",
 		"HarvestActions": [
 			{
 				"ActionId": "GatherBranches",
-				"DisplayName": "Gather Branches",
-				"YieldsItems": ["Branch01", "Stick01"],
+				"DisplayName": "NSLOCTEXT(\"DT_Resources [64587ECAB7AC7FA76B9DD0E74FE1F63D]\", \"CommonSpruce_HarvestActions_Index0_DisplayName\", \"Gather Branches\")",
+				"YieldsItems": [
+					"Branch01",
+					"Stick01"
+				],
+				"RequiredKnowledgeId": "None",
 				"RequiredToolType": "None",
 				"bToolRequired": false,
-				"MinToolQuality": 0.0,
-				"MissingToolTimeMultiplier": 1.0,
+				"MinToolQuality": 0,
+				"MissingToolTimeMultiplier": 1,
 				"bDestroysResource": false,
-				"BaseActionTime": 4.0,
+				"BaseActionTime": 4,
 				"SkillId": "Foraging",
-				"SkillXPReward": 4.0
+				"SkillXPReward": 4
 			},
 			{
 				"ActionId": "CollectResin",
-				"DisplayName": "Collect Resin",
-				"YieldsItems": ["Resin01"],
+				"DisplayName": "NSLOCTEXT(\"DT_Resources [64587ECAB7AC7FA76B9DD0E74FE1F63D]\", \"CommonSpruce_HarvestActions_Index1_DisplayName\", \"Collect Resin\")",
+				"YieldsItems": [
+					"Resin01"
+				],
+				"RequiredKnowledgeId": "Resin01",
 				"RequiredToolType": "None",
 				"bToolRequired": false,
-				"MinToolQuality": 0.0,
-				"MissingToolTimeMultiplier": 1.0,
+				"MinToolQuality": 0,
+				"MissingToolTimeMultiplier": 1,
 				"bDestroysResource": false,
-				"BaseActionTime": 6.0,
+				"BaseActionTime": 6,
 				"SkillId": "Foraging",
-				"SkillXPReward": 8.0
+				"SkillXPReward": 8
 			},
 			{
 				"ActionId": "ChopDown",
-				"DisplayName": "Chop Down",
-				"YieldsItems": ["Log01", "Log01", "Branch01", "Branch01"],
+				"DisplayName": "NSLOCTEXT(\"DT_Resources [64587ECAB7AC7FA76B9DD0E74FE1F63D]\", \"CommonSpruce_HarvestActions_Index2_DisplayName\", \"Chop Down\")",
+				"YieldsItems": [
+					"Log01",
+					"Log01",
+					"Branch01",
+					"Branch01"
+				],
+				"RequiredKnowledgeId": "None",
 				"RequiredToolType": "Axe",
 				"bToolRequired": true,
-				"MinToolQuality": 0.0,
-				"MissingToolTimeMultiplier": 1.0,
+				"MinToolQuality": 0,
+				"MissingToolTimeMultiplier": 1,
 				"bDestroysResource": true,
-				"BaseActionTime": 35.0,
+				"BaseActionTime": 35,
 				"SkillId": "Woodcutting",
-				"SkillXPReward": 30.0
+				"SkillXPReward": 30
 			}
 		],
 		"bKeepOnHarvest": true,
 		"YieldsItems": [],
-		"ResourceTags": ["Wood", "Softwood", "Conifer", "Harvestable"],
+		"ResourceTags": [
+			"Wood",
+			"Softwood",
+			"Conifer",
+			"Harvestable"
+		],
 		"MeshVariations": [],
-		"MinScale": { "X": 0.9, "Y": 0.9, "Z": 0.85 },
-		"MaxScale": { "X": 1.1, "Y": 1.1, "Z": 1.2 },
+		"MinScale":
+		{
+			"X": 0.90000000000000002,
+			"Y": 0.90000000000000002,
+			"Z": 0.84999999999999998
+		},
+		"MaxScale":
+		{
+			"X": 1.1000000000000001,
+			"Y": 1.1000000000000001,
+			"Z": 1.2
+		},
 		"bRandomizeRotation": true
 	},
 	{
 		"Name": "BeachBoulder",
-		"DisplayName": "Beach Boulder",
-		"Description": "A large, smooth boulder worn by centuries of wave action. Contains usable stone for tools and construction.",
+		"DisplayName": "NSLOCTEXT(\"DT_Resources [64587ECAB7AC7FA76B9DD0E74FE1F63D]\", \"BeachBoulder_DisplayName\", \"Beach Boulder\")",
+		"Description": "NSLOCTEXT(\"DT_Resources [64587ECAB7AC7FA76B9DD0E74FE1F63D]\", \"BeachBoulder_Description\", \"A large, smooth boulder worn by centuries of wave action. Contains usable stone for tools and construction.\")",
 		"ResourceType": "Rock",
 		"HarvestActions": [
 			{
 				"ActionId": "GatherLooseStones",
-				"DisplayName": "Gather Loose Stones",
-				"YieldsItems": ["RiverCobble01"],
+				"DisplayName": "NSLOCTEXT(\"DT_Resources [64587ECAB7AC7FA76B9DD0E74FE1F63D]\", \"BeachBoulder_HarvestActions_Index0_DisplayName\", \"Gather Loose Stones\")",
+				"YieldsItems": [
+					"RiverCobble01"
+				],
+				"RequiredKnowledgeId": "None",
 				"RequiredToolType": "None",
 				"bToolRequired": false,
-				"MinToolQuality": 0.0,
-				"MissingToolTimeMultiplier": 1.0,
+				"MinToolQuality": 0,
+				"MissingToolTimeMultiplier": 1,
 				"bDestroysResource": false,
-				"BaseActionTime": 2.0,
+				"BaseActionTime": 2,
 				"SkillId": "Foraging",
-				"SkillXPReward": 2.0
+				"SkillXPReward": 2
 			},
 			{
 				"ActionId": "MineStone",
-				"DisplayName": "Mine Stone",
-				"YieldsItems": ["Stone01", "Stone01", "Stone01", "RiverCobble01"],
+				"DisplayName": "NSLOCTEXT(\"DT_Resources [64587ECAB7AC7FA76B9DD0E74FE1F63D]\", \"BeachBoulder_HarvestActions_Index1_DisplayName\", \"Mine Stone\")",
+				"YieldsItems": [
+					"Stone01",
+					"Stone01",
+					"Stone01",
+					"RiverCobble01"
+				],
+				"RequiredKnowledgeId": "None",
 				"RequiredToolType": "Pickaxe",
 				"bToolRequired": false,
-				"MinToolQuality": 0.0,
-				"MissingToolTimeMultiplier": 5.0,
+				"MinToolQuality": 0,
+				"MissingToolTimeMultiplier": 5,
 				"bDestroysResource": true,
-				"BaseActionTime": 45.0,
+				"BaseActionTime": 45,
 				"SkillId": "Mining",
-				"SkillXPReward": 20.0
+				"SkillXPReward": 20
 			}
 		],
 		"bKeepOnHarvest": false,
 		"YieldsItems": [],
-		"ResourceTags": ["Stone", "Harvestable"],
+		"ResourceTags": [
+			"Stone",
+			"Harvestable"
+		],
 		"MeshVariations": [],
-		"MinScale": { "X": 0.8, "Y": 0.8, "Z": 0.8 },
-		"MaxScale": { "X": 1.2, "Y": 1.2, "Z": 1.1 },
+		"MinScale":
+		{
+			"X": 0.80000000000000004,
+			"Y": 0.80000000000000004,
+			"Z": 0.80000000000000004
+		},
+		"MaxScale":
+		{
+			"X": 1.2,
+			"Y": 1.2,
+			"Z": 1.1000000000000001
+		},
 		"bRandomizeRotation": true
 	},
 	{
 		"Name": "ForestBoulder",
-		"DisplayName": "Forest Boulder",
-		"Description": "A moss-covered boulder partially buried in forest soil. The exposed surfaces show weathered granite suitable for knapping and construction.",
+		"DisplayName": "NSLOCTEXT(\"DT_Resources [64587ECAB7AC7FA76B9DD0E74FE1F63D]\", \"ForestBoulder_DisplayName\", \"Forest Boulder\")",
+		"Description": "NSLOCTEXT(\"DT_Resources [64587ECAB7AC7FA76B9DD0E74FE1F63D]\", \"ForestBoulder_Description\", \"A moss-covered boulder partially buried in forest soil. The exposed surfaces show weathered granite suitable for knapping and construction.\")",
 		"ResourceType": "Rock",
 		"HarvestActions": [
 			{
 				"ActionId": "GatherLooseStones",
-				"DisplayName": "Gather Loose Stones",
-				"YieldsItems": ["Hammerstone01"],
+				"DisplayName": "NSLOCTEXT(\"DT_Resources [64587ECAB7AC7FA76B9DD0E74FE1F63D]\", \"ForestBoulder_HarvestActions_Index0_DisplayName\", \"Gather Loose Stones\")",
+				"YieldsItems": [
+					"RiverCobble01"
+				],
+				"RequiredKnowledgeId": "None",
 				"RequiredToolType": "None",
 				"bToolRequired": false,
-				"MinToolQuality": 0.0,
-				"MissingToolTimeMultiplier": 1.0,
+				"MinToolQuality": 0,
+				"MissingToolTimeMultiplier": 1,
 				"bDestroysResource": false,
-				"BaseActionTime": 3.0,
+				"BaseActionTime": 3,
 				"SkillId": "Foraging",
-				"SkillXPReward": 3.0
+				"SkillXPReward": 3
 			},
 			{
 				"ActionId": "MineStone",
-				"DisplayName": "Mine Stone",
-				"YieldsItems": ["Stone01", "Stone01", "Hammerstone01"],
+				"DisplayName": "NSLOCTEXT(\"DT_Resources [64587ECAB7AC7FA76B9DD0E74FE1F63D]\", \"ForestBoulder_HarvestActions_Index1_DisplayName\", \"Mine Stone\")",
+				"YieldsItems": [
+					"Stone01",
+					"Stone01",
+					"Hammerstone01"
+				],
+				"RequiredKnowledgeId": "None",
 				"RequiredToolType": "Pickaxe",
-				"bToolRequired": false,
-				"MinToolQuality": 0.0,
-				"MissingToolTimeMultiplier": 5.0,
+				"bToolRequired": true,
+				"MinToolQuality": 0,
+				"MissingToolTimeMultiplier": 5,
 				"bDestroysResource": true,
-				"BaseActionTime": 50.0,
+				"BaseActionTime": 50,
 				"SkillId": "Mining",
-				"SkillXPReward": 25.0
+				"SkillXPReward": 25
 			}
 		],
 		"bKeepOnHarvest": false,
 		"YieldsItems": [],
-		"ResourceTags": ["Stone", "Granite", "Harvestable"],
-		"MeshVariations": [],
-		"MinScale": { "X": 0.75, "Y": 0.75, "Z": 0.8 },
-		"MaxScale": { "X": 1.25, "Y": 1.25, "Z": 1.15 },
+		"ResourceTags": [
+			"Stone",
+			"Granite",
+			"Harvestable"
+		],
+		"MeshVariations": [
+			{
+				"Mesh": "/Game/Fab/Megascans/3D/Forest_Boulder_wgosajs/Medium/wgosajs_tier_2/StaticMeshes/wgosajs_tier_2.wgosajs_tier_2",
+				"Weight": 1,
+				"MaterialOverride": "None"
+			}
+		],
+		"MinScale":
+		{
+			"X": 0.75,
+			"Y": 0.75,
+			"Z": 0.80000000000000004
+		},
+		"MaxScale":
+		{
+			"X": 1.25,
+			"Y": 1.25,
+			"Z": 1.1499999999999999
+		},
 		"bRandomizeRotation": true
 	},
 	{
 		"Name": "FlintDeposit",
-		"DisplayName": "Flint Deposit",
-		"Description": "A nodule of cryptocrystalline quartz embedded in chalk or limestone. Flint's conchoidal fracture makes it ideal for knapping sharp tools - humanity's first precision material.",
+		"DisplayName": "NSLOCTEXT(\"DT_Resources [64587ECAB7AC7FA76B9DD0E74FE1F63D]\", \"FlintDeposit_DisplayName\", \"Flint Deposit\")",
+		"Description": "NSLOCTEXT(\"DT_Resources [64587ECAB7AC7FA76B9DD0E74FE1F63D]\", \"FlintDeposit_Description\", \"A nodule of cryptocrystalline quartz embedded in chalk or limestone. Flint\\'s conchoidal fracture makes it ideal for knapping sharp tools - humanity\\'s first precision material.\")",
 		"ResourceType": "Ore",
 		"HarvestActions": [
 			{
 				"ActionId": "KnapFlint",
-				"DisplayName": "Knap Flint",
-				"YieldsItems": ["FlintFlake01", "FlintFlake01"],
+				"DisplayName": "NSLOCTEXT(\"DT_Resources [64587ECAB7AC7FA76B9DD0E74FE1F63D]\", \"FlintDeposit_HarvestActions_Index0_DisplayName\", \"Knap Flint\")",
+				"YieldsItems": [
+					"FlintFlake01",
+					"FlintFlake01"
+				],
+				"RequiredKnowledgeId": "FlintFlake01",
 				"RequiredToolType": "None",
 				"bToolRequired": false,
-				"MinToolQuality": 0.0,
-				"MissingToolTimeMultiplier": 1.0,
+				"MinToolQuality": 0,
+				"MissingToolTimeMultiplier": 1,
 				"bDestroysResource": false,
-				"BaseActionTime": 8.0,
+				"BaseActionTime": 8,
 				"SkillId": "Knapping",
-				"SkillXPReward": 10.0
+				"SkillXPReward": 10
 			},
 			{
 				"ActionId": "ExtractFlint",
-				"DisplayName": "Extract Flint Nodule",
-				"YieldsItems": ["FlintNodule01", "FlintFlake01", "FlintFlake01"],
+				"DisplayName": "NSLOCTEXT(\"DT_Resources [64587ECAB7AC7FA76B9DD0E74FE1F63D]\", \"FlintDeposit_HarvestActions_Index1_DisplayName\", \"Extract Flint Nodule\")",
+				"YieldsItems": [
+					"FlintNodule01",
+					"FlintFlake01",
+					"FlintFlake01"
+				],
+				"RequiredKnowledgeId": "None",
 				"RequiredToolType": "Pickaxe",
 				"bToolRequired": false,
-				"MinToolQuality": 0.0,
-				"MissingToolTimeMultiplier": 4.0,
+				"MinToolQuality": 0,
+				"MissingToolTimeMultiplier": 4,
 				"bDestroysResource": true,
-				"BaseActionTime": 25.0,
+				"BaseActionTime": 25,
 				"SkillId": "Mining",
-				"SkillXPReward": 20.0
+				"SkillXPReward": 20
 			}
 		],
 		"bKeepOnHarvest": true,
 		"YieldsItems": [],
-		"ResourceTags": ["Stone", "Flint", "Knappable", "Harvestable"],
+		"ResourceTags": [
+			"Stone",
+			"Flint",
+			"Knappable",
+			"Harvestable"
+		],
 		"MeshVariations": [],
-		"MinScale": { "X": 0.7, "Y": 0.7, "Z": 0.7 },
-		"MaxScale": { "X": 1.0, "Y": 1.0, "Z": 1.0 },
+		"MinScale":
+		{
+			"X": 0.69999999999999996,
+			"Y": 0.69999999999999996,
+			"Z": 0.69999999999999996
+		},
+		"MaxScale":
+		{
+			"X": 1,
+			"Y": 1,
+			"Z": 1
+		},
 		"bRandomizeRotation": true
 	},
 	{
 		"Name": "RaspberryBush",
-		"DisplayName": "Wild Raspberry Bush",
-		"Description": "A thorny shrub bearing clusters of aggregate drupelets. Raspberries were among the first fruits gathered by early humans, providing essential vitamins and sugars.",
+		"DisplayName": "NSLOCTEXT(\"DT_Resources [64587ECAB7AC7FA76B9DD0E74FE1F63D]\", \"RaspberryBush_DisplayName\", \"Wild Raspberry Bush\")",
+		"Description": "NSLOCTEXT(\"DT_Resources [64587ECAB7AC7FA76B9DD0E74FE1F63D]\", \"RaspberryBush_Description\", \"A thorny shrub bearing clusters of aggregate drupelets. Raspberries were among the first fruits gathered by early humans, providing essential vitamins and sugars.\")",
 		"ResourceType": "Bush",
 		"HarvestActions": [
 			{
 				"ActionId": "GatherBerries",
-				"DisplayName": "Gather Berries",
-				"YieldsItems": ["Berries01", "Berries01"],
+				"DisplayName": "NSLOCTEXT(\"DT_Resources [64587ECAB7AC7FA76B9DD0E74FE1F63D]\", \"RaspberryBush_HarvestActions_Index0_DisplayName\", \"Gather Berries\")",
+				"YieldsItems": [
+					"Berries01",
+					"Berries01"
+				],
+				"RequiredKnowledgeId": "None",
 				"RequiredToolType": "None",
 				"bToolRequired": false,
-				"MinToolQuality": 0.0,
-				"MissingToolTimeMultiplier": 1.0,
+				"MinToolQuality": 0,
+				"MissingToolTimeMultiplier": 1,
 				"bDestroysResource": false,
-				"BaseActionTime": 4.0,
+				"BaseActionTime": 4,
 				"SkillId": "Foraging",
-				"SkillXPReward": 5.0
+				"SkillXPReward": 5
 			},
 			{
 				"ActionId": "GatherTwigs",
-				"DisplayName": "Gather Twigs",
-				"YieldsItems": ["Stick01"],
+				"DisplayName": "NSLOCTEXT(\"DT_Resources [64587ECAB7AC7FA76B9DD0E74FE1F63D]\", \"RaspberryBush_HarvestActions_Index1_DisplayName\", \"Gather Twigs\")",
+				"YieldsItems": [
+					"Stick01"
+				],
+				"RequiredKnowledgeId": "None",
 				"RequiredToolType": "None",
 				"bToolRequired": false,
-				"MinToolQuality": 0.0,
-				"MissingToolTimeMultiplier": 1.0,
+				"MinToolQuality": 0,
+				"MissingToolTimeMultiplier": 1,
 				"bDestroysResource": false,
-				"BaseActionTime": 2.0,
+				"BaseActionTime": 2,
 				"SkillId": "Foraging",
-				"SkillXPReward": 2.0
+				"SkillXPReward": 2
 			}
 		],
 		"bKeepOnHarvest": true,
 		"YieldsItems": [],
-		"ResourceTags": ["Bush", "Berries", "Food", "Harvestable"],
+		"ResourceTags": [
+			"Bush",
+			"Berries",
+			"Food",
+			"Harvestable"
+		],
 		"MeshVariations": [],
-		"MinScale": { "X": 0.8, "Y": 0.8, "Z": 0.85 },
-		"MaxScale": { "X": 1.2, "Y": 1.2, "Z": 1.15 },
+		"MinScale":
+		{
+			"X": 0.80000000000000004,
+			"Y": 0.80000000000000004,
+			"Z": 0.84999999999999998
+		},
+		"MaxScale":
+		{
+			"X": 1.2,
+			"Y": 1.2,
+			"Z": 1.1499999999999999
+		},
 		"bRandomizeRotation": true
 	},
 	{
 		"Name": "DeadShrub",
-		"DisplayName": "Dead Shrub",
-		"Description": "A dried-out shrub with brittle branches. While no longer living, it provides excellent tinder and plant fiber for cordage.",
+		"DisplayName": "NSLOCTEXT(\"DT_Resources [64587ECAB7AC7FA76B9DD0E74FE1F63D]\", \"DeadShrub_DisplayName\", \"Dead Shrub\")",
+		"Description": "NSLOCTEXT(\"DT_Resources [64587ECAB7AC7FA76B9DD0E74FE1F63D]\", \"DeadShrub_Description\", \"A dried-out shrub with brittle branches. While no longer living, it provides excellent tinder and plant fiber for cordage.\")",
 		"ResourceType": "Bush",
 		"HarvestActions": [
 			{
 				"ActionId": "GatherFiber",
-				"DisplayName": "Gather Plant Fiber",
-				"YieldsItems": ["PlantFiber01", "PlantFiber01"],
+				"DisplayName": "NSLOCTEXT(\"DT_Resources [64587ECAB7AC7FA76B9DD0E74FE1F63D]\", \"DeadShrub_HarvestActions_Index0_DisplayName\", \"Gather Plant Fiber\")",
+				"YieldsItems": [
+					"PlantFiber01",
+					"PlantFiber01"
+				],
+				"RequiredKnowledgeId": "None",
 				"RequiredToolType": "None",
 				"bToolRequired": false,
-				"MinToolQuality": 0.0,
-				"MissingToolTimeMultiplier": 1.0,
+				"MinToolQuality": 0,
+				"MissingToolTimeMultiplier": 1,
 				"bDestroysResource": false,
-				"BaseActionTime": 3.0,
+				"BaseActionTime": 3,
 				"SkillId": "Foraging",
-				"SkillXPReward": 3.0
+				"SkillXPReward": 3
 			},
 			{
 				"ActionId": "GatherTinder",
-				"DisplayName": "Gather Tinder",
-				"YieldsItems": ["Tinder01"],
+				"DisplayName": "NSLOCTEXT(\"DT_Resources [64587ECAB7AC7FA76B9DD0E74FE1F63D]\", \"DeadShrub_HarvestActions_Index1_DisplayName\", \"Gather Tinder\")",
+				"YieldsItems": [
+					"Tinder01"
+				],
+				"RequiredKnowledgeId": "Tinder01",
 				"RequiredToolType": "None",
 				"bToolRequired": false,
-				"MinToolQuality": 0.0,
-				"MissingToolTimeMultiplier": 1.0,
+				"MinToolQuality": 0,
+				"MissingToolTimeMultiplier": 1,
 				"bDestroysResource": false,
-				"BaseActionTime": 2.0,
+				"BaseActionTime": 2,
 				"SkillId": "Foraging",
-				"SkillXPReward": 2.0
+				"SkillXPReward": 2
 			},
 			{
 				"ActionId": "Uproot",
-				"DisplayName": "Uproot Bush",
-				"YieldsItems": ["PlantFiber01", "PlantFiber01", "Stick01", "Tinder01"],
+				"DisplayName": "NSLOCTEXT(\"DT_Resources [64587ECAB7AC7FA76B9DD0E74FE1F63D]\", \"DeadShrub_HarvestActions_Index2_DisplayName\", \"Uproot Bush\")",
+				"YieldsItems": [
+					"PlantFiber01",
+					"PlantFiber01",
+					"Stick01",
+					"Tinder01"
+				],
+				"RequiredKnowledgeId": "None",
 				"RequiredToolType": "None",
 				"bToolRequired": false,
-				"MinToolQuality": 0.0,
-				"MissingToolTimeMultiplier": 1.0,
+				"MinToolQuality": 0,
+				"MissingToolTimeMultiplier": 1,
 				"bDestroysResource": true,
-				"BaseActionTime": 8.0,
+				"BaseActionTime": 8,
 				"SkillId": "Foraging",
-				"SkillXPReward": 8.0
+				"SkillXPReward": 8
 			}
 		],
 		"bKeepOnHarvest": true,
 		"YieldsItems": [],
-		"ResourceTags": ["Bush", "Fiber", "Tinder", "Harvestable"],
+		"ResourceTags": [
+			"Bush",
+			"Fiber",
+			"Tinder",
+			"Harvestable"
+		],
 		"MeshVariations": [],
-		"MinScale": { "X": 0.7, "Y": 0.7, "Z": 0.75 },
-		"MaxScale": { "X": 1.3, "Y": 1.3, "Z": 1.2 },
+		"MinScale":
+		{
+			"X": 0.69999999999999996,
+			"Y": 0.69999999999999996,
+			"Z": 0.75
+		},
+		"MaxScale":
+		{
+			"X": 1.3,
+			"Y": 1.3,
+			"Z": 1.2
+		},
 		"bRandomizeRotation": true
 	},
 	{
 		"Name": "TallGrass",
-		"DisplayName": "Tall Grass",
-		"Description": "A patch of wild grass with long, fibrous blades. Used since prehistory for weaving, thatching, and making cordage.",
+		"DisplayName": "NSLOCTEXT(\"DT_Resources [64587ECAB7AC7FA76B9DD0E74FE1F63D]\", \"TallGrass_DisplayName\", \"Tall Grass\")",
+		"Description": "NSLOCTEXT(\"DT_Resources [64587ECAB7AC7FA76B9DD0E74FE1F63D]\", \"TallGrass_Description\", \"A patch of wild grass with long, fibrous blades. Used since prehistory for weaving, thatching, and making cordage.\")",
 		"ResourceType": "Plant",
 		"HarvestActions": [
 			{
 				"ActionId": "GatherGrass",
-				"DisplayName": "Gather Grass",
-				"YieldsItems": ["PlantFiber01"],
+				"DisplayName": "NSLOCTEXT(\"DT_Resources [64587ECAB7AC7FA76B9DD0E74FE1F63D]\", \"TallGrass_HarvestActions_Index0_DisplayName\", \"Gather Grass\")",
+				"YieldsItems": [
+					"PlantFiber01"
+				],
+				"RequiredKnowledgeId": "None",
 				"RequiredToolType": "None",
 				"bToolRequired": false,
-				"MinToolQuality": 0.0,
-				"MissingToolTimeMultiplier": 1.0,
+				"MinToolQuality": 0,
+				"MissingToolTimeMultiplier": 1,
 				"bDestroysResource": false,
-				"BaseActionTime": 2.0,
+				"BaseActionTime": 2,
 				"SkillId": "Foraging",
-				"SkillXPReward": 2.0
+				"SkillXPReward": 2
 			},
 			{
 				"ActionId": "CutGrass",
-				"DisplayName": "Cut Grass",
-				"YieldsItems": ["PlantFiber01", "PlantFiber01", "PlantFiber01"],
+				"DisplayName": "NSLOCTEXT(\"DT_Resources [64587ECAB7AC7FA76B9DD0E74FE1F63D]\", \"TallGrass_HarvestActions_Index1_DisplayName\", \"Cut Grass\")",
+				"YieldsItems": [
+					"PlantFiber01",
+					"PlantFiber01",
+					"PlantFiber01"
+				],
+				"RequiredKnowledgeId": "None",
 				"RequiredToolType": "Knife",
 				"bToolRequired": false,
-				"MinToolQuality": 0.0,
-				"MissingToolTimeMultiplier": 2.0,
+				"MinToolQuality": 0,
+				"MissingToolTimeMultiplier": 2,
 				"bDestroysResource": true,
-				"BaseActionTime": 4.0,
+				"BaseActionTime": 4,
 				"SkillId": "Foraging",
-				"SkillXPReward": 5.0
+				"SkillXPReward": 5
 			}
 		],
 		"bKeepOnHarvest": true,
 		"YieldsItems": [],
-		"ResourceTags": ["Plant", "Fiber", "Grass", "Harvestable"],
+		"ResourceTags": [
+			"Plant",
+			"Fiber",
+			"Grass",
+			"Harvestable"
+		],
 		"MeshVariations": [],
-		"MinScale": { "X": 0.8, "Y": 0.8, "Z": 0.7 },
-		"MaxScale": { "X": 1.2, "Y": 1.2, "Z": 1.3 },
+		"MinScale":
+		{
+			"X": 0.80000000000000004,
+			"Y": 0.80000000000000004,
+			"Z": 0.69999999999999996
+		},
+		"MaxScale":
+		{
+			"X": 1.2,
+			"Y": 1.2,
+			"Z": 1.3
+		},
 		"bRandomizeRotation": true
 	},
 	{
 		"Name": "ClayDeposit",
-		"DisplayName": "Clay Deposit",
-		"Description": "A patch of fine-grained sediment exposed along a riverbank or hillside. Clay has been used for pottery, building, and waterproofing for over 25,000 years.",
+		"DisplayName": "NSLOCTEXT(\"DT_Resources [64587ECAB7AC7FA76B9DD0E74FE1F63D]\", \"ClayDeposit_DisplayName\", \"Clay Deposit\")",
+		"Description": "NSLOCTEXT(\"DT_Resources [64587ECAB7AC7FA76B9DD0E74FE1F63D]\", \"ClayDeposit_Description\", \"A patch of fine-grained sediment exposed along a riverbank or hillside. Clay has been used for pottery, building, and waterproofing for over 25,000 years.\")",
 		"ResourceType": "Ore",
 		"HarvestActions": [
 			{
 				"ActionId": "GatherClay",
-				"DisplayName": "Gather Clay",
-				"YieldsItems": ["Clay01"],
+				"DisplayName": "NSLOCTEXT(\"DT_Resources [64587ECAB7AC7FA76B9DD0E74FE1F63D]\", \"ClayDeposit_HarvestActions_Index0_DisplayName\", \"Gather Clay\")",
+				"YieldsItems": [
+					"Clay01"
+				],
+				"RequiredKnowledgeId": "Clay01",
 				"RequiredToolType": "None",
 				"bToolRequired": false,
-				"MinToolQuality": 0.0,
-				"MissingToolTimeMultiplier": 1.0,
+				"MinToolQuality": 0,
+				"MissingToolTimeMultiplier": 1,
 				"bDestroysResource": false,
-				"BaseActionTime": 5.0,
+				"BaseActionTime": 5,
 				"SkillId": "Foraging",
-				"SkillXPReward": 5.0
+				"SkillXPReward": 5
 			},
 			{
 				"ActionId": "DigClay",
-				"DisplayName": "Dig Clay",
-				"YieldsItems": ["Clay01", "Clay01", "Clay01"],
+				"DisplayName": "NSLOCTEXT(\"DT_Resources [64587ECAB7AC7FA76B9DD0E74FE1F63D]\", \"ClayDeposit_HarvestActions_Index1_DisplayName\", \"Dig Clay\")",
+				"YieldsItems": [
+					"Clay01",
+					"Clay01",
+					"Clay01"
+				],
+				"RequiredKnowledgeId": "None",
 				"RequiredToolType": "Shovel",
 				"bToolRequired": false,
-				"MinToolQuality": 0.0,
-				"MissingToolTimeMultiplier": 3.0,
+				"MinToolQuality": 0,
+				"MissingToolTimeMultiplier": 3,
 				"bDestroysResource": true,
-				"BaseActionTime": 20.0,
+				"BaseActionTime": 20,
 				"SkillId": "Mining",
-				"SkillXPReward": 15.0
+				"SkillXPReward": 15
 			}
 		],
 		"bKeepOnHarvest": true,
 		"YieldsItems": [],
-		"ResourceTags": ["Clay", "Mineral", "Harvestable"],
+		"ResourceTags": [
+			"Clay",
+			"Mineral",
+			"Harvestable"
+		],
 		"MeshVariations": [],
-		"MinScale": { "X": 0.9, "Y": 0.9, "Z": 0.5 },
-		"MaxScale": { "X": 1.1, "Y": 1.1, "Z": 0.8 },
+		"MinScale":
+		{
+			"X": 0.90000000000000002,
+			"Y": 0.90000000000000002,
+			"Z": 0.5
+		},
+		"MaxScale":
+		{
+			"X": 1.1000000000000001,
+			"Y": 1.1000000000000001,
+			"Z": 0.80000000000000004
+		},
 		"bRandomizeRotation": true
 	},
 	{
 		"Name": "IronOreDeposit",
-		"DisplayName": "Iron Ore Deposit",
-		"Description": "A rocky outcrop streaked with rust-red oxide deposits. Iron transformed human civilization, though extracting and working it requires advanced knowledge and high temperatures.",
+		"DisplayName": "NSLOCTEXT(\"DT_Resources [64587ECAB7AC7FA76B9DD0E74FE1F63D]\", \"IronOreDeposit_DisplayName\", \"Iron Ore Deposit\")",
+		"Description": "NSLOCTEXT(\"DT_Resources [64587ECAB7AC7FA76B9DD0E74FE1F63D]\", \"IronOreDeposit_Description\", \"A rocky outcrop streaked with rust-red oxide deposits. Iron transformed human civilization, though extracting and working it requires advanced knowledge and high temperatures.\")",
 		"ResourceType": "Ore",
 		"HarvestActions": [
 			{
 				"ActionId": "MineOre",
-				"DisplayName": "Mine Iron Ore",
-				"YieldsItems": ["IronOre01", "IronOre01", "Stone01"],
+				"DisplayName": "NSLOCTEXT(\"DT_Resources [64587ECAB7AC7FA76B9DD0E74FE1F63D]\", \"IronOreDeposit_HarvestActions_Index0_DisplayName\", \"Mine Iron Ore\")",
+				"YieldsItems": [
+					"IronOre01",
+					"IronOre01",
+					"Stone01"
+				],
+				"RequiredKnowledgeId": "None",
 				"RequiredToolType": "Pickaxe",
 				"bToolRequired": true,
-				"MinToolQuality": 1.0,
-				"MissingToolTimeMultiplier": 1.0,
+				"MinToolQuality": 1,
+				"MissingToolTimeMultiplier": 1,
 				"bDestroysResource": true,
-				"BaseActionTime": 60.0,
+				"BaseActionTime": 60,
 				"SkillId": "Mining",
-				"SkillXPReward": 40.0
+				"SkillXPReward": 40
 			}
 		],
 		"bKeepOnHarvest": false,
 		"YieldsItems": [],
-		"ResourceTags": ["Ore", "Iron", "Metal", "Harvestable"],
+		"ResourceTags": [
+			"Ore",
+			"Iron",
+			"Metal",
+			"Harvestable"
+		],
 		"MeshVariations": [],
-		"MinScale": { "X": 0.85, "Y": 0.85, "Z": 0.8 },
-		"MaxScale": { "X": 1.15, "Y": 1.15, "Z": 1.1 },
+		"MinScale":
+		{
+			"X": 0.84999999999999998,
+			"Y": 0.84999999999999998,
+			"Z": 0.80000000000000004
+		},
+		"MaxScale":
+		{
+			"X": 1.1499999999999999,
+			"Y": 1.1499999999999999,
+			"Z": 1.1000000000000001
+		},
 		"bRandomizeRotation": true
 	},
 	{
 		"Name": "CopperOreDeposit",
-		"DisplayName": "Copper Ore Deposit",
-		"Description": "Rock veined with distinctive green malachite. Copper was the first metal worked by humans, initially cold-hammered into tools before smelting was discovered around 5000 BCE.",
+		"DisplayName": "NSLOCTEXT(\"DT_Resources [64587ECAB7AC7FA76B9DD0E74FE1F63D]\", \"CopperOreDeposit_DisplayName\", \"Copper Ore Deposit\")",
+		"Description": "NSLOCTEXT(\"DT_Resources [64587ECAB7AC7FA76B9DD0E74FE1F63D]\", \"CopperOreDeposit_Description\", \"Rock veined with distinctive green malachite. Copper was the first metal worked by humans, initially cold-hammered into tools before smelting was discovered around 5000 BCE.\")",
 		"ResourceType": "Ore",
 		"HarvestActions": [
 			{
 				"ActionId": "MineOre",
-				"DisplayName": "Mine Copper Ore",
-				"YieldsItems": ["CopperOre01", "CopperOre01", "Stone01"],
+				"DisplayName": "NSLOCTEXT(\"DT_Resources [64587ECAB7AC7FA76B9DD0E74FE1F63D]\", \"CopperOreDeposit_HarvestActions_Index0_DisplayName\", \"Mine Copper Ore\")",
+				"YieldsItems": [
+					"CopperOre01",
+					"CopperOre01",
+					"Stone01"
+				],
+				"RequiredKnowledgeId": "None",
 				"RequiredToolType": "Pickaxe",
 				"bToolRequired": true,
 				"MinToolQuality": 0.5,
-				"MissingToolTimeMultiplier": 1.0,
+				"MissingToolTimeMultiplier": 1,
 				"bDestroysResource": true,
-				"BaseActionTime": 50.0,
+				"BaseActionTime": 50,
 				"SkillId": "Mining",
-				"SkillXPReward": 35.0
+				"SkillXPReward": 35
 			},
 			{
 				"ActionId": "GatherNuggets",
-				"DisplayName": "Gather Copper Nuggets",
-				"YieldsItems": ["CopperNugget01"],
+				"DisplayName": "NSLOCTEXT(\"DT_Resources [64587ECAB7AC7FA76B9DD0E74FE1F63D]\", \"CopperOreDeposit_HarvestActions_Index1_DisplayName\", \"Gather Copper Nuggets\")",
+				"YieldsItems": [
+					"CopperNugget01"
+				],
+				"RequiredKnowledgeId": "CopperNugget01",
 				"RequiredToolType": "None",
 				"bToolRequired": false,
-				"MinToolQuality": 0.0,
-				"MissingToolTimeMultiplier": 1.0,
+				"MinToolQuality": 0,
+				"MissingToolTimeMultiplier": 1,
 				"bDestroysResource": false,
-				"BaseActionTime": 8.0,
+				"BaseActionTime": 8,
 				"SkillId": "Foraging",
-				"SkillXPReward": 10.0
+				"SkillXPReward": 10
 			}
 		],
 		"bKeepOnHarvest": true,
 		"YieldsItems": [],
-		"ResourceTags": ["Ore", "Copper", "Metal", "Harvestable"],
+		"ResourceTags": [
+			"Ore",
+			"Copper",
+			"Metal",
+			"Harvestable"
+		],
 		"MeshVariations": [],
-		"MinScale": { "X": 0.8, "Y": 0.8, "Z": 0.75 },
-		"MaxScale": { "X": 1.2, "Y": 1.2, "Z": 1.1 },
+		"MinScale":
+		{
+			"X": 0.80000000000000004,
+			"Y": 0.80000000000000004,
+			"Z": 0.75
+		},
+		"MaxScale":
+		{
+			"X": 1.2,
+			"Y": 1.2,
+			"Z": 1.1000000000000001
+		},
 		"bRandomizeRotation": true
 	},
 	{
 		"Name": "AppleTree",
-		"DisplayName": "Wild Apple Tree",
-		"Description": "A gnarled tree bearing small, tart wild apples. Domesticated from wild ancestors in the mountains of Kazakhstan, apples have been a staple food since the Neolithic.",
+		"DisplayName": "NSLOCTEXT(\"DT_Resources [64587ECAB7AC7FA76B9DD0E74FE1F63D]\", \"AppleTree_DisplayName\", \"Wild Apple Tree\")",
+		"Description": "NSLOCTEXT(\"DT_Resources [64587ECAB7AC7FA76B9DD0E74FE1F63D]\", \"AppleTree_Description\", \"A gnarled tree bearing small, tart wild apples. Domesticated from wild ancestors in the mountains of Kazakhstan, apples have been a staple food since the Neolithic.\")",
 		"ResourceType": "Tree",
 		"HarvestActions": [
 			{
 				"ActionId": "PickApples",
-				"DisplayName": "Pick Apples",
-				"YieldsItems": ["Apple01", "Apple01"],
+				"DisplayName": "NSLOCTEXT(\"DT_Resources [64587ECAB7AC7FA76B9DD0E74FE1F63D]\", \"AppleTree_HarvestActions_Index0_DisplayName\", \"Pick Apples\")",
+				"YieldsItems": [
+					"Apple01",
+					"Apple01"
+				],
+				"RequiredKnowledgeId": "None",
 				"RequiredToolType": "None",
 				"bToolRequired": false,
-				"MinToolQuality": 0.0,
-				"MissingToolTimeMultiplier": 1.0,
+				"MinToolQuality": 0,
+				"MissingToolTimeMultiplier": 1,
 				"bDestroysResource": false,
-				"BaseActionTime": 3.0,
+				"BaseActionTime": 3,
 				"SkillId": "Foraging",
-				"SkillXPReward": 5.0
+				"SkillXPReward": 5
 			},
 			{
 				"ActionId": "GatherSticks",
-				"DisplayName": "Gather Sticks",
-				"YieldsItems": ["Stick01"],
+				"DisplayName": "NSLOCTEXT(\"DT_Resources [64587ECAB7AC7FA76B9DD0E74FE1F63D]\", \"AppleTree_HarvestActions_Index1_DisplayName\", \"Gather Sticks\")",
+				"YieldsItems": [
+					"Stick01"
+				],
+				"RequiredKnowledgeId": "None",
 				"RequiredToolType": "None",
 				"bToolRequired": false,
-				"MinToolQuality": 0.0,
-				"MissingToolTimeMultiplier": 1.0,
+				"MinToolQuality": 0,
+				"MissingToolTimeMultiplier": 1,
 				"bDestroysResource": false,
-				"BaseActionTime": 2.0,
+				"BaseActionTime": 2,
 				"SkillId": "Foraging",
-				"SkillXPReward": 2.0
+				"SkillXPReward": 2
 			},
 			{
 				"ActionId": "ChopDown",
-				"DisplayName": "Chop Down",
-				"YieldsItems": ["Log01", "Stick01", "Apple01"],
+				"DisplayName": "NSLOCTEXT(\"DT_Resources [64587ECAB7AC7FA76B9DD0E74FE1F63D]\", \"AppleTree_HarvestActions_Index2_DisplayName\", \"Chop Down\")",
+				"YieldsItems": [
+					"Log01",
+					"Stick01",
+					"Apple01"
+				],
+				"RequiredKnowledgeId": "None",
 				"RequiredToolType": "Axe",
 				"bToolRequired": true,
-				"MinToolQuality": 0.0,
-				"MissingToolTimeMultiplier": 1.0,
+				"MinToolQuality": 0,
+				"MissingToolTimeMultiplier": 1,
 				"bDestroysResource": true,
-				"BaseActionTime": 25.0,
+				"BaseActionTime": 25,
 				"SkillId": "Woodcutting",
-				"SkillXPReward": 20.0
+				"SkillXPReward": 20
 			}
 		],
 		"bKeepOnHarvest": true,
 		"YieldsItems": [],
-		"ResourceTags": ["Wood", "FruitTree", "Food", "Harvestable"],
+		"ResourceTags": [
+			"Wood",
+			"FruitTree",
+			"Food",
+			"Harvestable"
+		],
 		"MeshVariations": [],
-		"MinScale": { "X": 0.8, "Y": 0.8, "Z": 0.85 },
-		"MaxScale": { "X": 1.1, "Y": 1.1, "Z": 1.15 },
+		"MinScale":
+		{
+			"X": 0.80000000000000004,
+			"Y": 0.80000000000000004,
+			"Z": 0.84999999999999998
+		},
+		"MaxScale":
+		{
+			"X": 1.1000000000000001,
+			"Y": 1.1000000000000001,
+			"Z": 1.1499999999999999
+		},
 		"bRandomizeRotation": true
 	},
 	{
 		"Name": "BlackAlder",
-		"DisplayName": "Black Alder Tree",
-		"Description": "A moisture-loving deciduous tree with dark, fissured bark and distinctive cone-like catkins. Black alder thrives in wetlands and riverbanks. Its wood resists water rot remarkably well - ancient Europeans used it for underwater foundations and well linings. The bark produces dark dyes and was traditionally used for tanning leather.",
+		"DisplayName": "NSLOCTEXT(\"DT_Resources [64587ECAB7AC7FA76B9DD0E74FE1F63D]\", \"BlackAlder_DisplayName\", \"Black Alder Tree\")",
+		"Description": "NSLOCTEXT(\"DT_Resources [64587ECAB7AC7FA76B9DD0E74FE1F63D]\", \"BlackAlder_Description\", \"A moisture-loving deciduous tree with dark, fissured bark and distinctive cone-like catkins. Black alder thrives in wetlands and riverbanks. Its wood resists water rot remarkably well - ancient Europeans used it for underwater foundations and well linings. The bark produces dark dyes and was traditionally used for tanning leather.\")",
 		"ResourceType": "Tree",
 		"HarvestActions": [
 			{
 				"ActionId": "GatherSticks",
-				"DisplayName": "Gather Sticks",
-				"YieldsItems": ["Stick01", "Stick01"],
+				"DisplayName": "NSLOCTEXT(\"DT_Resources [64587ECAB7AC7FA76B9DD0E74FE1F63D]\", \"BlackAlder_HarvestActions_Index0_DisplayName\", \"Gather Sticks\")",
+				"YieldsItems": [
+					"Stick01",
+					"Stick01"
+				],
+				"RequiredKnowledgeId": "None",
 				"RequiredToolType": "None",
 				"bToolRequired": false,
-				"MinToolQuality": 0.0,
-				"MissingToolTimeMultiplier": 1.0,
+				"MinToolQuality": 0,
+				"MissingToolTimeMultiplier": 1,
 				"bDestroysResource": false,
-				"BaseActionTime": 3.0,
+				"BaseActionTime": 3,
 				"SkillId": "Foraging",
-				"SkillXPReward": 3.0
+				"SkillXPReward": 3
 			},
 			{
 				"ActionId": "StripBark",
-				"DisplayName": "Strip Bark",
-				"YieldsItems": ["Bark01", "Bark01"],
+				"DisplayName": "NSLOCTEXT(\"DT_Resources [64587ECAB7AC7FA76B9DD0E74FE1F63D]\", \"BlackAlder_HarvestActions_Index1_DisplayName\", \"Strip Bark\")",
+				"YieldsItems": [
+					"Bark01",
+					"Bark01"
+				],
+				"RequiredKnowledgeId": "Bark01",
 				"RequiredToolType": "None",
 				"bToolRequired": false,
-				"MinToolQuality": 0.0,
-				"MissingToolTimeMultiplier": 1.0,
+				"MinToolQuality": 0,
+				"MissingToolTimeMultiplier": 1,
 				"bDestroysResource": false,
-				"BaseActionTime": 5.0,
+				"BaseActionTime": 5,
 				"SkillId": "Foraging",
-				"SkillXPReward": 6.0
+				"SkillXPReward": 6
 			},
 			{
 				"ActionId": "GatherCatkins",
-				"DisplayName": "Gather Catkins",
-				"YieldsItems": ["PlantFiber01"],
+				"DisplayName": "NSLOCTEXT(\"DT_Resources [64587ECAB7AC7FA76B9DD0E74FE1F63D]\", \"BlackAlder_HarvestActions_Index2_DisplayName\", \"Gather Catkins\")",
+				"YieldsItems": [
+					"PlantFiber01"
+				],
+				"RequiredKnowledgeId": "PlantFiber01",
 				"RequiredToolType": "None",
 				"bToolRequired": false,
-				"MinToolQuality": 0.0,
-				"MissingToolTimeMultiplier": 1.0,
+				"MinToolQuality": 0,
+				"MissingToolTimeMultiplier": 1,
 				"bDestroysResource": false,
-				"BaseActionTime": 4.0,
+				"BaseActionTime": 4,
 				"SkillId": "Foraging",
-				"SkillXPReward": 4.0
+				"SkillXPReward": 4
 			},
 			{
 				"ActionId": "ChopDown",
-				"DisplayName": "Chop Down",
-				"YieldsItems": ["Log01", "Log01", "Stick01", "Bark01", "Bark01"],
+				"DisplayName": "NSLOCTEXT(\"DT_Resources [64587ECAB7AC7FA76B9DD0E74FE1F63D]\", \"BlackAlder_HarvestActions_Index3_DisplayName\", \"Chop Down\")",
+				"YieldsItems": [
+					"Log01",
+					"Log01",
+					"Stick01",
+					"Bark01",
+					"Bark01"
+				],
+				"RequiredKnowledgeId": "None",
 				"RequiredToolType": "Axe",
 				"bToolRequired": true,
-				"MinToolQuality": 0.0,
-				"MissingToolTimeMultiplier": 1.0,
+				"MinToolQuality": 0,
+				"MissingToolTimeMultiplier": 1,
 				"bDestroysResource": true,
-				"BaseActionTime": 28.0,
+				"BaseActionTime": 28,
 				"SkillId": "Woodcutting",
-				"SkillXPReward": 22.0
+				"SkillXPReward": 22
 			}
 		],
 		"bKeepOnHarvest": true,
 		"YieldsItems": [],
-		"ResourceTags": ["Wood", "Hardwood", "Wetland", "Harvestable"],
-		"MeshVariations": [],
-		"MinScale": { "X": 0.85, "Y": 0.85, "Z": 0.9 },
-		"MaxScale": { "X": 1.15, "Y": 1.15, "Z": 1.2 },
+		"ResourceTags": [
+			"Wood",
+			"Hardwood",
+			"Wetland",
+			"Harvestable"
+		],
+		"MeshVariations": [
+			{
+				"Mesh": "/Game/BlackAlder/Geometry/PivotPainter/SM_BlackAlder_Forest_09_PP.SM_BlackAlder_Forest_09_PP",
+				"Weight": 1,
+				"MaterialOverride": "None"
+			},
+			{
+				"Mesh": "/Game/BlackAlder/Geometry/PivotPainter/SM_BlackAlder_Forest_08_PP.SM_BlackAlder_Forest_08_PP",
+				"Weight": 1,
+				"MaterialOverride": "None"
+			},
+			{
+				"Mesh": "/Game/BlackAlder/Geometry/PivotPainter/SM_BlackAlder_Forest_05_PP.SM_BlackAlder_Forest_05_PP",
+				"Weight": 1,
+				"MaterialOverride": "None"
+			},
+			{
+				"Mesh": "/Game/BlackAlder/Geometry/PivotPainter/SM_BlackAlder_Field_03_PP.SM_BlackAlder_Field_03_PP",
+				"Weight": 1,
+				"MaterialOverride": "None"
+			},
+			{
+				"Mesh": "/Game/BlackAlder/Geometry/PivotPainter/SM_BlackAlder_Forest_04_PP.SM_BlackAlder_Forest_04_PP",
+				"Weight": 1,
+				"MaterialOverride": "None"
+			}
+		],
+		"MinScale":
+		{
+			"X": 0.84999999999999998,
+			"Y": 0.84999999999999998,
+			"Z": 0.90000000000000002
+		},
+		"MaxScale":
+		{
+			"X": 1.1499999999999999,
+			"Y": 1.1499999999999999,
+			"Z": 1.2
+		},
 		"bRandomizeRotation": true
 	}
 ]

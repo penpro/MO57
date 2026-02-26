@@ -87,7 +87,7 @@ FName UMOPCGInteractionSubsystem::GetItemIdForMesh(UStaticMesh* Mesh) const
 	const FName* FoundItem = MeshToItemCache.Find(SoftMesh);
 	if (FoundItem)
 	{
-		UE_LOG(LogMOFramework, Log, TEXT("[MOPCGInteraction] Found mesh '%s' -> item '%s'"),
+		UE_LOG(LogMOFramework, Verbose, TEXT("[MOPCGInteraction] Found mesh '%s' -> item '%s'"),
 			*MeshPath, *FoundItem->ToString());
 		return *FoundItem;
 	}
@@ -97,7 +97,7 @@ FName UMOPCGInteractionSubsystem::GetItemIdForMesh(UStaticMesh* Mesh) const
 	{
 		if (Pair.Key.Get() == Mesh)
 		{
-			UE_LOG(LogMOFramework, Log, TEXT("[MOPCGInteraction] Found mesh '%s' -> item '%s' (by pointer)"),
+			UE_LOG(LogMOFramework, Verbose, TEXT("[MOPCGInteraction] Found mesh '%s' -> item '%s' (by pointer)"),
 				*MeshPath, *Pair.Value.ToString());
 			return Pair.Value;
 		}
@@ -113,7 +113,7 @@ FName UMOPCGInteractionSubsystem::GetItemIdForMesh(UStaticMesh* Mesh) const
 		const FString CachedAssetPath = Pair.Key.ToSoftObjectPath().GetAssetPathString();
 		if (MeshAssetPath == CachedAssetPath)
 		{
-			UE_LOG(LogMOFramework, Log, TEXT("[MOPCGInteraction] Found mesh '%s' -> item '%s' (by path string)"),
+			UE_LOG(LogMOFramework, Verbose, TEXT("[MOPCGInteraction] Found mesh '%s' -> item '%s' (by path string)"),
 				*MeshPath, *Pair.Value.ToString());
 			return Pair.Value;
 		}
@@ -242,7 +242,7 @@ bool UMOPCGInteractionSubsystem::HarvestHISMInstance(UHierarchicalInstancedStati
 
 	OutItemId = ItemId;
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOPCGInteraction] Harvested HISM instance %d: %s x%d (added: %s) at %s"),
+	UE_LOG(LogMOFramework, Verbose, TEXT("[MOPCGInteraction] Harvested HISM instance %d: %s x%d (added: %s) at %s"),
 		InstanceIndex,
 		*ItemId.ToString(),
 		Quantity,
@@ -335,7 +335,7 @@ bool UMOPCGInteractionSubsystem::HarvestISMInstance(UInstancedStaticMeshComponen
 
 	OutItemId = ItemId;
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOPCGInteraction] Harvested ISM instance %d: %s x%d (added: %s) at %s"),
+	UE_LOG(LogMOFramework, Verbose, TEXT("[MOPCGInteraction] Harvested ISM instance %d: %s x%d (added: %s) at %s"),
 		InstanceIndex,
 		*ItemId.ToString(),
 		Quantity,
@@ -372,7 +372,7 @@ void UMOPCGInteractionSubsystem::RegisterTagItemMapping(FName Tag, FName ItemId)
 	}
 
 	TagToItemMap.Add(Tag, ItemId);
-	UE_LOG(LogMOFramework, Log, TEXT("[MOPCGInteraction] Registered tag mapping: '%s' -> '%s'"),
+	UE_LOG(LogMOFramework, Verbose, TEXT("[MOPCGInteraction] Registered tag mapping: '%s' -> '%s'"),
 		*Tag.ToString(), *ItemId.ToString());
 }
 

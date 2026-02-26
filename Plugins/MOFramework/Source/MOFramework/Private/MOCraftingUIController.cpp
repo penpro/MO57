@@ -24,6 +24,7 @@
 #include "MOCraftingSubsystem.h"
 #include "MOQuestSubsystem.h"
 #include "MORecipeDatabaseSettings.h"
+#include "MOResourceDatabaseSettings.h"
 #include "MOItemDatabaseSettings.h"
 
 UMOCraftingUIController::UMOCraftingUIController()
@@ -550,7 +551,7 @@ bool UMOCraftingUIController::IsKeepOnHarvestContextMenuOpen() const
 // Harvest Operations
 // =============================================================================
 
-void UMOCraftingUIController::StartHarvestOperation(FName RecipeId)
+void UMOCraftingUIController::StartHarvestOperation(FName ActionId)
 {
 	if (!CurrentHarvestTarget.IsValid())
 	{
@@ -570,11 +571,23 @@ void UMOCraftingUIController::StartHarvestOperation(FName RecipeId)
 		return;
 	}
 
-	// Get recipe display name
-	FText ActionName = NSLOCTEXT("MO", "Harvesting", "Harvesting...");
-	if (const FMORecipeDefinitionRow* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(RecipeId))
+	// Get action display name from resource definition (single source of truth)
+	FText ActionDisplayName = NSLOCTEXT("MO", "Harvesting", "Harvesting...");
+	UMOHarvestSubsystem* HarvestSubsystem = GetWorld()->GetSubsystem<UMOHarvestSubsystem>();
+	if (HarvestSubsystem)
 	{
-		ActionName = FText::Format(NSLOCTEXT("MO", "HarvestingFormat", "{0}..."), Recipe->DisplayName);
+		TArray<FName> TargetTags = HarvestSubsystem->CollectTargetTags(CurrentHarvestTarget.ISMComponent.Get());
+		FName ResourceNodeId = HarvestSubsystem->ExtractResourceNodeId(TargetTags);
+		if (!ResourceNodeId.IsNone())
+		{
+			if (const FMOResourceNodeDefinitionRow* ResourceDef = UMOResourceDatabaseSettings::GetResourceDefinition(ResourceNodeId))
+			{
+				if (const FMOResourceHarvestAction* Action = ResourceDef->FindAction(ActionId))
+				{
+					ActionDisplayName = FText::Format(NSLOCTEXT("MO", "HarvestingFormat", "{0}..."), Action->DisplayName);
+				}
+			}
+		}
 	}
 
 	// Create progress widget if needed
@@ -600,17 +613,17 @@ void UMOCraftingUIController::StartHarvestOperation(FName RecipeId)
 	// Add to viewport
 	WidgetInst->AddToViewport(HarvestProgressZOrder);
 
-	// Start the harvest
+	// Start the harvest with ActionId (MOHarvestSubsystem will look up the action from resource definition)
 	WidgetInst->StartHarvest(
 		CurrentHarvestTarget.ISMComponent.Get(),
 		CurrentHarvestTarget.InstanceIndex,
-		RecipeId,
-		ActionName,
+		ActionId,
+		ActionDisplayName,
 		GetCachedInventory(),
 		GetCachedSkills()
 	);
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOCraftUI] Started harvest operation: %s"), *RecipeId.ToString());
+	UE_LOG(LogMOFramework, Log, TEXT("[MOCraftUI] Started harvest operation: %s"), *ActionId.ToString());
 }
 
 void UMOCraftingUIController::CancelHarvestOperation()
@@ -672,9 +685,9 @@ void UMOCraftingUIController::HandleKeepOnHarvestContextMenuInspectClicked()
 	UE_LOG(LogMOFramework, Log, TEXT("[MOCraftUI] Starting smart inspection for '%s'"), *ItemId.ToString());
 }
 
-void UMOCraftingUIController::HandleKeepOnHarvestContextMenuHarvestClicked(FName RecipeId)
+void UMOCraftingUIController::HandleKeepOnHarvestContextMenuHarvestClicked(FName ActionId)
 {
-	StartHarvestOperation(RecipeId);
+	StartHarvestOperation(ActionId);
 }
 
 void UMOCraftingUIController::HandleKeepOnHarvestContextMenuChopDownClicked()

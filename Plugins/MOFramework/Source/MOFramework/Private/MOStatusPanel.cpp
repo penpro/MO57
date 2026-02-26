@@ -803,7 +803,7 @@ void UMOStatusPanel::UpdateMentalStateFields()
 
 void UMOStatusPanel::PopulateInfoTab()
 {
-	UE_LOG(LogMOFramework, Warning, TEXT("[MOStatusPanel::PopulateInfoTab] Called"));
+	UE_LOG(LogMOFramework, Verbose, TEXT("[MOStatusPanel::PopulateInfoTab] Called"));
 
 	// Clear existing entries
 	for (UMOCharacterInfoEntry* Entry : InfoEntryWidgets)
@@ -850,7 +850,7 @@ void UMOStatusPanel::PopulateInfoTab()
 		return;
 	}
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOStatusPanel::PopulateInfoTab] Pawn GUID: %s"), *DisplayedPawnGuid.ToString());
+	UE_LOG(LogMOFramework, Verbose, TEXT("[MOStatusPanel::PopulateInfoTab] Pawn GUID: %s"), *DisplayedPawnGuid.ToString());
 
 	// Get pawn record from persistence
 	UGameInstance* GameInstance = UGameplayStatics::GetGameInstance(this);

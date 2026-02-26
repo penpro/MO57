@@ -95,7 +95,7 @@ void UMOHarvestProgressWidget::TickHarvest()
 void UMOHarvestProgressWidget::StartHarvest(
 	UInstancedStaticMeshComponent* InISMComponent,
 	int32 InInstanceIndex,
-	FName InRecipeId,
+	FName InActionId,
 	const FText& InActionDisplayName,
 	UMOInventoryComponent* InInventory,
 	UMOSkillsComponent* InSkills
@@ -107,7 +107,7 @@ void UMOHarvestProgressWidget::StartHarvest(
 		return;
 	}
 
-	RecipeId = InRecipeId;
+	ActionId = InActionId;
 	ActionDisplayName = InActionDisplayName;
 	InventoryComponent = InInventory;
 	SkillsComponent = InSkills;
@@ -120,7 +120,7 @@ void UMOHarvestProgressWidget::StartHarvest(
 		return;
 	}
 
-	if (!HarvestSubsystem->BeginHarvest(InISMComponent, InInstanceIndex, InRecipeId, InInventory))
+	if (!HarvestSubsystem->BeginHarvest(InISMComponent, InInstanceIndex, InActionId, InInventory))
 	{
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOHarvestProgress] Failed to begin harvest"));
 		return;
@@ -140,8 +140,8 @@ void UMOHarvestProgressWidget::StartHarvest(
 		HarvestStartTime = World->GetRealTimeSeconds();
 	}
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOHarvestProgress] Started harvest '%s' (duration: %.1fs)"),
-		*RecipeId.ToString(), HarvestDuration);
+	UE_LOG(LogMOFramework, Log, TEXT("[MOHarvestProgress] Started harvest action '%s' (duration: %.1fs)"),
+		*ActionId.ToString(), HarvestDuration);
 
 	// Start timer for display updates
 	if (UWorld* World = GetWorld())
@@ -182,7 +182,7 @@ void UMOHarvestProgressWidget::CancelHarvest()
 		HarvestSubsystem->CancelHarvest();
 	}
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOHarvestProgress] Harvest cancelled for '%s'"), *RecipeId.ToString());
+	UE_LOG(LogMOFramework, Log, TEXT("[MOHarvestProgress] Harvest cancelled for action '%s'"), *ActionId.ToString());
 
 	// Broadcast empty result for cancellation
 	FMOCraftResult EmptyResult;
@@ -199,7 +199,7 @@ void UMOHarvestProgressWidget::CompleteHarvest()
 
 	bIsHarvesting = false;
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOHarvestProgress] Harvest complete for '%s'"), *RecipeId.ToString());
+	UE_LOG(LogMOFramework, Log, TEXT("[MOHarvestProgress] Harvest complete for action '%s'"), *ActionId.ToString());
 
 	// Complete the harvest via subsystem
 	FMOCraftResult Result;

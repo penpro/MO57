@@ -2,7 +2,7 @@
 #include "MOFramework.h"
 #include "MOCommonButton.h"
 #include "MOHarvestSubsystem.h"
-#include "MORecipeDatabaseSettings.h"
+#include "MOResourceDatabaseSettings.h"
 #include "MOKnowledgeComponent.h"
 #include "MOSkillsComponent.h"
 #include "MOInventoryComponent.h"
@@ -63,24 +63,76 @@ void UMOKeepOnHarvestContextMenu::InitializeForTarget(
 	// Get smart inspect item
 	SmartInspectItemId = HarvestSubsystem->GetSmartInspectItemId(TargetTags, Knowledge, Skills);
 
-	// Get available harvest recipes
-	HarvestSubsystem->GetHarvestRecipesForTags(TargetTags, Knowledge, Skills, Inventory, AvailableHarvestRecipes);
+	// Extract ResourceNodeId from tags and look up the resource definition
+	CachedResourceNodeId = HarvestSubsystem->ExtractResourceNodeId(TargetTags);
 
-	// Find chop down recipe (even if we don't have the tool)
-	ChopDownRecipeId = HarvestSubsystem->FindDestroyRecipeForTags(TargetTags);
-	bCanExecuteChopDown = HarvestSubsystem->CanExecuteDestroyRecipe(ChopDownRecipeId, Inventory);
+	// Clear previous state
+	AvailableHarvestActions.Empty();
+	DestroyActionIndex = INDEX_NONE;
+	bCanExecuteDestroyAction = false;
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOKeepOnHarvestContextMenu] ChopDown: Recipe=%s, CanExecute=%s"),
-		*ChopDownRecipeId.ToString(), bCanExecuteChopDown ? TEXT("yes") : TEXT("no"));
+	// Debug: Log all collected tags
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOKeepOnHarvestContextMenu] Collected %d tags from target:"), TargetTags.Num());
+	for (const FName& Tag : TargetTags)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOKeepOnHarvestContextMenu]   Tag: '%s'"), *Tag.ToString());
+	}
+
+	if (!CachedResourceNodeId.IsNone())
+	{
+		// Look up resource definition from the DataTable
+		const FMOResourceNodeDefinitionRow* ResourceDef = UMOResourceDatabaseSettings::GetResourceDefinition(CachedResourceNodeId);
+		if (ResourceDef)
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOKeepOnHarvestContextMenu] Found resource definition: %s (%d actions)"),
+				*ResourceDef->DisplayName.ToString(), ResourceDef->HarvestActions.Num());
+
+			// Copy all harvest actions from the resource definition
+			AvailableHarvestActions = ResourceDef->HarvestActions;
+
+			// Log each action for debugging
+			for (int32 i = 0; i < AvailableHarvestActions.Num(); ++i)
+			{
+				const FMOResourceHarvestAction& Action = AvailableHarvestActions[i];
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOKeepOnHarvestContextMenu]   Action[%d]: %s (ActionId=%s, Destroys=%s)"),
+					i, *Action.DisplayName.ToString(), *Action.ActionId.ToString(),
+					Action.bDestroysResource ? TEXT("yes") : TEXT("no"));
+			}
+
+			// Find the destroy action (if any) and check if we can execute it
+			for (int32 i = 0; i < AvailableHarvestActions.Num(); ++i)
+			{
+				if (AvailableHarvestActions[i].bDestroysResource)
+				{
+					DestroyActionIndex = i;
+					bCanExecuteDestroyAction = CanPerformAction(AvailableHarvestActions[i]);
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOKeepOnHarvestContextMenu] Found destroy action: %s (CanExecute=%s)"),
+						*AvailableHarvestActions[i].ActionId.ToString(),
+						bCanExecuteDestroyAction ? TEXT("yes") : TEXT("no"));
+					break;
+				}
+			}
+		}
+		else
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOKeepOnHarvestContextMenu] Resource definition not found for: %s (Is DataTable configured in Project Settings?)"),
+				*CachedResourceNodeId.ToString());
+		}
+	}
+	else
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOKeepOnHarvestContextMenu] No ResourceNode_ tag found in target tags. ISM components must have 'ResourceNode_<RowName>' tag."));
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOKeepOnHarvestContextMenu] This usually means the resource was spawned before the tag system was added, or PCG needs to regenerate."));
+	}
 
 	// Refresh display
 	RefreshDisplay();
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOKeepOnHarvestContextMenu] Initialized with %d tags, %d harvest recipes, inspect='%s', chopdown='%s'"),
+	UE_LOG(LogMOFramework, Log, TEXT("[MOKeepOnHarvestContextMenu] Initialized with %d tags, %d harvest actions, inspect='%s', resourceId='%s'"),
 		TargetTags.Num(),
-		AvailableHarvestRecipes.Num(),
+		AvailableHarvestActions.Num(),
 		*SmartInspectItemId.ToString(),
-		*ChopDownRecipeId.ToString());
+		*CachedResourceNodeId.ToString());
 }
 
 void UMOKeepOnHarvestContextMenu::RefreshDisplay()
@@ -95,7 +147,7 @@ void UMOKeepOnHarvestContextMenu::RefreshDisplay()
 	PopulateButtons();
 
 	// Notify Blueprint
-	OnButtonStatesUpdated(CanInspect(), CanChopDown(), AvailableHarvestRecipes.Num());
+	OnButtonStatesUpdated(CanInspect(), CanExecuteDestroyAction(), AvailableHarvestActions.Num());
 }
 
 // ============================================================================
@@ -178,10 +230,10 @@ void UMOKeepOnHarvestContextMenu::PopulateButtons()
 		return;
 	}
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOKeepOnHarvestContextMenu] PopulateButtons: CanInspect=%s, HarvestRecipes=%d, ChopDownRecipe=%s"),
+	UE_LOG(LogMOFramework, Log, TEXT("[MOKeepOnHarvestContextMenu] PopulateButtons: CanInspect=%s, HarvestActions=%d, DestroyActionIndex=%d"),
 		CanInspect() ? TEXT("yes") : TEXT("no"),
-		AvailableHarvestRecipes.Num(),
-		*ChopDownRecipeId.ToString());
+		AvailableHarvestActions.Num(),
+		DestroyActionIndex);
 
 	// 1. Inspect button (if available)
 	if (CanInspect())
@@ -198,47 +250,66 @@ void UMOKeepOnHarvestContextMenu::PopulateButtons()
 		}
 	}
 
-	// 2. Harvest buttons (dynamic based on available recipes)
-	for (const FName& RecipeId : AvailableHarvestRecipes)
+	// 2. Harvest action buttons (non-destructive actions first)
+	for (int32 i = 0; i < AvailableHarvestActions.Num(); ++i)
 	{
-		const FMORecipeDefinitionRow* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(RecipeId);
-		if (!Recipe)
+		const FMOResourceHarvestAction& Action = AvailableHarvestActions[i];
+
+		// Skip the destroy action - it's handled separately at the end
+		if (Action.bDestroysResource)
 		{
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOKeepOnHarvestContextMenu] Recipe '%s' not found in database"), *RecipeId.ToString());
 			continue;
 		}
 
-		UE_LOG(LogMOFramework, Log, TEXT("[MOKeepOnHarvestContextMenu] Adding harvest button: %s"), *Recipe->DisplayName.ToString());
+		// Check requirements for logging
+		const bool bHasKnowledge = !Action.RequiresKnowledge() ||
+			(CachedKnowledge.IsValid() && CachedKnowledge->HasKnowledge(Action.RequiredKnowledgeId));
+		const bool bHasTool = !Action.RequiresTool() || !Action.bToolRequired || HasToolOfType(Action.RequiredToolType);
+		const bool bCanPerform = bHasKnowledge && bHasTool;
 
-		UMOCommonButton* HarvestBtn = CreateButton(Recipe->DisplayName);
-		if (HarvestBtn)
+		UE_LOG(LogMOFramework, Log, TEXT("[MOKeepOnHarvestContextMenu] Adding harvest button: %s (ActionId: %s, Knowledge=%s/%s, Tool=%s)"),
+			*Action.DisplayName.ToString(), *Action.ActionId.ToString(),
+			bHasKnowledge ? TEXT("ok") : TEXT("MISSING"),
+			Action.RequiresKnowledge() ? *Action.RequiredKnowledgeId.ToString() : TEXT("none"),
+			bHasTool ? TEXT("ok") : TEXT("missing"));
+
+		UMOCommonButton* ActionBtn = CreateButton(Action.DisplayName);
+		if (ActionBtn)
 		{
-			FName CapturedRecipeId = RecipeId;
-			HarvestBtn->OnClicked().AddWeakLambda(this, [this, CapturedRecipeId]()
+			// Enable/disable based on requirements (knowledge and tool)
+			ActionBtn->SetIsEnabled(bCanPerform);
+
+			FName CapturedActionId = Action.ActionId;
+			ActionBtn->OnClicked().AddWeakLambda(this, [this, CapturedActionId]()
 			{
-				UE_LOG(LogMOFramework, Log, TEXT("[MOKeepOnHarvestContextMenu] Harvest clicked (recipe: %s)"), *CapturedRecipeId.ToString());
-				OnHarvestClicked.Broadcast(CapturedRecipeId);
+				UE_LOG(LogMOFramework, Log, TEXT("[MOKeepOnHarvestContextMenu] Harvest clicked (action: %s)"), *CapturedActionId.ToString());
+				OnHarvestClicked.Broadcast(CapturedActionId);
 				RequestClose();
 			});
 		}
 	}
 
-	// 3. Chop Down button - always show if recipe exists, but disable if no tool
-	if (HasChopDownRecipe())
+	// 3. Destroy action button (Chop Down, Mine, etc.) - always shown last, disabled if no tool
+	if (HasDestroyAction())
 	{
-		const FMORecipeDefinitionRow* ChopRecipe = UMORecipeDatabaseSettings::GetRecipeDefinition(ChopDownRecipeId);
-		FText ChopLabel = ChopRecipe ? ChopRecipe->DisplayName : NSLOCTEXT("MO", "ChopDownButton", "Chop Down");
-
-		UMOCommonButton* ChopBtn = CreateButton(ChopLabel);
-		if (ChopBtn)
+		const FMOResourceHarvestAction& DestroyAction = AvailableHarvestActions[DestroyActionIndex];
+		FText DestroyLabel = DestroyAction.DisplayName;
+		if (DestroyLabel.IsEmpty())
 		{
-			// Disable if requirements not met (CanChopDown checks tool requirements)
-			ChopBtn->SetIsEnabled(CanChopDown());
+			DestroyLabel = NSLOCTEXT("MO", "DestroyButton", "Destroy");
+		}
 
-			ChopBtn->OnClicked().AddWeakLambda(this, [this]()
+		UMOCommonButton* DestroyBtn = CreateButton(DestroyLabel);
+		if (DestroyBtn)
+		{
+			// Disable if requirements not met (CanExecuteDestroyAction checks tool requirements)
+			DestroyBtn->SetIsEnabled(CanExecuteDestroyAction());
+
+			FName CapturedActionId = DestroyAction.ActionId;
+			DestroyBtn->OnClicked().AddWeakLambda(this, [this, CapturedActionId]()
 			{
-				UE_LOG(LogMOFramework, Log, TEXT("[MOKeepOnHarvestContextMenu] Chop Down clicked (recipe: %s)"), *ChopDownRecipeId.ToString());
-				OnHarvestClicked.Broadcast(ChopDownRecipeId);
+				UE_LOG(LogMOFramework, Log, TEXT("[MOKeepOnHarvestContextMenu] Destroy clicked (action: %s)"), *CapturedActionId.ToString());
+				OnHarvestClicked.Broadcast(CapturedActionId);
 				RequestClose();
 			});
 		}
@@ -261,4 +332,53 @@ void UMOKeepOnHarvestContextMenu::ClearButtons()
 		}
 	}
 	CreatedButtons.Empty();
+}
+
+// ============================================================================
+// TOOL CHECKS
+// ============================================================================
+
+bool UMOKeepOnHarvestContextMenu::HasToolOfType(EMOToolType ToolType) const
+{
+	if (ToolType == EMOToolType::None)
+	{
+		return true;
+	}
+
+	UMOInventoryComponent* Inventory = CachedInventory.Get();
+	if (!Inventory)
+	{
+		return false;
+	}
+
+	// Check if inventory has a tool of this type
+	return Inventory->HasToolOfType(ToolType);
+}
+
+bool UMOKeepOnHarvestContextMenu::CanPerformAction(const FMOResourceHarvestAction& Action) const
+{
+	// Check knowledge requirement first
+	if (Action.RequiresKnowledge())
+	{
+		UMOKnowledgeComponent* Knowledge = CachedKnowledge.Get();
+		if (!Knowledge || !Knowledge->HasKnowledge(Action.RequiredKnowledgeId))
+		{
+			return false;
+		}
+	}
+
+	// If action doesn't require a tool, it can be performed
+	if (!Action.RequiresTool())
+	{
+		return true;
+	}
+
+	// If tool is optional (bToolRequired=false), action can be performed without it (with penalties)
+	if (!Action.bToolRequired)
+	{
+		return true;
+	}
+
+	// Tool is required - check if player has it
+	return HasToolOfType(Action.RequiredToolType);
 }

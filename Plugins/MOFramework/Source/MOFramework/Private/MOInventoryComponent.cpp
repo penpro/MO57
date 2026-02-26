@@ -1757,3 +1757,66 @@ void UMOInventoryComponent::ApplyStartingItems()
 
 	OnSlotsChanged.Broadcast();
 }
+
+// ============================================================================
+// TOOL QUERIES
+// ============================================================================
+
+bool UMOInventoryComponent::HasToolOfType(EMOToolType ToolType) const
+{
+	if (ToolType == EMOToolType::None)
+	{
+		return true;
+	}
+
+	// Check all inventory entries for a matching tool capability
+	for (const FMOInventoryEntry& Entry : Inventory.Entries)
+	{
+		if (Entry.ItemDefinitionId.IsNone() || Entry.Quantity <= 0)
+		{
+			continue;
+		}
+
+		FMOItemDefinitionRow ItemDef;
+		if (UMOItemDatabaseSettings::GetItemDefinition(Entry.ItemDefinitionId, ItemDef))
+		{
+			if (ItemDef.HasToolCapability(ToolType))
+			{
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
+bool UMOInventoryComponent::FindToolOfType(EMOToolType ToolType, FGuid& OutItemGuid) const
+{
+	OutItemGuid = FGuid();
+
+	if (ToolType == EMOToolType::None)
+	{
+		return false;
+	}
+
+	// Find the first inventory entry with a matching tool capability
+	for (const FMOInventoryEntry& Entry : Inventory.Entries)
+	{
+		if (Entry.ItemDefinitionId.IsNone() || Entry.Quantity <= 0)
+		{
+			continue;
+		}
+
+		FMOItemDefinitionRow ItemDef;
+		if (UMOItemDatabaseSettings::GetItemDefinition(Entry.ItemDefinitionId, ItemDef))
+		{
+			if (ItemDef.HasToolCapability(ToolType))
+			{
+				OutItemGuid = Entry.ItemGuid;
+				return true;
+			}
+		}
+	}
+
+	return false;
+}

@@ -87,6 +87,7 @@ class UMOMentalStateComponent;
 class UMOAdrenalineComponent;
 class UMOEquipmentComponent;
 class UMOSkillsComponent;
+class UAnimMontage;
 struct FMOThreatInfo;
 
 /**
@@ -205,6 +206,9 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOOnParrySuccess, AActor*, Attacker
 /** Fired when entering/exiting combat. */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOOnCombatEngaged, bool, bInCombat);
 
+/** Fired when hitting a non-combat actor (resources, world objects). */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(FMOOnHitNonCombatActor, AActor*, HitActor, FVector, HitLocation, FVector, HitNormal, FName, HitBoneName);
+
 // ============================================================================
 // SAVE DATA
 // ============================================================================
@@ -293,6 +297,10 @@ public:
 
 	UPROPERTY(BlueprintAssignable, Category="MO|Combat|Events")
 	FMOOnCombatEngaged OnCombatEngaged;
+
+	/** Fired when hitting a non-combat actor (resources, world objects). */
+	UPROPERTY(BlueprintAssignable, Category="MO|Combat|Events")
+	FMOOnHitNonCombatActor OnHitNonCombatActor;
 
 	// ============================================================================
 	// ATTACK API
@@ -553,6 +561,18 @@ private:
 	FMOAttackDamageProfile UnarmedAttackProfile;
 
 	// ============================================================================
+	// ANIMATION
+	// ============================================================================
+
+	/** Animation montage for unarmed light attack. */
+	UPROPERTY(EditAnywhere, Category="MO|Combat|Animation")
+	TObjectPtr<UAnimMontage> UnarmedLightAttackMontage;
+
+	/** Animation montage for unarmed heavy attack. */
+	UPROPERTY(EditAnywhere, Category="MO|Combat|Animation")
+	TObjectPtr<UAnimMontage> UnarmedHeavyAttackMontage;
+
+	// ============================================================================
 	// INTERNAL STATE
 	// ============================================================================
 
@@ -635,6 +655,12 @@ private:
 	/** Execute the current attack (do the hit detection). */
 	void ExecuteAttack();
 
+	/** Process a hit result from the attack trace. */
+	void ProcessHit(const FHitResult& Hit, const FMOAttackDamageProfile& Profile);
+
+	/** Get the attack origin point (weapon tip or hand socket). */
+	FVector GetAttackOrigin() const;
+
 	/** Apply hit to target. */
 	EMOAttackResult ApplyHitToTarget(AActor* Target, const FMOCombatHitInfo& HitInfo);
 
@@ -646,6 +672,9 @@ private:
 
 	/** Apply weapon durability loss. */
 	void ApplyWeaponDurabilityLoss(int32 Amount);
+
+	/** Play the appropriate attack animation montage. */
+	void PlayAttackAnimation();
 
 	/** Grant combat skill XP. */
 	void GrantCombatXP(float Amount);

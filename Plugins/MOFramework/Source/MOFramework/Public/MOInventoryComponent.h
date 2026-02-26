@@ -99,6 +99,7 @@
 #include "Components/ActorComponent.h"
 #include "Net/Serialization/FastArraySerializer.h"
 #include "MOworldSaveGame.h"
+#include "MOItemDefinitionRow.h"
 #include "MOInventoryComponent.generated.h"
 
 USTRUCT(BlueprintType)
@@ -463,6 +464,28 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category="MO|Inventory|Slots")
 	bool GetEntry(int32 SlotIndex, FMOInventoryEntry& OutEntry) const;
+
+	// ============================================================================
+	// TOOL QUERIES
+	// ============================================================================
+
+	/**
+	 * Check if inventory contains a tool of a specific type.
+	 * Iterates through all items and checks their ToolType property from item definition.
+	 * @param ToolType The tool type to search for
+	 * @return True if at least one item of this tool type exists in inventory
+	 */
+	UFUNCTION(BlueprintPure, Category="MO|Inventory|Tools")
+	bool HasToolOfType(EMOToolType ToolType) const;
+
+	/**
+	 * Find the first tool of a specific type and return its GUID.
+	 * @param ToolType The tool type to search for
+	 * @param OutItemGuid The GUID of the found tool (if any)
+	 * @return True if a tool was found
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Inventory|Tools")
+	bool FindToolOfType(EMOToolType ToolType, FGuid& OutItemGuid) const;
 
 	/** Returns available ItemDefinitionIds for dropdowns. */
 	UFUNCTION()

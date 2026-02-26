@@ -68,6 +68,7 @@
 #include "CoreMinimal.h"
 #include "Subsystems/WorldSubsystem.h"
 #include "MORecipeDefinitionRow.h"
+#include "MOResourceNodeDefinitionRow.h"
 #include "MOHarvestSubsystem.generated.h"
 
 class UMOKnowledgeComponent;
@@ -75,6 +76,7 @@ class UMOSkillsComponent;
 class UMOInventoryComponent;
 class UInstancedStaticMeshComponent;
 class UHierarchicalInstancedStaticMeshComponent;
+class UDataTable;
 enum class EMOLearningPotential : uint8;
 struct FMOCraftResult;
 
@@ -107,7 +109,15 @@ struct MOFRAMEWORK_API FMOHarvestContext
 	UPROPERTY(BlueprintReadOnly, Category="MO|Harvest")
 	TArray<FName> TargetTags;
 
-	/** The harvest recipe being executed. */
+	/** The harvest action ID being executed (from resource definition). */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Harvest")
+	FName ActiveActionId = NAME_None;
+
+	/** The resource node ID (for looking up the action definition). */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Harvest")
+	FName ResourceNodeId = NAME_None;
+
+	/** Legacy: Recipe ID (for backward compatibility, will be removed). */
 	UPROPERTY(BlueprintReadOnly, Category="MO|Harvest")
 	FName ActiveRecipeId = NAME_None;
 
@@ -133,6 +143,8 @@ struct MOFRAMEWORK_API FMOHarvestContext
 		InstanceIndex = INDEX_NONE;
 		InstanceTransform = FTransform::Identity;
 		TargetTags.Empty();
+		ActiveActionId = NAME_None;
+		ResourceNodeId = NAME_None;
 		ActiveRecipeId = NAME_None;
 		ElapsedTime = 0.0f;
 		TotalTime = 0.0f;
@@ -173,6 +185,39 @@ public:
 	/** Broadcast when harvest is cancelled. */
 	UPROPERTY(BlueprintAssignable, Category="MO|Harvest|Events")
 	FMOOnHarvestCancelled OnHarvestCancelled;
+
+	// ============================================================================
+	// RESOURCE DEFINITION LOOKUP
+	// ============================================================================
+
+	/**
+	 * Extract the ResourceNodeId from component tags.
+	 * Looks for tag in format "ResourceNode_{RowName}".
+	 * @param Tags Array of tags to search
+	 * @return Row name of the resource definition, or NAME_None if not found
+	 */
+	UFUNCTION(BlueprintPure, Category="MO|Harvest")
+	FName ExtractResourceNodeId(const TArray<FName>& Tags) const;
+
+	/**
+	 * Get the resource definition row from the DataTable.
+	 * @param ResourceNodeId Row name in the resource DataTable
+	 * @return Pointer to the resource definition, or nullptr if not found
+	 */
+	const FMOResourceNodeDefinitionRow* GetResourceDefinition(FName ResourceNodeId) const;
+
+	/**
+	 * Get the resource definition for an ISM component based on its tags.
+	 * @param ISMComponent The component to look up
+	 * @return Pointer to the resource definition, or nullptr if not found
+	 */
+	const FMOResourceNodeDefinitionRow* GetResourceDefinitionForComponent(UInstancedStaticMeshComponent* ISMComponent) const;
+
+	/**
+	 * Get the cached resource DataTable.
+	 * @return The resource definitions DataTable, or nullptr if not configured
+	 */
+	UDataTable* GetResourceDataTable() const { return CachedResourceDataTable.Get(); }
 
 	// ============================================================================
 	// TAG COLLECTION
@@ -291,18 +336,18 @@ public:
 	// ============================================================================
 
 	/**
-	 * Begin a harvest operation.
+	 * Begin a harvest operation using an ActionId from resource definition.
 	 * @param ISMComponent The ISM component to harvest from
 	 * @param InstanceIndex The instance index
-	 * @param RecipeId The harvest recipe to execute
-	 * @param Inventory Player's inventory (for time calculation)
+	 * @param ActionId The harvest action ID (from FMOResourceNodeDefinitionRow::HarvestActions)
+	 * @param Inventory Player's inventory (for time calculation and tool penalty check)
 	 * @return True if harvest was started successfully
 	 */
 	UFUNCTION(BlueprintCallable, Category="MO|Harvest")
 	bool BeginHarvest(
 		UInstancedStaticMeshComponent* ISMComponent,
 		int32 InstanceIndex,
-		FName RecipeId,
+		FName ActionId,
 		UMOInventoryComponent* Inventory
 	);
 
@@ -338,7 +383,7 @@ public:
 	 * Check if a harvest operation is currently in progress.
 	 */
 	UFUNCTION(BlueprintPure, Category="MO|Harvest")
-	bool IsHarvestInProgress() const { return CurrentContext.IsValid() && !CurrentContext.ActiveRecipeId.IsNone(); }
+	bool IsHarvestInProgress() const { return CurrentContext.IsValid() && !CurrentContext.ActiveActionId.IsNone(); }
 
 	/**
 	 * Get the current harvest context (read-only).
@@ -359,6 +404,12 @@ private:
 	/** Cache of all harvest recipes (built on initialize). */
 	TArray<const FMORecipeDefinitionRow*> HarvestRecipeCache;
 
+	/** Cached reference to the resource definitions DataTable. */
+	TWeakObjectPtr<UDataTable> CachedResourceDataTable;
+
 	/** Build the harvest recipe cache from the recipe DataTable. */
 	void BuildHarvestRecipeCache();
+
+	/** Cache the resource DataTable reference. */
+	void CacheResourceDataTable();
 };

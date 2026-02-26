@@ -20,19 +20,15 @@ UBTTask_FleeFromThreat::UBTTask_FleeFromThreat()
 
 EBTNodeResult::Type UBTTask_FleeFromThreat::ExecuteTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory)
 {
-	UE_LOG(LogMOFramework, Warning, TEXT("BTTask_FleeFromThreat: ExecuteTask called!"));
-
 	AAIController* AIController = OwnerComp.GetAIOwner();
 	if (!AIController)
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("BTTask_FleeFromThreat: No AIController!"));
 		return EBTNodeResult::Failed;
 	}
 
 	APawn* OwnerPawn = AIController->GetPawn();
 	if (!OwnerPawn)
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("BTTask_FleeFromThreat: No OwnerPawn!"));
 		return EBTNodeResult::Failed;
 	}
 
@@ -40,25 +36,24 @@ EBTNodeResult::Type UBTTask_FleeFromThreat::ExecuteTask(UBehaviorTreeComponent& 
 	UBlackboardComponent* BlackboardComp = OwnerComp.GetBlackboardComponent();
 	if (!BlackboardComp)
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("BTTask_FleeFromThreat: No BlackboardComp!"));
 		return EBTNodeResult::Failed;
 	}
 
 	AActor* ThreatActor = Cast<AActor>(BlackboardComp->GetValueAsObject(ThreatActorKey.SelectedKeyName));
 	if (!ThreatActor)
 	{
-		// No threat, nothing to flee from
-		UE_LOG(LogMOFramework, Warning, TEXT("BTTask_FleeFromThreat: No ThreatActor in blackboard key '%s'!"), *ThreatActorKey.SelectedKeyName.ToString());
+		// No threat, nothing to flee from - this is normal, not an error
 		return EBTNodeResult::Failed;
 	}
 
-	UE_LOG(LogMOFramework, Warning, TEXT("BTTask_FleeFromThreat: Fleeing from %s"), *ThreatActor->GetName());
+	UE_LOG(LogMOFramework, Verbose, TEXT("[BTTask_Flee] %s fleeing from %s"),
+		*OwnerPawn->GetName(), *ThreatActor->GetName());
 
 	// Find flee location
 	FVector FleeLocation;
 	if (!FindFleeLocation(OwnerPawn, ThreatActor, FleeLocation))
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("BTTask_FleeFromThreat: Could not find valid flee location for %s"),
+		UE_LOG(LogMOFramework, Verbose, TEXT("[BTTask_Flee] %s: Could not find flee location"),
 			*OwnerPawn->GetName());
 		return EBTNodeResult::Failed;
 	}
@@ -89,7 +84,6 @@ EBTNodeResult::Type UBTTask_FleeFromThreat::ExecuteTask(UBehaviorTreeComponent& 
 	if (MoveResult.Code == EPathFollowingRequestResult::Failed)
 	{
 		// MoveTo failed - use direct movement
-		UE_LOG(LogMOFramework, Warning, TEXT("BTTask_FleeFromThreat: MoveTo failed, using direct movement"));
 		MyMemory->bUseDirectMovement = true;
 	}
 	else
@@ -123,13 +117,8 @@ EBTNodeResult::Type UBTTask_FleeFromThreat::ExecuteTask(UBehaviorTreeComponent& 
 			}
 
 			Movement->MaxWalkSpeed = FleeSpeed;
-			UE_LOG(LogMOFramework, Warning, TEXT("BTTask_FleeFromThreat: Set flee speed to %.1f (was %.1f)"),
-				FleeSpeed, MyMemory->OriginalWalkSpeed);
 		}
 	}
-
-	UE_LOG(LogMOFramework, Warning, TEXT("BTTask_FleeFromThreat: %s fleeing to %s (direct=%d)"),
-		*OwnerPawn->GetName(), *FleeLocation.ToString(), MyMemory->bUseDirectMovement ? 1 : 0);
 
 	return EBTNodeResult::InProgress;
 }
@@ -291,7 +280,6 @@ bool UBTTask_FleeFromThreat::FindFleeLocation(APawn* OwnerPawn, AActor* ThreatAc
 		if (NewDistanceToThreat > CurrentDistanceToThreat)
 		{
 			OutLocation = TargetLocation;
-			UE_LOG(LogMOFramework, Warning, TEXT("BTTask_FleeFromThreat: Using direct location (no navmesh)"));
 			return true;
 		}
 	}

@@ -1,6 +1,7 @@
 #include "MOHarvestSubsystem.h"
 #include "MOFramework.h"
 #include "MORecipeDatabaseSettings.h"
+#include "MOResourceDatabaseSettings.h"
 #include "MOKnowledgeComponent.h"
 #include "MOSkillsComponent.h"
 #include "MOInventoryComponent.h"
@@ -8,20 +9,88 @@
 #include "MOPCGInteractionSubsystem.h"
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Components/HierarchicalInstancedStaticMeshComponent.h"
+#include "Engine/DataTable.h"
 
 void UMOHarvestSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
 	BuildHarvestRecipeCache();
+	CacheResourceDataTable();
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOHarvest] Initialized with %d harvest recipes"), HarvestRecipeCache.Num());
+	UE_LOG(LogMOFramework, Log, TEXT("[MOHarvest] Initialized with %d harvest recipes, ResourceTable=%s"),
+		HarvestRecipeCache.Num(),
+		CachedResourceDataTable.IsValid() ? TEXT("loaded") : TEXT("NOT FOUND"));
 }
 
 void UMOHarvestSubsystem::Deinitialize()
 {
 	CancelHarvest();
 	HarvestRecipeCache.Empty();
+	CachedResourceDataTable.Reset();
 	Super::Deinitialize();
+}
+
+void UMOHarvestSubsystem::CacheResourceDataTable()
+{
+	const UMOResourceDatabaseSettings* ResourceSettings = GetDefault<UMOResourceDatabaseSettings>();
+	if (ResourceSettings)
+	{
+		CachedResourceDataTable = ResourceSettings->GetResourceDefinitionsDataTable();
+	}
+}
+
+FName UMOHarvestSubsystem::ExtractResourceNodeId(const TArray<FName>& Tags) const
+{
+	static const FString Prefix = TEXT("ResourceNode_");
+
+	for (const FName& Tag : Tags)
+	{
+		FString TagString = Tag.ToString();
+		if (TagString.StartsWith(Prefix))
+		{
+			// Extract the row name after the prefix
+			return FName(*TagString.RightChop(Prefix.Len()));
+		}
+	}
+
+	return NAME_None;
+}
+
+const FMOResourceNodeDefinitionRow* UMOHarvestSubsystem::GetResourceDefinition(FName ResourceNodeId) const
+{
+	if (ResourceNodeId.IsNone())
+	{
+		return nullptr;
+	}
+
+	UDataTable* DataTable = CachedResourceDataTable.Get();
+	if (!DataTable)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOHarvest] GetResourceDefinition: No resource DataTable cached"));
+		return nullptr;
+	}
+
+	static const FString ContextString(TEXT("MOHarvestSubsystem::GetResourceDefinition"));
+	return DataTable->FindRow<FMOResourceNodeDefinitionRow>(ResourceNodeId, ContextString);
+}
+
+const FMOResourceNodeDefinitionRow* UMOHarvestSubsystem::GetResourceDefinitionForComponent(UInstancedStaticMeshComponent* ISMComponent) const
+{
+	if (!IsValid(ISMComponent))
+	{
+		return nullptr;
+	}
+
+	TArray<FName> Tags = CollectTargetTags(ISMComponent);
+	FName ResourceNodeId = ExtractResourceNodeId(Tags);
+
+	if (ResourceNodeId.IsNone())
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOHarvest] GetResourceDefinitionForComponent: No ResourceNode_ tag found on component"));
+		return nullptr;
+	}
+
+	return GetResourceDefinition(ResourceNodeId);
 }
 
 void UMOHarvestSubsystem::BuildHarvestRecipeCache()
@@ -394,7 +463,7 @@ bool UMOHarvestSubsystem::CanExecuteDestroyRecipe(FName RecipeId, UMOInventoryCo
 bool UMOHarvestSubsystem::BeginHarvest(
 	UInstancedStaticMeshComponent* ISMComponent,
 	int32 InstanceIndex,
-	FName RecipeId,
+	FName ActionId,
 	UMOInventoryComponent* Inventory
 )
 {
@@ -416,13 +485,6 @@ bool UMOHarvestSubsystem::BeginHarvest(
 		return false;
 	}
 
-	const FMORecipeDefinitionRow* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(RecipeId);
-	if (!Recipe || !Recipe->bIsHarvestRecipe)
-	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOHarvest] BeginHarvest: Recipe '%s' not found or not a harvest recipe"), *RecipeId.ToString());
-		return false;
-	}
-
 	// Setup context
 	CurrentContext.Reset();
 	CurrentContext.ISMComponent = ISMComponent;
@@ -436,22 +498,50 @@ bool UMOHarvestSubsystem::BeginHarvest(
 	CurrentContext.InstanceIndex = InstanceIndex;
 	ISMComponent->GetInstanceTransform(InstanceIndex, CurrentContext.InstanceTransform, true);
 	CurrentContext.TargetTags = CollectTargetTags(ISMComponent);
-	CurrentContext.ActiveRecipeId = RecipeId;
+	CurrentContext.ActiveActionId = ActionId;
 	CurrentContext.ElapsedTime = 0.0f;
 
-	// Calculate adjusted craft time based on tools
-	UMOCraftingSubsystem* CraftingSubsystem = GetWorld()->GetSubsystem<UMOCraftingSubsystem>();
-	if (CraftingSubsystem && IsValid(Inventory))
+	// Extract ResourceNodeId and look up the HarvestAction from resource definition
+	CurrentContext.ResourceNodeId = ExtractResourceNodeId(CurrentContext.TargetTags);
+
+	const FMOResourceNodeDefinitionRow* ResourceDef = nullptr;
+	const FMOResourceHarvestAction* HarvestAction = nullptr;
+
+	if (!CurrentContext.ResourceNodeId.IsNone())
 	{
-		CurrentContext.TotalTime = CraftingSubsystem->GetAdjustedCraftTime(RecipeId, Inventory);
-	}
-	else
-	{
-		CurrentContext.TotalTime = Recipe->CraftTime;
+		ResourceDef = GetResourceDefinition(CurrentContext.ResourceNodeId);
+		if (ResourceDef)
+		{
+			HarvestAction = ResourceDef->FindAction(ActionId);
+		}
 	}
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOHarvest] Started harvest '%s' on instance %d (time: %.1fs)"),
-		*RecipeId.ToString(), InstanceIndex, CurrentContext.TotalTime);
+	if (!HarvestAction)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOHarvest] BeginHarvest: Action '%s' not found in resource '%s'"),
+			*ActionId.ToString(), *CurrentContext.ResourceNodeId.ToString());
+		CurrentContext.Reset();
+		return false;
+	}
+
+	// Calculate action time - base time from HarvestAction, potentially modified by tool quality
+	float BaseTime = HarvestAction->BaseActionTime;
+
+	// If player doesn't have the tool but action allows it with penalty, apply penalty
+	if (HarvestAction->RequiresTool() && !HarvestAction->bToolRequired && IsValid(Inventory))
+	{
+		if (!Inventory->HasToolOfType(HarvestAction->RequiredToolType))
+		{
+			BaseTime *= HarvestAction->MissingToolTimeMultiplier;
+			UE_LOG(LogMOFramework, Log, TEXT("[MOHarvest] No tool - applying time penalty (x%.1f)"),
+				HarvestAction->MissingToolTimeMultiplier);
+		}
+	}
+
+	CurrentContext.TotalTime = BaseTime;
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOHarvest] Started harvest action '%s' on resource '%s' instance %d (time: %.1fs)"),
+		*ActionId.ToString(), *CurrentContext.ResourceNodeId.ToString(), InstanceIndex, CurrentContext.TotalTime);
 
 	return true;
 }
@@ -493,7 +583,7 @@ void UMOHarvestSubsystem::CancelHarvest()
 {
 	if (IsHarvestInProgress())
 	{
-		UE_LOG(LogMOFramework, Log, TEXT("[MOHarvest] Cancelled harvest '%s'"), *CurrentContext.ActiveRecipeId.ToString());
+		UE_LOG(LogMOFramework, Log, TEXT("[MOHarvest] Cancelled harvest action '%s'"), *CurrentContext.ActiveActionId.ToString());
 		OnHarvestCancelled.Broadcast();
 	}
 
@@ -507,22 +597,31 @@ FMOCraftResult UMOHarvestSubsystem::CompleteHarvest(
 {
 	FMOCraftResult Result;
 
-	if (!CurrentContext.IsValid() || CurrentContext.ActiveRecipeId.IsNone())
+	if (!CurrentContext.IsValid() || CurrentContext.ActiveActionId.IsNone())
 	{
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOHarvest] CompleteHarvest: No valid harvest in progress"));
 		return Result;
 	}
 
-	const FMORecipeDefinitionRow* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(CurrentContext.ActiveRecipeId);
-	if (!Recipe)
+	// Look up the HarvestAction from resource definition
+	const FMOResourceNodeDefinitionRow* ResourceDef = GetResourceDefinition(CurrentContext.ResourceNodeId);
+	const FMOResourceHarvestAction* HarvestAction = nullptr;
+
+	if (ResourceDef)
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOHarvest] CompleteHarvest: Recipe '%s' not found"), *CurrentContext.ActiveRecipeId.ToString());
+		HarvestAction = ResourceDef->FindAction(CurrentContext.ActiveActionId);
+	}
+
+	if (!HarvestAction)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOHarvest] CompleteHarvest: Action '%s' not found in resource '%s'"),
+			*CurrentContext.ActiveActionId.ToString(), *CurrentContext.ResourceNodeId.ToString());
 		CurrentContext.Reset();
 		return Result;
 	}
 
-	// If bDestroysTarget, remove the instance
-	if (Recipe->bDestroysTarget)
+	// If bDestroysResource, remove the instance
+	if (HarvestAction->bDestroysResource)
 	{
 		if (CurrentContext.HISMComponent.IsValid())
 		{
@@ -535,17 +634,52 @@ FMOCraftResult UMOHarvestSubsystem::CompleteHarvest(
 		UE_LOG(LogMOFramework, Log, TEXT("[MOHarvest] Destroyed target instance %d"), CurrentContext.InstanceIndex);
 	}
 
-	// Use crafting subsystem to produce outputs and grant XP
-	UMOCraftingSubsystem* CraftingSubsystem = GetWorld()->GetSubsystem<UMOCraftingSubsystem>();
-	if (CraftingSubsystem)
+	// Produce yields from the HarvestAction
+	Result.bSuccess = true;
+
+	if (IsValid(Inventory))
 	{
-		Result = CraftingSubsystem->ProduceOutputsOnly(CurrentContext.ActiveRecipeId, Inventory, Skills);
+		for (const FName& ItemId : HarvestAction->YieldsItems)
+		{
+			if (ItemId.IsNone())
+			{
+				continue;
+			}
+
+			// Generate a new GUID for the item
+			FGuid NewItemGuid = FGuid::NewGuid();
+
+			// Add 1 of each yielded item (quantity can be enhanced later with tool quality/skill bonuses)
+			int32 Quantity = 1;
+
+			if (Inventory->AddItemByGuid(NewItemGuid, ItemId, Quantity))
+			{
+				Result.ProducedItems.FindOrAdd(ItemId) += Quantity;
+				UE_LOG(LogMOFramework, Log, TEXT("[MOHarvest] Produced item: %s x%d"), *ItemId.ToString(), Quantity);
+			}
+			else
+			{
+				// Track failed items (inventory full)
+				Result.FailedItems.FindOrAdd(ItemId) += Quantity;
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOHarvest] Failed to add item (inventory full?): %s x%d"),
+					*ItemId.ToString(), Quantity);
+			}
+		}
 	}
 
-	FName CompletedRecipeId = CurrentContext.ActiveRecipeId;
+	// Grant skill XP
+	if (IsValid(Skills) && !HarvestAction->SkillId.IsNone() && HarvestAction->SkillXPReward > 0.0f)
+	{
+		Skills->AddExperience(HarvestAction->SkillId, HarvestAction->SkillXPReward);
+		Result.XPGranted.FindOrAdd(HarvestAction->SkillId) += HarvestAction->SkillXPReward;
+		UE_LOG(LogMOFramework, Log, TEXT("[MOHarvest] Granted XP: %s +%.0f"),
+			*HarvestAction->SkillId.ToString(), HarvestAction->SkillXPReward);
+	}
+
+	FName CompletedActionId = CurrentContext.ActiveActionId;
 	CurrentContext.Reset();
 
-	OnHarvestComplete.Broadcast(CompletedRecipeId, Result.bSuccess);
+	OnHarvestComplete.Broadcast(CompletedActionId, Result.bSuccess);
 
 	return Result;
 }

@@ -121,10 +121,10 @@ void UMOHISMCullingSubsystem::RefreshAllHISMComponents()
 		PCGComp->Refresh(EPCGChangeType::Structural | EPCGChangeType::GenerationGrid, /*bCancelExistingRefresh=*/true);
 		RefreshedCount++;
 
-		UE_LOG(LogMOHISMCulling, Warning, TEXT("  -> REFRESHING PCG: %s"), *OwnerName);
+		UE_LOG(LogMOHISMCulling, Log, TEXT("  -> REFRESHING PCG: %s"), *OwnerName);
 	}
 
-	UE_LOG(LogMOHISMCulling, Warning, TEXT("Scan complete: %d total PCG components, %d with tag '%s', %d refreshed"),
+	UE_LOG(LogMOHISMCulling, Log, TEXT("Scan complete: %d total PCG components, %d with tag '%s', %d refreshed"),
 		TotalPCGComponents, TaggedCount, *PCGActorTag.ToString(), RefreshedCount);
 #else
 	UE_LOG(LogMOHISMCulling, Warning, TEXT("HISM culling refresh not available in non-editor builds"));

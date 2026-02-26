@@ -208,13 +208,13 @@ bool FMOPCGMeshSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 		ISM->AddInstances(ItemData.Transforms, false, true);
 		InstancesAdded += ItemData.Transforms.Num();
 
-		UE_LOG(LogMOFramework, Log, TEXT("[MOMeshSpawner] Added %d instances of '%s' (mesh: %s, tag: %s)"),
+		UE_LOG(LogMOFramework, Verbose, TEXT("[MOMeshSpawner] Added %d instances of '%s' (mesh: %s, tag: %s)"),
 			ItemData.Transforms.Num(), *ItemData.ItemId.ToString(), *ItemData.Mesh->GetName(), *TagName.ToString());
 
 		ComponentsCreated++;
 	}
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOMeshSpawner] Spawned %d instances across %d components (%d points processed, %d discarded)"),
+	UE_LOG(LogMOFramework, Verbose, TEXT("[MOMeshSpawner] Spawned %d instances across %d components (%d points processed, %d discarded)"),
 		InstancesAdded, ComponentsCreated, TotalPointsProcessed, TotalPointsDiscarded);
 
 	return true;
