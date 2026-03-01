@@ -118,19 +118,27 @@ void UMOAnatomyComponent::InitializeBodyParts()
 
 bool UMOAnatomyComponent::InflictDamage(EMOBodyPartType Part, float Damage, EMOWoundType WoundType)
 {
+	AActor* Owner = GetOwner();
+
 	if (GetOwnerRole() != ROLE_Authority)
 	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOAnatomy] InflictDamage REJECTED: Not authority (Role=%d) on %s"),
+			static_cast<int32>(GetOwnerRole()), Owner ? *Owner->GetName() : TEXT("NULL"));
 		return false;
 	}
 
 	if (Part == EMOBodyPartType::None || Damage <= 0.0f)
 	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOAnatomy] InflictDamage REJECTED: Invalid part (%d) or damage (%.1f)"),
+			static_cast<int32>(Part), Damage);
 		return false;
 	}
 
 	FMOBodyPartState* PartState = GetBodyPartStateMutable(Part);
 	if (!PartState || PartState->IsDestroyed())
 	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOAnatomy] InflictDamage REJECTED: PartState null or destroyed (Part=%d)"),
+			static_cast<int32>(Part));
 		return false;
 	}
 

@@ -20,6 +20,7 @@
 #include "MOIdentifiableInterface.h"
 #include "MORecruitmentComponent.h"
 #include "MOGameSettings.h"
+#include "MOInventoryUIController.h"
 #include "EngineUtils.h"
 
 UMOSystemMenuUIController::UMOSystemMenuUIController()
@@ -79,6 +80,7 @@ void UMOSystemMenuUIController::EndPlay(const EEndPlayReason::Type EndPlayReason
 	{
 		ContextWidget->OnCloseRequested.RemoveDynamic(this, &UMOSystemMenuUIController::HandleSurvivorContextMenuRequestClose);
 		ContextWidget->OnOpenTasksRequested.RemoveDynamic(this, &UMOSystemMenuUIController::HandleSurvivorContextMenuOpenTasks);
+		ContextWidget->OnInventoryRequested.RemoveDynamic(this, &UMOSystemMenuUIController::HandleSurvivorContextMenuOpenInventory);
 		if (ContextWidget->IsInViewport())
 		{
 			ContextWidget->RemoveFromParent();
@@ -935,8 +937,10 @@ void UMOSystemMenuUIController::ShowSurvivorContextMenu(APawn* Survivor, FVector
 	// Bind delegates
 	MenuWidget->OnCloseRequested.RemoveDynamic(this, &UMOSystemMenuUIController::HandleSurvivorContextMenuRequestClose);
 	MenuWidget->OnOpenTasksRequested.RemoveDynamic(this, &UMOSystemMenuUIController::HandleSurvivorContextMenuOpenTasks);
+	MenuWidget->OnInventoryRequested.RemoveDynamic(this, &UMOSystemMenuUIController::HandleSurvivorContextMenuOpenInventory);
 	MenuWidget->OnCloseRequested.AddDynamic(this, &UMOSystemMenuUIController::HandleSurvivorContextMenuRequestClose);
 	MenuWidget->OnOpenTasksRequested.AddDynamic(this, &UMOSystemMenuUIController::HandleSurvivorContextMenuOpenTasks);
+	MenuWidget->OnInventoryRequested.AddDynamic(this, &UMOSystemMenuUIController::HandleSurvivorContextMenuOpenInventory);
 
 	// Show modal background and add menu to viewport FIRST
 	// (SetPositionInViewport only works after widget is in viewport)
@@ -1094,6 +1098,33 @@ void UMOSystemMenuUIController::HandleSurvivorContextMenuOpenTasks(APawn* Surviv
 
 	// Open task menu for the survivor
 	ShowSurvivorTaskMenu(Survivor);
+}
+
+void UMOSystemMenuUIController::HandleSurvivorContextMenuOpenInventory(APawn* Survivor)
+{
+	// Close context menu first
+	CloseSurvivorContextMenu();
+
+	if (!IsValid(Survivor))
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOSysUI] HandleSurvivorContextMenuOpenInventory - invalid survivor"));
+		return;
+	}
+
+	// Find the inventory UI controller and open inventory with this survivor as container
+	if (AActor* Owner = GetOwner())
+	{
+		if (UMOInventoryUIController* InventoryUI = Owner->FindComponentByClass<UMOInventoryUIController>())
+		{
+			// Open inventory with the survivor as the "container" for item exchange
+			InventoryUI->OpenInventoryWithContainer(Survivor);
+			UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] Opened inventory exchange with survivor %s"), *Survivor->GetName());
+		}
+		else
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOSysUI] HandleSurvivorContextMenuOpenInventory - no MOInventoryUIController found"));
+		}
+	}
 }
 
 void UMOSystemMenuUIController::HandleSurvivorTaskMenuRequestClose()

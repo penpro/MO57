@@ -3,6 +3,7 @@
 #include "MOSkillsComponent.h"
 #include "MOInventoryComponent.h"
 #include "MOEquipmentComponent.h"
+#include "MORecipeDiscoveryComponent.h"
 #include "MORecipeDatabaseSettings.h"
 #include "MOItemDatabaseSettings.h"
 #include "MOItemDefinitionRow.h"
@@ -81,7 +82,7 @@ FMORecipeAvailability UMOCraftingSubsystem::IsRecipeAvailable(
 
 	// --- Check Knowledge Requirements ---
 	TArray<FName> MissingKnowledge;
-	if (!HasRequiredKnowledge(Recipe, KnowledgeComponent, &MissingKnowledge))
+	if (!HasRequiredKnowledge(Recipe, KnowledgeComponent, SkillsComponent, &MissingKnowledge))
 	{
 		Result.MissingKnowledge = MissingKnowledge;
 		Result.UnavailableReason = FText::FromString(TEXT("Missing required knowledge."));
@@ -476,6 +477,7 @@ float UMOCraftingSubsystem::GetRecipeCraftTime(FName RecipeId) const
 bool UMOCraftingSubsystem::HasRequiredKnowledge(
 	const FMORecipeDefinitionRow* Recipe,
 	UMOKnowledgeComponent* KnowledgeComponent,
+	UMOSkillsComponent* SkillsComponent,
 	TArray<FName>* OutMissingKnowledge
 ) const
 {
@@ -484,19 +486,58 @@ bool UMOCraftingSubsystem::HasRequiredKnowledge(
 		return true;
 	}
 
-	if (!IsValid(KnowledgeComponent))
+	// Try to get RecipeDiscoveryComponent from the component owner
+	UMORecipeDiscoveryComponent* DiscoveryComponent = nullptr;
+	if (IsValid(SkillsComponent))
 	{
-		if (OutMissingKnowledge)
+		if (AActor* Owner = SkillsComponent->GetOwner())
 		{
-			*OutMissingKnowledge = Recipe->RequiredKnowledge;
+			DiscoveryComponent = Owner->FindComponentByClass<UMORecipeDiscoveryComponent>();
 		}
-		return false;
+	}
+	else if (IsValid(KnowledgeComponent))
+	{
+		if (AActor* Owner = KnowledgeComponent->GetOwner())
+		{
+			DiscoveryComponent = Owner->FindComponentByClass<UMORecipeDiscoveryComponent>();
+		}
 	}
 
 	bool bHasAll = true;
 	for (const FName& KnowledgeId : Recipe->RequiredKnowledge)
 	{
-		if (!KnowledgeComponent->HasKnowledge(KnowledgeId))
+		bool bHasKnowledge = false;
+
+		// Check KnowledgeComponent first (legacy system)
+		if (IsValid(KnowledgeComponent) && KnowledgeComponent->HasKnowledge(KnowledgeId))
+		{
+			bHasKnowledge = true;
+		}
+
+		// Fallback: Check if player has this as a skill with level >= 1
+		// This bridges the gap between the unused KnowledgeComponent and active SkillsComponent
+		if (!bHasKnowledge && IsValid(SkillsComponent))
+		{
+			if (SkillsComponent->HasSkillLevel(KnowledgeId, 1))
+			{
+				UE_LOG(LogMOFramework, Log, TEXT("[MOCrafting] Knowledge '%s' satisfied via SkillsComponent (level >= 1)"),
+					*KnowledgeId.ToString());
+				bHasKnowledge = true;
+			}
+		}
+
+		// Fallback: Check if there's a recipe with this ID that's been discovered
+		if (!bHasKnowledge && IsValid(DiscoveryComponent))
+		{
+			if (DiscoveryComponent->IsRecipeDiscovered(KnowledgeId))
+			{
+				UE_LOG(LogMOFramework, Log, TEXT("[MOCrafting] Knowledge '%s' satisfied via RecipeDiscoveryComponent"),
+					*KnowledgeId.ToString());
+				bHasKnowledge = true;
+			}
+		}
+
+		if (!bHasKnowledge)
 		{
 			bHasAll = false;
 			if (OutMissingKnowledge)

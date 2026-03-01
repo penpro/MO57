@@ -1,5 +1,6 @@
 #include "MOForagingSubsystem.h"
 #include "MOPCGInteractionSubsystem.h"
+#include "MOGatheringSettingsActor.h"
 #include "MOWorldItem.h"
 #include "MOItemComponent.h"
 #include "MOInventoryComponent.h"
@@ -211,8 +212,11 @@ TArray<AMOWorldItem*> UMOForagingSubsystem::RevealHISMInstancesInRadius(FVector 
 		return SpawnedItems;
 	}
 
+	// Get settings from world actor
+	FMOForageDetectionSettings DetectionSettings = AMOGatheringSettingsActor::GetForageDetectionSettings(this);
+
 	// Cap the number of items
-	const int32 ItemsToReveal = FMath::Min(Instances.Num(), MaxItemsPerSearch);
+	const int32 ItemsToReveal = FMath::Min(Instances.Num(), DetectionSettings.MaxItemsPerSearch);
 
 	// Group instances by ISM component for efficient batch removal
 	TMap<UInstancedStaticMeshComponent*, TArray<int32>> ComponentToIndices;
@@ -280,7 +284,8 @@ TArray<AMOWorldItem*> UMOForagingSubsystem::RevealHISMInstancesInRadius(FVector 
 	// Award XP
 	if (ForagingPawn && SpawnedItems.Num() > 0)
 	{
-		AwardForagingXP(ForagingPawn, XPPerRevealedItem * SpawnedItems.Num());
+		FMOForageXPSettings XPSettings = AMOGatheringSettingsActor::GetForageXPSettings(this);
+		AwardForagingXP(ForagingPawn, XPSettings.XPPerRevealedItem * SpawnedItems.Num());
 	}
 
 	UE_LOG(LogMOForaging, Log, TEXT("[MOForagingSubsystem] Revealed %d items (capped from %d found)"),
@@ -312,6 +317,9 @@ TArray<AMOWorldItem*> UMOForagingSubsystem::DigForSupplies(FVector Location, int
 		return SpawnedItems;
 	}
 
+	// Get settings from world actor
+	FMODigSettings DigSettingsData = AMOGatheringSettingsActor::GetDigSettings(this);
+
 	// Roll each drop entry
 	for (const FMODigDropEntry& Entry : DigDropTable)
 	{
@@ -332,7 +340,7 @@ TArray<AMOWorldItem*> UMOForagingSubsystem::DigForSupplies(FVector Location, int
 		const int32 Quantity = FMath::RandRange(Entry.MinQuantity, Entry.MaxQuantity);
 
 		// Randomize spawn position within dig radius
-		const FVector2D RandomOffset = FMath::RandPointInCircle(DigSpawnRadius);
+		const FVector2D RandomOffset = FMath::RandPointInCircle(DigSettingsData.SpawnRadius);
 		const FVector SpawnLocation = Location + FVector(RandomOffset.X, RandomOffset.Y, 10.0f);
 		const FRotator SpawnRotation = FRotator(0.0f, FMath::RandRange(0.0f, 360.0f), 0.0f);
 
@@ -351,7 +359,8 @@ TArray<AMOWorldItem*> UMOForagingSubsystem::DigForSupplies(FVector Location, int
 	// Award XP
 	if (ForagingPawn && SpawnedItems.Num() > 0)
 	{
-		AwardForagingXP(ForagingPawn, XPPerDugItem * SpawnedItems.Num());
+		FMOForageXPSettings XPSettings = AMOGatheringSettingsActor::GetForageXPSettings(this);
+		AwardForagingXP(ForagingPawn, XPSettings.XPPerDugItem * SpawnedItems.Num());
 	}
 
 	UE_LOG(LogMOForaging, Log, TEXT("[MOForagingSubsystem] Dug up %d items at skill level %d"),
@@ -414,7 +423,8 @@ int32 UMOForagingSubsystem::DigForSuppliesToInventory(FVector Location, int32 Fo
 	// Award XP
 	if (ItemsAdded > 0)
 	{
-		AwardForagingXP(TargetPawn, XPPerDugItem * ItemsAdded);
+		FMOForageXPSettings XPSettings = AMOGatheringSettingsActor::GetForageXPSettings(this);
+		AwardForagingXP(TargetPawn, XPSettings.XPPerDugItem * ItemsAdded);
 	}
 
 	UE_LOG(LogMOForaging, Log, TEXT("[MOForagingSubsystem] Dug %d items directly to inventory at skill level %d"),
@@ -447,8 +457,11 @@ int32 UMOForagingSubsystem::ForageToInventory(FVector Origin, float Radius, APaw
 		return 0;
 	}
 
+	// Get settings from world actor
+	FMOForageDetectionSettings DetectionSettings = AMOGatheringSettingsActor::GetForageDetectionSettings(this);
+
 	// Cap the number of items
-	const int32 ItemsToReveal = FMath::Min(Instances.Num(), MaxItemsPerSearch);
+	const int32 ItemsToReveal = FMath::Min(Instances.Num(), DetectionSettings.MaxItemsPerSearch);
 
 	// Group instances by ISM component for efficient batch removal
 	TMap<UInstancedStaticMeshComponent*, TArray<int32>> ComponentToIndices;
@@ -505,7 +518,8 @@ int32 UMOForagingSubsystem::ForageToInventory(FVector Origin, float Radius, APaw
 	// Award XP
 	if (ItemsAdded > 0)
 	{
-		AwardForagingXP(TargetPawn, XPPerRevealedItem * ItemsAdded);
+		FMOForageXPSettings XPSettings = AMOGatheringSettingsActor::GetForageXPSettings(this);
+		AwardForagingXP(TargetPawn, XPSettings.XPPerRevealedItem * ItemsAdded);
 	}
 
 	UE_LOG(LogMOForaging, Log, TEXT("[MOForagingSubsystem] Foraged %d items directly to inventory (removed %d instances)"),
@@ -520,8 +534,11 @@ int32 UMOForagingSubsystem::ForageToInventory(FVector Origin, float Radius, APaw
 
 float UMOForagingSubsystem::CalculateSearchRadius(int32 ForagingLevel) const
 {
-	const float CalculatedRadius = BaseSearchRadius + (ForagingLevel * RadiusPerSkillLevel);
-	return FMath::Min(CalculatedRadius, MaxSearchRadius);
+	// Get settings from world actor if available
+	FMOForageDetectionSettings DetectionSettings = AMOGatheringSettingsActor::GetForageDetectionSettings(this);
+
+	const float CalculatedRadius = DetectionSettings.BaseSearchRadius + (ForagingLevel * DetectionSettings.RadiusPerSkillLevel);
+	return FMath::Min(CalculatedRadius, DetectionSettings.MaxSearchRadius);
 }
 
 int32 UMOForagingSubsystem::GetForagingLevel(APawn* Pawn) const

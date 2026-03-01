@@ -11,8 +11,8 @@ void UMOLoadPanel::NativeConstruct()
 {
 	Super::NativeConstruct();
 
-	UE_LOG(LogMOFramework, Warning, TEXT("[MOLoadPanel] NativeConstruct called"));
-	UE_LOG(LogMOFramework, Warning, TEXT("[MOLoadPanel] BackButton: %s, ScrollBox: %s, EntryClass: %s"),
+	UE_LOG(LogMOFramework, Verbose, TEXT("[MOLoadPanel] NativeConstruct called"));
+	UE_LOG(LogMOFramework, Verbose, TEXT("[MOLoadPanel] BackButton: %s, ScrollBox: %s, EntryClass: %s"),
 		BackButton ? TEXT("OK") : TEXT("NULL"),
 		SaveSlotsScrollBox ? TEXT("OK") : TEXT("NULL"),
 		SaveSlotEntryClass ? *SaveSlotEntryClass->GetName() : TEXT("NOT SET - Configure in Blueprint!"));
@@ -26,7 +26,7 @@ void UMOLoadPanel::NativeConstruct()
 	{
 		BackButton->OnClicked().RemoveAll(this);
 		BackButton->OnClicked().AddUObject(this, &UMOLoadPanel::HandleBackClicked);
-		UE_LOG(LogMOFramework, Log, TEXT("[MOLoadPanel] BackButton bound"));
+		UE_LOG(LogMOFramework, Verbose, TEXT("[MOLoadPanel] BackButton bound"));
 	}
 
 	RefreshSaveList();
@@ -68,7 +68,7 @@ UWidget* UMOLoadPanel::NativeGetDesiredFocusTarget() const
 
 void UMOLoadPanel::RefreshSaveList()
 {
-	UE_LOG(LogMOFramework, Log, TEXT("[MOLoadPanel] RefreshSaveList called"));
+	UE_LOG(LogMOFramework, Verbose, TEXT("[MOLoadPanel] RefreshSaveList called"));
 	CachedSaves.Empty();
 
 	// Get persistence subsystem (GameInstanceSubsystem)
@@ -91,15 +91,15 @@ void UMOLoadPanel::RefreshSaveList()
 	}
 
 	const FString CurrentWorldId = bFilterToCurrentWorld ? Persistence->GetCurrentWorldIdentifier() : FString();
-	UE_LOG(LogMOFramework, Log, TEXT("[MOLoadPanel] Filter to world: %s, World ID: '%s'"),
+	UE_LOG(LogMOFramework, Verbose, TEXT("[MOLoadPanel] Filter to world: %s, World ID: '%s'"),
 		bFilterToCurrentWorld ? TEXT("YES") : TEXT("NO"), *CurrentWorldId);
 
 	TArray<FString> SaveSlots = Persistence->GetAllSaveSlots();
-	UE_LOG(LogMOFramework, Log, TEXT("[MOLoadPanel] Total save slots found: %d"), SaveSlots.Num());
+	UE_LOG(LogMOFramework, Verbose, TEXT("[MOLoadPanel] Total save slots found: %d"), SaveSlots.Num());
 
 	for (const FString& SlotName : SaveSlots)
 	{
-		UE_LOG(LogMOFramework, Log, TEXT("[MOLoadPanel]   Checking slot: %s"), *SlotName);
+		UE_LOG(LogMOFramework, Verbose, TEXT("[MOLoadPanel]   Checking slot: %s"), *SlotName);
 
 		// Load actual metadata from save file
 		FMOSaveMetadata Meta;
@@ -108,12 +108,12 @@ void UMOLoadPanel::RefreshSaveList()
 			// Filter to current world if enabled
 			if (bFilterToCurrentWorld && !CurrentWorldId.IsEmpty() && !Meta.WorldName.IsEmpty() && Meta.WorldName != CurrentWorldId)
 			{
-				UE_LOG(LogMOFramework, Log, TEXT("[MOLoadPanel]   Skipping (world '%s' doesn't match current '%s')"), *Meta.WorldName, *CurrentWorldId);
+				UE_LOG(LogMOFramework, Verbose, TEXT("[MOLoadPanel]   Skipping (world '%s' doesn't match current '%s')"), *Meta.WorldName, *CurrentWorldId);
 				continue;
 			}
 
 			CachedSaves.Add(Meta);
-			UE_LOG(LogMOFramework, Log, TEXT("[MOLoadPanel]   Added save: %s (PlayTime: %.0f sec, Autosave: %s)"),
+			UE_LOG(LogMOFramework, Verbose, TEXT("[MOLoadPanel]   Added save: %s (PlayTime: %.0f sec, Autosave: %s)"),
 				*SlotName, Meta.PlayTime.GetTotalSeconds(), Meta.bIsAutosave ? TEXT("Yes") : TEXT("No"));
 		}
 		else
@@ -139,16 +139,16 @@ void UMOLoadPanel::RefreshSaveList()
 			// Filter legacy saves by slot name
 			if (bFilterToCurrentWorld && !CurrentWorldId.IsEmpty() && !SlotName.Contains(CurrentWorldId))
 			{
-				UE_LOG(LogMOFramework, Log, TEXT("[MOLoadPanel]   Skipping legacy save (doesn't match world ID)"));
+				UE_LOG(LogMOFramework, Verbose, TEXT("[MOLoadPanel]   Skipping legacy save (doesn't match world ID)"));
 				continue;
 			}
 
 			CachedSaves.Add(Meta);
-			UE_LOG(LogMOFramework, Log, TEXT("[MOLoadPanel]   Added legacy save: %s"), *SlotName);
+			UE_LOG(LogMOFramework, Verbose, TEXT("[MOLoadPanel]   Added legacy save: %s"), *SlotName);
 		}
 	}
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOLoadPanel] Found %d saves for display"), CachedSaves.Num());
+	UE_LOG(LogMOFramework, Verbose, TEXT("[MOLoadPanel] Found %d saves for display"), CachedSaves.Num());
 
 	// Sort by timestamp (newest first)
 	CachedSaves.Sort([](const FMOSaveMetadata& A, const FMOSaveMetadata& B)
@@ -167,7 +167,7 @@ void UMOLoadPanel::SetFilterToCurrentWorld(bool bFilter)
 
 void UMOLoadPanel::LoadFromSlot(const FString& SlotName)
 {
-	UE_LOG(LogMOFramework, Log, TEXT("[MOLoadPanel] LoadFromSlot broadcasting: %s"), *SlotName);
+	UE_LOG(LogMOFramework, Verbose, TEXT("[MOLoadPanel] LoadFromSlot broadcasting: %s"), *SlotName);
 	OnLoadRequested.Broadcast(SlotName);
 }
 
@@ -175,7 +175,7 @@ void UMOLoadPanel::PopulateSaveList()
 {
 	ClearSaveList();
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOLoadPanel] PopulateSaveList: %d saves to display"), CachedSaves.Num());
+	UE_LOG(LogMOFramework, Verbose, TEXT("[MOLoadPanel] PopulateSaveList: %d saves to display"), CachedSaves.Num());
 
 	if (!SaveSlotsScrollBox)
 	{
@@ -210,7 +210,7 @@ void UMOLoadPanel::PopulateSaveList()
 
 		SaveSlotsScrollBox->AddChild(Entry);
 		SlotEntryWidgets.Add(Entry);
-		UE_LOG(LogMOFramework, Log, TEXT("[MOLoadPanel] Added entry for slot: %s"), *Meta.SlotName);
+		UE_LOG(LogMOFramework, Verbose, TEXT("[MOLoadPanel] Added entry for slot: %s"), *Meta.SlotName);
 	}
 }
 

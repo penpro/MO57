@@ -118,7 +118,7 @@ void UMOHarvestSubsystem::BuildHarvestRecipeCache()
 		if (Recipe && Recipe->bIsHarvestRecipe)
 		{
 			HarvestRecipeCache.Add(Recipe);
-			UE_LOG(LogMOFramework, Log, TEXT("[MOHarvest] Cached harvest recipe '%s' (tag: '%s', destroys: %s, tools: %d, knowledge: %d, discovery: %s/%s@%d)"),
+			UE_LOG(LogMOFramework, Verbose, TEXT("[MOHarvest] Cached harvest recipe '%s' (tag: '%s', destroys: %s, tools: %d, knowledge: %d, discovery: %s/%s@%d)"),
 				*Recipe->RecipeId.ToString(),
 				*Recipe->RequiredTargetTag.ToString(),
 				Recipe->bDestroysTarget ? TEXT("yes") : TEXT("no"),
@@ -133,7 +133,7 @@ void UMOHarvestSubsystem::BuildHarvestRecipeCache()
 			for (const FMOToolRequirement& Tool : Recipe->RequiredTools)
 			{
 				FString ToolTypeName = ToolTypeEnum->GetNameStringByValue(static_cast<int64>(Tool.ToolType));
-				UE_LOG(LogMOFramework, Log, TEXT("[MOHarvest]   Tool: '%s', Required=%s"),
+				UE_LOG(LogMOFramework, Verbose, TEXT("[MOHarvest]   Tool: '%s', Required=%s"),
 					*ToolTypeName,
 					Tool.bIsRequired ? TEXT("yes") : TEXT("no"));
 			}
@@ -141,7 +141,7 @@ void UMOHarvestSubsystem::BuildHarvestRecipeCache()
 			// Log knowledge requirements
 			for (const FName& Knowledge : Recipe->RequiredKnowledge)
 			{
-				UE_LOG(LogMOFramework, Log, TEXT("[MOHarvest]   RequiredKnowledge: '%s'"), *Knowledge.ToString());
+				UE_LOG(LogMOFramework, Verbose, TEXT("[MOHarvest]   RequiredKnowledge: '%s'"), *Knowledge.ToString());
 			}
 		}
 	}

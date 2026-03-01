@@ -97,4 +97,13 @@ public:
 	 */
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category="MO|UI")
 	void RequestShowStationContextMenu(AActor* StationActor, FVector WorldPosition);
+
+	/**
+	 * Request to start butchering a carcass part.
+	 * Shows progress bar and locks input until complete or cancelled.
+	 * @param CarcassActor - The carcass actor
+	 * @param PartId - The part to butcher
+	 */
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category="MO|UI")
+	void RequestStartCarcassButchering(AActor* CarcassActor, FName PartId);
 };

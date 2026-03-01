@@ -8,10 +8,15 @@
 #include "Perception/AISenseConfig_Sight.h"
 #include "Perception/AISenseConfig_Hearing.h"
 #include "BehaviorTree/BlackboardComponent.h"
+#include "BehaviorTree/Blackboard/BlackboardKeyType.h"
 #include "BrainComponent.h"
 
 AMOCreatureController::AMOCreatureController()
 {
+	// Enable ticking for continuous blackboard updates
+	PrimaryActorTick.bCanEverTick = true;
+	PrimaryActorTick.bStartWithTickEnabled = true;
+
 	// Create and set perception component (inherited from AAIController)
 	UAIPerceptionComponent* PerceptionComp = CreateDefaultSubobject<UAIPerceptionComponent>(TEXT("PerceptionComponent"));
 	SetPerceptionComponent(*PerceptionComp);
@@ -22,6 +27,17 @@ void AMOCreatureController::BeginPlay()
 	Super::BeginPlay();
 
 	// Note: Perception setup moved to OnPossess to ensure valid listener ID
+}
+
+void AMOCreatureController::Tick(float DeltaTime)
+{
+	Super::Tick(DeltaTime);
+
+	// Continuously update blackboard threat info (distance, attack range check, etc.)
+	if (CurrentThreatActor.IsValid())
+	{
+		UpdateBlackboardThreatInfo();
+	}
 }
 
 void AMOCreatureController::OnPossess(APawn* InPawn)
@@ -248,7 +264,26 @@ void AMOCreatureController::OnTargetPerceptionUpdated(AActor* Actor, FAIStimulus
 
 	if (Stimulus.WasSuccessfullySensed())
 	{
-		// New threat detected - track it directly
+		// TARGET STICKINESS: Don't switch targets unless we don't have one or current is invalid
+		if (CurrentThreatActor.IsValid() && CurrentThreatActor.Get() != Actor)
+		{
+			// We already have a valid target - only switch if new target is MUCH closer (50% closer)
+			float CurrentDistance = FVector::Dist(ControlledPawn->GetActorLocation(), CurrentThreatActor->GetActorLocation());
+			float NewDistance = FVector::Dist(ControlledPawn->GetActorLocation(), Actor->GetActorLocation());
+
+			if (NewDistance >= CurrentDistance * 0.5f)
+			{
+				// New target isn't significantly closer - keep current target
+				UE_LOG(LogMOFramework, Verbose, TEXT("[MOCreatureController] Ignoring %s (dist %.1f), keeping current target %s (dist %.1f)"),
+					*Actor->GetName(), NewDistance, *CurrentThreatActor->GetName(), CurrentDistance);
+				return;
+			}
+
+			UE_LOG(LogMOFramework, Verbose, TEXT("[MOCreatureController] Switching from %s to closer threat %s"),
+				*CurrentThreatActor->GetName(), *Actor->GetName());
+		}
+
+		// New threat detected or switching to closer threat
 		CurrentThreatActor = Actor;
 		RememberedThreatActor = Actor;
 		LastKnownThreatLocation = Actor->GetActorLocation();
@@ -256,7 +291,7 @@ void AMOCreatureController::OnTargetPerceptionUpdated(AActor* Actor, FAIStimulus
 		// Clear any pending "forget" timer since we can see the threat again
 		GetWorld()->GetTimerManager().ClearTimer(ThreatMemoryTimerHandle);
 
-		UE_LOG(LogMOFramework, Verbose, TEXT("[MOCreatureController] Threat detected: %s at distance %.1f"),
+		UE_LOG(LogMOFramework, Verbose, TEXT("[MOCreatureController] THREAT DETECTED: %s at distance %.1f"),
 			*Actor->GetName(), FVector::Dist(ControlledPawn->GetActorLocation(), Actor->GetActorLocation()));
 
 		// Update blackboard immediately
@@ -367,10 +402,13 @@ void AMOCreatureController::UpdateBlackboardThreatInfo()
 {
 	if (!BlackboardComponent)
 	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOCreatureController] UpdateBlackboardThreatInfo - NO BLACKBOARD COMPONENT!"));
 		return;
 	}
 
 	bool bHasTarget = CurrentThreatActor.IsValid();
+	float DistanceToTarget = GetDistanceToThreat();
+	bool bIsInAttackRange = bHasTarget && (DistanceToTarget <= AttackRange);
 
 	// Update threat-related keys
 	BlackboardComponent->SetValueAsObject(TEXT("TargetActor"), CurrentThreatActor.Get());
@@ -378,7 +416,23 @@ void AMOCreatureController::UpdateBlackboardThreatInfo()
 	BlackboardComponent->SetValueAsBool(TEXT("HasTarget"), bHasTarget);
 	BlackboardComponent->SetValueAsBool(TEXT("ShouldFlee"), ShouldFlee());
 	BlackboardComponent->SetValueAsFloat(TEXT("HealthPercent"), GetHealthPercent());
-	BlackboardComponent->SetValueAsFloat(TEXT("DistanceToTarget"), GetDistanceToThreat());
+	BlackboardComponent->SetValueAsFloat(TEXT("DistanceToTarget"), DistanceToTarget);
+
+	// Check if IsInAttackRange key exists before setting
+	if (BlackboardComponent->GetKeyID(TEXT("IsInAttackRange")) == FBlackboard::InvalidKey)
+	{
+		static bool bLoggedOnce = false;
+		if (!bLoggedOnce)
+		{
+			UE_LOG(LogMOFramework, Error, TEXT("[MOCreatureController] BLACKBOARD KEY 'IsInAttackRange' DOES NOT EXIST! Add Bool key to BB_Creature."));
+			bLoggedOnce = true;
+		}
+	}
+	else
+	{
+		BlackboardComponent->SetValueAsBool(TEXT("IsInAttackRange"), bIsInAttackRange);
+	}
+
 	BlackboardComponent->SetValueAsVector(TEXT("HomeLocation"), HomeLocation);
 
 	// Update activity state keys
@@ -387,11 +441,6 @@ void AMOCreatureController::UpdateBlackboardThreatInfo()
 	BlackboardComponent->SetValueAsBool(TEXT("IsResting"), CurrentActivityState == EMOCreatureActivityState::Resting);
 	BlackboardComponent->SetValueAsBool(TEXT("IsSleeping"), CurrentActivityState == EMOCreatureActivityState::Sleeping);
 
-	// Commented out - fires constantly during gameplay
-	// UE_LOG(LogMOFramework, Warning, TEXT("MOCreatureController: Updated blackboard - HasTarget=%d, Target=%s, Distance=%.1f"),
-	// 	bHasTarget ? 1 : 0,
-	// 	CurrentThreatActor.IsValid() ? *CurrentThreatActor->GetName() : TEXT("None"),
-	// 	GetDistanceToThreat());
 }
 
 AActor* AMOCreatureController::GetCurrentThreat() const

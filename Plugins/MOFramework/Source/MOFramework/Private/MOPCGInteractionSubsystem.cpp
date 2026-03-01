@@ -64,13 +64,13 @@ void UMOPCGInteractionSubsystem::RebuildMeshLookupCache()
 		// Add to cache
 		MeshToItemCache.Add(Item->WorldVisual.StaticMesh, Item->ItemId);
 
-		UE_LOG(LogMOFramework, Log, TEXT("[MOPCGInteraction] Mapped mesh '%s' (path: %s) -> item '%s'"),
+		UE_LOG(LogMOFramework, Verbose, TEXT("[MOPCGInteraction] Mapped mesh '%s' (path: %s) -> item '%s'"),
 			*Item->WorldVisual.StaticMesh.GetAssetName(),
 			*Item->WorldVisual.StaticMesh.GetLongPackageName(),
 			*Item->ItemId.ToString());
 	}
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOPCGInteraction] Built mesh lookup cache with %d entries"), MeshToItemCache.Num());
+	UE_LOG(LogMOFramework, Verbose, TEXT("[MOPCGInteraction] Built mesh lookup cache with %d entries"), MeshToItemCache.Num());
 }
 
 FName UMOPCGInteractionSubsystem::GetItemIdForMesh(UStaticMesh* Mesh) const

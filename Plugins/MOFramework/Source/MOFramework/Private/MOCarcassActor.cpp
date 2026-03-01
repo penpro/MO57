@@ -4,8 +4,9 @@
 #include "MOInteractableComponent.h"
 #include "MOIdentityComponent.h"
 #include "MOInventoryComponent.h"
+#include "MOUIContractInterface.h"
 #include "MOCreature.h"
-#include "Components/SkeletalMeshComponent.h"
+#include "Components/PoseableMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/SphereComponent.h"
 #include "Engine/DataTable.h"
@@ -22,16 +23,23 @@ AMOCarcassActor::AMOCarcassActor()
 	PrimaryActorTick.TickInterval = 0.1f; // 10 Hz for harvest progress
 	bReplicates = true;
 
-	// Root component - interaction sphere
+	// Root component - interaction sphere (handles interaction traces)
 	InteractionSphere = CreateDefaultSubobject<USphereComponent>(TEXT("InteractionSphere"));
-	InteractionSphere->InitSphereRadius(150.0f);
-	InteractionSphere->SetCollisionProfileName(TEXT("OverlapAllDynamic"));
+	InteractionSphere->InitSphereRadius(100.0f);
+	InteractionSphere->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+	InteractionSphere->SetCollisionObjectType(ECC_WorldDynamic);
+	InteractionSphere->SetCollisionResponseToAllChannels(ECR_Ignore);
+	InteractionSphere->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block); // Block interaction traces
 	RootComponent = InteractionSphere;
 
-	// Skeletal mesh for carcass body
-	CarcassMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("CarcassMesh"));
+	// Poseable mesh for carcass body (allows manual bone positioning from ragdoll)
+	CarcassMesh = CreateDefaultSubobject<UPoseableMeshComponent>(TEXT("CarcassMesh"));
 	CarcassMesh->SetupAttachment(RootComponent);
-	CarcassMesh->SetCollisionProfileName(TEXT("NoCollision"));
+	// Enable collision for interaction traces (Visibility channel)
+	CarcassMesh->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+	CarcassMesh->SetCollisionObjectType(ECC_WorldDynamic);
+	CarcassMesh->SetCollisionResponseToAllChannels(ECR_Ignore);
+	CarcassMesh->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block); // Block interaction traces
 
 	// Static mesh for bones (hidden initially)
 	BonesMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("BonesMesh"));
@@ -283,13 +291,43 @@ void AMOCarcassActor::InitializeFromCreature(AMOCreature* DeadCreature)
 		return;
 	}
 
-	// Copy skeletal mesh configuration
+	// Copy skeletal mesh configuration and ragdoll pose
 	if (USkeletalMeshComponent* CreatureMesh = DeadCreature->GetMesh())
 	{
-		CarcassMesh->SetSkeletalMeshAsset(CreatureMesh->GetSkeletalMeshAsset());
+		// Set the same skeletal mesh asset
+		USkeletalMesh* MeshAsset = CreatureMesh->GetSkeletalMeshAsset();
+		CarcassMesh->SetSkinnedAssetAndUpdate(MeshAsset, false); // false = don't reset to ref pose
 
-		// TODO: Copy pose for ragdoll effect
-		// CarcassMesh->CopyPoseFromSkeletalComponent(CreatureMesh);
+		// Copy all materials
+		for (int32 i = 0; i < CreatureMesh->GetNumMaterials(); ++i)
+		{
+			CarcassMesh->SetMaterial(i, CreatureMesh->GetMaterial(i));
+		}
+
+		// Position carcass actor at the ragdoll's root bone location (where it settled)
+		FName RootBoneName = CreatureMesh->GetBoneName(0);
+		FVector RagdollPosition = CreatureMesh->GetBoneTransform(RootBoneName, RTS_World).GetLocation();
+		SetActorLocation(RagdollPosition);
+
+		// Copy bone transforms from the ragdolled creature using UPoseableMeshComponent
+		// This component allows us to manually set each bone's transform
+		const int32 NumBones = CreatureMesh->GetNumBones();
+		for (int32 BoneIdx = 0; BoneIdx < NumBones; ++BoneIdx)
+		{
+			FName BoneName = CreatureMesh->GetBoneName(BoneIdx);
+			FTransform BoneWorldTransform = CreatureMesh->GetBoneTransform(BoneName, RTS_World);
+
+			// SetBoneTransformByName sets the bone in world space when using EBoneSpaces::WorldSpace
+			CarcassMesh->SetBoneTransformByName(BoneName, BoneWorldTransform, EBoneSpaces::WorldSpace);
+		}
+
+		// Set up collision for interaction (query only, no physics simulation)
+		CarcassMesh->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+		CarcassMesh->SetCollisionObjectType(ECC_WorldDynamic);
+		CarcassMesh->SetCollisionResponseToAllChannels(ECR_Ignore);
+		CarcassMesh->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
+
+		UE_LOG(LogMOFramework, Log, TEXT("[MOCarcass] Copied %d bone transforms from ragdoll to poseable mesh"), NumBones);
 	}
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOCarcass] Initialized from creature %s"), *DeadCreature->GetName());
@@ -301,9 +339,7 @@ void AMOCarcassActor::InitializeFromCreature(AMOCreature* DeadCreature)
 
 bool AMOCarcassActor::HandleInteract(AController* InteractorController)
 {
-	// For now, start harvesting the first available part
-	// Later: show context menu with available parts
-
+	// Get available parts
 	TArray<FMOCarcassPartEntry> Available = GetAvailableParts();
 	if (Available.Num() == 0)
 	{
@@ -311,15 +347,21 @@ bool AMOCarcassActor::HandleInteract(AController* InteractorController)
 		return false;
 	}
 
-	// Start harvesting the first available part
-	// TODO: Show UI to select which part
+	// Route through UI system for progress bar and input lockout
+	if (InteractorController && InteractorController->Implements<UMOUIContractInterface>())
+	{
+		IMOUIContractInterface::Execute_RequestStartCarcassButchering(InteractorController, this, Available[0].PartId);
+		return true;
+	}
+
+	// Fallback: direct harvest (no UI, for AI or non-player controllers)
 	return StartHarvestPart(Available[0].PartId, InteractorController);
 }
 
 bool AMOCarcassActor::HandleSecondaryInteract(AController* InteractorController)
 {
 	// TODO: Show context menu with all available parts
-	// For now, same as primary
+	// For now, same as primary (start harvesting first available part)
 	return HandleInteract(InteractorController);
 }
 

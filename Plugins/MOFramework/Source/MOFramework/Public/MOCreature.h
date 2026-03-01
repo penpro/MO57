@@ -107,13 +107,19 @@ public:
 	// STATE QUERIES
 	// ============================================================================
 
-	/** Check if the creature is dead. */
-	UFUNCTION(BlueprintPure, Category="MO|Creature|State")
-	bool IsDead() const { return bIsDead; }
+	// Note: IsDead() inherited from AMOCharacter
 
 	/** Get health percentage (0.0 to 1.0). */
 	UFUNCTION(BlueprintPure, Category="MO|Creature|State")
 	float GetHealthPercent() const;
+
+	/** Get the creature's run/sprint speed (from definition). */
+	UFUNCTION(BlueprintPure, Category="MO|Creature|State")
+	float GetRunSpeed() const { return SprintSpeed; }
+
+	/** Get the creature's walk speed (from definition). */
+	UFUNCTION(BlueprintPure, Category="MO|Creature|State")
+	float GetWalkSpeed() const { return WalkSpeed; }
 
 	// ============================================================================
 	// EVENTS
@@ -164,13 +170,23 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category="MO|Creature")
 	float DestroyDelayAfterDeath = 30.f;
 
+	/** How long ragdoll plays before spawning carcass. */
+	UPROPERTY(EditDefaultsOnly, Category="MO|Creature")
+	float RagdollToCarassDelay = 2.0f;
+
+	/** Impulse strength applied when entering ragdoll (knockback). */
+	UPROPERTY(EditDefaultsOnly, Category="MO|Creature")
+	float RagdollImpulseStrength = 5000.0f;
+
+	/** Enable ragdoll physics on mesh. */
+	UFUNCTION(BlueprintCallable, Category="MO|Creature")
+	void EnableRagdoll();
+
 	// ============================================================================
 	// STATE
 	// ============================================================================
 
-	/** Whether this creature is dead. */
-	UPROPERTY(BlueprintReadOnly, Category="MO|Creature|State")
-	bool bIsDead = false;
+	// Note: bIsDead inherited from AMOCharacter
 
 	/** The actor that killed this creature. */
 	UPROPERTY(BlueprintReadOnly, Category="MO|Creature|State")
@@ -180,9 +196,8 @@ private:
 	/** Apply creature definition to components. */
 	void ApplyCreatureDefinition();
 
-	/** Handle instant death from anatomy component. */
-	UFUNCTION()
-	void HandleInstantDeath(EMOBodyPartType CausePart);
+	/** Handle instant death from anatomy component - overrides AMOCharacter. */
+	virtual void HandleInstantDeath(EMOBodyPartType CausePart) override;
 
 	/** Handle body part destruction - creatures die when vital parts are destroyed. */
 	UFUNCTION()
@@ -191,6 +206,22 @@ private:
 	/** Timer handle for delayed destroy after death. */
 	FTimerHandle DestroyTimerHandle;
 
+	/** Timer handle for delayed carcass spawn. */
+	FTimerHandle CarcassSpawnTimerHandle;
+
+	/** Timer handle for freezing ragdoll (used when no carcass). */
+	FTimerHandle RagdollFreezeTimerHandle;
+
+	/** Cached movement speeds from definition. */
+	float WalkSpeed = 200.0f;
+	float SprintSpeed = 600.0f;
+
+	/** Whether to spawn a carcass on death (determined by checking definition). */
+	bool bSpawnCarcassOnDeath = false;
+
 	/** Destroy the creature actor (called after death delay). */
 	void PerformDestroy();
+
+	/** Called by timer to spawn carcass after ragdoll settles. */
+	void SpawnCarcassDelayed();
 };

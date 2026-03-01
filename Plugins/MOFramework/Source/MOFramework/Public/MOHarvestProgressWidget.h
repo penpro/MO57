@@ -106,14 +106,14 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO|Harvest")
 	FName GetCurrentActionId() const { return ActionId; }
 
+	/** Update the visual display. Can be called externally for carcass butchering etc. */
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category="MO|Harvest")
+	void UpdateDisplay(float Progress, float TimeRemaining, const FText& ActionName);
+
 protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
 	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
-
-	/** Update the visual display. Override in BP for custom visuals. */
-	UFUNCTION(BlueprintNativeEvent, Category="MO|Harvest")
-	void UpdateDisplay(float Progress, float TimeRemaining, const FText& ActionName);
 
 	/** Called when harvest completes successfully. Override in BP for custom behavior. */
 	UFUNCTION(BlueprintNativeEvent, Category="MO|Harvest")

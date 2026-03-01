@@ -85,6 +85,7 @@ class UMOStationContextMenu;
 class UMOKeepOnHarvestContextMenu;
 class UMOHarvestProgressWidget;
 class AMOCraftingStationActor;
+class AMOCarcassActor;
 struct FMOCraftResult;
 
 /**
@@ -179,6 +180,22 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO|Crafting|Harvest")
 	bool IsHarvestInProgress() const;
 
+	// ==========================================================================
+	// CARCASS BUTCHERING
+	// ==========================================================================
+
+	/** Start butchering a part from a carcass. Shows progress widget and locks input. */
+	UFUNCTION(BlueprintCallable, Category="MO|Crafting|Carcass")
+	void StartCarcassButchering(AMOCarcassActor* Carcass, FName PartId);
+
+	/** Cancel carcass butchering in progress. */
+	UFUNCTION(BlueprintCallable, Category="MO|Crafting|Carcass")
+	void CancelCarcassButchering();
+
+	/** Check if carcass butchering is in progress. */
+	UFUNCTION(BlueprintPure, Category="MO|Crafting|Carcass")
+	bool IsCarcassButcheringInProgress() const;
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
@@ -264,4 +281,41 @@ private:
 
 	UFUNCTION()
 	void HandleHarvestCancelled();
+
+	// --- Carcass Butchering ---
+
+	/** Current carcass being butchered. */
+	UPROPERTY(Transient)
+	TWeakObjectPtr<AMOCarcassActor> CurrentCarcassTarget;
+
+	/** Part currently being butchered. */
+	FName CurrentCarcassPartId;
+
+	/** Whether carcass butchering is in progress. */
+	bool bIsCarcassButchering = false;
+
+	/** Carcass butchering elapsed time. */
+	float CarcassButcherElapsed = 0.0f;
+
+	/** Carcass butchering total time. */
+	float CarcassButcherTotal = 0.0f;
+
+	/** Timer handle for carcass butchering tick. */
+	FTimerHandle CarcassButcherTimerHandle;
+
+	/** Tick carcass butchering progress. */
+	UFUNCTION()
+	void TickCarcassButchering();
+
+	/** Handle carcass harvest progress from carcass actor. */
+	UFUNCTION()
+	void HandleCarcassHarvestProgress(float Progress, float TotalTime);
+
+	/** Handle carcass part harvested. */
+	UFUNCTION()
+	void HandleCarcassPartHarvested(FName PartId, bool bSuccess);
+
+	/** Handle carcass harvest cancelled. */
+	UFUNCTION()
+	void HandleCarcassHarvestCancelled();
 };

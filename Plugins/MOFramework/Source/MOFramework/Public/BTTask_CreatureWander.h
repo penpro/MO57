@@ -21,6 +21,11 @@ struct FBTWanderMemory
 
 	/** Whether the task has been initialized. */
 	bool bInitialized;
+
+	// Stuck detection
+	FVector LastPosition;
+	float StuckTime;
+	float LastStuckCheckTime;
 };
 
 /**
@@ -78,6 +83,14 @@ protected:
 	/** Movement speed multiplier while wandering (1.0 = normal walk speed). */
 	UPROPERTY(EditAnywhere, Category="Wander")
 	float WanderSpeedMultiplier = 0.6f;
+
+	/** How long without progress before considered stuck (seconds). */
+	UPROPERTY(EditAnywhere, Category="Wander|StuckRecovery")
+	float StuckThresholdTime = 2.0f;
+
+	/** Minimum distance to move per stuck check interval to not be considered stuck (cm). */
+	UPROPERTY(EditAnywhere, Category="Wander|StuckRecovery")
+	float StuckMinMovement = 30.f;
 
 private:
 	/** Initialize heading from pawn's current forward vector. */

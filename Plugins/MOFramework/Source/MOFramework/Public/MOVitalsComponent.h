@@ -445,6 +445,9 @@ private:
 	/** Previous blood loss stage for change detection. */
 	EMOBloodLossStage PreviousBloodLossStage = EMOBloodLossStage::None;
 
+	/** Prevents multiple death triggers from blood loss. */
+	bool bBloodLossDeathTriggered = false;
+
 	/** Cached reference to anatomy component. */
 	UPROPERTY(Transient)
 	TObjectPtr<UMOAnatomyComponent> CachedAnatomyComp;

@@ -82,6 +82,7 @@ class UMOInventoryComponent;
 class UAudioComponent;
 class UNiagaraComponent;
 class UNiagaraSystem;
+class UPointLightComponent;
 UCLASS()
 class MOFRAMEWORK_API AMOCraftingStationActor : public AMOBuildableActor,
 	public IMOInventoryHolderInterface,
@@ -112,6 +113,10 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO|CraftingStation|Visual")
 	TObjectPtr<UNiagaraComponent> ActiveParticleComponent;
 
+	/** Point light for active station (fire glow, etc.). */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO|CraftingStation|Visual")
+	TObjectPtr<UPointLightComponent> ActiveLightComponent;
+
 	// ============================================================================
 	// AUDIO/VISUAL CONFIGURATION
 	// ============================================================================
@@ -127,6 +132,26 @@ public:
 	/** Particle system for active state. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|CraftingStation|Visual")
 	TSoftObjectPtr<UNiagaraSystem> ActiveParticleSystem;
+
+	/** Base intensity for the active light (before flicker). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|CraftingStation|Visual", meta=(ClampMin="0.0"))
+	float LightBaseIntensity = 5000.0f;
+
+	/** How much the light intensity varies (0.0-1.0, e.g., 0.3 = +/-30% variation). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|CraftingStation|Visual", meta=(ClampMin="0.0", ClampMax="1.0"))
+	float LightFlickerAmount = 0.25f;
+
+	/** Speed of the flicker effect (higher = faster flicker). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|CraftingStation|Visual", meta=(ClampMin="0.1", ClampMax="20.0"))
+	float LightFlickerSpeed = 8.0f;
+
+	/** Light color (warm orange for fire). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|CraftingStation|Visual")
+	FLinearColor LightColor = FLinearColor(1.0f, 0.6f, 0.2f);
+
+	/** Light attenuation radius. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|CraftingStation|Visual", meta=(ClampMin="0.0"))
+	float LightRadius = 500.0f;
 
 	/** Volume multiplier for station sounds. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|CraftingStation|Audio", meta=(ClampMin="0.0", ClampMax="2.0"))
@@ -237,6 +262,14 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|CraftingStation|Visual")
 	void DeactivateParticles();
 
+	/** Activate light with flicker. */
+	UFUNCTION(BlueprintCallable, Category="MO|CraftingStation|Visual")
+	void ActivateLight();
+
+	/** Deactivate light. */
+	UFUNCTION(BlueprintCallable, Category="MO|CraftingStation|Visual")
+	void DeactivateLight();
+
 	// ============================================================================
 	// IMOInventoryHolderInterface IMPLEMENTATION
 	// ============================================================================
@@ -275,4 +308,10 @@ protected:
 private:
 	/** Whether the station is currently active. */
 	bool bIsActive = false;
+
+	/** Accumulated time for flicker calculation. */
+	float FlickerTimeAccumulator = 0.0f;
+
+	/** Update light flicker effect. Called from Tick when active. */
+	void UpdateLightFlicker(float DeltaTime);
 };

@@ -3,22 +3,50 @@
 #include "CoreMinimal.h"
 #include "BehaviorTree/BTTaskNode.h"
 #include "MOSurvivorJobTypes.h"
+#include "MOForagingSubsystem.h"
 #include "BTTask_SurvivorForage.generated.h"
 
 class UMOSurvivorJobQueueComponent;
 
 /**
- * BT Task that makes a survivor forage the ground.
+ * Memory structure for the forage task.
+ */
+USTRUCT()
+struct FBTTask_SurvivorForageMemory
+{
+	GENERATED_BODY()
+
+	/** Current state: 0 = finding item, 1 = moving to item, 2 = picking up item */
+	uint8 State = 0;
+
+	/** Target item location. */
+	FVector TargetLocation = FVector::ZeroVector;
+
+	/** Target item data. */
+	FMOHISMInstanceData TargetItem;
+
+	/** Time spent picking up current item. */
+	float PickupTime = 0.0f;
+
+	/** Number of items picked up this task execution. */
+	int32 ItemsPickedUp = 0;
+
+	// Stuck detection
+	FVector LastPosition = FVector::ZeroVector;
+	float StuckTime = 0.0f;
+};
+
+/**
+ * BT Task that makes a survivor forage ground items.
  *
  * This task:
- * 1. Picks a random point near the pawn
- * 2. Moves to that point
- * 3. Performs a forage action (digging animation)
- * 4. Awards XP and spawns items
+ * 1. Queries nearby HISM instances (ground items like sticks, stones)
+ * 2. Picks the closest valid item
+ * 3. Navigates to that item's location
+ * 4. Picks up the item and adds it to inventory
  * 5. Repeats for the job's RepeatCount
  *
- * Unlike gathering, foraging doesn't require finding a specific resource.
- * Items spawned depend on biome/location.
+ * Unlike the wander-based approach, this actually navigates to items.
  */
 UCLASS()
 class MOFRAMEWORK_API UBTTask_SurvivorForage : public UBTTaskNode
@@ -31,58 +59,47 @@ public:
 	virtual EBTNodeResult::Type ExecuteTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory) override;
 	virtual void TickTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory, float DeltaSeconds) override;
 	virtual EBTNodeResult::Type AbortTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory) override;
+	virtual uint16 GetInstanceMemorySize() const override { return sizeof(FBTTask_SurvivorForageMemory); }
+	virtual FString GetStaticDescription() const override;
 
 protected:
 	// ============================================================================
 	// CONFIGURATION
 	// ============================================================================
 
-	/** Radius to search for a forage point. */
+	/** Radius to search for ground items (how far survivor looks for items). */
 	UPROPERTY(EditAnywhere, Category = "Forage", meta = (ClampMin = "100.0"))
-	float ForageRadius = 300.0f;
+	float SearchRadius = 3000.0f;
 
-	/** Time to complete a single forage action (seconds). */
-	UPROPERTY(EditAnywhere, Category = "Forage", meta = (ClampMin = "0.5"))
-	float ForageDuration = 4.0f;
+	/** Time to pick up a single item (seconds). */
+	UPROPERTY(EditAnywhere, Category = "Forage", meta = (ClampMin = "0.1"))
+	float PickupDuration = 1.5f;
 
-	/** Minimum distance to move before foraging. */
+	/** How close to item before we can pick it up. */
 	UPROPERTY(EditAnywhere, Category = "Forage", meta = (ClampMin = "50.0"))
-	float MinMoveDistance = 100.0f;
+	float PickupRadius = 150.0f;
+
+	/** How long without progress before considered stuck (seconds). */
+	UPROPERTY(EditAnywhere, Category = "Forage|StuckRecovery")
+	float StuckThresholdTime = 3.0f;
+
+	/** Minimum distance to move to not be considered stuck (cm). */
+	UPROPERTY(EditAnywhere, Category = "Forage|StuckRecovery")
+	float StuckMinMovement = 50.0f;
 
 private:
 	/**
-	 * Pick a random forage point near the pawn.
+	 * Find the nearest ground item to pick up.
 	 */
-	bool PickForagePoint(APawn* Pawn, FVector& OutLocation);
+	bool FindNearestItem(APawn* Pawn, FMOHISMInstanceData& OutItemData);
+
+	/**
+	 * Pick up the target item and add to inventory.
+	 */
+	bool PickupItem(APawn* Pawn, const FMOHISMInstanceData& ItemData);
 
 	/**
 	 * Get the job queue component from the pawn.
 	 */
 	UMOSurvivorJobQueueComponent* GetJobQueueComponent(APawn* Pawn) const;
-
-	/**
-	 * Perform the actual forage/dig action and spawn items.
-	 */
-	void PerformForageAction(APawn* Pawn, EMOSurvivorJobType JobType, const FVector& Location);
-};
-
-/**
- * Memory structure for the forage task.
- */
-USTRUCT()
-struct FBTTask_SurvivorForageMemory
-{
-	GENERATED_BODY()
-
-	/** Current state: 0 = picking point, 1 = moving, 2 = foraging */
-	uint8 State = 0;
-
-	/** Target forage location. */
-	FVector TargetLocation = FVector::ZeroVector;
-
-	/** Time spent foraging at current location. */
-	float ForageTime = 0.0f;
-
-	/** Number of forages completed this task execution. */
-	int32 ForagesCompleted = 0;
 };

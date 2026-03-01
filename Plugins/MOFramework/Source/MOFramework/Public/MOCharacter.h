@@ -164,6 +164,7 @@
 #include "MOCraftingCapableInterface.h"
 #include "MOMedicalProviderInterface.h"
 #include "MOCraftingTypes.h"
+#include "MOBodyPartTypes.h"
 #include "MOCharacter.generated.h"
 
 /**
@@ -432,6 +433,10 @@ public:
 	/** Check if currently sprinting. */
 	UFUNCTION(BlueprintPure, Category="MO|State")
 	bool IsSprinting() const { return bIsSprinting; }
+
+	/** Check if character is dead. */
+	UFUNCTION(BlueprintPure, Category="MO|State")
+	bool IsDead() const { return bIsDead; }
 
 	// ============================================================================
 	// TERRAFORMING
@@ -708,6 +713,14 @@ public:
 	UPROPERTY(BlueprintReadOnly, Category="MO|State")
 	bool bIsSprinting = false;
 
+	/** Whether the character is dead. */
+	UPROPERTY(BlueprintReadOnly, Category="MO|State")
+	bool bIsDead = false;
+
+	/** Whether the ragdoll has been frozen (physics disabled, pose preserved). */
+	UPROPERTY(BlueprintReadOnly, Category="MO|State")
+	bool bRagdollFrozen = false;
+
 	/** Whether the character can currently be controlled. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|State")
 	bool bCanBeControlled = true;
@@ -879,6 +892,28 @@ protected:
 
 	/** Handle interaction from another pawn for recruitment. */
 	bool HandleRecruitmentInteraction(AController* InteractorController);
+
+	/** Handle instant death from anatomy (vital organ destroyed or blood loss). */
+	UFUNCTION()
+	virtual void HandleInstantDeath(EMOBodyPartType CausePart);
+
+	// ============================================================================
+	// DEATH AND RAGDOLL
+	// ============================================================================
+
+	/** Delay in seconds before ragdoll is frozen after death. Allows body to settle. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Death")
+	float RagdollFreezeDelay = 2.0f;
+
+	/** Timer handle for delayed ragdoll freeze. */
+	FTimerHandle RagdollFreezeTimerHandle;
+
+	/**
+	 * Freeze the ragdoll physics, preserving the current pose.
+	 * Sets mesh to QueryOnly collision (interactable but not physics-simulated).
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Death")
+	void FreezeRagdoll();
 
 	/** Update the held item mesh for a specific hand slot. */
 	void UpdateHeldItemMesh(EMOEquipmentSlot EquipSlot, const FMOEquippedItem& EquippedItem);

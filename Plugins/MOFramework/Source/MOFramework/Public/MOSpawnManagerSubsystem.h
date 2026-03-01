@@ -41,6 +41,12 @@
  * [2024-02] WEAK REFERENCES: FMOSpawnedEntityRecord uses TWeakObjectPtr.
  *   If pawn destroyed externally, record becomes invalid. Clean up on tick.
  *
+ * [2026-02] RECRUITED PAWNS: When a pawn is recruited via ForceRecruit(),
+ *   it calls RemoveFromTracking() to completely remove it from SpawnedEntities.
+ *   This ensures recruited pawns can NEVER be despawned by the spawn manager.
+ *   Previously used ClearEntityPersistence() which only cleared the flag,
+ *   leaving recruited pawns eligible for FIFO despawn - this was a bug.
+ *
  * =============================================================================
  * RELATED FILES
  * =============================================================================
@@ -49,7 +55,7 @@
  * - MOSpawnPoint.h - Spawn point actors
  * - MORecruitmentComponent.h - Survivor recruitment state
  *
- * LAST UPDATED: 2026-02-25
+ * LAST UPDATED: 2026-02-28
  * =============================================================================
  */
 
@@ -150,6 +156,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Spawn Manager")
 	void ClearEntityPersistence(APawn* Pawn);
 
+	/** Remove an entity from spawn tracking entirely (used when recruited - will NEVER despawn) */
+	UFUNCTION(BlueprintCallable, Category = "Spawn Manager")
+	void RemoveFromTracking(APawn* Pawn);
+
 	/** Convert a pawn to a corpse (for failed quests) */
 	UFUNCTION(BlueprintCallable, Category = "Spawn Manager")
 	void ConvertToCorpse(APawn* Pawn);
@@ -181,6 +191,10 @@ public:
 	/** Check if spawning is allowed (game state, player exists, etc.) */
 	UFUNCTION(BlueprintPure, Category = "Spawn Manager")
 	bool CanSpawn() const;
+
+	/** Reload spawn settings from Project Settings. Use during development to apply changes without restarting PIE. */
+	UFUNCTION(BlueprintCallable, Category = "Spawn Manager", meta=(DevelopmentOnly))
+	void ReloadSettings();
 
 protected:
 	// ============================================================================

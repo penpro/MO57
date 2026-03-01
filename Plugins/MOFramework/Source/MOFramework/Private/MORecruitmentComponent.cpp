@@ -167,11 +167,11 @@ void UMORecruitmentComponent::ForceRecruit()
 		return;
 	}
 
-	// Clear persistence since they're now recruited
+	// Remove from spawn tracking entirely - recruited pawns should NEVER despawn
 	UMOSpawnManagerSubsystem* SpawnManager = World->GetSubsystem<UMOSpawnManagerSubsystem>();
 	if (SpawnManager)
 	{
-		SpawnManager->ClearEntityPersistence(Cast<APawn>(GetOwner()));
+		SpawnManager->RemoveFromTracking(Cast<APawn>(GetOwner()));
 	}
 
 	// Spawn survivor AI controller and possess the pawn

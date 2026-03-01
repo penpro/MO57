@@ -1,6 +1,7 @@
 #include "MOPossessionSubsystem.h"
 #include "MOFramework.h"
 #include "MOViewpointUtils.h"
+#include "MOCharacter.h"
 
 #include "Engine/World.h"
 #include "EngineUtils.h"
@@ -91,6 +92,15 @@ APawn* UMOPossessionSubsystem::FindNearestUnpossessedPawn(APlayerController* Pla
 		if (UMORecruitmentComponent* RecruitComp = CandidatePawn->FindComponentByClass<UMORecruitmentComponent>())
 		{
 			if (!RecruitComp->IsPossessable())
+			{
+				continue;
+			}
+		}
+
+		// Cannot possess dead pawns
+		if (AMOCharacter* MOChar = Cast<AMOCharacter>(CandidatePawn))
+		{
+			if (MOChar->IsDead())
 			{
 				continue;
 			}

@@ -112,7 +112,7 @@ void UMOStatusPanel::SwitchToCategory(EMOStatusCategory Category)
 	OnCategoryChanged.Broadcast(Category);
 	OnCategoryChangedBP(Category);
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOStatusPanel] Switched to category: %d"), static_cast<int32>(Category));
+	UE_LOG(LogMOFramework, Verbose, TEXT("[MOStatusPanel] Switched to category: %d"), static_cast<int32>(Category));
 }
 
 void UMOStatusPanel::UpdateFieldValue(FName FieldId, const FText& Value, float NormalizedValue)
@@ -199,7 +199,7 @@ UMOStatusField* UMOStatusPanel::AddField(const FMOStatusFieldConfig& Config)
 	FieldWidgets.Add(Config.FieldId, Field);
 	FieldConfigMap.Add(Config.FieldId, Config);
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOStatusPanel] Added field: %s to category %d"), *Config.FieldId.ToString(), static_cast<int32>(Config.Category));
+	UE_LOG(LogMOFramework, Verbose, TEXT("[MOStatusPanel] Added field: %s to category %d"), *Config.FieldId.ToString(), static_cast<int32>(Config.Category));
 
 	return Field;
 }
@@ -333,7 +333,7 @@ UVerticalBox* UMOStatusPanel::GetCategoryContainer(EMOStatusCategory Category) c
 		default: break;
 		}
 
-		UE_LOG(LogMOFramework, Log, TEXT("[MOStatusPanel] Auto-created VerticalBox container for category %d"), static_cast<int32>(Category));
+		UE_LOG(LogMOFramework, Verbose, TEXT("[MOStatusPanel] Auto-created VerticalBox container for category %d"), static_cast<int32>(Category));
 		return NewBox;
 	}
 
@@ -467,12 +467,12 @@ void UMOStatusPanel::PopulateFieldConfigs_Implementation()
 	// If configs already set in Blueprint defaults, use those
 	if (FieldConfigs.Num() > 0)
 	{
-		UE_LOG(LogMOFramework, Log, TEXT("[MOStatusPanel] Using %d field configs from Blueprint defaults"), FieldConfigs.Num());
+		UE_LOG(LogMOFramework, Verbose, TEXT("[MOStatusPanel] Using %d field configs from Blueprint defaults"), FieldConfigs.Num());
 		return;
 	}
 
 	// Auto-populate with all medical system fields
-	UE_LOG(LogMOFramework, Log, TEXT("[MOStatusPanel] Auto-populating default medical field configs"));
+	UE_LOG(LogMOFramework, Verbose, TEXT("[MOStatusPanel] Auto-populating default medical field configs"));
 
 	// ============== VITALS ==============
 	FieldConfigs.Add({ FName("HeartRate"), NSLOCTEXT("MOStatus", "HeartRate", "Heart Rate"), EMOStatusCategory::Vitals, TEXT("{0} BPM"), true, false, 0.6f, 0.4f, 0 });
@@ -520,7 +520,7 @@ void UMOStatusPanel::PopulateFieldConfigs_Implementation()
 	// Note: Wounds and Conditions are dynamic - they get added/removed at runtime
 	// based on actual injuries. Use AddField() and RemoveField() for those.
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOStatusPanel] Auto-populated %d field configs"), FieldConfigs.Num());
+	UE_LOG(LogMOFramework, Verbose, TEXT("[MOStatusPanel] Auto-populated %d field configs"), FieldConfigs.Num());
 }
 
 void UMOStatusPanel::CreateFieldsFromConfigs()
@@ -544,7 +544,7 @@ void UMOStatusPanel::CreateFieldsFromConfigs()
 	// Add "None" placeholders for empty dynamic categories
 	UpdateEmptyPlaceholders();
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOStatusPanel] Created %d fields from configs"), FieldConfigs.Num());
+	UE_LOG(LogMOFramework, Verbose, TEXT("[MOStatusPanel] Created %d fields from configs"), FieldConfigs.Num());
 }
 
 void UMOStatusPanel::UpdateEmptyPlaceholders()
@@ -623,7 +623,7 @@ void UMOStatusPanel::BindToMedicalComponents(UMOVitalsComponent* Vitals, UMOMeta
 		BoundVitals = Vitals;
 		Vitals->OnVitalsChanged.AddDynamic(this, &UMOStatusPanel::HandleVitalsChanged);
 		UpdateVitalsFields();
-		UE_LOG(LogMOFramework, Log, TEXT("[MOStatusPanel] Bound to VitalsComponent"));
+		UE_LOG(LogMOFramework, Verbose, TEXT("[MOStatusPanel] Bound to VitalsComponent"));
 	}
 
 	// Bind to metabolism
@@ -632,7 +632,7 @@ void UMOStatusPanel::BindToMedicalComponents(UMOVitalsComponent* Vitals, UMOMeta
 		BoundMetabolism = Metabolism;
 		Metabolism->OnMetabolismChanged.AddDynamic(this, &UMOStatusPanel::HandleMetabolismChanged);
 		UpdateMetabolismFields();
-		UE_LOG(LogMOFramework, Log, TEXT("[MOStatusPanel] Bound to MetabolismComponent"));
+		UE_LOG(LogMOFramework, Verbose, TEXT("[MOStatusPanel] Bound to MetabolismComponent"));
 	}
 
 	// Bind to mental state
@@ -641,7 +641,7 @@ void UMOStatusPanel::BindToMedicalComponents(UMOVitalsComponent* Vitals, UMOMeta
 		BoundMentalState = MentalState;
 		MentalState->OnMentalStateChanged.AddDynamic(this, &UMOStatusPanel::HandleMentalStateChanged);
 		UpdateMentalStateFields();
-		UE_LOG(LogMOFramework, Log, TEXT("[MOStatusPanel] Bound to MentalStateComponent"));
+		UE_LOG(LogMOFramework, Verbose, TEXT("[MOStatusPanel] Bound to MentalStateComponent"));
 	}
 }
 

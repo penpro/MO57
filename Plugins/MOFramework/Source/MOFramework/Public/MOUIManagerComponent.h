@@ -482,6 +482,20 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO|UI|Harvest")
 	bool IsHarvestInProgress() const;
 
+	// --- Carcass Butchering ---
+
+	/** Start butchering a carcass part. Shows progress and locks input. */
+	UFUNCTION(BlueprintCallable, Category="MO|UI|Carcass")
+	void StartCarcassButchering(class AMOCarcassActor* Carcass, FName PartId);
+
+	/** Cancel any active carcass butchering. */
+	UFUNCTION(BlueprintCallable, Category="MO|UI|Carcass")
+	void CancelCarcassButchering();
+
+	/** Check if carcass butchering is in progress. */
+	UFUNCTION(BlueprintPure, Category="MO|UI|Carcass")
+	bool IsCarcassButcheringInProgress() const;
+
 	// --- Inspection ---
 
 	/** Start inspecting an item. Shows progress widget and grants knowledge on completion. */

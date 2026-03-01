@@ -453,10 +453,13 @@ public:
 private:
 	/**
 	 * Check if player has required knowledge for a recipe.
+	 * Checks KnowledgeComponent first, then falls back to SkillsComponent
+	 * (skill level >= 1) for each knowledge entry.
 	 */
 	bool HasRequiredKnowledge(
 		const FMORecipeDefinitionRow* Recipe,
 		UMOKnowledgeComponent* KnowledgeComponent,
+		UMOSkillsComponent* SkillsComponent,
 		TArray<FName>* OutMissingKnowledge = nullptr
 	) const;
 

@@ -1,7 +1,9 @@
 #include "MOVitalsComponent.h"
+#include "MOFramework.h"
 #include "MOAnatomyComponent.h"
 #include "MOMetabolismComponent.h"
 #include "MOMentalStateComponent.h"
+#include "MOBodyPartTypes.h"
 #include "Net/UnrealNetwork.h"
 #include "TimerManager.h"
 
@@ -80,6 +82,22 @@ void UMOVitalsComponent::ApplyBloodLoss(float AmountML)
 	{
 		OnBloodLossStageChanged.Broadcast(PreviousBloodLossStage, NewStage);
 		PreviousBloodLossStage = NewStage;
+	}
+
+	// Check for death from blood loss (< 20% blood volume remaining)
+	float BloodVolumePercent = GetBloodVolumePercent();
+	if (BloodVolumePercent <= 0.20f && !bBloodLossDeathTriggered)
+	{
+		bBloodLossDeathTriggered = true;
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOVitals] CRITICAL BLOOD LOSS - triggering death (%.1f%% remaining)"),
+			BloodVolumePercent * 100.0f);
+
+		// Trigger death via anatomy component
+		if (UMOAnatomyComponent* Anatomy = CachedAnatomyComp.Get())
+		{
+			// Use None as the body part since this is systemic blood loss, not organ destruction
+			Anatomy->OnInstantDeath.Broadcast(EMOBodyPartType::None);
+		}
 	}
 }
 

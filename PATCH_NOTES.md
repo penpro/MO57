@@ -4,6 +4,90 @@ This file tracks changes, bug fixes, and new features. Updated incrementally to 
 
 ---
 
+## [2026-03-01] Survivor Command Overhaul & Wolf Predators
+
+### New Features
+
+**Enhanced Survivor Context Menu**
+- **Set Home Button**: Right-click survivor → "Set Home" to mark current location as their home
+- **Inventory Button**: Right-click survivor → "Inventory" to open item exchange between player and survivor
+- **Dead Survivor Handling**: All command buttons disabled when survivor is dead, except Inventory (loot the body)
+- Shows "(Dead)" suffix on survivor name when deceased
+
+**Automatic Return Home After Jobs**
+- Survivors now automatically return to their assigned home location after completing assigned jobs
+- New `BTTask_SurvivorGoHome` behavior tree task with:
+  - Stuck detection (considers arrived if stuck near home for 3+ seconds)
+  - Graceful failure if no home assigned
+  - Configurable acceptance radius
+- BT_Survivor updated with auto-return-home as final step after job completion
+
+**Improved Foraging AI**
+- Survivors assigned to forage now actually navigate to ground items and pick them up
+- Replaced random walk (Brownian motion) with proper item-seeking behavior:
+  - Queries ForagingSubsystem for nearby HISM ground items
+  - Navigates to nearest item within search radius
+  - Picks up item, adds to inventory, removes HISM instance
+  - Repeats until target count reached or no items found
+- Stuck detection prevents infinite loops on unreachable items
+
+**Wolf Predator**
+- Added wolf creature with full animation set:
+  - Locomotion: Walk, Run, Turn animations with root motion variants
+  - Combat: Bite, Jump Bite, Run Bite attacks
+  - Idle: Breathe, Look Around, Aggressive stance
+  - Rest: Go To Rest, Rest, Sleep, Wake Up
+  - Reactions: Hit reactions (Front, Left, Right), Death, Howl
+- Three material variants: Standard, Arctic (white), Dark
+- Fur material variants for enhanced visual quality
+- Full skeletal mesh with physics asset
+
+**Carcass System**
+- Added DT_Carcasses DataTable for creature carcass definitions
+- Carcass spawning on creature death
+
+### Bug Fixes
+
+**Ragdoll Physics Fixed**
+- Characters now properly ragdoll on death instead of freezing in falling pose
+- Fixed by using `SetAllBodiesSimulatePhysics(true)` instead of `SetSimulatePhysics(true)`
+- Added `SetAllBodiesPhysicsBlendWeight(1.0f)` for full physics blend
+- Collision profile properly set to "Ragdoll" on death
+- All animation montages stopped before enabling ragdoll
+
+**Survivor Controller Spawning**
+- Context menu now spawns SurvivorController on-demand for recruited survivors
+- Fixes issue where recruited survivors had no AI controller after being unpossessed
+- Logs controller type for debugging
+
+### Technical Notes
+
+**New Files:**
+- `BTTask_SurvivorGoHome.h/cpp` - Return home behavior tree task
+- `BTTask_ChaseTarget.h/cpp` - Chase target behavior tree task
+- `MOGatheringSettingsActor.h/cpp` - Gathering configuration actor
+- `MOSpawnSettingsActor.h/cpp` - Spawn configuration actor
+- Wolf assets: SK_Wolf mesh, ABP_Wolf animation blueprint, BS_Wolf blend space
+- Wolf animations: 25+ animation assets with root motion variants
+- Wolf materials: 6 material variants (body + fur × 3 color schemes)
+
+**Modified Files:**
+- `MOSurvivorContextMenu.h/cpp` - Added Set Home, Inventory buttons and dead state handling
+- `MOSystemMenuUIController.h/cpp` - Added inventory delegate handling
+- `BTTask_SurvivorForage.h/cpp` - Complete rewrite for actual item navigation
+- `MOCharacter.cpp` - Fixed ragdoll physics on death
+- `MOCreature.cpp` - Creature death and carcass improvements
+- `MOCreatureController.cpp` - Predator AI improvements
+
+**Blueprint Setup Required:**
+1. Update `WBP_SurvivorContextMenu` to add:
+   - `SetHomeButton` (UMOCommonButton)
+   - `InventoryButton` (UMOCommonButton)
+
+2. `BT_Survivor` already updated with auto-return-home behavior
+
+---
+
 ## [2026-02-24] DataTable-Driven Resource Node System
 
 ### Overview

@@ -27,6 +27,9 @@ void UMOSurvivorTaskMenu::NativeConstruct()
 		CloseButton->OnClicked().RemoveAll(this);
 		CloseButton->OnClicked().AddUObject(this, &UMOSurvivorTaskMenu::HandleCloseClicked);
 	}
+
+	// Set keyboard focus to this widget so Tab/Escape work
+	SetFocus();
 }
 
 void UMOSurvivorTaskMenu::NativeDestruct()
@@ -43,11 +46,25 @@ void UMOSurvivorTaskMenu::NativeDestruct()
 	Super::NativeDestruct();
 }
 
+FReply UMOSurvivorTaskMenu::NativeOnPreviewKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent)
+{
+	const FKey PressedKey = InKeyEvent.GetKey();
+
+	// Close on Tab or Escape - handled in preview so it works even if child widgets have focus
+	if (PressedKey == EKeys::Tab || PressedKey == EKeys::Escape)
+	{
+		OnRequestClose.Broadcast();
+		return FReply::Handled();
+	}
+
+	return Super::NativeOnPreviewKeyDown(InGeometry, InKeyEvent);
+}
+
 FReply UMOSurvivorTaskMenu::NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent)
 {
 	const FKey PressedKey = InKeyEvent.GetKey();
 
-	// Close on Tab or Escape
+	// Fallback close on Tab or Escape
 	if (PressedKey == EKeys::Tab || PressedKey == EKeys::Escape)
 	{
 		OnRequestClose.Broadcast();

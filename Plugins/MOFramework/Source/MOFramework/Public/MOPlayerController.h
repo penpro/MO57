@@ -497,6 +497,7 @@ public:
 	virtual void RequestOpenCraftingMenu_Implementation(AActor* StationActor) override;
 	virtual void RequestShowGhostContextMenu_Implementation(AActor* GhostActor, FVector WorldPosition) override;
 	virtual void RequestShowStationContextMenu_Implementation(AActor* StationActor, FVector WorldPosition) override;
+	virtual void RequestStartCarcassButchering_Implementation(AActor* CarcassActor, FName PartId) override;
 
 protected:
 	// ============================================================================

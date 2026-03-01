@@ -239,15 +239,15 @@ public:
 
 	/** Base search radius for foraging (skill level 0). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Foraging|Config")
-	float BaseSearchRadius = 300.0f;
+	float BaseSearchRadius = 800.0f;
 
 	/** Additional radius per skill level. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Foraging|Config")
-	float RadiusPerSkillLevel = 5.0f;
+	float RadiusPerSkillLevel = 25.0f;
 
 	/** Maximum search radius cap. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Foraging|Config")
-	float MaxSearchRadius = 800.0f;
+	float MaxSearchRadius = 1500.0f;
 
 	/** Maximum items to reveal per search (prevents performance issues). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Foraging|Config")

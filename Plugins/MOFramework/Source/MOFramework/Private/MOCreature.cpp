@@ -56,10 +56,10 @@ void AMOCreature::BeginPlay()
 	// Apply creature definition settings
 	ApplyCreatureDefinition();
 
-	// Bind to anatomy death events
+	// Note: OnInstantDeath binding handled by AMOCharacter base class
+	// We override HandleInstantDeath to add creature-specific death behavior
 	if (UMOAnatomyComponent* Anatomy = GetAnatomyComponent())
 	{
-		Anatomy->OnInstantDeath.AddDynamic(this, &AMOCreature::HandleInstantDeath);
 		Anatomy->OnBodyPartDestroyed.AddDynamic(this, &AMOCreature::HandleBodyPartDestroyed);
 	}
 }
@@ -72,10 +72,9 @@ void AMOCreature::EndPlay(const EEndPlayReason::Type EndPlayReason)
 		GetWorld()->GetTimerManager().ClearTimer(DestroyTimerHandle);
 	}
 
-	// Unbind from anatomy
+	// Note: OnInstantDeath unbinding handled by AMOCharacter base class
 	if (UMOAnatomyComponent* Anatomy = GetAnatomyComponent())
 	{
-		Anatomy->OnInstantDeath.RemoveDynamic(this, &AMOCreature::HandleInstantDeath);
 		Anatomy->OnBodyPartDestroyed.RemoveDynamic(this, &AMOCreature::HandleBodyPartDestroyed);
 	}
 
@@ -125,6 +124,9 @@ void AMOCreature::ApplyCreatureDefinition()
 	// Store run speed for sprint logic
 	SprintSpeed = Definition->RunSpeed;
 	WalkSpeed = Definition->WalkSpeed;
+
+	// Check if this creature has a carcass definition
+	bSpawnCarcassOnDeath = !Definition->CarcassDefinitionId.IsNone();
 
 	// Apply perception and combat settings to controller
 	if (AMOCreatureController* CreatureAI = GetCreatureController())
@@ -259,53 +261,50 @@ void AMOCreature::OnDeath_Implementation(AActor* Killer)
 		CreatureAI->SetDead();
 	}
 
-	// Disable collision and movement
+	// Disable capsule collision (ragdoll mesh will have its own)
 	GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	if (UCharacterMovementComponent* Movement = GetCharacterMovement())
 	{
 		Movement->DisableMovement();
 	}
 
+	// Enable ragdoll physics
+	EnableRagdoll();
+
 	// Broadcast death event
 	OnCreatureDeath.Broadcast(this, Killer);
 
 	// Spawn carcass actor (replaces old loot system)
-	AMOCarcassActor* Carcass = SpawnCarcass();
-
-	// If carcass spawned successfully, destroy creature actor
-	// If not (no carcass definition), fall back to old loot system
-	if (Carcass)
+	// Delay carcass spawn to allow ragdoll to settle
+	if (bSpawnCarcassOnDeath)
 	{
-		// Play death montage briefly before transitioning to carcass
-		if (DeathMontage)
-		{
-			if (UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance())
-			{
-				AnimInstance->Montage_Play(DeathMontage);
-			}
-		}
-
-		// Hide this actor after a short delay, let carcass take over
-		SetLifeSpan(0.5f);
+		GetWorld()->GetTimerManager().SetTimer(
+			CarcassSpawnTimerHandle,
+			this,
+			&AMOCreature::SpawnCarcassDelayed,
+			RagdollToCarassDelay,
+			false
+		);
 	}
 	else
 	{
-		// No carcass definition - use old loot system
+		// No carcass - use legacy loot system
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOCreature] No carcass definition, using legacy loot system"));
-
-		// Play death montage if available
-		if (DeathMontage)
-		{
-			if (UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance())
-			{
-				AnimInstance->Montage_Play(DeathMontage);
-			}
-		}
 
 		// Spawn loot (legacy)
 		SpawnLoot();
 
-		// Schedule destruction
+		// Freeze ragdoll after it settles (same delay as carcass spawn)
+		// This keeps the body interactable with proper collision until destruction
+		GetWorld()->GetTimerManager().SetTimer(
+			RagdollFreezeTimerHandle,
+			this,
+			&AMOCreature::FreezeRagdoll,
+			RagdollToCarassDelay,
+			false
+		);
+
+		// Schedule destruction after ragdoll settles
 		if (DestroyDelayAfterDeath > 0.f)
 		{
 			GetWorld()->GetTimerManager().SetTimer(
@@ -318,8 +317,78 @@ void AMOCreature::OnDeath_Implementation(AActor* Killer)
 		}
 		else
 		{
-			PerformDestroy();
+			// At minimum, wait for ragdoll to settle before destroying
+			SetLifeSpan(RagdollToCarassDelay + 1.0f);
 		}
+	}
+}
+
+void AMOCreature::EnableRagdoll()
+{
+	USkeletalMeshComponent* MeshComp = GetMesh();
+	if (!MeshComp)
+	{
+		return;
+	}
+
+	// Stop any playing animation montages
+	if (UAnimInstance* AnimInstance = MeshComp->GetAnimInstance())
+	{
+		AnimInstance->StopAllMontages(0.0f);
+	}
+
+	// Pause animation blueprint updates so it doesn't fight with physics
+	// This prevents breathing/idle animations from playing during ragdoll
+	MeshComp->bPauseAnims = true;
+
+	// Enable physics simulation on the mesh (ragdoll)
+	MeshComp->SetSimulatePhysics(true);
+	MeshComp->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+	MeshComp->SetCollisionResponseToAllChannels(ECR_Block);
+	MeshComp->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
+	MeshComp->WakeAllRigidBodies();
+
+	// Apply a small impulse in the direction of last hit (if we have one)
+	// This makes the ragdoll fall more naturally
+	if (KillerActor.IsValid())
+	{
+		FVector ImpulseDir = GetActorLocation() - KillerActor.Get()->GetActorLocation();
+		ImpulseDir.Z = 0.3f; // Slight upward component
+		ImpulseDir.Normalize();
+		MeshComp->AddImpulse(ImpulseDir * RagdollImpulseStrength, NAME_None, true);
+	}
+
+	UE_LOG(LogMOFramework, Verbose, TEXT("[MOCreature] %s ragdoll enabled"), *GetName());
+}
+
+void AMOCreature::SpawnCarcassDelayed()
+{
+	AMOCarcassActor* Carcass = SpawnCarcass();
+
+	if (Carcass)
+	{
+		// Position carcass at ragdoll location
+		if (USkeletalMeshComponent* MeshComp = GetMesh())
+		{
+			// Get the pelvis/root bone location as the center of the ragdoll
+			FVector RagdollCenter = MeshComp->GetComponentLocation();
+			Carcass->SetActorLocation(RagdollCenter);
+		}
+
+		// Destroy creature actor now that carcass is spawned
+		Destroy();
+	}
+	else
+	{
+		// No carcass definition - continue with legacy system
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOCreature] No carcass definition, using legacy loot system"));
+		SpawnLoot();
+
+		// Freeze the ragdoll immediately since we're already past the delay
+		FreezeRagdoll();
+
+		// Schedule final destruction
+		SetLifeSpan(DestroyDelayAfterDeath > 0.f ? DestroyDelayAfterDeath : 30.0f);
 	}
 }
 

@@ -10,6 +10,14 @@ struct FBTFleeMemory
 	FVector TargetLocation;
 	bool bUseDirectMovement;
 	float OriginalWalkSpeed;
+
+	// Stuck detection
+	FVector LastPosition;
+	float StuckTime;
+	int32 RecoveryAttempts;
+	bool bIsRecovering;
+	float RecoveryTime;
+	FVector RecoveryDirection;
 };
 
 /**
@@ -55,7 +63,26 @@ protected:
 	UPROPERTY(EditAnywhere, Category="Flee")
 	int32 MaxFindAttempts = 10;
 
+	/** How long without progress before considered stuck (seconds). */
+	UPROPERTY(EditAnywhere, Category="Flee|StuckRecovery")
+	float StuckThresholdTime = 1.5f;
+
+	/** Minimum distance to move per stuck check interval to not be considered stuck (cm). */
+	UPROPERTY(EditAnywhere, Category="Flee|StuckRecovery")
+	float StuckMinMovement = 50.f;
+
+	/** How long to move sideways when stuck (seconds). */
+	UPROPERTY(EditAnywhere, Category="Flee|StuckRecovery")
+	float RecoveryDuration = 0.6f;
+
+	/** Maximum recovery attempts before picking entirely new flee location. */
+	UPROPERTY(EditAnywhere, Category="Flee|StuckRecovery")
+	int32 MaxRecoveryAttempts = 3;
+
 private:
 	/** Find a valid flee location away from the threat. */
 	bool FindFleeLocation(APawn* OwnerPawn, AActor* ThreatActor, FVector& OutLocation) const;
+
+	/** Check if stuck and handle recovery. Returns true if currently in recovery mode. */
+	bool HandleStuckRecovery(APawn* Pawn, AActor* Threat, FBTFleeMemory* Memory, float DeltaSeconds);
 };

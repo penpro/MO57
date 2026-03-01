@@ -1,4 +1,5 @@
 #include "MOCombatMedicalTypes.h"
+#include "MOFramework.h"
 #include "MOAnatomyComponent.h"
 #include "MOVitalsComponent.h"
 #include "MOMentalStateComponent.h"
@@ -93,6 +94,9 @@ bool UMOCombatMedicalHelpers::ApplyCombatDamage(
 
 	// Apply damage to body part HP and create wound
 	// InflictDamage reduces HP, creates wound, and checks death conditions
+	UE_LOG(LogMOFramework, Log, TEXT("[MOCombatMedical] ApplyCombatDamage calling InflictDamage: Part=%d, Damage=%.1f, WoundType=%d"),
+		static_cast<int32>(HitInfo.TargetBodyPart), HitInfo.GetFinalDamage(), static_cast<int32>(HitInfo.GetWoundType()));
+
 	bool bApplied = AnatomyComp->InflictDamage(
 		HitInfo.TargetBodyPart,
 		HitInfo.GetFinalDamage(),
@@ -101,6 +105,7 @@ bool UMOCombatMedicalHelpers::ApplyCombatDamage(
 
 	if (!bApplied)
 	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOCombatMedical] InflictDamage returned FALSE"));
 		return false;
 	}
 

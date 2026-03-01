@@ -262,4 +262,11 @@ private:
 
 	/** Check if player can perform a specific harvest action (has required tool). */
 	bool CanPerformAction(const FMOResourceHarvestAction& Action) const;
+
+	/**
+	 * Check if player has the required knowledge.
+	 * Checks KnowledgeComponent, SkillsComponent (level >= 1), and RecipeDiscoveryComponent.
+	 * This bridges the gap between the legacy KnowledgeComponent and active skill/recipe systems.
+	 */
+	bool HasRequiredKnowledge(FName KnowledgeId) const;
 };

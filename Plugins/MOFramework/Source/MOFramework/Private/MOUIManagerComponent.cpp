@@ -37,6 +37,7 @@
 #include "MOIdentityRegistrySubsystem.h"
 #include "MOIdentityComponent.h"
 #include "MOCraftingMenu.h"
+#include "MOCarcassActor.h"
 #include "MOSkillsPanel.h"
 #include "MOSkillsComponent.h"
 #include "MOKnowledgeComponent.h"
@@ -804,7 +805,7 @@ bool UMOUIManagerComponent::IsAnyMenuOpen() const
 	       IsPlayerStatusVisible() || IsPossessionMenuOpen() || IsCraftingMenuOpen() ||
 	       IsSkillsPanelOpen() || IsQuestLogOpen() || IsBuildingMenuOpen() || IsBuildWidgetOpen() ||
 	       IsStationContextMenuOpen() || IsKeepOnHarvestContextMenuOpen() ||
-	       IsInspectionInProgress() || IsHarvestInProgress();
+	       IsInspectionInProgress() || IsHarvestInProgress() || IsCarcassButcheringInProgress();
 }
 
 void UMOUIManagerComponent::CloseAllMenus()
@@ -829,6 +830,7 @@ void UMOUIManagerComponent::CloseAllMenus()
 		CraftController->HideStationContextMenu();
 		CraftController->HideKeepOnHarvestContextMenu();
 		CraftController->CancelHarvestOperation();
+		CraftController->CancelCarcassButchering();
 	}
 
 	if (UMOBuildingUIController* BuildController = GetBuildingController())
@@ -1572,6 +1574,31 @@ bool UMOUIManagerComponent::IsHarvestInProgress() const
 	if (UMOCraftingUIController* CraftController = GetCraftingController())
 	{
 		return CraftController->IsHarvestInProgress();
+	}
+	return false;
+}
+
+void UMOUIManagerComponent::StartCarcassButchering(AMOCarcassActor* Carcass, FName PartId)
+{
+	if (UMOCraftingUIController* CraftController = GetCraftingController())
+	{
+		CraftController->StartCarcassButchering(Carcass, PartId);
+	}
+}
+
+void UMOUIManagerComponent::CancelCarcassButchering()
+{
+	if (UMOCraftingUIController* CraftController = GetCraftingController())
+	{
+		CraftController->CancelCarcassButchering();
+	}
+}
+
+bool UMOUIManagerComponent::IsCarcassButcheringInProgress() const
+{
+	if (UMOCraftingUIController* CraftController = GetCraftingController())
+	{
+		return CraftController->IsCarcassButcheringInProgress();
 	}
 	return false;
 }

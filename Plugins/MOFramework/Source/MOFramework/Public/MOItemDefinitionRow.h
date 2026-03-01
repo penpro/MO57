@@ -283,17 +283,23 @@ struct MOFRAMEWORK_API FMOItemHeldVisual
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Held")
 	TSoftObjectPtr<UMaterialInterface> MaterialOverride;
 
+	/**
+	 * If true, left hand uses a mirrored version of RightHandTransform (flips Y scale).
+	 * If false, left hand uses LeftHandTransform for independent positioning.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Held")
+	bool bMirrorForLeftHand = true;
+
 	/** Transform offset for right hand. Position/rotation relative to hand socket. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Held")
 	FTransform RightHandTransform = FTransform::Identity;
 
-	/** Transform offset for left hand. If bMirrorForLeftHand is true, this is ignored. */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Held", meta=(EditCondition="!bMirrorForLeftHand"))
-	FTransform LeftHandTransform = FTransform::Identity;
-
-	/** If true, mirror the right hand transform for left hand (flip X scale). */
+	/**
+	 * Transform offset for left hand (only used when bMirrorForLeftHand is false).
+	 * TIP: Set up RightHandTransform first, then copy those values here and adjust.
+	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Held")
-	bool bMirrorForLeftHand = true;
+	FTransform LeftHandTransform = FTransform::Identity;
 
 	/** Get the appropriate transform for a given hand. */
 	FTransform GetTransformForHand(bool bIsLeftHand) const

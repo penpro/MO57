@@ -44,7 +44,7 @@
 class UMOInteractableComponent;
 class UMOIdentityComponent;
 class UMOInventoryComponent;
-class USkeletalMeshComponent;
+class UPoseableMeshComponent;
 class UStaticMeshComponent;
 class USphereComponent;
 struct FMOCarcassDefinitionRow;
@@ -71,9 +71,9 @@ public:
 	// COMPONENTS
 	// ============================================================================
 
-	/** Skeletal mesh for displaying carcass. */
+	/** Poseable mesh for displaying carcass (allows manual bone positioning). */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO|Carcass|Components")
-	TObjectPtr<USkeletalMeshComponent> CarcassMesh;
+	TObjectPtr<UPoseableMeshComponent> CarcassMesh;
 
 	/** Static mesh for skeletal stage (bones pile). */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO|Carcass|Components")
@@ -125,6 +125,10 @@ public:
 	/** Get current harvest progress (0-1). */
 	UFUNCTION(BlueprintPure, Category="MO|Carcass|State")
 	float GetHarvestProgress() const;
+
+	/** Get current decay stage. */
+	UFUNCTION(BlueprintPure, Category="MO|Carcass|State")
+	EMOCarcassDecayStage GetDecayStage() const { return DecayStage; }
 
 	// ============================================================================
 	// API

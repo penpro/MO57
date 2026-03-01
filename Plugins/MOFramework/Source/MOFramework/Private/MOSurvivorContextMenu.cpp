@@ -4,6 +4,7 @@
 #include "MOSurvivorJobQueueComponent.h"
 #include "MOIdentityComponent.h"
 #include "MORecruitmentComponent.h"
+#include "MOCharacter.h"
 #include "AIController.h"
 #include "Components/TextBlock.h"
 #include "GameFramework/Pawn.h"
@@ -16,7 +17,9 @@ void UMOSurvivorContextMenu::NativeConstruct()
 	BindButtonClick(FollowMeButton, this, &UMOSurvivorContextMenu::HandleFollowMeClicked);
 	BindButtonClick(StayHereButton, this, &UMOSurvivorContextMenu::HandleStayHereClicked);
 	BindButtonClick(GoHomeButton, this, &UMOSurvivorContextMenu::HandleGoHomeClicked);
+	BindButtonClick(SetHomeButton, this, &UMOSurvivorContextMenu::HandleSetHomeClicked);
 	BindButtonClick(OpenTasksButton, this, &UMOSurvivorContextMenu::HandleOpenTasksClicked);
+	BindButtonClick(InventoryButton, this, &UMOSurvivorContextMenu::HandleInventoryClicked);
 }
 
 void UMOSurvivorContextMenu::NativeDestruct()
@@ -39,18 +42,26 @@ void UMOSurvivorContextMenu::InitializeForSurvivor(APawn* Survivor, FVector2D Sc
 
 	TargetSurvivor = Survivor;
 
+	// Check if survivor is dead
+	bSurvivorIsDead = false;
+	if (AMOCharacter* MOChar = Cast<AMOCharacter>(Survivor))
+	{
+		bSurvivorIsDead = MOChar->IsDead();
+	}
+
 	// Cache controller - check if it's the right type
 	AController* ExistingController = Survivor->GetController();
 	AMOSurvivorController* SurvivorController = Cast<AMOSurvivorController>(ExistingController);
 
 	// Log what controller exists
-	UE_LOG(LogMOFramework, Log, TEXT("[MOSurvivorContextMenu] Survivor %s has controller: %s (IsSurvivorController: %s)"),
+	UE_LOG(LogMOFramework, Log, TEXT("[MOSurvivorContextMenu] Survivor %s has controller: %s (IsSurvivorController: %s, IsDead: %s)"),
 		*Survivor->GetName(),
 		ExistingController ? *ExistingController->GetClass()->GetName() : TEXT("None"),
-		SurvivorController ? TEXT("Yes") : TEXT("No"));
+		SurvivorController ? TEXT("Yes") : TEXT("No"),
+		bSurvivorIsDead ? TEXT("Yes") : TEXT("No"));
 
-	// If no survivor controller exists, spawn one on-demand for recruited survivors
-	if (!SurvivorController && Survivor->HasAuthority())
+	// If not dead and no survivor controller exists, spawn one on-demand for recruited survivors
+	if (!bSurvivorIsDead && !SurvivorController && Survivor->HasAuthority())
 	{
 		UMORecruitmentComponent* RecruitComp = Survivor->FindComponentByClass<UMORecruitmentComponent>();
 		if (RecruitComp && RecruitComp->IsPossessable())
@@ -182,6 +193,28 @@ void UMOSurvivorContextMenu::HandleGoHomeClicked()
 	RequestClose();
 }
 
+void UMOSurvivorContextMenu::HandleSetHomeClicked()
+{
+	APawn* Survivor = TargetSurvivor.Get();
+	UMOSurvivorJobQueueComponent* JobQueue = GetJobQueue();
+	if (!Survivor || !JobQueue)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorContextMenu] Cannot set home - no survivor or job queue"));
+		RequestClose();
+		return;
+	}
+
+	// Set current location as home
+	FVector CurrentLocation = Survivor->GetActorLocation();
+	JobQueue->SetHome(CurrentLocation);
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOSurvivorContextMenu] Set survivor home to %s"), *CurrentLocation.ToString());
+
+	// Update button states since we now have a home
+	UpdateButtonStates();
+	RequestClose();
+}
+
 void UMOSurvivorContextMenu::HandleOpenTasksClicked()
 {
 	APawn* Survivor = TargetSurvivor.Get();
@@ -200,8 +233,78 @@ void UMOSurvivorContextMenu::HandleOpenTasksClicked()
 	RequestClose();
 }
 
+void UMOSurvivorContextMenu::HandleInventoryClicked()
+{
+	APawn* Survivor = TargetSurvivor.Get();
+	if (!Survivor)
+	{
+		RequestClose();
+		return;
+	}
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOSurvivorContextMenu] Opening inventory for survivor"));
+
+	// Broadcast to UI controller to open inventory exchange
+	OnInventoryRequested.Broadcast(Survivor);
+
+	// Close this menu (inventory will open)
+	RequestClose();
+}
+
 void UMOSurvivorContextMenu::UpdateButtonStates()
 {
+	// If survivor is dead, disable everything except Inventory
+	if (bSurvivorIsDead)
+	{
+		if (FollowMeButton)
+		{
+			FollowMeButton->SetIsEnabled(false);
+		}
+		if (StayHereButton)
+		{
+			StayHereButton->SetIsEnabled(false);
+		}
+		if (GoHomeButton)
+		{
+			GoHomeButton->SetIsEnabled(false);
+		}
+		if (SetHomeButton)
+		{
+			SetHomeButton->SetIsEnabled(false);
+		}
+		if (OpenTasksButton)
+		{
+			OpenTasksButton->SetIsEnabled(false);
+		}
+		if (InventoryButton)
+		{
+			InventoryButton->SetIsEnabled(true);
+		}
+		return;
+	}
+
+	// Normal state - enable command buttons
+	if (FollowMeButton)
+	{
+		FollowMeButton->SetIsEnabled(true);
+	}
+	if (StayHereButton)
+	{
+		StayHereButton->SetIsEnabled(true);
+	}
+	if (SetHomeButton)
+	{
+		SetHomeButton->SetIsEnabled(true);
+	}
+	if (OpenTasksButton)
+	{
+		OpenTasksButton->SetIsEnabled(true);
+	}
+	if (InventoryButton)
+	{
+		InventoryButton->SetIsEnabled(true);
+	}
+
 	// Go Home button is only enabled if survivor has a home
 	if (GoHomeButton)
 	{
@@ -241,21 +344,36 @@ void UMOSurvivorContextMenu::UpdateDisplayTexts()
 			}
 		}
 
+		// Append "(Dead)" if dead
+		if (bSurvivorIsDead)
+		{
+			SurvivorName = FText::Format(NSLOCTEXT("MOSurvivorContextMenu", "DeadSurvivorFormat", "{0} (Dead)"), SurvivorName);
+		}
+
 		SurvivorNameText->SetText(SurvivorName);
 	}
 
 	// Update current task text
 	if (CurrentTaskText)
 	{
-		FText TaskText = FText::FromString(TEXT("Idle"));
+		FText TaskText;
 
-		AMOSurvivorController* Controller = GetSurvivorController();
-		if (Controller)
+		if (bSurvivorIsDead)
 		{
-			FName CommandName = Controller->GetActiveCommandName();
-			if (!CommandName.IsNone())
+			TaskText = FText::FromString(TEXT("Dead"));
+		}
+		else
+		{
+			TaskText = FText::FromString(TEXT("Idle"));
+
+			AMOSurvivorController* Controller = GetSurvivorController();
+			if (Controller)
 			{
-				TaskText = FText::FromName(CommandName);
+				FName CommandName = Controller->GetActiveCommandName();
+				if (!CommandName.IsNone())
+				{
+					TaskText = FText::FromName(CommandName);
+				}
 			}
 		}
 

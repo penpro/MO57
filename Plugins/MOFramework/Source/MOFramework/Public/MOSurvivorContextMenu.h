@@ -8,13 +8,20 @@
  *
  * PURPOSE:
  * Context menu shown when right-clicking a recruited survivor. Provides
- * quick access to command survivors (Follow, Stay, Go Home, Open Tasks).
+ * quick access to command survivors (Follow, Stay, Go Home, Set Home,
+ * Open Tasks, Inventory).
  *
  * BUTTONS:
  * - FollowMeButton: Survivor follows the player
  * - StayHereButton: Survivor stays at current location
  * - GoHomeButton: Survivor returns to assigned home (disabled if no home)
+ * - SetHomeButton: Set current location as home
  * - OpenTasksButton: Opens full task assignment menu
+ * - InventoryButton: Opens survivor inventory for item exchange
+ *
+ * DEATH STATE:
+ * When survivor is dead, all buttons are disabled except InventoryButton.
+ * This allows player to loot the corpse but not command it.
  *
  * =============================================================================
  * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
@@ -29,9 +36,12 @@
  * [2024-02] DELEGATE: OnOpenTasksRequested fires BEFORE menu closes.
  *   Caller should close menu after handling if needed.
  *
+ * [2024-03] DEATH STATE: When survivor is dead, all buttons except Inventory
+ *   are disabled. Check bIsDead via AMOCharacter before enabling buttons.
+ *
  * =============================================================================
  * RELATED FILES: MOContextMenuBase.h, MOSurvivorController.h, MOSurvivorTaskMenu.h
- * LAST UPDATED: 2026-02-25
+ * LAST UPDATED: 2026-03-01
  * =============================================================================
  */
 
@@ -52,13 +62,22 @@ class AMOSurvivorController;
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOSurvivorContextMenuOpenTasksSignature, APawn*, Survivor);
 
 /**
+ * Delegate fired when the "Inventory" button is clicked.
+ */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOSurvivorContextMenuInventorySignature, APawn*, Survivor);
+
+/**
  * Context menu shown when right-clicking a recruited survivor.
  *
  * Provides quick access to:
  * - Follow Me: Survivor follows the player
  * - Stay Here: Survivor stays at current location
  * - Go Home: Survivor returns to assigned home
+ * - Set Home: Set current location as home
  * - Assign Tasks: Opens the full task assignment menu
+ * - Inventory: Opens survivor inventory for item exchange
+ *
+ * When survivor is dead, only Inventory is enabled for looting.
  */
 UCLASS(Abstract)
 class MOFRAMEWORK_API UMOSurvivorContextMenu : public UMOContextMenuBase
@@ -85,6 +104,10 @@ public:
 	/** Fired when the "Open Tasks" button is clicked. */
 	UPROPERTY(BlueprintAssignable, Category = "MO|UI|Survivor")
 	FMOSurvivorContextMenuOpenTasksSignature OnOpenTasksRequested;
+
+	/** Fired when the "Inventory" button is clicked. */
+	UPROPERTY(BlueprintAssignable, Category = "MO|UI|Survivor")
+	FMOSurvivorContextMenuInventorySignature OnInventoryRequested;
 
 protected:
 	virtual void NativeConstruct() override;
@@ -114,9 +137,17 @@ protected:
 	UPROPERTY(BlueprintReadOnly, meta = (BindWidget), Category = "MO|UI|Survivor")
 	TObjectPtr<UMOCommonButton> GoHomeButton;
 
+	/** "Set Home" button. */
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional), Category = "MO|UI|Survivor")
+	TObjectPtr<UMOCommonButton> SetHomeButton;
+
 	/** "Assign Tasks" button. */
 	UPROPERTY(BlueprintReadOnly, meta = (BindWidget), Category = "MO|UI|Survivor")
 	TObjectPtr<UMOCommonButton> OpenTasksButton;
+
+	/** "Inventory" button. */
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional), Category = "MO|UI|Survivor")
+	TObjectPtr<UMOCommonButton> InventoryButton;
 
 private:
 	/** The survivor pawn this menu is controlling. */
@@ -128,15 +159,21 @@ private:
 	/** Cached job queue component. */
 	TWeakObjectPtr<UMOSurvivorJobQueueComponent> CachedJobQueue;
 
+	/** Whether the target survivor is dead. */
+	bool bSurvivorIsDead = false;
+
 	// Button handlers
 	void HandleFollowMeClicked();
 	void HandleStayHereClicked();
 	void HandleGoHomeClicked();
+	void HandleSetHomeClicked();
 	void HandleOpenTasksClicked();
+	void HandleInventoryClicked();
 
 	/**
 	 * Update button states based on survivor status.
-	 * Disables "Go Home" if no home is assigned, etc.
+	 * Disables "Go Home" if no home is assigned.
+	 * Disables all except "Inventory" if survivor is dead.
 	 */
 	void UpdateButtonStates();
 

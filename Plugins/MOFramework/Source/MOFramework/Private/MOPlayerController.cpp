@@ -9,6 +9,7 @@
 #include "MONotificationComponent.h"
 #include "MOBuildingComponent.h"
 #include "MOBuildableActor.h"
+#include "MOCarcassActor.h"
 #include "MOInteractorComponent.h"
 #include "MOIdentityComponent.h"
 #include "MOKeyBindingManager.h"
@@ -1155,5 +1156,16 @@ void AMOPlayerController::RequestShowStationContextMenu_Implementation(AActor* S
 	if (UIManagerComponent)
 	{
 		UIManagerComponent->ShowStationContextMenu(StationActor, WorldPosition);
+	}
+}
+
+void AMOPlayerController::RequestStartCarcassButchering_Implementation(AActor* CarcassActor, FName PartId)
+{
+	if (UIManagerComponent)
+	{
+		if (AMOCarcassActor* Carcass = Cast<AMOCarcassActor>(CarcassActor))
+		{
+			UIManagerComponent->StartCarcassButchering(Carcass, PartId);
+		}
 	}
 }

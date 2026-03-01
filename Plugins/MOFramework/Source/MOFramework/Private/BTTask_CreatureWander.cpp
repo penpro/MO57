@@ -33,6 +33,9 @@ EBTNodeResult::Type UBTTask_CreatureWander::ExecuteTask(UBehaviorTreeComponent& 
 	Memory->bInitialized = false;
 	Memory->TimeRemaining = FMath::RandRange(MinWanderDuration, MaxWanderDuration);
 	Memory->NextHeadingAdjustTime = 0.f; // Adjust immediately on first tick
+	Memory->LastPosition = OwnerPawn->GetActorLocation();
+	Memory->StuckTime = 0.f;
+	Memory->LastStuckCheckTime = 0.f;
 
 	// Initialize heading from current direction
 	InitializeHeading(OwnerPawn, Memory);
@@ -78,12 +81,95 @@ void UBTTask_CreatureWander::TickTask(UBehaviorTreeComponent& OwnerComp, uint8* 
 		return;
 	}
 
-	// Check if we need a new heading adjustment
-	Memory->NextHeadingAdjustTime -= DeltaSeconds;
-	if (Memory->NextHeadingAdjustTime <= 0.f)
+	// Water avoidance - check if we're in or heading toward water (z < 0)
+	FVector CurrentLocation = OwnerPawn->GetActorLocation();
+	const float WaterLevel = 0.f;
+	const float WaterAvoidanceMargin = 200.f; // Start avoiding before hitting water
+
+	bool bNeedsWaterAvoidance = false;
+	if (CurrentLocation.Z < WaterLevel + WaterAvoidanceMargin)
 	{
-		FVector HomeLocation = GetHomeLocation(OwnerComp, OwnerPawn);
-		PickNewHeadingAdjustment(OwnerPawn, Memory, HomeLocation);
+		// We're close to or in water - need to head uphill (positive Z gradient)
+		bNeedsWaterAvoidance = true;
+
+		// Force heading adjustment toward higher ground
+		// Find direction that leads uphill by checking multiple directions
+		FVector BestDirection = -Memory->CurrentHeading; // Default: turn around
+		float BestZGain = -FLT_MAX;
+
+		for (int32 i = 0; i < 8; ++i)
+		{
+			float Angle = (i / 8.f) * 360.f;
+			FVector TestDir = FRotator(0.f, Angle, 0.f).Vector();
+			FVector TestLocation = CurrentLocation + TestDir * 500.f;
+
+			// Trace to find ground height in that direction
+			FHitResult Hit;
+			FVector TraceStart = TestLocation + FVector(0, 0, 1000.f);
+			FVector TraceEnd = TestLocation - FVector(0, 0, 2000.f);
+
+			if (OwnerPawn->GetWorld()->LineTraceSingleByChannel(Hit, TraceStart, TraceEnd, ECC_Visibility))
+			{
+				float ZGain = Hit.ImpactPoint.Z - CurrentLocation.Z;
+				if (ZGain > BestZGain && Hit.ImpactPoint.Z > WaterLevel)
+				{
+					BestZGain = ZGain;
+					BestDirection = TestDir;
+				}
+			}
+		}
+
+		// Override heading to escape water
+		Memory->CurrentHeading = BestDirection;
+		Memory->CurrentHeading.Z = 0.f;
+		Memory->CurrentHeading.Normalize();
+	}
+
+	// Stuck detection - check every 0.5 seconds to avoid overhead
+	Memory->LastStuckCheckTime += DeltaSeconds;
+	if (Memory->LastStuckCheckTime >= 0.5f)
+	{
+		float DistanceMoved = FVector::Dist(CurrentLocation, Memory->LastPosition);
+
+		if (DistanceMoved < StuckMinMovement)
+		{
+			// Not moving much - accumulate stuck time
+			Memory->StuckTime += Memory->LastStuckCheckTime;
+
+			if (Memory->StuckTime >= StuckThresholdTime)
+			{
+				// We're stuck - reverse heading and add randomness
+				FRotator HeadingRotation = Memory->CurrentHeading.Rotation();
+				HeadingRotation.Yaw += 180.f + FMath::RandRange(-60.f, 60.f);
+				Memory->CurrentHeading = HeadingRotation.Vector();
+				Memory->CurrentHeading.Z = 0.f;
+				Memory->CurrentHeading.Normalize();
+
+				Memory->StuckTime = 0.f;
+				Memory->NextHeadingAdjustTime = FMath::RandRange(MinHeadingAdjustInterval, MaxHeadingAdjustInterval);
+
+				UE_LOG(LogMOFramework, Verbose, TEXT("[BTWander] %s stuck, reversing heading"), *OwnerPawn->GetName());
+			}
+		}
+		else
+		{
+			// Moving normally - reset stuck detection
+			Memory->StuckTime = 0.f;
+		}
+
+		Memory->LastPosition = CurrentLocation;
+		Memory->LastStuckCheckTime = 0.f;
+	}
+
+	// Check if we need a new heading adjustment (skip if doing water avoidance)
+	if (!bNeedsWaterAvoidance)
+	{
+		Memory->NextHeadingAdjustTime -= DeltaSeconds;
+		if (Memory->NextHeadingAdjustTime <= 0.f)
+		{
+			FVector HomeLocation = GetHomeLocation(OwnerComp, OwnerPawn);
+			PickNewHeadingAdjustment(OwnerPawn, Memory, HomeLocation);
+		}
 	}
 
 	// Get current forward direction
@@ -100,8 +186,9 @@ void UBTTask_CreatureWander::TickTask(UBehaviorTreeComponent& OwnerComp, uint8* 
 	FRotator CurrentRotation = CurrentForward.Rotation();
 	FRotator DesiredRotation = DesiredHeading.Rotation();
 
-	// Interpolate rotation
-	float InterpAlpha = FMath::Clamp(HeadingInterpSpeed * DeltaSeconds / 180.f, 0.f, 1.f);
+	// Interpolate rotation (faster when avoiding water)
+	float InterpSpeed = bNeedsWaterAvoidance ? HeadingInterpSpeed * 3.f : HeadingInterpSpeed;
+	float InterpAlpha = FMath::Clamp(InterpSpeed * DeltaSeconds / 180.f, 0.f, 1.f);
 	FRotator NewRotation = FMath::Lerp(CurrentRotation, DesiredRotation, InterpAlpha);
 
 	// Calculate new heading direction from interpolated rotation
@@ -166,13 +253,43 @@ void UBTTask_CreatureWander::PickNewHeadingAdjustment(APawn* Pawn, FBTWanderMemo
 	// Set next adjustment time
 	Memory->NextHeadingAdjustTime = FMath::RandRange(MinHeadingAdjustInterval, MaxHeadingAdjustInterval);
 
-	// Check if we're too far from home - if so, bias toward home
 	FVector CurrentLocation = Pawn->GetActorLocation();
-	float DistanceFromHome = FVector::Dist2D(CurrentLocation, HomeLocation);
+	const float WaterLevel = 0.f;
+	const float WaterAvoidanceMargin = 300.f;
 
 	float HeadingChange = 0.f;
+	bool bNeedsWaterAvoidance = false;
 
-	if (MaxDistanceFromHome > 0.f && DistanceFromHome > MaxDistanceFromHome * 0.7f)
+	// Check if current heading would lead toward water
+	FVector ProposedLocation = CurrentLocation + Memory->CurrentHeading * 500.f;
+
+	// Trace to find ground height in proposed direction
+	UWorld* World = Pawn->GetWorld();
+	if (World)
+	{
+		FHitResult Hit;
+		FVector TraceStart = ProposedLocation + FVector(0, 0, 1000.f);
+		FVector TraceEnd = ProposedLocation - FVector(0, 0, 2000.f);
+
+		if (World->LineTraceSingleByChannel(Hit, TraceStart, TraceEnd, ECC_Visibility))
+		{
+			if (Hit.ImpactPoint.Z < WaterLevel)
+			{
+				// Proposed direction leads to water - need to turn away
+				bNeedsWaterAvoidance = true;
+			}
+		}
+	}
+
+	// Check if we're too far from home - if so, bias toward home
+	float DistanceFromHome = FVector::Dist2D(CurrentLocation, HomeLocation);
+
+	if (bNeedsWaterAvoidance)
+	{
+		// Turn away from water - reverse heading with some randomness
+		HeadingChange = 180.f + FMath::RandRange(-45.f, 45.f);
+	}
+	else if (MaxDistanceFromHome > 0.f && DistanceFromHome > MaxDistanceFromHome * 0.7f)
 	{
 		// Getting far from home - turn back toward it
 		FVector ToHome = (HomeLocation - CurrentLocation).GetSafeNormal2D();
@@ -194,9 +311,6 @@ void UBTTask_CreatureWander::PickNewHeadingAdjustment(APawn* Pawn, FBTWanderMemo
 		);
 
 		HeadingChange = TurnSign * FMath::Min(AngleToHome, MaxHeadingChange * 2.f) * CorrectionStrength;
-
-		UE_LOG(LogMOFramework, Log, TEXT("BTTask_CreatureWander: Far from home (%.0f/%.0f), correcting heading by %.1f deg"),
-			DistanceFromHome, MaxDistanceFromHome, HeadingChange);
 	}
 	else
 	{

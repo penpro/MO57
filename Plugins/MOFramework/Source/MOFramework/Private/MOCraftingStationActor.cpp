@@ -6,6 +6,7 @@
 #include "MOCraftingCapableInterface.h"
 #include "MOworldSaveGame.h"
 #include "Components/AudioComponent.h"
+#include "Components/PointLightComponent.h"
 #include "NiagaraComponent.h"
 #include "NiagaraSystem.h"
 #include "Sound/SoundBase.h"
@@ -33,6 +34,15 @@ AMOCraftingStationActor::AMOCraftingStationActor()
 	ActiveParticleComponent = CreateDefaultSubobject<UNiagaraComponent>(TEXT("ActiveParticleComponent"));
 	ActiveParticleComponent->SetupAttachment(RootComponent);
 	ActiveParticleComponent->bAutoActivate = false;
+
+	// Create light component for fire glow
+	ActiveLightComponent = CreateDefaultSubobject<UPointLightComponent>(TEXT("ActiveLightComponent"));
+	ActiveLightComponent->SetupAttachment(RootComponent);
+	ActiveLightComponent->SetVisibility(false);
+	ActiveLightComponent->SetIntensity(5000.0f);
+	ActiveLightComponent->SetLightColor(FLinearColor(1.0f, 0.6f, 0.2f));
+	ActiveLightComponent->SetAttenuationRadius(500.0f);
+	ActiveLightComponent->SetCastShadows(false); // Cheaper without shadows
 }
 
 void AMOCraftingStationActor::BeginPlay()
@@ -54,6 +64,12 @@ void AMOCraftingStationActor::Tick(float DeltaTime)
 			SetStationActive(false);
 			UE_LOG(LogMOFramework, Log, TEXT("[MOCraftingStationActor] Fuel depleted, station deactivated"));
 		}
+	}
+
+	// Update light flicker when active
+	if (bIsActive)
+	{
+		UpdateLightFlicker(DeltaTime);
 	}
 }
 
@@ -240,19 +256,22 @@ void AMOCraftingStationActor::SetStationActive(bool bActive)
 	}
 
 	bIsActive = bActive;
-	SetActorTickEnabled(bIsActive && bRequiresFuel);
+	// Tick when active (for fuel consumption and light flicker)
+	SetActorTickEnabled(bIsActive);
 
 	// Activate/deactivate audio and visual effects
 	if (bIsActive)
 	{
 		PlayOnSound();
 		ActivateParticles();
+		ActivateLight();
 	}
 	else
 	{
 		StopOnSound();
 		StopUseSound();
 		DeactivateParticles();
+		DeactivateLight();
 	}
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOCraftingStationActor] Station %s"), bIsActive ? TEXT("activated") : TEXT("deactivated"));
@@ -367,6 +386,61 @@ void AMOCraftingStationActor::DeactivateParticles()
 		ActiveParticleComponent->Deactivate();
 		UE_LOG(LogMOFramework, Verbose, TEXT("[MOCraftingStationActor] Deactivated particles"));
 	}
+}
+
+void AMOCraftingStationActor::ActivateLight()
+{
+	if (!ActiveLightComponent)
+	{
+		return;
+	}
+
+	// Apply configured settings
+	ActiveLightComponent->SetIntensity(LightBaseIntensity);
+	ActiveLightComponent->SetLightColor(LightColor);
+	ActiveLightComponent->SetAttenuationRadius(LightRadius);
+	ActiveLightComponent->SetVisibility(true);
+
+	// Reset flicker accumulator
+	FlickerTimeAccumulator = FMath::FRand() * 100.0f; // Random start for variety
+
+	UE_LOG(LogMOFramework, Verbose, TEXT("[MOCraftingStationActor] Activated light"));
+}
+
+void AMOCraftingStationActor::DeactivateLight()
+{
+	if (ActiveLightComponent)
+	{
+		ActiveLightComponent->SetVisibility(false);
+		UE_LOG(LogMOFramework, Verbose, TEXT("[MOCraftingStationActor] Deactivated light"));
+	}
+}
+
+void AMOCraftingStationActor::UpdateLightFlicker(float DeltaTime)
+{
+	if (!ActiveLightComponent || !ActiveLightComponent->IsVisible())
+	{
+		return;
+	}
+
+	// Accumulate time
+	FlickerTimeAccumulator += DeltaTime * LightFlickerSpeed;
+
+	// Use multiple overlapping sine waves for organic fire-like flicker
+	// This creates an irregular, natural-looking pattern
+	const float Wave1 = FMath::Sin(FlickerTimeAccumulator * 1.0f);
+	const float Wave2 = FMath::Sin(FlickerTimeAccumulator * 2.3f) * 0.5f;
+	const float Wave3 = FMath::Sin(FlickerTimeAccumulator * 5.7f) * 0.25f;
+
+	// Combine waves and normalize to -1 to 1 range
+	const float CombinedWave = (Wave1 + Wave2 + Wave3) / 1.75f;
+
+	// Map to intensity variation
+	const float FlickerMultiplier = 1.0f + (CombinedWave * LightFlickerAmount);
+
+	// Apply to light
+	const float NewIntensity = LightBaseIntensity * FlickerMultiplier;
+	ActiveLightComponent->SetIntensity(NewIntensity);
 }
 
 // ============================================================================

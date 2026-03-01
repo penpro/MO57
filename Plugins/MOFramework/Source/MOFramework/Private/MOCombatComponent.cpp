@@ -18,6 +18,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Animation/AnimInstance.h"
 #include "Animation/AnimMontage.h"
+#include "DrawDebugHelpers.h"
 
 // ============================================================================
 // CONSTRUCTOR
@@ -33,7 +34,7 @@ UMOCombatComponent::UMOCombatComponent()
 	UnarmedAttackProfile.AttackType = EMOAttackType::Light;
 	UnarmedAttackProfile.BaseDamage = 5.0f;
 	UnarmedAttackProfile.PrimaryDamageType = EMODamageCategory::Blunt;
-	UnarmedAttackProfile.ArmorPenetration = 0.0f;
+	UnarmedAttackProfile.ArmorPenetration = 1.0f;  // 1.0 = full damage against unarmored targets
 	UnarmedAttackProfile.StaminaCost = 3.0f;
 	UnarmedAttackProfile.WindUpTime = 0.15f;
 	UnarmedAttackProfile.RecoveryTime = 0.25f;
@@ -831,7 +832,7 @@ void UMOCombatComponent::ExecuteAttack()
 		return;
 	}
 
-	// For player-controlled pawns, use camera trace (where the reticle is aiming)
+	// For player-controlled pawns, use camera aim direction but start from character position
 	// For AI, use traditional hand-based trace
 	FVector TraceStart;
 	FVector TraceDirection;
@@ -841,11 +842,21 @@ void UMOCombatComponent::ExecuteAttack()
 
 	if (PC && PC->PlayerCameraManager)
 	{
-		// Player-controlled: trace from camera center (like target reticle)
-		TraceStart = PC->PlayerCameraManager->GetCameraLocation();
-		TraceDirection = PC->PlayerCameraManager->GetCameraRotation().Vector();
+		// Player-controlled: trace from character position in camera aim direction
+		// This gives us the "where you're looking" targeting while keeping melee range sensible
+		FVector CameraLocation = PC->PlayerCameraManager->GetCameraLocation();
+		FVector CameraDirection = PC->PlayerCameraManager->GetCameraRotation().Vector();
 
-		UE_LOG(LogMOFramework, Verbose, TEXT("[MOCombat] Using camera trace for player attack"));
+		// Start from character's eye/chest height, slightly forward
+		FVector CharacterCenter = Owner->GetActorLocation();
+		CharacterCenter.Z += 50.f; // Raise to chest height
+
+		// Project forward from character in the camera's aim direction
+		TraceStart = CharacterCenter + CameraDirection * 30.f; // Start slightly in front
+		TraceDirection = CameraDirection;
+
+		UE_LOG(LogMOFramework, Log, TEXT("[MOCombat] Camera trace: Start=%s Dir=%s Range=%.0f"),
+			*TraceStart.ToString(), *TraceDirection.ToString(), Profile->Range);
 	}
 	else
 	{
@@ -855,6 +866,14 @@ void UMOCombatComponent::ExecuteAttack()
 	}
 
 	const FVector TraceEnd = TraceStart + TraceDirection * Profile->Range;
+
+	// Debug visualization (temporary - for debugging)
+#if ENABLE_DRAW_DEBUG
+	const float DebugDuration = 2.0f;
+	DrawDebugLine(GetWorld(), TraceStart, TraceEnd, FColor::Yellow, false, DebugDuration, 0, 2.0f);
+	DrawDebugSphere(GetWorld(), TraceStart, 30.0f, 8, FColor::Green, false, DebugDuration);
+	DrawDebugSphere(GetWorld(), TraceEnd, 30.0f, 8, FColor::Red, false, DebugDuration);
+#endif
 
 	TArray<FHitResult> HitResults;
 	FCollisionQueryParams QueryParams;
@@ -875,17 +894,20 @@ void UMOCombatComponent::ExecuteAttack()
 
 	if (bHit)
 	{
-		UE_LOG(LogMOFramework, Log, TEXT("[MOCombat] Attack hit %d targets"), HitResults.Num());
+		UE_LOG(LogMOFramework, Verbose, TEXT("[MOCombat] Attack hit %d targets"), HitResults.Num());
 
-		// Process each hit
+		// Process each hit - draw blue sphere at impact points
 		for (const FHitResult& Hit : HitResults)
 		{
+#if ENABLE_DRAW_DEBUG
+			DrawDebugSphere(GetWorld(), Hit.ImpactPoint, 20.0f, 8, FColor::Blue, false, DebugDuration);
+#endif
 			ProcessHit(Hit, *Profile);
 		}
 	}
 	else
 	{
-		UE_LOG(LogMOFramework, Verbose, TEXT("[MOCombat] Attack missed (no hits)"));
+		UE_LOG(LogMOFramework, Verbose, TEXT("[MOCombat] Attack missed - no targets in range"));
 	}
 }
 
@@ -1000,8 +1022,6 @@ void UMOCombatComponent::ProcessHit(const FHitResult& Hit, const FMOAttackDamage
 	if (Hit.BoneName != NAME_None)
 	{
 		HitBodyPart = UMOCombatMedicalHelpers::BoneNameToBodyPart(Hit.BoneName);
-		UE_LOG(LogMOFramework, Log, TEXT("[MOCombat] Hit bone '%s' -> body part %d"),
-			*Hit.BoneName.ToString(), static_cast<int32>(HitBodyPart));
 	}
 
 	// Check for combat component on target
@@ -1021,16 +1041,10 @@ void UMOCombatComponent::ProcessHit(const FHitResult& Hit, const FMOAttackDamage
 
 		EMOAttackResult Result = TargetCombat->ReceiveAttack(Owner, HitInfo);
 		OnAttackHit.Broadcast(HitActor, Result, HitInfo);
-
-		UE_LOG(LogMOFramework, Log, TEXT("[MOCombat] Applied %.1f damage to %s (result: %d)"),
-			HitInfo.BaseDamage, *HitActor->GetName(), static_cast<int32>(Result));
 	}
 	else
 	{
 		// Non-combat actor (resources, world objects)
-		UE_LOG(LogMOFramework, Log, TEXT("[MOCombat] Hit non-combat actor: %s at bone '%s'"),
-			*HitActor->GetName(), *Hit.BoneName.ToString());
-
 		OnHitNonCombatActor.Broadcast(HitActor, Hit.ImpactPoint, Hit.ImpactNormal, Hit.BoneName);
 	}
 }
@@ -1121,7 +1135,6 @@ void UMOCombatComponent::PlayAttackAnimation()
 	if (MontageToPlay)
 	{
 		AnimInstance->Montage_Play(MontageToPlay);
-		UE_LOG(LogMOFramework, Log, TEXT("[MOCombat] Playing attack montage: %s"), *MontageToPlay->GetName());
 	}
 	else
 	{

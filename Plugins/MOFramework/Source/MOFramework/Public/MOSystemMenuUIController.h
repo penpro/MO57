@@ -326,5 +326,8 @@ private:
 	void HandleSurvivorContextMenuOpenTasks(APawn* Survivor);
 
 	UFUNCTION()
+	void HandleSurvivorContextMenuOpenInventory(APawn* Survivor);
+
+	UFUNCTION()
 	void HandleSurvivorTaskMenuRequestClose();
 };

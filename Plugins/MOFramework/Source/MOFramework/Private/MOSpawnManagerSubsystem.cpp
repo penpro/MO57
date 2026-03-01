@@ -2,6 +2,7 @@
 #include "MOFramework.h"
 #include "MOSpawnPoint.h"
 #include "MOSpawnSettings.h"
+#include "MOSpawnSettingsActor.h"
 #include "MOBuildableActor.h"
 #include "MOSkillsComponent.h"
 #include "MORecruitmentComponent.h"
@@ -55,6 +56,22 @@ namespace
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
 
+// Console command to reload spawn settings during PIE
+static FAutoConsoleCommandWithWorld GReloadSpawnSettingsCmd(
+	TEXT("MO.SpawnManager.Reload"),
+	TEXT("Reload spawn manager settings from World Actor (or Project Settings fallback) without restarting PIE"),
+	FConsoleCommandWithWorldDelegate::CreateLambda([](UWorld* World)
+	{
+		if (World)
+		{
+			if (UMOSpawnManagerSubsystem* SpawnManager = World->GetSubsystem<UMOSpawnManagerSubsystem>())
+			{
+				SpawnManager->ReloadSettings();
+			}
+		}
+	})
+);
+
 UMOSpawnManagerSubsystem::UMOSpawnManagerSubsystem()
 {
 }
@@ -94,7 +111,25 @@ void UMOSpawnManagerSubsystem::Tick(float DeltaTime)
 {
 	TimeSinceLastCheck += DeltaTime;
 
-	if (TimeSinceLastCheck >= SpawnCheckInterval)
+	// Get spawn check interval from world actor (dynamic lookup)
+	AMOSpawnSettingsActor* WorldActor = AMOSpawnSettingsActor::GetSpawnSettingsActor(this);
+	FMOSpawnGlobalSettings GlobalSettings = AMOSpawnSettingsActor::GetGlobalSettings(this);
+	FMOSpawnDebugSettings DebugSettings = AMOSpawnSettingsActor::GetDebugSettings(this);
+	float CurrentSpawnCheckInterval = GlobalSettings.SpawnCheckInterval;
+
+	// Debug logging every 10 seconds
+	static float DebugLogTimer = 0.f;
+	DebugLogTimer += DeltaTime;
+	if (DebugLogTimer >= 10.f)
+	{
+		DebugLogTimer = 0.f;
+		UE_LOG(LogMOFramework, Warning, TEXT("[SpawnManager] WorldActor: %s, CheckInterval: %.1f, TimeMultiplier: %.2f"),
+			WorldActor ? *WorldActor->GetName() : TEXT("NONE"),
+			CurrentSpawnCheckInterval,
+			DebugSettings.CooldownTimeMultiplier);
+	}
+
+	if (TimeSinceLastCheck >= CurrentSpawnCheckInterval)
 	{
 		TimeSinceLastCheck = 0.0f;
 
@@ -117,17 +152,21 @@ void UMOSpawnManagerSubsystem::InitializeDefaultConfigs()
 		return;
 	}
 
-	// Load from project settings
-	const UMOSpawnSettings* Settings = UMOSpawnSettings::GetSpawnSettings();
-	if (Settings)
-	{
-		CategoryConfigs = Settings->GetAllCategoryConfigs();
-		SurvivorPersistenceHours = Settings->SurvivorPersistenceHours;
-		SpawnCheckInterval = Settings->SpawnCheckInterval;
-		MaxSpawnPointQueryDistance = Settings->MaxSpawnPointQueryDistance;
+	// Try to load from world actor first (will be found once BeginPlay runs on the settings actor)
+	// For now, load from project settings - ReloadSettings() can be called later to pick up world actor
+	CategoryConfigs = AMOSpawnSettingsActor::GetAllCategoryConfigs(this);
+	FMOSpawnGlobalSettings GlobalSettings = AMOSpawnSettingsActor::GetGlobalSettings(this);
+	FMOSpawnDebugSettings DebugSettings = AMOSpawnSettingsActor::GetDebugSettings(this);
 
-		UE_LOG(LogMOFramework, Log, TEXT("[SpawnManager] Loaded configs from Project Settings (TimeMultiplier=%.2f)"),
-			Settings->CooldownTimeMultiplier);
+	SurvivorPersistenceHours = GlobalSettings.SurvivorPersistenceHours;
+	SpawnCheckInterval = GlobalSettings.SpawnCheckInterval;
+	MaxSpawnPointQueryDistance = GlobalSettings.MaxSpawnPointQueryDistance;
+
+	// Check if we got configs (either from world actor or Project Settings fallback)
+	if (CategoryConfigs.Num() > 0)
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[SpawnManager] Loaded configs (TimeMultiplier=%.2f, CheckInterval=%.1fs)"),
+			DebugSettings.CooldownTimeMultiplier, SpawnCheckInterval);
 	}
 	else
 	{
@@ -311,7 +350,14 @@ APawn* UMOSpawnManagerSubsystem::ForceSpawnAtLocation(EMOSpawnCategory Category,
 
 bool UMOSpawnManagerSubsystem::DespawnOldest(EMOSpawnCategory Category)
 {
-	// Find oldest non-persistent entity of this category
+	APawn* PlayerPawn = GetPlayerPawn();
+	FVector PlayerLocation = PlayerPawn ? PlayerPawn->GetActorLocation() : FVector::ZeroVector;
+
+	// Get minimum despawn distance from settings
+	FMOSpawnGlobalSettings GlobalSettings = AMOSpawnSettingsActor::GetGlobalSettings(this);
+	const float MinDespawnDistance = GlobalSettings.MinDespawnDistance;
+
+	// Find oldest non-persistent entity of this category that's far enough from player
 	int32 OldestIndex = INDEX_NONE;
 	FDateTime OldestTime = FDateTime::MaxValue();
 
@@ -335,6 +381,16 @@ bool UMOSpawnManagerSubsystem::DespawnOldest(EMOSpawnCategory Category)
 			continue;
 		}
 
+		// Skip entities too close to player - don't despawn in front of them
+		if (PlayerPawn && Record.SpawnedPawn.IsValid())
+		{
+			float DistanceToPlayer = FVector::Dist(Record.SpawnedPawn->GetActorLocation(), PlayerLocation);
+			if (DistanceToPlayer < MinDespawnDistance)
+			{
+				continue;
+			}
+		}
+
 		if (Record.SpawnTime < OldestTime)
 		{
 			OldestTime = Record.SpawnTime;
@@ -344,6 +400,8 @@ bool UMOSpawnManagerSubsystem::DespawnOldest(EMOSpawnCategory Category)
 
 	if (OldestIndex == INDEX_NONE)
 	{
+		UE_LOG(LogMOFramework, Verbose, TEXT("[SpawnManager] No entities far enough to despawn for category %d (min distance: %.0fcm)"),
+			(int32)Category, MinDespawnDistance);
 		return false;
 	}
 
@@ -353,7 +411,9 @@ bool UMOSpawnManagerSubsystem::DespawnOldest(EMOSpawnCategory Category)
 
 	if (Pawn)
 	{
-		UE_LOG(LogMOFramework, Log, TEXT("[SpawnManager] Despawning oldest: %s"), *Pawn->GetName());
+		float DistanceToPlayer = PlayerPawn ? FVector::Dist(Pawn->GetActorLocation(), PlayerLocation) : 0.f;
+		UE_LOG(LogMOFramework, Log, TEXT("[SpawnManager] Despawning oldest: %s (%.0fm from player)"),
+			*Pawn->GetName(), DistanceToPlayer / 100.f);
 		OnEntityDespawned.Broadcast(Pawn, Category);
 		Pawn->Destroy();
 	}
@@ -411,6 +471,24 @@ void UMOSpawnManagerSubsystem::ClearEntityPersistence(APawn* Pawn)
 	}
 }
 
+void UMOSpawnManagerSubsystem::RemoveFromTracking(APawn* Pawn)
+{
+	if (!Pawn)
+	{
+		return;
+	}
+
+	for (int32 i = SpawnedEntities.Num() - 1; i >= 0; --i)
+	{
+		if (SpawnedEntities[i].SpawnedPawn.Get() == Pawn)
+		{
+			UE_LOG(LogMOFramework, Log, TEXT("[SpawnManager] Removed %s from tracking (recruited - will never despawn)"), *Pawn->GetName());
+			SpawnedEntities.RemoveAt(i);
+			return;
+		}
+	}
+}
+
 void UMOSpawnManagerSubsystem::ConvertToCorpse(APawn* Pawn)
 {
 	if (!Pawn)
@@ -430,19 +508,48 @@ void UMOSpawnManagerSubsystem::ConvertToCorpse(APawn* Pawn)
 
 FMOSpawnCategoryConfig UMOSpawnManagerSubsystem::GetCategoryConfig(EMOSpawnCategory Category) const
 {
-	for (const FMOSpawnCategoryConfig& Config : CategoryConfigs)
+	// Check if world actor exists
+	AMOSpawnSettingsActor* WorldActor = AMOSpawnSettingsActor::GetSpawnSettingsActor(this);
+
+	// Get config from world actor if it exists
+	FMOSpawnCategoryConfig Result;
+	bool bHasWorldActor = (WorldActor != nullptr);
+
+	if (bHasWorldActor)
 	{
-		if (Config.Category == Category)
+		// Get timing/behavior settings from world actor
+		Result = AMOSpawnSettingsActor::GetCategoryConfig(this, Category);
+	}
+	else
+	{
+		// Fall back to cached configs (from project settings or defaults)
+		for (const FMOSpawnCategoryConfig& Config : CategoryConfigs)
 		{
-			return Config;
+			if (Config.Category == Category)
+			{
+				Result = Config;
+				break;
+			}
 		}
 	}
 
-	// Return default
-	FMOSpawnCategoryConfig Default;
-	Default.Category = Category;
-	Default.bEnabled = false;
-	return Default;
+	// If world actor config has no SpawnableClasses, get them from cached configs (Project Settings)
+	if (Result.SpawnableClasses.Num() == 0)
+	{
+		for (const FMOSpawnCategoryConfig& Config : CategoryConfigs)
+		{
+			if (Config.Category == Category && Config.SpawnableClasses.Num() > 0)
+			{
+				Result.SpawnableClasses = Config.SpawnableClasses;
+				break;
+			}
+		}
+	}
+
+	// Ensure category is set correctly
+	Result.Category = Category;
+
+	return Result;
 }
 
 int32 UMOSpawnManagerSubsystem::GetSpawnedCount(EMOSpawnCategory Category) const
@@ -581,6 +688,31 @@ bool UMOSpawnManagerSubsystem::CanSpawn() const
 	return true;
 }
 
+void UMOSpawnManagerSubsystem::ReloadSettings()
+{
+	// Load from world actor (falls back to Project Settings automatically)
+	CategoryConfigs = AMOSpawnSettingsActor::GetAllCategoryConfigs(this);
+	FMOSpawnGlobalSettings GlobalSettings = AMOSpawnSettingsActor::GetGlobalSettings(this);
+	FMOSpawnDebugSettings DebugSettings = AMOSpawnSettingsActor::GetDebugSettings(this);
+
+	SurvivorPersistenceHours = GlobalSettings.SurvivorPersistenceHours;
+	SpawnCheckInterval = GlobalSettings.SpawnCheckInterval;
+	MaxSpawnPointQueryDistance = GlobalSettings.MaxSpawnPointQueryDistance;
+
+	// Check if we have a world actor
+	AMOSpawnSettingsActor* WorldActor = AMOSpawnSettingsActor::GetSpawnSettingsActor(this);
+	if (WorldActor)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[SpawnManager] Reloaded settings from World Actor '%s' (TimeMultiplier=%.2f, CheckInterval=%.1fs)"),
+			*WorldActor->GetName(), DebugSettings.CooldownTimeMultiplier, SpawnCheckInterval);
+	}
+	else
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[SpawnManager] Reloaded settings from Project Settings (TimeMultiplier=%.2f, CheckInterval=%.1fs)"),
+			DebugSettings.CooldownTimeMultiplier, SpawnCheckInterval);
+	}
+}
+
 // ============================================================================
 // INTERNAL
 // ============================================================================
@@ -592,11 +724,23 @@ void UMOSpawnManagerSubsystem::ProcessAllCategories()
 		return;
 	}
 
-	for (const FMOSpawnCategoryConfig& Config : CategoryConfigs)
+	// Get fresh configs from world actor (dynamic lookup each tick)
+	// This ensures we always use the latest settings from the placed actor
+	TArray<FMOSpawnCategoryConfig> CurrentConfigs = AMOSpawnSettingsActor::GetAllCategoryConfigs(this);
+
+	// If no world actor, use cached configs from project settings
+	if (CurrentConfigs.Num() == 0)
+	{
+		CurrentConfigs = CategoryConfigs;
+	}
+
+	for (const FMOSpawnCategoryConfig& Config : CurrentConfigs)
 	{
 		if (Config.bEnabled)
 		{
-			ProcessCategory(Config.Category, Config);
+			// Get the full config with SpawnableClasses merged from project settings
+			FMOSpawnCategoryConfig FullConfig = GetCategoryConfig(Config.Category);
+			ProcessCategory(Config.Category, FullConfig);
 		}
 	}
 }
@@ -869,12 +1013,9 @@ APawn* UMOSpawnManagerSubsystem::TryFallbackSpawn(EMOSpawnCategory Category, con
 
 float UMOSpawnManagerSubsystem::RollNewCooldown(const FMOSpawnCategoryConfig& Config) const
 {
-	// Get time multiplier from settings (for testing - lower = faster spawns)
-	float TimeMultiplier = 1.0f;
-	if (const UMOSpawnSettings* Settings = UMOSpawnSettings::GetSpawnSettings())
-	{
-		TimeMultiplier = FMath::Max(0.001f, Settings->CooldownTimeMultiplier);
-	}
+	// Get time multiplier from world actor or project settings (for testing - lower = faster spawns)
+	FMOSpawnDebugSettings DebugSettings = AMOSpawnSettingsActor::GetDebugSettings(this);
+	float TimeMultiplier = FMath::Max(0.001f, DebugSettings.CooldownTimeMultiplier);
 
 	// Check for first spawn faster
 	const bool bIsFirstSpawn = !HasSpawnedOnce.Contains(Config.Category) || !HasSpawnedOnce[Config.Category];

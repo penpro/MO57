@@ -223,12 +223,25 @@ void AMOCharacter::BeginPlay()
 		InteractableComponent->OnHandleInteract.BindUObject(this, &AMOCharacter::HandleRecruitmentInteraction);
 	}
 
+	// Bind to death events from anatomy
+	if (AnatomyComponent)
+	{
+		AnatomyComponent->OnInstantDeath.AddDynamic(this, &AMOCharacter::HandleInstantDeath);
+	}
+
 	Super::BeginPlay();
 }
 
 void AMOCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	StopMovementPhysiologyTracking();
+
+	// Unbind from death events
+	if (AnatomyComponent)
+	{
+		AnatomyComponent->OnInstantDeath.RemoveDynamic(this, &AMOCharacter::HandleInstantDeath);
+	}
+
 	Super::EndPlay(EndPlayReason);
 }
 
@@ -514,8 +527,8 @@ void AMOCharacter::RequestTerraformCycleTool_Implementation()
 
 bool AMOCharacter::CanBeControlled_Implementation() const
 {
-	// Check if controllable and not pending kill
-	return bCanBeControlled && !IsPendingKillPending();
+	// Check if controllable, not dead, and not pending kill
+	return bCanBeControlled && !bIsDead && !IsPendingKillPending();
 }
 
 bool AMOCharacter::CanMove_Implementation() const
@@ -989,6 +1002,103 @@ void AMOCharacter::HandleRecipeDiscovered(FName RecipeId, EMODiscoveryMethod Met
 			NotificationComp->ShowRecipeUnlockedNotification(RecipeId);
 		}
 	}
+}
+
+void AMOCharacter::HandleInstantDeath(EMOBodyPartType CausePart)
+{
+	if (bIsDead)
+	{
+		return; // Already dead
+	}
+
+	bIsDead = true;
+
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOCharacter] %s DIED! Cause: Body part %d destroyed"),
+		*GetName(), static_cast<int32>(CausePart));
+
+	// Disable input and movement
+	if (APlayerController* PC = Cast<APlayerController>(GetController()))
+	{
+		DisableInput(PC);
+	}
+
+	if (UCharacterMovementComponent* MovementComp = GetCharacterMovement())
+	{
+		MovementComp->DisableMovement();
+		MovementComp->StopMovementImmediately();
+	}
+
+	// Disable capsule collision (ragdoll mesh takes over collision)
+	if (UCapsuleComponent* Capsule = GetCapsuleComponent())
+	{
+		Capsule->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	}
+
+	// Enable ragdoll physics on mesh with proper collision
+	if (USkeletalMeshComponent* MeshComp = GetMesh())
+	{
+		// Stop all animations - both montages and the base animation blueprint
+		if (UAnimInstance* AnimInst = MeshComp->GetAnimInstance())
+		{
+			AnimInst->StopAllMontages(0.0f);
+		}
+
+		// Pause animation blueprint updates so it doesn't fight with physics
+		MeshComp->bPauseAnims = true;
+
+		// Set collision profile before enabling physics
+		MeshComp->SetCollisionProfileName(TEXT("Ragdoll"));
+		MeshComp->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+
+		// Enable physics simulation on ALL bodies, not just root
+		// SetSimulatePhysics(true) only enables root body - we need all bodies for ragdoll
+		MeshComp->SetAllBodiesSimulatePhysics(true);
+		MeshComp->SetAllBodiesPhysicsBlendWeight(1.0f);
+		MeshComp->WakeAllRigidBodies();
+	}
+
+	// Schedule ragdoll freeze after delay (allows body to settle naturally)
+	GetWorld()->GetTimerManager().SetTimer(
+		RagdollFreezeTimerHandle,
+		this,
+		&AMOCharacter::FreezeRagdoll,
+		RagdollFreezeDelay,
+		false
+	);
+
+	// TODO: Broadcast death event for game mode to handle (respawn, spectate, etc.)
+	// OnCharacterDeath.Broadcast(this, CausePart);
+}
+
+void AMOCharacter::FreezeRagdoll()
+{
+	if (bRagdollFrozen)
+	{
+		return; // Already frozen
+	}
+
+	bRagdollFrozen = true;
+
+	USkeletalMeshComponent* MeshComp = GetMesh();
+	if (!MeshComp)
+	{
+		return;
+	}
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOCharacter] %s ragdoll frozen - body is now static and interactable"),
+		*GetName());
+
+	// Ensure animations stay paused (prevents snapping back to animated pose)
+	MeshComp->bPauseAnims = true;
+
+	// Put all physics bodies to sleep - they'll stay in current position
+	// but won't actively simulate (saves performance)
+	MeshComp->PutAllRigidBodiesToSleep();
+
+	// Set collision to QueryOnly for interaction traces
+	// Keep physics enabled but sleeping so the pose is preserved
+	MeshComp->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+	MeshComp->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
 }
 
 // ============================================================================

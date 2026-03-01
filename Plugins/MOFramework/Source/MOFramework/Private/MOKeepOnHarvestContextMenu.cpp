@@ -6,6 +6,7 @@
 #include "MOKnowledgeComponent.h"
 #include "MOSkillsComponent.h"
 #include "MOInventoryComponent.h"
+#include "MORecipeDiscoveryComponent.h"
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
 #include "Components/InstancedStaticMeshComponent.h"
@@ -262,8 +263,7 @@ void UMOKeepOnHarvestContextMenu::PopulateButtons()
 		}
 
 		// Check requirements for logging
-		const bool bHasKnowledge = !Action.RequiresKnowledge() ||
-			(CachedKnowledge.IsValid() && CachedKnowledge->HasKnowledge(Action.RequiredKnowledgeId));
+		const bool bHasKnowledge = HasRequiredKnowledge(Action.RequiredKnowledgeId);
 		const bool bHasTool = !Action.RequiresTool() || !Action.bToolRequired || HasToolOfType(Action.RequiredToolType);
 		const bool bCanPerform = bHasKnowledge && bHasTool;
 
@@ -355,13 +355,58 @@ bool UMOKeepOnHarvestContextMenu::HasToolOfType(EMOToolType ToolType) const
 	return Inventory->HasToolOfType(ToolType);
 }
 
+bool UMOKeepOnHarvestContextMenu::HasRequiredKnowledge(FName KnowledgeId) const
+{
+	if (KnowledgeId.IsNone())
+	{
+		return true;
+	}
+
+	// Check KnowledgeComponent first (legacy system)
+	if (UMOKnowledgeComponent* Knowledge = CachedKnowledge.Get())
+	{
+		if (Knowledge->HasKnowledge(KnowledgeId))
+		{
+			return true;
+		}
+	}
+
+	// Check if player has this as a skill with level >= 1
+	// This bridges the gap between the unused KnowledgeComponent and the active SkillsComponent
+	if (UMOSkillsComponent* Skills = CachedSkills.Get())
+	{
+		if (Skills->HasSkillLevel(KnowledgeId, 1))
+		{
+			UE_LOG(LogMOFramework, Log, TEXT("[MOKeepOnHarvestContextMenu] Knowledge '%s' satisfied via SkillsComponent (level >= 1)"),
+				*KnowledgeId.ToString());
+			return true;
+		}
+	}
+
+	// Check if there's a recipe with this ID that's been discovered
+	// Some harvest actions may be gated by recipe discovery
+	if (AActor* Owner = GetOwningPlayerPawn())
+	{
+		if (UMORecipeDiscoveryComponent* Discovery = Owner->FindComponentByClass<UMORecipeDiscoveryComponent>())
+		{
+			if (Discovery->IsRecipeDiscovered(KnowledgeId))
+			{
+				UE_LOG(LogMOFramework, Log, TEXT("[MOKeepOnHarvestContextMenu] Knowledge '%s' satisfied via RecipeDiscoveryComponent"),
+					*KnowledgeId.ToString());
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
 bool UMOKeepOnHarvestContextMenu::CanPerformAction(const FMOResourceHarvestAction& Action) const
 {
-	// Check knowledge requirement first
+	// Check knowledge requirement first (now checks skills and recipes too)
 	if (Action.RequiresKnowledge())
 	{
-		UMOKnowledgeComponent* Knowledge = CachedKnowledge.Get();
-		if (!Knowledge || !Knowledge->HasKnowledge(Action.RequiredKnowledgeId))
+		if (!HasRequiredKnowledge(Action.RequiredKnowledgeId))
 		{
 			return false;
 		}
