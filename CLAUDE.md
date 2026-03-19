@@ -398,7 +398,11 @@ The C++ widget `UMONewGamePanel` is complete but needs a Blueprint widget:
    - Use this seed in noise/random nodes for consistent world generation
    - The global `FMath::RandInit()` is also set with this seed at game start
 
-**CommonUI Layer System Blueprint Setup (Phase 1):**
+---
+
+**UE5.7 Refactoring - Blueprint Setup Required:**
+
+**CommonUI Layer System (Phase 1):**
 The C++ infrastructure for the UI layer system is complete, but Blueprint setup is pending:
 
 1. **Create `WBP_PrimaryGameLayout`** - Parent: `UMOPrimaryGameLayout`
@@ -416,7 +420,7 @@ The C++ infrastructure for the UI layer system is complete, but Blueprint setup 
    - Call `UMOGameUIManagerSubsystem::Get()->NotifyPlayerAdded(this)` when player joins
    - This creates the layout widget for the player
 
-**EQS Resource Queries Blueprint Setup (Phase 2):**
+**EQS Resource Queries (Phase 2):**
 The C++ EQS components are complete, but Blueprint EQS query assets need creation:
 
 1. **Create `EQ_FindHarvestableItems`** - Environment Query asset
