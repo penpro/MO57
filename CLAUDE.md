@@ -398,6 +398,24 @@ The C++ widget `UMONewGamePanel` is complete but needs a Blueprint widget:
    - Use this seed in noise/random nodes for consistent world generation
    - The global `FMath::RandInit()` is also set with this seed at game start
 
+**CommonUI Layer System Blueprint Setup (Phase 1):**
+The C++ infrastructure for the UI layer system is complete, but Blueprint setup is pending:
+
+1. **Create `WBP_PrimaryGameLayout`** - Parent: `UMOPrimaryGameLayout`
+   - Add `HUDLayer` (UCommonActivatableWidgetStack) - Z-Order 0
+   - Add `GameLayer` (UCommonActivatableWidgetStack) - Z-Order 50
+   - Add `GameOverlayLayer` (UCommonActivatableWidgetStack) - Z-Order 100
+   - Add `MenuLayer` (UCommonActivatableWidgetStack) - Z-Order 150
+   - Add `ModalLayer` (UCommonActivatableWidgetStack) - Z-Order 200
+
+2. **Configure Subsystem:**
+   - Set `PrimaryLayoutClass` on `UMOGameUIManagerSubsystem` to `WBP_PrimaryGameLayout`
+   - Can be done via Project Settings or Blueprint
+
+3. **Hook into PlayerController:**
+   - Call `UMOGameUIManagerSubsystem::Get()->NotifyPlayerAdded(this)` when player joins
+   - This creates the layout widget for the player
+
 ## Planned Plugins
 - **Ultra Dynamic Sky** - Dynamic sky/atmosphere system
 - **Ultra Dynamic Weather** - Weather effects and systems
