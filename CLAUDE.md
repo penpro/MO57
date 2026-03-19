@@ -416,6 +416,33 @@ The C++ infrastructure for the UI layer system is complete, but Blueprint setup 
    - Call `UMOGameUIManagerSubsystem::Get()->NotifyPlayerAdded(this)` when player joins
    - This creates the layout widget for the player
 
+**EQS Resource Queries Blueprint Setup (Phase 2):**
+The C++ EQS components are complete, but Blueprint EQS query assets need creation:
+
+1. **Create `EQ_FindHarvestableItems`** - Environment Query asset
+   - Generator: `HarvestableItems` (custom generator)
+   - SearchRadius: 5000 (50 meters)
+   - Tests: Distance (prefer closer), PathExists (filter unreachable)
+   - Usage: Survivor AI ground resource finding (stone, fiber, sticks)
+
+2. **Create `EQ_FindHarvestTargets`** - Environment Query asset
+   - Generator: `HarvestTargets` (custom generator)
+   - RequiredTag: "GivesStick" (for wood gathering)
+   - Tests: Distance, PathExists
+   - Usage: Survivor AI tree harvesting
+
+3. **Create `EQ_FindEscapeRoute`** - Environment Query asset
+   - Generator: Points around querier (donut/circle)
+   - Context: Threat (provides threat actor from blackboard)
+   - Tests: EscapeRoute (custom test), PathExists
+   - Usage: Prey creature IsCornered() check
+
+4. **Update Behavior Trees:**
+   - Replace `FindNearestGatherResource()` calls with EQS RunQuery
+   - Replace IsCornered() placeholder with EQS query + threshold check
+
+**Note:** The underlying ForagingSubsystem still uses O(n) iteration. Future optimization will add spatial indexing.
+
 ## Planned Plugins
 - **Ultra Dynamic Sky** - Dynamic sky/atmosphere system
 - **Ultra Dynamic Weather** - Weather effects and systems
