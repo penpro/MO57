@@ -648,6 +648,31 @@ Receives video material from controller via `SetVideoMaterial()`. Press any key 
 
 ## Technical Debt & Known Issues
 
+### UE5.7 Native Refactoring Roadmap
+
+*Full audit completed March 18, 2026 - see `Docs/UE57_Refactoring_Plan.md`*
+
+The codebase was audited to identify custom implementations that could leverage UE5.7 native features:
+
+| Priority | System | Native Alternative | Impact |
+|----------|--------|-------------------|--------|
+| 1 | UI Controllers | CommonUI widget stacks, `UGameUIManagerSubsystem` | ~3000 LOC reduction |
+| 2 | AI Queries | Environment Query System (EQS) | O(n) → O(log n) |
+| 3 | Enums | Gameplay Tags (`EMOConditionType`, `EMOEquipmentSlot`, etc.) | Modding support |
+| 4 | Interaction | Smart Objects | Modern UE pattern |
+| 5 | Data Loading | Data Registry | Async loading |
+| 6 | Hustle Input | Enhanced Input Triggers | Quick win |
+| 7 | PCG Culling | Native PCG distance filtering | Remove custom node |
+| Deferred | AI Architecture | StateTree | BT works fine |
+| Deferred | Combat | Gameplay Ability System | Medical integration complex |
+
+**Correctly Custom (No Change Needed):**
+- Persistence/Identity system (native `ActorGuid` only works in dev builds)
+- Medical simulation (GAS overkill for physiological simulation)
+- Building system (no native alternative for weighted parts)
+- `FastArraySerializer` usage (already correct)
+- `TSoftObjectPtr` usage (already correct)
+
 ### Code Audit Summary
 
 The MOFramework has solid core systems but has accumulated technical debt in several areas:

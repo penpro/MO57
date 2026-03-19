@@ -184,6 +184,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Spawn Manager")
 	bool IsLocationValidForSpawn(FVector Location, float MinStructureDistance) const;
 
+	/** Check if a location is valid for spawning (not too close to other spawned entities) */
+	UFUNCTION(BlueprintPure, Category = "Spawn Manager")
+	bool IsLocationValidForSpawnNearEntities(FVector Location, float MinEntityDistance) const;
+
 	/** Get all valid spawn points for a category near the player */
 	UFUNCTION(BlueprintCallable, Category = "Spawn Manager")
 	TArray<AMOSpawnPoint*> GetValidSpawnPoints(EMOSpawnCategory Category) const;
@@ -219,6 +223,9 @@ protected:
 
 	/** Accumulated time since last spawn check */
 	float TimeSinceLastCheck = 0.0f;
+
+	/** Cached spawn check interval to avoid lookups every frame */
+	float CachedSpawnCheckInterval = 5.0f;
 
 	// ============================================================================
 	// INTERNAL

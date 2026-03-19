@@ -188,7 +188,8 @@
       "Bash(fi)",
       "Bash(for:*)",
       "Bash(do if ! grep -q \"CLAUDE: READ THIS HEADER\" \"$f\")",
-      "Bash(then echo \"$f\")"
+      "Bash(then echo \"$f\")",
+      "Bash(Sort-Object)"
     ]
   }
 }

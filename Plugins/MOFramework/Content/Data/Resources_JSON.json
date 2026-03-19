@@ -28,7 +28,7 @@
 				"YieldsItems": [
 					"Bark01"
 				],
-				"RequiredKnowledgeId": "Bark01",
+				"RequiredKnowledgeId": "HarvestBark",
 				"RequiredToolType": "None",
 				"bToolRequired": false,
 				"MinToolQuality": 0,
@@ -854,7 +854,7 @@
 					"Bark01",
 					"Bark01"
 				],
-				"RequiredKnowledgeId": "Bark01",
+				"RequiredKnowledgeId": "HarvestBark",
 				"RequiredToolType": "None",
 				"bToolRequired": false,
 				"MinToolQuality": 0,

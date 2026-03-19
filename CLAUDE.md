@@ -99,6 +99,38 @@
 - **MOViewpointUtils** - Use for viewpoint resolution and line-of-sight checks. Handles player/AI controller differences consistently.
 - **MOUIUtils** - Use for formatting (`FormatQuantityDisplay`, `FormatDurationAsText`, etc.) and widget creation. Don't duplicate formatting patterns.
 
+## UE5.7 Native Refactoring Roadmap
+
+*Full audit completed March 18, 2026 - see `Docs/UE57_Refactoring_Plan.md` and `Docs/devlog_2026-03-18.md`*
+
+### Priority Refactoring Targets
+
+| Priority | System | Native Alternative | Status |
+|----------|--------|-------------------|--------|
+| 1 | UI Controllers | CommonUI `UGameUIManagerSubsystem`, widget stacks | Planning |
+| 2 | AI Queries | Environment Query System (EQS) | Not Started |
+| 3 | Enums → Tags | Gameplay Tags | Not Started |
+| 4 | Interaction | Smart Objects | Not Started |
+| 5 | Data Loading | Data Registry | Not Started |
+| 6 | Hustle Input | Enhanced Input Triggers | Not Started |
+| 7 | PCG Culling | Native PCG distance filtering | Not Started |
+
+### Correctly Custom (DO NOT REFACTOR)
+- **Persistence/Identity** - Native `ActorGuid` only works in dev builds
+- **Medical simulation** - GAS overkill for physiological simulation
+- **Building system** - No native alternative for weighted build parts
+- **FastArraySerializer usage** - Already correct pattern
+- **TSoftObjectPtr usage** - Already correct pattern
+
+### When Adding New Features
+Before implementing custom solutions, check:
+1. **CommonUI** - For any UI widget or input handling
+2. **EQS** - For any spatial queries or target finding
+3. **Gameplay Tags** - For any enum-like categorization
+4. **Smart Objects** - For any interaction points
+5. **Data Registry** - For any DataTable caching
+6. **GAS** - Only if need prediction/replication of abilities
+
 ## Common UI Standards
 - **Always use Common UI features** for UI implementation
 - **UMOCommonButton** is the standard button class for all UI (not UButton)

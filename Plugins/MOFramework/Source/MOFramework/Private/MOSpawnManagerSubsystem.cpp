@@ -111,32 +111,36 @@ void UMOSpawnManagerSubsystem::Tick(float DeltaTime)
 {
 	TimeSinceLastCheck += DeltaTime;
 
-	// Get spawn check interval from world actor (dynamic lookup)
+	// Only do expensive lookups when the spawn check interval elapses
+	// Use cached interval, refresh it only during spawn checks
+	if (TimeSinceLastCheck < CachedSpawnCheckInterval)
+	{
+		return;
+	}
+
+	TimeSinceLastCheck = 0.0f;
+
+	// Now do the expensive lookups (only once per spawn check, not every frame)
 	AMOSpawnSettingsActor* WorldActor = AMOSpawnSettingsActor::GetSpawnSettingsActor(this);
+
+	// Early out if no settings actor - don't do any spawn work
+	if (!WorldActor)
+	{
+		// No settings actor in this level - skip all spawn processing
+		// Check again in 5 seconds
+		CachedSpawnCheckInterval = 5.0f;
+		return;
+	}
+
 	FMOSpawnGlobalSettings GlobalSettings = AMOSpawnSettingsActor::GetGlobalSettings(this);
 	FMOSpawnDebugSettings DebugSettings = AMOSpawnSettingsActor::GetDebugSettings(this);
-	float CurrentSpawnCheckInterval = GlobalSettings.SpawnCheckInterval;
 
-	// Debug logging every 10 seconds
-	static float DebugLogTimer = 0.f;
-	DebugLogTimer += DeltaTime;
-	if (DebugLogTimer >= 10.f)
-	{
-		DebugLogTimer = 0.f;
-		UE_LOG(LogMOFramework, Warning, TEXT("[SpawnManager] WorldActor: %s, CheckInterval: %.1f, TimeMultiplier: %.2f"),
-			WorldActor ? *WorldActor->GetName() : TEXT("NONE"),
-			CurrentSpawnCheckInterval,
-			DebugSettings.CooldownTimeMultiplier);
-	}
+	// Update cached interval for next tick
+	CachedSpawnCheckInterval = GlobalSettings.SpawnCheckInterval;
 
-	if (TimeSinceLastCheck >= CurrentSpawnCheckInterval)
-	{
-		TimeSinceLastCheck = 0.0f;
-
-		CleanupDeadEntities();
-		UpdatePersistence();
-		ProcessAllCategories();
-	}
+	CleanupDeadEntities();
+	UpdatePersistence();
+	ProcessAllCategories();
 }
 
 TStatId UMOSpawnManagerSubsystem::GetStatId() const
@@ -161,6 +165,7 @@ void UMOSpawnManagerSubsystem::InitializeDefaultConfigs()
 	SurvivorPersistenceHours = GlobalSettings.SurvivorPersistenceHours;
 	SpawnCheckInterval = GlobalSettings.SpawnCheckInterval;
 	MaxSpawnPointQueryDistance = GlobalSettings.MaxSpawnPointQueryDistance;
+	CachedSpawnCheckInterval = GlobalSettings.SpawnCheckInterval;
 
 	// Check if we got configs (either from world actor or Project Settings fallback)
 	if (CategoryConfigs.Num() > 0)
@@ -572,12 +577,38 @@ float UMOSpawnManagerSubsystem::GetCategoryCooldownRemaining(EMOSpawnCategory Ca
 
 	if (!LastSpawn || !Cooldown)
 	{
+		// First spawn - return 0 to allow spawn, but ProcessCategory will set initial staggered cooldown
 		return 0.0f;
 	}
 
 	const FTimespan TimeSinceSpawn = FDateTime::Now() - *LastSpawn;
 	const float Remaining = *Cooldown - TimeSinceSpawn.GetTotalSeconds();
 	return FMath::Max(0.0f, Remaining);
+}
+
+bool UMOSpawnManagerSubsystem::IsLocationValidForSpawnNearEntities(FVector Location, float MinEntityDistance) const
+{
+	if (MinEntityDistance <= 0.0f)
+	{
+		return true;
+	}
+
+	// Check distance from all recently spawned entities
+	for (const FMOSpawnedEntityRecord& Record : SpawnedEntities)
+	{
+		if (!Record.IsValid())
+		{
+			continue;
+		}
+
+		const float Distance = FVector::Dist(Location, Record.SpawnedPawn->GetActorLocation());
+		if (Distance < MinEntityDistance)
+		{
+			return false;
+		}
+	}
+
+	return true;
 }
 
 bool UMOSpawnManagerSubsystem::IsLocationValidForSpawn(FVector Location, float MinStructureDistance) const
@@ -698,6 +729,7 @@ void UMOSpawnManagerSubsystem::ReloadSettings()
 	SurvivorPersistenceHours = GlobalSettings.SurvivorPersistenceHours;
 	SpawnCheckInterval = GlobalSettings.SpawnCheckInterval;
 	MaxSpawnPointQueryDistance = GlobalSettings.MaxSpawnPointQueryDistance;
+	CachedSpawnCheckInterval = GlobalSettings.SpawnCheckInterval;
 
 	// Check if we have a world actor
 	AMOSpawnSettingsActor* WorldActor = AMOSpawnSettingsActor::GetSpawnSettingsActor(this);
@@ -761,6 +793,42 @@ void UMOSpawnManagerSubsystem::ProcessCategory(EMOSpawnCategory Category, const 
 		return;
 	}
 
+	// Check if this is a first spawn (no cooldown set yet)
+	const bool bIsFirstSpawn = !LastSpawnTimes.Contains(Category);
+
+	if (bIsFirstSpawn)
+	{
+		// First spawn - set an initial staggered cooldown instead of spawning all categories at once
+		// This prevents everything from spawning on top of each other at game start
+		// Use bFirstSpawnFaster config to determine if we use a shorter initial cooldown
+		FMOSpawnDebugSettings DebugSettings = AMOSpawnSettingsActor::GetDebugSettings(this);
+		float TimeMultiplier = FMath::Max(0.001f, DebugSettings.CooldownTimeMultiplier);
+
+		// Stagger based on category enum value to spread out initial spawns
+		float BaseStagger = 5.0f + (static_cast<int32>(Category) * 10.0f);  // 5s, 15s, 25s, 35s per category
+
+		float InitialCooldown;
+		if (Config.bFirstSpawnFaster)
+		{
+			// Use the faster first spawn cooldown, but still stagger
+			InitialCooldown = FMath::FRandRange(BaseStagger, BaseStagger + Config.FirstSpawnMaxCooldown * 0.1f);
+		}
+		else
+		{
+			// Use a portion of the normal cooldown for initial spawn
+			InitialCooldown = FMath::FRandRange(BaseStagger, BaseStagger + Config.MinCooldownSeconds * 0.25f);
+		}
+
+		InitialCooldown *= TimeMultiplier;
+
+		LastSpawnTimes.Add(Category, FDateTime::Now());
+		CurrentCooldowns.Add(Category, InitialCooldown);
+
+		UE_LOG(LogMOFramework, Log, TEXT("[SpawnManager] Category %d first spawn - setting initial staggered cooldown: %.1fs"),
+			(int32)Category, InitialCooldown);
+		return;
+	}
+
 	// Check if cooldown has elapsed
 	const float RemainingCooldown = GetCategoryCooldownRemaining(Category);
 	if (RemainingCooldown > 0.0f)
@@ -794,8 +862,6 @@ void UMOSpawnManagerSubsystem::ProcessCategory(EMOSpawnCategory Category, const 
 	{
 		// Update spawn time and roll new cooldown
 		LastSpawnTimes.Add(Category, FDateTime::Now());
-
-		const bool bIsFirstSpawn = !HasSpawnedOnce.Contains(Category) || !HasSpawnedOnce[Category];
 		CurrentCooldowns.Add(Category, RollNewCooldown(Config));
 		HasSpawnedOnce.Add(Category, true);
 
@@ -863,8 +929,15 @@ APawn* UMOSpawnManagerSubsystem::SpawnAtPoint(AMOSpawnPoint* Point, const FMOSpa
 	// Get spawn location
 	FVector SpawnLocation = Point->GetRandomSpawnLocation();
 
-	// Verify location is still valid
+	// Verify location is still valid (not too close to structures)
 	if (!IsLocationValidForSpawn(SpawnLocation, Config.MinDistanceFromStructure))
+	{
+		return nullptr;
+	}
+
+	// Verify location is not too close to other spawned entities
+	const float MinEntitySeparation = FMath::Max(200.0f, Config.MinSpawnDistance * 0.5f);
+	if (!IsLocationValidForSpawnNearEntities(SpawnLocation, MinEntitySeparation))
 	{
 		return nullptr;
 	}
@@ -968,6 +1041,14 @@ APawn* UMOSpawnManagerSubsystem::TryFallbackSpawn(EMOSpawnCategory Category, con
 
 		// Check structure avoidance
 		if (Config.MinDistanceFromStructure > 0.0f && !IsLocationValidForSpawn(SpawnLocation, Config.MinDistanceFromStructure))
+		{
+			continue;
+		}
+
+		// Check distance from other spawned entities (prevent spawning on top of each other)
+		// Use half of MinSpawnDistance as the minimum separation between entities
+		const float MinEntitySeparation = FMath::Max(200.0f, Config.MinSpawnDistance * 0.5f);
+		if (!IsLocationValidForSpawnNearEntities(SpawnLocation, MinEntitySeparation))
 		{
 			continue;
 		}
