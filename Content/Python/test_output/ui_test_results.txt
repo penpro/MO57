@@ -1,0 +1,99 @@
+================================================================================
+MO Framework UI Test Results
+Generated: 2026.03.31-15.01.56
+================================================================================
+
+SUMMARY: 20/28 tests passed (71.4%)
+Total Duration: 134.7ms
+
+FAILED TESTS:
+--------------------------------------------------------------------------------
+[FAIL] Building.CloseEscape
+       Error: Building still open after Escape
+       > Testing: Escape closes building
+       > Opening menu: Building
+       > Triggering back action via CommonUI
+       > Back action via ActionRouter: Not handled
+
+[FAIL] Crafting.CloseEscape
+       Error: Crafting still open after Escape
+       > Testing: Escape closes crafting
+       > Opening menu: Crafting
+       > Triggering back action via CommonUI
+       > Back action via ActionRouter: Not handled
+
+[FAIL] InGame.CloseEscape
+       Error: InGame still open after Escape
+       > Testing: Escape closes in-game menu
+       > Opening menu: InGame
+       > Triggering back action via CommonUI
+       > Back action via ActionRouter: Not handled
+
+[FAIL] Inventory.CloseEscape
+       Error: Inventory still open after Escape
+       > Testing: Escape closes inventory
+       > Opening menu: Inventory
+       > Triggering back action via CommonUI
+       > Back action via ActionRouter: Not handled
+
+[FAIL] Inventory.CloseTab
+       Error: Inventory still open after Tab
+       > Testing: Tab closes inventory
+       > Opening menu: Inventory
+       > Tab triggers same as Escape (back action)
+       > Triggering back action via CommonUI
+       > Back action via ActionRouter: Not handled
+
+[FAIL] Inventory.FocusAfterButtonClick
+       Error: Menu didn't close - bIsBackHandler may not be working
+       > Testing: Close still works after button interaction
+       > Opening menu: Inventory
+       > Simulating Escape after menu open (testing bIsBackHandler pattern)
+       > Triggering back action via CommonUI
+       > Back action via ActionRouter: Not handled
+
+[FAIL] Skills.CloseEscape
+       Error: Skills still open after Escape
+       > Testing: Escape closes skills
+       > Opening menu: Skills
+       > Triggering back action via CommonUI
+       > Back action via ActionRouter: Not handled
+
+[FAIL] Status.CloseEscape
+       Error: Status still open after Escape
+       > Testing: Escape closes status
+       > Opening menu: Status
+       > Triggering back action via CommonUI
+       > Back action via ActionRouter: Not handled
+
+
+ALL TEST RESULTS:
+--------------------------------------------------------------------------------
+[FAIL] Building.CloseEscape (4.2ms)
+[PASS] Building.CloseToggle (3.1ms)
+[PASS] Building.InputState (3.0ms)
+[PASS] Building.Open (2.5ms)
+[FAIL] Crafting.CloseEscape (2.3ms)
+[PASS] Crafting.CloseToggle (1.7ms)
+[PASS] Crafting.InputState (1.5ms)
+[PASS] Crafting.Open (1.5ms)
+[PASS] Focus.RestoredAfterMenuClose (5.0ms)
+[FAIL] InGame.CloseEscape (17.2ms)
+[PASS] InGame.InputBlocking (17.0ms)
+[PASS] InGame.Open (17.2ms)
+[PASS] InputState.CursorHiddenWhenNoMenus (0.0ms)
+[PASS] InputState.MovementRestoredAfterAllMenusClosed (3.0ms)
+[FAIL] Inventory.CloseEscape (2.6ms)
+[FAIL] Inventory.CloseTab (2.5ms)
+[PASS] Inventory.CloseToggle (2.8ms)
+[FAIL] Inventory.FocusAfterButtonClick (2.6ms)
+[PASS] Inventory.InputState (2.6ms)
+[PASS] Inventory.Open (2.7ms)
+[PASS] MenuSwitch.CraftingToBuilding (4.5ms)
+[PASS] MenuSwitch.InventoryToCrafting (4.4ms)
+[PASS] Nested.ContextMenuEscapeClosesOnlyContext (0.0ms)
+[PASS] Skills.CategoryCycling (5.9ms)
+[FAIL] Skills.CloseEscape (5.1ms)
+[PASS] Skills.Open (5.2ms)
+[FAIL] Status.CloseEscape (4.2ms)
+[PASS] Status.Open (3.7ms)

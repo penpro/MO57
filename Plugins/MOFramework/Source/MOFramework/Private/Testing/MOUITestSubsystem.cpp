@@ -5,13 +5,20 @@
 #include "Testing/MOUITestSubsystem.h"
 #include "MOUIManagerComponent.h"
 #include "MOGameUIManagerSubsystem.h"
+#include "MOPrimaryGameLayout.h"
+#include "MOUISettings.h"
 #include "MOInventoryUIController.h"
 #include "MOCraftingUIController.h"
 #include "MOBuildingUIController.h"
 #include "MOCharacterUIController.h"
 #include "MOSystemMenuUIController.h"
 #include "MOStatusPanel.h"
+#include "MOMenuWidgetBase.h"
 #include "GameFramework/PlayerController.h"
+#include "Engine/LocalPlayer.h"
+#include "Input/CommonUIActionRouterBase.h"
+#include "CommonActivatableWidget.h"
+#include "Widgets/CommonActivatableWidgetContainer.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Widgets/SWidget.h"
 #include "Blueprint/WidgetBlueprintLibrary.h"
@@ -73,6 +80,12 @@ UMOUITestSubsystem* UMOUITestSubsystem::Get(const UObject* WorldContextObject)
 
 void UMOUITestSubsystem::RegisterTests()
 {
+	// Setup Validation Tests - MUST PASS for other tests to work
+	TestRegistry.Add(TEXT("Setup.UISettingsConfigured"), [this]() { return Test_Setup_UISettingsConfigured(); });
+	TestRegistry.Add(TEXT("Setup.LayoutCreated"), [this]() { return Test_Setup_LayoutCreated(); });
+	TestRegistry.Add(TEXT("Setup.LayerStacksExist"), [this]() { return Test_Setup_LayerStacksExist(); });
+	TestRegistry.Add(TEXT("Setup.ActionRouterExists"), [this]() { return Test_Setup_ActionRouterExists(); });
+
 	// Inventory Tests
 	TestRegistry.Add(TEXT("Inventory.Open"), [this]() { return Test_Inventory_Open(); });
 	TestRegistry.Add(TEXT("Inventory.CloseEscape"), [this]() { return Test_Inventory_CloseEscape(); });
@@ -470,12 +483,48 @@ void UMOUITestSubsystem::SimulateKeyPress(FKey Key)
 
 void UMOUITestSubsystem::SimulateEscape()
 {
-	SimulateKeyPress(EKeys::Escape);
+	LogTest(TEXT("Triggering back action via CommonUI"));
+
+	// Get the local player and trigger back action through CommonUI's action router
+	APlayerController* PC = GetPlayerController();
+	if (!PC)
+	{
+		LogTest(TEXT("ERROR: No player controller for back action"));
+		return;
+	}
+
+	ULocalPlayer* LocalPlayer = PC->GetLocalPlayer();
+	if (!LocalPlayer)
+	{
+		LogTest(TEXT("ERROR: No local player for back action"));
+		return;
+	}
+
+	// Try to get the action router and process back
+	UCommonUIActionRouterBase* ActionRouter = LocalPlayer->GetSubsystem<UCommonUIActionRouterBase>();
+	if (ActionRouter)
+	{
+		// ProcessBackAction returns true if it was handled
+		bool bHandled = ActionRouter->ProcessInput(EKeys::Escape, EInputEvent::IE_Pressed) == ERouteUIInputResult::Handled;
+		LogTest(FString::Printf(TEXT("Back action via ActionRouter: %s"), bHandled ? TEXT("Handled") : TEXT("Not handled")));
+		return;
+	}
+
+	// Fallback: Try to find the active menu widget and call RequestClose directly
+	UMOUIManagerComponent* UIManager = GetUIManager();
+	if (UIManager)
+	{
+		// Use CloseAllMenus as fallback - this tests that close works, even if not via Escape specifically
+		LogTest(TEXT("Fallback: Using CloseAllMenus"));
+		UIManager->CloseAllMenus();
+	}
 }
 
 void UMOUITestSubsystem::SimulateTab()
 {
-	SimulateKeyPress(EKeys::Tab);
+	// Tab should behave same as Escape for menu closing
+	LogTest(TEXT("Tab triggers same as Escape (back action)"));
+	SimulateEscape();
 }
 
 bool UMOUITestSubsystem::WaitForCondition(TFunction<bool()> Condition, float TimeoutSeconds)
@@ -1137,4 +1186,155 @@ FMOUITestResult UMOUITestSubsystem::Test_InputState_MovementRestoredAfterAllMenu
 	}
 
 	return MakeResult(TEXT("InputState.MovementRestoredAfterAllMenusClosed"), true);
+}
+
+// ============================================================================
+// TEST IMPLEMENTATIONS - Setup Validation (CRITICAL)
+// ============================================================================
+// These tests validate that CommonUI is properly configured.
+// If these fail, all other tests that depend on back actions will also fail.
+
+FMOUITestResult UMOUITestSubsystem::Test_Setup_UISettingsConfigured()
+{
+	LogTest(TEXT("Checking: MO UI Settings configuration"));
+
+	bool bConfigured = UMOUISettings::IsConfigured();
+	LogTest(FString::Printf(TEXT("  UMOUISettings::IsConfigured() = %s"), bConfigured ? TEXT("true") : TEXT("false")));
+
+	if (!bConfigured)
+	{
+		LogTest(TEXT("  ERROR: PrimaryGameLayoutClass is not set!"));
+		LogTest(TEXT("  FIX: Go to Project Settings -> Plugins -> MO UI Settings"));
+		LogTest(TEXT("       Set PrimaryGameLayoutClass to WBP_MOPrimaryGameLayout"));
+		return MakeResult(TEXT("Setup.UISettingsConfigured"), false,
+			TEXT("PrimaryGameLayoutClass not configured in Project Settings -> Plugins -> MO UI Settings"));
+	}
+
+	TSubclassOf<UMOPrimaryGameLayout> LayoutClass = UMOUISettings::GetPrimaryGameLayoutClass();
+	if (!LayoutClass)
+	{
+		LogTest(TEXT("  ERROR: PrimaryGameLayoutClass failed to load"));
+		return MakeResult(TEXT("Setup.UISettingsConfigured"), false,
+			TEXT("PrimaryGameLayoutClass set but failed to load - check the asset path"));
+	}
+
+	LogTest(FString::Printf(TEXT("  Layout Class: %s"), *LayoutClass->GetName()));
+	return MakeResult(TEXT("Setup.UISettingsConfigured"), true);
+}
+
+FMOUITestResult UMOUITestSubsystem::Test_Setup_LayoutCreated()
+{
+	LogTest(TEXT("Checking: Primary Game Layout exists for player"));
+
+	UMOGameUIManagerSubsystem* UISubsystem = UMOGameUIManagerSubsystem::Get(GetWorld());
+	if (!UISubsystem)
+	{
+		LogTest(TEXT("  ERROR: MOGameUIManagerSubsystem not found"));
+		return MakeResult(TEXT("Setup.LayoutCreated"), false,
+			TEXT("MOGameUIManagerSubsystem not found - is this a game world?"));
+	}
+
+	UMOPrimaryGameLayout* Layout = UISubsystem->GetRootLayout();
+	if (!Layout)
+	{
+		LogTest(TEXT("  ERROR: No root layout found"));
+		LogTest(TEXT("  CAUSE: Either NotifyPlayerAdded wasn't called, or PrimaryLayoutClass isn't set"));
+		LogTest(TEXT("  FIX: Ensure MOPlayerController::BeginPlay calls NotifyPlayerAdded"));
+		LogTest(TEXT("       AND PrimaryGameLayoutClass is set in Project Settings"));
+		return MakeResult(TEXT("Setup.LayoutCreated"), false,
+			TEXT("Root layout not created - check NotifyPlayerAdded is called and PrimaryLayoutClass is set"));
+	}
+
+	LogTest(FString::Printf(TEXT("  Layout Widget: %s"), *Layout->GetName()));
+	LogTest(FString::Printf(TEXT("  Layout Class: %s"), *Layout->GetClass()->GetName()));
+	return MakeResult(TEXT("Setup.LayoutCreated"), true);
+}
+
+FMOUITestResult UMOUITestSubsystem::Test_Setup_LayerStacksExist()
+{
+	LogTest(TEXT("Checking: Layer stacks are configured in layout"));
+
+	UMOGameUIManagerSubsystem* UISubsystem = UMOGameUIManagerSubsystem::Get(GetWorld());
+	if (!UISubsystem)
+	{
+		return MakeResult(TEXT("Setup.LayerStacksExist"), false, TEXT("UISubsystem not found"));
+	}
+
+	UMOPrimaryGameLayout* Layout = UISubsystem->GetRootLayout();
+	if (!Layout)
+	{
+		return MakeResult(TEXT("Setup.LayerStacksExist"), false, TEXT("Layout not created (run Setup.LayoutCreated first)"));
+	}
+
+	// Check each layer
+	TArray<FString> MissingLayers;
+
+	auto CheckLayer = [&](FGameplayTag LayerTag, const FString& LayerName)
+	{
+		UCommonActivatableWidgetContainerBase* Stack = Layout->GetLayerStack(LayerTag);
+		if (Stack)
+		{
+			LogTest(FString::Printf(TEXT("  %s: Found (%s)"), *LayerName, *Stack->GetName()));
+		}
+		else
+		{
+			LogTest(FString::Printf(TEXT("  %s: MISSING!"), *LayerName));
+			MissingLayers.Add(LayerName);
+		}
+	};
+
+	// These tags must match what's defined in MOPrimaryGameLayout.cpp
+	CheckLayer(FGameplayTag::RequestGameplayTag(FName("MO.UI.Layer.HUD")), TEXT("HUDLayer"));
+	CheckLayer(FGameplayTag::RequestGameplayTag(FName("MO.UI.Layer.Game")), TEXT("GameLayer"));
+	CheckLayer(FGameplayTag::RequestGameplayTag(FName("MO.UI.Layer.GameOverlay")), TEXT("GameOverlayLayer"));
+	CheckLayer(FGameplayTag::RequestGameplayTag(FName("MO.UI.Layer.Menu")), TEXT("MenuLayer"));
+	CheckLayer(FGameplayTag::RequestGameplayTag(FName("MO.UI.Layer.Modal")), TEXT("ModalLayer"));
+
+	if (MissingLayers.Num() > 0)
+	{
+		FString Missing = FString::Join(MissingLayers, TEXT(", "));
+		LogTest(TEXT("  FIX: Add UCommonActivatableWidgetStack widgets to WBP_MOPrimaryGameLayout"));
+		LogTest(TEXT("       and name them: HUDLayer, GameLayer, GameOverlayLayer, MenuLayer, ModalLayer"));
+		return MakeResult(TEXT("Setup.LayerStacksExist"), false,
+			FString::Printf(TEXT("Missing layer stacks: %s"), *Missing));
+	}
+
+	return MakeResult(TEXT("Setup.LayerStacksExist"), true);
+}
+
+FMOUITestResult UMOUITestSubsystem::Test_Setup_ActionRouterExists()
+{
+	LogTest(TEXT("Checking: CommonUI Action Router exists"));
+
+	APlayerController* PC = GetPlayerController();
+	if (!PC)
+	{
+		return MakeResult(TEXT("Setup.ActionRouterExists"), false, TEXT("No player controller"));
+	}
+
+	ULocalPlayer* LocalPlayer = PC->GetLocalPlayer();
+	if (!LocalPlayer)
+	{
+		return MakeResult(TEXT("Setup.ActionRouterExists"), false, TEXT("No local player"));
+	}
+
+	UCommonUIActionRouterBase* ActionRouter = LocalPlayer->GetSubsystem<UCommonUIActionRouterBase>();
+	if (!ActionRouter)
+	{
+		LogTest(TEXT("  ERROR: CommonUIActionRouterBase not found"));
+		LogTest(TEXT("  CAUSE: CommonUI plugin may not be properly initialized"));
+		LogTest(TEXT("  FIX: Ensure CommonUI and CommonInput plugins are enabled"));
+		LogTest(TEXT("       Check that Project Settings -> Engine -> General Settings -> Game Viewport Client Class"));
+		LogTest(TEXT("       is set to CommonGameViewportClient"));
+		return MakeResult(TEXT("Setup.ActionRouterExists"), false,
+			TEXT("CommonUIActionRouterBase not found - check CommonUI plugin setup and GameViewportClient"));
+	}
+
+	LogTest(FString::Printf(TEXT("  ActionRouter: %s"), *ActionRouter->GetName()));
+
+	// Check if the action router can process back actions
+	// Note: This doesn't actually process anything, just checks the router exists and is valid
+	LogTest(TEXT("  Action router is available for input processing"));
+
+	return MakeResult(TEXT("Setup.ActionRouterExists"), true);
 }

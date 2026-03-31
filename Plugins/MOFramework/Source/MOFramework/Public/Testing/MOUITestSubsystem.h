@@ -211,6 +211,12 @@ private:
 	// TEST IMPLEMENTATIONS
 	// =========================================================================
 
+	// Setup Validation Tests - CRITICAL: Must pass for other tests to work
+	FMOUITestResult Test_Setup_UISettingsConfigured();
+	FMOUITestResult Test_Setup_LayoutCreated();
+	FMOUITestResult Test_Setup_LayerStacksExist();
+	FMOUITestResult Test_Setup_ActionRouterExists();
+
 	// Inventory Tests
 	FMOUITestResult Test_Inventory_Open();
 	FMOUITestResult Test_Inventory_CloseEscape();
