@@ -13,12 +13,16 @@
 #include "HAL/FileManager.h"
 #include "IPythonScriptPlugin.h"
 #include "Modules/ModuleManager.h"
+#include "Editor.h"
+#include "Engine/World.h"
+#include "GameFramework/PlayerController.h"
 
 #define LOCTEXT_NAMESPACE "FMOFrameworkEditorModule"
 
 // Python script paths
 static const FString PythonScriptDir = TEXT("D:/UEProjects/MO57/Content/Python/");
 static const FString AuditOutputDir = TEXT("D:/UEProjects/MO57/Content/Python/audit_output/");
+static const FString TestOutputDir = TEXT("D:/UEProjects/MO57/Content/Python/test_output/");
 
 namespace MOToolboxHelpers
 {
@@ -67,6 +71,55 @@ namespace MOToolboxHelpers
 		}
 
 		FPlatformProcess::ExploreFolder(*OutputPath);
+	}
+
+	void RunUITests(const FString& TestPattern)
+	{
+		// Check if PIE is running
+		UWorld* PIEWorld = nullptr;
+		for (const FWorldContext& Context : GEngine->GetWorldContexts())
+		{
+			if (Context.WorldType == EWorldType::PIE && Context.World())
+			{
+				PIEWorld = Context.World();
+				break;
+			}
+		}
+
+		if (!PIEWorld)
+		{
+			FMessageDialog::Open(EAppMsgType::Ok,
+				LOCTEXT("PIERequired", "UI Tests require Play In Editor (PIE) to be running.\n\nPlease start PIE first, then run the tests."));
+			return;
+		}
+
+		// Execute console command in PIE world
+		FString Command = TestPattern.IsEmpty()
+			? TEXT("MO.UI.RunAllTests")
+			: FString::Printf(TEXT("MO.UI.RunTests %s"), *TestPattern);
+
+		GEngine->Exec(PIEWorld, *Command);
+
+		FMessageDialog::Open(EAppMsgType::Ok,
+			FText::Format(LOCTEXT("TestsStarted", "UI Tests started!\n\nCheck Output Log for results.\nResults file: {0}"),
+				FText::FromString(TestOutputDir + TEXT("ui_test_results.txt"))));
+	}
+
+	void OpenTestResultsFile()
+	{
+		FString ResultsPath = TestOutputDir + TEXT("ui_test_results.txt");
+		ResultsPath.ReplaceInline(TEXT("/"), TEXT("\\"));
+
+		if (FPaths::FileExists(ResultsPath))
+		{
+			FPlatformProcess::LaunchFileInDefaultExternalApplication(*ResultsPath);
+		}
+		else
+		{
+			FMessageDialog::Open(EAppMsgType::Ok,
+				FText::Format(LOCTEXT("NoResultsFile", "No test results file found at:\n{0}\n\nRun tests first to generate results."),
+					FText::FromString(ResultsPath)));
+		}
 	}
 }
 
@@ -136,6 +189,43 @@ void FMOFrameworkEditorModule::StartupModule()
 		FMOToolboxCommands::Get().OpenAuditOutput,
 		FExecuteAction::CreateLambda([]() {
 			MOToolboxHelpers::OpenAuditOutputFolder();
+		}));
+
+	// UI Testing commands
+	PluginCommands->MapAction(
+		FMOToolboxCommands::Get().RunAllUITests,
+		FExecuteAction::CreateLambda([]() {
+			MOToolboxHelpers::RunUITests(TEXT(""));
+		}));
+
+	PluginCommands->MapAction(
+		FMOToolboxCommands::Get().RunInventoryTests,
+		FExecuteAction::CreateLambda([]() {
+			MOToolboxHelpers::RunUITests(TEXT("Inventory.*"));
+		}));
+
+	PluginCommands->MapAction(
+		FMOToolboxCommands::Get().RunCraftingTests,
+		FExecuteAction::CreateLambda([]() {
+			MOToolboxHelpers::RunUITests(TEXT("Crafting.*"));
+		}));
+
+	PluginCommands->MapAction(
+		FMOToolboxCommands::Get().RunBuildingTests,
+		FExecuteAction::CreateLambda([]() {
+			MOToolboxHelpers::RunUITests(TEXT("Building.*"));
+		}));
+
+	PluginCommands->MapAction(
+		FMOToolboxCommands::Get().RunInputStateTests,
+		FExecuteAction::CreateLambda([]() {
+			MOToolboxHelpers::RunUITests(TEXT("InputState.*"));
+		}));
+
+	PluginCommands->MapAction(
+		FMOToolboxCommands::Get().OpenTestResults,
+		FExecuteAction::CreateLambda([]() {
+			MOToolboxHelpers::OpenTestResultsFile();
 		}));
 
 	// Register menus after engine init
@@ -217,6 +307,37 @@ void FMOFrameworkEditorModule::RegisterMenus()
 						PluginCommands);
 				}
 
+				// UI Testing section
+				{
+					FToolMenuSection& TestSection = SubMenu->AddSection("UITesting", LOCTEXT("UITestingSection", "UI Testing"));
+
+					TestSection.AddMenuEntryWithCommandList(
+						FMOToolboxCommands::Get().RunAllUITests,
+						PluginCommands);
+
+					TestSection.AddMenuEntryWithCommandList(
+						FMOToolboxCommands::Get().RunInventoryTests,
+						PluginCommands);
+
+					TestSection.AddMenuEntryWithCommandList(
+						FMOToolboxCommands::Get().RunCraftingTests,
+						PluginCommands);
+
+					TestSection.AddMenuEntryWithCommandList(
+						FMOToolboxCommands::Get().RunBuildingTests,
+						PluginCommands);
+
+					TestSection.AddMenuEntryWithCommandList(
+						FMOToolboxCommands::Get().RunInputStateTests,
+						PluginCommands);
+
+					TestSection.AddSeparator("TestResultsSeparator");
+
+					TestSection.AddMenuEntryWithCommandList(
+						FMOToolboxCommands::Get().OpenTestResults,
+						PluginCommands);
+				}
+
 				// Utilities section
 				{
 					FToolMenuSection& UtilSection = SubMenu->AddSection("Utilities", LOCTEXT("UtilitiesSection", "Utilities"));
@@ -260,6 +381,16 @@ void FMOFrameworkEditorModule::RegisterToolbar()
 			MenuBuilder.AddMenuEntry(FMOToolboxCommands::Get().ApplyWidgetRenames);
 			MenuBuilder.AddSeparator();
 			MenuBuilder.AddMenuEntry(FMOToolboxCommands::Get().FixAllIssues);
+			MenuBuilder.EndSection();
+
+			MenuBuilder.BeginSection("UITesting", LOCTEXT("UITestingSection", "UI Testing"));
+			MenuBuilder.AddMenuEntry(FMOToolboxCommands::Get().RunAllUITests);
+			MenuBuilder.AddMenuEntry(FMOToolboxCommands::Get().RunInventoryTests);
+			MenuBuilder.AddMenuEntry(FMOToolboxCommands::Get().RunCraftingTests);
+			MenuBuilder.AddMenuEntry(FMOToolboxCommands::Get().RunBuildingTests);
+			MenuBuilder.AddMenuEntry(FMOToolboxCommands::Get().RunInputStateTests);
+			MenuBuilder.AddSeparator();
+			MenuBuilder.AddMenuEntry(FMOToolboxCommands::Get().OpenTestResults);
 			MenuBuilder.EndSection();
 
 			MenuBuilder.BeginSection("Utilities", LOCTEXT("UtilitiesSection", "Utilities"));

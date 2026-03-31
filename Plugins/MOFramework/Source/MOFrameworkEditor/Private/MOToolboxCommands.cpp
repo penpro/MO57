@@ -77,6 +77,43 @@ void FMOToolboxCommands::RegisterCommands()
 		"Run all automatic fixes (variables, renames)",
 		EUserInterfaceActionType::Button,
 		FInputChord());
+
+	// UI Testing commands
+	UI_COMMAND(RunAllUITests,
+		"Run All UI Tests",
+		"Run the complete UI test suite (requires PIE)",
+		EUserInterfaceActionType::Button,
+		FInputChord());
+
+	UI_COMMAND(RunInventoryTests,
+		"Run Inventory Tests",
+		"Run only inventory-related UI tests",
+		EUserInterfaceActionType::Button,
+		FInputChord());
+
+	UI_COMMAND(RunCraftingTests,
+		"Run Crafting Tests",
+		"Run only crafting-related UI tests",
+		EUserInterfaceActionType::Button,
+		FInputChord());
+
+	UI_COMMAND(RunBuildingTests,
+		"Run Building Tests",
+		"Run only building-related UI tests",
+		EUserInterfaceActionType::Button,
+		FInputChord());
+
+	UI_COMMAND(RunInputStateTests,
+		"Run Input State Tests",
+		"Run cursor/input blocking tests",
+		EUserInterfaceActionType::Button,
+		FInputChord());
+
+	UI_COMMAND(OpenTestResults,
+		"Open Test Results",
+		"Open the UI test results file",
+		EUserInterfaceActionType::Button,
+		FInputChord());
 }
 
 #undef LOCTEXT_NAMESPACE

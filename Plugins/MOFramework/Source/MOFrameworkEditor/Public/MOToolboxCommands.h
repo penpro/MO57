@@ -44,4 +44,12 @@ public:
 	TSharedPtr<FUICommandInfo> OpenAuditOutput;
 	TSharedPtr<FUICommandInfo> OpenToolboxPanel;
 	TSharedPtr<FUICommandInfo> FixAllIssues;
+
+	// UI Testing commands
+	TSharedPtr<FUICommandInfo> RunAllUITests;
+	TSharedPtr<FUICommandInfo> RunInventoryTests;
+	TSharedPtr<FUICommandInfo> RunCraftingTests;
+	TSharedPtr<FUICommandInfo> RunBuildingTests;
+	TSharedPtr<FUICommandInfo> RunInputStateTests;
+	TSharedPtr<FUICommandInfo> OpenTestResults;
 };
