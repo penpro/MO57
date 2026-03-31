@@ -101,7 +101,7 @@
 
 ## UE5.7 Native Refactoring Roadmap
 
-*Full audit completed March 18, 2026 - see `Docs/UE57_Refactoring_Plan.md` and `Docs/devlog_2026-03-18.md`*
+*Full audit completed March 18, 2026 - see `Docs/MO57_Master_Plan.md` for consolidated planning*
 
 ### Priority Refactoring Targets
 
@@ -159,6 +159,50 @@ Before implementing custom solutions, check:
 | `UMOCraftingSubsystem` | World | Recipe validation, crafting operations |
 | `UMOPossessionSubsystem` | World | Pawn possession management |
 | `UMOMedicalSubsystem` | GameInstance | DataTable lookups for medical definitions |
+| `UMOColonyManagerSubsystem` | World | Colony alerts, character enumeration, task assignment |
+| `UMOGameUIManagerSubsystem` | World | CommonUI layer management, widget stacks |
+
+### Colony Management System (Planned)
+
+*Full design in `Docs/MO57_Colony_Management_Design.docx`, implementation in `Docs/MO57_Master_Plan.md`*
+
+**Core Components**:
+| Component | Purpose |
+|-----------|---------|
+| `UMOColonyManagerSubsystem` | Alert queue, character enumeration, task delegation |
+| `UMOPersonalityComponent` | Character personality traits (Conscientiousness, Sociability, Stability) |
+| `UMOCharacterHistoryComponent` | Event log, relationship tracking, mood/activity summaries |
+| `UMORecruitmentComponent` | Tracks recruitment state (existing - determines colony membership) |
+| `UMOSurvivorJobQueueComponent` | Job queue management (existing - task assignment API) |
+
+**Colony UI Widgets**:
+| Widget | Layer | Purpose |
+|--------|-------|---------|
+| `UMOColonyBarWidget` | HUD | Persistent character strip with portraits |
+| `UMOColonyOverviewWidget` | Menu | Full colony management screen (replaces/extends possession menu) |
+| `UMOCharacterCardWidget` | - | Character detail view (mood, history, relationships, skills) |
+| `UMOColonyPortrait` | - | Reusable portrait with mood expression, activity, alert state |
+| `UMOTaskAssignmentWidget` | - | Task picker and job stack management |
+
+**Alert Tiers**:
+| Tier | Name | Examples | Display |
+|------|------|----------|---------|
+| 1 | Critical | Health <15%, combat while away | Pulsing red border, sound, cannot dismiss |
+| 2 | Urgent | Health <40%, idle >30min | Orange dot on portrait |
+| 3 | Notable | Task complete, skill gained | Colony log only |
+| 4 | Log | Routine activities | Character history only |
+
+**Personality System (UMOPersonalityComponent)**:
+- **Conscientiousness**: Diligent (methodical, slower, higher quality) vs Adaptable (quick, shortcuts, variable)
+- **Sociability**: Social (performs better near others) vs Reserved (performs better alone)
+- **Stability**: Stable (consistent mood) vs Volatile (strong mood swings, high ceiling/floor)
+
+**Key Design Principles**:
+1. Colony overview is a "window into community" not just a "management interface"
+2. Characters should feel like people with opinions, not interchangeable labor
+3. Trust is earned through demonstrated reliability
+4. Alert tiering prevents notification fatigue while surfacing critical issues
+5. Task assignment works without possession via `UMOSurvivorJobQueueComponent`
 
 ### Component Architecture
 
@@ -351,7 +395,7 @@ bool ApplySaveDataAuthority(const FMOVitalsSaveData& InSaveData);  // Server onl
 - Previously: `MOUIManagerComponent` was ~4000 lines handling all UI
 - **Fixed**: Split into 6 specialized controllers (Character, Building, Crafting, System, Inventory + Base)
 - UIManager now acts as thin orchestrator delegating to controllers
-- See `Docs/UIManagerSplit_TestingNotes.md` for testing checklist
+- See `Docs/MO57_Master_Plan.md` for remaining migration to CommonUI layer stack
 
 **MEDIUM - Monolithic Module Structure:**
 - All 60+ classes in single `MOFramework` module
@@ -446,6 +490,44 @@ The C++ EQS components are complete, but Blueprint EQS query assets need creatio
    - Replace IsCornered() placeholder with EQS query + threshold check
 
 **Note:** The underlying ForagingSubsystem still uses O(n) iteration. Future optimization will add spatial indexing.
+
+**Colony Management System (Stage 1-2 of Master Plan):**
+
+New files to create for colony system foundation:
+
+1. **`MOColonyTypes.h`** - Shared enums and structs
+   ```cpp
+   UENUM(BlueprintType)
+   enum class EAlertState : uint8 { None, Notable, Urgent, Critical };
+
+   UENUM(BlueprintType)
+   enum class EPersonalityAxis : uint8 { Conscientiousness, Sociability, Stability };
+
+   USTRUCT(BlueprintType)
+   struct FMOCharacterRelationship { /*...*/ };
+
+   USTRUCT(BlueprintType)
+   struct FMOCharacterHistoryEntry { /*...*/ };
+   ```
+
+2. **`UMOPersonalityComponent`** - Character personality traits
+   - Three personality dimensions with float values (-1.0 to 1.0)
+   - Affects task performance and mood responses
+   - Persists via save data
+
+3. **`UMOCharacterHistoryComponent`** - Character history and relationships
+   - Event log (capped at 50 entries)
+   - Relationship tracking with other characters
+   - `GetMoodSummary()`, `GetActivitySummary()` for UI
+
+4. **`UMOColonyManagerSubsystem`** - Colony-level coordination
+   - Alert queue with 4 tiers
+   - `GetAllColonyCharacters()` - enumerate recruited pawns
+   - `AssignTask()` - delegate to `UMOSurvivorJobQueueComponent`
+
+5. **Generic Widget Base Classes** (see Stage 1 of Master Plan)
+   - `UMOScrollListBase`, `UMOListEntryBase`, `UMODetailPanelBase`
+   - `UMOProgressWidgetBase`, `UMOConfirmationBase`, `UMOColonyPortrait`
 
 ## Planned Plugins
 - **Ultra Dynamic Sky** - Dynamic sky/atmosphere system
@@ -664,3 +746,48 @@ git log --oneline -10
    - Character traits create stories
    - Relationships matter
    - Memorable moments from systems interacting
+
+---
+
+## UE Python Widget Blueprint Automation
+
+**Documentation:** See `Content/Python/README_WIDGET_AUTOMATION.md` for full details.
+
+### Quick Reference
+
+| Operation | Works? | Function |
+|-----------|--------|----------|
+| Find widget by name | ✅ | `unreal.EditorUtilityLibrary.find_source_widget_by_name(wbp, Name)` |
+| Add new widget | ✅ | `unreal.EditorUtilityLibrary.add_source_widget(wbp, class, name, parent)` |
+| Set IsVariable flag | ❌ | **NOT EXPOSED** - `b_is_variable` not accessible via Python |
+| Access widget tree | ❌ | **NOT EXPOSED** - `widget_tree()` returns None |
+| Rename widget | ❌ | **NO API** - must delete and recreate |
+
+### Critical Limitation: IsVariable Flag
+
+The "Is Variable" checkbox (required for `BindWidget` meta) is stored in WidgetTree metadata and **cannot be set via Python API**.
+
+**Workarounds:**
+1. Manual fix: Right-click widget in hierarchy → "Set as Variable"
+2. Use `add_source_widget()` when creating new widgets (may auto-mark as variable - needs testing)
+3. Expose a custom C++ editor utility to set `bIsVariable`
+
+### Available Scripts
+
+```bash
+# Inspect widget blueprints and check IsVariable status
+py "D:/UEProjects/MO57/Content/Python/inspect_widget_blueprints.py"
+
+# Explore available API methods
+py "D:/UEProjects/MO57/Content/Python/explore_widget_tree.py"
+
+# Add missing widgets to blueprints
+py "D:/UEProjects/MO57/Content/Python/setup_widget_bindings.py"
+```
+
+### When BindWidget Fails
+
+If Blueprint compilation fails with "required widget binding not found":
+1. Run `inspect_widget_blueprints.py` to check if widget exists and IsVariable status
+2. If widget exists but `[NOT VAR]`: Manual fix required (right-click → Set as Variable)
+3. If widget missing: Run `setup_widget_bindings.py` or add manually

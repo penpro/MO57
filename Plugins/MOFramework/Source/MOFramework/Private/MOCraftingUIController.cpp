@@ -29,6 +29,7 @@
 #include "MORecipeDatabaseSettings.h"
 #include "MOResourceDatabaseSettings.h"
 #include "MOItemDatabaseSettings.h"
+#include "MOPrimaryGameLayout.h"
 
 UMOCraftingUIController::UMOCraftingUIController()
 {
@@ -221,9 +222,9 @@ void UMOCraftingUIController::OpenCraftingMenu()
 		}
 	}
 
-	// Show modal background and menu
+	// Show modal background and menu via layer system
 	ShowModalBackground();
-	MenuWidget->AddToViewport(CraftingMenuZOrder);
+	PushWidgetInstanceToLayer(MOUILayerTags::Layer_Menu, MenuWidget, CraftingMenuZOrder);
 
 	// Set input mode
 	ApplyInputModeForMenuOpen(MenuWidget);
@@ -345,8 +346,8 @@ void UMOCraftingUIController::ShowStationContextMenu(AActor* StationActor, FVect
 	// Show modal background
 	ShowModalBackground();
 
-	// Add to viewport
-	WidgetInst->AddToViewport(StationContextMenuZOrder);
+	// Add to layer system
+	PushWidgetInstanceToLayer(MOUILayerTags::Layer_GameOverlay, WidgetInst, StationContextMenuZOrder);
 
 	// Position at screen location from world position
 	FVector2D ScreenPosition;
@@ -508,8 +509,8 @@ void UMOCraftingUIController::ShowKeepOnHarvestContextMenu(const FMOInteractionT
 	// Show modal background
 	ShowModalBackground();
 
-	// Add to viewport
-	WidgetInst->AddToViewport(KeepOnHarvestContextMenuZOrder);
+	// Add to layer system
+	PushWidgetInstanceToLayer(MOUILayerTags::Layer_GameOverlay, WidgetInst, KeepOnHarvestContextMenuZOrder);
 
 	// Position at screen location from world position
 	FVector2D ScreenPosition;
@@ -621,8 +622,8 @@ void UMOCraftingUIController::StartHarvestOperation(FName ActionId)
 	WidgetInst->OnHarvestCompleted.AddDynamic(this, &UMOCraftingUIController::HandleHarvestCompleted);
 	WidgetInst->OnHarvestCancelled.AddDynamic(this, &UMOCraftingUIController::HandleHarvestCancelled);
 
-	// Add to viewport
-	WidgetInst->AddToViewport(HarvestProgressZOrder);
+	// Add to layer system
+	PushWidgetInstanceToLayer(MOUILayerTags::Layer_GameOverlay, WidgetInst, HarvestProgressZOrder);
 
 	// Start the harvest with ActionId (MOHarvestSubsystem will look up the action from resource definition)
 	WidgetInst->StartHarvest(
@@ -897,8 +898,8 @@ void UMOCraftingUIController::StartCarcassButchering(AMOCarcassActor* Carcass, F
 	WidgetInst->OnHarvestCancelled.RemoveDynamic(this, &UMOCraftingUIController::HandleCarcassHarvestCancelled);
 	WidgetInst->OnHarvestCancelled.AddDynamic(this, &UMOCraftingUIController::HandleCarcassHarvestCancelled);
 
-	// Add to viewport
-	WidgetInst->AddToViewport(HarvestProgressZOrder);
+	// Add to layer system
+	PushWidgetInstanceToLayer(MOUILayerTags::Layer_GameOverlay, WidgetInst, HarvestProgressZOrder);
 
 	// Show modal background and lock input
 	ShowModalBackground();
@@ -1006,7 +1007,7 @@ void UMOCraftingUIController::TickCarcassButchering()
 			}
 		}
 
-		WidgetInst->UpdateDisplay(Progress, TimeRemaining, ActionName);
+		WidgetInst->UpdateHarvestDisplay(Progress, TimeRemaining, ActionName);
 	}
 }
 

@@ -1,6 +1,9 @@
+/**
+ * MOBuildingRecipeEntryWidget.cpp - Building Recipe Entry Implementation
+ */
+
 #include "MOBuildingRecipeEntryWidget.h"
 #include "MOFramework.h"
-#include "MOCommonButton.h"
 #include "Components/TextBlock.h"
 #include "Components/Image.h"
 #include "Components/Border.h"
@@ -13,6 +16,11 @@ UMOBuildingRecipeEntryWidget::UMOBuildingRecipeEntryWidget(const FObjectInitiali
 void UMOBuildingRecipeEntryWidget::SetupEntry(const FMOBuildRecipeListEntryData& InData)
 {
 	EntryData = InData;
+
+	// Sync base class state
+	UMOListEntryBase::SetSelected(InData.bIsSelected);
+	SetEntryEnabled(InData.bCanBuild);
+
 	UpdateVisuals();
 }
 
@@ -21,7 +29,7 @@ void UMOBuildingRecipeEntryWidget::SetSelected(bool bInSelected)
 	if (EntryData.bIsSelected != bInSelected)
 	{
 		EntryData.bIsSelected = bInSelected;
-		UpdateVisuals();
+		Super::SetSelected(bInSelected);
 	}
 }
 
@@ -30,28 +38,7 @@ void UMOBuildingRecipeEntryWidget::SetCanBuild(bool bInCanBuild)
 	if (EntryData.bCanBuild != bInCanBuild)
 	{
 		EntryData.bCanBuild = bInCanBuild;
-		UpdateVisuals();
-	}
-}
-
-void UMOBuildingRecipeEntryWidget::NativeConstruct()
-{
-	Super::NativeConstruct();
-
-	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingRecipeEntryWidget] NativeConstruct for recipe: %s, EntryButton=%s"),
-		*EntryData.RecipeId.ToString(),
-		EntryButton ? TEXT("BOUND") : TEXT("NULL - widget not bound in Blueprint!"));
-
-	if (EntryButton)
-	{
-		// Remove first to avoid duplicate bindings when widget is re-added to viewport
-		EntryButton->OnClicked().RemoveAll(this);
-		EntryButton->OnClicked().AddUObject(this, &UMOBuildingRecipeEntryWidget::HandleButtonClicked);
-		UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingRecipeEntryWidget] Click handler bound for recipe: %s"), *EntryData.RecipeId.ToString());
-	}
-	else
-	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOBuildingRecipeEntryWidget] No EntryButton bound! Clicks will not work. Check that the Blueprint has a UMOCommonButton named 'EntryButton'."));
+		SetEntryEnabled(bInCanBuild);
 	}
 }
 
@@ -63,7 +50,7 @@ void UMOBuildingRecipeEntryWidget::NativePreConstruct()
 	UpdateVisuals();
 }
 
-void UMOBuildingRecipeEntryWidget::UpdateVisuals()
+void UMOBuildingRecipeEntryWidget::UpdateVisuals_Implementation()
 {
 	// Update name text
 	if (RecipeNameText)
@@ -94,7 +81,7 @@ void UMOBuildingRecipeEntryWidget::UpdateVisuals()
 		RecipeIcon->SetVisibility(ESlateVisibility::Hidden);
 	}
 
-	// Update background color
+	// Update background color (3-state: selected, buildable, unbuildable)
 	if (BackgroundBorder)
 	{
 		FLinearColor BackgroundColor;
@@ -120,5 +107,10 @@ void UMOBuildingRecipeEntryWidget::UpdateVisuals()
 void UMOBuildingRecipeEntryWidget::HandleButtonClicked()
 {
 	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingRecipeEntryWidget] HandleButtonClicked - Recipe: %s"), *EntryData.RecipeId.ToString());
+
+	// Call base to broadcast generic OnEntrySelected
+	Super::HandleButtonClicked();
+
+	// Broadcast building-specific delegate
 	OnEntryClicked.Broadcast(EntryData.RecipeId);
 }

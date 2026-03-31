@@ -1,0 +1,47 @@
+/**
+ * MOToolboxCommands.h - Editor toolbar commands for MO Framework
+ */
+
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Framework/Commands/Commands.h"
+#include "EditorStyleSet.h"
+
+/**
+ * Toolbar commands for the MO Framework toolbox.
+ */
+class FMOToolboxCommands : public TCommands<FMOToolboxCommands>
+{
+public:
+	FMOToolboxCommands()
+		: TCommands<FMOToolboxCommands>(
+			TEXT("MOToolbox"),
+			NSLOCTEXT("Contexts", "MOToolbox", "MO Framework Toolbox"),
+			NAME_None,
+			FAppStyle::GetAppStyleSetName())
+	{
+	}
+
+	// TCommands interface
+	virtual void RegisterCommands() override;
+
+	// Audit commands
+	TSharedPtr<FUICommandInfo> RunComprehensiveAudit;
+	TSharedPtr<FUICommandInfo> RunLayoutAudit;
+	TSharedPtr<FUICommandInfo> RunStyleAudit;
+	TSharedPtr<FUICommandInfo> RunValidation;
+
+	// Fix commands
+	TSharedPtr<FUICommandInfo> FixWidgetVariables;
+	TSharedPtr<FUICommandInfo> RunBatchOperations;
+
+	// Rename commands
+	TSharedPtr<FUICommandInfo> SmartRenameWidgets;
+	TSharedPtr<FUICommandInfo> ApplyWidgetRenames;
+
+	// Utility commands
+	TSharedPtr<FUICommandInfo> OpenAuditOutput;
+	TSharedPtr<FUICommandInfo> OpenToolboxPanel;
+	TSharedPtr<FUICommandInfo> FixAllIssues;
+};

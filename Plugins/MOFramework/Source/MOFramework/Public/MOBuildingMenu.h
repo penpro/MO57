@@ -45,7 +45,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "CommonActivatableWidget.h"
+#include "MOMenuWidgetBase.h"
 #include "MOBuildingMenu.generated.h"
 
 class UMOKnowledgeComponent;
@@ -65,8 +65,13 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOBuildingMenuRequestCloseSignature);
  * Delegate for when a building is selected to be placed (after clicking Build in detail panel).
  */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOOnBuildingSelectedSignature, FName, RecipeId);
+
+/**
+ * Inherits from UMOMenuWidgetBase for standardized CommonUI input handling.
+ * Tab/Escape close is handled by base class via bIsBackHandler.
+ */
 UCLASS()
-class MOFRAMEWORK_API UMOBuildingMenu : public UCommonActivatableWidget
+class MOFRAMEWORK_API UMOBuildingMenu : public UMOMenuWidgetBase
 {
 	GENERATED_BODY()
 
@@ -77,13 +82,16 @@ public:
 	// DELEGATES
 	// ============================================================================
 
-	/** Broadcast when the menu should be closed. */
+	/** @deprecated Use OnRequestClose (from base class) instead. Broadcast for legacy code. */
 	UPROPERTY(BlueprintAssignable, Category="MO|Building")
-	FMOBuildingMenuRequestCloseSignature OnRequestClose;
+	FMOBuildingMenuRequestCloseSignature OnLegacyRequestClose;
 
 	/** Broadcast when a building is selected. */
 	UPROPERTY(BlueprintAssignable, Category="MO|Building")
 	FMOOnBuildingSelectedSignature OnBuildingSelected;
+
+	// Override RequestClose to also broadcast legacy delegate
+	virtual void RequestClose() override;
 
 	// ============================================================================
 	// INITIALIZATION
@@ -133,7 +141,6 @@ protected:
 
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
-	virtual FReply NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
 
 private:
 	// ============================================================================

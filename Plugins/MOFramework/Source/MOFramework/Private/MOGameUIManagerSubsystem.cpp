@@ -2,6 +2,7 @@
 
 #include "MOGameUIManagerSubsystem.h"
 #include "MOPrimaryGameLayout.h"
+#include "MOUISettings.h"
 #include "CommonActivatableWidget.h"
 #include "Widgets/CommonActivatableWidgetContainer.h"
 #include "GameFramework/PlayerController.h"
@@ -98,9 +99,16 @@ void UMOGameUIManagerSubsystem::NotifyPlayerRemoved(APlayerController* PlayerCon
 
 void UMOGameUIManagerSubsystem::CreateLayoutForPlayer(APlayerController* PlayerController)
 {
-	if (!PrimaryLayoutClass)
+	// Try to get layout class from direct property first, then from settings
+	TSubclassOf<UMOPrimaryGameLayout> LayoutClass = PrimaryLayoutClass;
+	if (!LayoutClass)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("MOGameUIManagerSubsystem: PrimaryLayoutClass is not set! Set it in Project Settings or Blueprint."));
+		LayoutClass = UMOUISettings::GetPrimaryGameLayoutClass();
+	}
+
+	if (!LayoutClass)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("MOGameUIManagerSubsystem: PrimaryLayoutClass is not set! Configure it in Project Settings -> Plugins -> MO UI Settings."));
 		return;
 	}
 
@@ -112,7 +120,7 @@ void UMOGameUIManagerSubsystem::CreateLayoutForPlayer(APlayerController* PlayerC
 	}
 
 	// Create the layout widget
-	UMOPrimaryGameLayout* NewLayout = CreateWidget<UMOPrimaryGameLayout>(PlayerController, PrimaryLayoutClass);
+	UMOPrimaryGameLayout* NewLayout = CreateWidget<UMOPrimaryGameLayout>(PlayerController, LayoutClass);
 	if (!NewLayout)
 	{
 		UE_LOG(LogTemp, Error, TEXT("MOGameUIManagerSubsystem: Failed to create PrimaryGameLayout widget"));

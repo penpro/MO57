@@ -20,8 +20,19 @@
 UMOCraftingMenu::UMOCraftingMenu(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
-	// Enable keyboard input for this widget (needed for Tab/Escape to close)
-	SetIsFocusable(true);
+	// Base class (UMOMenuWidgetBase) handles:
+	// - SetIsFocusable(true)
+	// - bIsBackHandler = true (for Escape/Tab close)
+	// - bAutoRestoreFocus = true
+}
+
+void UMOCraftingMenu::RequestClose()
+{
+	// Call base class which broadcasts OnRequestClose
+	Super::RequestClose();
+
+	// Also broadcast legacy delegate for backward compatibility
+	OnLegacyRequestClose.Broadcast();
 }
 
 void UMOCraftingMenu::InitializeMenu(
@@ -331,10 +342,8 @@ void UMOCraftingMenu::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 
 void UMOCraftingMenu::HandleCloseClicked()
 {
-	// Broadcast standard delegate (prefer this for new code)
-	OnCloseRequested.Broadcast();
-	// Broadcast legacy delegate for backward compatibility
-	OnRequestClose.Broadcast();
+	// Use base class RequestClose() which broadcasts OnRequestClose and legacy delegate
+	RequestClose();
 }
 
 void UMOCraftingMenu::NativeDestruct()
@@ -346,23 +355,6 @@ void UMOCraftingMenu::NativeDestruct()
 	}
 
 	Super::NativeDestruct();
-}
-
-FReply UMOCraftingMenu::NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent)
-{
-	const FKey PressedKey = InKeyEvent.GetKey();
-
-	// Close on Tab or Escape
-	if (PressedKey == EKeys::Tab || PressedKey == EKeys::Escape)
-	{
-		// Broadcast standard delegate (prefer this for new code)
-		OnCloseRequested.Broadcast();
-		// Broadcast legacy delegate for backward compatibility
-		OnRequestClose.Broadcast();
-		return FReply::Handled();
-	}
-
-	return Super::NativeOnKeyDown(InGeometry, InKeyEvent);
 }
 
 void UMOCraftingMenu::HandleRecipeSelected(FName RecipeId)

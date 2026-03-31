@@ -9,6 +9,7 @@
 #include "MOQuestLogPanel.h"
 #include "MOQuestHUDWidget.h"
 #include "MOQuestSubsystem.h"
+#include "MOPrimaryGameLayout.h"
 
 UMOQuestUIController::UMOQuestUIController()
 {
@@ -127,7 +128,7 @@ void UMOQuestUIController::OpenQuestLog()
 	if (!PanelWidget->IsInViewport())
 	{
 		ShowModalBackground();
-		PanelWidget->AddToViewport(QuestLogPanelZOrder);
+		PushWidgetInstanceToLayer(MOUILayerTags::Layer_Menu, PanelWidget, QuestLogPanelZOrder);
 	}
 
 	ApplyInputModeForMenuOpen(PanelWidget);

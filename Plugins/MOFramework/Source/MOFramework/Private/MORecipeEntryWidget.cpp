@@ -1,6 +1,9 @@
+/**
+ * MORecipeEntryWidget.cpp - Recipe List Entry Implementation
+ */
+
 #include "MORecipeEntryWidget.h"
 #include "MOFramework.h"
-#include "MOCommonButton.h"
 #include "Components/TextBlock.h"
 #include "Components/Image.h"
 #include "Components/Border.h"
@@ -13,6 +16,11 @@ UMORecipeEntryWidget::UMORecipeEntryWidget(const FObjectInitializer& ObjectIniti
 void UMORecipeEntryWidget::SetupEntry(const FMORecipeListEntryData& InData)
 {
 	EntryData = InData;
+
+	// Sync base class state
+	UMOListEntryBase::SetSelected(InData.bIsSelected);
+	SetEntryEnabled(InData.bCanCraft);
+
 	UpdateVisuals();
 }
 
@@ -21,7 +29,7 @@ void UMORecipeEntryWidget::SetSelected(bool bInSelected)
 	if (EntryData.bIsSelected != bInSelected)
 	{
 		EntryData.bIsSelected = bInSelected;
-		UpdateVisuals();
+		Super::SetSelected(bInSelected);
 	}
 }
 
@@ -30,31 +38,8 @@ void UMORecipeEntryWidget::SetCanCraft(bool bInCanCraft)
 	if (EntryData.bCanCraft != bInCanCraft)
 	{
 		EntryData.bCanCraft = bInCanCraft;
-		UpdateVisuals();
+		SetEntryEnabled(bInCanCraft);
 	}
-}
-
-void UMORecipeEntryWidget::NativeConstruct()
-{
-	Super::NativeConstruct();
-
-	if (EntryButton)
-	{
-		// Remove first to avoid duplicate bindings when widget is re-added to viewport
-		EntryButton->OnClicked().RemoveAll(this);
-		EntryButton->OnClicked().AddUObject(this, &UMORecipeEntryWidget::HandleButtonClicked);
-	}
-}
-
-void UMORecipeEntryWidget::NativeDestruct()
-{
-	// Clean up button bindings
-	if (EntryButton)
-	{
-		EntryButton->OnClicked().RemoveAll(this);
-	}
-
-	Super::NativeDestruct();
 }
 
 void UMORecipeEntryWidget::NativePreConstruct()
@@ -65,7 +50,7 @@ void UMORecipeEntryWidget::NativePreConstruct()
 	UpdateVisuals();
 }
 
-void UMORecipeEntryWidget::UpdateVisuals()
+void UMORecipeEntryWidget::UpdateVisuals_Implementation()
 {
 	// Update name text
 	if (RecipeNameText)
@@ -96,7 +81,7 @@ void UMORecipeEntryWidget::UpdateVisuals()
 		RecipeIcon->SetVisibility(ESlateVisibility::Hidden);
 	}
 
-	// Update background color
+	// Update background color (3-state: selected, craftable, uncraftable)
 	if (BackgroundBorder)
 	{
 		FLinearColor BackgroundColor;
@@ -121,8 +106,12 @@ void UMORecipeEntryWidget::UpdateVisuals()
 
 void UMORecipeEntryWidget::HandleButtonClicked()
 {
-	// Broadcast standard delegate (prefer this for new code)
-	OnEntrySelected.Broadcast(EntryData.RecipeId);
+	// Call base to broadcast generic OnEntrySelected
+	Super::HandleButtonClicked();
+
+	// Broadcast recipe-specific delegates
+	OnRecipeSelected.Broadcast(EntryData.RecipeId);
+
 	// Broadcast legacy delegate for backward compatibility
 	OnEntryClicked.Broadcast(EntryData.RecipeId);
 }

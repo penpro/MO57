@@ -27,6 +27,7 @@
 #include "MOWorldItem.h"
 #include "MOStatusPanel.h"
 #include "MOModalBackground.h"
+#include "MOMenuWidgetBase.h"
 #include "MOVitalsComponent.h"
 #include "MOMetabolismComponent.h"
 #include "MOMentalStateComponent.h"
@@ -77,6 +78,8 @@
 #include "MOCharacterUIController.h"
 #include "MOSystemMenuUIController.h"
 #include "MOQuestUIController.h"
+#include "MOPrimaryGameLayout.h"
+#include "MOGameUIManagerSubsystem.h"
 
 UMOUIManagerComponent::UMOUIManagerComponent()
 {

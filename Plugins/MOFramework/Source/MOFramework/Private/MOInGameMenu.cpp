@@ -115,29 +115,26 @@ UWidget* UMOInGameMenu::NativeGetDesiredFocusTarget() const
 	return nullptr;
 }
 
-FReply UMOInGameMenu::NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent)
+bool UMOInGameMenu::NativeOnHandleBackAction()
 {
-	// Tab or Escape closes focus panel first, then menu
-	if (InKeyEvent.GetKey() == EKeys::Tab || InKeyEvent.GetKey() == EKeys::Escape)
+	// If focus panel is open, close it first
+	if (IsFocusPanelOpen())
 	{
-		if (IsFocusPanelOpen())
-		{
-			CloseFocusPanel();
-			return FReply::Handled();
-		}
-		else
-		{
-			RequestClose();
-			return FReply::Handled();
-		}
+		CloseFocusPanel();
+		return true;
 	}
 
-	return Super::NativeOnKeyDown(InGeometry, InKeyEvent);
+	// Otherwise, let base class handle close (broadcasts OnRequestClose)
+	return Super::NativeOnHandleBackAction();
 }
 
 void UMOInGameMenu::RequestClose()
 {
-	OnRequestClose.Broadcast();
+	// Call base class which broadcasts OnRequestClose
+	Super::RequestClose();
+
+	// Also broadcast legacy delegate for backward compatibility
+	OnLegacyRequestClose.Broadcast();
 }
 
 void UMOInGameMenu::RefreshSavePanelList()

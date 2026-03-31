@@ -50,7 +50,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Blueprint/UserWidget.h"
+#include "MOMenuWidgetBase.h"
 #include "MORecipeDefinitionRow.h"
 #include "MOUIDelegates.h"
 #include "MOCraftingMenu.generated.h"
@@ -76,12 +76,13 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOCraftingMenuRequestCloseSignature);
 /**
  * Main crafting menu widget.
  * See file header for composition and pitfalls.
+ * Inherits from UMOMenuWidgetBase for standardized CommonUI input handling.
  * - RecipeList (UMORecipeListWidget)
  * - DetailPanel (UMORecipeDetailPanel)
  * - QueueWidget (UMOCraftingQueueWidget) [optional]
  */
 UCLASS(Abstract, Blueprintable)
-class MOFRAMEWORK_API UMOCraftingMenu : public UUserWidget
+class MOFRAMEWORK_API UMOCraftingMenu : public UMOMenuWidgetBase
 {
 	GENERATED_BODY()
 
@@ -175,13 +176,12 @@ public:
 
 	// --- Delegates ---
 
-	/** Broadcast when the menu wants to close. Uses standard delegate signature. */
+	/** @deprecated Use OnRequestClose (from base class) instead. Broadcast for legacy code. */
 	UPROPERTY(BlueprintAssignable, Category="MO|Crafting|UI")
-	FMOUIRequestClose OnCloseRequested;
+	FMOCraftingMenuRequestCloseSignature OnLegacyRequestClose;
 
-	/** @deprecated Use OnCloseRequested instead. Broadcast for backward compatibility. */
-	UPROPERTY(BlueprintAssignable, Category="MO|Crafting|UI")
-	FMOCraftingMenuRequestCloseSignature OnRequestClose;
+	// Override RequestClose to also broadcast legacy delegate
+	virtual void RequestClose() override;
 
 	// --- Configuration ---
 
@@ -193,7 +193,6 @@ protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
 	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
-	virtual FReply NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
 
 	/** Called when a recipe is selected in the list. */
 	UFUNCTION()

@@ -1,7 +1,10 @@
 # UE5.7 Native Functionality Refactoring Plan
 
+> **SUPERSEDED**: This document has been consolidated into `MO57_Master_Plan.md` (March 28, 2026).
+> Kept for historical reference only. See Master Plan for current status.
+
 *Created: March 18, 2026*
-*Status: Planning Phase*
+*Status: Superseded*
 
 ---
 

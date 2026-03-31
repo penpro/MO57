@@ -10,6 +10,8 @@
  * Scrollable list of recipe entries. Used in crafting menu and building menu.
  * Filters and displays recipes based on knowledge, skills, and station.
  *
+ * INHERITS FROM: UMOScrollListBase (provides container management, selection)
+ *
  * ENTRY DATA:
  * Each entry shows:
  * - Recipe icon
@@ -55,16 +57,20 @@
  *   RecipeId, DisplayName, Category, Icon (TSoftObjectPtr), bCanCraft,
  *   bIsDiscovered, bIsSelected. Use for custom entry widget display.
  *
+ * [2026-03] WIDGET BINDINGS: Uses RecipeScrollBox/RecipeContainer (not base's
+ *   ContentScrollBox/ContentContainer) for backward compatibility. GetContainer()
+ *   is overridden to use these.
+ *
  * =============================================================================
- * RELATED FILES: MORecipeEntryWidget.h, MOCraftingMenu.h, MOBuildingMenu.h
- * LAST UPDATED: 2026-02-25
+ * RELATED FILES: MOScrollListBase.h, MORecipeEntryWidget.h, MOCraftingMenu.h
+ * LAST UPDATED: 2026-03-29
  * =============================================================================
  */
 
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Blueprint/UserWidget.h"
+#include "MOScrollListBase.h"
 #include "MORecipeDefinitionRow.h"
 #include "MOUIDelegates.h"
 #include "MORecipeListWidget.generated.h"
@@ -73,8 +79,6 @@ class UMOInventoryComponent;
 class UMOSkillsComponent;
 class UMORecipeDiscoveryComponent;
 class UMORecipeEntryWidget;
-class UScrollBox;
-class UVerticalBox;
 
 // Legacy delegate - prefer FMOUIRecipeSelected from MOUIDelegates.h for new code
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMORecipeSelectedSignature, FName, RecipeId);
@@ -114,12 +118,13 @@ struct MOFRAMEWORK_API FMORecipeListEntryData
 
 /**
  * Widget that displays a scrollable list of recipes.
+ * Inherits container/selection management from UMOScrollListBase.
  *
  * Requires a Blueprint implementation with:
  * - RecipeScrollBox (UScrollBox) or RecipeContainer (UVerticalBox)
  */
 UCLASS(Abstract, Blueprintable)
-class MOFRAMEWORK_API UMORecipeListWidget : public UUserWidget
+class MOFRAMEWORK_API UMORecipeListWidget : public UMOScrollListBase
 {
 	GENERATED_BODY()
 
@@ -152,8 +157,7 @@ public:
 	void ClearRecipes();
 
 	/** Refresh the visual state of all entries (craftability, selection). */
-	UFUNCTION(BlueprintCallable, Category="MO|Crafting|UI")
-	void RefreshEntryStates();
+	virtual void RefreshEntryStates() override;
 
 	// --- Selection ---
 
@@ -198,9 +202,12 @@ public:
 protected:
 	virtual void NativeConstruct() override;
 
+	/** Override to use our specific widget bindings (RecipeScrollBox/RecipeContainer). */
+	virtual UPanelWidget* GetContainer() const;
+
 	/** Called when a recipe entry is clicked. */
 	UFUNCTION()
-	void HandleEntryClicked(FName RecipeId);
+	void HandleRecipeEntryClicked(FName RecipeId);
 
 	/** Build visual data for a recipe. */
 	FMORecipeListEntryData BuildEntryData(FName RecipeId) const;
@@ -208,7 +215,7 @@ protected:
 	/** Check if a recipe can be crafted with current resources. */
 	bool CanCraftRecipe(FName RecipeId) const;
 
-	// --- Widget Bindings ---
+	// --- Widget Bindings (domain-specific, override base) ---
 
 	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
 	TObjectPtr<UScrollBox> RecipeScrollBox;
@@ -227,9 +234,9 @@ private:
 	UPROPERTY()
 	TWeakObjectPtr<UMORecipeDiscoveryComponent> DiscoveryComponent;
 
-	// Current recipe entries
+	// Current recipe entries (domain-specific type, different from base's EntryWidgets)
 	UPROPERTY()
-	TArray<TObjectPtr<UMORecipeEntryWidget>> EntryWidgets;
+	TArray<TObjectPtr<UMORecipeEntryWidget>> RecipeEntryWidgets;
 
 	// Current state
 	TArray<FName> CurrentRecipeIds;

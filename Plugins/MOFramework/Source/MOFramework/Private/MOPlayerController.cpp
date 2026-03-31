@@ -13,6 +13,7 @@
 #include "MOInteractorComponent.h"
 #include "MOIdentityComponent.h"
 #include "MOKeyBindingManager.h"
+#include "MOGameUIManagerSubsystem.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "InputMappingContext.h"
@@ -69,6 +70,13 @@ void AMOPlayerController::BeginPlay()
 
 	// Apply any saved custom key bindings
 	FMOKeyBindingManager::ApplyAllBindingsFromSettings(this);
+
+	// Notify UI manager subsystem that this player has been added
+	// This creates the primary game layout widget with layer stacks
+	if (UMOGameUIManagerSubsystem* UIManagerSubsystem = UMOGameUIManagerSubsystem::Get(this))
+	{
+		UIManagerSubsystem->NotifyPlayerAdded(this);
+	}
 }
 
 void AMOPlayerController::PlayerTick(float DeltaTime)

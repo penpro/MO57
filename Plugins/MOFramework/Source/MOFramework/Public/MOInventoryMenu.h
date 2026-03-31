@@ -89,8 +89,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Blueprint/UserWidget.h"
-#include "MOUIDelegates.h"
+#include "MOMenuWidgetBase.h"
 #include "MOInventoryMenu.generated.h"
 
 class UMOInventoryComponent;
@@ -101,8 +100,12 @@ class UMOItemInfoPanel;
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOInventoryMenuRequestCloseSignature);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FMOInventoryMenuSlotRightClickedSignature, int32, SlotIndex, const FGuid&, ItemGuid, FVector2D, ScreenPosition);
 
+/**
+ * Inherits from UMOMenuWidgetBase for standardized CommonUI input handling.
+ * Tab/Escape close is handled by base class via bIsBackHandler.
+ */
 UCLASS()
-class MOFRAMEWORK_API UMOInventoryMenu : public UUserWidget
+class MOFRAMEWORK_API UMOInventoryMenu : public UMOMenuWidgetBase
 {
 	GENERATED_BODY()
 
@@ -117,24 +120,20 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO|Inventory|UI")
 	UMOInventoryComponent* GetInventoryComponent() const { return InventoryComponent; }
 
-	/** Broadcast when the menu wants to close. Uses standard delegate signature. */
+	/** @deprecated Use OnRequestClose (from base class) instead. Broadcast for legacy code. */
 	UPROPERTY(BlueprintAssignable, Category="MO|Inventory|UI")
-	FMOUIRequestClose OnCloseRequested;
-
-	/** @deprecated Use OnCloseRequested instead. Broadcast for backward compatibility. */
-	UPROPERTY(BlueprintAssignable, Category="MO|Inventory|UI")
-	FMOInventoryMenuRequestCloseSignature OnRequestClose;
+	FMOInventoryMenuRequestCloseSignature OnLegacyRequestClose;
 
 	/** Called when a slot is right-clicked. UIManager uses this to show context menu. */
 	UPROPERTY(BlueprintAssignable, Category="MO|Inventory|UI")
 	FMOInventoryMenuSlotRightClickedSignature OnSlotRightClicked;
 
+	// Override RequestClose to also broadcast legacy delegate
+	virtual void RequestClose() override;
+
 protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
-
-	// Tab should close the menu.
-	virtual FReply NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
 
 private:
 	UFUNCTION()

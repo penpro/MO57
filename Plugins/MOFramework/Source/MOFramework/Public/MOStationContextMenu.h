@@ -185,11 +185,11 @@ protected:
 
 	/** Called when fuel time updates */
 	UFUNCTION(BlueprintImplementableEvent, Category="MO|CraftingStation|UI")
-	void OnFuelTimeUpdated(float TimeRemaining, bool bIsActive);
+	void OnFuelTimeUpdated(float TimeRemaining, bool bStationIsActive);
 
 	/** Called when button states change */
 	UFUNCTION(BlueprintImplementableEvent, Category="MO|CraftingStation|UI")
-	void OnButtonStatesUpdated(bool bCanLight, bool bIsActive);
+	void OnButtonStatesUpdated(bool bCanLight, bool bStationIsActive);
 
 private:
 	// ============================================================================

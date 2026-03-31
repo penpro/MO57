@@ -189,7 +189,12 @@
       "Bash(for:*)",
       "Bash(do if ! grep -q \"CLAUDE: READ THIS HEADER\" \"$f\")",
       "Bash(then echo \"$f\")",
-      "Bash(Sort-Object)"
+      "Bash(Sort-Object)",
+      "Bash(\"/d/UnrealEngine/UE_5.7/Engine/Binaries/DotNET/UnrealBuildTool/UnrealBuildTool.exe\" MO57Editor Win64 Development -Project=\"D:/UEProjects/MO57/MO57.uproject\" -Progress)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:miltoncandelero.github.io)",
+      "WebFetch(domain:unrealist.org)",
+      "WebFetch(domain:snorristurluson.github.io)"
     ]
   }
 }

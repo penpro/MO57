@@ -36,8 +36,8 @@
  * 2. Always broadcast OnCloseRequested when menu should close.
  *    Don't call RemoveFromParent() directly.
  *
- * 3. Context menus are NOT activatable widgets (no input mode change).
- *    They overlay the game world and disappear on interaction.
+ * 3. Context menus are CommonUI activatable widgets that overlay other UI.
+ *    They use the GameOverlay layer and disappear on interaction.
  *
  * =============================================================================
  * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
@@ -71,7 +71,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Blueprint/UserWidget.h"
+#include "CommonActivatableWidget.h"
 #include "MOCommonButton.h"
 #include "MOContextMenuBase.generated.h"
 
@@ -83,9 +83,10 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOContextMenuCloseRequested);
 /**
  * Base class for all context menu widgets.
  * See file header for usage guide and pitfalls.
+ * Inherits from UCommonActivatableWidget for CommonUI layer system support.
  */
 UCLASS(Abstract)
-class MOFRAMEWORK_API UMOContextMenuBase : public UUserWidget
+class MOFRAMEWORK_API UMOContextMenuBase : public UCommonActivatableWidget
 {
 	GENERATED_BODY()
 

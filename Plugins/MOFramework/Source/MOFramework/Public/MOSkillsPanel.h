@@ -83,7 +83,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Blueprint/UserWidget.h"
+#include "MOMenuWidgetBase.h"
 #include "MOSkillDefinitionRow.h"
 #include "MOSkillEntryWidget.h"
 #include "MOSkillsPanel.generated.h"
@@ -114,9 +114,11 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOSkillsPanelModeChangedSignature, 
 /**
  * Panel widget that displays all skills with their levels and XP progress.
  * Can filter by category and shows skill details.
+ * Inherits from UMOMenuWidgetBase for standardized CommonUI input handling.
+ * Tab/Escape close is handled by base class via bIsBackHandler.
  */
 UCLASS(Abstract, Blueprintable)
-class MOFRAMEWORK_API UMOSkillsPanel : public UUserWidget
+class MOFRAMEWORK_API UMOSkillsPanel : public UMOMenuWidgetBase
 {
 	GENERATED_BODY()
 
@@ -187,14 +189,18 @@ public:
 
 	// --- Delegates ---
 
+	/** @deprecated Use OnRequestClose (from base class) instead. Broadcast for legacy code. */
 	UPROPERTY(BlueprintAssignable, Category="MO|Skills|UI")
-	FMOSkillsPanelRequestCloseSignature OnRequestClose;
+	FMOSkillsPanelRequestCloseSignature OnLegacyRequestClose;
 
 	UPROPERTY(BlueprintAssignable, Category="MO|Skills|UI")
 	FMOSkillsPanelSkillSelectedSignature OnSkillSelected;
 
 	UPROPERTY(BlueprintAssignable, Category="MO|Skills|UI")
 	FMOSkillsPanelModeChangedSignature OnModeChanged;
+
+	// Override RequestClose to also broadcast legacy delegate
+	virtual void RequestClose() override;
 
 	// --- Configuration ---
 
@@ -213,7 +219,6 @@ public:
 protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
-	virtual FReply NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
 
 	/** Handle skill level up event. */
 	UFUNCTION()

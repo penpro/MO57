@@ -1,6 +1,9 @@
 #include "MOUIControllerBase.h"
 #include "MOUIManagerComponent.h"
 #include "MONotificationComponent.h"
+#include "MOGameUIManagerSubsystem.h"
+#include "MOPrimaryGameLayout.h"
+#include "CommonActivatableWidget.h"
 #include "GameFramework/PlayerController.h"
 
 UMOUIControllerBase::UMOUIControllerBase()
@@ -120,6 +123,71 @@ bool UMOUIControllerBase::IsAnyMenuOpen() const
 		return UIManager->IsAnyMenuOpen();
 	}
 	return false;
+}
+
+// =============================================================================
+// COMMONUI LAYER SYSTEM
+// =============================================================================
+
+UCommonActivatableWidget* UMOUIControllerBase::PushWidgetToLayer(FGameplayTag LayerTag, TSubclassOf<UCommonActivatableWidget> WidgetClass, int32 FallbackZOrder)
+{
+	APlayerController* PC = ResolveOwningPlayerController();
+	if (!PC)
+	{
+		return nullptr;
+	}
+
+	// Try to use the layer system first
+	if (UMOGameUIManagerSubsystem* UISubsystem = UMOGameUIManagerSubsystem::Get(this))
+	{
+		if (UMOPrimaryGameLayout* Layout = UISubsystem->GetRootLayout())
+		{
+			return Layout->PushWidgetToLayer(LayerTag, WidgetClass);
+		}
+	}
+
+	// Fallback: create widget manually and add to viewport
+	UCommonActivatableWidget* Widget = CreateWidget<UCommonActivatableWidget>(PC, WidgetClass);
+	if (Widget)
+	{
+		Widget->AddToViewport(FallbackZOrder);
+		Widget->ActivateWidget();
+	}
+	return Widget;
+}
+
+void UMOUIControllerBase::PushWidgetInstanceToLayer(FGameplayTag LayerTag, UCommonActivatableWidget* Widget, int32 FallbackZOrder)
+{
+	if (!Widget)
+	{
+		return;
+	}
+
+	// Try to use the layer system first
+	if (UMOGameUIManagerSubsystem* UISubsystem = UMOGameUIManagerSubsystem::Get(this))
+	{
+		if (UMOPrimaryGameLayout* Layout = UISubsystem->GetRootLayout())
+		{
+			Layout->PushWidgetToLayerInstance(LayerTag, Widget);
+			return;
+		}
+	}
+
+	// Fallback: add to viewport directly
+	Widget->AddToViewport(FallbackZOrder);
+	Widget->ActivateWidget();
+}
+
+void UMOUIControllerBase::PopWidgetFromLayer(UCommonActivatableWidget* Widget)
+{
+	if (!Widget)
+	{
+		return;
+	}
+
+	// Deactivating the widget will handle removal from the layer stack
+	// or from viewport if it was added directly
+	Widget->DeactivateWidget();
 }
 
 // =============================================================================

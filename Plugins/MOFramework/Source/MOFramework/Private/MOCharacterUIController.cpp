@@ -18,6 +18,7 @@
 #include "MOItemDatabaseSettings.h"
 #include "MONotificationComponent.h"
 #include "MOQuestSubsystem.h"
+#include "MOPrimaryGameLayout.h"
 
 UMOCharacterUIController::UMOCharacterUIController()
 {
@@ -162,7 +163,7 @@ void UMOCharacterUIController::OpenSkillsPanel()
 	if (!PanelWidget->IsInViewport())
 	{
 		ShowModalBackground();
-		PanelWidget->AddToViewport(SkillsPanelZOrder);
+		PushWidgetInstanceToLayer(MOUILayerTags::Layer_Menu, PanelWidget, SkillsPanelZOrder);
 	}
 
 	ApplyInputModeForMenuOpen(PanelWidget);
@@ -482,8 +483,8 @@ void UMOCharacterUIController::StartItemInspection(FName ItemDefinitionId, const
 	// Store the item being inspected
 	InspectingItemGuid = ItemGuid;
 
-	// Show the widget
-	InspectionWidget->AddToViewport(InspectionProgressZOrder);
+	// Show the widget via layer system
+	PushWidgetInstanceToLayer(MOUILayerTags::Layer_GameOverlay, InspectionWidget, InspectionProgressZOrder);
 
 	// Set up input mode for inspection (game and UI to allow ESC to cancel)
 	FInputModeGameAndUI InputMode;

@@ -8,10 +8,21 @@
 #include "MOItemDatabaseSettings.h"
 #include "Components/ScrollBox.h"
 #include "Components/VerticalBox.h"
+#include "Components/PanelWidget.h"
 
 UMORecipeListWidget::UMORecipeListWidget(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
+}
+
+UPanelWidget* UMORecipeListWidget::GetContainer() const
+{
+	// Use domain-specific bindings instead of base class ContentScrollBox/ContentContainer
+	if (RecipeScrollBox)
+	{
+		return RecipeScrollBox;
+	}
+	return RecipeContainer;
 }
 
 void UMORecipeListWidget::InitializeList(
@@ -32,7 +43,7 @@ void UMORecipeListWidget::PopulateRecipes(const TArray<FName>& RecipeIds)
 	ClearRecipes();
 
 	// Get the container to add entries to
-	UPanelWidget* Container = RecipeScrollBox ? Cast<UPanelWidget>(RecipeScrollBox) : Cast<UPanelWidget>(RecipeContainer);
+	UPanelWidget* Container = GetContainer();
 	if (!Container)
 	{
 		UE_LOG(LogMOFramework, Warning, TEXT("[MORecipeListWidget] No container widget bound"));
@@ -60,11 +71,11 @@ void UMORecipeListWidget::PopulateRecipes(const TArray<FName>& RecipeIds)
 		EntryWidget->SetupEntry(EntryData);
 
 		// Bind click handler
-		EntryWidget->OnEntryClicked.AddDynamic(this, &UMORecipeListWidget::HandleEntryClicked);
+		EntryWidget->OnEntryClicked.AddDynamic(this, &UMORecipeListWidget::HandleRecipeEntryClicked);
 
 		// Add to container
 		Container->AddChild(EntryWidget);
-		EntryWidgets.Add(EntryWidget);
+		RecipeEntryWidgets.Add(EntryWidget);
 	}
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MORecipeListWidget] Populated %d recipes"), RecipeIds.Num());
@@ -73,20 +84,20 @@ void UMORecipeListWidget::PopulateRecipes(const TArray<FName>& RecipeIds)
 void UMORecipeListWidget::ClearRecipes()
 {
 	// Remove all entry widgets
-	for (UMORecipeEntryWidget* Entry : EntryWidgets)
+	for (UMORecipeEntryWidget* Entry : RecipeEntryWidgets)
 	{
 		if (Entry)
 		{
 			Entry->RemoveFromParent();
 		}
 	}
-	EntryWidgets.Empty();
+	RecipeEntryWidgets.Empty();
 	SelectedRecipeId = NAME_None;
 }
 
 void UMORecipeListWidget::RefreshEntryStates()
 {
-	for (UMORecipeEntryWidget* Entry : EntryWidgets)
+	for (UMORecipeEntryWidget* Entry : RecipeEntryWidgets)
 	{
 		if (!Entry)
 		{
@@ -108,7 +119,7 @@ void UMORecipeListWidget::SelectRecipe(FName RecipeId)
 	SelectedRecipeId = RecipeId;
 
 	// Update visual state of affected entries
-	for (UMORecipeEntryWidget* Entry : EntryWidgets)
+	for (UMORecipeEntryWidget* Entry : RecipeEntryWidgets)
 	{
 		if (!Entry)
 		{
@@ -155,7 +166,7 @@ void UMORecipeListWidget::NativeConstruct()
 	Super::NativeConstruct();
 }
 
-void UMORecipeListWidget::HandleEntryClicked(FName RecipeId)
+void UMORecipeListWidget::HandleRecipeEntryClicked(FName RecipeId)
 {
 	SelectRecipe(RecipeId);
 }

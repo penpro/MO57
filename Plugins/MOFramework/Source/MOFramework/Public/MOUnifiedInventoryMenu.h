@@ -51,7 +51,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "CommonActivatableWidget.h"
+#include "MOMenuWidgetBase.h"
 #include "MOEquipmentComponent.h"
 #include "MOUnifiedInventoryMenu.generated.h"
 
@@ -95,6 +95,8 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOOnWorldItemContextMenuRequested,
 
 /**
  * Unified inventory menu with dual-panel layout.
+ * Inherits from UMOMenuWidgetBase for standardized CommonUI input handling.
+ * Tab/Escape close is handled by base class via bIsBackHandler.
  *
  * Left Panel: Always shows player inventory
  * Right Panel: Tabbed switcher with:
@@ -109,12 +111,12 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOOnWorldItemContextMenuRequested,
  *   - Stack management (organize, fill stacks)
  */
 UCLASS()
-class MOFRAMEWORK_API UMOUnifiedInventoryMenu : public UCommonActivatableWidget
+class MOFRAMEWORK_API UMOUnifiedInventoryMenu : public UMOMenuWidgetBase
 {
 	GENERATED_BODY()
 
 public:
-	UMOUnifiedInventoryMenu();
+	UMOUnifiedInventoryMenu(const FObjectInitializer& ObjectInitializer);
 
 	// ============================================================================
 	// INITIALIZATION
@@ -279,9 +281,12 @@ public:
 	// DELEGATES
 	// ============================================================================
 
-	/** Broadcast when the menu requests to close. */
+	/** @deprecated Use OnRequestClose (from base class) instead. Broadcast for legacy code. */
 	UPROPERTY(BlueprintAssignable, Category="MO|Inventory|Menu")
-	FMOOnUnifiedInventoryMenuClosed OnRequestClose;
+	FMOOnUnifiedInventoryMenuClosed OnLegacyRequestClose;
+
+	// Override RequestClose to also broadcast legacy delegate
+	virtual void RequestClose() override;
 
 	/** Broadcast when a quick transfer is requested (Shift+Click). */
 	UPROPERTY(BlueprintAssignable, Category="MO|Inventory|Menu")

@@ -8,8 +8,19 @@
 UMOPossessionMenu::UMOPossessionMenu(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
-	// Enable keyboard input for this widget (needed for Tab/Escape to close)
-	SetIsFocusable(true);
+	// Base class (UMOMenuWidgetBase) handles:
+	// - SetIsFocusable(true)
+	// - bIsBackHandler = true (for Escape/Tab close)
+	// - bAutoRestoreFocus = true
+}
+
+void UMOPossessionMenu::RequestClose()
+{
+	// Call base class which broadcasts OnRequestClose
+	Super::RequestClose();
+
+	// Also broadcast legacy delegate for backward compatibility
+	OnLegacyRequestClose.Broadcast();
 }
 
 void UMOPossessionMenu::NativeConstruct()
@@ -60,20 +71,6 @@ void UMOPossessionMenu::EnsureButtonBindings()
 	{
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOPossessionMenu] CreateCharacterButton is NULL!"));
 	}
-}
-
-FReply UMOPossessionMenu::NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent)
-{
-	const FKey PressedKey = InKeyEvent.GetKey();
-
-	// Tab or Escape closes the menu
-	if (PressedKey == EKeys::Tab || PressedKey == EKeys::Escape)
-	{
-		OnRequestClose.Broadcast();
-		return FReply::Handled();
-	}
-
-	return Super::NativeOnKeyDown(InGeometry, InKeyEvent);
 }
 
 void UMOPossessionMenu::PopulatePawnList(const TArray<FMOPersistedPawnRecord>& PawnRecords)
@@ -185,7 +182,8 @@ void UMOPossessionMenu::SetCreateCharacterVisible(bool bVisible)
 void UMOPossessionMenu::HandleCloseClicked()
 {
 	// Always allow close - the player can be in spectator mode or controlling any pawn
-	OnRequestClose.Broadcast();
+	// Use base class RequestClose() which broadcasts OnRequestClose and legacy delegate
+	RequestClose();
 }
 
 void UMOPossessionMenu::HandleCreateCharacterClicked()

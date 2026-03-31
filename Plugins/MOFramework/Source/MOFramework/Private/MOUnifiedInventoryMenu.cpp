@@ -16,8 +16,22 @@
 #include "TimerManager.h"
 #include "Engine/Engine.h"
 
-UMOUnifiedInventoryMenu::UMOUnifiedInventoryMenu()
+UMOUnifiedInventoryMenu::UMOUnifiedInventoryMenu(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
 {
+	// Base class (UMOMenuWidgetBase) handles:
+	// - SetIsFocusable(true)
+	// - bIsBackHandler = true (for Escape/Tab close)
+	// - bAutoRestoreFocus = true
+}
+
+void UMOUnifiedInventoryMenu::RequestClose()
+{
+	// Call base class which broadcasts OnRequestClose
+	Super::RequestClose();
+
+	// Also broadcast legacy delegate for backward compatibility
+	OnLegacyRequestClose.Broadcast();
 }
 
 void UMOUnifiedInventoryMenu::NativeConstruct()
@@ -734,7 +748,8 @@ void UMOUnifiedInventoryMenu::HandleLootNearbyToSecondaryClicked()
 
 void UMOUnifiedInventoryMenu::HandleCloseClicked()
 {
-	OnRequestClose.Broadcast();
+	// Use base class RequestClose() which broadcasts OnRequestClose and legacy delegate
+	RequestClose();
 }
 
 void UMOUnifiedInventoryMenu::HandlePlayerSlotRightClicked(int32 SlotIndex, const FGuid& ItemGuid, FVector2D ScreenPosition)

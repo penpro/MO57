@@ -42,7 +42,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "CommonActivatableWidget.h"
+#include "MOMenuWidgetBase.h"
 #include "MOStatusPanel.generated.h"
 
 class UMOStatusField;
@@ -133,9 +133,11 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOStatusPanelRequestCloseSignature);
 /**
  * Tab-based status panel for displaying player stats organized by category.
  * Uses MOStatusField widgets to display individual stats.
+ * Inherits from UMOMenuWidgetBase for standardized CommonUI input handling.
+ * Tab/Escape close is handled by base class via bIsBackHandler.
  */
 UCLASS(Abstract, Blueprintable)
-class MOFRAMEWORK_API UMOStatusPanel : public UCommonActivatableWidget
+class MOFRAMEWORK_API UMOStatusPanel : public UMOMenuWidgetBase
 {
 	GENERATED_BODY()
 
@@ -196,14 +198,18 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "MO|Status")
 	FMOStatusCategoryChangedSignature OnCategoryChanged;
 
-	/** Broadcast when panel requests to close */
+	/** @deprecated Use OnRequestClose (from base class) instead. Broadcast for legacy code. */
 	UPROPERTY(BlueprintAssignable, Category = "MO|Status")
-	FMOStatusPanelRequestCloseSignature OnRequestClose;
+	FMOStatusPanelRequestCloseSignature OnLegacyRequestClose;
+
+	// Override RequestClose to also broadcast legacy delegate
+	virtual void RequestClose() override;
 
 protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
 	virtual UWidget* NativeGetDesiredFocusTarget() const override;
+	// NativeOnKeyDown still handles Q/E and Left/Right for category cycling
 	virtual FReply NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
 
 	/** Blueprint event when category changes */

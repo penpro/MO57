@@ -50,7 +50,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "CommonActivatableWidget.h"
+#include "MOMenuWidgetBase.h"
 #include "MOworldSaveGame.h"
 #include "MOPossessionMenu.generated.h"
 
@@ -66,9 +66,11 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOPossessionMenuCreateCharacterSignature);
 /**
  * Menu for selecting which pawn to possess.
  * See file header for workflow and pitfalls.
+ * Inherits from UMOMenuWidgetBase for standardized CommonUI input handling.
+ * Tab/Escape close is handled by base class via bIsBackHandler.
  */
 UCLASS(Abstract, Blueprintable)
-class MOFRAMEWORK_API UMOPossessionMenu : public UCommonActivatableWidget
+class MOFRAMEWORK_API UMOPossessionMenu : public UMOMenuWidgetBase
 {
 	GENERATED_BODY()
 
@@ -98,9 +100,12 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO|UI|Possession")
 	int32 GetLivingPawnCount() const { return LivingPawnCount; }
 
-	/** Called when user wants to close the menu. */
+	/** @deprecated Use OnRequestClose (from base class) instead. Broadcast for legacy code. */
 	UPROPERTY(BlueprintAssignable, Category="MO|UI|Possession")
-	FMOPossessionMenuRequestCloseSignature OnRequestClose;
+	FMOPossessionMenuRequestCloseSignature OnLegacyRequestClose;
+
+	// Override RequestClose to also broadcast legacy delegate
+	virtual void RequestClose() override;
 
 	/** Called when user selects a pawn to possess. */
 	UPROPERTY(BlueprintAssignable, Category="MO|UI|Possession")
@@ -113,7 +118,6 @@ public:
 protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
-	virtual FReply NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
 
 	/** Widget class for pawn entries. Must be set in Blueprint. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Possession")

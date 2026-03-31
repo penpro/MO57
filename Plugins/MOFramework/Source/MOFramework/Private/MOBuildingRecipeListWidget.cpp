@@ -8,10 +8,21 @@
 #include "MOItemDatabaseSettings.h"
 #include "Components/ScrollBox.h"
 #include "Components/VerticalBox.h"
+#include "Components/PanelWidget.h"
 
 UMOBuildingRecipeListWidget::UMOBuildingRecipeListWidget(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
+}
+
+UPanelWidget* UMOBuildingRecipeListWidget::GetContainer() const
+{
+	// Use domain-specific bindings instead of base class ContentScrollBox/ContentContainer
+	if (RecipeScrollBox)
+	{
+		return RecipeScrollBox;
+	}
+	return RecipeContainer;
 }
 
 void UMOBuildingRecipeListWidget::InitializeList(
@@ -33,12 +44,8 @@ void UMOBuildingRecipeListWidget::PopulateRecipes(const TArray<FName>& RecipeIds
 	// Clear existing entries
 	ClearRecipes();
 
-	// Debug: Log widget binding status
-	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingRecipeListWidget] RecipeScrollBox bound: %s"), RecipeScrollBox ? TEXT("yes") : TEXT("no"));
-	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingRecipeListWidget] RecipeContainer bound: %s"), RecipeContainer ? TEXT("yes") : TEXT("no"));
-
 	// Get the container to add entries to
-	UPanelWidget* Container = RecipeScrollBox ? Cast<UPanelWidget>(RecipeScrollBox) : Cast<UPanelWidget>(RecipeContainer);
+	UPanelWidget* Container = GetContainer();
 	if (!Container)
 	{
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOBuildingRecipeListWidget] No container widget bound (need RecipeScrollBox or RecipeContainer)"));
@@ -74,11 +81,11 @@ void UMOBuildingRecipeListWidget::PopulateRecipes(const TArray<FName>& RecipeIds
 		EntryWidget->SetupEntry(EntryData);
 
 		// Bind click handler
-		EntryWidget->OnEntryClicked.AddDynamic(this, &UMOBuildingRecipeListWidget::HandleEntryClicked);
+		EntryWidget->OnEntryClicked.AddDynamic(this, &UMOBuildingRecipeListWidget::HandleBuildingEntryClicked);
 
 		// Add to container
 		Container->AddChild(EntryWidget);
-		EntryWidgets.Add(EntryWidget);
+		BuildingEntryWidgets.Add(EntryWidget);
 		CreatedCount++;
 
 		UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingRecipeListWidget] Entry widget created for: %s (DisplayName: %s)"),
@@ -91,20 +98,20 @@ void UMOBuildingRecipeListWidget::PopulateRecipes(const TArray<FName>& RecipeIds
 void UMOBuildingRecipeListWidget::ClearRecipes()
 {
 	// Remove all entry widgets
-	for (UMOBuildingRecipeEntryWidget* Entry : EntryWidgets)
+	for (UMOBuildingRecipeEntryWidget* Entry : BuildingEntryWidgets)
 	{
 		if (Entry)
 		{
 			Entry->RemoveFromParent();
 		}
 	}
-	EntryWidgets.Empty();
+	BuildingEntryWidgets.Empty();
 	SelectedRecipeId = NAME_None;
 }
 
 void UMOBuildingRecipeListWidget::RefreshEntryStates()
 {
-	for (UMOBuildingRecipeEntryWidget* Entry : EntryWidgets)
+	for (UMOBuildingRecipeEntryWidget* Entry : BuildingEntryWidgets)
 	{
 		if (!Entry)
 		{
@@ -129,7 +136,7 @@ void UMOBuildingRecipeListWidget::SelectRecipe(FName RecipeId)
 	SelectedRecipeId = RecipeId;
 
 	// Update visual state of affected entries
-	for (UMOBuildingRecipeEntryWidget* Entry : EntryWidgets)
+	for (UMOBuildingRecipeEntryWidget* Entry : BuildingEntryWidgets)
 	{
 		if (!Entry)
 		{
@@ -168,9 +175,9 @@ void UMOBuildingRecipeListWidget::NativeConstruct()
 	Super::NativeConstruct();
 }
 
-void UMOBuildingRecipeListWidget::HandleEntryClicked(FName RecipeId)
+void UMOBuildingRecipeListWidget::HandleBuildingEntryClicked(FName RecipeId)
 {
-	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingRecipeListWidget] HandleEntryClicked - RecipeId: %s"), *RecipeId.ToString());
+	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingRecipeListWidget] HandleBuildingEntryClicked - RecipeId: %s"), *RecipeId.ToString());
 	SelectRecipe(RecipeId);
 }
 

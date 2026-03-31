@@ -343,14 +343,14 @@ void UMOStationContextMenu::HandleLightClicked()
 void UMOStationContextMenu::UpdateButtonStates()
 {
 	const bool bCanLight = CanLightStation();
-	const bool bIsActive = IsStationActive();
+	const bool bStationIsActive = IsStationActive();
 
 	// Light button is disabled if already active or can't light
 	if (LightButton)
 	{
-		LightButton->SetIsEnabled(bCanLight && !bIsActive);
+		LightButton->SetIsEnabled(bCanLight && !bStationIsActive);
 	}
 
 	// Blueprint callback
-	OnButtonStatesUpdated(bCanLight, bIsActive);
+	OnButtonStatesUpdated(bCanLight, bStationIsActive);
 }

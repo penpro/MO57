@@ -17,6 +17,7 @@
 #include "MOSkillsComponent.h"
 #include "MOInventoryHolderInterface.h"
 #include "MOModalBackground.h"
+#include "MOPrimaryGameLayout.h"
 
 UMOBuildingUIController::UMOBuildingUIController()
 {
@@ -147,9 +148,9 @@ void UMOBuildingUIController::OpenBuildingMenu()
 	UMOSkillsComponent* Skills = GetCachedSkills();
 	MenuWidget->InitializeMenu(Knowledge, Discovery, Inventory, Skills);
 
-	// Show modal background and menu
+	// Show modal background and menu via layer system
 	ShowModalBackground();
-	MenuWidget->AddToViewport(BuildingMenuZOrder);
+	PushWidgetInstanceToLayer(MOUILayerTags::Layer_Menu, MenuWidget, BuildingMenuZOrder);
 
 	// Set input mode
 	ApplyInputModeForMenuOpen(MenuWidget);
@@ -298,8 +299,8 @@ void UMOBuildingUIController::ShowBuildWidget(AMOBuildableActor* Target)
 		// We just need to show it and let UIManager's CloseAllMenus handle clicks
 	}
 
-	// Add menu to viewport above background
-	WidgetInst->AddToViewport(GhostContextMenuZOrder);
+	// Add menu to layer system above background
+	PushWidgetInstanceToLayer(MOUILayerTags::Layer_GameOverlay, WidgetInst, GhostContextMenuZOrder);
 
 	// Get viewport size
 	int32 ViewportX, ViewportY;

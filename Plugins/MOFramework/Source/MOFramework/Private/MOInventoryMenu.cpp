@@ -1,8 +1,5 @@
 #include "MOInventoryMenu.h"
 
-#include "Input/Reply.h"
-#include "InputCoreTypes.h"
-
 #include "MOInventoryComponent.h"
 #include "MOInventoryGrid.h"
 #include "MOItemInfoPanel.h"
@@ -11,15 +8,25 @@
 UMOInventoryMenu::UMOInventoryMenu(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
-	SetIsFocusable(true);
+	// Base class (UMOMenuWidgetBase) handles:
+	// - SetIsFocusable(true)
+	// - bIsBackHandler = true (for Escape/Tab close)
+	// - bAutoRestoreFocus = true
+}
+
+void UMOInventoryMenu::RequestClose()
+{
+	// Call base class which broadcasts OnRequestClose
+	Super::RequestClose();
+
+	// Also broadcast legacy delegate for backward compatibility
+	OnLegacyRequestClose.Broadcast();
 }
 
 void UMOInventoryMenu::NativeConstruct()
 {
 	Super::NativeConstruct();
-
-	// Ensure Tab input is received.
-	SetKeyboardFocus();
+	// Focus is now handled by base class via GetDesiredFocusTarget()
 }
 
 void UMOInventoryMenu::NativeDestruct()
@@ -70,23 +77,6 @@ void UMOInventoryMenu::InitializeMenu(UMOInventoryComponent* InInventoryComponen
 	}
 
 	RefreshAll();
-}
-
-FReply UMOInventoryMenu::NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent)
-{
-	const FKey PressedKey = InKeyEvent.GetKey();
-
-	// Close on Tab or Escape
-	if (PressedKey == EKeys::Tab || PressedKey == EKeys::Escape)
-	{
-		// Broadcast standard delegate (prefer this for new code)
-		OnCloseRequested.Broadcast();
-		// Broadcast legacy delegate for backward compatibility
-		OnRequestClose.Broadcast();
-		return FReply::Handled();
-	}
-
-	return Super::NativeOnKeyDown(InGeometry, InKeyEvent);
 }
 
 void UMOInventoryMenu::HandleInventoryChanged()

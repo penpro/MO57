@@ -16,6 +16,15 @@
 #include "Kismet/GameplayStatics.h"
 #include "GameFramework/Pawn.h"
 
+void UMOStatusPanel::RequestClose()
+{
+	// Call base class which broadcasts OnRequestClose
+	Super::RequestClose();
+
+	// Also broadcast legacy delegate for backward compatibility
+	OnLegacyRequestClose.Broadcast();
+}
+
 void UMOStatusPanel::NativeConstruct()
 {
 	Super::NativeConstruct();
@@ -59,12 +68,7 @@ FReply UMOStatusPanel::NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEv
 {
 	const FKey PressedKey = InKeyEvent.GetKey();
 
-	// Tab or Escape closes the panel
-	if (PressedKey == EKeys::Tab || PressedKey == EKeys::Escape)
-	{
-		OnRequestClose.Broadcast();
-		return FReply::Handled();
-	}
+	// Tab/Escape close is handled by base class via bIsBackHandler
 
 	// Q/E or Left/Right to cycle categories
 	if (PressedKey == EKeys::Q || PressedKey == EKeys::Left)
@@ -431,7 +435,8 @@ void UMOStatusPanel::HandleConditionsTabClicked()
 
 void UMOStatusPanel::HandleBackClicked()
 {
-	OnRequestClose.Broadcast();
+	// Use base class RequestClose() which broadcasts OnRequestClose and legacy delegate
+	RequestClose();
 }
 
 void UMOStatusPanel::UpdateTabButtonStates()

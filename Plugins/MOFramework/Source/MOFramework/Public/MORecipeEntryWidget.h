@@ -10,150 +10,148 @@
  * Individual recipe entry in a recipe list. Shows recipe name, icon, and
  * visual state (selected, craftable, unavailable). Used by MORecipeListWidget.
  *
+ * INHERITS FROM: UMOListEntryBase (provides button handling, selection state)
+ *
  * VISUAL STATES:
  * - Selected: SelectedColor background
  * - Craftable: CraftableColor background, white text
  * - Unavailable: UncraftableColor background, gray text
  *
  * DELEGATES:
- * - OnEntrySelected (FMOUIRecipeSelected): Standard delegate, preferred
- * - OnEntryClicked (legacy): Deprecated, use OnEntrySelected
+ * - OnRecipeSelected (FMOUIRecipeSelected): Domain-specific delegate
+ * - OnEntryClicked (legacy): Deprecated, use OnRecipeSelected
+ * - OnEntrySelected (inherited): Generic list entry delegate
  *
  * =============================================================================
  * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
  * =============================================================================
  *
- * [2024-02] BUTTON TYPE: Uses UMOCommonButton (CommonUI). Bind click with
- *   OnClicked().AddUObject(), NOT OnClicked.AddDynamic().
+ * [2024-02] BUTTON TYPE: Uses UMOCommonButton (CommonUI) from base class.
+ *   Button handling is in base, but we override to broadcast recipe-specific delegates.
  *
  * [2024-02] ENTRY DATA: SetupEntry() caches FMORecipeListEntryData. Partial
  *   updates (SetSelected, SetCanCraft) modify cache and call UpdateVisuals().
  *
- * [2024-02] DUAL DELEGATES: OnEntrySelected is preferred. OnEntryClicked
- *   exists for backward compatibility - both are broadcast on click.
+ * [2024-02] THREE COLOR STATES: Unlike base's 2-state, recipe has 3:
+ *   selected, craftable, uncraftable. UpdateVisuals() is overridden.
  *
  * =============================================================================
- * RELATED FILES: MORecipeListWidget.h, MOCraftingMenu.h, MOUIDelegates.h
- * LAST UPDATED: 2026-02-25
+ * RELATED FILES: MOListEntryBase.h, MORecipeListWidget.h, MOCraftingMenu.h
+ * LAST UPDATED: 2026-03-29
  * =============================================================================
  */
 
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Blueprint/UserWidget.h"
+#include "MOListEntryBase.h"
 #include "MORecipeListWidget.h"
 #include "MOUIDelegates.h"
 #include "MORecipeEntryWidget.generated.h"
 
-class UMOCommonButton;
 class UTextBlock;
 class UImage;
-class UBorder;
 
 // Legacy delegate - prefer FMOUIRecipeSelected from MOUIDelegates.h for new code
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMORecipeEntryClickedSignature, FName, RecipeId);
+
+/**
+ * Recipe list entry widget.
+ * Inherits button handling and selection from UMOListEntryBase.
+ */
 UCLASS(Abstract, Blueprintable)
-class MOFRAMEWORK_API UMORecipeEntryWidget : public UUserWidget
+class MOFRAMEWORK_API UMORecipeEntryWidget : public UMOListEntryBase
 {
 	GENERATED_BODY()
 
 public:
 	UMORecipeEntryWidget(const FObjectInitializer& ObjectInitializer);
 
-	// --- Setup ---
+	// ============================================================================
+	// SETUP
+	// ============================================================================
 
 	/**
 	 * Configure this entry with recipe data.
 	 * @param InData Visual data for the recipe
 	 */
-	UFUNCTION(BlueprintCallable, Category="MO|Crafting|UI")
+	UFUNCTION(BlueprintCallable, Category = "MO|Crafting|UI")
 	void SetupEntry(const FMORecipeListEntryData& InData);
 
 	/** Update just the selection state. */
-	UFUNCTION(BlueprintCallable, Category="MO|Crafting|UI")
-	void SetSelected(bool bInSelected);
+	virtual void SetSelected(bool bInSelected) override;
 
 	/** Update just the craftable state. */
-	UFUNCTION(BlueprintCallable, Category="MO|Crafting|UI")
+	UFUNCTION(BlueprintCallable, Category = "MO|Crafting|UI")
 	void SetCanCraft(bool bInCanCraft);
 
-	// --- Getters ---
+	// ============================================================================
+	// GETTERS
+	// ============================================================================
 
-	UFUNCTION(BlueprintPure, Category="MO|Crafting|UI")
+	UFUNCTION(BlueprintPure, Category = "MO|Crafting|UI")
 	FName GetRecipeId() const { return EntryData.RecipeId; }
 
-	UFUNCTION(BlueprintPure, Category="MO|Crafting|UI")
-	bool IsSelected() const { return EntryData.bIsSelected; }
-
-	UFUNCTION(BlueprintPure, Category="MO|Crafting|UI")
+	UFUNCTION(BlueprintPure, Category = "MO|Crafting|UI")
 	bool CanCraft() const { return EntryData.bCanCraft; }
 
-	UFUNCTION(BlueprintPure, Category="MO|Crafting|UI")
+	UFUNCTION(BlueprintPure, Category = "MO|Crafting|UI")
 	const FMORecipeListEntryData& GetEntryData() const { return EntryData; }
 
-	// --- Delegates ---
+	// ============================================================================
+	// DELEGATES
+	// ============================================================================
 
 	/** Broadcast when this entry is clicked. Uses standard delegate signature. */
-	UPROPERTY(BlueprintAssignable, Category="MO|Crafting|UI")
-	FMOUIRecipeSelected OnEntrySelected;
+	UPROPERTY(BlueprintAssignable, Category = "MO|Crafting|UI")
+	FMOUIRecipeSelected OnRecipeSelected;
 
-	/** @deprecated Use OnEntrySelected instead. Broadcast for backward compatibility. */
-	UPROPERTY(BlueprintAssignable, Category="MO|Crafting|UI")
+	/** @deprecated Use OnRecipeSelected instead. Broadcast for backward compatibility. */
+	UPROPERTY(BlueprintAssignable, Category = "MO|Crafting|UI")
 	FMORecipeEntryClickedSignature OnEntryClicked;
 
-	// --- Configuration ---
-
-	/** Color when entry is selected. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Crafting|UI")
-	FLinearColor SelectedColor = FLinearColor(0.2f, 0.4f, 0.8f, 1.0f);
+	// ============================================================================
+	// CONFIGURATION (additional to base class)
+	// ============================================================================
 
 	/** Color when entry is not selected but craftable. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Crafting|UI")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MO|Crafting|UI|Style")
 	FLinearColor CraftableColor = FLinearColor(0.15f, 0.15f, 0.15f, 1.0f);
 
 	/** Color when entry cannot be crafted. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Crafting|UI")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MO|Crafting|UI|Style")
 	FLinearColor UncraftableColor = FLinearColor(0.3f, 0.1f, 0.1f, 0.5f);
 
 	/** Color for text when craftable. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Crafting|UI")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MO|Crafting|UI|Style")
 	FSlateColor TextColorCraftable = FSlateColor(FLinearColor::White);
 
 	/** Color for text when not craftable. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Crafting|UI")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MO|Crafting|UI|Style")
 	FSlateColor TextColorUncraftable = FSlateColor(FLinearColor(0.5f, 0.5f, 0.5f, 1.0f));
 
 protected:
-	virtual void NativeConstruct() override;
-	virtual void NativeDestruct() override;
 	virtual void NativePreConstruct() override;
 
-	/** Update visual appearance based on current state. */
-	UFUNCTION(BlueprintCallable, Category="MO|Crafting|UI")
-	void UpdateVisuals();
+	/** Override to handle recipe-specific 3-state visuals. */
+	virtual void UpdateVisuals_Implementation() override;
 
-	/** Called when the entry button is clicked. */
-	UFUNCTION()
-	void HandleButtonClicked();
+	/** Override to broadcast recipe-specific delegates. */
+	virtual void HandleButtonClicked() override;
 
 	/** Blueprint event for custom visual updates. */
-	UFUNCTION(BlueprintImplementableEvent, Category="MO|Crafting|UI")
+	UFUNCTION(BlueprintImplementableEvent, Category = "MO|Crafting|UI")
 	void OnVisualsUpdated(const FMORecipeListEntryData& Data);
 
-	// --- Widget Bindings ---
+	// ============================================================================
+	// WIDGET BINDINGS (recipe-specific)
+	// ============================================================================
 
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<UMOCommonButton> EntryButton;
-
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> RecipeNameText;
 
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
 	TObjectPtr<UImage> RecipeIcon;
-
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<UBorder> BackgroundBorder;
 
 private:
 	FMORecipeListEntryData EntryData;

@@ -11,6 +11,8 @@
  * UMORecipeListWidget for crafting. Supports filtering by category and
  * buildability, selection, and visual state updates.
  *
+ * INHERITS FROM: UMOScrollListBase (provides container management, selection)
+ *
  * DISPLAY DATA:
  * - FMOBuildRecipeListEntryData: Visual data per recipe entry
  *
@@ -32,17 +34,21 @@
  * [2024-02] FILTERING: CategoryFilter and bShowOnlyBuildable work independently.
  *   Both filters must pass for recipe to be shown.
  *
+ * [2026-03] WIDGET BINDINGS: Uses RecipeScrollBox/RecipeContainer (not base's
+ *   ContentScrollBox/ContentContainer) for backward compatibility. GetContainer()
+ *   is overridden to use these.
+ *
  * =============================================================================
- * RELATED FILES: MOBuildingRecipeEntryWidget.h, MOBuildingDetailPanel.h,
- *                MOBuildingUIController.h, MORecipeListWidget.h
- * LAST UPDATED: 2026-02-25
+ * RELATED FILES: MOScrollListBase.h, MOBuildingRecipeEntryWidget.h,
+ *                MOBuildingDetailPanel.h, MOBuildingUIController.h
+ * LAST UPDATED: 2026-03-29
  * =============================================================================
  */
 
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Blueprint/UserWidget.h"
+#include "MOScrollListBase.h"
 #include "MORecipeDefinitionRow.h"
 #include "MOBuildingRecipeListWidget.generated.h"
 
@@ -50,8 +56,6 @@ class UMOInventoryComponent;
 class UMOSkillsComponent;
 class UMORecipeDiscoveryComponent;
 class UMOBuildingRecipeEntryWidget;
-class UScrollBox;
-class UVerticalBox;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOBuildRecipeSelectedSignature, FName, RecipeId);
 
@@ -91,13 +95,13 @@ struct MOFRAMEWORK_API FMOBuildRecipeListEntryData
 
 /**
  * Widget that displays a scrollable list of building recipes.
- * Mirrors UMORecipeListWidget for crafting.
+ * Inherits container/selection management from UMOScrollListBase.
  *
  * Requires a Blueprint implementation with:
  * - RecipeScrollBox (UScrollBox) or RecipeContainer (UVerticalBox)
  */
 UCLASS(Abstract, Blueprintable)
-class MOFRAMEWORK_API UMOBuildingRecipeListWidget : public UUserWidget
+class MOFRAMEWORK_API UMOBuildingRecipeListWidget : public UMOScrollListBase
 {
 	GENERATED_BODY()
 
@@ -130,8 +134,7 @@ public:
 	void ClearRecipes();
 
 	/** Refresh the visual state of all entries (buildability, selection). */
-	UFUNCTION(BlueprintCallable, Category="MO|Building|UI")
-	void RefreshEntryStates();
+	virtual void RefreshEntryStates() override;
 
 	// --- Selection ---
 
@@ -167,9 +170,12 @@ public:
 protected:
 	virtual void NativeConstruct() override;
 
-	/** Called when a recipe entry is clicked. */
+	/** Override to use our specific widget bindings (RecipeScrollBox/RecipeContainer). */
+	virtual UPanelWidget* GetContainer() const;
+
+	/** Called when a building recipe entry is clicked. */
 	UFUNCTION()
-	void HandleEntryClicked(FName RecipeId);
+	void HandleBuildingEntryClicked(FName RecipeId);
 
 	/** Build visual data for a recipe. */
 	FMOBuildRecipeListEntryData BuildEntryData(FName RecipeId) const;
@@ -177,7 +183,7 @@ protected:
 	/** Check if a building can be built with current resources. */
 	bool CanBuildRecipe(FName RecipeId) const;
 
-	// --- Widget Bindings ---
+	// --- Widget Bindings (domain-specific, override base) ---
 
 	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
 	TObjectPtr<UScrollBox> RecipeScrollBox;
@@ -196,9 +202,9 @@ private:
 	UPROPERTY()
 	TWeakObjectPtr<UMORecipeDiscoveryComponent> DiscoveryComponent;
 
-	// Current recipe entries
+	// Current building entries (domain-specific type, different from base's EntryWidgets)
 	UPROPERTY()
-	TArray<TObjectPtr<UMOBuildingRecipeEntryWidget>> EntryWidgets;
+	TArray<TObjectPtr<UMOBuildingRecipeEntryWidget>> BuildingEntryWidgets;
 
 	// Current state
 	TArray<FName> CurrentRecipeIds;

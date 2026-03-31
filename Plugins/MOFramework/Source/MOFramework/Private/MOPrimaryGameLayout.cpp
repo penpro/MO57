@@ -108,12 +108,36 @@ void UMOPrimaryGameLayout::PushWidgetToLayerInstance(FGameplayTag LayerTag, UCom
 		return;
 	}
 
-	// For existing widget instances, we need to add them to the stack
-	// Note: AddWidget<> is the preferred method, but for instances we activate directly
-	Widget->AddToViewport(0); // Temporary - proper implementation would use stack's internal mechanisms
+	// Determine Z-order based on layer tag
+	// Modal background is at Z=10, so all interactive layers must be higher
+	// HUD (0) < ModalBackground (10) < Game (50) < GameOverlay (100) < Menu (150) < Modal (200)
+	int32 ZOrder = 50; // Default to Game layer
+	if (LayerTag == MOUILayerTags::Layer_HUD)
+	{
+		ZOrder = 0;
+	}
+	else if (LayerTag == MOUILayerTags::Layer_Game)
+	{
+		ZOrder = 50;
+	}
+	else if (LayerTag == MOUILayerTags::Layer_GameOverlay)
+	{
+		ZOrder = 100;
+	}
+	else if (LayerTag == MOUILayerTags::Layer_Menu)
+	{
+		ZOrder = 150;
+	}
+	else if (LayerTag == MOUILayerTags::Layer_Modal)
+	{
+		ZOrder = 200;
+	}
+
+	// For existing widget instances, add to viewport with correct Z-order
+	Widget->AddToViewport(ZOrder);
 	Widget->ActivateWidget();
 
-	UE_LOG(LogTemp, Verbose, TEXT("MOPrimaryGameLayout: Pushed widget instance to layer %s"), *LayerTag.ToString());
+	UE_LOG(LogTemp, Verbose, TEXT("MOPrimaryGameLayout: Pushed widget instance to layer %s (Z=%d)"), *LayerTag.ToString(), ZOrder);
 }
 
 void UMOPrimaryGameLayout::PopWidgetFromLayer(FGameplayTag LayerTag)

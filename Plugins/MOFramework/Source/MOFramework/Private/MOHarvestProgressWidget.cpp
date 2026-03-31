@@ -1,3 +1,7 @@
+/**
+ * MOHarvestProgressWidget.cpp - Harvest Progress Widget Implementation
+ */
+
 #include "MOHarvestProgressWidget.h"
 #include "MOFramework.h"
 #include "MOHarvestSubsystem.h"
@@ -6,8 +10,6 @@
 #include "MOSkillsComponent.h"
 #include "Components/ProgressBar.h"
 #include "Components/TextBlock.h"
-#include "CommonButtonBase.h"
-#include "TimerManager.h"
 #include "Components/InstancedStaticMeshComponent.h"
 
 void UMOHarvestProgressWidget::NativeConstruct()
@@ -16,80 +18,17 @@ void UMOHarvestProgressWidget::NativeConstruct()
 
 	// Ensure this widget doesn't steal focus from other UI elements
 	SetIsFocusable(false);
-
-	if (CancelButton)
-	{
-		CancelButton->OnClicked().RemoveAll(this);
-		CancelButton->OnClicked().AddUObject(this, &UMOHarvestProgressWidget::HandleCancelClicked);
-	}
 }
 
 void UMOHarvestProgressWidget::NativeDestruct()
 {
-	// Clear timer
-	if (UWorld* World = GetWorld())
-	{
-		World->GetTimerManager().ClearTimer(HarvestTimerHandle);
-	}
-
 	// Ensure we cancel if widget is destroyed while harvesting
-	if (bIsHarvesting)
+	if (IsProgressActive())
 	{
 		CancelHarvest();
 	}
 
 	Super::NativeDestruct();
-}
-
-void UMOHarvestProgressWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
-{
-	Super::NativeTick(MyGeometry, InDeltaTime);
-
-	if (bIsHarvesting)
-	{
-		// Calculate progress using GetRealTimeSeconds (continues even when game is paused)
-		if (const UWorld* World = GetWorld())
-		{
-			ElapsedTime = static_cast<float>(World->GetRealTimeSeconds() - HarvestStartTime);
-			CurrentProgress = FMath::Clamp(ElapsedTime / HarvestDuration, 0.0f, 1.0f);
-
-			// Check for completion
-			if (CurrentProgress >= 1.0f)
-			{
-				GetWorld()->GetTimerManager().ClearTimer(HarvestTimerHandle);
-				CompleteHarvest();
-				return;
-			}
-
-			const float TimeRemaining = FMath::Max(0.0f, HarvestDuration - ElapsedTime);
-			UpdateDisplay(CurrentProgress, TimeRemaining, ActionDisplayName);
-		}
-	}
-}
-
-void UMOHarvestProgressWidget::TickHarvest()
-{
-	if (!bIsHarvesting)
-	{
-		return;
-	}
-
-	// Use GetRealTimeSeconds - continues even when game is paused
-	const UWorld* World = GetWorld();
-	if (!World)
-	{
-		return;
-	}
-
-	ElapsedTime = static_cast<float>(World->GetRealTimeSeconds() - HarvestStartTime);
-	CurrentProgress = FMath::Clamp(ElapsedTime / HarvestDuration, 0.0f, 1.0f);
-
-	// Check for completion
-	if (CurrentProgress >= 1.0f)
-	{
-		GetWorld()->GetTimerManager().ClearTimer(HarvestTimerHandle);
-		CompleteHarvest();
-	}
 }
 
 void UMOHarvestProgressWidget::StartHarvest(
@@ -107,8 +46,8 @@ void UMOHarvestProgressWidget::StartHarvest(
 		return;
 	}
 
-	ActionId = InActionId;
-	ActionDisplayName = InActionDisplayName;
+	// Store domain-specific state
+	HarvestActionId = InActionId;
 	InventoryComponent = InInventory;
 	SkillsComponent = InSkills;
 
@@ -128,52 +67,20 @@ void UMOHarvestProgressWidget::StartHarvest(
 
 	// Get the duration from the subsystem's context
 	const FMOHarvestContext& Context = HarvestSubsystem->GetCurrentContext();
-	HarvestDuration = FMath::Max(0.1f, Context.TotalTime);
-
-	ElapsedTime = 0.0f;
-	CurrentProgress = 0.0f;
-	bIsHarvesting = true;
-
-	// Record start time using GetRealTimeSeconds (continues even when paused)
-	if (const UWorld* World = GetWorld())
-	{
-		HarvestStartTime = World->GetRealTimeSeconds();
-	}
+	const float HarvestDuration = FMath::Max(0.1f, Context.TotalTime);
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOHarvestProgress] Started harvest action '%s' (duration: %.1fs)"),
-		*ActionId.ToString(), HarvestDuration);
+		*InActionId.ToString(), HarvestDuration);
 
-	// Start timer for display updates
-	if (UWorld* World = GetWorld())
-	{
-		World->GetTimerManager().ClearTimer(HarvestTimerHandle);
-		World->GetTimerManager().SetTimer(
-			HarvestTimerHandle,
-			this,
-			&UMOHarvestProgressWidget::TickHarvest,
-			0.1f,  // Tick every 100ms for display updates
-			true,  // Looping
-			0.0f   // No delay
-		);
-	}
-
-	// Initial display update
-	UpdateDisplay(0.0f, HarvestDuration, ActionDisplayName);
+	// Use base class to start the timed progress
+	StartProgress(InActionDisplayName, HarvestDuration);
 }
 
 void UMOHarvestProgressWidget::CancelHarvest()
 {
-	if (!bIsHarvesting)
+	if (!IsProgressActive())
 	{
 		return;
-	}
-
-	bIsHarvesting = false;
-
-	// Clear timer
-	if (UWorld* World = GetWorld())
-	{
-		World->GetTimerManager().ClearTimer(HarvestTimerHandle);
 	}
 
 	// Cancel in subsystem
@@ -182,24 +89,20 @@ void UMOHarvestProgressWidget::CancelHarvest()
 		HarvestSubsystem->CancelHarvest();
 	}
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOHarvestProgress] Harvest cancelled for action '%s'"), *ActionId.ToString());
+	UE_LOG(LogMOFramework, Log, TEXT("[MOHarvestProgress] Harvest cancelled for action '%s'"), *HarvestActionId.ToString());
 
 	// Broadcast empty result for cancellation
 	FMOCraftResult EmptyResult;
 	OnHarvestCompleted.Broadcast(false, EmptyResult);
 	OnHarvestCancelled.Broadcast();
+
+	// Use base class to cancel progress (broadcasts OnCancelled)
+	CancelProgress();
 }
 
-void UMOHarvestProgressWidget::CompleteHarvest()
+void UMOHarvestProgressWidget::OnProgressSuccess_Implementation()
 {
-	if (!bIsHarvesting)
-	{
-		return;
-	}
-
-	bIsHarvesting = false;
-
-	UE_LOG(LogMOFramework, Log, TEXT("[MOHarvestProgress] Harvest complete for action '%s'"), *ActionId.ToString());
+	UE_LOG(LogMOFramework, Log, TEXT("[MOHarvestProgress] Harvest complete for action '%s'"), *HarvestActionId.ToString());
 
 	// Complete the harvest via subsystem
 	FMOCraftResult Result;
@@ -235,34 +138,40 @@ void UMOHarvestProgressWidget::CompleteHarvest()
 	// Call blueprint event
 	OnHarvestSuccess(Result);
 
-	// Broadcast completion
-	OnHarvestCompleted.Broadcast(true, Result);
+	// Broadcast domain-specific completion
+	OnHarvestCompleted.Broadcast(Result.bSuccess, Result);
 }
 
-void UMOHarvestProgressWidget::HandleCancelClicked()
+void UMOHarvestProgressWidget::UpdateDisplay_Implementation(float Progress, float TimeRemaining, const FText& InActionName)
 {
-	CancelHarvest();
-}
-
-void UMOHarvestProgressWidget::UpdateDisplay_Implementation(float Progress, float TimeRemaining, const FText& ActionName)
-{
+	// Update progress bar
 	if (ProgressBar)
 	{
 		ProgressBar->SetPercent(Progress);
 	}
 
+	// Update action name
 	if (ActionNameText)
 	{
-		ActionNameText->SetText(ActionName);
+		ActionNameText->SetText(InActionName);
 	}
 
+	// Use harvest-specific time format
 	if (TimeRemainingText)
 	{
-		int32 SecondsRemaining = FMath::CeilToInt(TimeRemaining);
+		const int32 SecondsRemaining = FMath::CeilToInt(TimeRemaining);
 		TimeRemainingText->SetText(FText::Format(
 			NSLOCTEXT("MO", "HarvestTimeRemaining", "{0}s remaining"),
 			FText::AsNumber(SecondsRemaining)));
 	}
+
+	// Note: Completion is handled by base class in NativeTick -> OnProgressSuccess
+}
+
+void UMOHarvestProgressWidget::UpdateHarvestDisplay_Implementation(float Progress, float TimeRemaining, const FText& InActionName)
+{
+	// Just delegate to UpdateDisplay
+	UpdateDisplay_Implementation(Progress, TimeRemaining, InActionName);
 }
 
 void UMOHarvestProgressWidget::OnHarvestSuccess_Implementation(const FMOCraftResult& Result)

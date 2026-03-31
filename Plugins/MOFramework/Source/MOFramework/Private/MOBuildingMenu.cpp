@@ -12,7 +12,19 @@
 UMOBuildingMenu::UMOBuildingMenu(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
-	SetIsFocusable(true);
+	// Base class (UMOMenuWidgetBase) handles:
+	// - SetIsFocusable(true)
+	// - bIsBackHandler = true (for Escape/Tab close)
+	// - bAutoRestoreFocus = true
+}
+
+void UMOBuildingMenu::RequestClose()
+{
+	// Call base class which broadcasts OnRequestClose
+	Super::RequestClose();
+
+	// Also broadcast legacy delegate for backward compatibility
+	OnLegacyRequestClose.Broadcast();
 }
 
 void UMOBuildingMenu::NativeConstruct()
@@ -59,20 +71,6 @@ void UMOBuildingMenu::NativeDestruct()
 	}
 
 	Super::NativeDestruct();
-}
-
-FReply UMOBuildingMenu::NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent)
-{
-	const FKey PressedKey = InKeyEvent.GetKey();
-
-	// Close on Tab, Escape, or B (the open key)
-	if (PressedKey == EKeys::Tab || PressedKey == EKeys::Escape || PressedKey == EKeys::B)
-	{
-		OnRequestClose.Broadcast();
-		return FReply::Handled();
-	}
-
-	return Super::NativeOnKeyDown(InGeometry, InKeyEvent);
 }
 
 void UMOBuildingMenu::InitializeMenu(
@@ -165,7 +163,8 @@ void UMOBuildingMenu::RefreshBuildingList()
 
 void UMOBuildingMenu::HandleCloseClicked()
 {
-	OnRequestClose.Broadcast();
+	// Use base class RequestClose() which broadcasts OnRequestClose and legacy delegate
+	RequestClose();
 }
 
 void UMOBuildingMenu::HandleRecipeSelected(FName RecipeId)

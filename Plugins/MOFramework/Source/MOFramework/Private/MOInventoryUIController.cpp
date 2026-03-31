@@ -14,6 +14,7 @@
 #include "MOFramework.h"
 #include "EngineUtils.h"
 #include "Blueprint/UserWidget.h"
+#include "MOPrimaryGameLayout.h"
 
 UMOInventoryUIController::UMOInventoryUIController()
 {
@@ -183,7 +184,7 @@ void UMOInventoryUIController::OpenInventoryMenu()
 	if (!MenuWidget->IsInViewport())
 	{
 		ShowModalBackground();
-		MenuWidget->AddToViewport(InventoryMenuZOrder);
+		PushWidgetInstanceToLayer(MOUILayerTags::Layer_Menu, MenuWidget, InventoryMenuZOrder);
 	}
 
 	UpdateReticleVisibility();
@@ -310,7 +311,7 @@ void UMOInventoryUIController::OpenInventoryWithContainer(AActor* ContainerActor
 	if (!MenuWidget->IsInViewport())
 	{
 		ShowModalBackground();
-		MenuWidget->AddToViewport(UnifiedInventoryMenuZOrder);
+		PushWidgetInstanceToLayer(MOUILayerTags::Layer_Menu, MenuWidget, UnifiedInventoryMenuZOrder);
 	}
 
 	UpdateReticleVisibility();
@@ -640,8 +641,8 @@ void UMOInventoryUIController::ShowItemContextMenu(UMOInventoryComponent* Invent
 
 	MenuWidget->InitializeForItem(InventoryComponent, ItemGuid, SlotIndex);
 
-	// Add to viewport first, then position
-	MenuWidget->AddToViewport(ItemContextMenuZOrder);
+	// Add to layer system, then position
+	PushWidgetInstanceToLayer(MOUILayerTags::Layer_GameOverlay, MenuWidget, ItemContextMenuZOrder);
 
 	// Position at mouse cursor using viewport slot positioning
 	MenuWidget->SetMenuPosition(ScreenPosition);
@@ -691,8 +692,8 @@ void UMOInventoryUIController::ShowWorldItemContextMenu(AMOWorldItem* WorldItem,
 	// Initialize for world item (shows Pickup instead of Drop)
 	MenuWidget->InitializeForWorldItem(WorldItem);
 
-	// Add to viewport first, then position
-	MenuWidget->AddToViewport(ItemContextMenuZOrder);
+	// Add to layer system, then position
+	PushWidgetInstanceToLayer(MOUILayerTags::Layer_GameOverlay, MenuWidget, ItemContextMenuZOrder);
 
 	// Position at mouse cursor
 	MenuWidget->SetMenuPosition(ScreenPosition);
@@ -1209,8 +1210,8 @@ void UMOInventoryUIController::ShowGroundContextMenu(FVector WorldLocation, FVec
 	// Switch to UI mode FIRST so GetMousePosition works correctly
 	ApplyInputModeForMenuOpen(MenuWidget);
 
-	// Add to viewport
-	MenuWidget->AddToViewport(GroundContextMenuZOrder);
+	// Add to layer system
+	PushWidgetInstanceToLayer(MOUILayerTags::Layer_GameOverlay, MenuWidget, GroundContextMenuZOrder);
 
 	// Position at screen center (where reticle is)
 	MenuWidget->SetMenuPosition(ScreenPosition);

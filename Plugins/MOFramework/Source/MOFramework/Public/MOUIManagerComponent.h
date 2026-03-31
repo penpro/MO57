@@ -178,6 +178,7 @@ class UMOSurvivalStatsComponent;
 
 // Forward declarations for public API (widgets owned by controllers)
 class UUserWidget;
+class UMOMenuWidgetBase;
 class UMOCraftingMenu;
 class UMOSkillsPanel;
 class UMOBuildingMenu;

@@ -77,11 +77,13 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "GameplayTagContainer.h"
 #include "MOUIControllerBase.generated.h"
 
 class APlayerController;
 class UUserWidget;
 class UMOUIManagerComponent;
+class UCommonActivatableWidget;
 class UMOInventoryComponent;
 class UMOSkillsComponent;
 class UMOKnowledgeComponent;
@@ -166,6 +168,41 @@ protected:
 
 	/** Check if any menu is currently open. */
 	bool IsAnyMenuOpen() const;
+
+	// =========================================================================
+	// COMMONUI LAYER SYSTEM
+	// =========================================================================
+	// Use these methods to push widgets to the appropriate layer.
+	// They will use the CommonUI layer system if available, otherwise fallback to AddToViewport.
+
+	/**
+	 * Push a widget to the specified UI layer.
+	 * Falls back to AddToViewport if the layer system is not configured.
+	 *
+	 * @param LayerTag The layer to push to (e.g., MOUILayerTags::Layer_Game)
+	 * @param WidgetClass The widget class to create and push
+	 * @param FallbackZOrder Z-order to use if falling back to AddToViewport
+	 * @return The created widget, or nullptr if failed
+	 */
+	UCommonActivatableWidget* PushWidgetToLayer(FGameplayTag LayerTag, TSubclassOf<UCommonActivatableWidget> WidgetClass, int32 FallbackZOrder = 10);
+
+	/**
+	 * Push an existing widget instance to the specified UI layer.
+	 * Falls back to AddToViewport if the layer system is not configured.
+	 *
+	 * @param LayerTag The layer to push to
+	 * @param Widget The widget instance to push
+	 * @param FallbackZOrder Z-order to use if falling back to AddToViewport
+	 */
+	void PushWidgetInstanceToLayer(FGameplayTag LayerTag, UCommonActivatableWidget* Widget, int32 FallbackZOrder = 10);
+
+	/**
+	 * Pop/deactivate a widget from its layer.
+	 * If using fallback AddToViewport, calls RemoveFromParent.
+	 *
+	 * @param Widget The widget to remove/deactivate
+	 */
+	void PopWidgetFromLayer(UCommonActivatableWidget* Widget);
 
 	// =========================================================================
 	// PAWN COMPONENT ACCESS

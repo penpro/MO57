@@ -48,7 +48,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "CommonActivatableWidget.h"
+#include "MOMenuWidgetBase.h"
 #include "MOInGameMenu.generated.h"
 
 class UMOCommonButton;
@@ -64,15 +64,18 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOInGameMenuExitGameSignature);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOInGameMenuSaveRequestedSignature, const FString&, SlotName);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOInGameMenuLoadRequestedSignature, const FString&, SlotName);
 
+/**
+ * Inherits from UMOMenuWidgetBase for standardized CommonUI input handling.
+ * Tab/Escape handling: Closes focus panel first, then closes menu via back handler.
+ */
 UCLASS()
-class MOFRAMEWORK_API UMOInGameMenu : public UCommonActivatableWidget
+class MOFRAMEWORK_API UMOInGameMenu : public UMOMenuWidgetBase
 {
 	GENERATED_BODY()
 
 public:
-	/** Request to close the menu (broadcasts delegate). */
-	UFUNCTION(BlueprintCallable, Category="MO|UI|InGameMenu")
-	void RequestClose();
+	/** Request to close the menu (broadcasts delegate). Override from base class. */
+	virtual void RequestClose() override;
 
 	/** Refresh the save panel's list of saves. */
 	UFUNCTION(BlueprintCallable, Category="MO|UI|InGameMenu")
@@ -82,9 +85,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|UI|InGameMenu")
 	void RefreshLoadPanelList();
 
-	/** Called when menu should close. */
+	/** @deprecated Use OnRequestClose (from base class) instead. Broadcast for legacy code. */
 	UPROPERTY(BlueprintAssignable, Category="MO|UI|InGameMenu")
-	FMOInGameMenuRequestCloseSignature OnRequestClose;
+	FMOInGameMenuRequestCloseSignature OnLegacyRequestClose;
 
 	/** Called when user confirms exit to main menu. */
 	UPROPERTY(BlueprintAssignable, Category="MO|UI|InGameMenu")
@@ -106,7 +109,8 @@ protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
 	virtual UWidget* NativeGetDesiredFocusTarget() const override;
-	virtual FReply NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
+	// Override back action: Close focus panel first, then close menu
+	virtual bool NativeOnHandleBackAction() override;
 
 	/** Switch the focus window to show a specific panel. */
 	UFUNCTION(BlueprintCallable, Category="MO|UI|InGameMenu")

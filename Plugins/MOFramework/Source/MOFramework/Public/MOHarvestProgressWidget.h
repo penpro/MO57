@@ -11,40 +11,37 @@
  * bar, time remaining, and cancel option. Used when harvesting resources
  * like chopping trees or gathering materials.
  *
- * WIDGET BINDINGS (required in Blueprint):
+ * INHERITS FROM: UMOProgressWidgetBase (provides BindWidget, progress tracking)
+ *
+ * WIDGET BINDINGS (inherited from base):
  * - ProgressBar (UProgressBar) - Visual progress
  * - ActionNameText (UTextBlock) - "Chopping Tree"
  * - TimeRemainingText (UTextBlock) - "3.2s"
+ * - InstructionText (optional) - Instruction hint
  * - CancelButton (optional) - Abort harvest
  *
  * =============================================================================
  * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
  * =============================================================================
  *
- * [2024-02] REAL-TIME TRACKING: Uses wall-clock time (FPlatformTime::Seconds)
- *   for accurate progress even if frame rate drops.
- *
- * [2024-02] TICK-BASED: Uses NativeTick for progress updates, not timers.
- *   Ensure widget is tickable when harvest is active.
+ * [2024-02] REAL-TIME TRACKING: Uses wall-clock time via base class for
+ *   accurate progress even if frame rate drops.
  *
  * [2024-02] DELEGATE CLEANUP: OnHarvestCompleted/OnHarvestCancelled persist.
  *   Clear bindings after use if reusing widget instance.
  *
  * =============================================================================
- * RELATED FILES: MOHarvestSubsystem.h, MOCraftingUIController.h, MOCraftResult.h
- * LAST UPDATED: 2026-02-25
+ * RELATED FILES: MOProgressWidgetBase.h, MOHarvestSubsystem.h, MOCraftingUIController.h
+ * LAST UPDATED: 2026-03-29
  * =============================================================================
  */
 
 #pragma once
 
 #include "CoreMinimal.h"
-#include "CommonActivatableWidget.h"
+#include "MOProgressWidgetBase.h"
 #include "MOHarvestProgressWidget.generated.h"
 
-class UProgressBar;
-class UTextBlock;
-class UCommonButtonBase;
 class UMOKnowledgeComponent;
 class UMOSkillsComponent;
 class UMOInventoryComponent;
@@ -53,23 +50,32 @@ struct FMOCraftResult;
 
 /**
  * Widget displaying harvest progress with a countdown timer.
+ * Inherits core progress functionality from UMOProgressWidgetBase.
  * See file header for widget bindings and pitfalls.
  */
 UCLASS(Abstract, Blueprintable)
-class MOFRAMEWORK_API UMOHarvestProgressWidget : public UCommonActivatableWidget
+class MOFRAMEWORK_API UMOHarvestProgressWidget : public UMOProgressWidgetBase
 {
 	GENERATED_BODY()
 
 public:
+	// ============================================================================
+	// DELEGATES (domain-specific)
+	// ============================================================================
+
 	/** Called when harvest is completed (either success or cancelled). */
 	DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOHarvestCompletedSignature, bool, bCompleted, const FMOCraftResult&, Result);
-	UPROPERTY(BlueprintAssignable, Category="MO|Harvest")
+	UPROPERTY(BlueprintAssignable, Category = "MO|Harvest")
 	FMOHarvestCompletedSignature OnHarvestCompleted;
 
 	/** Called when player requests to close/cancel the harvest. */
 	DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOHarvestCancelledSignature);
-	UPROPERTY(BlueprintAssignable, Category="MO|Harvest")
+	UPROPERTY(BlueprintAssignable, Category = "MO|Harvest")
 	FMOHarvestCancelledSignature OnHarvestCancelled;
+
+	// ============================================================================
+	// HARVEST CONTROL
+	// ============================================================================
 
 	/**
 	 * Start a harvest operation with progress display.
@@ -80,7 +86,7 @@ public:
 	 * @param InInventory Player's inventory (for time calculation and output)
 	 * @param InSkills Player's skills (for XP)
 	 */
-	UFUNCTION(BlueprintCallable, Category="MO|Harvest")
+	UFUNCTION(BlueprintCallable, Category = "MO|Harvest")
 	void StartHarvest(
 		UInstancedStaticMeshComponent* InISMComponent,
 		int32 InInstanceIndex,
@@ -91,75 +97,45 @@ public:
 	);
 
 	/** Cancel the harvest in progress. */
-	UFUNCTION(BlueprintCallable, Category="MO|Harvest")
+	UFUNCTION(BlueprintCallable, Category = "MO|Harvest")
 	void CancelHarvest();
 
 	/** Check if harvest is currently in progress. */
-	UFUNCTION(BlueprintPure, Category="MO|Harvest")
-	bool IsHarvestInProgress() const { return bIsHarvesting; }
-
-	/** Get current progress (0-1). */
-	UFUNCTION(BlueprintPure, Category="MO|Harvest")
-	float GetProgress() const { return CurrentProgress; }
+	UFUNCTION(BlueprintPure, Category = "MO|Harvest")
+	bool IsHarvestInProgress() const { return IsProgressActive(); }
 
 	/** Get the action ID being executed. */
-	UFUNCTION(BlueprintPure, Category="MO|Harvest")
-	FName GetCurrentActionId() const { return ActionId; }
+	UFUNCTION(BlueprintPure, Category = "MO|Harvest")
+	FName GetCurrentActionId() const { return HarvestActionId; }
 
 	/** Update the visual display. Can be called externally for carcass butchering etc. */
-	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category="MO|Harvest")
-	void UpdateDisplay(float Progress, float TimeRemaining, const FText& ActionName);
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "MO|Harvest")
+	void UpdateHarvestDisplay(float Progress, float TimeRemaining, const FText& InActionName);
 
 protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
-	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
+
+	/** Override base UpdateDisplay to use harvest-specific formatting. */
+	virtual void UpdateDisplay_Implementation(float Progress, float TimeRemaining, const FText& InActionName) override;
+
+	/** Override base OnProgressSuccess to complete harvest via subsystem. */
+	virtual void OnProgressSuccess_Implementation() override;
 
 	/** Called when harvest completes successfully. Override in BP for custom behavior. */
-	UFUNCTION(BlueprintNativeEvent, Category="MO|Harvest")
+	UFUNCTION(BlueprintNativeEvent, Category = "MO|Harvest")
 	void OnHarvestSuccess(const FMOCraftResult& Result);
 
-	// --- Widget Bindings ---
+	// ============================================================================
+	// HARVEST-SPECIFIC STATE
+	// ============================================================================
 
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidget), Category="MO|Harvest")
-	TObjectPtr<UProgressBar> ProgressBar;
+	/** The harvest action ID being executed. */
+	FName HarvestActionId = NAME_None;
 
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidget), Category="MO|Harvest")
-	TObjectPtr<UTextBlock> ActionNameText;
-
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidget), Category="MO|Harvest")
-	TObjectPtr<UTextBlock> TimeRemainingText;
-
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional), Category="MO|Harvest")
-	TObjectPtr<UTextBlock> InstructionText;
-
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional), Category="MO|Harvest")
-	TObjectPtr<UCommonButtonBase> CancelButton;
-
-private:
-	UFUNCTION()
-	void HandleCancelClicked();
-
-	/** Timer callback for real-time progress tracking. */
-	UFUNCTION()
-	void TickHarvest();
-
-	void CompleteHarvest();
-
-	// Current harvest state
-	FName ActionId = NAME_None;
-	FText ActionDisplayName;
+	/** Cached inventory component (weak ref). */
 	TWeakObjectPtr<UMOInventoryComponent> InventoryComponent;
+
+	/** Cached skills component (weak ref). */
 	TWeakObjectPtr<UMOSkillsComponent> SkillsComponent;
-
-	float HarvestDuration = 5.0f;
-	float ElapsedTime = 0.0f;
-	float CurrentProgress = 0.0f;
-	bool bIsHarvesting = false;
-
-	/** Wall-clock time when harvest started (for real-time tracking). */
-	double HarvestStartTime = 0.0;
-
-	/** Timer handle for progress updates. */
-	FTimerHandle HarvestTimerHandle;
 };

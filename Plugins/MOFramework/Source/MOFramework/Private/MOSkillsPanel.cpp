@@ -15,8 +15,19 @@
 UMOSkillsPanel::UMOSkillsPanel(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
-	// Enable keyboard input for this widget (needed for Tab/Escape to close)
-	SetIsFocusable(true);
+	// Base class (UMOMenuWidgetBase) handles:
+	// - SetIsFocusable(true)
+	// - bIsBackHandler = true (for Escape/Tab close)
+	// - bAutoRestoreFocus = true
+}
+
+void UMOSkillsPanel::RequestClose()
+{
+	// Call base class which broadcasts OnRequestClose
+	Super::RequestClose();
+
+	// Also broadcast legacy delegate for backward compatibility
+	OnLegacyRequestClose.Broadcast();
 }
 
 void UMOSkillsPanel::InitializePanel(UMOSkillsComponent* InSkillsComponent)
@@ -212,20 +223,6 @@ void UMOSkillsPanel::NativeDestruct()
 	Super::NativeDestruct();
 }
 
-FReply UMOSkillsPanel::NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent)
-{
-	const FKey PressedKey = InKeyEvent.GetKey();
-
-	// Close on Escape or Tab (same key that opens it)
-	if (PressedKey == EKeys::Escape || PressedKey == EKeys::Tab)
-	{
-		OnRequestClose.Broadcast();
-		return FReply::Handled();
-	}
-
-	return Super::NativeOnKeyDown(InGeometry, InKeyEvent);
-}
-
 void UMOSkillsPanel::HandleSkillLevelUp(FName SkillId, int32 OldLevel, int32 NewLevel)
 {
 	// Refresh the specific skill entry
@@ -294,7 +291,8 @@ void UMOSkillsPanel::HandleSkillEntrySelected(FName SkillId)
 
 void UMOSkillsPanel::HandleCloseClicked()
 {
-	OnRequestClose.Broadcast();
+	// Use base class RequestClose() which broadcasts OnRequestClose and legacy delegate
+	RequestClose();
 }
 
 void UMOSkillsPanel::HandleSkillsTabClicked()

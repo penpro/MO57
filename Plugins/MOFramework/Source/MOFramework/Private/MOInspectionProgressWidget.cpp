@@ -1,11 +1,13 @@
+/**
+ * MOInspectionProgressWidget.cpp - Inspection Progress Widget Implementation
+ */
+
 #include "MOInspectionProgressWidget.h"
 #include "MOFramework.h"
 #include "MOKnowledgeComponent.h"
 #include "MOSkillsComponent.h"
 #include "Components/ProgressBar.h"
 #include "Components/TextBlock.h"
-#include "CommonButtonBase.h"
-#include "TimerManager.h"
 
 void UMOInspectionProgressWidget::NativeConstruct()
 {
@@ -13,80 +15,17 @@ void UMOInspectionProgressWidget::NativeConstruct()
 
 	// Ensure this widget doesn't steal focus from other UI elements
 	SetIsFocusable(false);
-
-	if (CancelButton)
-	{
-		CancelButton->OnClicked().RemoveAll(this);
-		CancelButton->OnClicked().AddUObject(this, &UMOInspectionProgressWidget::HandleCancelClicked);
-	}
 }
 
 void UMOInspectionProgressWidget::NativeDestruct()
 {
-	// Clear timer
-	if (UWorld* World = GetWorld())
-	{
-		World->GetTimerManager().ClearTimer(InspectionTimerHandle);
-	}
-
 	// Ensure we cancel if widget is destroyed while inspecting
-	if (bIsInspecting)
+	if (IsProgressActive())
 	{
 		CancelInspection();
 	}
 
 	Super::NativeDestruct();
-}
-
-void UMOInspectionProgressWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
-{
-	Super::NativeTick(MyGeometry, InDeltaTime);
-
-	if (bIsInspecting)
-	{
-		// Calculate progress using GetRealTimeSeconds (continues even when game is paused)
-		if (const UWorld* World = GetWorld())
-		{
-			ElapsedTime = static_cast<float>(World->GetRealTimeSeconds() - InspectionStartTime);
-			CurrentProgress = FMath::Clamp(ElapsedTime / InspectionDuration, 0.0f, 1.0f);
-
-			// Check for completion
-			if (CurrentProgress >= 1.0f)
-			{
-				GetWorld()->GetTimerManager().ClearTimer(InspectionTimerHandle);
-				CompleteInspection();
-				return;
-			}
-
-			const float TimeRemaining = FMath::Max(0.0f, InspectionDuration - ElapsedTime);
-			UpdateDisplay(CurrentProgress, TimeRemaining, ItemDisplayName);
-		}
-	}
-}
-
-void UMOInspectionProgressWidget::TickInspection()
-{
-	if (!bIsInspecting)
-	{
-		return;
-	}
-
-	// Use GetRealTimeSeconds - continues even when game is paused
-	const UWorld* World = GetWorld();
-	if (!World)
-	{
-		return;
-	}
-
-	ElapsedTime = static_cast<float>(World->GetRealTimeSeconds() - InspectionStartTime);
-	CurrentProgress = FMath::Clamp(ElapsedTime / InspectionDuration, 0.0f, 1.0f);
-
-	// Check for completion
-	if (CurrentProgress >= 1.0f)
-	{
-		GetWorld()->GetTimerManager().ClearTimer(InspectionTimerHandle);
-		CompleteInspection();
-	}
 }
 
 void UMOInspectionProgressWidget::StartInspection(
@@ -96,67 +35,36 @@ void UMOInspectionProgressWidget::StartInspection(
 	UMOSkillsComponent* InSkillsComponent,
 	float InInspectionDuration)
 {
+	// Store domain-specific state
 	ItemDefinitionId = InItemDefinitionId;
 	ItemDisplayName = InItemDisplayName;
 	KnowledgeComponent = InKnowledgeComponent;
 	SkillsComponent = InSkillsComponent;
 
 	// Use debug duration if set, otherwise use the provided duration
+	float ActualDuration;
 	if (DebugInspectionDuration > 0.0f)
 	{
-		InspectionDuration = DebugInspectionDuration;
-		UE_LOG(LogMOFramework, Log, TEXT("[MOInspection] Using DEBUG duration override: %.1fs"), InspectionDuration);
+		ActualDuration = DebugInspectionDuration;
+		UE_LOG(LogMOFramework, Log, TEXT("[MOInspection] Using DEBUG duration override: %.1fs"), ActualDuration);
 	}
 	else
 	{
-		InspectionDuration = FMath::Max(0.1f, InInspectionDuration);
-	}
-
-	ElapsedTime = 0.0f;
-	CurrentProgress = 0.0f;
-	bIsInspecting = true;
-
-	// Record start time using GetRealTimeSeconds (continues even when paused)
-	if (const UWorld* World = GetWorld())
-	{
-		InspectionStartTime = World->GetRealTimeSeconds();
+		ActualDuration = FMath::Max(0.1f, InInspectionDuration);
 	}
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOInspection] Started inspection of '%s' (duration: %.1fs)"),
-		*ItemDefinitionId.ToString(), InspectionDuration);
+		*ItemDefinitionId.ToString(), ActualDuration);
 
-	// Start timer for display updates
-	// Progress is calculated from wall-clock time, so it continues even when tabbed out
-	if (UWorld* World = GetWorld())
-	{
-		World->GetTimerManager().ClearTimer(InspectionTimerHandle);
-		World->GetTimerManager().SetTimer(
-			InspectionTimerHandle,
-			this,
-			&UMOInspectionProgressWidget::TickInspection,
-			0.1f,  // Tick every 100ms for display updates
-			true,  // Looping
-			0.0f   // No delay
-		);
-	}
-
-	// Initial display update
-	UpdateDisplay(0.0f, InspectionDuration, ItemDisplayName);
+	// Use base class to start the timed progress
+	StartProgress(InItemDisplayName, ActualDuration);
 }
 
 void UMOInspectionProgressWidget::CancelInspection()
 {
-	if (!bIsInspecting)
+	if (!IsProgressActive())
 	{
 		return;
-	}
-
-	bIsInspecting = false;
-
-	// Clear timer
-	if (UWorld* World = GetWorld())
-	{
-		World->GetTimerManager().ClearTimer(InspectionTimerHandle);
 	}
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOInspection] Inspection cancelled for '%s'"), *ItemDefinitionId.ToString());
@@ -165,17 +73,13 @@ void UMOInspectionProgressWidget::CancelInspection()
 	FMOInspectionResult EmptyResult;
 	OnInspectionCompleted.Broadcast(false, EmptyResult);
 	OnInspectionCancelled.Broadcast();
+
+	// Use base class to cancel progress (broadcasts OnCancelled)
+	CancelProgress();
 }
 
-void UMOInspectionProgressWidget::CompleteInspection()
+void UMOInspectionProgressWidget::OnProgressSuccess_Implementation()
 {
-	if (!bIsInspecting)
-	{
-		return;
-	}
-
-	bIsInspecting = false;
-
 	UE_LOG(LogMOFramework, Log, TEXT("[MOInspection] Inspection complete for '%s'"), *ItemDefinitionId.ToString());
 
 	// Perform the actual inspection via knowledge component
@@ -212,34 +116,36 @@ void UMOInspectionProgressWidget::CompleteInspection()
 	// Call blueprint event
 	OnInspectionSuccess(Result);
 
-	// Broadcast completion
-	OnInspectionCompleted.Broadcast(true, Result);
+	// Broadcast domain-specific completion
+	OnInspectionCompleted.Broadcast(Result.bSuccess, Result);
 }
 
-void UMOInspectionProgressWidget::HandleCancelClicked()
+void UMOInspectionProgressWidget::UpdateDisplay_Implementation(float Progress, float TimeRemaining, const FText& InActionName)
 {
-	CancelInspection();
-}
-
-void UMOInspectionProgressWidget::UpdateDisplay_Implementation(float Progress, float TimeRemaining, const FText& ItemName)
-{
+	// Update progress bar
 	if (ProgressBar)
 	{
 		ProgressBar->SetPercent(Progress);
 	}
 
-	if (ItemNameText)
+	// Update action name with "Inspecting:" prefix
+	if (ActionNameText)
 	{
-		ItemNameText->SetText(FText::Format(NSLOCTEXT("MO", "InspectingItem", "Inspecting: {0}"), ItemName));
+		ActionNameText->SetText(FText::Format(
+			NSLOCTEXT("MO", "InspectingItem", "Inspecting: {0}"),
+			InActionName));
 	}
 
+	// Update time remaining
 	if (TimeRemainingText)
 	{
-		int32 SecondsRemaining = FMath::CeilToInt(TimeRemaining);
+		const int32 SecondsRemaining = FMath::CeilToInt(TimeRemaining);
 		TimeRemainingText->SetText(FText::Format(
 			NSLOCTEXT("MO", "TimeRemaining", "{0}s remaining"),
 			FText::AsNumber(SecondsRemaining)));
 	}
+
+	// Note: Completion is handled by base class in NativeTick -> OnProgressSuccess
 }
 
 void UMOInspectionProgressWidget::OnInspectionSuccess_Implementation(const FMOInspectionResult& Result)

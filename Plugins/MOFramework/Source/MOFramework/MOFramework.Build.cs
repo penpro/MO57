@@ -72,7 +72,8 @@ public class MOFramework : ModuleRules
 			PrivateDependencyModuleNames.AddRange(
 				new string[]
 				{
-					"UnrealEd",        // Thumbnail rendering, asset tools
+					"UnrealEd",        // Thumbnail rendering, asset tools, FBlueprintEditorUtils
+					"UMGEditor",       // UWidgetBlueprint access for widget editor utilities
 					"ContentBrowser",  // Content browser selection
 					"AssetTools",      // Asset creation utilities
 					"ToolMenus"        // Context menu registration

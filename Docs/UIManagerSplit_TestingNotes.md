@@ -1,5 +1,8 @@
 # UIManager Split - Testing Notes
 
+> **SUPERSEDED**: Testing checklist consolidated into `MO57_Master_Plan.md` (March 28, 2026).
+> The UIManager split is complete. Remaining CommonUI migration is tracked in Stage 6A/7A.
+
 ## Overview
 
 The monolithic `MOUIManagerComponent` (~4000 lines) has been split into 6 specialized UI controllers. Each controller handles a specific UI subsystem while UIManager maintains backward-compatible public API through delegation.

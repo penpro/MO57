@@ -22,6 +22,7 @@
 #include "MOGameSettings.h"
 #include "MOInventoryUIController.h"
 #include "EngineUtils.h"
+#include "MOPrimaryGameLayout.h"
 
 UMOSystemMenuUIController::UMOSystemMenuUIController()
 {
@@ -199,9 +200,9 @@ void UMOSystemMenuUIController::OpenInGameMenu()
 		UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] InGameMenu delegates bound"));
 	}
 
-	// Show modal background and menu
+	// Show modal background and menu via layer system
 	ShowModalBackground();
-	MenuWidget->AddToViewport(InGameMenuZOrder);
+	PushWidgetInstanceToLayer(MOUILayerTags::Layer_Menu, MenuWidget, InGameMenuZOrder);
 
 	// Set input mode
 	ApplyInputModeForMenuOpen(MenuWidget);
@@ -431,9 +432,9 @@ void UMOSystemMenuUIController::OpenPossessionMenu()
 	// Populate with pawn data
 	RefreshPossessionMenu();
 
-	// Show modal background and menu
+	// Show modal background and menu via layer system
 	ShowModalBackground();
-	MenuWidget->AddToViewport(PossessionMenuZOrder);
+	PushWidgetInstanceToLayer(MOUILayerTags::Layer_Menu, MenuWidget, PossessionMenuZOrder);
 
 	// Set input mode
 	ApplyInputModeForMenuOpen(MenuWidget);
@@ -764,10 +765,10 @@ void UMOSystemMenuUIController::ShowConfirmationDialog(const FText& Title, const
 	// Setup the dialog with content
 	DialogWidget->Setup(Title, Message, ConfirmText, CancelText);
 
-	// Show dialog
+	// Show dialog via layer system
 	if (!DialogWidget->IsInViewport())
 	{
-		DialogWidget->AddToViewport(ConfirmationDialogZOrder);
+		PushWidgetInstanceToLayer(MOUILayerTags::Layer_Modal, DialogWidget, ConfirmationDialogZOrder);
 	}
 }
 
@@ -942,10 +943,10 @@ void UMOSystemMenuUIController::ShowSurvivorContextMenu(APawn* Survivor, FVector
 	MenuWidget->OnOpenTasksRequested.AddDynamic(this, &UMOSystemMenuUIController::HandleSurvivorContextMenuOpenTasks);
 	MenuWidget->OnInventoryRequested.AddDynamic(this, &UMOSystemMenuUIController::HandleSurvivorContextMenuOpenInventory);
 
-	// Show modal background and add menu to viewport FIRST
+	// Show modal background and add menu to layer system FIRST
 	// (SetPositionInViewport only works after widget is in viewport)
 	ShowModalBackground();
-	MenuWidget->AddToViewport(SurvivorContextMenuZOrder);
+	PushWidgetInstanceToLayer(MOUILayerTags::Layer_GameOverlay, MenuWidget, SurvivorContextMenuZOrder);
 
 	// THEN initialize for this survivor (which calls SetPopupPosition)
 	MenuWidget->InitializeForSurvivor(Survivor, ScreenPosition);
@@ -1043,9 +1044,9 @@ void UMOSystemMenuUIController::ShowSurvivorTaskMenu(APawn* Survivor)
 	// Initialize for this survivor
 	MenuWidget->InitializeForSurvivor(Survivor);
 
-	// Show modal background and menu
+	// Show modal background and menu via layer system
 	ShowModalBackground();
-	MenuWidget->AddToViewport(SurvivorTaskMenuZOrder);
+	PushWidgetInstanceToLayer(MOUILayerTags::Layer_Menu, MenuWidget, SurvivorTaskMenuZOrder);
 
 	// Set input mode
 	ApplyInputModeForMenuOpen(MenuWidget);
