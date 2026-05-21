@@ -49,7 +49,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "CommonActivatableWidget.h"
+#include "CommonUserWidget.h"
 #include "MOItemContextMenu.generated.h"
 
 class UMOCommonButton;
@@ -60,7 +60,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOContextMenuClosedSignature);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOContextMenuActionSignature, FName, ActionId, const FGuid&, ItemGuid);
 
 UCLASS()
-class MOFRAMEWORK_API UMOItemContextMenu : public UCommonActivatableWidget
+class MOFRAMEWORK_API UMOItemContextMenu : public UCommonUserWidget
 {
 	GENERATED_BODY()
 
@@ -105,7 +105,6 @@ protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
 	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
-	virtual UWidget* NativeGetDesiredFocusTarget() const override;
 
 	/** Called to update button visibility based on item properties. Override in BP for custom logic. */
 	UFUNCTION(BlueprintNativeEvent, Category="MO|UI|ContextMenu")

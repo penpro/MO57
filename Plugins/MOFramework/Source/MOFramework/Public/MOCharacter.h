@@ -165,6 +165,7 @@
 #include "MOMedicalProviderInterface.h"
 #include "MOCraftingTypes.h"
 #include "MOBodyPartTypes.h"
+#include "MOInterruptTypes.h"
 #include "MOCharacter.generated.h"
 
 /**
@@ -437,6 +438,59 @@ public:
 	/** Check if character is dead. */
 	UFUNCTION(BlueprintPure, Category="MO|State")
 	bool IsDead() const { return bIsDead; }
+
+	// ============================================================================
+	// INTERRUPT EVENT BUS
+	// ============================================================================
+	//
+	// Centralized broadcast for "something just happened to this character that
+	// should interrupt ongoing activities." Sources call BroadcastInterrupt
+	// with an FMOInterruptContext; listeners implement IMOInterruptibleInterface
+	// and register/unregister with this character.
+	//
+	// Sources currently emitting interrupts on AMOCharacter:
+	//   - Movement detection (this class, in Tick — emits EMOInterruptReason::Movement)
+	//
+	// Future sources should call BroadcastInterrupt from wherever the relevant
+	// event already happens. Examples:
+	//   - AnatomyComponent on a serious wound       -> Reason::Damage
+	//   - AnatomyComponent on unconsciousness/death -> Reason::Unconscious / Death
+	//   - CombatComponent when combat starts        -> Reason::EnteredCombat
+	//   - Possession change                         -> Reason::LostControl
+	//
+	// Listeners decide policy per-reason (pause vs. cancel vs. ignore).
+
+	/**
+	 * Add a listener for all interrupt events on this character. The listener
+	 * must implement IMOInterruptibleInterface. Safe to call with an already-
+	 * registered listener (no-op).
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Interrupts")
+	void RegisterInterruptListener(UObject* Listener);
+
+	/** Stop notifying the given listener. Safe to call with an unregistered listener. */
+	UFUNCTION(BlueprintCallable, Category="MO|Interrupts")
+	void UnregisterInterruptListener(UObject* Listener);
+
+	/**
+	 * Fire an interrupt event to every registered listener. Anyone — internal
+	 * tick code, components on this character, world systems acting on this
+	 * character — can call this. The broadcaster doesn't decide what
+	 * "interrupt" means for any given listener; it just notifies.
+	 *
+	 * Listeners receive the context by const-ref and may unregister themselves
+	 * from within the callback (the broadcast iterates a snapshot).
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Interrupts")
+	void BroadcastInterrupt(const FMOInterruptContext& Context);
+
+	/**
+	 * Velocity² above which the character is considered to be "moving" for
+	 * the automatic Movement-reason broadcast. Default 25 ((5 cm/s)²) is
+	 * conservative — physics jitter while standing still won't trip it.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Interrupts", meta=(ClampMin="0"))
+	float MovementInterruptVelocitySqThreshold = 25.0f;
 
 	// ============================================================================
 	// TERRAFORMING
@@ -808,6 +862,23 @@ private:
 
 	/** Check for and handle falling through the world. */
 	void CheckFallThroughSafety(float DeltaTime);
+
+	// ============================================================================
+	// INTERRUPT EVENT BUS INTERNALS
+	// ============================================================================
+
+	/** All registered IMOInterruptibleInterface listeners. */
+	TArray<TWeakObjectPtr<UObject>> InterruptListeners;
+
+	/** Was the character above the movement threshold last tick? */
+	bool bWasConsideredMovingLastTick = false;
+
+	/**
+	 * Detect a stationary->moving transition and emit a Movement-reason
+	 * broadcast. Called from Tick. Does nothing if no listeners are registered,
+	 * so the cost while idle is just one velocity read and a bool compare.
+	 */
+	void TickMovementInterruptDetection();
 
 	/**
 	 * Find a safe location near the given position by searching for flat voxel terrain.

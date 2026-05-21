@@ -45,7 +45,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "CommonActivatableWidget.h"
+#include "MOActivatableWidget.h"
 #include "MOMainMenuWidget.generated.h"
 
 class UMOCommonButton;
@@ -59,7 +59,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOMainMenuLoadGameSignature, const 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOMainMenuExitGameSignature);
 
 UCLASS(Abstract, Blueprintable)
-class MOFRAMEWORK_API UMOMainMenuWidget : public UCommonActivatableWidget
+class MOFRAMEWORK_API UMOMainMenuWidget : public UMOActivatableWidget
 {
 	GENERATED_BODY()
 

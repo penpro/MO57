@@ -33,9 +33,11 @@
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "MOBuildingTypes.h"
+#include "MOInterruptibleInterface.h"
 
 #include "MOBuildProgressComponent.generated.h"
 
+class AMOCharacter;
 class UMOInventoryComponent;
 
 /**
@@ -160,12 +162,27 @@ class UMOInventoryComponent;
  * =============================================================================
  */
 UCLASS(ClassGroup=(MO), meta=(BlueprintSpawnableComponent))
-class MOFRAMEWORK_API UMOBuildProgressComponent : public UActorComponent
+class MOFRAMEWORK_API UMOBuildProgressComponent : public UActorComponent,
+	public IMOInterruptibleInterface
 {
 	GENERATED_BODY()
 
 public:
 	UMOBuildProgressComponent();
+
+	/**
+	 * Interrupt policy for an active build:
+	 *   Movement     -> Pause (progress preserved; resume on next interaction).
+	 *   Damage       -> Pause for severe damage (Severity >= 0.5), ignore minor.
+	 *   Knockdown    -> Pause (you can't keep building while flat on your back).
+	 *   Unconscious  -> Pause (preserve so the player can resume on wake-up).
+	 *   Death        -> Cancel (no resume — the builder is gone).
+	 *   EnteredCombat-> Pause (a fight is starting; come back to it).
+	 *   LostControl  -> Pause (pawn unpossessed; preserve for whoever takes over).
+	 *   UserCancel   -> Ignored here (UI calls CancelConstruction directly).
+	 *   External     -> Pause (default for unknown reasons).
+	 */
+	virtual void NotifyInterrupt_Implementation(const FMOInterruptContext& Context) override;
 
 	// ============================================================================
 	// DELEGATES
@@ -409,6 +426,23 @@ private:
 	/** Reference to builder's inventory (if drawing from inventory). */
 	UPROPERTY()
 	TWeakObjectPtr<UMOInventoryComponent> BuilderInventory;
+
+	/**
+	 * The character actively constructing this building. Cached so we can call
+	 * UnregisterInterruptListener on the same character even after BuilderInventory
+	 * has been cleared (e.g. on completion). Resolved from BuilderInventory->GetOwner()
+	 * when StartConstruction runs.
+	 */
+	TWeakObjectPtr<AMOCharacter> RegisteredBuilderCharacter;
+
+	/**
+	 * Hook into the builder's interrupt broadcast for the duration of an
+	 * active build. Idempotent — calling twice while already registered is a no-op.
+	 */
+	void RegisterWithBuilderForInterrupts();
+
+	/** Drop the registration so the builder stops notifying us. */
+	void UnregisterFromBuilderInterrupts();
 
 	/** Materials deposited into this building (ItemId -> Quantity). */
 	UPROPERTY()

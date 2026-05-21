@@ -41,7 +41,8 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "CommonActivatableWidget.h"
+#include "MOActivatableWidget.h"
+#include "CommonInputModeTypes.h"
 #include "MOProgressWidgetBase.generated.h"
 
 class UProgressBar;
@@ -64,7 +65,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOProgressCancelledDelegate);
  * See file header for usage and pitfalls.
  */
 UCLASS(Abstract, Blueprintable)
-class MOFRAMEWORK_API UMOProgressWidgetBase : public UCommonActivatableWidget
+class MOFRAMEWORK_API UMOProgressWidgetBase : public UMOActivatableWidget
 {
 	GENERATED_BODY()
 
@@ -141,6 +142,13 @@ public:
 	FMOProgressCancelledDelegate OnCancelled;
 
 protected:
+	/**
+	 * CommonUI input config.
+	 * Uses ECommonInputMode::All for game + UI input (allows ESC to cancel).
+	 * Shows mouse cursor for interactive elements.
+	 */
+	virtual TOptional<FUIInputConfig> GetDesiredInputConfig() const override;
+
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
 	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;

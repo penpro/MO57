@@ -78,12 +78,12 @@
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "GameplayTagContainer.h"
+#include "CommonActivatableWidget.h"  // Needed for the RegisterCachedMenu<T> template body
 #include "MOUIControllerBase.generated.h"
 
 class APlayerController;
 class UUserWidget;
 class UMOUIManagerComponent;
-class UCommonActivatableWidget;
 class UMOInventoryComponent;
 class UMOSkillsComponent;
 class UMOKnowledgeComponent;
@@ -144,12 +144,7 @@ protected:
 	// =========================================================================
 	// These methods delegate to UIManager for shared UI operations.
 	// Controllers should use these instead of implementing their own.
-
-	/** Apply input mode suitable for having a menu open. */
-	void ApplyInputModeForMenuOpen(UUserWidget* MenuWidget);
-
-	/** Restore input mode for gameplay (no menus open). */
-	void ApplyInputModeForMenuClosed();
+	// NOTE: Input mode is now handled automatically by CommonUI via GetDesiredInputConfig()
 
 	/** Show the modal background behind menus. */
 	void ShowModalBackground();
@@ -173,36 +168,110 @@ protected:
 	// COMMONUI LAYER SYSTEM
 	// =========================================================================
 	// Use these methods to push widgets to the appropriate layer.
-	// They will use the CommonUI layer system if available, otherwise fallback to AddToViewport.
+	// Requires WBP_PrimaryGameLayout to be configured in project settings.
 
 	/**
 	 * Push a widget to the specified UI layer.
-	 * Falls back to AddToViewport if the layer system is not configured.
 	 *
 	 * @param LayerTag The layer to push to (e.g., MOUILayerTags::Layer_Game)
 	 * @param WidgetClass The widget class to create and push
-	 * @param FallbackZOrder Z-order to use if falling back to AddToViewport
 	 * @return The created widget, or nullptr if failed
 	 */
-	UCommonActivatableWidget* PushWidgetToLayer(FGameplayTag LayerTag, TSubclassOf<UCommonActivatableWidget> WidgetClass, int32 FallbackZOrder = 10);
+	UCommonActivatableWidget* PushWidgetToLayer(FGameplayTag LayerTag, TSubclassOf<UCommonActivatableWidget> WidgetClass);
 
 	/**
-	 * Push an existing widget instance to the specified UI layer.
-	 * Falls back to AddToViewport if the layer system is not configured.
+	 * Push a widget to the specified UI layer, creating a new instance if needed.
+	 *
+	 * CommonUI stacks don't support adding existing widget instances directly.
+	 * If the passed widget is already activated, returns it as-is.
+	 * Otherwise, creates a NEW widget of the same class via the stack.
+	 *
+	 * IMPORTANT: The returned widget may be different from the passed widget!
+	 * Callers must update their cached references with the returned value.
 	 *
 	 * @param LayerTag The layer to push to
-	 * @param Widget The widget instance to push
-	 * @param FallbackZOrder Z-order to use if falling back to AddToViewport
+	 * @param Widget The widget instance (used for class lookup if new widget needed)
+	 * @return The actual widget in the stack (may be different from passed widget)
 	 */
-	void PushWidgetInstanceToLayer(FGameplayTag LayerTag, UCommonActivatableWidget* Widget, int32 FallbackZOrder = 10);
+	UCommonActivatableWidget* PushWidgetInstanceToLayer(FGameplayTag LayerTag, UCommonActivatableWidget* Widget);
 
 	/**
 	 * Pop/deactivate a widget from its layer.
-	 * If using fallback AddToViewport, calls RemoveFromParent.
 	 *
 	 * @param Widget The widget to remove/deactivate
 	 */
 	void PopWidgetFromLayer(UCommonActivatableWidget* Widget);
+
+	/**
+	 * Cache a widget reference AND bind to its OnDeactivated so the cache auto-clears
+	 * regardless of how the widget closes — controller's CloseX, outside-click handler,
+	 * stack pop, Escape key, anything.
+	 *
+	 * SYSTEM RULE: every cached UCommonActivatableWidget reference in a controller is
+	 * registered via this helper, never set directly. This is the single source of
+	 * truth for "is the menu open?" cache invalidation. Skipping it brings back the
+	 * stale-cache / press-twice symptom.
+	 *
+	 * Lifetime safety: lambda captures a WeakObjectPtr to this controller. If the
+	 * controller is destroyed before the widget, the lambda becomes a no-op rather
+	 * than dereferencing a dangling cache pointer.
+	 */
+	template<typename TWidget>
+	void RegisterCachedMenu(TWidget* Widget, TWeakObjectPtr<TWidget>& Cache)
+	{
+		static_assert(TIsDerivedFrom<TWidget, UCommonActivatableWidget>::Value,
+			"RegisterCachedMenu requires a UCommonActivatableWidget-derived type.");
+
+		if (!Widget) return;
+		Cache = Widget;
+
+		TWeakObjectPtr<UMOUIControllerBase> WeakSelf(this);
+		TWeakObjectPtr<TWidget>* CachePtr = &Cache;
+		Widget->OnDeactivated().AddLambda([WeakSelf, CachePtr]()
+		{
+			if (WeakSelf.IsValid())
+			{
+				CachePtr->Reset();
+			}
+		});
+	}
+
+	/**
+	 * SYSTEM RULE: every controller's IsXOpen() forwards here. Single source of truth
+	 * for "is the cached menu currently displayed?"
+	 *
+	 * Two flavors of cached widget need two different checks:
+	 *
+	 *   1. UCommonActivatableWidget (stack-managed) — cache is cleared on deactivate by
+	 *      RegisterCachedMenu's OnDeactivated lambda. So `IsValid(W)` is reliable, AND
+	 *      we deliberately do NOT call IsInViewport on these: stack widgets are nested
+	 *      inside a UCommonActivatableWidgetContainer, so IsInViewport returns false
+	 *      even when they're visibly active. Using IsInViewport here causes the
+	 *      "menu thinks it's closed while still showing" bug → close-then-reopen bounce
+	 *      when a toggle key is pressed.
+	 *
+	 *   2. Non-activatable popup (UCommonUserWidget added via AddToViewport) — there's
+	 *      no OnDeactivated, so the cache may be stale after RemoveFromParent. We
+	 *      gate on IsInViewport to catch that case.
+	 *
+	 * Skipping this helper and rolling per-controller checks is how both the press-twice
+	 * bug AND the close-then-reopen bounce came back. Stay in this helper.
+	 */
+	template<typename TWidget>
+	bool IsCachedMenuOpen(const TWeakObjectPtr<TWidget>& Cache) const
+	{
+		UWidget* W = Cache.Get();
+		if (!IsValid(W)) return false;
+
+		if (Cast<UCommonActivatableWidget>(W))
+		{
+			// Activatable: RegisterCachedMenu auto-clears Cache on deactivate, so
+			// a valid Cache means the widget is still in the activation lifecycle.
+			return true;
+		}
+		// Non-activatable popup: cache can outlive viewport presence.
+		return W->IsInViewport();
+	}
 
 	// =========================================================================
 	// PAWN COMPONENT ACCESS

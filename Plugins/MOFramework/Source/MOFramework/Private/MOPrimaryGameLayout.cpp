@@ -1,6 +1,9 @@
 // Copyright Penumbra Group Inc. All Rights Reserved.
 
 #include "MOPrimaryGameLayout.h"
+#include "MOFramework.h"
+#include "MOGameplayInputStub.h"
+#include "MOUIDebugSubsystem.h"
 #include "CommonActivatableWidget.h"
 #include "Widgets/CommonActivatableWidgetContainer.h"
 
@@ -46,7 +49,14 @@ void UMOPrimaryGameLayout::NativeConstruct()
 		RegisterLayer(MOUILayerTags::Layer_Modal, ModalLayer);
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("MOPrimaryGameLayout: Registered %d layers"), LayerStacks.Num());
+	// Log registration results - CRITICAL: if layers are null, Blueprint is misconfigured
+	if (!HUDLayer) UE_LOG(LogMOFramework, Warning, TEXT("MOPrimaryGameLayout: HUDLayer is NULL - widget not bound in Blueprint!"));
+	if (!GameLayer) UE_LOG(LogMOFramework, Warning, TEXT("MOPrimaryGameLayout: GameLayer is NULL - widget not bound in Blueprint!"));
+	if (!GameOverlayLayer) UE_LOG(LogMOFramework, Warning, TEXT("MOPrimaryGameLayout: GameOverlayLayer is NULL - widget not bound in Blueprint!"));
+	if (!MenuLayer) UE_LOG(LogMOFramework, Warning, TEXT("MOPrimaryGameLayout: MenuLayer is NULL - widget not bound in Blueprint!"));
+	if (!ModalLayer) UE_LOG(LogMOFramework, Warning, TEXT("MOPrimaryGameLayout: ModalLayer is NULL - widget not bound in Blueprint!"));
+
+	UE_LOG(LogMOFramework, Warning, TEXT("MOPrimaryGameLayout: Registered %d/5 layers"), LayerStacks.Num());
 }
 
 void UMOPrimaryGameLayout::RegisterLayer(FGameplayTag LayerTag, UCommonActivatableWidgetContainerBase* LayerStack)
@@ -80,64 +90,63 @@ UCommonActivatableWidget* UMOPrimaryGameLayout::PushWidgetToLayer(FGameplayTag L
 	UCommonActivatableWidgetContainerBase* Stack = GetLayerStack(LayerTag);
 	if (!Stack)
 	{
+		UE_LOG(LogTemp, Warning, TEXT("MOPrimaryGameLayout::PushWidgetToLayer: No stack for layer %s"), *LayerTag.ToString());
 		return nullptr;
 	}
 
-	// AddWidget creates the widget and activates it
+	MOUI_LOG(this, "Layer", "PUSH    layer=%s class=%s", *LayerTag.ToString(), *WidgetClass->GetName());
+
 	UCommonActivatableWidget* Widget = Stack->AddWidget(WidgetClass);
 	if (Widget)
 	{
-		UE_LOG(LogTemp, Verbose, TEXT("MOPrimaryGameLayout: Pushed %s to layer %s"),
-			*WidgetClass->GetName(), *LayerTag.ToString());
+		MOUI_LOG(this, "Layer", "PUSHED  layer=%s widget=%s activated=%s",
+			*LayerTag.ToString(), *Widget->GetName(),
+			Widget->IsActivated() ? TEXT("YES") : TEXT("no"));
+	}
+	else
+	{
+		MOUI_LOG(this, "Layer", "PUSH FAILED  layer=%s class=%s (AddWidget returned null)",
+			*LayerTag.ToString(), *WidgetClass->GetName());
 	}
 
 	return Widget;
 }
 
-void UMOPrimaryGameLayout::PushWidgetToLayerInstance(FGameplayTag LayerTag, UCommonActivatableWidget* Widget)
+UCommonActivatableWidget* UMOPrimaryGameLayout::PushWidgetToLayerInstance(FGameplayTag LayerTag, UCommonActivatableWidget* Widget)
 {
 	if (!Widget)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("MOPrimaryGameLayout::PushWidgetToLayerInstance: Widget is null"));
-		return;
+		return nullptr;
+	}
+
+	// If widget is already activated and in viewport, return it as-is
+	if (Widget->IsActivated() && Widget->IsInViewport())
+	{
+		UE_LOG(LogTemp, Log, TEXT("MOPrimaryGameLayout: Widget %s already activated"), *Widget->GetName());
+		return Widget;
 	}
 
 	UCommonActivatableWidgetContainerBase* Stack = GetLayerStack(LayerTag);
 	if (!Stack)
 	{
-		return;
+		UE_LOG(LogTemp, Warning, TEXT("MOPrimaryGameLayout::PushWidgetToLayerInstance: No stack for layer %s"), *LayerTag.ToString());
+		return nullptr;
 	}
 
-	// Determine Z-order based on layer tag
-	// Modal background is at Z=10, so all interactive layers must be higher
-	// HUD (0) < ModalBackground (10) < Game (50) < GameOverlay (100) < Menu (150) < Modal (200)
-	int32 ZOrder = 50; // Default to Game layer
-	if (LayerTag == MOUILayerTags::Layer_HUD)
+	// Widget was previously removed from stack - we need to add it back via AddWidget
+	// CommonUI stacks don't support adding existing instances directly, so create new via class
+	// AddWidget handles activation automatically (UE 5.5+) - DO NOT call ActivateWidget/SetFocus
+	UClass* WidgetClass = Widget->GetClass();
+	UCommonActivatableWidget* NewWidget = Stack->AddWidget(WidgetClass);
+
+	if (NewWidget)
 	{
-		ZOrder = 0;
-	}
-	else if (LayerTag == MOUILayerTags::Layer_Game)
-	{
-		ZOrder = 50;
-	}
-	else if (LayerTag == MOUILayerTags::Layer_GameOverlay)
-	{
-		ZOrder = 100;
-	}
-	else if (LayerTag == MOUILayerTags::Layer_Menu)
-	{
-		ZOrder = 150;
-	}
-	else if (LayerTag == MOUILayerTags::Layer_Modal)
-	{
-		ZOrder = 200;
+		UE_LOG(LogTemp, Warning, TEXT("MOPrimaryGameLayout: Created NEW widget %s for layer %s - caller must update cached reference!"),
+			*NewWidget->GetName(), *LayerTag.ToString());
 	}
 
-	// For existing widget instances, add to viewport with correct Z-order
-	Widget->AddToViewport(ZOrder);
-	Widget->ActivateWidget();
-
-	UE_LOG(LogTemp, Verbose, TEXT("MOPrimaryGameLayout: Pushed widget instance to layer %s (Z=%d)"), *LayerTag.ToString(), ZOrder);
+	return NewWidget;
 }
 
 void UMOPrimaryGameLayout::PopWidgetFromLayer(FGameplayTag LayerTag)
@@ -148,13 +157,59 @@ void UMOPrimaryGameLayout::PopWidgetFromLayer(FGameplayTag LayerTag)
 		return;
 	}
 
-	// Get the active widget and deactivate it
 	UWidget* ActiveWidget = Stack->GetActiveWidget();
 	if (UCommonActivatableWidget* ActivatableWidget = Cast<UCommonActivatableWidget>(ActiveWidget))
 	{
+		MOUI_LOG(this, "Layer", "POP     layer=%s widget=%s",
+			*LayerTag.ToString(), *ActivatableWidget->GetName());
 		ActivatableWidget->DeactivateWidget();
 		UE_LOG(LogTemp, Verbose, TEXT("MOPrimaryGameLayout: Popped widget from layer %s"), *LayerTag.ToString());
 	}
+}
+
+bool UMOPrimaryGameLayout::RemoveWidgetFromLayer(UCommonActivatableWidget* Widget)
+{
+	if (!Widget)
+	{
+		return false;
+	}
+
+	// Try to remove from each layer stack
+	// RemoveWidget will handle the case where the widget isn't in that stack
+	for (const auto& Pair : LayerStacks)
+	{
+		UCommonActivatableWidgetContainerBase* Stack = Pair.Value;
+		if (Stack)
+		{
+			// Try to remove - this is safe even if widget isn't in this stack
+			Stack->RemoveWidget(*Widget);
+
+			// Check if widget is no longer in viewport (removal succeeded)
+			if (!Widget->IsInViewport())
+			{
+				UE_LOG(LogTemp, Verbose, TEXT("MOPrimaryGameLayout: Removed widget %s from layer %s"),
+					*Widget->GetName(), *Pair.Key.ToString());
+				return true;
+			}
+		}
+	}
+
+	// If widget is still in viewport (wasn't in any stack), it was added via AddToViewport
+	// CRITICAL: Call DeactivateWidget() BEFORE RemoveFromParent() so NativeOnDeactivated fires
+	// This ensures input state (cursor, ignore move/look) is properly restored
+	if (Widget->IsInViewport())
+	{
+		if (Widget->IsActivated())
+		{
+			Widget->DeactivateWidget();
+		}
+		Widget->RemoveFromParent();
+		UE_LOG(LogTemp, Verbose, TEXT("MOPrimaryGameLayout: Removed widget %s from viewport (not in stack, deactivated)"),
+			*Widget->GetName());
+		return true;
+	}
+
+	return false;
 }
 
 void UMOPrimaryGameLayout::ClearLayer(FGameplayTag LayerTag)
@@ -185,11 +240,14 @@ int32 UMOPrimaryGameLayout::GetActiveMenuCount() const
 	int32 Count = 0;
 
 	// Count widgets in menu layers (excluding HUD which is always-visible)
+	// IMPORTANT: Exclude RootContentWidget stubs (MOGameplayInputStub) from the count.
+	// Every stack has a stub as its root - it's always "active" but is NOT a menu.
 	auto CountLayer = [this, &Count](FGameplayTag LayerTag)
 	{
 		if (const UCommonActivatableWidgetContainerBase* Stack = GetLayerStack(LayerTag))
 		{
-			if (Stack->GetActiveWidget() != nullptr)
+			UWidget* ActiveWidget = Stack->GetActiveWidget();
+			if (ActiveWidget && !ActiveWidget->IsA<UMOGameplayInputStub>())
 			{
 				Count++;
 			}

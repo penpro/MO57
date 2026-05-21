@@ -43,7 +43,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "CommonActivatableWidget.h"
+#include "MOActivatableWidget.h"
 #include "MOSurvivorJobTypes.h"
 #include "MOSurvivorTaskMenu.generated.h"
 
@@ -70,7 +70,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOTaskMenuCloseRequestedSignature);
  * Similar to the crafting menu with its recipe list and queue display.
  */
 UCLASS(Abstract)
-class MOFRAMEWORK_API UMOSurvivorTaskMenu : public UCommonActivatableWidget
+class MOFRAMEWORK_API UMOSurvivorTaskMenu : public UMOActivatableWidget
 {
 	GENERATED_BODY()
 
@@ -99,6 +99,7 @@ public:
 protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
+	virtual TOptional<FUIInputConfig> GetDesiredInputConfig() const override;
 	virtual FReply NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
 	virtual FReply NativeOnPreviewKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
 

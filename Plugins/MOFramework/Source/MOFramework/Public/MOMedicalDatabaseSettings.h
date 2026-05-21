@@ -47,16 +47,16 @@ class UDataTable;
  * Project Settings entry to configure medical system DataTables.
  * Accessible via Project Settings -> Plugins -> MO Medical Database.
  */
-UCLASS(Config=Game, DefaultConfig, meta=(DisplayName="MO Medical Database"))
+UCLASS(Config=Game, DefaultConfig, meta=(DisplayName="Medical Database"))
 class MOFRAMEWORK_API UMOMedicalDatabaseSettings : public UDeveloperSettings
 {
 	GENERATED_BODY()
 
 public:
-	// UDeveloperSettings overrides
+	// UDeveloperSettings overrides — unified under "MOFramework" section in Project Settings.
 	virtual FName GetContainerName() const override { return TEXT("Project"); }
-	virtual FName GetCategoryName() const override { return TEXT("Plugins"); }
-	virtual FName GetSectionName() const override { return TEXT("MO Medical Database"); }
+	virtual FName GetCategoryName() const override { return TEXT("MOFramework"); }
+	virtual FName GetSectionName() const override { return TEXT("Medical Database"); }
 
 	// ============================================================================
 	// DATATABLE REFERENCES

@@ -71,7 +71,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "CommonActivatableWidget.h"
+#include "MOActivatableWidget.h"
 #include "MONewGamePanel.generated.h"
 
 class UMOCommonButton;
@@ -81,7 +81,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMONewGameStartSignature);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMONewGameCloseSignature);
 
 UCLASS(Abstract, Blueprintable)
-class MOFRAMEWORK_API UMONewGamePanel : public UCommonActivatableWidget
+class MOFRAMEWORK_API UMONewGamePanel : public UMOActivatableWidget
 {
 	GENERATED_BODY()
 

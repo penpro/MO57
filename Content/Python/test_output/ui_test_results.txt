@@ -1,99 +1,389 @@
 ================================================================================
 MO Framework UI Test Results
-Generated: 2026.03.31-15.01.56
+Generated: 2026.04.01-19.25.06
 ================================================================================
 
-SUMMARY: 20/28 tests passed (71.4%)
-Total Duration: 134.7ms
+SUMMARY: 19/79 tests passed (24.1%)
+Total Duration: 699.4ms
 
 FAILED TESTS:
 --------------------------------------------------------------------------------
 [FAIL] Building.CloseEscape
-       Error: Building still open after Escape
+       Error: Failed to open building menu
        > Testing: Escape closes building
        > Opening menu: Building
-       > Triggering back action via CommonUI
-       > Back action via ActionRouter: Not handled
+
+[FAIL] Building.CloseTab
+       Error: Failed to open
+       > Testing: Tab closes building
+       > Opening menu: Building
+
+[FAIL] Building.CloseToggle
+       Error: Failed to open building menu
+       > Testing: Toggle key closes building
+       > Opening menu: Building
+
+[FAIL] Building.InputState
+       Error: Failed to open building menu
+       > Testing: Input state when building is open
+       > Opening menu: Building
+
+[FAIL] Building.Open
+       Error: Failed to open building menu
+       > Testing: Can open building menu
+       > Opening menu: Building
+
+[FAIL] CommonUI.BackActionHandler
+       Error: Failed to open inventory
+       > Testing: bIsBackHandler enables Escape to close menu
+       > Opening menu: Inventory
+
+[FAIL] CommonUI.FocusRestoration
+       Error: Failed to open inventory
+       > Testing: bAutoRestoreFocus restores focus after modal closes
+       > Opening menu: Inventory
+
+[FAIL] CommonUI.LayerStackPop
+       Error: Failed to open inventory
+       > Testing: Widget popped from layer stack on close
+       > Opening menu: Inventory
+
+[FAIL] CommonUI.LayerStackPush
+       Error: Failed to open inventory
+       > Testing: Widget pushed to correct layer stack
+       >   Initial MenuLayer widget count: 13
+       > Opening menu: Inventory
+
+[FAIL] CommonUI.MenuInputModeAll
+       Error: Failed to open inventory
+       > Testing: Menu widgets use ECommonInputMode::All
+       > Opening menu: Inventory
+
+[FAIL] CommonUI.ModalBlocksInput
+       Error: Failed to open inventory
+       > Testing: bIsModal blocks input to underlying widgets
+       > Opening menu: Inventory
+
+[FAIL] CommonUI.ModalInputModeMenu
+       Error: Movement not blocked - modal should block all input
+       > Testing: Modal widgets use ECommonInputMode::Menu
+       > Opening menu: InGame
+
+[FAIL] CommonUI.ToggleKeyPassthrough
+       Error: Failed to open inventory
+       > Testing: Toggle keys work while menu is open (ECommonInputMode::All)
+       > Opening menu: Inventory
+
+[FAIL] CommonUI.WidgetActivation
+       Error: Failed to open inventory
+       > Testing: NativeOnActivated called when widget pushed to layer
+       > Opening menu: Inventory
+
+[FAIL] CommonUI.WidgetDeactivation
+       Error: Failed to open inventory
+       > Testing: NativeOnDeactivated called when widget removed from layer
+       > Opening menu: Inventory
 
 [FAIL] Crafting.CloseEscape
-       Error: Crafting still open after Escape
+       Error: Failed to open crafting menu
        > Testing: Escape closes crafting
        > Opening menu: Crafting
-       > Triggering back action via CommonUI
-       > Back action via ActionRouter: Not handled
+
+[FAIL] Crafting.CloseTab
+       Error: Failed to open
+       > Testing: Tab closes crafting
+       > Opening menu: Crafting
+
+[FAIL] Crafting.CloseToggle
+       Error: Failed to open crafting menu
+       > Testing: Toggle key closes crafting
+       > Opening menu: Crafting
+
+[FAIL] Crafting.InputState
+       Error: Failed to open crafting menu
+       > Testing: Input state when crafting is open
+       > Opening menu: Crafting
+
+[FAIL] Crafting.Open
+       Error: Failed to open crafting menu
+       > Testing: Can open crafting menu
+       > Opening menu: Crafting
+
+[FAIL] Edge.OpenSameMenuTwice
+       Error: First open failed
+       > Testing: Opening same menu twice
+       > Opening menu: Inventory
+
+[FAIL] Focus.MenuReceivesFocusOnOpen
+       Error: Failed to open
+       > Testing: Menu receives focus when opened
+       > Opening menu: Inventory
+
+[FAIL] Focus.RestoredAfterMenuClose
+       Error: Failed to open inventory
+       > Testing: Focus management after menu close
+       > Opening menu: Inventory
+
+[FAIL] Focus.ReturnToGameAfterAllClosed
+       Error: Failed to open
+       > Testing: Focus returns to game after all menus closed
+       > Opening menu: Inventory
+
+[FAIL] HUD.ReticleHiddenWhenMenuOpen
+       Error: Failed to open
+       > Testing: Reticle hidden when menu open
+       > Opening menu: Inventory
+
+[FAIL] InGame.BlocksOtherMenus
+       Error: Failed to open InGame
+       > Testing: In-game menu blocks opening other menus
+       > Opening menu: InGame
 
 [FAIL] InGame.CloseEscape
-       Error: InGame still open after Escape
+       Error: Failed to open in-game menu
        > Testing: Escape closes in-game menu
        > Opening menu: InGame
-       > Triggering back action via CommonUI
-       > Back action via ActionRouter: Not handled
+
+[FAIL] InGame.InputBlocking
+       Error: Failed to open in-game menu
+       > Testing: In-game menu blocks input
+       > Opening menu: InGame
+
+[FAIL] InGame.Open
+       Error: Failed to open in-game menu
+       > Testing: Can open in-game menu
+       > Opening menu: InGame
+
+[FAIL] InputState.CursorHiddenWhenNoMenus
+       Error: Cursor still visible with no menus open
+       > Testing: Cursor hidden when no menus open
+
+[FAIL] InputState.CursorVisibleWhenMenuOpen
+       Error: Failed to open
+       > Testing: Cursor visible when menu open
+       > Opening menu: Inventory
+
+[FAIL] InputState.LookBlockedWhenMenuOpen
+       Error: Failed to open
+       > Testing: Look input blocked when menu open
+       > Opening menu: Inventory
+
+[FAIL] InputState.MovementBlockedWhenMenuOpen
+       Error: Failed to open
+       > Testing: Movement blocked when menu open
+       > Opening menu: Inventory
+
+[FAIL] InputState.MovementRestoredAfterAllMenusClosed
+       Error: Failed to open inventory
+       > Testing: Movement restored after all menus closed
+       > Opening menu: Inventory
 
 [FAIL] Inventory.CloseEscape
-       Error: Inventory still open after Escape
+       Error: Failed to open inventory menu
        > Testing: Escape closes inventory
        > Opening menu: Inventory
-       > Triggering back action via CommonUI
-       > Back action via ActionRouter: Not handled
 
 [FAIL] Inventory.CloseTab
-       Error: Inventory still open after Tab
+       Error: Failed to open inventory menu
        > Testing: Tab closes inventory
        > Opening menu: Inventory
-       > Tab triggers same as Escape (back action)
-       > Triggering back action via CommonUI
-       > Back action via ActionRouter: Not handled
+
+[FAIL] Inventory.CloseToggle
+       Error: Failed to open inventory menu
+       > Testing: Toggle key closes inventory
+       > Opening menu: Inventory
 
 [FAIL] Inventory.FocusAfterButtonClick
-       Error: Menu didn't close - bIsBackHandler may not be working
+       Error: Failed to open inventory menu
        > Testing: Close still works after button interaction
        > Opening menu: Inventory
-       > Simulating Escape after menu open (testing bIsBackHandler pattern)
-       > Triggering back action via CommonUI
-       > Back action via ActionRouter: Not handled
+
+[FAIL] Inventory.InputState
+       Error: Failed to open inventory menu
+       > Testing: Input state when inventory is open
+       > WARNING: Cursor already visible before opening menu
+       > Opening menu: Inventory
+
+[FAIL] Inventory.Open
+       Error: Failed to open inventory menu
+       > Testing: Can open inventory menu
+       > Opening menu: Inventory
+
+[FAIL] Inventory.ReopenAfterClose
+       Error: First open failed
+       > Testing: Inventory can be reopened after closing
+       > Opening menu: Inventory
+
+[FAIL] MenuSwitch.BuildingToSkills
+       Error: Failed to open building
+       > Testing: Opening skills closes building
+       > Opening menu: Building
+
+[FAIL] MenuSwitch.CraftingToBuilding
+       Error: Failed to open crafting
+       > Testing: Opening building closes crafting
+       > Opening menu: Crafting
+
+[FAIL] MenuSwitch.InGameBlocksSwitch
+       Error: Failed to open InGame
+       > Testing: In-game menu prevents menu switching
+       > Opening menu: InGame
+
+[FAIL] MenuSwitch.InventoryToCrafting
+       Error: Failed to open inventory
+       > Testing: Opening crafting closes inventory
+       > Opening menu: Inventory
+
+[FAIL] MenuSwitch.SkillsToStatus
+       Error: Failed to open skills
+       > Testing: Opening status closes skills
+       > Opening menu: Skills
+
+[FAIL] Skills.CategoryCycling
+       Error: Failed to open skills panel
+       > Testing: Q/E cycle categories (note: requires visual verification)
+       > Opening menu: Skills
 
 [FAIL] Skills.CloseEscape
-       Error: Skills still open after Escape
+       Error: Failed to open skills panel
        > Testing: Escape closes skills
        > Opening menu: Skills
-       > Triggering back action via CommonUI
-       > Back action via ActionRouter: Not handled
 
-[FAIL] Status.CloseEscape
-       Error: Status still open after Escape
-       > Testing: Escape closes status
+[FAIL] Skills.CloseTab
+       Error: Failed to open
+       > Testing: Tab closes skills
+       > Opening menu: Skills
+
+[FAIL] Skills.CloseToggle
+       Error: Failed to open
+       > Testing: Toggle key closes skills
+       > Opening menu: Skills
+
+[FAIL] Skills.InputState
+       Error: Failed to open
+       > Testing: Input state when skills is open
+       > Opening menu: Skills
+
+[FAIL] Skills.Open
+       Error: Failed to open skills panel
+       > Testing: Can open skills panel
+       > Opening menu: Skills
+
+[FAIL] Status.CloseToggle
+       Error: Still open after toggle
+       > Testing: Toggle key closes status
        > Opening menu: Status
-       > Triggering back action via CommonUI
-       > Back action via ActionRouter: Not handled
+
+[FAIL] Status.InputState
+       Error: Movement not blocked
+       > Testing: Input state when status is open
+       > Opening menu: Status
+
+[FAIL] Stress.RapidMenuSwitch
+       Error: Menus stuck open after rapid switching
+       > Testing: Rapid menu switching
+
+[FAIL] Stress.RapidOpenClose
+       Error: Failed to open on cycle 0
+       > Testing: Rapid open/close cycles
+       > Opening menu: Inventory
+
+[FAIL] ToggleKey.BuildingOpensAndCloses
+       Error: Toggle didn't open
+       > Testing: Building toggle key opens and closes
+
+[FAIL] ToggleKey.CraftingOpensAndCloses
+       Error: Toggle didn't open
+       > Testing: Crafting toggle key opens and closes
+
+[FAIL] ToggleKey.InventoryOpensAndCloses
+       Error: Toggle didn't open
+       > Testing: Inventory toggle key opens and closes
+
+[FAIL] ToggleKey.WorksAfterButtonClick
+       Error: Failed to open
+       > Testing: Toggle key works after button interaction
+       > Opening menu: Inventory
 
 
 ALL TEST RESULTS:
 --------------------------------------------------------------------------------
-[FAIL] Building.CloseEscape (4.2ms)
-[PASS] Building.CloseToggle (3.1ms)
-[PASS] Building.InputState (3.0ms)
-[PASS] Building.Open (2.5ms)
-[FAIL] Crafting.CloseEscape (2.3ms)
-[PASS] Crafting.CloseToggle (1.7ms)
-[PASS] Crafting.InputState (1.5ms)
-[PASS] Crafting.Open (1.5ms)
-[PASS] Focus.RestoredAfterMenuClose (5.0ms)
-[FAIL] InGame.CloseEscape (17.2ms)
-[PASS] InGame.InputBlocking (17.0ms)
-[PASS] InGame.Open (17.2ms)
-[PASS] InputState.CursorHiddenWhenNoMenus (0.0ms)
-[PASS] InputState.MovementRestoredAfterAllMenusClosed (3.0ms)
-[FAIL] Inventory.CloseEscape (2.6ms)
-[FAIL] Inventory.CloseTab (2.5ms)
-[PASS] Inventory.CloseToggle (2.8ms)
-[FAIL] Inventory.FocusAfterButtonClick (2.6ms)
-[PASS] Inventory.InputState (2.6ms)
-[PASS] Inventory.Open (2.7ms)
-[PASS] MenuSwitch.CraftingToBuilding (4.5ms)
-[PASS] MenuSwitch.InventoryToCrafting (4.4ms)
+[FAIL] Building.CloseEscape (4.3ms)
+[FAIL] Building.CloseTab (3.3ms)
+[FAIL] Building.CloseToggle (3.3ms)
+[FAIL] Building.InputState (3.2ms)
+[FAIL] Building.Open (3.1ms)
+[FAIL] CommonUI.BackActionHandler (5.7ms)
+[FAIL] CommonUI.FocusRestoration (10.8ms)
+[FAIL] CommonUI.LayerStackPop (5.3ms)
+[FAIL] CommonUI.LayerStackPush (5.1ms)
+[FAIL] CommonUI.MenuInputModeAll (5.3ms)
+[FAIL] CommonUI.ModalBlocksInput (5.2ms)
+[FAIL] CommonUI.ModalInputModeMenu (18.5ms)
+[FAIL] CommonUI.ToggleKeyPassthrough (5.8ms)
+[FAIL] CommonUI.WidgetActivation (5.7ms)
+[FAIL] CommonUI.WidgetDeactivation (5.5ms)
+[PASS] Confirmation.ModalBlocking (0.0ms)
+[PASS] ContextMenu.ParentMenuStaysOpen (0.0ms)
+[FAIL] Crafting.CloseEscape (2.5ms)
+[FAIL] Crafting.CloseTab (2.5ms)
+[FAIL] Crafting.CloseToggle (2.3ms)
+[FAIL] Crafting.InputState (2.2ms)
+[FAIL] Crafting.Open (2.3ms)
+[PASS] Edge.CloseAlreadyClosedMenu (0.0ms)
+[PASS] Edge.EscapeWithNoMenuOpen (0.2ms)
+[FAIL] Edge.OpenSameMenuTwice (5.5ms)
+[FAIL] Focus.MenuReceivesFocusOnOpen (5.3ms)
+[FAIL] Focus.RestoredAfterMenuClose (5.4ms)
+[FAIL] Focus.ReturnToGameAfterAllClosed (5.9ms)
+[FAIL] HUD.ReticleHiddenWhenMenuOpen (5.7ms)
+[FAIL] InGame.BlocksOtherMenus (17.2ms)
+[FAIL] InGame.CloseEscape (17.5ms)
+[FAIL] InGame.InputBlocking (17.2ms)
+[FAIL] InGame.Open (17.2ms)
+[FAIL] InputState.CursorHiddenWhenNoMenus (0.0ms)
+[FAIL] InputState.CursorVisibleWhenMenuOpen (6.0ms)
+[FAIL] InputState.LookBlockedWhenMenuOpen (5.6ms)
+[FAIL] InputState.MovementBlockedWhenMenuOpen (5.5ms)
+[FAIL] InputState.MovementRestoredAfterAllMenusClosed (5.5ms)
+[FAIL] Inventory.CloseEscape (5.7ms)
+[FAIL] Inventory.CloseTab (5.7ms)
+[FAIL] Inventory.CloseToggle (5.9ms)
+[FAIL] Inventory.FocusAfterButtonClick (5.9ms)
+[FAIL] Inventory.InputState (6.2ms)
+[FAIL] Inventory.Open (5.9ms)
+[FAIL] Inventory.ReopenAfterClose (5.9ms)
+[FAIL] MenuSwitch.BuildingToSkills (3.7ms)
+[FAIL] MenuSwitch.CraftingToBuilding (2.6ms)
+[FAIL] MenuSwitch.InGameBlocksSwitch (18.5ms)
+[FAIL] MenuSwitch.InventoryToCrafting (6.3ms)
+[FAIL] MenuSwitch.SkillsToStatus (7.3ms)
+[PASS] Nested.ConfirmationOverMenu (0.0ms)
 [PASS] Nested.ContextMenuEscapeClosesOnlyContext (0.0ms)
-[PASS] Skills.CategoryCycling (5.9ms)
-[FAIL] Skills.CloseEscape (5.1ms)
-[PASS] Skills.Open (5.2ms)
-[FAIL] Status.CloseEscape (4.2ms)
-[PASS] Status.Open (3.7ms)
+[PASS] Possession.CloseEscape (0.0ms)
+[PASS] Possession.InputState (0.0ms)
+[PASS] Possession.Open (1.3ms)
+[PASS] Setup.ActionRouterExists (0.0ms)
+[PASS] Setup.ControllersExist (0.0ms)
+[PASS] Setup.LayerStacksExist (0.0ms)
+[PASS] Setup.LayoutCreated (0.0ms)
+[PASS] Setup.UIManagerExists (0.0ms)
+[PASS] Setup.UISettingsConfigured (0.0ms)
+[FAIL] Skills.CategoryCycling (7.0ms)
+[FAIL] Skills.CloseEscape (7.0ms)
+[FAIL] Skills.CloseTab (7.1ms)
+[FAIL] Skills.CloseToggle (7.1ms)
+[FAIL] Skills.InputState (7.0ms)
+[FAIL] Skills.Open (7.1ms)
+[PASS] Status.CategoryCycling (16.7ms)
+[PASS] Status.CloseEscape (16.3ms)
+[PASS] Status.CloseTab (17.0ms)
+[FAIL] Status.CloseToggle (34.4ms)
+[FAIL] Status.InputState (17.2ms)
+[PASS] Status.Open (18.4ms)
+[FAIL] Stress.RapidMenuSwitch (202.4ms)
+[FAIL] Stress.RapidOpenClose (7.0ms)
+[FAIL] ToggleKey.BuildingOpensAndCloses (4.7ms)
+[FAIL] ToggleKey.CraftingOpensAndCloses (3.1ms)
+[FAIL] ToggleKey.InventoryOpensAndCloses (7.0ms)
+[FAIL] ToggleKey.WorksAfterButtonClick (6.9ms)

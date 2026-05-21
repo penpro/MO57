@@ -58,26 +58,45 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "MOInterruptibleInterface.h"
 #include "MOTerraformingComponent.generated.h"
 
 class AVoxelHeightSculptActor;
 class AVoxelVolumeSculptActor;
+class AMOCharacter;
 
 /**
  * Terraforming operation mode.
  * See file header for mode descriptions.
+ *
+ * NOTE: When adding a new mode, also:
+ *   - Add a case to UMOTerraformingComponent::ApplyTerraformAction (the dispatcher)
+ *   - Add a display name to GetModeDisplayName
+ *   - Update the modulo in CycleMode (it counts via (int)MAX)
  */
 UENUM(BlueprintType)
 enum class EMOTerraformMode : uint8
 {
-	Dig UMETA(DisplayName="Dig"),
-	Raise UMETA(DisplayName="Raise"),
-	Flatten UMETA(DisplayName="Flatten"),
-	Smooth UMETA(DisplayName="Smooth")
+	Dig				UMETA(DisplayName="Dig"),
+	Raise			UMETA(DisplayName="Raise"),
+	Flatten			UMETA(DisplayName="Flatten"),
+	Smooth			UMETA(DisplayName="Smooth"),
+	RemoveFoliage	UMETA(DisplayName="Remove Foliage"),
+
+	MAX				UMETA(Hidden)
 };
 
 /**
  * Terraforming tool configuration.
+ *
+ * Strength values are intentionally split per-mode-family rather than a single
+ * Strength field because the tools need very different intensities:
+ *  - Raise/Dig at 1.0 produce massive terrain changes per click — far too
+ *    aggressive for incremental terraforming. Default 0.1 gives a tenth of
+ *    that per action, so a 5-second timer feels meaningful.
+ *  - Smooth at 0.1 would be visually inert; it stays near 1.0.
+ *  - Flatten uses Falloff, not Strength.
+ *  - RemoveFoliage uses Radius only.
  */
 USTRUCT(BlueprintType)
 struct MOFRAMEWORK_API FMOTerraformConfig
@@ -86,36 +105,178 @@ struct MOFRAMEWORK_API FMOTerraformConfig
 
 	/** Radius of the terraforming brush (in Unreal units). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Terraforming", meta=(ClampMin="10.0"))
-	float Radius = 500.0f;
+	float Radius = 250.0f;
 
-	/** Strength of the operation (0-1). Higher = more dramatic effect. */
+	/**
+	 * Strength of Raise/Dig operations (0-1). Default 0.1 — a single 5-second
+	 * action makes a noticeable but not overwhelming change. If you want a
+	 * dramatic crater per click, set this higher.
+	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Terraforming", meta=(ClampMin="0.0", ClampMax="1.0"))
-	float Strength = 1.0f;
+	float RaiseLowerStrength = 0.1f;
+
+	/**
+	 * Strength of Smooth operation (0-1). Kept near full because smooth at
+	 * 0.1 is visually indistinguishable from no change at all.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Terraforming", meta=(ClampMin="0.0", ClampMax="1.0"))
+	float SmoothStrength = 1.0f;
 
 	/** Falloff for flatten operations (0-1). Higher = softer edges. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Terraforming", meta=(ClampMin="0.0", ClampMax="1.0"))
 	float Falloff = 0.5f;
 
-	/** For flatten: target height (if not using hit point). */
+	/** For flatten: target height (if not auto-computed from character feet). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Terraforming")
 	float FlattenTargetHeight = 0.0f;
 
-	/** For flatten: use hit point Z as target height. */
+	/**
+	 * When true, flatten uses the character's standing-on-ground Z as the
+	 * target height (the player's feet). When false, flatten uses the Z of
+	 * wherever the cursor's ray-trace hit the terrain.
+	 *
+	 * Default is true (feet) because the alternative made flattening cliffs
+	 * very confusing — you'd aim partway up a slope and the flatten target
+	 * would be at that intermediate height, not at the level the player
+	 * was standing on.
+	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Terraforming")
-	bool bUseFlattenHitHeight = true;
+	bool bUseCharacterFeetForFlatten = true;
 };
+
+/**
+ * Holds the captured intent of a terraform action while its 5-second progress
+ * timer is running. Once the timer expires, ApplyPendingTerraform() reads
+ * this struct and dispatches to the underlying voxel sculpt call.
+ *
+ * Captured AT THE MOMENT BeginTerraform is called — so if the player moves
+ * during the 5-second window, the FlattenTargetHeight (character feet Z) is
+ * locked to where they were aiming. Movement would cancel the action via the
+ * interrupt system anyway, so this lock is mostly defensive.
+ */
+// FMOTerrainModifiedZone has moved to UMOTerrainModificationSubsystem.
+// This component no longer tracks zones directly — it just reports each
+// successful terraform action to that subsystem, which owns the data, the
+// spatial index, the periodic sweep, and save/load integration.
+
+USTRUCT(BlueprintType)
+struct MOFRAMEWORK_API FMOTerraformPendingAction
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category="MO|Terraforming")
+	bool bActive = false;
+
+	UPROPERTY(BlueprintReadOnly, Category="MO|Terraforming")
+	EMOTerraformMode Mode = EMOTerraformMode::Dig;
+
+	/** Where the terraforming brush is centered (worldspace). */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Terraforming")
+	FVector TargetLocation = FVector::ZeroVector;
+
+	/** Surface normal at TargetLocation. Used by volume sculpt's Flatten. */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Terraforming")
+	FVector TargetNormal = FVector::UpVector;
+
+	/**
+	 * For Flatten: the Z value to flatten to. Already resolved at BeginTerraform
+	 * time per Config.bUseCharacterFeetForFlatten — when this struct is read,
+	 * we just use the value (no more "which Z do I use" decision).
+	 */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Terraforming")
+	float FlattenTargetHeight = 0.0f;
+
+	/**
+	 * Wall-clock seconds since this action began. Advanced by the component's
+	 * Tick (NOT by the widget) so completion isn't gated on UI existing.
+	 *
+	 * Storing the start TIMESTAMP rather than just an elapsed counter would
+	 * be safer against world-time-dilation, but at the moment we don't have
+	 * dilation in flight for terraforming and the simpler counter avoids
+	 * extra FPlatformTime calls per tick.
+	 */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Terraforming")
+	float ElapsedTime = 0.0f;
+
+	/** Total duration of this action — copied from TerraformDurationSeconds at start. */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Terraforming")
+	float TotalTime = 5.0f;
+
+	void Reset()
+	{
+		bActive = false;
+		Mode = EMOTerraformMode::Dig;
+		TargetLocation = FVector::ZeroVector;
+		TargetNormal = FVector::UpVector;
+		FlattenTargetHeight = 0.0f;
+		ElapsedTime = 0.0f;
+		TotalTime = 5.0f;
+	}
+
+	float GetProgress01() const
+	{
+		return TotalTime > 0.0f ? FMath::Clamp(ElapsedTime / TotalTime, 0.0f, 1.0f) : 0.0f;
+	}
+
+	float GetTimeRemaining() const
+	{
+		return FMath::Max(0.0f, TotalTime - ElapsedTime);
+	}
+};
+
+/**
+ * Broadcast when a terraform action begins (the 5-second progress timer
+ * starts). UI listens to this to spawn the progress widget.
+ */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOTerraformStartedSignature, EMOTerraformMode, Mode, float, DurationSeconds);
+
+/**
+ * Broadcast every component tick while a terraform action is in flight.
+ * UI listens to this to update the progress bar — the component is the
+ * source of truth for elapsed time, the widget is just a view.
+ */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOTerraformProgressSignature, float, Progress01, float, TimeRemainingSeconds);
+
+/**
+ * Broadcast when the 5-second timer completes and the sculpt actually applied.
+ */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOTerraformCompletedSignature, bool, bSuccess);
+
+/**
+ * Broadcast when a pending terraform action was cancelled — by the player,
+ * by a movement interrupt, or by any other source. UI listens to this to
+ * tear down the progress widget.
+ */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOTerraformCancelledSignature);
 
 /**
  * Component that enables terrain modification using the Voxel plugin.
  * Supports both height-based (2D) and volume-based (3D) terraforming.
+ *
+ * Each terraform action runs a 5-second progress timer (configurable via
+ * TerraformDurationSeconds) before the sculpt is applied. The component is
+ * a registered IMOInterruptibleInterface listener on its owning character,
+ * so movement / damage / etc. cancel the in-flight action automatically.
  */
 UCLASS(ClassGroup=(MO), meta=(BlueprintSpawnableComponent))
-class MOFRAMEWORK_API UMOTerraformingComponent : public UActorComponent
+class MOFRAMEWORK_API UMOTerraformingComponent : public UActorComponent,
+	public IMOInterruptibleInterface
 {
 	GENERATED_BODY()
 
 public:
 	UMOTerraformingComponent();
+
+	/**
+	 * Interrupt policy:
+	 *   Movement / Damage / Knockdown / Unconscious / Death / EnteredCombat
+	 *     / LostControl / External   -> CANCEL the pending terraform
+	 *   UserCancel                    -> ignored (UI calls CancelTerraform directly)
+	 *
+	 * Terraforming requires concentration; no partial progress is meaningful
+	 * mid-action.
+	 */
+	virtual void NotifyInterrupt_Implementation(const FMOInterruptContext& Context) override;
 
 	// ============================================================================
 	// CONFIGURATION
@@ -153,14 +314,61 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Terraforming|Actors")
 	TWeakObjectPtr<AVoxelVolumeSculptActor> VolumeSculptActor;
 
+	/**
+	 * Duration (seconds) of the progress timer on every terraform action.
+	 * Default 5s per design — applies to all modes uniformly.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Terraforming", meta=(ClampMin="0.1"))
+	float TerraformDurationSeconds = 5.0f;
+
 	// ============================================================================
-	// TERRAFORMING API
+	// TIMED ACTION (preferred API)
 	// ============================================================================
 
 	/**
-	 * Perform terraforming at the current aim location.
-	 * Uses the current mode and config.
-	 * @return True if terraforming was initiated
+	 * Begin a terraform action at the current aim location. Captures the
+	 * target into PendingAction, registers the component as an interrupt
+	 * listener on the owning character, and fires OnTerraformStarted so the
+	 * UI can spawn a progress widget.
+	 *
+	 * The widget runs the 5-second timer and calls CompleteTerraform when
+	 * done. CancelTerraform aborts at any point.
+	 *
+	 * @return True if a valid target was found and the action started.
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Terraforming")
+	bool BeginTerraform();
+
+	/** Apply the captured PendingAction. Called by the progress widget on success. */
+	UFUNCTION(BlueprintCallable, Category="MO|Terraforming")
+	bool CompleteTerraform();
+
+	/** Cancel any pending terraform action. Idempotent. */
+	UFUNCTION(BlueprintCallable, Category="MO|Terraforming")
+	void CancelTerraform();
+
+	/** True while a 5-second terraform timer is running and not yet applied. */
+	UFUNCTION(BlueprintPure, Category="MO|Terraforming")
+	bool IsTerraformPending() const { return PendingAction.bActive; }
+
+	/** Read-only access to the captured action (for UI display). */
+	UFUNCTION(BlueprintPure, Category="MO|Terraforming")
+	const FMOTerraformPendingAction& GetPendingAction() const { return PendingAction; }
+
+	// ============================================================================
+	// LEGACY IMMEDIATE-APPLY API
+	// ============================================================================
+	//
+	// These bypass the 5-second progress timer and apply the sculpt
+	// immediately. Kept for tooling, automated tests, and AI controllers
+	// that don't need a user-facing progress bar. Player input should
+	// always go through BeginTerraform / CompleteTerraform / CancelTerraform.
+
+	/**
+	 * Perform terraforming at the current aim location immediately, with no
+	 * progress timer. Used by tools and AI; player input should use
+	 * BeginTerraform instead.
+	 * @return True if terraforming was applied.
 	 */
 	UFUNCTION(BlueprintCallable, Category="MO|Terraforming")
 	bool TryTerraform();
@@ -191,10 +399,12 @@ public:
 	bool Raise(const FVector& WorldLocation);
 
 	/**
-	 * Perform a flatten operation.
-	 * @param WorldLocation The world position to flatten at
-	 * @param TargetHeight The height to flatten to (ignored if bUseFlattenHitHeight is true)
-	 * @return True if flatten was initiated
+	 * Perform a flatten operation at the given target height. Callers
+	 * (TerraformAtLocation, BeginTerraform/ApplyPendingTerraform) resolve
+	 * the target Z before invoking this — see Config.bUseCharacterFeetForFlatten.
+	 * @param WorldLocation The world position to center the brush on.
+	 * @param TargetHeight  The Z value to flatten to.
+	 * @return True if flatten was initiated.
 	 */
 	UFUNCTION(BlueprintCallable, Category="MO|Terraforming")
 	bool Flatten(const FVector& WorldLocation, float TargetHeight = 0.0f);
@@ -206,6 +416,16 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category="MO|Terraforming")
 	bool Smooth(const FVector& WorldLocation);
+
+	/**
+	 * Remove all foliage (ISM/HISM instances) within Config.Radius of
+	 * WorldLocation. Used by the RemoveFoliage terraform mode. Does NOT
+	 * yield items — this is clear-the-land destruction, not harvesting.
+	 *
+	 * @return True if any foliage was removed.
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Terraforming")
+	bool RemoveFoliage(const FVector& WorldLocation);
 
 	// ============================================================================
 	// MODE MANAGEMENT
@@ -231,6 +451,22 @@ public:
 	DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOTerraformModeChangedSignature, EMOTerraformMode, OldMode, EMOTerraformMode, NewMode);
 	UPROPERTY(BlueprintAssignable, Category="MO|Terraforming")
 	FMOTerraformModeChangedSignature OnModeChanged;
+
+	/** Broadcast when the 5-second progress timer starts (UI hook for the progress widget). */
+	UPROPERTY(BlueprintAssignable, Category="MO|Terraforming")
+	FMOTerraformStartedSignature OnTerraformStarted;
+
+	/** Broadcast every tick while in-flight so the UI can update its progress bar. */
+	UPROPERTY(BlueprintAssignable, Category="MO|Terraforming")
+	FMOTerraformProgressSignature OnTerraformProgress;
+
+	/** Broadcast when the timer completes and the sculpt was applied. */
+	UPROPERTY(BlueprintAssignable, Category="MO|Terraforming")
+	FMOTerraformCompletedSignature OnTerraformCompleted;
+
+	/** Broadcast when a pending action was cancelled from any source (UI / interrupt / etc). */
+	UPROPERTY(BlueprintAssignable, Category="MO|Terraforming")
+	FMOTerraformCancelledSignature OnTerraformCancelled;
 
 	// ============================================================================
 	// UTILITY
@@ -259,6 +495,14 @@ public:
 protected:
 	virtual void BeginPlay() override;
 
+	/**
+	 * Drives the in-flight terraform action's elapsed-time counter. The
+	 * component owns this — completion no longer depends on the UI widget
+	 * existing, so the action applies even when the progress widget hasn't
+	 * been configured. Tick is only enabled while PendingAction.bActive.
+	 */
+	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
+
 private:
 	bool ResolveViewpoint(FVector& OutLocation, FRotator& OutRotation) const;
 
@@ -273,4 +517,45 @@ private:
 	bool VolumeRaise(const FVector& Location);
 	bool VolumeFlatten(const FVector& Location, const FVector& Normal, float TargetHeight);
 	bool VolumeSmooth(const FVector& Location);
+
+	// ============================================================================
+	// TIMED ACTION INTERNALS
+	// ============================================================================
+
+	/** Captured intent of the currently-pending action, valid only while bActive. */
+	UPROPERTY()
+	FMOTerraformPendingAction PendingAction;
+
+	// Zone tracking moved to UMOTerrainModificationSubsystem. After a
+	// terraform action applies, the component just calls
+	// Subsystem->RegisterModifiedZone(...). The subsystem owns:
+	//   - the zone list + merge logic
+	//   - the spatial grid for fast queries
+	//   - the periodic sweep that removes PCG-respawned foliage
+	//   - save/load via UMOPersistenceSubsystem
+
+	/**
+	 * Cached AMOCharacter we registered with for interrupts. Stored separately
+	 * so we can unregister even if GetOwner() changes mid-action.
+	 */
+	TWeakObjectPtr<AMOCharacter> RegisteredInterruptCharacter;
+
+	/**
+	 * Dispatch a captured pending action to the right sculpt method. Reads
+	 * PendingAction; doesn't mutate it (the caller resets after).
+	 */
+	bool ApplyPendingTerraform();
+
+	/**
+	 * Compute the Z of the character's feet — i.e., the surface they're
+	 * standing on. Used as the Flatten target when bUseCharacterFeetForFlatten.
+	 * Returns false if the owner is not an AMOCharacter (e.g. AI pawn type).
+	 */
+	bool ResolveCharacterGroundZ(float& OutGroundZ) const;
+
+	/** Register this component as an interrupt listener on the owning character. */
+	void RegisterForInterrupts();
+
+	/** Unregister from the owning character's interrupt broadcast. */
+	void UnregisterFromInterrupts();
 };

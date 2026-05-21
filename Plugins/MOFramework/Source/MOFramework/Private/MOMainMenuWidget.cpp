@@ -11,6 +11,10 @@ UMOMainMenuWidget::UMOMainMenuWidget(const FObjectInitializer& ObjectInitializer
 	: Super(ObjectInitializer)
 {
 	SetIsFocusable(true);
+
+	// Main menu is the root surface — nothing exists behind it to fall back to,
+	// so clicking outside its content shouldn't dismiss it.
+	bClosesOnOutsideClick = false;
 }
 
 void UMOMainMenuWidget::NativeConstruct()

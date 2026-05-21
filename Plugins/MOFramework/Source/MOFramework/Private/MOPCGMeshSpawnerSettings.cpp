@@ -2,6 +2,8 @@
 #include "MOFramework.h"
 #include "MOItemDefinitionRow.h"
 #include "MOPCGInteractionSubsystem.h"
+#include "MOTerrainModificationSubsystem.h"
+#include "MOHarvestDebugSubsystem.h"
 #include "MOWeightedSelector.h"
 
 #include "PCGComponent.h"
@@ -111,10 +113,43 @@ bool FMOPCGMeshSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 	// Get input points
 	TArray<FPCGTaggedData> Inputs = Context->InputData.GetInputsByPin(PCGPinConstants::DefaultInputLabel);
 
+	// Cache the terrain-modification subsystem ONCE for the whole point loop.
+	// Per-point lookup would still be cheap (one TMap and a sphere math) but
+	// hoisting the resolve to the outer scope is free and clearer. Null is
+	// fine — IsLocationModified would also return false in that case, but
+	// skipping the call entirely is simplest.
+	UMOTerrainModificationSubsystem* TerrainMod = nullptr;
+	if (Settings->bRespectTerrainModifications)
+	{
+		if (UWorld* World = TargetActor->GetWorld())
+		{
+			TerrainMod = World->GetSubsystem<UMOTerrainModificationSubsystem>();
+		}
+	}
+
+	// Count total input points across all inputs so the log line shows the
+	// "denominator" of the filter — useful for confirming the spawner is
+	// even processing points.
+	int32 TotalInputPoints = 0;
+	for (const FPCGTaggedData& Input : Inputs)
+	{
+		if (const UPCGPointData* InputPointData = Cast<UPCGPointData>(Input.Data))
+		{
+			TotalInputPoints += InputPointData->GetPoints().Num();
+		}
+	}
+	MOHARVEST_LOG(TargetActor, "PCG-MeshSpawner",
+		"Execute START: bRespectTerrainMods=%d terrainSubsystem=%s totalInputPoints=%d zoneCount=%d",
+		Settings->bRespectTerrainModifications ? 1 : 0,
+		TerrainMod ? TEXT("FOUND") : TEXT("NULL"),
+		TotalInputPoints,
+		TerrainMod ? TerrainMod->GetZoneCount() : -1);
+
 	// Process each point and group by item type
 	FRandomStream RandomStream(Context->GetSeed() + Settings->SeedOffset);
 	int32 TotalPointsProcessed = 0;
 	int32 TotalPointsDiscarded = 0;
+	int32 TotalPointsSuppressedByTerrainMod = 0;
 
 	for (const FPCGTaggedData& Input : Inputs)
 	{
@@ -128,6 +163,19 @@ bool FMOPCGMeshSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 
 		for (const FPCGPoint& Point : InputPoints)
 		{
+			// REACTIVE TERRAIN-MOD FILTER: skip points in modified zones so
+			// PCG never creates instances on worked ground. This is the
+			// permanent fix for "PCG respawns foliage after a terraform
+			// action" — no polling, no flicker, no race.
+			//
+			// IsLocationModified is an O(zones-per-cell) grid lookup —
+			// effectively constant time for typical zone counts.
+			if (TerrainMod && TerrainMod->IsLocationModified(Point.Transform.GetLocation()))
+			{
+				++TotalPointsSuppressedByTerrainMod;
+				continue;
+			}
+
 			// Select item for this point using weighted selector utility
 			const FMOPCGItemSpawnEntry* SelectedEntry = FMOWeightedSelector::SelectWeightedIf(
 				Settings->ItemsToSpawn, TotalWeight, RandomStream, HasValidMesh);
@@ -157,6 +205,10 @@ bool FMOPCGMeshSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 			}
 		}
 	}
+
+	MOHARVEST_LOG(TargetActor, "PCG-MeshSpawner",
+		"Execute END: processed=%d discarded=%d suppressedByTerrainMod=%d",
+		TotalPointsProcessed, TotalPointsDiscarded, TotalPointsSuppressedByTerrainMod);
 
 	// Get PCG interaction subsystem for registering tag mappings
 	UMOPCGInteractionSubsystem* PCGSubsystem = nullptr;

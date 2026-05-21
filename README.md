@@ -6,6 +6,12 @@
 
 ---
 
+## Latest Update (2026-05-21)
+
+**Building System Overhaul + Critical Save/Load Fix.** Full floor/wall/half-wall/roof/roof-peak snap construction with mouse-wheel in-place flip, end-to-end wall extension, mixed-height stacking, and edge-aware roof tiling. Fixed the packaged-build bug where saved terrain would regenerate with the wrong seed (was setting the override on the graph asset; needed to set it on the stamp's own parameter overrides). Eliminated 2-second game-thread hitching from terrain modification sweep. Player now auto-possesses their saved character on load instead of being left as a sky-cam. See `PATCH_NOTES.md` for the full writeup.
+
+---
+
 ## Table of Contents
 
 1. [Vision & Core Pillars](#vision--core-pillars)

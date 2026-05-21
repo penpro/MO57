@@ -11,22 +11,20 @@ UMOModalBackground::UMOModalBackground(const FObjectInitializer& ObjectInitializ
 
 TSharedRef<SWidget> UMOModalBackground::RebuildWidget()
 {
-	// Create a full-screen transparent border that captures all mouse input
+	// Full-screen dimming border. HitTestInvisible so clicks pass through to the menu
+	// behind/above us. Click-outside-to-close is intentionally disabled because the
+	// modal background sits in front of menus and was consuming every menu click.
 	return SNew(SBorder)
 		.BorderImage(FCoreStyle::Get().GetBrush("NoBorder"))
 		.Padding(0)
 		.HAlign(HAlign_Fill)
 		.VAlign(VAlign_Fill)
-		.Visibility(EVisibility::Visible);
+		.Visibility(EVisibility::HitTestInvisible);
 }
 
 FReply UMOModalBackground::NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
 {
-	if (InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
-	{
-		OnBackgroundClicked.Broadcast();
-		return FReply::Handled();
-	}
-
+	// Disabled — see RebuildWidget comment. Click-outside-to-close should be a
+	// per-menu opt-in once CommonUI's layer system is properly handling input routing.
 	return Super::NativeOnMouseButtonDown(InGeometry, InMouseEvent);
 }

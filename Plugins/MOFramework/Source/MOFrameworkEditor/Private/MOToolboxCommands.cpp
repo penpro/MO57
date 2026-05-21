@@ -114,6 +114,25 @@ void FMOToolboxCommands::RegisterCommands()
 		"Open the UI test results file",
 		EUserInterfaceActionType::Button,
 		FInputChord());
+
+	// CommonUI-specific testing
+	UI_COMMAND(RunSetupValidation,
+		"Validate Setup",
+		"Run setup validation tests to check CommonUI configuration",
+		EUserInterfaceActionType::Button,
+		FInputChord());
+
+	UI_COMMAND(RunCommonUITests,
+		"Run CommonUI Tests",
+		"Run CommonUI-specific tests (layer stacks, input modes, etc.)",
+		EUserInterfaceActionType::Button,
+		FInputChord());
+
+	UI_COMMAND(RunDiagnostics,
+		"Print Diagnostics",
+		"Print comprehensive CommonUI diagnostic information to Output Log",
+		EUserInterfaceActionType::Button,
+		FInputChord());
 }
 
 #undef LOCTEXT_NAMESPACE

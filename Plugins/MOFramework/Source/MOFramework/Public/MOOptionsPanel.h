@@ -63,7 +63,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "CommonActivatableWidget.h"
+#include "MOActivatableWidget.h"
 #include "MOKeyBindingTypes.h"
 #include "MOOptionsPanel.generated.h"
 
@@ -79,7 +79,7 @@ class UInputMappingContext;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOOptionsPanelRequestCloseSignature);
 UCLASS()
-class MOFRAMEWORK_API UMOOptionsPanel : public UCommonActivatableWidget
+class MOFRAMEWORK_API UMOOptionsPanel : public UMOActivatableWidget
 {
 	GENERATED_BODY()
 

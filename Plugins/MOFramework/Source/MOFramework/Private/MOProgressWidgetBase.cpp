@@ -12,6 +12,19 @@ UMOProgressWidgetBase::UMOProgressWidgetBase(const FObjectInitializer& ObjectIni
 {
 }
 
+TOptional<FUIInputConfig> UMOProgressWidgetBase::GetDesiredInputConfig() const
+{
+	// Game mode — progress bars are passive HUD overlays, not interactive menus.
+	// ESC cancellation works via CommonUI back handler (bIsBackHandler on base class).
+	// Cursor stays hidden so the progress bar doesn't fight context menu cursor state.
+	return FUIInputConfig(
+		ECommonInputMode::Game,
+		EMouseCaptureMode::NoCapture,
+		EMouseLockMode::DoNotLock,
+		true
+	);
+}
+
 void UMOProgressWidgetBase::NativeConstruct()
 {
 	Super::NativeConstruct();

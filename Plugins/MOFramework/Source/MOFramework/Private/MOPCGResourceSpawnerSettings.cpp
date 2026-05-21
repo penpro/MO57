@@ -1,6 +1,8 @@
 #include "MOPCGResourceSpawnerSettings.h"
 #include "MOFramework.h"
 #include "MOPCGInteractionSubsystem.h"
+#include "MOTerrainModificationSubsystem.h"
+#include "MOHarvestDebugSubsystem.h"
 #include "MOWeightedSelector.h"
 
 #include "PCGComponent.h"
@@ -139,8 +141,36 @@ bool FMOPCGResourceSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 	// Get input points
 	TArray<FPCGTaggedData> Inputs = Context->InputData.GetInputsByPin(PCGPinConstants::DefaultInputLabel);
 
+	// Cache the terrain-modification subsystem for the spawn loop. Same
+	// reactive filter as MOPCGMeshSpawner — skip points in modified zones so
+	// PCG never spawns rocks/resources on terraformed ground.
+	UMOTerrainModificationSubsystem* TerrainMod = nullptr;
+	if (Settings->bRespectTerrainModifications)
+	{
+		if (UWorld* World = TargetActor->GetWorld())
+		{
+			TerrainMod = World->GetSubsystem<UMOTerrainModificationSubsystem>();
+		}
+	}
+
+	int32 TotalInputPoints = 0;
+	for (const FPCGTaggedData& Input : Inputs)
+	{
+		if (const UPCGPointData* InputPointData = Cast<UPCGPointData>(Input.Data))
+		{
+			TotalInputPoints += InputPointData->GetPoints().Num();
+		}
+	}
+	MOHARVEST_LOG(TargetActor, "PCG-ResourceSpawner",
+		"Execute START: bRespectTerrainMods=%d terrainSubsystem=%s totalInputPoints=%d zoneCount=%d",
+		Settings->bRespectTerrainModifications ? 1 : 0,
+		TerrainMod ? TEXT("FOUND") : TEXT("NULL"),
+		TotalInputPoints,
+		TerrainMod ? TerrainMod->GetZoneCount() : -1);
+
 	// Process each point
 	int32 TotalPointsProcessed = 0;
+	int32 TotalPointsSuppressedByTerrainMod = 0;
 
 	for (const FPCGTaggedData& Input : Inputs)
 	{
@@ -154,6 +184,13 @@ bool FMOPCGResourceSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 
 		for (const FPCGPoint& Point : InputPoints)
 		{
+			// Reactive terrain-mod filter — never spawn inside modified zones.
+			if (TerrainMod && TerrainMod->IsLocationModified(Point.Transform.GetLocation()))
+			{
+				++TotalPointsSuppressedByTerrainMod;
+				continue;
+			}
+
 			// Select resource using weighted selector
 			const FMOPCGResourceEntry* SelectedEntry = FMOWeightedSelector::SelectWeightedIf(
 				Settings->ResourcesToSpawn, TotalWeight, RandomStream, HasValidResource);
@@ -233,6 +270,10 @@ bool FMOPCGResourceSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 			TotalPointsProcessed++;
 		}
 	}
+
+	MOHARVEST_LOG(TargetActor, "PCG-ResourceSpawner",
+		"Execute END: processed=%d suppressedByTerrainMod=%d meshKeys=%d",
+		TotalPointsProcessed, TotalPointsSuppressedByTerrainMod, MeshSpawnMap.Num());
 
 	// Get PCG interaction subsystem for registering tag mappings
 	UMOPCGInteractionSubsystem* PCGSubsystem = nullptr;

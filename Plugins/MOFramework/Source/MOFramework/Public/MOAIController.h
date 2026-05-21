@@ -157,6 +157,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|AI|Config")
 	TSoftObjectPtr<UBehaviorTree> DefaultBehaviorTree;
 
+	/** Cached loaded behavior tree (resolved once in OnPossess, reused). */
+	UPROPERTY(Transient)
+	TObjectPtr<UBehaviorTree> CachedDefaultBehaviorTree;
+
 	/** Acceptance radius for reaching target locations. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|AI|Config")
 	float AcceptanceRadius = 100.0f;

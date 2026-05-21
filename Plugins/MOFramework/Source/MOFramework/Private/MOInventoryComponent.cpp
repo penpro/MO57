@@ -13,6 +13,7 @@
 #include "MOIdentityComponent.h"
 #include "MOPersistenceSubsystem.h"
 #include "MOQuestSubsystem.h"
+#include "MOHarvestDebugSubsystem.h"
 #include "UObject/UnrealType.h"
 #include "UObject/SoftObjectPtr.h"
 
@@ -53,6 +54,13 @@ int32 UMOInventoryComponent::FindEntryIndexByGuid(const FGuid& ItemGuid) const
 		return INDEX_NONE;
 	}
 
+	const int32* Found = GuidToEntryIndex.Find(ItemGuid);
+	if (Found && *Found < Inventory.Entries.Num() && Inventory.Entries[*Found].ItemGuid == ItemGuid)
+	{
+		return *Found;
+	}
+
+	// Fallback linear search if index is stale
 	for (int32 EntryIndex = 0; EntryIndex < Inventory.Entries.Num(); ++EntryIndex)
 	{
 		if (Inventory.Entries[EntryIndex].ItemGuid == ItemGuid)
@@ -64,21 +72,45 @@ int32 UMOInventoryComponent::FindEntryIndexByGuid(const FGuid& ItemGuid) const
 	return INDEX_NONE;
 }
 
+void UMOInventoryComponent::RebuildGuidIndex()
+{
+	GuidToEntryIndex.Reset();
+	GuidToEntryIndex.Reserve(Inventory.Entries.Num());
+	for (int32 i = 0; i < Inventory.Entries.Num(); ++i)
+	{
+		if (Inventory.Entries[i].ItemGuid.IsValid())
+		{
+			GuidToEntryIndex.Add(Inventory.Entries[i].ItemGuid, i);
+		}
+	}
+}
+
 bool UMOInventoryComponent::AddItemByGuid(const FGuid& ItemGuid, const FName ItemDefinitionId, int32 QuantityToAdd)
 {
 	AActor* OwnerActor = GetOwner();
 	if (!IsValid(OwnerActor) || !OwnerActor->HasAuthority())
 	{
+		MOHARVEST_LOG(this, "Inventory",
+			"AddItemByGuid REJECT: no authority (Owner='%s', ItemId='%s', Qty=%d)",
+			*GetNameSafe(OwnerActor), *ItemDefinitionId.ToString(), QuantityToAdd);
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventory] AddItemByGuid requires authority"));
 		return false;
 	}
 
 	if (!ItemGuid.IsValid() || ItemDefinitionId.IsNone() || QuantityToAdd <= 0)
 	{
+		MOHARVEST_LOG(this, "Inventory",
+			"AddItemByGuid REJECT: invalid input (GuidValid=%d, ItemId='%s', Qty=%d)",
+			ItemGuid.IsValid() ? 1 : 0, *ItemDefinitionId.ToString(), QuantityToAdd);
 		return false;
 	}
 
 	EnsureSlotsInitialized();
+
+	MOHARVEST_LOG(this, "Inventory",
+		"AddItemByGuid entry: ItemId='%s' Qty=%d (before: Entries=%d, SlotItemGuids=%d)",
+		*ItemDefinitionId.ToString(), QuantityToAdd,
+		Inventory.Entries.Num(), SlotItemGuids.Num());
 
 	// Check if this exact GUID already exists (stacking onto same item)
 	const int32 ExistingIndex = FindEntryIndexByGuid(ItemGuid);
@@ -216,6 +248,19 @@ bool UMOInventoryComponent::AddItemByGuid(const FGuid& ItemGuid, const FName Ite
 			}
 		}
 	}
+
+	// Count slotted vs unslotted entries so we can spot the silent-overflow bug
+	// (AddItemByGuid does not enforce slot capacity; entries beyond slot count exist
+	// in Inventory.Entries but never appear in SlotItemGuids).
+	int32 UsedSlots = 0;
+	for (const FGuid& Guid : SlotItemGuids)
+	{
+		if (Guid.IsValid()) ++UsedSlots;
+	}
+	MOHARVEST_LOG(this, "Inventory",
+		"AddItemByGuid OK: ItemId='%s' AddedTotal=%d RemainingNotAdded=%d (after: Entries=%d, SlotItemGuids=%d, UsedSlots=%d)",
+		*ItemDefinitionId.ToString(), QuantityToAdd - RemainingToAdd, RemainingToAdd,
+		Inventory.Entries.Num(), SlotItemGuids.Num(), UsedSlots);
 
 	return true;
 }
@@ -486,6 +531,7 @@ bool UMOInventoryComponent::GetItemDurability(const FGuid& ItemGuid, int32& OutD
 
 void UMOInventoryComponent::BroadcastInventoryChanged()
 {
+	RebuildGuidIndex();
 	OnInventoryChanged.Broadcast();
 }
 
@@ -496,6 +542,7 @@ void FMOInventoryList::PostReplicatedAdd(const TArrayView<int32>& /*AddedIndices
 {
 	if (OwnerComponent)
 	{
+		OwnerComponent->RebuildGuidIndex();
 		OwnerComponent->OnInventoryChanged.Broadcast();
 	}
 }
@@ -512,6 +559,7 @@ void FMOInventoryList::PostReplicatedRemove(const TArrayView<int32>& /*RemovedIn
 {
 	if (OwnerComponent)
 	{
+		OwnerComponent->RebuildGuidIndex();
 		OwnerComponent->OnInventoryChanged.Broadcast();
 	}
 }
@@ -564,31 +612,42 @@ bool UMOInventoryComponent::CanAddItem(const FGuid& ItemGuid) const
 {
 	if (!ItemGuid.IsValid())
 	{
+		MOHARVEST_LOG(this, "Inventory", "CanAddItem(<invalid GUID>) -> false");
 		return false;
 	}
 
 	// If the GUID already exists in inventory, it will stack - no new slot needed
 	if (FindEntryIndexByGuid(ItemGuid) != INDEX_NONE)
 	{
+		MOHARVEST_LOG(this, "Inventory",
+			"CanAddItem('%s') -> true (GUID already exists, stacks onto same entry)",
+			*ItemGuid.ToString(EGuidFormats::Short));
 		return true;
 	}
 
 	// If there's an empty slot, we can always add
-	if (HasEmptySlot())
-	{
-		return true;
-	}
+	const bool bEmpty = HasEmptySlot();
 
-	// No empty slots - this check is less useful without knowing the ItemDefinitionId
-	// since we can't check for stackable items. For safety, return false.
-	// The caller should use CanAddItemByDefinitionId for proper stack checking.
-	return false;
+	// SLOT-AWARE-BUT-NOT-STACK-AWARE: This check ignores room available in partial
+	// stacks. A fresh GUID with a full slot grid will report 'can't add' even when
+	// every slot has space for more of the same item. Callers that know the
+	// ItemDefinitionId should use CanAddItemByDefinitionId for an accurate check.
+	MOHARVEST_LOG(this, "Inventory",
+		"CanAddItem('%s') -> %s (new GUID, HasEmptySlot=%s, SlotItemGuids.Num=%d, Entries.Num=%d)",
+		*ItemGuid.ToString(EGuidFormats::Short),
+		bEmpty ? TEXT("true") : TEXT("false"),
+		bEmpty ? TEXT("true") : TEXT("false"),
+		SlotItemGuids.Num(), Inventory.Entries.Num());
+	return bEmpty;
 }
 
 bool UMOInventoryComponent::CanAddItemByDefinitionId(FName ItemDefinitionId, int32 Quantity) const
 {
 	if (ItemDefinitionId.IsNone() || Quantity <= 0)
 	{
+		MOHARVEST_LOG(this, "Inventory",
+			"CanAddItemByDefinitionId('%s', %d) -> false (invalid input)",
+			*ItemDefinitionId.ToString(), Quantity);
 		return false;
 	}
 
@@ -596,11 +655,23 @@ bool UMOInventoryComponent::CanAddItemByDefinitionId(FName ItemDefinitionId, int
 	FMOItemDefinitionRow ItemDef;
 	int32 MaxStackSize = 99;
 	bool bIsTool = false;
+	bool bHasDefinition = false;
 
 	if (UMOItemDatabaseSettings::GetItemDefinition(ItemDefinitionId, ItemDef))
 	{
 		MaxStackSize = ItemDef.MaxStackSize > 0 ? ItemDef.MaxStackSize : 1;
 		bIsTool = ItemDef.bIsTool;
+		bHasDefinition = true;
+	}
+
+	// Count empty slots up front for diagnostics.
+	int32 EmptySlots = 0;
+	for (const FGuid& SlotGuid : SlotItemGuids)
+	{
+		if (!SlotGuid.IsValid())
+		{
+			++EmptySlots;
+		}
 	}
 
 	int32 RemainingQuantity = Quantity;
@@ -608,53 +679,56 @@ bool UMOInventoryComponent::CanAddItemByDefinitionId(FName ItemDefinitionId, int
 	// Tools don't stack, so check if we have enough empty slots
 	if (bIsTool || MaxStackSize <= 1)
 	{
-		int32 SlotsNeeded = Quantity; // Each tool needs its own slot
-		int32 EmptySlots = 0;
-
-		for (const FGuid& SlotGuid : SlotItemGuids)
-		{
-			if (!SlotGuid.IsValid())
-			{
-				EmptySlots++;
-			}
-		}
-
-		return EmptySlots >= SlotsNeeded;
+		const int32 SlotsNeeded = Quantity; // Each tool needs its own slot
+		const bool bResult = EmptySlots >= SlotsNeeded;
+		MOHARVEST_LOG(this, "Inventory",
+			"CanAddItemByDefinitionId('%s', %d) -> %s [non-stackable path: bIsTool=%d, MaxStack=%d, EmptySlots=%d, SlotsNeeded=%d, SlotItemGuids.Num=%d, HasDef=%d]",
+			*ItemDefinitionId.ToString(), Quantity,
+			bResult ? TEXT("true") : TEXT("false"),
+			bIsTool ? 1 : 0, MaxStackSize, EmptySlots, SlotsNeeded,
+			SlotItemGuids.Num(), bHasDefinition ? 1 : 0);
+		return bResult;
 	}
 
 	// For stackable items, first check how much room exists in current stacks
+	int32 RoomInExistingStacks = 0;
+	int32 MatchingEntries = 0;
 	for (const FMOInventoryEntry& Entry : Inventory.Entries)
 	{
 		if (Entry.ItemDefinitionId != ItemDefinitionId)
 		{
 			continue;
 		}
-
-		int32 SpaceInStack = MaxStackSize - Entry.Quantity;
+		++MatchingEntries;
+		const int32 SpaceInStack = MaxStackSize - Entry.Quantity;
 		if (SpaceInStack > 0)
 		{
+			RoomInExistingStacks += SpaceInStack;
 			RemainingQuantity -= SpaceInStack;
 			if (RemainingQuantity <= 0)
 			{
-				return true; // Fits entirely in existing stacks
+				MOHARVEST_LOG(this, "Inventory",
+					"CanAddItemByDefinitionId('%s', %d) -> true [stack-fit: MaxStack=%d, RoomInStacks=%d, EmptySlots=%d, MatchingEntries=%d, SlotItemGuids.Num=%d, HasDef=%d]",
+					*ItemDefinitionId.ToString(), Quantity,
+					MaxStackSize, RoomInExistingStacks, EmptySlots, MatchingEntries,
+					SlotItemGuids.Num(), bHasDefinition ? 1 : 0);
+				return true;
 			}
 		}
 	}
 
 	// Calculate how many new slots we need for remaining quantity
-	int32 NewSlotsNeeded = (RemainingQuantity + MaxStackSize - 1) / MaxStackSize; // Ceiling division
+	const int32 NewSlotsNeeded = (RemainingQuantity + MaxStackSize - 1) / MaxStackSize;
 
-	// Count empty slots
-	int32 EmptySlots = 0;
-	for (const FGuid& SlotGuid : SlotItemGuids)
-	{
-		if (!SlotGuid.IsValid())
-		{
-			EmptySlots++;
-		}
-	}
-
-	return EmptySlots >= NewSlotsNeeded;
+	const bool bResult = EmptySlots >= NewSlotsNeeded;
+	MOHARVEST_LOG(this, "Inventory",
+		"CanAddItemByDefinitionId('%s', %d) -> %s [stack+slot: MaxStack=%d, MatchingEntries=%d, RoomInStacks=%d, RemainingAfterStacks=%d, NewSlotsNeeded=%d, EmptySlots=%d, SlotItemGuids.Num=%d, Entries.Num=%d, HasDef=%d]",
+		*ItemDefinitionId.ToString(), Quantity,
+		bResult ? TEXT("true") : TEXT("false"),
+		MaxStackSize, MatchingEntries, RoomInExistingStacks, RemainingQuantity,
+		NewSlotsNeeded, EmptySlots, SlotItemGuids.Num(), Inventory.Entries.Num(),
+		bHasDefinition ? 1 : 0);
+	return bResult;
 }
 
 bool UMOInventoryComponent::TryGetSlotGuid(int32 SlotIndex, FGuid& OutGuid) const

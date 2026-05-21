@@ -64,16 +64,16 @@ class UDataTable;
  * Caches are lazily initialized on first access and invalidated via InvalidateCache().
  * Call InvalidateCache() if you modify the DataTable at runtime.
  */
-UCLASS(Config=Game, DefaultConfig, meta=(DisplayName="MO Recipe Database"))
+UCLASS(Config=Game, DefaultConfig, meta=(DisplayName="Recipe Database"))
 class MOFRAMEWORK_API UMORecipeDatabaseSettings : public UDeveloperSettings
 {
 	GENERATED_BODY()
 
 public:
-	// UDeveloperSettings overrides
+	// UDeveloperSettings overrides — unified under "MOFramework" section in Project Settings.
 	virtual FName GetContainerName() const override { return TEXT("Project"); }
-	virtual FName GetCategoryName() const override { return TEXT("Plugins"); }
-	virtual FName GetSectionName() const override { return TEXT("MO Recipe Database"); }
+	virtual FName GetCategoryName() const override { return TEXT("MOFramework"); }
+	virtual FName GetSectionName() const override { return TEXT("Recipe Database"); }
 
 	/** The central DataTable containing FMORecipeDefinitionRow rows. */
 	UPROPERTY(EditAnywhere, Config, Category="Database")

@@ -26,8 +26,11 @@ const FName UMOGhostContextMenu::BuildingSkillId = FName("Construction");
 UMOGhostContextMenu::UMOGhostContextMenu(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
-	// Mouse leave closing is disabled by default (uses click-outside)
-	bCloseOnMouseLeave = false;
+	// Match the base default — close on mouse leave AND click-outside.
+	// ShouldCloseOnMouseLeave() still guards against closing while a build
+	// timer is active, so a player who walks away mid-build doesn't lose
+	// their queued construction.
+	bCloseOnMouseLeave = true;
 }
 
 void UMOGhostContextMenu::RequestClose()
@@ -56,9 +59,18 @@ void UMOGhostContextMenu::InitializeForGhost(AMOBuildableActor* Target, UMOInven
 		return;
 	}
 
+	// If we're re-initialising for a different target, drop the previous
+	// subscription before we point BuildProgress at a new component.
+	UnbindBuildProgressEvents();
+
 	TargetBuilding = Target;
 	BuilderInventory = InBuilderInventory;
 	BuildProgress = Target->BuildProgressComponent;
+
+	// Subscribe to the new BuildProgress component's state-change broadcast
+	// so this menu closes itself when construction transitions away from
+	// Constructing (movement interrupt, completion, external cancel).
+	BindBuildProgressEvents();
 
 	// Get skills component from the builder's owner
 	if (InBuilderInventory)
@@ -90,6 +102,14 @@ void UMOGhostContextMenu::InitializeForGhost(AMOBuildableActor* Target, UMOInven
 	// Refresh the material list
 	RefreshMaterialList();
 	UpdateButtonState();
+
+	// Reflect preserved build progress immediately. If this is a re-open on a
+	// Paused build, the bar should show the saved % the moment the menu opens
+	// — not 0% until the player clicks Build to resume. UpdateButtonState
+	// already calls RefreshBuildProgressDisplay, but call it explicitly here
+	// too so the contract ("InitializeForGhost shows current state") is
+	// obvious without tracing through the helper.
+	RefreshBuildProgressDisplay();
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOGhostContextMenu] Initialized for ghost: %s"), *Target->GetName());
 }
@@ -310,7 +330,59 @@ void UMOGhostContextMenu::NativeDestruct()
 		CancelButton->OnClicked().RemoveAll(this);
 	}
 
+	// Stop listening to BuildProgress state — otherwise we'd hold a dynamic
+	// binding to a freed widget if the component outlives us.
+	UnbindBuildProgressEvents();
+
 	Super::NativeDestruct();
+}
+
+void UMOGhostContextMenu::BindBuildProgressEvents()
+{
+	UMOBuildProgressComponent* Progress = BuildProgress.Get();
+	if (!IsValid(Progress))
+	{
+		return;
+	}
+
+	// RemoveDynamic-before-AddDynamic protects against re-init for the same target
+	// (no leaked duplicate bindings).
+	Progress->OnConstructionStateChanged.RemoveDynamic(this, &UMOGhostContextMenu::HandleBuildStateChanged);
+	Progress->OnConstructionStateChanged.AddDynamic(this, &UMOGhostContextMenu::HandleBuildStateChanged);
+}
+
+void UMOGhostContextMenu::UnbindBuildProgressEvents()
+{
+	if (UMOBuildProgressComponent* Progress = BuildProgress.Get())
+	{
+		Progress->OnConstructionStateChanged.RemoveDynamic(this, &UMOGhostContextMenu::HandleBuildStateChanged);
+	}
+}
+
+void UMOGhostContextMenu::HandleBuildStateChanged(EMOBuildState NewState)
+{
+	// Close the menu whenever construction leaves the actively-building state.
+	// Paused = something interrupted us (most commonly the movement interrupt).
+	// Complete = build finished; menu has nothing left to do.
+	// Ghost = build was cancelled with refund.
+	//
+	// Constructing is the only state where the menu is genuinely useful, so
+	// we use a positive test: close on anything else, but only when leaving
+	// Constructing (avoids closing on the initial Ghost->Constructing
+	// transition which fires during normal startup).
+	if (NewState == EMOBuildState::Constructing)
+	{
+		return;
+	}
+
+	UE_LOG(LogMOFramework, Log,
+		TEXT("[MOGhostContextMenu] Build state changed to %d (non-Constructing) — closing menu"),
+		(int32)NewState);
+
+	// Route through the standard close path so the UI controller's
+	// HandleGhostContextMenuRequestClose runs (which tears down the modal
+	// background, restores input mode, etc.).
+	RequestClose();
 }
 
 void UMOGhostContextMenu::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
@@ -326,30 +398,11 @@ void UMOGhostContextMenu::NativeTick(const FGeometry& MyGeometry, float InDeltaT
 		return;
 	}
 
-	// Update build progress UI if building
+	// Live progress animation only matters while actively constructing.
+	// (Paused-state display is set once on menu open and doesn't move.)
 	if (IsBuildTimerActive())
 	{
-		UMOBuildProgressComponent* Progress = BuildProgress.Get();
-		if (Progress)
-		{
-			float ProgressVal = Progress->GetProgress();
-			float TimeRemaining = Progress->GetTimeRemaining();
-
-			// Update progress bar
-			if (BuildProgressBar)
-			{
-				BuildProgressBar->SetPercent(ProgressVal);
-			}
-
-			// Update time text
-			if (BuildTimeText)
-			{
-				BuildTimeText->SetText(UMOUIUtils::FormatDurationAsTimeCode(TimeRemaining));
-			}
-
-			// Blueprint callback
-			OnBuildProgressUpdated(ProgressVal, TimeRemaining);
-		}
+		RefreshBuildProgressDisplay();
 	}
 }
 
@@ -388,6 +441,51 @@ void UMOGhostContextMenu::HandleCancelClicked()
 // INTERNAL
 // ============================================================================
 
+void UMOGhostContextMenu::RefreshBuildProgressDisplay()
+{
+	UMOBuildProgressComponent* Progress = BuildProgress.Get();
+	if (!Progress)
+	{
+		// No component → nothing to display. Clear so stale data from a
+		// previous building doesn't leak through when this menu instance is
+		// reused.
+		if (BuildProgressBar)
+		{
+			BuildProgressBar->SetPercent(0.0f);
+		}
+		if (BuildTimeText)
+		{
+			BuildTimeText->SetText(UMOUIUtils::FormatDurationAsTimeCode(0.0f));
+		}
+		return;
+	}
+
+	// GetProgress() returns the elapsed fraction (0..1) regardless of state.
+	// GetTimeRemaining() returns wall-clock seconds left at the current
+	// elapsed time. Both are valid in Constructing AND Paused states — the
+	// only difference is that in Paused they don't change without a resume.
+	//
+	// This is the fix for "menu re-opened on a paused build shows 0%":
+	// previously the menu zeroed the bar in any non-Constructing state.
+	// Now it just displays whatever the component has — the component is
+	// the source of truth, the menu is just a view.
+	const float ProgressVal = Progress->GetProgress();
+	const float TimeRemaining = Progress->GetTimeRemaining();
+
+	if (BuildProgressBar)
+	{
+		BuildProgressBar->SetPercent(ProgressVal);
+	}
+	if (BuildTimeText)
+	{
+		BuildTimeText->SetText(UMOUIUtils::FormatDurationAsTimeCode(TimeRemaining));
+	}
+
+	// Blueprint hook — kept here so subclasses still get notified once per
+	// tick during construction (was the only call site previously).
+	OnBuildProgressUpdated(ProgressVal, TimeRemaining);
+}
+
 void UMOGhostContextMenu::UpdateButtonState()
 {
 	const bool bAllMaterialsReady = AreAllMaterialsDeposited();
@@ -411,20 +509,19 @@ void UMOGhostContextMenu::UpdateButtonState()
 			: ESlateVisibility::Visible);
 	}
 
-	// Progress bar and time text are always visible
-	// They show 0% / 00:00 before build starts, then update during build
+	// Progress bar and time text are always visible. Push the latest value
+	// from the BuildProgressComponent so Paused state displays the preserved
+	// progress (not a stale 0%) when the menu is re-opened after a movement
+	// interrupt. RefreshBuildProgressDisplay handles all states correctly.
 	if (BuildProgressBar)
 	{
 		BuildProgressBar->SetVisibility(ESlateVisibility::Visible);
-		if (!bBuildActive)
-		{
-			BuildProgressBar->SetPercent(0.0f);
-		}
 	}
 	else
 	{
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOGhostContextMenu] BuildProgressBar not bound! Add a ProgressBar named 'BuildProgressBar' to the widget."));
 	}
+	RefreshBuildProgressDisplay();
 
 	if (BuildTimeText)
 	{

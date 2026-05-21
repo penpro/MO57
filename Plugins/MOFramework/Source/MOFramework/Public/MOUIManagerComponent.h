@@ -556,6 +556,14 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO|UI")
 	bool IsAnyMenuOpen() const;
 
+	/**
+	 * Close the topmost active menu. Called by Tab/Escape handlers.
+	 * Checks menus in priority order: Modal > InGame > Switchable.
+	 * @return True if a menu was closed, false if no menus were open.
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|UI")
+	bool CloseActiveMenu();
+
 	/** Close all open menus. */
 	UFUNCTION(BlueprintCallable, Category="MO|UI")
 	void CloseAllMenus();
@@ -578,7 +586,8 @@ private:
 
 	UMOInventoryComponent* ResolveCurrentPawnInventoryComponent() const;
 
-	void ApplyInputModeForMenuClosed(APlayerController* PlayerController) const;
+	/** Helper to restore input state when all menus are closed. Called after closing a menu. */
+	void RestoreInputStateIfNoMenusOpen();
 
 private:
 	// --- Reticle ---
@@ -625,7 +634,6 @@ private:
 
 	// --- Helpers ---
 
-	void ApplyInputModeForMenuOpen(APlayerController* PlayerController, UUserWidget* MenuWidget) const;
 	void UpdateReticleVisibility();
 
 	/** Drop item from inventory into world in front of player by GUID. */
@@ -642,8 +650,10 @@ private:
 	UPROPERTY(Transient)
 	TWeakObjectPtr<UMOModalBackground> ModalBackgroundWidget;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI", meta=(AllowPrivateAccess="true", ClampMin="0"))
-	int32 ModalBackgroundZOrder = 10;
+	// Must be BELOW PrimaryGameLayout (Z=0) so clicks on menus reach the menu first.
+	// Clicks in transparent layout areas pass through to the modal background, triggering close-on-outside.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI", meta=(AllowPrivateAccess="true"))
+	int32 ModalBackgroundZOrder = -1;
 
 	UFUNCTION()
 	void HandleModalBackgroundClicked();
@@ -740,13 +750,8 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|UI|Internal")
 	void RequestHideModalBackground();
 
-	/** Request input mode update for menu open. Centralized to ensure consistency. */
-	UFUNCTION(BlueprintCallable, Category="MO|UI|Internal")
-	void RequestInputModeForMenuOpen(UUserWidget* MenuWidget);
-
-	/** Request input mode update for menu closed. Centralized to ensure consistency. */
-	UFUNCTION(BlueprintCallable, Category="MO|UI|Internal")
-	void RequestInputModeForMenuClosed();
+	// NOTE: RequestInputModeForMenuOpen/Closed have been removed.
+	// CommonUI handles input mode automatically via GetDesiredInputConfig() on widgets.
 
 	/** Request reticle visibility update based on menu state. */
 	UFUNCTION(BlueprintCallable, Category="MO|UI|Internal")
@@ -772,9 +777,21 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|UI|ToolHint")
 	void ShowToolHint(const FText& HintText, float Duration = 0.0f);
 
-	/** Hide the current tool hint. */
+	/**
+	 * Hide the current tool hint, clearing BOTH persistent and transient state.
+	 * Use this from the persistent owner's exit path (e.g. terraform mode toggle off).
+	 * Internal focus-hint code should use EndTransientToolHint instead so it doesn't
+	 * wipe a persistent indicator owned by gameplay mode.
+	 */
 	UFUNCTION(BlueprintCallable, Category="MO|UI|ToolHint")
 	void HideToolHint();
+
+	/**
+	 * End any in-flight transient hint. If a persistent hint was previously
+	 * set via ShowToolHint(text, < 0), it re-displays. If not, the widget hides.
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|UI|ToolHint")
+	void EndTransientToolHint();
 
 	/** Get the tool hint widget (may be null if not created). */
 	UFUNCTION(BlueprintPure, Category="MO|UI|ToolHint")

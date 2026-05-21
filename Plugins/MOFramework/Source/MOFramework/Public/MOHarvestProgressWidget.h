@@ -126,6 +126,25 @@ protected:
 	UFUNCTION(BlueprintNativeEvent, Category = "MO|Harvest")
 	void OnHarvestSuccess(const FMOCraftResult& Result);
 
+	/**
+	 * Reactor for the subsystem's OnHarvestCancelled broadcast — fires when
+	 * something OTHER than this widget cancelled the harvest (movement
+	 * interrupt, network kick, console command, etc.). Tears down the widget
+	 * so the visual progress doesn't outlive the underlying state.
+	 *
+	 * Previously the widget and subsystem each had independent OnHarvestCancelled
+	 * delegates with no wiring between them — if the subsystem cancelled
+	 * itself, the widget kept ticking. This handler closes that gap.
+	 */
+	UFUNCTION()
+	void HandleSubsystemHarvestCancelled();
+
+	/** Subscribe to the subsystem's cancellation broadcast (idempotent). */
+	void BindSubsystemCancellation();
+
+	/** Unsubscribe from the subsystem's cancellation broadcast. */
+	void UnbindSubsystemCancellation();
+
 	// ============================================================================
 	// HARVEST-SPECIFIC STATE
 	// ============================================================================
@@ -138,4 +157,18 @@ protected:
 
 	/** Cached skills component (weak ref). */
 	TWeakObjectPtr<UMOSkillsComponent> SkillsComponent;
+
+	/**
+	 * Cached pointer to the harvest subsystem we're bound to. Kept so we can
+	 * unbind in NativeDestruct even if World->GetSubsystem<> returns a
+	 * different/null pointer at teardown time.
+	 */
+	TWeakObjectPtr<class UMOHarvestSubsystem> BoundHarvestSubsystem;
+
+	/**
+	 * Re-entrancy guard. When HandleSubsystemHarvestCancelled fires it calls
+	 * cancellation paths that themselves broadcast — without this guard we'd
+	 * double-broadcast OnHarvestCancelled and double-deactivate.
+	 */
+	bool bSuppressSubsystemCancellationHandler = false;
 };

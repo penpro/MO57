@@ -38,7 +38,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "CommonActivatableWidget.h"
+#include "MOActivatableWidget.h"
 #include "MOSaveGameTypes.h"
 #include "MOLoadPanel.generated.h"
 
@@ -54,7 +54,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOLoadPanelLoadRequestedSignature, 
  * When opened in-game, shows only saves from the current world.
  */
 UCLASS()
-class MOFRAMEWORK_API UMOLoadPanel : public UCommonActivatableWidget
+class MOFRAMEWORK_API UMOLoadPanel : public UMOActivatableWidget
 {
 	GENERATED_BODY()
 

@@ -33,10 +33,15 @@ void AMOCreatureController::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-	// Continuously update blackboard threat info (distance, attack range check, etc.)
-	if (CurrentThreatActor.IsValid())
+	// Throttle blackboard updates to 5Hz (was every frame)
+	ThreatUpdateAccumulator += DeltaTime;
+	if (ThreatUpdateAccumulator >= ThreatUpdateInterval)
 	{
-		UpdateBlackboardThreatInfo();
+		ThreatUpdateAccumulator = 0.0f;
+		if (CurrentThreatActor.IsValid())
+		{
+			UpdateBlackboardThreatInfo();
+		}
 	}
 }
 

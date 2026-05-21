@@ -22,6 +22,11 @@ void UMOHarvestProgressWidget::NativeConstruct()
 
 void UMOHarvestProgressWidget::NativeDestruct()
 {
+	// Drop any subsystem binding before we cancel — CancelHarvest below would
+	// fire OnHarvestCancelled which would re-enter our own handler if we left
+	// the binding live.
+	UnbindSubsystemCancellation();
+
 	// Ensure we cancel if widget is destroyed while harvesting
 	if (IsProgressActive())
 	{
@@ -65,6 +70,13 @@ void UMOHarvestProgressWidget::StartHarvest(
 		return;
 	}
 
+	// Subscribe to the subsystem's cancellation broadcast so a movement
+	// interrupt (or any other external cancel) tears this widget down.
+	// MUST be done after BeginHarvest succeeds — if we bind earlier and the
+	// subsystem rejects the request, we'd leak the binding.
+	BoundHarvestSubsystem = HarvestSubsystem;
+	BindSubsystemCancellation();
+
 	// Get the duration from the subsystem's context
 	const FMOHarvestContext& Context = HarvestSubsystem->GetCurrentContext();
 	const float HarvestDuration = FMath::Max(0.1f, Context.TotalTime);
@@ -83,6 +95,12 @@ void UMOHarvestProgressWidget::CancelHarvest()
 		return;
 	}
 
+	// Cancelling locally — drop the subsystem binding BEFORE we call the
+	// subsystem's CancelHarvest, otherwise the subsystem's OnHarvestCancelled
+	// broadcast would re-enter HandleSubsystemHarvestCancelled and call
+	// CancelHarvest a second time (double-broadcast, redundant deactivate).
+	UnbindSubsystemCancellation();
+
 	// Cancel in subsystem
 	if (UMOHarvestSubsystem* HarvestSubsystem = GetWorld()->GetSubsystem<UMOHarvestSubsystem>())
 	{
@@ -100,9 +118,68 @@ void UMOHarvestProgressWidget::CancelHarvest()
 	CancelProgress();
 }
 
+void UMOHarvestProgressWidget::HandleSubsystemHarvestCancelled()
+{
+	// Re-entrancy guard: our own CancelHarvest() may end up calling the
+	// subsystem's CancelHarvest which re-fires this handler.
+	if (bSuppressSubsystemCancellationHandler)
+	{
+		return;
+	}
+
+	if (!IsProgressActive())
+	{
+		// State already torn down (e.g. NativeDestruct ran first). Nothing to do.
+		return;
+	}
+
+	UE_LOG(LogMOFramework, Log,
+		TEXT("[MOHarvestProgress] Subsystem reports harvest cancelled externally (likely movement interrupt) — tearing down widget"));
+
+	bSuppressSubsystemCancellationHandler = true;
+
+	// Mirror the local-cancel path: broadcast our domain delegates so any UI
+	// controller listening (e.g. UMOCraftingUIController::HandleHarvestCancelled)
+	// can clean up its own state, then stop the progress timer.
+	FMOCraftResult EmptyResult;
+	OnHarvestCompleted.Broadcast(false, EmptyResult);
+	OnHarvestCancelled.Broadcast();
+	CancelProgress();
+
+	bSuppressSubsystemCancellationHandler = false;
+}
+
+void UMOHarvestProgressWidget::BindSubsystemCancellation()
+{
+	UMOHarvestSubsystem* Subsystem = BoundHarvestSubsystem.Get();
+	if (!IsValid(Subsystem))
+	{
+		return;
+	}
+
+	// Always RemoveDynamic before AddDynamic — defensive against re-entry on
+	// the same widget instance.
+	Subsystem->OnHarvestCancelled.RemoveDynamic(this, &UMOHarvestProgressWidget::HandleSubsystemHarvestCancelled);
+	Subsystem->OnHarvestCancelled.AddDynamic(this, &UMOHarvestProgressWidget::HandleSubsystemHarvestCancelled);
+}
+
+void UMOHarvestProgressWidget::UnbindSubsystemCancellation()
+{
+	if (UMOHarvestSubsystem* Subsystem = BoundHarvestSubsystem.Get())
+	{
+		Subsystem->OnHarvestCancelled.RemoveDynamic(this, &UMOHarvestProgressWidget::HandleSubsystemHarvestCancelled);
+	}
+	BoundHarvestSubsystem.Reset();
+}
+
 void UMOHarvestProgressWidget::OnProgressSuccess_Implementation()
 {
 	UE_LOG(LogMOFramework, Log, TEXT("[MOHarvestProgress] Harvest complete for action '%s'"), *HarvestActionId.ToString());
+
+	// Drop the subsystem binding now — CompleteHarvest below doesn't fire
+	// OnHarvestCancelled, but UnregisterFromHarvesterMovementInterrupts runs
+	// inside it. Cleaner to unbind in symmetric fashion with cancel path.
+	UnbindSubsystemCancellation();
 
 	// Complete the harvest via subsystem
 	FMOCraftResult Result;

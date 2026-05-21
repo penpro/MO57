@@ -36,7 +36,7 @@ void UMOBuildingUIController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	{
 		MenuWidget->OnRequestClose.RemoveDynamic(this, &UMOBuildingUIController::HandleBuildingMenuRequestClose);
 		MenuWidget->OnBuildingSelected.RemoveDynamic(this, &UMOBuildingUIController::HandleBuildingSelected);
-		if (MenuWidget->IsInViewport())
+		if (MenuWidget->IsActivated())
 		{
 			MenuWidget->RemoveFromParent();
 		}
@@ -71,6 +71,14 @@ void UMOBuildingUIController::ToggleBuildingMenu()
 	{
 		return;
 	}
+
+	// Frame-based debounce: prevent double-toggle from ECommonInputMode::All
+	const uint64 CurrentFrame = GFrameCounter;
+	if (CurrentFrame == LastToggleFrame)
+	{
+		return;
+	}
+	LastToggleFrame = CurrentFrame;
 
 	// Query UIManager for in-game menu state
 	UMOUIManagerComponent* UIManager = GetUIManager();
@@ -121,25 +129,32 @@ void UMOBuildingUIController::OpenBuildingMenu()
 		return;
 	}
 
-	// Create widget if needed
-	UMOBuildingMenu* MenuWidget = BuildingMenuWidget.Get();
+	// Close any existing menu first
+	UMOBuildingMenu* ExistingMenu = BuildingMenuWidget.Get();
+	if (IsValid(ExistingMenu) && ExistingMenu->IsActivated())
+	{
+		PopWidgetFromLayer(ExistingMenu);
+		BuildingMenuWidget.Reset();
+	}
+
+	// Create new widget via CommonUI layer stack
+	ShowModalBackground();
+	UCommonActivatableWidget* CreatedWidget = PushWidgetToLayer(MOUILayerTags::Layer_Menu, BuildingMenuClass);
+	UMOBuildingMenu* MenuWidget = Cast<UMOBuildingMenu>(CreatedWidget);
+
 	if (!IsValid(MenuWidget))
 	{
-		MenuWidget = CreateWidget<UMOBuildingMenu>(PlayerController, BuildingMenuClass);
-		if (!IsValid(MenuWidget))
-		{
-			UE_LOG(LogMOFramework, Error, TEXT("[MOBuildUI] Failed to create Building Menu widget"));
-			return;
-		}
-
-		BuildingMenuWidget = MenuWidget;
-
-		// Bind delegates
-		MenuWidget->OnRequestClose.RemoveDynamic(this, &UMOBuildingUIController::HandleBuildingMenuRequestClose);
-		MenuWidget->OnBuildingSelected.RemoveDynamic(this, &UMOBuildingUIController::HandleBuildingSelected);
-		MenuWidget->OnRequestClose.AddDynamic(this, &UMOBuildingUIController::HandleBuildingMenuRequestClose);
-		MenuWidget->OnBuildingSelected.AddDynamic(this, &UMOBuildingUIController::HandleBuildingSelected);
+		UE_LOG(LogMOFramework, Error, TEXT("[MOBuildUI] Failed to create building menu via layer stack"));
+		HideModalBackground();
+		return;
 	}
+
+	// Cache reference + auto-clear-on-deactivate (any close path). See base class.
+	RegisterCachedMenu(MenuWidget, BuildingMenuWidget);
+	MenuWidget->OnRequestClose.RemoveAll(this);
+	MenuWidget->OnBuildingSelected.RemoveAll(this);
+	MenuWidget->OnRequestClose.AddDynamic(this, &UMOBuildingUIController::HandleBuildingMenuRequestClose);
+	MenuWidget->OnBuildingSelected.AddDynamic(this, &UMOBuildingUIController::HandleBuildingSelected);
 
 	// Initialize menu with cached pawn component data
 	UMOKnowledgeComponent* Knowledge = GetCachedKnowledge();
@@ -148,16 +163,6 @@ void UMOBuildingUIController::OpenBuildingMenu()
 	UMOSkillsComponent* Skills = GetCachedSkills();
 	MenuWidget->InitializeMenu(Knowledge, Discovery, Inventory, Skills);
 
-	// Show modal background and menu via layer system
-	ShowModalBackground();
-	PushWidgetInstanceToLayer(MOUILayerTags::Layer_Menu, MenuWidget, BuildingMenuZOrder);
-
-	// Set input mode
-	ApplyInputModeForMenuOpen(MenuWidget);
-
-	// Set focus for keyboard navigation
-	MenuWidget->SetFocus();
-
 	UpdateReticleVisibility();
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildUI] Building Menu opened"));
@@ -165,27 +170,23 @@ void UMOBuildingUIController::OpenBuildingMenu()
 
 void UMOBuildingUIController::CloseBuildingMenu()
 {
-	APlayerController* PlayerController = ResolveOwningPlayerController();
-
+	// IMPORTANT: Get reference before clearing cache
+	// Reset cache FIRST to ensure IsBuildingMenuOpen() returns false immediately
+	// This prevents race conditions with toggle input that fires multiple times per frame
 	UMOBuildingMenu* MenuWidget = BuildingMenuWidget.Get();
-	if (IsValid(MenuWidget))
+	BuildingMenuWidget.Reset();
+
+	if (IsValid(MenuWidget) && MenuWidget->IsActivated())
 	{
-		if (MenuWidget->IsInViewport())
-		{
-			MenuWidget->RemoveFromParent();
-		}
+		PopWidgetFromLayer(MenuWidget);
 	}
 
 	UpdateReticleVisibility();
 
-	// Only restore input mode if no other menus are open
+	// Manage modal background visibility
 	if (!IsAnyMenuOpen())
 	{
 		HideModalBackground();
-		if (IsValid(PlayerController) && PlayerController->IsLocalController())
-		{
-			ApplyInputModeForMenuClosed();
-		}
 	}
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildUI] Building Menu closed"));
@@ -193,8 +194,7 @@ void UMOBuildingUIController::CloseBuildingMenu()
 
 bool UMOBuildingUIController::IsBuildingMenuOpen() const
 {
-	UMOBuildingMenu* MenuWidget = BuildingMenuWidget.Get();
-	return IsValid(MenuWidget) && MenuWidget->IsInViewport();
+	return IsCachedMenuOpen(BuildingMenuWidget);
 }
 
 UMOBuildingMenu* UMOBuildingUIController::GetBuildingMenu() const
@@ -299,8 +299,8 @@ void UMOBuildingUIController::ShowBuildWidget(AMOBuildableActor* Target)
 		// We just need to show it and let UIManager's CloseAllMenus handle clicks
 	}
 
-	// Add menu to layer system above background
-	PushWidgetInstanceToLayer(MOUILayerTags::Layer_GameOverlay, WidgetInst, GhostContextMenuZOrder);
+	// Add context menu directly to viewport (context menus are UCommonUserWidget, not activatable)
+	WidgetInst->AddToViewport(GhostContextMenuZOrder);
 
 	// Get viewport size
 	int32 ViewportX, ViewportY;
@@ -344,14 +344,9 @@ void UMOBuildingUIController::ShowBuildWidget(AMOBuildableActor* Target)
 	WidgetInst->SetPopupPosition(ScreenPosition);
 	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildUI] Final menu position: (%.0f, %.0f)"), ScreenPosition.X, ScreenPosition.Y);
 
-	// Set input mode - use Game and UI so keyboard still works
-	FInputModeGameAndUI InputMode;
-	InputMode.SetWidgetToFocus(WidgetInst->TakeWidget());
-	InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
-	InputMode.SetHideCursorDuringCapture(false);
-	PlayerController->SetInputMode(InputMode);
-	PlayerController->SetShowMouseCursor(true);
-
+	// NOTE: Do NOT call SetInputMode() - CommonUI manages input modes
+	// via GetDesiredInputConfig() on the context menu widget.
+	// Focus is set via CommonUI's activation system.
 	WidgetInst->SetKeyboardFocus();
 
 	UpdateReticleVisibility();
@@ -376,20 +371,16 @@ void UMOBuildingUIController::HideBuildWidget()
 
 	UpdateReticleVisibility();
 
-	// Hide modal and restore input mode
+	// Widget handles input state restoration via NativeOnDeactivated
+	// Just manage modal background visibility
 	HideModalBackground();
-	if (IsValid(PlayerController) && PlayerController->IsLocalController())
-	{
-		ApplyInputModeForMenuClosed();
-	}
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildUI] Ghost Context Menu closed"));
 }
 
 bool UMOBuildingUIController::IsBuildWidgetOpen() const
 {
-	UMOGhostContextMenu* WidgetInst = GhostContextMenuWidget.Get();
-	return IsValid(WidgetInst) && WidgetInst->IsInViewport();
+	return IsCachedMenuOpen(GhostContextMenuWidget);
 }
 
 void UMOBuildingUIController::HandleGhostContextMenuRequestClose()

@@ -48,7 +48,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "MOMenuWidgetBase.h"
+#include "MOModalWidget.h"
 #include "MOInGameMenu.generated.h"
 
 class UMOCommonButton;
@@ -65,11 +65,12 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOInGameMenuSaveRequestedSignature,
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOInGameMenuLoadRequestedSignature, const FString&, SlotName);
 
 /**
- * Inherits from UMOMenuWidgetBase for standardized CommonUI input handling.
+ * Inherits from UMOModalWidget for full input blocking (bIsModal + ECommonInputMode::Menu).
+ * This is a system menu that should block all game input including toggle keys.
  * Tab/Escape handling: Closes focus panel first, then closes menu via back handler.
  */
 UCLASS()
-class MOFRAMEWORK_API UMOInGameMenu : public UMOMenuWidgetBase
+class MOFRAMEWORK_API UMOInGameMenu : public UMOModalWidget
 {
 	GENERATED_BODY()
 

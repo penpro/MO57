@@ -286,6 +286,12 @@ protected:
 	float PendingPeripheralVisionAngle = -1.f;
 	float PendingHearingRange = -1.f;
 
+	/** Time accumulator for throttled blackboard updates. */
+	float ThreatUpdateAccumulator = 0.0f;
+
+	/** Interval between blackboard threat updates (seconds). */
+	static constexpr float ThreatUpdateInterval = 0.2f;
+
 private:
 	/** Setup perception component and sense configs (defers ConfigureSense to next tick). */
 	void SetupPerception();

@@ -42,7 +42,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "CommonActivatableWidget.h"
+#include "MOActivatableWidget.h"
 #include "MOConfirmationBase.generated.h"
 
 class UTextBlock;
@@ -58,7 +58,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOConfirmationDelegate);
  * See file header for usage and pitfalls.
  */
 UCLASS(Abstract, Blueprintable)
-class MOFRAMEWORK_API UMOConfirmationBase : public UCommonActivatableWidget
+class MOFRAMEWORK_API UMOConfirmationBase : public UMOActivatableWidget
 {
 	GENERATED_BODY()
 

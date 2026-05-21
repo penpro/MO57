@@ -79,7 +79,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "CommonActivatableWidget.h"
+#include "MOActivatableWidget.h"
 #include "MOConfirmationDialog.generated.h"
 
 class UMOCommonButton;
@@ -92,7 +92,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOConfirmationResultSignature);
  * See file header for usage and pitfalls.
  */
 UCLASS()
-class MOFRAMEWORK_API UMOConfirmationDialog : public UCommonActivatableWidget
+class MOFRAMEWORK_API UMOConfirmationDialog : public UMOActivatableWidget
 {
 	GENERATED_BODY()
 
@@ -118,6 +118,7 @@ public:
 protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
+	virtual TOptional<FUIInputConfig> GetDesiredInputConfig() const override;
 	virtual UWidget* NativeGetDesiredFocusTarget() const override;
 	virtual FReply NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
 

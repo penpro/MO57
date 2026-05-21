@@ -32,3 +32,6 @@ Plugins/MOFramework/Content/Characters/MetaHumans/
 
 # Duplicate content
 Content/Penumbra/Movies/
+
+# Claude Code per-session worktrees
+.claude/worktrees/

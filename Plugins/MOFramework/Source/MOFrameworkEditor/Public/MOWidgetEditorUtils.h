@@ -176,7 +176,7 @@ struct FMOWidgetStyleInfo
  * Exposes functionality that is otherwise inaccessible to Python/Blueprints.
  */
 UCLASS()
-class MOFRAMEWORK_API UMOWidgetEditorUtils : public UBlueprintFunctionLibrary
+class MOFRAMEWORKEDITOR_API UMOWidgetEditorUtils : public UBlueprintFunctionLibrary
 {
 	GENERATED_BODY()
 

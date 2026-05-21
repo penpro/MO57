@@ -28,13 +28,16 @@ void AMOAIController::OnPossess(APawn* InPawn)
 
 	UE_LOG(LogMOFramework, Log, TEXT("AMOAIController: Possessed %s"), InPawn ? *InPawn->GetName() : TEXT("None"));
 
-	// Run default behavior tree if set and no task is active
-	if (IsIdle() && DefaultBehaviorTree.IsValid())
+	// Resolve and cache the default behavior tree once
+	if (DefaultBehaviorTree.IsValid() && !CachedDefaultBehaviorTree)
 	{
-		if (UBehaviorTree* BT = DefaultBehaviorTree.LoadSynchronous())
-		{
-			RunBehaviorTree(BT);
-		}
+		CachedDefaultBehaviorTree = DefaultBehaviorTree.LoadSynchronous();
+	}
+
+	// Run default behavior tree if set and no task is active
+	if (IsIdle() && CachedDefaultBehaviorTree)
+	{
+		RunBehaviorTree(CachedDefaultBehaviorTree);
 	}
 }
 
@@ -69,9 +72,9 @@ bool AMOAIController::AssignTask(const FString& TaskName, AActor* TargetActor,
 
 	// If no specific behavior tree provided, use default
 	UBehaviorTree* BTToRun = TaskBehaviorTree;
-	if (!BTToRun && DefaultBehaviorTree.IsValid())
+	if (!BTToRun)
 	{
-		BTToRun = DefaultBehaviorTree.LoadSynchronous();
+		BTToRun = CachedDefaultBehaviorTree;
 	}
 
 	if (!BTToRun)
@@ -165,12 +168,9 @@ void AMOAIController::ReportTaskComplete(bool bSuccess)
 		*CompletedTask, bSuccess ? TEXT("completed successfully") : TEXT("failed"));
 
 	// If we have a default behavior tree, restart it
-	if (IsIdle() && DefaultBehaviorTree.IsValid())
+	if (IsIdle() && CachedDefaultBehaviorTree)
 	{
-		if (UBehaviorTree* BT = DefaultBehaviorTree.LoadSynchronous())
-		{
-			RunBehaviorTree(BT);
-		}
+		RunBehaviorTree(CachedDefaultBehaviorTree);
 	}
 }
 

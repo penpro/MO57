@@ -1,4 +1,5 @@
 #include "MOInventorySlot.h"
+#include "MOUIDebugSubsystem.h"
 #include "MOFramework.h"
 
 #include "Components/Button.h"
@@ -343,6 +344,10 @@ FReply UMOInventorySlot::NativeOnPreviewMouseButtonDown(const FGeometry& InGeome
 
 FReply UMOInventorySlot::NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
 {
+	MOUI_LOG(this, "Slot", "NativeOnMouseButtonDown slot=%d button=%s hasItem=%s",
+		SlotIndex, *InMouseEvent.GetEffectingButton().ToString(),
+		CachedVisualData.bHasItem ? TEXT("YES") : TEXT("no"));
+
 	// Handle right-click for context menu
 	if (InMouseEvent.GetEffectingButton() == EKeys::RightMouseButton)
 	{

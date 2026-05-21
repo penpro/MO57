@@ -73,7 +73,17 @@ public:
 	/**
 	 * Show a tool hint message.
 	 * @param HintText The text to display (e.g., "Dig", "Raise", "Place Wall")
-	 * @param Duration How long to show before fading (0 = use default)
+	 * @param Duration Auto-hide behavior:
+	 *                   > 0  : hide after this many seconds
+	 *                   == 0 : hide after DefaultDuration (the legacy default)
+	 *                   < 0  : PERSISTENT — never auto-hide. Caller is
+	 *                          responsible for calling HideHint() later.
+	 *                          Use for indicators of an ongoing state (e.g.
+	 *                          current terraform tool while in terraform mode).
+	 *                          Stored as the widget's "background" hint;
+	 *                          transient hints (duration >= 0) display over it
+	 *                          and the persistent text resurfaces when the
+	 *                          transient one ends.
 	 */
 	UFUNCTION(BlueprintCallable, Category="MO|UI|ToolHint")
 	void ShowHint(const FText& HintText, float Duration = 0.0f);
@@ -87,9 +97,26 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|UI|ToolHint")
 	void ShowHintWithIcon(const FText& HintText, UTexture2D* Icon, float Duration = 0.0f);
 
-	/** Immediately hide the hint. */
+	/**
+	 * Immediately hide the hint, clearing BOTH persistent and transient state.
+	 * Use this when the persistent-state owner (e.g. terraform mode) actually
+	 * ends — focus-hint code that just needs to dismiss a transient overlay
+	 * should call EndTransientHint() instead.
+	 */
 	UFUNCTION(BlueprintCallable, Category="MO|UI|ToolHint")
 	void HideHint();
+
+	/**
+	 * End any in-flight transient (auto-hide) hint. If a persistent hint was
+	 * previously set via ShowHint(text, < 0), it re-appears. If not, the
+	 * widget fully hides.
+	 *
+	 * This is the focus-hint code path: when the player aims at empty space,
+	 * we want to drop the "Black Alder"-style transient overlay, but NOT
+	 * wipe a persistent indicator (like the active terraform tool).
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|UI|ToolHint")
+	void EndTransientHint();
 
 	/** Check if hint is currently visible. */
 	UFUNCTION(BlueprintPure, Category="MO|UI|ToolHint")
@@ -148,6 +175,14 @@ protected:
 private:
 	bool bIsVisible = false;
 	FTimerHandle HideTimerHandle;
+
+	/**
+	 * Background text to display while no transient is active. Set by
+	 * ShowHint(text, < 0). Cleared by HideHint(). Survives transient
+	 * overlays via the EndTransientHint / OnHideTimerExpired paths.
+	 */
+	FText PersistentText;
+	bool bHasPersistent = false;
 
 	void ScheduleHide(float Duration);
 	void OnHideTimerExpired();

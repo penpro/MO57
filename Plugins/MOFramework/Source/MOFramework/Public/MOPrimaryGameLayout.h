@@ -71,21 +71,40 @@ public:
 	UCommonActivatableWidget* PushWidgetToLayer(FGameplayTag LayerTag, TSubclassOf<UCommonActivatableWidget> WidgetClass);
 
 	/**
-	 * Push an existing widget instance to the specified layer.
+	 * Push a widget to the specified layer, creating a new instance if needed.
+	 *
+	 * CommonUI stacks don't support adding existing widget instances directly.
+	 * If the passed widget is already activated in viewport, returns it as-is.
+	 * Otherwise, creates a NEW widget of the same class via the stack.
+	 *
+	 * IMPORTANT: The returned widget may be different from the passed widget!
+	 * Callers must update their cached references with the returned value.
 	 *
 	 * @param LayerTag The layer to push to
-	 * @param Widget The widget instance to push
+	 * @param Widget The widget instance (used for class lookup if new widget needed)
+	 * @return The actual widget in the stack (may be different from passed widget)
 	 */
 	UFUNCTION(BlueprintCallable, Category = "MO|UI|Layers")
-	void PushWidgetToLayerInstance(FGameplayTag LayerTag, UCommonActivatableWidget* Widget);
+	UCommonActivatableWidget* PushWidgetToLayerInstance(FGameplayTag LayerTag, UCommonActivatableWidget* Widget);
 
 	/**
 	 * Pop the topmost widget from the specified layer.
+	 * NOTE: This only deactivates the widget. Use RemoveWidgetFromLayer for proper removal.
 	 *
 	 * @param LayerTag The layer to pop from
 	 */
 	UFUNCTION(BlueprintCallable, Category = "MO|UI|Layers")
 	void PopWidgetFromLayer(FGameplayTag LayerTag);
+
+	/**
+	 * Remove a specific widget from its layer stack.
+	 * This properly removes the widget from the stack, not just deactivates it.
+	 *
+	 * @param Widget The widget to remove
+	 * @return True if the widget was found and removed
+	 */
+	UFUNCTION(BlueprintCallable, Category = "MO|UI|Layers")
+	bool RemoveWidgetFromLayer(UCommonActivatableWidget* Widget);
 
 	/**
 	 * Clear all widgets from a layer.

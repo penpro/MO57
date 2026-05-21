@@ -52,4 +52,9 @@ public:
 	TSharedPtr<FUICommandInfo> RunBuildingTests;
 	TSharedPtr<FUICommandInfo> RunInputStateTests;
 	TSharedPtr<FUICommandInfo> OpenTestResults;
+
+	// CommonUI-specific testing
+	TSharedPtr<FUICommandInfo> RunSetupValidation;
+	TSharedPtr<FUICommandInfo> RunCommonUITests;
+	TSharedPtr<FUICommandInfo> RunDiagnostics;
 };

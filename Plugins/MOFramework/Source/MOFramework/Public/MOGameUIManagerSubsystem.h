@@ -5,9 +5,11 @@
 #include "CoreMinimal.h"
 #include "Subsystems/WorldSubsystem.h"
 #include "GameplayTagContainer.h"
+#include "Widgets/CommonActivatableWidgetContainer.h"  // Full include needed for template methods
 #include "MOGameUIManagerSubsystem.generated.h"
 
 class UMOPrimaryGameLayout;
+class UMOActivatableWidget;
 class UCommonActivatableWidget;
 class APlayerController;
 
@@ -79,13 +81,21 @@ public:
 	UCommonActivatableWidget* PushWidgetToLayerForPlayer(APlayerController* PlayerController, FGameplayTag LayerTag, TSubclassOf<UCommonActivatableWidget> WidgetClass);
 
 	/**
-	 * Push an existing widget instance to a layer.
+	 * Push a widget to a layer, creating a new instance if needed.
+	 *
+	 * CommonUI stacks don't support adding existing widget instances directly.
+	 * If the passed widget is already activated, returns it as-is.
+	 * Otherwise, creates a NEW widget of the same class via the stack.
+	 *
+	 * IMPORTANT: The returned widget may be different from the passed widget!
+	 * Callers must update their cached references with the returned value.
 	 *
 	 * @param LayerTag The gameplay tag identifying the layer
-	 * @param Widget The widget instance to push
+	 * @param Widget The widget instance (used for class lookup if new widget needed)
+	 * @return The actual widget in the stack (may be different from passed widget)
 	 */
 	UFUNCTION(BlueprintCallable, Category = "MO|UI")
-	void PushWidgetToLayerInstance(FGameplayTag LayerTag, UCommonActivatableWidget* Widget);
+	UCommonActivatableWidget* PushWidgetToLayerInstance(FGameplayTag LayerTag, UCommonActivatableWidget* Widget);
 
 	/**
 	 * Pop the topmost widget from a layer.
@@ -130,6 +140,115 @@ public:
 	UFUNCTION(BlueprintPure, Category = "MO|UI")
 	int32 GetActiveMenuCount() const;
 
+	// =========================================================================
+	// LAYER ACCESS HELPERS (Convenience methods for common patterns)
+	// =========================================================================
+
+	/**
+	 * Get the Game layer stack directly.
+	 * Use this for gameplay menus (inventory, crafting, building, etc.)
+	 */
+	UFUNCTION(BlueprintPure, Category = "MO|UI")
+	UCommonActivatableWidgetContainerBase* GetGameLayer() const;
+
+	/**
+	 * Get the Menu layer stack directly.
+	 * Use this for system menus (in-game menu, possession).
+	 */
+	UFUNCTION(BlueprintPure, Category = "MO|UI")
+	UCommonActivatableWidgetContainerBase* GetMenuLayer() const;
+
+	/**
+	 * Get the Modal layer stack directly.
+	 * Use this for modal dialogs (confirmation dialogs).
+	 */
+	UFUNCTION(BlueprintPure, Category = "MO|UI")
+	UCommonActivatableWidgetContainerBase* GetModalLayer() const;
+
+	/**
+	 * Push a menu widget to the Game layer.
+	 * Includes dedicated server guard.
+	 *
+	 * @param MenuClass The menu widget class to instantiate
+	 * @return The created widget, or nullptr if failed or on dedicated server
+	 */
+	template<typename T>
+	T* PushMenu(TSubclassOf<T> MenuClass)
+	{
+		// Safety: no UI on dedicated server
+		if (IsRunningDedicatedServer())
+		{
+			return nullptr;
+		}
+
+		UCommonActivatableWidgetContainerBase* Stack = GetGameLayer();
+		if (!Stack)
+		{
+			return nullptr;
+		}
+
+		return Cast<T>(Stack->AddWidget(MenuClass));
+	}
+
+	/**
+	 * Push a modal widget to the Modal layer.
+	 * Includes dedicated server guard.
+	 *
+	 * @param ModalClass The modal widget class to instantiate
+	 * @return The created widget, or nullptr if failed or on dedicated server
+	 */
+	template<typename T>
+	T* PushModal(TSubclassOf<T> ModalClass)
+	{
+		// Safety: no UI on dedicated server
+		if (IsRunningDedicatedServer())
+		{
+			return nullptr;
+		}
+
+		UCommonActivatableWidgetContainerBase* Stack = GetModalLayer();
+		if (!Stack)
+		{
+			return nullptr;
+		}
+
+		return Cast<T>(Stack->AddWidget(ModalClass));
+	}
+
+	/**
+	 * Remove the active widget from the Game layer.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "MO|UI")
+	void RemoveActiveMenu();
+
+	/**
+	 * Check if a specific menu type is currently the active widget on the Game layer.
+	 * Use this for toggle key handling.
+	 *
+	 * @param MenuClass The menu class to check for
+	 * @return True if the active widget is of this type
+	 */
+	UFUNCTION(BlueprintPure, Category = "MO|UI")
+	bool IsMenuTypeActive(TSubclassOf<UCommonActivatableWidget> MenuClass) const;
+
+	// =========================================================================
+	// ACTIVE WIDGET TRACKING (for outside-click handling)
+	// =========================================================================
+
+	/**
+	 * Register a widget as currently active. Called from UMOActivatableWidget::NativeOnActivated.
+	 * Maintains a stack used by HandleFocusChanging when OldFocusedWidget has cleared.
+	 */
+	void RegisterActiveWidget(UMOActivatableWidget* Widget);
+
+	/**
+	 * Unregister an active widget. Called from UMOActivatableWidget::NativeOnDeactivated.
+	 */
+	void UnregisterActiveWidget(UMOActivatableWidget* Widget);
+
+	/** Return the most-recently registered active widget that is still valid. */
+	UMOActivatableWidget* GetTopmostActiveWidget() const;
+
 protected:
 	/** Class to use for the primary game layout */
 	UPROPERTY(EditDefaultsOnly, Category = "MO|UI")
@@ -146,4 +265,20 @@ private:
 	/** Cached reference to the first local player's layout for quick access */
 	UPROPERTY(Transient)
 	TWeakObjectPtr<UMOPrimaryGameLayout> CachedPrimaryLayout;
+
+	// Global focus-change listener used to close menus on outside click.
+	void HookOutsideClickHandler();
+	void UnhookOutsideClickHandler();
+	void HandleFocusChanging(const struct FFocusEvent& FocusEvent, const class FWeakWidgetPath& OldFocusedWidgetPath,
+		const TSharedPtr<class SWidget>& OldFocusedWidget, const class FWidgetPath& NewFocusedWidgetPath,
+		const TSharedPtr<class SWidget>& NewFocusedWidget);
+
+	FDelegateHandle FocusChangingHandle;
+
+	/**
+	 * Stack of currently-active widgets (most-recently-activated last).
+	 * Independent of CommonUI's layer stacks so it captures viewport-direct widgets
+	 * (e.g. main menu added via AddToViewport, not on a layer stack).
+	 */
+	TArray<TWeakObjectPtr<UMOActivatableWidget>> ActiveWidgetStack;
 };

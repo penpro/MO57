@@ -165,3 +165,85 @@ static FAutoConsoleCommandWithWorldAndArgs GMOUIStateCmd(
 		UE_LOG(LogTemp, Log, TEXT("InGame: %s"), TestSubsystem->IsMenuOpen(TEXT("InGame")) ? TEXT("Open") : TEXT("Closed"));
 	})
 );
+
+// Console command for full CommonUI diagnostics
+static FAutoConsoleCommandWithWorldAndArgs GMOUIDiagnoseCmd(
+	TEXT("MO.UI.Diagnose"),
+	TEXT("Print comprehensive CommonUI diagnostic information"),
+	FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+	{
+		if (!World)
+		{
+			UE_LOG(LogTemp, Error, TEXT("MO.UI.Diagnose: No world context"));
+			return;
+		}
+
+		UMOUITestSubsystem* TestSubsystem = World->GetSubsystem<UMOUITestSubsystem>();
+		if (!TestSubsystem)
+		{
+			UE_LOG(LogTemp, Error, TEXT("MO.UI.Diagnose: UITestSubsystem not found"));
+			return;
+		}
+
+		TestSubsystem->PrintDiagnostics();
+	})
+);
+
+// Console command to run setup validation tests only
+static FAutoConsoleCommandWithWorldAndArgs GMOUIValidateSetupCmd(
+	TEXT("MO.UI.ValidateSetup"),
+	TEXT("Run only the setup validation tests to check CommonUI configuration"),
+	FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+	{
+		if (!World)
+		{
+			UE_LOG(LogTemp, Error, TEXT("MO.UI.ValidateSetup: No world context"));
+			return;
+		}
+
+		UMOUITestSubsystem* TestSubsystem = World->GetSubsystem<UMOUITestSubsystem>();
+		if (!TestSubsystem)
+		{
+			UE_LOG(LogTemp, Error, TEXT("MO.UI.ValidateSetup: UITestSubsystem not found"));
+			return;
+		}
+
+		UE_LOG(LogTemp, Log, TEXT("Running Setup Validation Tests..."));
+		FMOUITestSummary Summary = TestSubsystem->RunTestsMatching(TEXT("Setup.*"));
+
+		if (Summary.FailedTests == 0)
+		{
+			UE_LOG(LogTemp, Log, TEXT("All setup tests passed! CommonUI is properly configured."));
+		}
+		else
+		{
+			UE_LOG(LogTemp, Error, TEXT("%d setup tests failed - CommonUI may not be properly configured."), Summary.FailedTests);
+			UE_LOG(LogTemp, Log, TEXT("Run MO.UI.Diagnose for detailed diagnostic information."));
+		}
+	})
+);
+
+// Console command to run CommonUI-specific tests
+static FAutoConsoleCommandWithWorldAndArgs GMOUITestCommonUICmd(
+	TEXT("MO.UI.TestCommonUI"),
+	TEXT("Run only the CommonUI-specific tests"),
+	FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+	{
+		if (!World)
+		{
+			UE_LOG(LogTemp, Error, TEXT("MO.UI.TestCommonUI: No world context"));
+			return;
+		}
+
+		UMOUITestSubsystem* TestSubsystem = World->GetSubsystem<UMOUITestSubsystem>();
+		if (!TestSubsystem)
+		{
+			UE_LOG(LogTemp, Error, TEXT("MO.UI.TestCommonUI: UITestSubsystem not found"));
+			return;
+		}
+
+		UE_LOG(LogTemp, Log, TEXT("Running CommonUI Tests..."));
+		FMOUITestSummary Summary = TestSubsystem->RunTestsMatching(TEXT("CommonUI.*"));
+		UE_LOG(LogTemp, Log, TEXT("CommonUI Tests: %d/%d passed"), Summary.PassedTests, Summary.TotalTests);
+	})
+);

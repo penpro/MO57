@@ -44,9 +44,9 @@
 
 /**
  * Project Settings for the Spawn Manager system.
- * Accessible via Project Settings > Game > MO Spawn Manager
+ * Accessible via Project Settings > MOFramework > Spawn Manager
  */
-UCLASS(config=Game, defaultconfig, meta=(DisplayName="MO Spawn Manager"))
+UCLASS(config=Game, defaultconfig, meta=(DisplayName="Spawn Manager"))
 class MOFRAMEWORK_API UMOSpawnSettings : public UDeveloperSettings
 {
 	GENERATED_BODY()
@@ -91,6 +91,51 @@ public:
 	float MaxSpawnPointQueryDistance = 200000.0f;  // 2km
 
 	// ============================================================================
+	// SURVIVOR DISCOVERY BEACON
+	// ============================================================================
+	//
+	// When a survivor spawns, an optional actor (typically a lit campfire BP)
+	// is placed nearby to act as a visual landmark — helps the player spot a
+	// survivor at distance. Beacon lifecycle is tied to the survivor's record:
+	// destroyed automatically when the survivor despawns / dies / is recruited.
+	//
+	// To enable: set SurvivorBeaconActorClass to your campfire BP (e.g.
+	// /MOFramework/BP_SurvivorCampfire). If the class derives from
+	// AMOCraftingStationActor, the spawn manager will also call
+	// SetStationActive(true) so the fire particles + light + audio run
+	// without requiring the player to manually light it.
+
+	/**
+	 * Actor class to spawn next to each survivor on spawn. None = feature off.
+	 *
+	 * Recommended: a Blueprint subclass of the campfire (AMOCraftingStationActor).
+	 * The spawn manager auto-lights stations of that type via SetStationActive,
+	 * matching the right-click "Light" menu path. Other AActor subclasses just
+	 * get placed (the BP is responsible for its own visual state in BeginPlay).
+	 */
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Survivor Beacon",
+		meta = (DisplayName = "Survivor Beacon Actor Class"))
+	TSoftClassPtr<AActor> SurvivorBeaconActorClass;
+
+	/**
+	 * Offset (cm) from the survivor's location to place the beacon.
+	 * X axis is forward relative to the survivor's yaw (so X=300 puts the
+	 * beacon 3m in front of her facing direction).
+	 */
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Survivor Beacon",
+		meta = (DisplayName = "Beacon Offset (cm)"))
+	FVector SurvivorBeaconOffset = FVector(300.0f, 0.0f, 0.0f);
+
+	/**
+	 * If true, line-trace down from the offset to find ground and place the
+	 * beacon there. Recommended for uneven terrain so the beacon doesn't
+	 * float / sink. Disable if your beacon class handles its own ground snap.
+	 */
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Survivor Beacon",
+		meta = (DisplayName = "Snap Beacon To Ground"))
+	bool bSnapBeaconToGround = true;
+
+	// ============================================================================
 	// DEBUG / TESTING
 	// ============================================================================
 
@@ -114,6 +159,6 @@ public:
 	UFUNCTION(BlueprintPure, Category = "MO|Spawn")
 	TArray<FMOSpawnCategoryConfig> GetAllCategoryConfigs() const;
 
-	// UDeveloperSettings interface
-	virtual FName GetCategoryName() const override { return FName(TEXT("Game")); }
+	// UDeveloperSettings interface — show under unified "MOFramework" category in Project Settings.
+	virtual FName GetCategoryName() const override { return FName(TEXT("MOFramework")); }
 };

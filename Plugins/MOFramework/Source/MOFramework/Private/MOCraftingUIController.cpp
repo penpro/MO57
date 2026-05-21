@@ -118,6 +118,14 @@ void UMOCraftingUIController::ToggleCraftingMenu()
 		return;
 	}
 
+	// Frame-based debounce: prevent double-toggle from ECommonInputMode::All
+	const uint64 CurrentFrame = GFrameCounter;
+	if (CurrentFrame == LastToggleFrame)
+	{
+		return;
+	}
+	LastToggleFrame = CurrentFrame;
+
 	// Query UIManager for in-game menu state
 	UMOUIManagerComponent* UIManager = GetUIManager();
 	if (UIManager && UIManager->IsInGameMenuOpen())
@@ -185,23 +193,30 @@ void UMOCraftingUIController::OpenCraftingMenu()
 		return;
 	}
 
-	// Create widget if needed
-	UMOCraftingMenu* MenuWidget = CraftingMenuWidget.Get();
+	// Close any existing menu first
+	UMOCraftingMenu* ExistingMenu = CraftingMenuWidget.Get();
+	if (IsValid(ExistingMenu) && ExistingMenu->IsActivated())
+	{
+		PopWidgetFromLayer(ExistingMenu);
+		CraftingMenuWidget.Reset();
+	}
+
+	// Create new widget via CommonUI layer stack
+	ShowModalBackground();
+	UCommonActivatableWidget* CreatedWidget = PushWidgetToLayer(MOUILayerTags::Layer_Menu, CraftingMenuClass);
+	UMOCraftingMenu* MenuWidget = Cast<UMOCraftingMenu>(CreatedWidget);
+
 	if (!IsValid(MenuWidget))
 	{
-		MenuWidget = CreateWidget<UMOCraftingMenu>(PlayerController, CraftingMenuClass);
-		CraftingMenuWidget = MenuWidget;
-
-		if (!IsValid(MenuWidget))
-		{
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOCraftUI] Failed to create crafting menu widget."));
-			return;
-		}
-
-		// Bind delegates
-		MenuWidget->OnRequestClose.RemoveDynamic(this, &UMOCraftingUIController::HandleCraftingMenuRequestClose);
-		MenuWidget->OnRequestClose.AddDynamic(this, &UMOCraftingUIController::HandleCraftingMenuRequestClose);
+		UE_LOG(LogMOFramework, Error, TEXT("[MOCraftUI] Failed to create crafting menu via layer stack"));
+		HideModalBackground();
+		return;
 	}
+
+	// Cache reference + auto-clear-on-deactivate (any close path). See base class.
+	RegisterCachedMenu(MenuWidget, CraftingMenuWidget);
+	MenuWidget->OnRequestClose.RemoveAll(this);
+	MenuWidget->OnRequestClose.AddDynamic(this, &UMOCraftingUIController::HandleCraftingMenuRequestClose);
 
 	// Get optional components from cache (avoids repeated FindComponentByClass)
 	UMOSkillsComponent* Skills = GetCachedSkills();
@@ -222,13 +237,7 @@ void UMOCraftingUIController::OpenCraftingMenu()
 		}
 	}
 
-	// Show modal background and menu via layer system
-	ShowModalBackground();
-	PushWidgetInstanceToLayer(MOUILayerTags::Layer_Menu, MenuWidget, CraftingMenuZOrder);
-
-	// Set input mode
-	ApplyInputModeForMenuOpen(MenuWidget);
-
+	// Widget handles input state via NativeOnActivated/GetDesiredInputConfig
 	UpdateReticleVisibility();
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOCraftUI] Crafting menu opened"));
@@ -236,30 +245,29 @@ void UMOCraftingUIController::OpenCraftingMenu()
 
 void UMOCraftingUIController::CloseCraftingMenu()
 {
-	APlayerController* PlayerController = ResolveOwningPlayerController();
-
+	// IMPORTANT: Get reference before clearing cache
+	// Reset cache FIRST to ensure IsCraftingMenuOpen() returns false immediately
+	// This prevents race conditions with toggle input that fires multiple times per frame
 	UMOCraftingMenu* MenuWidget = CraftingMenuWidget.Get();
+	CraftingMenuWidget.Reset();
+
 	if (IsValid(MenuWidget))
 	{
 		// Clear station reference to reset UI state
 		MenuWidget->SetActiveStationActor(nullptr);
 
-		if (MenuWidget->IsInViewport())
+		if (MenuWidget->IsActivated())
 		{
-			MenuWidget->RemoveFromParent();
+			PopWidgetFromLayer(MenuWidget);
 		}
 	}
 
 	UpdateReticleVisibility();
 
-	// Only restore input mode if no other menus are open
+	// Manage modal background visibility
 	if (!IsAnyMenuOpen())
 	{
 		HideModalBackground();
-		if (IsValid(PlayerController) && PlayerController->IsLocalController())
-		{
-			ApplyInputModeForMenuClosed();
-		}
 	}
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOCraftUI] Crafting menu closed"));
@@ -267,8 +275,7 @@ void UMOCraftingUIController::CloseCraftingMenu()
 
 bool UMOCraftingUIController::IsCraftingMenuOpen() const
 {
-	UMOCraftingMenu* MenuWidget = CraftingMenuWidget.Get();
-	return IsValid(MenuWidget) && MenuWidget->IsInViewport();
+	return IsCachedMenuOpen(CraftingMenuWidget);
 }
 
 UMOCraftingMenu* UMOCraftingUIController::GetCraftingMenu() const
@@ -346,8 +353,8 @@ void UMOCraftingUIController::ShowStationContextMenu(AActor* StationActor, FVect
 	// Show modal background
 	ShowModalBackground();
 
-	// Add to layer system
-	PushWidgetInstanceToLayer(MOUILayerTags::Layer_GameOverlay, WidgetInst, StationContextMenuZOrder);
+	// Add context menu directly to viewport (context menus are UCommonUserWidget, not activatable)
+	WidgetInst->AddToViewport(StationContextMenuZOrder);
 
 	// Position at screen location from world position
 	FVector2D ScreenPosition;
@@ -356,8 +363,6 @@ void UMOCraftingUIController::ShowStationContextMenu(AActor* StationActor, FVect
 		WidgetInst->SetPopupPosition(ScreenPosition);
 	}
 
-	// Set input mode
-	ApplyInputModeForMenuOpen(WidgetInst);
 	UpdateReticleVisibility();
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOCraftUI] Showing Station Context Menu for %s"), *Station->GetName());
@@ -374,15 +379,11 @@ void UMOCraftingUIController::HideStationContextMenu()
 	WidgetInst->RemoveFromParent();
 	CurrentStationTarget = nullptr;
 
-	// Check if we should hide modal background
+	// Widget handles input state restoration via NativeOnDeactivated
+	// Just manage modal background visibility
 	if (!IsAnyMenuOpen())
 	{
 		HideModalBackground();
-		APlayerController* PC = ResolveOwningPlayerController();
-		if (PC)
-		{
-			ApplyInputModeForMenuClosed();
-		}
 	}
 
 	UpdateReticleVisibility();
@@ -392,8 +393,7 @@ void UMOCraftingUIController::HideStationContextMenu()
 
 bool UMOCraftingUIController::IsStationContextMenuOpen() const
 {
-	UMOStationContextMenu* WidgetInst = StationContextMenuWidget.Get();
-	return WidgetInst && WidgetInst->IsInViewport();
+	return IsCachedMenuOpen(StationContextMenuWidget);
 }
 
 void UMOCraftingUIController::HandleStationContextMenuRequestClose()
@@ -509,8 +509,8 @@ void UMOCraftingUIController::ShowKeepOnHarvestContextMenu(const FMOInteractionT
 	// Show modal background
 	ShowModalBackground();
 
-	// Add to layer system
-	PushWidgetInstanceToLayer(MOUILayerTags::Layer_GameOverlay, WidgetInst, KeepOnHarvestContextMenuZOrder);
+	// Add context menu directly to viewport (context menus are UCommonUserWidget, not activatable)
+	WidgetInst->AddToViewport(KeepOnHarvestContextMenuZOrder);
 
 	// Position at screen location from world position
 	FVector2D ScreenPosition;
@@ -519,8 +519,6 @@ void UMOCraftingUIController::ShowKeepOnHarvestContextMenu(const FMOInteractionT
 		WidgetInst->SetPopupPosition(ScreenPosition);
 	}
 
-	// Set input mode
-	ApplyInputModeForMenuOpen(WidgetInst);
 	UpdateReticleVisibility();
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOCraftUI] Showing KeepOnHarvest Context Menu"));
@@ -537,15 +535,11 @@ void UMOCraftingUIController::HideKeepOnHarvestContextMenu()
 	WidgetInst->RemoveFromParent();
 	CurrentHarvestTarget.Reset();
 
-	// Check if we should hide modal background
+	// Widget handles input state restoration via NativeOnDeactivated
+	// Just manage modal background visibility
 	if (!IsAnyMenuOpen())
 	{
 		HideModalBackground();
-		APlayerController* PC = ResolveOwningPlayerController();
-		if (PC)
-		{
-			ApplyInputModeForMenuClosed();
-		}
 	}
 
 	UpdateReticleVisibility();
@@ -555,8 +549,7 @@ void UMOCraftingUIController::HideKeepOnHarvestContextMenu()
 
 bool UMOCraftingUIController::IsKeepOnHarvestContextMenuOpen() const
 {
-	UMOKeepOnHarvestContextMenu* WidgetInst = KeepOnHarvestContextMenuWidget.Get();
-	return WidgetInst && WidgetInst->IsInViewport();
+	return IsCachedMenuOpen(KeepOnHarvestContextMenuWidget);
 }
 
 // =============================================================================
@@ -602,28 +595,46 @@ void UMOCraftingUIController::StartHarvestOperation(FName ActionId)
 		}
 	}
 
-	// Create progress widget if needed
+	// Create or reuse progress widget
 	UMOHarvestProgressWidget* WidgetInst = HarvestProgressWidget.Get();
-	if (!WidgetInst)
+	bool bNeedsBindDelegates = false;
+
+	if (IsValid(WidgetInst))
 	{
-		WidgetInst = CreateWidget<UMOHarvestProgressWidget>(PC, HarvestProgressWidgetClass);
-		HarvestProgressWidget = WidgetInst;
+		// Try to reuse existing widget - push it to the layer stack
+		UCommonActivatableWidget* ActualWidget = PushWidgetInstanceToLayer(MOUILayerTags::Layer_GameOverlay, WidgetInst);
+
+		// CommonUI may have created a new widget (can't add existing instances to stacks)
+		if (ActualWidget && ActualWidget != WidgetInst)
+		{
+			WidgetInst = Cast<UMOHarvestProgressWidget>(ActualWidget);
+			HarvestProgressWidget = WidgetInst;
+			bNeedsBindDelegates = true;
+		}
+	}
+	else
+	{
+		// Create new widget via layer stack
+		UCommonActivatableWidget* ActualWidget = PushWidgetToLayer(MOUILayerTags::Layer_GameOverlay, HarvestProgressWidgetClass);
+		WidgetInst = Cast<UMOHarvestProgressWidget>(ActualWidget);
+		bNeedsBindDelegates = true;
 	}
 
-	if (!WidgetInst)
+	if (!IsValid(WidgetInst))
 	{
 		UE_LOG(LogMOFramework, Error, TEXT("[MOCraftUI] Failed to create Harvest Progress widget"));
 		return;
 	}
 
-	// Bind delegates
-	WidgetInst->OnHarvestCompleted.RemoveDynamic(this, &UMOCraftingUIController::HandleHarvestCompleted);
-	WidgetInst->OnHarvestCancelled.RemoveDynamic(this, &UMOCraftingUIController::HandleHarvestCancelled);
-	WidgetInst->OnHarvestCompleted.AddDynamic(this, &UMOCraftingUIController::HandleHarvestCompleted);
-	WidgetInst->OnHarvestCancelled.AddDynamic(this, &UMOCraftingUIController::HandleHarvestCancelled);
-
-	// Add to layer system
-	PushWidgetInstanceToLayer(MOUILayerTags::Layer_GameOverlay, WidgetInst, HarvestProgressZOrder);
+	// Cache and bind delegates if this is a new widget
+	if (bNeedsBindDelegates)
+	{
+		HarvestProgressWidget = WidgetInst;
+		WidgetInst->OnHarvestCompleted.RemoveDynamic(this, &UMOCraftingUIController::HandleHarvestCompleted);
+		WidgetInst->OnHarvestCancelled.RemoveDynamic(this, &UMOCraftingUIController::HandleHarvestCancelled);
+		WidgetInst->OnHarvestCompleted.AddDynamic(this, &UMOCraftingUIController::HandleHarvestCompleted);
+		WidgetInst->OnHarvestCancelled.AddDynamic(this, &UMOCraftingUIController::HandleHarvestCancelled);
+	}
 
 	// Start the harvest with ActionId (MOHarvestSubsystem will look up the action from resource definition)
 	WidgetInst->StartHarvest(
@@ -740,9 +751,9 @@ void UMOCraftingUIController::HandleKeepOnHarvestContextMenuChopDownClicked()
 void UMOCraftingUIController::HandleHarvestCompleted(bool bCompleted, const FMOCraftResult& Result)
 {
 	UMOHarvestProgressWidget* WidgetInst = HarvestProgressWidget.Get();
-	if (WidgetInst && WidgetInst->IsInViewport())
+	if (IsValid(WidgetInst))
 	{
-		WidgetInst->RemoveFromParent();
+		WidgetInst->DeactivateWidget();
 	}
 
 	CurrentHarvestTarget.Reset();
@@ -762,46 +773,65 @@ void UMOCraftingUIController::HandleHarvestCompleted(bool bCompleted, const FMOC
 					NotifComp->ShowItemPickupNotification(ItemName, Pair.Value);
 				}
 
-				// Show "Inventory Full" notification for items that couldn't be added
+				// Distinguish "node is depleted" from "your inventory is full". These are
+				// different problems and need different messages — players were dropping
+				// items trying to "fix" a full inventory when the actual issue was that
+				// the tree/rock had nothing left to give.
+				const bool bAnyProduced = Result.ProducedItems.Num() > 0;
 				if (Result.HasFailedItems())
 				{
+					// Real inventory rejection (currently only invalid-input cases, since
+					// AddItemByGuid does not enforce hard slot limits).
 					NotifComp->ShowWarningNotification(
 						NSLOCTEXT("MO", "InventoryFull", "Inventory Full! Some items could not be picked up."),
 						5.0f
 					);
 				}
+				else if (Result.HasDepletedItems() && !bAnyProduced)
+				{
+					// Every yield was skipped due to depletion AND nothing was produced —
+					// tell the player the node itself is exhausted.
+					NotifComp->ShowWarningNotification(
+						NSLOCTEXT("MO", "NodeDepleted", "Nothing left here. Try another resource or wait for it to regrow."),
+						4.0f
+					);
+				}
+				// If some yields produced and others depleted, the produced notifications
+				// already gave positive feedback — don't pile on a warning.
 			}
 		}
 	}
 
-	// Restore input mode if no other menus are open
+	// Widget handles input state restoration via NativeOnDeactivated
+	// Just manage modal background visibility
 	if (!IsAnyMenuOpen())
 	{
 		HideModalBackground();
-		ApplyInputModeForMenuClosed();
 	}
 	UpdateReticleVisibility();
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOCraftUI] Harvest completed: %s, FailedItems=%d"),
+	UE_LOG(LogMOFramework, Log, TEXT("[MOCraftUI] Harvest completed: %s, Produced=%d, Failed=%d, Depleted=%d"),
 		bCompleted ? TEXT("success") : TEXT("cancelled"),
-		Result.FailedItems.Num());
+		Result.ProducedItems.Num(),
+		Result.FailedItems.Num(),
+		Result.DepletedItems.Num());
 }
 
 void UMOCraftingUIController::HandleHarvestCancelled()
 {
 	UMOHarvestProgressWidget* WidgetInst = HarvestProgressWidget.Get();
-	if (WidgetInst && WidgetInst->IsInViewport())
+	if (IsValid(WidgetInst))
 	{
-		WidgetInst->RemoveFromParent();
+		WidgetInst->DeactivateWidget();
 	}
 
 	CurrentHarvestTarget.Reset();
 
-	// Restore input mode if no other menus are open
+	// Widget handles input state restoration via NativeOnDeactivated
+	// Just manage modal background visibility
 	if (!IsAnyMenuOpen())
 	{
 		HideModalBackground();
-		ApplyInputModeForMenuClosed();
 	}
 	UpdateReticleVisibility();
 
@@ -881,29 +911,46 @@ void UMOCraftingUIController::StartCarcassButchering(AMOCarcassActor* Carcass, F
 	}
 
 	UMOHarvestProgressWidget* WidgetInst = HarvestProgressWidget.Get();
-	if (!WidgetInst)
+	bool bNeedsBindDelegates = false;
+
+	if (IsValid(WidgetInst))
 	{
-		WidgetInst = CreateWidget<UMOHarvestProgressWidget>(PC, HarvestProgressWidgetClass);
-		HarvestProgressWidget = WidgetInst;
+		// Try to reuse existing widget - push it to the layer stack
+		UCommonActivatableWidget* ActualWidget = PushWidgetInstanceToLayer(MOUILayerTags::Layer_GameOverlay, WidgetInst);
+
+		// CommonUI may have created a new widget (can't add existing instances to stacks)
+		if (ActualWidget && ActualWidget != WidgetInst)
+		{
+			WidgetInst = Cast<UMOHarvestProgressWidget>(ActualWidget);
+			HarvestProgressWidget = WidgetInst;
+			bNeedsBindDelegates = true;
+		}
+	}
+	else
+	{
+		// Create new widget via layer stack
+		UCommonActivatableWidget* ActualWidget = PushWidgetToLayer(MOUILayerTags::Layer_GameOverlay, HarvestProgressWidgetClass);
+		WidgetInst = Cast<UMOHarvestProgressWidget>(ActualWidget);
+		bNeedsBindDelegates = true;
 	}
 
-	if (!WidgetInst)
+	if (!IsValid(WidgetInst))
 	{
 		UE_LOG(LogMOFramework, Error, TEXT("[MOCraftUI] Failed to create Harvest Progress widget for carcass"));
 		CancelCarcassButchering();
 		return;
 	}
 
-	// Bind widget delegates for cancel
-	WidgetInst->OnHarvestCancelled.RemoveDynamic(this, &UMOCraftingUIController::HandleCarcassHarvestCancelled);
-	WidgetInst->OnHarvestCancelled.AddDynamic(this, &UMOCraftingUIController::HandleCarcassHarvestCancelled);
+	// Cache and bind delegates if this is a new widget
+	if (bNeedsBindDelegates)
+	{
+		HarvestProgressWidget = WidgetInst;
+		WidgetInst->OnHarvestCancelled.RemoveDynamic(this, &UMOCraftingUIController::HandleCarcassHarvestCancelled);
+		WidgetInst->OnHarvestCancelled.AddDynamic(this, &UMOCraftingUIController::HandleCarcassHarvestCancelled);
+	}
 
-	// Add to layer system
-	PushWidgetInstanceToLayer(MOUILayerTags::Layer_GameOverlay, WidgetInst, HarvestProgressZOrder);
-
-	// Show modal background and lock input
+	// Show modal background (widget handles input state via NativeOnActivated)
 	ShowModalBackground();
-	ApplyInputModeForMenuOpen(WidgetInst);
 	UpdateReticleVisibility();
 
 	// Start timer for UI updates (carcass actor handles actual progress)
@@ -947,11 +994,11 @@ void UMOCraftingUIController::CancelCarcassButchering()
 		Carcass->CancelHarvest();
 	}
 
-	// Hide progress widget
+	// Deactivate progress widget (CommonUI pops from layer stack, restores input)
 	UMOHarvestProgressWidget* WidgetInst = HarvestProgressWidget.Get();
-	if (WidgetInst && WidgetInst->IsInViewport())
+	if (IsValid(WidgetInst))
 	{
-		WidgetInst->RemoveFromParent();
+		WidgetInst->DeactivateWidget();
 	}
 
 	// Reset state
@@ -959,11 +1006,11 @@ void UMOCraftingUIController::CancelCarcassButchering()
 	CurrentCarcassTarget.Reset();
 	CurrentCarcassPartId = NAME_None;
 
-	// Restore input mode
+	// Widget handles input state restoration via NativeOnDeactivated
+	// Just manage modal background visibility
 	if (!IsAnyMenuOpen())
 	{
 		HideModalBackground();
-		ApplyInputModeForMenuClosed();
 	}
 	UpdateReticleVisibility();
 
@@ -1038,11 +1085,11 @@ void UMOCraftingUIController::HandleCarcassPartHarvested(FName PartId, bool bSuc
 		Carcass->OnHarvestCancelled.RemoveDynamic(this, &UMOCraftingUIController::HandleCarcassHarvestCancelled);
 	}
 
-	// Hide progress widget
+	// Deactivate progress widget (CommonUI pops from layer stack, restores input)
 	UMOHarvestProgressWidget* WidgetInst = HarvestProgressWidget.Get();
-	if (WidgetInst && WidgetInst->IsInViewport())
+	if (IsValid(WidgetInst))
 	{
-		WidgetInst->RemoveFromParent();
+		WidgetInst->DeactivateWidget();
 	}
 
 	// Show success notification
@@ -1074,11 +1121,11 @@ void UMOCraftingUIController::HandleCarcassPartHarvested(FName PartId, bool bSuc
 	CurrentCarcassTarget.Reset();
 	CurrentCarcassPartId = NAME_None;
 
-	// Restore input mode
+	// Widget handles input state restoration via NativeOnDeactivated
+	// Just manage modal background visibility
 	if (!IsAnyMenuOpen())
 	{
 		HideModalBackground();
-		ApplyInputModeForMenuClosed();
 	}
 	UpdateReticleVisibility();
 

@@ -1,5 +1,6 @@
 #include "MOSurvivorTaskMenu.h"
 #include "MOFramework.h"
+#include "CommonInputModeTypes.h"
 #include "MOSurvivorJobQueueComponent.h"
 #include "MOSurvivorJobDatabaseSettings.h"
 #include "MOSurvivorTaskEntryWidget.h"
@@ -44,6 +45,16 @@ void UMOSurvivorTaskMenu::NativeDestruct()
 	CachedJobQueue.Reset();
 
 	Super::NativeDestruct();
+}
+
+TOptional<FUIInputConfig> UMOSurvivorTaskMenu::GetDesiredInputConfig() const
+{
+	return FUIInputConfig(
+		ECommonInputMode::Menu,
+		EMouseCaptureMode::NoCapture,
+		EMouseLockMode::DoNotLock,
+		false
+	);
 }
 
 FReply UMOSurvivorTaskMenu::NativeOnPreviewKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent)

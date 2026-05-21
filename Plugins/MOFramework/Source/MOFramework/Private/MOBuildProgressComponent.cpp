@@ -7,6 +7,7 @@
 #include "MOContainerActor.h"
 #include "MOItemDatabaseSettings.h"
 #include "MOItemDefinitionRow.h"
+#include "MOCharacter.h"
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetSystemLibrary.h"
@@ -98,6 +99,11 @@ void UMOBuildProgressComponent::StartConstruction(const FMOBuildProgress& Option
 
 	// Enable tick
 	SetComponentTickEnabled(true);
+
+	// Subscribe to the builder's "I started moving" broadcast. The character will
+	// call NotifyMovementInterrupt on us, which pauses the build while preserving
+	// progress so the player can resume by interacting again.
+	RegisterWithBuilderForInterrupts();
 
 	OnConstructionStarted.Broadcast();
 	OnConstructionStateChanged.Broadcast(Progress.State);
@@ -205,6 +211,10 @@ void UMOBuildProgressComponent::InterruptBuild(float PenaltyPercent)
 	Progress.State = EMOBuildState::Paused;
 	SetComponentTickEnabled(false);
 
+	// Build is no longer actively progressing; stop listening for movement.
+	// ResumeConstruction will re-register if it's later resumed.
+	UnregisterFromBuilderInterrupts();
+
 	OnConstructionStateChanged.Broadcast(Progress.State);
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildProgressComponent] Build interrupted! Lost %.1f%% (%.1fs). Progress now at %.1f%%"),
@@ -226,6 +236,10 @@ void UMOBuildProgressComponent::PauseConstruction()
 	Progress.State = EMOBuildState::Paused;
 	SetComponentTickEnabled(false);
 
+	// Build is no longer actively progressing; stop listening for movement.
+	// ResumeConstruction will re-register.
+	UnregisterFromBuilderInterrupts();
+
 	OnConstructionStateChanged.Broadcast(Progress.State);
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildProgressComponent] Construction paused at %.1f%%"),
@@ -241,6 +255,10 @@ void UMOBuildProgressComponent::ResumeConstruction()
 
 	Progress.State = EMOBuildState::Constructing;
 	SetComponentTickEnabled(true);
+
+	// Re-subscribe to the builder's movement broadcast so the next move pauses
+	// the build again.
+	RegisterWithBuilderForInterrupts();
 
 	OnConstructionStateChanged.Broadcast(Progress.State);
 
@@ -334,6 +352,9 @@ void UMOBuildProgressComponent::CancelConstruction(bool bRefundMaterials)
 	}
 
 	SetComponentTickEnabled(false);
+
+	// Build is gone; stop listening for movement on the (former) builder.
+	UnregisterFromBuilderInterrupts();
 
 	OnConstructionCancelled.Broadcast();
 	OnConstructionStateChanged.Broadcast(Progress.State);
@@ -654,8 +675,101 @@ void UMOBuildProgressComponent::FinalizeConstruction()
 
 	SetComponentTickEnabled(false);
 
+	// Construction is done; no need for further movement notifications.
+	UnregisterFromBuilderInterrupts();
+
 	OnConstructionCompleted.Broadcast();
 	OnConstructionStateChanged.Broadcast(Progress.State);
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildProgressComponent] Construction complete!"));
+}
+
+// ============================================================================
+// INTERRUPT HANDLING (IMOInterruptibleInterface)
+// ============================================================================
+
+void UMOBuildProgressComponent::NotifyInterrupt_Implementation(const FMOInterruptContext& Context)
+{
+	// Only meaningful while actually constructing. Defensive — the unregister
+	// calls in PauseConstruction/CancelConstruction/FinalizeConstruction should
+	// have already taken us off the listener list in other states.
+	if (Progress.State != EMOBuildState::Constructing)
+	{
+		return;
+	}
+
+	// Per-reason policy. The CLAUDE.md "Engineering Principles" rule applies
+	// here: this listener is the right place to encode "what does interrupt
+	// X mean for building?" — not the broadcaster, not the source.
+	switch (Context.Reason)
+	{
+	case EMOInterruptReason::Movement:
+	case EMOInterruptReason::Knockdown:
+	case EMOInterruptReason::Unconscious:
+	case EMOInterruptReason::EnteredCombat:
+	case EMOInterruptReason::LostControl:
+	case EMOInterruptReason::External:
+		UE_LOG(LogMOFramework, Log,
+			TEXT("[MOBuildProgressComponent] Interrupt reason=%d — pausing construction (progress preserved at %.1f%%)"),
+			(int32)Context.Reason, Progress.GetOverallProgress() * 100.0f);
+		PauseConstruction();
+		break;
+
+	case EMOInterruptReason::Damage:
+		// Only pause on substantial damage. Trivial hits (a stubbed toe)
+		// shouldn't break a 30-minute build. Threshold can be tuned.
+		if (Context.Severity >= 0.5f)
+		{
+			UE_LOG(LogMOFramework, Log,
+				TEXT("[MOBuildProgressComponent] Severe damage (severity=%.2f) — pausing construction"),
+				Context.Severity);
+			PauseConstruction();
+		}
+		break;
+
+	case EMOInterruptReason::Death:
+		// Builder is gone. Don't try to refund — that's the death pipeline's
+		// concern. Just stop the timer and unregister.
+		UE_LOG(LogMOFramework, Log,
+			TEXT("[MOBuildProgressComponent] Builder died — cancelling construction (no refund here; death pipeline owns cleanup)"));
+		CancelConstruction(/*bRefundMaterials=*/false);
+		break;
+
+	case EMOInterruptReason::UserCancel:
+		// UI paths call CancelConstruction directly; do nothing here to avoid
+		// double-firing the cancel.
+		break;
+
+	case EMOInterruptReason::None:
+	default:
+		break;
+	}
+}
+
+void UMOBuildProgressComponent::RegisterWithBuilderForInterrupts()
+{
+	// BuilderInventory must be set first; resolve the builder character from it.
+	UMOInventoryComponent* Inv = BuilderInventory.Get();
+	if (!IsValid(Inv))
+	{
+		return;
+	}
+
+	AMOCharacter* Builder = Cast<AMOCharacter>(Inv->GetOwner());
+	if (!IsValid(Builder))
+	{
+		return;
+	}
+
+	Builder->RegisterInterruptListener(this);
+	RegisteredBuilderCharacter = Builder;
+}
+
+void UMOBuildProgressComponent::UnregisterFromBuilderInterrupts()
+{
+	if (AMOCharacter* Builder = RegisteredBuilderCharacter.Get())
+	{
+		Builder->UnregisterInterruptListener(this);
+	}
+	RegisteredBuilderCharacter.Reset();
 }

@@ -51,6 +51,7 @@
 #include "CoreMinimal.h"
 #include "MOContextMenuBase.h"
 #include "MOItemDefinitionRow.h"
+#include "MOBuildingTypes.h"
 #include "MOGhostContextMenu.generated.h"
 
 class AMOBuildableActor;
@@ -296,6 +297,23 @@ private:
 	UFUNCTION()
 	void HandleCancelClicked();
 
+	/**
+	 * Reactor for the BuildProgressComponent's state-change broadcast. Closes
+	 * the menu when construction transitions away from Constructing (e.g. to
+	 * Paused via the movement-interrupt path, or Complete on success). This
+	 * makes the menu reactive to ALL state changes — not just the ones it
+	 * triggers itself — so future cancel sources (network, admin command,
+	 * scripted events) tear down the UI automatically.
+	 */
+	UFUNCTION()
+	void HandleBuildStateChanged(EMOBuildState NewState);
+
+	/** Bind to BuildProgress->OnConstructionStateChanged. Idempotent. */
+	void BindBuildProgressEvents();
+
+	/** Unbind from BuildProgress->OnConstructionStateChanged. */
+	void UnbindBuildProgressEvents();
+
 	// ============================================================================
 	// STATE
 	// ============================================================================
@@ -332,6 +350,20 @@ private:
 
 	/** Update the Add/Build button state */
 	void UpdateButtonState();
+
+	/**
+	 * Update the progress bar + time-remaining text to reflect the current
+	 * BuildProgressComponent state. Works for ALL states with non-zero
+	 * progress — Constructing (live progress) and Paused (frozen but
+	 * preserved). Only Ghost (not started) shows 0%; Complete is N/A
+	 * because the menu closes before we render it.
+	 *
+	 * Called from:
+	 *   - InitializeForGhost   (so re-opened menus immediately reflect saved progress)
+	 *   - UpdateButtonState    (so material deposit / status changes refresh too)
+	 *   - NativeTick           (so Constructing builds animate the bar)
+	 */
+	void RefreshBuildProgressDisplay();
 
 	/** Create text widget for a material entry */
 	UTextBlock* CreateMaterialTextWidget(const FMOGhostMaterialEntry& Entry);

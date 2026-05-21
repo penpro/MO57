@@ -57,6 +57,7 @@
 #include "MORecruitmentComponent.h"
 #include "MOQuestTypes.h"
 #include "MOWeatherTypes.h"
+#include "MOTerrainModificationSubsystem.h"
 #include "MOworldSaveGame.generated.h"
 
 USTRUCT(BlueprintType)
@@ -374,4 +375,15 @@ public:
     /** Weather and time of day state (UDW/UDS integration). */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Weather")
     FMOWeatherSaveData WeatherData;
+
+    // --- Terrain Modification Save Data ---
+
+    /**
+     * Tracked "worked ground" spheres. Distinct from VoxelSculptData (which
+     * is the voxel mesh itself, owned by the Voxel plugin's save system) —
+     * this is the metadata that says "PCG / foliage shouldn't grow back on
+     * this patch even though the terrain mesh has been restored."
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|TerrainMod")
+    FMOTerrainModificationSaveData TerrainModificationData;
 };

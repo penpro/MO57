@@ -1,4 +1,5 @@
 #include "MOUIControllerBase.h"
+#include "MOFramework.h"
 #include "MOUIManagerComponent.h"
 #include "MONotificationComponent.h"
 #include "MOGameUIManagerSubsystem.h"
@@ -48,24 +49,8 @@ UMOUIManagerComponent* UMOUIControllerBase::GetUIManager() const
 // =============================================================================
 // UI MANAGER DELEGATION
 // =============================================================================
-
-void UMOUIControllerBase::ApplyInputModeForMenuOpen(UUserWidget* MenuWidget)
-{
-	// Delegate to UIManager for centralized input mode handling
-	if (UMOUIManagerComponent* UIManager = GetUIManager())
-	{
-		UIManager->RequestInputModeForMenuOpen(MenuWidget);
-	}
-}
-
-void UMOUIControllerBase::ApplyInputModeForMenuClosed()
-{
-	// Delegate to UIManager for centralized input mode handling
-	if (UMOUIManagerComponent* UIManager = GetUIManager())
-	{
-		UIManager->RequestInputModeForMenuClosed();
-	}
-}
+// NOTE: Input mode is now handled automatically by CommonUI via GetDesiredInputConfig()
+// ApplyInputModeForMenuOpen/Closed have been removed.
 
 void UMOUIControllerBase::ShowModalBackground()
 {
@@ -129,53 +114,47 @@ bool UMOUIControllerBase::IsAnyMenuOpen() const
 // COMMONUI LAYER SYSTEM
 // =============================================================================
 
-UCommonActivatableWidget* UMOUIControllerBase::PushWidgetToLayer(FGameplayTag LayerTag, TSubclassOf<UCommonActivatableWidget> WidgetClass, int32 FallbackZOrder)
+UCommonActivatableWidget* UMOUIControllerBase::PushWidgetToLayer(FGameplayTag LayerTag, TSubclassOf<UCommonActivatableWidget> WidgetClass)
 {
-	APlayerController* PC = ResolveOwningPlayerController();
-	if (!PC)
+	UMOGameUIManagerSubsystem* UISubsystem = UMOGameUIManagerSubsystem::Get(this);
+	if (!UISubsystem)
+	{
+		UE_LOG(LogTemp, Error, TEXT("[MOUIControllerBase] PushWidgetToLayer: UISubsystem not available"));
+		return nullptr;
+	}
+
+	UMOPrimaryGameLayout* Layout = UISubsystem->GetRootLayout();
+	if (!Layout)
+	{
+		UE_LOG(LogTemp, Error, TEXT("[MOUIControllerBase] PushWidgetToLayer: No root layout. Is WBP_PrimaryGameLayout configured?"));
+		return nullptr;
+	}
+
+	return Layout->PushWidgetToLayer(LayerTag, WidgetClass);
+}
+
+UCommonActivatableWidget* UMOUIControllerBase::PushWidgetInstanceToLayer(FGameplayTag LayerTag, UCommonActivatableWidget* Widget)
+{
+	if (!Widget)
 	{
 		return nullptr;
 	}
 
-	// Try to use the layer system first
-	if (UMOGameUIManagerSubsystem* UISubsystem = UMOGameUIManagerSubsystem::Get(this))
+	UMOGameUIManagerSubsystem* UISubsystem = UMOGameUIManagerSubsystem::Get(this);
+	if (!UISubsystem)
 	{
-		if (UMOPrimaryGameLayout* Layout = UISubsystem->GetRootLayout())
-		{
-			return Layout->PushWidgetToLayer(LayerTag, WidgetClass);
-		}
+		UE_LOG(LogTemp, Error, TEXT("[MOUIControllerBase] PushWidgetInstanceToLayer: UISubsystem not available"));
+		return nullptr;
 	}
 
-	// Fallback: create widget manually and add to viewport
-	UCommonActivatableWidget* Widget = CreateWidget<UCommonActivatableWidget>(PC, WidgetClass);
-	if (Widget)
+	UMOPrimaryGameLayout* Layout = UISubsystem->GetRootLayout();
+	if (!Layout)
 	{
-		Widget->AddToViewport(FallbackZOrder);
-		Widget->ActivateWidget();
-	}
-	return Widget;
-}
-
-void UMOUIControllerBase::PushWidgetInstanceToLayer(FGameplayTag LayerTag, UCommonActivatableWidget* Widget, int32 FallbackZOrder)
-{
-	if (!Widget)
-	{
-		return;
+		UE_LOG(LogTemp, Error, TEXT("[MOUIControllerBase] PushWidgetInstanceToLayer: No root layout. Is WBP_PrimaryGameLayout configured?"));
+		return nullptr;
 	}
 
-	// Try to use the layer system first
-	if (UMOGameUIManagerSubsystem* UISubsystem = UMOGameUIManagerSubsystem::Get(this))
-	{
-		if (UMOPrimaryGameLayout* Layout = UISubsystem->GetRootLayout())
-		{
-			Layout->PushWidgetToLayerInstance(LayerTag, Widget);
-			return;
-		}
-	}
-
-	// Fallback: add to viewport directly
-	Widget->AddToViewport(FallbackZOrder);
-	Widget->ActivateWidget();
+	return Layout->PushWidgetToLayerInstance(LayerTag, Widget);
 }
 
 void UMOUIControllerBase::PopWidgetFromLayer(UCommonActivatableWidget* Widget)
@@ -185,9 +164,23 @@ void UMOUIControllerBase::PopWidgetFromLayer(UCommonActivatableWidget* Widget)
 		return;
 	}
 
-	// Deactivating the widget will handle removal from the layer stack
-	// or from viewport if it was added directly
-	Widget->DeactivateWidget();
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOUIControllerBase] PopWidgetFromLayer: %s (activated=%s)"),
+		*Widget->GetName(), Widget->IsActivated() ? TEXT("yes") : TEXT("no"));
+
+	// The idiomatic CommonUI close pattern: DeactivateWidget().
+	// When a widget on a CommonActivatableWidgetStack is deactivated, the stack
+	// automatically removes it and activates the next widget down (or root content).
+	// Do NOT use RemoveWidgetFromLayer — it removes from the stack data structure
+	// but deactivation is deferred, leaving the widget visually present.
+	if (Widget->IsActivated())
+	{
+		Widget->DeactivateWidget();
+	}
+	else if (Widget->IsInViewport())
+	{
+		// Widget was added via AddToViewport (context menus, fallback path)
+		Widget->RemoveFromParent();
+	}
 }
 
 // =============================================================================

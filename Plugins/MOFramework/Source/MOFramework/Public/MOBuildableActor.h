@@ -70,6 +70,7 @@
 #include "MOBuildableActor.generated.h"
 
 class UStaticMeshComponent;
+class UPrimitiveComponent;
 class UMOIdentityComponent;
 class UMOInteractableComponent;
 class UMOBuildProgressComponent;
@@ -231,6 +232,52 @@ public:
 	/** Base ghost material (translucent, unlit). */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="MO|Building|Visual")
 	TSoftObjectPtr<UMaterialInterface> GhostMaterialBase;
+
+	/**
+	 * If true, this piece is treated as a "stack-on-top" piece (wall, post,
+	 * pillar) when the snap system finds a flat target nearby. Forces stack
+	 * mode — the ghost is placed straddling an edge of the target with its
+	 * actor lifted by its own Z half-extent so the bottom of the wall ends
+	 * up at the target's actor Z + half-wall-height.
+	 *
+	 * Without this flag, the snap system tries to auto-detect "wall vs
+	 * floor" from the mesh extents (ratio of Z to max XY), which fails when
+	 * the wall and floor BPs share an actor scale that makes them both
+	 * slab-shaped at the actor level (e.g. cube mesh + 1×1×0.1 actor
+	 * scale + pitch=90 on the mesh component — the cube is symmetric to
+	 * rotation, so the actor's AABB is still slab-shaped). Set this flag
+	 * explicitly on wall / post / pillar BPs.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Building|Snapping")
+	bool bSnapAsWall = false;
+
+	/**
+	 * When bSnapAsWall is true, the wall ghost's actor Z is placed at
+	 * target.Z + SnapStackZOffset. Lets you put the wall N cm above the
+	 * floor's actor Z regardless of either piece's bounding-box shape.
+	 *
+	 * Default 50 = half a meter, which puts a 1m-tall wall's pivot at the
+	 * floor's top if the floor's pivot is at the floor's center. Adjust
+	 * per-BP for taller / shorter walls.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Building|Snapping",
+		meta=(EditCondition="bSnapAsWall"))
+	float SnapStackZOffset = 50.0f;
+
+	/**
+	 * If true, this piece is treated as a "roof" snap piece:
+	 *   - Always horizontal edge-snaps (never vertical-stacks above/below)
+	 *   - Snaps to floors, walls, or other roofs (any nearby buildable)
+	 *   - Z position is auto-computed: sits on top of floor/wall, or
+	 *     coplanar with another roof for slope-continuity tiling
+	 *   - Q/E cycles the snap edge like walls do
+	 *
+	 * Set this on BPs whose mesh is an angled/slanted roof piece. Typically
+	 * also set bSnapAsWall=true so it qualifies as a "tall" ghost in the
+	 * snap detection.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Building|Snapping")
+	bool bSnapAsRoof = false;
 
 	/** Original materials from the mesh (saved for restoration). */
 	UPROPERTY(Transient)
@@ -432,12 +479,31 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UMaterialInstanceDynamic> GhostMaterialInstance;
 
+	/**
+	 * Per-primitive collision state cached on SetGhostMode(true) so it can
+	 * be restored exactly on SetGhostMode(false). Built by walking every
+	 * UPrimitiveComponent on the actor — covers MeshComponent plus anything
+	 * the BP author added (interaction triggers, decoration meshes, etc.).
+	 */
+	UPROPERTY(Transient)
+	TMap<TObjectPtr<UPrimitiveComponent>, TEnumAsByte<ECollisionEnabled::Type>> CachedGhostCollisionStates;
+
 	// ============================================================================
 	// INTERNAL
 	// ============================================================================
 
 	/** Create the ghost material instance. */
 	void CreateGhostMaterial();
+
+	/**
+	 * Restore each cached per-primitive collision state, then clear the cache.
+	 * Called by both SetGhostMode(false) and InitializeBuilding — the latter
+	 * promotes a placement-ghost into a placed building WITHOUT going through
+	 * SetGhostMode(false) (to keep the ghost material until construction
+	 * completes), but it still needs collision restored so the player can
+	 * hit-test the building for right-click interactions.
+	 */
+	void RestoreGhostCollisionCache();
 
 	/** Save original materials from mesh. */
 	void SaveOriginalMaterials();

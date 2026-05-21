@@ -1,5 +1,6 @@
 #include "MOCharacter.h"
 #include "MOFramework.h"
+#include "MOInterruptibleInterface.h"
 
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
@@ -249,6 +250,16 @@ void AMOCharacter::UnPossessed()
 {
 	Super::UnPossessed();
 
+	// Fire LostControl on the event bus — any active player-driven actions
+	// (inspection, build, harvest, crafting) decide how to react. Most pause;
+	// inspection cancels. Doing this here means the unpossess path doesn't
+	// need to know about any specific activity system.
+	//
+	// We don't gate this on authority because LostControl is a client-relevant
+	// signal too: UI controllers running on the client own listeners that
+	// need to tear down.
+	BroadcastInterrupt(FMOInterruptContext(EMOInterruptReason::LostControl, this));
+
 	// When player unpossesses this pawn, spawn survivor AI controller if this is a recruited survivor
 	if (!HasAuthority())
 	{
@@ -365,6 +376,105 @@ void AMOCharacter::Tick(float DeltaTime)
 			FollowCamera->SetRelativeLocation(CurrentLocation);
 		}
 	}
+
+	// Detect movement transitions and fire the Movement-reason broadcast.
+	// Cheap when nobody's listening — just one bool compare and an early exit.
+	TickMovementInterruptDetection();
+}
+
+// ============================================================================
+// INTERRUPT EVENT BUS
+// ============================================================================
+
+void AMOCharacter::RegisterInterruptListener(UObject* Listener)
+{
+	if (!IsValid(Listener))
+	{
+		return;
+	}
+
+	// Reject objects that don't implement the interface — otherwise we'd silently
+	// store a listener that can never be notified.
+	if (!Listener->Implements<UMOInterruptibleInterface>())
+	{
+		UE_LOG(LogMOFramework, Warning,
+			TEXT("[MOCharacter] RegisterInterruptListener: '%s' does not implement IMOInterruptibleInterface"),
+			*GetNameSafe(Listener));
+		return;
+	}
+
+	// No-op if already present. Cheap to check; saves duplicate notifications.
+	for (const TWeakObjectPtr<UObject>& Existing : InterruptListeners)
+	{
+		if (Existing.Get() == Listener)
+		{
+			return;
+		}
+	}
+
+	InterruptListeners.Add(Listener);
+}
+
+void AMOCharacter::UnregisterInterruptListener(UObject* Listener)
+{
+	if (!Listener)
+	{
+		return;
+	}
+
+	InterruptListeners.RemoveAll([Listener](const TWeakObjectPtr<UObject>& Weak)
+	{
+		// Also opportunistically drop stale weak pointers while we're here.
+		return !Weak.IsValid() || Weak.Get() == Listener;
+	});
+}
+
+void AMOCharacter::BroadcastInterrupt(const FMOInterruptContext& Context)
+{
+	// Snapshot the list so listeners can safely call UnregisterInterruptListener
+	// from inside their NotifyInterrupt handler without invalidating our iteration.
+	TArray<TWeakObjectPtr<UObject>> Snapshot = InterruptListeners;
+	for (const TWeakObjectPtr<UObject>& Weak : Snapshot)
+	{
+		UObject* Listener = Weak.Get();
+		if (!IsValid(Listener))
+		{
+			continue;
+		}
+		if (Listener->Implements<UMOInterruptibleInterface>())
+		{
+			IMOInterruptibleInterface::Execute_NotifyInterrupt(Listener, Context);
+		}
+	}
+
+	// Compact stale entries the broadcast revealed.
+	InterruptListeners.RemoveAll([](const TWeakObjectPtr<UObject>& Weak)
+	{
+		return !Weak.IsValid();
+	});
+}
+
+void AMOCharacter::TickMovementInterruptDetection()
+{
+	// Fast path: nothing listening, skip entirely.
+	if (InterruptListeners.Num() == 0)
+	{
+		bWasConsideredMovingLastTick = false;
+		return;
+	}
+
+	const float SpeedSq = GetVelocity().SizeSquared();
+	const bool bIsMovingNow = SpeedSq > MovementInterruptVelocitySqThreshold;
+
+	// Edge-triggered: fire once on the transition stationary->moving.
+	// While the player keeps moving, we don't keep re-firing.
+	if (bIsMovingNow && !bWasConsideredMovingLastTick)
+	{
+		// Use the convenience constructor: self-caused, full severity.
+		BroadcastInterrupt(FMOInterruptContext(EMOInterruptReason::Movement, this));
+	}
+
+	bWasConsideredMovingLastTick = bIsMovingNow;
 }
 
 // ============================================================================
@@ -1016,6 +1126,14 @@ void AMOCharacter::HandleInstantDeath(EMOBodyPartType CausePart)
 	UE_LOG(LogMOFramework, Warning, TEXT("[MOCharacter] %s DIED! Cause: Body part %d destroyed"),
 		*GetName(), static_cast<int32>(CausePart));
 
+	// Fire the Death interrupt BEFORE we tear down input/movement. Listeners
+	// (active build, harvest, inspection, crafting) will see the Death reason
+	// and run their terminal cleanup — refund materials, cancel widgets,
+	// drop UI. This is the second example source on the event bus alongside
+	// movement detection; the pattern is the same for every future source
+	// (combat-start, knockdown, sleep, etc.).
+	BroadcastInterrupt(FMOInterruptContext(EMOInterruptReason::Death, this));
+
 	// Disable input and movement
 	if (APlayerController* PC = Cast<APlayerController>(GetController()))
 	{
@@ -1258,10 +1376,14 @@ void AMOCharacter::ToggleTerraformMode()
 				// Set gameplay mode to Terraform
 				UIManager->SetGameplayMode(EMOGameplayMode::Terraform);
 
-				// Show current tool hint
+				// Show current tool hint PERSISTENTLY (duration < 0). The
+				// indicator reflects an ongoing state — "you are in terraform
+				// mode and the current tool is X" — so it must stay visible
+				// the whole time the mode is active, not just for the 2-second
+				// default. HideToolHint below clears it on mode exit.
 				if (TerraformingComponent)
 				{
-					UIManager->ShowToolHint(TerraformingComponent->GetModeDisplayName());
+					UIManager->ShowToolHint(TerraformingComponent->GetModeDisplayName(), -1.0f);
 				}
 			}
 			else
@@ -1286,12 +1408,14 @@ void AMOCharacter::CycleTerraformTool()
 	{
 		TerraformingComponent->CycleMode();
 
-		// Show tool hint
+		// Show new tool name persistently — same reasoning as in
+		// ToggleTerraformMode: it's a mode indicator, not a momentary popup.
+		// HideToolHint on terraform-mode exit will clear it.
 		if (APlayerController* PC = Cast<APlayerController>(GetController()))
 		{
 			if (UMOUIManagerComponent* UIManager = PC->FindComponentByClass<UMOUIManagerComponent>())
 			{
-				UIManager->ShowToolHint(TerraformingComponent->GetModeDisplayName());
+				UIManager->ShowToolHint(TerraformingComponent->GetModeDisplayName(), -1.0f);
 			}
 		}
 	}
@@ -1311,7 +1435,11 @@ bool AMOCharacter::DoTerraform()
 		return false;
 	}
 
-	return TerraformingComponent->TryTerraform();
+	// BeginTerraform starts the 5-second progress timer (with movement-interrupt
+	// support) and fires OnTerraformStarted, which UMOCharacterUIController
+	// listens to in order to spawn the progress widget. Sculpt is applied by
+	// the widget on timer completion, not here.
+	return TerraformingComponent->BeginTerraform();
 }
 
 // ============================================================================

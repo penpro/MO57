@@ -1,4 +1,5 @@
 #include "MOInventoryUIController.h"
+#include "MOUIDebugSubsystem.h"
 #include "MOUIManagerComponent.h"
 #include "MOInventoryMenu.h"
 #include "MOUnifiedInventoryMenu.h"
@@ -74,45 +75,51 @@ void UMOInventoryUIController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 
 bool UMOInventoryUIController::IsInventoryMenuOpen() const
 {
-	// Check unified inventory menu first
-	const UMOUnifiedInventoryMenu* UnifiedMenu = UnifiedInventoryWidget.Get();
-	if (IsValid(UnifiedMenu) && UnifiedMenu->IsInViewport())
-	{
-		return true;
-	}
-
-	// Fall back to legacy inventory menu
-	const UMOInventoryMenu* MenuWidget = InventoryMenuWidget.Get();
-	return IsValid(MenuWidget) && MenuWidget->IsInViewport();
+	return IsCachedMenuOpen(UnifiedInventoryWidget) || IsCachedMenuOpen(InventoryMenuWidget);
 }
 
 void UMOInventoryUIController::ToggleInventoryMenu()
 {
+	UE_LOG(LogMOFramework, Verbose, TEXT("[MOInventoryUI] ToggleInventoryMenu START (frame %llu)"), GFrameCounter);
+
 	if (!IsLocalOwningPlayerController())
 	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventoryUI] BAIL: Not local owning player controller"));
 		return;
 	}
+
+	// Frame-based debounce: prevent double-toggle from ECommonInputMode::All
+	const uint64 CurrentFrame = GFrameCounter;
+	if (CurrentFrame == LastToggleFrame)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventoryUI] BAIL: Same-frame debounce (frame %llu)"), CurrentFrame);
+		return;
+	}
+	LastToggleFrame = CurrentFrame;
 
 	UMOUIManagerComponent* UIManager = GetUIManager();
 	if (!UIManager)
 	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventoryUI] BAIL: No UIManager"));
 		return;
 	}
 
-	// Don't allow opening while in-game menu is open
 	if (UIManager->IsInGameMenuOpen())
 	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventoryUI] BAIL: In-game menu is open"));
 		return;
 	}
 
-	// If already open, just close it
-	if (IsInventoryMenuOpen())
+	const bool bIsOpen = IsInventoryMenuOpen();
+	UE_LOG(LogMOFramework, Verbose, TEXT("[MOInventoryUI] IsInventoryMenuOpen() = %s"),
+		bIsOpen ? TEXT("TRUE") : TEXT("FALSE"));
+
+	if (bIsOpen)
 	{
 		CloseInventoryMenu();
 		return;
 	}
 
-	// Close other switchable menus and open this one
 	UIManager->CloseAllSwitchableMenus();
 	OpenInventoryMenu();
 }
@@ -160,67 +167,65 @@ void UMOInventoryUIController::OpenInventoryMenu()
 		return;
 	}
 
-	UMOInventoryMenu* MenuWidget = InventoryMenuWidget.Get();
+	MOUI_LOG(this, "InvCtrl", "OpenInventoryMenu — pushing %s to Menu layer", *InventoryMenuClass->GetName());
+	ShowModalBackground();
+	UCommonActivatableWidget* CreatedWidget = PushWidgetToLayer(MOUILayerTags::Layer_Menu, InventoryMenuClass);
+	UMOInventoryMenu* MenuWidget = Cast<UMOInventoryMenu>(CreatedWidget);
+
 	if (!IsValid(MenuWidget))
 	{
-		MenuWidget = CreateWidget<UMOInventoryMenu>(PlayerController, InventoryMenuClass);
-		InventoryMenuWidget = MenuWidget;
-
-		if (!IsValid(MenuWidget))
-		{
-			return;
-		}
-
-		// Bind Tab close (widget broadcasts, manager closes).
-		MenuWidget->OnRequestClose.AddDynamic(this, &UMOInventoryUIController::HandleInventoryMenuRequestClose);
-
-		// Bind right-click for context menu
-		MenuWidget->OnSlotRightClicked.AddDynamic(this, &UMOInventoryUIController::HandleInventoryMenuSlotRightClicked);
+		UE_LOG(LogMOFramework, Error, TEXT("[MOInventoryUI] Failed to create inventory menu via layer stack"));
+		HideModalBackground();
+		return;
 	}
 
-	// Always re-initialize on open in case pawn changed.
+	// Cache reference + auto-clear-on-deactivate (any close path). See base class.
+	RegisterCachedMenu(MenuWidget, InventoryMenuWidget);
+	MenuWidget->OnRequestClose.RemoveAll(this);
+	MenuWidget->OnSlotRightClicked.RemoveAll(this);
+	MenuWidget->OnRequestClose.AddDynamic(this, &UMOInventoryUIController::HandleInventoryMenuRequestClose);
+	MenuWidget->OnSlotRightClicked.AddDynamic(this, &UMOInventoryUIController::HandleInventoryMenuSlotRightClicked);
+
+	// Initialize with inventory data (refresh each time menu opens)
 	MenuWidget->InitializeMenu(InventoryComponent);
 
-	if (!MenuWidget->IsInViewport())
-	{
-		ShowModalBackground();
-		PushWidgetInstanceToLayer(MOUILayerTags::Layer_Menu, MenuWidget, InventoryMenuZOrder);
-	}
-
+	// Widget handles input state via NativeOnActivated/GetDesiredInputConfig
 	UpdateReticleVisibility();
-	ApplyInputModeForMenuOpen(MenuWidget);
 }
 
 void UMOInventoryUIController::CloseInventoryMenu()
 {
-	APlayerController* PlayerController = ResolveOwningPlayerController();
+	UE_LOG(LogMOFramework, Verbose, TEXT("[MOInventoryUI] CloseInventoryMenu START (frame %llu)"), GFrameCounter);
 
+	// Get references before clearing cache
 	UMOInventoryMenu* MenuWidget = InventoryMenuWidget.Get();
+	UMOUnifiedInventoryMenu* UnifiedMenu = UnifiedInventoryWidget.Get();
+
+	// Clear caches FIRST so IsInventoryMenuOpen() returns false immediately
+	InventoryMenuWidget.Reset();
+	UnifiedInventoryWidget.Reset();
+
+	// Deactivate widgets - this is the idiomatic CommonUI close pattern.
+	// DeactivateWidget() causes the stack to remove the widget automatically.
+	// Do NOT use RemoveWidgetFromLayer - it removes from stack but deactivation is deferred,
+	// leaving the widget visually present while IsOpen() returns false.
 	if (IsValid(MenuWidget))
 	{
-		if (MenuWidget->IsInViewport())
-		{
-			MenuWidget->RemoveFromParent();
-		}
+		MenuWidget->DeactivateWidget();
 	}
 
-	// Also close unified inventory menu if open
-	UMOUnifiedInventoryMenu* UnifiedMenu = UnifiedInventoryWidget.Get();
-	if (IsValid(UnifiedMenu) && UnifiedMenu->IsInViewport())
+	if (IsValid(UnifiedMenu))
 	{
-		UnifiedMenu->RemoveFromParent();
+		UnifiedMenu->DeactivateWidget();
 	}
 
 	UpdateReticleVisibility();
 
+	// Manage modal background visibility
 	UMOUIManagerComponent* UIManager = GetUIManager();
 	if (UIManager && !UIManager->IsAnyMenuOpen())
 	{
 		HideModalBackground();
-		if (IsValid(PlayerController) && PlayerController->IsLocalController())
-		{
-			ApplyInputModeForMenuClosed();
-		}
 	}
 }
 
@@ -275,31 +280,31 @@ void UMOInventoryUIController::OpenInventoryWithContainer(AActor* ContainerActor
 	// Set the active container
 	CurrentContainerActor = ContainerActor;
 
-	// Create or get the unified inventory widget
-	UMOUnifiedInventoryMenu* MenuWidget = UnifiedInventoryWidget.Get();
+	// CommonUI stacks don't support reusing widget instances - always create fresh
+	// The stack manages widget lifecycle; we just need to track the active one
+	ShowModalBackground();
+	UCommonActivatableWidget* CreatedWidget = PushWidgetToLayer(MOUILayerTags::Layer_Menu, UnifiedInventoryMenuClass);
+	UMOUnifiedInventoryMenu* MenuWidget = Cast<UMOUnifiedInventoryMenu>(CreatedWidget);
+
 	if (!IsValid(MenuWidget))
 	{
-		MenuWidget = CreateWidget<UMOUnifiedInventoryMenu>(PlayerController, UnifiedInventoryMenuClass);
-		UnifiedInventoryWidget = MenuWidget;
-
-		if (!IsValid(MenuWidget))
-		{
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOInventoryUI] Failed to create unified inventory menu widget."));
-			return;
-		}
-
-		// Bind delegates
-		MenuWidget->OnRequestClose.RemoveAll(this);
-		MenuWidget->OnRequestClose.AddDynamic(this, &UMOInventoryUIController::HandleUnifiedInventoryMenuRequestClose);
-
-		MenuWidget->OnContextMenuRequested.RemoveAll(this);
-		MenuWidget->OnContextMenuRequested.AddDynamic(this, &UMOInventoryUIController::HandleUnifiedInventoryMenuContextMenuRequested);
-
-		MenuWidget->OnWorldItemContextMenuRequested.RemoveAll(this);
-		MenuWidget->OnWorldItemContextMenuRequested.AddDynamic(this, &UMOInventoryUIController::HandleUnifiedInventoryMenuWorldItemContextMenuRequested);
+		UE_LOG(LogMOFramework, Error, TEXT("[MOInventoryUI] Failed to create unified inventory menu via layer stack"));
+		HideModalBackground();
+		return;
 	}
 
-	// Initialize with player inventory and container
+	// Cache reference + auto-clear-on-deactivate (any close path). See base class.
+	RegisterCachedMenu(MenuWidget, UnifiedInventoryWidget);
+	MenuWidget->OnRequestClose.RemoveAll(this);
+	MenuWidget->OnRequestClose.AddDynamic(this, &UMOInventoryUIController::HandleUnifiedInventoryMenuRequestClose);
+
+	MenuWidget->OnContextMenuRequested.RemoveAll(this);
+	MenuWidget->OnContextMenuRequested.AddDynamic(this, &UMOInventoryUIController::HandleUnifiedInventoryMenuContextMenuRequested);
+
+	MenuWidget->OnWorldItemContextMenuRequested.RemoveAll(this);
+	MenuWidget->OnWorldItemContextMenuRequested.AddDynamic(this, &UMOInventoryUIController::HandleUnifiedInventoryMenuWorldItemContextMenuRequested);
+
+	// Initialize with player inventory and container (refresh each time menu opens)
 	MenuWidget->InitializeMenu(InventoryComponent, ContainerActor);
 
 	// If container is provided, show the Other Inventory tab
@@ -308,14 +313,8 @@ void UMOInventoryUIController::OpenInventoryWithContainer(AActor* ContainerActor
 		MenuWidget->ShowOtherInventoryTab();
 	}
 
-	if (!MenuWidget->IsInViewport())
-	{
-		ShowModalBackground();
-		PushWidgetInstanceToLayer(MOUILayerTags::Layer_Menu, MenuWidget, UnifiedInventoryMenuZOrder);
-	}
-
+	// Widget handles input state via NativeOnActivated/GetDesiredInputConfig
 	UpdateReticleVisibility();
-	ApplyInputModeForMenuOpen(MenuWidget);
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOInventoryUI] Unified inventory menu opened with container: %s"),
 		IsValid(ContainerActor) ? *ContainerActor->GetName() : TEXT("None"));
@@ -327,7 +326,7 @@ void UMOInventoryUIController::SetActiveContainer(AActor* ContainerActor)
 
 	// If unified menu is open, update it
 	UMOUnifiedInventoryMenu* MenuWidget = UnifiedInventoryWidget.Get();
-	if (IsValid(MenuWidget) && MenuWidget->IsInViewport())
+	if (IsValid(MenuWidget) && MenuWidget->IsActivated())
 	{
 		MenuWidget->SetSecondaryInventorySource(ContainerActor);
 		if (IsValid(ContainerActor))
@@ -346,7 +345,7 @@ void UMOInventoryUIController::ClearActiveContainer()
 
 	// If unified menu is open, clear its container
 	UMOUnifiedInventoryMenu* MenuWidget = UnifiedInventoryWidget.Get();
-	if (IsValid(MenuWidget) && MenuWidget->IsInViewport())
+	if (IsValid(MenuWidget) && MenuWidget->IsActivated())
 	{
 		MenuWidget->ClearSecondaryInventorySource();
 	}
@@ -366,24 +365,8 @@ bool UMOInventoryUIController::HasActiveContainer() const
 
 void UMOInventoryUIController::HandleUnifiedInventoryMenuRequestClose()
 {
-	UMOUnifiedInventoryMenu* MenuWidget = UnifiedInventoryWidget.Get();
-	if (IsValid(MenuWidget) && MenuWidget->IsInViewport())
-	{
-		MenuWidget->RemoveFromParent();
-	}
-
-	UpdateReticleVisibility();
-
-	UMOUIManagerComponent* UIManager = GetUIManager();
-	if (UIManager && !UIManager->IsAnyMenuOpen())
-	{
-		HideModalBackground();
-		APlayerController* PlayerController = ResolveOwningPlayerController();
-		if (IsValid(PlayerController) && PlayerController->IsLocalController())
-		{
-			ApplyInputModeForMenuClosed();
-		}
-	}
+	// Use CloseInventoryMenu for consistent cleanup
+	CloseInventoryMenu();
 }
 
 void UMOInventoryUIController::HandleUnifiedInventoryMenuContextMenuRequested(UMOInventoryComponent* InventoryComponent, const FGuid& ItemGuid, int32 SlotIndex, FVector2D ScreenPosition)
@@ -628,6 +611,9 @@ void UMOInventoryUIController::ShowItemContextMenu(UMOInventoryComponent* Invent
 	// Close existing context menu if any
 	CloseItemContextMenu();
 
+	// Item context menus are free-floating popups (UCommonUserWidget) — use
+	// AddToViewport so SetMenuPosition can place them at the mouse. Layer stacks
+	// force their children to fill the stack and ignore positioning.
 	UMOItemContextMenu* MenuWidget = CreateWidget<UMOItemContextMenu>(PlayerController, ItemContextMenuClass);
 	if (!IsValid(MenuWidget))
 	{
@@ -641,10 +627,7 @@ void UMOInventoryUIController::ShowItemContextMenu(UMOInventoryComponent* Invent
 
 	MenuWidget->InitializeForItem(InventoryComponent, ItemGuid, SlotIndex);
 
-	// Add to layer system, then position
-	PushWidgetInstanceToLayer(MOUILayerTags::Layer_GameOverlay, MenuWidget, ItemContextMenuZOrder);
-
-	// Position at mouse cursor using viewport slot positioning
+	MenuWidget->AddToViewport(ItemContextMenuZOrder);
 	MenuWidget->SetMenuPosition(ScreenPosition);
 }
 
@@ -692,10 +675,7 @@ void UMOInventoryUIController::ShowWorldItemContextMenu(AMOWorldItem* WorldItem,
 	// Initialize for world item (shows Pickup instead of Drop)
 	MenuWidget->InitializeForWorldItem(WorldItem);
 
-	// Add to layer system, then position
-	PushWidgetInstanceToLayer(MOUILayerTags::Layer_GameOverlay, MenuWidget, ItemContextMenuZOrder);
-
-	// Position at mouse cursor
+	MenuWidget->AddToViewport(ItemContextMenuZOrder);
 	MenuWidget->SetMenuPosition(ScreenPosition);
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOInventoryUI] Showing context menu for world item: %s"), *WorldItem->GetName());
@@ -717,8 +697,7 @@ void UMOInventoryUIController::CloseItemContextMenu()
 
 bool UMOInventoryUIController::IsItemContextMenuOpen() const
 {
-	const UMOItemContextMenu* MenuWidget = ItemContextMenuWidget.Get();
-	return IsValid(MenuWidget) && MenuWidget->IsInViewport();
+	return IsCachedMenuOpen(ItemContextMenuWidget);
 }
 
 void UMOInventoryUIController::HandleContextMenuClosed()
@@ -742,6 +721,9 @@ void UMOInventoryUIController::HandleContextMenuAction(FName ActionId, const FGu
 
 	if (ActionId == FName("Use"))
 	{
+		// Close menu first for consistency with other actions
+		CloseItemContextMenu();
+
 		// Consume item - apply nutrition to survival stats (use cached component)
 		UMOSurvivalStatsComponent* SurvivalStats = GetCachedSurvivalStats();
 		if (IsValid(SurvivalStats))
@@ -1207,11 +1189,9 @@ void UMOInventoryUIController::ShowGroundContextMenu(FVector WorldLocation, FVec
 	APawn* ForagingPawn = PlayerController->GetPawn();
 	MenuWidget->InitializeForLocation(WorldLocation, ForagingPawn);
 
-	// Switch to UI mode FIRST so GetMousePosition works correctly
-	ApplyInputModeForMenuOpen(MenuWidget);
-
-	// Add to layer system
-	PushWidgetInstanceToLayer(MOUILayerTags::Layer_GameOverlay, MenuWidget, GroundContextMenuZOrder);
+	// NOTE: Cursor visibility is managed by CommonUI via GetDesiredInputConfig()
+	// Context menus are UCommonUserWidget (not activatable) - AddToViewport is correct
+	MenuWidget->AddToViewport(GroundContextMenuZOrder);
 
 	// Position at screen center (where reticle is)
 	MenuWidget->SetMenuPosition(ScreenPosition);
@@ -1243,22 +1223,12 @@ void UMOInventoryUIController::CloseGroundContextMenu()
 	}
 	GroundContextMenuWidget.Reset();
 
-	// Restore input mode if no other menus are open
-	UMOUIManagerComponent* UIManager = GetUIManager();
-	if (UIManager && !UIManager->IsAnyMenuOpen())
-	{
-		APlayerController* PlayerController = ResolveOwningPlayerController();
-		if (IsValid(PlayerController) && PlayerController->IsLocalController())
-		{
-			ApplyInputModeForMenuClosed();
-		}
-	}
+	// Widget handles input state restoration via NativeOnDeactivated
 }
 
 bool UMOInventoryUIController::IsGroundContextMenuOpen() const
 {
-	const UMOGroundContextMenu* MenuWidget = GroundContextMenuWidget.Get();
-	return IsValid(MenuWidget) && MenuWidget->IsInViewport();
+	return IsCachedMenuOpen(GroundContextMenuWidget);
 }
 
 void UMOInventoryUIController::HandleGroundContextMenuClosed()
@@ -1272,16 +1242,7 @@ void UMOInventoryUIController::HandleGroundContextMenuClosed()
 
 	GroundContextMenuWidget.Reset();
 
-	// Restore input mode if no other menus are open
-	UMOUIManagerComponent* UIManager = GetUIManager();
-	if (UIManager && !UIManager->IsAnyMenuOpen())
-	{
-		APlayerController* PlayerController = ResolveOwningPlayerController();
-		if (IsValid(PlayerController) && PlayerController->IsLocalController())
-		{
-			ApplyInputModeForMenuClosed();
-		}
-	}
+	// Widget handles input state restoration via NativeOnDeactivated
 }
 
 void UMOInventoryUIController::HandleForagingSearchComplete(const TArray<AMOWorldItem*>& RevealedItems)

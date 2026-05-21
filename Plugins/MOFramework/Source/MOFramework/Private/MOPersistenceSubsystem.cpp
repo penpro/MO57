@@ -1,5 +1,6 @@
 #include "MOPersistenceSubsystem.h"
 #include "MOFramework.h"
+#include "MOHarvestDebugSubsystem.h"
 
 #include "Engine/World.h"
 #include "HAL/FileManager.h"
@@ -36,6 +37,7 @@
 #include "MOCreature.h"
 #include "MOQuestSubsystem.h"
 #include "MOWeatherIntegrationSubsystem.h"
+#include "MOTerrainModificationSubsystem.h"
 
 // Voxel plugin sculpt persistence
 #include "VoxelMinimal/Utilities/VoxelThreadingUtilities.h"
@@ -256,6 +258,7 @@ bool UMOPersistenceSubsystem::SaveWorldToSlot(const FString& SlotName)
     // World seed (for voxel terrain regeneration)
     SaveObject->WorldSeed = UMOGameSettings::GetWorldSeed();
     UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Saving world seed: %d"), SaveObject->WorldSeed);
+    MOHARVEST_LOG(this, "Seed", "SAVE: writing WorldSeed=%d to slot='%s'", SaveObject->WorldSeed, *SlotName);
 
     // Screenshot capture (80x80 thumbnail)
     CaptureScreenshotForSave(SaveObject);
@@ -276,6 +279,7 @@ bool UMOPersistenceSubsystem::SaveWorldToSlot(const FString& SlotName)
     CaptureVoxelSculptData(World, SaveObject);
     CaptureQuestData(SaveObject);
     CaptureWeatherData(World, SaveObject);
+    CaptureTerrainModificationData(World, SaveObject);
 
     const bool bOk = UGameplayStatics::SaveGameToSlot(SaveObject, SlotName, 0);
 
@@ -519,6 +523,7 @@ FMOLoadResult UMOPersistenceSubsystem::LoadWorldFromSlotWithResult(const FString
     RestoreVoxelSculptData(World, LoadedTyped->VoxelSculptData);
     RestoreQuestData(LoadedTyped->QuestData);
     RestoreWeatherData(World, LoadedTyped->WeatherData);
+    RestoreTerrainModificationData(World, LoadedTyped->TerrainModificationData);
 
     ApplyInventoriesToSpawnedPawns(World, LoadedTyped->PawnInventoriesByGuid);
 
@@ -528,11 +533,18 @@ FMOLoadResult UMOPersistenceSubsystem::LoadWorldFromSlotWithResult(const FString
     // Extract world seed from save and store it for voxel regeneration
     LastLoadResult.WorldSeed = LoadedTyped->WorldSeed;
     UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Loaded world seed: %d"), LastLoadResult.WorldSeed);
+    MOHARVEST_LOG(this, "Seed", "LOAD: read WorldSeed=%d from save slot='%s'", LastLoadResult.WorldSeed, *SlotName);
+
+    // Surface the last-possessed pawn GUID so the game mode can re-possess
+    // it after voxel terrain has finished generating (otherwise the player
+    // gets left as a spectator 50m above the pawn).
+    LastLoadResult.LastPossessedPawnGuid = LoadedTyped->LastPossessedPawnGuid;
 
     // Apply loaded seed to game settings so voxel world can use it
     if (UMOGameSettings* Settings = UMOGameSettings::GetMOGameSettings())
     {
         Settings->PendingWorldSeed = LastLoadResult.WorldSeed;
+        MOHARVEST_LOG(this, "Seed", "LOAD: Settings->PendingWorldSeed set to %d", LastLoadResult.WorldSeed);
     }
 
     // Determine overall success - we succeed even with partial failures, but log them
@@ -2412,4 +2424,53 @@ void UMOPersistenceSubsystem::RestoreWeatherData(UWorld* World, const FMOWeather
     UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Restored weather data: DateTime=%s, Applied=%s"),
         *WeatherData.DateTime.ToString(),
         bApplied ? TEXT("Yes") : TEXT("No"));
+}
+
+// ============================================================================
+// TERRAIN MODIFICATION PERSISTENCE
+// ============================================================================
+//
+// "Worked-ground" zone metadata — distinct from the Voxel plugin's own sculpt
+// save (which handles the terrain mesh). This is just the bookkeeping that
+// keeps PCG/foliage out of areas the player has modified.
+
+void UMOPersistenceSubsystem::CaptureTerrainModificationData(UWorld* World, UMOWorldSaveGame* SaveObject) const
+{
+    if (!SaveObject || !World)
+    {
+        return;
+    }
+
+    UMOTerrainModificationSubsystem* Subsystem = World->GetSubsystem<UMOTerrainModificationSubsystem>();
+    if (!Subsystem)
+    {
+        UE_LOG(LogMOFramework, Verbose, TEXT("[MOPersist] CaptureTerrainModificationData: No terrain-modification subsystem"));
+        return;
+    }
+
+    Subsystem->BuildSaveData(SaveObject->TerrainModificationData);
+
+    UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Captured terrain modification data: %d zone(s)"),
+        SaveObject->TerrainModificationData.Zones.Num());
+}
+
+void UMOPersistenceSubsystem::RestoreTerrainModificationData(UWorld* World, const FMOTerrainModificationSaveData& TerrainModData)
+{
+    if (!World)
+    {
+        UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] RestoreTerrainModificationData: No world"));
+        return;
+    }
+
+    UMOTerrainModificationSubsystem* Subsystem = World->GetSubsystem<UMOTerrainModificationSubsystem>();
+    if (!Subsystem)
+    {
+        UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] RestoreTerrainModificationData: No terrain-modification subsystem"));
+        return;
+    }
+
+    Subsystem->ApplySaveDataAuthority(TerrainModData);
+
+    UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Restored terrain modification data: %d zone(s)"),
+        TerrainModData.Zones.Num());
 }

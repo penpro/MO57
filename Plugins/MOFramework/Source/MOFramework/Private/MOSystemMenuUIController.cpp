@@ -116,6 +116,14 @@ void UMOSystemMenuUIController::ToggleInGameMenu()
 		return;
 	}
 
+	// Frame-based debounce: prevent double-toggle from ECommonInputMode::All
+	const uint64 CurrentFrame = GFrameCounter;
+	if (CurrentFrame == LastToggleFrame)
+	{
+		return;
+	}
+	LastToggleFrame = CurrentFrame;
+
 	UMOUIManagerComponent* UIManager = GetUIManager();
 
 	// If any other menu is open, close it first
@@ -173,73 +181,70 @@ void UMOSystemMenuUIController::OpenInGameMenu()
 		return;
 	}
 
-	// Create widget if needed
-	UMOInGameMenu* MenuWidget = InGameMenuWidget.Get();
-	if (!IsValid(MenuWidget))
+	// Close any existing menu first
+	UMOInGameMenu* ExistingMenu = InGameMenuWidget.Get();
+	if (IsValid(ExistingMenu) && ExistingMenu->IsActivated())
 	{
-		MenuWidget = CreateWidget<UMOInGameMenu>(PlayerController, InGameMenuClass);
-		InGameMenuWidget = MenuWidget;
-
-		if (!IsValid(MenuWidget))
-		{
-			return;
-		}
-
-		// Bind delegates
-		MenuWidget->OnRequestClose.RemoveDynamic(this, &UMOSystemMenuUIController::HandleInGameMenuRequestClose);
-		MenuWidget->OnExitToMainMenu.RemoveDynamic(this, &UMOSystemMenuUIController::HandleInGameMenuExitToMainMenu);
-		MenuWidget->OnExitGame.RemoveDynamic(this, &UMOSystemMenuUIController::HandleInGameMenuExitGame);
-		MenuWidget->OnSaveRequested.RemoveDynamic(this, &UMOSystemMenuUIController::HandleSaveRequested);
-		MenuWidget->OnLoadRequested.RemoveDynamic(this, &UMOSystemMenuUIController::HandleLoadRequested);
-		MenuWidget->OnRequestClose.AddDynamic(this, &UMOSystemMenuUIController::HandleInGameMenuRequestClose);
-		MenuWidget->OnExitToMainMenu.AddDynamic(this, &UMOSystemMenuUIController::HandleInGameMenuExitToMainMenu);
-		MenuWidget->OnExitGame.AddDynamic(this, &UMOSystemMenuUIController::HandleInGameMenuExitGame);
-		MenuWidget->OnSaveRequested.AddDynamic(this, &UMOSystemMenuUIController::HandleSaveRequested);
-		MenuWidget->OnLoadRequested.AddDynamic(this, &UMOSystemMenuUIController::HandleLoadRequested);
-
-		UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] InGameMenu delegates bound"));
+		PopWidgetFromLayer(ExistingMenu);
+		InGameMenuWidget.Reset();
 	}
 
-	// Show modal background and menu via layer system
+	// Create new widget via CommonUI layer stack (Modal layer for full input blocking)
 	ShowModalBackground();
-	PushWidgetInstanceToLayer(MOUILayerTags::Layer_Menu, MenuWidget, InGameMenuZOrder);
+	UCommonActivatableWidget* CreatedWidget = PushWidgetToLayer(MOUILayerTags::Layer_Modal, InGameMenuClass);
+	UMOInGameMenu* MenuWidget = Cast<UMOInGameMenu>(CreatedWidget);
 
-	// Set input mode
-	ApplyInputModeForMenuOpen(MenuWidget);
+	if (!IsValid(MenuWidget))
+	{
+		UE_LOG(LogMOFramework, Error, TEXT("[MOSysUI] Failed to create in-game menu via layer stack"));
+		HideModalBackground();
+		return;
+	}
 
+	// Cache reference + auto-clear-on-deactivate (any close path). See base class.
+	RegisterCachedMenu(MenuWidget, InGameMenuWidget);
+	MenuWidget->OnRequestClose.RemoveAll(this);
+	MenuWidget->OnExitToMainMenu.RemoveAll(this);
+	MenuWidget->OnExitGame.RemoveAll(this);
+	MenuWidget->OnSaveRequested.RemoveAll(this);
+	MenuWidget->OnLoadRequested.RemoveAll(this);
+	MenuWidget->OnRequestClose.AddDynamic(this, &UMOSystemMenuUIController::HandleInGameMenuRequestClose);
+	MenuWidget->OnExitToMainMenu.AddDynamic(this, &UMOSystemMenuUIController::HandleInGameMenuExitToMainMenu);
+	MenuWidget->OnExitGame.AddDynamic(this, &UMOSystemMenuUIController::HandleInGameMenuExitGame);
+	MenuWidget->OnSaveRequested.AddDynamic(this, &UMOSystemMenuUIController::HandleSaveRequested);
+	MenuWidget->OnLoadRequested.AddDynamic(this, &UMOSystemMenuUIController::HandleLoadRequested);
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] InGameMenu opened via layer stack"));
+
+	// Widget handles input state via NativeOnActivated/GetDesiredInputConfig
 	UpdateReticleVisibility();
 }
 
 void UMOSystemMenuUIController::CloseInGameMenu()
 {
-	APlayerController* PlayerController = ResolveOwningPlayerController();
-
+	// IMPORTANT: Get reference before clearing cache
+	// Reset cache FIRST to ensure IsInGameMenuOpen() returns false immediately
+	// This prevents race conditions with toggle input that fires multiple times per frame
 	UMOInGameMenu* MenuWidget = InGameMenuWidget.Get();
-	if (IsValid(MenuWidget))
+	InGameMenuWidget.Reset();
+
+	if (IsValid(MenuWidget) && MenuWidget->IsActivated())
 	{
-		if (MenuWidget->IsInViewport())
-		{
-			MenuWidget->RemoveFromParent();
-		}
+		PopWidgetFromLayer(MenuWidget);
 	}
 
 	UpdateReticleVisibility();
 
-	// Only restore input mode if no other menus are open
+	// Manage modal background visibility
 	if (!IsAnyMenuOpen())
 	{
 		HideModalBackground();
-		if (IsValid(PlayerController) && PlayerController->IsLocalController())
-		{
-			ApplyInputModeForMenuClosed();
-		}
 	}
 }
 
 bool UMOSystemMenuUIController::IsInGameMenuOpen() const
 {
-	UMOInGameMenu* MenuWidget = InGameMenuWidget.Get();
-	return IsValid(MenuWidget) && MenuWidget->IsInViewport();
+	return IsCachedMenuOpen(InGameMenuWidget);
 }
 
 UMOInGameMenu* UMOSystemMenuUIController::GetInGameMenu() const
@@ -348,6 +353,14 @@ void UMOSystemMenuUIController::TogglePossessionMenu()
 {
 	UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] TogglePossessionMenu called"));
 
+	// Frame-based debounce: prevent double-toggle from ECommonInputMode::All
+	const uint64 CurrentFrame = GFrameCounter;
+	if (CurrentFrame == LastToggleFrame)
+	{
+		return;
+	}
+	LastToggleFrame = CurrentFrame;
+
 	if (!IsLocalOwningPlayerController())
 	{
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOSysUI] TogglePossessionMenu - Not local owning player controller, aborting"));
@@ -404,41 +417,42 @@ void UMOSystemMenuUIController::OpenPossessionMenu()
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] OpenPossessionMenu - All checks passed, creating menu"));
 
-	// Create widget if needed
-	UMOPossessionMenu* MenuWidget = PossessionMenuWidget.Get();
-	if (!IsValid(MenuWidget))
+	// Close any existing menu first
+	UMOPossessionMenu* ExistingMenu = PossessionMenuWidget.Get();
+	if (IsValid(ExistingMenu) && ExistingMenu->IsActivated())
 	{
-		MenuWidget = CreateWidget<UMOPossessionMenu>(PlayerController, PossessionMenuClass);
-		PossessionMenuWidget = MenuWidget;
-
-		if (!IsValid(MenuWidget))
-		{
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOSysUI] Failed to create possession menu widget."));
-			return;
-		}
+		PopWidgetFromLayer(ExistingMenu);
+		PossessionMenuWidget.Reset();
 	}
 
-	// Always rebind delegates to ensure they're connected (defensive against widget reconstruction)
-	MenuWidget->OnRequestClose.RemoveDynamic(this, &UMOSystemMenuUIController::HandlePossessionMenuRequestClose);
-	MenuWidget->OnPawnSelected.RemoveDynamic(this, &UMOSystemMenuUIController::HandlePossessionMenuPawnSelected);
-	MenuWidget->OnCreateCharacter.RemoveDynamic(this, &UMOSystemMenuUIController::HandlePossessionMenuCreateCharacter);
+	// Create new widget via CommonUI layer stack
+	ShowModalBackground();
+	UCommonActivatableWidget* CreatedWidget = PushWidgetToLayer(MOUILayerTags::Layer_Menu, PossessionMenuClass);
+	UMOPossessionMenu* MenuWidget = Cast<UMOPossessionMenu>(CreatedWidget);
+
+	if (!IsValid(MenuWidget))
+	{
+		UE_LOG(LogMOFramework, Error, TEXT("[MOSysUI] Failed to create possession menu via layer stack"));
+		HideModalBackground();
+		return;
+	}
+
+	// Cache reference + auto-clear-on-deactivate (any close path). See base class.
+	RegisterCachedMenu(MenuWidget, PossessionMenuWidget);
+	MenuWidget->OnRequestClose.RemoveAll(this);
+	MenuWidget->OnPawnSelected.RemoveAll(this);
+	MenuWidget->OnCreateCharacter.RemoveAll(this);
 	MenuWidget->OnRequestClose.AddDynamic(this, &UMOSystemMenuUIController::HandlePossessionMenuRequestClose);
 	MenuWidget->OnPawnSelected.AddDynamic(this, &UMOSystemMenuUIController::HandlePossessionMenuPawnSelected);
 	MenuWidget->OnCreateCharacter.AddDynamic(this, &UMOSystemMenuUIController::HandlePossessionMenuCreateCharacter);
 
-	// Ensure internal button bindings are set up (defensive against widget reuse issues)
+	// Ensure internal button bindings are set up
 	MenuWidget->EnsureButtonBindings();
 
 	// Populate with pawn data
 	RefreshPossessionMenu();
 
-	// Show modal background and menu via layer system
-	ShowModalBackground();
-	PushWidgetInstanceToLayer(MOUILayerTags::Layer_Menu, MenuWidget, PossessionMenuZOrder);
-
-	// Set input mode
-	ApplyInputModeForMenuOpen(MenuWidget);
-
+	// Widget handles input state via NativeOnActivated/GetDesiredInputConfig
 	UpdateReticleVisibility();
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] Possession menu opened"));
@@ -446,34 +460,29 @@ void UMOSystemMenuUIController::OpenPossessionMenu()
 
 void UMOSystemMenuUIController::ClosePossessionMenu()
 {
-	APlayerController* PlayerController = ResolveOwningPlayerController();
-
+	// IMPORTANT: Get reference before clearing cache
+	// Reset cache FIRST to ensure IsPossessionMenuOpen() returns false immediately
+	// This prevents race conditions with toggle input that fires multiple times per frame
 	UMOPossessionMenu* MenuWidget = PossessionMenuWidget.Get();
-	if (IsValid(MenuWidget))
+	PossessionMenuWidget.Reset();
+
+	if (IsValid(MenuWidget) && MenuWidget->IsActivated())
 	{
-		if (MenuWidget->IsInViewport())
-		{
-			MenuWidget->RemoveFromParent();
-		}
+		PopWidgetFromLayer(MenuWidget);
 	}
 
 	UpdateReticleVisibility();
 
-	// Only restore input mode if no other menus are open
+	// Manage modal background visibility
 	if (!IsAnyMenuOpen())
 	{
 		HideModalBackground();
-		if (IsValid(PlayerController) && PlayerController->IsLocalController())
-		{
-			ApplyInputModeForMenuClosed();
-		}
 	}
 }
 
 bool UMOSystemMenuUIController::IsPossessionMenuOpen() const
 {
-	UMOPossessionMenu* MenuWidget = PossessionMenuWidget.Get();
-	return IsValid(MenuWidget) && MenuWidget->IsInViewport();
+	return IsCachedMenuOpen(PossessionMenuWidget);
 }
 
 void UMOSystemMenuUIController::RefreshPossessionMenu()
@@ -743,19 +752,47 @@ void UMOSystemMenuUIController::ShowConfirmationDialog(const FText& Title, const
 		return;
 	}
 
-	// Create widget if needed
+	// Create or reuse widget
 	UMOConfirmationDialog* DialogWidget = ConfirmationDialogWidget.Get();
+	bool bNeedsBindDelegates = false;
+
+	// If dialog is already in viewport and visible, just update content
+	if (IsValid(DialogWidget) && DialogWidget->IsInViewport())
+	{
+		DialogWidget->Setup(Title, Message, ConfirmText, CancelText);
+		return;
+	}
+
+	if (IsValid(DialogWidget))
+	{
+		// Try to reuse existing widget - push it to the layer stack
+		UCommonActivatableWidget* ActualWidget = PushWidgetInstanceToLayer(MOUILayerTags::Layer_Modal, DialogWidget);
+
+		// CommonUI may have created a new widget (can't add existing instances to stacks)
+		if (ActualWidget && ActualWidget != DialogWidget)
+		{
+			DialogWidget = Cast<UMOConfirmationDialog>(ActualWidget);
+			ConfirmationDialogWidget = DialogWidget;
+			bNeedsBindDelegates = true;
+		}
+	}
+	else
+	{
+		// Create new widget via layer stack
+		UCommonActivatableWidget* ActualWidget = PushWidgetToLayer(MOUILayerTags::Layer_Modal, ConfirmationDialogClass);
+		DialogWidget = Cast<UMOConfirmationDialog>(ActualWidget);
+		bNeedsBindDelegates = true;
+	}
+
 	if (!IsValid(DialogWidget))
 	{
-		DialogWidget = CreateWidget<UMOConfirmationDialog>(PlayerController, ConfirmationDialogClass);
+		return;
+	}
+
+	// Cache and bind delegates if this is a new widget
+	if (bNeedsBindDelegates)
+	{
 		ConfirmationDialogWidget = DialogWidget;
-
-		if (!IsValid(DialogWidget))
-		{
-			return;
-		}
-
-		// Bind delegates
 		DialogWidget->OnConfirmed.RemoveDynamic(this, &UMOSystemMenuUIController::HandleConfirmationConfirmed);
 		DialogWidget->OnCancelled.RemoveDynamic(this, &UMOSystemMenuUIController::HandleConfirmationCancelled);
 		DialogWidget->OnConfirmed.AddDynamic(this, &UMOSystemMenuUIController::HandleConfirmationConfirmed);
@@ -764,23 +801,17 @@ void UMOSystemMenuUIController::ShowConfirmationDialog(const FText& Title, const
 
 	// Setup the dialog with content
 	DialogWidget->Setup(Title, Message, ConfirmText, CancelText);
-
-	// Show dialog via layer system
-	if (!DialogWidget->IsInViewport())
-	{
-		PushWidgetInstanceToLayer(MOUILayerTags::Layer_Modal, DialogWidget, ConfirmationDialogZOrder);
-	}
 }
 
 void UMOSystemMenuUIController::HandleConfirmationConfirmed()
 {
 	UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] Confirmation confirmed: %s"), *PendingConfirmationContext);
 
-	// Close the confirmation dialog
+	// Deactivate confirmation dialog (CommonUI pops from modal layer, restores input)
 	UMOConfirmationDialog* DialogWidget = ConfirmationDialogWidget.Get();
-	if (IsValid(DialogWidget) && DialogWidget->IsInViewport())
+	if (IsValid(DialogWidget))
 	{
-		DialogWidget->RemoveFromParent();
+		DialogWidget->DeactivateWidget();
 	}
 
 	if (PendingConfirmationContext == TEXT("ExitToMainMenu"))
@@ -865,11 +896,11 @@ void UMOSystemMenuUIController::HandleConfirmationCancelled()
 {
 	UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] Confirmation cancelled: %s"), *PendingConfirmationContext);
 
-	// Close the confirmation dialog
+	// Deactivate confirmation dialog (CommonUI pops from modal layer, restores input)
 	UMOConfirmationDialog* DialogWidget = ConfirmationDialogWidget.Get();
-	if (IsValid(DialogWidget) && DialogWidget->IsInViewport())
+	if (IsValid(DialogWidget))
 	{
-		DialogWidget->RemoveFromParent();
+		DialogWidget->DeactivateWidget();
 	}
 
 	PendingConfirmationContext.Empty();
@@ -943,10 +974,11 @@ void UMOSystemMenuUIController::ShowSurvivorContextMenu(APawn* Survivor, FVector
 	MenuWidget->OnOpenTasksRequested.AddDynamic(this, &UMOSystemMenuUIController::HandleSurvivorContextMenuOpenTasks);
 	MenuWidget->OnInventoryRequested.AddDynamic(this, &UMOSystemMenuUIController::HandleSurvivorContextMenuOpenInventory);
 
-	// Show modal background and add menu to layer system FIRST
+	// Show modal background and add context menu to viewport FIRST
 	// (SetPositionInViewport only works after widget is in viewport)
+	// Context menus are UCommonUserWidget, not activatable
 	ShowModalBackground();
-	PushWidgetInstanceToLayer(MOUILayerTags::Layer_GameOverlay, MenuWidget, SurvivorContextMenuZOrder);
+	MenuWidget->AddToViewport(SurvivorContextMenuZOrder);
 
 	// THEN initialize for this survivor (which calls SetPopupPosition)
 	MenuWidget->InitializeForSurvivor(Survivor, ScreenPosition);
@@ -955,8 +987,7 @@ void UMOSystemMenuUIController::ShowSurvivorContextMenu(APawn* Survivor, FVector
 		SurvivorContextMenuZOrder,
 		MenuWidget->IsInViewport() ? TEXT("true") : TEXT("false"));
 
-	// Set input mode
-	ApplyInputModeForMenuOpen(MenuWidget);
+	// Widget handles input state via NativeOnActivated/GetDesiredInputConfig
 	UpdateReticleVisibility();
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] Survivor context menu opened for %s at screen position (%f, %f)"),
@@ -965,8 +996,6 @@ void UMOSystemMenuUIController::ShowSurvivorContextMenu(APawn* Survivor, FVector
 
 void UMOSystemMenuUIController::CloseSurvivorContextMenu()
 {
-	APlayerController* PlayerController = ResolveOwningPlayerController();
-
 	UMOSurvivorContextMenu* MenuWidget = SurvivorContextMenuWidget.Get();
 	if (IsValid(MenuWidget))
 	{
@@ -978,21 +1007,17 @@ void UMOSystemMenuUIController::CloseSurvivorContextMenu()
 
 	UpdateReticleVisibility();
 
-	// Only restore input mode if no other menus are open
+	// Widget handles input state restoration via NativeOnDeactivated
+	// Just manage modal background visibility
 	if (!IsAnyMenuOpen())
 	{
 		HideModalBackground();
-		if (IsValid(PlayerController) && PlayerController->IsLocalController())
-		{
-			ApplyInputModeForMenuClosed();
-		}
 	}
 }
 
 bool UMOSystemMenuUIController::IsSurvivorContextMenuOpen() const
 {
-	UMOSurvivorContextMenu* MenuWidget = SurvivorContextMenuWidget.Get();
-	return IsValid(MenuWidget) && MenuWidget->IsInViewport();
+	return IsCachedMenuOpen(SurvivorContextMenuWidget);
 }
 
 void UMOSystemMenuUIController::ShowSurvivorTaskMenu(APawn* Survivor)
@@ -1023,33 +1048,52 @@ void UMOSystemMenuUIController::ShowSurvivorTaskMenu(APawn* Survivor)
 	// Store current target
 	CurrentSurvivorTarget = Survivor;
 
-	// Create widget if needed
+	// Create or reuse widget
 	UMOSurvivorTaskMenu* MenuWidget = SurvivorTaskMenuWidget.Get();
-	if (!IsValid(MenuWidget))
-	{
-		MenuWidget = CreateWidget<UMOSurvivorTaskMenu>(PlayerController, SurvivorTaskMenuClass);
-		SurvivorTaskMenuWidget = MenuWidget;
+	bool bNeedsBindDelegates = false;
 
-		if (!IsValid(MenuWidget))
+	if (IsValid(MenuWidget))
+	{
+		// Try to reuse existing widget - push it to the layer stack
+		ShowModalBackground();
+		UCommonActivatableWidget* ActualWidget = PushWidgetInstanceToLayer(MOUILayerTags::Layer_Menu, MenuWidget);
+
+		// CommonUI may have created a new widget (can't add existing instances to stacks)
+		if (ActualWidget && ActualWidget != MenuWidget)
 		{
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOSysUI] Failed to create survivor task menu widget."));
-			return;
+			MenuWidget = Cast<UMOSurvivorTaskMenu>(ActualWidget);
+			RegisterCachedMenu(MenuWidget, SurvivorTaskMenuWidget);
+			bNeedsBindDelegates = true;
 		}
 	}
+	else
+	{
+		// Create new widget via layer stack
+		ShowModalBackground();
+		UCommonActivatableWidget* ActualWidget = PushWidgetToLayer(MOUILayerTags::Layer_Menu, SurvivorTaskMenuClass);
+		MenuWidget = Cast<UMOSurvivorTaskMenu>(ActualWidget);
+		bNeedsBindDelegates = true;
+	}
 
-	// Bind delegates
-	MenuWidget->OnRequestClose.RemoveDynamic(this, &UMOSystemMenuUIController::HandleSurvivorTaskMenuRequestClose);
-	MenuWidget->OnRequestClose.AddDynamic(this, &UMOSystemMenuUIController::HandleSurvivorTaskMenuRequestClose);
+	if (!IsValid(MenuWidget))
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOSysUI] Failed to create survivor task menu widget."));
+		HideModalBackground();
+		return;
+	}
+
+	// Cache and bind delegates if this is a new widget
+	if (bNeedsBindDelegates)
+	{
+		RegisterCachedMenu(MenuWidget, SurvivorTaskMenuWidget);
+		MenuWidget->OnRequestClose.RemoveDynamic(this, &UMOSystemMenuUIController::HandleSurvivorTaskMenuRequestClose);
+		MenuWidget->OnRequestClose.AddDynamic(this, &UMOSystemMenuUIController::HandleSurvivorTaskMenuRequestClose);
+	}
 
 	// Initialize for this survivor
 	MenuWidget->InitializeForSurvivor(Survivor);
 
-	// Show modal background and menu via layer system
-	ShowModalBackground();
-	PushWidgetInstanceToLayer(MOUILayerTags::Layer_Menu, MenuWidget, SurvivorTaskMenuZOrder);
-
-	// Set input mode
-	ApplyInputModeForMenuOpen(MenuWidget);
+	// Widget handles input state via NativeOnActivated/GetDesiredInputConfig
 	UpdateReticleVisibility();
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] Survivor task menu opened for %s"), *Survivor->GetName());
@@ -1057,34 +1101,25 @@ void UMOSystemMenuUIController::ShowSurvivorTaskMenu(APawn* Survivor)
 
 void UMOSystemMenuUIController::CloseSurvivorTaskMenu()
 {
-	APlayerController* PlayerController = ResolveOwningPlayerController();
-
 	UMOSurvivorTaskMenu* MenuWidget = SurvivorTaskMenuWidget.Get();
 	if (IsValid(MenuWidget))
 	{
-		if (MenuWidget->IsInViewport())
-		{
-			MenuWidget->RemoveFromParent();
-		}
+		MenuWidget->DeactivateWidget();
 	}
 
 	UpdateReticleVisibility();
 
-	// Only restore input mode if no other menus are open
+	// Widget handles input state restoration via NativeOnDeactivated
+	// Just manage modal background visibility
 	if (!IsAnyMenuOpen())
 	{
 		HideModalBackground();
-		if (IsValid(PlayerController) && PlayerController->IsLocalController())
-		{
-			ApplyInputModeForMenuClosed();
-		}
 	}
 }
 
 bool UMOSystemMenuUIController::IsSurvivorTaskMenuOpen() const
 {
-	UMOSurvivorTaskMenu* MenuWidget = SurvivorTaskMenuWidget.Get();
-	return IsValid(MenuWidget) && MenuWidget->IsInViewport();
+	return IsCachedMenuOpen(SurvivorTaskMenuWidget);
 }
 
 void UMOSystemMenuUIController::HandleSurvivorContextMenuRequestClose()

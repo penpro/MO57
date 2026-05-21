@@ -42,7 +42,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "CommonActivatableWidget.h"
+#include "MOActivatableWidget.h"
 #include "MOQuestTypes.h"
 #include "MOQuestLogEntry.h"
 #include "MOQuestLogPanel.generated.h"
@@ -61,7 +61,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOOnQuestLogCloseRequested);
  * Opens from in-game menu or keybind.
  */
 UCLASS(Abstract, Blueprintable)
-class MOFRAMEWORK_API UMOQuestLogPanel : public UCommonActivatableWidget
+class MOFRAMEWORK_API UMOQuestLogPanel : public UMOActivatableWidget
 {
 	GENERATED_BODY()
 
@@ -96,6 +96,7 @@ protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
 	virtual UWidget* NativeGetDesiredFocusTarget() const override;
+	virtual TOptional<FUIInputConfig> GetDesiredInputConfig() const override;
 
 private:
 	/** Handle quest entry selection. */

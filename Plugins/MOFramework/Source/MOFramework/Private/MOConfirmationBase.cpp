@@ -9,6 +9,8 @@
 UMOConfirmationBase::UMOConfirmationBase(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
+	// Confirmations must be acknowledged — don't dismiss on outside click
+	bClosesOnOutsideClick = false;
 }
 
 void UMOConfirmationBase::NativeConstruct()

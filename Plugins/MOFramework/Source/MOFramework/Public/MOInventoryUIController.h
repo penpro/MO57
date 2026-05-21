@@ -262,6 +262,9 @@ private:
 	UPROPERTY(Transient)
 	TWeakObjectPtr<UMOUnifiedInventoryMenu> UnifiedInventoryWidget;
 
+	/** Frame-based debounce to prevent double-toggle from ECommonInputMode::All */
+	uint64 LastToggleFrame = 0;
+
 	UPROPERTY(Transient)
 	TWeakObjectPtr<AActor> CurrentContainerActor;
 

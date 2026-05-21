@@ -242,6 +242,15 @@ struct MOFRAMEWORK_API FMOSpawnedEntityRecord
 	UPROPERTY()
 	FDateTime PersistenceExpiry;
 
+	/**
+	 * Optional discovery beacon spawned alongside the pawn (e.g. lit campfire
+	 * next to a survivor so the player can see them from a distance). Owned
+	 * by the spawn manager — destroyed when this record is removed.
+	 * Null for entities that don't have a beacon.
+	 */
+	UPROPERTY(Transient)
+	TWeakObjectPtr<AActor> BeaconActor;
+
 	FMOSpawnedEntityRecord()
 		: SpawnTime(FDateTime::Now())
 		, PersistenceExpiry(FDateTime::MinValue())

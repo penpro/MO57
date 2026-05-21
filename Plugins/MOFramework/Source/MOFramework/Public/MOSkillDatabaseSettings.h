@@ -56,16 +56,16 @@ class UDataTable;
  * Maintains cached index of skills by category for O(1) filtering.
  * Cache is lazily initialized on first access.
  */
-UCLASS(Config=Game, DefaultConfig, meta=(DisplayName="MO Skill Database"))
+UCLASS(Config=Game, DefaultConfig, meta=(DisplayName="Skill Database"))
 class MOFRAMEWORK_API UMOSkillDatabaseSettings : public UDeveloperSettings
 {
 	GENERATED_BODY()
 
 public:
-	// UDeveloperSettings overrides
+	// UDeveloperSettings overrides — unified under "MOFramework" section in Project Settings.
 	virtual FName GetContainerName() const override { return TEXT("Project"); }
-	virtual FName GetCategoryName() const override { return TEXT("Plugins"); }
-	virtual FName GetSectionName() const override { return TEXT("MO Skill Database"); }
+	virtual FName GetCategoryName() const override { return TEXT("MOFramework"); }
+	virtual FName GetSectionName() const override { return TEXT("Skill Database"); }
 
 	/** The central DataTable containing FMOSkillDefinitionRow rows. */
 	UPROPERTY(EditAnywhere, Config, Category="Database")

@@ -251,6 +251,21 @@ public:
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tagging", meta=(PCG_Overridable))
 	TArray<FName> AdditionalTags;
+
+	// ============================================================================
+	// TERRAIN MODIFICATION
+	// ============================================================================
+
+	/**
+	 * If true, skip spawning at any point whose world location is inside a
+	 * modified terrain zone (UMOTerrainModificationSubsystem). PCG-respawn
+	 * flicker doesn't happen because nothing spawns there in the first place.
+	 *
+	 * Set false for resource nodes that should ignore terrain modifications
+	 * (e.g. infinite ore veins meant to spawn even on worked ground).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="TerrainModification", meta=(PCG_Overridable))
+	bool bRespectTerrainModifications = true;
 };
 
 /**

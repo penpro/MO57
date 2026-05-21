@@ -1,4 +1,5 @@
 #include "MOQuestLogPanel.h"
+#include "CommonInputModeTypes.h"
 #include "MOQuestSubsystem.h"
 #include "MOQuestLogEntry.h"
 #include "MOCommonButton.h"
@@ -44,6 +45,16 @@ void UMOQuestLogPanel::NativeDestruct()
 {
 	UnbindFromQuestSubsystem();
 	Super::NativeDestruct();
+}
+
+TOptional<FUIInputConfig> UMOQuestLogPanel::GetDesiredInputConfig() const
+{
+	return FUIInputConfig(
+		ECommonInputMode::Menu,
+		EMouseCaptureMode::NoCapture,
+		EMouseLockMode::DoNotLock,
+		false
+	);
 }
 
 UWidget* UMOQuestLogPanel::NativeGetDesiredFocusTarget() const

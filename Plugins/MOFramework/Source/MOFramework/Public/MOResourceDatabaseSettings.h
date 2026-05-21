@@ -37,16 +37,16 @@ class UDataTable;
 /**
  * Project Settings entry to point the plugin at a resource definition DataTable.
  */
-UCLASS(Config=Game, DefaultConfig, meta=(DisplayName="MO Resource Database"))
+UCLASS(Config=Game, DefaultConfig, meta=(DisplayName="Resource Database"))
 class MOFRAMEWORK_API UMOResourceDatabaseSettings : public UDeveloperSettings
 {
 	GENERATED_BODY()
 
 public:
-	// UDeveloperSettings overrides
+	// UDeveloperSettings overrides — unified under "MOFramework" section in Project Settings.
 	virtual FName GetContainerName() const override { return TEXT("Project"); }
-	virtual FName GetCategoryName() const override { return TEXT("Plugins"); }
-	virtual FName GetSectionName() const override { return TEXT("MO Resource Database"); }
+	virtual FName GetCategoryName() const override { return TEXT("MOFramework"); }
+	virtual FName GetSectionName() const override { return TEXT("Resource Database"); }
 
 	/** The central DataTable containing FMOResourceNodeDefinitionRow rows. */
 	UPROPERTY(EditAnywhere, Config, Category="Database")

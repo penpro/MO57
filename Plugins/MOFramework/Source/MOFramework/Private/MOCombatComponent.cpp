@@ -27,7 +27,7 @@
 UMOCombatComponent::UMOCombatComponent()
 {
 	PrimaryComponentTick.bCanEverTick = true;
-	PrimaryComponentTick.TickInterval = 0.0f; // Every frame for responsive combat
+	PrimaryComponentTick.TickInterval = 0.1f; // 10Hz — sufficient for 0.15-0.6s combat timers
 	SetIsReplicatedByDefault(true);
 
 	// Default unarmed attack profile

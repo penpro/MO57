@@ -116,6 +116,11 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawn Config")
 	float MaxSpawnPointQueryDistance = 2000.0f;
 
+	// NOTE: Survivor discovery beacon configuration (class, offset, ground
+	// snap) lives in UMOSpawnSettings (Project Settings → MOFramework →
+	// Spawn Manager → Survivor Beacon). Editable there at design time;
+	// MaybeSpawnSurvivorBeacon reads from it at runtime.
+
 	// ============================================================================
 	// EVENTS
 	// ============================================================================
@@ -240,9 +245,55 @@ protected:
 	APawn* SpawnPawnAtLocation(TSubclassOf<APawn> PawnClass, FVector Location, FRotator Rotation);
 	APawn* TryFallbackSpawn(EMOSpawnCategory Category, const FMOSpawnCategoryConfig& Config);
 
+	/**
+	 * Spawn (if configured) the discovery beacon for the entity at the given
+	 * record index. No-op if class is unset, record is invalid, or category
+	 * is non-Survivor. Beacon ref is stored on the record for cleanup.
+	 */
+	void MaybeSpawnSurvivorBeacon(int32 RecordIndex);
+
+	/**
+	 * Destroy the beacon associated with a record (if any). Idempotent —
+	 * safe to call multiple times. Called before SpawnedEntities.RemoveAt
+	 * everywhere a record is dropped, so beacons can't outlive their pawn.
+	 */
+	void DestroyBeaconForRecord(FMOSpawnedEntityRecord& Record);
+
 	float RollNewCooldown(const FMOSpawnCategoryConfig& Config) const;
 	APawn* GetPlayerPawn() const;
 	void NotifyPlayerOfSpawn(APawn* SpawnedPawn);
 
 	void InitializeDefaultConfigs();
+
+	// ============================================================================
+	// AI FREEZE (CPU savings for far-away spawned mobs)
+	// ============================================================================
+
+	/**
+	 * Pause the pawn's AI brain so its behavior tree stops ticking. The pawn stays
+	 * in the world and animations still play, but no decisions are made. Called
+	 * automatically after a successful spawn for categories that should freeze.
+	 */
+	void FreezeSpawnedPawn(APawn* Pawn);
+
+	/** Resume a frozen pawn's AI brain. */
+	void WakeSpawnedPawn(APawn* Pawn);
+
+	/**
+	 * Per-tick check: walks all tracked entities, wakes any that are within
+	 * WakeDistanceCm of the player. Survivors are never frozen so they're skipped.
+	 */
+	void UpdateFrozenPawnWakeCheck();
+
+	/** Whether spawns of this category should be frozen on spawn. */
+	bool ShouldFreezeCategory(EMOSpawnCategory Category) const;
+
+public:
+	/**
+	 * Distance (centimeters) at which a frozen pawn wakes up. Defaults to 25 meters.
+	 * Editable on the subsystem CDO via Project Settings.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawn Manager|Freeze",
+		meta = (ClampMin = "100.0", DisplayName = "Wake Distance (cm)"))
+	float WakeDistanceCm = 2500.0f;
 };

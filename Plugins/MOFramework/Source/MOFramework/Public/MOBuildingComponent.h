@@ -193,6 +193,47 @@ public:
 	FLinearColor InvalidPlacementColor = FLinearColor(1.0f, 0.2f, 0.2f, 0.5f);
 
 	// ============================================================================
+	// SNAPPING
+	// ============================================================================
+	//
+	// Edge snap pulls the ghost into alignment with nearby placed buildables so
+	// pieces don't have to be eyeballed. MVP behavior: compute axis-aligned
+	// XY bounding boxes for the ghost and each nearby AMOBuildableActor, and
+	// snap the ghost to the nearest "edges touching" position if within range.
+	//
+	// Z is also snapped to the neighbor's Z when an edge snap fires — the
+	// expectation is "these two pieces are coplanar." Player can still place
+	// pieces at different heights by aiming somewhere with no neighbor in
+	// range, or by disabling snap entirely (bEnableEdgeSnapping).
+	//
+	// Not yet implemented (future): socket-based snap points, corner snap,
+	// stacking (top-of-wall to bottom-of-floor), rotation snap to neighbor.
+
+	/** Master toggle. Disable to free-place. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Building|Snapping")
+	bool bEnableEdgeSnapping = true;
+
+	/**
+	 * Snap radius (cm). If the raw placement position lands within this
+	 * distance of an edge-aligned position relative to a nearby buildable,
+	 * the ghost is pulled to that aligned position.
+	 *
+	 * Too small = snap feels unresponsive. Too large = snap fires when the
+	 * player wants to free-place near a structure. 50cm is a good default
+	 * (half a meter).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Building|Snapping", meta=(ClampMin="0.0"))
+	float EdgeSnapDistance = 50.0f;
+
+	/**
+	 * Maximum 2D distance (cm) from the ghost to consider another buildable
+	 * as a snap candidate. Skip buildables farther than this — keeps the
+	 * search cheap and avoids snapping to something across the map.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Building|Snapping", meta=(ClampMin="0.0"))
+	float EdgeSnapSearchRadius = 500.0f;
+
+	// ============================================================================
 	// PLACEMENT MODE
 	// ============================================================================
 
@@ -257,6 +298,27 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Building")
 	void RotateGhostY(float DeltaDegrees);
 
+	/**
+	 * Increment the ghost's "in-place flip yaw" — adds a fixed amount on top
+	 * of whatever the snap chose, rotating around the ghost's CUBE CENTER
+	 * (not the actor pivot) so position stays invariant. Use this to mirror
+	 * placement orientation without disturbing the snap-aligned position —
+	 * e.g. swap which face of a wall points inward, or flip a triangular
+	 * wall's slant side without losing the floor-edge snap.
+	 *
+	 * Increment size depends on ghost shape:
+	 *   - FLAT pieces (floor-like, Z extent < ½ × min(X,Y) extent): 90°
+	 *     — four cycle states, matches the floor's 4-fold rotational symmetry
+	 *   - TALL pieces (walls, roofs): 180°
+	 *     — two cycle states, only meaningful flip is "face other direction"
+	 *
+	 * Unlike RotateGhostZ (which cycles the snap-edge index), this is a pure
+	 * cosmetic rotation overlay that doesn't change which edge of the target
+	 * the ghost snaps against. Accumulates mod 360°.
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Building")
+	void ToggleGhostFlipYaw();
+
 	// ============================================================================
 	// PLACEMENT
 	// ============================================================================
@@ -318,8 +380,30 @@ private:
 	/** User-applied rotation offset. */
 	FRotator UserRotationOffset = FRotator::ZeroRotator;
 
+	/**
+	 * In-place flip yaw (degrees, 0..360). Applied AFTER the snap math
+	 * runs, rotated around the ghost's cube center so position stays put.
+	 * Incremented by ToggleGhostFlipYaw() — wired to mouse wheel. Increment
+	 * size is 90° for flat ghosts, 180° otherwise, so wheel-clicks always
+	 * advance through the meaningful orientations and never land on a
+	 * "no visible change" state.
+	 */
+	float UserFlipYawDeg = 0.0f;
+
 	/** Last valid hit result from placement trace. */
 	FHitResult LastPlacementHit;
+
+	/**
+	 * Which of the snap target's 4 cardinal edges to stack against, when in
+	 * the stack-on-flat snap case (wall on floor). Q/E cycles this (+1/-1
+	 * per press). 0=+X, 1=-X, 2=+Y, 3=-Y in the target's local frame.
+	 *
+	 * Decoupled from UserRotationOffset because cube-shaped ghosts have
+	 * symmetric extents and yaw-based selection can't disambiguate; the
+	 * camera-direction approach also degenerates when looking down. Explicit
+	 * Q/E control sidesteps both.
+	 */
+	int32 SnapEdgeIndex = 0;
 
 	// ============================================================================
 	// INTERNAL METHODS
@@ -345,4 +429,39 @@ private:
 
 	/** Calculate final rotation for ghost based on surface and user input. */
 	FRotator CalculateGhostRotation(const FVector& SurfaceNormal) const;
+
+	/**
+	 * If bEnableEdgeSnapping is on, look for a nearby AMOBuildableActor whose
+	 * axis-aligned edge would line up with the ghost at a position close to
+	 * RawLocation. Returns a transform with:
+	 *   - location pulled to the neighbor's edge (XY) at the neighbor's Z
+	 *   - rotation overridden to match the neighbor's yaw (so snapped pieces
+	 *     line up to a consistent grid orientation, not the user's free Q/E
+	 *     rotation)
+	 * If no neighbor is within EdgeSnapDistance, returns RawLocation +
+	 * RawRotation unchanged.
+	 *
+	 * Sets bOutDidSnap if the caller wants to know whether a snap happened
+	 * (e.g. for visual feedback). Pass nullptr if not needed.
+	 */
+	FTransform TryEdgeSnap(const FVector& RawLocation, const FRotator& RawRotation, bool* bOutDidSnap = nullptr) const;
+
+	/**
+	 * Return half-extents (cm) of an actor's XY footprint by walking its
+	 * static mesh components' bounds. Z is included but unused by the
+	 * edge-snap logic. Returns zero vector if no meshes found.
+	 */
+	FVector GetActorXYExtents(const AActor* Actor) const;
+
+	/**
+	 * Return the actor's mesh-bounding box in actor-LOCAL space (after each
+	 * mesh component's relative transform, then actor scale). The box can
+	 * be off-center from the actor origin — e.g. a floor BP that offsets
+	 * its mesh +50cm in Z so it sits at standing-foot level. Use
+	 * box.GetCenter() to know where the mesh actually is relative to the
+	 * actor's pivot.
+	 *
+	 * Returns an invalid box (FBox::IsValid==false) if no static meshes.
+	 */
+	FBox GetActorLocalBox(const AActor* Actor) const;
 };

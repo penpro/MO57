@@ -74,14 +74,19 @@
 
 #include "CoreMinimal.h"
 #include "MOUIControllerBase.h"
+#include "MOInterruptibleInterface.h"
 #include "MOCharacterUIController.generated.h"
 
+class AMOCharacter;
 class UMOSkillsPanel;
 class UMOStatusPanel;
 class UMOInspectionProgressWidget;
+class UMOProgressWidgetBase;
+class UMOTerraformingComponent;
 class UMOVitalsComponent;
 class UMOMetabolismComponent;
 class UMOMentalStateComponent;
+enum class EMOTerraformMode : uint8;
 struct FMOInspectionResult;
 
 /**
@@ -96,12 +101,25 @@ struct FMOInspectionResult;
  * and provide clear ownership of the character UI subsystem.
  */
 UCLASS(ClassGroup=(MO), meta=(BlueprintSpawnableComponent))
-class MOFRAMEWORK_API UMOCharacterUIController : public UMOUIControllerBase
+class MOFRAMEWORK_API UMOCharacterUIController : public UMOUIControllerBase,
+	public IMOInterruptibleInterface
 {
 	GENERATED_BODY()
 
 public:
 	UMOCharacterUIController();
+
+	/**
+	 * Interrupt policy for an active item inspection:
+	 *   Movement / Damage / Knockdown / Unconscious / Death / EnteredCombat
+	 *     / LostControl / External  -> CANCEL (no progress preserved)
+	 *   UserCancel  -> ignored (UI calls CancelItemInspection directly)
+	 *
+	 * Inspection is a "stand still and concentrate" action — any meaningful
+	 * disturbance discards progress. Severity is not consulted today; a tap
+	 * on the shoulder breaks concentration just like a stab wound.
+	 */
+	virtual void NotifyInterrupt_Implementation(const FMOInterruptContext& Context) override;
 
 	// ==========================================================================
 	// SKILLS PANEL
@@ -182,6 +200,9 @@ protected:
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 private:
+	/** Frame-based debounce to prevent double-toggle from ECommonInputMode::All */
+	uint64 LastToggleFrame = 0;
+
 	// --- Skills Panel ---
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Character|Skills", meta=(AllowPrivateAccess="true"))
@@ -239,6 +260,70 @@ private:
 
 	/** The item GUID currently being inspected. */
 	FGuid InspectingItemGuid;
+
+	/**
+	 * Character we've registered with for interrupt notifications. Cached so
+	 * we can unregister later even if the controlled pawn changes
+	 * mid-inspection.
+	 */
+	TWeakObjectPtr<AMOCharacter> RegisteredInspectionCharacter;
+
+	/** Subscribe to the inspecting pawn's interrupt broadcast. */
+	void RegisterForInspectionInterrupts();
+
+	/** Drop the inspection interrupt registration (if any). */
+	void UnregisterFromInspectionInterrupts();
+
+	// --- Terraforming Progress ---
+
+	/**
+	 * Widget class to spawn for terraform progress display. Accepts ANY
+	 * UMOProgressWidgetBase subclass — the existing harvest progress widget
+	 * Blueprint works fine here, since the only thing the controller needs
+	 * is the base class's progress / time / label API. No terraform-specific
+	 * widget class is required.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Character|Terraforming", meta=(AllowPrivateAccess="true"))
+	TSubclassOf<UMOProgressWidgetBase> TerraformProgressWidgetClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Character|Terraforming", meta=(ClampMin="0", AllowPrivateAccess="true"))
+	int32 TerraformProgressZOrder = 200;
+
+	/** Active progress widget for the current pending terraform (null when none). */
+	UPROPERTY(Transient)
+	TWeakObjectPtr<UMOProgressWidgetBase> TerraformProgressWidget;
+
+	/** The component we're currently bound to (so we can unbind on pawn change). */
+	TWeakObjectPtr<UMOTerraformingComponent> BoundTerraformingComponent;
+
+	/** Bind to the controlled pawn's TerraformingComponent OnTerraformStarted. */
+	void BindToPawnTerraformingComponent();
+
+	/** Drop the OnTerraformStarted binding. */
+	void UnbindFromPawnTerraformingComponent();
+
+	/** Component said "I just started a terraform action" — spawn the widget. */
+	UFUNCTION()
+	void HandleTerraformStarted(EMOTerraformMode Mode, float DurationSeconds);
+
+	/** Component ticked — push progress into the widget for display. */
+	UFUNCTION()
+	void HandleTerraformProgress(float Progress01, float TimeRemainingSeconds);
+
+	/** Component finished applying the sculpt — tear down the widget. */
+	UFUNCTION()
+	void HandleTerraformCompleted(bool bSuccess);
+
+	/** Component aborted the action (movement / damage / explicit cancel) — tear down. */
+	UFUNCTION()
+	void HandleTerraformCancelled();
+
+	/** Player clicked the widget's Cancel button — tell the component to cancel. */
+	UFUNCTION()
+	void HandleTerraformWidgetCancelled();
+
+	/** Remove the progress widget from the layer stack and unbind its delegates. */
+	void TearDownTerraformProgressWidget();
 
 	UFUNCTION()
 	void HandleInspectionCompleted(bool bCompleted, const FMOInspectionResult& Result);

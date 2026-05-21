@@ -251,12 +251,23 @@ struct MOFRAMEWORK_API FMOCraftResult
 	UPROPERTY(BlueprintReadOnly, Category="MO|Crafting")
 	TMap<FName, int32> FailedItems;
 
+	/**
+	 * Items that were skipped because the resource node is depleted (ItemDefId -> attempts).
+	 * Separate from FailedItems so the UI can distinguish "this rock has nothing left" from
+	 * "your inventory is full" — they need different player-facing messages.
+	 */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Crafting")
+	TMap<FName, int32> DepletedItems;
+
 	/** XP granted to skills (SkillId -> XP amount). */
 	UPROPERTY(BlueprintReadOnly, Category="MO|Crafting")
 	TMap<FName, float> XPGranted;
 
-	/** Returns true if any items couldn't be added to inventory. */
+	/** True only when the inventory legitimately rejected an add. */
 	bool HasFailedItems() const { return FailedItems.Num() > 0; }
+
+	/** True when at least one yield was skipped because the node is depleted. */
+	bool HasDepletedItems() const { return DepletedItems.Num() > 0; }
 };
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOOnCraftCompleted, FName, RecipeId, const FMOCraftResult&, Result);

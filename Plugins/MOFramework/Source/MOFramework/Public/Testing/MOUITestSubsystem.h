@@ -20,6 +20,7 @@
 
 #include "CoreMinimal.h"
 #include "Subsystems/WorldSubsystem.h"
+#include "GameplayTagContainer.h"
 #include "MOUITestSubsystem.generated.h"
 
 class APlayerController;
@@ -179,6 +180,18 @@ public:
 	UFUNCTION(BlueprintPure, Category = "MO|UI|Testing")
 	bool IsMenuOpen(const FString& MenuName) const;
 
+	/** Get count of widgets in a specific layer. */
+	UFUNCTION(BlueprintPure, Category = "MO|UI|Testing")
+	int32 GetLayerWidgetCount(FGameplayTag LayerTag) const;
+
+	/** Check current input mode from CommonUI. */
+	UFUNCTION(BlueprintPure, Category = "MO|UI|Testing")
+	FString GetCurrentInputMode() const;
+
+	/** Print full CommonUI diagnostic info. */
+	UFUNCTION(BlueprintCallable, Category = "MO|UI|Testing")
+	void PrintDiagnostics() const;
+
 	// =========================================================================
 	// MENU CONTROL (for test automation)
 	// =========================================================================
@@ -211,59 +224,183 @@ private:
 	// TEST IMPLEMENTATIONS
 	// =========================================================================
 
-	// Setup Validation Tests - CRITICAL: Must pass for other tests to work
+	// =========================================================================
+	// SETUP VALIDATION TESTS - CRITICAL: Must pass for other tests to work
+	// =========================================================================
 	FMOUITestResult Test_Setup_UISettingsConfigured();
 	FMOUITestResult Test_Setup_LayoutCreated();
 	FMOUITestResult Test_Setup_LayerStacksExist();
 	FMOUITestResult Test_Setup_ActionRouterExists();
+	FMOUITestResult Test_Setup_UIManagerExists();
+	FMOUITestResult Test_Setup_ControllersExist();
 
-	// Inventory Tests
+	// =========================================================================
+	// INVENTORY TESTS
+	// =========================================================================
 	FMOUITestResult Test_Inventory_Open();
 	FMOUITestResult Test_Inventory_CloseEscape();
 	FMOUITestResult Test_Inventory_CloseToggle();
 	FMOUITestResult Test_Inventory_CloseTab();
 	FMOUITestResult Test_Inventory_InputState();
 	FMOUITestResult Test_Inventory_FocusAfterButtonClick();
+	FMOUITestResult Test_Inventory_ReopenAfterClose();
 
-	// Crafting Tests
+	// =========================================================================
+	// CRAFTING TESTS
+	// =========================================================================
 	FMOUITestResult Test_Crafting_Open();
 	FMOUITestResult Test_Crafting_CloseEscape();
 	FMOUITestResult Test_Crafting_CloseToggle();
+	FMOUITestResult Test_Crafting_CloseTab();
 	FMOUITestResult Test_Crafting_InputState();
+	FMOUITestResult Test_Crafting_CategoryExists();
 
-	// Building Tests
+	// =========================================================================
+	// BUILDING TESTS
+	// =========================================================================
 	FMOUITestResult Test_Building_Open();
 	FMOUITestResult Test_Building_CloseEscape();
 	FMOUITestResult Test_Building_CloseToggle();
+	FMOUITestResult Test_Building_CloseTab();
 	FMOUITestResult Test_Building_InputState();
+	FMOUITestResult Test_Building_CategoryExists();
 
-	// Skills Tests
+	// =========================================================================
+	// SKILLS TESTS
+	// =========================================================================
 	FMOUITestResult Test_Skills_Open();
 	FMOUITestResult Test_Skills_CloseEscape();
+	FMOUITestResult Test_Skills_CloseTab();
+	FMOUITestResult Test_Skills_CloseToggle();
 	FMOUITestResult Test_Skills_CategoryCycling();
+	FMOUITestResult Test_Skills_InputState();
 
-	// Status Tests
+	// =========================================================================
+	// STATUS TESTS
+	// =========================================================================
 	FMOUITestResult Test_Status_Open();
 	FMOUITestResult Test_Status_CloseEscape();
+	FMOUITestResult Test_Status_CloseTab();
+	FMOUITestResult Test_Status_CloseToggle();
+	FMOUITestResult Test_Status_CategoryCycling();
+	FMOUITestResult Test_Status_InputState();
 
-	// InGame Menu Tests
+	// =========================================================================
+	// IN-GAME MENU TESTS
+	// =========================================================================
 	FMOUITestResult Test_InGame_Open();
 	FMOUITestResult Test_InGame_CloseEscape();
 	FMOUITestResult Test_InGame_InputBlocking();
+	FMOUITestResult Test_InGame_BlocksOtherMenus();
+	FMOUITestResult Test_InGame_ResumeButton();
 
-	// Menu Switching Tests
+	// =========================================================================
+	// POSSESSION MENU TESTS
+	// =========================================================================
+	FMOUITestResult Test_Possession_Open();
+	FMOUITestResult Test_Possession_CloseEscape();
+	FMOUITestResult Test_Possession_InputState();
+
+	// =========================================================================
+	// CONTEXT MENU TESTS
+	// =========================================================================
+	FMOUITestResult Test_ContextMenu_ItemContextOpen();
+	FMOUITestResult Test_ContextMenu_ItemContextCloseEscape();
+	FMOUITestResult Test_ContextMenu_ClosesOnClickOutside();
+	FMOUITestResult Test_ContextMenu_ParentMenuStaysOpen();
+
+	// =========================================================================
+	// CONFIRMATION DIALOG TESTS
+	// =========================================================================
+	FMOUITestResult Test_Confirmation_Open();
+	FMOUITestResult Test_Confirmation_CloseEscape();
+	FMOUITestResult Test_Confirmation_AcceptButton();
+	FMOUITestResult Test_Confirmation_CancelButton();
+	FMOUITestResult Test_Confirmation_ModalBlocking();
+
+	// =========================================================================
+	// MENU SWITCHING TESTS
+	// =========================================================================
 	FMOUITestResult Test_MenuSwitch_InventoryToCrafting();
 	FMOUITestResult Test_MenuSwitch_CraftingToBuilding();
+	FMOUITestResult Test_MenuSwitch_BuildingToSkills();
+	FMOUITestResult Test_MenuSwitch_SkillsToStatus();
+	FMOUITestResult Test_MenuSwitch_AllMenusCycle();
+	FMOUITestResult Test_MenuSwitch_InGameBlocksSwitch();
 
-	// Nested Menu Tests
+	// =========================================================================
+	// NESTED/STACKING TESTS
+	// =========================================================================
 	FMOUITestResult Test_Nested_ContextMenuEscapeClosesOnlyContext();
+	FMOUITestResult Test_Nested_MultipleModalsStack();
+	FMOUITestResult Test_Nested_ConfirmationOverMenu();
+	FMOUITestResult Test_Nested_CorrectCloseOrder();
 
-	// Focus Tests
+	// =========================================================================
+	// FOCUS TESTS
+	// =========================================================================
 	FMOUITestResult Test_Focus_RestoredAfterMenuClose();
+	FMOUITestResult Test_Focus_MenuReceivesFocusOnOpen();
+	FMOUITestResult Test_Focus_ModalReceivesFocusOverMenu();
+	FMOUITestResult Test_Focus_ReturnToGameAfterAllClosed();
 
-	// Input State Tests
+	// =========================================================================
+	// INPUT STATE TESTS
+	// =========================================================================
 	FMOUITestResult Test_InputState_CursorHiddenWhenNoMenus();
+	FMOUITestResult Test_InputState_CursorVisibleWhenMenuOpen();
+	FMOUITestResult Test_InputState_MovementBlockedWhenMenuOpen();
 	FMOUITestResult Test_InputState_MovementRestoredAfterAllMenusClosed();
+	FMOUITestResult Test_InputState_LookBlockedWhenMenuOpen();
+	FMOUITestResult Test_InputState_GameInputBlockedByInGameMenu();
+
+	// =========================================================================
+	// HUD TESTS
+	// =========================================================================
+	FMOUITestResult Test_HUD_ReticleVisibleInGame();
+	FMOUITestResult Test_HUD_ReticleHiddenWhenMenuOpen();
+	FMOUITestResult Test_HUD_NotificationDisplays();
+	FMOUITestResult Test_HUD_NotificationAutoDismisses();
+
+	// =========================================================================
+	// BUILD MODE TESTS
+	// =========================================================================
+	FMOUITestResult Test_BuildMode_WidgetAppearsOnEnter();
+	FMOUITestResult Test_BuildMode_WidgetHidesOnExit();
+	FMOUITestResult Test_BuildMode_EscapeExitsBuildMode();
+
+	// =========================================================================
+	// TOGGLE KEY TESTS (comprehensive)
+	// =========================================================================
+	FMOUITestResult Test_ToggleKey_InventoryOpensAndCloses();
+	FMOUITestResult Test_ToggleKey_CraftingOpensAndCloses();
+	FMOUITestResult Test_ToggleKey_BuildingOpensAndCloses();
+	FMOUITestResult Test_ToggleKey_SkillsOpensAndCloses();
+	FMOUITestResult Test_ToggleKey_StatusOpensAndCloses();
+	FMOUITestResult Test_ToggleKey_WorksAfterButtonClick();
+
+	// =========================================================================
+	// STRESS/EDGE CASE TESTS
+	// =========================================================================
+	FMOUITestResult Test_Stress_RapidOpenClose();
+	FMOUITestResult Test_Stress_RapidMenuSwitch();
+	FMOUITestResult Test_Edge_OpenSameMenuTwice();
+	FMOUITestResult Test_Edge_CloseAlreadyClosedMenu();
+	FMOUITestResult Test_Edge_EscapeWithNoMenuOpen();
+
+	// =========================================================================
+	// COMMONUI-SPECIFIC TESTS
+	// =========================================================================
+	FMOUITestResult Test_CommonUI_LayerStackPush();
+	FMOUITestResult Test_CommonUI_LayerStackPop();
+	FMOUITestResult Test_CommonUI_MenuInputModeAll();
+	FMOUITestResult Test_CommonUI_ModalInputModeMenu();
+	FMOUITestResult Test_CommonUI_BackActionHandler();
+	FMOUITestResult Test_CommonUI_ModalBlocksInput();
+	FMOUITestResult Test_CommonUI_ToggleKeyPassthrough();
+	FMOUITestResult Test_CommonUI_FocusRestoration();
+	FMOUITestResult Test_CommonUI_WidgetActivation();
+	FMOUITestResult Test_CommonUI_WidgetDeactivation();
 
 	// =========================================================================
 	// HELPERS

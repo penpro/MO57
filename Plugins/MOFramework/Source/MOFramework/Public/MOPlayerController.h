@@ -316,9 +316,17 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Input|Actions|UI")
 	TObjectPtr<UInputAction> BuildAction;
 
-	/** Pause/menu action. */
+	/** Pause/menu action (typically Escape - opens in-game menu or closes topmost menu). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Input|Actions|UI")
 	TObjectPtr<UInputAction> PauseAction;
+
+	/**
+	 * Close menu action (typically Tab).
+	 * Closes the topmost active menu without opening the in-game menu.
+	 * Use this for Tab key behavior that only closes menus, never opens.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Input|Actions|UI")
+	TObjectPtr<UInputAction> CloseMenuAction;
 
 	/** Possess nearest pawn action. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Input|Actions|System")
@@ -339,6 +347,14 @@ public:
 	/** Rotate building ghost counter-clockwise (E). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Input|Actions|Building")
 	TObjectPtr<UInputAction> RotateBuildingCCWAction;
+
+	/**
+	 * Flip building ghost 180° in place (mouse wheel up / down). Toggle —
+	 * each press swaps between flipped and un-flipped. Rotates around the
+	 * cube center so position stays put; Q/E still cycle the snap edge.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Input|Actions|Building")
+	TObjectPtr<UInputAction> FlipPlacementYawAction;
 
 	/** Cancel building placement (Escape/RMB). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Input|Actions|Building")
@@ -582,6 +598,9 @@ protected:
 	/** Handle pause/menu. */
 	void HandlePause(const FInputActionValue& Value);
 
+	/** Handle close menu (Tab key - only closes, never opens in-game menu). */
+	void HandleCloseMenu(const FInputActionValue& Value);
+
 	/** Handle possess action. */
 	void HandlePossess(const FInputActionValue& Value);
 
@@ -597,6 +616,9 @@ protected:
 
 	/** Handle rotate building counter-clockwise. */
 	void HandleRotateBuildingCCW(const FInputActionValue& Value);
+
+	/** Handle in-place flip (mouse wheel) — toggles 180° yaw on the ghost. */
+	void HandleFlipPlacementYaw(const FInputActionValue& Value);
 
 	/** Handle cancel placement. */
 	void HandleCancelPlacement(const FInputActionValue& Value);

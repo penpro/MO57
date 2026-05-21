@@ -188,6 +188,27 @@ private:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Notifications", meta=(AllowPrivateAccess="true", ClampMin="0"))
 	int32 SkillPopupZOrder = 260;
 
+	/**
+	 * Normalized viewport position (0-1) for skill / level-up popups.
+	 * (0.2, 0.8) = 20% from the left, 80% from the top — i.e. lower-left of screen
+	 * but offset inward so it doesn't hug the corner.
+	 *
+	 * X: 0 = left edge, 1 = right edge.
+	 * Y: 0 = top edge, 1 = bottom edge.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Notifications",
+		meta=(AllowPrivateAccess="true", ClampMin="0.0", ClampMax="1.0"))
+	FVector2D SkillPopupViewportPosition = FVector2D(0.2f, 0.8f);
+
+	/**
+	 * Alignment for the popup widget at SkillPopupViewportPosition.
+	 * (0, 0) = top-left of widget at position; (0.5, 0.5) = centered on position;
+	 * (0, 1) = bottom-left of widget at position (good for bottom-anchored toasts).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Notifications",
+		meta=(AllowPrivateAccess="true", ClampMin="0.0", ClampMax="1.0"))
+	FVector2D SkillPopupAlignment = FVector2D(0.0f, 1.0f);
+
 	// --- Internal State ---
 
 	struct FQueuedNotification

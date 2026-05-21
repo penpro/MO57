@@ -7,6 +7,9 @@
 #include "MOInventoryComponent.h"
 #include "MOCraftingSubsystem.h"
 #include "MOPCGInteractionSubsystem.h"
+#include "MOResourceDepletionSubsystem.h"
+#include "MOHarvestDebugSubsystem.h"
+#include "MOCharacter.h"
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Components/HierarchicalInstancedStaticMeshComponent.h"
 #include "Engine/DataTable.h"
@@ -540,6 +543,11 @@ bool UMOHarvestSubsystem::BeginHarvest(
 
 	CurrentContext.TotalTime = BaseTime;
 
+	// Subscribe to the harvester's "I started moving" broadcast. Movement
+	// cancels the harvest entirely — no partial progress kept (gathering is a
+	// stay-put activity).
+	RegisterWithHarvesterForInterrupts(Inventory);
+
 	UE_LOG(LogMOFramework, Log, TEXT("[MOHarvest] Started harvest action '%s' on resource '%s' instance %d (time: %.1fs)"),
 		*ActionId.ToString(), *CurrentContext.ResourceNodeId.ToString(), InstanceIndex, CurrentContext.TotalTime);
 
@@ -587,6 +595,7 @@ void UMOHarvestSubsystem::CancelHarvest()
 		OnHarvestCancelled.Broadcast();
 	}
 
+	UnregisterFromHarvesterInterrupts();
 	CurrentContext.Reset();
 }
 
@@ -637,6 +646,43 @@ FMOCraftResult UMOHarvestSubsystem::CompleteHarvest(
 	// Produce yields from the HarvestAction
 	Result.bSuccess = true;
 
+	// Compute a stable per-node key for the depletion subsystem. Identifies a single
+	// HISM/ISM instance (e.g. a particular tree) across game sessions via its
+	// world-space location.
+	FString NodeKey;
+	UInstancedStaticMeshComponent* MeshCompForLog = nullptr;
+	{
+		UInstancedStaticMeshComponent* MeshComp =
+			CurrentContext.HISMComponent.IsValid() ?
+				static_cast<UInstancedStaticMeshComponent*>(CurrentContext.HISMComponent.Get()) :
+				CurrentContext.ISMComponent.Get();
+		MeshCompForLog = MeshComp;
+		if (MeshComp)
+		{
+			NodeKey = UMOResourceDepletionSubsystem::MakeNodeKey(MeshComp, CurrentContext.InstanceIndex);
+		}
+	}
+	UMOResourceDepletionSubsystem* Depletion = UMOResourceDepletionSubsystem::Get(this);
+
+	// Log the harvest attempt so we can see what's happening — particularly whether
+	// the NodeKey is non-empty and whether the depletion subsystem was found.
+	{
+		FString YieldList;
+		for (const FName& Y : HarvestAction->YieldsItems)
+		{
+			YieldList += Y.ToString() + TEXT(" ");
+		}
+		MOHARVEST_LOG(this, "Harvest",
+			"CompleteHarvest action='%s' resource='%s' MeshComp=%s InstanceIndex=%d NodeKey='%s' Depletion=%s yields=[%s]",
+			*CurrentContext.ActiveActionId.ToString(),
+			*CurrentContext.ResourceNodeId.ToString(),
+			MeshCompForLog ? *MeshCompForLog->GetClass()->GetName() : TEXT("<null>"),
+			CurrentContext.InstanceIndex,
+			*NodeKey,
+			Depletion ? TEXT("OK") : TEXT("NULL"),
+			*YieldList);
+	}
+
 	if (IsValid(Inventory))
 	{
 		for (const FName& ItemId : HarvestAction->YieldsItems)
@@ -644,6 +690,28 @@ FMOCraftResult UMOHarvestSubsystem::CompleteHarvest(
 			if (ItemId.IsNone())
 			{
 				continue;
+			}
+
+			// Check depletion limit. If this yield is configured with a count range,
+			// ConsumeYield decrements remaining and returns false when exhausted.
+			// Unconfigured items (no entry in InitialCountByItem) are treated as
+			// unlimited and return true.
+			//
+			// IMPORTANT: depletion-skip is NOT an inventory failure — it must land in
+			// DepletedItems, not FailedItems, so the UI does not show "Inventory Full!"
+			// when the player's inventory has plenty of room. Misclassifying these as
+			// inventory-full is the root cause of "I picked up a few things and it says
+			// the inventory is full — dropping doesn't help."
+			if (Depletion && !NodeKey.IsEmpty())
+			{
+				if (!Depletion->ConsumeYield(NodeKey, ItemId))
+				{
+					Result.DepletedItems.FindOrAdd(ItemId) += 1;
+					MOHARVEST_LOG(this, "Harvest",
+						"  Yield '%s' DEPLETED on node '%s' — skipping (NOT an inventory failure)",
+						*ItemId.ToString(), *NodeKey);
+					continue;
+				}
 			}
 
 			// Generate a new GUID for the item
@@ -655,13 +723,16 @@ FMOCraftResult UMOHarvestSubsystem::CompleteHarvest(
 			if (Inventory->AddItemByGuid(NewItemGuid, ItemId, Quantity))
 			{
 				Result.ProducedItems.FindOrAdd(ItemId) += Quantity;
-				UE_LOG(LogMOFramework, Log, TEXT("[MOHarvest] Produced item: %s x%d"), *ItemId.ToString(), Quantity);
+				MOHARVEST_LOG(this, "Harvest", "  Produced '%s' x%d", *ItemId.ToString(), Quantity);
 			}
 			else
 			{
-				// Track failed items (inventory full)
+				// Real inventory rejection. AddItemByGuid currently always returns true
+				// for valid inputs, so reaching this branch means invalid GUID / no
+				// authority / empty ItemId — not actually a full inventory.
 				Result.FailedItems.FindOrAdd(ItemId) += Quantity;
-				UE_LOG(LogMOFramework, Warning, TEXT("[MOHarvest] Failed to add item (inventory full?): %s x%d"),
+				MOHARVEST_LOG(this, "Harvest",
+					"  AddItemByGuid REJECTED '%s' x%d — invalid input or no authority (not inventory-full)",
 					*ItemId.ToString(), Quantity);
 			}
 		}
@@ -679,9 +750,76 @@ FMOCraftResult UMOHarvestSubsystem::CompleteHarvest(
 	FName CompletedActionId = CurrentContext.ActiveActionId;
 	CurrentContext.Reset();
 
+	// Harvest is done — stop listening for harvester movement.
+	UnregisterFromHarvesterInterrupts();
+
 	OnHarvestComplete.Broadcast(CompletedActionId, Result.bSuccess);
 
 	return Result;
+}
+
+// =============================================================================
+// INTERRUPT HANDLING (IMOInterruptibleInterface)
+// =============================================================================
+
+void UMOHarvestSubsystem::NotifyInterrupt_Implementation(const FMOInterruptContext& Context)
+{
+	if (!IsHarvestInProgress())
+	{
+		return;
+	}
+
+	// Any meaningful disturbance cancels — gathering has no resumable state.
+	// UserCancel skipped to avoid double-fire with the UI's direct CancelHarvest call.
+	switch (Context.Reason)
+	{
+	case EMOInterruptReason::Movement:
+	case EMOInterruptReason::Damage:
+	case EMOInterruptReason::Knockdown:
+	case EMOInterruptReason::Unconscious:
+	case EMOInterruptReason::Death:
+	case EMOInterruptReason::EnteredCombat:
+	case EMOInterruptReason::LostControl:
+	case EMOInterruptReason::External:
+		UE_LOG(LogMOFramework, Log,
+			TEXT("[MOHarvest] Interrupt reason=%d — cancelling harvest (no progress preserved)"),
+			(int32)Context.Reason);
+		// CancelHarvest broadcasts OnHarvestCancelled (the progress widget
+		// listens to that to tear itself down) and unregisters us.
+		CancelHarvest();
+		break;
+
+	case EMOInterruptReason::UserCancel:
+	case EMOInterruptReason::None:
+	default:
+		break;
+	}
+}
+
+void UMOHarvestSubsystem::RegisterWithHarvesterForInterrupts(UMOInventoryComponent* HarvesterInventory)
+{
+	if (!IsValid(HarvesterInventory))
+	{
+		return;
+	}
+
+	AMOCharacter* Harvester = Cast<AMOCharacter>(HarvesterInventory->GetOwner());
+	if (!IsValid(Harvester))
+	{
+		return;
+	}
+
+	Harvester->RegisterInterruptListener(this);
+	RegisteredHarvesterCharacter = Harvester;
+}
+
+void UMOHarvestSubsystem::UnregisterFromHarvesterInterrupts()
+{
+	if (AMOCharacter* Harvester = RegisteredHarvesterCharacter.Get())
+	{
+		Harvester->UnregisterInterruptListener(this);
+	}
+	RegisteredHarvesterCharacter.Reset();
 }
 
 float UMOHarvestSubsystem::GetHarvestProgress() const

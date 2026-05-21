@@ -142,6 +142,31 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Spawn")
 	TSubclassOf<APawn> DefaultNewGamePawnClass;
 
+	// =========================================================================
+	// SPAWN RECOVERY (used when the pawn fails to land — stuck, falling forever)
+	// =========================================================================
+
+	/**
+	 * Seconds to wait for the pawn to land before triggering recovery.
+	 * CheckPawnLanded polls every 0.1s, so this multiplies that interval.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Spawn|Recovery")
+	float MaxLandingWaitSeconds = 5.0f;
+
+	/**
+	 * Maximum recovery attempts before falling back to a guaranteed-safe hard location.
+	 * Each attempt tries a different strategy (lift, re-search, expanded re-search).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Spawn|Recovery")
+	int32 MaxLandingRecoveryAttempts = 3;
+
+	/**
+	 * Z offset added when "lifting" the pawn during the first recovery attempt
+	 * (in case it's stuck inside terrain).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Spawn|Recovery")
+	float RecoveryLiftOffset = 5000.0f;
+
 	// ============================================================================
 	// VOXEL SEED INTEGRATION
 	// ============================================================================
@@ -286,9 +311,21 @@ private:
 	/** Called when pawn has safely landed on ground - dismisses loading screen. */
 	void OnPawnLandedSafely();
 
+	/**
+	 * Called after the landing timer has run for MaxLandingWaitSeconds without the pawn
+	 * landing. Tries a progressive recovery — lift up, then re-search, then hard fallback.
+	 */
+	void RecoverStuckSpawn();
+
 	/** Timer handle for pawn landing check. */
 	FTimerHandle PawnLandingTimerHandle;
 
 	/** Track the pawn we're waiting to land. */
 	TWeakObjectPtr<APawn> PendingLandingPawn;
+
+	/** Number of CheckPawnLanded ticks since the current spawn attempt started. */
+	int32 LandingCheckTickCount = 0;
+
+	/** Number of recovery attempts triggered for this spawn. */
+	int32 LandingRecoveryAttempts = 0;
 };

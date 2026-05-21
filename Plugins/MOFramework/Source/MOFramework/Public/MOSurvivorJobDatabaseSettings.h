@@ -51,16 +51,16 @@ class UDataTable;
  * Maintains cached index of jobs by category for O(1) filtering.
  * Cache is lazily initialized on first access.
  */
-UCLASS(Config=Game, DefaultConfig, meta=(DisplayName="MO Survivor Job Database"))
+UCLASS(Config=Game, DefaultConfig, meta=(DisplayName="Survivor Job Database"))
 class MOFRAMEWORK_API UMOSurvivorJobDatabaseSettings : public UDeveloperSettings
 {
 	GENERATED_BODY()
 
 public:
-	// UDeveloperSettings overrides
+	// UDeveloperSettings overrides — unified under "MOFramework" section in Project Settings.
 	virtual FName GetContainerName() const override { return TEXT("Project"); }
-	virtual FName GetCategoryName() const override { return TEXT("Plugins"); }
-	virtual FName GetSectionName() const override { return TEXT("MO Survivor Job Database"); }
+	virtual FName GetCategoryName() const override { return TEXT("MOFramework"); }
+	virtual FName GetSectionName() const override { return TEXT("Survivor Job Database"); }
 
 	/** The central DataTable containing FMOSurvivorJobDefinitionRow rows. */
 	UPROPERTY(EditAnywhere, Config, Category="Database")

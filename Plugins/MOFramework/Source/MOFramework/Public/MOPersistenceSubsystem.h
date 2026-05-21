@@ -127,6 +127,15 @@ struct FMOLoadResult
     /** World seed from the loaded save (for voxel terrain regeneration). */
     UPROPERTY(BlueprintReadOnly)
     int32 WorldSeed = 0;
+
+    /**
+     * GUID of the pawn the player controller was possessing at save time.
+     * Game mode uses this after voxel terrain is ready to re-possess the
+     * correct pawn, so the player resumes IN their character at the saved
+     * location rather than being left as a sky-cam spectator.
+     */
+    UPROPERTY(BlueprintReadOnly)
+    FGuid LastPossessedPawnGuid;
 };
 
 UCLASS()
@@ -296,6 +305,10 @@ private:
     // Weather/time persistence (UDS/UDW integration)
     void CaptureWeatherData(UWorld* World, UMOWorldSaveGame* SaveObject) const;
     void RestoreWeatherData(UWorld* World, const FMOWeatherSaveData& WeatherData);
+
+    // Terrain-modification persistence (modified-zone tracker for foliage cleanup)
+    void CaptureTerrainModificationData(UWorld* World, UMOWorldSaveGame* SaveObject) const;
+    void RestoreTerrainModificationData(UWorld* World, const FMOTerrainModificationSaveData& TerrainModData);
 
     // Setup spectator camera above last possessed pawn on load
     void SetupSpectatorCameraForLoad(UWorld* World, const UMOWorldSaveGame* SaveData);

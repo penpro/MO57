@@ -147,6 +147,9 @@ protected:
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 private:
+	/** Frame-based debounce to prevent double-toggle from ECommonInputMode::All */
+	uint64 LastToggleFrame = 0;
+
 	// --- Building Menu ---
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Building", meta=(AllowPrivateAccess="true"))

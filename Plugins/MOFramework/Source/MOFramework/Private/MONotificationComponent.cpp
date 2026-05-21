@@ -470,8 +470,19 @@ void UMONotificationComponent::ShowSkillPopupInternal(FName SkillId, bool bIsKno
 	// Add to viewport
 	SkillWidget->AddToViewport(SkillPopupZOrder);
 
-	// Position it - for now we let the widget handle its own positioning via anchors
-	// The Blueprint widget should be configured to anchor bottom-center with appropriate offset
+	// Position the popup at a normalized viewport position (configurable —
+	// default 20% from left, 80% down = lower-left). SetPositionInViewport works
+	// in absolute viewport pixels, so multiply by the current viewport size.
+	if (UGameViewportClient* VC = PlayerController->GetWorld()->GetGameViewport())
+	{
+		FVector2D ViewportSize;
+		VC->GetViewportSize(ViewportSize);
+		const FVector2D PixelPos(
+			SkillPopupViewportPosition.X * ViewportSize.X,
+			SkillPopupViewportPosition.Y * ViewportSize.Y);
+		SkillWidget->SetAlignmentInViewport(SkillPopupAlignment);
+		SkillWidget->SetPositionInViewport(PixelPos, /*bRemoveDPIScale=*/false);
+	}
 	CurrentSkillPopupWidget = SkillWidget;
 
 	// Play flash animation

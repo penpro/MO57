@@ -137,6 +137,23 @@ public:
 	/** If true, registers tag mappings with MOPCGInteractionSubsystem for runtime lookup. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tagging", meta=(PCG_Overridable))
 	bool bRegisterWithSubsystem = true;
+
+	// ============================================================================
+	// TERRAIN MODIFICATION
+	// ============================================================================
+
+	/**
+	 * If true, skip spawning at any point whose world location is inside a
+	 * modified terrain zone (UMOTerrainModificationSubsystem). This is the
+	 * REACTIVE alternative to the periodic foliage sweep — instances never
+	 * appear in modified zones in the first place, so there's no PCG-respawn
+	 * flicker to clean up.
+	 *
+	 * Set false for spawn graphs that should ignore terrain modifications
+	 * (e.g. special biome content the player can't permanently clear).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="TerrainModification", meta=(PCG_Overridable))
+	bool bRespectTerrainModifications = true;
 };
 
 /**

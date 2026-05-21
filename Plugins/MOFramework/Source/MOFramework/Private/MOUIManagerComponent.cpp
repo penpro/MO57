@@ -304,46 +304,8 @@ void UMOUIManagerComponent::SetNearbyItemsQueryRadius(float NewRadius)
 	}
 }
 
-void UMOUIManagerComponent::ApplyInputModeForMenuOpen(APlayerController* PlayerController, UUserWidget* MenuWidget) const
-{
-	if (!IsValid(PlayerController) || !IsValid(MenuWidget))
-	{
-		return;
-	}
-
-	FInputModeGameAndUI InputMode;
-	InputMode.SetWidgetToFocus(MenuWidget->TakeWidget());
-	InputMode.SetHideCursorDuringCapture(false);
-	InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
-
-	PlayerController->SetInputMode(InputMode);
-	PlayerController->bShowMouseCursor = bShowMouseCursorWhileMenuOpen;
-
-	if (bLockMovementWhileMenuOpen)
-	{
-		PlayerController->SetIgnoreMoveInput(true);
-	}
-
-	if (bLockLookWhileMenuOpen)
-	{
-		PlayerController->SetIgnoreLookInput(true);
-	}
-}
-
-void UMOUIManagerComponent::ApplyInputModeForMenuClosed(APlayerController* PlayerController) const
-{
-	if (!IsValid(PlayerController))
-	{
-		return;
-	}
-
-	FInputModeGameOnly InputMode;
-	PlayerController->SetInputMode(InputMode);
-	PlayerController->bShowMouseCursor = false;
-
-	PlayerController->SetIgnoreMoveInput(false);
-	PlayerController->SetIgnoreLookInput(false);
-}
+// NOTE: ApplyInputModeForMenuOpen/Closed have been removed.
+// CommonUI handles input mode automatically via GetDesiredInputConfig() on widgets.
 
 void UMOUIManagerComponent::CreateReticle()
 {
@@ -794,21 +756,188 @@ void UMOUIManagerComponent::ShowConfirmationDialog(const FText& Title, const FTe
 
 bool UMOUIManagerComponent::IsAnyMenuOpen() const
 {
-	// Check system menu controller for survivor menus
-	if (UMOSystemMenuUIController* SysController = GetSystemMenuController())
+	// Delegate to UI subsystem's layer-based menu detection
+	// This uses the CommonUI widget stack counts rather than checking each widget individually
+	if (UMOGameUIManagerSubsystem* UISubsystem = UMOGameUIManagerSubsystem::Get(GetWorld()))
 	{
-		if (SysController->IsSurvivorContextMenuOpen() || SysController->IsSurvivorTaskMenuOpen())
+		return UISubsystem->IsAnyMenuOpen();
+	}
+	return false;
+}
+
+bool UMOUIManagerComponent::CloseActiveMenu()
+{
+	// Close menus in priority order: Modal > InGame > Context > Switchable
+	// This provides consistent Tab/Escape behavior via Enhanced Input
+
+	bool bClosedMenu = false;
+
+	// 1. Check for context menus (transient popups - highest priority)
+	if (UMOInventoryUIController* InvController = GetInventoryController())
+	{
+		if (InvController->IsItemContextMenuOpen())
 		{
-			return true;
+			InvController->CloseItemContextMenu();
+			bClosedMenu = true;
+		}
+		else if (InvController->IsGroundContextMenuOpen())
+		{
+			InvController->CloseGroundContextMenu();
+			bClosedMenu = true;
 		}
 	}
 
-	// Delegate to controllers for their respective menus
-	return IsInventoryMenuOpen() || IsInGameMenuOpen() || IsItemContextMenuOpen() ||
-	       IsPlayerStatusVisible() || IsPossessionMenuOpen() || IsCraftingMenuOpen() ||
-	       IsSkillsPanelOpen() || IsQuestLogOpen() || IsBuildingMenuOpen() || IsBuildWidgetOpen() ||
-	       IsStationContextMenuOpen() || IsKeepOnHarvestContextMenuOpen() ||
-	       IsInspectionInProgress() || IsHarvestInProgress() || IsCarcassButcheringInProgress();
+	if (!bClosedMenu)
+	{
+		if (UMOSystemMenuUIController* SysController = GetSystemMenuController())
+		{
+			if (SysController->IsSurvivorContextMenuOpen())
+			{
+				SysController->CloseSurvivorContextMenu();
+				bClosedMenu = true;
+			}
+			else if (SysController->IsSurvivorTaskMenuOpen())
+			{
+				SysController->CloseSurvivorTaskMenu();
+				bClosedMenu = true;
+			}
+		}
+	}
+
+	if (!bClosedMenu)
+	{
+		if (UMOCraftingUIController* CraftController = GetCraftingController())
+		{
+			if (CraftController->IsStationContextMenuOpen())
+			{
+				CraftController->HideStationContextMenu();
+				bClosedMenu = true;
+			}
+		}
+	}
+
+	if (!bClosedMenu)
+	{
+		if (UMOBuildingUIController* BuildController = GetBuildingController())
+		{
+			if (BuildController->IsBuildWidgetOpen())
+			{
+				BuildController->HideBuildWidget();
+				bClosedMenu = true;
+			}
+		}
+	}
+
+	// 2. Check for in-game menu (modal - blocks other menus)
+	if (!bClosedMenu)
+	{
+		if (UMOSystemMenuUIController* SysController = GetSystemMenuController())
+		{
+			if (SysController->IsInGameMenuOpen())
+			{
+				SysController->CloseInGameMenu();
+				bClosedMenu = true;
+			}
+		}
+	}
+
+	// 3. Check for switchable menus
+	if (!bClosedMenu)
+	{
+		if (UMOInventoryUIController* InvController = GetInventoryController())
+		{
+			if (InvController->IsInventoryMenuOpen())
+			{
+				InvController->CloseInventoryMenu();
+				bClosedMenu = true;
+			}
+		}
+	}
+
+	if (!bClosedMenu)
+	{
+		if (UMOCraftingUIController* CraftController = GetCraftingController())
+		{
+			if (CraftController->IsCraftingMenuOpen())
+			{
+				CraftController->CloseCraftingMenu();
+				bClosedMenu = true;
+			}
+		}
+	}
+
+	if (!bClosedMenu)
+	{
+		if (UMOCharacterUIController* CharController = GetCharacterController())
+		{
+			if (CharController->IsSkillsPanelOpen())
+			{
+				CharController->CloseSkillsPanel();
+				bClosedMenu = true;
+			}
+			else if (CharController->IsPlayerStatusVisible())
+			{
+				CharController->SetPlayerStatusVisible(false);
+				bClosedMenu = true;
+			}
+		}
+	}
+
+	if (!bClosedMenu)
+	{
+		if (UMOBuildingUIController* BuildController = GetBuildingController())
+		{
+			if (BuildController->IsBuildingMenuOpen())
+			{
+				BuildController->CloseBuildingMenu();
+				bClosedMenu = true;
+			}
+		}
+	}
+
+	if (!bClosedMenu)
+	{
+		if (UMOSystemMenuUIController* SysController = GetSystemMenuController())
+		{
+			if (SysController->IsPossessionMenuOpen())
+			{
+				SysController->ClosePossessionMenu();
+				bClosedMenu = true;
+			}
+		}
+	}
+
+	if (!bClosedMenu)
+	{
+		if (UMOQuestUIController* QuestController = GetQuestController())
+		{
+			if (QuestController->IsQuestLogOpen())
+			{
+				QuestController->CloseQuestLog();
+				bClosedMenu = true;
+			}
+		}
+	}
+
+	// If we closed a menu, check if we need to restore input state
+	if (bClosedMenu)
+	{
+		RestoreInputStateIfNoMenusOpen();
+	}
+
+	return bClosedMenu;
+}
+
+void UMOUIManagerComponent::RestoreInputStateIfNoMenusOpen()
+{
+	// If no menus remain open, hide modal background and update reticle
+	// NOTE: Input state is handled automatically by CommonUI via GetDesiredInputConfig()
+	// when widgets are popped from the layer stack
+	if (!IsAnyMenuOpen())
+	{
+		HideModalBackground();
+		UpdateReticleVisibility();
+	}
 }
 
 void UMOUIManagerComponent::CloseAllMenus()
@@ -855,16 +984,9 @@ void UMOUIManagerComponent::CloseAllMenus()
 		QuestController->CloseQuestLog();
 	}
 
-	// Hide modal background
+	// Hide modal background and update reticle
+	// NOTE: Input state is handled automatically by CommonUI via GetDesiredInputConfig()
 	HideModalBackground();
-
-	// Restore input mode
-	APlayerController* PlayerController = ResolveOwningPlayerController();
-	if (IsValid(PlayerController) && PlayerController->IsLocalController())
-	{
-		ApplyInputModeForMenuClosed(PlayerController);
-	}
-
 	UpdateReticleVisibility();
 }
 
@@ -906,15 +1028,10 @@ void UMOUIManagerComponent::CloseAllSwitchableMenus()
 	}
 
 	// Hide modal background if no menus remain open
+	// NOTE: Input state is handled automatically by CommonUI via GetDesiredInputConfig()
 	if (!IsAnyMenuOpen())
 	{
 		HideModalBackground();
-
-		APlayerController* PlayerController = ResolveOwningPlayerController();
-		if (IsValid(PlayerController) && PlayerController->IsLocalController())
-		{
-			ApplyInputModeForMenuClosed(PlayerController);
-		}
 	}
 }
 
@@ -988,23 +1105,8 @@ void UMOUIManagerComponent::RequestHideModalBackground()
 	HideModalBackground();
 }
 
-void UMOUIManagerComponent::RequestInputModeForMenuOpen(UUserWidget* MenuWidget)
-{
-	APlayerController* PlayerController = ResolveOwningPlayerController();
-	if (IsValid(PlayerController) && IsValid(MenuWidget))
-	{
-		ApplyInputModeForMenuOpen(PlayerController, MenuWidget);
-	}
-}
-
-void UMOUIManagerComponent::RequestInputModeForMenuClosed()
-{
-	APlayerController* PlayerController = ResolveOwningPlayerController();
-	if (IsValid(PlayerController))
-	{
-		ApplyInputModeForMenuClosed(PlayerController);
-	}
-}
+// NOTE: RequestInputModeForMenuOpen/Closed have been removed.
+// CommonUI handles input mode automatically via GetDesiredInputConfig() on widgets.
 
 void UMOUIManagerComponent::RequestUpdateReticleVisibility()
 {
@@ -1725,6 +1827,15 @@ void UMOUIManagerComponent::HideToolHint()
 	}
 }
 
+void UMOUIManagerComponent::EndTransientToolHint()
+{
+	UMOToolHintWidget* WidgetInst = ToolHintWidget.Get();
+	if (IsValid(WidgetInst))
+	{
+		WidgetInst->EndTransientHint();
+	}
+}
+
 UMOToolHintWidget* UMOUIManagerComponent::GetToolHintWidget() const
 {
 	return ToolHintWidget.Get();
@@ -1874,15 +1985,26 @@ void UMOUIManagerComponent::UpdateFocusHint()
 	{
 		CurrentFocusHintText = NewHintText;
 
-		// Update the tool hint widget with what we're looking at
+		// Update the tool hint widget with what we're looking at.
+		//
+		// Tool-hint widget supports a persistent "background" hint set via
+		// ShowToolHint(..., -1.0f) — e.g. the terraform mode indicator.
+		// Focus hints are TRANSIENT overlays — they appear briefly when the
+		// player aims at something, but must NOT wipe the persistent text.
+		//
+		// On "looking at empty space", we therefore call EndTransientToolHint
+		// (which restores the persistent text if any) instead of HideToolHint
+		// (which would clear everything).
 		if (!CurrentFocusHintText.IsEmpty())
 		{
-			// Show with 0 duration = persistent until hidden or replaced
+			// Transient show — auto-hides after DefaultDuration. Per-frame
+			// re-trigger while still looking at the same target effectively
+			// keeps it visible.
 			ShowToolHint(CurrentFocusHintText, 0.0f);
 		}
 		else
 		{
-			HideToolHint();
+			EndTransientToolHint();
 		}
 	}
 }

@@ -69,8 +69,10 @@
 #include "Subsystems/WorldSubsystem.h"
 #include "MORecipeDefinitionRow.h"
 #include "MOResourceNodeDefinitionRow.h"
+#include "MOInterruptibleInterface.h"
 #include "MOHarvestSubsystem.generated.h"
 
+class AMOCharacter;
 class UMOKnowledgeComponent;
 class UMOSkillsComponent;
 class UMOInventoryComponent;
@@ -164,13 +166,24 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOOnHarvestCancelled);
  * - Harvest execution with progress tracking
  */
 UCLASS()
-class MOFRAMEWORK_API UMOHarvestSubsystem : public UWorldSubsystem
+class MOFRAMEWORK_API UMOHarvestSubsystem : public UWorldSubsystem,
+	public IMOInterruptibleInterface
 {
 	GENERATED_BODY()
 
 public:
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 	virtual void Deinitialize() override;
+
+	/**
+	 * Interrupt policy for an active harvest:
+	 *   Movement / Damage / Knockdown / Unconscious / Death / EnteredCombat
+	 *     / LostControl / External  -> CANCEL (no progress preserved)
+	 *   UserCancel  -> ignored (UI calls CancelHarvest directly)
+	 *
+	 * Gathering is a stay-put activity — no partial progress is meaningful.
+	 */
+	virtual void NotifyInterrupt_Implementation(const FMOInterruptContext& Context) override;
 
 	// --- Delegates ---
 
@@ -406,6 +419,20 @@ private:
 
 	/** Cached reference to the resource definitions DataTable. */
 	TWeakObjectPtr<UDataTable> CachedResourceDataTable;
+
+	/**
+	 * Character we registered with for interrupt notifications. Set in
+	 * BeginHarvest, cleared in CompleteHarvest/CancelHarvest. Kept separately
+	 * from CurrentContext so we can unregister even if the harvest succeeds
+	 * (which Resets the context).
+	 */
+	TWeakObjectPtr<AMOCharacter> RegisteredHarvesterCharacter;
+
+	/** Subscribe to the harvester's interrupt broadcast. */
+	void RegisterWithHarvesterForInterrupts(UMOInventoryComponent* HarvesterInventory);
+
+	/** Drop the harvester interrupt registration (if any). */
+	void UnregisterFromHarvesterInterrupts();
 
 	/** Build the harvest recipe cache from the recipe DataTable. */
 	void BuildHarvestRecipeCache();

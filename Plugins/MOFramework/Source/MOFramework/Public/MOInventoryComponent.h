@@ -202,6 +202,8 @@ public:
 	UPROPERTY(Replicated)
 	FMOInventoryList Inventory;
 
+	void RebuildGuidIndex();
+
 	// Desired number of slots (authority sizes SlotItemGuids to match this)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Inventory|Slots")
 	int32 SlotCount = 16;
@@ -500,6 +502,9 @@ protected:
 
 private:
 	int32 FindEntryIndexByGuid(const FGuid& ItemGuid) const;
+
+	/** O(1) GUID-to-index lookup. Rebuilt after structural changes. */
+	TMap<FGuid, int32> GuidToEntryIndex;
 
 	void BroadcastInventoryChanged();
 

@@ -8,8 +8,132 @@
 | **Add columns to DataTable** | Use `add-column` command, not direct CSV edit |
 | **Compile C++** | Prompt user to close UE Editor first |
 | **Git commit** | Only when user explicitly asks |
+| **"Fix this bug"** | Read "Engineering Principles" below FIRST |
+| **"Add X to systems A, B, C"** | Read "Engineering Principles" — centralize, don't duplicate |
 
 **CSV files = NEVER edit directly. Always use `Tools/ue_csv_utils.py`**
+
+---
+
+## Engineering Principles (MANDATORY — read every session)
+
+**This project is targeting production-ready software. The user has explicitly
+called out a pattern of patching symptoms instead of systems and will reject
+work that does it. These rules override convenience and override speed.**
+
+### 1. Trace bugs to the layer that creates the bad state, not where it surfaces
+
+When a bug is reported, the first impulse is to fix the visible failure.
+Resist it. Walk the call stack backward to the layer that produces the
+incorrect state, and fix the bug there.
+
+**Concrete example from this codebase:** A "Inventory full!" notification was
+firing falsely. The visible failure was the `CanAddItem` check, but the
+actual bug was that `FMOCraftResult` stored depletion failures and inventory
+failures in the same `FailedItems` map. The UI couldn't distinguish them, so
+it always showed "Inventory Full!" — even when the problem was a depleted
+node. Patching `CanAddItem` would have masked the symptom and left the
+classification bug to cause future false positives elsewhere.
+
+**Rule:** Before editing, ask "where does the wrong value first appear?"
+If you're editing further downstream than that, you're patching a symptom.
+
+### 2. If N systems need the same behavior, build one abstraction — not N copies
+
+When asked to add a behavior to multiple systems (e.g. "moving interrupts
+building AND inspection AND gathering"), the wrong move is N parallel edits.
+The right move is one shared mechanism (interface, delegate, base class) that
+each system plugs into.
+
+**Concrete example from this codebase:** Movement interruption is implemented
+as `IMOMovementInterruptibleInterface` + a registration list on `AMOCharacter`.
+A new interruptible action (lockpicking, surgery, fishing) plugs in by
+implementing the interface and calling `RegisterMovementInterruptible` — no
+changes to `AMOCharacter`, no coupling between systems.
+
+**Rule:** If your patch touches N existing files to add behavior B, you've
+probably built B in the wrong place. Build it once, register N times.
+
+### 3. A comment claiming behavior doesn't make it true — verify
+
+Documentation drifts. Aspirational comments survive. "Uses click-outside" in
+`MOContextMenuBase` was wrong for 2+ years — the click-outside handler was
+never implemented. Anyone who trusted the comment had a broken UX.
+
+**Rule:** When a comment describes load-bearing behavior, confirm the code
+matches. If it doesn't, fix the code OR fix the comment — never just the
+caller that depends on the lie.
+
+### 4. Read the whole flow before changing one node
+
+A single function in a chain rarely has enough context to fix correctly.
+Read up to the caller, down to what's called, and across to similar
+functions in the same file. The CanAddItem bug had THREE related functions
+(`CanAddItem(FGuid)`, `CanAddItemByDefinitionId`, `AddItemByGuid`) plus the
+caller path — reading only one was why the first three patches missed.
+
+**Rule:** Before editing a function, read its caller, its callee(s), and
+its siblings.
+
+### 5. When the cause is unclear, add diagnostic logging — don't guess and patch
+
+If you've made two patches without certainty, stop. The next patch will
+probably also miss. Instrument the suspect layer with enough logging to
+prove what's happening, build, have the user reproduce, then read the data.
+This is faster than three more guess-patches.
+
+**Rule:** Two failed patches in a row = stop patching, start instrumenting.
+
+### 6. Failure modes must be distinguishable at the data layer
+
+If a struct lumps "kind A failure" and "kind B failure" into the same field,
+every consumer downstream has to guess what to do — and most will guess
+wrong. Distinguish failures where they're produced. The UI's job is to
+display, not to disambiguate.
+
+**Rule:** When a function can fail for multiple reasons, the return value
+must carry enough information to tell them apart. Don't make callers guess.
+
+### 7. Defaults are policy
+
+Default values in headers propagate to every subclass that doesn't override
+them. `bCloseOnMouseLeave = false` in the base meant every menu was broken
+until someone explicitly opted in. The base's default should be the behavior
+most subclasses want, with explicit overrides for exceptions.
+
+**Rule:** When you set a default, ask "will most code want this?" If not,
+change the default — don't leave it to every subclass to remember to opt in.
+
+### 8. "It compiles" is not "it works"
+
+Build success tells you the types match. It tells you nothing about whether
+the logic is correct. Always provide a concrete reproduction step the user
+can run, and verify behavior — not just compilation.
+
+**Rule:** Don't claim a fix is done because the build succeeded. Describe
+exactly how to test the behavior, and what the expected vs. failure output
+looks like.
+
+### 9. Production-ready means extension without modification
+
+If adding a new resource type means editing 5 files, the abstraction is
+wrong. If adding a new interruptible action means editing `AMOCharacter`,
+the abstraction is wrong. New features should plug in, not require surgery.
+
+**Rule:** When you finish a feature, ask: "to add the next instance of this
+pattern, how many existing files would I touch?" If the answer is more than 1
+(the new code itself), refactor first.
+
+### 10. Diagnose before designing the fix
+
+Don't propose a solution until you can explain the bug in one sentence
+that names the responsible layer. "The inventory check is wrong" is a
+symptom. "Depletion failures share a map with inventory failures, so the UI
+can't tell them apart" is a diagnosis. Only the diagnosis tells you where
+the fix belongs.
+
+**Rule:** If you can't write a one-sentence diagnosis naming the
+responsible layer, you don't understand the bug yet.
 
 ---
 

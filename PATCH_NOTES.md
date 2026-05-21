@@ -4,6 +4,121 @@ This file tracks changes, bug fixes, and new features. Updated incrementally to 
 
 ---
 
+## [2026-05-21] Building System Overhaul + Critical Save/Load Fix
+
+This is a big update — the building system is now fully featured, the packaged-build save/load bug that broke terrain regeneration is gone, and the editor-version-only 2-second hitching is gone. Highest-impact patch since the survivor system landed.
+
+### New Features
+
+**Full Building System**
+- **Floor → Wall → Half-Wall → Roof → Roof Peak** snap-together construction with intelligent edge/face detection
+- **Q/E rotation** cycles through the four cardinal snap edges of any target piece
+- **Mouse wheel in-place flip** — 90° per click for floors (4 orientations), 180° per click for walls/roofs (2 orientations). Rotates around the cube center so position stays put while orientation mirrors. Use for triangular walls, asymmetric pieces, or just to pick which side faces inward.
+- **Per-piece smart snap modes**:
+  - *Floors*: edge-to-edge, end-to-end, overhang on wall edges
+  - *Walls*: stack above, stack below, side-to-side, end-to-end extension along the long axis
+  - *Half-walls*: vertical stacking via cube-edge math, so two half-walls = one full wall height with no gap, AND can mix-and-match with full walls
+  - *Roofs*: rest on top of floor/wall with eave-on-wall alignment; tile end-to-end up the slope (rise = run for 45° pieces); tile side-to-side coplanar
+  - *Roof Peaks*: same snap rules as roof tiles (symmetric)
+- **Cursor-driven direction selection** for asymmetric pieces — point at the side of a wall where you want the roof to extend, hover the floor edge you want a wall to sit on, etc. Less fiddly than fixed snap-point cycling.
+
+**New Recipes Added** (all 1-stick recipes for testing):
+- `BuildStickFloor`, `BuildStickWall`, `BuildStickRoof`, `BuildStickRoofPeak45`, `BuildStickWallHalf`
+- Survivor Campfire (placed near recruited survivors)
+
+**Voxel DataTable JSON Utility** (`Tools/ue_json_utils.py`)
+- Auto-detects encoding (UTF-8 vs UTF-16-LE with BOM) for compatibility with UE's exporter
+- Subcommands: `list`, `get`, `has`, `add`, `add-file`, `delete`, `update`
+- Documented as a Claude Code skill at `.claude/skills/ue-datatable-json/SKILL.md`
+- Used for adding building recipes without round-tripping through the DataTable editor
+
+### Critical Bug Fixes
+
+**Voxel Terrain Seed Now Persists Across Packaged-Build Saves**
+The most painful bug we've had: in packaged builds, save+load would regenerate the terrain with a different seed even though the seed was being captured. Player would respawn standing on flattened terrain at sea level with the rest of the world towering ~100m above.
+
+Root cause was discovered through layered diagnostics: our code was setting the `Seed` parameter on the shared `UVoxelHeightGraph` *asset*, but the level uses a `FVoxelHeightGraphStamp` (inside a `UVoxelStampComponent`) that has its *own* `FVoxelParameterOverrides` map which takes precedence. The stamp's override was untouched, so the runtime read the cooked-default seed.
+
+Fixes applied:
+- `ApplySeedToHeightGraphParameter` now force-loads every cooked `UVoxelHeightGraph` via Asset Registry before iterating, fixing the original "0/0 graphs updated" issue in shipping builds where assets load lazily
+- `ApplySeedToVoxelStamps` now casts `FVoxelStampRef` to `FVoxelHeightGraphStamp` and calls `SetParameter("Seed")` on the stamp's own `IVoxelParameterOverridesOwner` interface — *this* is what the user's screenshot pointed at and what the runtime actually reads
+- `AVoxelWorld::bCreateRuntimeOnBeginPlay` is disabled at game-mode start, and any pre-existing runtime is destroyed, so the runtime can't auto-create with a stale seed before our save-loaded seed is applied
+- `StampRef.Update()` called after parameter change so the runtime re-evaluates the stamp
+
+**Auto-Possess Saved Pawn on Load**
+After load, the spectator camera was being placed 50m above the saved pawn's location, leaving the player floating as a sky-cam. Now the game finds the pawn matching the saved `LastPossessedPawnGuid`, possesses it on the player controller after voxel terrain is ready, and the player resumes IN their character at the saved location.
+
+**Mobs and Survivors No Longer Spawn in Trees**
+`MOSpawnManagerSubsystem`'s ground traces used `LineTraceSingleByChannel` which would stop at the first hit — often a PCG-spawned tree/rock ISM, leaving creatures perched in canopies. Replaced with `LineTraceMultiByChannel` that walks the hit list and lands on the first `AVoxelWorld` hit. Applies to both mob/survivor spawn search and survivor-beacon ground-snap.
+
+**Building Snap Bugs Fixed**
+- Half-wall stacking — `ZDelta = SnapStackZOffset × 2` formula assumed the offset equals half-height (true for full walls, false for half-walls), producing a 50cm gap. Replaced with cube-edge-to-cube-edge math (ghost cube bottom = target cube top). Works for any wall height and any cube-pivot offset; mixed half-on-full and full-on-half stacking is automatic.
+- `bAbove` partition for stack-above vs stack-below was comparing against the actor pivot, which is at the cube TOP for half-walls — so cursor in the lower half of the cube was always being treated as below-cube. Changed to compare against the cube center instead.
+- BELOW vertical stack was a fallback-only path; cursor aimed at a wall's lower portion couldn't reliably trigger it because nearby floor-edge HorizStack would always win first. Now BELOW fires as a *primary* snap when the cursor is below the cube bottom (plus a 25cm tolerance into the cube), and stays as a fallback for the ambiguous mid-cube case.
+- Wall-to-wall end-to-end snap previously didn't exist (every wall-on-wall went through vertical stack). Added Coplanar extension: cursor past a wall's long-axis end → new wall lines up end-to-end on the same Z plane.
+- Roof-on-roof end-to-end tiling now uses `2 × eave-axis extent` for tile pitch instead of bounding-box extent (which is inflated by the 45° tilt), so the user-intuitive "100cm" tile size matches actual placement. Z rise = horizontal run for 45° slopes.
+- Roof Z direction was inverted (clicking peak side spawned roof below instead of above); flipped the sign.
+- Side-to-side roof snap from below (looking up at a roof's underside) now works via cube-relative cursor normalization.
+
+### Performance
+
+**Terrain Sweep 2-Second Hitching — Eliminated**
+Diagnostics on the user's reproduction case showed sustained 3fps (6 frames in 2 seconds) during the periodic terrain modification sweep. Two passes of optimization:
+- Replaced `TActorIterator<AActor>` (walked 5,400 actors per sweep to find ~30 ISMs) with `TObjectIterator<UInstancedStaticMeshComponent>` (iterates ISMs directly). Cuts iteration cost by ~6×.
+- Replaced per-instance transform-fetch + `IsLocationModified` loop (10,000+ calls per sweep) with `ISM->GetInstancesOverlappingSphere()` per zone, which uses the ISM's internal spatial index. Calls drop from thousands to dozens.
+- Added `SweepPlayerRange = 2500cm` config — zones beyond 25m from any local player are filtered out before the sweep starts. Foliage that far away isn't visible (grass fade distance is much shorter), so respawned instances there don't matter until the player approaches.
+- Added `TRACE_CPUPROFILER_EVENT_SCOPE(MOTerrainSweep)` so the sweep cost shows up in Unreal Insights.
+
+Result: sweep no longer dominates frame time, no visible hitching during normal play.
+
+**Snap-Eval Log Spam Demoted**
+The per-target "Snap eval" log line was firing for every buildable in the world every tick while in placement mode (~2,000 lines/sec with ~30 buildables at 60fps). Demoted to `Verbose` so it no longer drives log file flushes / Output Log UI repaints. Re-enable for snap debugging via `Log LogMOFramework Verbose` in console. The actual snap-fire logs (VertStack, RoofSnap, WallEndToEnd, etc.) stay at `Log` level since they only fire when something matches.
+
+### Engineering Principles Codified
+
+Updated `CLAUDE.md` with 10 explicit engineering principles enforced for all code changes:
+1. Trace bugs to the layer that creates the bad state, not where it surfaces
+2. If N systems need the same behavior, build one abstraction — not N copies
+3. A comment claiming behavior doesn't make it true — verify
+4. Read the whole flow before changing one node
+5. When the cause is unclear, add diagnostic logging — don't guess and patch
+6. Failure modes must be distinguishable at the data layer
+7. Defaults are policy
+8. "It compiles" is not "it works"
+9. Production-ready means extension without modification
+10. Diagnose before designing the fix
+
+These guide every subsequent change.
+
+### Technical Notes
+
+**New / Heavily-Modified Files:**
+- `MOBuildingComponent.cpp/h` — major rewrite of snap math, in-place flip, per-piece-type snap modes
+- `MOTerrainModificationSubsystem.cpp/h` — sweep optimization + player-range filter + Insights tracing
+- `MOGameMode.cpp` — voxel seed pipeline (stamp + graph + asset-registry preload + AVoxelWorld auto-create lockout), auto-possess on load, voxel-only safe spawn trace
+- `MOPersistenceSubsystem.cpp/h` — `LastPossessedPawnGuid` surfaced on `FMOLoadResult`, diagnostic logging at every seed-flow checkpoint
+- `MOSpawnManagerSubsystem.cpp` — multi-trace + voxel filter for mob/survivor/beacon ground snap
+- `MOBuildableActor.h` — `bSnapAsWall`, `bSnapAsRoof`, `SnapStackZOffset` UPROPERTYs for BP-author intent
+- `MOPlayerController.h/cpp` — `FlipPlacementYawAction` input action + handler
+
+**New Blueprint Assets:**
+- `BP_BuildableRoofBase` (45° roof tile)
+- `BP_BuildableRoofPeak45` (peaked roof apex)
+- `BP_BuildableWallHalf` (half-height wall)
+- `BP_SurvivorCampfire`
+- `IA_FlipPlacementYaw` (input action — mouse wheel up/down)
+- `BP_GameplayInputStub`
+
+**New Recipes:** `BuildStickFloor`, `BuildStickWall`, `BuildStickRoof`, `BuildStickRoofPeak45`, `BuildStickWallHalf`
+
+**Blueprint Setup (if any pieces don't behave correctly):**
+- On each wall BP: `bSnapAsWall = true`, `SnapStackZOffset = 50.0` (or 25.0 for narrower stacking distance)
+- On each roof BP: `bSnapAsRoof = true` AND `bSnapAsWall = true` (so it qualifies as "tall" for snap detection)
+- `IA_FlipPlacementYaw` mapped to `Mouse Wheel Axis` (or both Up + Down) in `IMC_Building`
+- Player Controller's `FlipPlacementYawAction` slot points at `IA_FlipPlacementYaw`
+
+---
+
 ## [2026-03-01] Survivor Command Overhaul & Wolf Predators
 
 ### New Features

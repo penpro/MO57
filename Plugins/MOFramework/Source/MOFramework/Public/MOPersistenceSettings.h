@@ -46,16 +46,16 @@ class APawn;
  * Project Settings entry for MOFramework persistence configuration.
  * Configure fallback classes and behavior for save/load operations.
  */
-UCLASS(Config=Game, DefaultConfig, meta=(DisplayName="MO Persistence"))
+UCLASS(Config=Game, DefaultConfig, meta=(DisplayName="Persistence"))
 class MOFRAMEWORK_API UMOPersistenceSettings : public UDeveloperSettings
 {
 	GENERATED_BODY()
 
 public:
-	// UDeveloperSettings overrides
+	// UDeveloperSettings overrides — unified under "MOFramework" section in Project Settings.
 	virtual FName GetContainerName() const override { return TEXT("Project"); }
-	virtual FName GetCategoryName() const override { return TEXT("Plugins"); }
-	virtual FName GetSectionName() const override { return TEXT("MO Persistence"); }
+	virtual FName GetCategoryName() const override { return TEXT("MOFramework"); }
+	virtual FName GetSectionName() const override { return TEXT("Persistence"); }
 
 	/**
 	 * Fallback pawn class to use when loading a save if the original pawn class cannot be found.

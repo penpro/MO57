@@ -228,6 +228,45 @@ void FMOFrameworkEditorModule::StartupModule()
 			MOToolboxHelpers::OpenTestResultsFile();
 		}));
 
+	// CommonUI-specific testing commands
+	PluginCommands->MapAction(
+		FMOToolboxCommands::Get().RunSetupValidation,
+		FExecuteAction::CreateLambda([]() {
+			MOToolboxHelpers::RunUITests(TEXT("Setup.*"));
+		}));
+
+	PluginCommands->MapAction(
+		FMOToolboxCommands::Get().RunCommonUITests,
+		FExecuteAction::CreateLambda([]() {
+			MOToolboxHelpers::RunUITests(TEXT("CommonUI.*"));
+		}));
+
+	PluginCommands->MapAction(
+		FMOToolboxCommands::Get().RunDiagnostics,
+		FExecuteAction::CreateLambda([]() {
+			// Run diagnostics via console command
+			UWorld* PIEWorld = nullptr;
+			for (const FWorldContext& Context : GEngine->GetWorldContexts())
+			{
+				if (Context.WorldType == EWorldType::PIE && Context.World())
+				{
+					PIEWorld = Context.World();
+					break;
+				}
+			}
+
+			if (!PIEWorld)
+			{
+				FMessageDialog::Open(EAppMsgType::Ok,
+					LOCTEXT("PIERequiredDiag", "Diagnostics require Play In Editor (PIE) to be running.\n\nPlease start PIE first."));
+				return;
+			}
+
+			GEngine->Exec(PIEWorld, TEXT("MO.UI.Diagnose"));
+			FMessageDialog::Open(EAppMsgType::Ok,
+				LOCTEXT("DiagnosticsRun", "Diagnostics printed to Output Log.\n\nCheck the log for CommonUI configuration details."));
+		}));
+
 	// Register menus after engine init
 	UToolMenus::RegisterStartupCallback(FSimpleMulticastDelegate::FDelegate::CreateRaw(this, &FMOFrameworkEditorModule::RegisterMenus));
 }
@@ -316,6 +355,16 @@ void FMOFrameworkEditorModule::RegisterMenus()
 						PluginCommands);
 
 					TestSection.AddMenuEntryWithCommandList(
+						FMOToolboxCommands::Get().RunSetupValidation,
+						PluginCommands);
+
+					TestSection.AddMenuEntryWithCommandList(
+						FMOToolboxCommands::Get().RunCommonUITests,
+						PluginCommands);
+
+					TestSection.AddSeparator("MenuTestsSeparator");
+
+					TestSection.AddMenuEntryWithCommandList(
 						FMOToolboxCommands::Get().RunInventoryTests,
 						PluginCommands);
 
@@ -332,6 +381,10 @@ void FMOFrameworkEditorModule::RegisterMenus()
 						PluginCommands);
 
 					TestSection.AddSeparator("TestResultsSeparator");
+
+					TestSection.AddMenuEntryWithCommandList(
+						FMOToolboxCommands::Get().RunDiagnostics,
+						PluginCommands);
 
 					TestSection.AddMenuEntryWithCommandList(
 						FMOToolboxCommands::Get().OpenTestResults,
@@ -385,11 +438,15 @@ void FMOFrameworkEditorModule::RegisterToolbar()
 
 			MenuBuilder.BeginSection("UITesting", LOCTEXT("UITestingSection", "UI Testing"));
 			MenuBuilder.AddMenuEntry(FMOToolboxCommands::Get().RunAllUITests);
+			MenuBuilder.AddMenuEntry(FMOToolboxCommands::Get().RunSetupValidation);
+			MenuBuilder.AddMenuEntry(FMOToolboxCommands::Get().RunCommonUITests);
+			MenuBuilder.AddSeparator();
 			MenuBuilder.AddMenuEntry(FMOToolboxCommands::Get().RunInventoryTests);
 			MenuBuilder.AddMenuEntry(FMOToolboxCommands::Get().RunCraftingTests);
 			MenuBuilder.AddMenuEntry(FMOToolboxCommands::Get().RunBuildingTests);
 			MenuBuilder.AddMenuEntry(FMOToolboxCommands::Get().RunInputStateTests);
 			MenuBuilder.AddSeparator();
+			MenuBuilder.AddMenuEntry(FMOToolboxCommands::Get().RunDiagnostics);
 			MenuBuilder.AddMenuEntry(FMOToolboxCommands::Get().OpenTestResults);
 			MenuBuilder.EndSection();
 

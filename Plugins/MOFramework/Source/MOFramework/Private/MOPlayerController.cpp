@@ -1,5 +1,6 @@
 #include "MOPlayerController.h"
 #include "MOFramework.h"
+#include "MOUIDebugSubsystem.h"
 #include "MOControllableInterface.h"
 #include "MOSpectatorPawn.h"
 #include "MOCharacter.h"
@@ -59,11 +60,9 @@ void AMOPlayerController::BeginPlay()
 
 	UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController::BeginPlay - Setting up input context"));
 
-	// Set input mode to game only (captures mouse for look controls)
-	// This is important when transitioning from main menu which uses UI-only mode
-	FInputModeGameOnly InputMode;
-	SetInputMode(InputMode);
-	bShowMouseCursor = false;
+	// NOTE: Do NOT call SetInputMode() here - CommonUI manages input modes
+	// via GetDesiredInputConfig() on active widgets. The MOGameplayInputStub
+	// (RootContentWidgetClass on layer stacks) provides the baseline Game input mode.
 
 	// Setup default input context
 	SetupDefaultInputContext();
@@ -285,6 +284,12 @@ void AMOPlayerController::SetupInputComponent()
 		EnhancedInput->BindAction(PauseAction, ETriggerEvent::Started, this, &AMOPlayerController::HandlePause);
 	}
 
+	if (CloseMenuAction)
+	{
+		EnhancedInput->BindAction(CloseMenuAction, ETriggerEvent::Started, this, &AMOPlayerController::HandleCloseMenu);
+		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound CloseMenuAction (Tab key)"));
+	}
+
 	if (PossessAction)
 	{
 		EnhancedInput->BindAction(PossessAction, ETriggerEvent::Started, this, &AMOPlayerController::HandlePossess);
@@ -327,6 +332,16 @@ void AMOPlayerController::SetupInputComponent()
 	else
 	{
 		UE_LOG(LogMOFramework, Warning, TEXT("AMOPlayerController: RotateBuildingCCWAction is NOT set!"));
+	}
+
+	if (FlipPlacementYawAction)
+	{
+		EnhancedInput->BindAction(FlipPlacementYawAction, ETriggerEvent::Started, this, &AMOPlayerController::HandleFlipPlacementYaw);
+		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound FlipPlacementYawAction"));
+	}
+	else
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("AMOPlayerController: FlipPlacementYawAction is NOT set!"));
 	}
 
 	if (CancelPlacementAction)
@@ -927,14 +942,20 @@ void AMOPlayerController::HandleSecondaryActionRelease(const FInputActionValue& 
 
 void AMOPlayerController::HandleInventory(const FInputActionValue& Value)
 {
+	MOUI_LOG(this, "PC", "HandleInventory FIRED via Enhanced Input");
 	if (UIManagerComponent)
 	{
 		UIManagerComponent->ToggleInventoryMenu();
+	}
+	else
+	{
+		MOUI_LOG(this, "PC", "  UIManagerComponent is NULL");
 	}
 }
 
 void AMOPlayerController::HandleCraft(const FInputActionValue& Value)
 {
+	MOUI_LOG(this, "PC", "HandleCraft FIRED via Enhanced Input");
 	if (UIManagerComponent)
 	{
 		UIManagerComponent->ToggleCraftingMenu();
@@ -943,6 +964,7 @@ void AMOPlayerController::HandleCraft(const FInputActionValue& Value)
 
 void AMOPlayerController::HandlePlayerStatus(const FInputActionValue& Value)
 {
+	MOUI_LOG(this, "PC", "HandlePlayerStatus FIRED via Enhanced Input");
 	if (UIManagerComponent)
 	{
 		UIManagerComponent->TogglePlayerStatus();
@@ -951,6 +973,7 @@ void AMOPlayerController::HandlePlayerStatus(const FInputActionValue& Value)
 
 void AMOPlayerController::HandleSkills(const FInputActionValue& Value)
 {
+	MOUI_LOG(this, "PC", "HandleSkills FIRED via Enhanced Input");
 	if (UIManagerComponent)
 	{
 		UIManagerComponent->ToggleSkillsPanel();
@@ -959,6 +982,7 @@ void AMOPlayerController::HandleSkills(const FInputActionValue& Value)
 
 void AMOPlayerController::HandleJournal(const FInputActionValue& Value)
 {
+	MOUI_LOG(this, "PC", "HandleJournal FIRED via Enhanced Input");
 	if (UIManagerComponent)
 	{
 		UIManagerComponent->ToggleQuestLog();
@@ -967,6 +991,7 @@ void AMOPlayerController::HandleJournal(const FInputActionValue& Value)
 
 void AMOPlayerController::HandleBuild(const FInputActionValue& Value)
 {
+	MOUI_LOG(this, "PC", "HandleBuild FIRED via Enhanced Input");
 	// If in placement mode, cancel it
 	if (BuildingComponent && BuildingComponent->IsInPlacementMode())
 	{
@@ -983,14 +1008,35 @@ void AMOPlayerController::HandleBuild(const FInputActionValue& Value)
 
 void AMOPlayerController::HandlePause(const FInputActionValue& Value)
 {
+	MOUI_LOG(this, "PC", "HandlePause FIRED via Enhanced Input");
 	if (UIManagerComponent)
 	{
 		UIManagerComponent->ToggleInGameMenu();
 	}
 }
 
+void AMOPlayerController::HandleCloseMenu(const FInputActionValue& Value)
+{
+	MOUI_LOG(this, "PC", "HandleCloseMenu FIRED via Enhanced Input");
+	// Tab key behavior:
+	// - If any menu is open: close it (handled by widget's NativeOnPreviewKeyDown in Menu mode)
+	// - If no menu is open: open in-game menu (this path fires via Enhanced Input in Game mode)
+	if (UIManagerComponent)
+	{
+		if (UIManagerComponent->IsAnyMenuOpen())
+		{
+			UIManagerComponent->CloseActiveMenu();
+		}
+		else
+		{
+			UIManagerComponent->ToggleInGameMenu();
+		}
+	}
+}
+
 void AMOPlayerController::HandlePossess(const FInputActionValue& Value)
 {
+	MOUI_LOG(this, "PC", "HandlePossess FIRED via Enhanced Input");
 	UE_LOG(LogMOFramework, Warning, TEXT("AMOPlayerController::HandlePossess - Input received"));
 
 	if (UIManagerComponent)
@@ -1029,6 +1075,14 @@ void AMOPlayerController::HandleRotateBuildingCCW(const FInputActionValue& Value
 	if (BuildingComponent && BuildingComponent->IsInPlacementMode())
 	{
 		BuildingComponent->RotateGhostZ(-BuildingRotationIncrement);
+	}
+}
+
+void AMOPlayerController::HandleFlipPlacementYaw(const FInputActionValue& Value)
+{
+	if (BuildingComponent && BuildingComponent->IsInPlacementMode())
+	{
+		BuildingComponent->ToggleGhostFlipYaw();
 	}
 }
 

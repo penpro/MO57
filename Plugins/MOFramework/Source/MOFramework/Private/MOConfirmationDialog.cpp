@@ -1,11 +1,25 @@
 #include "MOConfirmationDialog.h"
 #include "MOFramework.h"
 #include "MOCommonButton.h"
+#include "CommonInputModeTypes.h"
 #include "Components/TextBlock.h"
+
+TOptional<FUIInputConfig> UMOConfirmationDialog::GetDesiredInputConfig() const
+{
+	return FUIInputConfig(
+		ECommonInputMode::Menu,
+		EMouseCaptureMode::NoCapture,
+		EMouseLockMode::DoNotLock,
+		false
+	);
+}
 
 void UMOConfirmationDialog::NativeConstruct()
 {
 	Super::NativeConstruct();
+
+	// Confirmation dialogs must be acknowledged — don't dismiss on outside click
+	bClosesOnOutsideClick = false;
 
 	if (ConfirmButton)
 	{

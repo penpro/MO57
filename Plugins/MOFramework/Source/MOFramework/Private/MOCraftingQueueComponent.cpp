@@ -7,6 +7,7 @@
 #include "MORecipeDatabaseSettings.h"
 #include "MOItemDatabaseSettings.h"
 #include "MOIdentifiableInterface.h"
+#include "MOCharacter.h"
 #include "Net/UnrealNetwork.h"
 #include "GameFramework/Pawn.h"
 
@@ -31,6 +32,11 @@ void UMOCraftingQueueComponent::EndPlay(const EEndPlayReason::Type EndPlayReason
 	{
 		PauseCrafting();
 	}
+
+	// Defensive — PauseCrafting() above already unregisters, but if the
+	// component is being destroyed while paused we still want a clean slate
+	// on the character's listener list.
+	UnregisterFromOwnerInterrupts();
 
 	Super::EndPlay(EndPlayReason);
 }
@@ -267,6 +273,12 @@ bool UMOCraftingQueueComponent::StartCrafting()
 	// Enable ticking
 	SetComponentTickEnabled(true);
 
+	// Subscribe to owner interrupts. Now severe damage / knockdown / death /
+	// combat / unconsciousness can pause this craft via the centralized bus.
+	// Movement is intentionally policy'd out in NotifyInterrupt — the player
+	// can walk around the station while a craft progresses on real-time.
+	RegisterWithOwnerForInterrupts();
+
 	UE_LOG(LogMOFramework, Log, TEXT("[MOCraftingQueue] Crafting started"));
 
 	return true;
@@ -284,7 +296,89 @@ void UMOCraftingQueueComponent::PauseCrafting()
 	// Disable ticking
 	SetComponentTickEnabled(false);
 
+	// Crafting is no longer actively progressing; drop the interrupt
+	// subscription. StartCrafting() will re-register on resume.
+	UnregisterFromOwnerInterrupts();
+
 	UE_LOG(LogMOFramework, Log, TEXT("[MOCraftingQueue] Crafting paused"));
+}
+
+// =============================================================================
+// INTERRUPT HANDLING (IMOInterruptibleInterface)
+// =============================================================================
+
+void UMOCraftingQueueComponent::NotifyInterrupt_Implementation(const FMOInterruptContext& Context)
+{
+	if (!bIsCraftingActive)
+	{
+		// Defensive — should already be unregistered, but ignore is safer than
+		// double-firing on a torn-down state.
+		return;
+	}
+
+	switch (Context.Reason)
+	{
+	case EMOInterruptReason::Movement:
+		// Crafting at a station is a long-running real-time activity. The
+		// player can walk to a barrel, pick up an item, walk back — that
+		// shouldn't void hours of progress. Movement is intentionally ignored
+		// for crafting (unlike harvesting / building / inspecting).
+		break;
+
+	case EMOInterruptReason::Damage:
+		// Trivial damage doesn't disrupt skilled work; real injury does.
+		if (Context.Severity >= 0.5f)
+		{
+			UE_LOG(LogMOFramework, Log,
+				TEXT("[MOCraftingQueue] Severe damage (severity=%.2f) — pausing crafting"),
+				Context.Severity);
+			PauseCrafting();
+		}
+		break;
+
+	case EMOInterruptReason::Knockdown:
+	case EMOInterruptReason::Unconscious:
+	case EMOInterruptReason::EnteredCombat:
+	case EMOInterruptReason::LostControl:
+	case EMOInterruptReason::External:
+		UE_LOG(LogMOFramework, Log,
+			TEXT("[MOCraftingQueue] Interrupt reason=%d — pausing crafting (will resume on next StartCrafting)"),
+			(int32)Context.Reason);
+		PauseCrafting();
+		break;
+
+	case EMOInterruptReason::Death:
+		UE_LOG(LogMOFramework, Log,
+			TEXT("[MOCraftingQueue] Crafter died — cancelling all queued crafts with refund"));
+		CancelAllCrafts(/*bRefundIngredients=*/true);
+		break;
+
+	case EMOInterruptReason::UserCancel:
+	case EMOInterruptReason::None:
+	default:
+		break;
+	}
+}
+
+void UMOCraftingQueueComponent::RegisterWithOwnerForInterrupts()
+{
+	AMOCharacter* OwnerChar = Cast<AMOCharacter>(GetOwner());
+	if (!IsValid(OwnerChar))
+	{
+		return;
+	}
+
+	OwnerChar->RegisterInterruptListener(this);
+	RegisteredCrafterCharacter = OwnerChar;
+}
+
+void UMOCraftingQueueComponent::UnregisterFromOwnerInterrupts()
+{
+	if (AMOCharacter* OwnerChar = RegisteredCrafterCharacter.Get())
+	{
+		OwnerChar->UnregisterInterruptListener(this);
+	}
+	RegisteredCrafterCharacter.Reset();
 }
 
 // =============================================================================

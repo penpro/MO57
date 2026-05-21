@@ -138,7 +138,13 @@ protected:
 
 private:
 	/** Whether intro is currently active. */
-	bool bIsActive = false;
+	/**
+	 * Skippable from the moment the widget is created. Setting this to false only
+	 * when SkipIntro / OnVideoFinished completes — not relying on the media player's
+	 * OnPlaybackStarted callback, which can fire late or not at all in packaged
+	 * builds and leave the intro un-skippable.
+	 */
+	bool bIsActive = true;
 
 	/** Time elapsed since intro started. */
 	float ElapsedTime = 0.0f;

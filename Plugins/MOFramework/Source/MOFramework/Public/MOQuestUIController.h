@@ -114,6 +114,9 @@ protected:
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 private:
+	/** Frame-based debounce to prevent double-toggle from ECommonInputMode::All */
+	uint64 LastToggleFrame = 0;
+
 	// --- Quest Log Panel ---
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Quest|UI", meta=(AllowPrivateAccess="true"))

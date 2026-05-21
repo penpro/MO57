@@ -4,11 +4,15 @@
 #include "MOSpawnSettings.h"
 #include "MOSpawnSettingsActor.h"
 #include "MOBuildableActor.h"
+#include "MOCraftingStationActor.h"
 #include "MOSkillsComponent.h"
 #include "MORecruitmentComponent.h"
 #include "MOIdentityComponent.h"
+#include "VoxelWorld.h"
 
 #include "EngineUtils.h"
+#include "AIController.h"
+#include "BrainComponent.h"
 
 namespace
 {
@@ -141,6 +145,7 @@ void UMOSpawnManagerSubsystem::Tick(float DeltaTime)
 	CleanupDeadEntities();
 	UpdatePersistence();
 	ProcessAllCategories();
+	UpdateFrozenPawnWakeCheck();
 }
 
 TStatId UMOSpawnManagerSubsystem::GetStatId() const
@@ -178,16 +183,16 @@ void UMOSpawnManagerSubsystem::InitializeDefaultConfigs()
 		// Fallback to hardcoded defaults if settings not available
 		UE_LOG(LogMOFramework, Warning, TEXT("[SpawnManager] Could not load settings, using hardcoded defaults"));
 
-		// Survivor config
+		// Survivor config — closer than wildlife (you're meant to find them)
 		{
 			FMOSpawnCategoryConfig Config;
 			Config.Category = EMOSpawnCategory::Survivor;
 			Config.MinCooldownSeconds = 3600.0f;
 			Config.MaxCooldownSeconds = 7200.0f;
 			Config.MaxSpawnedCount = 3;
-			Config.MinSpawnDistance = 200.0f;
-			Config.MaxSpawnDistance = 500.0f;
-			Config.MinDistanceFromStructure = 100.0f;
+			Config.MinSpawnDistance = 10.0f;    // 10m — close enough to discover but not spawned on top of you
+			Config.MaxSpawnDistance = 30.0f;
+			Config.MinDistanceFromStructure = 5.0f;
 			Config.MinGroupSize = 1;
 			Config.MaxGroupSize = 1;
 			Config.bFirstSpawnFaster = true;
@@ -196,16 +201,16 @@ void UMOSpawnManagerSubsystem::InitializeDefaultConfigs()
 			CategoryConfigs.Add(Config);
 		}
 
-		// Prey config
+		// Prey config — far enough that the player doesn't see them pop in
 		{
 			FMOSpawnCategoryConfig Config;
 			Config.Category = EMOSpawnCategory::Prey;
 			Config.MinCooldownSeconds = 2700.0f;
 			Config.MaxCooldownSeconds = 4500.0f;
 			Config.MaxSpawnedCount = 10;
-			Config.MinSpawnDistance = 100.0f;
-			Config.MaxSpawnDistance = 400.0f;
-			Config.MinDistanceFromStructure = 200.0f;
+			Config.MinSpawnDistance = 100.0f;   // 100m — outside ordinary view
+			Config.MaxSpawnDistance = 300.0f;
+			Config.MinDistanceFromStructure = 50.0f;
 			Config.MinGroupSize = 2;
 			Config.MaxGroupSize = 3;
 			Config.bFirstSpawnFaster = false;
@@ -213,16 +218,16 @@ void UMOSpawnManagerSubsystem::InitializeDefaultConfigs()
 			CategoryConfigs.Add(Config);
 		}
 
-		// Predator config
+		// Predator config — farther still, they ambush from a distance
 		{
 			FMOSpawnCategoryConfig Config;
 			Config.Category = EMOSpawnCategory::Predator;
 			Config.MinCooldownSeconds = 5400.0f;
 			Config.MaxCooldownSeconds = 9000.0f;
 			Config.MaxSpawnedCount = 3;
-			Config.MinSpawnDistance = 300.0f;
-			Config.MaxSpawnDistance = 600.0f;
-			Config.MinDistanceFromStructure = 300.0f;
+			Config.MinSpawnDistance = 100.0f;   // 100m
+			Config.MaxSpawnDistance = 200.0f;
+			Config.MinDistanceFromStructure = 50.0f;
 			Config.MinGroupSize = 1;
 			Config.MaxGroupSize = 2;
 			Config.bFirstSpawnFaster = false;
@@ -268,17 +273,17 @@ APawn* UMOSpawnManagerSubsystem::TrySpawnForCategory(EMOSpawnCategory Category)
 		return nullptr;
 	}
 
-	// Check max count
+	// Hard cap: don't spawn past MaxSpawnedCount. The previous behavior — DespawnOldest
+	// to make room and spawn a new one — created a rolling rotation that felt like
+	// "mobs keep spawning past the limit" because new entities kept appearing and old
+	// ones kept disappearing. With a hard cap, the count stays put until something
+	// dies / is GC'd, then the next cooldown can spawn a replacement.
 	const int32 CurrentCount = GetSpawnedCount(Category);
 	if (CurrentCount >= Config.MaxSpawnedCount)
 	{
-		// Try to despawn oldest
-		if (!DespawnOldest(Category))
-		{
-			UE_LOG(LogMOFramework, Log, TEXT("[SpawnManager] Max count (%d) reached for category %d, can't despawn oldest"),
-				Config.MaxSpawnedCount, (int32)Category);
-			return nullptr;
-		}
+		UE_LOG(LogMOFramework, Verbose, TEXT("[SpawnManager] At cap (%d) for category %d — skipping spawn"),
+			Config.MaxSpawnedCount, (int32)Category);
+		return nullptr;
 	}
 
 	// Get valid spawn points
@@ -343,8 +348,14 @@ APawn* UMOSpawnManagerSubsystem::ForceSpawnAtLocation(EMOSpawnCategory Category,
 
 		// Add to tracking
 		SpawnedEntities.Add(FMOSpawnedEntityRecord(SpawnedPawn, Category));
+		MaybeSpawnSurvivorBeacon(SpawnedEntities.Num() - 1);
 		OnEntitySpawned.Broadcast(SpawnedPawn, Category);
 		NotifyPlayerOfSpawn(SpawnedPawn);
+
+		if (ShouldFreezeCategory(Category))
+		{
+			FreezeSpawnedPawn(SpawnedPawn);
+		}
 
 		UE_LOG(LogMOFramework, Log, TEXT("[SpawnManager] Force spawned %s at %s"),
 			*SpawnedPawn->GetName(), *Location.ToString());
@@ -423,6 +434,7 @@ bool UMOSpawnManagerSubsystem::DespawnOldest(EMOSpawnCategory Category)
 		Pawn->Destroy();
 	}
 
+	DestroyBeaconForRecord(SpawnedEntities[OldestIndex]);
 	SpawnedEntities.RemoveAt(OldestIndex);
 	return true;
 }
@@ -439,6 +451,7 @@ void UMOSpawnManagerSubsystem::DespawnEntity(APawn* Pawn)
 		if (SpawnedEntities[i].SpawnedPawn.Get() == Pawn)
 		{
 			OnEntityDespawned.Broadcast(Pawn, SpawnedEntities[i].Category);
+			DestroyBeaconForRecord(SpawnedEntities[i]);
 			SpawnedEntities.RemoveAt(i);
 			break;
 		}
@@ -488,6 +501,7 @@ void UMOSpawnManagerSubsystem::RemoveFromTracking(APawn* Pawn)
 		if (SpawnedEntities[i].SpawnedPawn.Get() == Pawn)
 		{
 			UE_LOG(LogMOFramework, Log, TEXT("[SpawnManager] Removed %s from tracking (recruited - will never despawn)"), *Pawn->GetName());
+			DestroyBeaconForRecord(SpawnedEntities[i]);
 			SpawnedEntities.RemoveAt(i);
 			return;
 		}
@@ -883,6 +897,10 @@ void UMOSpawnManagerSubsystem::CleanupDeadEntities()
 	{
 		if (!SpawnedEntities[i].IsValid())
 		{
+			// Pawn is gone but the beacon might still be standing — destroy
+			// it so we don't leak a "find this survivor" landmark with no
+			// survivor at the other end.
+			DestroyBeaconForRecord(SpawnedEntities[i]);
 			SpawnedEntities.RemoveAt(i);
 		}
 	}
@@ -959,8 +977,14 @@ APawn* UMOSpawnManagerSubsystem::SpawnAtPoint(AMOSpawnPoint* Point, const FMOSpa
 
 		// Add to tracking
 		SpawnedEntities.Add(FMOSpawnedEntityRecord(SpawnedPawn, Config.Category));
+		MaybeSpawnSurvivorBeacon(SpawnedEntities.Num() - 1);
 		OnEntitySpawned.Broadcast(SpawnedPawn, Config.Category);
 		NotifyPlayerOfSpawn(SpawnedPawn);
+
+		if (ShouldFreezeCategory(Config.Category))
+		{
+			FreezeSpawnedPawn(SpawnedPawn);
+		}
 
 		UE_LOG(LogMOFramework, Log, TEXT("[SpawnManager] Spawned %s at spawn point %s"),
 			*SpawnedPawn->GetName(), *Point->GetName());
@@ -1016,8 +1040,12 @@ APawn* UMOSpawnManagerSubsystem::TryFallbackSpawn(EMOSpawnCategory Category, con
 	const int32 MaxAttempts = 10;
 	for (int32 Attempt = 0; Attempt < MaxAttempts; ++Attempt)
 	{
-		// Random distance within config range
-		const float Distance = FMath::FRandRange(Config.MinSpawnDistance, Config.MaxSpawnDistance);
+		// Random distance within config range. MinSpawnDistance/MaxSpawnDistance are
+		// authored in METERS (per their UPROPERTY comments). Convert to UE world units
+		// (centimeters) for actual placement. Without this, MinSpawnDistance=50 produced
+		// spawns at 50cm (~half a meter) instead of 50m.
+		const float DistanceMeters = FMath::FRandRange(Config.MinSpawnDistance, Config.MaxSpawnDistance);
+		const float Distance = DistanceMeters * 100.0f;
 
 		// Random angle
 		const float Angle = FMath::FRandRange(0.0f, 360.0f);
@@ -1029,26 +1057,36 @@ APawn* UMOSpawnManagerSubsystem::TryFallbackSpawn(EMOSpawnCategory Category, con
 
 		FVector SpawnLocation = PlayerLocation + Offset;
 
-		// Trace down to find ground
-		FHitResult HitResult;
-		FVector TraceStart = SpawnLocation + FVector(0, 0, 5000.0f);
-		FVector TraceEnd = SpawnLocation - FVector(0, 0, 10000.0f);
-
-		if (World->LineTraceSingleByChannel(HitResult, TraceStart, TraceEnd, ECC_Visibility))
+		// Trace down to find ground — VOXEL ONLY. Single-trace would happily
+		// stop at the first hit, which is often a PCG-spawned tree/rock ISM,
+		// so the mob ends up perched in a tree. Use multi-trace and pick the
+		// first AVoxelWorld hit so we land on actual terrain.
+		TArray<FHitResult> GroundHits;
+		const FVector TraceStart = SpawnLocation + FVector(0, 0, 5000.0f);
+		const FVector TraceEnd = SpawnLocation - FVector(0, 0, 10000.0f);
+		if (World->LineTraceMultiByChannel(GroundHits, TraceStart, TraceEnd, ECC_Visibility))
 		{
-			SpawnLocation = HitResult.ImpactPoint + FVector(0, 0, 100.0f);  // Spawn slightly above ground
+			for (const FHitResult& Hit : GroundHits)
+			{
+				if (Hit.GetActor() && Hit.GetActor()->IsA<AVoxelWorld>())
+				{
+					SpawnLocation = Hit.ImpactPoint + FVector(0, 0, 100.0f);
+					break;
+				}
+			}
 		}
 
-		// Check structure avoidance
-		if (Config.MinDistanceFromStructure > 0.0f && !IsLocationValidForSpawn(SpawnLocation, Config.MinDistanceFromStructure))
+		// Check structure avoidance (MinDistanceFromStructure is also in METERS — convert to cm).
+		const float MinStructureDistanceCm = Config.MinDistanceFromStructure * 100.0f;
+		if (MinStructureDistanceCm > 0.0f && !IsLocationValidForSpawn(SpawnLocation, MinStructureDistanceCm))
 		{
 			continue;
 		}
 
-		// Check distance from other spawned entities (prevent spawning on top of each other)
-		// Use half of MinSpawnDistance as the minimum separation between entities
-		const float MinEntitySeparation = FMath::Max(200.0f, Config.MinSpawnDistance * 0.5f);
-		if (!IsLocationValidForSpawnNearEntities(SpawnLocation, MinEntitySeparation))
+		// Check distance from other spawned entities (prevent spawning on top of each other).
+		// Use half of MinSpawnDistance as the minimum separation, floor of 2 meters.
+		const float MinEntitySeparationCm = FMath::Max(200.0f, (Config.MinSpawnDistance * 100.0f) * 0.5f);
+		if (!IsLocationValidForSpawnNearEntities(SpawnLocation, MinEntitySeparationCm))
 		{
 			continue;
 		}
@@ -1074,10 +1112,16 @@ APawn* UMOSpawnManagerSubsystem::TryFallbackSpawn(EMOSpawnCategory Category, con
 			// Add to tracking
 			FMOSpawnedEntityRecord Record(SpawnedPawn, Category);
 			SpawnedEntities.Add(Record);
+			MaybeSpawnSurvivorBeacon(SpawnedEntities.Num() - 1);
 
 			// Notify
 			OnEntitySpawned.Broadcast(SpawnedPawn, Category);
 			NotifyPlayerOfSpawn(SpawnedPawn);
+
+			if (ShouldFreezeCategory(Category))
+			{
+				FreezeSpawnedPawn(SpawnedPawn);
+			}
 
 			UE_LOG(LogMOFramework, Warning, TEXT("[SpawnManager] Fallback spawned %s at %s (%.0fm from player)"),
 				*SpawnedPawn->GetClass()->GetName(),
@@ -1090,6 +1134,80 @@ APawn* UMOSpawnManagerSubsystem::TryFallbackSpawn(EMOSpawnCategory Category, con
 
 	UE_LOG(LogMOFramework, Warning, TEXT("[SpawnManager] Fallback spawn failed after %d attempts"), MaxAttempts);
 	return nullptr;
+}
+
+// ============================================================================
+// AI FREEZE
+// ============================================================================
+
+bool UMOSpawnManagerSubsystem::ShouldFreezeCategory(EMOSpawnCategory Category) const
+{
+	// Survivors are gameplay-critical for discovery — never freeze them.
+	// Everything else (Prey, Predator, Ambient) freezes until the player is within
+	// WakeDistanceCm. This is what stops the CPU running idle behavior trees on
+	// 50+ deer scattered across the world.
+	return Category != EMOSpawnCategory::Survivor;
+}
+
+void UMOSpawnManagerSubsystem::FreezeSpawnedPawn(APawn* Pawn)
+{
+	if (!Pawn) return;
+
+	AController* Controller = Pawn->GetController();
+	AAIController* AIController = Cast<AAIController>(Controller);
+	if (!AIController) return;
+
+	if (UBrainComponent* Brain = AIController->GetBrainComponent())
+	{
+		Brain->StopLogic(TEXT("SpawnedFarFromPlayer"));
+	}
+}
+
+void UMOSpawnManagerSubsystem::WakeSpawnedPawn(APawn* Pawn)
+{
+	if (!Pawn) return;
+
+	AController* Controller = Pawn->GetController();
+	AAIController* AIController = Cast<AAIController>(Controller);
+	if (!AIController) return;
+
+	if (UBrainComponent* Brain = AIController->GetBrainComponent())
+	{
+		Brain->RestartLogic();
+	}
+}
+
+void UMOSpawnManagerSubsystem::UpdateFrozenPawnWakeCheck()
+{
+	APawn* PlayerPawn = GetPlayerPawn();
+	if (!PlayerPawn) return;
+
+	const FVector PlayerLocation = PlayerPawn->GetActorLocation();
+	const float WakeDistanceSq = WakeDistanceCm * WakeDistanceCm;
+
+	for (const FMOSpawnedEntityRecord& Record : SpawnedEntities)
+	{
+		if (!Record.IsValid()) continue;
+		if (!ShouldFreezeCategory(Record.Category)) continue;
+
+		APawn* Pawn = Record.SpawnedPawn.Get();
+		if (!Pawn) continue;
+
+		// Skip pawns whose AI brain is already running (not frozen).
+		AAIController* AIController = Cast<AAIController>(Pawn->GetController());
+		if (!AIController) continue;
+		UBrainComponent* Brain = AIController->GetBrainComponent();
+		if (!Brain || Brain->IsRunning()) continue;
+
+		// In range? Wake it up.
+		const float DistanceSq = FVector::DistSquared(PlayerLocation, Pawn->GetActorLocation());
+		if (DistanceSq <= WakeDistanceSq)
+		{
+			Brain->RestartLogic();
+			UE_LOG(LogMOFramework, Verbose, TEXT("[SpawnManager] Woke %s (player %.1fm away)"),
+				*Pawn->GetName(), FMath::Sqrt(DistanceSq) / 100.0f);
+		}
+	}
 }
 
 float UMOSpawnManagerSubsystem::RollNewCooldown(const FMOSpawnCategoryConfig& Config) const
@@ -1177,4 +1295,139 @@ void UMOSpawnManagerSubsystem::NotifyPlayerOfSpawn(APawn* SpawnedPawn)
 		UE_LOG(LogMOFramework, Log, TEXT("[SpawnManager] Player noticed spawn of %s (chance: %.1f%%)"),
 			*SpawnedPawn->GetName(), FinalChance * 100.0f);
 	}
+}
+
+// ============================================================================
+// SURVIVOR DISCOVERY BEACON
+// ============================================================================
+
+void UMOSpawnManagerSubsystem::MaybeSpawnSurvivorBeacon(int32 RecordIndex)
+{
+	if (!SpawnedEntities.IsValidIndex(RecordIndex))
+	{
+		return;
+	}
+	FMOSpawnedEntityRecord& Record = SpawnedEntities[RecordIndex];
+
+	// Only survivors get beacons — the whole point is letting the player
+	// find them at distance. Prey/predator/ambient don't need waypoints.
+	if (Record.Category != EMOSpawnCategory::Survivor)
+	{
+		return;
+	}
+
+	// Pull beacon config from the Project Settings (UMOSpawnSettings). Single
+	// source of truth — editable under MOFramework → Spawn Manager → Survivor
+	// Beacon. No fallback duplicated on this subsystem.
+	const UMOSpawnSettings* SpawnSettings = UMOSpawnSettings::GetSpawnSettings();
+	if (!SpawnSettings)
+	{
+		return;
+	}
+
+	// Resolve the soft class reference. Loads on first survivor spawn, then
+	// stays loaded for the session. If unset by the designer, the feature is
+	// off — silently skip (no warning; "not configured" is a valid state).
+	UClass* BeaconClass = SpawnSettings->SurvivorBeaconActorClass.LoadSynchronous();
+	if (!BeaconClass)
+	{
+		return;
+	}
+
+	APawn* SurvivorPawn = Record.SpawnedPawn.Get();
+	if (!IsValid(SurvivorPawn))
+	{
+		return;
+	}
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	// Offset is interpreted in the survivor's local frame (X=forward, Y=right).
+	// Rotate by yaw only so the beacon ends up flat next to her regardless of
+	// any roll/pitch from animation or terrain. Roll/pitch baked into the
+	// offset would look erratic across spawn locations.
+	const FRotator SurvivorRotation = SurvivorPawn->GetActorRotation();
+	const FRotator YawOnly(0.0f, SurvivorRotation.Yaw, 0.0f);
+	FVector BeaconLocation = SurvivorPawn->GetActorLocation() + YawOnly.RotateVector(SpawnSettings->SurvivorBeaconOffset);
+
+	if (SpawnSettings->bSnapBeaconToGround)
+	{
+		// Trace from well above the offset down to well below it. Survivor
+		// might be on a slope; her actor Z isn't a reliable ground anchor.
+		// VOXEL ONLY — multi-trace and pick the first AVoxelWorld hit so the
+		// beacon doesn't end up perched on a tree branch.
+		TArray<FHitResult> BeaconHits;
+		const FVector TraceStart = BeaconLocation + FVector(0.0f, 0.0f, 500.0f);
+		const FVector TraceEnd = BeaconLocation - FVector(0.0f, 0.0f, 2000.0f);
+		FCollisionQueryParams Params(SCENE_QUERY_STAT(MOSurvivorBeaconGroundSnap), /*bTraceComplex=*/false);
+		Params.AddIgnoredActor(SurvivorPawn);
+		if (World->LineTraceMultiByChannel(BeaconHits, TraceStart, TraceEnd, ECC_Visibility, Params))
+		{
+			for (const FHitResult& BHit : BeaconHits)
+			{
+				if (BHit.GetActor() && BHit.GetActor()->IsA<AVoxelWorld>())
+				{
+					BeaconLocation = BHit.ImpactPoint;
+					break;
+				}
+			}
+		}
+		// If the trace failed (e.g. void below), fall back to the unsnapped
+		// position — bad placement is preferable to no beacon at all.
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+	SpawnParams.ObjectFlags |= RF_Transient; // not persisted by save system
+	AActor* Beacon = World->SpawnActor<AActor>(BeaconClass, BeaconLocation, FRotator::ZeroRotator, SpawnParams);
+	if (!IsValid(Beacon))
+	{
+		UE_LOG(LogMOFramework, Warning,
+			TEXT("[SpawnManager] Survivor beacon spawn failed (class=%s, loc=%s)"),
+			*GetNameSafe(BeaconClass), *BeaconLocation.ToString());
+		return;
+	}
+
+	// Tag for runtime introspection / debug overlays / late-find cleanup.
+	Beacon->Tags.AddUnique(TEXT("MO_SurvivorBeacon"));
+
+	Record.BeaconActor = Beacon;
+
+	// If the beacon is a crafting station (e.g. the campfire BP, which is
+	// AMOCraftingStationActor), light it automatically. The BP defaults
+	// already render correctly out-of-the-box (no ghost / no construction
+	// phase) — what's missing is the active state that drives the fire
+	// particles, the point light, and the audio loop. Drive that here via
+	// the same SetStationActive(true) entry point the player's right-click
+	// "Light" menu hits, so there's exactly one code path that "turns the
+	// fire on".
+	//
+	// Beacons are landmarks, not crafting workstations the player tends —
+	// disable the fuel requirement so the fire never goes out (and so
+	// SetStationActive doesn't refuse to activate at CurrentFuel=0). The
+	// CurrentFuel=MaxFuel set is cosmetic (any future UI reading fuel
+	// shows it as "full").
+	if (AMOCraftingStationActor* Station = Cast<AMOCraftingStationActor>(Beacon))
+	{
+		Station->bRequiresFuel = false;
+		Station->CurrentFuel = Station->MaxFuel;
+		Station->SetStationActive(true);
+	}
+
+	UE_LOG(LogMOFramework, Log,
+		TEXT("[SpawnManager] Spawned survivor beacon %s at %s for %s"),
+		*Beacon->GetName(), *BeaconLocation.ToString(), *SurvivorPawn->GetName());
+}
+
+void UMOSpawnManagerSubsystem::DestroyBeaconForRecord(FMOSpawnedEntityRecord& Record)
+{
+	AActor* Beacon = Record.BeaconActor.Get();
+	if (IsValid(Beacon))
+	{
+		Beacon->Destroy();
+	}
+	Record.BeaconActor.Reset();
 }

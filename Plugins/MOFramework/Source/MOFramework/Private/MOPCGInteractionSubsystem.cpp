@@ -4,6 +4,7 @@
 #include "MOInventoryComponent.h"
 #include "MONotificationComponent.h"
 #include "MOHISMHarvestHelper.h"
+#include "MOHarvestDebugSubsystem.h"
 #include "Components/HierarchicalInstancedStaticMeshComponent.h"
 #include "Components/InstancedStaticMeshComponent.h"
 #include "GameFramework/Pawn.h"
@@ -208,11 +209,23 @@ bool UMOPCGInteractionSubsystem::HarvestHISMInstance(UHierarchicalInstancedStati
 		return false;
 	}
 
-	// CRITICAL: Check if inventory has space BEFORE removing the instance
-	// Otherwise we destroy world items but can't pick them up
-	const FGuid NewItemGuid = FGuid::NewGuid();
-	if (!Inventory->CanAddItem(NewItemGuid))
+	// CRITICAL: Check if inventory has space BEFORE removing the instance.
+	// Otherwise we destroy world items but can't pick them up.
+	// Use CanAddItemByDefinitionId so partial stacks count as having room — otherwise
+	// the player gets a false "inventory full" any time they don't have a completely
+	// empty slot, even if the existing stacks could absorb the new yield.
+	const int32 Quantity = DefaultHarvestQuantity;
+	MOHARVEST_LOG(this, "PCG",
+		"HarvestHISMInstance entry: ItemId='%s' Quantity=%d Harvester='%s' Inventory.SlotCount=%d Inventory.Entries=%d",
+		*ItemId.ToString(), Quantity,
+		*GetNameSafe(Harvester),
+		Inventory->GetSlotCount(), Inventory->GetEntryCount());
+
+	if (!Inventory->CanAddItemByDefinitionId(ItemId, Quantity))
 	{
+		MOHARVEST_LOG(this, "PCG",
+			"HarvestHISMInstance ABORT: CanAddItemByDefinitionId('%s', %d) returned false — showing inventory-full notification",
+			*ItemId.ToString(), Quantity);
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOPCGInteraction] HarvestHISMInstance: Inventory is full, cannot harvest"));
 
 		// Show notification to player
@@ -232,16 +245,23 @@ bool UMOPCGInteractionSubsystem::HarvestHISMInstance(UHierarchicalInstancedStati
 	// Remove instance using helper (handles KeepOnHarvest check automatically)
 	if (!FMOHISMHarvestHelper::RemoveInstance(HISMComponent, InstanceIndex, true))
 	{
+		MOHARVEST_LOG(this, "PCG",
+			"HarvestHISMInstance ABORT: RemoveInstance(%d) failed", InstanceIndex);
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOPCGInteraction] HarvestHISMInstance: Failed to remove instance %d"), InstanceIndex);
 		return false;
 	}
 
 	// Add item to inventory (we already verified space exists)
-	const int32 Quantity = DefaultHarvestQuantity;
+	const FGuid NewItemGuid = FGuid::NewGuid();
 	const bool bAdded = Inventory->AddItemByGuid(NewItemGuid, ItemId, Quantity);
 
 	OutItemId = ItemId;
 
+	MOHARVEST_LOG(this, "PCG",
+		"HarvestHISMInstance OK: removed instance=%d ItemId='%s' Quantity=%d AddItemByGuid=%s Inventory.Entries=%d",
+		InstanceIndex, *ItemId.ToString(), Quantity,
+		bAdded ? TEXT("true") : TEXT("false"),
+		Inventory->GetEntryCount());
 	UE_LOG(LogMOFramework, Verbose, TEXT("[MOPCGInteraction] Harvested HISM instance %d: %s x%d (added: %s) at %s"),
 		InstanceIndex,
 		*ItemId.ToString(),
@@ -301,11 +321,23 @@ bool UMOPCGInteractionSubsystem::HarvestISMInstance(UInstancedStaticMeshComponen
 		return false;
 	}
 
-	// CRITICAL: Check if inventory has space BEFORE removing the instance
-	// Otherwise we destroy world items but can't pick them up
-	const FGuid NewItemGuid = FGuid::NewGuid();
-	if (!Inventory->CanAddItem(NewItemGuid))
+	// CRITICAL: Check if inventory has space BEFORE removing the instance.
+	// Otherwise we destroy world items but can't pick them up.
+	// Use CanAddItemByDefinitionId so partial stacks count as having room — otherwise
+	// the player gets a false "inventory full" any time they don't have a completely
+	// empty slot, even if the existing stacks could absorb the new yield.
+	const int32 Quantity = DefaultHarvestQuantity;
+	MOHARVEST_LOG(this, "PCG",
+		"HarvestISMInstance entry: ItemId='%s' Quantity=%d Harvester='%s' Inventory.SlotCount=%d Inventory.Entries=%d",
+		*ItemId.ToString(), Quantity,
+		*GetNameSafe(Harvester),
+		Inventory->GetSlotCount(), Inventory->GetEntryCount());
+
+	if (!Inventory->CanAddItemByDefinitionId(ItemId, Quantity))
 	{
+		MOHARVEST_LOG(this, "PCG",
+			"HarvestISMInstance ABORT: CanAddItemByDefinitionId('%s', %d) returned false — showing inventory-full notification",
+			*ItemId.ToString(), Quantity);
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOPCGInteraction] HarvestISMInstance: Inventory is full, cannot harvest"));
 
 		// Show notification to player
@@ -325,13 +357,21 @@ bool UMOPCGInteractionSubsystem::HarvestISMInstance(UInstancedStaticMeshComponen
 	// Remove instance using helper (handles KeepOnHarvest check automatically)
 	if (!FMOHISMHarvestHelper::RemoveInstance(ISMComponent, InstanceIndex, true))
 	{
+		MOHARVEST_LOG(this, "PCG",
+			"HarvestISMInstance ABORT: RemoveInstance(%d) failed", InstanceIndex);
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOPCGInteraction] HarvestISMInstance: Failed to remove instance %d"), InstanceIndex);
 		return false;
 	}
 
 	// Add item to inventory (we already verified space exists)
-	const int32 Quantity = DefaultHarvestQuantity;
+	const FGuid NewItemGuid = FGuid::NewGuid();
 	const bool bAdded = Inventory->AddItemByGuid(NewItemGuid, ItemId, Quantity);
+
+	MOHARVEST_LOG(this, "PCG",
+		"HarvestISMInstance OK: removed instance=%d ItemId='%s' Quantity=%d AddItemByGuid=%s Inventory.Entries=%d",
+		InstanceIndex, *ItemId.ToString(), Quantity,
+		bAdded ? TEXT("true") : TEXT("false"),
+		Inventory->GetEntryCount());
 
 	OutItemId = ItemId;
 

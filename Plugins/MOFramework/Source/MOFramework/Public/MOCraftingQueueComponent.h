@@ -77,17 +77,36 @@
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "MOCraftingTypes.h"
+#include "MOInterruptibleInterface.h"
 #include "MOCraftingQueueComponent.generated.h"
 
+class AMOCharacter;
 class UMOCraftingSubsystem;
 class UMOInventoryComponent;
 class UMORecipeDiscoveryComponent;
 UCLASS(ClassGroup=(MO), meta=(BlueprintSpawnableComponent))
-class MOFRAMEWORK_API UMOCraftingQueueComponent : public UActorComponent
+class MOFRAMEWORK_API UMOCraftingQueueComponent : public UActorComponent,
+	public IMOInterruptibleInterface
 {
 	GENERATED_BODY()
 
 public:
+	/**
+	 * Interrupt policy for an active crafting queue:
+	 *   Movement              -> ignored (player can walk around mid-craft)
+	 *   Damage (sev >= 0.5)   -> Pause (real injury disrupts fine work)
+	 *   Knockdown / Unconscious / EnteredCombat / LostControl
+	 *                         -> Pause (preserve elapsed time via timestamp model)
+	 *   Death                 -> Cancel current craft with refund
+	 *   UserCancel            -> ignored (UI calls CancelCraft directly)
+	 *
+	 * Crafting uses real-time timestamps, so "pause" actually has to record
+	 * a paused-at time and freeze advancement — the current PauseCrafting()
+	 * just flips bIsCraftingActive. That's enough for now; if and when paused
+	 * crafts need to resume from the exact second they paused, the queue
+	 * model can be extended without touching this handler.
+	 */
+	virtual void NotifyInterrupt_Implementation(const FMOInterruptContext& Context) override;
 	UMOCraftingQueueComponent();
 
 	// --- Delegates ---
@@ -287,6 +306,19 @@ private:
 
 	/** Cache component references. */
 	void CacheComponents();
+
+	/** Hook into the owning character's interrupt broadcast. Idempotent. */
+	void RegisterWithOwnerForInterrupts();
+
+	/** Drop the owner interrupt registration. */
+	void UnregisterFromOwnerInterrupts();
+
+	/**
+	 * Character we registered with for interrupt notifications. Cached so
+	 * we can unregister on EndPlay even if GetOwner() has already torn down.
+	 * Resolved during the first StartCrafting() that actually activates a craft.
+	 */
+	TWeakObjectPtr<AMOCharacter> RegisteredCrafterCharacter;
 
 private:
 	/** The crafting queue (replicated via FastArray). */

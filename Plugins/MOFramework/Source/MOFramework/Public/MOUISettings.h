@@ -38,16 +38,16 @@ class UMOPrimaryGameLayout;
  * UI System configuration in Project Settings.
  * Accessible at: Project Settings -> Plugins -> MO UI Settings
  */
-UCLASS(Config=Game, DefaultConfig, meta=(DisplayName="MO UI Settings"))
+UCLASS(Config=Game, DefaultConfig, meta=(DisplayName="UI"))
 class MOFRAMEWORK_API UMOUISettings : public UDeveloperSettings
 {
 	GENERATED_BODY()
 
 public:
-	// UDeveloperSettings overrides
+	// UDeveloperSettings overrides — unified under "MOFramework" section in Project Settings.
 	virtual FName GetContainerName() const override { return TEXT("Project"); }
-	virtual FName GetCategoryName() const override { return TEXT("Plugins"); }
-	virtual FName GetSectionName() const override { return TEXT("MO UI Settings"); }
+	virtual FName GetCategoryName() const override { return TEXT("MOFramework"); }
+	virtual FName GetSectionName() const override { return TEXT("UI"); }
 
 	/**
 	 * The Widget Blueprint class to use as the primary game layout.

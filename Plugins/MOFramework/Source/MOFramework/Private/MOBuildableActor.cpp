@@ -129,6 +129,18 @@ bool AMOBuildableActor::IsComplete() const
 // INITIALIZATION
 // ============================================================================
 
+void AMOBuildableActor::RestoreGhostCollisionCache()
+{
+	for (const TPair<TObjectPtr<UPrimitiveComponent>, TEnumAsByte<ECollisionEnabled::Type>>& Entry : CachedGhostCollisionStates)
+	{
+		if (IsValid(Entry.Key))
+		{
+			Entry.Key->SetCollisionEnabled(Entry.Value);
+		}
+	}
+	CachedGhostCollisionStates.Reset();
+}
+
 void AMOBuildableActor::InitializeBuilding(FName InRecipeId)
 {
 	RecipeId = InRecipeId;
@@ -151,8 +163,15 @@ void AMOBuildableActor::InitializeBuilding(FName InRecipeId)
 	// The ghost visual remains until OnConstructionCompleted is called
 	bIsGhost = false; // We're no longer in "placement preview" mode
 
-	// Enable collision for the placed building
-	if (MeshComponent)
+	// Restore collision on every primitive that SetGhostMode(true) disabled.
+	// Critical for hit-trace interactions — without this, the placed building's
+	// InteractableComponent (and any BP-added collision triggers) stay at
+	// NoCollision and the player can't right-click to manage construction.
+	RestoreGhostCollisionCache();
+
+	// Backstop for the rare case the placed building was spawned directly
+	// (not via the placement pipeline → no cache entry for MeshComponent).
+	if (MeshComponent && MeshComponent->GetCollisionEnabled() == ECollisionEnabled::NoCollision)
 	{
 		MeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 	}
@@ -183,10 +202,19 @@ void AMOBuildableActor::SetGhostMode(bool bGhost)
 		// Enter ghost mode
 		CreateGhostMaterial();
 
-		// Disable collision for ghost
-		if (MeshComponent)
+		// Disable collision on EVERY primitive component on the actor — not
+		// just MeshComponent. BPs commonly add their own collision shapes
+		// (interaction triggers, child meshes, decoration components) that
+		// otherwise stay solid and block / push the player. Cache the
+		// original state per-component so we can restore exactly on exit.
+		CachedGhostCollisionStates.Reset();
+		TArray<UPrimitiveComponent*> Prims;
+		GetComponents<UPrimitiveComponent>(Prims);
+		for (UPrimitiveComponent* Prim : Prims)
 		{
-			MeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			if (!IsValid(Prim)) continue;
+			CachedGhostCollisionStates.Add(Prim, Prim->GetCollisionEnabled());
+			Prim->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 		}
 
 		// Disable interaction for ghost during placement
@@ -200,8 +228,16 @@ void AMOBuildableActor::SetGhostMode(bool bGhost)
 		// Exit ghost mode - restore original materials
 		RestoreOriginalMaterials();
 
-		// Enable collision
-		if (MeshComponent)
+		// Restore collision on every primitive we disabled on entry. Anything
+		// not in the cache (added since SetGhostMode(true)) is left at its
+		// current state — that's the BP-author's default and we shouldn't
+		// override it.
+		RestoreGhostCollisionCache();
+
+		// Safety backstop: if the actor exited ghost mode without ever
+		// entering (e.g., a directly-spawned non-ghost path), MeshComponent
+		// still needs the placed-building collision state.
+		if (MeshComponent && MeshComponent->GetCollisionEnabled() == ECollisionEnabled::NoCollision)
 		{
 			MeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 		}

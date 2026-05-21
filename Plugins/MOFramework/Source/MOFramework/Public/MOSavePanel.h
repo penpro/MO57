@@ -38,7 +38,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "CommonActivatableWidget.h"
+#include "MOActivatableWidget.h"
 #include "MOSaveGameTypes.h"
 #include "MOSavePanel.generated.h"
 
@@ -54,7 +54,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOSavePanelSaveRequestedSignature, 
  * Shows all saves for the current world in a ScrollBox.
  */
 UCLASS()
-class MOFRAMEWORK_API UMOSavePanel : public UCommonActivatableWidget
+class MOFRAMEWORK_API UMOSavePanel : public UMOActivatableWidget
 {
 	GENERATED_BODY()
 

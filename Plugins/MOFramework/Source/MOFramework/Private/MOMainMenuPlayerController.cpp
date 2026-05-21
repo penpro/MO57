@@ -23,8 +23,8 @@
 
 AMOMainMenuPlayerController::AMOMainMenuPlayerController()
 {
-	// Show mouse cursor in menu
-	bShowMouseCursor = true;
+	// NOTE: Cursor visibility is managed by CommonUI via GetDesiredInputConfig()
+	// on the main menu widget. Do not set bShowMouseCursor manually.
 }
 
 void AMOMainMenuPlayerController::BeginPlay()
@@ -40,11 +40,16 @@ void AMOMainMenuPlayerController::BeginPlay()
 		IntroVideoSource ? *IntroVideoSource->GetName() : TEXT("NULL"),
 		*IntroVideoFileName);
 
-	// Set input mode to Game and UI so keyboard input works
-	FInputModeGameAndUI InputMode;
-	InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
-	InputMode.SetHideCursorDuringCapture(false);
-	SetInputMode(InputMode);
+	// Packaged builds default to Game-only input mode at PC startup, which prevents
+	// Slate (intro widget, main menu) from receiving keyboard/mouse events until a
+	// CommonUI widget activates and applies its FUIInputConfig. The intro fires
+	// before any UI widget activates, so set GameAndUI here so it can be skipped.
+	// CommonUI's Menu input mode takes over once the main menu widget activates.
+	FInputModeGameAndUI InitialInputMode;
+	InitialInputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+	InitialInputMode.SetHideCursorDuringCapture(false);
+	SetInputMode(InitialInputMode);
+	bShowMouseCursor = true;
 
 	// Check if we should play the intro
 	UMOGameSettings* Settings = UMOGameSettings::GetMOGameSettings();
@@ -88,6 +93,13 @@ void AMOMainMenuPlayerController::ShowMainMenu()
 	if (MainMenuWidget)
 	{
 		MainMenuWidget->AddToViewport(100);
+
+		// SYSTEM RULE: stack-managed UMOActivatableWidget instances are activated by
+		// their stack container. Viewport-direct surfaces (AddToViewport) are activated
+		// by their caller — right here. Both paths reach NativeOnActivated. Without
+		// this call, the main menu would render but never enter CommonUI's activation
+		// lifecycle, so focus/cursor/input-mode/active-stack registration would not run.
+		MainMenuWidget->ActivateWidget();
 
 		// Bind menu callbacks
 		MainMenuWidget->OnNewGameRequested.AddDynamic(this, &AMOMainMenuPlayerController::HandleNewGameRequested);
@@ -133,8 +145,7 @@ void AMOMainMenuPlayerController::PlayIntroVideo()
 
 	bIntroPlaying = true;
 
-	// Hide mouse cursor during intro for cleaner presentation
-	bShowMouseCursor = false;
+	// NOTE: Cursor visibility managed by CommonUI via widget GetDesiredInputConfig()
 
 	// Setup media player and components
 	SetupMediaPlayer();
@@ -358,8 +369,7 @@ void AMOMainMenuPlayerController::HandleIntroComplete()
 
 	bIntroPlaying = false;
 
-	// Show mouse cursor again for main menu
-	bShowMouseCursor = true;
+	// NOTE: Cursor visibility managed by CommonUI via widget GetDesiredInputConfig()
 
 	// Mark intro as played so it won't play again this session
 	if (UMOGameSettings* Settings = UMOGameSettings::GetMOGameSettings())

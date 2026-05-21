@@ -66,6 +66,14 @@ void UMOQuestUIController::ToggleQuestLog()
 		return;
 	}
 
+	// Frame-based debounce: prevent double-toggle from ECommonInputMode::All
+	const uint64 CurrentFrame = GFrameCounter;
+	if (CurrentFrame == LastToggleFrame)
+	{
+		return;
+	}
+	LastToggleFrame = CurrentFrame;
+
 	// Query UIManager for in-game menu state
 	UMOUIManagerComponent* UIManager = GetUIManager();
 	if (UIManager && UIManager->IsInGameMenuOpen())
@@ -107,31 +115,35 @@ void UMOQuestUIController::OpenQuestLog()
 		return;
 	}
 
-	// Create widget if needed
-	UMOQuestLogPanel* PanelWidget = QuestLogPanelWidget.Get();
-	if (!PanelWidget)
+	// Close any existing panel first
+	UMOQuestLogPanel* ExistingPanel = QuestLogPanelWidget.Get();
+	if (IsValid(ExistingPanel) && ExistingPanel->IsActivated())
 	{
-		PanelWidget = CreateWidget<UMOQuestLogPanel>(PlayerController, QuestLogPanelClass);
-		if (!PanelWidget)
-		{
-			UE_LOG(LogMOFramework, Error, TEXT("[MOQuestUI] Failed to create Quest Log Panel widget."));
-			return;
-		}
-
-		QuestLogPanelWidget = PanelWidget;
-		PanelWidget->OnCloseRequested.AddDynamic(this, &UMOQuestUIController::HandleQuestLogRequestClose);
+		PopWidgetFromLayer(ExistingPanel);
+		QuestLogPanelWidget.Reset();
 	}
+
+	// Create new widget via CommonUI layer stack
+	ShowModalBackground();
+	UCommonActivatableWidget* CreatedWidget = PushWidgetToLayer(MOUILayerTags::Layer_Menu, QuestLogPanelClass);
+	UMOQuestLogPanel* PanelWidget = Cast<UMOQuestLogPanel>(CreatedWidget);
+
+	if (!IsValid(PanelWidget))
+	{
+		UE_LOG(LogMOFramework, Error, TEXT("[MOQuestUI] Failed to create quest log via layer stack"));
+		HideModalBackground();
+		return;
+	}
+
+	// Cache reference + auto-clear-on-deactivate (any close path). See base class.
+	RegisterCachedMenu(PanelWidget, QuestLogPanelWidget);
+	PanelWidget->OnCloseRequested.RemoveAll(this);
+	PanelWidget->OnCloseRequested.AddDynamic(this, &UMOQuestUIController::HandleQuestLogRequestClose);
 
 	// Refresh the quest list
 	PanelWidget->RefreshQuestList();
 
-	if (!PanelWidget->IsInViewport())
-	{
-		ShowModalBackground();
-		PushWidgetInstanceToLayer(MOUILayerTags::Layer_Menu, PanelWidget, QuestLogPanelZOrder);
-	}
-
-	ApplyInputModeForMenuOpen(PanelWidget);
+	// Widget handles input state via NativeOnActivated/GetDesiredInputConfig
 	UpdateReticleVisibility();
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOQuestUI] Quest Log opened"));
@@ -139,28 +151,35 @@ void UMOQuestUIController::OpenQuestLog()
 
 void UMOQuestUIController::CloseQuestLog()
 {
+	// IMPORTANT: Get reference before clearing cache
+	// Reset cache FIRST to ensure IsQuestLogOpen() returns false immediately
+	// This prevents race conditions with toggle input that fires multiple times per frame
 	UMOQuestLogPanel* PanelWidget = QuestLogPanelWidget.Get();
-	if (!PanelWidget)
+	QuestLogPanelWidget.Reset();
+
+	if (IsValid(PanelWidget) && PanelWidget->IsActivated())
 	{
-		return;
+		PopWidgetFromLayer(PanelWidget);
 	}
 
-	if (PanelWidget->IsInViewport())
+	UpdateReticleVisibility();
+
+	// Manage modal background visibility
+	if (!IsAnyMenuOpen())
 	{
-		PanelWidget->RemoveFromParent();
 		HideModalBackground();
 	}
-
-	ApplyInputModeForMenuClosed();
-	UpdateReticleVisibility();
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOQuestUI] Quest Log closed"));
 }
 
 bool UMOQuestUIController::IsQuestLogOpen() const
 {
+	// Check if we have a cached quest log - if so, panel is either open or opening
+	// IMPORTANT: Check IsValid() first, not just IsActivated()
+	// CommonUI defers activation, so there's a window where the widget is cached but not yet activated
 	UMOQuestLogPanel* PanelWidget = QuestLogPanelWidget.Get();
-	return PanelWidget && PanelWidget->IsInViewport();
+	return IsValid(PanelWidget);
 }
 
 UMOQuestLogPanel* UMOQuestUIController::GetQuestLog() const
