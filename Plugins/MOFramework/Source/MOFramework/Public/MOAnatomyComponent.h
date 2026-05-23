@@ -475,9 +475,9 @@ private:
 	UPROPERTY(EditAnywhere, Category="MO|Anatomy|Config", meta=(ClampMin="0.1"))
 	float TickInterval = 1.0f;
 
-	/** Time scale multiplier (1.0 = real time). */
-	UPROPERTY(EditAnywhere, Category="MO|Anatomy|Config", meta=(ClampMin="0.01"))
-	float TimeScaleMultiplier = 1.0f;
+	// NOTE: TimeScaleMultiplier removed — see UMOGameClockSubsystem.
+	// This component now reads the shared TimeScale from the world subsystem
+	// so all medical components stay in lockstep.
 
 	// ============================================================================
 	// INTERNAL STATE

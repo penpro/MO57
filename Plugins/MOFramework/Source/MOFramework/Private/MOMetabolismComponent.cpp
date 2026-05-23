@@ -3,6 +3,7 @@
 #include "MOAnatomyComponent.h"
 #include "MOItemDefinitionRow.h"
 #include "MOMedicalProviderInterface.h"
+#include "MOGameClockSubsystem.h"
 #include "Net/UnrealNetwork.h"
 #include "TimerManager.h"
 
@@ -479,6 +480,9 @@ void UMOMetabolismComponent::TickMetabolism()
 		return;
 	}
 
+	// Pull shared TimeScale from the central clock — see UMOGameClockSubsystem.
+	const UMOGameClockSubsystem* Clock = UMOGameClockSubsystem::Get(this);
+	const float TimeScaleMultiplier = Clock ? Clock->GetTimeScale() : 1.0f;
 	float ScaledDeltaTime = TickInterval * TimeScaleMultiplier;
 
 	// Process all metabolism functions

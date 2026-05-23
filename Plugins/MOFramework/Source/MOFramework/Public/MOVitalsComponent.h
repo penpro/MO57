@@ -59,8 +59,9 @@
  * 3. BLOOD LOSS STAGES: Class IV (>40% loss) is immediately life-threatening.
  *    Ensure UI shows urgent warnings at Class III/IV.
  *
- * 4. TIME SCALE: TimeScaleMultiplier affects blood regeneration and recovery.
- *    Must match across all medical components for consistent simulation.
+ * 4. TIME SCALE: This component reads TimeScale from UMOGameClockSubsystem
+ *    (single source of truth across all medical components). To tune the
+ *    overall simulation speed, change it on the subsystem — not here.
  *
  * RELATED FILES:
  * - MOMedicalTypes.h - FMOVitalSigns, FMOExertionState, FMOActivityState
@@ -170,9 +171,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Vitals|Config", meta=(ClampMin="0"))
 	float BloodRegenerationRate = 500.0f;
 
-	/** Time scale multiplier (1.0 = real time). */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Vitals|Config", meta=(ClampMin="0.01"))
-	float TimeScaleMultiplier = 1.0f;
+	// NOTE: TimeScaleMultiplier removed. The single source of truth is now
+	// UMOGameClockSubsystem::GetTimeScale(). Tick handlers in this component
+	// query GameClock->GetScaledDeltaTime(TickInterval). To change the
+	// simulation speed for all medical components, set it on the subsystem.
 
 	// ============================================================================
 	// DELEGATES

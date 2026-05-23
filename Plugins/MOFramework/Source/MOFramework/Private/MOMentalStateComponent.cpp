@@ -3,6 +3,7 @@
 #include "MOAnatomyComponent.h"
 #include "MOMetabolismComponent.h"
 #include "MOMedicalProviderInterface.h"
+#include "MOGameClockSubsystem.h"
 #include "Net/UnrealNetwork.h"
 #include "TimerManager.h"
 
@@ -347,6 +348,9 @@ void UMOMentalStateComponent::TickMentalState()
 		return;
 	}
 
+	// Pull shared TimeScale from the central clock — see UMOGameClockSubsystem.
+	const UMOGameClockSubsystem* Clock = UMOGameClockSubsystem::Get(this);
+	const float TimeScaleMultiplier = Clock ? Clock->GetTimeScale() : 1.0f;
 	float ScaledDeltaTime = TickInterval * TimeScaleMultiplier;
 
 	// Update external shock factors (blood loss, etc.)

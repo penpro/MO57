@@ -4,6 +4,7 @@
 #include "MOMentalStateComponent.h"
 #include "MOSkillsComponent.h"
 #include "MOMedicalProviderInterface.h"
+#include "MOGameClockSubsystem.h"
 #include "Net/UnrealNetwork.h"
 #include "TimerManager.h"
 
@@ -351,6 +352,9 @@ void UMOAdrenalineComponent::TickAdrenaline()
 		return;
 	}
 
+	// Pull shared TimeScale from the central clock — see UMOGameClockSubsystem.
+	const UMOGameClockSubsystem* Clock = UMOGameClockSubsystem::Get(this);
+	const float TimeScaleMultiplier = Clock ? Clock->GetTimeScale() : 1.0f;
 	float DeltaTime = TickInterval * TimeScaleMultiplier;
 
 	// Refresh skill cache periodically

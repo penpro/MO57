@@ -4,6 +4,7 @@
 #include "MOMetabolismComponent.h"
 #include "MOMentalStateComponent.h"
 #include "MOBodyPartTypes.h"
+#include "MOGameClockSubsystem.h"
 #include "Net/UnrealNetwork.h"
 #include "TimerManager.h"
 
@@ -303,6 +304,11 @@ void UMOVitalsComponent::ApplyEnvironmentalTemperature(float AmbientTemp, float 
 		return;
 	}
 
+	// Pull the shared TimeScale from the central clock. See
+	// UMOGameClockSubsystem — single source of truth across medical components.
+	const UMOGameClockSubsystem* Clock = UMOGameClockSubsystem::Get(this);
+	const float TimeScaleMultiplier = Clock ? Clock->GetTimeScale() : 1.0f;
+
 	// Normal body temp target
 	const float TargetTemp = 37.0f;
 
@@ -472,6 +478,9 @@ void UMOVitalsComponent::TickVitals()
 		return;
 	}
 
+	// Pull shared TimeScale from the central clock — see UMOGameClockSubsystem.
+	const UMOGameClockSubsystem* Clock = UMOGameClockSubsystem::Get(this);
+	const float TimeScaleMultiplier = Clock ? Clock->GetTimeScale() : 1.0f;
 	float ScaledDeltaTime = TickInterval * TimeScaleMultiplier;
 
 	// Update pain level from anatomy component

@@ -143,9 +143,9 @@ public:
 	// CONFIGURATION
 	// ============================================================================
 
-	/** Time scale multiplier (1.0 = real time). */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Mental|Config", meta=(ClampMin="0.01"))
-	float TimeScaleMultiplier = 1.0f;
+	// NOTE: TimeScaleMultiplier removed — see UMOGameClockSubsystem.
+	// This component now reads the shared TimeScale from the world subsystem
+	// so all medical components stay in lockstep.
 
 	/** Shock threshold for confusion (default 30). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Mental|Config")

@@ -50,8 +50,10 @@
  * 1. SCUM-STYLE COMPLEXITY: Vitamin/mineral tracking can feel tedious.
  *    Consider "good enough" thresholds vs micromanagement per CLAUDE.md.
  *
- * 2. TIME SCALE SYNC: TimeScaleMultiplier must match other medical
- *    components or digestion/calorie math will be inconsistent.
+ * 2. TIME SCALE: This component reads TimeScale from UMOGameClockSubsystem
+ *    (single source of truth across all medical components). The old
+ *    per-component TimeScaleMultiplier UPROPERTY used to require manual
+ *    sync — that footgun is gone; tune on the subsystem instead.
  *
  * 3. NEGATIVE NUTRITION: FMOItemNutrition can have negative values
  *    (poison, spoiled food). Handle gracefully in AbsorbNutrients().
@@ -199,9 +201,9 @@ public:
 	// CONFIGURATION
 	// ============================================================================
 
-	/** Time scale multiplier (1.0 = real time). */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Metabolism|Config", meta=(ClampMin="0.01"))
-	float TimeScaleMultiplier = 1.0f;
+	// NOTE: TimeScaleMultiplier removed — see UMOGameClockSubsystem.
+	// This component now reads the shared TimeScale from the world subsystem
+	// so all medical components stay in lockstep.
 
 	/** Daily water requirement in mL (normal ~2500mL/day). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Metabolism|Config", meta=(ClampMin="1.0"))

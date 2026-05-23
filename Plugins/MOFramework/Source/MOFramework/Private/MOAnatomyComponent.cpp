@@ -5,6 +5,7 @@
 #include "MOBodyPartDefinitionRow.h"
 #include "MOMedicalSubsystem.h"
 #include "MOMedicalProviderInterface.h"
+#include "MOGameClockSubsystem.h"
 #include "Net/UnrealNetwork.h"
 #include "Engine/DataTable.h"
 #include "Engine/GameInstance.h"
@@ -767,6 +768,9 @@ void UMOAnatomyComponent::TickAnatomy()
 		return;
 	}
 
+	// Pull shared TimeScale from the central clock — see UMOGameClockSubsystem.
+	const UMOGameClockSubsystem* Clock = UMOGameClockSubsystem::Get(this);
+	const float TimeScaleMultiplier = Clock ? Clock->GetTimeScale() : 1.0f;
 	float ScaledDeltaTime = TickInterval * TimeScaleMultiplier;
 
 	// Process wounds
@@ -994,6 +998,9 @@ void UMOAnatomyComponent::StartDeathTimer(EMOBodyPartType Part, float Seconds)
 
 void UMOAnatomyComponent::TickDeathTimer()
 {
+	// Pull shared TimeScale from the central clock — see UMOGameClockSubsystem.
+	const UMOGameClockSubsystem* Clock = UMOGameClockSubsystem::Get(this);
+	const float TimeScaleMultiplier = Clock ? Clock->GetTimeScale() : 1.0f;
 	DeathTimerRemaining -= TimeScaleMultiplier;
 
 	OnDeathTimer.Broadcast(DeathTimerPart, DeathTimerRemaining);
