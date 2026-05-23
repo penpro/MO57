@@ -20,7 +20,15 @@ UMOGameClockSubsystem* UMOGameClockSubsystem::Get(const UObject* WorldContextObj
 void UMOGameClockSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
-	UE_LOG(LogMOFramework, Log, TEXT("[MOGameClock] Initialized — TimeScale=%.2f"), TimeScale);
+
+	// Seed the in-game DateTime from the configured default. ApplySaveData
+	// overrides this when a save is loaded.
+	GameDateTime = DefaultStartDateTime;
+	RefreshDaytimeState();
+
+	UE_LOG(LogMOFramework, Log,
+		TEXT("[MOGameClock] Initialized — TimeScale=%.2f, GameDateTime=%s (%s)"),
+		TimeScale, *GameDateTime.ToString(), bIsDaytime ? TEXT("DAY") : TEXT("NIGHT"));
 }
 
 void UMOGameClockSubsystem::Deinitialize()
@@ -33,10 +41,21 @@ void UMOGameClockSubsystem::Deinitialize()
 void UMOGameClockSubsystem::Tick(float DeltaTime)
 {
 	// MO57 doesn't pause (Docs/PAUSE_POLICY.md). Real time is monotonic;
-	// no "is paused?" gate needed here. Every tick advances both
-	// accumulators.
+	// no "is paused?" gate needed here. Every tick advances all
+	// accumulators + the in-game DateTime.
 	RealSecondsAccumulated += DeltaTime;
-	GameSecondsAccumulated += static_cast<double>(DeltaTime) * static_cast<double>(TimeScale);
+
+	const double ScaledDelta = static_cast<double>(DeltaTime) * static_cast<double>(TimeScale);
+	GameSecondsAccumulated += ScaledDelta;
+
+	// Advance the in-game DateTime by the scaled delta. FTimespan::FromSeconds
+	// accepts fractional values, so we don't lose sub-second precision when
+	// TimeScale is small.
+	GameDateTime += FTimespan::FromSeconds(ScaledDelta);
+
+	// Check if we crossed a day/night boundary this tick. Cheap (no
+	// transition? do nothing); broadcasts only on actual flip.
+	RefreshDaytimeState();
 }
 
 TStatId UMOGameClockSubsystem::GetStatId() const
@@ -62,12 +81,52 @@ float UMOGameClockSubsystem::GetScaledDeltaTime(float RealDeltaTime) const
 	return RealDeltaTime * TimeScale;
 }
 
+// =============================================================================
+// IN-GAME DATE / TIME
+// =============================================================================
+
+void UMOGameClockSubsystem::SetGameDateTime(const FDateTime& NewDateTime)
+{
+	if (NewDateTime == GameDateTime)
+	{
+		return;
+	}
+
+	GameDateTime = NewDateTime;
+	UE_LOG(LogMOFramework, Log, TEXT("[MOGameClock] SetGameDateTime -> %s"), *GameDateTime.ToString());
+
+	// Re-evaluate daytime state after the jump. If we skipped from 5 PM to
+	// 7 AM (a "sleep until morning" jump), the day/night delegate fires.
+	RefreshDaytimeState();
+}
+
+void UMOGameClockSubsystem::RefreshDaytimeState()
+{
+	const int32 Hour = GameDateTime.GetHour();
+	const bool bNowDaytime = (Hour >= DaytimeStartHour && Hour < DaytimeEndHour);
+
+	if (bNowDaytime == bIsDaytime)
+	{
+		return;
+	}
+
+	bIsDaytime = bNowDaytime;
+	UE_LOG(LogMOFramework, Log, TEXT("[MOGameClock] Day/Night flipped -> %s at %s"),
+		bIsDaytime ? TEXT("DAY") : TEXT("NIGHT"), *GameDateTime.ToString());
+	OnDayNightChanged.Broadcast(bIsDaytime, GameDateTime);
+}
+
+// =============================================================================
+// SAVE / LOAD
+// =============================================================================
+
 FMOGameClockSaveData UMOGameClockSubsystem::BuildSaveData() const
 {
 	FMOGameClockSaveData Data;
 	Data.RealSecondsAccumulated = RealSecondsAccumulated;
 	Data.GameSecondsAccumulated = GameSecondsAccumulated;
 	Data.TimeScale = TimeScale;
+	Data.GameDateTime = GameDateTime;
 	Data.bIsValid = true;
 	return Data;
 }
@@ -88,7 +147,11 @@ void UMOGameClockSubsystem::ApplySaveData(const FMOGameClockSaveData& SaveData)
 	// from the default.
 	SetTimeScale(SaveData.TimeScale);
 
+	// Restore DateTime through SetGameDateTime so OnDayNightChanged fires
+	// if the saved time crosses a day/night boundary from the default.
+	SetGameDateTime(SaveData.GameDateTime);
+
 	UE_LOG(LogMOFramework, Log,
-		TEXT("[MOGameClock] ApplySaveData — RealPlayTime=%.1fs, GameTime=%.1fs, TimeScale=%.2f"),
-		RealSecondsAccumulated, GameSecondsAccumulated, TimeScale);
+		TEXT("[MOGameClock] ApplySaveData — RealPlayTime=%.1fs, GameTime=%.1fs, TimeScale=%.2f, GameDateTime=%s"),
+		RealSecondsAccumulated, GameSecondsAccumulated, TimeScale, *GameDateTime.ToString());
 }

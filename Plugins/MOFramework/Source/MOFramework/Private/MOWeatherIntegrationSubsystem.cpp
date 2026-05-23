@@ -1,17 +1,50 @@
 #include "MOWeatherIntegrationSubsystem.h"
 #include "MOWeatherProviderInterface.h"
+#include "MOGameClockSubsystem.h"
 #include "MOFramework.h"
 
 void UMOWeatherIntegrationSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
-	UE_LOG(LogMOFramework, Log, TEXT("[MOWeatherIntegration] Initialized"));
+
+	// Subscribe to the central clock's day/night transitions so this
+	// subsystem's own OnDayNightChanged delegate continues firing for
+	// existing listeners. The clock is the authoritative source — this
+	// subsystem is now a forwarder for backward compat (Phase 2 of clock
+	// centralization; see Docs/PAUSE_POLICY.md + MOGameClockSubsystem.h).
+	if (UMOGameClockSubsystem* Clock = UMOGameClockSubsystem::Get(this))
+	{
+		Clock->OnDayNightChanged.AddDynamic(this, &UMOWeatherIntegrationSubsystem::HandleClockDayNightChanged);
+		// Seed our cache from the clock's current state so any consumer
+		// that reads bCachedIsDaytime gets the right answer immediately.
+		bCachedIsDaytime = Clock->IsDaytime();
+	}
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOWeatherIntegration] Initialized — bound to clock day/night events"));
 }
 
 void UMOWeatherIntegrationSubsystem::Deinitialize()
 {
+	// Unhook from the clock so the dynamic delegate doesn't leak across
+	// subsystem teardown ordering surprises.
+	if (UMOGameClockSubsystem* Clock = UMOGameClockSubsystem::Get(this))
+	{
+		Clock->OnDayNightChanged.RemoveDynamic(this, &UMOWeatherIntegrationSubsystem::HandleClockDayNightChanged);
+	}
+
 	WeatherProvider = nullptr;
 	Super::Deinitialize();
+}
+
+void UMOWeatherIntegrationSubsystem::HandleClockDayNightChanged(bool bIsDaytime, const FDateTime& CurrentDateTime)
+{
+	bCachedIsDaytime = bIsDaytime;
+	// Re-broadcast on our own delegate for back-compat consumers (BTs,
+	// existing BP listeners, etc). Eventually those should point directly
+	// at UMOGameClockSubsystem::OnDayNightChanged and this can be removed.
+	OnDayNightChanged.Broadcast(bIsDaytime, CurrentDateTime);
+	UE_LOG(LogMOFramework, Log, TEXT("[MOWeatherIntegration] Day/Night forwarded from clock -> %s"),
+		bIsDaytime ? TEXT("DAY") : TEXT("NIGHT"));
 }
 
 void UMOWeatherIntegrationSubsystem::Tick(float DeltaTime)
@@ -207,24 +240,34 @@ bool UMOWeatherIntegrationSubsystem::IsSnowing() const
 
 FDateTime UMOWeatherIntegrationSubsystem::GetDateTime() const
 {
-	if (!HasWeatherProvider())
+	// Phase 2 of clock centralization: in-game DateTime lives on the clock.
+	// This subsystem became a forwarder so existing callers (BTs, BP, etc)
+	// keep working. New code should call UMOGameClockSubsystem::GetGameDateTime
+	// directly. If the clock is unavailable for any reason (subsystem init
+	// race, etc), fall back to the weather provider, then to FDateTime::Now.
+	if (const UMOGameClockSubsystem* Clock = UMOGameClockSubsystem::Get(this))
 	{
-		return FDateTime::Now();
+		return Clock->GetGameDateTime();
 	}
-
-	return IMOWeatherProviderInterface::Execute_GetDateTime(
-		WeatherProvider.GetObject());
+	if (HasWeatherProvider())
+	{
+		return IMOWeatherProviderInterface::Execute_GetDateTime(WeatherProvider.GetObject());
+	}
+	return FDateTime::Now();
 }
 
 bool UMOWeatherIntegrationSubsystem::IsDaytime() const
 {
-	if (!HasWeatherProvider())
+	// Phase 2: clock is authoritative for day/night. Forwarder for compat.
+	if (const UMOGameClockSubsystem* Clock = UMOGameClockSubsystem::Get(this))
 	{
-		return true;
+		return Clock->IsDaytime();
 	}
-
-	return IMOWeatherProviderInterface::Execute_IsDaytime(
-		WeatherProvider.GetObject());
+	if (HasWeatherProvider())
+	{
+		return IMOWeatherProviderInterface::Execute_IsDaytime(WeatherProvider.GetObject());
+	}
+	return true;
 }
 
 // ============================================================================
@@ -336,8 +379,10 @@ void UMOWeatherIntegrationSubsystem::CheckForWeatherChanges()
 	}
 
 	const FMOWeatherState NewWeatherState = GetCurrentWeatherState();
-	const bool bIsDaytime = IsDaytime();
 	const float CurrentTemp = GetGlobalTemperature(EMOTemperatureUnit::Celsius);
+	// NOTE: bIsDaytime detection moved to UMOGameClockSubsystem. We listen
+	// to its OnDayNightChanged delegate in HandleClockDayNightChanged and
+	// re-broadcast — no per-tick polling needed here anymore.
 
 	// Check rain state change
 	const bool bIsRaining = NewWeatherState.IsRaining();
@@ -359,14 +404,8 @@ void UMOWeatherIntegrationSubsystem::CheckForWeatherChanges()
 			bIsSnowing ? TEXT("started") : TEXT("stopped"));
 	}
 
-	// Check day/night change
-	if (bIsDaytime != bCachedIsDaytime)
-	{
-		bCachedIsDaytime = bIsDaytime;
-		OnDayNightChanged.Broadcast(bIsDaytime, GetDateTime());
-		UE_LOG(LogMOFramework, Log, TEXT("[MOWeatherIntegration] Transitioned to %s"),
-			bIsDaytime ? TEXT("day") : TEXT("night"));
-	}
+	// Day/night transitions are owned by UMOGameClockSubsystem now;
+	// HandleClockDayNightChanged forwards them to OnDayNightChanged.
 
 	// Check temperature threshold crossings
 	const bool bAboveHeat = CurrentTemp > HeatThresholdCelsius;
@@ -458,13 +497,24 @@ bool UMOWeatherIntegrationSubsystem::ApplyWeatherSaveData(const FMOWeatherSaveDa
 
 void UMOWeatherIntegrationSubsystem::SetDateTime(const FDateTime& DateTime)
 {
-	if (!HasWeatherProvider())
+	// Authoritative store is on the clock now. We also forward to the UDS
+	// provider (if registered) so the visual sky updates. Future BP-level
+	// cleanup: wire the provider to listen to clock directly and remove
+	// this dual write.
+	if (UMOGameClockSubsystem* Clock = UMOGameClockSubsystem::Get(this))
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOWeatherIntegration] SetDateTime: No provider registered"));
-		return;
+		Clock->SetGameDateTime(DateTime);
+	}
+	else
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOWeatherIntegration] SetDateTime: clock subsystem unavailable, falling back to provider only"));
 	}
 
-	IMOWeatherProviderInterface::Execute_SetDateTime(WeatherProvider.GetObject(), DateTime);
+	if (HasWeatherProvider())
+	{
+		IMOWeatherProviderInterface::Execute_SetDateTime(WeatherProvider.GetObject(), DateTime);
+	}
+
 	UE_LOG(LogMOFramework, Log, TEXT("[MOWeatherIntegration] Set date/time to %s"), *DateTime.ToString());
 }
 

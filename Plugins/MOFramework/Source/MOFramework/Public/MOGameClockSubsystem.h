@@ -29,20 +29,22 @@
  * logic on resume, no two-mode complexity. RealPlayTime advances every tick.
  *
  * =============================================================================
- * SCOPE — WHAT'S HERE TODAY (Phase 1)
+ * SCOPE — WHAT'S HERE TODAY (Phases 1 + 2)
  * =============================================================================
- * - TimeScale + GetScaledDeltaTime
- * - Cumulative real + game seconds
- * - Save/load
+ * - TimeScale + GetScaledDeltaTime (Phase 1)
+ * - Cumulative real + game seconds (Phase 1)
+ * - Save/load (Phase 1)
+ * - In-game DateTime, authoritative (Phase 2)
+ * - IsDaytime + OnDayNightChanged (Phase 2)
  *
- * SCOPE — WHAT'S COMING (Phase 2)
- * - In-game date/time (currently delegated to weather provider via UDS)
- * - Day/night events (OnHourChanged, OnDayChanged, OnDayPhaseChanged)
- * - Migration of OnDayNightChanged from MOWeatherIntegrationSubsystem
+ * MOWeatherIntegrationSubsystem.GetDateTime / IsDaytime / OnDayNightChanged
+ * now forward to this subsystem. They remain in the weather API for
+ * backward compatibility — callers using either path get the same answer.
  *
- * For now, if you need in-game DateTime, keep using
- * UMOWeatherIntegrationSubsystem::GetDateTime(). When Phase 2 lands, that
- * call will forward here.
+ * UDS visual sync (rendering the sun position from clock's DateTime) is
+ * Blueprint-side cleanup not yet done. Clock advances DateTime
+ * independently of UDS for now. If you set UDS time in the BP, it WON'T
+ * automatically sync to the clock — wire that up when you're ready.
  *
  * =============================================================================
  * KNOWN PITFALLS
@@ -79,7 +81,7 @@
 
 /**
  * Save data for the game clock. Persisted with the player's save slot so
- * playtime + game time elapsed survive save/reload.
+ * playtime + game time elapsed + in-game date/time survive save/reload.
  */
 USTRUCT(BlueprintType)
 struct MOFRAMEWORK_API FMOGameClockSaveData
@@ -98,6 +100,10 @@ struct MOFRAMEWORK_API FMOGameClockSaveData
 	UPROPERTY()
 	float TimeScale = 1.0f;
 
+	/** In-game date and time at the moment of save. */
+	UPROPERTY()
+	FDateTime GameDateTime = FDateTime(2026, 6, 1, 6, 0, 0);
+
 	/** True if this struct was populated from a real save (vs. default-init). */
 	UPROPERTY()
 	bool bIsValid = false;
@@ -108,6 +114,17 @@ struct MOFRAMEWORK_API FMOGameClockSaveData
  * the value (e.g. for UI display) to refresh.
  */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOGameClockTimeScaleChanged, float, OldScale, float, NewScale);
+
+/**
+ * Fired when in-game time crosses the daytime/nighttime boundary. bIsDaytime
+ * = true if the new state is daytime. CurrentDateTime is the game DateTime
+ * at the moment of transition.
+ *
+ * This delegate replaces UMOWeatherIntegrationSubsystem::OnDayNightChanged
+ * as the authoritative source. The weather subsystem now listens here and
+ * re-broadcasts its own delegate for backward compatibility.
+ */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOGameClockDayNightChanged, bool, bIsDaytime, const FDateTime&, CurrentDateTime);
 
 /**
  * Authoritative game time clock. See file header for design + scope.
@@ -191,6 +208,50 @@ public:
 	double GetGameTimeSeconds() const { return GameSecondsAccumulated; }
 
 	// =========================================================================
+	// IN-GAME DATE / TIME
+	// =========================================================================
+	//
+	// GameDateTime is the in-game calendar — what day is it, what hour,
+	// what minute. Authoritative; advances on every Tick by the scaled
+	// delta. AI schedules, food spoilage timers, scheduled NPC routines
+	// read from here.
+	//
+	// Distinct from GetGameTimeSeconds (a monotonic accumulator). DateTime
+	// is the "calendar" view; GameTimeSeconds is the "stopwatch" view.
+
+	/** Current in-game date and time. */
+	UFUNCTION(BlueprintPure, Category="MO|Clock|DateTime")
+	FDateTime GetGameDateTime() const { return GameDateTime; }
+
+	/**
+	 * Force the in-game DateTime to a specific value. Use for save load,
+	 * debug commands, and any "time skip" gameplay (sleep until morning,
+	 * fast-travel time advance, etc). Triggers daytime re-evaluation and
+	 * fires OnDayNightChanged if state changed.
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Clock|DateTime")
+	void SetGameDateTime(const FDateTime& NewDateTime);
+
+	/**
+	 * True if the in-game time is within the configured daytime hour window
+	 * [DaytimeStartHour, DaytimeEndHour). Default 6 AM – 6 PM.
+	 *
+	 * Computed from GameDateTime, not from any weather provider. UDS
+	 * visual lighting may show a different state if not wired to the clock.
+	 */
+	UFUNCTION(BlueprintPure, Category="MO|Clock|DateTime")
+	bool IsDaytime() const { return bIsDaytime; }
+
+	/**
+	 * Fired exactly once whenever the daytime boolean flips. Subscribers
+	 * include UMOWeatherIntegrationSubsystem (which re-broadcasts its own
+	 * delegate for compatibility) and any creature AI that toggles
+	 * behavior on day/night.
+	 */
+	UPROPERTY(BlueprintAssignable, Category="MO|Clock|DateTime")
+	FMOGameClockDayNightChanged OnDayNightChanged;
+
+	// =========================================================================
 	// SAVE / LOAD
 	// =========================================================================
 
@@ -214,10 +275,34 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="MO|Clock", meta=(ClampMin="0.01", ClampMax="1000.0"))
 	float TimeScale = 1.0f;
 
+	/** Hour (0-23) at which daytime starts. Default 6 AM. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="MO|Clock|DateTime", meta=(ClampMin="0", ClampMax="23"))
+	int32 DaytimeStartHour = 6;
+
+	/** Hour (0-23, exclusive) at which daytime ends. Default 18 (6 PM). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="MO|Clock|DateTime", meta=(ClampMin="1", ClampMax="24"))
+	int32 DaytimeEndHour = 18;
+
+	/**
+	 * Initial in-game DateTime when a fresh save starts (no clock save
+	 * data to restore from). Default: June 1, 2026, 06:00:00.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="MO|Clock|DateTime")
+	FDateTime DefaultStartDateTime = FDateTime(2026, 6, 1, 6, 0, 0);
+
+	/** Recompute bIsDaytime from current GameDateTime; broadcast if state flipped. */
+	void RefreshDaytimeState();
+
 private:
 	/** Cumulative real seconds since this clock started ticking (or since save load). */
 	double RealSecondsAccumulated = 0.0;
 
 	/** Cumulative in-game seconds (RealSecondsAccumulated * effective TimeScale, integrated). */
 	double GameSecondsAccumulated = 0.0;
+
+	/** Current in-game date and time. Advanced each tick by scaled delta. */
+	FDateTime GameDateTime;
+
+	/** Cached daytime state; updated only when GameDateTime crosses a boundary so the delegate doesn't fire every tick. */
+	bool bIsDaytime = true;
 };

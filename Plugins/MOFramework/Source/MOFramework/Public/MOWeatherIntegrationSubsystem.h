@@ -334,6 +334,16 @@ public:
 	FMOTimeOfDayChangedSignature OnDayNightChanged;
 
 private:
+	/**
+	 * Forwards day/night transitions from UMOGameClockSubsystem to this
+	 * subsystem's own OnDayNightChanged delegate. Allows existing
+	 * consumers (BT services, BP listeners) to keep using
+	 * WeatherIntegrationSubsystem's API while the clock is the
+	 * authoritative source. Phase 2 of clock centralization.
+	 */
+	UFUNCTION()
+	void HandleClockDayNightChanged(bool bIsDaytime, const FDateTime& CurrentDateTime);
+
 	/** The registered weather provider. */
 	UPROPERTY()
 	TScriptInterface<IMOWeatherProviderInterface> WeatherProvider;
