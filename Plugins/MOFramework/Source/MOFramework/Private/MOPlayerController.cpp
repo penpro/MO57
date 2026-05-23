@@ -282,15 +282,14 @@ void AMOPlayerController::SetupInputComponent()
 		UE_LOG(LogMOFramework, Warning, TEXT("AMOPlayerController: BuildAction is NOT set!"));
 	}
 
-	if (PauseAction)
+	if (BackMenuAction)
 	{
-		EnhancedInput->BindAction(PauseAction, ETriggerEvent::Started, this, &AMOPlayerController::HandlePause);
+		EnhancedInput->BindAction(BackMenuAction, ETriggerEvent::Started, this, &AMOPlayerController::HandleBackMenu);
+		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound BackMenuAction"));
 	}
-
-	if (CloseMenuAction)
+	else
 	{
-		EnhancedInput->BindAction(CloseMenuAction, ETriggerEvent::Started, this, &AMOPlayerController::HandleCloseMenu);
-		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound CloseMenuAction (Tab key)"));
+		UE_LOG(LogMOFramework, Warning, TEXT("AMOPlayerController: BackMenuAction is NOT set — Tab/menu input will not work. Assign IA_Back_Menu on BP defaults."));
 	}
 
 	if (PossessAction)
@@ -459,6 +458,41 @@ void AMOPlayerController::OnUnPossess()
 	UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Unpossessed - spectator input disabled"));
 
 	Super::OnUnPossess();
+}
+
+// ============================================================================
+// PAUSE POLICY ENFORCEMENT
+// ============================================================================
+//
+// MO57 is pure real-time. The vision (survival sim + Steam co-op à la
+// Satisfactory) doesn't permit pausing — world time, AI, vitals, weather,
+// hunger all keep ticking while menus are open. See Docs/PAUSE_POLICY.md.
+//
+// APlayerController::SetPause is the single chokepoint every pause path
+// in UE funnels through (UGameplayStatics::SetGamePaused, AGameMode::SetPause,
+// BP "Set Game Paused" node, console "pause" command, gamepad-disconnect
+// auto-pause behavior). Returning false means the world stays unpaused
+// regardless of caller — and the warning log surfaces unintended attempts
+// so we can track them down rather than silently letting a future
+// regression slip in.
+
+bool AMOPlayerController::SetPause(bool bPause, FCanUnpause CanUnpauseDelegate)
+{
+	if (bPause)
+	{
+		UE_LOG(LogMOFramework, Warning,
+			TEXT("[MOPlayerController] SetPause(true) refused — MO57 is real-time. "
+			     "If you need this, check Docs/PAUSE_POLICY.md first. Caller stack:"));
+		// PrintScriptCallstack in shipping is a no-op; in dev it surfaces the offender.
+		FFrame::KismetExecutionMessage(
+			TEXT("Pause attempt blocked by MO57 pause policy"),
+			ELogVerbosity::Warning);
+	}
+
+	// Always report failure. Returning Super::SetPause(false, ...) on the
+	// unpause side would be fine too, but consistency (always-false) is
+	// simpler and ensures no caller mistakenly thinks they paused.
+	return false;
 }
 
 // ============================================================================
@@ -1044,21 +1078,18 @@ void AMOPlayerController::HandleBuild(const FInputActionValue& Value)
 	}
 }
 
-void AMOPlayerController::HandlePause(const FInputActionValue& Value)
+void AMOPlayerController::HandleBackMenu(const FInputActionValue& Value)
 {
-	MOUI_LOG(this, "PC", "HandlePause FIRED via Enhanced Input");
-	if (UIManagerComponent)
-	{
-		UIManagerComponent->ToggleInGameMenu();
-	}
-}
-
-void AMOPlayerController::HandleCloseMenu(const FInputActionValue& Value)
-{
-	MOUI_LOG(this, "PC", "HandleCloseMenu FIRED via Enhanced Input");
-	// Tab key behavior:
-	// - If any menu is open: close it (handled by widget's NativeOnPreviewKeyDown in Menu mode)
-	// - If no menu is open: open in-game menu (this path fires via Enhanced Input in Game mode)
+	MOUI_LOG(this, "PC", "HandleBackMenu FIRED via Enhanced Input");
+	// "Back / Menu" semantic:
+	//   - Any menu open → close the topmost one (inventory, crafting,
+	//     in-game menu, etc.). Per-widget Tab handling in
+	//     UMOActivatableWidget::NativeOnPreviewKeyDown also handles this
+	//     when a menu has Slate focus; this path is the fallback for when
+	//     focus has drifted to the viewport.
+	//   - Nothing open → open the in-game system menu.
+	//
+	// Does NOT pause. MO57 is real-time — see Docs/PAUSE_POLICY.md.
 	if (UIManagerComponent)
 	{
 		if (UIManagerComponent->IsAnyMenuOpen())

@@ -137,6 +137,16 @@ responsible layer, you don't understand the bug yet.
 
 ---
 
+## Design Policies (load-bearing — never violate without policy doc update)
+
+| Policy | Document | Enforcement |
+|--------|----------|-------------|
+| **No pause, ever** (real-time always; single-player and co-op alike) | `Docs/PAUSE_POLICY.md` | `AMOPlayerController::SetPause` refuses + logs warning |
+
+If you find yourself wanting to add `SetGamePaused`, `SetPause(true)`, a "pause game" feature, or anything equivalent: don't. Read the policy doc first. The enforcement is intentional.
+
+---
+
 ## Project Vision
 
 **MO57** is an ultra-realistic procedural open-world survival game with a fully destructible/mutable voxel terrain. Think Minecraft's freedom meets hardcore realism - no fantasy creatures, grounded physics, detailed medical/survival simulation.

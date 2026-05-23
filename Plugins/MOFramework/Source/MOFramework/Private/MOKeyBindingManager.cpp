@@ -194,7 +194,7 @@ void FMOKeyBindingManager::ApplyAllBindingsFromSettings(AMOPlayerController* PC)
 	if (PC->PlayerStatusAction) ActionMap.Add(PC->PlayerStatusAction->GetFName(), PC->PlayerStatusAction);
 	if (PC->SkillsAction) ActionMap.Add(PC->SkillsAction->GetFName(), PC->SkillsAction);
 	if (PC->BuildAction) ActionMap.Add(PC->BuildAction->GetFName(), PC->BuildAction);
-	if (PC->PauseAction) ActionMap.Add(PC->PauseAction->GetFName(), PC->PauseAction);
+	if (PC->BackMenuAction) ActionMap.Add(PC->BackMenuAction->GetFName(), PC->BackMenuAction);
 	if (PC->PossessAction) ActionMap.Add(PC->PossessAction->GetFName(), PC->PossessAction);
 
 	// Building actions
@@ -274,7 +274,7 @@ void FMOKeyBindingManager::RestoreAllDefaults(AMOPlayerController* PC)
 		if (PC->PlayerStatusAction) ActionMap.Add(PC->PlayerStatusAction->GetFName(), PC->PlayerStatusAction);
 		if (PC->SkillsAction) ActionMap.Add(PC->SkillsAction->GetFName(), PC->SkillsAction);
 		if (PC->BuildAction) ActionMap.Add(PC->BuildAction->GetFName(), PC->BuildAction);
-		if (PC->PauseAction) ActionMap.Add(PC->PauseAction->GetFName(), PC->PauseAction);
+		if (PC->BackMenuAction) ActionMap.Add(PC->BackMenuAction->GetFName(), PC->BackMenuAction);
 		if (PC->PossessAction) ActionMap.Add(PC->PossessAction->GetFName(), PC->PossessAction);
 		if (PC->PlaceBuildingAction) ActionMap.Add(PC->PlaceBuildingAction->GetFName(), PC->PlaceBuildingAction);
 		if (PC->RotateBuildingCWAction) ActionMap.Add(PC->RotateBuildingCWAction->GetFName(), PC->RotateBuildingCWAction);
