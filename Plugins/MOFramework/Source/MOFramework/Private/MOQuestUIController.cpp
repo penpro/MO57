@@ -10,6 +10,7 @@
 #include "MOQuestHUDWidget.h"
 #include "MOQuestSubsystem.h"
 #include "MOPrimaryGameLayout.h"
+#include "MOTutorialHintWidget.h"
 
 UMOQuestUIController::UMOQuestUIController()
 {
@@ -25,6 +26,10 @@ void UMOQuestUIController::BeginPlay()
 		if (bCreateQuestHUDOnBeginPlay && QuestHUDWidgetClass)
 		{
 			CreateQuestHUD();
+		}
+		if (bCreateTutorialHintOnBeginPlay && TutorialHintWidgetClass)
+		{
+			CreateTutorialHintWidget();
 		}
 	}
 }
@@ -51,6 +56,16 @@ void UMOQuestUIController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 		}
 	}
 	QuestHUDWidget.Reset();
+
+	// Clean up tutorial hint widget
+	if (UMOTutorialHintWidget* HintWidget = TutorialHintWidget.Get())
+	{
+		if (HintWidget->IsInViewport())
+		{
+			HintWidget->RemoveFromParent();
+		}
+	}
+	TutorialHintWidget.Reset();
 
 	Super::EndPlay(EndPlayReason);
 }
@@ -272,4 +287,48 @@ bool UMOQuestUIController::IsQuestHUDVisible() const
 UMOQuestHUDWidget* UMOQuestUIController::GetQuestHUD() const
 {
 	return QuestHUDWidget.Get();
+}
+
+// =============================================================================
+// Tutorial Hint Widget
+// =============================================================================
+
+void UMOQuestUIController::CreateTutorialHintWidget()
+{
+	if (!IsLocalOwningPlayerController())
+	{
+		return;
+	}
+
+	APlayerController* PlayerController = ResolveOwningPlayerController();
+	if (!IsValid(PlayerController))
+	{
+		return;
+	}
+
+	if (!TutorialHintWidgetClass)
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOQuestUI] TutorialHintWidgetClass not set, skipping tutorial hint creation."));
+		return;
+	}
+
+	if (TutorialHintWidget.IsValid())
+	{
+		return;
+	}
+
+	UMOTutorialHintWidget* NewHint = CreateWidget<UMOTutorialHintWidget>(PlayerController, TutorialHintWidgetClass);
+	if (!IsValid(NewHint))
+	{
+		UE_LOG(LogMOFramework, Error, TEXT("[MOQuestUI] Failed to create Tutorial Hint widget."));
+		return;
+	}
+
+	TutorialHintWidget = NewHint;
+	NewHint->AddToViewport(TutorialHintZOrder);
+	// CommonActivatableWidget controls its own visibility via Activate/Deactivate;
+	// we do NOT call SetVisibility here — the widget starts deactivated and
+	// activates itself when there's a hint to show.
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOQuestUI] Tutorial hint widget created."));
 }

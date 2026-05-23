@@ -62,13 +62,41 @@
 #include "MOPlayerController.h"
 #include "MORecipeDatabaseSettings.h"
 #include "MOFramework.h"
+#include "MOQuestSubsystem.h"
 #include "Kismet/KismetMathLibrary.h"
 #include "Engine/World.h"
 #include "Engine/StaticMesh.h"
+#include "Engine/GameInstance.h"
 #include "EngineUtils.h"
 #include "GameFramework/PlayerController.h"
 #include "Components/StaticMeshComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
+
+namespace MOBuildingComponentInternal
+{
+	/**
+	 * Fire a tutorial event via the quest subsystem on this actor's game
+	 * instance. Used to surface "you just opened build mode / rotated /
+	 * placed / cancelled" hints to the tutorial popup widget.
+	 *
+	 * Gated on IsAnyQuestListeningForEvent so once the build tutorials
+	 * complete, the discrete-action firers (RotateGhostZ, TryPlaceGhost,
+	 * etc.) cost a single set lookup and skip the iteration. Same pattern
+	 * as the player controller's BroadcastTutorialEvent.
+	 */
+	void FireBuildingTutorialEvent(UObject* WorldContext, FName EventName)
+	{
+		if (!WorldContext) return;
+		UWorld* World = WorldContext->GetWorld();
+		if (!World) return;
+		UGameInstance* GI = World->GetGameInstance();
+		if (!GI) return;
+		UMOQuestSubsystem* Quest = GI->GetSubsystem<UMOQuestSubsystem>();
+		if (!Quest) return;
+		if (!Quest->IsAnyQuestListeningForEvent(EventName)) return;
+		Quest->FireGameEvent(EventName);
+	}
+}
 
 UMOBuildingComponent::UMOBuildingComponent()
 {
@@ -156,6 +184,7 @@ bool UMOBuildingComponent::EnterPlacementMode(FName RecipeId)
 	}
 
 	OnPlacementModeEntered.Broadcast(RecipeId);
+	MOBuildingComponentInternal::FireBuildingTutorialEvent(this, TEXT("OpenedBuildMenu"));
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingComponent] Entered placement mode for: %s"), *RecipeId.ToString());
 	return true;
@@ -187,6 +216,7 @@ void UMOBuildingComponent::ExitPlacementMode(bool bCancel)
 	}
 
 	OnPlacementModeExited.Broadcast(!bCancel);
+	MOBuildingComponentInternal::FireBuildingTutorialEvent(this, TEXT("ExitedBuildMode"));
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingComponent] Exited placement mode (cancelled: %s) for: %s"),
 		bCancel ? TEXT("yes") : TEXT("no"), *ExitedRecipeId.ToString());
@@ -323,6 +353,8 @@ void UMOBuildingComponent::RotateGhostZ(float DeltaDegrees)
 	UserRotationOffset.Yaw += DeltaDegrees;
 	UserRotationOffset.Yaw = FMath::Fmod(UserRotationOffset.Yaw, 360.0f);
 
+	MOBuildingComponentInternal::FireBuildingTutorialEvent(this, TEXT("RotatedGhost"));
+
 	// Each Q/E press also cycles the snap-edge selection. Stack-snap uses
 	// this to pick which of the target's 4 cardinal edges the ghost lands
 	// against. We can't infer this from yaw because cube-symmetric ghosts
@@ -350,6 +382,8 @@ void UMOBuildingComponent::ToggleGhostFlipYaw()
 	{
 		return;
 	}
+
+	MOBuildingComponentInternal::FireBuildingTutorialEvent(this, TEXT("FlippedGhost"));
 
 	// Pick increment by ghost shape: flat (Z << min(X,Y)) = 90°, else 180°.
 	// Falls back to 180° if the ghost isn't valid or has no bounds yet.
@@ -422,6 +456,7 @@ bool UMOBuildingComponent::TryPlaceGhost()
 	CurrentGhost = nullptr;
 
 	OnGhostPlaced.Broadcast(PlacedBuilding);
+	MOBuildingComponentInternal::FireBuildingTutorialEvent(this, TEXT("PlacedGhost"));
 	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingComponent] Placed building: %s"), *PlacedBuilding->GetName());
 
 	// Stay in placement mode and spawn a fresh ghost for the same recipe so

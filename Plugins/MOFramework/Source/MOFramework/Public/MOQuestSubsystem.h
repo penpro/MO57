@@ -160,6 +160,20 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Quest")
 	void FireGameEvent(FName EventName);
 
+	/**
+	 * Fast O(1) check: is any active quest listening for this Event-type
+	 * objective right now? Callers that fire events at high frequency
+	 * (per-tick movement / look) should check this first so they can skip
+	 * the FireGameEvent call entirely when no quest cares. Once tutorial
+	 * quests complete, this returns false and the per-tick broadcasts cost
+	 * nothing.
+	 *
+	 * Maintained by the subsystem from quest start / objective progress /
+	 * quest complete / abandon / load. Callers don't need to refresh it.
+	 */
+	UFUNCTION(BlueprintPure, Category="MO|Quest")
+	bool IsAnyQuestListeningForEvent(FName EventName) const;
+
 	// =========================================================================
 	// QUERIES
 	// =========================================================================
@@ -271,6 +285,54 @@ public:
 	UPROPERTY(BlueprintAssignable, Category="MO|Quest|Events")
 	FMOOnObjectiveCompleted OnObjectiveCompleted;
 
+	/**
+	 * Broadcast when the active tutorial hint changes (new objective, progress,
+	 * completion, or popup-enable toggle). Listeners query
+	 * GetActiveTutorialHint() to read the current state.
+	 */
+	UPROPERTY(BlueprintAssignable, Category="MO|Quest|Events")
+	FMOOnTutorialHintChanged OnTutorialHintChanged;
+
+	/**
+	 * Broadcast after a quest completes so external systems can apply rewards
+	 * (XP, knowledge, items). The subsystem only fires this — it never grants
+	 * rewards itself. Keeps the subsystem free of component dependencies.
+	 */
+	UPROPERTY(BlueprintAssignable, Category="MO|Quest|Events")
+	FMOOnApplyQuestRewards OnApplyQuestRewards;
+
+	// =========================================================================
+	// TUTORIAL HINT API
+	// =========================================================================
+
+	/**
+	 * Get the active tutorial hint, if any. Picks the first tutorial quest
+	 * (bIsTutorial=true) with an active objective that has
+	 * bShowAsTutorialPopup=true.
+	 *
+	 * @return True if a tutorial hint should be displayed.
+	 */
+	UFUNCTION(BlueprintPure, Category="MO|Quest|Tutorial")
+	bool GetActiveTutorialHint(FName& OutQuestId, FName& OutObjectiveId,
+		FText& OutHintTitle, FText& OutHintBody) const;
+
+	/**
+	 * Skip the current tutorial objective — marks it complete without firing
+	 * its normal completion event. Bound to F1 by the player controller.
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Quest|Tutorial")
+	void SkipCurrentTutorialObjective();
+
+	/**
+	 * Globally disable tutorial popups for this session. Quests still
+	 * progress, just no banner shows. Bound to F3 by the player controller.
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Quest|Tutorial")
+	void SetTutorialPopupsEnabled(bool bEnabled);
+
+	UFUNCTION(BlueprintPure, Category="MO|Quest|Tutorial")
+	bool AreTutorialPopupsEnabled() const { return bTutorialPopupsEnabled; }
+
 	// =========================================================================
 	// EVENT HANDLERS (Public for component callbacks)
 	// =========================================================================
@@ -280,6 +342,15 @@ public:
 
 	/** Called when a skill levels up. Components should call this directly. */
 	void HandleSkillLevelUp(FName SkillId, int32 OldLevel, int32 NewLevel);
+
+	/**
+	 * Called when a building finishes construction. Treated as an ItemCraft
+	 * event keyed by the building's RecipeId — quests with
+	 * Type=ItemCraft and TargetEventOrId=RecipeId (e.g., "Campfire01") will
+	 * progress. Components / buildable actors call this directly; the
+	 * subsystem doesn't watch the building system itself.
+	 */
+	void HandleBuildingCompleted(FName RecipeId);
 
 private:
 	// =========================================================================
@@ -318,6 +389,14 @@ private:
 	/** Get the current active objective for sequential quests. */
 	const FMOQuestObjective* GetCurrentSequentialObjective(const FMOQuestState& State, const FMOQuestDefinitionRow& Quest) const;
 
+	/**
+	 * Rebuild ActiveEventListeners from scratch by walking all active
+	 * quests' incomplete Event-type objectives. Call after any change that
+	 * affects which events have listeners (quest start/complete/abandon,
+	 * objective progress, load/reset).
+	 */
+	void RebuildActiveEventListeners();
+
 private:
 	/** Cached quest definitions by QuestId. */
 	UPROPERTY()
@@ -336,4 +415,21 @@ private:
 
 	/** Weak reference to bound crafting subsystem. */
 	TWeakObjectPtr<UMOCraftingSubsystem> BoundCraftingSubsystem;
+
+	/**
+	 * Whether tutorial popups are currently allowed. Toggleable at runtime
+	 * via SetTutorialPopupsEnabled (e.g., F3 binding). Default true.
+	 * Underlying quest progress is unaffected when disabled — only the
+	 * popup widget's visibility.
+	 */
+	UPROPERTY(Transient)
+	bool bTutorialPopupsEnabled = true;
+
+	/**
+	 * Set of Event names that at least one active quest is currently
+	 * listening for. High-frequency event broadcasters (per-tick move /
+	 * look) check this before calling FireGameEvent so they no-op when no
+	 * quest is interested. Rebuilt on every quest state change.
+	 */
+	TSet<FName> ActiveEventListeners;
 };

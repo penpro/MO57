@@ -20,12 +20,16 @@ void UMOIntroWidget::NativeConstruct()
 		SkipHintText->SetVisibility(ESlateVisibility::Collapsed);
 	}
 
-	// Request keyboard focus immediately
-	SetKeyboardFocus();
-
-	UE_LOG(LogMOFramework, Log, TEXT("[MOIntroWidget] NativeConstruct - VideoImage: %s, IsFocusable: %s"),
+	UE_LOG(LogMOFramework, Warning, TEXT("[Intro-DIAG] NativeConstruct - VideoImage: %s, IsFocusable: %s, IsActivated: %d"),
 		VideoImage ? TEXT("OK") : TEXT("NULL"),
-		IsFocusable() ? TEXT("YES") : TEXT("NO"));
+		IsFocusable() ? TEXT("YES") : TEXT("NO"),
+		IsActivated() ? 1 : 0);
+}
+
+UWidget* UMOIntroWidget::NativeGetDesiredFocusTarget() const
+{
+	UE_LOG(LogMOFramework, Warning, TEXT("[Intro-DIAG] NativeGetDesiredFocusTarget -> self"));
+	return const_cast<UMOIntroWidget*>(this);
 }
 
 void UMOIntroWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
@@ -98,6 +102,10 @@ FReply UMOIntroWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry, cons
 
 void UMOIntroWidget::SetVideoMaterial(UMaterialInstanceDynamic* InVideoMaterial)
 {
+	UE_LOG(LogMOFramework, Warning, TEXT("[Intro-DIAG] SetVideoMaterial: VideoImage=%s, Material=%s"),
+		VideoImage ? TEXT("OK") : TEXT("NULL"),
+		InVideoMaterial ? *InVideoMaterial->GetName() : TEXT("NULL"));
+
 	if (VideoImage && InVideoMaterial)
 	{
 		FSlateBrush Brush;
@@ -106,7 +114,7 @@ void UMOIntroWidget::SetVideoMaterial(UMaterialInstanceDynamic* InVideoMaterial)
 		Brush.DrawAs = ESlateBrushDrawType::Image;
 		VideoImage->SetBrush(Brush);
 
-		UE_LOG(LogMOFramework, Log, TEXT("[MOIntroWidget] Video material set"));
+		UE_LOG(LogMOFramework, Warning, TEXT("[Intro-DIAG] Video material applied to brush"));
 	}
 }
 
@@ -125,24 +133,27 @@ void UMOIntroWidget::OnPlaybackStarted()
 
 void UMOIntroWidget::SkipIntro()
 {
+	UE_LOG(LogMOFramework, Warning, TEXT("[Intro-DIAG] SkipIntro called, bIsActive=%d"), bIsActive ? 1 : 0);
 	if (!bIsActive)
 	{
 		return;
 	}
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOIntroWidget] Intro skipped"));
 	bIsActive = false;
 	OnIntroSkipped.Broadcast();
+	UE_LOG(LogMOFramework, Warning, TEXT("[Intro-DIAG] SkipIntro: OnIntroSkipped broadcast complete, calling DeactivateWidget"));
+	DeactivateWidget();
 }
 
 void UMOIntroWidget::OnVideoFinished()
 {
+	UE_LOG(LogMOFramework, Warning, TEXT("[Intro-DIAG] OnVideoFinished called, bIsActive=%d"), bIsActive ? 1 : 0);
 	if (!bIsActive)
 	{
 		return;
 	}
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOIntroWidget] Video finished"));
 	bIsActive = false;
 	OnIntroCompleted.Broadcast();
+	DeactivateWidget();
 }

@@ -4,6 +4,8 @@
 #include "MOIntroWidget.h"
 #include "MOGameSettings.h"
 #include "MOGameInstance.h"
+#include "MOGameUIManagerSubsystem.h"
+#include "MOPrimaryGameLayout.h"
 #include "Blueprint/UserWidget.h"
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetSystemLibrary.h"
@@ -39,6 +41,21 @@ void AMOMainMenuPlayerController::BeginPlay()
 	UE_LOG(LogMOFramework, Warning, TEXT("[MOMainMenuPlayerController] IntroVideoSource: %s, IntroVideoFileName: %s"),
 		IntroVideoSource ? *IntroVideoSource->GetName() : TEXT("NULL"),
 		*IntroVideoFileName);
+
+	// Bring up the UMOPrimaryGameLayout for the main menu world.
+	{
+		UMOGameUIManagerSubsystem* UISubsystem = UMOGameUIManagerSubsystem::Get(this);
+		UE_LOG(LogMOFramework, Warning, TEXT("[MainMenu-DIAG] BeginPlay: UISubsystem=%s"),
+			UISubsystem ? *UISubsystem->GetName() : TEXT("NULL"));
+		if (UISubsystem)
+		{
+			UISubsystem->NotifyPlayerAdded(this);
+			UMOPrimaryGameLayout* Layout = UISubsystem->GetRootLayoutForPlayer(this);
+			UE_LOG(LogMOFramework, Warning, TEXT("[MainMenu-DIAG] After NotifyPlayerAdded: layout=%s (class=%s)"),
+				Layout ? *Layout->GetName() : TEXT("NULL"),
+				Layout ? *Layout->GetClass()->GetName() : TEXT("<n/a>"));
+		}
+	}
 
 	// Packaged builds default to Game-only input mode at PC startup, which prevents
 	// Slate (intro widget, main menu) from receiving keyboard/mouse events until a
@@ -77,6 +94,10 @@ void AMOMainMenuPlayerController::SetupInputComponent()
 
 void AMOMainMenuPlayerController::ShowMainMenu()
 {
+	UE_LOG(LogMOFramework, Warning, TEXT("[MainMenu-DIAG] ShowMainMenu: existing widget=%s class=%s"),
+		MainMenuWidget ? *MainMenuWidget->GetName() : TEXT("NULL"),
+		MainMenuWidgetClass ? *MainMenuWidgetClass->GetName() : TEXT("NULL"));
+
 	if (MainMenuWidget)
 	{
 		MainMenuWidget->SetVisibility(ESlateVisibility::Visible);
@@ -89,24 +110,55 @@ void AMOMainMenuPlayerController::ShowMainMenu()
 		return;
 	}
 
+	// Push to the Menu layer of the primary game layout — the stack handles
+	// activation, input config, focus, and registers the widget with the UI
+	// manager. This puts the main menu inside the same CommonUI lifecycle
+	// the in-game UI uses, so modals spawned from it (via PushModalWidget)
+	// nest correctly and input handoff just works on close.
+	UMOGameUIManagerSubsystem* UISubsystem = UMOGameUIManagerSubsystem::Get(this);
+	UMOPrimaryGameLayout* Layout = UISubsystem ? UISubsystem->GetRootLayoutForPlayer(this) : nullptr;
+	UE_LOG(LogMOFramework, Warning, TEXT("[MainMenu-DIAG] ShowMainMenu: layout=%s"),
+		Layout ? *Layout->GetName() : TEXT("NULL"));
+	if (Layout)
+	{
+		UCommonActivatableWidget* Pushed = Layout->PushWidgetToLayer(
+			MOUILayerTags::Layer_Menu, MainMenuWidgetClass);
+		MainMenuWidget = Cast<UMOMainMenuWidget>(Pushed);
+		UE_LOG(LogMOFramework, Warning, TEXT("[MainMenu-DIAG] ShowMainMenu: pushed=%s cast=%s"),
+			Pushed ? *Pushed->GetClass()->GetName() : TEXT("NULL"),
+			MainMenuWidget ? *MainMenuWidget->GetName() : TEXT("NULL"));
+		if (MainMenuWidget)
+		{
+			MainMenuWidget->OnNewGameRequested.AddDynamic(this, &AMOMainMenuPlayerController::HandleNewGameRequested);
+			MainMenuWidget->OnLoadGameRequested.AddDynamic(this, &AMOMainMenuPlayerController::HandleLoadGameRequested);
+			MainMenuWidget->OnExitGameRequested.AddDynamic(this, &AMOMainMenuPlayerController::HandleExitGameRequested);
+
+			UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuPlayerController] Main menu pushed to Menu layer"));
+			return;
+		}
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOMainMenuPlayerController] PushWidgetToLayer returned non-MainMenu widget; falling back to AddToViewport"));
+	}
+	else
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOMainMenuPlayerController] No primary layout (PrimaryGameLayoutClass not set in Project Settings?). Falling back to AddToViewport — modals will use viewport fallback path."));
+	}
+
+	// Fallback path: if the primary layout couldn't be created (project not
+	// configured yet, etc.), keep the menu visible via AddToViewport. This
+	// preserves the old behavior so the game still loads — but modals
+	// spawned from this menu will go through PushModalWidget's viewport
+	// fallback branch, which has slightly weaker input handoff than the
+	// layer-stack path. Configure PrimaryGameLayoutClass in
+	// Project Settings → Plugins → MO UI Settings to fix.
 	MainMenuWidget = CreateWidget<UMOMainMenuWidget>(this, MainMenuWidgetClass);
 	if (MainMenuWidget)
 	{
 		MainMenuWidget->AddToViewport(100);
-
-		// SYSTEM RULE: stack-managed UMOActivatableWidget instances are activated by
-		// their stack container. Viewport-direct surfaces (AddToViewport) are activated
-		// by their caller — right here. Both paths reach NativeOnActivated. Without
-		// this call, the main menu would render but never enter CommonUI's activation
-		// lifecycle, so focus/cursor/input-mode/active-stack registration would not run.
 		MainMenuWidget->ActivateWidget();
 
-		// Bind menu callbacks
 		MainMenuWidget->OnNewGameRequested.AddDynamic(this, &AMOMainMenuPlayerController::HandleNewGameRequested);
 		MainMenuWidget->OnLoadGameRequested.AddDynamic(this, &AMOMainMenuPlayerController::HandleLoadGameRequested);
 		MainMenuWidget->OnExitGameRequested.AddDynamic(this, &AMOMainMenuPlayerController::HandleExitGameRequested);
-
-		UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuPlayerController] Main menu displayed"));
 	}
 }
 
@@ -150,17 +202,44 @@ void AMOMainMenuPlayerController::PlayIntroVideo()
 	// Setup media player and components
 	SetupMediaPlayer();
 
-	// Create intro widget
-	IntroWidget = CreateWidget<UMOIntroWidget>(this, IntroWidgetClass);
+	UE_LOG(LogMOFramework, Warning, TEXT("[MainMenu-DIAG] PlayIntroVideo: pushing intro to Modal layer"));
+
+	// Push intro widget onto the Modal layer so it lives in the CommonUI
+	// stack. The stack auto-activates it (which claims focus via
+	// NativeGetDesiredFocusTarget → self) and removes it on deactivate
+	// (called from SkipIntro / OnVideoFinished). No manual SetFocus needed.
+	UMOGameUIManagerSubsystem* UISubsystem = UMOGameUIManagerSubsystem::Get(this);
+	UMOPrimaryGameLayout* Layout = UISubsystem ? UISubsystem->GetRootLayoutForPlayer(this) : nullptr;
+	UE_LOG(LogMOFramework, Warning, TEXT("[MainMenu-DIAG] PlayIntroVideo: layout=%s IntroWidgetClass=%s"),
+		Layout ? *Layout->GetName() : TEXT("NULL"),
+		IntroWidgetClass ? *IntroWidgetClass->GetName() : TEXT("NULL"));
+
+	if (Layout)
+	{
+		UCommonActivatableWidget* PushedIntro = Layout->PushWidgetToLayer(
+			MOUILayerTags::Layer_Modal, IntroWidgetClass);
+		IntroWidget = Cast<UMOIntroWidget>(PushedIntro);
+		UE_LOG(LogMOFramework, Warning, TEXT("[MainMenu-DIAG] PlayIntroVideo: PushWidgetToLayer returned %s, cast result: %s"),
+			PushedIntro ? *PushedIntro->GetClass()->GetName() : TEXT("NULL"),
+			IntroWidget ? *IntroWidget->GetName() : TEXT("NULL (cast failed)"));
+	}
+	else
+	{
+		// Fallback: layout not available (PrimaryGameLayoutClass unset in
+		// project settings). Old AddToViewport path so the game still boots.
+		UE_LOG(LogMOFramework, Warning, TEXT("[MainMenu-DIAG] PlayIntroVideo: NO LAYOUT — using AddToViewport fallback"));
+		IntroWidget = CreateWidget<UMOIntroWidget>(this, IntroWidgetClass);
+		if (IntroWidget)
+		{
+			IntroWidget->AddToViewport(200);
+			IntroWidget->ActivateWidget();
+		}
+	}
+
 	if (IntroWidget)
 	{
-		IntroWidget->AddToViewport(200);  // Above main menu
 		IntroWidget->OnIntroCompleted.AddDynamic(this, &AMOMainMenuPlayerController::HandleIntroComplete);
 		IntroWidget->OnIntroSkipped.AddDynamic(this, &AMOMainMenuPlayerController::HandleIntroComplete);
-
-		// Set focus on intro widget so it can receive key input
-		IntroWidget->SetFocus();
-		IntroWidget->SetKeyboardFocus();
 
 		// Pass the video material to the widget
 		IntroWidget->SetVideoMaterial(VideoMaterialInstance);
@@ -383,12 +462,11 @@ void AMOMainMenuPlayerController::HandleIntroComplete()
 	// Clean up media player
 	CleanupMediaPlayer();
 
-	// Clean up intro widget
-	if (IntroWidget)
-	{
-		IntroWidget->RemoveFromParent();
-		IntroWidget = nullptr;
-	}
+	// Intro widget deactivates itself in SkipIntro/OnVideoFinished, which
+	// triggers the layer stack to remove it (or RemoveFromParent in the
+	// AddToViewport fallback path). Just clear our reference — no manual
+	// removal needed.
+	IntroWidget = nullptr;
 
 	// Show main menu
 	ShowMainMenu();

@@ -219,6 +219,16 @@ void UMOInventoryUIController::CloseInventoryMenu()
 		UnifiedMenu->DeactivateWidget();
 	}
 
+	// Drop the active container reference. Without this, OpenInventoryMenu()
+	// (e.g., the player pressing the inventory key) re-passes the last
+	// container — including survivors viewed via right-click — into the next
+	// fresh menu via OpenInventoryWithContainer(GetActiveContainer()). That
+	// caused the user-visible bug where, after viewing another survivor's
+	// inventory, pressing I reopened with the survivor still attached as the
+	// secondary panel. The header docs describe this clear-on-close flow at
+	// MOInventoryUIController.h:30; it just wasn't wired here.
+	ClearActiveContainer();
+
 	UpdateReticleVisibility();
 
 	// Manage modal background visibility

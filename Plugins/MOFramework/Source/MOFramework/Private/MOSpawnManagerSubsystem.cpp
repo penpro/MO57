@@ -183,7 +183,10 @@ void UMOSpawnManagerSubsystem::InitializeDefaultConfigs()
 		// Fallback to hardcoded defaults if settings not available
 		UE_LOG(LogMOFramework, Warning, TEXT("[SpawnManager] Could not load settings, using hardcoded defaults"));
 
-		// Survivor config — closer than wildlife (you're meant to find them)
+		// Survivor config — closer than wildlife (you're meant to find them).
+		// Restrict to shoreline band: tree canopies sit above 300, water at
+		// or below ~0–5, so [5, 300] keeps survivors visible on open beach /
+		// low ground where the player can actually find them.
 		{
 			FMOSpawnCategoryConfig Config;
 			Config.Category = EMOSpawnCategory::Survivor;
@@ -198,6 +201,9 @@ void UMOSpawnManagerSubsystem::InitializeDefaultConfigs()
 			Config.bFirstSpawnFaster = true;
 			Config.FirstSpawnMaxCooldown = 1800.0f;
 			Config.bEnabled = true;
+			Config.bRestrictSpawnZ = true;
+			Config.MinSpawnZ = 5.0f;
+			Config.MaxSpawnZ = 300.0f;
 			CategoryConfigs.Add(Config);
 		}
 
@@ -947,6 +953,18 @@ APawn* UMOSpawnManagerSubsystem::SpawnAtPoint(AMOSpawnPoint* Point, const FMOSpa
 	// Get spawn location
 	FVector SpawnLocation = Point->GetRandomSpawnLocation();
 
+	// Optional Z-range gate. Same band-restrict logic as the fallback path,
+	// applied to designed spawn points too. Doesn't re-trace ground here —
+	// trusts the spawn point's authored Z. If a designer drops a Survivor
+	// spawn point on a cliff, this gates it out.
+	if (Config.bRestrictSpawnZ && (SpawnLocation.Z < Config.MinSpawnZ || SpawnLocation.Z > Config.MaxSpawnZ))
+	{
+		UE_LOG(LogMOFramework, Verbose,
+			TEXT("[SpawnManager] SpawnAtPoint: rejected Z=%.1f for %s (allowed: %.1f..%.1f)"),
+			SpawnLocation.Z, *UEnum::GetValueAsString(Config.Category), Config.MinSpawnZ, Config.MaxSpawnZ);
+		return nullptr;
+	}
+
 	// Verify location is still valid (not too close to structures)
 	if (!IsLocationValidForSpawn(SpawnLocation, Config.MinDistanceFromStructure))
 	{
@@ -1064,16 +1082,40 @@ APawn* UMOSpawnManagerSubsystem::TryFallbackSpawn(EMOSpawnCategory Category, con
 		TArray<FHitResult> GroundHits;
 		const FVector TraceStart = SpawnLocation + FVector(0, 0, 5000.0f);
 		const FVector TraceEnd = SpawnLocation - FVector(0, 0, 10000.0f);
+		float GroundZ = SpawnLocation.Z; // fallback if no voxel hit found
+		bool bHitVoxel = false;
 		if (World->LineTraceMultiByChannel(GroundHits, TraceStart, TraceEnd, ECC_Visibility))
 		{
 			for (const FHitResult& Hit : GroundHits)
 			{
 				if (Hit.GetActor() && Hit.GetActor()->IsA<AVoxelWorld>())
 				{
+					GroundZ = Hit.ImpactPoint.Z;
 					SpawnLocation = Hit.ImpactPoint + FVector(0, 0, 100.0f);
+					bHitVoxel = true;
 					break;
 				}
 			}
+		}
+
+		// If we didn't actually land on voxel terrain, this attempt is
+		// inherently unsafe (we'd be in air or perched on whatever the trace
+		// hit). Skip and try a different angle.
+		if (!bHitVoxel)
+		{
+			continue;
+		}
+
+		// Optional Z-range gate. Categories like Survivor restrict spawns to
+		// a terrain band (shoreline) where trees don't grow, eliminating
+		// "found a survivor in the canopy" reports. The voxel-only trace
+		// above guarantees GroundZ is real terrain, not foliage.
+		if (Config.bRestrictSpawnZ && (GroundZ < Config.MinSpawnZ || GroundZ > Config.MaxSpawnZ))
+		{
+			UE_LOG(LogMOFramework, Verbose,
+				TEXT("[SpawnManager] Fallback: rejected ground Z=%.1f for %s (allowed: %.1f..%.1f)"),
+				GroundZ, *UEnum::GetValueAsString(Category), Config.MinSpawnZ, Config.MaxSpawnZ);
+			continue;
 		}
 
 		// Check structure avoidance (MinDistanceFromStructure is also in METERS — convert to cm).

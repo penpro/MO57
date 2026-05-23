@@ -31,15 +31,12 @@ void UMOItemContextMenu::NativeConstruct()
 
 	MouseOutsideTimer = 0.0f;
 
-	// Show cursor + Game+UI input mode while popup is visible.
-	// Symmetric with MOContextMenuBase pattern.
+	// Show cursor + Game+UI input via the shared helper (matches
+	// MOContextMenuBase). The helper is the single source of truth for
+	// context-menu input lifecycle — see UMOGameUIManagerSubsystem.
 	if (APlayerController* PC = GetOwningPlayer())
 	{
-		PC->bShowMouseCursor = true;
-		FInputModeGameAndUI InputMode;
-		InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
-		InputMode.SetHideCursorDuringCapture(false);
-		PC->SetInputMode(InputMode);
+		UMOGameUIManagerSubsystem::ApplyContextMenuInputState(PC);
 	}
 
 	StartMouseCheckTimer();
@@ -50,101 +47,13 @@ void UMOItemContextMenu::NativeDestruct()
 	MOUI_LOG(this, "ItemCtxMenu", "NativeDestruct ENTRY  %s", *GetName());
 	StopMouseCheckTimer();
 
-	// Release any pointer capture left by clicking a button in this widget,
-	// so subsequent clicks/keys route normally to the inventory.
-	if (FSlateApplication::IsInitialized())
-	{
-		if (TSharedPtr<FSlateUser> User = FSlateApplication::Get().GetUser(0))
-		{
-			if (User->HasAnyCapture())
-			{
-				User->ReleaseAllCapture();
-				MOUI_LOG(this, "ItemCtxMenu", "  released pointer capture");
-			}
-		}
-	}
-
+	// Single source of truth: subsystem helper releases pointer capture,
+	// restores game mode if nothing else is showing, or refocuses the
+	// underlying menu so its Tab/Escape come alive again.
 	if (APlayerController* PC = GetOwningPlayer())
 	{
-		bool bShouldRestoreGameMode = true;
-		int32 ActiveCount = -1;
-		if (UWorld* World = GetWorld())
-		{
-			if (UMOGameUIManagerSubsystem* UISub = World->GetSubsystem<UMOGameUIManagerSubsystem>())
-			{
-				ActiveCount = UISub->GetActiveMenuCount();
-				bShouldRestoreGameMode = !UISub->IsAnyMenuOpen();
-			}
-		}
-
-		MOUI_LOG(this, "ItemCtxMenu", "  ActiveMenuCount=%d, restoreGameMode=%s",
-			ActiveCount, bShouldRestoreGameMode ? TEXT("YES") : TEXT("no"));
-
-		if (bShouldRestoreGameMode)
-		{
-			PC->bShowMouseCursor = false;
-			FInputModeGameOnly GameOnlyMode;
-			PC->SetInputMode(GameOnlyMode);
-
-			if (FSlateApplication::IsInitialized() && PC->GetLocalPlayer())
-			{
-				if (UGameViewportClient* VC = PC->GetLocalPlayer()->ViewportClient)
-				{
-					if (TSharedPtr<SViewport> ViewportWidget = VC->GetGameViewportWidget())
-					{
-						FSlateApplication::Get().SetAllUserFocus(ViewportWidget.ToSharedRef(), EFocusCause::SetDirectly);
-					}
-				}
-			}
-		}
-		else
-		{
-			// Inventory (or other menu) is still open. Find its widget and focus it
-			// directly so keyboard/mouse routing keeps working — otherwise the I/Tab
-			// keys never reach the menu's NativeOnPreviewKeyDown to close it.
-			// IMPORTANT: GetActiveWidget() returns the RootContentWidget (GameplayInputStub)
-			// for empty stacks. We need to check GetWidgetList().Num() > 0 to confirm
-			// an actual pushed widget exists.
-			if (FSlateApplication::IsInitialized())
-			{
-				if (UWorld* World = GetWorld())
-				{
-					if (UMOGameUIManagerSubsystem* UISub = World->GetSubsystem<UMOGameUIManagerSubsystem>())
-					{
-						if (UMOPrimaryGameLayout* Layout = UISub->GetRootLayout())
-						{
-							static const TArray<FName> LayerPriority = {
-								FName("MO.UI.Layer.Modal"),
-								FName("MO.UI.Layer.Menu"),
-								FName("MO.UI.Layer.GameOverlay"),
-								FName("MO.UI.Layer.Game"),
-							};
-							for (const FName& LayerName : LayerPriority)
-							{
-								FGameplayTag Tag = FGameplayTag::RequestGameplayTag(LayerName, false);
-								if (!Tag.IsValid()) continue;
-								UCommonActivatableWidgetContainerBase* Stack = Layout->GetLayerStack(Tag);
-								if (!Stack) continue;
-
-								// Skip stacks that only contain the RootContentWidget (the stub)
-								if (Stack->GetWidgetList().Num() == 0) continue;
-
-								if (UCommonActivatableWidget* Active = Cast<UCommonActivatableWidget>(Stack->GetActiveWidget()))
-								{
-									if (TSharedPtr<SWidget> ActiveSlate = Active->GetCachedWidget())
-									{
-										FSlateApplication::Get().SetAllUserFocus(ActiveSlate.ToSharedRef(), EFocusCause::SetDirectly);
-										MOUI_LOG(this, "ItemCtxMenu", "  refocused %s on %s",
-											*Active->GetName(), *LayerName.ToString());
-										break;
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-		}
+		UMOGameUIManagerSubsystem::RestoreContextMenuInputState(this, PC);
+		MOUI_LOG(this, "ItemCtxMenu", "  invoked RestoreContextMenuInputState");
 	}
 
 	OnMenuClosed.Broadcast();

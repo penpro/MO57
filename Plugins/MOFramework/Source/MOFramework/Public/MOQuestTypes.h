@@ -115,13 +115,88 @@ struct MOFRAMEWORK_API FMOQuestObjective
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Quest")
 	bool bSequential = false;
 
+	// ========================================================================
+	// TUTORIAL HINT FIELDS
+	// ========================================================================
+	// These drive the tutorial popup widget. When this objective becomes the
+	// "current" objective for an active tutorial quest, the popup shows
+	// HintTitle + HintBody (formatted through FMOInputHintFormatter so
+	// {key:ActionName} tokens resolve to the player's live key bindings).
+	//
+	// If bShowAsTutorialPopup is false, the objective is silent — it advances
+	// the chain but no popup appears (useful for sequencer / book-keeping
+	// objectives between teachable moments).
+
+	/** Short title shown at the top of the tutorial popup banner. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Quest|Tutorial")
+	FText HintTitle;
+
+	/**
+	 * Body text shown in the tutorial popup. Supports token substitution:
+	 *   {key:ActionName}            → "[Space]"
+	 *   {key:ActionName:Building}   → key in the named context
+	 *   {key:ActionName:1}          → secondary slot binding
+	 * Tokens are resolved at display time, so rebinds update text live.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Quest|Tutorial", meta=(MultiLine="true"))
+	FText HintBody;
+
+	/**
+	 * If true, show the tutorial popup banner while this objective is the
+	 * current target of an active tutorial quest. Set false for silent
+	 * objectives that just progress the chain.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Quest|Tutorial")
+	bool bShowAsTutorialPopup = false;
+
 	FMOQuestObjective()
 		: Type(EMOObjectiveType::Event)
 		, RequiredCount(1)
 		, bOptional(false)
 		, bSequential(false)
+		, bShowAsTutorialPopup(false)
 	{
 	}
+};
+
+// ============================================================================
+// QUEST REWARDS
+// ============================================================================
+// Reward plumbing is wired but no reward actually does anything yet — the
+// quest subsystem broadcasts OnApplyQuestRewards on completion so future
+// systems (XP, knowledge, items) can hook in without modifying the subsystem.
+// FMOQuestRewardSpec lives on the row so designers can author rewards now.
+
+/** Kind of reward to apply on quest completion. */
+UENUM(BlueprintType)
+enum class EMOQuestRewardType : uint8
+{
+	/** No reward. */
+	None,
+	/** Grant XP. TargetId = SkillId, Amount = XP value. */
+	XP,
+	/** Grant a knowledge entry. TargetId = KnowledgeId. Amount ignored. */
+	Knowledge,
+	/** Grant items. TargetId = ItemId, Amount = quantity. */
+	Item
+};
+
+/** A single reward granted when a quest completes. */
+USTRUCT(BlueprintType)
+struct MOFRAMEWORK_API FMOQuestRewardSpec
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Quest|Reward")
+	EMOQuestRewardType Type = EMOQuestRewardType::None;
+
+	/** Target identifier — skill name, knowledge id, item id, etc. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Quest|Reward")
+	FName TargetId;
+
+	/** Amount — XP value, item count, etc. Ignored for booleans like Knowledge. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Quest|Reward")
+	float Amount = 0.0f;
 };
 
 /**
@@ -168,6 +243,15 @@ struct MOFRAMEWORK_API FMOQuestDefinitionRow : public FTableRowBase
 	/** Category for grouping in quest log (e.g., "Tutorial", "Main", "Side"). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Quest")
 	FName Category;
+
+	/**
+	 * Rewards granted when this quest completes. Empty for now on most
+	 * quests; the subsystem broadcasts OnApplyQuestRewards regardless so
+	 * future XP / knowledge / item systems can hook in without code changes
+	 * here.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Quest|Reward")
+	TArray<FMOQuestRewardSpec> Rewards;
 
 	FMOQuestDefinitionRow()
 		: bIsTutorial(false)

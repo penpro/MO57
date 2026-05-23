@@ -44,7 +44,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Blueprint/UserWidget.h"
+#include "MOActivatableWidget.h"
 #include "MOIntroWidget.generated.h"
 
 class UImage;
@@ -53,8 +53,18 @@ class UMaterialInstanceDynamic;
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOIntroCompletedSignature);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOIntroSkippedSignature);
 
+/**
+ * Intro widget. Inherits from UMOActivatableWidget so it participates in the
+ * CommonUI layer stack: pushed onto the Modal layer at boot, activates with
+ * proper input config + focus claim, deactivates cleanly into the main menu.
+ *
+ * Previously parented to UUserWidget and AddToViewport'd directly, which
+ * worked when nothing else was in the viewport but broke once we put a real
+ * UMOPrimaryGameLayout on the main menu world — the layout's stacks
+ * competed for focus with this widget.
+ */
 UCLASS(Abstract, Blueprintable)
-class MOFRAMEWORK_API UMOIntroWidget : public UUserWidget
+class MOFRAMEWORK_API UMOIntroWidget : public UMOActivatableWidget
 {
 	GENERATED_BODY()
 
@@ -115,6 +125,13 @@ protected:
 	virtual FReply NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
 	virtual FReply NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
 	virtual FReply NativeOnPreviewMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
+
+	/**
+	 * Focus self so key/mouse events route to NativeOnPreviewKeyDown /
+	 * NativeOnKeyDown on this widget. CommonUI's normal stack activation
+	 * sets focus to whatever this returns.
+	 */
+	virtual UWidget* NativeGetDesiredFocusTarget() const override;
 
 	// ============================================================================
 	// BIND WIDGETS

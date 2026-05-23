@@ -39,12 +39,20 @@ void UMOCharacterUIController::BeginPlay()
 			CreateStatusPanel();
 		}
 
-		// Subscribe to the controlled pawn's TerraformingComponent — when it
-		// fires OnTerraformStarted, we spawn the 5-second progress widget.
-		// Rebound in OnPawnChanged so possessing a different pawn picks up
-		// its component.
+		// Initial bind attempt — usually no-ops because pawn is null this early.
+		// The systematic OnPossessedPawnChanged hook on the base class runs the
+		// real rebind once possession completes.
 		BindToPawnTerraformingComponent();
 	}
+}
+
+void UMOCharacterUIController::OnPossessedPawnChanged(APawn* OldPawn, APawn* NewPawn)
+{
+	UE_LOG(LogMOFramework, Log,
+		TEXT("[MOCharUI] PossessedPawnChanged: old=%s new=%s — rebinding terraform delegates and status panel"),
+		OldPawn ? *OldPawn->GetName() : TEXT("<null>"),
+		NewPawn ? *NewPawn->GetName() : TEXT("<null>"));
+	OnPawnChanged();
 }
 
 void UMOCharacterUIController::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -214,13 +222,7 @@ void UMOCharacterUIController::CloseSkillsPanel()
 		PopWidgetFromLayer(PanelWidget);
 	}
 
-	UpdateReticleVisibility();
-
-	// Manage modal background visibility
-	if (!IsAnyMenuOpen())
-	{
-		HideModalBackground();
-	}
+	// Modal background + reticle refresh handled by UMOActivatableWidget::NativeOnDeactivated.
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOCharUI] Skills Panel closed"));
 }
@@ -355,13 +357,7 @@ void UMOCharacterUIController::SetPlayerStatusVisible(bool bVisible)
 			PopWidgetFromLayer(Status);
 		}
 
-		UpdateReticleVisibility();
-
-		// Manage modal background visibility
-		if (!IsAnyMenuOpen())
-		{
-			HideModalBackground();
-		}
+		// Modal background + reticle refresh handled by UMOActivatableWidget::NativeOnDeactivated.
 
 		UE_LOG(LogMOFramework, Log, TEXT("[MOCharUI] Status panel closed"));
 	}
@@ -592,9 +588,10 @@ void UMOCharacterUIController::TearDownTerraformProgressWidget()
 
 	Widget->OnCancelled.RemoveDynamic(this, &UMOCharacterUIController::HandleTerraformWidgetCancelled);
 
-	// DeactivateWidget pops it from the CommonUI layer stack; if for some
-	// reason it's not in a stack (added directly to viewport), fall back
-	// to RemoveFromParent.
+	// DeactivateWidget triggers UMOActivatableWidget::NativeOnDeactivated,
+	// which now systematically refreshes the modal background and reticle
+	// for every widget close — no need for per-caller HideModalBackground /
+	// UpdateReticleVisibility calls.
 	Widget->DeactivateWidget();
 	if (Widget->IsInViewport())
 	{
@@ -752,7 +749,7 @@ void UMOCharacterUIController::HandleInspectionCompleted(bool bCompleted, const 
 	// Clear inspecting item
 	InspectingItemGuid.Invalidate();
 
-	UpdateReticleVisibility();
+	// Modal background + reticle refresh handled by UMOActivatableWidget::NativeOnDeactivated.
 
 	// Show notifications for inspection results
 	if (bCompleted && Result.bSuccess)
@@ -824,7 +821,7 @@ void UMOCharacterUIController::HandleInspectionCancelled()
 
 	UnregisterFromInspectionInterrupts();
 
-	UpdateReticleVisibility();
+	// Modal background + reticle refresh handled by UMOActivatableWidget::NativeOnDeactivated.
 }
 
 // =============================================================================

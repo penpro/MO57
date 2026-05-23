@@ -1,5 +1,6 @@
 #include "MOSaveSlotEntry.h"
 #include "MOFramework.h"
+#include "MOCommonButton.h"
 #include "Components/TextBlock.h"
 #include "Components/Image.h"
 #include "Engine/Texture2D.h"
@@ -10,12 +11,44 @@
 void UMOSaveSlotEntry::NativeConstruct()
 {
 	Super::NativeConstruct();
+
+	// Bind rename/delete buttons if the BP author added them. These broadcast
+	// to the hosting panel (Save/Load) which decides how to confirm and execute.
+	//
+	// Also apply default labels here. UMOCommonButton auto-sizes to its label
+	// text — if the BP author dropped the button in without setting a label,
+	// it shrinks to zero width and looks invisible. Setting labels in C++
+	// means the BP author can use these buttons out-of-the-box without
+	// per-instance text setup. The BP can still override by calling
+	// SetButtonText after construction if a different label is desired.
+	if (RenameButton)
+	{
+		RenameButton->SetButtonText(NSLOCTEXT("MOSaveSlot", "RenameButton", "Rename"));
+		RenameButton->OnClicked().RemoveAll(this);
+		RenameButton->OnClicked().AddUObject(this, &UMOSaveSlotEntry::HandleRenameButtonClicked);
+	}
+	if (DeleteButton)
+	{
+		DeleteButton->SetButtonText(NSLOCTEXT("MOSaveSlot", "DeleteButton", "Delete"));
+		DeleteButton->OnClicked().RemoveAll(this);
+		DeleteButton->OnClicked().AddUObject(this, &UMOSaveSlotEntry::HandleDeleteButtonClicked);
+	}
 }
 
 void UMOSaveSlotEntry::NativeOnClicked()
 {
 	Super::NativeOnClicked();
 	OnSlotSelected.Broadcast(Metadata.SlotName);
+}
+
+void UMOSaveSlotEntry::HandleRenameButtonClicked()
+{
+	OnRenameRequested.Broadcast(Metadata.SlotName);
+}
+
+void UMOSaveSlotEntry::HandleDeleteButtonClicked()
+{
+	OnDeleteRequested.Broadcast(Metadata.SlotName);
 }
 
 void UMOSaveSlotEntry::InitializeFromMetadata(const FMOSaveMetadata& InMetadata)

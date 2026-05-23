@@ -192,12 +192,19 @@ public:
 	/** Create status panel widget. Called by UIManager during BeginPlay if configured. */
 	void CreateStatusPanel();
 
-	/** Called when pawn changes to rebind widgets. */
+	/** Called when pawn changes to rebind widgets. Wired via base class virtual. */
 	void OnPawnChanged();
 
 protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+
+	/**
+	 * Base class hook: fires when the owning PC takes/releases a pawn.
+	 * Routes through OnPawnChanged() so terraform delegate bindings,
+	 * status-panel rebinds, etc. all re-run with the live pawn.
+	 */
+	virtual void OnPossessedPawnChanged(APawn* OldPawn, APawn* NewPawn) override;
 
 private:
 	/** Frame-based debounce to prevent double-toggle from ECommonInputMode::All */

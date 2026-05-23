@@ -189,9 +189,22 @@ void UMOSystemMenuUIController::OpenInGameMenu()
 		InGameMenuWidget.Reset();
 	}
 
-	// Create new widget via CommonUI layer stack (Modal layer for full input blocking)
+	// Push to MENU layer, not Modal. Per MOPrimaryGameLayout layer design:
+	//   Menu (150)  → system menus (in-game menu, possession menu)
+	//   Modal (200) → dialogs that stack ABOVE menus (confirmations, text input)
+	//
+	// Previously pushed to Modal — which put the in-game menu on the same
+	// layer as the dialogs spawned from it (save rename/delete, exit confirm).
+	// Pushing a dialog to the same stack deactivates the in-game menu under it,
+	// and CommonUI's RemainingActive lookup then misses the menu when the
+	// dialog closes, dumping the player into "last UI standing" game-only
+	// mode. Putting the menu on Menu layer lets dialogs cleanly stack on top
+	// of it and pop without dragging the menu down.
+	//
+	// bIsModal=true on UMOModalWidget still blocks gameplay input regardless
+	// of which layer it lives on — it doesn't require Modal layer.
 	ShowModalBackground();
-	UCommonActivatableWidget* CreatedWidget = PushWidgetToLayer(MOUILayerTags::Layer_Modal, InGameMenuClass);
+	UCommonActivatableWidget* CreatedWidget = PushWidgetToLayer(MOUILayerTags::Layer_Menu, InGameMenuClass);
 	UMOInGameMenu* MenuWidget = Cast<UMOInGameMenu>(CreatedWidget);
 
 	if (!IsValid(MenuWidget))

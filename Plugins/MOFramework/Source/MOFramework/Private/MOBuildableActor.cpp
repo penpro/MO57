@@ -32,8 +32,10 @@
 #include "MOworldSaveGame.h"
 #include "MOFramework.h"
 #include "MOUIContractInterface.h"
+#include "MOQuestSubsystem.h"
 #include "Components/StaticMeshComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
+#include "Engine/GameInstance.h"
 
 AMOBuildableActor::AMOBuildableActor()
 {
@@ -46,7 +48,16 @@ AMOBuildableActor::AMOBuildableActor()
 	// Create mesh component
 	MeshComponent = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Mesh"));
 	MeshComponent->SetupAttachment(RootSceneComponent);
-	MeshComponent->SetCollisionProfileName(TEXT("BlockAll"));
+	// Default to IgnoreOnlyPawn for the under-construction state:
+	//   - Blocks Visibility / Camera / WorldStatic / WorldDynamic so the
+	//     interactor's LineTraceSingleByChannel(ECC_Visibility) lands and
+	//     right-click opens the build context menu.
+	//   - Ignores Pawn so the player walks through unfinished structures.
+	// OverlapAll does NOT work here — LineTrace*ByChannel skips overlap
+	// responses, so the trace would pass straight through the building.
+	// OnConstructionCompleted promotes this to BlockAll when the building
+	// is finished. BP subclasses inherit this default.
+	MeshComponent->SetCollisionProfileName(TEXT("IgnoreOnlyPawn"));
 
 	// Create identity component
 	IdentityComponent = CreateDefaultSubobject<UMOIdentityComponent>(TEXT("Identity"));
@@ -104,6 +115,19 @@ void AMOBuildableActor::BeginPlay()
 	if (BuildProgressComponent)
 	{
 		BuildProgressComponent->OnConstructionCompleted.AddDynamic(this, &AMOBuildableActor::OnConstructionCompleted);
+	}
+
+	// Apply the under-construction profile to MeshComponent + every static-mesh
+	// descendant of it. This overrides any BP-set NoCollision on the visible
+	// cube child so the right-click trace lands. OnConstructionCompleted will
+	// re-apply BlockAll via the same helper when the building is finished.
+	//
+	// Skip this for ghost mode — SetGhostMode(true) caches+disables all primitives
+	// and we'd undo its work. The ghost path restores collision via the cache
+	// when the building leaves ghost mode.
+	if (!bIsGhost)
+	{
+		ApplyStructuralCollisionProfile(FName("IgnoreOnlyPawn"));
 	}
 }
 
@@ -169,12 +193,12 @@ void AMOBuildableActor::InitializeBuilding(FName InRecipeId)
 	// NoCollision and the player can't right-click to manage construction.
 	RestoreGhostCollisionCache();
 
-	// Backstop for the rare case the placed building was spawned directly
-	// (not via the placement pipeline → no cache entry for MeshComponent).
-	if (MeshComponent && MeshComponent->GetCollisionEnabled() == ECollisionEnabled::NoCollision)
-	{
-		MeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-	}
+	// Apply the under-construction profile to the structural subtree (Mesh
+	// + every static-mesh descendant). This is the single source of truth
+	// for under-construction collision — overrides any BP NoCollision on
+	// the visible cube child so right-click traces land while the player
+	// can still walk through.
+	ApplyStructuralCollisionProfile(FName("IgnoreOnlyPawn"));
 
 	// Enable interaction so player can configure and start build
 	if (InteractableComponent)
@@ -400,6 +424,29 @@ bool AMOBuildableActor::CanInteract(AController* Controller) const
 void AMOBuildableActor::OnConstructionCompleted_Implementation()
 {
 	SetCompletedVisual();
+
+	// Promote the structural subtree from IgnoreOnlyPawn (walk-through with
+	// hit-trace during construction) to BlockAll now that the building is
+	// real geometry. ApplyStructuralCollisionProfile propagates to every
+	// static-mesh descendant of MeshComponent, so the visible cube child
+	// becomes solid even if its BP-defined profile was NoCollision.
+	ApplyStructuralCollisionProfile(FName("BlockAll"));
+
+	// Notify the quest system. Tutorial_BuildCampfire and similar quests
+	// listen for ItemCraft events keyed by RecipeId; the building system
+	// wasn't routed through the crafting subsystem so we wire it directly
+	// here. RecipeId is set in InitializeBuilding (Campfire01, Floor01, etc).
+	if (!RecipeId.IsNone())
+	{
+		if (UGameInstance* GI = GetGameInstance())
+		{
+			if (UMOQuestSubsystem* Quest = GI->GetSubsystem<UMOQuestSubsystem>())
+			{
+				Quest->HandleBuildingCompleted(RecipeId);
+			}
+		}
+	}
+
 	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildableActor] Construction completed for: %s"), *GetName());
 }
 
@@ -539,6 +586,36 @@ void AMOBuildableActor::SaveOriginalMaterials()
 	{
 		OriginalMaterials.Add(MeshComponent->GetMaterial(i));
 	}
+}
+
+void AMOBuildableActor::ApplyStructuralCollisionProfile(FName ProfileName)
+{
+	if (!MeshComponent)
+	{
+		return;
+	}
+
+	MeshComponent->SetCollisionProfileName(ProfileName);
+
+	// Propagate to every static-mesh descendant of MeshComponent. Recursive
+	// (true) so deeply-nested BP hierarchies still work.
+	TArray<USceneComponent*> Descendants;
+	MeshComponent->GetChildrenComponents(/*bIncludeAllDescendants=*/true, Descendants);
+	int32 PropagatedCount = 0;
+	for (USceneComponent* Child : Descendants)
+	{
+		UStaticMeshComponent* SMC = Cast<UStaticMeshComponent>(Child);
+		if (!IsValid(SMC) || !SMC->GetStaticMesh())
+		{
+			continue;
+		}
+		SMC->SetCollisionProfileName(ProfileName);
+		++PropagatedCount;
+	}
+
+	UE_LOG(LogMOFramework, Verbose,
+		TEXT("[MOBuildableActor] %s: applied structural profile '%s' to MeshComponent + %d descendant(s)"),
+		*GetName(), *ProfileName.ToString(), PropagatedCount);
 }
 
 void AMOBuildableActor::RestoreOriginalMaterials()

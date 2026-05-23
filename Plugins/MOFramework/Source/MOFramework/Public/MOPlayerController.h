@@ -385,6 +385,25 @@ public:
 	TObjectPtr<UInputAction> ViewAction;
 
 	// ============================================================================
+	// INPUT ACTIONS - TUTORIAL
+	// ============================================================================
+
+	/**
+	 * Skip the current tutorial popup objective (default F1). Marks the
+	 * active tutorial objective complete without firing its event — the
+	 * chain advances and the next hint appears.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Input|Actions|Tutorial")
+	TObjectPtr<UInputAction> SkipTutorialItemAction;
+
+	/**
+	 * Globally disable all tutorial popup banners for the rest of the session
+	 * (default F3). Quest progress still happens silently.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Input|Actions|Tutorial")
+	TObjectPtr<UInputAction> SkipAllTutorialsAction;
+
+	// ============================================================================
 	// CONTEXT MANAGEMENT
 	// ============================================================================
 
@@ -641,6 +660,16 @@ protected:
 	void HandleView(const FInputActionValue& Value);
 
 	// ============================================================================
+	// INPUT HANDLERS - TUTORIAL
+	// ============================================================================
+
+	/** Skip the currently displayed tutorial popup item (F1). */
+	void HandleSkipTutorialItem(const FInputActionValue& Value);
+
+	/** Disable all tutorial popups for the rest of the session (F3). */
+	void HandleSkipAllTutorials(const FInputActionValue& Value);
+
+	// ============================================================================
 	// INTERNAL
 	// ============================================================================
 
@@ -683,4 +712,16 @@ private:
 
 	/** Whether we have a pending spectator view to apply. */
 	bool bHasPendingSpectatorView = false;
+
+	// ============================================================================
+	// TUTORIAL EVENT BROADCAST
+	// ============================================================================
+	// Move/Look broadcast on every active tick. The quest subsystem matches
+	// active objectives and discards unmatched events cheaply, so no throttle
+	// or one-shot flag is needed (and one-shot flags caused stuck-popup bugs
+	// when the player performed the action before the matching tutorial
+	// quest activated).
+
+	/** Fire a game event via the quest subsystem, if one exists. */
+	void BroadcastTutorialEvent(FName EventName);
 };

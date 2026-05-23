@@ -102,6 +102,13 @@ protected:
 	virtual UWidget* NativeGetDesiredFocusTarget() const override;
 	virtual FReply NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
 
+	/**
+	 * Confirmations run in Menu input mode — they're modal and must block
+	 * gameplay input until acknowledged. Subclasses can override if they need
+	 * different input modes (e.g., a non-blocking notification confirm).
+	 */
+	virtual TOptional<FUIInputConfig> GetDesiredInputConfig() const override;
+
 	/** Handle confirm button click. */
 	UFUNCTION()
 	void HandleConfirmClicked();

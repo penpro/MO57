@@ -189,6 +189,29 @@ struct MOFRAMEWORK_API FMOSpawnCategoryConfig
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawn", meta = (ClampMin = "0"))
 	float MinDistanceFromStructure = 200.0f;
 
+	// ========================================================================
+	// Z-RANGE GATE (terrain band restriction)
+	// ========================================================================
+	// Useful for "only spawn where terrain looks right" — e.g. survivors only
+	// on shoreline (low Z, no trees) rather than in the canopy. The voxel
+	// ground trace tells us the resolved Z; this check rejects spawns whose
+	// ground Z falls outside the band. Tests Hit.ImpactPoint.Z, not the
+	// post-offset spawn location.
+
+	/** If true, gate spawns by world Z range (see Min/MaxSpawnZ). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawn|Terrain Band")
+	bool bRestrictSpawnZ = false;
+
+	/** Minimum ground Z for spawn (world units, cm). Inclusive. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawn|Terrain Band",
+		meta = (EditCondition = "bRestrictSpawnZ"))
+	float MinSpawnZ = 0.0f;
+
+	/** Maximum ground Z for spawn (world units, cm). Inclusive. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawn|Terrain Band",
+		meta = (EditCondition = "bRestrictSpawnZ"))
+	float MaxSpawnZ = 300.0f;
+
 	/** Minimum group size when spawning */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawn", meta = (ClampMin = "1"))
 	int32 MinGroupSize = 1;

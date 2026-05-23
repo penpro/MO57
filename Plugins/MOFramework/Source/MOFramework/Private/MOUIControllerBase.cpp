@@ -12,6 +12,38 @@ UMOUIControllerBase::UMOUIControllerBase()
 	PrimaryComponentTick.bCanEverTick = false;
 }
 
+void UMOUIControllerBase::BeginPlay()
+{
+	Super::BeginPlay();
+
+	// Single systematic possession-change hook for all UI controllers.
+	// Each subclass overrides OnPossessedPawnChanged() to react.
+	// Without this, BeginPlay-time pawn binding silently bails (pawn is null
+	// before possession completes) and no later hook re-runs the binding.
+	if (APlayerController* PC = ResolveOwningPlayerController())
+	{
+		PC->OnPossessedPawnChanged.RemoveDynamic(this, &UMOUIControllerBase::HandlePossessedPawnChanged);
+		PC->OnPossessedPawnChanged.AddDynamic(this, &UMOUIControllerBase::HandlePossessedPawnChanged);
+	}
+}
+
+void UMOUIControllerBase::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	if (APlayerController* PC = ResolveOwningPlayerController())
+	{
+		PC->OnPossessedPawnChanged.RemoveDynamic(this, &UMOUIControllerBase::HandlePossessedPawnChanged);
+	}
+	Super::EndPlay(EndPlayReason);
+}
+
+void UMOUIControllerBase::HandlePossessedPawnChanged(APawn* OldPawn, APawn* NewPawn)
+{
+	// Glue: route the UFUNCTION-bound delegate call to the virtual hook
+	// subclasses override. Keeping these as separate methods means subclasses
+	// don't need their own UFUNCTION dispatcher — just override the virtual.
+	OnPossessedPawnChanged(OldPawn, NewPawn);
+}
+
 APlayerController* UMOUIControllerBase::ResolveOwningPlayerController() const
 {
 	return Cast<APlayerController>(GetOwner());

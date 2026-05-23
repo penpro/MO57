@@ -5,6 +5,7 @@
 #include "MOConfirmationBase.h"
 #include "MOCommonButton.h"
 #include "Components/TextBlock.h"
+#include "CommonInputModeTypes.h"
 
 UMOConfirmationBase::UMOConfirmationBase(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -59,7 +60,28 @@ FReply UMOConfirmationBase::NativeOnKeyDown(const FGeometry& InGeometry, const F
 		return FReply::Handled();
 	}
 
+	// Enter confirms only when the confirm button has explicit keyboard focus.
+	// Without the focus guard, Enter would commit any dialog the moment it
+	// opened — surprising for destructive prompts like "Delete save".
+	if (InKeyEvent.GetKey() == EKeys::Enter)
+	{
+		if (ConfirmButton && ConfirmButton->HasKeyboardFocus())
+		{
+			HandleConfirmClicked();
+			return FReply::Handled();
+		}
+	}
+
 	return Super::NativeOnKeyDown(InGeometry, InKeyEvent);
+}
+
+TOptional<FUIInputConfig> UMOConfirmationBase::GetDesiredInputConfig() const
+{
+	return FUIInputConfig(
+		ECommonInputMode::Menu,
+		EMouseCaptureMode::NoCapture,
+		EMouseLockMode::DoNotLock,
+		false /* bHideCursorDuringViewportCapture */);
 }
 
 // ============================================================================
@@ -82,8 +104,19 @@ void UMOConfirmationBase::Configure(
 		MessageText->SetText(Message);
 	}
 
-	// Note: Button text would need UMOCommonButton to expose SetButtonText
-	// For now, Blueprint handles button text via BindWidget text blocks
+	// Propagate button labels to the actual buttons. UMOCommonButton::SetButtonText
+	// updates the stored ButtonLabel AND fires UpdateButtonText so the visible
+	// text refreshes — required because otherwise the dialog shows whatever
+	// design-time defaults the WBP had (e.g. "Confirm" / "Cancel"), which
+	// caused the swapped-label bug between exit-to-menu and overwrite-save.
+	if (ConfirmButton)
+	{
+		ConfirmButton->SetButtonText(ConfirmText);
+	}
+	if (CancelButton)
+	{
+		CancelButton->SetButtonText(CancelText);
+	}
 }
 
 // ============================================================================

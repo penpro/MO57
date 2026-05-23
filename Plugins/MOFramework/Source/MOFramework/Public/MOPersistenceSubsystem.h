@@ -181,6 +181,19 @@ public:
     UFUNCTION(BlueprintCallable, Category="MO|Persistence")
     bool DeleteSaveSlot(const FString& SlotName);
 
+    /**
+     * Rename a save slot's display name. Does NOT rename the underlying file
+     * (the slot name on disk is stable; only the player-visible DisplayName
+     * changes). The metadata in the saved game is updated in place by loading
+     * the save, mutating DisplayName, and writing it back to the same slot.
+     *
+     * @param SlotName The save slot file (stable identifier on disk).
+     * @param NewDisplayName Player-facing label shown in the save UI.
+     * @return True if the rename succeeded.
+     */
+    UFUNCTION(BlueprintCallable, Category="MO|Persistence")
+    bool RenameSaveSlot(const FString& SlotName, const FText& NewDisplayName);
+
     /** Check if a save slot exists. */
     UFUNCTION(BlueprintPure, Category="MO|Persistence")
     bool DoesSaveSlotExist(const FString& SlotName) const;

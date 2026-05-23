@@ -122,6 +122,23 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "MO|UI")
 	TObjectPtr<UInputAction> CloseAction;
 
+public:
+	/**
+	 * Claim Slate keyboard focus for this widget's desired target, walking
+	 * the chain down through any nested UMOActivatableWidget desired-focus
+	 * targets until we find a leaf (a focusable concrete widget like a
+	 * button or text input).
+	 *
+	 * Used when another widget deactivates above us and we should regain
+	 * focus — e.g. a modal closing on top of a still-active menu. Without
+	 * the chain walk, NativeGetDesiredFocusTarget might return another
+	 * activatable widget (e.g. a sub-panel inside a switcher) that doesn't
+	 * itself accept keyboard focus, leaving focus stranded.
+	 *
+	 * Safe to call any time after NativeConstruct.
+	 */
+	void ClaimFocusForReactivation();
+
 private:
 	/** CommonUI binding handle for CloseAction. Created in NativeOnActivated. */
 	FUIActionBindingHandle CloseActionBinding;

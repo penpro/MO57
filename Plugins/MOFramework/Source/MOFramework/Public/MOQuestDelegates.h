@@ -98,3 +98,26 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOOnSkillEvent, FName, SkillId, in
  * Used for entering/exiting locations.
  */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOOnLocationEvent, FName, LocationTag);
+
+// ============================================================================
+// TUTORIAL DELEGATES
+// ============================================================================
+
+/**
+ * Broadcast when the active tutorial hint changes — either a new tutorial
+ * objective became current, the existing one progressed, completed, or
+ * tutorial popups were toggled. Listeners query
+ * UMOQuestSubsystem::GetActiveTutorialHint() to read the new state.
+ */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOOnTutorialHintChanged);
+
+// ============================================================================
+// REWARD DELEGATES
+// ============================================================================
+
+/**
+ * Broadcast after a quest completes so subsystems can apply its rewards.
+ * The subsystem doesn't apply rewards directly — that keeps it decoupled
+ * from the XP/knowledge/inventory components.
+ */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOOnApplyQuestRewards, FName, QuestId);

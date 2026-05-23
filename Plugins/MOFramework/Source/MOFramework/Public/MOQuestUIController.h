@@ -43,6 +43,7 @@
 class UMOQuestLogPanel;
 class UMOQuestHUDWidget;
 class UMOQuestSubsystem;
+class UMOTutorialHintWidget;
 
 /**
  * Specialized UI controller for quest-related UI.
@@ -145,4 +146,26 @@ private:
 
 	UPROPERTY(Transient)
 	TWeakObjectPtr<UMOQuestHUDWidget> QuestHUDWidget;
+
+	// --- Tutorial Hint Widget ---
+
+	/**
+	 * Blueprint class for the tutorial hint banner shown top-center of the
+	 * HUD whenever an active tutorial objective has bShowAsTutorialPopup=true.
+	 * Assign WBP_TutorialHint here in the controller defaults.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Quest|UI|Tutorial", meta=(AllowPrivateAccess="true"))
+	TSubclassOf<UMOTutorialHintWidget> TutorialHintWidgetClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Quest|UI|Tutorial", meta=(ClampMin="0", AllowPrivateAccess="true"))
+	int32 TutorialHintZOrder = 6;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Quest|UI|Tutorial", meta=(AllowPrivateAccess="true"))
+	bool bCreateTutorialHintOnBeginPlay = true;
+
+	UPROPERTY(Transient)
+	TWeakObjectPtr<UMOTutorialHintWidget> TutorialHintWidget;
+
+	/** Create and add the tutorial hint widget to the viewport. */
+	void CreateTutorialHintWidget();
 };

@@ -71,18 +71,14 @@ void UMOContextMenuBase::NativeConstruct()
 
 	TimeSinceConstruct = 0.0f;
 
+	// Single source of truth: cursor + Game-and-UI input lives on the
+	// subsystem. See UMOGameUIManagerSubsystem::ApplyContextMenuInputState.
 	if (APlayerController* PC = GetOwningPlayer())
 	{
 		bWasCursorVisible = PC->bShowMouseCursor;
-		MOUI_LOG(this, "ContextMenu", "  %s: cursor was %s, setting bShowMouseCursor=true + FInputModeGameAndUI",
+		MOUI_LOG(this, "ContextMenu", "  %s: cursor was %s, applying context-menu input state",
 			*GetName(), bWasCursorVisible ? TEXT("VISIBLE") : TEXT("hidden"));
-
-		PC->bShowMouseCursor = true;
-
-		FInputModeGameAndUI InputMode;
-		InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
-		InputMode.SetHideCursorDuringCapture(false);
-		PC->SetInputMode(InputMode);
+		UMOGameUIManagerSubsystem::ApplyContextMenuInputState(PC);
 	}
 
 	// Hook into Slate's input pipeline so we see clicks that land outside this
@@ -110,47 +106,15 @@ void UMOContextMenuBase::NativeDestruct()
 	}
 	ClickOutsideHandler.Reset();
 
+	// Single source of truth for context-menu teardown input handling:
+	// - No other menu open → restore game mode + viewport focus
+	// - Menu still open  → refocus the topmost active widget (so the
+	//   underlying menu's Tab/Escape keys come alive again)
+	// See UMOGameUIManagerSubsystem::RestoreContextMenuInputState.
 	if (APlayerController* PC = GetOwningPlayer())
 	{
-		bool bShouldRestoreGameMode = true;
-		int32 ActiveMenus = -1;
-		if (UWorld* World = GetWorld())
-		{
-			if (UMOGameUIManagerSubsystem* UISub = World->GetSubsystem<UMOGameUIManagerSubsystem>())
-			{
-				ActiveMenus = UISub->GetActiveMenuCount();
-				bShouldRestoreGameMode = !UISub->IsAnyMenuOpen();
-			}
-		}
-
-		MOUI_LOG(this, "ContextMenu", "  %s: ActiveMenuCount=%d, restoreGameMode=%s",
-			*GetName(), ActiveMenus, bShouldRestoreGameMode ? TEXT("YES") : TEXT("no"));
-
-		if (bShouldRestoreGameMode)
-		{
-			PC->bShowMouseCursor = false;
-			FInputModeGameOnly GameOnlyMode;
-			PC->SetInputMode(GameOnlyMode);
-
-			// Return Slate focus to the viewport so the next click immediately
-			// triggers interact tracing instead of needing a "wake up" click.
-			if (FSlateApplication::IsInitialized() && PC->GetLocalPlayer())
-			{
-				if (UGameViewportClient* VC = PC->GetLocalPlayer()->ViewportClient)
-				{
-					if (TSharedPtr<SViewport> ViewportWidget = VC->GetGameViewportWidget())
-					{
-						FSlateApplication::Get().SetAllUserFocus(ViewportWidget.ToSharedRef(), EFocusCause::SetDirectly);
-					}
-				}
-			}
-
-			MOUI_LOG(this, "ContextMenu", "  %s: applied FInputModeGameOnly + cursor=false + focus->viewport", *GetName());
-		}
-		else
-		{
-			MOUI_LOG(this, "ContextMenu", "  %s: left cursor/input alone (menu still open)", *GetName());
-		}
+		UMOGameUIManagerSubsystem::RestoreContextMenuInputState(this, PC);
+		MOUI_LOG(this, "ContextMenu", "  %s: invoked RestoreContextMenuInputState", *GetName());
 	}
 
 	Super::NativeDestruct();

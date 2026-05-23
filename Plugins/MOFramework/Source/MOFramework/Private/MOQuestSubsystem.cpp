@@ -126,7 +126,17 @@ bool UMOQuestSubsystem::StartQuest(FName QuestId)
 	UE_LOG(LogMOFramework, Log, TEXT("[MOQuestSubsystem] Started quest '%s': %s"),
 		*QuestId.ToString(), *Definition->DisplayName.ToString());
 
+	// Refresh which events have listeners — new objectives just became active.
+	RebuildActiveEventListeners();
+
 	OnQuestStarted.Broadcast(QuestId);
+
+	// Starting a tutorial quest may surface a new hint — let listeners refresh.
+	if (Definition->bIsTutorial)
+	{
+		OnTutorialHintChanged.Broadcast();
+	}
+
 	return true;
 }
 
@@ -140,6 +150,7 @@ bool UMOQuestSubsystem::AbandonQuest(FName QuestId)
 	}
 
 	ActiveQuests.Remove(QuestId);
+	RebuildActiveEventListeners();
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOQuestSubsystem] Abandoned quest '%s'"), *QuestId.ToString());
 
@@ -325,6 +336,10 @@ void UMOQuestSubsystem::ApplySaveData(const FMOQuestSaveData& SaveData)
 		CompletedQuests.Add(QuestId);
 	}
 
+	// Active quests changed wholesale — rebuild the listener cache so the
+	// per-tick broadcasters know which events have receivers post-load.
+	RebuildActiveEventListeners();
+
 	UE_LOG(LogMOFramework, Log, TEXT("[MOQuestSubsystem] Loaded %d active quests, %d completed"),
 		ActiveQuests.Num(), CompletedQuests.Num());
 }
@@ -333,6 +348,7 @@ void UMOQuestSubsystem::ResetAllQuests()
 {
 	ActiveQuests.Empty();
 	CompletedQuests.Empty();
+	ActiveEventListeners.Empty();
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOQuestSubsystem] Reset all quest progress"));
 
@@ -376,6 +392,20 @@ void UMOQuestSubsystem::HandleSkillLevelUp(FName SkillId, int32 OldLevel, int32 
 	{
 		ProcessEventForObjectives(EMOObjectiveType::SkillLevelUp, SkillId, LevelsGained);
 	}
+}
+
+void UMOQuestSubsystem::HandleBuildingCompleted(FName RecipeId)
+{
+	if (RecipeId.IsNone())
+	{
+		return;
+	}
+	// Buildings produce themselves as the "crafted item" — Tutorial_BuildCampfire
+	// uses Type=ItemCraft, TargetEventOrId="Campfire01" exactly as a regular
+	// hand-craft would. We route through the same ItemCraft objective type so
+	// designers don't need to learn a new objective type just for buildings.
+	UE_LOG(LogMOFramework, Log, TEXT("[MOQuestSubsystem] HandleBuildingCompleted: %s"), *RecipeId.ToString());
+	ProcessEventForObjectives(EMOObjectiveType::ItemCraft, RecipeId, 1);
 }
 
 // ============================================================================
@@ -555,7 +585,24 @@ void UMOQuestSubsystem::UpdateObjectiveProgress(FMOQuestState& State, const FMOQ
 		UE_LOG(LogMOFramework, Log, TEXT("[MOQuestSubsystem] Quest '%s' objective '%s' COMPLETED"),
 			*State.QuestId.ToString(), *Objective.ObjectiveId.ToString());
 
+		// An objective just became complete — refresh listeners so high-freq
+		// broadcasters (per-tick move/look) stop firing for events nobody
+		// listens to anymore.
+		RebuildActiveEventListeners();
+
 		OnObjectiveCompleted.Broadcast(State.QuestId, Objective.ObjectiveId);
+	}
+
+	// Hint widget tracks the active tutorial hint by querying us — broadcast
+	// on ANY tutorial-quest objective change. Don't gate on this objective's
+	// own bShowAsTutorialPopup: a silent sequential gate (Obj1) completing
+	// is what unblocks the next popup objective (Obj2). If we only broadcast
+	// when popup objectives progressed, the popup widget would never learn
+	// that a gate fired and would stay blank.
+	const FMOQuestDefinitionRow* Definition = QuestDefinitions.Find(State.QuestId);
+	if (Definition && Definition->bIsTutorial)
+	{
+		OnTutorialHintChanged.Broadcast();
 	}
 }
 
@@ -594,10 +641,27 @@ void UMOQuestSubsystem::CheckQuestCompletion(FMOQuestState& State)
 	CompletedQuests.Add(State.QuestId);
 	ActiveQuests.Remove(State.QuestId);
 
+	// Now that the quest is gone from ActiveQuests, its objective events
+	// no longer have listeners — refresh the cache.
+	RebuildActiveEventListeners();
+
 	UE_LOG(LogMOFramework, Log, TEXT("[MOQuestSubsystem] Quest '%s' COMPLETED: %s"),
 		*State.QuestId.ToString(), *Definition->DisplayName.ToString());
 
 	OnQuestCompleted.Broadcast(State.QuestId);
+
+	// Fire the reward hook so external systems can grant XP/knowledge/items.
+	// The subsystem deliberately does NOT apply rewards itself — that's left
+	// to listeners (currently no-ops). Reward specs live on the quest row's
+	// Rewards array; listeners read them via GetQuestDefinition.
+	OnApplyQuestRewards.Broadcast(State.QuestId);
+
+	// Completing a tutorial quest changes which hint should be shown — let
+	// the popup widget re-evaluate.
+	if (Definition->bIsTutorial)
+	{
+		OnTutorialHintChanged.Broadcast();
+	}
 
 	// Check if completing this quest unlocks auto-start quests
 	CheckAutoStartQuests();
@@ -648,4 +712,175 @@ const FMOQuestObjective* UMOQuestSubsystem::GetCurrentSequentialObjective(
 	}
 
 	return nullptr;
+}
+
+// ============================================================================
+// TUTORIAL HINT API
+// ============================================================================
+
+bool UMOQuestSubsystem::GetActiveTutorialHint(FName& OutQuestId, FName& OutObjectiveId,
+	FText& OutHintTitle, FText& OutHintBody) const
+{
+	OutQuestId = NAME_None;
+	OutObjectiveId = NAME_None;
+	OutHintTitle = FText::GetEmpty();
+	OutHintBody = FText::GetEmpty();
+
+	if (!bTutorialPopupsEnabled)
+	{
+		return false;
+	}
+
+	// Pick the first active tutorial quest with an incomplete objective that
+	// wants to surface a popup AND is currently allowed to be active (sequential
+	// gating). The "silent-gate + popup-payload" pattern relies on this — a
+	// silent sequential objective comes first, and the popup objective only
+	// shows once that gate has fired. Without honoring sequential here, the
+	// popup objective would surface immediately when the quest starts.
+	for (const auto& Pair : ActiveQuests)
+	{
+		const FMOQuestState& State = Pair.Value;
+		const FMOQuestDefinitionRow* Definition = QuestDefinitions.Find(Pair.Key);
+		if (!Definition || !Definition->bIsTutorial)
+		{
+			continue;
+		}
+
+		// Cache the current sequential objective once per quest. nullptr if
+		// the quest has no sequential objectives left or has none at all.
+		const FMOQuestObjective* CurrentSequential = GetCurrentSequentialObjective(State, *Definition);
+
+		for (const FMOQuestObjective& Objective : Definition->Objectives)
+		{
+			if (!Objective.bShowAsTutorialPopup)
+			{
+				continue;
+			}
+			if (State.IsObjectiveComplete(Objective.ObjectiveId))
+			{
+				continue;
+			}
+
+			// Sequential gating: if this objective is sequential, only show
+			// it when it's the current sequential objective. Non-sequential
+			// objectives bypass this and show whenever incomplete.
+			if (Objective.bSequential)
+			{
+				if (!CurrentSequential || CurrentSequential->ObjectiveId != Objective.ObjectiveId)
+				{
+					continue;
+				}
+			}
+
+			OutQuestId = Pair.Key;
+			OutObjectiveId = Objective.ObjectiveId;
+			OutHintTitle = Objective.HintTitle;
+			OutHintBody = Objective.HintBody;
+			return true;
+		}
+	}
+
+	return false;
+}
+
+void UMOQuestSubsystem::SkipCurrentTutorialObjective()
+{
+	FName QuestId, ObjectiveId;
+	FText IgnoredTitle, IgnoredBody;
+	if (!GetActiveTutorialHint(QuestId, ObjectiveId, IgnoredTitle, IgnoredBody))
+	{
+		return;
+	}
+
+	FMOQuestState* State = ActiveQuests.Find(QuestId);
+	const FMOQuestDefinitionRow* Definition = QuestDefinitions.Find(QuestId);
+	if (!State || !Definition)
+	{
+		return;
+	}
+
+	// Find the objective and force it to RequiredCount via the normal update
+	// path — that fires OnObjectiveCompleted, advances the chain, and triggers
+	// hint refresh for free.
+	for (const FMOQuestObjective& Objective : Definition->Objectives)
+	{
+		if (Objective.ObjectiveId == ObjectiveId)
+		{
+			const int32 CurrentProgress = State->GetObjectiveProgress(ObjectiveId);
+			const int32 Remaining = Objective.RequiredCount - CurrentProgress;
+			if (Remaining > 0)
+			{
+				UpdateObjectiveProgress(*State, Objective, Remaining);
+				CheckQuestCompletion(*State);
+			}
+			UE_LOG(LogMOFramework, Log, TEXT("[MOQuestSubsystem] Skipped tutorial objective %s.%s"),
+				*QuestId.ToString(), *ObjectiveId.ToString());
+			return;
+		}
+	}
+}
+
+void UMOQuestSubsystem::SetTutorialPopupsEnabled(bool bEnabled)
+{
+	if (bTutorialPopupsEnabled == bEnabled)
+	{
+		return;
+	}
+	bTutorialPopupsEnabled = bEnabled;
+	UE_LOG(LogMOFramework, Log, TEXT("[MOQuestSubsystem] Tutorial popups %s"),
+		bEnabled ? TEXT("ENABLED") : TEXT("DISABLED"));
+	OnTutorialHintChanged.Broadcast();
+}
+
+// ============================================================================
+// EVENT LISTENER CACHE
+// ============================================================================
+
+bool UMOQuestSubsystem::IsAnyQuestListeningForEvent(FName EventName) const
+{
+	return ActiveEventListeners.Contains(EventName);
+}
+
+void UMOQuestSubsystem::RebuildActiveEventListeners()
+{
+	ActiveEventListeners.Reset();
+
+	for (const auto& Pair : ActiveQuests)
+	{
+		const FMOQuestState& State = Pair.Value;
+		const FMOQuestDefinitionRow* Definition = QuestDefinitions.Find(Pair.Key);
+		if (!Definition)
+		{
+			continue;
+		}
+
+		for (const FMOQuestObjective& Objective : Definition->Objectives)
+		{
+			// Only Event-type objectives go through FireGameEvent → here.
+			// Other objective types (ItemPickup, ItemCraft, SkillLevelUp)
+			// have their own dedicated entry points and don't need this.
+			if (Objective.Type != EMOObjectiveType::Event)
+			{
+				continue;
+			}
+			if (State.IsObjectiveComplete(Objective.ObjectiveId))
+			{
+				continue;
+			}
+			if (Objective.TargetEventOrId.IsNone())
+			{
+				continue;
+			}
+
+			// We don't honor sequential gating here on purpose: if a quest
+			// has a silent-gate sequential first objective followed by a
+			// popup payload sequential second objective, BOTH event names
+			// should be in the cache so the gate event can actually arrive
+			// and fire. ProcessEventForObjectives does the precise gating.
+			ActiveEventListeners.Add(Objective.TargetEventOrId);
+		}
+	}
+
+	UE_LOG(LogMOFramework, Verbose, TEXT("[MOQuestSubsystem] Rebuilt event listener cache: %d entries"),
+		ActiveEventListeners.Num());
 }

@@ -125,6 +125,44 @@ class MOFRAMEWORK_API UMOUIControllerBase : public UActorComponent
 public:
 	UMOUIControllerBase();
 
+	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+
+protected:
+	// =========================================================================
+	// PAWN POSSESSION CHANGES (systematic — every controller gets a hook)
+	// =========================================================================
+	//
+	// Subclasses override OnPossessedPawnChanged to rebind any per-pawn state
+	// (delegate listeners on the pawn's components, cached pawn references,
+	// widgets that show pawn-specific data, etc).
+	//
+	// The wiring is automatic: BeginPlay registers a UFUNCTION listener with
+	// APlayerController::OnPossessedPawnChanged, EndPlay unregisters. Without
+	// this, BeginPlay was the only chance to bind to the pawn — but
+	// possession happens AFTER BeginPlay, so any controller that does
+	// `Pawn->ComponentName->Delegate.Add(...)` at startup gets PC->GetPawn() ==
+	// nullptr and silently bails. That's how the terraform progress widget
+	// fix was broken in the first place — the controller was set up to
+	// rebind on pawn change, but the rebind was never wired.
+	//
+	// NOTE: Override the virtual, NOT the UFUNCTION. The UFUNCTION is the
+	// glue that lets us hook the delegate; subclasses get the virtual.
+	UFUNCTION()
+	void HandlePossessedPawnChanged(APawn* OldPawn, APawn* NewPawn);
+
+	/**
+	 * Called when the owning PC takes/releases possession of a pawn.
+	 * Override in subclasses to react. Default is empty.
+	 *
+	 * Fires for:
+	 *   - First possession at game start
+	 *   - Auto-possess after save load
+	 *   - Manual repossession via context menu / debug
+	 *   - Unpossession (NewPawn == nullptr)
+	 */
+	virtual void OnPossessedPawnChanged(APawn* OldPawn, APawn* NewPawn) {}
+
 protected:
 	// =========================================================================
 	// CONTROLLER UTILITIES

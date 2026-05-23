@@ -9,9 +9,11 @@
 #include "CommonActivatableWidget.h"
 #include "Widgets/CommonActivatableWidgetContainer.h"
 #include "GameFramework/PlayerController.h"
+#include "Engine/GameViewportClient.h"
 #include "Engine/LocalPlayer.h"
 #include "Engine/World.h"
 #include "Framework/Application/SlateApplication.h"
+#include "Framework/Application/SlateUser.h"
 #include "Input/Events.h"
 #include "Widgets/SViewport.h"
 
@@ -312,6 +314,221 @@ void UMOGameUIManagerSubsystem::PopWidgetFromLayer(FGameplayTag LayerTag)
 	if (Layout)
 	{
 		Layout->PopWidgetFromLayer(LayerTag);
+	}
+}
+
+UCommonActivatableWidget* UMOGameUIManagerSubsystem::PushModalWidget(const UObject* WorldContextObject,
+	TSubclassOf<UCommonActivatableWidget> WidgetClass)
+{
+	if (!WorldContextObject || !WidgetClass)
+	{
+		return nullptr;
+	}
+
+	UWorld* World = WorldContextObject->GetWorld();
+	if (!World)
+	{
+		return nullptr;
+	}
+
+	// Preferred path: CommonUI Modal layer via the project's primary game
+	// layout. Stack handles input-config push/pop and widget removal on
+	// deactivate — all the "input handoff" stuff happens for free.
+	if (UMOGameUIManagerSubsystem* Subsystem = UMOGameUIManagerSubsystem::Get(World))
+	{
+		if (UMOPrimaryGameLayout* Layout = Subsystem->GetRootLayout())
+		{
+			UCommonActivatableWidget* Pushed = Layout->PushWidgetToLayer(MOUILayerTags::Layer_Modal, WidgetClass);
+			if (Pushed)
+			{
+				UE_LOG(LogMOFramework, Verbose, TEXT("[MOGameUIManagerSubsystem] PushModalWidget: layer-stack path → %s"), *Pushed->GetName());
+				return Pushed;
+			}
+			// Layout exists but push failed (e.g. Modal layer not registered).
+			// Fall through to viewport fallback rather than failing outright.
+		}
+	}
+
+	// Fallback path: main menu / unparented contexts that don't run on top
+	// of UMOPrimaryGameLayout. AddToViewport at z=300 (above main menu's
+	// z=100), manual activation, auto-RemoveFromParent on OnDeactivated so
+	// modals don't leak. Input handoff here is trivial since main menu has
+	// nothing to compete with — the modal owns input until it deactivates,
+	// then the main menu widget below regains it via normal Slate focus.
+	APlayerController* PC = World->GetFirstPlayerController();
+	if (!PC)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOGameUIManagerSubsystem] PushModalWidget fallback: no player controller available"));
+		return nullptr;
+	}
+
+	UCommonActivatableWidget* Modal = CreateWidget<UCommonActivatableWidget>(PC, WidgetClass);
+	if (!Modal)
+	{
+		return nullptr;
+	}
+
+	Modal->AddToViewport(300);
+
+	// Bind auto-cleanup BEFORE Activate so we never miss an early deactivation.
+	// Weak lambda — modal removes itself from the viewport on deactivate
+	// (covers confirm AND cancel paths since OnDeactivated fires either way).
+	const TWeakObjectPtr<UCommonActivatableWidget> WeakModal(Modal);
+	Modal->OnDeactivated().AddWeakLambda(Modal, [WeakModal]()
+	{
+		if (UCommonActivatableWidget* W = WeakModal.Get())
+		{
+			W->RemoveFromParent();
+		}
+	});
+
+	Modal->ActivateWidget();
+
+	UE_LOG(LogMOFramework, Verbose, TEXT("[MOGameUIManagerSubsystem] PushModalWidget: viewport-fallback path → %s"), *Modal->GetName());
+	return Modal;
+}
+
+// =============================================================================
+// CONTEXT MENU INPUT LIFECYCLE
+// =============================================================================
+//
+// MOContextMenuBase and MOItemContextMenu are sibling UCommonUserWidget popup
+// classes (not activatable widgets), so they don't get CommonUI's automatic
+// input-config stacking via GetDesiredInputConfig. Each used to roll its own
+// copy of "show cursor + GameAndUI" on construct, then "if no menu open
+// restore game mode else refocus active widget" on destruct.
+//
+// Two copies meant they drifted: MOItemContextMenu had the refocus-active-
+// widget fallback (so closing an item context menu over the inventory hands
+// focus back to the inventory), MOContextMenuBase did not (so closing a
+// ground/station context menu while a menu was open left focus stranded —
+// the next Tab/Escape went nowhere).
+//
+// Both helpers now live here as the single source of truth. New context-menu
+// subclasses call these instead of reimplementing the lifecycle.
+
+void UMOGameUIManagerSubsystem::ApplyContextMenuInputState(APlayerController* PC)
+{
+	if (!IsValid(PC))
+	{
+		return;
+	}
+
+	PC->bShowMouseCursor = true;
+
+	FInputModeGameAndUI InputMode;
+	InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+	InputMode.SetHideCursorDuringCapture(false);
+	PC->SetInputMode(InputMode);
+}
+
+void UMOGameUIManagerSubsystem::RestoreContextMenuInputState(const UObject* WorldContextObject, APlayerController* PC)
+{
+	if (!IsValid(PC))
+	{
+		return;
+	}
+
+	// Release any pointer capture left over from clicking a button inside the
+	// menu. If we don't, the next click / key may route to the captured widget
+	// (now invalid) instead of whatever's underneath.
+	if (FSlateApplication::IsInitialized())
+	{
+		if (TSharedPtr<FSlateUser> User = FSlateApplication::Get().GetUser(0))
+		{
+			if (User->HasAnyCapture())
+			{
+				User->ReleaseAllCapture();
+			}
+		}
+	}
+
+	// Ask the world subsystem whether anything else is still showing. If yes,
+	// the underlying widget keeps owning input/cursor — we just need to hand
+	// Slate focus back so its key handlers (Tab/Escape) take effect.
+	const UMOGameUIManagerSubsystem* Subsystem = UMOGameUIManagerSubsystem::Get(WorldContextObject);
+	const bool bAnyMenuOpen = Subsystem ? Subsystem->IsAnyMenuOpen() : false;
+
+	if (!bAnyMenuOpen)
+	{
+		// No other UI active — context menu was the last thing showing, so
+		// restore gameplay state fully (cursor hidden, game-only input,
+		// viewport focused for the next interaction trace).
+		PC->bShowMouseCursor = false;
+
+		FInputModeGameOnly GameOnlyMode;
+		PC->SetInputMode(GameOnlyMode);
+
+		if (FSlateApplication::IsInitialized() && PC->GetLocalPlayer())
+		{
+			if (UGameViewportClient* VC = PC->GetLocalPlayer()->ViewportClient)
+			{
+				if (TSharedPtr<SViewport> ViewportWidget = VC->GetGameViewportWidget())
+				{
+					FSlateApplication::Get().SetAllUserFocus(ViewportWidget.ToSharedRef(), EFocusCause::SetDirectly);
+				}
+			}
+		}
+		return;
+	}
+
+	// A menu is still active beneath the context menu. Find the topmost
+	// active widget and hand Slate focus back to it so the menu's key
+	// handlers come alive again. Without this, the cursor stays visible
+	// (correct) but keystrokes go nowhere until the user clicks the menu —
+	// a "press twice to close" symptom.
+	//
+	// Layer scan walks top-down (Modal → Menu → GameOverlay → Game). The
+	// .Num() > 0 check skips stacks that only contain the
+	// GameplayInputStub root-content widget.
+	if (!FSlateApplication::IsInitialized())
+	{
+		return;
+	}
+
+	if (!Subsystem)
+	{
+		return;
+	}
+
+	UMOPrimaryGameLayout* Layout = Subsystem->GetRootLayout();
+	if (!Layout)
+	{
+		return;
+	}
+
+	static const TArray<FName> LayerPriority = {
+		FName("MO.UI.Layer.Modal"),
+		FName("MO.UI.Layer.Menu"),
+		FName("MO.UI.Layer.GameOverlay"),
+		FName("MO.UI.Layer.Game"),
+	};
+
+	for (const FName& LayerName : LayerPriority)
+	{
+		const FGameplayTag Tag = FGameplayTag::RequestGameplayTag(LayerName, false);
+		if (!Tag.IsValid())
+		{
+			continue;
+		}
+
+		UCommonActivatableWidgetContainerBase* Stack = Layout->GetLayerStack(Tag);
+		if (!Stack || Stack->GetWidgetList().Num() == 0)
+		{
+			continue;
+		}
+
+		UCommonActivatableWidget* Active = Cast<UCommonActivatableWidget>(Stack->GetActiveWidget());
+		if (!Active)
+		{
+			continue;
+		}
+
+		if (TSharedPtr<SWidget> ActiveSlate = Active->GetCachedWidget())
+		{
+			FSlateApplication::Get().SetAllUserFocus(ActiveSlate.ToSharedRef(), EFocusCause::SetDirectly);
+			return;
+		}
 	}
 }
 

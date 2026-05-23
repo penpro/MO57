@@ -106,6 +106,76 @@ public:
 	void PopWidgetFromLayer(FGameplayTag LayerTag);
 
 	/**
+	 * Canonical "show me a modal" entry point. Use this from any context
+	 * (panel, controller, BP) when you need to display a CommonActivatable
+	 * modal on top of whatever's currently showing.
+	 *
+	 * Behavior depends on whether the project's primary game layout exists:
+	 *
+	 *   IN-GAME (UMOPrimaryGameLayout present):
+	 *     Pushes the widget onto the Modal layer (z=200, above Menu=150).
+	 *     The layer stack handles input-config stacking — when the modal
+	 *     deactivates, input returns to whatever was below automatically.
+	 *
+	 *   MAIN MENU (no primary game layout — main menu just AddToViewports
+	 *   its root widget):
+	 *     AddToViewport at z=300 (above main menu's z=100), manually
+	 *     activates the widget, and auto-RemoveFromParents on
+	 *     OnDeactivated. Input handoff is simple in this case because
+	 *     there's no gameplay world underneath competing for input.
+	 *
+	 * Consumers don't need to care which path applies — same activated
+	 * widget back, same lifecycle (modal cleans up on deactivate). When the
+	 * main menu eventually migrates to use UMOPrimaryGameLayout, this
+	 * function's fallback branch becomes unreachable; callers don't change.
+	 *
+	 * @param WidgetClass The modal widget class to instantiate.
+	 * @return The instantiated and activated widget, or nullptr on failure.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "MO|UI", meta = (WorldContext = "WorldContextObject"))
+	static UCommonActivatableWidget* PushModalWidget(const UObject* WorldContextObject,
+		TSubclassOf<UCommonActivatableWidget> WidgetClass);
+
+	// =========================================================================
+	// CONTEXT MENU INPUT LIFECYCLE
+	// =========================================================================
+	//
+	// Context menus (UMOContextMenuBase, UMOItemContextMenu) are
+	// UCommonUserWidget popups, not UCommonActivatableWidget — they don't
+	// participate in CommonUI's layer-stack input config stacking. So they
+	// have to manage cursor + input mode manually in NativeConstruct /
+	// NativeDestruct.
+	//
+	// Two sibling base classes were each rolling their own copy of that
+	// logic — exactly the kind of duplication that lets one of them drift
+	// (e.g. focus refresh on the underlying menu missing from the older
+	// one). These helpers are the single source of truth so every
+	// context-menu subclass gets identical behavior. Adding a new context
+	// menu type means calling these two methods; no per-class duplication.
+	//
+	// PAIR INVARIANT: every ApplyContextMenuInputState call must be
+	// matched by exactly one RestoreContextMenuInputState call. Symmetric
+	// on the widget's NativeConstruct / NativeDestruct lifecycle.
+
+	/**
+	 * Configure input for an open context-menu popup: show the cursor and
+	 * switch to FInputModeGameAndUI (no viewport lock, cursor stays visible
+	 * during capture). Call from NativeConstruct of any context-menu widget.
+	 */
+	static void ApplyContextMenuInputState(APlayerController* PC);
+
+	/**
+	 * Restore appropriate input state after a context-menu popup closes.
+	 * - If no other menu is active: switch back to FInputModeGameOnly,
+	 *   hide cursor, hand Slate focus back to the viewport.
+	 * - If a menu is still active (e.g. inventory underneath a right-click
+	 *   item context menu): leave cursor/input mode alone and refocus the
+	 *   topmost active widget so its key handlers (Tab/Escape) work again.
+	 * Call from NativeDestruct of any context-menu widget.
+	 */
+	static void RestoreContextMenuInputState(const UObject* WorldContextObject, APlayerController* PC);
+
+	/**
 	 * Clear all widgets from a layer.
 	 *
 	 * @param LayerTag The gameplay tag identifying the layer

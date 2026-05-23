@@ -28,6 +28,9 @@
 #include "MOSystemMenuUIController.h"
 #include "MOQuestUIController.h"
 
+// Quest system (for tutorial event broadcast + F1/F3 skip)
+#include "MOQuestSubsystem.h"
+
 // Survivor command system
 #include "MORecruitmentComponent.h"
 
@@ -383,6 +386,20 @@ void AMOPlayerController::SetupInputComponent()
 	{
 		UE_LOG(LogMOFramework, Warning, TEXT("AMOPlayerController: ViewAction not set - camera shoulder toggle disabled. Set it in BP_MOPlayerController."));
 	}
+
+	// ========================================================================
+	// TUTORIAL CONTROLS (F1 skip current popup, F3 disable all popups)
+	// ========================================================================
+	if (SkipTutorialItemAction)
+	{
+		EnhancedInput->BindAction(SkipTutorialItemAction, ETriggerEvent::Started, this, &AMOPlayerController::HandleSkipTutorialItem);
+		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound SkipTutorialItemAction"));
+	}
+	if (SkipAllTutorialsAction)
+	{
+		EnhancedInput->BindAction(SkipAllTutorialsAction, ETriggerEvent::Started, this, &AMOPlayerController::HandleSkipAllTutorials);
+		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Bound SkipAllTutorialsAction"));
+	}
 }
 
 void AMOPlayerController::OnPossess(APawn* InPawn)
@@ -658,6 +675,16 @@ void AMOPlayerController::HandleMove(const FInputActionValue& Value)
 	{
 		const FVector2D MovementVector = Value.Get<FVector2D>();
 		IMOControllableInterface::Execute_RequestMove(ControllablePawn, MovementVector);
+
+		// Fire on every tick the input is active. The quest subsystem discards
+		// the event cheaply if no objective is listening. A one-shot flag here
+		// would race the tutorial chain — if the player looks/moves BEFORE the
+		// matching tutorial quest activates, the flag would latch and we'd
+		// never re-fire when that quest later starts.
+		if (!MovementVector.IsNearlyZero())
+		{
+			BroadcastTutorialEvent(TEXT("PlayerMoved"));
+		}
 	}
 	else
 	{
@@ -672,6 +699,13 @@ void AMOPlayerController::HandleLook(const FInputActionValue& Value)
 	{
 		const FVector2D LookVector = Value.Get<FVector2D>();
 		IMOControllableInterface::Execute_RequestLook(ControllablePawn, LookVector);
+
+		// Same reasoning as HandleMove — fire every tick, let the quest
+		// subsystem be the matcher.
+		if (!LookVector.IsNearlyZero())
+		{
+			BroadcastTutorialEvent(TEXT("PlayerLooked"));
+		}
 	}
 }
 
@@ -686,6 +720,7 @@ void AMOPlayerController::HandleJumpStart(const FInputActionValue& Value)
 	if (APawn* ControllablePawn = CachedControllablePawn.Get())
 	{
 		IMOControllableInterface::Execute_RequestJumpStart(ControllablePawn);
+		BroadcastTutorialEvent(TEXT("PlayerJumped"));
 	}
 }
 
@@ -735,6 +770,7 @@ void AMOPlayerController::HandleHustleTriggered(const FInputActionValue& Value)
 			if (APawn* ControllablePawn = CachedControllablePawn.Get())
 			{
 				IMOControllableInterface::Execute_RequestSprintStart(ControllablePawn);
+				BroadcastTutorialEvent(TEXT("PlayerSprinted"));
 			}
 		}
 	}
@@ -763,6 +799,7 @@ void AMOPlayerController::HandleHustleEnd(const FInputActionValue& Value)
 		if (APawn* ControllablePawn = CachedControllablePawn.Get())
 		{
 			IMOControllableInterface::Execute_RequestToggleJog(ControllablePawn);
+			BroadcastTutorialEvent(TEXT("PlayerJogged"));
 		}
 	}
 
@@ -780,6 +817,7 @@ void AMOPlayerController::HandleCrouch(const FInputActionValue& Value)
 	if (APawn* ControllablePawn = CachedControllablePawn.Get())
 	{
 		IMOControllableInterface::Execute_RequestCrouchToggle(ControllablePawn);
+		BroadcastTutorialEvent(TEXT("PlayerCrouched"));
 	}
 }
 
@@ -1134,8 +1172,54 @@ void AMOPlayerController::HandleView(const FInputActionValue& Value)
 		if (AMOCharacter* MOChar = Cast<AMOCharacter>(ControlledPawn))
 		{
 			MOChar->ToggleCameraShoulder();
+			BroadcastTutorialEvent(TEXT("ToggledView"));
 		}
 	}
+}
+
+// ============================================================================
+// INPUT HANDLERS - TUTORIAL
+// ============================================================================
+
+void AMOPlayerController::HandleSkipTutorialItem(const FInputActionValue& Value)
+{
+	UMOQuestSubsystem* Quest = GetGameInstance() ? GetGameInstance()->GetSubsystem<UMOQuestSubsystem>() : nullptr;
+	if (Quest)
+	{
+		Quest->SkipCurrentTutorialObjective();
+	}
+}
+
+void AMOPlayerController::HandleSkipAllTutorials(const FInputActionValue& Value)
+{
+	UMOQuestSubsystem* Quest = GetGameInstance() ? GetGameInstance()->GetSubsystem<UMOQuestSubsystem>() : nullptr;
+	if (Quest)
+	{
+		// F3 disables popups for the rest of the session. We don't toggle —
+		// once dismissed, stays dismissed. Re-enable via console or a settings
+		// menu later if needed.
+		Quest->SetTutorialPopupsEnabled(false);
+	}
+}
+
+void AMOPlayerController::BroadcastTutorialEvent(FName EventName)
+{
+	UMOQuestSubsystem* Quest = GetGameInstance() ? GetGameInstance()->GetSubsystem<UMOQuestSubsystem>() : nullptr;
+	if (!Quest)
+	{
+		return;
+	}
+
+	// Gate on the listener cache so high-frequency callers (HandleMove /
+	// HandleLook fire every tick) cost nothing once no quest cares. Once
+	// the movement tutorials complete, this returns false and FireGameEvent
+	// is never called — no map iteration, no logging spam.
+	if (!Quest->IsAnyQuestListeningForEvent(EventName))
+	{
+		return;
+	}
+
+	Quest->FireGameEvent(EventName);
 }
 
 // ============================================================================

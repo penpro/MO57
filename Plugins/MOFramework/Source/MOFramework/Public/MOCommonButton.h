@@ -101,14 +101,18 @@ protected:
 
 	/**
 	 * Called when the button text needs to be updated.
-	 * Override this in Blueprint to set your TextBlock's text.
 	 *
-	 * Example Blueprint implementation:
-	 * - Get your TextBlock reference
-	 * - Call SetText with the NewText parameter
+	 * C++ default behavior: walks the button's widget tree to find the first
+	 * UTextBlock or UCommonTextBlock descendant and updates its text. This
+	 * means SetButtonText() Just Works for any button BP that contains a
+	 * text widget — no Blueprint event override required.
+	 *
+	 * Override in Blueprint if you need custom logic (e.g. multiple text
+	 * widgets, formatted display, conditional swap-out).
 	 */
-	UFUNCTION(BlueprintImplementableEvent, Category="MO|UI|Button")
+	UFUNCTION(BlueprintNativeEvent, Category="MO|UI|Button")
 	void UpdateButtonText(const FText& NewText);
+	virtual void UpdateButtonText_Implementation(const FText& NewText);
 
 protected:
 	/** The text label displayed on the button. Set this per-instance in the designer. */

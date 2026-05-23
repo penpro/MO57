@@ -802,13 +802,7 @@ void UMOCraftingUIController::HandleHarvestCompleted(bool bCompleted, const FMOC
 		}
 	}
 
-	// Widget handles input state restoration via NativeOnDeactivated
-	// Just manage modal background visibility
-	if (!IsAnyMenuOpen())
-	{
-		HideModalBackground();
-	}
-	UpdateReticleVisibility();
+	// Modal background + reticle refresh handled by UMOActivatableWidget::NativeOnDeactivated.
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOCraftUI] Harvest completed: %s, Produced=%d, Failed=%d, Depleted=%d"),
 		bCompleted ? TEXT("success") : TEXT("cancelled"),
@@ -827,13 +821,7 @@ void UMOCraftingUIController::HandleHarvestCancelled()
 
 	CurrentHarvestTarget.Reset();
 
-	// Widget handles input state restoration via NativeOnDeactivated
-	// Just manage modal background visibility
-	if (!IsAnyMenuOpen())
-	{
-		HideModalBackground();
-	}
-	UpdateReticleVisibility();
+	// Modal background + reticle refresh handled by UMOActivatableWidget::NativeOnDeactivated.
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOCraftUI] Harvest cancelled"));
 }

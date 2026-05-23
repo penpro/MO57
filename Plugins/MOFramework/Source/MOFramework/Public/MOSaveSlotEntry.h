@@ -43,14 +43,17 @@
 
 #include "CoreMinimal.h"
 #include "CommonButtonBase.h"
-#include "MOSavePanel.h"
+#include "MOSaveGameTypes.h"  // FMOSaveMetadata lives here (NOT in MOSavePanel — including the panel created a circular dep through MOSaveSlotListPanel)
 #include "MOSaveSlotEntry.generated.h"
 
 class UTextBlock;
 class UImage;
 class UTexture2D;
+class UMOCommonButton;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOSaveSlotSelectedSignature, const FString&, SlotName);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOSaveSlotRenameRequestedSignature, const FString&, SlotName);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOSaveSlotDeleteRequestedSignature, const FString&, SlotName);
 
 /**
  * Individual save slot entry displayed in the save/load scroll box.
@@ -78,6 +81,14 @@ public:
 	UPROPERTY(BlueprintAssignable, Category="MO|UI|SaveSlot")
 	FMOSaveSlotSelectedSignature OnSlotSelected;
 
+	/** Fired when the player clicks the rename action on this slot. */
+	UPROPERTY(BlueprintAssignable, Category="MO|UI|SaveSlot")
+	FMOSaveSlotRenameRequestedSignature OnRenameRequested;
+
+	/** Fired when the player clicks the delete action on this slot. */
+	UPROPERTY(BlueprintAssignable, Category="MO|UI|SaveSlot")
+	FMOSaveSlotDeleteRequestedSignature OnDeleteRequested;
+
 protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeOnClicked() override;
@@ -85,6 +96,12 @@ protected:
 	/** Called when metadata is set. Override in BP to customize display. */
 	UFUNCTION(BlueprintImplementableEvent, Category="MO|UI|SaveSlot")
 	void OnMetadataUpdated(const FMOSaveMetadata& NewMetadata);
+
+	UFUNCTION()
+	void HandleRenameButtonClicked();
+
+	UFUNCTION()
+	void HandleDeleteButtonClicked();
 
 private:
 	void RefreshDisplay();
@@ -121,6 +138,22 @@ private:
 	/** Autosave indicator (visible only for autosaves). */
 	UPROPERTY(meta=(BindWidgetOptional))
 	TObjectPtr<UWidget> AutosaveIndicator;
+
+	/**
+	 * Optional rename action button. When present, clicks broadcast
+	 * OnRenameRequested with this slot's name. The hosting panel decides
+	 * how to gather the new display name (text input modal, inline edit, etc).
+	 */
+	UPROPERTY(meta=(BindWidgetOptional))
+	TObjectPtr<UMOCommonButton> RenameButton;
+
+	/**
+	 * Optional delete action button. When present, clicks broadcast
+	 * OnDeleteRequested with this slot's name. Hosting panel decides whether
+	 * to confirm before actually deleting.
+	 */
+	UPROPERTY(meta=(BindWidgetOptional))
+	TObjectPtr<UMOCommonButton> DeleteButton;
 
 	// ============================================================
 	// State

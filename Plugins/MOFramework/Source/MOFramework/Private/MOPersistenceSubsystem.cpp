@@ -1775,6 +1775,41 @@ bool UMOPersistenceSubsystem::DeleteSaveSlot(const FString& SlotName)
     return UGameplayStatics::DeleteGameInSlot(SlotName, 0);
 }
 
+bool UMOPersistenceSubsystem::RenameSaveSlot(const FString& SlotName, const FText& NewDisplayName)
+{
+    if (SlotName.IsEmpty())
+    {
+        UE_LOG(LogMOFramework, Warning, TEXT("[MOPersistence] RenameSaveSlot: empty slot name"));
+        return false;
+    }
+
+    // Load the existing save, mutate DisplayName, write back to the same slot.
+    // The underlying file name (slot) stays stable; only the player-visible
+    // label changes. Keeping the slot identifier stable means external code
+    // that has cached SlotName references (CurrentSlotName, save slot dropdowns
+    // mid-frame) doesn't break.
+    USaveGame* LoadedBase = UGameplayStatics::LoadGameFromSlot(SlotName, 0);
+    UMOWorldSaveGame* LoadedTyped = Cast<UMOWorldSaveGame>(LoadedBase);
+    if (!LoadedTyped)
+    {
+        UE_LOG(LogMOFramework, Warning, TEXT("[MOPersistence] RenameSaveSlot: failed to load slot '%s'"), *SlotName);
+        return false;
+    }
+
+    LoadedTyped->DisplayName = NewDisplayName.ToString();
+
+    const bool bSaved = UGameplayStatics::SaveGameToSlot(LoadedTyped, SlotName, 0);
+    if (!bSaved)
+    {
+        UE_LOG(LogMOFramework, Warning, TEXT("[MOPersistence] RenameSaveSlot: failed to write back slot '%s'"), *SlotName);
+        return false;
+    }
+
+    UE_LOG(LogMOFramework, Log, TEXT("[MOPersistence] Renamed slot '%s' display name to '%s'"),
+        *SlotName, *NewDisplayName.ToString());
+    return true;
+}
+
 bool UMOPersistenceSubsystem::DoesSaveSlotExist(const FString& SlotName) const
 {
     return UGameplayStatics::DoesSaveGameExist(SlotName, 0);

@@ -488,6 +488,7 @@ private:
 	UPROPERTY(Transient)
 	TMap<TObjectPtr<UPrimitiveComponent>, TEnumAsByte<ECollisionEnabled::Type>> CachedGhostCollisionStates;
 
+
 	// ============================================================================
 	// INTERNAL
 	// ============================================================================
@@ -510,4 +511,19 @@ private:
 
 	/** Restore original materials to mesh. */
 	void RestoreOriginalMaterials();
+
+	/**
+	 * Apply a collision profile to MeshComponent AND every UStaticMeshComponent
+	 * descendant of it. BP authors commonly attach the visible cube/wall mesh as
+	 * a CHILD of the C++ Mesh component — the C++ Mesh itself has no static
+	 * mesh asset, so configuring collision only on it leaves nothing for a
+	 * line-trace to hit. This helper propagates the structural collision
+	 * profile to whatever child actually has geometry, so trace responses match
+	 * the visible building no matter how the BP is laid out.
+	 *
+	 * Contract: anything you want to be "structural" (hit-traceable, blocks
+	 * pawn when complete) goes under MeshComponent. Anything cosmetic goes
+	 * elsewhere (attached to Root or as a sibling of Mesh).
+	 */
+	void ApplyStructuralCollisionProfile(FName ProfileName);
 };

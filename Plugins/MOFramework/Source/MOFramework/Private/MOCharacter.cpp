@@ -726,20 +726,27 @@ void AMOCharacter::ToggleCameraShoulder()
 		return;
 	}
 
-	// Get current Y position (use target if already transitioning)
-	const FVector CurrentLocation = FollowCamera->GetRelativeLocation();
-	CameraStartY = bIsCameraTransitioning ? FMath::Lerp(CameraStartY, CameraTargetY, CameraTransitionAlpha) : CurrentLocation.Y;
+	// The old logic computed the new start by lerping the previous start
+	// to the previous target using the LINEAR alpha (mismatched with the
+	// eased rendering) and then flipped the SIGN of that partial value.
+	// Result: each rapid press flipped a smaller and smaller value, so
+	// repeated presses converged the camera to Y=0. (80 → -80 → 80/3 → ...)
+	//
+	// Fix: don't compute the new target from the current partial position.
+	// The two valid shoulder positions are +CameraShoulderOffset and
+	// -CameraShoulderOffset. Snap the target to the opposite extreme of
+	// where the camera is *committed* to be:
+	//   - At rest: the current rendered Y is the commitment.
+	//   - Mid-transition: the in-flight CameraTargetY is the commitment
+	//     (the player asked to go there; pressing V again means "go back").
+	// Start is always the currently rendered Y so the visual stays smooth.
+	const float CurrentRenderedY = FollowCamera->GetRelativeLocation().Y;
+	const float CommittedSide = bIsCameraTransitioning ? CameraTargetY : CurrentRenderedY;
 
-	// Calculate new target: flip the sign
-	CameraTargetY = -CameraStartY;
+	const float Offset = FMath::Max(FMath::Abs(CameraShoulderOffset), 1.0f);
+	CameraTargetY = (CommittedSide >= 0.0f) ? -Offset : Offset;
+	CameraStartY = CurrentRenderedY;
 
-	// If the offset was 0, use the default shoulder offset
-	if (FMath::IsNearlyZero(CameraTargetY))
-	{
-		CameraTargetY = CameraShoulderOffset;
-	}
-
-	// Start the transition
 	CameraTransitionAlpha = 0.0f;
 	bIsCameraTransitioning = true;
 

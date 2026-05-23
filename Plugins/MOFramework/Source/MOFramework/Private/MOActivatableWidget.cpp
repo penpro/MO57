@@ -6,6 +6,7 @@
 #include "MOFramework.h"
 #include "MOUIDebugSubsystem.h"
 #include "MOGameUIManagerSubsystem.h"
+#include "MOUIManagerComponent.h"
 #include "CommonInputModeTypes.h"
 #include "GameFramework/PlayerController.h"
 #include "Framework/Application/SlateApplication.h"
@@ -53,6 +54,8 @@ FReply UMOActivatableWidget::NativeOnPreviewKeyDown(const FGeometry& InGeometry,
 	const FKey PressedKey = InKeyEvent.GetKey();
 	if (PressedKey == EKeys::Tab || PressedKey == EKeys::Escape)
 	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[Activatable-DIAG] %s: %s key pressed -> DeactivateWidget"),
+			*GetName(), *PressedKey.ToString());
 		MOUI_LOG(this, "Menu", "%s pressed on %s -> DeactivateWidget",
 			*PressedKey.ToString(), *GetName());
 		DeactivateWidget();
@@ -108,8 +111,52 @@ UWidget* UMOActivatableWidget::NativeGetDesiredFocusTarget() const
 	return Target;
 }
 
+void UMOActivatableWidget::ClaimFocusForReactivation()
+{
+	if (!FSlateApplication::IsInitialized())
+	{
+		return;
+	}
+
+	// Walk the desired-focus-target chain. NativeGetDesiredFocusTarget can
+	// return another UMOActivatableWidget (e.g. a sub-panel inside a
+	// switcher). If we stop at the first level we'd set focus on a widget
+	// that itself doesn't accept keyboard focus, leaving focus stranded
+	// (player would have to click to focus a button manually). Keep walking
+	// until we hit a non-activatable leaf or a self-loop.
+	UWidget* Current = NativeGetDesiredFocusTarget();
+	int32 SafetyCounter = 8; // guard against pathological cycles
+	while (SafetyCounter-- > 0)
+	{
+		UMOActivatableWidget* AsActivatable = Cast<UMOActivatableWidget>(Current);
+		if (!AsActivatable)
+		{
+			break;
+		}
+		UWidget* Next = AsActivatable->NativeGetDesiredFocusTarget();
+		if (!Next || Next == Current)
+		{
+			// Self-target or null — best we can do is focus the activatable
+			// itself (and rely on its key handlers).
+			break;
+		}
+		Current = Next;
+	}
+
+	// Fall back to focusing self if the chain didn't yield a target.
+	UWidget* FocusTarget = Current ? Current : this;
+	TSharedPtr<SWidget> SlateWidget = FocusTarget->GetCachedWidget();
+	if (SlateWidget.IsValid())
+	{
+		FSlateApplication::Get().SetAllUserFocus(SlateWidget.ToSharedRef(), EFocusCause::SetDirectly);
+		UE_LOG(LogMOFramework, Verbose, TEXT("[Activatable] %s::ClaimFocusForReactivation -> %s"),
+			*GetName(), *FocusTarget->GetName());
+	}
+}
+
 void UMOActivatableWidget::NativeOnActivated()
 {
+	UE_LOG(LogMOFramework, Warning, TEXT("[Activatable-DIAG] %s ACTIVATED"), *GetName());
 	MOUI_LOG(this, "Activate", "ENTRY  %s", *GetName());
 	Super::NativeOnActivated();
 
@@ -223,6 +270,7 @@ void UMOActivatableWidget::NativeOnActivated()
 
 void UMOActivatableWidget::NativeOnDeactivated()
 {
+	UE_LOG(LogMOFramework, Warning, TEXT("[Activatable-DIAG] %s DEACTIVATED"), *GetName());
 	MOUI_LOG(this, "Deactivate", "ENTRY  %s", *GetName());
 
 	// Only run cleanup symmetric with what we did in NativeOnActivated.
@@ -235,12 +283,15 @@ void UMOActivatableWidget::NativeOnDeactivated()
 
 	if (bDidSetupOnActivate)
 	{
-		// Unregister from the UI manager's active-widget stack.
+		// Unregister FIRST so GetTopmostActiveWidget below returns the widget
+		// underneath us (if any), not us.
+		UMOActivatableWidget* RemainingActive = nullptr;
 		if (UWorld* World = GetWorld())
 		{
 			if (UMOGameUIManagerSubsystem* UISub = World->GetSubsystem<UMOGameUIManagerSubsystem>())
 			{
 				UISub->UnregisterActiveWidget(this);
+				RemainingActive = UISub->GetTopmostActiveWidget();
 			}
 		}
 
@@ -262,14 +313,15 @@ void UMOActivatableWidget::NativeOnDeactivated()
 
 		if (PC)
 		{
-			MOUI_LOG(this, "Deactivate", "  %s: clearing bShowMouseCursor (was %s)",
-				*GetName(), PC->bShowMouseCursor ? TEXT("true") : TEXT("false"));
-			PC->bShowMouseCursor = false;
+			UE_LOG(LogMOFramework, Warning, TEXT("[Activatable-DIAG] %s deactivating: RemainingActive=%s"),
+				*GetName(),
+				RemainingActive ? *RemainingActive->GetName() : TEXT("<none — last UI>"));
 
+			// Release pointer capture either way — it's a Slate-state leftover
+			// from the modal being shown, not a UI-vs-game policy decision.
 			if (FSlateApplication::IsInitialized() && PC->GetLocalPlayer())
 			{
 				FSlateApplication& App = FSlateApplication::Get();
-
 				if (TSharedPtr<FSlateUser> User = App.GetUser(0))
 				{
 					if (User->HasAnyCapture())
@@ -278,29 +330,68 @@ void UMOActivatableWidget::NativeOnDeactivated()
 						MOUI_LOG(this, "Focus", "  %s: released pointer capture", *GetName());
 					}
 				}
-
-				if (UGameViewportClient* VC = PC->GetLocalPlayer()->ViewportClient)
-				{
-					TSharedPtr<SViewport> ViewportWidget = VC->GetGameViewportWidget();
-					if (ViewportWidget.IsValid())
-					{
-						App.SetAllUserFocus(ViewportWidget.ToSharedRef(), EFocusCause::SetDirectly);
-						MOUI_LOG(this, "Focus", "  %s: returned focus to viewport", *GetName());
-					}
-				}
 			}
 
-			// Explicitly restore game-only input mode. A previous context menu may
-			// have left FInputModeGameAndUI set, which prevents Enhanced Input axes
-			// (mouse look) from firing on the PlayerController.
-			FInputModeGameOnly GameOnlyMode;
-			PC->SetInputMode(GameOnlyMode);
-			MOUI_LOG(this, "Input", "  %s: applied FInputModeGameOnly", *GetName());
-
-			// Re-enable gameplay movement actions (symmetric with NativeOnActivated).
+			// CRITICAL: SetIgnoreMoveInput/LookInput are stack-counted —
+			// each (true) call needs a matching (false) call. NativeOnActivated
+			// always calls (true), so NativeOnDeactivated must always call
+			// (false), regardless of whether another UI is still active. If we
+			// only decrement when "last UI standing," nested UI scenarios
+			// (modal opens over menu, modal closes, menu closes) leave the
+			// counter unbalanced and gameplay input stays blocked.
+			//
+			// Symmetry rule: anything Activate sets, Deactivate must reverse.
+			// Cursor visibility / input mode / viewport focus restoration are
+			// the only things that should be conditional on RemainingActive —
+			// because they're driven by the active widget's GetDesiredInputConfig,
+			// not stack-counted.
 			PC->SetIgnoreMoveInput(false);
 			PC->SetIgnoreLookInput(false);
-			MOUI_LOG(this, "Input", "  %s: set bIgnoreMoveInput/LookInput=false", *GetName());
+			MOUI_LOG(this, "Input", "  %s: balanced SetIgnoreMoveInput/LookInput(false)", *GetName());
+
+			if (RemainingActive)
+			{
+				// Another UI widget is still showing. Don't stomp input mode
+				// or hide the cursor — defer to its desired config so the
+				// player can keep using the underlying menu.
+				TOptional<FUIInputConfig> NextConfig = RemainingActive->GetDesiredInputConfig();
+				const bool bNextWantsCursor = NextConfig.IsSet()
+					&& NextConfig->GetInputMode() != ECommonInputMode::Game;
+				PC->bShowMouseCursor = bNextWantsCursor;
+
+				// Hand focus to the remaining widget, walking its
+				// desired-focus-target chain through any nested activatables to
+				// a real focusable leaf.
+				RemainingActive->ClaimFocusForReactivation();
+
+				MOUI_LOG(this, "Input", "  %s: yielded to remaining UI %s (input-mode unchanged)",
+					*GetName(), *RemainingActive->GetName());
+			}
+			else
+			{
+				// Last UI standing — restore gameplay state fully.
+				MOUI_LOG(this, "Deactivate", "  %s: last UI standing — restoring gameplay mode", *GetName());
+
+				PC->bShowMouseCursor = false;
+
+				if (FSlateApplication::IsInitialized() && PC->GetLocalPlayer())
+				{
+					FSlateApplication& App = FSlateApplication::Get();
+					if (UGameViewportClient* VC = PC->GetLocalPlayer()->ViewportClient)
+					{
+						TSharedPtr<SViewport> ViewportWidget = VC->GetGameViewportWidget();
+						if (ViewportWidget.IsValid())
+						{
+							App.SetAllUserFocus(ViewportWidget.ToSharedRef(), EFocusCause::SetDirectly);
+							MOUI_LOG(this, "Focus", "  %s: returned focus to viewport", *GetName());
+						}
+					}
+				}
+
+				FInputModeGameOnly GameOnlyMode;
+				PC->SetInputMode(GameOnlyMode);
+				MOUI_LOG(this, "Input", "  %s: applied FInputModeGameOnly", *GetName());
+			}
 		}
 	}
 	else
@@ -313,6 +404,36 @@ void UMOActivatableWidget::NativeOnDeactivated()
 	{
 		RemoveActionBinding(CloseActionBinding);
 		CloseActionBinding = FUIActionBindingHandle();
+	}
+
+	// SYSTEMATIC RULE: every activatable widget hides the modal background
+	// (when no other menu is open) and refreshes the reticle on close. This
+	// replaces the per-caller "DeactivateWidget + HideModalBackground +
+	// UpdateReticleVisibility" pattern that was duplicated across the
+	// terraform, harvest, and inspection teardown paths. By centralizing
+	// here, every widget close — regardless of caller, regardless of input
+	// mode — restores the modal/reticle state correctly. Callers can now
+	// simply call DeactivateWidget() and trust the base class.
+	//
+	// Both calls are idempotent and read from CommonUI's stack as source of
+	// truth, so calling for a widget that wasn't modal (e.g. progress bar
+	// over no menus) is safe — HideModalBackground is no-op when there's
+	// nothing to hide, UpdateReticleVisibility just reflects current stack
+	// state. Game-mode widgets (progress bars) need this too: deactivating
+	// them must restore reticle visibility when there's no underlying menu.
+	if (APlayerController* PC = GetOwningPlayer())
+	{
+		if (UMOUIManagerComponent* UIManager = PC->FindComponentByClass<UMOUIManagerComponent>())
+		{
+			// RequestHideModalBackground / RequestUpdateReticleVisibility are the
+			// public BlueprintCallable wrappers. The raw HideModalBackground /
+			// UpdateReticleVisibility are private to UMOUIManagerComponent.
+			if (!UIManager->IsAnyMenuOpen())
+			{
+				UIManager->RequestHideModalBackground();
+			}
+			UIManager->RequestUpdateReticleVisibility();
+		}
 	}
 
 	Super::NativeOnDeactivated();
