@@ -293,6 +293,12 @@ protected:
 	/** Recompute bIsDaytime from current GameDateTime; broadcast if state flipped. */
 	void RefreshDaytimeState();
 
+	/** Register console commands (MO.Clock.*). Called from Initialize. */
+	void RegisterConsoleCommands();
+
+	/** Unregister console commands. Called from Deinitialize. */
+	void UnregisterConsoleCommands();
+
 private:
 	/** Cumulative real seconds since this clock started ticking (or since save load). */
 	double RealSecondsAccumulated = 0.0;
@@ -305,4 +311,7 @@ private:
 
 	/** Cached daytime state; updated only when GameDateTime crosses a boundary so the delegate doesn't fire every tick. */
 	bool bIsDaytime = true;
+
+	/** Registered console commands (released in Deinitialize). */
+	TArray<struct IConsoleCommand*> ConsoleCommands;
 };
