@@ -57,9 +57,26 @@ Composite `bIsSheltered` = `bIsIndoors OR (bIsCovered AND bIsWindSheltered)` for
 - `GetCurrentWeatherPreset` — UDW `Weather` variable
 - `GetWindVelocityAtLocation` — wind direction × intensity × tunable `MaxWindSpeedCmPerSec` (default 2000 cm/s ≈ 72 km/h)
 - `GetWeatherExposureAtLocation` — multi-axis shelter test + UDS values → modulated exposure
-- `SetDateTime` — wired to UDS native "Set Date and Time"
+- `IsLocationSheltered` — composite OR of overhead/wind/indoors via TestExposureShelter (any axis = "sheltered")
+- `IsDaytime` — reads `UMOGameClockSubsystem::IsDaytime()` (clock is authoritative, UDS is visual)
+- `GetDateTime` — reads `UMOGameClockSubsystem::GetGameDateTime()`
+- `SetDateTime` — calls `UMOGameClockSubsystem::SetGameDateTime()` (clock authoritative; existing sync pushes to UDS)
+- `BuildWeatherSaveData` — composite of self-calls to GetDateTime + GetCurrentWeatherPreset + GetCurrentWeatherState
+- `ApplyWeatherSaveData` — restores DateTime via clock, applies cloud/fog/preset to UDW (preset via Cast)
+- `SetWeatherPreset` — UObject→UDS_Weather_Settings_C cast → write UDWActor.Weather
 
-Remaining: `IsLocationSheltered`, `IsDaytime`, `GetDateTime`, `BuildWeatherSaveData`, `ApplyWeatherSaveData`.
+All 14 interface methods done. 
+
+### `MO.Weather.*` Console Commands (Dev/Test)
+
+Added four cheat commands to `UMOCheatSubsystem` for verifying the read-side and exercising save/load roundtrips:
+
+- **`MO.Weather.Info`** — Logs current weather: preset name, cloud, fog, rain, snow, wind, thunder, temp.
+- **`MO.Weather.ListPresets`** — Lists the 13 UDS presets that SetPreset accepts (`Clear_Skies`, `Rain`, `Snow`, `Foggy`, `Sand_Dust_Storm`, etc.).
+- **`MO.Weather.SetPreset <Name>`** — Loads `/Game/UltraDynamicSky/Blueprints/Weather_Effects/Weather_Presets/<Name>.<Name>_C`, grabs the CDO, calls `UMOWeatherIntegrationSubsystem::SetWeatherPreset` which dispatches through the bridge.
+- **`MO.Weather.LogSaveData`** — Calls `BuildWeatherSaveData` and prints every field — useful for verifying what would be persisted. Includes a reminder that `WeatherPresetObject` is `UPROPERTY(Transient)` and won't survive disk save→load.
+
+Save persistence caveat carries over: cloud/fog/datetime DO persist to disk; weather preset class does NOT (Transient). Visuals after load match the saved cloud/fog values but UDS's internal weather state randomizes. Future struct refactor to soft class path will close that gap.
 
 ### Engineering Notes
 

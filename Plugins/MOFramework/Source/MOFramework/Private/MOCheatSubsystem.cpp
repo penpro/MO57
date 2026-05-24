@@ -8,11 +8,15 @@
 #include "MOInventoryComponent.h"
 #include "MOItemDatabaseSettings.h"
 #include "MOItemDefinitionRow.h"
+#include "MOWeatherIntegrationSubsystem.h"
+#include "MOWeatherTypes.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/Pawn.h"
 #include "HAL/IConsoleManager.h"
+#include "UObject/Class.h"
+#include "UObject/ConstructorHelpers.h"
 
 namespace
 {
@@ -279,6 +283,121 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 			if (Target <= Current) Target += FTimespan::FromDays(1);
 			Sys->SetGameDateTime(Target);
 			UE_LOG(LogMOFramework, Warning, TEXT("[MOClock] Skipped to %s"), *Target.ToString());
+		}),
+		ECVF_Default));
+
+	// =========================================================================
+	// MO.Weather.* — operate on the world-scoped UMOWeatherIntegrationSubsystem
+	// =========================================================================
+	// Commands dispatch to whatever provider is registered (BP_WeatherBridge by
+	// default, which translates to UDS/UDW). If no provider is registered the
+	// subsystem logs a warning and the command is a no-op.
+
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Weather.Info"),
+		TEXT("Print current weather state (preset name + intensities + temperature)."),
+		FConsoleCommandWithWorldDelegate::CreateLambda([](UWorld* World)
+		{
+			UMOWeatherIntegrationSubsystem* Sys = World ? World->GetSubsystem<UMOWeatherIntegrationSubsystem>() : nullptr;
+			if (!Sys) { UE_LOG(LogMOFramework, Warning, TEXT("[MOWeather] No subsystem")); return; }
+
+			const FMOWeatherState State = Sys->GetCurrentWeatherState();
+			const float TempC = Sys->GetGlobalTemperature(EMOTemperatureUnit::Celsius);
+			UE_LOG(LogMOFramework, Warning,
+				TEXT("[MOWeather] %s | Cloud=%.2f Fog=%.2f Rain=%.2f Snow=%.2f Wind=%.2f Thunder=%.2f Temp=%.1fC"),
+				*State.DisplayName.ToString(),
+				State.CloudCoverage, State.Fog,
+				State.RainIntensity, State.SnowIntensity,
+				State.WindIntensity, State.ThunderIntensity,
+				TempC);
+		}),
+		ECVF_Default));
+
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Weather.ListPresets"),
+		TEXT("List the UDS weather presets MO.Weather.SetPreset accepts (built-in UDS Weather_Presets folder)."),
+		FConsoleCommandWithWorldDelegate::CreateLambda([](UWorld* /*World*/)
+		{
+			static const TCHAR* Presets[] = {
+				TEXT("Clear_Skies"),
+				TEXT("Partly_Cloudy"),
+				TEXT("Cloudy"),
+				TEXT("Overcast"),
+				TEXT("Foggy"),
+				TEXT("Rain_Light"),
+				TEXT("Rain"),
+				TEXT("Rain_Thunderstorm"),
+				TEXT("Snow_Light"),
+				TEXT("Snow"),
+				TEXT("Snow_Blizzard"),
+				TEXT("Sand_Dust_Calm"),
+				TEXT("Sand_Dust_Storm"),
+			};
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOWeather] Available UDS presets:"));
+			for (const TCHAR* P : Presets)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("  %s"), P);
+			}
+		}),
+		ECVF_Default));
+
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Weather.SetPreset"),
+		TEXT("Apply a UDS weather preset by name. Usage: MO.Weather.SetPreset Rain"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			UMOWeatherIntegrationSubsystem* Sys = World ? World->GetSubsystem<UMOWeatherIntegrationSubsystem>() : nullptr;
+			if (!Sys) { UE_LOG(LogMOFramework, Warning, TEXT("[MOWeather] No subsystem")); return; }
+			if (Args.Num() < 1)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOWeather] Usage: MO.Weather.SetPreset <PresetName>. Try MO.Weather.ListPresets."));
+				return;
+			}
+
+			// UDS preset class path pattern:
+			//   /Game/UltraDynamicSky/Blueprints/Weather_Effects/Weather_Presets/<Name>.<Name>_C
+			// (asset name + _C suffix for the generated BP class)
+			const FString& PresetName = Args[0];
+			const FString FullPath = FString::Printf(
+				TEXT("/Game/UltraDynamicSky/Blueprints/Weather_Effects/Weather_Presets/%s.%s_C"),
+				*PresetName, *PresetName);
+
+			UClass* PresetClass = LoadClass<UObject>(nullptr, *FullPath);
+			if (!PresetClass)
+			{
+				UE_LOG(LogMOFramework, Warning,
+					TEXT("[MOWeather] Preset '%s' not found at %s. Try MO.Weather.ListPresets."),
+					*PresetName, *FullPath);
+				return;
+			}
+
+			// UDS weather presets are blueprint classes whose CDO holds the
+			// preset values. UDWActor.Weather is an object reference (not class
+			// reference), so we pass the class default object.
+			UObject* CDO = PresetClass->GetDefaultObject();
+			Sys->SetWeatherPreset(CDO);
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOWeather] Applied preset '%s' (CDO=%s)"),
+				*PresetName, *GetNameSafe(CDO));
+		}),
+		ECVF_Default));
+
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Weather.LogSaveData"),
+		TEXT("Call BuildWeatherSaveData and print every field — for verifying what would be persisted."),
+		FConsoleCommandWithWorldDelegate::CreateLambda([](UWorld* World)
+		{
+			UMOWeatherIntegrationSubsystem* Sys = World ? World->GetSubsystem<UMOWeatherIntegrationSubsystem>() : nullptr;
+			if (!Sys) { UE_LOG(LogMOFramework, Warning, TEXT("[MOWeather] No subsystem")); return; }
+
+			const FMOWeatherSaveData Data = Sys->BuildWeatherSaveData();
+			UE_LOG(LogMOFramework, Warning,
+				TEXT("[MOWeather] SaveData: bIsValid=%s DateTime=%s Cloud=%.2f Fog=%.2f Preset=%s"),
+				Data.bIsValid ? TEXT("true") : TEXT("false"),
+				*Data.DateTime.ToString(),
+				Data.CloudCoverage, Data.FogDensity,
+				*GetNameSafe(Data.WeatherPresetObject));
+			UE_LOG(LogMOFramework, Warning,
+				TEXT("[MOWeather] NOTE: WeatherPresetObject is UPROPERTY(Transient) — won't serialize to disk."));
 		}),
 		ECVF_Default));
 }
