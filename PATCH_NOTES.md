@@ -78,6 +78,34 @@ Added four cheat commands to `UMOCheatSubsystem` for verifying the read-side and
 
 Save persistence caveat carries over: cloud/fog/datetime DO persist to disk; weather preset class does NOT (Transient). Visuals after load match the saved cloud/fog values but UDS's internal weather state randomizes. Future struct refactor to soft class path will close that gap.
 
+### Weather Save/Load Persistence — FIXED
+
+Persistence gap from earlier closed:
+
+- **`FMOWeatherSaveData.WeatherPresetPath` (`FSoftObjectPath`)** added alongside the
+  existing `WeatherPresetObject` (which stays as a transient runtime cache).
+  The soft path serializes to disk as an asset reference string and resolves
+  back to the preset asset on load.
+- **`UDW Change Weather`** is now used in both `SetWeatherPreset` and
+  `ApplyWeatherSaveData` (was direct `UDWActor.Weather =` writes — that
+  variable is the editor-time default selector, not the runtime transition
+  trigger). `Change Weather(NewWeather, TransitionTime)` kicks off the
+  lerp/broadcast/particle update. Transition time = 5s for in-game preset
+  changes, 0s for load restores.
+- **Two BP helpers added** in `UMOWeatherBlueprintLibrary`:
+  - `Make Soft Path From Object` — UObject* → FSoftObjectPath
+  - `Load Object From Soft Path (Sync)` — FSoftObjectPath → UObject*
+  The built-in BP nodes for FSoftObjectPath loading are inconsistent across
+  UE versions (and conflict with UniversalObjectLocator's `SyncLoad`); these
+  helpers are the canonical path.
+- **Logging** at every facade point upgraded to `Warning` level so the
+  Build/Apply/Register chain is visible in stock log filters. Includes
+  explicit PresetPath / PresetObject status to distinguish "transient null"
+  from "race" from "wiring bug" failure modes.
+
+Verified full roundtrip: `MO.Weather.SetPreset Rain` → save → restart editor
+→ load → rain visible. Cloud/fog/datetime/preset all survive disk persistence.
+
 ### Engineering Notes
 
 - Shelter traces use `ECC_Visibility`. Foliage/canopy meshes that should count as cover must be configured to block visibility traces. If a tree shows zero overhead cover when you're standing under it, that's a collision-channel issue, not a math issue.

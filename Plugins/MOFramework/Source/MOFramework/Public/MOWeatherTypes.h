@@ -31,6 +31,13 @@
  * [2024-02] SAVE DATA PRESET: WeatherPresetObject is Transient and won't
  *   serialize to disk. Blueprint must handle preset restoration separately.
  *
+ * [2026-05] SAVE DATA PRESET FIX: Added WeatherPresetPath (FSoftObjectPath)
+ *   which DOES serialize to disk. Bridge BP populates it from the runtime
+ *   object via "Make Soft Object Path" on build, and resolves it via "Load
+ *   Synchronous" on apply. WeatherPresetObject stays as a transient runtime
+ *   cache for efficiency but disk roundtrips go through WeatherPresetPath.
+ *   Verified working via MO.Weather.* console commands + save/load test.
+ *
  * =============================================================================
  * RELATED FILES: MOWeatherProviderInterface.h, MOWeatherIntegrationSubsystem.h
  * LAST UPDATED: 2026-05-24
@@ -329,9 +336,30 @@ struct MOFRAMEWORK_API FMOWeatherSaveData
 	FDateTime DateTime;
 
 	/**
-	 * Current weather preset object reference (UDS_Weather_Settings from UDW).
-	 * Note: This is transient and not saved to disk. Use for runtime passing only.
-	 * For disk persistence, the Blueprint should get the object by other means (e.g., UDW's current weather).
+	 * Soft path to the active weather preset asset (e.g. an instance of
+	 * UDS_Weather_Settings_C like Rain, Snow_Blizzard, etc.).
+	 *
+	 * SERIALIZES TO DISK as a path string and is resolved on load — unlike a
+	 * raw UObject* / TObjectPtr<UObject> which would either need
+	 * UPROPERTY(Transient) (lost across disk save/load) or full inline
+	 * serialization (heavy + brittle to asset moves).
+	 *
+	 * On Build: convert the runtime preset object via "Make Soft Object Path
+	 * from Object" (BP) or `FSoftObjectPath(PresetObject)` (C++).
+	 * On Apply: resolve via "Load Synchronous" (BP) or `TryLoad()` (C++),
+	 * cast to UDS_Weather_Settings_C, pass to UDW Change Weather.
+	 *
+	 * If the asset moves or is renamed between save and load, the path will
+	 * resolve to null and weather falls back to whatever UDW currently shows.
+	 * The cloud/fog fields below are direct values that always survive.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Weather|Save")
+	FSoftObjectPath WeatherPresetPath;
+
+	/**
+	 * Runtime-only cache of the resolved preset object. Populated by Build /
+	 * Apply for in-session efficiency. NOT serialized — disk persistence uses
+	 * WeatherPresetPath above.
 	 */
 	UPROPERTY(Transient, BlueprintReadWrite, Category="MO|Weather|Save")
 	TObjectPtr<UObject> WeatherPresetObject;

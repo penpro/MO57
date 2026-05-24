@@ -174,6 +174,20 @@ int32 UMOWeatherBlueprintLibrary::DateTimeToDayOfYear(const FDateTime& DateTime)
 	return DateTime.GetDayOfYear();
 }
 
+FSoftObjectPath UMOWeatherBlueprintLibrary::MakeSoftPathFromObject(const UObject* Object)
+{
+	return Object ? FSoftObjectPath(Object) : FSoftObjectPath();
+}
+
+UObject* UMOWeatherBlueprintLibrary::LoadObjectFromSoftPath(const FSoftObjectPath& Path)
+{
+	if (!Path.IsValid())
+	{
+		return nullptr;
+	}
+	return Path.TryLoad();
+}
+
 FMOWeatherExposure UMOWeatherBlueprintLibrary::MakeWeatherExposureFromUDWWithShelter(
 	float Rain,
 	float Snow,

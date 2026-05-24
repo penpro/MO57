@@ -354,30 +354,38 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 				return;
 			}
 
-			// UDS preset class path pattern:
-			//   /Game/UltraDynamicSky/Blueprints/Weather_Effects/Weather_Presets/<Name>.<Name>_C
-			// (asset name + _C suffix for the generated BP class)
+			// UDS weather presets are INSTANCES of UDS_Weather_Settings_C saved
+			// as data assets, NOT subclasses. Load path is:
+			//   /Game/UltraDynamicSky/Blueprints/Weather_Effects/Weather_Presets/<Name>.<Name>
+			// (object name = asset name, no _C suffix — that would be the class).
 			const FString& PresetName = Args[0];
-			const FString FullPath = FString::Printf(
-				TEXT("/Game/UltraDynamicSky/Blueprints/Weather_Effects/Weather_Presets/%s.%s_C"),
+			const FString InstancePath = FString::Printf(
+				TEXT("/Game/UltraDynamicSky/Blueprints/Weather_Effects/Weather_Presets/%s.%s"),
 				*PresetName, *PresetName);
 
-			UClass* PresetClass = LoadClass<UObject>(nullptr, *FullPath);
-			if (!PresetClass)
+			UObject* PresetInstance = LoadObject<UObject>(nullptr, *InstancePath);
+
+			// Fallback: maybe this version of UDS uses subclasses (older versions?)
+			if (!PresetInstance)
+			{
+				const FString ClassPath = InstancePath + TEXT("_C");
+				if (UClass* PresetClass = LoadClass<UObject>(nullptr, *ClassPath))
+				{
+					PresetInstance = PresetClass->GetDefaultObject();
+				}
+			}
+
+			if (!PresetInstance)
 			{
 				UE_LOG(LogMOFramework, Warning,
 					TEXT("[MOWeather] Preset '%s' not found at %s. Try MO.Weather.ListPresets."),
-					*PresetName, *FullPath);
+					*PresetName, *InstancePath);
 				return;
 			}
 
-			// UDS weather presets are blueprint classes whose CDO holds the
-			// preset values. UDWActor.Weather is an object reference (not class
-			// reference), so we pass the class default object.
-			UObject* CDO = PresetClass->GetDefaultObject();
-			Sys->SetWeatherPreset(CDO);
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOWeather] Applied preset '%s' (CDO=%s)"),
-				*PresetName, *GetNameSafe(CDO));
+			Sys->SetWeatherPreset(PresetInstance);
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOWeather] Applied preset '%s' (object=%s, class=%s)"),
+				*PresetName, *GetNameSafe(PresetInstance), *GetNameSafe(PresetInstance->GetClass()));
 		}),
 		ECVF_Default));
 

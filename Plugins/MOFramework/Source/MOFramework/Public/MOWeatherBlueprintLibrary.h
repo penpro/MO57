@@ -149,6 +149,28 @@ public:
 		bool bIsSheltered);
 
 	/**
+	 * Convert a UObject pointer to its FSoftObjectPath (for saving asset
+	 * references that survive disk save/load). BP-equivalent built-ins are
+	 * inconsistent across UE versions; this helper is the canonical path.
+	 *
+	 * Returns empty FSoftObjectPath if Object is null.
+	 */
+	UFUNCTION(BlueprintPure, Category="MO|Weather",
+		meta=(DisplayName="Make Soft Path From Object"))
+	static FSoftObjectPath MakeSoftPathFromObject(const UObject* Object);
+
+	/**
+	 * Load a UObject from a FSoftObjectPath synchronously. Returns null if
+	 * the path is empty/invalid or the asset can't be resolved.
+	 *
+	 * Sync load — fine for small assets (weather presets are tiny). Don't
+	 * use for large meshes/textures during gameplay.
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Weather",
+		meta=(DisplayName="Load Object From Soft Path (Sync)"))
+	static UObject* LoadObjectFromSoftPath(const FSoftObjectPath& Path);
+
+	/**
 	 * Build an FMOWeatherExposure from raw UDW values and a multi-axis shelter
 	 * test result. Each weather channel is modulated by the AXIS that physically
 	 * affects it:

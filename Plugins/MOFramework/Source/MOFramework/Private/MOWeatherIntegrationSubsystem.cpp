@@ -194,14 +194,19 @@ void UMOWeatherIntegrationSubsystem::RegisterWeatherProvider(TScriptInterface<IM
 
 	WeatherProvider = Provider;
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOWeatherIntegration] Registered weather provider: %s"),
-		*GetNameSafe(Provider.GetObject()));
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOWeatherIntegration] Registered weather provider: %s (pending save data: %s)"),
+		*GetNameSafe(Provider.GetObject()),
+		bHasPendingSaveData ? TEXT("YES — will apply now") : TEXT("no"));
 
 	// Apply any pending save data that was waiting for a provider
 	if (bHasPendingSaveData && PendingSaveData.bIsValid)
 	{
-		UE_LOG(LogMOFramework, Log, TEXT("[MOWeatherIntegration] Applying pending save data: DateTime=%s"),
-			*PendingSaveData.DateTime.ToString());
+		UE_LOG(LogMOFramework, Warning,
+			TEXT("[MOWeatherIntegration] Applying queued save data on provider registration: DateTime=%s Cloud=%.3f Fog=%.3f Preset=%s"),
+			*PendingSaveData.DateTime.ToString(),
+			PendingSaveData.CloudCoverage,
+			PendingSaveData.FogDensity,
+			*GetNameSafe(PendingSaveData.WeatherPresetObject.Get()));
 
 		IMOWeatherProviderInterface::Execute_ApplyWeatherSaveData(WeatherProvider.GetObject(), PendingSaveData);
 
@@ -553,7 +558,7 @@ FMOWeatherSaveData UMOWeatherIntegrationSubsystem::BuildWeatherSaveData() const
 
 	if (!HasWeatherProvider())
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOWeatherIntegration] BuildWeatherSaveData: No provider registered"));
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOWeatherIntegration] BuildWeatherSaveData: No provider registered — returning empty (bIsValid=false)"));
 		SaveData.bIsValid = false;
 		return SaveData;
 	}
@@ -562,17 +567,32 @@ FMOWeatherSaveData UMOWeatherIntegrationSubsystem::BuildWeatherSaveData() const
 	SaveData = IMOWeatherProviderInterface::Execute_BuildWeatherSaveData(WeatherProvider.GetObject());
 	SaveData.bIsValid = true;
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOWeatherIntegration] Built save data: DateTime=%s, Weather=%s"),
-		*SaveData.DateTime.ToString(), *GetNameSafe(SaveData.WeatherPresetObject.Get()));
+	UE_LOG(LogMOFramework, Warning,
+		TEXT("[MOWeatherIntegration] BuildWeatherSaveData OUT: bIsValid=%s DateTime=%s Cloud=%.3f Fog=%.3f PresetPath=%s PresetObject=%s"),
+		SaveData.bIsValid ? TEXT("true") : TEXT("false"),
+		*SaveData.DateTime.ToString(),
+		SaveData.CloudCoverage,
+		SaveData.FogDensity,
+		SaveData.WeatherPresetPath.IsValid() ? *SaveData.WeatherPresetPath.ToString() : TEXT("(empty — bridge BP didn't populate path)"),
+		*GetNameSafe(SaveData.WeatherPresetObject.Get()));
 
 	return SaveData;
 }
 
 bool UMOWeatherIntegrationSubsystem::ApplyWeatherSaveData(const FMOWeatherSaveData& SaveData)
 {
+	UE_LOG(LogMOFramework, Warning,
+		TEXT("[MOWeatherIntegration] ApplyWeatherSaveData IN: bIsValid=%s DateTime=%s Cloud=%.3f Fog=%.3f PresetPath=%s PresetObject=%s"),
+		SaveData.bIsValid ? TEXT("true") : TEXT("false"),
+		*SaveData.DateTime.ToString(),
+		SaveData.CloudCoverage,
+		SaveData.FogDensity,
+		SaveData.WeatherPresetPath.IsValid() ? *SaveData.WeatherPresetPath.ToString() : TEXT("(empty)"),
+		*GetNameSafe(SaveData.WeatherPresetObject.Get()));
+
 	if (!SaveData.bIsValid)
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOWeatherIntegration] ApplyWeatherSaveData: Invalid save data"));
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOWeatherIntegration] ApplyWeatherSaveData: bIsValid=false — rejecting"));
 		return false;
 	}
 
@@ -581,10 +601,14 @@ bool UMOWeatherIntegrationSubsystem::ApplyWeatherSaveData(const FMOWeatherSaveDa
 		// No provider yet - store as pending and apply when provider registers
 		PendingSaveData = SaveData;
 		bHasPendingSaveData = true;
-		UE_LOG(LogMOFramework, Log, TEXT("[MOWeatherIntegration] ApplyWeatherSaveData: No provider yet, storing as pending (DateTime=%s)"),
-			*SaveData.DateTime.ToString());
+		UE_LOG(LogMOFramework, Warning,
+			TEXT("[MOWeatherIntegration] ApplyWeatherSaveData: No provider yet — QUEUED as pending. Will fire when bridge registers."));
 		return true; // Return true because we've queued it
 	}
+
+	UE_LOG(LogMOFramework, Warning,
+		TEXT("[MOWeatherIntegration] ApplyWeatherSaveData: Dispatching to provider %s"),
+		*GetNameSafe(WeatherProvider.GetObject()));
 
 	// Delegate to provider for full state restoration
 	IMOWeatherProviderInterface::Execute_ApplyWeatherSaveData(WeatherProvider.GetObject(), SaveData);
@@ -595,8 +619,12 @@ bool UMOWeatherIntegrationSubsystem::ApplyWeatherSaveData(const FMOWeatherSaveDa
 	bWasRaining = CachedWeatherState.IsRaining();
 	bWasSnowing = CachedWeatherState.IsSnowing();
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOWeatherIntegration] Applied save data: DateTime=%s, Weather=%s"),
-		*SaveData.DateTime.ToString(), *GetNameSafe(SaveData.WeatherPresetObject.Get()));
+	UE_LOG(LogMOFramework, Warning,
+		TEXT("[MOWeatherIntegration] ApplyWeatherSaveData DONE — post-apply state: Cloud=%.3f Fog=%.3f Rain=%.3f Daytime=%s"),
+		CachedWeatherState.CloudCoverage,
+		CachedWeatherState.Fog,
+		CachedWeatherState.RainIntensity,
+		bCachedIsDaytime ? TEXT("yes") : TEXT("no"));
 
 	return true;
 }
@@ -628,11 +656,16 @@ void UMOWeatherIntegrationSubsystem::SetWeatherPreset(UObject* PresetObject)
 {
 	if (!HasWeatherProvider())
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOWeatherIntegration] SetWeatherPreset: No provider registered"));
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOWeatherIntegration] SetWeatherPreset: No provider registered (PresetObject=%s)"),
+			*GetNameSafe(PresetObject));
 		return;
 	}
 
+	UE_LOG(LogMOFramework, Warning,
+		TEXT("[MOWeatherIntegration] SetWeatherPreset: PresetObject=%s (class=%s) → dispatching to provider %s"),
+		*GetNameSafe(PresetObject),
+		PresetObject ? *GetNameSafe(PresetObject->GetClass()) : TEXT("null"),
+		*GetNameSafe(WeatherProvider.GetObject()));
+
 	IMOWeatherProviderInterface::Execute_SetWeatherPreset(WeatherProvider.GetObject(), PresetObject);
-	UE_LOG(LogMOFramework, Log, TEXT("[MOWeatherIntegration] Set weather preset to '%s'"),
-		*GetNameSafe(PresetObject));
 }
