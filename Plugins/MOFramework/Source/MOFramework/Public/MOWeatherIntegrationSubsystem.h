@@ -302,6 +302,75 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Weather")
 	void SetDateTime(const FDateTime& DateTime);
 
+	// ============================================================================
+	// UDS SYNC (throttled push from clock → visual sky)
+	// ============================================================================
+	//
+	// Goal: keep UDS visuals in tight lockstep with the gameplay clock so
+	// the sun moves smoothly at every TimeScale. Original design assumed
+	// UDS would glitch on frequent pushes (hence hourly sync); testing
+	// proved UDS handles 4+ Hz pushes cleanly, so we now push aggressively.
+	//
+	//   1. Throttle by game-time (default ~1 game-minute = 0.25° sun arc).
+	//      Constant degrees-per-push regardless of TimeScale → smooth at
+	//      any speed.
+	//   2. Drive syncs from multiple triggers, all gated by the throttle:
+	//      - Hour roll      (clock OnHourChanged)
+	//      - Menu activate  (UI sub OnActivatableWidgetRegistered)
+	//      - Real-time poll (every UdsSyncPollIntervalSeconds, default 0.25s)
+	//
+	// The poll is the primary driver at high TimeScale (>=60); the other
+	// triggers are noise that the throttle absorbs. At normal TimeScale=1,
+	// the poll fires every 0.25 real-sec but the throttle blocks until
+	// ~60 real-sec have passed (one game-minute) — minimal CPU cost.
+
+	/**
+	 * Request a UDS visual sync. If less than MinHoursBetweenUdsSyncs game-
+	 * hours have elapsed since the last sync, this is a no-op. Otherwise,
+	 * pushes GameClock's current DateTime to the registered provider.
+	 *
+	 * Idempotent / cheap to call repeatedly. Anything that wants to "give
+	 * UDS a chance to sync" can call this — the throttle handles the rest.
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Weather|UDSSync")
+	void RequestUdsSync();
+
+	/**
+	 * Game hours elapsed since the last successful UDS push. Useful for
+	 * debug UI / overlays. Returns a large number if no sync has happened
+	 * yet this session.
+	 */
+	UFUNCTION(BlueprintPure, Category="MO|Weather|UDSSync")
+	float GetGameHoursSinceLastUdsSync() const;
+
+	/**
+	 * Minimum game-hours between UDS syncs. With the default of ~1 game-minute,
+	 * sun motion is smooth at every TimeScale (0.25° arc per push at normal
+	 * play, larger but still <1° at accelerated speeds).
+	 *
+	 * Earlier default was 1.0 (full game-hour between pushes), but that gave
+	 * visibly jumpy 15° hour-by-hour sun jerks at high TimeScale. UDS handles
+	 * sub-second pushes fine in practice — no documented per-push limit and
+	 * community examples push from Tick (~60Hz) without issues — so we can
+	 * afford to keep UDS in tight lockstep with the clock.
+	 *
+	 * Raise this if UDS visibly glitches; lower to 0.0028 (10 game-sec) for
+	 * even smoother motion at very high TimeScale.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="MO|Weather|UDSSync", meta=(ClampMin="0.001"))
+	float MinHoursBetweenUdsSyncs = 0.0167f;  // = 1 game-minute (1/60 of an hour)
+
+	/**
+	 * Real-time interval (seconds) for the safety-net poll. Sets the upper
+	 * bound on sync responsiveness at high TimeScale: at TimeScale=600, this
+	 * poll fires 4×/sec and each call advances UDS by ~2.5° of sun arc.
+	 *
+	 * 0.25s = 4Hz = essentially free CPU; visually smooth. Raise to 1.0+ if
+	 * profiling ever shows UDS pushes are expensive (shouldn't happen).
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="MO|Weather|UDSSync", meta=(ClampMin="0.01"))
+	float UdsSyncPollIntervalSeconds = 0.25f;
+
 	/**
 	 * Set weather preset by object reference.
 	 * @param PresetObject Weather preset object (UDS_Weather_Settings from UDW)
@@ -343,6 +412,36 @@ private:
 	 */
 	UFUNCTION()
 	void HandleClockDayNightChanged(bool bIsDaytime, const FDateTime& CurrentDateTime);
+
+	/**
+	 * Forwards clock OnHourChanged to RequestUdsSync. Hour rolls are one of
+	 * several triggers that all funnel through the same throttled API; see
+	 * the UDS Sync section comment above.
+	 */
+	UFUNCTION()
+	void HandleClockHourChanged(int32 NewHour, const FDateTime& CurrentDateTime);
+
+	/**
+	 * Forwards UI subsystem OnActivatableWidgetRegistered to RequestUdsSync.
+	 * Menu opens are masked moments — if the throttle's window has elapsed,
+	 * sync UDS while the player can't see the sky.
+	 */
+	void HandleActivatableWidgetRegistered(class UMOActivatableWidget* Widget);
+
+	/** Safety-net real-time poll calling RequestUdsSync. Fires every UdsSyncPollIntervalSeconds. */
+	void HandleUdsSyncPollTick();
+
+	/** Internal: actually push DateTime to provider + update LastUdsSyncDateTime. No throttle check. */
+	void DoUdsSyncInternal(const FDateTime& Now);
+
+	/** Most recent GameDateTime we successfully pushed to UDS. */
+	FDateTime LastUdsSyncDateTime;
+
+	/** Periodic safety-net poll timer (real-time). */
+	FTimerHandle UdsSyncPollHandle;
+
+	/** Delegate handle for the UI sub's OnActivatableWidgetRegistered. */
+	FDelegateHandle ActivatableWidgetRegisteredHandle;
 
 	/** The registered weather provider. */
 	UPROPERTY()

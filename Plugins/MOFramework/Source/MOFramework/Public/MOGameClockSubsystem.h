@@ -127,6 +127,23 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOGameClockTimeScaleChanged, float
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOGameClockDayNightChanged, bool, bIsDaytime, const FDateTime&, CurrentDateTime);
 
 /**
+ * Fired once whenever the in-game hour rolls over to a different value.
+ * NewHour is 0-23. CurrentDateTime is the game DateTime at the boundary.
+ *
+ * Use cases:
+ *   - UMOWeatherIntegrationSubsystem listens to push DateTime to the UDS
+ *     visual provider once per hour (keeps UDS from being spammed every
+ *     tick while still preventing visual drift from gameplay time).
+ *   - Future NPC scheduling (work shifts, sleep cycles, scripted events).
+ *
+ * Skipping multiple hours (e.g. SetGameDateTime jumping from 17:00 to
+ * 07:00) fires exactly once for the destination hour — not once per hour
+ * passed. Listeners that need per-hour callbacks for elapsed time should
+ * compute their own intervals.
+ */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOGameClockHourChanged, int32, NewHour, const FDateTime&, CurrentDateTime);
+
+/**
  * Authoritative game time clock. See file header for design + scope.
  */
 UCLASS()
@@ -251,6 +268,18 @@ public:
 	UPROPERTY(BlueprintAssignable, Category="MO|Clock|DateTime")
 	FMOGameClockDayNightChanged OnDayNightChanged;
 
+	/**
+	 * Fired once per in-game hour change. UMOWeatherIntegrationSubsystem
+	 * uses this to push DateTime to UDS at a sane rate — keeps the visual
+	 * sky aligned with gameplay time without spamming the provider every
+	 * tick.
+	 *
+	 * Also a useful hook for scheduled gameplay events. See header comment
+	 * on FMOGameClockHourChanged.
+	 */
+	UPROPERTY(BlueprintAssignable, Category="MO|Clock|DateTime")
+	FMOGameClockHourChanged OnHourChanged;
+
 	// =========================================================================
 	// SAVE / LOAD
 	// =========================================================================
@@ -293,11 +322,17 @@ protected:
 	/** Recompute bIsDaytime from current GameDateTime; broadcast if state flipped. */
 	void RefreshDaytimeState();
 
-	/** Register console commands (MO.Clock.*). Called from Initialize. */
-	void RegisterConsoleCommands();
+	/**
+	 * Fire OnHourChanged if GameDateTime.GetHour() differs from LastBroadcastHour.
+	 * Called from Tick and SetGameDateTime so both natural advancement and
+	 * jumps (sleep skips, debug commands) generate a single transition event.
+	 */
+	void RefreshHourState();
 
-	/** Unregister console commands. Called from Deinitialize. */
-	void UnregisterConsoleCommands();
+	// NOTE: console commands (MO.Clock.*) live in UMOCheatSubsystem, not
+	// here. UWorldSubsystem lifetime (re-init per PIE world) is
+	// incompatible with IConsoleManager registration; see the
+	// "DO NOT MAKE THIS A UWorldSubsystem" note in MOCheatSubsystem.h.
 
 private:
 	/** Cumulative real seconds since this clock started ticking (or since save load). */
@@ -312,6 +347,11 @@ private:
 	/** Cached daytime state; updated only when GameDateTime crosses a boundary so the delegate doesn't fire every tick. */
 	bool bIsDaytime = true;
 
-	/** Registered console commands (released in Deinitialize). */
-	TArray<struct IConsoleCommand*> ConsoleCommands;
+	/**
+	 * Hour that we last broadcast on OnHourChanged. -1 = "not yet primed";
+	 * Initialize sets it to the current hour so we don't fire spuriously on
+	 * the very first tick. Subsequent ticks fire only when this differs
+	 * from GameDateTime.GetHour().
+	 */
+	int32 LastBroadcastHour = -1;
 };

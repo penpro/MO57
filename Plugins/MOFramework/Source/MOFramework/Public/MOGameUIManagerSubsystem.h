@@ -306,6 +306,15 @@ public:
 	// =========================================================================
 
 	/**
+	 * Fired right after a UMOActivatableWidget is added to the active stack.
+	 * Use this as a "player just opened a UI surface" signal — e.g. weather
+	 * subsystem rides this to do its UDS time sync at masked moments (player
+	 * is looking at a menu, not the sky, so the visual sync glitch is hidden).
+	 */
+	DECLARE_MULTICAST_DELEGATE_OneParam(FMOOnActivatableWidgetRegistered, UMOActivatableWidget* /*Widget*/);
+	FMOOnActivatableWidgetRegistered OnActivatableWidgetRegistered;
+
+	/**
 	 * Register a widget as currently active. Called from UMOActivatableWidget::NativeOnActivated.
 	 * Maintains a stack used by HandleFocusChanging when OldFocusedWidget has cleared.
 	 */

@@ -15,6 +15,7 @@
  * - FMOWeatherState: Global weather conditions (cloud, fog, rain, wind)
  * - FMOTimeOfDay: Time and season information
  * - EMOTemperatureUnit: Celsius vs Fahrenheit
+ * - FMOExposureShelter: Multi-axis shelter test result (overhead/wind/enclosure)
  * - FMOWeatherSaveData: Persistence structure
  *
  * =============================================================================
@@ -32,7 +33,7 @@
  *
  * =============================================================================
  * RELATED FILES: MOWeatherProviderInterface.h, MOWeatherIntegrationSubsystem.h
- * LAST UPDATED: 2026-02-25
+ * LAST UPDATED: 2026-05-24
  * =============================================================================
  */
 
@@ -231,6 +232,88 @@ enum class EMOWeatherEventType : uint8
 	StoppedSnowing,
 	WeatherChanged,
 	TemperatureThresholdCrossed
+};
+
+/**
+ * Comprehensive shelter / exposure-protection result for a world location.
+ *
+ * Models three INDEPENDENT axes — a real shelter situation is the combination
+ * of all three:
+ *
+ *   1. OverheadCover — blocks rain, snow, sky radiative heat loss.
+ *      Bus-stop overhang: HIGH. Open field: ZERO.
+ *
+ *   2. WindShelter — blocks wind, dust, wind-driven precipitation.
+ *      Computed RELATIVE to wind direction — a wall to the north only counts
+ *      if wind is from the north. Bus-stop overhang: ZERO. Doorway recess
+ *      facing away from wind: HIGH.
+ *
+ *   3. Enclosure — overall "indoors-ness" from close (~3m) geometry on all
+ *      sides. Feeds thermal/insulation systems (the math for "how warm
+ *      indoors" lives there, not here).
+ *      Small cabin: HIGH. Standing under tree in open field: LOW.
+ *
+ * Produced by UMOWeatherBlueprintLibrary::TestExposureShelter (comprehensive)
+ * or TestOverheadCover (cheap, only fills OverheadCover).
+ *
+ * NOTE: Tests `ECC_Visibility`. Foliage that should block weather must have
+ * collision configured to block visibility. If a tree shows zero overhead
+ * cover even though you're under it, that's a collision-channel issue, not
+ * a math issue.
+ */
+USTRUCT(BlueprintType)
+struct MOFRAMEWORK_API FMOExposureShelter
+{
+	GENERATED_BODY()
+
+	// --- Three axes (continuous 0-1) ---
+
+	/** Fraction of upper hemisphere blocked by geometry within ~50m. Primary
+	 *  driver for rain/snow protection and sky radiative heat loss. */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Weather")
+	float OverheadCover = 0.0f;
+
+	/** Distance-weighted wind-blocking score for the UPWIND direction passed
+	 *  to the test. 0 = wind blows freely. 1 = solid windbreak directly upwind.
+	 *  Closer geometry contributes more (a wall at 1m is better than a wall
+	 *  at 14m). If wind direction was zero/unknown, this stays at 0. */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Weather")
+	float WindShelter = 0.0f;
+
+	/** How densely the point is surrounded by close (<3m) geometry. Drives
+	 *  "indoors" determination for thermal/insulation systems. Does NOT
+	 *  modulate the four weather exposure channels directly. */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Weather")
+	float Enclosure = 0.0f;
+
+	// --- Convenience bools (computed from the axes) ---
+
+	/** OverheadCover >= 0.5 — "there's a roof above me." */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Weather")
+	bool bIsCovered = false;
+
+	/** WindShelter >= 0.5 — "I have a windbreak between me and the wind." */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Weather")
+	bool bIsWindSheltered = false;
+
+	/** Enclosure >= 0.85 AND close overhead + walls both >= 0.7 — "I'm inside
+	 *  a building or small enclosed space." */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Weather")
+	bool bIsIndoors = false;
+
+	// --- Raw counts (for callers who want custom thresholds) ---
+
+	UPROPERTY(BlueprintReadOnly, Category="MO|Weather")
+	int32 OverheadHits = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category="MO|Weather")
+	int32 OverheadRayCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category="MO|Weather")
+	int32 WallHits = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category="MO|Weather")
+	int32 WallRayCount = 0;
 };
 
 /**

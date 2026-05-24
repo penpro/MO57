@@ -4,6 +4,71 @@ This file tracks changes, bug fixes, and new features. Updated incrementally to 
 
 ---
 
+## [2026-05-24] Weather/Shelter Model + UDS Bridge Read-Side
+
+Weather is now actually wired up. The MO clock drives UDS time-of-day, UDS/UDW report current weather state back through `BP_WeatherBridge`, and a new multi-axis shelter model gives survival systems the granular environmental data they need.
+
+### Multi-Axis Exposure Shelter Model
+
+Survival exposure isn't a single "are you sheltered?" bool. A bus-stop overhang blocks rain but does nothing for wind; a doorway recess blocks wind but leaves you in the rain; a closet does both. The new `FMOExposureShelter` struct tracks three independent axes:
+
+- **OverheadCover** (0–1) — fraction of upper hemisphere blocked. Drives rain/snow protection and sky radiative heat loss. 9 long rays at 50m, 35° hemisphere sampling.
+- **WindShelter** (0–1) — distance-weighted blocking from the upwind direction. A wall 1m upwind scores higher than a wall 14m upwind. 5-ray cone in the upwind direction. Drives wind/dust/wind-chill.
+- **Enclosure** (0–1) — fraction of close (<3m) geometry on all sides. Drives "indoors" detection for thermal/insulation systems. 4 horizontal cardinal rays + recount of close overhead hits.
+
+Plus convenience bools (`bIsCovered`, `bIsWindSheltered`, `bIsIndoors`) and raw hit counts for callers wanting custom thresholds.
+
+### Two BP-Callable Test Functions
+
+- **`Test Exposure Shelter (Full)`** — 18 traces, fills all three axes. Takes a wind direction so wind shelter is direction-aware. Use for characters and AI survivors. ~1-2Hz tick rate per actor.
+- **`Test Overhead Cover (Cheap)`** — 9 traces, overhead only. Use for fires, dropped items, crops — anything that only cares about rain/snow protection. ~half the cost.
+
+Both in `UMOWeatherBlueprintLibrary` (`MO|Weather|Shelter` category in BP picker).
+
+### Continuous Modulation Helper
+
+**`Make Weather Exposure (from UDW + Shelter)`** — combines raw UDW values with a shelter result into `FMOWeatherExposure`. Continuous, not binary: partial canopy produces partial wetness.
+
+- Rain = raw × (1 - OverheadCover) — overhead is primary
+- Snow = raw × (1 - OverheadCover) — same as rain
+- Wind = raw × (1 - WindShelter) — upwind-aware
+- Dust = raw × (1 - WindShelter) — dust is wind-borne
+
+Composite `bIsSheltered` = `bIsIndoors OR (bIsCovered AND bIsWindSheltered)` for simple consumers.
+
+### UDS Time-of-Day Sync (from MO Clock)
+
+- **Hourly delegate sync** — `UMOWeatherIntegrationSubsystem` listens to `MOGameClockSubsystem::OnHourChanged` and pushes time-of-day to UDS at every game-hour rollover.
+- **Throttled poll fallback** — between hour ticks, a 0.25s real-time poll triggers a sync if more than ~1 game-minute has elapsed since the last successful sync. Keeps motion smooth at high TimeScale without per-tick overhead.
+- **Menu-open mask** — sync pauses while menus are open so the player doesn't see sun jumps mid-conversation.
+- **Helper: `Date Time → UDS Time Of Day`** — converts an FDateTime to UDS's 0-2400 format (hour×100 + minute×100/60).
+- **Helper: `Date Time → Day Of Year`** — converts to UDS's 1-366 day-of-year for sun-path calculation.
+
+**IMPORTANT:** UDS actor must have `bAnimateTimeOfDay = false` for manual control to work. Otherwise UDS overwrites our value every tick.
+
+### BP_WeatherBridge Read-Side Wired
+
+`BP_WeatherBridge` implements `IMOWeatherProviderInterface` by translating to UDS/UDW native API calls. No state stored in the bridge — every query reads fresh from UDS/UDW. Wired so far:
+
+- `GetGlobalTemperature` — UDW `Get Current Temperature` (Celsius hardcoded; MO is Celsius-only internally despite UDW defaulting to Fahrenheit)
+- `GetTemperatureAtLocation` — UDW `Get Current Temperature` with custom sample location
+- `GetCurrentWeatherState` — UDW `Get UDS Values Controlled by UDW` + `Get Normalized Wind Direction` → `MakeRotFromX`
+- `GetWeatherDisplayName` — UDW `Get Display Name for Current Weather` → string-to-text
+- `GetCurrentWeatherPreset` — UDW `Weather` variable
+- `GetWindVelocityAtLocation` — wind direction × intensity × tunable `MaxWindSpeedCmPerSec` (default 2000 cm/s ≈ 72 km/h)
+- `GetWeatherExposureAtLocation` — multi-axis shelter test + UDS values → modulated exposure
+- `SetDateTime` — wired to UDS native "Set Date and Time"
+
+Remaining: `IsLocationSheltered`, `IsDaytime`, `GetDateTime`, `BuildWeatherSaveData`, `ApplyWeatherSaveData`.
+
+### Engineering Notes
+
+- Shelter traces use `ECC_Visibility`. Foliage/canopy meshes that should count as cover must be configured to block visibility traces. If a tree shows zero overhead cover when you're standing under it, that's a collision-channel issue, not a math issue.
+- All weather/shelter math is in C++ for testability and performance — BP only orchestrates the calls.
+- The shelter model deliberately doesn't apply `Enclosure` to the four exposure channels — that's for the thermal/insulation system to consume separately. Keeps responsibility clean.
+
+---
+
 ## [2026-05-21] Building System Overhaul + Critical Save/Load Fix
 
 This is a big update — the building system is now fully featured, the packaged-build save/load bug that broke terrain regeneration is gone, and the editor-version-only 2-second hitching is gone. Highest-impact patch since the survivor system landed.

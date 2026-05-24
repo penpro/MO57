@@ -1,7 +1,11 @@
 #include "MOWeatherIntegrationSubsystem.h"
 #include "MOWeatherProviderInterface.h"
 #include "MOGameClockSubsystem.h"
+#include "MOGameUIManagerSubsystem.h"
+#include "MOActivatableWidget.h"
 #include "MOFramework.h"
+#include "Engine/World.h"
+#include "TimerManager.h"
 
 void UMOWeatherIntegrationSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -15,12 +19,37 @@ void UMOWeatherIntegrationSubsystem::Initialize(FSubsystemCollectionBase& Collec
 	if (UMOGameClockSubsystem* Clock = UMOGameClockSubsystem::Get(this))
 	{
 		Clock->OnDayNightChanged.AddDynamic(this, &UMOWeatherIntegrationSubsystem::HandleClockDayNightChanged);
+		Clock->OnHourChanged.AddDynamic(this, &UMOWeatherIntegrationSubsystem::HandleClockHourChanged);
 		// Seed our cache from the clock's current state so any consumer
 		// that reads bCachedIsDaytime gets the right answer immediately.
 		bCachedIsDaytime = Clock->IsDaytime();
 	}
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOWeatherIntegration] Initialized — bound to clock day/night events"));
+	// Hook UI subsystem so menu opens give us masked sync opportunities.
+	// The delegate is a plain FMulticastDelegate (not Dynamic), so we
+	// AddRaw + keep a handle for unregister.
+	if (UMOGameUIManagerSubsystem* UISub = UMOGameUIManagerSubsystem::Get(this))
+	{
+		ActivatableWidgetRegisteredHandle = UISub->OnActivatableWidgetRegistered.AddUObject(
+			this, &UMOWeatherIntegrationSubsystem::HandleActivatableWidgetRegistered);
+	}
+
+	// Safety-net poll: fires every UdsSyncPollIntervalSeconds real-time.
+	// Most ticks throttle blocks (less than MinHoursBetweenUdsSyncs game-
+	// hours since last sync). When the window has elapsed AND no event has
+	// fired, this catches up.
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().SetTimer(
+			UdsSyncPollHandle,
+			FTimerDelegate::CreateUObject(this, &UMOWeatherIntegrationSubsystem::HandleUdsSyncPollTick),
+			FMath::Max(0.1f, UdsSyncPollIntervalSeconds),
+			/*bLoop*/ true);
+	}
+
+	UE_LOG(LogMOFramework, Log,
+		TEXT("[MOWeatherIntegration] Initialized — UDS sync throttle=%.2fh, poll=%.1fs, bound to clock + UI events"),
+		MinHoursBetweenUdsSyncs, UdsSyncPollIntervalSeconds);
 }
 
 void UMOWeatherIntegrationSubsystem::Deinitialize()
@@ -30,6 +59,17 @@ void UMOWeatherIntegrationSubsystem::Deinitialize()
 	if (UMOGameClockSubsystem* Clock = UMOGameClockSubsystem::Get(this))
 	{
 		Clock->OnDayNightChanged.RemoveDynamic(this, &UMOWeatherIntegrationSubsystem::HandleClockDayNightChanged);
+		Clock->OnHourChanged.RemoveDynamic(this, &UMOWeatherIntegrationSubsystem::HandleClockHourChanged);
+	}
+
+	if (UMOGameUIManagerSubsystem* UISub = UMOGameUIManagerSubsystem::Get(this))
+	{
+		UISub->OnActivatableWidgetRegistered.Remove(ActivatableWidgetRegisteredHandle);
+	}
+
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(UdsSyncPollHandle);
 	}
 
 	WeatherProvider = nullptr;
@@ -45,6 +85,72 @@ void UMOWeatherIntegrationSubsystem::HandleClockDayNightChanged(bool bIsDaytime,
 	OnDayNightChanged.Broadcast(bIsDaytime, CurrentDateTime);
 	UE_LOG(LogMOFramework, Log, TEXT("[MOWeatherIntegration] Day/Night forwarded from clock -> %s"),
 		bIsDaytime ? TEXT("DAY") : TEXT("NIGHT"));
+}
+
+void UMOWeatherIntegrationSubsystem::HandleClockHourChanged(int32 NewHour, const FDateTime& CurrentDateTime)
+{
+	// Hour roll is just one of several triggers for UDS sync. Funnel
+	// through the throttled API so we get consistent gating.
+	RequestUdsSync();
+}
+
+void UMOWeatherIntegrationSubsystem::HandleActivatableWidgetRegistered(UMOActivatableWidget* /*Widget*/)
+{
+	// Menu opens are great masking moments for the sync glitch — player is
+	// looking at UI, not the sky. If enough game time has passed, do it now.
+	RequestUdsSync();
+}
+
+void UMOWeatherIntegrationSubsystem::HandleUdsSyncPollTick()
+{
+	// Safety net: catches the case where neither hour rolls nor menus open
+	// for an extended period (unlikely in normal play, defensive otherwise).
+	RequestUdsSync();
+}
+
+void UMOWeatherIntegrationSubsystem::RequestUdsSync()
+{
+	if (!HasWeatherProvider())
+	{
+		return;
+	}
+
+	const UMOGameClockSubsystem* Clock = UMOGameClockSubsystem::Get(this);
+	if (!Clock)
+	{
+		return;
+	}
+
+	const FDateTime Now = Clock->GetGameDateTime();
+	const FTimespan Elapsed = Now - LastUdsSyncDateTime;
+	const float ElapsedHours = static_cast<float>(Elapsed.GetTotalHours());
+
+	// Throttle: bail if the window hasn't elapsed. Multiple requests within
+	// the window are silently dropped — that's the whole point. The throttle
+	// is what protects UDS from being spammed.
+	if (ElapsedHours < MinHoursBetweenUdsSyncs)
+	{
+		return;
+	}
+
+	DoUdsSyncInternal(Now);
+}
+
+float UMOWeatherIntegrationSubsystem::GetGameHoursSinceLastUdsSync() const
+{
+	const UMOGameClockSubsystem* Clock = UMOGameClockSubsystem::Get(this);
+	if (!Clock) return 0.0f;
+	const FTimespan Elapsed = Clock->GetGameDateTime() - LastUdsSyncDateTime;
+	return static_cast<float>(Elapsed.GetTotalHours());
+}
+
+void UMOWeatherIntegrationSubsystem::DoUdsSyncInternal(const FDateTime& Now)
+{
+	IMOWeatherProviderInterface::Execute_SetDateTime(WeatherProvider.GetObject(), Now);
+	LastUdsSyncDateTime = Now;
+	UE_LOG(LogMOFramework, Log,
+		TEXT("[MOWeatherIntegration] UDS sync -> %s (next eligible in %.1fh)"),
+		*Now.ToString(), MinHoursBetweenUdsSyncs);
 }
 
 void UMOWeatherIntegrationSubsystem::Tick(float DeltaTime)

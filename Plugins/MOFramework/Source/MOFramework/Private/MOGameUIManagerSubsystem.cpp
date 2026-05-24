@@ -125,6 +125,11 @@ void UMOGameUIManagerSubsystem::RegisterActiveWidget(UMOActivatableWidget* Widge
 
 	ActiveWidgetStack.Add(Widget);
 	MOUI_LOG(this, "ActiveStack", "register %s (depth=%d)", *Widget->GetName(), ActiveWidgetStack.Num());
+
+	// Fan out a "widget activated" signal for listeners that want to ride
+	// menu opens for opportunistic work (e.g. weather sub syncing UDS time
+	// at a moment the player isn't looking at the sky).
+	OnActivatableWidgetRegistered.Broadcast(Widget);
 }
 
 void UMOGameUIManagerSubsystem::UnregisterActiveWidget(UMOActivatableWidget* Widget)
