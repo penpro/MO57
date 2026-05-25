@@ -13,6 +13,8 @@
 #include "MOWeatherIntegrationSubsystem.h"
 #include "MOWeatherTypes.h"
 #include "MOSpawnManagerSubsystem.h"
+#include "MOPersistenceSubsystem.h"
+#include "MOSaveGameTypes.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
@@ -729,6 +731,178 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 			UE_LOG(LogMOFramework, Warning,
 				TEXT("[MO.AI] ForceWakeAll affected %d brains — now check 'stat unit'"),
 				Affected);
+		}),
+		ECVF_Default));
+
+	// =========================================================================
+	// MO.Save.* — multi-slot save/load verification + manual driver
+	// =========================================================================
+	// MOSavePanel/MOLoadPanel already drive multi-slot through the persistence
+	// subsystem, but the UI hides the raw API behind a confirm-flow + filter.
+	// These commands hit UMOPersistenceSubsystem directly — used to verify
+	// task #62 and as ongoing regression coverage if save behavior changes.
+
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Save.List"),
+		TEXT("List every save slot on disk with display name, save time, and world identifier. "
+		     "Bypasses the UI's current-world filter so all worlds appear."),
+		FConsoleCommandWithWorldDelegate::CreateLambda([](UWorld* World)
+		{
+			UGameInstance* GI = World ? World->GetGameInstance() : nullptr;
+			UMOPersistenceSubsystem* Sys = GI ? GI->GetSubsystem<UMOPersistenceSubsystem>() : nullptr;
+			if (!Sys)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MO.Save] No persistence subsystem"));
+				return;
+			}
+
+			const TArray<FString> Slots = Sys->GetAllSaveSlots();
+			UE_LOG(LogMOFramework, Warning,
+				TEXT("[MO.Save.List] === %d slot(s) on disk (current=%s, world=%s) ==="),
+				Slots.Num(),
+				*Sys->GetCurrentSlotName(),
+				*Sys->GetCurrentWorldIdentifier());
+
+			for (const FString& Slot : Slots)
+			{
+				FMOSaveMetadata Meta;
+				const bool bOk = Sys->GetSaveSlotMetadata(Slot, Meta);
+				if (bOk)
+				{
+					UE_LOG(LogMOFramework, Warning,
+						TEXT("[MO.Save]   %s  display='%s'  world='%s'  saved=%s%s"),
+						*Slot,
+						*Meta.DisplayName.ToString(),
+						*Meta.WorldName,
+						*Meta.Timestamp.ToString(),
+						Meta.bIsAutosave ? TEXT("  [autosave]") : TEXT(""));
+				}
+				else
+				{
+					UE_LOG(LogMOFramework, Warning,
+						TEXT("[MO.Save]   %s  <metadata read failed>"), *Slot);
+				}
+			}
+		}),
+		ECVF_Default));
+
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Save.SaveAs"),
+		TEXT("Save the current world to a specific slot name (bypasses the UI's "
+		     "auto-name generator). Usage: MO.Save.SaveAs MySlot01"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			if (Args.Num() < 1)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MO.Save] Usage: MO.Save.SaveAs <SlotName>"));
+				return;
+			}
+			UGameInstance* GI = World ? World->GetGameInstance() : nullptr;
+			UMOPersistenceSubsystem* Sys = GI ? GI->GetSubsystem<UMOPersistenceSubsystem>() : nullptr;
+			if (!Sys)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MO.Save] No persistence subsystem"));
+				return;
+			}
+
+			const FString SlotName = Args[0];
+			const bool bExists = Sys->DoesSaveSlotExist(SlotName);
+			const bool bOk = Sys->SaveWorldToSlot(SlotName);
+			UE_LOG(LogMOFramework, Warning,
+				TEXT("[MO.Save.SaveAs] %s '%s' -> %s"),
+				bExists ? TEXT("Overwrote") : TEXT("Created"),
+				*SlotName,
+				bOk ? TEXT("OK") : TEXT("FAILED"));
+		}),
+		ECVF_Default));
+
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Save.LoadFrom"),
+		TEXT("Load a specific save slot. Bypasses the UI's load panel. "
+		     "Usage: MO.Save.LoadFrom <SlotName>"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			if (Args.Num() < 1)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MO.Save] Usage: MO.Save.LoadFrom <SlotName>"));
+				return;
+			}
+			UGameInstance* GI = World ? World->GetGameInstance() : nullptr;
+			UMOPersistenceSubsystem* Sys = GI ? GI->GetSubsystem<UMOPersistenceSubsystem>() : nullptr;
+			if (!Sys)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MO.Save] No persistence subsystem"));
+				return;
+			}
+
+			const FString SlotName = Args[0];
+			const FMOLoadResult Result = Sys->LoadWorldFromSlotWithResult(SlotName);
+			UE_LOG(LogMOFramework, Warning,
+				TEXT("[MO.Save.LoadFrom] '%s' -> %s  (pawns=%d ok / %d failed; items=%d / %d; buildings=%d / %d)"),
+				*SlotName,
+				Result.bSuccess ? TEXT("OK") : TEXT("FAILED"),
+				Result.PawnsLoaded, Result.PawnsFailed,
+				Result.ItemsLoaded, Result.ItemsFailed,
+				Result.BuildingsLoaded, Result.BuildingsFailed);
+			if (!Result.ErrorMessage.IsEmpty())
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MO.Save]   Error: %s"), *Result.ErrorMessage);
+			}
+		}),
+		ECVF_Default));
+
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Save.Delete"),
+		TEXT("Delete a save slot from disk (irreversible). Bypasses the UI's "
+		     "confirmation dialog. Usage: MO.Save.Delete <SlotName>"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			if (Args.Num() < 1)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MO.Save] Usage: MO.Save.Delete <SlotName>"));
+				return;
+			}
+			UGameInstance* GI = World ? World->GetGameInstance() : nullptr;
+			UMOPersistenceSubsystem* Sys = GI ? GI->GetSubsystem<UMOPersistenceSubsystem>() : nullptr;
+			if (!Sys)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MO.Save] No persistence subsystem"));
+				return;
+			}
+
+			const FString SlotName = Args[0];
+			if (!Sys->DoesSaveSlotExist(SlotName))
+			{
+				UE_LOG(LogMOFramework, Warning,
+					TEXT("[MO.Save.Delete] Slot '%s' does not exist"), *SlotName);
+				return;
+			}
+			const bool bOk = Sys->DeleteSaveSlot(SlotName);
+			UE_LOG(LogMOFramework, Warning,
+				TEXT("[MO.Save.Delete] '%s' -> %s"),
+				*SlotName, bOk ? TEXT("DELETED") : TEXT("FAILED"));
+		}),
+		ECVF_Default));
+
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Save.Current"),
+		TEXT("Print the current save slot name and session play time."),
+		FConsoleCommandWithWorldDelegate::CreateLambda([](UWorld* World)
+		{
+			UGameInstance* GI = World ? World->GetGameInstance() : nullptr;
+			UMOPersistenceSubsystem* Sys = GI ? GI->GetSubsystem<UMOPersistenceSubsystem>() : nullptr;
+			if (!Sys)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MO.Save] No persistence subsystem"));
+				return;
+			}
+
+			const FString Slot = Sys->GetCurrentSlotName();
+			UE_LOG(LogMOFramework, Warning,
+				TEXT("[MO.Save.Current] slot='%s'  worldId='%s'  sessionTime=%.1fs"),
+				Slot.IsEmpty() ? TEXT("<none>") : *Slot,
+				*Sys->GetCurrentWorldIdentifier(),
+				Sys->GetSessionPlayTime());
 		}),
 		ECVF_Default));
 
