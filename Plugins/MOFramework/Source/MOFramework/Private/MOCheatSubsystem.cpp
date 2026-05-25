@@ -68,6 +68,86 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 {
 	IConsoleManager& CM = IConsoleManager::Get();
 
+	// =========================================================================
+	// MO.Help — discovery for all MO.* commands
+	// =========================================================================
+	// Lists every registered console command/variable that starts with "MO."
+	// alongside its help text. The MO.* prefix is the project's convention so
+	// this surfaces every cheat/diagnostic command we register here AND any
+	// CVars (MO.Audio.*, MO.UI.Debug.*, etc.) registered elsewhere.
+	//
+	// Always available in every build — diagnostic, not destructive. Modders
+	// and QA discover commands via `MO.Help`.
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Help"),
+		TEXT("List every MO.* console command with its help text. Optional filter: MO.Help <substring>"),
+		FConsoleCommandWithArgsDelegate::CreateLambda([](const TArray<FString>& Args)
+		{
+			const FString Filter = Args.Num() > 0 ? Args[0] : FString();
+
+			// Collect first so we can sort + format. ForEachConsoleObject visits
+			// in registration order which isn't useful for browsing.
+			struct FEntry { FString Name; FString Help; bool bIsCommand; };
+			TArray<FEntry> Entries;
+
+			IConsoleManager::Get().ForEachConsoleObjectThatStartsWith(
+				FConsoleObjectVisitor::CreateLambda([&Entries, &Filter](const TCHAR* Name, IConsoleObject* Obj)
+				{
+					if (!Obj) return;
+					const FString NameStr(Name);
+					if (!Filter.IsEmpty() && !NameStr.Contains(Filter, ESearchCase::IgnoreCase))
+					{
+						return;
+					}
+
+					FEntry E;
+					E.Name = NameStr;
+					E.Help = Obj->GetHelp();
+					E.bIsCommand = (Obj->AsCommand() != nullptr);
+					Entries.Add(MoveTemp(E));
+				}),
+				TEXT("MO."));
+
+			Entries.Sort([](const FEntry& A, const FEntry& B) { return A.Name < B.Name; });
+
+			UE_LOG(LogMOFramework, Warning,
+				TEXT("[MO.Help] %d entries%s%s"),
+				Entries.Num(),
+				Filter.IsEmpty() ? TEXT("") : TEXT(" matching '"),
+				Filter.IsEmpty() ? TEXT("") : *(Filter + TEXT("'")));
+
+			for (const FEntry& E : Entries)
+			{
+				// Tag CMD vs CVAR so the difference is visible — CVars take a
+				// value, commands take args. Help text on multi-line entries
+				// reads better with the name on its own line.
+				UE_LOG(LogMOFramework, Warning,
+					TEXT("[MO.Help]   %s %s"),
+					E.bIsCommand ? TEXT("[CMD] ") : TEXT("[CVAR]"),
+					*E.Name);
+				if (!E.Help.IsEmpty())
+				{
+					// Split help text on \n so multi-line descriptions don't
+					// get glommed into one log line that overflows the console.
+					TArray<FString> HelpLines;
+					E.Help.ParseIntoArrayLines(HelpLines);
+					for (const FString& Line : HelpLines)
+					{
+						UE_LOG(LogMOFramework, Warning, TEXT("[MO.Help]           %s"), *Line);
+					}
+				}
+			}
+
+			if (Entries.Num() == 0 && !Filter.IsEmpty())
+			{
+				UE_LOG(LogMOFramework, Warning,
+					TEXT("[MO.Help] No MO.* commands matched '%s'. Try MO.Help with no filter to see everything."),
+					*Filter);
+			}
+		}),
+		ECVF_Default));
+
+
 	// ---------- MO.Player.Info ----------
 	ConsoleCommands.Add(CM.RegisterConsoleCommand(
 		TEXT("MO.Player.Info"),

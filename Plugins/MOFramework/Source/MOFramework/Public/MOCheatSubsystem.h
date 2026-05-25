@@ -1,30 +1,43 @@
 /**
  * =============================================================================
- * MOCheatSubsystem.h - Dev/debug console commands for player + world cheats
+ * MOCheatSubsystem.h - Dev/debug + casual cheat console commands
  * =============================================================================
  *
  * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
  * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
  *
  * PURPOSE:
- * Central host for MO.Player.* / MO.World.* / MO.Cheat.* console commands.
- * Owns no gameplay state — finds the local player pawn + sibling components
- * each time and acts on them.
+ * Central host for MO.* console commands. Owns no gameplay state — finds the
+ * local player pawn + sibling subsystems each call and acts on them.
  *
- * COMMAND CATEGORIES:
- *   MO.Player.* — operate on the locally controlled MOCharacter
- *   MO.World.*  — operate on world state (creature spawns, etc) [future]
+ * DESIGN DECISION (2026-05-25): Commands stay registered in ALL build
+ * configurations, including Shipping. MO57 is a casual single-player game
+ * with first-class mod support — cheats and runtime tooling are part of the
+ * product. Players who don't want to cheat can simply not open the console.
+ * Do NOT wrap registration in #if !UE_BUILD_SHIPPING; that would also hide
+ * the modder-facing data-table-injection commands (task #113) the same way.
+ *
+ * COMMAND NAMESPACES (live in this subsystem):
+ *   MO.Help           — discover commands (filterable)
+ *   MO.Player.*       — local pawn (Info, Teleport, GiveItem)
+ *   MO.Clock.*        — game clock (Info, SetTime, AdvanceHours, SkipTo*)
+ *   MO.Weather.*      — weather state (Info, ListPresets, SetPreset, ...)
+ *   MO.Audio.*        — audio bank (Info, AmbientVolume, ...)
+ *   MO.AI.*           — spawn-manager freeze pipeline (DumpFreezeState,
+ *                       ForceFreezeAll, ForceWakeAll, StressSpawn)
+ *
+ * Per-system debug commands (MO.UI.*, MO.Harvest.*) live in their respective
+ * subsystems — this file is only for cross-cutting cheats that need access
+ * to the player pawn + multiple component/subsystem types.
  *
  * EXTENSION:
  * To add a new command, follow the existing pattern in RegisterConsoleCommands:
- *   1. Pick a namespace (MO.Player / MO.World / etc)
+ *   1. Pick a namespace (MO.Player / MO.World / MO.Mod / etc)
  *   2. RegisterConsoleCommand with a lambda
  *   3. Lambda resolves world subsystem at call time (not capture)
  *   4. Push the result into ConsoleCommands so Deinitialize can release it
- *
- * Per-system commands (clock, harvest, UI debug) live in their respective
- * subsystems — this subsystem is only for cross-cutting cheats that need
- * access to the player pawn + multiple component types.
+ *   5. Write good help text — MO.Help displays it verbatim, that's the
+ *      discovery surface for QA, players, and modders.
  *
  * =============================================================================
  * KNOWN PITFALLS
