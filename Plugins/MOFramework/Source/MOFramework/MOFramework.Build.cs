@@ -1,5 +1,7 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
+using System.IO;
+using System.Reflection;
 using UnrealBuildTool;
 
 public class MOFramework : ModuleRules
@@ -7,6 +9,49 @@ public class MOFramework : ModuleRules
 	public MOFramework(ReadOnlyTargetRules Target) : base(Target)
 	{
 		PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
+
+		// =====================================================================
+		// PreBuildStep: refresh MOBuildInfoGenerated.h with current git data
+		// so FMOBuildInfo / the main menu version label match the build.
+		//
+		// PreBuildSteps lives on TargetRules, not ModuleRules — we receive a
+		// ReadOnlyTargetRules and have to reach the inner TargetRules via
+		// reflection. Same trick VoxelCore.Build.cs uses (UE's officially
+		// supported "do something at build time from a plugin" pattern).
+		//
+		// The script is idempotent and degrades gracefully if git is missing
+		// (writes "unknown" sentinels that the C++ side handles). We invoke
+		// it on Windows only — other platforms still compile against the
+		// committed stub header.
+		// =====================================================================
+		if (Target.Platform == UnrealTargetPlatform.Win64)
+		{
+			// ModuleDirectory = .../Plugins/MOFramework/Source/MOFramework
+			// Project root    = ../../../../  (four levels up)
+			string ProjectRoot = Path.GetFullPath(Path.Combine(ModuleDirectory, "..", "..", "..", ".."));
+			string ScriptPath  = Path.Combine(ProjectRoot, "Tools", "Update-BuildInfo.ps1");
+
+			if (File.Exists(ScriptPath))
+			{
+				FieldInfo InnerField = typeof(ReadOnlyTargetRules).GetField("Inner",
+					BindingFlags.NonPublic | BindingFlags.Instance);
+				TargetRules MutableRules = InnerField != null
+					? InnerField.GetValue(Target) as TargetRules
+					: null;
+
+				if (MutableRules != null)
+				{
+					string Command = string.Format(
+						"powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"{0}\"",
+						ScriptPath);
+
+					if (!MutableRules.PreBuildSteps.Contains(Command))
+					{
+						MutableRules.PreBuildSteps.Add(Command);
+					}
+				}
+			}
+		}
 		
 		PublicIncludePaths.AddRange(
 			new string[] {
@@ -52,6 +97,7 @@ public class MOFramework : ModuleRules
 			{
 				"CoreUObject",
 				"Engine",
+				"EngineSettings",  // UGeneralProjectSettings for build info / project version
 				"Slate",
 				"SlateCore",
 				"NetCore",     // Required for FastArraySerializer + push model symbols

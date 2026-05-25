@@ -1,10 +1,12 @@
 #include "MOMainMenuWidget.h"
 #include "MOFramework.h"
+#include "MOBuildInfo.h"
 #include "MOCommonButton.h"
 #include "MONewGamePanel.h"
 #include "MOLoadPanel.h"
 #include "MOOptionsPanel.h"
 #include "Components/PanelWidget.h"
+#include "Components/TextBlock.h"
 #include "Components/WidgetSwitcher.h"
 
 UMOMainMenuWidget::UMOMainMenuWidget(const FObjectInitializer& ObjectInitializer)
@@ -76,6 +78,14 @@ void UMOMainMenuWidget::NativeConstruct()
 	}
 
 	BindButtonEvents();
+
+	// Populate the build info label (project version + commit hash + branch).
+	// Optional widget — designers can omit it from the WBP. UMOBuildInfo
+	// handles the "no git data" degradation internally.
+	if (BuildInfoLabel)
+	{
+		BuildInfoLabel->SetText(UMOBuildInfo::GetDisplayLabel());
+	}
 
 	// Start with no focus panel open
 	if (FocusWindowSwitcher)

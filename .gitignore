@@ -35,3 +35,8 @@ Content/Penumbra/Movies/
 
 # Claude Code per-session worktrees
 .claude/worktrees/
+
+# Build-time generated header — overwritten by Tools/Update-BuildInfo.ps1
+# on every compile, so it shouldn't live in git history.
+Plugins/MOFramework/Source/MOFramework/Public/MOBuildInfoGenerated.h
+

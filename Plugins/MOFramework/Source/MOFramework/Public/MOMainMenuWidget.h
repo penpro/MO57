@@ -54,6 +54,7 @@ class UMOLoadPanel;
 class UMOOptionsPanel;
 class UMONewGamePanel;
 class UPanelWidget;
+class UTextBlock;
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOMainMenuNewGameSignature);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOMainMenuLoadGameSignature, const FString&, SlotName);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOMainMenuExitGameSignature);
@@ -190,6 +191,16 @@ private:
 	/** Options panel (optional - can be added directly to switcher in WBP). */
 	UPROPERTY(meta=(BindWidgetOptional))
 	TObjectPtr<UMOOptionsPanel> OptionsPanel;
+
+	/**
+	 * Optional text block showing project version + commit hash + branch.
+	 * Add a UTextBlock named "BuildInfoLabel" to WBP_MainMenu (small font,
+	 * corner of the screen). NativeConstruct populates it from
+	 * UMOBuildInfo::GetDisplayLabel(). Omit it from the WBP if you don't
+	 * want the label visible.
+	 */
+	UPROPERTY(meta=(BindWidgetOptional))
+	TObjectPtr<UTextBlock> BuildInfoLabel;
 
 	// ============================================================================
 	// STATE
