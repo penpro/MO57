@@ -25,6 +25,7 @@
 #include "MOHUDRootWidget.h"
 #include "MOStatusEffectStripWidget.h"
 #include "MOStatusMoodleTypes.h"
+#include "MOSurvivalStatsComponent.h"
 
 UMOCharacterUIController::UMOCharacterUIController()
 {
@@ -64,6 +65,7 @@ void UMOCharacterUIController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	// pointer could fire into us during shutdown if the vitals component
 	// outlives us by a frame.
 	UnbindFromPawnVitalsForMoodles();
+	UnbindFromPawnSurvivalStatsForMoodles();
 
 	// Clean up skills panel widget - unbind delegates first
 	if (UMOSkillsPanel* SkillsWidget = SkillsPanelWidget.Get())
@@ -433,6 +435,10 @@ void UMOCharacterUIController::OnPawnChanged()
 	// VitalsComponent so the HUD strip tracks the live pawn.
 	UnbindFromPawnVitalsForMoodles();
 	BindToPawnVitalsForMoodles();
+
+	// Survival-stat-derived moodles (hunger / thirst / energy).
+	UnbindFromPawnSurvivalStatsForMoodles();
+	BindToPawnSurvivalStatsForMoodles();
 }
 
 // =============================================================================
@@ -1025,6 +1031,149 @@ void UMOCharacterUIController::RefreshWetMoodle(EMOWetnessState State)
 	default:
 		// Dry handled above
 		break;
+	}
+
+	Strip->AddOrUpdateMoodle(M);
+}
+
+// =============================================================================
+// Survival-Stat Moodles (Hunger / Thirst / Energy)
+// =============================================================================
+//
+// Sources of truth: UMOSurvivalStatsComponent::OnStatChanged. The handler
+// reroutes by stat name to a per-stat refresh helper so each moodle has its
+// own bucket logic + label text. Energy is a placeholder for now (added
+// to test the pattern; the stat exists but doesn't drive interesting
+// gameplay yet).
+
+void UMOCharacterUIController::BindToPawnSurvivalStatsForMoodles()
+{
+	APlayerController* PC = ResolveOwningPlayerController();
+	if (!IsValid(PC))
+	{
+		return;
+	}
+
+	APawn* Pawn = PC->GetPawn();
+	if (!IsValid(Pawn))
+	{
+		return;
+	}
+
+	UMOSurvivalStatsComponent* Stats = Pawn->FindComponentByClass<UMOSurvivalStatsComponent>();
+	if (!IsValid(Stats))
+	{
+		return;
+	}
+
+	Stats->OnStatChanged.RemoveDynamic(this, &UMOCharacterUIController::HandleSurvivalStatChanged);
+	Stats->OnStatChanged.AddDynamic(this, &UMOCharacterUIController::HandleSurvivalStatChanged);
+	BoundSurvivalStats = Stats;
+
+	// Push current state immediately — same reasoning as the wet moodle:
+	// a respawned-hungry pawn should show the moodle without waiting for
+	// the stat to tick down further.
+	RefreshSurvivalStatMoodle(FName("Hunger"));
+	RefreshSurvivalStatMoodle(FName("Thirst"));
+	RefreshSurvivalStatMoodle(FName("Energy"));
+
+	UE_LOG(LogMOFramework, Log,
+		TEXT("[MOCharUI] Bound survival-stat moodles on '%s'"), *Pawn->GetName());
+}
+
+void UMOCharacterUIController::UnbindFromPawnSurvivalStatsForMoodles()
+{
+	if (UMOSurvivalStatsComponent* Stats = BoundSurvivalStats.Get())
+	{
+		Stats->OnStatChanged.RemoveDynamic(this, &UMOCharacterUIController::HandleSurvivalStatChanged);
+	}
+	BoundSurvivalStats.Reset();
+
+	// Drop any moodles we placed so the next pawn's state replaces them cleanly.
+	UMOUIManagerComponent* UIManager = GetUIManager();
+	UMOHUDRootWidget* HUDRoot = UIManager ? UIManager->GetHUDRoot() : nullptr;
+	if (UMOStatusEffectStripWidget* Strip = HUDRoot ? HUDRoot->GetStatusStrip() : nullptr)
+	{
+		Strip->RemoveMoodle(FName(TEXT("Hunger")));
+		Strip->RemoveMoodle(FName(TEXT("Thirst")));
+		Strip->RemoveMoodle(FName(TEXT("Energy")));
+	}
+}
+
+void UMOCharacterUIController::HandleSurvivalStatChanged(FName StatName, float /*OldValue*/, float /*NewValue*/)
+{
+	// Only the three stats we drive moodles for. Other stats (Temperature etc.)
+	// are handled by their own dedicated indicators.
+	if (StatName == FName("Hunger") ||
+	    StatName == FName("Thirst") ||
+	    StatName == FName("Energy"))
+	{
+		RefreshSurvivalStatMoodle(StatName);
+	}
+}
+
+void UMOCharacterUIController::RefreshSurvivalStatMoodle(FName StatName)
+{
+	UMOSurvivalStatsComponent* Stats = BoundSurvivalStats.Get();
+	if (!Stats) return;
+
+	UMOUIManagerComponent* UIManager = GetUIManager();
+	UMOHUDRootWidget* HUDRoot = UIManager ? UIManager->GetHUDRoot() : nullptr;
+	UMOStatusEffectStripWidget* Strip = HUDRoot ? HUDRoot->GetStatusStrip() : nullptr;
+	if (!Strip) return;
+
+	const float Percent = Stats->GetStatPercent(StatName);
+
+	// Above the warning threshold → no moodle (player is fine on this stat).
+	if (Percent >= SurvivalMoodleWarningPercent)
+	{
+		Strip->RemoveMoodle(StatName);
+		return;
+	}
+
+	// Below warning → push a moodle. Severity + label depend on which stat
+	// AND how deep into the warning band we are.
+	FMOStatusMoodle M;
+	M.Id = StatName;
+
+	const bool bCritical = Percent < SurvivalMoodleCriticalPercent;
+	M.Severity = bCritical ? EMOStatusMoodleSeverity::Critical : EMOStatusMoodleSeverity::Warning;
+
+	if (StatName == FName("Hunger"))
+	{
+		M.Icon = HungerMoodleIcon;
+		M.Label = bCritical
+			? NSLOCTEXT("MO", "Moodle.Starving",      "Starving")
+			: NSLOCTEXT("MO", "Moodle.Hungry",        "Hungry");
+		M.Tooltip = bCritical
+			? NSLOCTEXT("MO", "Moodle.Starving.Tip",  "You're starving. Find food immediately — extended hunger causes serious damage.")
+			: NSLOCTEXT("MO", "Moodle.Hungry.Tip",    "You're hungry. Eat soon to maintain strength and stamina.");
+	}
+	else if (StatName == FName("Thirst"))
+	{
+		M.Icon = ThirstMoodleIcon;
+		M.Label = bCritical
+			? NSLOCTEXT("MO", "Moodle.Dehydrated",    "Dehydrated")
+			: NSLOCTEXT("MO", "Moodle.Thirsty",       "Thirsty");
+		M.Tooltip = bCritical
+			? NSLOCTEXT("MO", "Moodle.Dehydrated.Tip","Severe dehydration. Drink water now — fatal within hours.")
+			: NSLOCTEXT("MO", "Moodle.Thirsty.Tip",   "You're thirsty. Find water soon.");
+	}
+	else if (StatName == FName("Energy"))
+	{
+		M.Icon = EnergyMoodleIcon;
+		M.Label = bCritical
+			? NSLOCTEXT("MO", "Moodle.Exhausted",     "Exhausted")
+			: NSLOCTEXT("MO", "Moodle.Tired",         "Tired");
+		M.Tooltip = bCritical
+			? NSLOCTEXT("MO", "Moodle.Exhausted.Tip", "Exhausted — sleep, your performance is suffering.")
+			: NSLOCTEXT("MO", "Moodle.Tired.Tip",     "You're tired. Rest soon.");
+	}
+	else
+	{
+		// Unknown stat — shouldn't happen given the gate in HandleSurvivalStatChanged,
+		// but bail rather than push a garbage moodle.
+		return;
 	}
 
 	Strip->AddOrUpdateMoodle(M);

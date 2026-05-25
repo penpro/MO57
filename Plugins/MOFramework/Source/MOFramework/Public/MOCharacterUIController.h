@@ -366,4 +366,42 @@ private:
 
 	UFUNCTION()
 	void HandleWetnessStateChanged(EMOWetnessState OldState, EMOWetnessState NewState);
+
+	// --- Survival-stat-derived moodles (hunger, thirst, energy) ---
+	//
+	// Same wiring pattern as wetness: subscribe on pawn change, push/remove
+	// moodles based on the stat's percent. Each stat has two buckets:
+	// "warning" (under WarningPercent) and "critical" (under CriticalPercent).
+
+	/** Survival stats we're currently subscribed to. */
+	UPROPERTY(Transient)
+	TWeakObjectPtr<class UMOSurvivalStatsComponent> BoundSurvivalStats;
+
+	/** Percent at which Hunger/Thirst/Energy show the warning moodle (default 0.50). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="MO|Character|Moodles",
+		meta=(AllowPrivateAccess="true", ClampMin="0.0", ClampMax="1.0"))
+	float SurvivalMoodleWarningPercent = 0.50f;
+
+	/** Percent at which Hunger/Thirst/Energy escalate to critical (default 0.25). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="MO|Character|Moodles",
+		meta=(AllowPrivateAccess="true", ClampMin="0.0", ClampMax="1.0"))
+	float SurvivalMoodleCriticalPercent = 0.25f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="MO|Character|Moodles", meta=(AllowPrivateAccess="true"))
+	TObjectPtr<class UTexture2D> HungerMoodleIcon;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="MO|Character|Moodles", meta=(AllowPrivateAccess="true"))
+	TObjectPtr<class UTexture2D> ThirstMoodleIcon;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="MO|Character|Moodles", meta=(AllowPrivateAccess="true"))
+	TObjectPtr<class UTexture2D> EnergyMoodleIcon;
+
+	void BindToPawnSurvivalStatsForMoodles();
+	void UnbindFromPawnSurvivalStatsForMoodles();
+
+	UFUNCTION()
+	void HandleSurvivalStatChanged(FName StatName, float OldValue, float NewValue);
+
+	/** Push/remove a moodle for the given stat based on its current percent. */
+	void RefreshSurvivalStatMoodle(FName StatName);
 };

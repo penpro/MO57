@@ -22,6 +22,7 @@
 #include "MOStatusMoodleTypes.h"
 #include "MOUIManagerComponent.h"
 #include "MOVitalsComponent.h"
+#include "MOSurvivalStatsComponent.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
@@ -1224,6 +1225,44 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 				TEXT("[MO.Player.SetWet] WetnessLevel=%.2f → state=%s"),
 				Vitals->GetWetnessLevel(),
 				*UEnum::GetValueAsString(Vitals->GetWetnessState()));
+		}),
+		ECVF_Default));
+
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Player.SetStat"),
+		TEXT("Force a survival stat to a specific value. Stat names: Hunger, "
+		     "Thirst, Temperature, Energy. Value is in the stat's units "
+		     "(0-100 typical). Usage: MO.Player.SetStat Hunger 20"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			if (Args.Num() < 2)
+			{
+				UE_LOG(LogMOFramework, Warning,
+					TEXT("[MO.Player.SetStat] Usage: MO.Player.SetStat <Hunger|Thirst|Temperature|Energy> <value>"));
+				return;
+			}
+			APawn* Pawn = ResolveLocalPawn(World);
+			if (!Pawn)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MO.Player.SetStat] No locally controlled pawn"));
+				return;
+			}
+			UMOSurvivalStatsComponent* Stats = Pawn->FindComponentByClass<UMOSurvivalStatsComponent>();
+			if (!Stats)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MO.Player.SetStat] Pawn has no UMOSurvivalStatsComponent"));
+				return;
+			}
+
+			const FName StatName(*Args[0]);
+			const float NewValue = FCString::Atof(*Args[1]);
+			Stats->SetStat(StatName, NewValue);
+
+			UE_LOG(LogMOFramework, Warning,
+				TEXT("[MO.Player.SetStat] %s -> %.1f (%.0f%%)"),
+				*StatName.ToString(),
+				Stats->GetStatCurrent(StatName),
+				Stats->GetStatPercent(StatName) * 100.0f);
 		}),
 		ECVF_Default));
 
