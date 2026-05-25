@@ -15,6 +15,8 @@
 #include "MOSpawnManagerSubsystem.h"
 #include "MOPersistenceSubsystem.h"
 #include "MOSaveGameTypes.h"
+#include "MORecipeDatabaseSettings.h"
+#include "MOSkillDatabaseSettings.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
@@ -976,17 +978,119 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 
 	ConsoleCommands.Add(CM.RegisterConsoleCommand(
 		TEXT("MO.Mod.Status"),
-		TEXT("Print mod overlay status: how many mod items are currently registered, "
-		     "and which tables they live in."),
+		TEXT("Print mod overlay status across every supported table."),
 		FConsoleCommandDelegate::CreateLambda([]()
 		{
-			UE_LOG(LogMOFramework, Warning,
-				TEXT("[MO.Mod] Mod overlay status:"));
-			UE_LOG(LogMOFramework, Warning,
-				TEXT("[MO.Mod]   Items: %d registered"),
+			UE_LOG(LogMOFramework, Warning, TEXT("[MO.Mod] Mod overlay status:"));
+			UE_LOG(LogMOFramework, Warning, TEXT("[MO.Mod]   Items:   %d registered"),
 				UMOItemDatabaseSettings::GetModItemCount());
+			UE_LOG(LogMOFramework, Warning, TEXT("[MO.Mod]   Recipes: %d registered"),
+				UMORecipeDatabaseSettings::GetModRecipeCount());
+			UE_LOG(LogMOFramework, Warning, TEXT("[MO.Mod]   Skills:  %d registered"),
+				UMOSkillDatabaseSettings::GetModSkillCount());
 			UE_LOG(LogMOFramework, Warning,
-				TEXT("[MO.Mod]   (other tables — recipes, quests, skills — not yet mod-supported; see task #113)"));
+				TEXT("[MO.Mod]   (quests/medical/jobs/resources still tracked under task #114)"));
+		}),
+		ECVF_Default));
+
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Mod.LoadRecipes"),
+		TEXT("Merge a UDataTable of FMORecipeDefinitionRow rows into the recipe database. "
+		     "Same rules as MO.Mod.LoadItems: mod rows win on ID collision and survive "
+		     "InvalidateCache. Usage: MO.Mod.LoadRecipes /Game/Mods/MyMod/DT_MoreRecipes.DT_MoreRecipes"),
+		FConsoleCommandWithArgsDelegate::CreateLambda([](const TArray<FString>& Args)
+		{
+			if (Args.Num() < 1)
+			{
+				UE_LOG(LogMOFramework, Warning,
+					TEXT("[MO.Mod] Usage: MO.Mod.LoadRecipes <DataTableAssetPath>"));
+				return;
+			}
+
+			FString FullPath = Args[0];
+			if (!FullPath.Contains(TEXT(".")))
+			{
+				int32 LastSlash;
+				if (FullPath.FindLastChar(TEXT('/'), LastSlash))
+				{
+					FullPath += TEXT(".") + FullPath.Mid(LastSlash + 1);
+				}
+			}
+
+			UDataTable* Table = LoadObject<UDataTable>(nullptr, *FullPath);
+			if (!IsValid(Table))
+			{
+				UE_LOG(LogMOFramework, Warning,
+					TEXT("[MO.Mod] LoadRecipes failed — '%s' not found."), *FullPath);
+				return;
+			}
+
+			const int32 Merged = UMORecipeDatabaseSettings::MergeModRecipeTable(Table);
+			UE_LOG(LogMOFramework, Warning,
+				TEXT("[MO.Mod] LoadRecipes: merged %d recipes from '%s'. Mod overlay now has %d total."),
+				Merged, *Table->GetName(), UMORecipeDatabaseSettings::GetModRecipeCount());
+		}),
+		ECVF_Default));
+
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Mod.ClearRecipes"),
+		TEXT("Drop every mod-registered recipe and invalidate the recipe cache."),
+		FConsoleCommandDelegate::CreateLambda([]()
+		{
+			const int32 Before = UMORecipeDatabaseSettings::GetModRecipeCount();
+			UMORecipeDatabaseSettings::ClearModRecipes();
+			UE_LOG(LogMOFramework, Warning,
+				TEXT("[MO.Mod] ClearRecipes: dropped %d mod recipes."), Before);
+		}),
+		ECVF_Default));
+
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Mod.LoadSkills"),
+		TEXT("Merge a UDataTable of FMOSkillDefinitionRow rows into the skill database. "
+		     "Usage: MO.Mod.LoadSkills /Game/Mods/MyMod/DT_MoreSkills.DT_MoreSkills"),
+		FConsoleCommandWithArgsDelegate::CreateLambda([](const TArray<FString>& Args)
+		{
+			if (Args.Num() < 1)
+			{
+				UE_LOG(LogMOFramework, Warning,
+					TEXT("[MO.Mod] Usage: MO.Mod.LoadSkills <DataTableAssetPath>"));
+				return;
+			}
+
+			FString FullPath = Args[0];
+			if (!FullPath.Contains(TEXT(".")))
+			{
+				int32 LastSlash;
+				if (FullPath.FindLastChar(TEXT('/'), LastSlash))
+				{
+					FullPath += TEXT(".") + FullPath.Mid(LastSlash + 1);
+				}
+			}
+
+			UDataTable* Table = LoadObject<UDataTable>(nullptr, *FullPath);
+			if (!IsValid(Table))
+			{
+				UE_LOG(LogMOFramework, Warning,
+					TEXT("[MO.Mod] LoadSkills failed — '%s' not found."), *FullPath);
+				return;
+			}
+
+			const int32 Merged = UMOSkillDatabaseSettings::MergeModSkillTable(Table);
+			UE_LOG(LogMOFramework, Warning,
+				TEXT("[MO.Mod] LoadSkills: merged %d skills from '%s'. Mod overlay now has %d total."),
+				Merged, *Table->GetName(), UMOSkillDatabaseSettings::GetModSkillCount());
+		}),
+		ECVF_Default));
+
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Mod.ClearSkills"),
+		TEXT("Drop every mod-registered skill and invalidate the skill cache."),
+		FConsoleCommandDelegate::CreateLambda([]()
+		{
+			const int32 Before = UMOSkillDatabaseSettings::GetModSkillCount();
+			UMOSkillDatabaseSettings::ClearModSkills();
+			UE_LOG(LogMOFramework, Warning,
+				TEXT("[MO.Mod] ClearSkills: dropped %d mod skills."), Before);
 		}),
 		ECVF_Default));
 

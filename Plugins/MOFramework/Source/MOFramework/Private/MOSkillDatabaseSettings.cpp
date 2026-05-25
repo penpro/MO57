@@ -8,6 +8,7 @@
 bool UMOSkillDatabaseSettings::bCachesDirty = true;
 TMap<EMOSkillCategory, TArray<FName>> UMOSkillDatabaseSettings::SkillsByCategory;
 TWeakObjectPtr<UDataTable> UMOSkillDatabaseSettings::CachedDataTable;
+TMap<FName, FMOSkillDefinitionRow> UMOSkillDatabaseSettings::ModSkillDefinitions;
 
 UDataTable* UMOSkillDatabaseSettings::GetSkillDefinitionsDataTable() const
 {
@@ -89,6 +90,12 @@ const FMOSkillDefinitionRow* UMOSkillDatabaseSettings::GetSkillDefinition(FName 
 		return nullptr;
 	}
 
+	// Mod overlay wins on collision — same rule as items / recipes.
+	if (const FMOSkillDefinitionRow* ModRow = ModSkillDefinitions.Find(SkillId))
+	{
+		return ModRow;
+	}
+
 	const UMOSkillDatabaseSettings* Settings = GetDefault<UMOSkillDatabaseSettings>();
 	if (!Settings)
 	{
@@ -150,18 +157,18 @@ void UMOSkillDatabaseSettings::GetAllSkillIds(TArray<FName>& OutSkillIds)
 	OutSkillIds.Empty();
 
 	const UMOSkillDatabaseSettings* Settings = GetDefault<UMOSkillDatabaseSettings>();
-	if (!Settings)
+	if (Settings)
 	{
-		return;
+		if (UDataTable* DataTable = Settings->GetSkillDefinitionsDataTable())
+		{
+			OutSkillIds = DataTable->GetRowNames();
+		}
 	}
 
-	UDataTable* DataTable = Settings->GetSkillDefinitionsDataTable();
-	if (!IsValid(DataTable))
+	for (const auto& Pair : ModSkillDefinitions)
 	{
-		return;
+		OutSkillIds.AddUnique(Pair.Key);
 	}
-
-	OutSkillIds = DataTable->GetRowNames();
 }
 
 void UMOSkillDatabaseSettings::GetSkillsByCategory(EMOSkillCategory Category, TArray<FName>& OutSkillIds)
@@ -195,7 +202,9 @@ void UMOSkillDatabaseSettings::InvalidateCache()
 	SkillsByCategory.Empty();
 	CachedDataTable.Reset();
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOSkillDatabaseSettings] Cache invalidated"));
+	UE_LOG(LogMOFramework, Log,
+		TEXT("[MOSkillDatabaseSettings] Cache invalidated (mod overlay retained: %d skills)"),
+		ModSkillDefinitions.Num());
 }
 
 void UMOSkillDatabaseSettings::EnsureCachesBuilt()
@@ -212,36 +221,130 @@ void UMOSkillDatabaseSettings::BuildCaches()
 {
 	SkillsByCategory.Empty();
 
-	const UMOSkillDatabaseSettings* Settings = GetDefault<UMOSkillDatabaseSettings>();
-	if (!Settings)
-	{
-		bCachesDirty = false;
-		return;
-	}
+	TSet<FName> VisitedIds;
 
-	UDataTable* DataTable = Settings->GetSkillDefinitionsDataTable();
-	if (!IsValid(DataTable))
+	auto IndexRow = [&VisitedIds](FName SkillId, const FMOSkillDefinitionRow* Skill)
 	{
-		bCachesDirty = false;
-		return;
-	}
-
-	TArray<FName> AllSkillIds = DataTable->GetRowNames();
-
-	for (const FName& SkillId : AllSkillIds)
-	{
-		const FMOSkillDefinitionRow* Skill = DataTable->FindRow<FMOSkillDefinitionRow>(SkillId, TEXT("BuildCaches"), false);
-		if (!Skill)
-		{
-			continue;
-		}
+		if (!Skill || SkillId.IsNone()) return;
+		if (VisitedIds.Contains(SkillId)) return;  // mod already covered
+		VisitedIds.Add(SkillId);
 
 		TArray<FName>& CategorySkills = SkillsByCategory.FindOrAdd(Skill->Category);
 		CategorySkills.Add(SkillId);
+	};
+
+	// Mod overlay first so mod-wins-over-base.
+	for (const auto& Pair : ModSkillDefinitions)
+	{
+		IndexRow(Pair.Key, &Pair.Value);
+	}
+
+	const UMOSkillDatabaseSettings* Settings = GetDefault<UMOSkillDatabaseSettings>();
+	UDataTable* DataTable = Settings ? Settings->GetSkillDefinitionsDataTable() : nullptr;
+
+	int32 BaseSkillCount = 0;
+	if (IsValid(DataTable))
+	{
+		TArray<FName> AllSkillIds = DataTable->GetRowNames();
+		BaseSkillCount = AllSkillIds.Num();
+
+		for (const FName& SkillId : AllSkillIds)
+		{
+			const FMOSkillDefinitionRow* Skill = DataTable->FindRow<FMOSkillDefinitionRow>(SkillId, TEXT("BuildCaches"), false);
+			IndexRow(SkillId, Skill);
+		}
 	}
 
 	bCachesDirty = false;
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOSkillDatabaseSettings] Cache built: %d skills, %d categories"),
-		AllSkillIds.Num(), SkillsByCategory.Num());
+	if (ModSkillDefinitions.Num() > 0)
+	{
+		UE_LOG(LogMOFramework, Log,
+			TEXT("[MOSkillDatabaseSettings] Cache built: %d base + %d mod = %d total skills, %d categories"),
+			BaseSkillCount, ModSkillDefinitions.Num(), VisitedIds.Num(), SkillsByCategory.Num());
+	}
+	else
+	{
+		UE_LOG(LogMOFramework, Log,
+			TEXT("[MOSkillDatabaseSettings] Cache built: %d skills, %d categories"),
+			BaseSkillCount, SkillsByCategory.Num());
+	}
+}
+
+// =============================================================================
+// MOD OVERLAY API
+// =============================================================================
+
+void UMOSkillDatabaseSettings::RegisterModSkill(FName SkillId, const FMOSkillDefinitionRow& Row)
+{
+	if (SkillId.IsNone())
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOSkillDatabaseSettings] RegisterModSkill refused — empty SkillId"));
+		return;
+	}
+
+	const bool bWasReplaced = ModSkillDefinitions.Contains(SkillId);
+	ModSkillDefinitions.Add(SkillId, Row);
+	bCachesDirty = true;
+
+	UE_LOG(LogMOFramework, Log,
+		TEXT("[MOSkillDatabaseSettings] %s mod skill '%s' (display='%s')"),
+		bWasReplaced ? TEXT("Replaced") : TEXT("Registered"),
+		*SkillId.ToString(),
+		*Row.DisplayName.ToString());
+}
+
+int32 UMOSkillDatabaseSettings::MergeModSkillTable(UDataTable* SourceTable)
+{
+	if (!IsValid(SourceTable))
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOSkillDatabaseSettings] MergeModSkillTable: null SourceTable"));
+		return 0;
+	}
+
+	if (SourceTable->GetRowStruct() != FMOSkillDefinitionRow::StaticStruct())
+	{
+		UE_LOG(LogMOFramework, Warning,
+			TEXT("[MOSkillDatabaseSettings] MergeModSkillTable: '%s' has row struct '%s', expected FMOSkillDefinitionRow"),
+			*SourceTable->GetName(),
+			SourceTable->GetRowStruct() ? *SourceTable->GetRowStruct()->GetName() : TEXT("<null>"));
+		return 0;
+	}
+
+	const TMap<FName, uint8*>& RowMap = SourceTable->GetRowMap();
+	int32 Merged = 0;
+	int32 Skipped = 0;
+
+	for (const auto& Pair : RowMap)
+	{
+		const FMOSkillDefinitionRow* Row = reinterpret_cast<const FMOSkillDefinitionRow*>(Pair.Value);
+		if (!Row)
+		{
+			++Skipped;
+			continue;
+		}
+		RegisterModSkill(Pair.Key, *Row);
+		++Merged;
+	}
+
+	UE_LOG(LogMOFramework, Log,
+		TEXT("[MOSkillDatabaseSettings] Merged mod table '%s': %d skills added, %d skipped"),
+		*SourceTable->GetName(), Merged, Skipped);
+
+	return Merged;
+}
+
+void UMOSkillDatabaseSettings::ClearModSkills()
+{
+	const int32 PreviousCount = ModSkillDefinitions.Num();
+	ModSkillDefinitions.Empty();
+	InvalidateCache();
+	UE_LOG(LogMOFramework, Log,
+		TEXT("[MOSkillDatabaseSettings] Cleared %d mod skills"),
+		PreviousCount);
+}
+
+int32 UMOSkillDatabaseSettings::GetModSkillCount()
+{
+	return ModSkillDefinitions.Num();
 }

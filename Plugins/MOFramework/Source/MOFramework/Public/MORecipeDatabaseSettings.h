@@ -124,6 +124,27 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Recipe Database")
 	static void InvalidateCache();
 
+	// =========================================================================
+	// MOD OVERLAY API (mirrors UMOItemDatabaseSettings — see that header for
+	// the full rationale; same shape, same semantics, same modder workflow.)
+	// =========================================================================
+
+	/** Register or replace a single recipe by ID. Survives InvalidateCache. */
+	UFUNCTION(BlueprintCallable, Category="MO|Recipe Database|Mod")
+	static void RegisterModRecipe(FName RecipeId, const FMORecipeDefinitionRow& Row);
+
+	/** Merge every FMORecipeDefinitionRow row from SourceTable into the mod overlay. */
+	UFUNCTION(BlueprintCallable, Category="MO|Recipe Database|Mod")
+	static int32 MergeModRecipeTable(UDataTable* SourceTable);
+
+	/** Drop all mod registrations and invalidate the cache. */
+	UFUNCTION(BlueprintCallable, Category="MO|Recipe Database|Mod")
+	static void ClearModRecipes();
+
+	/** Diagnostic count for MO.Mod.Status. */
+	UFUNCTION(BlueprintCallable, Category="MO|Recipe Database|Mod")
+	static int32 GetModRecipeCount();
+
 private:
 	/** Ensure caches are built. Thread-safe lazy initialization. */
 	static void EnsureCachesBuilt();
@@ -145,4 +166,11 @@ private:
 
 	/** Recipes indexed by category name. */
 	static TMap<FName, TArray<FName>> RecipesByCategory;
+
+	/**
+	 * Mod overlay — rows registered via RegisterModRecipe / MergeModRecipeTable.
+	 * Merged on top of base recipes during cache builds and queried first by
+	 * GetRecipeDefinition. Mod entries WIN on ID collision.
+	 */
+	static TMap<FName, FMORecipeDefinitionRow> ModRecipeDefinitions;
 };

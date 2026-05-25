@@ -111,6 +111,22 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Skill Database")
 	static void InvalidateCache();
 
+	// =========================================================================
+	// MOD OVERLAY API — see UMOItemDatabaseSettings header for full rationale.
+	// =========================================================================
+
+	UFUNCTION(BlueprintCallable, Category="MO|Skill Database|Mod")
+	static void RegisterModSkill(FName SkillId, const FMOSkillDefinitionRow& Row);
+
+	UFUNCTION(BlueprintCallable, Category="MO|Skill Database|Mod")
+	static int32 MergeModSkillTable(UDataTable* SourceTable);
+
+	UFUNCTION(BlueprintCallable, Category="MO|Skill Database|Mod")
+	static void ClearModSkills();
+
+	UFUNCTION(BlueprintCallable, Category="MO|Skill Database|Mod")
+	static int32 GetModSkillCount();
+
 private:
 	static void EnsureCachesBuilt();
 	static void BuildCaches();
@@ -120,4 +136,7 @@ private:
 
 	/** Cached pointer to loaded DataTable to avoid repeated loading. */
 	static TWeakObjectPtr<UDataTable> CachedDataTable;
+
+	/** Mod overlay — mod wins on ID collision, survives InvalidateCache. */
+	static TMap<FName, FMOSkillDefinitionRow> ModSkillDefinitions;
 };
