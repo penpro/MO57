@@ -67,9 +67,16 @@ void UMOSaveSlotEntry::RefreshDisplay()
 
 	if (TimestampText)
 	{
-		// Format: "Jan 27, 2026 3:05 PM"
-		const FString FormattedTime = Metadata.Timestamp.ToString(TEXT("%b %d, %Y %I:%M %p"));
-		TimestampText->SetText(FText::FromString(FormattedTime));
+		// Compact "MM.dd HH:mm" — fits a single line of the slot entry even
+		// at narrow widths, drops year/seconds/AM-PM that aren't useful for
+		// "when did I save?" scanning.
+		//
+		// Sticks to %m/%d/%H/%M which FDateTime::ToString DOES support. The
+		// old format used %b/%I/%p (strftime codes UE doesn't implement);
+		// they fell through to literal "b"/"I"/"p" producing the
+		// "b 25, 2026 l:11 p" output we just fixed.
+		TimestampText->SetText(FText::FromString(
+			Metadata.Timestamp.ToString(TEXT("%m.%d %H:%M"))));
 	}
 
 	if (PlayTimeText)
