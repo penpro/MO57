@@ -315,6 +315,21 @@ public:
 	FMOOnActivatableWidgetRegistered OnActivatableWidgetRegistered;
 
 	/**
+	 * Fired immediately after a player's primary game layout is created and
+	 * added to the player screen. Subscribers can safely push widgets to
+	 * layers at this point. Late subscribers (registering AFTER the layout
+	 * was already created) should call GetRootLayoutForPlayer() and push
+	 * directly — the delegate fires once and isn't replayed.
+	 *
+	 * This is the canonical CommonUI-style "UI is ready" signal — replaces
+	 * the previous polling/retry pattern where components would re-attempt
+	 * a layer push on a timer until the layout finally existed.
+	 */
+	DECLARE_MULTICAST_DELEGATE_TwoParams(FMOOnPrimaryLayoutCreated,
+		APlayerController* /*PlayerController*/, UMOPrimaryGameLayout* /*Layout*/);
+	FMOOnPrimaryLayoutCreated OnPrimaryLayoutCreated;
+
+	/**
 	 * Register a widget as currently active. Called from UMOActivatableWidget::NativeOnActivated.
 	 * Maintains a stack used by HandleFocusChanging when OldFocusedWidget has cleared.
 	 */

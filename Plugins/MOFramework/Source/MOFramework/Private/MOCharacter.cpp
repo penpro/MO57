@@ -1661,7 +1661,6 @@ bool AMOCharacter::FindSafeTerrainNearLocation(const FVector& NearLocation, FVec
 	// Helper lambda to check if a hit is valid voxel terrain with acceptable slope
 	auto IsValidTerrainHit = [this](const FHitResult& Hit) -> bool
 	{
-		// Check if voxel terrain only
 		if (bSafetyTeleportOnlyVoxelTerrain)
 		{
 			AActor* HitActor = Hit.GetActor();
@@ -1682,7 +1681,8 @@ bool AMOCharacter::FindSafeTerrainNearLocation(const FVector& NearLocation, FVec
 
 	const float RaycastStartZ = 50000.0f;
 
-	// First, try the immediate area directly above
+	// FIRST: try the immediate area directly above (handles "stuck below terrain"
+	// — pawn is inside a voxel chunk and needs to be lifted out).
 	{
 		FHitResult UpHit;
 		const FVector UpTraceStart = NearLocation;
@@ -1692,9 +1692,6 @@ bool AMOCharacter::FindSafeTerrainNearLocation(const FVector& NearLocation, FVec
 		{
 			if (IsValidTerrainHit(UpHit))
 			{
-				// Calculate teleport height - higher for steeper slopes
-				// At normal.Z = 1.0 (flat), use SafetyTeleportHeight
-				// At normal.Z = 0.6 (steep), use 2x SafetyTeleportHeight
 				const float SlopeMultiplier = 1.0f + (1.0f - UpHit.ImpactNormal.Z) * 2.5f;
 				OutSafeLocation = UpHit.Location + FVector(0.f, 0.f, SafetyTeleportHeight * SlopeMultiplier);
 				return true;
@@ -1702,19 +1699,45 @@ bool AMOCharacter::FindSafeTerrainNearLocation(const FVector& NearLocation, FVec
 		}
 	}
 
-	// Search laterally for flat voxel terrain
+	// SECOND: trace straight DOWN from high above the pawn's X/Y — this is the
+	// common case (pawn fell through, terrain is below). CRITICAL: this MUST
+	// run before any lateral search. The saved position is authoritative —
+	// if terrain exists directly below the pawn's X/Y, snap there. Don't
+	// laterally relocate the pawn (that's how loads ended up 20m off the
+	// saved spot — the lateral search picked a random "flatter" spot in a
+	// 20m ring instead of just dropping the pawn straight down).
+	{
+		const FVector DownStart(NearLocation.X, NearLocation.Y, NearLocation.Z + RaycastStartZ);
+		const FVector DownEnd(NearLocation.X, NearLocation.Y, NearLocation.Z - RaycastStartZ);
+
+		FHitResult DownHit;
+		if (World->LineTraceSingleByChannel(DownHit, DownStart, DownEnd, ECC_WorldStatic, QueryParams))
+		{
+			if (IsValidTerrainHit(DownHit))
+			{
+				const float SlopeMultiplier = 1.0f + (1.0f - DownHit.ImpactNormal.Z) * 2.5f;
+				OutSafeLocation = DownHit.Location + FVector(0.f, 0.f, SafetyTeleportHeight * SlopeMultiplier);
+				return true;
+			}
+		}
+	}
+
+	// LAST RESORT: no terrain at the pawn's exact X/Y — only NOW try a small
+	// lateral search. Default radius reduced to a sane value (was 2000cm = 20m
+	// which caused saved-position-loss). Use smaller search radius so even the
+	// worst case is a few meters, not a screen-clear teleport.
+	const float LastResortRadius = FMath::Min(SafetyLateralSearchRadius, 500.0f); // cap at 5m
+
 	FVector BestLocation = FVector::ZeroVector;
-	float BestSlopeZ = -1.0f;  // Track flattest surface found (highest normal.Z)
+	float BestSlopeZ = -1.0f;
 	bool bFoundValid = false;
 
 	for (int32 Sample = 0; Sample < SafetyLateralSearchSamples; ++Sample)
 	{
 		const float Angle = (static_cast<float>(Sample) / SafetyLateralSearchSamples) * 2.0f * PI;
-		const float Radius = SafetyLateralSearchRadius;
-
 		const FVector SampleXY(
-			NearLocation.X + FMath::Cos(Angle) * Radius,
-			NearLocation.Y + FMath::Sin(Angle) * Radius,
+			NearLocation.X + FMath::Cos(Angle) * LastResortRadius,
+			NearLocation.Y + FMath::Sin(Angle) * LastResortRadius,
 			RaycastStartZ
 		);
 		const FVector TraceEnd = SampleXY - FVector(0.f, 0.f, RaycastStartZ * 2.f);
@@ -1724,7 +1747,6 @@ bool AMOCharacter::FindSafeTerrainNearLocation(const FVector& NearLocation, FVec
 		{
 			if (IsValidTerrainHit(Hit))
 			{
-				// Prefer flatter terrain (higher normal.Z)
 				if (Hit.ImpactNormal.Z > BestSlopeZ)
 				{
 					BestSlopeZ = Hit.ImpactNormal.Z;
@@ -1739,6 +1761,9 @@ bool AMOCharacter::FindSafeTerrainNearLocation(const FVector& NearLocation, FVec
 	if (bFoundValid)
 	{
 		OutSafeLocation = BestLocation;
+		UE_LOG(LogMOFramework, Warning,
+			TEXT("[MOCharacter] %s: fell back to lateral terrain search (radius %.0fcm) — direct-down had no terrain at X/Y"),
+			*GetName(), LastResortRadius);
 		return true;
 	}
 
@@ -1747,6 +1772,17 @@ bool AMOCharacter::FindSafeTerrainNearLocation(const FVector& NearLocation, FVec
 
 void AMOCharacter::CheckFallThroughSafety(float DeltaTime)
 {
+	// Suppressed during world load: voxel collision hasn't generated yet, so
+	// the pawn LOOKS like it's falling through the world — but it's just
+	// waiting for terrain. Triggering the "find safe terrain" rescue here
+	// teleports the pawn ~20m off its saved position. Bail and keep the
+	// fall timer at zero so we don't fire the moment suppression lifts.
+	if (bSuppressFallThroughDuringLoad)
+	{
+		ContinuousFallTime = 0.f;
+		return;
+	}
+
 	UCharacterMovementComponent* MovementComp = GetCharacterMovement();
 	if (!MovementComp)
 	{

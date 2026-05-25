@@ -510,8 +510,28 @@ void UMOVitalsComponent::TickVitals()
 	GlucoseConsumption += (Exertion.CurrentExertion / 100.0f) * 0.05f;  // Activity adds consumption
 	ConsumeGlucose(GlucoseConsumption * ScaledDeltaTime);
 
+	// Thermal-comfort bucket transition — broadcast only on bucket change so
+	// HUD widgets re-render at human-perceivable thresholds, not every tick.
+	const EMOThermalComfort NewThermalComfort = GetThermalComfort();
+	if (NewThermalComfort != LastThermalComfort)
+	{
+		const EMOThermalComfort OldThermalComfort = LastThermalComfort;
+		LastThermalComfort = NewThermalComfort;
+		OnThermalComfortChanged.Broadcast(OldThermalComfort, NewThermalComfort);
+	}
+
 	// Broadcast general vitals changed for UI updates
 	OnVitalsChanged.Broadcast();
+}
+
+EMOThermalComfort UMOVitalsComponent::GetThermalComfort() const
+{
+	const float Temp = Vitals.BodyTemperature;
+	if (Temp < ThermalThresholds.VeryColdBelow) return EMOThermalComfort::VeryCold;
+	if (Temp < ThermalThresholds.ColdBelow)     return EMOThermalComfort::Cold;
+	if (Temp >= ThermalThresholds.VeryHotAbove) return EMOThermalComfort::VeryHot;
+	if (Temp >= ThermalThresholds.HotAbove)     return EMOThermalComfort::Hot;
+	return EMOThermalComfort::Comfortable;
 }
 
 void UMOVitalsComponent::CalculateHeartRate()

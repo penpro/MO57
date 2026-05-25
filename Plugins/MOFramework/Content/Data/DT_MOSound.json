@@ -1,0 +1,3250 @@
+[
+	{
+		"Name": "Ambient.Air.AirDrop1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Air_AirDrop1.ENV_Air_AirDrop1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Air.AirDrop2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Air_AirDrop2.ENV_Air_AirDrop2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Air.CalmHollow1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Air_CalmHollow1.ENV_Air_CalmHollow1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Air.CalmHollow2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Air_CalmHollow2.ENV_Air_CalmHollow2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Air.EucalyptusSway1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Air_EucalyptusSway1.ENV_Air_EucalyptusSway1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Air.EucalyptusSway2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Air_EucalyptusSway2.ENV_Air_EucalyptusSway2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Air.ForestBreath1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Air_ForestBreath1.ENV_Air_ForestBreath1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Air.ForestBreath2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Air_ForestBreath2.ENV_Air_ForestBreath2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Air.ForestPulse1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Air_ForestPulse1.ENV_Air_ForestPulse1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Air.ForestPulse2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Air_ForestPulse2.ENV_Air_ForestPulse2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Air.GentleBreeze1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Air_GentleBreeze1.ENV_Air_GentleBreeze1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Air.GentleBreeze2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Air_GentleBreeze2.ENV_Air_GentleBreeze2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Air.HighCanopyWind1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Air_HighCanopyWind1.ENV_Air_HighCanopyWind1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Air.HighCanopyWind2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Air_HighCanopyWind2.ENV_Air_HighCanopyWind2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Air.MushroomSporeDrift1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Air_MushroomSporeDrift1.ENV_Air_MushroomSporeDrift1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Air.MushroomSporeDrift2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Air_MushroomSporeDrift2.ENV_Air_MushroomSporeDrift2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Air.PineSway1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Air_PineSway1.ENV_Air_PineSway1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Air.PineSway2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Air_PineSway2.ENV_Air_PineSway2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Air.ShadowWind1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Air_ShadowWind1.ENV_Air_ShadowWind1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Air.ShadowWind2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Air_ShadowWind2.ENV_Air_ShadowWind2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Air.StrongWind1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Air_StrongWind1.ENV_Air_StrongWind1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Air.StrongWind2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Air_StrongWind2.ENV_Air_StrongWind2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Air.SwirlingLeaves1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Air_SwirlingLeaves1.ENV_Air_SwirlingLeaves1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Air.SwirlingLeaves2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Air_SwirlingLeaves2.ENV_Air_SwirlingLeaves2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Air.TreeSway1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Air_TreeSway1.ENV_Air_TreeSway1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Air.TreeSway2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Air_TreeSway2.ENV_Air_TreeSway2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Air.ValleyBreeze1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Air_ValleyBreeze1.ENV_Air_ValleyBreeze1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Air.ValleyBreeze2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Air_ValleyBreeze2.ENV_Air_ValleyBreeze2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Air.WhistlingWind1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Air_WhistlingWind1.ENV_Air_WhistlingWind1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Air.WhistlingWind2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Air_WhistlingWind2.ENV_Air_WhistlingWind2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Animal.BatFlutter1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Animal_BatFlutter1.ENV_Animal_BatFlutter1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Animal.BatFlutter2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Animal_BatFlutter2.ENV_Animal_BatFlutter2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Animal.BeeHiveBuzz1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Animal_BeeHiveBuzz1.ENV_Animal_BeeHiveBuzz1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Animal.BeeHiveBuzz2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Animal_BeeHiveBuzz2.ENV_Animal_BeeHiveBuzz2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Animal.BirdSongVaried1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Animal_BirdSongVaried1.ENV_Animal_BirdSongVaried1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Animal.BirdSongVaried2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Animal_BirdSongVaried2.ENV_Animal_BirdSongVaried2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Animal.ButterflyLand1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Animal_ButterflyLand1.ENV_Animal_ButterflyLand1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Animal.ButterflyLand2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Animal_ButterflyLand2.ENV_Animal_ButterflyLand2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Animal.DeerHoofDrum1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Animal_DeerHoofDrum1.ENV_Animal_DeerHoofDrum1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Animal.DeerHoofDrum2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Animal_DeerHoofDrum2.ENV_Animal_DeerHoofDrum2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Animal.DeerRustle1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Animal_DeerRustle1.ENV_Animal_DeerRustle1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Animal.DeerRustle2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Animal_DeerRustle2.ENV_Animal_DeerRustle2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Animal.EagleCry1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Animal_EagleCry1.ENV_Animal_EagleCry1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Animal.EagleCry2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Animal_EagleCry2.ENV_Animal_EagleCry2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Animal.FoxCall1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Animal_FoxCall1.ENV_Animal_FoxCall1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Animal.FoxCall2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Animal_FoxCall2.ENV_Animal_FoxCall2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Animal.FrogPondCroon1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Animal_FrogPondCroon1.ENV_Animal_FrogPondCroon1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Animal.FrogPondCroon2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Animal_FrogPondCroon2.ENV_Animal_FrogPondCroon2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Animal.HedgehogSnuffle1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Animal_HedgehogSnuffle1.ENV_Animal_HedgehogSnuffle1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Animal.HedgehogSnuffle2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Animal_HedgehogSnuffle2.ENV_Animal_HedgehogSnuffle2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Animal.InsectSwarm1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Animal_InsectSwarm1.ENV_Animal_InsectSwarm1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Animal.InsectSwarm2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Animal_InsectSwarm2.ENV_Animal_InsectSwarm2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Animal.MushroomMouse1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Animal_MushroomMouse1.ENV_Animal_MushroomMouse1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Animal.MushroomMouse2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Animal_MushroomMouse2.ENV_Animal_MushroomMouse2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Animal.OwlWings1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Animal_OwlWings1.ENV_Animal_OwlWings1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Animal.OwlWings2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Animal_OwlWings2.ENV_Animal_OwlWings2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Animal.SquirrelChatter1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Animal_SquirrelChatter1.ENV_Animal_SquirrelChatter1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Animal.SquirrelChatter2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Animal_SquirrelChatter2.ENV_Animal_SquirrelChatter2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Animal.WoodpeckerDrum1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Animal_WoodpeckerDrum1.ENV_Animal_WoodpeckerDrum1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Animal.WoodpeckerDrum2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Animal_WoodpeckerDrum2.ENV_Animal_WoodpeckerDrum2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Day.BirdsChirping1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Day_BirdsChirping1.ENV_Day_BirdsChirping1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Day.BirdsChirping2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Day_BirdsChirping2.ENV_Day_BirdsChirping2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Day.ButterflyFlutter1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Day_ButterflyFlutter1.ENV_Day_ButterflyFlutter1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Day.ButterflyFlutter2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Day_ButterflyFlutter2.ENV_Day_ButterflyFlutter2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Day.CicadaSong1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Day_CicadaSong1.ENV_Day_CicadaSong1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Day.CicadaSong2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Day_CicadaSong2.ENV_Day_CicadaSong2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Day.DappledWind1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Day_DappledWind1.ENV_Day_DappledWind1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Day.DappledWind2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Day_DappledWind2.ENV_Day_DappledWind2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Day.ForestAmbience1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Day_ForestAmbience1.ENV_Day_ForestAmbience1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Day.ForestAmbience2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Day_ForestAmbience2.ENV_Day_ForestAmbience2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Day.InsectsBuzz1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Day_InsectsBuzz1.ENV_Day_InsectsBuzz1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Day.InsectsBuzz2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Day_InsectsBuzz2.ENV_Day_InsectsBuzz2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Day.LeafRustle1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Day_LeafRustle1.ENV_Day_LeafRustle1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Day.LeafRustle2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Day_LeafRustle2.ENV_Day_LeafRustle2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Day.MossyGroundShift1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Day_MossyGroundShift1.ENV_Day_MossyGroundShift1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Day.MossyGroundShift2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Day_MossyGroundShift2.ENV_Day_MossyGroundShift2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Day.MushroomSporeWind1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Day_MushroomSporeWind1.ENV_Day_MushroomSporeWind1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Day.MushroomSporeWind2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Day_MushroomSporeWind2.ENV_Day_MushroomSporeWind2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Day.SquirrelScurry1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Day_SquirrelScurry1.ENV_Day_SquirrelScurry1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Day.SquirrelScurry2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Day_SquirrelScurry2.ENV_Day_SquirrelScurry2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Day.SunbeamRustle1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Day_SunbeamRustle1.ENV_Day_SunbeamRustle1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Day.SunbeamRustle2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Day_SunbeamRustle2.ENV_Day_SunbeamRustle2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Day.TreeCreak1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Day_TreeCreak1.ENV_Day_TreeCreak1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Day.TreeCreak2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Day_TreeCreak2.ENV_Day_TreeCreak2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Day.WoodpeckerTap1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Day_WoodpeckerTap1.ENV_Day_WoodpeckerTap1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Day.WoodpeckerTap2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Day_WoodpeckerTap2.ENV_Day_WoodpeckerTap2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Night.BatEchoes1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Night_BatEchoes1.ENV_Night_BatEchoes1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Night.BatEchoes2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Night_BatEchoes2.ENV_Night_BatEchoes2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Night.CicadaChorus1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Night_CicadaChorus1.ENV_Night_CicadaChorus1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Night.CicadaChorus2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Night_CicadaChorus2.ENV_Night_CicadaChorus2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Night.CricketChirp1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Night_CricketChirp1.ENV_Night_CricketChirp1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Night.CricketChirp2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Night_CricketChirp2.ENV_Night_CricketChirp2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Night.DistantWolfHowl1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Night_DistantWolfHowl1.ENV_Night_DistantWolfHowl1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Night.DistantWolfHowl2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Night_DistantWolfHowl2.ENV_Night_DistantWolfHowl2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Night.FireflyWhisper1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Night_FireflyWhisper1.ENV_Night_FireflyWhisper1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Night.FireflyWhisper2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Night_FireflyWhisper2.ENV_Night_FireflyWhisper2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Night.ForestAmbience1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Night_ForestAmbience1.ENV_Night_ForestAmbience1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Night.ForestAmbience2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Night_ForestAmbience2.ENV_Night_ForestAmbience2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Night.ForestBreeze1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Night_ForestBreeze1.ENV_Night_ForestBreeze1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Night.ForestBreeze2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Night_ForestBreeze2.ENV_Night_ForestBreeze2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Night.FrogsCroak1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Night_FrogsCroak1.ENV_Night_FrogsCroak1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Night.FrogsCroak2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Night_FrogsCroak2.ENV_Night_FrogsCroak2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Night.GlowMushroomDrip1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Night_GlowMushroomDrip1.ENV_Night_GlowMushroomDrip1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Night.GlowMushroomDrip2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Night_GlowMushroomDrip2.ENV_Night_GlowMushroomDrip2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Night.MoonlitAmbience1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Night_MoonlitAmbience1.ENV_Night_MoonlitAmbience1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Night.MoonlitAmbience2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Night_MoonlitAmbience2.ENV_Night_MoonlitAmbience2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Night.MushroomGlowAmbience1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Night_MushroomGlowAmbience1.ENV_Night_MushroomGlowAmbience1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Night.MushroomGlowAmbience2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Night_MushroomGlowAmbience2.ENV_Night_MushroomGlowAmbience2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Night.OwlHoot1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Night_OwlHoot1.ENV_Night_OwlHoot1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Night.OwlHoot2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Night_OwlHoot2.ENV_Night_OwlHoot2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Night.OwlWings1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Night_OwlWings1.ENV_Night_OwlWings1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Night.OwlWings2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Night_OwlWings2.ENV_Night_OwlWings2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Night.PineNeedleRustle1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Night_PineNeedleRustle1.ENV_Night_PineNeedleRustle1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Night.PineNeedleRustle2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Night_PineNeedleRustle2.ENV_Night_PineNeedleRustle2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Night.TwigCrack1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Night_TwigCrack1.ENV_Night_TwigCrack1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Night.TwigCrack2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Night_TwigCrack2.ENV_Night_TwigCrack2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Outdoor.Day",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Day_ForestAmbience1.ENV_Day_ForestAmbience1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": "Default day ambient (aliased to Day_ForestAmbience1)"
+	},
+	{
+		"Name": "Ambient.Outdoor.Dusk",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Day_CicadaSong1.ENV_Day_CicadaSong1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": "Default dusk ambient (aliased to Day_CicadaSong1; swap when better dusk loop available)"
+	},
+	{
+		"Name": "Ambient.Outdoor.Night",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Night_ForestAmbience1.ENV_Night_ForestAmbience1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": "Default night ambient (aliased to Night_ForestAmbience1)"
+	},
+	{
+		"Name": "Ambient.Water",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Water_RiverFlow1.ENV_Water_RiverFlow1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": "Default water ambient (aliased to Water_RiverFlow1)"
+	},
+	{
+		"Name": "Ambient.Water.BrookGurgle1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Water_BrookGurgle1.ENV_Water_BrookGurgle1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Water.BrookGurgle2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Water_BrookGurgle2.ENV_Water_BrookGurgle2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Water.DistantCascade1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Water_DistantCascade1.ENV_Water_DistantCascade1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Water.DistantCascade2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Water_DistantCascade2.ENV_Water_DistantCascade2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Water.FallMistySpray1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Water_FallMistySpray1.ENV_Water_FallMistySpray1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Water.FallMistySpray2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Water_FallMistySpray2.ENV_Water_FallMistySpray2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Water.ForestPuddles1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Water_ForestPuddles1.ENV_Water_ForestPuddles1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Water.ForestPuddles2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Water_ForestPuddles2.ENV_Water_ForestPuddles2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Water.HollowDrip1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Water_HollowDrip1.ENV_Water_HollowDrip1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Water.HollowDrip2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Water_HollowDrip2.ENV_Water_HollowDrip2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Water.LargeWaterfall1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Water_LargeWaterfall1.ENV_Water_LargeWaterfall1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Water.LargeWaterfall2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Water_LargeWaterfall2.ENV_Water_LargeWaterfall2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Water.LeafBoatFloat1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Water_LeafBoatFloat1.ENV_Water_LeafBoatFloat1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Water.LeafBoatFloat2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Water_LeafBoatFloat2.ENV_Water_LeafBoatFloat2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Water.PondRipple1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Water_PondRipple1.ENV_Water_PondRipple1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Water.PondRipple2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Water_PondRipple2.ENV_Water_PondRipple2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Water.RiverFlow1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Water_RiverFlow1.ENV_Water_RiverFlow1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Water.RiverFlow2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Water_RiverFlow2.ENV_Water_RiverFlow2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Water.RiverRapids1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Water_RiverRapids1.ENV_Water_RiverRapids1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Water.RiverRapids2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Water_RiverRapids2.ENV_Water_RiverRapids2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Water.RiverbankWind1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Water_RiverbankWind1.ENV_Water_RiverbankWind1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Water.RiverbankWind2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Water_RiverbankWind2.ENV_Water_RiverbankWind2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Water.SmallWaterfall1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Water_SmallWaterfall1.ENV_Water_SmallWaterfall1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Water.SmallWaterfall2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Water_SmallWaterfall2.ENV_Water_SmallWaterfall2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Water.StreamCross1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Water_StreamCross1.ENV_Water_StreamCross1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Water.StreamCross2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Water_StreamCross2.ENV_Water_StreamCross2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Water.StreamTrickle1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Water_StreamTrickle1.ENV_Water_StreamTrickle1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Water.StreamTrickle2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Water_StreamTrickle2.ENV_Water_StreamTrickle2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Water.WaterDrip1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Water_WaterDrip1.ENV_Water_WaterDrip1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Water.WaterDrip2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Water_WaterDrip2.ENV_Water_WaterDrip2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Weather.AfterRain1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Weather_AfterRain1.ENV_Weather_AfterRain1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Weather.AfterRain2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Weather_AfterRain2.ENV_Weather_AfterRain2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Weather.DewDrip1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Weather_DewDrip1.ENV_Weather_DewDrip1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Weather.DewDrip2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Weather_DewDrip2.ENV_Weather_DewDrip2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Weather.DripDrip1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Weather_DripDrip1.ENV_Weather_DripDrip1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Weather.DripDrip2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Weather_DripDrip2.ENV_Weather_DripDrip2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Weather.ForestUmbrella1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Weather_ForestUmbrella1.ENV_Weather_ForestUmbrella1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Weather.ForestUmbrella2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Weather_ForestUmbrella2.ENV_Weather_ForestUmbrella2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Weather.GentleStorm1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Weather_GentleStorm1.ENV_Weather_GentleStorm1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Weather.GentleStorm2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Weather_GentleStorm2.ENV_Weather_GentleStorm2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Weather.GustyRain1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Weather_GustyRain1.ENV_Weather_GustyRain1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Weather.GustyRain2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Weather_GustyRain2.ENV_Weather_GustyRain2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Weather.HeavyRain1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Weather_HeavyRain1.ENV_Weather_HeavyRain1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Weather.HeavyRain2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Weather_HeavyRain2.ENV_Weather_HeavyRain2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Weather.LightRain1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Weather_LightRain1.ENV_Weather_LightRain1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Weather.LightRain2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Weather_LightRain2.ENV_Weather_LightRain2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Weather.MistGather1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Weather_MistGather1.ENV_Weather_MistGather1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Weather.MistGather2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Weather_MistGather2.ENV_Weather_MistGather2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Weather.RainLeaves1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Weather_RainLeaves1.ENV_Weather_RainLeaves1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Weather.RainLeaves2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Weather_RainLeaves2.ENV_Weather_RainLeaves2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Weather.RainPitterPatter1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Weather_RainPitterPatter1.ENV_Weather_RainPitterPatter1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Weather.RainPitterPatter2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Weather_RainPitterPatter2.ENV_Weather_RainPitterPatter2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Weather.StormFade1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Weather_StormFade1.ENV_Weather_StormFade1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Weather.StormFade2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Weather_StormFade2.ENV_Weather_StormFade2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Weather.SuddenDownpour1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Weather_SuddenDownpour1.ENV_Weather_SuddenDownpour1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Weather.SuddenDownpour2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Weather_SuddenDownpour2.ENV_Weather_SuddenDownpour2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Weather.ThunderRolling1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Weather_ThunderRolling1.ENV_Weather_ThunderRolling1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Weather.ThunderRolling2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Weather_ThunderRolling2.ENV_Weather_ThunderRolling2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Weather.WoodDrip1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Weather_WoodDrip1.ENV_Weather_WoodDrip1",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Ambient.Weather.WoodDrip2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/ENV/ENV_Weather_WoodDrip2.ENV_Weather_WoodDrip2",
+		"Category": "Ambient",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "Music.Combat",
+		"Sound": "/MOFramework/Audio/flukes_drums01.flukes_drums01",
+		"Category": "Music",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": "Combat track (drum-driven). Was Music04."
+	},
+	{
+		"Name": "Music.Exploration.Day",
+		"Sound": "/MOFramework/Audio/female_vocalization01.female_vocalization01",
+		"Category": "Music",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": "Day exploration track (vocal-driven). Was Music02. Swap if intended for a different state."
+	},
+	{
+		"Name": "Music.Exploration.Night",
+		"Sound": "/MOFramework/Audio/female_vocalization02.female_vocalization02",
+		"Category": "Music",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": "Night exploration track (vocal-driven). Was Music03."
+	},
+	{
+		"Name": "Music.MainMenu",
+		"Sound": "/MOFramework/Audio/Intro01.Intro01",
+		"Category": "Music",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": "Default main menu / title track (Intro01)"
+	},
+	{
+		"Name": "SFX.Footsteps.BareWood1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Footsteps_BareWood1.SFX_Footsteps_BareWood1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Footsteps.BareWood2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Footsteps_BareWood2.SFX_Footsteps_BareWood2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Footsteps.FallenBranch1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Footsteps_FallenBranch1.SFX_Footsteps_FallenBranch1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Footsteps.FallenBranch2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Footsteps_FallenBranch2.SFX_Footsteps_FallenBranch2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Footsteps.GrassTread1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Footsteps_GrassTread1.SFX_Footsteps_GrassTread1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Footsteps.GrassTread2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Footsteps_GrassTread2.SFX_Footsteps_GrassTread2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Footsteps.HighSpeed1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Footsteps_HighSpeed1.SFX_Footsteps_HighSpeed1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Footsteps.HighSpeed2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Footsteps_HighSpeed2.SFX_Footsteps_HighSpeed2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Footsteps.LeafCrunch1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Footsteps_LeafCrunch1.SFX_Footsteps_LeafCrunch1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Footsteps.LeafCrunch2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Footsteps_LeafCrunch2.SFX_Footsteps_LeafCrunch2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Footsteps.MossPad1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Footsteps_MossPad1.SFX_Footsteps_MossPad1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Footsteps.MossPad2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Footsteps_MossPad2.SFX_Footsteps_MossPad2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Footsteps.MuddyStep1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Footsteps_MuddyStep1.SFX_Footsteps_MuddyStep1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Footsteps.MuddyStep2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Footsteps_MuddyStep2.SFX_Footsteps_MuddyStep2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Footsteps.MushroomStep1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Footsteps_MushroomStep1.SFX_Footsteps_MushroomStep1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Footsteps.MushroomStep2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Footsteps_MushroomStep2.SFX_Footsteps_MushroomStep2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Footsteps.QuickTread1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Footsteps_QuickTread1.SFX_Footsteps_QuickTread1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Footsteps.QuickTread2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Footsteps_QuickTread2.SFX_Footsteps_QuickTread2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Footsteps.RockScuff1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Footsteps_RockScuff1.SFX_Footsteps_RockScuff1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Footsteps.RockScuff2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Footsteps_RockScuff2.SFX_Footsteps_RockScuff2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Footsteps.SandTrail1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Footsteps_SandTrail1.SFX_Footsteps_SandTrail1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Footsteps.SandTrail2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Footsteps_SandTrail2.SFX_Footsteps_SandTrail2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Footsteps.SlowTread1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Footsteps_SlowTread1.SFX_Footsteps_SlowTread1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Footsteps.SlowTread2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Footsteps_SlowTread2.SFX_Footsteps_SlowTread2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Footsteps.Sneak1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Footsteps_Sneak1.SFX_Footsteps_Sneak1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Footsteps.Sneak2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Footsteps_Sneak2.SFX_Footsteps_Sneak2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Footsteps.StoneStep1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Footsteps_StoneStep1.SFX_Footsteps_StoneStep1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Footsteps.StoneStep2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Footsteps_StoneStep2.SFX_Footsteps_StoneStep2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Footsteps.WaterSplash1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Footsteps_WaterSplash1.SFX_Footsteps_WaterSplash1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Footsteps.WaterSplash2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Footsteps_WaterSplash2.SFX_Footsteps_WaterSplash2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Object.BarkPeel1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Object_BarkPeel1.SFX_Object_BarkPeel1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Object.BarkPeel2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Object_BarkPeel2.SFX_Object_BarkPeel2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Object.BranchSwing1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Object_BranchSwing1.SFX_Object_BranchSwing1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Object.BranchSwing2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Object_BranchSwing2.SFX_Object_BranchSwing2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Object.BreakTwig1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Object_BreakTwig1.SFX_Object_BreakTwig1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Object.BreakTwig2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Object_BreakTwig2.SFX_Object_BreakTwig2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Object.CrushLeaves1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Object_CrushLeaves1.SFX_Object_CrushLeaves1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Object.CrushLeaves2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Object_CrushLeaves2.SFX_Object_CrushLeaves2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Object.LeafTear1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Object_LeafTear1.SFX_Object_LeafTear1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Object.LeafTear2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Object_LeafTear2.SFX_Object_LeafTear2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Object.MushroomTear1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Object_MushroomTear1.SFX_Object_MushroomTear1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Object.MushroomTear2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Object_MushroomTear2.SFX_Object_MushroomTear2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Object.PebbleRoll1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Object_PebbleRoll1.SFX_Object_PebbleRoll1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Object.PebbleRoll2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Object_PebbleRoll2.SFX_Object_PebbleRoll2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Object.PineconeCrunch1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Object_PineconeCrunch1.SFX_Object_PineconeCrunch1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Object.PineconeCrunch2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Object_PineconeCrunch2.SFX_Object_PineconeCrunch2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Object.RockDrop1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Object_RockDrop1.SFX_Object_RockDrop1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Object.RockDrop2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Object_RockDrop2.SFX_Object_RockDrop2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Object.RootSnap1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Object_RootSnap1.SFX_Object_RootSnap1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Object.RootSnap2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Object_RootSnap2.SFX_Object_RootSnap2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Object.StoneHit1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Object_StoneHit1.SFX_Object_StoneHit1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Object.StoneHit2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Object_StoneHit2.SFX_Object_StoneHit2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Object.StumpHit1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Object_StumpHit1.SFX_Object_StumpHit1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Object.StumpHit2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Object_StumpHit2.SFX_Object_StumpHit2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Object.TrunkThud1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Object_TrunkThud1.SFX_Object_TrunkThud1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Object.TrunkThud2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Object_TrunkThud2.SFX_Object_TrunkThud2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Object.VineSnap1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Object_VineSnap1.SFX_Object_VineSnap1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Object.VineSnap2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Object_VineSnap2.SFX_Object_VineSnap2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Object.WoodKnock1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Object_WoodKnock1.SFX_Object_WoodKnock1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Object.WoodKnock2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Object_WoodKnock2.SFX_Object_WoodKnock2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.BarkChop1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_BarkChop1.SFX_Other_BarkChop1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.BarkChop2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_BarkChop2.SFX_Other_BarkChop2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.BarkThump1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_BarkThump1.SFX_Other_BarkThump1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.BarkThump2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_BarkThump2.SFX_Other_BarkThump2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.BatLanding1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_BatLanding1.SFX_Other_BatLanding1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.BatLanding2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_BatLanding2.SFX_Other_BatLanding2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.BatScreech1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_BatScreech1.SFX_Other_BatScreech1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.BatScreech2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_BatScreech2.SFX_Other_BatScreech2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.BeeSting1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_BeeSting1.SFX_Other_BeeSting1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.BeeSting2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_BeeSting2.SFX_Other_BeeSting2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.BeeWingBuzz1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_BeeWingBuzz1.SFX_Other_BeeWingBuzz1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.BeeWingBuzz2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_BeeWingBuzz2.SFX_Other_BeeWingBuzz2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.BerryPick1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_BerryPick1.SFX_Other_BerryPick1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.BerryPick2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_BerryPick2.SFX_Other_BerryPick2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.BirchPeel1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_BirchPeel1.SFX_Other_BirchPeel1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.BirchPeel2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_BirchPeel2.SFX_Other_BirchPeel2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.BirdAlarm1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_BirdAlarm1.SFX_Other_BirdAlarm1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.BirdAlarm2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_BirdAlarm2.SFX_Other_BirdAlarm2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.BirdFlap1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_BirdFlap1.SFX_Other_BirdFlap1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.BirdFlap2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_BirdFlap2.SFX_Other_BirdFlap2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.BirdLanding1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_BirdLanding1.SFX_Other_BirdLanding1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.BirdLanding2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_BirdLanding2.SFX_Other_BirdLanding2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.BirdPreen1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_BirdPreen1.SFX_Other_BirdPreen1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.BirdPreen2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_BirdPreen2.SFX_Other_BirdPreen2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.BirdWingBrush1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_BirdWingBrush1.SFX_Other_BirdWingBrush1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.BirdWingBrush2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_BirdWingBrush2.SFX_Other_BirdWingBrush2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.CrabWalk1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_CrabWalk1.SFX_Other_CrabWalk1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.CrabWalk2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_CrabWalk2.SFX_Other_CrabWalk2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.CricketJump1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_CricketJump1.SFX_Other_CricketJump1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.CricketJump2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_CricketJump2.SFX_Other_CricketJump2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.DeerAntlerTap1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_DeerAntlerTap1.SFX_Other_DeerAntlerTap1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.DeerAntlerTap2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_DeerAntlerTap2.SFX_Other_DeerAntlerTap2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.DeerFootSlip1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_DeerFootSlip1.SFX_Other_DeerFootSlip1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.DeerFootSlip2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_DeerFootSlip2.SFX_Other_DeerFootSlip2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.DeerGrazing1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_DeerGrazing1.SFX_Other_DeerGrazing1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.DeerGrazing2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_DeerGrazing2.SFX_Other_DeerGrazing2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.DeerHoofShake1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_DeerHoofShake1.SFX_Other_DeerHoofShake1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.DeerHoofShake2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_DeerHoofShake2.SFX_Other_DeerHoofShake2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.DeerSnort1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_DeerSnort1.SFX_Other_DeerSnort1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.DeerSnort2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_DeerSnort2.SFX_Other_DeerSnort2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.DewCollect1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_DewCollect1.SFX_Other_DewCollect1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.DewCollect2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_DewCollect2.SFX_Other_DewCollect2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.FireflyBuzz1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_FireflyBuzz1.SFX_Other_FireflyBuzz1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.FireflyBuzz2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_FireflyBuzz2.SFX_Other_FireflyBuzz2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.FireflyGlide1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_FireflyGlide1.SFX_Other_FireflyGlide1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.FireflyGlide2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_FireflyGlide2.SFX_Other_FireflyGlide2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.FlowerBloom1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_FlowerBloom1.SFX_Other_FlowerBloom1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.FlowerBloom2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_FlowerBloom2.SFX_Other_FlowerBloom2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.ForestPulse1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_ForestPulse1.SFX_Other_ForestPulse1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.ForestPulse2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_ForestPulse2.SFX_Other_ForestPulse2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.FoxHowl1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_FoxHowl1.SFX_Other_FoxHowl1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.FoxHowl2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_FoxHowl2.SFX_Other_FoxHowl2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.FoxRustle1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_FoxRustle1.SFX_Other_FoxRustle1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.FoxRustle2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_FoxRustle2.SFX_Other_FoxRustle2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.FrogChirp1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_FrogChirp1.SFX_Other_FrogChirp1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.FrogChirp2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_FrogChirp2.SFX_Other_FrogChirp2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.FrogDive1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_FrogDive1.SFX_Other_FrogDive1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.FrogDive2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_FrogDive2.SFX_Other_FrogDive2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.FrogJump1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_FrogJump1.SFX_Other_FrogJump1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.FrogJump2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_FrogJump2.SFX_Other_FrogJump2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.FungalPop1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_FungalPop1.SFX_Other_FungalPop1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.FungalPop2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_FungalPop2.SFX_Other_FungalPop2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.GrassSlice1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_GrassSlice1.SFX_Other_GrassSlice1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.GrassSlice2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_GrassSlice2.SFX_Other_GrassSlice2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.InsectFlutter1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_InsectFlutter1.SFX_Other_InsectFlutter1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.InsectFlutter2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_InsectFlutter2.SFX_Other_InsectFlutter2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.InsectStep1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_InsectStep1.SFX_Other_InsectStep1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.InsectStep2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_InsectStep2.SFX_Other_InsectStep2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.InsectTakeoff1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_InsectTakeoff1.SFX_Other_InsectTakeoff1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.InsectTakeoff2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_InsectTakeoff2.SFX_Other_InsectTakeoff2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.LeafBounce1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_LeafBounce1.SFX_Other_LeafBounce1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.LeafBounce2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_LeafBounce2.SFX_Other_LeafBounce2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.LeafSlide1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_LeafSlide1.SFX_Other_LeafSlide1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.LeafSlide2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_LeafSlide2.SFX_Other_LeafSlide2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.LeafStepSoft1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_LeafStepSoft1.SFX_Other_LeafStepSoft1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.LeafStepSoft2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_LeafStepSoft2.SFX_Other_LeafStepSoft2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.LeafTearAside1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_LeafTearAside1.SFX_Other_LeafTearAside1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.LeafTearAside2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_LeafTearAside2.SFX_Other_LeafTearAside2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.LeafTumble1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_LeafTumble1.SFX_Other_LeafTumble1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.LeafTumble2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_LeafTumble2.SFX_Other_LeafTumble2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.LeafWhip1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_LeafWhip1.SFX_Other_LeafWhip1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.LeafWhip2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_LeafWhip2.SFX_Other_LeafWhip2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.LizardRustle1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_LizardRustle1.SFX_Other_LizardRustle1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.LizardRustle2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_LizardRustle2.SFX_Other_LizardRustle2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.MouseScurry1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_MouseScurry1.SFX_Other_MouseScurry1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.MouseScurry2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_MouseScurry2.SFX_Other_MouseScurry2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.MushroomCrush1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_MushroomCrush1.SFX_Other_MushroomCrush1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.MushroomCrush2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_MushroomCrush2.SFX_Other_MushroomCrush2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.MushroomPick1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_MushroomPick1.SFX_Other_MushroomPick1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.MushroomPick2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_MushroomPick2.SFX_Other_MushroomPick2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.MushroomRustle1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_MushroomRustle1.SFX_Other_MushroomRustle1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.MushroomRustle2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_MushroomRustle2.SFX_Other_MushroomRustle2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.MushroomTap1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_MushroomTap1.SFX_Other_MushroomTap1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.MushroomTap2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_MushroomTap2.SFX_Other_MushroomTap2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.MushroomThud1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_MushroomThud1.SFX_Other_MushroomThud1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.MushroomThud2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_MushroomThud2.SFX_Other_MushroomThud2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.OwlGlide1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_OwlGlide1.SFX_Other_OwlGlide1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.OwlGlide2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_OwlGlide2.SFX_Other_OwlGlide2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.PebbleSkip1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_PebbleSkip1.SFX_Other_PebbleSkip1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.PebbleSkip2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_PebbleSkip2.SFX_Other_PebbleSkip2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.PineConeShake1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_PineConeShake1.SFX_Other_PineConeShake1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.PineConeShake2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_PineConeShake2.SFX_Other_PineConeShake2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.PineNeedleFall1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_PineNeedleFall1.SFX_Other_PineNeedleFall1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.PineNeedleFall2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_PineNeedleFall2.SFX_Other_PineNeedleFall2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.PineconeDrop1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_PineconeDrop1.SFX_Other_PineconeDrop1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.PineconeDrop2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_PineconeDrop2.SFX_Other_PineconeDrop2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.PondRippleTouch1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_PondRippleTouch1.SFX_Other_PondRippleTouch1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.PondRippleTouch2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_PondRippleTouch2.SFX_Other_PondRippleTouch2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.RabbitHop1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_RabbitHop1.SFX_Other_RabbitHop1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.RabbitHop2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_RabbitHop2.SFX_Other_RabbitHop2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.RabbitNibble1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_RabbitNibble1.SFX_Other_RabbitNibble1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.RabbitNibble2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_RabbitNibble2.SFX_Other_RabbitNibble2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.RainCatcher1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_RainCatcher1.SFX_Other_RainCatcher1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.RainCatcher2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_RainCatcher2.SFX_Other_RainCatcher2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.RainLeafSlide1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_RainLeafSlide1.SFX_Other_RainLeafSlide1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.RainLeafSlide2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_RainLeafSlide2.SFX_Other_RainLeafSlide2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.RainSplashLeaf1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_RainSplashLeaf1.SFX_Other_RainSplashLeaf1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.RainSplashLeaf2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_RainSplashLeaf2.SFX_Other_RainSplashLeaf2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.RustleDeep1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_RustleDeep1.SFX_Other_RustleDeep1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.RustleDeep2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_RustleDeep2.SFX_Other_RustleDeep2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.RustlingCloth1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_RustlingCloth1.SFX_Other_RustlingCloth1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.RustlingCloth2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_RustlingCloth2.SFX_Other_RustlingCloth2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.SpiderWalk1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_SpiderWalk1.SFX_Other_SpiderWalk1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.SpiderWalk2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_SpiderWalk2.SFX_Other_SpiderWalk2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.SporeRelease1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_SporeRelease1.SFX_Other_SporeRelease1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.SporeRelease2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_SporeRelease2.SFX_Other_SporeRelease2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.SquirrelJump1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_SquirrelJump1.SFX_Other_SquirrelJump1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.SquirrelJump2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_SquirrelJump2.SFX_Other_SquirrelJump2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.SquirrelNibble1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_SquirrelNibble1.SFX_Other_SquirrelNibble1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.SquirrelNibble2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_SquirrelNibble2.SFX_Other_SquirrelNibble2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.StreamSip1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_StreamSip1.SFX_Other_StreamSip1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.StreamSip2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_StreamSip2.SFX_Other_StreamSip2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.SwampBubble1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_SwampBubble1.SFX_Other_SwampBubble1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.SwampBubble2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_SwampBubble2.SFX_Other_SwampBubble2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.TwigRoll1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_TwigRoll1.SFX_Other_TwigRoll1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.TwigRoll2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_TwigRoll2.SFX_Other_TwigRoll2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.TwigShake1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_TwigShake1.SFX_Other_TwigShake1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.TwigShake2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_TwigShake2.SFX_Other_TwigShake2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.TwigSnap1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_TwigSnap1.SFX_Other_TwigSnap1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.TwigSnap2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_TwigSnap2.SFX_Other_TwigSnap2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.TwigStick1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_TwigStick1.SFX_Other_TwigStick1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.TwigStick2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_TwigStick2.SFX_Other_TwigStick2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.TwigWhip1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_TwigWhip1.SFX_Other_TwigWhip1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.TwigWhip2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_TwigWhip2.SFX_Other_TwigWhip2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.WaterLeafSip1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_WaterLeafSip1.SFX_Other_WaterLeafSip1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.WaterLeafSip2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_WaterLeafSip2.SFX_Other_WaterLeafSip2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.WaterSip1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_WaterSip1.SFX_Other_WaterSip1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.WaterSip2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_WaterSip2.SFX_Other_WaterSip2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.WindChimeLeaf1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_WindChimeLeaf1.SFX_Other_WindChimeLeaf1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.WindChimeLeaf2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_WindChimeLeaf2.SFX_Other_WindChimeLeaf2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.WindLeafRustle1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_WindLeafRustle1.SFX_Other_WindLeafRustle1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.WindLeafRustle2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_WindLeafRustle2.SFX_Other_WindLeafRustle2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.WindMurmur1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_WindMurmur1.SFX_Other_WindMurmur1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.WindMurmur2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_WindMurmur2.SFX_Other_WindMurmur2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.WoodChime1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_WoodChime1.SFX_Other_WoodChime1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.WoodChime2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_WoodChime2.SFX_Other_WoodChime2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.WoodCreak1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_WoodCreak1.SFX_Other_WoodCreak1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.WoodCreak2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_WoodCreak2.SFX_Other_WoodCreak2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.WoodShave1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_WoodShave1.SFX_Other_WoodShave1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.WoodShave2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_WoodShave2.SFX_Other_WoodShave2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.WoodSplit1",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_WoodSplit1.SFX_Other_WoodSplit1",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	},
+	{
+		"Name": "SFX.Other.WoodSplit2",
+		"Sound": "/MOFramework/Audio/A001_ForestSounds/Audios/SFX/SFX_Other_WoodSplit2.SFX_Other_WoodSplit2",
+		"Category": "SFX",
+		"VolumeMultiplier": 1.0,
+		"PitchMultiplier": 1.0,
+		"Description": ""
+	}
+]

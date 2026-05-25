@@ -85,6 +85,15 @@ void UMOGameUIManagerSubsystem::HandleFocusChanging(const FFocusEvent& FocusEven
 		return;
 	}
 
+	// [DIAG] Dump widget identity at the decision point so we can see exactly
+	// what's getting closed and what its policy was.
+	UE_LOG(LogMOFramework, Warning,
+		TEXT("[OutsideClick] decision for TopWidget '%s' (class=%s parent=%s)  bClosesOnOutsideClick=%s"),
+		*TopWidget->GetName(),
+		*TopWidget->GetClass()->GetName(),
+		TopWidget->GetClass()->GetSuperClass() ? *TopWidget->GetClass()->GetSuperClass()->GetName() : TEXT("(none)"),
+		TopWidget->bClosesOnOutsideClick ? TEXT("TRUE") : TEXT("false"));
+
 	if (!TopWidget->bClosesOnOutsideClick)
 	{
 		// Defer the reclaim to next tick. If we call SetAllUserFocus here, Slate's
@@ -261,6 +270,12 @@ void UMOGameUIManagerSubsystem::CreateLayoutForPlayer(APlayerController* PlayerC
 
 	UE_LOG(LogMOFramework, Warning, TEXT("MOGameUIManagerSubsystem: Created layout for player %s (class: %s)"),
 		*PlayerController->GetName(), *LayoutClass->GetName());
+
+	// Notify subscribers that the layout is ready. Push-on-startup consumers
+	// (HUD root, persistent toasters, etc.) subscribe in BeginPlay and push
+	// from this callback rather than polling. Single-fire — late subscribers
+	// must query GetRootLayoutForPlayer() and push directly.
+	OnPrimaryLayoutCreated.Broadcast(PlayerController, NewLayout);
 }
 
 UMOPrimaryGameLayout* UMOGameUIManagerSubsystem::GetRootLayoutForPlayer(APlayerController* PlayerController) const

@@ -101,15 +101,23 @@ public:
 
 	/** Music volume (0-1). */
 	UPROPERTY(Config, BlueprintReadWrite, Category="Audio", meta=(ClampMin="0.0", ClampMax="1.0"))
-	float MusicVolume = 0.8f;
+	float MusicVolume = 0.15f;
 
 	/** Sound effects volume (0-1). */
 	UPROPERTY(Config, BlueprintReadWrite, Category="Audio", meta=(ClampMin="0.0", ClampMax="1.0"))
-	float SFXVolume = 1.0f;
+	float SFXVolume = 0.50f;
 
 	/** Ambient/environment volume (0-1). */
 	UPROPERTY(Config, BlueprintReadWrite, Category="Audio", meta=(ClampMin="0.0", ClampMax="1.0"))
-	float AmbientVolume = 1.0f;
+	float AmbientVolume = 0.20f;
+
+	/**
+	 * Weather audio volume (0-1) — controls UDW's weather sounds (rain, thunder,
+	 * wind). Applied by the bridge BP (BP_WeatherBridge) reacting to
+	 * UMOAudioSubsystem::OnWeatherVolumeChanged. Not routed through SoundClasses.
+	 */
+	UPROPERTY(Config, BlueprintReadWrite, Category="Audio", meta=(ClampMin="0.0", ClampMax="1.0"))
+	float WeatherVolume = 0.50f;
 
 	// ============================================================================
 	// MAIN MENU / FIRST RUN
@@ -150,6 +158,18 @@ public:
 	/** Slot name for pending new game save (derived from world name). */
 	UPROPERTY(Config, BlueprintReadWrite, Category="MainMenu")
 	FString PendingNewGameSlot;
+
+	/**
+	 * Pre-generated name for the initial survivor pawn on new-game start.
+	 * Set by MONewGamePanel so the save slot can include the character's
+	 * name (e.g. "Alex_Smith-01"). Consumed by MOSpawnManagerSubsystem when
+	 * the first survivor spawns — cleared after use so subsequent spawns
+	 * get fresh random names.
+	 *
+	 * NOT persisted (no Config specifier) — transient for one new-game flow.
+	 */
+	UPROPERTY(BlueprintReadWrite, Category="MainMenu")
+	FString PendingSurvivorName;
 
 	/** World name entered by user in New Game dialog. */
 	UPROPERTY(Config, BlueprintReadWrite, Category="MainMenu")

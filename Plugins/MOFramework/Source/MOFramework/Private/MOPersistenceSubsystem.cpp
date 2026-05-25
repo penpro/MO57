@@ -1008,6 +1008,19 @@ void UMOPersistenceSubsystem::CapturePersistedPawnsAndInventories(UWorld* World,
         // Update fields that come from the actual pawn state
         PawnRecord.PawnGuid = PawnGuid;
         PawnRecord.Transform = Pawn->GetActorTransform();
+
+        // [DIAG] Flag whether THIS pawn is the locally-controlled one. Helps
+        // correlate save-vs-load: we want the player pawn's transform to
+        // round-trip perfectly. Also dump SCALE — a "character shrinks each
+        // load" bug means scale != (1,1,1) is being saved.
+        const bool bIsPlayer = Pawn->IsPlayerControlled();
+        UE_LOG(LogMOFramework, Warning,
+            TEXT("[MOPersist] SAVE/CAPTURE: pawn '%s' GUID=%s  Player=%s  Location=%s  Scale=%s"),
+            *Pawn->GetName(),
+            *PawnGuid.ToString(EGuidFormats::Short),
+            bIsPlayer ? TEXT("YES") : TEXT("no"),
+            *PawnRecord.Transform.GetLocation().ToString(),
+            *PawnRecord.Transform.GetScale3D().ToString());
         const FSoftObjectPath PawnClassSoftPath(Pawn->GetClass());
         PawnRecord.PawnClassPath = FSoftClassPath(PawnClassSoftPath.ToString());
 
@@ -1232,6 +1245,17 @@ void UMOPersistenceSubsystem::RespawnPersistedPawns(UWorld* World, const TArray<
             continue;
         }
 
+        // [DIAG] log the transform we're ABOUT to spawn with — compare with the
+        // SAVE log earlier to confirm round-trip integrity. Scale included so
+        // we can spot the "character shrinks each load" cumulative bug.
+        UE_LOG(LogMOFramework, Warning,
+            TEXT("[MOPersist] LOAD/SPAWN: Guid=%s class=%s requested Location=%s Rotation=%s Scale=%s"),
+            *PawnRecord.PawnGuid.ToString(EGuidFormats::Short),
+            *PawnClassToSpawn->GetName(),
+            *PawnRecord.Transform.GetLocation().ToString(),
+            *PawnRecord.Transform.GetRotation().Rotator().ToString(),
+            *PawnRecord.Transform.GetScale3D().ToString());
+
         APawn* DeferredPawn = World->SpawnActorDeferred<APawn>(
             PawnClassToSpawn,
             PawnRecord.Transform,
@@ -1249,6 +1273,12 @@ void UMOPersistenceSubsystem::RespawnPersistedPawns(UWorld* World, const TArray<
             OutResult.FailedPawnGuids.Add(PawnRecord.PawnGuid);
             continue;
         }
+
+        // [DIAG] log location IMMEDIATELY after deferred spawn (before FinishSpawningActor).
+        UE_LOG(LogMOFramework, Warning,
+            TEXT("[MOPersist] LOAD/SPAWN: post-deferred actor location=%s (delta from requested: %.1fcm)"),
+            *DeferredPawn->GetActorLocation().ToString(),
+            FVector::Dist(DeferredPawn->GetActorLocation(), PawnRecord.Transform.GetLocation()));
 
         // Only disable auto-possession for player-controlled pawns, not AI creatures
         // Creatures need their AutoPossessAI to spawn their AI controller
@@ -1315,6 +1345,15 @@ void UMOPersistenceSubsystem::RespawnPersistedPawns(UWorld* World, const TArray<
 
         UGameplayStatics::FinishSpawningActor(DeferredPawn, PawnRecord.Transform);
         OutResult.PawnsLoaded++;
+
+        // [DIAG] log final location AND scale after FinishSpawningActor. If
+        // scale doesn't match the requested scale, something in BeginPlay
+        // (ApplyAppearance, ApplyBodyParameters) is reapplying it.
+        UE_LOG(LogMOFramework, Warning,
+            TEXT("[MOPersist] LOAD/SPAWN: post-finish location=%s scale=%s (loc drift: %.1fcm)"),
+            *DeferredPawn->GetActorLocation().ToString(),
+            *DeferredPawn->GetActorScale3D().ToString(),
+            FVector::Dist(DeferredPawn->GetActorLocation(), PawnRecord.Transform.GetLocation()));
 
         if (bUsedFallback)
         {

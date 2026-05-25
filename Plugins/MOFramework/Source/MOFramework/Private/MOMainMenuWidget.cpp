@@ -21,7 +21,17 @@ void UMOMainMenuWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] NativeConstruct called"));
+	// Force false at runtime regardless of WBP class-default override. The
+	// C++ constructor sets this to false, but Widget Blueprints can override
+	// the value in their Class Defaults panel — and WBP_MOInGameMenu1 was
+	// apparently doing exactly that, causing the entire main menu to dismiss
+	// on outside-click. This per-instance write at NativeConstruct time
+	// runs AFTER BP class defaults are applied to the CDO, so it always wins.
+	bClosesOnOutsideClick = false;
+
+	UE_LOG(LogMOFramework, Warning,
+		TEXT("[MOMainMenuWidget] NativeConstruct '%s' — forced bClosesOnOutsideClick=false"),
+		*GetName());
 
 	// Try to find panels by type if BindWidgetOptional didn't find them
 	if (FocusWindowSwitcher)

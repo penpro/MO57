@@ -301,6 +301,26 @@ public:
 	UPROPERTY(BlueprintAssignable, Category="MO|Quest|Events")
 	FMOOnApplyQuestRewards OnApplyQuestRewards;
 
+	/**
+	 * Broadcast once per subsystem lifetime, immediately after quest definitions
+	 * finish loading. UI controllers that spawn quest-bound widgets subscribe
+	 * here instead of relying on BeginPlay timing — guarantees the subsystem
+	 * is queryable before the widget is created.
+	 *
+	 * Listeners that subscribe AFTER this fires can call IsReady() to detect
+	 * the race and act immediately. See UMOQuestUIController for the pattern.
+	 */
+	UPROPERTY(BlueprintAssignable, Category="MO|Quest|Events")
+	FMOOnQuestSystemReady OnQuestSystemReady;
+
+	/**
+	 * Returns true once LoadQuestDefinitions has completed and OnQuestSystemReady
+	 * has been broadcast. Late subscribers should check this and act
+	 * immediately if true, otherwise bind and wait for the broadcast.
+	 */
+	UFUNCTION(BlueprintPure, Category="MO|Quest")
+	bool IsReady() const { return bIsReady; }
+
 	// =========================================================================
 	// TUTORIAL HINT API
 	// =========================================================================
@@ -424,6 +444,14 @@ private:
 	 */
 	UPROPERTY(Transient)
 	bool bTutorialPopupsEnabled = true;
+
+	/**
+	 * Set true at the end of LoadQuestDefinitions, immediately before
+	 * OnQuestSystemReady fires. IsReady() reads this. Stays true for the
+	 * subsystem's lifetime (the GameInstance subsystem doesn't reset).
+	 */
+	UPROPERTY(Transient)
+	bool bIsReady = false;
 
 	/**
 	 * Set of Event names that at least one active quest is currently

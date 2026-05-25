@@ -4,6 +4,8 @@
 
 #include "MOCheatSubsystem.h"
 #include "MOFramework.h"
+#include "MOAudioSubsystem.h"
+#include "MOAudioTypes.h"
 #include "MOGameClockSubsystem.h"
 #include "MOInventoryComponent.h"
 #include "MOItemDatabaseSettings.h"
@@ -406,6 +408,171 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 				*GetNameSafe(Data.WeatherPresetObject));
 			UE_LOG(LogMOFramework, Warning,
 				TEXT("[MOWeather] NOTE: WeatherPresetObject is UPROPERTY(Transient) — won't serialize to disk."));
+		}),
+		ECVF_Default));
+
+	// =========================================================================
+	// MO.Audio.* — operate on the GameInstance-scoped UMOAudioSubsystem
+	// =========================================================================
+
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Audio.Info"),
+		TEXT("Print audio subsystem state: current music/ambient, volumes, loaded banks."),
+		FConsoleCommandWithWorldDelegate::CreateLambda([](UWorld* World)
+		{
+			UMOAudioSubsystem* Sys = UMOAudioSubsystem::Get(World);
+			if (!Sys) { UE_LOG(LogMOFramework, Warning, TEXT("[MOAudio] No subsystem")); return; }
+
+			UE_LOG(LogMOFramework, Warning,
+				TEXT("[MOAudio] Music=%s Ambient=%s | Vols: Master=%.2f Music=%.2f Ambient=%.2f SFX=%.2f UI=%.2f | Bank IDs=%d"),
+				*UEnum::GetValueAsString(Sys->GetMusicState()),
+				*UEnum::GetValueAsString(Sys->GetAmbientState()),
+				Sys->GetMasterVolume(), Sys->GetMusicVolume(), Sys->GetAmbientVolume(),
+				Sys->GetSFXVolume(), Sys->GetUIVolume(),
+				Sys->GetAllAudioIds().Num());
+		}),
+		ECVF_Default));
+
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Audio.ListBank"),
+		TEXT("List every audio ID currently registered across loaded banks."),
+		FConsoleCommandWithWorldDelegate::CreateLambda([](UWorld* World)
+		{
+			UMOAudioSubsystem* Sys = UMOAudioSubsystem::Get(World);
+			if (!Sys) { UE_LOG(LogMOFramework, Warning, TEXT("[MOAudio] No subsystem")); return; }
+
+			const TArray<FName> Ids = Sys->GetAllAudioIds();
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOAudio] %d audio IDs in bank:"), Ids.Num());
+			for (const FName& Id : Ids)
+			{
+				FMOAudioBankRow Row;
+				if (Sys->FindAudioBankRow(Id, Row))
+				{
+					UE_LOG(LogMOFramework, Warning, TEXT("  %s [%s] -> %s"),
+						*Id.ToString(),
+						*UEnum::GetValueAsString(Row.Category),
+						*Row.Sound.ToSoftObjectPath().ToString());
+				}
+			}
+		}),
+		ECVF_Default));
+
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Audio.SetMusic"),
+		TEXT("Set music state. Usage: MO.Audio.SetMusic <None|MainMenu|Exploration_Day|Exploration_Night|Combat|Stealth|DangerNear|Death|Discovery>"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			UMOAudioSubsystem* Sys = UMOAudioSubsystem::Get(World);
+			if (!Sys) { UE_LOG(LogMOFramework, Warning, TEXT("[MOAudio] No subsystem")); return; }
+			if (Args.Num() < 1)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOAudio] Usage: MO.Audio.SetMusic <StateName>"));
+				return;
+			}
+
+			const UEnum* EnumPtr = StaticEnum<EMOMusicState>();
+			const int64 Value = EnumPtr ? EnumPtr->GetValueByNameString(Args[0]) : INDEX_NONE;
+			if (Value == INDEX_NONE)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOAudio] Unknown music state: %s"), *Args[0]);
+				return;
+			}
+			Sys->SetMusicState(static_cast<EMOMusicState>(Value));
+		}),
+		ECVF_Default));
+
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Audio.SetAmbient"),
+		TEXT("Set ambient state. Usage: MO.Audio.SetAmbient <None|Outdoor_Day|Outdoor_Dusk|Outdoor_Night|Cave|Indoor|Water>"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			UMOAudioSubsystem* Sys = UMOAudioSubsystem::Get(World);
+			if (!Sys) { UE_LOG(LogMOFramework, Warning, TEXT("[MOAudio] No subsystem")); return; }
+			if (Args.Num() < 1)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOAudio] Usage: MO.Audio.SetAmbient <StateName>"));
+				return;
+			}
+
+			const UEnum* EnumPtr = StaticEnum<EMOAmbientState>();
+			const int64 Value = EnumPtr ? EnumPtr->GetValueByNameString(Args[0]) : INDEX_NONE;
+			if (Value == INDEX_NONE)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOAudio] Unknown ambient state: %s"), *Args[0]);
+				return;
+			}
+			Sys->SetAmbientState(static_cast<EMOAmbientState>(Value));
+		}),
+		ECVF_Default));
+
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Audio.Play"),
+		TEXT("Play a one-shot from the bank by ID. Usage: MO.Audio.Play SFX.UI.ButtonClick"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			UMOAudioSubsystem* Sys = UMOAudioSubsystem::Get(World);
+			if (!Sys) { UE_LOG(LogMOFramework, Warning, TEXT("[MOAudio] No subsystem")); return; }
+			if (Args.Num() < 1)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOAudio] Usage: MO.Audio.Play <AudioId>"));
+				return;
+			}
+			const bool bOk = Sys->PlayOneShot2D(FName(*Args[0]));
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOAudio] Play '%s' -> %s"),
+				*Args[0], bOk ? TEXT("OK") : TEXT("FAILED (check ListBank)"));
+		}),
+		ECVF_Default));
+
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Audio.MasterVolume"),
+		TEXT("Set master volume 0-1. Usage: MO.Audio.MasterVolume 0.5"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			UMOAudioSubsystem* Sys = UMOAudioSubsystem::Get(World);
+			if (!Sys || Args.Num() < 1) return;
+			Sys->SetMasterVolume(FCString::Atof(*Args[0]));
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOAudio] MasterVolume -> %.2f"), Sys->GetMasterVolume());
+		}),
+		ECVF_Default));
+
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Audio.MusicVolume"),
+		TEXT("Set music volume 0-1. Usage: MO.Audio.MusicVolume 0.5"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			UMOAudioSubsystem* Sys = UMOAudioSubsystem::Get(World);
+			if (!Sys || Args.Num() < 1) return;
+			Sys->SetMusicVolume(FCString::Atof(*Args[0]));
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOAudio] MusicVolume -> %.2f"), Sys->GetMusicVolume());
+		}),
+		ECVF_Default));
+
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Audio.DumpAmbient"),
+		TEXT("Dump full ambient state: current config, base layers playing, event groups + cooldowns, dominant group."),
+		FConsoleCommandWithWorldDelegate::CreateLambda([](UWorld* World)
+		{
+			UMOAudioSubsystem* Sys = UMOAudioSubsystem::Get(World);
+			if (!Sys) { UE_LOG(LogMOFramework, Warning, TEXT("[MOAudio] No subsystem")); return; }
+
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOAudio] === Ambient State Dump ==="));
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOAudio] State: %s"),
+				*UEnum::GetValueAsString(Sys->GetAmbientState()));
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOAudio] Run MO.Audio.Info for volume/bank summary."));
+			UE_LOG(LogMOFramework, Warning,
+				TEXT("[MOAudio] (Detailed config inspection requires opening DT_AmbientLayers in the editor.)"));
+		}),
+		ECVF_Default));
+
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Audio.AmbientVolume"),
+		TEXT("Set ambient volume 0-1. Usage: MO.Audio.AmbientVolume 0.5"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			UMOAudioSubsystem* Sys = UMOAudioSubsystem::Get(World);
+			if (!Sys || Args.Num() < 1) return;
+			Sys->SetAmbientVolume(FCString::Atof(*Args[0]));
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOAudio] AmbientVolume -> %.2f"), Sys->GetAmbientVolume());
 		}),
 		ECVF_Default));
 }

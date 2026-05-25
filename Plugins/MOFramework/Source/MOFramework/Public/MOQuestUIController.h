@@ -118,6 +118,21 @@ private:
 	/** Frame-based debounce to prevent double-toggle from ECommonInputMode::All */
 	uint64 LastToggleFrame = 0;
 
+	/**
+	 * Subscribed to UMOQuestSubsystem::OnQuestSystemReady. Spawns the quest
+	 * HUD + tutorial hint widgets once the subsystem has loaded its DataTable.
+	 * Called immediately if the subsystem is already ready when BeginPlay runs.
+	 */
+	UFUNCTION()
+	void HandleQuestSystemReady();
+
+	/**
+	 * Actually spawn the BeginPlay-time widgets (Quest HUD + tutorial hint).
+	 * Called from HandleQuestSystemReady. Idempotent — re-entry is a no-op if
+	 * the widgets already exist.
+	 */
+	void SpawnReadyTimeWidgets();
+
 	// --- Quest Log Panel ---
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Quest|UI", meta=(AllowPrivateAccess="true"))

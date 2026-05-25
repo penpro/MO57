@@ -1,0 +1,394 @@
+[
+	{
+		"Name": "Ambient.Outdoor.Day",
+		"BaseLayers": [
+			{
+				"AudioId": "Ambient.Day.ForestAmbience2",
+				"Volume": 2.0,
+				"DelayBetweenLoopsMin": 0.0,
+				"DelayBetweenLoopsMax": 0.0
+			},
+			{
+				"AudioId": "Ambient.Day.InsectsBuzz1",
+				"Volume": 1.0,
+				"DelayBetweenLoopsMin": 0.0,
+				"DelayBetweenLoopsMax": 0.0
+			},
+			{
+				"AudioId": "Ambient.Day.DappledWind1",
+				"Volume": 1.0,
+				"DelayBetweenLoopsMin": 0.0,
+				"DelayBetweenLoopsMax": 0.0
+			},
+			{
+				"AudioId": "Ambient.Air.GentleBreeze2",
+				"Volume": 1.0,
+				"DelayBetweenLoopsMin": 5.0,
+				"DelayBetweenLoopsMax": 10.0
+			}
+		],
+		"BaseLayerVolume": 1.0,
+		"EventGroups": [
+			{
+				"GroupName": "Birds",
+				"AudioIds": [
+					"Ambient.Day.BirdsChirping1",
+					"Ambient.Day.BirdsChirping2",
+					"Ambient.Animal.BirdSongVaried1",
+					"Ambient.Animal.BirdSongVaried2",
+					"Ambient.Day.WoodpeckerTap1",
+					"Ambient.Day.WoodpeckerTap2"
+				],
+				"CooldownSeconds": 35.0,
+				"DominantWeight": 6.0,
+				"BackgroundWeight": 1.0
+			},
+			{
+				"GroupName": "Insects",
+				"AudioIds": [
+					"Ambient.Animal.BeeHiveBuzz1",
+					"Ambient.Animal.BeeHiveBuzz2",
+					"Ambient.Day.ButterflyFlutter1",
+					"Ambient.Day.ButterflyFlutter2",
+					"Ambient.Animal.ButterflyLand1",
+					"Ambient.Animal.ButterflyLand2"
+				],
+				"CooldownSeconds": 30.0,
+				"DominantWeight": 5.0,
+				"BackgroundWeight": 1.2
+			},
+			{
+				"GroupName": "Wildlife",
+				"AudioIds": [
+					"Ambient.Day.SquirrelScurry1",
+					"Ambient.Day.SquirrelScurry2",
+					"Ambient.Animal.DeerHoofDrum1",
+					"Ambient.Animal.DeerHoofDrum2",
+					"Ambient.Animal.DeerRustle1",
+					"Ambient.Animal.DeerRustle2",
+					"Ambient.Animal.HedgehogSnuffle1",
+					"Ambient.Animal.HedgehogSnuffle2",
+					"Ambient.Animal.FoxCall1",
+					"Ambient.Animal.FoxCall2"
+				],
+				"CooldownSeconds": 45.0,
+				"DominantWeight": 4.0,
+				"BackgroundWeight": 0.8
+			},
+			{
+				"GroupName": "Plants",
+				"AudioIds": [
+					"Ambient.Day.LeafRustle1",
+					"Ambient.Day.LeafRustle2",
+					"Ambient.Day.MossyGroundShift1",
+					"Ambient.Day.MossyGroundShift2",
+					"Ambient.Day.SunbeamRustle1",
+					"Ambient.Day.SunbeamRustle2",
+					"Ambient.Day.MushroomSporeWind1",
+					"Ambient.Day.MushroomSporeWind2"
+				],
+				"CooldownSeconds": 20.0,
+				"DominantWeight": 4.0,
+				"BackgroundWeight": 1.5
+			},
+			{
+				"GroupName": "Wind",
+				"AudioIds": [
+					"Ambient.Air.SwirlingLeaves1",
+					"Ambient.Air.SwirlingLeaves2",
+					"Ambient.Air.TreeSway1",
+					"Ambient.Air.TreeSway2",
+					"Ambient.Air.HighCanopyWind1",
+					"Ambient.Air.HighCanopyWind2",
+					"Ambient.Day.TreeCreak1",
+					"Ambient.Day.TreeCreak2"
+				],
+				"CooldownSeconds": 25.0,
+				"DominantWeight": 4.0,
+				"BackgroundWeight": 1.2
+			}
+		],
+		"EventIntervalMin": 5.0,
+		"EventIntervalMax": 18.0,
+		"EventVolume": 0.85,
+		"VolumeJitterMin": 0.25,
+		"VolumeJitterMax": 1.0,
+		"PitchJitterMin": 0.85,
+		"PitchJitterMax": 1.15,
+		"DominanceShiftIntervalMin": 60.0,
+		"DominanceShiftIntervalMax": 120.0
+	},
+	{
+		"Name": "Ambient.Outdoor.Night",
+		"BaseLayers": [
+			{
+				"AudioId": "Ambient.Night.ForestAmbience1",
+				"Volume": 1.0,
+				"DelayBetweenLoopsMin": 0.0,
+				"DelayBetweenLoopsMax": 0.0
+			},
+			{
+				"AudioId": "Ambient.Night.CricketChirp1",
+				"Volume": 1.0,
+				"DelayBetweenLoopsMin": 0.0,
+				"DelayBetweenLoopsMax": 0.0
+			},
+			{
+				"AudioId": "Ambient.Night.ForestBreeze1",
+				"Volume": 1.0,
+				"DelayBetweenLoopsMin": 0.0,
+				"DelayBetweenLoopsMax": 0.0
+			},
+			{
+				"AudioId": "Ambient.Night.MoonlitAmbience1",
+				"Volume": 1.0,
+				"DelayBetweenLoopsMin": 0.0,
+				"DelayBetweenLoopsMax": 0.0
+			}
+		],
+		"BaseLayerVolume": 0.9,
+		"EventGroups": [
+			{
+				"GroupName": "Owls",
+				"AudioIds": [
+					"Ambient.Night.OwlHoot1",
+					"Ambient.Night.OwlHoot2",
+					"Ambient.Night.OwlWings1",
+					"Ambient.Night.OwlWings2"
+				],
+				"CooldownSeconds": 50.0,
+				"DominantWeight": 6.0,
+				"BackgroundWeight": 1.0
+			},
+			{
+				"GroupName": "Frogs",
+				"AudioIds": [
+					"Ambient.Night.FrogsCroak1",
+					"Ambient.Night.FrogsCroak2"
+				],
+				"CooldownSeconds": 30.0,
+				"DominantWeight": 4.0,
+				"BackgroundWeight": 1.5
+			},
+			{
+				"GroupName": "Insects",
+				"AudioIds": [
+					"Ambient.Night.CicadaChorus1",
+					"Ambient.Night.CicadaChorus2",
+					"Ambient.Night.FireflyWhisper1",
+					"Ambient.Night.FireflyWhisper2"
+				],
+				"CooldownSeconds": 25.0,
+				"DominantWeight": 5.0,
+				"BackgroundWeight": 1.2
+			},
+			{
+				"GroupName": "Wildlife",
+				"AudioIds": [
+					"Ambient.Night.DistantWolfHowl1",
+					"Ambient.Night.DistantWolfHowl2",
+					"Ambient.Night.BatEchoes1",
+					"Ambient.Night.BatEchoes2",
+					"Ambient.Animal.BatFlutter1",
+					"Ambient.Animal.BatFlutter2",
+					"Ambient.Animal.FoxCall1",
+					"Ambient.Animal.FoxCall2"
+				],
+				"CooldownSeconds": 60.0,
+				"DominantWeight": 4.0,
+				"BackgroundWeight": 0.6
+			},
+			{
+				"GroupName": "Plants",
+				"AudioIds": [
+					"Ambient.Night.PineNeedleRustle1",
+					"Ambient.Night.PineNeedleRustle2",
+					"Ambient.Night.GlowMushroomDrip1",
+					"Ambient.Night.GlowMushroomDrip2",
+					"Ambient.Night.MushroomGlowAmbience1",
+					"Ambient.Night.MushroomGlowAmbience2",
+					"Ambient.Night.TwigCrack1",
+					"Ambient.Night.TwigCrack2"
+				],
+				"CooldownSeconds": 20.0,
+				"DominantWeight": 3.0,
+				"BackgroundWeight": 1.0
+			}
+		],
+		"EventIntervalMin": 7.0,
+		"EventIntervalMax": 25.0,
+		"EventVolume": 0.75,
+		"VolumeJitterMin": 0.2,
+		"VolumeJitterMax": 1.0,
+		"PitchJitterMin": 0.85,
+		"PitchJitterMax": 1.15,
+		"DominanceShiftIntervalMin": 60.0,
+		"DominanceShiftIntervalMax": 150.0
+	},
+	{
+		"Name": "Ambient.Outdoor.Dusk",
+		"BaseLayers": [
+			{
+				"AudioId": "Ambient.Day.CicadaSong1",
+				"Volume": 1.0,
+				"DelayBetweenLoopsMin": 0.0,
+				"DelayBetweenLoopsMax": 0.0
+			},
+			{
+				"AudioId": "Ambient.Day.DappledWind1",
+				"Volume": 1.0,
+				"DelayBetweenLoopsMin": 0.0,
+				"DelayBetweenLoopsMax": 0.0
+			},
+			{
+				"AudioId": "Ambient.Air.ForestBreath1",
+				"Volume": 1.0,
+				"DelayBetweenLoopsMin": 0.0,
+				"DelayBetweenLoopsMax": 0.0
+			}
+		],
+		"BaseLayerVolume": 0.9,
+		"EventGroups": [
+			{
+				"GroupName": "Birds",
+				"AudioIds": [
+					"Ambient.Day.BirdsChirping2",
+					"Ambient.Animal.BirdSongVaried2"
+				],
+				"CooldownSeconds": 40.0,
+				"DominantWeight": 4.0,
+				"BackgroundWeight": 1.0
+			},
+			{
+				"GroupName": "EmergingNight",
+				"AudioIds": [
+					"Ambient.Night.FrogsCroak1",
+					"Ambient.Night.OwlHoot1",
+					"Ambient.Animal.BatFlutter1",
+					"Ambient.Animal.BatFlutter2"
+				],
+				"CooldownSeconds": 35.0,
+				"DominantWeight": 5.0,
+				"BackgroundWeight": 1.5
+			},
+			{
+				"GroupName": "Wind",
+				"AudioIds": [
+					"Ambient.Air.SwirlingLeaves1",
+					"Ambient.Air.GentleBreeze2",
+					"Ambient.Day.LeafRustle2"
+				],
+				"CooldownSeconds": 20.0,
+				"DominantWeight": 3.0,
+				"BackgroundWeight": 1.2
+			},
+			{
+				"GroupName": "Wildlife",
+				"AudioIds": [
+					"Ambient.Animal.FoxCall1",
+					"Ambient.Animal.FoxCall2",
+					"Ambient.Day.SquirrelScurry2"
+				],
+				"CooldownSeconds": 50.0,
+				"DominantWeight": 3.0,
+				"BackgroundWeight": 0.7
+			}
+		],
+		"EventIntervalMin": 6.0,
+		"EventIntervalMax": 20.0,
+		"EventVolume": 0.8,
+		"VolumeJitterMin": 0.25,
+		"VolumeJitterMax": 1.0,
+		"PitchJitterMin": 0.85,
+		"PitchJitterMax": 1.15,
+		"DominanceShiftIntervalMin": 45.0,
+		"DominanceShiftIntervalMax": 100.0
+	},
+	{
+		"Name": "Ambient.Water",
+		"BaseLayers": [
+			{
+				"AudioId": "Ambient.Water.RiverFlow1",
+				"Volume": 1.0,
+				"DelayBetweenLoopsMin": 0.0,
+				"DelayBetweenLoopsMax": 0.0
+			},
+			{
+				"AudioId": "Ambient.Water.StreamTrickle1",
+				"Volume": 1.0,
+				"DelayBetweenLoopsMin": 0.0,
+				"DelayBetweenLoopsMax": 0.0
+			},
+			{
+				"AudioId": "Ambient.Water.RiverbankWind1",
+				"Volume": 1.0,
+				"DelayBetweenLoopsMin": 0.0,
+				"DelayBetweenLoopsMax": 0.0
+			}
+		],
+		"BaseLayerVolume": 0.9,
+		"EventGroups": [
+			{
+				"GroupName": "Surface",
+				"AudioIds": [
+					"Ambient.Water.BrookGurgle1",
+					"Ambient.Water.BrookGurgle2",
+					"Ambient.Water.PondRipple1",
+					"Ambient.Water.PondRipple2"
+				],
+				"CooldownSeconds": 15.0,
+				"DominantWeight": 5.0,
+				"BackgroundWeight": 2.0
+			},
+			{
+				"GroupName": "Drips",
+				"AudioIds": [
+					"Ambient.Water.WaterDrip1",
+					"Ambient.Water.WaterDrip2",
+					"Ambient.Water.HollowDrip1",
+					"Ambient.Water.HollowDrip2"
+				],
+				"CooldownSeconds": 18.0,
+				"DominantWeight": 4.0,
+				"BackgroundWeight": 1.5
+			},
+			{
+				"GroupName": "Falls",
+				"AudioIds": [
+					"Ambient.Water.LargeWaterfall1",
+					"Ambient.Water.LargeWaterfall2",
+					"Ambient.Water.SmallWaterfall1",
+					"Ambient.Water.SmallWaterfall2",
+					"Ambient.Water.DistantCascade1",
+					"Ambient.Water.DistantCascade2",
+					"Ambient.Water.FallMistySpray1",
+					"Ambient.Water.FallMistySpray2"
+				],
+				"CooldownSeconds": 40.0,
+				"DominantWeight": 4.0,
+				"BackgroundWeight": 0.8
+			},
+			{
+				"GroupName": "Drift",
+				"AudioIds": [
+					"Ambient.Water.LeafBoatFloat1",
+					"Ambient.Water.LeafBoatFloat2",
+					"Ambient.Water.StreamCross1",
+					"Ambient.Water.StreamCross2"
+				],
+				"CooldownSeconds": 30.0,
+				"DominantWeight": 3.0,
+				"BackgroundWeight": 1.0
+			}
+		],
+		"EventIntervalMin": 4.0,
+		"EventIntervalMax": 14.0,
+		"EventVolume": 0.85,
+		"VolumeJitterMin": 0.3,
+		"VolumeJitterMax": 1.0,
+		"PitchJitterMin": 0.88,
+		"PitchJitterMax": 1.12,
+		"DominanceShiftIntervalMin": 60.0,
+		"DominanceShiftIntervalMax": 120.0
+	}
+]

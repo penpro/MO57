@@ -137,10 +137,16 @@ TOptional<FUIInputConfig> UMOGameplayInputStub::GetDesiredInputConfig() const
 
 	// No other UI active — apply Game mode (this is the in-game "all menus
 	// closed, return to gameplay" case the stub was designed for).
+	//
+	// LockOnCapture (not DoNotLock) is critical for mouse-look: without it,
+	// the OS cursor escapes the viewport when the player looks far in any
+	// direction, ending up on another monitor or outside the game window.
+	// Capture grabs the cursor; LockOnCapture confines it to the viewport
+	// for the duration of the capture.
 	return FUIInputConfig(
 		ECommonInputMode::Game,
 		EMouseCaptureMode::CapturePermanently_IncludingInitialMouseDown,
-		EMouseLockMode::DoNotLock,
+		EMouseLockMode::LockOnCapture,
 		true  // bHideCursorDuringViewportCapture - cursor hidden in gameplay
 	);
 }

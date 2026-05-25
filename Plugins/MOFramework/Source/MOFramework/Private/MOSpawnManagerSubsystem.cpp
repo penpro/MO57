@@ -1,5 +1,6 @@
 #include "MOSpawnManagerSubsystem.h"
 #include "MOFramework.h"
+#include "MOGameSettings.h"
 #include "MOSpawnPoint.h"
 #include "MOSpawnSettings.h"
 #include "MOSpawnSettingsActor.h"
@@ -16,7 +17,10 @@
 
 namespace
 {
-	// Common first and last names for random survivor generation
+	// Common first and last names for random survivor generation.
+	// Exposed via UMOSpawnManagerSubsystem::GenerateRandomSurvivorName() so the
+	// new-game flow can pre-generate a name for the initial survivor (used in
+	// the default save slot name).
 	const TArray<FString> SurvivorFirstNames = {
 		TEXT("Alex"), TEXT("Sam"), TEXT("Jordan"), TEXT("Taylor"), TEXT("Morgan"),
 		TEXT("Casey"), TEXT("Riley"), TEXT("Quinn"), TEXT("Avery"), TEXT("Parker"),
@@ -34,13 +38,6 @@ namespace
 		TEXT("Young"), TEXT("King"), TEXT("Wright"), TEXT("Scott"), TEXT("Green")
 	};
 
-	FString GenerateRandomSurvivorName()
-	{
-		const FString& FirstName = SurvivorFirstNames[FMath::RandRange(0, SurvivorFirstNames.Num() - 1)];
-		const FString& LastName = SurvivorLastNames[FMath::RandRange(0, SurvivorLastNames.Num() - 1)];
-		return FString::Printf(TEXT("%s %s"), *FirstName, *LastName);
-	}
-
 	void AssignSurvivorNameIfNeeded(APawn* Pawn, EMOSpawnCategory Category)
 	{
 		if (!Pawn || Category != EMOSpawnCategory::Survivor)
@@ -49,13 +46,42 @@ namespace
 		}
 
 		UMOIdentityComponent* IdentityComp = Pawn->FindComponentByClass<UMOIdentityComponent>();
-		if (IdentityComp && IdentityComp->DisplayName.IsEmpty())
+		if (!IdentityComp || !IdentityComp->DisplayName.IsEmpty())
 		{
-			FString GeneratedName = GenerateRandomSurvivorName();
-			IdentityComp->SetDisplayName(FText::FromString(GeneratedName));
-			UE_LOG(LogMOFramework, Log, TEXT("[SpawnManager] Assigned name '%s' to survivor"), *GeneratedName);
+			return; // No identity, or already named — nothing to do.
 		}
+
+		// One-shot pending name: if the new-game panel pre-generated a name for
+		// this pawn (so the save slot could match it), consume it here and
+		// clear so a second survivor spawn doesn't inherit the same name.
+		FString NameToAssign;
+		if (UMOGameSettings* Settings = UMOGameSettings::GetMOGameSettings())
+		{
+			if (!Settings->PendingSurvivorName.IsEmpty())
+			{
+				NameToAssign = Settings->PendingSurvivorName;
+				Settings->PendingSurvivorName.Empty();
+				UE_LOG(LogMOFramework, Log,
+					TEXT("[SpawnManager] Consumed pending survivor name '%s' from new-game flow"),
+					*NameToAssign);
+			}
+		}
+
+		if (NameToAssign.IsEmpty())
+		{
+			NameToAssign = UMOSpawnManagerSubsystem::GenerateRandomSurvivorName();
+		}
+
+		IdentityComp->SetDisplayName(FText::FromString(NameToAssign));
+		UE_LOG(LogMOFramework, Log, TEXT("[SpawnManager] Assigned name '%s' to survivor"), *NameToAssign);
 	}
+}
+
+FString UMOSpawnManagerSubsystem::GenerateRandomSurvivorName()
+{
+	const FString& FirstName = SurvivorFirstNames[FMath::RandRange(0, SurvivorFirstNames.Num() - 1)];
+	const FString& LastName = SurvivorLastNames[FMath::RandRange(0, SurvivorLastNames.Num() - 1)];
+	return FString::Printf(TEXT("%s %s"), *FirstName, *LastName);
 }
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"

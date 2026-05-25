@@ -1,5 +1,7 @@
 #include "MOGameMode.h"
+#include "MOAudioSubsystem.h"
 #include "MOFramework.h"
+#include "MOVoxelReadinessSubsystem.h"
 #include "MOCharacter.h"
 #include "MORecruitmentComponent.h"
 #include "MOIdentityComponent.h"
@@ -10,6 +12,7 @@
 #include "MOHarvestDebugSubsystem.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "Components/CapsuleComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "VoxelWorld.h"
 #include "VoxelStampComponent.h"
@@ -36,6 +39,19 @@ void AMOGameMode::BeginPlay()
 	Super::BeginPlay();
 
 	RegisterPCGTagMappings();
+
+	// Notify audio subsystem that the world (and this GameMode) is ready.
+	// At Initialize time the audio subsystem can't reliably distinguish menu
+	// vs gameplay because GameMode hasn't been spawned yet — by here it has.
+	// HandleWorldAudioContext is idempotent (SetMusicState early-returns
+	// when state already matches), safe to call alongside PostLoadMap.
+	if (UWorld* World = GetWorld())
+	{
+		if (UMOAudioSubsystem* Audio = UMOAudioSubsystem::Get(World))
+		{
+			Audio->HandleWorldAudioContext(World);
+		}
+	}
 
 	// Check for pending new game from main menu
 	HandlePendingNewGame();
@@ -248,84 +264,27 @@ void AMOGameMode::WaitForVoxelWorldAndSpawn()
 		return;
 	}
 
-	// Find the voxel world actor
-	AVoxelWorld* VoxelWorld = nullptr;
-	for (TActorIterator<AVoxelWorld> It(World); It; ++It)
+	UMOVoxelReadinessSubsystem* Voxel = UMOVoxelReadinessSubsystem::Get(World);
+	if (!Voxel)
 	{
-		VoxelWorld = *It;
-		break;
-	}
-
-	if (!VoxelWorld)
-	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOGameMode] No VoxelWorld found in level, spawning immediately"));
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOGameMode] No VoxelReadinessSubsystem, spawning immediately"));
 		SpawnInitialPawn();
 		return;
 	}
 
-	// Always wait for voxel world to be ready - even if IsVoxelWorldReady() returns true,
-	// the geometry might still be generating after a seed change
-	UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Waiting for VoxelWorld render state before spawning..."));
-	bPendingSpawnAfterVoxelReady = true;
+	UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Subscribing to OnVoxelReady for initial pawn spawn"));
 
-	// Use a timer to poll for voxel readiness - more reliable than OnNextStateRendered
-	// which may not fire again after world regeneration
-	World->GetTimerManager().ClearTimer(VoxelReadyTimerHandle);
-	World->GetTimerManager().SetTimer(
-		VoxelReadyTimerHandle,
-		FTimerDelegate::CreateUObject(this, &AMOGameMode::CheckVoxelReadyAndSpawn),
-		0.5f,  // Check every 0.5 seconds
-		true   // Looping until spawned
-	);
+	// Subscribe FIRST, then BeginPolling — the subsystem doesn't replay events
+	// for late subscribers, so order matters. AddUObject is safe to call
+	// multiple times if we somehow re-enter; the subsystem broadcasts to all
+	// listeners on the next ready transition.
+	Voxel->OnVoxelReady.AddUObject(this, &AMOGameMode::HandleVoxelReadyForNewGame);
+	Voxel->BeginPolling();
 }
 
-void AMOGameMode::CheckVoxelReadyAndSpawn()
+void AMOGameMode::HandleVoxelReadyForNewGame()
 {
-	if (!bPendingSpawnAfterVoxelReady)
-	{
-		GetWorld()->GetTimerManager().ClearTimer(VoxelReadyTimerHandle);
-		return;
-	}
-
-	UWorld* World = GetWorld();
-	if (!World)
-	{
-		return;
-	}
-
-	// Find the voxel world actor
-	AVoxelWorld* VoxelWorld = nullptr;
-	for (TActorIterator<AVoxelWorld> It(World); It; ++It)
-	{
-		VoxelWorld = *It;
-		break;
-	}
-
-	// Check if voxel world is ready
-	if (VoxelWorld && VoxelWorld->IsVoxelWorldReady())
-	{
-		UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] VoxelWorld ready, waiting %.1f seconds for collision generation..."),
-			CollisionGenerationDelay);
-		bPendingSpawnAfterVoxelReady = false;
-		World->GetTimerManager().ClearTimer(VoxelReadyTimerHandle);
-
-		// Start collision delay timer - wait for terrain collision to generate
-		World->GetTimerManager().SetTimer(
-			CollisionDelayTimerHandle,
-			FTimerDelegate::CreateUObject(this, &AMOGameMode::OnCollisionDelayComplete),
-			CollisionGenerationDelay,
-			false  // Not looping - fire once
-		);
-	}
-	else
-	{
-		UE_LOG(LogMOFramework, Verbose, TEXT("[MOGameMode] Still waiting for VoxelWorld..."));
-	}
-}
-
-void AMOGameMode::OnCollisionDelayComplete()
-{
-	UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Collision delay complete, spawning pawn now"));
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOGameMode] OnVoxelReady received — spawning initial pawn"));
 
 	// Debug: Verify stamp seeds after voxel world is ready
 	DebugLogVoxelStampSeeds();
@@ -335,69 +294,61 @@ void AMOGameMode::OnCollisionDelayComplete()
 
 void AMOGameMode::WaitForVoxelAndRegroundPawns()
 {
-	bPendingRegroundAfterVoxel = true;
-	UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Waiting for voxel world before re-grounding loaded pawns..."));
-
-	// Start polling for voxel readiness
-	UWorld* World = GetWorld();
-	if (World)
-	{
-		World->GetTimerManager().SetTimer(
-			RegroundPawnsTimerHandle,
-			this,
-			&AMOGameMode::CheckVoxelReadyAndReground,
-			0.5f,
-			true  // Looping until voxel is ready
-		);
-	}
-}
-
-void AMOGameMode::CheckVoxelReadyAndReground()
-{
 	UWorld* World = GetWorld();
 	if (!World)
 	{
 		return;
 	}
 
-	// Find the voxel world
-	AVoxelWorld* VoxelWorld = nullptr;
-	for (TActorIterator<AVoxelWorld> It(World); It; ++It)
+	UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Subscribing to OnVoxelReady for pawn regrounding..."));
+
+	// Suppress fall-through safety on every MOCharacter for the duration of
+	// the voxel-load + regrounding window. Without this, the per-character
+	// CheckFallThroughSafety tick sees the pawn falling (no voxel collision
+	// yet) and teleports it ~20m off its saved spot via FindSafeTerrainNearLocation.
+	int32 SuppressedCount = 0;
+	for (TActorIterator<AMOCharacter> It(World); It; ++It)
 	{
-		VoxelWorld = *It;
-		break;
+		if (AMOCharacter* C = *It)
+		{
+			C->bSuppressFallThroughDuringLoad = true;
+			++SuppressedCount;
+		}
+	}
+	UE_LOG(LogMOFramework, Warning,
+		TEXT("[MOGameMode] Suppressed fall-through safety on %d characters during load"),
+		SuppressedCount);
+
+	UMOVoxelReadinessSubsystem* Voxel = UMOVoxelReadinessSubsystem::Get(World);
+	if (!Voxel)
+	{
+		UE_LOG(LogMOFramework, Warning,
+			TEXT("[MOGameMode] No VoxelReadinessSubsystem on load — regrounding immediately"));
+		RegroundAllPawns();
+		return;
 	}
 
-	if (VoxelWorld && VoxelWorld->IsVoxelWorldReady())
-	{
-		// Stop the polling timer
-		World->GetTimerManager().ClearTimer(RegroundPawnsTimerHandle);
+	Voxel->OnVoxelReady.AddUObject(this, &AMOGameMode::HandleVoxelReadyForLoad);
+	Voxel->BeginPolling();
+}
 
-		UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Voxel world ready, waiting %.1f seconds for collision generation before re-grounding..."),
-			CollisionGenerationDelay);
-
-		// Wait for collision generation, then re-ground
-		World->GetTimerManager().SetTimer(
-			RegroundPawnsTimerHandle,
-			this,
-			&AMOGameMode::RegroundAllPawns,
-			CollisionGenerationDelay,
-			false  // Not looping
-		);
-	}
+void AMOGameMode::HandleVoxelReadyForLoad()
+{
+	UE_LOG(LogMOFramework, Warning,
+		TEXT("[MOGameMode] OnVoxelReady received — regrounding loaded pawns"));
+	RegroundAllPawns();
 }
 
 void AMOGameMode::RegroundAllPawns()
 {
-	bPendingRegroundAfterVoxel = false;
-
 	UWorld* World = GetWorld();
 	if (!World)
 	{
 		return;
 	}
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Re-grounding all loaded pawns to terrain..."));
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOGameMode] === RegroundAllPawns: ENTRY (after voxel ready + %.1fs collision delay) ==="),
+		CollisionGenerationDelay);
 
 	int32 RegroundedCount = 0;
 
@@ -411,10 +362,17 @@ void AMOGameMode::RegroundAllPawns()
 		}
 
 		FVector CurrentLocation = Character->GetActorLocation();
+		// [DIAG] log every character's location at regrounding-entry time so
+		// we can compare with the spawn-time location in persistence logs.
+		UE_LOG(LogMOFramework, Warning,
+			TEXT("[MOGameMode]   pre-reground: %s at %s"),
+			*Character->GetName(), *CurrentLocation.ToString());
 
-		// Trace down from high above current position to find terrain
-		FVector TraceStart = FVector(CurrentLocation.X, CurrentLocation.Y, CurrentLocation.Z + 50000.0f);
-		FVector TraceEnd = FVector(CurrentLocation.X, CurrentLocation.Y, CurrentLocation.Z - 50000.0f);
+		// Trace narrow window above/below the saved position to find local
+		// terrain. Narrow trace prevents accidentally hitting distant terrain
+		// (cliff above, void below) and snapping the pawn to it.
+		FVector TraceStart = FVector(CurrentLocation.X, CurrentLocation.Y, CurrentLocation.Z + RegroundTraceHalfHeight);
+		FVector TraceEnd = FVector(CurrentLocation.X, CurrentLocation.Y, CurrentLocation.Z - RegroundTraceHalfHeight);
 
 		FHitResult HitResult;
 		FCollisionQueryParams QueryParams;
@@ -426,15 +384,27 @@ void AMOGameMode::RegroundAllPawns()
 			AActor* HitActor = HitResult.GetActor();
 			if (HitActor && HitActor->IsA<AVoxelWorld>())
 			{
-				// Position slightly above hit point
-				FVector NewLocation = HitResult.ImpactPoint + FVector(0.0f, 0.0f, 100.0f);
+				// Land snug on terrain — small lift just clears collision.
+				FVector NewLocation = HitResult.ImpactPoint + FVector(0.0f, 0.0f, RegroundLiftAboveTerrain);
 
-				if (!FMath::IsNearlyEqual(CurrentLocation.Z, NewLocation.Z, 50.0f))
+				// Only relocate if the mismatch is meaningful. Saved position is
+				// authoritative — wiggles smaller than RegroundTriggerThreshold
+				// stay exactly where the player saved.
+				const float ZMismatch = FMath::Abs(CurrentLocation.Z - NewLocation.Z);
+				if (ZMismatch > RegroundTriggerThreshold)
 				{
 					Character->SetActorLocation(NewLocation);
-					UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Re-grounded %s from Z=%.1f to Z=%.1f"),
-						*Character->GetName(), CurrentLocation.Z, NewLocation.Z);
+					UE_LOG(LogMOFramework, Warning,
+						TEXT("[MOGameMode] Re-grounded %s: Z drift was %.1fcm (threshold %.0f) — moved from Z=%.1f to Z=%.1f"),
+						*Character->GetName(), ZMismatch, RegroundTriggerThreshold,
+						CurrentLocation.Z, NewLocation.Z);
 					RegroundedCount++;
+				}
+				else
+				{
+					UE_LOG(LogMOFramework, Verbose,
+						TEXT("[MOGameMode] Preserved saved position for %s — Z drift only %.1fcm"),
+						*Character->GetName(), ZMismatch);
 				}
 			}
 		}
@@ -467,10 +437,36 @@ void AMOGameMode::RegroundAllPawns()
 			{
 				if (APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0))
 				{
+					// [DIAG] dump location IMMEDIATELY before Possess.
+					const FVector PrePossess = TargetPawn->GetActorLocation();
 					PC->Possess(TargetPawn);
-					UE_LOG(LogMOFramework, Log,
-						TEXT("[MOGameMode] Auto-possessed last-played pawn '%s' at %s after load"),
-						*TargetPawn->GetName(), *TargetPawn->GetActorLocation().ToString());
+					const FVector PostPossess = TargetPawn->GetActorLocation();
+
+					UE_LOG(LogMOFramework, Warning,
+						TEXT("[MOGameMode] Auto-possessed last-played pawn '%s'  PrePossess=%s  PostPossess=%s  (possess delta: %.1fcm)"),
+						*TargetPawn->GetName(),
+						*PrePossess.ToString(),
+						*PostPossess.ToString(),
+						FVector::Dist(PrePossess, PostPossess));
+
+					// Schedule a 1-second "settling" log so we can see if the pawn
+					// keeps moving (physics drift, character movement, etc.) AFTER
+					// possession completes.
+					TWeakObjectPtr<APawn> WeakTarget = TargetPawn;
+					FTimerHandle SettlingHandle;
+					World->GetTimerManager().SetTimer(SettlingHandle,
+						FTimerDelegate::CreateLambda([WeakTarget, PostPossess]()
+						{
+							if (APawn* P = WeakTarget.Get())
+							{
+								UE_LOG(LogMOFramework, Warning,
+									TEXT("[MOGameMode]   pawn '%s' settled at %s (drift from post-possess: %.1fcm)"),
+									*P->GetName(),
+									*P->GetActorLocation().ToString(),
+									FVector::Dist(P->GetActorLocation(), PostPossess));
+							}
+						}),
+						1.0f, false);
 				}
 			}
 			else
@@ -482,7 +478,284 @@ void AMOGameMode::RegroundAllPawns()
 		}
 	}
 
-	// Dismiss loading screen after re-grounding loaded pawns
+	// Find the player pawn — we'll wait on its grounded state before dropping
+	// the loading screen. Without this, players see ~2-5s of all pawns falling
+	// before voxel collision settles.
+	APawn* PlayerPawn = nullptr;
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (UMOPersistenceSubsystem* Persistence = GI->GetSubsystem<UMOPersistenceSubsystem>())
+		{
+			const FGuid LastGuid = Persistence->GetLastLoadResult().LastPossessedPawnGuid;
+			if (LastGuid.IsValid())
+			{
+				for (TActorIterator<AMOCharacter> It(World); It; ++It)
+				{
+					if (!IsValid(*It)) continue;
+					UMOIdentityComponent* IdComp = (*It)->FindComponentByClass<UMOIdentityComponent>();
+					if (IdComp && IdComp->GetGuid() == LastGuid)
+					{
+						PlayerPawn = *It;
+						break;
+					}
+				}
+			}
+		}
+	}
+
+	if (IsValid(PlayerPawn))
+	{
+		// Keep loading screen + fall-through suppression up until pawn lands.
+		BeginPlayerLandingPoll(PlayerPawn);
+	}
+	else
+	{
+		// No player pawn to wait on — fall through to immediate handoff.
+		UE_LOG(LogMOFramework, Warning,
+			TEXT("[MOGameMode] No player pawn found for landing wait — finishing load handoff immediately"));
+		FinishLoadHandoff();
+	}
+}
+
+void AMOGameMode::BeginPlayerLandingPoll(APawn* PlayerPawn)
+{
+	UWorld* World = GetWorld();
+	if (!World || !IsValid(PlayerPawn))
+	{
+		FinishLoadHandoff();
+		return;
+	}
+
+	WaitingForLandingPawn = PlayerPawn;
+	PlayerLandingPollStartedAtSeconds = World->GetTimeSeconds();
+	LastTerrainProbeZ = -FLT_MAX;
+	ConsecutiveStableTerrainTicks = 0;
+
+	// === Spawn-and-wait, anchored to saved location ===
+	// 1. Cache saved X/Y/Z so the probe trace doesn't drift if the pawn
+	//    moves for any reason during the wait.
+	// 2. Place pawn at saved Z + 25cm clearance.
+	// 3. Disable character movement entirely (MOVE_None) — no gravity, no
+	//    floor sweep, no falling. Pawn hovers in place and acts as the
+	//    voxel-world INVOKER — voxel terrain streams + generates collision
+	//    around it because that's where the player is.
+	// 4. Poll-trace through a wide vertical window around saved Z for terrain.
+	// 5. When terrain found within range: snap pawn to terrain + clearance,
+	//    restore MOVE_Walking, finish.
+	// 6. ABSOLUTE LAST RESORT after timeout: FindSafeSpawnLocation.
+	//
+	// Saved position is authoritative — no falling, no lateral relocation,
+	// no physics surprises. AMOCharacter::CheckFallThroughSafety stays
+	// suppressed for the entire wait (true in-game fall-through only).
+	const FVector OriginalLocation = PlayerPawn->GetActorLocation();
+	SavedAnchorXY = FVector(OriginalLocation.X, OriginalLocation.Y, 0.0f);
+	SavedAnchorZ = OriginalLocation.Z;
+	const FVector SpawnPos = OriginalLocation + FVector(0.0f, 0.0f, PlayerLandingSpawnOffset);
+
+	// Disable physics/movement entirely. Pawn becomes inert.
+	if (ACharacter* Character = Cast<ACharacter>(PlayerPawn))
+	{
+		if (UCharacterMovementComponent* Movement = Character->GetCharacterMovement())
+		{
+			Movement->StopMovementImmediately();
+			Movement->Velocity = FVector::ZeroVector;
+			Movement->SetMovementMode(MOVE_None);
+		}
+	}
+
+	PlayerPawn->SetActorLocation(SpawnPos, /*bSweep=*/false, nullptr,
+		ETeleportType::TeleportPhysics);
+
+	UE_LOG(LogMOFramework, Warning,
+		TEXT("[MOGameMode] Spawn-and-wait: '%s' placed at %s (+%.0fcm over save). Physics OFF — waiting for terrain (max %.1fs)."),
+		*PlayerPawn->GetName(), *SpawnPos.ToString(),
+		PlayerLandingSpawnOffset, PlayerLandingMaxWaitSeconds);
+
+	// Poll every 250ms — fast enough that the wait feels short once terrain
+	// loads, cheap enough to not matter.
+	World->GetTimerManager().SetTimer(
+		PlayerLandingPollHandle,
+		this,
+		&AMOGameMode::PollPlayerLanding,
+		0.25f,
+		true);
+}
+
+void AMOGameMode::PollPlayerLanding()
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		FinishLoadHandoff();
+		return;
+	}
+
+	APawn* Pawn = WaitingForLandingPawn.Get();
+	if (!IsValid(Pawn))
+	{
+		UE_LOG(LogMOFramework, Warning,
+			TEXT("[MOGameMode] Landing-wait pawn became invalid — finishing load handoff"));
+		FinishLoadHandoff();
+		return;
+	}
+
+	const float Elapsed = World->GetTimeSeconds() - PlayerLandingPollStartedAtSeconds;
+
+	// Use a CAPSULE SWEEP matching the pawn's capsule, on ECC_Pawn channel —
+	// this is exactly how UCharacterMovementComponent probes for floor when
+	// other characters (deer, wolves) land on terrain. If they land, this
+	// sweep will find the same surface they're landing on.
+	//
+	// CRITICAL: bTraceComplex = false. Voxel Plugin uses SIMPLE collision
+	// for terrain (per existing code comment in FindSafeSpawnLocation).
+	// Complex traces miss the voxel surface entirely.
+	float CapsuleRadius = 34.0f;
+	float CapsuleHalfHeight = 88.0f;
+	if (ACharacter* Character = Cast<ACharacter>(Pawn))
+	{
+		if (UCapsuleComponent* Capsule = Character->GetCapsuleComponent())
+		{
+			CapsuleRadius = Capsule->GetScaledCapsuleRadius();
+			CapsuleHalfHeight = Capsule->GetScaledCapsuleHalfHeight();
+		}
+	}
+
+	// Wider Z range: ±200m. Even if terrain regenerated significantly
+	// off the saved Z, we'll catch it.
+	const float SearchHalfRange = FMath::Max(PlayerLandingTerrainSearchDistance, 20000.0f);
+	const FVector SweepStart(SavedAnchorXY.X, SavedAnchorXY.Y, SavedAnchorZ + SearchHalfRange);
+	const FVector SweepEnd  (SavedAnchorXY.X, SavedAnchorXY.Y, SavedAnchorZ - SearchHalfRange);
+
+	FHitResult Hit;
+	FCollisionQueryParams QueryParams;
+	QueryParams.AddIgnoredActor(Pawn);
+	QueryParams.bTraceComplex = false; // voxel uses SIMPLE collision
+
+	const FCollisionShape CapsuleShape =
+		FCollisionShape::MakeCapsule(CapsuleRadius, CapsuleHalfHeight);
+
+	const bool bHit = World->SweepSingleByChannel(
+		Hit, SweepStart, SweepEnd, FQuat::Identity,
+		ECC_Pawn, CapsuleShape, QueryParams);
+
+	// Re-snap pawn to detected terrain each tick. As voxel LODs refine, the
+	// surface Z may shift slightly; following it keeps the pawn from being
+	// stuck inside terrain when LOD finishes.
+	if (bHit && Hit.bBlockingHit)
+	{
+		const FVector LandedPos = Hit.ImpactPoint + FVector(0.0f, 0.0f, PlayerLandingSpawnOffset);
+		Pawn->SetActorLocation(LandedPos, /*bSweep=*/false, nullptr,
+			ETeleportType::TeleportPhysics);
+
+		// Track stability — terrain Z within threshold of previous reading.
+		const bool bStableTick = (LastTerrainProbeZ != -FLT_MAX) &&
+			(FMath::Abs(Hit.ImpactPoint.Z - LastTerrainProbeZ) <= LandingTerrainStableThreshold);
+		LastTerrainProbeZ = Hit.ImpactPoint.Z;
+
+		if (bStableTick)
+		{
+			++ConsecutiveStableTerrainTicks;
+		}
+		else
+		{
+			ConsecutiveStableTerrainTicks = 0;
+		}
+
+		UE_LOG(LogMOFramework, Warning,
+			TEXT("[MOGameMode] terrain-probe @ %.2fs / %.1fs  hit Z=%.1f (Δ from prev: %.1f)  stable=%d/%d  hitActor=%s"),
+			Elapsed, PlayerLandingMaxWaitSeconds,
+			Hit.ImpactPoint.Z,
+			bStableTick ? FMath::Abs(Hit.ImpactPoint.Z - LastTerrainProbeZ) : 0.0f,
+			ConsecutiveStableTerrainTicks,
+			LandingTerrainStableTicks,
+			Hit.GetActor() ? *Hit.GetActor()->GetName() : TEXT("(noActor)"));
+
+		if (ConsecutiveStableTerrainTicks >= LandingTerrainStableTicks)
+		{
+			// LOD has settled — restore movement.
+			if (ACharacter* Character = Cast<ACharacter>(Pawn))
+			{
+				if (UCharacterMovementComponent* Movement = Character->GetCharacterMovement())
+				{
+					Movement->SetMovementMode(MOVE_Walking);
+				}
+			}
+
+			UE_LOG(LogMOFramework, Warning,
+				TEXT("[MOGameMode] === Terrain STABLE at Z=%.1f after %.2fs — placed pawn at %s, restored Walking ==="),
+				Hit.ImpactPoint.Z, Elapsed, *LandedPos.ToString());
+			FinishLoadHandoff();
+			return;
+		}
+	}
+	else
+	{
+		// No hit this tick — reset stability counter, keep waiting.
+		ConsecutiveStableTerrainTicks = 0;
+
+		UE_LOG(LogMOFramework, Warning,
+			TEXT("[MOGameMode] terrain-probe @ %.2fs / %.1fs  pawnZ=%.1f anchorZ=%.1f probe=±%.0fcm  result=(no visibility hit)"),
+			Elapsed, PlayerLandingMaxWaitSeconds,
+			Pawn->GetActorLocation().Z, SavedAnchorZ,
+			PlayerLandingTerrainSearchDistance);
+	}
+
+	if (Elapsed >= PlayerLandingMaxWaitSeconds)
+	{
+		// LAST RESORT — after PlayerLandingMaxWaitSeconds (default 30s) of no
+		// terrain found anywhere in a 100m vertical window around the saved
+		// Z, the save data points at coordinates with no voxel terrain at
+		// all (corrupted save / outside world / etc.). Recover to a safe
+		// new-game-style spawn location so the player isn't stuck.
+		const FVector SafeFallback = FindSafeSpawnLocation();
+		Pawn->SetActorLocation(SafeFallback, /*bSweep=*/false, nullptr,
+			ETeleportType::TeleportPhysics);
+
+		if (ACharacter* Character = Cast<ACharacter>(Pawn))
+		{
+			if (UCharacterMovementComponent* Movement = Character->GetCharacterMovement())
+			{
+				Movement->SetMovementMode(MOVE_Walking);
+			}
+		}
+
+		UE_LOG(LogMOFramework, Error,
+			TEXT("[MOGameMode] === LAST-RESORT TIMEOUT after %.2fs — no terrain anywhere in ±%.0fcm of saved Z=%.1f at saved X/Y=%.0f,%.0f. Recovered to safe spawn %s ==="),
+			Elapsed, PlayerLandingTerrainSearchDistance, SavedAnchorZ,
+			SavedAnchorXY.X, SavedAnchorXY.Y, *SafeFallback.ToString());
+		FinishLoadHandoff();
+	}
+}
+
+void AMOGameMode::FinishLoadHandoff()
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	// Stop any in-flight landing poll. Safe to call even if no timer set.
+	World->GetTimerManager().ClearTimer(PlayerLandingPollHandle);
+	WaitingForLandingPawn.Reset();
+
+	// Lift the fall-through safety suppression — load is complete, the world
+	// has settled, characters can now legitimately fall through and need the
+	// rescue. (Match the iteration in WaitForVoxelAndRegroundPawns.)
+	int32 UnsuppressedCount = 0;
+	for (TActorIterator<AMOCharacter> It(World); It; ++It)
+	{
+		if (AMOCharacter* C = *It)
+		{
+			C->bSuppressFallThroughDuringLoad = false;
+			++UnsuppressedCount;
+		}
+	}
+	UE_LOG(LogMOFramework, Warning,
+		TEXT("[MOGameMode] Lifted fall-through suppression on %d characters (load complete)"),
+		UnsuppressedCount);
+
+	// Dismiss loading screen
 	if (UGameInstance* GI = GetGameInstance())
 	{
 		if (UMOGameInstance* MOGI = Cast<UMOGameInstance>(GI))
@@ -569,17 +842,43 @@ void AMOGameMode::SpawnInitialPawn()
 		PC->Possess(NewPawn);
 		UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Player controller possessed initial pawn"));
 
-		// Start checking for pawn landing to dismiss loading screen
+		// Event-driven landing detection.
+		//
+		// Replaces the old 10Hz polling loop. The pawn spawns SpawnHeightOffset
+		// (default 200cm) above detected terrain, so it falls a moment and
+		// triggers ACharacter::LandedDelegate on contact. We bind that here and
+		// arm a single MaxLandingWaitSeconds timeout as the safety net — if no
+		// land event arrives in time, RecoverStuckSpawn runs and re-arms.
+		//
+		// Edge case: if the spawn collision handler nudged the pawn to a
+		// settled position (no falling at all), LandedDelegate would never
+		// fire — so we check IsMovingOnGround immediately and short-circuit
+		// to OnPawnLandedSafely if the pawn is already grounded at t=0.
 		PendingLandingPawn = NewPawn;
-		LandingCheckTickCount = 0;
 		LandingRecoveryAttempts = 0;
-		GetWorld()->GetTimerManager().SetTimer(
-			PawnLandingTimerHandle,
-			this,
-			&AMOGameMode::CheckPawnLanded,
-			0.1f,  // Check every 100ms
-			true   // Loop until landed
-		);
+
+		if (ACharacter* Character = Cast<ACharacter>(NewPawn))
+		{
+			UCharacterMovementComponent* Movement = Character->GetCharacterMovement();
+			if (Movement && !Movement->IsFalling() && Movement->IsMovingOnGround())
+			{
+				UE_LOG(LogMOFramework, Log,
+					TEXT("[MOGameMode] Initial pawn spawned already grounded — skipping landing wait"));
+				OnPawnLandedSafely();
+				return;
+			}
+
+			Character->LandedDelegate.RemoveDynamic(this, &AMOGameMode::HandlePawnLanded);
+			Character->LandedDelegate.AddDynamic(this, &AMOGameMode::HandlePawnLanded);
+			ArmLandingTimeout();
+		}
+		else
+		{
+			// Non-character pawn — no landing concept, succeed immediately.
+			UE_LOG(LogMOFramework, Log,
+				TEXT("[MOGameMode] Initial pawn is not a Character — dismissing loading screen immediately"));
+			OnPawnLandedSafely();
+		}
 	}
 }
 
@@ -790,44 +1089,37 @@ FVector AMOGameMode::FindSafeSpawnLocation() const
 // ============================================================================
 // PAWN LANDING DETECTION
 // ============================================================================
+//
+// Event-driven: SpawnInitialPawn binds ACharacter::LandedDelegate to
+// HandlePawnLanded and arms a single MaxLandingWaitSeconds timeout. The
+// delegate fires the moment the pawn lands (cancels timeout, success path).
+// If the timeout fires first, RecoverStuckSpawn runs and re-arms a fresh
+// timeout for its teleport recovery to land. No more 10Hz polling.
 
-void AMOGameMode::CheckPawnLanded()
+void AMOGameMode::HandlePawnLanded(const FHitResult& Hit)
 {
-	APawn* Pawn = PendingLandingPawn.Get();
-	if (!Pawn)
+	UE_LOG(LogMOFramework, Log,
+		TEXT("[MOGameMode] HandlePawnLanded — landed at %s, normal=%s"),
+		*Hit.ImpactPoint.ToString(), *Hit.ImpactNormal.ToString());
+	OnPawnLandedSafely();
+}
+
+void AMOGameMode::ArmLandingTimeout()
+{
+	UWorld* World = GetWorld();
+	if (!World)
 	{
-		GetWorld()->GetTimerManager().ClearTimer(PawnLandingTimerHandle);
 		return;
 	}
 
-	// Check if character is on ground (not falling)
-	if (ACharacter* Character = Cast<ACharacter>(Pawn))
-	{
-		UCharacterMovementComponent* Movement = Character->GetCharacterMovement();
-		if (Movement && !Movement->IsFalling() && Movement->IsMovingOnGround())
-		{
-			GetWorld()->GetTimerManager().ClearTimer(PawnLandingTimerHandle);
-			OnPawnLandedSafely();
-			return;
-		}
-	}
-	else
-	{
-		// Not a character - just dismiss immediately
-		GetWorld()->GetTimerManager().ClearTimer(PawnLandingTimerHandle);
-		OnPawnLandedSafely();
-		return;
-	}
-
-	// Pawn isn't landed yet — bump the tick counter and check for stuck recovery.
-	// Timer fires every 0.1s, so MaxLandingWaitSeconds maps to ticks at 10/sec.
-	++LandingCheckTickCount;
-	const int32 TicksBeforeRecovery = FMath::Max(1, FMath::RoundToInt(MaxLandingWaitSeconds * 10.0f));
-	if (LandingCheckTickCount >= TicksBeforeRecovery)
-	{
-		LandingCheckTickCount = 0;
-		RecoverStuckSpawn();
-	}
+	// SetTimer resets an existing handle, so multiple calls are safe — each
+	// arms a fresh MaxLandingWaitSeconds window from "now."
+	World->GetTimerManager().SetTimer(
+		PawnLandingTimerHandle,
+		this,
+		&AMOGameMode::RecoverStuckSpawn,
+		MaxLandingWaitSeconds,
+		/*bLoop=*/false);
 }
 
 void AMOGameMode::RecoverStuckSpawn()
@@ -919,12 +1211,32 @@ void AMOGameMode::RecoverStuckSpawn()
 
 	Pawn->SetActorLocation(RecoveryLocation, /*bSweep=*/false, nullptr,
 		ETeleportType::TeleportPhysics);
+
+	// Re-arm the timeout. If this teleport doesn't land the pawn either,
+	// we'll fall through to the next recovery strategy after another
+	// MaxLandingWaitSeconds. If it DOES land, LandedDelegate fires first
+	// and OnPawnLandedSafely cancels this timer.
+	ArmLandingTimeout();
 }
 
 void AMOGameMode::OnPawnLandedSafely()
 {
 	APawn* Pawn = PendingLandingPawn.Get();
 	PendingLandingPawn.Reset();
+
+	// Stop the recovery timeout — whichever path got us here, we're done waiting.
+	// Safe to call even if the timer isn't running.
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(PawnLandingTimerHandle);
+	}
+
+	// Unbind LandedDelegate so the pawn's later normal jumps/falls during
+	// gameplay don't keep firing this handler.
+	if (ACharacter* Character = Cast<ACharacter>(Pawn))
+	{
+		Character->LandedDelegate.RemoveDynamic(this, &AMOGameMode::HandlePawnLanded);
+	}
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Pawn landed safely at %s"),
 		Pawn ? *Pawn->GetActorLocation().ToString() : TEXT("NULL"));

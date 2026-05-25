@@ -62,6 +62,62 @@
 #include "MOVitalsTypes.generated.h"
 
 /**
+ * Thermal comfort bucket — perceived "how cold/hot the player feels".
+ * Derived from FMOVitalSigns::BodyTemperature (not ambient): drops as the
+ * core cools, rises as the body overheats. Each bucket maps to a HUD icon.
+ *
+ * Medical ranges (UMOVitalsComponent::ThermalThresholds defaults to these):
+ *   VeryCold     core < 35.0 °C   severe hypothermia
+ *   Cold         35.0 – 36.5      mild hypothermia / shivering
+ *   Comfortable  36.5 – 37.5      normal
+ *   Hot          37.5 – 39.0      mild hyperthermia / sweating
+ *   VeryHot      core ≥ 39.0      severe heat stress
+ *
+ * Five-value, numeric ordering preserved so a HUD widget can use the value
+ * directly as an array index.
+ */
+UENUM(BlueprintType)
+enum class EMOThermalComfort : uint8
+{
+	VeryCold    = 0  UMETA(DisplayName = "Very Cold"),
+	Cold        = 1  UMETA(DisplayName = "Cold"),
+	Comfortable = 2  UMETA(DisplayName = "Comfortable"),
+	Hot         = 3  UMETA(DisplayName = "Hot"),
+	VeryHot     = 4  UMETA(DisplayName = "Very Hot"),
+};
+
+/**
+ * Threshold curve for mapping body-core temperature → thermal comfort bucket.
+ * Tunable per UMOVitalsComponent so designers can experiment without touching
+ * code, but the defaults are medically grounded (see EMOThermalComfort).
+ */
+USTRUCT(BlueprintType)
+struct MOFRAMEWORK_API FMOThermalComfortThresholds
+{
+	GENERATED_BODY()
+
+	/** Core temp below this = VeryCold (severe hypothermia). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Vitals|Thermal",
+		meta=(ClampMin="20.0", ClampMax="40.0"))
+	float VeryColdBelow = 35.0f;
+
+	/** Core temp below this (and ≥ VeryColdBelow) = Cold. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Vitals|Thermal",
+		meta=(ClampMin="20.0", ClampMax="40.0"))
+	float ColdBelow = 36.5f;
+
+	/** Core temp above this (and < HotAbove) = Hot. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Vitals|Thermal",
+		meta=(ClampMin="35.0", ClampMax="45.0"))
+	float HotAbove = 37.5f;
+
+	/** Core temp above this = VeryHot (severe heat stress). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Vitals|Thermal",
+		meta=(ClampMin="35.0", ClampMax="45.0"))
+	float VeryHotAbove = 39.0f;
+};
+
+/**
  * Complete vital signs reading.
  * See file header for normal ranges and medical context.
  */

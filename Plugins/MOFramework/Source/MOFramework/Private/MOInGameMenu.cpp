@@ -1,11 +1,14 @@
 #include "MOInGameMenu.h"
 #include "MOFramework.h"
 #include "MOCommonButton.h"
+#include "MOMainMenuGameMode.h"
 #include "MOSavePanel.h"
 #include "MOLoadPanel.h"
 #include "MOOptionsPanel.h"
 #include "Components/PanelWidget.h"
 #include "Components/WidgetSwitcher.h"
+#include "Engine/World.h"
+#include "GameFramework/GameModeBase.h"
 
 void UMOInGameMenu::NativeDestruct()
 {
@@ -53,6 +56,42 @@ void UMOInGameMenu::NativeDestruct()
 void UMOInGameMenu::NativeConstruct()
 {
 	Super::NativeConstruct();
+
+	// [DIAG] Unconditional entry log so we can confirm NativeConstruct ran.
+	const UWorld* DiagWorld = GetWorld();
+	const AGameModeBase* DiagGM = DiagWorld ? DiagWorld->GetAuthGameMode() : nullptr;
+	UE_LOG(LogMOFramework, Warning,
+		TEXT("[MOInGameMenu] NativeConstruct '%s'  bClosesOnOutsideClick=%s  World=%s  GameMode=%s (class=%s)"),
+		*GetName(),
+		bClosesOnOutsideClick ? TEXT("TRUE") : TEXT("false"),
+		DiagWorld ? *DiagWorld->GetName() : TEXT("(null)"),
+		DiagGM ? *DiagGM->GetName() : TEXT("(null)"),
+		DiagGM ? *DiagGM->GetClass()->GetName() : TEXT("(null)"));
+
+	// Context-dependent close policy:
+	// - Pause menu in gameplay: click-outside should dismiss (game behind it)
+	// - Main menu: nothing behind — click-outside leaves the player with no UI
+	if (UWorld* World = GetWorld())
+	{
+		const AGameModeBase* GM = World->GetAuthGameMode();
+		const bool bIsMainMenuWorld = GM && GM->IsA<AMOMainMenuGameMode>();
+		if (bIsMainMenuWorld)
+		{
+			bClosesOnOutsideClick = false;
+			UE_LOG(LogMOFramework, Warning,
+				TEXT("[MOInGameMenu] '%s' detected MAIN-MENU world — bClosesOnOutsideClick now=%s"),
+				*GetName(),
+				bClosesOnOutsideClick ? TEXT("TRUE") : TEXT("false"));
+		}
+		else
+		{
+			UE_LOG(LogMOFramework, Warning,
+				TEXT("[MOInGameMenu] '%s' not in main-menu world — leaving bClosesOnOutsideClick=%s (GM was %s)"),
+				*GetName(),
+				bClosesOnOutsideClick ? TEXT("TRUE") : TEXT("false"),
+				GM ? *GM->GetClass()->GetName() : TEXT("(null)"));
+		}
+	}
 
 	// Try to find panels by type if BindWidgetOptional didn't find them
 	if (FocusWindowSwitcher)

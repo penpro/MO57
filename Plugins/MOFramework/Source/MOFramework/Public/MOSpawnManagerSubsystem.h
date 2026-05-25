@@ -205,6 +205,15 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Spawn Manager", meta=(DevelopmentOnly))
 	void ReloadSettings();
 
+	/**
+	 * Generate a random survivor display name (first + last). Used internally
+	 * when a survivor pawn spawns without a name, and exposed so the new-game
+	 * flow can pre-generate a name for the initial pawn (so the same name can
+	 * be used for the default save slot, e.g. "Alex_Smith-01").
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Spawn Manager")
+	static FString GenerateRandomSurvivorName();
+
 protected:
 	// ============================================================================
 	// RUNTIME STATE

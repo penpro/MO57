@@ -2,8 +2,10 @@
 #include "MOFramework.h"
 #include "MOCommonButton.h"
 #include "MOGameSettings.h"
+#include "MOSpawnManagerSubsystem.h"
 #include "Components/EditableTextBox.h"
 #include "Components/TextBlock.h"
+#include "Kismet/GameplayStatics.h"
 
 UMONewGamePanel::UMONewGamePanel(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -192,25 +194,47 @@ void UMONewGamePanel::HandleStartGameClicked()
 		Settings->PendingWorldName = WorldName;
 		Settings->PendingWorldSeed = Seed;
 
-		// Generate slot name from world name (sanitize for filesystem)
-		FString SlotName = WorldName;
-		SlotName = SlotName.Replace(TEXT(" "), TEXT("_"));
-		SlotName = SlotName.Replace(TEXT("/"), TEXT("_"));
-		SlotName = SlotName.Replace(TEXT("\\"), TEXT("_"));
-		SlotName = SlotName.Replace(TEXT(":"), TEXT("_"));
-		SlotName = SlotName.Replace(TEXT("*"), TEXT("_"));
-		SlotName = SlotName.Replace(TEXT("?"), TEXT("_"));
-		SlotName = SlotName.Replace(TEXT("\""), TEXT("_"));
-		SlotName = SlotName.Replace(TEXT("<"), TEXT("_"));
-		SlotName = SlotName.Replace(TEXT(">"), TEXT("_"));
-		SlotName = SlotName.Replace(TEXT("|"), TEXT("_"));
+		// Pre-generate the starting survivor's name so the save slot can use
+		// it (e.g. "Alex_Smith-01"). Spawn manager consumes
+		// Settings->PendingSurvivorName when the first survivor pawn spawns.
+		const FString SurvivorName = UMOSpawnManagerSubsystem::GenerateRandomSurvivorName();
+		Settings->PendingSurvivorName = SurvivorName;
 
-		// Add timestamp suffix to ensure uniqueness
-		SlotName = FString::Printf(TEXT("%s_%s"), *SlotName, *FDateTime::Now().ToString(TEXT("%Y%m%d_%H%M%S")));
+		// Build slot name from the survivor name (sanitized) + iteration suffix.
+		// Format: "<First>_<Last>-01". Filesystem-safe characters only.
+		auto Sanitize = [](FString In) -> FString
+		{
+			In = In.Replace(TEXT(" "), TEXT("_"));
+			In = In.Replace(TEXT("/"), TEXT("_"));
+			In = In.Replace(TEXT("\\"), TEXT("_"));
+			In = In.Replace(TEXT(":"), TEXT("_"));
+			In = In.Replace(TEXT("*"), TEXT("_"));
+			In = In.Replace(TEXT("?"), TEXT("_"));
+			In = In.Replace(TEXT("\""), TEXT("_"));
+			In = In.Replace(TEXT("<"), TEXT("_"));
+			In = In.Replace(TEXT(">"), TEXT("_"));
+			In = In.Replace(TEXT("|"), TEXT("_"));
+			return In;
+		};
+
+		const FString SanitizedSurvivor = Sanitize(SurvivorName);
+		const FString BaseSlot = FString::Printf(TEXT("%s-01"), *SanitizedSurvivor);
+
+		// If "-01" already exists in the save directory, bump to -02, -03, etc.
+		// Iteration is local to MONewGamePanel — the save subsystem will
+		// overwrite-on-confirm if the player picks the same name twice.
+		FString SlotName = BaseSlot;
+		int32 Iter = 2;
+		while (UGameplayStatics::DoesSaveGameExist(SlotName, 0) && Iter < 100)
+		{
+			SlotName = FString::Printf(TEXT("%s-%02d"), *SanitizedSurvivor, Iter++);
+		}
+
 		Settings->PendingNewGameSlot = SlotName;
 
-		UE_LOG(LogMOFramework, Log, TEXT("[MONewGamePanel] Set PendingWorldName='%s', PendingWorldSeed=%d, Slot='%s'"),
-			*WorldName, Seed, *SlotName);
+		UE_LOG(LogMOFramework, Log,
+			TEXT("[MONewGamePanel] World='%s' Seed=%d Survivor='%s' Slot='%s'"),
+			*WorldName, Seed, *SurvivorName, *SlotName);
 	}
 
 	// Broadcast start game request

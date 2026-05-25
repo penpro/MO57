@@ -1,4 +1,5 @@
 #include "MOOptionsPanel.h"
+#include "MOAudioSubsystem.h"
 #include "MOGameSettings.h"
 #include "MOUIManagerComponent.h"
 #include "MOFramework.h"
@@ -15,6 +16,17 @@
 #include "GameFramework/PlayerController.h"
 #include "InputAction.h"
 #include "InputMappingContext.h"
+
+UMOOptionsPanel::UMOOptionsPanel(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+	// Options panel must be closed deliberately (Back button / Escape).
+	// Outside-click would dismiss the entire main menu underneath it because
+	// the panel sits inside the main menu's WidgetSwitcher — outside the
+	// panel bounds == outside the main menu == "click outside" handler fires
+	// against the main menu's surface, leaving the player with no UI.
+	bClosesOnOutsideClick = false;
+}
 
 void UMOOptionsPanel::NativeDestruct()
 {
@@ -35,9 +47,9 @@ void UMOOptionsPanel::NativeDestruct()
 	{
 		MasterVolumeSlider->OnValueChanged.RemoveDynamic(this, &UMOOptionsPanel::HandleMasterVolumeChanged);
 	}
-	if (MusicVolumeSlider)
+	if (MusicSlider)
 	{
-		MusicVolumeSlider->OnValueChanged.RemoveDynamic(this, &UMOOptionsPanel::HandleMusicVolumeChanged);
+		MusicSlider->OnValueChanged.RemoveDynamic(this, &UMOOptionsPanel::HandleMusicVolumeChanged);
 	}
 	if (SFXVolumeSlider)
 	{
@@ -46,6 +58,10 @@ void UMOOptionsPanel::NativeDestruct()
 	if (AmbientVolumeSlider)
 	{
 		AmbientVolumeSlider->OnValueChanged.RemoveDynamic(this, &UMOOptionsPanel::HandleAmbientVolumeChanged);
+	}
+	if (WeatherVolumeSlider)
+	{
+		WeatherVolumeSlider->OnValueChanged.RemoveDynamic(this, &UMOOptionsPanel::HandleWeatherVolumeChanged);
 	}
 	if (CameraSensitivitySlider)
 	{
@@ -90,10 +106,10 @@ void UMOOptionsPanel::NativeConstruct()
 		MasterVolumeSlider->OnValueChanged.RemoveDynamic(this, &UMOOptionsPanel::HandleMasterVolumeChanged);
 		MasterVolumeSlider->OnValueChanged.AddDynamic(this, &UMOOptionsPanel::HandleMasterVolumeChanged);
 	}
-	if (MusicVolumeSlider)
+	if (MusicSlider)
 	{
-		MusicVolumeSlider->OnValueChanged.RemoveDynamic(this, &UMOOptionsPanel::HandleMusicVolumeChanged);
-		MusicVolumeSlider->OnValueChanged.AddDynamic(this, &UMOOptionsPanel::HandleMusicVolumeChanged);
+		MusicSlider->OnValueChanged.RemoveDynamic(this, &UMOOptionsPanel::HandleMusicVolumeChanged);
+		MusicSlider->OnValueChanged.AddDynamic(this, &UMOOptionsPanel::HandleMusicVolumeChanged);
 	}
 	if (SFXVolumeSlider)
 	{
@@ -104,6 +120,11 @@ void UMOOptionsPanel::NativeConstruct()
 	{
 		AmbientVolumeSlider->OnValueChanged.RemoveDynamic(this, &UMOOptionsPanel::HandleAmbientVolumeChanged);
 		AmbientVolumeSlider->OnValueChanged.AddDynamic(this, &UMOOptionsPanel::HandleAmbientVolumeChanged);
+	}
+	if (WeatherVolumeSlider)
+	{
+		WeatherVolumeSlider->OnValueChanged.RemoveDynamic(this, &UMOOptionsPanel::HandleWeatherVolumeChanged);
+		WeatherVolumeSlider->OnValueChanged.AddDynamic(this, &UMOOptionsPanel::HandleWeatherVolumeChanged);
 	}
 	if (CameraSensitivitySlider)
 	{
@@ -218,9 +239,9 @@ void UMOOptionsPanel::RefreshUIFromSettings()
 	}
 	UpdateVolumeLabel(MasterVolumeText, Settings->MasterVolume);
 
-	if (MusicVolumeSlider)
+	if (MusicSlider)
 	{
-		MusicVolumeSlider->SetValue(Settings->MusicVolume);
+		MusicSlider->SetValue(Settings->MusicVolume);
 	}
 	UpdateVolumeLabel(MusicVolumeText, Settings->MusicVolume);
 
@@ -235,6 +256,26 @@ void UMOOptionsPanel::RefreshUIFromSettings()
 		AmbientVolumeSlider->SetValue(Settings->AmbientVolume);
 	}
 	UpdateVolumeLabel(AmbientVolumeText, Settings->AmbientVolume);
+
+	if (WeatherVolumeSlider)
+	{
+		WeatherVolumeSlider->SetValue(Settings->WeatherVolume);
+	}
+	UpdateVolumeLabel(WeatherVolumeText, Settings->WeatherVolume);
+
+	// Push current settings to the audio subsystem so the runtime mix matches
+	// what the saved values say. Without this, opening the options panel for
+	// the first time shows the right slider positions but volumes default to
+	// the audio settings' defaults — they're out of sync until the user touches
+	// a slider.
+	if (UMOAudioSubsystem* Audio = UMOAudioSubsystem::Get(this))
+	{
+		Audio->SetMasterVolume(Settings->MasterVolume);
+		Audio->SetMusicVolume(Settings->MusicVolume);
+		Audio->SetSFXVolume(Settings->SFXVolume);
+		Audio->SetAmbientVolume(Settings->AmbientVolume);
+		Audio->SetWeatherVolume(Settings->WeatherVolume);
+	}
 
 	// Gameplay options
 	if (CameraSensitivitySlider)
@@ -312,9 +353,9 @@ void UMOOptionsPanel::ReadUIToSettings()
 	{
 		Settings->MasterVolume = MasterVolumeSlider->GetValue();
 	}
-	if (MusicVolumeSlider)
+	if (MusicSlider)
 	{
-		Settings->MusicVolume = MusicVolumeSlider->GetValue();
+		Settings->MusicVolume = MusicSlider->GetValue();
 	}
 	if (SFXVolumeSlider)
 	{
@@ -323,6 +364,10 @@ void UMOOptionsPanel::ReadUIToSettings()
 	if (AmbientVolumeSlider)
 	{
 		Settings->AmbientVolume = AmbientVolumeSlider->GetValue();
+	}
+	if (WeatherVolumeSlider)
+	{
+		Settings->WeatherVolume = WeatherVolumeSlider->GetValue();
 	}
 
 	// Gameplay options
@@ -405,24 +450,53 @@ void UMOOptionsPanel::HandleBackClicked()
 	OnRequestClose.Broadcast();
 }
 
+// Volume handlers push the new value INTO the audio subsystem in real-time so
+// the user hears the change while dragging the slider. Persisted to disk in
+// ApplySettings; this just updates the live state.
+
 void UMOOptionsPanel::HandleMasterVolumeChanged(float Value)
 {
 	UpdateVolumeLabel(MasterVolumeText, Value);
+	if (UMOAudioSubsystem* Audio = UMOAudioSubsystem::Get(this))
+	{
+		Audio->SetMasterVolume(Value);
+	}
 }
 
 void UMOOptionsPanel::HandleMusicVolumeChanged(float Value)
 {
 	UpdateVolumeLabel(MusicVolumeText, Value);
+	if (UMOAudioSubsystem* Audio = UMOAudioSubsystem::Get(this))
+	{
+		Audio->SetMusicVolume(Value);
+	}
 }
 
 void UMOOptionsPanel::HandleSFXVolumeChanged(float Value)
 {
 	UpdateVolumeLabel(SFXVolumeText, Value);
+	if (UMOAudioSubsystem* Audio = UMOAudioSubsystem::Get(this))
+	{
+		Audio->SetSFXVolume(Value);
+	}
 }
 
 void UMOOptionsPanel::HandleAmbientVolumeChanged(float Value)
 {
 	UpdateVolumeLabel(AmbientVolumeText, Value);
+	if (UMOAudioSubsystem* Audio = UMOAudioSubsystem::Get(this))
+	{
+		Audio->SetAmbientVolume(Value);
+	}
+}
+
+void UMOOptionsPanel::HandleWeatherVolumeChanged(float Value)
+{
+	UpdateVolumeLabel(WeatherVolumeText, Value);
+	if (UMOAudioSubsystem* Audio = UMOAudioSubsystem::Get(this))
+	{
+		Audio->SetWeatherVolume(Value);
+	}
 }
 
 void UMOOptionsPanel::HandleCameraSensitivityChanged(float Value)

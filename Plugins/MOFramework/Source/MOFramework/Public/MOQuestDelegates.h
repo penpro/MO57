@@ -121,3 +121,18 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOOnTutorialHintChanged);
  * from the XP/knowledge/inventory components.
  */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOOnApplyQuestRewards, FName, QuestId);
+
+// ============================================================================
+// READINESS DELEGATE
+// ============================================================================
+
+/**
+ * Broadcast once after UMOQuestSubsystem finishes loading its quest definitions
+ * DataTable. UI controllers (HUD widget, tutorial hint) subscribe to this
+ * instead of spawning their widgets at BeginPlay — the subsystem might not be
+ * done initializing yet, especially if quest definitions move to async load.
+ *
+ * Late subscribers can call IsReady() and short-circuit if the broadcast
+ * already happened.
+ */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOOnQuestSystemReady);

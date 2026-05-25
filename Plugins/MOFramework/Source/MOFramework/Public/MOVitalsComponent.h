@@ -111,6 +111,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOOnVitalsChanged);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOOnActivityChanged, EMOActivityLevel, OldActivity, EMOActivityLevel, NewActivity);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOOnStaminaChanged, float, OldStamina, float, NewStamina);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOOnStaminaDepleted);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOOnThermalComfortChanged, EMOThermalComfort, OldComfort, EMOThermalComfort, NewComfort);
 
 // ============================================================================
 // SAVE DATA
@@ -171,6 +172,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Vitals|Config", meta=(ClampMin="0"))
 	float BloodRegenerationRate = 500.0f;
 
+	/**
+	 * Body-core temperature thresholds for the thermal-comfort HUD indicator.
+	 * Mapped to EMOThermalComfort buckets in GetThermalComfort(). Defaults are
+	 * medically meaningful — keep unless the game uses different units.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Vitals|Config")
+	FMOThermalComfortThresholds ThermalThresholds;
+
 	// NOTE: TimeScaleMultiplier removed. The single source of truth is now
 	// UMOGameClockSubsystem::GetTimeScale(). Tick handlers in this component
 	// query GameClock->GetScaledDeltaTime(TickInterval). To change the
@@ -211,6 +220,16 @@ public:
 	/** Fired when stamina is fully depleted. Movement system should respond by downgrading activity. */
 	UPROPERTY(BlueprintAssignable, Category="MO|Vitals|Events")
 	FMOOnStaminaDepleted OnStaminaDepleted;
+
+	/**
+	 * Fired ONLY when the thermal-comfort BUCKET changes (not on every temp
+	 * fluctuation). E.g., body temp dropping from 37.0 → 36.8 keeps the
+	 * pawn in Comfortable and broadcasts nothing; 36.4 crosses ColdBelow
+	 * and fires (Comfortable → Cold). Lets HUD widgets re-render on state
+	 * change only — no per-tick spam.
+	 */
+	UPROPERTY(BlueprintAssignable, Category="MO|Vitals|Events")
+	FMOOnThermalComfortChanged OnThermalComfortChanged;
 
 	// ============================================================================
 	// BLOOD API
@@ -366,6 +385,13 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Vitals|Temperature")
 	void ApplyEnvironmentalTemperature(float AmbientTemp, float InsulationFactor);
 
+	/**
+	 * Map current Vitals.BodyTemperature to a thermal-comfort bucket via the
+	 * configured thresholds. HUD widgets call this to render an icon.
+	 */
+	UFUNCTION(BlueprintPure, Category="MO|Vitals|Temperature")
+	EMOThermalComfort GetThermalComfort() const;
+
 	// ============================================================================
 	// GLUCOSE API
 	// ============================================================================
@@ -446,6 +472,13 @@ private:
 
 	/** Previous blood loss stage for change detection. */
 	EMOBloodLossStage PreviousBloodLossStage = EMOBloodLossStage::None;
+
+	/**
+	 * Last thermal-comfort bucket — for change detection on each tick. We
+	 * broadcast OnThermalComfortChanged only when this differs from the
+	 * fresh computation. Initial value Comfortable matches default 37 °C.
+	 */
+	EMOThermalComfort LastThermalComfort = EMOThermalComfort::Comfortable;
 
 	/** Prevents multiple death triggers from blood loss. */
 	bool bBloodLossDeathTriggered = false;

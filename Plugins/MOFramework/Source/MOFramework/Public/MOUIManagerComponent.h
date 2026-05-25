@@ -155,6 +155,8 @@
 
 class APlayerController;
 class UMOInventoryComponent;
+class UMOHUDRootWidget;
+class UMOPrimaryGameLayout;
 class UMOReticleWidget;
 class UCommonActivatableWidget;
 class UMOModalBackground;
@@ -612,6 +614,41 @@ private:
 	TWeakObjectPtr<UMOReticleWidget> ReticleWidget;
 
 	void CreateReticle();
+
+	// --- Composite HUD root (pushed to MOPrimaryGameLayout::Layer_HUD) ---
+
+	/**
+	 * Composite HUD widget class (assign WBP_HUDRoot here in BP defaults).
+	 * If unset, no HUD root is pushed and the legacy procedural HUD widgets
+	 * (reticle, mode indicator, etc.) still run as before. Set this on
+	 * BP_PlayerController defaults to enable the composite HUD.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|HUDRoot", meta=(AllowPrivateAccess="true"))
+	TSubclassOf<UMOHUDRootWidget> HUDRootClass;
+
+	/** Whether to push the HUD root on BeginPlay. Off = no auto-push (manual via cheat). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|HUDRoot", meta=(AllowPrivateAccess="true"))
+	bool bCreateHUDRootOnBeginPlay = true;
+
+	/** Live HUD root instance once pushed. */
+	UPROPERTY(Transient)
+	TWeakObjectPtr<UMOHUDRootWidget> HUDRootWidget;
+
+	/**
+	 * Push HUDRootClass to MOPrimaryGameLayout::Layer_HUD. Idempotent — safe
+	 * to call once the layout exists. Invoked from HandlePrimaryLayoutCreated
+	 * (delegate) so we never poll for layout readiness.
+	 */
+	void CreateHUDRoot(UMOPrimaryGameLayout* Layout);
+
+	/**
+	 * Subscribed to UMOGameUIManagerSubsystem::OnPrimaryLayoutCreated.
+	 * Fires once the layout for our player is created, pushes the HUD root.
+	 */
+	void HandlePrimaryLayoutCreated(APlayerController* PlayerController, UMOPrimaryGameLayout* Layout);
+
+	/** Delegate subscription handle for clean unbind in EndPlay. */
+	FDelegateHandle PrimaryLayoutCreatedHandle;
 
 	// --- FPS Counter ---
 

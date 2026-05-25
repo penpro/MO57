@@ -50,11 +50,16 @@ void UMOLoadingOverlay::ShowOverlay()
 	UE_LOG(LogMOFramework, Log, TEXT("[MOLoadingOverlay] Showing overlay"));
 }
 
-void UMOLoadingOverlay::FadeOutAndRemove()
+void UMOLoadingOverlay::FadeOutAndRemove(float OverrideDuration)
 {
 	if (bIsFadingOut)
 	{
 		return; // Already fading
+	}
+
+	if (OverrideDuration > 0.0f)
+	{
+		FadeOutDuration = OverrideDuration;
 	}
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOLoadingOverlay] Starting fade out (duration=%.2fs)"), FadeOutDuration);

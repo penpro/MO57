@@ -148,7 +148,10 @@ public:
 
 	/**
 	 * Seconds to wait for the pawn to land before triggering recovery.
-	 * CheckPawnLanded polls every 0.1s, so this multiplies that interval.
+	 * One-shot timeout — armed when the spawn flow binds to LandedDelegate;
+	 * cancelled when the delegate fires. If the timeout elapses without a
+	 * landing event, RecoverStuckSpawn runs and re-arms a fresh timeout for
+	 * the next recovery attempt.
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Spawn|Recovery")
 	float MaxLandingWaitSeconds = 5.0f;
@@ -166,6 +169,44 @@ public:
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Spawn|Recovery")
 	float RecoveryLiftOffset = 5000.0f;
+
+	// =========================================================================
+	// LOAD-GAME REGROUNDING
+	// =========================================================================
+	//
+	// After a save loads + voxel terrain regenerates from the seed, persisted
+	// pawns can be slightly above/below the new terrain due to imperfect seed
+	// reproducibility. We trace down to find the new terrain top and re-place
+	// the pawn. Defaults are TIGHT so a small voxel wiggle doesn't visibly
+	// teleport the pawn — only meaningful Z mismatches get corrected.
+
+	/**
+	 * Z mismatch (cm) required to trigger regrounding. Below this, the pawn
+	 * stays at its exact saved Z (saved position is authoritative). Set higher
+	 * to make load feel more "exact"; set lower if pawns fall through terrain.
+	 * Default 200 = 2m: covers head-stuck-in-terrain but ignores ankle-deep drift.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Spawn|Reground",
+		meta=(ClampMin="10.0", ClampMax="2000.0"))
+	float RegroundTriggerThreshold = 200.0f;
+
+	/**
+	 * Z offset (cm) above the traced terrain impact point. Pawn lands here
+	 * then gravity settles them. Default 30 = ~30cm — feet sit right on top of
+	 * terrain, no visible drop. Capsule half-height takes care of clearance.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Spawn|Reground",
+		meta=(ClampMin="0.0", ClampMax="500.0"))
+	float RegroundLiftAboveTerrain = 30.0f;
+
+	/**
+	 * Trace half-height (cm) above/below the pawn used to find terrain. Keep
+	 * tight so the trace doesn't accidentally grab terrain hundreds of meters
+	 * away (a cliff edge or floating island). Default 3000 = 30m up/down.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Spawn|Reground",
+		meta=(ClampMin="500.0", ClampMax="50000.0"))
+	float RegroundTraceHalfHeight = 3000.0f;
 
 	// ============================================================================
 	// VOXEL SEED INTEGRATION
@@ -269,34 +310,111 @@ private:
 	void WaitForVoxelWorldAndSpawn();
 
 	/** Timer callback to check voxel readiness. */
-	void CheckVoxelReadyAndSpawn();
+	// === Voxel readiness — event-driven via UMOVoxelReadinessSubsystem ===
+	// Previously this was four FTimerHandles + a CheckVoxelReadyAndX poll pair
+	// for each of new-game and load. Now both subscribe to OnVoxelReady on
+	// the readiness subsystem; it owns the single polling loop project-wide.
 
-	/** Timer callback after collision delay - actually spawn the pawn. */
-	void OnCollisionDelayComplete();
-
-	/** Whether we're waiting for voxel world to spawn. */
-	bool bPendingSpawnAfterVoxelReady = false;
-
-	/** Timer handle for polling voxel world readiness. */
-	FTimerHandle VoxelReadyTimerHandle;
-
-	/** Timer handle for collision generation delay. */
-	FTimerHandle CollisionDelayTimerHandle;
-
-	/** Timer handle for re-grounding loaded pawns after voxel regeneration. */
-	FTimerHandle RegroundPawnsTimerHandle;
+	/** OnVoxelReady handler for the new-game spawn flow. */
+	void HandleVoxelReadyForNewGame();
 
 	/** Wait for voxel world to be ready, then re-ground all loaded pawns. */
 	void WaitForVoxelAndRegroundPawns();
 
-	/** Timer callback to check voxel readiness for re-grounding. */
-	void CheckVoxelReadyAndReground();
+	/** OnVoxelReady handler for the load-game regrounding flow. */
+	void HandleVoxelReadyForLoad();
 
 	/** Actually re-ground all MOCharacters to terrain level. */
 	void RegroundAllPawns();
 
-	/** Whether we need to re-ground pawns after voxel is ready. */
-	bool bPendingRegroundAfterVoxel = false;
+	// =========================================================================
+	// LOADING-SCREEN-HELD-UNTIL-LANDED (load path)
+	// =========================================================================
+	//
+	// After regrounding finishes, the player pawn may still be slightly in
+	// the air while voxel collision settles. Instead of dismissing the
+	// loading screen immediately and showing the player a few seconds of
+	// falling pawns, we poll the player pawn's grounded state and only
+	// dismiss once they've actually landed (or after a generous timeout).
+
+	/** The player pawn we're waiting for to land. Cleared after dismiss. */
+	TWeakObjectPtr<APawn> WaitingForLandingPawn;
+
+	/** Timer handle for landing poll loop. */
+	FTimerHandle PlayerLandingPollHandle;
+
+	/** World time when landing poll started — used for timeout. */
+	float PlayerLandingPollStartedAtSeconds = 0.0f;
+
+	/**
+	 * Hard timeout (seconds) for waiting on terrain to appear under the saved
+	 * X/Y. Last-resort safe-spawn only fires after this elapses. Default 30s —
+	 * voxel streaming + collision generation can be slow for saves far from
+	 * world origin. Loading screen + black fade stays up for the entire wait.
+	 */
+	UPROPERTY(EditAnywhere, Category="MO|Spawn|Reground",
+		meta=(ClampMin="1.0", ClampMax="120.0"))
+	float PlayerLandingMaxWaitSeconds = 30.0f;
+
+	/**
+	 * Tiny clearance offset (cm) above saved Z (or terrain top, once found)
+	 * where we place the pawn. Just enough to avoid clipping into geometry.
+	 * Saved position is authoritative — we don't drop the pawn from height.
+	 */
+	UPROPERTY(EditAnywhere, Category="MO|Spawn|Reground",
+		meta=(ClampMin="5.0", ClampMax="200.0"))
+	float PlayerLandingSpawnOffset = 25.0f;
+
+	/**
+	 * Half-range (cm) for the terrain probe trace around the saved Z. Each
+	 * poll, we trace from (savedZ + this) down to (savedZ - this) at the
+	 * saved X/Y. 5000 = 50m above + 50m below = 100m total window. Wide
+	 * enough to catch voxel terrain even if collision regen lands a bit off
+	 * the saved Z, narrow enough not to pick up "wrong" terrain in caves or
+	 * underground voids.
+	 */
+	UPROPERTY(EditAnywhere, Category="MO|Spawn|Reground",
+		meta=(ClampMin="100.0", ClampMax="20000.0"))
+	float PlayerLandingTerrainSearchDistance = 5000.0f;
+
+	/** Saved Z captured at landing-poll start so the probe trace stays anchored. */
+	float SavedAnchorZ = 0.0f;
+	FVector SavedAnchorXY = FVector::ZeroVector;
+
+	/**
+	 * Number of consecutive polls where the detected terrain Z must stay
+	 * within LandingTerrainStableThreshold of the previous reading before we
+	 * declare the LOD/refinement passes finished. Default 3 = 750ms with the
+	 * 250ms poll interval.
+	 */
+	UPROPERTY(EditAnywhere, Category="MO|Spawn|Reground",
+		meta=(ClampMin="1", ClampMax="20"))
+	int32 LandingTerrainStableTicks = 3;
+
+	/**
+	 * Δ in cm between consecutive terrain hits considered "stable" — LOD has
+	 * settled enough to commit. 10cm = a thumb's-width wobble. Voxel LOD0
+	 * is typically sub-cm precise so this is generous.
+	 */
+	UPROPERTY(EditAnywhere, Category="MO|Spawn|Reground",
+		meta=(ClampMin="0.5", ClampMax="100.0"))
+	float LandingTerrainStableThreshold = 10.0f;
+
+	/** Internal: terrain Z from the previous successful poll, for stability check. */
+	float LastTerrainProbeZ = 0.0f;
+
+	/** Internal: consecutive count of polls where probe Z stayed stable. */
+	int32 ConsecutiveStableTerrainTicks = 0;
+
+	/** Begin polling for the player pawn's grounded state. */
+	void BeginPlayerLandingPoll(APawn* PlayerPawn);
+
+	/** Timer callback — dismisses loading screen + clears state when player lands. */
+	void PollPlayerLanding();
+
+	/** Final teardown — dismiss screen, lift suppression, clear flags. Idempotent. */
+	void FinishLoadHandoff();
+
 
 	/** Delay in seconds after voxel ready before searching for land (allows collision generation). */
 	static constexpr float CollisionGenerationDelay = 3.0f;
@@ -304,9 +422,22 @@ private:
 	// ============================================================================
 	// PAWN LANDING DETECTION (for loading screen dismissal)
 	// ============================================================================
+	//
+	// Event-driven: bind to ACharacter::LandedDelegate after Possess(NewPawn),
+	// then arm a one-shot MaxLandingWaitSeconds timeout as a safety net. If
+	// the delegate fires first, the timeout is cancelled and the loading
+	// screen dismisses. If the timeout fires first, RecoverStuckSpawn
+	// teleports the pawn and re-arms a fresh timeout for the next attempt.
+	//
+	// Replaces the previous 10Hz polling loop on CheckPawnLanded — same end
+	// behavior, but no per-frame timer cost across the entire spawn flow.
 
-	/** Check if possessed pawn has landed on the ground. */
-	void CheckPawnLanded();
+	/**
+	 * LandedDelegate callback. Fired by ACharacter when MOVE_Falling
+	 * transitions to MOVE_Walking. Forwards to OnPawnLandedSafely.
+	 */
+	UFUNCTION()
+	void HandlePawnLanded(const FHitResult& Hit);
 
 	/** Called when pawn has safely landed on ground - dismisses loading screen. */
 	void OnPawnLandedSafely();
@@ -314,17 +445,22 @@ private:
 	/**
 	 * Called after the landing timer has run for MaxLandingWaitSeconds without the pawn
 	 * landing. Tries a progressive recovery — lift up, then re-search, then hard fallback.
+	 * Re-arms the one-shot landing timeout at the end of each non-fallback recovery.
 	 */
 	void RecoverStuckSpawn();
 
-	/** Timer handle for pawn landing check. */
+	/**
+	 * Arm the one-shot MaxLandingWaitSeconds timeout. Called by SpawnInitialPawn
+	 * after binding LandedDelegate, and by RecoverStuckSpawn after each teleport
+	 * recovery. Safe to call multiple times; resets the existing timer.
+	 */
+	void ArmLandingTimeout();
+
+	/** Timer handle for the one-shot landing timeout (drives RecoverStuckSpawn). */
 	FTimerHandle PawnLandingTimerHandle;
 
 	/** Track the pawn we're waiting to land. */
 	TWeakObjectPtr<APawn> PendingLandingPawn;
-
-	/** Number of CheckPawnLanded ticks since the current spawn attempt started. */
-	int32 LandingCheckTickCount = 0;
 
 	/** Number of recovery attempts triggered for this spawn. */
 	int32 LandingRecoveryAttempts = 0;

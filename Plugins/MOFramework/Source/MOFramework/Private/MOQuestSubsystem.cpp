@@ -453,6 +453,13 @@ void UMOQuestSubsystem::LoadQuestDefinitions()
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOQuestSubsystem] Loaded %d quest definitions from %s"),
 		QuestDefinitions.Num(), *Table->GetName());
+
+	// Signal readiness to UI controllers (and anyone else subscribed). Listeners
+	// that subscribe AFTER this broadcast check IsReady() and act synchronously.
+	// Set the flag BEFORE broadcasting so handlers that re-query IsReady inside
+	// their own handler see true.
+	bIsReady = true;
+	OnQuestSystemReady.Broadcast();
 }
 
 bool UMOQuestSubsystem::ArePrerequisitesMet(const FMOQuestDefinitionRow& Quest) const

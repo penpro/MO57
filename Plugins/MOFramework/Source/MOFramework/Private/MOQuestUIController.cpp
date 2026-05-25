@@ -4,6 +4,8 @@
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/Pawn.h"
 #include "Blueprint/UserWidget.h"
+#include "Engine/GameInstance.h"
+#include "Engine/World.h"
 
 #include "MOUIManagerComponent.h"
 #include "MOQuestLogPanel.h"
@@ -21,21 +23,73 @@ void UMOQuestUIController::BeginPlay()
 {
 	Super::BeginPlay();
 
-	if (IsLocalOwningPlayerController())
+	if (!IsLocalOwningPlayerController())
 	{
-		if (bCreateQuestHUDOnBeginPlay && QuestHUDWidgetClass)
-		{
-			CreateQuestHUD();
-		}
-		if (bCreateTutorialHintOnBeginPlay && TutorialHintWidgetClass)
-		{
-			CreateTutorialHintWidget();
-		}
+		return;
+	}
+
+	// Event-driven: wait for UMOQuestSubsystem::OnQuestSystemReady before
+	// spawning the HUD/tutorial widgets. Even if the GameInstance subsystem
+	// happens to be ready by the time BeginPlay fires today (synchronous
+	// DataTable load), depending on that ordering is exactly the kind of
+	// implicit race we just stopped doing for voxel readiness. If the
+	// definitions ever move to async load, the BeginPlay path silently breaks.
+	//
+	// Same-frame fallback: if the subsystem already finished loading before
+	// we got here, IsReady() returns true and we skip the wait entirely.
+	UGameInstance* GI = GetWorld() ? GetWorld()->GetGameInstance() : nullptr;
+	UMOQuestSubsystem* QuestSub = GI ? GI->GetSubsystem<UMOQuestSubsystem>() : nullptr;
+	if (!IsValid(QuestSub))
+	{
+		UE_LOG(LogMOFramework, Warning,
+			TEXT("[MOQuestUI] Quest subsystem unavailable at BeginPlay — quest widgets will not be created"));
+		return;
+	}
+
+	if (QuestSub->IsReady())
+	{
+		SpawnReadyTimeWidgets();
+		return;
+	}
+
+	QuestSub->OnQuestSystemReady.RemoveDynamic(this, &UMOQuestUIController::HandleQuestSystemReady);
+	QuestSub->OnQuestSystemReady.AddDynamic(this, &UMOQuestUIController::HandleQuestSystemReady);
+}
+
+void UMOQuestUIController::HandleQuestSystemReady()
+{
+	SpawnReadyTimeWidgets();
+}
+
+void UMOQuestUIController::SpawnReadyTimeWidgets()
+{
+	if (!IsLocalOwningPlayerController())
+	{
+		return;
+	}
+
+	if (bCreateQuestHUDOnBeginPlay && QuestHUDWidgetClass && !QuestHUDWidget.IsValid())
+	{
+		CreateQuestHUD();
+	}
+	if (bCreateTutorialHintOnBeginPlay && TutorialHintWidgetClass && !TutorialHintWidget.IsValid())
+	{
+		CreateTutorialHintWidget();
 	}
 }
 
 void UMOQuestUIController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	// Unbind from quest subsystem readiness signal. Safe even if BeginPlay
+	// took the IsReady() short-circuit path and never subscribed.
+	if (UGameInstance* GI = GetWorld() ? GetWorld()->GetGameInstance() : nullptr)
+	{
+		if (UMOQuestSubsystem* QuestSub = GI->GetSubsystem<UMOQuestSubsystem>())
+		{
+			QuestSub->OnQuestSystemReady.RemoveDynamic(this, &UMOQuestUIController::HandleQuestSystemReady);
+		}
+	}
+
 	// Clean up quest log panel widget - unbind delegates first
 	if (UMOQuestLogPanel* QuestWidget = QuestLogPanelWidget.Get())
 	{

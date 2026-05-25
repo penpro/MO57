@@ -1,4 +1,5 @@
 #include "MOMainMenuPlayerController.h"
+#include "MOAudioSubsystem.h"
 #include "MOFramework.h"
 #include "MOMainMenuWidget.h"
 #include "MOIntroWidget.h"
@@ -467,6 +468,17 @@ void AMOMainMenuPlayerController::HandleIntroComplete()
 	// AddToViewport fallback path). Just clear our reference — no manual
 	// removal needed.
 	IntroWidget = nullptr;
+
+	// NOW start main-menu music. AMOMainMenuGameMode::BeginPlay deferred the
+	// call because the intro has its own audio — starting Cedar in parallel
+	// with the intro video clashes. Intro is done, safe to start now.
+	if (UWorld* World = GetWorld())
+	{
+		if (UMOAudioSubsystem* Audio = UMOAudioSubsystem::Get(World))
+		{
+			Audio->HandleWorldAudioContext(World);
+		}
+	}
 
 	// Show main menu
 	ShowMainMenu();

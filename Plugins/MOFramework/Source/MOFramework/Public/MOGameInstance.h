@@ -73,6 +73,27 @@ public:
 	TArray<FText> LoadingTips;
 
 	/**
+	 * Fade-out duration for the loading screen after the player pawn lands.
+	 * Set explicitly in code so the value doesn't depend on whatever the
+	 * WBP_LoadingOverlay default ends up being. 1.0s = deliberate hand-off.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="MO|LoadingScreen",
+		meta=(ClampMin="0.0", ClampMax="5.0"))
+	float LoadingScreenFadeOutSeconds = 1.0f;
+
+	/**
+	 * Debug toggle — when true, the black loading overlay is suppressed
+	 * entirely. The pawn-spawn + voxel-wait sequence runs as normal but the
+	 * player sees the world the whole time. Useful for debugging "why is
+	 * the pawn not landing" scenarios visually.
+	 *
+	 * Toggle via console: `MO.Loading.Skip 1` (or 0 to re-enable).
+	 * Not persisted — defaults off each session.
+	 */
+	UPROPERTY(BlueprintReadWrite, Category="MO|LoadingScreen|Debug")
+	bool bSkipLoadingOverlay = false;
+
+	/**
 	 * Show the loading overlay immediately.
 	 * Call this before starting a level transition.
 	 */

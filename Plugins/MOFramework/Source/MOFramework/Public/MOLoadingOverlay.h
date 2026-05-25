@@ -64,9 +64,13 @@ public:
 
 	/**
 	 * Begin fading out the overlay. Removes from viewport when complete.
+	 * @param OverrideDuration  If > 0, uses this duration instead of the
+	 *                          widget's configured FadeOutDuration. Callers can
+	 *                          pin the fade length without depending on the
+	 *                          WBP default.
 	 */
 	UFUNCTION(BlueprintCallable, Category="MO|Loading")
-	void FadeOutAndRemove();
+	void FadeOutAndRemove(float OverrideDuration = -1.0f);
 
 	/**
 	 * Set the loading text displayed on the overlay.
@@ -98,9 +102,13 @@ protected:
 	// CONFIGURATION
 	// ============================================================================
 
-	/** Duration of the fade-out animation in seconds. */
+	/**
+	 * Duration of the fade-out animation in seconds. Used by FadeOutAndRemove().
+	 * Default 1.0s feels like a deliberate hand-off from "loading" to "game",
+	 * giving the world a moment to settle visually before player input matters.
+	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Loading")
-	float FadeOutDuration = 0.5f;
+	float FadeOutDuration = 1.0f;
 
 private:
 	/** Current opacity (1.0 = fully visible, 0.0 = invisible). */

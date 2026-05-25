@@ -84,6 +84,8 @@ class MOFRAMEWORK_API UMOOptionsPanel : public UMOActivatableWidget
 	GENERATED_BODY()
 
 public:
+	UMOOptionsPanel(const FObjectInitializer& ObjectInitializer);
+
 	/** Apply current settings. */
 	UFUNCTION(BlueprintCallable, Category="MO|UI|Options")
 	virtual void ApplySettings();
@@ -121,6 +123,7 @@ private:
 	UFUNCTION() void HandleMusicVolumeChanged(float Value);
 	UFUNCTION() void HandleSFXVolumeChanged(float Value);
 	UFUNCTION() void HandleAmbientVolumeChanged(float Value);
+	UFUNCTION() void HandleWeatherVolumeChanged(float Value);
 	UFUNCTION() void HandleCameraSensitivityChanged(float Value);
 
 	// Resolution/display handlers
@@ -201,7 +204,7 @@ private:
 
 	/** Music volume slider. */
 	UPROPERTY(meta=(BindWidgetOptional))
-	TObjectPtr<USlider> MusicVolumeSlider;
+	TObjectPtr<USlider> MusicSlider;
 
 	/** Music volume percentage display. */
 	UPROPERTY(meta=(BindWidgetOptional))
@@ -222,6 +225,14 @@ private:
 	/** Ambient volume percentage display. */
 	UPROPERTY(meta=(BindWidgetOptional))
 	TObjectPtr<UTextBlock> AmbientVolumeText;
+
+	/** Weather volume slider (UDW rain/thunder/wind). */
+	UPROPERTY(meta=(BindWidgetOptional))
+	TObjectPtr<USlider> WeatherVolumeSlider;
+
+	/** Weather volume percentage display. */
+	UPROPERTY(meta=(BindWidgetOptional))
+	TObjectPtr<UTextBlock> WeatherVolumeText;
 
 	// ============================================================
 	// GAMEPLAY OPTIONS

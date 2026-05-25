@@ -3,7 +3,35 @@
 #include "MOGameSettings.h"
 #include "MOLoadingOverlay.h"
 #include "Blueprint/UserWidget.h"
+#include "Engine/Engine.h"
+#include "HAL/IConsoleManager.h"
 #include "Kismet/GameplayStatics.h"
+
+// Console command: MO.Loading.Skip [0|1]
+//   Toggle the black loading overlay on/off (debug). The voxel-wait + pawn
+//   spawn-wait sequence still runs identically — only the visual overlay
+//   is suppressed so you can see the world during the wait.
+static FAutoConsoleCommandWithWorldAndArgs GMOLoadingSkipCmd(
+	TEXT("MO.Loading.Skip"),
+	TEXT("Toggle loading overlay visibility (debug). Usage: MO.Loading.Skip [0|1]"),
+	FConsoleCommandWithWorldAndArgsDelegate::CreateLambda(
+		[](const TArray<FString>& Args, UWorld* World)
+		{
+			if (!World) return;
+			UMOGameInstance* GI = Cast<UMOGameInstance>(World->GetGameInstance());
+			if (!GI) return;
+
+			bool bNewValue = !GI->bSkipLoadingOverlay; // toggle by default
+			if (Args.Num() > 0)
+			{
+				bNewValue = (Args[0] == TEXT("1") || Args[0].ToBool());
+			}
+			GI->bSkipLoadingOverlay = bNewValue;
+
+			UE_LOG(LogMOFramework, Warning,
+				TEXT("[MOGameInstance] bSkipLoadingOverlay = %s"),
+				bNewValue ? TEXT("TRUE (overlay HIDDEN)") : TEXT("false (overlay normal)"));
+		}));
 
 void UMOGameInstance::Init()
 {
@@ -40,6 +68,14 @@ void UMOGameInstance::Shutdown()
 
 void UMOGameInstance::ShowLoadingOverlay()
 {
+	// Debug short-circuit — overlay suppressed via MO.Loading.Skip console cmd.
+	if (bSkipLoadingOverlay)
+	{
+		UE_LOG(LogMOFramework, Warning,
+			TEXT("[MOGameInstance] ShowLoadingOverlay: skipped (bSkipLoadingOverlay=true)"));
+		return;
+	}
+
 	if (!LoadingOverlayClass)
 	{
 		UE_LOG(LogMOFramework, Error, TEXT("[MOGameInstance] ShowLoadingOverlay: LoadingOverlayClass not set in BP_MOGameInstance!"));
@@ -151,7 +187,14 @@ void UMOGameInstance::DismissLoadingScreen()
 
 	if (LoadingOverlayWidget)
 	{
-		LoadingOverlayWidget->FadeOutAndRemove();
+		// Override the WBP's FadeOutDuration with the GameInstance setting,
+		// so the fade is consistent regardless of WBP defaults. 1.0s default
+		// gives the world a moment to settle visually before player input.
+		UE_LOG(LogMOFramework, Log,
+			TEXT("[MOGameInstance] DismissLoadingScreen: starting %.1fs fade-out"),
+			LoadingScreenFadeOutSeconds);
+
+		LoadingOverlayWidget->FadeOutAndRemove(LoadingScreenFadeOutSeconds);
 		// Don't null the pointer - the widget will remove itself after fade
 	}
 

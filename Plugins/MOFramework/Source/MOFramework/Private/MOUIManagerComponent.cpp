@@ -80,6 +80,7 @@
 #include "MOQuestUIController.h"
 #include "MOPrimaryGameLayout.h"
 #include "MOGameUIManagerSubsystem.h"
+#include "MOHUDRootWidget.h"
 
 UMOUIManagerComponent::UMOUIManagerComponent()
 {
@@ -93,6 +94,32 @@ void UMOUIManagerComponent::BeginPlay()
 
 	if (IsLocalOwningPlayerController())
 	{
+		// HUD root: subscribe to the layout-created event from the UI subsystem.
+		// MOGameUIManagerSubsystem creates the UMOPrimaryGameLayout asynchronously
+		// (during its NotifyPlayerAdded path, which runs after THIS BeginPlay).
+		// Don't poll/retry — subscribe and react.
+		//
+		// Edge case: if the layout ALREADY exists when we get here (subsystem
+		// init order happened to run first), the delegate has already fired
+		// once and won't fire again — so check and push immediately too.
+		if (bCreateHUDRootOnBeginPlay && HUDRootClass)
+		{
+			if (UMOGameUIManagerSubsystem* UISubsystem = UMOGameUIManagerSubsystem::Get(GetWorld()))
+			{
+				PrimaryLayoutCreatedHandle = UISubsystem->OnPrimaryLayoutCreated.AddUObject(
+					this, &UMOUIManagerComponent::HandlePrimaryLayoutCreated);
+
+				if (APlayerController* PC = ResolveOwningPlayerController())
+				{
+					if (UMOPrimaryGameLayout* ExistingLayout = UISubsystem->GetRootLayoutForPlayer(PC))
+					{
+						// Layout already created before we subscribed — push now.
+						CreateHUDRoot(ExistingLayout);
+					}
+				}
+			}
+		}
+
 		if (bCreateReticleOnBeginPlay)
 		{
 			CreateReticle();
@@ -150,6 +177,17 @@ void UMOUIManagerComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 
 	// Stop focus hint timer
 	StopFocusHintTimer();
+
+	// Unsubscribe from layout-created delegate so the subsystem doesn't fire
+	// into a dead component on the next world/PIE cycle.
+	if (PrimaryLayoutCreatedHandle.IsValid())
+	{
+		if (UMOGameUIManagerSubsystem* UISubsystem = UMOGameUIManagerSubsystem::Get(GetWorld()))
+		{
+			UISubsystem->OnPrimaryLayoutCreated.Remove(PrimaryLayoutCreatedHandle);
+		}
+		PrimaryLayoutCreatedHandle.Reset();
+	}
 
 	Super::EndPlay(EndPlayReason);
 }
@@ -306,6 +344,58 @@ void UMOUIManagerComponent::SetNearbyItemsQueryRadius(float NewRadius)
 
 // NOTE: ApplyInputModeForMenuOpen/Closed have been removed.
 // CommonUI handles input mode automatically via GetDesiredInputConfig() on widgets.
+
+void UMOUIManagerComponent::HandlePrimaryLayoutCreated(APlayerController* PlayerController,
+	UMOPrimaryGameLayout* Layout)
+{
+	// Filter: only react to the layout created for OUR player, not co-op
+	// peers or other players in split-screen.
+	if (!PlayerController || !Layout) return;
+	if (PlayerController != ResolveOwningPlayerController()) return;
+
+	CreateHUDRoot(Layout);
+}
+
+void UMOUIManagerComponent::CreateHUDRoot(UMOPrimaryGameLayout* Layout)
+{
+	if (!HUDRootClass)
+	{
+		UE_LOG(LogMOFramework, Log,
+			TEXT("[MOUI] HUDRootClass not set — composite HUD root skipped (legacy procedural widgets still active)."));
+		return;
+	}
+
+	if (HUDRootWidget.IsValid())
+	{
+		// Already pushed — happens if both the delegate AND the
+		// "layout-already-exists" path in BeginPlay fire for the same layout.
+		// Idempotent — silent skip.
+		return;
+	}
+
+	if (!Layout)
+	{
+		UE_LOG(LogMOFramework, Warning,
+			TEXT("[MOUI] CreateHUDRoot called with null layout — ignoring."));
+		return;
+	}
+
+	UCommonActivatableWidget* Created = Layout->PushWidgetToLayer(
+		MOUILayerTags::Layer_HUD, HUDRootClass);
+
+	if (UMOHUDRootWidget* CastedRoot = ::Cast<UMOHUDRootWidget>(Created))
+	{
+		HUDRootWidget = CastedRoot;
+		UE_LOG(LogMOFramework, Warning,
+			TEXT("[MOUI] HUD root '%s' pushed to Layer_HUD"),
+			*CastedRoot->GetName());
+	}
+	else
+	{
+		UE_LOG(LogMOFramework, Warning,
+			TEXT("[MOUI] HUD root push returned null or wrong class."));
+	}
+}
 
 void UMOUIManagerComponent::CreateReticle()
 {

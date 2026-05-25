@@ -818,6 +818,19 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Safety")
 	bool bEnableFallThroughSafety = true;
 
+	/**
+	 * Suppress fall-through safety teleport. Set true while the world is
+	 * being loaded — during the gap between persistence-spawn and voxel-ready,
+	 * the pawn appears to be "falling" only because voxel collision hasn't
+	 * generated yet. The fall-through rescue would teleport the pawn 20m
+	 * away from its saved position, corrupting the load.
+	 *
+	 * MOGameMode sets this true in WaitForVoxelAndRegroundPawns and clears
+	 * it after RegroundAllPawns finishes.
+	 */
+	UPROPERTY(BlueprintReadWrite, Category="MO|Safety")
+	bool bSuppressFallThroughDuringLoad = false;
+
 	/** How long to fall before triggering safety teleport (seconds). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Safety")
 	float FallThroughTimeThreshold = 2.0f;
