@@ -21,6 +21,7 @@
 #include "MOStatusEffectStripWidget.h"
 #include "MOStatusMoodleTypes.h"
 #include "MOUIManagerComponent.h"
+#include "MOVitalsComponent.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
@@ -1189,6 +1190,40 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 			const int32 Before = Strip->GetMoodleCount();
 			Strip->ClearAllMoodles();
 			UE_LOG(LogMOFramework, Warning, TEXT("[MO.HUD.ClearMoodles] Dropped %d moodle(s)."), Before);
+		}),
+		ECVF_Default));
+
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Player.SetWet"),
+		TEXT("Force the local pawn's wetness level (0.0-1.0). Drives the wet "
+		     "moodle on the HUD strip. Usage: MO.Player.SetWet 0.5"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			if (Args.Num() < 1)
+			{
+				UE_LOG(LogMOFramework, Warning,
+					TEXT("[MO.Player.SetWet] Usage: MO.Player.SetWet <0..1>"));
+				return;
+			}
+			APawn* Pawn = ResolveLocalPawn(World);
+			if (!Pawn)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MO.Player.SetWet] No locally controlled pawn"));
+				return;
+			}
+			UMOVitalsComponent* Vitals = Pawn->FindComponentByClass<UMOVitalsComponent>();
+			if (!Vitals)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MO.Player.SetWet] Pawn has no UMOVitalsComponent"));
+				return;
+			}
+
+			const float Level = FCString::Atof(*Args[0]);
+			Vitals->SetWetnessLevel(Level);
+			UE_LOG(LogMOFramework, Warning,
+				TEXT("[MO.Player.SetWet] WetnessLevel=%.2f → state=%s"),
+				Vitals->GetWetnessLevel(),
+				*UEnum::GetValueAsString(Vitals->GetWetnessState()));
 		}),
 		ECVF_Default));
 

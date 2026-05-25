@@ -113,6 +113,13 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOOnStaminaChanged, float, OldStam
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOOnStaminaDepleted);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOOnThermalComfortChanged, EMOThermalComfort, OldComfort, EMOThermalComfort, NewComfort);
 
+/**
+ * Fired only when the wetness STATE crosses a bucket boundary (Dry → Damp,
+ * Damp → Wet, Wet → Soaked, etc). Continuous WetnessLevel changes don't
+ * fire — listeners (HUD moodle) re-render on state change only.
+ */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOOnWetnessStateChanged, EMOWetnessState, OldState, EMOWetnessState, NewState);
+
 // ============================================================================
 // SAVE DATA
 // ============================================================================
@@ -180,6 +187,39 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Vitals|Config")
 	FMOThermalComfortThresholds ThermalThresholds;
 
+	/** Bucket thresholds for the wet-state moodle (Dry/Damp/Wet/Soaked). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Vitals|Config")
+	FMOWetnessThresholds WetnessThresholds;
+
+	/**
+	 * How fast WetnessLevel rises per second of full exposure to rain
+	 * (intensity 1.0, zero overhead cover). Default 0.10 → fully soaked in 10s
+	 * of standing in a torrential downpour. Modified by rain intensity and
+	 * shelter coverage at evaluation time.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Vitals|Wetness",
+		meta=(ClampMin="0.001", ClampMax="1.0"))
+	float WetnessGainPerSecond = 0.10f;
+
+	/**
+	 * How fast WetnessLevel decays per second while sheltered or in clear
+	 * weather. Default 0.005 → fully soaked → dry in ~200s (~3 min). Slow
+	 * enough that the player has to deliberately get under cover, not just
+	 * pass through a doorway.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Vitals|Wetness",
+		meta=(ClampMin="0.0001", ClampMax="1.0"))
+	float WetnessDecayPerSecond = 0.005f;
+
+	/**
+	 * Seconds between weather/shelter polls. Wetness update is cheap once we
+	 * have a rain intensity + overhead coverage number; the EXPENSIVE part
+	 * is the 9-ray shelter trace. Default 2s = trace cost amortized.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Vitals|Wetness",
+		meta=(ClampMin="0.25", ClampMax="10.0"))
+	float WetnessPollInterval = 2.0f;
+
 	// NOTE: TimeScaleMultiplier removed. The single source of truth is now
 	// UMOGameClockSubsystem::GetTimeScale(). Tick handlers in this component
 	// query GameClock->GetScaledDeltaTime(TickInterval). To change the
@@ -230,6 +270,37 @@ public:
 	 */
 	UPROPERTY(BlueprintAssignable, Category="MO|Vitals|Events")
 	FMOOnThermalComfortChanged OnThermalComfortChanged;
+
+	/**
+	 * Fired ONLY when wetness BUCKET crosses (Dry/Damp/Wet/Soaked). Continuous
+	 * WetnessLevel ticks don't fire — moodle widget renders on state change only.
+	 */
+	UPROPERTY(BlueprintAssignable, Category="MO|Vitals|Events")
+	FMOOnWetnessStateChanged OnWetnessStateChanged;
+
+	// ============================================================================
+	// WETNESS API
+	// ============================================================================
+	//
+	// WetnessLevel rises while the pawn is in active precipitation that isn't
+	// blocked by overhead cover, and decays toward zero when sheltered or in
+	// clear weather. Bucket transitions broadcast OnWetnessStateChanged so the
+	// HUD moodle strip can show a wet/damp/soaked icon.
+
+	/** Current wetness 0–1 (raw accumulator). */
+	UFUNCTION(BlueprintPure, Category="MO|Vitals|Wetness")
+	float GetWetnessLevel() const { return WetnessLevel; }
+
+	/** Current bucket derived from WetnessLevel + WetnessThresholds. */
+	UFUNCTION(BlueprintPure, Category="MO|Vitals|Wetness")
+	EMOWetnessState GetWetnessState() const;
+
+	/**
+	 * Force-set wetness. Used by cheats (MO.Player.SetWet) and save-restore.
+	 * Clamps to [0,1] and fires OnWetnessStateChanged if the bucket transitions.
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Vitals|Wetness")
+	void SetWetnessLevel(float NewLevel);
 
 	// ============================================================================
 	// BLOOD API
@@ -479,6 +550,26 @@ private:
 	 * fresh computation. Initial value Comfortable matches default 37 °C.
 	 */
 	EMOThermalComfort LastThermalComfort = EMOThermalComfort::Comfortable;
+
+	/** Current wetness 0–1, integrated by UpdateWetness on each weather poll. */
+	UPROPERTY(Transient)
+	float WetnessLevel = 0.0f;
+
+	/** Last wetness bucket — broadcast on transition only. */
+	EMOWetnessState LastWetnessState = EMOWetnessState::Dry;
+
+	/** Seconds since the last shelter trace + wetness integration. */
+	float WetnessAccumulatorSeconds = 0.0f;
+
+	/**
+	 * Per-tick step that integrates rain intensity + overhead shelter into
+	 * WetnessLevel. Called from TickComponent at WetnessPollInterval to
+	 * amortize the 9-ray shelter trace.
+	 */
+	void UpdateWetness(float DeltaSeconds);
+
+	/** Convert WetnessLevel to bucket via WetnessThresholds. */
+	EMOWetnessState ComputeWetnessState(float Level) const;
 
 	/** Prevents multiple death triggers from blood loss. */
 	bool bBloodLossDeathTriggered = false;

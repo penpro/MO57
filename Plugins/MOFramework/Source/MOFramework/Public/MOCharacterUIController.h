@@ -75,6 +75,7 @@
 #include "CoreMinimal.h"
 #include "MOUIControllerBase.h"
 #include "MOInterruptibleInterface.h"
+#include "MOVitalsTypes.h"  // EMOWetnessState (used in HandleWetnessStateChanged)
 #include "MOCharacterUIController.generated.h"
 
 class AMOCharacter;
@@ -337,4 +338,32 @@ private:
 
 	UFUNCTION()
 	void HandleInspectionCancelled();
+
+	// =========================================================================
+	// VITALS-DERIVED MOODLES (wet, future: bleeding, hot/cold thresholds, etc.)
+	// =========================================================================
+	//
+	// Subscribes to UMOVitalsComponent::OnWetnessStateChanged on the live pawn
+	// and pushes/removes a "Wet" moodle on the HUD status strip. Re-binds via
+	// OnPossessedPawnChanged so the listener always tracks the current pawn.
+
+	/** Vitals we're currently subscribed to — held weakly so possess-swap doesn't keep it alive. */
+	UPROPERTY(Transient)
+	TWeakObjectPtr<class UMOVitalsComponent> BoundVitalsComponent;
+
+	/** Optional icon shown in the wet moodle. If null, the moodle still renders with label only. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="MO|Character|Moodles", meta=(AllowPrivateAccess="true"))
+	TObjectPtr<class UTexture2D> WetMoodleIcon;
+
+	/** Bind to the live pawn's vitals OnWetnessStateChanged. */
+	void BindToPawnVitalsForMoodles();
+
+	/** Drop the wetness binding (called on pawn-swap and EndPlay). */
+	void UnbindFromPawnVitalsForMoodles();
+
+	/** Push/remove the wet moodle on the HUD strip based on wetness state. */
+	void RefreshWetMoodle(EMOWetnessState State);
+
+	UFUNCTION()
+	void HandleWetnessStateChanged(EMOWetnessState OldState, EMOWetnessState NewState);
 };

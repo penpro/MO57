@@ -22,6 +22,9 @@
 #include "MOCharacter.h"
 #include "MOTerraformingComponent.h"
 #include "MOProgressWidgetBase.h"
+#include "MOHUDRootWidget.h"
+#include "MOStatusEffectStripWidget.h"
+#include "MOStatusMoodleTypes.h"
 
 UMOCharacterUIController::UMOCharacterUIController()
 {
@@ -57,6 +60,11 @@ void UMOCharacterUIController::OnPossessedPawnChanged(APawn* OldPawn, APawn* New
 
 void UMOCharacterUIController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	// Drop the vitals subscription first — otherwise a stale delegate
+	// pointer could fire into us during shutdown if the vitals component
+	// outlives us by a frame.
+	UnbindFromPawnVitalsForMoodles();
+
 	// Clean up skills panel widget - unbind delegates first
 	if (UMOSkillsPanel* SkillsWidget = SkillsPanelWidget.Get())
 	{
@@ -420,6 +428,11 @@ void UMOCharacterUIController::OnPawnChanged()
 	TearDownTerraformProgressWidget();
 	UnbindFromPawnTerraformingComponent();
 	BindToPawnTerraformingComponent();
+
+	// Vitals-derived moodles (wet, etc.) — rebind to the new pawn's
+	// VitalsComponent so the HUD strip tracks the live pawn.
+	UnbindFromPawnVitalsForMoodles();
+	BindToPawnVitalsForMoodles();
 }
 
 // =============================================================================
@@ -890,4 +903,129 @@ void UMOCharacterUIController::UnregisterFromInspectionInterrupts()
 		Pawn->UnregisterInterruptListener(this);
 	}
 	RegisteredInspectionCharacter.Reset();
+}
+
+// =============================================================================
+// Vitals-Derived Moodles (Wet, future bleeding/etc.)
+// =============================================================================
+
+void UMOCharacterUIController::BindToPawnVitalsForMoodles()
+{
+	APlayerController* PC = ResolveOwningPlayerController();
+	if (!IsValid(PC))
+	{
+		return;
+	}
+
+	APawn* Pawn = PC->GetPawn();
+	if (!IsValid(Pawn))
+	{
+		return;
+	}
+
+	UMOVitalsComponent* Vitals = Pawn->FindComponentByClass<UMOVitalsComponent>();
+	if (!IsValid(Vitals))
+	{
+		return;
+	}
+
+	// AddUnique pattern via Remove-then-Add for dynamic delegates.
+	Vitals->OnWetnessStateChanged.RemoveDynamic(this, &UMOCharacterUIController::HandleWetnessStateChanged);
+	Vitals->OnWetnessStateChanged.AddDynamic(this, &UMOCharacterUIController::HandleWetnessStateChanged);
+	BoundVitalsComponent = Vitals;
+
+	// Push the moodle to reflect CURRENT state immediately — don't wait for
+	// the next state transition (player may have respawned soaked).
+	RefreshWetMoodle(Vitals->GetWetnessState());
+
+	UE_LOG(LogMOFramework, Log,
+		TEXT("[MOCharUI] Bound to vitals for moodles on '%s' (current state=%s)"),
+		*Pawn->GetName(),
+		*UEnum::GetValueAsString(Vitals->GetWetnessState()));
+}
+
+void UMOCharacterUIController::UnbindFromPawnVitalsForMoodles()
+{
+	if (UMOVitalsComponent* Vitals = BoundVitalsComponent.Get())
+	{
+		Vitals->OnWetnessStateChanged.RemoveDynamic(this, &UMOCharacterUIController::HandleWetnessStateChanged);
+	}
+	BoundVitalsComponent.Reset();
+
+	// Remove any previously-pushed moodle on pawn-swap so the new pawn's
+	// state can replace it cleanly.
+	UMOUIManagerComponent* UIManager = GetUIManager();
+	UMOHUDRootWidget* HUDRoot = UIManager ? UIManager->GetHUDRoot() : nullptr;
+	if (UMOStatusEffectStripWidget* Strip = HUDRoot ? HUDRoot->GetStatusStrip() : nullptr)
+	{
+		Strip->RemoveMoodle(FName(TEXT("Wet")));
+	}
+}
+
+void UMOCharacterUIController::HandleWetnessStateChanged(EMOWetnessState OldState, EMOWetnessState NewState)
+{
+	UE_LOG(LogMOFramework, Log,
+		TEXT("[MOCharUI] Wetness %s -> %s"),
+		*UEnum::GetValueAsString(OldState),
+		*UEnum::GetValueAsString(NewState));
+	RefreshWetMoodle(NewState);
+}
+
+void UMOCharacterUIController::RefreshWetMoodle(EMOWetnessState State)
+{
+	UMOUIManagerComponent* UIManager = GetUIManager();
+	UMOHUDRootWidget* HUDRoot = UIManager ? UIManager->GetHUDRoot() : nullptr;
+	UMOStatusEffectStripWidget* Strip = HUDRoot ? HUDRoot->GetStatusStrip() : nullptr;
+	if (!Strip)
+	{
+		// HUD strip not present in WBP — silent no-op. The diagnostic dump
+		// in MOHUDRootWidget::NativeOnInitialized already complains if the
+		// designer forgot to add it.
+		return;
+	}
+
+	const FName WetMoodleId(TEXT("Wet"));
+
+	if (State == EMOWetnessState::Dry)
+	{
+		Strip->RemoveMoodle(WetMoodleId);
+		return;
+	}
+
+	// Damp / Wet / Soaked — show or update the same moodle slot. Label +
+	// severity ratchet up as the player gets wetter so the player gets
+	// progressive visual feedback without spawning multiple icons.
+	FMOStatusMoodle M;
+	M.Id = WetMoodleId;
+	M.Icon = WetMoodleIcon;
+
+	switch (State)
+	{
+	case EMOWetnessState::Damp:
+		M.Label = NSLOCTEXT("MO", "Moodle.Damp", "Damp");
+		M.Tooltip = NSLOCTEXT("MO", "Moodle.Damp.Tooltip",
+			"You're slightly damp. Your body will lose heat faster in cold weather.");
+		M.Severity = EMOStatusMoodleSeverity::Info;
+		break;
+
+	case EMOWetnessState::Wet:
+		M.Label = NSLOCTEXT("MO", "Moodle.Wet", "Wet");
+		M.Tooltip = NSLOCTEXT("MO", "Moodle.Wet.Tooltip",
+			"You're wet. Significant heat loss in cold; fire-starting is harder.");
+		M.Severity = EMOStatusMoodleSeverity::Warning;
+		break;
+
+	case EMOWetnessState::Soaked:
+		M.Label = NSLOCTEXT("MO", "Moodle.Soaked", "Soaked");
+		M.Tooltip = NSLOCTEXT("MO", "Moodle.Soaked.Tooltip",
+			"You're soaked through. Severe heat loss in cold; find shelter and a fire.");
+		M.Severity = EMOStatusMoodleSeverity::Critical;
+		break;
+
+	default:
+		// Dry handled above
+		break;
+	}
+
+	Strip->AddOrUpdateMoodle(M);
 }

@@ -87,6 +87,46 @@ enum class EMOThermalComfort : uint8
 };
 
 /**
+ * Four-step wetness bucket. WetnessLevel (0.0–1.0) maps to one of these
+ * via FMOWetnessThresholds. HUD moodle re-renders on bucket change only,
+ * not on every continuous level update.
+ */
+UENUM(BlueprintType)
+enum class EMOWetnessState : uint8
+{
+	Dry    = 0  UMETA(DisplayName = "Dry"),
+	Damp   = 1  UMETA(DisplayName = "Damp"),
+	Wet    = 2  UMETA(DisplayName = "Wet"),
+	Soaked = 3  UMETA(DisplayName = "Soaked"),
+};
+
+/**
+ * Threshold curve for mapping continuous WetnessLevel (0–1) → bucket.
+ * Designers can tune to control how quickly the moodle escalates without
+ * touching the underlying accumulator logic.
+ */
+USTRUCT(BlueprintType)
+struct MOFRAMEWORK_API FMOWetnessThresholds
+{
+	GENERATED_BODY()
+
+	/** WetnessLevel ≥ this and < WetAbove = Damp. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Vitals|Wetness",
+		meta=(ClampMin="0.0", ClampMax="1.0"))
+	float DampAbove = 0.15f;
+
+	/** WetnessLevel ≥ this and < SoakedAbove = Wet. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Vitals|Wetness",
+		meta=(ClampMin="0.0", ClampMax="1.0"))
+	float WetAbove = 0.45f;
+
+	/** WetnessLevel ≥ this = Soaked. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Vitals|Wetness",
+		meta=(ClampMin="0.0", ClampMax="1.0"))
+	float SoakedAbove = 0.80f;
+};
+
+/**
  * Threshold curve for mapping body-core temperature → thermal comfort bucket.
  * Tunable per UMOVitalsComponent so designers can experiment without touching
  * code, but the defaults are medically grounded (see EMOThermalComfort).

@@ -5,6 +5,9 @@
 #include "MOMentalStateComponent.h"
 #include "MOBodyPartTypes.h"
 #include "MOGameClockSubsystem.h"
+#include "MOWeatherIntegrationSubsystem.h"
+#include "MOWeatherBlueprintLibrary.h"
+#include "MOWeatherTypes.h"
 #include "Net/UnrealNetwork.h"
 #include "TimerManager.h"
 
@@ -520,6 +523,16 @@ void UMOVitalsComponent::TickVitals()
 		OnThermalComfortChanged.Broadcast(OldThermalComfort, NewThermalComfort);
 	}
 
+	// Wetness integrates against the rain pipeline. Cheap accumulator that
+	// gates the expensive 9-ray shelter trace to once every WetnessPollInterval
+	// (default 2s) — most of the simulation cost is in the trace.
+	WetnessAccumulatorSeconds += ScaledDeltaTime;
+	if (WetnessAccumulatorSeconds >= WetnessPollInterval)
+	{
+		UpdateWetness(WetnessAccumulatorSeconds);
+		WetnessAccumulatorSeconds = 0.0f;
+	}
+
 	// Broadcast general vitals changed for UI updates
 	OnVitalsChanged.Broadcast();
 }
@@ -1027,4 +1040,79 @@ void UMOVitalsComponent::UpdateMaxStamina()
 
 	// Clamp current stamina to new max
 	Activity.CurrentStamina = FMath::Min(Activity.CurrentStamina, Activity.MaxStamina);
+}
+
+// ============================================================================
+// WETNESS
+// ============================================================================
+
+EMOWetnessState UMOVitalsComponent::GetWetnessState() const
+{
+	return ComputeWetnessState(WetnessLevel);
+}
+
+EMOWetnessState UMOVitalsComponent::ComputeWetnessState(float Level) const
+{
+	if (Level >= WetnessThresholds.SoakedAbove) return EMOWetnessState::Soaked;
+	if (Level >= WetnessThresholds.WetAbove)    return EMOWetnessState::Wet;
+	if (Level >= WetnessThresholds.DampAbove)   return EMOWetnessState::Damp;
+	return EMOWetnessState::Dry;
+}
+
+void UMOVitalsComponent::SetWetnessLevel(float NewLevel)
+{
+	const float Clamped = FMath::Clamp(NewLevel, 0.0f, 1.0f);
+	if (FMath::IsNearlyEqual(Clamped, WetnessLevel, 0.001f))
+	{
+		return;
+	}
+	WetnessLevel = Clamped;
+
+	const EMOWetnessState NewState = ComputeWetnessState(WetnessLevel);
+	if (NewState != LastWetnessState)
+	{
+		const EMOWetnessState OldState = LastWetnessState;
+		LastWetnessState = NewState;
+		OnWetnessStateChanged.Broadcast(OldState, NewState);
+	}
+}
+
+void UMOVitalsComponent::UpdateWetness(float DeltaSeconds)
+{
+	AActor* Owner = GetOwner();
+	UWorld* World = Owner ? Owner->GetWorld() : nullptr;
+	if (!World)
+	{
+		return;
+	}
+
+	// Read the current weather state. Without rain there's nothing wetting
+	// the pawn — drive WetnessLevel toward 0.
+	UMOWeatherIntegrationSubsystem* WeatherSys = World->GetSubsystem<UMOWeatherIntegrationSubsystem>();
+	const float RainIntensity = WeatherSys ? WeatherSys->GetCurrentWeatherState().RainIntensity : 0.0f;
+
+	float NewLevel = WetnessLevel;
+
+	if (RainIntensity > KINDA_SMALL_NUMBER)
+	{
+		// Cheap overhead shelter test — 9 line traces. WetnessPollInterval
+		// (default 2s) caps the trace rate. Pass owner so its own collision
+		// doesn't block the rays.
+		const FVector Origin = Owner->GetActorLocation();
+		const FMOExposureShelter Shelter = UMOWeatherBlueprintLibrary::TestOverheadCover(
+			World, Origin, Owner);
+
+		// Coverage 0 = fully exposed, 1 = fully covered. Effective rain on
+		// the pawn = intensity × (1 − coverage). Damp/Wet/Soaked accumulator
+		// then ticks up over DeltaSeconds.
+		const float EffectiveRain = RainIntensity * FMath::Max(0.0f, 1.0f - Shelter.OverheadCover);
+		NewLevel += EffectiveRain * WetnessGainPerSecond * DeltaSeconds;
+	}
+	else
+	{
+		// No rain — clothing dries.
+		NewLevel -= WetnessDecayPerSecond * DeltaSeconds;
+	}
+
+	SetWetnessLevel(FMath::Clamp(NewLevel, 0.0f, 1.0f));
 }
