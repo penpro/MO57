@@ -59,6 +59,7 @@
 
 class UMOThermalComfortWidget;
 class UMOStatusEffectStripWidget;
+class UMOWindDirectionWidget;
 
 /**
  * Composite HUD root. Lives on Layer_HUD for the entire gameplay session.
@@ -116,10 +117,21 @@ protected:
 	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
 	TObjectPtr<UMOStatusEffectStripWidget> StatusStrip;
 
+	/**
+	 * Wind direction indicator (relative to player facing). Auto-hides when
+	 * WindIntensity is below the widget's HideBelowIntensity threshold.
+	 */
+	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
+	TObjectPtr<UMOWindDirectionWidget> WindIndicator;
+
 public:
 	/** Accessor for sources/cheats that need to push moodles. May be null if WBP doesn't include the strip. */
 	UFUNCTION(BlueprintPure, Category="MO|HUD")
 	UMOStatusEffectStripWidget* GetStatusStrip() const { return StatusStrip; }
+
+	/** Accessor for the wind indicator. May be null if WBP doesn't include it. */
+	UFUNCTION(BlueprintPure, Category="MO|HUD")
+	UMOWindDirectionWidget* GetWindIndicator() const { return WindIndicator; }
 
 	// Future:
 	// UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
