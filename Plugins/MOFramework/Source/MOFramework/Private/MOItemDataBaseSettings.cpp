@@ -6,6 +6,7 @@
 
 // Static member initialization
 TMap<FName, FMOItemDefinitionRow> UMOItemDatabaseSettings::CachedItemDefinitions;
+TMap<FName, FMOItemDefinitionRow> UMOItemDatabaseSettings::ModItemDefinitions;
 bool UMOItemDatabaseSettings::bCacheBuilt = false;
 TWeakObjectPtr<UDataTable> UMOItemDatabaseSettings::CachedDataTable;
 bool UMOItemDatabaseSettings::bDataTableLoggedOnce = false;
@@ -96,6 +97,15 @@ bool UMOItemDatabaseSettings::GetItemDefinition(FName ItemDefinitionId, FMOItemD
 		return false;
 	}
 
+	// Mod overlay wins on ID collision in BOTH editor and packaged paths so
+	// modders can override base items the same way in either build. Check
+	// before falling through to the regular lookup.
+	if (const FMOItemDefinitionRow* ModRow = ModItemDefinitions.Find(ItemDefinitionId))
+	{
+		OutDefinition = *ModRow;
+		return true;
+	}
+
 #if WITH_EDITOR
 	// In editor builds, read directly from DataTable to always pick up changes
 	const UMOItemDatabaseSettings* Settings = GetDefault<UMOItemDatabaseSettings>();
@@ -162,7 +172,7 @@ void UMOItemDatabaseSettings::BuildCacheIfNeeded()
 
 	// Build the cache from all rows
 	const TMap<FName, uint8*>& RowMap = DataTable->GetRowMap();
-	CachedItemDefinitions.Reserve(RowMap.Num());
+	CachedItemDefinitions.Reserve(RowMap.Num() + ModItemDefinitions.Num());
 
 	for (const auto& Pair : RowMap)
 	{
@@ -173,15 +183,126 @@ void UMOItemDatabaseSettings::BuildCacheIfNeeded()
 		}
 	}
 
+	// Merge mod overlay on top — mod entries win on ID collision so modders
+	// can override base items. Survives every cache rebuild because ModItems
+	// is a separate static.
+	int32 OverriddenBase = 0;
+	for (const auto& Pair : ModItemDefinitions)
+	{
+		if (CachedItemDefinitions.Contains(Pair.Key))
+		{
+			++OverriddenBase;
+		}
+		CachedItemDefinitions.Add(Pair.Key, Pair.Value);
+	}
+
 	bCacheBuilt = true;
-	UE_LOG(LogMOFramework, Log, TEXT("[MOItemDatabase] Built cache with %d items"), CachedItemDefinitions.Num());
+	if (ModItemDefinitions.Num() > 0)
+	{
+		UE_LOG(LogMOFramework, Log,
+			TEXT("[MOItemDatabase] Built cache: %d base + %d mod (of which %d overrode base) = %d total"),
+			RowMap.Num(), ModItemDefinitions.Num(), OverriddenBase, CachedItemDefinitions.Num());
+	}
+	else
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOItemDatabase] Built cache with %d items"), CachedItemDefinitions.Num());
+	}
 }
 
 void UMOItemDatabaseSettings::InvalidateCache()
 {
 	CachedItemDefinitions.Empty();
 	bCacheBuilt = false;
-	UE_LOG(LogMOFramework, Log, TEXT("[MOItemDatabase] Cache invalidated"));
+	UE_LOG(LogMOFramework, Log,
+		TEXT("[MOItemDatabase] Cache invalidated (mod overlay retained: %d items)"),
+		ModItemDefinitions.Num());
+}
+
+// =============================================================================
+// MOD OVERLAY API
+// =============================================================================
+
+void UMOItemDatabaseSettings::RegisterModItem(FName ItemId, const FMOItemDefinitionRow& Row)
+{
+	if (ItemId.IsNone())
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOItemDatabase] RegisterModItem refused — empty ItemId"));
+		return;
+	}
+
+	const bool bWasReplaced = ModItemDefinitions.Contains(ItemId);
+	ModItemDefinitions.Add(ItemId, Row);
+
+	// If the live cache is already built, write through so callers see the
+	// new row immediately. Without this, the row would only appear after
+	// the next InvalidateCache + lookup.
+	if (bCacheBuilt)
+	{
+		CachedItemDefinitions.Add(ItemId, Row);
+	}
+
+	UE_LOG(LogMOFramework, Log,
+		TEXT("[MOItemDatabase] %s mod item '%s' (display='%s')"),
+		bWasReplaced ? TEXT("Replaced") : TEXT("Registered"),
+		*ItemId.ToString(),
+		*Row.DisplayName.ToString());
+}
+
+int32 UMOItemDatabaseSettings::MergeModItemTable(UDataTable* SourceTable)
+{
+	if (!IsValid(SourceTable))
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOItemDatabase] MergeModItemTable: null SourceTable"));
+		return 0;
+	}
+
+	// Guard the row struct so modders get a clear error rather than a
+	// silent garbage-data read if they pass the wrong DataTable type.
+	if (SourceTable->GetRowStruct() != FMOItemDefinitionRow::StaticStruct())
+	{
+		UE_LOG(LogMOFramework, Warning,
+			TEXT("[MOItemDatabase] MergeModItemTable: '%s' has row struct '%s', expected FMOItemDefinitionRow"),
+			*SourceTable->GetName(),
+			SourceTable->GetRowStruct() ? *SourceTable->GetRowStruct()->GetName() : TEXT("<null>"));
+		return 0;
+	}
+
+	const TMap<FName, uint8*>& RowMap = SourceTable->GetRowMap();
+	int32 Merged = 0;
+	int32 Skipped = 0;
+
+	for (const auto& Pair : RowMap)
+	{
+		const FMOItemDefinitionRow* Row = reinterpret_cast<const FMOItemDefinitionRow*>(Pair.Value);
+		if (!Row)
+		{
+			++Skipped;
+			continue;
+		}
+		RegisterModItem(Pair.Key, *Row);
+		++Merged;
+	}
+
+	UE_LOG(LogMOFramework, Log,
+		TEXT("[MOItemDatabase] Merged mod table '%s': %d items added, %d skipped (null rows)"),
+		*SourceTable->GetName(), Merged, Skipped);
+
+	return Merged;
+}
+
+void UMOItemDatabaseSettings::ClearModItems()
+{
+	const int32 PreviousCount = ModItemDefinitions.Num();
+	ModItemDefinitions.Empty();
+	InvalidateCache();
+	UE_LOG(LogMOFramework, Log,
+		TEXT("[MOItemDatabase] Cleared %d mod items + invalidated cache (will reload base on next lookup)"),
+		PreviousCount);
+}
+
+int32 UMOItemDatabaseSettings::GetModItemCount()
+{
+	return ModItemDefinitions.Num();
 }
 
 UTexture2D* UMOItemDatabaseSettings::GetItemIconSmall(FName ItemDefinitionId)

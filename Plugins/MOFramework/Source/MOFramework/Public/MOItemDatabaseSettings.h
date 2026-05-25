@@ -62,12 +62,58 @@ public:
 	/**
 	 * Invalidate the item definition cache.
 	 * Call this if the DataTable is modified at runtime (rare).
+	 *
+	 * Does NOT clear mod registrations — those are re-merged on the next
+	 * cache build. Use ClearModItems() to drop those.
 	 */
 	static void InvalidateCache();
+
+	// =========================================================================
+	// MOD OVERLAY API (used by MO.Mod.* console commands + future loader UI)
+	// =========================================================================
+	//
+	// Mod rows live in a separate static map and get merged on top of the
+	// base cache. If a mod ItemId matches a base row, the mod overrides it.
+	// Mod registrations survive InvalidateCache — they only go away via
+	// ClearModItems() or process restart.
+	//
+	// Modders typically wouldn't call these C++ APIs directly; the console
+	// commands MO.Mod.LoadItems / MO.Mod.ClearMods provide the user-facing path.
+
+	/**
+	 * Register or replace a single item by ID. Modder/cheat path — survives
+	 * InvalidateCache. If the cache is already built, the row is also
+	 * inserted into the live cache so subsequent lookups see it immediately.
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Item Database|Mod")
+	static void RegisterModItem(FName ItemId, const FMOItemDefinitionRow& Row);
+
+	/**
+	 * Iterate every row of SourceTable (must contain FMOItemDefinitionRow
+	 * rows) and register each as a mod item. Returns count merged. Safe to
+	 * call on a partially-broken table — skips null rows and logs them.
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Item Database|Mod")
+	static int32 MergeModItemTable(UDataTable* SourceTable);
+
+	/** Drop all mod registrations and invalidate the cache so base reloads cleanly. */
+	UFUNCTION(BlueprintCallable, Category="MO|Item Database|Mod")
+	static void ClearModItems();
+
+	/** Number of currently registered mod items (useful for MO.Mod.Status). */
+	UFUNCTION(BlueprintCallable, Category="MO|Item Database|Mod")
+	static int32 GetModItemCount();
 
 private:
 	/** Cached item definitions for fast lookup. */
 	static TMap<FName, FMOItemDefinitionRow> CachedItemDefinitions;
+
+	/**
+	 * Mod overlay — rows registered via RegisterModItem / MergeModItemTable.
+	 * Merged on top of CachedItemDefinitions in BuildCacheIfNeeded so mod
+	 * rows survive cache rebuilds. Mods win on ID collision.
+	 */
+	static TMap<FName, FMOItemDefinitionRow> ModItemDefinitions;
 
 	/** Whether the cache has been built. */
 	static bool bCacheBuilt;

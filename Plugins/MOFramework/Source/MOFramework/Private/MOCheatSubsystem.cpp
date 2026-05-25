@@ -732,6 +732,90 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 		}),
 		ECVF_Default));
 
+	// =========================================================================
+	// MO.Mod.* — runtime modding support
+	// =========================================================================
+	// Modders can drop a DataTable asset (same row struct as the base — e.g.
+	// FMOItemDefinitionRow for items) anywhere in the Content tree and call
+	// MO.Mod.LoadItems /Game/Mods/MyMod/DT_MoreItems.DT_MoreItems to merge it
+	// in. Mod rows live in a separate static overlay, win on ID collision
+	// with base items, and survive cache rebuilds. Only the item table is
+	// wired up so far — recipes/quests/skills/etc are tracked in task #113.
+
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Mod.LoadItems"),
+		TEXT("Merge a UDataTable of FMOItemDefinitionRow rows into the item database. "
+		     "Mod rows override base on ID collision and survive cache rebuilds. "
+		     "Usage: MO.Mod.LoadItems /Game/Mods/MyMod/DT_MoreItems.DT_MoreItems"),
+		FConsoleCommandWithArgsDelegate::CreateLambda([](const TArray<FString>& Args)
+		{
+			if (Args.Num() < 1)
+			{
+				UE_LOG(LogMOFramework, Warning,
+					TEXT("[MO.Mod] Usage: MO.Mod.LoadItems <DataTableAssetPath>"));
+				return;
+			}
+
+			const FString Path = Args[0];
+
+			// LoadObject works on the long form /Game/X/Y.Y.
+			// Modders sometimes copy-paste the short form /Game/X/Y — handle
+			// both by appending '.Y' if no dot is present.
+			FString FullPath = Path;
+			if (!FullPath.Contains(TEXT(".")))
+			{
+				int32 LastSlash;
+				if (FullPath.FindLastChar(TEXT('/'), LastSlash))
+				{
+					FullPath += TEXT(".") + FullPath.Mid(LastSlash + 1);
+				}
+			}
+
+			UDataTable* Table = LoadObject<UDataTable>(nullptr, *FullPath);
+			if (!IsValid(Table))
+			{
+				UE_LOG(LogMOFramework, Warning,
+					TEXT("[MO.Mod] LoadItems failed — '%s' not found. Make sure the asset exists and the path is /Game/... (not on disk)."),
+					*FullPath);
+				return;
+			}
+
+			const int32 Merged = UMOItemDatabaseSettings::MergeModItemTable(Table);
+			UE_LOG(LogMOFramework, Warning,
+				TEXT("[MO.Mod] LoadItems: merged %d items from '%s'. Mod overlay now has %d total."),
+				Merged, *Table->GetName(), UMOItemDatabaseSettings::GetModItemCount());
+		}),
+		ECVF_Default));
+
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Mod.ClearMods"),
+		TEXT("Drop every mod-registered item and invalidate the item cache so the base "
+		     "DataTable reloads cleanly on the next lookup."),
+		FConsoleCommandDelegate::CreateLambda([]()
+		{
+			const int32 Before = UMOItemDatabaseSettings::GetModItemCount();
+			UMOItemDatabaseSettings::ClearModItems();
+			UE_LOG(LogMOFramework, Warning,
+				TEXT("[MO.Mod] ClearMods: dropped %d mod items, cache invalidated."), Before);
+		}),
+		ECVF_Default));
+
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Mod.Status"),
+		TEXT("Print mod overlay status: how many mod items are currently registered, "
+		     "and which tables they live in."),
+		FConsoleCommandDelegate::CreateLambda([]()
+		{
+			UE_LOG(LogMOFramework, Warning,
+				TEXT("[MO.Mod] Mod overlay status:"));
+			UE_LOG(LogMOFramework, Warning,
+				TEXT("[MO.Mod]   Items: %d registered"),
+				UMOItemDatabaseSettings::GetModItemCount());
+			UE_LOG(LogMOFramework, Warning,
+				TEXT("[MO.Mod]   (other tables — recipes, quests, skills — not yet mod-supported; see task #113)"));
+		}),
+		ECVF_Default));
+
 	// MO.AI.StressSpawn — bulk-spawn for freeze profiling.
 	//
 	// The natural spawn rate (handful of mobs across a huge world) doesn't move
