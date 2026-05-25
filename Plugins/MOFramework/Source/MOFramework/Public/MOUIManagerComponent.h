@@ -634,6 +634,13 @@ private:
 	UPROPERTY(Transient)
 	TWeakObjectPtr<UMOHUDRootWidget> HUDRootWidget;
 
+public:
+	/** Accessor for sources/cheats that need to push moodles or query HUD children. */
+	UFUNCTION(BlueprintPure, Category="MO|UI|HUDRoot")
+	UMOHUDRootWidget* GetHUDRoot() const { return HUDRootWidget.Get(); }
+
+private:
+
 	/**
 	 * Push HUDRootClass to MOPrimaryGameLayout::Layer_HUD. Idempotent — safe
 	 * to call once the layout exists. Invoked from HandlePrimaryLayoutCreated

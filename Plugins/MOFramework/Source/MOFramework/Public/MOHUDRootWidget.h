@@ -58,6 +58,7 @@
 #include "MOHUDRootWidget.generated.h"
 
 class UMOThermalComfortWidget;
+class UMOStatusEffectStripWidget;
 
 /**
  * Composite HUD root. Lives on Layer_HUD for the entire gameplay session.
@@ -107,11 +108,20 @@ protected:
 	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
 	TObjectPtr<UMOThermalComfortWidget> ThermalComfortIndicator;
 
+	/**
+	 * Generic moodle strip (wet, bleeding, hungry, well-fed, buffs, etc.).
+	 * Sources push moodles via AddOrUpdateMoodle; strip auto-collapses when
+	 * empty. Diagnostic accessor for cheats / debug overlays.
+	 */
+	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
+	TObjectPtr<UMOStatusEffectStripWidget> StatusStrip;
+
+public:
+	/** Accessor for sources/cheats that need to push moodles. May be null if WBP doesn't include the strip. */
+	UFUNCTION(BlueprintPure, Category="MO|HUD")
+	UMOStatusEffectStripWidget* GetStatusStrip() const { return StatusStrip; }
+
 	// Future:
 	// UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
 	// TObjectPtr<UMOHungerWidget> HungerIndicator;
-	//
-	// UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	// TObjectPtr<UMOCompassWidget> Compass;
-	// ... etc.
 };

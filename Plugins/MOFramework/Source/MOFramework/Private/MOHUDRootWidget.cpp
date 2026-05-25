@@ -5,6 +5,7 @@
 #include "MOHUDRootWidget.h"
 #include "MOFramework.h"
 #include "MOThermalComfortWidget.h"
+#include "MOStatusEffectStripWidget.h"
 #include "Blueprint/WidgetTree.h"
 
 UMOHUDRootWidget::UMOHUDRootWidget(const FObjectInitializer& ObjectInitializer)
@@ -56,9 +57,14 @@ void UMOHUDRootWidget::NativeOnInitialized()
 	}
 
 	UE_LOG(LogMOFramework, Warning,
-		TEXT("[MOHUDRoot] NativeOnInitialized — BindWidgetOptional ThermalComfortIndicator=%s | WidgetTree descendant of UMOThermalComfortWidget=%s"),
+		TEXT("[MOHUDRoot] NativeOnInitialized — children:"));
+	UE_LOG(LogMOFramework, Warning,
+		TEXT("[MOHUDRoot]   ThermalComfortIndicator: BindWidget=%s  TreeDescendant=%s"),
 		ThermalComfortIndicator ? *ThermalComfortIndicator->GetName() : TEXT("NULL"),
 		FoundInTree ? *FoundInTree->GetName() : TEXT("NULL"));
+	UE_LOG(LogMOFramework, Warning,
+		TEXT("[MOHUDRoot]   StatusStrip: BindWidget=%s"),
+		StatusStrip ? *StatusStrip->GetName() : TEXT("NULL (add WBP_StatusEffectStrip to WBP_HUDRoot, name it 'StatusStrip', tick 'Is Variable')"));
 
 	// Self-heal: if the WBP designer placed the widget but forgot to tick
 	// "Is Variable", the BindWidgetOptional pointer is null but the tree

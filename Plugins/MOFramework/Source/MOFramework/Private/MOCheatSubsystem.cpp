@@ -17,6 +17,10 @@
 #include "MOSaveGameTypes.h"
 #include "MORecipeDatabaseSettings.h"
 #include "MOSkillDatabaseSettings.h"
+#include "MOHUDRootWidget.h"
+#include "MOStatusEffectStripWidget.h"
+#include "MOStatusMoodleTypes.h"
+#include "MOUIManagerComponent.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
@@ -1091,6 +1095,100 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 			UMOSkillDatabaseSettings::ClearModSkills();
 			UE_LOG(LogMOFramework, Warning,
 				TEXT("[MO.Mod] ClearSkills: dropped %d mod skills."), Before);
+		}),
+		ECVF_Default));
+
+	// =========================================================================
+	// MO.HUD.* — status moodle strip drivers for #56
+	// =========================================================================
+	// The strip is generic; eventually wet-state / bleeding / hunger components
+	// will push moodles. These cheats let designers/QA validate the strip
+	// renders correctly without those sources being wired yet.
+
+	auto ResolveStripFromWorld = [](UWorld* World) -> UMOStatusEffectStripWidget*
+	{
+		if (!World) return nullptr;
+		APlayerController* PC = World->GetFirstPlayerController();
+		if (!PC) return nullptr;
+		UMOUIManagerComponent* UIMgr = PC->FindComponentByClass<UMOUIManagerComponent>();
+		if (!UIMgr) return nullptr;
+		UMOHUDRootWidget* HUDRoot = UIMgr->GetHUDRoot();
+		return HUDRoot ? HUDRoot->GetStatusStrip() : nullptr;
+	};
+
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.HUD.AddTestMoodle"),
+		TEXT("Push a test moodle to the HUD status strip. "
+		     "Usage: MO.HUD.AddTestMoodle <Id> [Label] [Severity=Info|Warning|Critical|Buff]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([ResolveStripFromWorld](const TArray<FString>& Args, UWorld* World)
+		{
+			if (Args.Num() < 1)
+			{
+				UE_LOG(LogMOFramework, Warning,
+					TEXT("[MO.HUD] Usage: MO.HUD.AddTestMoodle <Id> [Label] [Severity]"));
+				return;
+			}
+			UMOStatusEffectStripWidget* Strip = ResolveStripFromWorld(World);
+			if (!Strip)
+			{
+				UE_LOG(LogMOFramework, Warning,
+					TEXT("[MO.HUD] No StatusStrip on HUDRoot — add WBP_StatusEffectStrip to WBP_HUDRoot and tick 'Is Variable' (name 'StatusStrip')"));
+				return;
+			}
+
+			FMOStatusMoodle M;
+			M.Id = FName(*Args[0]);
+			M.Label = Args.Num() > 1 ? FText::FromString(Args[1]) : FText::FromName(M.Id);
+			M.Tooltip = FText::Format(NSLOCTEXT("MO", "TestMoodleTooltip", "Test moodle '{0}'"),
+				FText::FromName(M.Id));
+
+			if (Args.Num() > 2)
+			{
+				const FString& SevStr = Args[2];
+				if      (SevStr.Equals(TEXT("Warning"),  ESearchCase::IgnoreCase)) M.Severity = EMOStatusMoodleSeverity::Warning;
+				else if (SevStr.Equals(TEXT("Critical"), ESearchCase::IgnoreCase)) M.Severity = EMOStatusMoodleSeverity::Critical;
+				else if (SevStr.Equals(TEXT("Buff"),     ESearchCase::IgnoreCase)) M.Severity = EMOStatusMoodleSeverity::Buff;
+				else                                                                M.Severity = EMOStatusMoodleSeverity::Info;
+			}
+
+			Strip->AddOrUpdateMoodle(M);
+			UE_LOG(LogMOFramework, Warning,
+				TEXT("[MO.HUD.AddTestMoodle] Added '%s' (severity=%d). Strip now has %d moodle(s)."),
+				*M.Id.ToString(), static_cast<int32>(M.Severity), Strip->GetMoodleCount());
+		}),
+		ECVF_Default));
+
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.HUD.RemoveMoodle"),
+		TEXT("Remove a moodle from the HUD status strip. Usage: MO.HUD.RemoveMoodle <Id>"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([ResolveStripFromWorld](const TArray<FString>& Args, UWorld* World)
+		{
+			if (Args.Num() < 1)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MO.HUD] Usage: MO.HUD.RemoveMoodle <Id>"));
+				return;
+			}
+			UMOStatusEffectStripWidget* Strip = ResolveStripFromWorld(World);
+			if (!Strip) return;
+
+			const FName Id(*Args[0]);
+			Strip->RemoveMoodle(Id);
+			UE_LOG(LogMOFramework, Warning,
+				TEXT("[MO.HUD.RemoveMoodle] Removed '%s'. Strip now has %d moodle(s)."),
+				*Id.ToString(), Strip->GetMoodleCount());
+		}),
+		ECVF_Default));
+
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.HUD.ClearMoodles"),
+		TEXT("Drop every moodle from the HUD status strip."),
+		FConsoleCommandWithWorldDelegate::CreateLambda([ResolveStripFromWorld](UWorld* World)
+		{
+			UMOStatusEffectStripWidget* Strip = ResolveStripFromWorld(World);
+			if (!Strip) return;
+			const int32 Before = Strip->GetMoodleCount();
+			Strip->ClearAllMoodles();
+			UE_LOG(LogMOFramework, Warning, TEXT("[MO.HUD.ClearMoodles] Dropped %d moodle(s)."), Before);
 		}),
 		ECVF_Default));
 
