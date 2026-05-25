@@ -305,4 +305,39 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawn Manager|Freeze",
 		meta = (ClampMin = "100.0", DisplayName = "Wake Distance (cm)"))
 	float WakeDistanceCm = 2500.0f;
+
+	// ============================================================================
+	// DIAGNOSTIC ACCESSORS (used by MO.AI.* cheat commands)
+	// ============================================================================
+
+	/**
+	 * Dump live AI freeze state for every tracked entity to the log:
+	 * name, category, distance from player, Brain->IsRunning() flag,
+	 * plus a summary count + anomaly flag for any "in WakeDistance but
+	 * not running" or "out of WakeDistance but still running."
+	 *
+	 * Bound to MO.AI.DumpFreezeState. Purely diagnostic — does not mutate state.
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|AI|Debug")
+	void DumpFreezeState() const;
+
+	/**
+	 * Force-freeze every Prey/Predator/Ambient entity right now, ignoring
+	 * distance. Useful for "I want to confirm StopLogic actually halts BT
+	 * ticks" — pair with a CPU profiler or per-tick log to verify.
+	 *
+	 * Bound to MO.AI.ForceFreezeAll.
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|AI|Debug")
+	int32 ForceFreezeAll();
+
+	/**
+	 * Force-wake every tracked entity regardless of distance. Restores BT
+	 * ticking on everything so you can compare CPU profile against the
+	 * forced-freeze state.
+	 *
+	 * Bound to MO.AI.ForceWakeAll.
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|AI|Debug")
+	int32 ForceWakeAll();
 };

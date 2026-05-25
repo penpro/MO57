@@ -1245,6 +1245,124 @@ void UMOSpawnManagerSubsystem::WakeSpawnedPawn(APawn* Pawn)
 	}
 }
 
+// ============================================================================
+// DIAGNOSTIC ACCESSORS (MO.AI.* cheat commands)
+// ============================================================================
+//
+// These exist to verify the freeze pipeline actually halts BT ticks. The
+// production code path already calls StopLogic/RestartLogic, but "the
+// API call returned without error" is not the same as "the BT actually
+// stopped ticking" — see Engineering Principle #8 in CLAUDE.md.
+//
+// DumpFreezeState gives a per-pawn snapshot. ForceFreezeAll/ForceWakeAll
+// let you toggle the global state for profiler comparison passes.
+
+void UMOSpawnManagerSubsystem::DumpFreezeState() const
+{
+	APawn* PlayerPawn = GetPlayerPawn();
+	const FVector PlayerLoc = PlayerPawn ? PlayerPawn->GetActorLocation() : FVector::ZeroVector;
+	const float WakeDistanceSq = WakeDistanceCm * WakeDistanceCm;
+
+	const UEnum* CategoryEnum = StaticEnum<EMOSpawnCategory>();
+
+	UE_LOG(LogMOFramework, Warning,
+		TEXT("[MO.AI.DumpFreezeState] === %d tracked entities, WakeDistance=%.0fcm (%.1fm), Player=%s ==="),
+		SpawnedEntities.Num(), WakeDistanceCm, WakeDistanceCm / 100.0f,
+		PlayerPawn ? *PlayerPawn->GetName() : TEXT("NULL"));
+
+	int32 RunningCount = 0;
+	int32 FrozenCount = 0;
+	int32 AnomalyCount = 0;
+
+	for (const FMOSpawnedEntityRecord& Record : SpawnedEntities)
+	{
+		APawn* Pawn = Record.SpawnedPawn.Get();
+		if (!Pawn)
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MO.AI]   <stale> category=%s"),
+				CategoryEnum ? *CategoryEnum->GetNameStringByValue(static_cast<int64>(Record.Category)) : TEXT("?"));
+			continue;
+		}
+
+		AAIController* AIController = Cast<AAIController>(Pawn->GetController());
+		UBrainComponent* Brain = AIController ? AIController->GetBrainComponent() : nullptr;
+
+		const bool bShouldFreeze = ShouldFreezeCategory(Record.Category);
+		const float DistanceSq = PlayerPawn ? FVector::DistSquared(PlayerLoc, Pawn->GetActorLocation()) : FLT_MAX;
+		const float DistanceM = FMath::Sqrt(DistanceSq) / 100.0f;
+		const bool bRunning = Brain && Brain->IsRunning();
+		const bool bInWakeRange = bShouldFreeze && DistanceSq <= WakeDistanceSq;
+
+		if (bRunning) ++RunningCount; else ++FrozenCount;
+
+		// Anomalies: the freeze pipeline says we SHOULD be frozen but Brain
+		// is running (the case the audit was suspicious about), OR we're
+		// well past WakeDistance and still running — both indicate the
+		// freeze isn't catching this entity.
+		const bool bShouldBeFrozen = bShouldFreeze && !bInWakeRange;
+		const bool bAnomaly = bShouldBeFrozen && bRunning;
+		if (bAnomaly) ++AnomalyCount;
+
+		UE_LOG(LogMOFramework, Warning,
+			TEXT("[MO.AI]   %s%s  category=%s  dist=%.1fm  Brain=%s%s  inWakeRange=%s"),
+			bAnomaly ? TEXT("[!] ") : TEXT("    "),
+			*Pawn->GetName(),
+			CategoryEnum ? *CategoryEnum->GetNameStringByValue(static_cast<int64>(Record.Category)) : TEXT("?"),
+			DistanceM,
+			Brain ? TEXT("present") : TEXT("MISSING"),
+			Brain ? (bRunning ? TEXT(":running") : TEXT(":stopped")) : TEXT(""),
+			bInWakeRange ? TEXT("YES") : TEXT("no"));
+	}
+
+	UE_LOG(LogMOFramework, Warning,
+		TEXT("[MO.AI.DumpFreezeState] === Summary: %d running, %d stopped, %d anomalies "
+		     "(anomaly = should be frozen by distance/category but Brain still running) ==="),
+		RunningCount, FrozenCount, AnomalyCount);
+}
+
+int32 UMOSpawnManagerSubsystem::ForceFreezeAll()
+{
+	int32 Affected = 0;
+	for (const FMOSpawnedEntityRecord& Record : SpawnedEntities)
+	{
+		if (!ShouldFreezeCategory(Record.Category)) continue;
+		APawn* Pawn = Record.SpawnedPawn.Get();
+		if (!Pawn) continue;
+
+		AAIController* AIController = Cast<AAIController>(Pawn->GetController());
+		UBrainComponent* Brain = AIController ? AIController->GetBrainComponent() : nullptr;
+		if (!Brain || !Brain->IsRunning()) continue;
+
+		Brain->StopLogic(TEXT("MO.AI.ForceFreezeAll"));
+		++Affected;
+	}
+	UE_LOG(LogMOFramework, Warning,
+		TEXT("[MO.AI.ForceFreezeAll] Stopped %d brains (out of %d tracked entities)"),
+		Affected, SpawnedEntities.Num());
+	return Affected;
+}
+
+int32 UMOSpawnManagerSubsystem::ForceWakeAll()
+{
+	int32 Affected = 0;
+	for (const FMOSpawnedEntityRecord& Record : SpawnedEntities)
+	{
+		APawn* Pawn = Record.SpawnedPawn.Get();
+		if (!Pawn) continue;
+
+		AAIController* AIController = Cast<AAIController>(Pawn->GetController());
+		UBrainComponent* Brain = AIController ? AIController->GetBrainComponent() : nullptr;
+		if (!Brain || Brain->IsRunning()) continue;
+
+		Brain->RestartLogic();
+		++Affected;
+	}
+	UE_LOG(LogMOFramework, Warning,
+		TEXT("[MO.AI.ForceWakeAll] Restarted %d brains (out of %d tracked entities)"),
+		Affected, SpawnedEntities.Num());
+	return Affected;
+}
+
 void UMOSpawnManagerSubsystem::UpdateFrozenPawnWakeCheck()
 {
 	APawn* PlayerPawn = GetPlayerPawn();

@@ -12,6 +12,7 @@
 #include "MOItemDefinitionRow.h"
 #include "MOWeatherIntegrationSubsystem.h"
 #include "MOWeatherTypes.h"
+#include "MOSpawnManagerSubsystem.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
@@ -573,6 +574,173 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 			if (!Sys || Args.Num() < 1) return;
 			Sys->SetAmbientVolume(FCString::Atof(*Args[0]));
 			UE_LOG(LogMOFramework, Warning, TEXT("[MOAudio] AmbientVolume -> %.2f"), Sys->GetAmbientVolume());
+		}),
+		ECVF_Default));
+
+	// =========================================================================
+	// MO.AI.* — verification commands for the spawn-manager freeze pipeline
+	// =========================================================================
+	// The freeze pipeline calls UBrainComponent::StopLogic on Prey/Predator/Ambient
+	// spawns until the player is within WakeDistanceCm. These commands let you
+	// confirm the pipeline is actually halting BT ticks (and not silently
+	// no-opping somewhere downstream).
+	//
+	// Verification workflow:
+	//   1. MO.AI.DumpFreezeState — see who's tracked, their distance, and
+	//      whether Brain->IsRunning matches expectations. Anomalies (should
+	//      be frozen but Brain still running) are flagged with [!].
+	//   2. stat unit / Insights — sample CPU before/after toggling.
+	//   3. MO.AI.ForceFreezeAll — flip every tracked entity to stopped.
+	//      Profile again — BT tick cost should drop.
+	//   4. MO.AI.ForceWakeAll — restore. Profile should swing back up.
+	//
+	// If step 3 doesn't move the profiler, StopLogic isn't doing what we
+	// expect and the pipeline needs a deeper look (e.g. behavior trees
+	// re-arming themselves via a service).
+
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.AI.DumpFreezeState"),
+		TEXT("Dump per-pawn freeze state for every tracked spawned entity. Flags anomalies "
+		     "(should be frozen by category/distance but Brain still running)."),
+		FConsoleCommandWithWorldDelegate::CreateLambda([](UWorld* World)
+		{
+			UMOSpawnManagerSubsystem* Sys = World ? World->GetSubsystem<UMOSpawnManagerSubsystem>() : nullptr;
+			if (!Sys)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MO.AI] No spawn manager subsystem"));
+				return;
+			}
+			Sys->DumpFreezeState();
+		}),
+		ECVF_Default));
+
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.AI.ForceFreezeAll"),
+		TEXT("Stop the AI brain on every tracked non-Survivor spawned entity. "
+		     "Pair with 'stat unit' / Insights to verify BT tick cost actually drops."),
+		FConsoleCommandWithWorldDelegate::CreateLambda([](UWorld* World)
+		{
+			UMOSpawnManagerSubsystem* Sys = World ? World->GetSubsystem<UMOSpawnManagerSubsystem>() : nullptr;
+			if (!Sys)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MO.AI] No spawn manager subsystem"));
+				return;
+			}
+			const int32 Affected = Sys->ForceFreezeAll();
+			UE_LOG(LogMOFramework, Warning,
+				TEXT("[MO.AI] ForceFreezeAll affected %d brains — now check 'stat unit'"),
+				Affected);
+		}),
+		ECVF_Default));
+
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.AI.ForceWakeAll"),
+		TEXT("Restart the AI brain on every tracked spawned entity (regardless of distance). "
+		     "Counterpart to MO.AI.ForceFreezeAll for A/B profiler comparison."),
+		FConsoleCommandWithWorldDelegate::CreateLambda([](UWorld* World)
+		{
+			UMOSpawnManagerSubsystem* Sys = World ? World->GetSubsystem<UMOSpawnManagerSubsystem>() : nullptr;
+			if (!Sys)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MO.AI] No spawn manager subsystem"));
+				return;
+			}
+			const int32 Affected = Sys->ForceWakeAll();
+			UE_LOG(LogMOFramework, Warning,
+				TEXT("[MO.AI] ForceWakeAll affected %d brains — now check 'stat unit'"),
+				Affected);
+		}),
+		ECVF_Default));
+
+	// MO.AI.StressSpawn — bulk-spawn for freeze profiling.
+	//
+	// The natural spawn rate (handful of mobs across a huge world) doesn't move
+	// 'stat unit' enough to see the freeze pipeline working. This command dumps
+	// N deer + N wolves in a ring around the player so their BTs all start
+	// ticking at once. Re-runnable — each invocation adds another batch on top.
+	// Spawns are placed via random angle + random radius between [MinR, MaxR];
+	// a downward sphere-trace finds the local ground so they don't fall through.
+	// Each spawn flows through UMOSpawnManagerSubsystem::ForceSpawnAtLocation so
+	// it's tracked in SpawnedEntities and auto-frozen if outside WakeDistance.
+	//
+	// Usage:
+	//   MO.AI.StressSpawn           — N=25, MinR=2000cm (20m), MaxR=10000cm (100m)
+	//   MO.AI.StressSpawn 50        — N=50, defaults for radii
+	//   MO.AI.StressSpawn 50 1000 5000
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.AI.StressSpawn"),
+		TEXT("Bulk-spawn N Prey + N Predator around the player for freeze profiling. "
+		     "Usage: MO.AI.StressSpawn [Count=25] [MinRadius=2000] [MaxRadius=10000]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			if (!World)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MO.AI.StressSpawn] No world"));
+				return;
+			}
+
+			UMOSpawnManagerSubsystem* Sys = World->GetSubsystem<UMOSpawnManagerSubsystem>();
+			if (!Sys)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MO.AI.StressSpawn] No spawn manager subsystem"));
+				return;
+			}
+
+			APlayerController* PC = World->GetFirstPlayerController();
+			APawn* PlayerPawn = PC ? PC->GetPawn() : nullptr;
+			if (!PlayerPawn)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MO.AI.StressSpawn] No player pawn"));
+				return;
+			}
+
+			const int32 Count    = (Args.Num() > 0) ? FMath::Max(1, FCString::Atoi(*Args[0])) : 25;
+			const float MinRadius = (Args.Num() > 1) ? FMath::Max(100.0f, FCString::Atof(*Args[1])) : 2000.0f;
+			const float MaxRadius = (Args.Num() > 2) ? FMath::Max(MinRadius + 100.0f, FCString::Atof(*Args[2])) : 10000.0f;
+
+			const FVector PlayerLoc = PlayerPawn->GetActorLocation();
+			const FCollisionQueryParams TraceParams(SCENE_QUERY_STAT(StressSpawnGroundTrace), false, PlayerPawn);
+
+			auto SpawnRing = [&](EMOSpawnCategory Category, const TCHAR* Label) -> int32
+			{
+				int32 Spawned = 0;
+				for (int32 i = 0; i < Count; ++i)
+				{
+					// Random polar offset in the ring [MinR, MaxR].
+					const float Angle  = FMath::FRandRange(0.0f, 2.0f * PI);
+					const float Radius = FMath::FRandRange(MinRadius, MaxRadius);
+					const FVector XYOffset(FMath::Cos(Angle) * Radius, FMath::Sin(Angle) * Radius, 0.0f);
+					const FVector ProbeAtXY = PlayerLoc + XYOffset;
+
+					// Drop trace to find ground near the player's Z. ±5000cm catches
+					// hills and small basins without picking up a different layer
+					// of terrain on a vertical voxel cliff.
+					const FVector TraceStart = ProbeAtXY + FVector(0, 0, 5000.0f);
+					const FVector TraceEnd   = ProbeAtXY - FVector(0, 0, 5000.0f);
+
+					FHitResult Hit;
+					const bool bHit = World->LineTraceSingleByChannel(
+						Hit, TraceStart, TraceEnd, ECC_Visibility, TraceParams);
+
+					const FVector SpawnLoc = bHit
+						? Hit.ImpactPoint + FVector(0, 0, 100.0f)
+						: ProbeAtXY;  // fallback: spawn at player Z
+
+					APawn* Pawn = Sys->ForceSpawnAtLocation(Category, SpawnLoc, FRotator::ZeroRotator);
+					if (Pawn) ++Spawned;
+				}
+				UE_LOG(LogMOFramework, Warning,
+					TEXT("[MO.AI.StressSpawn] %s: %d/%d spawned"), Label, Spawned, Count);
+				return Spawned;
+			};
+
+			const int32 PreyCount     = SpawnRing(EMOSpawnCategory::Prey,     TEXT("Prey"));
+			const int32 PredatorCount = SpawnRing(EMOSpawnCategory::Predator, TEXT("Predator"));
+
+			UE_LOG(LogMOFramework, Warning,
+				TEXT("[MO.AI.StressSpawn] Done. Total added: %d (%d Prey + %d Predator) "
+				     "in ring [%.0f-%.0f]cm. Run MO.AI.DumpFreezeState to see them."),
+				PreyCount + PredatorCount, PreyCount, PredatorCount, MinRadius, MaxRadius);
 		}),
 		ECVF_Default));
 }
