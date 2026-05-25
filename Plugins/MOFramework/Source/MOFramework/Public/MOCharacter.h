@@ -169,6 +169,18 @@
 #include "MOCharacter.generated.h"
 
 /**
+ * Broadcast when this character transitions to dead state (bIsDead becomes
+ * true via HandleInstantDeath). Listeners — death recap UI, kill notifications,
+ * spectator-cam handoff — subscribe here.
+ *
+ * Fires AFTER bIsDead is set but BEFORE input/movement/ragdoll teardown, so
+ * handlers see a "freshly dead" snapshot of the character's state. The
+ * delegate is single-fire per pawn (HandleInstantDeath early-outs if already
+ * dead), so subscribers don't need to guard against duplicate dispatches.
+ */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOOnPawnDied, AMOCharacter*, DeadCharacter, EMOBodyPartType, CausePart);
+
+/**
  * Movement mode affecting speed and physiological effects.
  */
 UENUM(BlueprintType)
@@ -438,6 +450,13 @@ public:
 	/** Check if character is dead. */
 	UFUNCTION(BlueprintPure, Category="MO|State")
 	bool IsDead() const { return bIsDead; }
+
+	/**
+	 * Broadcast once on death — see FMOOnPawnDied above. Single-fire per
+	 * pawn (HandleInstantDeath bails if bIsDead is already true).
+	 */
+	UPROPERTY(BlueprintAssignable, Category="MO|State")
+	FMOOnPawnDied OnPawnDied;
 
 	// ============================================================================
 	// INTERRUPT EVENT BUS

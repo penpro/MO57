@@ -1133,6 +1133,12 @@ void AMOCharacter::HandleInstantDeath(EMOBodyPartType CausePart)
 	UE_LOG(LogMOFramework, Warning, TEXT("[MOCharacter] %s DIED! Cause: Body part %d destroyed"),
 		*GetName(), static_cast<int32>(CausePart));
 
+	// Broadcast the death event BEFORE the interrupt cascade tears down
+	// state. Listeners (death recap UI, kill feed, spectator handoff) get a
+	// clean snapshot — vitals/skills/inventory haven't been touched yet,
+	// so the recap can pull final stats accurately.
+	OnPawnDied.Broadcast(this, CausePart);
+
 	// Fire the Death interrupt BEFORE we tear down input/movement. Listeners
 	// (active build, harvest, inspection, crafting) will see the Death reason
 	// and run their terminal cleanup — refund materials, cancel widgets,

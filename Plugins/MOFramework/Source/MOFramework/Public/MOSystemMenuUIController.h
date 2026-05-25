@@ -94,6 +94,9 @@ class UMOPawnEntryWidget;
 class UMOConfirmationDialog;
 class UMOSurvivorContextMenu;
 class UMOSurvivorTaskMenu;
+class UMODeathRecapWidget;
+class AMOCharacter;
+enum class EMOBodyPartType : uint8;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOOnConfirmationConfirmedDelegate);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOOnConfirmationCancelledDelegate);
@@ -216,6 +219,13 @@ protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
+	/**
+	 * Rebind death-recap subscription when the player swaps pawns. We listen
+	 * to AMOCharacter::OnPawnDied on whichever character the local PC is
+	 * currently possessing — when the player dies, we push the recap UI.
+	 */
+	virtual void OnPossessedPawnChanged(APawn* OldPawn, APawn* NewPawn) override;
+
 private:
 	/** Frame-based debounce to prevent double-toggle from ECommonInputMode::All */
 	uint64 LastToggleFrame = 0;
@@ -333,4 +343,42 @@ private:
 
 	UFUNCTION()
 	void HandleSurvivorTaskMenuRequestClose();
+
+	// --- Death Recap ---
+	//
+	// Subscribes to OnPawnDied on the player's currently-possessed AMOCharacter.
+	// When the player dies, builds a recap snapshot, pushes the recap widget to
+	// Layer_Modal, and lets the user either return to main menu or continue
+	// (continue path defers to OnContinueRequested — currently no respawn
+	// implementation, so the button can stay hidden in the WBP).
+	//
+	// The subscription rebinds when OnPossessedPawnChanged fires so the recap
+	// always tracks the live possessed pawn rather than the BeginPlay-time one.
+
+	/** Blueprint class for the death recap modal (assign WBP_DeathRecap here). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|System Menu|Death", meta=(AllowPrivateAccess="true"))
+	TSubclassOf<UMODeathRecapWidget> DeathRecapWidgetClass;
+
+	UPROPERTY(Transient)
+	TWeakObjectPtr<UMODeathRecapWidget> DeathRecapWidget;
+
+	/** Last MOCharacter we subscribed OnPawnDied on — held weakly for safe unbind. */
+	UPROPERTY(Transient)
+	TWeakObjectPtr<AMOCharacter> SubscribedDeathPawn;
+
+	UFUNCTION()
+	void HandlePawnDied(AMOCharacter* DeadCharacter, EMOBodyPartType CausePart);
+
+	/** Bind OnPawnDied on Pawn (rebinds if already subscribed elsewhere). */
+	void BindDeathListenerToPawn(AMOCharacter* Character);
+
+	/** Unbind OnPawnDied from whatever pawn we subscribed to last. */
+	void UnbindDeathListener();
+
+	/**
+	 * Centralized "open the main menu level" path — called by both the
+	 * in-game-menu exit confirmation flow and the death recap "Return"
+	 * button. Single source of truth for the exit sequence.
+	 */
+	void ReturnToMainMenuImmediate();
 };

@@ -13,6 +13,8 @@
 #include "MOConfirmationDialog.h"
 #include "MOSurvivorContextMenu.h"
 #include "MOSurvivorTaskMenu.h"
+#include "MODeathRecapWidget.h"
+#include "MOCharacter.h"
 #include "MOPersistenceSubsystem.h"
 #include "MOPossessionSubsystem.h"
 #include "MOIdentityRegistrySubsystem.h"
@@ -101,6 +103,12 @@ void UMOSystemMenuUIController::EndPlay(const EEndPlayReason::Type EndPlayReason
 	SurvivorTaskMenuWidget.Reset();
 
 	CurrentSurvivorTarget.Reset();
+
+	// Death recap — unbind from the subscribed pawn (if any) and drop the
+	// widget cache. The widget itself is on Layer_Modal and will be cleaned
+	// up by the layer stack when the level tears down.
+	UnbindDeathListener();
+	DeathRecapWidget.Reset();
 
 	Super::EndPlay(EndPlayReason);
 }
@@ -829,20 +837,7 @@ void UMOSystemMenuUIController::HandleConfirmationConfirmed()
 
 	if (PendingConfirmationContext == TEXT("ExitToMainMenu"))
 	{
-		// Close all menus via UIManager
-		if (UMOUIManagerComponent* UIManager = GetUIManager())
-		{
-			UIManager->CloseAllMenus();
-		}
-
-		// Mark that we're returning from gameplay so the intro doesn't play
-		if (UMOGameSettings* Settings = UMOGameSettings::GetMOGameSettings())
-		{
-			Settings->MarkReturningFromGameplay();
-		}
-
-		UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] Exiting to main menu: %s"), *MainMenuLevelPath);
-		UGameplayStatics::OpenLevel(this, *MainMenuLevelPath);
+		ReturnToMainMenuImmediate();
 	}
 	else if (PendingConfirmationContext == TEXT("ExitGame"))
 	{
@@ -1179,4 +1174,152 @@ void UMOSystemMenuUIController::HandleSurvivorContextMenuOpenInventory(APawn* Su
 void UMOSystemMenuUIController::HandleSurvivorTaskMenuRequestClose()
 {
 	CloseSurvivorTaskMenu();
+}
+
+// =============================================================================
+// DEATH RECAP
+// =============================================================================
+
+void UMOSystemMenuUIController::OnPossessedPawnChanged(APawn* OldPawn, APawn* NewPawn)
+{
+	Super::OnPossessedPawnChanged(OldPawn, NewPawn);
+
+	// Always unbind from the previous pawn first — if BindDeathListenerToPawn
+	// short-circuits (e.g. NewPawn isn't a MOCharacter), we still leave the
+	// listener clean rather than dangling on the old pawn.
+	UnbindDeathListener();
+
+	if (AMOCharacter* NewMOChar = Cast<AMOCharacter>(NewPawn))
+	{
+		BindDeathListenerToPawn(NewMOChar);
+	}
+}
+
+void UMOSystemMenuUIController::BindDeathListenerToPawn(AMOCharacter* Character)
+{
+	if (!IsValid(Character))
+	{
+		return;
+	}
+
+	// AddUnique pattern via Remove-then-Add: dynamic delegates don't expose
+	// "already bound" cheaply, so we always remove first.
+	Character->OnPawnDied.RemoveDynamic(this, &UMOSystemMenuUIController::HandlePawnDied);
+	Character->OnPawnDied.AddDynamic(this, &UMOSystemMenuUIController::HandlePawnDied);
+
+	SubscribedDeathPawn = Character;
+
+	UE_LOG(LogMOFramework, Log,
+		TEXT("[MOSysUI] Bound OnPawnDied listener to '%s'"), *Character->GetName());
+}
+
+void UMOSystemMenuUIController::UnbindDeathListener()
+{
+	if (AMOCharacter* OldChar = SubscribedDeathPawn.Get())
+	{
+		OldChar->OnPawnDied.RemoveDynamic(this, &UMOSystemMenuUIController::HandlePawnDied);
+	}
+	SubscribedDeathPawn.Reset();
+}
+
+void UMOSystemMenuUIController::HandlePawnDied(AMOCharacter* DeadCharacter, EMOBodyPartType CausePart)
+{
+	if (!IsLocalOwningPlayerController())
+	{
+		// Death recap is a local-player-only UI — remote / dedicated-server
+		// PCs shouldn't try to push a widget.
+		return;
+	}
+
+	if (!DeathRecapWidgetClass)
+	{
+		UE_LOG(LogMOFramework, Warning,
+			TEXT("[MOSysUI] Pawn '%s' died but DeathRecapWidgetClass is not set — recap suppressed. "
+			     "Assign WBP_DeathRecap on UMOSystemMenuUIController in BP defaults."),
+			DeadCharacter ? *DeadCharacter->GetName() : TEXT("NULL"));
+		return;
+	}
+
+	// If a previous recap is still showing (shouldn't happen — recap holds you
+	// until you click out — but defensive), pop the old one first.
+	if (UMODeathRecapWidget* Existing = DeathRecapWidget.Get())
+	{
+		if (Existing->IsActivated())
+		{
+			Existing->DeactivateWidget();
+		}
+		DeathRecapWidget.Reset();
+	}
+
+	// Build the snapshot BEFORE pushing the widget so the data exists before
+	// NativeConstruct can ask for it. UMODeathRecapWidget::SetRecapData
+	// buffers the data if the widget isn't constructed yet, but the cleaner
+	// flow is to push, then immediately populate.
+	const FMODeathRecapData Data = UMODeathRecapWidget::BuildRecapData(DeadCharacter, CausePart);
+
+	UCommonActivatableWidget* Created = PushWidgetToLayer(
+		MOUILayerTags::Layer_Modal, DeathRecapWidgetClass);
+
+	UMODeathRecapWidget* RecapWidget = Cast<UMODeathRecapWidget>(Created);
+	if (!IsValid(RecapWidget))
+	{
+		UE_LOG(LogMOFramework, Error,
+			TEXT("[MOSysUI] Failed to push death recap widget to Layer_Modal"));
+		return;
+	}
+
+	RegisterCachedMenu(RecapWidget, DeathRecapWidget);
+	RecapWidget->SetRecapData(Data);
+
+	// Route "Return to Main Menu" to the centralized exit path. The lambda
+	// captures a weak self so a teardown mid-click doesn't crash the recap.
+	TWeakObjectPtr<UMOSystemMenuUIController> WeakSelf(this);
+	RecapWidget->OnReturnToMenuRequested.AddLambda([WeakSelf]()
+	{
+		if (UMOSystemMenuUIController* Self = WeakSelf.Get())
+		{
+			Self->ReturnToMainMenuImmediate();
+		}
+	});
+
+	// Continue (respawn) — no respawn flow yet, so this just closes the recap.
+	// MOGameMode-side respawn logic is a separate task; when wired up this
+	// lambda will call into it.
+	RecapWidget->OnContinueRequested.AddLambda([WeakSelf]()
+	{
+		if (UMOSystemMenuUIController* Self = WeakSelf.Get())
+		{
+			if (UMODeathRecapWidget* W = Self->DeathRecapWidget.Get())
+			{
+				if (W->IsActivated())
+				{
+					W->DeactivateWidget();
+				}
+			}
+		}
+	});
+
+	UE_LOG(LogMOFramework, Warning,
+		TEXT("[MOSysUI] Death recap shown for '%s' (cause: %d)"),
+		DeadCharacter ? *DeadCharacter->GetName() : TEXT("NULL"),
+		static_cast<int32>(CausePart));
+}
+
+void UMOSystemMenuUIController::ReturnToMainMenuImmediate()
+{
+	// Close all menus via UIManager so we don't carry stale modal state into
+	// the main menu level.
+	if (UMOUIManagerComponent* UIManager = GetUIManager())
+	{
+		UIManager->CloseAllMenus();
+	}
+
+	// Mark that we're returning from gameplay so the intro doesn't play
+	if (UMOGameSettings* Settings = UMOGameSettings::GetMOGameSettings())
+	{
+		Settings->MarkReturningFromGameplay();
+	}
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] Exiting to main menu: %s"), *MainMenuLevelPath);
+	UGameplayStatics::OpenLevel(this, *MainMenuLevelPath);
 }
