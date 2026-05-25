@@ -299,12 +299,15 @@ protected:
 
 public:
 	/**
-	 * Distance (centimeters) at which a frozen pawn wakes up. Defaults to 25 meters.
-	 * Editable on the subsystem CDO via Project Settings.
+	 * Distance (centimeters) at which a frozen pawn wakes up. Defaults to 75 meters.
+	 * Was 25m originally — bumped to 75m so the player can't surprise sleeping
+	 * mobs at melee range (mob wakes ~50m before they'd normally be visible in
+	 * dense terrain, giving time for an idle anim/reaction state before
+	 * contact). Editable on the subsystem CDO via Project Settings.
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawn Manager|Freeze",
 		meta = (ClampMin = "100.0", DisplayName = "Wake Distance (cm)"))
-	float WakeDistanceCm = 2500.0f;
+	float WakeDistanceCm = 7500.0f;
 
 	// ============================================================================
 	// DIAGNOSTIC ACCESSORS (used by MO.AI.* cheat commands)

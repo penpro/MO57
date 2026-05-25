@@ -14,6 +14,9 @@
 #include "EngineUtils.h"
 #include "AIController.h"
 #include "BrainComponent.h"
+#include "GameFramework/Character.h"
+#include "GameFramework/CharacterMovementComponent.h"
+#include "Components/SkeletalMeshComponent.h"
 
 namespace
 {
@@ -1221,13 +1224,40 @@ void UMOSpawnManagerSubsystem::FreezeSpawnedPawn(APawn* Pawn)
 {
 	if (!Pawn) return;
 
-	AController* Controller = Pawn->GetController();
-	AAIController* AIController = Cast<AAIController>(Controller);
-	if (!AIController) return;
-
-	if (UBrainComponent* Brain = AIController->GetBrainComponent())
+	// 1. Stop the AI brain (original behavior — halts BT ticks).
+	if (AAIController* AIController = Cast<AAIController>(Pawn->GetController()))
 	{
-		Brain->StopLogic(TEXT("SpawnedFarFromPlayer"));
+		if (UBrainComponent* Brain = AIController->GetBrainComponent())
+		{
+			Brain->StopLogic(TEXT("SpawnedFarFromPlayer"));
+		}
+	}
+
+	// 2. Disable the pawn's own Tick — kills the cost of any per-tick logic
+	//    the AMOCharacter/AMOCreature subclasses run (movement detection,
+	//    interrupt scans, etc.).
+	Pawn->SetActorTickEnabled(false);
+
+	// 3. Disable the CharacterMovementComponent tick — that's the floor
+	//    probe, gravity simulation, and nav-mesh checks. Single biggest
+	//    per-tick cost on idle mobs after the BT.
+	if (ACharacter* Character = Cast<ACharacter>(Pawn))
+	{
+		if (UCharacterMovementComponent* Movement = Character->GetCharacterMovement())
+		{
+			Movement->SetComponentTickEnabled(false);
+		}
+
+		// 4. Throttle the skeletal mesh's anim tick policy. With
+		//    OnlyTickPoseWhenRendered the engine skips the anim graph
+		//    entirely when the mob is offscreen — but on-screen frozen
+		//    mobs still animate normally (their last looping anim
+		//    continues), so the visual hit is invisible to the player.
+		if (USkeletalMeshComponent* Mesh = Character->GetMesh())
+		{
+			Mesh->VisibilityBasedAnimTickOption =
+				EVisibilityBasedAnimTickOption::OnlyTickPoseWhenRendered;
+		}
 	}
 }
 
@@ -1235,13 +1265,31 @@ void UMOSpawnManagerSubsystem::WakeSpawnedPawn(APawn* Pawn)
 {
 	if (!Pawn) return;
 
-	AController* Controller = Pawn->GetController();
-	AAIController* AIController = Cast<AAIController>(Controller);
-	if (!AIController) return;
-
-	if (UBrainComponent* Brain = AIController->GetBrainComponent())
+	// 1. Resume the AI brain.
+	if (AAIController* AIController = Cast<AAIController>(Pawn->GetController()))
 	{
-		Brain->RestartLogic();
+		if (UBrainComponent* Brain = AIController->GetBrainComponent())
+		{
+			Brain->RestartLogic();
+		}
+	}
+
+	// 2-4: reverse the throttles. Restore SkeletalMesh to the engine's
+	// always-tick default so AI-driven movement renders correctly.
+	Pawn->SetActorTickEnabled(true);
+
+	if (ACharacter* Character = Cast<ACharacter>(Pawn))
+	{
+		if (UCharacterMovementComponent* Movement = Character->GetCharacterMovement())
+		{
+			Movement->SetComponentTickEnabled(true);
+		}
+
+		if (USkeletalMeshComponent* Mesh = Character->GetMesh())
+		{
+			Mesh->VisibilityBasedAnimTickOption =
+				EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
+		}
 	}
 }
 
@@ -1295,22 +1343,44 @@ void UMOSpawnManagerSubsystem::DumpFreezeState() const
 
 		if (bRunning) ++RunningCount; else ++FrozenCount;
 
-		// Anomalies: the freeze pipeline says we SHOULD be frozen but Brain
-		// is running (the case the audit was suspicious about), OR we're
-		// well past WakeDistance and still running — both indicate the
-		// freeze isn't catching this entity.
+		// Per-pawn tick-throttle state (added with #112). All three should be
+		// disabled/throttled when the pawn is frozen — if any of them is in
+		// the wrong state we want it visible in the dump.
+		const bool bActorTicks = Pawn->IsActorTickEnabled();
+		bool bMovementTicks = false;
+		bool bMeshTicksWhenOffscreen = true;  // default = expensive
+		if (ACharacter* Character = Cast<ACharacter>(Pawn))
+		{
+			if (UCharacterMovementComponent* Movement = Character->GetCharacterMovement())
+			{
+				bMovementTicks = Movement->IsComponentTickEnabled();
+			}
+			if (USkeletalMeshComponent* Mesh = Character->GetMesh())
+			{
+				bMeshTicksWhenOffscreen =
+					(Mesh->VisibilityBasedAnimTickOption == EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones ||
+					 Mesh->VisibilityBasedAnimTickOption == EVisibilityBasedAnimTickOption::AlwaysTickPose);
+			}
+		}
+
+		// Anomalies: should be frozen but ANY of (brain, actor tick, movement
+		// tick, off-screen anim) is still running. Each of those contributes
+		// per-frame cost, so all four together are the freeze surface.
 		const bool bShouldBeFrozen = bShouldFreeze && !bInWakeRange;
-		const bool bAnomaly = bShouldBeFrozen && bRunning;
+		const bool bAnomaly = bShouldBeFrozen && (bRunning || bActorTicks || bMovementTicks || bMeshTicksWhenOffscreen);
 		if (bAnomaly) ++AnomalyCount;
 
 		UE_LOG(LogMOFramework, Warning,
-			TEXT("[MO.AI]   %s%s  category=%s  dist=%.1fm  Brain=%s%s  inWakeRange=%s"),
+			TEXT("[MO.AI]   %s%s  cat=%s  dist=%.1fm  Brain=%s%s  ActorTick=%s  MoveTick=%s  AnimOffscreen=%s  inWakeRange=%s"),
 			bAnomaly ? TEXT("[!] ") : TEXT("    "),
 			*Pawn->GetName(),
 			CategoryEnum ? *CategoryEnum->GetNameStringByValue(static_cast<int64>(Record.Category)) : TEXT("?"),
 			DistanceM,
 			Brain ? TEXT("present") : TEXT("MISSING"),
-			Brain ? (bRunning ? TEXT(":running") : TEXT(":stopped")) : TEXT(""),
+			Brain ? (bRunning ? TEXT(":run") : TEXT(":stop")) : TEXT(""),
+			bActorTicks ? TEXT("on") : TEXT("off"),
+			bMovementTicks ? TEXT("on") : TEXT("off"),
+			bMeshTicksWhenOffscreen ? TEXT("on") : TEXT("off"),
 			bInWakeRange ? TEXT("YES") : TEXT("no"));
 	}
 
@@ -1322,6 +1392,10 @@ void UMOSpawnManagerSubsystem::DumpFreezeState() const
 
 int32 UMOSpawnManagerSubsystem::ForceFreezeAll()
 {
+	// Use the FULL freeze pipeline (brain + actor tick + movement tick + mesh
+	// anim policy) so the profiler comparison reflects every throttle, not
+	// just brain stopping. Without this we measured 60→30 fps with brains
+	// alone; the additional throttles are what claw the cost back.
 	int32 Affected = 0;
 	for (const FMOSpawnedEntityRecord& Record : SpawnedEntities)
 	{
@@ -1329,15 +1403,11 @@ int32 UMOSpawnManagerSubsystem::ForceFreezeAll()
 		APawn* Pawn = Record.SpawnedPawn.Get();
 		if (!Pawn) continue;
 
-		AAIController* AIController = Cast<AAIController>(Pawn->GetController());
-		UBrainComponent* Brain = AIController ? AIController->GetBrainComponent() : nullptr;
-		if (!Brain || !Brain->IsRunning()) continue;
-
-		Brain->StopLogic(TEXT("MO.AI.ForceFreezeAll"));
+		FreezeSpawnedPawn(Pawn);
 		++Affected;
 	}
 	UE_LOG(LogMOFramework, Warning,
-		TEXT("[MO.AI.ForceFreezeAll] Stopped %d brains (out of %d tracked entities)"),
+		TEXT("[MO.AI.ForceFreezeAll] Froze %d pawns (out of %d tracked entities — full pipeline: brain+actor+movement+anim)"),
 		Affected, SpawnedEntities.Num());
 	return Affected;
 }
@@ -1350,15 +1420,11 @@ int32 UMOSpawnManagerSubsystem::ForceWakeAll()
 		APawn* Pawn = Record.SpawnedPawn.Get();
 		if (!Pawn) continue;
 
-		AAIController* AIController = Cast<AAIController>(Pawn->GetController());
-		UBrainComponent* Brain = AIController ? AIController->GetBrainComponent() : nullptr;
-		if (!Brain || Brain->IsRunning()) continue;
-
-		Brain->RestartLogic();
+		WakeSpawnedPawn(Pawn);
 		++Affected;
 	}
 	UE_LOG(LogMOFramework, Warning,
-		TEXT("[MO.AI.ForceWakeAll] Restarted %d brains (out of %d tracked entities)"),
+		TEXT("[MO.AI.ForceWakeAll] Woke %d pawns (out of %d tracked entities — full pipeline reversed)"),
 		Affected, SpawnedEntities.Num());
 	return Affected;
 }
