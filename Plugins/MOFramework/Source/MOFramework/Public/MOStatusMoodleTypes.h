@@ -79,4 +79,19 @@ struct MOFRAMEWORK_API FMOStatusMoodle
 	/** Optional stack count (e.g. "x3"). 0 = don't show count. */
 	UPROPERTY(BlueprintReadWrite, Category="MO|HUD|Moodle")
 	int32 Stack = 0;
+
+	/**
+	 * Intensity tier within the moodle's own scale (0 = mildest). Sources that
+	 * have multiple icons per moodle (e.g. Hunger: 0=Hungry, 1=Starving;
+	 * Wet: 0=Damp, 1=Wet, 2=Soaked) author one icon per level and pass the
+	 * picked icon in Icon. Level is preserved here so BP-side tooltip / VFX
+	 * code can react to tier transitions (pulse on level-up, etc.) without
+	 * having to re-derive from severity.
+	 *
+	 * Severity (Info/Warning/Critical) is for VISUAL CLASSIFICATION; Level
+	 * is for INTENSITY within a class. The two are independent — a Critical
+	 * "Starving" can be Level 1 of a 0..1 scale OR Level 4 of a 0..4 scale.
+	 */
+	UPROPERTY(BlueprintReadWrite, Category="MO|HUD|Moodle")
+	int32 Level = 0;
 };

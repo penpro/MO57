@@ -4,10 +4,8 @@
 
 #include "MOHUDRootWidget.h"
 #include "MOFramework.h"
-#include "MOThermalComfortWidget.h"
 #include "MOStatusEffectStripWidget.h"
 #include "MOWindDirectionWidget.h"
-#include "Blueprint/WidgetTree.h"
 
 UMOHUDRootWidget::UMOHUDRootWidget(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -34,51 +32,15 @@ void UMOHUDRootWidget::NativeOnInitialized()
 {
 	Super::NativeOnInitialized();
 
-	// Two pieces of info, so we can tell the failure modes apart:
-	//   1. BindWidgetOptional pointer — null = "child isn't a named variable
-	//      in WBP_HUDRoot's tree" (either not placed, OR placed without
-	//      'Is Variable' ticked, OR placed with wrong type)
-	//   2. Walk WidgetTree for any UMOThermalComfortWidget descendant — finds
-	//      the widget regardless of variable status. Null here = "no widget
-	//      of that class exists in the tree at all" (definitely not placed,
-	//      or placed with wrong parent class)
-	UMOThermalComfortWidget* FoundInTree = nullptr;
-	if (WidgetTree)
-	{
-		WidgetTree->ForEachWidget([&FoundInTree](UWidget* W)
-		{
-			if (!FoundInTree)
-			{
-				if (UMOThermalComfortWidget* Casted = Cast<UMOThermalComfortWidget>(W))
-				{
-					FoundInTree = Casted;
-				}
-			}
-		});
-	}
-
+	// Report which BindWidgetOptional slots resolved — tells designers
+	// at a glance whether each WBP child is wired correctly. NULL means
+	// either "not placed" or "placed without 'Is Variable' ticked."
 	UE_LOG(LogMOFramework, Warning,
 		TEXT("[MOHUDRoot] NativeOnInitialized — children:"));
-	UE_LOG(LogMOFramework, Warning,
-		TEXT("[MOHUDRoot]   ThermalComfortIndicator: BindWidget=%s  TreeDescendant=%s"),
-		ThermalComfortIndicator ? *ThermalComfortIndicator->GetName() : TEXT("NULL"),
-		FoundInTree ? *FoundInTree->GetName() : TEXT("NULL"));
 	UE_LOG(LogMOFramework, Warning,
 		TEXT("[MOHUDRoot]   StatusStrip: BindWidget=%s"),
 		StatusStrip ? *StatusStrip->GetName() : TEXT("NULL (add WBP_StatusEffectStrip to WBP_HUDRoot, name it 'StatusStrip', tick 'Is Variable')"));
 	UE_LOG(LogMOFramework, Warning,
 		TEXT("[MOHUDRoot]   WindIndicator: BindWidget=%s"),
 		WindIndicator ? *WindIndicator->GetName() : TEXT("NULL (add WBP_WindDirection to WBP_HUDRoot, name it 'WindIndicator', tick 'Is Variable')"));
-
-	// Self-heal: if the WBP designer placed the widget but forgot to tick
-	// "Is Variable", the BindWidgetOptional pointer is null but the tree
-	// has it. Wire it up so the rest of C++ can use ThermalComfortIndicator.
-	// (Logs above keep the diagnostic visible so the designer still knows
-	// to fix the WBP.)
-	if (!ThermalComfortIndicator && FoundInTree)
-	{
-		ThermalComfortIndicator = FoundInTree;
-		UE_LOG(LogMOFramework, Warning,
-			TEXT("[MOHUDRoot]   ↳ Auto-wired ThermalComfortIndicator from tree (consider ticking 'Is Variable' on the widget in WBP_HUDRoot)"));
-	}
 }

@@ -351,9 +351,25 @@ private:
 	UPROPERTY(Transient)
 	TWeakObjectPtr<class UMOVitalsComponent> BoundVitalsComponent;
 
-	/** Optional icon shown in the wet moodle. If null, the moodle still renders with label only. */
+	/**
+	 * Icons for the wet moodle, indexed by Level:
+	 *   [0] Damp, [1] Wet, [2] Soaked
+	 * Author one texture per level in BP defaults. If the array is shorter
+	 * than the resolved level, the last entry is used (so a single-icon
+	 * fallback works fine). If empty, the moodle renders label-only.
+	 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="MO|Character|Moodles", meta=(AllowPrivateAccess="true"))
-	TObjectPtr<class UTexture2D> WetMoodleIcon;
+	TArray<TObjectPtr<class UTexture2D>> WetMoodleIcons;
+
+	/**
+	 * Icons for the thermal moodle, indexed by EMOThermalComfort enum value:
+	 *   [0] VeryCold, [1] Cold, [2] Comfortable (unused — no moodle when comfortable),
+	 *   [3] Hot, [4] VeryHot
+	 * Comfortable removes the moodle; the other four states push it with
+	 * severity ratcheting (Warning at Cold/Hot, Critical at VeryCold/VeryHot).
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="MO|Character|Moodles", meta=(AllowPrivateAccess="true"))
+	TArray<TObjectPtr<class UTexture2D>> ThermalMoodleIcons;
 
 	/** Bind to the live pawn's vitals OnWetnessStateChanged. */
 	void BindToPawnVitalsForMoodles();
@@ -366,6 +382,12 @@ private:
 
 	UFUNCTION()
 	void HandleWetnessStateChanged(EMOWetnessState OldState, EMOWetnessState NewState);
+
+	UFUNCTION()
+	void HandleThermalComfortChanged(EMOThermalComfort OldComfort, EMOThermalComfort NewComfort);
+
+	/** Push/remove the thermal moodle on the HUD strip based on comfort state. */
+	void RefreshThermalMoodle(EMOThermalComfort Comfort);
 
 	// --- Survival-stat-derived moodles (hunger, thirst, energy) ---
 	//
@@ -387,14 +409,25 @@ private:
 		meta=(AllowPrivateAccess="true", ClampMin="0.0", ClampMax="1.0"))
 	float SurvivalMoodleCriticalPercent = 0.25f;
 
+	/** Indexed by Level — [0] Hungry, [1] Starving. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="MO|Character|Moodles", meta=(AllowPrivateAccess="true"))
-	TObjectPtr<class UTexture2D> HungerMoodleIcon;
+	TArray<TObjectPtr<class UTexture2D>> HungerMoodleIcons;
 
+	/** Indexed by Level — [0] Thirsty, [1] Dehydrated. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="MO|Character|Moodles", meta=(AllowPrivateAccess="true"))
-	TObjectPtr<class UTexture2D> ThirstMoodleIcon;
+	TArray<TObjectPtr<class UTexture2D>> ThirstMoodleIcons;
 
+	/** Indexed by Level — [0] Tired, [1] Exhausted. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="MO|Character|Moodles", meta=(AllowPrivateAccess="true"))
-	TObjectPtr<class UTexture2D> EnergyMoodleIcon;
+	TArray<TObjectPtr<class UTexture2D>> EnergyMoodleIcons;
+
+	/**
+	 * Helper: returns the texture at Level (clamped to the array's last
+	 * entry if Level overflows). Empty array → nullptr. Centralizes the
+	 * "graceful fallback when designer hasn't authored every tier yet"
+	 * behavior so every moodle source treats out-of-range identically.
+	 */
+	static class UTexture2D* PickIconForLevel(const TArray<TObjectPtr<class UTexture2D>>& Icons, int32 Level);
 
 	void BindToPawnSurvivalStatsForMoodles();
 	void UnbindFromPawnSurvivalStatsForMoodles();

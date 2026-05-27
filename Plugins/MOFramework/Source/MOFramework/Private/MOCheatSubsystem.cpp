@@ -1121,13 +1121,13 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 	ConsoleCommands.Add(CM.RegisterConsoleCommand(
 		TEXT("MO.HUD.AddTestMoodle"),
 		TEXT("Push a test moodle to the HUD status strip. "
-		     "Usage: MO.HUD.AddTestMoodle <Id> [Label] [Severity=Info|Warning|Critical|Buff]"),
+		     "Usage: MO.HUD.AddTestMoodle <Id> [Label] [Severity=Info|Warning|Critical|Buff] [Level=0]"),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([ResolveStripFromWorld](const TArray<FString>& Args, UWorld* World)
 		{
 			if (Args.Num() < 1)
 			{
 				UE_LOG(LogMOFramework, Warning,
-					TEXT("[MO.HUD] Usage: MO.HUD.AddTestMoodle <Id> [Label] [Severity]"));
+					TEXT("[MO.HUD] Usage: MO.HUD.AddTestMoodle <Id> [Label] [Severity] [Level]"));
 				return;
 			}
 			UMOStatusEffectStripWidget* Strip = ResolveStripFromWorld(World);
@@ -1153,10 +1153,15 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 				else                                                                M.Severity = EMOStatusMoodleSeverity::Info;
 			}
 
+			if (Args.Num() > 3)
+			{
+				M.Level = FCString::Atoi(*Args[3]);
+			}
+
 			Strip->AddOrUpdateMoodle(M);
 			UE_LOG(LogMOFramework, Warning,
-				TEXT("[MO.HUD.AddTestMoodle] Added '%s' (severity=%d). Strip now has %d moodle(s)."),
-				*M.Id.ToString(), static_cast<int32>(M.Severity), Strip->GetMoodleCount());
+				TEXT("[MO.HUD.AddTestMoodle] Added '%s' (severity=%d, level=%d). Strip now has %d moodle(s)."),
+				*M.Id.ToString(), static_cast<int32>(M.Severity), M.Level, Strip->GetMoodleCount());
 		}),
 		ECVF_Default));
 

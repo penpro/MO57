@@ -938,16 +938,22 @@ void UMOCharacterUIController::BindToPawnVitalsForMoodles()
 	// AddUnique pattern via Remove-then-Add for dynamic delegates.
 	Vitals->OnWetnessStateChanged.RemoveDynamic(this, &UMOCharacterUIController::HandleWetnessStateChanged);
 	Vitals->OnWetnessStateChanged.AddDynamic(this, &UMOCharacterUIController::HandleWetnessStateChanged);
+
+	Vitals->OnThermalComfortChanged.RemoveDynamic(this, &UMOCharacterUIController::HandleThermalComfortChanged);
+	Vitals->OnThermalComfortChanged.AddDynamic(this, &UMOCharacterUIController::HandleThermalComfortChanged);
+
 	BoundVitalsComponent = Vitals;
 
-	// Push the moodle to reflect CURRENT state immediately — don't wait for
-	// the next state transition (player may have respawned soaked).
+	// Push current state immediately — don't wait for the next transition
+	// (player may have respawned soaked + freezing).
 	RefreshWetMoodle(Vitals->GetWetnessState());
+	RefreshThermalMoodle(Vitals->GetThermalComfort());
 
 	UE_LOG(LogMOFramework, Log,
-		TEXT("[MOCharUI] Bound to vitals for moodles on '%s' (current state=%s)"),
+		TEXT("[MOCharUI] Bound to vitals for moodles on '%s' (wet=%s, thermal=%s)"),
 		*Pawn->GetName(),
-		*UEnum::GetValueAsString(Vitals->GetWetnessState()));
+		*UEnum::GetValueAsString(Vitals->GetWetnessState()),
+		*UEnum::GetValueAsString(Vitals->GetThermalComfort()));
 }
 
 void UMOCharacterUIController::UnbindFromPawnVitalsForMoodles()
@@ -955,16 +961,18 @@ void UMOCharacterUIController::UnbindFromPawnVitalsForMoodles()
 	if (UMOVitalsComponent* Vitals = BoundVitalsComponent.Get())
 	{
 		Vitals->OnWetnessStateChanged.RemoveDynamic(this, &UMOCharacterUIController::HandleWetnessStateChanged);
+		Vitals->OnThermalComfortChanged.RemoveDynamic(this, &UMOCharacterUIController::HandleThermalComfortChanged);
 	}
 	BoundVitalsComponent.Reset();
 
-	// Remove any previously-pushed moodle on pawn-swap so the new pawn's
-	// state can replace it cleanly.
+	// Remove any previously-pushed moodles on pawn-swap so the new pawn's
+	// state can replace them cleanly.
 	UMOUIManagerComponent* UIManager = GetUIManager();
 	UMOHUDRootWidget* HUDRoot = UIManager ? UIManager->GetHUDRoot() : nullptr;
 	if (UMOStatusEffectStripWidget* Strip = HUDRoot ? HUDRoot->GetStatusStrip() : nullptr)
 	{
 		Strip->RemoveMoodle(FName(TEXT("Wet")));
+		Strip->RemoveMoodle(FName(TEXT("Thermal")));
 	}
 }
 
@@ -975,6 +983,90 @@ void UMOCharacterUIController::HandleWetnessStateChanged(EMOWetnessState OldStat
 		*UEnum::GetValueAsString(OldState),
 		*UEnum::GetValueAsString(NewState));
 	RefreshWetMoodle(NewState);
+}
+
+void UMOCharacterUIController::HandleThermalComfortChanged(EMOThermalComfort OldComfort, EMOThermalComfort NewComfort)
+{
+	UE_LOG(LogMOFramework, Log,
+		TEXT("[MOCharUI] ThermalComfort %s -> %s"),
+		*UEnum::GetValueAsString(OldComfort),
+		*UEnum::GetValueAsString(NewComfort));
+	RefreshThermalMoodle(NewComfort);
+}
+
+void UMOCharacterUIController::RefreshThermalMoodle(EMOThermalComfort Comfort)
+{
+	UMOUIManagerComponent* UIManager = GetUIManager();
+	UMOHUDRootWidget* HUDRoot = UIManager ? UIManager->GetHUDRoot() : nullptr;
+	UMOStatusEffectStripWidget* Strip = HUDRoot ? HUDRoot->GetStatusStrip() : nullptr;
+	if (!Strip) return;
+
+	const FName ThermalMoodleId(TEXT("Thermal"));
+
+	// Comfortable = no moodle. The strip is for "things to react to," and
+	// being comfortable isn't one of them. Player can infer from the
+	// absence of cold/hot moodles that they're fine.
+	if (Comfort == EMOThermalComfort::Comfortable)
+	{
+		Strip->RemoveMoodle(ThermalMoodleId);
+		return;
+	}
+
+	FMOStatusMoodle M;
+	M.Id = ThermalMoodleId;
+	// Use enum value directly as the icon index — designers author 5
+	// textures, ThermalMoodleIcons[0]..[4] = VeryCold..VeryHot. Index 2
+	// (Comfortable) is unused but kept in the array so the indexing stays
+	// 1:1 with the enum.
+	M.Level = static_cast<int32>(Comfort);
+	M.Icon = PickIconForLevel(ThermalMoodleIcons, M.Level);
+
+	switch (Comfort)
+	{
+	case EMOThermalComfort::VeryCold:
+		M.Label = NSLOCTEXT("MO", "Moodle.VeryCold", "Freezing");
+		M.Tooltip = NSLOCTEXT("MO", "Moodle.VeryCold.Tip",
+			"Severe hypothermia. Find heat now — performance is degrading, danger of death.");
+		M.Severity = EMOStatusMoodleSeverity::Critical;
+		break;
+
+	case EMOThermalComfort::Cold:
+		M.Label = NSLOCTEXT("MO", "Moodle.Cold", "Cold");
+		M.Tooltip = NSLOCTEXT("MO", "Moodle.Cold.Tip",
+			"You're cold. Build a fire, find shelter, or get drier clothing.");
+		M.Severity = EMOStatusMoodleSeverity::Warning;
+		break;
+
+	case EMOThermalComfort::Hot:
+		M.Label = NSLOCTEXT("MO", "Moodle.Hot", "Hot");
+		M.Tooltip = NSLOCTEXT("MO", "Moodle.Hot.Tip",
+			"You're overheating. Seek shade, water, and rest.");
+		M.Severity = EMOStatusMoodleSeverity::Warning;
+		break;
+
+	case EMOThermalComfort::VeryHot:
+		M.Label = NSLOCTEXT("MO", "Moodle.VeryHot", "Heatstroke");
+		M.Tooltip = NSLOCTEXT("MO", "Moodle.VeryHot.Tip",
+			"Severe hyperthermia. Cool down now — performance is degrading, danger of death.");
+		M.Severity = EMOStatusMoodleSeverity::Critical;
+		break;
+
+	default:
+		// Comfortable handled above; new enum values would fall through here.
+		return;
+	}
+
+	Strip->AddOrUpdateMoodle(M);
+}
+
+UTexture2D* UMOCharacterUIController::PickIconForLevel(const TArray<TObjectPtr<UTexture2D>>& Icons, int32 Level)
+{
+	if (Icons.Num() == 0)
+	{
+		return nullptr;
+	}
+	const int32 Clamped = FMath::Clamp(Level, 0, Icons.Num() - 1);
+	return Icons[Clamped];
 }
 
 void UMOCharacterUIController::RefreshWetMoodle(EMOWetnessState State)
@@ -999,15 +1091,15 @@ void UMOCharacterUIController::RefreshWetMoodle(EMOWetnessState State)
 	}
 
 	// Damp / Wet / Soaked — show or update the same moodle slot. Label +
-	// severity ratchet up as the player gets wetter so the player gets
-	// progressive visual feedback without spawning multiple icons.
+	// severity + icon ratchet up as the player gets wetter; designers
+	// author one texture per Level in WetMoodleIcons.
 	FMOStatusMoodle M;
 	M.Id = WetMoodleId;
-	M.Icon = WetMoodleIcon;
 
 	switch (State)
 	{
 	case EMOWetnessState::Damp:
+		M.Level = 0;
 		M.Label = NSLOCTEXT("MO", "Moodle.Damp", "Damp");
 		M.Tooltip = NSLOCTEXT("MO", "Moodle.Damp.Tooltip",
 			"You're slightly damp. Your body will lose heat faster in cold weather.");
@@ -1015,6 +1107,7 @@ void UMOCharacterUIController::RefreshWetMoodle(EMOWetnessState State)
 		break;
 
 	case EMOWetnessState::Wet:
+		M.Level = 1;
 		M.Label = NSLOCTEXT("MO", "Moodle.Wet", "Wet");
 		M.Tooltip = NSLOCTEXT("MO", "Moodle.Wet.Tooltip",
 			"You're wet. Significant heat loss in cold; fire-starting is harder.");
@@ -1022,6 +1115,7 @@ void UMOCharacterUIController::RefreshWetMoodle(EMOWetnessState State)
 		break;
 
 	case EMOWetnessState::Soaked:
+		M.Level = 2;
 		M.Label = NSLOCTEXT("MO", "Moodle.Soaked", "Soaked");
 		M.Tooltip = NSLOCTEXT("MO", "Moodle.Soaked.Tooltip",
 			"You're soaked through. Severe heat loss in cold; find shelter and a fire.");
@@ -1033,6 +1127,7 @@ void UMOCharacterUIController::RefreshWetMoodle(EMOWetnessState State)
 		break;
 	}
 
+	M.Icon = PickIconForLevel(WetMoodleIcons, M.Level);
 	Strip->AddOrUpdateMoodle(M);
 }
 
@@ -1131,17 +1226,18 @@ void UMOCharacterUIController::RefreshSurvivalStatMoodle(FName StatName)
 		return;
 	}
 
-	// Below warning → push a moodle. Severity + label depend on which stat
-	// AND how deep into the warning band we are.
+	// Below warning → push a moodle. Severity + label + icon level depend
+	// on which stat AND how deep into the warning band we are.
 	FMOStatusMoodle M;
 	M.Id = StatName;
 
 	const bool bCritical = Percent < SurvivalMoodleCriticalPercent;
+	M.Level = bCritical ? 1 : 0;  // 0 = warning, 1 = critical
 	M.Severity = bCritical ? EMOStatusMoodleSeverity::Critical : EMOStatusMoodleSeverity::Warning;
 
 	if (StatName == FName("Hunger"))
 	{
-		M.Icon = HungerMoodleIcon;
+		M.Icon = PickIconForLevel(HungerMoodleIcons, M.Level);
 		M.Label = bCritical
 			? NSLOCTEXT("MO", "Moodle.Starving",      "Starving")
 			: NSLOCTEXT("MO", "Moodle.Hungry",        "Hungry");
@@ -1151,7 +1247,7 @@ void UMOCharacterUIController::RefreshSurvivalStatMoodle(FName StatName)
 	}
 	else if (StatName == FName("Thirst"))
 	{
-		M.Icon = ThirstMoodleIcon;
+		M.Icon = PickIconForLevel(ThirstMoodleIcons, M.Level);
 		M.Label = bCritical
 			? NSLOCTEXT("MO", "Moodle.Dehydrated",    "Dehydrated")
 			: NSLOCTEXT("MO", "Moodle.Thirsty",       "Thirsty");
@@ -1161,7 +1257,7 @@ void UMOCharacterUIController::RefreshSurvivalStatMoodle(FName StatName)
 	}
 	else if (StatName == FName("Energy"))
 	{
-		M.Icon = EnergyMoodleIcon;
+		M.Icon = PickIconForLevel(EnergyMoodleIcons, M.Level);
 		M.Label = bCritical
 			? NSLOCTEXT("MO", "Moodle.Exhausted",     "Exhausted")
 			: NSLOCTEXT("MO", "Moodle.Tired",         "Tired");

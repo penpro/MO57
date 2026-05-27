@@ -46,7 +46,7 @@
  *
  * =============================================================================
  * RELATED FILES: MOPrimaryGameLayout.h, MOUIManagerComponent.h,
- *                MOThermalComfortWidget.h
+ *                MOStatusEffectStripWidget.h, MOWindDirectionWidget.h
  * LAST UPDATED: 2026-05-25
  * =============================================================================
  */
@@ -57,7 +57,6 @@
 #include "MOActivatableWidget.h"
 #include "MOHUDRootWidget.generated.h"
 
-class UMOThermalComfortWidget;
 class UMOStatusEffectStripWidget;
 class UMOWindDirectionWidget;
 
@@ -105,9 +104,11 @@ protected:
 	// matching widget into the WBP designer with the SAME name + "Is Variable"
 	// checked. No further C++ wiring.
 
-	/** Thermal comfort indicator (player core temperature). */
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<UMOThermalComfortWidget> ThermalComfortIndicator;
+	// NOTE: Removed dedicated UMOThermalComfortWidget — thermal is now a
+	// moodle in the StatusStrip (see UMOCharacterUIController::RefreshThermalMoodle).
+	// Comfortable removes the moodle; Cold/Hot/VeryCold/VeryHot push it
+	// with severity ratcheting. Designers can remove the old
+	// WBP_ThermalComfortComponent placement from WBP_HUDRoot when ready.
 
 	/**
 	 * Generic moodle strip (wet, bleeding, hungry, well-fed, buffs, etc.).
