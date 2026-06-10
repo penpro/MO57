@@ -135,6 +135,150 @@ the fix belongs.
 **Rule:** If you can't write a one-sentence diagnosis naming the
 responsible layer, you don't understand the bug yet.
 
+### 11. The simulation IS the design — every system reflects real-world phenomena
+
+MO57's first design pillar is realism. Every system in the game — timers,
+movement, combat, biology, crafting, healing, travel, weather, resource
+gathering, AI behavior, social interaction — models the real-world
+phenomenon it represents. Convenience shortcuts that bypass the
+simulation are a design failure, not a polish step. They make a
+different game.
+
+This rule sits above the others because it determines what "correct"
+means. The other principles ask "is this code right?". This one asks
+"is this game right?" — and the answer drives what's allowed to ship.
+
+**Concrete examples already in this codebase:**
+- **Terraforming** runs a 5-second progress timer with
+  interrupt-on-movement. Better tools shorten it; the floor is
+  non-zero. A swing of the pickaxe is a timed action, not an instant
+  click.
+- **Wounds** bleed, scab, and scar over real game time via the medical
+  cascade. No HP regen — healing is the actual recovery arc with risks
+  (infection) and dependencies (clean water, suturing skill).
+- **Vitals** (HR, BP, SpO2, glucose, blood volume, temperature) tick
+  on real intervals. Cold doesn't just "do damage" — it shifts the
+  thermal-comfort moodle, which affects metabolism, which affects
+  glucose, which affects mental state.
+- **Crafting** consumes materials AND time AND skill. There is no
+  "click and it's done."
+- **Movement-interruptible actions** register via
+  `IMOMovementInterruptibleInterface`. Moving cancels lockpicking,
+  surgery, terraforming, fishing — because in reality you can't do
+  those things while walking.
+- **AI sleep cycles** are real-clock — frozen mobs stay asleep until
+  the recheck timer fires, and players can't run up on them in the
+  meantime because the recheck distance is meters of travel away.
+
+**Examples to reject, no matter how convenient they sound:**
+- "Instant build / instant dig / instant craft" modes for shipped
+  builds (cheat console commands for debug are a separate question)
+- "HP regen over time" — use the actual healing simulation
+- "Fast travel" that teleports between distant points — build roads,
+  ride horses, take the journey
+- Passive auto-pickup (items walk into inventory as you near them
+  without input) — but see the QoL section below for the version
+  that's fine
+- "Skill use is free" — every skill use costs time, energy, material,
+  or all three
+- Hidden internal timers the player can't see while waiting — if
+  something takes 30 seconds, the player must see it taking 30 seconds
+- Stat decay / regen rates that read as game-y rather than biological
+  ("hunger decreases 1/sec" is wrong; "metabolism burns X kcal/min
+  based on activity level + body composition" is right)
+
+### Tedium is not simulation — eliminate the first, preserve the second
+
+Critical distinction:
+
+- **Simulation friction** is the in-world thing taking real time.
+  Cooking a stew takes 20 minutes because that's how long stew takes.
+  Walking to the well takes 90 seconds because the well is 90 seconds
+  away. This is sacred — see the reject list above.
+- **UX tedium** is the player making the same gesture N times for the
+  same simulated outcome. Clicking each of 80 berries individually to
+  move them into a barrel — the *gesture* is tedious; the *simulation*
+  is fine with 80 berries changing hands in N seconds.
+
+Quality-of-life features that batch repeated gestures into one action,
+with one combined-duration timer, **respect both principles at once**.
+Reference example: Project Zomboid has timers on every individual
+pickup / drop / equip — realistic, but a "deposit all matching" action
+would massively improve the play experience without breaking realism.
+Total time is still ~N × per-item duration; player just made one
+gesture instead of 80.
+
+**Good QoL patterns that don't break realism:**
+- **"Deposit all matching"** / **"Take all"** — one combined-duration
+  timer covering all transferred items. Total time stays realistic;
+  player makes one gesture. Slight efficiency bonus is acceptable
+  (real handfuls are faster than one-at-a-time).
+- **Recipe queuing** — enqueue 5 meals; each cooks in sequence at its
+  real duration. Player doesn't click "start next" 5 times.
+- **Auto-sort inventory by category** — instant; mental organization
+  is fast.
+- **Press-button-to-sweep pickup** — timed action: press F, character
+  spends 4 seconds picking up everything in 3m. Visible, interruptible,
+  totally fine. This is the *good* version of "auto-pickup."
+- **Stack / unstack** items — instant; it's a UI shuffle, not a
+  world event.
+- **Workshop crafting batch** — set a station to "craft 20 arrows";
+  the station works for 20 × craft-duration with the player free to
+  do other things, just like real fletching.
+
+**The killer feature: delegate tedium to AI pawns.** Tedium that can't
+be batched (because each instance has its own simulation cost — chop
+12 trees in 12 different places) is delegate-able to recruited
+survivors via `UMOSurvivorJobQueueComponent`. The player doesn't skip
+the simulation; **the simulation happens without the player.** Hauling,
+watering crops, restocking firewood, churning butter, processing hides,
+basic crafting, tending livestock — all real-time tasks the pawn AI
+does on its own clock while the player is elsewhere. This is the loop
+that takes MO57 from "Project Zomboid" to "RimWorld." Every system that
+the player can do should be plumbed to be pawn-assignable.
+
+### When a system feels too slow, the right moves are (in order):
+1. **Tedium check first** — is the player making repeated gestures
+   with no per-gesture choice? Batch them or offer as a pawn job.
+2. Better feedback so the wait feels productive — progress bar,
+   incremental yield, visible environmental change, audio cues.
+3. Tool / skill progression that meaningfully reduces but doesn't
+   eliminate the duration.
+4. Re-check whether the simulation duration was correct — tune down
+   toward the realistic floor if the original value was excessive, but
+   never below the floor.
+5. Add parallel work the player can do while waiting (drink, eat,
+   sharpen a tool, plan the next move).
+
+Never collapse a single simulated action's duration to zero, add a
+"creative mode" toggle to shipped builds, or hide the realistic timer
+behind an animation that "skips" the wait.
+
+**Rule:** Before adding any "instant" / "auto" / "fast-X" mode, ask
+three questions in order:
+1. *Does the simulation need tuning?* → Tune it.
+2. *Is the player skipping the simulation?* → Refuse.
+3. *Is this batching repeated gestures with no per-gesture choice?* →
+   Allow it, with a combined-duration timer covering the batched
+   work — or expose it as an assignable pawn job. Or both.
+
+---
+
+## Consolidated Documentation
+
+| Document | Purpose | Read When |
+|----------|---------|-----------|
+| `Docs/PROJECT_STATUS.md` | Metrics, progress, **audit issue tracker** (C1-L7) | Starting any feature, checking progress, or reviewing known issues |
+| `Docs/TECHNICAL_REFERENCE.md` | Architecture patterns, APIs, performance/networking guidelines | Implementing any system — UI, AI, medical, crafting, networking |
+| `Docs/MO57_Master_Plan.md` | Detailed stage execution plans | Working on UI refactor or colony management |
+| `Docs/UI_Overhaul_Architecture.md` | CommonUI migration details + 15 pitfalls | Any UI widget work |
+| `Docs/MobAIPlan.md` | Creature AI behavior tree design | Adding new creature types |
+| `Docs/PCG_Integration_Plan.md` | PCG world items architecture | Working on PCG/resource spawning |
+| `Docs/Voxel_Plugin_Reference.md` | Voxel Plugin 2.0 reference + MO57 voxel integration + caves/mining playbook | Any voxel-graph, terraforming, or PCG-voxel-sampling work |
+| `Docs/Terrain_Foundation_Plan.md` | VHG_Realistic recipe (multi-octave + ridged mountains + beach flattening) | Authoring or tuning base terrain generation |
+| `Docs/World_Features_Architecture.md` | Unifying abstraction for caves / rivers / POIs / landmarks / ore / player builds | Before designing any new "kind of thing" that lives in the world |
+| `Docs/Archive/` | Superseded docs (historical reference only) | Never — check git history if needed |
+
 ---
 
 ## Design Policies (load-bearing — never violate without policy doc update)
@@ -540,128 +684,14 @@ bool ApplySaveDataAuthority(const FMOVitalsSaveData& InSaveData);  // Server onl
 
 ### Pending Implementation (Blueprint Setup Required)
 
-**Creature Animation Blueprint Setup:**
-The C++ infrastructure for creature activity states is complete, but Blueprint setup is pending:
+See `Docs/PROJECT_STATUS.md` for full status of all pending work.
 
-1. **Deer ABP State Machine** - Add states for: Locomotion, Resting (IdleRest anim), Sleeping (IdleSleep anim), Death
-2. **ABP Variables** - Add: `GroundSpeed` (float), `IsDead` (bool), `IsResting` (bool), `IsSleeping` (bool)
-3. **Blackboard Keys** - Add to creature blackboard: `ActivityState` (enum), `IsDead`, `IsResting`, `IsSleeping`
-4. **Animation Montages** - Create montages for HitReaction and Death, assign to BP_Deer's `HitReactionMontage` and `DeathMontage` properties
-5. **Behavior Tree** - Add `BTService_CreatureActivity` to BT_Prey root, add rest/sleep branches with decorators
-
-**State Machine Transitions:**
-- Locomotion → Resting: `IsResting == true AND GroundSpeed < 10`
-- Locomotion → Sleeping: `IsSleeping == true AND GroundSpeed < 10`
-- Resting/Sleeping → Locomotion: states become false OR `GroundSpeed > 10`
-- Any → Death: `IsDead == true`
-
-**New Game Panel Blueprint Setup:**
-The C++ widget `UMONewGamePanel` is complete but needs a Blueprint widget:
-
-1. **Create `WBP_NewGamePanel`** - Parent: `UMONewGamePanel`
-   - Add `SeedInputBox` (EditableTextBox) - for entering seed text/number
-   - Add `RandomSeedButton` (UMOCommonButton) - labeled "Random"
-   - Add `StartGameButton` (UMOCommonButton) - labeled "Start Game"
-   - Add `BackButton` (UMOCommonButton, optional) - labeled "Back"
-   - Add `SeedPreviewText` (TextBlock, optional) - shows computed seed integer
-
-2. **Update `WBP_MainMenu`** FocusWindowSwitcher:
-   - Index 0: Empty placeholder
-   - Index 1: WBP_NewGamePanel (NEW)
-   - Index 2: WBP_LoadPanel (shifted)
-   - Index 3: WBP_OptionsPanel (shifted)
-
-3. **Voxel Graph Seed Integration:**
-   - Voxel graphs can call `UMOGameSettings::GetWorldSeed()` (Blueprint Pure) to get the player-selected seed
-   - Use this seed in noise/random nodes for consistent world generation
-   - The global `FMath::RandInit()` is also set with this seed at game start
-
----
-
-**UE5.7 Refactoring - Blueprint Setup Required:**
-
-**CommonUI Layer System (Phase 1):**
-The C++ infrastructure for the UI layer system is complete, but Blueprint setup is pending:
-
-1. **Create `WBP_PrimaryGameLayout`** - Parent: `UMOPrimaryGameLayout`
-   - Add `HUDLayer` (UCommonActivatableWidgetStack) - Z-Order 0
-   - Add `GameLayer` (UCommonActivatableWidgetStack) - Z-Order 50
-   - Add `GameOverlayLayer` (UCommonActivatableWidgetStack) - Z-Order 100
-   - Add `MenuLayer` (UCommonActivatableWidgetStack) - Z-Order 150
-   - Add `ModalLayer` (UCommonActivatableWidgetStack) - Z-Order 200
-
-2. **Configure Subsystem:**
-   - Set `PrimaryLayoutClass` on `UMOGameUIManagerSubsystem` to `WBP_PrimaryGameLayout`
-   - Can be done via Project Settings or Blueprint
-
-3. **Hook into PlayerController:**
-   - Call `UMOGameUIManagerSubsystem::Get()->NotifyPlayerAdded(this)` when player joins
-   - This creates the layout widget for the player
-
-**EQS Resource Queries (Phase 2):**
-The C++ EQS components are complete, but Blueprint EQS query assets need creation:
-
-1. **Create `EQ_FindHarvestableItems`** - Environment Query asset
-   - Generator: `HarvestableItems` (custom generator)
-   - SearchRadius: 5000 (50 meters)
-   - Tests: Distance (prefer closer), PathExists (filter unreachable)
-   - Usage: Survivor AI ground resource finding (stone, fiber, sticks)
-
-2. **Create `EQ_FindHarvestTargets`** - Environment Query asset
-   - Generator: `HarvestTargets` (custom generator)
-   - RequiredTag: "GivesStick" (for wood gathering)
-   - Tests: Distance, PathExists
-   - Usage: Survivor AI tree harvesting
-
-3. **Create `EQ_FindEscapeRoute`** - Environment Query asset
-   - Generator: Points around querier (donut/circle)
-   - Context: Threat (provides threat actor from blackboard)
-   - Tests: EscapeRoute (custom test), PathExists
-   - Usage: Prey creature IsCornered() check
-
-4. **Update Behavior Trees:**
-   - Replace `FindNearestGatherResource()` calls with EQS RunQuery
-   - Replace IsCornered() placeholder with EQS query + threshold check
-
-**Note:** The underlying ForagingSubsystem still uses O(n) iteration. Future optimization will add spatial indexing.
-
-**Colony Management System (Stage 1-2 of Master Plan):**
-
-New files to create for colony system foundation:
-
-1. **`MOColonyTypes.h`** - Shared enums and structs
-   ```cpp
-   UENUM(BlueprintType)
-   enum class EAlertState : uint8 { None, Notable, Urgent, Critical };
-
-   UENUM(BlueprintType)
-   enum class EPersonalityAxis : uint8 { Conscientiousness, Sociability, Stability };
-
-   USTRUCT(BlueprintType)
-   struct FMOCharacterRelationship { /*...*/ };
-
-   USTRUCT(BlueprintType)
-   struct FMOCharacterHistoryEntry { /*...*/ };
-   ```
-
-2. **`UMOPersonalityComponent`** - Character personality traits
-   - Three personality dimensions with float values (-1.0 to 1.0)
-   - Affects task performance and mood responses
-   - Persists via save data
-
-3. **`UMOCharacterHistoryComponent`** - Character history and relationships
-   - Event log (capped at 50 entries)
-   - Relationship tracking with other characters
-   - `GetMoodSummary()`, `GetActivitySummary()` for UI
-
-4. **`UMOColonyManagerSubsystem`** - Colony-level coordination
-   - Alert queue with 4 tiers
-   - `GetAllColonyCharacters()` - enumerate recruited pawns
-   - `AssignTask()` - delegate to `UMOSurvivorJobQueueComponent`
-
-5. **Generic Widget Base Classes** (see Stage 1 of Master Plan)
-   - `UMOScrollListBase`, `UMOListEntryBase`, `UMODetailPanelBase`
-   - `UMOProgressWidgetBase`, `UMOConfirmationBase`, `UMOColonyPortrait`
+**Key items needing Blueprint setup (C++ complete):**
+- Creature ABP state machines (Deer locomotion/rest/sleep/death states)
+- EQS query assets (EQ_FindHarvestableItems, EQ_FindHarvestTargets, EQ_FindEscapeRoute)
+- NewGamePanel WBP (seed input, random button, start button)
+- CommonUI layer stacks already configured via WBP_PrimaryGameLayout (Stage 3A COMPLETE)
+- Colony management components (MOColonyTypes.h, UMOPersonalityComponent already created in Stage 1)
 
 ## Planned Plugins
 - **Ultra Dynamic Sky** - Dynamic sky/atmosphere system
@@ -792,94 +822,13 @@ git log --oneline -10
 
 ---
 
-## Similar Games Research & Design Lessons
+## Design Principles (Derived from SCUM, Zomboid, RimWorld, Kenshi, DayZ/Tarkov research)
 
-### SCUM (Medical/Metabolism Reference)
-**What works well:**
-- Granular nutrition (vitamins, minerals, macros) adds depth without overwhelming
-- Body composition affects gameplay (fat = cold resistance, muscle = strength)
-- Real-time metabolism with time scale multiplier keeps it manageable
-- BCU implant provides UI justification for detailed stats
-
-**Community feedback to consider:**
-- Many find vitamin/mineral tracking tedious → Consider "good enough" thresholds vs micromanagement
-- Bathroom mechanics divisive → Keep optional/toggleable
-- Medical system praised but complex → Tiered UI: simple overview vs detailed mode
-
-### Project Zomboid (Pawn Management)
-**What works well:**
-- Moodles (mood indicators) provide quick status at a glance
-- Trait system gives each character personality
-- Skill progression through use feels natural
-- NPCs in multiplayer add social dynamics
-
-**Community feedback:**
-- NPC AI needs better pathfinding and combat → Invest in behavior trees
-- Multiplayer desync issues → Authoritative server model (already using)
-- Players want more NPC interaction options → Job assignments, relationship building
-
-### RimWorld (Colony/Job System)
-**What works well:**
-- Work priorities (1-4 scale) simple yet powerful
-- Mood system with cascading effects creates emergent stories
-- Schedule system (work/sleep/recreation blocks)
-- Social relationships affect mood and productivity
-
-**Community feedback:**
-- Micro-management can become tedious at scale → Automation/standing orders
-- Players love emergent stories from personality clashes
-- Medical operations with skill requirements feel meaningful
-
-### Kenshi (Multi-Pawn Adventure)
-**What works well:**
-- Seamless switching between pawns
-- Squads with autonomous behavior
-- Each character has individual skills/stats
-- Base building + exploration loop
-
-**Community feedback:**
-- AI pathing issues in complex terrain → Navigation mesh quality important
-- Players want more control over idle behavior
-- Equipment management for many pawns gets tedious → Templates/loadouts
-
-### DayZ/Tarkov (Medical Realism)
-**What works well:**
-- Body part damage zones feel impactful
-- Medical items require knowledge to use effectively
-- Bleeding/fractures create tension
-- Status effects (tremors, limping) provide feedback
-
-**Community feedback:**
-- Too punishing without teammates → Solo should be viable
-- Inventory tetris divisive → Consider slot-based (already implemented)
-- Real-time healing works in survival context
-
-### Design Principles Derived
-
-1. **Tiered Complexity**
-   - Simple overview for quick checks
-   - Detailed view for interested players
-   - Don't force micromanagement
-
-2. **Visual Feedback Over Numbers**
-   - Use moodles/icons for quick status
-   - Color coding for severity
-   - Reserve detailed numbers for inspection
-
-3. **Graceful Degradation**
-   - Injuries impair, don't immediately kill
-   - Time to react and treat
-   - Death should feel preventable in hindsight
-
-4. **Automation at Scale**
-   - Single pawn: manual control fine
-   - Many pawns: need priorities/schedules/jobs
-   - Standing orders for common tasks
-
-5. **Emergent Narrative**
-   - Character traits create stories
-   - Relationships matter
-   - Memorable moments from systems interacting
+1. **Tiered Complexity** - Simple overview for quick checks, detailed view for interested players
+2. **Visual Feedback Over Numbers** - Moodles/icons for status, color coding for severity
+3. **Graceful Degradation** - Injuries impair, don't immediately kill; death preventable in hindsight
+4. **Automation at Scale** - Manual control for 1 pawn, priorities/schedules/jobs for many
+5. **Emergent Narrative** - Character traits, relationships, memorable moments from systems interacting
 
 ---
 
