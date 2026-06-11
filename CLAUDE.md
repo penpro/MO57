@@ -268,7 +268,7 @@ three questions in order:
 
 | Document | Purpose | Read When |
 |----------|---------|-----------|
-| `Docs/PROJECT_STATUS.md` | Metrics, progress, **audit issue tracker** (C1-L7) | Starting any feature, checking progress, or reviewing known issues |
+| `Docs/PROJECT_STATUS.md` | Metrics, progress, **audit issue tracker** (C/H/M/L codes; June 11 2026 re-audit) | Starting any feature, checking progress, or reviewing known issues |
 | `Docs/TECHNICAL_REFERENCE.md` | Architecture patterns, APIs, performance/networking guidelines | Implementing any system — UI, AI, medical, crafting, networking |
 | `Docs/MO57_Master_Plan.md` | Detailed stage execution plans | Working on UI refactor or colony management |
 | `Docs/UI_Overhaul_Architecture.md` | CommonUI migration details + 15 pitfalls | Any UI widget work |
