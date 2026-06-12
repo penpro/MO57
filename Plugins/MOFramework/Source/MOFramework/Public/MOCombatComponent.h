@@ -681,4 +681,16 @@ private:
 
 	/** Load weapon profile from DataTable. */
 	bool LoadWeaponProfile(FName ProfileId, FMOWeaponDamageProfileRow& OutProfile) const;
+
+	/**
+	 * Cache of the equipped main-hand weapon's profile row.
+	 * GetCurrentAttackProfile() returns pointers INTO this member's
+	 * AttackProfiles array, and callers (StartAttack, ProcessWindUp @10Hz)
+	 * dereference them after the call returns — so the row must live on
+	 * the component, never on the stack. Self-validating against
+	 * MainHandWeapon.WeaponProfileId, which covers equip, unequip,
+	 * save-restore, and replication without manual refresh calls.
+	 */
+	mutable FMOWeaponDamageProfileRow CachedMainHandProfileRow;
+	mutable FName CachedMainHandProfileRowId = NAME_None;
 };

@@ -943,11 +943,19 @@ const FMOAttackDamageProfile* UMOCombatComponent::GetCurrentAttackProfile() cons
 	// If we have a weapon, use its profile
 	if (MainHandWeapon.WeaponProfileId != NAME_None)
 	{
-		FMOWeaponDamageProfileRow Profile;
-		if (LoadWeaponProfile(MainHandWeapon.WeaponProfileId, Profile))
+		// Returned pointers are dereferenced after this call returns, so
+		// they must point into the cached member row — a stack-local copy
+		// here is a use-after-free. Revalidate by id; load only on change.
+		if (CachedMainHandProfileRowId != MainHandWeapon.WeaponProfileId
+			&& LoadWeaponProfile(MainHandWeapon.WeaponProfileId, CachedMainHandProfileRow))
 		{
-			return Profile.GetAttackProfile(CurrentAttackType);
+			CachedMainHandProfileRowId = MainHandWeapon.WeaponProfileId;
 		}
+		if (CachedMainHandProfileRowId == MainHandWeapon.WeaponProfileId)
+		{
+			return CachedMainHandProfileRow.GetAttackProfile(CurrentAttackType);
+		}
+		// Profile row missing from the table — fall through to unarmed.
 	}
 
 	// Fall back to unarmed

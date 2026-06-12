@@ -773,12 +773,13 @@ void UMOAnatomyComponent::TickAnatomy()
 	const float TimeScaleMultiplier = Clock ? Clock->GetTimeScale() : 1.0f;
 	float ScaledDeltaTime = TickInterval * TimeScaleMultiplier;
 
-	// Process wounds
+	// Process wounds. ProcessWound may remove a fully-healed wound, which
+	// invalidates the index — so the bleed contribution comes back as the
+	// return value instead of re-reading Wounds.Wounds[i] after the call.
 	float TotalBleedRate = 0.0f;
 	for (int32 i = Wounds.Wounds.Num() - 1; i >= 0; --i)
 	{
-		ProcessWound(Wounds.Wounds[i], ScaledDeltaTime);
-		TotalBleedRate += Wounds.Wounds[i].BleedRate;
+		TotalBleedRate += ProcessWound(Wounds.Wounds[i], ScaledDeltaTime);
 	}
 
 	// Apply blood loss to vitals
@@ -800,7 +801,7 @@ void UMOAnatomyComponent::TickAnatomy()
 	}
 }
 
-void UMOAnatomyComponent::ProcessWound(FMOWound& Wound, float DeltaTime)
+float UMOAnatomyComponent::ProcessWound(FMOWound& Wound, float DeltaTime)
 {
 	// Update time
 	Wound.TimeSinceInflicted += DeltaTime;
@@ -865,17 +866,19 @@ void UMOAnatomyComponent::ProcessWound(FMOWound& Wound, float DeltaTime)
 	float HealFactor = 1.0f - (Wound.HealingProgress / 100.0f);
 	// Bleed rate naturally decreases as wound closes
 
-	// Check if fully healed
+	// Check if fully healed. A healed wound is closed — it contributes no
+	// bleed this tick, and removal invalidates the caller's reference/index,
+	// which is why the contribution goes back as the return value.
 	if (Wound.HealingProgress >= 100.0f)
 	{
 		FGuid HealedId = Wound.WoundId;
 		Wounds.RemoveWound(HealedId);
 		OnWoundHealed.Broadcast(HealedId);
+		return 0.0f;
 	}
-	else
-	{
-		Wounds.MarkItemDirty(Wound);
-	}
+
+	Wounds.MarkItemDirty(Wound);
+	return Wound.BleedRate;
 }
 
 void UMOAnatomyComponent::ProcessCondition(FMOCondition& Condition, float DeltaTime)
@@ -916,14 +919,13 @@ void UMOAnatomyComponent::ProcessCondition(FMOCondition& Condition, float DeltaT
 		Condition.Severity = FMath::Max(0.0f, Condition.Severity - TreatedRecoveryRate * DeltaTime);
 	}
 
-	// Check for condition progression (defined in DataTable, e.g., Infection -> Sepsis)
-	if (ProgressesTo != EMOConditionType::None && Condition.Severity >= ProgressionThreshold)
-	{
-		if (!HasCondition(ProgressesTo))
-		{
-			AddCondition(ProgressesTo, EMOBodyPartType::None, 20.0f);
-		}
-	}
+	// Decide progression now, but apply it LAST: AddCondition appends to the
+	// Conditions array this Condition& points into, and a reallocation would
+	// leave every use of Condition below reading (and MarkItemDirty writing)
+	// through a dangling reference.
+	const bool bProgress = ProgressesTo != EMOConditionType::None
+		&& Condition.Severity >= ProgressionThreshold
+		&& !HasCondition(ProgressesTo);
 
 	// Check for condition resolution
 	if (Condition.Severity <= 0.0f)
@@ -936,6 +938,14 @@ void UMOAnatomyComponent::ProcessCondition(FMOCondition& Condition, float DeltaT
 	else
 	{
 		Conditions.MarkItemDirty(Condition);
+	}
+
+	// Progression (e.g., Infection -> Sepsis) after the final use of
+	// Condition. Appending during TickAnatomy's reverse index loop is safe:
+	// new entries land above the current index and get processed next tick.
+	if (bProgress)
+	{
+		AddCondition(ProgressesTo, EMOBodyPartType::None, 20.0f);
 	}
 }
 

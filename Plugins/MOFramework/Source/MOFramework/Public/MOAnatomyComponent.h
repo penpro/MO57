@@ -516,10 +516,17 @@ private:
 	/** Periodic tick for wound healing, infection, etc. */
 	void TickAnatomy();
 
-	/** Process wound healing and infection. */
-	void ProcessWound(FMOWound& Wound, float DeltaTime);
+	/**
+	 * Process wound healing and infection.
+	 * @return The wound's bleed contribution for this tick (0 when the wound
+	 *         healed and was removed). Callers must NOT touch the Wound
+	 *         reference (or its index) after this returns — removal
+	 *         invalidates both.
+	 */
+	float ProcessWound(FMOWound& Wound, float DeltaTime);
 
-	/** Process condition progression. */
+	/** Process condition progression. May append to (and reallocate) the
+	 *  Conditions array, but only after its last use of the reference. */
 	void ProcessCondition(FMOCondition& Condition, float DeltaTime);
 
 	/** Check for instant death conditions. */

@@ -282,15 +282,20 @@ protected:
 	 * Pause the pawn's AI brain so its behavior tree stops ticking. The pawn stays
 	 * in the world and animations still play, but no decisions are made. Called
 	 * automatically after a successful spawn for categories that should freeze.
+	 * Takes the tracking record so freeze state lives on the data layer
+	 * (bFrozenByManager + the pre-freeze anim policy for restore-on-wake).
 	 */
-	void FreezeSpawnedPawn(APawn* Pawn);
+	void FreezeSpawnedPawn(FMOSpawnedEntityRecord& Record);
 
-	/** Resume a frozen pawn's AI brain. */
-	void WakeSpawnedPawn(APawn* Pawn);
+	/** Full reverse of FreezeSpawnedPawn: brain, actor tick, movement tick,
+	 *  and the pawn's original anim policy. The ONLY wake path — a partial
+	 *  wake (brain only) leaves a statue with a running brain. */
+	void WakeSpawnedPawn(FMOSpawnedEntityRecord& Record);
 
 	/**
-	 * Per-tick check: walks all tracked entities, wakes any that are within
-	 * WakeDistanceCm of the player. Survivors are never frozen so they're skipped.
+	 * Spawn-check-interval check: walks all tracked entities, wakes any record
+	 * the manager froze (bFrozenByManager) once it's within WakeDistanceCm of
+	 * the player. Survivors are never frozen so they're skipped.
 	 */
 	void UpdateFrozenPawnWakeCheck();
 

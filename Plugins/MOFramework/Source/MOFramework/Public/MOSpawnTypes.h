@@ -274,8 +274,23 @@ struct MOFRAMEWORK_API FMOSpawnedEntityRecord
 	UPROPERTY(Transient)
 	TWeakObjectPtr<AActor> BeaconActor;
 
+	/**
+	 * True while the spawn manager has this pawn throttled via
+	 * FreezeSpawnedPawn. The wake check gates on THIS, never on
+	 * Brain->IsRunning() — a stopped brain also describes a corpse, and
+	 * waking those restarts behavior trees on ragdolls.
+	 */
+	UPROPERTY(Transient)
+	bool bFrozenByManager = false;
+
+	/** Pre-freeze anim tick policy (EVisibilityBasedAnimTickOption as uint8 —
+	 *  kept raw to avoid the SkeletalMeshComponent include in a types header).
+	 *  Restored on wake so a BP-authored cheaper policy isn't promoted to the
+	 *  engine's always-tick default. 0 = AlwaysTickPoseAndRefreshBones. */
+	uint8 SavedAnimTickOption = 0;
+
 	FMOSpawnedEntityRecord()
-		: SpawnTime(FDateTime::Now())
+		: SpawnTime(FDateTime::UtcNow())
 		, PersistenceExpiry(FDateTime::MinValue())
 	{
 	}
@@ -283,12 +298,14 @@ struct MOFRAMEWORK_API FMOSpawnedEntityRecord
 	FMOSpawnedEntityRecord(APawn* InPawn, EMOSpawnCategory InCategory)
 		: SpawnedPawn(InPawn)
 		, Category(InCategory)
-		, SpawnTime(FDateTime::Now())
+		, SpawnTime(FDateTime::UtcNow())
 		, bPersistent(false)
 		, PersistenceExpiry(FDateTime::MinValue())
 	{
 	}
 
 	bool IsValid() const { return SpawnedPawn.IsValid(); }
-	bool IsPersistenceExpired() const { return bPersistent && FDateTime::Now() > PersistenceExpiry; }
+	// UtcNow everywhere in spawn timing: local Now() jumps with DST/clock
+	// changes, instantly expiring cooldowns and persistence windows.
+	bool IsPersistenceExpired() const { return bPersistent && FDateTime::UtcNow() > PersistenceExpiry; }
 };

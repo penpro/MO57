@@ -16,7 +16,9 @@
 #include "BrainComponent.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "GameFramework/PlayerController.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Kismet/GameplayStatics.h"
 
 namespace
 {
@@ -86,8 +88,6 @@ FString UMOSpawnManagerSubsystem::GenerateRandomSurvivorName()
 	const FString& LastName = SurvivorLastNames[FMath::RandRange(0, SurvivorLastNames.Num() - 1)];
 	return FString::Printf(TEXT("%s %s"), *FirstName, *LastName);
 }
-#include "GameFramework/PlayerController.h"
-#include "Kismet/GameplayStatics.h"
 
 // Console command to reload spawn settings during PIE
 static FAutoConsoleCommandWithWorld GReloadSpawnSettingsCmd(
@@ -153,13 +153,20 @@ void UMOSpawnManagerSubsystem::Tick(float DeltaTime)
 
 	TimeSinceLastCheck = 0.0f;
 
+	// Record upkeep runs regardless of the settings actor: ForceSpawnAtLocation
+	// can spawn (and freeze) pawns in levels without one, and those still need
+	// cleanup, persistence expiry, and the wake check.
+	CleanupDeadEntities();
+	UpdatePersistence();
+	UpdateFrozenPawnWakeCheck();
+
 	// Now do the expensive lookups (only once per spawn check, not every frame)
 	AMOSpawnSettingsActor* WorldActor = AMOSpawnSettingsActor::GetSpawnSettingsActor(this);
 
 	// Early out if no settings actor - don't do any spawn work
 	if (!WorldActor)
 	{
-		// No settings actor in this level - skip all spawn processing
+		// No settings actor in this level - skip new-spawn processing
 		// Check again in 5 seconds
 		CachedSpawnCheckInterval = 5.0f;
 		return;
@@ -171,10 +178,7 @@ void UMOSpawnManagerSubsystem::Tick(float DeltaTime)
 	// Update cached interval for next tick
 	CachedSpawnCheckInterval = GlobalSettings.SpawnCheckInterval;
 
-	CleanupDeadEntities();
-	UpdatePersistence();
 	ProcessAllCategories();
-	UpdateFrozenPawnWakeCheck();
 }
 
 TStatId UMOSpawnManagerSubsystem::GetStatId() const
@@ -381,16 +385,16 @@ APawn* UMOSpawnManagerSubsystem::ForceSpawnAtLocation(EMOSpawnCategory Category,
 		// Assign name for survivors
 		AssignSurvivorNameIfNeeded(SpawnedPawn, Category);
 
-		// Add to tracking
+		// Add to tracking. Freeze before broadcasting so listeners observe the
+		// pawn's final spawn state, and so Last() is still our record.
 		SpawnedEntities.Add(FMOSpawnedEntityRecord(SpawnedPawn, Category));
 		MaybeSpawnSurvivorBeacon(SpawnedEntities.Num() - 1);
-		OnEntitySpawned.Broadcast(SpawnedPawn, Category);
-		NotifyPlayerOfSpawn(SpawnedPawn);
-
 		if (ShouldFreezeCategory(Category))
 		{
-			FreezeSpawnedPawn(SpawnedPawn);
+			FreezeSpawnedPawn(SpawnedEntities.Last());
 		}
+		OnEntitySpawned.Broadcast(SpawnedPawn, Category);
+		NotifyPlayerOfSpawn(SpawnedPawn);
 
 		UE_LOG(LogMOFramework, Log, TEXT("[SpawnManager] Force spawned %s at %s"),
 			*SpawnedPawn->GetName(), *Location.ToString());
@@ -502,7 +506,7 @@ void UMOSpawnManagerSubsystem::MarkEntityPersistent(APawn* Pawn, float Persisten
 		if (Record.SpawnedPawn.Get() == Pawn)
 		{
 			Record.bPersistent = true;
-			Record.PersistenceExpiry = FDateTime::Now() + FTimespan::FromHours(PersistenceHours);
+			Record.PersistenceExpiry = FDateTime::UtcNow() + FTimespan::FromHours(PersistenceHours);
 			UE_LOG(LogMOFramework, Log, TEXT("[SpawnManager] Marked %s persistent for %.1f hours"),
 				*Pawn->GetName(), PersistenceHours);
 			return;
@@ -630,7 +634,7 @@ float UMOSpawnManagerSubsystem::GetCategoryCooldownRemaining(EMOSpawnCategory Ca
 		return 0.0f;
 	}
 
-	const FTimespan TimeSinceSpawn = FDateTime::Now() - *LastSpawn;
+	const FTimespan TimeSinceSpawn = FDateTime::UtcNow() - *LastSpawn;
 	const float Remaining = *Cooldown - TimeSinceSpawn.GetTotalSeconds();
 	return FMath::Max(0.0f, Remaining);
 }
@@ -870,7 +874,7 @@ void UMOSpawnManagerSubsystem::ProcessCategory(EMOSpawnCategory Category, const 
 
 		InitialCooldown *= TimeMultiplier;
 
-		LastSpawnTimes.Add(Category, FDateTime::Now());
+		LastSpawnTimes.Add(Category, FDateTime::UtcNow());
 		CurrentCooldowns.Add(Category, InitialCooldown);
 
 		UE_LOG(LogMOFramework, Log, TEXT("[SpawnManager] Category %d first spawn - setting initial staggered cooldown: %.1fs"),
@@ -910,7 +914,7 @@ void UMOSpawnManagerSubsystem::ProcessCategory(EMOSpawnCategory Category, const 
 	if (SpawnedCount > 0)
 	{
 		// Update spawn time and roll new cooldown
-		LastSpawnTimes.Add(Category, FDateTime::Now());
+		LastSpawnTimes.Add(Category, FDateTime::UtcNow());
 		CurrentCooldowns.Add(Category, RollNewCooldown(Config));
 		HasSpawnedOnce.Add(Category, true);
 
@@ -920,7 +924,7 @@ void UMOSpawnManagerSubsystem::ProcessCategory(EMOSpawnCategory Category, const 
 	else
 	{
 		// Still set a cooldown to avoid spamming spawn attempts
-		LastSpawnTimes.Add(Category, FDateTime::Now());
+		LastSpawnTimes.Add(Category, FDateTime::UtcNow());
 		CurrentCooldowns.Add(Category, 30.0f);  // Try again in 30 seconds
 		UE_LOG(LogMOFramework, Warning, TEXT("[SpawnManager] FAILED: No spawns for category %d, retrying in 30s"), (int32)Category);
 	}
@@ -943,7 +947,12 @@ void UMOSpawnManagerSubsystem::CleanupDeadEntities()
 
 void UMOSpawnManagerSubsystem::UpdatePersistence()
 {
-	const FDateTime Now = FDateTime::Now();
+	const FDateTime Now = FDateTime::UtcNow();
+
+	// ConvertToCorpse despawns the pawn, which removes its record from
+	// SpawnedEntities — mutating the array we're iterating. Collect first,
+	// convert after the loop ends.
+	TArray<APawn*> PawnsToCorpse;
 
 	for (FMOSpawnedEntityRecord& Record : SpawnedEntities)
 	{
@@ -964,11 +973,16 @@ void UMOSpawnManagerSubsystem::UpdatePersistence()
 						// Quest timed out - convert to corpse
 						UE_LOG(LogMOFramework, Log, TEXT("[SpawnManager] Survivor %s quest timed out"),
 							*Pawn->GetName());
-						ConvertToCorpse(Pawn);
+						PawnsToCorpse.Add(Pawn);
 					}
 				}
 			}
 		}
+	}
+
+	for (APawn* Pawn : PawnsToCorpse)
+	{
+		ConvertToCorpse(Pawn);
 	}
 }
 
@@ -1022,16 +1036,16 @@ APawn* UMOSpawnManagerSubsystem::SpawnAtPoint(AMOSpawnPoint* Point, const FMOSpa
 		// Assign name for survivors
 		AssignSurvivorNameIfNeeded(SpawnedPawn, Config.Category);
 
-		// Add to tracking
+		// Add to tracking. Freeze before broadcasting so listeners observe the
+		// pawn's final spawn state, and so Last() is still our record.
 		SpawnedEntities.Add(FMOSpawnedEntityRecord(SpawnedPawn, Config.Category));
 		MaybeSpawnSurvivorBeacon(SpawnedEntities.Num() - 1);
-		OnEntitySpawned.Broadcast(SpawnedPawn, Config.Category);
-		NotifyPlayerOfSpawn(SpawnedPawn);
-
 		if (ShouldFreezeCategory(Config.Category))
 		{
-			FreezeSpawnedPawn(SpawnedPawn);
+			FreezeSpawnedPawn(SpawnedEntities.Last());
 		}
+		OnEntitySpawned.Broadcast(SpawnedPawn, Config.Category);
+		NotifyPlayerOfSpawn(SpawnedPawn);
 
 		UE_LOG(LogMOFramework, Log, TEXT("[SpawnManager] Spawned %s at spawn point %s"),
 			*SpawnedPawn->GetName(), *Point->GetName());
@@ -1180,19 +1194,19 @@ APawn* UMOSpawnManagerSubsystem::TryFallbackSpawn(EMOSpawnCategory Category, con
 			// Assign name for survivors
 			AssignSurvivorNameIfNeeded(SpawnedPawn, Category);
 
-			// Add to tracking
+			// Add to tracking. Freeze before broadcasting so listeners observe
+			// the pawn's final spawn state, and so Last() is still our record.
 			FMOSpawnedEntityRecord Record(SpawnedPawn, Category);
 			SpawnedEntities.Add(Record);
 			MaybeSpawnSurvivorBeacon(SpawnedEntities.Num() - 1);
+			if (ShouldFreezeCategory(Category))
+			{
+				FreezeSpawnedPawn(SpawnedEntities.Last());
+			}
 
 			// Notify
 			OnEntitySpawned.Broadcast(SpawnedPawn, Category);
 			NotifyPlayerOfSpawn(SpawnedPawn);
-
-			if (ShouldFreezeCategory(Category))
-			{
-				FreezeSpawnedPawn(SpawnedPawn);
-			}
 
 			UE_LOG(LogMOFramework, Warning, TEXT("[SpawnManager] Fallback spawned %s at %s (%.0fm from player)"),
 				*SpawnedPawn->GetClass()->GetName(),
@@ -1220,8 +1234,9 @@ bool UMOSpawnManagerSubsystem::ShouldFreezeCategory(EMOSpawnCategory Category) c
 	return Category != EMOSpawnCategory::Survivor;
 }
 
-void UMOSpawnManagerSubsystem::FreezeSpawnedPawn(APawn* Pawn)
+void UMOSpawnManagerSubsystem::FreezeSpawnedPawn(FMOSpawnedEntityRecord& Record)
 {
+	APawn* Pawn = Record.SpawnedPawn.Get();
 	if (!Pawn) return;
 
 	// 1. Stop the AI brain (original behavior — halts BT ticks).
@@ -1253,16 +1268,24 @@ void UMOSpawnManagerSubsystem::FreezeSpawnedPawn(APawn* Pawn)
 		//    entirely when the mob is offscreen — but on-screen frozen
 		//    mobs still animate normally (their last looping anim
 		//    continues), so the visual hit is invisible to the player.
+		//    Save the authored policy first so wake restores it instead of
+		//    promoting every pawn to the engine's always-tick default.
 		if (USkeletalMeshComponent* Mesh = Character->GetMesh())
 		{
+			Record.SavedAnimTickOption = static_cast<uint8>(Mesh->VisibilityBasedAnimTickOption);
 			Mesh->VisibilityBasedAnimTickOption =
 				EVisibilityBasedAnimTickOption::OnlyTickPoseWhenRendered;
 		}
 	}
+
+	// Freeze state lives on the record: the wake check gates on this, never
+	// on Brain->IsRunning() — a stopped brain also describes a corpse.
+	Record.bFrozenByManager = true;
 }
 
-void UMOSpawnManagerSubsystem::WakeSpawnedPawn(APawn* Pawn)
+void UMOSpawnManagerSubsystem::WakeSpawnedPawn(FMOSpawnedEntityRecord& Record)
 {
+	APawn* Pawn = Record.SpawnedPawn.Get();
 	if (!Pawn) return;
 
 	// 1. Resume the AI brain.
@@ -1274,8 +1297,8 @@ void UMOSpawnManagerSubsystem::WakeSpawnedPawn(APawn* Pawn)
 		}
 	}
 
-	// 2-4: reverse the throttles. Restore SkeletalMesh to the engine's
-	// always-tick default so AI-driven movement renders correctly.
+	// 2-4: reverse the throttles. Restore the skeletal mesh to the policy it
+	// had at freeze time (BPs may author something cheaper than always-tick).
 	Pawn->SetActorTickEnabled(true);
 
 	if (ACharacter* Character = Cast<ACharacter>(Pawn))
@@ -1288,9 +1311,11 @@ void UMOSpawnManagerSubsystem::WakeSpawnedPawn(APawn* Pawn)
 		if (USkeletalMeshComponent* Mesh = Character->GetMesh())
 		{
 			Mesh->VisibilityBasedAnimTickOption =
-				EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
+				static_cast<EVisibilityBasedAnimTickOption>(Record.SavedAnimTickOption);
 		}
 	}
+
+	Record.bFrozenByManager = false;
 }
 
 // ============================================================================
@@ -1363,11 +1388,19 @@ void UMOSpawnManagerSubsystem::DumpFreezeState() const
 			}
 		}
 
-		// Anomalies: should be frozen but ANY of (brain, actor tick, movement
-		// tick, off-screen anim) is still running. Each of those contributes
-		// per-frame cost, so all four together are the freeze surface.
-		const bool bShouldBeFrozen = bShouldFreeze && !bInWakeRange;
-		const bool bAnomaly = bShouldBeFrozen && (bRunning || bActorTicks || bMovementTicks || bMeshTicksWhenOffscreen);
+		// Anomalies, both directions:
+		// - Frozen leak: the manager believes this pawn is frozen but part of
+		//   the freeze surface (brain, actor tick, movement tick, off-screen
+		//   anim) is still running — per-frame cost we think we saved.
+		// - Statue: the manager believes this pawn is awake but its body
+		//   throttles are still applied. Actor/movement ticks are only ever
+		//   disabled by our freeze, so this can't false-positive on corpses
+		//   or scripted brain stops.
+		const bool bFrozenLeak = Record.bFrozenByManager
+			&& (bRunning || bActorTicks || bMovementTicks || bMeshTicksWhenOffscreen);
+		const bool bStatue = !Record.bFrozenByManager
+			&& (!bActorTicks || !bMovementTicks);
+		const bool bAnomaly = bFrozenLeak || bStatue;
 		if (bAnomaly) ++AnomalyCount;
 
 		UE_LOG(LogMOFramework, Warning,
@@ -1397,13 +1430,12 @@ int32 UMOSpawnManagerSubsystem::ForceFreezeAll()
 	// just brain stopping. Without this we measured 60→30 fps with brains
 	// alone; the additional throttles are what claw the cost back.
 	int32 Affected = 0;
-	for (const FMOSpawnedEntityRecord& Record : SpawnedEntities)
+	for (FMOSpawnedEntityRecord& Record : SpawnedEntities)
 	{
 		if (!ShouldFreezeCategory(Record.Category)) continue;
-		APawn* Pawn = Record.SpawnedPawn.Get();
-		if (!Pawn) continue;
+		if (!Record.SpawnedPawn.IsValid()) continue;
 
-		FreezeSpawnedPawn(Pawn);
+		FreezeSpawnedPawn(Record);
 		++Affected;
 	}
 	UE_LOG(LogMOFramework, Warning,
@@ -1415,12 +1447,11 @@ int32 UMOSpawnManagerSubsystem::ForceFreezeAll()
 int32 UMOSpawnManagerSubsystem::ForceWakeAll()
 {
 	int32 Affected = 0;
-	for (const FMOSpawnedEntityRecord& Record : SpawnedEntities)
+	for (FMOSpawnedEntityRecord& Record : SpawnedEntities)
 	{
-		APawn* Pawn = Record.SpawnedPawn.Get();
-		if (!Pawn) continue;
+		if (!Record.SpawnedPawn.IsValid()) continue;
 
-		WakeSpawnedPawn(Pawn);
+		WakeSpawnedPawn(Record);
 		++Affected;
 	}
 	UE_LOG(LogMOFramework, Warning,
@@ -1437,25 +1468,21 @@ void UMOSpawnManagerSubsystem::UpdateFrozenPawnWakeCheck()
 	const FVector PlayerLocation = PlayerPawn->GetActorLocation();
 	const float WakeDistanceSq = WakeDistanceCm * WakeDistanceCm;
 
-	for (const FMOSpawnedEntityRecord& Record : SpawnedEntities)
+	for (FMOSpawnedEntityRecord& Record : SpawnedEntities)
 	{
-		if (!Record.IsValid()) continue;
-		if (!ShouldFreezeCategory(Record.Category)) continue;
+		// Gate on the manager's own freeze flag. Inferring "frozen" from a
+		// stopped brain conflated frozen mobs with corpses (restarting BTs on
+		// ragdolls) and woke only the brain, leaving the body throttled.
+		if (!Record.bFrozenByManager) continue;
 
 		APawn* Pawn = Record.SpawnedPawn.Get();
 		if (!Pawn) continue;
 
-		// Skip pawns whose AI brain is already running (not frozen).
-		AAIController* AIController = Cast<AAIController>(Pawn->GetController());
-		if (!AIController) continue;
-		UBrainComponent* Brain = AIController->GetBrainComponent();
-		if (!Brain || Brain->IsRunning()) continue;
-
-		// In range? Wake it up.
+		// In range? Full wake: brain + actor tick + movement tick + anim policy.
 		const float DistanceSq = FVector::DistSquared(PlayerLocation, Pawn->GetActorLocation());
 		if (DistanceSq <= WakeDistanceSq)
 		{
-			Brain->RestartLogic();
+			WakeSpawnedPawn(Record);
 			UE_LOG(LogMOFramework, Verbose, TEXT("[SpawnManager] Woke %s (player %.1fm away)"),
 				*Pawn->GetName(), FMath::Sqrt(DistanceSq) / 100.0f);
 		}
