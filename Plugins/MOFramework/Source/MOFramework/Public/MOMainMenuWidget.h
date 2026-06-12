@@ -115,7 +115,13 @@ protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
 	virtual UWidget* NativeGetDesiredFocusTarget() const override;
-	virtual FReply NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
+
+	/**
+	 * Close keys back out of an open focus panel; at the bare title screen they
+	 * do nothing — there is nothing behind the main menu, and deactivating it
+	 * soft-locks the pawn-less level (hidden cursor, no input surface).
+	 */
+	virtual bool NativeOnCloseKeyRequested(const FKeyEvent& InKeyEvent) override;
 
 private:
 	// ============================================================================

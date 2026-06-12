@@ -96,12 +96,9 @@ UWidget* UMONewGamePanel::NativeGetDesiredFocusTarget() const
 
 FReply UMONewGamePanel::NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent)
 {
-	// Escape closes panel
-	if (InKeyEvent.GetKey() == EKeys::Escape)
-	{
-		OnRequestClose.Broadcast();
-		return FReply::Handled();
-	}
+	// Escape never reaches this bubble-phase handler — the main menu (an
+	// ancestor in the preview path) consumes it via NativeOnCloseKeyRequested
+	// and closes this panel through CloseFocusPanel.
 
 	// Enter starts game (if not focused on text input)
 	if (InKeyEvent.GetKey() == EKeys::Enter)

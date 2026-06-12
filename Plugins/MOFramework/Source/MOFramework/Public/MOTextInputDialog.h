@@ -131,6 +131,9 @@ protected:
 	 */
 	virtual void OnDialogConfirmed_Implementation() override;
 
+	/** OnTextConfirmed is a result delegate too — one-shot per open (see base). */
+	virtual void ClearResultDelegates() override;
+
 	UFUNCTION()
 	void HandleTextCommitted(const FText& InText, ETextCommit::Type CommitMethod);
 

@@ -62,15 +62,30 @@ protected:
 	virtual UWidget* NativeGetDesiredFocusTarget() const override;
 
 	/**
-	 * Universal Tab handler — closes the widget on Tab regardless of subclass.
-	 * Used to live in UMOMenuWidget / UMOModalWidget, but that meant any activatable
-	 * not extending those (e.g. UMOQuestLogPanel) silently couldn't be closed with
-	 * Tab. Placing it on the base means every activatable shares the behavior.
+	 * Universal close-key handler — Tab/Escape close the widget regardless of
+	 * subclass (any activatable, not just menus/modals). Runs in the preview
+	 * (tunnel) phase, so it fires ancestor-first, BEFORE any bubble-phase
+	 * NativeOnKeyDown in subclasses or children — which is why subclasses must
+	 * customize close behavior via NativeOnCloseKeyRequested below, never via
+	 * bubble-phase key handlers (those are unreachable for Tab/Escape).
 	 *
-	 * Tab → DeactivateWidget. Escape is still handled separately via
-	 * NativeOnHandleBackAction (CommonUI's back action chain).
+	 * Tab is exempted while keyboard focus sits in an editable text widget —
+	 * there it's text-field input (focus traversal / literal tab), not a close
+	 * request; swallowing it would tear down the dialog mid-typing.
 	 */
 	virtual FReply NativeOnPreviewKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
+
+	/**
+	 * Close-request hook: called when a universal close key (Tab/Escape) is
+	 * pressed with this widget in the preview path. Subclasses override to
+	 * emit a definitive result before closing (confirmations cancel), close an
+	 * open child panel instead of themselves (main/in-game menu), or route
+	 * through RequestClose for controller cleanup (menus, modals).
+	 * Return true when the request was handled (key is consumed); return false
+	 * to decline and let the key continue routing.
+	 * Default: DeactivateWidget(), handled.
+	 */
+	virtual bool NativeOnCloseKeyRequested(const FKeyEvent& InKeyEvent);
 
 	/** Called when widget is activated. */
 	virtual void NativeOnActivated() override;
@@ -140,6 +155,9 @@ public:
 	void ClaimFocusForReactivation();
 
 private:
+	/** True when the event's Slate user has keyboard focus inside an editable text widget. */
+	static bool IsKeyboardFocusInEditableText(const FKeyEvent& InKeyEvent);
+
 	/** CommonUI binding handle for CloseAction. Created in NativeOnActivated. */
 	FUIActionBindingHandle CloseActionBinding;
 

@@ -78,10 +78,10 @@ protected:
 	virtual TOptional<FUIInputConfig> GetDesiredInputConfig() const override;
 
 	/**
-	 * Override Tab/Escape to route through RequestClose so controller cleanup runs.
-	 * The base class also handles Tab/Escape but with direct DeactivateWidget.
+	 * Close keys route through RequestClose so controller cleanup runs
+	 * (modal background, reticle). The base default is a bare DeactivateWidget.
 	 */
-	virtual FReply NativeOnPreviewKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
+	virtual bool NativeOnCloseKeyRequested(const FKeyEvent& InKeyEvent) override;
 
 	/** Called when widget is activated. */
 	virtual void NativeOnActivated() override;

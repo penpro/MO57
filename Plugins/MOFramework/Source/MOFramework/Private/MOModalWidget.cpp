@@ -11,8 +11,8 @@ UMOModalWidget::UMOModalWidget(const FObjectInitializer& ObjectInitializer)
 {
 	// We don't use CommonUI's back-action chain (bIsBackHandler) — it auto-registers
 	// a project-level Back InputAction that we don't configure. Tab/Escape are
-	// handled in NativeOnPreviewKeyDown (this class for RequestClose, base class
-	// for direct DeactivateWidget).
+	// dispatched by the base preview handler through NativeOnCloseKeyRequested
+	// (this class routes them to RequestClose; the base default deactivates).
 	bIsBackHandler = false;
 
 	// CRITICAL: bIsModal = true blocks ALL input from reaching other widgets.
@@ -42,20 +42,13 @@ TOptional<FUIInputConfig> UMOModalWidget::GetDesiredInputConfig() const
 	);
 }
 
-FReply UMOModalWidget::NativeOnPreviewKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent)
+bool UMOModalWidget::NativeOnCloseKeyRequested(const FKeyEvent& InKeyEvent)
 {
-	// Override Tab/Escape to route through RequestClose so the controller's
-	// cleanup path runs (modal background, reticle, etc.). The base class
-	// handles both keys but with DeactivateWidget directly, which skips the
-	// controller cleanup.
-	const FKey PressedKey = InKeyEvent.GetKey();
-	if (PressedKey == EKeys::Tab || PressedKey == EKeys::Escape)
-	{
-		RequestClose();
-		return FReply::Handled();
-	}
-
-	return Super::NativeOnPreviewKeyDown(InGeometry, InKeyEvent);
+	// Route through RequestClose so the controller's cleanup path runs (modal
+	// background, reticle, etc.). The base default is a direct DeactivateWidget,
+	// which skips the controller cleanup.
+	RequestClose();
+	return true;
 }
 
 void UMOModalWidget::NativeOnActivated()

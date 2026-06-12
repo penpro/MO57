@@ -86,6 +86,12 @@ void UMOTextInputDialog::OnDialogConfirmed_Implementation()
 	Super::OnDialogConfirmed_Implementation();
 }
 
+void UMOTextInputDialog::ClearResultDelegates()
+{
+	Super::ClearResultDelegates();
+	OnTextConfirmed.Clear();
+}
+
 void UMOTextInputDialog::HandleTextCommitted(const FText& InText, ETextCommit::Type CommitMethod)
 {
 	// Enter key in the input acts as Confirm. Other commit types (lose focus,

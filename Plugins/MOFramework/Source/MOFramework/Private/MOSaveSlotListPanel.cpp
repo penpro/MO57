@@ -282,6 +282,7 @@ void UMOSaveSlotListPanel::HandleEntryRenameRequested(const FString& SlotName)
 				NSLOCTEXT("MOSaveSlot", "RenameConfirm", "Rename"),
 				NSLOCTEXT("MOSaveSlot", "RenameCancel", "Cancel"));
 			Dialog->OnTextConfirmed.AddDynamic(this, &UMOSaveSlotListPanel::HandleRenameConfirmed);
+			Dialog->OnCancelled.AddDynamic(this, &UMOSaveSlotListPanel::HandleActionCancelled);
 			return;
 		}
 		else if (Pushed)
@@ -310,6 +311,7 @@ void UMOSaveSlotListPanel::HandleEntryDeleteRequested(const FString& SlotName)
 				NSLOCTEXT("MOSaveSlot", "DeleteConfirm", "Delete"),
 				NSLOCTEXT("MOSaveSlot", "DeleteCancel", "Cancel"));
 			Dialog->OnConfirmed.AddDynamic(this, &UMOSaveSlotListPanel::HandleDeleteConfirmed);
+			Dialog->OnCancelled.AddDynamic(this, &UMOSaveSlotListPanel::HandleActionCancelled);
 			return;
 		}
 		else if (Pushed)
@@ -343,6 +345,13 @@ void UMOSaveSlotListPanel::HandleDeleteConfirmed()
 	{
 		ConfirmDelete(SlotName); // base method — deletes + auto-refresh
 	}
+}
+
+void UMOSaveSlotListPanel::HandleActionCancelled()
+{
+	// Pending-action state exists iff a dialog is open: a cancelled dialog
+	// (button or Escape/Tab) must disarm it so nothing stale can be acted on.
+	PendingActionSlotName.Reset();
 }
 
 void UMOSaveSlotListPanel::HandleRenameConfirmed(const FText& NewName)

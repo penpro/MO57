@@ -57,32 +57,12 @@ TOptional<FUIInputConfig> UMOSurvivorTaskMenu::GetDesiredInputConfig() const
 	);
 }
 
-FReply UMOSurvivorTaskMenu::NativeOnPreviewKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent)
+bool UMOSurvivorTaskMenu::NativeOnCloseKeyRequested(const FKeyEvent& InKeyEvent)
 {
-	const FKey PressedKey = InKeyEvent.GetKey();
-
-	// Close on Tab or Escape - handled in preview so it works even if child widgets have focus
-	if (PressedKey == EKeys::Tab || PressedKey == EKeys::Escape)
-	{
-		OnRequestClose.Broadcast();
-		return FReply::Handled();
-	}
-
-	return Super::NativeOnPreviewKeyDown(InGeometry, InKeyEvent);
-}
-
-FReply UMOSurvivorTaskMenu::NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent)
-{
-	const FKey PressedKey = InKeyEvent.GetKey();
-
-	// Fallback close on Tab or Escape
-	if (PressedKey == EKeys::Tab || PressedKey == EKeys::Escape)
-	{
-		OnRequestClose.Broadcast();
-		return FReply::Handled();
-	}
-
-	return Super::NativeOnKeyDown(InGeometry, InKeyEvent);
+	// Broadcast OnRequestClose so the spawning controller's cleanup runs; the
+	// base default is a bare DeactivateWidget that would skip it.
+	OnRequestClose.Broadcast();
+	return true;
 }
 
 void UMOSurvivorTaskMenu::InitializeForSurvivor(APawn* Survivor)

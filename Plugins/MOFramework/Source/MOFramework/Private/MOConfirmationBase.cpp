@@ -43,7 +43,35 @@ void UMOConfirmationBase::NativeDestruct()
 		CancelButton->OnClicked().RemoveAll(this);
 	}
 
+	ClearResultDelegates();
+
 	Super::NativeDestruct();
+}
+
+void UMOConfirmationBase::NativeOnDeactivated()
+{
+	Super::NativeOnDeactivated();
+
+	// Results are one-shot per open: every close path (confirm/cancel click,
+	// Escape/Tab via NativeOnCloseKeyRequested) broadcasts its definitive result
+	// before deactivating. PushModalWidget recycles pooled instances across
+	// unrelated consumers, so anything still bound here belongs to a past
+	// consumer and must not survive into the next open.
+	ClearResultDelegates();
+}
+
+void UMOConfirmationBase::ClearResultDelegates()
+{
+	OnConfirmed.Clear();
+	OnCancelled.Clear();
+}
+
+bool UMOConfirmationBase::NativeOnCloseKeyRequested(const FKeyEvent& InKeyEvent)
+{
+	// Close keys are a cancel, not a silent dismiss — consumers waiting on a
+	// result (e.g. an armed pending-action slot) must hear OnCancelled.
+	HandleCancelClicked();
+	return true;
 }
 
 UWidget* UMOConfirmationBase::NativeGetDesiredFocusTarget() const
@@ -54,11 +82,8 @@ UWidget* UMOConfirmationBase::NativeGetDesiredFocusTarget() const
 
 FReply UMOConfirmationBase::NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent)
 {
-	if (InKeyEvent.GetKey() == EKeys::Escape)
-	{
-		HandleCancelClicked();
-		return FReply::Handled();
-	}
+	// Escape never reaches this bubble-phase handler — the base preview handler
+	// consumes it and routes through NativeOnCloseKeyRequested (cancel) above.
 
 	// Enter confirms only when the confirm button has explicit keyboard focus.
 	// Without the focus guard, Enter would commit any dialog the moment it

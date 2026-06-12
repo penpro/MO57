@@ -29,7 +29,4 @@ class MOFRAMEWORK_API UMOMenuWidgetBase : public UMOMenuWidget
 
 public:
 	UMOMenuWidgetBase(const FObjectInitializer& ObjectInitializer);
-
-protected:
-	virtual FReply NativeOnPreviewKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
 };

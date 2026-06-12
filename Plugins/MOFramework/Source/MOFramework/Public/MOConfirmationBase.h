@@ -25,10 +25,17 @@
  * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
  * =============================================================================
  *
- * [2026-03] ESCAPE KEY: NativeOnKeyDown handles Escape as cancel.
+ * [2026-06] ESCAPE/TAB: handled via NativeOnCloseKeyRequested (the base
+ *   preview-phase close hook) and broadcast OnCancelled — every close path
+ *   produces a definitive result. Bubble-phase key handlers can't see these
+ *   keys (the base preview handler consumes them first).
  *
- * [2026-03] DELEGATE CLEANUP: OnConfirmed/OnCancelled bindings persist.
- *   Clear bindings before rebinding if reusing dialog.
+ * [2026-06] DELEGATE LIFECYCLE: OnConfirmed/OnCancelled (and subclass result
+ *   delegates via ClearResultDelegates) are ONE-SHOT PER OPEN — cleared in
+ *   NativeOnDeactivated after the result broadcast. PushModalWidget recycles
+ *   pooled instances across unrelated consumers; without the clear, a stale
+ *   foreign binding fires on the next consumer's confirm (audit C10: deleted
+ *   the wrong save slot). Consumers bind per-open and never need to unbind.
  *
  * [2026-03] REQUIRED WIDGETS: TitleText, MessageText, ConfirmButton, and
  *   CancelButton are required (BindWidget). Blueprint must have all.
@@ -99,8 +106,20 @@ public:
 protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
+	virtual void NativeOnDeactivated() override;
 	virtual UWidget* NativeGetDesiredFocusTarget() const override;
 	virtual FReply NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
+
+	/** Close keys cancel the dialog — broadcasts OnCancelled before closing. */
+	virtual bool NativeOnCloseKeyRequested(const FKeyEvent& InKeyEvent) override;
+
+	/**
+	 * Clear all result delegates. Called from NativeOnDeactivated — results are
+	 * one-shot per open because pooled instances are recycled across unrelated
+	 * consumers. Subclasses with extra result delegates (e.g. OnTextConfirmed)
+	 * override and call Super.
+	 */
+	virtual void ClearResultDelegates();
 
 	/**
 	 * Confirmations run in Menu input mode — they're modal and must block

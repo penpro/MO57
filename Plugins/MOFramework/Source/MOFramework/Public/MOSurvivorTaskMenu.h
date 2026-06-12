@@ -100,8 +100,9 @@ protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
 	virtual TOptional<FUIInputConfig> GetDesiredInputConfig() const override;
-	virtual FReply NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
-	virtual FReply NativeOnPreviewKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
+
+	/** Close keys broadcast OnRequestClose so the spawning controller cleans up. */
+	virtual bool NativeOnCloseKeyRequested(const FKeyEvent& InKeyEvent) override;
 
 	// ============================================================================
 	// WIDGET BINDINGS

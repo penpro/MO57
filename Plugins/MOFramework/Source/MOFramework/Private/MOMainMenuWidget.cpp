@@ -161,21 +161,19 @@ UWidget* UMOMainMenuWidget::NativeGetDesiredFocusTarget() const
 	return nullptr;
 }
 
-FReply UMOMainMenuWidget::NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent)
+bool UMOMainMenuWidget::NativeOnCloseKeyRequested(const FKeyEvent& InKeyEvent)
 {
-	// Escape closes focus panel if open
-	if (InKeyEvent.GetKey() == EKeys::Escape)
+	// Back out of an open focus panel (New Game / Load / Options) first.
+	if (IsFocusPanelOpen())
 	{
-		if (IsFocusPanelOpen())
-		{
-			CloseFocusPanel();
-			return FReply::Handled();
-		}
-		// On main menu, Escape with no panel open does nothing
-		// (don't close the menu - there's nothing behind it)
+		CloseFocusPanel();
+		return true;
 	}
 
-	return Super::NativeOnKeyDown(InGeometry, InKeyEvent);
+	// At the bare title screen the close keys do nothing — there is nothing
+	// behind the main menu. Letting the base deactivate it would soft-lock the
+	// pawn-less level (FInputModeGameOnly + hidden cursor, no input surface).
+	return true;
 }
 
 void UMOMainMenuWidget::ShowNewGamePanel()

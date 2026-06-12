@@ -154,17 +154,17 @@ UWidget* UMOInGameMenu::NativeGetDesiredFocusTarget() const
 	return nullptr;
 }
 
-bool UMOInGameMenu::NativeOnHandleBackAction()
+bool UMOInGameMenu::NativeOnCloseKeyRequested(const FKeyEvent& InKeyEvent)
 {
-	// If focus panel is open, close it first
+	// Back out of an open focus panel (Save / Load / Options) first.
 	if (IsFocusPanelOpen())
 	{
 		CloseFocusPanel();
 		return true;
 	}
 
-	// Otherwise, let base class handle close (broadcasts OnRequestClose)
-	return Super::NativeOnHandleBackAction();
+	// No panel open — close the whole menu (modal base routes RequestClose).
+	return Super::NativeOnCloseKeyRequested(InKeyEvent);
 }
 
 void UMOInGameMenu::RequestClose()

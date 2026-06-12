@@ -223,6 +223,10 @@ private:
 	UFUNCTION()
 	void HandleRenameConfirmed(const FText& NewName);
 
+	/** Bound to both dialogs' OnCancelled — disarms the pending action. */
+	UFUNCTION()
+	void HandleActionCancelled();
+
 	/** Slot the player is currently confirming on. Set when the modal opens, cleared on close. */
 	UPROPERTY(Transient)
 	FString PendingActionSlotName;

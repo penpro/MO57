@@ -49,19 +49,50 @@ FReply UMOActivatableWidget::NativeOnPreviewKeyDown(const FGeometry& InGeometry,
 	// (bIsBackHandler) because that auto-registers a project-level Back input
 	// action — if the project's CommonUI input data isn't fully configured,
 	// CommonUI complains "Cannot create action binding ... no action provided".
-	// MOMenuWidget / MOModalWidget override this and route through RequestClose
-	// for controller-side cleanup (modal background, reticle).
+	//
+	// Preview (tunnel) phase fires ancestor-first, so this runs BEFORE any
+	// bubble-phase key handler in subclasses or children. Close behavior is
+	// therefore customized through NativeOnCloseKeyRequested — a bubble-phase
+	// Escape handler in a subclass is unreachable dead code.
 	const FKey PressedKey = InKeyEvent.GetKey();
 	if (PressedKey == EKeys::Tab || PressedKey == EKeys::Escape)
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[Activatable-DIAG] %s: %s key pressed -> DeactivateWidget"),
-			*GetName(), *PressedKey.ToString());
-		MOUI_LOG(this, "Menu", "%s pressed on %s -> DeactivateWidget",
+		// Tab inside an editable text field is field input (focus traversal /
+		// literal tab), not a close request — let it tunnel to the field
+		// instead of tearing down the widget under the user's typing.
+		if (PressedKey == EKeys::Tab && IsKeyboardFocusInEditableText(InKeyEvent))
+		{
+			return Super::NativeOnPreviewKeyDown(InGeometry, InKeyEvent);
+		}
+
+		MOUI_LOG(this, "Menu", "%s pressed on %s -> close key request",
 			*PressedKey.ToString(), *GetName());
-		DeactivateWidget();
-		return FReply::Handled();
+		if (NativeOnCloseKeyRequested(InKeyEvent))
+		{
+			return FReply::Handled();
+		}
 	}
 	return Super::NativeOnPreviewKeyDown(InGeometry, InKeyEvent);
+}
+
+bool UMOActivatableWidget::NativeOnCloseKeyRequested(const FKeyEvent& InKeyEvent)
+{
+	DeactivateWidget();
+	return true;
+}
+
+bool UMOActivatableWidget::IsKeyboardFocusInEditableText(const FKeyEvent& InKeyEvent)
+{
+	if (!FSlateApplication::IsInitialized())
+	{
+		return false;
+	}
+
+	const TSharedPtr<SWidget> Focused =
+		FSlateApplication::Get().GetUserFocusedWidget(InKeyEvent.GetUserIndex());
+	// Matches SEditableText / SMultiLineEditableText — the inner Slate widgets
+	// that hold focus for UEditableTextBox and friends.
+	return Focused.IsValid() && Focused->GetTypeAsString().Contains(TEXT("EditableText"));
 }
 
 FReply UMOActivatableWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)

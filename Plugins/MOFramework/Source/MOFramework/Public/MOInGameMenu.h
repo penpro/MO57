@@ -110,8 +110,9 @@ protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
 	virtual UWidget* NativeGetDesiredFocusTarget() const override;
-	// Override back action: Close focus panel first, then close menu
-	virtual bool NativeOnHandleBackAction() override;
+
+	/** Close keys back out of an open focus panel first, then close the menu. */
+	virtual bool NativeOnCloseKeyRequested(const FKeyEvent& InKeyEvent) override;
 
 	/** Switch the focus window to show a specific panel. */
 	UFUNCTION(BlueprintCallable, Category="MO|UI|InGameMenu")

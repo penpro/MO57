@@ -9,10 +9,10 @@
  *        any key mapped to that action fires DeactivateWidget. Works regardless of
  *        Menu input mode. This is "press the key that opened the menu to close it."
  *
- *     2. Tab via NativeOnPreviewKeyDown (this class) — calls RequestClose so the
- *        controller's HandleXMenuRequestClose path runs (modal background, reticle,
- *        etc. cleanup). The base UMOActivatableWidget also has a Tab handler that
- *        just calls DeactivateWidget for non-MOMenuWidget activatables (e.g. journal).
+ *     2. Tab/Escape via NativeOnCloseKeyRequested (this class) — calls RequestClose
+ *        so the controller's HandleXMenuRequestClose path runs (modal background,
+ *        reticle, etc. cleanup). The base UMOActivatableWidget default just calls
+ *        DeactivateWidget for non-MOMenuWidget activatables (e.g. journal).
  *
  *     3. Escape via NativeOnHandleBackAction (CommonUI's back action chain, gated by
  *        bIsBackHandler in the constructor).
@@ -29,9 +29,9 @@ UMOMenuWidget::UMOMenuWidget(const FObjectInitializer& ObjectInitializer)
 {
 	// We don't use CommonUI's back-action chain (bIsBackHandler) because it
 	// auto-registers a project-level Back InputAction which we don't configure.
-	// Tab/Escape close paths live in UMOActivatableWidget::NativeOnPreviewKeyDown
-	// (base) and our own NativeOnPreviewKeyDown override below — both route Tab
-	// through RequestClose for controller cleanup.
+	// Tab/Escape close keys are dispatched by the base preview handler through
+	// NativeOnCloseKeyRequested — our override routes them through RequestClose
+	// for controller cleanup.
 	bIsBackHandler = false;
 }
 
@@ -45,7 +45,7 @@ TOptional<FUIInputConfig> UMOMenuWidget::GetDesiredInputConfig() const
 {
 	// ECommonInputMode::Menu = BLOCKS all game input (movement, mouse look, Enhanced Input).
 	// Cursor is visible, mouse is free for UI interaction.
-	// Toggle keys are handled in NativeOnPreviewKeyDown below.
+	// The menu's own toggle key still closes it via the CloseAction binding (base class).
 	return FUIInputConfig(
 		ECommonInputMode::Menu,
 		EMouseCaptureMode::NoCapture,
@@ -54,20 +54,13 @@ TOptional<FUIInputConfig> UMOMenuWidget::GetDesiredInputConfig() const
 	);
 }
 
-FReply UMOMenuWidget::NativeOnPreviewKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent)
+bool UMOMenuWidget::NativeOnCloseKeyRequested(const FKeyEvent& InKeyEvent)
 {
-	// Override Tab/Escape to go through RequestClose (broadcasts OnRequestClose so
-	// the controller's full close path runs — modal background, reticle, etc.).
-	// The base class also handles these keys but with a direct DeactivateWidget
-	// that skips the controller cleanup.
-	const FKey PressedKey = InKeyEvent.GetKey();
-	if (PressedKey == EKeys::Tab || PressedKey == EKeys::Escape)
-	{
-		RequestClose();
-		return FReply::Handled();
-	}
-
-	return Super::NativeOnPreviewKeyDown(InGeometry, InKeyEvent);
+	// Route through RequestClose (broadcasts OnRequestClose so the controller's
+	// full close path runs — modal background, reticle, etc.). The base default
+	// is a direct DeactivateWidget that skips the controller cleanup.
+	RequestClose();
+	return true;
 }
 
 void UMOMenuWidget::NativeOnActivated()
