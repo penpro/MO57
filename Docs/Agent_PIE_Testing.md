@@ -152,3 +152,31 @@ pc.get_component_by_class(unreal.MOUIManagerComponent).toggle_skills_panel()
 | Direct PIE into gameplay map = void world | Missing pending flags (H48). Always prime settings first |
 | Quest/pickup tests behave oddly at spawn | Starting loadout fires pickup events (M18) — GatherSticks/GatherStone complete instantly |
 | Editor frontmost check fails | Desktop became frontmost — re-foreground via Win32, never `open_application` |
+
+## 11. Slate key-injection testing (UI widget tests)
+
+`MOUITestSubsystem` (world subsystem) exposes `simulate_escape()` / `simulate_tab()` /
+`simulate_key_press(key)` — these call `FSlateApplication::ProcessKeyDownEvent`, which
+routes along the **keyboard focus path** and runs handlers synchronously. Proven for
+testing preview-key handling (the #138 close-key suite lives in
+`%TEMP%\claude\step_138_*.py`). Hard-won rules:
+
+1. **An UNCONSUMED Escape ends PIE** (editor-level binding). Always claim focus into
+   the widget under test first, and GUARD every injection on a verified
+   `has_keyboard_focus()` — if the claim failed, skip the injection or you kill the
+   session.
+2. **Push/open and test in SEPARATE bridge commands.** CommonUI defers widget
+   construction/activation a tick; `set_keyboard_focus()` in the same exec as
+   `push_modal_widget`/`open_in_game_menu` silently no-ops (no cached SWidget yet).
+3. **Focus claiming works at the main menu, fails in the in-game world** (viewport
+   capture / input-mode interplay — see #137 H43/M22). Test widget logic at the main
+   menu when possible; in-game key-routing tests need #137 fixed first or a human.
+4. **`get_editor_property` only sees `Edit*` or `Blueprint*` UPROPERTYs.** Plain
+   `UPROPERTY(meta=(BindWidget))` members (e.g. `OptionsButton`, `SeedInputBox`) are
+   invisible to python. Workaround: `unreal.WidgetLibrary.get_all_widgets_of_class`
+   (note: py name is `WidgetLibrary`, not `WidgetBlueprintLibrary`) + filter by
+   `w.get_typed_outer(unreal.MOWidgetClass)`.
+5. Persist state across bridge commands by stashing on the test-lib module:
+   `atl.T138_state = {...}` — each `py:` exec gets a fresh env, the module survives.
+6. Dynamic delegates accept python callables: `dlg.on_cancelled.add_callable(fn)`;
+   `is_bound()` checks survive into asserts (used to prove one-shot delegate clears).
