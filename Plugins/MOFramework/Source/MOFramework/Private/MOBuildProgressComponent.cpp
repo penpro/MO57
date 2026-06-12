@@ -7,6 +7,7 @@
 #include "MOContainerActor.h"
 #include "MOItemDatabaseSettings.h"
 #include "MOItemDefinitionRow.h"
+#include "MOWorldItemFactory.h"
 #include "MOCharacter.h"
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
@@ -272,15 +273,20 @@ void UMOBuildProgressComponent::CancelConstruction(bool bRefundMaterials)
 		return;
 	}
 
-	// Refund deposited materials by spawning them as world items
+	// Refund deposited materials by spawning them as world items through the
+	// canonical factory. Item definitions carry meshes, not per-item actor
+	// classes, so spawning WorldVisual.WorldActorClass directly refunds
+	// nothing for any item in the database.
 	if (bRefundMaterials && Progress.DepositedMaterials.Num() > 0)
 	{
 		UWorld* World = GetWorld();
 		AActor* Owner = GetOwner();
+		UMOWorldItemFactory* Factory = World ? World->GetSubsystem<UMOWorldItemFactory>() : nullptr;
 
-		if (World && Owner)
+		if (Factory && Owner)
 		{
-			FVector DropLocation = Owner->GetActorLocation() + FVector(0.0f, 0.0f, 50.0f);
+			const FVector DropLocation = Owner->GetActorLocation() + FVector(0.0f, 0.0f, 50.0f);
+			int32 RefundedStacks = 0;
 
 			for (const auto& Pair : Progress.DepositedMaterials)
 			{
@@ -292,49 +298,28 @@ void UMOBuildProgressComponent::CancelConstruction(bool bRefundMaterials)
 					continue;
 				}
 
-				// Get item definition to find world actor class
-				FMOItemDefinitionRow ItemDef;
-				if (!UMOItemDatabaseSettings::GetItemDefinition(ItemId, ItemDef))
+				const FVector SpawnLocation = DropLocation + FVector(
+					FMath::RandRange(-50.0f, 50.0f),
+					FMath::RandRange(-50.0f, 50.0f),
+					FMath::RandRange(0.0f, 30.0f)
+				);
+
+				if (Factory->SpawnDroppedItem(ItemId, Count, FGuid::NewGuid(), SpawnLocation, FRotator::ZeroRotator, Owner))
 				{
-					UE_LOG(LogMOFramework, Warning, TEXT("[MOBuildProgressComponent] Cannot refund %s - item definition not found"), *ItemId.ToString());
-					continue;
+					++RefundedStacks;
 				}
-
-				UClass* WorldActorClass = ItemDef.WorldVisual.WorldActorClass.LoadSynchronous();
-				if (!WorldActorClass)
+				else
 				{
-					UE_LOG(LogMOFramework, Warning, TEXT("[MOBuildProgressComponent] Cannot refund %s - no WorldActorClass"), *ItemId.ToString());
-					continue;
-				}
-
-				// Spawn world items for each deposited material
-				for (int32 i = 0; i < Count; ++i)
-				{
-					FVector SpawnLocation = DropLocation + FVector(
-						FMath::RandRange(-50.0f, 50.0f),
-						FMath::RandRange(-50.0f, 50.0f),
-						FMath::RandRange(0.0f, 30.0f)
-					);
-
-					FActorSpawnParameters SpawnParams;
-					SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
-
-					AActor* SpawnedActor = World->SpawnActor<AActor>(WorldActorClass, SpawnLocation, FRotator::ZeroRotator, SpawnParams);
-					if (SpawnedActor)
-					{
-						// Enable drop physics if it's a world item
-						if (AMOWorldItem* WorldItem = Cast<AMOWorldItem>(SpawnedActor))
-						{
-							WorldItem->EnableDropPhysics();
-						}
-
-						UE_LOG(LogMOFramework, Verbose, TEXT("[MOBuildProgressComponent] Refunded %s at %s"),
-							*ItemId.ToString(), *SpawnLocation.ToString());
-					}
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOBuildProgressComponent] Failed to refund %d x %s"), Count, *ItemId.ToString());
 				}
 			}
 
-			UE_LOG(LogMOFramework, Log, TEXT("[MOBuildProgressComponent] Refunded %d material types"), Progress.DepositedMaterials.Num());
+			UE_LOG(LogMOFramework, Log, TEXT("[MOBuildProgressComponent] Refunded %d of %d material stacks"),
+				RefundedStacks, Progress.DepositedMaterials.Num());
+		}
+		else
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOBuildProgressComponent] Cannot refund materials - no world item factory"));
 		}
 	}
 

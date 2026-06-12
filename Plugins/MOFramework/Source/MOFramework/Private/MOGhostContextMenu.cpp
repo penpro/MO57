@@ -6,6 +6,7 @@
 #include "MOItemDatabaseSettings.h"
 #include "MOItemDefinitionRow.h"
 #include "MOWorldItem.h"
+#include "MOWorldItemFactory.h"
 #include "MOItemComponent.h"
 #include "MOContainerActor.h"
 #include "MOBuildingTypes.h"
@@ -864,53 +865,41 @@ void UMOGhostContextMenu::DropRefundedMaterials(int32 RefundCount, const FVector
 	const int32 TotalDeposited = DepositedMaterialsForRefund.Num();
 	const int32 LoseCount = TotalDeposited - RefundCount;
 
-	// Spawn refunded materials (skip the first LoseCount items)
+	// Spawn refunded materials (skip the first LoseCount items) through the
+	// canonical factory. Item definitions carry meshes, not per-item actor
+	// classes, so spawning WorldVisual.WorldActorClass directly drops nothing.
 	UWorld* World = GetWorld();
-	if (!World)
+	UMOWorldItemFactory* Factory = World ? World->GetSubsystem<UMOWorldItemFactory>() : nullptr;
+	if (!Factory)
 	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOGhostContextMenu] DropRefundedMaterials: no world item factory, %d materials lost"),
+			TotalDeposited - LoseCount);
 		return;
 	}
 
+	// Consolidate by ItemId so stackable items drop as stacks
+	TMap<FName, int32> ItemsToDrop;
 	for (int32 i = LoseCount; i < TotalDeposited; ++i)
 	{
-		const FMODepositedMaterial& Mat = DepositedMaterialsForRefund[i];
+		ItemsToDrop.FindOrAdd(DepositedMaterialsForRefund[i].ItemId)++;
+	}
 
-		FMOItemDefinitionRow ItemDef;
-		if (!UMOItemDatabaseSettings::GetItemDefinition(Mat.ItemId, ItemDef))
-		{
-			continue;
-		}
-
-		UClass* WorldActorClass = ItemDef.WorldVisual.WorldActorClass.LoadSynchronous();
-		if (!WorldActorClass)
-		{
-			continue;
-		}
-
+	for (const auto& Pair : ItemsToDrop)
+	{
 		// Scatter spawn locations slightly
-		FVector SpawnLocation = DropLocation + FVector(
+		const FVector SpawnLocation = DropLocation + FVector(
 			FMath::RandRange(-50.0f, 50.0f),
 			FMath::RandRange(-50.0f, 50.0f),
 			FMath::RandRange(0.0f, 30.0f)
 		);
 
-		FActorSpawnParameters SpawnParams;
-		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
-
-		AActor* SpawnedActor = World->SpawnActor<AActor>(WorldActorClass, SpawnLocation, FRotator::ZeroRotator, SpawnParams);
-
-		if (SpawnedActor)
+		if (Factory->SpawnDroppedItem(Pair.Key, Pair.Value, FGuid::NewGuid(), SpawnLocation, FRotator::ZeroRotator, nullptr))
 		{
-			// Apply item definition visuals if it's a world item
-			if (AMOWorldItem* WorldItem = Cast<AMOWorldItem>(SpawnedActor))
-			{
-				WorldItem->ApplyItemDefinitionToWorldMesh();
-				WorldItem->EnableDropPhysics();
-			}
-
-			UE_LOG(LogMOFramework, Verbose, TEXT("[MOGhostContextMenu] Refunded %s (%s rarity)"),
-				*Mat.ItemId.ToString(),
-				*UEnum::GetValueAsString(Mat.Rarity));
+			UE_LOG(LogMOFramework, Verbose, TEXT("[MOGhostContextMenu] Dropped refund %d x %s"), Pair.Value, *Pair.Key.ToString());
+		}
+		else
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOGhostContextMenu] Failed to drop refund %d x %s"), Pair.Value, *Pair.Key.ToString());
 		}
 	}
 
