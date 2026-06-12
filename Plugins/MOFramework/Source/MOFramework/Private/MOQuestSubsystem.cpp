@@ -401,9 +401,12 @@ void UMOQuestSubsystem::HandleBuildingCompleted(FName RecipeId)
 		return;
 	}
 	// Buildings produce themselves as the "crafted item" — Tutorial_BuildCampfire
-	// uses Type=ItemCraft, TargetEventOrId="Campfire01" exactly as a regular
-	// hand-craft would. We route through the same ItemCraft objective type so
-	// designers don't need to learn a new objective type just for buildings.
+	// uses Type=ItemCraft, TargetEventOrId="BuildCampfire" (the recipe ROW name)
+	// exactly as a regular hand-craft would. We route through the same ItemCraft
+	// objective type so designers don't need a new objective type for buildings.
+	// NOTE: the craft path (HandleCraftCompleted) keys objectives by PRODUCED
+	// ITEM ids; this building path keys by RECIPE id — two id namespaces feed
+	// the same objective type, so quest authors must match the right one.
 	UE_LOG(LogMOFramework, Log, TEXT("[MOQuestSubsystem] HandleBuildingCompleted: %s"), *RecipeId.ToString());
 	ProcessEventForObjectives(EMOObjectiveType::ItemCraft, RecipeId, 1);
 }

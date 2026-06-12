@@ -365,10 +365,10 @@ public:
 
 	/**
 	 * Called when a building finishes construction. Treated as an ItemCraft
-	 * event keyed by the building's RecipeId — quests with
-	 * Type=ItemCraft and TargetEventOrId=RecipeId (e.g., "Campfire01") will
-	 * progress. Components / buildable actors call this directly; the
-	 * subsystem doesn't watch the building system itself.
+	 * event keyed by the building's RecipeId (the recipe ROW name, e.g.
+	 * "BuildCampfire") — quests with Type=ItemCraft and TargetEventOrId set to
+	 * that recipe id will progress. Components / buildable actors call this
+	 * directly; the subsystem doesn't watch the building system itself.
 	 */
 	void HandleBuildingCompleted(FName RecipeId);
 

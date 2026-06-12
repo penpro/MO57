@@ -14,5 +14,11 @@ def log(msg):
     """Helper to log to UE output"""
     unreal.log(f"[MO57] {msg}")
 
-# Uncomment to verify Python is working on editor startup:
-# log("Python scripting initialized")
+# Auto-load the Claude command bridge (file-driven console/python execution for
+# autonomous test sessions — see Docs/Agent_PIE_Testing.md). Safe no-op cost when
+# unused: one file-stat per 0.25s.
+try:
+    import claude_bridge  # noqa: F401  (registration happens at import)
+    log("claude_bridge loaded")
+except Exception as bridge_err:
+    log(f"claude_bridge failed to load: {bridge_err}")

@@ -435,7 +435,8 @@ void AMOBuildableActor::OnConstructionCompleted_Implementation()
 	// Notify the quest system. Tutorial_BuildCampfire and similar quests
 	// listen for ItemCraft events keyed by RecipeId; the building system
 	// wasn't routed through the crafting subsystem so we wire it directly
-	// here. RecipeId is set in InitializeBuilding (Campfire01, Floor01, etc).
+	// here. RecipeId is set in InitializeBuilding and is the recipe ROW name
+	// (BuildCampfire, BuildFloor, etc) — not an item id.
 	if (!RecipeId.IsNone())
 	{
 		if (UGameInstance* GI = GetGameInstance())
