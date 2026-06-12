@@ -1419,7 +1419,8 @@ void UMOSpawnManagerSubsystem::DumpFreezeState() const
 
 	UE_LOG(LogMOFramework, Warning,
 		TEXT("[MO.AI.DumpFreezeState] === Summary: %d running, %d stopped, %d anomalies "
-		     "(anomaly = should be frozen by distance/category but Brain still running) ==="),
+		     "(anomaly = frozen-flagged but part of the freeze surface still running, "
+		     "OR awake but actor/movement ticks still throttled = statue) ==="),
 		RunningCount, FrozenCount, AnomalyCount);
 }
 
