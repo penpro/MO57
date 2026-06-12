@@ -354,6 +354,15 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Building|Visual")
 	virtual void SetCompletedVisual();
 
+	/**
+	 * Everything "this building is finished geometry" requires: completed
+	 * visuals + BlockAll collision promotion. Shared by live completion and
+	 * save-restore so loaded buildings can't drift from freshly-built ones
+	 * (loaded walls used to restore visuals only and stay walk-through).
+	 * Deliberately excludes one-shot completion side effects (quest notify).
+	 */
+	void EnterCompletedState();
+
 	// ============================================================================
 	// COLLISION
 	// ============================================================================

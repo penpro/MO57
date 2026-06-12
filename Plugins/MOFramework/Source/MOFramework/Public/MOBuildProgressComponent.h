@@ -444,9 +444,9 @@ private:
 	/** Drop the registration so the builder stops notifying us. */
 	void UnregisterFromBuilderInterrupts();
 
-	/** Materials deposited into this building (ItemId -> Quantity). */
-	UPROPERTY()
-	TMap<FName, int32> DepositedMaterials;
+	// NOTE: the deposited-materials ledger lives in Progress.DepositedMaterials
+	// (FMOBuildProgress) so BuildSaveData/ApplySaveData round-trip it — a
+	// component-local copy here was destroyed on save/load (audit C12).
 
 	// ============================================================================
 	// INTERNAL

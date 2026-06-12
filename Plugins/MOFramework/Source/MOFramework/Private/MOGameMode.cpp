@@ -7,6 +7,7 @@
 #include "MOIdentityComponent.h"
 #include "MOPCGInteractionSubsystem.h"
 #include "MOPersistenceSubsystem.h"
+#include "MOQuestSubsystem.h"
 #include "MOGameSettings.h"
 #include "MOGameInstance.h"
 #include "MOHarvestDebugSubsystem.h"
@@ -160,14 +161,33 @@ void AMOGameMode::HandlePendingNewGame()
 		FMath::RandInit(EffectiveSeed);
 		UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Applied world seed to FMath: %d"), EffectiveSeed);
 
+		// A previous session's loaded save must not leak into this new world:
+		// reset GameInstance-scoped persistence (loaded save, destroyed-GUID
+		// ledger, playtime — handing it this world's slot) and quest state
+		// (ResetAllQuests re-runs the tutorial auto-starts itself).
+		if (UGameInstance* GameInstance = GetGameInstance())
+		{
+			if (UMOPersistenceSubsystem* Persistence = GameInstance->GetSubsystem<UMOPersistenceSubsystem>())
+			{
+				Persistence->ResetForNewWorld(Settings->PendingNewGameSlot);
+			}
+			if (UMOQuestSubsystem* Quests = GameInstance->GetSubsystem<UMOQuestSubsystem>())
+			{
+				Quests->ResetAllQuests();
+			}
+		}
+
 		// If auto-initialization is enabled, apply seed to voxel stamps and create runtime
 		if (bAutoInitializeVoxelWithSeed)
 		{
 			InitializeVoxelWorldWithSeed();
 		}
 
-		// Clear the pending flag
+		// Clear the pending flags — the slot too, otherwise a later boot
+		// without bPendingNewGame falls into the load branch with this
+		// stale slot persisted in config.
 		Settings->bPendingNewGame = false;
+		Settings->PendingNewGameSlot.Empty();
 		Settings->SaveSettings();
 
 		// Wait for voxel world to be ready before spawning

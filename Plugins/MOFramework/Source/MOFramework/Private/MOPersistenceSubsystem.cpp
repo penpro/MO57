@@ -143,6 +143,19 @@ void UMOPersistenceSubsystem::Deinitialize()
     Super::Deinitialize();
 }
 
+void UMOPersistenceSubsystem::ResetForNewWorld(const FString& NewSlotName)
+{
+    LoadedWorldSave = nullptr;
+    SessionDestroyedGuids.Empty();
+    SessionPlayTimeSeconds = 0.0f;
+    bNextSaveIsAutosave = false;
+    CurrentSlotName = NewSlotName;
+
+    UE_LOG(LogMOFramework, Log,
+        TEXT("[MOPersistence] ResetForNewWorld: session state cleared, slot is now '%s'"),
+        *NewSlotName);
+}
+
 void UMOPersistenceSubsystem::HandlePostWorldInitialization(UWorld* World, const UWorld::InitializationValues /*IVS*/)
 {
     BindToWorld(World);

@@ -225,6 +225,16 @@ public:
     UFUNCTION(BlueprintPure, Category="MO|Persistence")
     float GetSessionPlayTime() const { return SessionPlayTimeSeconds; }
 
+    /**
+     * Reset all GameInstance-scoped session state for a NEW world. Without
+     * this, "play save A -> main menu -> New Game" leaks save A's
+     * LoadedWorldSave / destroyed-GUID ledger / playtime into the new world
+     * (cross-save contamination), and a careless save can overwrite slot A.
+     * The new-game flow calls this with the slot the new world will use.
+     */
+    UFUNCTION(BlueprintCallable, Category="MO|Persistence")
+    void ResetForNewWorld(const FString& NewSlotName);
+
     // --- Pawn Record Access (for Possession Menu) ---
 
     /** Get all pawn records from the current save data. */

@@ -230,6 +230,28 @@ void UMOGhostContextMenu::CancelBuild()
 		const bool bBuildStarted = (Progress->GetState() == EMOBuildState::Constructing ||
 			Progress->GetState() == EMOBuildState::Paused);
 
+		// Rebuild the refund list from the COMPONENT's ledger — the single
+		// owner. The widget-local list emptied on every menu reopen
+		// (InitializeForGhost), so cancel-after-reopen refunded nothing and
+		// destroyed every deposited material.
+		DepositedMaterialsForRefund.Empty();
+		TMap<FName, int32> ComponentLedger;
+		Progress->GetDepositedMaterials(ComponentLedger);
+		for (const auto& Pair : ComponentLedger)
+		{
+			FMODepositedMaterial DepositedMat;
+			DepositedMat.ItemId = Pair.Key;
+			FMOItemDefinitionRow ItemDef;
+			if (UMOItemDatabaseSettings::GetItemDefinition(Pair.Key, ItemDef))
+			{
+				DepositedMat.Rarity = ItemDef.Rarity;
+			}
+			for (int32 i = 0; i < Pair.Value; ++i)
+			{
+				DepositedMaterialsForRefund.Add(DepositedMat);
+			}
+		}
+
 		// Calculate refund based on build state and skill
 		const int32 TotalDeposited = DepositedMaterialsForRefund.Num();
 		const int32 RefundCount = CalculateRefundAmount(TotalDeposited, bBuildStarted);

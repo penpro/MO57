@@ -421,7 +421,7 @@ bool AMOBuildableActor::CanInteract(AController* Controller) const
 // EVENTS
 // ============================================================================
 
-void AMOBuildableActor::OnConstructionCompleted_Implementation()
+void AMOBuildableActor::EnterCompletedState()
 {
 	SetCompletedVisual();
 
@@ -431,6 +431,11 @@ void AMOBuildableActor::OnConstructionCompleted_Implementation()
 	// static-mesh descendant of MeshComponent, so the visible cube child
 	// becomes solid even if its BP-defined profile was NoCollision.
 	ApplyStructuralCollisionProfile(FName("BlockAll"));
+}
+
+void AMOBuildableActor::OnConstructionCompleted_Implementation()
+{
+	EnterCompletedState();
 
 	// Notify the quest system. Tutorial_BuildCampfire and similar quests
 	// listen for ItemCraft events keyed by RecipeId; the building system
@@ -509,11 +514,13 @@ void AMOBuildableActor::ApplySaveData(const FMOPersistedBuildingRecord& InRecord
 		BuildProgressComponent->ApplySaveData(InRecord.Progress);
 	}
 
-	// Update visuals based on state
+	// Update visuals based on state. Complete goes through the shared
+	// completed-state routine: BeginPlay applied IgnoreOnlyPawn before this
+	// ran, so restoring visuals alone left loaded walls walk-through.
 	EMOBuildState State = GetBuildState();
 	if (State == EMOBuildState::Complete)
 	{
-		SetCompletedVisual();
+		EnterCompletedState();
 	}
 	else if (State == EMOBuildState::Constructing)
 	{

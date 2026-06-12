@@ -139,7 +139,7 @@ bool UMOBuildProgressComponent::DepositMaterial(FName ItemId)
 	}
 
 	// Accept the deposit
-	DepositedMaterials.FindOrAdd(ItemId)++;
+	Progress.DepositedMaterials.FindOrAdd(ItemId)++;
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildProgressComponent] Deposited %s (%d/%d)"),
 		*ItemId.ToString(), Deposited + 1, Required);
@@ -149,7 +149,7 @@ bool UMOBuildProgressComponent::DepositMaterial(FName ItemId)
 
 int32 UMOBuildProgressComponent::GetDepositedCount(FName ItemId) const
 {
-	const int32* Count = DepositedMaterials.Find(ItemId);
+	const int32* Count = Progress.DepositedMaterials.Find(ItemId);
 	return Count ? *Count : 0;
 }
 
@@ -223,7 +223,7 @@ void UMOBuildProgressComponent::InterruptBuild(float PenaltyPercent)
 
 void UMOBuildProgressComponent::GetDepositedMaterials(TMap<FName, int32>& OutMaterials) const
 {
-	OutMaterials = DepositedMaterials;
+	OutMaterials = Progress.DepositedMaterials;
 }
 
 void UMOBuildProgressComponent::PauseConstruction()
@@ -273,7 +273,7 @@ void UMOBuildProgressComponent::CancelConstruction(bool bRefundMaterials)
 	}
 
 	// Refund deposited materials by spawning them as world items
-	if (bRefundMaterials && DepositedMaterials.Num() > 0)
+	if (bRefundMaterials && Progress.DepositedMaterials.Num() > 0)
 	{
 		UWorld* World = GetWorld();
 		AActor* Owner = GetOwner();
@@ -282,7 +282,7 @@ void UMOBuildProgressComponent::CancelConstruction(bool bRefundMaterials)
 		{
 			FVector DropLocation = Owner->GetActorLocation() + FVector(0.0f, 0.0f, 50.0f);
 
-			for (const auto& Pair : DepositedMaterials)
+			for (const auto& Pair : Progress.DepositedMaterials)
 			{
 				const FName& ItemId = Pair.Key;
 				const int32 Count = Pair.Value;
@@ -334,12 +334,12 @@ void UMOBuildProgressComponent::CancelConstruction(bool bRefundMaterials)
 				}
 			}
 
-			UE_LOG(LogMOFramework, Log, TEXT("[MOBuildProgressComponent] Refunded %d material types"), DepositedMaterials.Num());
+			UE_LOG(LogMOFramework, Log, TEXT("[MOBuildProgressComponent] Refunded %d material types"), Progress.DepositedMaterials.Num());
 		}
 	}
 
 	// Clear deposited materials
-	DepositedMaterials.Empty();
+	Progress.DepositedMaterials.Empty();
 
 	Progress.State = EMOBuildState::Ghost;
 	Progress.ElapsedTime = 0.0f;

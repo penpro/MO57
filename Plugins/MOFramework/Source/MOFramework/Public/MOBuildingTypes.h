@@ -196,6 +196,16 @@ struct MOFRAMEWORK_API FMOBuildProgress
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Building|Sources", meta=(ClampMin="0.0"))
 	float GatherRange = 150.0f;
 
+	/**
+	 * Materials deposited into this building (ItemId -> quantity). Lives in
+	 * the save payload: these items were already removed from inventories,
+	 * so a ledger outside the persisted struct destroys them on save/load.
+	 * The build component owns this; UI displays and refunds FROM it, never
+	 * from a widget-local copy.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Building|Progress")
+	TMap<FName, int32> DepositedMaterials;
+
 	/** Get overall progress (0.0 - 1.0). */
 	float GetOverallProgress() const
 	{

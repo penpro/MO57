@@ -482,9 +482,62 @@ void UMOInteractorComponent::ServerRequestSecondaryInteract_Implementation(AActo
 	}
 }
 
+bool UMOInteractorComponent::ValidateInstanceHarvestRequest(UInstancedStaticMeshComponent* Component, int32 InstanceIndex, const TCHAR* RPCName)
+{
+	APawn* OwnerPawn = Cast<APawn>(GetOwner());
+	UWorld* World = GetWorld();
+	if (!IsValid(OwnerPawn) || !IsValid(Component) || !World)
+	{
+		return false;
+	}
+
+	if (InstanceIndex < 0 || InstanceIndex >= Component->GetInstanceCount())
+	{
+		UE_LOG(LogMOFramework, Warning,
+			TEXT("[MOInteractor] %s rejected: instance index %d out of range (count %d)"),
+			RPCName, InstanceIndex, Component->GetInstanceCount());
+		return false;
+	}
+
+	// Reach: same policy as the actor path (UMOInteractionSubsystem's
+	// MaximumInteractDistance), doubled because instance origins can sit
+	// meters from the traced surface (tree trunk vs pivot). Still kills the
+	// harvest-anything-anywhere exploit by orders of magnitude.
+	float MaxDistance = 500.0f;
+	if (const UMOInteractionSubsystem* Interaction = World->GetSubsystem<UMOInteractionSubsystem>())
+	{
+		MaxDistance = Interaction->MaximumInteractDistance;
+	}
+	MaxDistance *= 2.0f;
+
+	FTransform InstanceTransform;
+	if (!Component->GetInstanceTransform(InstanceIndex, InstanceTransform, /*bWorldSpace=*/true))
+	{
+		return false;
+	}
+	const float DistSq = FVector::DistSquared(OwnerPawn->GetActorLocation(), InstanceTransform.GetLocation());
+	if (DistSq > FMath::Square(MaxDistance))
+	{
+		UE_LOG(LogMOFramework, Warning,
+			TEXT("[MOInteractor] %s rejected: instance %.0fcm away (max %.0fcm)"),
+			RPCName, FMath::Sqrt(DistSq), MaxDistance);
+		return false;
+	}
+
+	// Rate limit: real harvests arrive seconds apart (timed actions); spam
+	// arrives per-frame. 0.1s spacing never touches legit play.
+	const double Now = World->GetTimeSeconds();
+	if (LastInstanceHarvestServerTime >= 0.0 && Now - LastInstanceHarvestServerTime < 0.1)
+	{
+		return false;
+	}
+	LastInstanceHarvestServerTime = Now;
+	return true;
+}
+
 void UMOInteractorComponent::ServerRequestHISMInteract_Implementation(AActor* OwnerActor, UHierarchicalInstancedStaticMeshComponent* HISMComponent, int32 InstanceIndex)
 {
-	if (!IsValid(HISMComponent))
+	if (!ValidateInstanceHarvestRequest(HISMComponent, InstanceIndex, TEXT("ServerRequestHISMInteract")))
 	{
 		return;
 	}
@@ -521,7 +574,7 @@ void UMOInteractorComponent::ServerRequestHISMInteract_Implementation(AActor* Ow
 
 void UMOInteractorComponent::ServerRequestISMInteract_Implementation(AActor* OwnerActor, UInstancedStaticMeshComponent* ISMComponent, int32 InstanceIndex)
 {
-	if (!IsValid(ISMComponent))
+	if (!ValidateInstanceHarvestRequest(ISMComponent, InstanceIndex, TEXT("ServerRequestISMInteract")))
 	{
 		return;
 	}

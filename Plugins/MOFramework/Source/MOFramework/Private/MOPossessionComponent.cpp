@@ -70,6 +70,23 @@ void UMOPossessionComponent::ServerTryPossessNearestPawn_Implementation()
 
 void UMOPossessionComponent::ServerSpawnActorNearController_Implementation(TSubclassOf<AActor> ActorClassToSpawn, float SpawnDistance, FVector SpawnOffset, bool bUseViewRotation)
 {
+	// Client-controlled spawn surface: a client can request ANY class at ANY
+	// offset through this RPC. No production flow uses it (the possession
+	// menu calls the subsystem server-side); the only referencer is the
+	// template BP_ThirdPersonPlayerController. Dev/prototyping tool only —
+	// reject outright in shipping, clamp the spatial params elsewhere.
+#if UE_BUILD_SHIPPING
+	UE_LOG(LogMOFramework, Warning,
+		TEXT("[MOPossession] ServerSpawnActorNearController rejected: dev-only RPC (shipping build)"));
+	return;
+#else
+	if (!ActorClassToSpawn)
+	{
+		return;
+	}
+	SpawnDistance = FMath::Clamp(SpawnDistance, 0.0f, 2000.0f);
+	SpawnOffset = SpawnOffset.GetClampedToMaxSize(2000.0f);
+
 	APlayerController* PlayerController = Cast<APlayerController>(GetOwner());
 	if (!IsValid(PlayerController))
 	{
@@ -89,6 +106,7 @@ void UMOPossessionComponent::ServerSpawnActorNearController_Implementation(TSubc
 	}
 
 	PossessionSubsystem->ServerSpawnActorNearController(PlayerController, ActorClassToSpawn, SpawnDistance, SpawnOffset, bUseViewRotation);
+#endif
 }
 
 bool UMOPossessionComponent::TrySpawnAndPossessPawn(TSubclassOf<APawn> PawnClassToSpawn, float SpawnDistance, FVector SpawnOffset, bool bUseViewRotation)
@@ -110,6 +128,20 @@ bool UMOPossessionComponent::TrySpawnAndPossessPawn(TSubclassOf<APawn> PawnClass
 
 void UMOPossessionComponent::ServerSpawnAndPossessPawn_Implementation(TSubclassOf<APawn> PawnClassToSpawn, float SpawnDistance, FVector SpawnOffset, bool bUseViewRotation)
 {
+	// Same client-controlled spawn surface as ServerSpawnActorNearController
+	// above — dev-only, rejected in shipping, clamped elsewhere.
+#if UE_BUILD_SHIPPING
+	UE_LOG(LogMOFramework, Warning,
+		TEXT("[MOPossession] ServerSpawnAndPossessPawn rejected: dev-only RPC (shipping build)"));
+	return;
+#else
+	if (!PawnClassToSpawn)
+	{
+		return;
+	}
+	SpawnDistance = FMath::Clamp(SpawnDistance, 0.0f, 2000.0f);
+	SpawnOffset = SpawnOffset.GetClampedToMaxSize(2000.0f);
+
 	APlayerController* PlayerController = Cast<APlayerController>(GetOwner());
 	if (!IsValid(PlayerController))
 	{
@@ -129,4 +161,5 @@ void UMOPossessionComponent::ServerSpawnAndPossessPawn_Implementation(TSubclassO
 	}
 
 	PossessionSubsystem->ServerSpawnAndPossessPawn(PlayerController, PawnClassToSpawn, SpawnDistance, SpawnOffset, bUseViewRotation);
+#endif
 }

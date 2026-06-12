@@ -270,6 +270,19 @@ private:
 	void BuildTrace(const FVector& ViewLocation, const FRotator& ViewRotation, FVector& OutTraceStart, FVector& OutTraceEnd) const;
 	bool TraceForHit(const FVector& TraceStart, const FVector& TraceEnd, FHitResult& OutHitResult) const;
 
+	/**
+	 * Server-side validation for the instance-harvest RPCs: index in range,
+	 * instance within interact reach of the pawn, and minimum spacing
+	 * between accepted requests. The client supplies the component and
+	 * index, so without this a client could harvest any instance in the
+	 * world at unlimited rate (the actor path validates in
+	 * UMOInteractionSubsystem; the instance path must match it).
+	 */
+	bool ValidateInstanceHarvestRequest(UInstancedStaticMeshComponent* Component, int32 InstanceIndex, const TCHAR* RPCName);
+
+	/** Server time of the last accepted instance-harvest RPC (rate limiting). */
+	double LastInstanceHarvestServerTime = -1.0;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Interaction", meta=(AllowPrivateAccess="true"))
 	FMOInteractionTraceConfig TraceConfig;
 
