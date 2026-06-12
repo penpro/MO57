@@ -199,6 +199,18 @@ void UMOAudioSubsystem::Deinitialize()
 		PreLoadMapHandle.Reset();
 	}
 
+	// Cancel in-flight asset loads FIRST so no completion delegate can fire
+	// into a half-torn-down subsystem (they're weak-bound too — this is the
+	// belt to that suspenders, and it releases the streamable requests).
+	for (const TSharedPtr<FStreamableHandle>& Handle : ActiveStreamHandles)
+	{
+		if (Handle.IsValid())
+		{
+			Handle->CancelHandle();
+		}
+	}
+	ActiveStreamHandles.Reset();
+
 	StopAllAudio();
 
 	LoadedBanks.Reset();
@@ -338,8 +350,8 @@ void UMOAudioSubsystem::SetMusicState(EMOMusicState NewState)
 			*OverridePath.ToString());
 
 		FStreamableManager& Streamable = UAssetManager::GetStreamableManager();
-		Streamable.RequestAsyncLoad(OverridePath,
-			FStreamableDelegate::CreateLambda([this, OverridePath, FadeIn, OldState, NewState]()
+		TrackStreamHandle(Streamable.RequestAsyncLoad(OverridePath,
+			FStreamableDelegate::CreateWeakLambda(this, [this, OverridePath, FadeIn, OldState, NewState]()
 			{
 				USoundBase* Sound = Cast<USoundBase>(OverridePath.ResolveObject());
 				if (Sound)
@@ -360,7 +372,7 @@ void UMOAudioSubsystem::SetMusicState(EMOMusicState NewState)
 						*OverridePath.ToString());
 				}
 				OnMusicStateChanged.Broadcast(OldState, NewState);
-			}));
+			})));
 		return;
 	}
 
@@ -681,17 +693,32 @@ void UMOAudioSubsystem::ResolveAndLoadAsync(FName AudioId,
 	}
 
 	// Async load. Capture by value (row pointer + audio id) so the lambda
-	// stays valid even if banks rearrange mid-flight.
+	// stays valid even if banks rearrange mid-flight. Weak-bound to `this`:
+	// the OnLoaded TFunctions all capture the subsystem raw, so the delegate
+	// must never fire after Deinitialize. Handle tracked for cancellation.
 	FSoftObjectPath Path = Row->Sound.ToSoftObjectPath();
 	const FMOAudioBankRow RowCopy = *Row;
 
 	FStreamableManager& Streamable = UAssetManager::GetStreamableManager();
-	Streamable.RequestAsyncLoad(Path,
-		FStreamableDelegate::CreateLambda([Path, RowCopy, OnLoaded]()
+	TrackStreamHandle(Streamable.RequestAsyncLoad(Path,
+		FStreamableDelegate::CreateWeakLambda(this, [Path, RowCopy, OnLoaded]()
 		{
 			USoundBase* Sound = Cast<USoundBase>(Path.ResolveObject());
 			OnLoaded(Sound, RowCopy);
-		}));
+		})));
+}
+
+void UMOAudioSubsystem::TrackStreamHandle(TSharedPtr<FStreamableHandle> Handle)
+{
+	ActiveStreamHandles.RemoveAll([](const TSharedPtr<FStreamableHandle>& Existing)
+	{
+		return !Existing.IsValid() || Existing->HasLoadCompleted() || Existing->WasCanceled();
+	});
+
+	if (Handle.IsValid())
+	{
+		ActiveStreamHandles.Add(MoveTemp(Handle));
+	}
 }
 
 void UMOAudioSubsystem::StopMusicWithFade(float FadeOutSeconds)

@@ -484,6 +484,18 @@ private:
 	FDelegateHandle PreLoadMapHandle;
 
 	/**
+	 * In-flight streamable load handles. StreamableManager callbacks are not
+	 * lifetime-bound to this subsystem, so every request is (a) weak-bound to
+	 * `this` and (b) tracked here so Deinitialize can cancel anything still
+	 * loading — otherwise a PIE-end/exit during a cold load fires into a
+	 * destroyed subsystem. Completed handles are pruned on each new request.
+	 */
+	TArray<TSharedPtr<struct FStreamableHandle>> ActiveStreamHandles;
+
+	/** Prune completed entries and track a new in-flight load handle. */
+	void TrackStreamHandle(TSharedPtr<struct FStreamableHandle> Handle);
+
+	/**
 	 * Immediately stop all music/ambient + cancel all event/dominance/breathe
 	 * timers. No fade — used when the level is about to unload (PreLoadMap)
 	 * or when the subsystem is shutting down (Deinitialize). Audio components

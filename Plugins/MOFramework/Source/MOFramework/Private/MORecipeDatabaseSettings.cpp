@@ -1,8 +1,10 @@
 #include "MORecipeDatabaseSettings.h"
 #include "MOFramework.h"
+#include "MOBuildableActor.h" // TSubclassOf<AMOBuildableActor>::Get() needs the complete type
 
 #include "Engine/DataTable.h"
 #include "Engine/Texture2D.h"
+#include "UObject/StrongObjectPtr.h"
 
 // Static cache members
 bool UMORecipeDatabaseSettings::bCachesDirty = true;
@@ -11,6 +13,14 @@ TArray<FName> UMORecipeDatabaseSettings::BuildingRecipeIds;
 TArray<FName> UMORecipeDatabaseSettings::CraftableRecipeIds;
 TMap<FName, TArray<FName>> UMORecipeDatabaseSettings::RecipesByCategory;
 TMap<FName, FMORecipeDefinitionRow> UMORecipeDatabaseSettings::ModRecipeDefinitions;
+
+// GC roots for the mod overlay. ModRecipeDefinitions holds ROW COPIES whose
+// hard refs (TSubclassOf<AMOBuildableActor> BuildableActorClass) are invisible
+// to the GC — a plain static TMap is not a UPROPERTY, so once the mod's
+// source table is collected the copies hold dangling UClass pointers. Every
+// registered row's class is rooted here until ClearModRecipes. Rooting per
+// row (not per table) also covers direct RegisterModRecipe callers.
+static TArray<TStrongObjectPtr<UObject>> GModRecipeHardRefs;
 
 UDataTable* UMORecipeDatabaseSettings::GetRecipeDefinitionsDataTable() const
 {
@@ -314,6 +324,21 @@ void UMORecipeDatabaseSettings::RegisterModRecipe(FName RecipeId, const FMORecip
 	const bool bWasReplaced = ModRecipeDefinitions.Contains(RecipeId);
 	ModRecipeDefinitions.Add(RecipeId, Row);
 
+	// Keep the row's hard class ref alive — the overlay map is GC-invisible
+	// (see GModRecipeHardRefs above).
+	if (UClass* BuildClass = Row.PlacementData.BuildableActorClass.Get())
+	{
+		const bool bAlreadyRooted = GModRecipeHardRefs.ContainsByPredicate(
+			[BuildClass](const TStrongObjectPtr<UObject>& Rooted)
+			{
+				return Rooted.Get() == BuildClass;
+			});
+		if (!bAlreadyRooted)
+		{
+			GModRecipeHardRefs.Emplace(BuildClass);
+		}
+	}
+
 	// Force cache rebuild so the new recipe shows up in by-station / building /
 	// category lists. Lookup-by-ID already sees it instantly via the overlay
 	// check at the top of GetRecipeDefinition.
@@ -371,6 +396,7 @@ void UMORecipeDatabaseSettings::ClearModRecipes()
 {
 	const int32 PreviousCount = ModRecipeDefinitions.Num();
 	ModRecipeDefinitions.Empty();
+	GModRecipeHardRefs.Reset(); // release the GC roots with the overlay
 	InvalidateCache();
 	UE_LOG(LogMOFramework, Log,
 		TEXT("[MORecipeDatabaseSettings] Cleared %d mod recipes + invalidated cache"),
