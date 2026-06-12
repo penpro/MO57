@@ -42,37 +42,24 @@ Screenshots are only for *visual* verification (HUD layout, world rendering) —
 - **Write commands with `Add-Content -Encoding ascii`** — PS 5.1's utf8 stamps BOMs that break prefix matching (bridge strips them, but ascii is cleaner).
 - Dev-machine tooling only — it executes arbitrary local commands. Never ship.
 
-## 3. Fast-start a new game (zero menu clicks)
+## 3. Boot a new game — ONE COMMAND, seed-safe, zero screenshots
 
-> ⚠ **CAVEAT (from the project owner, June 12 2026): the fast-start below breaks parts of the seed flow for voxel world-gen and PCG.** PIE-ing directly into MOPCGScattering — even with pending flags primed — does not reproduce the same seed/voxel/PCG initialization as the real boot. **For any test that touches world generation, seeds, terrain, or PCG content, use the NORMAL flow:** PIE from LoadingLevel → Space to skip intro → click New Game → Start Game (menu clicks are safe — cursor is free in menus). Reserve the fast-start for tests that only need *a* world (UI, quests, inventory, subsystem logic).
-
-The menu flow (intro → main menu → New Game → Start) exists for humans. The pending-flags path is what `StartNewGame` itself does — prime it directly:
-
-```
-# step_prime_newgame.py  (run via bridge while in the editor, PIE stopped)
-gus = unreal.GameUserSettings.get_game_user_settings()   # returns MOGameSettings
-gus.set_editor_property("bPendingNewGame", True)
-gus.set_editor_property("bIsLoadingIntoGameplay", True)
-gus.set_editor_property("PendingNewGameSlot", "ClaudeTest-01")
-gus.set_editor_property("PendingWorldSeed", 13546)
-gus.save_settings()
-```
-
-Then:
-```
-py:lvl = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem); lvl.load_level("/Game/VoxelExamples/PCGScattering/MOPCGScattering")
-py:unreal.get_editor_subsystem(unreal.LevelEditorSubsystem).editor_request_begin_play()
-```
-`AMOGameMode::HandlePendingNewGame` sees the flags → seeds the voxel runtime → spawns + possesses the initial pawn. Boot to possession ≈ 30-45 s (voxel gen + PSO compiles).
-
-**Readiness signal** — poll the log, don't sleep blind:
 ```powershell
-Select-String "D:\UEProjects\MO57\Saved\Logs\MO57.log" -Pattern "possessed initial pawn"
+powershell -ExecutionPolicy Bypass -File D:\UEProjects\MO57\Tools\agent_boot_newgame.ps1 -Seed 4242
 ```
 
-**Stop PIE:** `py:unreal.get_editor_subsystem(unreal.LevelEditorSubsystem).editor_request_end_play()` (also: `editor_play_simulate`, `is_in_play_in_editor` exist). Restore the editor map afterwards: `load_level("/Game/Penumbra/Maps/LoadingLevel")`.
+That's the whole thing. The script drives the **normal** boot flow entirely in-process (proven June 12, ~10 s warm / ~45 s cold):
+LoadingLevel PIE → intro → `SkipIntroVideo()` → seed into settings → `StartNewGame()` → poll log for possession → `MO.Clock.SetTime 12 0`. It ends any running PIE first and restores LoadingLevel as the origin. Stage transitions come from tailing `MO57.log` — no screenshots, no clicks, no coordinates.
 
-> If you must PIE through the human path instead: PIE from LoadingLevel (the GameDefaultMap), skip the intro with **Space** (never Escape on the title screen — H42a soft-lock), click New Game → Start Game.
+Why this is seed-correct: `SkipIntroVideo` and `StartNewGame` are the **same BlueprintCallable functions the menu buttons call** — the game performs its own normal OpenLevel transition into the gameplay map, so the voxel/PCG seed pipeline initializes exactly as a human run.
+
+> ⚠ **Never PIE directly into MOPCGScattering** (even with pending flags primed) — it skips the fresh OpenLevel transition and breaks parts of the seed flow for voxel world-gen and PCG (project owner, June 12 2026). Tests touching world generation, seeds, terrain, or PCG must go through this boot.
+
+**Stop PIE:** `py:import agent_test_lib as atl; atl.end_pie(out)` — or `editor_request_end_play()` directly.
+
+**The library (`Content/Python/agent_test_lib.py`)** is the toolbox to GROW — every new test need becomes a named function there (driving real code paths), never a click sequence:
+`pc / pawn / component / ui_manager` · `gi_subsystem(world,"MOQuestSubsystem")` / `world_subsystem(world,"MOCraftingSubsystem")` · boot ladder (`ensure_loading_level / begin_pie / end_pie / skip_intro / start_new_game / set_noon`) · `give(world,"Stick01",10,out)` · `quest_status(world,out)`.
+Note: `import agent_test_lib` caches — after editing the lib mid-session, send `py:import importlib, agent_test_lib; importlib.reload(agent_test_lib)`.
 
 ## 4. First commands after possession — always
 
@@ -130,7 +117,8 @@ pc.get_component_by_class(unreal.MOUIManagerComponent).toggle_skills_panel()
 `GiveItem` fires real pickup events — it advances ItemPickup quest objectives (M18), which is useful for driving tutorial chains.
 
 **Keys (IMC_MODefault):** I inventory · K skills · Esc/Tab back-menu · C craft · B build · E interact · P possess · Y status · T terraform · R cycle tool · F1 debug · Ctrl crouch · Shift hustle · Space jump.
-⚠ As of June 12, PC-level UI keys don't fire in PIE (task #144) — drive menus via UIManager calls until fixed.
+
+⚠ **Synthetic-input limitation (resolved #144, June 12):** keys injected by the computer-use tools do NOT reliably reach the PC's Enhanced Input actions in PIE gameplay (they do reach Slate widgets and some pawn paths). A human's physical keyboard works perfectly — verified live, all handlers FIRED. So: **never test gameplay keybinds with injected keys**; drive the same code paths in-process (`ui_manager(world).toggle_skills_panel()` etc.) and reserve keybind verification for a human press. This also rules out AHK-style tools — same injected-input class, same blind spot.
 
 ## 8. Mouse/keyboard interaction rules (when you must click)
 
