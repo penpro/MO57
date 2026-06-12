@@ -40,3 +40,5 @@ Content/Penumbra/Movies/
 # on every compile, so it shouldn't live in git history.
 Plugins/MOFramework/Source/MOFramework/Public/MOBuildInfoGenerated.h
 
+
+Content/Python/__pycache__/
