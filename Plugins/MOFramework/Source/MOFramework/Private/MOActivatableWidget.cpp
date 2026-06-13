@@ -193,7 +193,7 @@ void UMOActivatableWidget::ClaimFocusForReactivation()
 
 void UMOActivatableWidget::NativeOnActivated()
 {
-	UE_LOG(LogMOFramework, Warning, TEXT("[Activatable-DIAG] %s ACTIVATED"), *GetName());
+	UE_LOG(LogMOFramework, Verbose, TEXT("[Activatable] %s ACTIVATED"), *GetName());
 	MOUI_LOG(this, "Activate", "ENTRY  %s", *GetName());
 	Super::NativeOnActivated();
 
@@ -334,7 +334,7 @@ void UMOActivatableWidget::NativeOnActivated()
 
 void UMOActivatableWidget::NativeOnDeactivated()
 {
-	UE_LOG(LogMOFramework, Warning, TEXT("[Activatable-DIAG] %s DEACTIVATED"), *GetName());
+	UE_LOG(LogMOFramework, Verbose, TEXT("[Activatable] %s DEACTIVATED"), *GetName());
 	MOUI_LOG(this, "Deactivate", "ENTRY  %s", *GetName());
 
 	// Only run cleanup symmetric with what we did in NativeOnActivated.
@@ -377,7 +377,7 @@ void UMOActivatableWidget::NativeOnDeactivated()
 
 		if (PC)
 		{
-			UE_LOG(LogMOFramework, Warning, TEXT("[Activatable-DIAG] %s deactivating: RemainingActive=%s"),
+			UE_LOG(LogMOFramework, Verbose, TEXT("[Activatable] %s deactivating: RemainingActive=%s"),
 				*GetName(),
 				RemainingActive ? *RemainingActive->GetName() : TEXT("<none — last UI>"));
 

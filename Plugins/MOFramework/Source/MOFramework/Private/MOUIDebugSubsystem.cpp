@@ -21,6 +21,8 @@
 #include "CommonActivatableWidget.h"
 #include "Input/CommonUIActionRouterBase.h"
 
+bool UMOUIDebugSubsystem::bGloballyEnabled = false;
+
 namespace
 {
 	FString GetTimestamp()
@@ -62,14 +64,20 @@ void UMOUIDebugSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
 
-	OpenLogFile();
+	// Console commands are always available so MO.UI.Enable can turn logging on.
 	RegisterConsoleCommands();
-	HookFocusEvents();
 
-	Log(TEXT("System"), TEXT("=========================================="));
-	Log(TEXT("System"), FString::Printf(TEXT("UI Debug log started — %s"), *FDateTime::Now().ToString()));
-	Log(TEXT("System"), FString::Printf(TEXT("Log path: %s"), *LogFilePath));
-	Log(TEXT("System"), TEXT("=========================================="));
+	// Default OFF (H55): no log file, no global Slate focus hook, no banner until
+	// explicitly enabled. SetEnabled() opens the file and hooks focus on demand.
+	if (bEnabled)
+	{
+		OpenLogFile();
+		HookFocusEvents();
+		Log(TEXT("System"), TEXT("=========================================="));
+		Log(TEXT("System"), FString::Printf(TEXT("UI Debug log started — %s"), *FDateTime::Now().ToString()));
+		Log(TEXT("System"), FString::Printf(TEXT("Log path: %s"), *LogFilePath));
+		Log(TEXT("System"), TEXT("=========================================="));
+	}
 }
 
 void UMOUIDebugSubsystem::Deinitialize()
@@ -266,8 +274,34 @@ void UMOUIDebugSubsystem::DumpFullState(const FString& Reason)
 
 void UMOUIDebugSubsystem::SetEnabled(bool bInEnabled)
 {
-	bEnabled = bInEnabled;
-	Log(TEXT("System"), FString::Printf(TEXT("Logging %s"), bEnabled ? TEXT("ENABLED") : TEXT("DISABLED")));
+	// Keep the process-static fast-path flag in sync regardless (the MOUI_LOG
+	// macro reads it before formatting).
+	bGloballyEnabled = bInEnabled;
+
+	if (bEnabled == bInEnabled)
+	{
+		return;
+	}
+
+	if (bInEnabled)
+	{
+		bEnabled = true;
+		if (!LogFileHandle)
+		{
+			OpenLogFile();
+		}
+		HookFocusEvents();
+		Log(TEXT("System"), FString::Printf(TEXT("UI debug logging ENABLED — %s"), *FDateTime::Now().ToString()));
+		Log(TEXT("System"), FString::Printf(TEXT("Log path: %s"), *LogFilePath));
+	}
+	else
+	{
+		// Log the disable message while still enabled, then tear down.
+		Log(TEXT("System"), TEXT("UI debug logging DISABLED"));
+		bEnabled = false;
+		UnhookFocusEvents();
+		CloseLogFile();
+	}
 }
 
 void UMOUIDebugSubsystem::OpenLogFile()

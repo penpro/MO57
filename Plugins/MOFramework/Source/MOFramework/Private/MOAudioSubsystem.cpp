@@ -1386,7 +1386,9 @@ void UMOAudioSubsystem::HandleBaseLayerBreatheTimer()
 
 void UMOAudioSubsystem::HandleBaseLayerStatusLog()
 {
-	UE_LOG(LogMOFramework, Warning,
+	// Verbose, not Warning: this is a periodic (10s) diagnostic dump — it must
+	// not spam the default log every 10 seconds for the whole session (audit L8).
+	UE_LOG(LogMOFramework, Verbose,
 		TEXT("[MOAudio] === Base layers (every 10s) — %d active ==="),
 		AmbientLayerComponents.Num());
 
@@ -1395,7 +1397,7 @@ void UMOAudioSubsystem::HandleBaseLayerStatusLog()
 		UAudioComponent* Comp = AmbientLayerComponents[i];
 		if (!Comp)
 		{
-			UE_LOG(LogMOFramework, Warning,
+			UE_LOG(LogMOFramework, Verbose,
 				TEXT("[MOAudio]   [%d] <null component>"), i);
 			continue;
 		}

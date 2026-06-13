@@ -85,9 +85,10 @@ void UMOGameUIManagerSubsystem::HandleFocusChanging(const FFocusEvent& FocusEven
 		return;
 	}
 
-	// [DIAG] Dump widget identity at the decision point so we can see exactly
-	// what's getting closed and what its policy was.
-	UE_LOG(LogMOFramework, Warning,
+	// Dump widget identity at the decision point so we can see exactly
+	// what's getting closed and what its policy was. Verbose — this fires on
+	// every click that lands on the viewport (audit H55/L14 log hygiene).
+	UE_LOG(LogMOFramework, Verbose,
 		TEXT("[OutsideClick] decision for TopWidget '%s' (class=%s parent=%s)  bClosesOnOutsideClick=%s"),
 		*TopWidget->GetName(),
 		*TopWidget->GetClass()->GetName(),
