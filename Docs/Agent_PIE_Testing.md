@@ -217,3 +217,28 @@ Proven examples (the #137 suite): `%TEMP%\claude\seq_h43.py` (menu-count + curso
 state, in-game, no injection) and `seq_h41.py` (recipe-query regression). Both run
 green start-to-finish from a single submit. This is the preferred harness for all
 future UI/state verification — reach for it over hand-sequenced bridge commands.
+
+**Hard-won menu-cycling rules (from a #143 false-alarm investigation):**
+- The test subsystem's `OpenMenu(name)` is a TOGGLE (`ToggleInventoryMenu` etc.),
+  while `CloseAllMenus()` is a one-way close. Mixing toggle-open with CloseAll-close
+  in a tight loop polled at ~2 ticks DESYNCS parity: a deferred deactivation hasn't
+  completed when the next toggle reads "still open" and flips it back, eventually
+  leaving one menu stuck activated. That stuck state then poisons every later run in
+  the session (baseline count != 0). This looks exactly like a regression but isn't.
+- Robust pattern (see `seq_regress2.py`, runs 9/0): ONE fully-settled cycle per menu
+  — open, `yield 10`, assert count==1, CloseAll, `yield 14`, assert count==0 — and
+  gate each open on `count==0` first. Generous settles (10-14 ticks) because
+  deactivation → stub reactivation → focus reclaim is multi-frame, especially when
+  the editor is backgrounded and tick-throttled.
+- To recover a session with a stuck menu without rebooting: directly
+  `widget.deactivate_widget()` the activated widget (find it via
+  `all_widgets("MOActivatableWidget")` + `is_activated()`). That clears it when
+  CloseAllMenus can't (CloseAllMenus closes the *controller-tracked* instance, not a
+  toggle-opened orphan).
+- The runner itself never broke through all of this — every failing sequence logged
+  its FAIL/traceback and the core bridge kept polling. Trust it.
+
+**Foregrounding to un-throttle:** a backgrounded editor throttles slate ticks hard,
+stretching `yield N` wall-time. The `Get-Process | where MainWindowHandle -ne 0` +
+`SetForegroundWindow` dance (memory: ue_pie_computer_testing) speeds runs up; the
+window handle is sometimes 0 right after launch — poll for it.
