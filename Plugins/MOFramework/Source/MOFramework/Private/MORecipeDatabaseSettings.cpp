@@ -133,48 +133,13 @@ void UMORecipeDatabaseSettings::GetRecipesForStation(EMOCraftingStation Station,
 
 void UMORecipeDatabaseSettings::GetBuildingRecipes(TArray<FName>& OutRecipeIds)
 {
-#if WITH_EDITOR
-	// In editor, always scan DataTable directly to pick up reimported changes.
-	// Mod entries are layered on top with the same override-wins rule used
-	// in the packaged BuildCaches path.
-	OutRecipeIds.Empty();
-	TSet<FName> Seen;
-
-	// Mod overlay first so mod-overrides-base ID is counted via the mod row.
-	for (const auto& Pair : ModRecipeDefinitions)
-	{
-		if (Pair.Value.bIsBuilding && !Pair.Key.IsNone())
-		{
-			OutRecipeIds.Add(Pair.Key);
-			Seen.Add(Pair.Key);
-		}
-	}
-
-	const UMORecipeDatabaseSettings* Settings = GetDefault<UMORecipeDatabaseSettings>();
-	if (Settings)
-	{
-		if (UDataTable* DataTable = Settings->GetRecipeDefinitionsDataTable())
-		{
-			TArray<FName> AllRecipeIds = DataTable->GetRowNames();
-			OutRecipeIds.Reserve(OutRecipeIds.Num() + AllRecipeIds.Num() / 4);
-
-			for (const FName& RecipeId : AllRecipeIds)
-			{
-				if (Seen.Contains(RecipeId)) continue;  // mod already covered
-
-				const FMORecipeDefinitionRow* Recipe = DataTable->FindRow<FMORecipeDefinitionRow>(RecipeId, TEXT("GetBuildingRecipes"), false);
-				if (Recipe && Recipe->bIsBuilding)
-				{
-					OutRecipeIds.Add(RecipeId);
-				}
-			}
-		}
-	}
-#else
-	// In packaged builds, use cache for performance (already includes mod entries)
+	// EnsureCachesBuilt rebuilds on every call in-editor (picks up DataTable
+	// reimports) and uses the dirty-flag cache in packaged builds. Both paths
+	// include the mod overlay. Previously this query had a bespoke in-editor
+	// scan while the station/category/craftable queries trusted the stale cache
+	// — that divergence WAS H41. Now all four share one freshness policy.
 	EnsureCachesBuilt();
 	OutRecipeIds = BuildingRecipeIds;
-#endif
 }
 
 void UMORecipeDatabaseSettings::GetCraftableRecipes(TArray<FName>& OutRecipeIds)
@@ -223,12 +188,24 @@ void UMORecipeDatabaseSettings::InvalidateCache()
 
 void UMORecipeDatabaseSettings::EnsureCachesBuilt()
 {
+#if WITH_EDITOR
+	// In-editor, always rebuild so DataTable reimports are reflected immediately
+	// across ALL recipe queries (station, building, craftable, category). The
+	// recipe table is small and these queries fire on menu-open, not per-frame,
+	// so the rebuild cost is negligible. Fixes H41 — previously only
+	// GetBuildingRecipes scanned fresh; the others served first-session data for
+	// the rest of the editor process after any reimport.
+	BuildCaches();
+#else
+	// Packaged builds: the table can't change at runtime, so the dirty-flag
+	// cache is authoritative and rebuilt only when explicitly invalidated
+	// (e.g. a mod overlay registers).
 	if (!bCachesDirty)
 	{
 		return;
 	}
-
 	BuildCaches();
+#endif
 }
 
 void UMORecipeDatabaseSettings::BuildCaches()
@@ -291,9 +268,11 @@ void UMORecipeDatabaseSettings::BuildCaches()
 
 	bCachesDirty = false;
 
+	// Verbose, not Log: in-editor EnsureCachesBuilt rebuilds on every recipe
+	// query (H41 freshness), so Log-level here would spam on every menu open.
 	if (ModRecipeDefinitions.Num() > 0)
 	{
-		UE_LOG(LogMOFramework, Log,
+		UE_LOG(LogMOFramework, Verbose,
 			TEXT("[MORecipeDatabaseSettings] Cache built: %d base + %d mod = %d total recipes (%d buildings, %d craftable, %d stations, %d categories)"),
 			BaseRecipeCount, ModRecipeDefinitions.Num(), VisitedIds.Num(),
 			BuildingRecipeIds.Num(), CraftableRecipeIds.Num(),
@@ -301,7 +280,7 @@ void UMORecipeDatabaseSettings::BuildCaches()
 	}
 	else
 	{
-		UE_LOG(LogMOFramework, Log,
+		UE_LOG(LogMOFramework, Verbose,
 			TEXT("[MORecipeDatabaseSettings] Cache built: %d recipes, %d buildings, %d craftable, %d stations, %d categories"),
 			BaseRecipeCount,
 			BuildingRecipeIds.Num(), CraftableRecipeIds.Num(),

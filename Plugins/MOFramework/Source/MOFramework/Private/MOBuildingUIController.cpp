@@ -346,8 +346,8 @@ void UMOBuildingUIController::ShowBuildWidget(AMOBuildableActor* Target)
 
 	// NOTE: Do NOT call SetInputMode() - CommonUI manages input modes
 	// via GetDesiredInputConfig() on the context menu widget.
-	// Focus is set via CommonUI's activation system.
-	WidgetInst->SetKeyboardFocus();
+	// Keyboard focus is claimed by UMOContextMenuBase::NativeConstruct for
+	// every context menu (audit H45) — no per-site SetKeyboardFocus needed.
 
 	UpdateReticleVisibility();
 

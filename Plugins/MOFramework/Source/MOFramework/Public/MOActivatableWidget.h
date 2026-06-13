@@ -154,6 +154,17 @@ public:
 	 */
 	void ClaimFocusForReactivation();
 
+	/**
+	 * True if this widget is an interactive UI surface (menu, modal, dialog,
+	 * panel) — i.e. its desired input mode is Menu, not Game. Passive Game-mode
+	 * overlays (progress bars, tutorial hints, the input stub) return false.
+	 *
+	 * The single source of truth for "is this a menu?" — classify by input
+	 * mode, never by widget class (audit Principle 6: H26/H43). Used by cursor
+	 * policy on activation and by the layout's open-menu count.
+	 */
+	bool IsUISurface() const;
+
 private:
 	/** True when the event's Slate user has keyboard focus inside an editable text widget. */
 	static bool IsKeyboardFocusInEditableText(const FKeyEvent& InKeyEvent);

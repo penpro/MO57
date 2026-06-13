@@ -118,8 +118,33 @@ void UMOGameUIManagerSubsystem::HandleFocusChanging(const FFocusEvent& FocusEven
 		return;
 	}
 
-	MOUI_LOG(this, "OutsideClick", "closing %s", *TopWidget->GetName());
-	TopWidget->DeactivateWidget();
+	// Defer the close to next tick for the same reason the opt-out branch above
+	// defers its focus reclaim: we're inside Slate's in-progress OnFocusChanging
+	// broadcast. Deactivating synchronously runs the widget-underneath's
+	// NativeOnDeactivated → ClaimFocusForReactivation right now, and the in-flight
+	// Mouse focus change then finalizes AFTER it, clobbering the survivor's
+	// reclaimed focus (audit H44). Letting the Mouse focus change complete first,
+	// then deactivating, keeps the survivor focused.
+	MOUI_LOG(this, "OutsideClick", "closing %s next tick", *TopWidget->GetName());
+	TWeakObjectPtr<UMOActivatableWidget> WeakTop(TopWidget);
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().SetTimerForNextTick([WeakTop]()
+		{
+			if (UMOActivatableWidget* Top = WeakTop.Get())
+			{
+				if (Top->IsActivated())
+				{
+					Top->DeactivateWidget();
+				}
+			}
+		});
+	}
+	else
+	{
+		// No world to schedule on — fall back to synchronous close.
+		TopWidget->DeactivateWidget();
+	}
 }
 
 void UMOGameUIManagerSubsystem::RegisterActiveWidget(UMOActivatableWidget* Widget)

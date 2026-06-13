@@ -90,6 +90,29 @@ void UMOContextMenuBase::NativeConstruct()
 		FSlateApplication::Get().RegisterInputPreProcessor(ClickOutsideHandler);
 		MOUI_LOG(this, "ContextMenu", "  %s: registered click-outside handler", *GetName());
 	}
+
+	// H45: claim keyboard focus so the advertised Tab/Escape close (NativeOnKeyDown)
+	// works immediately — without it, key events only reach this menu after the
+	// player clicks it, and a stray Escape under GameAndUI opens the in-game menu
+	// on top of a fresh context menu. Centralized here so EVERY context menu gets
+	// it (previously only the ghost menu claimed focus, at its own spawn site).
+	//
+	// Deferred one tick: at NativeConstruct the Slate tree isn't laid out and the
+	// right-click that spawned us is still settling — a synchronous claim can be
+	// clobbered. Next tick is strictly more reliable for focus.
+	if (UWorld* World = GetWorld())
+	{
+		TWeakObjectPtr<UMOContextMenuBase> WeakThis(this);
+		World->GetTimerManager().SetTimerForNextTick([WeakThis]()
+		{
+			UMOContextMenuBase* Self = WeakThis.Get();
+			if (Self && Self->IsInViewport())
+			{
+				Self->SetKeyboardFocus();
+				MOUI_LOG(Self, "ContextMenu", "  %s: claimed keyboard focus (deferred)", *Self->GetName());
+			}
+		});
+	}
 }
 
 void UMOContextMenuBase::NativeDestruct()

@@ -2,6 +2,7 @@
 
 #include "MOPrimaryGameLayout.h"
 #include "MOFramework.h"
+#include "MOActivatableWidget.h"
 #include "MOGameplayInputStub.h"
 #include "MOUIDebugSubsystem.h"
 #include "CommonActivatableWidget.h"
@@ -239,19 +240,41 @@ int32 UMOPrimaryGameLayout::GetActiveMenuCount() const
 {
 	int32 Count = 0;
 
-	// Count widgets in menu layers (excluding HUD which is always-visible)
-	// IMPORTANT: Exclude RootContentWidget stubs (MOGameplayInputStub) from the count.
-	// Every stack has a stub as its root - it's always "active" but is NOT a menu.
+	// Count only interactive Menu-mode UI surfaces. Two things must NOT count:
+	//   1. The RootContentWidget stub (MOGameplayInputStub) on every layer —
+	//      always "active" but never a menu.
+	//   2. Passive Game-mode overlays (progress bars, tutorial hints) — counting
+	//      them as menus parks input in Menu mode during timed gameplay actions
+	//      and makes the stub defer its cursor/reticle reset (audit H43, and the
+	//      H26/H43 interlock).
+	// Classify by input mode, not by class (Principle 6) — via IsUISurface().
+	//
+	// The stub MUST be excluded by class FIRST: UMOGameplayInputStub's own
+	// GetDesiredInputConfig calls back into GetActiveMenuCount, so probing its
+	// input mode here would recurse infinitely.
 	auto CountLayer = [this, &Count](FGameplayTag LayerTag)
 	{
-		if (const UCommonActivatableWidgetContainerBase* Stack = GetLayerStack(LayerTag))
+		const UCommonActivatableWidgetContainerBase* Stack = GetLayerStack(LayerTag);
+		if (!Stack)
 		{
-			UWidget* ActiveWidget = Stack->GetActiveWidget();
-			if (ActiveWidget && !ActiveWidget->IsA<UMOGameplayInputStub>())
+			return;
+		}
+		UWidget* ActiveWidget = Stack->GetActiveWidget();
+		if (!ActiveWidget || ActiveWidget->IsA<UMOGameplayInputStub>())
+		{
+			return;
+		}
+		if (const UMOActivatableWidget* MOWidget = Cast<UMOActivatableWidget>(ActiveWidget))
+		{
+			// Known MO widget — trust its declared input mode.
+			if (MOWidget->IsUISurface())
 			{
 				Count++;
 			}
+			return;
 		}
+		// Non-MO activatable of unknown policy — preserve prior count-it behavior.
+		Count++;
 	};
 
 	CountLayer(MOUILayerTags::Layer_Game);

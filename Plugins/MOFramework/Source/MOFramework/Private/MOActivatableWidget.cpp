@@ -142,6 +142,12 @@ UWidget* UMOActivatableWidget::NativeGetDesiredFocusTarget() const
 	return Target;
 }
 
+bool UMOActivatableWidget::IsUISurface() const
+{
+	TOptional<FUIInputConfig> Config = GetDesiredInputConfig();
+	return Config.IsSet() && Config->GetInputMode() != ECommonInputMode::Game;
+}
+
 void UMOActivatableWidget::ClaimFocusForReactivation()
 {
 	if (!FSlateApplication::IsInitialized())
@@ -197,13 +203,40 @@ void UMOActivatableWidget::NativeOnActivated()
 		if (Config.IsSet())
 		{
 			const ECommonInputMode Mode = Config->GetInputMode();
-			bool bWantsCursor = (Mode != ECommonInputMode::Game);
-			MOUI_LOG(this, "Activate", "  %s: InputMode=%d wantsCursor=%s -> set bShowMouseCursor=%s (was %s)",
+			const bool bWantsCursor = (Mode != ECommonInputMode::Game);
+
+			// H26: a passive Game-mode overlay (progress bar, tutorial hint)
+			// activating while a menu is open must NOT stomp the cursor the menu
+			// owns. The active-widget registry holds only UI surfaces, so a
+			// non-null topmost means a menu is driving cursor policy — defer to
+			// it. Symmetric with the deactivate path, which already checks the
+			// registry before touching the cursor. UI surfaces always apply
+			// their own policy (they ARE the authority).
+			bool bMayDriveCursor = true;
+			if (!bWantsCursor)
+			{
+				if (UWorld* World = GetWorld())
+				{
+					if (UMOGameUIManagerSubsystem* UISub = World->GetSubsystem<UMOGameUIManagerSubsystem>())
+					{
+						if (UISub->GetTopmostActiveWidget() != nullptr)
+						{
+							bMayDriveCursor = false;
+						}
+					}
+				}
+			}
+
+			MOUI_LOG(this, "Activate", "  %s: InputMode=%d wantsCursor=%s mayDrive=%s -> bShowMouseCursor (was %s)",
 				*GetName(), (int32)Mode,
 				bWantsCursor ? TEXT("YES") : TEXT("no"),
-				bWantsCursor ? TEXT("true") : TEXT("false"),
+				bMayDriveCursor ? TEXT("YES") : TEXT("no — menu owns cursor"),
 				PC->bShowMouseCursor ? TEXT("true") : TEXT("false"));
-			PC->bShowMouseCursor = bWantsCursor;
+
+			if (bMayDriveCursor)
+			{
+				PC->bShowMouseCursor = bWantsCursor;
+			}
 		}
 		else
 		{
