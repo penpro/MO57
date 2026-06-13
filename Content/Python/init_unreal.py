@@ -22,3 +22,12 @@ try:
     log("claude_bridge loaded")
 except Exception as bridge_err:
     log(f"claude_bridge failed to load: {bridge_err}")
+
+# Auto-load the tick-driven sequence runner (multi-frame UI test sequences —
+# see claude_seq.py header and Docs/Agent_PIE_Testing.md §11). Independent slate
+# tick hook; loaded after the bridge so a failure here never blocks command polling.
+try:
+    import claude_seq  # noqa: F401  (registration happens at import)
+    log("claude_seq loaded")
+except Exception as seq_err:
+    log(f"claude_seq failed to load: {seq_err}")

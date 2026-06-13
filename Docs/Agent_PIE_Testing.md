@@ -168,9 +168,13 @@ testing preview-key handling (the #138 close-key suite lives in
 2. **Push/open and test in SEPARATE bridge commands.** CommonUI defers widget
    construction/activation a tick; `set_keyboard_focus()` in the same exec as
    `push_modal_widget`/`open_in_game_menu` silently no-ops (no cached SWidget yet).
-3. **Focus claiming works at the main menu, fails in the in-game world** (viewport
-   capture / input-mode interplay — see #137 H43/M22). Test widget logic at the main
-   menu when possible; in-game key-routing tests need #137 fixed first or a human.
+3. **Programmatic focus claiming works at the main menu, is flaky in the in-game
+   world** (viewport capture / input-mode interplay). Prefer state-query tests
+   in-game (open menu via controller method → assert `GetActiveMenuCount`/cursor)
+   over key-injection; injection tests are most reliable at the main menu. NOTE:
+   #137 is now fixed, so in-game cursor/menu-count behavior is correct — but the
+   *harness's* SetAllUserFocus into a fresh in-game widget can still lose to
+   viewport capture, so guard injections regardless.
 4. **`get_editor_property` only sees `Edit*` or `Blueprint*` UPROPERTYs.** Plain
    `UPROPERTY(meta=(BindWidget))` members (e.g. `OptionsButton`, `SeedInputBox`) are
    invisible to python. Workaround: `unreal.WidgetLibrary.get_all_widgets_of_class`
@@ -180,3 +184,36 @@ testing preview-key handling (the #138 close-key suite lives in
    `atl.T138_state = {...}` — each `py:` exec gets a fresh env, the module survives.
 6. Dynamic delegates accept python callables: `dlg.on_cancelled.add_callable(fn)`;
    `is_bound()` checks survive into asserts (used to prove one-shot delegate clears).
+
+## 12. The sequence runner (claude_seq) — multi-frame tests in ONE file
+
+`Content/Python/claude_seq.py` (auto-loaded by init_unreal, independent slate
+tick hook) drives **generator-based test sequences one step per frame**. This
+replaces the old "Add-Content; Start-Sleep; Add-Content" external orchestration
+for anything that needs frame separation (CommonUI defers construction/activation
+a tick, so push→focus→inject→assert MUST span frames).
+
+Write a file defining `sequence(ctx)` as a generator; each `yield` lets a frame
+pass (`yield N` waits N frames). Submit it through the core bridge:
+
+    py:import claude_seq; claude_seq.run_file(r"C:\path\to\seq_mytest.py")
+
+Results stream to ue_out.txt prefixed `[seq:<name>]`, ending in
+`DONE pass=<n> fail=<n>` (or `FAILED <traceback>` / `ABORTED`). Read them the
+usual way (`Get-Content ue_out.txt -Tail N`). A failing sequence is contained —
+it logs and drops, never crashing the tick (proven: an intentional exception and
+an intentional assert-FAIL both reported cleanly without touching the core bridge).
+
+`ctx` essentials (full list in the file header):
+- `ctx.world/.pc/.pawn` — live-resolved each access (valid across travel/PIE start)
+- `ctx.atl` — agent_test_lib; `ctx.test_subsystem()` — MOUITestSubsystem
+- `ctx.find_class("MOFoo")`, `ctx.all_widgets(cls)`, `ctx.push_modal(cls)`
+- `ctx.simulate_escape()/_tab()/_key(FKey)`
+- `ctx.assert_true(label, cond)` / `ctx.assert_eq(label, a, b)` — record PASS/FAIL
+- `ctx.guard(label, cond)` — like assert but ABORTS the sequence if false; use
+  before injecting Escape so a failed focus precondition can't end PIE
+
+Proven examples (the #137 suite): `%TEMP%\claude\seq_h43.py` (menu-count + cursor
+state, in-game, no injection) and `seq_h41.py` (recipe-query regression). Both run
+green start-to-finish from a single submit. This is the preferred harness for all
+future UI/state verification — reach for it over hand-sequenced bridge commands.
