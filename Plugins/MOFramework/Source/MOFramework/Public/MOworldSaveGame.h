@@ -58,6 +58,10 @@
 #include "MOQuestTypes.h"
 #include "MOWeatherTypes.h"
 #include "MOTerrainModificationSubsystem.h"
+#include "MOSurvivorJobTypes.h"      // (H39) FMOSurvivorJobQueueSaveData
+#include "MOCombatComponent.h"       // (H38) FMOCombatSaveData
+#include "MOGameClockSubsystem.h"    // (H34) FMOGameClockSaveData
+#include "MOResourceDepletionSubsystem.h" // (H37) FMOResourceNodeDepletionSaveEntry
 #include "MOworldSaveGame.generated.h"
 
 USTRUCT(BlueprintType)
@@ -180,6 +184,22 @@ struct FMOPersistedPawnRecord
     /** Recruitment component state (for survivors) */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Components")
     FMORecruitmentSaveData RecruitmentData;
+
+    /**
+     * (H39) Survivor job queue state (queued jobs, home binding). Default-
+     * constructs (bHasValidData=false) for old saves, so ApplySaveDataAuthority
+     * no-ops on legacy records rather than wiping a live queue.
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Components")
+    FMOSurvivorJobQueueSaveData JobQueueData;
+
+    /**
+     * (H38) Combat component state — weapon wear (durability) for main/off hand
+     * and combat decay timer. Persisted so weapon durability survives reload.
+     * Default-constructs for old saves.
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Components")
+    FMOCombatSaveData CombatData;
 
     /** Flag to indicate if component data has been populated (for legacy save compatibility) */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Components")
@@ -386,4 +406,24 @@ public:
      */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|TerrainMod")
     FMOTerrainModificationSaveData TerrainModificationData;
+
+    // --- Game Clock Save Data (H34) ---
+
+    /**
+     * (H34) Game clock state: in-game date/time, TimeScale, and cumulative
+     * real/game-time accumulators. Default-constructs (bIsValid=false) for old
+     * saves, so restore falls back to the clock's fresh-start defaults.
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Clock")
+    FMOGameClockSaveData GameClockData;
+
+    // --- Resource Depletion Save Data (H37) ---
+
+    /**
+     * (H37) Per-resource-node yield depletion + respawn timers. Default-
+     * constructs (bHasValidData=false) for old saves, so a legacy load leaves
+     * the fresh runtime depletion map untouched.
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Resources")
+    FMOResourceDepletionSaveData ResourceDepletionData;
 };

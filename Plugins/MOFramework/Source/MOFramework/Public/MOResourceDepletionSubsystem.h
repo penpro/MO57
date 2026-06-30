@@ -41,6 +41,47 @@ struct MOFRAMEWORK_API FMOResourceYieldRange
 	int32 MaxCount = 5;
 };
 
+/**
+ * (H37) Serializable per-node depletion entry for the save game. Flattens the
+ * runtime TMap<FString, FMOResourceNodeDepletion> into an array of entries so
+ * the depletion state round-trips through USaveGame. The remaining-per-item map
+ * is itself serializable (TMap<FName,int32>), so it is stored directly.
+ */
+USTRUCT(BlueprintType)
+struct MOFRAMEWORK_API FMOResourceNodeDepletionSaveEntry
+{
+	GENERATED_BODY()
+
+	/** Position-based node key (see MakeNodeKey). */
+	UPROPERTY()
+	FString NodeKey;
+
+	/** Remaining counts per ItemId at save time. */
+	UPROPERTY()
+	TMap<FName, int32> RemainingByItem;
+
+	/** Timestamp the node became fully depleted (MinValue if not depleted). */
+	UPROPERTY()
+	FDateTime FullyDepletedAt = FDateTime::MinValue();
+};
+
+/**
+ * (H37) Whole-subsystem depletion save payload. Held in UMOWorldSaveGame.
+ */
+USTRUCT(BlueprintType)
+struct MOFRAMEWORK_API FMOResourceDepletionSaveData
+{
+	GENERATED_BODY()
+
+	/** All tracked node depletion entries. */
+	UPROPERTY()
+	TArray<FMOResourceNodeDepletionSaveEntry> Entries;
+
+	/** True if populated from a real save (vs. default-init / legacy save). */
+	UPROPERTY()
+	bool bHasValidData = false;
+};
+
 /** Per-node depletion state. */
 USTRUCT()
 struct MOFRAMEWORK_API FMOResourceNodeDepletion
@@ -101,6 +142,26 @@ public:
 	/** Stable position-based key for an HISM/ISM instance. */
 	UFUNCTION(BlueprintPure, Category = "Resource Depletion")
 	static FString MakeNodeKey(UInstancedStaticMeshComponent* MeshComp, int32 InstanceIndex);
+
+	// ============================================================================
+	// SAVE / LOAD  (H37)
+	// ============================================================================
+
+	/**
+	 * (H37) Snapshot the current depletion map for persistence. Any caller.
+	 * Prunes already-respawned (expired) entries so stale data isn't saved.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Resource Depletion|Save")
+	void BuildSaveData(FMOResourceDepletionSaveData& OutSaveData) const;
+
+	/**
+	 * (H37) Restore depletion state from a save. Replaces the runtime map.
+	 * No-ops on legacy saves (bHasValidData=false) so a fresh world isn't
+	 * cleared. Expired entries are dropped on restore (nodes that aged past
+	 * RespawnHoursReal come back fresh, matching CheckRespawns semantics).
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Resource Depletion|Save")
+	void ApplySaveDataAuthority(const FMOResourceDepletionSaveData& InSaveData);
 
 	/**
 	 * Hours of real time (not game time) after full depletion before the node

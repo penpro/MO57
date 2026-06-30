@@ -333,6 +333,23 @@ private:
     void CaptureTerrainModificationData(UWorld* World, UMOWorldSaveGame* SaveObject) const;
     void RestoreTerrainModificationData(UWorld* World, const FMOTerrainModificationSaveData& TerrainModData);
 
+    // (H34) Game clock persistence (in-game date/time, TimeScale, accumulators)
+    void CaptureGameClockData(UWorld* World, UMOWorldSaveGame* SaveObject) const;
+    void RestoreGameClockData(UWorld* World, const FMOGameClockSaveData& ClockData);
+
+    // (H37) Resource depletion persistence (per-node yield counts + respawn timers)
+    void CaptureResourceDepletionData(UWorld* World, UMOWorldSaveGame* SaveObject) const;
+    void RestoreResourceDepletionData(UWorld* World, const FMOResourceDepletionSaveData& DepletionData);
+
+    /**
+     * (H30) Shared per-pawn component-state restoration. Applies the 7 component
+     * save blocks (vitals/anatomy/metabolism/mental/skills/equipment/recruitment)
+     * plus combat (H38) and job queue (H39) from a record onto a spawned pawn.
+     * Called by BOTH the full-load path (ApplyInventoriesToSpawnedPawns) and the
+     * possession-menu path (SpawnPawnFromRecord) so the two never diverge.
+     */
+    void ApplyPawnComponentState(APawn* Pawn, const FMOPersistedPawnRecord& Record) const;
+
     // Setup spectator camera above last possessed pawn on load
     void SetupSpectatorCameraForLoad(UWorld* World, const UMOWorldSaveGame* SaveData);
 

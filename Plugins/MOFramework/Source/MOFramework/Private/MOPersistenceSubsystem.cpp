@@ -29,6 +29,8 @@
 #include "MOSkillsComponent.h"
 #include "MOEquipmentComponent.h"
 #include "MORecruitmentComponent.h"
+#include "MOCombatComponent.h"               // (H30/H38) combat weapon-wear restore
+#include "MOSurvivorJobQueueComponent.h"     // (H39) survivor job-queue restore
 #include "MOCreature.h"
 #include "MOBuildableActor.h"
 #include "MOBuildProgressComponent.h"
@@ -38,6 +40,9 @@
 #include "MOQuestSubsystem.h"
 #include "MOWeatherIntegrationSubsystem.h"
 #include "MOTerrainModificationSubsystem.h"
+#include "MOGameClockSubsystem.h"            // (H34) game clock persistence
+#include "MOResourceDepletionSubsystem.h"    // (H37) resource depletion persistence
+#include "MOSpawnManagerSubsystem.h"         // (H35) adopt restored creatures into spawn tracking
 
 // Voxel plugin sculpt persistence
 #include "VoxelMinimal/Utilities/VoxelThreadingUtilities.h"
@@ -748,6 +753,14 @@ APawn* UMOPersistenceSubsystem::SpawnPawnFromRecord(const FGuid& PawnGuid)
         }
     }
 
+    // (H30) Restore the 7 component states (+ combat/jobs) via the SAME routine
+    // the full-load path uses. Before this, the possession-menu spawn skipped
+    // all component restoration, so the character spawned full-healed and
+    // skill-wiped — and the next autosave then captured that wiped state over
+    // the good record. `Record` is a snapshot from GetPawnRecord; component data
+    // lives on it.
+    ApplyPawnComponentState(SpawnedPawn, Record);
+
     UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] SpawnPawnFromRecord: Spawned pawn %s (%s)"),
         *Record.CharacterName, *PawnGuid.ToString());
 
@@ -1104,6 +1117,18 @@ void UMOPersistenceSubsystem::CapturePersistedPawnsAndInventories(UWorld* World,
                 static_cast<int32>(PawnRecord.RecruitmentData.RecruitmentState),
                 PawnRecord.RecruitmentData.bHasValidData ? 1 : 0);
         }
+        // (H38) Capture combat weapon state (durability/wear) so it survives reload.
+        if (UMOCombatComponent* CombatComp = Pawn->FindComponentByClass<UMOCombatComponent>())
+        {
+            CombatComp->BuildSaveData(PawnRecord.CombatData);
+            PawnRecord.bHasComponentData = true;
+        }
+        // (H39) Capture survivor job queue (queued jobs + home binding).
+        if (UMOSurvivorJobQueueComponent* JobQueueComp = Pawn->FindComponentByClass<UMOSurvivorJobQueueComponent>())
+        {
+            JobQueueComp->BuildSaveData(PawnRecord.JobQueueData);
+            PawnRecord.bHasComponentData = true;
+        }
 
         UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] SAVE: Capturing pawn '%s' GUID=%s Name='%s' Class=%s Location=%s ComponentData=%s"),
             *Pawn->GetName(),
@@ -1133,6 +1158,71 @@ void UMOPersistenceSubsystem::CapturePersistedPawnsAndInventories(UWorld* World,
             FMORecipeDiscoverySaveData DiscoverySaveData;
             Discovery->BuildSaveData(DiscoverySaveData);
             SaveObject->PawnDiscoveredRecipesByGuid.Add(PawnGuid, DiscoverySaveData);
+        }
+    }
+
+    // ========================================================================
+    // (H29) MERGE: preserve records for pawns NOT currently in the world.
+    // ------------------------------------------------------------------------
+    // The loop above rebuilt PersistedPawns from LIVE actors only. Records for
+    // pawns that aren't spawned right now — survivors that failed to spawn
+    // ("PAWN LOST", which the load path explicitly anticipates), or simply
+    // pawns the streaming/possession system hasn't instantiated — would be
+    // silently dropped by the next save, permanently destroying that character.
+    //
+    // Re-add any record from the previously-loaded save whose GUID we did NOT
+    // capture from a live actor this pass, along with its inventory / crafting
+    // queue / recipe-discovery side tables. Deceased records are preserved too
+    // (HasLivingPawns / permadeath rely on them persisting).
+    if (LoadedWorldSave)
+    {
+        // GUIDs captured from live actors this pass.
+        TSet<FGuid> CapturedGuids;
+        CapturedGuids.Reserve(SaveObject->PersistedPawns.Num());
+        for (const FMOPersistedPawnRecord& Captured : SaveObject->PersistedPawns)
+        {
+            CapturedGuids.Add(Captured.PawnGuid);
+        }
+
+        int32 PreservedCount = 0;
+        for (const FMOPersistedPawnRecord& ExistingRecord : LoadedWorldSave->PersistedPawns)
+        {
+            if (!ExistingRecord.PawnGuid.IsValid() || CapturedGuids.Contains(ExistingRecord.PawnGuid))
+            {
+                continue; // captured live above, or invalid — skip
+            }
+
+            // Don't resurrect records the player explicitly destroyed this
+            // session (item/pawn deletion ledger). A destroyed-GUID pawn should
+            // stay gone rather than be re-preserved.
+            if (SessionDestroyedGuids.Contains(ExistingRecord.PawnGuid))
+            {
+                continue;
+            }
+
+            SaveObject->PersistedPawns.Add(ExistingRecord);
+            CapturedGuids.Add(ExistingRecord.PawnGuid);
+            ++PreservedCount;
+
+            // Carry over the side tables keyed by this GUID so the preserved
+            // pawn keeps its inventory / queue / discoveries on next load.
+            if (const FMOInventorySaveData* Inv = LoadedWorldSave->PawnInventoriesByGuid.Find(ExistingRecord.PawnGuid))
+            {
+                SaveObject->PawnInventoriesByGuid.Add(ExistingRecord.PawnGuid, *Inv);
+            }
+            if (const FMOCraftingQueueSaveData* Queue = LoadedWorldSave->PawnCraftingQueuesByGuid.Find(ExistingRecord.PawnGuid))
+            {
+                SaveObject->PawnCraftingQueuesByGuid.Add(ExistingRecord.PawnGuid, *Queue);
+            }
+            if (const FMORecipeDiscoverySaveData* Disc = LoadedWorldSave->PawnDiscoveredRecipesByGuid.Find(ExistingRecord.PawnGuid))
+            {
+                SaveObject->PawnDiscoveredRecipesByGuid.Add(ExistingRecord.PawnGuid, *Disc);
+            }
+        }
+
+        if (PreservedCount > 0)
+        {
+            UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] SAVE: (H29) preserved %d unspawned pawn record(s) not present in the live world"), PreservedCount);
         }
     }
 
@@ -1373,6 +1463,93 @@ void UMOPersistenceSubsystem::RespawnPersistedPawns(UWorld* World, const TArray<
     }
 }
 
+void UMOPersistenceSubsystem::ApplyPawnComponentState(APawn* Pawn, const FMOPersistedPawnRecord& PawnRecord) const
+{
+    // (H30) Single shared "restore component state" routine. This is the ONLY
+    // place that replays the live-load component restoration, so the full-load
+    // path and the possession-menu spawn path can never drift (the bug: spawn
+    // path full-healed + skill-wiped, then the next save overwrote the good
+    // record). Mirrors exactly the BuildSaveData captures in
+    // CapturePersistedPawnsAndInventories.
+    if (!IsValid(Pawn))
+    {
+        return;
+    }
+
+    if (!PawnRecord.bHasComponentData)
+    {
+        // Legacy record with no component data — nothing to apply. (H38/H39
+        // JobQueueData/CombatData also default to invalid here, so they no-op.)
+        return;
+    }
+
+    // Apply vitals
+    if (UMOVitalsComponent* VitalsComp = Pawn->FindComponentByClass<UMOVitalsComponent>())
+    {
+        VitalsComp->ApplySaveDataAuthority(PawnRecord.VitalsData);
+    }
+    // Apply anatomy
+    if (UMOAnatomyComponent* AnatomyComp = Pawn->FindComponentByClass<UMOAnatomyComponent>())
+    {
+        AnatomyComp->ApplySaveDataAuthority(PawnRecord.AnatomyData);
+    }
+    // Apply metabolism
+    if (UMOMetabolismComponent* MetabolismComp = Pawn->FindComponentByClass<UMOMetabolismComponent>())
+    {
+        MetabolismComp->ApplySaveDataAuthority(PawnRecord.MetabolismData);
+    }
+    // Apply mental state
+    if (UMOMentalStateComponent* MentalStateComp = Pawn->FindComponentByClass<UMOMentalStateComponent>())
+    {
+        MentalStateComp->ApplySaveDataAuthority(PawnRecord.MentalStateData);
+    }
+    // Apply skills
+    if (UMOSkillsComponent* SkillsComp = Pawn->FindComponentByClass<UMOSkillsComponent>())
+    {
+        SkillsComp->ApplySaveData(PawnRecord.SkillsData);
+    }
+    // Apply equipment
+    if (UMOEquipmentComponent* EquipmentComp = Pawn->FindComponentByClass<UMOEquipmentComponent>())
+    {
+        EquipmentComp->ApplySaveData(PawnRecord.EquipmentData);
+    }
+    // Apply recruitment state
+    if (UMORecruitmentComponent* RecruitmentComp = Pawn->FindComponentByClass<UMORecruitmentComponent>())
+    {
+        const bool bHadValidData = PawnRecord.RecruitmentData.bHasValidData;
+        const int32 SavedState = static_cast<int32>(PawnRecord.RecruitmentData.RecruitmentState);
+        const bool bApplied = RecruitmentComp->ApplySaveDataAuthority(PawnRecord.RecruitmentData);
+        const int32 FinalState = static_cast<int32>(RecruitmentComp->RecruitmentState);
+
+        UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Recruitment state: GUID=%s, SavedValid=%d, SavedState=%d, Applied=%d, FinalState=%d"),
+            *PawnRecord.PawnGuid.ToString(EGuidFormats::Short), bHadValidData ? 1 : 0, SavedState, bApplied ? 1 : 0, FinalState);
+    }
+    else
+    {
+        UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] No RecruitmentComponent on pawn GUID=%s"),
+            *PawnRecord.PawnGuid.ToString(EGuidFormats::Short));
+    }
+
+    // (H38) Apply combat weapon state (durability/wear). Orphaned before — combat
+    // wear evaporated every reload. Only applies if the record carried combat
+    // data (old saves default-construct to zeroed weapons; ApplySaveDataAuthority
+    // overwrites the live weapon, but a pawn with no combat component is skipped).
+    if (UMOCombatComponent* CombatComp = Pawn->FindComponentByClass<UMOCombatComponent>())
+    {
+        CombatComp->ApplySaveDataAuthority(PawnRecord.CombatData);
+    }
+
+    // (H39) Apply survivor job queue (queued jobs + home binding). No-ops on
+    // records saved before this field existed (bHasValidData=false).
+    if (UMOSurvivorJobQueueComponent* JobQueueComp = Pawn->FindComponentByClass<UMOSurvivorJobQueueComponent>())
+    {
+        JobQueueComp->ApplySaveDataAuthority(PawnRecord.JobQueueData);
+    }
+
+    UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Applied component state data to pawn GUID=%s"),
+        *PawnRecord.PawnGuid.ToString(EGuidFormats::Short));
+}
+
 void UMOPersistenceSubsystem::ApplyInventoriesToSpawnedPawns(UWorld* World, const TMap<FGuid, FMOInventorySaveData>& PawnInventoriesByGuid)
 {
     if (!World || World->GetNetMode() == NM_Client)
@@ -1446,60 +1623,13 @@ void UMOPersistenceSubsystem::ApplyInventoriesToSpawnedPawns(UWorld* World, cons
                 }
             }
 
-            // Apply component state data from pawn record
+            // (H30) Apply component state data from pawn record via the shared
+            // routine (also used by SpawnPawnFromRecord, so the two paths match).
             for (const FMOPersistedPawnRecord& PawnRecord : LoadedWorldSave->PersistedPawns)
             {
                 if (PawnRecord.PawnGuid == PawnGuid && PawnRecord.bHasComponentData)
                 {
-                    // Apply vitals
-                    if (UMOVitalsComponent* VitalsComp = Pawn->FindComponentByClass<UMOVitalsComponent>())
-                    {
-                        VitalsComp->ApplySaveDataAuthority(PawnRecord.VitalsData);
-                    }
-                    // Apply anatomy
-                    if (UMOAnatomyComponent* AnatomyComp = Pawn->FindComponentByClass<UMOAnatomyComponent>())
-                    {
-                        AnatomyComp->ApplySaveDataAuthority(PawnRecord.AnatomyData);
-                    }
-                    // Apply metabolism
-                    if (UMOMetabolismComponent* MetabolismComp = Pawn->FindComponentByClass<UMOMetabolismComponent>())
-                    {
-                        MetabolismComp->ApplySaveDataAuthority(PawnRecord.MetabolismData);
-                    }
-                    // Apply mental state
-                    if (UMOMentalStateComponent* MentalStateComp = Pawn->FindComponentByClass<UMOMentalStateComponent>())
-                    {
-                        MentalStateComp->ApplySaveDataAuthority(PawnRecord.MentalStateData);
-                    }
-                    // Apply skills
-                    if (UMOSkillsComponent* SkillsComp = Pawn->FindComponentByClass<UMOSkillsComponent>())
-                    {
-                        SkillsComp->ApplySaveData(PawnRecord.SkillsData);
-                    }
-                    // Apply equipment
-                    if (UMOEquipmentComponent* EquipmentComp = Pawn->FindComponentByClass<UMOEquipmentComponent>())
-                    {
-                        EquipmentComp->ApplySaveData(PawnRecord.EquipmentData);
-                    }
-                    // Apply recruitment state
-                    if (UMORecruitmentComponent* RecruitmentComp = Pawn->FindComponentByClass<UMORecruitmentComponent>())
-                    {
-                        const bool bHadValidData = PawnRecord.RecruitmentData.bHasValidData;
-                        const int32 SavedState = static_cast<int32>(PawnRecord.RecruitmentData.RecruitmentState);
-                        const bool bApplied = RecruitmentComp->ApplySaveDataAuthority(PawnRecord.RecruitmentData);
-                        const int32 FinalState = static_cast<int32>(RecruitmentComp->RecruitmentState);
-
-                        UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Recruitment state: GUID=%s, SavedValid=%d, SavedState=%d, Applied=%d, FinalState=%d"),
-                            *PawnGuid.ToString(EGuidFormats::Short), bHadValidData ? 1 : 0, SavedState, bApplied ? 1 : 0, FinalState);
-                    }
-                    else
-                    {
-                        UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] No RecruitmentComponent on pawn GUID=%s"),
-                            *PawnGuid.ToString(EGuidFormats::Short));
-                    }
-
-                    UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Applied component state data to pawn GUID=%s"),
-                        *PawnGuid.ToString(EGuidFormats::Short));
+                    ApplyPawnComponentState(Pawn, PawnRecord);
                     break;
                 }
             }

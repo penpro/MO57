@@ -188,6 +188,77 @@ int32 UMOResourceDepletionSubsystem::RollInitialCount(FName ItemId) const
 	return FMath::RandRange(Range->MinCount, Range->MaxCount);
 }
 
+// ============================================================================
+// SAVE / LOAD  (H37)
+// ============================================================================
+
+void UMOResourceDepletionSubsystem::BuildSaveData(FMOResourceDepletionSaveData& OutSaveData) const
+{
+	OutSaveData.Entries.Reset();
+
+	// Same expiry rule as CheckRespawns: don't persist entries that have already
+	// respawned — they'd just be pruned on next sweep anyway, and persisting them
+	// would needlessly re-suppress a node that should be fresh.
+	const FDateTime Now = FDateTime::Now();
+	const FTimespan RespawnDuration = FTimespan::FromHours(RespawnHoursReal);
+
+	for (const TPair<FString, FMOResourceNodeDepletion>& Pair : DepletionMap)
+	{
+		const FMOResourceNodeDepletion& State = Pair.Value;
+
+		if (State.FullyDepletedAt != FDateTime::MinValue() &&
+			(Now - State.FullyDepletedAt) >= RespawnDuration)
+		{
+			continue; // already respawned — skip
+		}
+
+		FMOResourceNodeDepletionSaveEntry Entry;
+		Entry.NodeKey = Pair.Key;
+		Entry.RemainingByItem = State.RemainingByItem;
+		Entry.FullyDepletedAt = State.FullyDepletedAt;
+		OutSaveData.Entries.Add(MoveTemp(Entry));
+	}
+
+	OutSaveData.bHasValidData = true;
+
+	UE_LOG(LogMOFramework, Log, TEXT("[ResourceDepletion] BuildSaveData: %d node(s) captured"), OutSaveData.Entries.Num());
+}
+
+void UMOResourceDepletionSubsystem::ApplySaveDataAuthority(const FMOResourceDepletionSaveData& InSaveData)
+{
+	if (!InSaveData.bHasValidData)
+	{
+		// Legacy save (no depletion field) — leave the fresh runtime map untouched.
+		return;
+	}
+
+	DepletionMap.Empty(InSaveData.Entries.Num());
+
+	const FDateTime Now = FDateTime::Now();
+	const FTimespan RespawnDuration = FTimespan::FromHours(RespawnHoursReal);
+	int32 Restored = 0;
+
+	for (const FMOResourceNodeDepletionSaveEntry& Entry : InSaveData.Entries)
+	{
+		// Drop entries that aged past respawn while the game was closed — they
+		// come back as "not tracked" (fresh), matching the header's documented
+		// "game closed -> reopened" behavior.
+		if (Entry.FullyDepletedAt != FDateTime::MinValue() &&
+			(Now - Entry.FullyDepletedAt) >= RespawnDuration)
+		{
+			continue;
+		}
+
+		FMOResourceNodeDepletion& State = DepletionMap.FindOrAdd(Entry.NodeKey);
+		State.RemainingByItem = Entry.RemainingByItem;
+		State.FullyDepletedAt = Entry.FullyDepletedAt;
+		++Restored;
+	}
+
+	UE_LOG(LogMOFramework, Log, TEXT("[ResourceDepletion] ApplySaveDataAuthority: restored %d of %d saved node(s)"),
+		Restored, InSaveData.Entries.Num());
+}
+
 void UMOResourceDepletionSubsystem::CheckRespawns()
 {
 	if (DepletionMap.Num() == 0) return;
