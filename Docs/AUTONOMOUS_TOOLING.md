@@ -68,8 +68,14 @@ Content-fix loop (proven): `DataTableTools.get_rows` → mutate JSON →
 - `DataTableTools.set_rows` — **wrote** a nested-struct-array fix to 10 rows;
   FText/NSLOCTEXT + arrays round-tripped intact.
 - `AssetTools.save_assets` — persisted to disk (confirmed via git).
+- `DataTableTools.add_rows` (creates blank rows by name) + `set_rows` —
+  **authored 33 brand-new rows from scratch** (22 body parts + 11 medical
+  items); enum fields, NSLOCTEXT names, and nested vectors all round-trip.
 - Reads RUNTIME ground truth → caught CSV↔DataTable drift (H40a already fixed
   in DT_Quests; only the CSV was stale).
+
+Note: `add_rows` takes `{data_table, row_names[]}` ONLY (no values) — it makes
+blanks; populate them with a following `set_rows`. Different shape from `set_rows`.
 
 **MISSES / FRICTION**
 - Harness MCP client did not auto-reconnect on editor reopen (server fine) → curl workaround.
@@ -78,10 +84,18 @@ Content-fix loop (proven): `DataTableTools.get_rows` → mutate JSON →
 - `returnValue` is double-nested (`content[0].text` → `{"returnValue": "<json string>"}` → parse again).
 - **Python `urllib` gets an empty body for `tools/call`** (SSE/chunked handling) — the HTTP client must shell out to `curl`.
 
-## Implications for #136 (data integrity)
-Much of the audit's #136 was CSV-based and partly stale. The correct pass is
-verify-via-MCP against the live DataTables: H40a already correct; **H40c
-fixed** (this commit); remaining — H40d (6 item-ids-used-as-knowledge gates →
-"None" or real knowledge id; design call), M21 (treatment item refs, 22 missing
-body-part rows), H40b (`SnareSettin` knowledge typo). All MCP-doable now that the
-read/write/save loop is proven.
+## #136 (data integrity) — COMPLETE via MCP
+The CSV-based audit was partly stale; the real pass was verify-via-MCP against
+the live DataTables, all done:
+- **H40a** — verified already-correct (BuildCampfire id was right in DT_Quests; CSV drift).
+- **H40b** — verified self-consistent (`SnareWire01` grants `SnareSettin`, which IS the consumed id; ugly but not broken).
+- **H40c** — phantom harvest skills (Woodcutting/Mining/Knapping) remapped to real skills.
+- **H40d** — 8 harvest actions hard-gated on non-existent knowledge → ungated (`NAME_None`).
+- **M21** — 22 missing body-part rows (kidneys/fingers/toes) + 11 missing medical items authored via `add_rows`.
+
+Final re-scan: zero broken knowledge gates, zero dangling treatment item refs.
+
+FOLLOW-ON (gameplay content, NOT data integrity): the 11 medical items have no
+production chain — they need recipes/loot to be obtainable, and treatment-consume
+logic should keep the reusable splint/blanket/tourniquet. Icons/meshes are
+placeholder pending art.
