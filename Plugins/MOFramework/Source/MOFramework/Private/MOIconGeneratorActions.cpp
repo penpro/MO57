@@ -59,7 +59,7 @@ struct FMOIconGeneratorActionsRegistrar
 		// Delay registration until menus are ready
 		if (!IsRunningCommandlet())
 		{
-			FCoreDelegates::OnPostEngineInit.AddLambda([]()
+			FCoreDelegates::GetOnPostEngineInit().AddLambda([]()
 			{
 				FMOIconGeneratorActions::RegisterMenus();
 			});
