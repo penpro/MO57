@@ -295,6 +295,8 @@ bool UMOPersistenceSubsystem::SaveWorldToSlot(const FString& SlotName)
     CaptureQuestData(SaveObject);
     CaptureWeatherData(World, SaveObject);
     CaptureTerrainModificationData(World, SaveObject);
+    CaptureGameClockData(World, SaveObject);          // (H34) in-game date/time, TimeScale, accumulators
+    CaptureResourceDepletionData(World, SaveObject);  // (H37) per-node yield depletion + respawn timers
 
     const bool bOk = UGameplayStatics::SaveGameToSlot(SaveObject, SlotName, 0);
 
@@ -539,6 +541,8 @@ FMOLoadResult UMOPersistenceSubsystem::LoadWorldFromSlotWithResult(const FString
     RestoreQuestData(LoadedTyped->QuestData);
     RestoreWeatherData(World, LoadedTyped->WeatherData);
     RestoreTerrainModificationData(World, LoadedTyped->TerrainModificationData);
+    RestoreGameClockData(World, LoadedTyped->GameClockData);                 // (H34)
+    RestoreResourceDepletionData(World, LoadedTyped->ResourceDepletionData); // (H37)
 
     ApplyInventoriesToSpawnedPawns(World, LoadedTyped->PawnInventoriesByGuid);
 
@@ -2642,4 +2646,93 @@ void UMOPersistenceSubsystem::RestoreTerrainModificationData(UWorld* World, cons
 
     UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Restored terrain modification data: %d zone(s)"),
         TerrainModData.Zones.Num());
+}
+
+// ============================================================================
+// GAME CLOCK PERSISTENCE  (H34)
+// ============================================================================
+
+void UMOPersistenceSubsystem::CaptureGameClockData(UWorld* World, UMOWorldSaveGame* SaveObject) const
+{
+    if (!SaveObject || !World)
+    {
+        return;
+    }
+
+    UMOGameClockSubsystem* Clock = UMOGameClockSubsystem::Get(World);
+    if (!Clock)
+    {
+        UE_LOG(LogMOFramework, Verbose, TEXT("[MOPersist] CaptureGameClockData: No game clock subsystem"));
+        return;
+    }
+
+    SaveObject->GameClockData = Clock->BuildSaveData();
+
+    UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Captured game clock data (GameDateTime=%s, TimeScale=%.2f)"),
+        *SaveObject->GameClockData.GameDateTime.ToString(), SaveObject->GameClockData.TimeScale);
+}
+
+void UMOPersistenceSubsystem::RestoreGameClockData(UWorld* World, const FMOGameClockSaveData& ClockData)
+{
+    if (!World)
+    {
+        return;
+    }
+
+    UMOGameClockSubsystem* Clock = UMOGameClockSubsystem::Get(World);
+    if (!Clock)
+    {
+        UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] RestoreGameClockData: No game clock subsystem"));
+        return;
+    }
+
+    // ApplySaveData no-ops internally on legacy/fresh saves (bIsValid=false),
+    // leaving the clock at its fresh-start defaults.
+    Clock->ApplySaveData(ClockData);
+
+    UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Restored game clock data"));
+}
+
+// ============================================================================
+// RESOURCE DEPLETION PERSISTENCE  (H37)
+// ============================================================================
+
+void UMOPersistenceSubsystem::CaptureResourceDepletionData(UWorld* World, UMOWorldSaveGame* SaveObject) const
+{
+    if (!SaveObject || !World)
+    {
+        return;
+    }
+
+    UMOResourceDepletionSubsystem* Subsystem = World->GetSubsystem<UMOResourceDepletionSubsystem>();
+    if (!Subsystem)
+    {
+        UE_LOG(LogMOFramework, Verbose, TEXT("[MOPersist] CaptureResourceDepletionData: No resource-depletion subsystem"));
+        return;
+    }
+
+    Subsystem->BuildSaveData(SaveObject->ResourceDepletionData);
+
+    UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Captured resource depletion data: %d node(s)"),
+        SaveObject->ResourceDepletionData.Entries.Num());
+}
+
+void UMOPersistenceSubsystem::RestoreResourceDepletionData(UWorld* World, const FMOResourceDepletionSaveData& DepletionData)
+{
+    if (!World)
+    {
+        return;
+    }
+
+    UMOResourceDepletionSubsystem* Subsystem = World->GetSubsystem<UMOResourceDepletionSubsystem>();
+    if (!Subsystem)
+    {
+        UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] RestoreResourceDepletionData: No resource-depletion subsystem"));
+        return;
+    }
+
+    Subsystem->ApplySaveDataAuthority(DepletionData);
+
+    UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Restored resource depletion data: %d node(s)"),
+        DepletionData.Entries.Num());
 }
