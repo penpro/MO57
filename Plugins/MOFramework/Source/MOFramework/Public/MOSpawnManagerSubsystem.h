@@ -214,6 +214,16 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Spawn Manager")
 	static FString GenerateRandomSurvivorName();
 
+	/**
+	 * (H35) Adopt an already-spawned pawn (e.g. a persistence-restored creature)
+	 * into spawn tracking so it counts toward population caps, FIFO despawn, and
+	 * AI-freeze. Resolves the pawn's category from its class via the configs;
+	 * no-ops if the class matches no managed category or the pawn is already
+	 * tracked. Idempotent.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Spawn Manager")
+	void AdoptRestoredEntity(APawn* Pawn);
+
 protected:
 	// ============================================================================
 	// RUNTIME STATE

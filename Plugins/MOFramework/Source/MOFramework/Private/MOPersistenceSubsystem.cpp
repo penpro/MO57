@@ -1450,6 +1450,19 @@ void UMOPersistenceSubsystem::RespawnPersistedPawns(UWorld* World, const TArray<
         UGameplayStatics::FinishSpawningActor(DeferredPawn, PawnRecord.Transform);
         OutResult.PawnsLoaded++;
 
+        // (H35) Adopt restored creatures into spawn tracking so they count toward
+        // population caps / FIFO despawn / AI-freeze — otherwise every save/load
+        // cycle compounds the creature population. Survivors keep their
+        // recruitment-managed handling; the player matches no spawn category and
+        // is skipped inside AdoptRestoredEntity.
+        if (DeferredPawn->IsA<AMOCreature>())
+        {
+            if (UMOSpawnManagerSubsystem* SpawnMgr = World->GetSubsystem<UMOSpawnManagerSubsystem>())
+            {
+                SpawnMgr->AdoptRestoredEntity(DeferredPawn);
+            }
+        }
+
         // [DIAG] log final location AND scale after FinishSpawningActor. If
         // scale doesn't match the requested scale, something in BeginPlay
         // (ApplyAppearance, ApplyBodyParameters) is reapplying it.

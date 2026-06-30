@@ -403,6 +403,60 @@ APawn* UMOSpawnManagerSubsystem::ForceSpawnAtLocation(EMOSpawnCategory Category,
 	return SpawnedPawn;
 }
 
+void UMOSpawnManagerSubsystem::AdoptRestoredEntity(APawn* Pawn)
+{
+	if (!IsValid(Pawn))
+	{
+		return;
+	}
+
+	// Idempotent: never double-track a pawn we already spawned or adopted.
+	for (const FMOSpawnedEntityRecord& Record : SpawnedEntities)
+	{
+		if (Record.SpawnedPawn.Get() == Pawn)
+		{
+			return;
+		}
+	}
+
+	// Resolve the spawn category from the pawn's class via the configs. A pawn
+	// whose class matches no managed category (e.g. the player) is left untracked.
+	EMOSpawnCategory Category = EMOSpawnCategory::Survivor;
+	bool bFoundCategory = false;
+	for (const FMOSpawnCategoryConfig& Config : CategoryConfigs)
+	{
+		for (const TSubclassOf<APawn>& SpawnClass : Config.SpawnableClasses)
+		{
+			if (SpawnClass && Pawn->IsA(SpawnClass))
+			{
+				Category = Config.Category;
+				bFoundCategory = true;
+				break;
+			}
+		}
+		if (bFoundCategory)
+		{
+			break;
+		}
+	}
+
+	if (!bFoundCategory)
+	{
+		UE_LOG(LogMOFramework, Verbose, TEXT("[SpawnManager] (H35) AdoptRestoredEntity: %s matches no spawn category — left untracked"), *Pawn->GetName());
+		return;
+	}
+
+	// Mirror the live spawn path: track, then freeze if the category starts frozen.
+	SpawnedEntities.Add(FMOSpawnedEntityRecord(Pawn, Category));
+	if (ShouldFreezeCategory(Category))
+	{
+		FreezeSpawnedPawn(SpawnedEntities.Last());
+	}
+
+	UE_LOG(LogMOFramework, Log, TEXT("[SpawnManager] (H35) Adopted restored %s into category %d (%d tracked)"),
+		*Pawn->GetName(), static_cast<int32>(Category), SpawnedEntities.Num());
+}
+
 bool UMOSpawnManagerSubsystem::DespawnOldest(EMOSpawnCategory Category)
 {
 	APawn* PlayerPawn = GetPlayerPawn();
