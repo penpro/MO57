@@ -5,6 +5,8 @@
 #include "MOInventoryComponent.h"
 #include "MOWorldItem.h"
 #include "MOItemComponent.h"
+#include "MOInteractorComponent.h"
+#include "GameFramework/Pawn.h"
 #include "Components/TextBlock.h"
 #include "Engine/Engine.h"
 
@@ -142,33 +144,27 @@ bool UMONearbyItemsPanel::PickupItem(AMOWorldItem* WorldItem, UMOInventoryCompon
 		return false;
 	}
 
-	// Try to add item to inventory
-	FGuid NewItemGuid = FGuid::NewGuid();
-	bool bSuccess = TargetInventory->AddItemByGuid(NewItemGuid, ItemComp->ItemDefinitionId, ItemComp->Quantity);
-
-	if (bSuccess)
+	// Route through the canonical authoritative pickup (preserves GUID identity,
+	// replicates the actor's disappearance) instead of a client-side GUID mint +
+	// add + non-replicated Destroy/Hide (H21).
+	UMOInteractorComponent* Interactor = nullptr;
+	if (APawn* OwningPawn = GetOwningPlayerPawn())
 	{
-		// Remove from cached list
-		CachedNearbyItems.Remove(WorldItem);
-
-		// Broadcast pickup event
-		OnItemPickedUp.Broadcast(WorldItem, TargetInventory);
-
-		// Destroy or hide the world item
-		if (WorldItem->bDestroyAfterPickup)
-		{
-			WorldItem->Destroy();
-		}
-		else
-		{
-			WorldItem->SetActorHiddenInGame(true);
-			WorldItem->SetActorEnableCollision(false);
-		}
-
-		UpdateEmptyState();
+		Interactor = OwningPawn->FindComponentByClass<UMOInteractorComponent>();
 	}
+	if (!Interactor)
+	{
+		return false;
+	}
+	Interactor->RequestInteractWithActor(WorldItem);
 
-	return bSuccess;
+	// Optimistic UI: drop from the nearby list now; replication finalizes the
+	// actor's removal on every client.
+	CachedNearbyItems.Remove(WorldItem);
+	OnItemPickedUp.Broadcast(WorldItem, TargetInventory);
+	UpdateEmptyState();
+
+	return true;
 }
 
 int32 UMONearbyItemsPanel::LootAllToInventory(UMOInventoryComponent* TargetInventory)

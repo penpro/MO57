@@ -236,6 +236,14 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Interaction")
 	bool TryInteract();
 
+	/**
+	 * Request the server to interact with a SPECIFIC, already-resolved actor (e.g. a
+	 * UI-driven pickup of a known world item, where no re-trace is wanted). Locally
+	 * controlled clients route through the authoritative ServerRequestInteract.
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Interaction")
+	void RequestInteractWithActor(AActor* TargetActor);
+
 	/** Try secondary interaction with whatever we're looking at. */
 	UFUNCTION(BlueprintCallable, Category="MO|Interaction")
 	bool TrySecondaryInteract();

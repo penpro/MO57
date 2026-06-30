@@ -336,6 +336,24 @@ bool UMOInteractorComponent::TryInteract()
 	return true;
 }
 
+void UMOInteractorComponent::RequestInteractWithActor(AActor* TargetActor)
+{
+	if (!IsValid(TargetActor))
+	{
+		return;
+	}
+
+	// UI/Blueprint may call this on the owning client; route to the authoritative
+	// server RPC exactly like TryInteract does, but for an already-resolved target.
+	APawn* OwnerPawn = Cast<APawn>(GetOwner());
+	if (!OwnerPawn || !OwnerPawn->IsLocallyControlled())
+	{
+		return;
+	}
+
+	ServerRequestInteract(TargetActor);
+}
+
 void UMOInteractorComponent::ServerRequestInteract_Implementation(AActor* TargetActor)
 {
 	UWorld* World = GetWorld();

@@ -20,6 +20,8 @@
 #include "MODragVisualWidget.h"
 #include "MOWorldItem.h"
 #include "MOItemComponent.h"
+#include "MOInteractorComponent.h"
+#include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/Pawn.h"
 #include "CollisionQueryParams.h"
@@ -507,36 +509,28 @@ bool UMOInventorySlot::NativeOnDrop(const FGeometry& InGeometry, const FDragDrop
 			return false;
 		}
 
-		// Pick up the world item into the target inventory
+		// Pick up the world item through the canonical authoritative path: the pawn's
+		// interactor Server RPC preserves the world-item GUID into the inventory entry
+		// and replicates the actor's disappearance -- no client-side GUID mint, no
+		// non-replicated Destroy/Hide (H21).
 		UMOItemComponent* ItemComp = DraggedWorldItem->GetItemComponent();
 		if (!IsValid(ItemComp))
 		{
 			return false;
 		}
 
-		// Generate a new GUID for the picked up item
-		FGuid NewItemGuid = FGuid::NewGuid();
-		bool bAdded = InventoryComponent->AddItemByGuid(NewItemGuid, ItemComp->ItemDefinitionId, ItemComp->Quantity);
-
-		if (bAdded)
+		if (APawn* OwningPawn = GetOwningPlayerPawn())
 		{
-			// Destroy or hide the world item
-			if (DraggedWorldItem->bDestroyAfterPickup)
+			if (UMOInteractorComponent* Interactor = OwningPawn->FindComponentByClass<UMOInteractorComponent>())
 			{
-				DraggedWorldItem->Destroy();
-			}
-			else
-			{
-				DraggedWorldItem->SetActorHiddenInGame(true);
-				DraggedWorldItem->SetActorEnableCollision(false);
+				Interactor->RequestInteractWithActor(DraggedWorldItem);
 			}
 		}
 
-		// Refresh this slot
+		// Inventory/world-item replication drives the actual update; refresh the view.
 		RefreshFromInventory();
 
 		// Broadcast drop received so parent widgets can refresh (e.g., nearby items panel)
-		// Using nullptr for SourceInventory since this came from a world item
 		OnSlotDropReceived.Broadcast(TargetSlot, SourceSlot, nullptr);
 		return true;
 	}

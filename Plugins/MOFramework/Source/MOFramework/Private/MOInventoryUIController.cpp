@@ -9,6 +9,7 @@
 #include "MOInventoryComponent.h"
 #include "MOWorldItem.h"
 #include "MOItemComponent.h"
+#include "MOInteractorComponent.h"
 #include "MOSurvivalStatsComponent.h"
 #include "MOInventoryHolderInterface.h"
 #include "MOIdentifiableInterface.h"
@@ -474,6 +475,18 @@ int32 UMOInventoryUIController::LootAllNearbyItems()
 	TArray<AMOWorldItem*> NearbyItems = QueryNearbyWorldItems();
 	int32 LootedCount = 0;
 
+	// Resolve the pawn's interactor once; route each pickup through the canonical
+	// authoritative path (preserves GUID identity, replicates the actor's
+	// disappearance) instead of minting a GUID + client-side add + Destroy/Hide (H21).
+	UMOInteractorComponent* Interactor = nullptr;
+	if (APlayerController* PC = ResolveOwningPlayerController())
+	{
+		if (APawn* Pawn = PC->GetPawn())
+		{
+			Interactor = Pawn->FindComponentByClass<UMOInteractorComponent>();
+		}
+	}
+
 	for (AMOWorldItem* WorldItem : NearbyItems)
 	{
 		if (!IsValid(WorldItem))
@@ -481,47 +494,16 @@ int32 UMOInventoryUIController::LootAllNearbyItems()
 			continue;
 		}
 
-		// Get item info from the world item
 		UMOItemComponent* ItemComp = WorldItem->GetItemComponent();
 		if (!IsValid(ItemComp))
 		{
 			continue;
 		}
 
-		// Get identity for GUID
-		FGuid ItemGuid;
-		if (WorldItem->Implements<UMOIdentifiableInterface>())
+		if (Interactor)
 		{
-			ItemGuid = IMOIdentifiableInterface::Execute_GetPersistentGuid(WorldItem);
-		}
-
-		if (!ItemGuid.IsValid())
-		{
-			// Generate a new GUID for this item
-			ItemGuid = FGuid::NewGuid();
-		}
-
-		// Add to inventory
-		bool bAdded = InventoryComponent->AddItemByGuid(
-			ItemGuid,
-			ItemComp->ItemDefinitionId,
-			ItemComp->Quantity
-		);
-
-		if (bAdded)
-		{
+			Interactor->RequestInteractWithActor(WorldItem);
 			LootedCount++;
-
-			// Hide or destroy the world item based on its settings
-			if (WorldItem->bDestroyAfterPickup)
-			{
-				WorldItem->Destroy();
-			}
-			else if (WorldItem->bHideOnPickup)
-			{
-				WorldItem->SetActorHiddenInGame(true);
-				WorldItem->SetActorEnableCollision(false);
-			}
 		}
 	}
 
@@ -1010,32 +992,18 @@ void UMOInventoryUIController::HandleContextMenuAction(FName ActionId, const FGu
 			return;
 		}
 
-		// Add to player inventory
-		FGuid NewItemGuid = FGuid::NewGuid();
-		bool bAdded = InventoryComponent->AddItemByGuid(NewItemGuid, ItemComp->ItemDefinitionId, ItemComp->Quantity);
-
-		if (bAdded)
+		// Route through the canonical authoritative pickup (preserves GUID identity,
+		// replicates the actor's disappearance) instead of a client-side GUID mint +
+		// add + non-replicated Destroy/Hide (H21). Success is async (server-side);
+		// an inventory-full toast, if wanted, should come from a server->client notify.
+		if (APlayerController* PC = ResolveOwningPlayerController())
 		{
-			UE_LOG(LogMOFramework, Log, TEXT("[MOInventoryUI] Pickup action - picked up %s x%d"),
-				*ItemComp->ItemDefinitionId.ToString(), ItemComp->Quantity);
-
-			// Hide or destroy the world item
-			if (WorldItem->bDestroyAfterPickup)
+			if (APawn* Pawn = PC->GetPawn())
 			{
-				WorldItem->Destroy();
-			}
-			else
-			{
-				WorldItem->SetActorHiddenInGame(true);
-				WorldItem->SetActorEnableCollision(false);
-			}
-		}
-		else
-		{
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOInventoryUI] Pickup action - failed to add item to inventory (full?)"));
-			if (UIManager)
-			{
-				UIManager->ShowNotification(NSLOCTEXT("MO", "InventoryFull", "Inventory full"), 2.0f);
+				if (UMOInteractorComponent* Interactor = Pawn->FindComponentByClass<UMOInteractorComponent>())
+				{
+					Interactor->RequestInteractWithActor(WorldItem);
+				}
 			}
 		}
 	}
