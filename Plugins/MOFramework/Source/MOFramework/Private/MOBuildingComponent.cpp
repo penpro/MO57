@@ -447,6 +447,27 @@ bool UMOBuildingComponent::TryPlaceGhost()
 		return false;
 	}
 
+	// Client: the ghost is a client-only preview and cannot be promoted across the wire.
+	// Forward the resolved placement to the server (which spawns the real replicated
+	// building), then respawn a fresh local ghost so the player can chain placements (H19).
+	if (!GetOwner()->HasAuthority())
+	{
+		ServerPlaceBuilding(CurrentRecipeId, CurrentGhost->GetActorTransform());
+
+		const FMORecipeDefinitionRow* ChainRecipe = UMORecipeDatabaseSettings::GetRecipeDefinition(CurrentRecipeId);
+		CurrentGhost->Destroy();
+		CurrentGhost = nullptr;
+		if (ChainRecipe && SpawnGhostActor(*ChainRecipe))
+		{
+			bCurrentPlacementValid = false;
+		}
+		else
+		{
+			ExitPlacementMode(false);
+		}
+		return true;
+	}
+
 	// The ghost becomes the actual building - just finalize its placement.
 	AMOBuildableActor* PlacedBuilding = CurrentGhost;
 	PlacedBuilding->InitializeBuilding(CurrentRecipeId);
@@ -483,6 +504,52 @@ bool UMOBuildingComponent::TryPlaceGhost()
 	}
 
 	return true;
+}
+
+void UMOBuildingComponent::ServerPlaceBuilding_Implementation(FName InRecipeId, FTransform PlacementTransform)
+{
+	UWorld* World = GetWorld();
+	if (!World || !GetOwner() || !GetOwner()->HasAuthority())
+	{
+		return;
+	}
+
+	const FMORecipeDefinitionRow* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(InRecipeId);
+	if (!Recipe || !Recipe->bIsBuilding)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOBuildingComponent] ServerPlaceBuilding: invalid building recipe %s"), *InRecipeId.ToString());
+		return;
+	}
+
+	// Resolve the buildable class the same way SpawnGhostActor does.
+	TSubclassOf<AMOBuildableActor> ActorClass = Recipe->PlacementData.BuildableActorClass;
+	if (!ActorClass)
+	{
+		if (Recipe->ContainerSlotCount > 0)
+		{
+			ActorClass = AMOContainerActor::StaticClass();
+		}
+		else if (Recipe->ProvidedStationType != EMOCraftingStation::None)
+		{
+			ActorClass = AMOCraftingStationActor::StaticClass();
+		}
+		else
+		{
+			ActorClass = AMOBuildableActor::StaticClass();
+		}
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	AMOBuildableActor* Placed = World->SpawnActor<AMOBuildableActor>(ActorClass, PlacementTransform, SpawnParams);
+	if (!Placed)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOBuildingComponent] ServerPlaceBuilding: spawn failed for recipe %s"), *InRecipeId.ToString());
+		return;
+	}
+
+	Placed->InitializeBuilding(InRecipeId);
+	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingComponent] ServerPlaceBuilding: spawned %s for recipe %s"), *Placed->GetName(), *InRecipeId.ToString());
 }
 
 void UMOBuildingComponent::HandlePlacementPrimaryAction()

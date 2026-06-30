@@ -337,6 +337,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Building")
 	bool TryPlaceGhost();
 
+	// Client->server transport for building placement (H19). A remote client forwards the
+	// resolved placement here; the server spawns the real replicated building.
+	UFUNCTION(Server, Reliable)
+	void ServerPlaceBuilding(FName InRecipeId, FTransform PlacementTransform);
+
 	/**
 	 * Handle primary action during placement mode (attempt to place).
 	 */

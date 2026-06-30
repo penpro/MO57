@@ -36,10 +36,15 @@
 #include "Components/StaticMeshComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Engine/GameInstance.h"
+#include "Net/UnrealNetwork.h"
 
 AMOBuildableActor::AMOBuildableActor()
 {
 	PrimaryActorTick.bCanEverTick = false;
+
+	// Replicate so server-spawned buildings appear on all clients (H19).
+	bReplicates = true;
+	SetReplicateMovement(false); // buildings are static once placed
 
 	// Create root scene component
 	RootSceneComponent = CreateDefaultSubobject<USceneComponent>(TEXT("RootScene"));
@@ -67,6 +72,22 @@ AMOBuildableActor::AMOBuildableActor()
 
 	// Create build progress component
 	BuildProgressComponent = CreateDefaultSubobject<UMOBuildProgressComponent>(TEXT("BuildProgress"));
+}
+
+void AMOBuildableActor::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(AMOBuildableActor, RecipeId);
+}
+
+void AMOBuildableActor::OnRep_RecipeId()
+{
+	// A server-spawned building just replicated its recipe; reconstruct local visuals/
+	// collision/interaction from it (mirrors the authority InitializeBuilding path).
+	if (!RecipeId.IsNone())
+	{
+		InitializeBuilding(RecipeId);
+	}
 }
 
 void AMOBuildableActor::BeginPlay()

@@ -480,9 +480,15 @@ private:
 	/** Whether currently in ghost mode. */
 	bool bIsGhost = false;
 
-	/** Recipe ID for this building. */
-	UPROPERTY()
+	/** Recipe ID for this building. Replicated so remote clients reconstruct visuals/state. */
+	UPROPERTY(ReplicatedUsing=OnRep_RecipeId)
 	FName RecipeId = NAME_None;
+
+	/** Client-side: reconstruct the building from the replicated RecipeId. */
+	UFUNCTION()
+	void OnRep_RecipeId();
+
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	/** Dynamic material instance for ghost effect. */
 	UPROPERTY(Transient)
