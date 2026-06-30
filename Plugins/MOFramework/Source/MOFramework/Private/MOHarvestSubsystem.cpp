@@ -543,6 +543,13 @@ bool UMOHarvestSubsystem::BeginHarvest(
 
 	CurrentContext.TotalTime = BaseTime;
 
+	// (H23) Capture the authoritative start timestamp. CompleteHarvest validates
+	// that at least TotalTime real seconds elapse before granting yields/XP, so a
+	// premature (or forged) completion call can't collect a zero-duration harvest.
+	// Same clock source as the progress widget (FPlatformTime::Seconds) so the
+	// comparison is apples-to-apples.
+	CurrentContext.StartTimeSeconds = FPlatformTime::Seconds();
+
 	// Subscribe to the harvester's "I started moving" broadcast. Movement
 	// cancels the harvest entirely — no partial progress kept (gathering is a
 	// stay-put activity).
@@ -601,7 +608,8 @@ void UMOHarvestSubsystem::CancelHarvest()
 
 FMOCraftResult UMOHarvestSubsystem::CompleteHarvest(
 	UMOInventoryComponent* Inventory,
-	UMOSkillsComponent* Skills
+	UMOSkillsComponent* Skills,
+	bool bAllowSkipTimer
 )
 {
 	FMOCraftResult Result;
@@ -610,6 +618,28 @@ FMOCraftResult UMOHarvestSubsystem::CompleteHarvest(
 	{
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOHarvest] CompleteHarvest: No valid harvest in progress"));
 		return Result;
+	}
+
+	// (H23) Authoritative duration validation. The completion call is driven by the
+	// UI widget's wall-clock, but the subsystem is the source of truth for whether
+	// enough time has actually passed. Reject early/forged completions: leave the
+	// context intact (do NOT Reset) so a subsequent legitimate completion can fire.
+	// Callers that already simulated the duration via their own timer (AI survivors)
+	// pass bAllowSkipTimer=true.
+	if (!bAllowSkipTimer && CurrentContext.TotalTime > 0.0f)
+	{
+		const double ElapsedSeconds = FPlatformTime::Seconds() - CurrentContext.StartTimeSeconds;
+		// Small tolerance for frame-time/scheduling jitter so a legitimate completion
+		// landing a hair early (e.g. TotalTime - 0.02s) isn't spuriously rejected.
+		const double RequiredSeconds = static_cast<double>(CurrentContext.TotalTime) - 0.05;
+		if (ElapsedSeconds < RequiredSeconds)
+		{
+			UE_LOG(LogMOFramework, Warning,
+				TEXT("[MOHarvest] CompleteHarvest REJECTED for action '%s': only %.2fs elapsed of required %.2fs (premature/forged completion). Context kept."),
+				*CurrentContext.ActiveActionId.ToString(), ElapsedSeconds, CurrentContext.TotalTime);
+			Result.bSuccess = false;
+			return Result;
+		}
 	}
 
 	// Look up the HarvestAction from resource definition

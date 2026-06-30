@@ -51,6 +51,24 @@
  *   gather sticks doesn't destroy tree). Instance is only removed if
  *   recipe's bDestroysResource=true.
  *
+ * [2026-06] (H23 PARTIAL FIX) AUTHORITATIVE DURATION: CompleteHarvest now validates
+ *   wall-clock elapsed time (StartTimeSeconds captured in BeginHarvest) before
+ *   granting yields/XP, closing the zero-duration "free XP" path. AI callers that
+ *   already waited via their own timer pass bAllowSkipTimer=true.
+ *
+ * [2026-06] (H23 STILL OPEN) SINGLE GLOBAL CONTEXT: There is exactly ONE
+ *   CurrentContext for the whole world. BeginHarvest cancels any in-flight harvest,
+ *   so two harvesters at once (co-op, or player + AI survivor) CLOBBER each other —
+ *   the second Begin cancels the first. The clock is also still effectively *driven*
+ *   by the UI widget's NativeTick calling CompleteProgress->CompleteHarvest (the
+ *   subsystem only *vetoes* via the duration check; UpdateHarvest remains unused).
+ *   FULL FIX (deferred — needs runtime + co-op testing): clone the
+ *   UMOTerraformingComponent model — make harvest a COMPONENT-owned, tick-advanced,
+ *   per-harvester action (TMap<harvester, FMOHarvestContext> here, or move the
+ *   context onto a per-pawn UMOHarvestComponent), route OnHarvestProgress/Cancelled/
+ *   Complete per-harvester, and have the component auto-complete on its own tick so
+ *   the widget becomes a pure view. See PROJECT_STATUS.md H23.
+ *
  * =============================================================================
  * RELATED FILES
  * =============================================================================
@@ -59,7 +77,7 @@
  * - MORecipeDefinitionRow.h - Recipe definitions with SourceTags
  * - MOHISMHarvestHelper.h - Helper for HISM operations
  *
- * LAST UPDATED: 2026-02-25
+ * LAST UPDATED: 2026-06-30 (H23 partial: server-side duration validation)
  * =============================================================================
  */
 
@@ -131,6 +149,15 @@ struct MOFRAMEWORK_API FMOHarvestContext
 	UPROPERTY(BlueprintReadOnly, Category="MO|Harvest")
 	float TotalTime = 0.0f;
 
+	/**
+	 * (H23) Wall-clock timestamp (FPlatformTime::Seconds) captured at BeginHarvest.
+	 * CompleteHarvest validates that at least TotalTime real seconds have elapsed
+	 * before granting yields/XP, so a UI that calls CompleteHarvest early (or a
+	 * forged call) cannot collect a zero-duration harvest. Not a UPROPERTY: this is
+	 * authoritative timing state, not replicated/BP-visible context.
+	 */
+	double StartTimeSeconds = 0.0;
+
 	/** Check if this context references a valid target. */
 	bool IsValid() const
 	{
@@ -150,6 +177,7 @@ struct MOFRAMEWORK_API FMOHarvestContext
 		ActiveRecipeId = NAME_None;
 		ElapsedTime = 0.0f;
 		TotalTime = 0.0f;
+		StartTimeSeconds = 0.0;
 	}
 };
 
@@ -382,14 +410,25 @@ public:
 	/**
 	 * Complete the current harvest operation.
 	 * Removes instance if bDestroysTarget, adds items to inventory, grants XP.
+	 *
+	 * (H23) Validates server-side that at least the action's TotalTime has elapsed
+	 * since BeginHarvest (wall-clock). If not enough time has passed the harvest is
+	 * rejected (no yields, no XP) and the context is left intact so a later, legitimate
+	 * completion can still fire. Callers that have ALREADY simulated the duration
+	 * through their own timer (e.g. AI survivors that waited via their job timer) pass
+	 * bAllowSkipTimer=true to bypass the wall-clock gate — mirroring the
+	 * UMOTerraformingComponent "skip the timer" completion path.
+	 *
 	 * @param Inventory Player's inventory
 	 * @param Skills Player's skills
-	 * @return Craft result with outputs and XP
+	 * @param bAllowSkipTimer If true, skip the elapsed-duration validation (caller already waited)
+	 * @return Craft result with outputs and XP (bSuccess=false if rejected for insufficient time)
 	 */
 	UFUNCTION(BlueprintCallable, Category="MO|Harvest")
 	FMOCraftResult CompleteHarvest(
 		UMOInventoryComponent* Inventory,
-		UMOSkillsComponent* Skills
+		UMOSkillsComponent* Skills,
+		bool bAllowSkipTimer = false
 	);
 
 	/**

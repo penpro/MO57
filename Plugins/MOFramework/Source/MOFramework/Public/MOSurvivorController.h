@@ -319,9 +319,17 @@ protected:
 	UPROPERTY(BlueprintReadOnly, Category = "MO|Survivor|State")
 	float SimpleJobTimer = 0.0f;
 
-	/** Duration for simple job actions. */
+	/** Duration for simple job actions (default fallback for dig/forage). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MO|Survivor|Config")
 	float SimpleJobActionDuration = 4.0f;
+
+	/**
+	 * (H24) Effective action duration resolved per-job. For recipe-based gather
+	 * harvests this is read from the resource definition's BaseActionTime (matching
+	 * the player path) instead of the flat SimpleJobActionDuration constant. Set in
+	 * StartSimpleJobExecution; defaults to SimpleJobActionDuration for non-harvest jobs.
+	 */
+	float ActiveJobActionDuration = 4.0f;
 
 	/** Search radius for finding gather resources. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MO|Survivor|Config")
@@ -370,6 +378,14 @@ private:
 
 	/** Find nearest harvestable target (trees, etc.) using harvest recipes. */
 	bool FindNearestHarvestTarget(FName RequiredTag, float SearchRadius, FName& OutRecipeId);
+
+	/**
+	 * (H24) Resolve the real per-action harvest duration for the current recipe
+	 * gather target from its resource definition's BaseActionTime (with the same
+	 * missing-tool time penalty BeginHarvest applies). Returns the flat
+	 * SimpleJobActionDuration fallback if the definition/action can't be resolved.
+	 */
+	float ResolveGatherActionDuration() const;
 
 	/** Get item tags that match the job type for filtering. */
 	TArray<FName> GetItemTagsForJobType(EMOSurvivorJobType JobType) const;

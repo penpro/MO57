@@ -28,9 +28,16 @@
  * [2024-02] MOUSE TRACKING: Uses timer-based mouse check like MOItemContextMenu.
  *   AutoCloseDelay determines hover-out-to-close delay.
  *
+ * [2026-06] (H22) TIMED ACTION: Clicking Search/Dig no longer executes instantly.
+ *   It starts a timed, interruptible foraging action (ForagingActionDuration);
+ *   items + XP are only granted on completion in FinishForagingAction(). Movement
+ *   or other interrupts (IMOInterruptibleInterface) cancel it with no reward.
+ *   ShouldCloseOnMouseLeave() is suppressed while the action runs (mirrors
+ *   UMOGhostContextMenu's build-timer guard) so cursor drift doesn't cancel it.
+ *
  * =============================================================================
- * RELATED FILES: MOContextMenuBase.h, MOForagingSubsystem.h
- * LAST UPDATED: 2026-02-25
+ * RELATED FILES: MOContextMenuBase.h, MOForagingSubsystem.h, MOGhostContextMenu.h
+ * LAST UPDATED: 2026-06-30 (H22 timed/interruptible foraging)
  * =============================================================================
  */
 
@@ -38,13 +45,26 @@
 
 #include "CoreMinimal.h"
 #include "MOContextMenuBase.h"
+#include "MOInterruptibleInterface.h"
 #include "MOGroundContextMenu.generated.h"
 
 class UMOCommonButton;
 class UTextBlock;
 class UPanelWidget;
 class AMOWorldItem;
+class AMOCharacter;
 class APawn;
+
+/**
+ * (H22) Which foraging action is currently being performed as a timed action.
+ */
+UENUM()
+enum class EMOGroundForageAction : uint8
+{
+	None,
+	SearchNearby,
+	DigForSupplies
+};
 
 /**
  * Delegate fired when a foraging action completes.
@@ -63,12 +83,21 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOForagingCompleteSignature, const 
  * - Add RadiusText (UTextBlock, optional) - Shows search radius
  */
 UCLASS(Abstract)
-class MOFRAMEWORK_API UMOGroundContextMenu : public UMOContextMenuBase
+class MOFRAMEWORK_API UMOGroundContextMenu : public UMOContextMenuBase,
+	public IMOInterruptibleInterface
 {
 	GENERATED_BODY()
 
 public:
 	UMOGroundContextMenu(const FObjectInitializer& ObjectInitializer);
+
+	/**
+	 * (H22) IMOInterruptibleInterface: cancels an in-progress timed foraging action
+	 * on any meaningful disturbance (movement, damage, death, etc.). Foraging is a
+	 * stay-put activity with no resumable state, so the action is discarded — no
+	 * items spawned, no XP granted.
+	 */
+	virtual void NotifyInterrupt_Implementation(const FMOInterruptContext& Context) override;
 
 	// ============================================================================
 	// INITIALIZATION
@@ -125,6 +154,21 @@ protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
 
+	/**
+	 * (H22) Keep the menu open while a timed foraging action is running, so a tiny
+	 * cursor drift doesn't cancel a multi-second dig. Mirrors UMOGhostContextMenu's
+	 * build-timer guard.
+	 */
+	virtual bool ShouldCloseOnMouseLeave() const override;
+
+	/**
+	 * (H22) Seconds a foraging action takes to complete. Foraging is no longer an
+	 * instant, free-XP world action — the action runs for this duration and can be
+	 * interrupted (movement, damage) before any items/XP are granted.
+	 */
+	UPROPERTY(EditDefaultsOnly, Category="MO|Foraging", meta=(ClampMin="0.1"))
+	float ForagingActionDuration = 3.0f;
+
 	// ============================================================================
 	// BOUND WIDGETS
 	// ============================================================================
@@ -167,6 +211,22 @@ private:
 	int32 ForagingLevel = 0;
 
 	// ============================================================================
+	// (H22) TIMED FORAGING ACTION STATE
+	// ============================================================================
+
+	/** Which action is running (None when idle). */
+	EMOGroundForageAction PendingForageAction = EMOGroundForageAction::None;
+
+	/** Elapsed time into the current foraging action. */
+	float ForageActionElapsed = 0.0f;
+
+	/** Timer handle driving the foraging action progress. */
+	FTimerHandle ForageActionTimerHandle;
+
+	/** Character we registered with for interrupt notifications (for movement-cancel). */
+	TWeakObjectPtr<AMOCharacter> RegisteredForageCharacter;
+
+	// ============================================================================
 	// BUTTON HANDLERS
 	// ============================================================================
 
@@ -180,6 +240,34 @@ private:
 
 	/** Update the UI text displays. */
 	void UpdateDisplayText();
+
+	// ============================================================================
+	// (H22) TIMED FORAGING ACTION
+	// ============================================================================
+
+	/**
+	 * Begin a timed, interruptible foraging action. Disables buttons, suppresses
+	 * mouse-leave close, registers for pawn interrupts, and starts the action timer.
+	 * The foraging primitive (which spawns items + grants XP) only runs on
+	 * completion in FinishForagingAction().
+	 */
+	void StartForagingAction(EMOGroundForageAction Action);
+
+	/** Timer callback: advances elapsed time and completes when the duration is met. */
+	void TickForagingAction();
+
+	/** Completion: invokes the foraging primitive for the pending action, then closes. */
+	void FinishForagingAction();
+
+	/** Cancel an in-progress action (interrupt / destruct). No items, no XP. */
+	void CancelForagingAction();
+
+	/** True while a timed foraging action is running. */
+	bool IsForagingActionInProgress() const { return PendingForageAction != EMOGroundForageAction::None; }
+
+	/** Register/unregister this menu as an interrupt listener on the foraging character. */
+	void RegisterForagingInterrupts();
+	void UnregisterForagingInterrupts();
 
 	// ============================================================================
 	// MOUSE TRACKING

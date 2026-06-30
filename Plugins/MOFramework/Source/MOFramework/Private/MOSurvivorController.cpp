@@ -605,6 +605,11 @@ void AMOSurvivorController::StartSimpleJobExecution()
 		return;
 	}
 
+	// (H24) Default the effective action duration to the configured constant.
+	// Recipe-based gather harvests override this below with the resource
+	// definition's real BaseActionTime.
+	ActiveJobActionDuration = SimpleJobActionDuration;
+
 	// For gather jobs, find an HISM resource instead of random point
 	if (IsGatherJob(CurrentJob.JobType))
 	{
@@ -612,6 +617,10 @@ void AMOSurvivorController::StartSimpleJobExecution()
 		{
 			SimpleJobState = 1; // Moving
 			SimpleJobTimer = 0.0f;
+
+			// (H24) Resolve the real per-action harvest duration from the resource
+			// definition (recipe harvests); falls back to the flat constant otherwise.
+			ActiveJobActionDuration = ResolveGatherActionDuration();
 
 			// Start moving to the target
 			MoveToLocation(SimpleJobTargetLocation, 100.0f);
@@ -734,14 +743,18 @@ void AMOSurvivorController::UpdateSimpleJobExecution(float DeltaTime)
 		{
 			SimpleJobTimer += DeltaTime;
 
+			// (H24) Use the per-job effective duration (real BaseActionTime for recipe
+			// harvests) instead of the flat SimpleJobActionDuration constant.
+			const float EffectiveDuration = FMath::Max(0.1f, ActiveJobActionDuration);
+
 			// Update progress
-			float Progress = FMath::Clamp(SimpleJobTimer / SimpleJobActionDuration, 0.0f, 1.0f);
+			float Progress = FMath::Clamp(SimpleJobTimer / EffectiveDuration, 0.0f, 1.0f);
 			if (JobQueue)
 			{
 				JobQueue->UpdateJobProgress(CurrentJob.JobId, Progress);
 			}
 
-			if (SimpleJobTimer >= SimpleJobActionDuration)
+			if (SimpleJobTimer >= EffectiveDuration)
 			{
 				// Action complete - perform the actual foraging/digging
 				PerformSimpleJobAction();
@@ -884,11 +897,17 @@ void AMOSurvivorController::PerformSimpleJobAction()
 					UMOInventoryComponent* Inventory = ControlledPawn->FindComponentByClass<UMOInventoryComponent>();
 					UMOSkillsComponent* Skills = ControlledPawn->FindComponentByClass<UMOSkillsComponent>();
 
-					// Begin harvest (instant for survivors - skip timer since we already waited)
+					// (H24) The action time was already simulated via SimpleJobTimer using
+					// the resource definition's real BaseActionTime (ActiveJobActionDuration,
+					// resolved in StartSimpleJobExecution) — NOT a flat 4s constant. So by
+					// the time we reach PerformSimpleJobAction the correct duration has
+					// elapsed; Begin + Complete back-to-back here just applies the yields.
 					if (HarvestSubsystem->BeginHarvest(ISMComp, GatherTargetInstanceIndex, HarvestRecipeId, Inventory))
 					{
-						// Complete immediately (we already waited via SimpleJobTimer)
-						FMOCraftResult Result = HarvestSubsystem->CompleteHarvest(Inventory, Skills);
+						// (H23/H24) bAllowSkipTimer=true: the survivor already simulated the
+						// real action duration via its job timer, so bypass the subsystem's
+						// wall-clock gate (Begin + Complete fire in the same frame here).
+						FMOCraftResult Result = HarvestSubsystem->CompleteHarvest(Inventory, Skills, /*bAllowSkipTimer=*/true);
 
 						if (Result.bSuccess)
 						{
@@ -1169,6 +1188,58 @@ bool AMOSurvivorController::FindNearestHarvestTarget(FName RequiredTag, float Se
 	}
 
 	return bFound;
+}
+
+float AMOSurvivorController::ResolveGatherActionDuration() const
+{
+	// (H24) Non-recipe gather (loose ground pickups) and dig/forage jobs have no
+	// per-action simulation time of their own — keep the configured constant.
+	if (!bIsRecipeHarvest || HarvestRecipeId.IsNone())
+	{
+		return SimpleJobActionDuration;
+	}
+
+	const APawn* ControlledPawn = GetPawn();
+	UInstancedStaticMeshComponent* ISMComp = GatherTargetHISMComponent.Get();
+	const UWorld* World = GetWorld();
+	if (!ControlledPawn || !IsValid(ISMComp) || !World)
+	{
+		return SimpleJobActionDuration;
+	}
+
+	UMOHarvestSubsystem* HarvestSubsystem = World->GetSubsystem<UMOHarvestSubsystem>();
+	if (!HarvestSubsystem)
+	{
+		return SimpleJobActionDuration;
+	}
+
+	// Resolve the harvest action the same way BeginHarvest does: ResourceNodeId
+	// from the target tags -> FindAction(HarvestRecipeId).
+	const TArray<FName> TargetTags = HarvestSubsystem->CollectTargetTags(ISMComp);
+	const FName ResourceNodeId = HarvestSubsystem->ExtractResourceNodeId(TargetTags);
+	const FMOResourceNodeDefinitionRow* ResourceDef = HarvestSubsystem->GetResourceDefinition(ResourceNodeId);
+	const FMOResourceHarvestAction* HarvestAction = ResourceDef ? ResourceDef->FindAction(HarvestRecipeId) : nullptr;
+	if (!HarvestAction)
+	{
+		// Definition missing — fall back rather than silently treating 4s as the
+		// "real" time; the constant also signals that the lookup failed.
+		return SimpleJobActionDuration;
+	}
+
+	// Mirror BeginHarvest's tool penalty: optional-but-missing tool slows the action.
+	float ActionTime = HarvestAction->BaseActionTime;
+	if (HarvestAction->RequiresTool() && !HarvestAction->bToolRequired)
+	{
+		if (const UMOInventoryComponent* Inventory = ControlledPawn->FindComponentByClass<UMOInventoryComponent>())
+		{
+			if (!Inventory->HasToolOfType(HarvestAction->RequiredToolType))
+			{
+				ActionTime *= HarvestAction->MissingToolTimeMultiplier;
+			}
+		}
+	}
+
+	return FMath::Max(0.1f, ActionTime);
 }
 
 TArray<FName> AMOSurvivorController::GetItemTagsForJobType(EMOSurvivorJobType JobType) const

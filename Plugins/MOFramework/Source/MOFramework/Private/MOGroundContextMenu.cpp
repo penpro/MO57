@@ -1,6 +1,8 @@
 #include "MOGroundContextMenu.h"
 #include "MOForagingSubsystem.h"
 #include "MOCommonButton.h"
+#include "MOCharacter.h"
+#include "MOInterruptTypes.h"
 #include "Components/TextBlock.h"
 #include "Components/PanelWidget.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
@@ -32,6 +34,11 @@ void UMOGroundContextMenu::NativeConstruct()
 
 void UMOGroundContextMenu::NativeDestruct()
 {
+	// (H22) If the menu is torn down mid-action, cancel cleanly: stop the timer
+	// and drop the interrupt registration so we don't leave a dangling listener
+	// on the character. No items/XP are granted for an incomplete action.
+	CancelForagingAction();
+
 	StopMouseCheckTimer();
 	Super::NativeDestruct();
 }
@@ -71,36 +78,36 @@ void UMOGroundContextMenu::HandleSearchNearbyClicked()
 {
 	UE_LOG(LogMOGroundMenu, Log, TEXT("[MOGroundContextMenu] Search Nearby clicked"));
 
-	UWorld* World = GetWorld();
-	if (!World)
-	{
-		RequestClose();
-		return;
-	}
-
-	UMOForagingSubsystem* ForagingSubsystem = World->GetSubsystem<UMOForagingSubsystem>();
-	if (!ForagingSubsystem)
-	{
-		UE_LOG(LogMOGroundMenu, Warning, TEXT("[MOGroundContextMenu] No foraging subsystem"));
-		RequestClose();
-		return;
-	}
-
-	// Perform the search (pawn passed for XP award)
-	TArray<AMOWorldItem*> RevealedItems = ForagingSubsystem->RevealHISMInstancesInRadius(
-		TargetLocation, SearchRadius, ForagingPawn.Get());
-
-	// Broadcast completion
-	OnSearchComplete.Broadcast(RevealedItems);
-
-	// Close the menu
-	RequestClose();
+	// (H22) Don't forage instantly. Start a timed, interruptible action; the
+	// foraging primitive (which spawns items + grants XP) runs only on completion.
+	StartForagingAction(EMOGroundForageAction::SearchNearby);
 }
 
 void UMOGroundContextMenu::HandleDigForSuppliesClicked()
 {
 	UE_LOG(LogMOGroundMenu, Log, TEXT("[MOGroundContextMenu] Dig for Supplies clicked"));
 
+	// (H22) Don't dig instantly. Start a timed, interruptible action.
+	StartForagingAction(EMOGroundForageAction::DigForSupplies);
+}
+
+// ============================================================================
+// (H22) TIMED FORAGING ACTION
+// ============================================================================
+
+void UMOGroundContextMenu::StartForagingAction(EMOGroundForageAction Action)
+{
+	if (Action == EMOGroundForageAction::None)
+	{
+		return;
+	}
+
+	// Ignore a second click while an action is already running.
+	if (IsForagingActionInProgress())
+	{
+		return;
+	}
+
 	UWorld* World = GetWorld();
 	if (!World)
 	{
@@ -108,23 +115,184 @@ void UMOGroundContextMenu::HandleDigForSuppliesClicked()
 		return;
 	}
 
-	UMOForagingSubsystem* ForagingSubsystem = World->GetSubsystem<UMOForagingSubsystem>();
-	if (!ForagingSubsystem)
+	// Validate the subsystem exists up front so we fail fast (same as the old
+	// instant path) rather than waiting a full duration only to no-op.
+	if (!World->GetSubsystem<UMOForagingSubsystem>())
 	{
 		UE_LOG(LogMOGroundMenu, Warning, TEXT("[MOGroundContextMenu] No foraging subsystem"));
 		RequestClose();
 		return;
 	}
 
-	// Perform the dig (pawn passed for XP award)
-	TArray<AMOWorldItem*> DugItems = ForagingSubsystem->DigForSupplies(
-		TargetLocation, ForagingLevel, ForagingPawn.Get());
+	PendingForageAction = Action;
+	ForageActionElapsed = 0.0f;
 
-	// Broadcast completion
-	OnDigComplete.Broadcast(DugItems);
+	// Disable the buttons so the action reads as "in progress" and can't be
+	// re-triggered or switched mid-action.
+	if (SearchNearbyButton)
+	{
+		SearchNearbyButton->SetIsEnabled(false);
+	}
+	if (DigForSuppliesButton)
+	{
+		DigForSuppliesButton->SetIsEnabled(false);
+	}
 
-	// Close the menu
+	// Movement / damage / death etc. cancel the action with no reward.
+	RegisterForagingInterrupts();
+
+	// Drive the action via a repeating timer (cheap, ~20Hz like the mouse check).
+	World->GetTimerManager().SetTimer(
+		ForageActionTimerHandle,
+		this,
+		&UMOGroundContextMenu::TickForagingAction,
+		0.05f,
+		true);
+
+	UE_LOG(LogMOGroundMenu, Log, TEXT("[MOGroundContextMenu] Started timed foraging action (%d) for %.1fs"),
+		static_cast<int32>(Action), ForagingActionDuration);
+}
+
+void UMOGroundContextMenu::TickForagingAction()
+{
+	if (!IsForagingActionInProgress())
+	{
+		return;
+	}
+
+	ForageActionElapsed += 0.05f;
+
+	if (ForageActionElapsed >= ForagingActionDuration)
+	{
+		FinishForagingAction();
+	}
+}
+
+void UMOGroundContextMenu::FinishForagingAction()
+{
+	const EMOGroundForageAction Action = PendingForageAction;
+
+	// Tear down action state/timers BEFORE running the payload so the menu can't
+	// re-enter or self-cancel (e.g. RequestClose -> NativeDestruct).
+	UWorld* World = GetWorld();
+	if (World)
+	{
+		World->GetTimerManager().ClearTimer(ForageActionTimerHandle);
+	}
+	UnregisterForagingInterrupts();
+	PendingForageAction = EMOGroundForageAction::None;
+	ForageActionElapsed = 0.0f;
+
+	UMOForagingSubsystem* ForagingSubsystem = World ? World->GetSubsystem<UMOForagingSubsystem>() : nullptr;
+	if (!ForagingSubsystem)
+	{
+		UE_LOG(LogMOGroundMenu, Warning, TEXT("[MOGroundContextMenu] FinishForagingAction: No foraging subsystem"));
+		RequestClose();
+		return;
+	}
+
+	// Now the action has taken time — grant the result.
+	if (Action == EMOGroundForageAction::SearchNearby)
+	{
+		TArray<AMOWorldItem*> RevealedItems = ForagingSubsystem->RevealHISMInstancesInRadius(
+			TargetLocation, SearchRadius, ForagingPawn.Get());
+		OnSearchComplete.Broadcast(RevealedItems);
+	}
+	else if (Action == EMOGroundForageAction::DigForSupplies)
+	{
+		TArray<AMOWorldItem*> DugItems = ForagingSubsystem->DigForSupplies(
+			TargetLocation, ForagingLevel, ForagingPawn.Get());
+		OnDigComplete.Broadcast(DugItems);
+	}
+
 	RequestClose();
+}
+
+void UMOGroundContextMenu::CancelForagingAction()
+{
+	if (!IsForagingActionInProgress())
+	{
+		return;
+	}
+
+	UE_LOG(LogMOGroundMenu, Log, TEXT("[MOGroundContextMenu] Foraging action cancelled (no items/XP granted)"));
+
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(ForageActionTimerHandle);
+	}
+	UnregisterForagingInterrupts();
+	PendingForageAction = EMOGroundForageAction::None;
+	ForageActionElapsed = 0.0f;
+
+	// Re-enable buttons in case the menu somehow stays open.
+	if (SearchNearbyButton)
+	{
+		SearchNearbyButton->SetIsEnabled(true);
+	}
+	if (DigForSuppliesButton)
+	{
+		DigForSuppliesButton->SetIsEnabled(true);
+	}
+}
+
+void UMOGroundContextMenu::NotifyInterrupt_Implementation(const FMOInterruptContext& Context)
+{
+	if (!IsForagingActionInProgress())
+	{
+		return;
+	}
+
+	// Any meaningful disturbance cancels — foraging has no resumable state.
+	// UserCancel is skipped to avoid double-handling with explicit UI close.
+	switch (Context.Reason)
+	{
+	case EMOInterruptReason::Movement:
+	case EMOInterruptReason::Damage:
+	case EMOInterruptReason::Knockdown:
+	case EMOInterruptReason::Unconscious:
+	case EMOInterruptReason::Death:
+	case EMOInterruptReason::EnteredCombat:
+	case EMOInterruptReason::LostControl:
+	case EMOInterruptReason::External:
+		CancelForagingAction();
+		// The action was interrupted — close the menu too.
+		RequestClose();
+		break;
+
+	case EMOInterruptReason::UserCancel:
+	case EMOInterruptReason::None:
+	default:
+		break;
+	}
+}
+
+void UMOGroundContextMenu::RegisterForagingInterrupts()
+{
+	AMOCharacter* Character = Cast<AMOCharacter>(ForagingPawn.Get());
+	if (!IsValid(Character))
+	{
+		return;
+	}
+
+	Character->RegisterInterruptListener(this);
+	RegisteredForageCharacter = Character;
+}
+
+void UMOGroundContextMenu::UnregisterForagingInterrupts()
+{
+	if (AMOCharacter* Character = RegisteredForageCharacter.Get())
+	{
+		Character->UnregisterInterruptListener(this);
+	}
+	RegisteredForageCharacter.Reset();
+}
+
+bool UMOGroundContextMenu::ShouldCloseOnMouseLeave() const
+{
+	// (H22) Keep the menu open while a timed action runs, mirroring the ghost
+	// menu's build-timer guard, so cursor drift doesn't cancel a multi-second dig.
+	return Super::ShouldCloseOnMouseLeave() && !IsForagingActionInProgress();
 }
 
 void UMOGroundContextMenu::UpdateDisplayText()
@@ -233,6 +401,15 @@ void UMOGroundContextMenu::StopMouseCheckTimer()
 
 void UMOGroundContextMenu::CheckMousePosition()
 {
+	// (H22) Never auto-close (and thus cancel) while a timed foraging action is
+	// running — the player committed to the action by clicking. Mirrors the
+	// ShouldCloseOnMouseLeave() guard for this menu's own timer-based close path.
+	if (IsForagingActionInProgress())
+	{
+		MouseOutsideTimer = 0.0f;
+		return;
+	}
+
 	const bool bMouseOver = IsMouseOverMenu();
 
 	if (!bMouseOver)
