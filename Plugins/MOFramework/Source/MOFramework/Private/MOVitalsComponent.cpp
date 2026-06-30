@@ -89,12 +89,14 @@ void UMOVitalsComponent::ApplyBloodLoss(float AmountML)
 	}
 
 	// Check for death from blood loss (< 20% blood volume remaining)
+	// GetBloodVolumePercent() returns a 0-100 percentage, so the death gate is 20.0,
+	// not 0.20 (which fired at 0.2% blood and made bleed-out unreachable). (H11)
 	float BloodVolumePercent = GetBloodVolumePercent();
-	if (BloodVolumePercent <= 0.20f && !bBloodLossDeathTriggered)
+	if (BloodVolumePercent <= 20.0f && !bBloodLossDeathTriggered)
 	{
 		bBloodLossDeathTriggered = true;
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOVitals] CRITICAL BLOOD LOSS - triggering death (%.1f%% remaining)"),
-			BloodVolumePercent * 100.0f);
+			BloodVolumePercent);
 
 		// Trigger death via anatomy component
 		if (UMOAnatomyComponent* Anatomy = CachedAnatomyComp.Get())

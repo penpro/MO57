@@ -878,7 +878,10 @@ float UMOAnatomyComponent::ProcessWound(FMOWound& Wound, float DeltaTime)
 	}
 
 	Wounds.MarkItemDirty(Wound);
-	return Wound.BleedRate;
+	// Clotting: the bleed contribution tapers with closure (HealFactor 1->0 as
+	// HealingProgress 0->100%) instead of running at full rate until the wound
+	// vanishes, so an untreated cut slows rather than staying lethal forever. (H16)
+	return Wound.BleedRate * HealFactor;
 }
 
 void UMOAnatomyComponent::ProcessCondition(FMOCondition& Condition, float DeltaTime)
