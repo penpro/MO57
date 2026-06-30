@@ -1508,9 +1508,10 @@ bool UMOInventoryComponent::TransferItem(const FGuid& ItemGuid, UMOInventoryComp
 		return false;
 	}
 
-	// Try to add to target
+	// Carry the item's current durability across the transfer so a chest
+	// round-trip no longer silently repairs a worn tool to full. (H31)
 	FGuid NewGuid = FGuid::NewGuid();
-	if (!TargetInventory->AddItemByGuid(NewGuid, Entry.ItemDefinitionId, Entry.Quantity))
+	if (!TargetInventory->AddItemByGuidWithDurability(NewGuid, Entry.ItemDefinitionId, Entry.Quantity, Entry.CurrentDurability))
 	{
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventory] TransferItem: Failed to add to target inventory (full?)"));
 		return false;
