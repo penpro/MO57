@@ -1011,14 +1011,27 @@ void AMOCharacter::ApplyMovementPhysiologyEffects(float DeltaTime)
 	// Apply to vitals (exertion, temperature)
 	if (VitalsComponent)
 	{
-		// Set exertion level
+		// Set exertion level (SetExertionLevel is itself authority-gated)
 		VitalsComponent->SetExertionLevel(GetCurrentExertionLevel());
 
-		// Apply temperature increase
-		// Note: The vitals component handles temperature regulation,
-		// we just add heat generation from exercise
-		float TempRise = GetCurrentTempRiseRate() * DeltaTime;
-		VitalsComponent->Vitals.BodyTemperature = FMath::Min(VitalsComponent->Vitals.BodyTemperature + TempRise, 40.0f);
+		// (H13) Exercise heat generation. This adds heat ONLY — the cooling /
+		// regulation toward 37°C lives in the vitals environmental pipeline
+		// (UMOVitalsComponent::ApplyEnvironmentalTemperature, now driven every
+		// EnvironmentalTempUpdateInterval via H12). The two compose without
+		// fighting: exercise nudges temp up here, regulation pulls it back to
+		// 37 there. Do NOT add cooling in this block — that would double-regulate
+		// against the environmental path.
+		//
+		// Authority-gate the direct write: Vitals.BodyTemperature is
+		// COND_OwnerOnly-replicated and owned by the server. Writing it on a
+		// client (this timer runs for all roles) would briefly fight the
+		// replicated value. Gentle rates (~0.01–0.08°C/min) keep this far below
+		// the vitals 25–45°C clamp.
+		if (HasAuthority())
+		{
+			float TempRise = GetCurrentTempRiseRate() * DeltaTime;
+			VitalsComponent->Vitals.BodyTemperature = FMath::Min(VitalsComponent->Vitals.BodyTemperature + TempRise, 40.0f);
+		}
 	}
 
 	// ============================================================================

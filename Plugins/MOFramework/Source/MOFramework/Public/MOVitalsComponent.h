@@ -220,6 +220,59 @@ public:
 		meta=(ClampMin="0.25", ClampMax="10.0"))
 	float WetnessPollInterval = 2.0f;
 
+	// ============================================================================
+	// ENVIRONMENTAL TEMPERATURE (H12) — weather→body exposure pipeline
+	// ============================================================================
+	//
+	// Drives ApplyEnvironmentalTemperature() from the live weather provider on a
+	// throttled cadence (NOT every frame, NOT every vitals tick). The ambient
+	// signal is the weather subsystem's "feels-like" temperature (already folds
+	// in wind chill, wet-cold, and heat index). Insulation is a tunable default
+	// plus a cheap shelter bonus reusing the wetness overhead-cover trace.
+	//
+	// SAFETY: every value here is gentle and EditDefaultsOnly so the lead can
+	// tune in playtest. Body temp is hard-clamped 25–45°C inside
+	// ApplyEnvironmentalTemperature regardless of these settings.
+
+	/** (H12) Master switch — environmental temperature only affects the body when true. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="MO|Vitals|Temperature")
+	bool bEnableEnvironmentalTemperature = true;
+
+	/**
+	 * (H12) Seconds between environmental-temperature applications. The weather
+	 * query + (cheap) feels-like math is light, but there is no reason to run it
+	 * every tick — exposure drift is slow. Default 2s matches the wetness poll so
+	 * both weather-driven systems update on the same cadence. The full elapsed
+	 * interval is passed to ApplyEnvironmentalTemperature so drift stays correct.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="MO|Vitals|Temperature",
+		meta=(ClampMin="0.25", ClampMax="30.0"))
+	float EnvironmentalTempUpdateInterval = 2.0f;
+
+	/**
+	 * (H12) Baseline insulation (0..1, 1 = fully insulated/no exposure) used when
+	 * per-item clothing warmth is not available. v1 stop-gap: equipment exposes
+	 * no first-class warmth field yet (only a generic ScalarProperties bag), so
+	 * we start from this tunable. 0.5 = moderately clothed — a deliberately
+	 * forgiving default so an un-tuned game never cooks or freezes the player.
+	 * FLAG: replace with real clothing-warmth aggregation when equipment gains a
+	 * warmth field (see report).
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="MO|Vitals|Temperature",
+		meta=(ClampMin="0.0", ClampMax="1.0"))
+	float DefaultInsulationFactor = 0.5f;
+
+	/**
+	 * (H12) Extra insulation granted by full overhead cover (a roof). Scaled by
+	 * the OverheadCover value from the shelter trace (0 open sky → 1 fully
+	 * covered) and ADDED to DefaultInsulationFactor, then clamped to 1.0. Being
+	 * under cover blunts environmental drift (out of wind/sun/radiative loss).
+	 * Default 0.35 → standing under a solid roof reaches ~0.85 insulation.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="MO|Vitals|Temperature",
+		meta=(ClampMin="0.0", ClampMax="1.0"))
+	float ShelterInsulationBonus = 0.35f;
+
 	// NOTE: TimeScaleMultiplier removed. The single source of truth is now
 	// UMOGameClockSubsystem::GetTimeScale(). Tick handlers in this component
 	// query GameClock->GetScaledDeltaTime(TickInterval). To change the
@@ -452,9 +505,14 @@ public:
 	 * Apply environmental temperature effect.
 	 * @param AmbientTemp Ambient temperature in Celsius.
 	 * @param InsulationFactor How well protected from environment (0-1, 1=fully insulated).
+	 * @param DeltaTimeOverride (H12) Seconds of simulation this call represents. When <= 0
+	 *        the function falls back to TickInterval. The internal environmental driver
+	 *        was authored against TickInterval; pass the real poll interval here so a
+	 *        throttled (slower-than-tick) caller integrates the right amount of drift
+	 *        instead of silently under-counting it. Always still scaled by the clock TimeScale.
 	 */
 	UFUNCTION(BlueprintCallable, Category="MO|Vitals|Temperature")
-	void ApplyEnvironmentalTemperature(float AmbientTemp, float InsulationFactor);
+	void ApplyEnvironmentalTemperature(float AmbientTemp, float InsulationFactor, float DeltaTimeOverride = -1.0f);
 
 	/**
 	 * Map current Vitals.BodyTemperature to a thermal-comfort bucket via the
@@ -562,11 +620,45 @@ private:
 	float WetnessAccumulatorSeconds = 0.0f;
 
 	/**
+	 * (H12) Most recent overhead-cover value (0 open sky → 1 fully covered) from
+	 * the wetness shelter trace. Cached so the environmental-temperature step can
+	 * derive a shelter insulation bonus WITHOUT firing a second 9-ray trace.
+	 * Updated inside UpdateWetness; only meaningful while it's raining (the trace
+	 * is skipped in clear weather), so it decays toward 0 when no trace runs.
+	 */
+	float CachedOverheadCover = 0.0f;
+
+	/** (H12) Seconds since the last environmental-temperature application. */
+	float EnvironmentalTempAccumulatorSeconds = 0.0f;
+
+	/**
 	 * Per-tick step that integrates rain intensity + overhead shelter into
 	 * WetnessLevel. Called from TickComponent at WetnessPollInterval to
 	 * amortize the 9-ray shelter trace.
 	 */
 	void UpdateWetness(float DeltaSeconds);
+
+	/**
+	 * (H12) Throttled environmental-temperature step. Reads feels-like ambient
+	 * from the weather subsystem, derives an insulation factor, and calls
+	 * ApplyEnvironmentalTemperature with the real elapsed interval. Called from
+	 * TickVitals at EnvironmentalTempUpdateInterval. No weather provider →
+	 * weather subsystem returns its default temp, so this is a gentle no-op-ish
+	 * pull toward 20°C, never a freeze/cook.
+	 */
+	void UpdateEnvironmentalTemperature(float DeltaSeconds);
+
+	/** (H15) Cached adrenaline sibling (weak; resolved lazily via the medical interface). */
+	UPROPERTY(Transient)
+	TWeakObjectPtr<class UMOAdrenalineComponent> CachedAdrenalineComp;
+
+	/**
+	 * (H15) Resolve the owner's adrenaline component, caching it. Returns nullptr
+	 * for pawns without one (creatures, etc) so the HR modifier is simply skipped.
+	 * Mirrors the adrenaline component's own resolution: medical interface first,
+	 * FindComponentByClass fallback.
+	 */
+	class UMOAdrenalineComponent* GetAdrenalineComponent();
 
 	/** Convert WetnessLevel to bucket via WetnessThresholds. */
 	EMOWetnessState ComputeWetnessState(float Level) const;

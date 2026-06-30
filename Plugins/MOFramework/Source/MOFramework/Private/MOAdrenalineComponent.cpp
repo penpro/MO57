@@ -576,9 +576,28 @@ void UMOAdrenalineComponent::RecalculateEffects()
 
 void UMOAdrenalineComponent::ApplyVitalsModifiers()
 {
-	// Apply heart rate modifier to vitals
-	// Note: The vitals component should read from us rather than us pushing
-	// This is handled by GetHeartRateModifier() being called by vitals tick
+	// (H15) PULL model — consumers read our modifiers each tick rather than us
+	// pushing. This avoids ordering races against the vitals/anatomy/combat ticks
+	// and keeps each modifier owned by the system it affects. Wiring status:
+	//
+	//   - Heart rate     WIRED  → UMOVitalsComponent::CalculateHeartRate() applies
+	//                              GetHeartRateModifier() to the summed HR.
+	//   - Stamina drain  WIRED  → UMOVitalsComponent::UpdateStamina() multiplies
+	//                              DrainRate by GetStaminaDrainModifier().
+	//   - Bleed reduction FLAGGED→ should multiply per-wound bleed where blood loss
+	//                              is summed: UMOAnatomyComponent::TickAnatomy()
+	//                              (~MOAnatomyComponent.cpp:782-788) via
+	//                              CalculateEffectiveBleedRate(). Not wired here:
+	//                              vasoconstriction is wound-specific, so it belongs
+	//                              in anatomy's ProcessWound/TickAnatomy, not in the
+	//                              systemic vitals ApplyBloodLoss chokepoint.
+	//   - Accuracy        FLAGGED→ combat/weapon spread should call
+	//                              CalculateEffectiveAccuracy()/GetAccuracyPenalty()
+	//                              when computing shot dispersion in the combat
+	//                              component (MOCombatComponent attack resolution).
+	//
+	// This function is intentionally a no-op; it remains as the documented
+	// integration map so the contract is discoverable from the producer side.
 }
 
 // ============================================================================

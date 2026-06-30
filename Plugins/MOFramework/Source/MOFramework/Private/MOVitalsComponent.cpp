@@ -3,6 +3,8 @@
 #include "MOAnatomyComponent.h"
 #include "MOMetabolismComponent.h"
 #include "MOMentalStateComponent.h"
+#include "MOAdrenalineComponent.h"           // (H15) heart-rate modifier consumer
+#include "MOMedicalProviderInterface.h"      // (H15) resolve adrenaline sibling
 #include "MOBodyPartTypes.h"
 #include "MOGameClockSubsystem.h"
 #include "MOWeatherIntegrationSubsystem.h"
@@ -302,7 +304,7 @@ float UMOVitalsComponent::GetCurrentCalorieMultiplier() const
 // TEMPERATURE API
 // ============================================================================
 
-void UMOVitalsComponent::ApplyEnvironmentalTemperature(float AmbientTemp, float InsulationFactor)
+void UMOVitalsComponent::ApplyEnvironmentalTemperature(float AmbientTemp, float InsulationFactor, float DeltaTimeOverride)
 {
 	if (GetOwnerRole() != ROLE_Authority)
 	{
@@ -313,6 +315,11 @@ void UMOVitalsComponent::ApplyEnvironmentalTemperature(float AmbientTemp, float 
 	// UMOGameClockSubsystem — single source of truth across medical components.
 	const UMOGameClockSubsystem* Clock = UMOGameClockSubsystem::Get(this);
 	const float TimeScaleMultiplier = Clock ? Clock->GetTimeScale() : 1.0f;
+
+	// (H12) Seconds of simulation this call represents. Throttled callers pass
+	// their real poll interval so drift integrates correctly; a non-positive
+	// override falls back to the legacy per-tick assumption.
+	const float StepSeconds = (DeltaTimeOverride > 0.0f) ? DeltaTimeOverride : TickInterval;
 
 	// Normal body temp target
 	const float TargetTemp = 37.0f;
@@ -331,17 +338,17 @@ void UMOVitalsComponent::ApplyEnvironmentalTemperature(float AmbientTemp, float 
 	float OldTemp = Vitals.BodyTemperature;
 
 	// Move toward ambient if exposed
-	Vitals.BodyTemperature += EnvironmentalRate * TickInterval * TimeScaleMultiplier;
+	Vitals.BodyTemperature += EnvironmentalRate * StepSeconds * TimeScaleMultiplier;
 
 	// Body regulation toward normal
 	if (Vitals.BodyTemperature > TargetTemp)
 	{
-		Vitals.BodyTemperature -= FMath::Min(RegulationRate * TickInterval * TimeScaleMultiplier,
+		Vitals.BodyTemperature -= FMath::Min(RegulationRate * StepSeconds * TimeScaleMultiplier,
 											  Vitals.BodyTemperature - TargetTemp);
 	}
 	else if (Vitals.BodyTemperature < TargetTemp)
 	{
-		Vitals.BodyTemperature += FMath::Min(RegulationRate * TickInterval * TimeScaleMultiplier,
+		Vitals.BodyTemperature += FMath::Min(RegulationRate * StepSeconds * TimeScaleMultiplier,
 											  TargetTemp - Vitals.BodyTemperature);
 	}
 
@@ -527,12 +534,27 @@ void UMOVitalsComponent::TickVitals()
 
 	// Wetness integrates against the rain pipeline. Cheap accumulator that
 	// gates the expensive 9-ray shelter trace to once every WetnessPollInterval
-	// (default 2s) — most of the simulation cost is in the trace.
+	// (default 2s) — most of the simulation cost is in the trace. Runs BEFORE
+	// the environmental-temperature step so CachedOverheadCover is fresh for it.
 	WetnessAccumulatorSeconds += ScaledDeltaTime;
 	if (WetnessAccumulatorSeconds >= WetnessPollInterval)
 	{
 		UpdateWetness(WetnessAccumulatorSeconds);
 		WetnessAccumulatorSeconds = 0.0f;
+	}
+
+	// (H12) Environmental temperature: drive the (previously dead) weather→body
+	// exposure pipeline on a throttled cadence. Accumulate real (unscaled by
+	// TimeScale) seconds — ApplyEnvironmentalTemperature applies the TimeScale
+	// itself, so passing scaled time here would double-count it.
+	if (bEnableEnvironmentalTemperature)
+	{
+		EnvironmentalTempAccumulatorSeconds += TickInterval;
+		if (EnvironmentalTempAccumulatorSeconds >= EnvironmentalTempUpdateInterval)
+		{
+			UpdateEnvironmentalTemperature(EnvironmentalTempAccumulatorSeconds);
+			EnvironmentalTempAccumulatorSeconds = 0.0f;
+		}
 	}
 
 	// Broadcast general vitals changed for UI updates
@@ -547,6 +569,35 @@ EMOThermalComfort UMOVitalsComponent::GetThermalComfort() const
 	if (Temp >= ThermalThresholds.VeryHotAbove) return EMOThermalComfort::VeryHot;
 	if (Temp >= ThermalThresholds.HotAbove)     return EMOThermalComfort::Hot;
 	return EMOThermalComfort::Comfortable;
+}
+
+UMOAdrenalineComponent* UMOVitalsComponent::GetAdrenalineComponent()
+{
+	// (H15) Lazy resolve + cache. Mirrors UMOAdrenalineComponent::RefreshCachedComponents:
+	// prefer the medical provider interface, fall back to FindComponentByClass.
+	if (UMOAdrenalineComponent* Cached = CachedAdrenalineComp.Get())
+	{
+		return Cached;
+	}
+
+	AActor* Owner = GetOwner();
+	if (!Owner)
+	{
+		return nullptr;
+	}
+
+	UMOAdrenalineComponent* Resolved = nullptr;
+	if (Owner->Implements<UMOMedicalProviderInterface>())
+	{
+		Resolved = IMOMedicalProviderInterface::Execute_GetAdrenaline(Owner);
+	}
+	if (!Resolved)
+	{
+		Resolved = Owner->FindComponentByClass<UMOAdrenalineComponent>();
+	}
+
+	CachedAdrenalineComp = Resolved;
+	return Resolved;
 }
 
 void UMOVitalsComponent::CalculateHeartRate()
@@ -614,6 +665,18 @@ void UMOVitalsComponent::CalculateHeartRate()
 
 	// Calculate final HR
 	Vitals.HeartRate = BaseHR + ExertionMod + BloodLossMod + StressMod + TempMod + GlucoseMod + FitnessMod;
+
+	// (H15) Adrenaline heart-rate modifier. Previously computed in the adrenaline
+	// component but never consumed (ApplyVitalsModifiers was empty). It is a
+	// multiplier (1.0 = Baseline → no-op at rest, up to ~MaxHeartRateMultiplier
+	// during a combat spike). Applied to the summed HR before the physiological
+	// clamp so fight-or-flight tachycardia is real but still bounded by the
+	// 20–220 BPM clamp below. Single application — see MOAdrenalineComponent.h
+	// pitfall #4 (no double-apply); nothing else multiplies HR.
+	if (UMOAdrenalineComponent* Adrenaline = GetAdrenalineComponent())
+	{
+		Vitals.HeartRate *= Adrenaline->GetHeartRateModifier();
+	}
 
 	// Clamp to physiological limits
 	Vitals.HeartRate = FMath::Clamp(Vitals.HeartRate, 20.0f, 220.0f);
@@ -959,6 +1022,15 @@ void UMOVitalsComponent::UpdateStamina(float DeltaTime)
 			}
 		}
 
+		// (H15) Adrenaline stamina-drain modifier. Multiplier (1.0 = Baseline →
+		// no-op at rest): a slight buff (<1.0) during the active adrenaline push,
+		// a penalty (>1.0) during the post-combat crash. Previously computed but
+		// never consumed (ApplyVitalsModifiers was empty).
+		if (UMOAdrenalineComponent* Adrenaline = GetAdrenalineComponent())
+		{
+			DrainRate *= Adrenaline->GetStaminaDrainModifier();
+		}
+
 		Activity.CurrentStamina = FMath::Max(0.0f, Activity.CurrentStamina - DrainRate * DeltaTime);
 	}
 	else
@@ -1104,17 +1176,73 @@ void UMOVitalsComponent::UpdateWetness(float DeltaSeconds)
 		const FMOExposureShelter Shelter = UMOWeatherBlueprintLibrary::TestOverheadCover(
 			World, Origin, Owner);
 
+		// (H12) Cache the fresh overhead-cover for the environmental-temperature
+		// step so it gets a shelter insulation bonus without a second trace.
+		CachedOverheadCover = FMath::Clamp(Shelter.OverheadCover, 0.0f, 1.0f);
+
 		// Coverage 0 = fully exposed, 1 = fully covered. Effective rain on
 		// the pawn = intensity × (1 − coverage). Damp/Wet/Soaked accumulator
 		// then ticks up over DeltaSeconds.
-		const float EffectiveRain = RainIntensity * FMath::Max(0.0f, 1.0f - Shelter.OverheadCover);
+		const float EffectiveRain = RainIntensity * FMath::Max(0.0f, 1.0f - CachedOverheadCover);
 		NewLevel += EffectiveRain * WetnessGainPerSecond * DeltaSeconds;
 	}
 	else
 	{
 		// No rain — clothing dries.
 		NewLevel -= WetnessDecayPerSecond * DeltaSeconds;
+
+		// (H12) No trace fires in clear weather, so the cached overhead-cover
+		// would go stale. Decay it toward 0 (treat as "no shelter info") so a
+		// pawn that walked out from under a roof loses the phantom bonus. Fast
+		// linear decay — fully forgotten after ~10s of clear sky.
+		CachedOverheadCover = FMath::Max(0.0f, CachedOverheadCover - 0.1f * DeltaSeconds);
 	}
 
 	SetWetnessLevel(FMath::Clamp(NewLevel, 0.0f, 1.0f));
+}
+
+// (H12) Throttled weather→body exposure step. This is the single caller that
+// finally wires ApplyEnvironmentalTemperature (formerly dead code). Conservative
+// by construction: feels-like ambient is gentle, insulation is forgiving, and
+// the body temp is hard-clamped 25–45°C inside ApplyEnvironmentalTemperature.
+void UMOVitalsComponent::UpdateEnvironmentalTemperature(float DeltaSeconds)
+{
+	if (GetOwnerRole() != ROLE_Authority)
+	{
+		return;
+	}
+
+	AActor* Owner = GetOwner();
+	UWorld* World = Owner ? Owner->GetWorld() : nullptr;
+	if (!World)
+	{
+		return;
+	}
+
+	// Ambient signal: prefer "feels-like" (folds in wind chill, wet-cold, and
+	// heat index) so weather genuinely drives body temp — the survival pillar.
+	// With no weather provider the subsystem returns its configured default
+	// (20°C), so this gently holds the pawn near comfort rather than doing
+	// anything dangerous.
+	UMOWeatherIntegrationSubsystem* WeatherSys = World->GetSubsystem<UMOWeatherIntegrationSubsystem>();
+	if (!WeatherSys)
+	{
+		return;
+	}
+
+	const FVector Origin = Owner->GetActorLocation();
+	const float FeelsLikeC = WeatherSys->GetFeelsLikeTemperature(Origin, EMOTemperatureUnit::Celsius);
+
+	// Insulation = tunable clothing default + a cheap shelter bonus (reusing the
+	// wetness trace's cached overhead cover — no extra trace). Clamped 0..1.
+	// FLAG: clothing warmth is a flat default until equipment exposes a real
+	// per-item warmth field (see report). DefaultInsulationFactor is deliberately
+	// forgiving so an un-tuned game never cooks/freezes the player.
+	const float Insulation = FMath::Clamp(
+		DefaultInsulationFactor + ShelterInsulationBonus * CachedOverheadCover,
+		0.0f, 1.0f);
+
+	// Pass the real elapsed interval so drift integrates correctly despite the
+	// throttle (ApplyEnvironmentalTemperature still applies the clock TimeScale).
+	ApplyEnvironmentalTemperature(FeelsLikeC, Insulation, DeltaSeconds);
 }
