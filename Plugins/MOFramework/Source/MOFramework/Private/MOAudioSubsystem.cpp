@@ -53,6 +53,23 @@ void UMOAudioSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 		UIVolume = Settings->DefaultUIVolume;
 	}
 
+	// (H9) Prefer the player's SAVED volumes over developer defaults at boot.
+	// Without this, the mix runs on UMOAudioSettings dev defaults until the
+	// Options panel is opened — saved user volumes never took effect at startup
+	// (nothing calls UMOGameSettings::ApplyMOSettings at boot). UGameUserSettings
+	// is loaded from GameUserSettings.ini before subsystems initialize, so these
+	// reflect the persisted values. UIVolume has no user-facing slider — it stays
+	// on the audio-settings default. The ApplyVolumeToSoundClass calls below then
+	// push the resolved values to the sound classes.
+	if (const UMOGameSettings* UserSettings = UMOGameSettings::GetMOGameSettings())
+	{
+		MasterVolume = FMath::Clamp(UserSettings->MasterVolume, 0.0f, 1.0f);
+		MusicVolume = FMath::Clamp(UserSettings->MusicVolume, 0.0f, 1.0f);
+		AmbientVolume = FMath::Clamp(UserSettings->AmbientVolume, 0.0f, 1.0f);
+		SFXVolume = FMath::Clamp(UserSettings->SFXVolume, 0.0f, 1.0f);
+		WeatherVolume = FMath::Clamp(UserSettings->WeatherVolume, 0.0f, 1.0f);
+	}
+
 	// Try to load the default audio bank if configured. Lazy — if it's
 	// not set, we just don't have a bank; playback no-ops cleanly.
 	if (Settings && !Settings->DefaultAudioBank.IsNull())
@@ -316,7 +333,19 @@ void UMOAudioSubsystem::StopAllAudio()
 		TM.ClearTimer(DominanceShiftTimerHandle);
 		TM.ClearTimer(BaseLayerBreatheTimerHandle);
 		TM.ClearTimer(BaseLayerStatusLogTimerHandle);
+
+		// (H8) Cancel pending delayed base-layer restarts (see StopAmbientWithFade).
+		for (FTimerHandle& H : DelayedLayerTimerHandles)
+		{
+			TM.ClearTimer(H);
+		}
 	}
+	DelayedLayerTimerHandles.Reset();
+
+	// (H8) Bump generations so any async load still in flight is recognized as
+	// stale and bails — StopAllAudio runs on level transition / shutdown.
+	++MusicGeneration;
+	++AmbientGeneration;
 
 	// Reset internal state so PostLoadMap starts fresh, and so delayed
 	// base-layer respawn timers see bAmbientStreamActive=false and bail.
@@ -346,6 +375,10 @@ void UMOAudioSubsystem::SetMusicState(EMOMusicState NewState)
 	const EMOMusicState OldState = CurrentMusicState;
 	CurrentMusicState = NewState;
 
+	// (H8) Bump the music generation so any async load still in flight from the
+	// previous state is recognized as stale and bails before spawning audio.
+	const uint32 ThisGeneration = ++MusicGeneration;
+
 	UE_LOG(LogMOFramework, Warning, TEXT("[MOAudio] Music state: %s -> %s"),
 		*UEnum::GetValueAsString(OldState), *UEnum::GetValueAsString(NewState));
 
@@ -370,8 +403,16 @@ void UMOAudioSubsystem::SetMusicState(EMOMusicState NewState)
 
 		FStreamableManager& Streamable = UAssetManager::GetStreamableManager();
 		TrackStreamHandle(Streamable.RequestAsyncLoad(OverridePath,
-			FStreamableDelegate::CreateWeakLambda(this, [this, OverridePath, FadeIn, OldState, NewState]()
+			FStreamableDelegate::CreateWeakLambda(this, [this, OverridePath, FadeIn, OldState, NewState, ThisGeneration]()
 			{
+				// (H8) Stale-load guard: a newer SetMusicState superseded us
+				// while this asset was loading — drop silently so we don't
+				// spawn a second track or broadcast a stale transition.
+				if (ThisGeneration != MusicGeneration)
+				{
+					return;
+				}
+
 				USoundBase* Sound = Cast<USoundBase>(OverridePath.ResolveObject());
 				if (Sound)
 				{
@@ -397,8 +438,14 @@ void UMOAudioSubsystem::SetMusicState(EMOMusicState NewState)
 
 	// Standard path — bank lookup. Bank lookup miss = silence (logged), not an error.
 	const FName AudioId = MakeMusicAudioId(NewState);
-	ResolveAndLoadAsync(AudioId, [this, FadeIn, OldState, NewState](USoundBase* Sound, const FMOAudioBankRow& Row)
+	ResolveAndLoadAsync(AudioId, [this, FadeIn, OldState, NewState, ThisGeneration](USoundBase* Sound, const FMOAudioBankRow& Row)
 	{
+		// (H8) Stale-load guard — see override path above.
+		if (ThisGeneration != MusicGeneration)
+		{
+			return;
+		}
+
 		if (Sound)
 		{
 			StartMusic(Sound, Row, FadeIn);
@@ -421,6 +468,12 @@ void UMOAudioSubsystem::SetAmbientState(EMOAmbientState NewState)
 	const EMOAmbientState OldState = CurrentAmbientState;
 	CurrentAmbientState = NewState;
 
+	// (H8) Bump the ambient generation so stale async layer/single loads from a
+	// superseded state bail before spawning. The bAmbientStreamActive bool alone
+	// is re-armable (A->B->A re-arms it true), letting a stale-A continuation
+	// pass; the generation is monotonic so it never collides.
+	const uint32 ThisGeneration = ++AmbientGeneration;
+
 	UE_LOG(LogMOFramework, Warning, TEXT("[MOAudio] Ambient state: %s -> %s"),
 		*UEnum::GetValueAsString(OldState), *UEnum::GetValueAsString(NewState));
 
@@ -442,8 +495,15 @@ void UMOAudioSubsystem::SetAmbientState(EMOAmbientState NewState)
 	else
 	{
 		const FName AudioId = MakeAmbientAudioId(NewState);
-		ResolveAndLoadAsync(AudioId, [this, FadeIn, OldState, NewState](USoundBase* Sound, const FMOAudioBankRow& Row)
+		ResolveAndLoadAsync(AudioId, [this, FadeIn, OldState, NewState, ThisGeneration](USoundBase* Sound, const FMOAudioBankRow& Row)
 		{
+			// (H8) Stale-load guard: a newer ambient state superseded us while
+			// this single-track asset was loading — drop silently.
+			if (ThisGeneration != AmbientGeneration)
+			{
+				return;
+			}
+
 			if (Sound)
 			{
 				StartAmbientSingle(Sound, Row, FadeIn);
@@ -769,7 +829,16 @@ void UMOAudioSubsystem::StopAmbientWithFade(float FadeOutSeconds)
 		TM.ClearTimer(DominanceShiftTimerHandle);
 		TM.ClearTimer(BaseLayerBreatheTimerHandle);
 		TM.ClearTimer(BaseLayerStatusLogTimerHandle);
+
+		// (H8) Cancel pending delayed base-layer restarts. These were
+		// uncancelable locals before — a stale restart would respawn an
+		// immortal looping component after the state changed.
+		for (FTimerHandle& H : DelayedLayerTimerHandles)
+		{
+			TM.ClearTimer(H);
+		}
 	}
+	DelayedLayerTimerHandles.Reset();
 
 	bAmbientStreamActive = false;
 	CurrentLayerConfig = FMOAmbientLayerConfig();
@@ -781,6 +850,16 @@ void UMOAudioSubsystem::StartMusic(USoundBase* Sound, const FMOAudioBankRow& Row
 {
 	UWorld* World = GetGameInstance() ? GetGameInstance()->GetWorld() : nullptr;
 	if (!World || !Sound) return;
+
+	// (H8) Stop and clear any existing music component before overwriting the
+	// member. Without this, a second StartMusic (e.g. a late async load that
+	// passed the staleness guard, or rapid state changes) would orphan the old
+	// component — it keeps playing untracked, producing two simultaneous tracks.
+	if (MusicComponent)
+	{
+		MusicComponent->Stop();
+		MusicComponent = nullptr;
+	}
 
 	MusicComponent = UGameplayStatics::SpawnSound2D(World, Sound,
 		/*VolumeMultiplier*/ Row.VolumeMultiplier,
@@ -929,8 +1008,12 @@ void UMOAudioSubsystem::StartBaseLayer(const FMOAmbientBaseLayer& Layer, int32 S
 void UMOAudioSubsystem::StartBaseLayerContinuous(FName AudioId, int32 SlotIdx,
 	float Volume, float FadeInSeconds)
 {
+	// (H8) Capture the ambient generation at request time; the continuation
+	// bails if a newer ambient state has superseded this one mid-load.
+	const uint32 ThisGeneration = AmbientGeneration;
+
 	ResolveAndLoadAsync(AudioId,
-		[this, Volume, FadeInSeconds, AudioId, SlotIdx](USoundBase* Sound, const FMOAudioBankRow& Row)
+		[this, Volume, FadeInSeconds, AudioId, SlotIdx, ThisGeneration](USoundBase* Sound, const FMOAudioBankRow& Row)
 		{
 			if (!Sound)
 			{
@@ -939,8 +1022,10 @@ void UMOAudioSubsystem::StartBaseLayerContinuous(FName AudioId, int32 SlotIdx,
 				return;
 			}
 
-			// Bail if ambient state changed while we were loading.
-			if (!bAmbientStreamActive) return;
+			// (H8) Bail if ambient state changed while we were loading. Generation
+			// check is stale-safe across A->B->A; bAmbientStreamActive is the cheap
+			// gate for the common "stream fully stopped" case.
+			if (!bAmbientStreamActive || ThisGeneration != AmbientGeneration) return;
 
 			UWorld* World = GetGameInstance() ? GetGameInstance()->GetWorld() : nullptr;
 			if (!World) return;
@@ -980,8 +1065,14 @@ void UMOAudioSubsystem::StartBaseLayerContinuous(FName AudioId, int32 SlotIdx,
 void UMOAudioSubsystem::StartBaseLayerDelayed(FName AudioId, int32 SlotIdx,
 	float Volume, float FadeInSeconds, float DelayMin, float DelayMax)
 {
+	// (H8) Capture the ambient generation at request time; both the load
+	// continuation and the self-restart timer below bail if a newer ambient
+	// state supersedes this one. On respawn, this re-reads the (still current)
+	// generation, so the chain naturally tracks the live state.
+	const uint32 ThisGeneration = AmbientGeneration;
+
 	ResolveAndLoadAsync(AudioId,
-		[this, Volume, FadeInSeconds, AudioId, SlotIdx, DelayMin, DelayMax]
+		[this, Volume, FadeInSeconds, AudioId, SlotIdx, DelayMin, DelayMax, ThisGeneration]
 		(USoundBase* Sound, const FMOAudioBankRow& Row)
 		{
 			if (!Sound)
@@ -991,8 +1082,8 @@ void UMOAudioSubsystem::StartBaseLayerDelayed(FName AudioId, int32 SlotIdx,
 				return;
 			}
 
-			// Bail if ambient state changed while we were loading.
-			if (!bAmbientStreamActive) return;
+			// (H8) Bail if ambient state changed while we were loading.
+			if (!bAmbientStreamActive || ThisGeneration != AmbientGeneration) return;
 
 			UWorld* World = GetGameInstance() ? GetGameInstance()->GetWorld() : nullptr;
 			if (!World) return;
@@ -1040,19 +1131,30 @@ void UMOAudioSubsystem::StartBaseLayerDelayed(FName AudioId, int32 SlotIdx,
 				PlayDuration, DelayMin, DelayMax);
 
 			// Schedule the next iteration: wait one full play + a random gap,
-			// then re-enter StartBaseLayerDelayed. Sentinel check prevents
+			// then re-enter StartBaseLayerDelayed. Generation check prevents
 			// the cycle from firing on a stale state.
 			const float NextDelay = PlayDuration + FMath::FRandRange(DelayMin, DelayMax);
 			TWeakObjectPtr<UAudioComponent> WeakComp = Component;
 
+			// (H8) Store the restart handle in a member (was an uncancelable
+			// local) so StopAmbientWithFade / StopAllAudio can cancel pending
+			// restarts on state change — otherwise an orphan restart keeps a
+			// looping component immortal. Prune dead handles to bound growth.
+			FTimerManager& TM = World->GetTimerManager();
+			DelayedLayerTimerHandles.RemoveAll([&TM](const FTimerHandle& H)
+			{
+				return !H.IsValid() || !TM.IsTimerActive(H);
+			});
+
 			FTimerHandle RestartHandle;
-			World->GetTimerManager().SetTimer(RestartHandle,
+			TM.SetTimer(RestartHandle,
 				FTimerDelegate::CreateLambda(
-					[this, AudioId, SlotIdx, Volume, DelayMin, DelayMax, WeakComp]()
+					[this, AudioId, SlotIdx, Volume, DelayMin, DelayMax, WeakComp, ThisGeneration]()
 					{
-						if (!bAmbientStreamActive)
+						// (H8) State changed (or stream stopped) — silently drop.
+						if (!bAmbientStreamActive || ThisGeneration != AmbientGeneration)
 						{
-							return; // State changed — silently drop.
+							return;
 						}
 
 						// Stop the current iteration (might still be playing if
@@ -1069,6 +1171,8 @@ void UMOAudioSubsystem::StartBaseLayerDelayed(FName AudioId, int32 SlotIdx,
 							/*FadeInSeconds*/ 0.0f, DelayMin, DelayMax);
 					}),
 				NextDelay, /*bLoop=*/false);
+
+			DelayedLayerTimerHandles.Add(RestartHandle);
 		});
 }
 
@@ -1388,9 +1492,28 @@ void UMOAudioSubsystem::HandleBaseLayerBreatheTimer()
 		return;
 	}
 
-	// Target volume: 65-100% of nominal base layer volume. Wide enough that
-	// the drift is audible without making layers disappear.
-	const float NominalVol = CurrentLayerConfig.BaseLayerVolume;
+	// (H10) Breathe around the layer's AUTHORED effective volume, not the raw
+	// config BaseLayerVolume. The authored mix is:
+	//   BaseLayerVolume * per-layer Volume * per-asset VolumeMultiplier
+	// (see FMOAmbientBaseLayer docs and StartBaseLayer). Using BaseLayerVolume
+	// alone erased the per-layer/per-asset balance within a few breathe cycles —
+	// every layer converged to ~0.65-1.0 * BaseLayerVolume regardless of how it
+	// was authored. Slot index is parallel to CurrentLayerConfig.BaseLayers
+	// (StartAmbientLayered pre-sizes and spawns by index).
+	float NominalVol = CurrentLayerConfig.BaseLayerVolume;
+	if (CurrentLayerConfig.BaseLayers.IsValidIndex(PickIdx))
+	{
+		const FMOAmbientBaseLayer& LayerCfg = CurrentLayerConfig.BaseLayers[PickIdx];
+		float AssetMultiplier = 1.0f;
+		if (const FMOAudioBankRow* Row = AudioIdLookup.FindRef(LayerCfg.AudioId))
+		{
+			AssetMultiplier = Row->VolumeMultiplier;
+		}
+		NominalVol = CurrentLayerConfig.BaseLayerVolume * LayerCfg.Volume * AssetMultiplier;
+	}
+
+	// Target volume: 65-100% of the layer's authored effective volume. Wide
+	// enough that the drift is audible without making layers disappear.
 	const float TargetVol = FMath::FRandRange(0.65f, 1.0f) * NominalVol;
 	const float DriftDuration = FMath::FRandRange(6.0f, 12.0f);
 

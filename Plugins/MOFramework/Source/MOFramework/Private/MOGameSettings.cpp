@@ -1,10 +1,13 @@
 #include "MOGameSettings.h"
 #include "MOFramework.h"
+#include "MOAudioSubsystem.h"
 #include "Kismet/GameplayStatics.h"
 #include "Sound/SoundMix.h"
 #include "Sound/SoundClass.h"
 #include "AudioDevice.h"
 #include "Engine/Engine.h"
+#include "Engine/GameInstance.h"
+#include "Engine/World.h"
 
 UMOGameSettings::UMOGameSettings()
 {
@@ -84,25 +87,43 @@ void UMOGameSettings::ApplyAudioSettings()
 		AudioDevice->SetTransientPrimaryVolume(MasterVolume);
 	}
 
-	// For Sound Class volumes, use the gameplay statics approach if you have sound classes set up.
-	// Create Sound Classes in content (SC_Music, SC_SFX, SC_Ambient) and assign them to sounds.
-	// Then load and apply mix overrides:
+	// (H9) Push the saved per-category volumes to the audio subsystem so the
+	// runtime mix matches the user's saved settings. Previously this was left as
+	// commented-out example code, so saved volumes never applied until the
+	// Options panel was opened (which does the same push) — every session ran on
+	// the audio subsystem's developer defaults.
 	//
-	// Example setup (would require assets to be created):
-	// USoundClass* MusicClass = LoadObject<USoundClass>(nullptr, TEXT("/Game/Audio/SoundClasses/SC_Music.SC_Music"));
-	// USoundClass* SFXClass = LoadObject<USoundClass>(nullptr, TEXT("/Game/Audio/SoundClasses/SC_SFX.SC_SFX"));
-	// USoundClass* AmbientClass = LoadObject<USoundClass>(nullptr, TEXT("/Game/Audio/SoundClasses/SC_Ambient.SC_Ambient"));
-	//
-	// if (MusicClass)
-	// {
-	//     UGameplayStatics::SetSoundMixClassOverride(GEngine->GetWorld(), nullptr, MusicClass, MusicVolume, 1.0f, 0.0f, true);
-	// }
-	//
-	// For now, we rely on the master volume and individual sounds using audio components can check these values.
-	// Blueprint audio components can read MusicVolume, SFXVolume, AmbientVolume and apply them manually.
+	// UMOAudioSubsystem is GameInstance-scoped, but UMOGameSettings is a
+	// UGameUserSettings with no world of its own. Resolve via any live Game/PIE
+	// world's GameInstance. If none exists yet (very early boot, before a world
+	// loads), this no-ops cleanly — UMOAudioSubsystem::Initialize seeds itself
+	// from these same saved values, so boot is still covered.
+	if (GEngine)
+	{
+		for (const FWorldContext& Context : GEngine->GetWorldContexts())
+		{
+			if (Context.WorldType != EWorldType::Game && Context.WorldType != EWorldType::PIE)
+			{
+				continue;
+			}
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOGameSettings] Audio applied - Master: %.2f, Music: %.2f, SFX: %.2f, Ambient: %.2f"),
-		MasterVolume, MusicVolume, SFXVolume, AmbientVolume);
+			if (UGameInstance* GI = Context.OwningGameInstance)
+			{
+				if (UMOAudioSubsystem* Audio = GI->GetSubsystem<UMOAudioSubsystem>())
+				{
+					Audio->SetMasterVolume(MasterVolume);
+					Audio->SetMusicVolume(MusicVolume);
+					Audio->SetSFXVolume(SFXVolume);
+					Audio->SetAmbientVolume(AmbientVolume);
+					Audio->SetWeatherVolume(WeatherVolume);
+					break;
+				}
+			}
+		}
+	}
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOGameSettings] Audio applied - Master: %.2f, Music: %.2f, SFX: %.2f, Ambient: %.2f, Weather: %.2f"),
+		MasterVolume, MusicVolume, SFXVolume, AmbientVolume, WeatherVolume);
 }
 
 void UMOGameSettings::ApplyGraphicsSettings()

@@ -453,6 +453,24 @@ private:
 	 */
 	bool bAmbientStreamActive = false;
 
+	/**
+	 * (H8) Per-stream generation counters. Incremented on every music/ambient
+	 * state change. Async load continuations capture the generation by value
+	 * and bail if it no longer matches — so a stale load from a superseded
+	 * state can't spawn audio (the bool sentinel alone is re-armable: A->B->A
+	 * would let a stale-A continuation pass). Authoritative staleness guard.
+	 */
+	uint32 MusicGeneration = 0;
+	uint32 AmbientGeneration = 0;
+
+	/**
+	 * (H8) Live delayed base-layer restart timer handles. StartBaseLayerDelayed
+	 * stores its restart timer here (previously an uncancelable local) so
+	 * StopAmbientWithFade / StopAllAudio can cancel pending restarts on state
+	 * change. Cleared whenever the ambient stream stops.
+	 */
+	TArray<FTimerHandle> DelayedLayerTimerHandles;
+
 	/** Loaded ambient layers DataTable (cached from settings on init). */
 	UPROPERTY()
 	TObjectPtr<UDataTable> CachedAmbientLayersTable;
