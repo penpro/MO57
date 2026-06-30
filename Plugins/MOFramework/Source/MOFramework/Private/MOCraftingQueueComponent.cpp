@@ -84,6 +84,14 @@ bool UMOCraftingQueueComponent::EnqueueCraft(FName RecipeId, int32 Count, EMOCra
 		return false;
 	}
 
+	// Server-authoritative: only the server mutates the replicated queue and consumes
+	// ingredients. On a remote client this no-ops (matches UMOSurvivorJobQueueComponent).
+	if (!GetOwner()->HasAuthority())
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOCraftingQueue] EnqueueCraft ignored on non-authority"));
+		return false;
+	}
+
 	// Check queue size limit
 	if (MaxQueueSize > 0 && Queue.Entries.Num() >= MaxQueueSize)
 	{
@@ -136,6 +144,12 @@ bool UMOCraftingQueueComponent::EnqueueCraft(FName RecipeId, int32 Count, EMOCra
 
 bool UMOCraftingQueueComponent::CancelCraft(const FGuid& EntryId, bool bRefundIngredients)
 {
+	if (!GetOwner()->HasAuthority())
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOCraftingQueue] CancelCraft ignored on non-authority"));
+		return false;
+	}
+
 	for (int32 i = 0; i < Queue.Entries.Num(); ++i)
 	{
 		if (Queue.Entries[i].EntryId == EntryId)
@@ -186,6 +200,11 @@ bool UMOCraftingQueueComponent::CancelCraft(const FGuid& EntryId, bool bRefundIn
 
 void UMOCraftingQueueComponent::CancelAllCrafts(bool bRefundIngredients)
 {
+	if (!GetOwner()->HasAuthority())
+	{
+		return;
+	}
+
 	if (Queue.Entries.Num() == 0)
 	{
 		return;
@@ -222,6 +241,11 @@ void UMOCraftingQueueComponent::CancelAllCrafts(bool bRefundIngredients)
 
 bool UMOCraftingQueueComponent::ReorderQueueEntry(const FGuid& EntryId, int32 NewIndex)
 {
+	if (!GetOwner()->HasAuthority())
+	{
+		return false;
+	}
+
 	// Can't reorder to position 0 if crafting is active (can't interrupt active craft)
 	if (bIsCraftingActive && NewIndex == 0)
 	{
@@ -262,6 +286,11 @@ bool UMOCraftingQueueComponent::ReorderQueueEntry(const FGuid& EntryId, int32 Ne
 
 bool UMOCraftingQueueComponent::StartCrafting()
 {
+	if (!GetOwner()->HasAuthority())
+	{
+		return false;
+	}
+
 	if (IsQueueEmpty())
 	{
 		return false;
@@ -286,6 +315,11 @@ bool UMOCraftingQueueComponent::StartCrafting()
 
 void UMOCraftingQueueComponent::PauseCrafting()
 {
+	if (!GetOwner()->HasAuthority())
+	{
+		return;
+	}
+
 	if (!bIsCraftingActive)
 	{
 		return;
@@ -606,6 +640,11 @@ bool UMOCraftingQueueComponent::ApplySaveData(const FMOCraftingQueueSaveData& In
 
 void UMOCraftingQueueComponent::ClearQueue()
 {
+	if (!GetOwner()->HasAuthority())
+	{
+		return;
+	}
+
 	Queue.Entries.Empty();
 	Queue.MarkArrayDirty();
 	bIsCraftingActive = false;
@@ -619,6 +658,13 @@ void UMOCraftingQueueComponent::ClearQueue()
 
 void UMOCraftingQueueComponent::ProcessCraftingTick(float DeltaTime)
 {
+	// Tick is only enabled by StartCrafting (authority-gated), but guard the body
+	// directly — progress mutation is the one thing the queue must never do on a client.
+	if (!GetOwner()->HasAuthority())
+	{
+		return;
+	}
+
 	if (Queue.Entries.Num() == 0)
 	{
 		PauseCrafting();
