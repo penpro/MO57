@@ -2,13 +2,13 @@
 
 **Ultra-realistic procedural open-world survival game** with fully destructible voxel terrain. Minecraft's freedom meets hardcore realism - no fantasy creatures, grounded physics, and detailed medical/survival simulation.
 
-*Developed with Unreal Engine 5.7*
+*Developed with Unreal Engine 5.8*
 
 ---
 
-## Latest Update (2026-05-21)
+## Latest Update (2026-06-30)
 
-**Building System Overhaul + Critical Save/Load Fix.** Full floor/wall/half-wall/roof/roof-peak snap construction with mouse-wheel in-place flip, end-to-end wall extension, mixed-height stacking, and edge-aware roof tiling. Fixed the packaged-build bug where saved terrain would regenerate with the wrong seed (was setting the override on the graph asset; needed to set it on the stamp's own parameter overrides). Eliminated 2-second game-thread hitching from terrain modification sweep. Player now auto-possesses their saved character on load instead of being left as a sky-cam. See `PATCH_NOTES.md` for the full writeup.
+**Unreal Engine 5.8 Upgrade + Open-Source Voxel Migration.** Upgraded from UE 5.7 to 5.8 and swapped the Voxel Plugin to the open-source dev-phy build (the only line with 5.8 support). Root-caused the long-standing voxel "spawn in water" / teleport bug to `ACharacter::SetBase`'s changed 5.8 signature — `AMOCharacter` only overrode the old one, so the engine never called it. Got a clean, playable *packaged* build back: fixed a cook-blocking ensure in the weather subsystem, repointed five medical/skills DataTables that weren't cooking, restored Nanite/foliage usage flags on Megascans materials, and fixed packaged-only main-menu issues (music over the intro video, the Exit button not quitting). The Voxel sculpt API is now wrapped behind a `MOVoxel` facade so the rest of the codebase stays decoupled from plugin churn. See `PATCH_NOTES.md` for the full writeup.
 
 ---
 
@@ -33,7 +33,7 @@
 |--------|-------------|
 | **Realism First** | All systems rooted in real-world mechanics (medical, crafting, physics) |
 | **Emergent Civilization** | Solo primitive survival → multi-pawn settlements → castle cities |
-| **Total World Mutability** | Dig, mine, build, terraform via Voxel Plugin Pro 2.0 |
+| **Total World Mutability** | Dig, mine, build, terraform via Voxel Plugin (open-source dev-phy build) |
 | **Modding Foundation** | Full C++ mod support; base game is a realistic framework others can reskin/extend |
 
 ### Multiplayer
@@ -43,7 +43,7 @@
 
 ### World Generation
 
-- Voxel Plugin Pro 2.0 for destructible/buildable terrain
+- Voxel Plugin (open-source dev-phy build) for destructible/buildable terrain
 - Finite large flat world with world border
 - Procedurally generated biomes, resources, points of interest
 - Chunked loading for performance
@@ -654,11 +654,11 @@ Receives video material from controller via `SetVideoMaterial()`. Press any key 
 
 ## Technical Debt & Known Issues
 
-### UE5.7 Native Refactoring Roadmap
+### UE5.8 Native Refactoring Roadmap
 
 *Full audit completed March 18, 2026 - see `Docs/UE57_Refactoring_Plan.md`*
 
-The codebase was audited to identify custom implementations that could leverage UE5.7 native features:
+The codebase was audited to identify custom implementations that could leverage UE5.8 native features:
 
 | Priority | System | Native Alternative | Impact |
 |----------|--------|-------------------|--------|
@@ -859,17 +859,17 @@ Good fundamentals with interface-based decoupling, but needs abstraction layer w
 ### Environment
 
 - **IDE**: Rider for C++
-- **Engine**: Unreal Engine 5.7
-- **Engine Path**: `D:\UnrealEngine\UE_5.7`
+- **Engine**: Unreal Engine 5.8 (source build)
+- **Engine Path**: `D:\UnrealEngine\UE_5.8`
 
 ### Build Commands (PowerShell)
 
 ```powershell
 # Build Editor (Development)
-& 'D:\UnrealEngine\UE_5.7\Engine\Binaries\DotNET\UnrealBuildTool\UnrealBuildTool.exe' MO57Editor Win64 Development '-Project=D:\ueprojects\mo57\mo57.uproject'
+& 'D:\UnrealEngine\UE_5.8\Engine\Binaries\DotNET\UnrealBuildTool\UnrealBuildTool.exe' MO57Editor Win64 Development '-Project=D:\ueprojects\mo57\mo57.uproject'
 
 # Build Game (Development)
-& 'D:\UnrealEngine\UE_5.7\Engine\Binaries\DotNET\UnrealBuildTool\UnrealBuildTool.exe' MO57 Win64 Development '-Project=D:\ueprojects\mo57\mo57.uproject'
+& 'D:\UnrealEngine\UE_5.8\Engine\Binaries\DotNET\UnrealBuildTool\UnrealBuildTool.exe' MO57 Win64 Development '-Project=D:\ueprojects\mo57\mo57.uproject'
 ```
 
 ### Workflow Rules
@@ -889,7 +889,7 @@ Good fundamentals with interface-based decoupling, but needs abstraction layer w
 - **Ultra Dynamic Sky** - Dynamic sky/atmosphere
 - **Ultra Dynamic Weather** - Weather effects
 - **Oceanology** - Ocean/water simulation
-- **Voxel Plugin Pro 2.0** - Voxel terrain/world generation
+- **Voxel Plugin (open-source dev-phy build)** - Voxel terrain/world generation
 
 ---
 

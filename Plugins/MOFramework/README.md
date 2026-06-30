@@ -1,6 +1,6 @@
 # MOFramework
 
-A comprehensive Unreal Engine 5.7 plugin providing modular gameplay systems for survival, inventory management, crafting, and UI. Built with replication support and designed for extensibility.
+A comprehensive Unreal Engine 5.8 plugin providing modular gameplay systems for survival, inventory management, crafting, and UI. Built with replication support and designed for extensibility.
 
 ## Table of Contents
 
@@ -45,7 +45,7 @@ A comprehensive Unreal Engine 5.7 plugin providing modular gameplay systems for 
 
 ## Requirements
 
-- Unreal Engine 5.7+
+- Unreal Engine 5.8+
 - CommonUI Plugin (enabled by default in UE5)
 - Enhanced Input Plugin
 

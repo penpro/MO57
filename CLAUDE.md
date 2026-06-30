@@ -298,7 +298,7 @@ If you find yourself wanting to add `SetGamePaused`, `SetPause(true)`, a "pause 
 ### Core Pillars
 1. **Realism First** - All systems rooted in real-world mechanics (medical, crafting, physics)
 2. **Emergent Civilization** - Solo primitive survival → multi-pawn settlements → castle cities
-3. **Total World Mutability** - Dig, mine, build, terraform via Voxel Plugin Pro 2.0
+3. **Total World Mutability** - Dig, mine, build, terraform via Voxel Plugin (open-source dev-phy build)
 4. **Modding Foundation** - Full C++ mod support; base game is a realistic framework others can reskin/extend
 
 ### Multiplayer
@@ -323,7 +323,7 @@ If you find yourself wanting to add `SetGamePaused`, `SetPause(true)`, a "pause 
 - **Tech Accessibility**: No hard locks; player has "genetic memory" (lore: galactic seeding program) allowing attempts at any tech, but practical prerequisites make skipping difficult (can't smelt without foundry, can't build foundry without tools/materials)
 
 ### World Generation
-- Voxel Plugin Pro 2.0 for destructible/buildable terrain
+- Voxel Plugin (open-source dev-phy build) for destructible/buildable terrain
 - Finite large flat world with world border (engine supports earth-sized spheres for future)
 - Procedurally generated biomes, resources, points of interest
 - Chunked loading for performance
@@ -350,10 +350,17 @@ If you find yourself wanting to add `SetGamePaused`, `SetPause(true)`, a "pause 
 
 ## Development Environment
 - IDE: Rider for C++
-- Engine: Unreal Engine 5.7
-- Engine Install Path: `D:\UnrealEngine\UE_5.7`
-- Engine User Data: `C:\Users\penum\AppData\Local\UnrealEngine\5.7`
+- Engine: Unreal Engine 5.8 (source build)
+- Engine Install Path: `D:\UnrealEngine\UE_5.8`
+- Engine User Data: `C:\Users\penum\AppData\Local\UnrealEngine\5.8`
 - Build Tool Logs: `C:\Users\penum\AppData\Local\UnrealBuildTool`
+
+### UE 5.8 Migration Notes (upgraded 2026-06-30 from 5.7)
+- **Voxel Plugin = open-source dev-phy build** (not Pro 2.0), vendored into `Plugins/Voxel`. The sculpt API is wrapped behind **`MOVoxel`** (`MOVoxelAlias.h/.cpp`) — call through the facade; don't include Voxel headers directly elsewhere.
+- **`ACharacter::SetBase` changed signature** in 5.8: `UPrimitiveComponent*` → `FMovementBaseInterfaceData*`. Override the **new** signature (engine-version gated) or the engine silently never calls your override. See `MOCharacter.h`.
+- **Subsystem `Initialize()` must not `GetSubsystem()` siblings that don't exist in a cook world** (e.g. UI subsystems). The cook commandlet promotes the resulting ensure to **fatal** and packaging dies — defer cross-subsystem binds to `OnWorldBeginPlay`. See `MOWeatherIntegrationSubsystem`.
+- **Build settings: `DefaultBuildSettings = V7`** (both targets).
+- Next deprecation to clear before any 5.9 move: `FCoreDelegates::OnPostEngineInit` → `GetOnPostEngineInit()`.
 
 ## Workflow Rules
 - **Before compiling**: Prompt user to close Unreal Editor (Live Coding blocks CLI builds)
@@ -377,7 +384,7 @@ If you find yourself wanting to add `SetGamePaused`, `SetPause(true)`, a "pause 
 - **MOViewpointUtils** - Use for viewpoint resolution and line-of-sight checks. Handles player/AI controller differences consistently.
 - **MOUIUtils** - Use for formatting (`FormatQuantityDisplay`, `FormatDurationAsText`, etc.) and widget creation. Don't duplicate formatting patterns.
 
-## UE5.7 Native Refactoring Roadmap
+## UE5.8 Native Refactoring Roadmap
 
 *Full audit completed March 18, 2026 - see `Docs/MO57_Master_Plan.md` for consolidated planning*
 
@@ -638,7 +645,7 @@ UFUNCTION(BlueprintCallable)
 bool ApplySaveDataAuthority(const FMOVitalsSaveData& InSaveData);  // Server only
 ```
 
-### UE 5.7 Best Practices Observed
+### UE 5.8 Best Practices Observed
 
 1. **TObjectPtr** - Smart pointers for UPROPERTY object references
 2. **Enhanced Input System** - Input Actions + Mapping Contexts
@@ -697,7 +704,7 @@ See `Docs/PROJECT_STATUS.md` for full status of all pending work.
 - **Ultra Dynamic Sky** - Dynamic sky/atmosphere system
 - **Ultra Dynamic Weather** - Weather effects and systems
 - **Oceanology** - Ocean/water simulation
-- **Voxel Plugin Pro 2.0** - Voxel terrain/world generation
+- **Voxel Plugin (open-source dev-phy build)** - Voxel terrain/world generation
 
 ---
 
@@ -795,10 +802,10 @@ python Tools/ue_csv_utils.py export items.db Plugins/MOFramework/Content/Data/It
 ### Build Commands (PowerShell)
 ```powershell
 # Build Editor (Development)
-powershell.exe -Command "& 'D:\UnrealEngine\UE_5.7\Engine\Binaries\DotNET\UnrealBuildTool\UnrealBuildTool.exe' MO57Editor Win64 Development '-Project=D:\ueprojects\mo57\mo57.uproject'"
+powershell.exe -Command "& 'D:\UnrealEngine\UE_5.8\Engine\Binaries\DotNET\UnrealBuildTool\UnrealBuildTool.exe' MO57Editor Win64 Development '-Project=D:\ueprojects\mo57\mo57.uproject'"
 
 # Build Game (Development)
-powershell.exe -Command "& 'D:\UnrealEngine\UE_5.7\Engine\Binaries\DotNET\UnrealBuildTool\UnrealBuildTool.exe' MO57 Win64 Development '-Project=D:\ueprojects\mo57\mo57.uproject'"
+powershell.exe -Command "& 'D:\UnrealEngine\UE_5.8\Engine\Binaries\DotNET\UnrealBuildTool\UnrealBuildTool.exe' MO57 Win64 Development '-Project=D:\ueprojects\mo57\mo57.uproject'"
 
 # View build logs
 powershell.exe -Command "Get-Content 'C:\Users\penum\AppData\Local\UnrealBuildTool\Log.txt' -Tail 50"

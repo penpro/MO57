@@ -4,6 +4,30 @@ This file tracks changes, bug fixes, and new features. Updated incrementally to 
 
 ---
 
+## [2026-06-30] UE 5.8 Engine Upgrade + Open-Source Voxel Migration
+
+Upgraded the project from Unreal Engine 5.7 to 5.8 and swapped the Voxel Plugin to the open-source dev-phy build (the only line with 5.8 support). Most of the effort went into getting a clean, playable *packaged* build back — the cook commandlet is far stricter than the editor, so several latent issues surfaced as hard blockers.
+
+### Engine + Build
+- **UE 5.7 → 5.8** across both targets; `DefaultBuildSettings` V6 → V7.
+- **Voxel Plugin → dev-phy** (open-source) build, vendored into `Plugins/Voxel`.
+- **`MOVoxel` facade** (`MOVoxelAlias.h/.cpp`) — one translation unit names the Voxel types; terraforming + persistence call through it, so the rest of MO stays decoupled from the Voxel sculpt API as it churns.
+
+### Packaged-Build Fixes
+- **Voxel character base / landfall** *(root cause)* — `ACharacter::SetBase` changed signature in 5.8 (`UPrimitiveComponent*` → `FMovementBaseInterfaceData*`). `AMOCharacter` only overrode the old one, so the engine never called it and characters teleported / spawned in water on voxel updates. Now overrides the new signature (engine-version gated). Verified: spawns on a beach, zero voxel-base errors.
+- **Cook crash** — `MOWeatherIntegrationSubsystem::Initialize()` fetched the UI subsystem, which doesn't exist in a cook world; the cook commandlet promotes that ensure to fatal and killed packaging. Moved the bind to `OnWorldBeginPlay`.
+- **Missing DataTables** — repointed the medical/skills settings off the `/Game/Data` redirectors to the real `/MOFramework/Data` tables (they weren't cooking).
+- **Gray meshes** — set `bUsedWithNanite` + `bUsedWithInstancedStaticMeshes` on the Megascans master materials (props, foliage, far-LOD billboards, fuzz).
+- **Main menu** — music no longer plays over the intro video (packaged-only timing); the Exit Game button now quits reliably instead of needing Alt-F4.
+- **PCG ensure** — local patch to `FPCGWaitForVoxelWorldElement::PrepareDataInternal` for the 5.8 `FPCGDataCollection::DataCrcs` change (also fixed upstream by the plugin dev).
+- **ColonyAlert** — exempt per-instance `AlertId` GUID from the member-init determinism test.
+
+### Known Follow-ups
+- Megascans master-material flags are saved engine-side (`Engine/Plugins/Fab`), so they're per-machine until those masters are migrated into project content.
+- `FCoreDelegates::OnPostEngineInit` deprecation to clear before any 5.9 move.
+
+---
+
 ## [2026-05-24] Weather/Shelter Model + UDS Bridge Read-Side
 
 Weather is now actually wired up. The MO clock drives UDS time-of-day, UDS/UDW report current weather state back through `BP_WeatherBridge`, and a new multi-axis shelter model gives survival systems the granular environmental data they need.
