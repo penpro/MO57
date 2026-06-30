@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "Nodes/VoxelNode_RangeDebug.h"
 
@@ -135,7 +135,7 @@ class FVoxelNodeRangeStatManager
 public:
 	struct FQueuedStat
 	{
-		FVoxelGraphNodeRef NodeRef;
+		FVoxelGraphMergedNodeRef NodeRef;
 		FName PinRef;
 		TSharedPtr<FVoxelRangeStats> Stats;
 	};
@@ -152,19 +152,17 @@ public:
 	{
 		VOXEL_FUNCTION_COUNTER();
 
-		FQueuedStat QueuedStat;
-		while (Queue.Dequeue(QueuedStat))
+		const auto AddNode = [this](const FQueuedStat& QueuedStat, UEdGraphNode* GraphNode)
 		{
-			UEdGraphNode* GraphNode = QueuedStat.NodeRef.GetGraphNode_EditorOnly();
 			if (!ensure(GraphNode))
 			{
-				continue;
+				return;
 			}
 
 			UEdGraphPin* Pin = GraphNode->FindPin(QueuedStat.PinRef);
 			if (!ensure(Pin))
 			{
-				continue;
+				return;
 			}
 
 			TVoxelMap<FEdGraphPinReference, TSharedPtr<FVoxelRangeStats>>& PinToStats = NodeToPinToStats.FindOrAdd(GraphNode);
@@ -176,6 +174,16 @@ public:
 			else
 			{
 				PinToStats.Add_CheckNew(Pin, QueuedStat.Stats);
+			}
+		};
+
+		FQueuedStat QueuedStat;
+		while (Queue.Dequeue(QueuedStat))
+		{
+			AddNode(QueuedStat, QueuedStat.NodeRef.Node.GetGraphNode_EditorOnly());
+			for (const FVoxelGraphNodeRef& Node : QueuedStat.NodeRef.MergedNodes)
+			{
+				AddNode(QueuedStat, Node.GetGraphNode_EditorOnly());
 			}
 		}
 	}

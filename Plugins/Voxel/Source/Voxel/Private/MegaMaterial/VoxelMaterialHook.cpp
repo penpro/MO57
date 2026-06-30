@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelMaterialHook.h"
 
@@ -28,6 +28,7 @@ ADD_VOXEL_SHADER_HOOK(
 	float  CloudEmptySpaceSkippingSphereRadius;
 ##endif
 	)",
+	UE_508_SWITCH(
 	R"(
 ##if TEMPLATE_USES_SUBSTRATE
 	FSharedLocalBases SharedLocalBases;
@@ -37,6 +38,17 @@ ADD_VOXEL_SHADER_HOOK(
 	FSharedLocalBases SharedLocalBasesFullySimplified;
 	FSubstrateTree SubstrateTreeFullySimplified;
 	)",
+	R"(
+##if TEMPLATE_USES_SUBSTRATE
+	FSharedLocalBases SharedLocalBases;
+	FSubstrateTree SubstrateTree;
+
+##if (SUBSTRATE_USE_FULLYSIMPLIFIED_MATERIAL == 1) || ENABLE_NEW_HLSL_GENERATOR
+	// The new translator always add those members in. This is because we do not hide fully simplified instructions behind a "##if SUBSTRATE_USE_FULLYSIMPLIFIED_MATERIAL == 1" for now.
+	FSharedLocalBases SharedLocalBasesFullySimplified;
+	FSubstrateTree SubstrateTreeFullySimplified;
+	)"
+	),
 	"",
 	R"(
 	uint Voxel_DebugMode;
@@ -102,6 +114,7 @@ ADD_VOXEL_SHADER_HOOK(
 	FVoxelMaterialHook,
 	"6F912F1438B246498E18FDD90C717824",
 	"/Engine/Private/Nanite/NaniteRasterizationCommon.ush",
+	UE_508_SWITCH(
 	UE_507_SWITCH(
 	R"(
 		VertexParameters = MakeInitializedMaterialVertexParameters();
@@ -114,6 +127,13 @@ ADD_VOXEL_SHADER_HOOK(
 		SetVertexParameterAttributeData(VertexParameters, InputVert, InstanceDynamicData.LocalToTranslatedWorld, LocalToWorld, false /*bUsePrevPosition*/);
 	)"
 	),
+	R"(
+		VertexParameters = MakeInitializedMaterialVertexParameters();
+		SetVertexParameterInstanceData(VertexParameters, InstanceData, PrimitiveData, true /* WPO */);
+		SetVertexParameterAttributeData(VertexParameters, InputVert, LocalToTranslatedWorld, LocalToWorld, false /*bUsePrevPosition*/);
+	)"
+	),
+	UE_508_SWITCH(
 	UE_507_SWITCH(
 	R"(
 	##endif
@@ -124,6 +144,18 @@ ADD_VOXEL_SHADER_HOOK(
 		BRANCH
 		if (IsFirstPerson_FromFlags(PrimitiveData.Flags) || (PrimitiveData.Flags & PRIMITIVE_SCENE_DATA_FLAG_EVALUATE_WORLD_POSITION_OFFSET) != 0u)
 		{
+			EvaluateVertexMaterialAttributes(VertexParameters);
+		}
+	##endif // ENABLE_NEW_HLSL_GENERATOR
+	##endif
+	)"
+	),
+	R"(
+	##if ENABLE_NEW_HLSL_GENERATOR
+		BRANCH
+		if (IsFirstPerson_FromFlags(PrimitiveData.Flags) || (PrimitiveData.Flags & PRIMITIVE_SCENE_DATA_FLAG_EVALUATE_WORLD_POSITION_OFFSET) != 0u)
+		{
+			// This needs to be called after MakeMaterialLWCData (hence, after SetVertexParameterAttributeData), so that GetWorldPosition can be used :
 			EvaluateVertexMaterialAttributes(VertexParameters);
 		}
 	##endif // ENABLE_NEW_HLSL_GENERATOR
@@ -327,11 +359,12 @@ ADD_VOXEL_SHADER_HOOK(
 ##if VOXEL_NANITE_MATERIAL
 if (Cluster.NumUVs == 0)
 {
-	const float Sign = PixelAttributes.TangentZ.Value.z >= 0 ? 1 : -1;
-	const float a = -rcp(Sign + PixelAttributes.TangentZ.Value.z);
-	const float b = PixelAttributes.TangentZ.Value.x * PixelAttributes.TangentZ.Value.y * a;
-	const float3 TangentX = float3(1 + Sign * a * Pow2(PixelAttributes.TangentZ.Value.x), Sign * b, -Sign * PixelAttributes.TangentZ.Value.x);
-	const float3 TangentY = float3(b, Sign + a * Pow2(PixelAttributes.TangentZ.Value.y), -PixelAttributes.TangentZ.Value.y);
+	float3 TangentZ = normalize(PixelAttributes.TangentZ.Value);
+	const float Sign = TangentZ.z >= 0 ? 1 : -1;
+	const float a = -rcp(Sign + TangentZ.z);
+	const float b = TangentZ.x * TangentZ.y * a;
+	const float3 TangentX = float3(1 + Sign * a * Pow2(TangentZ.x), Sign * b, -Sign * TangentZ.x);
+	const float3 TangentY = float3(b, Sign + a * Pow2(TangentZ.y), -TangentZ.y);
 	PixelAttributes.UnMirrored = 1;
 	// Should be Pow2(InvScale) but that requires renormalization
 	float3x3 LocalToWorldNoScale = DFToFloat3x3(InstanceData.LocalToWorld);
@@ -339,7 +372,7 @@ if (Cluster.NumUVs == 0)
 	LocalToWorldNoScale[0] *= InvScale.x;
 	LocalToWorldNoScale[1] *= InvScale.y;
 	LocalToWorldNoScale[2] *= InvScale.z;
-	PixelAttributes.TangentToWorld = mul(float3x3(TangentX, TangentY, PixelAttributes.TangentZ.Value), LocalToWorldNoScale);
+	PixelAttributes.TangentToWorld = mul(float3x3(TangentX, TangentY, TangentZ), LocalToWorldNoScale);
 }
 ##endif
 ##endif)");

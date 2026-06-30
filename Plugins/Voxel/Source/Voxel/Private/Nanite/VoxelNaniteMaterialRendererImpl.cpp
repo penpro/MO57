@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "Nanite/VoxelNaniteMaterialRendererImpl.h"
 #include "Nanite/VoxelMaterialSelectionCS.h"
@@ -10,6 +10,7 @@
 
 #include "BasePassRendering.h"
 #include "Materials/Material.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "BasePassRendering.inl"
 #include "Materials/MaterialRenderProxy.h"
 #include "Rendering/NaniteStreamingManager.h"
@@ -199,27 +200,7 @@ void FVoxelNaniteMaterialRendererImpl::PreRenderBasePass_RenderThread(
 		MaterialRef = QueuedData_RenderThread->MaterialRef;
 		LocalToWorld = QueuedData_RenderThread->LocalToWorld;
 		UsedSurfaceTypes = MoveTemp(QueuedData_RenderThread->UsedSurfaceTypes);
-		PerPageData_Texture = QueuedData_RenderThread->PerPageData_Texture;
-
-		if (!ensure(PerPageData_Texture) ||
-			!ensure(QueuedData_RenderThread->PerPageData.Num() > 0))
-		{
-			QueuedData_RenderThread.Reset();
-			return;
-		}
-
-		RHIUpdateTexture2D_Safe(
-			PerPageData_Texture,
-			0,
-			FUpdateTextureRegion2D(
-				0,
-				0,
-				0,
-				0,
-				256,
-				256),
-			256 * sizeof(FIntPoint),
-			QueuedData_RenderThread->PerPageData.View<uint8>());
+		UniqueId = QueuedData_RenderThread->UniqueId;
 
 		QueuedData_RenderThread.Reset();
 	}
@@ -237,8 +218,7 @@ void FVoxelNaniteMaterialRendererImpl::PreRenderBasePass_RenderThread(
 	// There's probably a deeper issue at play here
 	UsedSurfaceTypes.Sort();
 
-	if (UsedSurfaceTypes.Num() == 0 ||
-		!ensureVoxelSlow(PerPageData_Texture))
+	if (UsedSurfaceTypes.Num() == 0)
 	{
 		return;
 	}
@@ -280,7 +260,11 @@ void FVoxelNaniteMaterialRendererImpl::PreRenderBasePass_RenderThread(
 	}
 #endif
 
+#if VOXEL_ENGINE_VERSION >= 508
+	RDG_EVENT_SCOPE_STAT(GraphBuilder, VoxelNaniteMaterialSelection, "VoxelNaniteMaterialSelection");
+#else
 	RDG_GPU_STAT_SCOPE(GraphBuilder, VoxelNaniteMaterialSelection);
+#endif
 
 	if (!PrimitiveUniformBuffer)
 	{
@@ -409,6 +393,9 @@ void FVoxelNaniteMaterialRendererImpl::ComputeMaterialSelection(
 		Parameters.RayTracingDataBuffer = PassParameters.VisibleClustersSWHW;
 #endif
 		Parameters.ShadingBinData = PassParameters.VisibleClustersSWHW;
+#if VOXEL_ENGINE_VERSION >= 508
+		Parameters.ThreadGroupData = PassParameters.VisibleClustersSWHW;
+#endif
 		Parameters.MultiViewIndices = PassParameters.VisibleClustersSWHW;
 		Parameters.MultiViewRectScaleOffsets = PassParameters.VisibleClustersSWHW;
 		Parameters.InViews = PassParameters.VisibleClustersSWHW;
@@ -426,6 +413,7 @@ void FVoxelNaniteMaterialRendererImpl::ComputeMaterialSelection(
 	const TUniformBufferRef<FVoxelMaterialSelectionParameters> VoxelParameters = INLINE_LAMBDA
 	{
 		FVoxelMaterialSelectionParameters Parameters;
+		Parameters.UniqueId = UniqueId;
 
 		{
 			VOXEL_SCOPE_COUNTER("RenderIndexToShadingBin");
@@ -507,7 +495,6 @@ void FVoxelNaniteMaterialRendererImpl::ComputeMaterialSelection(
 			}
 		}
 
-		Parameters.PerPageData_Texture = PerPageData_Texture;
 		Parameters.VisBuffer64 = PassParameters.VisBuffer64;
 		Parameters.ShadingMask = PassParameters.ShadingMask;
 

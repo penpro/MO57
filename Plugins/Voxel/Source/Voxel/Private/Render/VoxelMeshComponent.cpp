@@ -1,15 +1,16 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "Render/VoxelMeshComponent.h"
+#include "Render/VoxelMeshSceneProxy.h"
+#include "Render/VoxelMeshRenderProxy.h"
 #include "VoxelMesh.h"
-#include "VoxelMeshSceneProxy.h"
-#include "VoxelMeshRenderProxy.h"
 #include "Materials/MaterialInterface.h"
 
 UVoxelMeshComponent::UVoxelMeshComponent()
 {
 	CastShadow = true;
 	bUseAsOccluder = true;
+	bCanEverAffectNavigation = false;
 
 	BodyInstance.SetCollisionEnabled(ECollisionEnabled::NoCollision);
 }
@@ -17,7 +18,8 @@ UVoxelMeshComponent::UVoxelMeshComponent()
 void UVoxelMeshComponent::SetRenderProxy(
 	const TSharedRef<FVoxelMeshRenderProxy>& NewRenderProxy,
 	const TSharedRef<FVoxelMaterialRef>& NewMaterialRef,
-	const TSharedRef<FVoxelMaterialRef>& NewLumenMaterialRef)
+	const TSharedRef<FVoxelMaterialRef>& NewLumenMaterialRef,
+	const bool bNewCacheTextureStreaming)
 {
 	VOXEL_FUNCTION_COUNTER();
 	check(IsInGameThread());
@@ -40,6 +42,8 @@ void UVoxelMeshComponent::SetRenderProxy(
 	{
 		RuntimeVirtualTextures.Add(RuntimeVirtualTexture.Resolve_Ensured());
 	}
+
+	bCacheTextureStreaming = bNewCacheTextureStreaming;
 
 	MarkRenderStateDirty();
 
@@ -115,4 +119,41 @@ void UVoxelMeshComponent::OnComponentDestroyed(const bool bDestroyingHierarchy)
 
 	// Clear memory
 	RenderProxy.Reset();
+}
+
+void UVoxelMeshComponent::GetStreamingRenderAssetInfo(
+	FStreamingTextureLevelContext& LevelContext,
+	TArray<FStreamingRenderAssetPrimitiveInfo>& OutStreamingRenderAssets) const
+{
+	if (!bCacheTextureStreaming)
+	{
+		Super::GetStreamingRenderAssetInfo(LevelContext, OutStreamingRenderAssets);
+		return;
+	}
+
+	if (CanSkipGetTextureStreamingRenderAssetInfo() ||
+		CVarStreamingUseNewMetrics.GetValueOnGameThread() == 0)
+	{
+		return;
+	}
+
+	LevelContext.BindBuildData(nullptr);
+
+	if (MaterialRef)
+	{
+		MaterialRef->GetStreamingRenderAssetInfo(
+			LevelContext,
+			Bounds,
+			Bounds.SphereRadius,
+			OutStreamingRenderAssets);
+	}
+
+	if (LumenMaterialRef)
+	{
+		LumenMaterialRef->GetStreamingRenderAssetInfo(
+			LevelContext,
+			Bounds,
+			Bounds.SphereRadius,
+			OutStreamingRenderAssets);
+	}
 }

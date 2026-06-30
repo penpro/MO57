@@ -1,13 +1,23 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
 #include "VoxelMinimal.h"
-#include "VoxelMetadataRef.h"
-#include "Surface/VoxelSurfaceTypeBlend.h"
+#include "Bulk/VoxelBulkData.h"
 #include "VoxelHeightModifier.generated.h"
 
 class UVoxelMetadata;
+class FVoxelHeightSculptCanvasWriter;
+
+class VOXEL_API IVoxelHeightModifierRuntime
+{
+public:
+	IVoxelHeightModifierRuntime() = default;
+	virtual ~IVoxelHeightModifierRuntime() = default;
+
+	virtual FVoxelBox2D GetBounds() const = 0;
+	virtual void Apply(FVoxelHeightSculptCanvasWriter& Writer) const = 0;
+};
 
 USTRUCT()
 struct VOXEL_API FVoxelHeightModifier : public FVoxelVirtualStruct
@@ -15,58 +25,26 @@ struct VOXEL_API FVoxelHeightModifier : public FVoxelVirtualStruct
 	GENERATED_BODY()
 	GENERATED_VIRTUAL_STRUCT_BODY()
 
-public:
-	virtual void Initialize_GameThread();
-	virtual FVoxelBox2D GetBounds() const VOXEL_PURE_VIRTUAL({});
+	virtual TSharedPtr<IVoxelHeightModifierRuntime> GetRuntime() const VOXEL_PURE_VIRTUAL({});
+};
 
-	virtual void GetUsage(
-		bool& bWritesHeights,
-		bool& bWritesSurfaceTypes,
-		TVoxelSet<FVoxelMetadataRef>& MetadataRefsToWrite) const
+USTRUCT()
+struct VOXEL_API FVoxelHeightSerializedModifier final : public FVoxelBulkData
+{
+	GENERATED_BODY()
+	GENERATED_VIRTUAL_STRUCT_BODY()
+
+public:
+	TSharedPtr<FVoxelHeightModifier> Modifier;
+
+	FVoxelHeightSerializedModifier() = default;
+	explicit FVoxelHeightSerializedModifier(const TSharedRef<FVoxelHeightModifier>& Modifier)
+		: Modifier(Modifier)
 	{
-		bWritesHeights = true;
 	}
 
-	struct FSurfaceTypes
-	{
-		TVoxelArray<float> Alphas;
-		TVoxelArray<FVoxelSurfaceTypeBlend> SurfaceTypes;
-	};
-	struct FMetadata
-	{
-		TVoxelArray<float> Alphas;
-		TSharedPtr<FVoxelBuffer> Buffer;
-	};
-
-	struct FData
-	{
-		TVoxelArrayView<float> Heights;
-		FIntPoint Size = FIntPoint(ForceInit);
-		TSharedPtr<FSurfaceTypes> SurfaceTypes;
-		TVoxelMap<FVoxelMetadataRef, TSharedPtr<FMetadata>> MetadataRefToMetadata;
-		FVoxelIntBox2D Indices;
-		FTransform2d IndexToWorld;
-
-		template<typename LambdaType>
-		requires LambdaHasSignature_V<LambdaType, float(float, const FVector2D&)>
-		void Apply(LambdaType Lambda) const
-		{
-			VOXEL_FUNCTION_COUNTER_NUM(Indices.Count_int32());
-
-			Voxel::ParallelFor(Indices.GetY(), [&](const int32 IndexY)
-			{
-				for (int32 IndexX = Indices.Min.X; IndexX < Indices.Max.X; IndexX++)
-				{
-					float& Height = Heights[IndexX + Size.X * IndexY];
-					const FVector2D Position = IndexToWorld.TransformPoint(FVector2D(IndexX, IndexY));
-
-					Height = Lambda(MakeCopy(Height), Position);
-				}
-			});
-		}
-	};
-	virtual void Apply(const FData& Data) const VOXEL_PURE_VIRTUAL();
-
-private:
-	bool bInitialized = false;
+public:
+	//~ Begin FVoxelBulkData Interface
+	virtual void Serialize(FArchive& Ar) override;
+	//~ End FVoxelBulkData Interface
 };

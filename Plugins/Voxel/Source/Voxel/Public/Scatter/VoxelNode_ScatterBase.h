@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -16,19 +16,16 @@ struct VOXEL_API FVoxelNode_ScatterBase : public FVoxelNode
 	GENERATED_VOXEL_NODE_BODY()
 
 public:
-	VOXEL_INPUT_PIN(FVoxelPointSet, In, nullptr);
 	// Debug name for this node
 	VOXEL_INPUT_PIN(FName, Name, nullptr);
 	// Chunk size, in meters
-	VOXEL_INPUT_PIN(int32, ChunkSize, 64);
-
-	VOXEL_OUTPUT_PIN(FVoxelPointSet, Out);
+	VOXEL_INPUT_PIN(float, ChunkSize, 64.f);
 
 public:
 	//~ Begin FVoxelNode Interface
 	virtual bool HasGuid() const override
 	{
-		return true;
+		return false;
 	}
 	virtual bool CanBeQueried() const override
 	{

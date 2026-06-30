@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -10,7 +10,7 @@
 
 // Scatter points around parent points
 // Output is only child points, not parents
-USTRUCT(Category = "Point")
+USTRUCT(Category = "Point", meta = (AllowList = "PCG, Scatter"))
 struct VOXELPCG_API FVoxelNode_ScatterPoints : public FVoxelNode
 {
 	GENERATED_BODY()

@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -15,22 +15,6 @@ template<typename T, typename = decltype(std::declval<T>().AsWeak())>
 FORCEINLINE TWeakPtr<T> MakeWeakPtr(T& Ptr)
 {
 	return StaticCastWeakPtr<T>(Ptr.AsWeak());
-}
-
-template<typename T, typename = decltype(std::declval<T>().AsShared())>
-FORCEINLINE TSharedRef<T> MakeSharedRef(T* Ptr)
-{
-	return StaticCastSharedRef<T>(Ptr->AsShared());
-}
-template<typename T, typename = decltype(std::declval<T>().AsShared())>
-FORCEINLINE TSharedRef<T> MakeSharedRef(T& Ptr)
-{
-	return StaticCastSharedRef<T>(Ptr.AsShared());
-}
-template<typename T>
-FORCEINLINE TSharedRef<T> MakeSharedRef(const TSharedRef<T>& Ref)
-{
-	return Ref;
 }
 
 template<typename T>
@@ -381,5 +365,27 @@ requires std::is_constructible_v<T, ArgTypes...>
 	return MakeUnique<T>(Forward<ArgTypes>(Args)...);
 }
 
+template<typename T>
+requires std::is_array_v<T>
+[[nodiscard]] FORCEINLINE TUniquePtr<T> MakeUnique_Safe(SIZE_T Size)
+{
+	return MakeUnique<T>(Size);
+}
+
 #define MakeUnique MakeUnique_Safe
 #endif
+
+template<typename T>
+FORCEINLINE void VoxelEnableSharedFromThis(TSharedRef<T>& SharedRef)
+{
+#if VOXEL_ENGINE_VERSION >= 508
+	struct FSharedRef
+	{
+		T* Object;
+		SharedPointerInternals::FSharedReferencer<ESPMode::ThreadSafe> SharedReferenceCount;
+	};
+	SharedPointerInternals::EnableSharedFromThis(ReinterpretCastRef<FSharedRef>(SharedRef).SharedReferenceCount, &SharedRef.Get());
+#else
+	SharedPointerInternals::EnableSharedFromThis(&SharedRef, &SharedRef.Get());
+#endif
+}

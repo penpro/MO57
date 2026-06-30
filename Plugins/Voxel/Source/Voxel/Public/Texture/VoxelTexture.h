@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -7,7 +7,7 @@
 
 class FVoxelTextureData;
 
-UCLASS(BlueprintType, meta = (VoxelAssetType, AssetColor=Red))
+UCLASS(BlueprintType, meta = (VoxelAssetType, AssetColor=Red, AssetSubMenu = "Misc"))
 class VOXEL_API UVoxelTexture : public UVoxelAsset
 {
 	GENERATED_BODY()

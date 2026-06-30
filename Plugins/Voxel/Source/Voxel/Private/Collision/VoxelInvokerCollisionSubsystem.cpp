@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "Collision/VoxelInvokerCollisionSubsystem.h"
 #include "Collision/VoxelCollider.h"
@@ -35,12 +35,19 @@ void FVoxelInvokerCollisionSubsystem::LoadFromPrevious(FVoxelSubsystem& InPrevio
 	}
 
 	if (PreviousSubsystem.GetConfig().LayerToRender != GetConfig().LayerToRender ||
-		PreviousSubsystem.GetConfig().VoxelSize != GetConfig().VoxelSize ||
+		PreviousSubsystem.GetConfig().CollisionVoxelSize != GetConfig().CollisionVoxelSize ||
 		PreviousSubsystem.GetConfig().MegaMaterialProxy != GetConfig().MegaMaterialProxy ||
 		PreviousSubsystem.GetConfig().CollisionChunkSize != GetConfig().CollisionChunkSize ||
 		PreviousSubsystem.GetConfig().BlockinessMetadata != GetConfig().BlockinessMetadata)
 	{
 		PreviousChunkKeyToColliderRef.Empty();
+	}
+
+	if (PreviousSubsystem.GetConfig().CollisionChunkSize != GetConfig().CollisionChunkSize ||
+		PreviousSubsystem.GetConfig().CollisionVoxelSize != GetConfig().CollisionVoxelSize ||
+		!PreviousSubsystem.GetConfig().LocalToWorld.Equals(GetConfig().LocalToWorld))
+	{
+		InvokerView = nullptr;
 	}
 }
 
@@ -51,7 +58,7 @@ void FVoxelInvokerCollisionSubsystem::Initialize()
 	if (!InvokerView)
 	{
 		InvokerView = FVoxelCollisionInvokerManager::Get(GetConfig().World)->MakeView(
-			GetConfig().CollisionChunkSize * GetConfig().VoxelSize,
+			GetConfig().CollisionChunkSize * GetConfig().CollisionVoxelSize,
 			GetConfig().LocalToWorld);
 	}
 }
@@ -210,7 +217,7 @@ bool FVoxelInvokerCollisionSubsystem::HasCollision(const TConstVoxelArrayView<FV
 	ensure(!IsPreviousSubsystem());
 
 	const FVoxelConfig& Config = GetConfig();
-	const int32 ChunkSize = Config.CollisionChunkSize * Config.VoxelSize;
+	const int32 ChunkSize = Config.CollisionChunkSize * Config.CollisionVoxelSize;
 
 	for (const FVector& Position : Positions)
 	{
@@ -239,7 +246,7 @@ void FVoxelInvokerCollisionSubsystem::ComputeInline(
 	check(IsInGameThread());
 
 	const FVoxelConfig& Config = GetConfig();
-	const int32 ChunkSize = Config.CollisionChunkSize * Config.VoxelSize;
+	const int32 ChunkSize = Config.CollisionChunkSize * Config.CollisionVoxelSize;
 
 	TVoxelSet<FIntVector> ChunkKeys;
 	ChunkKeys.Reserve(Positions.Num());
@@ -327,12 +334,14 @@ FVoxelInvokerCollisionSubsystem::FColliderRef FVoxelInvokerCollisionSubsystem::C
 		GetConfig().LayerToRender,
 		0,
 		FInt64Vector3(ChunkKey) * GetConfig().CollisionChunkSize,
-		GetConfig().VoxelSize,
+		GetConfig().CollisionVoxelSize,
 		GetConfig().CollisionChunkSize,
 		GetConfig().LocalToWorld,
 		*GetConfig().MegaMaterialProxy,
 		GetConfig().BlockinessMetadata,
-		false);
+		false,
+		0.f,
+		0);
 
 	Mesher.bQueryMetadata = false;
 
@@ -362,8 +371,9 @@ void FVoxelInvokerCollisionSubsystem::SetupComponent(
 		Collider,
 		Config.InvokerCollision,
 		Config.bDoubleSidedCollision,
+		Config.bGenerateOverlapEvents,
 		FTransform(
 			FQuat::Identity,
-			FVector(ChunkKey) * Config.CollisionChunkSize * Config.VoxelSize,
-			FVector(Config.VoxelSize)));
+			FVector(ChunkKey) * Config.CollisionChunkSize * Config.CollisionVoxelSize,
+			FVector(Config.CollisionVoxelSize)));
 }

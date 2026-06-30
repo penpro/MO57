@@ -1,10 +1,20 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
 #include "VoxelCoreMinimal.h"
 #include "VoxelMinimal/VoxelAtomic.h"
 #include "VoxelMinimal/VoxelObjectPtr.h"
+
+class UStreamableRenderAsset;
+class FStreamingTextureLevelContext;
+struct FStreamingRenderAssetPrimitiveInfo;
+
+struct VOXELCORE_API FVoxelTextureStreamingRef
+{
+	TVoxelObjectPtr<UStreamableRenderAsset> Texture;
+	float TexelFactor = 0.f;
+};
 
 // Keeps material references alive
 // This is needed because material objects are re-instantiated in-place when recompiled
@@ -29,12 +39,21 @@ public:
 	{
 		return WeakMaterial;
 	}
+	void GetStreamingRenderAssetInfo(
+		FStreamingTextureLevelContext& LevelContext,
+		const FBoxSphereBounds& Bounds,
+		float ComponentScale,
+		TArray<FStreamingRenderAssetPrimitiveInfo>& OutStreamingRenderAssets);
 
 protected:
 	FVoxelMaterialRef() = default;
 
 	TObjectPtr<UMaterialInterface> Material;
 	TVoxelObjectPtr<UMaterialInterface> WeakMaterial;
+
+	TOptional<EMaterialQualityLevel::Type> QualityLevel;
+	TOptional<ERHIFeatureLevel::Type> FeatureLevel;
+	TVoxelArray<FVoxelTextureStreamingRef> TextureStreamingRefs;
 
 	friend class FVoxelMaterialRefManager;
 };

@@ -1,7 +1,9 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelEditorMinimal.h"
 #include "VoxelGraph.h"
+#include "VoxelGraphTracker.h"
+#include "VoxelTerminalGraph.h"
 #include "VoxelGraphEnvironment.h"
 #include "VoxelParameterOverridesDetails.h"
 
@@ -187,6 +189,35 @@ VOXEL_CUSTOMIZE_CLASS(UVoxelGraph)(IDetailLayoutBuilder& DetailLayout)
 			})
 		]
 	];
+
+	{
+		FSimpleDelegate RefreshDelegate = FVoxelEditorUtilities::MakeRefreshDelegate(this, DetailLayout);
+
+		TArray<UObject*> MainTerminalGraphs;
+		for (const TVoxelObjectPtr<UVoxelGraph>& WeakGraph : WeakGraphs)
+		{
+			UVoxelGraph* Graph = WeakGraph.Resolve();
+			if (!Graph ||
+				!Graph->HasMainTerminalGraph())
+			{
+				continue;
+			}
+
+			MainTerminalGraphs.Add(&Graph->GetMainTerminalGraph());
+			GVoxelGraphTracker->OnTerminalGraphChanged(*Graph).Add(FOnVoxelGraphChanged::Make(this, [RefreshDelegate]
+			{
+				RefreshDelegate.ExecuteIfBound();
+			}));
+		}
+
+		if (MainTerminalGraphs.Num() > 0)
+		{
+			Category.AddExternalObjectProperty(
+				MainTerminalGraphs,
+				GET_MEMBER_NAME_CHECKED(UVoxelTerminalGraph, bDisableNodeMerging),
+				EPropertyLocation::Advanced);
+		}
+	}
 
 	KeepAlive(FVoxelParameterOverridesDetails::Create(
 		DetailLayout,

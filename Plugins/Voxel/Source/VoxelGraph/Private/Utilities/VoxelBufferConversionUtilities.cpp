@@ -1,7 +1,37 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "Utilities/VoxelBufferConversionUtilities.h"
 #include "VoxelBufferConversionUtilitiesImpl.ispc.generated.h"
+
+FVoxelInt32Buffer FVoxelBufferConversionUtilities::BooleanToInt32(const FVoxelBoolBuffer& Buffer)
+{
+	VOXEL_FUNCTION_COUNTER_NUM(Buffer.Num(), 1024);
+
+	FVoxelInt32Buffer Result;
+	Result.Allocate(Buffer.Num());
+
+	ispc::VoxelBufferConversionUtilities_BooleanToInt32(
+		Buffer.GetData(),
+		Result.GetData(),
+		Buffer.Num());
+
+	return Result;
+}
+
+FVoxelInt32Buffer FVoxelBufferConversionUtilities::ByteToInt32(const FVoxelByteBuffer& Buffer)
+{
+	VOXEL_FUNCTION_COUNTER_NUM(Buffer.Num(), 1024);
+
+	FVoxelInt32Buffer Result;
+	Result.Allocate(Buffer.Num());
+
+	ispc::VoxelBufferConversionUtilities_ByteToInt32(
+		Buffer.GetData(),
+		Result.GetData(),
+		Buffer.Num());
+
+	return Result;
+}
 
 FVoxelFloatBuffer FVoxelBufferConversionUtilities::Int32ToFloat(const FVoxelInt32Buffer& Buffer)
 {

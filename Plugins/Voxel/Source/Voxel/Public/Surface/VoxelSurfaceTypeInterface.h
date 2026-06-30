@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -13,11 +13,18 @@ class VOXEL_API UVoxelSurfaceTypeInterface : public UVoxelAsset
 	GENERATED_BODY()
 
 public:
+	UPROPERTY(EditAnywhere, Category = "Config", AdvancedDisplay)
+	FGuid Guid;
+
+public:
 	//~ Begin UObject Interface
 	virtual void Serialize(FArchive& Ar) override;
 	virtual void PostLoad() override;
+	virtual void GetAssetRegistryTags(FAssetRegistryTagsContext Context) const override;
 #if WITH_EDITOR
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
+	virtual void PostRename(UObject* OldOuter, const FName OldName) override;
+	virtual void PostDuplicate(EDuplicateMode::Type DuplicateMode) override;
 #endif
 	//~ End UObject Interface
 

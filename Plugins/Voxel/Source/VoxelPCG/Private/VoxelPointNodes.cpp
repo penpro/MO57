@@ -1,10 +1,11 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelPointNodes.h"
+#include "VoxelBufferSplitter.h"
 #include "VoxelPointNodesStats.h"
 #include "VoxelPointId.h"
 
-void FVoxelNode_FilterPoints::Compute(const FVoxelGraphQuery Query) const
+void FVoxelNode_SplitPoints::Compute(const FVoxelGraphQuery Query) const
 {
 	const TValue<FVoxelPointSet> Points = InPin.Get(Query);
 
@@ -15,36 +16,40 @@ void FVoxelNode_FilterPoints::Compute(const FVoxelGraphQuery Query) const
 			return;
 		}
 
-		const TValue<FVoxelBoolBuffer> KeepPoint = KeepPointPin.Get(Points->MakeQuery(Query));
+		const TValue<FVoxelBoolBuffer> Condition = ConditionPin.Get(Points->MakeQuery(Query));
 
-		VOXEL_GRAPH_WAIT(Points, KeepPoint)
+		VOXEL_GRAPH_WAIT(Points, Condition)
 		{
-			if (!Points->CheckNum(this, KeepPoint->Num()))
+			if (!Points->CheckNum(this, Condition->Num()))
 			{
-				OutPin.Set(Query, Points);
+				TruePin.Set(Query, Points);
 				return;
 			}
 
 			FVoxelNodeStatScope StatScope(*this, Points->Num());
 
-			FVoxelInt32Buffer Indices;
-			Indices.Allocate(Points->Num());
-
-			int32 WriteIndex = 0;
-			for (int32 Index = 0; Index < Points->Num(); Index++)
+			if (Condition->IsConstant())
 			{
-				if ((*KeepPoint)[Index])
+				if (Condition->GetConstant())
 				{
-					Indices.Set(WriteIndex++, Index);
+					TruePin.Set(Query, Points);
 				}
+				else
+				{
+					FalsePin.Set(Query, Points);
+				}
+				return;
 			}
-			Indices.ShrinkTo(WriteIndex);
 
-			FVoxelPointFilterStats::RecordNodeStats(*this, Points->Num(), Indices.Num());
-
-			OutPin.Set(
-				Query,
-				Points->Gather(Indices.View()));
+			TVoxelArray<TSharedPtr<FVoxelPointSet>> PointSets = Points->Split(FVoxelBufferSplitter(*Condition));
+			if (const TSharedPtr<FVoxelPointSet> PointSet = PointSets[0])
+			{
+				FalsePin.Set(Query, PointSet.ToSharedRef());
+			}
+			if (const TSharedPtr<FVoxelPointSet> PointSet = PointSets[1])
+			{
+				TruePin.Set(Query, PointSet.ToSharedRef());
+			}
 		};
 	};
 }
@@ -71,7 +76,7 @@ void FVoxelNode_DensityFilter::Compute(const FVoxelGraphQuery Query) const
 		{
 			if (!Points->CheckNum(this, Densities->Num()))
 			{
-				OutPin.Set(Query, Points);
+				APin.Set(Query, Points);
 				return;
 			}
 
@@ -86,28 +91,25 @@ void FVoxelNode_DensityFilter::Compute(const FVoxelGraphQuery Query) const
 
 			const FVoxelPointRandom Random(Seed, STATIC_HASH("DensityFilter"));
 
-			FVoxelInt32Buffer Indices;
-			Indices.Allocate(Points->Num());
+			FVoxelBoolBuffer Condition;
+			Condition.Allocate(Points->Num());
 
-			int32 WriteIndex = 0;
 			for (int32 Index = 0; Index < Points->Num(); Index++)
 			{
 				const FVoxelPointId Id = (*IdBuffer)[Index];
 				const float Fraction = Random.GetFraction(Id);
-				if (Fraction >= (*Densities)[Index])
-				{
-					continue;
-				}
-
-				Indices.Set(WriteIndex++, Index);
+				Condition.Set(Index, Fraction >= (*Densities)[Index]);
 			}
-			Indices.ShrinkTo(WriteIndex);
 
-			FVoxelPointFilterStats::RecordNodeStats(*this, Points->Num(), Indices.Num());
-
-			OutPin.Set(
-				Query,
-				Points->Gather(Indices.View()));
+			TVoxelArray<TSharedPtr<FVoxelPointSet>> PointSets = Points->Split(FVoxelBufferSplitter(Condition));
+			if (const TSharedPtr<FVoxelPointSet> PointSet = PointSets[0])
+			{
+				BPin.Set(Query, PointSet.ToSharedRef());
+			}
+			if (const TSharedPtr<FVoxelPointSet> PointSet = PointSets[1])
+			{
+				APin.Set(Query, PointSet.ToSharedRef());
+			}
 		};
 	};
 }

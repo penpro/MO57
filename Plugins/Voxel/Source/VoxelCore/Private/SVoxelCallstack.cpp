@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "SVoxelCallstack.h"
 
@@ -204,7 +204,7 @@ public:
 						.Style(VoxelStyle, *FString(StyleName + ".Hyperlink"))
 						.OnNavigate_Lambda([=, this]
 						{
-							FVoxelUtilities::FocusObject(Entry->WeakObject.Resolve());
+							Entry->OnClick();
 						})
 					]
 				]

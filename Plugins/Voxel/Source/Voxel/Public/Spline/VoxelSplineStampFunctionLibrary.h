@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -31,6 +31,10 @@ public:
 public:
 	UFUNCTION(Category = "Stamp|Spline", meta = (AllowList = "HeightSpline, VolumeSpline"))
 	float GetSplineLength() const;
+
+	// Returns the last valid spline key (at the spline's end point)
+	UFUNCTION(Category = "Stamp|Spline", meta = (AllowList = "HeightSpline, VolumeSpline"))
+	float GetLastSplineKey() const;
 
 	UFUNCTION(Category = "Stamp|Spline", meta = (AllowList = "HeightSpline, VolumeSpline"))
 	FVoxelVectorBuffer GetPositionAlongSpline(UPARAM(meta = (SplineKeyPin)) const FVoxelFloatBuffer& SplineKey) const;

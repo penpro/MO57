@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -66,7 +66,7 @@ struct FVoxelMetadataRefStatics
 			}; \
 		}
 
-UCLASS(BlueprintType, Abstract, meta = (VoxelAssetType, AssetColor=Red, AssetSubMenu = "Metadata"))
+UCLASS(BlueprintType, Abstract, meta = (VoxelAssetType, AssetColor=Red, AssetSubMenu = "Structure"))
 class VOXEL_API UVoxelMetadata : public UVoxelAsset
 {
 	GENERATED_BODY()
@@ -90,6 +90,9 @@ public:
 	}
 
 public:
+	UPROPERTY(EditAnywhere, Category = "Config", AdvancedDisplay)
+	FGuid Guid;
+
 #if WITH_EDITORONLY_DATA
 	UPROPERTY(EditAnywhere, Category = "Editor")
 	FVoxelAssetIcon AssetIcon;
@@ -108,9 +111,12 @@ public:
 public:
 	//~ Begin UObject Interface
 	virtual void Serialize(FArchive& Ar) override;
+	virtual void PostLoad() override;
+	virtual void GetAssetRegistryTags(FAssetRegistryTagsContext Context) const override;
 #if WITH_EDITOR
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
 	virtual void PostRename(UObject* OldOuter, const FName OldName) override;
+	virtual void PostDuplicate(EDuplicateMode::Type DuplicateMode) override;
 #endif
 	//~ End UObject Interface
 };

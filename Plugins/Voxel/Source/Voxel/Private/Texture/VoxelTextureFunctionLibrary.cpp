@@ -1,9 +1,13 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "Texture/VoxelTextureFunctionLibrary.h"
 #include "Texture/VoxelTextureData.h"
 #include "VoxelTextureFunctionLibraryImpl.ispc.generated.h"
 #include "VoxelTextureFunctionLibraryImpl_Color.ispc.generated.h"
+
+VOXEL_REGISTER_FUNCTION(UVoxelTextureFunctionLibrary, SampleTexture);
+VOXEL_REGISTER_FUNCTION(UVoxelTextureFunctionLibrary, IsValid);
+VOXEL_REGISTER_FUNCTION(UVoxelTextureFunctionLibrary, GetSize);
 
 bool UVoxelTextureFunctionLibrary::IsValid(const FVoxelTextureRef& Texture) const
 {

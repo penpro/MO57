@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "Spline/VoxelHeightSplineStamp.h"
 #include "Spline/VoxelHeightSplineGraph.h"
@@ -244,6 +244,11 @@ FVoxelBox FVoxelHeightSplineStampRuntime::GetLocalBounds() const
 	return FVoxelBox::FromBounds(GetChildren());
 }
 
+bool FVoxelHeightSplineStampRuntime::CanPartiallyInvalidate() const
+{
+	return true;
+}
+
 bool FVoxelHeightSplineStampRuntime::ShouldUseQueryPrevious() const
 {
 	return GetBlendMode() == EVoxelHeightBlendMode::Override;
@@ -273,7 +278,7 @@ TVoxelInlineArray<FVoxelBox, 1> FVoxelHeightSplineStampRuntime::GetChildren() co
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
 
-bool FVoxelHeightSplineStampRuntime::ShouldFullyInvalidate(
+bool FVoxelHeightSplineStampRuntime::TryToPartiallyInvalidate(
 	const FVoxelStampRuntime& PreviousRuntime,
 	TVoxelArray<FVoxelBox>& OutLocalBoundsToInvalidate) const
 {
@@ -287,7 +292,7 @@ bool FVoxelHeightSplineStampRuntime::ShouldFullyInvalidate(
 		MaxWidth != Other.MaxWidth ||
 		*MetadataOverrides != *Other.MetadataOverrides)
 	{
-		return true;
+		return false;
 	}
 
 	const TVoxelSet<FVoxelSplineSegment> OldSegments(Other.Segments);
@@ -309,7 +314,7 @@ bool FVoxelHeightSplineStampRuntime::ShouldFullyInvalidate(
 		}
 	}
 
-	return false;
+	return true;
 }
 
 ///////////////////////////////////////////////////////////////////////////////

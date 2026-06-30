@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelWorld.h"
 #include "VoxelState.h"
@@ -8,9 +8,12 @@
 #include "VoxelTaskContext.h"
 #include "VoxelWorldRootComponent.h"
 #include "VoxelStampComponentUtilities.h"
+#include "Collision/VoxelCollisionInvoker.h"
 #include "MegaMaterial/VoxelMegaMaterial.h"
+#include "Navigation/VoxelNavigationComponent.h"
 #include "GameFramework/Pawn.h"
 #include "Misc/ScopedSlowTask.h"
+#include "Kismet/GameplayStatics.h"
 
 #if WITH_EDITOR
 #include "Selection.h"
@@ -48,13 +51,17 @@ VOXEL_RUN_ON_STARTUP_GAME()
 	});
 }
 
-class FVoxelWorldTicker : public FVoxelSingleton
+class FVoxelWorldDebugTicker : public FVoxelSingleton
 {
 public:
 	//~ Begin FVoxelSingleton Interface
 	virtual void Tick() override
 	{
 		VOXEL_FUNCTION_COUNTER();
+
+#if WITH_EDITOR
+		CheckForMissingCollisionInvokers();
+#endif
 
 		if (!GVoxelDumpStatus ||
 			GFrameCounter % 10 != 0)
@@ -101,8 +108,48 @@ public:
 		});
 	}
 	//~ End FVoxelSingleton Interface
+
+#if WITH_EDITOR
+	static void CheckForMissingCollisionInvokers()
+	{
+		VOXEL_FUNCTION_COUNTER();
+
+		ForEachObjectOfClass_Copy<AVoxelWorld>([](AVoxelWorld& VoxelWorld)
+		{
+			if (VoxelWorld.IsTemplate() ||
+				!VoxelWorld.bWarnAboutMissingInvokers ||
+				VoxelWorld.bCollisionInvokerComponentSeen)
+			{
+				return;
+			}
+
+			const UWorld* World = VoxelWorld.GetWorld();
+			if (!World ||
+				World->GetNetMode() != NM_DedicatedServer)
+			{
+				return;
+			}
+
+			if (!VoxelWorld.bPlayerSeen)
+			{
+				if (UGameplayStatics::GetNumPlayerStates(World) > 0)
+				{
+					VoxelWorld.bPlayerSeen = true;
+				}
+			}
+
+			ForEachObjectOfClass<UVoxelCollisionInvokerComponent>([&](const UVoxelCollisionInvokerComponent& Component)
+			{
+				if (Component.GetWorld() == World)
+				{
+					VoxelWorld.bCollisionInvokerComponentSeen = true;
+				}
+			});
+		});
+	}
+#endif
 };
-FVoxelWorldTicker* GVoxelWorldTicker = new FVoxelWorldTicker();
+FVoxelWorldDebugTicker* GVoxelWorldDebugTicker = new FVoxelWorldDebugTicker();
 
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
@@ -130,6 +177,8 @@ AVoxelWorld::AVoxelWorld()
 		UVoxelHeightLayer::Default();
 		UVoxelVolumeLayer::Default();
 	}
+
+	NavigationMeshComponent = UVoxelNavigationComponent::StaticClass();
 }
 
 AVoxelWorld::~AVoxelWorld()
@@ -460,6 +509,22 @@ void AVoxelWorld::EndPlay(const EEndPlayReason::Type EndPlayReason)
 		DestroyRuntime();
 	}
 
+#if WITH_EDITOR
+	if (bWarnAboutMissingInvokers &&
+		bPlayerSeen &&
+		!bCollisionInvokerComponentSeen)
+	{
+		const UWorld* World = GetWorld();
+		if (World &&
+			World->GetNetMode() == NM_DedicatedServer)
+		{
+			VOXEL_MESSAGE(Error,
+				"No voxel collision invokers found on dedicated server. This will lead to players falling through the world.\n"
+				"Either add a Voxel Collision Invoker to your character class or set WarnAboutMissingInvokers to false on your Voxel World.");
+		}
+	}
+#endif
+
 	Super::EndPlay(EndPlayReason);
 }
 
@@ -492,6 +557,34 @@ void AVoxelWorld::OnConstruction(const FTransform& Transform)
 		CreateRuntime();
 	}
 #endif
+}
+
+void AVoxelWorld::ApplyWorldOffset(const FVector& InOffset, const bool bWorldShift)
+{
+	VOXEL_FUNCTION_COUNTER();
+
+	Super::ApplyWorldOffset(InOffset, bWorldShift);
+
+	if (!Runtime)
+	{
+		return;
+	}
+
+	// The runtime mesh components are reused across frames and aren't necessarily
+	// re-meshed when the world origin moves, so their cached render bounds would
+	// otherwise stay at the pre-shift location and the chunks get wrongly culled.
+	// Refresh each component's transform and render state to fix that.
+	for (const TVoxelObjectPtr<USceneComponent>& WeakComponent : Runtime->AllComponents)
+	{
+		USceneComponent* Component = WeakComponent.Resolve();
+		if (!Component)
+		{
+			continue;
+		}
+
+		Component->UpdateComponentToWorld();
+		Component->MarkRenderStateDirty();
+	}
 }
 
 void AVoxelWorld::PostLoad()
@@ -737,7 +830,9 @@ bool AVoxelWorld::CanBeBaseForCharacter(APawn* Pawn) const
 		return Super::CanBeBaseForCharacter(Pawn);
 	}
 
+	PRAGMA_DISABLE_DEPRECATION_WARNINGS
 	const UPrimitiveComponent* MovementBase = Pawn->GetMovementBase();
+	PRAGMA_ENABLE_DEPRECATION_WARNINGS
 	if (!MovementBase ||
 		MovementBase->GetOwner() != this ||
 		MovementBase == GetRootComponent())
@@ -785,7 +880,7 @@ void AVoxelWorld::CreateNewIfNeeded_EditorOnly(const UObject* WorldContext)
 		return;
 	}
 
-	for (AVoxelWorld* It : TActorRange<AVoxelWorld>(World))
+	if (TActorIterator<AVoxelWorld>(World))
 	{
 		return;
 	}

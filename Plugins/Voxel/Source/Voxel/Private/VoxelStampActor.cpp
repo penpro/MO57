@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelStampActor.h"
 #include "VoxelSettings.h"
@@ -8,6 +8,10 @@ AVoxelStampActor::AVoxelStampActor()
 {
 	StampComponent = CreateDefaultSubobject<UVoxelStampComponent>("Stamp");
 	RootComponent = StampComponent;
+
+#if WITH_EDITORONLY_DATA
+	bIsSpatiallyLoaded = false;
+#endif
 }
 
 UVoxelStampComponent& AVoxelStampActor::GetStampComponent() const

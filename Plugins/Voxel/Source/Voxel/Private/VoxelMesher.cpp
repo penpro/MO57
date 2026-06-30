@@ -1,11 +1,13 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelMesher.h"
 #include "VoxelMesh.h"
 #include "VoxelQuery.h"
 #include "VoxelCellGenerator.h"
+#include "VoxelDistanceFieldWrapper.h"
 #include "VoxelGraphPositionParameter.h"
 #include "Surface/VoxelSurfaceTypeTable.h"
+#include "VoxelMesherDistanceFieldBuilder.h"
 #include "Surface/VoxelSurfaceTypeBlendBuffer.h"
 #include "Surface/VoxelSmartSurfaceTypeResolver.h"
 #include "Buffer/VoxelBaseBuffers.h"
@@ -23,7 +25,9 @@ FVoxelMesher::FVoxelMesher(
 	const FTransform& LocalToWorld,
 	const FVoxelMegaMaterialProxy& MegaMaterialProxy,
 	const FVoxelFloatMetadataRef BlockinessMetadata,
-	const bool bExportDistances)
+	const bool bGenerateDistanceFields,
+	const float MeshDistanceFieldBias,
+	const int32 MeshDistanceFieldBricksPerChunk)
 	: Layers(Layers)
 	, SurfaceTypeTable(SurfaceTypeTable)
 	, DependencyCollector(DependencyCollector)
@@ -35,7 +39,9 @@ FVoxelMesher::FVoxelMesher(
 	, LocalToWorld(LocalToWorld)
 	, MegaMaterialProxy(MegaMaterialProxy)
 	, BlockinessMetadata(BlockinessMetadata)
-	, bExportDistances(bExportDistances)
+	, bGenerateDistanceFields(bGenerateDistanceFields)
+	, MeshDistanceFieldBias(MeshDistanceFieldBias)
+	, MeshDistanceFieldBricksPerChunk(MeshDistanceFieldBricksPerChunk)
 	// We need edges to have accurate mesh normals & for Lumen
 	, DataSize(ChunkSize + 4)
 {
@@ -110,83 +116,137 @@ void FVoxelMesher::GenerateVertices()
 		[&](
 		FIntVector Position,
 		const TVoxelStaticArray<float, 8>& CellDistances)
-	{
-		Position -= FIntVector(1);
-
-		int32 NumVertices = 0;
-		FVector3f VertexSum = FVector3f(ForceInit);
-
-		for (int32 EdgeIndex = 0; EdgeIndex < 12; EdgeIndex++)
 		{
-			const int32 Direction = EdgeIndex / 4;
-			const int32 VertexIndex = EdgeIndex % 4;
+			Position -= FIntVector(1);
 
-			const int32 IndexA = INLINE_LAMBDA
+			int32 NumVertices = 0;
+			FVector3f VertexSum = FVector3f(ForceInit);
+
+			for (int32 EdgeIndex = 0; EdgeIndex < 12; EdgeIndex++)
 			{
-				switch (Direction)
+				const int32 Direction = EdgeIndex / 4;
+				const int32 VertexIndex = EdgeIndex % 4;
+
+				const int32 IndexA = INLINE_LAMBDA
 				{
-				default: VOXEL_ASSUME(false);
-				case 0: return bool(VertexIndex & 0x0) + 2 * bool(VertexIndex & 0x1) + 4 * bool(VertexIndex & 0x2);
-				case 1: return bool(VertexIndex & 0x1) + 2 * bool(VertexIndex & 0x0) + 4 * bool(VertexIndex & 0x2);
-				case 2: return bool(VertexIndex & 0x1) + 2 * bool(VertexIndex & 0x2) + 4 * bool(VertexIndex & 0x0);
+					switch (Direction)
+					{
+					default: VOXEL_ASSUME(false);
+					case 0: return bool(VertexIndex & 0x0) + 2 * bool(VertexIndex & 0x1) + 4 * bool(VertexIndex & 0x2);
+					case 1: return bool(VertexIndex & 0x1) + 2 * bool(VertexIndex & 0x0) + 4 * bool(VertexIndex & 0x2);
+					case 2: return bool(VertexIndex & 0x1) + 2 * bool(VertexIndex & 0x2) + 4 * bool(VertexIndex & 0x0);
+					}
+				};
+				const int32 IndexB = IndexA + (1 << Direction);
+
+				const float DistanceA = CellDistances[IndexA];
+				const float DistanceB = CellDistances[IndexB];
+
+				if ((DistanceA >= 0) == (DistanceB >= 0))
+				{
+					continue;
 				}
-			};
-			const int32 IndexB = IndexA + (1 << Direction);
 
-			const float DistanceA = CellDistances[IndexA];
-			const float DistanceB = CellDistances[IndexB];
+				if (IndexA == 0)
+				{
+					checkVoxelSlow(FVoxelUtilities::IsValidINT16(Position.X));
+					checkVoxelSlow(FVoxelUtilities::IsValidINT16(Position.Y));
+					checkVoxelSlow(FVoxelUtilities::IsValidINT16(Position.Z));
 
-			if ((DistanceA >= 0) == (DistanceB >= 0))
-			{
-				continue;
+					FEdge Edge;
+					Edge.X = Position.X;
+					Edge.Y = Position.Y;
+					Edge.Z = Position.Z;
+					Edge.Direction = Direction;
+					Edge.Sign = DistanceA < 0;
+					Edge.MortonCode =
+						(FMath::MortonCode3(Position.X) << 0) |
+						(FMath::MortonCode3(Position.Y) << 1) |
+						(FMath::MortonCode3(Position.Z) << 2);
+
+					checkVoxelSlow(!Edges.Contains(Edge));
+					Edges.Add(Edge);
+				}
+
+				FVector3f Vertex = FVector3f(
+					IndexA & 0x1 ? 1.f : 0.f,
+					IndexA & 0x2 ? 1.f : 0.f,
+					IndexA & 0x4 ? 1.f : 0.f);
+
+				const float Alpha = DistanceA / (DistanceA - DistanceB);
+				ensureVoxelSlow(0.f <= Alpha && Alpha <= 1.f);
+				Vertex[Direction] = Alpha;
+
+				NumVertices++;
+				VertexSum += Vertex;
 			}
 
-			if (IndexA == 0)
+			FVector3f Alpha = VertexSum / NumVertices;
+			ensureVoxelSlow(-KINDA_SMALL_NUMBER < Alpha.X && Alpha.X < 1.f + KINDA_SMALL_NUMBER);
+			ensureVoxelSlow(-KINDA_SMALL_NUMBER < Alpha.Y && Alpha.Y < 1.f + KINDA_SMALL_NUMBER);
+			ensureVoxelSlow(-KINDA_SMALL_NUMBER < Alpha.Z && Alpha.Z < 1.f + KINDA_SMALL_NUMBER);
+
+			// Saddle snap: if 6 corners share a sign and the 2 minority corners are
+			// diagonally opposite on the same face, the iso just brushes that face.
+			// Snap the perpendicular axis to the face plane to avoid sliver triangles.
 			{
-				checkVoxelSlow(FVoxelUtilities::IsValidINT16(Position.X));
-				checkVoxelSlow(FVoxelUtilities::IsValidINT16(Position.Y));
-				checkVoxelSlow(FVoxelUtilities::IsValidINT16(Position.Z));
+				int32 NumPositive = 0;
+				for (int32 CornerIndex = 0; CornerIndex < 8; CornerIndex++)
+				{
+					if (CellDistances[CornerIndex] >= 0)
+					{
+						NumPositive++;
+					}
+				}
 
-				FEdge Edge;
-				Edge.X = Position.X;
-				Edge.Y = Position.Y;
-				Edge.Z = Position.Z;
-				Edge.Direction = Direction;
-				Edge.Sign = DistanceA < 0;
-				Edge.MortonCode =
-					(FMath::MortonCode3(Position.X) << 0) |
-					(FMath::MortonCode3(Position.Y) << 1) |
-					(FMath::MortonCode3(Position.Z) << 2);
+				if (NumPositive == 2 || NumPositive == 6)
+				{
+					const bool bMinorityPositive = (NumPositive == 2);
+					int32 M1 = -1;
+					int32 M2 = -1;
+					for (int32 CornerIndex = 0; CornerIndex < 8; CornerIndex++)
+					{
+						if ((CellDistances[CornerIndex] >= 0) == bMinorityPositive)
+						{
+							if (M1 == -1)
+							{
+								M1 = CornerIndex;
+							}
+							else
+							{
+								M2 = CornerIndex;
+							}
+						}
+					}
 
-				checkVoxelSlow(!Edges.Contains(Edge));
-				Edges.Add(Edge);
+					const int32 Xor = M1 ^ M2;
+					const int32 BitCount =
+						((Xor & 0x1) != 0) +
+						((Xor & 0x2) != 0) +
+						((Xor & 0x4) != 0);
+
+					if (BitCount == 2)
+					{
+						// Face-diagonal: the bit not set in Xor is the face's perpendicular axis.
+						const int32 SnapAxis =
+							(Xor & 0x1) == 0 ? 0 :
+							(Xor & 0x2) == 0 ? 1 : 2;
+
+						Alpha[SnapAxis] = float((M1 >> SnapAxis) & 1);
+					}
+				}
 			}
 
-			FVector3f Vertex = FVector3f(
-				IndexA & 0x1 ? 1.f : 0.f,
-				IndexA & 0x2 ? 1.f : 0.f,
-				IndexA & 0x4 ? 1.f : 0.f);
+			const FVector3f Vertex = FVector3f(Position) + Alpha;
 
-			const float Alpha = DistanceA / (DistanceA - DistanceB);
-			ensureVoxelSlow(0.f <= Alpha && Alpha <= 1.f);
-			Vertex[Direction] = Alpha;
+			const int32 VertexIndex = Vertices.Add(Vertex);
+			ensureVoxelSlow(VertexIndex == VertexCells.Add(FCell(Position)));
 
-			NumVertices++;
-			VertexSum += Vertex;
-		}
-
-		const FVector3f Alpha = VertexSum / NumVertices;
-		ensureVoxelSlow(-KINDA_SMALL_NUMBER < Alpha.X && Alpha.X < 1.f + KINDA_SMALL_NUMBER);
-		ensureVoxelSlow(-KINDA_SMALL_NUMBER < Alpha.Y && Alpha.Y < 1.f + KINDA_SMALL_NUMBER);
-		ensureVoxelSlow(-KINDA_SMALL_NUMBER < Alpha.Z && Alpha.Z < 1.f + KINDA_SMALL_NUMBER);
-
-		const FVector3f Vertex = FVector3f(Position) + Alpha;
-
-		const int32 VertexIndex = Vertices.Add(Vertex);
-		ensureVoxelSlow(VertexIndex == VertexCells.Add(FCell(Position)));
-
-		CellToVertexIndex.Add_CheckNew(FCell(Position), VertexIndex);
-	});
+			CellToVertexIndex.Add_CheckNew(FCell(Position), VertexIndex);
+		},
+		bGenerateDistanceFields
+		? &CellGeneratorOutput
+		: nullptr);
 }
 
 void FVoxelMesher::GenerateTriangles()
@@ -1008,31 +1068,17 @@ TSharedPtr<FVoxelMesh> FVoxelMesher::Finalize()
 		ComputeCells(Permutation),
 		MoveTemp(LODs));
 
-	if (bExportDistances)
+	if (bGenerateDistanceFields)
 	{
-		VOXEL_SCOPE_COUNTER("Export distances");
-
-		Mesh->DistancesOffset = -1;
-		Mesh->DistancesSize = DataSize;
-
-		// TODO Improve
-
-		const FVoxelQuery Query(
+		Mesh->DistanceFieldsData = FVoxelMesherDistanceFieldBuilder::Build(
 			ChunkLOD,
-			Layers,
-			SurfaceTypeTable,
-			DependencyCollector);
-
-		const FVector Start = FVector(ChunkOffset - (1 << ChunkLOD)) * VoxelSize;
-		const float Step = float(1 << ChunkLOD) * VoxelSize;
-
-		const FVoxelFloatBuffer DistancesBuffer = Query.SampleVolumeLayer(
-			WeakLayer,
-			Start,
-			FIntVector(DataSize),
-			Step);
-
-		Mesh->Distances = DistancesBuffer.View().Array();
+			ChunkOffset,
+			VoxelSize,
+			ChunkSize,
+			MeshDistanceFieldBias,
+			MeshDistanceFieldBricksPerChunk,
+			DataSize,
+			CellGeneratorOutput);
 	}
 
 	Mesh->UpdateStats();

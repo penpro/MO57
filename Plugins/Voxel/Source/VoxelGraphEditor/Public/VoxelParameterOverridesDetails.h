@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -175,7 +175,9 @@ public:
 		const TVoxelArray<FVoxelParameterView*>& ParameterViews,
 		const FVoxelDetailInterface& DetailInterface);
 
-	void AddOrphans(FVoxelCategoryBuilder& CategoryBuilder);
+	void AddOrphans(
+		FVoxelCategoryBuilder& CategoryBuilder,
+		const FString& BaseCategory);
 
 private:
 	const TVoxelArray<FWeakOwner> Owners;

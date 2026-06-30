@@ -1,8 +1,10 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "StaticMesh/VoxelStaticMeshFunctionLibrary.h"
 #include "StaticMesh/VoxelStaticMeshData.h"
 #include "VoxelStaticMeshFunctionLibraryImpl.ispc.generated.h"
+
+VOXEL_REGISTER_FUNCTION(UVoxelStaticMeshFunctionLibrary, GetVoxelStaticMeshBounds);
 
 void FVoxelStaticMeshRefPinType::Convert(
 	const bool bSetObject,
@@ -18,46 +20,32 @@ void FVoxelStaticMeshRefPinType::Convert(
 	{
 		Struct.Object = InObject;
 		Struct.MeshData = InObject.GetData();
+
+		for (const FVoxelStaticMeshMetadata& Metadata : InObject.Metadatas)
+		{
+			if (!Metadata.Metadata ||
+				!Metadata.Data.Buffer ||
+				!ensure(Metadata.Data.Buffer->Num_Slow() == Struct.MeshData->Points.Num()) ||
+				!ensure(Metadata.Data.Buffer->GetInnerType() == Metadata.Metadata->GetInnerType()))
+			{
+				continue;
+			}
+
+			const FVoxelMetadataRef MetadataRef(Metadata.Metadata);
+
+			if (Struct.MetadataRefToBuffer.Contains(MetadataRef))
+			{
+				continue;
+			}
+
+			Struct.MetadataRefToBuffer.Add_EnsureNew(MetadataRef, Metadata.Data.Buffer);
+		}
 	}
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
-
-FVoxelFloatBuffer UVoxelStaticMeshFunctionLibrary::SampleVoxelStaticMesh(
-	const FVoxelStaticMeshRef& Mesh,
-	const FVoxelVectorBuffer& Position,
-	const float Scale,
-	const bool bUseTricubic) const
-{
-	if (!Mesh.MeshData)
-	{
-		VOXEL_MESSAGE(Error, "{0}: Mesh is null", this);
-		return {};
-	}
-
-	FVoxelVectorBuffer LocalPosition = Position;
-	LocalPosition.ExpandConstants();
-
-	FVoxelFloatBuffer Result;
-	Result.Allocate(LocalPosition.Num());
-
-	ispc::VoxelStaticMeshFunctionLibrary_SampleVoxelStaticMesh(
-		LocalPosition.X.GetData(),
-		LocalPosition.Y.GetData(),
-		LocalPosition.Z.GetData(),
-		Result.GetData(),
-		LocalPosition.Num(),
-		Scale,
-		bUseTricubic,
-		GetISPCValue(Mesh.MeshData->Size),
-		Mesh.MeshData->VoxelSize,
-		GetISPCValue(Mesh.MeshData->Origin),
-		Mesh.MeshData->DistanceField.GetData());
-
-	return Result;
-}
 
 FVoxelBox UVoxelStaticMeshFunctionLibrary::GetVoxelStaticMeshBounds(
 	const FVoxelStaticMeshRef& Mesh,

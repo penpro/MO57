@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "Shape/VoxelShapeFunctionLibrary.h"
 #include "VoxelGraphMigration.h"
@@ -8,6 +8,11 @@ VOXEL_RUN_ON_STARTUP_GAME()
 {
 	REGISTER_VOXEL_FUNCTION_MIGRATION("CreateSphereDistanceField", UVoxelShapeFunctionLibrary, MakeSphere);
 }
+
+VOXEL_REGISTER_FUNCTION(UVoxelShapeFunctionLibrary, MakeSphereBounds);
+VOXEL_REGISTER_FUNCTION(UVoxelShapeFunctionLibrary, MakeSphere);
+VOXEL_REGISTER_FUNCTION(UVoxelShapeFunctionLibrary, MakeCubeBounds);
+VOXEL_REGISTER_FUNCTION(UVoxelShapeFunctionLibrary, MakeCube);
 
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////

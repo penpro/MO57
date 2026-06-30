@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -6,7 +6,7 @@
 #include "VoxelMinimal.h"
 #include "VoxelScatterGraph.generated.h"
 
-UCLASS(BlueprintType, meta = (AssetSubMenu = "Graph"))
+UCLASS(BlueprintType, meta = (AssetSubMenu = "Scatter"))
 class VOXEL_API UVoxelScatterGraph : public UVoxelGraph
 {
 	GENERATED_BODY()

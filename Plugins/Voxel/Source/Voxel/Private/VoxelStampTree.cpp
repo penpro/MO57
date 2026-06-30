@@ -1,6 +1,7 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelStampTree.h"
+#include "VoxelTaskContext.h"
 
 TUniquePtr<FVoxelStampTree::FIterator> FVoxelStampTree::CreateIterator(
 	const FVoxelQuery& Query,
@@ -8,13 +9,13 @@ TUniquePtr<FVoxelStampTree::FIterator> FVoxelStampTree::CreateIterator(
 {
 	VOXEL_FUNCTION_COUNTER();
 
-	Query.DependencyCollector.AddDependency(*Dependency, Bounds);
-
 	TVoxelInlineArray<int32, 128> Indices;
 
-	AABBTree.TraverseBounds(FVoxelFastBox(Bounds), [&](const int32 Index)
+	ForeachElementIndex_Unsorted(Query.DependencyCollector, Bounds, [&](const int32 Index)
 	{
+		checkVoxelSlow(!Indices.Contains(Index));
 		Indices.Add(Index);
+		return EVoxelIterate::Continue;
 	});
 
 	Indices.Sort();
@@ -81,6 +82,8 @@ void FVoxelStampTreeManager::AddTask(TVoxelUniqueFunction<void()> Lambda)
 		VOXEL_SCOPE_LOCK(CriticalSection);
 		Tasks_RequiresLock.Enqueue(MoveTemp(Lambda));
 	}
+
+	FVoxelTaskScope Scope(*GVoxelGlobalTaskContext);
 
 	Voxel::AsyncTask([]
 	{

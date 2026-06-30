@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -10,6 +10,7 @@
 class FVoxelRenderTree;
 class FVoxelRenderChunk;
 class FVoxelTextureManager;
+class FVoxelRenderInvokersView;
 class FVoxelNaniteMaterialRenderer;
 struct FVoxelRenderChunkData;
 struct FVoxelChunkNeighborInfo;
@@ -63,6 +64,8 @@ private:
 	TSharedPtr<FVoxelTextureManager> PreviousTextureManager;
 	TSharedPtr<FVoxelNaniteMaterialRenderer> NaniteMaterialRenderer;
 	TSharedPtr<FVoxelNaniteMaterialRenderer> PreviousNaniteMaterialRenderer;
+	TSharedPtr<FVoxelRenderInvokersView> InvokerView;
+	TSharedPtr<FVoxelDependencyTracker> InvokersDependencyTracker;
 
 private:
 	TVoxelChunkedArray<TSharedPtr<FVoxelRenderChunkData>> RenderDatasToDestroy;

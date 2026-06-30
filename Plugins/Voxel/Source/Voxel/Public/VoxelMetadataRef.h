@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -53,11 +53,15 @@ public:
 	}
 
 	FName GetFName() const;
+	FString GetName() const;
+	FGuid GetGuid() const;
 	FVoxelPinType GetInnerType() const;
 	FVoxelRuntimePinValue GetDefaultValue() const;
 	TVoxelOptional<EVoxelMetadataMaterialType> GetMaterialType() const;
 	TVoxelObjectPtr<UVoxelMetadata> GetMetadata() const;
 	TSharedRef<FVoxelBuffer> MakeDefaultBuffer(int32 Num) const;
+
+	friend void operator<<(FArchive& Ar, FVoxelMetadataRef& MetadataRef);
 
 public:
 	void UpdateFromSourceObject() const;
@@ -103,6 +107,11 @@ public:
 	static TVoxelArray<FVoxelMetadataRef> GetUniqueValidRefs(TConstVoxelArrayView<UVoxelMetadata*> Metadatas);
 	static TVoxelArray<FVoxelMetadataRef> GetUniqueValidRefs(TConstVoxelArrayView<TObjectPtr<UVoxelMetadata>> Metadatas);
 	static TVoxelArray<FVoxelMetadataRef> GetUniqueValidRefs(TConstVoxelArrayView<FVoxelMetadataRef> Refs);
+	static bool FindFromGuid(
+		const FGuid Guid,
+		FVoxelMetadataRef& OutMetadata);
+
+	static const FName GuidTagName;
 
 private:
 	int32 PrivateIndex = -1;

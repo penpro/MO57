@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelGraphVisuals.h"
 #include "VoxelEdGraph.h"
@@ -55,6 +55,7 @@ FLinearColor FVoxelGraphVisuals::GetNodeColor(const FString& ColorName)
 	CASE("Blue", FLinearColor(0.f, 0.68359375f, 1.f));
 	CASE("Green", FLinearColor(0.039216f, 0.666667f, 0.f));
 	CASE("Red", FLinearColor(1.f, 0.f, 0.f));
+	CASE("LightRed", FLinearColor(0.8f, 0.3f, 0.3f));
 	CASE("Orange", FLinearColor(1.f, 0.546875f, 0.f));
 	CASE("White", FLinearColor::White);
 

@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelTerminalGraph.h"
 #include "VoxelGraph.h"
@@ -29,11 +29,22 @@ FGuid UVoxelTerminalGraph::GetGuid() const
 {
 	if (GetGraph().FindTerminalGraph_NoInheritance(PrivateGuid) != this)
 	{
-		ensure(!PrivateGuid.IsValid());
-		ensure(!GetGraph().FindTerminalGraph_NoInheritance(PrivateGuid));
+		ensureMsgf(!PrivateGuid.IsValid(),
+			TEXT("Terminal graph '%s' (Guid=%s) unexpectedly has a valid guid while not registered in graph '%s'"),
+			*GetPathName(),
+			*PrivateGuid.ToString(),
+			*GetGraph().GetPathName());
+		ensureMsgf(!GetGraph().FindTerminalGraph_NoInheritance(PrivateGuid),
+			TEXT("Terminal graph '%s' (Guid=%s) is not the registered terminal graph for guid in graph '%s'"),
+			*GetPathName(),
+			*PrivateGuid.ToString(),
+			*GetGraph().GetPathName());
 
 		ConstCast(this)->PrivateGuid = GetGraph().FindTerminalGraphGuid_NoInheritance(this);
-		ensure(PrivateGuid.IsValid());
+			ensureMsgf(PrivateGuid.IsValid(),
+				TEXT("Terminal graph '%s' failed to resolve a valid guid in graph '%s'"),
+				*GetPathName(),
+				*GetGraph().GetPathName());
 	}
 	return PrivateGuid;
 }
@@ -721,3 +732,15 @@ void UVoxelTerminalGraph::Serialize(FArchive& Ar)
 
 	SerializeVoxelVersion(Ar);
 }
+
+#if WITH_EDITOR
+void UVoxelTerminalGraph::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
+{
+	Super::PostEditChangeProperty(PropertyChangedEvent);
+
+	if (PropertyChangedEvent.GetMemberPropertyName() == GET_OWN_MEMBER_NAME(bDisableNodeMerging))
+	{
+		GVoxelGraphTracker->NotifyEdGraphChanged(GetEdGraph());
+	}
+}
+#endif

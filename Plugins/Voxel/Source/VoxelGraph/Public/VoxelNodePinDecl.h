@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -263,6 +263,11 @@ namespace FVoxelPinMetadataBuilder
 	{ \
 		RegisterPinRef(Name ## Pin); \
 	};
+
+#define VOXEL_TYPED_INPUT_PIN(InType, InPinType, Name, Default, ...) \
+	INTERNAL_DECLARE_VOXEL_PIN(InType, Name); \
+	TPinRef_Input<InType> Name ## Pin = TPinRef_Input<InType>(CreateInputPin(InPinType, STATIC_FNAME(#Name), VOXEL_PIN_METADATA_IMPL(InType, __LINE__, StaticStruct(), Default, Internal::None, ##__VA_ARGS__))); \
+	INTERNAL_REGISTER_VOXEL_PIN(Name)
 
 #define VOXEL_INPUT_PIN(InType, Name, Default, ...) \
 	INTERNAL_DECLARE_VOXEL_PIN(InType, Name); \

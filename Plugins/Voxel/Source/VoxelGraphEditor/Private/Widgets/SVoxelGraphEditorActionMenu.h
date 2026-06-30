@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -65,6 +65,11 @@ private:
 	TSharedRef<FGraphActionListBuilderBase> GetActionList();
 	TSharedRef<SExpanderArrow> CreateActionExpander(const FCustomExpanderData& ActionMenuData) const;
 	TSharedRef<SWidget> OnCreateWidgetForAction(FCreateWidgetForActionData* CreateData) const;
+
+private:
+	FText GetSearchContextDesc() const;
+	void OnGraphToggleChanged(ECheckBoxState NewState) const;
+	ECheckBoxState GraphToggleIsChecked() const;
 
 protected:
 	TVoxelObjectPtr<UEdGraph> WeakEdGraph = nullptr;

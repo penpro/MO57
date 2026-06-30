@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelMinimal.h"
 #include "EdGraph/EdGraph.h"
@@ -399,6 +399,25 @@ UObject* FVoxelUtilities::CreateNewAsset_Direct(
 	FAssetRegistryModule::AssetCreated(Object);
 	(void)Object->MarkPackageDirty();
 	return Object;
+}
+
+UObject* FVoxelUtilities::CreateNewAsset_Dialog(
+	UClass* Class,
+	const FString& AssetName,
+	const FString& DefaultPath)
+{
+	IVoxelFactory* Factory = IVoxelAutoFactoryInterface::GetInterface().MakeFactory(Class);
+	if (!ensure(Factory))
+	{
+		return nullptr;
+	}
+
+	const FAssetToolsModule& AssetToolsModule = FAssetToolsModule::GetModule();
+	return AssetToolsModule.Get().CreateAssetWithDialog(
+		AssetName,
+		DefaultPath,
+		Class, 
+		Factory->GetUFactory());
 }
 
 void FVoxelUtilities::CreateUniqueAssetName(
@@ -810,6 +829,103 @@ void FVoxelUtilities::SerializeBulkData(
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
 
+struct FVoxelReadBulkDataAsyncState
+{
+public:
+	const TVoxelPromise<TSharedPtr<TVoxelArray64<uint8>>> Promise;
+	FBulkDataIORequestCallBack Callback;
+	TVoxelArray64<uint8> Result;
+
+	FVoxelReadBulkDataAsyncState()
+		: Callback([this](const bool bWasCancelled, IBulkDataIORequest* Request)
+		{
+			Promise.Set(ProcessResult(bWasCancelled, Request));
+			delete this;
+		})
+	{
+	}
+	UE_NONCOPYABLE(FVoxelReadBulkDataAsyncState);
+
+	VOXEL_COUNT_INSTANCES();
+
+private:
+	TSharedPtr<TVoxelArray64<uint8>> ProcessResult(const bool bWasCancelled, IBulkDataIORequest* Request)
+	{
+		if (!ensure(!bWasCancelled))
+		{
+			LOG_VOXEL(Error, "Bulk data read was cancelled");
+			return {};
+		}
+
+		if (!ensure(Request))
+		{
+			LOG_VOXEL(Error, "Bulk data IO request is null");
+			return {};
+		}
+
+		const uint8* ReadResult = Request->GetReadResults();
+		if (!ensure(ReadResult == Result.GetData()))
+		{
+			LOG_VOXEL(Error, "Read result pointer mismatch: Expected=%p, Actual=%p", Result.GetData(), ReadResult);
+			return {};
+		}
+
+		const int64 ReadSize = Request->GetSize();
+		if (!ensure(ReadSize == Result.Num()))
+		{
+			LOG_VOXEL(Error, "Read size mismatch: Expected=%lld, Actual=%lld", ReadSize, Result.Num());
+			return {};
+		}
+
+		return MakeSharedCopy(MoveTemp(Result));
+	}
+};
+
+DEFINE_VOXEL_INSTANCE_COUNTER(FVoxelReadBulkDataAsyncState);
+
+TVoxelFuture<TSharedPtr<TVoxelArray64<uint8>>> FVoxelUtilities::ReadBulkDataAsync(
+	const FBulkData& BulkData,
+	const int64 Offset,
+	const int64 Length,
+	const EAsyncIOPriorityAndFlags Priority)
+{
+	VOXEL_FUNCTION_COUNTER();
+
+	if (!ensure(Length <= MAX_int32))
+	{
+		LOG_VOXEL(Error, "Length exceeds MAX_int32: Length=%lld", Length);
+		return {};
+	}
+
+	const int64 BulkDataSize = BulkData.GetBulkDataSize();
+
+	if (!ensure(0 <= Offset && Offset + Length <= BulkDataSize))
+	{
+		LOG_VOXEL(Error, "Invalid bulk data access: Offset=%lld, Length=%lld, BulkDataSize=%lld", Offset, Length, BulkDataSize);
+		return {};
+	}
+
+	FVoxelReadBulkDataAsyncState* State = new FVoxelReadBulkDataAsyncState();
+	SetNumFast(State->Result, Length);
+
+	TVoxelPromise<TSharedPtr<TVoxelArray64<uint8>>> Promise = State->Promise;
+
+	BulkData.CreateStreamingRequest(
+		Offset,
+		Length,
+		Priority,
+		&State->Callback,
+		State->Result.GetData());
+
+	// TRICKY: State might be deleted here
+
+	return Promise;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+
 UObject* FVoxelUtilities::NewObject_Safe(UObject* Outer, const UClass* Class, const FName Name)
 {
 	const FName SafeName = MakeUniqueObjectName(Outer, Class, Name);
@@ -819,6 +935,74 @@ UObject* FVoxelUtilities::NewObject_Safe(UObject* Outer, const UClass* Class, co
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
+
+uint64 FVoxelUtilities::HashStruct(const UScriptStruct* Struct, const void* DataPtr)
+{
+	if (!ensure(Struct))
+	{
+		return 0;
+	}
+
+	if (Struct == StaticStructFast<FVoxelInstancedStruct>())
+	{
+		const FVoxelInstancedStruct& InstancedStruct = *static_cast<const FVoxelInstancedStruct*>(DataPtr);
+		if (!InstancedStruct.IsValid())
+		{
+			return 0;
+		}
+
+		Struct = InstancedStruct.GetScriptStruct();
+		DataPtr = InstancedStruct.GetStructMemory();
+	}
+
+#define CASE(Type) \
+	if (Struct == StaticStructFast<Type>()) \
+	{ \
+		return FVoxelUtilities::MurmurHash(*static_cast<const Type*>(DataPtr)); \
+	}
+
+	CASE(FVector2D);
+	CASE(FVector);
+	CASE(FVector4);
+	CASE(FIntPoint);
+	CASE(FIntVector);
+	CASE(FRotator);
+	CASE(FQuat);
+	CASE(FTransform);
+	CASE(FColor);
+	CASE(FLinearColor);
+	CASE(FMatrix);
+
+#undef CASE
+
+	TVoxelInlineArray<uint64, 64> Hashes;
+	for (FProperty& ChildProperty : GetStructProperties(Struct))
+	{
+		Hashes.Add(HashProperty(ChildProperty, ChildProperty.ContainerPtrToValuePtr<void>(DataPtr)));
+	}
+
+	if (Hashes.Num() > 0)
+	{
+		return MurmurHashView(Hashes);
+	}
+
+	if (Struct->GetPropertiesSize() == 1)
+	{
+		// Empty struct
+		return 0;
+	}
+
+	UScriptStruct::ICppStructOps* CppStructOps = Struct->GetCppStructOps();
+	check(CppStructOps);
+
+	if (!CppStructOps->HasGetTypeHash())
+	{
+		// TODO Serialize instead and compute hash from that?
+		return 0;
+	}
+
+	return CppStructOps->GetStructTypeHash(DataPtr);
+}
 
 uint64 FVoxelUtilities::HashProperty(const FProperty& Property, const void* DataPtr)
 {
@@ -943,67 +1127,7 @@ uint64 FVoxelUtilities::HashProperty(const FProperty& Property, const void* Data
 	}
 	case FStructProperty::StaticClassCastFlags():
 	{
-		const UScriptStruct* Struct = CastFieldChecked<FStructProperty>(Property).Struct;
-
-		if (Struct == StaticStructFast<FVoxelInstancedStruct>())
-		{
-			const FVoxelInstancedStruct& InstancedStruct = *static_cast<const FVoxelInstancedStruct*>(DataPtr);
-			if (!InstancedStruct.IsValid())
-			{
-				return 0;
-			}
-
-			Struct = InstancedStruct.GetScriptStruct();
-			DataPtr = InstancedStruct.GetStructMemory();
-		}
-
-#define CASE(Type) \
-		if (Struct == StaticStructFast<Type>()) \
-		{ \
-			return FVoxelUtilities::MurmurHash(*static_cast<const Type*>(DataPtr)); \
-		}
-
-		CASE(FVector2D);
-		CASE(FVector);
-		CASE(FVector4);
-		CASE(FIntPoint);
-		CASE(FIntVector);
-		CASE(FRotator);
-		CASE(FQuat);
-		CASE(FTransform);
-		CASE(FColor);
-		CASE(FLinearColor);
-		CASE(FMatrix);
-
-#undef CASE
-
-		TVoxelInlineArray<uint64, 64> Hashes;
-		for (FProperty& ChildProperty : GetStructProperties(Struct))
-		{
-			Hashes.Add(HashProperty(ChildProperty, ChildProperty.ContainerPtrToValuePtr<void>(DataPtr)));
-		}
-
-		if (Hashes.Num() > 0)
-		{
-			return MurmurHashView(Hashes);
-		}
-
-		if (Struct->GetPropertiesSize() == 1)
-		{
-			// Empty struct
-			return 0;
-		}
-
-		UScriptStruct::ICppStructOps* CppStructOps = Struct->GetCppStructOps();
-		check(CppStructOps);
-
-		if (!CppStructOps->HasGetTypeHash())
-		{
-			// TODO Serialize instead and compute hash from that?
-			return 0;
-		}
-
-		return CppStructOps->GetStructTypeHash(DataPtr);
+		return HashStruct(CastFieldChecked<FStructProperty>(Property).Struct, DataPtr);
 	}
 	default:
 	{
@@ -1091,7 +1215,7 @@ const FBoolProperty& FVoxelUtilities::MakeBoolProperty()
 {
 	static const TUniquePtr<FBoolProperty> Property = INLINE_LAMBDA
 	{
-		TUniquePtr<FBoolProperty> Result = MakeUnique<FBoolProperty>(FFieldVariant(), FName(), EObjectFlags());
+		TUniquePtr<FBoolProperty> Result = UE_508_SWITCH(MakeUnique<FBoolProperty>(FFieldVariant(), FName(), EObjectFlags()), MakeUnique<FBoolProperty>(FFieldVariant(), FName()));
 		Result->SetElementSize(sizeof(bool));
 		return Result;
 	};
@@ -1102,7 +1226,7 @@ const FFloatProperty& FVoxelUtilities::MakeFloatProperty()
 {
 	static const TUniquePtr<FFloatProperty> Property = INLINE_LAMBDA
 	{
-		TUniquePtr<FFloatProperty> Result = MakeUnique<FFloatProperty>(FFieldVariant(), FName(), EObjectFlags());
+		TUniquePtr<FFloatProperty> Result = UE_508_SWITCH(MakeUnique<FFloatProperty>(FFieldVariant(), FName(), EObjectFlags()), MakeUnique<FFloatProperty>(FFieldVariant(), FName()));
 		Result->SetElementSize(sizeof(float));
 		return Result;
 	};
@@ -1113,7 +1237,7 @@ const FIntProperty& FVoxelUtilities::MakeIntProperty()
 {
 	static const TUniquePtr<FIntProperty> Property = INLINE_LAMBDA
 	{
-		TUniquePtr<FIntProperty> Result = MakeUnique<FIntProperty>(FFieldVariant(), FName(), EObjectFlags());
+		TUniquePtr<FIntProperty> Result = UE_508_SWITCH(MakeUnique<FIntProperty>(FFieldVariant(), FName(), EObjectFlags()), MakeUnique<FIntProperty>(FFieldVariant(), FName()));
 		Result->SetElementSize(sizeof(int32));
 		return Result;
 	};
@@ -1124,7 +1248,7 @@ const FNameProperty& FVoxelUtilities::MakeNameProperty()
 {
 	static const TUniquePtr<FNameProperty> Property = INLINE_LAMBDA
 	{
-		TUniquePtr<FNameProperty> Result = MakeUnique<FNameProperty>(FFieldVariant(), FName(), EObjectFlags());
+		TUniquePtr<FNameProperty> Result = UE_508_SWITCH(MakeUnique<FNameProperty>(FFieldVariant(), FName(), EObjectFlags()), MakeUnique<FNameProperty>(FFieldVariant(), FName()));
 		Result->SetElementSize(sizeof(FName));
 		return Result;
 	};
@@ -1133,7 +1257,7 @@ const FNameProperty& FVoxelUtilities::MakeNameProperty()
 
 TUniquePtr<FEnumProperty> FVoxelUtilities::MakeEnumProperty(const UEnum* Enum)
 {
-	TUniquePtr<FEnumProperty> Property = MakeUnique<FEnumProperty>(FFieldVariant(), FName(), EObjectFlags());
+	TUniquePtr<FEnumProperty> Property = UE_508_SWITCH(MakeUnique<FEnumProperty>(FFieldVariant(), FName(), EObjectFlags()), MakeUnique<FEnumProperty>(FFieldVariant(), FName()));
 	Property->SetEnum(ConstCast(Enum));
 	Property->SetElementSize(sizeof(uint8));
 	return Property;
@@ -1143,7 +1267,7 @@ TUniquePtr<FStructProperty> FVoxelUtilities::MakeStructProperty(const UScriptStr
 {
 	check(Struct);
 
-	TUniquePtr<FStructProperty> Property = MakeUnique<FStructProperty>(FFieldVariant(), FName(), EObjectFlags());
+	TUniquePtr<FStructProperty> Property = UE_508_SWITCH(MakeUnique<FStructProperty>(FFieldVariant(), FName(), EObjectFlags()), MakeUnique<FStructProperty>(FFieldVariant(), FName()));
 	Property->Struct = ConstCast(Struct);
 	Property->SetElementSize(Struct->GetStructureSize());
 	return Property;
@@ -1153,7 +1277,7 @@ TUniquePtr<FObjectProperty> FVoxelUtilities::MakeObjectProperty(const UClass* Cl
 {
 	check(Class);
 
-	TUniquePtr<FObjectProperty> Property = MakeUnique<FObjectProperty>(FFieldVariant(), FName(), EObjectFlags());
+	TUniquePtr<FObjectProperty> Property = UE_508_SWITCH(MakeUnique<FObjectProperty>(FFieldVariant(), FName(), EObjectFlags()), MakeUnique<FObjectProperty>(FFieldVariant(), FName()));
 	Property->PropertyClass = ConstCast(Class);
 	Property->SetElementSize(sizeof(UObject*));
 	return Property;
@@ -1163,7 +1287,7 @@ TUniquePtr<FArrayProperty> FVoxelUtilities::MakeArrayProperty(FProperty* InnerPr
 {
 	check(InnerProperty);
 
-	TUniquePtr<FArrayProperty> Property = MakeUnique<FArrayProperty>(FFieldVariant(), FName(), EObjectFlags());
+	TUniquePtr<FArrayProperty> Property = UE_508_SWITCH(MakeUnique<FArrayProperty>(FFieldVariant(), FName(), EObjectFlags()), MakeUnique<FArrayProperty>(FFieldVariant(), FName()));
 	Property->Inner = InnerProperty;
 	return Property;
 }

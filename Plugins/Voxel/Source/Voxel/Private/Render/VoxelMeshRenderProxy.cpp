@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "Render/VoxelMeshRenderProxy.h"
 #include "Render/VoxelVertexFactory.h"
@@ -64,12 +64,6 @@ VOXEL_CONSOLE_VARIABLE(
 		}
 	});
 
-VOXEL_CONSOLE_VARIABLE(
-	VOXEL_API, int32, GVoxelNumDistanceFieldBricksPerChunk, 4,
-	"voxel.render.NumDistanceFieldBricksPerChunk",
-	"Num distance field bricks per chunk. Reducing this helps with memory usage but will have lower quality & can self-shadow",
-	Voxel::RefreshAll);
-
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
@@ -131,11 +125,19 @@ FVoxelMeshRenderProxy::~FVoxelMeshRenderProxy()
 	}
 
 #if RHI_RAYTRACING
+#if VOXEL_ENGINE_VERSION >= 508
+	if (!RayTracingGeometryGroupHandle.IsNull())
+	{
+		GRayTracingGeometryManager->ReleaseRayTracingGeometryGroup(RayTracingGeometryGroupHandle);
+		RayTracingGeometryGroupHandle = {};
+	}
+#else
 	if (RayTracingGeometryGroupHandle != -1)
 	{
 		GRayTracingGeometryManager->ReleaseRayTracingGeometryGroup(RayTracingGeometryGroupHandle);
 		RayTracingGeometryGroupHandle = -1;
 	}
+#endif
 
 	if (RayTracingGeometry)
 	{
@@ -191,11 +193,14 @@ FVoxelFuture FVoxelMeshRenderProxy::Initialize_AsyncThread(const FVoxelRenderSub
 
 	if (bEnableMeshDistanceField)
 	{
-		BuildDistanceField(Subsystem);
+		if (ensure(Mesh->DistanceFieldsData))
+		{
+			DistanceFieldVolumeData = Mesh->DistanceFieldsData;
+		}
 	}
 	else
 	{
-		ensure(Mesh->Distances.Num() == 0);
+		ensure(!Mesh->DistanceFieldsData);
 	}
 
 	// Always generate - bit of a waste but shouldn't be a bottleneck
@@ -430,115 +435,4 @@ void FVoxelMeshRenderProxy::Initialize_RenderThread(
 
 	RayTracingGeometry->InitResource(RHICmdList);
 #endif
-}
-
-void FVoxelMeshRenderProxy::BuildDistanceField(const FVoxelRenderSubsystem& Subsystem)
-{
-	VOXEL_FUNCTION_COUNTER();
-
-	if (!ensure(Mesh->Distances.Num() > 0))
-	{
-		return;
-	}
-
-	const FVoxelConfig& Config = Subsystem.GetConfig();
-
-	const int32 NumBricksPerChunk = GVoxelNumDistanceFieldBricksPerChunk;
-	const int32 NumQueriesPerChunk = NumBricksPerChunk * DistanceField::UniqueDataBrickSize;
-	// 2 * MeshDistanceFieldObjectBorder, additional padding at the end to overlap chunks
-	const int32 NumQueriesInChunk = NumQueriesPerChunk - 2;
-	const float TexelSize = Config.RenderChunkSize / float(NumQueriesInChunk);
-
-	FVoxelDistanceFieldWrapper Wrapper(FVoxelBox(0, Config.RenderChunkSize).ToFBox());
-	Wrapper.SetSize(FIntVector(NumBricksPerChunk));
-
-	const FVoxelIntBox BrickBoundsA(0, NumBricksPerChunk);
-	const FVoxelIntBox BrickBoundsB(0, DistanceField::BrickSize);
-
-	FVoxelDistanceFieldWrapper::FMip& Mip = Wrapper.Mips[0];
-
-	BrickBoundsA.Iterate([&](const FIntVector& BrickPositionA)
-	{
-		const TSharedRef<FVoxelDistanceFieldWrapper::FBrick> Brick = MakeShared<FVoxelDistanceFieldWrapper::FBrick>(255);
-
-		BrickBoundsB.Iterate([&](const FIntVector& BrickPositionB)
-		{
-			// 7 unique voxel, and 1 voxel shared with the next brick
-			// Shader samples between [0.5, 7.5] for good interpolation
-			const FIntVector DistancePosition = BrickPositionA * DistanceField::UniqueDataBrickSize + BrickPositionB;
-			const FVector3f QueryPosition = FVector3f(DistancePosition - 1) * TexelSize;
-
-			FVector3f MeshPosition = QueryPosition - Mesh->DistancesOffset;
-			MeshPosition = FVoxelUtilities::Clamp(MeshPosition, 0.f, Mesh->DistancesSize - 0.0001f);
-
-			const FIntVector MinPosition = FVoxelUtilities::FloorToInt(MeshPosition);
-			const FIntVector MaxPosition = FVoxelUtilities::CeilToInt(MeshPosition);
-			const FVector3f Alpha = MeshPosition - FVector3f(MinPosition);
-
-			const float Distance000 = Mesh->Distances[FVoxelUtilities::Get3DIndex<int32>(Mesh->DistancesSize, MinPosition.X, MinPosition.Y, MinPosition.Z)];
-			const float Distance001 = Mesh->Distances[FVoxelUtilities::Get3DIndex<int32>(Mesh->DistancesSize, MaxPosition.X, MinPosition.Y, MinPosition.Z)];
-			const float Distance010 = Mesh->Distances[FVoxelUtilities::Get3DIndex<int32>(Mesh->DistancesSize, MinPosition.X, MaxPosition.Y, MinPosition.Z)];
-			const float Distance011 = Mesh->Distances[FVoxelUtilities::Get3DIndex<int32>(Mesh->DistancesSize, MaxPosition.X, MaxPosition.Y, MinPosition.Z)];
-			const float Distance100 = Mesh->Distances[FVoxelUtilities::Get3DIndex<int32>(Mesh->DistancesSize, MinPosition.X, MinPosition.Y, MaxPosition.Z)];
-			const float Distance101 = Mesh->Distances[FVoxelUtilities::Get3DIndex<int32>(Mesh->DistancesSize, MaxPosition.X, MinPosition.Y, MaxPosition.Z)];
-			const float Distance110 = Mesh->Distances[FVoxelUtilities::Get3DIndex<int32>(Mesh->DistancesSize, MinPosition.X, MaxPosition.Y, MaxPosition.Z)];
-			const float Distance111 = Mesh->Distances[FVoxelUtilities::Get3DIndex<int32>(Mesh->DistancesSize, MaxPosition.X, MaxPosition.Y, MaxPosition.Z)];
-
-			if (FVoxelUtilities::IsNaN(Distance000) ||
-				FVoxelUtilities::IsNaN(Distance001) ||
-				FVoxelUtilities::IsNaN(Distance010) ||
-				FVoxelUtilities::IsNaN(Distance011) ||
-				FVoxelUtilities::IsNaN(Distance100) ||
-				FVoxelUtilities::IsNaN(Distance101) ||
-				FVoxelUtilities::IsNaN(Distance110) ||
-				FVoxelUtilities::IsNaN(Distance111))
-			{
-				return;
-			}
-
-			float Distance = FVoxelUtilities::TrilinearInterpolation(
-				Distance000,
-				Distance001,
-				Distance010,
-				Distance011,
-				Distance100,
-				Distance101,
-				Distance110,
-				Distance111,
-				Alpha.X,
-				Alpha.Y,
-				Alpha.Z);
-
-			Distance /= Config.VoxelSize;
-			Distance += Config.MeshDistanceFieldBias;
-
-			const int32 BrickIndex = FVoxelUtilities::Get3DIndex<int32>(DistanceField::BrickSize, BrickPositionB);
-			(*Brick)[BrickIndex] = Mip.QuantizeDistance(Distance);
-		});
-
-		const bool bHasValue = INLINE_LAMBDA
-		{
-			const uint8 UniqueValue = (*Brick)[0];
-			for (const uint8 Value : *Brick)
-			{
-				if (UniqueValue != Value)
-				{
-					return true;
-				}
-			}
-
-			return false;
-		};
-
-		if (bHasValue)
-		{
-			Mip.AddBrick(BrickPositionA, Brick);
-		}
-	});
-
-	// TODO?
-	Wrapper.Mips[1] = Wrapper.Mips[0];
-	Wrapper.Mips[2] = Wrapper.Mips[0];
-
-	DistanceFieldVolumeData = Wrapper.Build();
 }

@@ -1,42 +1,20 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "Sculpt/Height/VoxelHeightSculptStamp.h"
-#include "Sculpt/Height/VoxelHeightSculptData.h"
-#include "Sculpt/Height/VoxelHeightSculptCache.h"
-#include "Sculpt/Height/VoxelHeightSculptEditor.h"
-#include "Sculpt/Height/VoxelHeightSculptInnerData.h"
-#include "Sculpt/Height/VoxelHeightChunkTree.h"
-#include "Sculpt/Height/VoxelHeightModifier.h"
+#include "Sculpt/Height/VoxelSculptHeightData.h"
+#include "VoxelQuery.h"
 #include "VoxelWorld.h"
-#include "VoxelLayers.h"
-#include "VoxelStackLayer.h"
 #include "VoxelLayerStack.h"
-#include "VoxelInvalidationCallstack.h"
-#include "Surface/VoxelSurfaceTypeTable.h"
+#include "Sculpt/Height/VoxelSculptHeight.h"
 
 FVoxelHeightSculptStamp::FVoxelHeightSculptStamp()
 {
 	BlendMode = EVoxelHeightBlendMode::Override;
 }
 
-FVoxelFuture FVoxelHeightSculptStamp::ApplyModifier(const TSharedRef<const FVoxelHeightModifier>& Modifier)
+TVoxelOptional<FVoxelWeakStackLayer> FVoxelHeightSculptStamp::GetWeakStackLayer(const UWorld& World) const
 {
 	VOXEL_FUNCTION_COUNTER();
-	check(IsInGameThread());
-
-	const TSharedPtr<const FVoxelStampRuntime> Runtime = ResolveStampRuntime();
-	if (!Runtime)
-	{
-		VOXEL_MESSAGE(Error, "Cannot sculpt: Stamp is not registered");
-		return {};
-	}
-
-	UWorld* World = Runtime->GetWorld().Resolve();
-	if (!ensureVoxelSlow(World))
-	{
-		VOXEL_MESSAGE(Error, "Cannot sculpt: World is null");
-		return {};
-	}
 
 	if (!Layer)
 	{
@@ -44,15 +22,9 @@ FVoxelFuture FVoxelHeightSculptStamp::ApplyModifier(const TSharedRef<const FVoxe
 		return {};
 	}
 
-	TVoxelOptional<FVoxelStackLayer> StackLayer;
 	if (StackOverride)
 	{
-		if (StackOverride->HeightLayers.Contains(Layer))
-		{
-			StackLayer = FVoxelStackLayer(StackOverride, Layer);
-		}
-
-		if (!StackLayer)
+		if (!StackOverride->HeightLayers.Contains(Layer))
 		{
 			VOXEL_MESSAGE(Error,
 				"Cannot sculpt: Failed to find a matching layer in StackOverride.\n"
@@ -65,174 +37,39 @@ FVoxelFuture FVoxelHeightSculptStamp::ApplyModifier(const TSharedRef<const FVoxe
 
 			return {};
 		}
-	}
-	else
-	{
-		StackLayer = INLINE_LAMBDA -> TVoxelOptional<FVoxelStackLayer>
-		{
-			VOXEL_SCOPE_COUNTER("TActorRange<AVoxelWorld>");
 
-			for (const AVoxelWorld* VoxelWorld : TActorRange<AVoxelWorld>(World))
-			{
-				UVoxelLayerStack* Stack = VoxelWorld->LayerStack;
-				if (!Stack)
-				{
-					continue;
-				}
-
-				if (Stack->HeightLayers.Contains(Layer))
-				{
-					return FVoxelStackLayer(Stack, Layer);
-				}
-			}
-
-			return {};
-		};
-
-		if (!StackLayer)
-		{
-			TArray<const AVoxelWorld*> VoxelWorlds;
-			for (const AVoxelWorld* VoxelWorld : TActorRange<AVoxelWorld>(World))
-			{
-				VoxelWorlds.Add(VoxelWorld);
-			}
-
-			VOXEL_MESSAGE(Error,
-				"Cannot sculpt: Failed to find a Voxel World with a compatible stack.\n"
-				"You need a Voxel World with a LayerStack containing the following layer in your scene: {0}\n"
-				"If this sculpt stamp is not meant to be rendered with a Voxel World, manually set StackOverride\n"
-				"Voxel Worlds checked: {0}",
-				Layer,
-				VoxelWorlds);
-
-			return {};
-		}
-	}
-	check(StackLayer);
-
-	const FTransform2d SculptToWorld = FTransform2d(FScale2d(ScaleXY)) * FVoxelUtilities::MakeTransform2(Runtime->GetLocalToWorld());
-	const FVoxelHeightSculptDataId SculptDataId = GetData()->SculptDataId;
-
-	if (!Cache ||
-		Cache->SculptToWorld != SculptToWorld ||
-		Cache->SculptDataId != SculptDataId)
-	{
-		Cache = MakeShared<FVoxelHeightSculptCache>(SculptToWorld, SculptDataId);
+		return FVoxelStackLayer(StackOverride, Layer);
 	}
 
-	check(Cache->SculptToWorld == SculptToWorld);
-	check(Cache->SculptDataId == SculptDataId);
-
-	const TSharedRef<FVoxelHeightModifier> LocalModifier = Modifier->MakeSharedCopy();
-	LocalModifier->Initialize_GameThread();
-
-	const FVoxelInvalidationScope Scope(GetComponent());
-
-	const TSharedRef<FVoxelHeightSculptEditor> Editor = MakeShared<FVoxelHeightSculptEditor>(
-		bRelativeHeight,
-		SculptToWorld,
-		Runtime->GetLocalToWorld().GetScale3D().Z,
-		Runtime->GetLocalToWorld().GetLocation().Z,
-		SculptDataId,
-		BlendMode,
-		FVoxelLayers::Get(World),
-		FVoxelSurfaceTypeTable::Get(),
-		StackLayer.GetValue(),
-		Cache.ToSharedRef(),
-		LocalModifier);
-
-	return GetData()->AddTask(
-		[Editor](FVoxelHeightSculptInnerData& InnerData)
-		{
-			return Editor->DoWork(InnerData);
-		});
-}
-
-FVoxelFuture FVoxelHeightSculptStamp::SetInnerData(const TSharedRef<const FVoxelHeightSculptInnerData>& NewInnerData)
-{
-	return GetData()->AddTask(
-		[NewInnerData = NewInnerData](FVoxelHeightSculptInnerData& InnerData)
-		{
-			InnerData.CopyFrom(*NewInnerData);
-			return FVoxelBox2D::Infinite;
-		});
-}
-
-FVoxelFuture FVoxelHeightSculptStamp::ClearSculptData()
-{
-	return GetData()->AddTask(
-		[](FVoxelHeightSculptInnerData& InnerData)
-		{
-			InnerData.CopyFrom(FVoxelHeightSculptInnerData());
-			return FVoxelBox2D::Infinite;
-		});
-}
-
-///////////////////////////////////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////////////////////
-
-void FVoxelHeightSculptStamp::ClearCache()
-{
-	VOXEL_FUNCTION_COUNTER();
-
-	Cache.Reset();
-}
-
-///////////////////////////////////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////////////////////
-
-TSharedRef<FVoxelHeightSculptData> FVoxelHeightSculptStamp::GetData() const
-{
-	if (!PrivateData)
+	for (const AVoxelWorld* VoxelWorld : TActorRange<AVoxelWorld>(&World))
 	{
-		ConstCast(this)->SetData(MakeShared<FVoxelHeightSculptData>(nullptr));
+		UVoxelLayerStack* Stack = VoxelWorld->LayerStack;
+		if (!Stack)
+		{
+			continue;
+		}
+
+		if (Stack->HeightLayers.Contains(Layer))
+		{
+			return FVoxelStackLayer(Stack, Layer);
+		}
 	}
-	return PrivateData.ToSharedRef();
-}
 
-void FVoxelHeightSculptStamp::SetData(const TSharedRef<FVoxelHeightSculptData>& NewData)
-{
-	ensure(
-		!PrivateData ||
-		PrivateData->SaveAsset.IsExplicitlyNull() ||
-		PrivateData->SaveAsset == NewData->SaveAsset);
-
-	PrivateData = NewData;
-	PrivateDataOnChanged = MakeSharedVoid();
-
-	PrivateData->OnChanged.Add(MakeWeakPtrDelegate(PrivateDataOnChanged, MakeWeakPtrLambda(this, [this]
+	TVoxelArray<const AVoxelWorld*> VoxelWorlds;
+	for (const AVoxelWorld* VoxelWorld : TActorRange<AVoxelWorld>(&World))
 	{
-		const TSharedPtr<const FVoxelStampRuntime> StampRuntime = ResolveStampRuntime();
-		if (!StampRuntime)
-		{
-			return;
-		}
+		VoxelWorlds.Add(VoxelWorld);
+	}
 
-		StampRuntime->RequestUpdate();
+	VOXEL_MESSAGE(Error,
+		"Cannot sculpt: Failed to find a Voxel World with a compatible stack.\n"
+		"You need a Voxel World with a LayerStack containing the following layer in your scene: {0}\n"
+		"If this sculpt stamp is not meant to be rendered with a Voxel World, manually set StackOverride\n"
+		"Voxel Worlds checked: {1}",
+		Layer,
+		VoxelWorlds);
 
-		if (!GIsEditor)
-		{
-			return;
-		}
-
-		if (const USceneComponent* Component = StampRuntime->GetComponent().Resolve_Ensured())
-		{
-			(void)Component->MarkPackageDirty();
-		}
-	})));
-}
-
-///////////////////////////////////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////////////////////
-
-void FVoxelHeightSculptStamp::PostDuplicate()
-{
-	VOXEL_FUNCTION_COUNTER();
-
-	SetData(MakeShared<FVoxelHeightSculptData>(nullptr, GetData()->GetInnerData()));
+	return {};
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -253,110 +90,109 @@ void FVoxelHeightSculptStamp::GetPropertyInfo(FPropertyInfo& Info) const
 
 bool FVoxelHeightSculptStampRuntime::Initialize(FVoxelDependencyCollector& DependencyCollector)
 {
-	const TSharedRef<const FVoxelHeightSculptData> Data = Stamp.GetData();
+	VOXEL_FUNCTION_COUNTER();
+	checkUObjectAccess();
 
-	SculptDataId = Data->SculptDataId;
-	Dependency = Data->Dependency;
-	InnerData = Data->GetInnerData();
-
-	if (!InnerData->HeightChunkTree->IsEmpty() ||
-		!InnerData->SurfaceTypeChunkTree->IsEmpty())
+	const AVoxelSculptHeight* SculptActor = Stamp.WeakSculptActor.Resolve();
+	if (!ensure(SculptActor))
 	{
+		return false;
+	}
+
+	WeakSculptActor = SculptActor;
+	Dependency = SculptActor->GetDependency();
+	BulkLoader = SculptActor->GetBulkLoader();
+	SculptData = SculptActor->GetSculptData().GetShared();
+	RootHash = SculptActor->GetSculptData().GetHash();
+
+	if (Stamp.bIsInfinite)
+	{
+		// Always initialize stamp if infinite to avoid huge first refresh
 		return true;
 	}
 
-	for (auto& It : InnerData->MetadataRefToChunkTree)
-	{
-		if (!It.Value->IsEmpty())
-		{
-			return true;
-		}
-	}
-
-	return false;
+	return SculptData->GetBounds().IsValidAndNotEmpty();
 }
 
 FVoxelBox FVoxelHeightSculptStampRuntime::GetLocalBounds() const
 {
-	FVoxelBox2D Bounds = FVoxelBox2D::InvertedInfinite;
+	FVoxelBox Bounds = SculptData->GetBounds().Scale(FVector(Stamp.ScaleXY, Stamp.ScaleXY, 1.f));
 
-	if (!InnerData->HeightChunkTree->IsEmpty())
+	if (!Bounds.IsValidAndNotEmpty() &&
+		Stamp.bIsInfinite)
 	{
-		Bounds += InnerData->HeightChunkTree->GetBounds().Scale(Stamp.ScaleXY);
+		// Always initialize stamp if infinite to avoid huge first refresh
+		Bounds = FVoxelBox(0, 1);
 	}
+	ensure(Bounds.IsValidAndNotEmpty());
 
-	if (!InnerData->SurfaceTypeChunkTree->IsEmpty())
-	{
-		Bounds += InnerData->SurfaceTypeChunkTree->GetBounds().Scale(Stamp.ScaleXY);
-	}
+	return Bounds;
+}
 
-	for (const auto& It : InnerData->MetadataRefToChunkTree)
-	{
-		if (!It.Value->IsEmpty())
-		{
-			Bounds += It.Value->GetBounds().Scale(Stamp.ScaleXY);
-		}
-	}
+bool FVoxelHeightSculptStampRuntime::HasCollectDependencies() const
+{
+	return Stamp.bIsInfinite;
+}
 
-	if (InnerData->MinHeight < InnerData->MaxHeight)
-	{
-		return Bounds.ToBox3D(InnerData->MinHeight, InnerData->MaxHeight);
-	}
-
-	return Bounds.ToBox3D(-1.f, 1.f);
+bool FVoxelHeightSculptStampRuntime::CanPartiallyInvalidate() const
+{
+	return true;
 }
 
 bool FVoxelHeightSculptStampRuntime::HasRelativeHeightRange() const
 {
-	return Stamp.bRelativeHeight;
+	return Stamp.bStoreRelativeHeights;
 }
 
-bool FVoxelHeightSculptStampRuntime::ShouldFullyInvalidate(
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+
+bool FVoxelHeightSculptStampRuntime::TryToPartiallyInvalidate(
 	const FVoxelStampRuntime& PreviousRuntime,
 	TVoxelArray<FVoxelBox>& OutLocalBoundsToInvalidate) const
 {
 	VOXEL_FUNCTION_COUNTER();
 
 	const FVoxelHeightSculptStampRuntime& TypedPreviousRuntime = CastStructChecked<FVoxelHeightSculptStampRuntime>(PreviousRuntime);
-	if (TypedPreviousRuntime.SculptDataId != SculptDataId ||
+	if (TypedPreviousRuntime.WeakSculptActor != WeakSculptActor ||
 		TypedPreviousRuntime.Stamp.ScaleXY != Stamp.ScaleXY ||
-		TypedPreviousRuntime.Stamp.bRelativeHeight != Stamp.bRelativeHeight)
+		TypedPreviousRuntime.Stamp.bIsInfinite != Stamp.bIsInfinite ||
+		TypedPreviousRuntime.Stamp.NearMaxLOD != Stamp.NearMaxLOD ||
+		TypedPreviousRuntime.Stamp.MidMaxLOD != Stamp.MidMaxLOD)
 	{
-		return true;
+		return false;
 	}
 
-	// Invalidate any new bounds
-	GetLocalBounds().Remove_Split(
-		TypedPreviousRuntime.GetLocalBounds(),
-		OutLocalBoundsToInvalidate);
+	if (!Stamp.bIsInfinite)
+	{
+		// Invalidate any new bounds
+		GetLocalBounds().Remove_Split(
+			TypedPreviousRuntime.GetLocalBounds(),
+			OutLocalBoundsToInvalidate);
+	}
 
-	return false;
+	return true;
 }
 
-///////////////////////////////////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////////////////////
-
-void FVoxelHeightSculptStampRuntime::Apply(
-	const FVoxelHeightBulkQuery& Query,
-	const FVoxelHeightTransform& StampToQuery) const
+void FVoxelHeightSculptStampRuntime::CollectDependencies(
+	FVoxelDependencyCollector& DependencyCollector,
+	const FVoxelHeightTransform& StampToQuery,
+	const FVoxelBox2D& Bounds) const
 {
-	VOXEL_FUNCTION_COUNTER();
-
-	const FVoxelBox2D Bounds = StampToQuery.InverseTransform(Query.GetBounds()).Scale(1. / Stamp.ScaleXY);
-	Query.AddDependency(*Dependency, Bounds);
-
-	if (AffectShape())
+	if (Bounds.IsInfinite())
 	{
-		InnerData->ApplyShape(
-			Query,
-			StampToQuery,
-			Stamp.ScaleXY,
-			Stamp.BlendMode,
-			Stamp.bApplyOnVoid,
-			Stamp.bRelativeHeight);
+		DependencyCollector.AddDependency(*Dependency, FVoxelBox2D::Infinite);
+		return;
 	}
+
+	const FVoxelBox2D LocalBounds = StampToQuery.InverseTransform(Bounds).Scale(1. / Stamp.ScaleXY);
+	DependencyCollector.AddDependency(*Dependency, LocalBounds);
 }
+
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
 
 void FVoxelHeightSculptStampRuntime::Apply(
 	const FVoxelHeightSparseQuery& Query,
@@ -367,35 +203,21 @@ void FVoxelHeightSculptStampRuntime::Apply(
 	const FVoxelBox2D Bounds = StampToQuery.InverseTransform(Query.PositionBounds).Scale(1. / Stamp.ScaleXY);
 	Query.AddDependency(*Dependency, Bounds);
 
-	if (AffectShape())
-	{
-		InnerData->ApplyShape(
-			Query,
-			StampToQuery,
-			Stamp.ScaleXY,
-			Stamp.BlendMode,
-			Stamp.bApplyOnVoid,
-			Stamp.bRelativeHeight);
-	}
+	const EVoxelHeightChunkQuality Quality =
+		Query.Query.LOD <= Stamp.NearMaxLOD
+		? EVoxelHeightChunkQuality::Near
+		: Query.Query.LOD <= Stamp.MidMaxLOD
+		? EVoxelHeightChunkQuality::Mid
+		: EVoxelHeightChunkQuality::Far;
 
-	if (AffectSurfaceType() &&
-		Query.bQuerySurfaceTypes)
-	{
-		InnerData->ApplySurfaceType(
-			Query,
-			StampToQuery,
-			Stamp.ScaleXY);
-	}
-
-	if (AffectMetadata())
-	{
-		for (const FVoxelMetadataRef& Metadata : Query.MetadatasToQuery)
-		{
-			InnerData->ApplyMetadata(
-				Metadata,
-				Query,
-				StampToQuery,
-				Stamp.ScaleXY);
-		}
-	}
+	SculptData->Apply(
+		*BulkLoader,
+		Query,
+		StampToQuery,
+		Stamp.ScaleXY,
+		Stamp.Behavior,
+		Stamp.BlendMode,
+		Stamp.bApplyOnVoid,
+		Quality,
+		RootHash);
 }

@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelStampComponent.h"
 #include "VoxelStampComponentUtilities.h"
@@ -9,16 +9,6 @@
 #include "VoxelHeightStamp.h"
 #include "VoxelVolumeStamp.h"
 #include "VoxelInvalidationCallstack.h"
-
-#include "Sculpt/Height/VoxelHeightSculptData.h"
-#include "Sculpt/Height/VoxelHeightSculptActor.h"
-#include "Sculpt/Height/VoxelHeightSculptStamp.h"
-#include "Sculpt/Height/VoxelHeightSculptInnerData.h"
-
-#include "Sculpt/Volume/VoxelVolumeSculptData.h"
-#include "Sculpt/Volume/VoxelVolumeSculptActor.h"
-#include "Sculpt/Volume/VoxelVolumeSculptStamp.h"
-#include "Sculpt/Volume/VoxelVolumeSculptInnerData.h"
 
 #if WITH_EDITOR
 #include "LevelEditor.h"
@@ -120,47 +110,6 @@ UVoxelStampComponent::~UVoxelStampComponent()
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
 
-void UVoxelStampComponent::OnRegister()
-{
-	VOXEL_FUNCTION_COUNTER();
-
-	if (PrivateStamp.IsA<FVoxelHeightSculptStamp>() &&
-		ensure(GetWorld()))
-	{
-		AVoxelHeightSculptActor* SculptActor = GetWorld()->SpawnActor<AVoxelHeightSculptActor>();
-
-		if (ensure(SculptActor))
-		{
-			CastChecked<UVoxelHeightSculptComponent>(SculptActor->GetRootComponent())->PrivateStamp = PrivateStamp.CastTo<FVoxelHeightSculptStamp>();
-			PrivateStamp = {};
-
-			FVoxelUtilities::DelayedCall(MakeWeakObjectPtrLambda(GetOwner(), [Owner = GetOwner()]
-			{
-				Owner->Destroy();
-			}));
-		}
-	}
-
-	if (PrivateStamp.IsA<FVoxelVolumeSculptStamp>() &&
-		ensure(GetWorld()))
-	{
-		AVoxelVolumeSculptActor* SculptActor = GetWorld()->SpawnActor<AVoxelVolumeSculptActor>();
-
-		if (ensure(SculptActor))
-		{
-			CastChecked<UVoxelVolumeSculptComponent>(SculptActor->GetRootComponent())->PrivateStamp = PrivateStamp.CastTo<FVoxelVolumeSculptStamp>();
-			PrivateStamp = {};
-
-			FVoxelUtilities::DelayedCall(MakeWeakObjectPtrLambda(GetOwner(), [Owner = GetOwner()]
-			{
-				Owner->Destroy();
-			}));
-		}
-	}
-
-	Super::OnRegister();
-}
-
 void UVoxelStampComponent::Serialize(FArchive& Ar)
 {
 	VOXEL_FUNCTION_COUNTER();
@@ -220,20 +169,6 @@ void UVoxelStampComponent::Serialize(FArchive& Ar)
 	{
 		TVoxelArray64<uint8> Data;
 		Ar << Data;
-		return;
-	}
-
-	if (FVoxelHeightSculptStamp* Stamp = PrivateStamp.As<FVoxelHeightSculptStamp>())
-	{
-		const TSharedRef<FVoxelHeightSculptInnerData> NewInnerData = MakeShared<FVoxelHeightSculptInnerData>();
-		NewInnerData->Serialize(Ar);
-		Stamp->SetData(MakeShared<FVoxelHeightSculptData>(nullptr, NewInnerData));
-	}
-	if (FVoxelVolumeSculptStamp* Stamp = PrivateStamp.As<FVoxelVolumeSculptStamp>())
-	{
-		const TSharedRef<FVoxelVolumeSculptInnerData> NewInnerData = MakeShared<FVoxelVolumeSculptInnerData>(false);
-		NewInnerData->Serialize(Ar);
-		Stamp->SetData(MakeShared<FVoxelVolumeSculptData>(nullptr, NewInnerData));
 	}
 }
 

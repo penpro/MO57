@@ -1,7 +1,10 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "Sculpt/Volume/VoxelVolumeSculptBlueprintLibrary.h"
-#include "Sculpt/Volume/VoxelVolumeSculptActor.h"
+#include "VoxelSculptVolumeCache.h"
+#include "Sculpt/Volume/VoxelSculptVolume.h"
+#include "Sculpt/Volume/VoxelSculptVolumeAsset.h"
+#include "Sculpt/Volume/VoxelSculptVolumeData.h"
 
 bool UVoxelVolumeSculptBlueprintLibrary::IsValidSave(FVoxelVolumeSculptSave Save)
 {
@@ -34,20 +37,7 @@ int64 UVoxelVolumeSculptBlueprintLibrary::GetSaveSize(FVoxelVolumeSculptSave Sav
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
 
-FVoxelFuture UVoxelVolumeSculptBlueprintLibrary::ClearSculptData(AVoxelVolumeSculptActor* SculptActor)
-{
-	VOXEL_FUNCTION_COUNTER();
-
-	if (!SculptActor)
-	{
-		VOXEL_MESSAGE(Error, "SculptActor is invalid");
-		return {};
-	}
-
-	return SculptActor->ClearSculptData();
-}
-
-void UVoxelVolumeSculptBlueprintLibrary::ClearSculptCache(AVoxelVolumeSculptActor* SculptActor)
+void UVoxelVolumeSculptBlueprintLibrary::ClearSculptData(AVoxelSculptVolume* SculptActor)
 {
 	VOXEL_FUNCTION_COUNTER();
 
@@ -57,7 +47,42 @@ void UVoxelVolumeSculptBlueprintLibrary::ClearSculptCache(AVoxelVolumeSculptActo
 		return;
 	}
 
-	SculptActor->GetStamp()->ClearCache();
+	SculptActor->SetSculptData(MakeVoxelBulkRef(MakeShared<FVoxelSculptVolumeData>()));
+}
+
+void UVoxelVolumeSculptBlueprintLibrary::ClearSculptCache(AVoxelSculptVolume* SculptActor)
+{
+	VOXEL_FUNCTION_COUNTER();
+
+	if (!SculptActor)
+	{
+		VOXEL_MESSAGE(Error, "SculptActor is invalid");
+		return;
+	}
+
+	SculptActor->ClearSculptCache();
+}
+
+void UVoxelVolumeSculptBlueprintLibrary::SetSculptAsset(
+	AVoxelSculptVolume* SculptActor,
+	UVoxelSculptVolumeAsset* Asset)
+{
+	VOXEL_FUNCTION_COUNTER();
+
+	if (!SculptActor)
+	{
+		VOXEL_MESSAGE(Error, "SculptActor is invalid");
+		return;
+	}
+
+	if (!Asset)
+	{
+		SculptActor->SetSculptData(MakeVoxelBulkRef(MakeShared<FVoxelSculptVolumeData>()));
+	}
+	else
+	{
+		SculptActor->SetSculptData(Asset->GetData(), Asset->GetBulkLoader());
+	}
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -66,7 +91,7 @@ void UVoxelVolumeSculptBlueprintLibrary::ClearSculptCache(AVoxelVolumeSculptActo
 
 FVoxelFuture UVoxelVolumeSculptBlueprintLibrary::K2_GetSave(
 	FVoxelVolumeSculptSave& Save,
-	AVoxelVolumeSculptActor* SculptActor,
+	AVoxelSculptVolume* SculptActor,
 	const bool bCompress)
 {
 	VOXEL_FUNCTION_COUNTER();
@@ -86,7 +111,7 @@ FVoxelFuture UVoxelVolumeSculptBlueprintLibrary::K2_GetSave(
 }
 
 FVoxelFuture UVoxelVolumeSculptBlueprintLibrary::LoadFromSave(
-	AVoxelVolumeSculptActor* SculptActor,
+	AVoxelSculptVolume* SculptActor,
 	const FVoxelVolumeSculptSave Save)
 {
 	VOXEL_FUNCTION_COUNTER();
@@ -105,7 +130,7 @@ FVoxelFuture UVoxelVolumeSculptBlueprintLibrary::LoadFromSave(
 ///////////////////////////////////////////////////////////////////////////////
 
 FVoxelFuture UVoxelVolumeSculptBlueprintLibrary::ApplyModifier(
-	AVoxelVolumeSculptActor* SculptActor,
+	AVoxelSculptVolume* SculptActor,
 	const TSharedRef<FVoxelVolumeModifier>& Modifier)
 {
 	VOXEL_FUNCTION_COUNTER();

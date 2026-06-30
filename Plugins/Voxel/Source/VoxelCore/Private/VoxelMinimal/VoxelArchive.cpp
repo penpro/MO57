@@ -1,15 +1,18 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelMinimal.h"
 
 FVoxelWriter::FVoxelWriter()
 {
-	Impl.SetIsSaving(true);
-	Impl.SetIsPersistent(true);
+	SetIsSaving(true);
+	SetIsPersistent(true);
+	SetWantBinaryPropertySerialization(true);
 }
 
-void FVoxelWriter::FArchiveImpl::Serialize(void* Data, const int64 NumToSerialize)
+void FVoxelWriter::Serialize(void* Data, const int64 NumToSerialize)
 {
+	VOXEL_FUNCTION_COUNTER_NUM(NumToSerialize, 128);
+
 	if (NumToSerialize == 0)
 	{
 		return;
@@ -27,12 +30,12 @@ void FVoxelWriter::FArchiveImpl::Serialize(void* Data, const int64 NumToSerializ
 	Offset += NumToSerialize;
 }
 
-int64 FVoxelWriter::FArchiveImpl::TotalSize()
+int64 FVoxelWriter::TotalSize()
 {
 	return Bytes.Num();
 }
 
-FString FVoxelWriter::FArchiveImpl::GetArchiveName() const
+FString FVoxelWriter::GetArchiveName() const
 {
 	return "FVoxelArchive";
 }
@@ -41,15 +44,17 @@ FString FVoxelWriter::FArchiveImpl::GetArchiveName() const
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
 
-FVoxelReader::FVoxelReader(const TConstVoxelArrayView64<uint8> Bytes)
-	: Impl(Bytes)
+FVoxelReader::FVoxelReader(const TConstVoxelArrayView64<uint8>& Bytes): Bytes(Bytes)
 {
-	Impl.SetIsLoading(true);
-	Impl.SetIsPersistent(true);
+	SetIsLoading(true);
+	SetIsPersistent(true);
+	SetWantBinaryPropertySerialization(true);
 }
 
-void FVoxelReader::FArchiveImpl::Serialize(void* Data, const int64 NumToSerialize)
+void FVoxelReader::Serialize(void* Data, const int64 NumToSerialize)
 {
+	VOXEL_FUNCTION_COUNTER_NUM(NumToSerialize, 128);
+
 	if (IsError() ||
 		NumToSerialize == 0)
 	{
@@ -71,12 +76,12 @@ void FVoxelReader::FArchiveImpl::Serialize(void* Data, const int64 NumToSerializ
 	Offset += NumToSerialize;
 }
 
-int64 FVoxelReader::FArchiveImpl::TotalSize()
+int64 FVoxelReader::TotalSize()
 {
 	return Bytes.Num();
 }
 
-FString FVoxelReader::FArchiveImpl::GetArchiveName() const
+FString FVoxelReader::GetArchiveName() const
 {
 	return "FVoxelArchive";
 }

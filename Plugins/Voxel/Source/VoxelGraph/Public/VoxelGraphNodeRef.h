@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -13,6 +13,7 @@ public:
 	TVoxelObjectPtr<const UVoxelTerminalGraph> TerminalGraph;
 	FName NodeId;
 	int32 TemplateInstance = 0;
+	bool bGeneratedNode = false;
 
 	// Debug only
 	FName EdGraphNodeTitle;
@@ -26,7 +27,8 @@ public:
 		const UVoxelTerminalGraph& TerminalGraph,
 		FName NodeId,
 		FName EdGraphNodeTitle,
-		FName EdGraphNodeName);
+		FName EdGraphNodeName,
+		bool bGeneratedNode = false);
 
 #if WITH_EDITOR
 	UEdGraphNode* GetGraphNode_EditorOnly() const;
@@ -59,6 +61,51 @@ public:
 			GetTypeHash(Key.NodeId),
 			GetTypeHash(Key.TemplateInstance));
 	}
+};
+
+struct VOXELGRAPH_API FVoxelGraphMergedNodeRef
+{
+public:
+	FVoxelGraphMergedNodeRef() = default;
+
+	FVoxelGraphMergedNodeRef(
+		const FVoxelGraphNodeRef& NodeRef,
+		const TVoxelArray<FVoxelGraphNodeRef>& MergedNodeRefs)
+		: Node(NodeRef)
+	{
+		TVoxelSet<FVoxelGraphNodeRef> Nodes(MergedNodeRefs);
+		for (const FVoxelGraphNodeRef& OtherNode : Nodes)
+		{
+			if (Node == OtherNode)
+			{
+				continue;
+			}
+
+			MergedNodes.Add(OtherNode);
+		}
+	}
+
+public:
+	TSharedRef<FVoxelMessageToken> CreateMessageToken() const;
+
+	FString ToString() const;
+
+	FORCEINLINE bool operator==(const FVoxelGraphMergedNodeRef& Other) const
+	{
+		return
+			Node == Other.Node &&
+			MergedNodes == Other.MergedNodes;
+	}
+	FORCEINLINE friend uint32 GetTypeHash(const FVoxelGraphMergedNodeRef& Key)
+	{
+		return FVoxelUtilities::MurmurHashMulti(
+			GetTypeHash(Key.Node),
+			GetTypeHash(Key.MergedNodes));
+	}
+
+public:
+	FVoxelGraphNodeRef Node;
+	TVoxelArray<FVoxelGraphNodeRef> MergedNodes;
 };
 
 struct VOXELGRAPH_API FVoxelGraphPinRef

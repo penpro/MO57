@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -198,6 +198,12 @@ public:
 		const UScriptStruct* NodeStruct,
 		const TArray<TArray<FPin*>>& Pins,
 		TOptional<FVoxelPinType> OutputPinType = {});
+
+	static TArray<FPin*> Call_NoInput(
+		const FNode& TargetNode,
+		const UScriptStruct* NodeStruct,
+		int32 MaxDimension,
+		const TOptional<FVoxelPinType>& OutputPinType);
 
 	template<typename LambdaType, typename... ArgTypes>
 	requires std::is_invocable_v<LambdaType, FPin*, ArgTypes...>

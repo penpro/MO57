@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "Collision/VoxelCollisionBaker.h"
 #include "Collision/VoxelCollisionState.h"
@@ -430,6 +430,7 @@ void AVoxelCollisionBaker::Render(const TVoxelMap<FIntVector, TSharedPtr<FVoxelC
 			It.Value->Collider.ToSharedRef(),
 			Collision,
 			bDoubleSidedCollision,
+			bGenerateOverlapEvents,
 			FTransform(
 				FQuat::Identity,
 				FVector(It.Key) * ChunkSize * VoxelSize,

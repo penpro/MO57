@@ -1,15 +1,17 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelGraphToolkit.h"
 #include "VoxelEdGraph.h"
 #include "VoxelGraphSchema.h"
 #include "VoxelGraphTracker.h"
 #include "VoxelTerminalGraph.h"
+#include "VoxelGraphCompiler.h"
 #include "VoxelTerminalGraphRuntime.h"
 #include "VoxelGraphCommandManager.h"
 #include "VoxelGraphEditorSummoner.h"
 #include "VoxelGraphEditorSettings.h"
 #include "Members/SVoxelGraphMembers.h"
+#include "Nodes/VoxelGraphDebugNode.h"
 #include "Widgets/SVoxelGraphSearch.h"
 #include "Widgets/SVoxelGraphPreview.h"
 #include "Widgets/SVoxelGraphMessages.h"
@@ -18,6 +20,67 @@
 #include "Customizations/VoxelGraphPreviewSettingsCustomization.h"
 #include "SGraphPanel.h"
 #include "SourceCodeNavigation.h"
+#include "VoxelGraphEditorUtilities.h"
+
+VOXEL_RUN_ON_STARTUP_EDITOR()
+{
+	FVoxelGraphEditorUtilities::OnSelectNodes.BindLambda([](const TVoxelSet<const UEdGraphNode*>& Nodes)
+	{
+		TVoxelMap<TSharedPtr<SGraphEditor>, TVoxelArray<const UEdGraphNode*>> GraphEditorToNodes;
+		for (const UEdGraphNode* Node : Nodes)
+		{
+			if (!Node)
+			{
+				continue;
+			}
+
+			const UVoxelGraph* Graph = Node->GetTypedOuter<UVoxelGraph>();
+			if (!Graph)
+			{
+				continue;
+			}
+
+			const UEdGraph* EdGraph = Node->GetGraph();
+			if (!ensure(EdGraph))
+			{
+				continue;
+			}
+
+			const FVoxelGraphToolkit* Toolkit = FVoxelToolkit::OpenToolkit<FVoxelGraphToolkit>(*Graph);
+			if (!ensure(Toolkit))
+			{
+				continue;
+			}
+
+			TSharedPtr<SGraphEditor> GraphEditor = Toolkit->FindGraphEditor(*EdGraph);
+			if (!GraphEditor ||
+				!GraphEditorToNodes.Contains(GraphEditor))
+			{
+				GraphEditor = Toolkit->OpenGraphAndBringToFront(*EdGraph, true);
+				if (!ensure(GraphEditor))
+				{
+					continue;
+				}
+
+				GraphEditorToNodes.Add_EnsureNew(GraphEditor);
+			}
+
+			GraphEditorToNodes[GraphEditor].Add(Node);
+		}
+
+		for (const auto& It : GraphEditorToNodes)
+		{
+			It.Key->ClearSelectionSet();
+
+			for (const UEdGraphNode* Node : It.Value)
+			{
+				It.Key->SetNodeSelection(ConstCast(Node), true);
+			}
+
+			It.Key->ZoomToFit(true);
+		}
+	});
+}
 
 TSharedPtr<FVoxelGraphToolkit> FVoxelGraphToolkit::Get(const UEdGraph* EdGraph)
 {
@@ -199,10 +262,11 @@ void FVoxelGraphToolkit::Tick()
 
 		// Focus Messages tab
 		const TSharedPtr<FTabManager> TabManager = GetTabManager();
-		if (ensure(TabManager))
+		if (ensureMsgf(TabManager, TEXT("No tab manager for %s"), *GetAsset()->GetPathName()))
 		{
 			const TSharedPtr<SDockTab> MessagesTab = TabManager->FindExistingLiveTab(FTabId(MessagesTabId));
-			if (ensure(MessagesTab) &&
+			// MessagesTab may be null if the user closed the Messages tab
+			if (MessagesTab.IsValid() &&
 				// Only focus if asset is focused
 				TabManager->GetOwnerTab()->HasAnyUserFocus())
 			{
@@ -514,12 +578,16 @@ TSharedRef<SGraphEditor> FVoxelGraphToolkit::CreateGraphEditor(UEdGraph& EdGraph
 	VOXEL_FUNCTION_COUNTER();
 
 	// Make sure to fixup the graph before opening it
-	FixupTerminalGraph(EdGraph.GetTypedOuter<UVoxelTerminalGraph>());
+	if (!EdGraph.HasAnyFlags(RF_Transient))
+	{
+		FixupTerminalGraph(EdGraph.GetTypedOuter<UVoxelTerminalGraph>());
+	}
 
 	const FGraphAppearanceInfo AppearanceInfo;
 
 	SGraphEditor::FGraphEditorEvents Events;
-	if (bBindOnSelect)
+	if (bBindOnSelect &&
+		!EdGraph.HasAnyFlags(RF_Transient))
 	{
 		Events.OnSelectionChanged = MakeLambdaDelegate([
 			=,
@@ -751,6 +819,132 @@ TSet<UEdGraphNode*> FVoxelGraphToolkit::GetSelectedNodes() const
 void FVoxelGraphToolkit::AddNodeToReconstruct(UEdGraphNode* Node)
 {
 	NodesToReconstruct.Add(Node);
+}
+
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+
+bool FVoxelGraphToolkit::IsGraphSensitive() const
+{
+	return bSensitiveContext;
+}
+
+void FVoxelGraphToolkit::SetIsGraphSensitive(const bool bValue)
+{
+	bSensitiveContext = bValue;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+
+void FVoxelGraphToolkit::OpenIntermediateGraph(const UVoxelTerminalGraph& TerminalGraph, const FName PassName)
+{
+	TerminalGraph.GetRuntime().EnsureIsCompiled(
+		true,
+		[&](const FName Pass, FVoxelGraphCompiler& Compiler)
+		{
+			if (Pass != PassName)
+			{
+				return;
+			}
+
+			const TSharedRef<Voxel::Graph::FGraph> NewGraph = MakeShared<Voxel::Graph::FGraph>();
+			Compiler.CloneInto(*NewGraph);
+
+			UEdGraph* EdGraph = WeakIntermediateGraph.Resolve();
+			if (!EdGraph)
+			{
+				UVoxelEdGraph* VoxelEdGraph = NewObject<UVoxelEdGraph>(GetTransientPackage(), NAME_None, RF_Transient);
+				VoxelEdGraph->SetLatestVersion();
+				VoxelEdGraph->Schema = UVoxelGraphSchema::StaticClass();
+				VoxelEdGraph->SetToolkit(SharedThis(this));
+
+				WeakIntermediateGraph = VoxelEdGraph;
+				EdGraph = VoxelEdGraph;
+			}
+
+			if (TerminalGraph.IsMainTerminalGraph())
+			{
+				IntermediateGraphName = "Main Graph";
+			}
+			else if (TerminalGraph.IsEditorTerminalGraph())
+			{
+				IntermediateGraphName = "Editor Graph";
+			}
+			else
+			{
+				IntermediateGraphName = TerminalGraph.GetDisplayName();
+			}
+			IntermediateGraphName += " | " + FName::NameToDisplayString(PassName.ToString(), false);
+
+			// Remove existing nodes
+			{
+				TArray<TObjectPtr<UEdGraphNode>> CopiedNodes = EdGraph->Nodes;
+				for (UEdGraphNode* Node : CopiedNodes)
+				{
+					EdGraph->RemoveNode(Node);
+				}
+			}
+
+			const FVoxelIntBox2D Bounds = INLINE_LAMBDA
+			{
+				TVoxelArray<FIntPoint> Positions;
+				for (const Voxel::Graph::FNode& Node : NewGraph->GetNodes())
+				{
+					const UEdGraphNode* GraphNode = Node.NodeRef.GetGraphNode_EditorOnly();
+					if (!GraphNode)
+					{
+						continue;
+					}
+					Positions.Add(FIntPoint(GraphNode->NodePosX * 2, GraphNode->NodePosY * 2));
+				}
+				return FVoxelIntBox2D::FromPositions(Positions);
+			};
+
+			TMap<const Voxel::Graph::FNode*, UVoxelGraphDebugNode*> NodeMap;
+			for (const Voxel::Graph::FNode& Node : NewGraph->GetNodes())
+			{
+				FGraphNodeCreator<UVoxelGraphDebugNode> NodeCreator(*EdGraph);
+				UVoxelGraphDebugNode* DebugNode = NodeCreator.CreateNode(false);
+				DebugNode->Node = &Node;
+				DebugNode->Graph = NewGraph;
+				NodeCreator.Finalize();
+
+				NodeMap.Add(&Node, DebugNode);
+
+				const UEdGraphNode* GraphNode = Node.NodeRef.GetGraphNode_EditorOnly();
+				if (!GraphNode)
+				{
+					DebugNode->NodePosX = Bounds.Max.X;
+					DebugNode->NodePosY = Bounds.Max.Y;
+					continue;
+				}
+
+				DebugNode->NodePosX = GraphNode->NodePosX * 2;
+				DebugNode->NodePosY = GraphNode->NodePosY * 2;
+			}
+	
+			for (const Voxel::Graph::FNode& Node : NewGraph->GetNodes())
+			{
+				UVoxelGraphDebugNode* DebugNode = NodeMap[&Node];
+
+				for (const Voxel::Graph::FPin& Pin : Node.GetPins())
+				{
+					UEdGraphPin* DebugPin = DebugNode->PinMap[&Pin];
+
+					for (Voxel::Graph::FPin& OtherPin : Pin.GetLinkedTo())
+					{
+						UVoxelGraphDebugNode* OtherNode = NodeMap[&OtherPin.Node];
+						UEdGraphPin* OtherDebugPin = OtherNode->PinMap[&OtherPin];
+						DebugPin->MakeLinkTo(OtherDebugPin);
+					}
+				}
+			}
+
+			OpenGraphAndBringToFront(*EdGraph, true);
+		});
 }
 
 ///////////////////////////////////////////////////////////////////////////////

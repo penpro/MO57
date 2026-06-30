@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -6,7 +6,7 @@
 #include "VoxelGraph.h"
 #include "VoxelFunctionLibraryAsset.generated.h"
 
-UCLASS(meta = (VoxelAssetType, AssetColor = Blue))
+UCLASS(meta = (VoxelAssetType, AssetColor = Blue, AssetSubMenu = "Misc"))
 class VOXELGRAPH_API UVoxelFunctionLibraryAsset : public UVoxelAsset
 {
 	GENERATED_BODY()

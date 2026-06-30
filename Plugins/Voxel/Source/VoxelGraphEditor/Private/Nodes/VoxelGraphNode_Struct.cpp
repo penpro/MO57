@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelGraphNode_Struct.h"
 
@@ -7,6 +7,7 @@
 #include "VoxelGraphToolkit.h"
 #include "VoxelGraphMigration.h"
 #include "VoxelTemplateNode.h"
+#include "VoxelTerminalGraph.h"
 #include "Nodes/VoxelNode_UFunction.h"
 
 #include "UnrealEdGlobals.h"
@@ -110,7 +111,7 @@ bool UVoxelGraphNode_Struct::CanPasteHere(const UEdGraph* TargetGraph) const
 		return false;
 	}
 
-	return Struct->CanPasteHere(*Toolkit->Asset);
+	return Struct->CanPasteHere(*Toolkit->Asset, VoxelGraph->GetTypedOuter<UVoxelTerminalGraph>());
 }
 
 void UVoxelGraphNode_Struct::PostPasteNode()
@@ -281,6 +282,16 @@ bool UVoxelGraphNode_Struct::GetOverlayInfo(FString& Type, FString& Tooltip, FSt
 	}
 
 	return true;
+}
+
+bool UVoxelGraphNode_Struct::GetGraphWarningInfo(const UVoxelGraph& Graph, FString& OutWarning)
+{
+	if (!Struct.IsValid())
+	{
+		return false;
+	}
+
+	return !Struct->IsDesignedForGraph(Graph, &OutWarning);
 }
 
 bool UVoxelGraphNode_Struct::ShowAsPromotableWildcard(const UEdGraphPin& Pin) const
@@ -602,6 +613,22 @@ void UVoxelGraphNode_Struct::PostReconstructNode()
 	{
 		Struct->PostReconstructNode();
 	}
+}
+
+bool UVoxelGraphNode_Struct::IsPinVisible(const UEdGraphPin& Pin)
+{
+	if (!Struct)
+	{
+		return false;
+	}
+
+	const TSharedPtr<const FVoxelPin> VoxelPin = Struct->FindPin(Pin.PinName);
+	if (!VoxelPin)
+	{
+		return false;
+	}
+
+	return GetNodeDefinition()->IsPinVisible(&Pin, this);
 }
 
 ///////////////////////////////////////////////////////////////////////////////

@@ -1,8 +1,9 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
 #include "VoxelMinimal.h"
+#include "UnifiedBuffer.h"
 #include "Nanite/NaniteShared.h"
 #include "Surface/VoxelSurfaceType.h"
 #include "MegaMaterial/VoxelRenderMaterial.h"
@@ -29,8 +30,7 @@ public:
 		TSharedPtr<FVoxelMaterialRef> MaterialRef;
 		FTransform LocalToWorld;
 		TVoxelArray<FVoxelSurfaceType> UsedSurfaceTypes;
-		TVoxelArray<FIntPoint> PerPageData;
-		FTextureRHIRef PerPageData_Texture;
+		uint32 UniqueId;
 	};
 	TSharedPtr<FQueuedData> QueuedData_RenderThread;
 
@@ -40,7 +40,7 @@ private:
 	TSharedPtr<FVoxelMaterialRef> MaterialRef;
 	FTransform LocalToWorld;
 	TVoxelArray<FVoxelSurfaceType> UsedSurfaceTypes;
-	FTextureRHIRef PerPageData_Texture;
+	uint32 UniqueId = 0;
 
 	TRefCountPtr<FRDGPooledBuffer> MaterialIndexToShadingBinExternalBuffer;
 

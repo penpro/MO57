@@ -1,8 +1,9 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "Heightmap/VoxelHeightmapFunctionLibrary.h"
 #include "Heightmap/VoxelHeightmap_Height.h"
-#include "VoxelHeightmapFunctionLibraryImpl.ispc.generated.h"
+
+VOXEL_REGISTER_FUNCTION(UVoxelHeightmapFunctionLibrary, GetHeightmapSize);
 
 void FVoxelHeightmapRefPinType::Convert(
 	const bool bSetObject,
@@ -24,76 +25,46 @@ void FVoxelHeightmapRefPinType::Convert(
 
 		Struct.Object = InObject;
 		Struct.ScaleXY = InObject.ScaleXY;
+		Struct.DefaultSurfaceType = FVoxelSurfaceType(InObject.DefaultSurfaceType);
 		Struct.ScaleZ = Height->ScaleZ;
 		Struct.OffsetZ = Height->OffsetZ;
 		Struct.HeightData = Height->GetData();
+
+		if (!Struct.HeightData)
+		{
+			return;
+		}
+
+		for (int32 Index = 0; Index < InObject.Weights.Num(); Index++)
+		{
+			const UVoxelHeightmap_Weight* Weight = InObject.Weights[Index];
+			if (!ensure(Weight))
+			{
+				continue;
+			}
+
+			const TSharedPtr<const FVoxelHeightmap_WeightData> WeightData = Weight->GetData();
+			if (!WeightData)
+			{
+				continue;
+			}
+
+			Struct.Weightmaps.Add(FVoxelHeightmapUtilities::FWeightmap
+			{
+				FVoxelSurfaceType(Weight->SurfaceType),
+				Weight->Type,
+				Weight->Strength,
+				FVoxelFloatMetadataRef(Weight->Metadata),
+				Weight->bUseBicubic,
+				WeightData
+			});
+		}
 	}
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
-
-FVoxelFloatBuffer UVoxelHeightmapFunctionLibrary::SampleHeightmap(
-	const FVoxelHeightmapRef& Heightmap,
-	const FVoxelVector2DBuffer& Position,
-	const bool bUseBicubic) const
-{
-	if (!Heightmap.HeightData)
-	{
-		VOXEL_MESSAGE(Error, "{0}: Heightmap is null", this);
-		return {};
-	}
-
-	FVoxelVector2DBuffer LocalPosition = Position;
-	LocalPosition.ExpandConstants();
-
-	FVoxelFloatBuffer Result;
-	Result.Allocate(LocalPosition.Num());
-
-	float ScaleZ;
-	float OffsetZ;
-	FVoxelUtilities::CombineScaleAndOffset(
-		Heightmap.HeightData->InternalScaleZ,
-		Heightmap.HeightData->InternalOffsetZ,
-		Heightmap.ScaleZ,
-		Heightmap.OffsetZ,
-		ScaleZ,
-		OffsetZ);
-
-	if (Heightmap.HeightData->bIsUINT16)
-	{
-		ispc::VoxelHeightmapFunctionLibrary_SampleHeightmap_uint16(
-			LocalPosition.X.GetData(),
-			LocalPosition.Y.GetData(),
-			Result.GetData(),
-			LocalPosition.Num(),
-			bUseBicubic,
-			ScaleZ / MAX_uint16,
-			OffsetZ,
-			Heightmap.ScaleXY,
-			Heightmap.HeightData->SizeX,
-			Heightmap.HeightData->SizeY,
-			Heightmap.HeightData->RawData.View<uint16>().GetData());
-	}
-	else
-	{
-		ispc::VoxelHeightmapFunctionLibrary_SampleHeightmap_float(
-			LocalPosition.X.GetData(),
-			LocalPosition.Y.GetData(),
-			Result.GetData(),
-			LocalPosition.Num(),
-			bUseBicubic,
-			ScaleZ,
-			OffsetZ,
-			Heightmap.ScaleXY,
-			Heightmap.HeightData->SizeX,
-			Heightmap.HeightData->SizeY,
-			Heightmap.HeightData->RawData.View<float>().GetData());
-	}
-
-	return Result;
-}
 
 FIntPoint UVoxelHeightmapFunctionLibrary::GetHeightmapSize(const FVoxelHeightmapRef& Heightmap) const
 {

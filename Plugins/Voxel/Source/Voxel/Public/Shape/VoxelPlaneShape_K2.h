@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -23,6 +23,10 @@ public:
 	 * @param Layer Layer that this stamps belong to
 	 * You can control the order of layers in Layer Stacks
 	 * You can select the layer stack to use in your Voxel World or PCG Sampler settings
+	 * @param BoundsExtensionMultiplier By how much to extend the bounds, relative to the bounds size
+	 * Increase this if you are using a high smoothness
+	 * Increasing this will lead to more stamps being sampled per voxel, increasing generation cost
+	 * @param MaximumBoundsExtension Bounds Extension will be limited to this value in cm, regardless of what the multiplier is set to
 	 * @param Priority Priority of the stamp within its layer
 	 * Higher priority stamps will be applied last
 	 * @param LODRange This stamp will only be applied on LODs within this range (inclusive)
@@ -30,11 +34,8 @@ public:
 	 * @param bApplyOnVoid If false, this stamp will only apply on parts where another stamp has been applied first
 	 * This is useful to avoid having stamps going beyond world bounds
 	 * Only used if BlendMode is not Override nor Intersect
-	 * @param BoundsExtension By how much to extend the bounds, relative to the bounds size
-	 * Increase this if you are using a high smoothness
-	 * Increasing this will lead to more stamps being sampled per voxel, increasing generation cost
 	 */
-	UFUNCTION(BlueprintCallable, Category = "Voxel|Stamp|Shape|Plane", DisplayName = "Make Voxel Plane Shape Stamp", meta = (Keywords = "Construct, Create", Size = "(X=1000.000000,Y=1000.000000)", Height = "1.000000", Layer = "/Script/Voxel.VoxelVolumeLayer'/Voxel/Default/DefaultVolumeLayer.DefaultVolumeLayer'", AutoCreateRefTerm = "AdditionalLayers", Behavior = "AffectAll", Smoothness = "100.000000", LODRange = "(Min=0,Max=32)", bApplyOnVoid = "True", BoundsExtension = "1.000000"))
+	UFUNCTION(BlueprintCallable, Category = "Voxel|Stamp|Shape|Plane", DisplayName = "Make Voxel Plane Shape Stamp", meta = (Keywords = "Construct, Create", Size = "(X=1000.000000,Y=1000.000000)", Height = "1.000000", Layer = "/Script/Voxel.VoxelVolumeLayer'/Voxel/Default/DefaultVolumeLayer.DefaultVolumeLayer'", AutoCreateRefTerm = "AdditionalLayers", BoundsExtensionMultiplier = "1.000000", MaximumBoundsExtension = "1000.000000", Behavior = "AffectAll", Smoothness = "100.000000", LODRange = "(Min=0,Max=32)", bApplyOnVoid = "True"))
 	static void Make(
 		FVoxelShapeStampRef& Stamp,
 		FVector2D Size,
@@ -43,6 +44,8 @@ public:
 		UVoxelVolumeLayer* Layer,
 		EVoxelVolumeBlendMode BlendMode,
 		TArray<UVoxelVolumeLayer*> AdditionalLayers,
+		float BoundsExtensionMultiplier,
+		float MaximumBoundsExtension,
 		FTransform Transform,
 		EVoxelStampBehavior Behavior,
 		int32 Priority,
@@ -51,14 +54,15 @@ public:
 		FVoxelExposedSeed StampSeed,
 		UPARAM(DisplayName = "LOD Range") FInt32Interval LODRange,
 		bool bDisableStampSelection,
-		bool bApplyOnVoid,
-		float BoundsExtension)
+		bool bApplyOnVoid)
 	{
 		Stamp = FVoxelShapeStampRef::New();
 		Stamp->SurfaceType = SurfaceType;
 		Stamp->Layer = Layer;
 		Stamp->BlendMode = BlendMode;
 		Stamp->AdditionalLayers = AdditionalLayers;
+		Stamp->BoundsExtensionMultiplier = BoundsExtensionMultiplier;
+		Stamp->MaximumBoundsExtension = MaximumBoundsExtension;
 		Stamp->Transform = Transform;
 		Stamp->Behavior = Behavior;
 		Stamp->Priority = Priority;
@@ -68,7 +72,6 @@ public:
 		Stamp->LODRange = LODRange;
 		Stamp->bDisableStampSelection = bDisableStampSelection;
 		Stamp->bApplyOnVoid = bApplyOnVoid;
-		Stamp->BoundsExtension = BoundsExtension;
 
 		TVoxelInstancedStruct<FVoxelPlaneShape> Shape(FVoxelPlaneShape::StaticStruct());
 		Shape->Size = Size;
@@ -82,6 +85,10 @@ public:
 	 * @param Layer Layer that this stamps belong to
 	 * You can control the order of layers in Layer Stacks
 	 * You can select the layer stack to use in your Voxel World or PCG Sampler settings
+	 * @param BoundsExtensionMultiplier By how much to extend the bounds, relative to the bounds size
+	 * Increase this if you are using a high smoothness
+	 * Increasing this will lead to more stamps being sampled per voxel, increasing generation cost
+	 * @param MaximumBoundsExtension Bounds Extension will be limited to this value in cm, regardless of what the multiplier is set to
 	 * @param Priority Priority of the stamp within its layer
 	 * Higher priority stamps will be applied last
 	 * @param LODRange This stamp will only be applied on LODs within this range (inclusive)
@@ -89,9 +96,6 @@ public:
 	 * @param bApplyOnVoid If false, this stamp will only apply on parts where another stamp has been applied first
 	 * This is useful to avoid having stamps going beyond world bounds
 	 * Only used if BlendMode is not Override nor Intersect
-	 * @param BoundsExtension By how much to extend the bounds, relative to the bounds size
-	 * Increase this if you are using a high smoothness
-	 * Increasing this will lead to more stamps being sampled per voxel, increasing generation cost
 	 */
 	UFUNCTION(BlueprintPure, Category = "Voxel|Stamp|Shape|Plane", DisplayName = "Break Voxel Plane Shape Stamp", meta = (Keywords = "Break", AutoCreateRefTerm = "AdditionalLayers"))
 	static void Break(
@@ -102,6 +106,8 @@ public:
 		UVoxelVolumeLayer*& Layer,
 		EVoxelVolumeBlendMode& BlendMode,
 		TArray<UVoxelVolumeLayer*>& AdditionalLayers,
+		float& BoundsExtensionMultiplier,
+		float& MaximumBoundsExtension,
 		FTransform& Transform,
 		EVoxelStampBehavior& Behavior,
 		int32& Priority,
@@ -110,13 +116,14 @@ public:
 		FVoxelExposedSeed& StampSeed,
 		UPARAM(DisplayName = "LOD Range") FInt32Interval& LODRange,
 		bool& bDisableStampSelection,
-		bool& bApplyOnVoid,
-		float& BoundsExtension)
+		bool& bApplyOnVoid)
 	{
 		SurfaceType = FVoxelUtilities::MakeSafe<UVoxelSurfaceTypeInterface*>();
 		Layer = FVoxelUtilities::MakeSafe<UVoxelVolumeLayer*>();
 		BlendMode = FVoxelUtilities::MakeSafe<EVoxelVolumeBlendMode>();
 		AdditionalLayers = FVoxelUtilities::MakeSafe<TArray<UVoxelVolumeLayer*>>();
+		BoundsExtensionMultiplier = FVoxelUtilities::MakeSafe<float>();
+		MaximumBoundsExtension = FVoxelUtilities::MakeSafe<float>();
 		Transform = FVoxelUtilities::MakeSafe<FTransform>();
 		Behavior = FVoxelUtilities::MakeSafe<EVoxelStampBehavior>();
 		Priority = FVoxelUtilities::MakeSafe<int32>();
@@ -126,7 +133,6 @@ public:
 		LODRange = FVoxelUtilities::MakeSafe<FInt32Interval>();
 		bDisableStampSelection = FVoxelUtilities::MakeSafe<bool>();
 		bApplyOnVoid = FVoxelUtilities::MakeSafe<bool>();
-		BoundsExtension = FVoxelUtilities::MakeSafe<float>();
 		Size = FVoxelUtilities::MakeSafe<FVector2D>();
 		Height = FVoxelUtilities::MakeSafe<double>();
 
@@ -147,6 +153,8 @@ public:
 		Layer = Stamp->Layer;
 		BlendMode = Stamp->BlendMode;
 		AdditionalLayers = Stamp->AdditionalLayers;
+		BoundsExtensionMultiplier = Stamp->BoundsExtensionMultiplier;
+		MaximumBoundsExtension = Stamp->MaximumBoundsExtension;
 		Transform = Stamp->Transform;
 		Behavior = Stamp->Behavior;
 		Priority = Stamp->Priority;
@@ -156,7 +164,6 @@ public:
 		LODRange = Stamp->LODRange;
 		bDisableStampSelection = Stamp->bDisableStampSelection;
 		bApplyOnVoid = Stamp->bApplyOnVoid;
-		BoundsExtension = Stamp->BoundsExtension;
 		Size = Shape->Size;
 		Height = Shape->Height;
 	}

@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -16,14 +16,6 @@ public:
 	explicit FVoxelTextureManager(const FVoxelMegaMaterialProxy& MegaMaterialProxy);
 
 public:
-	UTexture2D* GetPerPageDataTexture() const
-	{
-		return PerPageDataTexture;
-	}
-	FVoxelTexturePool& GetNaniteIndirectionBufferPool() const
-	{
-		return *NaniteIndirectionBufferPool;
-	}
 	FVoxelTexturePool& GetChunkIndicesBufferPool() const
 	{
 		return *ChunkIndicesBufferPool;
@@ -49,8 +41,6 @@ public:
 	void AddReferencedObjects(FReferenceCollector& Collector);
 
 private:
-	TObjectPtr<UTexture2D> PerPageDataTexture;
-	TSharedPtr<FVoxelTexturePool> NaniteIndirectionBufferPool;
 	TSharedPtr<FVoxelTexturePool> ChunkIndicesBufferPool;
 	TSharedPtr<FVoxelTexturePool> MaterialBufferPool;
 	TVoxelMap<FVoxelMetadataRef, TSharedPtr<FVoxelTexturePool>> MetadataToBufferPool;

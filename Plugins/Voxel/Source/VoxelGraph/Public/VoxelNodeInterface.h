@@ -1,11 +1,11 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
 #include "VoxelMinimal.h"
 
 struct FVoxelNode;
-struct FVoxelGraphNodeRef;
+struct FVoxelGraphMergedNodeRef;
 
 struct VOXELGRAPH_API IVoxelNodeInterface
 {
@@ -13,10 +13,10 @@ public:
 	IVoxelNodeInterface() = default;
 	virtual ~IVoxelNodeInterface() = default;
 
-	virtual const FVoxelGraphNodeRef& GetNodeRef() const = 0;
+	virtual const FVoxelGraphMergedNodeRef& GetNodeRef() const = 0;
 
 public:
-	static void RaiseBufferErrorStatic(const FVoxelGraphNodeRef& Node);
+	static void RaiseBufferErrorStatic(const FVoxelGraphMergedNodeRef& Node);
 
 	void RaiseBufferError() const
 	{

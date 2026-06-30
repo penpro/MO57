@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -18,4 +18,10 @@ public:
 		TSharedRef<IPropertyHandle> PropertyHandle,
 		IDetailChildrenBuilder& ChildBuilder,
 		IPropertyTypeCustomizationUtils& CustomizationUtils) override;
+
+public:
+	virtual void CustomizePropertyRow(
+		TSharedRef<IPropertyHandle> BasePropertyHandle,
+		FProperty* Property,
+		IDetailPropertyRow& PropertyRow) {}
 };

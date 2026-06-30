@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelGraphNode.h"
 #include "VoxelEdGraph.h"
@@ -700,13 +700,10 @@ void UVoxelGraphNode::FixupPreviewSettings()
 		PreviewSettings.Add(Settings);
 	}
 
-	if (!FindPin(PreviewedPin))
+	if (!FindPin(PreviewedPin) &&
+		PreviewSettings.Num() > 0)
 	{
-		for (const FVoxelPinPreviewSettings& Settings : PreviewSettings)
-		{
-			PreviewedPin = Settings.PinName;
-			break;
-		}
+		PreviewedPin = PreviewSettings[0].PinName;
 	}
 
 	if (const TSharedPtr<FVoxelGraphToolkit> Toolkit = GetToolkit())
@@ -775,6 +772,11 @@ void UVoxelGraphNode::AutowireNewNode(UEdGraphPin* FromPin)
 	// Check non-promotable and same type pins first
 	for (UEdGraphPin* Pin : Pins)
 	{
+		if (!IsPinVisible(*Pin))
+		{
+			continue;
+		}
+
 		const FPinConnectionResponse Response = Schema.CanCreateConnection(FromPin, Pin);
 
 		if (Response.Response == CONNECT_RESPONSE_MAKE)
@@ -794,6 +796,11 @@ void UVoxelGraphNode::AutowireNewNode(UEdGraphPin* FromPin)
 
 	for (UEdGraphPin* Pin : Pins)
 	{
+		if (!IsPinVisible(*Pin))
+		{
+			continue;
+		}
+
 		const FPinConnectionResponse Response = Schema.CanCreateConnection(FromPin, Pin);
 
 		if (Response.Response == CONNECT_RESPONSE_MAKE_WITH_PROMOTION)

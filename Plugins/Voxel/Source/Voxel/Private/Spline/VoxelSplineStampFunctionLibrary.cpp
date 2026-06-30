@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "Spline/VoxelSplineStampFunctionLibrary.h"
 #include "Spline/VoxelSplineMetadata.h"
@@ -6,17 +6,32 @@
 #include "Components/SplineComponent.h"
 #include "VoxelSplineStampImpl.ispc.generated.h"
 
+VOXEL_REGISTER_FUNCTION(UVoxelSplineStampFunctionLibrary, GetVectorSplineParameterValue);
+VOXEL_REGISTER_FUNCTION(UVoxelSplineStampFunctionLibrary, GetVector2DSplineParameterValue);
+VOXEL_REGISTER_FUNCTION(UVoxelSplineStampFunctionLibrary, GetTransformAlongSpline);
+VOXEL_REGISTER_FUNCTION(UVoxelSplineStampFunctionLibrary, GetSplineLength);
+VOXEL_REGISTER_FUNCTION(UVoxelSplineStampFunctionLibrary, GetPositionAlongSpline);
+VOXEL_REGISTER_FUNCTION(UVoxelSplineStampFunctionLibrary, GetLastSplineKey);
+VOXEL_REGISTER_FUNCTION(UVoxelSplineStampFunctionLibrary, GetHeightAlongSpline);
+VOXEL_REGISTER_FUNCTION(UVoxelSplineStampFunctionLibrary, GetFloatSplineParameterValue);
+VOXEL_REGISTER_FUNCTION(UVoxelSplineStampFunctionLibrary, GetDistanceAlongSpline);
+VOXEL_REGISTER_FUNCTION(UVoxelSplineStampFunctionLibrary, GetClosestSplineKeyGeneric);
+VOXEL_REGISTER_FUNCTION(UVoxelSplineStampFunctionLibrary, GetClosestSplineKey3D);
+VOXEL_REGISTER_FUNCTION(UVoxelSplineStampFunctionLibrary, GetClosestSplineKey2D);
+
 FVoxelFloatBuffer UVoxelSplineStampFunctionLibrary::GetClosestSplineKeyGeneric(const FVoxelVectorBuffer& Position) const
 {
-	if (Query.IsPreview())
-	{
-		return DefaultBuffer;
-	}
-
 	const FVoxelGraphParameters::FSplineStamp* Parameter = Query->FindParameter<FVoxelGraphParameters::FSplineStamp>();
 	if (!Parameter)
 	{
-		VOXEL_MESSAGE(Error, "{0}: No spline data", this);
+		if (Query.IsPreview())
+		{
+			VOXEL_MESSAGE(Error, "{0}: No Spline Preview Data node found in Editor Graph", this);
+		}
+		else
+		{
+			VOXEL_MESSAGE(Error, "{0}: No spline data", this);
+		}
 		return DefaultBuffer;
 	}
 
@@ -35,15 +50,17 @@ FVoxelFloatBuffer UVoxelSplineStampFunctionLibrary::GetClosestSplineKeyGeneric(c
 
 FVoxelFloatBuffer UVoxelSplineStampFunctionLibrary::GetClosestSplineKey2D(const FVoxelVector2DBuffer& InPosition) const
 {
-	if (Query.IsPreview())
-	{
-		return DefaultBuffer;
-	}
-
 	const FVoxelGraphParameters::FSplineStamp* Parameter = Query->FindParameter<FVoxelGraphParameters::FSplineStamp>();
 	if (!Parameter)
 	{
-		VOXEL_MESSAGE(Error, "{0}: No spline data", this);
+		if (Query.IsPreview())
+		{
+			VOXEL_MESSAGE(Error, "{0}: No Spline Preview Data node found in Editor Graph", this);
+		}
+		else
+		{
+			VOXEL_MESSAGE(Error, "{0}: No spline data", this);
+		}
 		return DefaultBuffer;
 	}
 
@@ -98,15 +115,17 @@ FVoxelFloatBuffer UVoxelSplineStampFunctionLibrary::GetClosestSplineKey2D(const 
 
 FVoxelFloatBuffer UVoxelSplineStampFunctionLibrary::GetClosestSplineKey3D(const FVoxelVectorBuffer& InPosition) const
 {
-	if (Query.IsPreview())
-	{
-		return DefaultBuffer;
-	}
-
 	const FVoxelGraphParameters::FSplineStamp* Parameter = Query->FindParameter<FVoxelGraphParameters::FSplineStamp>();
 	if (!Parameter)
 	{
-		VOXEL_MESSAGE(Error, "{0}: No spline data", this);
+		if (Query.IsPreview())
+		{
+			VOXEL_MESSAGE(Error, "{0}: No Spline Preview Data node found in Editor Graph", this);
+		}
+		else
+		{
+			VOXEL_MESSAGE(Error, "{0}: No spline data", this);
+		}
 		return DefaultBuffer;
 	}
 
@@ -167,34 +186,59 @@ FVoxelFloatBuffer UVoxelSplineStampFunctionLibrary::GetClosestSplineKey3D(const 
 
 float UVoxelSplineStampFunctionLibrary::GetSplineLength() const
 {
-	if (Query.IsPreview())
-	{
-		return 0.f;
-	}
-
 	const FVoxelGraphParameters::FSplineStamp* Parameter = Query->FindParameter<FVoxelGraphParameters::FSplineStamp>();
 	if (!Parameter)
 	{
-		VOXEL_MESSAGE(Error, "{0}: No spline data", this);
-		return 0.f;
+		if (Query.IsPreview())
+		{
+			VOXEL_MESSAGE(Error, "{0}: No Spline Preview Data node found in Editor Graph", this);
+		}
+		else
+		{
+			VOXEL_MESSAGE(Error, "{0}: No spline data", this);
+		}
+		return DefaultBuffer;
 	}
 
 	return Parameter->SplineLength;
 }
 
-FVoxelVectorBuffer UVoxelSplineStampFunctionLibrary::GetPositionAlongSpline(const FVoxelFloatBuffer& SplineKey) const
+float UVoxelSplineStampFunctionLibrary::GetLastSplineKey() const
 {
-	if (Query.IsPreview())
-	{
-		return DefaultBuffer;
-	}
-
 	const FVoxelGraphParameters::FSplineStamp* Parameter = Query->FindParameter<FVoxelGraphParameters::FSplineStamp>();
 	if (!Parameter)
 	{
-		VOXEL_MESSAGE(Error, "{0}: No spline data", this);
+		if (Query.IsPreview())
+		{
+			VOXEL_MESSAGE(Error, "{0}: No Spline Preview Data node found in Editor Graph", this);
+		}
+		else
+		{
+			VOXEL_MESSAGE(Error, "{0}: No spline data", this);
+		}
+		return 0.f;
+	}
+
+	const int32 NumPoints = Parameter->SplineCurves->Position.Points.Num();
+	return float(NumPoints - 1);
+}
+
+FVoxelVectorBuffer UVoxelSplineStampFunctionLibrary::GetPositionAlongSpline(const FVoxelFloatBuffer& SplineKey) const
+{
+	const FVoxelGraphParameters::FSplineStamp* Parameter = Query->FindParameter<FVoxelGraphParameters::FSplineStamp>();
+	if (!Parameter)
+	{
+		if (Query.IsPreview())
+		{
+			VOXEL_MESSAGE(Error, "{0}: No Spline Preview Data node found in Editor Graph", this);
+		}
+		else
+		{
+			VOXEL_MESSAGE(Error, "{0}: No spline data", this);
+		}
 		return DefaultBuffer;
 	}
+
 	const FSplineCurves& SplineCurves = *Parameter->SplineCurves;
 
 	VOXEL_FUNCTION_COUNTER_NUM(SplineKey.Num());
@@ -218,17 +262,20 @@ FVoxelFloatBuffer UVoxelSplineStampFunctionLibrary::GetHeightAlongSpline(const F
 
 FVoxelFloatBuffer UVoxelSplineStampFunctionLibrary::GetDistanceAlongSpline(const FVoxelFloatBuffer& SplineKey) const
 {
-	if (Query.IsPreview())
-	{
-		return DefaultBuffer;
-	}
-
 	const FVoxelGraphParameters::FSplineStamp* Parameter = Query->FindParameter<FVoxelGraphParameters::FSplineStamp>();
 	if (!Parameter)
 	{
-		VOXEL_MESSAGE(Error, "{0}: No spline data", this);
+		if (Query.IsPreview())
+		{
+			VOXEL_MESSAGE(Error, "{0}: No Spline Preview Data node found in Editor Graph", this);
+		}
+		else
+		{
+			VOXEL_MESSAGE(Error, "{0}: No spline data", this);
+		}
 		return DefaultBuffer;
 	}
+
 	const FSplineCurves& SplineCurves = *Parameter->SplineCurves;
 
 	const int32 NumPoints = SplineCurves.Position.Points.Num();
@@ -265,17 +312,20 @@ FVoxelFloatBuffer UVoxelSplineStampFunctionLibrary::GetDistanceAlongSpline(const
 
 FVoxelTransformBuffer UVoxelSplineStampFunctionLibrary::GetTransformAlongSpline(const FVoxelFloatBuffer& SplineKey) const
 {
-	if (Query.IsPreview())
-	{
-		return DefaultBuffer;
-	}
-
 	const FVoxelGraphParameters::FSplineStamp* Parameter = Query->FindParameter<FVoxelGraphParameters::FSplineStamp>();
 	if (!Parameter)
 	{
-		VOXEL_MESSAGE(Error, "{0}: No spline data", this);
+		if (Query.IsPreview())
+		{
+			VOXEL_MESSAGE(Error, "{0}: No Spline Preview Data node found in Editor Graph", this);
+		}
+		else
+		{
+			VOXEL_MESSAGE(Error, "{0}: No spline data", this);
+		}
 		return DefaultBuffer;
 	}
+
 	const FSplineCurves& SplineCurves = *Parameter->SplineCurves;
 
 	FVoxelTransformBuffer Result;
@@ -316,15 +366,17 @@ FVoxelFloatBuffer UVoxelSplineStampFunctionLibrary::GetFloatSplineParameterValue
 	const FVoxelFloatSplineParameter& InParameter,
 	const FVoxelFloatBuffer& SplineKey) const
 {
-	if (Query.IsPreview())
-	{
-		return DefaultBuffer;
-	}
-
 	const FVoxelGraphParameters::FSplineStamp* Parameter = Query->FindParameter<FVoxelGraphParameters::FSplineStamp>();
 	if (!Parameter)
 	{
-		VOXEL_MESSAGE(Error, "{0}: No spline data", this);
+		if (Query.IsPreview())
+		{
+			VOXEL_MESSAGE(Error, "{0}: No Spline Preview Data node found in Editor Graph", this);
+		}
+		else
+		{
+			VOXEL_MESSAGE(Error, "{0}: No spline data", this);
+		}
 		return DefaultBuffer;
 	}
 
@@ -362,15 +414,17 @@ FVoxelVector2DBuffer UVoxelSplineStampFunctionLibrary::GetVector2DSplineParamete
 	const FVoxelVector2DSplineParameter& InParameter,
 	const FVoxelFloatBuffer& SplineKey) const
 {
-	if (Query.IsPreview())
-	{
-		return DefaultBuffer;
-	}
-
 	const FVoxelGraphParameters::FSplineStamp* Parameter = Query->FindParameter<FVoxelGraphParameters::FSplineStamp>();
 	if (!Parameter)
 	{
-		VOXEL_MESSAGE(Error, "{0}: No spline data", this);
+		if (Query.IsPreview())
+		{
+			VOXEL_MESSAGE(Error, "{0}: No Spline Preview Data node found in Editor Graph", this);
+		}
+		else
+		{
+			VOXEL_MESSAGE(Error, "{0}: No spline data", this);
+		}
 		return DefaultBuffer;
 	}
 
@@ -409,15 +463,17 @@ FVoxelVectorBuffer UVoxelSplineStampFunctionLibrary::GetVectorSplineParameterVal
 	const FVoxelVectorSplineParameter& InParameter,
 	const FVoxelFloatBuffer& SplineKey) const
 {
-	if (Query.IsPreview())
-	{
-		return DefaultBuffer;
-	}
-
 	const FVoxelGraphParameters::FSplineStamp* Parameter = Query->FindParameter<FVoxelGraphParameters::FSplineStamp>();
 	if (!Parameter)
 	{
-		VOXEL_MESSAGE(Error, "{0}: No spline data", this);
+		if (Query.IsPreview())
+		{
+			VOXEL_MESSAGE(Error, "{0}: No Spline Preview Data node found in Editor Graph", this);
+		}
+		else
+		{
+			VOXEL_MESSAGE(Error, "{0}: No spline data", this);
+		}
 		return DefaultBuffer;
 	}
 

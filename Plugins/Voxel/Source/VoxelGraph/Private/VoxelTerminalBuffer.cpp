@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelTerminalBuffer.h"
 #include "VoxelBufferAccessor.h"
@@ -334,6 +334,31 @@ void FVoxelTerminalBuffer::MergeFrom(
 		{
 			this->SetTyped(ReadIndex, Buffers[OutputIndex]->AsChecked<FVoxelTerminalBuffer>().GetTyped<Type>(WriteIndex));
 		});
+	});
+}
+
+void FVoxelTerminalBuffer::HashCombine(const TVoxelArrayView<uint64> InOutHashes) const
+{
+	VOXEL_FUNCTION_COUNTER_NUM(InOutHashes.Num());
+	checkVoxelSlow(Num() == 1 || InOutHashes.Num() == Num());
+
+	SwitchTypeSize([&]<typename Type>()
+	{
+		if (IsConstant())
+		{
+			const uint64 Hash = FVoxelUtilities::MurmurHash(GetConstant<Type>());
+			for (int32 Index = 0; Index < Num(); Index++)
+			{
+				InOutHashes[Index] = FVoxelUtilities::MurmurHash(InOutHashes[Index] ^ Hash);
+			}
+		}
+		else
+		{
+			for (int32 Index = 0; Index < Num(); Index++)
+			{
+				InOutHashes[Index] = FVoxelUtilities::MurmurHash(InOutHashes[Index] ^ FVoxelUtilities::MurmurHash(GetTyped<Type>(Index)));
+			}
+		}
 	});
 }
 

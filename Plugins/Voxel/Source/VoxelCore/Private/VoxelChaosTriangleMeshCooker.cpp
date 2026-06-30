@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelChaosTriangleMeshCooker.h"
 #include "VoxelAABBTree.h"
@@ -184,7 +184,11 @@ struct Chaos::FTriangleMeshOverlapVisitorNoMTD<void>
 			Tree.GetBounds().GetBox().Min,
 			Tree.GetBounds().GetBox().Max);
 
+#if VOXEL_ENGINE_VERSION >= 508
+		Result->SetCullsBackFaceRaycast(true);
+#else
 		Result->bCullsBackFaceRaycast = true;
+#endif
 
 		INLINE_LAMBDA
 		{

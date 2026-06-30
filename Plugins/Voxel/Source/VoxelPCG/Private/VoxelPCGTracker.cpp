@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelPCGTracker.h"
 #include "PCGGraph.h"
@@ -290,5 +290,9 @@ void FVoxelPCGTracker::RefreshComponent(UPCGComponent& Component)
 		return;
 	}
 
+#if VOXEL_ENGINE_VERSION >= 508
+	Subsystem->RefreshRuntimeGenExecutionSource(&Component, EPCGChangeType::None);
+#else
 	Subsystem->RefreshRuntimeGenComponent(&Component, EPCGChangeType::None);
+#endif
 }

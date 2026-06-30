@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelMinimal.isph"
 #include "VoxelStampQueryImpl.isph"
@@ -131,8 +131,7 @@ export void VoxelHeightmapStamp_SampleWeightmap(
 			Query.PositionsY[Index]);
 
 		varying float2 LocalPosition = InverseTransform(StampToQuery, WorldPosition);
-		LocalPosition = LocalPosition * InvScaleXY + Offset;
-		LocalPosition = LocalPosition * HeightmapToWeightmap;
+		LocalPosition = LocalPosition * InvScaleXY * HeightmapToWeightmap + Offset;
 		LocalPosition = clamp(LocalPosition, float2_one, SizeMinus2);
 
 		const varying double MinXf = floor(LocalPosition.x);

@@ -1,7 +1,9 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelMetadata.h"
 #include "VoxelFloatMetadata.h"
+#include "VoxelMetadataRef.h"
+#include "UObject/AssetRegistryTagsContext.h"
 #if WITH_EDITOR
 #include "ObjectTools.h"
 #include "AssetRegistry/IAssetRegistry.h"
@@ -88,6 +90,24 @@ void UVoxelMetadata::Serialize(FArchive& Ar)
 	SerializeVoxelVersion(Ar);
 }
 
+void UVoxelMetadata::PostLoad()
+{
+	Super::PostLoad();
+
+	// Force register this asset
+	(void)FVoxelMetadataRef(this);
+}
+
+void UVoxelMetadata::GetAssetRegistryTags(FAssetRegistryTagsContext Context) const
+{
+	Super::GetAssetRegistryTags(Context);
+
+	Context.AddTag(FAssetRegistryTag(
+		FVoxelMetadataRef::GuidTagName,
+		Guid.ToString(EGuidFormats::Digits),
+		FAssetRegistryTag::TT_Hidden));
+}
+
 #if WITH_EDITOR
 void UVoxelMetadata::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
 {
@@ -112,5 +132,13 @@ void UVoxelMetadata::PostRename(UObject* OldOuter, const FName OldName)
 {
 	Super::PostRename(OldOuter, OldName);
 	FVoxelMetadataRef(this).UpdateFromSourceObject();
+}
+
+void UVoxelMetadata::PostDuplicate(const EDuplicateMode::Type DuplicateMode)
+{
+	Super::PostDuplicate(DuplicateMode);
+
+	Guid = FGuid::NewGuid();
+	(void)FVoxelMetadataRef(this);
 }
 #endif

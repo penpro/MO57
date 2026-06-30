@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "SVoxelGraphNodeVariable.h"
 #include "SCommentBubble.h"
@@ -31,7 +31,9 @@ void SVoxelGraphNodeVariable::UpdateGraphNode()
 
 	SetupErrorReporting();
 
+#if VOXEL_ENGINE_VERSION < 508
 	ContentScale.Bind(this, &SGraphNode::GetContentScale);
+#endif
 
 	const FText NodeTitle = GraphNode->GetNodeTitle(ENodeTitleType::EditableTitle);
 

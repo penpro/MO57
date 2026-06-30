@@ -1,10 +1,13 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "Surface/VoxelSmartSurfaceFunctionLibrary.h"
 #include "Surface/VoxelSmartSurfaceTypeResolver.h"
 #include "VoxelBufferSplitter.h"
 #include "VoxelQuery.h"
 #include "Graphs/VoxelStampGraphParameters.h"
+
+VOXEL_REGISTER_FUNCTION(UVoxelSmartSurfaceFunctionLibrary, ResolveSmartSurfaces);
+VOXEL_REGISTER_FUNCTION(UVoxelSmartSurfaceFunctionLibrary, GetVertexNormal);
 
 void FVoxelGraphParameters::FSmartSurface::Split(
 	const FVoxelBufferSplitter& Splitter,
@@ -25,15 +28,17 @@ void FVoxelGraphParameters::FSmartSurface::Split(
 
 FVoxelVectorBuffer UVoxelSmartSurfaceFunctionLibrary::GetVertexNormal() const
 {
-	if (Query.IsPreview())
-	{
-		return FVector3f::UpVector;
-	}
-
 	const FVoxelGraphParameters::FSmartSurface* Parameter = Query->FindParameter<FVoxelGraphParameters::FSmartSurface>();
 	if (!Parameter)
 	{
-		VOXEL_MESSAGE(Error, "{0}: No vertex data", this);
+		if (Query.IsPreview())
+		{
+			VOXEL_MESSAGE(Error, "{0}: No Smart Surface Type Preview Data node in Editor Graph found", this);
+		}
+		else
+		{
+			VOXEL_MESSAGE(Error, "{0}: No vertex data", this);
+		}
 		return FVector3f::UpVector;
 	}
 

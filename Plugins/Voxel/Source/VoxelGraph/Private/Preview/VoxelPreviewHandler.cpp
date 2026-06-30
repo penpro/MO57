@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "Preview/VoxelPreviewHandler.h"
 #include "VoxelGraph.h"
@@ -6,6 +6,7 @@
 #include "VoxelTerminalGraph.h"
 #include "VoxelCompiledGraph.h"
 #include "VoxelCompiledTerminalGraph.h"
+#include "Nodes/VoxelPreviewDataNode.h"
 #include "Nodes/VoxelNode_ValueDebug.h"
 #include "VoxelGraphPositionParameter.h"
 #include "Preview/VoxelNode_Preview.h"
@@ -82,6 +83,16 @@ TVoxelFuture<TVoxelArray<uint8>> FVoxelPreviewHandler::Compute(UVoxelTerminalGra
 		return {};
 	}
 
+	const FVoxelCompiledTerminalGraph* CompiledEditorTerminalGraph = Environment->RootCompiledGraph->FindTerminalGraph(GVoxelEditorTerminalGraphGuid);
+	TVoxelArray<const FVoxelPreviewDataNode*> QueryParameterNodes;
+	if (CompiledEditorTerminalGraph)
+	{
+		for (const FVoxelPreviewDataNode* Node : CompiledEditorTerminalGraph->GetNodes<FVoxelPreviewDataNode>())
+		{
+			QueryParameterNodes.Add(Node);
+		}
+	}
+
 	return Voxel::AsyncTask(MakeStrongPtrLambda(this, [=, this]() -> TVoxelFuture<TVoxelArray<uint8>>
 	{
 		FVoxelVectorBuffer Positions;
@@ -102,6 +113,21 @@ TVoxelFuture<TVoxelArray<uint8>> FVoxelPreviewHandler::Compute(UVoxelTerminalGra
 		FVoxelGraphQueryImpl& Query = Context.MakeQuery();
 
 		Query.AddParameter<FVoxelGraphParameters::FPosition3D>().SetLocalPosition(Positions);
+
+		for (const FVoxelPreviewDataNode* Node : QueryParameterNodes)
+		{
+			const FVoxelGraphQueryImpl::FFunctionCallData FunctionCallData
+			{
+				*Node,
+				Query
+			};
+
+			const FVoxelGraphQueryImpl& NewQuery = Query.GetChild(
+				*Environment->RootCompiledGraph,
+				*CompiledEditorTerminalGraph,
+				&FunctionCallData);
+			Node->Query_WithPosition(NewQuery, Query);
+		}
 
 		const FVoxelRuntimePinValue Value = Evaluator->ValuePin.GetSynchronous(Query);
 		if (!ensureVoxelSlow(SupportsType(Value.GetType())))
@@ -196,6 +222,16 @@ FVoxelFuture FVoxelPreviewHandler::ComputeAtMousePosition(UVoxelTerminalGraph& T
 		return {};
 	}
 
+	const FVoxelCompiledTerminalGraph* CompiledEditorTerminalGraph = Environment->RootCompiledGraph->FindTerminalGraph(GVoxelEditorTerminalGraphGuid);
+	TVoxelArray<const FVoxelPreviewDataNode*> QueryParameterNodes;
+	if (CompiledEditorTerminalGraph)
+	{
+		for (const FVoxelPreviewDataNode* Node : CompiledEditorTerminalGraph->GetNodes<FVoxelPreviewDataNode>())
+		{
+			QueryParameterNodes.Add(Node);
+		}
+	}
+
 	return Voxel::AsyncTask(MakeStrongPtrLambda(this, [=, this]
 	{
 		const FVector Position = LocalToWorld.TransformPosition(FVector(MousePosition.X, MousePosition.Y, 0.f));
@@ -205,6 +241,21 @@ FVoxelFuture FVoxelPreviewHandler::ComputeAtMousePosition(UVoxelTerminalGraph& T
 
 		Query.AddParameter<FVoxelGraphParameters::FPosition3D>().SetLocalPosition(Position);
 		Query.AddParameter<FVoxelGraphParameters::FDebugValuePosition>().bFullValue = bShowFullValue;
+
+		for (const FVoxelPreviewDataNode* Node : QueryParameterNodes)
+		{
+			const FVoxelGraphQueryImpl::FFunctionCallData FunctionCallData
+			{
+				*Node,
+				Query
+			};
+
+			const FVoxelGraphQueryImpl& NewQuery = Query.GetChild(
+				*Environment->RootCompiledGraph,
+				*CompiledEditorTerminalGraph,
+				&FunctionCallData);
+			Node->Query_WithPosition(NewQuery, Query);
+		}
 
 		(void)Evaluator->ValuePin.GetSynchronous(Query);
 

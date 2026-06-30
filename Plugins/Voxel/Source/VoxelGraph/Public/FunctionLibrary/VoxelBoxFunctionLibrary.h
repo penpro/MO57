@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -12,7 +12,7 @@ class VOXELGRAPH_API UVoxelBoxFunctionLibrary : public UVoxelFunctionLibrary
 	GENERATED_BODY()
 
 public:
-	UFUNCTION(Category = "Math|Box", meta = (NativeMakeFunc, ShowInShortList))
+	UFUNCTION(Category = "Math|Box", meta = (NativeMakeFunc, ShowInPinShortList))
 	FVoxelBox MakeBox(
 		const FVector& Min,
 		const FVector& Max) const
@@ -82,7 +82,7 @@ public:
 	}
 
 public:
-	UFUNCTION(Category = "Math|Box", meta = (NativeMakeFunc, ShowInShortList))
+	UFUNCTION(Category = "Math|Box", meta = (NativeMakeFunc, ShowInPinShortList))
 	FVoxelBox2D MakeBox2D(
 		const FVector2D& Min,
 		const FVector2D& Max) const

@@ -1,6 +1,7 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelEditorMinimal.h"
+#include "VoxelMetadata.h"
 #include "VoxelMetadataOverrides.h"
 #include "VoxelPinValueCustomizationHelper.h"
 
@@ -13,6 +14,7 @@ public:
 	virtual void CustomizeHeader(TSharedRef<IPropertyHandle> PropertyHandle, FDetailWidgetRow& HeaderRow, IPropertyTypeCustomizationUtils& CustomizationUtils) override
 	{
 		MetadataHandle = PropertyHandle->GetChildHandleStatic(FVoxelMetadataOverride, Metadata);
+		ValueHandle = PropertyHandle->GetChildHandleStatic(FVoxelMetadataOverride, Value);
 
 		UObject* MetadataObject = nullptr;
 		MetadataHandle->GetValue(MetadataObject);
@@ -40,9 +42,8 @@ public:
 			return;
 		}
 
-		const TSharedRef<IPropertyHandle> ValueHandle = PropertyHandle->GetChildHandleStatic(FVoxelMetadataOverride, Value);
 		Wrapper = FVoxelPinValueCustomizationHelper::CreatePinValueCustomization(
-			ValueHandle,
+			ValueHandle.ToSharedRef(),
 			ChildBuilder,
 			FVoxelEditorUtilities::MakeRefreshDelegate(this, CustomizationUtils),
 			{},
@@ -80,11 +81,31 @@ public:
 
 		UObject* MetadataObject = nullptr;
 		MetadataHandle->GetValue(MetadataObject);
-		if (MetadataObject != CachedMetadataObject)
+		if (MetadataObject == CachedMetadataObject)
 		{
-			RefreshDelegate.ExecuteIfBound();
-			MetadataHandle = nullptr;
+			return;
 		}
+
+		// The Value type follows the selected metadata - fix it up here, otherwise CreatePinValueCustomization
+		// would bail out on an invalid type and the value widget would not be displayed
+		if (const UVoxelMetadata* Metadata = Cast<UVoxelMetadata>(MetadataObject))
+		{
+			if (ensure(ValueHandle))
+			{
+				const FVoxelPinType NewType = Metadata->GetInnerType().GetExposedType();
+
+				ValueHandle->NotifyPreChange();
+				FVoxelEditorUtilities::ForeachData<FVoxelPinValue>(ValueHandle, [&](FVoxelPinValue& Value)
+				{
+					Value.Fixup(NewType);
+				});
+				ValueHandle->NotifyPostChange(EPropertyChangeType::ValueSet);
+				ValueHandle->NotifyFinishedChangingProperties();
+			}
+		}
+
+		RefreshDelegate.ExecuteIfBound();
+		MetadataHandle = nullptr;
 	}
 	//~ End FVoxelTicker Interface
 
@@ -92,6 +113,7 @@ private:
 	TSharedPtr<FVoxelInstancedStructDetailsWrapper> Wrapper;
 
 	TSharedPtr<IPropertyHandle> MetadataHandle;
+	TSharedPtr<IPropertyHandle> ValueHandle;
 	TVoxelObjectPtr<UObject> CachedMetadataObject;
 	FSimpleDelegate RefreshDelegate;
 };

@@ -1,10 +1,11 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelMessageToken_GraphCallstack.h"
 #include "VoxelNode.h"
 #include "VoxelGraph.h"
 #include "VoxelGraphContext.h"
 #include "VoxelTerminalGraph.h"
+#include "VoxelGraphEditorUtilities.h"
 #include "Nodes/VoxelNode_RangeDebug.h"
 #include "Nodes/VoxelNode_ValueDebug.h"
 #if WITH_EDITOR
@@ -13,6 +14,45 @@
 #include "Logging/TokenizedMessage.h"
 #include "Widgets/Layout/SScrollBox.h"
 #endif
+
+#if WITH_EDITOR
+struct FVoxelCallstackNodeEntry : public FVoxelCallstackEntry
+{
+	FVoxelGraphMergedNodeRef NodeRef;
+
+	FVoxelCallstackNodeEntry(
+		const FVoxelGraphMergedNodeRef& NodeRef,
+		const FString& Name,
+		const FString& Prefix,
+		const EType Type)
+		: FVoxelCallstackEntry(Name, Prefix, Type)
+		, NodeRef(NodeRef)
+	{
+	}
+
+	virtual void OnClick() const override
+	{
+		TVoxelSet<const UEdGraphNode*> GraphNodes;
+		if (const UEdGraphNode* GraphNode = NodeRef.Node.GetGraphNode_EditorOnly())
+		{
+			GraphNodes.Add(GraphNode);
+		}
+		for (const FVoxelGraphNodeRef& Node : NodeRef.MergedNodes)
+		{
+			if (const UEdGraphNode* GraphNode = Node.GetGraphNode_EditorOnly())
+			{
+				GraphNodes.Add(GraphNode);
+			}
+		}
+
+		FVoxelGraphEditorUtilities::OnSelectNodes.ExecuteIfBound(GraphNodes);
+	}
+};
+#endif
+
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
 
 FVoxelGraphSharedCallstack::FVoxelGraphSharedCallstack(const FVoxelGraphCallstack& Callstack)
 	: NodeRef(Callstack.Node->GetNodeRef())
@@ -49,25 +89,25 @@ FString FVoxelGraphSharedCallstack::ToDebugString() const
 	}
 
 	FString Result;
-	FVoxelGraphNodeRef LastNodeRef;
+	FVoxelGraphMergedNodeRef LastNodeRef;
 	for (int32 Index = Callstacks.Num() - 1; Index >= 0; Index--)
 	{
 		const FVoxelGraphSharedCallstack* Callstack = Callstacks[Index];
-		if (Callstack->NodeRef.IsExplicitlyNull() ||
+		if (Callstack->NodeRef.Node.IsExplicitlyNull() ||
 			Callstack->NodeRef == LastNodeRef)
 		{
 			continue;
 		}
 		LastNodeRef = Callstack->NodeRef;
 
-		if (Callstack->NodeRef.EdGraphNodeTitle.IsNone())
+		if (Callstack->NodeRef.Node.EdGraphNodeTitle.IsNone())
 		{
-			ensure(!Callstack->NodeRef.NodeId.IsNone());
-			Callstack->NodeRef.NodeId.AppendString(Result);
+			ensure(!Callstack->NodeRef.Node.NodeId.IsNone());
+			Callstack->NodeRef.Node.NodeId.AppendString(Result);
 		}
 		else
 		{
-			Callstack->NodeRef.EdGraphNodeTitle.AppendString(Result);
+			Callstack->NodeRef.Node.EdGraphNodeTitle.AppendString(Result);
 		}
 
 		if (Index > 0)
@@ -109,9 +149,10 @@ TSharedRef<IMessageToken> FVoxelMessageToken_GraphCallstack::GetMessageToken() c
 					TVoxelArray<const FVoxelGraphSharedCallstack*> Callstacks;
 					for (const FVoxelGraphSharedCallstack* Callstack = RootCallstack.Get(); Callstack; Callstack = Callstack->GetParent().Get())
 					{
-						const FVoxelGraphNodeRef NodeRef = Callstack->GetNodeRef();
-						if (NodeRef.IsExplicitlyNull() ||
-							Callstack->IsDebugNode())
+						const FVoxelGraphMergedNodeRef NodeRef = Callstack->GetNodeRef();
+						if (NodeRef.Node.IsExplicitlyNull() ||
+							Callstack->IsDebugNode() ||
+							NodeRef.Node.bGeneratedNode)
 						{
 							continue;
 						}
@@ -128,7 +169,7 @@ TSharedRef<IMessageToken> FVoxelMessageToken_GraphCallstack::GetMessageToken() c
 
 					const UVoxelTerminalGraph* LastTerminalGraph = nullptr;
 
-					TVoxelArray<FVoxelGraphNodeRef> PendingNodes;
+					TVoxelArray<FVoxelGraphMergedNodeRef> PendingNodes;
 
 					const auto FlushNodes = [&]
 					{
@@ -151,18 +192,18 @@ TSharedRef<IMessageToken> FVoxelMessageToken_GraphCallstack::GetMessageToken() c
 							GraphName += "." + LastTerminalGraph->GetDisplayName();
 						}
 
-						const TSharedRef<FVoxelCallstackEntry> GraphEntry = MakeShared<FVoxelCallstackEntry>(
+						const TSharedRef<FVoxelCallstackEntry> GraphEntry = MakeShared<FVoxelCallstackObjectEntry>(
 							LastTerminalGraph,
 							GraphName,
 							"Graph: ",
 							FVoxelCallstackEntry::EType::Subdued);
 						Result.Add(GraphEntry);
 
-						for (const FVoxelGraphNodeRef& Node : PendingNodes)
+						for (const FVoxelGraphMergedNodeRef& Node : PendingNodes)
 						{
-							TSharedRef<FVoxelCallstackEntry> NodeEntry = MakeShared<FVoxelCallstackEntry>(
-									Node.GetGraphNode_EditorOnly(),
-									Node.EdGraphNodeTitle.ToString(),
+							TSharedRef<FVoxelCallstackEntry> NodeEntry = MakeShared<FVoxelCallstackNodeEntry>(
+									Node,
+									Node.ToString(),
 									LexToString(Num) + ". ",
 									Num == Callstacks.Num()
 									? FVoxelCallstackEntry::EType::Marked
@@ -177,7 +218,7 @@ TSharedRef<IMessageToken> FVoxelMessageToken_GraphCallstack::GetMessageToken() c
 
 					for (const FVoxelGraphSharedCallstack* Callstack : Callstacks)
 					{
-						const UVoxelTerminalGraph* TerminalGraph = Callstack->GetNodeRef().TerminalGraph.Resolve();
+						const UVoxelTerminalGraph* TerminalGraph = Callstack->GetNodeRef().Node.TerminalGraph.Resolve();
 						if (!ensureVoxelSlow(TerminalGraph))
 						{
 							continue;

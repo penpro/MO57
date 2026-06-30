@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelValuesDump.h"
 #include "VoxelLayers.h"
@@ -84,11 +84,11 @@ void FVoxelValuesDump::Log(
 		}
 #endif
 
-		LOG_VOXEL(Log, "\t%8.2f %-15s Smoothness=%8.1f BoundsExtension=%2.1f %s %s %s",
+		LOG_VOXEL(Log, "\t%8.2f %-15s Smoothness=%8.1f HeightPaddingMultiplier=%2.1f %s %s %s",
 			StampDelta.DistanceAfter,
 			*GetEnumDisplayName(Stamp.BlendMode).ToString(),
 			Stamp.Smoothness,
-			Stamp.BoundsExtension,
+			Stamp.HeightPaddingMultiplier,
 			*Stamp.GetStruct()->GetName(),
 			*MakeVoxelObjectPtr(Stamp.GetAsset()).GetPathName(),
 			*PackageName);
@@ -112,11 +112,12 @@ void FVoxelValuesDump::Log(
 		}
 #endif
 
-		LOG_VOXEL(Log, "\t%8.2f %-15s Smoothness=%8.1f BoundsExtension=%2.1f %s %s %s",
+		LOG_VOXEL(Log, "\t%8.2f %-15s Smoothness=%8.1f BoundsExtensionMultiplier=%2.1f MaximumBoundsExtension=%f %s %s %s",
 			StampDelta.DistanceAfter,
 			*GetEnumDisplayName(Stamp.BlendMode).ToString(),
 			Stamp.Smoothness,
-			Stamp.BoundsExtension,
+			Stamp.BoundsExtensionMultiplier,
+			Stamp.MaximumBoundsExtension,
 			*Stamp.GetStruct()->GetName(),
 			*MakeVoxelObjectPtr(Stamp.GetAsset()).GetPathName(),
 			*PackageName);

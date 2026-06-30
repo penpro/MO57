@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -39,6 +39,10 @@ public:
 
 	UPROPERTY(Config, EditAnywhere, Category = "Config")
 	bool bDisableMegaMaterialCacheAutoSave = false;
+
+	// Disables automatic MegaMaterial recompilation when materials or surface types change
+	UPROPERTY(Config, EditAnywhere, Category = "Config")
+	bool bDisableMegaMaterialAutoRecompile = false;
 
 	// Will disable stamp priority calculation, when spawning or duplicating stamps
 	UPROPERTY(Config, EditAnywhere, Category = "Config")

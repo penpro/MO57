@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -107,6 +107,37 @@ private:
 	TVoxelMap<TVoxelObjectPtr<UVoxelMetadata>, FVoxelPinValue> WeakMetadataToValue;
 
 	friend class UVoxelQueryBlueprintLibrary;
+};
+
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+
+USTRUCT(BlueprintType)
+struct VOXEL_API FVoxelQueryStampResult
+{
+	GENERATED_BODY()
+
+public:
+	// Either a VoxelStampComponent, or a VoxelInstancedStampComponent if the stamp is part of one of those
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Config")
+	TObjectPtr<USceneComponent> StampComponent;
+
+	// If the stamp is part of a VoxelInstancedStampComponent, this returns the index of the stamp
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Config")
+	int32 StampIndex = -1;
+
+	// The layer stamp is writing to
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Config")
+	FVoxelStackLayer Layer;
+
+	// Returns distance, even for height stamps
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Config")
+	float DistanceBeforeStamp = 0.f;
+
+	// Returns distance, even for height stamps
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Config")
+	float DistanceAfterStamp = 0.f;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -251,4 +282,24 @@ public:
 		TArray<FVector> Positions,
 		TArray<UVoxelMetadata*> MetadatasToQuery,
 		float GradientStep = 100.f);
+
+public:
+	static TVoxelFuture<TOptional<TArray<FVoxelQueryStampResult>>> QueryVoxelStamps(
+		UWorld* World,
+		const FVoxelStackLayer& Layer,
+		const FVector& Position);
+
+	/**
+	 * Queries the list of stamps in specified layer at position
+	 * @param Results				The query results
+	 * @param Layer					The layer to query
+	 * @param Position				The position to query
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Voxel")
+	static FVoxelFuture K2_QueryVoxelStamps(
+		bool& bSuccess,
+		TArray<FVoxelQueryStampResult>& Results,
+		UWorld* World,
+		const FVoxelStackLayer& Layer,
+		const FVector& Position);
 };

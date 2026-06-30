@@ -1,8 +1,10 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "Surface/VoxelSurfaceTypeInterface.h"
+#include "Surface/VoxelSurfaceType.h"
 #include "Surface/VoxelSurfaceTypeAsset.h"
 #include "Surface/VoxelSurfaceTypeTable.h"
+#include "UObject/AssetRegistryTagsContext.h"
 
 #if WITH_EDITOR
 #include "FileHelpers.h"
@@ -24,6 +26,16 @@ void UVoxelSurfaceTypeInterface::PostLoad()
 	(void)FVoxelSurfaceType(this);
 }
 
+void UVoxelSurfaceTypeInterface::GetAssetRegistryTags(FAssetRegistryTagsContext Context) const
+{
+	Super::GetAssetRegistryTags(Context);
+
+	Context.AddTag(FAssetRegistryTag(
+		FVoxelSurfaceType::GuidTagName,
+		Guid.ToString(EGuidFormats::Digits),
+		FAssetRegistryTag::TT_Hidden));
+}
+
 #if WITH_EDITOR
 void UVoxelSurfaceTypeInterface::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
 {
@@ -32,7 +44,22 @@ void UVoxelSurfaceTypeInterface::PostEditChangeProperty(FPropertyChangedEvent& P
 	if (PropertyChangedEvent.ChangeType != EPropertyChangeType::Interactive)
 	{
 		FVoxelSurfaceTypeTable::Refresh();
+		FVoxelSurfaceType(this).UpdateFromSourceObject();
 	}
+}
+
+void UVoxelSurfaceTypeInterface::PostRename(UObject* OldOuter, const FName OldName)
+{
+	Super::PostRename(OldOuter, OldName);
+	FVoxelSurfaceType(this).UpdateFromSourceObject();
+}
+
+void UVoxelSurfaceTypeInterface::PostDuplicate(const EDuplicateMode::Type DuplicateMode)
+{
+	Super::PostDuplicate(DuplicateMode);
+
+	Guid = FGuid::NewGuid();
+	(void)FVoxelSurfaceType(this);
 }
 #endif
 

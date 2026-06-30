@@ -1,13 +1,16 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "PCGVoxelQuery.h"
 #include "VoxelQuery.h"
 #include "VoxelLayer.h"
 #include "VoxelLayers.h"
+#include "VoxelVersion.h"
 #include "VoxelMetadata.h"
 #include "VoxelPCGUtilities.h"
 #include "Surface/VoxelSurfaceTypeTable.h"
 #include "Surface/VoxelSurfaceTypeBlendBuffer.h"
+#include "Surface/VoxelSmartSurfaceTypeResolver.h"
+#include "Utilities/VoxelBufferGradientUtilities.h"
 
 #include "PCGComponent.h"
 #include "Data/PCGPointData.h"
@@ -71,6 +74,7 @@ TSharedPtr<FVoxelPCGOutput> UPCGVoxelQuerySettings::CreateOutput(FPCGContext& Co
 		LOD,
 		HeightOrDistanceAttribute,
 		bQuerySurfaceTypes,
+		bResolveSmartSurfaceTypes,
 		SurfaceAttributeSuffix,
 		FVoxelMetadataRef::GetUniqueValidRefs(NewMetadatasToQuery),
 		MetadataAttributeSuffix);
@@ -100,6 +104,16 @@ TSharedPtr<FVoxelPCGOutput> UPCGVoxelQuerySettings::CreateOutput(FPCGContext& Co
 FString UPCGVoxelQuerySettings::GetNodeDebugInfo() const
 {
 	return Super::GetNodeDebugInfo() + " [Layer: " + FString(Layer.Layer ? Layer.Layer->GetName() : "None") + "]";
+}
+
+void UPCGVoxelQuerySettings::Serialize(FArchive& Ar)
+{
+	Super::Serialize(Ar);
+
+	if (Ar.CustomVer(GVoxelCustomVersionGUID) < FVoxelVersion::AddResolveSmartSurfaceTypeToPCGQueryProjection)
+	{
+		bResolveSmartSurfaceTypes = false;
+	}
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -141,12 +155,15 @@ FVoxelFuture FVoxelQueryPCGOutput::Query(
 {
 	VOXEL_FUNCTION_COUNTER();
 
+	// PCG points are in the current world; the voxel layers are queried in absolute space
+	const FVector OriginOffset = GetWorldOriginOffset();
+
 	FVoxelDoubleVectorBuffer Positions;
 	Positions.Allocate(Points.Num());
 
 	for (int32 Index = 0; Index < Points.Num(); Index++)
 	{
-		Positions.Set(Index, Points[Index].Transform.GetLocation());
+		Positions.Set(Index, Points[Index].Transform.GetLocation() + OriginOffset);
 	}
 
 	FVoxelSurfaceTypeBlendBuffer SurfaceTypes;
@@ -198,6 +215,43 @@ FVoxelFuture FVoxelQueryPCGOutput::Query(
 
 	if (bQuerySurfaceTypes)
 	{
+		if (bResolveSmartSurfaceTypes)
+		{
+			FVoxelVectorBuffer PointNormals;
+			if (WeakLayer.Type == EVoxelLayerType::Height)
+			{
+				const float GradientStep = 100.f;
+
+				FVoxelDoubleVector2DBuffer GradientPositions = FVoxelBufferGradientUtilities::SplitPositions2D(Positions, GradientStep);
+
+				const FVoxelFloatBuffer GradientHeights = Query.SampleHeightLayer(WeakLayer, GradientPositions);
+
+				PointNormals = FVoxelBufferGradientUtilities::CollapseGradient2DToNormal(GradientHeights, Points.Num(), GradientStep);
+			}
+			else
+			{
+				const float GradientStep = 100.f;
+
+				FVoxelDoubleVectorBuffer GradientPositions = FVoxelBufferGradientUtilities::SplitPositions3D(Positions, GradientStep);
+
+				const FVoxelFloatBuffer GradientDistances = Query.SampleVolumeLayer(WeakLayer, GradientPositions);
+
+				PointNormals = FVoxelBufferGradientUtilities::CollapseGradient3DToNormal(GradientDistances, Points.Num(), GradientStep);
+			}
+
+			FVoxelSmartSurfaceTypeResolver Resolver(
+				Query.LOD,
+				WeakLayer,
+				Query.Layers,
+				Query.SurfaceTypeTable,
+				Query.DependencyCollector,
+				Positions,
+				PointNormals,
+				SurfaceTypes.View());
+
+			Resolver.Resolve();
+		}
+
 		for (int32 Index = 0; Index < Points.Num(); Index++)
 		{
 			if (FVoxelUtilities::IsNaN(Values[Index]))

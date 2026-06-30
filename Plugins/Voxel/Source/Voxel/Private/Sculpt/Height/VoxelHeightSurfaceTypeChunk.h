@@ -1,15 +1,15 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
 #include "VoxelMinimal.h"
 #include "Surface/VoxelSurfaceTypeBlend.h"
-#include "Sculpt/Height/VoxelHeightSculptDefinitions.h"
+#include "Sculpt/Height/VoxelHeightChunkDefinitions.h"
 
 DECLARE_VOXEL_MEMORY_STAT(VOXEL_API, STAT_VoxelHeightSurfaceType_Memory, "Voxel Height Surface Type Memory");
 
 struct FVoxelHeightSurfaceTypeChunk
-	: FVoxelHeightSculptDefinitions
+	: FVoxelHeightChunkDefinitions
 	, TVoxelRefCountThis<FVoxelHeightSurfaceTypeChunk>
 {
 public:
@@ -43,8 +43,20 @@ public:
 		float& OutAlpha,
 		FVoxelSurfaceTypeBlend& OutSurfaceType) const;
 
+	void GetAverageSurfaceType(
+		float& OutAlpha,
+		FVoxelSurfaceTypeBlend& OutSurfaceType) const;
+
+	static TVoxelRefCountPtr<FVoxelHeightSurfaceTypeChunk> Create(
+		TConstVoxelArrayView<float> Alphas,
+		TConstVoxelArrayView<FVoxelSurfaceTypeBlend> SurfaceTypes,
+		const FIntPoint& Offset,
+		const FIntPoint& Size);
+
 public:
-	void Serialize(FArchive& Ar);
+	void Serialize(
+		FArchive& Ar,
+		int32 Version);
+
 	int64 GetAllocatedSize() const;
-	TVoxelRefCountPtr<FVoxelHeightSurfaceTypeChunk> Clone() const;
 };

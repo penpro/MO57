@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -7,6 +7,7 @@
 #include "VoxelBuffer.generated.h"
 
 struct FVoxelInt32Buffer;
+class FVoxelBulkHasher;
 class FVoxelBufferSplitter;
 
 struct FVoxelBufferInitializers
@@ -165,6 +166,8 @@ public:
 	virtual void MergeFrom(
 		const FVoxelBufferSplitter& Splitter,
 		TConstVoxelArrayView<const FVoxelBuffer*> Buffers) VOXEL_PURE_VIRTUAL();
+
+	virtual void HashCombine(TVoxelArrayView<uint64> InOutHashes) const VOXEL_PURE_VIRTUAL();
 
 public:
 	virtual void SetGeneric(

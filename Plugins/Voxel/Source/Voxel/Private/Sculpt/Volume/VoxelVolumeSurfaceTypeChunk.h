@@ -1,15 +1,15 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
 #include "VoxelMinimal.h"
 #include "Surface/VoxelSurfaceTypeBlend.h"
-#include "Sculpt/Volume/VoxelVolumeSculptDefinitions.h"
+#include "Sculpt/Volume/VoxelVolumeChunkDefinitions.h"
 
 DECLARE_VOXEL_MEMORY_STAT(VOXEL_API, STAT_VoxelVolumeSurfaceType_Memory, "Voxel Volume Surface Type Memory");
 
 struct FVoxelVolumeSurfaceTypeChunk
-	: FVoxelVolumeSculptDefinitions
+	: FVoxelVolumeChunkDefinitions
 	, TVoxelRefCountThis<FVoxelVolumeSurfaceTypeChunk>
 {
 public:
@@ -43,11 +43,20 @@ public:
 		float& OutAlpha,
 		FVoxelSurfaceTypeBlend& OutSurfaceType) const;
 
+	void GetAverageSurfaceType(
+		float& OutAlpha,
+		FVoxelSurfaceTypeBlend& OutSurfaceType) const;
+
+	static TVoxelRefCountPtr<FVoxelVolumeSurfaceTypeChunk> Create(
+		TConstVoxelArrayView<float> Alphas,
+		TConstVoxelArrayView<FVoxelSurfaceTypeBlend> SurfaceTypes,
+		const FIntVector& Offset,
+		const FIntVector& Size);
+
 public:
 	void Serialize(
 		FArchive& Ar,
 		int32 Version);
 
 	int64 GetAllocatedSize() const;
-	TVoxelRefCountPtr<FVoxelVolumeSurfaceTypeChunk> Clone() const;
 };

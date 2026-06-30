@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -216,6 +216,63 @@ public:
 					Position,
 					MetadatasToQuery,
 					GradientStep);
+			});
+	}
+
+	/**
+	 * Queries the list of stamps in specified layer at position
+	 * @param Results The query results
+	 * @param Layer The layer to query
+	 * @param Position The position to query
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Voxel", meta = (AutoCreateRefTerm = "Results", WorldContext = "WorldContextObject"))
+	static void QueryVoxelStamps(
+		bool& bSuccess,
+		TArray<FVoxelQueryStampResult>& Results,
+		UObject* WorldContextObject,
+		const FVoxelStackLayer& Layer,
+		const FVector& Position)
+	{
+		Voxel::ExecuteSynchronously([&]
+		{
+			return UVoxelQueryBlueprintLibrary::K2_QueryVoxelStamps(
+				bSuccess,
+				Results,
+				GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::ReturnNull),
+				Layer,
+				Position);
+		});
+	}
+
+	/**
+	 * Queries the list of stamps in specified layer at position
+	 * @param Results The query results
+	 * @param Layer The layer to query
+	 * @param Position The position to query
+	 * @param bExecuteIfAlreadyPending If true, this node will execute even if the last call has not yet completed. Be careful when using this on tick.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Voxel", meta = (Latent, LatentInfo = "LatentInfo", WorldContext = "WorldContextObject", AdvancedDisplay = "bExecuteIfAlreadyPending", AutoCreateRefTerm = "Results"))
+	static void QueryVoxelStampsAsync(
+		UObject* WorldContextObject,
+		FLatentActionInfo LatentInfo,
+		bool& bSuccess,
+		TArray<FVoxelQueryStampResult>& Results,
+		const FVoxelStackLayer& Layer,
+		const FVector& Position,
+		bool bExecuteIfAlreadyPending = false)
+	{
+		FVoxelLatentAction::Execute(
+			WorldContextObject,
+			LatentInfo,
+			bExecuteIfAlreadyPending,
+			[&]
+			{
+				return UVoxelQueryBlueprintLibrary::K2_QueryVoxelStamps(
+					bSuccess,
+					Results,
+					GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::ReturnNull),
+					Layer,
+					Position);
 			});
 	}
 };

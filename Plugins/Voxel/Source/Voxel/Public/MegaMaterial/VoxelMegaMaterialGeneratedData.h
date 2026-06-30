@@ -1,27 +1,15 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
 #include "VoxelMinimal.h"
-#include "VoxelRenderMaterial.h"
-#include "VoxelMegaMaterialTarget.h"
+#include "MegaMaterial/VoxelMegaMaterialGeneratedMaterial.h"
 #include "VoxelMegaMaterialGeneratedData.generated.h"
 
 class UVoxelMetadata;
 class UVoxelMegaMaterial;
 class UVoxelSurfaceTypeAsset;
-
-USTRUCT()
-struct FVoxelMegaMaterialGeneratedMaterial
-{
-	GENERATED_BODY()
-
-	UPROPERTY()
-	TObjectPtr<UMaterial> Material;
-
-	UPROPERTY()
-	TObjectPtr<UMaterialInstanceConstant> Instance;
-};
+class FGlobalComponentRecreateRenderStateContext;
 
 USTRUCT()
 struct FVoxelMegaMaterialSurfaceInfo
@@ -45,7 +33,7 @@ public:
 	TMap<FVoxelMaterialRenderIndex, FVoxelMegaMaterialSurfaceInfo> IndexToSurfaceInfo;
 
 	UPROPERTY()
-	TMap<FVoxelMaterialRenderIndex, FVoxelMegaMaterialGeneratedMaterial> IndexToGeneratedMaterial;
+	TMap<FVoxelMaterialRenderIndex, FVoxelMegaMaterialMaterialGeneratedMaterial> IndexToGeneratedMaterial;
 
 	UPROPERTY()
 	TArray<TObjectPtr<UVoxelMetadata>> MetadataIndexToMetadata;
@@ -64,15 +52,10 @@ public:
 public:
 #if WITH_EDITOR
 	void ForceRebuild();
-	void QueueRebuild(bool bInteractive = false);
+	void QueueRebuild();
 	bool IsRebuildQueued() const;
-	void RebuildNow(bool bInteractive = false);
-
-	static void OnMaterialChanged(
-		UMaterialInterface* Material,
-		bool bInteractive = false);
-	
-	static void OnMaterialFunctionChanged(UMaterialFunction* MaterialFunction);
+	void RebuildNow();
+	static void RebuildIfNeeded(const UObject* ChangedObject);
 #endif
 
 private:
@@ -80,21 +63,26 @@ private:
 	TSoftObjectPtr<UVoxelMegaMaterial> SoftMegaMaterial;
 
 	UPROPERTY()
-	TMap<EVoxelMegaMaterialTarget, FVoxelMegaMaterialGeneratedMaterial> TargetToGeneratedMaterial;
+	TMap<EVoxelMegaMaterialTarget, FVoxelMegaMaterialTargetGeneratedMaterial> TargetToGeneratedMaterial;
 
 	TVoxelObjectPtr<UVoxelMegaMaterial> WeakMegaMaterial;
-	TVoxelSet<TVoxelObjectPtr<UObject>> WatchedMaterials;
+
+#if WITH_EDITORONLY_DATA
+	UPROPERTY()
+	TSet<TObjectPtr<const UObject>> WatchedObjects;
+#endif
 
 #if WITH_EDITOR
 	void GenerateMaterialForTarget(
 		const UVoxelMegaMaterial& MegaMaterial,
 		EVoxelMegaMaterialTarget Target,
-		bool bInteractive);
+		const FVoxelMegaMaterialTargetBaseState& BaseState,
+		TSharedPtr<FGlobalComponentRecreateRenderStateContext>& Context);
 
 	void GenerateMaterial(
 		const UVoxelMegaMaterial& MegaMaterial,
-		const UVoxelSurfaceTypeAsset& SurfaceType,
-		FVoxelMegaMaterialGeneratedMaterial& GeneratedMaterial,
-		bool bInteractive);
+		const FVoxelMegaMaterialMaterialState& State,
+		FVoxelMegaMaterialMaterialGeneratedMaterial& GeneratedMaterial,
+		TSharedPtr<FGlobalComponentRecreateRenderStateContext>& Context);
 #endif
 };

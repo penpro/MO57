@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelLayers.h"
 #include "VoxelQuery.h"
@@ -81,7 +81,11 @@ TSharedPtr<const FVoxelHeightLayer> FVoxelLayers::FindHeightLayer(
 	const FVoxelWeakStackLayer& WeakLayer,
 	FVoxelDependencyCollector& DependencyCollector) const
 {
-	if (!ensure(WeakLayer.Type == EVoxelLayerType::Height))
+	if (!ensureMsgf(
+			WeakLayer.Type == EVoxelLayerType::Height,
+			TEXT("FindHeightLayer called with a Volume layer: Stack=%s Layer=%s"),
+			*WeakLayer.Stack.GetFName().ToString(),
+			*WeakLayer.Layer.GetFName().ToString()))
 	{
 		return nullptr;
 	}
@@ -95,7 +99,11 @@ TSharedPtr<const FVoxelVolumeLayer> FVoxelLayers::FindVolumeLayer(
 	const FVoxelWeakStackLayer& WeakLayer,
 	FVoxelDependencyCollector& DependencyCollector) const
 {
-	if (!ensure(WeakLayer.Type == EVoxelLayerType::Volume))
+	if (!ensureMsgf(
+			WeakLayer.Type == EVoxelLayerType::Volume,
+			TEXT("FindVolumeLayer called with a Height layer: Stack=%s Layer=%s"),
+			*WeakLayer.Stack.GetFName().ToString(),
+			*WeakLayer.Layer.GetFName().ToString()))
 	{
 		return nullptr;
 	}

@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelState.h"
 #include "VoxelWorld.h"
@@ -6,6 +6,7 @@
 #include "VoxelSubsystem.h"
 #include "VoxelTaskContext.h"
 #include "VoxelInvalidationQueue.h"
+#include "Bulk/VoxelBulkPtr.h"
 #include "Surface/VoxelSurfaceTypeTable.h"
 #if WITH_EDITOR
 #include "LevelEditorViewport.h"
@@ -92,6 +93,8 @@ FVoxelState::FVoxelState(
 		TaskContext->bComputeTotalTime = true;
 	}
 
+	TaskContext->BulkDataTimestamp = FVoxelBulkPtr::GetGlobalTimestamp();
+
 	if (AreVoxelStatsEnabled())
 	{
 		TaskContext->LambdaWrapper = [StatName = StatName](TVoxelUniqueFunction<void()> Lambda)
@@ -167,6 +170,13 @@ FVoxelState::FVoxelState(
 		}
 
 		ActiveDrawGroups = PreviousState->ActiveDrawGroups;
+
+		// Drop empty groups (never drawn into, or whose draws have expired) so
+		// ActiveDrawGroups doesn't grow by one every state forever
+		ActiveDrawGroups.RemoveAllSwap([](const TSharedPtr<FVoxelDebugDrawGroup>& Group)
+		{
+			return Group->IsEmpty_AnyThread();
+		});
 	}
 
 	DrawGroup = FVoxelDebugDrawGroup::Create();

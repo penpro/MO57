@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -9,7 +9,7 @@ class UVoxelHeightmap_Height;
 class UVoxelHeightmap_Weight;
 class UVoxelSurfaceTypeInterface;
 
-UCLASS(BlueprintType, meta = (VoxelAssetType, AssetColor=Red))
+UCLASS(BlueprintType, meta = (VoxelAssetType, AssetColor=Red, AssetSubMenu = "Stamps"))
 class VOXEL_API UVoxelHeightmap : public UVoxelAsset
 {
 	GENERATED_BODY()

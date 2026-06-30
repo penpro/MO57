@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -18,7 +18,7 @@ public:
 	uint32 GetHash() const;
 	FString ToDebugString() const;
 
-	const FVoxelGraphNodeRef& GetNodeRef() const
+	const FVoxelGraphMergedNodeRef& GetNodeRef() const
 	{
 		return NodeRef;
 	}
@@ -32,7 +32,7 @@ public:
 	}
 
 private:
-	FVoxelGraphNodeRef NodeRef;
+	FVoxelGraphMergedNodeRef NodeRef;
 	TSharedPtr<const FVoxelGraphSharedCallstack> Parent;
 	bool bDebugNode = false;
 };

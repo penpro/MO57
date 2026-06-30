@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "Texture/VoxelTextureBlueprintLibrary.h"
 #include "Texture/VoxelTexture.h"
@@ -57,8 +57,12 @@ TVoxelFuture<UVoxelTexture*> UVoxelTextureBlueprintLibrary::CreateVoxelTextureFr
 				TextureRHI->GetSizeXYZ());
 
 			// Sync the GPU. Unfortunately we can't use the fences because not all RHIs implement them yet.
+#if VOXEL_ENGINE_VERSION >= 508
+			RHICmdList.SubmitAndBlockUntilGPUIdle(true);
+#else
 			RHICmdList.BlockUntilGPUIdle();
 			RHICmdList.FlushResources();
+#endif
 
 			int32 RowPitchInPixels = 0;
 			const uint8* LockedData = static_cast<const uint8*>(Readback.Lock(RowPitchInPixels));

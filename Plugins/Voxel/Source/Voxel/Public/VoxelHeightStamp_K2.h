@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -170,6 +170,59 @@ public:
 		}
 
 		Stamp->AdditionalLayers = AdditionalLayers;
+		Stamp.Update();
+	}
+
+	/**
+	 * Get Height Padding Multiplier
+	 * By how much to extend the bounds, relative to the bounds size
+	 * Increase this if you are using a high smoothness
+	 * Increasing this will lead to more stamps being sampled per voxel, increasing generation cost
+	 * @param HeightPaddingMultiplier By how much to extend the bounds, relative to the bounds size
+	 * Increase this if you are using a high smoothness
+	 * Increasing this will lead to more stamps being sampled per voxel, increasing generation cost
+	 */
+	UFUNCTION(BlueprintPure, Category = "Voxel|Stamp|Height", DisplayName = "Get Height Padding Multiplier")
+	static void GetHeightPaddingMultiplier(
+		UPARAM(Required) FVoxelHeightStampRef Stamp,
+		float& HeightPaddingMultiplier)
+	{
+		HeightPaddingMultiplier = FVoxelUtilities::MakeSafe<float>();
+
+		if (!Stamp.IsValid())
+		{
+			VOXEL_MESSAGE(Error, "Stamp is invalid");
+			return;
+		}
+
+		HeightPaddingMultiplier = Stamp->HeightPaddingMultiplier;
+	}
+
+	/**
+	 * Set Height Padding Multiplier
+	 * By how much to extend the bounds, relative to the bounds size
+	 * Increase this if you are using a high smoothness
+	 * Increasing this will lead to more stamps being sampled per voxel, increasing generation cost
+	 * This will automatically refresh the stamp
+	 * @param HeightPaddingMultiplier By how much to extend the bounds, relative to the bounds size
+	 * Increase this if you are using a high smoothness
+	 * Increasing this will lead to more stamps being sampled per voxel, increasing generation cost
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Voxel|Stamp|Height", DisplayName = "Set Height Padding Multiplier", meta = (HeightPaddingMultiplier = "0.100000"))
+	static void SetHeightPaddingMultiplier(
+		UPARAM(Required) FVoxelHeightStampRef Stamp,
+		UPARAM(DisplayName = "Stamp") FVoxelHeightStampRef& OutStamp,
+		float HeightPaddingMultiplier)
+	{
+		OutStamp = Stamp;
+
+		if (!Stamp.IsValid())
+		{
+			VOXEL_MESSAGE(Error, "Stamp is invalid");
+			return;
+		}
+
+		Stamp->HeightPaddingMultiplier = HeightPaddingMultiplier;
 		Stamp.Update();
 	}
 };

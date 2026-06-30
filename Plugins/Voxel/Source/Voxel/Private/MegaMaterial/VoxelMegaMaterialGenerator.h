@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -11,26 +11,20 @@ class FVoxelMegaMaterialGenerator
 {
 public:
 	static bool GenerateMaterialForTarget(
-		const UVoxelMegaMaterial& MegaMaterial,
-		const TMap<FVoxelMaterialRenderIndex, FVoxelMegaMaterialSurfaceInfo>& IndexToSurfaceInfo,
-		EVoxelMegaMaterialTarget Target,
+		TVoxelObjectPtr<const UObject> ErrorOwner,
+		const FVoxelMegaMaterialTargetState& State,
 		UMaterial& NewMaterial,
-		UMaterialInstanceConstant& NewMaterialInstance,
-		TConstVoxelArrayView<TObjectPtr<UVoxelMetadata>> Metadatas,
-		TVoxelSet<TVoxelObjectPtr<UObject>>& OutWatchedMaterials,
-		bool bIsDummyMaterial);
+		UMaterialInstanceConstant& NewMaterialInstance);
 
 	static bool GenerateMaterial(
-		const UVoxelMegaMaterial& MegaMaterial,
-		const UVoxelSurfaceTypeAsset& SurfaceType,
+		TVoxelObjectPtr<const UObject> ErrorOwner,
+		const FVoxelMegaMaterialMaterialState& State,
 		UMaterial& NewMaterial,
-		UMaterialInstanceConstant& NewMaterialInstance,
-		TConstVoxelArrayView<TObjectPtr<UVoxelMetadata>> Metadatas,
-		bool bIsDummyMaterial);
+		UMaterialInstanceConstant& NewMaterialInstance);
 
 	static bool ApplyBlendSmoothness(
-		const TMap<FVoxelMaterialRenderIndex, FVoxelMegaMaterialSurfaceInfo>& IndexToSurfaceInfo,
-		const UMaterial& Material,
+		const TMap<FVoxelMaterialRenderIndex, FVoxelSurfaceTypeState>& IndexToSurfaceType,
+		const UMaterial& NewMaterial,
 		UMaterialInstanceConstant& MaterialInstance);
 
 public:
@@ -39,12 +33,9 @@ public:
 
 private:
 	static bool AddAttributePostProcess(
-		const UVoxelMegaMaterial& MegaMaterial,
+		TVoxelObjectPtr<const UObject> ErrorOwner,
+		const FVoxelMegaMaterialState& MegaMaterial,
 		UMaterial& Material);
-
-	static void CollectedWatchedMaterials(
-		UMaterialInterface& Material,
-		TVoxelSet<TVoxelObjectPtr<UObject>>& OutWatchedMaterials);
 
 	static void WrapInComment(
 		UMaterial& Material,

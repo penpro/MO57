@@ -1,18 +1,18 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
 #include "VoxelMinimal.h"
+#include "VoxelStackLayer.h"
 #include "VoxelVolumeStamp.h"
+#include "Bulk/VoxelBulkPtr.h"
 #include "VoxelVolumeSculptStamp.generated.h"
 
-class UVoxelLayerStack;
-class FVoxelVolumeSculptData;
-class FVoxelVolumeSculptCache;
-class FVoxelVolumeSculptInnerData;
+class IVoxelBulkLoader;
+class AVoxelSculptVolume;
+class FVoxelSculptVolumeCache;
 struct FVoxelVolumeModifier;
-
-DECLARE_UNIQUE_VOXEL_ID(FVoxelVolumeSculptDataId);
+struct FVoxelSculptVolumeData;
 
 USTRUCT(meta = (Internal))
 struct VOXEL_API FVoxelVolumeSculptStamp final : public FVoxelVolumeStamp
@@ -24,15 +24,30 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Config")
 	float Scale = 100;
 
-	// If true will compress distances to one byte
-	// Setting this will clear any existing data
-	UPROPERTY(EditAnywhere, Category = "Config", AdvancedDisplay)
-	bool bUseFastDistances = false;
+	// If true, stores the distance field into two floats: a Additive and a Subtractive distance
+	// This allows changing the underlying world (eg, moving a stamp) without obvious chunks being left over
+	// Will use 2-4x more memory/disk space
+	UPROPERTY(EditAnywhere, Category = "Config")
+	bool bStoreMovableDistances = true;
 
-	// If false, edits won't be diffed
-	// This make editing up to 5x faster, but will lead to obvious chunks if you move the underlying stamps after editing
-	UPROPERTY(EditAnywhere, Category = "Config", AdvancedDisplay)
-	bool bEnableDiffing = true;
+	// Max error percentage allowed when saving
+	// This is used to pick the bit depth to use when saving a chunk
+	UPROPERTY(EditAnywhere, Category = "Config", AdvancedDisplay, meta = (UIMin = 0, UIMax = 100, Units = "Percent", EditCondition = "!bStoreMovableDistances"))
+	float MaxErrorPercentage = 0.5f;
+
+	// Set this to true for runtime stamps
+	// Will ensure only updated chunks are invalidated when sculpting outside the existing stamp bounds
+	// Do not set this to true on too many stamps, this adds a small overhead to all computed chunks
+	UPROPERTY(EditAnywhere, Category = "Config")
+	bool bIsInfinite = false;
+
+	// Any chunk whose LOD is <= to this will use the Near quality
+	UPROPERTY(EditAnywhere, Category = "Config")
+	int32 NearMaxLOD = 3;
+
+	// Any chunk whose LOD is <= to this will use the Mid quality
+	UPROPERTY(EditAnywhere, Category = "Config")
+	int32 MidMaxLOD = 6;
 
 	// Use this if this stamp is not rendered in the Voxel World stack
 	// This stack will be used during sculpting to query the distances before any sculpt is applied
@@ -40,30 +55,18 @@ public:
 	TObjectPtr<UVoxelLayerStack> StackOverride;
 
 public:
+	TVoxelObjectPtr<const AVoxelSculptVolume> WeakSculptActor;
+
 	FVoxelVolumeSculptStamp();
 
-	FVoxelFuture ApplyModifier(const TSharedRef<const FVoxelVolumeModifier>& Modifier);
-	FVoxelFuture SetInnerData(const TSharedRef<const FVoxelVolumeSculptInnerData>& NewInnerData);
-	FVoxelFuture ClearSculptData();
-
-	void ClearCache();
-
-	TSharedRef<FVoxelVolumeSculptData> GetData() const;
-	void SetData(const TSharedRef<FVoxelVolumeSculptData>& NewData);
+	TVoxelOptional<FVoxelWeakStackLayer> GetWeakStackLayer(const UWorld& World) const;
 
 public:
 	//~ Begin FVoxelVolumeStamp Interface
-	virtual void FixupProperties() override;
-	virtual void PostDuplicate() override;
 #if WITH_EDITOR
 	virtual void GetPropertyInfo(FPropertyInfo& Info) const override;
 #endif
 	//~ End FVoxelVolumeStamp Interface
-
-private:
-	TSharedPtr<FVoxelVolumeSculptData> PrivateData;
-	FSharedVoidPtr PrivateDataOnChanged;
-	TSharedPtr<FVoxelVolumeSculptCache> Cache;
 };
 
 USTRUCT()
@@ -72,21 +75,26 @@ struct VOXEL_API FVoxelVolumeSculptStampRuntime : public FVoxelVolumeStampRuntim
 	GENERATED_BODY()
 	GENERATED_VOXEL_RUNTIME_STAMP_BODY(FVoxelVolumeSculptStamp)
 
-	FVoxelVolumeSculptDataId SculptDataId;
+	TVoxelObjectPtr<const AVoxelSculptVolume> WeakSculptActor;
 	TSharedPtr<FVoxelDependency3D> Dependency;
-	TSharedPtr<const FVoxelVolumeSculptInnerData> InnerData;
+	TSharedPtr<IVoxelBulkLoader> BulkLoader;
+	TSharedPtr<const FVoxelSculptVolumeData> SculptData;
+	FVoxelBulkHash RootHash;
 
 	//~ Begin FVoxelVolumeStampRuntime Interface
 	virtual bool Initialize(FVoxelDependencyCollector& DependencyCollector) override;
 	virtual FVoxelBox GetLocalBounds() const override;
+	virtual bool HasCollectDependencies() const override;
+	virtual bool CanPartiallyInvalidate() const override;
 
-	virtual bool ShouldFullyInvalidate(
+	virtual bool TryToPartiallyInvalidate(
 		const FVoxelStampRuntime& PreviousRuntime,
 		TVoxelArray<FVoxelBox>& OutLocalBoundsToInvalidate) const override;
 
-	virtual void Apply(
-		const FVoxelVolumeBulkQuery& Query,
-		const FVoxelVolumeTransform& StampToQuery) const override;
+	virtual void CollectDependencies(
+		FVoxelDependencyCollector& DependencyCollector,
+		const FVoxelVolumeTransform& StampToQuery,
+		const FVoxelBox& Bounds) const override;
 
 	virtual void Apply(
 		const FVoxelVolumeSparseQuery& Query,

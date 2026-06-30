@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -21,21 +21,21 @@ class VOXELGRAPH_API UVoxelPositionFunctionLibrary : public UVoxelFunctionLibrar
 	GENERATED_BODY()
 
 public:
-	UFUNCTION(Category = "Misc", meta = (ShowInShortList, NotTemplate))
+	UFUNCTION(Category = "Misc", meta = (ShowInPinShortList, NotTemplate))
 	FVoxelVector2DBuffer GetPosition2D(
 		UPARAM(meta = (HidePinLabel)) EVoxelPositionSpace Space) const;
 
-	UFUNCTION(Category = "Misc", meta = (ShowInShortList, NotTemplate))
+	UFUNCTION(Category = "Misc", meta = (ShowInPinShortList, NotTemplate))
 	FVoxelVectorBuffer GetPosition3D(
 		UPARAM(meta = (HidePinLabel)) EVoxelPositionSpace Space,
 		UPARAM(meta = (AdvancedDisplay)) bool bFallbackTo2D = false) const;
 
 public:
-	UFUNCTION(Category = "Misc", DisplayName = "Get Position 2D (double)", meta = (ShowInShortList, NotTemplate))
+	UFUNCTION(Category = "Misc", DisplayName = "Get Position 2D (double)", meta = (ShowInPinShortList, NotTemplate))
 	FVoxelDoubleVector2DBuffer GetPosition2D_Double(
 		UPARAM(meta = (HidePinLabel)) EVoxelPositionSpace Space) const;
 
-	UFUNCTION(Category = "Misc", DisplayName = "Get Position 3D (double)", meta = (ShowInShortList, NotTemplate))
+	UFUNCTION(Category = "Misc", DisplayName = "Get Position 3D (double)", meta = (ShowInPinShortList, NotTemplate))
 	FVoxelDoubleVectorBuffer GetPosition3D_Double(
 		UPARAM(meta = (HidePinLabel)) EVoxelPositionSpace Space,
 		UPARAM(meta = (AdvancedDisplay)) bool bFallbackTo2D = false) const;

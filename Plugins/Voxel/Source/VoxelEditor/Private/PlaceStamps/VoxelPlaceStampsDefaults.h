@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -32,12 +32,6 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Defaults")
 	TObjectPtr<UVoxelSurfaceTypeInterface> SurfaceType;
 
-	// By how much to extend the bounds, relative to the bounds size
-	// Increase this if you are using a high smoothness
-	// Increasing this will lead to more stamps being sampled per voxel, increasing generation cost
-	UPROPERTY(EditAnywhere, Category = "Defaults", AdvancedDisplay, meta = (UIMin = 0, UIMax = 5))
-	float BoundsExtension = 1.f;
-
 	// This stamp will only be applied on LODs within this range (inclusive)
 	UPROPERTY(EditAnywhere, Category = "Defaults", DisplayName = "LOD Range", AdvancedDisplay)
 	FInt32Interval LODRange = { 0, 32 };
@@ -61,6 +55,12 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Height Defaults", DisplayName = "Apply On Void", AdvancedDisplay)
 	bool bHeightApplyOnVoid = true;
 
+	// By how much to extend the bounds, relative to the bounds size
+	// Increase this if you are using a high smoothness
+	// Increasing this will lead to more stamps being sampled per voxel, increasing generation cost
+	UPROPERTY(EditAnywhere, Category = "Height Defaults", AdvancedDisplay, meta = (UIMin = 0, UIMax = 5))
+	float HeightPaddingMultiplier = 1.f;
+
 public:
 	// Layer that this stamps belong to
 	// You can control the order of layers in Layer Stacks
@@ -79,6 +79,16 @@ public:
 	// Only used if BlendMode is not Override nor Intersect
 	UPROPERTY(EditAnywhere, Category = "Volume Defaults", DisplayName = "Apply On Void", AdvancedDisplay)
 	bool bVolumeApplyOnVoid = true;
+
+	// By how much to extend the bounds, relative to the bounds size
+	// Increase this if you are using a high smoothness
+	// Increasing this will lead to more stamps being sampled per voxel, increasing generation cost
+	UPROPERTY(EditAnywhere, Category = "Volume Defaults", AdvancedDisplay, meta = (UIMin = 0, UIMax = 5))
+	float BoundsExtensionMultiplier = 1.f;
+
+	// Bounds Extension will be limited to this value in cm, regardless of what the multiplier is set to
+	UPROPERTY(EditAnywhere, Category = "Volume Defaults", AdvancedDisplay, meta = (ClampMin = 0))
+	float MaximumBoundsExtension = 1000.f;
 
 public:
 	void ApplyOnStamp(const FVoxelStampRef& StampRef) const;

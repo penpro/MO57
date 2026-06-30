@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -16,24 +16,72 @@
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
 
-// PerPageData:
-// X: Indirection offset for the current page, required because Nanite indices have strong requirements & might require duplicating vertices
-// Y: ChunkIndices offset
-// See FVoxelNaniteMaterialRenderer::PrepareRender
+uint GetExtendedDataOffset(
+	const FCluster Cluster,
+	const uint ClusterIndex)
+{
+#if VOXEL_ENGINE_VERSION < 506
+	FPageHeader Header = GetPageHeader(ClusterPageData, Cluster.PageBaseAddress);
+	const uint ClusterSOAStride = (Header.NumClusters << 4);
+	const uint ClusterBaseAddress = Cluster.PageBaseAddress + (ClusterIndex << 4);
+	uint4 ClusterData = ClusterPageData.Load4(ClusterBaseAddress + 6 * ClusterSOAStride + NANITE_GPU_PAGE_HEADER_SIZE);
 
-// Cluster.GroupIndex is the vertex offset of the cluster in the page
-// Look for VOXEL_GROUP_INDEX
+	return BitFieldExtractU32(ClusterData.x, 22,  0);
+#else
+	return Cluster.ExtendedDataOffset;
+#endif
+}
+
+uint GetExtendedDataNum(
+	const FCluster Cluster,
+	const uint ClusterIndex)
+{
+#if VOXEL_ENGINE_VERSION < 506
+	FPageHeader Header = GetPageHeader(ClusterPageData, Cluster.PageBaseAddress);
+	const uint ClusterSOAStride = (Header.NumClusters << 4);
+	const uint ClusterBaseAddress = Cluster.PageBaseAddress + (ClusterIndex << 4);
+	uint4 ClusterData = ClusterPageData.Load4(ClusterBaseAddress + 6 * ClusterSOAStride + NANITE_GPU_PAGE_HEADER_SIZE);
+
+	return BitFieldExtractU32(ClusterData.x, 10, 22);
+#else
+	return Cluster.ExtendedDataNum;
+#endif
+}
+
+// ExtendedData:
+// 4 bytes: Magic Number + Mesh Index
+// 4 bytes: Chunk Indices Index
+// 6 bits: Size of Mesh Vertices Compression
+// ...: Mesh Vertices
 
 int GetVertexIndexInVoxelChunk(
 	const FCluster Cluster,
-	const int2 PerPageData,
-	const Texture2D NaniteIndirection_Texture,
-	const uint NaniteIndirection_TextureSizeLog2,
+	const uint ClusterIndex,
 	const int VertexIndexInCluster)
 {
-	const int VertexIndexInPage = Cluster.GroupIndex + VertexIndexInCluster;
+	const uint MeshVerticesAddress = Cluster.PageBaseAddress + GetExtendedDataOffset(Cluster, ClusterIndex) + 8;
+	const uint StartData = ClusterPageData.Load(MeshVerticesAddress);
+	const uint SizeOfIndex = BitFieldExtractU32(StartData, 6, 0);
 
-	return asint(NaniteIndirection_Texture[GetTextureIndex_Log2(PerPageData.x + VertexIndexInPage, NaniteIndirection_TextureSizeLog2)].r);
+	FBitStreamReaderState BitStreamReader = BitStreamReader_Create_Aligned(MeshVerticesAddress, 6 + SizeOfIndex * VertexIndexInCluster, SizeOfIndex);
+	return asint(BitStreamReader_Read_RO(ClusterPageData, BitStreamReader, SizeOfIndex, SizeOfIndex));
+}
+
+int GetChunkIndicesIndexInCluster(
+	const FCluster Cluster,
+	const uint ClusterIndex)
+{
+	const uint ChunkIndicesIndex = ClusterPageData.Load(Cluster.PageBaseAddress + GetExtendedDataOffset(Cluster, ClusterIndex) + 4);
+	return asint(ChunkIndicesIndex);
+}
+
+bool IsVoxelCluster(
+	const FCluster Cluster,
+	const uint ClusterIndex,
+	uint UniqueId)
+{
+	const uint ClusterUniqueId = ClusterPageData.Load(Cluster.PageBaseAddress + GetExtendedDataOffset(Cluster, ClusterIndex));
+	return ClusterUniqueId == UniqueId;
 }
 
 uint GetVoxelAttributeOffset(

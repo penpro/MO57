@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "Surface/VoxelNode_BreakSurfaceTypeBlend.h"
 #include "VoxelGraphMigration.h"
@@ -83,9 +83,9 @@ void FVoxelNode_BreakSurfaceTypeBlend::Compute(const FVoxelGraphQuery Query) con
 
 void FVoxelNode_BreakSurfaceTypeBlend::PostSerialize()
 {
-	Super::PostSerialize();
-
 	FixupLayerPins();
+
+	Super::PostSerialize();
 }
 
 ///////////////////////////////////////////////////////////////////////////////

@@ -1,10 +1,16 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelMetadataRef.h"
 #include "VoxelBuffer.h"
 #include "VoxelMetadata.h"
 #include "VoxelObjectPinType.h"
 #include "Buffer/VoxelBaseBuffers.h"
+#include "AssetRegistry/AssetRegistryModule.h"
+#include "AssetRegistry/IAssetRegistry.h"
+#include "AssetRegistry/ARFilter.h"
+#include "AssetRegistry/AssetData.h"
+
+const FName FVoxelMetadataRef::GuidTagName = "VoxelMetadataGuid";
 
 struct FVoxelMetadataRefObjectPinType : public FVoxelObjectPinType
 {
@@ -44,6 +50,7 @@ struct FVoxelMetadataImpl
 {
 	TVoxelObjectPtr<UVoxelMetadata> WeakMetadata;
 	FName Name;
+	FGuid Guid;
 	FVoxelPinType InnerType;
 	FVoxelPinValue ExposedDefaultValue;
 	FVoxelRuntimePinValue DefaultValue;
@@ -64,6 +71,7 @@ struct FVoxelMetadataImpl
 		const FVoxelPinValue OldDefaultValue = MoveTemp(ExposedDefaultValue);
 
 		Name = Metadata->GetFName();
+		Guid = Metadata->Guid;
 		InnerType = Metadata->GetInnerType();
 		ExposedDefaultValue = NewDefaultValue;
 		DefaultValue = FVoxelPinType::MakeRuntimeValue(InnerType, NewDefaultValue, {});
@@ -85,6 +93,8 @@ public:
 
 	FVoxelSharedCriticalSection CriticalSection;
 	TVoxelMap<TVoxelObjectPtr<UVoxelMetadata>, int32> MetadataToIndex_RequiresLock;
+	TVoxelMap<FGuid, int32> GuidToIndex_RequiresLock;
+	TVoxelMap<FGuid, FSoftObjectPath> GuidToUnloadedPath_RequiresLock;
 
 	// Make sure metadatas are never GCed
 	TVoxelArray<TObjectPtr<const UVoxelMetadata>> MetadatasToKeepAlive;
@@ -111,10 +121,23 @@ public:
 			return *Index;
 		}
 
-		const UVoxelMetadata* Metadata = WeakMetadata.Resolve();
+		UVoxelMetadata* Metadata = WeakMetadata.Resolve();
 		if (!ensure(Metadata))
 		{
 			return -1;
+		}
+
+		if (!Metadata->Guid.IsValid())
+		{
+			Metadata->Guid = FGuid::NewGuid();
+			Metadata->MarkPackageDirty();
+			if (!GIsEditor)
+			{
+				VOXEL_MESSAGE(
+					Error,
+					"Metadata {0} does not have a valid GUID.",
+					Metadata->GetName());
+			}
 		}
 
 		MetadatasToKeepAlive.Add(Metadata);
@@ -127,7 +150,82 @@ public:
 		Metadatas[Index].Update();
 
 		MetadataToIndex_RequiresLock.Add_EnsureNew(WeakMetadata, Index);
+
+		if (const int32* ExistingIndexPtr = GuidToIndex_RequiresLock.Find(Metadata->Guid))
+		{
+			VOXEL_MESSAGE(
+				Error,
+				"Metadata {0} GUID is colliding with metadata asset {1}. Regenerate the GUID in one of the assets.",
+				Metadata->GetFName(),
+				Metadatas[*ExistingIndexPtr].Name);
+		}
+		else
+		{
+			GuidToIndex_RequiresLock.Add_CheckNew(Metadata->Guid, Index);
+		}
+
+		GuidToUnloadedPath_RequiresLock.Remove(Metadata->Guid);
+
 		return Index;
+	}
+
+	void RegisterFromAssetData(const FAssetData& AssetData)
+	{
+		VOXEL_FUNCTION_COUNTER();
+		checkUObjectAccess();
+
+		const UClass* AssetClass = AssetData.GetClass();
+		if (!AssetClass ||
+			!AssetClass->IsChildOf(UVoxelMetadata::StaticClass()))
+		{
+			return;
+		}
+
+		FString GuidString;
+		if (!AssetData.GetTagValue(FVoxelMetadataRef::GuidTagName, GuidString))
+		{
+			VOXEL_MESSAGE(
+				Warning,
+				"Metadata {0} has no GUID asset registry tag. Re-save it to fix.",
+				AssetData.AssetName);
+			return;
+		}
+
+		FGuid Guid;
+		if (!ensure(FGuid::Parse(GuidString, Guid)) ||
+			!ensure(Guid.IsValid()))
+		{
+			return;
+		}
+
+		VOXEL_SCOPE_WRITE_LOCK(CriticalSection);
+
+		if (GuidToIndex_RequiresLock.Contains(Guid))
+		{
+			return;
+		}
+
+		GuidToUnloadedPath_RequiresLock.FindOrAdd(Guid) = AssetData.ToSoftObjectPath();
+	}
+
+	void PopulateFromAssetRegistry()
+	{
+		VOXEL_FUNCTION_COUNTER();
+		check(IsInGameThread());
+
+		const IAssetRegistry& AssetRegistry = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry").Get();
+
+		FARFilter Filter;
+		Filter.ClassPaths.Add(UVoxelMetadata::StaticClass()->GetClassPathName());
+		Filter.bRecursiveClasses = true;
+
+		TArray<FAssetData> Assets;
+		AssetRegistry.GetAssets(Filter, Assets);
+
+		for (const FAssetData& AssetData : Assets)
+		{
+			RegisterFromAssetData(AssetData);
+		}
 	}
 
 	//~ Begin FVoxelSingleton Interface
@@ -145,6 +243,30 @@ public:
 			PinType->MetadataClass = Class;
 			FVoxelObjectPinType::RegisterPinType(PinType);
 		}
+
+		FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry");
+		IAssetRegistry& AssetRegistry = AssetRegistryModule.Get();
+
+		if (AssetRegistry.IsLoadingAssets())
+		{
+			AssetRegistry.OnFilesLoaded().AddLambda([this]
+			{
+				PopulateFromAssetRegistry();
+			});
+		}
+		else
+		{
+			PopulateFromAssetRegistry();
+		}
+
+		AssetRegistry.OnAssetAdded().AddLambda([this](const FAssetData& AssetData)
+		{
+			RegisterFromAssetData(AssetData);
+		});
+		AssetRegistry.OnAssetUpdatedOnDisk().AddLambda([this](const FAssetData& AssetData)
+		{
+			RegisterFromAssetData(AssetData);
+		});
 	}
 	virtual void AddReferencedObjects(FReferenceCollector& Collector) override
 	{
@@ -192,6 +314,26 @@ FName FVoxelMetadataRef::GetFName() const
 	}
 
 	return GetImpl().Name;
+}
+
+FString FVoxelMetadataRef::GetName() const
+{
+	if (!IsValid())
+	{
+		return {};
+	}
+
+	return GetImpl().Name.ToString();
+}
+
+FGuid FVoxelMetadataRef::GetGuid() const
+{
+	if (!IsValid())
+	{
+		return {};
+	}
+
+	return GetImpl().Guid;
 }
 
 FVoxelPinType FVoxelMetadataRef::GetInnerType() const
@@ -243,6 +385,52 @@ TSharedRef<FVoxelBuffer> FVoxelMetadataRef::MakeDefaultBuffer(const int32 Num) c
 	Buffer->Allocate(Num);
 	Buffer->SetAllGeneric(GetDefaultValue());
 	return Buffer;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+
+void operator<<(FArchive& Ar, FVoxelMetadataRef& MetadataRef)
+{
+	if (Ar.GetArchiveName().StartsWith("FVoxel"))
+	{
+		FGuid Guid;
+
+		if (Ar.IsSaving())
+		{
+			Guid = MetadataRef.GetGuid();
+		}
+
+		Ar << Guid;
+
+		if (Ar.IsLoading())
+		{
+			if (!FVoxelMetadataRef::FindFromGuid(
+				Guid,
+				MetadataRef))
+			{
+				Ar.SetError();
+			}
+		}
+
+		return;
+	}
+
+	UVoxelMetadata* Metadata = nullptr;
+
+	if (Ar.IsSaving())
+	{
+		Metadata = MetadataRef.GetMetadata().Resolve();
+		ensureVoxelSlow(Metadata);
+	}
+
+	Ar << Metadata;
+
+	if (Ar.IsLoading())
+	{
+		MetadataRef = FVoxelMetadataRef(Metadata);
+	}
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -426,6 +614,40 @@ TVoxelArray<FVoxelMetadataRef> FVoxelMetadataRef::GetUniqueValidRefs(const TCons
 	}
 
 	return Result;
+}
+
+bool FVoxelMetadataRef::FindFromGuid(
+	const FGuid Guid,
+	FVoxelMetadataRef& OutMetadata)
+{
+	if (!ensure(Guid.IsValid()))
+	{
+		return true;
+	}
+
+	VOXEL_SCOPE_READ_LOCK(GVoxelMetadataSingleton->CriticalSection);
+
+	if (const int32* IndexPtr = GVoxelMetadataSingleton->GuidToIndex_RequiresLock.Find(Guid))
+	{
+		OutMetadata.PrivateIndex = *IndexPtr;
+		return true;
+	}
+
+	if (const FSoftObjectPath* UnloadedPath = GVoxelMetadataSingleton->GuidToUnloadedPath_RequiresLock.Find(Guid))
+	{
+		VOXEL_MESSAGE(
+			Error,
+			"Metadata {0} is referenced by a save but is not loaded. Hard-reference it from your GameInstance (or any always-loaded object) so it loads before the save is applied.",
+			UnloadedPath->ToString());
+	}
+	else
+	{
+		VOXEL_MESSAGE(
+			Error,
+			"Failed to find metadata with GUID {0}. The asset may have been deleted, or it has not been re-saved since the GUID asset registry tag was added.",
+			Guid.ToString());
+	}
+	return false;
 }
 
 ///////////////////////////////////////////////////////////////////////////////

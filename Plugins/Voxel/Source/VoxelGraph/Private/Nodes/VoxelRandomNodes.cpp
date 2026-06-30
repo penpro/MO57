@@ -1,7 +1,14 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "Nodes/VoxelRandomNodes.h"
 #include "Nodes/VoxelNode_UFunction.h"
+
+VOXEL_REGISTER_FUNCTION(UVoxelRandomNodesFunctionLibrary, MakeRandomVectorSettings);
+VOXEL_REGISTER_FUNCTION(UVoxelRandomNodesFunctionLibrary, BreakRandomVectorSettings);
+
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
 
 FVoxelRandomVectorSettings UVoxelRandomNodesFunctionLibrary::MakeRandomVectorSettings(const EVoxelRandomVectorType Type, const FVoxelFloatRange& RangeX, const FVoxelFloatRange& RangeY, const FVoxelFloatRange& RangeZ) const
 {

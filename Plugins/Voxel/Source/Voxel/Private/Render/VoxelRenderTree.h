@@ -1,12 +1,13 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
 #include "VoxelMinimal.h"
 #include "VoxelChunkKey.h"
 
-struct FVoxelRenderSubsystem;
 class FVoxelRenderChunk;
+struct FVoxelRenderSubsystem;
+struct FVoxelRenderInvokersContainer;
 
 class FVoxelRenderTree
 {
@@ -22,7 +23,9 @@ public:
 	~FVoxelRenderTree();
 
 public:
-	void Update(FVoxelRenderSubsystem& Subsystem);
+	void Update(
+		FVoxelRenderSubsystem& Subsystem,
+		const FVoxelRenderInvokersContainer& InvokersContainer);
 	void DestroyAllRenderDatas(FVoxelRenderSubsystem& Subsystem);
 
 	TConstVoxelArrayView<FVoxelChunkKey> GetChunkKeysToRender() const;
@@ -59,9 +62,16 @@ private:
 		FVoxelRenderChunk& Chunk);
 
 private:
-	void Traverse(const FVoxelRenderSubsystem& Subsystem);
-	void Collapse(const FVoxelRenderSubsystem& Subsystem);
-	void Subdivide(const FVoxelRenderSubsystem& Subsystem);
+	void Traverse(
+		const FVoxelRenderSubsystem& Subsystem,
+		const TVoxelArray<FVector>& CameraInvokers);
+	void Collapse(
+		const FVoxelRenderSubsystem& Subsystem,
+		const TVoxelArray<FVector>& CameraInvokers);
+	void Subdivide(
+		const FVoxelRenderSubsystem& Subsystem,
+		const TVoxelArray<FVector>& CameraInvokers);
+	void TraverseLODInvokers(const FVoxelRenderInvokersContainer& LODInvokers);
 	void SubdivideNeighbors(FVoxelRenderSubsystem& Subsystem);
 	void FinalizeTraversal(FVoxelRenderSubsystem& Subsystem);
 

@@ -1,7 +1,8 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "Members/VoxelMembersSchemaAction_Function.h"
 #include "SVoxelGraphMembers.h"
+#include "VoxelGraphCompiler.h"
 #include "VoxelGraphToolkit.h"
 #include "VoxelTerminalGraph.h"
 #include "VoxelGraphSchemaAction.h"
@@ -80,8 +81,41 @@ FReply FVoxelMembersSchemaAction_Function::OnDragged(const FPointerEvent& MouseE
 void FVoxelMembersSchemaAction_Function::BuildContextMenu(FMenuBuilder& MenuBuilder)
 {
 	const UVoxelTerminalGraph* TerminalGraph = WeakTerminalGraph.Resolve();
-	if (!ensure(TerminalGraph) ||
-		TerminalGraph->GetBaseTerminalGraphs().Num() < 2)
+	if (!ensure(TerminalGraph))
+	{
+		return;
+	}
+
+	MenuBuilder.AddSubMenu(
+		INVTEXT("Intermediate Graph"),
+		INVTEXT("Open graph after selected compiler pass"),
+		MakeLambdaDelegate([this](FMenuBuilder& Builder)
+		{
+			for (const FVoxelGraphCompilerPass& Pass : GVoxelGraphCompilerPasses)
+			{
+				Builder.AddMenuEntry(
+					FText::FromString("Open " + Pass.Name.ToString() + " Pass"),
+					{},
+					{},
+					FUIAction
+					{
+						MakeLambdaDelegate([this, PassName = Pass.Name]
+						{
+							const UVoxelTerminalGraph* LocalGraph = WeakTerminalGraph.Resolve();
+							const TSharedPtr<FVoxelGraphToolkit> Toolkit = GetToolkit();
+							if (!ensure(LocalGraph) ||
+								!ensure(Toolkit))
+							{
+								return;
+							}
+
+							Toolkit->OpenIntermediateGraph(*LocalGraph, PassName);
+						})
+					});
+			}
+		}));
+
+	if (TerminalGraph->GetBaseTerminalGraphs().Num() < 2)
 	{
 		return;
 	}

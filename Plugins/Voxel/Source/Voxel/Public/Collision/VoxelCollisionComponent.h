@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -13,7 +13,7 @@ class VOXEL_API UVoxelCollisionComponent final : public UPrimitiveComponent
 	GENERATED_BODY()
 
 public:
-	UVoxelCollisionComponent() = default;
+	UVoxelCollisionComponent();
 
 	TSharedPtr<const FVoxelCollider> GetCollider() const
 	{
@@ -24,6 +24,7 @@ public:
 		const TSharedRef<const FVoxelCollider>& NewCollider,
 		const FBodyInstance& NewBodyInstance,
 		bool bDoubleSidedGeometry,
+		bool bInGenerateOverlapEvents,
 		const FTransform& RelativeTransform);
 
 	void ClearCollider();

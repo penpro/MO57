@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelTemplateNode.h"
 #include "VoxelObjectPinType.h"
@@ -1290,6 +1290,44 @@ TArray<FVoxelTemplateNodeUtilities::FPin*> FVoxelTemplateNodeUtilities::Call_Mul
 			{
 				TargetPin->MakeLinkTo(NewInputPin);
 			}
+		}
+
+		StructNode.SetVoxelNode(VoxelNode);
+		StructNode.Check();
+	}
+
+	return ResultPins;
+}
+
+TArray<FVoxelTemplateNodeUtilities::FPin*> FVoxelTemplateNodeUtilities::Call_NoInput(
+	const FNode& TargetNode,
+	const UScriptStruct* NodeStruct,
+	const int32 MaxDimension,
+	const TOptional<FVoxelPinType>& OutputPinType)
+{
+	TArray<FPin*> ResultPins;
+
+	for (int32 DimensionIndex = 0; DimensionIndex < MaxDimension; DimensionIndex++)
+	{
+		FNode& StructNode = TargetNode.Graph.NewNode(GetNodeRef());
+		const TSharedRef<FVoxelNode> VoxelNode = MakeSharedStruct<FVoxelNode>(NodeStruct);
+
+		for (FVoxelPin& Pin : VoxelNode->GetPins())
+		{
+			if (!ensure(!Pin.bIsInput))
+			{
+				continue;
+			}
+
+			FVoxelPinType Type = Pin.GetType();
+			if (Type.IsWildcard() &&
+				ensure(OutputPinType.IsSet()))
+			{
+				Type = OutputPinType.GetValue();
+				VoxelNode->PromotePin_Runtime(Pin, Type);
+			}
+
+			ResultPins.Add(&StructNode.NewOutputPin(Pin.Name, Type));
 		}
 
 		StructNode.SetVoxelNode(VoxelNode);

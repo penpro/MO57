@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "Graphs/VoxelSampleStampNodes.h"
 #include "Graphs/VoxelStampGraphParameters.h"
@@ -11,79 +11,6 @@ VOXEL_RUN_ON_STARTUP_GAME()
 {
 	REGISTER_VOXEL_NODE_MIGRATION("SampleHeightStamp", FVoxelNode_SampleHeightStamp);
 	REGISTER_VOXEL_NODE_MIGRATION("SampleVolumeStamp", FVoxelNode_SampleVolumeStamp);
-}
-
-///////////////////////////////////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////////////////////
-
-FVoxelNode_SampleStamp::FVoxelNode_SampleStamp()
-{
-	FixupMetadataPins();
-}
-
-void FVoxelNode_SampleStamp::Initialize(FInitializer& Initializer)
-{
-	VOXEL_FUNCTION_COUNTER();
-
-	for (FMetadataPin& MetadataPin : MetadataPins)
-	{
-		Initializer.InitializePinRef(MetadataPin.PinRef);
-	}
-}
-
-void FVoxelNode_SampleStamp::PostSerialize()
-{
-	Super::PostSerialize();
-
-	FixupMetadataPins();
-}
-
-#if WITH_EDITOR
-FVoxelNode::EPostEditChange FVoxelNode_SampleStamp::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
-{
-	if (PropertyChangedEvent.GetPropertyName() == GET_OWN_MEMBER_NAME(MetadatasToQuery))
-	{
-		FixupMetadataPins();
-		return EPostEditChange::Reconstruct;
-	}
-
-	return EPostEditChange::None;
-}
-#endif
-
-void FVoxelNode_SampleStamp::FixupMetadataPins()
-{
-	VOXEL_FUNCTION_COUNTER();
-
-	for (const FMetadataPin& MetadataPin : MetadataPins)
-	{
-		RemovePin(MetadataPin.PinRef.GetName());
-	}
-	MetadataPins.Reset();
-
-	MetadatasToQuery = TVoxelSet<TObjectPtr<UVoxelMetadata>>(MetadatasToQuery).Array();
-
-	for (UVoxelMetadata* Metadata : MetadatasToQuery)
-	{
-		if (!Metadata)
-		{
-			continue;
-		}
-
-		MetadataPins.Add(FMetadataPin
-		{
-			FVoxelMetadataRef(Metadata),
-			CreateOutputPin(
-				Metadata->GetInnerType().GetBufferType(),
-				Metadata->GetFName(),
-				VOXEL_PIN_METADATA(
-					void,
-					nullptr,
-					DisplayName(Metadata->GetName()),
-					Category("Metadata"))),
-		});
-	}
 }
 
 ///////////////////////////////////////////////////////////////////////////////

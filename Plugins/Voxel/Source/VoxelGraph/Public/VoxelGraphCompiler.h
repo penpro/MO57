@@ -1,10 +1,50 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
 #include "VoxelMinimal.h"
 #include "VoxelCompilationGraph.h"
 #include "VoxelTerminalGraphRuntime.h"
+
+class FVoxelGraphCompiler;
+
+struct VOXELGRAPH_API FVoxelGraphCompilerPass
+{
+	template<typename T>
+	struct TMethodPointer
+	{
+		using MethodPtr = void(T::*)();
+		using ConstMethodPtr = void(T::*)() const;
+    
+	private:
+		union
+		{
+			MethodPtr Ptr;
+			ConstMethodPtr ConstPtr;
+		};
+		bool bIsConst = false;
+    
+	public:
+		TMethodPointer(MethodPtr InPtr) : Ptr(InPtr), bIsConst(false) {}
+		TMethodPointer(ConstMethodPtr InPtr) : ConstPtr(InPtr), bIsConst(true) {}
+    
+		void Call(T& Obj) const
+		{
+			if (bIsConst)
+			{
+				(Obj.*ConstPtr)();
+			}
+			else
+			{
+				(Obj.*Ptr)();
+			}
+		}
+	};
+
+	FName Name;
+	TMethodPointer<FVoxelGraphCompiler> Function;
+};
+VOXELGRAPH_API extern TVoxelArray<FVoxelGraphCompilerPass> GVoxelGraphCompilerPasses;
 
 class VOXELGRAPH_API FVoxelGraphCompiler : public Voxel::Graph::FGraph
 {
@@ -42,6 +82,7 @@ public:
 	void ReplaceTemplates();
 	void RemovePassthroughs();
 	void RemoveNodesNotLinkedToQueryableNodes();
+	void MergeSameSubTrees();
 	void CheckForLoops();
 	void CheckNodeGuids();
 

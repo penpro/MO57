@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -31,7 +31,7 @@ public:
 	//~ End UObject Interface
 };
 
-UCLASS(meta = (VoxelAssetType, AssetColor=Grey))
+UCLASS(meta = (VoxelAssetType, AssetColor=Grey, AssetSubMenu = "Structure"))
 class VOXEL_API UVoxelHeightLayer : public UVoxelLayer
 {
 	GENERATED_BODY()
@@ -40,7 +40,7 @@ public:
 	static UVoxelHeightLayer* Default();
 };
 
-UCLASS(meta = (VoxelAssetType, AssetColor=Grey))
+UCLASS(meta = (VoxelAssetType, AssetColor=Grey, AssetSubMenu = "Structure"))
 class VOXEL_API UVoxelVolumeLayer : public UVoxelLayer
 {
 	GENERATED_BODY()

@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "MegaMaterial/VoxelMegaMaterialProxy.h"
 #include "MegaMaterial/VoxelMegaMaterial.h"
@@ -56,7 +56,7 @@ FVoxelMaterialRenderIndex FVoxelMegaMaterialProxy::GetRenderIndex(const FVoxelSu
 
 #if WITH_EDITOR
 	if (GIsEditor &&
-		bDetectNewSurfaces)
+		bAutomaticallyDetectNewSurfaces)
 	{
 		UsageTracker->NotifyMissingSurfaceType(SurfaceType);
 	}
@@ -452,7 +452,7 @@ void FVoxelMegaMaterialProxy::LogErrors(
 
 FVoxelMegaMaterialProxy::FVoxelMegaMaterialProxy(UVoxelMegaMaterial& MegaMaterial)
 	: WeakMegaMaterial(MegaMaterial)
-	, bDetectNewSurfaces(MegaMaterial.bDetectNewSurfaces)
+	, bAutomaticallyDetectNewSurfaces(MegaMaterial.bAutomaticallyDetectNewSurfaces)
 #if WITH_EDITOR
 	, UsageTracker(MegaMaterial.UsageTracker.ToSharedRef())
 #endif
@@ -507,7 +507,7 @@ void FVoxelMegaMaterialProxy::Initialize(const FVoxelMegaMaterialProxy* OldProxy
 	for (const auto& It : GeneratedData->IndexToSurfaceInfo)
 	{
 		const FVoxelMegaMaterialSurfaceInfo& SurfaceInfo = It.Value;
-		const FVoxelMegaMaterialGeneratedMaterial& GeneratedMaterial = GeneratedData->IndexToGeneratedMaterial[It.Key];
+		const FVoxelMegaMaterialMaterialGeneratedMaterial& GeneratedMaterial = GeneratedData->IndexToGeneratedMaterial[It.Key];
 
 		RenderIndexToMaterial.Add_EnsureNew(
 			It.Key,
@@ -540,7 +540,7 @@ bool FVoxelMegaMaterialProxy::Equals(const FVoxelMegaMaterialProxy& Other) const
 	VOXEL_FUNCTION_COUNTER();
 
 	if (WeakMegaMaterial != Other.WeakMegaMaterial ||
-		bDetectNewSurfaces != Other.bDetectNewSurfaces)
+		bAutomaticallyDetectNewSurfaces != Other.bAutomaticallyDetectNewSurfaces)
 	{
 		return false;
 	}

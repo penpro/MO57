@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -6,6 +6,7 @@
 #include "VoxelPCGHelpers.h"
 #include "VoxelStackLayer.h"
 #include "VoxelMetadataRef.h"
+#include "Scatter/VoxelScatterUtilities.h"
 #include "PCGVoxelSamplerV2.generated.h"
 
 class FVoxelLayers;
@@ -60,6 +61,9 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings", meta = (PCG_Overridable))
 	float DistanceBetweenPoints = 100.f;
 
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings", meta = (PCG_Overridable))
+	EVoxelHeightScatterType HeightScatterType = EVoxelHeightScatterType::Grid;
+
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings", meta=(ClampMin="0", PCG_Overridable))
 	float Looseness = 1.0f;
 
@@ -73,6 +77,10 @@ public:
 	// If false smart surface types won't be resolved
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings", AdvancedDisplay, meta = (PCG_Overridable))
 	bool bResolveSmartSurfaceTypes = true;
+
+	// Increasing this will cause cells with little 'surface' inside them to be ignored. Can help prevent visible lines in point density.
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings", AdvancedDisplay, meta = (PCG_Overridable, ClampMin = 0))
+	float MinCellArea = 0.03f;
 };
 
 class FVoxelSamplerV2PCGOutput : public FVoxelPCGOutput
@@ -87,6 +95,8 @@ public:
 	const bool bResolveSmartSurfaceTypes;
 	const float DistanceBetweenPoints;
 	const float Looseness;
+	const EVoxelHeightScatterType HeightScatterType;
+	const float MinCellArea;
 	const TVoxelObjectPtr<UPCGPointData> WeakPointData;
 	const TVoxelArray<FVoxelMetadataRef> MetadatasToQuery;
 
@@ -99,6 +109,8 @@ public:
 		const bool bResolveSmartSurfaceTypes,
 		const float DistanceBetweenPoints,
 		const float Looseness,
+		const EVoxelHeightScatterType HeightScatterType,
+		const float MinTriangleSize,
 		const TVoxelObjectPtr<UPCGPointData>& WeakPointData,
 		const TVoxelArray<FVoxelMetadataRef>& MetadatasToQuery)
 		: Layers(Layers)
@@ -109,6 +121,8 @@ public:
 		, bResolveSmartSurfaceTypes(bResolveSmartSurfaceTypes)
 		, DistanceBetweenPoints(DistanceBetweenPoints)
 		, Looseness(Looseness)
+		, HeightScatterType(HeightScatterType)
+		, MinCellArea(MinTriangleSize)
 		, WeakPointData(WeakPointData)
 		, MetadatasToQuery(MetadatasToQuery)
 	{
@@ -120,6 +134,5 @@ public:
 	//~ End FVoxelPCGOutput Interface
 
 private:
-	FVoxelFuture Generate2D() const;
-	FVoxelFuture Generate3D() const;
+	FVoxelFuture GeneratePoints(bool bHeight) const;
 };

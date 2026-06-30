@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelActorFactories.h"
 #include "VoxelWorld.h"
@@ -22,9 +22,10 @@
 #include "Spline/VoxelVolumeSplineStamp.h"
 #include "StaticMesh/VoxelMeshStamp.h"
 #include "StaticMesh/VoxelStaticMesh.h"
-#include "Sculpt/VoxelSculptSaveAsset.h"
-#include "Sculpt/Height/VoxelHeightSculptActor.h"
-#include "Sculpt/Volume/VoxelVolumeSculptActor.h"
+#include "Sculpt/Height/VoxelSculptHeight.h"
+#include "Sculpt/Height/VoxelSculptHeightAsset.h"
+#include "Sculpt/Volume/VoxelSculptVolume.h"
+#include "Sculpt/Volume/VoxelSculptVolumeAsset.h"
 
 DEFINE_VOXEL_PLACEABLE_ITEM_FACTORY(UActorFactory_VoxelWorld);
 DEFINE_VOXEL_PLACEABLE_ITEM_FACTORY(UActorFactory_VoxelStampActor);
@@ -256,13 +257,13 @@ UActorFactory_VoxelDebugActor::UActorFactory_VoxelDebugActor()
 UActorFactory_VoxelHeightSculptActor::UActorFactory_VoxelHeightSculptActor()
 {
 	DisplayName = INVTEXT("Voxel Height Sculpt Actor");
-	NewActorClass = AVoxelHeightSculptActor::StaticClass();
+	NewActorClass = AVoxelSculptHeight::StaticClass();
 }
 
 bool UActorFactory_VoxelHeightSculptActor::CanCreateActorFrom(const FAssetData& AssetData, FText& OutErrorMsg)
 {
 	// When dragging actor from spawn actor menu, the AssetData will be the actor class to spawn
-	if (AssetData.GetAsset() == AVoxelHeightSculptActor::StaticClass())
+	if (AssetData.GetAsset() == AVoxelSculptHeight::StaticClass())
 	{
 		return true;
 	}
@@ -274,31 +275,30 @@ bool UActorFactory_VoxelHeightSculptActor::CanCreateActorFrom(const FAssetData& 
 		return true;
 	}
 
-	return Class->IsChildOf<UVoxelHeightSculptSaveAsset>();
+	return Class->IsChildOf<UVoxelSculptHeightAsset>();
 }
 
 void UActorFactory_VoxelHeightSculptActor::PostSpawnActor(UObject* Asset, AActor* NewActor)
 {
 	Super::PostSpawnActor(Asset, NewActor);
 
-	AVoxelHeightSculptActor& SculptActor = *CastChecked<AVoxelHeightSculptActor>(NewActor);
+	AVoxelSculptHeight& SculptActor = *CastChecked<AVoxelSculptHeight>(NewActor);
 	SculptActor.GetStamp()->Layer = GetDefault<UVoxelSettings>()->DefaultHeightLayer.LoadSynchronous();
 	SculptActor.GetStamp()->Priority = UVoxelStampComponent::GetNewStampPriority(NewActor->GetWorld(), SculptActor.GetStamp());
-
-	SculptActor.SetExternalSaveAsset(Cast<UVoxelHeightSculptSaveAsset>(Asset));
+	SculptActor.GetComponent().ExternalAsset = Cast<UVoxelSculptHeightAsset>(Asset);
 
 	AVoxelWorld::CreateNewIfNeeded_EditorOnly(NewActor);
 }
 
 UObject* UActorFactory_VoxelHeightSculptActor::GetAssetFromActorInstance(AActor* ActorInstance)
 {
-	const AVoxelHeightSculptActor* TypedActor = Cast<AVoxelHeightSculptActor>(ActorInstance);
+	const AVoxelSculptHeight* TypedActor = Cast<AVoxelSculptHeight>(ActorInstance);
 	if (!ensure(TypedActor))
 	{
 		return nullptr;
 	}
 
-	return TypedActor->GetExternalSaveAsset();
+	return TypedActor->GetComponent().ExternalAsset;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -308,13 +308,13 @@ UObject* UActorFactory_VoxelHeightSculptActor::GetAssetFromActorInstance(AActor*
 UActorFactory_VoxelVolumeSculptActor::UActorFactory_VoxelVolumeSculptActor()
 {
 	DisplayName = INVTEXT("Voxel Volume Sculpt Actor");
-	NewActorClass = AVoxelVolumeSculptActor::StaticClass();
+	NewActorClass = AVoxelSculptVolume::StaticClass();
 }
 
 bool UActorFactory_VoxelVolumeSculptActor::CanCreateActorFrom(const FAssetData& AssetData, FText& OutErrorMsg)
 {
 	// When dragging actor from spawn actor menu, the AssetData will be the actor class to spawn
-	if (AssetData.GetAsset() == AVoxelVolumeSculptActor::StaticClass())
+	if (AssetData.GetAsset() == AVoxelSculptVolume::StaticClass())
 	{
 		return true;
 	}
@@ -326,31 +326,30 @@ bool UActorFactory_VoxelVolumeSculptActor::CanCreateActorFrom(const FAssetData& 
 		return true;
 	}
 
-	return Class->IsChildOf<UVoxelVolumeSculptSaveAsset>();
+	return Class->IsChildOf<UVoxelSculptVolumeAsset>();
 }
 
 void UActorFactory_VoxelVolumeSculptActor::PostSpawnActor(UObject* Asset, AActor* NewActor)
 {
 	Super::PostSpawnActor(Asset, NewActor);
 
-	AVoxelVolumeSculptActor& SculptActor = *CastChecked<AVoxelVolumeSculptActor>(NewActor);
+	AVoxelSculptVolume& SculptActor = *CastChecked<AVoxelSculptVolume>(NewActor);
 	SculptActor.GetStamp()->Layer = GetDefault<UVoxelSettings>()->DefaultVolumeLayer.LoadSynchronous();
 	SculptActor.GetStamp()->Priority = UVoxelStampComponent::GetNewStampPriority(NewActor->GetWorld(), SculptActor.GetStamp());
-
-	SculptActor.SetExternalSaveAsset(Cast<UVoxelVolumeSculptSaveAsset>(Asset));
+	SculptActor.GetComponent().ExternalAsset = Cast<UVoxelSculptVolumeAsset>(Asset);
 
 	AVoxelWorld::CreateNewIfNeeded_EditorOnly(NewActor);
 }
 
 UObject* UActorFactory_VoxelVolumeSculptActor::GetAssetFromActorInstance(AActor* ActorInstance)
 {
-	const AVoxelVolumeSculptActor* TypedActor = Cast<AVoxelVolumeSculptActor>(ActorInstance);
+	const AVoxelSculptVolume* TypedActor = Cast<AVoxelSculptVolume>(ActorInstance);
 	if (!ensure(TypedActor))
 	{
 		return nullptr;
 	}
 
-	return TypedActor->GetExternalSaveAsset();
+	return TypedActor->GetComponent().ExternalAsset;
 }
 
 ///////////////////////////////////////////////////////////////////////////////

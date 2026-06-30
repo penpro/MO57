@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "Surface/VoxelSurfaceTypeAsset.h"
 #include "MegaMaterial/VoxelMegaMaterial.h"
@@ -54,7 +54,7 @@ void UVoxelSurfaceTypeAsset::PostEditChangeProperty(FPropertyChangedEvent& Prope
 		{
 			if (MegaMaterial.SurfaceTypes.Contains(this))
 			{
-				MegaMaterial.GetGeneratedData_EditorOnly().QueueRebuild(PropertyChangedEvent.ChangeType == EPropertyChangeType::Interactive);
+				MegaMaterial.GetGeneratedData_EditorOnly().QueueRebuild();
 			}
 		});
 	}

@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -28,7 +28,7 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Voxel|Sculpt")
 	static void ApplySculptGraph(
-		UPARAM(Required) AVoxelVolumeSculptActor* SculptActor,
+		UPARAM(Required) AVoxelSculptVolume* SculptActor,
 		const FVector& Center,
 		const float Radius = 500.0f,
 		const FVoxelVolumeSculptGraphWrapper& Graph = FVoxelVolumeSculptGraphWrapper(),
@@ -58,7 +58,7 @@ public:
 	static void ApplySculptGraphAsync(
 		UObject* WorldContextObject,
 		FLatentActionInfo LatentInfo,
-		UPARAM(Required) AVoxelVolumeSculptActor* SculptActor,
+		UPARAM(Required) AVoxelSculptVolume* SculptActor,
 		const FVector& Center,
 		const float Radius = 500.0f,
 		const FVoxelVolumeSculptGraphWrapper& Graph = FVoxelVolumeSculptGraphWrapper(),
@@ -80,39 +80,6 @@ public:
 			});
 	}
 
-	// Clear all sculpt data
-	UFUNCTION(BlueprintCallable, Category = "Voxel|Sculpt")
-	static void ClearSculptData(UPARAM(Required) AVoxelVolumeSculptActor* SculptActor)
-	{
-		Voxel::ExecuteSynchronously([&]
-		{
-			return UVoxelVolumeSculptBlueprintLibrary::ClearSculptData(
-				SculptActor);
-		});
-	}
-
-	/**
-	 * Clear all sculpt data
-	 * @param bExecuteIfAlreadyPending If true, this node will execute even if the last call has not yet completed. Be careful when using this on tick.
-	 */
-	UFUNCTION(BlueprintCallable, Category = "Voxel|Sculpt", meta = (Latent, LatentInfo = "LatentInfo", WorldContext = "WorldContextObject", AdvancedDisplay = "bExecuteIfAlreadyPending"))
-	static void ClearSculptDataAsync(
-		UObject* WorldContextObject,
-		FLatentActionInfo LatentInfo,
-		UPARAM(Required) AVoxelVolumeSculptActor* SculptActor,
-		bool bExecuteIfAlreadyPending = false)
-	{
-		FVoxelLatentAction::Execute(
-			WorldContextObject,
-			LatentInfo,
-			bExecuteIfAlreadyPending,
-			[&]
-			{
-				return UVoxelVolumeSculptBlueprintLibrary::ClearSculptData(
-					SculptActor);
-			});
-	}
-
 	/**
 	 * Flatten a voxel surface horizontally
 	 * @param SculptActor The sculpt actor to sculpt
@@ -125,7 +92,7 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Voxel|Sculpt")
 	static void Flatten(
-		UPARAM(Required) AVoxelVolumeSculptActor* SculptActor,
+		UPARAM(Required) AVoxelSculptVolume* SculptActor,
 		const FVector Center,
 		const FVector Normal = FVector::UpVector,
 		const float Radius = 500.0f,
@@ -161,7 +128,7 @@ public:
 	static void FlattenAsync(
 		UObject* WorldContextObject,
 		FLatentActionInfo LatentInfo,
-		UPARAM(Required) AVoxelVolumeSculptActor* SculptActor,
+		UPARAM(Required) AVoxelSculptVolume* SculptActor,
 		const FVector Center,
 		const FVector Normal = FVector::UpVector,
 		const float Radius = 500.0f,
@@ -191,7 +158,7 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Voxel")
 	static void GetSave(
 		FVoxelVolumeSculptSave& Save,
-		UPARAM(Required) AVoxelVolumeSculptActor* SculptActor,
+		UPARAM(Required) AVoxelSculptVolume* SculptActor,
 		bool bCompress = true)
 	{
 		Voxel::ExecuteSynchronously([&]
@@ -212,7 +179,7 @@ public:
 		UObject* WorldContextObject,
 		FLatentActionInfo LatentInfo,
 		FVoxelVolumeSculptSave& Save,
-		UPARAM(Required) AVoxelVolumeSculptActor* SculptActor,
+		UPARAM(Required) AVoxelSculptVolume* SculptActor,
 		bool bCompress = true,
 		bool bExecuteIfAlreadyPending = false)
 	{
@@ -232,7 +199,7 @@ public:
 	// Load from Save
 	UFUNCTION(BlueprintCallable, Category = "Voxel")
 	static void LoadFromSave(
-		UPARAM(Required) AVoxelVolumeSculptActor* SculptActor,
+		UPARAM(Required) AVoxelSculptVolume* SculptActor,
 		FVoxelVolumeSculptSave Save)
 	{
 		Voxel::ExecuteSynchronously([&]
@@ -251,7 +218,7 @@ public:
 	static void LoadFromSaveAsync(
 		UObject* WorldContextObject,
 		FLatentActionInfo LatentInfo,
-		UPARAM(Required) AVoxelVolumeSculptActor* SculptActor,
+		UPARAM(Required) AVoxelSculptVolume* SculptActor,
 		FVoxelVolumeSculptSave Save,
 		bool bExecuteIfAlreadyPending = false)
 	{
@@ -280,7 +247,7 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Voxel|Sculpt")
 	static void PaintSurface(
-		UPARAM(Required) AVoxelVolumeSculptActor* SculptActor,
+		UPARAM(Required) AVoxelSculptVolume* SculptActor,
 		const FVector Center,
 		const float Radius = 500.0f,
 		const float Strength = 0.05f,
@@ -319,7 +286,7 @@ public:
 	static void PaintSurfaceAsync(
 		UObject* WorldContextObject,
 		FLatentActionInfo LatentInfo,
-		UPARAM(Required) AVoxelVolumeSculptActor* SculptActor,
+		UPARAM(Required) AVoxelSculptVolume* SculptActor,
 		const FVector Center,
 		const float Radius = 500.0f,
 		const float Strength = 0.05f,
@@ -360,7 +327,7 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Voxel|Sculpt")
 	static void SculptAngle(
-		UPARAM(Required) AVoxelVolumeSculptActor* SculptActor,
+		UPARAM(Required) AVoxelSculptVolume* SculptActor,
 		const FVector Center,
 		const float Radius = 500.0f,
 		const float Strength = 1.0f,
@@ -399,7 +366,7 @@ public:
 	static void SculptAngleAsync(
 		UObject* WorldContextObject,
 		FLatentActionInfo LatentInfo,
-		UPARAM(Required) AVoxelVolumeSculptActor* SculptActor,
+		UPARAM(Required) AVoxelSculptVolume* SculptActor,
 		const FVector Center,
 		const float Radius = 500.0f,
 		const float Strength = 1.0f,
@@ -438,7 +405,7 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Voxel|Sculpt")
 	static void SculptCube(
-		UPARAM(Required) AVoxelVolumeSculptActor* SculptActor,
+		UPARAM(Required) AVoxelSculptVolume* SculptActor,
 		const FVector Center,
 		const FVector Size = FVector(1000.0, 1000.0, 1000.0),
 		const FRotator Rotation = FRotator::ZeroRotator,
@@ -473,7 +440,7 @@ public:
 	static void SculptCubeAsync(
 		UObject* WorldContextObject,
 		FLatentActionInfo LatentInfo,
-		UPARAM(Required) AVoxelVolumeSculptActor* SculptActor,
+		UPARAM(Required) AVoxelSculptVolume* SculptActor,
 		const FVector Center,
 		const FVector Size = FVector(1000.0, 1000.0, 1000.0),
 		const FRotator Rotation = FRotator::ZeroRotator,
@@ -509,7 +476,7 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Voxel|Sculpt")
 	static void SculptSphere(
-		UPARAM(Required) AVoxelVolumeSculptActor* SculptActor,
+		UPARAM(Required) AVoxelSculptVolume* SculptActor,
 		const FVector Center,
 		const float Radius = 1000.0f,
 		const EVoxelSculptMode Mode = EVoxelSculptMode::Add,
@@ -539,7 +506,7 @@ public:
 	static void SculptSphereAsync(
 		UObject* WorldContextObject,
 		FLatentActionInfo LatentInfo,
-		UPARAM(Required) AVoxelVolumeSculptActor* SculptActor,
+		UPARAM(Required) AVoxelSculptVolume* SculptActor,
 		const FVector Center,
 		const float Radius = 1000.0f,
 		const EVoxelSculptMode Mode = EVoxelSculptMode::Add,
@@ -572,7 +539,7 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Voxel|Sculpt")
 	static void SculptSurface(
-		UPARAM(Required) AVoxelVolumeSculptActor* SculptActor,
+		UPARAM(Required) AVoxelSculptVolume* SculptActor,
 		const FVector Center,
 		const float Radius = 500.0f,
 		const float Strength = 0.5f,
@@ -605,7 +572,7 @@ public:
 	static void SculptSurfaceAsync(
 		UObject* WorldContextObject,
 		FLatentActionInfo LatentInfo,
-		UPARAM(Required) AVoxelVolumeSculptActor* SculptActor,
+		UPARAM(Required) AVoxelSculptVolume* SculptActor,
 		const FVector Center,
 		const float Radius = 500.0f,
 		const float Strength = 0.5f,
@@ -639,7 +606,7 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Voxel|Sculpt")
 	static void Smooth(
-		UPARAM(Required) AVoxelVolumeSculptActor* SculptActor,
+		UPARAM(Required) AVoxelSculptVolume* SculptActor,
 		const FVector Center,
 		const float Radius = 1000.0f,
 		const float Strength = 1.0f,
@@ -669,7 +636,7 @@ public:
 	static void SmoothAsync(
 		UObject* WorldContextObject,
 		FLatentActionInfo LatentInfo,
-		UPARAM(Required) AVoxelVolumeSculptActor* SculptActor,
+		UPARAM(Required) AVoxelSculptVolume* SculptActor,
 		const FVector Center,
 		const float Radius = 1000.0f,
 		const float Strength = 1.0f,

@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelGraphNodeRef.h"
 #include "VoxelTerminalGraph.h"
@@ -12,9 +12,11 @@ FVoxelGraphNodeRef::FVoxelGraphNodeRef(
 	const UVoxelTerminalGraph& TerminalGraph,
 	const FName NodeId,
 	const FName EdGraphNodeTitle,
-	const FName EdGraphNodeName)
+	const FName EdGraphNodeName,
+	const bool bGeneratedNode)
 	: TerminalGraph(&TerminalGraph)
 	, NodeId(NodeId)
+	, bGeneratedNode(bGeneratedNode)
 	, EdGraphNodeTitle(EdGraphNodeTitle)
 	, EdGraphNodeName(EdGraphNodeName)
 {
@@ -92,6 +94,27 @@ TSharedRef<FVoxelMessageToken> FVoxelGraphNodeRef::CreateMessageToken() const
 	const TSharedRef<FVoxelMessageToken_NodeRef> Result = MakeShared<FVoxelMessageToken_NodeRef>();
 	Result->NodeRef = *this;
 	return Result;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+
+TSharedRef<FVoxelMessageToken> FVoxelGraphMergedNodeRef::CreateMessageToken() const
+{
+	const TSharedRef<FVoxelMessageToken_MergedNodeRef> Result = MakeShared<FVoxelMessageToken_MergedNodeRef>();
+	Result->NodeRef = *this;
+	return Result;
+}
+
+FString FVoxelGraphMergedNodeRef::ToString() const
+{
+	FString Title = Node.EdGraphNodeTitle.ToString();
+	if (MergedNodes.Num() > 0)
+	{
+		Title += " [Merged " + LexToString(MergedNodes.Num() + 1) + " nodes]";
+	}
+	return Title;
 }
 
 ///////////////////////////////////////////////////////////////////////////////

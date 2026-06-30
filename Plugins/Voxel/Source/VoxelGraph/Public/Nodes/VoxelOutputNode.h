@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -6,7 +6,7 @@
 #include "VoxelNode.h"
 #include "VoxelOutputNode.generated.h"
 
-USTRUCT(meta = (Abstract, Internal, NodeColor = "Orange", Category = "Internal"))
+USTRUCT(meta = (Abstract, Internal, NodeColor = "Orange", NodeIconColor = "Orange", Category = "Internal"))
 struct VOXELGRAPH_API FVoxelOutputNode : public FVoxelNode
 {
 	GENERATED_BODY()

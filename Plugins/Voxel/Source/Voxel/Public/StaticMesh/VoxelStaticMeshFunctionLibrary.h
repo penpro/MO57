@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -19,6 +19,7 @@ struct VOXEL_API FVoxelStaticMeshRef
 
 	TVoxelObjectPtr<UVoxelStaticMesh> Object;
 	TSharedPtr<const FVoxelStaticMeshData> MeshData;
+	TVoxelMap<FVoxelMetadataRef, TSharedPtr<const FVoxelBuffer>> MetadataRefToBuffer;
 };
 
 DECLARE_VOXEL_OBJECT_PIN_TYPE(FVoxelStaticMeshRef);
@@ -41,20 +42,6 @@ class VOXEL_API UVoxelStaticMeshFunctionLibrary : public UVoxelFunctionLibrary
 	GENERATED_BODY()
 
 public:
-	/**
-	 * Get the distance to a voxel mesh asset
-	 * @param Mesh				The mesh to sample
-	 * @param Position			Position
-	 * @param bUseTricubic		If true will use tricubic sampling, which is slower but better looking
-	 * @return	The height
-	 */
-	UFUNCTION(Category = "Static Mesh")
-	UPARAM(DisplayName = "Distance") FVoxelFloatBuffer SampleVoxelStaticMesh(
-		const FVoxelStaticMeshRef& Mesh,
-		UPARAM(meta = (PositionPin)) const FVoxelVectorBuffer& Position,
-		float Scale = 1.f,
-		bool bUseTricubic = true) const;
-
 	UFUNCTION(Category = "Static Mesh")
 	FVoxelBox GetVoxelStaticMeshBounds(
 		const FVoxelStaticMeshRef& Mesh,

@@ -1,11 +1,11 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelHeightStamp.h"
+#include "VoxelVersion.h"
 #include "Buffer/VoxelDoubleBuffers.h"
 
 FVoxelHeightStamp::FVoxelHeightStamp()
 {
-	BoundsExtension = 0.1f;
 	Layer = UVoxelHeightLayer::Default();
 }
 
@@ -21,6 +21,16 @@ void FVoxelHeightStamp::FixupProperties()
 		VoxelLayers.RemoveAt(0);
 
 		AdditionalLayers = MoveTemp(VoxelLayers);
+	}
+}
+
+void FVoxelHeightStamp::PostSerialize(const FArchive& Ar)
+{
+	Super::PostSerialize(Ar);
+
+	if (Ar.CustomVer(GVoxelCustomVersionGUID) < FVoxelVersion::ChangeBoundsExtension)
+	{
+		HeightPaddingMultiplier = BoundsExtension_DEPRECATED;
 	}
 }
 

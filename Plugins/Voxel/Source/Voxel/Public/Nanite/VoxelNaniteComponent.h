@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -30,7 +30,7 @@ public:
 		const FVoxelNaniteMaterialRenderer& MaterialRenderer);
 
 	void ClearMesh();
-	void SetNaniteMaterial(UMaterialInterface* Material);
+	void SetNaniteMaterial(const TSharedPtr<FVoxelMaterialInstanceRef>& Material);
 
 	//~ Begin UStaticMeshComponent Interface
 	virtual bool ShouldCreatePhysicsState() const override;
@@ -39,9 +39,16 @@ public:
 	virtual FPrimitiveSceneProxy* CreateStaticMeshSceneProxy(
 		Nanite::FMaterialAudit& NaniteMaterials,
 		bool bCreateNanite) override;
+	virtual void GetStreamingRenderAssetInfo(
+		FStreamingTextureLevelContext& LevelContext,
+		TArray<FStreamingRenderAssetPrimitiveInfo>& OutStreamingRenderAssets) const override;
 	//~ End UStaticMeshComponent Interface
 
 private:
 	TSharedPtr<const FVoxelNaniteMesh> Mesh;
+	TSharedPtr<FVoxelMaterialInstanceRef> NaniteMaterial;
+	TArray<TSharedPtr<FVoxelMaterialInstanceRef>> UsedMaterials;
 	FDisplacementFadeRange DisplacementFade;
+
+	bool bCacheTextureStreaming = false;
 };

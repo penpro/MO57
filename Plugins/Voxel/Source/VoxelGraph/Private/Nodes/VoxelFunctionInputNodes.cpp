@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "Nodes/VoxelFunctionInputNodes.h"
 #include "Nodes/VoxelCallFunctionNodes.h"
@@ -73,7 +73,14 @@ void FVoxelNode_FunctionInput_WithDefaults::Compute(const FVoxelGraphQuery Query
 		return;
 	}
 
-	const TSharedPtr<FPinRef_Input> InputPinRef = Query->FunctionCallData->Node.GuidToInputPinRef.FindRef(Guid);
+	const FVoxelNode_CallFunction* CallFunctionNode = Query->FunctionCallData->Node.As<FVoxelNode_CallFunction>();
+	if (!ensure(CallFunctionNode))
+	{
+		VOXEL_MESSAGE(Error, "{0}: No matching input found on {1}", this, Query->FunctionCallData->Node);
+		return;
+	}
+
+	const TSharedPtr<FPinRef_Input> InputPinRef = CallFunctionNode->GuidToInputPinRef.FindRef(Guid);
 	if (!ensureVoxelSlow(InputPinRef))
 	{
 		VOXEL_MESSAGE(Error, "{0}: No matching input found on {1}", this, Query->FunctionCallData->Node);

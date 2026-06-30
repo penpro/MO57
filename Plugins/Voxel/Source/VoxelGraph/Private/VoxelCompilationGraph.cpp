@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelCompilationGraph.h"
 #include "VoxelNode.h"
@@ -128,7 +128,10 @@ void FPin::CopyOutputPinTo(FPin& Target) const
 
 	for (FPin* Other : LinkedTo)
 	{
-		Other->MakeLinkTo(Target);
+		if (!Other->IsLinkedTo(Target))
+		{
+			Other->MakeLinkTo(Target);
+		}
 	}
 }
 
@@ -241,6 +244,7 @@ void FNode::CopyFrom(const FNode& Src)
 	ensure(NodeRef == Src.NodeRef);
 	Errors = Src.Errors;
 	VoxelNode = Src.VoxelNode;
+	MergedNodeRefs = Src.MergedNodeRefs;
 }
 
 void FNode::AddError(const FString& Error)
@@ -407,6 +411,12 @@ void FNode::RemovePin(FPin& Pin)
 	{
 		ensure(OutputPins.Remove(&Pin));
 	}
+}
+
+void FNode::AddMergedNodeRef(const FNode& Other)
+{
+	MergedNodeRefs.Add(Other.NodeRef);
+	MergedNodeRefs.Append(Other.MergedNodeRefs);
 }
 
 ///////////////////////////////////////////////////////////////////////////////

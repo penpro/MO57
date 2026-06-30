@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelEditorMinimal.h"
 #include "VoxelMessage.h"
@@ -19,7 +19,9 @@
 #endif
 #include "Subsystems/AssetEditorSubsystem.h"
 
+#if VOXEL_ENGINE_VERSION < 508
 DEFINE_PRIVATE_ACCESS(FPCGEditor, PCGEditorGraph);
+#endif
 DEFINE_PRIVATE_ACCESS(FPCGEditor, GraphEditorWidget);
 
 void JumpToPCGNode(
@@ -33,7 +35,11 @@ void JumpToPCGNode(
 		return;
 	}
 
+#if VOXEL_ENGINE_VERSION >= 508
+	UEdGraph* EdGraph = reinterpret_cast<UEdGraph*>(Editor.GetMainEditorGraph());
+#else
 	UEdGraph* EdGraph = reinterpret_cast<UEdGraph*>(PrivateAccess::PCGEditorGraph(Editor));
+#endif
 	const TSharedPtr<SGraphEditor> GraphEditor = PrivateAccess::GraphEditorWidget(Editor);
 	if (!ensure(EdGraph) ||
 		!ensure(GraphEditor))

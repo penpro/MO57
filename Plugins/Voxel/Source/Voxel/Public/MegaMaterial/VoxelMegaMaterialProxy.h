@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -18,7 +18,7 @@ class VOXEL_API FVoxelMegaMaterialProxy
 {
 public:
 	const TVoxelObjectPtr<UVoxelMegaMaterial> WeakMegaMaterial;
-	const bool bDetectNewSurfaces;
+	const bool bAutomaticallyDetectNewSurfaces;
 
 	static TSharedRef<FVoxelMegaMaterialProxy> Default();
 

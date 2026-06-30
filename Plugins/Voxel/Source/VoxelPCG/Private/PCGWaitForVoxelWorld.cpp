@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "PCGWaitForVoxelWorld.h"
 #include "VoxelState.h"
@@ -92,19 +92,15 @@ bool FPCGWaitForVoxelWorldElement::PrepareDataInternal(FPCGContext* Context) con
 {
 	VOXEL_FUNCTION_COUNTER();
 
-	if (!ensure(Context->InputData.TaggedData.Num() == Context->InputData.DataCrcs.Num()))
+	// UE 5.8: FPCGDataCollection::DataCrcs is no longer a parallel array to
+	// TaggedData at PrepareData time, so the old per-index pairing tripped an
+	// ensure (TaggedData.Num() == DataCrcs.Num()) and dropped this node's output.
+	// Forward the collection wholesale (CRCs preserved internally) and just
+	// re-pin the outputs. [Local patch matching the dev-phy upstream fix.]
+	Context->OutputData = Context->InputData;
+	for (FPCGTaggedData& Data : Context->OutputData.TaggedData)
 	{
-		return true;
-	}
-
-	for (int32 Index = 0; Index < Context->InputData.TaggedData.Num(); Index++)
-	{
-		FPCGTaggedData Data = Context->InputData.TaggedData[Index];
 		Data.Pin = PCGPinConstants::DefaultOutputLabel;
-
-		Context->OutputData.AddData(
-			Data,
-			Context->InputData.DataCrcs[Index]);
 	}
 
 	return true;

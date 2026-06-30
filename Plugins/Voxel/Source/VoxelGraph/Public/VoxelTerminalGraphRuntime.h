@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -8,6 +8,7 @@
 
 class UVoxelGraph;
 class UVoxelTerminalGraph;
+class FVoxelGraphCompiler;
 struct FOnVoxelGraphChanged;
 
 namespace Voxel::Graph
@@ -79,7 +80,9 @@ public:
 
 	const FVoxelSerializedGraph& GetSerializedGraph() const;
 
-	void EnsureIsCompiled(bool bForce = false);
+	void EnsureIsCompiled(
+		bool bForce = false,
+		const TFunction<void(FName, FVoxelGraphCompiler&)>& OnGetGraphAtPass = nullptr);
 #if WITH_EDITOR
 	void BindOnEdGraphChanged();
 #endif
@@ -140,14 +143,15 @@ private:
 	UPROPERTY()
 	FVoxelCompiledTerminalGraphRef CompiledGraph;
 
-	TSharedPtr<FVoxelCompiledTerminalGraph> Compile();
+	TSharedPtr<FVoxelCompiledTerminalGraph> Compile(const TFunction<void(FName, FVoxelGraphCompiler&)>& OnGetGraphAtPass = nullptr);
 
 	static TSharedPtr<FVoxelCompiledTerminalGraph> Compile(
 		const FOnVoxelGraphChanged& OnTranslated,
 		const FOnVoxelGraphChanged& OnForceRecompile,
 		const UVoxelTerminalGraph& TerminalGraph,
 		bool bEnableLogging,
-		TVoxelArray<TSharedRef<FVoxelMessage>>& OutCompileMessages);
+		TVoxelArray<TSharedRef<FVoxelMessage>>& OutCompileMessages,
+		const TFunction<void(FName, FVoxelGraphCompiler&)>& OnGetGraphAtPass = nullptr);
 
 	friend class UVoxelGraph;
 };

@@ -1,10 +1,64 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelGraphMessageTokens.h"
 #include "VoxelGraphTracker.h"
 #include "VoxelTerminalGraph.h"
 #include "EdGraph/EdGraphNode.h"
 #include "Logging/TokenizedMessage.h"
+#include "VoxelGraphEditorUtilities.h"
+
+uint32 FVoxelMessageToken_MergedNodeRef::GetHash() const
+{
+	return GetTypeHash(NodeRef);
+}
+
+FString FVoxelMessageToken_MergedNodeRef::ToString() const
+{
+	return NodeRef.ToString();
+}
+
+TSharedRef<IMessageToken> FVoxelMessageToken_MergedNodeRef::GetMessageToken() const
+{
+	ensure(IsInGameThread());
+
+#if WITH_EDITOR
+	return FActionToken::Create(
+		FText::FromString(ToString()),
+		FText::FromString("Go to " + ToString()),
+		MakeLambdaDelegate([NodeRef = NodeRef]
+		{
+			TVoxelSet<const UEdGraphNode*> GraphNodes;
+			if (const UEdGraphNode* GraphNode = NodeRef.Node.GetGraphNode_EditorOnly())
+			{
+				GraphNodes.Add(GraphNode);
+			}
+			for (const FVoxelGraphNodeRef& Node : NodeRef.MergedNodes)
+			{
+				if (const UEdGraphNode* GraphNode = Node.GetGraphNode_EditorOnly())
+				{
+					GraphNodes.Add(GraphNode);
+				}
+			}
+
+			FVoxelGraphEditorUtilities::OnSelectNodes.ExecuteIfBound(GraphNodes);
+		}));
+#else
+	return Super::GetMessageToken();
+#endif
+}
+
+void FVoxelMessageToken_MergedNodeRef::GetObjects(TSet<const UObject*>& OutObjects) const
+{
+	OutObjects.Add(NodeRef.Node.TerminalGraph.Resolve());
+	for (const FVoxelGraphNodeRef& Node : NodeRef.MergedNodes)
+	{
+		OutObjects.Add(Node.TerminalGraph.Resolve());
+	}
+}
+
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
 
 uint32 FVoxelMessageToken_NodeRef::GetHash() const
 {

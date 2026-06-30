@@ -1,8 +1,17 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelMinimal.h"
 #include "VoxelTaskContext.h"
 #include "VoxelDebugDrawerManager.h"
+
+VOXEL_CONSOLE_VARIABLE(
+	VOXELCORE_API, bool, GVoxelFreezeDebugDraws, false,
+	"voxel.FreezeDebugDraws",
+	"Freeze timed debug draws so they never expire");
+
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
 
 FVoxelDebugDrawer::FVoxelDebugDrawer()
 	: World(GVoxelDebugDrawerManager->DefaultWorld)
@@ -76,6 +85,12 @@ FVoxelDebugDrawer& FVoxelDebugDrawer::OneFrame()
 FVoxelDebugDrawer& FVoxelDebugDrawer::LifeTime(const float NewLifeTime)
 {
 	PrivateLifeTime = NewLifeTime;
+	return *this;
+}
+
+FVoxelDebugDrawer& FVoxelDebugDrawer::Space(const EVoxelWorldSpace NewSpace)
+{
+	Draw->Space = NewSpace;
 	return *this;
 }
 
@@ -172,6 +187,12 @@ TSharedRef<FVoxelDebugDrawGroup> FVoxelDebugDrawGroup::Create()
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
 
+bool FVoxelDebugDrawGroup::IsEmpty_AnyThread()
+{
+	VOXEL_SCOPE_LOCK(CriticalSection);
+	return Draws_RequiresLock.Num() == 0;
+}
+
 void FVoxelDebugDrawGroup::Clear_AnyThread()
 {
 	VOXEL_FUNCTION_COUNTER();
@@ -248,7 +269,7 @@ void FVoxelDebugDrawGroup::IterateDraws(
 		OutDraws.Add(Draw.Draw);
 
 		if (Draw.bIsOneFrame ||
-			Draw.EndTime < Time)
+			(!GVoxelFreezeDebugDraws && Draw.EndTime < Time))
 		{
 			Draws_RequiresLock.RemoveAtSwap(Index);
 			Index--;

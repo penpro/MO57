@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelMinimal.h"
 #include "VoxelStamp.h"
@@ -19,7 +19,7 @@ VOXEL_RUN_ON_STARTUP_GAME()
 	TArray<UScriptStruct*> AllStructs = GetDerivedStructs<FVoxelStamp>(false);
 	AllStructs.RemoveAll([](const UScriptStruct* Struct)
 	{
-		return Struct->HasMetaDataHierarchical("Internal");
+		return false;
 	});
 	AllStructs.Sort([](const UScriptStruct& A, const UScriptStruct& B)
 	{

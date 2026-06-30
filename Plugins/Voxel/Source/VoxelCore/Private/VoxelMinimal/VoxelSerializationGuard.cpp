@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelMinimal.h"
 
@@ -59,7 +59,9 @@ FVoxelSerializationGuard::~FVoxelSerializationGuard()
 		Ar.Seek(Offset);
 		check(Ar.Tell() == Offset);
 
-		SerializedSize = NewOffset - Offset;
+		check(NewOffset - Offset <= MAX_int32);
+
+		SerializedSize = int32(NewOffset - Offset);
 		Ar << SerializedSize;
 
 		Ar.Seek(NewOffset);

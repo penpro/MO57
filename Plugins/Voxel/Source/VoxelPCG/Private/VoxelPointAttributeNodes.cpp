@@ -1,13 +1,15 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelPointAttributeNodes.h"
 #include "VoxelPointId.h"
-#include "VoxelPointUtilities.h"
 #include "VoxelBufferAccessor.h"
 #include "VoxelCompilationGraph.h"
 #include "Nodes/VoxelVectorNodes.h"
 #include "Buffer/VoxelFloatBuffers.h"
 #include "Buffer/VoxelIntegerBuffers.h"
+#include "VoxelGraphPositionParameter.h"
+#include "Scatter/VoxelPointUtilities.h"
+#include "Scatter/VoxelScatterFunctionLibrary.h"
 #include "Utilities/VoxelBufferMathUtilities.h"
 #include "Metadata/Accessors/PCGAttributeExtractor.h"
 
@@ -101,6 +103,20 @@ void FVoxelNode_GetPointAttribute::Compute(const FVoxelGraphQuery Query) const
 
 	VOXEL_GRAPH_WAIT(BaseName)
 	{
+		if (Query.IsPreview() &&
+			BaseName == FVoxelPointAttributes::Position)
+		{
+			const FVoxelGraphParameters::FPosition3D* Parameter = Query->FindParameter<FVoxelGraphParameters::FPosition3D>();
+			if (!Parameter)
+			{
+				VOXEL_MESSAGE(Error, "{0}: No valid position", this);
+				return;
+			}
+
+			ValuePin.Set(Query, FVoxelRuntimePinValue::Make(Parameter->GetLocalPosition_Double(Query)));
+			return;
+		}
+
 		const FVoxelGraphParameters::FPointSet* Parameter = Query->FindParameter<FVoxelGraphParameters::FPointSet>();
 		if (!Parameter)
 		{
@@ -117,52 +133,17 @@ void FVoxelNode_GetPointAttribute::Compute(const FVoxelGraphQuery Query) const
 		const FName Name = AddParentPrefix(BaseName);
 		const FVoxelPinType ReturnType = ValuePin.GetType_RuntimeOnly();
 
-		// If the full attribute name exists, use it
-		if (const TSharedPtr<const FVoxelBuffer> Attribute = PointSet->FindShared(Name))
-		{
-			if (!Attribute->GetBufferType().CanBeCastedTo(ReturnType))
-			{
-				VOXEL_MESSAGE(Error, "{0}: Found attribute named {1} of type {2}, cannot cast to {3}",
-					this,
-					Name,
-					Attribute->GetBufferType().ToString(),
-					ReturnType.ToString());
-
-				return;
-			}
-
-			ValuePin.Set(Query, FVoxelRuntimePinValue::Make(Attribute.ToSharedRef()));
-			return;
-		}
-
-		FName AttributeName;
-		TVoxelArray<FString> Extractors;
-		const TSharedPtr<const FVoxelBuffer> Attribute = FVoxelPointUtilities::FindExtractedAttribute(
+		const TSharedPtr<const FVoxelBuffer> Attribute =  FVoxelPointUtilities::ParseAttribute(
 			*PointSet,
+			ReturnType,
 			Name,
-			AttributeName,
-			Extractors);
-
+			GetNodeRef());
 		if (!Attribute)
 		{
-			VOXEL_MESSAGE(Error, "{0}: No attribute named {1} found", this, Name);
 			return;
 		}
 
-		const TSharedPtr<const FVoxelBuffer> Buffer = ExtractData(
-			Attribute.ToSharedRef(),
-			Extractors,
-			0,
-			AttributeName,
-			Query);
-
-		if (!ensure(Buffer))
-		{
-			VOXEL_MESSAGE(Error, "{0}: Failed to extract {1}", this, AttributeName);
-			return;
-		}
-
-		ValuePin.Set(Query, FVoxelRuntimePinValue::Make(Buffer.ToSharedRef()));
+		ValuePin.Set(Query, FVoxelRuntimePinValue::Make(Attribute.ToSharedRef()));
 	};
 }
 
@@ -172,74 +153,6 @@ FVoxelPinTypeSet FVoxelNode_GetPointAttribute::GetPromotionTypes(const FVoxelPin
 	return FVoxelPinTypeSet::AllBuffers();
 }
 #endif
-
-///////////////////////////////////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////////////////////
-
-TSharedPtr<const FVoxelBuffer> FVoxelNode_GetPointAttribute::ExtractData(
-	const TSharedRef<const FVoxelBuffer>& Buffer,
-	const TConstVoxelArrayView<FString> Extractors,
-	const int32 ExtractorIndex,
-	const FName AttributeName,
-	const FVoxelGraphQuery Query) const
-{
-	VOXEL_FUNCTION_COUNTER();
-
-	const FVoxelPinType ReturnType = ValuePin.GetType_RuntimeOnly();
-	const FString& Extractor = Extractors[ExtractorIndex];
-
-	const TSharedPtr<const FVoxelBuffer> NewValue = INLINE_LAMBDA -> TSharedPtr<const FVoxelBuffer>
-	{
-#define CALL_EXTRACTOR(Type, ExtractorFunc) \
-		if (Buffer->GetStruct() == StaticStructFast<Type>()) \
-		{ \
-			return ExtractorFunc( \
-				StaticCastSharedRef<const Type>(Buffer), \
-				Extractor, \
-				ExtractorIndex + 1 >= Extractors.Num() ? ReturnType : FVoxelPinType(), \
-				AttributeName, \
-				GetNodeRef()); \
-		}
-
-		CALL_EXTRACTOR(FVoxelLinearColorBuffer, FVoxelPointUtilities::ExtractVector);
-		CALL_EXTRACTOR(FVoxelVectorBuffer, FVoxelPointUtilities::ExtractVector);
-		CALL_EXTRACTOR(FVoxelVector2DBuffer, FVoxelPointUtilities::ExtractVector);
-		CALL_EXTRACTOR(FVoxelIntVector4Buffer, FVoxelPointUtilities::ExtractVector);
-		CALL_EXTRACTOR(FVoxelIntVectorBuffer, FVoxelPointUtilities::ExtractVector);
-		CALL_EXTRACTOR(FVoxelIntPointBuffer, FVoxelPointUtilities::ExtractVector);
-		CALL_EXTRACTOR(FVoxelQuaternionBuffer, FVoxelPointUtilities::ExtractQuat);
-		CALL_EXTRACTOR(FVoxelTransformBuffer, FVoxelPointUtilities::ExtractTransform);
-
-#undef CALL_EXTRACTOR
-
-		VOXEL_MESSAGE(Error, "{0}: Cannot extract data from attribute {1} with type {2}",
-			this,
-			AttributeName,
-			ReturnType.ToString());
-
-		return {};
-	};
-
-	if (!NewValue)
-	{
-		return {};
-	}
-
-	ensure(ExtractorIndex < Extractors.Num());
-
-	if (ExtractorIndex + 1 >= Extractors.Num())
-	{
-		return NewValue;
-	}
-
-	return ExtractData(
-		NewValue.ToSharedRef(),
-		Extractors,
-		ExtractorIndex + 1,
-		AttributeName,
-		Query);
-}
 
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
@@ -269,6 +182,61 @@ FVoxelTemplateNodeUtilities::FPin* FVoxelTemplateNode_GetPointAttributeBase::Exp
 	Pins.Add(MakeConstant(Node, FVoxelPinValue::Make(GetAttributeName())));
 
 	return Call_Single<FVoxelNode_GetPointAttribute>(Pins, AllPins[0]->Type);
+}
+
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+
+void FVoxelNode_SetPointPosition::Compute(const FVoxelGraphQuery Query) const
+{
+	// Read the cache-bounds extension first so we can extend the chunk-bounds parameter
+	// before fetching upstream points. Same pattern as FVoxelNode_PruneByDistance.
+	const TValue<FVoxelVectorBuffer> CacheBoundsExtension = CacheBoundsExtensionPin.Get(Query);
+
+	VOXEL_GRAPH_WAIT(CacheBoundsExtension)
+	{
+		const TValue<FVoxelPointSet> Points = INLINE_LAMBDA
+		{
+			const FVoxelGraphParameters::FPointSetChunkBounds* BoundsParameter = Query->FindParameter<FVoxelGraphParameters::FPointSetChunkBounds>();
+			if (!BoundsParameter)
+			{
+				return InPin.Get(Query);
+			}
+
+			const FVector3d Extension = FVector3d(FVector(((*CacheBoundsExtension)[0])));
+			if (Extension.IsNearlyZero())
+			{
+				return InPin.Get(Query);
+			}
+
+			FVoxelGraphQueryImpl& NewQuery = Query->CloneParameters();
+			NewQuery.RemoveParameter<FVoxelGraphParameters::FPointSetChunkBounds>();
+
+			FVoxelGraphParameters::FPointSetChunkBounds& Parameter = NewQuery.AddParameter<FVoxelGraphParameters::FPointSetChunkBounds>(*BoundsParameter);
+			Parameter.ExtendBounds(BoundsParameter->GetInitialBounds().Extend(Extension));
+
+			return InPin.Get(FVoxelGraphQuery(NewQuery, Query.GetCallstack()));
+		};
+
+		VOXEL_GRAPH_WAIT(Points)
+		{
+			const TValue<FVoxelDoubleVectorBuffer> Position = PositionPin.Get(Points->MakeQuery(Query));
+
+			VOXEL_GRAPH_WAIT(Points, Position)
+			{
+				if (!Points->CheckNum(this, Position->Num_Slow()))
+				{
+					OutPin.Set(Query, Points);
+					return;
+				}
+
+				const TSharedRef<FVoxelPointSet> NewPoints = Points->MakeSharedCopy();
+				NewPoints->Add(FVoxelPointAttributes::Position, Position);
+				OutPin.Set(Query, NewPoints);
+			};
+		};
+	};
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -314,6 +282,11 @@ void FVoxelNode_ApplyTranslation::Compute(const FVoxelGraphQuery Query) const
 
 	VOXEL_GRAPH_WAIT(Points)
 	{
+		if (Points->Num() == 0)
+		{
+			return;
+		}
+
 		const TValue<FVoxelDoubleVectorBuffer> Translation = TranslationPin.Get(Points->MakeQuery(Query));
 
 		VOXEL_GRAPH_WAIT(Points, Translation)
@@ -390,16 +363,220 @@ void FVoxelNode_ApplyScale::Compute(const FVoxelGraphQuery Query) const
 		{
 			CheckVoxelBuffersNum(*Points, Scale);
 
+			const TSharedRef<FVoxelPointSet> NewPoints = Points->MakeSharedCopy();
+
 			const FVoxelVectorBuffer* ScaleBuffer = Points->Find<FVoxelVectorBuffer>(FVoxelPointAttributes::Scale);
-			if (!ScaleBuffer)
+			if (ScaleBuffer)
 			{
-				VOXEL_MESSAGE(Error, "{0}: Missing attribute Scale", this);
+				NewPoints->Add(FVoxelPointAttributes::Scale, FVoxelBufferMathUtilities::Multiply(*ScaleBuffer, *Scale));
+			}
+			else
+			{
+				NewPoints->Add(FVoxelPointAttributes::Scale, Scale);
+			}
+
+			OutPin.Set(Query, NewPoints);
+		};
+	};
+}
+
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+
+void FVoxelNode_TransformPoints::Compute(const FVoxelGraphQuery Query) const
+{
+	// Read the cache-bounds extension first so we can extend the chunk-bounds parameter
+	// before fetching upstream points. Same pattern as FVoxelNode_PruneByDistance.
+	const TValue<FVoxelVectorBuffer> CacheBoundsExtension = CacheBoundsExtensionPin.Get(Query);
+
+	VOXEL_GRAPH_WAIT(CacheBoundsExtension)
+	{
+	const TValue<FVoxelPointSet> Points = INLINE_LAMBDA
+	{
+		const FVoxelGraphParameters::FPointSetChunkBounds* BoundsParameter = Query->FindParameter<FVoxelGraphParameters::FPointSetChunkBounds>();
+		if (!BoundsParameter)
+		{
+			return InPin.Get(Query);
+		}
+
+		const FVector3d Extension = FVector3d(FVector(((*CacheBoundsExtension)[0])));
+		if (Extension.IsNearlyZero())
+		{
+			return InPin.Get(Query);
+		}
+
+		FVoxelGraphQueryImpl& NewQuery = Query->CloneParameters();
+		NewQuery.RemoveParameter<FVoxelGraphParameters::FPointSetChunkBounds>();
+
+		FVoxelGraphParameters::FPointSetChunkBounds& Parameter = NewQuery.AddParameter<FVoxelGraphParameters::FPointSetChunkBounds>(*BoundsParameter);
+		Parameter.ExtendBounds(BoundsParameter->GetInitialBounds().Extend(Extension));
+
+		return InPin.Get(FVoxelGraphQuery(NewQuery, Query.GetCallstack()));
+	};
+
+	VOXEL_GRAPH_WAIT(Points)
+	{
+		if (Points->Num() == 0)
+		{
+			return;
+		}
+
+		const FVoxelGraphQuery PointQuery = Points->MakeQuery(Query);
+
+		const TValue<FVoxelSeed> Seed = SeedPin.Get(Query);
+		const TValue<FVoxelVectorBuffer> OffsetMin = OffsetMinPin.Get(PointQuery);
+		const TValue<FVoxelVectorBuffer> OffsetMax = OffsetMaxPin.Get(PointQuery);
+		const TValue<FVoxelBoolBuffer> OffsetInLocalSpace = bOffsetInLocalSpacePin.Get(PointQuery);
+		const TValue<FVoxelFloatRangeBuffer> Roll = RollPin.Get(PointQuery);
+		const TValue<FVoxelFloatRangeBuffer> Pitch = PitchPin.Get(PointQuery);
+		const TValue<FVoxelFloatRangeBuffer> Yaw = YawPin.Get(PointQuery);
+		const TValue<FVoxelBoolBuffer> AbsoluteRotation = bAbsoluteRotationPin.Get(PointQuery);
+		const TValue<FVoxelVectorBuffer> ScaleMin = ScaleMinPin.Get(PointQuery);
+		const TValue<FVoxelVectorBuffer> ScaleMax = ScaleMaxPin.Get(PointQuery);
+		const TValue<FVoxelBoolBuffer> AbsoluteScale = bAbsoluteScalePin.Get(PointQuery);
+		const TValue<FVoxelBoolBuffer> UniformScale = bUniformScalePin.Get(PointQuery);
+
+		VOXEL_GRAPH_WAIT(Points, Seed, OffsetMin, OffsetMax, OffsetInLocalSpace, Roll, Pitch, Yaw, AbsoluteRotation, ScaleMin, ScaleMax, AbsoluteScale, UniformScale)
+		{
+			FVoxelNodeStatScope StatScope(*this, Points->Num());
+
+			const FVoxelPointIdBuffer* IdBuffer = Points->Find<FVoxelPointIdBuffer>(FVoxelPointAttributes::Id);
+			if (!IdBuffer)
+			{
+				VOXEL_MESSAGE(Error, "{0}: Missing attribute Id", this);
 				return;
 			}
 
 			const TSharedRef<FVoxelPointSet> NewPoints = Points->MakeSharedCopy();
-			NewPoints->Add(FVoxelPointAttributes::Scale, FVoxelBufferMathUtilities::Multiply(*ScaleBuffer, *Scale));
+			const int32 Num = Points->Num();
+
+			// Position transform
+			{
+				const FVoxelDoubleVectorBuffer* PositionBuffer = Points->Find<FVoxelDoubleVectorBuffer>(FVoxelPointAttributes::Position);
+				if (!PositionBuffer)
+				{
+					VOXEL_MESSAGE(Error, "{0}: Missing attribute Position", this);
+					return;
+				}
+
+				const FVoxelQuaternionBuffer* RotationBuffer = Points->Find<FVoxelQuaternionBuffer>(FVoxelPointAttributes::Rotation);
+
+				const FVoxelPointRandom RandomX(Seed, STATIC_HASH("TransformPoints_OffsetX"));
+				const FVoxelPointRandom RandomY(Seed, STATIC_HASH("TransformPoints_OffsetY"));
+				const FVoxelPointRandom RandomZ(Seed, STATIC_HASH("TransformPoints_OffsetZ"));
+
+				FVoxelDoubleVectorBuffer NewPositionBuffer;
+				NewPositionBuffer.Allocate(Num);
+
+				for (int32 Index = 0; Index < Num; Index++)
+				{
+					const FVoxelPointId PointId = (*IdBuffer)[Index];
+					const FVector3f OffsetMinValue = (*OffsetMin)[Index];
+					const FVector3f OffsetMaxValue = (*OffsetMax)[Index];
+
+					FVector3d Offset;
+					Offset.X = FMath::Lerp(static_cast<double>(OffsetMinValue.X), static_cast<double>(OffsetMaxValue.X), static_cast<double>(RandomX.GetFraction(PointId)));
+					Offset.Y = FMath::Lerp(static_cast<double>(OffsetMinValue.Y), static_cast<double>(OffsetMaxValue.Y), static_cast<double>(RandomY.GetFraction(PointId)));
+					Offset.Z = FMath::Lerp(static_cast<double>(OffsetMinValue.Z), static_cast<double>(OffsetMaxValue.Z), static_cast<double>(RandomZ.GetFraction(PointId)));
+
+					if (RotationBuffer &&
+						(*OffsetInLocalSpace)[Index])
+					{
+						const FQuat4f PointRotation = (*RotationBuffer)[Index];
+						Offset = FQuat(PointRotation).RotateVector(Offset);
+					}
+
+					NewPositionBuffer.Set(Index, (*PositionBuffer)[Index] + Offset);
+				}
+
+				NewPoints->Add(FVoxelPointAttributes::Position, MakeSharedCopy(MoveTemp(NewPositionBuffer)));
+			}
+
+			// Rotation transform
+			{
+				const FVoxelQuaternionBuffer* RotationBuffer = Points->Find<FVoxelQuaternionBuffer>(FVoxelPointAttributes::Rotation);
+
+				const FVoxelPointRandom RandomPitch(Seed, STATIC_HASH("TransformPoints_Pitch"));
+				const FVoxelPointRandom RandomYaw(Seed, STATIC_HASH("TransformPoints_Yaw"));
+				const FVoxelPointRandom RandomRoll(Seed, STATIC_HASH("TransformPoints_Roll"));
+
+				FVoxelQuaternionBuffer NewRotationBuffer;
+				NewRotationBuffer.Allocate(Num);
+
+				for (int32 Index = 0; Index < Num; Index++)
+				{
+					const FVoxelPointId PointId = (*IdBuffer)[Index];
+					const FVoxelFloatRange PitchRange = (*Pitch)[Index];
+					const FVoxelFloatRange YawRange = (*Yaw)[Index];
+					const FVoxelFloatRange RollRange = (*Roll)[Index];
+
+					const float RandomPitchValue = FMath::Lerp(PitchRange.Min, PitchRange.Max, RandomPitch.GetFraction(PointId));
+					const float RandomYawValue = FMath::Lerp(YawRange.Min, YawRange.Max, RandomYaw.GetFraction(PointId));
+					const float RandomRollValue = FMath::Lerp(RollRange.Min, RollRange.Max, RandomRoll.GetFraction(PointId));
+
+					const FQuat4f RandomQuat = FQuat4f(FRotator(RandomPitchValue, RandomYawValue, RandomRollValue).Quaternion());
+
+					if ((*AbsoluteRotation)[Index] ||
+						!RotationBuffer)
+					{
+						NewRotationBuffer.Set(Index, RandomQuat);
+					}
+					else
+					{
+						NewRotationBuffer.Set(Index, (*RotationBuffer)[Index] * RandomQuat);
+					}
+				}
+
+				NewPoints->Add(FVoxelPointAttributes::Rotation, MakeSharedCopy(MoveTemp(NewRotationBuffer)));
+			}
+
+			// Scale transform
+			{
+				const FVoxelVectorBuffer* ScaleBuffer = Points->Find<FVoxelVectorBuffer>(FVoxelPointAttributes::Scale);
+
+				const FVoxelPointRandom RandomScaleX(Seed, STATIC_HASH("TransformPoints_ScaleX"));
+				const FVoxelPointRandom RandomScaleY(Seed, STATIC_HASH("TransformPoints_ScaleY"));
+				const FVoxelPointRandom RandomScaleZ(Seed, STATIC_HASH("TransformPoints_ScaleZ"));
+
+				FVoxelVectorBuffer NewScaleBuffer;
+				NewScaleBuffer.Allocate(Num);
+
+				for (int32 Index = 0; Index < Num; Index++)
+				{
+					const FVoxelPointId PointId = (*IdBuffer)[Index];
+					const FVector3f ScaleMinValue = (*ScaleMin)[Index];
+					const FVector3f ScaleMaxValue = (*ScaleMax)[Index];
+
+					FVector3f RandomScale;
+					if ((*UniformScale)[Index])
+					{
+						const float UniformValue = FMath::Lerp(ScaleMinValue.X, ScaleMaxValue.X, RandomScaleX.GetFraction(PointId));
+						RandomScale = FVector3f(UniformValue);
+					}
+					else
+					{
+						RandomScale.X = FMath::Lerp(ScaleMinValue.X, ScaleMaxValue.X, RandomScaleX.GetFraction(PointId));
+						RandomScale.Y = FMath::Lerp(ScaleMinValue.Y, ScaleMaxValue.Y, RandomScaleY.GetFraction(PointId));
+						RandomScale.Z = FMath::Lerp(ScaleMinValue.Z, ScaleMaxValue.Z, RandomScaleZ.GetFraction(PointId));
+					}
+
+					if ((*AbsoluteScale)[Index] ||
+						!ScaleBuffer)
+					{
+						NewScaleBuffer.Set(Index, RandomScale);
+					}
+					else
+					{
+						NewScaleBuffer.Set(Index, (*ScaleBuffer)[Index] * RandomScale);
+					}
+				}
+
+				NewPoints->Add(FVoxelPointAttributes::Scale, MakeSharedCopy(MoveTemp(NewScaleBuffer)));
+			}
+
 			OutPin.Set(Query, NewPoints);
 		};
+	};
 	};
 }

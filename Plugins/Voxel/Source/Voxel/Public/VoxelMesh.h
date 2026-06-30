@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -6,6 +6,7 @@
 #include "VoxelMetadataRef.h"
 #include "Surface/VoxelSurfaceTypeBlend.h"
 
+class FDistanceFieldVolumeData;
 struct FVoxelSubsystem;
 struct FVoxelChunkNeighborInfo;
 
@@ -26,6 +27,8 @@ public:
 	const TVoxelArray<FVoxelOctahedron> Normals;
 	const TVoxelArray<FVoxelSurfaceTypeBlend> SurfaceTypes;
 
+	TSharedPtr<FDistanceFieldVolumeData> DistanceFieldsData;
+
 	struct FCell
 	{
 		int16 X = 0;
@@ -40,10 +43,6 @@ public:
 		TVoxelArray<FVector3f> DisplacedVertices;
 	};
 	const TVoxelArray<FLOD> LODs;
-
-	int32 DistancesOffset = 0;
-	int32 DistancesSize = 0;
-	TVoxelArray<float> Distances;
 
 	VOXEL_ALLOCATED_SIZE_TRACKER(STAT_VoxelMeshMemory);
 

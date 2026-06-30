@@ -1,9 +1,10 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
 #include "VoxelMinimal.h"
 #include "VoxelStackLayer.h"
+#include "VoxelStampBehavior.h"
 #include "VoxelHeightBlendMode.h"
 #include "VoxelVolumeBlendMode.h"
 #include "VoxelFunctionLibrary.h"
@@ -107,4 +108,14 @@ public:
 		FVoxelFloatBuffer& Distance,
 		FVoxelFloatBuffer& Value,
 		bool& bIsValid) const;
+
+public:
+	// Returns true if there are any stamps affecting the given layer within the bounds of the provided positions
+	// Use this for per-chunk early-out optimizations (e.g., skip expensive gradient computation if no stamps exist)
+	// BehaviorMask is a bitmask; if "Affect All" is selected, any stamp will qualify, not only stamps which Affect All
+	UFUNCTION(Category = "Stamp")
+	bool HasStampsInBounds(
+		UPARAM(DisplayName = "Position (World Space)") const FVoxelDoubleVectorBuffer& Position,
+		const FVoxelWeakStackLayer& Layer,
+		EVoxelStampBehavior BehaviorMask = EVoxelStampBehavior::AffectAll) const;
 };

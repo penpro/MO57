@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -10,6 +10,7 @@ class FVoxelState;
 class FVoxelLayers;
 class FVoxelRuntime;
 class FVoxelSurfaceTypeTable;
+class FVoxelInvalidationQueue;
 struct IVoxelSubsystemGCObject;
 
 USTRUCT()
@@ -38,6 +39,7 @@ public:
 	FVoxelLayers& GetLayers() const;
 	FVoxelSurfaceTypeTable& GetSurfaceTypeTable() const;
 	FVoxelTaskContext& GetTaskContext() const;
+	FVoxelInvalidationQueue& GetInvalidationQueue() const;
 	TSharedRef<FVoxelDependencyTracker> Finalize(FVoxelDependencyCollector& DependencyCollector) const;
 	FVoxelSubsystem& GetSubsystem(const UScriptStruct* Struct) const;
 	void AddGCObject(const TSharedRef<IVoxelSubsystemGCObject>& Object) const;

@@ -1,7 +1,7 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "Surface/VoxelSmartSurfaceType.h"
-#include "Surface/VoxelSurfaceTypeGraph.h"
+#include "Surface/VoxelSmartSurfaceTypeGraph.h"
 #include "Surface/VoxelOutputNode_OutputSurface.h"
 #include "VoxelDependency.h"
 #include "VoxelGraphTracker.h"
@@ -13,7 +13,7 @@ DEFINE_VOXEL_FACTORY(UVoxelSmartSurfaceType);
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
 
-bool UVoxelSmartSurfaceType::ShouldForceEnableOverride(const FGuid& Guid) const
+bool UVoxelSmartSurfaceType::ShouldForceEnableOverride(const FGuid& ParameterGuid) const
 {
 	return true;
 }

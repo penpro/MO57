@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelFunctionLibrary.h"
 #include "VoxelBuffer.h"
@@ -6,28 +6,65 @@
 #include "VoxelNodeStats.h"
 #include "Nodes/VoxelNode_UFunction.h"
 
-TVoxelMap<const UFunction*, UVoxelFunctionLibrary::FVoxelNativeFuncPtr> FunctionToNativeCall;
+static TVoxelMap<const UFunction*, FVoxelFunctionLibraryRegistry::FNativeFuncPtr> GVoxelFunctionToNativeCall;
+static FVoxelFunctionRegistration* GVoxelFirstPendingFunctionRegistration = nullptr;
 
-void UVoxelFunctionLibrary::RegisterFunction(const UClass* Class, const FName FunctionName, const FVoxelNativeFuncPtr NativeFunction)
+FVoxelFunctionRegistration::FVoxelFunctionRegistration(
+	const FVoxelFunctionLibraryRegistry::FGetClassFuncPtr GetClassPtr,
+	const TCHAR* Name,
+	const FVoxelFunctionLibraryRegistry::FNativeFuncPtr NativeFunction)
+	: GetClassPtr(GetClassPtr)
+	, Name(Name)
+	, NativeFunction(NativeFunction)
+	, Next(GVoxelFirstPendingFunctionRegistration)
 {
-	if (!ensure(Class))
-	{
-		return;
-	}
-
-	const UFunction* Function = Class->FindFunctionByName(FunctionName);
-	if (!ensure(Function))
-	{
-		return;
-	}
-
-	FunctionToNativeCall.Add_EnsureNew(Function, NativeFunction);
+	GVoxelFirstPendingFunctionRegistration = this;
 }
 
-UVoxelFunctionLibrary::FVoxelNativeFuncPtr UVoxelFunctionLibrary::FindFunction(const UFunction& Function)
+FVoxelFunctionLibraryRegistry::FNativeFuncPtr FVoxelFunctionLibraryRegistry::FindFunction(const UFunction& Function)
 {
-	return FunctionToNativeCall.FindRef(&Function);
+	for (const FVoxelFunctionRegistration* Registration = GVoxelFirstPendingFunctionRegistration; Registration; Registration = Registration->Next)
+	{
+		const UClass* Class = Registration->GetClassPtr();
+		if (!ensure(Class))
+		{
+			continue;
+		}
+
+		const UFunction* PendingFunction = Class->FindFunctionByName(Registration->Name);
+		if (!ensure(PendingFunction))
+		{
+			continue;
+		}
+
+		GVoxelFunctionToNativeCall.Add_EnsureNew(PendingFunction, Registration->NativeFunction);
+	}
+	GVoxelFirstPendingFunctionRegistration = nullptr;
+
+	return GVoxelFunctionToNativeCall.FindRef(&Function);
 }
+
+#if !UE_BUILD_SHIPPING
+VOXEL_RUN_ON_STARTUP_GAME()
+{
+	int32 NumMissing = 0;
+	for (const UClass* Class : GetDerivedClasses<UVoxelFunctionLibrary>())
+	{
+		for (TFieldIterator<UFunction> It(Class, EFieldIteratorFlags::ExcludeSuper); It; ++It)
+		{
+			const UFunction* Function = *It;
+			if (FVoxelFunctionLibraryRegistry::FindFunction(*Function))
+			{
+				continue;
+			}
+
+			LOG_VOXEL(Error, "Missing VOXEL_REGISTER_FUNCTION(%s, %s); in %s.cpp", *(FString(Class->GetPrefixCPP()) + Class->GetName()), *Function->GetName(), *Class->GetName());
+			NumMissing++;
+		}
+	}
+	ensureMsgf(NumMissing == 0, TEXT("%d UVoxelFunctionLibrary UFUNCTIONs are missing VOXEL_REGISTER_FUNCTION (see log)"), NumMissing);
+}
+#endif
 
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
@@ -70,7 +107,7 @@ FVoxelPinType UVoxelFunctionLibrary::MakeType(const FProperty& Property)
 
 UVoxelFunctionLibrary::FCachedFunction::FCachedFunction(const UFunction& Function)
 	: Function(Function)
-	, NativeCall(FindFunction(Function))
+	, NativeCall(FVoxelFunctionLibraryRegistry::FindFunction(Function))
 {
 }
 

@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "StaticMesh/VoxelMeshStamp.h"
 #include "StaticMesh/VoxelStaticMesh.h"

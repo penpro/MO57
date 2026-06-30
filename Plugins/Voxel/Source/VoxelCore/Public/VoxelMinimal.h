@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #ifdef CANNOT_INCLUDE_VOXEL_MINIMAL
 #error "VoxelMinimal.h recursively included"
@@ -44,7 +44,6 @@
 #include "VoxelMinimal/VoxelBox.h"
 #include "VoxelMinimal/VoxelBox2D.h"
 #include "VoxelMinimal/VoxelChunkedRef.h"
-#include "VoxelMinimal/VoxelColor3.h"
 #include "VoxelMinimal/VoxelCoreCommands.h"
 #include "VoxelMinimal/VoxelCriticalSection.h"
 #include "VoxelMinimal/VoxelSharedCriticalSection.h"
@@ -59,7 +58,6 @@
 #include "VoxelMinimal/VoxelFuture.h"
 #include "VoxelMinimal/VoxelGlobalShader.h"
 #include "VoxelMinimal/VoxelGuid.h"
-#include "VoxelMinimal/VoxelHash.h"
 #include "VoxelMinimal/VoxelInstancedStruct.h"
 #include "VoxelMinimal/VoxelIntBox.h"
 #include "VoxelMinimal/VoxelIntBox2D.h"
@@ -83,11 +81,11 @@
 #include "VoxelMinimal/VoxelSharedPtr.h"
 #include "VoxelMinimal/VoxelSingleton.h"
 #include "VoxelMinimal/VoxelStructView.h"
-#include "VoxelMinimal/VoxelSuccess.h"
 #include "VoxelMinimal/VoxelTicker.h"
 #include "VoxelMinimal/VoxelUniqueFunction.h"
 #include "VoxelMinimal/VoxelVirtualStruct.h"
 #include "VoxelMinimal/VoxelWeakPropertyPtr.h"
+#include "VoxelMinimal/VoxelWorldSpace.h"
 #include "VoxelMinimal/VoxelWorldSubsystem.h"
 
 #include "VoxelMinimal/Containers/VoxelArray.h"
@@ -112,6 +110,7 @@
 #include "VoxelMinimal/Utilities/VoxelIntPointUtilities.h"
 #include "VoxelMinimal/Utilities/VoxelIntVectorUtilities.h"
 #include "VoxelMinimal/Utilities/VoxelLambdaUtilities.h"
+#include "VoxelMinimal/Utilities/VoxelMapUtilities.h"
 #include "VoxelMinimal/Utilities/VoxelMaterialUtilities.h"
 #include "VoxelMinimal/Utilities/VoxelMathUtilities.h"
 #include "VoxelMinimal/Utilities/VoxelObjectUtilities.h"

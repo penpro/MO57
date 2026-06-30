@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -192,7 +192,7 @@ public:
 	FVoxelSurfaceTypeBlendLayer GetTopLayer() const;
 	TVoxelArray<FVoxelSurfaceTypeBlendLayer> GetLayersSortedByWeight() const;
 
-	bool Equals(
+	bool Equals_Slow(
 		const FVoxelSurfaceTypeBlend& Other,
 		float Tolerance = KINDA_SMALL_NUMBER) const;
 

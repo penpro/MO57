@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -75,12 +75,19 @@ public:
 	{
 		return PrivateOwner;
 	}
+	// World origin rebasing: PCG points are in the current world, but the voxel layers are queried in
+	// absolute space. Add this to query positions, and subtract it from positions written back to points.
+	FORCEINLINE const FVector& GetWorldOriginOffset() const
+	{
+		return PrivateOriginOffset;
+	}
 
 public:
 	virtual FVoxelFuture Run() const = 0;
 
 private:
 	FPCGContext* PrivateOwner = nullptr;
+	FVector PrivateOriginOffset = FVector::ZeroVector;
 	TVoxelOptional<FVoxelFuture> PrivateFuture;
 	TSharedPtr<FVoxelDependencyCollector> PrivateDependencyCollector;
 	TSharedPtr<FVoxelInvalidationQueue> PrivateInvalidationQueue;

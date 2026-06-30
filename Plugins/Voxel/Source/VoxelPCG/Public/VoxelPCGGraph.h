@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -6,7 +6,7 @@
 #include "VoxelGraph.h"
 #include "VoxelPCGGraph.generated.h"
 
-UCLASS(BlueprintType, meta = (DisplayName = "Voxel PCG Graph", AssetSubMenu = "Graph"))
+UCLASS(BlueprintType, meta = (DisplayName = "Voxel PCG Graph", AssetSubMenu = "Scatter"))
 class VOXELPCG_API UVoxelPCGGraph : public UVoxelGraph
 {
 	GENERATED_BODY()

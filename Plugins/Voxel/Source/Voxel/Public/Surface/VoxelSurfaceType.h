@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -8,6 +8,10 @@
 class UVoxelSurfaceTypeAsset;
 class UVoxelSmartSurfaceType;
 class UVoxelSurfaceTypeInterface;
+struct FVoxelSurfaceTypeImpl;
+
+template<typename T>
+struct TVoxelSurfaceTypeImpl;
 
 #if !UE_BUILD_SHIPPING
 extern VOXEL_API TVoxelArray<FVoxelObjectPtr> GVoxelDebugSurfaceTypes;
@@ -29,6 +33,11 @@ public:
 	FVoxelSurfaceType() = default;
 	explicit FVoxelSurfaceType(UVoxelSurfaceTypeInterface* SurfaceTypeInterface);
 
+private:
+	TVoxelSurfaceTypeImpl<UVoxelSurfaceTypeAsset>& GetSurfaceTypeAssetImpl() const;
+	TVoxelSurfaceTypeImpl<UVoxelSmartSurfaceType>& GetSmartSurfaceTypeImpl() const;
+
+public:
 	TVoxelObjectPtr<UVoxelSurfaceTypeAsset> GetSurfaceTypeAsset() const;
 	TVoxelObjectPtr<UVoxelSmartSurfaceType> GetSmartSurfaceType() const;
 	TVoxelObjectPtr<UVoxelSurfaceTypeInterface> GetSurfaceTypeInterface() const;
@@ -36,8 +45,20 @@ public:
 	FName GetFName() const;
 	FString GetName() const;
 	FLinearColor GetDebugColor() const;
+	FGuid GetGuid() const;
 
+	friend void operator<<(FArchive& Ar, FVoxelSurfaceType& SurfaceType);
+
+public:
+	void UpdateFromSourceObject() const;
+
+public:
 	static void ForeachSurfaceType(TFunctionRef<void(FVoxelSurfaceType)> Lambda);
+	static bool FindFromGuid(
+		FGuid Guid,
+		FVoxelSurfaceType& OutSurfaceType);
+
+	static const FName GuidTagName;
 
 public:
 	FORCEINLINE bool IsNull() const

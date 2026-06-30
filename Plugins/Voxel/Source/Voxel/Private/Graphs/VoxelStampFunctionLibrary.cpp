@@ -1,11 +1,16 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "Graphs/VoxelStampFunctionLibrary.h"
 #include "Graphs/VoxelStampGraphParameters.h"
 #include "Surface/VoxelSurfaceTypeBlendUtilities.h"
 #include "VoxelQuery.h"
 #include "VoxelLayers.h"
+#include "VoxelStampTree.h"
+#include "VoxelHeightLayer.h"
+#include "VoxelVolumeLayer.h"
 #include "VoxelGraphMigration.h"
+#include "VoxelGraphPositionParameter.h"
+#include "Graphs/VoxelPreviewStampDataNodes.h"
 
 VOXEL_RUN_ON_STARTUP_GAME()
 {
@@ -23,6 +28,23 @@ VOXEL_RUN_ON_STARTUP_GAME()
 	REGISTER_VOXEL_FUNCTION_MIGRATION("QueryHeightMetadata", UVoxelStampFunctionLibrary, QueryHeightMetadata);
 	REGISTER_VOXEL_FUNCTION_MIGRATION("QueryVolumeMetadata", UVoxelStampFunctionLibrary, QueryVolumeMetadata);
 }
+
+VOXEL_REGISTER_FUNCTION(UVoxelStampFunctionLibrary, QueryVolumeSurfaceType);
+VOXEL_REGISTER_FUNCTION(UVoxelStampFunctionLibrary, QueryVolumeMetadata);
+VOXEL_REGISTER_FUNCTION(UVoxelStampFunctionLibrary, QueryHeightSurfaceType);
+VOXEL_REGISTER_FUNCTION(UVoxelStampFunctionLibrary, QueryHeightMetadata);
+VOXEL_REGISTER_FUNCTION(UVoxelStampFunctionLibrary, QueryHeight);
+VOXEL_REGISTER_FUNCTION(UVoxelStampFunctionLibrary, QueryDistance);
+VOXEL_REGISTER_FUNCTION(UVoxelStampFunctionLibrary, IsVolumeOverrideBlendMode);
+VOXEL_REGISTER_FUNCTION(UVoxelStampFunctionLibrary, IsHeightOverrideBlendMode);
+VOXEL_REGISTER_FUNCTION(UVoxelStampFunctionLibrary, HasStampsInBounds);
+VOXEL_REGISTER_FUNCTION(UVoxelStampFunctionLibrary, GetVolumeSmoothness);
+VOXEL_REGISTER_FUNCTION(UVoxelStampFunctionLibrary, GetVolumeBlendMode);
+VOXEL_REGISTER_FUNCTION(UVoxelStampFunctionLibrary, GetSurfaceTypeWeight);
+VOXEL_REGISTER_FUNCTION(UVoxelStampFunctionLibrary, GetStampSeed);
+VOXEL_REGISTER_FUNCTION(UVoxelStampFunctionLibrary, GetHeightSmoothness);
+VOXEL_REGISTER_FUNCTION(UVoxelStampFunctionLibrary, GetHeightBlendMode);
+VOXEL_REGISTER_FUNCTION(UVoxelStampFunctionLibrary, BlendSurfaceTypes);
 
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
@@ -76,14 +98,13 @@ FVoxelFloatBuffer UVoxelStampFunctionLibrary::GetSurfaceTypeWeight(
 
 FVoxelSeed UVoxelStampFunctionLibrary::GetStampSeed() const
 {
-	if (Query.IsPreview())
-	{
-		return {};
-	}
-
 	const FVoxelGraphParameters::FStampSeed* Parameter = Query->FindParameter<FVoxelGraphParameters::FStampSeed>();
-	if (!ensure(Parameter))
+	if (!Parameter)
 	{
+		if (Query.IsPreview())
+		{
+			VOXEL_MESSAGE(Error, "{0}: No Volume or Height Preview Data node in Editor Graph found", this);
+		}
 		return {};
 	}
 
@@ -96,14 +117,13 @@ FVoxelSeed UVoxelStampFunctionLibrary::GetStampSeed() const
 
 float UVoxelStampFunctionLibrary::GetHeightSmoothness() const
 {
-	if (Query.IsPreview())
-	{
-		return 0.f;
-	}
-
 	const FVoxelGraphParameters::FHeightStamp* Parameter = Query->FindParameter<FVoxelGraphParameters::FHeightStamp>();
-	if (!ensure(Parameter))
+	if (!Parameter)
 	{
+		if (Query.IsPreview())
+		{
+			VOXEL_MESSAGE(Error, "{0}: No Height Preview Data node in Editor Graph found", this);
+		}
 		return 0.f;
 	}
 
@@ -112,14 +132,13 @@ float UVoxelStampFunctionLibrary::GetHeightSmoothness() const
 
 EVoxelHeightBlendMode UVoxelStampFunctionLibrary::GetHeightBlendMode() const
 {
-	if (Query.IsPreview())
-	{
-		return {};
-	}
-
 	const FVoxelGraphParameters::FHeightStamp* Parameter = Query->FindParameter<FVoxelGraphParameters::FHeightStamp>();
-	if (!ensure(Parameter))
+	if (!Parameter)
 	{
+		if (Query.IsPreview())
+		{
+			VOXEL_MESSAGE(Error, "{0}: No Height Preview Data node in Editor Graph found", this);
+		}
 		return {};
 	}
 
@@ -137,14 +156,13 @@ bool UVoxelStampFunctionLibrary::IsHeightOverrideBlendMode() const
 
 float UVoxelStampFunctionLibrary::GetVolumeSmoothness() const
 {
-	if (Query.IsPreview())
-	{
-		return 0.f;
-	}
-
 	const FVoxelGraphParameters::FVolumeStamp* Parameter = Query->FindParameter<FVoxelGraphParameters::FVolumeStamp>();
-	if (!ensure(Parameter))
+	if (!Parameter)
 	{
+		if (Query.IsPreview())
+		{
+			VOXEL_MESSAGE(Error, "{0}: No Volume Preview Data node in Editor Graph found", this);
+		}
 		return 0.f;
 	}
 
@@ -153,14 +171,13 @@ float UVoxelStampFunctionLibrary::GetVolumeSmoothness() const
 
 EVoxelVolumeBlendMode UVoxelStampFunctionLibrary::GetVolumeBlendMode() const
 {
-	if (Query.IsPreview())
-	{
-		return {};
-	}
-
 	const FVoxelGraphParameters::FVolumeStamp* Parameter = Query->FindParameter<FVoxelGraphParameters::FVolumeStamp>();
-	if (!ensure(Parameter))
+	if (!Parameter)
 	{
+		if (Query.IsPreview())
+		{
+			VOXEL_MESSAGE(Error, "{0}: No Volume Preview Data node in Editor Graph found", this);
+		}
 		return {};
 	}
 
@@ -184,7 +201,18 @@ void UVoxelStampFunctionLibrary::QueryHeight(
 {
 	if (Query.IsPreview())
 	{
-		Height = 0.f;
+		const FVoxelGraphParameters::FHeightStampPreviewData* Parameter = Query->FindParameter<FVoxelGraphParameters::FHeightStampPreviewData>();
+		if (!Parameter)
+		{
+			VOXEL_MESSAGE(Error, "{0}: No Height Preview Data node in Editor Graph found", this);
+			Height = 0.f;
+			bIsValid = true;
+			return;
+		}
+
+		FVoxelGraphQueryImpl& NewQuery = Query->CloneParameters();
+		NewQuery.AddParameter<FVoxelGraphParameters::FPosition2D>().SetWorldPosition(Position);
+		Height = *Parameter->ValuePin.GetSynchronous(Query.GetImpl());
 		bIsValid = true;
 		return;
 	}
@@ -216,7 +244,18 @@ void UVoxelStampFunctionLibrary::QueryDistance(
 {
 	if (Query.IsPreview())
 	{
-		Distance = 1e9f;
+		const FVoxelGraphParameters::FVolumeStampPreviewData* Parameter = Query->FindParameter<FVoxelGraphParameters::FVolumeStampPreviewData>();
+		if (!Parameter)
+		{
+			VOXEL_MESSAGE(Error, "{0}: No Volume Preview Data node in Editor Graph found", this);
+			Distance = 1e9f;
+			bIsValid = true;
+			return;
+		}
+
+		FVoxelGraphQueryImpl& NewQuery = Query->CloneParameters();
+		NewQuery.AddParameter<FVoxelGraphParameters::FPosition3D>().SetWorldPosition(Position);
+		Distance = *Parameter->ValuePin.GetSynchronous(Query.GetImpl());
 		bIsValid = true;
 		return;
 	}
@@ -253,7 +292,19 @@ void UVoxelStampFunctionLibrary::QueryHeightSurfaceType(
 {
 	if (Query.IsPreview())
 	{
-		Height = 0.f;
+		const FVoxelGraphParameters::FHeightStampPreviewData* Parameter = Query->FindParameter<FVoxelGraphParameters::FHeightStampPreviewData>();
+		if (!Parameter)
+		{
+			VOXEL_MESSAGE(Error, "{0}: No Height Preview Data node in Editor Graph found", this);
+			Height = 0.f;
+			bIsValid = true;
+			return;
+		}
+
+		FVoxelGraphQueryImpl& NewQuery = Query->CloneParameters();
+		NewQuery.AddParameter<FVoxelGraphParameters::FPosition2D>().SetWorldPosition(Position);
+		Height = *Parameter->ValuePin.GetSynchronous(Query.GetImpl());
+		SurfaceType = *Parameter->SurfaceTypePin.GetSynchronous(Query.GetImpl());
 		bIsValid = true;
 		return;
 	}
@@ -295,7 +346,19 @@ void UVoxelStampFunctionLibrary::QueryVolumeSurfaceType(
 {
 	if (Query.IsPreview())
 	{
-		Distance = 1e9f;
+		const FVoxelGraphParameters::FVolumeStampPreviewData* Parameter = Query->FindParameter<FVoxelGraphParameters::FVolumeStampPreviewData>();
+		if (!Parameter)
+		{
+			VOXEL_MESSAGE(Error, "{0}: No Volume Preview Data node in Editor Graph found", this);
+			Distance = 1e9f;
+			bIsValid = true;
+			return;
+		}
+
+		FVoxelGraphQueryImpl& NewQuery = Query->CloneParameters();
+		NewQuery.AddParameter<FVoxelGraphParameters::FPosition3D>().SetWorldPosition(Position);
+		Distance = *Parameter->ValuePin.GetSynchronous(Query.GetImpl());
+		SurfaceType = *Parameter->SurfaceTypePin.GetSynchronous(Query.GetImpl());
 		bIsValid = true;
 		return;
 	}
@@ -342,7 +405,35 @@ void UVoxelStampFunctionLibrary::QueryHeightMetadata(
 {
 	if (Query.IsPreview())
 	{
-		Height = 0.f;
+		const FVoxelGraphParameters::FHeightStampPreviewData* Parameter = Query->FindParameter<FVoxelGraphParameters::FHeightStampPreviewData>();
+		if (!Parameter)
+		{
+			VOXEL_MESSAGE(Error, "{0}: No Height Preview Data node in Editor Graph found", this);
+			Height = 1e9f;
+			bIsValid = true;
+			return;
+		}
+
+		FVoxelGraphQueryImpl& NewQuery = Query->CloneParameters();
+		NewQuery.AddParameter<FVoxelGraphParameters::FPosition2D>().SetWorldPosition(Position);
+		Height = *Parameter->ValuePin.GetSynchronous(Query.GetImpl());
+
+		bool bFound = false;
+		for (const auto& It : Parameter->MetadataPins)
+		{
+			if (It.Key == Metadata)
+			{
+				Value = It.Value.GetSynchronous(Query.GetImpl())->AsChecked<FVoxelFloatBuffer>();
+				bFound = true;
+				break;
+			}
+		}
+
+		if (!bFound)
+		{
+			Value = Metadata.MakeDefaultBuffer(Position.Num())->AsChecked<FVoxelFloatBuffer>();
+		}
+
 		bIsValid = true;
 		return;
 	}
@@ -394,7 +485,35 @@ void UVoxelStampFunctionLibrary::QueryVolumeMetadata(
 {
 	if (Query.IsPreview())
 	{
-		Distance = 1e9f;
+		const FVoxelGraphParameters::FVolumeStampPreviewData* Parameter = Query->FindParameter<FVoxelGraphParameters::FVolumeStampPreviewData>();
+		if (!Parameter)
+		{
+			VOXEL_MESSAGE(Error, "{0}: No Volume Preview Data node in Editor Graph found", this);
+			Distance = 1e9f;
+			bIsValid = true;
+			return;
+		}
+
+		FVoxelGraphQueryImpl& NewQuery = Query->CloneParameters();
+		NewQuery.AddParameter<FVoxelGraphParameters::FPosition3D>().SetWorldPosition(Position);
+		Distance = *Parameter->ValuePin.GetSynchronous(Query.GetImpl());
+
+		bool bFound = false;
+		for (const auto& It : Parameter->MetadataPins)
+		{
+			if (It.Key == Metadata)
+			{
+				Value = It.Value.GetSynchronous(Query.GetImpl())->AsChecked<FVoxelFloatBuffer>();
+				bFound = true;
+				break;
+			}
+		}
+
+		if (!bFound)
+		{
+			Value = Metadata.MakeDefaultBuffer(Position.Num())->AsChecked<FVoxelFloatBuffer>();
+		}
+
 		bIsValid = true;
 		return;
 	}
@@ -434,4 +553,88 @@ void UVoxelStampFunctionLibrary::QueryVolumeMetadata(
 		MetadataToBuffer);
 
 	bIsValid = true;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+
+bool UVoxelStampFunctionLibrary::HasStampsInBounds(
+	const FVoxelDoubleVectorBuffer& Position,
+	const FVoxelWeakStackLayer& Layer,
+	const EVoxelStampBehavior BehaviorMask) const
+{
+	// In preview mode, assume stamps exist for safety
+	if (Query.IsPreview())
+	{
+		return true;
+	}
+
+	const FVoxelGraphParameters::FQuery* Parameter = Query->FindParameter<FVoxelGraphParameters::FQuery>();
+	if (!Parameter)
+	{
+		VOXEL_MESSAGE(Error, "{0}: Cannot call here", this);
+		return true;
+	}
+	const FVoxelQuery& VoxelQuery = Parameter->Query;
+
+	if (!VoxelQuery.Layers.HasLayer(Layer, Query->Context.DependencyCollector))
+	{
+		return false;
+	}
+
+	// Compute bounds from positions
+	const FVoxelBox Bounds = FVoxelBox::FromPositions(
+		Position.X.View(),
+		Position.Y.View(),
+		Position.Z.View());
+
+	if (!Bounds.IsValid())
+	{
+		return false;
+	}
+
+	// Query only this specific layer's tree, not previous layers
+	bool bHasStamps = false;
+
+	if (Layer.Type == EVoxelLayerType::Height)
+	{
+		const TSharedPtr<const FVoxelHeightLayer> HeightLayer = VoxelQuery.Layers.FindHeightLayer(Layer, Query->Context.DependencyCollector);
+		if (!HeightLayer)
+		{
+			return false;
+		}
+
+		HeightLayer->GetTree(VoxelQuery.LOD).ForeachElement_Unsorted(
+			Query->Context.DependencyCollector,
+			Bounds,
+			BehaviorMask,
+			[&](const FVoxelStampTreeElement& Element)
+			{
+				bHasStamps = true;
+				return EVoxelIterate::Stop;
+			});
+	}
+	else
+	{
+		check(Layer.Type == EVoxelLayerType::Volume);
+
+		const TSharedPtr<const FVoxelVolumeLayer> VolumeLayer = VoxelQuery.Layers.FindVolumeLayer(Layer, Query->Context.DependencyCollector);
+		if (!VolumeLayer)
+		{
+			return false;
+		}
+
+		VolumeLayer->GetTree(VoxelQuery.LOD).ForeachElement_Unsorted(
+			Query->Context.DependencyCollector,
+			Bounds,
+			BehaviorMask,
+			[&](const FVoxelStampTreeElement& Element)
+			{
+				bHasStamps = true;
+				return EVoxelIterate::Stop;
+			});
+	}
+
+	return bHasStamps;
 }

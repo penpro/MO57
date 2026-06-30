@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -25,23 +25,6 @@ struct FVoxelPlaceStampsItem
 
 	void Setup()
 	{
-		if (Asset.GetClass()->IsChildOf<UScriptStruct>())
-		{
-			ActorFactory = UActorFactory_VoxelPlaceStampActor::StaticClass()->GetDefaultObject<UActorFactory>();
-		}
-		else
-		{
-			if (UActorFactory* Factory = GEditor->FindActorFactoryByClass(Asset.GetClass()))
-			{
-				ActorFactory = Factory;
-			}
-			else
-			{
-				UObject* ClassObject = Asset.GetClass()->GetDefaultObject();
-				ActorFactory = FActorFactoryAssetProxy::GetFactoryForAssetObject(ClassObject);
-			}
-		}
-
 		if (GetDescription.IsBound())
 		{
 			Description = GetDescription.Execute();
@@ -51,5 +34,37 @@ struct FVoxelPlaceStampsItem
 		{
 			UserTags = GetTags.Execute();
 		}
+
+		if (ActorFactory)
+		{
+			return;
+		}
+
+		if (Asset.GetClass()->IsChildOf<UScriptStruct>())
+		{
+			ActorFactory = UActorFactory_VoxelPlaceStampActor::StaticClass()->GetDefaultObject<UActorFactory>();
+			return;
+		}
+
+		const UClass* TargetClass = Cast<UClass>(Asset.GetAsset());
+		if (!TargetClass)
+		{
+			TargetClass = Asset.GetClass();
+		}
+
+		ActorFactory = GEditor->FindActorFactoryByClass(TargetClass);
+		if (ActorFactory)
+		{
+			return;
+		}
+
+		ActorFactory = GEditor->FindActorFactoryForActorClass(TargetClass);
+		if (ActorFactory)
+		{
+			return;
+		}
+
+		UObject* ClassObject = TargetClass->GetDefaultObject();
+		ActorFactory = FActorFactoryAssetProxy::GetFactoryForAssetObject(ClassObject);
 	}
 };

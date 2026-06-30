@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -39,6 +39,7 @@ public:
 	//~ Begin UVoxelPCGSettings Interface
 	virtual TSharedPtr<FVoxelPCGOutput> CreateOutput(FPCGContext& Context) const override;
 	virtual FString GetNodeDebugInfo() const override;
+	virtual void Serialize(FArchive& Ar) override;
 	//~ End UVoxelPCGSettings Interface
 
 public:
@@ -70,6 +71,10 @@ public:
 	// The LOD to sample
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings", AdvancedDisplay, meta = (PCG_Overridable, ClampMin = 0))
 	int32 LOD = 0;
+
+	// If false smart surface types won't be resolved
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings", AdvancedDisplay, meta = (PCG_Overridable))
+	bool bResolveSmartSurfaceTypes = true;
 };
 
 class FVoxelQueryPCGOutput : public FVoxelPCGOutput
@@ -81,6 +86,7 @@ public:
 	const int32 LOD;
 	const FString HeightOrDistanceAttribute;
 	const bool bQuerySurfaceTypes;
+	const bool bResolveSmartSurfaceTypes;
 	const FString SurfaceAttributeSuffix;
 	const TVoxelArray<FVoxelMetadataRef> MetadatasToQuery;
 	const FString MetadataAttributeSuffix;
@@ -94,6 +100,7 @@ public:
 		const int32 LOD,
 		const FString& HeightOrDistanceAttribute,
 		const bool bQuerySurfaceTypes,
+		const bool bResolveSmartSurfaceTypes,
 		const FString& SurfaceAttributeSuffix,
 		const TVoxelArray<FVoxelMetadataRef>& MetadatasToQuery,
 		const FString& MetadataAttributeSuffix)
@@ -103,6 +110,7 @@ public:
 		, LOD(LOD)
 		, HeightOrDistanceAttribute(HeightOrDistanceAttribute)
 		, bQuerySurfaceTypes(bQuerySurfaceTypes)
+		, bResolveSmartSurfaceTypes(bResolveSmartSurfaceTypes)
 		, SurfaceAttributeSuffix(SurfaceAttributeSuffix)
 		, MetadatasToQuery(MetadatasToQuery)
 		, MetadataAttributeSuffix(MetadataAttributeSuffix)

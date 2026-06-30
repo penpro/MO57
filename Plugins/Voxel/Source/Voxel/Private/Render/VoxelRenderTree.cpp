@@ -1,9 +1,10 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "Render/VoxelRenderTree.h"
 #include "Render/VoxelRenderChunk.h"
 #include "Render/VoxelRenderSubsystem.h"
 #include "Render/VoxelScreenSizeHelper.h"
+#include "Render/VoxelRenderInvokersContainer.h"
 #include "Render/VoxelRenderNeighborSubdivider.h"
 #include "VoxelMesh.h"
 #include "VoxelMesher.h"
@@ -81,13 +82,16 @@ FVoxelRenderTree::~FVoxelRenderTree()
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
 
-void FVoxelRenderTree::Update(FVoxelRenderSubsystem& Subsystem)
+void FVoxelRenderTree::Update(
+	FVoxelRenderSubsystem& Subsystem,
+	const FVoxelRenderInvokersContainer& InvokersContainer)
 {
 	VOXEL_FUNCTION_COUNTER();
 
-	Traverse(Subsystem);
-	Collapse(Subsystem);
-	Subdivide(Subsystem);
+	Traverse(Subsystem, InvokersContainer.CameraInvokers);
+	Collapse(Subsystem, InvokersContainer.CameraInvokers);
+	Subdivide(Subsystem, InvokersContainer.CameraInvokers);
+	TraverseLODInvokers(InvokersContainer);
 	SubdivideNeighbors(Subsystem);
 	FinalizeTraversal(Subsystem);
 }
@@ -241,7 +245,9 @@ void FVoxelRenderTree::DestroyChunk(
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
 
-void FVoxelRenderTree::Traverse(const FVoxelRenderSubsystem& Subsystem)
+void FVoxelRenderTree::Traverse(
+	const FVoxelRenderSubsystem& Subsystem,
+	const TVoxelArray<FVector>& CameraInvokers)
 {
 	VOXEL_FUNCTION_COUNTER();
 
@@ -265,7 +271,7 @@ void FVoxelRenderTree::Traverse(const FVoxelRenderSubsystem& Subsystem)
 			continue;
 		}
 
-		const double ChunkQuality = ScreenSizeHelper.GetChunkQuality(Chunk.ChunkKey);
+		const double ChunkQuality = ScreenSizeHelper.GetChunkQuality(CameraInvokers, Chunk.ChunkKey);
 
 		if (ChunkQuality > ScreenSizeHelper.MaxQuality &&
 			Chunk.Children.Num() > 0)
@@ -297,7 +303,9 @@ void FVoxelRenderTree::Traverse(const FVoxelRenderSubsystem& Subsystem)
 	}
 }
 
-void FVoxelRenderTree::Collapse(const FVoxelRenderSubsystem& Subsystem)
+void FVoxelRenderTree::Collapse(
+	const FVoxelRenderSubsystem& Subsystem,
+	const TVoxelArray<FVector>& CameraInvokers)
 {
 	VOXEL_FUNCTION_COUNTER();
 
@@ -335,7 +343,7 @@ void FVoxelRenderTree::Collapse(const FVoxelRenderSubsystem& Subsystem)
 			{
 				const FVoxelChunkKey ParentChunkKey = ChunkKey.GetParent();
 				if (!ChunkKeyToChunk.Contains(ParentChunkKey) ||
-					ScreenSizeHelper.GetChunkQuality(ParentChunkKey) < ScreenSizeHelper.MinQuality)
+					ScreenSizeHelper.GetChunkQuality(CameraInvokers, ParentChunkKey) < ScreenSizeHelper.MinQuality)
 				{
 					break;
 				}
@@ -370,8 +378,8 @@ void FVoxelRenderTree::Collapse(const FVoxelRenderSubsystem& Subsystem)
 			ChunkKeysToCollapse.Sort([&](const FVoxelChunkKey& ChunkKeyA, const FVoxelChunkKey& ChunkKeyB)
 			{
 				return
-					ScreenSizeHelper.GetChunkQuality(ChunkKeyA) <
-					ScreenSizeHelper.GetChunkQuality(ChunkKeyB);
+					ScreenSizeHelper.GetChunkQuality(CameraInvokers, ChunkKeyA) <
+					ScreenSizeHelper.GetChunkQuality(CameraInvokers, ChunkKeyB);
 			});
 		}
 
@@ -395,7 +403,9 @@ void FVoxelRenderTree::Collapse(const FVoxelRenderSubsystem& Subsystem)
 	}
 }
 
-void FVoxelRenderTree::Subdivide(const FVoxelRenderSubsystem& Subsystem)
+void FVoxelRenderTree::Subdivide(
+	const FVoxelRenderSubsystem& Subsystem,
+	const TVoxelArray<FVector>& CameraInvokers)
 {
 	VOXEL_FUNCTION_COUNTER();
 
@@ -418,7 +428,7 @@ void FVoxelRenderTree::Subdivide(const FVoxelRenderSubsystem& Subsystem)
 			!Chunk.bMeshInvalidated)
 		{
 			if (Chunk.ChunkKey.LOD > 0 &&
-				ScreenSizeHelper.GetChunkQuality(Chunk.ChunkKey) <= ScreenSizeHelper.MaxQuality)
+				ScreenSizeHelper.GetChunkQuality(CameraInvokers, Chunk.ChunkKey) <= ScreenSizeHelper.MaxQuality)
 			{
 				ChunkKeysToSubdivide.Add(Chunk.ChunkKey);
 			}
@@ -435,8 +445,8 @@ void FVoxelRenderTree::Subdivide(const FVoxelRenderSubsystem& Subsystem)
 		ChunkKeysToSubdivide.Sort([&](const FVoxelChunkKey& ChunkKeyA, const FVoxelChunkKey& ChunkKeyB)
 		{
 			return
-				ScreenSizeHelper.GetChunkQuality(ChunkKeyA) >
-				ScreenSizeHelper.GetChunkQuality(ChunkKeyB);
+				ScreenSizeHelper.GetChunkQuality(CameraInvokers, ChunkKeyA) >
+				ScreenSizeHelper.GetChunkQuality(CameraInvokers, ChunkKeyB);
 		});
 	}
 
@@ -461,6 +471,126 @@ void FVoxelRenderTree::Subdivide(const FVoxelRenderSubsystem& Subsystem)
 				NumMeshesToCompute++;
 			}
 		}
+	}
+}
+
+void FVoxelRenderTree::TraverseLODInvokers(const FVoxelRenderInvokersContainer& LODInvokers)
+{
+	if (LODInvokers.LODVolumes.Num() == 0)
+	{
+		return;
+	}
+
+	const auto ShouldSubdivideChunk = [&](const FVoxelChunkKey& ChunkKey, int32& OutTargetLOD) -> bool
+	{
+		int32 TargetLOD = ChunkKey.LOD;
+		const FVoxelBox ChunkBounds = ChunkKey.GetChunkKeyBounds().ToVoxelBox();
+		LODInvokers.Tree.TraverseBounds(FVoxelFastBox(ChunkBounds), [&](const int32 Index)
+		{
+			const FVoxelLODVolume& Invoker = LODInvokers.LODVolumes[Index];
+			if (ChunkKey.LOD <= Invoker.MinLOD)
+			{
+				return;
+			}
+
+			switch (Invoker.Type)
+			{
+			case EVoxelLODInvokerType::Sphere:
+			{
+				if (ChunkBounds.SquaredDistanceToPoint(Invoker.Position) > Invoker.Radius * Invoker.Radius)
+				{
+					return;
+				}
+
+				break;
+			}
+			case EVoxelLODInvokerType::Box:
+			{
+				const FVector AABBCenter = ChunkBounds.GetCenter();
+				const FVector AABBExtent = ChunkBounds.GetExtent();
+
+				const FVector LocalAABBCenter = Invoker.InvRotation.RotateVector(AABBCenter - Invoker.Position);
+
+				// No more Abs() calls needed!
+				const FMatrix& AbsRot = Invoker.AbsRotationMatrix;
+				const FVector RotatedExtent = FVector(
+					AbsRot.M[0][0] * AABBExtent.X + AbsRot.M[0][1] * AABBExtent.Y + AbsRot.M[0][2] * AABBExtent.Z,
+					AbsRot.M[1][0] * AABBExtent.X + AbsRot.M[1][1] * AABBExtent.Y + AbsRot.M[1][2] * AABBExtent.Z,
+					AbsRot.M[2][0] * AABBExtent.X + AbsRot.M[2][1] * AABBExtent.Y + AbsRot.M[2][2] * AABBExtent.Z
+				);
+
+				if (FMath::Abs(LocalAABBCenter.X) > Invoker.Extents.X + RotatedExtent.X ||
+					FMath::Abs(LocalAABBCenter.Y) > Invoker.Extents.Y + RotatedExtent.Y ||
+					FMath::Abs(LocalAABBCenter.Z) > Invoker.Extents.Z + RotatedExtent.Z)
+				{
+					return;
+				}
+
+				break;
+			}
+			default: ensure(false); return;
+			}
+
+			TargetLOD = FMath::Min(TargetLOD, Invoker.MinLOD);
+		});
+
+		OutTargetLOD = TargetLOD;
+		return TargetLOD < ChunkKey.LOD;
+	};
+
+	struct FData
+	{
+		FVoxelChunkKey ChunkKey;
+		int32 TargetLOD;
+	};
+	TVoxelArray<FData> ChunkKeysToSubdivide;
+	ChunkKeysToSubdivide.Reserve(ChunkKeyToChunk.Num());
+
+	for (const auto& It : ChunkKeyToChunk)
+	{
+		FVoxelRenderChunk& Chunk = *It.Value;
+		if (Chunk.Children.Num() > 0)
+		{
+			continue;
+		}
+
+		int32 TargetLOD = -1;
+		if (!ShouldSubdivideChunk(It.Key, TargetLOD))
+		{
+			continue;
+		}
+
+		ChunkKeysToSubdivide.Add({ It.Key, TargetLOD });
+	}
+
+	while (ChunkKeysToSubdivide.Num() > 0)
+	{
+		TVoxelArray<FData> NewChunkKeysToSubdivide;
+		NewChunkKeysToSubdivide.Reserve(ChunkKeysToSubdivide.Num());
+
+		for (const FData& Data : ChunkKeysToSubdivide)
+		{
+			FVoxelRenderChunk& Chunk = *ChunkKeyToChunk[Data.ChunkKey];
+			SubdivideChunk(Chunk);
+
+			if (Data.ChunkKey.LOD - 1 <= Data.TargetLOD)
+			{
+				continue;
+			}
+
+			for (const TSharedPtr<FVoxelRenderChunk>& Child : Chunk.Children)
+			{
+				int32 TargetLOD = -1;
+				if (!ShouldSubdivideChunk(Child->ChunkKey, TargetLOD))
+				{
+					continue;
+				}
+
+				NewChunkKeysToSubdivide.Add({ Child->ChunkKey, TargetLOD });
+			}
+		}
+
+		ChunkKeysToSubdivide = MoveTemp(NewChunkKeysToSubdivide);
 	}
 }
 

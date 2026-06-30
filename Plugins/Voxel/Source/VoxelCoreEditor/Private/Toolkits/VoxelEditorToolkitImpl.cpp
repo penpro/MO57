@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "Toolkits/VoxelEditorToolkitImpl.h"
 #include "Engine/Blueprint.h"

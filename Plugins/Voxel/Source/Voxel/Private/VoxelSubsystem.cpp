@@ -1,8 +1,9 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelSubsystem.h"
 #include "VoxelState.h"
 #include "VoxelSubsystemGCObject.h"
+#include "VoxelInvalidationQueue.h"
 
 DEFINE_VOXEL_INSTANCE_COUNTER(FVoxelSubsystem);
 
@@ -42,6 +43,12 @@ FVoxelTaskContext& FVoxelSubsystem::GetTaskContext() const
 {
 	checkVoxelSlow(PrivateState);
 	return *PrivateState->TaskContext;
+}
+
+FVoxelInvalidationQueue& FVoxelSubsystem::GetInvalidationQueue() const
+{
+	checkVoxelSlow(PrivateState);
+	return *PrivateState->InvalidationQueue;
 }
 
 TSharedRef<FVoxelDependencyTracker> FVoxelSubsystem::Finalize(FVoxelDependencyCollector& DependencyCollector) const

@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -42,9 +42,9 @@ public:
 	//~ End TStructOpsTypeTraits Interface
 
 	//~ Begin IVoxelNodeInterface Interface
-	FORCEINLINE virtual const FVoxelGraphNodeRef& GetNodeRef() const final override
+	FORCEINLINE virtual const FVoxelGraphMergedNodeRef& GetNodeRef() const final override
 	{
-		ensureVoxelSlow(!PrivateNodeRef.IsExplicitlyNull());
+		ensureVoxelSlow(!PrivateNodeRef.Node.IsExplicitlyNull());
 		return PrivateNodeRef;
 	}
 	//~ End IVoxelNodeInterface Interface
@@ -114,7 +114,10 @@ public:
 	{
 		return true;
 	}
-	virtual bool CanPasteHere(const UVoxelGraph& Graph) const;
+	virtual bool CanPasteHere(
+		const UVoxelGraph& Graph,
+		const UVoxelTerminalGraph* TerminalGraph) const;
+	virtual bool IsDesignedForGraph(const UVoxelGraph& Graph, FString* OutWarning = nullptr) const;
 
 	struct FInitializer
 	{
@@ -141,7 +144,8 @@ public:
 
 public:
 	virtual void PreSerialize() override;
-	virtual void PostSerialize() override;
+	virtual void PostSerialize();
+	void PostSerialize(const FArchive& Ar);
 
  #if WITH_EDITOR
 	enum class EPostEditChange : uint8
@@ -496,7 +500,7 @@ private:
 public:
 	void InitializeNodeRuntime(
 		int32 NodeIndex,
-		const FVoxelGraphNodeRef& NodeRef,
+		const FVoxelGraphMergedNodeRef& NodeRef,
 		TVoxelMap<FName, FPinRef_Input*>& OutNameToInputPinRefs,
 		TVoxelMap<FName, FPinRef_Output*>& OutNameToOutputPinRefs);
 
@@ -514,7 +518,7 @@ protected:
 
 private:
 	int32 PrivateNodeIndex = -1;
-	FVoxelGraphNodeRef PrivateNodeRef;
+	FVoxelGraphMergedNodeRef PrivateNodeRef;
 	TVoxelArray<FPinRef_Output*> PrivateOutputPinRefs;
 	TOptional<bool> CachedAreTemplatePinsBuffers;
 
@@ -528,11 +532,12 @@ private:
 
 template<typename T>
 requires std::derived_from<T, FVoxelNode>
-struct TStructOpsTypeTraits<T> : TStructOpsTypeTraitsBase2<FVoxelNode>
+struct TStructOpsTypeTraits<T> : TStructOpsTypeTraitsBase2<T>
 {
 	enum
 	{
 		WithSerializer = true,
+		WithPostSerialize = true,
 		WithAddStructReferencedObjects = true,
 	};
 };
@@ -561,6 +566,7 @@ struct TStructOpsTypeTraits<T> : TStructOpsTypeTraitsBase2<FVoxelNode>
 
 #define GENERATED_VOXEL_NODE_BODY() \
 	GENERATED_VIRTUAL_STRUCT_BODY(FVoxelNode) \
+	using FVoxelNode::PostSerialize; \
 	IMPL_GENERATED_VOXEL_NODE_EDITOR_BODY()
 
 ///////////////////////////////////////////////////////////////////////////////

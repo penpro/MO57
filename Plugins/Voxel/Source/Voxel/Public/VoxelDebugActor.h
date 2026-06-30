@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -6,8 +6,57 @@
 #include "VoxelStackLayer.h"
 #include "VoxelDebugActor.generated.h"
 
-USTRUCT()
-struct FVoxelDebugActorSettings
+class FVoxelLayers;
+class FVoxelSurfaceTypeTable;
+
+class VOXEL_API FVoxelDebugActorState
+{
+public:
+	const TSharedRef<FVoxelLayers> Layers;
+	const TSharedRef<FVoxelSurfaceTypeTable> SurfaceTypeTable;
+	const int32 LOD;
+	const FMatrix IndexToWorld;
+	const FVoxelWeakStackLayer WeakLayer;
+
+	static constexpr int32 Resolution = 128;
+
+	FVoxelDebugActorState(
+		const TSharedRef<FVoxelLayers>& Layers,
+		const TSharedRef<FVoxelSurfaceTypeTable>& SurfaceTypeTable,
+		const int32 LOD,
+		const FMatrix& IndexToWorld,
+		const FVoxelWeakStackLayer& WeakLayer)
+		: Layers(Layers)
+		, SurfaceTypeTable(SurfaceTypeTable)
+		, LOD(LOD)
+		, IndexToWorld(IndexToWorld)
+		, WeakLayer(WeakLayer)
+	{
+	}
+
+public:
+	void Generate();
+
+	bool IsInvalidated() const
+	{
+		return DependencyTracker->IsInvalidated();
+	}
+	TConstVoxelArrayView<FColor> GetColors() const
+	{
+		return Colors;
+	}
+
+private:
+	TVoxelArray<FColor> Colors;
+	TSharedPtr<FVoxelDependencyTracker> DependencyTracker;
+};
+
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+
+UCLASS(NotBlueprintable)
+class VOXEL_API AVoxelDebugActor : public AActor
 {
 	GENERATED_BODY()
 
@@ -18,47 +67,7 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Config")
 	FVoxelStackLayer Layer;
 
-	UPROPERTY(EditAnywhere, Category = "Config")
-	int32 Size = 100;
-
-	UPROPERTY(EditAnywhere, Category = "Config")
-	float VoxelSize = 100;
-
-	UPROPERTY(EditAnywhere, Category = "Config")
-	bool bGrayscale = false;
-
-	UPROPERTY(EditAnywhere, Category = "Config")
-	float GrayscaleScale = 1.f;
-
-	UPROPERTY(EditAnywhere, Category = "Config")
-	float ColorStep = 100.f;
-
 public:
-	bool operator==(const FVoxelDebugActorSettings& Other) const
-	{
-		return
-			LOD == Other.LOD &&
-			Layer == Other.Layer &&
-			Size == Other.Size &&
-			VoxelSize == Other.VoxelSize &&
-			bGrayscale == Other.bGrayscale &&
-			GrayscaleScale == Other.GrayscaleScale &&
-			ColorStep == Other.ColorStep;
-	}
-};
-
-UCLASS(NotBlueprintable)
-class VOXEL_API AVoxelDebugActor : public AActor
-{
-	GENERATED_BODY()
-
-public:
-	UPROPERTY(EditAnywhere, Category = "Config", meta = (ShowOnlyInnerProperties))
-	FVoxelDebugActorSettings Settings;
-
-	UPROPERTY(EditAnywhere, Category = "Config", AdvancedDisplay)
-	TObjectPtr<UMaterialInterface> ParentMaterial;
-
 	AVoxelDebugActor();
 
 	void Refresh();
@@ -76,11 +85,10 @@ private:
 	UPROPERTY()
 	TObjectPtr<UMaterialInstanceDynamic> Material;
 
-	UPROPERTY(Transient, DuplicateTransient, NonTransactional)
-	TArray<TObjectPtr<UTexture2D>> Textures;
+	UPROPERTY()
+	TObjectPtr<UTexture2D> Texture;
 
-	FVoxelFuture LastFuture;
-	FTransform LastTransform = FTransform(FVector(FVoxelUtilities::NaNd()));
-	FVoxelDebugActorSettings LastSettings;
-	TSharedPtr<FVoxelDependencyTracker> DependencyTracker;
+	TVoxelOptional<TVoxelFuture<FVoxelDebugActorState>> FutureState;
+
+	FVoxelFuture ApplyState(const TSharedRef<FVoxelDebugActorState>& State);
 };

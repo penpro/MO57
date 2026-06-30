@@ -1,17 +1,19 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
 #include "VoxelMinimal.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
 #include "Sculpt/VoxelSculptSave.h"
-#include "Sculpt/Height/VoxelPaintHeightModifier.h"
-#include "Sculpt/Height/VoxelFlattenHeightModifier.h"
-#include "Sculpt/Height/VoxelGraphHeightModifier.h"
-#include "Sculpt/Height/VoxelSmoothHeightModifier.h"
-#include "Sculpt/Height/VoxelSculptHeightModifier.h"
+#include "Sculpt/Height/Tools/VoxelPaintHeightModifier.h"
+#include "Sculpt/Height/Tools/VoxelFlattenHeightModifier.h"
+#include "Sculpt/Height/Tools/VoxelGraphHeightModifier.h"
+#include "Sculpt/Height/Tools/VoxelSmoothHeightModifier.h"
+#include "Sculpt/Height/Tools/VoxelSculptHeightModifier.h"
 #include "Sculpt/Height/VoxelHeightSculptGraphWrapper.h"
 #include "VoxelHeightSculptBlueprintLibrary.generated.h"
+
+class UVoxelSculptHeightAsset;
 
 UCLASS()
 class VOXEL_API UVoxelHeightSculptBlueprintLibrary  : public UBlueprintFunctionLibrary
@@ -31,28 +33,34 @@ public:
 public:
 	// Clear all sculpt data
 	UFUNCTION(BlueprintCallable, Category = "Voxel|Sculpt")
-	static FVoxelFuture ClearSculptData(UPARAM(Required) AVoxelHeightSculptActor* SculptActor);
+	static void ClearSculptData(UPARAM(Required) AVoxelSculptHeight* SculptActor);
 
 	// Clear all sculpt cache
 	// This will free up memory but subsequent edits might be slightly slower
 	UFUNCTION(BlueprintCallable, Category = "Voxel|Sculpt")
-	static void ClearSculptCache(UPARAM(Required) AVoxelHeightSculptActor* SculptActor);
+	static void ClearSculptCache(UPARAM(Required) AVoxelSculptHeight* SculptActor);
+
+	// Will assign sculpt asset to sculpt actor
+	UFUNCTION(BlueprintCallable, Category = "Voxel|Sculpt")
+	static void SetSculptAsset(
+		UPARAM(Required) AVoxelSculptHeight* SculptActor,
+		UVoxelSculptHeightAsset* Asset);
 
 public:
 	UFUNCTION(BlueprintCallable, Category = "Voxel")
 	static FVoxelFuture K2_GetSave(
 		FVoxelHeightSculptSave& Save,
-		UPARAM(Required) AVoxelHeightSculptActor* SculptActor,
+		UPARAM(Required) AVoxelSculptHeight* SculptActor,
 		bool bCompress = true);
 
 	UFUNCTION(BlueprintCallable, Category = "Voxel")
 	static FVoxelFuture LoadFromSave(
-		UPARAM(Required) AVoxelHeightSculptActor* SculptActor,
+		UPARAM(Required) AVoxelSculptHeight* SculptActor,
 		FVoxelHeightSculptSave Save);
 
 private:
 	static FVoxelFuture ApplyModifier(
-		UPARAM(Required) AVoxelHeightSculptActor* SculptActor,
+		UPARAM(Required) AVoxelSculptHeight* SculptActor,
 		const TSharedRef<FVoxelHeightModifier>& Modifier);
 
 public:
@@ -69,7 +77,7 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Voxel|Sculpt")
 	static FVoxelFuture PaintSurface(
-		UPARAM(Required) AVoxelHeightSculptActor* SculptActor,
+		UPARAM(Required) AVoxelSculptHeight* SculptActor,
 		const FVector2D Center,
 		const float Radius = 500.f,
 		const float Strength = 0.05f,
@@ -104,7 +112,7 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Voxel|Sculpt")
 	static FVoxelFuture Flatten(
-		UPARAM(Required) AVoxelHeightSculptActor* SculptActor,
+		UPARAM(Required) AVoxelSculptHeight* SculptActor,
 		const FVector2D Center,
 		const float Radius = 500.f,
 		const float Falloff = 0.1f,
@@ -133,7 +141,7 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Voxel|Sculpt")
 	static FVoxelFuture Smooth(
-		UPARAM(Required) AVoxelHeightSculptActor* SculptActor,
+		UPARAM(Required) AVoxelSculptHeight* SculptActor,
 		const FVector2D Center,
 		const float Radius = 1000.f,
 		const float Strength = 1.f,
@@ -159,7 +167,7 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Voxel|Sculpt")
 	static FVoxelFuture SculptHeight(
-		UPARAM(Required) AVoxelHeightSculptActor* SculptActor,
+		UPARAM(Required) AVoxelSculptHeight* SculptActor,
 		const FVector2D Center,
 		const float Radius = 500.f,
 		const float Strength = 0.5f,
@@ -185,7 +193,7 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Voxel|Sculpt")
 	static FVoxelFuture ApplySculptGraph(
-		UPARAM(Required) AVoxelHeightSculptActor* SculptActor,
+		UPARAM(Required) AVoxelSculptHeight* SculptActor,
 		const FVector2D& Center,
 		const float Radius = 500.f,
 		const FVoxelHeightSculptGraphWrapper& Graph = FVoxelHeightSculptGraphWrapper())

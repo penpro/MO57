@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -7,7 +7,7 @@
 #include "Surface/VoxelSurfaceTypeInterface.h"
 #include "VoxelSurfaceTypeAsset.generated.h"
 
-UCLASS(meta = (VoxelAssetType, AssetColor=Green))
+UCLASS(meta = (VoxelAssetType, AssetColor=Green, AssetSubMenu = "Materials"))
 class VOXEL_API UVoxelSurfaceTypeAsset : public UVoxelSurfaceTypeInterface
 {
 	GENERATED_BODY()

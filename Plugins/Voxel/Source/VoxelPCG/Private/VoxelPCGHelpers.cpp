@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelPCGHelpers.h"
 #include "VoxelMessage.h"
@@ -250,6 +250,7 @@ bool FVoxelPCGElement::PrepareDataInternal(FPCGContext* Context) const
 
 	ensure(!Output->PrivateOwner);
 	Output->PrivateOwner = Context;
+	Output->PrivateOriginOffset = Component->GetWorld() ? FVector(Component->GetWorld()->OriginLocation) : FVector::ZeroVector;
 	Output->PrivateDependencyCollector = MakeShared<FVoxelDependencyCollector>(Component->GetFName());
 	Output->PrivateInvalidationQueue = DependencySnapshot;
 	Output->PrivateSeed = Context->GetSeed();

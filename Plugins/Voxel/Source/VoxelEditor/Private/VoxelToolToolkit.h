@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -21,13 +21,21 @@ struct FVoxelToolSculptActorSelector
 	TObjectPtr<AVoxelSculptActorBase> Actor;
 };
 
-class FVoxelToolToolkit : public FModeToolkit
+class FVoxelToolToolkit : public FModeToolkit, public FGCObject
 {
 public:
 	explicit FVoxelToolToolkit(const TSharedPtr<FVoxelToolEdMode>& EdMode)
 		: FModeToolkit()
 		, WeakEdMode(EdMode)
 	{}
+
+	//~ Begin FGCObject Interface
+	virtual void AddReferencedObjects(FReferenceCollector& Collector) override;
+	virtual FString GetReferencerName() const override
+	{
+		return "FVoxelToolToolkit";
+	}
+	//~ End FGCObject Interface
 
 	//~ Begin FModeToolkit Interface
 	virtual void Init(const TSharedPtr<IToolkitHost>& InitToolkitHost, TWeakObjectPtr<UEdMode> InOwningMode) override;

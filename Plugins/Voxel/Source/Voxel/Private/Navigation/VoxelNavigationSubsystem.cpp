@@ -1,10 +1,10 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "Navigation/VoxelNavigationSubsystem.h"
 #include "Navigation/VoxelNavigationMesh.h"
 #include "Navigation/VoxelNavigationMesher.h"
 #include "Navigation/VoxelNavigationInvoker.h"
-#include "Navigation/VoxelNavigationComponent.h"
+#include "Navigation/VoxelNavigationMeshInterface.h"
 #include "VoxelRuntime.h"
 #include "VoxelTaskContext.h"
 #include "NavMesh/NavMeshBoundsVolume.h"
@@ -47,10 +47,18 @@ void FVoxelNavigationSubsystem::LoadFromPrevious(FVoxelSubsystem& InPreviousSubs
 	}
 
 	if (PreviousSubsystem.GetConfig().LayerToRender != GetConfig().LayerToRender ||
-		PreviousSubsystem.GetConfig().VoxelSize != GetConfig().VoxelSize ||
-		PreviousSubsystem.GetConfig().NavigationChunkSize != GetConfig().NavigationChunkSize)
+		PreviousSubsystem.GetConfig().NavigationVoxelSize != GetConfig().NavigationVoxelSize ||
+		PreviousSubsystem.GetConfig().NavigationChunkSize != GetConfig().NavigationChunkSize ||
+		PreviousSubsystem.GetConfig().NavigationMeshComponentClass != GetConfig().NavigationMeshComponentClass)
 	{
 		PreviousChunkKeyToNavigationMesh.Empty();
+	}
+
+	if (PreviousSubsystem.GetConfig().NavigationVoxelSize != GetConfig().NavigationVoxelSize ||
+		PreviousSubsystem.GetConfig().NavigationChunkSize != GetConfig().NavigationChunkSize ||
+		!PreviousSubsystem.GetConfig().LocalToWorld.Equals(GetConfig().LocalToWorld))
+	{
+		InvokerView = nullptr;
 	}
 }
 
@@ -61,7 +69,7 @@ void FVoxelNavigationSubsystem::Initialize()
 	if (!InvokerView)
 	{
 		InvokerView = FVoxelNavigationInvokerManager::Get(GetConfig().World)->MakeView(
-			GetConfig().NavigationChunkSize * GetConfig().VoxelSize,
+			GetConfig().NavigationChunkSize * GetConfig().NavigationVoxelSize,
 			GetConfig().LocalToWorld);
 	}
 
@@ -112,7 +120,7 @@ void FVoxelNavigationSubsystem::Compute()
 			{
 				VOXEL_SCOPE_COUNTER("NavMeshBounds");
 
-				const FVoxelIntBox IntBounds = FVoxelIntBox::FromFloatBox_WithPadding(Bounds.Scale(1. / GetConfig().VoxelSize));
+				const FVoxelIntBox IntBounds = FVoxelIntBox::FromFloatBox_WithPadding(Bounds.Scale(1. / GetConfig().NavigationVoxelSize));
 				const int32 ChunkSize = GetConfig().NavigationChunkSize;
 
 				const FIntVector Min = FVoxelUtilities::DivideFloor(IntBounds.Min, ChunkSize);
@@ -174,9 +182,9 @@ void FVoxelNavigationSubsystem::Compute()
 				const TSharedRef<FVoxelNavigationMesher> Mesher = MakeShared<FVoxelNavigationMesher>(
 					*this,
 					GetConfig().LayerToRender,
-					FVector(ChunkKey) * GetConfig().NavigationChunkSize * GetConfig().VoxelSize,
+					FVector(ChunkKey) * GetConfig().NavigationChunkSize * GetConfig().NavigationVoxelSize,
 					GetConfig().NavigationChunkSize,
-					GetConfig().VoxelSize);
+					GetConfig().NavigationVoxelSize);
 
 				const TSharedRef<FVoxelNavigationMesh> Mesh = Mesher->CreateMesh();
 
@@ -196,6 +204,8 @@ void FVoxelNavigationSubsystem::Render(FVoxelRuntime& Runtime)
 
 	ChunkKeyToNavigationComponent.Reserve(ChunkKeyToNavigationMesh_RequiresLock.Num());
 
+	const UClass* NavigationMeshComponentClass = GetConfig().NavigationMeshComponentClass.Resolve();
+
 	for (const auto& It : ChunkKeyToNavigationMesh_RequiresLock)
 	{
 		const TSharedRef<FVoxelNavigationMesh> Mesh = It.Value.ToSharedRef();
@@ -204,19 +214,42 @@ void FVoxelNavigationSubsystem::Render(FVoxelRuntime& Runtime)
 			continue;
 		}
 
-		UVoxelNavigationComponent* Component = nullptr;
+		USceneComponent* Component = nullptr;
 		{
-			TVoxelObjectPtr<UVoxelNavigationComponent> WeakComponent;
+			TVoxelObjectPtr<USceneComponent> WeakComponent;
 			if (PreviousChunkKeyToNavigationComponent.RemoveAndCopyValue(It.Key, WeakComponent))
 			{
 				Component = WeakComponent.Resolve();
 			}
+
+			if (Component &&
+				Component->GetClass() != NavigationMeshComponentClass)
+			{
+				if (IVoxelNavigationMeshInterface* Interface = Cast<IVoxelNavigationMeshInterface>(Component))
+				{
+					Interface->SetNavigationMesh(nullptr);
+				}
+				Runtime.RemoveComponent(Component);
+
+				Component = nullptr;
+			}
 		}
 		if (!Component)
 		{
-			Component = Runtime.NewComponent<UVoxelNavigationComponent>();
+			if (!ensure(NavigationMeshComponentClass))
+			{
+				continue;
+			}
+
+			Component = Runtime.NewComponent(NavigationMeshComponentClass);
 		}
 		if (!ensure(Component))
+		{
+			continue;
+		}
+
+		IVoxelNavigationMeshInterface* NavigationMeshInterface = Cast<IVoxelNavigationMeshInterface>(Component);
+		if (!ensure(NavigationMeshInterface))
 		{
 			continue;
 		}
@@ -224,29 +257,29 @@ void FVoxelNavigationSubsystem::Render(FVoxelRuntime& Runtime)
 		ChunkKeyToNavigationComponent.Add_EnsureNew(It.Key, Component);
 		ChunkKeyToLastRenderTime.FindOrAdd(It.Key) = RenderTime;
 
-		if (Component->GetNavigationMesh() == Mesh)
+		if (NavigationMeshInterface->GetNavigationMesh() == Mesh)
 		{
 			// Already set
 			continue;
 		}
 
-		Component->SetRelativeScale3D(FVector(GetConfig().VoxelSize));
-		Component->SetRelativeLocation(FVector(It.Key) * GetConfig().NavigationChunkSize * GetConfig().VoxelSize);
-		Component->SetNavigationMesh(Mesh);
+		Component->SetRelativeScale3D(FVector(GetConfig().NavigationVoxelSize));
+		Component->SetRelativeLocation(FVector(It.Key) * GetConfig().NavigationChunkSize * GetConfig().NavigationVoxelSize);
+		NavigationMeshInterface->SetNavigationMesh(Mesh);
 	}
 
 	struct FAdditionalChunk
 	{
 		double Time;
 		FIntVector ChunkKey;
-		UVoxelNavigationComponent* Component;
+		USceneComponent* Component;
 		TSharedPtr<FVoxelNavigationMesh> NavigationMesh;
 	};
 	TVoxelArray<FAdditionalChunk> AdditionalChunks;
 
 	for (const auto& It : PreviousChunkKeyToNavigationComponent)
 	{
-		UVoxelNavigationComponent* Component = It.Value.Resolve();
+		USceneComponent* Component = It.Value.Resolve();
 		if (!ensureVoxelSlow(Component))
 		{
 			ensureVoxelSlow(ChunkKeyToLastRenderTime.Remove(It.Key));
@@ -295,7 +328,10 @@ void FVoxelNavigationSubsystem::Render(FVoxelRuntime& Runtime)
 			continue;
 		}
 
-		Component->SetNavigationMesh(nullptr);
+		if (IVoxelNavigationMeshInterface* Interface = Cast<IVoxelNavigationMeshInterface>(Component))
+		{
+			Interface->SetNavigationMesh(nullptr);
+		}
 		Runtime.RemoveComponent(Component);
 		ensureVoxelSlow(ChunkKeyToLastRenderTime.Remove(It.Key));
 	}
@@ -312,7 +348,10 @@ void FVoxelNavigationSubsystem::Render(FVoxelRuntime& Runtime)
 	{
 		if (NumAdditionalChunks >= GetConfig().MaxAdditionalNavigationChunks)
 		{
-			AdditionalChunk.Component->SetNavigationMesh(nullptr);
+			if (IVoxelNavigationMeshInterface* Interface = Cast<IVoxelNavigationMeshInterface>(AdditionalChunk.Component))
+			{
+				Interface->SetNavigationMesh(nullptr);
+			}
 			Runtime.RemoveComponent(AdditionalChunk.Component);
 			ensureVoxelSlow(ChunkKeyToLastRenderTime.Remove(AdditionalChunk.ChunkKey));
 			continue;

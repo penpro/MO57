@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelGraphEditorSummoner.h"
 #include "VoxelGraphToolkit.h"
@@ -82,8 +82,14 @@ TAttribute<FText> FVoxelGraphEditorSummoner::ConstructTabNameForObject(UEdGraph*
 		}
 
 		const UVoxelTerminalGraph* TerminalGraph = EdGraph->GetTypedOuter<UVoxelTerminalGraph>();
-		if (!ensure(TerminalGraph))
+		if (!TerminalGraph)
 		{
+			if (EdGraph->HasAnyFlags(RF_Transient))
+			{
+				return INVTEXT("Intermediate Graph");
+			}
+
+			ensure(false);
 			return {};
 		}
 
@@ -111,6 +117,55 @@ TSharedRef<SWidget> FVoxelGraphEditorSummoner::CreateTabBodyForObject(const FWor
 	const TSharedPtr<FVoxelGraphToolkit> Toolkit = WeakToolkit.Pin();
 	check(Toolkit);
 
+	const TSharedRef<SVerticalBox> OverlayBox =
+		SNew(SVerticalBox)
+		.Visibility(EVisibility::HitTestInvisible)
+		+ SVerticalBox::Slot()
+		.AutoHeight()
+		.HAlign(HAlign_Center)
+		.Padding(0.f, 0.f, 0.f, -10.f)
+		[
+			SNew(STextBlock)
+			.TextStyle(FAppStyle::Get(), "Graph.CornerText")
+			.Text(INVTEXT("VOXEL"))
+		]
+		+ SVerticalBox::Slot()
+		.AutoHeight()
+		.HAlign(HAlign_Center)
+		[
+			SNew(STextBlock)
+			.TextStyle(FAppStyle::Get(), "Graph.CornerText")
+			.Font(FCoreStyle::GetDefaultFontStyle("BoldCondensed", 16))
+			.Text(FText::FromString(FVoxelUtilities::GetPluginVersion().ToString_UserFacing()))
+		];
+
+	if (EdGraph->HasAllFlags(RF_Transient))
+	{
+		OverlayBox->AddSlot()
+		.AutoHeight()
+		.HAlign(HAlign_Center)
+		[
+			SNew(STextBlock)
+			.Font(FCoreStyle::GetDefaultFontStyle("BoldCondensed", 12))
+			.ColorAndOpacity(FStyleColors::AccentBlue)
+			.RenderOpacity(0.2f)
+			.Text_Lambda([Toolkit]
+			{
+				return FText::FromString(Toolkit->IntermediateGraphName);
+			})
+		];
+		OverlayBox->AddSlot()
+		.AutoHeight()
+		.HAlign(HAlign_Center)
+		[
+			SNew(STextBlock)
+			.Font(FCoreStyle::GetDefaultFontStyle("BoldCondensed", 12))
+			.ColorAndOpacity(FStyleColors::Warning)
+			.RenderOpacity(0.2f)
+			.Text(INVTEXT("Intermediate graphs do not auto refresh.\nAfter doing changes, try opening it again."))
+		];
+	}
+
 	return
 		SNew(SOverlay)
 		+ SOverlay::Slot()
@@ -122,26 +177,7 @@ TSharedRef<SWidget> FVoxelGraphEditorSummoner::CreateTabBodyForObject(const FWor
 		.VAlign(VAlign_Bottom)
 		.HAlign(HAlign_Right)
 		[
-			SNew(SVerticalBox)
-			.Visibility(EVisibility::HitTestInvisible)
-			+ SVerticalBox::Slot()
-			.AutoHeight()
-			.HAlign(HAlign_Center)
-			.Padding(0.f, 0.f, 0.f, -10.f)
-			[
-				SNew(STextBlock)
-				.TextStyle(FAppStyle::Get(), "Graph.CornerText")
-				.Text(INVTEXT("VOXEL"))
-			]
-			+ SVerticalBox::Slot()
-			.AutoHeight()
-			.HAlign(HAlign_Center)
-			[
-				SNew(STextBlock)
-				.TextStyle(FAppStyle::Get(), "Graph.CornerText")
-				.Font(FCoreStyle::GetDefaultFontStyle("BoldCondensed", 16))
-				.Text(FText::FromString(FVoxelUtilities::GetPluginVersion().ToString_UserFacing()))
-			]
+			OverlayBox
 		];
 }
 
@@ -155,8 +191,13 @@ const FSlateBrush* FVoxelGraphEditorSummoner::GetTabIconForObject(const FWorkflo
 	}
 
 	const UVoxelTerminalGraph* TerminalGraph = EdGraph->GetTypedOuter<UVoxelTerminalGraph>();
-	if (!ensure(TerminalGraph))
+	if (!TerminalGraph)
 	{
+		if (EdGraph->HasAnyFlags(RF_Transient))
+		{
+			return FAppStyle::GetBrush("BlueprintDebugger.TabIcon");
+		}
+
 		return nullptr;
 	}
 

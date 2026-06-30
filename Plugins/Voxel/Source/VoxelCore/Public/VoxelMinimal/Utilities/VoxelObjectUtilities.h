@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -6,6 +6,7 @@
 #include "Templates/Casts.h"
 #include "Templates/SubclassOf.h"
 #include "Serialization/BulkData.h"
+#include "VoxelMinimal/VoxelFuture.h"
 #include "VoxelMinimal/VoxelStructView.h"
 #include "VoxelMinimal/VoxelObjectHelpers.h"
 #include "VoxelMinimal/VoxelUniqueFunction.h"
@@ -60,6 +61,10 @@ namespace FVoxelUtilities
 		const TArray<FString>& PrefixesToRemove,
 		const FString& NewPrefix,
 		const FString& Suffix);
+	VOXELCORE_API UObject* CreateNewAsset_Dialog(
+		UClass* Class,
+		const FString& AssetName,
+		const FString& DefaultPath);
 
 	template<typename T>
 	void CreateNewAsset_Deferred(
@@ -103,6 +108,16 @@ namespace FVoxelUtilities
 			PrefixesToRemove,
 			NewPrefix,
 			Suffix);
+	}
+	template<typename T>
+	T* CreateNewAsset_Dialog(
+		const FString& AssetName,
+		const FString& DefaultPath)
+	{
+		return Cast<T>(CreateNewAsset_Dialog(
+			T::StaticClass(),
+			AssetName,
+			DefaultPath));
 	}
 
 	VOXELCORE_API void CreateUniqueAssetName(
@@ -181,33 +196,11 @@ namespace FVoxelUtilities
 		});
 	}
 
-	template<typename T>
-	TSharedPtr<const TConstVoxelArrayView64<T>> LockBulkData_ReadOnly(const FBulkData& BulkData)
-	{
-		if (!ensure(BulkData.GetBulkDataSize() % sizeof(T) == 0))
-		{
-			return nullptr;
-		}
-
-		const void* Data = BulkData.LockReadOnly();
-		if (!ensure(Data))
-		{
-			BulkData.Unlock();
-			return nullptr;
-		}
-
-		TConstVoxelArrayView64<T>* ArrayView = new TConstVoxelArrayView64<T>(
-			static_cast<const T*>(Data),
-			BulkData.GetBulkDataSize() / sizeof(T));
-
-		return MakeShareable_CustomDestructor(
-			ArrayView,
-			[&BulkData, ArrayView]
-			{
-				BulkData.Unlock();
-				delete ArrayView;
-			});
-	}
+	VOXELCORE_API TVoxelFuture<TSharedPtr<TVoxelArray64<uint8>>> ReadBulkDataAsync(
+		const FBulkData& BulkData,
+		int64 Offset,
+		int64 Length,
+		EAsyncIOPriorityAndFlags Priority = AIOP_Normal);
 
 	//////////////////////////////////////////////////////////////////////////////
 	//////////////////////////////////////////////////////////////////////////////
@@ -225,6 +218,7 @@ namespace FVoxelUtilities
 	//////////////////////////////////////////////////////////////////////////////
 	//////////////////////////////////////////////////////////////////////////////
 
+	VOXELCORE_API uint64 HashStruct(const UScriptStruct* Struct, const void* DataPtr);
 	VOXELCORE_API uint64 HashProperty(const FProperty& Property, const void* DataPtr);
 	VOXELCORE_API void DestroyStruct_Safe(const UScriptStruct* Struct, void* StructMemory);
 	VOXELCORE_API void AddStructReferencedObjects(FReferenceCollector& Collector, const FVoxelStructView& StructView);

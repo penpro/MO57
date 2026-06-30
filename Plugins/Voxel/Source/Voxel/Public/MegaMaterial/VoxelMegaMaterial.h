@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -18,26 +18,26 @@ enum class EVoxelMegaMaterialGenerationType
 	Generated
 };
 
-UCLASS(BlueprintType, meta = (VoxelAssetType, AssetColor=Green))
+UCLASS(BlueprintType, meta = (VoxelAssetType, AssetColor=Green, AssetSubMenu = "Materials"))
 class VOXEL_API UVoxelMegaMaterial : public UVoxelAsset
 {
 	GENERATED_BODY()
 
 public:
 	// Will show a notification when we are trying to render a mega material with new surfaces not in the Surfaces array
-	UPROPERTY(EditAnywhere, Category = "Surfaces")
-	bool bDetectNewSurfaces = true;
+	UPROPERTY(EditAnywhere, Category = "Settings")
+	bool bAutomaticallyDetectNewSurfaces = true;
 
 	UPROPERTY()
 	TArray<TObjectPtr<UMaterialInterface>> Materials;
 
-	UPROPERTY(EditAnywhere, Category = "Surfaces")
+	UPROPERTY(EditAnywhere, Category = "Settings")
 	TArray<TObjectPtr<UVoxelSurfaceTypeAsset>> SurfaceTypes;
 
 public:
 	// This material function will be applied everywhere
 	// It needs to have one input and one output, each of the type MaterialAttribute
-	UPROPERTY(EditAnywhere, Category = "Global")
+	UPROPERTY(EditAnywhere, Category = "Material Generation")
 	TObjectPtr<UMaterialFunction> AttributePostProcess;
 
 public:
@@ -69,34 +69,34 @@ public:
 
 public:
 	// Enable dither-based smooth blends
-	UPROPERTY(EditAnywhere, Category = "Misc")
+	UPROPERTY(EditAnywhere, Category = "Settings")
 	bool bEnableSmoothBlends = true;
 
-	UPROPERTY(EditAnywhere, Category = "Misc", meta = (InlineEditConditionToggle))
-	bool bEnableDitherNoiseTexture = false;
-
-	// Noise texture to apply to the smooth blend dithering
-	UPROPERTY(EditAnywhere, Category = "Misc", AdvancedDisplay, meta = (EditCondition = "bEnableDitherNoiseTexture"))
-	TSoftObjectPtr<UTexture2D> DitherNoiseTexture;
-
 	// If true the generated materials will be set to the Masked blend mode
-	UPROPERTY(EditAnywhere, Category = "Misc", AdvancedDisplay)
+	UPROPERTY(EditAnywhere, Category = "Settings")
 	bool bGenerateMaskedMaterial = false;
 
 	// If true the generated materials will be set to two sided
-	UPROPERTY(EditAnywhere, Category = "Misc", AdvancedDisplay)
+	UPROPERTY(EditAnywhere, Category = "Settings")
 	bool bGenerateTwoSidedMaterial = false;
 
 	// If true, will set bHasPixelAnimation to true to reduce TSR blurriness
-	UPROPERTY(EditAnywhere, Category = "Misc", AdvancedDisplay)
+	UPROPERTY(EditAnywhere, Category = "Settings")
 	bool bSetHasPixelAnimation = false;
 
 	// Compiles the PixelDepthOffset output in the non-nanite material
-	UPROPERTY(EditAnywhere, Category = "Misc", AdvancedDisplay)
+	UPROPERTY(EditAnywhere, Category = "Settings")
 	bool bEnablePixelDepthOffset = false;
 
+	UPROPERTY(EditAnywhere, Category = "Settings", meta = (InlineEditConditionToggle))
+	bool bEnableDitherNoiseTexture = false;
+
+	// Noise texture to apply to the smooth blend dithering
+	UPROPERTY(EditAnywhere, Category = "Settings", AdvancedDisplay, meta = (EditCondition = "bEnableDitherNoiseTexture"))
+	TSoftObjectPtr<UTexture2D> DitherNoiseTexture;
+
 	// Custom output nodes in this material will be copied to the generated material
-	UPROPERTY(EditAnywhere, Category = "Misc", AdvancedDisplay)
+	UPROPERTY(EditAnywhere, Category = "Material Generation")
 	TObjectPtr<UMaterialInterface> CustomOutputsMaterial;
 
 public:

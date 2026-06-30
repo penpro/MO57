@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelStampUtilities.h"
 #include "VoxelHeightStamp.h"
@@ -604,7 +604,7 @@ void FVoxelStampUtilities::ComputeOverrideStamp(
 
 			for (const FVoxelMetadataRef& Metadata : Parameter.PreviousMetadatasToQuery)
 			{
-				Reason += Metadata.GetFName().ToString() + ", ";
+				Reason += Metadata.GetName() + ", ";
 			}
 
 			Reason.RemoveFromEnd(", ");

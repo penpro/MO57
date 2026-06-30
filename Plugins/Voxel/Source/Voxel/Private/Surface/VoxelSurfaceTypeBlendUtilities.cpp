@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "Surface/VoxelSurfaceTypeBlendUtilities.h"
 #include "VoxelBufferAccessor.h"
@@ -35,6 +35,11 @@ FVoxelSurfaceTypeBlendBuffer FVoxelSurfaceTypeBlendUtilities::Lerp(
 			return FVoxelSurfaceTypeBlend::FromType(LayerB);
 		}
 		if (LayerB.IsNull())
+		{
+			return FVoxelSurfaceTypeBlend::FromType(LayerA);
+		}
+
+		if (LayerA == LayerB)
 		{
 			return FVoxelSurfaceTypeBlend::FromType(LayerA);
 		}

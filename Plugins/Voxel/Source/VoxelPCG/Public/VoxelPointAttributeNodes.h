@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -7,9 +7,10 @@
 #include "VoxelPointSet.h"
 #include "Buffer/VoxelClassBuffer.h"
 #include "Buffer/VoxelGraphStaticMeshBuffer.h"
+#include "Buffer/VoxelRangeBuffers.h"
 #include "VoxelPointAttributeNodes.generated.h"
 
-USTRUCT(Category = "Point")
+USTRUCT(Category = "Point", meta = (AllowList = "PCG, Scatter"))
 struct VOXELPCG_API FVoxelNode_SetPointAttribute : public FVoxelNode
 {
 	GENERATED_BODY()
@@ -36,7 +37,7 @@ protected:
 	}
 };
 
-USTRUCT(Category = "Point")
+USTRUCT(Category = "Point", meta = (AllowList = "PCG, Scatter"))
 struct VOXELPCG_API FVoxelNode_GetPointAttribute : public FVoxelNode
 {
 	GENERATED_BODY()
@@ -63,14 +64,6 @@ protected:
 	{
 		return Name;
 	}
-
-private:
-	TSharedPtr<const FVoxelBuffer> ExtractData(
-		const TSharedRef<const FVoxelBuffer>& Buffer,
-		TConstVoxelArrayView<FString> Extractors,
-		int32 ExtractorIndex,
-		FName AttributeName,
-		FVoxelGraphQuery Query) const;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -105,7 +98,7 @@ struct VOXELPCG_API FVoxelNode_GetParentPointAttribute : public FVoxelNode_GetPo
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
 
-USTRUCT(Category = "Point", meta = (Abstract))
+USTRUCT(Category = "Point", meta = (Abstract, AllowList = "PCG, Scatter"))
 struct VOXELPCG_API FVoxelTemplateNode_SetPointAttributeBase : public FVoxelTemplateNode
 {
 	GENERATED_BODY()
@@ -123,7 +116,7 @@ struct VOXELPCG_API FVoxelTemplateNode_SetPointAttributeBase : public FVoxelTemp
 	virtual FName GetAttributeName() const VOXEL_PURE_VIRTUAL({});
 };
 
-USTRUCT(Category = "Point", meta = (Abstract, PinTypeAliases = "/Script/VoxelGraph.VoxelPointSet"))
+USTRUCT(Category = "Point", meta = (Abstract, AllowList = "PCG, Scatter", PinTypeAliases = "/Script/VoxelGraph.VoxelPointSet"))
 struct VOXELPCG_API FVoxelTemplateNode_GetPointAttributeBase : public FVoxelTemplateNode
 {
 	GENERATED_BODY()
@@ -183,18 +176,26 @@ struct VOXELPCG_API FVoxelTemplateNode_GetParentPointMesh : public FVoxelTemplat
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
 
-USTRUCT()
-struct VOXELPCG_API FVoxelTemplateNode_SetPointPosition : public FVoxelTemplateNode_SetPointAttributeBase
+USTRUCT(Category = "Point", meta = (AllowList = "PCG, Scatter"))
+struct VOXELPCG_API FVoxelNode_SetPointPosition : public FVoxelNode
 {
 	GENERATED_BODY()
 	GENERATED_VOXEL_NODE_BODY()
 
+	VOXEL_INPUT_PIN(FVoxelPointSet, In, nullptr);
 	VOXEL_INPUT_PIN(FVoxelDoubleVectorBuffer, Position, nullptr);
+	// Maximum per-axis displacement this node applies relative to the input point's
+	// original chunk-local position. Tells the cache layer to query upstream points
+	// from a region extended by this much on each side, so that points which displace
+	// into this chunk from neighbors are actually generated and reach the cache.
+	// Leave at zero if no displacement crosses chunk boundaries, or if this node is
+	// downstream of any Cache node.
+	VOXEL_INPUT_PIN(FVoxelVectorBuffer, CacheBoundsExtension, FVector::ZeroVector);
+	VOXEL_OUTPUT_PIN(FVoxelPointSet, Out);
 
-	virtual FName GetAttributeName() const override
-	{
-		return FVoxelPointAttributes::Position;
-	}
+	//~ Begin FVoxelNode Interface
+	virtual void Compute(FVoxelGraphQuery Query) const override;
+	//~ End FVoxelNode Interface
 };
 
 USTRUCT()
@@ -321,7 +322,7 @@ struct VOXELPCG_API FVoxelTemplateNode_GetParentPointScale : public FVoxelTempla
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
 
-USTRUCT(Category = "Point")
+USTRUCT(Category = "Point", meta = (AllowList = "PCG, Scatter"))
 struct VOXELPCG_API FVoxelNode_GetPointSeed : public FVoxelNode
 {
 	GENERATED_BODY()
@@ -504,7 +505,7 @@ struct VOXELPCG_API FVoxelTemplateNode_GetPointSteepness : public FVoxelTemplate
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
 
-USTRUCT(Category = "Point")
+USTRUCT(Category = "Point", meta = (AllowList = "PCG, Scatter"))
 struct VOXELPCG_API FVoxelNode_ApplyTranslation : public FVoxelNode
 {
 	GENERATED_BODY()
@@ -519,7 +520,7 @@ struct VOXELPCG_API FVoxelNode_ApplyTranslation : public FVoxelNode
 	//~ End FVoxelNode Interface
 };
 
-USTRUCT(Category = "Point")
+USTRUCT(Category = "Point", meta = (AllowList = "PCG, Scatter"))
 struct VOXELPCG_API FVoxelNode_ApplyRotation : public FVoxelNode
 {
 	GENERATED_BODY()
@@ -534,7 +535,7 @@ struct VOXELPCG_API FVoxelNode_ApplyRotation : public FVoxelNode
 	//~ End FVoxelNode Interface
 };
 
-USTRUCT(Category = "Point")
+USTRUCT(Category = "Point", meta = (AllowList = "PCG, Scatter"))
 struct VOXELPCG_API FVoxelNode_ApplyScale : public FVoxelNode
 {
 	GENERATED_BODY()
@@ -542,6 +543,65 @@ struct VOXELPCG_API FVoxelNode_ApplyScale : public FVoxelNode
 
 	VOXEL_INPUT_PIN(FVoxelPointSet, In, nullptr);
 	VOXEL_INPUT_PIN(FVoxelVectorBuffer, Scale, FVector::OneVector);
+	VOXEL_OUTPUT_PIN(FVoxelPointSet, Out);
+
+	//~ Begin FVoxelNode Interface
+	virtual void Compute(FVoxelGraphQuery Query) const override;
+	//~ End FVoxelNode Interface
+};
+
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+
+// Randomizes point transforms using the point's seed.
+// Applies random position offsets, rotations, and scale variations.
+USTRUCT(Category = "Point", meta = (AllowList = "PCG, Scatter"))
+struct VOXELPCG_API FVoxelNode_TransformPoints : public FVoxelNode
+{
+	GENERATED_BODY()
+	GENERATED_VOXEL_NODE_BODY()
+
+	VOXEL_INPUT_PIN(FVoxelPointSet, In, nullptr);
+
+	// Position Settings
+	// Minimum position offset
+	VOXEL_INPUT_PIN(FVoxelVectorBuffer, OffsetMin, FVector::ZeroVector, Category("Position"));
+	// Maximum position offset
+	VOXEL_INPUT_PIN(FVoxelVectorBuffer, OffsetMax, FVector::ZeroVector, Category("Position"));
+	// If true, offset is applied in local space (relative to point rotation)
+	VOXEL_INPUT_PIN(FVoxelBoolBuffer, bOffsetInLocalSpace, false, Category("Position"));
+
+	// Rotation Settings
+	// Roll range in degrees
+	VOXEL_INPUT_PIN(FVoxelFloatRangeBuffer, Roll, nullptr, Category("Rotation"));
+	// Pitch range in degrees
+	VOXEL_INPUT_PIN(FVoxelFloatRangeBuffer, Pitch, nullptr, Category("Rotation"));
+	// Yaw range in degrees
+	VOXEL_INPUT_PIN(FVoxelFloatRangeBuffer, Yaw, nullptr, Category("Rotation"));
+	// If true, replaces existing rotation. If false, combines with existing.
+	VOXEL_INPUT_PIN(FVoxelBoolBuffer, bAbsoluteRotation, false, Category("Rotation"));
+
+	// Scale Settings
+	// Minimum scale
+	VOXEL_INPUT_PIN(FVoxelVectorBuffer, ScaleMin, FVector::OneVector, Category("Scale"));
+	// Maximum scale
+	VOXEL_INPUT_PIN(FVoxelVectorBuffer, ScaleMax, FVector::OneVector, Category("Scale"));
+	// If true, replaces existing scale. If false, multiplies with existing.
+	VOXEL_INPUT_PIN(FVoxelBoolBuffer, bAbsoluteScale, false, Category("Scale"));
+	// If true, uses uniform scaling (X value for all axes)
+	VOXEL_INPUT_PIN(FVoxelBoolBuffer, bUniformScale, true, Category("Scale"));
+
+	// Seed for randomization - combines with point IDs for deterministic results
+	VOXEL_INPUT_PIN(FVoxelSeed, Seed, nullptr);
+
+	// Maximum per-axis displacement this node may apply (worst-case bound on
+	// |OffsetMin|/|OffsetMax|). Tells the cache layer to query upstream points from a
+	// region extended by this much on each side, so points that displace into this chunk
+	// from neighbors are actually generated and reach the cache. Leave at zero if no
+	// displacement crosses chunk boundaries, or if downstream of any Cache node.
+	VOXEL_INPUT_PIN(FVoxelVectorBuffer, CacheBoundsExtension, FVector::ZeroVector);
+
 	VOXEL_OUTPUT_PIN(FVoxelPointSet, Out);
 
 	//~ Begin FVoxelNode Interface

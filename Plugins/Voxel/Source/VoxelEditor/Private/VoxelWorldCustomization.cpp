@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelEditorMinimal.h"
 #include "VoxelWorld.h"
@@ -247,7 +247,6 @@ VOXEL_CUSTOMIZE_CLASS(AVoxelWorld)(IDetailLayoutBuilder& DetailLayout)
 
 			return EVisibility::Collapsed;
 		});
-
 
 	UpdateRowWithWarning(
 		DetailLayout.GetProperty(GET_MEMBER_NAME_STATIC(AVoxelWorld, bGenerateNavigationInsideNavMeshBounds), AVoxelWorld::StaticClass()),

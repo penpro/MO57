@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -23,7 +23,7 @@ struct VOXELGRAPH_API FVoxelComputeNode_MixSeeds : public FVoxelComputeNode
 	}
 };
 
-USTRUCT(Category = "Math|Seed", meta = (ShowInShortList))
+USTRUCT(Category = "Math|Seed", meta = (ShowInPinShortList))
 struct VOXELGRAPH_API FVoxelNode_MakeSeeds : public FVoxelNode
 {
 	GENERATED_BODY()

@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "Nanite/VoxelNaniteMaterialRenderer.h"
 #include "Nanite/VoxelNaniteMesh.h"
@@ -48,28 +48,6 @@ void FVoxelNaniteMaterialRenderer::PrepareRender(TVoxelSet<TSharedPtr<const FVox
 	}
 	UsedSurfaceTypes.AddUnique(FVoxelSurfaceType());
 	UsedSurfaceTypes.Sort();
-
-	ensure(PerPageData.Num() == 0);
-	FVoxelUtilities::SetNumFast(PerPageData, 256 * 256);
-	FVoxelUtilities::SetAll(PerPageData, FIntPoint(-1));
-
-	for (const TSharedPtr<const FVoxelNaniteMesh>& Mesh : Meshes)
-	{
-		for (const FVoxelNaniteMesh::FPage& Page : Mesh->Pages)
-		{
-			if (!ensure(PerPageData.IsValidIndex(Page.Index)))
-			{
-				continue;
-			}
-
-			const int64 NaniteIndirectionIndex = Mesh->NaniteIndirectionTextureRef->GetIndex();
-			checkVoxelSlow(NaniteIndirectionIndex <= MAX_int32);
-
-			// See GetVertexIndexInVoxelChunk
-			PerPageData[Page.Index].X = int32(NaniteIndirectionIndex) + Page.VertexOffset;
-			PerPageData[Page.Index].Y = Mesh->MegaMaterialRenderData->ChunkIndicesIndex;
-		}
-	}
 }
 
 void FVoxelNaniteMaterialRenderer::UpdateRender(
@@ -94,19 +72,6 @@ void FVoxelNaniteMaterialRenderer::UpdateRender(
 		}
 	}
 
-	UTexture2D* Texture = Subsystem.GetTextureManager().GetPerPageDataTexture();
-	if (!Texture)
-	{
-		ensure(Meshes.Num() == 0);
-		return;
-	}
-
-	FTextureResource* Resource = Texture->GetResource();
-	if (!ensure(Resource))
-	{
-		return;
-	}
-
 	using FQueuedData = FVoxelNaniteMaterialRendererImpl::FQueuedData;
 
 	const TSharedRef<FQueuedData> QueuedData = MakeSharedCopy(FQueuedData
@@ -114,13 +79,11 @@ void FVoxelNaniteMaterialRenderer::UpdateRender(
 		Subsystem.GetMaterialInstanceRef(EVoxelMegaMaterialTarget::NaniteMaterialSelection),
 		NewLocalToWorld,
 		UsedSurfaceTypes,
-		MoveTemp(PerPageData)
+		Subsystem.GetConfig().VoxelWorldId
 	});
 
-	Voxel::RenderTask([Impl = Impl, Resource, QueuedData]
+	Voxel::RenderTask([Impl = Impl, QueuedData]
 	{
-		QueuedData->PerPageData_Texture = Resource->GetTexture2DRHI();
-
 		Impl->QueuedData_RenderThread = QueuedData;
 	});
 }

@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -36,6 +36,12 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Config", AdvancedDisplay, meta = (EditCondition = "!bDisableEditingLayers", HideEditConditionToggle))
 	TArray<TObjectPtr<UVoxelHeightLayer>> AdditionalLayers;
 
+	// By how much to extend the bounds, relative to the bounds size
+	// Increase this if you are using a high smoothness
+	// Increasing this will lead to more stamps being sampled per voxel, increasing generation cost
+	UPROPERTY(EditAnywhere, Category = "Config", AdvancedDisplay, meta = (UIMin = 0, UIMax = 5))
+	float HeightPaddingMultiplier = 0.1f;
+
 public:
 	UPROPERTY(VisibleAnywhere, Category = "Config", SkipSerialization, meta = (NoK2, NoCopyEditor))
 	bool bDisableEditingLayers = false;
@@ -48,6 +54,7 @@ public:
 
 	//~ Begin FVoxelStamp Interface
 	virtual void FixupProperties() override;
+	virtual void PostSerialize(const FArchive& Ar) override;
 #if WITH_EDITOR
 	virtual void GetPropertyInfo(FPropertyInfo& Info) const override;
 #endif
@@ -77,6 +84,13 @@ public:
 	}
 
 public:
+	virtual void CollectDependencies(
+		FVoxelDependencyCollector& DependencyCollector,
+		const FVoxelHeightTransform& StampToQuery,
+		const FVoxelBox2D& Bounds) const
+	{
+	}
+
 	virtual void Apply(
 		const FVoxelHeightBulkQuery& Query,
 		const FVoxelHeightTransform& StampToQuery) const;

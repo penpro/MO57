@@ -1,8 +1,9 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelMesh.h"
 #include "VoxelBuffer.h"
 #include "VoxelChunkKey.h"
+#include "VoxelDistanceFieldWrapper.h"
 
 DEFINE_VOXEL_MEMORY_STAT(STAT_VoxelMeshMemory);
 
@@ -77,7 +78,10 @@ int64 FVoxelMesh::GetAllocatedSize() const
 		AllocatedSize += LOD.DisplacedVertices.GetAllocatedSize();
 	}
 
-	AllocatedSize += Distances.GetAllocatedSize();
+	if (DistanceFieldsData)
+	{
+		AllocatedSize += DistanceFieldsData->GetResourceSizeBytes();
+	}
 
 	return AllocatedSize;
 }

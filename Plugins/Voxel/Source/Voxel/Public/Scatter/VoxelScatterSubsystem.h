@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -8,6 +8,8 @@
 #include "VoxelScatterSubsystem.generated.h"
 
 class FVoxelScatterNodeRuntime;
+class FVoxelScatterInvokersView;
+class FVoxelScatterCacheManager;
 
 USTRUCT()
 struct VOXEL_API FVoxelScatterSubsystem : public FVoxelSubsystem
@@ -23,8 +25,16 @@ public:
 	virtual void Render(FVoxelRuntime& Runtime) override;
 	//~ End FVoxelSubsystem Interface
 
+	FORCEINLINE TSharedPtr<FVoxelScatterCacheManager> GetCacheManager() const
+	{
+		return CacheManager;
+	}
+
 private:
 	TSharedPtr<FVoxelDependencyTracker> DependencyTracker;
 	TVoxelMap<FVoxelScatterNodeWeakRef, TSharedPtr<FVoxelScatterNodeRuntime>> NodeRefToRuntime;
 	TVoxelMap<FVoxelScatterNodeWeakRef, TSharedPtr<FVoxelScatterNodeRuntime>> PreviousNodeRefToRuntime;
+	TSharedPtr<FVoxelScatterInvokersView> InvokerView;
+	TSharedPtr<FVoxelDependencyTracker> InvokersDependencyTracker;
+	TSharedPtr<FVoxelScatterCacheManager> CacheManager;
 };

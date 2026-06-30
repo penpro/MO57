@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "Collision/VoxelStaticMeshCollisionComponent.h"
 #include "Collision/VoxelCollider.h"
@@ -7,6 +7,12 @@
 #include "Materials/Material.h"
 #include "PhysicsEngine/BodySetup.h"
 #include "Chaos/TriangleMeshImplicitObject.h"
+
+UVoxelStaticMeshCollisionComponent::UVoxelStaticMeshCollisionComponent()
+{
+	bIgnoreStreamingManagerUpdate = true;
+	bCanEverAffectNavigation = false;
+}
 
 void UVoxelStaticMeshCollisionComponent::SetBodyInstance(const FBodyInstance& NewBodyInstance)
 {
@@ -17,7 +23,8 @@ void UVoxelStaticMeshCollisionComponent::SetBodyInstance(const FBodyInstance& Ne
 
 void UVoxelStaticMeshCollisionComponent::SetCollider(
 	const TSharedPtr<const FVoxelCollider>& NewCollider,
-	const bool bDoubleSidedGeometry)
+	const bool bDoubleSidedGeometry,
+	const bool bInGenerateOverlapEvents)
 {
 	VOXEL_FUNCTION_COUNTER();
 
@@ -39,6 +46,8 @@ void UVoxelStaticMeshCollisionComponent::SetCollider(
 		!GetWorld()->IsGameWorld() ||
 #endif
 		bDoubleSidedGeometry;
+
+	SetGenerateOverlapEvents(bInGenerateOverlapEvents);
 
 	OverrideMaterials.Reset();
 

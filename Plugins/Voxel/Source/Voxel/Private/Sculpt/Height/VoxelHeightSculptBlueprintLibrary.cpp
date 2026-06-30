@@ -1,7 +1,9 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "Sculpt/Height/VoxelHeightSculptBlueprintLibrary.h"
-#include "Sculpt/Height/VoxelHeightSculptActor.h"
+#include "Sculpt/Height/VoxelSculptHeight.h"
+#include "Sculpt/Height/VoxelSculptHeightAsset.h"
+#include "Sculpt/Height/VoxelSculptHeightData.h"
 
 bool UVoxelHeightSculptBlueprintLibrary::IsValidSave(FVoxelHeightSculptSave Save)
 {
@@ -34,20 +36,7 @@ int64 UVoxelHeightSculptBlueprintLibrary::GetSaveSize(FVoxelHeightSculptSave Sav
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
 
-FVoxelFuture UVoxelHeightSculptBlueprintLibrary::ClearSculptData(AVoxelHeightSculptActor* SculptActor)
-{
-	VOXEL_FUNCTION_COUNTER();
-
-	if (!SculptActor)
-	{
-		VOXEL_MESSAGE(Error, "SculptActor is invalid");
-		return {};
-	}
-
-	return SculptActor->ClearSculptData();
-}
-
-void UVoxelHeightSculptBlueprintLibrary::ClearSculptCache(AVoxelHeightSculptActor* SculptActor)
+void UVoxelHeightSculptBlueprintLibrary::ClearSculptData(AVoxelSculptHeight* SculptActor)
 {
 	VOXEL_FUNCTION_COUNTER();
 
@@ -57,7 +46,42 @@ void UVoxelHeightSculptBlueprintLibrary::ClearSculptCache(AVoxelHeightSculptActo
 		return;
 	}
 
-	SculptActor->GetStamp()->ClearCache();
+	SculptActor->SetSculptData(MakeVoxelBulkRef(MakeShared<FVoxelSculptHeightData>()));
+}
+
+void UVoxelHeightSculptBlueprintLibrary::ClearSculptCache(AVoxelSculptHeight* SculptActor)
+{
+	VOXEL_FUNCTION_COUNTER();
+
+	if (!SculptActor)
+	{
+		VOXEL_MESSAGE(Error, "SculptActor is invalid");
+		return;
+	}
+
+	SculptActor->ClearSculptCache();
+}
+
+void UVoxelHeightSculptBlueprintLibrary::SetSculptAsset(
+	AVoxelSculptHeight* SculptActor,
+	UVoxelSculptHeightAsset* Asset)
+{
+	VOXEL_FUNCTION_COUNTER();
+
+	if (!SculptActor)
+	{
+		VOXEL_MESSAGE(Error, "SculptActor is invalid");
+		return;
+	}
+
+	if (!Asset)
+	{
+		SculptActor->SetSculptData(MakeVoxelBulkRef(MakeShared<FVoxelSculptHeightData>()));
+	}
+	else
+	{
+		SculptActor->SetSculptData(Asset->GetData(), Asset->GetBulkLoader());
+	}
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -66,7 +90,7 @@ void UVoxelHeightSculptBlueprintLibrary::ClearSculptCache(AVoxelHeightSculptActo
 
 FVoxelFuture UVoxelHeightSculptBlueprintLibrary::K2_GetSave(
 	FVoxelHeightSculptSave& Save,
-	AVoxelHeightSculptActor* SculptActor,
+	AVoxelSculptHeight* SculptActor,
 	const bool bCompress)
 {
 	VOXEL_FUNCTION_COUNTER();
@@ -86,7 +110,7 @@ FVoxelFuture UVoxelHeightSculptBlueprintLibrary::K2_GetSave(
 }
 
 FVoxelFuture UVoxelHeightSculptBlueprintLibrary::LoadFromSave(
-	AVoxelHeightSculptActor* SculptActor,
+	AVoxelSculptHeight* SculptActor,
 	const FVoxelHeightSculptSave Save)
 {
 	VOXEL_FUNCTION_COUNTER();
@@ -105,7 +129,7 @@ FVoxelFuture UVoxelHeightSculptBlueprintLibrary::LoadFromSave(
 ///////////////////////////////////////////////////////////////////////////////
 
 FVoxelFuture UVoxelHeightSculptBlueprintLibrary::ApplyModifier(
-	AVoxelHeightSculptActor* SculptActor,
+	AVoxelSculptHeight* SculptActor,
 	const TSharedRef<FVoxelHeightModifier>& Modifier)
 {
 	VOXEL_FUNCTION_COUNTER();

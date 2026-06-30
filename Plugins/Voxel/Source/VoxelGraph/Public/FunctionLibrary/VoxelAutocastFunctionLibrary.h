@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -1430,6 +1430,19 @@ public:
 		Result.Z = Value;
 		Result.W = Value;
 		return Result;
+	}
+
+public:
+	UFUNCTION(meta = (Autocast))
+	FVoxelInt32Buffer BooleanToInt32(const FVoxelBoolBuffer& Value) const
+	{
+		return FVoxelBufferConversionUtilities::BooleanToInt32(Value);
+	}
+
+	UFUNCTION(meta = (Autocast))
+	FVoxelInt32Buffer ByteToInt32(const FVoxelByteBuffer& Value) const
+	{
+		return FVoxelBufferConversionUtilities::ByteToInt32(Value);
 	}
 
 public:

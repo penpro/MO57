@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelPointGenerator.h"
 #include "VoxelQuery.h"
@@ -161,7 +161,6 @@ TVoxelArray<FVoxelPointGenerator::FPoint> FVoxelPointGenerator::Generate(
 	TVoxelArray<FVoxelIntBox> AllChunkBounds;
 	AllChunkBounds.Reserve(Chunks.Num());
 
-	int32 MaxNumPoints = 0;
 	for (int32 Z = 0; Z < SizeInChunks.Z; Z++)
 	{
 		for (int32 Y = 0; Y < SizeInChunks.Y; Y++)
@@ -175,8 +174,6 @@ TVoxelArray<FVoxelPointGenerator::FPoint> FVoxelPointGenerator::Generate(
 					continue;
 				}
 
-				MaxNumPoints += Chunk.Size.X * Chunk.Size.Y * Chunk.Size.Z;
-
 				AllChunkBounds.Add(
 					FVoxelIntBox(0, Chunk.Size)
 					.ShiftBy(FIntVector(X, Y, Z) * ChunkSize)
@@ -185,14 +182,7 @@ TVoxelArray<FVoxelPointGenerator::FPoint> FVoxelPointGenerator::Generate(
 		}
 	}
 
-	TVoxelArray<FPoint> Points;
-	Points.Reserve(MaxNumPoints);
-
-	FVoxelVectorBuffer PointNormals;
-	PointNormals.Allocate(MaxNumPoints);
-
-	FVoxelDoubleVectorBuffer PointPositions;
-	PointPositions.Allocate(MaxNumPoints);
+	TVoxelChunkedArray<FPoint> Points;
 
 	for (const FVoxelIntBox& ChunkBounds : AllChunkBounds)
 	{
@@ -447,23 +437,27 @@ TVoxelArray<FVoxelPointGenerator::FPoint> FVoxelPointGenerator::Generate(
 						MaxY - MinY,
 						MaxZ - MinZ).GetSafeNormal();
 
-					const int32 Index = Points.Num();
-
-					FPoint& Point = Points.Emplace_GetRef_EnsureNoGrow();
+					FPoint& Point = Points.Emplace_GetRef();
 					Point.Position = Position;
 					Point.Normal = Normal;
 					Point.Seed = PointSeed;
 					Point.Density = bApplyDensityToPoints ? (Ratio - Chance) / Ratio : 1.0f;
-
-					PointNormals.Set(Index, Normal);
-					PointPositions.Set(Index, Position);
 				}
 			}
 		}
 	}
 
-	PointNormals.ShrinkTo(Points.Num());
-	PointPositions.ShrinkTo(Points.Num());
+	FVoxelVectorBuffer PointNormals;
+	PointNormals.Allocate(Points.Num());
+
+	FVoxelDoubleVectorBuffer PointPositions;
+	PointPositions.Allocate(Points.Num());
+
+	for (int32 Index = 0; Index < Points.Num(); Index++)
+	{
+		PointNormals.Set(Index, Points[Index].Normal);
+		PointPositions.Set(Index, Points[Index].Position);
+	}
 
 	OutSurfaceTypes.AllocateZeroed(PointPositions.Num());
 
@@ -500,5 +494,5 @@ TVoxelArray<FVoxelPointGenerator::FPoint> FVoxelPointGenerator::Generate(
 		Resolver.Resolve();
 	}
 
-	return Points;
+	return Points.Array();
 }

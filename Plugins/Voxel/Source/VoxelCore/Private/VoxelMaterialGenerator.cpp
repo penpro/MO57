@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelMaterialGenerator.h"
 
@@ -477,7 +477,7 @@ bool FVoxelMaterialGenerator::PostCopyExpression(UMaterialExpression& Expression
 		return true;
 	}
 
-	const UMaterialFunction* OldFunction = Cast<UMaterialFunction>(FunctionCall->MaterialFunction);
+	UMaterialFunction* OldFunction = Cast<UMaterialFunction>(FunctionCall->MaterialFunction);
 	if (!ensureVoxelSlow(OldFunction))
 	{
 		VOXEL_MESSAGE(Error, "{0}: {1}: material function instance or material function layers are not supported",

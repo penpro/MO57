@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -123,6 +123,13 @@ public:
 	void AddNodeToReconstruct(UEdGraphNode* Node);
 
 public:
+	bool IsGraphSensitive() const;
+	void SetIsGraphSensitive(bool bValue);
+
+public:
+	void OpenIntermediateGraph(const UVoxelTerminalGraph& TerminalGraph, FName PassName);
+
+public:
 	static TSharedRef<SWidget> MakeMenuOverlay(UVoxelGraph* Graph);
 
 public:
@@ -156,6 +163,11 @@ private:
 
 	TWeakPtr<SGraphEditor> WeakFocusedGraph;
 	TVoxelObjectPtr<UEdGraph> GraphBeingClosed;
+
+	TVoxelObjectPtr<UEdGraph> WeakIntermediateGraph;
+	FString IntermediateGraphName;
+
+	bool bSensitiveContext = true;
 
 	friend struct FVoxelGraphEditorSummoner;
 	friend struct FVoxelGraphReadOnlySummoner;

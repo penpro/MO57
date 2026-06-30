@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -294,6 +294,13 @@ namespace FVoxelUtilities
 	FORCEINLINE bool IsValidUINT32(const int64 Value)
 	{
 		return 0 <= Value && Value <= MAX_uint32;
+	}
+
+	template<int32 MaxBits>
+	FORCEINLINE int32 CheckBits(const int32 Value)
+	{
+		checkVoxelSlow(0 <= Value && Value < (1 << MaxBits));
+		return Value;
 	}
 
 	//////////////////////////////////////////////////////////////////////////////

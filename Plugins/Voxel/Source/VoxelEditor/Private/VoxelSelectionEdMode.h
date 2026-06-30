@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -36,6 +36,17 @@ public:
 
 	virtual bool HandleClick(FEditorViewportClient* ViewportClient, HHitProxy* HitProxy, const FViewportClick& Click) override;
 	//~ End UEdMode Interface
+
+	//~ Begin ILegacyEdModeViewportInterface Interface
+	// This mode is always active as a default mode and only handles click-selection; it doesn't need legacy
+	// gizmos/widgets. Returning the interface default (true) would globally disable the new 5.8 TRS gizmos.
+#if VOXEL_ENGINE_VERSION >= 508
+	virtual bool RequiresLegacyViewportInteractions() const override
+	{
+		return false;
+	}
+#endif
+	//~ End ILegacyEdModeViewportInterface Interface
 
 private:
 	TVoxelSet<TWeakPtr<const FVoxelStampRuntime>> IgnoredStamps;

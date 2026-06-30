@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -97,6 +97,12 @@ public:
 		std::is_constructible_v<Type, OtherType>
 	)
 	explicit TVoxelSet(const TVoxelSet<OtherType, OtherAllocator>& Other)
+	{
+		this->Append(Other);
+	}
+	template<typename OtherType>
+	requires std::is_constructible_v<Type, OtherType>
+	explicit TVoxelSet(const TSet<OtherType>& Other)
 	{
 		this->Append(Other);
 	}
@@ -230,6 +236,19 @@ public:
 	template<typename OtherType, typename OtherAllocator>
 	requires std::is_constructible_v<Type, OtherType>
 	void Append(const TVoxelSet<OtherType, OtherAllocator>& Set)
+	{
+		VOXEL_FUNCTION_COUNTER_NUM(Set.Num(), 1024);
+
+		this->ReserveGrow(Set.Num());
+
+		for (const OtherType& Value : Set)
+		{
+			this->Add(Type(Value));
+		}
+	}
+	template<typename OtherType>
+	requires std::is_constructible_v<Type, OtherType>
+	void Append(const TSet<OtherType>& Set)
 	{
 		VOXEL_FUNCTION_COUNTER_NUM(Set.Num(), 1024);
 

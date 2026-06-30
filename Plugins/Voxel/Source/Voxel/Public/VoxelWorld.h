@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -55,6 +55,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Config")
 	bool bEnableNanite = true;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Config")
+	bool bUseCameraAsInvoker = true;
+
 	// If false, you will need to manually call CreateRuntime
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Config", AdvancedDisplay)
 	bool bCreateRuntimeOnBeginPlay = true;
@@ -78,7 +81,19 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Config", AdvancedDisplay, meta = (ClampMin = 1))
 	int32 MaxBackgroundTasks = 256;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Config", AdvancedDisplay, meta = (EditCondition = "!bUseCameraAsInvoker"))
+	bool bDisableCameraInvokerInEditor = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Config", AdvancedDisplay, meta = (EditCondition = "bUseCameraAsInvoker || !bDisableCameraInvokerInEditor"))
+	float CameraInvokerPositionPrecision = 100.f;
+
 public:
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Voxel Collision")
+	bool bDoubleSidedCollision = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Voxel Collision")
+	bool bGenerateOverlapEvents = false;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Voxel Collision|Visibility")
 	FBodyInstance VisibilityCollision;
 
@@ -88,8 +103,15 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Voxel Collision|Invoker")
 	FBodyInstance InvokerCollision;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Voxel Collision|Invoker", meta = (InlineEditConditionToggle))
+	bool bOverrideCollisionVoxelSize = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Voxel Collision|Invoker", meta = (EditCondition = "bOverrideCollisionVoxelSize", Units = cm, ClampMin = 1))
+	int32 CollisionVoxelSize = 100;
+
+	// If true will warn when a dedicated server has a voxel world but no invoker components
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Voxel Collision|Invoker")
-	bool bDoubleSidedCollision = false;
+	bool bWarnAboutMissingInvokers = true;
 
 public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Voxel Navigation")
@@ -113,6 +135,16 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Voxel Navigation")
 	bool bOnlyGenerateNavigationInEditor = false;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Voxel Navigation", meta = (InlineEditConditionToggle))
+	bool bOverrideNavigationVoxelSize = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Voxel Navigation", meta = (EditCondition = "bOverrideNavigationVoxelSize", Units = cm, ClampMin = 1))
+	int32 NavigationVoxelSize = 100;
+
+	// Useful if you plan to bake your navigation
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Voxel Navigation", AdvancedDisplay, meta = (MustImplement = "/Script/Voxel.VoxelNavigationMeshInterface"))
+	TSubclassOf<USceneComponent> NavigationMeshComponent;
+
 public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nanite")
 	bool bEnableTessellation = true;
@@ -135,7 +167,11 @@ public:
 	int32 NanitePositionPrecision = 6;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nanite", AdvancedDisplay)
-	bool bCompressNaniteVertices = false;
+	bool bCompressNaniteVertices = true;
+
+	// Experimental! Editor only
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Nanite", AdvancedDisplay)
+	bool bUseNaniteBuilder = false;
 
 public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Voxel Rendering")
@@ -175,6 +211,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, AdvancedDisplay, Category = "Voxel Rendering")
 	float MeshDistanceFieldBias = 0.5f;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, AdvancedDisplay, Category = "Voxel Rendering", meta = (ClampMin = 1))
+	int32 MeshDistanceFieldBricksPerChunk = 4;
+
 	// Use this to override specific rendering settings
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, AdvancedDisplay, Category = "Voxel Rendering")
 	FVoxelComponentSettings ComponentSettings;
@@ -182,9 +221,21 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, AdvancedDisplay, Category = "Voxel Rendering")
 	EVoxelRenderChunkSize RenderChunkSize = EVoxelRenderChunkSize::Size32;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, AdvancedDisplay, Category = "Voxel Rendering")
+	bool bCacheTextureStreaming = false;
+
 public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Scatter")
 	bool bRenderScatterActors = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Scatter")
+	bool bUseCameraAsScatterInvoker = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Scatter", AdvancedDisplay, meta = (EditCondition = "!bUseCameraAsScatterInvoker"))
+	bool bDisableCameraScatterInvokerInEditor = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Scatter", AdvancedDisplay, meta = (EditCondition = "bUseCameraAsScatterInvoker || !bDisableCameraScatterInvokerInEditor"))
+	float CameraScatterInvokerPositionPrecision = 100.f;
 
 public:
 	AVoxelWorld();
@@ -253,6 +304,7 @@ public:
 	virtual void EndPlay(EEndPlayReason::Type EndPlayReason) override;
 	virtual void Destroyed() override;
 	virtual void OnConstruction(const FTransform& Transform) override;
+	virtual void ApplyWorldOffset(const FVector& InOffset, bool bWorldShift) override;
 	virtual void PostLoad() override;
 	virtual void Serialize(FArchive& Ar) override;
 #if WITH_EDITOR
@@ -275,5 +327,11 @@ private:
 	bool bDisableModify = false;
 	TSharedPtr<FVoxelRuntime> Runtime;
 
+#if WITH_EDITOR
+	bool bPlayerSeen = false;
+	bool bCollisionInvokerComponentSeen = false;
+#endif
+
 	friend FVoxelRuntime;
+	friend class FVoxelWorldDebugTicker;
 };

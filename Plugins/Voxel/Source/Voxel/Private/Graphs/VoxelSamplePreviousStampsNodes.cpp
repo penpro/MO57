@@ -1,11 +1,14 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "Graphs/VoxelSamplePreviousStampsNodes.h"
-#include "Graphs/VoxelStampGraphParameters.h"
 #include "VoxelQuery.h"
 #include "VoxelMetadata.h"
+#include "VoxelGraphPositionParameter.h"
+#include "Graphs/VoxelStampGraphParameters.h"
+#include "Graphs/VoxelPreviewStampDataNodes.h"
 #include "Surface/VoxelSmartSurfaceFunctionLibrary.h"
 #include "VoxelSamplePreviousStampsNodesImpl.ispc.generated.h"
+#include "Surface/VoxelPreviewDataNode_SmartSurfaceTypePreviewData.h"
 
 FVoxelNode_SamplePreviousStampsBase::FVoxelNode_SamplePreviousStampsBase()
 {
@@ -52,7 +55,8 @@ void FVoxelNode_SamplePreviousStampsBase::FixupMetadataPins()
 	}
 	MetadataPins.Reset();
 
-	MetadatasToQuery = TVoxelSet<TObjectPtr<UVoxelMetadata>>(MetadatasToQuery).Array();
+	const TArray<TObjectPtr<UVoxelMetadata>> TempMetadatasToQuery = TVoxelSet<TObjectPtr<UVoxelMetadata>>(MetadatasToQuery).Array();
+	MetadatasToQuery = TempMetadatasToQuery;
 
 	for (UVoxelMetadata* Metadata : MetadatasToQuery)
 	{
@@ -101,6 +105,86 @@ void FVoxelNode_SamplePreviousHeightStamps::Compute(const FVoxelGraphQuery Query
 		if (HeightStamp->BlendMode != EVoxelHeightBlendMode::Override)
 		{
 			VOXEL_MESSAGE(Error, "{0}: blend mode should be set to Override", this);
+			return;
+		}
+
+		if (Query.IsPreview())
+		{
+			const FVoxelGraphParameters::FHeightStampPreviewData* HeightPreviewData = Query->FindParameter<FVoxelGraphParameters::FHeightStampPreviewData>();
+			if (!HeightPreviewData)
+			{
+				VOXEL_MESSAGE(Error, "{0}: No Height Preview Data node in Editor Graph found", this);
+				return;
+			}
+
+			FVoxelGraphQueryImpl& NewGraphQuery = HeightPreviewData->Query.CloneParameters();
+			NewGraphQuery.AddParameter<FVoxelGraphParameters::FPosition2D>().SetLocalPosition(*InPosition);
+
+			FVoxelGraphQuery NewQuery = FVoxelGraphQuery(NewGraphQuery, Query.GetCallstack());
+
+			TOptional<TValue<FVoxelFloatBuffer>> Heights;
+			if (HeightPin.ShouldCompute())
+			{
+				Heights = HeightPreviewData->ValuePin.Get(NewQuery);
+			}
+			TOptional<TValue<FVoxelSurfaceTypeBlendBuffer>> SurfaceTypes;
+			if (SurfaceTypePin.ShouldCompute())
+			{
+				SurfaceTypes = HeightPreviewData->SurfaceTypePin.Get(NewQuery);
+			}
+
+			TVoxelArray<TValue<FVoxelBuffer>> MetadataToBuffer;
+			MetadataToBuffer.Reserve(MetadataPins.Num());
+
+			TSharedPtr<TVoxelMap<FVoxelMetadataRef, int32>> MetadataToBufferIndex = MakeShared<TVoxelMap<FVoxelMetadataRef, int32>>();
+			MetadataToBufferIndex->Reserve(MetadataPins.Num());
+
+			for (const FMetadataPin& MetadataPin : MetadataPins)
+			{
+				if (!MetadataPin.PinRef.ShouldCompute())
+				{
+					continue;
+				}
+
+				if (const TPinRef_Input<FVoxelBuffer>* Pin = HeightPreviewData->MetadataPins.Find(MetadataPin.MetadataRef))
+				{
+					int32 Index = MetadataToBuffer.Add(Pin->Get(NewQuery));
+					MetadataToBufferIndex->Add_EnsureNew(MetadataPin.MetadataRef, Index);
+				}
+			}
+
+			const int32 NumPositions = Position.Num();
+			VOXEL_GRAPH_WAIT(NumPositions, Heights, SurfaceTypes, MetadataToBuffer, MetadataToBufferIndex)
+			{
+				if (Heights.IsSet())
+				{
+					HeightPin.Set(Query, *Heights);
+				}
+				if (SurfaceTypes.IsSet())
+				{
+					SurfaceTypePin.Set(Query, *SurfaceTypes);
+				}
+
+				for (const FMetadataPin& MetadataPin : MetadataPins)
+				{
+					if (!MetadataPin.PinRef.ShouldCompute())
+					{
+						continue;
+					}
+
+					TSharedPtr<const FVoxelBuffer> Result;
+					if (const int32* Index = MetadataToBufferIndex->Find(MetadataPin.MetadataRef))
+					{
+						Result = MetadataToBuffer[*Index];
+					}
+					else
+					{
+						Result = MetadataPin.MetadataRef.MakeDefaultBuffer(NumPositions);
+					}
+
+					MetadataPin.PinRef.Set(Query, FVoxelRuntimePinValue::Make(Result.ToSharedRef()));
+				}
+			};
 			return;
 		}
 
@@ -270,6 +354,86 @@ void FVoxelNode_SamplePreviousVolumeStamps::Compute(const FVoxelGraphQuery Query
 			return;
 		}
 
+		if (Query.IsPreview())
+		{
+			const FVoxelGraphParameters::FVolumeStampPreviewData* VolumePreviewData = Query->FindParameter<FVoxelGraphParameters::FVolumeStampPreviewData>();
+			if (!VolumePreviewData)
+			{
+				VOXEL_MESSAGE(Error, "{0}: No Volume Preview Data node in Editor Graph found", this);
+				return;
+			}
+
+			FVoxelGraphQueryImpl& NewGraphQuery = VolumePreviewData->Query.CloneParameters();
+			NewGraphQuery.AddParameter<FVoxelGraphParameters::FPosition3D>().SetLocalPosition(*InPosition);
+
+			FVoxelGraphQuery NewQuery = FVoxelGraphQuery(NewGraphQuery, Query.GetCallstack());
+
+			TOptional<TValue<FVoxelFloatBuffer>> Distances;
+			if (DistancePin.ShouldCompute())
+			{
+				Distances = VolumePreviewData->ValuePin.Get(NewQuery);
+			}
+			TOptional<TValue<FVoxelSurfaceTypeBlendBuffer>> SurfaceTypes;
+			if (SurfaceTypePin.ShouldCompute())
+			{
+				SurfaceTypes = VolumePreviewData->SurfaceTypePin.Get(NewQuery);
+			}
+
+			TVoxelArray<TValue<FVoxelBuffer>> MetadataToBuffer;
+			MetadataToBuffer.Reserve(MetadataPins.Num());
+
+			TSharedPtr<TVoxelMap<FVoxelMetadataRef, int32>> MetadataToBufferIndex = MakeShared<TVoxelMap<FVoxelMetadataRef, int32>>();
+			MetadataToBufferIndex->Reserve(MetadataPins.Num());
+
+			for (const FMetadataPin& MetadataPin : MetadataPins)
+			{
+				if (!MetadataPin.PinRef.ShouldCompute())
+				{
+					continue;
+				}
+
+				if (const TPinRef_Input<FVoxelBuffer>* Pin = VolumePreviewData->MetadataPins.Find(MetadataPin.MetadataRef))
+				{
+					int32 Index = MetadataToBuffer.Add(Pin->Get(NewQuery));
+					MetadataToBufferIndex->Add_EnsureNew(MetadataPin.MetadataRef, Index);
+				}
+			}
+
+			const int32 NumPositions = Position.Num();
+			VOXEL_GRAPH_WAIT(NumPositions, Distances, SurfaceTypes, MetadataToBuffer, MetadataToBufferIndex)
+			{
+				if (Distances.IsSet())
+				{
+					DistancePin.Set(Query, *Distances);
+				}
+				if (SurfaceTypes.IsSet())
+				{
+					SurfaceTypePin.Set(Query, *SurfaceTypes);
+				}
+
+				for (const FMetadataPin& MetadataPin : MetadataPins)
+				{
+					if (!MetadataPin.PinRef.ShouldCompute())
+					{
+						continue;
+					}
+
+					TSharedPtr<const FVoxelBuffer> Result;
+					if (const int32* Index = MetadataToBufferIndex->Find(MetadataPin.MetadataRef))
+					{
+						Result = MetadataToBuffer[*Index];
+					}
+					else
+					{
+						Result = MetadataPin.MetadataRef.MakeDefaultBuffer(NumPositions);
+					}
+
+					MetadataPin.PinRef.Set(Query, FVoxelRuntimePinValue::Make(Result.ToSharedRef()));
+				}
+			};
+			return;
+		}
+
 		const FVoxelGraphParameters::FVolumeQuery* VolumeQuery = Query->FindParameter<FVoxelGraphParameters::FVolumeQuery>();
 		if (!VolumeQuery ||
 			!VolumeQuery->QueryPrevious)
@@ -424,6 +588,86 @@ void FVoxelNode_SampleTerrain::Compute(const FVoxelGraphQuery Query) const
 
 		VOXEL_FUNCTION_COUNTER_NUM(Position.Num());
 		FVoxelNodeStatScope StatScope(*this, Position.Num());
+
+		if (Query.IsPreview())
+		{
+			const FVoxelGraphParameters::FSmartSurfaceTypePreview* Parameter = Query->FindParameter<FVoxelGraphParameters::FSmartSurfaceTypePreview>();
+			if (!Parameter)
+			{
+				VOXEL_MESSAGE(Error, "{0}: No Smart Surface Type Preview Data node in Editor Graph found", this);
+				return;
+			}
+
+			FVoxelGraphQueryImpl& NewGraphQuery = Parameter->Query.CloneParameters();
+			NewGraphQuery.AddParameter<FVoxelGraphParameters::FPosition3D>().SetLocalPosition(*InPosition);
+
+			FVoxelGraphQuery NewQuery = FVoxelGraphQuery(NewGraphQuery, Query.GetCallstack());
+
+			TOptional<TValue<FVoxelFloatBuffer>> Distances;
+			if (DistancePin.ShouldCompute())
+			{
+				Distances = Parameter->ValuePin.Get(NewQuery);
+			}
+			TOptional<TValue<FVoxelSurfaceTypeBlendBuffer>> SurfaceTypes;
+			if (SurfaceTypePin.ShouldCompute())
+			{
+				SurfaceTypes = Parameter->SurfaceTypePin.Get(NewQuery);
+			}
+
+			TVoxelArray<TValue<FVoxelBuffer>> MetadataToBuffer;
+			MetadataToBuffer.Reserve(MetadataPins.Num());
+
+			TSharedPtr<TVoxelMap<FVoxelMetadataRef, int32>> MetadataToBufferIndex = MakeShared<TVoxelMap<FVoxelMetadataRef, int32>>();
+			MetadataToBufferIndex->Reserve(MetadataPins.Num());
+
+			for (const FMetadataPin& MetadataPin : MetadataPins)
+			{
+				if (!MetadataPin.PinRef.ShouldCompute())
+				{
+					continue;
+				}
+
+				if (const TPinRef_Input<FVoxelBuffer>* Pin = Parameter->MetadataPins.Find(MetadataPin.MetadataRef))
+				{
+					int32 Index = MetadataToBuffer.Add(Pin->Get(NewQuery));
+					MetadataToBufferIndex->Add_EnsureNew(MetadataPin.MetadataRef, Index);
+				}
+			}
+
+			const int32 NumPositions = Position.Num();
+			VOXEL_GRAPH_WAIT(NumPositions, Distances, SurfaceTypes, MetadataToBuffer, MetadataToBufferIndex)
+			{
+				if (Distances.IsSet())
+				{
+					DistancePin.Set(Query, *Distances);
+				}
+				if (SurfaceTypes.IsSet())
+				{
+					SurfaceTypePin.Set(Query, *SurfaceTypes);
+				}
+
+				for (const FMetadataPin& MetadataPin : MetadataPins)
+				{
+					if (!MetadataPin.PinRef.ShouldCompute())
+					{
+						continue;
+					}
+
+					TSharedPtr<const FVoxelBuffer> Result;
+					if (const int32* Index = MetadataToBufferIndex->Find(MetadataPin.MetadataRef))
+					{
+						Result = MetadataToBuffer[*Index];
+					}
+					else
+					{
+						Result = MetadataPin.MetadataRef.MakeDefaultBuffer(NumPositions);
+					}
+
+					MetadataPin.PinRef.Set(Query, FVoxelRuntimePinValue::Make(Result.ToSharedRef()));
+				}
+			};
+			return;
+		}
 
 		const FVoxelGraphParameters::FSmartSurfaceUniform* SmartSurface = Query->FindParameter<FVoxelGraphParameters::FSmartSurfaceUniform>();
 		if (!SmartSurface)

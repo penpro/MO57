@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -133,6 +133,10 @@ public:
 	FVoxelGraphPreviewConfig PreviewConfig;
 #endif
 
+	// Will disable common nodes sub-tree merging
+	UPROPERTY(EditAnywhere, Category = "Config", AdvancedDisplay)
+	bool bDisableNodeMerging = false;
+
 public:
 	UVoxelGraph& GetGraph();
 	const UVoxelGraph& GetGraph() const;
@@ -258,9 +262,14 @@ public:
 	//~ Begin UObject Interface
 	virtual void PostLoad() override;
 	virtual void Serialize(FArchive& Ar) override;
+#if WITH_EDITOR
+	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
+#endif
 	//~ End UObject Interface
 
 private:
 	UPROPERTY()
 	TObjectPtr<UVoxelTerminalGraphRuntime> Runtime;
+
+	friend class UVoxelTerminalGraphRuntime;
 };

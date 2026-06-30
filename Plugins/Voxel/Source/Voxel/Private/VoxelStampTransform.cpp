@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelStampTransform.h"
 
@@ -16,7 +16,7 @@ FVoxelHeightTransform FVoxelHeightTransform::Create(
 	const FTransform& StampToWorld,
 	const FTransform& WorldToQuery,
 	const FVoxelBox& StampBounds,
-	const float BoundsExtension)
+	const float HeightPaddingMultiplier)
 {
 	ensure(!StampBounds.IsInfinite());
 	ensure(StampBounds.IsValidAndNotEmpty());
@@ -88,7 +88,7 @@ FVoxelHeightTransform FVoxelHeightTransform::Create(
 
 	const FVoxelBox QueryBounds = Result.GetBounds(StampBounds);
 
-	Result.HeightPadding = QueryBounds.Size().Z * BoundsExtension;
+	Result.HeightPadding = QueryBounds.Size().Z * HeightPaddingMultiplier;
 	Result.MinHeight = FVoxelUtilities::DoubleToFloat_Higher(QueryBounds.Min.Z - Result.HeightPadding);
 	Result.MaxHeight = FVoxelUtilities::DoubleToFloat_Lower(QueryBounds.Max.Z + Result.HeightPadding);
 
@@ -158,7 +158,8 @@ FVoxelVolumeTransform FVoxelVolumeTransform::Create(
 	const FTransform& StampToWorld,
 	const FTransform& WorldToQuery,
 	const FVoxelBox& StampBounds,
-	const float BoundsExtension)
+	const float BoundsExtensionMultiplier,
+	const float MaximumBoundsExtension)
 {
 	ensure(!StampBounds.IsInfinite());
 	ensure(StampBounds.IsValidAndNotEmpty());
@@ -175,7 +176,7 @@ FVoxelVolumeTransform FVoxelVolumeTransform::Create(
 	const FVoxelBox WorldBounds = StampBounds.TransformBy(StampToWorld);
 
 	// Always compute MaxDistance on WorldBounds to stay consistent
-	Result.MaxDistance = WorldBounds.Size().GetAbsMin() * BoundsExtension;
+	Result.MaxDistance = FMath::Min(WorldBounds.Size().GetAbsMin() * BoundsExtensionMultiplier, MaximumBoundsExtension);
 
 	if (GVoxelDisableMaxDistance)
 	{

@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelMinimal.isph"
 #include "VoxelStampQueryImpl.isph"
@@ -64,9 +64,9 @@ FORCEINLINE const void* uniform FindChunk(
 
 export void VoxelVolumeChunkTreeIterator_CreateIterator_Bulk(
 	const uniform FVoxelVolumeBulkQuery& Query,
-	const uniform FVoxelVolumeTransform& StampToQuery,
+	const uniform FVoxelVolumeTransform& SculptToQuery,
+	const uniform double Offset,
 	const void* uniform KeyToChunk,
-	const uniform float Scale,
 	uniform uint8 OutHasMaxChunk[],
 	uniform int32 OutIndirectIndex[],
 	uniform float OutAlphaX[],
@@ -99,7 +99,7 @@ export void VoxelVolumeChunkTreeIterator_CreateIterator_Bulk(
 			{
 				const varying int32 IndexX = Query.StartIndex.x + Index;
 				const varying int32 IndirectIndex = GetIndex(Query, IndexX, IndexY, IndexZ);
-				const varying double3 Position = InverseTransform_double(StampToQuery, GetPosition(Query, IndexX, IndexY, IndexZ)) / Scale;
+				const varying double3 Position = InverseTransform_double(SculptToQuery, GetPosition(Query, IndexX, IndexY, IndexZ)) + Offset;
 				const varying int32 WriteIndex = GlobalWriteIndex + Index;
 
 				const varying int3 PositionMin = MakeInt3(floor(Position));

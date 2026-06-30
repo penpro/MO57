@@ -1,12 +1,10 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
 #include "VoxelCoreMinimal.h"
 #include "Math/TransformCalculus2D.h"
 #include "VoxelMinimal/VoxelInterval.h"
-#include "VoxelMinimal/Containers/VoxelArray.h"
-#include "VoxelMinimal/Containers/VoxelArrayView.h"
 #include "VoxelMinimal/Utilities/VoxelHashUtilities.h"
 #include "VoxelMinimal/Utilities/VoxelVectorUtilities.h"
 #include "VoxelBox.generated.h"

@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -56,6 +56,8 @@ public:
 
 	static TSharedRef<FVoxelAABBTree2D> Create(TVoxelArray<FElement>&& Elements);
 	static TSharedRef<FVoxelAABBTree2D> Create(TConstVoxelArrayView<FVoxelBox2D> Bounds);
+	static TSharedRef<FVoxelAABBTree2D> Create(const TVoxelChunkedArray<FVoxelBox2D>& Bounds);
+	static TSharedRef<FVoxelAABBTree2D> Create(const TVoxelChunkedArray<FVoxelIntBox2D>& Bounds);
 
 public:
 	FORCEINLINE bool IsEmpty() const

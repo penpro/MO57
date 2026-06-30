@@ -1,23 +1,10 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
 #include "VoxelMinimal.h"
 #include "VoxelFunctionLibrary.h"
 #include "VoxelPCGFunctionLibrary.generated.h"
-
-namespace FVoxelGraphParameters
-{
-	struct FPCGBounds : FUniformParameter
-	{
-		const FVoxelBox Bounds;
-
-		explicit FPCGBounds(const FVoxelBox& Bounds)
-			: Bounds(Bounds)
-		{
-		}
-	};
-}
 
 UCLASS()
 class VOXELPCG_API UVoxelPCGFunctionLibrary : public UVoxelFunctionLibrary

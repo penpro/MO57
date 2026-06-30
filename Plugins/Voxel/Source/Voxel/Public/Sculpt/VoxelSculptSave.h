@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -58,7 +58,7 @@ struct VOXEL_API FVoxelHeightSculptSave
 {
 	GENERATED_BODY()
 
-	friend class AVoxelHeightSculptActor;
+	friend class AVoxelSculptHeight;
 };
 
 USTRUCT(BlueprintType)
@@ -69,5 +69,5 @@ struct VOXEL_API FVoxelVolumeSculptSave
 {
 	GENERATED_BODY()
 
-	friend class AVoxelVolumeSculptActor;
+	friend class AVoxelSculptVolume;
 };

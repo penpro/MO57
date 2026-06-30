@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelDebugDrawerManager.h"
 #include "SceneRendering.h"
@@ -183,7 +183,11 @@ void FVoxelDebugDrawerWorldManager::RenderPoints_RenderThread(
 	const TShaderMapRef<FVoxelDebugPointVS> VertexShader(ShaderMap);
 	const TShaderMapRef<FVoxelDebugPointPS> PixelShader(ShaderMap);
 
+#if VOXEL_ENGINE_VERSION >= 508
+	RDG_EVENT_SCOPE_STAT(GraphBuilder, VoxelDebugDrawPoints, "VoxelDebugDrawPoints");
+#else
 	RDG_GPU_STAT_SCOPE(GraphBuilder, VoxelDebugDrawPoints);
+#endif
 
 	GraphBuilder.AddPass(
 		RDG_EVENT_NAME("VoxelDebugDraw Points"),
@@ -289,7 +293,7 @@ void FVoxelDebugDrawerWorldManager::RenderLines_RenderThread(
 		return;
 	}
 
-	const FMatrix Matrix = View.ViewMatrices.GetProjectionMatrix();
+	const FMatrix Matrix = UE_508_SWITCH(View.ViewMatrices.GetProjectionMatrix(), View.ViewMatrices.GetViewToClip());
 
 	FPlane LeftPlane(ForceInit);
 	FPlane RightPlane(ForceInit);
@@ -308,7 +312,11 @@ void FVoxelDebugDrawerWorldManager::RenderLines_RenderThread(
 	const TShaderMapRef<FVoxelDebugLineVS> VertexShader(ShaderMap);
 	const TShaderMapRef<FVoxelDebugLinePS> PixelShader(ShaderMap);
 
+#if VOXEL_ENGINE_VERSION >= 508
+	RDG_EVENT_SCOPE_STAT(GraphBuilder, VoxelDebugDrawLines, "VoxelDebugDrawLines");
+#else
 	RDG_GPU_STAT_SCOPE(GraphBuilder, VoxelDebugDrawLines);
+#endif
 
 	GraphBuilder.AddPass(
 		RDG_EVENT_NAME("VoxelDebugDraw Lines"),
@@ -358,12 +366,16 @@ void FVoxelDebugDrawerWorldManager::Tick()
 
 	World_Unsafe = GetWorld().Resolve_Ensured();
 
+	// Read OriginLocation here on the game thread; the async copy below uses the captured value to
+	// bring Absolute draws into the current world (so they stay aligned across world origin rebasing)
+	const FVector OriginOffset = World_Unsafe ? FVector(World_Unsafe->OriginLocation) : FVector::ZeroVector;
+
 	if (!Future.IsComplete())
 	{
 		return;
 	}
 
-	Future = Voxel::AsyncTask(MakeWeakPtrLambda(this, [this]() -> FVoxelFuture
+	Future = Voxel::AsyncTask(MakeWeakPtrLambda(this, [this, OriginOffset]() -> FVoxelFuture
 	{
 		VOXEL_SCOPE_COUNTER_NUM("FVoxelDebugDrawerManager Cleanup", Groups_RequiresLock.Num());
 
@@ -412,15 +424,43 @@ void FVoxelDebugDrawerWorldManager::Tick()
 		int32 LineIndex = 0;
 		for (const TSharedPtr<const FVoxelDebugDraw>& Draw : DrawsToRender)
 		{
+			// Absolute draws are in world-origin independent space; bring them to the current world
+			const FVector3f Offset =
+				Draw->Space == EVoxelWorldSpace::Absolute
+				? -FVector3f(OriginOffset)
+				: FVector3f(ForceInit);
+			const bool bHasOffset = !Offset.IsZero();
+
 			if (Draw->Points.Num() > 0)
 			{
-				Draw->Points.CopyTo(PointsToRender.View().Slice(PointIndex, Draw->Points.Num()));
+				const TVoxelArrayView<FVoxelDebugPoint> Destination = PointsToRender.View().Slice(PointIndex, Draw->Points.Num());
+				Draw->Points.CopyTo(Destination);
+
+				if (bHasOffset)
+				{
+					for (FVoxelDebugPoint& Point : Destination)
+					{
+						Point.Center += Offset;
+					}
+				}
+
 				PointIndex += Draw->Points.Num();
 			}
 
 			if (Draw->Lines.Num() > 0)
 			{
-				Draw->Lines.CopyTo(LinesToRender.View().Slice(LineIndex, Draw->Lines.Num()));
+				const TVoxelArrayView<FVoxelDebugLine> Destination = LinesToRender.View().Slice(LineIndex, Draw->Lines.Num());
+				Draw->Lines.CopyTo(Destination);
+
+				if (bHasOffset)
+				{
+					for (FVoxelDebugLine& Line : Destination)
+					{
+						Line.Start += Offset;
+						Line.End += Offset;
+					}
+				}
+
 				LineIndex += Draw->Lines.Num();
 			}
 		}

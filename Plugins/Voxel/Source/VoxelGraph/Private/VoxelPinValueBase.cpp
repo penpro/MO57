@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelPinValueBase.h"
 #include "VoxelPinValueOps.h"
@@ -205,7 +205,6 @@ void FVoxelPinValueBase::ExportToProperty(const FProperty& Property, void* Memor
 		ensure(false);
 		return;
 	}
-	break;
 	case EVoxelPinInternalType::Double:
 	{
 		if (!ensure(Property.IsA<FDoubleProperty>()))
@@ -451,7 +450,8 @@ bool FVoxelPinValueBase::ImportFromString(const FString& Value)
 	}
 	case EVoxelPinInternalType::Class:
 	{
-		check(IsInGameThread());
+		checkUObjectAccess();
+
 		UClass* LoadedClass = Cast<UClass>(FSoftObjectPtr(Value).LoadSynchronous());
 
 		if (LoadedClass &&
@@ -465,7 +465,8 @@ bool FVoxelPinValueBase::ImportFromString(const FString& Value)
 	}
 	case EVoxelPinInternalType::Object:
 	{
-		check(IsInGameThread());
+		checkUObjectAccess();
+
 		UObject* LoadedObject = FSoftObjectPtr(Value).LoadSynchronous();
 
 		if (LoadedObject &&

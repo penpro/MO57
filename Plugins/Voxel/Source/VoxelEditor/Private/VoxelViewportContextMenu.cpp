@@ -1,7 +1,8 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelEditorMinimal.h"
 
+#include "VoxelMesh.h"
 #include "VoxelQuery.h"
 #include "VoxelState.h"
 #include "VoxelWorld.h"
@@ -9,7 +10,10 @@
 #include "VoxelRuntime.h"
 #include "VoxelValuesDump.h"
 #include "VoxelEditorSettings.h"
+#include "VoxelMesherDebugEditor.h"
 #include "SVoxelStampDeltaList.h"
+#include "Render/VoxelMeshComponent.h"
+#include "Render/VoxelMeshRenderProxy.h"
 #include "Collision/VoxelCollisionChannels.h"
 
 #include "ToolMenus.h"
@@ -78,51 +82,49 @@ public:
 			LocalPosition,
 			0);
 
-		if (StampDeltas.Num() == 0)
-		{
-			return;
-		}
-
 		FToolMenuSection& Section = ToolMenu->AddSection("VoxelStamps", INVTEXT("Voxel Stamps"));
 
-		if (GVoxelStampDeltaListTabManager->IsTabOpened())
+		if (StampDeltas.Num() > 0)
 		{
-			Section.AddMenuEntry(
-				"VoxelStamps",
-				INVTEXT("Voxel Stamps [" + LexToString(StampDeltas.Num()) + "]"),
-				{},
-				FSlateIcon(FVoxelEditorStyle::GetStyleSetName(), "VoxelIcon"),
-				FToolUIActionChoice(MakeLambdaDelegate([StampDeltas]
-				{
-					GVoxelStampDeltaListTabManager->OpenStampDeltaList(StampDeltas);
-				})));
-		}
-		else
-		{
-			Section.AddSubMenu(
-				"VoxelStamps",
-				FText::FromString("Voxel Stamps [" + LexToString(StampDeltas.Num()) + "]"),
-				{},
-				FNewToolMenuDelegate::CreateLambda([StampDeltas](UToolMenu* Menu)
-				{
-					Menu->bSearchable = false;
+			if (GVoxelStampDeltaListTabManager->IsTabOpened())
+			{
+				Section.AddMenuEntry(
+					"VoxelStamps",
+					INVTEXT("Voxel Stamps [" + LexToString(StampDeltas.Num()) + "]"),
+					{},
+					FSlateIcon(FVoxelEditorStyle::GetStyleSetName(), "VoxelIcon"),
+					FToolUIActionChoice(MakeLambdaDelegate([StampDeltas]
+					{
+						GVoxelStampDeltaListTabManager->OpenStampDeltaList(StampDeltas);
+					})));
+			}
+			else
+			{
+				Section.AddSubMenu(
+					"VoxelStamps",
+					FText::FromString("Voxel Stamps [" + LexToString(StampDeltas.Num()) + "]"),
+					{},
+					FNewToolMenuDelegate::CreateLambda([StampDeltas](UToolMenu* Menu)
+					{
+						Menu->bSearchable = false;
 
-					TSharedPtr<SVoxelStampDeltaList> StampsListWidget;
-					const TSharedRef<SWidget> Widget =
-						SNew(SBox)
-						.MaxDesiredHeight(400.f)
-						.MinDesiredWidth(500.f)
-						[
-							SAssignNew(StampsListWidget, SVoxelStampDeltaList)
-						];
+						TSharedPtr<SVoxelStampDeltaList> StampsListWidget;
+						const TSharedRef<SWidget> Widget =
+							SNew(SBox)
+							.MaxDesiredHeight(400.f)
+							.MinDesiredWidth(500.f)
+							[
+								SAssignNew(StampsListWidget, SVoxelStampDeltaList)
+							];
 
-					StampsListWidget->UpdateStamps(StampDeltas);
+						StampsListWidget->UpdateStamps(StampDeltas);
 
-					FToolMenuSection& LocalSection = Menu->AddSection("Stamps");
-					LocalSection.AddEntry(FToolMenuEntry::InitWidget("PickStamp", Widget, FText::GetEmpty(), false, false, true));
-				}),
-				false,
-				FSlateIcon(FVoxelEditorStyle::GetStyleSetName(), "VoxelIcon"));
+						FToolMenuSection& LocalSection = Menu->AddSection("Stamps");
+						LocalSection.AddEntry(FToolMenuEntry::InitWidget("PickStamp", Widget, FText::GetEmpty(), false, false, true));
+					}),
+					false,
+					FSlateIcon(FVoxelEditorStyle::GetStyleSetName(), "VoxelIcon"));
+			}
 		}
 
 		Section.AddMenuEntry(
@@ -141,6 +143,52 @@ public:
 					LayerToRender.Layer.Resolve_Ensured(),
 					WorldPosition);
 			})));
+
+		const TArray<FVoxelMesherDebugChunk> NearbyChunks = INLINE_LAMBDA -> TArray<FVoxelMesherDebugChunk>
+		{
+			constexpr double SearchRadius = 1600.0;
+
+			TArray<FVoxelMesherDebugChunk> Result;
+
+			for (UVoxelMeshComponent* MeshComponent : TInlineComponentArray<UVoxelMeshComponent*>(LevelEditorContext->HitProxyActor.Get()))
+			{
+				const TSharedPtr<FVoxelMeshRenderProxy> RenderProxy = MeshComponent->GetRenderProxy();
+				if (!RenderProxy)
+				{
+					continue;
+				}
+
+				const FBoxSphereBounds Bounds = MeshComponent->Bounds;
+				const FBox Box(Bounds.Origin - Bounds.BoxExtent, Bounds.Origin + Bounds.BoxExtent);
+
+				if (Box.ComputeSquaredDistanceToPoint(WorldPosition) > FMath::Square(SearchRadius))
+				{
+					continue;
+				}
+
+				Result.Add({ RenderProxy->Mesh, MeshComponent->GetComponentTransform() });
+			}
+
+			return Result;
+		};
+
+		if (NearbyChunks.Num() > 0)
+		{
+			Section.AddMenuEntry(
+				"VoxelMesherDebug",
+				INVTEXT("Debug meshing"),
+				{},
+				FSlateIcon(FVoxelEditorStyle::GetStyleSetName(), "VoxelIcon"),
+				FToolUIActionChoice(MakeLambdaDelegate([
+					NearbyChunks,
+					WorldPosition,
+					Layers = State->Layers,
+					SurfaceTypeTable = State->SurfaceTypeTable,
+					WeakLayer = State->Config->LayerToRender]
+				{
+					FVoxelMesherDebugEditor::Open(NearbyChunks, WorldPosition, Layers, SurfaceTypeTable, WeakLayer);
+				})));
+		}
 
 #if 0
 		Section.AddMenuEntry(

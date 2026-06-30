@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -10,9 +10,9 @@ class FPrimitiveUniformShaderParameters;
 
 BEGIN_GLOBAL_SHADER_PARAMETER_STRUCT(FVoxelMaterialSelectionParameters, )
 	SHADER_PARAMETER_SCALAR_ARRAY(uint32, RenderIndexToShadingBin, [128])
-	SHADER_PARAMETER_TEXTURE(Texture2D<uint2>, PerPageData_Texture)
 	SHADER_PARAMETER_RDG_TEXTURE(Texture2D<UlongType>, VisBuffer64)
 	SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D<uint>, ShadingMask)
+	SHADER_PARAMETER(uint32, UniqueId)
 END_GLOBAL_SHADER_PARAMETER_STRUCT()
 
 class FVoxelMaterialSelectionCS : public FMaterialShader

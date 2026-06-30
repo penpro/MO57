@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -49,6 +49,8 @@ public:
 	FVoxelInstancedStruct MakeInstancedStruct() const;
 
 	bool Identical(FConstVoxelStructView Other) const;
+	TVoxelArray<FString> GetChanges(FConstVoxelStructView New) const;
+
 	void CopyTo(FVoxelStructView Other) const;
 
 	FORCEINLINE TConstVoxelArrayView<uint8> GetRawView() const

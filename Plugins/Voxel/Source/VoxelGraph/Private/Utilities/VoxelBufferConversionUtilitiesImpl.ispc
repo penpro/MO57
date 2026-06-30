@@ -1,8 +1,34 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelMinimal.isph"
 
 // ReSharper disable CppCStyleCast
+
+export void VoxelBufferConversionUtilities_BooleanToInt32(
+	const uniform bool Bool[],
+	uniform int32 Int32[],
+	const uniform int32 Num)
+{
+	FOREACH(Index, 0, Num)
+	{
+		Int32[Index] = select(Bool[Index], 1, 0);
+	}
+}
+
+export void VoxelBufferConversionUtilities_ByteToInt32(
+	const uniform uint8 Byte[],
+	uniform int32 Int32[],
+	const uniform int32 Num)
+{
+	FOREACH(Index, 0, Num)
+	{
+		Int32[Index] = Byte[Index];
+	}
+}
+
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
 
 export void VoxelBufferConversionUtilities_Int32ToFloat(
 	const uniform int32 Int32[],

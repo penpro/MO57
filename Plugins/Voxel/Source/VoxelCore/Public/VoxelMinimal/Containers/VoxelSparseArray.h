@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -202,7 +202,7 @@ public:
 
 public:
 	template<typename InType>
-	struct TIterator : TVoxelRangeIterator<TIterator<InType>>
+	struct TIterator : TVoxelIterator<TIterator<InType>>
 	{
 	public:
 		TIterator() = default;
@@ -246,7 +246,7 @@ public:
 	{
 		return FConstIterator(*this);
 	}
-	FORCEINLINE FVoxelRangeIteratorEnd end() const
+	FORCEINLINE FVoxelIteratorEnd end() const
 	{
 		return FIterator::end();
 	}

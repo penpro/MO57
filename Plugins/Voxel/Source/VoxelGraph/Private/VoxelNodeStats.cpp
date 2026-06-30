@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelNodeStats.h"
 #include "VoxelNode.h"
@@ -18,7 +18,7 @@ class FVoxelNodeStatManager
 public:
 	struct FQueuedStat
 	{
-		FVoxelGraphNodeRef NodeRef;
+		FVoxelGraphMergedNodeRef NodeRef;
 		double Duration = 0.;
 		int64 Count = 0;
 	};
@@ -28,6 +28,7 @@ public:
 	{
 		double Time = 0.;
 		int64 NumElements = 0;
+		bool bMerged = false;
 	};
 	TVoxelMap<TVoxelObjectPtr<const UEdGraphNode>, FStats> NodeToStats;
 
@@ -40,18 +41,28 @@ public:
 	{
 		VOXEL_FUNCTION_COUNTER();
 
-		FQueuedStat QueuedStat;
-		while (Queue.Dequeue(QueuedStat))
+		const auto AddNode = [this](const FQueuedStat& QueuedStat, UEdGraphNode* GraphNode, const bool bMerged) -> FStats*
 		{
-			UEdGraphNode* GraphNode = QueuedStat.NodeRef.GetGraphNode_EditorOnly();
 			if (!ensure(GraphNode))
 			{
-				continue;
+				return nullptr;
 			}
 
 			FStats& Stats = NodeToStats.FindOrAdd(GraphNode);
 			Stats.Time += QueuedStat.Duration;
 			Stats.NumElements += QueuedStat.Count;
+			Stats.bMerged = bMerged;
+			return &Stats;
+		};
+
+		FQueuedStat QueuedStat;
+		while (Queue.Dequeue(QueuedStat))
+		{
+			AddNode(QueuedStat, QueuedStat.NodeRef.Node.GetGraphNode_EditorOnly(), false);
+			for (const FVoxelGraphNodeRef& Node : QueuedStat.NodeRef.MergedNodes)
+			{
+				AddNode(QueuedStat, Node.GetGraphNode_EditorOnly(), true);
+			}
 		}
 	}
 	//~ End FVoxelSingleton Interface
@@ -81,10 +92,17 @@ public:
 			return {};
 		}
 
-		return FText::Format(INVTEXT("Computed {0} elements in {1}, for an average of {2} per element"),
+		FText MergedString;
+		if (Stats->bMerged)
+		{
+			MergedString = INVTEXT("\nWas merged with another node so performance cost is shared");
+		}
+
+		return FText::Format(INVTEXT("Computed {0} elements in {1}, for an average of {2} per element{3}"),
 			FVoxelUtilities::NumberToText(Stats->NumElements),
 			FVoxelUtilities::SecondsToText(Stats->Time),
-			FVoxelUtilities::SecondsToText(Stats->Time / Stats->NumElements));
+			FVoxelUtilities::SecondsToText(Stats->Time / Stats->NumElements),
+			MergedString);
 	}
 	virtual FText GetNodeText(const UEdGraphNode& Node) override
 	{
@@ -94,10 +112,17 @@ public:
 			return {};
 		}
 
-		return FText::Format(INVTEXT("{0} x {1} = {2}"),
+		FText MergedString;
+		if (Stats->bMerged)
+		{
+			MergedString = INVTEXT(" [Merged]");
+		}
+
+		return FText::Format(INVTEXT("{0} x {1} = {2}{3}"),
 			FVoxelUtilities::SecondsToText(Stats->Time / Stats->NumElements),
 			FVoxelUtilities::NumberToText(Stats->NumElements),
-			FVoxelUtilities::SecondsToText(Stats->Time));
+			FVoxelUtilities::SecondsToText(Stats->Time),
+			MergedString);
 	}
 	//~ End IVoxelNodeStatProvider Interface
 };

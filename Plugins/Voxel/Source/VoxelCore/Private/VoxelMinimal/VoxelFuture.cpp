@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelMinimal.h"
 #include "VoxelTaskContext.h"
@@ -64,8 +64,6 @@ void IVoxelPromiseState::CheckCanAddContinuation(const FVoxelFuture& Future)
 	}
 
 	const TUniquePtr<FVoxelTaskContextStrongRef> ThisContextPtr = ThisContext.Pin();
-	const TUniquePtr<FVoxelTaskContextStrongRef> OtherContextPtr = OtherContext.Pin();
-
 	if (!ThisContextPtr)
 	{
 		return;

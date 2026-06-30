@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelTestManager.h"
 #include "Dom/JsonObject.h"
@@ -124,6 +124,7 @@ VOXEL_RUN_ON_STARTUP_GAME()
 		{
 			LOG_VOXEL(Display, "Tests complete");
 
+			PRAGMA_DISABLE_DEPRECATION_WARNINGS
 			const TSharedRef<FJsonObject> ResultJson = MakeShared<FJsonObject>();
 
 			TVoxelArray<FVoxelTestManager::FTestData> FailedTests;
@@ -221,6 +222,7 @@ VOXEL_RUN_ON_STARTUP_GAME()
 				}
 				Json->SetArrayField("errors", ErrorArray);
 			}
+			PRAGMA_ENABLE_DEPRECATION_WARNINGS
 
 			const FString JsonText = FVoxelUtilities::JsonToString(Json, true);
 			verify(FFileHelper::SaveStringToFile(JsonText, *(FPaths::ProjectSavedDir() / "VoxelTests" / "VoxelTests.json")));

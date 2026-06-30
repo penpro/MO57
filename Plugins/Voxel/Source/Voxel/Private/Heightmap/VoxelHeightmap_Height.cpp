@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "Heightmap/VoxelHeightmap_Height.h"
 #include "Heightmap/VoxelHeightmap.h"
@@ -149,32 +149,45 @@ void UVoxelHeightmap_Height::Serialize(FArchive& Ar)
 	bool bHasEditorOnlyData = !Ar.IsCooking();
 	Ar << bHasEditorOnlyData;
 
-	if (bHasEditorOnlyData)
-	{
-		ensure(!FPlatformProperties::RequiresCookedData());
-		return;
-	}
-
 	if (Ar.IsLoading())
 	{
+		if (bHasEditorOnlyData)
+		{
+			// No serialized data in editor
+			ensure(!FPlatformProperties::RequiresCookedData());
+			return;
+		}
+
+		// We are cooked, use the serialized data
+
 		const TSharedRef<FVoxelHeightmap_HeightData> NewData = MakeShared<FVoxelHeightmap_HeightData>();
 		NewData->Serialize(Ar, this);
 		Data = NewData;
+		return;
 	}
-	else
+
+	if (Ar.IsSaving())
 	{
-#if WITH_EDITOR
-		(void)GetData();
-
-		if (!Data)
+		if (Ar.IsCooking())
 		{
-			Data = MakeShared<FVoxelHeightmap_HeightData>();
-		}
+			// Serialize data if we are cooking
 
-		ConstCast(*Data).Serialize(Ar, this);
-#else
-		ensure(false);
-#endif
+			(void)GetData();
+
+			if (!Data)
+			{
+				Data = MakeShared<FVoxelHeightmap_HeightData>();
+			}
+
+			ConstCast(*Data).Serialize(Ar, this);
+		}
+		return;
+	}
+
+	if (Ar.IsCountingMemory() &&
+		GetData())
+	{
+		ConstCast(*GetData()).Serialize(Ar, this);
 	}
 }
 

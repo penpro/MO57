@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "Graphs/VoxelHeightGraph.h"
 #include "Graphs/VoxelOutputNode_OutputHeight.h"

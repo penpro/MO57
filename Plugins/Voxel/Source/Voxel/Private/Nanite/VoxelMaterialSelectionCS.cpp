@@ -1,8 +1,9 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelMaterialSelectionCS.h"
 #include "MeshDrawShaderBindings.h"
 #include "DataDrivenShaderPlatformInfo.h"
+#include "ShaderCompilerCore.h"
 
 IMPLEMENT_GLOBAL_SHADER_PARAMETER_STRUCT(FVoxelMaterialSelectionParameters, "MaterialSelectionParameters");
 

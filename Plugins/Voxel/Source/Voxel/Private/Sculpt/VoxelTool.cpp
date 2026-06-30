@@ -1,13 +1,24 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "Sculpt/VoxelTool.h"
 #include "Collision/VoxelCollisionChannels.h"
 #include "Landscape.h"
+#include "Engine/StaticMeshActor.h"
 #include "Framework/Application/SlateApplication.h"
 
 UVoxelTool::~UVoxelTool()
 {
 	ensure(!bIsActive);
+}
+
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+
+FVector UVoxelTool::GetWorldOriginOffset() const
+{
+	const UWorld* World = WeakWorld.Resolve();
+	return World ? FVector(World->OriginLocation) : FVector::ZeroVector;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -76,7 +87,7 @@ void UVoxelTool::CallTick(const FRay& Ray, const bool bInverseAction)
 		HitResult,
 		Ray.Origin,
 		Ray.Origin + Ray.Direction * 1e6,
-		ECC_VoxelEditor,
+		!World->IsGameWorld() ? FCollisionObjectQueryParams(ECC_VoxelEditor) : FCollisionObjectQueryParams(FCollisionObjectQueryParams::AllObjects),
 		QueryParams);
 
 	if (bValidHit)
@@ -153,12 +164,24 @@ AActor* UVoxelTool::SpawnActor(UClass* Class)
 	FActorSpawnParameters SpawnParameters;
 	SpawnParameters.ObjectFlags |= RF_Transient;
 #if WITH_EDITOR
-	SpawnParameters.bTemporaryEditorActor = true;
-	SpawnParameters.bHideFromSceneOutliner = true;
+	if (!World->IsGameWorld())
+	{
+		SpawnParameters.bTemporaryEditorActor = true;
+		SpawnParameters.bHideFromSceneOutliner = true;
+	}
 #endif
 
 	AActor* Actor = World->SpawnActor<AActor>(Class, SpawnParameters);
-	ensure(Actor);
+	if (!ensure(Actor))
+	{
+		return nullptr;
+	}
+
+	if (AStaticMeshActor* StaticMeshActor = Cast<AStaticMeshActor>(Actor))
+	{
+		StaticMeshActor->SetMobility(EComponentMobility::Movable);
+	}
+
 	Actors.Add(Actor);
 	return Actor;
 }
@@ -259,7 +282,11 @@ void UVoxelTool::FindProjectionAverage(
 		VOXEL_SCOPE_COUNTER("Linetrace");
 
 		FHitResult OutHit;
-		if (World->LineTraceSingleByChannel(OutHit, Start, End, ECC_VoxelEditor))
+		if (World->LineTraceSingleByObjectType(
+			OutHit,
+			Start,
+			End,
+			!World->IsGameWorld() ? FCollisionObjectQueryParams(ECC_VoxelEditor) : FCollisionObjectQueryParams(FCollisionObjectQueryParams::AllObjects)))
 		{
 			Hits.Add(OutHit);
 		}

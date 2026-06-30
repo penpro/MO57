@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -6,7 +6,7 @@
 #include "VoxelGraph.h"
 #include "VoxelVolumeSculptGraph.generated.h"
 
-UCLASS(BlueprintType, meta = (AssetSubMenu = "Graph"))
+UCLASS(BlueprintType, meta = (AssetSubMenu = "Sculpting"))
 class VOXEL_API UVoxelVolumeSculptGraph : public UVoxelGraph
 {
 	GENERATED_BODY()

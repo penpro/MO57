@@ -1,54 +1,19 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
 #include "VoxelMinimal.h"
 #include "VoxelNode.h"
-#include "VoxelMetadataRef.h"
 #include "VoxelHeightStampRef.h"
+#include "VoxelNode_MetadataPinsBase.h"
 #include "VoxelVolumeStampRef.h"
 #include "Graphs/VoxelGraphStamp.h"
 #include "Buffer/VoxelDoubleBuffers.h"
 #include "Surface/VoxelSurfaceTypeBlendBuffer.h"
 #include "VoxelSampleStampNodes.generated.h"
 
-USTRUCT(meta = (Abstract))
-struct VOXEL_API FVoxelNode_SampleStamp : public FVoxelNode
-{
-	GENERATED_BODY()
-	GENERATED_VOXEL_NODE_BODY()
-
-public:
-	FVoxelNode_SampleStamp();
-
-	//~ Begin FVoxelNode Interface
-	virtual void Initialize(FInitializer& Initializer) override;
-	virtual void PostSerialize() override;
-#if WITH_EDITOR
-	virtual EPostEditChange PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
-#endif
-	//~ End FVoxelNode Interface
-
-public:
-	struct FMetadataPin
-	{
-		FVoxelMetadataRef MetadataRef;
-		FPinRef_Output PinRef;
-	};
-	TVoxelArray<FMetadataPin> MetadataPins;
-
-	UPROPERTY(EditAnywhere, Category = "Config")
-	TArray<TObjectPtr<UVoxelMetadata>> MetadatasToQuery;
-
-	void FixupMetadataPins();
-};
-
-///////////////////////////////////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////////////////////
-
 USTRUCT(Category = "Stamp", meta = (Abstract))
-struct VOXEL_API FVoxelNode_SampleHeightStampBase : public FVoxelNode_SampleStamp
+struct VOXEL_API FVoxelNode_SampleHeightStampBase : public FVoxelNode_MetadataPinsBase
 {
 	GENERATED_BODY()
 	GENERATED_VOXEL_NODE_BODY()
@@ -67,7 +32,7 @@ protected:
 };
 
 USTRUCT(Category = "Stamp", meta = (Abstract))
-struct VOXEL_API FVoxelNode_SampleVolumeStampBase : public FVoxelNode_SampleStamp
+struct VOXEL_API FVoxelNode_SampleVolumeStampBase : public FVoxelNode_MetadataPinsBase
 {
 	GENERATED_BODY()
 	GENERATED_VOXEL_NODE_BODY()

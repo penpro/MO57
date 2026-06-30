@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -23,7 +23,7 @@ public:
 	{
 		return PrivateName;
 	}
-	int32 GetChunkSize() const
+	float GetChunkSize() const
 	{
 		return PrivateChunkSize;
 	}
@@ -35,6 +35,10 @@ public:
 	{
 		return PrivateEvaluator;
 	}
+	TVoxelObjectPtr<AVoxelScatterActor> GetActorRef() const
+	{
+		return PrivateNodeRef.Actor;
+	}
 
 public:
 	void Initialize(
@@ -43,7 +47,9 @@ public:
 		const TVoxelNodeEvaluator<FVoxelNode_ScatterBase>& Evaluator);
 
 public:
-	virtual	void Compute(const FVoxelSubsystem& Subsystem) {}
+	virtual	void Compute(
+		const FVoxelSubsystem& Subsystem,
+		const TVoxelArray<FVector>& Invokers) {}
 	virtual void Render(FVoxelRuntime& Runtime) {}
 	virtual void Destroy(FVoxelRuntime& Runtime) {}
 
@@ -54,7 +60,7 @@ private:
 	FVoxelScatterNodeWeakRef PrivateNodeRef;
 	TVoxelNodeEvaluator<FVoxelNode_ScatterBase> PrivateEvaluator;
 	FName PrivateName;
-	int32 PrivateChunkSize = 0;
+	float PrivateChunkSize = 0.f;
 	TSharedPtr<FVoxelDependencyTracker> DependencyTracker;
 };
 

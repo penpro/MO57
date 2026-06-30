@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelPinValueBlueprintLibrary.h"
 
@@ -46,6 +46,17 @@ DEFINE_FUNCTION(UVoxelPinValueBlueprintLibrary::execK2_BreakVoxelPinValue)
 	Stack.MostRecentPropertyAddress = nullptr;
 
 	Stack.StepCompiledIn<FProperty>(nullptr);
+
+	// Is null on startup, when Python is enabled
+	if (!Stack.PropertyChainForCompiledIn)
+	{
+		P_NATIVE_BEGIN;
+		Value = {};
+		bIsValid = false;
+		P_NATIVE_END;
+
+		return;
+	}
 
 	const FProperty* Property = Stack.MostRecentProperty;
 	void* PropertyAddress = Stack.MostRecentPropertyAddress;

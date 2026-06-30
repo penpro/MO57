@@ -1,9 +1,12 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "FunctionLibrary/VoxelCurveFunctionLibrary.h"
 #include "VoxelDependency.h"
 #include "VoxelInvalidationCallstack.h"
 #include "VoxelCurveFunctionLibraryImpl.ispc.generated.h"
+
+VOXEL_REGISTER_FUNCTION(UVoxelCurveFunctionLibrary, SampleCurve);
+VOXEL_REGISTER_FUNCTION(UVoxelCurveFunctionLibrary, MakeCurveFromAsset);
 
 struct FVoxelCurveData
 {

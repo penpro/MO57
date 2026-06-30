@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelEditorMinimal.h"
 #include "MegaMaterial/VoxelMegaMaterial.h"
@@ -10,15 +10,11 @@
 VOXEL_CUSTOMIZE_CLASS(UVoxelMegaMaterial)(IDetailLayoutBuilder& DetailLayout)
 {
 	// Top category
-	DetailLayout.EditCategory("Materials");
-	DetailLayout.EditCategory("Global");
+	DetailLayout.EditCategory("Settings");
+	DetailLayout.EditCategory("Material Generation");
 
-	const TSharedRef<IPropertyHandle> SurfaceTypesHandle = DetailLayout.GetProperty(GET_MEMBER_NAME_STATIC(UVoxelMegaMaterial, SurfaceTypes), UVoxelMegaMaterial::StaticClass());
-
-	if (!SurfaceTypesHandle->IsExpanded())
-	{
-		SurfaceTypesHandle->SetExpanded(true);
-	}
+	// SurfaceTypes is edited in the toolkit's left pane (SVoxelMegaMaterialSurfaceGrid)
+	DetailLayout.HideProperty(GET_MEMBER_NAME_STATIC(UVoxelMegaMaterial, SurfaceTypes), UVoxelMegaMaterial::StaticClass());
 
 	const auto AddButton = [&](
 		IDetailCategoryBuilder& CategoryBuilder,
@@ -106,7 +102,8 @@ VOXEL_CUSTOMIZE_CLASS(UVoxelMegaMaterial)(IDetailLayoutBuilder& DetailLayout)
 		});
 	}
 
-	IDetailCategoryBuilder& Category = DetailLayout.EditCategory("Misc");
+	IDetailCategoryBuilder& Category = DetailLayout.EditCategory("Debug", FText::GetEmpty(), ECategoryPriority::Uncommon);
+	Category.SetSortOrder(100000);
 
 	Category
 	.AddCustomRow(INVTEXT("Rebuild"))

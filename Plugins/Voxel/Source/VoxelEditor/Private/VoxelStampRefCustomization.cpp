@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelEditorMinimal.h"
 #include "VoxelGraph.h"
@@ -8,6 +8,7 @@
 #include "SVoxelStampTypeSelector.h"
 #include "VoxelStampRefNodeBuilder.h"
 #include "VoxelStampRefDataProvider.h"
+#include "VoxelIntervalCustomization.h"
 #include "Graphs/VoxelHeightGraphStamp.h"
 #include "Graphs/VoxelVolumeGraphStamp.h"
 #include "VoxelStampComponentBase.h"
@@ -143,7 +144,15 @@ public:
 
 			AddProperty(GET_MEMBER_NAME_CHECKED(FVoxelStamp, StampSeed));
 
-			IDetailGroup& Advanced = DetailInterface.AddGroup("Advanced", INVTEXT("Advanced"));
+			IDetailCategoryBuilder* ParentCategory;
+			if (DetailInterface.IsCategoryBuilder())
+			{
+				ParentCategory = &DetailInterface.GetCategoryBuilder();
+			}
+			else
+			{
+				ParentCategory = &DetailInterface.GetChildrenBuilder().GetParentCategory();
+			}
 
 			const auto AddAdvanced = [&](const FName Name)
 			{
@@ -161,13 +170,53 @@ public:
 
 				Row->Visibility(EVisibility::Collapsed);
 
-				FixupWarningRow(DetailInterface, StructProvider, PropertyHandle, &Advanced.AddPropertyRow(RowProperty.ToSharedRef()));
+				if (Name == GET_MEMBER_NAME_CHECKED(FVoxelStamp, LODRange))
+				{
+					RowProperty->SetInstanceMetaData("VoxelPropertyChain", FVoxelEditorUtilities::GeneratePropertyChain(PropertyHandle));
+
+					RowProperty->SetOnPropertyValuePreChange(MakeLambdaDelegate([PropertyHandle]
+					{
+						PropertyHandle->NotifyPreChange();
+					}));
+					RowProperty->SetOnPropertyValueChangedWithData(MakeLambdaDelegate([PropertyHandle](const FPropertyChangedEvent& PropertyChangedEvent)
+					{
+						FVoxelEditorUtilities::ForeachData<FVoxelStampRef>(PropertyHandle, [&](FVoxelStampRef& StampRef, UObject* Object)
+						{
+							StampRef->FixupProperties();
+						});
+
+						PropertyHandle->NotifyPostChange(PropertyChangedEvent.ChangeType);
+					}));
+
+					RowProperty->SetOnChildPropertyValuePreChange(MakeLambdaDelegate([PropertyHandle]
+					{
+						PropertyHandle->NotifyPreChange();
+					}));
+					RowProperty->SetOnChildPropertyValueChangedWithData(MakeLambdaDelegate([PropertyHandle](const FPropertyChangedEvent& PropertyChangedEvent)
+					{
+						FVoxelEditorUtilities::ForeachData<FVoxelStampRef>(PropertyHandle, [&](FVoxelStampRef& StampRef, UObject* Object)
+						{
+							StampRef->FixupProperties();
+						});
+
+						PropertyHandle->NotifyPostChange(PropertyChangedEvent.ChangeType);
+					}));
+
+					FVoxelIntervalStructCustomizationUtils::UpdateIntervalRow<int32>(
+						RowProperty.ToSharedRef(), 
+						ParentCategory->AddProperty(RowProperty.ToSharedRef(), EPropertyLocation::Advanced));
+					return;
+				}
+
+				FixupWarningRow(DetailInterface, StructProvider, PropertyHandle, &ParentCategory->AddProperty(RowProperty.ToSharedRef(), EPropertyLocation::Advanced));
 			};
 
 			AddAdvanced("AdditionalLayers");
 			AddAdvanced(GET_MEMBER_NAME_CHECKED(FVoxelStamp, LODRange));
 			AddAdvanced(GET_MEMBER_NAME_CHECKED(FVoxelStamp, bDisableStampSelection));
-			AddAdvanced(GET_MEMBER_NAME_CHECKED(FVoxelStamp, BoundsExtension));
+			AddAdvanced(GET_MEMBER_NAME_CHECKED(FVoxelVolumeStamp, BoundsExtensionMultiplier));
+			AddAdvanced(GET_MEMBER_NAME_CHECKED(FVoxelVolumeStamp, MaximumBoundsExtension));
+			AddAdvanced(GET_MEMBER_NAME_CHECKED(FVoxelHeightStamp, HeightPaddingMultiplier));
 			AddAdvanced(GET_MEMBER_NAME_CHECKED(FVoxelStamp, bExcludeFromPriorityIncrements));
 		}
 

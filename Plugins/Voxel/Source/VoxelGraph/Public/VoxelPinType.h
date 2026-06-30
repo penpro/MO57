@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -192,7 +192,7 @@ private:
 public:
 	FVoxelPinType() = default;
 	FVoxelPinType(const FEdGraphPinType& PinType);
-	explicit FVoxelPinType(const FProperty& Property);
+	explicit FVoxelPinType(const FProperty& Property, bool bAllowBitFields = false);
 
 	static bool IsSupported(const FProperty& Property);
 

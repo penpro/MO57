@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "Render/VoxelTextureManager.h"
 #include "Render/VoxelTexturePool.h"
@@ -12,19 +12,6 @@ FVoxelTextureManager::FVoxelTextureManager(const FVoxelMegaMaterialProxy& MegaMa
 	: MetadataIndexToMetadata(MegaMaterialProxy.GetMetadataIndexToMetadata())
 {
 	VOXEL_FUNCTION_COUNTER();
-
-	PerPageDataTexture = FVoxelTextureUtilities::CreateTexture2D(
-		"Voxel.PerPageData",
-		256,
-		256,
-		false,
-		TF_Nearest,
-		PF_R32G32_UINT);
-
-	NaniteIndirectionBufferPool = MakeShared<FVoxelTexturePool>(
-		sizeof(int32),
-		PF_R32_SINT,
-		TEXT("Voxel.NaniteIndirection"));
 
 	ChunkIndicesBufferPool = MakeShared<FVoxelTexturePool>(
 		sizeof(int32),
@@ -50,7 +37,7 @@ FVoxelTextureManager::FVoxelTextureManager(const FVoxelMegaMaterialProxy& MegaMa
 		const TSharedRef<FVoxelTexturePool> BufferPool = MakeShared<FVoxelTexturePool>(
 			TypeSize,
 			PixelFormat,
-			"Voxel.Metadata." + Metadata.GetFName().ToString());
+			"Voxel.Metadata." + Metadata.GetName());
 
 		MetadataToBufferPool.Add_EnsureNew(Metadata, BufferPool);
 	}
@@ -60,19 +47,6 @@ void FVoxelTextureManager::UpdateInstance(UMaterialInstanceDynamic& Instance) co
 {
 	VOXEL_FUNCTION_COUNTER();
 	check(IsInGameThread());
-
-	Instance.SetTextureParameterValue(STATIC_FNAME("VOXEL_PerPageData_Texture"), PerPageDataTexture);
-
-	if (UTexture2D* Texture = NaniteIndirectionBufferPool->GetTexture_GameThread())
-	{
-		Instance.SetTextureParameterValue(
-			STATIC_FNAME("VOXEL_NaniteIndirection_Texture"),
-			Texture);
-
-		Instance.SetScalarParameterValue(
-			STATIC_FNAME("VOXEL_NaniteIndirection_TextureSizeLog2"),
-			FVoxelUtilities::ExactLog2(Texture->GetSizeX()));
-	}
 
 	if (UTexture2D* Texture = ChunkIndicesBufferPool->GetTexture_GameThread())
 	{
@@ -129,7 +103,6 @@ void FVoxelTextureManager::ProcessUploads()
 	VOXEL_FUNCTION_COUNTER();
 	check(IsInGameThread());
 
-	NaniteIndirectionBufferPool->ProcessUploads();
 	ChunkIndicesBufferPool->ProcessUploads();
 	MaterialBufferPool->ProcessUploads();
 
@@ -143,9 +116,6 @@ void FVoxelTextureManager::AddReferencedObjects(FReferenceCollector& Collector)
 {
 	VOXEL_FUNCTION_COUNTER();
 
-	Collector.AddReferencedObject(PerPageDataTexture);
-
-	NaniteIndirectionBufferPool->AddReferencedObjects(Collector);
 	ChunkIndicesBufferPool->AddReferencedObjects(Collector);
 	MaterialBufferPool->AddReferencedObjects(Collector);
 

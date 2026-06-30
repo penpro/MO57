@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "PCGVoxelSampler.h"
 #include "VoxelPCGUtilities.h"
@@ -246,6 +246,10 @@ FVoxelFuture FVoxelSamplerPCGOutput::Generate2D() const
 	FVoxelDoubleVector2DBuffer Positions;
 	Positions.Allocate(CellCount);
 
+	// PCG points are in the current world; the voxel layers are queried in absolute space. Positions are
+	// built in absolute space for the queries below, and shifted back when emitting the output points.
+	const FVector OriginOffset = GetWorldOriginOffset();
+
 	TVoxelArray<float> DensityMultipliers;
 	TVoxelArray<int32> Seeds;
 	DensityMultipliers.Reserve(CellCount);
@@ -276,7 +280,7 @@ FVoxelFuture FVoxelSamplerPCGOutput::Generate2D() const
 				CurrentY + RandY * Looseness * CellSize
 			};
 
-			Positions.Set(NumSamples++, Position);
+			Positions.Set(NumSamples++, Position + FVector2D(OriginOffset));
 
 			DensityMultipliers.Add(bApplyDensityToPoints ? (Ratio - Chance) / Ratio : 1.0f);
 			Seeds.Add(RandomSource.GetCurrentSeed());
@@ -372,6 +376,11 @@ FVoxelFuture FVoxelSamplerPCGOutput::Generate2D() const
 			continue;
 		}
 
+		if (PointNormals[ReadIndex].ContainsNaN())
+		{
+			continue;
+		}
+
 		const int32 WriteIndex = Points.Emplace();
 		FPCGPoint& Point = Points[WriteIndex];
 		Indirection.Add(ReadIndex);
@@ -387,8 +396,9 @@ FVoxelFuture FVoxelSamplerPCGOutput::Generate2D() const
 
 		Point.Transform = FTransform(FRotationMatrix::MakeFromZ(FVector(PointNormals[ReadIndex])).ToQuat(),
 
+			// Shift the point back to the current world (Positions are in absolute space for the queries)
 			FVector(
-				Positions[ReadIndex],
+				Positions[ReadIndex] - FVector2D(OriginOffset),
 				Height));
 
 		Point.Density = DensityMultipliers[ReadIndex];

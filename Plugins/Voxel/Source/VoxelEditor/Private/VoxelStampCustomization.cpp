@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelStampCustomization.h"
 #include "VoxelStamp.h"
@@ -46,16 +46,21 @@ void FVoxelStampCustomization::CustomizeChildren(
 			continue;
 		}
 
-		ChildBuilder.AddProperty(ChildHandle.ToSharedRef());
+		CustomizePropertyRow(
+			PropertyHandle, 
+			ChildHandle->GetProperty(),
+			ChildBuilder.AddProperty(ChildHandle.ToSharedRef()));
 	}
 
 	if (AdvancedHandles.Num() > 0)
 	{
-		IDetailGroup& Group = ChildBuilder.AddGroup("Advanced", INVTEXT("Advanced"));
-
+		IDetailCategoryBuilder& ParentCategory = ChildBuilder.GetParentCategory();
 		for (const TSharedPtr<IPropertyHandle>& Handle : AdvancedHandles)
 		{
-			Group.AddPropertyRow(Handle.ToSharedRef());
+			CustomizePropertyRow(
+				PropertyHandle,
+				Handle->GetProperty(),
+				ParentCategory.AddProperty(Handle.ToSharedRef(), EPropertyLocation::Advanced));
 		}
 	}
 }

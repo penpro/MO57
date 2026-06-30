@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -59,6 +59,12 @@ FORCEINLINE FIntPoint operator*(const uint32 Value, const FIntPoint& Vector)
 {
 	checkVoxelSlow(Value <= MAX_int32);
 	return FIntPoint(int32(Value)) * Vector;
+}
+
+FORCEINLINE FIntPoint operator*(const FIntPoint& Vector, const uint32 Value)
+{
+	checkVoxelSlow(Value <= MAX_int32);
+	return Vector * FIntPoint(int32(Value));
 }
 
 FIntPoint operator*(const FIntPoint&, float) = delete;

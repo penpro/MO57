@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelInstancedStructCustomization.h"
 #include "VoxelInstancedStructNodeBuilder.h"
@@ -18,7 +18,7 @@ void FVoxelInstancedStructCustomization::CustomizeHeader(
 	StructProperty = PropertyHandle;
 	RefreshDelegate = FVoxelEditorUtilities::MakeRefreshDelegate(this, CustomizationUtils);
 
-	FCoreUObjectDelegates::OnObjectsReinstanced.Add(MakeWeakDelegateDelegate(RefreshDelegate, [RefreshDelegate = RefreshDelegate](const FCoreUObjectDelegates::FReplacementObjectMap&)
+	FCoreUObjectDelegates::OnObjectsReinstanced.Add(MakeWeakDelegateDelegate<UE_508_SWITCH(FDefaultDelegateUserPolicy, FDefaultTSDelegateUserPolicy)>(RefreshDelegate, [RefreshDelegate = RefreshDelegate](const FCoreUObjectDelegates::FReplacementObjectMap&)
 	{
 		RefreshDelegate.Execute();
 	}));

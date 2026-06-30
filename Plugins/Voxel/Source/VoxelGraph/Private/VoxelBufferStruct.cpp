@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelBufferStruct.h"
 #include "VoxelBufferAccessor.h"
@@ -285,6 +285,11 @@ void FVoxelBufferStruct::Split(
 
 		GetTerminalBuffer(TerminalBufferIndex).Split(Splitter, TerminalBuffers);
 	}
+
+	for (const int32 Index : Splitter.GetValidOutputs())
+	{
+		OutBuffers[Index]->AsChecked<FVoxelBufferStruct>().ForceRecomputeNum();
+	}
 }
 
 void FVoxelBufferStruct::MergeFrom(
@@ -307,8 +312,18 @@ void FVoxelBufferStruct::MergeFrom(
 		GetTerminalBuffer(TerminalBufferIndex).MergeFrom(Splitter, TerminalBuffers);
 	}
 
-	// Ensure Num is valid
-	(void)Num();
+	ForceRecomputeNum();
+}
+
+void FVoxelBufferStruct::HashCombine(const TVoxelArrayView<uint64> InOutHashes) const
+{
+	VOXEL_FUNCTION_COUNTER_NUM(InOutHashes.Num());
+	checkVoxelSlow(Num() == 1 || InOutHashes.Num() == Num());
+
+	for (int32 TerminalBufferIndex = 0; TerminalBufferIndex < NumTerminalBuffers(); TerminalBufferIndex++)
+	{
+		GetTerminalBuffer(TerminalBufferIndex).HashCombine(InOutHashes);
+	}
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -342,6 +357,18 @@ void FVoxelBufferStruct::ExpandConstants(const int32 NewNum)
 	{
 		Buffer.PrivateNum = NewNum;
 	}
+}
+
+void FVoxelBufferStruct::ForceRecomputeNum()
+{
+	PrivateNum = -1;
+
+	for (const FVoxelBufferStruct& Buffer : GetBufferStructs())
+	{
+		Buffer.PrivateNum = -1;
+	}
+
+	(void)Num();
 }
 
 ///////////////////////////////////////////////////////////////////////////////

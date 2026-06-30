@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -18,7 +18,11 @@ public:
 	(
 		FirstVersion,
 		AddSmoothBlends,
-		ChunkIndices
+		ChunkIndices,
+		NaniteIndirection,
+		AddStateTracking,
+		ExtendedDataSupport,
+		MarkWorldPositionOffsetConnected
 	);
 
 	const UMaterialExpressionVoxelMegaMaterialInternalSwitch& Switch;
@@ -72,7 +76,7 @@ private:
 	TVoxelMap<EMaterialProperty, FString> PropertyToDefaultCode;
 
 	void InitializeDefaultProperties();
-	void ComputeDisplacementAndLayerMask();
+	void ComputeDisplacementAndLayerMask(bool bComputeSmoothness);
 	void ComputeProperties(TConstVoxelArrayView<EMaterialProperty> Properties);
 };
 

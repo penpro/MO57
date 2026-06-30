@@ -4,8 +4,22 @@
 		"/Script/Voxel.VoxelNode_BreakSurfaceTypeBlend":
 		{
 		},
+		"/Script/Voxel.VoxelNode_CachePoints":
+		{
+			"ChunkSize": "Cache chunk size, in meters.\nWhen a stamp moves, the whole cache chunk it touches is regenerated, and every\nrender chunk overlapping that cache chunk is also redrawn - so larger values\nmean more work per edit.\nFor runtime editing, prefer cache chunks roughly the same size as your render\nchunks, or smaller. For static content, larger is fine.",
+			"CacheSize": "Cache size in MB"
+		},
 		"/Script/Voxel.VoxelNode_MakeSurfaceTypeBlend":
 		{
+		},
+		"/Script/Voxel.VoxelNode_MetadataPinsBase":
+		{
+		},
+		"/Script/Voxel.VoxelNode_SampleHeightmap":
+		{
+			"Heightmap": "The heightmap to sample",
+			"Position": "Position, note that the heightmap ScaleXY is applied",
+			"UseBicubic": "If true will use bicubic sampling, which is slower but better looking"
 		},
 		"/Script/Voxel.VoxelNode_SampleHeightStamp":
 		{
@@ -25,9 +39,6 @@
 		"/Script/Voxel.VoxelNode_SamplePreviousVolumeStamps":
 		{
 		},
-		"/Script/Voxel.VoxelNode_SampleStamp":
-		{
-		},
 		"/Script/Voxel.VoxelNode_SampleTerrain":
 		{
 		},
@@ -40,6 +51,11 @@
 		"/Script/Voxel.VoxelNode_SampleVolumeStampParameter":
 		{
 		},
+		"/Script/Voxel.VoxelNode_SampleVoxelStaticMesh":
+		{
+			"Mesh": "The mesh to sample",
+			"UseTricubic": "If true will use tricubic sampling, which is slower but better looking"
+		},
 		"/Script/Voxel.VoxelNode_ScatterBase":
 		{
 			"Name": "Debug name for this node",
@@ -47,7 +63,6 @@
 		},
 		"/Script/Voxel.VoxelNode_ScatterMesh":
 		{
-			"RenderDistance": "In meters"
 		},
 		"/Script/Voxel.VoxelOutputNode_MetadataBase":
 		{
@@ -84,6 +99,30 @@
 		"/Script/Voxel.VoxelOutputNode_OutputVolumeSpline":
 		{
 		},
+		"/Script/Voxel.VoxelPreviewDataNode_BaseMetadata":
+		{
+		},
+		"/Script/Voxel.VoxelPreviewDataNode_BaseStampPreviewData":
+		{
+		},
+		"/Script/Voxel.VoxelPreviewDataNode_HeightPreviewData":
+		{
+		},
+		"/Script/Voxel.VoxelPreviewDataNode_HeightSculptPreviewData":
+		{
+		},
+		"/Script/Voxel.VoxelPreviewDataNode_SmartSurfaceTypePreviewData":
+		{
+		},
+		"/Script/Voxel.VoxelPreviewDataNode_SplinePreviewData":
+		{
+		},
+		"/Script/Voxel.VoxelPreviewDataNode_VolumePreviewData":
+		{
+		},
+		"/Script/Voxel.VoxelPreviewDataNode_VolumeSculptPreviewData":
+		{
+		},
 		"/Script/VoxelGraph.VoxelComputeNode":
 		{
 		},
@@ -99,15 +138,17 @@
 		"/Script/VoxelGraph.VoxelComputeNode_Abs_Int64":
 		{
 		},
-		"/Script/VoxelGraph.VoxelComputeNode_Acos":
+		"/Script/VoxelGraph.VoxelComputeNode_Acos_Double":
 		{
-			"Value": "Value between -1 and 1",
-			"ReturnValue": "Angle in radians"
 		},
-		"/Script/VoxelGraph.VoxelComputeNode_AcosDegrees":
+		"/Script/VoxelGraph.VoxelComputeNode_Acos_Float":
 		{
-			"Value": "Value between -1 and 1",
-			"ReturnValue": "Angle in degrees"
+		},
+		"/Script/VoxelGraph.VoxelComputeNode_AcosDegrees_Double":
+		{
+		},
+		"/Script/VoxelGraph.VoxelComputeNode_AcosDegrees_Float":
+		{
 		},
 		"/Script/VoxelGraph.VoxelComputeNode_Add_Double":
 		{
@@ -121,33 +162,41 @@
 		"/Script/VoxelGraph.VoxelComputeNode_Add_Int64":
 		{
 		},
-		"/Script/VoxelGraph.VoxelComputeNode_Asin":
+		"/Script/VoxelGraph.VoxelComputeNode_Asin_Double":
 		{
-			"Value": "Value between -1 and 1",
-			"ReturnValue": "Angle in radians"
 		},
-		"/Script/VoxelGraph.VoxelComputeNode_AsinDegrees":
+		"/Script/VoxelGraph.VoxelComputeNode_Asin_Float":
 		{
-			"Value": "Value between -1 and 1",
-			"ReturnValue": "Angle in degrees"
 		},
-		"/Script/VoxelGraph.VoxelComputeNode_Atan":
+		"/Script/VoxelGraph.VoxelComputeNode_AsinDegrees_Double":
 		{
-			"Value": "Value",
-			"ReturnValue": "Angle in radians"
 		},
-		"/Script/VoxelGraph.VoxelComputeNode_Atan2":
+		"/Script/VoxelGraph.VoxelComputeNode_AsinDegrees_Float":
 		{
-			"ReturnValue": "Angle in radians"
 		},
-		"/Script/VoxelGraph.VoxelComputeNode_Atan2Degrees":
+		"/Script/VoxelGraph.VoxelComputeNode_Atan2_Double":
 		{
-			"ReturnValue": "Angle in degrees"
 		},
-		"/Script/VoxelGraph.VoxelComputeNode_AtanDegrees":
+		"/Script/VoxelGraph.VoxelComputeNode_Atan2_Float":
 		{
-			"Value": "Value",
-			"ReturnValue": "Angle in degrees"
+		},
+		"/Script/VoxelGraph.VoxelComputeNode_Atan2Degrees_Double":
+		{
+		},
+		"/Script/VoxelGraph.VoxelComputeNode_Atan2Degrees_Float":
+		{
+		},
+		"/Script/VoxelGraph.VoxelComputeNode_Atan_Double":
+		{
+		},
+		"/Script/VoxelGraph.VoxelComputeNode_Atan_Float":
+		{
+		},
+		"/Script/VoxelGraph.VoxelComputeNode_AtanDegrees_Double":
+		{
+		},
+		"/Script/VoxelGraph.VoxelComputeNode_AtanDegrees_Float":
+		{
 		},
 		"/Script/VoxelGraph.VoxelComputeNode_BilinearInterpolation":
 		{
@@ -235,15 +284,17 @@
 		"/Script/VoxelGraph.VoxelComputeNode_Clamp_Int64":
 		{
 		},
-		"/Script/VoxelGraph.VoxelComputeNode_Cos":
+		"/Script/VoxelGraph.VoxelComputeNode_Cos_Double":
 		{
-			"Value": "Angle in radians",
-			"ReturnValue": "cos(x), between -1 and 1"
 		},
-		"/Script/VoxelGraph.VoxelComputeNode_CosDegrees":
+		"/Script/VoxelGraph.VoxelComputeNode_Cos_Float":
 		{
-			"Value": "Angle in degrees",
-			"ReturnValue": "cos(x), between -1 and 1"
+		},
+		"/Script/VoxelGraph.VoxelComputeNode_CosDegrees_Double":
+		{
+		},
+		"/Script/VoxelGraph.VoxelComputeNode_CosDegrees_Float":
+		{
 		},
 		"/Script/VoxelGraph.VoxelComputeNode_CrossProduct_2D_Double":
 		{
@@ -257,7 +308,10 @@
 		"/Script/VoxelGraph.VoxelComputeNode_CrossProduct_3D_Float":
 		{
 		},
-		"/Script/VoxelGraph.VoxelComputeNode_DegreesToRadians":
+		"/Script/VoxelGraph.VoxelComputeNode_DegreesToRadians_Double":
+		{
+		},
+		"/Script/VoxelGraph.VoxelComputeNode_DegreesToRadians_Float":
 		{
 		},
 		"/Script/VoxelGraph.VoxelComputeNode_Distance2D_3D_Double":
@@ -329,7 +383,10 @@
 		"/Script/VoxelGraph.VoxelComputeNode_Frac_Float":
 		{
 		},
-		"/Script/VoxelGraph.VoxelComputeNode_GetPI":
+		"/Script/VoxelGraph.VoxelComputeNode_GetPI_Double":
+		{
+		},
+		"/Script/VoxelGraph.VoxelComputeNode_GetPI_Float":
 		{
 		},
 		"/Script/VoxelGraph.VoxelComputeNode_Greater_Double":
@@ -538,17 +595,14 @@
 		},
 		"/Script/VoxelGraph.VoxelComputeNode_Power_Double":
 		{
-			"Base": "If negative, abs(Base) will be used instead",
-			"Exp": "Exponent",
-			"ReturnValue": "Result"
 		},
 		"/Script/VoxelGraph.VoxelComputeNode_Power_Float":
 		{
-			"Base": "If negative, abs(Base) will be used instead",
-			"Exp": "Exponent",
-			"ReturnValue": "Result"
 		},
-		"/Script/VoxelGraph.VoxelComputeNode_RadiansToDegrees":
+		"/Script/VoxelGraph.VoxelComputeNode_RadiansToDegrees_Double":
+		{
+		},
+		"/Script/VoxelGraph.VoxelComputeNode_RadiansToDegrees_Float":
 		{
 		},
 		"/Script/VoxelGraph.VoxelComputeNode_RandFloat":
@@ -602,17 +656,25 @@
 		"/Script/VoxelGraph.VoxelComputeNode_SimplexNoise3D":
 		{
 		},
-		"/Script/VoxelGraph.VoxelComputeNode_Sin":
+		"/Script/VoxelGraph.VoxelComputeNode_Sin_Double":
 		{
-			"Value": "Angle in radians",
-			"ReturnValue": "sin(x), between -1 and 1"
 		},
-		"/Script/VoxelGraph.VoxelComputeNode_SinDegrees":
+		"/Script/VoxelGraph.VoxelComputeNode_Sin_Float":
 		{
-			"Value": "Angle in degrees",
-			"ReturnValue": "sin(x), between -1 and 1"
+		},
+		"/Script/VoxelGraph.VoxelComputeNode_SinDegrees_Double":
+		{
+		},
+		"/Script/VoxelGraph.VoxelComputeNode_SinDegrees_Float":
+		{
 		},
 		"/Script/VoxelGraph.VoxelComputeNode_SmoothStep":
+		{
+		},
+		"/Script/VoxelGraph.VoxelComputeNode_Sqrt_Double":
+		{
+		},
+		"/Script/VoxelGraph.VoxelComputeNode_Sqrt_Float":
 		{
 		},
 		"/Script/VoxelGraph.VoxelComputeNode_Subtract_Double":
@@ -627,15 +689,17 @@
 		"/Script/VoxelGraph.VoxelComputeNode_Subtract_Int64":
 		{
 		},
-		"/Script/VoxelGraph.VoxelComputeNode_Tan":
+		"/Script/VoxelGraph.VoxelComputeNode_Tan_Double":
 		{
-			"Value": "Angle in radians",
-			"ReturnValue": "tan(x)"
 		},
-		"/Script/VoxelGraph.VoxelComputeNode_TanDegrees":
+		"/Script/VoxelGraph.VoxelComputeNode_Tan_Float":
 		{
-			"Value": "Angle in degrees",
-			"ReturnValue": "tan(x)"
+		},
+		"/Script/VoxelGraph.VoxelComputeNode_TanDegrees_Double":
+		{
+		},
+		"/Script/VoxelGraph.VoxelComputeNode_TanDegrees_Float":
+		{
 		},
 		"/Script/VoxelGraph.VoxelComputeNode_TrueDistanceCellularNoise2D":
 		{
@@ -817,6 +881,9 @@
 		"/Script/VoxelGraph.VoxelOutputNode":
 		{
 		},
+		"/Script/VoxelGraph.VoxelPreviewDataNode":
+		{
+		},
 		"/Script/VoxelGraph.VoxelTemplateNode":
 		{
 		},
@@ -832,8 +899,46 @@
 		"/Script/VoxelGraph.VoxelTemplateNode_AbstractVectorBase":
 		{
 		},
+		"/Script/VoxelGraph.VoxelTemplateNode_Acos":
+		{
+			"Value": "Value between -1 and 1",
+			"ReturnValue": "Angle in radians"
+		},
+		"/Script/VoxelGraph.VoxelTemplateNode_AcosDegrees":
+		{
+			"Value": "Value between -1 and 1",
+			"ReturnValue": "Angle in degrees"
+		},
 		"/Script/VoxelGraph.VoxelTemplateNode_Add":
 		{
+		},
+		"/Script/VoxelGraph.VoxelTemplateNode_Asin":
+		{
+			"Value": "Value between -1 and 1",
+			"ReturnValue": "Angle in radians"
+		},
+		"/Script/VoxelGraph.VoxelTemplateNode_AsinDegrees":
+		{
+			"Value": "Value between -1 and 1",
+			"ReturnValue": "Angle in degrees"
+		},
+		"/Script/VoxelGraph.VoxelTemplateNode_Atan":
+		{
+			"Value": "Value",
+			"ReturnValue": "Angle in radians"
+		},
+		"/Script/VoxelGraph.VoxelTemplateNode_Atan2":
+		{
+			"ReturnValue": "Angle in radians"
+		},
+		"/Script/VoxelGraph.VoxelTemplateNode_Atan2Degrees":
+		{
+			"ReturnValue": "Angle in degrees"
+		},
+		"/Script/VoxelGraph.VoxelTemplateNode_AtanDegrees":
+		{
+			"Value": "Value",
+			"ReturnValue": "Angle in degrees"
 		},
 		"/Script/VoxelGraph.VoxelTemplateNode_BinaryOperator":
 		{
@@ -862,7 +967,20 @@
 		"/Script/VoxelGraph.VoxelTemplateNode_CompareBase":
 		{
 		},
+		"/Script/VoxelGraph.VoxelTemplateNode_Cos":
+		{
+			"Value": "Angle in radians",
+			"ReturnValue": "cos(x), between -1 and 1"
+		},
+		"/Script/VoxelGraph.VoxelTemplateNode_CosDegrees":
+		{
+			"Value": "Angle in degrees",
+			"ReturnValue": "cos(x), between -1 and 1"
+		},
 		"/Script/VoxelGraph.VoxelTemplateNode_CrossProduct":
+		{
+		},
+		"/Script/VoxelGraph.VoxelTemplateNode_DegreesToRadians":
 		{
 		},
 		"/Script/VoxelGraph.VoxelTemplateNode_Distance":
@@ -887,6 +1005,9 @@
 		{
 		},
 		"/Script/VoxelGraph.VoxelTemplateNode_Frac":
+		{
+		},
+		"/Script/VoxelGraph.VoxelTemplateNode_GetPI":
 		{
 		},
 		"/Script/VoxelGraph.VoxelTemplateNode_Greater":
@@ -957,6 +1078,12 @@
 		},
 		"/Script/VoxelGraph.VoxelTemplateNode_Power":
 		{
+			"Base": "If negative, abs(Base) will be used instead",
+			"Exp": "Exponent",
+			"ReturnValue": "Result"
+		},
+		"/Script/VoxelGraph.VoxelTemplateNode_RadiansToDegrees":
+		{
 		},
 		"/Script/VoxelGraph.VoxelTemplateNode_RandomVector":
 		{
@@ -967,11 +1094,36 @@
 		"/Script/VoxelGraph.VoxelTemplateNode_Sign":
 		{
 		},
+		"/Script/VoxelGraph.VoxelTemplateNode_Sin":
+		{
+			"Value": "Angle in radians",
+			"ReturnValue": "sin(x), between -1 and 1"
+		},
+		"/Script/VoxelGraph.VoxelTemplateNode_SinDegrees":
+		{
+			"Value": "Angle in degrees",
+			"ReturnValue": "sin(x), between -1 and 1"
+		},
 		"/Script/VoxelGraph.VoxelTemplateNode_SmoothStep":
 		{
 		},
+		"/Script/VoxelGraph.VoxelTemplateNode_Sqrt":
+		{
+			"Value": "Value to compute the square root of",
+			"ReturnValue": "Square root of the input value"
+		},
 		"/Script/VoxelGraph.VoxelTemplateNode_Subtract":
 		{
+		},
+		"/Script/VoxelGraph.VoxelTemplateNode_Tan":
+		{
+			"Value": "Angle in radians",
+			"ReturnValue": "tan(x)"
+		},
+		"/Script/VoxelGraph.VoxelTemplateNode_TanDegrees":
+		{
+			"Value": "Angle in degrees",
+			"ReturnValue": "tan(x)"
 		},
 		"/Script/VoxelGraph.VoxelTemplateNode_UnaryOperator":
 		{
@@ -994,8 +1146,15 @@
 		"/Script/VoxelPCG.VoxelNode_DensityFilter":
 		{
 		},
-		"/Script/VoxelPCG.VoxelNode_FilterPoints":
+		"/Script/VoxelPCG.VoxelNode_FindNearestNeighbors":
 		{
+			"QueryPoints": "The query points - find neighbors FOR each of these points",
+			"ReferencePoints": "The reference points - search WITHIN these points",
+			"MaxDistance": "Maximum search distance. Points beyond this distance will not be considered.",
+			"BoundsExtension": "Extends the requested chunk bounds for reference points, to find neighbors across chunk boundaries.\nFor example: MaxDistance 200, BoundsExtension 1.5, we'll extend the bounds by 300.",
+			"FirstNeighborPosition": "Closest neighbor position. Will be NaN if no neighbor found within MaxDistance.",
+			"SecondNeighborPosition": "Second closest neighbor position. Will be NaN if no neighbor found within MaxDistance.",
+			"ThirdNeighborPosition": "Third closest neighbor position. Will be NaN if no neighbor found within MaxDistance."
 		},
 		"/Script/VoxelPCG.VoxelNode_Generate2DPoints":
 		{
@@ -1018,6 +1177,7 @@
 		},
 		"/Script/VoxelPCG.VoxelNode_PruneByDistance":
 		{
+			"BoundsExtension": "Extends the requested chunk bounds, to get more cohesive pruning results on chunk boundaries\nFor example: Distance 200, BoundsExtension 2, we'll extend the bounds by 400\nNOTE! Bounds Extension is Scatter only"
 		},
 		"/Script/VoxelPCG.VoxelNode_RaymarchLayerDistanceField":
 		{
@@ -1039,6 +1199,29 @@
 		},
 		"/Script/VoxelPCG.VoxelNode_SetPointAttribute":
 		{
+		},
+		"/Script/VoxelPCG.VoxelNode_SetPointPosition":
+		{
+			"CacheBoundsExtension": "Maximum per-axis displacement this node applies relative to the input point's\noriginal chunk-local position. Tells the cache layer to query upstream points\nfrom a region extended by this much on each side, so that points which displace\ninto this chunk from neighbors are actually generated and reach the cache.\nLeave at zero if no displacement crosses chunk boundaries, or if this node is\ndownstream of any Cache node."
+		},
+		"/Script/VoxelPCG.VoxelNode_SplitPoints":
+		{
+		},
+		"/Script/VoxelPCG.VoxelNode_TransformPoints":
+		{
+			"OffsetMin": "Position Settings\nMinimum position offset",
+			"OffsetMax": "Maximum position offset",
+			"bOffsetInLocalSpace": "If true, offset is applied in local space (relative to point rotation)",
+			"Roll": "Rotation Settings\nRoll range in degrees",
+			"Pitch": "Pitch range in degrees",
+			"Yaw": "Yaw range in degrees",
+			"bAbsoluteRotation": "If true, replaces existing rotation. If false, combines with existing.",
+			"ScaleMin": "Scale Settings\nMinimum scale",
+			"ScaleMax": "Maximum scale",
+			"bAbsoluteScale": "If true, replaces existing scale. If false, multiplies with existing.",
+			"bUniformScale": "If true, uses uniform scaling (X value for all axes)",
+			"Seed": "Seed for randomization - combines with point IDs for deterministic results",
+			"CacheBoundsExtension": "Maximum per-axis displacement this node may apply (worst-case bound on\n|OffsetMin|/|OffsetMax|). Tells the cache layer to query upstream points from a\nregion extended by this much on each side, so points that displace into this chunk\nfrom neighbors are actually generated and reach the cache. Leave at zero if no\ndisplacement crosses chunk boundaries, or if downstream of any Cache node."
 		},
 		"/Script/VoxelPCG.VoxelOutputNode_OutputPoints":
 		{
@@ -1103,9 +1286,6 @@
 		"/Script/VoxelPCG.VoxelTemplateNode_SetPointMesh":
 		{
 		},
-		"/Script/VoxelPCG.VoxelTemplateNode_SetPointPosition":
-		{
-		},
 		"/Script/VoxelPCG.VoxelTemplateNode_SetPointRotation":
 		{
 		},
@@ -1122,25 +1302,21 @@
 		{
 			"Heightmap": ""
 		},
-		"/Script/Voxel.VoxelHeightmapFunctionLibrary:SampleHeightmap":
-		{
-			"Heightmap": "",
-			"Position": "",
-			"bUseBicubic": "true"
-		},
-		"/Script/Voxel.VoxelScatterFunctionLibrary:GeneratePoints3D":
+		"/Script/Voxel.VoxelScatterFunctionLibrary:GeneratePoints":
 		{
 			"Layer": "{}",
 			"DistanceBetweenPoints": "100.f",
+			"HeightScatterType": "EVoxelHeightScatterType::Grid",
 			"Looseness": "1.f",
+			"MinCellArea": "0.03f",
 			"Seed": "{}",
 			"bQuerySurfaceTypes": "true",
 			"bResolveSurfaceTypes": "false",
-			"MetadatasToQuery": "{}",
-			"InBounds": "{}"
+			"MetadatasToQuery": "{}"
 		},
 		"/Script/Voxel.VoxelScatterFunctionLibrary:GetScatterBounds":
 		{
+			"bExtendedBounds": "false"
 		},
 		"/Script/Voxel.VoxelSculptGraphFunctionLibrary:GetPreviousDistance":
 		{
@@ -1205,6 +1381,9 @@
 		{
 			"SplineKey": ""
 		},
+		"/Script/Voxel.VoxelSplineStampFunctionLibrary:GetLastSplineKey":
+		{
+		},
 		"/Script/Voxel.VoxelSplineStampFunctionLibrary:GetPositionAlongSpline":
 		{
 			"SplineKey": ""
@@ -1251,6 +1430,12 @@
 		},
 		"/Script/Voxel.VoxelStampFunctionLibrary:GetVolumeSmoothness":
 		{
+		},
+		"/Script/Voxel.VoxelStampFunctionLibrary:HasStampsInBounds":
+		{
+			"Position": "",
+			"Layer": "",
+			"BehaviorMask": "EVoxelStampBehavior::AffectAll"
 		},
 		"/Script/Voxel.VoxelStampFunctionLibrary:IsHeightOverrideBlendMode":
 		{
@@ -1311,13 +1496,6 @@
 			"Mesh": "",
 			"Scale": "1.f"
 		},
-		"/Script/Voxel.VoxelStaticMeshFunctionLibrary:SampleVoxelStaticMesh":
-		{
-			"Mesh": "",
-			"Position": "",
-			"Scale": "1.f",
-			"bUseTricubic": "true"
-		},
 		"/Script/Voxel.VoxelTextureFunctionLibrary:GetSize":
 		{
 			"Texture": ""
@@ -1333,6 +1511,14 @@
 			"Scale": "100.f",
 			"Interpolation": "EVoxelTextureInterpolation::Bilinear",
 			"bSRGB": "true"
+		},
+		"/Script/VoxelGraph.VoxelAutocastFunctionLibrary:BooleanToInt32":
+		{
+			"Value": ""
+		},
+		"/Script/VoxelGraph.VoxelAutocastFunctionLibrary:ByteToInt32":
+		{
+			"Value": ""
 		},
 		"/Script/VoxelGraph.VoxelAutocastFunctionLibrary:DoubleLinearColorToDoubleVector":
 		{

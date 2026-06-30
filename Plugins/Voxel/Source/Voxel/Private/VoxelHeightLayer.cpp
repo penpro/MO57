@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelHeightLayer.h"
 #include "VoxelHeightStamp.h"
@@ -364,7 +364,17 @@ void FVoxelHeightLayer::SampleAsVolume(const FVoxelVolumeBulkQuery& Query) const
 
 			for (int32 Index = 0; Index < Heights.Num(); Index++)
 			{
-				ensure(FVoxelUtilities::IntBits(Heights[Index]) == FVoxelUtilities::IntBits(LocalHeights[Index]));
+				if (FVoxelUtilities::IntBits(Heights[Index]) == FVoxelUtilities::IntBits(LocalHeights[Index]))
+				{
+					continue;
+				}
+
+				if (FVoxelShouldCancel())
+				{
+					continue;
+				}
+
+				ensure(false);
 			}
 		}
 	}

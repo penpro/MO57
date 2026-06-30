@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -18,8 +18,8 @@ class FPin;
 class FNode;
 class FGraph;
 
-void PushPinView(FPin* const * Pins);
-void PopPinView(FPin* const * Pins);
+VOXELGRAPH_API void PushPinView(FPin* const * Pins);
+VOXELGRAPH_API void PopPinView(FPin* const * Pins);
 
 template<typename T>
 class TPinsView
@@ -146,6 +146,7 @@ public:
 	{
 		return LinkedTo;
 	}
+	TConstVoxelArrayView<FPin*> GetRawLinkedTo() const { return LinkedTo; }
 
 	void MakeLinkTo(FPin& Other);
 	bool IsLinkedTo(FPin& Other) const;
@@ -241,6 +242,8 @@ public:
 	TPinsView<const FPin> GetInputPins() const { return InputPins; }
 	TPinsView<const FPin> GetOutputPins() const { return OutputPins; }
 
+	TConstVoxelArrayView<FPin*> GetRawPins() const { return Pins; }
+
 public:
 	FPin* FindPin(FName Name);
 
@@ -281,6 +284,12 @@ public:
 	void BreakAllLinks();
 	void RemovePin(FPin& Pin);
 
+	void AddMergedNodeRef(const FNode& Other);
+	const TVoxelArray<FVoxelGraphNodeRef>& GetMergedNodeRefs() const
+	{
+		return MergedNodeRefs;
+	}
+
 private:
 	FGraph& Graph;
 
@@ -291,6 +300,8 @@ private:
 
 	TVoxelInlineArray<FPin*, NumInlinePins> InputPins;
 	TVoxelInlineArray<FPin*, NumInlinePins> OutputPins;
+
+	TVoxelArray<FVoxelGraphNodeRef> MergedNodeRefs;
 
 	friend FVoxelTemplateNodeUtilities;
 };
@@ -344,6 +355,17 @@ public:
 	FNode& NewNode(const FVoxelGraphNodeRef& NodeRef)
 	{
 		return NewNode(ENodeType::Struct, NodeRef);
+	}
+
+	FNode& NewGeneratedNode(const ENodeType Type, const FVoxelGraphNodeRef& NodeRef)
+	{
+		FVoxelGraphNodeRef NewRef = NodeRef;
+		NewRef.bGeneratedNode = true;
+		return NewNode(Type, NewRef);
+	}
+	FNode& NewGeneratedNode(const FVoxelGraphNodeRef& NodeRef)
+	{
+		return NewGeneratedNode(ENodeType::Struct, NodeRef);
 	}
 
 	template<typename PredicateType>

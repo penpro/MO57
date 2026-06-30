@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelCellGenerator.h"
 #include "VoxelQuery.h"
@@ -77,7 +77,8 @@ FVoxelCellGenerator::FVoxelCellGenerator(
 
 void FVoxelCellGenerator::ForeachCell(
 	FVoxelDependencyCollector& OutDependencyCollector,
-	const TVoxelFunctionRef<void(const FIntVector&, const TVoxelStaticArray<float, 8>&)> Lambda)
+	const TVoxelFunctionRef<void(const FIntVector&, const TVoxelStaticArray<float, 8>&)> Lambda,
+	FVoxelCellGeneratorOutput* OutData)
 {
 	VOXEL_FUNCTION_COUNTER();
 
@@ -108,16 +109,17 @@ void FVoxelCellGenerator::ForeachCell(
 			.IntersectWith(FVoxelIntBox(0, Size)));
 	};
 
-	if (!OptionalVolumeBounds)
+	if (!OptionalVolumeBounds ||
+		!OptionalVolumeBounds->IsValid())
 	{
-		ForeachHeightCell<false>(Lambda, {});
+		ForeachHeightCell<false>(Lambda, OutData, {});
 		return;
 	}
 
 	const FVoxelIntBox VolumeBounds = OptionalVolumeBounds.GetBox();
 	const FIntVector VolumeSize = VolumeBounds.Size();
 
-	ForeachHeightCell<true>(Lambda, VolumeBounds);
+	ForeachHeightCell<true>(Lambda, OutData, VolumeBounds);
 
 	const TVoxelArray<FVoxelIntBox> AllBoundsToCompute = INLINE_LAMBDA -> TVoxelArray<FVoxelIntBox>
 	{
@@ -454,6 +456,15 @@ void FVoxelCellGenerator::ForeachCell(
 
 	VOXEL_SCOPE_COUNTER_NUM("Iterate distances", VolumeBounds.Count_int32());
 
+	if (OutData)
+	{
+		OutData->VolumeData = 
+		{
+			Distances,
+			VolumeBounds
+		};
+	}
+
 	for (int32 LocalX = 0; LocalX < VolumeSize.X - 1; LocalX++)
 	{
 		for (int32 LocalY = 0; LocalY < VolumeSize.Y - 1; LocalY++)
@@ -526,6 +537,7 @@ void FVoxelCellGenerator::ForeachCell(
 template<bool bCheckVolumeBounds>
 void FVoxelCellGenerator::ForeachHeightCell(
 	const TVoxelFunctionRef<void(const FIntVector&, const TVoxelStaticArray<float, 8>&)> Lambda,
+	FVoxelCellGeneratorOutput* OutData,
 	const FVoxelIntBox& VolumeBounds)
 {
 	VOXEL_FUNCTION_COUNTER();
@@ -601,6 +613,15 @@ void FVoxelCellGenerator::ForeachHeightCell(
 	const FVoxelIntBox2D Indices = Heights->Indices;
 	const FIntPoint Size2D = Indices.Size();
 	const TConstVoxelArrayView<float> HeightView = Heights->Heights.View();
+
+	if (OutData)
+	{
+		OutData->HeightData = 
+		{
+			HeightView.Array(),
+			Indices
+		};
+	}
 
 	for (int32 LocalY = 0; LocalY < Size2D.Y - 1; LocalY++)
 	{

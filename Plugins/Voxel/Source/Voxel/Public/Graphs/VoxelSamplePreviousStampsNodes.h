@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -87,7 +87,7 @@ public:
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
 
-USTRUCT(Category = "Stamp", meta = (AllowList = "SurfaceType", Keywords = "get sample query surface previous stamps"))
+USTRUCT(Category = "Stamp", meta = (AllowList = "SmartSurfaceType", Keywords = "get sample query surface previous stamps"))
 struct VOXEL_API FVoxelNode_SampleTerrain : public FVoxelNode_SamplePreviousStampsBase
 {
 	GENERATED_BODY()

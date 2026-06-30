@@ -1,19 +1,20 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
 #include "VoxelEditorMinimal.h"
 #include "Misc/Change.h"
+#include "Bulk/VoxelBulkPtr.h"
 
-class FVoxelHeightSculptInnerData;
-class FVoxelVolumeSculptInnerData;
+struct FVoxelSculptVolumeData;
+struct FVoxelSculptHeightData;
 
 class FVoxelHeightSculptChange : public FSwapChange
 {
 public:
-	const TSharedRef<const FVoxelHeightSculptInnerData> Snapshot;
+	const TVoxelBulkRef<FVoxelSculptHeightData> Snapshot;
 
-	explicit FVoxelHeightSculptChange(const TSharedRef<const FVoxelHeightSculptInnerData>& Snapshot)
+	explicit FVoxelHeightSculptChange(const TVoxelBulkRef<FVoxelSculptHeightData>& Snapshot)
 		: Snapshot(Snapshot)
 	{
 	}
@@ -27,9 +28,9 @@ public:
 class FVoxelVolumeSculptChange : public FSwapChange
 {
 public:
-	const TSharedRef<const FVoxelVolumeSculptInnerData> Snapshot;
+	const TVoxelBulkRef<FVoxelSculptVolumeData> Snapshot;
 
-	explicit FVoxelVolumeSculptChange(const TSharedRef<const FVoxelVolumeSculptInnerData>& Snapshot)
+	explicit FVoxelVolumeSculptChange(const TVoxelBulkRef<FVoxelSculptVolumeData>& Snapshot)
 		: Snapshot(Snapshot)
 	{
 	}

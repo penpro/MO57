@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "Common.ush"
 #include "/Engine/Generated/Material.ush"
@@ -9,9 +9,9 @@
 struct
 {
 	DECLARE_SCALAR_ARRAY(uint, RenderIndexToShadingBin, 128);
-	Texture2D<uint2> PerPageData_Texture;
 	Texture2D<UlongType> VisBuffer64;
 	RWTexture2D<uint> ShadingMask;
+	uint UniqueId;
 } MaterialSelectionParameters;
 
 #define USES_DISPLACEMENT 1
@@ -50,25 +50,21 @@ void Main(const uint2 DispatchThreadId : SV_DispatchThreadID)
 		return;
 	}
 
-	const uint MaxStreamingPages = PageConstants.y;
 	const FVisibleCluster VisibleCluster = GetVisibleCluster(VisibleClusterIndex);
-	const int RootPageIndex = VisibleCluster.PageIndex - MaxStreamingPages;
-
-	BRANCH
-	if (RootPageIndex < 0)
-	{
-		return;
-	}
-
-	const int2 PerPageData = asint(MaterialSelectionParameters.PerPageData_Texture[GetTextureIndex_Log2(RootPageIndex, 8)].rg);
-
-	BRANCH
-	if (PerPageData.x == -1)
-	{
-		return;
-	}
-
 	const FCluster Cluster = GetCluster(VisibleCluster.PageIndex, VisibleCluster.ClusterIndex);
+
+	BRANCH
+	if (GetExtendedDataNum(Cluster, VisibleCluster.ClusterIndex) == 0)
+	{
+		return;
+	}
+
+	BRANCH
+	if (!IsVoxelCluster(Cluster, VisibleCluster.ClusterIndex, MaterialSelectionParameters.UniqueId))
+	{
+		return;
+	}
+
 	const uint3 TriIndices = DecodeTriangleIndices(Cluster, TriIndex);
 
 	FPrimitiveSceneData PrimitiveData;

@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "Nodes/VoxelTemplatedMathNodes.h"
 #include "VoxelCompilationGraph.h"
@@ -31,6 +31,11 @@ FVoxelTemplateNode::FPin* FVoxelTemplateNode_FloatMathNode::ExpandPins(FNode& No
 
 	const TArray<TArray<FPin*>> BrokenPins = ApplyVector(Pins, BreakVector);
 	check(BrokenPins.Num() == NumPins);
+
+	if (Pins.Num() == 0)
+	{
+		return MakeVector(Call_NoInput(Node, NodeStruct, MaxDimension, OutputType));
+	}
 
 	return MakeVector(Call_Multi(NodeStruct, BrokenPins));
 }

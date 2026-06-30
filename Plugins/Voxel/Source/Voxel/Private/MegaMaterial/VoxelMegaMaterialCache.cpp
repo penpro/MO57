@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "MegaMaterial/VoxelMegaMaterialCache.h"
 #include "VoxelSettings.h"
@@ -107,6 +107,11 @@ void UVoxelMegaMaterialCache::AutoSaveIfEnabled() const
 	}
 
 	Package->FullyLoad();
+
+	if (!ensureVoxelSlow(Package->IsFullyLoaded()))
+	{
+		return;
+	}
 
 	FSavePackageArgs SaveArgs;
 	SaveArgs.TopLevelFlags = RF_Standalone;

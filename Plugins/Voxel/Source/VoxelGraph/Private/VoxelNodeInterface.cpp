@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelNodeInterface.h"
 #include "VoxelMessage.h"
@@ -42,7 +42,7 @@ VOXEL_RUN_ON_STARTUP_GAME()
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
 
-void IVoxelNodeInterface::RaiseBufferErrorStatic(const FVoxelGraphNodeRef& Node)
+void IVoxelNodeInterface::RaiseBufferErrorStatic(const FVoxelGraphMergedNodeRef& Node)
 {
 	VOXEL_MESSAGE(Error, "{0}: Inputs have different buffer sizes", Node);
 }

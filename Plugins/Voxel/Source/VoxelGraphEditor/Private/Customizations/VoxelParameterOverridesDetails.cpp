@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelParameterOverridesDetails.h"
 #include "Customizations/VoxelParameterDetails.h"
@@ -182,7 +182,9 @@ void FVoxelParameterOverridesDetails::GenerateView(
 	ParameterDetails->MakeRow(DetailInterface);
 }
 
-void FVoxelParameterOverridesDetails::AddOrphans(FVoxelCategoryBuilder& CategoryBuilder)
+void FVoxelParameterOverridesDetails::AddOrphans(
+	FVoxelCategoryBuilder& CategoryBuilder,
+	const FString& BaseCategory)
 {
 	VOXEL_FUNCTION_COUNTER();
 
@@ -272,6 +274,11 @@ void FVoxelParameterOverridesDetails::AddOrphans(FVoxelCategoryBuilder& Category
 		ParameterDetails->InitializeOrphan(Values);
 		GuidToParameterDetails.Add_EnsureNew(Guid, ParameterDetails);
 
+		if (!BaseCategory.IsEmpty())
+		{
+			Category = BaseCategory + "|" + Category;
+		}
+
 		CategoryBuilder.AddProperty(
 			Category,
 			MakeWeakPtrLambda(this, [ParameterDetails](const FVoxelDetailInterface& DetailInterface)
@@ -348,7 +355,7 @@ void FVoxelParameterOverridesDetails::Initialize(
 			}));
 	}
 
-	AddOrphans(CategoryBuilder);
+	AddOrphans(CategoryBuilder, BaseCategory);
 
 	if (DetailLayout.IsLayoutBuilder())
 	{

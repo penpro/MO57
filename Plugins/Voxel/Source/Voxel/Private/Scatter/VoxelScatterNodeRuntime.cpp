@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "Scatter/VoxelScatterNodeRuntime.h"
 #include "Scatter/VoxelNode_ScatterBase.h"
@@ -21,7 +21,7 @@ void FVoxelScatterNodeRuntime::Initialize(
 	FVoxelGraphQueryImpl& Query = Context.MakeQuery();
 
 	PrivateName = PrivateEvaluator->NamePin.GetSynchronous(Query);
-	PrivateChunkSize = PrivateEvaluator->ChunkSizePin.GetSynchronous(Query);
+	PrivateChunkSize = PrivateEvaluator->ChunkSizePin.GetSynchronous(Query) * 100.f;
 
 	Initialize(Query);
 

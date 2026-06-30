@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelPinType.h"
 #include "VoxelPinValueOps.h"
@@ -47,7 +47,7 @@ FVoxelPinType::FVoxelPinType(const FEdGraphPinType& PinType)
 	(void)IsValid();
 }
 
-FVoxelPinType::FVoxelPinType(const FProperty& Property)
+FVoxelPinType::FVoxelPinType(const FProperty& Property, const bool bAllowBitFields)
 {
 	if (Property.IsA<FArrayProperty>())
 	{
@@ -59,7 +59,7 @@ FVoxelPinType::FVoxelPinType(const FProperty& Property)
 	else if (Property.IsA<FBoolProperty>())
 	{
 		InternalType = EVoxelPinInternalType::Bool;
-		ensure(CastFieldChecked<FBoolProperty>(Property).IsNativeBool());
+		ensure(bAllowBitFields || CastFieldChecked<FBoolProperty>(Property).IsNativeBool());
 	}
 	else if (Property.IsA<FFloatProperty>())
 	{

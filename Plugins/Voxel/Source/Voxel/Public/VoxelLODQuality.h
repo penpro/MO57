@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -23,7 +23,7 @@ public:
 	// Higher quality = better looking voxel mesh, but higher memory & rendering cost
 	// The voxel mesh will first compute at MinQuality, and slowly increase its resolution up to MaxQuality
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Config", meta = (EditCondition = "!bAlwaysUseGameQuality", EditConditionHides))
-	FFloatInterval EditorQuality = FFloatInterval(0.5f, 1.f);
+	FFloatInterval EditorQuality = FFloatInterval(1.f, 1.f);
 
 	// If true, will always use Game Quality, even in editor
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Config")

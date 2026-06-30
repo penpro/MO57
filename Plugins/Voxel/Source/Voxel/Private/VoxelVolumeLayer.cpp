@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelVolumeLayer.h"
 #include "VoxelVolumeStampWrapper.h"
@@ -172,6 +172,7 @@ FVoxelOptionalBox FVoxelVolumeLayer::GetVolumeStampBounds(
 		BehaviorMask,
 		[&](const FVoxelStampTreeElement& Element)
 		{
+			ensureVoxelSlow(Element.Bounds.IsValidAndNotEmpty());
 			Result += Element.Bounds;
 		});
 

@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "FunctionLibrary/VoxelBasicFunctionLibrary.h"
 #include "VoxelGraphMigration.h"
@@ -7,6 +7,15 @@ VOXEL_RUN_ON_STARTUP_GAME()
 {
 	REGISTER_VOXEL_FUNCTION_MIGRATION("GetQueryToWorld", UVoxelBasicFunctionLibrary, GetLocalToWorldTransform);
 }
+
+VOXEL_REGISTER_FUNCTION(UVoxelBasicFunctionLibrary, ToBuffer);
+VOXEL_REGISTER_FUNCTION(UVoxelBasicFunctionLibrary, RandUnitVector);
+VOXEL_REGISTER_FUNCTION(UVoxelBasicFunctionLibrary, IsPreviewScene);
+VOXEL_REGISTER_FUNCTION(UVoxelBasicFunctionLibrary, HashPosition);
+VOXEL_REGISTER_FUNCTION(UVoxelBasicFunctionLibrary, GetLODStep);
+VOXEL_REGISTER_FUNCTION(UVoxelBasicFunctionLibrary, GetLOD);
+VOXEL_REGISTER_FUNCTION(UVoxelBasicFunctionLibrary, GetLocalToWorldTransform);
+VOXEL_REGISTER_FUNCTION(UVoxelBasicFunctionLibrary, GetCollisionEnabled);
 
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////

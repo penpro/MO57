@@ -1,11 +1,11 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "Render/VoxelRenderComponentCreator.h"
 #include "Render/VoxelRenderChunk.h"
 #include "Render/VoxelMeshComponent.h"
+#include "Render/VoxelMeshRenderProxy.h"
 #include "Render/VoxelRenderSubsystem.h"
 #include "VoxelRuntime.h"
-#include "VoxelMeshRenderProxy.h"
 #include "Nanite/VoxelNaniteComponent.h"
 #include "Collision/VoxelCollisionComponent.h"
 #include "Collision/VoxelStaticMeshCollisionComponent.h"
@@ -236,7 +236,7 @@ void FVoxelRenderComponentCreator::DestroyUnusedComponents()
 
 		for (UVoxelStaticMeshCollisionComponent* Component : StaticMeshCollisionComponents)
 		{
-			Component->SetCollider(nullptr, false);
+			Component->SetCollider(nullptr, false, false);
 		}
 
 		StaticMeshCollisionComponents.ForeachView([&](int32, const TConstVoxelArrayView<UVoxelStaticMeshCollisionComponent*> Components)
@@ -263,6 +263,7 @@ void FVoxelRenderComponentCreator::ProcessCollisionTasks()
 			RenderData.Collider.ToSharedRef(),
 			Config.VisibilityCollision,
 			Config.bDoubleSidedCollision,
+			Config.bGenerateOverlapEvents,
 			GetComponentTransform(RenderData));
 	}
 }
@@ -278,7 +279,10 @@ void FVoxelRenderComponentCreator::ProcessStaticMeshCollisionTasks()
 
 		Component.SetRelativeTransform(GetComponentTransform(RenderData));
 		Component.SetBodyInstance(Config.VisibilityCollision);
-		Component.SetCollider(RenderData.Collider, Config.bDoubleSidedCollision);
+		Component.SetCollider(
+			RenderData.Collider,
+			Config.bDoubleSidedCollision,
+			Config.bGenerateOverlapEvents);
 
 		Component.BodyInstance.SetObjectType(ECC_WorldStatic);
 	}
@@ -288,8 +292,8 @@ void FVoxelRenderComponentCreator::ProcessNaniteTasks()
 {
 	VOXEL_FUNCTION_COUNTER_NUM(NaniteTasks.Num());
 
-	UMaterialInterface* NaniteWPOMaterial = Subsystem.GetMaterialInstanceRef(EVoxelMegaMaterialTarget::NaniteWPO)->GetMaterial();
-	UMaterialInterface* NaniteDisplacementMaterial = Subsystem.GetMaterialInstanceRef(EVoxelMegaMaterialTarget::NaniteDisplacement)->GetMaterial();
+	const TSharedPtr<FVoxelMaterialInstanceRef> NaniteWPOMaterial = Subsystem.GetMaterialInstanceRef(EVoxelMegaMaterialTarget::NaniteWPO);
+	const TSharedPtr<FVoxelMaterialInstanceRef> NaniteDisplacementMaterial = Subsystem.GetMaterialInstanceRef(EVoxelMegaMaterialTarget::NaniteDisplacement);
 
 	for (const FNaniteTask& Task : NaniteTasks)
 	{
@@ -341,7 +345,8 @@ void FVoxelRenderComponentCreator::ProcessMeshTasks()
 		Component.SetRenderProxy(
 			RenderData.RenderProxy.ToSharedRef(),
 			NonNaniteMaterial,
-			LumenMaterial);
+			LumenMaterial,
+			Config.bCacheTextureStreaming);
 
 		FVoxelUtilities::ResetPreviousLocalToWorld(Component);
 	}

@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "Heightmap/VoxelHeightmap_Weight.h"
 #include "Heightmap/VoxelHeightmap.h"

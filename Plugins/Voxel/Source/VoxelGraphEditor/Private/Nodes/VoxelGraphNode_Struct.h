@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -38,6 +38,7 @@ public:
 	virtual bool ShowPaletteIconOnNode() const override { return true; }
 	virtual bool IsCompact() const override;
 	virtual bool GetOverlayInfo(FString& Type, FString& Tooltip, FString& Color) override;
+	virtual bool GetGraphWarningInfo(const UVoxelGraph& Graph, FString& OutWarning) override;
 
 	virtual bool ShowAsPromotableWildcard(const UEdGraphPin& Pin) const override;
 	virtual bool IsPinOptional(const UEdGraphPin& Pin) const override;
@@ -65,6 +66,8 @@ public:
 
 	virtual void PreReconstructNode() override;
 	virtual void PostReconstructNode() override;
+
+	virtual bool IsPinVisible(const UEdGraphPin& Pin) override;
 
 	virtual void PinDefaultValueChanged(UEdGraphPin* Pin) override;
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;

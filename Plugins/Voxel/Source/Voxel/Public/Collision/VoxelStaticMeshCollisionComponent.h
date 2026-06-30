@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -14,7 +14,7 @@ class VOXEL_API UVoxelStaticMeshCollisionComponent final : public UStaticMeshCom
 	GENERATED_BODY()
 
 public:
-	UVoxelStaticMeshCollisionComponent() = default;
+	UVoxelStaticMeshCollisionComponent();
 
 	TSharedPtr<const FVoxelCollider> GetCollider() const
 	{
@@ -24,7 +24,8 @@ public:
 	void SetBodyInstance(const FBodyInstance& NewBodyInstance);
 	void SetCollider(
 		const TSharedPtr<const FVoxelCollider>& NewCollider,
-		bool bDoubleSidedGeometry);
+		bool bDoubleSidedGeometry,
+		bool bInGenerateOverlapEvents);
 
 public:
 	//~ Begin UPrimitiveComponent Interface

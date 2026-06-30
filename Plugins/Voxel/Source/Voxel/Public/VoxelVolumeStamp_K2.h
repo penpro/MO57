@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -170,6 +170,104 @@ public:
 		}
 
 		Stamp->AdditionalLayers = AdditionalLayers;
+		Stamp.Update();
+	}
+
+	/**
+	 * Get Bounds Extension Multiplier
+	 * By how much to extend the bounds, relative to the bounds size
+	 * Increase this if you are using a high smoothness
+	 * Increasing this will lead to more stamps being sampled per voxel, increasing generation cost
+	 * @param BoundsExtensionMultiplier By how much to extend the bounds, relative to the bounds size
+	 * Increase this if you are using a high smoothness
+	 * Increasing this will lead to more stamps being sampled per voxel, increasing generation cost
+	 */
+	UFUNCTION(BlueprintPure, Category = "Voxel|Stamp|Volume", DisplayName = "Get Bounds Extension Multiplier")
+	static void GetBoundsExtensionMultiplier(
+		UPARAM(Required) FVoxelVolumeStampRef Stamp,
+		float& BoundsExtensionMultiplier)
+	{
+		BoundsExtensionMultiplier = FVoxelUtilities::MakeSafe<float>();
+
+		if (!Stamp.IsValid())
+		{
+			VOXEL_MESSAGE(Error, "Stamp is invalid");
+			return;
+		}
+
+		BoundsExtensionMultiplier = Stamp->BoundsExtensionMultiplier;
+	}
+
+	/**
+	 * Set Bounds Extension Multiplier
+	 * By how much to extend the bounds, relative to the bounds size
+	 * Increase this if you are using a high smoothness
+	 * Increasing this will lead to more stamps being sampled per voxel, increasing generation cost
+	 * This will automatically refresh the stamp
+	 * @param BoundsExtensionMultiplier By how much to extend the bounds, relative to the bounds size
+	 * Increase this if you are using a high smoothness
+	 * Increasing this will lead to more stamps being sampled per voxel, increasing generation cost
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Voxel|Stamp|Volume", DisplayName = "Set Bounds Extension Multiplier", meta = (BoundsExtensionMultiplier = "1.000000"))
+	static void SetBoundsExtensionMultiplier(
+		UPARAM(Required) FVoxelVolumeStampRef Stamp,
+		UPARAM(DisplayName = "Stamp") FVoxelVolumeStampRef& OutStamp,
+		float BoundsExtensionMultiplier)
+	{
+		OutStamp = Stamp;
+
+		if (!Stamp.IsValid())
+		{
+			VOXEL_MESSAGE(Error, "Stamp is invalid");
+			return;
+		}
+
+		Stamp->BoundsExtensionMultiplier = BoundsExtensionMultiplier;
+		Stamp.Update();
+	}
+
+	/**
+	 * Get Maximum Bounds Extension
+	 * Bounds Extension will be limited to this value in cm, regardless of what the multiplier is set to
+	 * @param MaximumBoundsExtension Bounds Extension will be limited to this value in cm, regardless of what the multiplier is set to
+	 */
+	UFUNCTION(BlueprintPure, Category = "Voxel|Stamp|Volume", DisplayName = "Get Maximum Bounds Extension")
+	static void GetMaximumBoundsExtension(
+		UPARAM(Required) FVoxelVolumeStampRef Stamp,
+		float& MaximumBoundsExtension)
+	{
+		MaximumBoundsExtension = FVoxelUtilities::MakeSafe<float>();
+
+		if (!Stamp.IsValid())
+		{
+			VOXEL_MESSAGE(Error, "Stamp is invalid");
+			return;
+		}
+
+		MaximumBoundsExtension = Stamp->MaximumBoundsExtension;
+	}
+
+	/**
+	 * Set Maximum Bounds Extension
+	 * Bounds Extension will be limited to this value in cm, regardless of what the multiplier is set to
+	 * This will automatically refresh the stamp
+	 * @param MaximumBoundsExtension Bounds Extension will be limited to this value in cm, regardless of what the multiplier is set to
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Voxel|Stamp|Volume", DisplayName = "Set Maximum Bounds Extension", meta = (MaximumBoundsExtension = "1000.000000"))
+	static void SetMaximumBoundsExtension(
+		UPARAM(Required) FVoxelVolumeStampRef Stamp,
+		UPARAM(DisplayName = "Stamp") FVoxelVolumeStampRef& OutStamp,
+		float MaximumBoundsExtension)
+	{
+		OutStamp = Stamp;
+
+		if (!Stamp.IsValid())
+		{
+			VOXEL_MESSAGE(Error, "Stamp is invalid");
+			return;
+		}
+
+		Stamp->MaximumBoundsExtension = MaximumBoundsExtension;
 		Stamp.Update();
 	}
 };

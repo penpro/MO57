@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelStampRef.h"
 #include "VoxelStampManager.h"
@@ -30,7 +30,6 @@ FVoxelStampRef FVoxelStampRef::New(const FVoxelStamp& StampToCopyFrom)
 	FVoxelStampRef Result;
 	Result.Inner->Stamp = StampToCopyFrom.MakeSharedCopy();
 	Result.Inner->Stamp->WeakStampRef = Result;
-	Result.Inner->Stamp->PostDuplicate();
 	return Result;
 }
 

@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "Surface/VoxelSurfaceTypeBlend.h"
 #include "Surface/VoxelSurfaceTypeBlendBuilder.h"
@@ -136,25 +136,34 @@ TVoxelArray<FVoxelSurfaceTypeBlendLayer> FVoxelSurfaceTypeBlend::GetLayersSorted
 	return SortedLayers;
 }
 
-bool FVoxelSurfaceTypeBlend::Equals(
+bool FVoxelSurfaceTypeBlend::Equals_Slow(
 	const FVoxelSurfaceTypeBlend& Other,
 	const float Tolerance) const
 {
 	Check();
 	Other.Check();
 
-	if (NumLayers != Other.NumLayers)
+	TVoxelInlineSet<FVoxelSurfaceType, 16> AllTypes;
+	TVoxelInlineMap<FVoxelSurfaceType, float, 16> TypeToWeight;
+	TVoxelInlineMap<FVoxelSurfaceType, float, 16> OtherTypeToWeight;
+
+	for (const FVoxelSurfaceTypeBlendLayer& Layer : GetLayers())
 	{
-		return false;
+		AllTypes.Add(Layer.Type);
+		TypeToWeight.Add_EnsureNew(Layer.Type, Layer.Weight.ToFloat());
+	}
+	for (const FVoxelSurfaceTypeBlendLayer& Layer : Other.GetLayers())
+	{
+		AllTypes.Add(Layer.Type);
+		OtherTypeToWeight.Add_EnsureNew(Layer.Type, Layer.Weight.ToFloat());
 	}
 
-	for (int32 Index = 0; Index < NumLayers; Index++)
+	for (const FVoxelSurfaceType& Type : AllTypes)
 	{
-		const FVoxelSurfaceTypeBlendLayer& Layer = Layers[0];
-		const FVoxelSurfaceTypeBlendLayer& OtherLayer = Other.Layers[0];
+		const float Weight = TypeToWeight.FindRef(Type);
+		const float OtherWeight = OtherTypeToWeight.FindRef(Type);
 
-		if (Layer.Type != OtherLayer.Type ||
-			!FMath::IsNearlyEqual(Layer.Weight.ToFloat(), OtherLayer.Weight.ToFloat(), Tolerance))
+		if (!FMath::IsNearlyEqual(Weight, OtherWeight, Tolerance))
 		{
 			return false;
 		}
@@ -235,6 +244,12 @@ void FVoxelSurfaceTypeBlend::Lerp(
 		return;
 	}
 	if (BlendB.IsNull())
+	{
+		OutResult = BlendA;
+		return;
+	}
+
+	if (BlendA == BlendB)
 	{
 		OutResult = BlendA;
 		return;
@@ -335,7 +350,7 @@ void FVoxelSurfaceTypeBlend::Lerp(
 
 		FVoxelSurfaceTypeBlend ExpectedResult;
 		Lerp(ExpectedResult, BlendACopy, FromType(SurfaceB), Alpha);
-		ensure(OutResult.Equals(ExpectedResult, 0.01f));
+		ensure(OutResult.Equals_Slow(ExpectedResult, 0.01f));
 	};
 #endif
 

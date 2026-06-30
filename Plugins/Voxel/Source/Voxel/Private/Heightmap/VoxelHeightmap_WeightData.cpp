@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "Heightmap/VoxelHeightmap_WeightData.h"
 #include "Heightmap/VoxelHeightmap_Weight.h"
@@ -31,7 +31,7 @@ TSharedPtr<const FVoxelHeightmap_WeightData> FVoxelHeightmap_WeightData::Create(
 
 		FString KeySuffix;
 		KeySuffix += Texture->Source.GetId().ToString();
-		KeySuffix += "_" + FVoxelUtilities::BlobToHex(Writer);
+		KeySuffix += "_" + FVoxelUtilities::BlobToHex(Writer.Bytes);
 
 		return FDerivedDataCacheInterface::BuildCacheKey(
 			TEXT("VOXEL_WEIGHTMAP"),
@@ -43,7 +43,7 @@ TSharedPtr<const FVoxelHeightmap_WeightData> FVoxelHeightmap_WeightData::Create(
 	if (GetDerivedDataCacheRef().GetSynchronous(*DerivedDataKey, DerivedData, Weightmap.GetPathName()))
 	{
 		FVoxelReader Reader(DerivedData);
-		Data->Serialize(Reader.Ar(), nullptr);
+		Data->Serialize(Reader, nullptr);
 		return Data;
 	}
 
@@ -54,8 +54,8 @@ TSharedPtr<const FVoxelHeightmap_WeightData> FVoxelHeightmap_WeightData::Create(
 
 	{
 		FVoxelWriter Writer;
-		Data->Serialize(Writer.Ar(), nullptr);
-		GetDerivedDataCacheRef().Put(*DerivedDataKey, Writer, Weightmap.GetPathName());
+		Data->Serialize(Writer, nullptr);
+		GetDerivedDataCacheRef().Put(*DerivedDataKey, Writer.Bytes, Weightmap.GetPathName());
 	}
 
 	return Data;

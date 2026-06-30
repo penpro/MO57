@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "SVoxelGraphPreview.h"
 #include "ToolMenus.h"
@@ -1513,7 +1513,7 @@ FMatrix SVoxelGraphPreview::GetPixelToWorld() const
 	return
 		FScaleMatrix(1. / TerminalGraph->PreviewConfig.Resolution) *
 		FScaleMatrix(2.) *
-		FTranslationMatrix(-FVector::OneVector) *
+		FTranslationMatrix(FVector(-1.f, -1.f, 0.f)) *
 		FScaleMatrix(FVector(TerminalGraph->PreviewConfig.Zoom, TerminalGraph->PreviewConfig.Zoom, 1.f)) *
 		FRotationMatrix(Matrix.Rotator()) *
 		FTranslationMatrix(TerminalGraph->PreviewConfig.Position);

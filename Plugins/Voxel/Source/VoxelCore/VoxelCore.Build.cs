@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 global using static VoxelGlobalMethods;
 
@@ -150,8 +150,7 @@ internal class VoxelConfig
 		if (DevWorkflow &&
 		    !Target.Architectures.bIsMultiArch)
 		{
-			// ISPC support for R#
-			ModuleRules.PublicIncludePaths.Add(Path.Combine(
+			var ModulePath = Path.Combine(
 				PluginDirectory,
 				"Intermediate",
 				"Build",
@@ -159,7 +158,13 @@ internal class VoxelConfig
 				Target.Architecture.ToString(),
 				Target.bBuildEditor ? "UnrealEditor" : "UnrealGame",
 				Target.Configuration.ToString(),
-				ModuleName));
+				ModuleName);
+
+			// ISPC support for R#
+			if (Directory.Exists(ModulePath))
+			{
+				ModuleRules.PublicIncludePaths.Add(ModulePath);
+			}
 		}
 	}
 }
@@ -679,7 +684,16 @@ public class VoxelCore : ModuleRules
 			Console.WriteLine("VOXEL_DEBUG=1");
 		}
 
-		PublicDefinitions.Add("VOXEL_DEBUG=" + (Config.EnableDebug ? "1" : "0"));
+		if (Config.EnableDebug)
+		{
+			PublicDefinitions.Add("VOXEL_DEBUG=1");
+		}
+		else
+		{
+			// TRICKY: VoxelBuilder relies on text being exactly "VOXEL_DEBUG=0"
+			PublicDefinitions.Add("VOXEL_DEBUG=0");
+		}
+
 		PublicDefinitions.Add("VOXEL_DEV_WORKFLOW=" + (Config.DevWorkflow ? "1" : "0"));
 
 		PublicDependencyModuleNames.AddRange(new string[]
@@ -693,8 +707,6 @@ public class VoxelCore : ModuleRules
 
 		PrivateDependencyModuleNames.AddRange(new string[]
 		{
-			"zlib",
-			"UElibPNG",
 			"Json",
 			"JsonUtilities",
 			"HTTP",

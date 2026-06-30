@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -133,6 +133,8 @@ struct FPCGCallVoxelGraphContext : public FPCGContext, public IPCGAsyncLoadingCo
 	TSharedPtr<FVoxelLayers> Layers;
 	TSharedPtr<FVoxelSurfaceTypeTable> SurfaceTypeTable;
 	FVoxelBox Bounds;
+	// World origin rebasing: the graph runs in absolute space; offset added to inputs, subtracted from outputs
+	FVector OriginOffset = FVector::ZeroVector;
 
 	TArray<const UPCGPointData*> InPointData;
 	TArray<TVoxelMap<FName, TVoxelObjectPtr<UPCGPointData>>> OutPointData;
@@ -174,6 +176,7 @@ private:
 		const TVoxelNodeEvaluator<FVoxelOutputNode_OutputPoints>& Evaluator,
 		const TSharedRef<FVoxelDependencyCollector>& DependencyCollector,
 		const FVoxelBox& Bounds,
+		const FVector& OriginOffset,
 		const TVoxelSet<FName>& PinsToQuery,
 		const TSharedRef<FVoxelLayers>& Layers,
 		const TSharedRef<FVoxelSurfaceTypeTable>& SurfaceTypeTable,

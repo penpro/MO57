@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelLayerTracker.h"
 #include "VoxelHeightLayer.h"
@@ -9,6 +9,7 @@
 #include "VoxelLayerStack.h"
 #include "VoxelDependency.h"
 #include "VoxelStampManager.h"
+#include "VoxelStampChangeProcessor.h"
 
 VOXEL_CONSOLE_VARIABLE(
 	VOXEL_API, bool, GVoxelStampShowTree, false,
@@ -17,18 +18,13 @@ VOXEL_CONSOLE_VARIABLE(
 
 VOXEL_CONSOLE_VARIABLE(
 	VOXEL_API, bool, GVoxelStampShowAllBounds, false,
-	"voxel.stamp.ShowAllBounds",
+	"voxel.ShowStampBounds",
 	"Show all stamp bounds");
 
 VOXEL_CONSOLE_VARIABLE(
 	VOXEL_API, bool, GVoxelStampShowSelectedBounds, false,
 	"voxel.stamp.ShowSelectedBounds",
 	"Show the bounds of the selected stamp");
-
-VOXEL_CONSOLE_VARIABLE(
-	VOXEL_API, bool, GVoxelStampShowInvalidations, false,
-	"voxel.stamp.ShowInvalidations",
-	"Show the bounds invalidated by stamp changes");
 
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
@@ -82,7 +78,8 @@ bool FVoxelLayerTrackerStamps::UpdateStampsIfNeeded(const FVoxelLayerTrackerStam
 				Stamp->GetLocalToWorld(),
 				WorldToQuery,
 				Stamp->GetLocalBounds(),
-				Stamp->GetStamp().BoundsExtension);
+				VolumeStamp.BoundsExtensionMultiplier,
+				VolumeStamp.MaximumBoundsExtension);
 
 			IntersectBounds = IntersectBounds.IntersectWith(StampToQuery.GetBounds(Stamp->GetLocalBounds()));
 		}
@@ -199,237 +196,19 @@ FVoxelLayerTrackerStamps::FVoxelLayerTrackerStamps(
 
 void FVoxelLayerTrackerStamps::Initialize()
 {
-	LayerManager->OnStampChanged.Add(MakeWeakPtrDelegate(this, [this](const TVoxelChunkedArray<FVoxelStampLayerManager::FChangedStamp>& ChangedStamps)
+	LayerManager->OnStampChanged.Add(MakeWeakPtrDelegate(this, [this](const TVoxelChunkedArray<FVoxelStampChange>& StampChanges)
 	{
-		VOXEL_FUNCTION_COUNTER();
-		VOXEL_SCOPE_COUNTER_FORMAT("ChangedStamps.Num() = %d", ChangedStamps.Num());
-
 		LayerTimestamp->Increment();
 		TrackerTimestamp->Increment();
 
-		TVoxelChunkedArray<FVoxelBox> BoundsToUpdate;
-		TVoxelChunkedArray<FInt32Interval> LODRangesToUpdate;
+		FVoxelStampChangeProcessor Processor(
+			bIs2D,
+			StackMaxDistance,
+			QueryToWorld,
+			WorldToQuery,
+			LODToDependency);
 
-		for (const FVoxelStampLayerManager::FChangedStamp& ChangedStamp : ChangedStamps)
-		{
-			const TSharedPtr<const FVoxelStampRuntime>& OldStamp = ChangedStamp.OldStamp;
-			const TSharedPtr<const FVoxelStampRuntime>& NewStamp = ChangedStamp.NewStamp;
-
-			TVoxelArray<FVoxelBox> LocalBoundsToInvalidate;
-			const bool bCanPartiallyInvalidate = INLINE_LAMBDA
-			{
-				if (!OldStamp ||
-					!NewStamp)
-				{
-					return false;
-				}
-
-				if (NewStamp->ShouldFullyInvalidate(*OldStamp, LocalBoundsToInvalidate))
-				{
-					return false;
-				}
-
-				const FVoxelStamp& OldStampRef = OldStamp->GetStamp();
-				const FVoxelStamp& NewStampRef = NewStamp->GetStamp();
-
-				if (OldStampRef.Behavior != NewStampRef.Behavior ||
-					OldStampRef.Priority != NewStampRef.Priority ||
-					OldStampRef.Smoothness != NewStampRef.Smoothness ||
-					OldStampRef.BoundsExtension != NewStampRef.BoundsExtension)
-				{
-					return false;
-				}
-
-				if (bIs2D)
-				{
-					if (CastStructChecked<FVoxelHeightStamp>(OldStampRef).BlendMode != CastStructChecked<FVoxelHeightStamp>(NewStampRef).BlendMode)
-					{
-						return false;
-					}
-				}
-				else
-				{
-					if (CastStructChecked<FVoxelVolumeStamp>(OldStampRef).BlendMode != CastStructChecked<FVoxelVolumeStamp>(NewStampRef).BlendMode)
-					{
-						return false;
-					}
-				}
-
-				if (OldStamp->GetLODRange() != NewStamp->GetLODRange() ||
-					!OldStamp->GetLocalToWorld().Equals(NewStamp->GetLocalToWorld(), 0))
-				{
-					return false;
-				}
-
-				return true;
-			};
-
-			if (bCanPartiallyInvalidate)
-			{
-				// Used by sculpting: only invalidate the bounds going beyond our original bounds
-				// Sculpt dependency will handle invalidation within the sculpt bounds
-
-				const FVoxelStampRuntime& Stamp = *OldStamp;
-
-				if (bIs2D)
-				{
-					const FVoxelHeightTransform StampToQuery = FVoxelHeightTransform::Create(
-						Stamp.GetLocalToWorld(),
-						WorldToQuery,
-						Stamp.GetLocalBounds(),
-						Stamp.GetStamp().BoundsExtension);
-
-					for (const FVoxelBox& LocalBounds : LocalBoundsToInvalidate)
-					{
-						FVoxelBox Bounds = StampToQuery.GetBounds(LocalBounds);
-
-						// TODO More granular?
-						if (CastStructChecked<FVoxelHeightStampRuntime>(Stamp).HasRelativeHeightRange())
-						{
-							Bounds = FVoxelBox2D(Bounds).ToBox3D_Infinite();
-						}
-
-						BoundsToUpdate.Add(Bounds);
-						LODRangesToUpdate.Add(Stamp.GetLODRange());
-					}
-				}
-				else
-				{
-					const FVoxelVolumeTransform StampToQuery = FVoxelVolumeTransform::Create(
-						Stamp.GetLocalToWorld(),
-						WorldToQuery,
-						Stamp.GetLocalBounds(),
-						Stamp.GetStamp().BoundsExtension);
-
-					for (const FVoxelBox& LocalBounds : LocalBoundsToInvalidate)
-					{
-						BoundsToUpdate.Add(StampToQuery.GetBounds(LocalBounds));
-						LODRangesToUpdate.Add(Stamp.GetLODRange());
-					}
-				}
-
-				continue;
-			}
-
-			if (!bIs2D)
-			{
-				if ((OldStamp && CastStructChecked<FVoxelVolumeStamp>(OldStamp->GetStamp()).BlendMode == EVoxelVolumeBlendMode::Intersect) ||
-					(NewStamp && CastStructChecked<FVoxelVolumeStamp>(NewStamp->GetStamp()).BlendMode == EVoxelVolumeBlendMode::Intersect))
-				{
-					for (const TSharedRef<FVoxelDependency3D>& Dependency : LODToDependency)
-					{
-						Dependency->Invalidate(FVoxelBox::Infinite);
-					}
-				}
-			}
-
-			const auto Invalidate = [&](const FVoxelStampRuntime& Stamp)
-			{
-				if (bIs2D)
-				{
-					const FVoxelHeightTransform StampToQuery = FVoxelHeightTransform::Create(
-						Stamp.GetLocalToWorld(),
-						WorldToQuery,
-						Stamp.GetLocalBounds(),
-						Stamp.GetStamp().BoundsExtension);
-
-					FVoxelBox Bounds = StampToQuery.GetBounds(Stamp.GetLocalBounds());
-
-					// TODO More granular?
-					if (CastStructChecked<FVoxelHeightStampRuntime>(Stamp).HasRelativeHeightRange())
-					{
-						Bounds = FVoxelBox2D(Bounds).ToBox3D_Infinite();
-					}
-
-					BoundsToUpdate.Add(Bounds);
-				}
-				else
-				{
-					const FVoxelVolumeTransform StampToQuery = FVoxelVolumeTransform::Create(
-						Stamp.GetLocalToWorld(),
-						WorldToQuery,
-						Stamp.GetLocalBounds(),
-						Stamp.GetStamp().BoundsExtension);
-
-					BoundsToUpdate.Add(StampToQuery.GetBounds(Stamp.GetLocalBounds()));
-				}
-
-				LODRangesToUpdate.Add(Stamp.GetLODRange());
-			};
-
-			if (OldStamp)
-			{
-				Invalidate(*OldStamp);
-			}
-			if (NewStamp)
-			{
-				Invalidate(*NewStamp);
-			}
-		}
-
-		if (bIs2D)
-		{
-			for (FVoxelBox& Bounds : BoundsToUpdate)
-			{
-				Bounds.Min.Z -= StackMaxDistance;
-				Bounds.Max.Z += StackMaxDistance;
-			}
-		}
-
-		if (GVoxelStampShowInvalidations)
-		{
-			for (const FVoxelBox& Bounds : BoundsToUpdate)
-			{
-				FVoxelDebugDrawer()
-				.Color(FLinearColor::Blue)
-				.LifeTime(1.f)
-				.DrawBox(Bounds, QueryToWorld);
-			}
-		}
-
-		TVoxelStaticArray<bool, NumLODs + 1> LocalShouldSplit{ ForceInit };
-		for (const FInt32Interval& LODRange : LODRangesToUpdate)
-		{
-			LocalShouldSplit[LODRange.Min] = true;
-			LocalShouldSplit[LODRange.Max + 1] = true;
-		}
-
-		TSharedPtr<FVoxelAABBTree> Tree;
-		for (int32 LOD = 0; LOD < NumLODs; LOD++)
-		{
-			if (!Tree ||
-				LocalShouldSplit[LOD])
-			{
-				VOXEL_SCOPE_COUNTER_FORMAT("Build tree LOD=%d", LOD);
-
-				FVoxelAABBTree::FElementArray Elements;
-				Elements.SetNum(BoundsToUpdate.Num());
-
-				int32 WriteIndex = 0;
-
-				checkVoxelSlow(BoundsToUpdate.Num() == LODRangesToUpdate.Num());
-				for (int32 Index = 0; Index < BoundsToUpdate.Num(); Index++)
-				{
-					if (!LODRangesToUpdate[Index].Contains(LOD))
-					{
-						continue;
-					}
-
-					const FVoxelBox& Bounds = BoundsToUpdate[Index];
-
-					Elements.Set(
-						WriteIndex++,
-						Bounds,
-						Index);
-				}
-
-				Elements.SetNum(WriteIndex);
-
-				Tree = FVoxelAABBTree::Create(MoveTemp(Elements));
-			}
-
-			LODToDependency[LOD]->Invalidate(Tree.ToSharedRef());
-		}
+		Processor.Process(StampChanges);
 	}));
 }
 
@@ -441,7 +220,7 @@ TSharedRef<FVoxelStampTree> FVoxelLayerTrackerStamps::CreateTree(
 	VOXEL_FUNCTION_COUNTER();
 	VOXEL_SCOPE_COUNTER_FORMAT("CreateTree Layer=%s LOD=%d", *Layer.GetName(), LOD);
 
-	Stamps.Shrink();
+	// TODO MOVE OUT
 
 	struct FSortableElement
 	{
@@ -571,11 +350,12 @@ TSharedRef<FVoxelStampTree> FVoxelLayerTrackerStamps::CreateTree(
 
 				if (bIs2D)
 				{
+					const FVoxelHeightStamp& HeightStamp = Stamp.GetStamp().AsChecked<FVoxelHeightStamp>();
 					Element.HeightStampToQuery = FVoxelHeightTransform::Create(
 						Stamp.GetLocalToWorld(),
 						WorldToQuery,
 						Child,
-						Stamp.GetStamp().BoundsExtension);
+						HeightStamp.HeightPaddingMultiplier);
 
 					Element.Bounds = Element.HeightStampToQuery.GetBounds(Child);
 
@@ -589,11 +369,13 @@ TSharedRef<FVoxelStampTree> FVoxelLayerTrackerStamps::CreateTree(
 				}
 				else
 				{
+					const FVoxelVolumeStamp& VolumeStamp = Stamp.GetStamp().AsChecked<FVoxelVolumeStamp>();
 					Element.VolumeStampToQuery = FVoxelVolumeTransform::Create(
 						Stamp.GetLocalToWorld(),
 						WorldToQuery,
 						Child,
-						Stamp.GetStamp().BoundsExtension);
+						VolumeStamp.BoundsExtensionMultiplier,
+						VolumeStamp.MaximumBoundsExtension);
 
 					Element.Bounds = Element.VolumeStampToQuery.GetBounds(Child);
 
@@ -692,17 +474,12 @@ TSharedRef<FVoxelStampTree> FVoxelLayerTrackerStamps::CreateTree(
 			// Also check previous layers
 			for (TSharedPtr<FVoxelStampTree> It = PreviousTree; It; It = It->PreviousTree)
 			{
-				It->AABBTree.TraverseBounds(
-					FVoxelFastBox(FVoxelBox2D(Element.Bounds).ToBox3D_Infinite()),
-					[&](const int32 PreviousIndex)
+				It->ForeachElement_Unsorted(
+					FVoxelDependencyCollector::Null,
+					FVoxelBox2D(Element.Bounds).ToBox3D_Infinite(),
+					EVoxelStampBehavior::AffectShape,
+					[&](const FVoxelStampTreeElement& PreviousElement)
 					{
-						const FVoxelStampTreeElement& PreviousElement = It->Elements[PreviousIndex];
-						if (!EnumHasAllFlags(PreviousElement.Stamp->GetStamp().Behavior, EVoxelStampBehavior::AffectShape))
-						{
-							// Doesn't affect shape, skip
-							return;
-						}
-
 						Range += PreviousElement.Bounds.GetZ();
 					});
 			}
@@ -751,6 +528,7 @@ TSharedRef<FVoxelStampTree> FVoxelLayerTrackerStamps::CreateTree(
 
 		FVoxelBox CurrentIntersectBounds = FVoxelBox::Infinite;
 
+		// Combine intersect stamps to support spline intersections
 		const FVoxelStampRuntime* LastStamp = nullptr;
 		FVoxelBox LastStampBounds;
 
@@ -786,12 +564,28 @@ TSharedRef<FVoxelStampTree> FVoxelLayerTrackerStamps::CreateTree(
 		}
 	}
 
+	TVoxelArray<int32> CollectDependenciesIndices;
+	{
+		VOXEL_SCOPE_COUNTER("CollectDependenciesIndices");
+
+		for (int32 Index = 0; Index < Elements.Num(); Index++)
+		{
+			FVoxelStampTreeElement& Element = Elements[Index];
+			if (Element.Stamp->HasCollectDependencies())
+			{
+				CollectDependenciesIndices.Add(Index);
+			}
+		}
+	}
+
 	FVoxelAABBTree AABBTree;
 	AABBTree.Initialize(MoveTemp(TreeElements));
 
 	return MakeShared<FVoxelStampTree>(
+		bIs2D,
 		LODToDependency[LOD],
 		MoveTemp(AABBTree),
+		MoveTemp(CollectDependenciesIndices),
 		MoveTemp(Elements),
 		MoveTemp(Stamps),
 		PreviousTree);
@@ -812,6 +606,10 @@ TSharedRef<FVoxelLayerTracker> FVoxelLayerTracker::Create(
 	if (Actor)
 	{
 		LayerTracker->QueryToWorld = Actor->ActorToWorld();
+		if (const UWorld* ResolvedWorld = World.Resolve())
+		{
+			LayerTracker->QueryToWorld.AddToTranslation(FVector(ResolvedWorld->OriginLocation));
+		}
 	}
 
 	const FSimpleDelegate Delegate = MakeWeakPtrDelegate(LayerTracker->Timestamp, [&Timestamp = *LayerTracker->Timestamp]
@@ -1066,7 +864,11 @@ void FVoxelLayerTrackerSubsystem::Tick()
 		}
 		FVoxelLayerTracker& LayerTracker = *It.Value();
 
-		const FTransform NewLocalToWorld = Actor->ActorToWorld();
+		FTransform NewLocalToWorld = Actor->ActorToWorld();
+		if (const UWorld* ResolvedWorld = GetWorld().Resolve())
+		{
+			NewLocalToWorld.AddToTranslation(FVector(ResolvedWorld->OriginLocation));
+		}
 		if (!LayerTracker.QueryToWorld.Equals(NewLocalToWorld))
 		{
 			LayerTracker.QueryToWorld = NewLocalToWorld;
@@ -1098,7 +900,13 @@ void FVoxelLayerTrackerSubsystem::Tick()
 				"Layer " + Layer->GetPathName());
 
 			const int32 Index = FMath::RoundToInt(FPlatformTime::Seconds() / 2);
-			It.Value->GetTree(0).AABBTree.DrawTree(GetWorld(), Color, FTransform::Identity, Index);
+
+			FVoxelDebugDrawer Drawer(GetWorld());
+
+			It.Value->GetTree(0).AABBTree.DrawTree(
+				Drawer.Color(Color).OneFrame().Space(EVoxelWorldSpace::Absolute),
+				FMatrix::Identity,
+				Index);
 		}
 	}
 
@@ -1211,6 +1019,7 @@ void FVoxelLayerTrackerSubsystem::Tick()
 						FVoxelDebugDrawer(GetWorld())
 						.OneFrame()
 						.Color(Color)
+						.Space(EVoxelWorldSpace::Absolute)
 						.DrawBox(Bounds, FTransform::Identity);
 					}
 				}

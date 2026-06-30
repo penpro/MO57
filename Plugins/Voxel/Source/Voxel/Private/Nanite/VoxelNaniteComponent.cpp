@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "Nanite/VoxelNaniteComponent.h"
 #include "Nanite/VoxelNaniteMesh.h"
@@ -15,6 +15,8 @@
 
 UVoxelNaniteComponent::UVoxelNaniteComponent()
 {
+	bCanEverAffectNavigation = false;
+
 	BodyInstance.SetCollisionEnabled(ECollisionEnabled::NoCollision);
 }
 
@@ -76,6 +78,7 @@ void UVoxelNaniteComponent::SetMesh(
 	}
 
 	DisplacementFade = Config.DisplacementFade;
+	bCacheTextureStreaming = Config.bCacheTextureStreaming;
 }
 
 void UVoxelNaniteComponent::ClearMesh()
@@ -83,6 +86,8 @@ void UVoxelNaniteComponent::ClearMesh()
 	VOXEL_FUNCTION_COUNTER();
 
 	Mesh.Reset();
+	NaniteMaterial.Reset();
+	UsedMaterials.Reset();
 
 	for (int32 Index = 0; Index < OverrideMaterials.Num(); Index++)
 	{
@@ -92,9 +97,10 @@ void UVoxelNaniteComponent::ClearMesh()
 	SetStaticMesh(nullptr);
 }
 
-void UVoxelNaniteComponent::SetNaniteMaterial(UMaterialInterface* Material)
+void UVoxelNaniteComponent::SetNaniteMaterial(const TSharedPtr<FVoxelMaterialInstanceRef>& Material)
 {
-	SetMaterial(0, Material);
+	NaniteMaterial = Material;
+	SetMaterial(0, Material->GetMaterial());
 }
 
 bool UVoxelNaniteComponent::ShouldCreatePhysicsState() const
@@ -186,4 +192,48 @@ FPrimitiveSceneProxy* UVoxelNaniteComponent::CreateStaticMeshSceneProxy(
 	Proxy->Mesh = Mesh;
 	Proxy->UpdateDisplacement(DisplacementFade, Scale.X);
 	return Proxy;
+}
+
+void UVoxelNaniteComponent::GetStreamingRenderAssetInfo(
+	FStreamingTextureLevelContext& LevelContext,
+	TArray<FStreamingRenderAssetPrimitiveInfo>& OutStreamingRenderAssets) const
+{
+	if (!bCacheTextureStreaming)
+	{
+		Super::GetStreamingRenderAssetInfo(LevelContext, OutStreamingRenderAssets);
+		return;
+	}
+
+	if (bIgnoreInstanceForTextureStreaming ||
+		!GetStaticMesh() ||
+		GetStaticMesh()->IsCompiling() ||
+		!(GetStaticMesh()->HasValidRenderData() || GetStaticMesh()->HasValidNaniteData()))
+	{
+		return;
+	}
+
+	if (CanSkipGetTextureStreamingRenderAssetInfo() ||
+		CVarStreamingUseNewMetrics.GetValueOnGameThread() == 0)
+	{
+		return;
+	}
+
+	LevelContext.BindBuildData(nullptr);
+
+	if (NaniteMaterial)
+	{
+		NaniteMaterial->GetStreamingRenderAssetInfo(
+			LevelContext,
+			Bounds,
+			StreamingDistanceMultiplier,
+			OutStreamingRenderAssets);
+	}
+	for (const TSharedPtr<FVoxelMaterialInstanceRef>& Material : UsedMaterials)
+	{
+		Material->GetStreamingRenderAssetInfo(
+			LevelContext,
+			Bounds,
+			StreamingDistanceMultiplier,
+			OutStreamingRenderAssets);
+	}
 }

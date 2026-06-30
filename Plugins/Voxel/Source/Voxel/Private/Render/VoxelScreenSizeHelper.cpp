@@ -1,15 +1,10 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "Render/VoxelScreenSizeHelper.h"
 #include "VoxelSubsystem.h"
 
 FVoxelScreenSizeHelper::FVoxelScreenSizeHelper(const FVoxelConfig& Config)
 {
-	CameraChunkPosition =
-		FVector(Config.LocalToWorld.InverseTransformPosition(Config.CameraPosition.GetValue()))
-		/ Config.VoxelSize
-		/ Config.RenderChunkSize;
-
 	FFloatInterval Quality =
 		Config.bIsEditorWorld && !Config.LODQuality.bAlwaysUseGameQuality
 		? Config.LODQuality.EditorQuality
@@ -28,4 +23,24 @@ FVoxelScreenSizeHelper::FVoxelScreenSizeHelper(const FVoxelConfig& Config)
 
 	ChunkToWorld = Config.RenderChunkSize * Config.VoxelSize;
 	QualityExponent = FMath::Clamp(Config.QualityExponent, 0.001f, 100.f);
+}
+
+double FVoxelScreenSizeHelper::GetChunkQuality(const TVoxelArray<FVector>& Invokers, const FVoxelChunkKey ChunkKey) const
+{
+	const FVoxelIntBox Bounds = ChunkKey.GetChunkKeyBounds();
+
+	double ClosestDistance = MAX_flt;
+
+	for (const FVector& InvokerPosition : Invokers)
+	{
+		ClosestDistance = FMath::Min(ClosestDistance, Bounds.DistanceToPoint(InvokerPosition));
+	}
+
+	if (ClosestDistance == 0)
+	{
+		return 0;
+	}
+
+	const int32 ChunkSize = 1 << ChunkKey.LOD;
+	return ClosestDistance / FMath::Pow(double(ChunkSize), QualityExponent);
 }

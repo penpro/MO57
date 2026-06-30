@@ -1,8 +1,8 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelEditorMinimal.h"
 #include "VoxelGraphEnvironment.h"
-#include "Sculpt/Volume/VoxelGraphVolumeTool.h"
+#include "Sculpt/Volume/Tools/VoxelGraphVolumeTool.h"
 #include "VoxelParameterOverridesDetails.h"
 
 VOXEL_CUSTOMIZE_CLASS(UVoxelGraphVolumeTool)(IDetailLayoutBuilder& DetailLayout)

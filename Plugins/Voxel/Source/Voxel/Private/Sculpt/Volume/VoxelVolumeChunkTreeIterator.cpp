@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "Sculpt/Volume/VoxelVolumeChunkTreeIterator.h"
 #include "VoxelVolumeChunkTreeIteratorImpl.ispc.generated.h"
@@ -89,8 +89,8 @@ FORCEINLINE void FVoxelVolumeChunkTreeIterator::Set(
 FVoxelVolumeChunkTreeIterator FVoxelVolumeChunkTreeIterator::Create(
 	const TVoxelMap<FIntVector, void*>& KeyToChunk,
 	const FVoxelVolumeBulkQuery& Query,
-	const FVoxelVolumeTransform& StampToQuery,
-	const float Scale)
+	const FVoxelVolumeTransform& SculptToQuery,
+	const double Offset)
 {
 	VOXEL_FUNCTION_COUNTER_NUM(Query.Num());
 
@@ -109,10 +109,10 @@ FVoxelVolumeChunkTreeIterator FVoxelVolumeChunkTreeIterator::Create(
 			{
 				for (int32 IndexX = Query.Indices.Min.X; IndexX < Query.Indices.Max.X; IndexX++)
 				{
-					const FVector3d Position = StampToQuery.InverseTransform(Query.GetPosition(IndexX, IndexY, IndexZ)) / Scale;
+					const FVector3d Position = SculptToQuery.InverseTransform(Query.GetPosition(IndexX, IndexY, IndexZ));
 					const int32 IndirectIndex = Query.GetIndex(IndexX, IndexY, IndexZ);
 
-					Iterator2.Set(WriteIndex, IndirectIndex, Position, [&](const FIntVector& ChunkKey)
+					Iterator2.Set(WriteIndex, IndirectIndex, Position + Offset, [&](const FIntVector& ChunkKey)
 					{
 						if (ChunkKey != LastChunkKey)
 						{
@@ -137,10 +137,10 @@ FVoxelVolumeChunkTreeIterator FVoxelVolumeChunkTreeIterator::Create(
 
 	int32 NumChunks = 0;
 	ispc::VoxelVolumeChunkTreeIterator_CreateIterator_Bulk(
-	Query.ISPC(),
-		StampToQuery.ISPC(),
+		Query.ISPC(),
+		SculptToQuery.ISPC(),
+		Offset,
 		&KeyToChunk,
-		Scale,
 		Iterator.Flags_Array.GetData(),
 		Iterator.IndirectIndex_Array.GetData(),
 		Iterator.AlphaX_Array.GetData(),
@@ -173,8 +173,8 @@ FVoxelVolumeChunkTreeIterator FVoxelVolumeChunkTreeIterator::Create(
 FVoxelVolumeChunkTreeIterator FVoxelVolumeChunkTreeIterator::Create(
 	const TVoxelMap<FIntVector, void*>& KeyToChunk,
 	const FVoxelVolumeSparseQuery& Query,
-	const FVoxelVolumeTransform& StampToQuery,
-	const float Scale)
+	const FVoxelVolumeTransform& SculptToQuery,
+	const double Offset)
 {
 	VOXEL_FUNCTION_COUNTER_NUM(Query.Num());
 
@@ -186,9 +186,9 @@ FVoxelVolumeChunkTreeIterator FVoxelVolumeChunkTreeIterator::Create(
 
 	for (int32 Index = 0; Index < Query.Num(); Index++)
 	{
-		const FVector3d Position = StampToQuery.InverseTransform(Query.Positions[Index]) / Scale;
+		const FVector3d Position = SculptToQuery.InverseTransform(Query.Positions[Index]);
 
-		Iterator.Set(Index, Query.GetIndirectIndex(Index), Position, [&](const FIntVector& ChunkKey)
+		Iterator.Set(Index, Query.GetIndirectIndex(Index), Position + Offset, [&](const FIntVector& ChunkKey)
 		{
 			if (ChunkKey != LastChunkKey)
 			{
@@ -204,7 +204,8 @@ FVoxelVolumeChunkTreeIterator FVoxelVolumeChunkTreeIterator::Create(
 
 FVoxelVolumeChunkTreeIterator FVoxelVolumeChunkTreeIterator::Create(
 	const TVoxelMap<FIntVector, void*>& KeyToChunk,
-	const FVoxelDoubleVectorBuffer& Positions)
+	const FVoxelDoubleVectorBuffer& Positions,
+	const double Offset)
 {
 	VOXEL_FUNCTION_COUNTER_NUM(Positions.Num());
 
@@ -216,7 +217,7 @@ FVoxelVolumeChunkTreeIterator FVoxelVolumeChunkTreeIterator::Create(
 
 	for (int32 Index = 0; Index < Positions.Num(); Index++)
 	{
-		Iterator.Set(Index, Index, Positions[Index], [&](const FIntVector& ChunkKey)
+		Iterator.Set(Index, Index, Positions[Index] + Offset, [&](const FIntVector& ChunkKey)
 		{
 			if (ChunkKey != LastChunkKey)
 			{

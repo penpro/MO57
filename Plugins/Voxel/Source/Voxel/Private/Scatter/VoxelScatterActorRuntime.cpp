@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "Scatter/VoxelScatterActorRuntime.h"
 #include "Scatter/VoxelScatterGraph.h"
@@ -26,10 +26,16 @@ TSharedPtr<FVoxelScatterActorRuntime> FVoxelScatterActorRuntime::Create(AVoxelSc
 
 	FVoxelDependencyCollector DependencyCollector(STATIC_FNAME("FVoxelScatterActorRuntime"));
 
+	FTransform LocalToWorld = Actor.ActorToWorld();
+	if (const UWorld* World = Actor.GetWorld())
+	{
+		LocalToWorld.AddToTranslation(FVector(World->OriginLocation));
+	}
+
 	const TSharedPtr<FVoxelGraphEnvironment> Environment = FVoxelGraphEnvironment::Create(
 		Actor,
 		Actor,
-		Actor.ActorToWorld(),
+		LocalToWorld,
 		DependencyCollector);
 
 	if (!Environment)
@@ -112,12 +118,18 @@ void FVoxelScatterActorRuntime::Destroy()
 	VOXEL_FUNCTION_COUNTER();
 	ensure(IsInGameThread());
 
-	const TSharedRef<FVoxelScatterManager> ScatterManager = FVoxelScatterManager::Get(WeakWorld);
-
-	for (const FVoxelScatterNodeWeakRef& NodeRef : NodeRefs)
+	// The world (and its scatter manager) may already be torn down, eg when changing maps and the
+	// actor is destroyed by GC. In that case there's nothing to unregister - the manager goes away too.
+	if (WeakWorld.IsValid_Slow())
 	{
-		ScatterManager->RemoveNode(NodeRef);
+		const TSharedRef<FVoxelScatterManager> ScatterManager = FVoxelScatterManager::Get(WeakWorld);
+
+		for (const FVoxelScatterNodeWeakRef& NodeRef : NodeRefs)
+		{
+			ScatterManager->RemoveNode(NodeRef);
+		}
 	}
+
 	NodeRefs.Reset();
 }
 

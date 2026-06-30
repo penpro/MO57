@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -9,11 +9,11 @@
 #include "Surface/VoxelSurfaceTypeInterface.h"
 #include "VoxelSmartSurfaceType.generated.h"
 
-class UVoxelSurfaceTypeGraph;
 class FVoxelSmartSurfaceProxy;
+class UVoxelSmartSurfaceTypeGraph;
 struct FVoxelOutputNode_OutputSurface;
 
-UCLASS(meta = (VoxelAssetType, AssetColor=Green))
+UCLASS(meta = (VoxelAssetType, AssetColor=Green, AssetSubMenu = "Materials"))
 class VOXEL_API UVoxelSmartSurfaceType
 	: public UVoxelSurfaceTypeInterface
 	, public IVoxelParameterOverridesObjectOwner
@@ -22,7 +22,7 @@ class VOXEL_API UVoxelSmartSurfaceType
 
 public:
 	UPROPERTY(EditAnywhere, Category = "Config")
-	TObjectPtr<UVoxelSurfaceTypeGraph> Graph;
+	TObjectPtr<UVoxelSmartSurfaceTypeGraph> Graph;
 
 	UPROPERTY()
 	FVoxelParameterOverrides ParameterOverrides;
@@ -34,7 +34,7 @@ public:
 
 public:
 	//~ Begin IVoxelParameterOverridesObjectOwner Interface
-	virtual bool ShouldForceEnableOverride(const FGuid& Guid) const override;
+	virtual bool ShouldForceEnableOverride(const FGuid& ParameterGuid) const override;
 	virtual UVoxelGraph* GetGraph() const override;
 	virtual FVoxelParameterOverrides& GetParameterOverrides() override;
 	//~ End IVoxelParameterOverridesObjectOwner Interface

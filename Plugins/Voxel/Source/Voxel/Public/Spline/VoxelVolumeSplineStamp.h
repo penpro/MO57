@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -77,10 +77,11 @@ public:
 	virtual bool Initialize(FVoxelDependencyCollector& DependencyCollector) override;
 	virtual bool Initialize_Parallel(FVoxelDependencyCollector& DependencyCollector) override;
 	virtual FVoxelBox GetLocalBounds() const override;
+	virtual bool CanPartiallyInvalidate() const override;
 	virtual bool ShouldUseQueryPrevious() const override;
 	virtual TVoxelInlineArray<FVoxelBox, 1> GetChildren() const override;
 
-	virtual bool ShouldFullyInvalidate(
+	virtual bool TryToPartiallyInvalidate(
 		const FVoxelStampRuntime& PreviousRuntime,
 		TVoxelArray<FVoxelBox>& OutLocalBoundsToInvalidate) const override;
 

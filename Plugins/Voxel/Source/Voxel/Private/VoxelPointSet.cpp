@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelPointSet.h"
 #include "VoxelNode.h"
@@ -17,6 +17,7 @@ const FName FVoxelPointAttributes::BoundsMax = "BoundsMax";
 const FName FVoxelPointAttributes::Color = "Color";
 const FName FVoxelPointAttributes::Steepness = "Steepness";
 const FName FVoxelPointAttributes::SurfaceTypes = "SurfaceTypes";
+const FName FVoxelPointAttributes::IsNeighbor = "IsNeighbor";
 
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
@@ -53,6 +54,10 @@ FVoxelGraphQuery FVoxelPointSet::MakeQuery(const FVoxelGraphQuery Query) const
 	if (const FVoxelDoubleVectorBuffer* Position = Find<FVoxelDoubleVectorBuffer>(FVoxelPointAttributes::Position))
 	{
 		NewQuery.AddParameter<FVoxelGraphParameters::FPosition3D>().SetLocalPosition(*Position);
+	}
+	else
+	{
+		NewQuery.AddParameter<FVoxelGraphParameters::FPosition3D>().SetLocalPosition(FVoxelDoubleVectorBuffer());
 	}
 
 	return FVoxelGraphQuery(NewQuery, Query.GetCallstack());
@@ -91,6 +96,80 @@ TSharedRef<FVoxelPointSet> FVoxelPointSet::Gather(const TConstVoxelArrayView<int
 	}
 
 	return Result;
+}
+
+TVoxelArray<TSharedPtr<FVoxelPointSet>> FVoxelPointSet::Split(const FVoxelBufferSplitter& Splitter) const
+{
+	TVoxelArray<TSharedPtr<FVoxelPointSet>> PointSets;
+	FVoxelUtilities::SetNumZeroed(PointSets, Splitter.NumOutputs());
+
+	for (const int32 Index : Splitter.GetValidOutputs())
+	{
+		PointSets[Index] = MakeShared<FVoxelPointSet>();
+		PointSets[Index]->SetNum(Splitter.GetOutputNum(Index));
+	}
+
+	TVoxelOptional<int32> UniqueOutputIndex = Splitter.GetUniqueOutput();
+	if (!UniqueOutputIndex.IsSet())
+	{
+		for (const auto& It : NameToAttribute)
+		{
+			TVoxelArray<FVoxelBuffer*> Buffers;
+			FVoxelUtilities::SetNumZeroed(Buffers, Splitter.NumOutputs());
+			for (const int32 Index : Splitter.GetValidOutputs())
+			{
+				TSharedRef<FVoxelBuffer> Buffer = FVoxelBuffer::MakeDefault(It.Value->GetInnerType());
+				PointSets[Index]->NameToAttribute.FindOrAdd(It.Key) = Buffer;
+				Buffers[Index] = &Buffer.Get();
+			}
+
+			It.Value->Split(Splitter, Buffers);
+		}
+	}
+	else
+	{
+		const int32 Index = UniqueOutputIndex.GetValue();
+		for (const auto& It : NameToAttribute)
+		{
+			PointSets[Index]->Add(It.Key, It.Value->MakeDeepCopy());
+		}
+	}
+
+	return PointSets;
+}
+
+void FVoxelPointSet::KeepAttributes(const TVoxelSet<FName>& AttributesToKeep)
+{
+	for (auto It = NameToAttribute.CreateIterator(); It; ++It)
+	{
+		if (AttributesToKeep.Contains(It.Key()))
+		{
+			continue;
+		}
+
+		It.RemoveCurrent();
+	}
+}
+
+bool FVoxelPointSet::Equals(const FVoxelPointSet& Other) const
+{
+	if (Num() != Other.Num() ||
+		NameToAttribute.Num() != Other.NameToAttribute.Num())
+	{
+		return false;
+	}
+
+	for (const auto& It : NameToAttribute)
+	{
+		const TSharedPtr<const FVoxelBuffer> OtherAttribute = Other.NameToAttribute.FindRef(It.Key);
+		if (!OtherAttribute ||
+			!It.Value->Equal(*OtherAttribute))
+		{
+			return false;
+		}
+	}
+
+	return true;
 }
 
 int64 FVoxelPointSet::GetAllocatedSize() const

@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelSourceParser.h"
 #include "VoxelNode.h"
@@ -34,7 +34,7 @@ void FVoxelSourceParser::Initialize()
 FString FVoxelSourceParser::GetPinTooltip(const UScriptStruct* NodeStruct, const FName PinName)
 {
 	VOXEL_FUNCTION_COUNTER();
-	ensure(IsInGameThread());
+	VOXEL_SCOPE_LOCK(CriticalSection);
 
 	LoadFromDiskIfNeeded();
 
@@ -66,7 +66,7 @@ FString FVoxelSourceParser::GetPinTooltip(const UScriptStruct* NodeStruct, const
 FString FVoxelSourceParser::GetPropertyDefault(const UFunction* Function, const FName InPropertyName)
 {
 	VOXEL_FUNCTION_COUNTER();
-	ensure(IsInGameThread());
+	VOXEL_SCOPE_LOCK(CriticalSection);
 
 	LoadFromDiskIfNeeded();
 
@@ -483,7 +483,7 @@ void FVoxelSourceParser::LoadFromDiskIfNeeded()
 			continue;
 		}
 
-		TVoxelMap<FName, FString>& PinToTooltip = NodePathToPinToTooltip.Add_EnsureNew(FTopLevelAssetPath(NodeIt.Key));
+		TVoxelMap<FName, FString>& PinToTooltip = NodePathToPinToTooltip.Add_EnsureNew(FTopLevelAssetPath(UE_508_SWITCH(NodeIt.Key, NodeIt.Key.ToView())));
 
 		for (auto& PinIt : NodeIt.Value->AsObject()->Values)
 		{
@@ -505,7 +505,7 @@ void FVoxelSourceParser::LoadFromDiskIfNeeded()
 			continue;
 		}
 
-		TVoxelMap<FName, FString>& PropertyToDefault = FunctionPathToPropertyToDefault.Add_EnsureNew(FFunctionPath(FunctionIt.Key));
+		TVoxelMap<FName, FString>& PropertyToDefault = FunctionPathToPropertyToDefault.Add_EnsureNew(FFunctionPath(UE_508_SWITCH(FunctionIt.Key, FString(FunctionIt.Key.ToView()))));
 
 		for (auto& PropertyIt : FunctionIt.Value->AsObject()->Values)
 		{

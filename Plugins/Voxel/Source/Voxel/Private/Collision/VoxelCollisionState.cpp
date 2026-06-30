@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "Collision/VoxelCollisionState.h"
 #include "Collision/VoxelCollider.h"
@@ -401,7 +401,9 @@ TSharedRef<FVoxelCollisionChunk> FVoxelCollisionState::CreateChunk(
 		FTransform(),
 		*MegaMaterialProxy,
 		{},
-		false);
+		false,
+		0.f,
+		0);
 
 	Mesher.bQueryMetadata = false;
 

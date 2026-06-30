@@ -1,8 +1,9 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelMembersSchemaAction_MainGraph.h"
 #include "VoxelGraph.h"
 #include "VoxelGraphToolkit.h"
+#include "VoxelGraphCompiler.h"
 #include "VoxelTerminalGraph.h"
 #include "VoxelGraphSchemaAction.h"
 #include "Nodes/VoxelGraphNode_Struct.h"
@@ -26,8 +27,44 @@ TSharedRef<SWidget> FVoxelMembersSchemaAction_MainGraph::CreatePaletteWidget(con
 void FVoxelMembersSchemaAction_MainGraph::BuildContextMenu(FMenuBuilder& MenuBuilder)
 {
 	const UVoxelGraph* Graph = WeakGraph.Resolve();
-	if (!ensure(Graph) ||
-		!Graph->GetBaseGraph_Unsafe())
+	if (!ensure(Graph))
+	{
+		return;
+	}
+
+	if (Graph->HasMainTerminalGraph())
+	{
+		MenuBuilder.AddSubMenu(
+			INVTEXT("Intermediate Graph"),
+			INVTEXT("Open graph after selected compiler pass"),
+			MakeLambdaDelegate([this](FMenuBuilder& Builder)
+			{
+				for (const FVoxelGraphCompilerPass& Pass : GVoxelGraphCompilerPasses)
+				{
+					Builder.AddMenuEntry(
+						FText::FromString("Open " + Pass.Name.ToString() + " Pass"),
+						{},
+						{},
+						FUIAction
+						{
+							MakeLambdaDelegate([this, PassName = Pass.Name]
+							{
+								const UVoxelGraph* LocalGraph = WeakGraph.Resolve();
+								const TSharedPtr<FVoxelGraphToolkit> Toolkit = GetToolkit();
+								if (!ensure(LocalGraph) ||
+									!ensure(Toolkit))
+								{
+									return;
+								}
+
+								Toolkit->OpenIntermediateGraph(LocalGraph->GetMainTerminalGraph(), PassName);
+							})
+						});
+				}
+			}));
+	}
+
+	if (!Graph->GetBaseGraph_Unsafe())
 	{
 		return;
 	}

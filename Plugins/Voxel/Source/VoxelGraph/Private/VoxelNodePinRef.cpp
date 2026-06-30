@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelNodePinRef.h"
 #include "VoxelNode.h"
@@ -32,7 +32,8 @@ FVoxelRuntimePinValue FVoxelNode::FPinRef_Input::GetSynchronous(const FVoxelGrap
 	Query.Context.Execute();
 
 	FVoxelRuntimePinValue Result = Value.GetValue();
-	if (!Result.IsBuffer())
+	if (!Result.IsBuffer() ||
+		Type.IsBufferArray())
 	{
 		return Result;
 	}

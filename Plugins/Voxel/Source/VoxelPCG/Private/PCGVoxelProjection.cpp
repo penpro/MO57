@@ -1,13 +1,15 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "PCGVoxelProjection.h"
 #include "VoxelQuery.h"
 #include "VoxelLayer.h"
 #include "VoxelLayers.h"
+#include "VoxelVersion.h"
 #include "VoxelMetadata.h"
 #include "VoxelPCGUtilities.h"
 #include "Surface/VoxelSurfaceTypeTable.h"
 #include "Surface/VoxelSurfaceTypeBlendBuffer.h"
+#include "Surface/VoxelSmartSurfaceTypeResolver.h"
 
 #include "PCGComponent.h"
 #include "Data/PCGPointData.h"
@@ -80,6 +82,7 @@ TSharedPtr<FVoxelPCGOutput> UPCGVoxelProjectionSettings::CreateOutput(FPCGContex
 		GradientStep,
 		bDebugSteps,
 		bQuerySurfaceTypes,
+		bResolveSmartSurfaceTypes,
 		FVoxelMetadataRef::GetUniqueValidRefs(NewMetadatasToQuery));
 
 	TArray<FPCGTaggedData> Sources = Context.InputData.GetInputsByPin(PCGPinConstants::DefaultInputLabel);
@@ -107,6 +110,16 @@ TSharedPtr<FVoxelPCGOutput> UPCGVoxelProjectionSettings::CreateOutput(FPCGContex
 FString UPCGVoxelProjectionSettings::GetNodeDebugInfo() const
 {
 	return Super::GetNodeDebugInfo() + " [Layer: " + FString(Layer.Layer ? Layer.Layer->GetName() : "None") + "]";
+}
+
+void UPCGVoxelProjectionSettings::Serialize(FArchive& Ar)
+{
+	Super::Serialize(Ar);
+
+	if (Ar.CustomVer(GVoxelCustomVersionGUID) < FVoxelVersion::AddResolveSmartSurfaceTypeToPCGQueryProjection)
+	{
+		bResolveSmartSurfaceTypes = false;
+	}
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -165,7 +178,25 @@ FVoxelFuture FVoxelProjectionPCGOutput::Project2D(
 {
 	VOXEL_FUNCTION_COUNTER();
 
-	if (bUpdateRotation)
+	// PCG points are in the current world; the voxel layers are queried in absolute space. The point
+	// write-backs below re-fetch the (current world) location, so only the query positions are shifted.
+	const FVector OriginOffset = GetWorldOriginOffset();
+
+	bool bProcessRotations = bUpdateRotation;
+	if (bQuerySurfaceTypes &&
+		bResolveSmartSurfaceTypes)
+	{
+		bProcessRotations = true;
+	}
+
+	FVoxelVectorBuffer PointNormals;
+	if (bQuerySurfaceTypes &&
+		bResolveSmartSurfaceTypes)
+	{
+		PointNormals.Allocate(Points.Num());
+	}
+
+	if (bProcessRotations)
 	{
 		FVoxelDoubleVector2DBuffer Positions;
 		Positions.Allocate(Points.Num() * 5);
@@ -175,7 +206,7 @@ FVoxelFuture FVoxelProjectionPCGOutput::Project2D(
 		for (int32 Index = 0; Index < Points.Num(); Index++)
 		{
 			const FPCGPoint& Point = Points[Index];
-			const FVector Position = Point.Transform.GetLocation();
+			const FVector Position = Point.Transform.GetLocation() + OriginOffset;
 
 			Positions.Set(5 * Index + 0, FVector2d(Position.X - HalfGradientStep, Position.Y));
 			Positions.Set(5 * Index + 1, FVector2d(Position.X + HalfGradientStep, Position.Y));
@@ -217,9 +248,18 @@ FVoxelFuture FVoxelProjectionPCGOutput::Project2D(
 				(HeightMaxY - HeightMinY) / -GradientStep,
 				1.f).GetSafeNormal();
 
-			Point.Transform.SetRotation(FRotationMatrix::MakeFromZX(
-				NewUpVector,
-				Point.Transform.GetRotation().GetAxisX()).ToQuat());
+			if (bUpdateRotation)
+			{
+				Point.Transform.SetRotation(FRotationMatrix::MakeFromZX(
+					NewUpVector,
+					Point.Transform.GetRotation().GetAxisX()).ToQuat());
+			}
+
+			if (bQuerySurfaceTypes &&
+				bResolveSmartSurfaceTypes)
+			{
+				PointNormals.Set(Index, FVector3f(NewUpVector));
+			}
 		}
 	}
 	else
@@ -230,7 +270,7 @@ FVoxelFuture FVoxelProjectionPCGOutput::Project2D(
 		for (int32 Index = 0; Index < Points.Num(); Index++)
 		{
 			const FPCGPoint& Point = Points[Index];
-			const FVector Position = Point.Transform.GetLocation();
+			const FVector Position = Point.Transform.GetLocation() + OriginOffset;
 
 			Positions.Set(Index, FVector2D(Position));
 		}
@@ -289,25 +329,44 @@ FVoxelFuture FVoxelProjectionPCGOutput::Project2D(
 			*SurfaceTypeTable,
 			GetDependencyCollector());
 
-		FVoxelDoubleVector2DBuffer Positions;
-		Positions.Allocate(Points.Num());
+		FVoxelDoubleVector2DBuffer HeightPositions;
+		HeightPositions.Allocate(Points.Num());
+
+		FVoxelDoubleVectorBuffer PointPositions;
+		PointPositions.Allocate(Points.Num());
 
 		for (int32 Index = 0; Index < Points.Num(); Index++)
 		{
 			const FPCGPoint& Point = Points[Index];
-			const FVector Position = Point.Transform.GetLocation();
+			const FVector Position = Point.Transform.GetLocation() + OriginOffset;
 
-			Positions.Set(Index, FVector2D(Position));
+			HeightPositions.Set(Index, FVector2D(Position));
+			PointPositions.Set(Index, Position);
 		}
 
 		Query.SampleHeightLayer(
 			WeakLayer,
-			Positions,
+			HeightPositions,
 			SurfaceTypes.View(),
 			MetadataToBuffer);
 
 		if (bQuerySurfaceTypes)
 		{
+			if (bResolveSmartSurfaceTypes)
+			{
+				FVoxelSmartSurfaceTypeResolver Resolver(
+					Query.LOD,
+					WeakLayer,
+					Query.Layers,
+					Query.SurfaceTypeTable,
+					Query.DependencyCollector,
+					PointPositions,
+					PointNormals,
+					SurfaceTypes.View());
+
+				Resolver.Resolve();
+			}
+
 			SurfaceTypeToWeight.Reserve(32);
 
 			for (int32 Index = 0; Index < Points.Num(); Index++)
@@ -384,14 +443,18 @@ FVoxelFuture FVoxelProjectionPCGOutput::Project3D(
 {
 	VOXEL_FUNCTION_COUNTER();
 
+	// PCG points are in the current world; the voxel layers are queried in absolute space. Positions are
+	// ray-marched and written back in the current world, so only QueryPositions are shifted to absolute.
+	const FVector OriginOffset = GetWorldOriginOffset();
+
+	FVoxelVectorBuffer PointNormals;
+	PointNormals.Allocate(Points.Num());
+
 	{
 		VOXEL_SCOPE_COUNTER("Project");
 
 		TVoxelArray<FVector> Positions;
 		FVoxelUtilities::SetNumFast(Positions, Points.Num());
-
-		TVoxelArray<FVector3f> Normals;
-		FVoxelUtilities::SetNumFast(Normals, Points.Num());
 
 		{
 			VOXEL_SCOPE_COUNTER("Copy positions");
@@ -401,8 +464,8 @@ FVoxelFuture FVoxelProjectionPCGOutput::Project3D(
 				const FPCGPoint& Point = Points[Index];
 
 				Positions[Index] = Point.Transform.GetLocation();
-				Normals[Index] = FVector3f(Point.Transform.GetRotation().GetUpVector());
-				ensure(Normals[Index].IsNormalized());
+				PointNormals.Set(Index, FVector3f(Point.Transform.GetRotation().GetUpVector()));
+				ensure(PointNormals[Index].IsNormalized());
 			}
 		}
 
@@ -439,7 +502,7 @@ FVoxelFuture FVoxelProjectionPCGOutput::Project3D(
 
 				for (int32 Index = 0; Index < PointsAlive.Num(); Index++)
 				{
-					const FVector Position = Positions[PointsAlive[Index]];
+					const FVector Position = Positions[PointsAlive[Index]] + OriginOffset;
 
 					QueryPositions.Set(7 * Index + 0, FVector(Position.X - HalfGradientStep, Position.Y, Position.Z));
 					QueryPositions.Set(7 * Index + 1, FVector(Position.X + HalfGradientStep, Position.Y, Position.Z));
@@ -492,16 +555,21 @@ FVoxelFuture FVoxelProjectionPCGOutput::Project3D(
 				if (AbsDistance < Tolerance ||
 					Step == MaxSteps - 1)
 				{
+					const FVector NewUpVector = FVector(
+						DistanceMaxX - DistanceMinX,
+						DistanceMaxY - DistanceMinY,
+						DistanceMaxZ - DistanceMinZ).GetSafeNormal();
+
 					if (bUpdateRotation)
 					{
-						const FVector NewUpVector = FVector(
-							DistanceMaxX - DistanceMinX,
-							DistanceMaxY - DistanceMinY,
-							DistanceMaxZ - DistanceMinZ).GetSafeNormal();
-
 						Point.Transform.SetRotation(FRotationMatrix::MakeFromZX(
 							NewUpVector,
 							Point.Transform.GetRotation().GetAxisX()).ToQuat());
+					}
+					if (bQuerySurfaceTypes &&
+						bResolveSmartSurfaceTypes)
+					{
+						PointNormals.Set(PointIndex, FVector3f(NewUpVector));
 					}
 
 					PointIndex = -1;
@@ -518,7 +586,7 @@ FVoxelFuture FVoxelProjectionPCGOutput::Project3D(
 
 				if (bForceDirection)
 				{
-					const FVector3f Normal = Normals[PointIndex];
+					const FVector3f Normal = PointNormals[PointIndex];
 					const float LocalSpeed = FMath::Clamp(FVector3f::DotProduct(Gradient.GetSafeNormal(), Normal.GetSafeNormal()), 0.25f, 1.f);
 					const float Value = LocalSpeed * Distance * Speed;
 
@@ -596,7 +664,7 @@ FVoxelFuture FVoxelProjectionPCGOutput::Project3D(
 		for (int32 Index = 0; Index < Points.Num(); Index++)
 		{
 			const FPCGPoint& Point = Points[Index];
-			const FVector Position = Point.Transform.GetLocation();
+			const FVector Position = Point.Transform.GetLocation() + OriginOffset;
 
 			Positions.Set(Index, Position);
 		}
@@ -609,6 +677,21 @@ FVoxelFuture FVoxelProjectionPCGOutput::Project3D(
 
 		if (bQuerySurfaceTypes)
 		{
+			if (bResolveSmartSurfaceTypes)
+			{
+				FVoxelSmartSurfaceTypeResolver Resolver(
+					Query.LOD,
+					WeakLayer,
+					Query.Layers,
+					Query.SurfaceTypeTable,
+					Query.DependencyCollector,
+					Positions,
+					PointNormals,
+					SurfaceTypes.View());
+
+				Resolver.Resolve();
+			}
+
 			SurfaceTypeToWeight.Reserve(32);
 
 			for (int32 Index = 0; Index < Points.Num(); Index++)

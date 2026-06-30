@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "SVoxelGraphNode.h"
 #include "VoxelNode.h"
@@ -39,7 +39,9 @@ void SVoxelGraphNode::Construct(const FArguments& Args, UVoxelGraphNode* InNode)
 		SNew(SVoxelToolTip)
 		.Text(GetNodeTooltip()));
 
+#if VOXEL_ENGINE_VERSION < 508
 	ContentScale.Bind(this, &SGraphNode::GetContentScale);
+#endif
 
 	UpdateGraphNode();
 }
@@ -72,6 +74,39 @@ void SVoxelGraphNode::UpdateGraphNode()
 	}
 
 	OverlayWidgets = {};
+
+	INLINE_LAMBDA
+	{
+		const TSharedPtr<FVoxelGraphToolkit> Toolkit = GetVoxelNode().GetToolkit();
+		if (!Toolkit)
+		{
+			return;
+		}
+
+		FString GraphWarning;
+		if (!GetVoxelNode().GetGraphWarningInfo(*Toolkit->Asset, GraphWarning))
+		{
+			return;
+		}
+
+		FString Tooltip = GraphWarning;
+		if (GraphWarning == "InvalidGraph")
+		{
+			Tooltip = "Node is not designed to be used in this type of graph";
+		}
+
+		const FSlateBrush* ImageBrush = FVoxelEditorStyle::GetBrush(TEXT("Node.Overlay.Warning"));
+
+		FOverlayWidget& OverlayWidget = OverlayWidgets.Add_GetRef({});
+		OverlayWidget.Widget =
+			SNew(SImage)
+			.Image(ImageBrush)
+			.ToolTipText(FText::FromString(Tooltip))
+			.Visibility(EVisibility::Visible)
+			.ColorAndOpacity(FStyleColors::Warning);
+
+		OverlayWidget.BrushSize = ImageBrush->ImageSize;
+	};
 
 	FString Type;
 	FString Tooltip;

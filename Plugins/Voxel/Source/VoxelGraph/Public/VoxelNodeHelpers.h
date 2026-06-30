@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -27,6 +27,42 @@ struct TVoxelGraphWaitLambdaArg<TSharedPtr<T>>
 };
 
 template<typename T>
+struct TVoxelGraphWaitLambdaArg<TVoxelArray<TSharedRef<T>>>
+{
+	FORCEINLINE static const TVoxelArray<TSharedRef<T>>& Get(const TVoxelArray<TSharedRef<T>>& Arg)
+	{
+		return Arg;
+	}
+};
+
+template<typename T>
+struct TVoxelGraphWaitLambdaArg<TVoxelArray<TSharedPtr<T>>>
+{
+	FORCEINLINE static const TVoxelArray<TSharedPtr<T>>& Get(const TVoxelArray<TSharedPtr<T>>& Arg)
+	{
+		return Arg;
+	}
+};
+
+template<typename Key, typename Value>
+struct TVoxelGraphWaitLambdaArg<TVoxelMap<Key, TSharedRef<Value>>>
+{
+	FORCEINLINE static const TVoxelMap<Key, TSharedRef<Value>>& Get(const TVoxelMap<Key, TSharedRef<Value>>& Arg)
+	{
+		return Arg;
+	}
+};
+
+template<typename Key, typename Value>
+struct TVoxelGraphWaitLambdaArg<TVoxelMap<Key, TSharedPtr<Value>>>
+{
+	FORCEINLINE static const TVoxelMap<Key, TSharedPtr<Value>>& Get(const TVoxelMap<Key, TSharedPtr<Value>>& Arg)
+	{
+		return Arg;
+	}
+};
+
+template<typename T>
 requires
 (
 	std::is_trivially_destructible_v<T> &&
@@ -35,6 +71,20 @@ requires
 struct TVoxelGraphWaitLambdaArg<T>
 {
 	FORCEINLINE static const T& Get(const T& Arg)
+	{
+		return Arg;
+	}
+};
+
+template<typename T>
+requires
+(
+	std::is_trivially_destructible_v<T> &&
+	!FVoxelNode::TIsValue<T>::Value
+)
+struct TVoxelGraphWaitLambdaArg<TVoxelArray<T>>
+{
+	FORCEINLINE static const TVoxelArray<T>& Get(const TVoxelArray<T>& Arg)
 	{
 		return Arg;
 	}
@@ -55,6 +105,50 @@ struct TVoxelGraphWaitLambdaArg<FVoxelNode::TValue<T>>
 	FORCEINLINE static auto Get(const FVoxelNode::TValue<T>& Arg) -> decltype(auto)
 	{
 		return Arg.Get();
+	}
+};
+
+template<>
+struct TVoxelGraphWaitLambdaArg<TOptional<FVoxelNode::FValue>>
+{
+	FORCEINLINE static TOptional<FVoxelRuntimePinValue> Get(const TOptional<FVoxelNode::FValue>& Arg)
+	{
+		if (Arg.IsSet())
+		{
+			return Arg->GetValue();
+		}
+
+		return {};
+	}
+};
+
+template<typename T>
+requires FVoxelNode::FValue::PassByValue<T>
+struct TVoxelGraphWaitLambdaArg<TOptional<FVoxelNode::TValue<T>>>
+{
+	FORCEINLINE static TOptional<T> Get(const TOptional<FVoxelNode::TValue<T>>& Arg)
+	{
+		if (Arg.IsSet())
+		{
+			return TOptional<T>(Arg->Get());
+		}
+
+		return TOptional<T>();
+	}
+};
+
+template<typename T>
+requires (!FVoxelNode::FValue::PassByValue<T>)
+struct TVoxelGraphWaitLambdaArg<TOptional<FVoxelNode::TValue<T>>>
+{
+	FORCEINLINE static TOptional<TSharedRef<const T>> Get(const TOptional<FVoxelNode::TValue<T>>& Arg)
+	{
+		if (Arg.IsSet())
+		{
+			return TOptional<TSharedRef<const T>>(Arg->Get());
+		}
+
+		return TOptional<TSharedRef<const T>>();
 	}
 };
 

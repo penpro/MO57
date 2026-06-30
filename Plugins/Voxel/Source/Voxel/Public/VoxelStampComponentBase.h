@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -23,6 +23,7 @@ public:
 	virtual void OnActorVisibilityChanged() override;
 	virtual void CreateRenderState_Concurrent(FRegisterComponentContext* Context) override;
 	virtual void UpdateBounds() override;
+	virtual void ApplyWorldOffset(const FVector& InOffset, bool bWorldShift) override;
 #if WITH_EDITOR
 	virtual void PostEditUndo() override;
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
@@ -32,6 +33,15 @@ public:
 public:
 	UFUNCTION(BlueprintCallable, Category = "Voxel")
 	void UpdateStamp();
+
+	/**
+	 * Returns the stamp bounds, either in local space or transformed into world space.
+	 * Returns false if the stamp is invalid, the runtime could not be created, or the runtime reports empty local bounds.
+	 *
+	 * @param bWorldSpace If true, returns bounds transformed by the component's world transform; otherwise returns bounds in the component's local space.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Voxel", meta = (ReturnDisplayName = "Success"))
+	bool GetStampBounds(bool bWorldSpace, FBox& OutBounds) const;
 
 protected:
 	virtual void PreUpdateStamp() {}

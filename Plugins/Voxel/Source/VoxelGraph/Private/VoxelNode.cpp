@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelNode.h"
 #include "VoxelGraph.h"
@@ -8,6 +8,8 @@
 #include "VoxelSourceParser.h"
 #include "Nodes/VoxelOutputNode.h"
 #include "VoxelCompiledTerminalGraph.h"
+#include "Nodes/VoxelPreviewDataNode.h"
+#include "UObject/UObjectThreadContext.h"
 
 DEFINE_VOXEL_INSTANCE_COUNTER(FVoxelNode);
 
@@ -53,6 +55,10 @@ VOXEL_RUN_ON_STARTUP(Game, 999)
 			{
 				ensure(Struct->GetStructCPPName().StartsWith("FVoxelOutputNode_"));
 			}
+			else if (Parent == FVoxelPreviewDataNode::StaticStruct())
+			{
+				ensure(Struct->GetStructCPPName().StartsWith("FVoxelPreviewDataNode_"));
+			}
 			else
 			{
 				ensure(Struct->GetStructCPPName().StartsWith("FVoxelNode_"));
@@ -95,6 +101,11 @@ FVoxelNode& FVoxelNode::operator=(const FVoxelNode& Other)
 	checkVoxelSlow(PrivateInputPinRefOffsets == Other.PrivateInputPinRefOffsets);
 	checkVoxelSlow(PrivateOutputPinRefOffsets == Other.PrivateOutputPinRefOffsets);
 	checkVoxelSlow(PrivateVariadicPinRefOffsets == Other.PrivateVariadicPinRefOffsets);
+
+	if (!NodeGuid.IsValid())
+	{
+		NodeGuid = FGuid::NewGuid();
+	}
 
 #if WITH_EDITOR
 	ExposedPins = Other.ExposedPins;
@@ -258,12 +269,23 @@ FString FVoxelNode::GetTooltip() const
 }
 #endif
 
-bool FVoxelNode::CanPasteHere(const UVoxelGraph& Graph) const
+bool FVoxelNode::CanPasteHere(
+	const UVoxelGraph& Graph,
+	const UVoxelTerminalGraph* TerminalGraph) const
 {
 #if WITH_EDITOR
 	if (Graph.IsFunctionLibrary())
 	{
 		return true;
+	}
+
+	if (GetMetadataContainer().HasMetaDataHierarchical(STATIC_FNAME("EditorGraphOnly")))
+	{
+		if (TerminalGraph &&
+			TerminalGraph != &Graph.GetEditorTerminalGraph())
+		{
+			return false;
+		}
 	}
 
 	const FString GraphType = Graph.GetGraphTypeName();
@@ -288,6 +310,60 @@ bool FVoxelNode::CanPasteHere(const UVoxelGraph& Graph) const
 #endif
 
 	return true;
+}
+
+bool FVoxelNode::IsDesignedForGraph(const UVoxelGraph& Graph, FString* OutWarning) const
+{
+#if WITH_EDITOR
+	if (Graph.IsFunctionLibrary())
+	{
+		return true;
+	}
+
+	FString AllowListString;
+	if (!GetMetadataContainer().GetStringMetaDataHierarchical(STATIC_FNAME("SensitiveAllowList"), &AllowListString))
+	{
+		return true;
+	}
+
+	FString WarningType = "InvalidGraph";
+
+	int32 Index = -1;
+	if (AllowListString.FindChar(':', Index))
+	{
+		WarningType = AllowListString.RightChop(Index + 1);
+		if (WarningType.IsEmpty())
+		{
+			WarningType = "InvalidGraph";
+		}
+
+		AllowListString = AllowListString.Left(Index);
+	}
+
+	const FString GraphType = Graph.GetGraphTypeName();
+
+	TArray<FString> AllowList;
+	AllowListString.ParseIntoArray(AllowList, TEXT(","));
+
+	bool bIsAllowed = false;
+	for (const FString& Type : AllowList)
+	{
+		if (GraphType == Type.TrimStartAndEnd().ToLower())
+		{
+			bIsAllowed = true;
+			break;
+		}
+	}
+
+	if (OutWarning)
+	{
+		*OutWarning = WarningType;
+	}
+
+	return bIsAllowed;
+#else
+	return true;
+#endif
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -325,7 +401,38 @@ bool FVoxelNode::IsNodeIdentical(const FVoxelNode& Other) const
 	ConstCast(this)->PreSerialize();
 	ConstCast(Other).PreSerialize();
 
-	return GetStruct()->CompareScriptStruct(this, &Other, PPF_None);
+	const UScriptStruct* Struct = GetStruct();
+
+	if (Struct->StructFlags & STRUCT_IdenticalNative)
+	{
+		UScriptStruct::ICppStructOps* TheCppStructOps = Struct->GetCppStructOps();
+		check(TheCppStructOps);
+		bool bResult = false;
+		if (TheCppStructOps->Identical(this, &Other, PPF_None, bResult))
+		{
+			return bResult;
+		}
+	}
+
+	const FProperty& NodeGuidProperty = FindFPropertyChecked(FVoxelNode, NodeGuid);
+	for (const FProperty& Property : GetStructProperties(Struct))
+	{
+		// Node GUID will always be different
+		if (&Property == &NodeGuidProperty)
+		{
+			continue;
+		}
+
+		for (int32 Index = 0; Index < Property.ArrayDim; Index++)
+		{
+			if (!Property.Identical_InContainer(this, &Other, Index, PPF_None))
+			{
+				return false;
+			}
+		}
+	}
+
+	return true;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -343,8 +450,6 @@ void FVoxelNode::PreSerialize()
 
 void FVoxelNode::PostSerialize()
 {
-	Super::PostSerialize();
-
 	if (Version < FVersion::AddIsValid)
 	{
 		ensure(!SerializedDataProperty.bIsValid);
@@ -354,6 +459,11 @@ void FVoxelNode::PostSerialize()
 
 	LoadSerializedData(SerializedDataProperty);
 	SerializedDataProperty = {};
+}
+
+void FVoxelNode::PostSerialize(const FArchive& Ar)
+{
+	PostSerialize();
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -786,10 +896,14 @@ FName FVoxelNode::CreatePin(
 	if (bIsInput)
 	{
 #if WITH_EDITOR
-		ensure(
-			Metadata.DefaultValue.IsEmpty() ||
-			Type.IsWildcard() ||
-			FVoxelPinValue(Type.GetPinDefaultValueType()).ImportFromString(Metadata.DefaultValue));
+		// Loading objects during serialization is not allowed
+		if (!FUObjectThreadContext::Get().GetSerializeContext())
+		{
+			ensure(
+				Metadata.DefaultValue.IsEmpty() ||
+				Type.IsWildcard() ||
+				FVoxelPinValue(Type.GetPinDefaultValueType()).ImportFromString(Metadata.DefaultValue));
+		}
 #endif
 
 		ensure(!Metadata.bNoCache);
@@ -1223,20 +1337,20 @@ void FVoxelNode::LoadSerializedData(const FVoxelNodeSerializedData& SerializedDa
 
 void FVoxelNode::InitializeNodeRuntime(
 	const int32 NodeIndex,
-	const FVoxelGraphNodeRef& NodeRef,
+	const FVoxelGraphMergedNodeRef& NodeRef,
 	TVoxelMap<FName, FPinRef_Input*>& OutNameToInputPinRefs,
 	TVoxelMap<FName, FPinRef_Output*>& OutNameToOutputPinRefs)
 {
 	VOXEL_FUNCTION_COUNTER();
-	ensure(!NodeRef.NodeId.IsNone());
-	ensure(!NodeRef.IsDeleted());
+	ensure(!NodeRef.Node.NodeId.IsNone());
+	ensure(!NodeRef.Node.IsDeleted());
 
 	FlushDeferredPins();
 
 	ensure(PrivateNodeIndex == -1);
 	PrivateNodeIndex = NodeIndex;
 
-	ensure(PrivateNodeRef.IsExplicitlyNull());
+	ensure(PrivateNodeRef.Node.IsExplicitlyNull());
 	PrivateNodeRef = NodeRef;
 
 	ensure(!CachedAreTemplatePinsBuffers);

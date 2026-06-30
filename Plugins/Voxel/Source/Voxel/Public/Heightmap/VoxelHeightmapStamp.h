@@ -1,10 +1,11 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
 #include "VoxelMinimal.h"
 #include "VoxelHeightStamp.h"
 #include "VoxelFloatMetadataRef.h"
+#include "VoxelHeightmapUtilities.h"
 #include "Surface/VoxelSurfaceType.h"
 #include "VoxelHeightmapStamp.generated.h"
 
@@ -74,17 +75,7 @@ public:
 
 	TSharedPtr<const FVoxelHeightmap_HeightData> HeightData;
 	TSharedPtr<FVoxelRuntimeMetadataOverrides> MetadataOverrides;
-
-	struct FWeightmap
-	{
-		FVoxelSurfaceType SurfaceType;
-		EVoxelHeightmapWeightType Type;
-		float Strength = 0;
-		FVoxelFloatMetadataRef MetadataRef;
-		bool bUseBicubic = true;
-		TSharedPtr<const FVoxelHeightmap_WeightData> Data;
-	};
-	TVoxelArray<FWeightmap> Weightmaps;
+	TVoxelArray<FVoxelHeightmapUtilities::FWeightmap> Weightmaps;
 
 public:
 	//~ Begin FVoxelHeightStampRuntime Interface

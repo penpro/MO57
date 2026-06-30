@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelStampRuntime.h"
 #include "VoxelHeightStamp.h"
@@ -20,6 +20,9 @@ void FVoxelStampRuntime::BulkCreate(
 	check(IsInGameThread());
 
 	const TVoxelMap<UScriptStruct*, UScriptStruct*>& StampToStampRuntime = GetStampToStampRuntime();
+
+	const UWorld* ResolvedWorld = World.Resolve();
+	const FVector OriginOffset = ResolvedWorld ? FVector(ResolvedWorld->OriginLocation) : FVector::ZeroVector;
 
 	if (WITH_EDITOR)
 	{
@@ -46,7 +49,8 @@ void FVoxelStampRuntime::BulkCreate(
 			Runtime->PreInitialize(
 				StampInfo.Stamp,
 				World,
-				StampInfo.Component);
+				StampInfo.Component,
+				OriginOffset);
 
 			Runtime->StampIndex = StampInfo.StampIndex;
 			Runtime->WeakStampRef = StampInfo.WeakStampRef;
@@ -256,7 +260,8 @@ FVoxelStamp& FVoxelStampRuntime::GetMutableStamp()
 void FVoxelStampRuntime::PreInitialize(
 	const TSharedRef<FVoxelStamp>& Stamp,
 	const TVoxelObjectPtr<UWorld> World,
-	const TVoxelObjectPtr<USceneComponent> Component)
+	const TVoxelObjectPtr<USceneComponent> Component,
+	const FVector& OriginOffset)
 {
 	VOXEL_FUNCTION_COUNTER();
 	ensureVoxelSlowNoSideEffects(Component.IsExplicitlyNull() || Component.IsValid_Slow());
@@ -281,6 +286,9 @@ void FVoxelStampRuntime::PreInitialize(
 			Initializer.MaxLOD = GVoxelMaxStampLOD;
 		}
 	}
+
+	PrivateLocalToWorld = Stamp->Transform;
+	PrivateLocalToWorld.AddToTranslation(OriginOffset);
 
 	const int64 StampOffset = Internal_GetStampOffset();
 	const FVoxelStamp*& StampPtr = *reinterpret_cast<const FVoxelStamp**>(reinterpret_cast<uint8*>(this) + StampOffset);

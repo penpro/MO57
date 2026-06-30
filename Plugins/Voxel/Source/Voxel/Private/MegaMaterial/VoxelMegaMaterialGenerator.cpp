@@ -1,7 +1,8 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "MegaMaterial/VoxelMegaMaterialGenerator.h"
 #include "MegaMaterial/VoxelMegaMaterial.h"
+#include "MegaMaterial/VoxelMegaMaterialPrivateAccess.h"
 #include "MegaMaterial/MaterialExpressionGetVoxelRandom.h"
 #include "MegaMaterial/MaterialExpressionGetVoxelMetadata.h"
 #include "MegaMaterial/MaterialExpressionVoxelNaniteMaterialHook.h"
@@ -26,13 +27,15 @@
 #include "Materials/MaterialAttributeDefinitionMap.h"
 #include "Materials/MaterialExpressionMaterialFunctionCall.h"
 #include "Materials/MaterialExpressionSetMaterialAttributes.h"
+#include "Materials/MaterialExpressionBreakMaterialAttributes.h"
 #include "Materials/MaterialExpressionRuntimeVirtualTextureOutput.h"
 #include "Materials/MaterialExpressionSingleLayerWaterMaterialOutput.h"
 #endif
 
 #if WITH_EDITOR
-DEFINE_PRIVATE_ACCESS(UMaterial, ShadingModel);
+DEFINE_PRIVATE_ACCESS(UMaterialInstance, StaticParametersRuntime)
 
+#if !INTELLISENSE_PARSER && VOXEL_ENGINE_VERSION < 508
 UClass* UMaterialExpressionRuntimeVirtualTextureOutput::GetPrivateStaticClass()
 {
 	static UClass* Class = FindObjectChecked<UClass>(nullptr, TEXT("/Script/Engine.MaterialExpressionRuntimeVirtualTextureOutput"));
@@ -40,47 +43,73 @@ UClass* UMaterialExpressionRuntimeVirtualTextureOutput::GetPrivateStaticClass()
 	return Class;
 }
 #endif
+#endif
 
 #if WITH_EDITOR
+// The engine can't see WorldPositionOffset through our custom root expression, so MaterialMayModifyMeshPosition()
+// is false and the shader map id misses TShadowDepthPSCombined, which the compiled material expects (asserts on 5.8).
+// Wrap the root in an identity SetMaterialAttributes so WorldPositionOffset is detected as connected.
+static void MarkWorldPositionOffsetConnected(UMaterial& Material)
+{
+	FMaterialAttributesInput& RootAttributes = Material.GetEditorOnlyData()->MaterialAttributes;
+	if (!RootAttributes.Expression)
+	{
+		return;
+	}
+
+	UMaterialExpressionBreakMaterialAttributes& Break = FVoxelUtilities::CreateMaterialExpression<UMaterialExpressionBreakMaterialAttributes>(Material);
+	Break.MaterialAttributes = RootAttributes;
+
+	int32 WorldPositionOffsetOutputIndex = INDEX_NONE;
+	for (int32 Index = 0; Index < Break.Outputs.Num(); Index++)
+	{
+		if (Break.Outputs[Index].OutputName == "WorldPositionOffset")
+		{
+			WorldPositionOffsetOutputIndex = Index;
+			break;
+		}
+	}
+	if (!ensure(WorldPositionOffsetOutputIndex != INDEX_NONE))
+	{
+		return;
+	}
+
+	UMaterialExpressionSetMaterialAttributes& Set = FVoxelUtilities::CreateMaterialExpression<UMaterialExpressionSetMaterialAttributes>(Material);
+	Set.Inputs[0] = RootAttributes;
+	Set.AttributeSetTypes = { FMaterialAttributeDefinitionMap::GetID(MP_WorldPositionOffset) };
+	Set.Inputs.Emplace_GetRef().Connect(WorldPositionOffsetOutputIndex, &Break);
+
+	RootAttributes.Expression = &Set;
+}
+
 bool FVoxelMegaMaterialGenerator::GenerateMaterialForTarget(
-	const UVoxelMegaMaterial& MegaMaterial,
-	const TMap<FVoxelMaterialRenderIndex, FVoxelMegaMaterialSurfaceInfo>& IndexToSurfaceInfo,
-	const EVoxelMegaMaterialTarget Target,
+	const TVoxelObjectPtr<const UObject> ErrorOwner,
+	const FVoxelMegaMaterialTargetState& State,
 	UMaterial& NewMaterial,
-	UMaterialInstanceConstant& NewMaterialInstance,
-	const TConstVoxelArrayView<TObjectPtr<UVoxelMetadata>> Metadatas,
-	TVoxelSet<TVoxelObjectPtr<UObject>>& OutWatchedMaterials,
-	const bool bIsDummyMaterial)
+	UMaterialInstanceConstant& NewMaterialInstance)
 {
 	VOXEL_FUNCTION_COUNTER();
+
 	check(NewMaterialInstance.Parent == &NewMaterial);
 
-	UTexture2D* DitherNoiseTexture = MegaMaterial.DitherNoiseTexture.LoadSynchronous();
+	UTexture2D* DitherNoiseTexture = State.MegaMaterial.DitherNoiseTexture.LoadSynchronous();
 
-	TUniquePtr<FMaterialUpdateContext> UpdateContext;
-	if (!bIsDummyMaterial)
-	{
-		UpdateContext = MakeUnique<FMaterialUpdateContext>();
-		UpdateContext->AddMaterial(&NewMaterial);
-		UpdateContext->AddMaterialInstance(&NewMaterialInstance);
-	}
+	TUniquePtr<FMaterialUpdateContext> UpdateContext = MakeUnique<FMaterialUpdateContext>();
+	UpdateContext->AddMaterial(&NewMaterial);
+	UpdateContext->AddMaterialInstance(&NewMaterialInstance);
 
 	NewMaterial.bUseMaterialAttributes = true;
 	NewMaterial.bTangentSpaceNormal = false;
-	NewMaterial.BlendMode = MegaMaterial.bGenerateMaskedMaterial ? BLEND_Masked : BLEND_Opaque;
-	NewMaterial.TwoSided = MegaMaterial.bGenerateTwoSidedMaterial;
-	NewMaterial.bHasPixelAnimation = MegaMaterial.bSetHasPixelAnimation;
+	NewMaterial.BlendMode = State.MegaMaterial.bGenerateMaskedMaterial ? BLEND_Masked : BLEND_Opaque;
+	NewMaterial.TwoSided = State.MegaMaterial.bGenerateTwoSidedMaterial;
+	NewMaterial.bHasPixelAnimation = State.MegaMaterial.bSetHasPixelAnimation;
 
 	FVoxelUtilities::ClearMaterialExpressions(NewMaterial);
 
 	TVoxelSet<EMaterialShadingModel> ShadingModels;
-	for (const auto& It : IndexToSurfaceInfo)
+	for (const auto& It : State.IndexToSurfaceType)
 	{
-		UVoxelSurfaceTypeAsset& SurfaceType = *It.Value.SurfaceType;
-		UMaterial& Material = *SurfaceType.Material->GetMaterial();
-		const EMaterialShadingModel ShadingModel = PrivateAccess::ShadingModel(Material);
-
-		ShadingModels.Add(ShadingModel);
+		ShadingModels.Add(It.Value.MaterialInterface.Material.ShadingModel);
 	}
 
 	if (ShadingModels.Num() == 1)
@@ -93,41 +122,63 @@ bool FVoxelMegaMaterialGenerator::GenerateMaterialForTarget(
 
 		if (ShadingModels.Contains(MSM_Unlit))
 		{
-			VOXEL_MESSAGE(Error, "{0}: unlit materials cannot be used with lit materials", MegaMaterial);
+			VOXEL_MESSAGE(Error, "{0}: unlit materials cannot be used with lit materials", ErrorOwner);
 		}
+	}
+
+	// The generated material can only carry a single refraction method, so reconcile
+	// across surface types: use the first non-None method, and warn if they disagree.
+	// Without this the generated material defaults to RM_None, which compiles out the
+	// refraction offset (REFRACTION_USE_NONE) - eg breaking Single Layer Water refraction.
+	{
+		ERefractionMode RefractionMethod = RM_None;
+		for (const auto& It : State.IndexToSurfaceType)
+		{
+			const ERefractionMode SurfaceRefractionMethod = It.Value.MaterialInterface.Material.RefractionMethod;
+			if (SurfaceRefractionMethod == RM_None)
+			{
+				continue;
+			}
+
+			if (RefractionMethod == RM_None)
+			{
+				RefractionMethod = SurfaceRefractionMethod;
+			}
+			else if (RefractionMethod != SurfaceRefractionMethod)
+			{
+				VOXEL_MESSAGE(Error, "{0}: surface types use different refraction methods, only one can be used", ErrorOwner);
+			}
+		}
+
+		NewMaterial.RefractionMethod = RefractionMethod;
 	}
 
 	TVoxelArray<TFunction<void(FMaterialInstanceParameterUpdateContext&)>> DelayedCopyParameterValues;
 
-	if (MegaMaterial.CustomOutputsMaterial &&
-		MegaMaterial.CustomOutputsMaterial->GetMaterial())
+	if (State.MegaMaterial.CustomOutputsMaterial.Material.Object)
 	{
-		CollectedWatchedMaterials(
-			*MegaMaterial.CustomOutputsMaterial,
-			OutWatchedMaterials);
-
-		VOXEL_SCOPE_COUNTER_FNAME(MegaMaterial.CustomOutputsMaterial->GetFName());
+		VOXEL_SCOPE_COUNTER_FNAME(State.MegaMaterial.CustomOutputsMaterial.Object->GetFName());
 
 		const FString Prefix = "VOXELCUSTOMOUTPUT_";
 
 		FVoxelMaterialGenerator Generator(
-			MegaMaterial,
+			ErrorOwner,
 			NewMaterial,
 			"VOXELCUSTOMOUTPUT_",
 			false,
 			ShouldDuplicateFunction);
 
-		if (!ensure(Generator.CopyExpressions(*MegaMaterial.CustomOutputsMaterial->GetMaterial())))
+		if (!ensure(Generator.CopyExpressions(*State.MegaMaterial.CustomOutputsMaterial.Material.Object)))
 		{
 			return false;
 		}
 
-		DelayedCopyParameterValues.Add([&MegaMaterial, &NewMaterialInstance, Prefix](FMaterialInstanceParameterUpdateContext& InstanceUpdateContext)
+		DelayedCopyParameterValues.Add([&State, &NewMaterialInstance, Prefix](FMaterialInstanceParameterUpdateContext& InstanceUpdateContext)
 		{
 			FVoxelUtilities::CopyParameterValues(
 				InstanceUpdateContext,
 				NewMaterialInstance,
-				*MegaMaterial.CustomOutputsMaterial,
+				*State.MegaMaterial.CustomOutputsMaterial.Object,
 				Prefix);
 		});
 
@@ -142,7 +193,7 @@ bool FVoxelMegaMaterialGenerator::GenerateMaterialForTarget(
 			WrapInComment(
 				NewMaterial,
 				*Generator.GetBounds(),
-				FString::Printf(TEXT("CustomOutputs: %s"), *MegaMaterial.CustomOutputsMaterial->GetName()));
+				FString::Printf(TEXT("CustomOutputs: %s"), *State.MegaMaterial.CustomOutputsMaterial.Object->GetName()));
 		}
 	}
 
@@ -151,23 +202,25 @@ bool FVoxelMegaMaterialGenerator::GenerateMaterialForTarget(
 	TVoxelMap<FVoxelMaterialRenderIndex, FVoxelMegaMaterialSwitchInputs> MaterialIndexToInputs;
 
 	int32 PositionY = 0;
-	for (const auto& It : IndexToSurfaceInfo)
+	for (const auto& It : State.IndexToSurfaceType)
 	{
 		const FVoxelMaterialRenderIndex RenderIndex = It.Key;
-		UVoxelSurfaceTypeAsset& SurfaceType = *It.Value.SurfaceType;
-		UMaterialInterface& MaterialInterface = *SurfaceType.Material;
-		UMaterial& Material = *MaterialInterface.GetMaterial();
+		const FVoxelSurfaceTypeState& SurfaceType = It.Value;
 
-		VOXEL_SCOPE_COUNTER_FNAME(MaterialInterface.GetFName());
+		if (!ensure(SurfaceType.Object) ||
+			!ensure(SurfaceType.MaterialInterface.Material.Object))
+		{
+			continue;
+		}
 
-		CollectedWatchedMaterials(
-			MaterialInterface,
-			OutWatchedMaterials);
+		const UMaterial& Material = *SurfaceType.MaterialInterface.Material.Object;
+
+		VOXEL_SCOPE_COUNTER_FNAME(SurfaceType.Object->GetFName());
 
 		const FString Prefix = "VOXELMATERIAL_" + FString::FromInt(RenderIndex.Index) + "_";
 
 		FVoxelMaterialGenerator Generator(
-			MegaMaterial,
+			ErrorOwner,
 			NewMaterial,
 			Prefix,
 			true,
@@ -305,7 +358,7 @@ bool FVoxelMegaMaterialGenerator::GenerateMaterialForTarget(
 		}
 
 		if (ShadingModels.Num() > 1 &&
-			PrivateAccess::ShadingModel(Material) != MSM_FromMaterialExpression)
+			SurfaceType.MaterialInterface.Material.ShadingModel != MSM_FromMaterialExpression)
 		{
 			UMaterialExpressionShadingModel& ShadingModel = Generator.NewExpression<UMaterialExpressionShadingModel>();
 			ShadingModel.ShadingModel = PrivateAccess::ShadingModel(Material);
@@ -322,12 +375,12 @@ bool FVoxelMegaMaterialGenerator::GenerateMaterialForTarget(
 			Inputs.Attributes.Expression = &SetMaterialAttributes;
 		}
 
-		DelayedCopyParameterValues.Add([&NewMaterialInstance, &MaterialInterface, Prefix](FMaterialInstanceParameterUpdateContext& InstanceUpdateContext)
+		DelayedCopyParameterValues.Add([&NewMaterialInstance, SurfaceType, Prefix](FMaterialInstanceParameterUpdateContext& InstanceUpdateContext)
 		{
 			FVoxelUtilities::CopyParameterValues(
 				InstanceUpdateContext,
 				NewMaterialInstance,
-				MaterialInterface,
+				*SurfaceType.MaterialInterface.Object,
 				Prefix);
 		});
 
@@ -358,7 +411,7 @@ bool FVoxelMegaMaterialGenerator::GenerateMaterialForTarget(
 				*Generator.GetBounds(),
 				FString::Printf(TEXT("Material %d: %s"),
 					RenderIndex.Index,
-					*MaterialInterface.GetName()));
+					*SurfaceType.MaterialInterface.Object->GetName()));
 		}
 	}
 
@@ -369,18 +422,23 @@ bool FVoxelMegaMaterialGenerator::GenerateMaterialForTarget(
 		UMaterialExpressionVoxelMegaMaterialInternalSwitch& Switch = FVoxelUtilities::CreateMaterialExpression<UMaterialExpressionVoxelMegaMaterialInternalSwitch>(NewMaterial);
 		Switch.MaterialExpressionEditorX = 5400;
 		Switch.MaterialExpressionEditorY = PositionY / 2;
-		Switch.Target = Target;
-		Switch.bEnablePixelDepthOffset = MegaMaterial.bEnablePixelDepthOffset;
+		Switch.Target = State.Target;
+		Switch.bEnablePixelDepthOffset = State.MegaMaterial.bEnablePixelDepthOffset;
 		Switch.bEnableSmoothBlends = INLINE_LAMBDA
 		{
-			if (!MegaMaterial.bEnableSmoothBlends)
+			if (State.Target == EVoxelMegaMaterialTarget::Lumen)
 			{
 				return false;
 			}
 
-			for (const auto& It : IndexToSurfaceInfo)
+			if (!State.MegaMaterial.bEnableSmoothBlends)
 			{
-				if (It.Value.SurfaceType->BlendSmoothness > 0)
+				return false;
+			}
+
+			for (const auto& It : State.IndexToSurfaceType)
+			{
+				if (It.Value.BlendSmoothness > 0)
 				{
 					return true;
 				}
@@ -390,24 +448,22 @@ bool FVoxelMegaMaterialGenerator::GenerateMaterialForTarget(
 			return false;
 		};
 
-		Switch.bEnableDitherNoiseTexture = MegaMaterial.bEnableDitherNoiseTexture && DitherNoiseTexture != nullptr;
+		Switch.bEnableDitherNoiseTexture = State.MegaMaterial.bEnableDitherNoiseTexture && DitherNoiseTexture != nullptr;
 
 		// Default material
 		Switch.IndexToInputs.Add(FVoxelMaterialRenderIndex(0), {});
 
 		float MaxMagnitude = 0;
-		for (const auto& It : IndexToSurfaceInfo)
+		for (const auto& It : State.IndexToSurfaceType)
 		{
 			const FVoxelMaterialRenderIndex RenderIndex = It.Key;
-			UVoxelSurfaceTypeAsset& SurfaceType = *It.Value.SurfaceType;
+			const FVoxelSurfaceTypeState& SurfaceType = It.Value;
 
-			const UMaterialInterface& MaterialInterface = *SurfaceType.Material;
-
-			MaxMagnitude = FMath::Max(MaxMagnitude, MaterialInterface.GetDisplacementScaling().Magnitude);
+			MaxMagnitude = FMath::Max(MaxMagnitude, SurfaceType.MaterialInterface.DisplacementScaling.Magnitude);
 
 			FVoxelMegaMaterialSwitchInputs Inputs = MaterialIndexToInputs[RenderIndex];
-			Inputs.bTangentSpaceNormal = MaterialInterface.GetMaterial()->bTangentSpaceNormal;
-			Inputs.DisplacementScaling = MaterialInterface.GetDisplacementScaling();
+			Inputs.bTangentSpaceNormal = SurfaceType.MaterialInterface.Material.bTangentSpaceNormal;
+			Inputs.DisplacementScaling = SurfaceType.MaterialInterface.DisplacementScaling;
 
 			ensure(!Switch.IndexToInputs.Contains(RenderIndex));
 			Switch.IndexToInputs.Add(RenderIndex, Inputs);
@@ -446,7 +502,10 @@ bool FVoxelMegaMaterialGenerator::GenerateMaterialForTarget(
 		}
 	}
 
-	if (!AddAttributePostProcess(MegaMaterial, NewMaterial))
+	if (!AddAttributePostProcess(
+		ErrorOwner,
+		State.MegaMaterial,
+		NewMaterial))
 	{
 		return false;
 	}
@@ -477,15 +536,24 @@ bool FVoxelMegaMaterialGenerator::GenerateMaterialForTarget(
 
 			if (GetVoxelMetadata->Metadata)
 			{
-				GetVoxelMetadata->MetadataIndex = Metadatas.Find(GetVoxelMetadata->Metadata);
+				GetVoxelMetadata->MetadataIndex = State.MetadataIndexToMetadata.Find(GetVoxelMetadata->Metadata);
 				ensure(GetVoxelMetadata->MetadataIndex != -1);
 			}
 		}
 	}
 
+	MarkWorldPositionOffsetConnected(NewMaterial);
+
 	NewMaterial.PostEditChange();
 
 	{
+		// FMaterialInstanceParameterUpdateContext does not clear static switches
+		PrivateAccess::StaticParametersRuntime(NewMaterialInstance).Empty();
+		if (UMaterialInstanceEditorOnlyData* EditorOnly = NewMaterialInstance.GetEditorOnlyData())
+		{
+			EditorOnly->StaticParameters.Empty();
+		}
+
 		FMaterialInstanceParameterUpdateContext InstanceUpdateContext(&NewMaterialInstance, EMaterialInstanceClearParameterFlag::All);
 
 		for (const TFunction<void(FMaterialInstanceParameterUpdateContext&)>& CopyParameterValues : DelayedCopyParameterValues)
@@ -494,7 +562,7 @@ bool FVoxelMegaMaterialGenerator::GenerateMaterialForTarget(
 		}
 
 		ApplyBlendSmoothness(
-			IndexToSurfaceInfo,
+			State.IndexToSurfaceType,
 			NewMaterial,
 			NewMaterialInstance);
 
@@ -511,31 +579,19 @@ bool FVoxelMegaMaterialGenerator::GenerateMaterialForTarget(
 }
 
 bool FVoxelMegaMaterialGenerator::GenerateMaterial(
-	const UVoxelMegaMaterial& MegaMaterial,
-	const UVoxelSurfaceTypeAsset& SurfaceType,
+	const TVoxelObjectPtr<const UObject> ErrorOwner,
+	const FVoxelMegaMaterialMaterialState& State,
 	UMaterial& NewMaterial,
-	UMaterialInstanceConstant& NewMaterialInstance,
-	const TConstVoxelArrayView<TObjectPtr<UVoxelMetadata>> Metadatas,
-	const bool bIsDummyMaterial)
+	UMaterialInstanceConstant& NewMaterialInstance)
 {
 	VOXEL_FUNCTION_COUNTER();
 	check(NewMaterialInstance.Parent == &NewMaterial);
 
-	const UMaterialInterface& MaterialInterface = *SurfaceType.Material;
+	const UMaterial& Material = *State.SurfaceType.MaterialInterface.Material.Object;
 
-	if (!ensure(MaterialInterface.GetMaterial()))
-	{
-		return false;
-	}
-	const UMaterial& Material = *MaterialInterface.GetMaterial();
-
-	TUniquePtr<FMaterialUpdateContext> UpdateContext;
-	if (!bIsDummyMaterial)
-	{
-		UpdateContext = MakeUnique<FMaterialUpdateContext>();
-		UpdateContext->AddMaterial(&NewMaterial);
-		UpdateContext->AddMaterialInstance(&NewMaterialInstance);
-	}
+	const TUniquePtr<FMaterialUpdateContext> UpdateContext = MakeUnique<FMaterialUpdateContext>();
+	UpdateContext->AddMaterial(&NewMaterial);
+	UpdateContext->AddMaterialInstance(&NewMaterialInstance);
 
 	for (FProperty& Property : GetClassProperties<UMaterial>())
 	{
@@ -556,20 +612,53 @@ bool FVoxelMegaMaterialGenerator::GenerateMaterial(
 
 #if VOXEL_ENGINE_VERSION >= 506
 	// Otherwise "Cooking a material resource that doesn't have a valid ShaderMap"
+#if VOXEL_ENGINE_VERSION >= 508
+	NewMaterial.SetUsageByFlag(MATUSAGE_StaticMesh, true);
+	NewMaterial.SetUsageByFlag(MATUSAGE_Nanite, true);
+#else
 	NewMaterial.bUsedWithStaticMesh = true;
-#endif
-
 	NewMaterial.bUsedWithNanite = true;
+#endif
+#endif
 	NewMaterial.bEnableTessellation = true;
 
-	if (MegaMaterial.bSetHasPixelAnimation)
+	if (State.MegaMaterial.bSetHasPixelAnimation)
 	{
 		NewMaterial.bHasPixelAnimation = true;
 	}
 
-	if (const UMaterialInstance* Instance = Cast<UMaterialInstance>(&MaterialInterface))
+	NewMaterialInstance.BasePropertyOverrides = {};
+
+	for (const FVoxelMaterialInstanceBaseState& MaterialInstance : ReverseIterate(State.SurfaceType.MaterialInterface.MaterialInstanceHierarchy))
 	{
-		NewMaterialInstance.BasePropertyOverrides = Instance->BasePropertyOverrides;
+		static_assert(sizeof(FMaterialInstanceBasePropertyOverrides) == UE_508_SWITCH(32, 40), "Need to update code below");
+
+#define COPY(Override, Value) \
+		if (MaterialInstance.BasePropertyOverrides.Override) \
+		{ \
+			NewMaterialInstance.BasePropertyOverrides.Override = true; \
+			NewMaterialInstance.BasePropertyOverrides.Value = MaterialInstance.BasePropertyOverrides.Value; \
+		}
+
+		COPY(bOverride_OpacityMaskClipValue, OpacityMaskClipValue);
+		COPY(bOverride_BlendMode, BlendMode);
+		COPY(bOverride_ShadingModel, ShadingModel);
+		COPY(bOverride_DitheredLODTransition, DitheredLODTransition);
+		COPY(bOverride_CastDynamicShadowAsMasked, bCastDynamicShadowAsMasked);
+		COPY(bOverride_TwoSided, TwoSided);
+		COPY(bOverride_bIsThinSurface, bIsThinSurface);
+		COPY(bOverride_OutputTranslucentVelocity, bOutputTranslucentVelocity);
+		COPY(bOverride_bHasPixelAnimation, bHasPixelAnimation);
+		COPY(bOverride_bEnableTessellation, bEnableTessellation);
+		COPY(bOverride_DisplacementScaling, DisplacementScaling);
+		COPY(bOverride_bEnableDisplacementFade, bEnableDisplacementFade);
+		COPY(bOverride_DisplacementFadeRange, DisplacementFadeRange);
+		COPY(bOverride_MaxWorldPositionOffsetDisplacement, MaxWorldPositionOffsetDisplacement);
+#if VOXEL_ENGINE_VERSION >= 506
+		COPY(bOverride_CompatibleWithLumenCardSharing, bCompatibleWithLumenCardSharing);
+#endif
+
+#undef COPY
 	}
 
 	NewMaterial.bUseMaterialAttributes = true;
@@ -579,7 +668,7 @@ bool FVoxelMegaMaterialGenerator::GenerateMaterial(
 	TVoxelArray<TFunction<void(FMaterialInstanceParameterUpdateContext&)>> DelayedCopyParameterValues;
 
 	FVoxelMaterialGenerator Generator(
-		MegaMaterial,
+		ErrorOwner,
 		NewMaterial,
 		{},
 		false,
@@ -600,7 +689,7 @@ bool FVoxelMegaMaterialGenerator::GenerateMaterial(
 		}
 
 		ensure(GetVoxelRandom->SurfaceTypeSeed.Seed.IsEmpty());
-		GetVoxelRandom->SurfaceTypeSeed = SurfaceType.Seed;
+		GetVoxelRandom->SurfaceTypeSeed = State.SurfaceType.Seed;
 	});
 
 	NewMaterial.EditorX = Material.EditorX + 500;
@@ -615,7 +704,10 @@ bool FVoxelMegaMaterialGenerator::GenerateMaterial(
 		NewMaterial.GetEditorOnlyData()->MaterialAttributes.Expression = &Hook;
 	}
 
-	if (!AddAttributePostProcess(MegaMaterial, NewMaterial))
+	if (!AddAttributePostProcess(
+		ErrorOwner,
+		State.MegaMaterial,
+		NewMaterial))
 	{
 		return false;
 	}
@@ -633,11 +725,13 @@ bool FVoxelMegaMaterialGenerator::GenerateMaterial(
 
 			if (GetVoxelMetadata->Metadata)
 			{
-				GetVoxelMetadata->MetadataIndex = Metadatas.Find(GetVoxelMetadata->Metadata);
+				GetVoxelMetadata->MetadataIndex = State.MetadataIndexToMetadata.Find(GetVoxelMetadata->Metadata);
 				ensure(GetVoxelMetadata->MetadataIndex != -1);
 			}
 		}
 	}
+
+	MarkWorldPositionOffsetConnected(NewMaterial);
 
 	NewMaterial.PostEditChange();
 
@@ -646,30 +740,30 @@ bool FVoxelMegaMaterialGenerator::GenerateMaterial(
 	FVoxelUtilities::CopyParameterValues(
 		InstanceUpdateContext,
 		NewMaterialInstance,
-		MaterialInterface,
+		*State.SurfaceType.MaterialInterface.Object,
 		{});
 
 	return true;
 }
 
 bool FVoxelMegaMaterialGenerator::ApplyBlendSmoothness(
-	const TMap<FVoxelMaterialRenderIndex, FVoxelMegaMaterialSurfaceInfo>& IndexToSurfaceInfo,
-	const UMaterial& Material,
+	const TMap<FVoxelMaterialRenderIndex, FVoxelSurfaceTypeState>& IndexToSurfaceType,
+	const UMaterial& NewMaterial,
 	UMaterialInstanceConstant& MaterialInstance)
 {
 	VOXEL_FUNCTION_COUNTER();
 
 	bool bChanged = false;
 
-	for (const auto& It : IndexToSurfaceInfo)
+	for (const auto& It : IndexToSurfaceType)
 	{
 		const FVoxelMaterialRenderIndex RenderIndex = It.Key;
-		const UVoxelSurfaceTypeAsset& SurfaceType = *It.Value.SurfaceType;
+		const FVoxelSurfaceTypeState& SurfaceType = It.Value;
 
 		// Apply displacement scaling, but keep it relative to output magnitude just like displacement in FVoxelMegaMaterialSwitch
 		const float Scale =
-			SurfaceType.Material->GetDisplacementScaling().Magnitude /
-			Material.GetDisplacementScaling().Magnitude;
+			SurfaceType.MaterialInterface.DisplacementScaling.Magnitude /
+			NewMaterial.GetDisplacementScaling().Magnitude;
 
 		const float NewValue = FMath::Max(SurfaceType.BlendSmoothness, 0.f) * Scale;
 
@@ -754,10 +848,13 @@ TVoxelArray<UVoxelMetadata*> FVoxelMegaMaterialGenerator::GetUsedMetadatas(const
 ///////////////////////////////////////////////////////////////////////////////
 
 bool FVoxelMegaMaterialGenerator::AddAttributePostProcess(
-	const UVoxelMegaMaterial& MegaMaterial,
+	const TVoxelObjectPtr<const UObject> ErrorOwner,
+	const FVoxelMegaMaterialState& MegaMaterial,
 	UMaterial& Material)
 {
-	if (!MegaMaterial.AttributePostProcess)
+	VOXEL_FUNCTION_COUNTER();
+
+	if (!MegaMaterial.AttributePostProcess.Object)
 	{
 		return true;
 	}
@@ -765,24 +862,24 @@ bool FVoxelMegaMaterialGenerator::AddAttributePostProcess(
 	{
 		TArray<FFunctionExpressionInput> Inputs;
 		TArray<FFunctionExpressionOutput> Outputs;
-		MegaMaterial.AttributePostProcess->GetInputsAndOutputs(Inputs, Outputs);
+		MegaMaterial.AttributePostProcess.Object->GetInputsAndOutputs(Inputs, Outputs);
 
 		if (Inputs.Num() != 1 ||
 			Outputs.Num() != 1)
 		{
-			VOXEL_MESSAGE(Error, "{0}: MegaMaterial AttributePostProcess should have exactly one input and one output, both of the type MaterialAttributes", MegaMaterial);
+			VOXEL_MESSAGE(Error, "{0}: MegaMaterial AttributePostProcess should have exactly one input and one output, both of the type MaterialAttributes", ErrorOwner);
 			return false;
 		}
 	}
 
 	FVoxelMaterialGenerator Generator(
-		MegaMaterial,
+		ErrorOwner,
 		Material,
 		{},
 		false,
 		ShouldDuplicateFunction);
 
-	UMaterialFunction* NewFunction = Generator.DuplicateFunctionIfNeeded(*MegaMaterial.AttributePostProcess);
+	UMaterialFunction* NewFunction = Generator.DuplicateFunctionIfNeeded(*MegaMaterial.AttributePostProcess.Object);
 	if (!ensureVoxelSlow(NewFunction))
 	{
 		return false;
@@ -799,25 +896,6 @@ bool FVoxelMegaMaterialGenerator::AddAttributePostProcess(
 	Material.GetEditorOnlyData()->MaterialAttributes.Expression = &FunctionCall;
 
 	return true;
-}
-
-void FVoxelMegaMaterialGenerator::CollectedWatchedMaterials(
-	UMaterialInterface& Material,
-	TVoxelSet<TVoxelObjectPtr<UObject>>& OutWatchedMaterials)
-{
-	UMaterialInterface* Value = &Material;
-	while (Value)
-	{
-		OutWatchedMaterials.Add(Value);
-
-		const UMaterialInstance* Instance = Cast<UMaterialInstance>(Value);
-		if (!Instance)
-		{
-			break;
-		}
-
-		Value = Instance->Parent;
-	}
 }
 
 void FVoxelMegaMaterialGenerator::WrapInComment(

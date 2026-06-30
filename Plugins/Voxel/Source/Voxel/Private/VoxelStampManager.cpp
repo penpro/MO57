@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelStampManager.h"
 #include "VoxelStampRef.h"
@@ -36,13 +36,13 @@ void FVoxelStampLayerManager::NotifyStampsChanged()
 {
 	VOXEL_FUNCTION_COUNTER();
 	check(IsInGameThread());
-	ensure(ChangedStamps.Num() > 0);
+	ensure(StampChanges.Num() > 0);
 
 	FVoxelInvalidationScope Scope(FVoxelInvalidationCallstack::Create(Layer));
 
 	NumStamps = Stamps.Num();
 
-	const TVoxelChunkedArray<FChangedStamp> LocalChangedStamps = MoveTemp(ChangedStamps);
+	const TVoxelChunkedArray<FVoxelStampChange> LocalChangedStamps = MoveTemp(StampChanges);
 	OnStampChanged.Broadcast(LocalChangedStamps);
 }
 
@@ -247,7 +247,7 @@ void FVoxelStampManager::FlushUpdates()
 
 				const TSharedPtr<const FVoxelStampRuntime> OldStamp = LayerManager.Stamps.RemoveAt_ReturnValue(LayerRef.IndexInLayer);
 
-				LayerManager.ChangedStamps.Add(FVoxelStampLayerManager::FChangedStamp
+				LayerManager.StampChanges.Add(FVoxelStampChange
 				{
 					OldStamp,
 					nullptr
@@ -380,7 +380,7 @@ void FVoxelStampManager::FlushUpdates()
 			checkVoxelSlow(!bHasOldStamp || !OldStamp->FailedToInitialize());
 			checkVoxelSlow(!NewStamp->FailedToInitialize());
 
-			LayerManager.ChangedStamps.Add(FVoxelStampLayerManager::FChangedStamp
+			LayerManager.StampChanges.Add(FVoxelStampChange
 			{
 				bHasOldStamp ? OldStamp : nullptr,
 				NewStamp
@@ -414,7 +414,7 @@ void FVoxelStampManager::FlushUpdates()
 
 			checkVoxelSlow(!OldStamp->FailedToInitialize());
 
-			LayerManager.ChangedStamps.Add(FVoxelStampLayerManager::FChangedStamp
+			LayerManager.StampChanges.Add(FVoxelStampChange
 			{
 				OldStamp,
 				nullptr
@@ -426,7 +426,7 @@ void FVoxelStampManager::FlushUpdates()
 	const TVoxelArray<TSharedPtr<FVoxelStampLayerManager>> LocalLayerManagers = LayerToLayerManager.ValueArray();
 	for (const TSharedPtr<FVoxelStampLayerManager>& LayerManager : LocalLayerManagers)
 	{
-		if (LayerManager->ChangedStamps.Num() > 0)
+		if (LayerManager->StampChanges.Num() > 0)
 		{
 			LayerManager->NotifyStampsChanged();
 		}

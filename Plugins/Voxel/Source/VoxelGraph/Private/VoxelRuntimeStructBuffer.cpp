@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelRuntimeStructBuffer.h"
 #include "VoxelRuntimeStruct.h"
@@ -380,6 +380,17 @@ void FVoxelRuntimeStructBuffer::MergeFrom(
 
 	// Ensure Num is valid
 	(void)Num();
+}
+
+void FVoxelRuntimeStructBuffer::HashCombine(const TVoxelArrayView<uint64> InOutHashes) const
+{
+	VOXEL_FUNCTION_COUNTER_NUM(InOutHashes.Num());
+	checkVoxelSlow(Num() == 1 || InOutHashes.Num() == Num());
+
+	for (const auto& It : PropertyNameToBuffer)
+	{
+		It.Value->HashCombine(InOutHashes);
+	}
 }
 
 void FVoxelRuntimeStructBuffer::SetGeneric(

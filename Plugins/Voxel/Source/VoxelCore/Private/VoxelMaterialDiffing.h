@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -12,10 +12,19 @@ class FVoxelMaterialDiffing
 {
 public:
 	FString Diff;
+	const UMaterial& OldMaterial;
+	const UMaterial& NewMaterial;
 
-	bool Equal(
+	FVoxelMaterialDiffing(
 		const UMaterial& OldMaterial,
-		const UMaterial& NewMaterial);
+		const UMaterial& NewMaterial)
+		: OldMaterial(OldMaterial)
+		, NewMaterial(NewMaterial)
+	{
+	}
+
+public:
+	bool Equal();
 
 private:
 	TVoxelSet<TPair<const UMaterialExpression*, const UMaterialExpression*>> EqualExpressions;

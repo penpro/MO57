@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "PCGVoxelSamplerV2.h"
 #include "VoxelLayer.h"
@@ -16,8 +16,6 @@
 #include "Scatter/VoxelScatterUtilities.h"
 #include "Surface/VoxelSurfaceTypeTable.h"
 #include "Surface/VoxelSurfaceTypeBlendBuffer.h"
-#include "Surface/VoxelSmartSurfaceTypeResolver.h"
-#include "Utilities/VoxelBufferGradientUtilities.h"
 
 FString UPCGVoxelSamplerV2Settings::GetAdditionalTitleInformation() const
 {
@@ -154,6 +152,8 @@ TSharedPtr<FVoxelPCGOutput> UPCGVoxelSamplerV2Settings::CreateOutput(FPCGContext
 		bResolveSmartSurfaceTypes,
 		DistanceBetweenPoints,
 		Looseness,
+		HeightScatterType,
+		MinCellArea,
 		PointData,
 		FVoxelMetadataRef::GetUniqueValidRefs(MetadatasToQuery));
 }
@@ -171,246 +171,11 @@ FVoxelFuture FVoxelSamplerV2PCGOutput::Run() const
 {
 	return Voxel::AsyncTask([this]
 	{
-		if (WeakLayer.Type == EVoxelLayerType::Height)
-		{
-			return Generate2D();
-		}
-		else
-		{
-			return Generate3D();
-		}
+		return GeneratePoints(WeakLayer.Type == EVoxelLayerType::Height);
 	});
 }
 
-FVoxelFuture FVoxelSamplerV2PCGOutput::Generate2D() const
-{
-	VOXEL_FUNCTION_COUNTER();
-
-	if (!Layers->HasLayer(WeakLayer, GetDependencyCollector()))
-	{
-		return {};
-	}
-
-	const FIntPoint CellMin = FVoxelUtilities::CeilToInt(FVector2D(Bounds.Min) / DistanceBetweenPoints);
-	const FIntPoint CellMax = FVoxelUtilities::FloorToInt(FVector2D(Bounds.Max) / DistanceBetweenPoints);
-
-	if (CellMin.X > CellMax.X ||
-		CellMin.Y > CellMax.Y)
-	{
-		VOXEL_MESSAGE(Error, "Invalid distance between points: {0}", DistanceBetweenPoints);
-		return {};
-	}
-
-	const int32 CellCount = (CellMax - CellMin + 1).SizeSquared();
-
-	// Drop points slightly by an epsilon otherwise point can be culled. If the sampler has a volume connected as the Bounding Shape,
-	// the volume will call through to PCGHelpers::IsInsideBounds() which is a one sided test and points at the top of the volume
-	// will fail it. TODO perhaps the one-sided check can be isolated to component-bounds
-	constexpr double ZMultiplier = 1.0 - UE_DOUBLE_SMALL_NUMBER;
-	// Try to use a multiplier instead of a simply offset to combat loss of precision in floats. However if MaxZ is very small,
-	// then multiplier will not work, so just use an offset.
-	double SampleZ = (FMath::Abs(Bounds.Max.Z) > UE_DOUBLE_SMALL_NUMBER) ? Bounds.Max.Z * ZMultiplier : -UE_DOUBLE_SMALL_NUMBER;
-	// Make sure we're still in bounds though!
-	SampleZ = FMath::Max(SampleZ, Bounds.Min.Z);
-
-	FVoxelDoubleVector2DBuffer Positions;
-	Positions.Allocate(CellCount);
-
-	TVoxelArray<float> DensityMultipliers;
-	TVoxelArray<int32> Seeds;
-	DensityMultipliers.Reserve(CellCount);
-	Seeds.Reserve(CellCount);
-
-	int32 NumSamples = 0;
-	for (int32 IndexX = CellMin.X; IndexX <= CellMax.X; IndexX++)
-	{
-		for (int32 IndexY = CellMin.Y; IndexY <= CellMax.Y; IndexY++)
-		{
-			const double CurrentX = IndexX * DistanceBetweenPoints;
-			const double CurrentY = IndexY * DistanceBetweenPoints;
-
-			FRandomStream RandomSource(PCGHelpers::ComputeSeed(GetSeed(), IndexX, IndexY));
-
-			const float RandX = RandomSource.FRand();
-			const float RandY = RandomSource.FRand();
-
-			const FVector2D Position
-			{
-				CurrentX + RandX * Looseness * DistanceBetweenPoints * 0.5f,
-				CurrentY + RandY * Looseness * DistanceBetweenPoints * 0.5f
-			};
-
-			Positions.Set(NumSamples++, Position);
-
-			DensityMultipliers.Add(1.f);
-			Seeds.Add(RandomSource.GetCurrentSeed());
-		}
-	}
-
-	Positions.ShrinkTo(NumSamples);
-
-	check(NumSamples == DensityMultipliers.Num());
-	check(NumSamples == Seeds.Num());
-
-	FVoxelSurfaceTypeBlendBuffer SurfaceTypes;
-	SurfaceTypes.AllocateZeroed(Positions.Num());
-
-	TVoxelMap<FVoxelMetadataRef, TSharedRef<FVoxelBuffer>> MetadataToBuffer;
-	MetadataToBuffer.Reserve(MetadatasToQuery.Num());
-
-	for (const FVoxelMetadataRef& MetadataToQuery : MetadatasToQuery)
-	{
-		MetadataToBuffer.Add_EnsureNew(
-			MetadataToQuery,
-			MetadataToQuery.MakeDefaultBuffer(Positions.Num()));
-	}
-
-	const FVoxelQuery Query(
-		LOD,
-		*Layers,
-		*SurfaceTypeTable,
-		GetDependencyCollector());
-
-	const FVoxelFloatBuffer Heights = Query.SampleHeightLayer(
-		WeakLayer,
-		Positions,
-		SurfaceTypes.View(),
-		MetadataToBuffer);
-
-	if (Voxel::ShouldCancel())
-	{
-		return {};
-	}
-
-	FVoxelDoubleVectorBuffer PointPositions;
-	PointPositions.Allocate(NumSamples);
-
-	for (int32 Index = 0; Index < NumSamples; Index++)
-	{
-		PointPositions.Set(Index, FVector(Positions.X[Index], Positions.Y[Index], Heights[Index]));
-	}
-
-	FVoxelVectorBuffer PointNormals;
-	{
-		VOXEL_SCOPE_COUNTER("Compute Gradient");
-
-		// TODO?
-		const float GradientStep = 100.f;
-
-		FVoxelDoubleVector2DBuffer GradientPositions = FVoxelBufferGradientUtilities::SplitPositions2D(Positions, GradientStep);
-
-		const FVoxelFloatBuffer GradientHeights = Query.SampleHeightLayer(WeakLayer, GradientPositions);
-
-		PointNormals = FVoxelBufferGradientUtilities::CollapseGradient2DToNormal(GradientHeights, NumSamples, GradientStep);
-	}
-
-	FVoxelSmartSurfaceTypeResolver Resolver(
-		0,
-		WeakLayer,
-		*Layers,
-		*SurfaceTypeTable,
-		GetDependencyCollector(),
-		PointPositions,
-		PointNormals,
-		SurfaceTypes.View());
-
-	Resolver.Resolve();
-
-	TVoxelMap<FVoxelSurfaceType, TVoxelArray<float>> SurfaceTypeToWeight;
-	SurfaceTypeToWeight.Reserve(32);
-
-	TVoxelArray<int32> Indirection;
-	Indirection.Reserve(NumSamples);
-
-	TVoxelArray<FPCGPoint> Points;
-	Points.Reserve(NumSamples);
-
-	for (int32 ReadIndex = 0; ReadIndex < NumSamples; ReadIndex++)
-	{
-		const float Height = Heights[ReadIndex];
-
-		if (FVoxelUtilities::IsNaN(Height) ||
-			Height < Bounds.Min.Z ||
-			Height > Bounds.Max.Z)
-		{
-			continue;
-		}
-
-		const int32 WriteIndex = Points.Emplace();
-		FPCGPoint& Point = Points[WriteIndex];
-		Indirection.Add(ReadIndex);
-
-		for (const FVoxelSurfaceTypeBlendLayer& Layer : SurfaceTypes[ReadIndex].GetLayers())
-		{
-			if (!SurfaceTypeToWeight.Contains(Layer.Type))
-			{
-				SurfaceTypeToWeight.Add_CheckNew(Layer.Type).SetNumZeroed(NumSamples);
-			}
-			SurfaceTypeToWeight.FindChecked(Layer.Type)[WriteIndex] += Layer.Weight.ToFloat();
-		}
-
-		Point.Transform = FTransform(FRotationMatrix::MakeFromZ(FVector(PointNormals[ReadIndex])).ToQuat(),
-
-			FVector(
-				Positions[ReadIndex],
-				Height));
-
-		Point.Density = DensityMultipliers[ReadIndex];
-		Point.Seed = Seeds[ReadIndex];
-		Point.MetadataEntry = WriteIndex;
-
-		Point.SetLocalBounds(FBox(FVector(-0.5f * DistanceBetweenPoints), FVector(0.5f * DistanceBetweenPoints)));
-	}
-
-	return Voxel::GameTask([
-		=,
-		this,
-		MetadataToBuffer = MoveTemp(MetadataToBuffer),
-		Points = MakeSharedCopy(MoveTemp(Points)),
-		SurfaceTypeToWeight = MoveTemp(SurfaceTypeToWeight),
-		Indirection = MoveTemp(Indirection)]
-	{
-		VOXEL_FUNCTION_COUNTER();
-		check(IsInGameThread());
-
-		UPCGPointData* PointData = WeakPointData.Resolve();
-		if (!ensure(PointData))
-		{
-			return;
-		}
-
-		FVoxelPCGUtilities::AddPointsToMetadata(*PointData->Metadata, *Points);
-
-		for (const auto& It : SurfaceTypeToWeight)
-		{
-			FVoxelPCGUtilities::AddAttribute<float>(
-				*PointData->Metadata,
-				*Points,
-				It.Key.GetFName(),
-				MakeVoxelArrayView(It.Value).LeftOf(Points->Num()));
-		}
-
-		FVoxelSurfaceType::ForeachSurfaceType([&](const FVoxelSurfaceType& Type)
-		{
-			FVoxelPCGUtilities::AddDefaultAttributeIfNeeded<float>(
-				*PointData->Metadata,
-				Type.GetFName());
-		});
-
-		for (const FVoxelMetadataRef MetadataToQuery : MetadatasToQuery)
-		{
-			MetadataToQuery.AddToPCG(
-				*PointData->Metadata,
-				*Points,
-				MetadataToQuery.GetFName(),
-				*MetadataToBuffer[MetadataToQuery]->Gather(Indirection));
-		}
-
-		PointData->GetMutablePoints() = MoveTemp(*Points);
-	});
-}
-
-FVoxelFuture FVoxelSamplerV2PCGOutput::Generate3D() const
+FVoxelFuture FVoxelSamplerV2PCGOutput::GeneratePoints(const bool bHeight) const
 {
 	if (!Layers->HasLayer(WeakLayer, GetDependencyCollector()))
 	{
@@ -428,25 +193,46 @@ FVoxelFuture FVoxelSamplerV2PCGOutput::Generate3D() const
 		return {};
 	}
 
-	const FIntVector Size = FVoxelUtilities::CeilToInt(Bounds.Size() / DistanceBetweenPoints);
-
 	const FVoxelQuery Query(
 		LOD,
 		*Layers,
 		*SurfaceTypeTable,
 		GetDependencyCollector());
 
-	FVoxelPointSet PointSet = FVoxelScatterUtilities::ScatterPoints3D(
-		Query,
-		Bounds.Min,
-		Size,
-		DistanceBetweenPoints,
-		GetSeed(),
-		Looseness,
-		WeakLayer,
-		true,
-		bResolveSmartSurfaceTypes,
-		MetadatasToQuery);
+	// Bounds are in the current world; scatter generates & queries in absolute space
+	const FVector OriginOffset = GetWorldOriginOffset();
+
+	FVoxelPointSet PointSet;
+	if (bHeight)
+	{
+		PointSet = FVoxelScatterUtilities::ScatterPoints2D(
+			Query,
+			Bounds.ShiftBy(OriginOffset),
+			{},
+			DistanceBetweenPoints,
+			GetSeed(),
+			Looseness,
+			HeightScatterType,
+			WeakLayer,
+			true,
+			bResolveSmartSurfaceTypes,
+			MetadatasToQuery);
+	}
+	else
+	{
+		PointSet = FVoxelScatterUtilities::ScatterPoints3D(
+			Query,
+			Bounds.ShiftBy(OriginOffset),
+			{},
+			DistanceBetweenPoints,
+			GetSeed(),
+			Looseness,
+			MinCellArea,
+			WeakLayer,
+			true,
+			bResolveSmartSurfaceTypes,
+			MetadatasToQuery);
+	}
 
 	if (PointSet.Num() == 0)
 	{
@@ -474,6 +260,7 @@ FVoxelFuture FVoxelSamplerV2PCGOutput::Generate3D() const
 	TVoxelMap<FVoxelSurfaceType, TVoxelArray<float>> SurfaceTypeToWeight;
 	SurfaceTypeToWeight.Reserve(32);
 
+	const FRandomStream Stream(GetSeed());
 	for (int32 Index = 0; Index < PointSet.Num(); Index++)
 	{
 		FPCGPoint& Point = Points[Index];
@@ -481,9 +268,9 @@ FVoxelFuture FVoxelSamplerV2PCGOutput::Generate3D() const
 
 		Point.Transform = FTransform(
 			FQuat((*RotationBuffer)[Index]),
-			(*PositionBuffer)[Index]);
+			(*PositionBuffer)[Index] - OriginOffset);
 
-		Point.Density = 1.f;
+		Point.Density = Stream.FRand();
 		Point.Seed = (*IdBuffer)[Index].PointId;
 		Point.MetadataEntry = Index;
 

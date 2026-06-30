@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 using System.IO;
 using UnrealBuildTool;
@@ -30,5 +30,10 @@ public class Voxel : ModuleRules
 			Path.Combine(GetModuleDirectory("Renderer"), "Private"),
 			Path.Combine(GetModuleDirectory("Renderer"), "Internal")
 		});
+
+		if (Target.bBuildEditor)
+		{
+			PrivateDependencyModuleNames.AddRange(new string[] { "NaniteBuilder" });
+		}
 	}
 }

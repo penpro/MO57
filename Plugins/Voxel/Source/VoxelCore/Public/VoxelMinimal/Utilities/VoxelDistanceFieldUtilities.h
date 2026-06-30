@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -134,7 +134,6 @@ namespace FVoxelUtilities
 
 	VOXELCORE_API void JumpFlood(
 		const FIntVector& Size,
-		float VoxelSize,
 		TVoxelArrayView<float> Distances,
 		TVoxelArray<float>& OutClosestX,
 		TVoxelArray<float>& OutClosestY,
@@ -142,7 +141,6 @@ namespace FVoxelUtilities
 
 	VOXELCORE_API void JumpFlood_Initialized(
 		const FIntVector& Size,
-		float VoxelSize,
 		TVoxelArrayView<float> Distances,
 		TVoxelArray<float>& ClosestX,
 		TVoxelArray<float>& ClosestY,
@@ -150,6 +148,5 @@ namespace FVoxelUtilities
 
 	VOXELCORE_API void JumpFlood(
 		const FIntVector& Size,
-		float VoxelSize,
 		TVoxelArrayView<float> Distances);
 }

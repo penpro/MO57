@@ -1,9 +1,11 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelGraphNode_CustomizeParameter.h"
+#include "VoxelEdGraph.h"
 #include "VoxelGraphToolkit.h"
 #include "VoxelGraphTracker.h"
 #include "VoxelGraphVisuals.h"
+#include "VoxelTerminalGraph.h"
 #include "Nodes/VoxelNode_CustomizeParameter.h"
 
 const FVoxelParameter* UVoxelGraphNode_CustomizeParameter::GetParameter() const
@@ -70,6 +72,36 @@ void UVoxelGraphNode_CustomizeParameter::AllocateDefaultPins()
 	}
 
 	Super::AllocateDefaultPins();
+}
+
+bool UVoxelGraphNode_CustomizeParameter::CanPasteHere(const UEdGraph* TargetGraph) const
+{
+	if (!Super::CanPasteHere(TargetGraph))
+	{
+		return false;
+	}
+
+	const UVoxelEdGraph* VoxelGraph = Cast<UVoxelEdGraph>(TargetGraph);
+	if (!VoxelGraph)
+	{
+		return false;
+	}
+
+	const TSharedPtr<FVoxelGraphToolkit> Toolkit = VoxelGraph->GetGraphToolkit();
+	if (!Toolkit ||
+		!Toolkit->Asset)
+	{
+		return false;
+	}
+
+	const UVoxelTerminalGraph* TerminalGraph = VoxelGraph->GetTypedOuter<UVoxelTerminalGraph>();
+	if (TerminalGraph &&
+		TerminalGraph != &Toolkit->Asset->GetEditorTerminalGraph())
+	{
+		return false;
+	}
+
+	return true;
 }
 
 ///////////////////////////////////////////////////////////////////////////////

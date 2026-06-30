@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelMinimal.isph"
 
@@ -200,7 +200,6 @@ export void VoxelDistanceFieldUtilities_JumpFlood_JumpFlood(
 
 export void VoxelDistanceFieldUtilities_JumpFlood_ComputeDistances(
 	const uniform int32 Z,
-	const uniform float VoxelSize,
 	const uniform int32 SizeX,
 	const uniform int32 SizeY,
 	const uniform int32 SizeZ,
@@ -235,8 +234,7 @@ export void VoxelDistanceFieldUtilities_JumpFlood_ComputeDistances(
 
 			OutDistances[Index] =
 				sqrt(SquaredDistance) *
-				(OutDistances[Index] < 0.f ? -1.f : 1.f) *
-				VoxelSize;
+				(OutDistances[Index] < 0.f ? -1.f : 1.f);
 		}
 	}
 }

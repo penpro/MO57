@@ -1,9 +1,9 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelEditorMinimal.h"
 #include "VoxelStampComponent.h"
 
-VOXEL_CUSTOMIZE_CLASS(UVoxelStampComponent)(IDetailLayoutBuilder& DetailLayout)
+VOXEL_CUSTOMIZE_CLASS(UVoxelStampComponentBase)(IDetailLayoutBuilder& DetailLayout)
 {
 	FVoxelEditorUtilities::EnableRealtime();
 

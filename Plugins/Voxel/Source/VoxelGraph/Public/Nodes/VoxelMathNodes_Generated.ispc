@@ -1,112 +1,6 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelISPCNodeHelpers.isph"
-
-export void VoxelNode_VoxelComputeNode_Acos(const FVoxelInputBuffer* uniform InputBuffers, void* uniform const* uniform OutputBuffers, const uniform int32 Num)
-{
-	FOREACH(Index, 0, Num)
-	{
-		const float Value = LoadFloat(InputBuffers[0], Index);
-		float ReturnValue;
-
-		ReturnValue = acos(Value);
-
-		StoreFloat(OutputBuffers[0], Index, ReturnValue);
-	}
-}
-
-export void VoxelNode_VoxelComputeNode_AcosDegrees(const FVoxelInputBuffer* uniform InputBuffers, void* uniform const* uniform OutputBuffers, const uniform int32 Num)
-{
-	FOREACH(Index, 0, Num)
-	{
-		const float Value = LoadFloat(InputBuffers[0], Index);
-		float ReturnValue;
-
-		ReturnValue = 180.f / PI * acos(Value);
-
-		StoreFloat(OutputBuffers[0], Index, ReturnValue);
-	}
-}
-
-export void VoxelNode_VoxelComputeNode_Asin(const FVoxelInputBuffer* uniform InputBuffers, void* uniform const* uniform OutputBuffers, const uniform int32 Num)
-{
-	FOREACH(Index, 0, Num)
-	{
-		const float Value = LoadFloat(InputBuffers[0], Index);
-		float ReturnValue;
-
-		ReturnValue = asin(Value);
-
-		StoreFloat(OutputBuffers[0], Index, ReturnValue);
-	}
-}
-
-export void VoxelNode_VoxelComputeNode_AsinDegrees(const FVoxelInputBuffer* uniform InputBuffers, void* uniform const* uniform OutputBuffers, const uniform int32 Num)
-{
-	FOREACH(Index, 0, Num)
-	{
-		const float Value = LoadFloat(InputBuffers[0], Index);
-		float ReturnValue;
-
-		ReturnValue = 180.f / PI * asin(Value);
-
-		StoreFloat(OutputBuffers[0], Index, ReturnValue);
-	}
-}
-
-export void VoxelNode_VoxelComputeNode_Atan(const FVoxelInputBuffer* uniform InputBuffers, void* uniform const* uniform OutputBuffers, const uniform int32 Num)
-{
-	FOREACH(Index, 0, Num)
-	{
-		const float Value = LoadFloat(InputBuffers[0], Index);
-		float ReturnValue;
-
-		ReturnValue = atan(Value);
-
-		StoreFloat(OutputBuffers[0], Index, ReturnValue);
-	}
-}
-
-export void VoxelNode_VoxelComputeNode_Atan2(const FVoxelInputBuffer* uniform InputBuffers, void* uniform const* uniform OutputBuffers, const uniform int32 Num)
-{
-	FOREACH(Index, 0, Num)
-	{
-		const float Y = LoadFloat(InputBuffers[0], Index);
-		const float X = LoadFloat(InputBuffers[1], Index);
-		float ReturnValue;
-
-		ReturnValue = atan2(Y, X);
-
-		StoreFloat(OutputBuffers[0], Index, ReturnValue);
-	}
-}
-
-export void VoxelNode_VoxelComputeNode_Atan2Degrees(const FVoxelInputBuffer* uniform InputBuffers, void* uniform const* uniform OutputBuffers, const uniform int32 Num)
-{
-	FOREACH(Index, 0, Num)
-	{
-		const float Y = LoadFloat(InputBuffers[0], Index);
-		const float X = LoadFloat(InputBuffers[1], Index);
-		float ReturnValue;
-
-		ReturnValue = 180.f / PI * atan2(Y, X);
-
-		StoreFloat(OutputBuffers[0], Index, ReturnValue);
-	}
-}
-
-export void VoxelNode_VoxelComputeNode_AtanDegrees(const FVoxelInputBuffer* uniform InputBuffers, void* uniform const* uniform OutputBuffers, const uniform int32 Num)
-{
-	FOREACH(Index, 0, Num)
-	{
-		const float Value = LoadFloat(InputBuffers[0], Index);
-		float ReturnValue;
-
-		ReturnValue = 180.f / PI * atan(Value);
-
-		StoreFloat(OutputBuffers[0], Index, ReturnValue);
-	}
-}
 
 export void VoxelNode_VoxelComputeNode_BilinearInterpolation(const FVoxelInputBuffer* uniform InputBuffers, void* uniform const* uniform OutputBuffers, const uniform int32 Num)
 {
@@ -238,45 +132,6 @@ export void VoxelNode_VoxelComputeNode_BreakQuaternion(const FVoxelInputBuffer* 
 	}
 }
 
-export void VoxelNode_VoxelComputeNode_Cos(const FVoxelInputBuffer* uniform InputBuffers, void* uniform const* uniform OutputBuffers, const uniform int32 Num)
-{
-	FOREACH(Index, 0, Num)
-	{
-		const float Value = LoadFloat(InputBuffers[0], Index);
-		float ReturnValue;
-
-		ReturnValue = cos(Value);
-
-		StoreFloat(OutputBuffers[0], Index, ReturnValue);
-	}
-}
-
-export void VoxelNode_VoxelComputeNode_CosDegrees(const FVoxelInputBuffer* uniform InputBuffers, void* uniform const* uniform OutputBuffers, const uniform int32 Num)
-{
-	FOREACH(Index, 0, Num)
-	{
-		const float Value = LoadFloat(InputBuffers[0], Index);
-		float ReturnValue;
-
-		ReturnValue = cos(PI / 180.f * Value);
-
-		StoreFloat(OutputBuffers[0], Index, ReturnValue);
-	}
-}
-
-export void VoxelNode_VoxelComputeNode_DegreesToRadians(const FVoxelInputBuffer* uniform InputBuffers, void* uniform const* uniform OutputBuffers, const uniform int32 Num)
-{
-	FOREACH(Index, 0, Num)
-	{
-		const float A = LoadFloat(InputBuffers[0], Index);
-		float ReturnValue;
-
-		ReturnValue = A * (PI / 180.f);
-
-		StoreFloat(OutputBuffers[0], Index, ReturnValue);
-	}
-}
-
 export void VoxelNode_VoxelComputeNode_DistanceToColor(const FVoxelInputBuffer* uniform InputBuffers, void* uniform const* uniform OutputBuffers, const uniform int32 Num)
 {
 	FOREACH(Index, 0, Num)
@@ -291,18 +146,6 @@ export void VoxelNode_VoxelComputeNode_DistanceToColor(const FVoxelInputBuffer* 
 		StoreFloat(OutputBuffers[1], Index, Color.y);
 		StoreFloat(OutputBuffers[2], Index, Color.z);
 		StoreFloat(OutputBuffers[3], Index, Color.w);
-	}
-}
-
-export void VoxelNode_VoxelComputeNode_GetPI(const FVoxelInputBuffer* uniform InputBuffers, void* uniform const* uniform OutputBuffers, const uniform int32 Num)
-{
-	FOREACH(Index, 0, Num)
-	{
-		float ReturnValue;
-
-		ReturnValue = PI;
-
-		StoreFloat(OutputBuffers[0], Index, ReturnValue);
 	}
 }
 
@@ -413,19 +256,6 @@ export void VoxelNode_VoxelComputeNode_MakeRotationFromZ(const FVoxelInputBuffer
 	}
 }
 
-export void VoxelNode_VoxelComputeNode_RadiansToDegrees(const FVoxelInputBuffer* uniform InputBuffers, void* uniform const* uniform OutputBuffers, const uniform int32 Num)
-{
-	FOREACH(Index, 0, Num)
-	{
-		const float A = LoadFloat(InputBuffers[0], Index);
-		float ReturnValue;
-
-		ReturnValue = A * (180.f / PI);
-
-		StoreFloat(OutputBuffers[0], Index, ReturnValue);
-	}
-}
-
 export void VoxelNode_VoxelComputeNode_ReplaceVoid(const FVoxelInputBuffer* uniform InputBuffers, void* uniform const* uniform OutputBuffers, const uniform int32 Num)
 {
 	FOREACH(Index, 0, Num)
@@ -452,57 +282,5 @@ export void VoxelNode_VoxelComputeNode_RightShift(const FVoxelInputBuffer* unifo
 		ReturnValue = Value >> clamp(Shift, 0, 31);
 
 		StoreInt32(OutputBuffers[0], Index, ReturnValue);
-	}
-}
-
-export void VoxelNode_VoxelComputeNode_Sin(const FVoxelInputBuffer* uniform InputBuffers, void* uniform const* uniform OutputBuffers, const uniform int32 Num)
-{
-	FOREACH(Index, 0, Num)
-	{
-		const float Value = LoadFloat(InputBuffers[0], Index);
-		float ReturnValue;
-
-		ReturnValue = sin(Value);
-
-		StoreFloat(OutputBuffers[0], Index, ReturnValue);
-	}
-}
-
-export void VoxelNode_VoxelComputeNode_SinDegrees(const FVoxelInputBuffer* uniform InputBuffers, void* uniform const* uniform OutputBuffers, const uniform int32 Num)
-{
-	FOREACH(Index, 0, Num)
-	{
-		const float Value = LoadFloat(InputBuffers[0], Index);
-		float ReturnValue;
-
-		ReturnValue = sin(PI / 180.f * Value);
-
-		StoreFloat(OutputBuffers[0], Index, ReturnValue);
-	}
-}
-
-export void VoxelNode_VoxelComputeNode_Tan(const FVoxelInputBuffer* uniform InputBuffers, void* uniform const* uniform OutputBuffers, const uniform int32 Num)
-{
-	FOREACH(Index, 0, Num)
-	{
-		const float Value = LoadFloat(InputBuffers[0], Index);
-		float ReturnValue;
-
-		ReturnValue = tan(Value);
-
-		StoreFloat(OutputBuffers[0], Index, ReturnValue);
-	}
-}
-
-export void VoxelNode_VoxelComputeNode_TanDegrees(const FVoxelInputBuffer* uniform InputBuffers, void* uniform const* uniform OutputBuffers, const uniform int32 Num)
-{
-	FOREACH(Index, 0, Num)
-	{
-		const float Value = LoadFloat(InputBuffers[0], Index);
-		float ReturnValue;
-
-		ReturnValue = tan(PI / 180.f * Value);
-
-		StoreFloat(OutputBuffers[0], Index, ReturnValue);
 	}
 }

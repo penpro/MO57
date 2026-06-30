@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -20,6 +20,7 @@ struct VOXEL_API FVoxelPointAttributes
 	static const FName Color;
 	static const FName Steepness;
 	static const FName SurfaceTypes;
+	static const FName IsNeighbor;
 
 	static FName MakeParent(const FName Name)
 	{
@@ -76,6 +77,9 @@ public:
 	FVoxelGraphQuery MakeQuery(FVoxelGraphQuery Query) const;
 	bool CheckNum(const FVoxelNode* Node, int32 BufferNum) const;
 	TSharedRef<FVoxelPointSet> Gather(TConstVoxelArrayView<int32> Indices) const;
+	TVoxelArray<TSharedPtr<FVoxelPointSet>> Split(const FVoxelBufferSplitter& Splitter) const;
+	void KeepAttributes(const TVoxelSet<FName>& AttributesToKeep);
+	bool Equals(const FVoxelPointSet& Other) const;
 	int64 GetAllocatedSize() const;
 
 public:

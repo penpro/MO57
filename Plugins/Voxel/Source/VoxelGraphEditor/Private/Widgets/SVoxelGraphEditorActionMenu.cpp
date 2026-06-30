@@ -1,7 +1,9 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "SVoxelGraphEditorActionMenu.h"
 #include "SGraphActionMenu.h"
+#include "VoxelGraphToolkit.h"
+#include "VoxelGraphVisuals.h"
 #include "VoxelGraphSchemaAction.h"
 #include "VoxelGraphContextActionsBuilder.h"
 #include "Widgets/Notifications/SProgressBar.h"
@@ -17,6 +19,24 @@ void SVoxelGraphActionWidget::Construct(const FArguments& InArgs, const FCreateW
 	if (InCreateData->Action->GetTypeId() == FVoxelGraphSchemaAction::StaticGetTypeId())
 	{
 		static_cast<FVoxelGraphSchemaAction&>(*InCreateData->Action).GetIcon(Icon, Color);
+	}
+
+	FString ToolTip = InCreateData->Action->GetTooltipDescription().ToString();
+	if (ToolTip != InCreateData->Action->GetMenuDescription().ToString())
+	{
+		TArray<FString> ToolTipLines;
+		ToolTip.ParseIntoArrayLines(ToolTipLines, true);
+
+		ToolTip = {};
+		for (FString Line : ToolTipLines)
+		{
+			Line.TrimStartAndEndInline();
+			ToolTip += Line + " ";
+		}
+	}
+	else
+	{
+		ToolTip = {};
 	}
 
 	this->ChildSlot
@@ -40,6 +60,18 @@ void SVoxelGraphActionWidget::Construct(const FArguments& InArgs, const FCreateW
 			.Font(FCoreStyle::GetDefaultFontStyle("Regular", 9))
 			.Text(InCreateData->Action->GetMenuDescription())
 			.HighlightText(InArgs._HighlightText)
+		]
+		+ SHorizontalBox::Slot()
+		.AutoWidth()
+		.VAlign(VAlign_Center)
+		.Padding(6.0f, 0.0f, 3.0f, 0.0f)
+		[
+			SNew(STextBlock)
+			.Font(FCoreStyle::GetDefaultFontStyle("Regular", 9))
+			.ColorAndOpacity(FSlateColor::UseSubduedForeground())
+			.Text(FText::FromString(ToolTip))
+			.HighlightText(InArgs._HighlightText)
+			.OverflowPolicy(ETextOverflowPolicy::Ellipsis)
 		]
 	];
 }
@@ -70,6 +102,17 @@ void SVoxelGraphEditorActionMenu::Construct(const FArguments& InArgs)
 
 	ensure(bNoEdGraph || InArgs._GraphObj);
 
+	FSlateColor TypeColor;
+	FSlateIcon ContextIcon;
+	if (DraggedFromPins.Num() == 1)
+	{
+		if (const UEdGraphPin* Pin = DraggedFromPins[0])
+		{
+			TypeColor = Pin->GetSchema()->GetPinTypeColor(Pin->PinType);
+			ContextIcon = FVoxelGraphVisuals::GetPinIcon(Pin->PinType);
+		}
+	}
+
 	SBorder::Construct(
 		SBorder::FArguments()
 		.BorderImage(FAppStyle::GetBrush("Menu.Background"))
@@ -80,6 +123,46 @@ void SVoxelGraphEditorActionMenu::Construct(const FArguments& InArgs)
 			.HeightOverride(400.f)
 			[
 				SNew(SVerticalBox)
+				+ SVerticalBox::Slot()
+				.AutoHeight()
+				.Padding(2.f, 2.f, 2.f, 5.f)
+				[
+					SNew(SHorizontalBox)
+					+ SHorizontalBox::Slot()
+					.AutoWidth()
+					.VAlign(VAlign_Center)
+					.Padding(0.f, 0.f, ContextIcon.IsSet() ? 5.f : 0.f, 0.f)
+					[
+						SNew(SImage)
+						.ColorAndOpacity(TypeColor)
+						.Visibility(ContextIcon.IsSet() ? EVisibility::Visible : EVisibility::Collapsed)
+						.Image(ContextIcon.GetIcon())
+					]
+					+ SHorizontalBox::Slot()
+					.FillWidth(1.f)
+					.VAlign(VAlign_Center)
+					[
+						SNew(STextBlock)
+						.Text(this, &SVoxelGraphEditorActionMenu::GetSearchContextDesc)
+						.Font(FAppStyle::GetFontStyle(FName("BlueprintEditor.ActionMenu.ContextDescriptionFont")))
+						.ToolTipText(INVTEXT("Describes the current context of the action list"))
+						.AutoWrapText(true)
+					]
+					+ SHorizontalBox::Slot()
+					.HAlign(HAlign_Right)
+					.VAlign(VAlign_Center)
+					.AutoWidth()
+					[
+						SNew(SCheckBox)
+						.OnCheckStateChanged(this, &SVoxelGraphEditorActionMenu::OnGraphToggleChanged)
+						.IsChecked(this, &SVoxelGraphEditorActionMenu::GraphToggleIsChecked)
+						.ToolTipText(INVTEXT("Should the list be filtered to only actions that make sense in the current graph?"))
+						[
+							SNew(STextBlock)
+							.Text(INVTEXT("Graph Sensitive"))
+						]
+					]
+				]
 				+ SVerticalBox::Slot()
 				.FillHeight(1.f)
 				[
@@ -195,4 +278,84 @@ TSharedRef<SExpanderArrow> SVoxelGraphEditorActionMenu::CreateActionExpander(con
 TSharedRef<SWidget> SVoxelGraphEditorActionMenu::OnCreateWidgetForAction(FCreateWidgetForActionData* CreateData) const
 {
 	return SNew(SVoxelGraphActionWidget, CreateData);
+}
+
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+
+FText SVoxelGraphEditorActionMenu::GetSearchContextDesc() const
+{
+	if (bNoEdGraph)
+	{
+		return INVTEXT("All Possible Actions");
+	}
+
+	const TSharedPtr<FVoxelGraphToolkit> Toolkit = FVoxelGraphToolkit::Get(WeakEdGraph.Resolve());
+	if (!Toolkit)
+	{
+		return INVTEXT("All Possible Actions");
+	}
+
+	FString Description;
+	if (DraggedFromPins.Num() == 1)
+	{
+		const UEdGraphPin* Pin = DraggedFromPins[0];
+		if (ensure(Pin))
+		{
+			Description = "\n" + FString(Pin->Direction == EGPD_Input ? "providing" : "taking");
+			Description += " a(n) " + FVoxelPinType(Pin->PinType).ToString();
+		}
+	}
+	else if (DraggedFromPins.Num() > 1)
+	{
+		Description = "\nfor " + LexToString(DraggedFromPins.Num()) + " pins";
+	}
+
+	if (Toolkit->IsGraphSensitive())
+	{
+		FString TypeName = Toolkit->Asset->GetClass()->GetDisplayNameText().ToString();
+		TypeName.RemoveFromStart("Voxel ");
+
+		Description = "All " + TypeName + " Actions " + Description;
+	}
+	else
+	{
+		Description = "All Actions " + Description;
+	}
+	
+	return FText::FromString(Description);
+}
+
+void SVoxelGraphEditorActionMenu::OnGraphToggleChanged(const ECheckBoxState NewState) const
+{
+	if (bNoEdGraph)
+	{
+		return;
+	}
+
+	const TSharedPtr<FVoxelGraphToolkit> Toolkit = FVoxelGraphToolkit::Get(WeakEdGraph.Resolve());
+	if (!Toolkit)
+	{
+		return;
+	}
+
+	Toolkit->SetIsGraphSensitive(NewState == ECheckBoxState::Checked);
+	GraphActionMenu->RefreshAllActions(true, false);
+}
+
+ECheckBoxState SVoxelGraphEditorActionMenu::GraphToggleIsChecked() const
+{
+	if (bNoEdGraph)
+	{
+		return ECheckBoxState::Unchecked;
+	}
+
+	const TSharedPtr<FVoxelGraphToolkit> Toolkit = FVoxelGraphToolkit::Get(WeakEdGraph.Resolve());
+	if (!Toolkit)
+	{
+		return ECheckBoxState::Unchecked;
+	}
+
+	return Toolkit->IsGraphSensitive() ? ECheckBoxState::Checked : ECheckBoxState::Unchecked;
 }

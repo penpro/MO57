@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "StaticMesh/VoxelStaticMesh.h"
 #include "StaticMesh/VoxelStaticMeshCS.h"
@@ -249,7 +249,9 @@ void UVoxelStaticMesh::CreateMeshData_EditorOnly()
 	if (ensure(SourceModel.GetMeshDescriptionBulkData()))
 	{
 		KeySuffix += "MD";
+		PRAGMA_DISABLE_DEPRECATION_WARNINGS
 		KeySuffix += SourceModel.GetMeshDescriptionBulkData()->GetIdString();
+		PRAGMA_ENABLE_DEPRECATION_WARNINGS
 	}
 
 	{
@@ -258,7 +260,7 @@ void UVoxelStaticMesh::CreateMeshData_EditorOnly()
 		Writer << BoundsExtension;
 		Writer << VoxelizerSettings;
 
-		KeySuffix += "_" + FVoxelUtilities::BlobToHex(Writer);
+		KeySuffix += "_" + FVoxelUtilities::BlobToHex(Writer.Bytes);
 	}
 
 	const FString DerivedDataKey = FDerivedDataCacheInterface::BuildCacheKey(
@@ -298,8 +300,8 @@ void UVoxelStaticMesh::CreateMeshData_EditorOnly()
 	}
 
 	FVoxelWriter Writer;
-	ConstCast(*MeshData).Serialize(Writer.Ar());
-	GetDerivedDataCacheRef().Put(*DerivedDataKey, Writer, GetPathName());
+	ConstCast(*MeshData).Serialize(Writer);
+	GetDerivedDataCacheRef().Put(*DerivedDataKey, Writer.Bytes, GetPathName());
 
 	PrivateData = MeshData;
 }

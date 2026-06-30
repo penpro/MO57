@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -334,39 +334,6 @@ public:
 		}
 
 		Stamp->LODRange = Range;
-		Stamp.Update();
-	}
-
-public:
-	// Get Bounds Extension
-	UFUNCTION(BlueprintPure, Category = "Voxel|Stamp")
-	static void GetBoundsExtension(const FVoxelStampRef Stamp, float& BoundsExtension)
-	{
-		BoundsExtension = {};
-
-		if (!Stamp.IsValid())
-		{
-			VOXEL_MESSAGE(Error, "Stamp is invalid");
-			return;
-		}
-
-		BoundsExtension = Stamp->BoundsExtension;
-	}
-
-	// Set Bounds Extension
-	// This will automatically refresh the stamp
-	UFUNCTION(BlueprintCallable, Category = "Voxel|Stamp")
-	static void SetBoundsExtension(const FVoxelStampRef Stamp, UPARAM(meta = (DisplayName = "Stamp")) FVoxelStampRef& OutStamp, const float BoundsExtension)
-	{
-		OutStamp = Stamp;
-
-		if (!Stamp.IsValid())
-		{
-			VOXEL_MESSAGE(Error, "Stamp is invalid");
-			return;
-		}
-
-		Stamp->BoundsExtension = BoundsExtension;
 		Stamp.Update();
 	}
 

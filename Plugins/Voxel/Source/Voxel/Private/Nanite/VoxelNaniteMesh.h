@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -43,8 +43,6 @@ public:
 private:
 	TObjectPtr<UStaticMesh> StaticMesh;
 	TVoxelObjectPtr<UStaticMesh> WeakStaticMesh;
-
-	TSharedPtr<FVoxelTexturePoolRef> NaniteIndirectionTextureRef;
 
 	struct FPage
 	{

@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelGraphCompiler.h"
 #include "VoxelGraph.h"
@@ -17,6 +17,36 @@
 #include "Nodes/VoxelNode_CustomizeParameter.h"
 #include "FunctionLibrary/VoxelBasicFunctionLibrary.h"
 #include "FunctionLibrary/VoxelPositionFunctionLibrary.h"
+
+#define GRAPH_PASS(Name) { #Name, &FVoxelGraphCompiler::Name }
+TVoxelArray<FVoxelGraphCompilerPass> GVoxelGraphCompilerPasses = 
+{
+	GRAPH_PASS(AddPreviewNode),
+	GRAPH_PASS(AddRangeNodes),
+	GRAPH_PASS(AddPreviewValueNodes),
+	GRAPH_PASS(RemoveSplitPins),
+	GRAPH_PASS(FixPositionPins),
+	GRAPH_PASS(FixSplineKeyPins),
+	GRAPH_PASS(AddWildcardErrors),
+	GRAPH_PASS(AddNoDefaultErrors),
+	GRAPH_PASS(CheckParameters),
+	GRAPH_PASS(CheckFunctionInputs),
+	GRAPH_PASS(CheckFunctionOutputs),
+	GRAPH_PASS(AddToBuffer),
+	GRAPH_PASS(RemoveLocalVariables),
+	GRAPH_PASS(CollapseInputs),
+	GRAPH_PASS(ReplaceTemplates),
+	GRAPH_PASS(RemovePassthroughs),
+	GRAPH_PASS(RemoveNodesNotLinkedToQueryableNodes),
+	GRAPH_PASS(MergeSameSubTrees),
+	GRAPH_PASS(CheckForLoops),
+	GRAPH_PASS(CheckNodeGuids),
+};
+#undef GRAPH_PASS
+
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
 
 FVoxelGraphCompiler::FVoxelGraphCompiler(const UVoxelTerminalGraph& TerminalGraph)
 	: TerminalGraph(TerminalGraph)
@@ -330,7 +360,8 @@ void FVoxelGraphCompiler::AddPreviewNode()
 		TerminalGraph,
 		"Preview",
 		"Preview Node",
-		{}
+		{},
+		true
 	};
 
 	FNode& PreviewNode = NewNode(NodeRef);
@@ -376,7 +407,7 @@ void FVoxelGraphCompiler::AddRangeNodes()
 				continue;
 			}
 
-			FNode& DebugNode = NewNode(Node.NodeRef.WithSuffix("DebugRangeNode").WithSuffix(Pin.Name.ToString()));
+			FNode& DebugNode = NewGeneratedNode(Node.NodeRef.WithSuffix("DebugRangeNode").WithSuffix(Pin.Name.ToString()));
 
 			const TSharedRef<FVoxelNode_RangeDebug> DebugVoxelNode = MakeShared<FVoxelNode_RangeDebug>();
 			DebugVoxelNode->PromotePin_Runtime(DebugVoxelNode->GetUniqueInputPin(), Pin.Type);
@@ -415,7 +446,7 @@ void FVoxelGraphCompiler::AddPreviewValueNodes()
 				continue;
 			}
 
-			FNode& DebugNode = NewNode(Node.NodeRef.WithSuffix("DebugValueNode").WithSuffix(Pin.Name.ToString()));
+			FNode& DebugNode = NewGeneratedNode(Node.NodeRef.WithSuffix("DebugValueNode").WithSuffix(Pin.Name.ToString()));
 
 			const TSharedRef<FVoxelNode_ValueDebug> DebugVoxelNode = MakeShared<FVoxelNode_ValueDebug>();
 			DebugVoxelNode->PromotePin_Runtime(DebugVoxelNode->GetUniqueInputPin(), Pin.Type);
@@ -466,7 +497,7 @@ void FVoxelGraphCompiler::RemoveSplitPins()
 			{
 				if (ParentPin->Direction == EPinDirection::Input)
 				{
-					FNode& MakeNode = NewNode(Node.NodeRef.WithSuffix("Make_" + ParentPin->Name.ToString()));
+					FNode& MakeNode = NewGeneratedNode(Node.NodeRef.WithSuffix("Make_" + ParentPin->Name.ToString()));
 					MakeBreakNode = &MakeNode;
 
 					const FVoxelNode* MakeVoxelNodeTemplate = SerializedGraph.FindMakeNode(ParentPin->Type);
@@ -498,7 +529,7 @@ void FVoxelGraphCompiler::RemoveSplitPins()
 				{
 					check(ParentPin->Direction == EPinDirection::Output);
 
-					FNode& BreakNode = NewNode(Node.NodeRef.WithSuffix("Break_" + ParentPin->Name.ToString()));
+					FNode& BreakNode = NewGeneratedNode(Node.NodeRef.WithSuffix("Break_" + ParentPin->Name.ToString()));
 					MakeBreakNode = &BreakNode;
 
 					const FVoxelNode* BreakVoxelNodeTemplate = SerializedGraph.FindBreakNode(ParentPin->Type);
@@ -620,7 +651,7 @@ void FVoxelGraphCompiler::FixPositionPins()
 
 			const TSharedRef<FVoxelNode_UFunction> FunctionNode = FVoxelNode_UFunction::Make(Function);
 
-			FNode& PositionNode = NewNode(Node.NodeRef.WithSuffix("GetPosition"));
+			FNode& PositionNode = NewGeneratedNode(Node.NodeRef.WithSuffix("GetPosition"));
 			PositionNode.SetVoxelNode(FunctionNode);
 
 			PositionNode.NewInputPin(
@@ -671,7 +702,7 @@ void FVoxelGraphCompiler::FixSplineKeyPins()
 				continue;
 			}
 
-			FNode& SplineKeyNode = NewNode(Node.NodeRef.WithSuffix("GetClosestSplineKeyGeneric"));
+			FNode& SplineKeyNode = NewGeneratedNode(Node.NodeRef.WithSuffix("GetClosestSplineKeyGeneric"));
 			{
 				SplineKeyNode.SetVoxelNode(FVoxelNode_UFunction::Make(Function));
 
@@ -684,7 +715,7 @@ void FVoxelGraphCompiler::FixSplineKeyPins()
 					SplineKeyNode.GetVoxelNode().GetUniqueOutputPin().GetType()).MakeLinkTo(Pin);
 			}
 
-			FNode& PositionNode = NewNode(Node.NodeRef.WithSuffix("GetPosition"));
+			FNode& PositionNode = NewGeneratedNode(Node.NodeRef.WithSuffix("GetPosition"));
 			{
 				PositionNode.SetVoxelNode(FVoxelNode_UFunction::Make(FindUFunctionChecked(UVoxelPositionFunctionLibrary, GetPosition3D)));
 
@@ -969,7 +1000,7 @@ void FVoxelGraphCompiler::AddToBuffer()
 
 				if (!ToBufferNode)
 				{
-					ToBufferNode = &NewNode(Node.NodeRef.WithSuffix(ToPin.Name.ToString() + "_ToBuffer"));
+					ToBufferNode = &NewGeneratedNode(Node.NodeRef.WithSuffix(ToPin.Name.ToString() + "_ToBuffer"));
 
 					const TSharedRef<FVoxelNode_UFunction> FunctionNode = FVoxelNode_UFunction::Make(FindUFunctionChecked(UVoxelBasicFunctionLibrary, ToBuffer));
 					FunctionNode->PromotePin_Runtime(FunctionNode->GetUniqueInputPin(), FromPin.Type);
@@ -1163,7 +1194,7 @@ void FVoxelGraphCompiler::CollapseInputs()
 			continue;
 		}
 
-		FNode& Node = NewNode(InputData.InputNodes[0]->NodeRef);
+		FNode& Node = NewGeneratedNode(InputData.InputNodes[0]->NodeRef);
 
 		const TSharedRef<FVoxelNode_FunctionInput_WithDefaults> VoxelNode = MakeShared<FVoxelNode_FunctionInput_WithDefaults>();
 		VoxelNode->Guid = It.Key;
@@ -1285,6 +1316,218 @@ void FVoxelGraphCompiler::RemoveNodesNotLinkedToQueryableNodes()
 		}
 	}
 	RemoveNodesImpl(NodesToKeep);
+}
+
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+
+void FVoxelGraphCompiler::MergeSameSubTrees()
+{
+	if (TerminalGraph.bDisableNodeMerging)
+	{
+		return;
+	}
+
+	TVoxelArray<TVoxelArray<FNode*>> LeafNodeGroups;
+
+	// Find all nodes, which do not have input pins connected
+	{
+		TVoxelArray<FNode*> LeafNodes;
+		for (FNode& Node : GetNodes())
+		{
+			bool bHasAnyInputLinks = false;
+			for (const FPin& InputPin : Node.GetInputPins())
+			{
+				if (InputPin.GetLinkedTo().Num() == 0)
+				{
+					continue;
+				}
+
+				bHasAnyInputLinks = true;
+				break;
+			}
+
+			if (bHasAnyInputLinks)
+			{
+				continue;
+			}
+
+			LeafNodes.Add(&Node);
+		}
+
+		if (LeafNodes.Num() > 1)
+		{
+			LeafNodeGroups.Add(MoveTemp(LeafNodes));
+		}
+	}
+
+	const auto ArePinsSame = [](const FPin& A, const FPin& B, const auto& Lambda)
+	{
+		if (A.Type != B.Type)
+		{
+			return false;
+		}
+
+		if (A.Direction != B.Direction)
+		{
+			return false;
+		}
+
+		// Output pins don't have default value
+		// and if are connected to other nodes, does not change the evaluation flow
+		if (A.Direction == EPinDirection::Output)
+		{
+			return true;
+		}
+
+		if (A.GetRawLinkedTo().Num() != B.GetRawLinkedTo().Num())
+		{
+			return false;
+		}
+
+		// If no connection, check if default value is same
+		if (A.GetRawLinkedTo().Num() == 0)
+		{
+			return A.GetDefaultValue() == B.GetDefaultValue();
+		}
+
+		for (int32 Index = 0; Index < A.GetRawLinkedTo().Num(); Index++)
+		{
+			const FPin* LinkedToPin = A.GetRawLinkedTo()[Index];
+			const FPin* OtherLinkedToPin = B.GetRawLinkedTo()[Index];
+			if ((LinkedToPin != nullptr) != (OtherLinkedToPin != nullptr))
+			{
+				return false;
+			}
+
+			if (!LinkedToPin)
+			{
+				continue;
+			}
+
+			if (LinkedToPin->Name != OtherLinkedToPin->Name ||
+				LinkedToPin->Type != OtherLinkedToPin->Type)
+			{
+				return false;
+			}
+
+			// We check if linked to node is same
+			if (!Lambda(LinkedToPin->Node, OtherLinkedToPin->Node, Lambda))
+			{
+				return false;
+			}
+		}
+
+		return true;
+	};
+	const auto CanMergeNodes = [ArePinsSame](const FNode& A, const FNode& B, const auto& Lambda)
+	{
+		if (!A.GetVoxelNode().IsNodeIdentical(B.GetVoxelNode()))
+		{
+			return false;
+		}
+
+		if (A.GetRawPins().Num() != B.GetRawPins().Num())
+		{
+			return false;
+		}
+
+		for (int32 Index = 0; Index < A.GetRawPins().Num(); Index++)
+		{
+			const FPin* PinA = A.GetRawPins()[Index];
+			const FPin* PinB = B.GetRawPins()[Index];
+			if ((PinA != nullptr) != (PinB != nullptr))
+			{
+				return false;
+			}
+
+			if (!PinA)
+			{
+				continue;
+			}
+
+			if (!ArePinsSame(*PinA, *PinB, Lambda))
+			{
+				return false;
+			}
+		}
+
+		return true;
+	};
+
+	while (LeafNodeGroups.Num() > 0)
+	{
+		TVoxelArray<FNode*> LeafNodes = TVoxelSet<FNode*>(LeafNodeGroups.Pop()).Array();
+
+		TVoxelMap<FNode*, TVoxelSet<const FNode*>> NodeToCopies;
+
+		// From the current group, find all similar nodes and pair them
+		// First node to all identical nodes
+		for (int32 Index = 0; Index < LeafNodes.Num() - 1; Index++)
+		{
+			Voxel::Graph::FNode* Node = LeafNodes[Index];
+			int32 InnerIndex = Index + 1;
+			while (InnerIndex < LeafNodes.Num())
+			{
+				const Voxel::Graph::FNode* OtherNode = LeafNodes[InnerIndex];
+				if (!CanMergeNodes(*Node, *OtherNode, CanMergeNodes))
+				{
+					InnerIndex++;
+					continue;
+				}
+
+				NodeToCopies.FindOrAdd(Node).Add(OtherNode);
+				LeafNodes.RemoveAtSwap(InnerIndex);
+			}
+		}
+
+		// If no pairs found, stop
+		if (NodeToCopies.Num() == 0)
+		{
+			break;
+		}
+
+		for (const auto& It : NodeToCopies)
+		{
+			// Copy output pins to the first node from identical nodes
+			for (const FNode* OtherNode : It.Value)
+			{
+				It.Key->AddMergedNodeRef(*OtherNode);
+
+				for (int32 Index = 0; Index < OtherNode->GetOutputPins().Num(); Index++)
+				{
+					const FPin& PinToCopyFrom = OtherNode->GetOutputPins()[Index];
+					FPin& PinToCopyTo = It.Key->GetOutputPins()[Index];
+					PinToCopyFrom.CopyOutputPinTo(PinToCopyTo);
+				}
+			}
+
+			// Remove all, except the first, identical nodes
+			RemoveNodes([&](const FNode& Node)
+			{
+				return It.Value.Contains(&Node);
+			});
+
+			// Take the first node from the pair and put all nodes, connected to output pins, as new leaf nodes 
+			for (const FPin& Pin : It.Key->GetOutputPins())
+			{
+				if (Pin.GetLinkedTo().Num() < 2)
+				{
+					continue;
+				}
+
+				TVoxelArray<FNode*> NewLeafNodes;
+				NewLeafNodes.Reserve(Pin.GetLinkedTo().Num());
+				for (const FPin& LinkedPin : Pin.GetLinkedTo())
+				{
+					NewLeafNodes.Add(&LinkedPin.Node);
+				}
+
+				LeafNodeGroups.Add(NewLeafNodes);
+			}
+		}
+	}
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -1435,7 +1678,7 @@ void FVoxelGraphCompiler::InitializeTemplatesPassthroughNodes(FNode& Node)
 
 	for (FPin& InputPin : Node.GetInputPins())
 	{
-		FNode& Passthrough = NewNode(ENodeType::Passthrough, FVoxelTemplateNodeUtilities::GetNodeRef());
+		FNode& Passthrough = NewGeneratedNode(ENodeType::Passthrough, FVoxelTemplateNodeUtilities::GetNodeRef());
 		FPin& PassthroughInputPin = Passthrough.NewInputPin("Input" + InputPin.Name, InputPin.Type);
 		FPin& PassthroughOutputPin = Passthrough.NewOutputPin(InputPin.Name, InputPin.Type);
 
@@ -1447,7 +1690,7 @@ void FVoxelGraphCompiler::InitializeTemplatesPassthroughNodes(FNode& Node)
 
 	for (FPin& OutputPin : Node.GetOutputPins())
 	{
-		FNode& Passthrough = NewNode(ENodeType::Passthrough, FVoxelTemplateNodeUtilities::GetNodeRef());
+		FNode& Passthrough = NewGeneratedNode(ENodeType::Passthrough, FVoxelTemplateNodeUtilities::GetNodeRef());
 		FPin& PassthroughInputPin = Passthrough.NewInputPin(OutputPin.Name, OutputPin.Type);
 		if (OutputPin.Type.HasPinDefaultValue())
 		{

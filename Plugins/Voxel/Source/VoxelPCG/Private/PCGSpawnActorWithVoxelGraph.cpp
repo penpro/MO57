@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "PCGSpawnActorWithVoxelGraph.h"
 #include "PCGVoxelGraphParameterOverrides.h"
@@ -331,7 +331,7 @@ void UPCGSpawnActorWithVoxelGraphSettings::RefreshTemplateActor()
 				Options.bNotifyObjectReplacement = true;
 				UEngine::CopyPropertiesForUnrelatedObjects(TemplateActor, NewTemplateActor, Options);
 
-				TemplateActor->Rename(nullptr, GetTransientPackage(), REN_DontCreateRedirectors | REN_ForceNoResetLoaders);
+				TemplateActor->Rename(nullptr, GetTransientPackage(), REN_DontCreateRedirectors UE_508_SWITCH(| REN_ForceNoResetLoaders, ));
 
 				TMap<UObject*, UObject*> OldToNew;
 				OldToNew.Emplace(TemplateActor, NewTemplateActor);
@@ -346,7 +346,7 @@ void UPCGSpawnActorWithVoxelGraphSettings::RefreshTemplateActor()
 			TemplateActor->Modify();
 
 			// Outer to this object
-			TemplateActor->Rename(nullptr, this, REN_DoNotDirty | REN_DontCreateRedirectors | REN_ForceNoResetLoaders);
+			TemplateActor->Rename(nullptr, this, REN_DoNotDirty | REN_DontCreateRedirectors UE_508_SWITCH(| REN_ForceNoResetLoaders, ));
 		}
 	}
 	else
@@ -787,7 +787,11 @@ void FPCGSpawnActorWithVoxelGraphElement::SpawnActors(FPCGContext* Context, AAct
 					// Not supported due to linking errors
 					ensure(false);
 #else
+#if VOXEL_ENGINE_VERSION >= 508
+					Subsystem->RegisterOrUpdateExecutionSource(PCGComponent);
+#else
 					Subsystem->RegisterOrUpdatePCGComponent(PCGComponent);
+#endif
 #endif
 				}
 			}

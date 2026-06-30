@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "SVoxelGraphPinParameter.h"
 #include "VoxelParameterView.h"
@@ -141,7 +141,7 @@ TSharedRef<SWidget>	SVoxelGraphPinParameter::GetDefaultValueWidget()
 					.CurrentItem_Lambda(MakeWeakPtrLambda(this, [this]() -> FVoxelSelectorItem
 					{
 						const FVoxelGraphBlueprintParameter& CurrentParameter = Cast<UK2Node_VoxelGraphParameterBase>(GraphPinObj->GetOwningNode())->CachedParameter;
-						return FVoxelSelectorItem(CurrentParameter.Guid, CurrentParameter.Name, CurrentParameter.Type);
+						return FVoxelSelectorItem(CurrentParameter.Guid, CurrentParameter.Name, CurrentParameter.ExposedType);
 					}))
 					.IsValidItem_Lambda(MakeWeakPtrLambda(this, [this]
 					{

@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "Surface/VoxelNode_MakeSurfaceTypeBlend.h"
 #include "Surface/VoxelSurfaceTypeBlendBuilder.h"
@@ -30,7 +30,8 @@ void FVoxelNode_MakeSurfaceTypeBlend::Compute(const FVoxelGraphQuery Query) cons
 {
 	struct FLayer
 	{
-		TValue<FVoxelSurfaceTypeBuffer> Types;
+		bool bIsSurfaceType = false;
+		TValue<FVoxelBuffer> Types;
 		TValue<FVoxelFloatBuffer> Weights;
 	};
 
@@ -41,7 +42,8 @@ void FVoxelNode_MakeSurfaceTypeBlend::Compute(const FVoxelGraphQuery Query) cons
 	{
 		Layers.Add_EnsureNoGrow(FLayer
 		{
-			LayerPin.Type.Get(Query),
+			LayerPin.Type.GetInnerType_RuntimeOnly().Is<FVoxelSurfaceType>(),
+			LayerPin.Type.Get<FVoxelBuffer>(Query),
 			LayerPin.Weight.Get(Query)
 		});
 	}
@@ -78,9 +80,21 @@ void FVoxelNode_MakeSurfaceTypeBlend::Compute(const FVoxelGraphQuery Query) cons
 					continue;
 				}
 
-				const FVoxelSurfaceType Type = (*Layer.Types)[Index];
+				if (Layer.bIsSurfaceType)
+				{
+					const FVoxelSurfaceType Type = Layer.Types->AsChecked<FVoxelSurfaceTypeBuffer>()[Index];
 
-				Builder.AddLayer(Type, Weight);
+					Builder.AddLayer(Type, Weight);
+				}
+				else
+				{
+					const FVoxelSurfaceTypeBlend& SurfaceBlend = Layer.Types->AsChecked<FVoxelSurfaceTypeBlendBuffer>()[Index];
+
+					for (const FVoxelSurfaceTypeBlendLayer& OtherLayer : SurfaceBlend.GetLayers())
+					{
+						Builder.AddLayer(OtherLayer.Type, OtherLayer.Weight.ToFloat() * Weight);
+					}
+				}
 			}
 
 			Builder.Build(Result->View()[Index]);
@@ -92,10 +106,20 @@ void FVoxelNode_MakeSurfaceTypeBlend::Compute(const FVoxelGraphQuery Query) cons
 
 void FVoxelNode_MakeSurfaceTypeBlend::PostSerialize()
 {
-	Super::PostSerialize();
-
 	FixupLayerPins();
+
+	Super::PostSerialize();
 }
+
+#if WITH_EDITOR
+FVoxelPinTypeSet FVoxelNode_MakeSurfaceTypeBlend::GetPromotionTypes(const FVoxelPin& Pin) const
+{
+	FVoxelPinTypeSet Result;
+	Result.Add<FVoxelSurfaceTypeBuffer>();
+	Result.Add<FVoxelSurfaceTypeBlendBuffer>();
+	return Result;
+}
+#endif
 
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
@@ -105,8 +129,14 @@ void FVoxelNode_MakeSurfaceTypeBlend::FixupLayerPins()
 {
 	VOXEL_FUNCTION_COUNTER();
 
-	for (const FLayerPin& Layer : LayerPins)
+	TVoxelMap<int32, FVoxelPinType> IndexToType;
+
+	for (int32 Index = 0; Index < LayerPins.Num(); Index++)
 	{
+		const FLayerPin& Layer = LayerPins[Index];
+
+		IndexToType.Add_EnsureNew(Index, GetPin(Layer.Type).GetType());
+
 		RemovePin(Layer.Type.GetName());
 		RemovePin(Layer.Weight.GetName());
 	}
@@ -116,9 +146,9 @@ void FVoxelNode_MakeSurfaceTypeBlend::FixupLayerPins()
 	{
 		const FString Category = "Layer " + FString::FromInt(Index);
 
-		LayerPins.Add(FLayerPin
+		FLayerPin& Pin = LayerPins.Add_GetRef(FLayerPin
 		{
-			CreateInputPin<FVoxelSurfaceTypeBuffer>(
+			CreateInputPin<FVoxelWildcardBuffer>(
 				FName("Type", Index + 1),
 				VOXEL_PIN_METADATA(
 					FVoxelSurfaceTypeBlendBuffer,
@@ -136,6 +166,13 @@ void FVoxelNode_MakeSurfaceTypeBlend::FixupLayerPins()
 					Tooltip("Weight of this layer"),
 					Category(Category)))
 		});
+
+		FVoxelPinType Type = IndexToType.FindRef(Index);
+		if (!Type.IsValid())
+		{
+			Type = FVoxelPinType::Make<FVoxelSurfaceTypeBuffer>();
+		}
+		GetPin(Pin.Type).SetType(Type);
 	}
 }
 

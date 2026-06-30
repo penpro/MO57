@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -420,7 +420,7 @@ TSharedRef<T> MakeSharedStruct(const UScriptStruct* Struct, const T* StructToCop
 	checkVoxelSlow(Struct->IsChildOf(StaticStructFast<T>()));
 
 	TSharedRef<T> SharedRef = ReinterpretCastRef<TSharedRef<T>>(MakeSharedStruct(Struct, static_cast<const void*>(StructToCopyFrom)));
-	SharedPointerInternals::EnableSharedFromThis(&SharedRef, &SharedRef.Get());
+	VoxelEnableSharedFromThis(SharedRef);
 	return SharedRef;
 }
 

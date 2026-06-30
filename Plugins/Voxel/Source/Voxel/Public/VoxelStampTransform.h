@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -61,7 +61,7 @@ public:
 		const FTransform& StampToWorld,
 		const FTransform& WorldToQuery,
 		const FVoxelBox& StampBounds,
-		float BoundsExtension);
+		float HeightPaddingMultiplier);
 
 public:
 	FORCEINLINE ispc::FVoxelHeightTransform ISPC() const
@@ -165,7 +165,8 @@ public:
 		const FTransform& StampToWorld,
 		const FTransform& WorldToQuery,
 		const FVoxelBox& StampBounds,
-		float BoundsExtension);
+		float BoundsExtensionMultiplier,
+		float MaximumBoundsExtension);
 
 public:
 	FORCEINLINE ispc::FVoxelVolumeTransform ISPC() const

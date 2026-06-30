@@ -1,12 +1,12 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelToolToolkit.h"
 #include "VoxelToolEdMode.h"
 #include "VoxelStampComponent.h"
-#include "Sculpt/Height/VoxelHeightTool.h"
+#include "Sculpt/Height/Tools/VoxelHeightTool.h"
 #include "Sculpt/Height/VoxelHeightSculptStamp.h"
-#include "Sculpt/Volume/VoxelVolumeTool.h"
 #include "Sculpt/Volume/VoxelVolumeSculptStamp.h"
+#include "Sculpt/Volume/Tools/VoxelVolumeTool.h"
 
 #include "EditorModes.h"
 #include "EditorModeManager.h"
@@ -14,7 +14,7 @@
 #include "IStructureDetailsView.h"
 #include "Widgets/Layout/SHeader.h"
 #include "Kismet2/ComponentEditorUtils.h"
-#include "Sculpt/Height/VoxelHeightSculptActor.h"
+#include "Sculpt/Height/VoxelSculptHeight.h"
 #include "Toolkits/AssetEditorModeUILayer.h"
 
 VOXEL_INITIALIZE_STYLE(Voxel)
@@ -25,6 +25,17 @@ VOXEL_INITIALIZE_STYLE(Voxel)
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
+
+void FVoxelToolToolkit::AddReferencedObjects(FReferenceCollector& Collector)
+{
+	// Keep the actor reference held by the struct-on-scope GC-tracked, otherwise it dangles
+	// when the sculpt actor is collected and the details view crashes reading freed memory
+	if (StructOnScope &&
+		StructOnScope->IsValid())
+	{
+		StructOnScope->AddReferencedObjects(Collector);
+	}
+}
 
 void FVoxelToolToolkit::Init(const TSharedPtr<IToolkitHost>& InitToolkitHost, const TWeakObjectPtr<UEdMode> InOwningMode)
 {
@@ -190,7 +201,7 @@ TSharedRef<SWidget> FVoxelToolToolkit::CreatePaletteWidget(TSharedPtr<FUICommand
 	}
 
 	const UClass* TargetToolClass =
-		Actor->IsA<AVoxelHeightSculptActor>()
+		Actor->IsA<AVoxelSculptHeight>()
 		? UVoxelHeightTool::StaticClass()
 		: UVoxelVolumeTool::StaticClass();
 

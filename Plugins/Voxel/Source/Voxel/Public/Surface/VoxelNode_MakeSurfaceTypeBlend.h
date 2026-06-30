@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -25,12 +25,15 @@ public:
 	virtual void Initialize(FInitializer& Initializer) override;
 	virtual void Compute(FVoxelGraphQuery Query) const override;
 	virtual void PostSerialize() override;
+#if WITH_EDITOR
+	virtual FVoxelPinTypeSet GetPromotionTypes(const FVoxelPin& Pin) const override;
+#endif
 	//~ End FVoxelNode Interface
 
 public:
 	struct FLayerPin
 	{
-		TPinRef_Input<FVoxelSurfaceTypeBuffer> Type;
+		FPinRef_Input Type;
 		TPinRef_Input<FVoxelFloatBuffer> Weight;
 	};
 	TVoxelArray<FLayerPin> LayerPins;

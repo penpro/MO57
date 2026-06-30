@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -62,6 +62,7 @@ public:
 	virtual TSharedRef<FVoxelBuffer> Replicate(TConstVoxelArrayView<int32> Counts, int32 NewNum) const override;
 	virtual void Split(const FVoxelBufferSplitter& Splitter, TVoxelArrayView<FVoxelBuffer*> OutBuffers) const override;
 	virtual void MergeFrom(const FVoxelBufferSplitter& Splitter, TConstVoxelArrayView<const FVoxelBuffer*> Buffers) override;
+	virtual void HashCombine(TVoxelArrayView<uint64> InOutHashes) const final override;
 	virtual void SetGeneric(int32 Index, const FVoxelRuntimePinValue& Value) override;
 	virtual FVoxelRuntimePinValue GetGeneric(int32 Index) const override;
 	//~ End FVoxelBuffer Interface

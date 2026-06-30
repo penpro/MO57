@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -47,7 +47,7 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Config")
 	float Strength = 1.f;
 
-	// If set this metadata will be set to the strength of the weightmap
+	// If set this metadata will be set to the clamped strength from 0 to 1 of the weightmap
 	// The value will be maxed with the values from previous stamps
 	UPROPERTY(EditAnywhere, Category = "Config")
 	TObjectPtr<UVoxelFloatMetadata> Metadata;

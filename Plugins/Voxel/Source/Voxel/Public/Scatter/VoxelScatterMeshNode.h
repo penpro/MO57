@@ -1,13 +1,14 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
 #include "VoxelMinimal.h"
+#include "VoxelMeshComponentSettings.h"
 #include "Scatter/VoxelNode_ScatterBase.h"
 #include "Scatter/VoxelScatterNodeRuntime.h"
 #include "VoxelScatterMeshNode.generated.h"
 
-struct FVoxelSubsystem;
+struct FVoxelClassBuffer;
 
 USTRUCT()
 struct VOXEL_API FVoxelNode_ScatterMesh : public FVoxelNode_ScatterBase
@@ -16,13 +17,60 @@ struct VOXEL_API FVoxelNode_ScatterMesh : public FVoxelNode_ScatterBase
 	GENERATED_VOXEL_NODE_BODY()
 
 public:
-	// In meters
-	VOXEL_INPUT_PIN(float, RenderDistance, 64);
+	FVoxelNode_ScatterMesh();
+
+	//~ Begin FVoxelNode_ScatterBase Interface
+	virtual void Initialize(FInitializer& Initializer) override;
+	virtual TSharedRef<FVoxelScatterNodeRuntime> MakeRuntime() const override;
+	virtual void PostSerialize() override;
+	//~ End FVoxelNode_ScatterBase Interface
 
 public:
-	//~ Begin FVoxelNode_ScatterBase Interface
-	virtual TSharedRef<FVoxelScatterNodeRuntime> MakeRuntime() const override;
-	//~ End FVoxelNode_ScatterBase Interface
+	UPROPERTY(EditAnywhere, Category = "Config")
+	FName ComponentTypeAttributeOverride;
+
+	UPROPERTY(EditAnywhere, Category = "Config")
+	TMap<FName, FName> SpawnedComponentPropertyOverrides;
+
+	UPROPERTY(EditAnywhere, Category = "Config")
+	FName CollisionProfileAttributeOverride;
+
+	UPROPERTY(EditAnywhere, Category = "Config")
+	TArray<FName> PerInstanceDataAttributes;
+
+public:
+	struct FLayerPin
+	{
+		TPinRef_Input<FVoxelPointSet> Points;
+		TPinRef_Input<TSubclassOf<UInstancedStaticMeshComponent>> ComponentClass;
+		TPinRef_Input<FVoxelMeshComponentSettings> RenderSettings;
+		TPinRef_Input<FBodyInstance> CollisionProfile;
+		TPinRef_Input<int32> NumChunks;
+	};
+	TVoxelArray<FLayerPin> LayerPins;
+
+	UPROPERTY()
+	int32 NumLayerPins = 1;
+
+	void FixupLayerPins();
+
+public:
+#if WITH_EDITOR
+	class FDefinition : public Super::FDefinition
+	{
+	public:
+		GENERATED_VOXEL_NODE_DEFINITION_BODY(FVoxelNode_ScatterMesh);
+
+		virtual FString GetAddPinLabel() const override;
+		virtual FString GetAddPinTooltip() const override;
+
+		virtual bool CanAddInputPin() const override { return true; }
+		virtual void AddInputPin() override;
+
+		virtual bool CanRemoveInputPin() const override;
+		virtual void RemoveInputPin() override;
+	};
+#endif
 };
 
 class VOXEL_API FVoxelScatterMeshNodeRuntime : public TVoxelScatterNodeRuntime<FVoxelNode_ScatterMesh>
@@ -30,30 +78,69 @@ class VOXEL_API FVoxelScatterMeshNodeRuntime : public TVoxelScatterNodeRuntime<F
 public:
 	//~ Begin FVoxelScatterNodeRuntime Interface
 	virtual void Initialize(FVoxelGraphQueryImpl& Query) override;
-	virtual void Compute(const FVoxelSubsystem& Subsystem) override;
+	virtual void Compute(
+		const FVoxelSubsystem& Subsystem,
+		const TVoxelArray<FVector>& Invokers) override;
 	virtual void Render(FVoxelRuntime& Runtime) override;
 	virtual void Destroy(FVoxelRuntime& Runtime) override;
 	//~ End FVoxelScatterNodeRuntime Interface
 
 private:
-	float RenderDistance = 0;
-	int32 ChunkSize = 0;
-	int32 RenderDistanceInChunks = 0;
+	TArray<int32> RenderDistances;
+	int32 TotalChunksRenderDistance = 0;
 
 private:
+	struct FAttributeOverrides
+	{
+	private:
+		struct FData
+		{
+			FMinimalName Name;
+			FVoxelRuntimePinValue Value;
+		};
+		TVoxelArray<FData> Attributes;
+	
+	public:
+		void AddAttribute(
+			FName Name,
+			const FVoxelRuntimePinValue& Value);
+		void ApplyAttributes(
+			UObject& Object,
+			const TVoxelMap<FName, FProperty*>& NameToProperty);
+	};
 	struct FRenderData
 	{
 		TVoxelArray<FTransform> Transforms;
+		TVoxelArray<float> PerInstanceCustomData;
+
+		TVoxelObjectPtr<UStaticMesh> Mesh;
+		UClass* Class = nullptr;
+		FName ProfileName;
+
+		FAttributeOverrides AttributeOverrides;
 	};
 	struct FChunk
 	{
 		const FIntVector ChunkKey;
+		int32 LayerIndex;
 		TSharedPtr<FVoxelDependencyTracker> DependencyTracker;
-		TVoxelMap<TVoxelObjectPtr<UStaticMesh>, TSharedPtr<FRenderData>> MeshToRenderData;
-		TVoxelMap<TVoxelObjectPtr<UStaticMesh>, TVoxelObjectPtr<UInstancedStaticMeshComponent>> MeshToComponent;
+		bool bInvalidated = false;
+		TVoxelArray<TVoxelObjectPtr<UInstancedStaticMeshComponent>> Components;
 
-		explicit FChunk(const FIntVector& ChunkKey)
+		FVoxelMeshComponentSettings RenderSettings;
+		FBodyInstance CollisionProfile;
+
+		TVoxelSet<UClass*> ComponentClassesToCreate;
+		TVoxelMap<uint64, TSharedPtr<FRenderData>> KeyToRenderData;
+		FAttributeOverrides ConstantAttributeOverrides;
+
+		int32 NumPerInstanceCustomData = 0;
+
+		explicit FChunk(
+			const FIntVector& ChunkKey,
+			const int32 LayerIndex)
 			: ChunkKey(ChunkKey)
+			, LayerIndex(LayerIndex)
 		{
 		}
 	};
@@ -66,9 +153,9 @@ private:
 		const FVoxelSubsystem& Subsystem,
 		FChunk& Chunk) const;
 
-	static void RenderChunk(
+	void RenderChunk(
 		FVoxelRuntime& Runtime,
-		FChunk& Chunk);
+		FChunk& Chunk) const;
 
 	static void DestroyChunk(
 		FVoxelRuntime& Runtime,

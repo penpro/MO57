@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelShaderHook.h"
 #if WITH_EDITOR
@@ -596,7 +596,8 @@ bool FVoxelShaderHook::Revert(FVoxelShaderFileData& FileData)
 bool FVoxelShaderHook::CreatePatch(FVoxelShaderFileData& FileData, TArray<FString>& OutPatch, int32& OutStartLine)
 {
 	// If state is deprecated, we don't show this hook in patch
-	if (State == EVoxelShaderHookState::Deprecated)
+	if (State == EVoxelShaderHookState::Deprecated ||
+		State == EVoxelShaderHookState::Active)
 	{
 		return false;
 	}
@@ -1196,7 +1197,7 @@ bool FVoxelShaderHookGroup::ExecuteShaderUpdate(const FVoxelShaderFileData& File
 	FString OriginalContent;
 	FFileHelper::LoadFileToString(OriginalContent, *Path);
 
-	if (!FFileHelper::SaveStringToFile(FileData.GetContent(), *Path, FFileHelper::EEncodingOptions::ForceUTF8))
+	if (!FFileHelper::SaveStringToFile(FileData.GetContent(), *Path, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM))
 	{
 		FMessageDialog::Open(
 			EAppMsgType::Ok,

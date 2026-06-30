@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelGenericStructBuffer.h"
 #include "VoxelBufferAccessor.h"
@@ -357,6 +357,31 @@ void FVoxelGenericStructBuffer::MergeFrom(
 	{
 		Set(ReadIndex, Buffers[OutputIndex]->AsChecked<FVoxelGenericStructBuffer>()[WriteIndex]);
 	});
+}
+
+void FVoxelGenericStructBuffer::HashCombine(const TVoxelArrayView<uint64> InOutHashes) const
+{
+	VOXEL_FUNCTION_COUNTER_NUM(InOutHashes.Num());
+	checkVoxelSlow(Num() == 1 || InOutHashes.Num() == Num());
+
+	if (IsConstant())
+	{
+		const FConstVoxelStructView Constant = GetConstant();
+		const uint64 Hash = FVoxelUtilities::HashStruct(Constant.GetScriptStruct(), Constant.GetStructMemory());
+		for (int32 Index = 0; Index < Num(); Index++)
+		{
+			InOutHashes[Index] = FVoxelUtilities::MurmurHash(InOutHashes[Index] ^ Hash);
+		}
+	}
+	else
+	{
+		for (int32 Index = 0; Index < Num(); Index++)
+		{
+			const FConstVoxelStructView Value = (*this)[Index];
+			const uint64 Hash = FVoxelUtilities::HashStruct(Value.GetScriptStruct(), Value.GetStructMemory());
+			InOutHashes[Index] = FVoxelUtilities::MurmurHash(InOutHashes[Index] ^ Hash);
+		}
+	}
 }
 
 void FVoxelGenericStructBuffer::SetGeneric(

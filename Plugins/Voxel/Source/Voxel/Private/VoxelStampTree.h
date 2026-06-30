@@ -1,10 +1,11 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
 #include "VoxelMinimal.h"
 #include "VoxelQuery.h"
 #include "VoxelAABBTree.h"
+#include "VoxelHeightStamp.h"
 #include "VoxelVolumeStamp.h"
 #include "VoxelStampTransform.h"
 
@@ -37,21 +38,27 @@ checkStatic(sizeof(FVoxelStampTreeElement) == 128);
 struct FVoxelStampTree
 {
 public:
+	const bool bIs2D;
 	const TSharedRef<FVoxelDependency3D> Dependency;
 	const FVoxelAABBTree AABBTree;
+	const TVoxelArray<int32> CollectDependenciesIndices;
 	// Deterministically sorted
 	const TVoxelArray<FVoxelStampTreeElement> Elements;
 	const TVoxelArray<TSharedRef<const FVoxelStampRuntime>> Stamps;
 	const TSharedPtr<FVoxelStampTree> PreviousTree;
 
 	FVoxelStampTree(
+		const bool bIs2D,
 		const TSharedRef<FVoxelDependency3D>& Dependency,
 		FVoxelAABBTree&& AABBTree,
+		TVoxelArray<int32>&& CollectDependenciesIndices,
 		TVoxelArray<FVoxelStampTreeElement>&& Elements,
 		TVoxelArray<TSharedRef<const FVoxelStampRuntime>>&& Stamps,
 		const TSharedPtr<FVoxelStampTree>& PreviousTree)
-		: Dependency(Dependency)
+		: bIs2D(bIs2D)
+		, Dependency(Dependency)
 		, AABBTree(MoveTemp(AABBTree))
+		, CollectDependenciesIndices(MoveTemp(CollectDependenciesIndices))
 		, Elements(MoveTemp(Elements))
 		, Stamps(MoveTemp(Stamps))
 		, PreviousTree(PreviousTree)
@@ -118,18 +125,51 @@ public:
 
 public:
 	template<typename LambdaType>
-	requires LambdaHasSignature_V<LambdaType, EVoxelIterate(const FVoxelStampTreeElement&)>
-	void ForeachElement_Unsorted(
+	requires LambdaHasSignature_V<LambdaType, EVoxelIterate(int32)>
+	FORCENOINLINE void ForeachElementIndex_Unsorted(
 		FVoxelDependencyCollector& DependencyCollector,
 		const FVoxelBox& Bounds,
-		const EVoxelStampBehavior BehaviorMask,
 		LambdaType Lambda) const
 	{
 		VOXEL_FUNCTION_COUNTER();
 
 		DependencyCollector.AddDependency(*Dependency, Bounds);
 
+		for (const int32 Index : CollectDependenciesIndices)
+		{
+			const FVoxelStampTreeElement& Element = Elements[Index];
+
+			if (bIs2D)
+			{
+				CastStructChecked<FVoxelHeightStampRuntime>(*Element.Stamp).CollectDependencies(
+					DependencyCollector,
+					Element.HeightStampToQuery,
+					FVoxelBox2D(Bounds));
+			}
+			else
+			{
+				CastStructChecked<FVoxelVolumeStampRuntime>(*Element.Stamp).CollectDependencies(
+					DependencyCollector,
+					Element.VolumeStampToQuery,
+					Bounds);
+			}
+		}
+
 		AABBTree.TraverseBounds(FVoxelFastBox(Bounds), [&](const int32 Index)
+		{
+			return Lambda(Index);
+		});
+	}
+
+	template<typename LambdaType>
+	requires LambdaHasSignature_V<LambdaType, EVoxelIterate(const FVoxelStampTreeElement&)>
+	FORCEINLINE void ForeachElement_Unsorted(
+		FVoxelDependencyCollector& DependencyCollector,
+		const FVoxelBox& Bounds,
+		const EVoxelStampBehavior BehaviorMask,
+		LambdaType Lambda) const
+	{
+		this->ForeachElementIndex_Unsorted(DependencyCollector, Bounds, [&](const int32 Index)
 		{
 			const FVoxelStampTreeElement& Element = Elements[Index];
 
@@ -143,7 +183,7 @@ public:
 	}
 	template<typename LambdaType>
 	requires LambdaHasSignature_V<LambdaType, void(const FVoxelStampTreeElement&)>
-	void ForeachElement_Unsorted(
+	FORCEINLINE void ForeachElement_Unsorted(
 		FVoxelDependencyCollector& DependencyCollector,
 		const FVoxelBox& Bounds,
 		const EVoxelStampBehavior BehaviorMask,

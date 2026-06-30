@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -13,6 +13,7 @@ class VOXELCORE_API FVoxelTaskContextStrongRef
 {
 public:
 	FVoxelTaskContext& Context;
+	uint64 DebugId = 0;
 
 	explicit FVoxelTaskContextStrongRef(FVoxelTaskContext& Context);
 	~FVoxelTaskContextStrongRef();
@@ -46,6 +47,7 @@ public:
 	bool bSynchronous = false;
 	bool bComputeTotalTime = false;
 	bool bTrackPromisesCallstacks = false;
+	int64 BulkDataTimestamp = MAX_int64;
 	FLambdaWrapper LambdaWrapper;
 	TVoxelAtomic<double> TotalTime;
 	TSharedPtr<FVoxelDebugDrawGroup> DrawGroup;
@@ -163,6 +165,14 @@ private:
 	void TrackPromise(const FVoxelPromiseState& PromiseState);
 	void UntrackPromise(const FVoxelPromiseState& PromiseState);
 
+private:
+	FVoxelCriticalSection DebugDataCriticalSection;
+	uint64 DebugCounter_RequiresLock = 0;
+	TVoxelMap<uint64, FVoxelStackFrames> IdToStackFrame_RequiresLock;
+
+	uint64 AddDebugFrame();
+	void RemoveDebugFrame(uint64 DebugId);
+
 	friend FVoxelPromiseState;
 	friend FVoxelTaskContextWeakRef;
 	friend FVoxelTaskContextStrongRef;
@@ -197,6 +207,7 @@ public:
 			return *Context;
 		}
 
+		checkVoxelSlow(GVoxelGlobalTaskContext);
 		return *GVoxelGlobalTaskContext;
 	}
 

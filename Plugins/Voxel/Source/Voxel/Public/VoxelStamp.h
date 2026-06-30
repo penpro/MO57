@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -59,11 +59,8 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Config", AdvancedDisplay)
 	bool bApplyOnVoid = true;
 
-	// By how much to extend the bounds, relative to the bounds size
-	// Increase this if you are using a high smoothness
-	// Increasing this will lead to more stamps being sampled per voxel, increasing generation cost
-	UPROPERTY(EditAnywhere, Category = "Config", AdvancedDisplay, meta = (UIMin = 0, UIMax = 5))
-	float BoundsExtension = 1.f;
+	UPROPERTY()
+	float BoundsExtension_DEPRECATED = 1.f;
 
 	// If true, will exclude this stamp, when other stamp is duplicated and highest priority is determined
 	UPROPERTY(EditAnywhere, Category = "Config", AdvancedDisplay, meta = (NoK2))
@@ -73,7 +70,7 @@ public:
 	virtual void FixupProperties();
 	virtual void FixupComponents(const IVoxelStampComponentInterface& Interface) {}
 
-	virtual void PostDuplicate()
+	virtual void PostSerialize(const FArchive& Ar)
 	{
 	}
 	virtual UObject* GetAsset() const
@@ -130,4 +127,14 @@ private:
 	FVoxelWeakStampRef WeakStampRef;
 
 	friend FVoxelStampRef;
+};
+
+template<typename T>
+requires std::derived_from<T, FVoxelStamp>
+struct TStructOpsTypeTraits<T> : public TStructOpsTypeTraitsBase2<T>
+{
+	enum
+	{
+		WithPostSerialize = true,
+	};
 };

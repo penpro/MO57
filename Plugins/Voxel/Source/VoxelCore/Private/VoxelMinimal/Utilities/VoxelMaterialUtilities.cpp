@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelMinimal.h"
 #include "VoxelMaterialDiffing.h"
@@ -178,9 +178,13 @@ TVoxelArray<UMaterialExpression*> FVoxelUtilities::GetMaterialExpressions(const 
 	// See FMaterialEditorUtilities::InitExpressions, GetExpressionCollection() cannot be trusted
 
 	TArray<UObject*> Objects;
-	GetObjectsWithOuter(&Material, Objects, false);
+	Objects.Reserve(256);
+
+	GetObjectsWithOuter(&Material, Objects, UE_508_SWITCH(false, EGetObjectsFlags::None));
 
 	TVoxelArray<UMaterialExpression*> Expressions;
+	Expressions.Reserve(Objects.Num());
+
 	for (int32 Index = 0; Index < Objects.Num(); ++Index)
 	{
 		UMaterialExpression* Expression = Cast<UMaterialExpression>(Objects[Index]);
@@ -219,9 +223,13 @@ TVoxelArray<UMaterialExpression*> FVoxelUtilities::GetMaterialExpressions(const 
 	// See FMaterialEditorUtilities::InitExpressions, GetExpressionCollection() cannot be trusted
 
 	TArray<UObject*> Objects;
-	GetObjectsWithOuter(&MaterialFunction, Objects, false);
+	Objects.Reserve(256);
+
+	GetObjectsWithOuter(&MaterialFunction, Objects, UE_508_SWITCH(false, EGetObjectsFlags::None));
 
 	TVoxelArray<UMaterialExpression*> Expressions;
+	Expressions.Reserve(Objects.Num());
+
 	for (int32 Index = 0; Index < Objects.Num(); ++Index)
 	{
 		UMaterialExpression* Expression = Cast<UMaterialExpression>(Objects[Index]);
@@ -255,21 +263,15 @@ TVoxelArray<UMaterialExpression*> FVoxelUtilities::GetMaterialExpressions(const 
 
 TVoxelArray<UMaterialExpression*> FVoxelUtilities::GetMaterialExpressions_Recursive(
 	const UMaterial& Material,
-	TVoxelSet<const UObject*>* Visited)
+	TVoxelSet<const UMaterialFunction*>* Visited)
 {
 	VOXEL_FUNCTION_COUNTER();
 
-	TVoxelSet<const UObject*> VisitedAllocation;
+	TVoxelSet<const UMaterialFunction*> VisitedAllocation;
 	if (!Visited)
 	{
 		Visited = &VisitedAllocation;
 	}
-
-	if (Visited->Contains(&Material))
-	{
-		return {};
-	}
-	Visited->Add_EnsureNew(&Material);
 
 	TVoxelArray<UMaterialExpression*> Result;
 	Result.Reserve(1024);
@@ -298,11 +300,11 @@ TVoxelArray<UMaterialExpression*> FVoxelUtilities::GetMaterialExpressions_Recurs
 
 TVoxelArray<UMaterialExpression*> FVoxelUtilities::GetMaterialExpressions_Recursive(
 	const UMaterialFunction& MaterialFunction,
-	TVoxelSet<const UObject*>* Visited)
+	TVoxelSet<const UMaterialFunction*>* Visited)
 {
 	VOXEL_FUNCTION_COUNTER();
 
-	TVoxelSet<const UObject*> VisitedAllocation;
+	TVoxelSet<const UMaterialFunction*> VisitedAllocation;
 	if (!Visited)
 	{
 		Visited = &VisitedAllocation;
@@ -337,6 +339,96 @@ TVoxelArray<UMaterialExpression*> FVoxelUtilities::GetMaterialExpressions_Recurs
 	}
 
 	return Result;
+}
+#endif
+
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+
+#if WITH_EDITOR
+void FVoxelUtilities::GetMaterialFunctionsUsed(
+	const UMaterial& Material,
+	TVoxelSet<UMaterialFunction*>& Result)
+{
+	VOXEL_FUNCTION_COUNTER();
+
+	// See FMaterialEditorUtilities::InitExpressions, GetExpressionCollection() cannot be trusted
+
+	TVoxelChunkedArray<UMaterialFunction*> NewFunctions;
+
+	ForEachObjectWithOuterBreakable(
+		&Material,
+		[&](UObject* Object)
+		{
+			const UMaterialExpressionMaterialFunctionCall* FunctionCall = Cast<UMaterialExpressionMaterialFunctionCall>(Object);
+			if (!IsValid(FunctionCall))
+			{
+				return true;
+			}
+
+			UMaterialFunction* Function = Cast<UMaterialFunction>(FunctionCall->MaterialFunction);
+			if (!Function)
+			{
+				return true;
+			}
+
+			if (!Result.TryAdd(Function))
+			{
+				return true;
+			}
+
+			NewFunctions.Add(Function);
+			return true;
+		},
+		UE_508_SWITCH(false, EGetObjectsFlags::None));
+
+	for (const UMaterialFunction* Function : NewFunctions)
+	{
+		GetMaterialFunctionsUsed(*Function, Result);
+	}
+}
+
+void FVoxelUtilities::GetMaterialFunctionsUsed(
+	const UMaterialFunction& MaterialFunction,
+	TVoxelSet<UMaterialFunction*>& Result)
+{
+	VOXEL_FUNCTION_COUNTER();
+
+	// See FMaterialEditorUtilities::InitExpressions, GetExpressionCollection() cannot be trusted
+
+	TVoxelChunkedArray<UMaterialFunction*> NewFunctions;
+
+	ForEachObjectWithOuterBreakable(
+		&MaterialFunction,
+		[&](UObject* Object)
+		{
+			const UMaterialExpressionMaterialFunctionCall* FunctionCall = Cast<UMaterialExpressionMaterialFunctionCall>(Object);
+			if (!IsValid(FunctionCall))
+			{
+				return true;
+			}
+
+			UMaterialFunction* Function = Cast<UMaterialFunction>(FunctionCall->MaterialFunction);
+			if (!Function)
+			{
+				return true;
+			}
+
+			if (!Result.TryAdd(Function))
+			{
+				return true;
+			}
+
+			NewFunctions.Add(Function);
+			return true;
+		},
+		UE_508_SWITCH(false, EGetObjectsFlags::None));
+
+	for (const UMaterialFunction* Function : NewFunctions)
+	{
+		GetMaterialFunctionsUsed(*Function, Result);
+	}
 }
 #endif
 
@@ -521,9 +613,9 @@ bool FVoxelUtilities::AreMaterialsIdentical(
 {
 	VOXEL_FUNCTION_COUNTER();
 
-	FVoxelMaterialDiffing Diffing;
+	FVoxelMaterialDiffing Diffing(OldMaterial, NewMaterial);
 
-	const bool bResult = Diffing.Equal(OldMaterial, NewMaterial);
+	const bool bResult = Diffing.Equal();
 	OutDiff = Diffing.Diff;
 	return bResult;
 }

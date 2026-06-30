@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelGlobalActionsExtender.h"
 #include "VoxelPCGTracker.h"
@@ -217,7 +217,11 @@ void FVoxelGlobalActionsExtender::RegisterMenu()
 							{
 								if (UPCGSubsystem* PCGSubsystem = UPCGSubsystem::GetInstance(GEditor->GetEditorWorldContext().World()))
 								{
+#if VOXEL_ENGINE_VERSION >= 508
+									PCGSubsystem->RefreshAllRuntimeGenExecutionSources();
+#else
 									PCGSubsystem->RefreshAllRuntimeGenComponents();
+#endif
 								}
 							})),
 						{}

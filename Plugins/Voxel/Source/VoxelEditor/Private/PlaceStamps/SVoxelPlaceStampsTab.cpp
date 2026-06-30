@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "SVoxelPlaceStampsTab.h"
 
@@ -7,15 +7,15 @@
 #include "VoxelActorFactories.h"
 #include "SVoxelPlaceStampsTile.h"
 #include "Heightmap/VoxelHeightmap.h"
+#include "VoxelPlaceStampsSubsystem.h"
 #include "StaticMesh/VoxelStaticMesh.h"
 #include "SVoxelPlaceStampsTagCheckBox.h"
-#include "Sculpt/Height/VoxelHeightSculptStamp.h"
-#include "Sculpt/Volume/VoxelVolumeSculptStamp.h"
+#include "Sculpt/Volume/VoxelSculptVolume.h"
+#include "Sculpt/Height/VoxelSculptHeight.h"
 
 #include "WidgetDrawerConfig.h"
 #include "IPlacementModeModule.h"
 #include "IStructureDetailsView.h"
-#include "VoxelPlaceStampsSubsystem.h"
 #include "Toolkits/AssetEditorModeUILayer.h"
 
 void SVoxelPlaceStampsTab::Construct(const FArguments& InArgs, const TSharedPtr<SDockTab>& ParentTab)
@@ -309,8 +309,8 @@ TSharedRef<SWidget> SVoxelPlaceStampsTab::CreateCategoriesWidget()
 		FSlateIcon(FAppStyle::GetAppStyleSetName(), "LandscapeEditor.SculptTool"),
 		MakeLambdaDelegate([this](TArray<TSharedPtr<FVoxelPlaceStampsItem>>& OutItems)
 		{
-			OutItems.Add(ConstructSculpt(FAssetData(FVoxelHeightSculptStamp::StaticStruct())));
-			OutItems.Add(ConstructSculpt(FAssetData(FVoxelVolumeSculptStamp::StaticStruct())));
+			OutItems.Add(ConstructSculpt(FAssetData(AVoxelSculptHeight::StaticClass())));
+			OutItems.Add(ConstructSculpt(FAssetData(AVoxelSculptVolume::StaticClass())));
 		}));
 
 	return ToolbarBuilder.MakeWidget();
@@ -873,35 +873,28 @@ TSharedPtr<FVoxelPlaceStampsItem> SVoxelPlaceStampsTab::ConstructHeightmap(const
 
 TSharedPtr<FVoxelPlaceStampsItem> SVoxelPlaceStampsTab::ConstructSculpt(const FAssetData& AssetData)
 {
-	const UClass* Class = AssetData.GetClass();
+	const UClass* Class = Cast<UClass>(AssetData.GetAsset());
 	if (!Class)
 	{
 		return nullptr;
 	}
 
-	if (!Class->IsChildOf<UScriptStruct>())
-	{
-		return nullptr;
-	}
-
-	const UScriptStruct* Struct = Cast<UScriptStruct>(AssetData.GetAsset());
-	if (!Struct->IsChildOf<FVoxelHeightSculptStamp>() &&
-		!Struct->IsChildOf<FVoxelVolumeSculptStamp>())
+	if (!Class->IsChildOf<AVoxelSculptActorBase>())
 	{
 		return nullptr;
 	}
 
 	const TSharedRef<FVoxelPlaceStampsItem> NewItem = MakeShared<FVoxelPlaceStampsItem>();
-	NewItem->Name = Struct->GetDisplayNameText().ToString();
+	NewItem->Name = Class->GetDisplayNameText().ToString();
 	NewItem->AssetThumbnail = MakeShared<FAssetThumbnail>(AssetData, 128.f, 128.f, FVoxelEditorUtilities::GetThumbnailPool());
 
 	NewItem->Asset = AssetData;
 
-	if (Struct->IsChildOf<FVoxelHeightSculptStamp>())
+	if (Class->IsChildOf<AVoxelSculptHeight>())
 	{
 		NewItem->SystemTags = { "Sculpt", "Height" };
 	}
-	else if (Struct->IsChildOf<FVoxelVolumeSculptStamp>())
+	else if (Class->IsChildOf<AVoxelSculptVolume>())
 	{
 		NewItem->SystemTags = { "Sculpt", "Volume" };
 	}

@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -15,6 +15,10 @@ struct FVoxelPointIdBuffer;
 
 struct VOXELGRAPH_API FVoxelBufferConversionUtilities
 {
+public:
+	static FVoxelInt32Buffer ByteToInt32(const FVoxelByteBuffer& Buffer);
+	static FVoxelInt32Buffer BooleanToInt32(const FVoxelBoolBuffer& Buffer);
+
 public:
 	static FVoxelFloatBuffer Int32ToFloat(const FVoxelInt32Buffer& Buffer);
 	static FVoxelDoubleBuffer Int32ToDouble(const FVoxelInt32Buffer& Buffer);

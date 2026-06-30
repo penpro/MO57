@@ -1,6 +1,11 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "FunctionLibrary/VoxelPositionFunctionLibrary.h"
+
+VOXEL_REGISTER_FUNCTION(UVoxelPositionFunctionLibrary, GetPosition3D_Double);
+VOXEL_REGISTER_FUNCTION(UVoxelPositionFunctionLibrary, GetPosition3D);
+VOXEL_REGISTER_FUNCTION(UVoxelPositionFunctionLibrary, GetPosition2D_Double);
+VOXEL_REGISTER_FUNCTION(UVoxelPositionFunctionLibrary, GetPosition2D);
 
 FVoxelVector2DBuffer UVoxelPositionFunctionLibrary::GetPosition2D(const EVoxelPositionSpace Space) const
 {

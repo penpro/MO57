@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelToolEdMode.h"
 #include "VoxelToolToolkit.h"
@@ -6,12 +6,12 @@
 #include "VoxelStampComponent.h"
 #include "VoxelSurfacePickerEdMode.h"
 #include "Sculpt/VoxelSculptActorBase.h"
-#include "Sculpt/Height/VoxelHeightTool.h"
-#include "Sculpt/Volume/VoxelVolumeTool.h"
-#include "Sculpt/Height/VoxelHeightSculptData.h"
-#include "Sculpt/Height/VoxelHeightSculptActor.h"
-#include "Sculpt/Volume/VoxelVolumeSculptData.h"
-#include "Sculpt/Volume/VoxelVolumeSculptActor.h"
+#include "Sculpt/Height/Tools/VoxelHeightTool.h"
+#include "Sculpt/Volume/Tools/VoxelVolumeTool.h"
+#include "Sculpt/Height/VoxelSculptHeightData.h"
+#include "Sculpt/Height/VoxelSculptHeight.h"
+#include "Sculpt/Volume/VoxelSculptVolume.h"
+#include "Sculpt/Volume/VoxelSculptVolumeData.h"
 
 #include "SceneView.h"
 #include "Misc/ITransaction.h"
@@ -319,7 +319,7 @@ void FVoxelToolEdMode::StopSculpting()
 	FVoxelTransaction Transaction(ActiveTool, "Sculpt voxels");
 
 	GUndo->StoreUndo(
-		SculptActor->GetRootComponent(),
+		SculptActor,
 		MoveTemp(Change));
 }
 
@@ -357,7 +357,7 @@ void FVoxelToolEdMode::DoEdit()
 
 	if (UVoxelHeightTool* Tool = Cast<UVoxelHeightTool>(ActiveTool))
 	{
-		AVoxelHeightSculptActor& Actor = *CastChecked<AVoxelHeightSculptActor>(SculptActor);
+		AVoxelSculptHeight& Actor = *CastChecked<AVoxelSculptHeight>(SculptActor);
 
 		if (!Tool->PrepareModifierData())
 		{
@@ -372,7 +372,7 @@ void FVoxelToolEdMode::DoEdit()
 
 		if (!Change)
 		{
-			Change = MakeUnique<FVoxelHeightSculptChange>(Actor.GetStamp()->GetData()->GetInnerData());
+			Change = MakeUnique<FVoxelHeightSculptChange>(Actor.GetSculptData());
 		}
 
 		ensure(Future.IsComplete());
@@ -386,7 +386,7 @@ void FVoxelToolEdMode::DoEdit()
 
 	if (UVoxelVolumeTool* Tool = Cast<UVoxelVolumeTool>(ActiveTool))
 	{
-		AVoxelVolumeSculptActor& Actor = *CastChecked<AVoxelVolumeSculptActor>(SculptActor);
+		AVoxelSculptVolume& Actor = *CastChecked<AVoxelSculptVolume>(SculptActor);
 
 		if (!Tool->PrepareModifierData())
 		{
@@ -401,7 +401,7 @@ void FVoxelToolEdMode::DoEdit()
 
 		if (!Change)
 		{
-			Change = MakeUnique<FVoxelVolumeSculptChange>(Actor.GetStamp()->GetData()->GetInnerData());
+			Change = MakeUnique<FVoxelVolumeSculptChange>(Actor.GetSculptData());
 		}
 
 		ensure(Future.IsComplete());

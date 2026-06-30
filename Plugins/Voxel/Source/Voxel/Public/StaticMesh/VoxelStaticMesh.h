@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -11,7 +11,7 @@ class UVoxelStaticMesh;
 class FVoxelStaticMeshData;
 class UVoxelSurfaceTypeInterface;
 
-UCLASS(BlueprintType, meta = (VoxelAssetType, AssetColor=Red))
+UCLASS(BlueprintType, meta = (VoxelAssetType, AssetColor=Red, AssetSubMenu = "Stamps"))
 class VOXEL_API UVoxelStaticMesh : public UVoxelAsset
 {
 	GENERATED_BODY()

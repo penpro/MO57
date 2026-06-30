@@ -1,8 +1,10 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelQueryBlueprintLibrary.h"
 #include "VoxelQuery.h"
 #include "VoxelLayers.h"
+#include "VoxelStampDelta.h"
+#include "VoxelStampRuntime.h"
 #include "Surface/VoxelSurfaceTypeTable.h"
 #include "Surface/VoxelSurfaceTypeBlendBuffer.h"
 #include "Surface/VoxelSmartSurfaceTypeResolver.h"
@@ -173,7 +175,7 @@ TVoxelFuture<bool> UVoxelQueryBlueprintLibrary::ExportVoxelDataToRenderTarget(
 				return {};
 			}
 
-			return Voxel::RenderTask([Values, Resource]
+			return Voxel::RenderTask([Values, Resource](FRHICommandListImmediate& RHICmdList)
 			{
 				FRHITexture* TextureRHI = Resource->GetTextureRHI();
 				if (!ensure(TextureRHI))
@@ -191,6 +193,7 @@ TVoxelFuture<bool> UVoxelQueryBlueprintLibrary::ExportVoxelDataToRenderTarget(
 				}
 
 				RHIUpdateTexture2D_Safe(
+					RHICmdList,
 					TextureRHI,
 					0,
 					FUpdateTextureRegion2D(
@@ -639,6 +642,88 @@ FVoxelFuture UVoxelQueryBlueprintLibrary::K2_MultiQueryVoxelLayer(
 			MetadatasToQuery,
 			GradientStep)
 		.Then_GameThread([&bSuccess, &Results](const TOptional<TArray<FVoxelQueryResult>>& NewResults)
+		{
+			if (!NewResults)
+			{
+				return;
+			}
+
+			bSuccess = true;
+			Results = *NewResults;
+		});
+}
+
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+
+TVoxelFuture<TOptional<TArray<FVoxelQueryStampResult>>> UVoxelQueryBlueprintLibrary::QueryVoxelStamps(
+	UWorld* World,
+	const FVoxelStackLayer& Layer,
+	const FVector& Position)
+{
+	ensure(IsInGameThread());
+
+	if (!World)
+	{
+		VOXEL_MESSAGE(Error, "World is null");
+		return {};
+	}
+
+	if (!Layer.IsValid())
+	{
+		VOXEL_MESSAGE(Error, "Layer is null");
+		return {};
+	}
+
+	return Voxel::AsyncTask([
+		Position,
+		WeakLayer = FVoxelWeakStackLayer(Layer),
+		Layers = FVoxelLayers::Get(World),
+		SurfaceTypeTable = FVoxelSurfaceTypeTable::Get()]
+	{
+		VOXEL_FUNCTION_COUNTER();
+
+		TVoxelArray<FVoxelStampDelta> StampDeltas = Layers->GetStampDeltas(
+			WeakLayer,
+			Position,
+			0);
+
+		return Voxel::GameTask([NewStampDeltas = MakeSharedCopy(MoveTemp(StampDeltas))]() -> TOptional<TArray<FVoxelQueryStampResult>>
+		{
+			TArray<FVoxelQueryStampResult> Result;
+			for (const FVoxelStampDelta& Delta : *NewStampDeltas)
+			{
+				FVoxelQueryStampResult StampData;
+				StampData.DistanceBeforeStamp = Delta.DistanceBefore;
+				StampData.DistanceAfterStamp = Delta.DistanceAfter;
+				StampData.Layer = Delta.Layer.Resolve();
+				StampData.StampComponent = Delta.Stamp->GetComponent().Resolve();
+				StampData.StampIndex = Delta.Stamp->GetInstanceIndex();
+				Result.Add(MoveTemp(StampData));
+			}
+
+			return Result;
+		});
+	});
+}
+
+FVoxelFuture UVoxelQueryBlueprintLibrary::K2_QueryVoxelStamps(
+	bool& bSuccess,
+	TArray<FVoxelQueryStampResult>& Results,
+	UWorld* World,
+	const FVoxelStackLayer& Layer,
+	const FVector& Position)
+{
+	bSuccess = false;
+	Results.Reset();
+
+	return
+		QueryVoxelStamps(
+			World,
+			Layer,
+			Position)
+		.Then_GameThread([&bSuccess, &Results](const TOptional<TArray<FVoxelQueryStampResult>>& NewResults)
 		{
 			if (!NewResults)
 			{

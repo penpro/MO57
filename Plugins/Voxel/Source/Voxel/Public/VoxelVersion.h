@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -10,7 +10,12 @@ using FVoxelVersion = DECLARE_VOXEL_VERSION
 	AddVoxelStaticMesh,
 	FixVoxelEdGraphMigration,
 	RemoveSculptStamps,
-	AddExternalSculptSaves
+	AddExternalSculptSaves,
+	AddVolumeSculptDistanceType,
+	AddBulkDataToSaveAssets,
+	ChangeBoundsExtension,
+	AddResolveSmartSurfaceTypeToPCGQueryProjection,
+	AddBulkDataToHeightSaveAssets
 );
 
 constexpr FVoxelGuid GVoxelCustomVersionGUID = VOXEL_GUID("897612303D0244CCBA7E5839DB2E7231");

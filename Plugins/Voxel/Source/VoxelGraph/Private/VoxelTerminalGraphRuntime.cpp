@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelTerminalGraphRuntime.h"
 #include "VoxelGraph.h"
@@ -106,7 +106,9 @@ const FVoxelSerializedGraph& UVoxelTerminalGraphRuntime::GetSerializedGraph() co
 	return PrivateSerializedGraph;
 }
 
-void UVoxelTerminalGraphRuntime::EnsureIsCompiled(const bool bForce)
+void UVoxelTerminalGraphRuntime::EnsureIsCompiled(
+	const bool bForce,
+	const TFunction<void(FName, FVoxelGraphCompiler&)>& OnGetGraphAtPass)
 {
 	VOXEL_FUNCTION_COUNTER();
 
@@ -117,7 +119,7 @@ void UVoxelTerminalGraphRuntime::EnsureIsCompiled(const bool bForce)
 	}
 
 	const TSharedPtr<FVoxelCompiledTerminalGraph> PreviousCompiledGraph = CompiledGraph.IsSet() ? CompiledGraph.GetValue() : nullptr;
-	const TSharedPtr<FVoxelCompiledTerminalGraph> NewCompiledGraph = Compile();
+	const TSharedPtr<FVoxelCompiledTerminalGraph> NewCompiledGraph = Compile(OnGetGraphAtPass);
 
 #if WITH_EDITOR
 	ON_SCOPE_EXIT
@@ -227,8 +229,7 @@ bool UVoxelTerminalGraphRuntime::HasNode(const UScriptStruct* Struct) const
 	// Bypass in editor to avoid recursively migrating
 	check(GVoxelGraphEditorInterface);
 	return GVoxelGraphEditorInterface->HasNode(GetTerminalGraph(), Struct);
-#endif
-
+#else
 	for (const auto& It : GetSerializedGraph().NodeNameToNode)
 	{
 		if (It.Value.VoxelNode &&
@@ -239,6 +240,7 @@ bool UVoxelTerminalGraphRuntime::HasNode(const UScriptStruct* Struct) const
 	}
 
 	return false;
+#endif
 }
 
 #if WITH_EDITOR
@@ -273,6 +275,12 @@ void UVoxelTerminalGraphRuntime::BeginCacheForCookedPlatformData(const ITargetPl
 	if (IsTemplate())
 	{
 		// UDerivedDataCacheCommandlet calls BeginCacheForCookedPlatformData on templates too
+		return;
+	}
+
+	if (GetTerminalGraph().PrivateGuid == GVoxelMainTerminalGraphGuid &&
+		!GetGraph().HasMainTerminalGraph())
+	{
 		return;
 	}
 
@@ -337,7 +345,7 @@ void UVoxelTerminalGraphRuntime::Translate()
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
 
-TSharedPtr<FVoxelCompiledTerminalGraph> UVoxelTerminalGraphRuntime::Compile()
+TSharedPtr<FVoxelCompiledTerminalGraph> UVoxelTerminalGraphRuntime::Compile(const TFunction<void(FName, FVoxelGraphCompiler&)>& OnGetGraphAtPass)
 {
 	VOXEL_FUNCTION_COUNTER();
 	check(IsInGameThread());
@@ -370,7 +378,8 @@ TSharedPtr<FVoxelCompiledTerminalGraph> UVoxelTerminalGraphRuntime::Compile()
 		GetTerminalGraph(),
 		// In the editor the second Compile will handle error logging
 		!WITH_EDITOR,
-		CompileMessages);
+		CompileMessages,
+		OnGetGraphAtPass);
 
 #if WITH_EDITOR
 	if (!NewCompiledGraph &&
@@ -409,7 +418,8 @@ TSharedPtr<FVoxelCompiledTerminalGraph> UVoxelTerminalGraphRuntime::Compile(
 	const FOnVoxelGraphChanged& OnForceRecompile,
 	const UVoxelTerminalGraph& TerminalGraph,
 	const bool bEnableLogging,
-	TVoxelArray<TSharedRef<FVoxelMessage>>& OutCompileMessages)
+	TVoxelArray<TSharedRef<FVoxelMessage>>& OutCompileMessages,
+	const TFunction<void(FName, FVoxelGraphCompiler&)>& OnGetGraphAtPass)
 {
 	VOXEL_FUNCTION_COUNTER();
 	check(IsInGameThread());
@@ -428,44 +438,27 @@ TSharedPtr<FVoxelCompiledTerminalGraph> UVoxelTerminalGraphRuntime::Compile(
 	}
 	ensure(!Scope.HasError());
 
-#define RUN_PASS(Name, ...) \
-	ensure(!Scope.HasError()); \
-	\
-	GraphCompiler->Name(); \
-	\
-	if (Scope.HasError()) \
-	{ \
-		return nullptr;  \
-	} \
-	\
-	GraphCompiler->Check(); \
-	\
-	if (Scope.HasError()) \
-	{ \
-		return nullptr;  \
+	for (const FVoxelGraphCompilerPass& Pass : GVoxelGraphCompilerPasses)
+	{
+		ensure(!Scope.HasError());
+		Pass.Function.Call(*GraphCompiler);
+
+		if (OnGetGraphAtPass)
+		{
+			OnGetGraphAtPass(Pass.Name, *GraphCompiler);
+		}
+
+		if (Scope.HasError())
+		{
+			return nullptr;
+		}
+
+		GraphCompiler->Check();
+		if (Scope.HasError())
+		{
+			return nullptr;
+		}
 	}
-
-	RUN_PASS(AddPreviewNode);
-	RUN_PASS(AddRangeNodes);
-	RUN_PASS(AddPreviewValueNodes);
-	RUN_PASS(RemoveSplitPins);
-	RUN_PASS(FixPositionPins);
-	RUN_PASS(FixSplineKeyPins);
-	RUN_PASS(AddWildcardErrors);
-	RUN_PASS(AddNoDefaultErrors);
-	RUN_PASS(CheckParameters);
-	RUN_PASS(CheckFunctionInputs);
-	RUN_PASS(CheckFunctionOutputs);
-	RUN_PASS(AddToBuffer);
-	RUN_PASS(RemoveLocalVariables);
-	RUN_PASS(CollapseInputs);
-	RUN_PASS(ReplaceTemplates);
-	RUN_PASS(RemovePassthroughs);
-	RUN_PASS(RemoveNodesNotLinkedToQueryableNodes);
-	RUN_PASS(CheckForLoops);
-	RUN_PASS(CheckNodeGuids);
-
-#undef RUN_PASS
 
 	// Do this at the end, will assert before CheckOutputs if we have multiple outputs
 	{
@@ -528,7 +521,7 @@ TSharedPtr<FVoxelCompiledTerminalGraph> UVoxelTerminalGraphRuntime::Compile(
 
 		It.Value->InitializeNodeRuntime(
 			Pins.NodeIndex,
-			It.Key->NodeRef,
+			FVoxelGraphMergedNodeRef(It.Key->NodeRef, It.Key->GetMergedNodeRefs()),
 			Pins.NameToInputPinRefs,
 			Pins.NameToOutputPinRefs);
 

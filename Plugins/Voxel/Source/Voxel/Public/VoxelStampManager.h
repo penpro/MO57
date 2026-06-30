@@ -1,8 +1,9 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
 #include "VoxelMinimal.h"
+#include "VoxelStampChange.h"
 #include "VoxelStampRuntime.h"
 #include "VoxelInvalidationCallstack.h"
 
@@ -12,18 +13,13 @@ public:
 	const TVoxelObjectPtr<UWorld> World;
 	const TVoxelObjectPtr<UVoxelLayer> Layer;
 
-	struct FChangedStamp
-	{
-		TSharedPtr<const FVoxelStampRuntime> OldStamp;
-		TSharedPtr<const FVoxelStampRuntime> NewStamp;
-	};
-	TMulticastDelegate<void(const TVoxelChunkedArray<FChangedStamp>& ChangedStamps)> OnStampChanged;
+	TMulticastDelegate<void(const TVoxelChunkedArray<FVoxelStampChange>& StampChanges)> OnStampChanged;
 
 	const TVoxelChunkedSparseArray<TSharedRef<const FVoxelStampRuntime>>& GetStamps() const;
 
 private:
 	TVoxelChunkedSparseArray<TSharedRef<const FVoxelStampRuntime>> Stamps;
-	TVoxelChunkedArray<FChangedStamp> ChangedStamps;
+	TVoxelChunkedArray<FVoxelStampChange> StampChanges;
 	VOXEL_CUSTOM_COUNTER_HELPER(NumStamps);
 
 	FVoxelStampLayerManager(

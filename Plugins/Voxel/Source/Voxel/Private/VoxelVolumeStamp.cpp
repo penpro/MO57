@@ -1,6 +1,7 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelVolumeStamp.h"
+#include "VoxelVersion.h"
 #include "Buffer/VoxelDoubleBuffers.h"
 
 FVoxelVolumeStamp::FVoxelVolumeStamp()
@@ -20,6 +21,17 @@ void FVoxelVolumeStamp::FixupProperties()
 		VoxelLayers.RemoveAt(0);
 
 		AdditionalLayers = MoveTemp(VoxelLayers);
+	}
+}
+
+void FVoxelVolumeStamp::PostSerialize(const FArchive& Ar)
+{
+	Super::PostSerialize(Ar);
+
+	if (Ar.CustomVer(GVoxelCustomVersionGUID) < FVoxelVersion::ChangeBoundsExtension)
+	{
+		BoundsExtensionMultiplier = BoundsExtension_DEPRECATED;
+		MaximumBoundsExtension = 1e9;
 	}
 }
 

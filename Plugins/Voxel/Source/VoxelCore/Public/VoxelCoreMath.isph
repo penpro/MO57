@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelCoreMinimal.isph"
 #include "VoxelCoreTypes.isph"
@@ -632,6 +632,15 @@ FORCEINLINE generic float2 clamp(
 	return MakeFloat2(
 		clamp(Value.x, A.x, B.x),
 		clamp(Value.y, A.y, B.y));
+}
+FORCEINLINE generic float2 clamp(
+	const generic float2 Value,
+	const generic float A,
+	const generic float B)
+{
+	return MakeFloat2(
+		clamp(Value.x, A, B),
+		clamp(Value.y, A, B));
 }
 FORCEINLINE generic float3 clamp(
 	const generic float3 Value,
@@ -1730,7 +1739,7 @@ FORCEINLINE generic float4 MakeQuaternionFromBasis(
 		Quat.z = (X.y - Y.x) * S;
 		Quat.w = 0.5f * (1.f / InvS);
 	}
-	else if (X.x > Y.y && X.x > Z.z)
+	else if (X.x >= Y.y && X.x >= Z.z)
 	{
 		const generic float InvS = InvSqrt(X.x - Y.y - Z.z + 1.0f);
 		const generic float S = 0.5f * InvS;
@@ -1740,7 +1749,7 @@ FORCEINLINE generic float4 MakeQuaternionFromBasis(
 		Quat.z = (X.z + Z.x) * S;
 		Quat.w = (Y.z - Z.y) * S;
 	}
-	else if (Y.y > X.x && Y.y > Z.z)
+	else if (Y.y >= Z.z)
 	{
 		const generic float InvS = InvSqrt(Y.y - Z.z - X.x + 1.0f);
 		const generic float S = 0.5f * InvS;

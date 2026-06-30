@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "Collision/VoxelCollisionComponent.h"
 #include "Collision/VoxelCollider.h"
@@ -8,10 +8,17 @@
 #include "PhysicsEngine/BodySetup.h"
 #include "Chaos/TriangleMeshImplicitObject.h"
 
+UVoxelCollisionComponent::UVoxelCollisionComponent()
+{
+	bIgnoreStreamingManagerUpdate = true;
+	bCanEverAffectNavigation = false;
+}
+
 void UVoxelCollisionComponent::SetCollider(
 	const TSharedRef<const FVoxelCollider>& NewCollider,
 	const FBodyInstance& NewBodyInstance,
 	const bool bDoubleSidedGeometry,
+	const bool bInGenerateOverlapEvents,
 	const FTransform& RelativeTransform)
 {
 	VOXEL_FUNCTION_COUNTER();
@@ -43,6 +50,8 @@ void UVoxelCollisionComponent::SetCollider(
 		!GetWorld()->IsGameWorld() ||
 #endif
 		bDoubleSidedGeometry;
+
+	SetGenerateOverlapEvents(bInGenerateOverlapEvents);
 
 	{
 		VOXEL_SCOPE_COUNTER("FImplicitObject::Track");

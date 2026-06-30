@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelPlaceStampsDefaults.h"
 #include "VoxelSettings.h"
@@ -23,7 +23,6 @@ void FVoxelPlaceStampDefaults::ApplyOnStamp(const FVoxelStampRef& StampRef) cons
 	StampRef->Smoothness = Smoothness;
 	StampRef->MetadataOverrides = MetadataOverrides;
 	StampRef->LODRange = LODRange;
-	StampRef->BoundsExtension = BoundsExtension;
 
 	if (FVoxelHeightStamp* HeightStamp = StampRef.As<FVoxelHeightStamp>())
 	{
@@ -31,6 +30,7 @@ void FVoxelPlaceStampDefaults::ApplyOnStamp(const FVoxelStampRef& StampRef) cons
 		HeightStamp->BlendMode = HeightBlendMode;
 		HeightStamp->bApplyOnVoid = bHeightApplyOnVoid;
 		HeightStamp->AdditionalLayers = HeightAdditionalLayers;
+		HeightStamp->HeightPaddingMultiplier = HeightPaddingMultiplier;
 	}
 	else if (FVoxelVolumeStamp* VolumeStamp = StampRef.As<FVoxelVolumeStamp>())
 	{
@@ -38,6 +38,8 @@ void FVoxelPlaceStampDefaults::ApplyOnStamp(const FVoxelStampRef& StampRef) cons
 		VolumeStamp->BlendMode = VolumeBlendMode;
 		VolumeStamp->bApplyOnVoid = bVolumeApplyOnVoid;
 		VolumeStamp->AdditionalLayers = VolumeAdditionalLayers;
+		VolumeStamp->BoundsExtensionMultiplier = BoundsExtensionMultiplier;
+		VolumeStamp->MaximumBoundsExtension = MaximumBoundsExtension;
 	}
 
 	INLINE_LAMBDA

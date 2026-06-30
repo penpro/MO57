@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -24,6 +24,7 @@ public:
 
 	//~ Begin UVoxelGraphNode Interface
 	virtual void AllocateDefaultPins() override;
+	virtual bool CanPasteHere(const UEdGraph* TargetGraph) const override;
 
 	virtual FText GetNodeTitle(ENodeTitleType::Type TitleType) const override;
 	virtual FLinearColor GetNodeTitleColor() const override;

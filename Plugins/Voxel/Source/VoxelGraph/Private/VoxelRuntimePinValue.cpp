@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelRuntimePinValue.h"
 #include "VoxelBuffer.h"
@@ -381,5 +381,224 @@ FString FVoxelRuntimePinValue::ToDebugString(const bool bFullValue, bool bParseB
 				nullptr);
 		}
 	}
+	}
+}
+
+void FVoxelRuntimePinValue::ExportToProperty(const FProperty& Property, void* Memory) const
+{
+	VOXEL_FUNCTION_COUNTER();
+
+	if (!ensure(IsValid()) ||
+		// CanBeCastedTo_K2: ExportToProperty does implicit float -> double conversion
+		!ensure(Type.GetExposedType().CanBeCastedTo_K2(FVoxelPinType(Property, true))))
+	{
+		return;
+	}
+
+	if (Type.IsBuffer())
+	{
+		return;
+	}
+
+	switch (Type.GetInternalType())
+	{
+	default:
+	{
+		ensure(false);
+	}
+	break;
+	case EVoxelPinInternalType::Bool:
+	{
+		if (!ensure(Property.IsA<FBoolProperty>()))
+		{
+			return;
+		}
+
+		CastFieldChecked<FBoolProperty>(Property).SetPropertyValue(Memory, Get<bool>());
+	}
+	break;
+	case EVoxelPinInternalType::Float:
+	{
+		if (Property.IsA<FFloatProperty>())
+		{
+			CastFieldChecked<FFloatProperty>(Property).SetPropertyValue(Memory, Get<float>());
+			return;
+		}
+
+		if (Property.IsA<FDoubleProperty>())
+		{
+			CastFieldChecked<FDoubleProperty>(Property).SetPropertyValue(Memory, Get<float>());
+			return;
+		}
+
+		ensure(false);
+		return;
+	}
+	case EVoxelPinInternalType::Double:
+	{
+		if (!ensure(Property.IsA<FDoubleProperty>()))
+		{
+			return;
+		}
+
+		CastFieldChecked<FDoubleProperty>(Property).SetPropertyValue(Memory, Get<double>());
+	}
+	break;
+	case EVoxelPinInternalType::UInt16:
+	{
+		if (!ensure(Property.IsA<FUInt16Property>()))
+		{
+			return;
+		}
+
+		CastFieldChecked<FUInt16Property>(Property).SetPropertyValue(Memory, Get<uint16>());
+	}
+	break;
+	case EVoxelPinInternalType::Int32:
+	{
+		if (!ensure(Property.IsA<FIntProperty>()))
+		{
+			return;
+		}
+
+		CastFieldChecked<FIntProperty>(Property).SetPropertyValue(Memory, Get<int32>());
+	}
+	break;
+	case EVoxelPinInternalType::Int64:
+	{
+		if (!ensure(Property.IsA<FInt64Property>()))
+		{
+			return;
+		}
+
+		CastFieldChecked<FInt64Property>(Property).SetPropertyValue(Memory, Get<int64>());
+	}
+	break;
+	case EVoxelPinInternalType::Name:
+	{
+		if (!ensure(Property.IsA<FNameProperty>()))
+		{
+			return;
+		}
+
+		CastFieldChecked<FNameProperty>(Property).SetPropertyValue(Memory, Get<FName>());
+	}
+	break;
+	case EVoxelPinInternalType::Byte:
+	{
+		if (const FEnumProperty* EnumProperty = CastField<FEnumProperty>(Property))
+		{
+			if (!ensure(Type.GetEnum() == EnumProperty->GetEnum()) ||
+				!ensure(EnumProperty->GetUnderlyingProperty()->IsA<FByteProperty>()))
+			{
+				return;
+			}
+
+			CastFieldChecked<FByteProperty>(EnumProperty->GetUnderlyingProperty())->SetPropertyValue(Memory, Get<uint8>());
+		}
+		else if (const FByteProperty* ByteProperty = CastField<FByteProperty>(Property))
+		{
+			if (!ensure(Type.GetEnum() == ByteProperty->Enum))
+			{
+				return;
+			}
+
+			ByteProperty->SetPropertyValue(Memory, Get<uint8>());
+		}
+		else
+		{
+			ensure(false);
+		}
+	}
+	break;
+	case EVoxelPinInternalType::Class:
+	{
+		if (Property.IsA<FClassProperty>())
+		{
+			const FClassProperty& ClassProperty = CastFieldChecked<FClassProperty>(Property);
+			if (!ensure(Type.GetBaseClass()->IsChildOf(ClassProperty.MetaClass)))
+			{
+				return;
+			}
+
+			checkUObjectAccess();
+			ClassProperty.SetObjectPropertyValue(Memory, Class);
+		}
+		else if (Property.IsA<FSoftClassProperty>())
+		{
+			const FSoftClassProperty& ClassProperty = CastFieldChecked<FSoftClassProperty>(Property);
+			if (!ensure(Type.GetBaseClass()->IsChildOf(ClassProperty.MetaClass)))
+			{
+				return;
+			}
+
+			checkUObjectAccess();
+			ClassProperty.SetObjectPropertyValue(Memory, Class);
+		}
+		else
+		{
+			ensure(false);
+		}
+	}
+	break;
+	case EVoxelPinInternalType::Struct:
+	{
+		if (Property.IsA<FObjectProperty>())
+		{
+			const FObjectProperty& ObjectProperty = CastFieldChecked<FObjectProperty>(Property);
+			if (!ensure(ObjectProperty.PropertyClass == Type.GetObjectClass()))
+			{
+				return;
+			}
+
+			checkUObjectAccess();
+
+			const TSharedPtr<const FVoxelObjectPinType> ObjectPinType = FVoxelObjectPinType::StructToPinType().FindRef(Type.GetStruct());
+			if (!ensure(ObjectPinType))
+			{
+				return;
+			}
+
+			UObject* Object = ObjectPinType->GetObject(GetStructView());
+			ObjectProperty.SetObjectPropertyValue(Memory, Object);
+		}
+		else if (Property.IsA<FSoftObjectProperty>())
+		{
+			const FSoftObjectProperty& ObjectProperty = CastFieldChecked<FSoftObjectProperty>(Property);
+			if (!ensure(ObjectProperty.PropertyClass == Type.GetObjectClass()))
+			{
+				return;
+			}
+
+			checkUObjectAccess();
+
+			const TSharedPtr<const FVoxelObjectPinType> ObjectPinType = FVoxelObjectPinType::StructToPinType().FindRef(Type.GetStruct());
+			if (!ensure(ObjectPinType))
+			{
+				return;
+			}
+
+			UObject* Object = ObjectPinType->GetObject(GetStructView());
+			ObjectProperty.SetObjectPropertyValue(Memory, Object);
+		}
+		else
+		{
+			if (!ensure(Property.IsA<FStructProperty>()))
+			{
+				return;
+			}
+
+			FConstVoxelStructView StructView = GetStructView();
+			const FStructProperty& StructProperty = CastFieldChecked<FStructProperty>(Property);
+			if (!ensure(Type.GetStruct() == StructProperty.Struct) ||
+				!ensure(Type.GetStruct() == StructView.GetScriptStruct()))
+			{
+				return;
+			}
+
+			StructView.GetScriptStruct()->CopyScriptStruct(Memory, StructView.GetStructMemory());
+		}
+	}
+	break;
 	}
 }

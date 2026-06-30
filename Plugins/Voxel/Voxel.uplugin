@@ -1,7 +1,7 @@
 {
 	"FileVersion": 3,
-	"Version": 2000008,
-	"VersionName": "2.0p8",
+	"Version": 1,
+	"VersionName": "Unknown",
 	"FriendlyName": "Voxel Plugin",
 	"Description": "State-of-the-art voxel technology for Unreal Engine",
 	"Category": "Landscape",
@@ -10,141 +10,66 @@
 	"DocsURL": "https://docs.voxelplugin.com",
 	"MarketplaceURL": "",
 	"SupportURL": "https://discord.voxelplugin.com",
-	"EngineVersion": "5.7.0",
+	"EnabledByDefault": true,
 	"CanContainContent": true,
-	"Installed": true,
+	"IsBetaVersion": false,
+	"IsExperimentalVersion": false,
+	"Installed": false,
 	"Modules": [
 		{
 			"Name": "VoxelCore",
 			"Type": "Runtime",
-			"LoadingPhase": "PostConfigInit",
-			"PlatformAllowList": [
-				"Win64",
-				"Linux",
-				"Mac",
-				"Android",
-				"IOS"
-			]
+			"LoadingPhase": "PostConfigInit"
 		},
 		{
 			"Name": "VoxelCoreEditor",
 			"Type": "Editor",
-			"LoadingPhase": "Default",
-			"PlatformAllowList": [
-				"Win64",
-				"Linux",
-				"Mac",
-				"Android",
-				"IOS"
-			]
+			"LoadingPhase": "Default"
 		},
 		{
 			"Name": "VoxelGraph",
 			"Type": "Runtime",
-			"LoadingPhase": "Default",
-			"PlatformAllowList": [
-				"Win64",
-				"Linux",
-				"Mac",
-				"Android",
-				"IOS"
-			]
+			"LoadingPhase": "Default"
 		},
 		{
 			"Name": "VoxelGraphEditor",
 			"Type": "Editor",
-			"LoadingPhase": "Default",
-			"PlatformAllowList": [
-				"Win64",
-				"Linux",
-				"Mac",
-				"Android",
-				"IOS"
-			]
+			"LoadingPhase": "Default"
 		},
 		{
 			"Name": "Voxel",
 			"Type": "Runtime",
-			"LoadingPhase": "PostConfigInit",
-			"PlatformAllowList": [
-				"Win64",
-				"Linux",
-				"Mac",
-				"Android",
-				"IOS"
-			]
+			"LoadingPhase": "PostConfigInit"
 		},
 		{
 			"Name": "VoxelEditor",
 			"Type": "Editor",
-			"LoadingPhase": "Default",
-			"PlatformAllowList": [
-				"Win64",
-				"Linux",
-				"Mac",
-				"Android",
-				"IOS"
-			]
+			"LoadingPhase": "Default"
 		},
 		{
 			"Name": "VoxelBlueprint",
 			"Type": "UncookedOnly",
-			"LoadingPhase": "PostConfigInit",
-			"PlatformAllowList": [
-				"Win64",
-				"Linux",
-				"Mac",
-				"Android",
-				"IOS"
-			]
+			"LoadingPhase": "PostConfigInit"
 		},
 		{
 			"Name": "VoxelBlueprintEditor",
 			"Type": "Editor",
-			"LoadingPhase": "Default",
-			"PlatformAllowList": [
-				"Win64",
-				"Linux",
-				"Mac",
-				"Android",
-				"IOS"
-			]
+			"LoadingPhase": "Default"
 		},
 		{
 			"Name": "VoxelTests",
 			"Type": "Runtime",
-			"LoadingPhase": "Default",
-			"PlatformAllowList": [
-				"Win64",
-				"Linux",
-				"Mac",
-				"Android",
-				"IOS"
-			]
+			"LoadingPhase": "Default"
 		},
 		{
 			"Name": "VoxelPCG",
 			"Type": "Runtime",
-			"LoadingPhase": "Default",
-			"PlatformAllowList": [
-				"Win64",
-				"Linux",
-				"Mac",
-				"Android",
-				"IOS"
-			]
+			"LoadingPhase": "Default"
 		},
 		{
 			"Name": "VoxelPCGEditor",
 			"Type": "Editor",
-			"LoadingPhase": "Default",
-			"PlatformAllowList": [
-				"Win64",
-				"Linux",
-				"Mac",
-				"Android",
-				"IOS"
-			]
+			"LoadingPhase": "Default"
 		}
 	],
 	"Plugins": [
@@ -152,7 +77,5 @@
 			"Name": "PCG",
 			"Enabled": true
 		}
-	],
-	"IsBetaVersion": false,
-	"IsExperimentalVersion": false
+	]
 }

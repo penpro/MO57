@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -8,7 +8,6 @@
 
 class FVoxelNavigationMesh;
 class FVoxelNavigationInvokerView;
-class UVoxelNavigationComponent;
 
 USTRUCT()
 struct VOXEL_API FVoxelNavigationSubsystem : public FVoxelSubsystem
@@ -33,10 +32,10 @@ private:
 	FVoxelCriticalSection CriticalSection;
 
 	TVoxelMap<FIntVector, TSharedPtr<FVoxelNavigationMesh>> ChunkKeyToNavigationMesh_RequiresLock;
-	TVoxelMap<FIntVector, TVoxelObjectPtr<UVoxelNavigationComponent>> ChunkKeyToNavigationComponent;
+	TVoxelMap<FIntVector, TVoxelObjectPtr<USceneComponent>> ChunkKeyToNavigationComponent;
 
 	TVoxelMap<FIntVector, TSharedPtr<FVoxelNavigationMesh>> PreviousChunkKeyToNavigationMesh;
-	TVoxelMap<FIntVector, TVoxelObjectPtr<UVoxelNavigationComponent>> PreviousChunkKeyToNavigationComponent;
+	TVoxelMap<FIntVector, TVoxelObjectPtr<USceneComponent>> PreviousChunkKeyToNavigationComponent;
 
 	TVoxelMap<FIntVector, double> ChunkKeyToLastRenderTime;
 };

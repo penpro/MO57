@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -241,6 +241,7 @@ public:
 		return Type.CanBeCastedTo(Other);
 	}
 	FString ToDebugString(bool bFullValue, bool bParseBaseStructs) const;
+	void ExportToProperty(const FProperty& Property, void* Memory) const;
 
 public:
 	template<typename T>

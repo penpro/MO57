@@ -1,19 +1,21 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
 #include "VoxelMinimal.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
 #include "Sculpt/VoxelSculptSave.h"
-#include "Sculpt/Volume/VoxelPaintVolumeModifier.h"
-#include "Sculpt/Volume/VoxelAngleVolumeModifier.h"
-#include "Sculpt/Volume/VoxelFlattenVolumeModifier.h"
-#include "Sculpt/Volume/VoxelGraphVolumeModifier.h"
-#include "Sculpt/Volume/VoxelSmoothVolumeModifier.h"
-#include "Sculpt/Volume/VoxelSphereVolumeModifier.h"
-#include "Sculpt/Volume/VoxelCubeVolumeModifier.h"
-#include "Sculpt/Volume/VoxelSurfaceVolumeModifier.h"
+#include "Sculpt/Volume/Tools/VoxelPaintVolumeModifier.h"
+#include "Sculpt/Volume/Tools/VoxelAngleVolumeModifier.h"
+#include "Sculpt/Volume/Tools/VoxelFlattenVolumeModifier.h"
+#include "Sculpt/Volume/Tools/VoxelGraphVolumeModifier.h"
+#include "Sculpt/Volume/Tools/VoxelSmoothVolumeModifier.h"
+#include "Sculpt/Volume/Tools/VoxelSphereVolumeModifier.h"
+#include "Sculpt/Volume/Tools/VoxelCubeVolumeModifier.h"
+#include "Sculpt/Volume/Tools/VoxelSurfaceVolumeModifier.h"
 #include "VoxelVolumeSculptBlueprintLibrary.generated.h"
+
+class UVoxelSculptVolumeAsset;
 
 UCLASS()
 class VOXEL_API UVoxelVolumeSculptBlueprintLibrary  : public UBlueprintFunctionLibrary
@@ -33,28 +35,34 @@ public:
 public:
 	// Clear all sculpt data
 	UFUNCTION(BlueprintCallable, Category = "Voxel|Sculpt")
-	static FVoxelFuture ClearSculptData(UPARAM(Required) AVoxelVolumeSculptActor* SculptActor);
+	static void ClearSculptData(UPARAM(Required) AVoxelSculptVolume* SculptActor);
 
 	// Clear all sculpt cache
 	// This will free up memory but subsequent edits might be slightly slower
 	UFUNCTION(BlueprintCallable, Category = "Voxel|Sculpt")
-	static void ClearSculptCache(UPARAM(Required) AVoxelVolumeSculptActor* SculptActor);
+	static void ClearSculptCache(UPARAM(Required) AVoxelSculptVolume* SculptActor);
+
+	// Will assign sculpt asset to sculpt actor
+	UFUNCTION(BlueprintCallable, Category = "Voxel|Sculpt")
+	static void SetSculptAsset(
+		UPARAM(Required) AVoxelSculptVolume* SculptActor,
+		UVoxelSculptVolumeAsset* Asset);
 
 public:
 	UFUNCTION(BlueprintCallable, Category = "Voxel")
 	static FVoxelFuture K2_GetSave(
 		FVoxelVolumeSculptSave& Save,
-		UPARAM(Required) AVoxelVolumeSculptActor* SculptActor,
+		UPARAM(Required) AVoxelSculptVolume* SculptActor,
 		bool bCompress = true);
 
 	UFUNCTION(BlueprintCallable, Category = "Voxel")
 	static FVoxelFuture LoadFromSave(
-		UPARAM(Required) AVoxelVolumeSculptActor* SculptActor,
+		UPARAM(Required) AVoxelSculptVolume* SculptActor,
 		FVoxelVolumeSculptSave Save);
 
 private:
 	static FVoxelFuture ApplyModifier(
-		UPARAM(Required) AVoxelVolumeSculptActor* SculptActor,
+		UPARAM(Required) AVoxelSculptVolume* SculptActor,
 		const TSharedRef<FVoxelVolumeModifier>& Modifier);
 
 public:
@@ -71,7 +79,7 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Voxel|Sculpt")
 	static FVoxelFuture PaintSurface(
-		UPARAM(Required) AVoxelVolumeSculptActor* SculptActor,
+		UPARAM(Required) AVoxelSculptVolume* SculptActor,
 		const FVector Center,
 		const float Radius = 500.f,
 		const float Strength = 0.05f,
@@ -107,7 +115,7 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Voxel|Sculpt")
 	static FVoxelFuture SculptAngle(
-		UPARAM(Required) AVoxelVolumeSculptActor* SculptActor,
+		UPARAM(Required) AVoxelSculptVolume* SculptActor,
 		const FVector Center,
 		const float Radius = 500.f,
 		const float Strength = 1.f,
@@ -141,7 +149,7 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Voxel|Sculpt")
 	static FVoxelFuture Flatten(
-		UPARAM(Required) AVoxelVolumeSculptActor* SculptActor,
+		UPARAM(Required) AVoxelSculptVolume* SculptActor,
 		const FVector Center,
 		const FVector Normal = FVector::UpVector,
 		const float Radius = 500.f,
@@ -170,7 +178,7 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Voxel|Sculpt")
 	static FVoxelFuture Smooth(
-		UPARAM(Required) AVoxelVolumeSculptActor* SculptActor,
+		UPARAM(Required) AVoxelSculptVolume* SculptActor,
 		const FVector Center,
 		const float Radius = 1000.f,
 		const float Strength = 1.f,
@@ -196,7 +204,7 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Voxel|Sculpt")
 	static FVoxelFuture SculptSphere(
-		UPARAM(Required) AVoxelVolumeSculptActor* SculptActor,
+		UPARAM(Required) AVoxelSculptVolume* SculptActor,
 		const FVector Center,
 		const float Radius = 1000.f,
 		const EVoxelSculptMode Mode = EVoxelSculptMode::Add,
@@ -224,7 +232,7 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Voxel|Sculpt")
 	static FVoxelFuture SculptCube(
-		UPARAM(Required) AVoxelVolumeSculptActor* SculptActor,
+		UPARAM(Required) AVoxelSculptVolume* SculptActor,
 		const FVector Center,
 		const FVector Size = FVector(1000.f),
 		const FRotator Rotation = FRotator::ZeroRotator,
@@ -254,7 +262,7 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Voxel|Sculpt")
 	static FVoxelFuture SculptSurface(
-		UPARAM(Required) AVoxelVolumeSculptActor* SculptActor,
+		UPARAM(Required) AVoxelSculptVolume* SculptActor,
 		const FVector Center,
 		const float Radius = 500.f,
 		const float Strength = 0.5f,
@@ -281,7 +289,7 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Voxel|Sculpt")
 	static FVoxelFuture ApplySculptGraph(
-		UPARAM(Required) AVoxelVolumeSculptActor* SculptActor,
+		UPARAM(Required) AVoxelSculptVolume* SculptActor,
 		const FVector& Center,
 		const float Radius = 500.f,
 		const FVoxelVolumeSculptGraphWrapper& Graph = FVoxelVolumeSculptGraphWrapper(),

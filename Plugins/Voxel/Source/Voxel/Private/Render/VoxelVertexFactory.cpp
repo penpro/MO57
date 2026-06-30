@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "Render/VoxelVertexFactory.h"
 #include "Render/VoxelTexturePool.h"
@@ -105,9 +105,13 @@ void FVoxelVertexFactory::ModifyCompilationEnvironment(
 	FShaderCompilerEnvironment& OutEnvironment)
 {
 	OutEnvironment.SetDefine(TEXT("VF_SUPPORTS_PRIMITIVE_SCENE_DATA"),
+#if VOXEL_ENGINE_VERSION >= 508
+		UseGPUScene(Parameters.Platform));
+#else
 		UseGPUScene(
 			Parameters.Platform,
 			GetMaxSupportedFeatureLevel(Parameters.Platform)));
+#endif
 }
 
 void FVoxelVertexFactory::GetPSOPrecacheVertexFetchElements(

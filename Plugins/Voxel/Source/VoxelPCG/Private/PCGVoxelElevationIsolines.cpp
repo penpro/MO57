@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "PCGVoxelElevationIsolines.h"
 
@@ -208,6 +208,9 @@ FVoxelFuture FVoxelElevationIsolinesPCGOutput::Generate2D() const
 
 	const int32 CellCount = (CellMax - CellMin + 1).SizeSquared();
 
+	// PCG generates in the current world; the layer is queried in absolute space, output shifted back
+	const FVector OriginOffset = GetWorldOriginOffset();
+
 	FVoxelDoubleVector2DBuffer Positions;
 	Positions.Allocate(CellCount);
 
@@ -219,7 +222,7 @@ FVoxelFuture FVoxelElevationIsolinesPCGOutput::Generate2D() const
 			const double CurrentX = IndexX * Resolution;
 			const double CurrentY = IndexY * Resolution;
 
-			Positions.Set(NumSamples++, FVector2D(CurrentX, CurrentY));
+			Positions.Set(NumSamples++, FVector2D(CurrentX, CurrentY) + FVector2D(OriginOffset));
 		}
 	}
 
@@ -370,6 +373,12 @@ FVoxelFuture FVoxelElevationIsolinesPCGOutput::Generate2D() const
 			if (FinalTransforms.Num() < 2)
 			{
 				continue;
+			}
+
+			// Shift the isoline back to the current world (the grid was offset for the queries); Z (elevation) stays absolute
+			for (FTransform& Transform : FinalTransforms)
+			{
+				Transform.AddToTranslation(FVector(-OriginOffset.X, -OriginOffset.Y, 0.0));
 			}
 
 			FIsoline Isoline;

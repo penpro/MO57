@@ -1,8 +1,9 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelStampComponentBase.h"
 #include "VoxelStampComponentUtilities.h"
 #include "VoxelStampComponentInterface.h"
+#include "VoxelStampRuntime.h"
 #include "VoxelInvalidationCallstack.h"
 
 VOXEL_RUN_ON_STARTUP_GAME()
@@ -61,7 +62,8 @@ void UVoxelStampComponentBase::PostInitProperties()
 
 	Super::PostInitProperties();
 
-	if (HasAnyFlags(RF_ClassDefaultObject))
+	if (HasAnyFlags(RF_ClassDefaultObject) ||
+		GetOuter()->HasAnyFlags(RF_ClassDefaultObject))
 	{
 		return;
 	}
@@ -130,6 +132,19 @@ void UVoxelStampComponentBase::UpdateBounds()
 
 	Super::UpdateBounds();
 
+	ApplyComponentChangesToStamp();
+}
+
+void UVoxelStampComponentBase::ApplyWorldOffset(const FVector& InOffset, const bool bWorldShift)
+{
+	VOXEL_FUNCTION_COUNTER();
+
+	Super::ApplyWorldOffset(InOffset, bWorldShift);
+
+	// USceneComponent::ApplyWorldOffset moves the component directly without going through UpdateBounds,
+	// so the stamp keeps its pre-shift Transform. The stamp bakes the world origin into its absolute
+	// LocalToWorld (Transform + OriginOffset), so a stale Transform makes it render offset by OriginLocation.
+	// Refresh it here so the stamp re-reads the new transform & origin.
 	ApplyComponentChangesToStamp();
 }
 
@@ -224,6 +239,43 @@ void UVoxelStampComponentBase::UpdateStamp()
 			Stamp.Unregister();
 		}
 	}
+}
+
+bool UVoxelStampComponentBase::GetStampBounds(const bool bWorldSpace, FBox& OutBounds) const
+{
+	VOXEL_FUNCTION_COUNTER();
+
+	OutBounds = FBox(ForceInit);
+
+	const FVoxelStampRef StampRef = GetStamp_Internal();
+	if (!StampRef.IsValid())
+	{
+		return false;
+	}
+
+	TSharedPtr<const FVoxelStampRuntime> Runtime = StampRef.ResolveStampRuntime();
+	if (!Runtime)
+	{
+		Runtime = FVoxelStampRuntime::Create(GetWorld(), StampRef, ConstCast(this));
+	}
+	if (!Runtime)
+	{
+		return false;
+	}
+
+	FVoxelBox LocalBounds = Runtime->GetLocalBounds();
+	if (!LocalBounds.IsValid())
+	{
+		return false;
+	}
+
+	if (bWorldSpace)
+	{
+		LocalBounds = LocalBounds.TransformBy(GetComponentTransform());
+	}
+
+	OutBounds = LocalBounds.ToFBox();
+	return true;
 }
 
 ///////////////////////////////////////////////////////////////////////////////

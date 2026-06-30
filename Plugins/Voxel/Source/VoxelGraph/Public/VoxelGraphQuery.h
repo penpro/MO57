@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -34,7 +34,7 @@ public:
 
 	struct FFunctionCallData
 	{
-		const FVoxelNode_CallFunction& Node;
+		const FVoxelNode& Node;
 		const FVoxelGraphQueryImpl& Query;
 	};
 	TOptional<FFunctionCallData> FunctionCallData;
@@ -192,14 +192,14 @@ private:
 	struct FChildKey
 	{
 		const FVoxelCompiledGraph* CompiledGraph = nullptr;
-		const FVoxelNode_CallFunction* FunctionCallNode = nullptr;
+		const FVoxelNode* CallNode = nullptr;
 		const FVoxelGraphQueryImpl* FunctionCallQuery = nullptr;
 
 		FORCEINLINE bool operator==(const FChildKey& Other) const
 		{
 			return
 				CompiledGraph == Other.CompiledGraph &&
-				FunctionCallNode == Other.FunctionCallNode &&
+				CallNode == Other.CallNode &&
 				FunctionCallQuery == Other.FunctionCallQuery;
 		}
 		FORCEINLINE friend uint32 GetTypeHash(const FChildKey& Key)

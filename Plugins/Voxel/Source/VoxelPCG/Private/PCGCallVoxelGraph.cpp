@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "PCGCallVoxelGraph.h"
 
@@ -23,6 +23,7 @@
 #include "Buffer/VoxelSoftObjectPathBuffer.h"
 #include "Graphs/VoxelStampGraphParameters.h"
 #include "Surface/VoxelSurfaceTypeTable.h"
+#include "Scatter/VoxelScatterFunctionLibrary.h"
 
 #include "PCGComponent.h"
 #include "Helpers/PCGAsync.h"
@@ -132,7 +133,14 @@ TArray<FPCGSettingsOverridableParam> UPCGCallVoxelGraphSettings::GatherOverridab
 	{
 		PCGSettingsHelpers::FPCGGetAllOverridableParamsConfig Config;
 		Config.bExcludeSuperProperties = true;
+#if VOXEL_ENGINE_VERSION >= 508
+		Config.ShouldKeepPropertyFunc = [](const FProperty* Property, int32)
+		{
+			return !Property->HasAnyPropertyFlags(CPF_DisableEditOnInstance);
+		};
+#else
 		Config.ExcludePropertyFlags = CPF_DisableEditOnInstance;
+#endif
 		OverridableParams.Append(PCGSettingsHelpers::GetAllOverridableParams(ScriptStruct, Config));
 	}
 
@@ -413,12 +421,36 @@ void FPCGCallVoxelGraphContext::InitializeUserParametersStruct()
 		}
 	}
 
+	if (!InputData.GetParamsByPin(PCGPinConstants::DefaultParamsLabel).IsEmpty())
+	{
+		bHasParamConnected = true;
+	}
+
 	if (!bHasParamConnected)
 	{
 		return;
 	}
 
 	ParameterPinOverrides.InitializeFromBagStruct(Settings->ParameterPinOverrides.GetPropertyBagStruct());
+
+	const TSharedPtr<FVoxelGraphParametersView> ParametersView = Settings->GetParametersView();
+	if (!ParametersView)
+	{
+		return;
+	}
+
+	for (const FVoxelParameterView* ParameterView : ParametersView->GetChildren())
+	{
+		const FVoxelParameter Parameter = ParameterView->GetParameter();
+		const FPropertyBagPropertyDesc* Desc = ParameterPinOverrides.FindPropertyDescByName(Parameter.Name);
+		if (!Desc)
+		{
+			continue;
+		}
+
+		void* TargetAddress = ParameterPinOverrides.GetMutableValue().GetMemory() + Desc->CachedProperty->GetOffset_ForInternal();
+		ParameterView->GetDefaultValue().ExportToProperty(*Desc->CachedProperty, TargetAddress);;
+	}
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -580,11 +612,6 @@ bool FPCGCallVoxelGraphElement::PrepareDataInternal(FPCGContext* InContext) cons
 
 		for (const FPropertyBagPropertyDesc& PropertyDesc : PropertyBagStruct->GetPropertyDescs())
 		{
-			if (Context->InputData.GetInputCountByPin(PropertyDesc.Name) == 0)
-			{
-				continue;
-			}
-
 			if (!ensure(PropertyDesc.CachedProperty))
 			{
 				continue;
@@ -621,6 +648,10 @@ bool FPCGCallVoxelGraphElement::PrepareDataInternal(FPCGContext* InContext) cons
 	{
 		LocalToWorld = TargetActor->ActorToWorld();
 	}
+
+	// Match scatter/meshing: run the graph in absolute (world-origin independent) space
+	Context->OriginOffset = World ? FVector(World->OriginLocation) : FVector::ZeroVector;
+	LocalToWorld.AddToTranslation(Context->OriginOffset);
 
 	Context->DependencyCollector = MakeShared<FVoxelDependencyCollector>(STATIC_FNAME("PCGCallVoxelGraph")); // GVoxelPCGTracker->GetDependencyTracker(*Context->SourceComponent);
 
@@ -1035,6 +1066,7 @@ bool FPCGCallVoxelGraphElement::ExecuteInternal(FPCGContext* InContext) const
 			Evaluator = Context->Evaluator,
 			DependencyCollector = Context->DependencyCollector.ToSharedRef(),
 			Bounds = Context->Bounds,
+			OriginOffset = Context->OriginOffset,
 			PinsToQuery = Context->PinsToQuery,
 			Layers = Context->Layers.ToSharedRef(),
 			SurfaceTypeTable = Context->SurfaceTypeTable.ToSharedRef(),
@@ -1047,6 +1079,7 @@ bool FPCGCallVoxelGraphElement::ExecuteInternal(FPCGContext* InContext) const
 				Evaluator,
 				DependencyCollector,
 				Bounds,
+				OriginOffset,
 				PinsToQuery,
 				Layers,
 				SurfaceTypeTable,
@@ -1072,6 +1105,7 @@ FVoxelFuture FPCGCallVoxelGraphElement::Compute(
 	const TVoxelNodeEvaluator<FVoxelOutputNode_OutputPoints>& Evaluator,
 	const TSharedRef<FVoxelDependencyCollector>& DependencyCollector,
 	const FVoxelBox& Bounds,
+	const FVector& OriginOffset,
 	const TVoxelSet<FName>& PinsToQuery,
 	const TSharedRef<FVoxelLayers>& Layers,
 	const TSharedRef<FVoxelSurfaceTypeTable>& SurfaceTypeTable,
@@ -1124,7 +1158,7 @@ FVoxelFuture FPCGCallVoxelGraphElement::Compute(
 		{
 			const FPCGPoint& Point = Points[Index];
 
-			Position.Set(Index, Point.Transform.GetTranslation());
+			Position.Set(Index, Point.Transform.GetTranslation() + OriginOffset);
 			Rotation.Set(Index, FQuat4f(Point.Transform.GetRotation()));
 			Scale.Set(Index, FVector3f(Point.Transform.GetScale3D()));
 			Density.Set(Index, Point.Density);
@@ -1159,7 +1193,7 @@ FVoxelFuture FPCGCallVoxelGraphElement::Compute(
 	FVoxelGraphQueryImpl& Query = Context.MakeQuery();
 	Query.AddParameter<FVoxelGraphParameters::FQuery>(VoxelQuery);
 	Query.AddParameter<FVoxelGraphParameters::FPointSet>().Value = PointSet;
-	Query.AddParameter<FVoxelGraphParameters::FPCGBounds>(Bounds);
+	Query.AddParameter<FVoxelGraphParameters::FPointSetChunkBounds>(Bounds.ShiftBy(OriginOffset), false);
 
 	TVoxelMap<FName, TVoxelArray<FPCGPoint>> PinToNewPoints;
 	TVoxelMap<FName, TVoxelArray<TFunction<void(UPCGMetadata&, TVoxelArray<FPCGPoint>&)>>> PinToMetadataWriters;
@@ -1194,7 +1228,7 @@ FVoxelFuture FPCGCallVoxelGraphElement::Compute(
 
 				for (int32 Index = 0; Index < NewPoints.Num(); Index++)
 				{
-					NewPoints[Index].Transform.SetTranslation((*Position)[Index]);
+					NewPoints[Index].Transform.SetTranslation((*Position)[Index] - OriginOffset);
 				}
  			}
 

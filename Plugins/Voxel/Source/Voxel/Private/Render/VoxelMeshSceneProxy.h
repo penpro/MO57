@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -45,7 +45,12 @@ public:
 	virtual bool IsRayTracingStaticRelevant() const override;
 	virtual bool HasRayTracingRepresentation() const override;
 
+#if VOXEL_ENGINE_VERSION >= 508
+	virtual ERayTracingPrimitiveFlags GetRayTracingPrimitiveFlags() override;
+	virtual void GetStaticRayTracingInstances(FStaticRayTracingInstances& OutRayTracingInstances) override;
+#else
 	virtual ERayTracingPrimitiveFlags GetCachedRayTracingInstance(FRayTracingInstance& RayTracingInstance) override;
+#endif
 	virtual TArray<FRayTracingGeometry*> GetStaticRayTracingGeometries() const override;
 	virtual RayTracing::UE_506_SWITCH(GeometryGroupHandle, FGeometryGroupHandle) GetRayTracingGeometryGroupHandle() const override;
 #endif

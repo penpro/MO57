@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "Navigation/VoxelNavigationComponent.h"
 #include "Navigation/VoxelNavigationMesh.h"
@@ -16,17 +16,9 @@ UVoxelNavigationComponent::UVoxelNavigationComponent()
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
 
-void UVoxelNavigationComponent::SetNavigationMesh(const TSharedPtr<const FVoxelNavigationMesh>& NewNavigationMesh)
+void UVoxelNavigationComponent::UpdateNavigationMesh()
 {
 	VOXEL_FUNCTION_COUNTER();
-
-	NavigationMesh = NewNavigationMesh;
-
-	if (NavigationMesh)
-	{
-		ensure(!NavigationMesh->IsEmpty());
-		NavigationMesh->UpdateStats();
-	}
 
 	UpdateBounds();
 	MarkRenderStateDirty();
@@ -49,22 +41,22 @@ void UVoxelNavigationComponent::SetNavigationMesh(const TSharedPtr<const FVoxelN
 
 bool UVoxelNavigationComponent::IsNavigationRelevant() const
 {
-	return NavigationMesh.IsValid();
+	return GetNavigationMesh().IsValid();
 }
 
 bool UVoxelNavigationComponent::DoCustomNavigableGeometryExport(FNavigableGeometryExport& GeomExport) const
 {
 	VOXEL_FUNCTION_COUNTER();
 
-	if (NavigationMesh)
+	if (GetNavigationMesh())
 	{
-		const TArray<FVector> DoubleVertices(NavigationMesh->Vertices);
+		const TArray<FVector> DoubleVertices(GetNavigationMesh()->Vertices);
 
 		GeomExport.ExportCustomMesh(
 			DoubleVertices.GetData(),
-			NavigationMesh->Vertices.Num(),
-			NavigationMesh->Indices.GetData(),
-			NavigationMesh->Indices.Num(),
+			GetNavigationMesh()->Vertices.Num(),
+			GetNavigationMesh()->Indices.GetData(),
+			GetNavigationMesh()->Indices.Num(),
 			GetComponentTransform());
 	}
 
@@ -73,7 +65,7 @@ bool UVoxelNavigationComponent::DoCustomNavigableGeometryExport(FNavigableGeomet
 
 FBoxSphereBounds UVoxelNavigationComponent::CalcBounds(const FTransform& LocalToWorld) const
 {
-	const FVoxelBox LocalBounds = NavigationMesh ? NavigationMesh->LocalBounds : FVoxelBox();
+	const FVoxelBox LocalBounds = GetNavigationMesh() ? GetNavigationMesh()->LocalBounds : FVoxelBox();
 	ensure(LocalBounds.IsValid());
 	return LocalBounds.TransformBy(LocalToWorld).ToFBox();
 }
@@ -85,16 +77,16 @@ void UVoxelNavigationComponent::OnComponentDestroyed(const bool bDestroyingHiera
 	Super::OnComponentDestroyed(bDestroyingHierarchy);
 
 	// Clear memory
-	NavigationMesh.Reset();
+	GetNavigationMesh().Reset();
 }
 
 FPrimitiveSceneProxy* UVoxelNavigationComponent::CreateSceneProxy()
 {
 	if (!GIsEditor ||
-		!NavigationMesh)
+		!GetNavigationMesh())
 	{
 		return nullptr;
 	}
 
-	return new FVoxelNavigationMeshSceneProxy(*this, NavigationMesh.ToSharedRef());
+	return new FVoxelNavigationMeshSceneProxy(*this, GetNavigationMesh().ToSharedRef());
 }

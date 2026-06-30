@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -40,6 +40,9 @@
 		FString::Printf(Format, ##__VA_ARGS__); \
 	}
 
+#undef ensureMsgf
+#define ensureMsgf(InExpression, InFormat, ...) ((!!InExpression) || [&]{ FString::Printf(InFormat, ##__VA_ARGS__); }())
+
 // Syntax highlighting is wrong otherwise
 #undef TEXTVIEW
 #define TEXTVIEW(String) FStringView(TEXT(String))
@@ -53,9 +56,6 @@
 #define INTELLISENSE_SKIP(...) __VA_ARGS__
 #define INTELLISENSE_SWITCH(True, False) False
 #endif
-
-// This is defined in the generated.h. It lets you use GetOuterASomeOuter. Resharper/intellisense are confused when it's used, so define it for them
-#define INTELLISENSE_DECLARE_WITHIN(Name) INTELLISENSE_ONLY(DECLARE_WITHIN(Name))
 
 #define INTELLISENSE_PRINTF(Format, ...) INTELLISENSE_ONLY((void)FString::Printf(TEXT(Format), __VA_ARGS__);)
 
@@ -193,7 +193,7 @@ FORCEINLINE const FName& VoxelStaticName(const T&)
 #define VOXEL_GET_TYPE(Value) std::decay_t<decltype(Value)>
 #define VOXEL_THIS_TYPE VOXEL_GET_TYPE(*this)
 // This is needed in classes, where just doing class Name would fwd declare it in the class scope
-#define VOXEL_FWD_DECLARE_CLASS(Name) void PREPROCESSOR_JOIN(__VoxelDeclareDummy_, __LINE__)(class Name*);
+#define VOXEL_FWD_DECLARE_CLASS(Name) void UE_JOIN(__VoxelDeclareDummy_, __LINE__)(class Name*);
 
 // This makes the macro parameter show up as a class in Resharper
 #if INTELLISENSE_PARSER
@@ -231,7 +231,7 @@ struct VOXELCORE_API FVoxelConsoleVariableHelper
 		Name,  \
 		TEXT(Description)); \
 	\
-	static const FVoxelConsoleVariableHelper PREPROCESSOR_JOIN(VoxelConsoleVariableHelper, __COUNTER__)([] \
+	static const FVoxelConsoleVariableHelper UE_JOIN(VoxelConsoleVariableHelper, __COUNTER__)([] \
 	{ \
 		static Type LastValue = Default; \
 		if (LastValue != Name) \
@@ -247,7 +247,7 @@ struct VOXELCORE_API FVoxelConsoleVariableHelper
 
 #define VOXEL_CONSOLE_COMMAND(Command, Description) \
 	static void VoxelConsoleCommand(TVoxelCounterDummy<__COUNTER__>, const TArray<FString>& Args); \
-	static FAutoConsoleCommand PREPROCESSOR_JOIN(VoxelAutoCmd, __COUNTER__)( \
+	static FAutoConsoleCommand UE_JOIN(VoxelAutoCmd, __COUNTER__)( \
 	    TEXT(Command), \
 	    TEXT(Description), \
 		MakeLambdaDelegate([](const TArray<FString>& Args) \
@@ -261,7 +261,7 @@ struct VOXELCORE_API FVoxelConsoleVariableHelper
 
 #define VOXEL_CONSOLE_WORLD_COMMAND(Command, Description) \
 	static void VoxelConsoleCommand(TVoxelCounterDummy<__COUNTER__>, const TArray<FString>& Args, UWorld* World); \
-	static FAutoConsoleCommand PREPROCESSOR_JOIN(VoxelAutoCmd, __COUNTER__)( \
+	static FAutoConsoleCommand UE_JOIN(VoxelAutoCmd, __COUNTER__)( \
 	    TEXT(Command), \
 	    TEXT(Description), \
 		MakeLambdaDelegate([](const TArray<FString>& Args, UWorld* World, FOutputDevice&) \
@@ -274,9 +274,9 @@ struct VOXELCORE_API FVoxelConsoleVariableHelper
 
 #define VOXEL_EXPAND(X) X
 
-#define VOXEL_APPEND_LINE(X) PREPROCESSOR_JOIN(X, __LINE__)
+#define VOXEL_APPEND_LINE(X) UE_JOIN(X, __LINE__)
 
-#define ON_SCOPE_EXIT_IMPL(Suffix) const auto PREPROCESSOR_JOIN(PREPROCESSOR_JOIN(ScopeGuard_, __LINE__), Suffix) = ::ScopeExitSupport::FScopeGuardSyntaxSupport() + [&]()
+#define ON_SCOPE_EXIT_IMPL(Suffix) const auto UE_JOIN(UE_JOIN(ScopeGuard_, __LINE__), Suffix) = ::ScopeExitSupport::FScopeGuardSyntaxSupport() + [&]()
 
 // Unlike GENERATE_MEMBER_FUNCTION_CHECK, this supports inheritance
 // However, it doesn't do any signature check
@@ -343,7 +343,7 @@ struct TVoxelCounterDummy
 
 #define VOXEL_RUN_ON_STARTUP(Phase, Priority) \
 	static void VoxelStartupFunction(TVoxelCounterDummy<__COUNTER__>); \
-	static const FVoxelRunOnStartupPhaseHelper PREPROCESSOR_JOIN(VoxelRunOnStartupPhaseHelper, __COUNTER__)(EVoxelRunOnStartupPhase::Phase, Priority, [] \
+	static const FVoxelRunOnStartupPhaseHelper UE_JOIN(VoxelRunOnStartupPhaseHelper, __COUNTER__)(EVoxelRunOnStartupPhase::Phase, Priority, [] \
 	{ \
 		VoxelStartupFunction(TVoxelCounterDummy<__COUNTER__ - 2>()); \
 	}); \
@@ -375,7 +375,7 @@ namespace Voxel::Internal
 
 #define VOXEL_ON_CONSTRUCT() Voxel::Internal::FOnConstruct VOXEL_APPEND_LINE(__OnConstruct) = Voxel::Internal::FOnConstruct() + [this]
 
-#define INITIALIZATION_LAMBDA static const Voxel::Internal::FOnConstruct PREPROCESSOR_JOIN(__UniqueId, __COUNTER__) = Voxel::Internal::FOnConstruct() + []
+#define INITIALIZATION_LAMBDA static const Voxel::Internal::FOnConstruct UE_JOIN(__UniqueId, __COUNTER__) = Voxel::Internal::FOnConstruct() + []
 
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
@@ -1217,6 +1217,30 @@ FORCEINLINE TSoftObjectPtr<T> MakeSoftObjectPtr(const FString& Path)
 		auto& Property(const Class& Object); \
 	}
 
+// Usage: DEFINE_PRIVATE_STATIC_ACCESS(FMyClass, MyProperty) in global scope, then PrivateAccess::MyProperty() from anywhere
+#define DEFINE_PRIVATE_STATIC_ACCESS(Class, Property) \
+	namespace PrivateAccess \
+	{ \
+		template<typename> \
+		struct TClass_ ## Property; \
+		\
+		template<> \
+		struct TClass_ ## Property<Class> \
+		{ \
+			template<auto* PropertyPtr> \
+			struct TProperty_ ## Property \
+			{ \
+				friend auto& Property() \
+				{ \
+					return *PropertyPtr; \
+				} \
+			}; \
+		}; \
+		template struct TClass_ ## Property<Class>::TProperty_ ## Property<&Class::Property>; \
+		\
+		auto& Property(); \
+	}
+
 // Usage: DEFINE_PRIVATE_ACCESS_FUNCTION(FMyClass, MyFunction) in global scope, then PrivateAccess::MyFunction(MyObject)(MyArgs) from anywhere
 #define DEFINE_PRIVATE_ACCESS_FUNCTION(Class, Function) \
 	namespace PrivateAccess \
@@ -1246,6 +1270,32 @@ FORCEINLINE TSoftObjectPtr<T> MakeSoftObjectPtr(const FString& Path)
 		{ \
 			return Function(const_cast<Class&>(Object)); \
 		} \
+	}
+
+// Usage: DEFINE_PRIVATE_STATIC_ACCESS_FUNCTION(FMyClass, MyFunction) in global scope, then PrivateAccess::MyFunction()(MyArgs) from anywhere
+#define DEFINE_PRIVATE_STATIC_ACCESS_FUNCTION(Class, Function) \
+	namespace PrivateAccess \
+	{ \
+		template<typename> \
+		struct TClass_ ## Function; \
+		\
+		template<> \
+		struct TClass_ ## Function<Class> \
+		{ \
+			template<auto FunctionPtr> \
+			struct TFunction_ ## Function \
+			{ \
+				friend auto Function() \
+				{ \
+					return []<typename... ArgTypes>(ArgTypes&&... Args) \
+					{ \
+						return (*FunctionPtr)(Forward<ArgTypes>(Args)...); \
+					}; \
+				} \
+			}; \
+		}; \
+		template struct TClass_ ## Function<Class>::TFunction_ ## Function<&Class::Function>; \
+		auto Function(); \
 	}
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -1283,23 +1333,31 @@ private:
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
 
-struct FVoxelRangeIteratorEnd
+struct FVoxelIteratorEnd
 {
 };
 
 template<typename Type>
-struct TVoxelRangeIterator
+struct TVoxelIterator
 {
 	FORCEINLINE Type begin() const
 	{
 		return static_cast<const Type&>(*this);
 	}
-	FORCEINLINE static FVoxelRangeIteratorEnd end()
+	FORCEINLINE static FVoxelIteratorEnd end()
 	{
 		return {};
 	}
-    FORCEINLINE bool operator!=(const FVoxelRangeIteratorEnd&) const
+    FORCEINLINE bool operator!=(const FVoxelIteratorEnd&) const
     {
         return bool(static_cast<const Type&>(*this));
     }
+
+	FORCEINLINE auto operator->() const
+	{
+		if constexpr (std::is_reference_v<decltype(DeclVal<Type>().operator*())>)
+		{
+			return &static_cast<const Type&>(*this).operator*();
+		}
+	}
 };

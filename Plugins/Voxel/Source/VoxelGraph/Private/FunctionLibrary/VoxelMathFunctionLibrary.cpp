@@ -1,10 +1,64 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "FunctionLibrary/VoxelMathFunctionLibrary.h"
 #include "VoxelGraphMigration.h"
 #include "Utilities/VoxelBufferMathUtilities.h"
 #include "Utilities/VoxelBufferTransformUtilities.h"
 #include "VoxelMathFunctionLibraryImpl.ispc.generated.h"
+
+VOXEL_REGISTER_FUNCTION(UVoxelMathFunctionLibrary, UnrotateVector);
+VOXEL_REGISTER_FUNCTION(UVoxelMathFunctionLibrary, TransformLocation);
+VOXEL_REGISTER_FUNCTION(UVoxelMathFunctionLibrary, SmoothUnion);
+VOXEL_REGISTER_FUNCTION(UVoxelMathFunctionLibrary, SmoothSubtraction);
+VOXEL_REGISTER_FUNCTION(UVoxelMathFunctionLibrary, SmoothMin);
+VOXEL_REGISTER_FUNCTION(UVoxelMathFunctionLibrary, SmoothMax);
+VOXEL_REGISTER_FUNCTION(UVoxelMathFunctionLibrary, SmoothIntersection);
+VOXEL_REGISTER_FUNCTION(UVoxelMathFunctionLibrary, RotateVector2D);
+VOXEL_REGISTER_FUNCTION(UVoxelMathFunctionLibrary, RotateVector);
+VOXEL_REGISTER_FUNCTION(UVoxelMathFunctionLibrary, MakeVoid);
+VOXEL_REGISTER_FUNCTION(UVoxelMathFunctionLibrary, MakeVector2D);
+VOXEL_REGISTER_FUNCTION(UVoxelMathFunctionLibrary, MakeVector);
+VOXEL_REGISTER_FUNCTION(UVoxelMathFunctionLibrary, MakeTransform);
+VOXEL_REGISTER_FUNCTION(UVoxelMathFunctionLibrary, MakeNormal);
+VOXEL_REGISTER_FUNCTION(UVoxelMathFunctionLibrary, MakeLinearColor);
+VOXEL_REGISTER_FUNCTION(UVoxelMathFunctionLibrary, MakeIntVector4);
+VOXEL_REGISTER_FUNCTION(UVoxelMathFunctionLibrary, MakeIntVector);
+VOXEL_REGISTER_FUNCTION(UVoxelMathFunctionLibrary, MakeIntPoint);
+VOXEL_REGISTER_FUNCTION(UVoxelMathFunctionLibrary, MakeInt64Vector4);
+VOXEL_REGISTER_FUNCTION(UVoxelMathFunctionLibrary, MakeInt64Vector);
+VOXEL_REGISTER_FUNCTION(UVoxelMathFunctionLibrary, MakeInt64Point);
+VOXEL_REGISTER_FUNCTION(UVoxelMathFunctionLibrary, MakeInt32Range);
+VOXEL_REGISTER_FUNCTION(UVoxelMathFunctionLibrary, MakeFloatRange);
+VOXEL_REGISTER_FUNCTION(UVoxelMathFunctionLibrary, MakeDoubleVector2D);
+VOXEL_REGISTER_FUNCTION(UVoxelMathFunctionLibrary, MakeDoubleVector);
+VOXEL_REGISTER_FUNCTION(UVoxelMathFunctionLibrary, MakeDoubleLinearColor);
+VOXEL_REGISTER_FUNCTION(UVoxelMathFunctionLibrary, LerpRotation);
+VOXEL_REGISTER_FUNCTION(UVoxelMathFunctionLibrary, InverseTransformLocation);
+VOXEL_REGISTER_FUNCTION(UVoxelMathFunctionLibrary, GetUpVector);
+VOXEL_REGISTER_FUNCTION(UVoxelMathFunctionLibrary, GetRightVector);
+VOXEL_REGISTER_FUNCTION(UVoxelMathFunctionLibrary, GetForwardVector);
+VOXEL_REGISTER_FUNCTION(UVoxelMathFunctionLibrary, CombineTransform);
+VOXEL_REGISTER_FUNCTION(UVoxelMathFunctionLibrary, CombineRotation);
+VOXEL_REGISTER_FUNCTION(UVoxelMathFunctionLibrary, BreakVector2D);
+VOXEL_REGISTER_FUNCTION(UVoxelMathFunctionLibrary, BreakVector);
+VOXEL_REGISTER_FUNCTION(UVoxelMathFunctionLibrary, BreakTransform);
+VOXEL_REGISTER_FUNCTION(UVoxelMathFunctionLibrary, BreakNormal);
+VOXEL_REGISTER_FUNCTION(UVoxelMathFunctionLibrary, BreakLinearColor);
+VOXEL_REGISTER_FUNCTION(UVoxelMathFunctionLibrary, BreakIntVector4);
+VOXEL_REGISTER_FUNCTION(UVoxelMathFunctionLibrary, BreakIntVector);
+VOXEL_REGISTER_FUNCTION(UVoxelMathFunctionLibrary, BreakIntPoint);
+VOXEL_REGISTER_FUNCTION(UVoxelMathFunctionLibrary, BreakInt64Vector4);
+VOXEL_REGISTER_FUNCTION(UVoxelMathFunctionLibrary, BreakInt64Vector);
+VOXEL_REGISTER_FUNCTION(UVoxelMathFunctionLibrary, BreakInt64Point);
+VOXEL_REGISTER_FUNCTION(UVoxelMathFunctionLibrary, BreakInt32Range);
+VOXEL_REGISTER_FUNCTION(UVoxelMathFunctionLibrary, BreakFloatRange);
+VOXEL_REGISTER_FUNCTION(UVoxelMathFunctionLibrary, BreakDoubleVector2D);
+VOXEL_REGISTER_FUNCTION(UVoxelMathFunctionLibrary, BreakDoubleVector);
+VOXEL_REGISTER_FUNCTION(UVoxelMathFunctionLibrary, BreakDoubleLinearColor);
+
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
 
 FVoxelTransformBuffer UVoxelMathFunctionLibrary::MakeTransform(
 	const FVoxelVectorBuffer& Translation,

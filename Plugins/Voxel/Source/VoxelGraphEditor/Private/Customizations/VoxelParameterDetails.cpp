@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "Customizations/VoxelParameterDetails.h"
 #include "VoxelGraph.h"
@@ -406,7 +406,7 @@ void FVoxelParameterDetails::BuildRow(
 
 	TSharedRef<SWidget> NameWidget =
 		SNew(SVoxelDetailText)
-		.ColorAndOpacity(IsOrphan() ? FStyleColors::Error : FSlateColor::UseForeground())
+		.ColorAndOpacity(IsOrphan() ? FStyleColors::Warning : FSlateColor::UseForeground())
 		.Text_Lambda(MakeWeakPtrLambda(this, [this]
 		{
 			if (DisplayName.IsEmpty())
@@ -417,6 +417,28 @@ void FVoxelParameterDetails::BuildRow(
 			return FText::FromString(DisplayName);
 		}))
 		.ToolTipText_Lambda(GetRowToolTip);
+
+	if (IsOrphan())
+	{
+		NameWidget =
+			SNew(SHorizontalBox)
+			.ToolTipText(INVTEXT("This parameter is orphaned, to remove it, reset it to default"))
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			.VAlign(VAlign_Center)
+			[
+				NameWidget
+			]
+			+ SHorizontalBox::Slot()
+			.Padding(4.f, 2.f)
+			.AutoWidth()
+			.VAlign(VAlign_Center)
+			[
+				SNew(SImage)
+				.Image(FAppStyle::GetBrush("Icons.Error"))
+				.ColorAndOpacity(FSlateColor::UseSubduedForeground())
+			];
+	}
 
 	if (!bForceEnableOverride &&
 		!IsOrphan())

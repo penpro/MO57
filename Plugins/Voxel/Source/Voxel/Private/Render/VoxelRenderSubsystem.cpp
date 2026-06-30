@@ -1,8 +1,9 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "Render/VoxelRenderSubsystem.h"
 #include "Render/VoxelRenderChunk.h"
 #include "Render/VoxelMeshRenderProxy.h"
+#include "Render/VoxelRenderInvokersManager.h"
 #include "Render/VoxelRenderComponentCreator.h"
 #include "Nanite/VoxelNaniteMesh.h"
 #include "Nanite/VoxelNaniteMaterialRenderer.h"
@@ -12,6 +13,7 @@
 #include "VoxelMesher.h"
 #include "VoxelLayers.h"
 #include "VoxelRenderTree.h"
+#include "VoxelTaskContext.h"
 #include "VoxelCellGenerator.h"
 #include "VoxelTextureManager.h"
 #include "VoxelQueryDebugDrawer.h"
@@ -41,6 +43,7 @@ void FVoxelRenderSubsystem::LoadFromPrevious(FVoxelSubsystem& InPreviousSubsyste
 
 	TextureManager = PreviousSubsystem.TextureManager;
 	NaniteMaterialRenderer = PreviousSubsystem.NaniteMaterialRenderer;
+	InvokerView = PreviousSubsystem.InvokerView;
 
 	ensure(!PreviousSubsystem.PreviousTextureManager);
 	PreviousTextureManager = PreviousSubsystem.TextureManager;
@@ -68,6 +71,7 @@ void FVoxelRenderSubsystem::LoadFromPrevious(FVoxelSubsystem& InPreviousSubsyste
 		PreviousSubsystem.GetConfig().DisplacementFade != GetConfig().DisplacementFade ||
 		PreviousSubsystem.GetConfig().NanitePositionPrecision != GetConfig().NanitePositionPrecision ||
 		PreviousSubsystem.GetConfig().bCompressNaniteVertices != GetConfig().bCompressNaniteVertices ||
+		PreviousSubsystem.GetConfig().bUseNaniteBuilder != GetConfig().bUseNaniteBuilder ||
 
 		PreviousSubsystem.GetConfig().bEnableLumen != GetConfig().bEnableLumen ||
 		PreviousSubsystem.GetConfig().bEnableRaytracing != GetConfig().bEnableRaytracing ||
@@ -77,6 +81,7 @@ void FVoxelRenderSubsystem::LoadFromPrevious(FVoxelSubsystem& InPreviousSubsyste
 		PreviousSubsystem.GetConfig().RaytracingMaxLOD != GetConfig().RaytracingMaxLOD ||
 		PreviousSubsystem.GetConfig().MeshDistanceFieldMaxLOD != GetConfig().MeshDistanceFieldMaxLOD ||
 		PreviousSubsystem.GetConfig().MeshDistanceFieldBias != GetConfig().MeshDistanceFieldBias ||
+		PreviousSubsystem.GetConfig().MeshDistanceFieldBricksPerChunk != GetConfig().MeshDistanceFieldBricksPerChunk ||
 		PreviousSubsystem.GetConfig().ComponentSettings != GetConfig().ComponentSettings)
 	{
 		if (RenderTree)
@@ -87,6 +92,12 @@ void FVoxelRenderSubsystem::LoadFromPrevious(FVoxelSubsystem& InPreviousSubsyste
 
 		// No need to reset texture manager
 		NaniteMaterialRenderer = nullptr;
+	}
+
+	if (InvokerView &&
+		!InvokerView->Equal(*this, PreviousSubsystem))
+	{
+		InvokerView = nullptr;
 	}
 
 	if (PreviousSubsystem.GetConfig().MegaMaterialProxy == GetConfig().MegaMaterialProxy)
@@ -139,6 +150,11 @@ void FVoxelRenderSubsystem::Initialize()
 		!NaniteMaterialRenderer)
 	{
 		NaniteMaterialRenderer = MakeShared_Stats<FVoxelNaniteMaterialRenderer>(GetConfig().MegaMaterialProxy);
+	}
+
+	if (!InvokerView)
+	{
+		InvokerView = FVoxelRenderInvokersManager::Get(GetConfig().World)->MakeView(*this);
 	}
 }
 
@@ -206,19 +222,31 @@ void FVoxelRenderSubsystem::Compute()
 		return;
 	}
 
-	RenderTree->Update(*this);
-
-	StartMeshingTasks().Then_AsyncThread([this]
+	const TVoxelFuture<const FVoxelRenderInvokersContainer> FutureLODInvokers = INLINE_LAMBDA
 	{
-		StartRenderTasks().Then_AnyThread([this]
+		FVoxelDependencyCollector DependencyCollector(STATIC_FNAME("FVoxelRenderSubsystem Invokers"));
+
+		const TVoxelFuture<const FVoxelRenderInvokersContainer> Result = GetTaskContext().Wrap(InvokerView->GetInvokers(DependencyCollector));
+		InvokersDependencyTracker = Finalize(DependencyCollector);
+		return Result;
+	};
+
+	FutureLODInvokers.Then_AsyncThread([this](const FVoxelRenderInvokersContainer& InvokersContainer)
+	{
+		RenderTree->Update(*this, InvokersContainer);
+
+		StartMeshingTasks().Then_AsyncThread([this]
 		{
-			if (GetConfig().bEnableNanite)
+			StartRenderTasks().Then_AnyThread([this]
 			{
-				Voxel::AsyncTask([this]
+				if (GetConfig().bEnableNanite)
 				{
-					FinalizeRender_Nanite();
-				});
-			}
+					Voxel::AsyncTask([this]
+					{
+						FinalizeRender_Nanite();
+					});
+				}
+			});
 		});
 	});
 }
@@ -275,7 +303,8 @@ bool FVoxelRenderSubsystem::TryInitializeRootChunks()
 {
 	VOXEL_FUNCTION_COUNTER();
 
-	if (!GetConfig().CameraPosition.IsSet())
+	if (!InvokerView ||
+		!InvokerView->HasInvokers())
 	{
 		return false;
 	}
@@ -422,17 +451,20 @@ FVoxelFuture FVoxelRenderSubsystem::StartMeshingTasks()
 					Config.LocalToWorld,
 					*Config.MegaMaterialProxy,
 					Config.BlockinessMetadata,
-					Config.bGenerateMeshDistanceFields && Chunk->ChunkKey.LOD <= Config.MeshDistanceFieldMaxLOD);
+					Config.bGenerateMeshDistanceFields && Chunk->ChunkKey.LOD <= Config.MeshDistanceFieldMaxLOD,
+					Config.MeshDistanceFieldBias,
+					Config.MeshDistanceFieldBricksPerChunk);
 
 				Mesher.bQueryMetadata = true;
 
 				Chunk->Mesh = Mesher.CreateMesh(CachedHeights);
-				Chunk->MeshDependencyTracker = Finalize(DependencyCollector);
 
 				if (Mesher.CellGenerator)
 				{
 					CachedHeights = Mesher.CellGenerator->Heights;
 				}
+
+				Chunk->MeshDependencyTracker = Finalize(DependencyCollector);
 			}
 		}));
 	}

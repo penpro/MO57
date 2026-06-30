@@ -1,29 +1,26 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
 #include "VoxelMinimal.h"
+#include "VoxelNavigationMeshInterface.h"
 #include "VoxelNavigationComponent.generated.h"
 
 class FVoxelNavigationMesh;
 
 UCLASS()
-class VOXEL_API UVoxelNavigationComponent final : public UPrimitiveComponent
+class VOXEL_API UVoxelNavigationComponent final
+	: public UPrimitiveComponent
+	, public IVoxelNavigationMeshInterface
 {
 	GENERATED_BODY()
 
 public:
 	UVoxelNavigationComponent();
 
-	TSharedPtr<const FVoxelNavigationMesh> GetNavigationMesh() const
-	{
-		return NavigationMesh;
-	}
-
-	void SetNavigationMesh(const TSharedPtr<const FVoxelNavigationMesh>& NewNavigationMesh);
-
 public:
 	//~ Begin UPrimitiveComponent Interface
+	virtual void UpdateNavigationMesh() override;
 	virtual bool ShouldCreatePhysicsState() const override { return false; }
 	virtual bool IsNavigationRelevant() const override;
 	virtual bool DoCustomNavigableGeometryExport(FNavigableGeometryExport& GeomExport) const override;
@@ -31,7 +28,4 @@ public:
 	virtual void OnComponentDestroyed(bool bDestroyingHierarchy) override;
 	virtual FPrimitiveSceneProxy* CreateSceneProxy() override;
 	//~ End UPrimitiveComponent Interface
-
-private:
-	TSharedPtr<const FVoxelNavigationMesh> NavigationMesh;
 };

@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -6,11 +6,13 @@
 #include "VoxelMesh.h"
 #include "VoxelQuery.h"
 #include "VoxelStackLayer.h"
+#include "VoxelCellGenerator.h"
 #include "VoxelFloatMetadataRef.h"
 #include "Buffer/VoxelFloatBuffers.h"
 
 class FVoxelCellGenerator;
 class FVoxelMegaMaterialProxy;
+struct FVoxelCellGeneratorOutput;
 struct FVoxelCellGeneratorHeights;
 
 class FVoxelMesher
@@ -29,7 +31,9 @@ public:
 	const FTransform LocalToWorld;
 	const FVoxelMegaMaterialProxy& MegaMaterialProxy;
 	const FVoxelFloatMetadataRef BlockinessMetadata;
-	const bool bExportDistances;
+	const bool bGenerateDistanceFields;
+	const float MeshDistanceFieldBias;
+	const int32 MeshDistanceFieldBricksPerChunk;
 
 	const int32 DataSize;
 
@@ -48,7 +52,9 @@ public:
 		const FTransform& LocalToWorld,
 		const FVoxelMegaMaterialProxy& MegaMaterialProxy,
 		FVoxelFloatMetadataRef BlockinessMetadata,
-		bool bExportDistances);
+		bool bGenerateDistanceFields,
+		float MeshDistanceFieldBias,
+		int32 MeshDistanceFieldBricksPerChunk);
 
 	TSharedPtr<FVoxelMesh> CreateMesh(const TSharedPtr<const FVoxelCellGeneratorHeights>& CachedHeights);
 
@@ -117,6 +123,9 @@ private:
 	TVoxelArray<int32> Indices;
 	TVoxelArray<FCell> VertexCells;
 	TVoxelArray<FVector3f> Vertices;
+
+	FVoxelCellGeneratorOutput CellGeneratorOutput;
+
 
 private:
 	void GenerateVertices();

@@ -1,9 +1,9 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelEditorMinimal.h"
 #include "VoxelGraphEnvironment.h"
 #include "VoxelParameterOverridesDetails.h"
-#include "Sculpt/Height/VoxelGraphHeightTool.h"
+#include "Sculpt/Height/Tools/VoxelGraphHeightTool.h"
 
 VOXEL_CUSTOMIZE_CLASS(UVoxelGraphHeightTool)(IDetailLayoutBuilder& DetailLayout)
 {

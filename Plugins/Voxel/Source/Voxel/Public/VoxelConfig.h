@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -16,10 +16,12 @@ struct VOXEL_API FVoxelConfig
 {
 public:
 	const TVoxelObjectPtr<UWorld> World;
+	const uint32 VoxelWorldId;
 	const TVoxelObjectPtr<const AVoxelWorld> VoxelWorld;
 	const TVoxelObjectPtr<const UObject> VoxelWorldObject;
 	const bool bIsEditorWorld;
-	const TOptional<FVector> CameraPosition;
+	const bool bUseCameraInvoker;
+	const float CameraInvokerPositionPrecision;
 	const ERHIFeatureLevel::Type FeatureLevel;
 
 	const FTransform LocalToWorld;
@@ -40,17 +42,22 @@ public:
 	const int32 CollisionChunkSize;
 	const FBodyInstance InvokerCollision;
 	const bool bDoubleSidedCollision;
+	const bool bGenerateOverlapEvents;
+	const int32 CollisionVoxelSize;
 
 	const bool bEnableNavigation;
 	const int32 NavigationChunkSize;
 	const int32 MaxAdditionalNavigationChunks;
 	const bool bGenerateInsideNavMeshBounds;
 	const bool bOnlyGenerateNavigationInEditor;
+	const int32 NavigationVoxelSize;
+	const TVoxelObjectPtr<UClass> NavigationMeshComponentClass;
 
 	const int32 NaniteMaxTessellationLOD;
 	const FDisplacementFadeRange DisplacementFade;
 	const int32 NanitePositionPrecision;
 	const bool bCompressNaniteVertices;
+	const bool bUseNaniteBuilder;
 
 	const bool bEnableLumen;
 	const bool bEnableRaytracing;
@@ -60,9 +67,13 @@ public:
 	const int32 RaytracingMaxLOD;
 	const int32 MeshDistanceFieldMaxLOD;
 	const float MeshDistanceFieldBias;
+	const int32 MeshDistanceFieldBricksPerChunk;
 	const FVoxelComponentSettings ComponentSettings;
+	const bool bCacheTextureStreaming;
 
 	const bool bRenderScatterActors;
+	const bool bUseCameraScatterInvoker;
+	const float CameraScatterInvokerPositionPrecision;
 
 	explicit FVoxelConfig(const AVoxelWorld& VoxelWorld);
 

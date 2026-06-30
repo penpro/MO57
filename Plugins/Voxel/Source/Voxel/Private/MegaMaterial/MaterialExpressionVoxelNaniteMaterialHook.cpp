@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "MaterialExpressionVoxelNaniteMaterialHook.h"
 #include "VoxelHLSLMaterialTranslator.h"
@@ -64,43 +64,18 @@ int32 UMaterialExpressionVoxelNaniteMaterialHook::Compile(FMaterialCompiler* Com
 	FString Code = R"(
 #if MATERIAL_VERTEX_PARAMETERS_VOXEL_VERSION == 6 && MATERIAL_PIXEL_PARAMETERS_VOXEL_VERSION == 8 && IS_NANITE_PASS
 {
-	const uint MaxStreamingPages = PageConstants.y;
-	const int RootPageIndex = Parameters.Voxel_PageIndex - MaxStreamingPages;
-
 	const FCluster Cluster = GetCluster(Parameters.Voxel_PageIndex, Parameters.Voxel_ClusterIndex);
-	const int2 PerPageData = asint(PerPageData_Texture[GetTextureIndex_Log2(RootPageIndex, 8)].rg);
 
-	Parameters.Voxel_ChunkIndicesIndex = PerPageData.y;
+	Parameters.Voxel_ChunkIndicesIndex = GetChunkIndicesIndexInCluster(Cluster, Parameters.Voxel_ClusterIndex);
 
-	Parameters.Voxel_VertexIndicesInChunk.r = GetVertexIndexInVoxelChunk(Cluster, PerPageData, NaniteIndirection_Texture, NaniteIndirection_TextureSizeLog2, Parameters.Voxel_TriIndices.r);
-	Parameters.Voxel_VertexIndicesInChunk.g = GetVertexIndexInVoxelChunk(Cluster, PerPageData, NaniteIndirection_Texture, NaniteIndirection_TextureSizeLog2, Parameters.Voxel_TriIndices.g);
-	Parameters.Voxel_VertexIndicesInChunk.b = GetVertexIndexInVoxelChunk(Cluster, PerPageData, NaniteIndirection_Texture, NaniteIndirection_TextureSizeLog2, Parameters.Voxel_TriIndices.b);
+	Parameters.Voxel_VertexIndicesInChunk.r = GetVertexIndexInVoxelChunk(Cluster, Parameters.Voxel_ClusterIndex, Parameters.Voxel_TriIndices.r);
+	Parameters.Voxel_VertexIndicesInChunk.g = GetVertexIndexInVoxelChunk(Cluster, Parameters.Voxel_ClusterIndex, Parameters.Voxel_TriIndices.g);
+	Parameters.Voxel_VertexIndicesInChunk.b = GetVertexIndexInVoxelChunk(Cluster, Parameters.Voxel_ClusterIndex, Parameters.Voxel_TriIndices.b);
 
 #define VOXEL_NANITE_MATERIAL 1
 }
 #endif
 )";
-
-	{
-		const FString Texture = Writer.GetParameterCode(Compiler->TextureParameter("VOXEL_PerPageData_Texture", DefaultTexture, SAMPLERTYPE_Color));
-
-		Code.ReplaceInline(TEXT("PerPageData_Texture"), *Texture, ESearchCase::CaseSensitive);
-	}
-
-	{
-		const FString TextureSizeLog2 = Writer.GetParameterCode(Compiler->ScalarParameter(
-			"VOXEL_NaniteIndirection_TextureSizeLog2",
-			0.f));
-
-		Code.ReplaceInline(TEXT("NaniteIndirection_TextureSizeLog2"), *TextureSizeLog2, ESearchCase::CaseSensitive);
-
-		const FString Texture = Writer.GetParameterCode(Compiler->TextureParameter(
-			"VOXEL_NaniteIndirection_Texture",
-			DefaultTexture,
-			SAMPLERTYPE_Color));
-
-		Code.ReplaceInline(TEXT("NaniteIndirection_Texture"), *Texture, ESearchCase::CaseSensitive);
-	}
 
 	Writer.AddCodeChunk(MCT_VoidStatement, TEXT("%s"), *Code);
 

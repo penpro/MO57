@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -231,3 +231,17 @@ template<typename T>
 FIntVector operator%(const FIntVector& V, T A) = delete;
 template<typename T>
 FIntVector operator/(const FIntVector& V, T A) = delete;
+
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+
+template<>
+struct TLess<FIntPoint>
+{
+	FORCEINLINE bool operator()(const FIntPoint& A, const FIntPoint& B) const
+	{
+		if (A.X != B.X) return A.X < B.X;
+		return A.Y < B.Y;
+	}
+};

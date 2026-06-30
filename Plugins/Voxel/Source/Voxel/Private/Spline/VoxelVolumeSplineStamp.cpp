@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "Spline/VoxelVolumeSplineStamp.h"
 #include "Spline/VoxelVolumeSplineGraph.h"
@@ -223,6 +223,11 @@ FVoxelBox FVoxelVolumeSplineStampRuntime::GetLocalBounds() const
 	return FVoxelBox::FromBounds(GetChildren());
 }
 
+bool FVoxelVolumeSplineStampRuntime::CanPartiallyInvalidate() const
+{
+	return true;
+}
+
 bool FVoxelVolumeSplineStampRuntime::ShouldUseQueryPrevious() const
 {
 	return GetBlendMode() == EVoxelVolumeBlendMode::Override;
@@ -247,7 +252,7 @@ TVoxelInlineArray<FVoxelBox, 1> FVoxelVolumeSplineStampRuntime::GetChildren() co
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
 
-bool FVoxelVolumeSplineStampRuntime::ShouldFullyInvalidate(
+bool FVoxelVolumeSplineStampRuntime::TryToPartiallyInvalidate(
 	const FVoxelStampRuntime& PreviousRuntime,
 	TVoxelArray<FVoxelBox>& OutLocalBoundsToInvalidate) const
 {
@@ -261,7 +266,7 @@ bool FVoxelVolumeSplineStampRuntime::ShouldFullyInvalidate(
 		MaxWidth != Other.MaxWidth ||
 		*MetadataOverrides != *Other.MetadataOverrides)
 	{
-		return true;
+		return false;
 	}
 
 	const TVoxelSet<FVoxelSplineSegment> OldSegments(Other.Segments);
@@ -283,7 +288,7 @@ bool FVoxelVolumeSplineStampRuntime::ShouldFullyInvalidate(
 		}
 	}
 
-	return false;
+	return true;
 }
 
 ///////////////////////////////////////////////////////////////////////////////

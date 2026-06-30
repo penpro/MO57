@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelRuntime.h"
 #include "VoxelWorld.h"
@@ -36,6 +36,10 @@ FVoxelRuntime::FVoxelRuntime(AVoxelWorld& VoxelWorld)
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
 
+#if VOXEL_ENGINE_VERSION < 506
+DEFINE_PRIVATE_ACCESS(UWorld, CleanupWorldTag)
+#endif
+
 void FVoxelRuntime::Initialize()
 {
 	VOXEL_FUNCTION_COUNTER();
@@ -54,6 +58,20 @@ void FVoxelRuntime::Initialize()
 		{
 			return;
 		}
+
+#if VOXEL_ENGINE_VERSION >= 506
+		if (!VoxelWorld->IsActorInitialized() ||
+			World->IsCleanedUp())
+		{
+			return;
+		}
+#else
+		if (!VoxelWorld->IsActorInitialized() ||
+			PrivateAccess::CleanupWorldTag(*World) != 0)
+		{
+			return;
+		}
+#endif
 
 		Tick();
 	}));
@@ -194,7 +212,7 @@ void FVoxelRuntime::Tick()
 		const FVoxelRenderSubsystem* RenderSubsystem = OldState->GetSubsystemPtr<FVoxelRenderSubsystem>();
 		if (!RenderSubsystem)
 		{
-			ensure(!FApp::CanEverRender());
+			ensure(!FApp::CanEverRender() || World->GetNetMode() == NM_DedicatedServer);
 			return false;
 		}
 

@@ -1,10 +1,9 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
 #include "VoxelCoreMinimal.h"
 #include "Engine/TextureDefines.h"
-#include "VoxelMinimal/VoxelColor3.h"
 #include "VoxelMinimal/Containers/VoxelArray.h"
 #include "VoxelMinimal/Containers/VoxelArrayView.h"
 #include "VoxelTextureUtilities.generated.h"
@@ -58,27 +57,10 @@ public:
 		UTexture2DArray* ExistingTexture = nullptr);
 
 public:
-	static TVoxelArray64<uint8> CompressPng_RGB(
-		TConstVoxelArrayView64<FVoxelColor3> ColorData,
-		int32 Width,
-		int32 Height);
-
 	static TVoxelArray64<uint8> CompressPng_Grayscale(
 		TConstVoxelArrayView64<uint16> GrayscaleData,
 		int32 Width,
 		int32 Height);
-
-	static bool UncompressPng_RGB(
-		TConstVoxelArrayView64<uint8> CompressedData,
-		TVoxelArray64<FVoxelColor3>& OutColorData,
-		int32& OutWidth,
-		int32& OutHeight);
-
-	static bool Uncompress_RGB(
-		TConstVoxelArrayView64<uint8> CompressedData,
-		TVoxelArray64<FVoxelColor3>& OutColorData,
-		int32& OutWidth,
-		int32& OutHeight);
 
 	static bool UncompressPng_Grayscale(
 		TConstVoxelArrayView64<uint8> CompressedData,

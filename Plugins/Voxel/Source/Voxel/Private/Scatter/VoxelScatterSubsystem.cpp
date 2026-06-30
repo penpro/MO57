@@ -1,9 +1,11 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "Scatter/VoxelScatterSubsystem.h"
+#include "VoxelScatterInvokersManager.h"
 #include "Scatter/VoxelScatterManager.h"
-#include "Scatter/VoxelScatterNodeRuntime.h"
 #include "Scatter/VoxelNode_ScatterBase.h"
+#include "Scatter/VoxelScatterNodeRuntime.h"
+#include "Scatter/VoxelScatterCacheManager.h"
 
 void FVoxelScatterSubsystem::LoadFromPrevious(FVoxelSubsystem& InPreviousSubsystem)
 {
@@ -13,6 +15,14 @@ void FVoxelScatterSubsystem::LoadFromPrevious(FVoxelSubsystem& InPreviousSubsyst
 
 	PreviousNodeRefToRuntime = MoveTemp(PreviousSubsystem.NodeRefToRuntime);
 	ensure(PreviousSubsystem.PreviousNodeRefToRuntime.Num() == 0);
+
+	CacheManager = MoveTemp(PreviousSubsystem.CacheManager);
+
+	if (InvokerView &&
+		!InvokerView->Equal(*this, PreviousSubsystem))
+	{
+		InvokerView = nullptr;
+	}
 }
 
 void FVoxelScatterSubsystem::Initialize()
@@ -36,6 +46,11 @@ void FVoxelScatterSubsystem::Initialize()
 
 	NodeRefToRuntime.Reserve(NodeRefToEvaluator.Num());
 
+	if (!CacheManager)
+	{
+		CacheManager = MakeShared<FVoxelScatterCacheManager>();
+	}
+
 	for (const auto& It : NodeRefToEvaluator)
 	{
 		if (const TSharedPtr<FVoxelScatterNodeRuntime> Runtime = PreviousNodeRefToRuntime.FindRef(It.Key))
@@ -52,6 +67,12 @@ void FVoxelScatterSubsystem::Initialize()
 		const TSharedRef<FVoxelScatterNodeRuntime> Runtime = It.Value->MakeRuntime();
 		Runtime->Initialize(*this, It.Key, It.Value);
 		NodeRefToRuntime.Add_EnsureNew(It.Key, Runtime);
+		CacheManager->ResetCache(It.Key.Actor);
+	}
+
+	if (!InvokerView)
+	{
+		InvokerView = FVoxelScatterInvokersManager::Get(GetConfig().World)->MakeView(*this);
 	}
 }
 
@@ -59,11 +80,27 @@ void FVoxelScatterSubsystem::Compute()
 {
 	VOXEL_FUNCTION_COUNTER();
 
+	if (!InvokerView)
+	{
+		return;
+	}
+
+	const TSharedRef<const TVoxelArray<FVector>> Invokers = INLINE_LAMBDA
+	{
+		FVoxelDependencyCollector DependencyCollector(STATIC_FNAME("FVoxelScatterSubsystem Invokers"));
+
+		const TSharedRef<const TVoxelArray<FVector>> Result = InvokerView->GetInvokers(DependencyCollector);
+		InvokersDependencyTracker = Finalize(DependencyCollector);
+		return Result;
+	};
+
 	for (const auto& It : NodeRefToRuntime)
 	{
-		Voxel::AsyncTask([this, Runtime = It.Value]
+		Voxel::AsyncTask([this, Runtime = It.Value, Invokers]
 		{
-			Runtime->Compute(*this);
+			Runtime->Compute(
+				*this,
+				*Invokers);
 		});
 	}
 }

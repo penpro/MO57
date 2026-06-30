@@ -1,30 +1,31 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
 #include "VoxelMinimal.h"
 #include "VoxelStampQuery.h"
 #include "VoxelStampTransform.h"
-#include "Sculpt/Volume/VoxelVolumeSculptDefinitions.h"
+#include "Sculpt/Volume/VoxelVolumeChunkDefinitions.h"
 
-class FVoxelVolumeChunkTreeIterator : public FVoxelVolumeSculptDefinitions
+class FVoxelVolumeChunkTreeIterator : public FVoxelVolumeChunkDefinitions
 {
 public:
 	static FVoxelVolumeChunkTreeIterator Create(
 		const TVoxelMap<FIntVector, void*>& KeyToChunk,
 		const FVoxelVolumeBulkQuery& Query,
-		const FVoxelVolumeTransform& StampToQuery,
-		float Scale);
+		const FVoxelVolumeTransform& SculptToQuery,
+		double Offset);
 
 	static FVoxelVolumeChunkTreeIterator Create(
 		const TVoxelMap<FIntVector, void*>& KeyToChunk,
 		const FVoxelVolumeSparseQuery& Query,
-		const FVoxelVolumeTransform& StampToQuery,
-		float Scale);
+		const FVoxelVolumeTransform& SculptToQuery,
+		double Offset);
 
 	static FVoxelVolumeChunkTreeIterator Create(
 		const TVoxelMap<FIntVector, void*>& KeyToChunk,
-		const FVoxelDoubleVectorBuffer& Positions);
+		const FVoxelDoubleVectorBuffer& Positions,
+		double Offset);
 
 protected:
 	TVoxelArray<const void*> Chunks;
@@ -65,6 +66,44 @@ protected:
 template<typename ChunkType>
 class TVoxelVolumeChunkTreeIterator : public FVoxelVolumeChunkTreeIterator
 {
+public:
+	static TVoxelVolumeChunkTreeIterator Create(
+		const TVoxelMap<FIntVector, ChunkType*>& KeyToChunk,
+		const FVoxelVolumeBulkQuery& Query,
+		const FVoxelVolumeTransform& SculptToQuery,
+		const double Offset)
+	{
+		return ReinterpretCastRef<TVoxelVolumeChunkTreeIterator>(FVoxelVolumeChunkTreeIterator::Create(
+			ReinterpretCastRef<TVoxelMap<FIntVector, void*>>(KeyToChunk),
+			Query,
+			SculptToQuery,
+			Offset));
+	}
+
+	static TVoxelVolumeChunkTreeIterator Create(
+		const TVoxelMap<FIntVector, ChunkType*>& KeyToChunk,
+		const FVoxelVolumeSparseQuery& Query,
+		const FVoxelVolumeTransform& SculptToQuery,
+		const double Offset)
+	{
+		return ReinterpretCastRef<TVoxelVolumeChunkTreeIterator>(FVoxelVolumeChunkTreeIterator::Create(
+			ReinterpretCastRef<TVoxelMap<FIntVector, void*>>(KeyToChunk),
+			Query,
+			SculptToQuery,
+			Offset));
+	}
+
+	static TVoxelVolumeChunkTreeIterator Create(
+		const TVoxelMap<FIntVector, ChunkType*>& KeyToChunk,
+		const FVoxelDoubleVectorBuffer& Positions,
+		const double Offset)
+	{
+		return ReinterpretCastRef<TVoxelVolumeChunkTreeIterator>(FVoxelVolumeChunkTreeIterator::Create(
+			ReinterpretCastRef<TVoxelMap<FIntVector, void*>>(KeyToChunk),
+			Positions,
+			Offset));
+	}
+
 public:
 	template<
 		typename Interp0DType,

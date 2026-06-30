@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "Render/VoxelMeshSceneProxy.h"
 #include "Render/VoxelMeshRenderProxy.h"
@@ -354,6 +354,41 @@ bool FVoxelMeshSceneProxy::HasRayTracingRepresentation() const
 		!GVoxelDisableRaytracing;
 }
 
+#if VOXEL_ENGINE_VERSION >= 508
+ERayTracingPrimitiveFlags FVoxelMeshSceneProxy::GetRayTracingPrimitiveFlags()
+{
+	if (!IsRayTracingRelevant() ||
+		!ensure(RenderProxy->RayTracingGeometry))
+	{
+		return ERayTracingPrimitiveFlags::Exclude;
+	}
+
+	ERayTracingPrimitiveFlags PrimitiveFlags = ERayTracingPrimitiveFlags::CacheInstances;
+
+	if (IsRayTracingFarField())
+	{
+		PrimitiveFlags |= ERayTracingPrimitiveFlags::FarField;
+	}
+
+	return PrimitiveFlags;
+}
+
+void FVoxelMeshSceneProxy::GetStaticRayTracingInstances(FStaticRayTracingInstances& OutRayTracingInstances)
+{
+	if (!IsRayTracingRelevant() ||
+		!ensure(RenderProxy->RayTracingGeometry))
+	{
+		return;
+	}
+
+	FRayTracingInstance& RayTracingInstance = OutRayTracingInstances.LODs.Emplace_GetRef().Instances.Emplace_GetRef();
+	RayTracingInstance.Geometry = RenderProxy->RayTracingGeometry.Get();
+	RayTracingInstance.bApplyLocalBoundsTransform = false;
+	RayTracingInstance.NumTransforms = 1;
+
+	DrawMesh(RayTracingInstance.Materials.Emplace_GetRef(), true);
+}
+#else
 ERayTracingPrimitiveFlags FVoxelMeshSceneProxy::GetCachedRayTracingInstance(FRayTracingInstance& RayTracingInstance)
 {
 	if (!IsRayTracingRelevant() ||
@@ -383,6 +418,7 @@ ERayTracingPrimitiveFlags FVoxelMeshSceneProxy::GetCachedRayTracingInstance(FRay
 
 	return PrimitiveFlags;
 }
+#endif
 
 RayTracing::UE_506_SWITCH(GeometryGroupHandle, FGeometryGroupHandle) FVoxelMeshSceneProxy::GetRayTracingGeometryGroupHandle() const
 {

@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "MegaMaterial/VoxelMegaMaterialSwitch.h"
 #include "VoxelHLSLMaterialTranslator.h"
@@ -39,12 +39,13 @@ int32 FVoxelMegaMaterialSwitch::Compile()
 		return -1;
 	}
 
+	const EMaterialProperty CurrentProperty = FMaterialAttributeDefinitionMap::GetProperty(Compiler.GetMaterialAttribute());
 	if (!HasVoxelTag())
 	{
 		AddVoxelTag();
 
 		InitializeDefaultProperties();
-		ComputeDisplacementAndLayerMask();
+		ComputeDisplacementAndLayerMask(CurrentProperty != MP_WorldPositionOffset);
 
 		TVoxelArray<EMaterialProperty> Properties;
 		if (IsVertex())
@@ -86,10 +87,9 @@ int32 FVoxelMegaMaterialSwitch::Compile()
 		FVoxelMaterialTranslatorNoCodeReuseScope::DisableFutureReuse(Translator);
 	}
 
-	const EMaterialProperty Property = FMaterialAttributeDefinitionMap::GetProperty(Compiler.GetMaterialAttribute());
-	const EMaterialValueType ValueType = FMaterialAttributeDefinitionMap::GetValueType(Property);
+	const EMaterialValueType ValueType = FMaterialAttributeDefinitionMap::GetValueType(CurrentProperty);
 
-	if (Property == MP_PixelDepthOffset)
+	if (CurrentProperty == MP_PixelDepthOffset)
 	{
 		if (!Switch.bEnablePixelDepthOffset)
 		{
@@ -103,7 +103,7 @@ int32 FVoxelMegaMaterialSwitch::Compile()
 		}
 	}
 
-	if (Property == MP_BaseColor &&
+	if (CurrentProperty == MP_BaseColor &&
 		!IsVertex())
 	{
 		AddLine("#ifdef VOXEL_MEGA_MATERIAL_DEBUG");
@@ -162,7 +162,7 @@ int32 FVoxelMegaMaterialSwitch::Compile()
 		AddLine("}");
 	}
 
-	if (Property == MP_Displacement)
+	if (CurrentProperty == MP_Displacement)
 	{
 		AddLine("#if VOXEL_HOOK");
 		AddLine("const float VoxelDisplacement = Parameters.Voxel_Displacement;");
@@ -174,7 +174,7 @@ int32 FVoxelMegaMaterialSwitch::Compile()
 	}
 
 	const TVoxelSet<EMaterialProperty> ConnectedProperties = GetConnectedProperties();
-	if (!ConnectedProperties.Contains(Property))
+	if (!ConnectedProperties.Contains(CurrentProperty))
 	{
 		// Ensure FMaterialAttributesInput::CompileWithDefault does SetConnectedProperty properly
 		return -1;
@@ -205,7 +205,7 @@ int32 FVoxelMegaMaterialSwitch::CompileCustomOutput(
 		return -1;
 	}
 
-	ComputeDisplacementAndLayerMask();
+	ComputeDisplacementAndLayerMask(true);
 
 	{
 		const FString Type = INLINE_LAMBDA
@@ -463,7 +463,7 @@ void FVoxelMegaMaterialSwitch::InitializeDefaultProperties()
 	}
 }
 
-void FVoxelMegaMaterialSwitch::ComputeDisplacementAndLayerMask()
+void FVoxelMegaMaterialSwitch::ComputeDisplacementAndLayerMask(const bool bComputeSmoothness)
 {
 	VOXEL_FUNCTION_COUNTER();
 
@@ -494,48 +494,20 @@ void FVoxelMegaMaterialSwitch::ComputeDisplacementAndLayerMask()
 		FIndentScope Scope(*this);
 
 		{
-			const int32 PerPageData_Texture = Compiler.TextureParameter(
-				"VOXEL_PerPageData_Texture",
-				FVoxelTextureUtilities::GetDefaultTexture2D(),
-				SAMPLERTYPE_Color);
-
-			AddLine("const uint MaxStreamingPages = PageConstants.y;");
-			AddLine("const int RootPageIndex = Parameters.Voxel_PageIndex - MaxStreamingPages;");
 			AddLine("const FCluster Cluster = GetCluster(Parameters.Voxel_PageIndex, Parameters.Voxel_ClusterIndex);");
-			AddLine("const int2 PerPageData = asint(%s[GetTextureIndex_Log2(RootPageIndex, 8)].rg);", *Translator.GetParameterCode(PerPageData_Texture));
-			AddLine("Parameters.Voxel_ChunkIndicesIndex = PerPageData.y;");
+			AddLine("Parameters.Voxel_ChunkIndicesIndex = GetChunkIndicesIndexInCluster(Cluster, Parameters.Voxel_ClusterIndex);");
 		}
 
 		{
-			const int32 NaniteIndirection_Texture = Compiler.TextureParameter(
-				"VOXEL_NaniteIndirection_Texture",
-				FVoxelTextureUtilities::GetDefaultTexture2D(),
-				SAMPLERTYPE_Color);
-
-			const int32 NaniteIndirection_TextureSizeLog2 = Compiler.ScalarParameter(
-				"VOXEL_NaniteIndirection_TextureSizeLog2",
-				0.f);
-
 			if (IsVertex())
 			{
-				AddLine(
-					"Parameters.Voxel_VertexIndexInChunk = GetVertexIndexInVoxelChunk(Cluster, PerPageData, %s, %s, Parameters.Voxel_VertexIndex);",
-					*Translator.GetParameterCode(NaniteIndirection_Texture),
-					*Translator.GetParameterCode(NaniteIndirection_TextureSizeLog2));
+				AddLine("Parameters.Voxel_VertexIndexInChunk = GetVertexIndexInVoxelChunk(Cluster, Parameters.Voxel_ClusterIndex, Parameters.Voxel_VertexIndex);");
 			}
 			else
 			{
-				AddLine("Parameters.Voxel_VertexIndicesInChunk.r = GetVertexIndexInVoxelChunk(Cluster, PerPageData, %s, %s, Parameters.Voxel_TriIndices.r);",
-					*Translator.GetParameterCode(NaniteIndirection_Texture),
-					*Translator.GetParameterCode(NaniteIndirection_TextureSizeLog2));
-
-				AddLine("Parameters.Voxel_VertexIndicesInChunk.g = GetVertexIndexInVoxelChunk(Cluster, PerPageData, %s, %s, Parameters.Voxel_TriIndices.g);",
-					*Translator.GetParameterCode(NaniteIndirection_Texture),
-					*Translator.GetParameterCode(NaniteIndirection_TextureSizeLog2));
-
-				AddLine("Parameters.Voxel_VertexIndicesInChunk.b = GetVertexIndexInVoxelChunk(Cluster, PerPageData, %s, %s, Parameters.Voxel_TriIndices.b);",
-					*Translator.GetParameterCode(NaniteIndirection_Texture),
-					*Translator.GetParameterCode(NaniteIndirection_TextureSizeLog2));
+				AddLine("Parameters.Voxel_VertexIndicesInChunk.r = GetVertexIndexInVoxelChunk(Cluster, Parameters.Voxel_ClusterIndex, Parameters.Voxel_TriIndices.r);");
+				AddLine("Parameters.Voxel_VertexIndicesInChunk.g = GetVertexIndexInVoxelChunk(Cluster, Parameters.Voxel_ClusterIndex, Parameters.Voxel_TriIndices.g);");
+				AddLine("Parameters.Voxel_VertexIndicesInChunk.b = GetVertexIndexInVoxelChunk(Cluster, Parameters.Voxel_ClusterIndex, Parameters.Voxel_TriIndices.b);");
 			}
 		}
 
@@ -650,7 +622,8 @@ void FVoxelMegaMaterialSwitch::ComputeDisplacementAndLayerMask()
 		FVoxelTextureUtilities::GetDefaultTexture2D(),
 		SAMPLERTYPE_Color);
 
-	if (Switch.bEnableSmoothBlends)
+	if (Switch.bEnableSmoothBlends &&
+		bComputeSmoothness)
 	{
 		AddLine(R"(
 				GetVoxelDisplacement(
@@ -905,7 +878,7 @@ void FVoxelMegaMaterialSwitch::ComputeProperties(const TConstVoxelArrayView<EMat
 	FVoxelWriter Writer;
 	Writer << ConnectedProperties;
 
-	AddLine("// Connected properties: %s", *FVoxelUtilities::BlobToHex(Writer.Move()));
+	AddLine("// Connected properties: %s", *FVoxelUtilities::BlobToHex(Writer.Bytes));
 }
 #endif
 

@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -14,6 +14,12 @@ public:
 		float Step);
 	static FVoxelDoubleVector2DBuffer SplitPositions2D(
 		const FVoxelDoubleVector2DBuffer& Positions,
+		float Step);
+	static FVoxelVector2DBuffer SplitPositions2D(
+		const FVoxelVectorBuffer& Positions,
+		float Step);
+	static FVoxelDoubleVector2DBuffer SplitPositions2D(
+		const FVoxelDoubleVectorBuffer& Positions,
 		float Step);
 
 public:
@@ -36,6 +42,11 @@ public:
 		float Step);
 
 	static FVoxelVectorBuffer CollapseGradient3D(
+		const FVoxelFloatBuffer& Distances,
+		int32 NumPositions,
+		float Step);
+
+	static FVoxelVectorBuffer CollapseGradient3DToNormal(
 		const FVoxelFloatBuffer& Distances,
 		int32 NumPositions,
 		float Step);

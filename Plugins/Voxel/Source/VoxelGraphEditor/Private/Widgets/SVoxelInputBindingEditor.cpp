@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "SVoxelInputBindingEditor.h"
 #include "Widgets/Text/SlateEditableTextLayout.h"
@@ -37,7 +37,7 @@ void SVoxelInputBindingEditor::Construct(const FArguments& InArgs)
 		.Font(FCoreStyle::GetDefaultFontStyle("Regular", 9))
 	);
 
-	EditableTextLayout->LoadText();
+	UE_508_SWITCH(EditableTextLayout->LoadText(), SlateEditableTextLayout.LoadText());
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -59,17 +59,17 @@ FReply SVoxelInputBindingEditor::OnKeyDown(const FGeometry& MyGeometry, const FK
 		EditingInputChord.Key = Key;
 	}
 
-	EditableTextLayout->BeginEditTransation();
+	UE_508_SWITCH(EditableTextLayout->BeginEditTransation(), SlateEditableTextLayout.BeginEditTransaction());
 
 	EditingInputChord.bCtrl = InKeyEvent.IsControlDown();
 	EditingInputChord.bAlt = InKeyEvent.IsAltDown();
 	EditingInputChord.bShift = InKeyEvent.IsShiftDown();
 	EditingInputChord.bCmd = InKeyEvent.IsCommandDown();
 
-	EditableTextLayout->LoadText();
-	EditableTextLayout->GoTo(ETextLocation::EndOfDocument);
+	UE_508_SWITCH(EditableTextLayout->LoadText(), SlateEditableTextLayout.LoadText());
+	UE_508_SWITCH(EditableTextLayout->GoTo(ETextLocation::EndOfDocument), SlateEditableTextLayout.GoTo(ETextLocation::EndOfDocument));
 
-	EditableTextLayout->EndEditTransaction();
+	UE_508_SWITCH(EditableTextLayout->EndEditTransaction(), SlateEditableTextLayout.EndEditTransaction());
 	
 	OnChordTyped(EditingInputChord);
 	

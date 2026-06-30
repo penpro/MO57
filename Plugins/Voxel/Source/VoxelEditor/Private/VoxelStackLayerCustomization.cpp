@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelEditorMinimal.h"
 #include "VoxelLayer.h"
@@ -672,7 +672,7 @@ private:
 public:
 	virtual void Tick() override
 	{
-		if (GIsSavingPackage ||
+		if (UE_508_SWITCH(GIsSavingPackage, UE::IsSavingPackage()) ||
 			IsGarbageCollecting() ||
 			!BaseHandle ||
 			!BaseHandle->IsValidHandle())

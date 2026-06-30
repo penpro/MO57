@@ -1,10 +1,11 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
 #include "VoxelCoreMinimal.h"
 #include "VoxelMinimal/VoxelBox.h"
 #include "VoxelMinimal/VoxelObjectPtr.h"
+#include "VoxelMinimal/VoxelWorldSpace.h"
 #include "VoxelMinimal/VoxelCriticalSection.h"
 
 struct FVoxelDebugDrawGroup;
@@ -33,6 +34,7 @@ checkStatic(sizeof(FVoxelDebugLine) == 2 * sizeof(FVector4f));
 
 struct VOXELCORE_API FVoxelDebugDraw
 {
+	EVoxelWorldSpace Space = EVoxelWorldSpace::CurrentWorld;
 	TVoxelChunkedArray<FVoxelDebugPoint> Points;
 	TVoxelChunkedArray<FVoxelDebugLine> Lines;
 };
@@ -71,6 +73,7 @@ public:
 	FVoxelDebugDrawer& Color(const FLinearColor& NewColor);
 	FVoxelDebugDrawer& OneFrame();
 	FVoxelDebugDrawer& LifeTime(float NewLifeTime);
+	FVoxelDebugDrawer& Space(EVoxelWorldSpace NewSpace);
 
 public:
 	FVoxelDebugDrawer& DrawPoint(
@@ -113,6 +116,7 @@ public:
 	static TSharedRef<FVoxelDebugDrawGroup> Create();
 
 public:
+	bool IsEmpty_AnyThread();
 	void Clear_AnyThread();
 	void AddDraw_AnyThread(
 		bool bIsOneFrame,

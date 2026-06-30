@@ -1,13 +1,11 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelSculptChanges.h"
 #include "VoxelStampComponent.h"
-#include "Sculpt/Height/VoxelHeightSculptData.h"
-#include "Sculpt/Height/VoxelHeightSculptActor.h"
-#include "Sculpt/Height/VoxelHeightSculptInnerData.h"
-#include "Sculpt/Volume/VoxelVolumeSculptData.h"
-#include "Sculpt/Volume/VoxelVolumeSculptActor.h"
-#include "Sculpt/Volume/VoxelVolumeSculptInnerData.h"
+#include "Sculpt/Volume/VoxelSculptVolume.h"
+#include "Sculpt/Volume/VoxelSculptVolumeData.h"
+#include "Sculpt/Height/VoxelSculptHeight.h"
+#include "Sculpt/Height/VoxelSculptHeightData.h"
 
 FString FVoxelHeightSculptChange::ToString() const
 {
@@ -18,14 +16,14 @@ TUniquePtr<FChange> FVoxelHeightSculptChange::Execute(UObject* Object)
 {
 	VOXEL_FUNCTION_COUNTER();
 
-	const UVoxelHeightSculptComponent* Component = Cast<UVoxelHeightSculptComponent>(Object);
-	if (!ensure(Component))
+	AVoxelSculptHeight* SculptActor = Cast<AVoxelSculptHeight>(Object);
+	if (!ensure(SculptActor))
 	{
-		return MakeUnique<FVoxelHeightSculptChange>(MakeShared<FVoxelHeightSculptInnerData>());
+		return MakeUnique<FVoxelHeightSculptChange>(MakeVoxelBulkRef(MakeShared<FVoxelSculptHeightData>()));
 	}
 
-	TUniquePtr<FVoxelHeightSculptChange> Result = MakeUnique<FVoxelHeightSculptChange>(Component->GetStamp()->GetData()->GetInnerData());
-	Component->GetStamp()->SetInnerData(Snapshot);
+	TUniquePtr<FVoxelHeightSculptChange> Result = MakeUnique<FVoxelHeightSculptChange>(SculptActor->GetSculptData());
+	SculptActor->SetSculptData(Snapshot);
 	return Result;
 }
 
@@ -42,13 +40,13 @@ TUniquePtr<FChange> FVoxelVolumeSculptChange::Execute(UObject* Object)
 {
 	VOXEL_FUNCTION_COUNTER();
 
-	const UVoxelVolumeSculptComponent* Component = Cast<UVoxelVolumeSculptComponent>(Object);
-	if (!ensure(Component))
+	AVoxelSculptVolume* SculptActor = Cast<AVoxelSculptVolume>(Object);
+	if (!ensure(SculptActor))
 	{
-		return MakeUnique<FVoxelVolumeSculptChange>(MakeShared<FVoxelVolumeSculptInnerData>(false));
+		return MakeUnique<FVoxelVolumeSculptChange>(MakeVoxelBulkRef(MakeShared<FVoxelSculptVolumeData>()));
 	}
 
-	TUniquePtr<FVoxelVolumeSculptChange> Result = MakeUnique<FVoxelVolumeSculptChange>(Component->GetStamp()->GetData()->GetInnerData());
-	Component->GetStamp()->SetInnerData(Snapshot);
+	TUniquePtr<FVoxelVolumeSculptChange> Result = MakeUnique<FVoxelVolumeSculptChange>(SculptActor->GetSculptData());
+	SculptActor->SetSculptData(Snapshot);
 	return Result;
 }

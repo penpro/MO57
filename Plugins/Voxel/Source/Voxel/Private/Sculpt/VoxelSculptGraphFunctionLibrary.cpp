@@ -1,7 +1,10 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "Sculpt/VoxelSculptGraphFunctionLibrary.h"
 #include "VoxelBufferSplitter.h"
+
+VOXEL_REGISTER_FUNCTION(UVoxelSculptGraphFunctionLibrary, GetPreviousHeight);
+VOXEL_REGISTER_FUNCTION(UVoxelSculptGraphFunctionLibrary, GetPreviousDistance);
 
 void FVoxelGraphParameters::FHeightSculpt::Split(
 	const FVoxelBufferSplitter& Splitter,
@@ -51,19 +54,46 @@ void FVoxelGraphParameters::FVolumeSculpt::Split(
 	PreviousDistances.Split(Splitter, Buffers);
 }
 
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+
+void FVoxelPreviewDataNode_HeightSculptPreviewData::Query_WithPosition(const FVoxelGraphQueryImpl& Query, FVoxelGraphQueryImpl& OutQuery) const
+{
+	FVoxelGraphParameters::FHeightSculpt& HeightSculpt = OutQuery.AddParameter<FVoxelGraphParameters::FHeightSculpt>();
+	HeightSculpt.PreviousHeights = *HeightPin.GetSynchronous(Query);
+	HeightSculpt.IsValid = *IsValidPin.GetSynchronous(Query);
+}
+
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+
+void FVoxelPreviewDataNode_VolumeSculptPreviewData::Query_WithPosition(const FVoxelGraphQueryImpl& Query, FVoxelGraphQueryImpl& OutQuery) const
+{
+	FVoxelGraphParameters::FVolumeSculpt& VolumeSculpt = OutQuery.AddParameter<FVoxelGraphParameters::FVolumeSculpt>();
+	VolumeSculpt.PreviousDistances = *DistancePin.GetSynchronous(Query);
+}
+
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+
 void UVoxelSculptGraphFunctionLibrary::GetPreviousHeight(
 	FVoxelFloatBuffer& Height,
 	FVoxelBoolBuffer& IsValid) const
 {
-	if (Query.IsPreview())
-	{
-		return;
-	}
-
 	const FVoxelGraphParameters::FHeightSculpt* Parameter = Query->FindParameter<FVoxelGraphParameters::FHeightSculpt>();
 	if (!Parameter)
 	{
-		VOXEL_MESSAGE(Error, "{0}: No height sculpt data", this);
+		if (Query.IsPreview())
+		{
+			VOXEL_MESSAGE(Error, "{0}: No Height Sculpt Preview Data in Editor Graph found", this);
+		}
+		else
+		{
+			VOXEL_MESSAGE(Error, "{0}: No height sculpt data", this);
+		}
 		return;
 	}
 
@@ -73,15 +103,17 @@ void UVoxelSculptGraphFunctionLibrary::GetPreviousHeight(
 
 FVoxelFloatBuffer UVoxelSculptGraphFunctionLibrary::GetPreviousDistance() const
 {
-	if (Query.IsPreview())
-	{
-		return DefaultBuffer;
-	}
-
 	const FVoxelGraphParameters::FVolumeSculpt* Parameter = Query->FindParameter<FVoxelGraphParameters::FVolumeSculpt>();
 	if (!Parameter)
 	{
-		VOXEL_MESSAGE(Error, "{0}: No volume sculpt data", this);
+		if (Query.IsPreview())
+		{
+			VOXEL_MESSAGE(Error, "{0}: No Volume Sculpt Preview Data in Editor Graph found", this);
+		}
+		else
+		{
+			VOXEL_MESSAGE(Error, "{0}: No volume sculpt data", this);
+		}
 		return DefaultBuffer;
 	}
 

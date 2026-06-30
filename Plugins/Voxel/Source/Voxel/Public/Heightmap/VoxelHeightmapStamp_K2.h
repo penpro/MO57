@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -41,6 +41,9 @@ public:
 	 * @param Layer Layer that this stamps belong to
 	 * You can control the order of layers in Layer Stacks
 	 * You can select the layer stack to use in your Voxel World or PCG Sampler settings
+	 * @param HeightPaddingMultiplier By how much to extend the bounds, relative to the bounds size
+	 * Increase this if you are using a high smoothness
+	 * Increasing this will lead to more stamps being sampled per voxel, increasing generation cost
 	 * @param Priority Priority of the stamp within its layer
 	 * Higher priority stamps will be applied last
 	 * @param LODRange This stamp will only be applied on LODs within this range (inclusive)
@@ -48,11 +51,8 @@ public:
 	 * @param bApplyOnVoid If false, this stamp will only apply on parts where another stamp has been applied first
 	 * This is useful to avoid having stamps going beyond world bounds
 	 * Only used if BlendMode is not Override nor Intersect
-	 * @param BoundsExtension By how much to extend the bounds, relative to the bounds size
-	 * Increase this if you are using a high smoothness
-	 * Increasing this will lead to more stamps being sampled per voxel, increasing generation cost
 	 */
-	UFUNCTION(BlueprintCallable, Category = "Voxel|Stamp|Heightmap", DisplayName = "Make Voxel Heightmap Stamp", meta = (Keywords = "Construct, Create", AutoCreateRefTerm = "WeightmapSurfaceTypes, AdditionalLayers", Layer = "/Script/Voxel.VoxelHeightLayer'/Voxel/Default/DefaultHeightLayer.DefaultHeightLayer'", Behavior = "AffectAll", Smoothness = "100.000000", LODRange = "(Min=0,Max=32)", bApplyOnVoid = "True", BoundsExtension = "0.100000"))
+	UFUNCTION(BlueprintCallable, Category = "Voxel|Stamp|Heightmap", DisplayName = "Make Voxel Heightmap Stamp", meta = (Keywords = "Construct, Create", AutoCreateRefTerm = "WeightmapSurfaceTypes, AdditionalLayers", Layer = "/Script/Voxel.VoxelHeightLayer'/Voxel/Default/DefaultHeightLayer.DefaultHeightLayer'", HeightPaddingMultiplier = "0.100000", Behavior = "AffectAll", Smoothness = "100.000000", LODRange = "(Min=0,Max=32)", bApplyOnVoid = "True"))
 	static void Make(
 		FVoxelHeightmapStampRef& Stamp,
 		UVoxelHeightmap* Heightmap,
@@ -61,6 +61,7 @@ public:
 		UVoxelHeightLayer* Layer,
 		EVoxelHeightBlendMode BlendMode,
 		TArray<UVoxelHeightLayer*> AdditionalLayers,
+		float HeightPaddingMultiplier,
 		FTransform Transform,
 		EVoxelStampBehavior Behavior,
 		int32 Priority,
@@ -69,8 +70,7 @@ public:
 		FVoxelExposedSeed StampSeed,
 		UPARAM(DisplayName = "LOD Range") FInt32Interval LODRange,
 		bool bDisableStampSelection,
-		bool bApplyOnVoid,
-		float BoundsExtension)
+		bool bApplyOnVoid)
 	{
 		Stamp = FVoxelHeightmapStampRef::New();
 		Stamp->Heightmap = Heightmap;
@@ -79,6 +79,7 @@ public:
 		Stamp->Layer = Layer;
 		Stamp->BlendMode = BlendMode;
 		Stamp->AdditionalLayers = AdditionalLayers;
+		Stamp->HeightPaddingMultiplier = HeightPaddingMultiplier;
 		Stamp->Transform = Transform;
 		Stamp->Behavior = Behavior;
 		Stamp->Priority = Priority;
@@ -88,7 +89,6 @@ public:
 		Stamp->LODRange = LODRange;
 		Stamp->bDisableStampSelection = bDisableStampSelection;
 		Stamp->bApplyOnVoid = bApplyOnVoid;
-		Stamp->BoundsExtension = BoundsExtension;
 	}
 
 	/**
@@ -97,6 +97,9 @@ public:
 	 * @param Layer Layer that this stamps belong to
 	 * You can control the order of layers in Layer Stacks
 	 * You can select the layer stack to use in your Voxel World or PCG Sampler settings
+	 * @param HeightPaddingMultiplier By how much to extend the bounds, relative to the bounds size
+	 * Increase this if you are using a high smoothness
+	 * Increasing this will lead to more stamps being sampled per voxel, increasing generation cost
 	 * @param Priority Priority of the stamp within its layer
 	 * Higher priority stamps will be applied last
 	 * @param LODRange This stamp will only be applied on LODs within this range (inclusive)
@@ -104,9 +107,6 @@ public:
 	 * @param bApplyOnVoid If false, this stamp will only apply on parts where another stamp has been applied first
 	 * This is useful to avoid having stamps going beyond world bounds
 	 * Only used if BlendMode is not Override nor Intersect
-	 * @param BoundsExtension By how much to extend the bounds, relative to the bounds size
-	 * Increase this if you are using a high smoothness
-	 * Increasing this will lead to more stamps being sampled per voxel, increasing generation cost
 	 */
 	UFUNCTION(BlueprintPure, Category = "Voxel|Stamp|Heightmap", DisplayName = "Break Voxel Heightmap Stamp", meta = (Keywords = "Break", AutoCreateRefTerm = "WeightmapSurfaceTypes, AdditionalLayers"))
 	static void Break(
@@ -117,6 +117,7 @@ public:
 		UVoxelHeightLayer*& Layer,
 		EVoxelHeightBlendMode& BlendMode,
 		TArray<UVoxelHeightLayer*>& AdditionalLayers,
+		float& HeightPaddingMultiplier,
 		FTransform& Transform,
 		EVoxelStampBehavior& Behavior,
 		int32& Priority,
@@ -125,8 +126,7 @@ public:
 		FVoxelExposedSeed& StampSeed,
 		UPARAM(DisplayName = "LOD Range") FInt32Interval& LODRange,
 		bool& bDisableStampSelection,
-		bool& bApplyOnVoid,
-		float& BoundsExtension)
+		bool& bApplyOnVoid)
 	{
 		Heightmap = FVoxelUtilities::MakeSafe<UVoxelHeightmap*>();
 		DefaultSurfaceType = FVoxelUtilities::MakeSafe<UVoxelSurfaceTypeInterface*>();
@@ -134,6 +134,7 @@ public:
 		Layer = FVoxelUtilities::MakeSafe<UVoxelHeightLayer*>();
 		BlendMode = FVoxelUtilities::MakeSafe<EVoxelHeightBlendMode>();
 		AdditionalLayers = FVoxelUtilities::MakeSafe<TArray<UVoxelHeightLayer*>>();
+		HeightPaddingMultiplier = FVoxelUtilities::MakeSafe<float>();
 		Transform = FVoxelUtilities::MakeSafe<FTransform>();
 		Behavior = FVoxelUtilities::MakeSafe<EVoxelStampBehavior>();
 		Priority = FVoxelUtilities::MakeSafe<int32>();
@@ -143,7 +144,6 @@ public:
 		LODRange = FVoxelUtilities::MakeSafe<FInt32Interval>();
 		bDisableStampSelection = FVoxelUtilities::MakeSafe<bool>();
 		bApplyOnVoid = FVoxelUtilities::MakeSafe<bool>();
-		BoundsExtension = FVoxelUtilities::MakeSafe<float>();
 
 		if (!Stamp.IsValid())
 		{
@@ -157,6 +157,7 @@ public:
 		Layer = Stamp->Layer;
 		BlendMode = Stamp->BlendMode;
 		AdditionalLayers = Stamp->AdditionalLayers;
+		HeightPaddingMultiplier = Stamp->HeightPaddingMultiplier;
 		Transform = Stamp->Transform;
 		Behavior = Stamp->Behavior;
 		Priority = Stamp->Priority;
@@ -166,7 +167,6 @@ public:
 		LODRange = Stamp->LODRange;
 		bDisableStampSelection = Stamp->bDisableStampSelection;
 		bApplyOnVoid = Stamp->bApplyOnVoid;
-		BoundsExtension = Stamp->BoundsExtension;
 	}
 
 	// Get Heightmap

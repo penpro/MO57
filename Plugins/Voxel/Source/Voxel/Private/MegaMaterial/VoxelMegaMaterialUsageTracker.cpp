@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "MegaMaterial/VoxelMegaMaterialUsageTracker.h"
 #include "MegaMaterial/VoxelMegaMaterial.h"
@@ -17,7 +17,7 @@ void FVoxelMegaMaterialUsageTracker::Sync()
 		return;
 	}
 
-	if (!MegaMaterial->bDetectNewSurfaces)
+	if (!MegaMaterial->bAutomaticallyDetectNewSurfaces)
 	{
 		VOXEL_SCOPE_LOCK(CriticalSection);
 		SurfaceTypesToAdd_RequiresLock.Empty();

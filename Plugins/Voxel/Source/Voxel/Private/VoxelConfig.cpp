@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelConfig.h"
 #include "VoxelWorld.h"
@@ -11,6 +11,57 @@
 #include "VT/RuntimeVirtualTexture.h"
 
 extern int32 GVoxelMegaMaterialDebugMode;
+constexpr uint32 GVoxelMagicNumber = 0x2F66ED00u;
+
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+
+class FVoxelWorldManager
+{
+public:
+	int32 GetId(const TVoxelObjectPtr<const AVoxelWorld>& VoxelWorld)
+	{
+		if (const int32* IndexPtr = VoxelWorldToIndex.Find(VoxelWorld))
+		{
+			return *IndexPtr;
+		}
+
+		TVoxelSet<int32> UsedIndices;
+		for (auto It = VoxelWorldToIndex.CreateIterator(); It; ++It)
+		{
+			if (!It.Key().IsValid_Slow())
+			{
+				It.RemoveCurrent();
+				continue;
+			}
+
+			UsedIndices.Add(It.Value());
+		}
+
+		for (int32 Index = 0; Index < 256; Index++)
+		{
+			if (UsedIndices.Contains(Index))
+			{
+				continue;
+			}
+
+			VoxelWorldToIndex.Add_EnsureNew(VoxelWorld, Index);
+			return Index;
+		}
+
+		ensure(false);
+		return 0;
+	}
+
+private:
+	TVoxelMap<TVoxelObjectPtr<const AVoxelWorld>, int32> VoxelWorldToIndex;
+};
+FVoxelWorldManager* GVoxelWorldManager = new FVoxelWorldManager();
+
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
 
 FVoxelConfig::FVoxelConfig(const AVoxelWorld& VoxelWorld)
 	: FVoxelConfig(*VoxelWorld.GetWorld(), VoxelWorld)
@@ -21,19 +72,29 @@ FVoxelConfig::FVoxelConfig(
 	UWorld& World,
 	const AVoxelWorld& VoxelWorld)
 	: World(&World)
+	, VoxelWorldId(GVoxelMagicNumber | GVoxelWorldManager->GetId(VoxelWorld))
 	, VoxelWorld(&VoxelWorld)
 	, VoxelWorldObject(&VoxelWorld)
 	, bIsEditorWorld(!World.IsGameWorld())
-	, CameraPosition(INLINE_LAMBDA
+	, bUseCameraInvoker(INLINE_LAMBDA
 	{
-		TOptional<FVector> Position = FVoxelUtilities::GetCameraPosition(&World);
-		if (Position)
+#if WITH_EDITOR
+		if (VoxelWorld.bUseCameraAsInvoker)
 		{
-			// Round to voxel size to reduce frequency of invalidations
-			Position = FVoxelUtilities::RoundToFloat(*Position / VoxelWorld.VoxelSize) * VoxelWorld.VoxelSize;
+			return true;
 		}
-		return Position;
+
+		if (!World.IsGameWorld())
+		{
+			return !VoxelWorld.bDisableCameraInvokerInEditor;
+		}
+
+		return false;
+#else
+		return VoxelWorld.bUseCameraAsInvoker;
+#endif
 	})
+	, CameraInvokerPositionPrecision(VoxelWorld.CameraInvokerPositionPrecision)
 	, FeatureLevel(World.GetFeatureLevel())
 
 	, LocalToWorld(VoxelWorld.ActorToWorld())
@@ -74,17 +135,22 @@ FVoxelConfig::FVoxelConfig(
 	, CollisionChunkSize(FMath::Clamp(VoxelWorld.CollisionChunkSize, 1, 64))
 	, InvokerCollision(VoxelWorld.InvokerCollision)
 	, bDoubleSidedCollision(VoxelWorld.bDoubleSidedCollision)
+	, bGenerateOverlapEvents(VoxelWorld.bGenerateOverlapEvents)
+	, CollisionVoxelSize(FMath::Max(VoxelWorld.bOverrideCollisionVoxelSize ? VoxelWorld.CollisionVoxelSize : VoxelWorld.VoxelSize, 1))
 
 	, bEnableNavigation(VoxelWorld.bEnableNavigation)
 	, NavigationChunkSize(FMath::Clamp(VoxelWorld.NavigationChunkSize, 1, 64))
 	, MaxAdditionalNavigationChunks(VoxelWorld.MaxAdditionalNavigationChunks)
 	, bGenerateInsideNavMeshBounds(VoxelWorld.bGenerateNavigationInsideNavMeshBounds || !UseNavigationInvokers(World))
 	, bOnlyGenerateNavigationInEditor(VoxelWorld.bOnlyGenerateNavigationInEditor)
+	, NavigationVoxelSize(FMath::Max(VoxelWorld.bOverrideNavigationVoxelSize ? VoxelWorld.NavigationVoxelSize : VoxelWorld.VoxelSize, 1))
+	, NavigationMeshComponentClass(VoxelWorld.NavigationMeshComponent)
 
 	, NaniteMaxTessellationLOD(VoxelWorld.bEnableTessellation ? VoxelWorld.NaniteMaxTessellationLOD : -1)
 	, DisplacementFade(VoxelWorld.bEnableDisplacementFade ? VoxelWorld.DisplacementFade : FDisplacementFadeRange::Invalid())
 	, NanitePositionPrecision(VoxelWorld.NanitePositionPrecision)
 	, bCompressNaniteVertices(VoxelWorld.bCompressNaniteVertices)
+	, bUseNaniteBuilder(VoxelWorld.bUseNaniteBuilder)
 
 	, bEnableLumen(VoxelWorld.bEnableLumen && CanEnableLumen())
 	, bEnableRaytracing((VoxelWorld.bEnableRaytracing && CanEnableRayTracing()) || (bEnableLumen && UseHardwareRayTracingForLumen()))
@@ -94,8 +160,29 @@ FVoxelConfig::FVoxelConfig(
 	, RaytracingMaxLOD(VoxelWorld.RaytracingMaxLOD)
 	, MeshDistanceFieldMaxLOD(VoxelWorld.MeshDistanceFieldMaxLOD)
 	, MeshDistanceFieldBias(VoxelWorld.MeshDistanceFieldBias)
+	, MeshDistanceFieldBricksPerChunk(VoxelWorld.MeshDistanceFieldBricksPerChunk)
 	, ComponentSettings(VoxelWorld.ComponentSettings)
+	, bCacheTextureStreaming(VoxelWorld.bCacheTextureStreaming)
 	, bRenderScatterActors(VoxelWorld.bRenderScatterActors)
+	, bUseCameraScatterInvoker(INLINE_LAMBDA
+	{
+	#if WITH_EDITOR
+		if (VoxelWorld.bUseCameraAsScatterInvoker)
+		{
+			return true;
+		}
+
+		if (!World.IsGameWorld())
+		{
+			return !VoxelWorld.bDisableCameraScatterInvokerInEditor;
+		}
+
+		return false;
+	#else
+		return VoxelWorld.bUseCameraAsScatterInvoker;
+	#endif
+	})
+	, CameraScatterInvokerPositionPrecision(VoxelWorld.CameraScatterInvokerPositionPrecision)
 {
 	if (!VoxelWorld.ActorToWorld().GetScale3D().Equals(FVector::OneVector))
 	{
@@ -124,13 +211,8 @@ bool FVoxelConfig::Equals(const FVoxelConfig& Other) const
 {
 	VOXEL_FUNCTION_COUNTER();
 
-	if (CameraPosition.IsSet() != Other.CameraPosition.IsSet())
-	{
-		return false;
-	}
-
-	if (CameraPosition &&
-		!CameraPosition->Equals(Other.CameraPosition.GetValue()))
+	if (bUseCameraInvoker != Other.bUseCameraInvoker ||
+		CameraInvokerPositionPrecision != Other.CameraInvokerPositionPrecision)
 	{
 		return false;
 	}
@@ -161,7 +243,9 @@ bool FVoxelConfig::Equals(const FVoxelConfig& Other) const
 	if (!FVoxelUtilities::BodyInstanceEqual(VisibilityCollision, Other.VisibilityCollision) ||
 		CollisionChunkSize != Other.CollisionChunkSize ||
 		!FVoxelUtilities::BodyInstanceEqual(InvokerCollision, Other.InvokerCollision) ||
-		bDoubleSidedCollision != Other.bDoubleSidedCollision)
+		bDoubleSidedCollision != Other.bDoubleSidedCollision ||
+		bGenerateOverlapEvents != Other.bGenerateOverlapEvents ||
+		CollisionVoxelSize != Other.CollisionVoxelSize)
 	{
 		return false;
 	}
@@ -170,7 +254,9 @@ bool FVoxelConfig::Equals(const FVoxelConfig& Other) const
 		NavigationChunkSize != Other.NavigationChunkSize ||
 		MaxAdditionalNavigationChunks != Other.MaxAdditionalNavigationChunks ||
 		bGenerateInsideNavMeshBounds != Other.bGenerateInsideNavMeshBounds ||
-		bOnlyGenerateNavigationInEditor != Other.bOnlyGenerateNavigationInEditor)
+		bOnlyGenerateNavigationInEditor != Other.bOnlyGenerateNavigationInEditor ||
+		NavigationVoxelSize != Other.NavigationVoxelSize ||
+		NavigationMeshComponentClass != Other.NavigationMeshComponentClass)
 	{
 		return false;
 	}
@@ -178,7 +264,8 @@ bool FVoxelConfig::Equals(const FVoxelConfig& Other) const
 	if (NaniteMaxTessellationLOD != Other.NaniteMaxTessellationLOD ||
 		DisplacementFade != Other.DisplacementFade ||
 		NanitePositionPrecision != Other.NanitePositionPrecision ||
-		bCompressNaniteVertices != Other.bCompressNaniteVertices)
+		bCompressNaniteVertices != Other.bCompressNaniteVertices ||
+		bUseNaniteBuilder != Other.bUseNaniteBuilder)
 	{
 		return false;
 	}
@@ -191,12 +278,16 @@ bool FVoxelConfig::Equals(const FVoxelConfig& Other) const
 		RaytracingMaxLOD != Other.RaytracingMaxLOD ||
 		MeshDistanceFieldMaxLOD != Other.MeshDistanceFieldMaxLOD ||
 		MeshDistanceFieldBias != Other.MeshDistanceFieldBias ||
-		ComponentSettings != Other.ComponentSettings)
+		MeshDistanceFieldBricksPerChunk != Other.MeshDistanceFieldBricksPerChunk ||
+		ComponentSettings != Other.ComponentSettings ||
+		bCacheTextureStreaming != Other.bCacheTextureStreaming)
 	{
 		return false;
 	}
 
-	if (bRenderScatterActors != Other.bRenderScatterActors)
+	if (bRenderScatterActors != Other.bRenderScatterActors ||
+		bUseCameraScatterInvoker != Other.bUseCameraScatterInvoker ||
+		CameraScatterInvokerPositionPrecision != Other.CameraScatterInvokerPositionPrecision)
 	{
 		return false;
 	}

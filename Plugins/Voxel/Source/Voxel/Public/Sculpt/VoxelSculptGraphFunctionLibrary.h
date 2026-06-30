@@ -1,10 +1,11 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
 #include "VoxelMinimal.h"
 #include "VoxelFunctionLibrary.h"
 #include "Buffer/VoxelBaseBuffers.h"
+#include "Nodes/VoxelPreviewDataNode.h"
 #include "VoxelSculptGraphFunctionLibrary.generated.h"
 
 namespace FVoxelGraphParameters
@@ -27,6 +28,39 @@ namespace FVoxelGraphParameters
 			TConstVoxelArrayView<FVolumeSculpt*> OutResult) const;
 	};
 }
+
+USTRUCT(meta = (AllowList = "HeightSculpt"))
+struct VOXEL_API FVoxelPreviewDataNode_HeightSculptPreviewData : public FVoxelPreviewDataNode
+{
+	GENERATED_BODY()
+	GENERATED_VOXEL_NODE_BODY()
+
+public:
+	VOXEL_INPUT_PIN(FVoxelFloatBuffer, Height, nullptr);
+	VOXEL_INPUT_PIN(FVoxelBoolBuffer, IsValid, nullptr);
+
+	//~ Begin FVoxelQueryParameterNode_BaseStampData Interface
+	virtual void Query_WithPosition(
+		const FVoxelGraphQueryImpl& Query,
+		FVoxelGraphQueryImpl& OutQuery) const override;
+	//~ End FVoxelQueryParameterNode_BaseStampData Interface
+};
+
+USTRUCT(meta = (AllowList = "VolumeSculpt"))
+struct VOXEL_API FVoxelPreviewDataNode_VolumeSculptPreviewData : public FVoxelPreviewDataNode
+{
+	GENERATED_BODY()
+	GENERATED_VOXEL_NODE_BODY()
+
+public:
+	VOXEL_INPUT_PIN(FVoxelFloatBuffer, Distance, nullptr);
+
+	//~ Begin FVoxelQueryParameterNode_BaseStampData Interface
+	virtual void Query_WithPosition(
+		const FVoxelGraphQueryImpl& Query,
+		FVoxelGraphQueryImpl& OutQuery) const override;
+	//~ End FVoxelQueryParameterNode_BaseStampData Interface
+};
 
 UCLASS()
 class VOXEL_API UVoxelSculptGraphFunctionLibrary : public UVoxelFunctionLibrary

@@ -1,10 +1,11 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelGraphContextActionsBuilder.h"
 #include "VoxelNodeLibrary.h"
 #include "VoxelGraphToolkit.h"
 #include "VoxelTerminalGraph.h"
 #include "Nodes/VoxelGraphNode.h"
+#include "Nodes/VoxelOutputNode.h"
 #include "VoxelGraphSchemaAction.h"
 #include "Nodes/VoxelOperatorNodes.h"
 #include "VoxelGraphEditorSettings.h"
@@ -23,9 +24,14 @@ TSharedPtr<FVoxelGraphContextActionsBuilder> FVoxelGraphContextActionsBuilder::B
 	const TSharedPtr<FVoxelGraphToolkit> Toolkit = FVoxelGraphToolkit::Get(MenuBuilder->CurrentGraph);
 	UVoxelTerminalGraph* TerminalGraph = MenuBuilder->CurrentGraph->GetTypedOuter<UVoxelTerminalGraph>();
 
-	if (!ensure(Toolkit) ||
-		!ensure(TerminalGraph))
+	if (!ensure(Toolkit))
 	{
+		return nullptr;
+	}
+
+	if (!TerminalGraph)
+	{
+		ensure(MenuBuilder->CurrentGraph->HasAnyFlags(RF_Transient));
 		return nullptr;
 	}
 
@@ -616,8 +622,22 @@ EVoxelIterate FVoxelGraphContextActionsBuilder::BuildNodes(FGraphContextMenuBuil
 		NumStepCompletedActions++;
 
 		const TSharedRef<const FVoxelNode>& Node = Nodes[NodeIndexToBuild];
-		if (Toolkit &&
-			!Node->CanPasteHere(*Toolkit->Asset))
+		if (Toolkit)
+		{
+			if (!Node->CanPasteHere(*Toolkit->Asset, ActiveTerminalGraph))
+			{
+				continue;
+			}
+
+			if (Toolkit->IsGraphSensitive() &&
+				!Node->IsDesignedForGraph(*Toolkit->Asset))
+			{
+				continue;
+			}
+		}
+
+		if (Node->GetStruct()->IsChildOf<FVoxelOutputNode>() &&
+			!Node->GetMetadataContainer().GetStringMetaDataHierarchical("Placeable"))
 		{
 			continue;
 		}
@@ -788,8 +808,43 @@ EVoxelIterate FVoxelGraphContextActionsBuilder::BuildNodes(FGraphContextMenuBuil
 
 			MenuBuilder.AddAction(Action);
 
-			if (Node->GetMetadataContainer().HasMetaDataHierarchical(STATIC_FNAME("ShowInRootShortList")) ||
-				(MenuBuilder.FromPin && Node->GetMetadataContainer().HasMetaDataHierarchical(STATIC_FNAME("ShowInShortList"))))
+			const bool bShowInGraphShortList = INLINE_LAMBDA
+			{
+				if (!Toolkit)
+				{
+					return false;
+				}
+
+				FString GraphShortListString;
+				if (!Node->GetMetadataContainer().GetStringMetaDataHierarchical(STATIC_FNAME("ShowInGraphShortList"), &GraphShortListString))
+				{
+					return false;
+				}
+
+				if (Toolkit->Asset->IsFunctionLibrary())
+				{
+					return false;
+				}
+
+				const FString GraphType = Toolkit->Asset->GetGraphTypeName();
+				TArray<FString> ShortList;
+				GraphShortListString.ParseIntoArray(ShortList, TEXT(","));
+
+				for (FString Type : ShortList)
+				{
+					Type = Type.TrimStartAndEnd().ToLower();
+					if (Type == "all" ||
+						Type == GraphType)
+					{
+						return true;
+					}
+				}
+
+				return false;
+			};
+
+			if (bShowInGraphShortList ||
+				(MenuBuilder.FromPin && Node->GetMetadataContainer().HasMetaDataHierarchical(STATIC_FNAME("ShowInPinShortList"))))
 			{
 				ShortListActions_Forced.Add(MakeShortListAction(Action));
 			}

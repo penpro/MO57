@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelPointNodesStats.h"
 #include "VoxelNodeStats.h"
@@ -13,7 +13,7 @@ class FVoxelNodePointFilterStatManager
 public:
 	struct FQueuedStat
 	{
-		FVoxelGraphNodeRef NodeRef;
+		FVoxelGraphMergedNodeRef NodeRef;
 		int64 Count = 0;
 		int64 FilteredCount = 0;
 	};
@@ -35,18 +35,26 @@ public:
 	{
 		VOXEL_FUNCTION_COUNTER();
 
-		FQueuedStat QueuedStat;
-		while (Queue.Dequeue(QueuedStat))
+		const auto AddNode = [this](const FQueuedStat& QueuedStat, UEdGraphNode* GraphNode)
 		{
-			UEdGraphNode* GraphNode = QueuedStat.NodeRef.GetGraphNode_EditorOnly();
 			if (!ensure(GraphNode))
 			{
-				continue;
+				return;
 			}
 
 			FStats& Stats = NodeToStats.FindOrAdd(GraphNode);
 			Stats.NumPoints += QueuedStat.Count;
 			Stats.NumFilteredPoints += QueuedStat.FilteredCount;
+		};
+
+		FQueuedStat QueuedStat;
+		while (Queue.Dequeue(QueuedStat))
+		{
+			AddNode(QueuedStat, QueuedStat.NodeRef.Node.GetGraphNode_EditorOnly());
+			for (const FVoxelGraphNodeRef& Node : QueuedStat.NodeRef.MergedNodes)
+			{
+				AddNode(QueuedStat, Node.GetGraphNode_EditorOnly());
+			}
 		}
 	}
 	//~ End FVoxelSingleton Interface

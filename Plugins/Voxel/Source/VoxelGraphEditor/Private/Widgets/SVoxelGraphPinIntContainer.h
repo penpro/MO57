@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -156,7 +156,7 @@ private:
 			default: ensure(false); return 0;
 			}
 		}
-		if constexpr (
+		else if constexpr (
 			std::is_same_v<T, FIntVector> ||
 			std::is_same_v<T, FInt64Vector>)
 		{
@@ -168,7 +168,7 @@ private:
 			default: ensure(false); return 0;
 			}
 		}
-		if constexpr (
+		else if constexpr (
 			std::is_same_v<T, FIntVector4> ||
 			std::is_same_v<T, FInt64Vector4>)
 		{
@@ -181,9 +181,11 @@ private:
 			default: ensure(false); return 0;
 			}
 		}
-
-		ensure(false);
-		return 0;
+		else
+		{
+			ensure(false);
+			return 0;
+		}
 	}
 
 	static void SetComponent(T& CurrentValue, const IntType NewComponentValue, const int32 Component)
@@ -199,7 +201,7 @@ private:
 			default: ensure(false); return;
 			}
 		}
-		if constexpr (
+		else if constexpr (
 			std::is_same_v<T, FIntVector> ||
 			std::is_same_v<T, FInt64Vector>)
 		{
@@ -211,7 +213,7 @@ private:
 			default: ensure(false); return;
 			}
 		}
-		if constexpr (
+		else if constexpr (
 			std::is_same_v<T, FIntVector4> ||
 			std::is_same_v<T, FInt64Vector4>)
 		{
@@ -224,7 +226,9 @@ private:
 			default: ensure(false); return;
 			}
 		}
-
-		ensure(false);
+		else
+		{
+			ensure(false);
+		}
 	}
 };

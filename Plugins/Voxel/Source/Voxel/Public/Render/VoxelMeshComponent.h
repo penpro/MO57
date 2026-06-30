@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -24,7 +24,8 @@ public:
 	void SetRenderProxy(
 		const TSharedRef<FVoxelMeshRenderProxy>& NewRenderProxy,
 		const TSharedRef<FVoxelMaterialRef>& NewMaterialRef,
-		const TSharedRef<FVoxelMaterialRef>& NewLumenMaterialRef);
+		const TSharedRef<FVoxelMaterialRef>& NewLumenMaterialRef,
+		bool bNewCacheTextureStreaming);
 
 	void ClearRenderProxy();
 
@@ -39,12 +40,17 @@ public:
 
 	virtual FBoxSphereBounds CalcBounds(const FTransform& LocalToWorld) const override;
 	virtual void OnComponentDestroyed(bool bDestroyingHierarchy) override;
+	virtual void GetStreamingRenderAssetInfo(
+		FStreamingTextureLevelContext& LevelContext,
+		TArray<FStreamingRenderAssetPrimitiveInfo>& OutStreamingRenderAssets) const override;
 	//~ End UPrimitiveComponent Interface
 
 private:
 	TSharedPtr<FVoxelMeshRenderProxy> RenderProxy;
 	TSharedPtr<FVoxelMaterialRef> MaterialRef;
 	TSharedPtr<FVoxelMaterialRef> LumenMaterialRef;
+
+	bool bCacheTextureStreaming = false;
 
 	friend class FVoxelMeshSceneProxy;
 };

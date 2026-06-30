@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "VoxelEditorMinimal.h"
 #include "VoxelMessage.h"
@@ -107,6 +107,10 @@ void GatherBlueprintCallstack(const TSharedRef<FVoxelMessage>& Message)
 		for (int32 InnerIndex = 0; InnerIndex < Index; InnerIndex++)
 		{
 			BlueprintNode = GetNode(InnerIndex);
+			if (!BlueprintNode)
+			{
+				continue;
+			}
 			if (BlueprintNode->IsA<UK2Node_Tunnel>())
 			{
 				continue;

@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -7,6 +7,7 @@
 #include "VoxelNodeDefinition.h"
 #include "VoxelGraphNode.generated.h"
 
+class UVoxelGraph;
 class UVoxelGraphSchema;
 struct FVoxelPin;
 struct FVoxelNode;
@@ -85,6 +86,7 @@ public:
 	virtual bool IsPinOptional(const UEdGraphPin& Pin) const { return false; }
 	virtual bool ShouldHidePinDefaultValue(const UEdGraphPin& Pin) const { return false; }
 	virtual bool GetOverlayInfo(FString& Type, FString& Tooltip, FString& Color) { return false; }
+	virtual bool GetGraphWarningInfo(const UVoxelGraph& Graph, FString& OutWarning) { return false; }
 	virtual bool HasExecutionFlow() { return false; }
 
 	virtual bool CanRemovePin_ContextMenu(const UEdGraphPin& Pin) const { return false; }
@@ -126,6 +128,10 @@ private:
 	virtual bool CanSplitPin(const UEdGraphPin* Pin) const final override
 	{
 		return ensure(Pin) && CanSplitPin(*Pin);
+	}
+	virtual bool IsPinVisible(const UEdGraphPin& Pin)
+	{
+		return true;
 	}
 
 public:

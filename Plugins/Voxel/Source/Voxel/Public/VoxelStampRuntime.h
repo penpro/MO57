@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -92,11 +92,22 @@ public:
 		return { GetLocalBounds() };
 	}
 
-	virtual bool ShouldFullyInvalidate(
+	// Called globally, used by sculpt actors to not invalidate everything when expanding their bounds
+	virtual bool HasCollectDependencies() const
+	{
+		return false;
+	}
+	virtual bool CanPartiallyInvalidate() const
+	{
+		return false;
+	}
+
+	virtual bool TryToPartiallyInvalidate(
 		const FVoxelStampRuntime& PreviousRuntime,
 		TVoxelArray<FVoxelBox>& OutLocalBoundsToInvalidate) const
 	{
-		return true;
+		ensure(false);
+		return false;
 	}
 	virtual bool ShouldUseQueryPrevious() const
 	{
@@ -146,7 +157,7 @@ public:
 	}
 	FORCEINLINE const FTransform& GetLocalToWorld() const
 	{
-		return GetStamp().Transform;
+		return PrivateLocalToWorld;
 	}
 
 	AActor* GetActor() const;
@@ -221,10 +232,13 @@ private:
 	};
 	FInitializationInfo InitializationInfo;
 
+	FTransform PrivateLocalToWorld;
+
 	void PreInitialize(
 		const TSharedRef<FVoxelStamp>& Stamp,
 		TVoxelObjectPtr<UWorld> World,
-		TVoxelObjectPtr<USceneComponent> Component);
+		TVoxelObjectPtr<USceneComponent> Component,
+		const FVector& OriginOffset);
 
 	void FinalizeInitialization();
 

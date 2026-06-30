@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -39,6 +39,7 @@ public:
 	//~ Begin UVoxelPCGSettings Interface
 	virtual TSharedPtr<FVoxelPCGOutput> CreateOutput(FPCGContext& Context) const override;
 	virtual FString GetNodeDebugInfo() const override;
+	virtual void Serialize(FArchive& Ar) override;
 	//~ End UVoxelPCGSettings Interface
 
 public:
@@ -100,6 +101,10 @@ public:
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings", meta = (PCG_Overridable))
 	TArray<TObjectPtr<UVoxelMetadata>> NewMetadatasToQuery;
+
+	// If false smart surface types won't be resolved
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings", AdvancedDisplay, meta = (PCG_Overridable))
+	bool bResolveSmartSurfaceTypes = true;
 };
 
 class FVoxelProjectionPCGOutput : public FVoxelPCGOutput
@@ -118,6 +123,7 @@ public:
 	const float GradientStep;
 	const bool bDebugSteps;
 	const bool bQuerySurfaceTypes;
+	const bool bResolveSmartSurfaceTypes;
 	const TVoxelArray<FVoxelMetadataRef> MetadatasToQuery;
 
 	TVoxelMap<TVoxelObjectPtr<const UPCGPointData>, TVoxelObjectPtr<UPCGPointData>> SourceToResult;
@@ -136,6 +142,7 @@ public:
 		const float GradientStep,
 		const bool bDebugSteps,
 		const bool bQuerySurfaceTypes,
+		const bool bResolveSmartSurfaceTypes,
 		const TVoxelArray<FVoxelMetadataRef>& MetadatasToQuery)
 		: Layers(Layers)
 		, SurfaceTypeTable(SurfaceTypeTable)
@@ -150,6 +157,7 @@ public:
 		, GradientStep(GradientStep)
 		, bDebugSteps(bDebugSteps)
 		, bQuerySurfaceTypes(bQuerySurfaceTypes)
+		, bResolveSmartSurfaceTypes(bResolveSmartSurfaceTypes)
 		, MetadatasToQuery(MetadatasToQuery)
 	{
 	}

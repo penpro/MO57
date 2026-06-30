@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "Sculpt/VoxelToolBrush.h"
 #include "Engine/Texture2D.h"
@@ -228,6 +228,7 @@ void FVoxelToolBrushBase::GetBrushPlane(
 TSharedRef<const FVoxelToolRuntimeBrush> FVoxelToolBrush::GetRuntimeBrush() const
 {
 	VOXEL_FUNCTION_COUNTER();
+	check(IsInGameThread());
 
 	const TSharedRef<FVoxelToolRuntimeBrush> Brush = MakeShareable(new FVoxelToolRuntimeBrush());
 	Brush->BrushType = BrushType;

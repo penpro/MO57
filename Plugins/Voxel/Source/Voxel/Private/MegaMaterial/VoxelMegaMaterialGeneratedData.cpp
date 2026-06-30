@@ -1,81 +1,89 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #include "MegaMaterial/VoxelMegaMaterialGeneratedData.h"
 #include "MegaMaterial/VoxelMegaMaterial.h"
+#include "MegaMaterial/VoxelMegaMaterialProxy.h"
+#include "MegaMaterial/VoxelMegaMaterialCache.h"
 #include "MegaMaterial/VoxelMegaMaterialGenerator.h"
 #include "VoxelMaterialUsage.h"
-#include "Nanite/VoxelMaterialSelectionCS.h"
+#include "VoxelSettings.h"
 #include "Surface/VoxelSurfaceTypeAsset.h"
-#include "MegaMaterial/VoxelMegaMaterialCache.h"
-#include "MegaMaterial/VoxelMegaMaterialProxy.h"
+#include "Nanite/VoxelMaterialSelectionCS.h"
 
 #if WITH_EDITOR
 #include "AssetCompilingManager.h"
 #include "IAssetCompilingManager.h"
-#include "ComponentRecreateRenderStateContext.h"
+#include "Materials/Material.h"
+#include "Materials/MaterialInstanceConstant.h"
 #include "UObject/ObjectSaveContext.h"
 #include "MaterialEditor/PreviewMaterial.h"
-#include "Materials/MaterialFunction.h"
-#include "Materials/MaterialInstanceConstant.h"
 #endif
 
 #if WITH_EDITOR
 class FVoxelMegaMaterialGeneratedDataManager : public FVoxelSingleton
 {
 public:
-	TVoxelMap<TVoxelObjectPtr<UVoxelMegaMaterialGeneratedData>, bool> GeneratedDataToRebuildToIsInteractive;
+	TVoxelSet<TVoxelObjectPtr<UVoxelMegaMaterialGeneratedData>> GeneratedDataToRebuild;
 
 	//~ Begin FVoxelSingleton Interface
 	virtual void Initialize() override
 	{
-		UMaterial::OnMaterialCompilationFinished().AddLambda([](UMaterialInterface* Material)
+		UMaterial::OnMaterialCompilationFinished().AddLambda([](const UMaterialInterface* Material)
 		{
 			if (Material->IsA<UPreviewMaterial>())
 			{
 				return;
 			}
 
-			UVoxelMegaMaterialGeneratedData::OnMaterialChanged(Material);
+			if (GetDefault<UVoxelSettings>()->bDisableMegaMaterialAutoRecompile)
+			{
+				return;
+			}
+
+			UVoxelMegaMaterialGeneratedData::RebuildIfNeeded(Material);
 		});
 
-		FCoreUObjectDelegates::OnObjectPreSave.AddLambda([](UObject* Object, const FObjectPreSaveContext&)
+		FCoreUObjectDelegates::OnObjectPreSave.AddLambda([](const UObject* Object, const FObjectPreSaveContext&)
 		{
 			if (!Object)
 			{
 				return;
 			}
 
-			if (Object->IsA<UMaterialInstance>())
-			{
-				UVoxelMegaMaterialGeneratedData::OnMaterialChanged(CastChecked<UMaterialInstance>(Object));
-			}
-
-			if (Object->IsA<UMaterialFunction>())
-			{
-				UVoxelMegaMaterialGeneratedData::OnMaterialFunctionChanged(CastChecked<UMaterialFunction>(Object));
-			}
-		});
-
-		FCoreUObjectDelegates::OnObjectPropertyChanged.AddLambda([](UObject* Object, const FPropertyChangedEvent& PropertyChangedEvent)
-		{
-			if (!Object ||
-				!Object->IsA<UMaterialInstance>())
+			if (GetDefault<UVoxelSettings>()->bDisableMegaMaterialAutoRecompile)
 			{
 				return;
 			}
 
-			// Material instance changes don't have a proper Interactive flag set in PropertyChangedEvent
-			// Always assume they are interactive, OnObjectPreSave will handle the final flushing
-			UVoxelMegaMaterialGeneratedData::OnMaterialChanged(
-				CastChecked<UMaterialInstance>(Object),
-				true);
+			UVoxelMegaMaterialGeneratedData::RebuildIfNeeded(Object);
+		});
+
+		FCoreUObjectDelegates::OnObjectPropertyChanged.AddLambda([](const UObject* Object, const FPropertyChangedEvent& PropertyChangedEvent)
+		{
+			if (!Object)
+			{
+				return;
+			}
+
+			if (!Object->IsA<UMaterialInstance>() &&
+				!Object->IsA<UVoxelSurfaceTypeAsset>())
+			{
+				return;
+			}
+
+			if (GetDefault<UVoxelSettings>()->bDisableMegaMaterialAutoRecompile)
+			{
+				return;
+			}
+
+			UVoxelMegaMaterialGeneratedData::RebuildIfNeeded(Object);
 		});
 	}
 	virtual void Tick() override
 	{
 		VOXEL_FUNCTION_COUNTER();
 
-		if (GeneratedDataToRebuildToIsInteractive.Num() == 0)
+		if (GeneratedDataToRebuild.Num() == 0)
 		{
 			return;
 		}
@@ -90,10 +98,9 @@ public:
 			}
 		}
 
-		for (auto It = GeneratedDataToRebuildToIsInteractive.CreateIterator(); It; ++It)
+		for (auto It = GeneratedDataToRebuild.CreateIterator(); It; ++It)
 		{
-			UVoxelMegaMaterialGeneratedData* GeneratedData = It.Key().Resolve();
-			const bool bInteractive = It.Value();
+			UVoxelMegaMaterialGeneratedData* GeneratedData = It->Resolve();
 			It.RemoveCurrent();
 
 			if (!ensureVoxelSlow(GeneratedData))
@@ -101,7 +108,7 @@ public:
 				continue;
 			}
 
-			GeneratedData->RebuildNow(bInteractive);
+			GeneratedData->RebuildNow();
 
 			// Rebuild one at a time
 			break;
@@ -159,24 +166,17 @@ void UVoxelMegaMaterialGeneratedData::ForceRebuild()
 	QueueRebuild();
 }
 
-void UVoxelMegaMaterialGeneratedData::QueueRebuild(const bool bInteractive)
+void UVoxelMegaMaterialGeneratedData::QueueRebuild()
 {
-	if (bool* IsInteractivePtr = GVoxelMegaMaterialGeneratedDataManager->GeneratedDataToRebuildToIsInteractive.Find(this))
-	{
-		*IsInteractivePtr &= bInteractive;
-	}
-	else
-	{
-		GVoxelMegaMaterialGeneratedDataManager->GeneratedDataToRebuildToIsInteractive.Add_EnsureNew(this, bInteractive);
-	}
+	GVoxelMegaMaterialGeneratedDataManager->GeneratedDataToRebuild.Add(this);
 }
 
 bool UVoxelMegaMaterialGeneratedData::IsRebuildQueued() const
 {
-	return GVoxelMegaMaterialGeneratedDataManager->GeneratedDataToRebuildToIsInteractive.Contains(MakeVoxelObjectPtr(ConstCast(this)));
+	return GVoxelMegaMaterialGeneratedDataManager->GeneratedDataToRebuild.Contains(MakeVoxelObjectPtr(ConstCast(this)));
 }
 
-void UVoxelMegaMaterialGeneratedData::RebuildNow(const bool bInteractive)
+void UVoxelMegaMaterialGeneratedData::RebuildNow()
 {
 	VOXEL_FUNCTION_COUNTER();
 
@@ -187,11 +187,7 @@ void UVoxelMegaMaterialGeneratedData::RebuildNow(const bool bInteractive)
 	}
 
 	// Combine all recreates that will be triggered below
-	TVoxelOptional<FGlobalComponentRecreateRenderStateContext> Context;
-	if (!bInteractive)
-	{
-		Context.Emplace();
-	}
+	TSharedPtr<FGlobalComponentRecreateRenderStateContext> Context;
 
 	UVoxelMegaMaterial* MegaMaterial = GetMegaMaterial();
 	if (!ensureVoxelSlow(MegaMaterial))
@@ -201,6 +197,21 @@ void UVoxelMegaMaterialGeneratedData::RebuildNow(const bool bInteractive)
 
 	ON_SCOPE_EXIT
 	{
+		TSet<TObjectPtr<const UObject>> NewWatchedObjects;
+		NewWatchedObjects.Reserve(WatchedObjects.Num());
+
+		WatchedObjects.Reset();
+
+		ForeachObjectReference(*this, [&](const UObject* Object)
+		{
+			if (Object)
+			{
+				NewWatchedObjects.Add(Object);
+			}
+		});
+
+		WatchedObjects = MoveTemp(NewWatchedObjects);
+
 		if (const UVoxelMegaMaterialCache* Cache = GetTypedOuter<UVoxelMegaMaterialCache>())
 		{
 			Cache->AutoSaveIfEnabled();
@@ -277,15 +288,25 @@ void UVoxelMegaMaterialGeneratedData::RebuildNow(const bool bInteractive)
 		}
 	}
 
-	if (!bInteractive)
+	const FVoxelMegaMaterialState MegaMaterialState(*MegaMaterial);
+
+	TMap<FVoxelMaterialRenderIndex, FVoxelSurfaceTypeState> IndexToSurfaceType;
 	{
-		// Reset watched materials, they'll be added back below
-		WatchedMaterials.Reset();
-		WatchedMaterials.Add(MegaMaterial->AttributePostProcess);
+		IndexToSurfaceType.Reserve(IndexToSurfaceInfo.Num());
+
+		for (const auto& It : IndexToSurfaceInfo)
+		{
+			IndexToSurfaceType.Add(It.Key, FVoxelSurfaceTypeState(*It.Value.SurfaceType));
+		}
 	}
 
 	{
 		VOXEL_SCOPE_COUNTER("Generate targets");
+
+		FVoxelMegaMaterialTargetBaseState BaseState;
+		BaseState.MegaMaterial = MegaMaterialState;
+		BaseState.IndexToSurfaceType = IndexToSurfaceType;
+		BaseState.MetadataIndexToMetadata = MetadataIndexToMetadata;
 
 		if (MegaMaterial->NonNaniteMaterialType == EVoxelMegaMaterialGenerationType::Custom)
 		{
@@ -294,7 +315,7 @@ void UVoxelMegaMaterialGeneratedData::RebuildNow(const bool bInteractive)
 		}
 		else
 		{
-			GenerateMaterialForTarget(*MegaMaterial, EVoxelMegaMaterialTarget::NonNanite, bInteractive);
+			GenerateMaterialForTarget(*MegaMaterial, EVoxelMegaMaterialTarget::NonNanite, BaseState, Context);
 		}
 
 		if (MegaMaterial->NaniteDisplacementMaterialType == EVoxelMegaMaterialGenerationType::Custom)
@@ -310,11 +331,13 @@ void UVoxelMegaMaterialGeneratedData::RebuildNow(const bool bInteractive)
 
 				if (UMaterial* Material = MegaMaterial->CustomNaniteDisplacementMaterial->GetMaterial())
 				{
+					PRAGMA_DISABLE_DEPRECATION_WARNINGS
 					if (!Material->bUsedWithVoxelMaterialSelection)
 					{
 						Material->Modify();
 						Material->CheckMaterialUsage(MATUSAGE_VirtualHeightfieldMesh);
 					}
+					PRAGMA_ENABLE_DEPRECATION_WARNINGS
 				}
 			}
 
@@ -328,9 +351,9 @@ void UVoxelMegaMaterialGeneratedData::RebuildNow(const bool bInteractive)
 		}
 		else
 		{
-			GenerateMaterialForTarget(*MegaMaterial, EVoxelMegaMaterialTarget::NaniteWPO, bInteractive);
-			GenerateMaterialForTarget(*MegaMaterial, EVoxelMegaMaterialTarget::NaniteDisplacement, bInteractive);
-			GenerateMaterialForTarget(*MegaMaterial, EVoxelMegaMaterialTarget::NaniteMaterialSelection, bInteractive);
+			GenerateMaterialForTarget(*MegaMaterial, EVoxelMegaMaterialTarget::NaniteWPO, BaseState, Context);
+			GenerateMaterialForTarget(*MegaMaterial, EVoxelMegaMaterialTarget::NaniteDisplacement, BaseState, Context);
+			GenerateMaterialForTarget(*MegaMaterial, EVoxelMegaMaterialTarget::NaniteMaterialSelection, BaseState, Context);
 		}
 
 		if (MegaMaterial->LumenMaterialType == EVoxelMegaMaterialGenerationType::Custom)
@@ -340,30 +363,35 @@ void UVoxelMegaMaterialGeneratedData::RebuildNow(const bool bInteractive)
 		}
 		else
 		{
-			GenerateMaterialForTarget(*MegaMaterial, EVoxelMegaMaterialTarget::Lumen, bInteractive);
+			GenerateMaterialForTarget(*MegaMaterial, EVoxelMegaMaterialTarget::Lumen, BaseState, Context);
 		}
 	}
 
 	{
 		VOXEL_SCOPE_COUNTER("Generate materials");
 
-		const TMap<FVoxelMaterialRenderIndex, FVoxelMegaMaterialGeneratedMaterial> OldIndexToGeneratedMaterial = MoveTemp(IndexToGeneratedMaterial);
+		const TMap<FVoxelMaterialRenderIndex, FVoxelMegaMaterialMaterialGeneratedMaterial> OldIndexToGeneratedMaterial = MoveTemp(IndexToGeneratedMaterial);
 		check(IndexToGeneratedMaterial.Num() == 0);
 
-		for (const auto& It : IndexToSurfaceInfo)
+		for (const auto& It : IndexToSurfaceType)
 		{
-			FVoxelMegaMaterialGeneratedMaterial& GeneratedMaterial = IndexToGeneratedMaterial.Add(It.Key);
+			FVoxelMegaMaterialMaterialGeneratedMaterial& GeneratedMaterial = IndexToGeneratedMaterial.Add(It.Key);
 
-			if (const FVoxelMegaMaterialGeneratedMaterial* OldGeneratedMaterial = OldIndexToGeneratedMaterial.Find(It.Key))
+			if (const FVoxelMegaMaterialMaterialGeneratedMaterial* OldGeneratedMaterial = OldIndexToGeneratedMaterial.Find(It.Key))
 			{
 				GeneratedMaterial = *OldGeneratedMaterial;
 			}
 
+			FVoxelMegaMaterialMaterialState State;
+			State.MegaMaterial = MegaMaterialState;
+			State.SurfaceType = It.Value;
+			State.MetadataIndexToMetadata = MetadataIndexToMetadata;
+
 			GenerateMaterial(
 				*MegaMaterial,
-				*It.Value.SurfaceType,
+				State,
 				GeneratedMaterial,
-				bInteractive);
+				Context);
 		}
 	}
 
@@ -381,35 +409,15 @@ void UVoxelMegaMaterialGeneratedData::RebuildNow(const bool bInteractive)
 	}
 }
 
-void UVoxelMegaMaterialGeneratedData::OnMaterialChanged(
-	UMaterialInterface* Material,
-	const bool bInteractive)
+void UVoxelMegaMaterialGeneratedData::RebuildIfNeeded(const UObject* ChangedObject)
 {
 	VOXEL_FUNCTION_COUNTER();
 
-	ForEachObjectOfClass_Copy<UVoxelMegaMaterialGeneratedData>([&](UVoxelMegaMaterialGeneratedData& GeneratedData)
+	ForEachObjectOfClass<UVoxelMegaMaterialGeneratedData>([&](UVoxelMegaMaterialGeneratedData& GeneratedData)
 	{
-		if (!GeneratedData.WatchedMaterials.Contains(Material))
+		if (GeneratedData.WatchedObjects.Contains(ChangedObject))
 		{
-			return;
-		}
-
-		GeneratedData.QueueRebuild(bInteractive);
-	});
-}
-
-void UVoxelMegaMaterialGeneratedData::OnMaterialFunctionChanged(UMaterialFunction* MaterialFunction)
-{
-	VOXEL_FUNCTION_COUNTER();
-
-	ForEachObjectOfClass_Copy<UVoxelMegaMaterialGeneratedData>([&](UVoxelMegaMaterialGeneratedData& GeneratedData)
-	{
-		if (const UVoxelMegaMaterial* MegaMaterial = GeneratedData.WeakMegaMaterial.Resolve())
-		{
-			if (MegaMaterial->AttributePostProcess == MaterialFunction)
-			{
-				GeneratedData.QueueRebuild();
-			}
+			GeneratedData.QueueRebuild();
 		}
 	});
 }
@@ -423,11 +431,12 @@ void UVoxelMegaMaterialGeneratedData::OnMaterialFunctionChanged(UMaterialFunctio
 void UVoxelMegaMaterialGeneratedData::GenerateMaterialForTarget(
 	const UVoxelMegaMaterial& MegaMaterial,
 	const EVoxelMegaMaterialTarget Target,
-	const bool bInteractive)
+	const FVoxelMegaMaterialTargetBaseState& BaseState,
+	TSharedPtr<FGlobalComponentRecreateRenderStateContext>& Context)
 {
 	VOXEL_FUNCTION_COUNTER();
 
-	FVoxelMegaMaterialGeneratedMaterial& GeneratedMaterial = TargetToGeneratedMaterial.FindOrAdd(Target);
+	FVoxelMegaMaterialTargetGeneratedMaterial& GeneratedMaterial = TargetToGeneratedMaterial.FindOrAdd(Target);
 	if (!GeneratedMaterial.Material)
 	{
 		GeneratedMaterial.Material = FVoxelUtilities::NewObject_Safe<UMaterial>(
@@ -444,299 +453,45 @@ void UVoxelMegaMaterialGeneratedData::GenerateMaterialForTarget(
 		GeneratedMaterial.Instance->Parent = GeneratedMaterial.Material;
 	}
 
-	TargetToMaterial.Add(Target, GeneratedMaterial.Instance);
+	FVoxelMegaMaterialTargetState State;
+	static_cast<FVoxelMegaMaterialTargetBaseState&>(State) = BaseState;
+	State.Target = Target;
 
-	switch (Target)
-	{
-	default: check(false);
-	case EVoxelMegaMaterialTarget::NonNanite:
-	{
-		GeneratedMaterial.Material->bUsedWithNanite = false;
-		GeneratedMaterial.Material->bUsedWithVoxelPlugin = true;
-	}
-	break;
-	case EVoxelMegaMaterialTarget::NaniteWPO:
-	{
-		GeneratedMaterial.Material->bUsedWithNanite = true;
-		GeneratedMaterial.Material->bEnableTessellation = false;
-	}
-	break;
-	case EVoxelMegaMaterialTarget::NaniteDisplacement:
-	{
-		GeneratedMaterial.Material->bUsedWithNanite = true;
-		GeneratedMaterial.Material->bEnableTessellation = true;
-	}
-	break;
-	case EVoxelMegaMaterialTarget::NaniteMaterialSelection:
-	{
-		GeneratedMaterial.Material->bUsedWithNanite = false;
-		GeneratedMaterial.Material->bEnableTessellation = true;
-		GeneratedMaterial.Material->bUsedWithVoxelMaterialSelection = true;
-	}
-	break;
-	case EVoxelMegaMaterialTarget::Lumen:
-	{
-		GeneratedMaterial.Material->bUsedWithNanite = false;
-		GeneratedMaterial.Material->bUsedWithVoxelPlugin = true;
-	}
-	break;
-	}
-
-	const auto UpdateMaterialInstance = [&]
-	{
-		FMaterialInstanceParameterUpdateContext UpdateContext(GeneratedMaterial.Instance);
-
-		bool bChanged = false;
-		for (const auto& It : IndexToSurfaceInfo)
-		{
-			bChanged |= FVoxelUtilities::CopyParameterValues(
-				UpdateContext,
-				*GeneratedMaterial.Instance,
-				*It.Value.SurfaceType->Material,
-				"VOXELMATERIAL_" + FString::FromInt(It.Key.Index) + "_");
-		}
-
-		bChanged |= FVoxelMegaMaterialGenerator::ApplyBlendSmoothness(
-			IndexToSurfaceInfo,
-			*GeneratedMaterial.Material,
-			*GeneratedMaterial.Instance);
-
-		if (bChanged)
-		{
-			GeneratedMaterial.Instance->PostEditChange();
-		}
-	};
-
-	if (bInteractive)
-	{
-		UpdateMaterialInstance();
-		return;
-	}
-
-	if (!IsRunningCookCommandlet())
-	{
-		const double StartTime = FPlatformTime::Seconds();
-
-		UMaterial* DummyMaterial = NewObject<UMaterial>();
-		ON_SCOPE_EXIT
-		{
-			// Ensure the dummy material isn't compiled
-			FVoxelUtilities::ClearMaterialExpressions(*DummyMaterial);
-			DummyMaterial->CancelOutstandingCompilation();
-			DummyMaterial->ConditionalBeginDestroy();
-		};
-
-		// Copy flags to not fail diffing on them
-		DummyMaterial->bUsedWithNanite = GeneratedMaterial.Material->bUsedWithNanite;
-		DummyMaterial->bEnableTessellation = GeneratedMaterial.Material->bEnableTessellation;
-		DummyMaterial->bUsedWithVoxelPlugin = GeneratedMaterial.Material->bUsedWithVoxelPlugin;
-		DummyMaterial->bUsedWithVoxelMaterialSelection = GeneratedMaterial.Material->bUsedWithVoxelMaterialSelection;
-
-		UMaterialInstanceConstant* DummyMaterialInstance = NewObject<UMaterialInstanceConstant>();
-		DummyMaterialInstance->Parent = DummyMaterial;
-		ON_SCOPE_EXIT
-		{
-			DummyMaterialInstance->ConditionalBeginDestroy();
-		};
-
-		if (!ensureVoxelSlow(FVoxelMegaMaterialGenerator::GenerateMaterialForTarget(
-			MegaMaterial,
-			IndexToSurfaceInfo,
-			Target,
-			*DummyMaterial,
-			*DummyMaterialInstance,
-			MetadataIndexToMetadata,
-			WatchedMaterials,
-			true)))
-		{
-			return;
-		}
-
-		FString MaterialDiff;
-		const bool bSameMaterial = FVoxelUtilities::AreMaterialsIdentical(
-			*GeneratedMaterial.Material,
-			*DummyMaterial,
-			MaterialDiff);
-
-		const double EndTime = FPlatformTime::Seconds();
-
-		if (bSameMaterial)
-		{
-			UpdateMaterialInstance();
-			return;
-		}
-
-		LOG_VOXEL(Log, "Generating MegaMaterial %s target %s took %s, material changes detected. Regenerating. Changes: %s",
-			*MegaMaterial.GetPathName(),
-			LexToString(Target),
-			*FVoxelUtilities::SecondsToString(EndTime - StartTime),
-			*MaterialDiff);
-	}
-
-	const double StartTime = FPlatformTime::Seconds();
-
-	if (!ensure(FVoxelMegaMaterialGenerator::GenerateMaterialForTarget(
+	GeneratedMaterial.Update(
 		MegaMaterial,
-		IndexToSurfaceInfo,
-		Target,
-		*GeneratedMaterial.Material,
-		*GeneratedMaterial.Instance,
-		MetadataIndexToMetadata,
-		WatchedMaterials,
-		false)))
-	{
-		return;
-	}
+		State,
+		Context);
 
-	const double EndTime = FPlatformTime::Seconds();
-
-	LOG_VOXEL(Display, "Regenerating MegaMaterial %s target %s took %s",
-		*MegaMaterial.GetPathName(),
-		LexToString(Target),
-		*FVoxelUtilities::SecondsToString(EndTime - StartTime));
+	TargetToMaterial.Add(State.Target, GeneratedMaterial.Instance);
 }
 
 void UVoxelMegaMaterialGeneratedData::GenerateMaterial(
 	const UVoxelMegaMaterial& MegaMaterial,
-	const UVoxelSurfaceTypeAsset& SurfaceType,
-	FVoxelMegaMaterialGeneratedMaterial& GeneratedMaterial,
-	const bool bInteractive)
+	const FVoxelMegaMaterialMaterialState& State,
+	FVoxelMegaMaterialMaterialGeneratedMaterial& GeneratedMaterial,
+	TSharedPtr<FGlobalComponentRecreateRenderStateContext>& Context)
 {
 	VOXEL_FUNCTION_COUNTER();
-
-	const UMaterialInterface& MaterialInterface = *SurfaceType.Material;
 
 	if (!GeneratedMaterial.Material)
 	{
 		GeneratedMaterial.Material = FVoxelUtilities::NewObject_Safe<UMaterial>(
 			this,
-			FName(MegaMaterial.GetName() + "_Generated_" + MaterialInterface.GetName()));
+			FName(MegaMaterial.GetName() + "_Generated_" + State.SurfaceType.Object->GetName()));
 	}
 	if (!GeneratedMaterial.Instance ||
 		!ensureVoxelSlow(GeneratedMaterial.Instance->Parent == GeneratedMaterial.Material))
 	{
 		GeneratedMaterial.Instance = FVoxelUtilities::NewObject_Safe<UMaterialInstanceConstant>(
 			this,
-			FName(MegaMaterial.GetName() + "_GeneratedInstance_" + MaterialInterface.GetName()));
+			FName(MegaMaterial.GetName() + "_GeneratedInstance_" + State.SurfaceType.Object->GetName()));
 
 		GeneratedMaterial.Instance->Parent = GeneratedMaterial.Material;
 	}
 
-	if (bInteractive)
-	{
-		FMaterialInstanceParameterUpdateContext UpdateContext(GeneratedMaterial.Instance);
-
-		if (FVoxelUtilities::CopyParameterValues(
-			UpdateContext,
-			*GeneratedMaterial.Instance,
-			MaterialInterface,
-			{}))
-		{
-			GeneratedMaterial.Instance->PostEditChange();
-		}
-
-		return;
-	}
-
-	if (!IsRunningCookCommandlet())
-	{
-		const double StartTime = FPlatformTime::Seconds();
-
-		UMaterial* DummyMaterial = NewObject<UMaterial>();
-		ON_SCOPE_EXIT
-		{
-			// Ensure the dummy material isn't compiled
-			FVoxelUtilities::ClearMaterialExpressions(*DummyMaterial);
-			DummyMaterial->CancelOutstandingCompilation();
-			DummyMaterial->ConditionalBeginDestroy();
-		};
-
-		// Copy flags to not fail diffing on them
-		DummyMaterial->bUsedWithNanite = GeneratedMaterial.Material->bUsedWithNanite;
-		DummyMaterial->bEnableTessellation = GeneratedMaterial.Material->bEnableTessellation;
-		DummyMaterial->bUsedWithVoxelPlugin = GeneratedMaterial.Material->bUsedWithVoxelPlugin;
-		DummyMaterial->bUsedWithVoxelMaterialSelection = GeneratedMaterial.Material->bUsedWithVoxelMaterialSelection;
-
-		UMaterialInstanceConstant* DummyMaterialInstance = NewObject<UMaterialInstanceConstant>();
-		DummyMaterialInstance->Parent = DummyMaterial;
-		ON_SCOPE_EXIT
-		{
-			DummyMaterialInstance->ConditionalBeginDestroy();
-		};
-
-		if (!ensureVoxelSlow(FVoxelMegaMaterialGenerator::GenerateMaterial(
-			MegaMaterial,
-			SurfaceType,
-			*DummyMaterial,
-			*DummyMaterialInstance,
-			MetadataIndexToMetadata,
-			true)))
-		{
-			return;
-		}
-
-		FString MaterialDiff;
-		const bool bSameMaterial = FVoxelUtilities::AreMaterialsIdentical(
-			*GeneratedMaterial.Material,
-			*DummyMaterial,
-			MaterialDiff);
-
-		const double EndTime = FPlatformTime::Seconds();
-
-		if (bSameMaterial)
-		{
-			FString InstanceDiff;
-			const bool bSameMaterialInstance = FVoxelUtilities::AreInstancesIdentical(
-				*GeneratedMaterial.Instance,
-				*DummyMaterialInstance,
-				InstanceDiff);
-
-			if (bSameMaterialInstance)
-			{
-				LOG_VOXEL(Verbose, "Generating MegaMaterial %s material %s took %s, no changes detected",
-					*MegaMaterial.GetPathName(),
-					*MaterialInterface.GetName(),
-					*FVoxelUtilities::SecondsToString(EndTime - StartTime));
-
-				return;
-			}
-
-			LOG_VOXEL(Log, "Generating MegaMaterial %s material %s took %s, instance changes detected. Updating. Changes: %s",
-				*MegaMaterial.GetPathName(),
-				*MaterialInterface.GetName(),
-				*FVoxelUtilities::SecondsToString(EndTime - StartTime),
-				*InstanceDiff);
-
-			GeneratedMaterial.Instance->CopyMaterialUniformParametersEditorOnly(DummyMaterialInstance);
-			GeneratedMaterial.Instance->PostEditChange();
-			return;
-		}
-
-		LOG_VOXEL(Log, "Generating MegaMaterial %s material %s took %s, material changes detected. Regenerating. Changes: %s",
-			*MegaMaterial.GetPathName(),
-			*MaterialInterface.GetName(),
-			*FVoxelUtilities::SecondsToString(EndTime - StartTime),
-			*MaterialDiff);
-	}
-
-	const double StartTime = FPlatformTime::Seconds();
-
-	if (!ensure(FVoxelMegaMaterialGenerator::GenerateMaterial(
+	GeneratedMaterial.Update(
 		MegaMaterial,
-		SurfaceType,
-		*GeneratedMaterial.Material,
-		*GeneratedMaterial.Instance,
-		MetadataIndexToMetadata,
-		false)))
-	{
-		return;
-	}
-
-	const double EndTime = FPlatformTime::Seconds();
-
-	LOG_VOXEL(Display, "Regenerating MegaMaterial %s material %s took %s",
-		*MegaMaterial.GetPathName(),
-		*MaterialInterface.GetName(),
-		*FVoxelUtilities::SecondsToString(EndTime - StartTime));
+		State,
+		Context);
 }
 #endif

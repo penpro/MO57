@@ -1,4 +1,4 @@
-// Copyright Voxel Plugin SAS, 2026. All Rights Reserved.
+// Copyright Voxel Plugin SAS. All Rights Reserved.
 
 #pragma once
 
@@ -37,10 +37,14 @@ public:
 	{
 		return WeakWorld.Resolve();
 	}
-	FVector GetHitLocation() const
+	FVector GetHitLocation(const EVoxelWorldSpace Space) const
 	{
-		return HitLocation;
+		return Space == EVoxelWorldSpace::Absolute ? HitLocation + GetWorldOriginOffset() : HitLocation;
 	}
+	// World origin rebasing: viewport hits (and preview actors) are in the current world, but the
+	// sculpt data pipeline works in absolute space. Add this to brush positions to bring them to
+	// absolute space, matching SculptToWorld in AVoxelSculptVolume/AVoxelSculptHeight::GetSculptContext.
+	FVector GetWorldOriginOffset() const;
 	FVector GetHitNormal() const
 	{
 		return HitNormal;
