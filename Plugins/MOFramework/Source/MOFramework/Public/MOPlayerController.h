@@ -704,6 +704,15 @@ protected:
 	/** Setup default input context on begin play. */
 	void SetupDefaultInputContext();
 
+	/**
+	 * Duplicate the assigned InputMappingContext assets into per-controller
+	 * runtime copies so runtime key rebinding (FMOKeyBindingManager) mutates
+	 * THIS controller's copy and never the shared asset — which would otherwise
+	 * leak rebinds across players/sessions and dirty the asset in-editor.
+	 * Idempotent: copies are marked RF_Transient and skipped on later calls.
+	 */
+	void EnsureRuntimeInputContexts();
+
 private:
 	/** Currently active primary input context. */
 	EMOInputContext CurrentInputContext = EMOInputContext::PawnControl;

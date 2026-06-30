@@ -21,8 +21,11 @@
  * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
  * =============================================================================
  *
- * [2024-02] CONTEXT MODIFICATION: ApplyBinding modifies the InputMappingContext
- *   at runtime. Changes are NOT persisted to asset - use MOGameSettings.
+ * [2026-06] CONTEXT MODIFICATION: ApplyBinding edits the InputMappingContext in
+ *   place (MapKey/UnmapKey). AMOPlayerController::EnsureRuntimeInputContexts()
+ *   duplicates the shared IMC assets into per-controller RF_Transient copies at
+ *   BeginPlay, so these edits hit THIS controller's copy, never the shared asset.
+ *   Persisted custom bindings live in MOGameSettings; the asset stays immutable.
  *
  * [2024-02] SUBSYSTEM REFRESH: After modifying context, must remove and re-add
  *   to UEnhancedInputLocalPlayerSubsystem for changes to take effect.

@@ -63,6 +63,10 @@ void AMOPlayerController::BeginPlay()
 
 	UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController::BeginPlay - Setting up input context"));
 
+	// Swap the shared IMC assets for per-controller runtime copies BEFORE we add
+	// or rebind anything, so runtime key rebinding never mutates the shared asset. (#142)
+	EnsureRuntimeInputContexts();
+
 	// NOTE: Do NOT call SetInputMode() here - CommonUI manages input modes
 	// via GetDesiredInputConfig() on active widgets. The MOGameplayInputStub
 	// (RootContentWidgetClass on layer stacks) provides the baseline Game input mode.
@@ -516,6 +520,10 @@ void AMOPlayerController::SetInputContext(EMOInputContext NewContext, bool bRemo
 
 void AMOPlayerController::AddInputContext(EMOInputContext Context)
 {
+	// Defensive: guarantee we operate on the per-controller runtime copies even if
+	// a context switch ever happens before BeginPlay. Idempotent. (#142)
+	EnsureRuntimeInputContexts();
+
 	UInputMappingContext* MappingContext = nullptr;
 	int32 Priority = 0;
 
@@ -617,6 +625,35 @@ void AMOPlayerController::SetupDefaultInputContext()
 	{
 		UE_LOG(LogMOFramework, Warning, TEXT("AMOPlayerController: PawnControlContext is NOT set! No input mapping context active."));
 	}
+}
+
+void AMOPlayerController::EnsureRuntimeInputContexts()
+{
+	// Runtime key rebinding (FMOKeyBindingManager::ApplyBinding) edits the mapping
+	// context in place via MapKey/UnmapKey. Those edits must never touch the shared
+	// IMC *asset*: it's referenced by every controller and, in-editor, is the on-disk
+	// asset, so mutating it leaks rebinds across players/sessions and dirties the asset.
+	// Duplicate each assigned context into a per-controller transient copy and point our
+	// field at it; all downstream add/remove/rebind code then works on the copy.
+	auto MakeRuntimeCopy = [this](TObjectPtr<UInputMappingContext>& Field, const TCHAR* DebugName)
+	{
+		if (Field && !Field->HasAnyFlags(RF_Transient))
+		{
+			if (UInputMappingContext* RuntimeCopy = DuplicateObject<UInputMappingContext>(Field, this))
+			{
+				RuntimeCopy->SetFlags(RF_Transient);
+				Field = RuntimeCopy;
+			}
+			else
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOPlayerController] Failed to duplicate %s for runtime rebinding; rebinds would fall back to mutating the shared asset"), DebugName);
+			}
+		}
+	};
+
+	MakeRuntimeCopy(PawnControlContext, TEXT("PawnControlContext"));
+	MakeRuntimeCopy(BaseBuildingContext, TEXT("BaseBuildingContext"));
+	MakeRuntimeCopy(MenuContext, TEXT("MenuContext"));
 }
 
 // ============================================================================
