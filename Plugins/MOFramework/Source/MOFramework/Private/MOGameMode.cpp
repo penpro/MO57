@@ -5,6 +5,7 @@
 #include "MOCharacter.h"
 #include "MORecruitmentComponent.h"
 #include "MOIdentityComponent.h"
+#include "MOSpawnManagerSubsystem.h" // (H51) GenerateRandomSurvivorName — shared name generator
 #include "MOPCGInteractionSubsystem.h"
 #include "MOPersistenceSubsystem.h"
 #include "MOQuestSubsystem.h"
@@ -394,18 +395,43 @@ void AMOGameMode::RegroundAllPawns()
 		FVector TraceStart = FVector(CurrentLocation.X, CurrentLocation.Y, CurrentLocation.Z + RegroundTraceHalfHeight);
 		FVector TraceEnd = FVector(CurrentLocation.X, CurrentLocation.Y, CurrentLocation.Z - RegroundTraceHalfHeight);
 
-		FHitResult HitResult;
+		// (H52) Use a MULTI-hit trace and pick the voxel surface NEAREST the
+		// saved Z, not the topmost. A single-hit downward trace returns the
+		// first (highest) surface, so a pawn saved inside a dug tunnel/cave
+		// would be re-snapped to the hill above it. Caves/mining are a project
+		// pillar — the floor the pawn was actually standing on is the one
+		// closest to its saved Z within the search window.
+		TArray<FHitResult> HitResults;
 		FCollisionQueryParams QueryParams;
 		QueryParams.AddIgnoredActor(Character);
 
-		if (World->LineTraceSingleByChannel(HitResult, TraceStart, TraceEnd, ECC_Visibility, QueryParams))
+		if (World->LineTraceMultiByChannel(HitResults, TraceStart, TraceEnd, ECC_Visibility, QueryParams))
 		{
-			// Check if we hit voxel terrain
-			AActor* HitActor = HitResult.GetActor();
-			if (HitActor && HitActor->IsA<AVoxelWorld>())
+			const FHitResult* BestVoxelHit = nullptr;
+			float BestZDelta = TNumericLimits<float>::Max();
+			for (const FHitResult& Candidate : HitResults)
+			{
+				if (!Candidate.bBlockingHit)
+				{
+					continue;
+				}
+				AActor* CandidateActor = Candidate.GetActor();
+				if (!CandidateActor || !CandidateActor->IsA<AVoxelWorld>())
+				{
+					continue;
+				}
+				const float ZDelta = FMath::Abs(Candidate.ImpactPoint.Z - CurrentLocation.Z);
+				if (ZDelta < BestZDelta)
+				{
+					BestZDelta = ZDelta;
+					BestVoxelHit = &Candidate;
+				}
+			}
+
+			if (BestVoxelHit)
 			{
 				// Land snug on terrain — small lift just clears collision.
-				FVector NewLocation = HitResult.ImpactPoint + FVector(0.0f, 0.0f, RegroundLiftAboveTerrain);
+				FVector NewLocation = BestVoxelHit->ImpactPoint + FVector(0.0f, 0.0f, RegroundLiftAboveTerrain);
 
 				// Only relocate if the mismatch is meaningful. Saved position is
 				// authoritative — wiggles smaller than RegroundTriggerThreshold
@@ -640,13 +666,16 @@ void AMOGameMode::PollPlayerLanding()
 		}
 	}
 
-	// Wider Z range: ±200m. Even if terrain regenerated significantly
-	// off the saved Z, we'll catch it.
-	const float SearchHalfRange = FMath::Max(PlayerLandingTerrainSearchDistance, 20000.0f);
+	// (H52) Honor the configured search distance instead of a hard 20000cm
+	// floor. The FMath::Max(..., 20000.0f) that used to live here made the
+	// documented ±PlayerLandingTerrainSearchDistance config dead — the probe
+	// always reached ±200m regardless of the setting, which is exactly the
+	// behavior the property exists to constrain (it warns against picking up
+	// "wrong" terrain in caves/underground voids).
+	const float SearchHalfRange = PlayerLandingTerrainSearchDistance;
 	const FVector SweepStart(SavedAnchorXY.X, SavedAnchorXY.Y, SavedAnchorZ + SearchHalfRange);
 	const FVector SweepEnd  (SavedAnchorXY.X, SavedAnchorXY.Y, SavedAnchorZ - SearchHalfRange);
 
-	FHitResult Hit;
 	FCollisionQueryParams QueryParams;
 	QueryParams.AddIgnoredActor(Pawn);
 	QueryParams.bTraceComplex = false; // voxel uses SIMPLE collision
@@ -654,9 +683,37 @@ void AMOGameMode::PollPlayerLanding()
 	const FCollisionShape CapsuleShape =
 		FCollisionShape::MakeCapsule(CapsuleRadius, CapsuleHalfHeight);
 
-	const bool bHit = World->SweepSingleByChannel(
-		Hit, SweepStart, SweepEnd, FQuat::Identity,
+	// (H52) Sweep for ALL blocking surfaces in the window and keep the one
+	// NEAREST the saved anchor Z, not the topmost. A single downward sweep
+	// returns the first (highest) surface, so a save made inside a dug
+	// tunnel/cave re-snapped the pawn to the hill surface above it every poll
+	// (~250ms). Caves/mining are a project pillar — the surface the player
+	// actually saved on is the one closest to SavedAnchorZ.
+	TArray<FHitResult> Hits;
+	const bool bAnyHit = World->SweepMultiByChannel(
+		Hits, SweepStart, SweepEnd, FQuat::Identity,
 		ECC_Pawn, CapsuleShape, QueryParams);
+
+	FHitResult Hit;
+	bool bHit = false;
+	if (bAnyHit)
+	{
+		float BestZDelta = TNumericLimits<float>::Max();
+		for (const FHitResult& Candidate : Hits)
+		{
+			if (!Candidate.bBlockingHit)
+			{
+				continue;
+			}
+			const float ZDelta = FMath::Abs(Candidate.ImpactPoint.Z - SavedAnchorZ);
+			if (ZDelta < BestZDelta)
+			{
+				BestZDelta = ZDelta;
+				Hit = Candidate;
+				bHit = true;
+			}
+		}
+	}
 
 	// Re-snap pawn to detected terrain each tick. As voxel LODs refine, the
 	// surface Z may shift slightly; following it keeps the pawn from being
@@ -821,30 +878,38 @@ void AMOGameMode::SpawnInitialPawn()
 		return;
 	}
 
-	// Assign a random name to the initial character
+	// Assign the initial character's name.
 	if (UMOIdentityComponent* IdentityComp = NewPawn->FindComponentByClass<UMOIdentityComponent>())
 	{
 		if (IdentityComp->DisplayName.IsEmpty())
 		{
-			// Name pools for initial character
-			static const TArray<FString> FirstNames = {
-				TEXT("Alex"), TEXT("Sam"), TEXT("Jordan"), TEXT("Taylor"), TEXT("Morgan"),
-				TEXT("Casey"), TEXT("Riley"), TEXT("Quinn"), TEXT("Avery"), TEXT("Parker"),
-				TEXT("Emma"), TEXT("Liam"), TEXT("Olivia"), TEXT("Noah"), TEXT("Ava"),
-				TEXT("Sophia"), TEXT("Jackson"), TEXT("Isabella"), TEXT("Lucas"), TEXT("Mia")
-			};
-			static const TArray<FString> LastNames = {
-				TEXT("Smith"), TEXT("Johnson"), TEXT("Williams"), TEXT("Brown"), TEXT("Jones"),
-				TEXT("Garcia"), TEXT("Miller"), TEXT("Davis"), TEXT("Rodriguez"), TEXT("Martinez"),
-				TEXT("Anderson"), TEXT("Taylor"), TEXT("Thomas"), TEXT("Moore"), TEXT("Jackson")
-			};
+			// (H51) Consume PendingSurvivorName (written by the new-game panel,
+			// which derived the save slot from it — e.g. slot "Alex_Smith-01").
+			// Previously this rolled a fresh name from a DUPLICATE local pool,
+			// so the slot said one name but the pawn got another, and the stale
+			// pending name was later stolen by the first wandering survivor.
+			// Mirror the consume-then-fallback shape in MOSpawnManagerSubsystem's
+			// AssignSurvivorNameIfNeeded, sharing the canonical name generator.
+			FString NameToAssign;
+			if (UMOGameSettings* Settings = UMOGameSettings::GetMOGameSettings())
+			{
+				if (!Settings->PendingSurvivorName.IsEmpty())
+				{
+					NameToAssign = Settings->PendingSurvivorName;
+					Settings->PendingSurvivorName.Empty();
+					UE_LOG(LogMOFramework, Log,
+						TEXT("[MOGameMode] Initial pawn consumed pending survivor name '%s' from new-game flow"),
+						*NameToAssign);
+				}
+			}
 
-			const FString& FirstName = FirstNames[FMath::RandRange(0, FirstNames.Num() - 1)];
-			const FString& LastName = LastNames[FMath::RandRange(0, LastNames.Num() - 1)];
-			FString FullName = FString::Printf(TEXT("%s %s"), *FirstName, *LastName);
+			if (NameToAssign.IsEmpty())
+			{
+				NameToAssign = UMOSpawnManagerSubsystem::GenerateRandomSurvivorName();
+			}
 
-			IdentityComp->SetDisplayName(FText::FromString(FullName));
-			UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Initial pawn assigned name: %s"), *FullName);
+			IdentityComp->SetDisplayName(FText::FromString(NameToAssign));
+			UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Initial pawn assigned name: %s"), *NameToAssign);
 		}
 	}
 
