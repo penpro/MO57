@@ -251,7 +251,7 @@ public:
 	// ============================================================================
 
 	/** Current combat state. */
-	UPROPERTY(Replicated, BlueprintReadOnly, Category="MO|Combat")
+	UPROPERTY(ReplicatedUsing=OnRep_CombatState, BlueprintReadOnly, Category="MO|Combat")
 	EMOCombatState CombatState = EMOCombatState::Idle;
 
 	/** Whether we are considered "in combat" (for activity level, UI, etc). */
@@ -266,9 +266,13 @@ public:
 	UPROPERTY(Replicated, BlueprintReadOnly, Category="MO|Combat")
 	FMOWeaponState OffHandWeapon;
 
-	/** Current attack type being executed. */
-	UPROPERTY(BlueprintReadOnly, Category="MO|Combat")
+	/** Current attack type being executed. Replicated so remote clients pick the right montage. */
+	UPROPERTY(Replicated, BlueprintReadOnly, Category="MO|Combat")
 	EMOAttackType CurrentAttackType = EMOAttackType::Light;
+
+	/** Drives client-side combat cosmetics (montage + OnCombatStateChanged) from the replicated state. */
+	UFUNCTION()
+	void OnRep_CombatState(EMOCombatState OldState);
 
 	// ============================================================================
 	// DELEGATES
@@ -375,6 +379,29 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category="MO|Combat|Defense")
 	bool StartDodge(const FVector& Direction);
+
+	// ============================================================================
+	// SERVER RPCs - client->server transport for player-driven combat verbs (H18).
+	// Locally-controlled clients forward intent here; the server runs the verb
+	// authoritatively and CombatState/CurrentAttackType replicate the result back.
+	// ============================================================================
+	UFUNCTION(Server, Reliable)
+	void ServerStartAttack(EMOAttackType AttackType);
+
+	UFUNCTION(Server, Reliable)
+	void ServerCancelAttack();
+
+	UFUNCTION(Server, Reliable)
+	void ServerStartBlock();
+
+	UFUNCTION(Server, Reliable)
+	void ServerStopBlock();
+
+	UFUNCTION(Server, Reliable)
+	void ServerAttemptParry();
+
+	UFUNCTION(Server, Reliable)
+	void ServerStartDodge(FVector Direction);
 
 	/**
 	 * Check if we are currently blocking.

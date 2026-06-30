@@ -123,6 +123,7 @@ void UMOCombatComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& O
 	DOREPLIFETIME(UMOCombatComponent, bInCombat);
 	DOREPLIFETIME(UMOCombatComponent, MainHandWeapon);
 	DOREPLIFETIME(UMOCombatComponent, OffHandWeapon);
+	DOREPLIFETIME(UMOCombatComponent, CurrentAttackType);
 }
 
 // ============================================================================
@@ -141,6 +142,14 @@ bool UMOCombatComponent::StartHeavyAttack()
 
 bool UMOCombatComponent::StartAttack(EMOAttackType AttackType)
 {
+	// Player-driven verb: a remote client forwards intent to the server, which runs the
+	// verb authoritatively; CombatState/CurrentAttackType replicate the result back (H18).
+	if (!GetOwner()->HasAuthority())
+	{
+		ServerStartAttack(AttackType);
+		return true;
+	}
+
 	FString Reason;
 	if (!CanAttack(AttackType, Reason))
 	{
@@ -188,6 +197,12 @@ bool UMOCombatComponent::StartAttack(EMOAttackType AttackType)
 
 bool UMOCombatComponent::CancelAttack()
 {
+	if (!GetOwner()->HasAuthority())
+	{
+		ServerCancelAttack();
+		return true;
+	}
+
 	if (CombatState != EMOCombatState::WindingUp)
 	{
 		return false;
@@ -242,6 +257,12 @@ bool UMOCombatComponent::CanAttack(EMOAttackType AttackType, FString& OutReason)
 
 bool UMOCombatComponent::StartBlock()
 {
+	if (!GetOwner()->HasAuthority())
+	{
+		ServerStartBlock();
+		return true;
+	}
+
 	if (CombatState != EMOCombatState::Idle &&
 		CombatState != EMOCombatState::Ready)
 	{
@@ -262,6 +283,12 @@ bool UMOCombatComponent::StartBlock()
 
 void UMOCombatComponent::StopBlock()
 {
+	if (!GetOwner()->HasAuthority())
+	{
+		ServerStopBlock();
+		return;
+	}
+
 	if (CombatState != EMOCombatState::Blocking)
 	{
 		return;
@@ -273,6 +300,12 @@ void UMOCombatComponent::StopBlock()
 
 bool UMOCombatComponent::AttemptParry()
 {
+	if (!GetOwner()->HasAuthority())
+	{
+		ServerAttemptParry();
+		return true;
+	}
+
 	if (CombatState != EMOCombatState::Idle &&
 		CombatState != EMOCombatState::Ready &&
 		CombatState != EMOCombatState::Blocking)
@@ -311,6 +344,12 @@ bool UMOCombatComponent::AttemptParry()
 
 bool UMOCombatComponent::StartDodge(const FVector& Direction)
 {
+	if (!GetOwner()->HasAuthority())
+	{
+		ServerStartDodge(Direction);
+		return true;
+	}
+
 	if (CombatState != EMOCombatState::Idle &&
 		CombatState != EMOCombatState::Ready &&
 		CombatState != EMOCombatState::Blocking)
@@ -339,6 +378,52 @@ bool UMOCombatComponent::StartDodge(const FVector& Direction)
 
 	UE_LOG(LogMOFramework, Verbose, TEXT("[MOCombat] Started dodge"));
 	return true;
+}
+
+// ============================================================================
+// SERVER RPCs + REPLICATION (H18 - client->server transport for combat verbs)
+// ============================================================================
+
+void UMOCombatComponent::ServerStartAttack_Implementation(EMOAttackType AttackType)
+{
+	StartAttack(AttackType);
+}
+
+void UMOCombatComponent::ServerCancelAttack_Implementation()
+{
+	CancelAttack();
+}
+
+void UMOCombatComponent::ServerStartBlock_Implementation()
+{
+	StartBlock();
+}
+
+void UMOCombatComponent::ServerStopBlock_Implementation()
+{
+	StopBlock();
+}
+
+void UMOCombatComponent::ServerAttemptParry_Implementation()
+{
+	AttemptParry();
+}
+
+void UMOCombatComponent::ServerStartDodge_Implementation(FVector Direction)
+{
+	StartDodge(Direction);
+}
+
+void UMOCombatComponent::OnRep_CombatState(EMOCombatState OldState)
+{
+	// Clients mirror the cosmetics the server already broadcast via SetCombatState.
+	OnCombatStateChanged.Broadcast(OldState, CombatState);
+
+	// Show the attack montage on remote clients (the authority played it inline).
+	if (CombatState == EMOCombatState::WindingUp)
+	{
+		PlayAttackAnimation();
+	}
 }
 
 // ============================================================================
