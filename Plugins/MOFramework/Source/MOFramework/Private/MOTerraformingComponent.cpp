@@ -183,6 +183,14 @@ bool UMOTerraformingComponent::TryTerraform()
 
 bool UMOTerraformingComponent::TerraformAtLocation(const FVector& WorldLocation, EMOTerraformMode Mode)
 {
+	// Server-authoritative: voxel edits + the RegisterModifiedZone persistence record
+	// must only run on the server; a non-authority caller no-ops (H17). Remote-client
+	// terraform transport (ServerBeginTerraform + multicast re-apply) is a flagged follow-on.
+	if (!GetOwner()->HasAuthority())
+	{
+		return false;
+	}
+
 	// RemoveFoliage doesn't need a voxel sculpt actor — it works on world
 	// HISM/ISM components — so let it through before the HasValidSculptActor gate.
 	if (Mode != EMOTerraformMode::RemoveFoliage && !HasValidSculptActor())
@@ -697,6 +705,14 @@ void UMOTerraformingComponent::CancelTerraform()
 bool UMOTerraformingComponent::ApplyPendingTerraform()
 {
 	if (!PendingAction.bActive)
+	{
+		return false;
+	}
+
+	// Server-authoritative: the actual voxel mutation + RegisterModifiedZone run only on
+	// the server. The timed action's tick runs wherever BeginTerraform was called, so gate
+	// the apply here so a client-side tick can never mutate the voxel world / persistence (H17).
+	if (!GetOwner()->HasAuthority())
 	{
 		return false;
 	}
