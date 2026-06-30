@@ -1149,7 +1149,22 @@ void AMOGameMode::RecoverStuckSpawn()
 	APawn* Pawn = PendingLandingPawn.Get();
 	if (!Pawn)
 	{
+		// The pawn we were waiting on was destroyed mid-spawn. Don't just clear the
+		// timer and bail — that strands the player on the loading screen forever.
+		// Dismiss it and clear the transition flag, same as the success path. (H32)
 		GetWorld()->GetTimerManager().ClearTimer(PawnLandingTimerHandle);
+		PendingLandingPawn.Reset();
+		if (UGameInstance* GI = GetGameInstance())
+		{
+			if (UMOGameInstance* MOGI = Cast<UMOGameInstance>(GI))
+			{
+				MOGI->DismissLoadingScreen();
+			}
+		}
+		if (UMOGameSettings* Settings = UMOGameSettings::GetMOGameSettings())
+		{
+			Settings->bIsLoadingIntoGameplay = false;
+		}
 		return;
 	}
 

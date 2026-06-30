@@ -7,6 +7,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "MOIdentityComponent.h"
+#include "MOPersistenceSubsystem.h"
 #include "MOInteractorComponent.h"
 #include "MOInventoryComponent.h"
 #include "MOKnowledgeComponent.h"
@@ -1138,6 +1139,23 @@ void AMOCharacter::HandleInstantDeath(EMOBodyPartType CausePart)
 	// clean snapshot — vitals/skills/inventory haven't been touched yet,
 	// so the recap can pull final stats accurately.
 	OnPawnDied.Broadcast(this, CausePart);
+
+	// Permadeath: record the death in the save so this pawn doesn't resurrect on
+	// reload (MarkPawnDeceased previously had zero callers — H28). Authority-only:
+	// it mutates the persisted world save.
+	if (HasAuthority() && IdentityComponent)
+	{
+		if (UWorld* World = GetWorld())
+		{
+			if (UGameInstance* GI = World->GetGameInstance())
+			{
+				if (UMOPersistenceSubsystem* Persistence = GI->GetSubsystem<UMOPersistenceSubsystem>())
+				{
+					Persistence->MarkPawnDeceased(IdentityComponent->GetGuid());
+				}
+			}
+		}
+	}
 
 	// Fire the Death interrupt BEFORE we tear down input/movement. Listeners
 	// (active build, harvest, inspection, crafting) will see the Death reason
