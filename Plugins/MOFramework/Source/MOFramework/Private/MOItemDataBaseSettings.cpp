@@ -146,11 +146,12 @@ bool UMOItemDatabaseSettings::GetItemDefinition(FName ItemDefinitionId, FMOItemD
 void UMOItemDatabaseSettings::BuildCacheIfNeeded()
 {
 #if WITH_EDITOR
-	// In editor builds, skip caching entirely to always pick up DataTable changes
-	// Performance impact is negligible for development
+	// In editor builds, skip caching entirely to always pick up DataTable changes.
+	// Performance impact is negligible for development. The cache-building code
+	// below is #else'd out so it isn't compiled (and flagged unreachable) in
+	// editor builds — UE5.8/V7 build settings treat unreachable code as an error.
 	return;
-#endif
-
+#else
 	if (bCacheBuilt)
 	{
 		return;
@@ -207,6 +208,7 @@ void UMOItemDatabaseSettings::BuildCacheIfNeeded()
 	{
 		UE_LOG(LogMOFramework, Log, TEXT("[MOItemDatabase] Built cache with %d items"), CachedItemDefinitions.Num());
 	}
+#endif // !WITH_EDITOR
 }
 
 void UMOItemDatabaseSettings::InvalidateCache()

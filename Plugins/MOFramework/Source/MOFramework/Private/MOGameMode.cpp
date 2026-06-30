@@ -915,7 +915,8 @@ FVector AMOGameMode::FindSafeSpawnLocation() const
 	// Target beach spawn: between MinSpawnHeightAboveWater and MaxSpawnHeightAboveWater
 	const float IdealBeachMaxZ = WaterLevelZ + MaxSpawnHeightAboveWater;
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] FindSafeSpawnLocation: WaterLevelZ=%.1f, MinSpawnZ=%.1f, BeachMaxZ=%.1f, MinSlopeNormalZ=%.2f, VoxelOnly=%d"),
+	// [5.8 landfall diag] Warning-level so it shows in packaged logs — demote to Log once #150 is fixed.
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOGameMode] FindSafeSpawnLocation: WaterLevelZ=%.1f, MinSpawnZ=%.1f, BeachMaxZ=%.1f, MinSlopeNormalZ=%.2f, VoxelOnly=%d"),
 		WaterLevelZ, MinSpawnZ, IdealBeachMaxZ, MinSpawnSurfaceNormalZ, bSpawnOnlyOnVoxelTerrain ? 1 : 0);
 
 	// Track best beach candidate (lowest point within beach height range)
@@ -1080,7 +1081,8 @@ FVector AMOGameMode::FindSafeSpawnLocation() const
 		}
 	}
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Spawn search stats: TotalHits=%d, AboveWater=%d, RejectedNotVoxel=%d, RejectedSteep=%d, FoundBeach=%d, FoundLand=%d"),
+	// [5.8 landfall diag] Warning-level so it shows in packaged logs — demote to Log once #150 is fixed.
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOGameMode] Spawn search stats: TotalHits=%d, AboveWater=%d, RejectedNotVoxel=%d, RejectedSteep=%d, FoundBeach=%d, FoundLand=%d"),
 		TotalHits, HitsAboveWater, HitsRejectedNotVoxel, HitsRejectedTooSteep, bFoundBeach ? 1 : 0, bFoundLand ? 1 : 0);
 
 	// Prefer beach location if found

@@ -6,6 +6,7 @@
 #include "MOAudioSettings.h"
 #include "MOFramework.h"
 #include "MOGameClockSubsystem.h"
+#include "MOGameSettings.h"
 #include "MOMainMenuGameMode.h"
 
 #include "Camera/PlayerCameraManager.h"
@@ -239,6 +240,24 @@ void UMOAudioSubsystem::HandleWorldAudioContext(UWorld* World)
 
 	if (bIsMainMenu)
 	{
+		// Defer menu music while the intro video is still pending. The intro has
+		// its own audio, so starting Cedar over it clashes. This guard is what
+		// makes the deferral robust: HandleWorldAudioContext also runs from the
+		// PostLoadMapWithWorld delegate, which fires the instant the menu map
+		// loads — before the intro completes — so MOMainMenuGameMode::BeginPlay's
+		// own deferral isn't enough on its own (the bug only surfaces in packaged
+		// builds, where PostLoadMap beats the intro). When the video finishes,
+		// MOMainMenuPlayerController::HandleIntroComplete clears bPlayIntro and
+		// calls back here, so the music starts then.
+		const UMOGameSettings* Settings = UMOGameSettings::GetMOGameSettings();
+		if (Settings && Settings->bPlayIntro)
+		{
+			UE_LOG(LogMOFramework, Log,
+				TEXT("[MOAudio] Main menu '%s' — intro pending, deferring menu music"),
+				*World->GetName());
+			return;
+		}
+
 		UE_LOG(LogMOFramework, Warning,
 			TEXT("[MOAudio] World audio context: main menu '%s' — main menu music"),
 			*World->GetName());

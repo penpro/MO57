@@ -16,10 +16,7 @@
 #include "Engine/World.h"
 
 // Voxel plugin includes
-#include "Sculpt/Height/VoxelHeightSculptActor.h"
-#include "Sculpt/Height/VoxelHeightSculptBlueprintLibrary.h"
-#include "Sculpt/Volume/VoxelVolumeSculptActor.h"
-#include "Sculpt/Volume/VoxelVolumeSculptBlueprintLibrary.h"
+#include "MOVoxelAlias.h"  // all Voxel sculpt calls go through this facade
 #include "Sculpt/VoxelSculptMode.h"
 #include "Sculpt/VoxelLevelToolType.h"
 
@@ -91,22 +88,18 @@ void UMOTerraformingComponent::AutoFindSculptActors()
 		return;
 	}
 
-	// Find height sculpt actor
-	TArray<AActor*> HeightActors;
-	UGameplayStatics::GetAllActorsOfClass(World, AVoxelHeightSculptActor::StaticClass(), HeightActors);
-	if (HeightActors.Num() > 0)
+	// Find height sculpt actor (facade hides the Voxel actor type)
+	if (AActor* Height = MOVoxel::FindHeightSculptActor(World))
 	{
-		HeightSculptActor = Cast<AVoxelHeightSculptActor>(HeightActors[0]);
-		UE_LOG(LogMOFramework, Log, TEXT("[MOTerraforming] Auto-found HeightSculptActor: %s"), *HeightActors[0]->GetName());
+		HeightSculptActor = Height;
+		UE_LOG(LogMOFramework, Log, TEXT("[MOTerraforming] Auto-found HeightSculptActor: %s"), *Height->GetName());
 	}
 
 	// Find volume sculpt actor
-	TArray<AActor*> VolumeActors;
-	UGameplayStatics::GetAllActorsOfClass(World, AVoxelVolumeSculptActor::StaticClass(), VolumeActors);
-	if (VolumeActors.Num() > 0)
+	if (AActor* Volume = MOVoxel::FindVolumeSculptActor(World))
 	{
-		VolumeSculptActor = Cast<AVoxelVolumeSculptActor>(VolumeActors[0]);
-		UE_LOG(LogMOFramework, Log, TEXT("[MOTerraforming] Auto-found VolumeSculptActor: %s"), *VolumeActors[0]->GetName());
+		VolumeSculptActor = Volume;
+		UE_LOG(LogMOFramework, Log, TEXT("[MOTerraforming] Auto-found VolumeSculptActor: %s"), *Volume->GetName());
 	}
 }
 
@@ -289,77 +282,45 @@ bool UMOTerraformingComponent::Smooth(const FVector& WorldLocation)
 
 bool UMOTerraformingComponent::HeightDig(const FVector2D& Location)
 {
-	AVoxelHeightSculptActor* Actor = HeightSculptActor.Get();
+	AActor* Actor = HeightSculptActor.Get();
 	if (!IsValid(Actor))
 	{
 		return false;
 	}
-
-	UVoxelHeightSculptBlueprintLibrary::SculptHeight(
-		Actor,
-		Location,
-		Config.Radius,
-		Config.RaiseLowerStrength,
-		EVoxelSculptMode::Remove
-	);
-
+	MOVoxel::HeightSculpt(Actor, Location, Config.Radius, Config.RaiseLowerStrength, /*bAdd*/ false);
 	return true;
 }
 
 bool UMOTerraformingComponent::HeightRaise(const FVector2D& Location)
 {
-	AVoxelHeightSculptActor* Actor = HeightSculptActor.Get();
+	AActor* Actor = HeightSculptActor.Get();
 	if (!IsValid(Actor))
 	{
 		return false;
 	}
-
-	UVoxelHeightSculptBlueprintLibrary::SculptHeight(
-		Actor,
-		Location,
-		Config.Radius,
-		Config.RaiseLowerStrength,
-		EVoxelSculptMode::Add
-	);
-
+	MOVoxel::HeightSculpt(Actor, Location, Config.Radius, Config.RaiseLowerStrength, /*bAdd*/ true);
 	return true;
 }
 
 bool UMOTerraformingComponent::HeightFlatten(const FVector2D& Location, float TargetHeight)
 {
-	AVoxelHeightSculptActor* Actor = HeightSculptActor.Get();
+	AActor* Actor = HeightSculptActor.Get();
 	if (!IsValid(Actor))
 	{
 		return false;
 	}
-
-	UVoxelHeightSculptBlueprintLibrary::Flatten(
-		Actor,
-		Location,
-		Config.Radius,
-		Config.Falloff,
-		EVoxelLevelToolType::Both,
-		TargetHeight
-	);
-
+	MOVoxel::HeightFlatten(Actor, Location, Config.Radius, Config.Falloff, TargetHeight);
 	return true;
 }
 
 bool UMOTerraformingComponent::HeightSmooth(const FVector2D& Location)
 {
-	AVoxelHeightSculptActor* Actor = HeightSculptActor.Get();
+	AActor* Actor = HeightSculptActor.Get();
 	if (!IsValid(Actor))
 	{
 		return false;
 	}
-
-	UVoxelHeightSculptBlueprintLibrary::Smooth(
-		Actor,
-		Location,
-		Config.Radius,
-		Config.SmoothStrength
-	);
-
+	MOVoxel::HeightSmooth(Actor, Location, Config.Radius, Config.SmoothStrength);
 	return true;
 }
 
@@ -369,78 +330,47 @@ bool UMOTerraformingComponent::HeightSmooth(const FVector2D& Location)
 
 bool UMOTerraformingComponent::VolumeDig(const FVector& Location)
 {
-	AVoxelVolumeSculptActor* Actor = VolumeSculptActor.Get();
+	AActor* Actor = VolumeSculptActor.Get();
 	if (!IsValid(Actor))
 	{
 		return false;
 	}
-
-	UVoxelVolumeSculptBlueprintLibrary::SculptSphere(
-		Actor,
-		Location,
-		Config.Radius,
-		EVoxelSculptMode::Remove,
-		0.0f  // Smoothness
-	);
-
+	MOVoxel::VolumeSphere(Actor, Location, Config.Radius, /*bAdd*/ false, /*Smoothness*/ 0.0f);
 	return true;
 }
 
 bool UMOTerraformingComponent::VolumeRaise(const FVector& Location)
 {
-	AVoxelVolumeSculptActor* Actor = VolumeSculptActor.Get();
+	AActor* Actor = VolumeSculptActor.Get();
 	if (!IsValid(Actor))
 	{
 		return false;
 	}
-
-	UVoxelVolumeSculptBlueprintLibrary::SculptSphere(
-		Actor,
-		Location,
-		Config.Radius,
-		EVoxelSculptMode::Add,
-		0.0f  // Smoothness
-	);
-
+	MOVoxel::VolumeSphere(Actor, Location, Config.Radius, /*bAdd*/ true, /*Smoothness*/ 0.0f);
 	return true;
 }
 
 bool UMOTerraformingComponent::VolumeFlatten(const FVector& Location, const FVector& Normal, float TargetHeight)
 {
-	AVoxelVolumeSculptActor* Actor = VolumeSculptActor.Get();
+	AActor* Actor = VolumeSculptActor.Get();
 	if (!IsValid(Actor))
 	{
 		return false;
 	}
-
-	UVoxelVolumeSculptBlueprintLibrary::Flatten(
-		Actor,
-		Location,
-		Normal,
-		Config.Radius,
-		Config.Radius * 2.0f,  // Height
-		Config.Falloff,
-		EVoxelLevelToolType::Both
-	);
-
+	// TargetHeight is unused for volume flatten — the Voxel API flattens toward the
+	// Location/Normal plane; Height is the vertical reach of the brush.
+	MOVoxel::VolumeFlatten(Actor, Location, Normal, Config.Radius, Config.Radius * 2.0f, Config.Falloff);
 	return true;
 }
 
 bool UMOTerraformingComponent::VolumeSmooth(const FVector& Location)
 {
-	AVoxelVolumeSculptActor* Actor = VolumeSculptActor.Get();
+	AActor* Actor = VolumeSculptActor.Get();
 	if (!IsValid(Actor))
 	{
 		return false;
 	}
-
-	UVoxelVolumeSculptBlueprintLibrary::Smooth(
-		Actor,
-		Location,
-		Config.Radius,
-		Config.SmoothStrength
-	);
-
+	MOVoxel::VolumeSmooth(Actor, Location, Config.Radius, Config.SmoothStrength);
 	return true;
 }
 

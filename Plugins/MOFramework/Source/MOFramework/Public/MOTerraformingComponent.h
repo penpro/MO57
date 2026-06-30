@@ -18,9 +18,10 @@
  * - Smooth: Reduce terrain roughness
  *
  * VOXEL INTEGRATION:
- * Uses AVoxelHeightSculptActor and AVoxelVolumeSculptActor from Voxel Plugin.
- * The component manages sculpt actor lifecycle and applies modifications
- * based on player input.
+ * All Voxel Plugin calls go through the MOVoxel facade (MOVoxelAlias.h) — this
+ * component never names a Voxel type. The cached sculpt actors are held as plain
+ * AActor* (the facade revalidates/casts them). When the Voxel API changes, only
+ * MOVoxelAlias.cpp needs updating.
  *
  * BRUSH CONFIGURATION:
  * - Radius: Size of affected area (Unreal Units)
@@ -61,8 +62,6 @@
 #include "MOInterruptibleInterface.h"
 #include "MOTerraformingComponent.generated.h"
 
-class AVoxelHeightSculptActor;
-class AVoxelVolumeSculptActor;
 class AMOCharacter;
 
 /**
@@ -306,13 +305,15 @@ public:
 	// SCULPT ACTOR REFERENCES
 	// ============================================================================
 
-	/** Height sculpt actor for 2D terrain modification. */
+	/** Height sculpt actor (Voxel) for 2D terrain modification. Held as AActor* —
+	 *  the MOVoxel facade validates/casts it. Auto-found at BeginPlay. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Terraforming|Actors")
-	TWeakObjectPtr<AVoxelHeightSculptActor> HeightSculptActor;
+	TWeakObjectPtr<AActor> HeightSculptActor;
 
-	/** Volume sculpt actor for 3D terrain modification. */
+	/** Volume sculpt actor (Voxel) for 3D terrain modification. Held as AActor* —
+	 *  the MOVoxel facade validates/casts it. Auto-found at BeginPlay. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Terraforming|Actors")
-	TWeakObjectPtr<AVoxelVolumeSculptActor> VolumeSculptActor;
+	TWeakObjectPtr<AActor> VolumeSculptActor;
 
 	/**
 	 * Duration (seconds) of the progress timer on every terraform action.

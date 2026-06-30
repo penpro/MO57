@@ -25,14 +25,14 @@ void UMOWeatherIntegrationSubsystem::Initialize(FSubsystemCollectionBase& Collec
 		bCachedIsDaytime = Clock->IsDaytime();
 	}
 
-	// Hook UI subsystem so menu opens give us masked sync opportunities.
-	// The delegate is a plain FMulticastDelegate (not Dynamic), so we
-	// AddRaw + keep a handle for unregister.
-	if (UMOGameUIManagerSubsystem* UISub = UMOGameUIManagerSubsystem::Get(this))
-	{
-		ActivatableWidgetRegisteredHandle = UISub->OnActivatableWidgetRegistered.AddUObject(
-			this, &UMOWeatherIntegrationSubsystem::HandleActivatableWidgetRegistered);
-	}
+	// NOTE: the UI hook (OnActivatableWidgetRegistered) is bound in
+	// OnWorldBeginPlay(), NOT here. UMOGameUIManagerSubsystem only creates for
+	// real game worlds, so it is absent during cook/commandlet (and editor
+	// preview). Fetching an absent sibling subsystem from within Initialize()
+	// trips a UE5.8 ensure (SubsystemCollection.cpp:109) that is *fatal in the
+	// cook commandlet* — it was the cause of packaging failing. Deferring the
+	// bind to OnWorldBeginPlay (gameplay-only, after every subsystem exists)
+	// keeps the cook path from ever touching the UI subsystem.
 
 	// Safety-net poll: fires every UdsSyncPollIntervalSeconds real-time.
 	// Most ticks throttle blocks (less than MinHoursBetweenUdsSyncs game-
@@ -74,6 +74,22 @@ void UMOWeatherIntegrationSubsystem::Deinitialize()
 
 	WeatherProvider = nullptr;
 	Super::Deinitialize();
+}
+
+void UMOWeatherIntegrationSubsystem::OnWorldBeginPlay(UWorld& InWorld)
+{
+	Super::OnWorldBeginPlay(InWorld);
+
+	// Bind the UI hook here, not in Initialize(): this runs only when a world
+	// begins play (PIE / packaged game), by which point UMOGameUIManagerSubsystem
+	// exists and can be fetched without the during-Initialize ensure. It never
+	// runs during cook, so packaging stays clean.
+	if (UMOGameUIManagerSubsystem* UISub = UMOGameUIManagerSubsystem::Get(this))
+	{
+		UISub->OnActivatableWidgetRegistered.RemoveAll(this);
+		ActivatableWidgetRegisteredHandle = UISub->OnActivatableWidgetRegistered.AddUObject(
+			this, &UMOWeatherIntegrationSubsystem::HandleActivatableWidgetRegistered);
+	}
 }
 
 void UMOWeatherIntegrationSubsystem::HandleClockDayNightChanged(bool bIsDaytime, const FDateTime& CurrentDateTime)

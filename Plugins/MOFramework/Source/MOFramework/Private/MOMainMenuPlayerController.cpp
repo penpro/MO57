@@ -409,7 +409,7 @@ void AMOMainMenuPlayerController::LoadGame(const FString& SlotName)
 
 void AMOMainMenuPlayerController::ExitGame()
 {
-	UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuPlayerController] Exiting game"));
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOMainMenuPlayerController] ExitGame requested — saving settings and quitting"));
 
 	// Save settings before exit
 	UMOGameSettings* Settings = UMOGameSettings::GetMOGameSettings();
@@ -418,8 +418,17 @@ void AMOMainMenuPlayerController::ExitGame()
 		Settings->SaveSettings();
 	}
 
-	// Exit the game
-	UKismetSystemLibrary::QuitGame(this, this, EQuitPreference::Quit, false);
+	// Quit. Use the world as the context object (more reliable than the PC in a
+	// menu world that has no pawn) and ignore platform restrictions so a desktop
+	// standalone build actually closes. QuitGame from a menu-world PC has been
+	// observed to no-op in packaged builds, so we follow with a hard platform
+	// exit request as a fallback (harmless if the engine is already tearing down).
+	UWorld* World = GetWorld();
+	UKismetSystemLibrary::QuitGame(World ? static_cast<UObject*>(World) : static_cast<UObject*>(this),
+		this, EQuitPreference::Quit, /*bIgnorePlatformRestrictions=*/true);
+	FPlatformMisc::RequestExit(/*Force=*/false);
+
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOMainMenuPlayerController] ExitGame: QuitGame + RequestExit issued"));
 }
 
 void AMOMainMenuPlayerController::ExecuteDelayedLevelLoad()

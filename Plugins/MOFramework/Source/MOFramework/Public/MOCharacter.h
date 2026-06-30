@@ -244,21 +244,51 @@ public:
 	// ============================================================================
 	// VOXEL WORLD COMPATIBILITY
 	// ============================================================================
-	// Required for base replication to work properly with Voxel Plugin.
-	// Voxel actor components are generated at runtime & not replicated.
-	// Without this override, character may teleport when voxel world updates.
+	// Required for base replication to work with the Voxel Plugin: voxel actor
+	// collision components are generated at runtime & not replicated, so when the
+	// voxel world rebuilds we must re-base the character to the voxel world's ROOT
+	// component instead of the transient collision sub-component. Without it the
+	// character teleports when the voxel world updates, and on dev-phy 5.8 the
+	// initial spawn lands wrong (lands in water).
+	//
+	// UE 5.8 changed ACharacter::SetBase's signature from UPrimitiveComponent* to
+	// FMovementBaseInterfaceData*. We MUST override the new signature on 5.8 — an
+	// override of only the old 5.7 signature is silently never called by the 5.8
+	// engine (it dispatches to the new overload), which is exactly what was
+	// breaking voxel basing. Engine-version gated (not VOXEL_ENGINE_VERSION) so
+	// MOCharacter stays decoupled from the Voxel module; the VoxelWorld class is
+	// resolved by path via LoadClass. Mirrors AVoxelCharacter::SetBase.
+#if ENGINE_MAJOR_VERSION > 5 || (ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION >= 8)
+	virtual void SetBase(FMovementBaseInterfaceData* MovementBaseInterfaceData, const FName BoneName, const bool bNotifyActor) override
+	{
+		FMovementBaseInterfaceData RedirectedData;
+		if (MovementBaseInterfaceData && MovementBaseInterfaceData->IsValid())
+		{
+			static UClass* const VoxelWorldClass = LoadClass<UObject>(nullptr, TEXT("/Script/Voxel.VoxelWorld"));
 
+			UObject* BaseOwner = MovementBaseInterfaceData->GetMovementBaseObjectOwner();
+			if (ensure(VoxelWorldClass) && BaseOwner && BaseOwner->IsA(VoxelWorldClass))
+			{
+				const AActor* BaseActor = Cast<AActor>(BaseOwner);
+				if (UPrimitiveComponent* Root = Cast<UPrimitiveComponent>(BaseActor->GetRootComponent()))
+				{
+					RedirectedData = FMovementBaseInterfaceData(Root);
+					MovementBaseInterfaceData = &RedirectedData;
+				}
+			}
+		}
+
+		Super::SetBase(MovementBaseInterfaceData, BoneName, bNotifyActor);
+	}
+#else
 	virtual void SetBase(UPrimitiveComponent* NewBase, const FName BoneName, const bool bNotifyActor) override
 	{
 		if (NewBase)
 		{
-			// LoadClass to not depend on the voxel module directly
 			static UClass* const VoxelWorldClass = LoadClass<UObject>(nullptr, TEXT("/Script/Voxel.VoxelWorld"));
 
 			const AActor* BaseOwner = NewBase->GetOwner();
-			if (ensure(VoxelWorldClass) &&
-				BaseOwner &&
-				BaseOwner->IsA(VoxelWorldClass))
+			if (ensure(VoxelWorldClass) && BaseOwner && BaseOwner->IsA(VoxelWorldClass))
 			{
 				NewBase = Cast<UPrimitiveComponent>(BaseOwner->GetRootComponent());
 				ensure(NewBase);
@@ -267,6 +297,7 @@ public:
 
 		Super::SetBase(NewBase, BoneName, bNotifyActor);
 	}
+#endif
 
 	// ============================================================================
 	// COMPONENT ACCESSORS

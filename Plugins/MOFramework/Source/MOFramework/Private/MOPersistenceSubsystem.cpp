@@ -41,10 +41,7 @@
 
 // Voxel plugin sculpt persistence
 #include "VoxelMinimal/Utilities/VoxelThreadingUtilities.h"
-#include "Sculpt/Height/VoxelHeightSculptActor.h"
-#include "Sculpt/Height/VoxelHeightSculptBlueprintLibrary.h"
-#include "Sculpt/Volume/VoxelVolumeSculptActor.h"
-#include "Sculpt/Volume/VoxelVolumeSculptBlueprintLibrary.h"
+#include "MOVoxelAlias.h"  // all Voxel sculpt save/load goes through this facade
 #include "Sculpt/VoxelSculptSave.h"
 
 // For screenshot capture
@@ -2136,13 +2133,12 @@ void UMOPersistenceSubsystem::CaptureVoxelSculptData(UWorld* World, UMOWorldSave
 
     SaveObject->VoxelSculptData.Reset();
 
-    // Capture height sculpt actors
+    // Capture height sculpt actors (facade hides the Voxel actor type + async save)
     TArray<AActor*> HeightActors;
-    UGameplayStatics::GetAllActorsOfClass(World, AVoxelHeightSculptActor::StaticClass(), HeightActors);
+    MOVoxel::GetHeightSculptActors(World, HeightActors);
 
-    for (AActor* Actor : HeightActors)
+    for (AActor* HeightActor : HeightActors)
     {
-        AVoxelHeightSculptActor* HeightActor = Cast<AVoxelHeightSculptActor>(Actor);
         if (!IsValid(HeightActor))
         {
             continue;
@@ -2152,23 +2148,11 @@ void UMOPersistenceSubsystem::CaptureVoxelSculptData(UWorld* World, UMOWorldSave
         Record.ActorName = HeightActor->GetName();
         Record.bIsVolumeSculpt = false;
 
-        // Use K2_GetSave with ExecuteSynchronously - the proper pattern for synchronous save
-        FVoxelHeightSculptSave SculptSave;
-        Voxel::ExecuteSynchronously([&]
+        if (MOVoxel::SaveHeightSculpt(HeightActor, Record.SculptData))
         {
-            return UVoxelHeightSculptBlueprintLibrary::K2_GetSave(SculptSave, HeightActor, true);
-        });
-
-        if (SculptSave.IsValid())
-        {
-            // Serialize the save data to bytes
-            FMemoryWriter Writer(Record.SculptData);
-            SculptSave.Serialize(Writer);
             Record.bHasValidData = true;
-
-            UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Captured height sculpt '%s': %lld bytes"),
+            UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Captured height sculpt '%s': %d bytes"),
                 *Record.ActorName, Record.SculptData.Num());
-
             SaveObject->VoxelSculptData.Add(Record);
         }
         else
@@ -2180,11 +2164,10 @@ void UMOPersistenceSubsystem::CaptureVoxelSculptData(UWorld* World, UMOWorldSave
 
     // Capture volume sculpt actors
     TArray<AActor*> VolumeActors;
-    UGameplayStatics::GetAllActorsOfClass(World, AVoxelVolumeSculptActor::StaticClass(), VolumeActors);
+    MOVoxel::GetVolumeSculptActors(World, VolumeActors);
 
-    for (AActor* Actor : VolumeActors)
+    for (AActor* VolumeActor : VolumeActors)
     {
-        AVoxelVolumeSculptActor* VolumeActor = Cast<AVoxelVolumeSculptActor>(Actor);
         if (!IsValid(VolumeActor))
         {
             continue;
@@ -2194,22 +2177,11 @@ void UMOPersistenceSubsystem::CaptureVoxelSculptData(UWorld* World, UMOWorldSave
         Record.ActorName = VolumeActor->GetName();
         Record.bIsVolumeSculpt = true;
 
-        // Use K2_GetSave with ExecuteSynchronously
-        FVoxelVolumeSculptSave SculptSave;
-        Voxel::ExecuteSynchronously([&]
+        if (MOVoxel::SaveVolumeSculpt(VolumeActor, Record.SculptData))
         {
-            return UVoxelVolumeSculptBlueprintLibrary::K2_GetSave(SculptSave, VolumeActor, true);
-        });
-
-        if (SculptSave.IsValid())
-        {
-            FMemoryWriter Writer(Record.SculptData);
-            SculptSave.Serialize(Writer);
             Record.bHasValidData = true;
-
-            UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Captured volume sculpt '%s': %lld bytes"),
+            UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Captured volume sculpt '%s': %d bytes"),
                 *Record.ActorName, Record.SculptData.Num());
-
             SaveObject->VoxelSculptData.Add(Record);
         }
         else
@@ -2243,16 +2215,16 @@ void UMOPersistenceSubsystem::RestoreVoxelSculptData(UWorld* World, const TArray
 
         if (Record.bIsVolumeSculpt)
         {
-            // Find the volume sculpt actor by name
+            // Find the volume sculpt actor by name (facade hides the Voxel type + async load)
             TArray<AActor*> VolumeActors;
-            UGameplayStatics::GetAllActorsOfClass(World, AVoxelVolumeSculptActor::StaticClass(), VolumeActors);
+            MOVoxel::GetVolumeSculptActors(World, VolumeActors);
 
-            AVoxelVolumeSculptActor* FoundActor = nullptr;
+            AActor* FoundActor = nullptr;
             for (AActor* Actor : VolumeActors)
             {
                 if (Actor->GetName() == Record.ActorName)
                 {
-                    FoundActor = Cast<AVoxelVolumeSculptActor>(Actor);
+                    FoundActor = Actor;
                     break;
                 }
             }
@@ -2264,18 +2236,8 @@ void UMOPersistenceSubsystem::RestoreVoxelSculptData(UWorld* World, const TArray
                 continue;
             }
 
-            // Deserialize the save data
-            FVoxelVolumeSculptSave SculptSave;
-            FMemoryReader Reader(Record.SculptData, true);
-            SculptSave.Serialize(Reader);
-
-            if (SculptSave.IsValid())
+            if (MOVoxel::LoadVolumeSculpt(FoundActor, Record.SculptData))
             {
-                // Use ExecuteSynchronously to ensure the load completes before continuing
-                Voxel::ExecuteSynchronously([&]
-                {
-                    return UVoxelVolumeSculptBlueprintLibrary::LoadFromSave(FoundActor, SculptSave);
-                });
                 UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Restored volume sculpt '%s'"),
                     *Record.ActorName);
             }
@@ -2284,14 +2246,14 @@ void UMOPersistenceSubsystem::RestoreVoxelSculptData(UWorld* World, const TArray
         {
             // Find the height sculpt actor by name
             TArray<AActor*> HeightActors;
-            UGameplayStatics::GetAllActorsOfClass(World, AVoxelHeightSculptActor::StaticClass(), HeightActors);
+            MOVoxel::GetHeightSculptActors(World, HeightActors);
 
-            AVoxelHeightSculptActor* FoundActor = nullptr;
+            AActor* FoundActor = nullptr;
             for (AActor* Actor : HeightActors)
             {
                 if (Actor->GetName() == Record.ActorName)
                 {
-                    FoundActor = Cast<AVoxelHeightSculptActor>(Actor);
+                    FoundActor = Actor;
                     break;
                 }
             }
@@ -2303,18 +2265,8 @@ void UMOPersistenceSubsystem::RestoreVoxelSculptData(UWorld* World, const TArray
                 continue;
             }
 
-            // Deserialize the save data
-            FVoxelHeightSculptSave SculptSave;
-            FMemoryReader Reader(Record.SculptData, true);
-            SculptSave.Serialize(Reader);
-
-            if (SculptSave.IsValid())
+            if (MOVoxel::LoadHeightSculpt(FoundActor, Record.SculptData))
             {
-                // Use ExecuteSynchronously to ensure the load completes before continuing
-                Voxel::ExecuteSynchronously([&]
-                {
-                    return UVoxelHeightSculptBlueprintLibrary::LoadFromSave(FoundActor, SculptSave);
-                });
                 UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Restored height sculpt '%s'"),
                     *Record.ActorName);
             }

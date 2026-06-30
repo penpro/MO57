@@ -34,9 +34,17 @@
  * [2024-02] PENDING SAVE DATA: If ApplyWeatherSaveData() is called before
  *   provider registration, data is queued in PendingSaveData.
  *
+ * [2026-06] COOK CRASH — NEVER fetch a game-world-only subsystem (e.g.
+ *   UMOGameUIManagerSubsystem) from within Initialize(). That subsystem is
+ *   absent during cook/commandlet, and a during-Initialize fetch trips a
+ *   UE5.8 ensure (SubsystemCollection.cpp:109) that is FATAL in the cook
+ *   commandlet → packaging fails. The UI hook is bound in OnWorldBeginPlay()
+ *   instead. (The clock subsystem IS safe to fetch in Initialize — it creates
+ *   in every world.)
+ *
  * =============================================================================
  * RELATED FILES: MOWeatherProviderInterface.h, MOWeatherTypes.h
- * LAST UPDATED: 2026-02-25
+ * LAST UPDATED: 2026-06-30
  * =============================================================================
  */
 
@@ -91,6 +99,7 @@ class MOFRAMEWORK_API UMOWeatherIntegrationSubsystem : public UTickableWorldSubs
 public:
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 	virtual void Deinitialize() override;
+	virtual void OnWorldBeginPlay(UWorld& InWorld) override;
 	virtual void Tick(float DeltaTime) override;
 	virtual TStatId GetStatId() const override;
 

@@ -69,8 +69,10 @@ struct MOFRAMEWORK_API FMOColonyAlert
 {
 	GENERATED_BODY()
 
-	/** Unique ID for this alert */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Alert")
+	/** Unique ID for this alert. Generated per-instance via FGuid::NewGuid()
+	 *  in the constructor, so it is intentionally non-deterministic — exempt
+	 *  it from UE's member-initialization determinism test. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Alert", Meta = (IgnoreForMemberInitializationTest))
 	FGuid AlertId;
 
 	/** Character this alert is for */

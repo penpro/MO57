@@ -1,6 +1,6 @@
 {
 	"FileVersion": 3,
-	"EngineAssociation": "5.7",
+	"EngineAssociation": "{C67CC057-40D5-9605-C1D9-EBB465B177A7}",
 	"Category": "",
 	"Description": "",
 	"Modules": [
@@ -32,9 +32,8 @@
 			"Enabled": true
 		},
 		{
-			"Name": "VoxelPluginInstaller",
-			"Enabled": true,
-			"MarketplaceURL": "com.epicgames.launcher://ue/marketplace/product/dcb8f76613ce49cda4e70fb602513ce4"
+			"Name": "Voxel",
+			"Enabled": true
 		},
 		{
 			"Name": "Water",
@@ -50,6 +49,32 @@
 		},
 		{
 			"Name": "EditorScriptingUtilities",
+			"Enabled": true
+		},
+		{
+			"Name": "ModelContextProtocol",
+			"Enabled": true
+		},
+		{
+			"Name": "MetaHumanCoreML",
+			"Enabled": true,
+			"SupportedTargetPlatforms": [
+				"Mac",
+				"IOS",
+				"TVOS",
+				"VisionOS"
+			]
+		},
+		{
+			"Name": "MCPClientToolset",
+			"Enabled": true
+		},
+		{
+			"Name": "Terminal",
+			"Enabled": true
+		},
+		{
+			"Name": "EditorToolset",
 			"Enabled": true
 		}
 	]
