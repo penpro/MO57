@@ -1,5 +1,0 @@
-// Copyright Voxel Plugin SAS. All Rights Reserved.
-
-#pragma once
-
-#include "VoxelCoreMinimal.h"

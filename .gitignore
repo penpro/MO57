@@ -30,6 +30,10 @@ Content/MetaHumans/
 Content/UltraDynamicSky/
 Plugins/MOFramework/Content/Characters/MetaHumans/
 
+# Voxel Plugin (dev-phy build) — large vendored tree kept out of git history.
+# Recover from the Phyronnaz dev-phy branch if a fresh checkout needs it.
+Plugins/Voxel/
+
 # Duplicate content
 Content/Penumbra/Movies/
 
