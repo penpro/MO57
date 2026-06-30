@@ -647,24 +647,29 @@ void UMOQuestSubsystem::CheckQuestCompletion(FMOQuestState& State)
 	State.bIsComplete = true;
 	State.CompletionTime = FDateTime::Now();
 
+	// Snapshot the id before Remove frees the ActiveQuests entry that `State`
+	// references; every read below must use the local, not the dangling ref. (H27)
+	const FName CompletedQuestId = State.QuestId;
+
 	// Move to completed set
-	CompletedQuests.Add(State.QuestId);
-	ActiveQuests.Remove(State.QuestId);
+	CompletedQuests.Add(CompletedQuestId);
+	ActiveQuests.Remove(CompletedQuestId);
+	// NOTE: `State` is dangling past this point — do not read it again.
 
 	// Now that the quest is gone from ActiveQuests, its objective events
 	// no longer have listeners — refresh the cache.
 	RebuildActiveEventListeners();
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOQuestSubsystem] Quest '%s' COMPLETED: %s"),
-		*State.QuestId.ToString(), *Definition->DisplayName.ToString());
+		*CompletedQuestId.ToString(), *Definition->DisplayName.ToString());
 
-	OnQuestCompleted.Broadcast(State.QuestId);
+	OnQuestCompleted.Broadcast(CompletedQuestId);
 
 	// Fire the reward hook so external systems can grant XP/knowledge/items.
 	// The subsystem deliberately does NOT apply rewards itself — that's left
 	// to listeners (currently no-ops). Reward specs live on the quest row's
 	// Rewards array; listeners read them via GetQuestDefinition.
-	OnApplyQuestRewards.Broadcast(State.QuestId);
+	OnApplyQuestRewards.Broadcast(CompletedQuestId);
 
 	// Completing a tutorial quest changes which hint should be shown — let
 	// the popup widget re-evaluate.
