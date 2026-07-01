@@ -212,6 +212,13 @@ void AMOGameMode::HandlePendingNewGame()
 			UMOPersistenceSubsystem* Persistence = GameInstance->GetSubsystem<UMOPersistenceSubsystem>();
 			if (Persistence)
 			{
+				// #158: an in-game load carries a LIVE prior session; the new-game branch above
+				// resets GameInstance persistence for exactly this reason, but the load branch never
+				// did -- so the prior session's loaded-save ref / destroyed-GUID ledger / slot name
+				// leaked into the load and it failed. Main-menu load worked only because a fresh boot
+				// already had clean state. ResetForNewWorld clears in-memory session state ONLY (it
+				// does NOT touch the save file), so it is safe immediately before loading this slot.
+				Persistence->ResetForNewWorld(SlotToLoad);
 				FMOLoadResult Result = Persistence->LoadWorldFromSlotWithResult(SlotToLoad);
 				if (Result.bSuccess)
 				{
