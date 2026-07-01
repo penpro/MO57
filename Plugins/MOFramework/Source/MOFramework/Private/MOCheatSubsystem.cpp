@@ -26,6 +26,9 @@
 #include "MOInteractorComponent.h"
 #include "MOCombatComponent.h"
 #include "MOCraftingQueueComponent.h"
+#include "Blueprint/UserWidget.h"
+#include "Blueprint/WidgetTree.h"
+#include "UObject/UObjectIterator.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
@@ -384,6 +387,85 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 				PC->ConsoleCommand(TEXT("MO.Test.Craft"), true);
 			}
 			UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] ===== MPSuite end ====="));
+		}),
+		ECVF_Default));
+
+	// =========================================================================
+	// MO.Test.State + MO.Test.FindWidget -- INTROSPECTION so a runner reads state +
+	// UI positions from the log ([MOQUERY]) instead of screenshotting.
+	// =========================================================================
+
+	// ---------- MO.Test.State ----------
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Test.State"),
+		TEXT("Log [MOQUERY] game state (netmode / in-game vs menu / possessed pawn / level) -- read from the log instead of screenshotting."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			if (!World)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] STATE: no world"));
+				return;
+			}
+			const TCHAR* NetMode = TEXT("Unknown");
+			switch (World->GetNetMode())
+			{
+			case NM_Standalone:      NetMode = TEXT("Standalone"); break;
+			case NM_ListenServer:    NetMode = TEXT("ListenServer"); break;
+			case NM_DedicatedServer: NetMode = TEXT("DedicatedServer"); break;
+			case NM_Client:          NetMode = TEXT("Client"); break;
+			default: break;
+			}
+			APlayerController* PC = World->GetFirstPlayerController();
+			APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+			const bool bInGame = Pawn && Pawn->FindComponentByClass<UMOInventoryComponent>() != nullptr;
+			UE_LOG(LogMOFramework, Warning,
+				TEXT("[MOQUERY] STATE netmode=%s level=%s inGame=%s pawn=%s class=%s"),
+				NetMode, *World->GetMapName(),
+				bInGame ? TEXT("YES") : TEXT("NO(menu?)"),
+				Pawn ? *Pawn->GetName() : TEXT("none"),
+				Pawn ? *Pawn->GetClass()->GetName() : TEXT("-"));
+		}),
+		ECVF_Default));
+
+	// ---------- MO.Test.FindWidget [NameSubstring] ----------
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Test.FindWidget"),
+		TEXT("Log [MOQUERY] live widgets whose name contains the arg, with absolute on-screen center/rect -- locate UI without screenshots. Usage: MO.Test.FindWidget [NameSubstring]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			const FString Filter = Args.Num() > 0 ? Args[0] : FString();
+			int32 Found = 0;
+			for (TObjectIterator<UUserWidget> It; It; ++It)
+			{
+				UUserWidget* UW = *It;
+				if (!IsValid(UW) || UW->GetWorld() != World || !UW->IsInViewport() || !UW->WidgetTree)
+				{
+					continue;
+				}
+				UW->WidgetTree->ForEachWidget([&Filter, &Found](UWidget* Child)
+				{
+					if (!Child)
+					{
+						return;
+					}
+					const FString Name = Child->GetName();
+					if (!Filter.IsEmpty() && !Name.Contains(Filter))
+					{
+						return;
+					}
+					const FGeometry& Geo = Child->GetCachedGeometry();
+					const FVector2D LocalSize = Geo.GetLocalSize();
+					const FVector2D TopLeft = Geo.LocalToAbsolute(FVector2D::ZeroVector);
+					const FVector2D Center = Geo.LocalToAbsolute(LocalSize * 0.5f);
+					UE_LOG(LogMOFramework, Warning,
+						TEXT("[MOQUERY] WIDGET '%s' (%s) center=(%.0f,%.0f) topLeft=(%.0f,%.0f) size=(%.0f,%.0f) visible=%d"),
+						*Name, *Child->GetClass()->GetName(),
+						Center.X, Center.Y, TopLeft.X, TopLeft.Y, LocalSize.X, LocalSize.Y,
+						Child->IsVisible() ? 1 : 0);
+					Found++;
+				});
+			}
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] FindWidget('%s'): %d match(es)"), *Filter, Found);
 		}),
 		ECVF_Default));
 

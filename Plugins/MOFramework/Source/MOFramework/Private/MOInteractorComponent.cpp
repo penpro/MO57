@@ -1,6 +1,7 @@
 #include "MOInteractorComponent.h"
 #include "MOFramework.h"
 #include "MOViewpointUtils.h"
+#include "MOItemComponent.h"
 
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
@@ -351,7 +352,42 @@ void UMOInteractorComponent::RequestInteractWithActor(AActor* TargetActor)
 		return;
 	}
 
-	ServerRequestInteract(TargetActor);
+	// Route to the specific-item pickup path (distance-validated, no crosshair re-trace),
+	// not ServerRequestInteract -- that anti-cheat re-traces and would reject an off-aim
+	// item the UI explicitly selected (the H21 regression #159 caught by MO.Test.DropPickup).
+	ServerPickUpWorldItem(TargetActor);
+}
+
+void UMOInteractorComponent::ServerPickUpWorldItem_Implementation(AActor* TargetActor)
+{
+	APawn* OwnerPawn = Cast<APawn>(GetOwner());
+	if (!OwnerPawn || !OwnerPawn->HasAuthority() || !IsValid(TargetActor))
+	{
+		return;
+	}
+	AController* Controller = OwnerPawn->GetController();
+	if (!IsValid(Controller))
+	{
+		return;
+	}
+
+	// Distance validation (anti-cheat): the UI selected a specific item, so validate by
+	// reach instead of an aim trace. Generous reach covers the nearby-items radius.
+	const float MaxReachSq = FMath::Square(3000.0f);
+	if (FVector::DistSquared(OwnerPawn->GetActorLocation(), TargetActor->GetActorLocation()) > MaxReachSq)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInteract] ServerPickUpWorldItem: %s out of reach"), *TargetActor->GetName());
+		return;
+	}
+
+	// Canonical authoritative pickup: preserves the world-item GUID into inventory and
+	// hides/destroys the actor via replication (UMOItemComponent handles the authority).
+	if (UMOItemComponent* ItemComp = TargetActor->FindComponentByClass<UMOItemComponent>())
+	{
+		const bool bOk = ItemComp->GiveToInteractorInventory(Controller);
+		UE_LOG(LogMOFramework, Log, TEXT("[MOInteract] ServerPickUpWorldItem: %s -> %s"),
+			*TargetActor->GetName(), bOk ? TEXT("picked up") : TEXT("give failed (full?)"));
+	}
 }
 
 void UMOInteractorComponent::ServerRequestInteract_Implementation(AActor* TargetActor)

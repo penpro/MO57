@@ -262,6 +262,15 @@ protected:
 	UFUNCTION(Server, Reliable)
 	void ServerRequestInteract(AActor* TargetActor);
 
+	/**
+	 * Server RPC for a UI-driven pickup of a SPECIFIC, already-resolved world item
+	 * (nearby-items menu, loot-all, drag-to-slot). Unlike ServerRequestInteract this
+	 * does NOT re-trace from the crosshair -- the UI already chose the item -- it just
+	 * distance-validates and routes to the canonical GiveToInteractorInventory (#159).
+	 */
+	UFUNCTION(Server, Reliable)
+	void ServerPickUpWorldItem(AActor* TargetActor);
+
 	UFUNCTION(Server, Reliable)
 	void ServerRequestSecondaryInteract(AActor* TargetActor);
 
