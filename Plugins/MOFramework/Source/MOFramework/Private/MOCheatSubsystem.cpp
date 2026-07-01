@@ -27,6 +27,7 @@
 #include "MOCombatComponent.h"
 #include "MOCraftingQueueComponent.h"
 #include "Blueprint/UserWidget.h"
+#include "Components/TextBlock.h"
 #include "Blueprint/WidgetTree.h"
 #include "UObject/UObjectIterator.h"
 #include "Engine/GameInstance.h"
@@ -449,7 +450,16 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 						return;
 					}
 					const FString Name = Child->GetName();
-					if (!Filter.IsEmpty() && !Name.Contains(Filter))
+					// CommonUI button labels are UCommonTextBlock (: UTextBlock) leaves in the
+					// button's own WidgetTree, so capture the visible text and let the filter
+					// match on it -- "FindWidget Load" should find a button by its on-screen
+					// label, not just an internal object name.
+					FString LabelText;
+					if (const UTextBlock* AsText = Cast<UTextBlock>(Child))
+					{
+						LabelText = AsText->GetText().ToString();
+					}
+					if (!Filter.IsEmpty() && !Name.Contains(Filter) && !LabelText.Contains(Filter))
 					{
 						return;
 					}
@@ -465,8 +475,8 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 					const FVector2D TopLeft = Geo.LocalToAbsolute(FVector2D::ZeroVector);
 					const FVector2D Center = Geo.LocalToAbsolute(LocalSize * 0.5f);
 					UE_LOG(LogMOFramework, Warning,
-						TEXT("[MOQUERY] WIDGET '%s' (%s) center=(%.0f,%.0f) topLeft=(%.0f,%.0f) size=(%.0f,%.0f) visible=%d"),
-						*Name, *Child->GetClass()->GetName(),
+						TEXT("[MOQUERY] WIDGET '%s' (%s) text='%s' center=(%.0f,%.0f) topLeft=(%.0f,%.0f) size=(%.0f,%.0f) visible=%d"),
+						*Name, *Child->GetClass()->GetName(), *LabelText,
 						Center.X, Center.Y, TopLeft.X, TopLeft.Y, LocalSize.X, LocalSize.Y,
 						Child->IsVisible() ? 1 : 0);
 					Found++;
