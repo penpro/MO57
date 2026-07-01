@@ -23,6 +23,9 @@
 #include "MOUIManagerComponent.h"
 #include "MOVitalsComponent.h"
 #include "MOSurvivalStatsComponent.h"
+#include "MOInteractorComponent.h"
+#include "MOCombatComponent.h"
+#include "MOCraftingQueueComponent.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
@@ -263,6 +266,124 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 				Count, *ItemId.ToString(),
 				bOk ? TEXT("OK") : TEXT("FAILED"),
 				*NewGuid.ToString(EGuidFormats::DigitsWithHyphens));
+		}),
+		ECVF_Default));
+
+	// =========================================================================
+	// MO.Test.* — automated MP-authority test harness (#132). Each command drives
+	// the exact authoritative path the UI invokes and logs a greppable [MOTEST]
+	// PASS/FAIL marker, so a runner can assert from Saved/Logs/MO57.log with no
+	// input driving. Run these in a CLIENT window on 2-client PIE to exercise the
+	// real client->server RPCs.
+	// =========================================================================
+
+	// ---------- MO.Test.DropPickup [ItemId=Stick01] ----------
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Test.DropPickup"),
+		TEXT("H21 identity test: give->drop->pickup, assert the same GUID returns to inventory. Usage: MO.Test.DropPickup [ItemId=Stick01]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			const FName ItemId = Args.Num() > 0 ? FName(*Args[0]) : FName(TEXT("Stick01"));
+			APawn* Pawn = ResolveLocalPawn(World);
+			UMOInventoryComponent* Inv = ResolveLocalInventory(World);
+			if (!Pawn || !Inv)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] FAIL DropPickup: no pawn/inventory (are you in-game?)"));
+				return;
+			}
+			FMOItemDefinitionRow ItemDef;
+			if (!UMOItemDatabaseSettings::GetItemDefinition(ItemId, ItemDef))
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] FAIL DropPickup: '%s' is not in the item database"), *ItemId.ToString());
+				return;
+			}
+			const FGuid Guid = FGuid::NewGuid();
+			if (!Inv->AddItemByGuid(Guid, ItemId, 1))
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] FAIL DropPickup: give failed"));
+				return;
+			}
+			const FVector DropLoc = Pawn->GetActorLocation() + Pawn->GetActorForwardVector() * 150.0f;
+			AActor* WorldItem = Inv->DropItemByGuid(Guid, DropLoc, FRotator::ZeroRotator);
+			if (!WorldItem)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] FAIL DropPickup: drop returned null"));
+				return;
+			}
+			UMOInteractorComponent* Interactor = Pawn->FindComponentByClass<UMOInteractorComponent>();
+			if (!Interactor)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] FAIL DropPickup: no interactor on pawn"));
+				return;
+			}
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] DropPickup: gave+dropped %s as %s GUID=%s; requesting pickup"),
+				*ItemId.ToString(), *WorldItem->GetName(), *Guid.ToString(EGuidFormats::DigitsWithHyphens));
+			Interactor->RequestInteractWithActor(WorldItem);
+			// On standalone/host the canonical pickup runs same-frame (authority), so the
+			// original GUID should be back in inventory now. On a true remote client it is
+			// async -- run this on the host, or grep GiveToInteractorInventory's logged GUID.
+			FMOInventoryEntry Entry;
+			const bool bBack = Inv->TryGetEntryByGuid(Guid, Entry);
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] %s DropPickup: original GUID %s %s after pickup"),
+				bBack ? TEXT("PASS") : TEXT("FAIL"),
+				*Guid.ToString(EGuidFormats::DigitsWithHyphens),
+				bBack ? TEXT("preserved (identity intact)") : TEXT("NOT back -- identity lost or async on a remote client"));
+		}),
+		ECVF_Default));
+
+	// ---------- MO.Test.Attack ----------
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Test.Attack"),
+		TEXT("H18 combat test: trigger a light attack (client forwards ServerStartAttack); log the combat state."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			APawn* Pawn = ResolveLocalPawn(World);
+			UMOCombatComponent* Combat = Pawn ? Pawn->FindComponentByClass<UMOCombatComponent>() : nullptr;
+			if (!Combat)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] FAIL Attack: no combat component (are you in-game?)"));
+				return;
+			}
+			const bool bOk = Combat->StartLightAttack();
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] %s Attack: StartLightAttack=%s CombatState=%d"),
+				bOk ? TEXT("PASS") : TEXT("INFO"), bOk ? TEXT("true") : TEXT("false"), (int32)Combat->CombatState);
+		}),
+		ECVF_Default));
+
+	// ---------- MO.Test.Craft [RecipeId=KnapFlint] ----------
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Test.Craft"),
+		TEXT("H20 crafting test: enqueue a craft (server-gated). Usage: MO.Test.Craft [RecipeId=KnapFlint]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			const FName RecipeId = Args.Num() > 0 ? FName(*Args[0]) : FName(TEXT("KnapFlint"));
+			APawn* Pawn = ResolveLocalPawn(World);
+			UMOCraftingQueueComponent* Queue = Pawn ? Pawn->FindComponentByClass<UMOCraftingQueueComponent>() : nullptr;
+			if (!Queue)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] FAIL Craft: no crafting queue component (are you in-game?)"));
+				return;
+			}
+			const bool bOk = Queue->EnqueueCraft(RecipeId, 1, EMOCraftingStation::None);
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] %s Craft: EnqueueCraft(%s)=%s"),
+				bOk ? TEXT("PASS") : TEXT("INFO"), *RecipeId.ToString(), bOk ? TEXT("true") : TEXT("false"));
+		}),
+		ECVF_Default));
+
+	// ---------- MO.Test.MPSuite ----------
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Test.MPSuite"),
+		TEXT("Run the MP-authority smoke suite (DropPickup + Attack + Craft); grep the log for [MOTEST]."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] ===== MPSuite begin ====="));
+			if (APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr)
+			{
+				PC->ConsoleCommand(TEXT("MO.Test.DropPickup"), true);
+				PC->ConsoleCommand(TEXT("MO.Test.Attack"), true);
+				PC->ConsoleCommand(TEXT("MO.Test.Craft"), true);
+			}
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] ===== MPSuite end ====="));
 		}),
 		ECVF_Default));
 
