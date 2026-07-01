@@ -504,6 +504,17 @@ protected:
 	 */
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
+	/**
+	 * Co-op transport (#132/H17 follow-on). A remote client resolves its terraform target
+	 * locally (viewpoint trace in BeginTerraform) and runs the timed action for responsive
+	 * progress UI, then forwards the resolved apply here so the voxel mutation + persistence
+	 * happen authoritatively on the host. NOTE: a client visual re-apply (MulticastApplyTerraform)
+	 * is a separate follow-on -- it depends on the voxel plugin's edit-replication model and needs
+	 * 2-client PIE to verify (avoid double-apply); still tracked under #132.
+	 */
+	UFUNCTION(Server, Reliable)
+	void ServerApplyTerraform(EMOTerraformMode Mode, FVector Location, float FlattenHeight);
+
 private:
 	bool ResolveViewpoint(FVector& OutLocation, FRotator& OutRotation) const;
 

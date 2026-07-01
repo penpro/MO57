@@ -27,6 +27,8 @@ UMOTerraformingComponent::UMOTerraformingComponent()
 	// disabled so we don't waste a per-frame call when idle.
 	PrimaryComponentTick.bCanEverTick = true;
 	PrimaryComponentTick.bStartWithTickEnabled = false;
+	// Replicated so the co-op ServerApplyTerraform RPC routes to the host (#132/H17).
+	SetIsReplicatedByDefault(true);
 }
 
 void UMOTerraformingComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
@@ -702,6 +704,30 @@ void UMOTerraformingComponent::CancelTerraform()
 	OnTerraformCancelled.Broadcast();
 }
 
+void UMOTerraformingComponent::ServerApplyTerraform_Implementation(EMOTerraformMode Mode, FVector Location, float FlattenHeight)
+{
+	// Runs on the host. HasAuthority() is true here, so the per-mode sculpt + its
+	// RegisterModifiedZone persistence run authoritatively -- the same path a host player uses.
+	if (!GetOwner() || !GetOwner()->HasAuthority())
+	{
+		return;
+	}
+	if (Mode != EMOTerraformMode::RemoveFoliage && !HasValidSculptActor())
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOTerraforming] ServerApplyTerraform: no valid sculpt actor"));
+		return;
+	}
+	switch (Mode)
+	{
+	case EMOTerraformMode::Dig:           Dig(Location); break;
+	case EMOTerraformMode::Raise:         Raise(Location); break;
+	case EMOTerraformMode::Flatten:       Flatten(Location, FlattenHeight); break;
+	case EMOTerraformMode::Smooth:        Smooth(Location); break;
+	case EMOTerraformMode::RemoveFoliage: RemoveFoliage(Location); break;
+	default: break;
+	}
+}
+
 bool UMOTerraformingComponent::ApplyPendingTerraform()
 {
 	if (!PendingAction.bActive)
@@ -714,6 +740,14 @@ bool UMOTerraformingComponent::ApplyPendingTerraform()
 	// the apply here so a client-side tick can never mutate the voxel world / persistence (H17).
 	if (!GetOwner()->HasAuthority())
 	{
+		// Co-op: a remote client that locally controls this pawn forwards the resolved apply
+		// to the host so the terraform reaches the authoritative voxel world + persistence.
+		const APawn* OwnerPawn = Cast<APawn>(GetOwner());
+		if (OwnerPawn && OwnerPawn->IsLocallyControlled())
+		{
+			ServerApplyTerraform(PendingAction.Mode, PendingAction.TargetLocation, PendingAction.FlattenTargetHeight);
+			return true; // dispatched to the host; authoritative apply + persistence happen there
+		}
 		return false;
 	}
 

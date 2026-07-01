@@ -88,6 +88,15 @@ bool UMOCraftingQueueComponent::EnqueueCraft(FName RecipeId, int32 Count, EMOCra
 	// ingredients. On a remote client this no-ops (matches UMOSurvivorJobQueueComponent).
 	if (!GetOwner()->HasAuthority())
 	{
+		// Co-op: a remote client that locally controls this pawn forwards the craft to the
+		// host; the replicated Queue then updates its UI. A non-locally-controlled owner
+		// (e.g. a simulated proxy) has no business enqueuing, so it stays a no-op.
+		const APawn* OwnerPawn = Cast<APawn>(GetOwner());
+		if (OwnerPawn && OwnerPawn->IsLocallyControlled())
+		{
+			ServerRequestEnqueueCraft(RecipeId, Count, Station);
+			return true; // dispatched; authoritative result arrives via Queue replication
+		}
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOCraftingQueue] EnqueueCraft ignored on non-authority"));
 		return false;
 	}
@@ -140,6 +149,13 @@ bool UMOCraftingQueueComponent::EnqueueCraft(FName RecipeId, int32 Count, EMOCra
 	}
 
 	return true;
+}
+
+void UMOCraftingQueueComponent::ServerRequestEnqueueCraft_Implementation(FName RecipeId, int32 Count, EMOCraftingStation Station)
+{
+	// Executes on the host, where HasAuthority() is true, so EnqueueCraft runs the real
+	// authoritative path (ingredient consume + queue mutation + replication).
+	EnqueueCraft(RecipeId, Count, Station);
 }
 
 bool UMOCraftingQueueComponent::CancelCraft(const FGuid& EntryId, bool bRefundIngredients)

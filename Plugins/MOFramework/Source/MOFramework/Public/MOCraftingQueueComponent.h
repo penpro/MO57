@@ -280,6 +280,14 @@ protected:
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
+	/**
+	 * Client->host transport for co-op: a remote client that locally controls this pawn
+	 * forwards its craft request here instead of no-oping. Runs EnqueueCraft on the host
+	 * (authority); the replicated Queue then updates the requesting client's UI (#132/H20).
+	 */
+	UFUNCTION(Server, Reliable)
+	void ServerRequestEnqueueCraft(FName RecipeId, int32 Count, EMOCraftingStation Station);
+
 private:
 	// --- Internal Methods ---
 
