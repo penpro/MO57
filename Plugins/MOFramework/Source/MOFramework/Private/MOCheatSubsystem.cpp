@@ -438,7 +438,7 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 			for (TObjectIterator<UUserWidget> It; It; ++It)
 			{
 				UUserWidget* UW = *It;
-				if (!IsValid(UW) || UW->GetWorld() != World || !UW->IsInViewport() || !UW->WidgetTree)
+				if (!IsValid(UW) || UW->GetWorld() != World || !UW->WidgetTree)
 				{
 					continue;
 				}
@@ -455,6 +455,13 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 					}
 					const FGeometry& Geo = Child->GetCachedGeometry();
 					const FVector2D LocalSize = Geo.GetLocalSize();
+					// Skip widgets not currently laid out on screen (zero cached size). This
+					// replaces the old IsInViewport() gate, which wrongly excluded every CommonUI
+					// widget -- they live on activatable widget-stacks, not AddToViewport (#160).
+					if (LocalSize.X <= 1.f && LocalSize.Y <= 1.f)
+					{
+						return;
+					}
 					const FVector2D TopLeft = Geo.LocalToAbsolute(FVector2D::ZeroVector);
 					const FVector2D Center = Geo.LocalToAbsolute(LocalSize * 0.5f);
 					UE_LOG(LogMOFramework, Warning,
