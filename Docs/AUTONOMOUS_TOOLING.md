@@ -99,3 +99,38 @@ FOLLOW-ON (gameplay content, NOT data integrity): the 11 medical items have no
 production chain — they need recipes/loot to be obtainable, and treatment-consume
 logic should keep the reusable splint/blanket/tourniquet. Icons/meshes are
 placeholder pending art.
+
+## MO.Test.* runtime harness + closed-loop verification (2026-07-01, UE 5.8)
+
+The eyes now close the loop with **zero screenshots**. Two pieces:
+
+**1. `MO.Test.*` console harness** (C++, `MOCheatSubsystem`) — each logs a greppable marker:
+
+| Command | Marker | Checks |
+|---------|--------|--------|
+| `MO.Test.State` | `[MOQUERY] STATE` | netmode / level / inGame / possessed pawn (menu→NO, in-game→YES) |
+| `MO.Test.FindWidget [sub]` | `[MOQUERY] WIDGET` | live CommonUI widgets matching the substring, with on-screen center/rect — the "where's the button" locator |
+| `MO.Test.DropPickup [item]` | `[MOTEST] PASS/FAIL` | give→drop→pick-up round-trip; GUID identity preserved |
+| `MO.Test.Attack` | `[MOTEST] PASS/FAIL` | StartLightAttack → combat state |
+| `MO.Test.Craft [recipe]` | `[MOTEST] INFO` | EnqueueCraft (false on a fresh pawn = no recipe/mats — expected) |
+| `MO.Test.MPSuite` | — | runs the three above via ConsoleCommand |
+
+**2. The file-I/O bridge is the driver** (`Content/Python/claude_bridge.py`, auto-loaded by
+`init_unreal.py`; **survived the 5.7→5.8 upgrade**). A whole verification session is PowerShell + grep —
+no clicks, no screenshots: foreground the editor → append bridge lines to `%TEMP%\claude\ue_cmd.txt`
+(`py:import agent_test_lib as atl; atl.begin_pie(out)` → `atl.skip_intro(world,out)` →
+`atl.start_new_game(world,out,seed=N)` → `MO.Test.X`) → grep `Saved/Logs/MO57.log` for
+`[MOQUERY]`/`[MOTEST]`. Full playbook: `Docs/Agent_PIE_Testing.md`. The bridge is gitignored (dev-only) —
+it lives in the MAIN tree's `Content/Python/` only, not in git worktrees.
+
+**Verified live (2026-07-01):**
+- **#159** (H21 pickup regression): `MO.Test.DropPickup` → **PASS**, GUID intact. The new
+  `UMOInteractorComponent::ServerPickUpWorldItem` (HasAuthority-gated, distance-validated, no crosshair
+  re-trace) fixes UI-driven pickups (nearby menu / loot-all / drag) that H21 had accidentally aim-gated.
+- **#160** (FindWidget): dropping the `IsInViewport()` gate → **18 matches** at the main menu incl.
+  NewGameButton / LoadGameButton — CommonUI widgets live on activatable stacks, never `AddToViewport`.
+- `MO.Test.Attack` → PASS; `MO.Test.State` correct at menu (inGame=NO) and in-game (inGame=YES + pawn).
+
+**Fallback when NOT using the bridge:** the CommonUI menu captures viewport keyboard input, so the
+in-game `~` console can't receive typed text over a menu — run `MO.Test.*` from the **editor's Output Log
+console command box** (press Shift+F1 first if in-game to free the mouse) and read the Output Log search filter.
