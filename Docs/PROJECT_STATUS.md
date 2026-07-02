@@ -347,6 +347,8 @@ These areas are strong and should be preserved (re-confirmed June 11 unless note
 
 | Date | Milestone |
 |------|-----------|
+| 2026-07-01 | Fable-5 audit pass (3 agents over the fix-campaign's own churn). Fixed + committed (0b68eb0, 532ce4d): permadeath-on-load (dead pawns resurrected), in-game-load-failure permafreeze, loaded-building free-build, craft-completion dangling-ref (C6/H27 class), terraform co-op persistence skip + server validation, craft Count int-overflow dupe, destroyed-GUID suppression latch; M1 blackboard-key centralization (MOBlackboardKeys.h, 58 sites). 2 findings were in this campaign's OWN earlier fixes (#132/#158). Deferred → #162 (building state replication), #163 (MP cheat-hardening), #164 (memory-safety [M]s + save/load [M]s). |
+| 2026-06-30 → 07-01 | MO.Test.* MP-authority console harness + file-I/O bridge (claude_bridge) revived & proven under UE5.8 = screenshot-free PIE test loop; fixed #159 (H21 pickup regression, runtime-verified), #158 (in-game load), #160/#161 (FindWidget + menu label swap); #132 crafting/terraform client→server transport |
 | 2026-06-11 | Full re-audit (17 agents + 40 adversarial verifications, 156K LOC, 511 files, 12 units); 27 May issues re-verified (11 fixed, 7 incidentally); 9 new criticals C4–C12, 48 new highs H8–H55, ~135 M/L items; tasks #124–#143 filed |
 | 2026-05-17 → 06-10 | Game clock, UDS/UDW weather bridge, exposure model, audio subsystem, HUD root + moodles, save/modal/focus overhaul, cheat + mod runtime, AI freeze pipeline, voxel docs + World Features architecture |
 | 2026-05-17 | Full codebase audit (6 agents, 114K LOC, 467 files) |
