@@ -17,6 +17,8 @@
 #include "MOSaveGameTypes.h"
 #include "MORecipeDatabaseSettings.h"
 #include "MOSkillDatabaseSettings.h"
+#include "MOMedicalDatabaseSettings.h"
+#include "MOBodyPartDefinitionRow.h"
 #include "MOHUDRootWidget.h"
 #include "MOStatusEffectStripWidget.h"
 #include "MOStatusMoodleTypes.h"
@@ -32,9 +34,12 @@
 #include "UObject/UObjectIterator.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
+#include "Engine/DataTable.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/Pawn.h"
 #include "HAL/IConsoleManager.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
 #include "UObject/Class.h"
 #include "UObject/ConstructorHelpers.h"
 
@@ -56,6 +61,254 @@ namespace
 	{
 		APawn* Pawn = ResolveLocalPawn(World);
 		return Pawn ? Pawn->FindComponentByClass<UMOInventoryComponent>() : nullptr;
+	}
+
+	// =========================================================================
+	// Shared test bodies. The individual MO.Test.* commands and MO.Test.RunAll
+	// both call these, so there is ONE implementation per check. Each logs its
+	// existing [MOTEST] markers (so single-command usage is unchanged) AND
+	// returns a structured result the suite aggregates into a results file.
+	// =========================================================================
+
+	/** Pass/fail + a human-readable detail line for one automated check. */
+	struct FMOTestResult
+	{
+		bool bPass = false;
+		FString Name;
+		FString Detail;
+	};
+
+	/** H21 identity: give -> drop -> pickup, assert the same GUID returns. */
+	FMOTestResult RunDropPickupTest(UWorld* World, FName ItemId)
+	{
+		auto Fail = [](const FString& Detail) -> FMOTestResult
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] FAIL DropPickup: %s"), *Detail);
+			return { false, TEXT("DropPickup"), Detail };
+		};
+
+		APawn* Pawn = ResolveLocalPawn(World);
+		UMOInventoryComponent* Inv = ResolveLocalInventory(World);
+		if (!Pawn || !Inv)
+		{
+			return Fail(TEXT("no pawn/inventory (are you in-game?)"));
+		}
+		FMOItemDefinitionRow ItemDef;
+		if (!UMOItemDatabaseSettings::GetItemDefinition(ItemId, ItemDef))
+		{
+			return Fail(FString::Printf(TEXT("'%s' is not in the item database"), *ItemId.ToString()));
+		}
+		const FGuid Guid = FGuid::NewGuid();
+		if (!Inv->AddItemByGuid(Guid, ItemId, 1))
+		{
+			return Fail(TEXT("give failed"));
+		}
+		const FVector DropLoc = Pawn->GetActorLocation() + Pawn->GetActorForwardVector() * 150.0f;
+		AActor* WorldItem = Inv->DropItemByGuid(Guid, DropLoc, FRotator::ZeroRotator);
+		if (!WorldItem)
+		{
+			return Fail(TEXT("drop returned null"));
+		}
+		UMOInteractorComponent* Interactor = Pawn->FindComponentByClass<UMOInteractorComponent>();
+		if (!Interactor)
+		{
+			return Fail(TEXT("no interactor on pawn"));
+		}
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] DropPickup: gave+dropped %s as %s GUID=%s; requesting pickup"),
+			*ItemId.ToString(), *WorldItem->GetName(), *Guid.ToString(EGuidFormats::DigitsWithHyphens));
+		Interactor->RequestInteractWithActor(WorldItem);
+		// On standalone/host the canonical pickup runs same-frame (authority), so the
+		// original GUID should be back in inventory now. On a true remote client it is
+		// async -- run this on the host, or grep GiveToInteractorInventory's logged GUID.
+		FMOInventoryEntry Entry;
+		const bool bBack = Inv->TryGetEntryByGuid(Guid, Entry);
+		const FString Detail = bBack
+			? TEXT("original GUID preserved (identity intact)")
+			: TEXT("original GUID NOT back -- identity lost or async on a remote client");
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] %s DropPickup: %s"), bBack ? TEXT("PASS") : TEXT("FAIL"), *Detail);
+		return { bBack, TEXT("DropPickup"), Detail };
+	}
+
+	/** H18 combat: trigger a light attack (client forwards ServerStartAttack). */
+	FMOTestResult RunAttackTest(UWorld* World)
+	{
+		APawn* Pawn = ResolveLocalPawn(World);
+		UMOCombatComponent* Combat = Pawn ? Pawn->FindComponentByClass<UMOCombatComponent>() : nullptr;
+		if (!Combat)
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] FAIL Attack: no combat component (are you in-game?)"));
+			return { false, TEXT("Attack"), TEXT("no combat component (are you in-game?)") };
+		}
+		const bool bOk = Combat->StartLightAttack();
+		const FString Detail = FString::Printf(TEXT("StartLightAttack=%s CombatState=%d"),
+			bOk ? TEXT("true") : TEXT("false"), (int32)Combat->CombatState);
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] %s Attack: %s"), bOk ? TEXT("PASS") : TEXT("FAIL"), *Detail);
+		return { bOk, TEXT("Attack"), Detail };
+	}
+
+	/** H20 crafting: grant the recipe's ingredients, then enqueue (server-gated). */
+	FMOTestResult RunCraftTest(UWorld* World, FName RecipeId)
+	{
+		APawn* Pawn = ResolveLocalPawn(World);
+		UMOCraftingQueueComponent* Queue = Pawn ? Pawn->FindComponentByClass<UMOCraftingQueueComponent>() : nullptr;
+		if (!Queue)
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] FAIL Craft: no crafting queue component (are you in-game?)"));
+			return { false, TEXT("Craft"), TEXT("no crafting queue component (are you in-game?)") };
+		}
+
+		// Self-setup: grant the recipe's ingredients so the enqueue path is
+		// actually exercised instead of failing on missing materials. Tools /
+		// skill / station gates can't be fabricated here -- the detail reports
+		// if enqueue still fails so the failure is diagnosable.
+		int32 Granted = 0;
+		if (const FMORecipeDefinitionRow* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(RecipeId))
+		{
+			if (UMOInventoryComponent* Inv = ResolveLocalInventory(World))
+			{
+				for (const FMORecipeIngredient& Ing : Recipe->Ingredients)
+				{
+					if (!Ing.ItemDefinitionId.IsNone() && Inv->AddItemByGuid(FGuid::NewGuid(), Ing.ItemDefinitionId, Ing.Quantity))
+					{
+						Granted += Ing.Quantity;
+					}
+				}
+			}
+		}
+
+		const bool bOk = Queue->EnqueueCraft(RecipeId, 1, EMOCraftingStation::None);
+		const FString Detail = bOk
+			? FString::Printf(TEXT("EnqueueCraft(%s)=true after granting %d ingredient(s)"), *RecipeId.ToString(), Granted)
+			: FString::Printf(TEXT("EnqueueCraft(%s)=false even after granting %d ingredient(s) (needs tool/skill/station?)"), *RecipeId.ToString(), Granted);
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] %s Craft: %s"), bOk ? TEXT("PASS") : TEXT("FAIL"), *Detail);
+		return { bOk, TEXT("Craft"), Detail };
+	}
+
+	/**
+	 * Content-integrity check (#65): every recipe/treatment reference must
+	 * resolve to a real item/skill row. This is the drift class that produced
+	 * H40/M21 (dangling item + treatment refs). Appends one result per table
+	 * and logs each dangling ref as an indented [MOTEST] line.
+	 */
+	void RunDataValidation(TArray<FMOTestResult>& OutResults)
+	{
+		// ---- Recipes: ingredient/output/buildpart/fuel items + required skill ----
+		{
+			TArray<FName> RecipeIds;
+			UMORecipeDatabaseSettings::GetAllRecipeIds(RecipeIds);
+			int32 Dangling = 0;
+			int32 EmptyOutputs = 0;
+			for (const FName& RecipeId : RecipeIds)
+			{
+				const FMORecipeDefinitionRow* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(RecipeId);
+				if (!Recipe) { continue; }
+
+				auto CheckItem = [&Dangling, &RecipeId](FName ItemId, const TCHAR* Field)
+				{
+					FMOItemDefinitionRow Tmp;
+					if (!ItemId.IsNone() && !UMOItemDatabaseSettings::GetItemDefinition(ItemId, Tmp))
+					{
+						++Dangling;
+						UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST]   Recipe '%s' %s -> unknown item '%s'"),
+							*RecipeId.ToString(), Field, *ItemId.ToString());
+					}
+				};
+
+				for (const FMORecipeIngredient& Ing : Recipe->Ingredients) { CheckItem(Ing.ItemDefinitionId, TEXT("ingredient")); }
+				for (const FMORecipeOutput& Out : Recipe->Outputs) { CheckItem(Out.ItemDefinitionId, TEXT("output")); }
+				for (const FMOBuildPart& Part : Recipe->BuildParts) { CheckItem(Part.ItemDefinitionId, TEXT("buildpart")); }
+				for (const FName& Fuel : Recipe->AcceptedFuelItems) { CheckItem(Fuel, TEXT("fuel")); }
+
+				if (!Recipe->RequiredSkillId.IsNone() && !UMOSkillDatabaseSettings::GetSkillDefinition(Recipe->RequiredSkillId))
+				{
+					++Dangling;
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST]   Recipe '%s' requiredSkill -> unknown skill '%s'"),
+						*RecipeId.ToString(), *Recipe->RequiredSkillId.ToString());
+				}
+
+				// Empty-outputs trap (MORecipeDefinitionRow.h known pitfalls): a
+				// non-building, non-harvest recipe with no outputs silently
+				// consumes ingredients and yields nothing.
+				if (!Recipe->bIsBuilding && !Recipe->bIsHarvestRecipe && Recipe->Outputs.Num() == 0)
+				{
+					++EmptyOutputs;
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST]   Recipe '%s' has NO outputs (consumes ingredients, yields nothing)"),
+						*RecipeId.ToString());
+				}
+			}
+			const bool bPass = (Dangling == 0 && EmptyOutputs == 0);
+			OutResults.Add({ bPass, TEXT("Data:Recipes"),
+				FString::Printf(TEXT("%d recipes, %d dangling ref(s), %d empty-output recipe(s)"), RecipeIds.Num(), Dangling, EmptyOutputs) });
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] %s Data:Recipes -- %d recipes, %d dangling, %d empty-output"),
+				bPass ? TEXT("PASS") : TEXT("FAIL"), RecipeIds.Num(), Dangling, EmptyOutputs);
+		}
+
+		// ---- Medical treatments: required items + required skill ----
+		{
+			int32 Dangling = 0;
+			int32 Count = 0;
+			const UMOMedicalDatabaseSettings* Med = GetDefault<UMOMedicalDatabaseSettings>();
+			UDataTable* Table = Med ? Med->GetMedicalTreatmentsTable() : nullptr;
+			if (Table)
+			{
+				TArray<FMOMedicalTreatmentRow*> Rows;
+				Table->GetAllRows<FMOMedicalTreatmentRow>(TEXT("MO.Test.ValidateData"), Rows);
+				Count = Rows.Num();
+				for (const FMOMedicalTreatmentRow* Row : Rows)
+				{
+					if (!Row) { continue; }
+					for (const FName& ItemId : Row->RequiredItemIds)
+					{
+						FMOItemDefinitionRow Tmp;
+						if (!ItemId.IsNone() && !UMOItemDatabaseSettings::GetItemDefinition(ItemId, Tmp))
+						{
+							++Dangling;
+							UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST]   Treatment '%s' requiredItem -> unknown item '%s'"),
+								*Row->TreatmentId.ToString(), *ItemId.ToString());
+						}
+					}
+					if (!Row->RequiredSkillId.IsNone() && !UMOSkillDatabaseSettings::GetSkillDefinition(Row->RequiredSkillId))
+					{
+						++Dangling;
+						UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST]   Treatment '%s' requiredSkill -> unknown skill '%s'"),
+							*Row->TreatmentId.ToString(), *Row->RequiredSkillId.ToString());
+					}
+				}
+				const bool bPass = (Dangling == 0);
+				OutResults.Add({ bPass, TEXT("Data:Treatments"),
+					FString::Printf(TEXT("%d treatments, %d dangling ref(s)"), Count, Dangling) });
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] %s Data:Treatments -- %d treatments, %d dangling"),
+					bPass ? TEXT("PASS") : TEXT("FAIL"), Count, Dangling);
+			}
+			else
+			{
+				OutResults.Add({ false, TEXT("Data:Treatments"), TEXT("medical treatments table not configured") });
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] FAIL Data:Treatments -- table not configured"));
+			}
+		}
+	}
+
+	/**
+	 * Write results to Saved/MOTestResults.txt -- a stable, immediately-flushed
+	 * path a runner reads instead of scraping the buffered game log -- and log
+	 * a one-line summary (also greppable).
+	 */
+	void WriteTestResults(const FString& SuiteName, const TArray<FMOTestResult>& Results)
+	{
+		int32 Pass = 0;
+		int32 Fail = 0;
+		FString Out = FString::Printf(TEXT("[MOTEST-RESULTS] Suite=%s\n"), *SuiteName);
+		for (const FMOTestResult& R : Results)
+		{
+			Out += FString::Printf(TEXT("%s %s | %s\n"), R.bPass ? TEXT("PASS") : TEXT("FAIL"), *R.Name, *R.Detail);
+			if (R.bPass) { ++Pass; } else { ++Fail; }
+		}
+		Out += FString::Printf(TEXT("SUMMARY %d passed, %d failed\n"), Pass, Fail);
+
+		const FString Path = FPaths::ProjectSavedDir() / TEXT("MOTestResults.txt");
+		FFileHelper::SaveStringToFile(Out, *Path);
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] ===== %s: %d passed, %d failed -> %s ====="),
+			*SuiteName, Pass, Fail, *Path);
 	}
 }
 
@@ -288,50 +541,7 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
 		{
 			const FName ItemId = Args.Num() > 0 ? FName(*Args[0]) : FName(TEXT("Stick01"));
-			APawn* Pawn = ResolveLocalPawn(World);
-			UMOInventoryComponent* Inv = ResolveLocalInventory(World);
-			if (!Pawn || !Inv)
-			{
-				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] FAIL DropPickup: no pawn/inventory (are you in-game?)"));
-				return;
-			}
-			FMOItemDefinitionRow ItemDef;
-			if (!UMOItemDatabaseSettings::GetItemDefinition(ItemId, ItemDef))
-			{
-				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] FAIL DropPickup: '%s' is not in the item database"), *ItemId.ToString());
-				return;
-			}
-			const FGuid Guid = FGuid::NewGuid();
-			if (!Inv->AddItemByGuid(Guid, ItemId, 1))
-			{
-				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] FAIL DropPickup: give failed"));
-				return;
-			}
-			const FVector DropLoc = Pawn->GetActorLocation() + Pawn->GetActorForwardVector() * 150.0f;
-			AActor* WorldItem = Inv->DropItemByGuid(Guid, DropLoc, FRotator::ZeroRotator);
-			if (!WorldItem)
-			{
-				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] FAIL DropPickup: drop returned null"));
-				return;
-			}
-			UMOInteractorComponent* Interactor = Pawn->FindComponentByClass<UMOInteractorComponent>();
-			if (!Interactor)
-			{
-				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] FAIL DropPickup: no interactor on pawn"));
-				return;
-			}
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] DropPickup: gave+dropped %s as %s GUID=%s; requesting pickup"),
-				*ItemId.ToString(), *WorldItem->GetName(), *Guid.ToString(EGuidFormats::DigitsWithHyphens));
-			Interactor->RequestInteractWithActor(WorldItem);
-			// On standalone/host the canonical pickup runs same-frame (authority), so the
-			// original GUID should be back in inventory now. On a true remote client it is
-			// async -- run this on the host, or grep GiveToInteractorInventory's logged GUID.
-			FMOInventoryEntry Entry;
-			const bool bBack = Inv->TryGetEntryByGuid(Guid, Entry);
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] %s DropPickup: original GUID %s %s after pickup"),
-				bBack ? TEXT("PASS") : TEXT("FAIL"),
-				*Guid.ToString(EGuidFormats::DigitsWithHyphens),
-				bBack ? TEXT("preserved (identity intact)") : TEXT("NOT back -- identity lost or async on a remote client"));
+			RunDropPickupTest(World, ItemId);
 		}),
 		ECVF_Default));
 
@@ -341,16 +551,7 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 		TEXT("H18 combat test: trigger a light attack (client forwards ServerStartAttack); log the combat state."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
 		{
-			APawn* Pawn = ResolveLocalPawn(World);
-			UMOCombatComponent* Combat = Pawn ? Pawn->FindComponentByClass<UMOCombatComponent>() : nullptr;
-			if (!Combat)
-			{
-				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] FAIL Attack: no combat component (are you in-game?)"));
-				return;
-			}
-			const bool bOk = Combat->StartLightAttack();
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] %s Attack: StartLightAttack=%s CombatState=%d"),
-				bOk ? TEXT("PASS") : TEXT("INFO"), bOk ? TEXT("true") : TEXT("false"), (int32)Combat->CombatState);
+			RunAttackTest(World);
 		}),
 		ECVF_Default));
 
@@ -361,16 +562,7 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
 		{
 			const FName RecipeId = Args.Num() > 0 ? FName(*Args[0]) : FName(TEXT("KnapFlint"));
-			APawn* Pawn = ResolveLocalPawn(World);
-			UMOCraftingQueueComponent* Queue = Pawn ? Pawn->FindComponentByClass<UMOCraftingQueueComponent>() : nullptr;
-			if (!Queue)
-			{
-				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] FAIL Craft: no crafting queue component (are you in-game?)"));
-				return;
-			}
-			const bool bOk = Queue->EnqueueCraft(RecipeId, 1, EMOCraftingStation::None);
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] %s Craft: EnqueueCraft(%s)=%s"),
-				bOk ? TEXT("PASS") : TEXT("INFO"), *RecipeId.ToString(), bOk ? TEXT("true") : TEXT("false"));
+			RunCraftTest(World, RecipeId);
 		}),
 		ECVF_Default));
 
@@ -388,6 +580,42 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 				PC->ConsoleCommand(TEXT("MO.Test.Craft"), true);
 			}
 			UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] ===== MPSuite end ====="));
+		}),
+		ECVF_Default));
+
+	// ---------- MO.Test.ValidateData ----------
+	// Content-integrity gate (#65). This subsystem only exists once a game
+	// GameInstance does (i.e. PIE running), but unlike the gameplay tests it
+	// needs NO possessed pawn -- it reads DataTables, so it runs fine sitting at
+	// the main menu. Writes PASS/FAIL to Saved/MOTestResults.txt.
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Test.ValidateData"),
+		TEXT("Validate DataTable integrity (dangling recipe/treatment item+skill refs, empty-output recipes). Writes Saved/MOTestResults.txt. Works at the main menu (no pawn needed)."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			TArray<FMOTestResult> Results;
+			RunDataValidation(Results);
+			WriteTestResults(TEXT("ValidateData"), Results);
+		}),
+		ECVF_Default));
+
+	// ---------- MO.Test.RunAll ----------
+	// The full regression gate: gameplay smoke tests (need an in-game pawn) plus
+	// the data-integrity checks, aggregated into one PASS/FAIL summary file so a
+	// runner reads Saved/MOTestResults.txt instead of scraping the buffered log.
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Test.RunAll"),
+		TEXT("Run the full regression suite (DropPickup+Attack+Craft + data validation) and write PASS/FAIL to Saved/MOTestResults.txt."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] ===== RunAll begin ====="));
+			TArray<FMOTestResult> Results;
+			Results.Add(RunDropPickupTest(World, FName(TEXT("Stick01"))));
+			Results.Add(RunAttackTest(World));
+			Results.Add(RunCraftTest(World, FName(TEXT("KnapFlint"))));
+			RunDataValidation(Results);
+			WriteTestResults(TEXT("RunAll"), Results);
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] ===== RunAll end ====="));
 		}),
 		ECVF_Default));
 
