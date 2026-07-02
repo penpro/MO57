@@ -271,12 +271,26 @@ void AMOGameMode::HandlePendingNewGame()
 				}
 				else
 				{
-					UE_LOG(LogMOFramework, Error, TEXT("[MOGameMode] Failed to load save: %s"), *Result.ErrorMessage);
+					// Load failed (missing/corrupt .sav). The pre-flight lockout already
+					// destroyed the voxel runtime and ResetForNewWorld wiped the live session,
+					// so dismissing the loading screen here is the ONLY thing preventing a
+					// permanent opaque freeze with no exit but killing the process (audit [C]).
+					// Dismiss so the player can Esc -> Exit to Menu and pick another save.
+					// (Fuller auto-return-to-menu recovery is a tracked follow-up.)
+					UE_LOG(LogMOFramework, Error, TEXT("[MOGameMode] Failed to load save: %s -- dismissing loading screen so the player isn't stuck"), *Result.ErrorMessage);
+					if (UMOGameInstance* MOGI = Cast<UMOGameInstance>(GetGameInstance()))
+					{
+						MOGI->DismissLoadingScreen();
+					}
 				}
 			}
 			else
 			{
-				UE_LOG(LogMOFramework, Error, TEXT("[MOGameMode] No persistence subsystem found!"));
+				UE_LOG(LogMOFramework, Error, TEXT("[MOGameMode] No persistence subsystem found! -- dismissing loading screen so the player isn't stuck"));
+				if (UMOGameInstance* MOGI = Cast<UMOGameInstance>(GetGameInstance()))
+				{
+					MOGI->DismissLoadingScreen();
+				}
 			}
 		}
 	}

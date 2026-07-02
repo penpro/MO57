@@ -706,26 +706,44 @@ void UMOTerraformingComponent::CancelTerraform()
 
 void UMOTerraformingComponent::ServerApplyTerraform_Implementation(EMOTerraformMode Mode, FVector Location, float FlattenHeight)
 {
-	// Runs on the host. HasAuthority() is true here, so the per-mode sculpt + its
-	// RegisterModifiedZone persistence run authoritatively -- the same path a host player uses.
-	if (!GetOwner() || !GetOwner()->HasAuthority())
+	AActor* OwnerActor = GetOwner();
+	if (!OwnerActor || !OwnerActor->HasAuthority())
 	{
 		return;
 	}
+
+	// Validate the client-resolved target before honoring it. The requesting client
+	// resolved Location from its own viewpoint trace, so bound how far from the pawn the
+	// server will act (generous margin over the client trace distance for tools/latency),
+	// and clamp FlattenHeight to a sane band around the target so a bad/hostile value
+	// can't spike terrain to +/-1e9 (audit -- terraform got no server validation in H17).
+	const float MaxServerReachSq = FMath::Square(2500.0f);
+	if (FVector::DistSquared(OwnerActor->GetActorLocation(), Location) > MaxServerReachSq)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOTerraforming] ServerApplyTerraform: target out of reach -- rejected"));
+		return;
+	}
+	FlattenHeight = FMath::Clamp(FlattenHeight, Location.Z - 5000.0f, Location.Z + 5000.0f);
+
 	if (Mode != EMOTerraformMode::RemoveFoliage && !HasValidSculptActor())
 	{
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOTerraforming] ServerApplyTerraform: no valid sculpt actor"));
 		return;
 	}
-	switch (Mode)
-	{
-	case EMOTerraformMode::Dig:           Dig(Location); break;
-	case EMOTerraformMode::Raise:         Raise(Location); break;
-	case EMOTerraformMode::Flatten:       Flatten(Location, FlattenHeight); break;
-	case EMOTerraformMode::Smooth:        Smooth(Location); break;
-	case EMOTerraformMode::RemoveFoliage: RemoveFoliage(Location); break;
-	default: break;
-	}
+
+	// Route through the SHARED authoritative apply so the voxel edit AND its
+	// RegisterModifiedZone + foliage sweep (persistence!) all run -- the true host path.
+	// (Previously this duplicated only the sculpt switch and silently skipped zone
+	// registration, so remote-client terraform never saved and PCG foliage respawned in
+	// the dug crater. Populate the pending action the server component doesn't otherwise
+	// have -- the timed tick ran on the client -- then run + clear it.)
+	PendingAction.Reset();
+	PendingAction.bActive = true;
+	PendingAction.Mode = Mode;
+	PendingAction.TargetLocation = Location;
+	PendingAction.FlattenTargetHeight = FlattenHeight;
+	ApplyPendingTerraform();
+	PendingAction.Reset();
 }
 
 bool UMOTerraformingComponent::ApplyPendingTerraform()

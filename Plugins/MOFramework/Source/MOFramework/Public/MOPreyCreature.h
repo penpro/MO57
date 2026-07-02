@@ -91,6 +91,15 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category="MO|Creature|Prey")
 	float SafeDistance = 1500.f;
 
+	/**
+	 * Health fraction below which the placeholder IsCornered() check considers this
+	 * prey cornered (fight-back trigger) while in attack range. Tunable per species
+	 * (audit M2 -- was a bare 0.15f literal). Replaced by the EQS escape-route query
+	 * when M3 lands.
+	 */
+	UPROPERTY(EditDefaultsOnly, Category="MO|Creature|Prey", meta=(ClampMin="0.0", ClampMax="1.0"))
+	float CorneredHealthPercent = 0.15f;
+
 	/** Default behavior tree for prey creatures. */
 	UPROPERTY(EditDefaultsOnly, Category="MO|Creature|Prey")
 	TSoftObjectPtr<UBehaviorTree> DefaultPreyBehaviorTree;

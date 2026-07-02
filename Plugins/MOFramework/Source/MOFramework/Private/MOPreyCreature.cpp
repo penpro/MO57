@@ -63,5 +63,5 @@ bool AMOPreyCreature::IsCornered() const
 	}
 
 	// Simple placeholder: cornered if very low health and in attack range
-	return GetHealthPercent() < 0.15f && CreatureAI->IsInAttackRange();
+	return GetHealthPercent() < CorneredHealthPercent && CreatureAI->IsInAttackRange();
 }

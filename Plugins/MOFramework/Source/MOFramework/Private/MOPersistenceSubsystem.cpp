@@ -151,6 +151,12 @@ void UMOPersistenceSubsystem::ResetForNewWorld(const FString& NewSlotName)
     SessionDestroyedGuids.Empty();
     SessionPlayTimeSeconds = 0.0f;
     bNextSaveIsAutosave = false;
+    // Clear the load-suppression latch too: it's normally cleared by a 0.25s world-lifetime
+    // timer, but if the world was torn down inside that window (quit-to-menu right after a
+    // load) the timer died with it and the flag stuck true, silently stopping ALL destroyed-
+    // GUID recording for the rest of the GameInstance -> destroyed items/pawns resurrect on
+    // later save/loads. Every new-world/load path funnels through here, so reset it (audit).
+    bSuppressDestroyedGuidRecording = false;
     CurrentSlotName = NewSlotName;
 
     UE_LOG(LogMOFramework, Log,
@@ -1036,6 +1042,17 @@ void UMOPersistenceSubsystem::CapturePersistedPawnsAndInventories(UWorld* World,
         PawnRecord.PawnGuid = PawnGuid;
         PawnRecord.Transform = Pawn->GetActorTransform();
 
+        // Permadeath capture: record live death state so a pawn that died THIS session is
+        // saved deceased even if it had no prior record for MarkPawnDeceased to flip (spawned
+        // + died before any save). Latches -- an already-deceased record stays deceased.
+        if (const AMOCharacter* AsChar = Cast<AMOCharacter>(Pawn))
+        {
+            if (AsChar->IsDead())
+            {
+                PawnRecord.bIsDeceased = true;
+            }
+        }
+
         // [DIAG] Flag whether THIS pawn is the locally-controlled one. Helps
         // correlate save-vs-load: we want the player pawn's transform to
         // round-trip perfectly. Also dump SCALE — a "character shrinks each
@@ -1316,6 +1333,14 @@ void UMOPersistenceSubsystem::RespawnPersistedPawns(UWorld* World, const TArray<
         if (SessionDestroyedGuids.Contains(PawnRecord.PawnGuid))
         {
             // This is expected - pawn was destroyed, don't count as failure
+            continue;
+        }
+
+        if (PawnRecord.bIsDeceased)
+        {
+            // Permadeath (core pillar): a pawn that died stays dead. The single-pawn
+            // SpawnPawnFromRecord path already gates on this; this full-load loop did not,
+            // so dead survivors/creatures resurrected as live actors on every load.
             continue;
         }
 

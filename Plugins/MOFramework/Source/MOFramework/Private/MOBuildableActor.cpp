@@ -532,6 +532,16 @@ void AMOBuildableActor::ApplySaveData(const FMOPersistedBuildingRecord& InRecord
 
 	if (BuildProgressComponent)
 	{
+		// Repopulate recipe-derived BuildParts/weights FIRST. ApplySaveData restores only the
+		// FMOBuildProgress payload (deposits/elapsed/state), NOT BuildParts -- so without this a
+		// loaded in-progress building has an empty parts list: required materials read as zero,
+		// AreAllMaterialsDeposited() is vacuously true, and Start Build finishes it for free.
+		// InitializeFromRecipe resets Progress; the ApplySaveData below then overwrites it with
+		// the saved deposits/state (order matters).
+		if (const FMORecipeDefinitionRow* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(InRecord.RecipeId))
+		{
+			BuildProgressComponent->InitializeFromRecipe(*Recipe);
+		}
 		BuildProgressComponent->ApplySaveData(InRecord.Progress);
 	}
 

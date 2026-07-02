@@ -293,9 +293,8 @@ private:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|System Menu|Confirmation", meta=(AllowPrivateAccess="true"))
 	TSubclassOf<UMOConfirmationDialog> ConfirmationDialogClass;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|System Menu|Confirmation", meta=(ClampMin="0", AllowPrivateAccess="true"))
-	int32 ConfirmationDialogZOrder = 200;
+	// (ConfirmationDialogZOrder removed -- L7 vestige: dialogs go through the CommonUI
+	// Modal layer stack now, which owns ordering; the property was read by nothing.)
 
 	UPROPERTY(Transient)
 	TWeakObjectPtr<UMOConfirmationDialog> ConfirmationDialogWidget;

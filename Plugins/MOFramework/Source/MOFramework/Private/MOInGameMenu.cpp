@@ -57,10 +57,10 @@ void UMOInGameMenu::NativeConstruct()
 {
 	Super::NativeConstruct();
 
-	// [DIAG] Unconditional entry log so we can confirm NativeConstruct ran.
+	// Construct-entry diagnostic (demoted to Verbose -- routine event, L6-family log hygiene).
 	const UWorld* DiagWorld = GetWorld();
 	const AGameModeBase* DiagGM = DiagWorld ? DiagWorld->GetAuthGameMode() : nullptr;
-	UE_LOG(LogMOFramework, Warning,
+	UE_LOG(LogMOFramework, Verbose,
 		TEXT("[MOInGameMenu] NativeConstruct '%s'  bClosesOnOutsideClick=%s  World=%s  GameMode=%s (class=%s)"),
 		*GetName(),
 		bClosesOnOutsideClick ? TEXT("TRUE") : TEXT("false"),

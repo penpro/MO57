@@ -84,6 +84,13 @@ bool UMOCraftingQueueComponent::EnqueueCraft(FName RecipeId, int32 Count, EMOCra
 		return false;
 	}
 
+	// Server-authoritative clamp. EnqueueCraft is the single chokepoint the co-op
+	// ServerRequestEnqueueCraft RPC also funnels through, so bound the (client-supplied)
+	// repeat count here. Without it a huge Count overflowed the int32 `Ingredient.Quantity
+	// * Count` below: Required wrapped negative, passed the availability check while
+	// consuming almost nothing -> item duplication. Also caps absurd offline catch-up. (audit)
+	Count = FMath::Min(Count, 1000);
+
 	// Server-authoritative: only the server mutates the replicated queue and consumes
 	// ingredients. On a remote client this no-ops (matches UMOSurvivorJobQueueComponent).
 	if (!GetOwner()->HasAuthority())
@@ -728,13 +735,19 @@ void UMOCraftingQueueComponent::CompletCurrentCraft()
 		return;
 	}
 
-	FMOCraftingQueueEntry& CurrentEntry = Queue.Entries[0];
+	// Snapshot identity BEFORE any external call. ProduceOutputsOnly and the OnCraftCompleted
+	// broadcast below run synchronously into the crafting subsystem + quest/BP handlers that can
+	// enqueue/cancel crafts (Queue.Entries realloc/RemoveAt), so holding a live
+	// FMOCraftingQueueEntry& across them would dangle -- the C6/H27 defect class. Work off
+	// snapshots and re-locate the entry by EntryId afterward; never assume index 0 still holds it.
+	const FGuid ActiveEntryId = Queue.Entries[0].EntryId;
+	const FName ActiveRecipeId = Queue.Entries[0].RecipeId;
 
 	// Get recipe for output generation
-	const FMORecipeDefinitionRow* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(CurrentEntry.RecipeId);
+	const FMORecipeDefinitionRow* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(ActiveRecipeId);
 	if (!Recipe)
 	{
-		UE_LOG(LogMOFramework, Error, TEXT("[MOCraftingQueue] Recipe not found for completion: %s"), *CurrentEntry.RecipeId.ToString());
+		UE_LOG(LogMOFramework, Error, TEXT("[MOCraftingQueue] Recipe not found for completion: %s"), *ActiveRecipeId.ToString());
 		Queue.Entries.RemoveAt(0);
 		Queue.MarkArrayDirty();
 		OnQueueChanged.Broadcast();
@@ -752,7 +765,7 @@ void UMOCraftingQueueComponent::CompletCurrentCraft()
 		{
 			SkillsComp = Owner->FindComponentByClass<UMOSkillsComponent>();
 		}
-		Result = CraftingSub->ProduceOutputsOnly(CurrentEntry.RecipeId, CachedInventory.Get(), SkillsComp);
+		Result = CraftingSub->ProduceOutputsOnly(ActiveRecipeId, CachedInventory.Get(), SkillsComp);
 	}
 	else
 	{
@@ -775,27 +788,39 @@ void UMOCraftingQueueComponent::CompletCurrentCraft()
 		}
 	}
 
-	CurrentEntry.CompletedCount++;
-	FGuid CompletedEntryId = CurrentEntry.EntryId;
-
-	UE_LOG(LogMOFramework, Log, TEXT("[MOCraftingQueue] Completed craft %d/%d for recipe %s"),
-		CurrentEntry.CompletedCount, CurrentEntry.Count, *CurrentEntry.RecipeId.ToString());
-
-	OnCraftCompleted.Broadcast(CompletedEntryId, Result);
-
-	// Check if this entry has more repeats
-	if (CurrentEntry.CompletedCount >= CurrentEntry.Count)
+	// Re-locate the entry -- the broadcast chain inside ProduceOutputsOnly may have mutated the
+	// queue. From here we index only via this freshly-found index and never across a broadcast.
+	const int32 EntryIdx = Queue.Entries.IndexOfByPredicate(
+		[&ActiveEntryId](const FMOCraftingQueueEntry& E) { return E.EntryId == ActiveEntryId; });
+	bool bEntryFullyComplete = false;
+	if (EntryIdx != INDEX_NONE)
 	{
-		// Entry fully complete, remove it
-		Queue.Entries.RemoveAt(0);
-		Queue.MarkArrayDirty();
-		OnQueueChanged.Broadcast();
+		FMOCraftingQueueEntry& Entry = Queue.Entries[EntryIdx];
+		Entry.CompletedCount++;
+
+		UE_LOG(LogMOFramework, Log, TEXT("[MOCraftingQueue] Completed craft %d/%d for recipe %s"),
+			Entry.CompletedCount, Entry.Count, *ActiveRecipeId.ToString());
+
+		if (Entry.CompletedCount >= Entry.Count)
+		{
+			// Entry fully complete, remove it
+			Queue.Entries.RemoveAt(EntryIdx);
+			Queue.MarkArrayDirty();
+			bEntryFullyComplete = true;
+		}
+		else
+		{
+			// Reset for next repeat
+			Entry.Progress = 0.0f;
+			Queue.MarkItemDirty(Entry);
+		}
 	}
-	else
+	// else: a listener already removed our entry during ProduceOutputsOnly -- nothing to update.
+
+	OnCraftCompleted.Broadcast(ActiveEntryId, Result);
+	if (bEntryFullyComplete)
 	{
-		// Reset for next repeat
-		CurrentEntry.Progress = 0.0f;
-		Queue.MarkItemDirty(CurrentEntry);
+		OnQueueChanged.Broadcast();
 	}
 
 	// Reset start time for next craft
