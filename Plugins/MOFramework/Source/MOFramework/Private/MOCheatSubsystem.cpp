@@ -28,6 +28,7 @@
 #include "MOInteractorComponent.h"
 #include "MOCombatComponent.h"
 #include "MOCraftingQueueComponent.h"
+#include "MOSkillsComponent.h"
 #include "Blueprint/UserWidget.h"
 #include "Components/TextBlock.h"
 #include "Blueprint/WidgetTree.h"
@@ -157,11 +158,12 @@ namespace
 			return { false, TEXT("Craft"), TEXT("no crafting queue component (are you in-game?)") };
 		}
 
-		// Self-setup: grant the recipe's ingredients so the enqueue path is
-		// actually exercised instead of failing on missing materials. Tools /
-		// skill / station gates can't be fabricated here -- the detail reports
-		// if enqueue still fails so the failure is diagnosable.
+		// Self-setup: grant the recipe's ingredients AND its gating skill so the
+		// enqueue exercises the crafting PATH, isolated from content balance.
+		// Tools/stations can't be fabricated here -- the detail reports if
+		// enqueue still fails so the remaining gate is diagnosable.
 		int32 Granted = 0;
+		FString SkillNote;
 		if (const FMORecipeDefinitionRow* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(RecipeId))
 		{
 			if (UMOInventoryComponent* Inv = ResolveLocalInventory(World))
@@ -174,12 +176,23 @@ namespace
 					}
 				}
 			}
+			if (!Recipe->RequiredSkillId.IsNone() && Recipe->RequiredSkillLevel > 0)
+			{
+				if (UMOSkillsComponent* Skills = Pawn->FindComponentByClass<UMOSkillsComponent>())
+				{
+					if (!Skills->HasSkillLevel(Recipe->RequiredSkillId, Recipe->RequiredSkillLevel))
+					{
+						Skills->SetSkillLevel(Recipe->RequiredSkillId, Recipe->RequiredSkillLevel);
+						SkillNote = FString::Printf(TEXT(", set %s=%d"), *Recipe->RequiredSkillId.ToString(), Recipe->RequiredSkillLevel);
+					}
+				}
+			}
 		}
 
 		const bool bOk = Queue->EnqueueCraft(RecipeId, 1, EMOCraftingStation::None);
 		const FString Detail = bOk
-			? FString::Printf(TEXT("EnqueueCraft(%s)=true after granting %d ingredient(s)"), *RecipeId.ToString(), Granted)
-			: FString::Printf(TEXT("EnqueueCraft(%s)=false even after granting %d ingredient(s) (needs tool/skill/station?)"), *RecipeId.ToString(), Granted);
+			? FString::Printf(TEXT("EnqueueCraft(%s)=true after granting %d ingredient(s)%s"), *RecipeId.ToString(), Granted, *SkillNote)
+			: FString::Printf(TEXT("EnqueueCraft(%s)=false even after granting %d ingredient(s)%s (needs tool/station?)"), *RecipeId.ToString(), Granted, *SkillNote);
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] %s Craft: %s"), bOk ? TEXT("PASS") : TEXT("FAIL"), *Detail);
 		return { bOk, TEXT("Craft"), Detail };
 	}
@@ -558,10 +571,10 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 	// ---------- MO.Test.Craft [RecipeId=KnapFlint] ----------
 	ConsoleCommands.Add(CM.RegisterConsoleCommand(
 		TEXT("MO.Test.Craft"),
-		TEXT("H20 crafting test: enqueue a craft (server-gated). Usage: MO.Test.Craft [RecipeId=KnapFlint]"),
+		TEXT("H20 crafting test: enqueue a craft (server-gated). Usage: MO.Test.Craft [RecipeId=KnapFlintFlakes]"),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
 		{
-			const FName RecipeId = Args.Num() > 0 ? FName(*Args[0]) : FName(TEXT("KnapFlint"));
+			const FName RecipeId = Args.Num() > 0 ? FName(*Args[0]) : FName(TEXT("KnapFlintFlakes"));
 			RunCraftTest(World, RecipeId);
 		}),
 		ECVF_Default));
@@ -612,7 +625,7 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 			TArray<FMOTestResult> Results;
 			Results.Add(RunDropPickupTest(World, FName(TEXT("Stick01"))));
 			Results.Add(RunAttackTest(World));
-			Results.Add(RunCraftTest(World, FName(TEXT("KnapFlint"))));
+			Results.Add(RunCraftTest(World, FName(TEXT("KnapFlintFlakes"))));
 			RunDataValidation(Results);
 			WriteTestResults(TEXT("RunAll"), Results);
 			UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] ===== RunAll end ====="));
