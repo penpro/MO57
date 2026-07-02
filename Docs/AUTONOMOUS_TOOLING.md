@@ -4,6 +4,34 @@ Goal: a toolset that can build *and verify* the game with minimal human input.
 There are three "hands" (write) and one "eyes" (verify). The whole game of
 autonomy is closing the loop between them.
 
+## Unified CLI — `Tools/ue.py` (START HERE, 2026-07-02)
+
+One entry point wraps all three layers. Prefer it over hand-rolled
+`Add-Content; Start-Sleep; Get-Content -Tail` loops and per-script MCP clients —
+it bakes in every transport lesson below.
+
+| Command | Does | Notes |
+|---------|------|-------|
+| `python Tools/ue.py status` | editor / bridge / MCP / PIE state in one shot | exit 2 if env down |
+| `ue.py run "MO.Test.X" [--grep MOTEST]` | console cmd via bridge, **correlated** | prints THIS call's output + the MO57.log delta |
+| `ue.py py -c 'out(...)'` / `ue.py py --file s.py` | editor python; `--file` supports **multi-line scripts** (wrapped in exec) | exit 1 on py-err |
+| `ue.py seq test.py` | claude_seq multi-frame sequence, waits for DONE | exit 1 on fail/timeout |
+| `ue.py boot [--seed N] [--name S]` | menu→in-game (wraps agent_boot_newgame.ps1) | ~40 s |
+| `ue.py pie begin\|end` | PIE lifecycle | |
+| `ue.py test [--suite RunAll\|ValidateData]` | runs suite, waits for + prints `Saved/MOTestResults.txt` | exit code = pass/fail → CI-able |
+| `ue.py rows list\|get\|set TABLE [--file rows.json]` | DataTable verbs; `set` is **one-row-at-a-time + readback verify + save** | avoids the silent batch failures |
+| `ue.py mcp dt\|asset TOOL --args '{...}'` | raw MCP call, session cached, fail-fast curl | |
+| `ue.py refresh-data` | invalidate item+recipe static caches after MCP edits | needed before PIE sees new rows |
+| `ue.py build` | UBT 5.8 (refuses if editor running) | |
+| `ue.py editor start\|stop\|wait` | lifecycle incl. wait-for-bridge | |
+| `ue.py cycle [--boot --seed N] [--test]` | **the whole compile-verify loop as one command**: close → build → relaunch → wait bridge → boot → RunAll | |
+
+Correlation design: every bridge call is bracketed with begin/end markers in
+`ue_out.txt`, so output is attributed to *the* command — plus the game-log
+delta from the command's start offset (`--grep` to filter). No more guessing
+which tail lines were yours. Shell note: quote args from bash/git-bash;
+PowerShell 5.1 mangles embedded quotes in native args.
+
 ## The three layers
 
 | Layer | Reaches | Editor state |
@@ -120,8 +148,10 @@ The eyes now close the loop with **zero screenshots**. Two pieces:
 no clicks, no screenshots: foreground the editor → append bridge lines to `%TEMP%\claude\ue_cmd.txt`
 (`py:import agent_test_lib as atl; atl.begin_pie(out)` → `atl.skip_intro(world,out)` →
 `atl.start_new_game(world,out,seed=N)` → `MO.Test.X`) → grep `Saved/Logs/MO57.log` for
-`[MOQUERY]`/`[MOTEST]`. Full playbook: `Docs/Agent_PIE_Testing.md`. The bridge is gitignored (dev-only) —
-it lives in the MAIN tree's `Content/Python/` only, not in git worktrees.
+`[MOQUERY]`/`[MOTEST]`. Full playbook: `Docs/Agent_PIE_Testing.md`. The bridge IS tracked in git
+(`Content/Python/claude_bridge.py`, alongside `claude_seq.py`, the tick-driven multi-frame
+sequence runner) — dev-machine tooling, never ship. Prefer driving all of this through
+`Tools/ue.py` (see top) rather than raw file appends.
 
 **Verified live (2026-07-01):**
 - **#159** (H21 pickup regression): `MO.Test.DropPickup` → **PASS**, GUID intact. The new

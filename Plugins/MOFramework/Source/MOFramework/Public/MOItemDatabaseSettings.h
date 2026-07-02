@@ -65,7 +65,11 @@ public:
 	 *
 	 * Does NOT clear mod registrations — those are re-merged on the next
 	 * cache build. Use ClearModItems() to drop those.
+	 *
+	 * BlueprintCallable for parity with UMORecipeDatabaseSettings::InvalidateCache
+	 * so editor-python tooling (ue.py refresh-data) can refresh after MCP edits.
 	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Item Database")
 	static void InvalidateCache();
 
 	// =========================================================================
