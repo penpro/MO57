@@ -1,6 +1,7 @@
 // Copyright Penumbra Group Inc. All Rights Reserved.
 
 #include "EnvQueryTest_EscapeRoute.h"
+#include "MOBlackboardKeys.h"
 #include "EnvironmentQuery/EnvQueryTypes.h"
 #include "EnvironmentQuery/Items/EnvQueryItemType_Point.h"
 #include "EnvironmentQuery/Contexts/EnvQueryContext_Querier.h"
@@ -71,7 +72,7 @@ void UEnvQueryTest_EscapeRoute::RunTest(FEnvQueryInstance& QueryInstance) const
 	{
 		if (UBlackboardComponent* BB = OwnerController->GetBlackboardComponent())
 		{
-			if (AActor* ThreatActor = Cast<AActor>(BB->GetValueAsObject(TEXT("ThreatActor"))))
+			if (AActor* ThreatActor = Cast<AActor>(BB->GetValueAsObject(MOBlackboardKeys::ThreatActor)))
 			{
 				ThreatLocation = ThreatActor->GetActorLocation();
 			}

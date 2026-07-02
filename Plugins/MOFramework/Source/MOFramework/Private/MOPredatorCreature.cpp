@@ -1,4 +1,5 @@
 #include "MOPredatorCreature.h"
+#include "MOBlackboardKeys.h"
 #include "MOFramework.h"
 #include "MOCreatureController.h"
 #include "BehaviorTree/BehaviorTree.h"
@@ -59,9 +60,9 @@ void AMOPredatorCreature::AlertPack(AActor* Threat)
 			// Set threat on blackboard (this will trigger their behavior tree)
 			if (UBlackboardComponent* BB = MemberAI->GetBlackboardComponent())
 			{
-				BB->SetValueAsObject(TEXT("TargetActor"), Threat);
-				BB->SetValueAsVector(TEXT("TargetLocation"), Threat->GetActorLocation());
-				BB->SetValueAsBool(TEXT("HasTarget"), true);
+				BB->SetValueAsObject(MOBlackboardKeys::TargetActor, Threat);
+				BB->SetValueAsVector(MOBlackboardKeys::TargetLocation, Threat->GetActorLocation());
+				BB->SetValueAsBool(MOBlackboardKeys::HasTarget, true);
 			}
 		}
 	}

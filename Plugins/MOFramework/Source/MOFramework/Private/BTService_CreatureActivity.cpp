@@ -1,4 +1,5 @@
 #include "BTService_CreatureActivity.h"
+#include "MOBlackboardKeys.h"
 #include "MOFramework.h"
 #include "MOCreatureController.h"
 #include "MOCreatureTypes.h"
@@ -43,7 +44,7 @@ void UBTService_CreatureActivity::TickNode(UBehaviorTreeComponent& OwnerComp, ui
 
 	// Check for threats - always wake up if there's a threat
 	UBlackboardComponent* BB = OwnerComp.GetBlackboardComponent();
-	bool bHasThreat = BB && BB->GetValueAsBool(TEXT("HasTarget"));
+	bool bHasThreat = BB && BB->GetValueAsBool(MOBlackboardKeys::HasTarget);
 
 	EMOCreatureActivityState CurrentState = Controller->GetActivityState();
 

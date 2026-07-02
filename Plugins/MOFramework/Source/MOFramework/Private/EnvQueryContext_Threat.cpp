@@ -1,6 +1,7 @@
 // Copyright Penumbra Group Inc. All Rights Reserved.
 
 #include "EnvQueryContext_Threat.h"
+#include "MOBlackboardKeys.h"
 #include "EnvironmentQuery/EnvQueryTypes.h"
 #include "EnvironmentQuery/Items/EnvQueryItemType_Actor.h"
 #include "AIController.h"
@@ -9,7 +10,7 @@
 
 UEnvQueryContext_Threat::UEnvQueryContext_Threat()
 {
-	ThreatBlackboardKey = TEXT("ThreatActor");
+	ThreatBlackboardKey = MOBlackboardKeys::ThreatActor;
 }
 
 void UEnvQueryContext_Threat::ProvideContext(FEnvQueryInstance& QueryInstance, FEnvQueryContextData& ContextData) const

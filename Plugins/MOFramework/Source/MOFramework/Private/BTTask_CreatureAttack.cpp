@@ -1,4 +1,5 @@
 #include "BTTask_CreatureAttack.h"
+#include "MOBlackboardKeys.h"
 #include "MOFramework.h"
 #include "MOAnatomyComponent.h"
 #include "MOBodyPartTypes.h"
@@ -74,7 +75,7 @@ EBTNodeResult::Type UBTTask_CreatureAttack::ExecuteTask(UBehaviorTreeComponent& 
 	AIController->StopMovement();
 
 	// Set IsAttacking blackboard key (for AnimBP to prevent idle override)
-	BlackboardComp->SetValueAsBool(TEXT("IsAttacking"), true);
+	BlackboardComp->SetValueAsBool(MOBlackboardKeys::IsAttacking, true);
 
 	// Play attack animation montage
 	if (AttackMontage)
@@ -116,7 +117,7 @@ EBTNodeResult::Type UBTTask_CreatureAttack::AbortTask(UBehaviorTreeComponent& Ow
 	// Clear IsAttacking blackboard key
 	if (UBlackboardComponent* BlackboardComp = OwnerComp.GetBlackboardComponent())
 	{
-		BlackboardComp->SetValueAsBool(TEXT("IsAttacking"), false);
+		BlackboardComp->SetValueAsBool(MOBlackboardKeys::IsAttacking, false);
 	}
 
 	// Stop attack montage if it was playing
@@ -198,7 +199,7 @@ void UBTTask_CreatureAttack::TickTask(UBehaviorTreeComponent& OwnerComp, uint8* 
 		// Clear IsAttacking blackboard key
 		if (UBlackboardComponent* BlackboardComp = OwnerComp.GetBlackboardComponent())
 		{
-			BlackboardComp->SetValueAsBool(TEXT("IsAttacking"), false);
+			BlackboardComp->SetValueAsBool(MOBlackboardKeys::IsAttacking, false);
 		}
 		FinishLatentTask(OwnerComp, EBTNodeResult::Succeeded);
 	}

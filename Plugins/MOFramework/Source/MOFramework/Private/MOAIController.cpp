@@ -1,4 +1,5 @@
 #include "MOAIController.h"
+#include "MOBlackboardKeys.h"
 #include "MOFramework.h"
 #include "BehaviorTree/BehaviorTreeComponent.h"
 #include "BehaviorTree/BlackboardComponent.h"
@@ -269,19 +270,18 @@ void AMOAIController::SetupBlackboardForTask()
 	}
 
 	// Set common task values
-	// Note: Actual key names depend on your blackboard asset
-	// These are common conventions
+	// Note: Key names are centralized in MOBlackboardKeys.h and must match the blackboard asset
 	if (CurrentTaskTarget.IsValid())
 	{
-		BlackboardComponent->SetValueAsObject(TEXT("TargetActor"), CurrentTaskTarget.Get());
+		BlackboardComponent->SetValueAsObject(MOBlackboardKeys::TargetActor, CurrentTaskTarget.Get());
 	}
 
 	if (!CurrentTaskLocation.IsZero())
 	{
-		BlackboardComponent->SetValueAsVector(TEXT("TargetLocation"), CurrentTaskLocation);
+		BlackboardComponent->SetValueAsVector(MOBlackboardKeys::TargetLocation, CurrentTaskLocation);
 	}
 
-	BlackboardComponent->SetValueAsString(TEXT("TaskName"), CurrentTaskName);
+	BlackboardComponent->SetValueAsString(MOBlackboardKeys::TaskName, CurrentTaskName);
 }
 
 void AMOAIController::ClearBlackboardTaskData()
@@ -291,7 +291,7 @@ void AMOAIController::ClearBlackboardTaskData()
 		return;
 	}
 
-	BlackboardComponent->ClearValue(TEXT("TargetActor"));
-	BlackboardComponent->ClearValue(TEXT("TargetLocation"));
-	BlackboardComponent->ClearValue(TEXT("TaskName"));
+	BlackboardComponent->ClearValue(MOBlackboardKeys::TargetActor);
+	BlackboardComponent->ClearValue(MOBlackboardKeys::TargetLocation);
+	BlackboardComponent->ClearValue(MOBlackboardKeys::TaskName);
 }

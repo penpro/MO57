@@ -1,4 +1,5 @@
 #include "MOCreatureController.h"
+#include "MOBlackboardKeys.h"
 #include "MOFramework.h"
 #include "MOCreatureDefinitionRow.h"
 #include "MOAnatomyComponent.h"
@@ -416,15 +417,15 @@ void AMOCreatureController::UpdateBlackboardThreatInfo()
 	bool bIsInAttackRange = bHasTarget && (DistanceToTarget <= AttackRange);
 
 	// Update threat-related keys
-	BlackboardComponent->SetValueAsObject(TEXT("TargetActor"), CurrentThreatActor.Get());
-	BlackboardComponent->SetValueAsVector(TEXT("TargetLocation"), LastKnownThreatLocation);
-	BlackboardComponent->SetValueAsBool(TEXT("HasTarget"), bHasTarget);
-	BlackboardComponent->SetValueAsBool(TEXT("ShouldFlee"), ShouldFlee());
-	BlackboardComponent->SetValueAsFloat(TEXT("HealthPercent"), GetHealthPercent());
-	BlackboardComponent->SetValueAsFloat(TEXT("DistanceToTarget"), DistanceToTarget);
+	BlackboardComponent->SetValueAsObject(MOBlackboardKeys::TargetActor, CurrentThreatActor.Get());
+	BlackboardComponent->SetValueAsVector(MOBlackboardKeys::TargetLocation, LastKnownThreatLocation);
+	BlackboardComponent->SetValueAsBool(MOBlackboardKeys::HasTarget, bHasTarget);
+	BlackboardComponent->SetValueAsBool(MOBlackboardKeys::ShouldFlee, ShouldFlee());
+	BlackboardComponent->SetValueAsFloat(MOBlackboardKeys::HealthPercent, GetHealthPercent());
+	BlackboardComponent->SetValueAsFloat(MOBlackboardKeys::DistanceToTarget, DistanceToTarget);
 
 	// Check if IsInAttackRange key exists before setting
-	if (BlackboardComponent->GetKeyID(TEXT("IsInAttackRange")) == FBlackboard::InvalidKey)
+	if (BlackboardComponent->GetKeyID(MOBlackboardKeys::IsInAttackRange) == FBlackboard::InvalidKey)
 	{
 		static bool bLoggedOnce = false;
 		if (!bLoggedOnce)
@@ -435,16 +436,16 @@ void AMOCreatureController::UpdateBlackboardThreatInfo()
 	}
 	else
 	{
-		BlackboardComponent->SetValueAsBool(TEXT("IsInAttackRange"), bIsInAttackRange);
+		BlackboardComponent->SetValueAsBool(MOBlackboardKeys::IsInAttackRange, bIsInAttackRange);
 	}
 
-	BlackboardComponent->SetValueAsVector(TEXT("HomeLocation"), HomeLocation);
+	BlackboardComponent->SetValueAsVector(MOBlackboardKeys::HomeLocation, HomeLocation);
 
 	// Update activity state keys
-	BlackboardComponent->SetValueAsEnum(TEXT("ActivityState"), static_cast<uint8>(CurrentActivityState));
-	BlackboardComponent->SetValueAsBool(TEXT("IsDead"), CurrentActivityState == EMOCreatureActivityState::Dead);
-	BlackboardComponent->SetValueAsBool(TEXT("IsResting"), CurrentActivityState == EMOCreatureActivityState::Resting);
-	BlackboardComponent->SetValueAsBool(TEXT("IsSleeping"), CurrentActivityState == EMOCreatureActivityState::Sleeping);
+	BlackboardComponent->SetValueAsEnum(MOBlackboardKeys::ActivityState, static_cast<uint8>(CurrentActivityState));
+	BlackboardComponent->SetValueAsBool(MOBlackboardKeys::IsDead, CurrentActivityState == EMOCreatureActivityState::Dead);
+	BlackboardComponent->SetValueAsBool(MOBlackboardKeys::IsResting, CurrentActivityState == EMOCreatureActivityState::Resting);
+	BlackboardComponent->SetValueAsBool(MOBlackboardKeys::IsSleeping, CurrentActivityState == EMOCreatureActivityState::Sleeping);
 
 }
 
@@ -530,10 +531,10 @@ void AMOCreatureController::SetActivityState(EMOCreatureActivityState NewState)
 	// Update blackboard with new state
 	if (BlackboardComponent)
 	{
-		BlackboardComponent->SetValueAsEnum(TEXT("ActivityState"), static_cast<uint8>(CurrentActivityState));
-		BlackboardComponent->SetValueAsBool(TEXT("IsDead"), CurrentActivityState == EMOCreatureActivityState::Dead);
-		BlackboardComponent->SetValueAsBool(TEXT("IsResting"), CurrentActivityState == EMOCreatureActivityState::Resting);
-		BlackboardComponent->SetValueAsBool(TEXT("IsSleeping"), CurrentActivityState == EMOCreatureActivityState::Sleeping);
+		BlackboardComponent->SetValueAsEnum(MOBlackboardKeys::ActivityState, static_cast<uint8>(CurrentActivityState));
+		BlackboardComponent->SetValueAsBool(MOBlackboardKeys::IsDead, CurrentActivityState == EMOCreatureActivityState::Dead);
+		BlackboardComponent->SetValueAsBool(MOBlackboardKeys::IsResting, CurrentActivityState == EMOCreatureActivityState::Resting);
+		BlackboardComponent->SetValueAsBool(MOBlackboardKeys::IsSleeping, CurrentActivityState == EMOCreatureActivityState::Sleeping);
 	}
 }
 

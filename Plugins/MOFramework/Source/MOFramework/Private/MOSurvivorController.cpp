@@ -1,4 +1,5 @@
 #include "MOSurvivorController.h"
+#include "MOBlackboardKeys.h"
 #include "MOFramework.h"
 #include "MOSurvivorJobQueueComponent.h"
 #include "MOSurvivorJobDatabaseSettings.h"
@@ -449,27 +450,27 @@ void AMOSurvivorController::SetupBlackboardForSurvivor()
 	}
 
 	// Set survivor-specific blackboard keys
-	BlackboardComponent->SetValueAsBool(TEXT("IsFollowing"), bIsFollowing);
-	BlackboardComponent->SetValueAsBool(TEXT("ShouldStay"), bShouldStay);
-	BlackboardComponent->SetValueAsBool(TEXT("IsGoingHome"), bIsGoingHome);
-	BlackboardComponent->SetValueAsBool(TEXT("IsProcessingJob"), bIsProcessingJob);
+	BlackboardComponent->SetValueAsBool(MOBlackboardKeys::IsFollowing, bIsFollowing);
+	BlackboardComponent->SetValueAsBool(MOBlackboardKeys::ShouldStay, bShouldStay);
+	BlackboardComponent->SetValueAsBool(MOBlackboardKeys::IsGoingHome, bIsGoingHome);
+	BlackboardComponent->SetValueAsBool(MOBlackboardKeys::IsProcessingJob, bIsProcessingJob);
 
 	if (bIsFollowing && FollowTarget.IsValid())
 	{
-		BlackboardComponent->SetValueAsObject(TEXT("FollowTarget"), FollowTarget.Get());
+		BlackboardComponent->SetValueAsObject(MOBlackboardKeys::FollowTarget, FollowTarget.Get());
 	}
 	else
 	{
-		BlackboardComponent->ClearValue(TEXT("FollowTarget"));
+		BlackboardComponent->ClearValue(MOBlackboardKeys::FollowTarget);
 	}
 
 	if (bShouldStay)
 	{
-		BlackboardComponent->SetValueAsVector(TEXT("StayLocation"), StayLocation);
+		BlackboardComponent->SetValueAsVector(MOBlackboardKeys::StayLocation, StayLocation);
 	}
 	else
 	{
-		BlackboardComponent->ClearValue(TEXT("StayLocation"));
+		BlackboardComponent->ClearValue(MOBlackboardKeys::StayLocation);
 	}
 
 	if (bIsGoingHome)
@@ -477,28 +478,28 @@ void AMOSurvivorController::SetupBlackboardForSurvivor()
 		UMOSurvivorJobQueueComponent* JobQueue = GetJobQueue();
 		if (JobQueue && JobQueue->HasHome())
 		{
-			BlackboardComponent->SetValueAsVector(TEXT("HomeLocation"), JobQueue->HomeLocation);
+			BlackboardComponent->SetValueAsVector(MOBlackboardKeys::HomeLocation, JobQueue->HomeLocation);
 		}
 	}
 	else
 	{
-		BlackboardComponent->ClearValue(TEXT("HomeLocation"));
+		BlackboardComponent->ClearValue(MOBlackboardKeys::HomeLocation);
 	}
 
 	if (bIsProcessingJob && CurrentJob.IsValid())
 	{
-		BlackboardComponent->SetValueAsInt(TEXT("CurrentJobType"), static_cast<int32>(CurrentJob.JobType));
-		BlackboardComponent->SetValueAsVector(TEXT("JobTargetLocation"), CurrentJob.TargetLocation);
+		BlackboardComponent->SetValueAsInt(MOBlackboardKeys::CurrentJobType, static_cast<int32>(CurrentJob.JobType));
+		BlackboardComponent->SetValueAsVector(MOBlackboardKeys::JobTargetLocation, CurrentJob.TargetLocation);
 		if (CurrentJob.TargetActor.IsValid())
 		{
-			BlackboardComponent->SetValueAsObject(TEXT("JobTargetActor"), CurrentJob.TargetActor.Get());
+			BlackboardComponent->SetValueAsObject(MOBlackboardKeys::JobTargetActor, CurrentJob.TargetActor.Get());
 		}
 	}
 	else
 	{
-		BlackboardComponent->ClearValue(TEXT("CurrentJobType"));
-		BlackboardComponent->ClearValue(TEXT("JobTargetLocation"));
-		BlackboardComponent->ClearValue(TEXT("JobTargetActor"));
+		BlackboardComponent->ClearValue(MOBlackboardKeys::CurrentJobType);
+		BlackboardComponent->ClearValue(MOBlackboardKeys::JobTargetLocation);
+		BlackboardComponent->ClearValue(MOBlackboardKeys::JobTargetActor);
 	}
 }
 
@@ -510,16 +511,16 @@ void AMOSurvivorController::ClearSurvivorBlackboardData()
 		return;
 	}
 
-	BlackboardComponent->SetValueAsBool(TEXT("IsFollowing"), false);
-	BlackboardComponent->SetValueAsBool(TEXT("ShouldStay"), false);
-	BlackboardComponent->SetValueAsBool(TEXT("IsGoingHome"), false);
-	BlackboardComponent->SetValueAsBool(TEXT("IsProcessingJob"), false);
-	BlackboardComponent->ClearValue(TEXT("FollowTarget"));
-	BlackboardComponent->ClearValue(TEXT("StayLocation"));
-	BlackboardComponent->ClearValue(TEXT("HomeLocation"));
-	BlackboardComponent->ClearValue(TEXT("CurrentJobType"));
-	BlackboardComponent->ClearValue(TEXT("JobTargetLocation"));
-	BlackboardComponent->ClearValue(TEXT("JobTargetActor"));
+	BlackboardComponent->SetValueAsBool(MOBlackboardKeys::IsFollowing, false);
+	BlackboardComponent->SetValueAsBool(MOBlackboardKeys::ShouldStay, false);
+	BlackboardComponent->SetValueAsBool(MOBlackboardKeys::IsGoingHome, false);
+	BlackboardComponent->SetValueAsBool(MOBlackboardKeys::IsProcessingJob, false);
+	BlackboardComponent->ClearValue(MOBlackboardKeys::FollowTarget);
+	BlackboardComponent->ClearValue(MOBlackboardKeys::StayLocation);
+	BlackboardComponent->ClearValue(MOBlackboardKeys::HomeLocation);
+	BlackboardComponent->ClearValue(MOBlackboardKeys::CurrentJobType);
+	BlackboardComponent->ClearValue(MOBlackboardKeys::JobTargetLocation);
+	BlackboardComponent->ClearValue(MOBlackboardKeys::JobTargetActor);
 }
 
 void AMOSurvivorController::BroadcastCommandChange(FName CommandName)
