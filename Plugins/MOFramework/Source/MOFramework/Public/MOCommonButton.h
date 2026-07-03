@@ -95,6 +95,18 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO|UI|Button")
 	FText GetButtonText() const { return ButtonLabel; }
 
+	/**
+	 * TEST/AUTOMATION: run the full guarded click path exactly as a user click
+	 * would — UCommonButtonBase::HandleButtonClicked() checks
+	 * IsInteractionEnabled() + hold requirements, then NativeOnClicked()
+	 * broadcasts OnClicked()/BP_OnClicked. Used by MO.Test.ClickWidget so the
+	 * autonomous harness can drive real UI flows (a locked/disabled button
+	 * correctly refuses the click). Returns false without clicking when the
+	 * button is not interactable.
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|UI|Button|Test")
+	bool SimulateClick();
+
 protected:
 	virtual void NativePreConstruct() override;
 	virtual void NativeConstruct() override;

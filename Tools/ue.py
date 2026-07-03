@@ -43,6 +43,7 @@ OUT_FILE = os.path.join(TMP, "ue_out.txt")
 SID_FILE = os.path.join(TMP, "mcp_session.txt")
 UBT = r"D:\UnrealEngine\UE_5.8\Engine\Binaries\DotNET\UnrealBuildTool\UnrealBuildTool.exe"
 EDITOR_EXE = r"D:\UnrealEngine\UE_5.8\Engine\Binaries\Win64\UnrealEditor.exe"
+EDITOR_CMD = r"D:\UnrealEngine\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe"
 MCP_URL = "http://127.0.0.1:8000/mcp"
 
 # Toolset aliases -> full MCP toolset names
@@ -566,6 +567,59 @@ def cmd_refresh_data(a):
     sys.exit(1 if err else 0)
 
 
+def cmd_auto(a):
+    """Headless UE automation tests (IMPLEMENT_SIMPLE_AUTOMATION_TEST suites).
+
+    Runs UnrealEditor-Cmd -unattended -nullrhi with an Automation RunTests
+    filter and parses the -ReportExportPath index.json for a pass/fail exit
+    code. Requires the editor CLOSED (second instance on the same project
+    contends for DDC/config).
+    """
+    if editor_running() and not a.force:
+        _die(1, "editor is RUNNING — headless automation opens the project a second time. "
+                "Close it first (ue.py editor stop) or pass --force.")
+    report = os.path.join(TMP, "autoreport")
+    os.makedirs(report, exist_ok=True)
+    for f in os.listdir(report):
+        try:
+            os.remove(os.path.join(report, f))
+        except OSError:
+            pass
+    logpath = os.path.join(TMP, "autotest.log")
+    # String form (not list) so the inner quotes around ExecCmds reach UE intact.
+    cmdline = (f'"{EDITOR_CMD}" "{UPROJECT}" -unattended -nullrhi -nosplash -nop4 -NoLiveCoding '
+               f'-ExecCmds="Automation RunTests {a.filter};Quit" '
+               f'-ReportExportPath="{report}" -abslog="{logpath}"')
+    print(f"[auto] running '{a.filter}' automation tests headless (first run can take a few minutes)...")
+    t0 = time.time()
+    proc = subprocess.run(cmdline, capture_output=True, text=True,
+                          encoding="utf-8", errors="replace")
+    idx = os.path.join(report, "index.json")
+    if not os.path.exists(idx):
+        tail = ""
+        try:
+            with open(logpath, "r", encoding="utf-8", errors="replace") as f:
+                tail = "\n".join(f.read().splitlines()[-25:])
+        except OSError:
+            pass
+        _die(1, f"[auto] no report produced (exit {proc.returncode}). Log tail:\n{tail}")
+    with open(idx, "r", encoding="utf-8-sig", errors="replace") as f:
+        data = json.load(f)
+    succ = int(data.get("succeeded", 0)) + int(data.get("succeededWithWarnings", 0))
+    fail = int(data.get("failed", 0))
+    for t in data.get("tests", []):
+        state = t.get("state", "?")
+        if state != "Success":
+            print(f"  {state:8s} {t.get('fullTestPath', t.get('testDisplayName', '?'))}")
+            for e in t.get("entries", [])[:3]:
+                msg = (e.get("event", {}) or {}).get("message", "")
+                if msg:
+                    print(f"           {msg[:180]}")
+    print(f"[auto] {succ} passed, {fail} failed, notRun={data.get('notRun', 0)} "
+          f"in {time.time() - t0:.0f}s (report: {idx})")
+    sys.exit(0 if (fail == 0 and succ > 0) else 1)
+
+
 def cmd_build(a):
     if editor_running() and not a.force:
         _die(1, "editor is RUNNING — UBT needs it closed. Use `ue.py cycle` (auto-close) "
@@ -698,6 +752,11 @@ def main():
     sub.add_parser("refresh-data",
                    help="invalidate item+recipe static caches (after MCP DataTable edits)"
                    ).set_defaults(fn=cmd_refresh_data)
+
+    s = sub.add_parser("auto", help="run headless UE automation tests (editor must be closed); exit code = pass/fail")
+    s.add_argument("--filter", default="MOFramework", help="Automation RunTests filter (default: MOFramework)")
+    s.add_argument("--force", action="store_true")
+    s.set_defaults(fn=cmd_auto)
 
     s = sub.add_parser("build", help="UBT build (refuses if editor is running)")
     s.add_argument("--target", default="MO57Editor")

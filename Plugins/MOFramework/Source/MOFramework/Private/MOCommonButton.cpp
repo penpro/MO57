@@ -28,6 +28,21 @@ void UMOCommonButton::SetButtonText(const FText& InText)
 	UpdateButtonText(ButtonLabel);
 }
 
+bool UMOCommonButton::SimulateClick()
+{
+	// Route through the protected UCommonButtonBase handler so the click is
+	// FAITHFUL: HandleButtonClicked() re-checks IsInteractionEnabled() and the
+	// hold requirement before NativeOnClicked() broadcasts OnClicked(). We
+	// pre-check interactability only to give the caller an honest return value
+	// (the base handler returns void).
+	if (!IsInteractionEnabled())
+	{
+		return false;
+	}
+	HandleButtonClicked();
+	return true;
+}
+
 void UMOCommonButton::UpdateButtonText_Implementation(const FText& NewText)
 {
 	// Default: walk the button's widget tree and set the first TextBlock /

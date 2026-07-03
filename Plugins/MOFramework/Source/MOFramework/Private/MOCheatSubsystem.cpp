@@ -29,6 +29,22 @@
 #include "MOCombatComponent.h"
 #include "MOCraftingQueueComponent.h"
 #include "MOSkillsComponent.h"
+#include "MOControllableInterface.h"
+#include "MOCommonButton.h"
+#include "AIController.h"
+#include "BehaviorTree/BlackboardComponent.h"
+#include "BehaviorTree/BlackboardData.h"
+#include "BehaviorTree/Blackboard/BlackboardKeyType_Bool.h"
+#include "BehaviorTree/Blackboard/BlackboardKeyType_Float.h"
+#include "BehaviorTree/Blackboard/BlackboardKeyType_Int.h"
+#include "BehaviorTree/Blackboard/BlackboardKeyType_Vector.h"
+#include "BehaviorTree/Blackboard/BlackboardKeyType_Name.h"
+#include "BehaviorTree/Blackboard/BlackboardKeyType_String.h"
+#include "BehaviorTree/Blackboard/BlackboardKeyType_Enum.h"
+#include "BehaviorTree/Blackboard/BlackboardKeyType_Object.h"
+#include "EngineUtils.h"
+#include "Framework/Application/SlateApplication.h"
+#include "Components/Widget.h"
 #include "Blueprint/UserWidget.h"
 #include "Components/TextBlock.h"
 #include "Blueprint/WidgetTree.h"
@@ -62,6 +78,29 @@ namespace
 	{
 		APawn* Pawn = ResolveLocalPawn(World);
 		return Pawn ? Pawn->FindComponentByClass<UMOInventoryComponent>() : nullptr;
+	}
+
+	/**
+	 * MO.AI.*: find the first pawn whose name contains NameSub (case-insensitive)
+	 * and return its blackboard. OutPawnName stays empty when no pawn matched
+	 * (vs. matched-but-no-AI, where it's set and the return is null).
+	 */
+	UBlackboardComponent* ResolveBlackboard(UWorld* World, const FString& NameSub, FString& OutPawnName)
+	{
+		if (!World) return nullptr;
+		for (TActorIterator<APawn> It(World); It; ++It)
+		{
+			if (It->GetName().Contains(NameSub))
+			{
+				OutPawnName = It->GetName();
+				if (AAIController* AI = Cast<AAIController>(It->GetController()))
+				{
+					return AI->GetBlackboardComponent();
+				}
+				return nullptr;
+			}
+		}
+		return nullptr;
 	}
 
 	// =========================================================================
@@ -629,6 +668,276 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 			RunDataValidation(Results);
 			WriteTestResults(TEXT("RunAll"), Results);
 			UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] ===== RunAll end ====="));
+		}),
+		ECVF_Default));
+
+	// =========================================================================
+	// MO.Test.Input + MO.Test.ClickWidget -- Pillar-0 DRIVE primitives (charter
+	// Move 1). Input goes through IMOControllableInterface::Execute_Request* --
+	// the exact seam AMOPlayerController delegates through -- so movement /
+	// interaction / combat flows are testable without OS input (synthetic keys
+	// never reach Enhanced Input, #144; this interface is the post-input
+	// surface). ClickWidget drives real UI: an MO button gets the full guarded
+	// CommonUI click path; anything else gets a synthesized Slate pointer click
+	// at its screen center (real hit-testing, catches occlusion/z-order bugs).
+	// =========================================================================
+
+	// ---------- MO.Test.Input <Action> [args] ----------
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Test.Input"),
+		TEXT("Inject controllable-interface input on the local pawn. Usage: MO.Test.Input <Move X Y|Look X Y|JumpStart|JumpEnd|SprintStart|SprintEnd|ToggleJog|CrouchToggle|Interact|SecondaryInteract|PrimaryAction|PrimaryActionRelease|SecondaryAction|SecondaryActionRelease|TerraformToggle|TerraformCycleTool>. Move/Look are per-frame inputs (drive across frames via claude_seq)."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			APawn* Pawn = ResolveLocalPawn(World);
+			if (!Pawn || !Pawn->GetClass()->ImplementsInterface(UMOControllableInterface::StaticClass()))
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] FAIL Input: no controllable pawn (are you in-game?)"));
+				return;
+			}
+			if (Args.Num() < 1)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] FAIL Input: no action given (see help)"));
+				return;
+			}
+			const FString& Action = Args[0];
+			auto Is = [&Action](const TCHAR* Name) { return Action.Equals(Name, ESearchCase::IgnoreCase); };
+			bool bDispatched = true;
+			if (Is(TEXT("Move")) && Args.Num() >= 3)
+			{
+				IMOControllableInterface::Execute_RequestMove(Pawn, FVector2D(FCString::Atof(*Args[1]), FCString::Atof(*Args[2])));
+			}
+			else if (Is(TEXT("Look")) && Args.Num() >= 3)
+			{
+				IMOControllableInterface::Execute_RequestLook(Pawn, FVector2D(FCString::Atof(*Args[1]), FCString::Atof(*Args[2])));
+			}
+			else if (Is(TEXT("JumpStart")))              { IMOControllableInterface::Execute_RequestJumpStart(Pawn); }
+			else if (Is(TEXT("JumpEnd")))                { IMOControllableInterface::Execute_RequestJumpEnd(Pawn); }
+			else if (Is(TEXT("SprintStart")))            { IMOControllableInterface::Execute_RequestSprintStart(Pawn); }
+			else if (Is(TEXT("SprintEnd")))              { IMOControllableInterface::Execute_RequestSprintEnd(Pawn); }
+			else if (Is(TEXT("ToggleJog")))              { IMOControllableInterface::Execute_RequestToggleJog(Pawn); }
+			else if (Is(TEXT("CrouchToggle")))           { IMOControllableInterface::Execute_RequestCrouchToggle(Pawn); }
+			else if (Is(TEXT("Interact")))               { IMOControllableInterface::Execute_RequestInteract(Pawn); }
+			else if (Is(TEXT("SecondaryInteract")))      { IMOControllableInterface::Execute_RequestSecondaryInteract(Pawn); }
+			else if (Is(TEXT("PrimaryAction")))          { IMOControllableInterface::Execute_RequestPrimaryAction(Pawn); }
+			else if (Is(TEXT("PrimaryActionRelease")))   { IMOControllableInterface::Execute_RequestPrimaryActionRelease(Pawn); }
+			else if (Is(TEXT("SecondaryAction")))        { IMOControllableInterface::Execute_RequestSecondaryAction(Pawn); }
+			else if (Is(TEXT("SecondaryActionRelease"))) { IMOControllableInterface::Execute_RequestSecondaryActionRelease(Pawn); }
+			else if (Is(TEXT("TerraformToggle")))        { IMOControllableInterface::Execute_RequestTerraformToggle(Pawn); }
+			else if (Is(TEXT("TerraformCycleTool")))     { IMOControllableInterface::Execute_RequestTerraformCycleTool(Pawn); }
+			else { bDispatched = false; }
+
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] %s Input: '%s' (canMove=%s canJump=%s vel=%s)"),
+				bDispatched ? TEXT("PASS") : TEXT("FAIL"), *Action,
+				IMOControllableInterface::Execute_CanMove(Pawn) ? TEXT("Y") : TEXT("N"),
+				IMOControllableInterface::Execute_CanJump(Pawn) ? TEXT("Y") : TEXT("N"),
+				*Pawn->GetVelocity().ToCompactString());
+		}),
+		ECVF_Default));
+
+	// ---------- MO.Test.ClickWidget <NameSubstring> ----------
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Test.ClickWidget"),
+		TEXT("Click a live widget by name: UMOCommonButton -> full guarded CommonUI click (SimulateClick); other widgets -> synthesized Slate pointer click at their screen center. Usage: MO.Test.ClickWidget <NameSubstring> (locate names via MO.Test.FindWidget)"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			if (!World || Args.Num() < 1)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] FAIL ClickWidget: usage MO.Test.ClickWidget <NameSubstring>"));
+				return;
+			}
+			const FString& Needle = Args[0];
+
+			// Pass 1: MO buttons -- deterministic, guard-respecting click.
+			UMOCommonButton* Exact = nullptr;
+			UMOCommonButton* Partial = nullptr;
+			for (TObjectIterator<UMOCommonButton> It; It; ++It)
+			{
+				UMOCommonButton* Btn = *It;
+				if (!IsValid(Btn) || Btn->GetWorld() != World || !Btn->GetCachedWidget().IsValid() || !Btn->IsVisible())
+				{
+					continue;
+				}
+				if (Btn->GetName().Equals(Needle, ESearchCase::IgnoreCase)) { Exact = Btn; break; }
+				if (!Partial && Btn->GetName().Contains(Needle)) { Partial = Btn; }
+			}
+			if (UMOCommonButton* Btn = Exact ? Exact : Partial)
+			{
+				const bool bClicked = Btn->SimulateClick();
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] %s ClickWidget: '%s' via direct MOCommonButton path%s"),
+					bClicked ? TEXT("PASS") : TEXT("FAIL"), *Btn->GetName(),
+					bClicked ? TEXT("") : TEXT(" (button not interactable)"));
+				return;
+			}
+
+			// Pass 2: any widget -- synthesized pointer click through real Slate
+			// hit-testing at the widget's absolute center (same coords FindWidget
+			// reports), so occlusion/z-order behave as they would for a user.
+			UWidget* Target = nullptr;
+			UWidget* TargetPartial = nullptr;
+			for (TObjectIterator<UWidget> It; It; ++It)
+			{
+				UWidget* W = *It;
+				if (!IsValid(W) || W->GetWorld() != World || !W->GetCachedWidget().IsValid() || !W->IsVisible())
+				{
+					continue;
+				}
+				if (W->GetName().Equals(Needle, ESearchCase::IgnoreCase)) { Target = W; break; }
+				if (!TargetPartial && W->GetName().Contains(Needle)) { TargetPartial = W; }
+			}
+			UWidget* W = Target ? Target : TargetPartial;
+			if (!W)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] FAIL ClickWidget: no live widget matching '%s' (try MO.Test.FindWidget)"), *Needle);
+				return;
+			}
+			const FGeometry& Geo = W->GetCachedGeometry();
+			const FVector2D Center = FVector2D(Geo.GetAbsolutePosition()) + FVector2D(Geo.GetAbsoluteSize()) * 0.5f;
+			FSlateApplication& Slate = FSlateApplication::Get();
+			TSet<FKey> Pressed;
+			Pressed.Add(EKeys::LeftMouseButton);
+			const FPointerEvent DownEvent(0, Center, Center, Pressed, EKeys::LeftMouseButton, 0.0f, FModifierKeysState());
+			Slate.ProcessMouseButtonDownEvent(nullptr, DownEvent);
+			const FPointerEvent UpEvent(0, Center, Center, TSet<FKey>(), EKeys::LeftMouseButton, 0.0f, FModifierKeysState());
+			Slate.ProcessMouseButtonUpEvent(UpEvent);
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] PASS ClickWidget: '%s' via pointer click at (%.0f, %.0f)"),
+				*W->GetName(), Center.X, Center.Y);
+		}),
+		ECVF_Default));
+
+	// =========================================================================
+	// MO.AI.DumpBlackboard + MO.AI.SetKey -- Pillar-0 AI observe/tweak verbs
+	// (charter Move 1). Complements MO.AI.DumpFreezeState / StressSpawn: dump
+	// reads EVERY key via DescribeKeyValue (no hardcoded key lists); SetKey
+	// writes typed by the blackboard asset's entry so a runner can force
+	// ShouldFlee/HealthPercent/etc. and watch the BT react.
+	// =========================================================================
+
+	// ---------- MO.AI.DumpBlackboard <PawnNameSubstring> ----------
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.AI.DumpBlackboard"),
+		TEXT("Log [MOQUERY] every blackboard key+value for the first AI pawn whose name contains the arg. Usage: MO.AI.DumpBlackboard <PawnNameSubstring>"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			if (!World || Args.Num() < 1)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] BB: usage MO.AI.DumpBlackboard <PawnNameSubstring>"));
+				return;
+			}
+			FString PawnName;
+			UBlackboardComponent* BB = ResolveBlackboard(World, Args[0], PawnName);
+			if (!BB)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] BB: %s"), PawnName.IsEmpty()
+					? *FString::Printf(TEXT("no pawn matching '%s'"), *Args[0])
+					: *FString::Printf(TEXT("pawn '%s' has no AI blackboard"), *PawnName));
+				return;
+			}
+			const UBlackboardData* Asset = BB->GetBlackboardAsset();
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] BB %s (asset=%s):"),
+				*PawnName, Asset ? *Asset->GetName() : TEXT("none"));
+			for (const UBlackboardData* Data = Asset; Data; Data = Data->Parent)
+			{
+				for (const FBlackboardEntry& Entry : Data->Keys)
+				{
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] BB   %s"),
+						*BB->DescribeKeyValue(Entry.EntryName, EBlackboardDescription::KeyWithValue));
+				}
+			}
+		}),
+		ECVF_Default));
+
+	// ---------- MO.AI.SetKey <PawnNameSubstring> <KeyName> <Value...> ----------
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.AI.SetKey"),
+		TEXT("Set a blackboard key on the first AI pawn whose name contains the arg (typed by the BB asset: bool/float/int/vector(X Y Z)/name/string/enum/object-by-actor-name). Usage: MO.AI.SetKey <PawnSub> <KeyName> <Value> [Y Z]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			if (!World || Args.Num() < 3)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] BB: usage MO.AI.SetKey <PawnSub> <KeyName> <Value> [Y Z]"));
+				return;
+			}
+			FString PawnName;
+			UBlackboardComponent* BB = ResolveBlackboard(World, Args[0], PawnName);
+			if (!BB)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] BB: %s"), PawnName.IsEmpty()
+					? *FString::Printf(TEXT("no pawn matching '%s'"), *Args[0])
+					: *FString::Printf(TEXT("pawn '%s' has no AI blackboard"), *PawnName));
+				return;
+			}
+			const FName KeyName(*Args[1]);
+			const FBlackboardEntry* Entry = nullptr;
+			for (const UBlackboardData* Data = BB->GetBlackboardAsset(); Data && !Entry; Data = Data->Parent)
+			{
+				for (const FBlackboardEntry& E : Data->Keys)
+				{
+					if (E.EntryName == KeyName) { Entry = &E; break; }
+				}
+			}
+			if (!Entry || !Entry->KeyType)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] BB %s: no key '%s' (run MO.AI.DumpBlackboard %s for the list)"),
+					*PawnName, *Args[1], *Args[0]);
+				return;
+			}
+
+			const FString& Val = Args[2];
+			bool bSet = true;
+			if (Entry->KeyType->IsA<UBlackboardKeyType_Bool>())        { BB->SetValueAsBool(KeyName, Val.ToBool()); }
+			else if (Entry->KeyType->IsA<UBlackboardKeyType_Float>())  { BB->SetValueAsFloat(KeyName, FCString::Atof(*Val)); }
+			else if (Entry->KeyType->IsA<UBlackboardKeyType_Int>())    { BB->SetValueAsInt(KeyName, FCString::Atoi(*Val)); }
+			else if (Entry->KeyType->IsA<UBlackboardKeyType_Enum>())   { BB->SetValueAsEnum(KeyName, (uint8)FCString::Atoi(*Val)); }
+			else if (Entry->KeyType->IsA<UBlackboardKeyType_Name>())   { BB->SetValueAsName(KeyName, FName(*Val)); }
+			else if (Entry->KeyType->IsA<UBlackboardKeyType_String>()) { BB->SetValueAsString(KeyName, Val); }
+			else if (Entry->KeyType->IsA<UBlackboardKeyType_Vector>())
+			{
+				if (Args.Num() >= 5)
+				{
+					BB->SetValueAsVector(KeyName, FVector(FCString::Atof(*Args[2]), FCString::Atof(*Args[3]), FCString::Atof(*Args[4])));
+				}
+				else
+				{
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] BB %s: vector key '%s' needs X Y Z"), *PawnName, *Args[1]);
+					bSet = false;
+				}
+			}
+			else if (Entry->KeyType->IsA<UBlackboardKeyType_Object>())
+			{
+				if (Val.Equals(TEXT("None"), ESearchCase::IgnoreCase) || Val.Equals(TEXT("null"), ESearchCase::IgnoreCase))
+				{
+					BB->ClearValue(KeyName);
+				}
+				else
+				{
+					AActor* Found = nullptr;
+					for (TActorIterator<AActor> It(World); It; ++It)
+					{
+						if (It->GetName().Contains(Val)) { Found = *It; break; }
+					}
+					if (Found)
+					{
+						BB->SetValueAsObject(KeyName, Found);
+					}
+					else
+					{
+						UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] BB %s: no actor matching '%s' for object key '%s'"), *PawnName, *Val, *Args[1]);
+						bSet = false;
+					}
+				}
+			}
+			else
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] BB %s: key '%s' has unsupported type %s"),
+					*PawnName, *Args[1], *Entry->KeyType->GetClass()->GetName());
+				bSet = false;
+			}
+
+			if (bSet)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] BB %s: set -> %s"),
+					*PawnName, *BB->DescribeKeyValue(KeyName, EBlackboardDescription::KeyWithValue));
+			}
 		}),
 		ECVF_Default));
 
