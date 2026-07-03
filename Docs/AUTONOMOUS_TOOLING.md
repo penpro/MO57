@@ -20,6 +20,7 @@ it bakes in every transport lesson below.
 | `ue.py pie begin\|end` | PIE lifecycle | |
 | `ue.py test [--suite RunAll\|ValidateData]` | runs suite, waits for + prints `Saved/MOTestResults.txt` | exit code = pass/fail → CI-able |
 | `ue.py auto [--filter MOFramework]` | **headless automation tests** (UnrealEditor-Cmd -unattended -nullrhi), parses report JSON | editor must be CLOSED; 91 tests ≈ 26 s; exit code = pass/fail |
+| `ue.py mptest` | **2-client co-op PIE smoke** (`Content/Python/test_multiplayer.py` via claude_seq) | configures 2-player listen-server PIE (`UMOEditorTestHelper::ConfigurePIE`), targets host/client worlds by net mode, ALWAYS restores 1-player settings after |
 | `ue.py rows list\|get\|set TABLE [--file rows.json]` | DataTable verbs; `set` is **one-row-at-a-time + readback verify + save** | avoids the silent batch failures |
 | `ue.py mcp dt\|asset TOOL --args '{...}'` | raw MCP call, session cached, fail-fast curl | |
 | `ue.py refresh-data` | invalidate item+recipe static caches after MCP edits | needed before PIE sees new rows |

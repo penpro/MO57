@@ -373,16 +373,42 @@ UMOCheatSubsystem* UMOCheatSubsystem::Get(const UObject* WorldContextObject)
 	return GI ? GI->GetSubsystem<UMOCheatSubsystem>() : nullptr;
 }
 
+namespace
+{
+	/**
+	 * Console-name OWNERSHIP guard. Multi-GameInstance PIE (2-player listen
+	 * server) creates one subsystem per GameInstance, but console names are
+	 * process-GLOBAL: the second Initialize's duplicate registrations alias the
+	 * first instance's objects, and whichever instance tears down second then
+	 * unregisters already-freed IConsoleObjects — EXCEPTION_ACCESS_VIOLATION in
+	 * UnregisterConsoleCommands (found by the FIRST 2-client mptest boot,
+	 * 2026-07-03). Only the first instance registers; only it unregisters.
+	 */
+	UMOCheatSubsystem* GCheatConsoleOwner = nullptr;
+}
+
 void UMOCheatSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
-	RegisterConsoleCommands();
-	UE_LOG(LogMOFramework, Log, TEXT("[MOCheat] Initialized — %d commands registered"), ConsoleCommands.Num());
+	if (GCheatConsoleOwner == nullptr)
+	{
+		RegisterConsoleCommands();
+		GCheatConsoleOwner = this;
+		UE_LOG(LogMOFramework, Log, TEXT("[MOCheat] Initialized — %d commands registered"), ConsoleCommands.Num());
+	}
+	else
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOCheat] Secondary GameInstance (multi-PIE) — console commands already owned, skipping registration"));
+	}
 }
 
 void UMOCheatSubsystem::Deinitialize()
 {
-	UnregisterConsoleCommands();
+	if (GCheatConsoleOwner == this)
+	{
+		UnregisterConsoleCommands();
+		GCheatConsoleOwner = nullptr;
+	}
 	Super::Deinitialize();
 }
 

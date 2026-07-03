@@ -567,6 +567,28 @@ def cmd_refresh_data(a):
     sys.exit(1 if err else 0)
 
 
+def cmd_mptest(a):
+    """2-client co-op smoke: run Content/Python/test_multiplayer.py as a seq,
+    then ALWAYS restore 1-player standalone PIE settings and end PIE."""
+    seq_path = os.path.join(ROOT, "Content", "Python", "test_multiplayer.py")
+
+    class _SeqArgs:
+        file, timeout = seq_path, a.timeout
+    code = 1
+    try:
+        cmd_seq(_SeqArgs)
+    except SystemExit as e:
+        code = e.code if isinstance(e.code, int) else 1
+    finally:
+        bridge_run(['py:unreal.MOEditorTestHelper.configure_pie(1, False)',
+                    'py:import agent_test_lib as atl; '
+                    '(atl.end_pie(out) if unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)'
+                    '.is_in_play_in_editor() else out("[atl] no PIE"))'],
+                   timeout=15, want_log=False)
+        print("[mptest] PIE settings restored to 1-player standalone; PIE ended")
+    sys.exit(code)
+
+
 def cmd_auto(a):
     """Headless UE automation tests (IMPLEMENT_SIMPLE_AUTOMATION_TEST suites).
 
@@ -752,6 +774,10 @@ def main():
     sub.add_parser("refresh-data",
                    help="invalidate item+recipe static caches (after MCP DataTable edits)"
                    ).set_defaults(fn=cmd_refresh_data)
+
+    s = sub.add_parser("mptest", help="2-client co-op PIE smoke (test_multiplayer.py); restores 1-player settings after")
+    s.add_argument("--timeout", type=float, default=600)
+    s.set_defaults(fn=cmd_mptest)
 
     s = sub.add_parser("auto", help="run headless UE automation tests (editor must be closed); exit code = pass/fail")
     s.add_argument("--filter", default="MOFramework", help="Automation RunTests filter (default: MOFramework)")

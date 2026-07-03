@@ -60,12 +60,23 @@ namespace
 	}
 }
 
+namespace
+{
+	// Console-name ownership guard for multi-GameInstance PIE — see the
+	// matching comment in MOCheatSubsystem.cpp (same crash class, 2026-07-03).
+	UMOUIDebugSubsystem* GUIDebugConsoleOwner = nullptr;
+}
+
 void UMOUIDebugSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
 
 	// Console commands are always available so MO.UI.Enable can turn logging on.
-	RegisterConsoleCommands();
+	if (GUIDebugConsoleOwner == nullptr)
+	{
+		RegisterConsoleCommands();
+		GUIDebugConsoleOwner = this;
+	}
 
 	// Default OFF (H55): no log file, no global Slate focus hook, no banner until
 	// explicitly enabled. SetEnabled() opens the file and hooks focus on demand.
@@ -84,7 +95,11 @@ void UMOUIDebugSubsystem::Deinitialize()
 {
 	Log(TEXT("System"), TEXT("UI Debug log closing"));
 	UnhookFocusEvents();
-	UnregisterConsoleCommands();
+	if (GUIDebugConsoleOwner == this)
+	{
+		UnregisterConsoleCommands();
+		GUIDebugConsoleOwner = nullptr;
+	}
 	CloseLogFile();
 	Super::Deinitialize();
 }

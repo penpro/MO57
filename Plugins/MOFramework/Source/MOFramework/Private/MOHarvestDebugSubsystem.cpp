@@ -20,12 +20,23 @@ namespace
 	}
 }
 
+namespace
+{
+	// Console-name ownership guard for multi-GameInstance PIE — see the
+	// matching comment in MOCheatSubsystem.cpp (same crash class, 2026-07-03).
+	UMOHarvestDebugSubsystem* GHarvestDebugConsoleOwner = nullptr;
+}
+
 void UMOHarvestDebugSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
 
 	OpenLogFile();
-	RegisterConsoleCommands();
+	if (GHarvestDebugConsoleOwner == nullptr)
+	{
+		RegisterConsoleCommands();
+		GHarvestDebugConsoleOwner = this;
+	}
 
 	Log(TEXT("System"), TEXT("=========================================="));
 	Log(TEXT("System"), FString::Printf(TEXT("Harvest Debug log started — %s"), *FDateTime::Now().ToString()));
@@ -36,7 +47,11 @@ void UMOHarvestDebugSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 void UMOHarvestDebugSubsystem::Deinitialize()
 {
 	Log(TEXT("System"), TEXT("Harvest Debug log closing"));
-	UnregisterConsoleCommands();
+	if (GHarvestDebugConsoleOwner == this)
+	{
+		UnregisterConsoleCommands();
+		GHarvestDebugConsoleOwner = nullptr;
+	}
 	CloseLogFile();
 	Super::Deinitialize();
 }
