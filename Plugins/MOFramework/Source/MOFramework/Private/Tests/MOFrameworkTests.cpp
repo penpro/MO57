@@ -91,16 +91,19 @@ bool FMOSkillsComponent_AddExperience_LevelsUp::RunTest(const FString& Parameter
 
 	const FName TestSkillId = TEXT("TestCrafting");
 
-	// Initialize skill at level 1
+	// Skills initialize at level 0 - the first XP gains carry them to level 1
+	// (see UMOSkillsComponent::InitializeSkill)
 	Skills->InitializeSkill(TestSkillId);
-	TestEqual(TEXT("Initial level is 1"), Skills->GetSkillLevel(TestSkillId), 1);
+	TestEqual(TEXT("Initial level is 0"), Skills->GetSkillLevel(TestSkillId), 0);
 
-	// Add enough XP to level up (default XP for level 2 is ~283 with 100 base and 1.5 exponent)
+	// Add enough XP to level up several times. With no DataTable entry the default
+	// curve applies (100 base XP, 1.25x per level): 0->1 = 100, 1->2 = 125, 2->3 = 156.25.
+	// 500 XP covers those three level-ups (381.25 total) but not 3->4 (195.31).
 	const bool bAddedXP = Skills->AddExperience(TestSkillId, 500.0f);
 	TestTrue(TEXT("XP was added successfully"), bAddedXP);
 
-	// Should have leveled up
-	TestTrue(TEXT("Leveled up past level 1"), Skills->GetSkillLevel(TestSkillId) > 1);
+	// Should have leveled up from 0 to exactly 3
+	TestEqual(TEXT("500 XP on default curve reaches level 3"), Skills->GetSkillLevel(TestSkillId), 3);
 
 	return true;
 }
@@ -215,11 +218,31 @@ bool FMOKnowledgeComponent_InspectItem_GrantsXPWithDiminishing::RunTest(const FS
 	UMOSkillsComponent* Skills = NewObject<UMOSkillsComponent>();
 
 	const FName TestItemId = TEXT("Item_TestHerb");
+	const FName TestKnowledgeId = TEXT("Knowledge_TestHerb");
+
+	// InspectItem resolves items through UMOItemDatabaseSettings, so register a
+	// fixture row in the Items DataTable for the duration of this test (removed below).
+	UDataTable* ItemTable = GetDefault<UMOItemDatabaseSettings>()->GetItemDefinitionsDataTable();
+	if (!TestNotNull(TEXT("Items DataTable resolved"), ItemTable))
+	{
+		return false;
+	}
+
+	FMOItemDefinitionRow TestItem = MOFrameworkTestData::MakeTestItem(TestItemId, TEXT("Test Herb"));
+	FMOInspectionGrant Grant;
+	Grant.Id = TestKnowledgeId;
+	Grant.bIsKnowledge = true;
+	Grant.XPAmount = 50.0f;
+	Grant.MaxLevel = 0;  // Unlimited
+	TestItem.Inspection.Grants.Add(Grant);
+	ItemTable->AddRow(TestItemId, TestItem);
+	UMOItemDatabaseSettings::InvalidateCache();
 
 	// First inspection
 	FMOInspectionResult Result1 = Knowledge->InspectItem(TestItemId, Skills);
 	TestTrue(TEXT("First inspection succeeds"), Result1.bSuccess);
 	TestTrue(TEXT("First inspection marked as first"), Result1.bFirstInspection);
+	TestEqual(TEXT("First inspection grants XP for the knowledge entry"), Result1.XPGrants.Num(), 1);
 
 	// Second inspection
 	FMOInspectionResult Result2 = Knowledge->InspectItem(TestItemId, Skills);
@@ -230,6 +253,15 @@ bool FMOKnowledgeComponent_InspectItem_GrantsXPWithDiminishing::RunTest(const FS
 	FMOItemKnowledgeProgress Progress;
 	Knowledge->GetInspectionProgress(TestItemId, Progress);
 	TestEqual(TEXT("Inspection count is 2"), Progress.InspectionCount, 2);
+
+	// Two 50 XP grants reach the 100 XP needed for knowledge level 1 (default curve),
+	// which is when the knowledge counts as learned
+	TestEqual(TEXT("Knowledge leveled to 1 after two inspections"), Skills->GetSkillLevel(TestKnowledgeId), 1);
+	TestTrue(TEXT("Knowledge is learned once its level is above 0"), Knowledge->HasKnowledge(TestKnowledgeId));
+
+	// Remove the fixture row so the shared DataTable is untouched for other tests
+	ItemTable->RemoveRow(TestItemId);
+	UMOItemDatabaseSettings::InvalidateCache();
 
 	return true;
 }
@@ -349,6 +381,24 @@ bool FMOIntegration_SkillsAndKnowledge_WorkTogether::RunTest(const FString& Para
 	const FName TestItemId = TEXT("Item_RareHerb");
 	const FName HerbalismSkill = TEXT("Herbalism");
 
+	// InspectItem resolves items through UMOItemDatabaseSettings, so register a
+	// fixture row that grants Herbalism XP when inspected (removed below).
+	UDataTable* ItemTable = GetDefault<UMOItemDatabaseSettings>()->GetItemDefinitionsDataTable();
+	if (!TestNotNull(TEXT("Items DataTable resolved"), ItemTable))
+	{
+		return false;
+	}
+
+	FMOItemDefinitionRow TestItem = MOFrameworkTestData::MakeTestItem(TestItemId, TEXT("Rare Herb"));
+	FMOInspectionGrant Grant;
+	Grant.Id = HerbalismSkill;
+	Grant.bIsKnowledge = false;
+	Grant.XPAmount = 25.0f;
+	Grant.MaxLevel = 0;  // Unlimited
+	TestItem.Inspection.Grants.Add(Grant);
+	ItemTable->AddRow(TestItemId, TestItem);
+	UMOItemDatabaseSettings::InvalidateCache();
+
 	// Set up skill
 	Skills->SetSkillLevel(HerbalismSkill, 10);
 
@@ -356,12 +406,21 @@ bool FMOIntegration_SkillsAndKnowledge_WorkTogether::RunTest(const FString& Para
 	FMOInspectionResult Result = Knowledge->InspectItem(TestItemId, Skills);
 
 	TestTrue(TEXT("Inspection succeeded with skills"), Result.bSuccess);
+	TestEqual(TEXT("Inspection granted XP to one skill"), Result.XPGrants.Num(), 1);
+	if (Result.XPGrants.Num() == 1)
+	{
+		TestEqual(TEXT("Grant recorded the skill level before XP"), Result.XPGrants[0].LevelBefore, 10);
+	}
 
 	// Inspection should track the skill level used
 	FMOItemKnowledgeProgress Progress;
 	Knowledge->GetInspectionProgress(TestItemId, Progress);
 	// LastInspectionSkillLevel may depend on implementation - just check the progress exists
 	TestEqual(TEXT("Progress shows 1 inspection"), Progress.InspectionCount, 1);
+
+	// Remove the fixture row so the shared DataTable is untouched for other tests
+	ItemTable->RemoveRow(TestItemId);
+	UMOItemDatabaseSettings::InvalidateCache();
 
 	return true;
 }

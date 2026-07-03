@@ -83,6 +83,33 @@ namespace MOMedicalTestData
 		Nutrition.Calcium = 30.0f;
 		return Nutrition;
 	}
+
+	/**
+	 * Creates a component owned by a transient actor.
+	 * NewObject'd actors default to ROLE_Authority, so the medical components'
+	 * authority-gated mutation APIs (ApplyBloodLoss, DrinkWater, InflictDamage, ...)
+	 * actually apply. Components created without an owner have ROLE_None and
+	 * silently reject all state mutations.
+	 */
+	template <typename TComponent>
+	TComponent* NewComponentWithAuthority()
+	{
+		AActor* OwnerActor = NewObject<AActor>();
+		return NewObject<TComponent>(OwnerActor);
+	}
+
+	/**
+	 * Creates an anatomy component with authority and default body parts.
+	 * Body parts are normally initialized during authority BeginPlay (never called
+	 * on NewObject'd components); applying empty save data runs the same
+	 * InitializeBodyParts() path (see UMOAnatomyComponent::ApplySaveDataAuthority).
+	 */
+	UMOAnatomyComponent* NewInitializedAnatomy()
+	{
+		UMOAnatomyComponent* Anatomy = NewComponentWithAuthority<UMOAnatomyComponent>();
+		Anatomy->ApplySaveDataAuthority(FMOAnatomySaveData());
+		return Anatomy;
+	}
 }
 
 //=============================================================================
@@ -424,13 +451,17 @@ bool FMOMetabolism_IsDehydrated_DetectsLowHydration::RunTest(const FString& Para
 	Metabolism->Nutrients.HydrationLevel = 100.0f;
 	TestFalse(TEXT("Not dehydrated at 100%"), Metabolism->IsDehydrated());
 
-	// Moderate hydration - not dehydrated
-	Metabolism->Nutrients.HydrationLevel = 50.0f;
-	TestFalse(TEXT("Not dehydrated at 50%"), Metabolism->IsDehydrated());
+	// IsDehydrated() triggers below 70% - dehydration effects (raised HR, lowered BP,
+	// temperature drift) begin well before hydration is critical
+	Metabolism->Nutrients.HydrationLevel = 70.0f;
+	TestFalse(TEXT("Not dehydrated at exactly 70% (threshold is exclusive)"), Metabolism->IsDehydrated());
 
-	// Low hydration - dehydrated (threshold typically 30%)
-	Metabolism->Nutrients.HydrationLevel = 25.0f;
-	TestTrue(TEXT("Dehydrated at 25%"), Metabolism->IsDehydrated());
+	Metabolism->Nutrients.HydrationLevel = 69.9f;
+	TestTrue(TEXT("Dehydrated just below the 70% threshold"), Metabolism->IsDehydrated());
+
+	// Moderate dehydration
+	Metabolism->Nutrients.HydrationLevel = 50.0f;
+	TestTrue(TEXT("Dehydrated at 50%"), Metabolism->IsDehydrated());
 
 	// Critical hydration
 	Metabolism->Nutrients.HydrationLevel = 10.0f;
@@ -768,9 +799,12 @@ bool FMOVitals_IsHypothermic_DetectsLowTemp::RunTest(const FString& Parameters)
 	Vitals->Vitals.BodyTemperature = 37.0f;
 	TestFalse(TEXT("Not hypothermic at 37C"), Vitals->Vitals.IsHypothermic());
 
-	// Mild hypothermia
+	// Hypothermia begins below 35C (clinical definition, exclusive boundary)
 	Vitals->Vitals.BodyTemperature = 35.0f;
-	TestTrue(TEXT("Hypothermic at 35C"), Vitals->Vitals.IsHypothermic());
+	TestFalse(TEXT("Not hypothermic at exactly 35C (boundary is exclusive)"), Vitals->Vitals.IsHypothermic());
+
+	Vitals->Vitals.BodyTemperature = 34.9f;
+	TestTrue(TEXT("Hypothermic below 35C"), Vitals->Vitals.IsHypothermic());
 
 	return true;
 }
@@ -856,7 +890,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOAnatomy_GetBodyPartState_ReturnsValidData,
 
 bool FMOAnatomy_GetBodyPartState_ReturnsValidData::RunTest(const FString& Parameters)
 {
-	UMOAnatomyComponent* Anatomy = NewObject<UMOAnatomyComponent>();
+	// Body parts only exist after initialization (authority BeginPlay in-game),
+	// so tests must initialize explicitly via the save-data path
+	UMOAnatomyComponent* Anatomy = MOMedicalTestData::NewInitializedAnatomy();
 
 	FMOBodyPartState State;
 	const bool bFound = Anatomy->GetBodyPartState(EMOBodyPartType::Head, State);
@@ -877,7 +913,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOAnatomy_IsBodyPartFunctional_ChecksStatus,
 
 bool FMOAnatomy_IsBodyPartFunctional_ChecksStatus::RunTest(const FString& Parameters)
 {
-	UMOAnatomyComponent* Anatomy = NewObject<UMOAnatomyComponent>();
+	// Requires initialized body parts (uninitialized components report non-functional)
+	UMOAnatomyComponent* Anatomy = MOMedicalTestData::NewInitializedAnatomy();
 
 	// Healthy part should be functional
 	TestTrue(TEXT("Healthy head is functional"), Anatomy->IsBodyPartFunctional(EMOBodyPartType::Head));
@@ -988,7 +1025,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOAnatomy_CanMove_ChecksLegStatus,
 
 bool FMOAnatomy_CanMove_ChecksLegStatus::RunTest(const FString& Parameters)
 {
-	UMOAnatomyComponent* Anatomy = NewObject<UMOAnatomyComponent>();
+	// CanMove requires functional legs and spine, so body parts must be initialized
+	UMOAnatomyComponent* Anatomy = MOMedicalTestData::NewInitializedAnatomy();
 
 	// Initially should be able to move
 	TestTrue(TEXT("Can move initially"), Anatomy->CanMove());
@@ -1002,7 +1040,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOAnatomy_CanGrip_ChecksArmStatus,
 
 bool FMOAnatomy_CanGrip_ChecksArmStatus::RunTest(const FString& Parameters)
 {
-	UMOAnatomyComponent* Anatomy = NewObject<UMOAnatomyComponent>();
+	// CanGrip requires functional hand/thumb/finger parts, so initialize body parts
+	UMOAnatomyComponent* Anatomy = MOMedicalTestData::NewInitializedAnatomy();
 
 	// Check grip capability (requires at least one functional hand)
 	const bool bCanGrip = Anatomy->CanGrip();
@@ -1579,7 +1618,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOMedical_Integration_SevereBloodLoss_VitalCha
 
 bool FMOMedical_Integration_SevereBloodLoss_VitalChanges::RunTest(const FString& Parameters)
 {
-	UMOVitalsComponent* Vitals = NewObject<UMOVitalsComponent>();
+	// ApplyBloodLoss is authority-gated, so the component needs an owning actor
+	UMOVitalsComponent* Vitals = MOMedicalTestData::NewComponentWithAuthority<UMOVitalsComponent>();
 
 	// Record baseline vitals
 	const float BaseHR = Vitals->Vitals.HeartRate;
@@ -1772,8 +1812,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOMedical_Integration_RecoveryScenario,
 
 bool FMOMedical_Integration_RecoveryScenario::RunTest(const FString& Parameters)
 {
-	UMOVitalsComponent* Vitals = NewObject<UMOVitalsComponent>();
-	UMOMetabolismComponent* Metabolism = NewObject<UMOMetabolismComponent>();
+	// Blood/hydration mutation APIs are authority-gated, so both components need owners
+	UMOVitalsComponent* Vitals = MOMedicalTestData::NewComponentWithAuthority<UMOVitalsComponent>();
+	UMOMetabolismComponent* Metabolism = MOMedicalTestData::NewComponentWithAuthority<UMOMetabolismComponent>();
 
 	// Simulate injured/depleted state
 	Vitals->ApplyBloodLoss(1200.0f);  // ~25% blood loss
@@ -1783,6 +1824,7 @@ bool FMOMedical_Integration_RecoveryScenario::RunTest(const FString& Parameters)
 	// Record depleted state
 	const float DepletedBlood = Vitals->Vitals.BloodVolume;
 	const float DepletedHydration = Metabolism->Nutrients.HydrationLevel;
+	TestEqual(TEXT("Blood loss applied"), DepletedBlood, 3800.0f);
 
 	// Simulate recovery: transfusion, eating, drinking
 	Vitals->ApplyBloodTransfusion(500.0f);
@@ -1798,6 +1840,8 @@ bool FMOMedical_Integration_RecoveryScenario::RunTest(const FString& Parameters)
 
 	// Verify improvement
 	TestTrue(TEXT("Blood volume increased"), RecoveredBlood > DepletedBlood);
+	// Water absorbs directly: 800mL of the 2500mL daily requirement = +32% (35% -> 67%)
+	TestEqual(TEXT("Hydration restored by drinking"), RecoveredHydration, DepletedHydration + 32.0f);
 
 	return true;
 }
@@ -1935,12 +1979,13 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOMedical_Boundary_ZeroBlood,
 
 bool FMOMedical_Boundary_ZeroBlood::RunTest(const FString& Parameters)
 {
-	UMOVitalsComponent* Vitals = NewObject<UMOVitalsComponent>();
+	// ApplyBloodLoss is authority-gated, so the component needs an owning actor
+	UMOVitalsComponent* Vitals = MOMedicalTestData::NewComponentWithAuthority<UMOVitalsComponent>();
 
 	// Drain all blood
 	Vitals->ApplyBloodLoss(5000.0f);
 
-	TestTrue(TEXT("Blood volume at zero or positive"), Vitals->Vitals.BloodVolume >= 0.0f);
+	TestEqual(TEXT("Blood volume drained to zero"), Vitals->Vitals.BloodVolume, 0.0f);
 	TestEqual(TEXT("Blood loss stage is Class3"), Vitals->GetBloodLossStage(), EMOBloodLossStage::Class3);
 
 	// Try to drain more (should not go negative)

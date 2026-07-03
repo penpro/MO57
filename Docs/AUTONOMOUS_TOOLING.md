@@ -19,6 +19,7 @@ it bakes in every transport lesson below.
 | `ue.py boot [--seed N] [--name S]` | menu→in-game (wraps agent_boot_newgame.ps1) | ~40 s |
 | `ue.py pie begin\|end` | PIE lifecycle | |
 | `ue.py test [--suite RunAll\|ValidateData]` | runs suite, waits for + prints `Saved/MOTestResults.txt` | exit code = pass/fail → CI-able |
+| `ue.py auto [--filter MOFramework]` | **headless automation tests** (UnrealEditor-Cmd -unattended -nullrhi), parses report JSON | editor must be CLOSED; 91 tests ≈ 26 s; exit code = pass/fail |
 | `ue.py rows list\|get\|set TABLE [--file rows.json]` | DataTable verbs; `set` is **one-row-at-a-time + readback verify + save** | avoids the silent batch failures |
 | `ue.py mcp dt\|asset TOOL --args '{...}'` | raw MCP call, session cached, fail-fast curl | |
 | `ue.py refresh-data` | invalidate item+recipe static caches after MCP edits | needed before PIE sees new rows |
@@ -142,6 +143,15 @@ The eyes now close the loop with **zero screenshots**. Two pieces:
 | `MO.Test.Attack` | `[MOTEST] PASS/FAIL` | StartLightAttack → combat state |
 | `MO.Test.Craft [recipe]` | `[MOTEST] INFO` | EnqueueCraft (false on a fresh pawn = no recipe/mats — expected) |
 | `MO.Test.MPSuite` | — | runs the three above via ConsoleCommand |
+| `MO.Test.RunAll` / `MO.Test.ValidateData` | `Saved/MOTestResults.txt` | full regression suite / DataTable-integrity gate; results FILE, not log scraping |
+| `MO.Test.Input <action>` | `[MOTEST] PASS/FAIL` | drives IMOControllableInterface::Execute_Request* (Move/Look/Jump/Sprint/Interact/Primary/Secondary/Terraform...) — the post-Enhanced-Input seam, so #144 doesn't apply. Move/Look are per-frame: drive via claude_seq |
+| `MO.Test.ClickWidget <name>` | `[MOTEST] PASS/FAIL` | REAL UI click: UMOCommonButton -> guarded SimulateClick(); others -> synthesized Slate pointer click at screen center. Locate names with FindWidget first |
+| `MO.AI.DumpBlackboard <pawnSub>` | `[MOQUERY] BB` | every blackboard key+value (DescribeKeyValue over the asset chain) |
+| `MO.AI.SetKey <pawnSub> <key> <val...>` | `[MOQUERY] BB` | typed write (bool/float/int/vector/name/string/enum/object-by-actor-name) + readback |
+
+PIE runs ~3 fps when the editor window is unfocused (background throttling) — each claude_seq
+`yield` frame is then ~0.3 s of wall/game time; sample transient states (jumps, montages)
+per-frame rather than waiting N frames and checking once.
 
 **2. The file-I/O bridge is the driver** (`Content/Python/claude_bridge.py`, auto-loaded by
 `init_unreal.py`; **survived the 5.7→5.8 upgrade**). A whole verification session is PowerShell + grep —
