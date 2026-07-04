@@ -1,6 +1,7 @@
 #include "MOMainMenuPlayerController.h"
 #include "MOAudioSubsystem.h"
 #include "MOFramework.h"
+#include "MOTravelUtils.h"
 #include "MOMainMenuWidget.h"
 #include "MOIntroWidget.h"
 #include "MOGameSettings.h"
@@ -440,7 +441,10 @@ void AMOMainMenuPlayerController::ExecuteDelayedLevelLoad()
 	}
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuPlayerController] Opening level: %s"), *PendingLevelPath);
-	UGameplayStatics::OpenLevel(this, *PendingLevelPath);
+	// Net-mode-aware: OpenLevel here silently dropped the listen-server role and
+	// every connected client (mptest, 2026-07-03). The helper ServerTravels when
+	// hosting and OpenLevels in standalone.
+	UMOTravelUtils::TravelToGameplayLevel(this, PendingLevelPath);
 	PendingLevelPath.Empty();
 }
 

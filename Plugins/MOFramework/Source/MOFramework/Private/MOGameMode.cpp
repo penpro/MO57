@@ -34,6 +34,16 @@ AMOGameMode::AMOGameMode()
 {
 	// Add default tag mappings - can be overridden in Blueprint
 	PCGTagItemMappings.Add({ TEXT("GivesStick"), TEXT("Stick01") });
+
+	// Co-op: clients must FOLLOW the host through ServerTravel. Non-seamless
+	// travel drops connected clients (mptest evidence 2026-07-03: host PCs 2->1,
+	// client parked at LoadingLevel), and is unreliable in one-process PIE
+	// anyway. Seamless travel keeps the connection alive through map change —
+	// also the right shipping behavior (no disconnect/reconnect hitch).
+	// NOTE: traveling players arrive via HandleSeamlessTravelPlayer, NOT
+	// Login/PostLogin — any join-flow logic added there must handle both paths.
+	// AMOMainMenuGameMode inherits this, which is what drives menu->game travel.
+	bUseSeamlessTravel = true;
 }
 
 void AMOGameMode::BeginPlay()

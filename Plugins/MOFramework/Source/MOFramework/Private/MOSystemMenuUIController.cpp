@@ -1,5 +1,6 @@
 #include "MOSystemMenuUIController.h"
 #include "MOFramework.h"
+#include "MOTravelUtils.h"
 
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/Pawn.h"
@@ -893,7 +894,9 @@ void UMOSystemMenuUIController::HandleConfirmationConfirmed()
 		// Reload the gameplay level to get a clean state
 		// The GameMode's BeginPlay will handle loading the save data
 		UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] Reloading level to load save: %s"), *SlotName);
-		UGameplayStatics::OpenLevel(this, *GameplayLevelPath);
+		// Net-mode-aware: keeps the listen-server role + connected clients when
+		// the host loads a save in co-op (plain OpenLevel dropped both).
+		UMOTravelUtils::TravelToGameplayLevel(GetOwner(), GameplayLevelPath);
 	}
 
 	PendingConfirmationContext.Empty();
@@ -1321,5 +1324,9 @@ void UMOSystemMenuUIController::ReturnToMainMenuImmediate()
 	}
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] Exiting to main menu: %s"), *MainMenuLevelPath);
+	// DELIBERATELY plain OpenLevel (not MOTravelUtils): the host exiting to the
+	// main menu is a session END — dropping the server role and disconnecting
+	// clients is the intent. Graceful co-op teardown belongs to the session
+	// layer (charter Move 3).
 	UGameplayStatics::OpenLevel(this, *MainMenuLevelPath);
 }
