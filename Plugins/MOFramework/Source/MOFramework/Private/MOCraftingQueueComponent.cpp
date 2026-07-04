@@ -160,8 +160,18 @@ bool UMOCraftingQueueComponent::EnqueueCraft(FName RecipeId, int32 Count, EMOCra
 
 void UMOCraftingQueueComponent::ServerRequestEnqueueCraft_Implementation(FName RecipeId, int32 Count, EMOCraftingStation Station)
 {
-	// Executes on the host, where HasAuthority() is true, so EnqueueCraft runs the real
-	// authoritative path (ingredient consume + queue mutation + replication).
+	// Normally executes on the host, where HasAuthority() is true, so EnqueueCraft runs
+	// the real authoritative path (ingredient consume + queue mutation + replication).
+	// The guard is load-bearing: a Server RPC resolves to LOCAL callspace when the
+	// owner's world has no NetDriver (e.g. a pawn lingering in a torn-down world after
+	// travel/disconnect). Without it, EnqueueCraft re-forwards here on !HasAuthority and
+	// the pair recurses to EXCEPTION_STACK_OVERFLOW (crashed the editor 2026-07-04).
+	if (!GetOwner() || !GetOwner()->HasAuthority())
+	{
+		UE_LOG(LogMOFramework, Warning,
+			TEXT("[MOCraftingQueue] ServerRequestEnqueueCraft executed without authority (dead-world local callspace?) - dropped"));
+		return;
+	}
 	EnqueueCraft(RecipeId, Count, Station);
 }
 

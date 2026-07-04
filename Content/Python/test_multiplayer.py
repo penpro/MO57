@@ -134,6 +134,16 @@ def sequence(ctx):
 
     # ---- Phase 5 (best effort): client->server craft RPC round-trip -------
     host = helper.find_pie_world_by_net_mode("ListenServer")        # fresh post-travel
+    # Re-resolve the client pawn from the CURRENT client world too: a pawn
+    # captured pre-travel can linger in a torn-down world with no NetDriver,
+    # where a Server RPC resolves to LOCAL callspace instead of transporting.
+    # (Exactly that stack-overflowed the editor on 2026-07-04 before the
+    # component-side authority guard existed; the RPC is now dropped there,
+    # but a stale pawn would still make this phase a false red.)
+    fresh_client = helper.find_pie_world_by_net_mode("Client")
+    fresh_pawn = _pawn(fresh_client, 0) if fresh_client else None
+    if fresh_pawn and fresh_pawn.get_component_by_class(unreal.MOInventoryComponent):
+        client_pawn = fresh_pawn
     if client_pawn and host:
         try:
             # Authority-side setup: the client player's pawn AS SEEN BY THE
@@ -143,27 +153,33 @@ def sequence(ctx):
                 inv = proxy.get_component_by_class(unreal.MOInventoryComponent)
                 skills = proxy.get_component_by_class(unreal.MOSkillsComponent)
                 if inv:
-                    inv.add_item_by_guid(unreal.Guid.new_guid(), "Flint01", 1)
+                    inv.add_item_by_guid(unreal.GuidLibrary.new_guid(), "Flint01", 1)
                 if skills:
                     skills.set_skill_level("Stoneworking", 3)
-                queue_before = 0
+                # Queue is a private UPROPERTY (get_editor_property throws);
+                # GetAllQueueEntries is the BlueprintCallable read surface.
+                queue_before = -1
                 qc = proxy.get_component_by_class(unreal.MOCraftingQueueComponent)
                 if qc:
                     try:
-                        queue_before = len(qc.get_editor_property("queue").get_editor_property("entries"))
+                        queue_before = len(qc.get_all_queue_entries())
                     except Exception:
                         queue_before = -1
-                # Client-side action: enqueue from the CLIENT world. The
-                # component forwards to ServerRequestEnqueueCraft (real RPC).
-                cq = client_pawn.get_component_by_class(unreal.MOCraftingQueueComponent)
-                if cq:
-                    cq.enqueue_craft("KnapFlintFlakes", 1, unreal.MOCraftingStation.NONE)
-                    ctx.out("client EnqueueCraft dispatched")
-                yield 15                      # RPC + host tick + replication
+                # Client-side action: MO.Test.Craft ON THE CLIENT WORLD. The
+                # command body defers itself to the next engine tick
+                # (RunOnNextTick in MOCheatSubsystem): editor-Python holds
+                # FEditorScriptExecutionGuard, which maps EVERY RPC to LOCAL
+                # callspace -- a direct Python call (this phase's first
+                # version) executed ServerRequestEnqueueCraft in-place on the
+                # client and never transported. The deferred body resolves the
+                # client's local pawn and EnqueueCraft forwards for real.
+                _exec(fresh_client or client, "MO.Test.Craft KnapFlintFlakes")
+                ctx.out("client MO.Test.Craft dispatched (deferred -> real RPC transport)")
+                yield 15                      # next-tick + RPC + host tick + replication
                 queue_after = -1
                 if qc:
                     try:
-                        queue_after = len(qc.get_editor_property("queue").get_editor_property("entries"))
+                        queue_after = len(qc.get_all_queue_entries())
                     except Exception:
                         queue_after = -1
                 ctx.out("host-side proxy queue entries: before=%s after=%s" % (queue_before, queue_after))

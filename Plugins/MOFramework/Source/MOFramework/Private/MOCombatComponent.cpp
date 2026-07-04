@@ -383,35 +383,70 @@ bool UMOCombatComponent::StartDodge(const FVector& Direction)
 // ============================================================================
 // SERVER RPCs + REPLICATION (H18 - client->server transport for combat verbs)
 // ============================================================================
+// Each implementation must guard on authority before calling back into its
+// public verb: the verb re-forwards to the Server RPC on !HasAuthority, and a
+// Server RPC executes at LOCAL callspace when the owner's world has no
+// NetDriver (pawn in a torn-down world after travel/disconnect) - without the
+// guard that pair recurses to a stack overflow (crafting-queue twin of this
+// pattern crashed the editor 2026-07-04).
+
+bool UMOCombatComponent::HasAuthorityForServerRPC(const TCHAR* RPCName) const
+{
+	if (GetOwner() && GetOwner()->HasAuthority())
+	{
+		return true;
+	}
+	UE_LOG(LogMOFramework, Warning,
+		TEXT("[MOCombat] %s executed without authority (dead-world local callspace?) - dropped"), RPCName);
+	return false;
+}
 
 void UMOCombatComponent::ServerStartAttack_Implementation(EMOAttackType AttackType)
 {
-	StartAttack(AttackType);
+	if (HasAuthorityForServerRPC(TEXT("ServerStartAttack")))
+	{
+		StartAttack(AttackType);
+	}
 }
 
 void UMOCombatComponent::ServerCancelAttack_Implementation()
 {
-	CancelAttack();
+	if (HasAuthorityForServerRPC(TEXT("ServerCancelAttack")))
+	{
+		CancelAttack();
+	}
 }
 
 void UMOCombatComponent::ServerStartBlock_Implementation()
 {
-	StartBlock();
+	if (HasAuthorityForServerRPC(TEXT("ServerStartBlock")))
+	{
+		StartBlock();
+	}
 }
 
 void UMOCombatComponent::ServerStopBlock_Implementation()
 {
-	StopBlock();
+	if (HasAuthorityForServerRPC(TEXT("ServerStopBlock")))
+	{
+		StopBlock();
+	}
 }
 
 void UMOCombatComponent::ServerAttemptParry_Implementation()
 {
-	AttemptParry();
+	if (HasAuthorityForServerRPC(TEXT("ServerAttemptParry")))
+	{
+		AttemptParry();
+	}
 }
 
 void UMOCombatComponent::ServerStartDodge_Implementation(FVector Direction)
 {
-	StartDodge(Direction);
+	if (HasAuthorityForServerRPC(TEXT("ServerStartDodge")))
+	{
+		StartDodge(Direction);
+	}
 }
 
 void UMOCombatComponent::OnRep_CombatState(EMOCombatState OldState)

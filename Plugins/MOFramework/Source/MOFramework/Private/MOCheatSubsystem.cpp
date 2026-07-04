@@ -55,6 +55,7 @@
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/Pawn.h"
 #include "HAL/IConsoleManager.h"
+#include "TimerManager.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 #include "UObject/Class.h"
@@ -234,6 +235,35 @@ namespace
 			: FString::Printf(TEXT("EnqueueCraft(%s)=false even after granting %d ingredient(s)%s (needs tool/station?)"), *RecipeId.ToString(), Granted, *SkillNote);
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] %s Craft: %s"), bOk ? TEXT("PASS") : TEXT("FAIL"), *Detail);
 		return { bOk, TEXT("Craft"), Detail };
+	}
+
+	/**
+	 * Run a test body on the NEXT world tick instead of the caller's stack.
+	 *
+	 * Load-bearing for MP transport tests: editor-Python executes console
+	 * commands under FEditorScriptExecutionGuard, and AActor::GetFunctionCallspace
+	 * maps EVERY RPC to LOCAL callspace while that guard is up — so a Server RPC
+	 * fired from a client world inside a Python-driven command never transports
+	 * to the host (it executes locally and gets dropped by the authority guards).
+	 * The next engine tick runs outside the guard, so RPC routing is real.
+	 * RunAll aggregation is unaffected — it calls the Run*Test functions
+	 * directly. MPSuite goes through the console commands, so its three tests
+	 * run a tick after its begin/end markers — grep [MOTEST] lines, not order.
+	 */
+	void RunOnNextTick(UWorld* World, TFunction<void(UWorld*)> Body)
+	{
+		if (!World)
+		{
+			return;
+		}
+		World->GetTimerManager().SetTimerForNextTick(FTimerDelegate::CreateLambda(
+			[WeakWorld = MakeWeakObjectPtr(World), Body = MoveTemp(Body)]()
+			{
+				if (UWorld* W = WeakWorld.Get())
+				{
+					Body(W);
+				}
+			}));
 	}
 
 	/**
@@ -619,7 +649,8 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
 		{
 			const FName ItemId = Args.Num() > 0 ? FName(*Args[0]) : FName(TEXT("Stick01"));
-			RunDropPickupTest(World, ItemId);
+			// Deferred so client-world RPCs really transport (see RunOnNextTick).
+			RunOnNextTick(World, [ItemId](UWorld* W) { RunDropPickupTest(W, ItemId); });
 		}),
 		ECVF_Default));
 
@@ -629,7 +660,8 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 		TEXT("H18 combat test: trigger a light attack (client forwards ServerStartAttack); log the combat state."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
 		{
-			RunAttackTest(World);
+			// Deferred so client-world RPCs really transport (see RunOnNextTick).
+			RunOnNextTick(World, [](UWorld* W) { RunAttackTest(W); });
 		}),
 		ECVF_Default));
 
@@ -640,7 +672,8 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
 		{
 			const FName RecipeId = Args.Num() > 0 ? FName(*Args[0]) : FName(TEXT("KnapFlintFlakes"));
-			RunCraftTest(World, RecipeId);
+			// Deferred so client-world RPCs really transport (see RunOnNextTick).
+			RunOnNextTick(World, [RecipeId](UWorld* W) { RunCraftTest(W, RecipeId); });
 		}),
 		ECVF_Default));
 
