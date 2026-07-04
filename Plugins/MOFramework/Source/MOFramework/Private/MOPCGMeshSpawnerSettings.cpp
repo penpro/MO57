@@ -358,6 +358,14 @@ UInstancedStaticMeshComponent* FMOPCGMeshSpawnerElement::GetOrCreateManagedISMC(
 	Params.Descriptor.bAffectDynamicIndirectLighting = false;
 	Params.Descriptor.ComponentTags = ComponentTags; // Include tags in descriptor
 	Params.NumCustomDataFloats = 0;
+	// Descriptor equality/hash EXCLUDES ComponentTags (UE5.8) — same latent
+	// merge/reclaim bug the biome spawner hit: crc-less nodes (native Static
+	// Mesh Spawners) can reclaim any descriptor-equal component, wiping our
+	// tagged instances. Unique RayTracingGroupId makes the descriptor its own;
+	// SettingsCrc scopes reuse within this node. See MOPCGBiomeSpawnerSettings.
+	const uint32 ItemHash = (GetTypeHash(ItemId) ^ 0x4D4F4954u /*'MOIT'*/) | 1u;
+	Params.Descriptor.RayTracingGroupId = (int32)(ItemHash & 0x7fffffffu);
+	Params.SettingsCrc = FPCGCrc(ItemHash);
 
 	// Use PCG's managed component system - handles cleanup automatically on re-execution
 	UInstancedStaticMeshComponent* ISM = UPCGActorHelpers::GetOrCreateISMC(

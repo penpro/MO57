@@ -154,6 +154,37 @@ paths probed on `EditorToolset.EditorAppToolset`:
 - Git Bash mangles `/Game/...` into `C:/Program Files/Git/Game/...` — call
   with `MSYS_NO_PATHCONV=1` (or from PowerShell).
 
+## Hit / miss record — P2 PCG biome layer (2026-07-04)
+
+**HITS**
+- **PCG graph authoring from editor-Python WORKS — the "MCP-PCG graph gap" did
+  not materialize.** `PCGGraph.add_node_of_type`, `PCGNode.add_edge_to(
+  "Out", node, "In")`, `remove_edge_to`, `node.get_settings().set_editor_property`,
+  save_asset: the MO Biome Spawner was added to MOPCG_StampScatter1, rewired
+  twice, and instance-tuned entirely from the loop. Graph surgery is scriptable.
+- Node topology introspection: `node.input_pins` -> pin `.get_editor_property
+  ("edges")` -> upstream node — enough to map a 50-node production graph.
+
+**TRAPS (cost real iterations — check these FIRST next time)**
+- **`get_components_by_class(HISM)` does NOT return plain ISM components**, and
+  PCG's GetOrCreateISMC may create ISM even when the descriptor asks for HISM
+  (grass got HISM, trees/rocks got ISM — same node, same execution). Probe with
+  the ISM BASE class or half the scatter is invisible. This false "trees
+  vanish" signal burned ~5 debugging iterations.
+- **`FISMComponentDescriptor` equality/hash EXCLUDES ComponentTags** (UE5.8
+  ISMComponentDescriptor.cpp): descriptor-equal components merge/reclaim
+  across chains sharing a mesh, and crc-less nodes (native Static Mesh
+  Spawners) reuse ANY descriptor-equal managed resource. Custom spawner nodes
+  must set a unique `Descriptor.RayTracingGroupId` + `SettingsCrc` (see
+  MOPCGBiomeSpawnerSettings.cpp).
+- **Biome bands must PARTITION the sample space** (catch-all + priorities):
+  voxel-surface normals REFINE across PCG re-generations, so points that
+  matched narrow slope bands on the first pass fall out on later passes and
+  the layer visibly thins as cells re-execute.
+- The scattering cells re-generate repeatedly while the voxel world settles —
+  transient world-state probes must poll, and per-execution [MOBiomeSpawner]
+  bucket logs are the ground truth for what the node produced.
+
 ## MO.Test.* runtime harness + closed-loop verification (2026-07-01, UE 5.8)
 
 The eyes now close the loop with **zero screenshots**. Two pieces:
