@@ -287,10 +287,14 @@ def rows_set_safe(table, rows, do_save=True):
                                   "values": json.dumps({name: fields})})
         back = rows_get(table, [name])
         row = back.get(name, {}) if isinstance(back, dict) else {}
+        # Readback keys come back camelCase regardless of authored casing
+        # ("Species" -> "species") — compare case-insensitively, else every
+        # PascalCase field silently skips verify (and arrays false-MISMATCH).
+        row_ci = {str(rk).lower(): rv for rk, rv in row.items()} if isinstance(row, dict) else {}
         bad = []
         for k, v in fields.items():
+            got = row_ci.get(k.lower())
             if isinstance(v, (str, int, float, bool)):
-                got = row.get(k)
                 # FText fields wrap plain strings in NSLOCTEXT(...) — substring match
                 if isinstance(got, str) and isinstance(v, str):
                     if v not in got:
@@ -299,7 +303,11 @@ def rows_set_safe(table, rows, do_save=True):
                         isinstance(v, (int, float)) and isinstance(got, (int, float))
                         and float(got) == float(v)):
                     bad.append(k)
-            elif isinstance(v, (list, dict)) and v and not row.get(k):
+            elif isinstance(v, list) and v:
+                # struct-array: verified when readback has the same element count
+                if not isinstance(got, list) or len(got) != len(v):
+                    bad.append(k)
+            elif isinstance(v, dict) and v and not got:
                 bad.append(k)
         good = not bad
         ok += good

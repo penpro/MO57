@@ -18,6 +18,7 @@
 #include "MORecipeDatabaseSettings.h"
 #include "MOSkillDatabaseSettings.h"
 #include "MOSkillDefinitionRow.h"
+#include "MOBiomeDatabaseSettings.h"
 #include "MOBuildableActor.h" // complete type for TSubclassOf<AMOBuildableActor> null-check (A1 art audit)
 #include "MOContainerActor.h"
 #include "MOCraftingStationActor.h"
@@ -274,6 +275,8 @@ namespace
 			}));
 	}
 
+	void RunBiomeValidation(TArray<FMOTestResult>& OutResults); // defined below (P1)
+
 	/**
 	 * Content-integrity check (#65): every recipe/treatment reference must
 	 * resolve to a real item/skill row. This is the drift class that produced
@@ -376,6 +379,85 @@ namespace
 				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] FAIL Data:Treatments -- table not configured"));
 			}
 		}
+
+		// ---- Biomes (P1): species mesh/tag integrity + band sanity ----
+		RunBiomeValidation(OutResults);
+	}
+
+	/**
+	 * Biome catalog integrity (pipeline P1): every species mesh must resolve to
+	 * a real asset, every species must carry a HISM tag (harvest/interaction
+	 * resolves what an instance IS from the tag), and bands must be min<=max.
+	 * P2's spawner consumes these rows blind — this check is what makes that safe.
+	 */
+	void RunBiomeValidation(TArray<FMOTestResult>& OutResults)
+	{
+		const UMOBiomeDatabaseSettings* Settings = GetDefault<UMOBiomeDatabaseSettings>();
+		UDataTable* Table = Settings ? Settings->GetBiomeDefinitionsDataTable() : nullptr;
+		if (!Table)
+		{
+			OutResults.Add({ false, TEXT("Data:Biomes"), TEXT("biome definitions table not configured") });
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] FAIL Data:Biomes -- table not configured"));
+			return;
+		}
+
+		int32 Bad = 0;
+		int32 SpeciesCount = 0;
+		TArray<FName> BiomeIds;
+		UMOBiomeDatabaseSettings::GetAllBiomeIds(BiomeIds);
+		for (const FName& BiomeId : BiomeIds)
+		{
+			const FMOBiomeDefinitionRow* Biome = UMOBiomeDatabaseSettings::GetBiomeDefinition(BiomeId);
+			if (!Biome) { continue; }
+
+			auto CheckBand = [&Bad, &BiomeId](float Min, float Max, const TCHAR* Band)
+			{
+				if (Min > Max)
+				{
+					++Bad;
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST]   Biome '%s' %s band inverted (%.2f > %.2f)"),
+						*BiomeId.ToString(), Band, Min, Max);
+				}
+			};
+			CheckBand(Biome->HeightMin, Biome->HeightMax, TEXT("height"));
+			CheckBand(Biome->SlopeMinDeg, Biome->SlopeMaxDeg, TEXT("slope"));
+			CheckBand(Biome->MoistureMin, Biome->MoistureMax, TEXT("moisture"));
+			CheckBand(Biome->TemperatureMin, Biome->TemperatureMax, TEXT("temperature"));
+
+			if (Biome->Species.Num() == 0)
+			{
+				++Bad;
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST]   Biome '%s' has NO species"), *BiomeId.ToString());
+			}
+			for (int32 i = 0; i < Biome->Species.Num(); ++i)
+			{
+				const FMOBiomeSpeciesEntry& Sp = Biome->Species[i];
+				++SpeciesCount;
+				if (Sp.Mesh.IsNull() || !Sp.Mesh.LoadSynchronous())
+				{
+					++Bad;
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST]   Biome '%s' species[%d] mesh unresolvable: %s"),
+						*BiomeId.ToString(), i, *Sp.Mesh.ToString());
+				}
+				if (Sp.HISMTag.IsNone())
+				{
+					++Bad;
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST]   Biome '%s' species[%d] missing HISMTag"),
+						*BiomeId.ToString(), i);
+				}
+				if (Sp.MinScale > Sp.MaxScale || Sp.DensityPerHectare < 0.0f)
+				{
+					++Bad;
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST]   Biome '%s' species[%d] bad scale/density"),
+						*BiomeId.ToString(), i);
+				}
+			}
+		}
+		const bool bPass = (Bad == 0 && BiomeIds.Num() > 0);
+		OutResults.Add({ bPass, TEXT("Data:Biomes"),
+			FString::Printf(TEXT("%d biomes, %d species, %d problem(s)"), BiomeIds.Num(), SpeciesCount, Bad) });
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] %s Data:Biomes -- %d biomes, %d species, %d problem(s)"),
+			bPass ? TEXT("PASS") : TEXT("FAIL"), BiomeIds.Num(), SpeciesCount, Bad);
 	}
 
 	// =========================================================================
