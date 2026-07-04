@@ -19,6 +19,24 @@
 | UENUMs | 58+ | All properly marked BlueprintType |
 | Interfaces | 9+ | Good decoupling |
 
+### Art Debt Baseline (pipeline A1 — `MO.Test.ValidateArt`, 2026-07-04)
+
+The burn-down number for the A-track. Re-run `python Tools/ue.py pie begin`
++ `ue.py run "MO.Test.ValidateArt"` and compare against this table; the
+`[MOTEST] ART` log lines are the per-slot offender list.
+
+| Category | Slots | Missing | Placeholder | Notes |
+|----------|-------|---------|-------------|-------|
+| Recipes (icon; +preview mesh & actor class for buildings) | 144 | 135 | 0 | 122 recipes, 11 buildings |
+| Items (small+large icon, world visual) | 642 | 600 | 0 | 214 items |
+| Skills (icon) | 22 | 22 | 0 | 22 skills |
+| **Total** | **808** | **757** | **0** | 51 slots have real art |
+
+Zero placeholders = art slots are simply unset, not stubbed. A5 graybox
+generation flips building-mesh MISSING → PLACEHOLDER (`Graybox` paths are
+classified as placeholder by design). `MO.Test.RunAll` carries the totals as
+an informational `Data:Art` line without failing the standing gate.
+
 ---
 
 ## Master Plan Progress

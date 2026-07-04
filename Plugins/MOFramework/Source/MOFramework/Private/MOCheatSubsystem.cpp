@@ -17,6 +17,8 @@
 #include "MOSaveGameTypes.h"
 #include "MORecipeDatabaseSettings.h"
 #include "MOSkillDatabaseSettings.h"
+#include "MOSkillDefinitionRow.h"
+#include "MOBuildableActor.h" // complete type for TSubclassOf<AMOBuildableActor> null-check (A1 art audit)
 #include "MOMedicalDatabaseSettings.h"
 #include "MOBodyPartDefinitionRow.h"
 #include "MOHUDRootWidget.h"
@@ -370,6 +372,197 @@ namespace
 		}
 	}
 
+	// =========================================================================
+	// Art validation (#171 / pipeline A1): make the art gap a queryable number.
+	// Every visual slot in the definition tables is either OK (a real asset),
+	// MISSING (unset), or PLACEHOLDER (engine/basic-shape/graybox stand-in).
+	// The [MOTEST] ART lines are the greppable burn-down list; the totals are
+	// the baseline PROJECT_STATUS tracks.
+	// =========================================================================
+
+	enum class EMOArtSlotState : uint8 { Ok, Missing, Placeholder };
+
+	EMOArtSlotState ClassifyArtPath(const FSoftObjectPath& Path)
+	{
+		if (!Path.IsValid())
+		{
+			return EMOArtSlotState::Missing;
+		}
+		const FString PathString = Path.ToString();
+		// "/Engine/" catches BasicShapes/EngineMeshes/editor textures wholesale;
+		// "Graybox" marks A5-generated stand-ins (deliberately placeholder, not
+		// missing -- that distinction IS the A5 gate).
+		static const TCHAR* PlaceholderMarkers[] = {
+			TEXT("/Engine/"), TEXT("BasicShapes"), TEXT("EngineMeshes"),
+			TEXT("Placeholder"), TEXT("Graybox")
+		};
+		for (const TCHAR* Marker : PlaceholderMarkers)
+		{
+			if (PathString.Contains(Marker))
+			{
+				return EMOArtSlotState::Placeholder;
+			}
+		}
+		return EMOArtSlotState::Ok;
+	}
+
+	struct FMOArtDebtCounter
+	{
+		int32 Missing = 0;
+		int32 Placeholder = 0;
+		int32 SlotsChecked = 0;
+
+		void CheckPath(const FSoftObjectPath& Path, const FString& RowId, const TCHAR* Slot)
+		{
+			++SlotsChecked;
+			switch (ClassifyArtPath(Path))
+			{
+			case EMOArtSlotState::Missing:
+				++Missing;
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST]   ART MISSING %s '%s'"), Slot, *RowId);
+				break;
+			case EMOArtSlotState::Placeholder:
+				++Placeholder;
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST]   ART PLACEHOLDER %s '%s' -> %s"), Slot, *RowId, *Path.ToString());
+				break;
+			default:
+				break;
+			}
+		}
+
+		void CountMissing(const FString& RowId, const TCHAR* Slot)
+		{
+			++SlotsChecked;
+			++Missing;
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST]   ART MISSING %s '%s'"), Slot, *RowId);
+		}
+
+		bool IsClean() const { return Missing == 0 && Placeholder == 0; }
+	};
+
+	struct FMOArtDebtTotals
+	{
+		int32 Missing = 0;
+		int32 Placeholder = 0;
+		int32 SlotsChecked = 0;
+
+		void Accumulate(const FMOArtDebtCounter& C)
+		{
+			Missing += C.Missing;
+			Placeholder += C.Placeholder;
+			SlotsChecked += C.SlotsChecked;
+		}
+	};
+
+	FMOArtDebtTotals RunArtValidation(TArray<FMOTestResult>& OutResults)
+	{
+		FMOArtDebtTotals Totals;
+
+		// ---- Recipes: crafting icon for all; preview mesh + actor class for buildings ----
+		{
+			TArray<FName> RecipeIds;
+			UMORecipeDatabaseSettings::GetAllRecipeIds(RecipeIds);
+			FMOArtDebtCounter C;
+			int32 Buildings = 0;
+			for (const FName& RecipeId : RecipeIds)
+			{
+				const FMORecipeDefinitionRow* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(RecipeId);
+				if (!Recipe) { continue; }
+				const FString Id = RecipeId.ToString();
+				C.CheckPath(Recipe->Icon.ToSoftObjectPath(), Id, TEXT("Recipe.Icon"));
+				if (Recipe->bIsBuilding)
+				{
+					++Buildings;
+					C.CheckPath(Recipe->PlacementData.PreviewMesh.ToSoftObjectPath(), Id, TEXT("Recipe.PreviewMesh"));
+					// Hard class ref, not a soft path: unset means the building
+					// falls back to the base ghost with no mesh of its own.
+					if (!Recipe->PlacementData.BuildableActorClass)
+					{
+						C.CountMissing(Id, TEXT("Recipe.BuildableActorClass"));
+					}
+					else
+					{
+						++C.SlotsChecked;
+					}
+				}
+			}
+			OutResults.Add({ C.IsClean(), TEXT("Art:Recipes"),
+				FString::Printf(TEXT("%d recipes (%d buildings), %d slots: %d missing, %d placeholder"),
+					RecipeIds.Num(), Buildings, C.SlotsChecked, C.Missing, C.Placeholder) });
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] %s Art:Recipes -- %d slots, %d missing, %d placeholder"),
+				C.IsClean() ? TEXT("PASS") : TEXT("FAIL"), C.SlotsChecked, C.Missing, C.Placeholder);
+			Totals.Accumulate(C);
+		}
+
+		// ---- Items: both icons; world visual = mesh OR a custom world actor ----
+		{
+			const UMOItemDatabaseSettings* Settings = GetDefault<UMOItemDatabaseSettings>();
+			UDataTable* Table = Settings ? Settings->GetItemDefinitionsDataTable() : nullptr;
+			if (Table)
+			{
+				FMOArtDebtCounter C;
+				int32 Count = 0;
+				for (const TPair<FName, uint8*>& Pair : Table->GetRowMap())
+				{
+					const FMOItemDefinitionRow* Row = reinterpret_cast<const FMOItemDefinitionRow*>(Pair.Value);
+					if (!Row) { continue; }
+					++Count;
+					const FString Id = Pair.Key.ToString();
+					C.CheckPath(Row->UI.IconSmall.ToSoftObjectPath(), Id, TEXT("Item.IconSmall"));
+					C.CheckPath(Row->UI.IconLarge.ToSoftObjectPath(), Id, TEXT("Item.IconLarge"));
+					// A dropped item renders WorldVisual.StaticMesh through the
+					// default AMOWorldItem; a custom WorldActorClass brings its
+					// own visuals. Neither set = invisible on the ground.
+					if (!Row->WorldVisual.StaticMesh.IsNull())
+					{
+						C.CheckPath(Row->WorldVisual.StaticMesh.ToSoftObjectPath(), Id, TEXT("Item.WorldMesh"));
+					}
+					else if (!Row->WorldVisual.WorldActorClass.IsNull())
+					{
+						C.CheckPath(Row->WorldVisual.WorldActorClass.ToSoftObjectPath(), Id, TEXT("Item.WorldActorClass"));
+					}
+					else
+					{
+						C.CountMissing(Id, TEXT("Item.WorldVisual"));
+					}
+				}
+				OutResults.Add({ C.IsClean(), TEXT("Art:Items"),
+					FString::Printf(TEXT("%d items, %d slots: %d missing, %d placeholder"),
+						Count, C.SlotsChecked, C.Missing, C.Placeholder) });
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] %s Art:Items -- %d slots, %d missing, %d placeholder"),
+					C.IsClean() ? TEXT("PASS") : TEXT("FAIL"), C.SlotsChecked, C.Missing, C.Placeholder);
+				Totals.Accumulate(C);
+			}
+			else
+			{
+				OutResults.Add({ false, TEXT("Art:Items"), TEXT("item definitions table not configured") });
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] FAIL Art:Items -- table not configured"));
+			}
+		}
+
+		// ---- Skills: UI icon ----
+		{
+			TArray<FName> SkillIds;
+			UMOSkillDatabaseSettings::GetAllSkillIds(SkillIds);
+			FMOArtDebtCounter C;
+			for (const FName& SkillId : SkillIds)
+			{
+				if (const FMOSkillDefinitionRow* Skill = UMOSkillDatabaseSettings::GetSkillDefinition(SkillId))
+				{
+					C.CheckPath(Skill->Icon.ToSoftObjectPath(), SkillId.ToString(), TEXT("Skill.Icon"));
+				}
+			}
+			OutResults.Add({ C.IsClean(), TEXT("Art:Skills"),
+				FString::Printf(TEXT("%d skills: %d missing, %d placeholder"),
+					SkillIds.Num(), C.Missing, C.Placeholder) });
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] %s Art:Skills -- %d skills, %d missing, %d placeholder"),
+				C.IsClean() ? TEXT("PASS") : TEXT("FAIL"), SkillIds.Num(), C.Missing, C.Placeholder);
+			Totals.Accumulate(C);
+		}
+
+		return Totals;
+	}
+
 	/**
 	 * Write results to Saved/MOTestResults.txt -- a stable, immediately-flushed
 	 * path a runner reads instead of scraping the buffered game log -- and log
@@ -710,6 +903,21 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 		}),
 		ECVF_Default));
 
+	// ---------- MO.Test.ValidateArt ----------
+	// Pipeline A1 (#171): art debt as a number. Per-slot MISSING/PLACEHOLDER
+	// audit over recipes/items/skills; [MOTEST] ART lines are the burn-down
+	// list. Like ValidateData it needs no pawn -- runs at the main menu.
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Test.ValidateArt"),
+		TEXT("Audit art slots (recipe icons/preview meshes, item icons/world visuals, skill icons): MISSING or PLACEHOLDER (engine/basic-shape/graybox paths). Writes Saved/MOTestResults.txt. Works at the main menu."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			TArray<FMOTestResult> Results;
+			RunArtValidation(Results);
+			WriteTestResults(TEXT("ValidateArt"), Results);
+		}),
+		ECVF_Default));
+
 	// ---------- MO.Test.RunAll ----------
 	// The full regression gate: gameplay smoke tests (need an in-game pawn) plus
 	// the data-integrity checks, aggregated into one PASS/FAIL summary file so a
@@ -725,6 +933,17 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 			Results.Add(RunAttackTest(World));
 			Results.Add(RunCraftTest(World, FName(TEXT("KnapFlintFlakes"))));
 			RunDataValidation(Results);
+			// Art debt is a tracked BASELINE being burned down (pipeline
+			// A-track), not a regression: one always-informational line so the
+			// standing gate stays green while the debt exists by design. The
+			// honest per-category verdicts live in MO.Test.ValidateArt.
+			{
+				TArray<FMOTestResult> ArtDetail;
+				const FMOArtDebtTotals Art = RunArtValidation(ArtDetail);
+				Results.Add({ true, TEXT("Data:Art"),
+					FString::Printf(TEXT("%d missing, %d placeholder across %d slots (baseline burn-down -- see MO.Test.ValidateArt)"),
+						Art.Missing, Art.Placeholder, Art.SlotsChecked) });
+			}
 			WriteTestResults(TEXT("RunAll"), Results);
 			UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] ===== RunAll end ====="));
 		}),
