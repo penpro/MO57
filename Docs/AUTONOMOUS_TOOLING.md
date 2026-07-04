@@ -154,6 +154,25 @@ paths probed on `EditorToolset.EditorAppToolset`:
 - Git Bash mangles `/Game/...` into `C:/Program Files/Git/Game/...` — call
   with `MSYS_NO_PATHCONV=1` (or from PowerShell).
 
+## Packaging vs. the MCP port (2026-07-04)
+
+Editor-UI packaging ("Cook failed" with a clean-looking log) traced to ONE
+error line: `HttpListener unable to bind to 127.0.0.1:8000`. With
+`bAutoStartServer=True` (EditorPerProjectUserSettings), EVERY editor process
+auto-starts the MCP server — including the cook commandlet the editor spawns
+for packaging. Parent editor holds 8000 → child bind fails → one Error-level
+line → commandlet exit 1 → cook failed.
+
+Fix (no engine rebuild — UE_5.8 is an INSTALLED build, project builds cannot
+recompile engine modules): `bAutoStartServer=False` in per-project user
+settings; `ue.py editor start` passes `-ModelContextProtocolStartServer`
+instead. Loop-launched editors keep the MCP hands; commandlets stay silent;
+editor-UI packaging works with the editor open (verified: cook green while
+editor running). A dormant `!IsRunningCommandlet()` guard is also patched
+into the engine source (ModelContextProtocolEditor.cpp) for whenever the
+engine gets rebuilt. If the editor is ever launched OUTSIDE ue.py and needs
+MCP: console `ModelContextProtocol.StartServer`.
+
 ## Hit / miss record — P2 PCG biome layer (2026-07-04)
 
 **HITS**

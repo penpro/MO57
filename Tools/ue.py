@@ -347,7 +347,15 @@ def editor_start(wait_bridge_s=360):
     for p in (CMD_FILE, OUT_FILE):  # truncate so no stale commands/markers replay
         open(p, "w").close()
     DETACHED = 0x00000008 | 0x00000200  # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
-    subprocess.Popen([EDITOR_EXE, UPROJECT], creationflags=DETACHED,
+    # -ModelContextProtocolStartServer: the MCP server is started HERE, by
+    # command line, instead of via bAutoStartServer=True in per-project user
+    # settings. With the config flag on, every editor child process — notably
+    # the COOK COMMANDLET spawned by editor-UI packaging — also tried to bind
+    # port 8000, failed (the interactive editor holds it), and that single
+    # Error line made the whole cook exit 1 ("Cook failed", 2026-07-04).
+    # Config stays False; only loop-launched editors get the MCP hands.
+    subprocess.Popen([EDITOR_EXE, UPROJECT, "-ModelContextProtocolStartServer"],
+                     creationflags=DETACHED,
                      stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                      stderr=subprocess.DEVNULL, close_fds=True)
     deadline = time.time() + wait_bridge_s
