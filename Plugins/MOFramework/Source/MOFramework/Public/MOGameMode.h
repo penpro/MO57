@@ -296,7 +296,41 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Voxel")
 	bool bAutoInitializeVoxelWithSeed = true;
 
+	// =========================================================================
+	// CO-OP JOIN-SPAWN (pipeline S0)
+	// =========================================================================
+	// The initial-pawn flow above serves exactly ONE player (the host). Remote
+	// players arrive through two different doors and get a survivor spawned by
+	// the same safe-spawn rules:
+	//  - HandleSeamlessTravelPlayer: players carried along by the host's
+	//    seamless ServerTravel (menu -> generated world). NOTE: these players
+	//    NEVER see Login/PostLogin.
+	//  - PostLogin: direct/late joins into a running world.
+	// Joins that arrive before the voxel world is ready are queued and flushed
+	// from the same completion points the host flow uses.
+
+	virtual void PostLogin(APlayerController* NewPlayer) override;
+	virtual void HandleSeamlessTravelPlayer(AController*& C) override;
+
 private:
+	/** Common entry for both join doors: queue until world-ready, then spawn. */
+	void HandleRemotePlayerJoin(APlayerController* PC);
+
+	/** Spawn + possess pending remote joins once the world is ready. */
+	void FlushPendingJoinControllers();
+
+	/**
+	 * Lean survivor spawn for a REMOTE player: safe location -> spawn ->
+	 * name -> recruit -> possess. Deliberately skips the host-only landing /
+	 * loading-screen machinery (PendingLandingPawn is single-slot host state).
+	 */
+	APawn* SpawnJoinPawnForController(APlayerController* PC);
+
+	/** Remote PCs that joined before the world was ready for pawns. */
+	TArray<TWeakObjectPtr<APlayerController>> PendingJoinControllers;
+
+	/** Set at the completion points of the new-game and load flows. */
+	bool bWorldReadyForJoins = false;
 	/** Register all configured tag mappings with the PCG interaction subsystem. */
 	void RegisterPCGTagMappings();
 

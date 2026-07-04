@@ -377,6 +377,8 @@ void AMOGameMode::WaitForVoxelAndRegroundPawns()
 		UE_LOG(LogMOFramework, Warning,
 			TEXT("[MOGameMode] No VoxelReadinessSubsystem on load — regrounding immediately"));
 		RegroundAllPawns();
+		bWorldReadyForJoins = true;
+		FlushPendingJoinControllers();
 		return;
 	}
 
@@ -389,6 +391,10 @@ void AMOGameMode::HandleVoxelReadyForLoad()
 	UE_LOG(LogMOFramework, Warning,
 		TEXT("[MOGameMode] OnVoxelReady received — regrounding loaded pawns"));
 	RegroundAllPawns();
+
+	// Loaded world is now spawnable for remote joins (co-op join-spawn, S0).
+	bWorldReadyForJoins = true;
+	FlushPendingJoinControllers();
 }
 
 void AMOGameMode::RegroundAllPawns()
@@ -958,6 +964,11 @@ void AMOGameMode::SpawnInitialPawn()
 		PC->Possess(NewPawn);
 		UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Player controller possessed initial pawn"));
 
+		// World is now spawnable — release any remote players who joined while
+		// the voxel world was still generating (co-op join-spawn, S0).
+		bWorldReadyForJoins = true;
+		FlushPendingJoinControllers();
+
 		// Event-driven landing detection.
 		//
 		// Replaces the old 10Hz polling loop. The pawn spawns SpawnHeightOffset
@@ -996,6 +1007,131 @@ void AMOGameMode::SpawnInitialPawn()
 			OnPawnLandedSafely();
 		}
 	}
+}
+
+// ============================================================================
+// CO-OP JOIN-SPAWN (pipeline S0)
+// ============================================================================
+
+void AMOGameMode::PostLogin(APlayerController* NewPlayer)
+{
+	Super::PostLogin(NewPlayer);
+	// Direct/late joins into a running world. (Seamless-travel players never
+	// hit this path — they arrive via HandleSeamlessTravelPlayer below.)
+	HandleRemotePlayerJoin(NewPlayer);
+}
+
+void AMOGameMode::HandleSeamlessTravelPlayer(AController*& C)
+{
+	// Super may SWAP the controller object (it recreates the PC for the new
+	// level when classes differ) — use C only after it returns.
+	Super::HandleSeamlessTravelPlayer(C);
+	HandleRemotePlayerJoin(Cast<APlayerController>(C));
+}
+
+void AMOGameMode::HandleRemotePlayerJoin(APlayerController* PC)
+{
+	if (!PC)
+	{
+		return;
+	}
+	if (PC->IsLocalController())
+	{
+		// The host — served by the initial-pawn / load flows above.
+		return;
+	}
+	if (PC->GetPawn())
+	{
+		// Already has a pawn (future: session-restored possession).
+		return;
+	}
+
+	if (!bWorldReadyForJoins)
+	{
+		PendingJoinControllers.AddUnique(PC);
+		UE_LOG(LogMOFramework, Warning,
+			TEXT("[MOGameMode] Remote player %s joined before world ready — queued (%d pending)"),
+			*PC->GetName(), PendingJoinControllers.Num());
+		return;
+	}
+
+	SpawnJoinPawnForController(PC);
+}
+
+void AMOGameMode::FlushPendingJoinControllers()
+{
+	if (PendingJoinControllers.Num() == 0)
+	{
+		return;
+	}
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOGameMode] Flushing %d pending remote join(s)"),
+		PendingJoinControllers.Num());
+	for (const TWeakObjectPtr<APlayerController>& WeakPC : PendingJoinControllers)
+	{
+		APlayerController* PC = WeakPC.Get();
+		if (PC && !PC->GetPawn())
+		{
+			SpawnJoinPawnForController(PC);
+		}
+	}
+	PendingJoinControllers.Reset();
+}
+
+APawn* AMOGameMode::SpawnJoinPawnForController(APlayerController* PC)
+{
+	if (!PC || !DefaultNewGamePawnClass)
+	{
+		UE_LOG(LogMOFramework, Warning,
+			TEXT("[MOGameMode] SpawnJoinPawnForController: %s"),
+			!PC ? TEXT("null PC") : TEXT("DefaultNewGamePawnClass not set"));
+		return nullptr;
+	}
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return nullptr;
+	}
+
+	// Same safe-spawn rules as the host; independent roll so co-op players
+	// land near the same biome band but not inside each other.
+	const FVector SpawnLocation = FindSafeSpawnLocation();
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+	APawn* NewPawn = World->SpawnActor<APawn>(DefaultNewGamePawnClass, SpawnLocation, FRotator::ZeroRotator, SpawnParams);
+	if (!NewPawn)
+	{
+		UE_LOG(LogMOFramework, Error, TEXT("[MOGameMode] Failed to spawn join pawn for %s"), *PC->GetName());
+		return nullptr;
+	}
+
+	// Name from the canonical generator (the session layer will provide the
+	// player's real name later — Move 3). Same empty-check discipline as the
+	// initial pawn so a restored identity is never stomped.
+	if (UMOIdentityComponent* IdentityComp = NewPawn->FindComponentByClass<UMOIdentityComponent>())
+	{
+		if (IdentityComp->DisplayName.IsEmpty())
+		{
+			const FString JoinName = UMOSpawnManagerSubsystem::GenerateRandomSurvivorName();
+			IdentityComp->SetDisplayName(FText::FromString(JoinName));
+			UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Join pawn assigned name: %s"), *JoinName);
+		}
+	}
+
+	// Recruited like the host's pawn — captured by the next save like any
+	// other recruited survivor (GUID identity handles multiple player pawns).
+	if (UMORecruitmentComponent* RecruitComp = NewPawn->FindComponentByClass<UMORecruitmentComponent>())
+	{
+		RecruitComp->ForceRecruit();
+	}
+
+	PC->Possess(NewPawn);
+	UE_LOG(LogMOFramework, Warning,
+		TEXT("[MOGameMode] Remote player %s possessed join pawn %s at %s"),
+		*PC->GetName(), *NewPawn->GetName(), *SpawnLocation.ToCompactString());
+	// No landing/loading-screen machinery here: PendingLandingPawn is host-only
+	// single-slot state; the join pawn simply falls SpawnHeightOffset to ground.
+	return NewPawn;
 }
 
 FVector AMOGameMode::FindSafeSpawnLocation() const
