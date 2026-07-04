@@ -76,10 +76,14 @@ enum class EMOSurvivorJobType : uint8
 	StayAtLocation,
 	GoHome,
 
+	// Crafting jobs (V0 village vertical slice): walk to storage, withdraw the
+	// recipe's real ingredients, walk to the station, run the REAL crafting
+	// queue at its real duration, walk back, deposit the real output.
+	CraftAtStation,
+
 	// Future expansion
 	// Hunt,
 	// Farm,
-	// Craft,
 	// Build,
 	// Guard,
 };
@@ -147,6 +151,21 @@ struct MOFRAMEWORK_API FMOSurvivorJobEntry : public FFastArraySerializerItem
 	/** When this job was started. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Job", meta = (IgnoreForMemberInitializationTest))
 	FDateTime StartTime;
+
+	// --- CraftAtStation fields (unused for other job types) ---
+
+	/** Recipe to craft for CraftAtStation jobs. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Job")
+	FName CraftRecipeId;
+
+	/** Storage actor (communal container) for ingredient withdraw / output
+	 *  deposit. Not replicated - resolved via StorageActorGuid if needed.
+	 *  (TargetActor/TargetActorGuid hold the STATION for CraftAtStation.) */
+	TWeakObjectPtr<AActor> StorageActor;
+
+	/** Storage actor GUID for replication/persistence. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Job", meta = (IgnoreForMemberInitializationTest))
+	FGuid StorageActorGuid;
 
 	FMOSurvivorJobEntry()
 		: JobId(FGuid::NewGuid())

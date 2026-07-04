@@ -120,6 +120,19 @@ public:
 	FGuid EnqueueJobWithTarget(EMOSurvivorJobType JobType, AActor* Target, int32 RepeatCount = 1);
 
 	/**
+	 * Add a CraftAtStation job (V0): withdraw the recipe's ingredients from
+	 * Storage, craft at Station via the survivor's REAL crafting queue, and
+	 * deposit the output back to Storage.
+	 * @param RecipeId - Recipe to craft (must exist in DT_Recipes)
+	 * @param Station - Crafting station actor to work at
+	 * @param Storage - Container actor holding ingredients / receiving output
+	 * @param RepeatCount - Number of crafts
+	 * @return GUID of the new job entry
+	 */
+	UFUNCTION(BlueprintCallable, Category = "MO|Survivor|Jobs")
+	FGuid EnqueueCraftJob(FName RecipeId, AActor* Station, AActor* Storage, int32 RepeatCount = 1);
+
+	/**
 	 * Cancel a specific job.
 	 * @param JobId - GUID of the job to cancel
 	 * @return True if job was found and cancelled

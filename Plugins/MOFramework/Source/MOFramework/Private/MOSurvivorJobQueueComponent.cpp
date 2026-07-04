@@ -1,6 +1,7 @@
 #include "MOSurvivorJobQueueComponent.h"
 #include "MOFramework.h"
 #include "MOSurvivorJobDatabaseSettings.h"
+#include "MOIdentityComponent.h"
 #include "Net/UnrealNetwork.h"
 
 UMOSurvivorJobQueueComponent::UMOSurvivorJobQueueComponent()
@@ -111,6 +112,46 @@ FGuid UMOSurvivorJobQueueComponent::EnqueueJobWithTarget(EMOSurvivorJobType JobT
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOSurvivorJobQueue] Enqueued target job %s for actor %s"),
 		*NewJob.JobId.ToString(), *Target->GetName());
+
+	OnQueueChanged.Broadcast();
+	return NewJob.JobId;
+}
+
+FGuid UMOSurvivorJobQueueComponent::EnqueueCraftJob(FName RecipeId, AActor* Station, AActor* Storage, int32 RepeatCount)
+{
+	if (RecipeId.IsNone() || !IsValid(Station) || !IsValid(Storage))
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorJobQueue] EnqueueCraftJob rejected: recipe/station/storage missing"));
+		return FGuid();
+	}
+
+	if (!GetOwner()->HasAuthority())
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorJobQueue] EnqueueCraftJob called on non-authority"));
+		return FGuid();
+	}
+
+	FMOSurvivorJobEntry NewJob = CreateJobEntry(EMOSurvivorJobType::CraftAtStation, RepeatCount);
+	NewJob.TargetActor = Station;                     // station in the shared target slot
+	NewJob.TargetLocation = Station->GetActorLocation();
+	NewJob.CraftRecipeId = RecipeId;
+	NewJob.StorageActor = Storage;
+
+	// Best-effort GUIDs so a saved/replicated job can re-resolve its actors.
+	if (const UMOIdentityComponent* StationId = Station->FindComponentByClass<UMOIdentityComponent>())
+	{
+		NewJob.TargetActorGuid = StationId->GetGuid();
+	}
+	if (const UMOIdentityComponent* StorageId = Storage->FindComponentByClass<UMOIdentityComponent>())
+	{
+		NewJob.StorageActorGuid = StorageId->GetGuid();
+	}
+
+	JobQueue.Jobs.Add(NewJob);
+	MarkQueueDirty();
+
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorJobQueue] Enqueued craft job %s: %dx %s at %s, storage %s"),
+		*NewJob.JobId.ToString(), RepeatCount, *RecipeId.ToString(), *Station->GetName(), *Storage->GetName());
 
 	OnQueueChanged.Broadcast();
 	return NewJob.JobId;

@@ -19,6 +19,12 @@
 #include "MOSkillDatabaseSettings.h"
 #include "MOSkillDefinitionRow.h"
 #include "MOBuildableActor.h" // complete type for TSubclassOf<AMOBuildableActor> null-check (A1 art audit)
+#include "MOContainerActor.h"
+#include "MOCraftingStationActor.h"
+#include "MOBuildProgressComponent.h"
+#include "MORecruitmentComponent.h"
+#include "MOSurvivorJobQueueComponent.h"
+#include "MOInventoryHolderInterface.h"
 #include "MOMedicalDatabaseSettings.h"
 #include "MOBodyPartDefinitionRow.h"
 #include "MOHUDRootWidget.h"
@@ -563,6 +569,64 @@ namespace
 		return Totals;
 	}
 
+	// =========================================================================
+	// MO.Colony.* helpers (V0 village vertical slice)
+	// =========================================================================
+
+	APawn* FindColonyPawnBySub(UWorld* World, const FString& NameSub)
+	{
+		APawn* LocalPawn = ResolveLocalPawn(World);
+		for (TActorIterator<APawn> It(World); It; ++It)
+		{
+			APawn* Pawn = *It;
+			if (Pawn == LocalPawn || !IsValid(Pawn))
+			{
+				continue;
+			}
+			if (!Pawn->FindComponentByClass<UMORecruitmentComponent>())
+			{
+				continue;
+			}
+			if (NameSub.IsEmpty() || Pawn->GetName().Contains(NameSub))
+			{
+				return Pawn;
+			}
+		}
+		return nullptr;
+	}
+
+	AActor* FindWorldActorBySub(UWorld* World, const FString& NameSub)
+	{
+		if (NameSub.IsEmpty())
+		{
+			return nullptr;
+		}
+		for (TActorIterator<AActor> It(World); It; ++It)
+		{
+			if (IsValid(*It) && It->GetName().Contains(NameSub))
+			{
+				return *It;
+			}
+		}
+		return nullptr;
+	}
+
+	UMOInventoryComponent* ResolveActorInventory(AActor* Actor)
+	{
+		if (!IsValid(Actor))
+		{
+			return nullptr;
+		}
+		if (Actor->Implements<UMOInventoryHolderInterface>())
+		{
+			if (UMOInventoryComponent* Inv = IMOInventoryHolderInterface::Execute_GetInventory(Actor))
+			{
+				return Inv;
+			}
+		}
+		return Actor->FindComponentByClass<UMOInventoryComponent>();
+	}
+
 	/**
 	 * Write results to Saved/MOTestResults.txt -- a stable, immediately-flushed
 	 * path a runner reads instead of scraping the buffered game log -- and log
@@ -915,6 +979,270 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 			TArray<FMOTestResult> Results;
 			RunArtValidation(Results);
 			WriteTestResults(TEXT("ValidateArt"), Results);
+		}),
+		ECVF_Default));
+
+	// =========================================================================
+	// MO.Colony.* -- V0 village vertical slice dev verbs. All bodies deferred
+	// (RunOnNextTick) so Python-driven runs escape the script guard and any
+	// downstream RPCs route for real. [MOQUERY] COLONY lines are the greppable
+	// output surface for the test_village_v0 gate.
+	// =========================================================================
+
+	// ---------- MO.Colony.SpawnSurvivor [dist=300] ----------
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Colony.SpawnSurvivor"),
+		TEXT("Dev: spawn a survivor pawn (player pawn class) in front of the player. Usage: MO.Colony.SpawnSurvivor [dist=300]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			const float Dist = Args.Num() > 0 ? FCString::Atof(*Args[0]) : 300.0f;
+			RunOnNextTick(World, [Dist](UWorld* W)
+			{
+				APawn* LocalPawn = ResolveLocalPawn(W);
+				if (!LocalPawn)
+				{
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] COLONY SpawnSurvivor FAILED: no local pawn"));
+					return;
+				}
+				FActorSpawnParameters P;
+				P.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+				const FVector Loc = LocalPawn->GetActorLocation()
+					+ LocalPawn->GetActorForwardVector() * Dist + FVector(0, 0, 50);
+				APawn* NewPawn = W->SpawnActor<APawn>(LocalPawn->GetClass(), Loc, LocalPawn->GetActorRotation(), P);
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] COLONY SpawnSurvivor %s"),
+					NewPawn ? *NewPawn->GetName() : TEXT("FAILED"));
+			});
+		}),
+		ECVF_Default));
+
+	// ---------- MO.Colony.Recruit <pawnNameSub> ----------
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Colony.Recruit"),
+		TEXT("Dev: force-recruit a survivor by name substring (skips quest). Usage: MO.Colony.Recruit <pawnNameSub>"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			const FString Sub = Args.Num() > 0 ? Args[0] : FString();
+			RunOnNextTick(World, [Sub](UWorld* W)
+			{
+				APawn* Pawn = FindColonyPawnBySub(W, Sub);
+				UMORecruitmentComponent* Recruit = Pawn ? Pawn->FindComponentByClass<UMORecruitmentComponent>() : nullptr;
+				if (!Recruit)
+				{
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] COLONY Recruit FAILED: no pawn matching '%s'"), *Sub);
+					return;
+				}
+				Recruit->ForceRecruit();
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] COLONY Recruit %s possessable=%d"),
+					*Pawn->GetName(), Recruit->IsPossessable() ? 1 : 0);
+			});
+		}),
+		ECVF_Default));
+
+	// ---------- MO.Colony.PlaceBuilding <recipeId> [dist=400] ----------
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Colony.PlaceBuilding"),
+		TEXT("Dev: spawn a COMPLETED building for a building recipe in front of the player (mirrors ServerPlaceBuilding + restore-as-complete). Usage: MO.Colony.PlaceBuilding <recipeId> [dist=400]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			const FName RecipeId = Args.Num() > 0 ? FName(*Args[0]) : NAME_None;
+			const float Dist = Args.Num() > 1 ? FCString::Atof(*Args[1]) : 400.0f;
+			RunOnNextTick(World, [RecipeId, Dist](UWorld* W)
+			{
+				const FMORecipeDefinitionRow* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(RecipeId);
+				APawn* LocalPawn = ResolveLocalPawn(W);
+				if (!Recipe || !Recipe->bIsBuilding || !LocalPawn)
+				{
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] COLONY PlaceBuilding FAILED: %s"),
+						!LocalPawn ? TEXT("no local pawn") : TEXT("not a building recipe"));
+					return;
+				}
+
+				// Same class inference as UMOBuildingComponent::ServerPlaceBuilding.
+				TSubclassOf<AMOBuildableActor> ActorClass = Recipe->PlacementData.BuildableActorClass;
+				if (!ActorClass)
+				{
+					if (Recipe->ContainerSlotCount > 0) { ActorClass = AMOContainerActor::StaticClass(); }
+					else if (Recipe->ProvidedStationType != EMOCraftingStation::None) { ActorClass = AMOCraftingStationActor::StaticClass(); }
+					else { ActorClass = AMOBuildableActor::StaticClass(); }
+				}
+
+				// Ground-snap: trace down from ahead-of-player.
+				FVector Loc = LocalPawn->GetActorLocation() + LocalPawn->GetActorForwardVector() * Dist + FVector(0, 0, 200);
+				FHitResult Hit;
+				FCollisionQueryParams QP;
+				QP.AddIgnoredActor(LocalPawn);
+				if (W->LineTraceSingleByChannel(Hit, Loc, Loc - FVector(0, 0, 2000), ECC_WorldStatic, QP))
+				{
+					Loc = Hit.Location;
+				}
+
+				FActorSpawnParameters P;
+				P.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+				AMOBuildableActor* Placed = W->SpawnActor<AMOBuildableActor>(ActorClass, FTransform(FRotator::ZeroRotator, Loc), P);
+				if (!Placed)
+				{
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] COLONY PlaceBuilding FAILED: spawn"));
+					return;
+				}
+				Placed->InitializeBuilding(RecipeId);
+
+				// Dev-only shortcut: restore as COMPLETE via the same path the
+				// save system uses for finished buildings. (Shipped placement
+				// always runs real construction - see CLAUDE.md sim rules.)
+				if (UMOBuildProgressComponent* Progress = Placed->FindComponentByClass<UMOBuildProgressComponent>())
+				{
+					FMOBuildProgress Done;
+					Done.State = EMOBuildState::Complete;
+					Progress->ApplySaveData(Done);
+				}
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] COLONY PlaceBuilding %s recipe=%s at %s"),
+					*Placed->GetName(), *RecipeId.ToString(), *Loc.ToCompactString());
+			});
+		}),
+		ECVF_Default));
+
+	// ---------- MO.Colony.Stock <actorNameSub> <itemId> [count=1] ----------
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Colony.Stock"),
+		TEXT("Dev: add items to a container/station inventory by actor name substring. Usage: MO.Colony.Stock <actorNameSub> <itemId> [count=1]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			if (Args.Num() < 2)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] COLONY Stock usage: <actorNameSub> <itemId> [count]"));
+				return;
+			}
+			const FString Sub = Args[0];
+			const FName ItemId = FName(*Args[1]);
+			const int32 Count = Args.Num() > 2 ? FCString::Atoi(*Args[2]) : 1;
+			RunOnNextTick(World, [Sub, ItemId, Count](UWorld* W)
+			{
+				AActor* Actor = FindWorldActorBySub(W, Sub);
+				UMOInventoryComponent* Inv = ResolveActorInventory(Actor);
+				if (!Inv)
+				{
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] COLONY Stock FAILED: no inventory on actor matching '%s'"), *Sub);
+					return;
+				}
+				const bool bAdded = Inv->AddItemByGuid(FGuid::NewGuid(), ItemId, Count);
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] COLONY Stock %s %dx %s ok=%d now=%d"),
+					*Actor->GetName(), Count, *ItemId.ToString(), bAdded ? 1 : 0,
+					Inv->GetItemCountByDefinitionId(ItemId));
+			});
+		}),
+		ECVF_Default));
+
+	// ---------- MO.Colony.AssignJob <pawnSub> <recipeId> <stationSub> <storageSub> [repeat=1] ----------
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Colony.AssignJob"),
+		TEXT("Dev: assign a CraftAtStation job. Usage: MO.Colony.AssignJob <pawnSub> <recipeId> <stationSub> <storageSub> [repeat=1]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			if (Args.Num() < 4)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] COLONY AssignJob usage: <pawnSub> <recipeId> <stationSub> <storageSub> [repeat]"));
+				return;
+			}
+			const FString PawnSub = Args[0];
+			const FName RecipeId = FName(*Args[1]);
+			const FString StationSub = Args[2];
+			const FString StorageSub = Args[3];
+			const int32 Repeat = Args.Num() > 4 ? FCString::Atoi(*Args[4]) : 1;
+			RunOnNextTick(World, [PawnSub, RecipeId, StationSub, StorageSub, Repeat](UWorld* W)
+			{
+				APawn* Pawn = FindColonyPawnBySub(W, PawnSub);
+				AActor* Station = FindWorldActorBySub(W, StationSub);
+				AActor* Storage = FindWorldActorBySub(W, StorageSub);
+				UMOSurvivorJobQueueComponent* JobQueue = Pawn ? Pawn->FindComponentByClass<UMOSurvivorJobQueueComponent>() : nullptr;
+				if (!JobQueue || !Station || !Storage)
+				{
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] COLONY AssignJob FAILED: pawn=%s station=%s storage=%s"),
+						Pawn ? *Pawn->GetName() : TEXT("none"),
+						Station ? *Station->GetName() : TEXT("none"),
+						Storage ? *Storage->GetName() : TEXT("none"));
+					return;
+				}
+				const FGuid JobId = JobQueue->EnqueueCraftJob(RecipeId, Station, Storage, Repeat);
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] COLONY AssignJob %s -> %dx %s ok=%d"),
+					*Pawn->GetName(), Repeat, *RecipeId.ToString(), JobId.IsValid() ? 1 : 0);
+			});
+		}),
+		ECVF_Default));
+
+	// ---------- MO.Colony.SetSkill <pawnSub> <skillId> <level> ----------
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Colony.SetSkill"),
+		TEXT("Dev: set a skill level on a colony pawn. Usage: MO.Colony.SetSkill <pawnSub> <skillId> <level>"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			if (Args.Num() < 3)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] COLONY SetSkill usage: <pawnSub> <skillId> <level>"));
+				return;
+			}
+			const FString Sub = Args[0];
+			const FName SkillId = FName(*Args[1]);
+			const int32 Level = FCString::Atoi(*Args[2]);
+			RunOnNextTick(World, [Sub, SkillId, Level](UWorld* W)
+			{
+				APawn* Pawn = FindColonyPawnBySub(W, Sub);
+				UMOSkillsComponent* Skills = Pawn ? Pawn->FindComponentByClass<UMOSkillsComponent>() : nullptr;
+				if (!Skills)
+				{
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] COLONY SetSkill FAILED: no pawn/skills matching '%s'"), *Sub);
+					return;
+				}
+				Skills->SetSkillLevel(SkillId, Level);
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] COLONY SetSkill %s %s=%d"),
+					*Pawn->GetName(), *SkillId.ToString(), Level);
+			});
+		}),
+		ECVF_Default));
+
+	// ---------- MO.Colony.Status ----------
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Colony.Status"),
+		TEXT("Dev: dump the colony roster (recruited survivors, jobs, queues) as [MOQUERY] COLONY lines."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			RunOnNextTick(World, [](UWorld* W)
+			{
+				int32 Count = 0;
+				APawn* LocalPawn = ResolveLocalPawn(W);
+				for (TActorIterator<APawn> It(W); It; ++It)
+				{
+					APawn* Pawn = *It;
+					if (Pawn == LocalPawn || !IsValid(Pawn))
+					{
+						continue;
+					}
+					UMORecruitmentComponent* Recruit = Pawn->FindComponentByClass<UMORecruitmentComponent>();
+					if (!Recruit)
+					{
+						continue;
+					}
+					++Count;
+					FString JobDesc = TEXT("none");
+					int32 QueueLen = 0;
+					if (UMOSurvivorJobQueueComponent* JobQueue = Pawn->FindComponentByClass<UMOSurvivorJobQueueComponent>())
+					{
+						QueueLen = JobQueue->GetAllJobs().Num();
+						const FMOSurvivorJobEntry Job = JobQueue->GetCurrentJob();
+						if (Job.IsValid())
+						{
+							JobDesc = FString::Printf(TEXT("%s:%s p=%.2f"),
+								*UEnum::GetDisplayValueAsText(Job.JobType).ToString(),
+								*UEnum::GetDisplayValueAsText(Job.State).ToString(),
+								Job.Progress);
+						}
+					}
+					UE_LOG(LogMOFramework, Warning,
+						TEXT("[MOQUERY] COLONY pawn=%s recruited=%d job=%s queue=%d controller=%s"),
+						*Pawn->GetName(), Recruit->IsPossessable() ? 1 : 0, *JobDesc, QueueLen,
+						Pawn->GetController() ? *Pawn->GetController()->GetClass()->GetName() : TEXT("none"));
+				}
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] COLONY roster=%d"), Count);
+			});
 		}),
 		ECVF_Default));
 

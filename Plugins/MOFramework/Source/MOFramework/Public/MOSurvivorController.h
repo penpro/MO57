@@ -373,6 +373,48 @@ private:
 	/** Perform the actual job action (digging, foraging, gathering). */
 	void PerformSimpleJobAction();
 
+	// =========================================================================
+	// CRAFT-AT-STATION JOB (V0 village vertical slice)
+	// =========================================================================
+	// Extends the simple-job state machine with craft legs. SimpleJobState:
+	//   10 = moving to storage (withdraw leg)
+	//   11 = withdrawing ingredients (timed handling action)
+	//   12 = moving to station
+	//   13 = crafting — the survivor's REAL UMOCraftingQueueComponent runs the
+	//        recipe at its real duration; we poll for completion and resume if
+	//        an interrupt paused it
+	//   14 = moving back to storage (deposit leg)
+	//   15 = depositing outputs (timed handling action)
+
+	/** Resolve actors + start the withdraw leg. */
+	void StartCraftJobExecution();
+
+	/** Tick the craft-leg state machine (states 10-15). */
+	void UpdateCraftJobExecution(float DeltaTime);
+
+	/** Move recipe ingredients storage -> pawn. False if storage lacks them. */
+	bool TransferCraftIngredients();
+
+	/** Move recipe outputs pawn -> storage. */
+	void DepositCraftOutputs();
+
+	/** Inventory of a container/station actor (holder interface or component). */
+	class UMOInventoryComponent* GetActorInventory(AActor* Actor) const;
+
+	/** Station actor the craft job works at. */
+	TWeakObjectPtr<AActor> CraftStationActor;
+
+	/** Storage actor the craft job withdraws from / deposits to. */
+	TWeakObjectPtr<AActor> CraftStorageActor;
+
+	/** Recipe the craft job runs. */
+	FName CraftJobRecipeId;
+
+	/** Seconds of handling time for the withdraw/deposit legs (one combined
+	 *  gesture for the batch — QoL batching, not an instant transfer). */
+	UPROPERTY(EditAnywhere, Category = "MO|Survivor|Config")
+	float CraftHandlingDuration = 2.0f;
+
 	/** Find nearest HISM resource matching the job type for gather jobs. */
 	bool FindNearestGatherResource(EMOSurvivorJobType JobType);
 

@@ -12,6 +12,10 @@
 #include "MOInventoryComponent.h"
 #include "MOKnowledgeComponent.h"
 #include "MOCraftingSubsystem.h"
+#include "MOCraftingQueueComponent.h"
+#include "MOCraftingStationActor.h"
+#include "MORecipeDatabaseSettings.h"
+#include "MOInventoryHolderInterface.h"
 #include "BehaviorTree/BehaviorTreeComponent.h"
 #include "EngineUtils.h"
 #include "BehaviorTree/BlackboardComponent.h"
@@ -571,6 +575,7 @@ bool AMOSurvivorController::CanExecuteSimply(EMOSurvivorJobType JobType) const
 	case EMOSurvivorJobType::GatherWood:
 	case EMOSurvivorJobType::GatherStone:
 	case EMOSurvivorJobType::GatherFiber:
+	case EMOSurvivorJobType::CraftAtStation:
 		return true;
 	default:
 		return false;
@@ -603,6 +608,15 @@ void AMOSurvivorController::StartSimpleJobExecution()
 	if (!World)
 	{
 		CompleteSimpleJob(false);
+		return;
+	}
+
+	// Craft jobs run their own multi-leg machine (states 10-15). This is also
+	// the repeat entry point, so each craft iteration restarts the full
+	// withdraw -> craft -> deposit loop.
+	if (CurrentJob.JobType == EMOSurvivorJobType::CraftAtStation)
+	{
+		StartCraftJobExecution();
 		return;
 	}
 
@@ -693,6 +707,13 @@ void AMOSurvivorController::UpdateSimpleJobExecution(float DeltaTime)
 	if (!ControlledPawn)
 	{
 		CompleteSimpleJob(false);
+		return;
+	}
+
+	// Craft-leg states live in their own machine.
+	if (SimpleJobState >= 10)
+	{
+		UpdateCraftJobExecution(DeltaTime);
 		return;
 	}
 
@@ -796,6 +817,11 @@ void AMOSurvivorController::CompleteSimpleJob(bool bSuccess)
 	// Clear harvest state
 	HarvestRecipeId = NAME_None;
 	bIsRecipeHarvest = false;
+
+	// Clear craft-job state
+	CraftStationActor.Reset();
+	CraftStorageActor.Reset();
+	CraftJobRecipeId = NAME_None;
 
 	UMOSurvivorJobQueueComponent* JobQueue = GetJobQueue();
 	if (JobQueue && CurrentJob.IsValid())
@@ -983,6 +1009,332 @@ void AMOSurvivorController::PerformSimpleJobAction()
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorController] PerformSimpleJobAction called for unhandled job type: %d"),
 			static_cast<int32>(CurrentJob.JobType));
 		break;
+	}
+}
+
+// ============================================================================
+// CRAFT-AT-STATION JOB (V0 village vertical slice)
+// ============================================================================
+
+UMOInventoryComponent* AMOSurvivorController::GetActorInventory(AActor* Actor) const
+{
+	if (!IsValid(Actor))
+	{
+		return nullptr;
+	}
+	if (Actor->Implements<UMOInventoryHolderInterface>())
+	{
+		if (UMOInventoryComponent* Inv = IMOInventoryHolderInterface::Execute_GetInventory(Actor))
+		{
+			return Inv;
+		}
+	}
+	return Actor->FindComponentByClass<UMOInventoryComponent>();
+}
+
+void AMOSurvivorController::StartCraftJobExecution()
+{
+	// Resolve job data. TargetActor carries the station, StorageActor the
+	// container (see EnqueueCraftJob).
+	CraftStationActor = CurrentJob.TargetActor;
+	CraftStorageActor = CurrentJob.StorageActor;
+	CraftJobRecipeId = CurrentJob.CraftRecipeId;
+
+	AActor* Station = CraftStationActor.Get();
+	AActor* Storage = CraftStorageActor.Get();
+	if (!Station || !Storage || CraftJobRecipeId.IsNone() ||
+		!UMORecipeDatabaseSettings::GetRecipeDefinition(CraftJobRecipeId))
+	{
+		UE_LOG(LogMOFramework, Warning,
+			TEXT("[MOSurvivorController] Craft job invalid (station=%s storage=%s recipe=%s)"),
+			Station ? *Station->GetName() : TEXT("null"),
+			Storage ? *Storage->GetName() : TEXT("null"),
+			*CraftJobRecipeId.ToString());
+		CompleteSimpleJob(false);
+		return;
+	}
+
+	SimpleJobState = 10; // moving to storage (withdraw leg)
+	SimpleJobTimer = 0.0f;
+	SimpleJobTargetLocation = Storage->GetActorLocation();
+	MoveToLocation(SimpleJobTargetLocation, 150.0f);
+
+	if (UMOSurvivorJobQueueComponent* JobQueue = GetJobQueue())
+	{
+		JobQueue->SetJobState(CurrentJob.JobId, EMOSurvivorJobState::MovingToTarget);
+	}
+
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorController] Craft job started: %s at %s (storage %s)"),
+		*CraftJobRecipeId.ToString(), *Station->GetName(), *Storage->GetName());
+}
+
+void AMOSurvivorController::UpdateCraftJobExecution(float DeltaTime)
+{
+	APawn* ControlledPawn = GetPawn();
+	UMOSurvivorJobQueueComponent* JobQueue = GetJobQueue();
+	if (!ControlledPawn)
+	{
+		CompleteSimpleJob(false);
+		return;
+	}
+
+	// Building actors have real footprints: accept arrival within interaction
+	// range, and treat a stalled path within a generous radius as arrival
+	// (nav edge vs mesh bounds), otherwise fail honestly - crafting REQUIRES
+	// standing at the station/storage, there is no craft-from-afar fallback.
+	auto UpdateMoveLeg = [&](float ArriveDist, float StallDist) -> int32
+	{
+		const float Distance = FVector::Dist2D(ControlledPawn->GetActorLocation(), SimpleJobTargetLocation);
+		if (Distance <= ArriveDist)
+		{
+			StopMovement();
+			return 1; // arrived
+		}
+		if (GetMoveStatus() != EPathFollowingStatus::Moving)
+		{
+			if (Distance <= StallDist)
+			{
+				StopMovement();
+				return 1; // close enough - nav stopped at the building's bounds
+			}
+			UE_LOG(LogMOFramework, Warning,
+				TEXT("[MOSurvivorController] Craft job move leg stalled %.0fuu from target - failing"), Distance);
+			return -1; // unreachable
+		}
+		return 0; // still moving
+	};
+
+	auto SetProgress = [&](float Progress)
+	{
+		if (JobQueue)
+		{
+			JobQueue->UpdateJobProgress(CurrentJob.JobId, Progress);
+		}
+	};
+
+	switch (SimpleJobState)
+	{
+	case 10: // moving to storage (withdraw leg)
+		{
+			const int32 Arrive = UpdateMoveLeg(250.0f, 600.0f);
+			if (Arrive < 0) { CompleteSimpleJob(false); return; }
+			if (Arrive > 0)
+			{
+				SimpleJobState = 11;
+				SimpleJobTimer = 0.0f;
+				if (JobQueue) { JobQueue->SetJobState(CurrentJob.JobId, EMOSurvivorJobState::Performing); }
+			}
+			SetProgress(0.05f);
+			break;
+		}
+
+	case 11: // withdrawing ingredients (timed handling)
+		{
+			SimpleJobTimer += DeltaTime;
+			SetProgress(0.05f + 0.15f * FMath::Clamp(SimpleJobTimer / FMath::Max(0.1f, CraftHandlingDuration), 0.0f, 1.0f));
+			if (SimpleJobTimer >= CraftHandlingDuration)
+			{
+				if (!TransferCraftIngredients())
+				{
+					CompleteSimpleJob(false);
+					return;
+				}
+				AActor* Station = CraftStationActor.Get();
+				if (!Station) { CompleteSimpleJob(false); return; }
+				SimpleJobState = 12;
+				SimpleJobTimer = 0.0f;
+				SimpleJobTargetLocation = Station->GetActorLocation();
+				MoveToLocation(SimpleJobTargetLocation, 150.0f);
+				if (JobQueue) { JobQueue->SetJobState(CurrentJob.JobId, EMOSurvivorJobState::MovingToTarget); }
+			}
+			break;
+		}
+
+	case 12: // moving to station
+		{
+			const int32 Arrive = UpdateMoveLeg(250.0f, 600.0f);
+			if (Arrive < 0) { CompleteSimpleJob(false); return; }
+			if (Arrive > 0)
+			{
+				UMOCraftingQueueComponent* CraftQueue = ControlledPawn->FindComponentByClass<UMOCraftingQueueComponent>();
+				const FMORecipeDefinitionRow* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(CraftJobRecipeId);
+				if (!CraftQueue || !Recipe)
+				{
+					CompleteSimpleJob(false);
+					return;
+				}
+				// We are standing at the station: pass its type (or the
+				// recipe's requirement as fallback) so station-gated recipes
+				// validate. The REAL crafting queue takes over from here -
+				// real ingredient consume, real duration, real outputs.
+				EMOCraftingStation StationType = Recipe->RequiredStation;
+				if (const AMOCraftingStationActor* StationActor = Cast<AMOCraftingStationActor>(CraftStationActor.Get()))
+				{
+					StationType = StationActor->GetStationType();
+				}
+				if (!CraftQueue->EnqueueCraft(CraftJobRecipeId, 1, StationType))
+				{
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorController] Craft enqueue failed for %s"),
+						*CraftJobRecipeId.ToString());
+					CompleteSimpleJob(false);
+					return;
+				}
+				SimpleJobState = 13;
+				SimpleJobTimer = 0.0f;
+				if (JobQueue) { JobQueue->SetJobState(CurrentJob.JobId, EMOSurvivorJobState::Performing); }
+			}
+			SetProgress(0.25f);
+			break;
+		}
+
+	case 13: // crafting - the real crafting queue runs at real duration
+		{
+			UMOCraftingQueueComponent* CraftQueue = ControlledPawn->FindComponentByClass<UMOCraftingQueueComponent>();
+			if (!CraftQueue)
+			{
+				CompleteSimpleJob(false);
+				return;
+			}
+			if (CraftQueue->IsQueueEmpty())
+			{
+				// Craft finished - outputs are in the pawn inventory. Head back.
+				AActor* Storage = CraftStorageActor.Get();
+				if (!Storage) { CompleteSimpleJob(false); return; }
+				SimpleJobState = 14;
+				SimpleJobTimer = 0.0f;
+				SimpleJobTargetLocation = Storage->GetActorLocation();
+				MoveToLocation(SimpleJobTargetLocation, 150.0f);
+				if (JobQueue) { JobQueue->SetJobState(CurrentJob.JobId, EMOSurvivorJobState::Returning); }
+				break;
+			}
+			if (!CraftQueue->IsCraftingActive())
+			{
+				// An interrupt (movement/endplay) paused the queue while we
+				// stand at the station - resume, the survivor isn't going anywhere.
+				CraftQueue->StartCrafting();
+			}
+			FMOCraftingQueueEntry Current;
+			if (CraftQueue->GetCurrentCraft(Current))
+			{
+				SetProgress(0.3f + 0.5f * FMath::Clamp(Current.Progress, 0.0f, 1.0f));
+			}
+			break;
+		}
+
+	case 14: // returning to storage (deposit leg)
+		{
+			const int32 Arrive = UpdateMoveLeg(250.0f, 600.0f);
+			if (Arrive < 0) { CompleteSimpleJob(false); return; }
+			if (Arrive > 0)
+			{
+				SimpleJobState = 15;
+				SimpleJobTimer = 0.0f;
+				if (JobQueue) { JobQueue->SetJobState(CurrentJob.JobId, EMOSurvivorJobState::Performing); }
+			}
+			SetProgress(0.85f);
+			break;
+		}
+
+	case 15: // depositing outputs (timed handling)
+		{
+			SimpleJobTimer += DeltaTime;
+			SetProgress(0.85f + 0.15f * FMath::Clamp(SimpleJobTimer / FMath::Max(0.1f, CraftHandlingDuration), 0.0f, 1.0f));
+			if (SimpleJobTimer >= CraftHandlingDuration)
+			{
+				DepositCraftOutputs();
+
+				CurrentJob.CompletedCount++;
+				if (CurrentJob.CompletedCount >= CurrentJob.RepeatCount)
+				{
+					CompleteSimpleJob(true);
+				}
+				else
+				{
+					StartSimpleJobExecution(); // next iteration: full loop again
+				}
+			}
+			break;
+		}
+
+	default:
+		CompleteSimpleJob(false);
+		break;
+	}
+}
+
+bool AMOSurvivorController::TransferCraftIngredients()
+{
+	APawn* ControlledPawn = GetPawn();
+	const FMORecipeDefinitionRow* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(CraftJobRecipeId);
+	UMOInventoryComponent* StorageInv = GetActorInventory(CraftStorageActor.Get());
+	UMOInventoryComponent* PawnInv = ControlledPawn ? ControlledPawn->FindComponentByClass<UMOInventoryComponent>() : nullptr;
+	if (!Recipe || !StorageInv || !PawnInv)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorController] Craft withdraw failed: recipe/storage/pawn inventory missing"));
+		return false;
+	}
+
+	// All-or-nothing check first so a partial withdraw never strands materials.
+	for (const FMORecipeIngredient& Ing : Recipe->Ingredients)
+	{
+		if (!Ing.ItemDefinitionId.IsNone() && !StorageInv->HasItem(Ing.ItemDefinitionId, Ing.Quantity))
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorController] Storage lacks %dx %s for %s"),
+				Ing.Quantity, *Ing.ItemDefinitionId.ToString(), *CraftJobRecipeId.ToString());
+			return false;
+		}
+	}
+
+	for (const FMORecipeIngredient& Ing : Recipe->Ingredients)
+	{
+		if (Ing.ItemDefinitionId.IsNone())
+		{
+			continue;
+		}
+		// Stackable material transfer: fresh GUID on the receiving side (same
+		// as the crafting subsystem's material-gather path). Identity-tracked
+		// transfer of specific instances is a non-goal for materials.
+		StorageInv->RemoveItemByDefinitionId(Ing.ItemDefinitionId, Ing.Quantity);
+		PawnInv->AddItemByGuid(FGuid::NewGuid(), Ing.ItemDefinitionId, Ing.Quantity);
+	}
+
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorController] Withdrew ingredients for %s from %s"),
+		*CraftJobRecipeId.ToString(), *CraftStorageActor->GetName());
+	return true;
+}
+
+void AMOSurvivorController::DepositCraftOutputs()
+{
+	APawn* ControlledPawn = GetPawn();
+	const FMORecipeDefinitionRow* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(CraftJobRecipeId);
+	UMOInventoryComponent* StorageInv = GetActorInventory(CraftStorageActor.Get());
+	UMOInventoryComponent* PawnInv = ControlledPawn ? ControlledPawn->FindComponentByClass<UMOInventoryComponent>() : nullptr;
+	if (!Recipe || !StorageInv || !PawnInv)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorController] Craft deposit skipped: recipe/storage/pawn inventory missing"));
+		return;
+	}
+
+	for (const FMORecipeOutput& Out : Recipe->Outputs)
+	{
+		if (Out.ItemDefinitionId.IsNone())
+		{
+			continue;
+		}
+		const int32 Have = PawnInv->GetItemCountByDefinitionId(Out.ItemDefinitionId);
+		const int32 Move = FMath::Min(Have, Out.Quantity);
+		if (Move > 0)
+		{
+			PawnInv->RemoveItemByDefinitionId(Out.ItemDefinitionId, Move);
+			StorageInv->AddItemByGuid(FGuid::NewGuid(), Out.ItemDefinitionId, Move);
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorController] Deposited %dx %s to %s"),
+				Move, *Out.ItemDefinitionId.ToString(), *CraftStorageActor->GetName());
+		}
+		else
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorController] Expected output %s not in pawn inventory - nothing to deposit"),
+				*Out.ItemDefinitionId.ToString());
+		}
 	}
 }
 
