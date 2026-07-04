@@ -554,6 +554,62 @@ def cmd_save(a):
     print(out)
 
 
+EDITOR_APP = "EditorToolset.EditorAppToolset"
+
+
+def cmd_asset(a):
+    """Asset verbs (pipeline A-track). shot = render an asset thumbnail or the
+    level/PIE viewport to a PNG the agent can Read for visual QA (A3)."""
+    if a.action == "shot":
+        import base64
+        out_path = os.path.abspath(a.out)
+        out_dir = os.path.dirname(os.path.abspath(a.out))
+        if a.target.lower() == "pie":
+            # CaptureViewport shoots the EDITOR scene view, which is a black
+            # empty world while a game is running (verified 2026-07-04) — the
+            # A3 gap-risk fallback captures the actual PIE game view instead:
+            # HighResShot renders to Saved/Screenshots, we wait and collect.
+            import shutil
+            shots_dir = os.path.join(ROOT, "Saved", "Screenshots", "WindowsEditor")
+            before = set(os.listdir(shots_dir)) if os.path.isdir(shots_dir) else set()
+            ok, _lines, _ = bridge_run(["HighResShot 1920x1080"], timeout=10, want_log=False)
+            if not ok:
+                _die(2, "bridge not responding")
+            new_shot = None
+            for _ in range(30):
+                time.sleep(1)
+                now = set(os.listdir(shots_dir)) if os.path.isdir(shots_dir) else set()
+                fresh = [f for f in now - before if f.lower().endswith(".png")]
+                if fresh:
+                    new_shot = os.path.join(shots_dir, sorted(fresh)[-1])
+                    time.sleep(1)  # let the writer finish
+                    break
+            if not new_shot:
+                _die(2, "no screenshot appeared in " + shots_dir + " (is PIE running?)")
+            if out_dir:
+                os.makedirs(out_dir, exist_ok=True)
+            shutil.copyfile(new_shot, os.path.abspath(a.out))
+            print(f"[shot] pie (HighResShot) -> {os.path.abspath(a.out)} ({_size(a.out)} bytes)")
+            return
+        if a.target.lower() == "viewport":
+            # The binding demands every param key be PRESENT (null = use default);
+            # {} is rejected with "needs a default value".
+            r = mcp_call(EDITOR_APP, "CaptureViewport",
+                         {"captureTransform": None, "annotations": None})
+            img = r.get("image") if isinstance(r, dict) else None
+        else:
+            r = mcp_call(EDITOR_APP, "CaptureAssetImage", {"assetPath": a.target})
+            img = r if isinstance(r, dict) and "data" in r else None
+        if not img or not img.get("data"):
+            _die(2, f"capture failed: {r!r:.400}")
+        d = os.path.dirname(out_path)
+        if d:
+            os.makedirs(d, exist_ok=True)
+        with open(out_path, "wb") as f:
+            f.write(base64.b64decode(img["data"]))
+        print(f"[shot] {a.target} -> {out_path} ({_size(out_path)} bytes, {img.get('mimeType', '?')})")
+
+
 def cmd_refresh_data(a):
     ok, lines, _ = bridge_run([
         'py:unreal.MORecipeDatabaseSettings.invalidate_cache(); '
@@ -766,6 +822,12 @@ def main():
     s.add_argument("--file", help='JSON file {"RowName": {field: value}} (set)')
     s.add_argument("--no-save", action="store_true")
     s.set_defaults(fn=cmd_rows)
+
+    s = sub.add_parser("asset", help="asset verbs: shot <assetPath|viewport> <out.png> (visual QA, A3)")
+    s.add_argument("action", choices=["shot"])
+    s.add_argument("target", help="asset path (/Game/...) for a thumbnail render, 'pie' for the game view (HighResShot), or 'viewport' for the editor scene view")
+    s.add_argument("out", help="output .png path")
+    s.set_defaults(fn=cmd_asset)
 
     s = sub.add_parser("save", help="save an asset via MCP")
     s.add_argument("asset")

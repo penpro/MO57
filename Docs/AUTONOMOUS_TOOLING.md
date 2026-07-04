@@ -130,6 +130,30 @@ production chain — they need recipes/loot to be obtainable, and treatment-cons
 logic should keep the reusable splint/blanket/tourniquet. Icons/meshes are
 placeholder pending art.
 
+## Hit / miss record — A3 visual-QA rung (2026-07-04)
+
+`ue.py asset shot <target> <out.png>` — the loop can now SEE. Three capture
+paths probed on `EditorToolset.EditorAppToolset`:
+
+**HITS**
+- `CaptureAssetImage {assetPath}` → base64 PNG thumbnail of any mesh/material/
+  texture. Gate proof: Megascans stick renders and *reads as a stick*.
+  Exposed as `ue.py asset shot /Game/... out.png`.
+- **`HighResShot` via bridge = THE PIE game-view capture** (`ue.py asset shot
+  pie out.png`): boot → shot → 3.2MB 1920x1080 of the possessed survivor on
+  voxel terrain. First-ever agent visual QA of the running game — and it
+  immediately surfaced a real finding: a mirrored-terrain band across the sky
+  (water-plane/reflection artifact, logged as a P-track lead).
+- Param quirk: the toolset bindings REQUIRE every param key present —
+  `{}` → "needs a default value"; pass explicit `null` for optionals.
+
+**MISSES / FRICTION**
+- `CaptureViewport` shoots the **editor scene view only** — during PIE it
+  returns the empty editor world (black + axis gizmo), NOT the game. The A3
+  gap-risk fallback (HighResShot) is therefore the canonical PIE path.
+- Git Bash mangles `/Game/...` into `C:/Program Files/Git/Game/...` — call
+  with `MSYS_NO_PATHCONV=1` (or from PowerShell).
+
 ## MO.Test.* runtime harness + closed-loop verification (2026-07-01, UE 5.8)
 
 The eyes now close the loop with **zero screenshots**. Two pieces:
