@@ -135,6 +135,7 @@ private:
 		TObjectPtr<UStaticMesh> Mesh = nullptr;
 		FName HISMTag;
 		FName BiomeId;
+		bool bAutoSweep = false;
 		TArray<FTransform> Transforms;
 	};
 };

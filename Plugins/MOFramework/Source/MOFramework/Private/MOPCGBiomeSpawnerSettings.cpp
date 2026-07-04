@@ -249,6 +249,7 @@ bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 			Bucket.Mesh = Mesh;
 			Bucket.HISMTag = Sp.HISMTag;
 			Bucket.BiomeId = Chosen->Id;
+			Bucket.bAutoSweep = Sp.bAutoSweepOnTerraform;
 			Bucket.Transforms.Add(Xf);
 			++TotalAccepted;
 		}
@@ -280,6 +281,14 @@ bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 		Params.Descriptor.bAffectDynamicIndirectLighting = false;
 		Params.Descriptor.ComponentTags.Add(Bucket.HISMTag);
 		Params.Descriptor.ComponentTags.Add(FName(*FString::Printf(TEXT("MOBiome_%s"), *Bucket.BiomeId.ToString())));
+		if (Bucket.bAutoSweep)
+		{
+			// Opt decorative ground cover into the terrain-mod subsystem's
+			// terraform sweep (its AutoSweepTags allowlist — "grass").
+			// Harvestable species stay un-tagged and persist as interaction
+			// targets when nearby ground is dug.
+			Params.Descriptor.ComponentTags.Add(FName(TEXT("grass")));
+		}
 		Params.NumCustomDataFloats = 0;
 		// LOAD-BEARING, two layers (verified UE5.8 sources + live dumps):
 		// 1. FISMComponentDescriptor equality/hash EXCLUDES ComponentTags, so

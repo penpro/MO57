@@ -518,6 +518,12 @@ protected:
 private:
 	bool ResolveViewpoint(FVector& OutLocation, FRotator& OutRotation) const;
 
+	/** Register a successful sculpt as worked ground (zone + immediate sweep).
+	 *  Called from TerraformAtLocation so EVERY public sculpt entry persists
+	 *  its zone — not only the timed-action path (which registers in
+	 *  ApplyPendingTerraform with its own no-subsystem fallback). */
+	void RegisterWorkedGround(const FVector& Location);
+
 	// Height sculpting operations
 	bool HeightDig(const FVector2D& Location);
 	bool HeightRaise(const FVector2D& Location);

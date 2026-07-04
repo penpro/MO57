@@ -201,12 +201,15 @@ bool UMOTerraformingComponent::TerraformAtLocation(const FVector& WorldLocation,
 		return false;
 	}
 
+	bool bSuccess = false;
 	switch (Mode)
 	{
 	case EMOTerraformMode::Dig:
-		return Dig(WorldLocation);
+		bSuccess = Dig(WorldLocation);
+		break;
 	case EMOTerraformMode::Raise:
-		return Raise(WorldLocation);
+		bSuccess = Raise(WorldLocation);
+		break;
 	case EMOTerraformMode::Flatten:
 		{
 			// Resolve the flatten target Z. Default: character's feet (the
@@ -227,14 +230,39 @@ bool UMOTerraformingComponent::TerraformAtLocation(const FVector& WorldLocation,
 					TargetHeight = WorldLocation.Z;
 				}
 			}
-			return Flatten(WorldLocation, TargetHeight);
+			bSuccess = Flatten(WorldLocation, TargetHeight);
+			break;
 		}
 	case EMOTerraformMode::Smooth:
-		return Smooth(WorldLocation);
+		bSuccess = Smooth(WorldLocation);
+		break;
 	case EMOTerraformMode::RemoveFoliage:
-		return RemoveFoliage(WorldLocation);
+		bSuccess = RemoveFoliage(WorldLocation);
+		break;
 	default:
 		return false;
+	}
+
+	// Every successful sculpt is "worked ground" — register + sweep here, at
+	// the PUBLIC entry, not only in ApplyPendingTerraform. Before this,
+	// BlueprintCallable callers (BP, mods, test harness) mutated voxels with
+	// NO RegisterModifiedZone: the edit never persisted and PCG scatter
+	// respawned in the crater — the exact bug class the ServerApplyTerraform
+	// comment documents for the old remote-client path.
+	if (bSuccess)
+	{
+		RegisterWorkedGround(WorldLocation);
+	}
+	return bSuccess;
+}
+
+void UMOTerraformingComponent::RegisterWorkedGround(const FVector& Location)
+{
+	if (UMOTerrainModificationSubsystem* TerrainMod = UMOTerrainModificationSubsystem::Get(this))
+	{
+		TerrainMod->RegisterModifiedZone(Location, Config.Radius);
+		// Immediate sweep: clears scatter already standing in the new zone.
+		TerrainMod->SweepModifiedZones();
 	}
 }
 

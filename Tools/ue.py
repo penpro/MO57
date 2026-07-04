@@ -246,7 +246,11 @@ def mcp_call(toolset, tool, args, _retried=False):
                                                 "tool_name": tool,
                                                 "arguments": args}}})
     out = _mcp_parse(_curl(body, sid))
-    if out is None and not _retried:
+    # {} means the server rejected our SESSION (a jsonrpc error has no
+    # "result" key, so parse yields {}) — happens after every editor
+    # relaunch while the cached session id points at the dead instance.
+    # Reconnect once, same as a dead-transport None.
+    if (out is None or out == {}) and not _retried:
         if mcp_connect():
             return mcp_call(toolset, tool, args, _retried=True)
     return out

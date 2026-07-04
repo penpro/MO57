@@ -63,6 +63,15 @@ struct MOFRAMEWORK_API FMOBiomeSpeciesEntry
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Biome|Species")
 	FName HISMTag;
 
+	/**
+	 * Decorative ground cover: swept away when the ground under it is
+	 * terraformed (adds the terrain-mod subsystem's "grass" AutoSweep tag).
+	 * Leave FALSE for harvestable species (trees/rocks) — those persist as
+	 * explicit interaction targets and are never auto-yanked by a dig.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Biome|Species")
+	bool bAutoSweepOnTerraform = false;
+
 	/** Random uniform scale range applied per instance. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Biome|Species", meta=(ClampMin="0.01"))
 	float MinScale = 0.85f;
