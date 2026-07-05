@@ -48,6 +48,7 @@
 
 class UStaticMesh;
 class UInstancedStaticMeshComponent;
+class UDataTable;
 
 UCLASS(BlueprintType, ClassGroup=(MO))
 class MOFRAMEWORK_API UMOPCGBiomeSpawnerSettings : public UPCGSettings
@@ -81,13 +82,16 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Biome", meta = (PCG_Overridable))
 	int32 SeedOffset = 0;
 
-	/** Moisture noise period in UU (low frequency = large coherent regions). */
+	/** Moisture noise period in UU (low frequency = large coherent regions).
+	 *  A biome region spans roughly half a period — 300k UU ≈ 1.5 km regions
+	 *  (look-review verdict 2026-07-04: the small test regions read as noise,
+	 *  real biomes should be 10-50x that). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Biome", meta = (PCG_Overridable, ClampMin = "1000"))
-	float MoistureNoisePeriod = 40000.0f;
+	float MoistureNoisePeriod = 300000.0f;
 
 	/** Temperature noise period in UU. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Biome", meta = (PCG_Overridable, ClampMin = "1000"))
-	float TemperatureNoisePeriod = 60000.0f;
+	float TemperatureNoisePeriod = 450000.0f;
 
 	// ============================================================================
 	// DENSITY
@@ -107,6 +111,18 @@ public:
 	/** Skip points inside terraformed zones (never scatter on worked ground). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawning", meta = (PCG_Overridable))
 	bool bRespectTerrainModifications = true;
+
+	/**
+	 * DT_ResourceNodes table (FMOResourceNodeDefinitionRow) used to resolve
+	 * species ResourceNodeId into the full harvest tag bundle. Same asset the
+	 * MO Resource Spawner points at.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawning")
+	TObjectPtr<UDataTable> ResourceNodeDataTable;
+
+	/** Register MOResource_<Id> tag-item mappings with the PCG interaction subsystem. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawning")
+	bool bRegisterWithSubsystem = true;
 
 	/** Collision profile for the created HISM components. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawning")
@@ -135,6 +151,7 @@ private:
 		TObjectPtr<UStaticMesh> Mesh = nullptr;
 		FName HISMTag;
 		FName BiomeId;
+		FName ResourceNodeId;
 		bool bAutoSweep = false;
 		TArray<FTransform> Transforms;
 	};

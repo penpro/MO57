@@ -55,13 +55,52 @@ struct MOFRAMEWORK_API FMOBiomeSpeciesEntry
 	float ClusterRadius = 0.0f;
 
 	/**
-	 * HISM component tag applied to this species' instances. The harvest /
-	 * interaction path resolves what an instance IS from this tag (existing
-	 * MOResource_* convention) — an untagged species is scenery the player
-	 * can't interact with, so validation requires it.
+	 * Oasis/canopy grouping: species sharing a ClusterGroup (>= 0) within a
+	 * biome sample the SAME clump-noise field, so they co-locate into natural
+	 * stands — trees as the top cap, bushes/saplings as undergrowth around
+	 * them. -1 = independent scatter (no shared field).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Biome|Species")
+	int32 ClusterGroup = -1;
+
+	/**
+	 * Where in the shared clump this species lives (only used when
+	 * ClusterGroup >= 0): the clump field is 0..1 and the species spawns
+	 * where field >= ClusterCore. High (0.75+) = clump cores only (canopy
+	 * trees). Mid (0.5) = core + surrounding ring (undergrowth). Density is
+	 * auto-compensated so the authored per-hectare rate is preserved.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Biome|Species", meta=(ClampMin="0.0", ClampMax="0.95"))
+	float ClusterCore = 0.6f;
+
+	/**
+	 * HISM component tag for DECORATIVE species (no ResourceNodeId). When
+	 * ResourceNodeId is set the full harvest tag bundle replaces this.
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Biome|Species")
 	FName HISMTag;
+
+	/**
+	 * DT_ResourceNodes row for HARVESTABLE species (trees, rocks, bushes).
+	 * Applies the exact tag bundle the native resource spawner uses
+	 * (Name/MOResource_/Action_/Gives_/RequiresTool_/KeepOnHarvest +
+	 * ResourceNode_<Id>) and registers the interaction-subsystem mapping —
+	 * biome scatter is fully interactable, not scenery. None = decorative.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Biome|Species")
+	FName ResourceNodeId;
+
+	/**
+	 * Align to the terrain normal (rocks/debris). FALSE (default) = grow
+	 * world-up with a small random tilt — trees on slopes must NOT lean with
+	 * the surface normal or they read wonky.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Biome|Species")
+	bool bAlignToSurfaceNormal = false;
+
+	/** Max random tilt from vertical in degrees (world-up species). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Biome|Species", meta=(ClampMin="0.0", ClampMax="45.0"))
+	float MaxRandomTiltDeg = 8.0f;
 
 	/**
 	 * Decorative ground cover: swept away when the ground under it is
@@ -136,4 +175,13 @@ struct MOFRAMEWORK_API FMOBiomeDefinitionRow : public FTableRowBase
 	/** Scatterable species palette. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Biome|Species")
 	TArray<FMOBiomeSpeciesEntry> Species;
+
+	/** Band test shared by the spawner and the mask query — keep in ONE place. */
+	bool Contains(float Height, float SlopeDeg, float Moisture, float Temperature) const
+	{
+		return Height >= HeightMin && Height <= HeightMax
+			&& SlopeDeg >= SlopeMinDeg && SlopeDeg <= SlopeMaxDeg
+			&& Moisture >= MoistureMin && Moisture <= MoistureMax
+			&& Temperature >= TemperatureMin && Temperature <= TemperatureMax;
+	}
 };

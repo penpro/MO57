@@ -1,6 +1,8 @@
 #include "MOPCGBiomeSpawnerSettings.h"
 #include "MOFramework.h"
 #include "MOBiomeDatabaseSettings.h"
+#include "MOResourceNodeDefinitionRow.h"
+#include "MOPCGInteractionSubsystem.h"
 #include "MOTerrainModificationSubsystem.h"
 
 #include "PCGComponent.h"
@@ -60,29 +62,11 @@ TArray<FPCGPinProperties> UMOPCGBiomeSpawnerSettings::OutputPinProperties() cons
 
 namespace
 {
-	/** Seeded 0..1 Perlin sample over world XY with the given period. */
-	float SampleClimateNoise(const FVector& Location, float PeriodUU, int32 Seed)
-	{
-		// Fold the seed into a domain offset — PerlinNoise2D has no seed param.
-		const float OffsetX = (Seed % 8887) * 131.7f;
-		const float OffsetY = ((Seed / 8887) % 8887) * 313.1f;
-		const FVector2D Sample(Location.X / PeriodUU + OffsetX, Location.Y / PeriodUU + OffsetY);
-		return FMath::Clamp(FMath::PerlinNoise2D(Sample) * 0.5f + 0.5f, 0.0f, 1.0f);
-	}
-
 	/** Surface slope in degrees from the point's up vector (identity = flat). */
 	float PointSlopeDeg(const FPCGPoint& Point)
 	{
 		const FVector Up = Point.Transform.GetRotation().GetUpVector();
 		return FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(Up.Z, -1.0f, 1.0f)));
-	}
-
-	bool BiomeContains(const FMOBiomeDefinitionRow& Biome, float Height, float SlopeDeg, float Moisture, float Temperature)
-	{
-		return Height >= Biome.HeightMin && Height <= Biome.HeightMax
-			&& SlopeDeg >= Biome.SlopeMinDeg && SlopeDeg <= Biome.SlopeMaxDeg
-			&& Moisture >= Biome.MoistureMin && Moisture <= Biome.MoistureMax
-			&& Temperature >= Biome.TemperatureMin && Temperature <= Biome.TemperatureMax;
 	}
 }
 
@@ -173,15 +157,17 @@ bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 				continue;
 			}
 
-			const float Moisture = SampleClimateNoise(Location, Settings->MoistureNoisePeriod, Seed);
-			const float Temperature = SampleClimateNoise(Location, Settings->TemperatureNoisePeriod, Seed + 7919);
+			// Shared mask math (UMOBiomeDatabaseSettings) so tests/tools can
+			// query the same field this spawner realizes.
+			const float Moisture = UMOBiomeDatabaseSettings::ClimateNoise(Location, Settings->MoistureNoisePeriod, Seed);
+			const float Temperature = UMOBiomeDatabaseSettings::ClimateNoise(Location, Settings->TemperatureNoisePeriod, Seed + 7919);
 			const float SlopeDeg = PointSlopeDeg(Point);
 
 			// Highest-priority biome whose bands contain this sample.
 			const FBiomeEntry* Chosen = nullptr;
 			for (const FBiomeEntry& E : Biomes)
 			{
-				if (BiomeContains(*E.Row, Location.Z, SlopeDeg, Moisture, Temperature))
+				if (E.Row->Contains(Location.Z, SlopeDeg, Moisture, Temperature))
 				{
 					Chosen = &E;
 					break;
@@ -193,8 +179,12 @@ bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 			}
 
 			// Density-scaled species pick: each point is one scatter slot;
-			// expected instances/point for species s = Density_s / InputPPH,
-			// cluster noise concentrates (x2 in clumps, 0 between).
+			// expected instances/point for species s = Density_s / InputPPH.
+			// ClusterGroup >= 0: species in the same group sample ONE shared
+			// clump field, spawning only where field >= their ClusterCore —
+			// canopy trees at clump cores, undergrowth in the wider ring
+			// around them (oasis/top-cap look). Acceptance is rescaled by the
+			// surviving area fraction so authored per-hectare rates hold.
 			float Acceptance[64];
 			float TotalAcceptance = 0.0f;
 			const int32 NumSpecies = FMath::Min(Chosen->Row->Species.Num(), 64);
@@ -202,8 +192,28 @@ bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 			{
 				const FMOBiomeSpeciesEntry& Sp = Chosen->Row->Species[i];
 				float P = (Chosen->LoadedMeshes[i] ? Sp.DensityPerHectare / Settings->InputPointsPerHectare : 0.0f);
-				if (P > 0.0f && Sp.ClusterRadius > 0.0f)
+				if (P > 0.0f && Sp.ClusterGroup >= 0)
 				{
+					// Shared field per (biome, group): offsets depend on the
+					// GROUP, not the species, so group members co-locate.
+					const float Period = FMath::Max(Sp.ClusterRadius * 4.0f, 1000.0f);
+					const float Clump01 = FMath::Clamp(FMath::PerlinNoise2D(FVector2D(
+						Location.X / Period + Sp.ClusterGroup * 53.7f,
+						Location.Y / Period - Sp.ClusterGroup * 71.3f)) * 0.5f + 0.5f, 0.0f, 1.0f);
+					if (Clump01 < Sp.ClusterCore)
+					{
+						P = 0.0f;
+					}
+					else
+					{
+						// Compensate for the culled area (clamped: the clump
+						// cores shouldn't exceed 4x local concentration).
+						P *= FMath::Min(1.0f / FMath::Max(1.0f - Sp.ClusterCore, 0.25f), 4.0f);
+					}
+				}
+				else if (P > 0.0f && Sp.ClusterRadius > 0.0f)
+				{
+					// Ungrouped legacy clustering: per-species clump noise.
 					const float Clump = FMath::PerlinNoise2D(FVector2D(
 						Location.X / FMath::Max(Sp.ClusterRadius * 4.0f, 1.0f) + i * 17.3f,
 						Location.Y / FMath::Max(Sp.ClusterRadius * 4.0f, 1.0f) - i * 29.1f));
@@ -241,14 +251,29 @@ bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 			FTransform Xf = Point.Transform;
 			const float Scale = RandomStream.FRandRange(Sp.MinScale, Sp.MaxScale);
 			Xf.SetScale3D(FVector(Scale));
-			// Random yaw so scatter doesn't read as a grid.
-			Xf.SetRotation(FQuat(FVector::UpVector, RandomStream.FRandRange(0.0f, 2.0f * PI)) * Xf.GetRotation());
+			const float Yaw = RandomStream.FRandRange(0.0f, 2.0f * PI);
+			if (Sp.bAlignToSurfaceNormal)
+			{
+				// Rocks/debris: sit on the surface as sampled, random yaw.
+				Xf.SetRotation(FQuat(FVector::UpVector, Yaw) * Xf.GetRotation());
+			}
+			else
+			{
+				// Trees & upright plants: grow toward WORLD UP with only a
+				// small random tilt. Inheriting the surface normal makes
+				// slope trees lean wonky — real trunks grow against gravity.
+				const float TiltRad = FMath::DegreesToRadians(RandomStream.FRandRange(0.0f, Sp.MaxRandomTiltDeg));
+				const float TiltDir = RandomStream.FRandRange(0.0f, 2.0f * PI);
+				const FQuat Tilt(FVector(FMath::Cos(TiltDir), FMath::Sin(TiltDir), 0.0f), TiltRad);
+				Xf.SetRotation(Tilt * FQuat(FVector::UpVector, Yaw));
+			}
 
 			const FString Key = FString::Printf(TEXT("%s|%s"), *Mesh->GetPathName(), *Chosen->Id.ToString());
 			FSpeciesBucket& Bucket = Buckets.FindOrAdd(Key);
 			Bucket.Mesh = Mesh;
 			Bucket.HISMTag = Sp.HISMTag;
 			Bucket.BiomeId = Chosen->Id;
+			Bucket.ResourceNodeId = Sp.ResourceNodeId;
 			Bucket.bAutoSweep = Sp.bAutoSweepOnTerraform;
 			Bucket.Transforms.Add(Xf);
 			++TotalAccepted;
@@ -279,7 +304,49 @@ bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 		Params.Descriptor.bCastShadow = Settings->bCastShadows;
 		Params.Descriptor.bAffectDistanceFieldLighting = false;
 		Params.Descriptor.bAffectDynamicIndirectLighting = false;
-		Params.Descriptor.ComponentTags.Add(Bucket.HISMTag);
+
+		// HARVESTABLE species: apply the exact tag bundle the native resource
+		// spawner derives from DT_ResourceNodes (Name/MOResource_/Action_/
+		// Gives_/RequiresTool_/KeepOnHarvest + ResourceNode_<Id>) and register
+		// the interaction mapping. Biome trees/rocks are REAL interaction
+		// targets, not scenery. Decorative species fall back to HISMTag.
+		const FMOResourceNodeDefinitionRow* ResourceDef = nullptr;
+		if (!Bucket.ResourceNodeId.IsNone() && Settings->ResourceNodeDataTable)
+		{
+			ResourceDef = Settings->ResourceNodeDataTable->FindRow<FMOResourceNodeDefinitionRow>(
+				Bucket.ResourceNodeId, TEXT("MOBiomeSpawner"), /*bWarnIfRowMissing=*/false);
+			if (!ResourceDef)
+			{
+				UE_LOG(LogMOFramework, Warning,
+					TEXT("[MOBiomeSpawner] ResourceNodeId '%s' not in ResourceNodeDataTable - species stays decorative"),
+					*Bucket.ResourceNodeId.ToString());
+			}
+		}
+		if (ResourceDef)
+		{
+			for (const FName& Tag : ResourceDef->GetAllTags())
+			{
+				Params.Descriptor.ComponentTags.AddUnique(Tag);
+			}
+			Params.Descriptor.ComponentTags.AddUnique(
+				FName(*FString::Printf(TEXT("ResourceNode_%s"), *Bucket.ResourceNodeId.ToString())));
+			if (Settings->bRegisterWithSubsystem)
+			{
+				if (UWorld* World = TargetActor->GetWorld())
+				{
+					if (UMOPCGInteractionSubsystem* PCGSubsystem = World->GetSubsystem<UMOPCGInteractionSubsystem>())
+					{
+						PCGSubsystem->RegisterTagItemMapping(
+							FName(*FString::Printf(TEXT("MOResource_%s"), *Bucket.ResourceNodeId.ToString())),
+							Bucket.ResourceNodeId);
+					}
+				}
+			}
+		}
+		else if (!Bucket.HISMTag.IsNone())
+		{
+			Params.Descriptor.ComponentTags.Add(Bucket.HISMTag);
+		}
 		Params.Descriptor.ComponentTags.Add(FName(*FString::Printf(TEXT("MOBiome_%s"), *Bucket.BiomeId.ToString())));
 		if (Bucket.bAutoSweep)
 		{

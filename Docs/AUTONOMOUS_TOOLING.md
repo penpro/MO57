@@ -204,6 +204,23 @@ MCP: console `ModelContextProtocol.StartServer`.
   transient world-state probes must poll, and per-execution [MOBiomeSpawner]
   bucket logs are the ground truth for what the node produced.
 
+## P4 look-feedback round (2026-07-04) — probe deterministic math, don't travel
+
+Wes's look-review drove 5 changes (harvest registration, upright trees,
+prairie density /4, oasis clusters, 10-50x biome scale). Verification lessons:
+- **Query the mask, don't teleport to it.** Proving "biomes are big regions"
+  by flying a probe pawn 175k UU failed three ways (ocean headings, voxel-gen
+  latency, teleport churn fighting streaming). The mask is pure math — it's
+  now exposed as `UMOBiomeDatabaseSettings.ResolveBiomeAt` (shared with the
+  spawner so they can't drift) and the gate samples a 16x16 grid: 2 biomes,
+  contiguity 0.86, in milliseconds.
+- Scatter never spawns below sea level now (biome HeightMin=-100): the first
+  ocean-probe teleport revealed the Meadow catch-all would have carpeted the
+  seafloor in grass.
+- Leads filed: spawn placement doesn't avoid tree clumps (survivor can spawn
+  inside a canopy); forest clump compensation (~3.3x local density) may want
+  tuning once aerial-vantage shot tooling exists.
+
 ## MO.Test.* runtime harness + closed-loop verification (2026-07-01, UE 5.8)
 
 The eyes now close the loop with **zero screenshots**. Two pieces:

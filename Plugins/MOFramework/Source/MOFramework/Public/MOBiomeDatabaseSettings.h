@@ -54,6 +54,21 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Biome Database")
 	static bool IsConfigured();
 
+	/** Seeded 0..1 climate noise over world XY — THE mask function; the PCG
+	 *  biome spawner and any query path must share it or they drift. */
+	static float ClimateNoise(const FVector& Location, float PeriodUU, int32 Seed);
+
+	/**
+	 * Resolve which biome the mask assigns at a world position (highest
+	 * Priority whose bands contain the sample). Pure deterministic math over
+	 * DT_Biomes — usable from tests/tools without visiting the location.
+	 * Height/slope are caller-supplied (pass nominal land values for map-scale
+	 * structure queries).
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Biome Database")
+	static FName ResolveBiomeAt(FVector Location, float Height, float SlopeDeg,
+		int32 Seed, float MoistureNoisePeriod, float TemperatureNoisePeriod);
+
 private:
 	/** Cached pointer to loaded DataTable to avoid repeated loading. */
 	static TWeakObjectPtr<UDataTable> CachedDataTable;

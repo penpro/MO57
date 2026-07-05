@@ -439,10 +439,13 @@ namespace
 					UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST]   Biome '%s' species[%d] mesh unresolvable: %s"),
 						*BiomeId.ToString(), i, *Sp.Mesh.ToString());
 				}
-				if (Sp.HISMTag.IsNone())
+				// A species is either HARVESTABLE (ResourceNodeId -> full
+				// interaction tag bundle) or DECORATIVE (HISMTag). Neither =
+				// untagged scenery nothing can address — reject.
+				if (Sp.HISMTag.IsNone() && Sp.ResourceNodeId.IsNone())
 				{
 					++Bad;
-					UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST]   Biome '%s' species[%d] missing HISMTag"),
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST]   Biome '%s' species[%d] has neither ResourceNodeId nor HISMTag"),
 						*BiomeId.ToString(), i);
 				}
 				if (Sp.MinScale > Sp.MaxScale || Sp.DensityPerHectare < 0.0f)
