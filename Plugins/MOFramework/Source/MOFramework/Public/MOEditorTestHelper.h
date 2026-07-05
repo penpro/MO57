@@ -59,6 +59,18 @@ public:
 	static UWorld* FindPIEWorldByNetMode(const FString& NetModeName, int32 ClientIndex = 0);
 
 	/**
+	 * World-subsystem accessor for editor-Python: this UE build exposes no
+	 * SubsystemBlueprintLibrary to py, so seq gates reach live subsystems
+	 * (colony, clock) through this instead. Cast the result py-side.
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Test")
+	static UWorldSubsystem* GetWorldSubsystem(UWorld* World, TSubclassOf<UWorldSubsystem> SubsystemClass);
+
+	/** GameInstance-subsystem accessor for editor-Python (same gap as above). */
+	UFUNCTION(BlueprintCallable, Category="MO|Test")
+	static UGameInstanceSubsystem* GetGameInstanceSubsystem(UWorld* World, TSubclassOf<UGameInstanceSubsystem> SubsystemClass);
+
+	/**
 	 * Configure the NEXT PIE session: number of players and listen-server mode
 	 * (net mode PIE_ListenServer under one process when bListenServer, else
 	 * PIE_Standalone). Editor builds only — returns false in packaged games.

@@ -40,7 +40,8 @@
 #include "MOQuestSubsystem.h"
 #include "MOWeatherIntegrationSubsystem.h"
 #include "MOTerrainModificationSubsystem.h"
-#include "MOGameClockSubsystem.h"            // (H34) game clock persistence
+#include "MOGameClockSubsystem.h"
+#include "MOColonyManagerSubsystem.h"            // (H34) game clock persistence
 #include "MOResourceDepletionSubsystem.h"    // (H37) resource depletion persistence
 #include "MOSpawnManagerSubsystem.h"         // (H35) adopt restored creatures into spawn tracking
 
@@ -302,6 +303,7 @@ bool UMOPersistenceSubsystem::SaveWorldToSlot(const FString& SlotName)
     CaptureWeatherData(World, SaveObject);
     CaptureTerrainModificationData(World, SaveObject);
     CaptureGameClockData(World, SaveObject);          // (H34) in-game date/time, TimeScale, accumulators
+    CaptureColonyData(World, SaveObject);             // (V1) settlement, residency, mood, histories
     CaptureResourceDepletionData(World, SaveObject);  // (H37) per-node yield depletion + respawn timers
 
     const bool bOk = UGameplayStatics::SaveGameToSlot(SaveObject, SlotName, 0);
@@ -548,6 +550,7 @@ FMOLoadResult UMOPersistenceSubsystem::LoadWorldFromSlotWithResult(const FString
     RestoreWeatherData(World, LoadedTyped->WeatherData);
     RestoreTerrainModificationData(World, LoadedTyped->TerrainModificationData);
     RestoreGameClockData(World, LoadedTyped->GameClockData);                 // (H34)
+    RestoreColonyData(World, LoadedTyped->ColonyData);                       // (V1)
     RestoreResourceDepletionData(World, LoadedTyped->ResourceDepletionData); // (H37)
 
     ApplyInventoriesToSpawnedPawns(World, LoadedTyped->PawnInventoriesByGuid);
@@ -2689,6 +2692,22 @@ void UMOPersistenceSubsystem::RestoreTerrainModificationData(UWorld* World, cons
 // ============================================================================
 // GAME CLOCK PERSISTENCE  (H34)
 // ============================================================================
+
+void UMOPersistenceSubsystem::CaptureColonyData(UWorld* World, UMOWorldSaveGame* SaveObject) const
+{
+    if (UMOColonyManagerSubsystem* Colony = World ? World->GetSubsystem<UMOColonyManagerSubsystem>() : nullptr)
+    {
+        SaveObject->ColonyData = Colony->BuildSaveData();
+    }
+}
+
+void UMOPersistenceSubsystem::RestoreColonyData(UWorld* World, const FMOColonySaveData& ColonyData)
+{
+    if (UMOColonyManagerSubsystem* Colony = World ? World->GetSubsystem<UMOColonyManagerSubsystem>() : nullptr)
+    {
+        Colony->ApplySaveDataAuthority(ColonyData);
+    }
+}
 
 void UMOPersistenceSubsystem::CaptureGameClockData(UWorld* World, UMOWorldSaveGame* SaveObject) const
 {

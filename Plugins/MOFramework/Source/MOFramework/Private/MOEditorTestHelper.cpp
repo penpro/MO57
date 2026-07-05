@@ -110,3 +110,14 @@ bool UMOEditorTestHelper::ConfigurePIE(int32 NumPlayers, bool bListenServer)
 	return false;
 #endif
 }
+
+UWorldSubsystem* UMOEditorTestHelper::GetWorldSubsystem(UWorld* World, TSubclassOf<UWorldSubsystem> SubsystemClass)
+{
+	return World ? World->GetSubsystemBase(SubsystemClass) : nullptr;
+}
+
+UGameInstanceSubsystem* UMOEditorTestHelper::GetGameInstanceSubsystem(UWorld* World, TSubclassOf<UGameInstanceSubsystem> SubsystemClass)
+{
+	UGameInstance* GI = World ? World->GetGameInstance() : nullptr;
+	return GI ? GI->GetSubsystemBase(SubsystemClass) : nullptr;
+}

@@ -336,6 +336,8 @@ private:
     // (H34) Game clock persistence (in-game date/time, TimeScale, accumulators)
     void CaptureGameClockData(UWorld* World, UMOWorldSaveGame* SaveObject) const;
     void RestoreGameClockData(UWorld* World, const FMOGameClockSaveData& ClockData);
+    void CaptureColonyData(UWorld* World, UMOWorldSaveGame* SaveObject) const;   // (V1)
+    void RestoreColonyData(UWorld* World, const FMOColonySaveData& ColonyData);  // (V1)
 
     // (H37) Resource depletion persistence (per-node yield counts + respawn timers)
     void CaptureResourceDepletionData(UWorld* World, UMOWorldSaveGame* SaveObject) const;

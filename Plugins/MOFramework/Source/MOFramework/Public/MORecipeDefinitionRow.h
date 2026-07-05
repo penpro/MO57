@@ -479,6 +479,11 @@ struct MOFRAMEWORK_API FMORecipeDefinitionRow : public FTableRowBase
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Recipe|Building|Container", meta=(EditCondition="bIsBuilding", EditConditionHides, ClampMin="0"))
 	int32 ContainerSlotCount = 0;
 
+	/** For dwellings: how many villagers this building houses (0 = not a home).
+	 *  Read by UMOColonyManagerSubsystem::AssignResidence (V1 settlement loop). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Recipe|Building|Housing", meta=(EditCondition="bIsBuilding", EditConditionHides, ClampMin="0"))
+	int32 HousingCapacity = 0;
+
 	/** For crafting stations: whether the station requires fuel to operate. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Recipe|Building|Station", meta=(EditCondition="bIsBuilding", EditConditionHides))
 	bool bRequiresFuel = false;

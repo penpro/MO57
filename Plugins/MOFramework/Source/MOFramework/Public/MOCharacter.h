@@ -209,6 +209,8 @@ class UMOTerraformingComponent;
 class UMOEquipmentComponent;
 class UMORecruitmentComponent;
 class UMOSurvivorJobQueueComponent;
+class UMOPersonalityComponent;
+class UMOCharacterHistoryComponent;
 class USpringArmComponent;
 class UCameraComponent;
 class USkeletalMesh;
@@ -366,6 +368,12 @@ public:
 
 	UFUNCTION(BlueprintPure, Category="MO")
 	UMOSurvivorJobQueueComponent* GetJobQueueComponent() const { return JobQueueComponent; }
+
+	UFUNCTION(BlueprintPure, Category="MO")
+	UMOPersonalityComponent* GetPersonalityComponent() const { return PersonalityComponent; }
+
+	UFUNCTION(BlueprintPure, Category="MO")
+	UMOCharacterHistoryComponent* GetHistoryComponent() const { return HistoryComponent; }
 
 	UFUNCTION(BlueprintPure, Category="MO")
 	UMOInteractableComponent* GetInteractableComponent() const { return InteractableComponent; }
@@ -668,6 +676,14 @@ public:
 	/** Job queue component for survivor task management. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO")
 	TObjectPtr<UMOSurvivorJobQueueComponent> JobQueueComponent;
+
+	/** Personality axes (colony V1) — zeroed until the colony tick rolls them. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO")
+	TObjectPtr<UMOPersonalityComponent> PersonalityComponent;
+
+	/** Life-event history log (colony V1). */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO")
+	TObjectPtr<UMOCharacterHistoryComponent> HistoryComponent;
 
 	/** Interactable component for other pawns to interact with this character. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO")

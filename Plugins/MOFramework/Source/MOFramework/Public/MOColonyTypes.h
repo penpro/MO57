@@ -378,3 +378,73 @@ enum class EColonyActivityState : uint8
 	/** Dead */
 	Dead UMETA(DisplayName = "Dead")
 };
+
+// =============================================================================
+// V1 SETTLEMENT LOOP TYPES (colony manager + history save payloads)
+// =============================================================================
+
+/** Save payload for a character's event log (oldest first). */
+USTRUCT(BlueprintType)
+struct MOFRAMEWORK_API FMOCharacterHistorySaveData
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	TArray<FMOCharacterHistoryEntry> Entries;
+
+	UPROPERTY()
+	bool bHasValidData = false;
+};
+
+/** One settlement (V1: a single settlement per world). */
+USTRUCT(BlueprintType)
+struct MOFRAMEWORK_API FMOSettlementRecord
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Settlement", meta=(IgnoreForMemberInitializationTest))
+	FGuid SettlementId;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Settlement")
+	FText DisplayName;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Settlement")
+	FVector Center = FVector::ZeroVector;
+
+	/** Communal reach: storages/houses inside this radius belong to the settlement. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Settlement", meta=(ClampMin="1000"))
+	float Radius = 20000.0f;
+
+	bool IsValid() const { return SettlementId.IsValid(); }
+};
+
+/** Inputs to the mood function — all read from the REAL simulations. */
+USTRUCT(BlueprintType)
+struct MOFRAMEWORK_API FMOVillagerMoodInputs
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Mood") bool bStarving = false;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Mood") bool bDehydrated = false;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Mood") float Wetness = 0.0f;          // 0..1
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Mood") float Shock = 0.0f;            // 0..100
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Mood") float TraumaticStress = 0.0f;  // 0..100
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Mood") float MoraleFatigue = 0.0f;    // 0..100
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Mood") bool bHasHome = false;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Mood") float UnhousedHours = 0.0f;    // consecutive
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Mood") float MoodVarianceModifier = 1.0f; // personality Stability (0.5 stable .. 1.5 volatile)
+};
+
+/** Save payload for the whole settlement layer. */
+USTRUCT(BlueprintType)
+struct MOFRAMEWORK_API FMOColonySaveData
+{
+	GENERATED_BODY()
+
+	UPROPERTY() FMOSettlementRecord Settlement;
+	UPROPERTY() TMap<FGuid, FGuid> Residency;            // pawn -> house building
+	UPROPERTY() TMap<FGuid, float> VillagerMood;         // pawn -> 0..1
+	UPROPERTY() TMap<FGuid, float> VillagerUnhousedHours;
+	UPROPERTY() TMap<FGuid, FMOCharacterHistorySaveData> VillagerHistory;
+	UPROPERTY() bool bHasValidData = false;
+};

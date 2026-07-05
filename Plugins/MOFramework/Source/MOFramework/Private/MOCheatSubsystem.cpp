@@ -19,6 +19,8 @@
 #include "MOSkillDatabaseSettings.h"
 #include "MOSkillDefinitionRow.h"
 #include "MOBiomeDatabaseSettings.h"
+#include "MOColonyManagerSubsystem.h"
+#include "MOIdentityComponent.h"
 #include "MOBuildableActor.h" // complete type for TSubclassOf<AMOBuildableActor> null-check (A1 art audit)
 #include "MOContainerActor.h"
 #include "MOCraftingStationActor.h"
@@ -1284,6 +1286,55 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 		}),
 		ECVF_Default));
 
+	// ---------- MO.Colony.Found [name=FirstLanding] [radius=20000] ----------
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Colony.Found"),
+		TEXT("Dev: found the settlement at the local pawn's position. Usage: MO.Colony.Found [name] [radius]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			const FString Name = Args.Num() > 0 ? Args[0] : FString(TEXT("FirstLanding"));
+			const float Radius = Args.Num() > 1 ? FCString::Atof(*Args[1]) : 20000.0f;
+			RunOnNextTick(World, [Name, Radius](UWorld* W)
+			{
+				APawn* LocalPawn = ResolveLocalPawn(W);
+				UMOColonyManagerSubsystem* Colony = W->GetSubsystem<UMOColonyManagerSubsystem>();
+				if (!LocalPawn || !Colony)
+				{
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] COLONY Found FAILED: pawn/subsystem missing"));
+					return;
+				}
+				Colony->FoundSettlement(Name, LocalPawn->GetActorLocation(), Radius);
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] COLONY Found %s r=%.0f"), *Name, Radius);
+			});
+		}),
+		ECVF_Default));
+
+	// ---------- MO.Colony.AssignHouse <pawnSub> <houseSub> ----------
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Colony.AssignHouse"),
+		TEXT("Dev: assign a villager to a dwelling (capacity from recipe HousingCapacity). Usage: MO.Colony.AssignHouse <pawnSub> <houseSub>"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			if (Args.Num() < 2)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] COLONY AssignHouse usage: <pawnSub> <houseSub>"));
+				return;
+			}
+			const FString PawnSub = Args[0];
+			const FString HouseSub = Args[1];
+			RunOnNextTick(World, [PawnSub, HouseSub](UWorld* W)
+			{
+				APawn* Pawn = FindColonyPawnBySub(W, PawnSub);
+				AActor* House = FindWorldActorBySub(W, HouseSub);
+				UMOColonyManagerSubsystem* Colony = W->GetSubsystem<UMOColonyManagerSubsystem>();
+				const bool bOk = Pawn && House && Colony && Colony->AssignResidence(Pawn, House);
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] COLONY AssignHouse %s -> %s ok=%d"),
+					Pawn ? *Pawn->GetName() : TEXT("none"),
+					House ? *House->GetName() : TEXT("none"), bOk ? 1 : 0);
+			});
+		}),
+		ECVF_Default));
+
 	// ---------- MO.Colony.Status ----------
 	ConsoleCommands.Add(CM.RegisterConsoleCommand(
 		TEXT("MO.Colony.Status"),
@@ -1321,9 +1372,19 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 								Job.Progress);
 						}
 					}
+					float Mood = -1.0f;
+					int32 bHoused = 0;
+					if (UMOColonyManagerSubsystem* Colony = W->GetSubsystem<UMOColonyManagerSubsystem>())
+					{
+						if (const UMOIdentityComponent* Id = Pawn->FindComponentByClass<UMOIdentityComponent>())
+						{
+							Mood = Colony->GetVillagerMood(Id->GetGuid());
+							bHoused = Colony->HasResidence(Id->GetGuid()) ? 1 : 0;
+						}
+					}
 					UE_LOG(LogMOFramework, Warning,
-						TEXT("[MOQUERY] COLONY pawn=%s recruited=%d job=%s queue=%d controller=%s"),
-						*Pawn->GetName(), Recruit->IsPossessable() ? 1 : 0, *JobDesc, QueueLen,
+						TEXT("[MOQUERY] COLONY pawn=%s recruited=%d job=%s queue=%d mood=%.2f housed=%d controller=%s"),
+						*Pawn->GetName(), Recruit->IsPossessable() ? 1 : 0, *JobDesc, QueueLen, Mood, bHoused,
 						Pawn->GetController() ? *Pawn->GetController()->GetClass()->GetName() : TEXT("none"));
 				}
 				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] COLONY roster=%d"), Count);

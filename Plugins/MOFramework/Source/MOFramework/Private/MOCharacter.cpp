@@ -23,6 +23,8 @@
 #include "MOEquipmentComponent.h"
 #include "MOCombatComponent.h"
 #include "MORecruitmentComponent.h"
+#include "MOPersonalityComponent.h"
+#include "MOCharacterHistoryComponent.h"
 #include "MOSurvivorJobQueueComponent.h"
 #include "MOInteractableComponent.h"
 #include "MONotificationComponent.h"
@@ -110,6 +112,12 @@ AMOCharacter::AMOCharacter()
 
 	// MO Components - Survivor Job Queue (for task assignment when recruited)
 	JobQueueComponent = CreateDefaultSubobject<UMOSurvivorJobQueueComponent>(TEXT("JobQueueComponent"));
+
+	// MO Components - Colony (V1): personality axes + life-event history.
+	// Traits start zeroed; the colony upkeep tick randomizes them the first
+	// time a recruited villager is seen (villagers become people on joining).
+	PersonalityComponent = CreateDefaultSubobject<UMOPersonalityComponent>(TEXT("PersonalityComponent"));
+	HistoryComponent = CreateDefaultSubobject<UMOCharacterHistoryComponent>(TEXT("HistoryComponent"));
 
 	// MO Components - Interactable (allows other pawns to interact with this character)
 	InteractableComponent = CreateDefaultSubobject<UMOInteractableComponent>(TEXT("InteractableComponent"));
