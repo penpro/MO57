@@ -479,6 +479,11 @@ struct MOFRAMEWORK_API FMORecipeDefinitionRow : public FTableRowBase
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Recipe|Building|Container", meta=(EditCondition="bIsBuilding", EditConditionHides, ClampMin="0"))
 	int32 ContainerSlotCount = 0;
 
+	/** School (V2.2): villagers near a completed school keep their whole skill
+	 *  tree maintained (no decay) and can be taught by skilled villagers. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Recipe|Building|School", meta=(EditCondition="bIsBuilding", EditConditionHides))
+	bool bIsSchool = false;
+
 	/** For dwellings: how many villagers this building houses (0 = not a home).
 	 *  Read by UMOColonyManagerSubsystem::AssignResidence (V1 settlement loop). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Recipe|Building|Housing", meta=(EditCondition="bIsBuilding", EditConditionHides, ClampMin="0"))

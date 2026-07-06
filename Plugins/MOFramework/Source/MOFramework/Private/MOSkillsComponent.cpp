@@ -1,4 +1,6 @@
 #include "MOSkillsComponent.h"
+#include "MOGameClockSubsystem.h"
+#include "TimerManager.h"
 #include "MOSkillDatabaseSettings.h"
 #include "MOFramework.h"
 #include "MOQuestSubsystem.h"
@@ -72,6 +74,16 @@ bool UMOSkillsComponent::AddExperience(FName SkillId, float XPAmount)
 	}
 
 	Progress->CurrentXP += XPAmount;
+
+	// Using a skill (gaining XP in it) resets its decay clock (V2.2).
+	if (UWorld* World = GetWorld())
+	{
+		if (UMOGameClockSubsystem* Clock = World->GetSubsystem<UMOGameClockSubsystem>())
+		{
+			LastUsedGameSeconds.Add(SkillId, Clock->GetGameTimeSeconds());
+		}
+	}
+
 	OnExperienceGained.Broadcast(SkillId, XPAmount, Progress->CurrentXP);
 
 	// Process any level ups
@@ -250,4 +262,96 @@ bool UMOSkillsComponent::ApplySaveData(const FMOSkillsSaveData& InSaveData)
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOSkillsComponent] Applied save data with %d skills"), Skills.Num());
 	return true;
+}
+
+// ============================================================================
+// SKILL DECAY (V2.2)
+// ============================================================================
+
+void UMOSkillsComponent::BeginPlay()
+{
+	Super::BeginPlay();
+	AActor* Owner = GetOwner();
+	if (Owner && Owner->HasAuthority())
+	{
+		if (UWorld* World = GetWorld())
+		{
+			// Slow real-time cadence; the pass itself works in GAME hours, so
+			// accelerated clocks decay proportionally faster (honest sim).
+			World->GetTimerManager().SetTimer(DecayTimer, this,
+				&UMOSkillsComponent::ApplyDecayPass, 60.0f, /*bLoop=*/true);
+		}
+	}
+}
+
+float UMOSkillsComponent::ComputeSkillDecayXP(float GameHoursSinceLastPass, float UnusedGameHours,
+	float GraceGameHours, float DecayXPPerGameHour)
+{
+	if (UnusedGameHours <= GraceGameHours || GameHoursSinceLastPass <= 0.0f || DecayXPPerGameHour <= 0.0f)
+	{
+		return 0.0f;
+	}
+	// Only the portion of this pass that lies PAST the grace boundary decays
+	// (a skill crossing the boundary mid-pass doesn't lose a full pass).
+	const float DecayingHours = FMath::Min(GameHoursSinceLastPass, UnusedGameHours - GraceGameHours);
+	return DecayXPPerGameHour * FMath::Max(DecayingHours, 0.0f);
+}
+
+void UMOSkillsComponent::ApplyDecayPass()
+{
+	AActor* Owner = GetOwner();
+	UWorld* World = GetWorld();
+	if (!Owner || !Owner->HasAuthority() || !World)
+	{
+		return;
+	}
+	UMOGameClockSubsystem* Clock = World->GetSubsystem<UMOGameClockSubsystem>();
+	if (!Clock)
+	{
+		return;
+	}
+	const double Now = Clock->GetGameTimeSeconds();
+	const float HoursSinceLastPass = (LastDecayPassGameSeconds >= 0.0)
+		? static_cast<float>((Now - LastDecayPassGameSeconds) / 3600.0)
+		: 0.0f;
+	LastDecayPassGameSeconds = Now;
+	if (bSkillMaintenance || HoursSinceLastPass <= 0.0f)
+	{
+		return;   // schooled villagers keep their whole tree sharp
+	}
+
+	for (FMOSkillProgress& Progress : Skills)
+	{
+		if (Progress.Level <= DecayFloorLevel && Progress.CurrentXP <= 0.0f)
+		{
+			continue;
+		}
+		// Never-used-since-load skills start their grace at first sight.
+		if (!LastUsedGameSeconds.Contains(Progress.SkillId))
+		{
+			LastUsedGameSeconds.Add(Progress.SkillId, Now);
+			continue;
+		}
+		const float UnusedHours = static_cast<float>((Now - LastUsedGameSeconds[Progress.SkillId]) / 3600.0);
+		const float Loss = ComputeSkillDecayXP(HoursSinceLastPass, UnusedHours,
+			DecayGraceGameHours, DecayXPPerGameHour);
+		if (Loss <= 0.0f)
+		{
+			continue;
+		}
+		Progress.CurrentXP -= Loss;
+		while (Progress.CurrentXP < 0.0f && Progress.Level > DecayFloorLevel)
+		{
+			// De-level: drop into the previous level near its top, mirroring
+			// the level-up curve so re-learning is quick at first (rust, not
+			// amnesia).
+			Progress.Level -= 1;
+			const FMOSkillDefinitionRow* SkillDef = GetSkillDefinition(Progress.SkillId);
+			Progress.XPToNextLevel = CalculateXPForLevel(SkillDef, Progress.Level);
+			Progress.CurrentXP += Progress.XPToNextLevel;
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOSkills] %s: %s decayed to level %d"),
+				*Owner->GetName(), *Progress.SkillId.ToString(), Progress.Level);
+		}
+		Progress.CurrentXP = FMath::Max(Progress.CurrentXP, 0.0f);
+	}
 }

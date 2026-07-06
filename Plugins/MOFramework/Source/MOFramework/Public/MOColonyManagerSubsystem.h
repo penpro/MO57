@@ -128,6 +128,31 @@ public:
 		const TMap<FName, int32>& Stock, const TSet<FName>& RecipesInFlight, int32 IdleVillagers);
 
 	// =========================================================================
+	// SCHOOL / TEACHING (V2.2)
+	// =========================================================================
+
+	/**
+	 * THE teaching function — pure math for headless tests. XP a student
+	 * gains per pass: 2x the direct-action baseline (design: being taught by
+	 * a skilled pawn is twice as fast as learning by doing).
+	 */
+	UFUNCTION(BlueprintPure, Category="MO|Colony")
+	static float ComputeTeachXP(float GameHoursElapsed, float BaseXPPerGameHour);
+
+	/** Villagers within this range of a completed School are IN school:
+	 *  whole skill tree maintained (no decay) + teachable. */
+	UPROPERTY(EditAnywhere, Category="MO|Colony|School")
+	float SchoolRadius = 1500.0f;
+
+	/** Direct-action XP baseline the 2x teaching multiplier applies to. */
+	UPROPERTY(EditAnywhere, Category="MO|Colony|School")
+	float TeachBaseXPPerGameHour = 20.0f;
+
+	/** Teacher must lead the student by this many levels in the taught skill. */
+	UPROPERTY(EditAnywhere, Category="MO|Colony|School")
+	int32 TeachTeacherLevelMargin = 2;
+
+	// =========================================================================
 	// UPKEEP (driven by timer; public so tests can force a tick)
 	// =========================================================================
 
@@ -153,6 +178,7 @@ private:
 	void TryFeedVillager(APawn* Villager, const FGuid& PawnGuid);
 	AMOContainerActor* FindCommunalFood(FName& OutItemId) const;
 	void RunQuotaPass(const TArray<APawn*>& Roster);
+	void RunSchoolPass(const TArray<APawn*>& Roster, float GameHoursElapsed);
 	static FGuid GetPawnGuid(const APawn* Pawn);
 
 	UPROPERTY() FMOSettlementRecord Settlement;

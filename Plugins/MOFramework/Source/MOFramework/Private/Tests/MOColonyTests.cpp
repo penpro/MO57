@@ -10,6 +10,7 @@
 #include "Misc/AutomationTest.h"
 #include "MOColonyManagerSubsystem.h"
 #include "MOColonyTypes.h"
+#include "MOSkillsComponent.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -175,6 +176,49 @@ bool FMOColony_Quota_InFlightNotDoubled::RunTest(const FString& Parameters)
 	InFlight.Add(TEXT("Knap"));
 	const TArray<FName> Work = UMOColonyManagerSubsystem::DecideQuotaWork(Quotas, Stock, InFlight, 3);
 	TestEqual(TEXT("in-flight order not double-assigned"), Work.Num(), 0);
+	return true;
+}
+
+
+// ============================================================================
+// V2.2 decay + teaching math
+// ============================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOColony_Decay_GraceWindowProtects,
+	"MOFramework.Colony.Decay.GraceWindowProtects",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+bool FMOColony_Decay_GraceWindowProtects::RunTest(const FString& Parameters)
+{
+	// Used 10h ago, grace 24h: no decay yet.
+	TestEqual(TEXT("inside grace = zero decay"),
+		UMOSkillsComponent::ComputeSkillDecayXP(2.0f, 10.0f, 24.0f, 1.5f), 0.0f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOColony_Decay_RustPastGrace,
+	"MOFramework.Colony.Decay.RustPastGrace",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+bool FMOColony_Decay_RustPastGrace::RunTest(const FString& Parameters)
+{
+	// Unused 30h (6h past grace), 2h elapsed this pass: full 2h decays.
+	TestEqual(TEXT("past grace decays per elapsed hour"),
+		UMOSkillsComponent::ComputeSkillDecayXP(2.0f, 30.0f, 24.0f, 1.5f), 3.0f);
+	// Crossing the boundary mid-pass: unused 25h, pass 4h -> only 1h decays.
+	TestEqual(TEXT("boundary crossing decays only the past-grace slice"),
+		UMOSkillsComponent::ComputeSkillDecayXP(4.0f, 25.0f, 24.0f, 1.5f), 1.5f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOColony_Teach_DoubleSpeed,
+	"MOFramework.Colony.Teach.DoubleSpeed",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+bool FMOColony_Teach_DoubleSpeed::RunTest(const FString& Parameters)
+{
+	// 3 game-hours at base 20 XP/h -> taught = 120 (2x the 60 of doing).
+	TestEqual(TEXT("teaching is exactly 2x direct action"),
+		UMOColonyManagerSubsystem::ComputeTeachXP(3.0f, 20.0f), 120.0f);
+	TestEqual(TEXT("no time, no XP"),
+		UMOColonyManagerSubsystem::ComputeTeachXP(0.0f, 20.0f), 0.0f);
 	return true;
 }
 

@@ -154,6 +154,44 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Skills")
 	bool AddExperience(FName SkillId, float XPAmount);
 
+	// =========================================================================
+	// SKILL DECAY (V2.2): unused skills degrade over game time unless
+	// maintained (schooling). Design pillar: "Skill Decay: Unused skills
+	// degrade over time unless maintained via schooling."
+	// =========================================================================
+
+	/**
+	 * THE decay function — pure math for headless tests. XP lost this pass:
+	 * zero while inside the grace window, else DecayXPPerGameHour x the
+	 * game-hours elapsed since the previous pass.
+	 */
+	UFUNCTION(BlueprintPure, Category="MO|Skills|Decay")
+	static float ComputeSkillDecayXP(float GameHoursSinceLastPass, float UnusedGameHours,
+		float GraceGameHours, float DecayXPPerGameHour);
+
+	/** Schooling switch: while true, NO skills decay (the School's effect). */
+	UFUNCTION(BlueprintCallable, Category="MO|Skills|Decay")
+	void SetSkillMaintenance(bool bMaintained) { bSkillMaintenance = bMaintained; }
+
+	UFUNCTION(BlueprintPure, Category="MO|Skills|Decay")
+	bool IsSkillMaintained() const { return bSkillMaintenance; }
+
+	/** Run one decay pass now (timer-driven normally; public for gates). */
+	UFUNCTION(BlueprintCallable, Category="MO|Skills|Decay")
+	void ApplyDecayPass();
+
+	/** Game-hours a skill can rest before decaying (real use resets it). */
+	UPROPERTY(EditAnywhere, Category="MO|Skills|Decay")
+	float DecayGraceGameHours = 24.0f;
+
+	/** XP lost per game-hour once past grace. */
+	UPROPERTY(EditAnywhere, Category="MO|Skills|Decay")
+	float DecayXPPerGameHour = 1.5f;
+
+	/** Skills never decay below this level ("genetic memory" floor). */
+	UPROPERTY(EditAnywhere, Category="MO|Skills|Decay")
+	int32 DecayFloorLevel = 1;
+
 	/**
 	 * Get the current level of a skill.
 	 * @param SkillId The skill to query
@@ -229,6 +267,15 @@ private:
 	 * Formula: BaseXP * ScaleFactor^Level
 	 */
 	float CalculateXPForLevel(const FMOSkillDefinitionRow* SkillDef, int32 Level) const;
+
+	virtual void BeginPlay() override;
+
+	/** Last game-clock use per skill (AddExperience stamps it). Transient:
+	 *  grace restarts on load — acceptable simplification, noted in V2.2. */
+	TMap<FName, double> LastUsedGameSeconds;
+	double LastDecayPassGameSeconds = -1.0;
+	bool bSkillMaintenance = false;
+	FTimerHandle DecayTimer;
 
 	/**
 	 * Get the skill definition from the database.

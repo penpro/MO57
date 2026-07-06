@@ -19,6 +19,8 @@
 #include "MOGameClockSubsystem.h"
 #include "MOSurvivorController.h"
 #include "MOSurvivorJobQueueComponent.h"
+#include "MOSkillsComponent.h"
+#include "MOBuildProgressComponent.h"
 #include "EngineUtils.h"
 #include "TimerManager.h"
 
@@ -363,6 +365,122 @@ void UMOColonyManagerSubsystem::RunQuotaPass(const TArray<APawn*>& Roster)
 }
 
 // ============================================================================
+// SCHOOL / TEACHING (V2.2)
+// ============================================================================
+
+float UMOColonyManagerSubsystem::ComputeTeachXP(float GameHoursElapsed, float BaseXPPerGameHour)
+{
+	// Design pillar: being taught by a skilled pawn = 2x direct-action speed.
+	return FMath::Max(GameHoursElapsed, 0.0f) * FMath::Max(BaseXPPerGameHour, 0.0f) * 2.0f;
+}
+
+void UMOColonyManagerSubsystem::RunSchoolPass(const TArray<APawn*>& Roster, float GameHoursElapsed)
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	// Completed schools inside the settlement.
+	TArray<AActor*> Schools;
+	for (TActorIterator<AMOBuildableActor> It(World); It; ++It)
+	{
+		AMOBuildableActor* Building = *It;
+		if (!IsValid(Building) || !IsInSettlement(Building->GetActorLocation()))
+		{
+			continue;
+		}
+		const FMORecipeDefinitionRow* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(Building->GetRecipeId());
+		if (!Recipe || !Recipe->bIsSchool)
+		{
+			continue;
+		}
+		const UMOBuildProgressComponent* Progress = Building->FindComponentByClass<UMOBuildProgressComponent>();
+		if (Progress && Progress->GetState() == EMOBuildState::Complete)
+		{
+			Schools.Add(Building);
+		}
+	}
+
+	// Who is IN school right now, and the maintenance flag for everyone.
+	TArray<APawn*> AtSchool;
+	for (APawn* Villager : Roster)
+	{
+		bool bInSchool = false;
+		for (const AActor* School : Schools)
+		{
+			if (FVector::DistSquared2D(Villager->GetActorLocation(), School->GetActorLocation())
+				<= FMath::Square(SchoolRadius))
+			{
+				bInSchool = true;
+				break;
+			}
+		}
+		if (UMOSkillsComponent* Skills = Villager->FindComponentByClass<UMOSkillsComponent>())
+		{
+			Skills->SetSkillMaintenance(bInSchool);
+		}
+		if (bInSchool)
+		{
+			AtSchool.Add(Villager);
+		}
+	}
+	if (AtSchool.Num() < 2 || GameHoursElapsed <= 0.0f)
+	{
+		return;   // teaching needs a teacher AND a student, co-located
+	}
+
+	// Teaching: each student learns the best skill some co-located teacher
+	// leads them in by the margin. Real time, real XP, real skills API.
+	for (APawn* Student : AtSchool)
+	{
+		UMOSkillsComponent* StudentSkills = Student->FindComponentByClass<UMOSkillsComponent>();
+		if (!StudentSkills)
+		{
+			continue;
+		}
+		FName BestSkill = NAME_None;
+		int32 BestLead = 0;
+		APawn* BestTeacher = nullptr;
+		for (APawn* Teacher : AtSchool)
+		{
+			if (Teacher == Student)
+			{
+				continue;
+			}
+			const UMOSkillsComponent* TeacherSkills = Teacher->FindComponentByClass<UMOSkillsComponent>();
+			if (!TeacherSkills)
+			{
+				continue;
+			}
+			for (const FMOSkillProgress& TS : TeacherSkills->Skills)
+			{
+				const int32 Lead = TS.Level - StudentSkills->GetSkillLevel(TS.SkillId);
+				if (Lead >= TeachTeacherLevelMargin && Lead > BestLead)
+				{
+					BestLead = Lead;
+					BestSkill = TS.SkillId;
+					BestTeacher = Teacher;
+				}
+			}
+		}
+		if (BestSkill.IsNone() || !BestTeacher)
+		{
+			continue;
+		}
+		const float XP = ComputeTeachXP(GameHoursElapsed, TeachBaseXPPerGameHour);
+		StudentSkills->AddExperience(BestSkill, XP);
+		if (UMOCharacterHistoryComponent* History = Student->FindComponentByClass<UMOCharacterHistoryComponent>())
+		{
+			History->AddEntry(EHistoryEntryType::SkillGain,
+				FString::Printf(TEXT("Taught %s by %s (+%.0f XP)"),
+					*BestSkill.ToString(), *BestTeacher->GetName(), XP));
+		}
+	}
+}
+
+// ============================================================================
 // UPKEEP
 // ============================================================================
 
@@ -389,6 +507,9 @@ void UMOColonyManagerSubsystem::RunUpkeepTick()
 
 	// Standing orders first: idle hands pick up quota work this same pass.
 	RunQuotaPass(Roster);
+
+	// School: maintenance flags + teaching for co-located villagers (V2.2).
+	RunSchoolPass(Roster, GameHoursElapsed);
 
 	for (APawn* Villager : Roster)
 	{

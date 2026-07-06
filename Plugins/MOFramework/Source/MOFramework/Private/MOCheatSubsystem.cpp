@@ -21,6 +21,7 @@
 #include "MOBiomeDatabaseSettings.h"
 #include "MOColonyManagerSubsystem.h"
 #include "MOColonyOverviewWidget.h"
+#include "MOSurvivorController.h"
 #include "MOGameUIManagerSubsystem.h"
 #include "MOPrimaryGameLayout.h"
 #include "MOIdentityComponent.h"
@@ -1334,6 +1335,38 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] COLONY AssignHouse %s -> %s ok=%d"),
 					Pawn ? *Pawn->GetName() : TEXT("none"),
 					House ? *House->GetName() : TEXT("none"), bOk ? 1 : 0);
+			});
+		}),
+		ECVF_Default));
+
+	// ---------- MO.Colony.SendTo <pawnSub> <actorSub> ----------
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Colony.SendTo"),
+		TEXT("Dev: order a villager to stand at an actor's location (Stay command). Usage: MO.Colony.SendTo <pawnSub> <actorSub>"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			if (Args.Num() < 2)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] COLONY SendTo usage: <pawnSub> <actorSub>"));
+				return;
+			}
+			const FString PawnSub = Args[0];
+			const FString TargetSub = Args[1];
+			RunOnNextTick(World, [PawnSub, TargetSub](UWorld* W)
+			{
+				APawn* Pawn = FindColonyPawnBySub(W, PawnSub);
+				AActor* Target = FindWorldActorBySub(W, TargetSub);
+				AMOSurvivorController* AI = Pawn ? Cast<AMOSurvivorController>(Pawn->GetController()) : nullptr;
+				if (!AI || !Target)
+				{
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] COLONY SendTo FAILED: pawn=%s target=%s ai=%d"),
+						Pawn ? *Pawn->GetName() : TEXT("none"),
+						Target ? *Target->GetName() : TEXT("none"), AI ? 1 : 0);
+					return;
+				}
+				AI->SetStayAtLocation(Target->GetActorLocation() + FVector(150.0f, 150.0f, 0.0f));
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] COLONY SendTo %s -> %s"),
+					*Pawn->GetName(), *Target->GetName());
 			});
 		}),
 		ECVF_Default));
