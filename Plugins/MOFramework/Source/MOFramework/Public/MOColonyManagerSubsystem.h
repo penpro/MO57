@@ -153,6 +153,38 @@ public:
 	int32 TeachTeacherLevelMargin = 2;
 
 	// =========================================================================
+	// RELATIONSHIPS / STANDING (V2.3)
+	// =========================================================================
+
+	/**
+	 * Colony standing of a candidate: mean relationship Strength toward the
+	 * current roster. Gates recruitment — strangers must spend REAL time near
+	 * settlers before they'll join (ForceRecruit dev verb bypasses).
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Colony|Relationships")
+	float GetColonyStanding(APawn* Candidate) const;
+
+	UFUNCTION(BlueprintCallable, Category="MO|Colony|Relationships")
+	bool CanRecruitByStanding(APawn* Candidate) const;
+
+	/** Marriage — V2.3 DATA MODEL only (courtship sim is V2.5). Sets Spouse
+	 *  both ways with the family strength floor. */
+	UFUNCTION(BlueprintCallable, Category="MO|Colony|Relationships")
+	bool Marry(APawn* A, APawn* B);
+
+	/** Record a parent->child bond both ways (data model; births are V2.5). */
+	UFUNCTION(BlueprintCallable, Category="MO|Colony|Relationships")
+	bool RecordParentage(APawn* Parent, APawn* Child);
+
+	/** Villagers within this range of each other share time (familiarity). */
+	UPROPERTY(EditAnywhere, Category="MO|Colony|Relationships")
+	float FamiliarityRadius = 1200.0f;
+
+	/** Minimum mean standing toward the roster before a stranger will join. */
+	UPROPERTY(EditAnywhere, Category="MO|Colony|Relationships")
+	float RecruitStandingThreshold = 0.15f;
+
+	// =========================================================================
 	// UPKEEP (driven by timer; public so tests can force a tick)
 	// =========================================================================
 
@@ -179,6 +211,7 @@ private:
 	AMOContainerActor* FindCommunalFood(FName& OutItemId) const;
 	void RunQuotaPass(const TArray<APawn*>& Roster);
 	void RunSchoolPass(const TArray<APawn*>& Roster, float GameHoursElapsed);
+	void RunRelationshipPass(const TArray<APawn*>& Roster, float GameHoursElapsed);
 	static FGuid GetPawnGuid(const APawn* Pawn);
 
 	UPROPERTY() FMOSettlementRecord Settlement;

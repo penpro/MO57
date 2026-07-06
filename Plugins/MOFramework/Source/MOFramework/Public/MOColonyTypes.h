@@ -224,7 +224,12 @@ enum class ERelationshipType : uint8
 	Romantic UMETA(DisplayName = "Romantic"),
 
 	/** Active hostility */
-	Enemy UMETA(DisplayName = "Enemy")
+	Enemy UMETA(DisplayName = "Enemy"),
+
+	// --- Family (V2.3 data model; sim arrives V2.5) ---
+	Spouse UMETA(DisplayName = "Spouse"),
+	Parent UMETA(DisplayName = "Parent"),
+	Child UMETA(DisplayName = "Child")
 };
 
 /**
@@ -391,6 +396,10 @@ struct MOFRAMEWORK_API FMOCharacterHistorySaveData
 
 	UPROPERTY()
 	TArray<FMOCharacterHistoryEntry> Entries;
+
+	/** Relationship graph (V2.3) — includes family (Spouse/Parent/Child). */
+	UPROPERTY()
+	TArray<FMOCharacterRelationship> Relationships;
 
 	UPROPERTY()
 	bool bHasValidData = false;

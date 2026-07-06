@@ -477,7 +477,192 @@ void UMOColonyManagerSubsystem::RunSchoolPass(const TArray<APawn*>& Roster, floa
 				FString::Printf(TEXT("Taught %s by %s (+%.0f XP)"),
 					*BestSkill.ToString(), *BestTeacher->GetName(), XP));
 		}
+
+		// Teaching forges a typed bond: mentor and student, both ways (V2.3).
+		const FGuid StudentGuid = GetPawnGuid(Student);
+		const FGuid TeacherGuid = GetPawnGuid(BestTeacher);
+		if (StudentGuid.IsValid() && TeacherGuid.IsValid())
+		{
+			if (UMOCharacterHistoryComponent* StudentHistory = Student->FindComponentByClass<UMOCharacterHistoryComponent>())
+			{
+				if (StudentHistory->GetRelationship(TeacherGuid).RelationshipType == ERelationshipType::None)
+				{
+					StudentHistory->SetRelationshipType(TeacherGuid, ERelationshipType::Mentor);
+				}
+			}
+			if (UMOCharacterHistoryComponent* TeacherHistory = BestTeacher->FindComponentByClass<UMOCharacterHistoryComponent>())
+			{
+				if (TeacherHistory->GetRelationship(StudentGuid).RelationshipType == ERelationshipType::None)
+				{
+					TeacherHistory->SetRelationshipType(StudentGuid, ERelationshipType::Student);
+				}
+			}
+		}
 	}
+}
+
+// =============================================================================
+// RELATIONSHIPS / STANDING (V2.3)
+// =============================================================================
+
+void UMOColonyManagerSubsystem::RunRelationshipPass(const TArray<APawn*>& Roster, float GameHoursElapsed)
+{
+	UWorld* World = GetWorld();
+	if (!World || GameHoursElapsed <= 0.0f)
+	{
+		return;
+	}
+
+	// Social circle = roster + wild recruitables lingering near any settler.
+	// Strangers build standing by ACTUALLY spending time around the colony —
+	// that standing is what the recruitment gate reads.
+	TArray<APawn*> Social = Roster;
+	for (TActorIterator<APawn> It(World); It; ++It)
+	{
+		APawn* Candidate = *It;
+		if (!IsValid(Candidate) || Roster.Contains(Candidate))
+		{
+			continue;
+		}
+		const UMORecruitmentComponent* Recruit = Candidate->FindComponentByClass<UMORecruitmentComponent>();
+		if (!Recruit || !Recruit->IsRecruitable() || Recruit->IsPossessable())
+		{
+			continue;
+		}
+		if (!Candidate->FindComponentByClass<UMOCharacterHistoryComponent>())
+		{
+			continue;
+		}
+		for (const APawn* Settler : Roster)
+		{
+			if (FVector::DistSquared2D(Candidate->GetActorLocation(), Settler->GetActorLocation())
+				<= FMath::Square(FamiliarityRadius))
+			{
+				Social.Add(Candidate);
+				break;
+			}
+		}
+	}
+
+	// Per pawn: who shared this slice of time with me?
+	for (APawn* Pawn : Social)
+	{
+		UMOCharacterHistoryComponent* History = Pawn->FindComponentByClass<UMOCharacterHistoryComponent>();
+		if (!History)
+		{
+			continue;
+		}
+		TSet<FGuid> CoLocated;
+		for (APawn* Other : Social)
+		{
+			if (Other == Pawn)
+			{
+				continue;
+			}
+			const FGuid OtherGuid = GetPawnGuid(Other);
+			if (!OtherGuid.IsValid())
+			{
+				continue;
+			}
+			if (FVector::DistSquared2D(Pawn->GetActorLocation(), Other->GetActorLocation())
+				<= FMath::Square(FamiliarityRadius))
+			{
+				CoLocated.Add(OtherGuid);
+				History->AddSharedTime(OtherGuid, GameHoursElapsed);
+			}
+		}
+		History->ApplyApartDrift(CoLocated, GameHoursElapsed);
+	}
+}
+
+float UMOColonyManagerSubsystem::GetColonyStanding(APawn* Candidate) const
+{
+	if (!Candidate)
+	{
+		return 0.0f;
+	}
+	const UMOCharacterHistoryComponent* History = Candidate->FindComponentByClass<UMOCharacterHistoryComponent>();
+	if (!History)
+	{
+		return 0.0f;
+	}
+	const FGuid CandidateGuid = GetPawnGuid(Candidate);
+	TArray<FGuid> RosterGuids;
+	for (const APawn* Settler : GetColonyRoster())
+	{
+		const FGuid Guid = GetPawnGuid(Settler);
+		if (Guid.IsValid() && Guid != CandidateGuid)
+		{
+			RosterGuids.Add(Guid);
+		}
+	}
+	return History->GetAverageStandingWith(RosterGuids);
+}
+
+bool UMOColonyManagerSubsystem::CanRecruitByStanding(APawn* Candidate) const
+{
+	if (!Candidate)
+	{
+		return false;
+	}
+	// Bootstrap: with nobody (else) in the colony there is no one to know.
+	const FGuid CandidateGuid = GetPawnGuid(Candidate);
+	int32 OthersOnRoster = 0;
+	for (const APawn* Settler : GetColonyRoster())
+	{
+		const FGuid Guid = GetPawnGuid(Settler);
+		if (Guid.IsValid() && Guid != CandidateGuid)
+		{
+			++OthersOnRoster;
+		}
+	}
+	if (OthersOnRoster == 0)
+	{
+		return true;
+	}
+	return GetColonyStanding(Candidate) >= RecruitStandingThreshold;
+}
+
+bool UMOColonyManagerSubsystem::Marry(APawn* A, APawn* B)
+{
+	if (!A || !B || A == B)
+	{
+		return false;
+	}
+	UMOCharacterHistoryComponent* HistoryA = A->FindComponentByClass<UMOCharacterHistoryComponent>();
+	UMOCharacterHistoryComponent* HistoryB = B->FindComponentByClass<UMOCharacterHistoryComponent>();
+	const FGuid GuidA = GetPawnGuid(A);
+	const FGuid GuidB = GetPawnGuid(B);
+	if (!HistoryA || !HistoryB || !GuidA.IsValid() || !GuidB.IsValid())
+	{
+		return false;
+	}
+	HistoryA->SetRelationshipType(GuidB, ERelationshipType::Spouse);
+	HistoryB->SetRelationshipType(GuidA, ERelationshipType::Spouse);
+	HistoryA->AddEntry(EHistoryEntryType::RelationshipChange,
+		FString::Printf(TEXT("Married %s"), *B->GetName()));
+	HistoryB->AddEntry(EHistoryEntryType::RelationshipChange,
+		FString::Printf(TEXT("Married %s"), *A->GetName()));
+	return true;
+}
+
+bool UMOColonyManagerSubsystem::RecordParentage(APawn* Parent, APawn* Child)
+{
+	if (!Parent || !Child || Parent == Child)
+	{
+		return false;
+	}
+	UMOCharacterHistoryComponent* ParentHistory = Parent->FindComponentByClass<UMOCharacterHistoryComponent>();
+	UMOCharacterHistoryComponent* ChildHistory = Child->FindComponentByClass<UMOCharacterHistoryComponent>();
+	const FGuid ParentGuid = GetPawnGuid(Parent);
+	const FGuid ChildGuid = GetPawnGuid(Child);
+	if (!ParentHistory || !ChildHistory || !ParentGuid.IsValid() || !ChildGuid.IsValid())
+	{
+		return false;
+	}
+	ParentHistory->SetRelationshipType(ChildGuid, ERelationshipType::Child);
+	ChildHistory->SetRelationshipType(ParentGuid, ERelationshipType::Parent);
+	return true;
 }
 
 // ============================================================================
@@ -510,6 +695,9 @@ void UMOColonyManagerSubsystem::RunUpkeepTick()
 
 	// School: maintenance flags + teaching for co-located villagers (V2.2).
 	RunSchoolPass(Roster, GameHoursElapsed);
+
+	// Relationships: REAL shared time builds bonds; absence fades them (V2.3).
+	RunRelationshipPass(Roster, GameHoursElapsed);
 
 	for (APawn* Villager : Roster)
 	{

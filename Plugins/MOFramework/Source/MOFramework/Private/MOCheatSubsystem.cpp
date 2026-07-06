@@ -20,6 +20,7 @@
 #include "MOSkillDefinitionRow.h"
 #include "MOBiomeDatabaseSettings.h"
 #include "MOColonyManagerSubsystem.h"
+#include "MOCharacterHistoryComponent.h"
 #include "MOColonyOverviewWidget.h"
 #include "MOSurvivorController.h"
 #include "MOGameUIManagerSubsystem.h"
@@ -1367,6 +1368,70 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 				AI->SetStayAtLocation(Target->GetActorLocation() + FVector(150.0f, 150.0f, 0.0f));
 				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] COLONY SendTo %s -> %s"),
 					*Pawn->GetName(), *Target->GetName());
+			});
+		}),
+		ECVF_Default));
+
+	// ---------- MO.Colony.Standing <pawnSub> ----------
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Colony.Standing"),
+		TEXT("Dev: print a pawn's colony standing + relationship graph. Usage: MO.Colony.Standing <pawnSub>"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			if (Args.Num() < 1)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] COLONY Standing usage: <pawnSub>"));
+				return;
+			}
+			const FString PawnSub = Args[0];
+			RunOnNextTick(World, [PawnSub](UWorld* W)
+			{
+				APawn* Pawn = FindColonyPawnBySub(W, PawnSub);
+				UMOColonyManagerSubsystem* Colony = W->GetSubsystem<UMOColonyManagerSubsystem>();
+				if (!Pawn || !Colony)
+				{
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] COLONY Standing FAILED: pawn=%s"),
+						Pawn ? *Pawn->GetName() : TEXT("none"));
+					return;
+				}
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] COLONY Standing %s standing=%.3f recruitable=%d"),
+					*Pawn->GetName(), Colony->GetColonyStanding(Pawn),
+					Colony->CanRecruitByStanding(Pawn) ? 1 : 0);
+				if (const UMOCharacterHistoryComponent* History = Pawn->FindComponentByClass<UMOCharacterHistoryComponent>())
+				{
+					for (const FMOCharacterRelationship& Rel : History->GetRelationships())
+					{
+						UE_LOG(LogMOFramework, Warning,
+							TEXT("[MOQUERY] COLONY Rel %s -> %s type=%s strength=%.3f shared=%.0fs"),
+							*Pawn->GetName(), *Rel.OtherCharacterGuid.ToString(EGuidFormats::Short),
+							*UEnum::GetValueAsString(Rel.RelationshipType), Rel.Strength, Rel.ProximityTime);
+					}
+				}
+			});
+		}),
+		ECVF_Default));
+
+	// ---------- MO.Colony.Marry <pawnSubA> <pawnSubB> ----------
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Colony.Marry"),
+		TEXT("Dev: record a marriage (V2.3 data model; courtship sim is V2.5). Usage: MO.Colony.Marry <pawnSubA> <pawnSubB>"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			if (Args.Num() < 2)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] COLONY Marry usage: <pawnSubA> <pawnSubB>"));
+				return;
+			}
+			const FString SubA = Args[0];
+			const FString SubB = Args[1];
+			RunOnNextTick(World, [SubA, SubB](UWorld* W)
+			{
+				APawn* A = FindColonyPawnBySub(W, SubA);
+				APawn* B = FindColonyPawnBySub(W, SubB);
+				UMOColonyManagerSubsystem* Colony = W->GetSubsystem<UMOColonyManagerSubsystem>();
+				const bool bOk = Colony && Colony->Marry(A, B);
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] COLONY Marry %s + %s ok=%d"),
+					A ? *A->GetName() : TEXT("none"), B ? *B->GetName() : TEXT("none"), bOk ? 1 : 0);
 			});
 		}),
 		ECVF_Default));

@@ -11,6 +11,7 @@
 #include "MOColonyManagerSubsystem.h"
 #include "MOColonyTypes.h"
 #include "MOSkillsComponent.h"
+#include "MOCharacterHistoryComponent.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -219,6 +220,64 @@ bool FMOColony_Teach_DoubleSpeed::RunTest(const FString& Parameters)
 		UMOColonyManagerSubsystem::ComputeTeachXP(3.0f, 20.0f), 120.0f);
 	TestEqual(TEXT("no time, no XP"),
 		UMOColonyManagerSubsystem::ComputeTeachXP(0.0f, 20.0f), 0.0f);
+	return true;
+}
+
+// ============================================================================
+// V2.3 relationship math
+// ============================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOColony_Rel_SharedTimeGrows,
+	"MOFramework.Colony.Relationships.SharedTimeGrows",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+bool FMOColony_Rel_SharedTimeGrows::RunTest(const FString& Parameters)
+{
+	// Strangers -> one shared game-hour moves the bond by the grow rate.
+	const float After1h = UMOCharacterHistoryComponent::ComputeStrengthDelta(0.0f, 1.0f, 0.0f);
+	TestEqual(TEXT("one shared hour = grow rate from zero"), After1h, 0.02f, 0.0001f);
+	// Growth is asymptotic: the second stretch closes less absolute distance.
+	const float After10h = UMOCharacterHistoryComponent::ComputeStrengthDelta(0.0f, 10.0f, 0.0f);
+	const float After20h = UMOCharacterHistoryComponent::ComputeStrengthDelta(0.0f, 20.0f, 0.0f);
+	TestTrue(TEXT("10h grows a real bond"), After10h > 0.15f);
+	TestTrue(TEXT("second 10h adds less than the first (asymptote)"),
+		(After20h - After10h) < After10h);
+	// Never exceeds 1 even after absurd shared time.
+	TestTrue(TEXT("clamped at 1"),
+		UMOCharacterHistoryComponent::ComputeStrengthDelta(0.9f, 10000.0f, 0.0f) <= 1.0f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOColony_Rel_ApartDrifts,
+	"MOFramework.Colony.Relationships.ApartDrifts",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+bool FMOColony_Rel_ApartDrifts::RunTest(const FString& Parameters)
+{
+	// Apart time fades a positive bond toward zero...
+	const float Faded = UMOCharacterHistoryComponent::ComputeStrengthDelta(0.5f, 0.0f, 100.0f);
+	TestEqual(TEXT("100h apart fades by drift rate"), Faded, 0.4f, 0.0001f);
+	// ...but absence alone never flips friend to enemy (floors at 0).
+	TestEqual(TEXT("fade floors at zero"),
+		UMOCharacterHistoryComponent::ComputeStrengthDelta(0.1f, 0.0f, 100000.0f), 0.0f);
+	// Hostility also cools toward zero with distance (ceilings at 0).
+	TestEqual(TEXT("grudges cool toward zero, not past it"),
+		UMOCharacterHistoryComponent::ComputeStrengthDelta(-0.1f, 0.0f, 100000.0f), 0.0f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOColony_Rel_GrowthBeatsDrift,
+	"MOFramework.Colony.Relationships.GrowthBeatsDrift",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+bool FMOColony_Rel_GrowthBeatsDrift::RunTest(const FString& Parameters)
+{
+	// A villager sharing 8h/day and apart 16h/day must still NET GAIN —
+	// otherwise no friendship could ever form in normal village life.
+	float Strength = 0.0f;
+	for (int32 Day = 0; Day < 30; ++Day)
+	{
+		Strength = UMOCharacterHistoryComponent::ComputeStrengthDelta(Strength, 8.0f, 0.0f);
+		Strength = UMOCharacterHistoryComponent::ComputeStrengthDelta(Strength, 0.0f, 16.0f);
+	}
+	TestTrue(TEXT("30 days of village life forms a friend-grade bond"), Strength > 0.35f);
 	return true;
 }
 

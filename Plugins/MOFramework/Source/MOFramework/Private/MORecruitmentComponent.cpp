@@ -1,4 +1,5 @@
 #include "MORecruitmentComponent.h"
+#include "MOColonyManagerSubsystem.h"
 #include "MOFramework.h"
 #include "MOSpawnManagerSubsystem.h"
 #include "MOInventoryComponent.h"
@@ -87,6 +88,30 @@ bool UMORecruitmentComponent::BeginInteraction(APawn* InteractingPawn)
 	{
 		// Can't interact with dead
 		return false;
+	}
+
+	// STANDING GATE (V2.3): once a colony exists, strangers only agree to join
+	// after real shared time near settlers has built trust. Quests still start
+	// (doing someone a favor is HOW you build standing), but the immediate
+	// no-quest recruit path refuses below the threshold. ForceRecruit (dev
+	// verb) bypasses by design.
+	if (RecruitmentState == EMORecruitmentState::Wandering &&
+		ActiveQuest.QuestType == EMORecruitmentQuestType::None)
+	{
+		if (const UWorld* World = GetWorld())
+		{
+			if (UMOColonyManagerSubsystem* Colony = World->GetSubsystem<UMOColonyManagerSubsystem>())
+			{
+				APawn* OwnerPawn = Cast<APawn>(GetOwner());
+				if (OwnerPawn && !Colony->CanRecruitByStanding(OwnerPawn))
+				{
+					UE_LOG(LogMOFramework, Warning,
+						TEXT("[Recruitment] %s declines to join: colony standing %.2f below %.2f — spend time together first"),
+						*GetOwner()->GetName(), Colony->GetColonyStanding(OwnerPawn), Colony->RecruitStandingThreshold);
+					return false;
+				}
+			}
+		}
 	}
 
 	// Mark as interacted

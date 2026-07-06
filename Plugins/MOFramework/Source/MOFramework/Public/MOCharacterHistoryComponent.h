@@ -53,7 +53,47 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|History|Save")
 	bool ApplySaveDataAuthority(const FMOCharacterHistorySaveData& InSaveData);
 
-	UPROPERTY(BlueprintAssignable, Category="MO|History")
+	// =========================================================================
+	// RELATIONSHIP GRAPH (V2.3) — grown by REAL shared time, not scripts.
+	// =========================================================================
+
+	/**
+	 * THE bond function — pure math for headless tests. Strength approaches 1
+	 * asymptotically with shared hours (fast early, slow late), and drifts
+	 * back toward 0 while apart (friendships fade, slowly).
+	 */
+	UFUNCTION(BlueprintPure, Category="MO|History|Relationships")
+	static float ComputeStrengthDelta(float CurrentStrength, float SharedGameHours,
+		float ApartGameHours, float GrowPerSharedHour = 0.02f, float DriftPerApartHour = 0.001f);
+
+	/** Accrue shared time with another character (authority). Grows Strength;
+	 *  auto-types Friend past the threshold if untyped. */
+	UFUNCTION(BlueprintCallable, Category="MO|History|Relationships")
+	void AddSharedTime(const FGuid& OtherGuid, float GameHours);
+
+	/** Drift all bonds NOT in the given co-located set (authority). */
+	void ApplyApartDrift(const TSet<FGuid>& CoLocated, float GameHours);
+
+	/** Author a typed relationship both ways is the caller's job (authority). */
+	UFUNCTION(BlueprintCallable, Category="MO|History|Relationships")
+	void SetRelationshipType(const FGuid& OtherGuid, ERelationshipType Type);
+
+	UFUNCTION(BlueprintPure, Category="MO|History|Relationships")
+	FMOCharacterRelationship GetRelationship(const FGuid& OtherGuid) const;
+
+	UFUNCTION(BlueprintPure, Category="MO|History|Relationships")
+	const TArray<FMOCharacterRelationship>& GetRelationships() const { return Relationships; }
+
+	/** Mean Strength toward the given characters (0 when none known) —
+	 *  the STANDING recruitment gates on. */
+	UFUNCTION(BlueprintCallable, Category="MO|History|Relationships")
+	float GetAverageStandingWith(const TArray<FGuid>& Others) const;
+
+	/** Strength at which an untyped bond becomes Friend. */
+	UPROPERTY(EditAnywhere, Category="MO|History|Relationships")
+	float FriendThreshold = 0.35f;
+
+		UPROPERTY(BlueprintAssignable, Category="MO|History")
 	FMOOnHistoryEntryAdded OnEntryAdded;
 
 	/** Ring-buffer cap; oldest entries drop past this. */
@@ -61,6 +101,11 @@ public:
 	int32 MaxEntries = 100;
 
 private:
+	FMOCharacterRelationship* FindOrAddRelationship(const FGuid& OtherGuid);
+
 	UPROPERTY()
 	TArray<FMOCharacterHistoryEntry> Entries;
+
+	UPROPERTY()
+	TArray<FMOCharacterRelationship> Relationships;
 };
