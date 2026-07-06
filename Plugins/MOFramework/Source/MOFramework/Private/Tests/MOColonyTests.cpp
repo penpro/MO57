@@ -103,4 +103,79 @@ bool FMOColony_Mood_ClampedAtRockBottom::RunTest(const FString& Parameters)
 	return true;
 }
 
+
+// ============================================================================
+// V2.1 quota decision math
+// ============================================================================
+
+namespace MOColonyTestData
+{
+	FMOColonyQuota Quota(const TCHAR* Item, const TCHAR* Recipe, int32 Target, int32 Prio = 0)
+	{
+		FMOColonyQuota Q;
+		Q.OutputItemId = Item;
+		Q.RecipeId = Recipe;
+		Q.TargetCount = Target;
+		Q.Priority = Prio;
+		return Q;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOColony_Quota_FillsBelowTarget,
+	"MOFramework.Colony.Quota.FillsBelowTarget",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+bool FMOColony_Quota_FillsBelowTarget::RunTest(const FString& Parameters)
+{
+	TArray<FMOColonyQuota> Quotas = { MOColonyTestData::Quota(TEXT("Flake"), TEXT("Knap"), 8) };
+	TMap<FName, int32> Stock;
+	Stock.Add(TEXT("Flake"), 3);
+	const TArray<FName> Work = UMOColonyManagerSubsystem::DecideQuotaWork(Quotas, Stock, {}, 2);
+	TestEqual(TEXT("one assignment"), Work.Num(), 1);
+	TestTrue(TEXT("assigns the quota recipe"), Work.Num() == 1 && Work[0] == FName(TEXT("Knap")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOColony_Quota_MetQuotaIdles,
+	"MOFramework.Colony.Quota.MetQuotaIdles",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+bool FMOColony_Quota_MetQuotaIdles::RunTest(const FString& Parameters)
+{
+	TArray<FMOColonyQuota> Quotas = { MOColonyTestData::Quota(TEXT("Flake"), TEXT("Knap"), 8) };
+	TMap<FName, int32> Stock;
+	Stock.Add(TEXT("Flake"), 8);
+	const TArray<FName> Work = UMOColonyManagerSubsystem::DecideQuotaWork(Quotas, Stock, {}, 3);
+	TestEqual(TEXT("no busywork when quota met"), Work.Num(), 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOColony_Quota_PriorityWinsScarceHands,
+	"MOFramework.Colony.Quota.PriorityWinsScarceHands",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+bool FMOColony_Quota_PriorityWinsScarceHands::RunTest(const FString& Parameters)
+{
+	TArray<FMOColonyQuota> Quotas = {
+		MOColonyTestData::Quota(TEXT("Rope"), TEXT("TwistRope"), 4, /*Prio=*/1),
+		MOColonyTestData::Quota(TEXT("Flake"), TEXT("Knap"), 8, /*Prio=*/5),
+	};
+	TMap<FName, int32> Stock;   // both empty
+	const TArray<FName> Work = UMOColonyManagerSubsystem::DecideQuotaWork(Quotas, Stock, {}, 1);
+	TestEqual(TEXT("one idle hand, one job"), Work.Num(), 1);
+	TestTrue(TEXT("higher priority quota first"), Work.Num() == 1 && Work[0] == FName(TEXT("Knap")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOColony_Quota_InFlightNotDoubled,
+	"MOFramework.Colony.Quota.InFlightNotDoubled",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+bool FMOColony_Quota_InFlightNotDoubled::RunTest(const FString& Parameters)
+{
+	TArray<FMOColonyQuota> Quotas = { MOColonyTestData::Quota(TEXT("Flake"), TEXT("Knap"), 8) };
+	TMap<FName, int32> Stock;
+	TSet<FName> InFlight;
+	InFlight.Add(TEXT("Knap"));
+	const TArray<FName> Work = UMOColonyManagerSubsystem::DecideQuotaWork(Quotas, Stock, InFlight, 3);
+	TestEqual(TEXT("in-flight order not double-assigned"), Work.Num(), 0);
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

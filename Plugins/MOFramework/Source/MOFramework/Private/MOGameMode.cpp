@@ -50,6 +50,14 @@ void AMOGameMode::BeginPlay()
 {
 	Super::BeginPlay();
 
+	// Fall-through rescue loop (authority): catches pawns dropping through
+	// ungenerated voxel — join spawns, travel edge cases, streaming lag.
+	if (HasAuthority())
+	{
+		GetWorldTimerManager().SetTimer(FallthroughRescueTimer, this,
+			&AMOGameMode::RescueFallenPawns, 5.0f, /*bLoop=*/true);
+	}
+
 	RegisterPCGTagMappings();
 
 	// Notify audio subsystem that the world (and this GameMode) is ready.
@@ -1092,9 +1100,17 @@ APawn* AMOGameMode::SpawnJoinPawnForController(APlayerController* PC)
 		return nullptr;
 	}
 
-	// Same safe-spawn rules as the host; independent roll so co-op players
-	// land near the same biome band but not inside each other.
-	const FVector SpawnLocation = FindSafeSpawnLocation();
+	// Spawn NEAR THE HOST, not at an independent far roll. The voxel world is
+	// only generated (and collidable) around existing players — the original
+	// independent roll dropped join pawns over ungenerated terrain, where they
+	// fell through ON THE SERVER and plummeted forever (total client
+	// replication blackout: the falling pawn drags net relevancy into the
+	// void; observed live 2026-07-06). Friends-only co-op spawns together.
+	FVector SpawnLocation = FindJoinSpawnNearHost();
+	if (SpawnLocation.IsNearlyZero())
+	{
+		SpawnLocation = FindSafeSpawnLocation();   // no grounded host pawn — old path
+	}
 
 	FActorSpawnParameters SpawnParams;
 	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
@@ -1132,6 +1148,85 @@ APawn* AMOGameMode::SpawnJoinPawnForController(APlayerController* PC)
 	// No landing/loading-screen machinery here: PendingLandingPawn is host-only
 	// single-slot state; the join pawn simply falls SpawnHeightOffset to ground.
 	return NewPawn;
+}
+
+FVector AMOGameMode::FindJoinSpawnNearHost() const
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return FVector::ZeroVector;
+	}
+	// Anchor on any grounded, player-controlled pawn (the host, or an earlier
+	// joiner) — terrain is guaranteed generated and collidable around them.
+	for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
+	{
+		const APlayerController* PC = It->Get();
+		APawn* Anchor = PC ? PC->GetPawn() : nullptr;
+		if (!Anchor)
+		{
+			continue;
+		}
+		const FVector Base = Anchor->GetActorLocation();
+		// Ring roll: close enough to share the generated area, far enough not
+		// to spawn inside the host. Ground-trace each candidate.
+		for (int32 Attempt = 0; Attempt < 8; ++Attempt)
+		{
+			const float Angle = FMath::FRandRange(0.0f, 2.0f * PI);
+			const float Dist = FMath::FRandRange(600.0f, 1500.0f);
+			const FVector Candidate = Base + FVector(FMath::Cos(Angle) * Dist, FMath::Sin(Angle) * Dist, 0.0f);
+			FHitResult Hit;
+			FCollisionQueryParams QP;
+			QP.AddIgnoredActor(Anchor);
+			if (World->LineTraceSingleByChannel(Hit,
+				Candidate + FVector(0, 0, 3000.0f), Candidate - FVector(0, 0, 3000.0f),
+				ECC_WorldStatic, QP))
+			{
+				return Hit.Location + FVector(0, 0, SpawnHeightOffset);
+			}
+		}
+		// Traces all missed (host mid-air?) — drop the joiner right beside them.
+		return Base + FVector(300.0f, 300.0f, SpawnHeightOffset);
+	}
+	return FVector::ZeroVector;
+}
+
+void AMOGameMode::RescueFallenPawns()
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+	for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
+	{
+		const APlayerController* PC = It->Get();
+		APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+		if (!Pawn || Pawn->GetActorLocation().Z > FallthroughRescueZ)
+		{
+			continue;
+		}
+		// Below the world: the pawn fell through unloaded/ungenerated terrain.
+		// Recover instead of falling forever (a falling pawn also blacks out
+		// its client's net relevancy). Reuse the join-spawn anchor logic.
+		FVector Rescue = FindJoinSpawnNearHost();
+		if (Rescue.IsNearlyZero())
+		{
+			Rescue = FindSafeSpawnLocation();
+		}
+		UE_LOG(LogMOFramework, Warning,
+			TEXT("[MOGameMode] RESCUE: %s fell through the world (z=%.0f) — moving to %s"),
+			*Pawn->GetName(), Pawn->GetActorLocation().Z, *Rescue.ToCompactString());
+		Pawn->TeleportTo(Rescue, Pawn->GetActorRotation(), false, true);
+		if (ACharacter* Character = Cast<ACharacter>(Pawn))
+		{
+			if (UCharacterMovementComponent* Move = Character->GetCharacterMovement())
+			{
+				Move->Velocity = FVector::ZeroVector;
+				Move->SetMovementMode(MOVE_Falling);   // land normally from SpawnHeightOffset
+			}
+		}
+	}
 }
 
 FVector AMOGameMode::FindSafeSpawnLocation() const

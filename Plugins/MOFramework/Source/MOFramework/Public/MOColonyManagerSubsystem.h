@@ -109,6 +109,25 @@ public:
 	FMOOnVillagerMoodChanged OnVillagerMoodChanged;
 
 	// =========================================================================
+	// QUOTAS / STANDING ORDERS (V2.1)
+	// =========================================================================
+
+	/** Set (or update) the standing order for an item. TargetCount 0 removes it. */
+	UFUNCTION(BlueprintCallable, Category="MO|Colony")
+	void SetQuota(FName OutputItemId, FName RecipeId, int32 TargetCount, int32 Priority = 0);
+
+	UFUNCTION(BlueprintPure, Category="MO|Colony")
+	const TArray<FMOColonyQuota>& GetQuotas() const { return Quotas; }
+
+	/**
+	 * THE quota decision — pure math for headless tests. Returns the recipes
+	 * to assign right now, highest priority first: quotas whose stock is
+	 * below target, not already in flight, capped at IdleVillagers.
+	 */
+	static TArray<FName> DecideQuotaWork(const TArray<FMOColonyQuota>& InQuotas,
+		const TMap<FName, int32>& Stock, const TSet<FName>& RecipesInFlight, int32 IdleVillagers);
+
+	// =========================================================================
 	// UPKEEP (driven by timer; public so tests can force a tick)
 	// =========================================================================
 
@@ -133,9 +152,11 @@ public:
 private:
 	void TryFeedVillager(APawn* Villager, const FGuid& PawnGuid);
 	AMOContainerActor* FindCommunalFood(FName& OutItemId) const;
+	void RunQuotaPass(const TArray<APawn*>& Roster);
 	static FGuid GetPawnGuid(const APawn* Pawn);
 
 	UPROPERTY() FMOSettlementRecord Settlement;
+	UPROPERTY() TArray<FMOColonyQuota> Quotas;
 	UPROPERTY() TMap<FGuid, FGuid> Residency;
 	UPROPERTY() TMap<FGuid, float> VillagerMood;
 	UPROPERTY() TMap<FGuid, float> VillagerUnhousedHours;

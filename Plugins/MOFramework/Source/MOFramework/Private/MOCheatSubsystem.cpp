@@ -1338,6 +1338,33 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 		}),
 		ECVF_Default));
 
+	// ---------- MO.Colony.SetQuota <itemId> <recipeId> <count> [prio=0] ----------
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Colony.SetQuota"),
+		TEXT("Standing order: keep <count> of <itemId> in communal storage by crafting <recipeId>. Count 0 removes. Usage: MO.Colony.SetQuota <itemId> <recipeId> <count> [prio]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			if (Args.Num() < 3)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] COLONY SetQuota usage: <itemId> <recipeId> <count> [prio]"));
+				return;
+			}
+			const FName ItemId = FName(*Args[0]);
+			const FName RecipeId = FName(*Args[1]);
+			const int32 Count = FCString::Atoi(*Args[2]);
+			const int32 Prio = Args.Num() > 3 ? FCString::Atoi(*Args[3]) : 0;
+			RunOnNextTick(World, [ItemId, RecipeId, Count, Prio](UWorld* W)
+			{
+				if (UMOColonyManagerSubsystem* Colony = W->GetSubsystem<UMOColonyManagerSubsystem>())
+				{
+					Colony->SetQuota(ItemId, RecipeId, Count, Prio);
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] COLONY SetQuota %s=%d via %s prio=%d"),
+						*ItemId.ToString(), Count, *RecipeId.ToString(), Prio);
+				}
+			});
+		}),
+		ECVF_Default));
+
 	// ---------- MO.Colony.UI ----------
 	ConsoleCommands.Add(CM.RegisterConsoleCommand(
 		TEXT("MO.Colony.UI"),

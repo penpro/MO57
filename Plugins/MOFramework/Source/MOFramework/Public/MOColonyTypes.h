@@ -435,6 +435,30 @@ struct MOFRAMEWORK_API FMOVillagerMoodInputs
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Mood") float MoodVarianceModifier = 1.0f; // personality Stability (0.5 stable .. 1.5 volatile)
 };
 
+/** A standing order (V2.1): keep TargetCount of an item in communal storage
+ *  by crafting RecipeId. The Medieval-Dynasty-style scale abstraction — the
+ *  PLAYER sets intent, villagers do the real labor through the V0 job flow. */
+USTRUCT(BlueprintType)
+struct MOFRAMEWORK_API FMOColonyQuota
+{
+	GENERATED_BODY()
+
+	/** Item to keep stocked (measured across settlement communal storage). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Quota")
+	FName OutputItemId;
+
+	/** Recipe villagers run to produce it. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Quota")
+	FName RecipeId;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Quota", meta=(ClampMin="0"))
+	int32 TargetCount = 0;
+
+	/** Higher fills first when idle hands are scarce. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Quota")
+	int32 Priority = 0;
+};
+
 /** Save payload for the whole settlement layer. */
 USTRUCT(BlueprintType)
 struct MOFRAMEWORK_API FMOColonySaveData
@@ -446,5 +470,6 @@ struct MOFRAMEWORK_API FMOColonySaveData
 	UPROPERTY() TMap<FGuid, float> VillagerMood;         // pawn -> 0..1
 	UPROPERTY() TMap<FGuid, float> VillagerUnhousedHours;
 	UPROPERTY() TMap<FGuid, FMOCharacterHistorySaveData> VillagerHistory;
+	UPROPERTY() TArray<FMOColonyQuota> Quotas;
 	UPROPERTY() bool bHasValidData = false;
 };

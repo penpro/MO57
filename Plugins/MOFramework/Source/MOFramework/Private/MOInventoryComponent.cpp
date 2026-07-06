@@ -43,8 +43,16 @@ void UMOInventoryComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
-	DOREPLIFETIME_CONDITION(UMOInventoryComponent, Inventory, COND_OwnerOnly);
-	DOREPLIFETIME_CONDITION(UMOInventoryComponent, SlotItemGuids, COND_OwnerOnly);
+	// COND_None, NOT COND_OwnerOnly: this component also lives on COMMUNAL
+	// CONTAINERS (baskets, stations), which have no owning connection — under
+	// OwnerOnly their contents replicated to NOBODY and every co-op client
+	// saw shared storage as permanently empty (V0 co-op sub-gate, 2026-07-06:
+	// villager deposited 4 flakes server-side, client read 0 forever).
+	// Bandwidth is bounded by actor relevancy + FastArray deltas; pawn-
+	// inventory privacy is a non-goal in friends-only co-op. If that changes,
+	// split a shared-container subclass with its own lifetime registration.
+	DOREPLIFETIME_CONDITION(UMOInventoryComponent, Inventory, COND_None);
+	DOREPLIFETIME_CONDITION(UMOInventoryComponent, SlotItemGuids, COND_None);
 }
 
 int32 UMOInventoryComponent::FindEntryIndexByGuid(const FGuid& ItemGuid) const

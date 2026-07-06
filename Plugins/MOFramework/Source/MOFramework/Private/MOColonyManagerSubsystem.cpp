@@ -2,6 +2,7 @@
 #include "MOFramework.h"
 #include "MOCharacter.h"
 #include "MOContainerActor.h"
+#include "MOCraftingStationActor.h"
 #include "MOBuildableActor.h"
 #include "MOIdentityComponent.h"
 #include "MORecruitmentComponent.h"
@@ -17,6 +18,7 @@
 #include "MORecipeDefinitionRow.h"
 #include "MOGameClockSubsystem.h"
 #include "MOSurvivorController.h"
+#include "MOSurvivorJobQueueComponent.h"
 #include "EngineUtils.h"
 #include "TimerManager.h"
 
@@ -203,6 +205,164 @@ float UMOColonyManagerSubsystem::GetVillagerMood(const FGuid& PawnGuid) const
 }
 
 // ============================================================================
+// QUOTAS / STANDING ORDERS (V2.1)
+// ============================================================================
+
+void UMOColonyManagerSubsystem::SetQuota(FName OutputItemId, FName RecipeId, int32 TargetCount, int32 Priority)
+{
+	Quotas.RemoveAll([&](const FMOColonyQuota& Q) { return Q.OutputItemId == OutputItemId; });
+	if (TargetCount > 0)
+	{
+		FMOColonyQuota Q;
+		Q.OutputItemId = OutputItemId;
+		Q.RecipeId = RecipeId;
+		Q.TargetCount = TargetCount;
+		Q.Priority = Priority;
+		Quotas.Add(Q);
+	}
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOColony] Quota %s: keep %d via %s (prio %d)"),
+		*OutputItemId.ToString(), TargetCount, *RecipeId.ToString(), Priority);
+}
+
+TArray<FName> UMOColonyManagerSubsystem::DecideQuotaWork(const TArray<FMOColonyQuota>& InQuotas,
+	const TMap<FName, int32>& Stock, const TSet<FName>& RecipesInFlight, int32 IdleVillagers)
+{
+	TArray<FMOColonyQuota> Sorted = InQuotas;
+	Sorted.Sort([](const FMOColonyQuota& A, const FMOColonyQuota& B) { return A.Priority > B.Priority; });
+
+	TArray<FName> Assignments;
+	for (const FMOColonyQuota& Q : Sorted)
+	{
+		if (Assignments.Num() >= IdleVillagers)
+		{
+			break;
+		}
+		if (Q.RecipeId.IsNone() || Q.TargetCount <= 0)
+		{
+			continue;
+		}
+		if (Stock.FindRef(Q.OutputItemId) >= Q.TargetCount)
+		{
+			continue;   // quota met — no busywork
+		}
+		if (RecipesInFlight.Contains(Q.RecipeId))
+		{
+			continue;   // someone is already on it — one villager per order per pass
+		}
+		Assignments.Add(Q.RecipeId);
+	}
+	return Assignments;
+}
+
+void UMOColonyManagerSubsystem::RunQuotaPass(const TArray<APawn*>& Roster)
+{
+	if (Quotas.Num() == 0)
+	{
+		return;
+	}
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	// Stock across settlement communal storage, for quota'd items only.
+	TMap<FName, int32> Stock;
+	TArray<AMOContainerActor*> Storages;
+	for (TActorIterator<AMOContainerActor> It(World); It; ++It)
+	{
+		if (IsValid(*It) && IsInSettlement(It->GetActorLocation()))
+		{
+			Storages.Add(*It);
+			if (const UMOInventoryComponent* Inv = It->FindComponentByClass<UMOInventoryComponent>())
+			{
+				for (const FMOColonyQuota& Q : Quotas)
+				{
+					Stock.FindOrAdd(Q.OutputItemId) += Inv->GetItemCountByDefinitionId(Q.OutputItemId);
+				}
+			}
+		}
+	}
+	if (Storages.Num() == 0)
+	{
+		return;
+	}
+
+	// Idle AI villagers + recipes already in flight.
+	TArray<APawn*> Idle;
+	TSet<FName> InFlight;
+	for (APawn* Villager : Roster)
+	{
+		const bool bAIControlled = Villager->GetController()
+			&& Villager->GetController()->IsA<AMOSurvivorController>();
+		if (!bAIControlled)
+		{
+			continue;
+		}
+		const UMOSurvivorJobQueueComponent* JobQueue = Villager->FindComponentByClass<UMOSurvivorJobQueueComponent>();
+		if (!JobQueue)
+		{
+			continue;
+		}
+		const FMOSurvivorJobEntry Current = JobQueue->GetCurrentJob();
+		if (Current.IsValid())
+		{
+			if (Current.JobType == EMOSurvivorJobType::CraftAtStation)
+			{
+				InFlight.Add(Current.CraftRecipeId);
+			}
+		}
+		else
+		{
+			Idle.Add(Villager);
+		}
+	}
+	if (Idle.Num() == 0)
+	{
+		return;
+	}
+
+	const TArray<FName> Assignments = DecideQuotaWork(Quotas, Stock, InFlight, Idle.Num());
+	int32 IdleIndex = 0;
+	for (const FName& RecipeId : Assignments)
+	{
+		APawn* Villager = Idle[IdleIndex++];
+		UMOSurvivorJobQueueComponent* JobQueue = Villager->FindComponentByClass<UMOSurvivorJobQueueComponent>();
+
+		// Nearest station/storage to the worker — same resolution the UI uses.
+		AActor* Station = nullptr;
+		float BestD = TNumericLimits<float>::Max();
+		for (TActorIterator<AMOCraftingStationActor> It(World); It; ++It)
+		{
+			const float D = FVector::DistSquared(It->GetActorLocation(), Villager->GetActorLocation());
+			if (IsValid(*It) && D < BestD) { Station = *It; BestD = D; }
+		}
+		AActor* Storage = Storages[0];
+		BestD = TNumericLimits<float>::Max();
+		for (AMOContainerActor* S : Storages)
+		{
+			const float D = FVector::DistSquared(S->GetActorLocation(), Villager->GetActorLocation());
+			if (D < BestD) { Storage = S; BestD = D; }
+		}
+		if (!Station || !JobQueue)
+		{
+			continue;
+		}
+		const FGuid JobId = JobQueue->EnqueueCraftJob(RecipeId, Station, Storage, 1);
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOColony] Quota assigned: %s -> %s (ok=%d)"),
+			*Villager->GetName(), *RecipeId.ToString(), JobId.IsValid() ? 1 : 0);
+		if (JobId.IsValid())
+		{
+			if (UMOCharacterHistoryComponent* History = Villager->FindComponentByClass<UMOCharacterHistoryComponent>())
+			{
+				History->AddEntry(EHistoryEntryType::Activity,
+					FString::Printf(TEXT("Took standing order: %s"), *RecipeId.ToString()));
+			}
+		}
+	}
+}
+
+// ============================================================================
 // UPKEEP
 // ============================================================================
 
@@ -225,7 +385,12 @@ void UMOColonyManagerSubsystem::RunUpkeepTick()
 		: 0.0f;
 	LastUpkeepGameSeconds = NowGameSeconds;
 
-	for (APawn* Villager : GetColonyRoster())
+	const TArray<APawn*> Roster = GetColonyRoster();
+
+	// Standing orders first: idle hands pick up quota work this same pass.
+	RunQuotaPass(Roster);
+
+	for (APawn* Villager : Roster)
 	{
 		const FGuid PawnGuid = GetPawnGuid(Villager);
 
@@ -395,6 +560,7 @@ FMOColonySaveData UMOColonyManagerSubsystem::BuildSaveData() const
 {
 	FMOColonySaveData Data;
 	Data.Settlement = Settlement;
+	Data.Quotas = Quotas;
 	Data.Residency = Residency;
 	Data.VillagerMood = VillagerMood;
 	Data.VillagerUnhousedHours = VillagerUnhousedHours;
@@ -419,6 +585,7 @@ bool UMOColonyManagerSubsystem::ApplySaveDataAuthority(const FMOColonySaveData& 
 		return false;
 	}
 	Settlement = InData.Settlement;
+	Quotas = InData.Quotas;
 	Residency = InData.Residency;
 	VillagerMood = InData.VillagerMood;
 	VillagerUnhousedHours = InData.VillagerUnhousedHours;

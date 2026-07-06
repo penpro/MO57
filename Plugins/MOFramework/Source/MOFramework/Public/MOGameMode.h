@@ -326,6 +326,21 @@ private:
 	 */
 	APawn* SpawnJoinPawnForController(APlayerController* PC);
 
+	/** Ground-traced spawn point near an existing grounded player (join +
+	 *  rescue anchor). Zero vector if no player pawn exists yet. */
+	FVector FindJoinSpawnNearHost() const;
+
+	/** Authority safety net: recover player pawns that fell below the world
+	 *  (ungenerated voxel) instead of letting them plummet forever — a falling
+	 *  pawn also blacks out its client's net relevancy. Timer-driven. */
+	void RescueFallenPawns();
+
+	/** Pawns below this Z are considered fallen through the world. */
+	UPROPERTY(EditAnywhere, Category="MO|Spawn")
+	float FallthroughRescueZ = -30000.0f;
+
+	FTimerHandle FallthroughRescueTimer;
+
 	/** Remote PCs that joined before the world was ready for pawns. */
 	TArray<TWeakObjectPtr<APlayerController>> PendingJoinControllers;
 
