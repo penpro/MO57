@@ -20,6 +20,9 @@
 #include "MOSkillDefinitionRow.h"
 #include "MOBiomeDatabaseSettings.h"
 #include "MOColonyManagerSubsystem.h"
+#include "MOColonyOverviewWidget.h"
+#include "MOGameUIManagerSubsystem.h"
+#include "MOPrimaryGameLayout.h"
 #include "MOIdentityComponent.h"
 #include "MOBuildableActor.h" // complete type for TSubclassOf<AMOBuildableActor> null-check (A1 art audit)
 #include "MOContainerActor.h"
@@ -1331,6 +1334,23 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] COLONY AssignHouse %s -> %s ok=%d"),
 					Pawn ? *Pawn->GetName() : TEXT("none"),
 					House ? *House->GetName() : TEXT("none"), bOk ? 1 : 0);
+			});
+		}),
+		ECVF_Default));
+
+	// ---------- MO.Colony.UI ----------
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Colony.UI"),
+		TEXT("Open the colony overview widget on the Menu layer (C++-built tree; ClickWidget-addressable buttons)."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			RunOnNextTick(World, [](UWorld* W)
+			{
+				UMOGameUIManagerSubsystem* UISub = W->GetSubsystem<UMOGameUIManagerSubsystem>();
+				UCommonActivatableWidget* Widget = UISub
+					? UISub->PushWidgetToLayer(MOUILayerTags::Layer_Menu, UMOColonyOverviewWidget::StaticClass())
+					: nullptr;
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] COLONY UI opened=%d"), Widget ? 1 : 0);
 			});
 		}),
 		ECVF_Default));
