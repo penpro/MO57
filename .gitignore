@@ -46,3 +46,6 @@ Plugins/MOFramework/Source/MOFramework/Public/MOBuildInfoGenerated.h
 
 
 Content/Python/__pycache__/
+
+# graphify knowledge graph (regenerable via 'graphify update .')
+graphify-out/

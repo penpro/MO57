@@ -1,5 +1,17 @@
 # MOFramework Project Memory
 
+## Graphify knowledge graph
+
+This project has a graphify knowledge graph at `graphify-out/` (11k nodes,
+741 code files; AST-extracted, fully local). Rules:
+- For architecture / "what connects to what" questions, try the graph before
+  grepping: `python -m graphify query "..."`, `explain "Symbol"`,
+  `path "A" "B"`, `affected "X"` (run from repo root).
+- After a session that modifies code, run `python -m graphify update .` to
+  keep it current (AST-only, no LLM, ~1 min).
+- `graphify-out/` is gitignored — regenerable, never commit it.
+- The CLI has no PATH shim on this machine: use `python -m graphify`.
+
 ## STOP - Check Before These Operations
 
 | Operation | Check This Section First |
