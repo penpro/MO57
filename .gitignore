@@ -49,3 +49,10 @@ Content/Python/__pycache__/
 
 # graphify knowledge graph (regenerable via 'graphify update .')
 graphify-out/
+
+# generated / machine-local (cleanup 2026-07-06)
+*.slnx
+Tools/__pycache__/
+.codex/
+.cursor/
+.gemini/
