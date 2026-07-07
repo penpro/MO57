@@ -60,7 +60,7 @@
 #include "MOInteractionInterface.generated.h"
 
 UINTERFACE(BlueprintType)
-class MOFRAMEWORK_API UMOInteractionInterface : public UInterface
+class MOFRAMEWORKCORE_API UMOInteractionInterface : public UInterface
 {
 	GENERATED_BODY()
 };
@@ -69,7 +69,7 @@ class MOFRAMEWORK_API UMOInteractionInterface : public UInterface
  * Interface for interactors (typically PlayerController).
  * See file header for implementation requirements and pitfalls.
  */
-class MOFRAMEWORK_API IMOInteractionInterface
+class MOFRAMEWORKCORE_API IMOInteractionInterface
 {
 	GENERATED_BODY()
 

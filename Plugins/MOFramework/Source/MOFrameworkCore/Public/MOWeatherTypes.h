@@ -54,7 +54,7 @@
  * Values range from 0.0 (no exposure) to 1.0 (full exposure).
  */
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOWeatherExposure
+struct MOFRAMEWORKCORE_API FMOWeatherExposure
 {
 	GENERATED_BODY()
 
@@ -92,7 +92,7 @@ struct MOFRAMEWORK_API FMOWeatherExposure
  * Current global weather state.
  */
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOWeatherState
+struct MOFRAMEWORKCORE_API FMOWeatherState
 {
 	GENERATED_BODY()
 
@@ -142,7 +142,7 @@ struct MOFRAMEWORK_API FMOWeatherState
  * Time and season information.
  */
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOTimeOfDay
+struct MOFRAMEWORKCORE_API FMOTimeOfDay
 {
 	GENERATED_BODY()
 
@@ -269,7 +269,7 @@ enum class EMOWeatherEventType : uint8
  * a math issue.
  */
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOExposureShelter
+struct MOFRAMEWORKCORE_API FMOExposureShelter
 {
 	GENERATED_BODY()
 
@@ -327,7 +327,7 @@ struct MOFRAMEWORK_API FMOExposureShelter
  * Save data for weather and time of day state.
  */
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOWeatherSaveData
+struct MOFRAMEWORKCORE_API FMOWeatherSaveData
 {
 	GENERATED_BODY()
 

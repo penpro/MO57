@@ -106,7 +106,7 @@ enum class EMOWetnessState : uint8
  * touching the underlying accumulator logic.
  */
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOWetnessThresholds
+struct MOFRAMEWORKCORE_API FMOWetnessThresholds
 {
 	GENERATED_BODY()
 
@@ -132,7 +132,7 @@ struct MOFRAMEWORK_API FMOWetnessThresholds
  * code, but the defaults are medically grounded (see EMOThermalComfort).
  */
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOThermalComfortThresholds
+struct MOFRAMEWORKCORE_API FMOThermalComfortThresholds
 {
 	GENERATED_BODY()
 
@@ -162,7 +162,7 @@ struct MOFRAMEWORK_API FMOThermalComfortThresholds
  * See file header for normal ranges and medical context.
  */
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOVitalSigns
+struct MOFRAMEWORKCORE_API FMOVitalSigns
 {
 	GENERATED_BODY()
 
@@ -257,7 +257,7 @@ struct MOFRAMEWORK_API FMOVitalSigns
  * Exertion and stress state.
  */
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOExertionState
+struct MOFRAMEWORKCORE_API FMOExertionState
 {
 	GENERATED_BODY()
 

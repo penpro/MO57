@@ -75,7 +75,7 @@ enum class EMOResourceType : uint8
  * Allows multiple visual representations for the same resource type.
  */
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOResourceMeshVariation
+struct MOFRAMEWORKCORE_API FMOResourceMeshVariation
 {
 	GENERATED_BODY()
 
@@ -103,7 +103,7 @@ struct MOFRAMEWORK_API FMOResourceMeshVariation
  * - "Chop Down": Yields Log, requires Axe, destroys resource
  */
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOResourceHarvestAction
+struct MOFRAMEWORKCORE_API FMOResourceHarvestAction
 {
 	GENERATED_BODY()
 
@@ -269,7 +269,7 @@ struct MOFRAMEWORK_API FMOResourceHarvestAction
  * - All entries in ResourceTags array
  */
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOResourceNodeDefinitionRow : public FTableRowBase
+struct MOFRAMEWORKCORE_API FMOResourceNodeDefinitionRow : public FTableRowBase
 {
 	GENERATED_BODY()
 

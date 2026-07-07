@@ -112,7 +112,7 @@ enum class EMORecruitmentQuestType : uint8
  * Configuration for a recruitment quest.
  */
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMORecruitmentQuest
+struct MOFRAMEWORKCORE_API FMORecruitmentQuest
 {
 	GENERATED_BODY()
 
@@ -157,7 +157,7 @@ struct MOFRAMEWORK_API FMORecruitmentQuest
  * Configuration for a spawn category.
  */
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOSpawnCategoryConfig
+struct MOFRAMEWORKCORE_API FMOSpawnCategoryConfig
 {
 	GENERATED_BODY()
 
@@ -241,7 +241,7 @@ struct MOFRAMEWORK_API FMOSpawnCategoryConfig
  * Record of a spawned entity for tracking and FIFO management.
  */
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOSpawnedEntityRecord
+struct MOFRAMEWORKCORE_API FMOSpawnedEntityRecord
 {
 	GENERATED_BODY()
 

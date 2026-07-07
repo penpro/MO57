@@ -67,7 +67,7 @@ enum class EMOSkillCategory : uint8
  * The row name is the canonical SkillId (example: "cooking", "herbalism").
  */
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOSkillDefinitionRow : public FTableRowBase
+struct MOFRAMEWORKCORE_API FMOSkillDefinitionRow : public FTableRowBase
 {
 	GENERATED_BODY()
 

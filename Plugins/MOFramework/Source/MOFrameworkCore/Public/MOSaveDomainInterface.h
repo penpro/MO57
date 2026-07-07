@@ -45,7 +45,7 @@ class UMOSaveDomain : public UInterface
 	GENERATED_BODY()
 };
 
-class MOFRAMEWORK_API IMOSaveDomain
+class MOFRAMEWORKCORE_API IMOSaveDomain
 {
 	GENERATED_BODY()
 

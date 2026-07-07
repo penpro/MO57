@@ -90,7 +90,7 @@ class UMOControllableInterface : public UInterface
  * Interface for pawns that can be controlled by AMOPlayerController.
  * Provides a standardized way for the controller to delegate input to any pawn type.
  */
-class MOFRAMEWORK_API IMOControllableInterface
+class MOFRAMEWORKCORE_API IMOControllableInterface
 {
 	GENERATED_BODY()
 

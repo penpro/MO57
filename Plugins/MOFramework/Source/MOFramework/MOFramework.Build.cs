@@ -70,6 +70,7 @@ public class MOFramework : ModuleRules
 		PublicDependencyModuleNames.AddRange(
 			new string[]
 			{
+				"MOFrameworkCore",          // C1 split: types/interfaces/rows layer
 				"Core",
 				"UMG",
 				"InputCore",

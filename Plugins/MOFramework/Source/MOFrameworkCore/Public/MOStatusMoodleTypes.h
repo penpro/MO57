@@ -52,7 +52,7 @@ enum class EMOStatusMoodleSeverity : uint8
  * doesn't flicker by being removed-and-re-added every frame).
  */
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOStatusMoodle
+struct MOFRAMEWORKCORE_API FMOStatusMoodle
 {
 	GENERATED_BODY()
 

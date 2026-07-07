@@ -228,7 +228,7 @@ enum class EMOBloodLossStage : uint8
  * State of a single body part.
  */
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOBodyPartState
+struct MOFRAMEWORKCORE_API FMOBodyPartState
 {
 	GENERATED_BODY()
 

@@ -177,7 +177,7 @@ enum class EMOToolType : uint8
  * An item can have multiple tool capabilities (e.g., a claw hammer can be Hammer + Pickaxe).
  */
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOToolCapability
+struct MOFRAMEWORKCORE_API FMOToolCapability
 {
 	GENERATED_BODY()
 
@@ -228,7 +228,7 @@ enum class EMOEquipmentSlotType : uint8
 };
 
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOItemUIVisual
+struct MOFRAMEWORKCORE_API FMOItemUIVisual
 {
 	GENERATED_BODY()
 
@@ -243,7 +243,7 @@ struct MOFRAMEWORK_API FMOItemUIVisual
 };
 
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOItemWorldVisual
+struct MOFRAMEWORKCORE_API FMOItemWorldVisual
 {
 	GENERATED_BODY()
 
@@ -271,7 +271,7 @@ struct MOFRAMEWORK_API FMOItemWorldVisual
  * Separate from WorldVisual since held items need different positioning.
  */
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOItemHeldVisual
+struct MOFRAMEWORKCORE_API FMOItemHeldVisual
 {
 	GENERATED_BODY()
 
@@ -324,7 +324,7 @@ struct MOFRAMEWORK_API FMOItemHeldVisual
 };
 
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOItemScalarProperty
+struct MOFRAMEWORKCORE_API FMOItemScalarProperty
 {
 	GENERATED_BODY()
 
@@ -340,7 +340,7 @@ struct MOFRAMEWORK_API FMOItemScalarProperty
  * Models realistic macronutrients, vitamins, and minerals.
  */
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOItemNutrition
+struct MOFRAMEWORKCORE_API FMOItemNutrition
 {
 	GENERATED_BODY()
 
@@ -395,7 +395,7 @@ struct MOFRAMEWORK_API FMOItemNutrition
  * Both skills and knowledge use the same leveling system.
  */
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOInspectionGrant
+struct MOFRAMEWORKCORE_API FMOInspectionGrant
 {
 	GENERATED_BODY()
 
@@ -422,7 +422,7 @@ struct MOFRAMEWORK_API FMOInspectionGrant
  * Inspection data - defines what skills and knowledge gain XP when inspecting this item.
  */
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOItemInspection
+struct MOFRAMEWORKCORE_API FMOItemInspection
 {
 	GENERATED_BODY()
 
@@ -437,7 +437,7 @@ struct MOFRAMEWORK_API FMOItemInspection
  * The row name is the canonical ItemDefinitionId (example: "apple01").
  */
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOItemDefinitionRow : public FTableRowBase
+struct MOFRAMEWORKCORE_API FMOItemDefinitionRow : public FTableRowBase
 {
 	GENERATED_BODY()
 

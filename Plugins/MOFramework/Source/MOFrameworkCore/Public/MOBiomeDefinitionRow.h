@@ -38,7 +38,7 @@ class UStaticMesh;
  * One scatterable species inside a biome's palette (a tree, bush, rock...).
  */
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOBiomeSpeciesEntry
+struct MOFRAMEWORKCORE_API FMOBiomeSpeciesEntry
 {
 	GENERATED_BODY()
 
@@ -124,7 +124,7 @@ struct MOFRAMEWORK_API FMOBiomeSpeciesEntry
  * Row name = BiomeId.
  */
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOBiomeDefinitionRow : public FTableRowBase
+struct MOFRAMEWORKCORE_API FMOBiomeDefinitionRow : public FTableRowBase
 {
 	GENERATED_BODY()
 

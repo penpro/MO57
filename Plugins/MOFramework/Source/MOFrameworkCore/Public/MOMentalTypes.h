@@ -69,7 +69,7 @@
  * See file header for consciousness cascade and effect details.
  */
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOMentalState
+struct MOFRAMEWORKCORE_API FMOMentalState
 {
 	GENERATED_BODY()
 

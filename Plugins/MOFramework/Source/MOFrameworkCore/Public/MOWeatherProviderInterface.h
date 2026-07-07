@@ -67,7 +67,7 @@ class UMOWeatherProviderInterface : public UInterface
  * 4. Place one instance in your level
  * 5. Register it with the Weather Integration Subsystem
  */
-class MOFRAMEWORK_API IMOWeatherProviderInterface
+class MOFRAMEWORKCORE_API IMOWeatherProviderInterface
 {
 	GENERATED_BODY()
 

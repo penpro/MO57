@@ -149,7 +149,7 @@ enum class EMOActivityLevel : uint8
  * Defines energy costs, stamina drain rates, and other activity-specific parameters.
  */
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOActivityConfig
+struct MOFRAMEWORKCORE_API FMOActivityConfig
 {
 	GENERATED_BODY()
 
@@ -198,7 +198,7 @@ struct MOFRAMEWORK_API FMOActivityConfig
  * Replicated for UI and network sync.
  */
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOActivityState
+struct MOFRAMEWORKCORE_API FMOActivityState
 {
 	GENERATED_BODY()
 

@@ -65,7 +65,7 @@ enum class EAlertState : uint8
  * Alert entry in the colony manager queue.
  */
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOColonyAlert
+struct MOFRAMEWORKCORE_API FMOColonyAlert
 {
 	GENERATED_BODY()
 
@@ -132,7 +132,7 @@ enum class EPersonalityAxis : uint8
  * Each value ranges from -1.0 to 1.0.
  */
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOPersonalityTraits
+struct MOFRAMEWORKCORE_API FMOPersonalityTraits
 {
 	GENERATED_BODY()
 
@@ -236,7 +236,7 @@ enum class ERelationshipType : uint8
  * Relationship between two characters.
  */
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOCharacterRelationship
+struct MOFRAMEWORKCORE_API FMOCharacterRelationship
 {
 	GENERATED_BODY()
 
@@ -311,7 +311,7 @@ enum class EHistoryEntryType : uint8
  * Entry in a character's history log.
  */
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOCharacterHistoryEntry
+struct MOFRAMEWORKCORE_API FMOCharacterHistoryEntry
 {
 	GENERATED_BODY()
 
@@ -390,7 +390,7 @@ enum class EColonyActivityState : uint8
 
 /** Save payload for a character's event log (oldest first). */
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOCharacterHistorySaveData
+struct MOFRAMEWORKCORE_API FMOCharacterHistorySaveData
 {
 	GENERATED_BODY()
 
@@ -407,7 +407,7 @@ struct MOFRAMEWORK_API FMOCharacterHistorySaveData
 
 /** One settlement (V1: a single settlement per world). */
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOSettlementRecord
+struct MOFRAMEWORKCORE_API FMOSettlementRecord
 {
 	GENERATED_BODY()
 
@@ -429,7 +429,7 @@ struct MOFRAMEWORK_API FMOSettlementRecord
 
 /** Inputs to the mood function — all read from the REAL simulations. */
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOVillagerMoodInputs
+struct MOFRAMEWORKCORE_API FMOVillagerMoodInputs
 {
 	GENERATED_BODY()
 
@@ -448,7 +448,7 @@ struct MOFRAMEWORK_API FMOVillagerMoodInputs
  *  by crafting RecipeId. The Medieval-Dynasty-style scale abstraction — the
  *  PLAYER sets intent, villagers do the real labor through the V0 job flow. */
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOColonyQuota
+struct MOFRAMEWORKCORE_API FMOColonyQuota
 {
 	GENERATED_BODY()
 
@@ -470,7 +470,7 @@ struct MOFRAMEWORK_API FMOColonyQuota
 
 /** Save payload for the whole settlement layer. */
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOColonySaveData
+struct MOFRAMEWORKCORE_API FMOColonySaveData
 {
 	GENERATED_BODY()
 
