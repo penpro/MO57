@@ -77,6 +77,56 @@ void UMOEquipmentComponent::TickComponent(float DeltaTime, ELevelTick TickType, 
 // EQUIPMENT OPERATIONS
 // ============================================================================
 
+namespace
+{
+	/** The slot an item's EquipmentSlotType naturally occupies. Held items get
+	 *  the right hand. None and unknown types map to MAX (not equippable). */
+	EMOEquipmentSlot NaturalSlotForType(EMOEquipmentSlotType SlotType)
+	{
+		switch (SlotType)
+		{
+		case EMOEquipmentSlotType::Head:  return EMOEquipmentSlot::Head;
+		case EMOEquipmentSlotType::Chest: return EMOEquipmentSlot::Chest;
+		case EMOEquipmentSlotType::Hands: return EMOEquipmentSlot::Hands;
+		case EMOEquipmentSlotType::Legs:  return EMOEquipmentSlot::Legs;
+		case EMOEquipmentSlotType::Feet:  return EMOEquipmentSlot::Feet;
+		case EMOEquipmentSlotType::Back:  return EMOEquipmentSlot::Back;
+		case EMOEquipmentSlotType::Held:  return EMOEquipmentSlot::RightHand;
+		default:                          return EMOEquipmentSlot::MAX;
+		}
+	}
+}
+
+bool UMOEquipmentComponent::EquipFromInventoryToNaturalSlot(UMOInventoryComponent* Inventory, const FGuid& ItemGuid)
+{
+	if (!IsValid(Inventory) || !ItemGuid.IsValid())
+	{
+		return false;
+	}
+
+	FMOInventoryEntry Entry;
+	if (!Inventory->TryGetEntryByGuid(ItemGuid, Entry))
+	{
+		return false;
+	}
+
+	FMOItemDefinitionRow ItemDef;
+	if (!UMOItemDatabaseSettings::GetItemDefinition(Entry.ItemDefinitionId, ItemDef))
+	{
+		return false;
+	}
+
+	const EMOEquipmentSlot Slot = NaturalSlotForType(ItemDef.EquipmentSlotType);
+	if (Slot == EMOEquipmentSlot::MAX)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOEquipmentComponent] EquipFromInventoryToNaturalSlot: %s has no equip slot (EquipmentSlotType=%d)"),
+			*Entry.ItemDefinitionId.ToString(), static_cast<int32>(ItemDef.EquipmentSlotType));
+		return false;
+	}
+
+	return EquipFromInventory(Inventory, ItemGuid, Slot);
+}
+
 bool UMOEquipmentComponent::EquipFromInventory(UMOInventoryComponent* Inventory, const FGuid& ItemGuid, EMOEquipmentSlot EquipSlot)
 {
 	UE_LOG(LogMOFramework, Warning, TEXT("[MOEquipmentComponent] EquipFromInventory: ItemGuid=%s, EquipSlot=%d"),
@@ -328,28 +378,13 @@ bool UMOEquipmentComponent::CanEquipToSlot(FName ItemDefinitionId, EMOEquipmentS
 		return false;
 	}
 
-	// Check if the item's equipment slot type matches the target slot
-	switch (ItemDef.EquipmentSlotType)
+	// Held items fit either hand; everything else fits exactly its natural slot.
+	if (ItemDef.EquipmentSlotType == EMOEquipmentSlotType::Held)
 	{
-	case EMOEquipmentSlotType::None:
-		return false;
-	case EMOEquipmentSlotType::Head:
-		return EquipSlot == EMOEquipmentSlot::Head;
-	case EMOEquipmentSlotType::Chest:
-		return EquipSlot == EMOEquipmentSlot::Chest;
-	case EMOEquipmentSlotType::Hands:
-		return EquipSlot == EMOEquipmentSlot::Hands;
-	case EMOEquipmentSlotType::Legs:
-		return EquipSlot == EMOEquipmentSlot::Legs;
-	case EMOEquipmentSlotType::Feet:
-		return EquipSlot == EMOEquipmentSlot::Feet;
-	case EMOEquipmentSlotType::Back:
-		return EquipSlot == EMOEquipmentSlot::Back;
-	case EMOEquipmentSlotType::Held:
 		return EquipSlot == EMOEquipmentSlot::LeftHand || EquipSlot == EMOEquipmentSlot::RightHand;
-	default:
-		return false;
 	}
+	const EMOEquipmentSlot Natural = NaturalSlotForType(ItemDef.EquipmentSlotType);
+	return Natural != EMOEquipmentSlot::MAX && EquipSlot == Natural;
 }
 
 // ============================================================================

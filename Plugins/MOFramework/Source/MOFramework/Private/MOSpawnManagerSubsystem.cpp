@@ -9,6 +9,8 @@
 #include "MOSkillsComponent.h"
 #include "MORecruitmentComponent.h"
 #include "MOIdentityComponent.h"
+#include "MOInventoryComponent.h"
+#include "MOEquipmentComponent.h"
 #include "VoxelWorld.h"
 
 #include "EngineUtils.h"
@@ -79,6 +81,39 @@ namespace
 
 		IdentityComp->SetDisplayName(FText::FromString(NameToAssign));
 		UE_LOG(LogMOFramework, Log, TEXT("[SpawnManager] Assigned name '%s' to survivor"), *NameToAssign);
+	}
+
+	void GrantSurvivorStarterClothingIfNeeded(APawn* Pawn, EMOSpawnCategory Category, const TArray<FName>& Clothing)
+	{
+		if (!Pawn || Category != EMOSpawnCategory::Survivor || Clothing.Num() == 0)
+		{
+			return;
+		}
+
+		UMOInventoryComponent* Inventory = Pawn->FindComponentByClass<UMOInventoryComponent>();
+		UMOEquipmentComponent* Equipment = Pawn->FindComponentByClass<UMOEquipmentComponent>();
+		if (!Inventory || !Equipment)
+		{
+			return; // Pawn class doesn't carry gear — nothing to dress.
+		}
+
+		int32 Equipped = 0;
+		for (const FName& ItemId : Clothing)
+		{
+			const FGuid ItemGuid = FGuid::NewGuid();
+			if (!Inventory->AddItemByGuid(ItemGuid, ItemId, 1))
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[SpawnManager] Starter clothing '%s' could not be added to %s's inventory"),
+					*ItemId.ToString(), *Pawn->GetName());
+				continue;
+			}
+			if (Equipment->EquipFromInventoryToNaturalSlot(Inventory, ItemGuid))
+			{
+				++Equipped;
+			}
+		}
+		UE_LOG(LogMOFramework, Log, TEXT("[SpawnManager] Survivor %s spawned wearing %d/%d starter items"),
+			*Pawn->GetName(), Equipped, Clothing.Num());
 	}
 }
 
@@ -384,6 +419,8 @@ APawn* UMOSpawnManagerSubsystem::ForceSpawnAtLocation(EMOSpawnCategory Category,
 	{
 		// Assign name for survivors
 		AssignSurvivorNameIfNeeded(SpawnedPawn, Category);
+		GrantSurvivorStarterClothingIfNeeded(SpawnedPawn, Category,
+			AMOSpawnSettingsActor::GetGlobalSettings(this).SurvivorStarterClothing);
 
 		// Add to tracking. Freeze before broadcasting so listeners observe the
 		// pawn's final spawn state, and so Last() is still our record.
@@ -1089,6 +1126,8 @@ APawn* UMOSpawnManagerSubsystem::SpawnAtPoint(AMOSpawnPoint* Point, const FMOSpa
 
 		// Assign name for survivors
 		AssignSurvivorNameIfNeeded(SpawnedPawn, Config.Category);
+		GrantSurvivorStarterClothingIfNeeded(SpawnedPawn, Config.Category,
+			AMOSpawnSettingsActor::GetGlobalSettings(this).SurvivorStarterClothing);
 
 		// Add to tracking. Freeze before broadcasting so listeners observe the
 		// pawn's final spawn state, and so Last() is still our record.
@@ -1247,6 +1286,8 @@ APawn* UMOSpawnManagerSubsystem::TryFallbackSpawn(EMOSpawnCategory Category, con
 		{
 			// Assign name for survivors
 			AssignSurvivorNameIfNeeded(SpawnedPawn, Category);
+			GrantSurvivorStarterClothingIfNeeded(SpawnedPawn, Category,
+				AMOSpawnSettingsActor::GetGlobalSettings(this).SurvivorStarterClothing);
 
 			// Add to tracking. Freeze before broadcasting so listeners observe
 			// the pawn's final spawn state, and so Last() is still our record.

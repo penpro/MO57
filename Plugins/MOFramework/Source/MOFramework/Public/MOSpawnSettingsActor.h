@@ -36,6 +36,12 @@ struct FMOSpawnGlobalSettings
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Global", meta=(ClampMin="0.1", Units="hours"))
 	float SurvivorPersistenceHours = 10.0f;
 
+	/** Items every wild survivor spawns wearing (equipped to each item's natural
+	 *  slot). Survivors live outdoors — a naked pawn dies to the first winter
+	 *  night, so the loadout is survival state, not cosmetics. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Global")
+	TArray<FName> SurvivorStarterClothing = { TEXT("LeatherTunic01"), TEXT("LeatherTrousers01"), TEXT("LeatherBoots01") };
+
 	/** How often to check spawn conditions (seconds). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Global", meta=(ClampMin="0.1", Units="s"))
 	float SpawnCheckInterval = 5.0f;

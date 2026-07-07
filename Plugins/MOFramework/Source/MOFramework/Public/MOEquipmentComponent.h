@@ -227,6 +227,16 @@ public:
 	bool EquipFromInventory(UMOInventoryComponent* Inventory, const FGuid& ItemGuid, EMOEquipmentSlot EquipSlot);
 
 	/**
+	 * Equip an item to the slot its own definition declares (EquipmentSlotType).
+	 * Held items default to the right hand. Callers that don't care which slot
+	 * an item belongs in (spawn loadouts, AI dressing) use this instead of
+	 * duplicating the slot-type mapping.
+	 * @return True if equip started; false if the item isn't equippable.
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Equipment")
+	bool EquipFromInventoryToNaturalSlot(UMOInventoryComponent* Inventory, const FGuid& ItemGuid);
+
+	/**
 	 * Unequip an item back to inventory.
 	 * @param EquipSlot The slot to unequip
 	 * @param Inventory Target inventory to receive the item
