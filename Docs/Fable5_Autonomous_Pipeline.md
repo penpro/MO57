@@ -328,16 +328,24 @@ learning. Data-layer API on UMOCharacterHistoryComponent first
 (BuildAwaySummary(sinceGameSeconds)), UI panel later. Gate: possess-away-
 repossess seq asserts the summary contains the villager's real activity.
 
-**F1 — fire as a local heat source.** Campfire/forge emit warmth: local
-ambient override near heat sources (extend the ambient-provider seam with
-point sources aggregated by the registry), wet clothing dries near fire,
-wet wood burns poorly (fuel quality). Makes winter logistics real: firewood
-demand joins food demand in colony upkeep.
+**F1 — fire as a local heat source. UNITS 1-4 LANDED 2026-07-07**
+(e7ab946, d11a7e1, 965ab3e, f100fa7): IMOLocalHeatSource + registry
+aggregation; stations radiate while lit+fueled (campfire/forge 40C,
+kitchen 20C); vitals folds the delta into feels-like; wet clothing dries
+~11x by the fire (works in rain); cold villagers seek the nearest lit
+hearth (homeless included); colony hearth pass issues RefuelStation jobs
+— firewood demand joined food demand. Gates: test_fire_heat 5/5,
+test_village_hearth 3/3, test_village_firewood 3/3. REMAINING: wet wood
+burns poorly (needs per-item wetness state — design first).
 
 **T1 — transfer-all with combined timer** (take all / deposit matching —
 one gesture, real total duration). **T2 — sweep pickup** (timed radius
 gather, visible + interruptible). **T3 — haul/restock survivor jobs**
-(source -> storage; firewood/water/food restocking as standing orders).
+(source -> storage; water/food restocking as standing orders). FIRST CUT
+LANDED 2026-07-07 (f100fa7): RefuelStation job = the haul-job pattern
+(fetch into pack -> deliver -> station-specific handling); firewood
+restocking is live. Generalize to food/water via the same states-20+
+machine.
 
 **R1 — readability audit.** Environmental "why" readout (cold because wet +
 wind + no roof), action timers visible everywhere, "why failed" strings for
