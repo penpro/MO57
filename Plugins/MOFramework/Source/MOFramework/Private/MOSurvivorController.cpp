@@ -1461,18 +1461,24 @@ void AMOSurvivorController::UpdateRefuelJobExecution(float DeltaTime)
 				AMOCraftingStationActor* Station = Cast<AMOCraftingStationActor>(CraftStationActor.Get());
 				UMOInventoryComponent* PawnInv = GetPawn()->FindComponentByClass<UMOInventoryComponent>();
 				if (!Station || !PawnInv) { CompleteSimpleJob(false); return; }
-				PawnInv->RemoveItemByDefinitionId(RefuelItemId, RefuelCarried);
-				const float Added = Station->AddFuel(RefuelItemId, RefuelCarried);
+				// Feed only what the tank accepts; any leftover stays in the
+				// pawn's pack (recoverable — no matter destroyed on a full fire).
+				const int32 Accepted = Station->AddFuel(RefuelItemId, RefuelCarried);
+				if (Accepted > 0)
+				{
+					PawnInv->RemoveItemByDefinitionId(RefuelItemId, Accepted);
+				}
 				// Tending the fire includes lighting it: a burned-out station
 				// relights once it has fuel again.
-				if (Added > 0.0f && !Station->IsStationActive())
+				if (Accepted > 0 && !Station->IsStationActive())
 				{
 					Station->SetStationActive(true);
 				}
 				UE_LOG(LogMOFramework, Warning,
-					TEXT("[MOSurvivorController] Refuel job done: +%.0f fuel to %s (%s now %s)"),
-					Added, *Station->GetName(), *RefuelItemId.ToString(),
-					Station->IsStationActive() ? TEXT("BURNING") : TEXT("cold"));
+					TEXT("[MOSurvivorController] Refuel job done: %d/%d item(s) into %s (%s now %s, %d kept)"),
+					Accepted, RefuelCarried, *Station->GetName(),
+					*RefuelItemId.ToString(), Station->IsStationActive() ? TEXT("BURNING") : TEXT("cold"),
+					RefuelCarried - Accepted);
 				RefuelCarried = 0;
 				CompleteSimpleJob(true);
 			}

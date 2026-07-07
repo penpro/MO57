@@ -187,6 +187,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|CraftingStation|Fuel")
 	TArray<FName> AcceptedFuelItems;
 
+	/** Fuel units one fuel item is worth. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|CraftingStation|Fuel", meta=(ClampMin="0.01"))
+	float FuelPerItemUnit = 10.0f;
+
 	// ============================================================================
 	// HEAT EMISSION (IMOLocalHeatSource)
 	// ============================================================================
@@ -212,9 +216,19 @@ public:
 	// FUEL SYSTEM
 	// ============================================================================
 
-	/** Add fuel to the station. Returns amount actually added. */
+	/**
+	 * Feed up to Quantity fuel items. Only as many as fit under MaxFuel are
+	 * accepted; returns the COUNT actually consumed so the caller removes only
+	 * those and leaves the rest in the source inventory. Transactional on
+	 * purpose — the old "return fuel added" contract let callers destroy whole
+	 * unburned items when the tank was near full (matter vanishing, Principle 11).
+	 */
 	UFUNCTION(BlueprintCallable, Category="MO|CraftingStation|Fuel")
-	float AddFuel(FName ItemDefinitionId, int32 Quantity);
+	int32 AddFuel(FName ItemDefinitionId, int32 Quantity);
+
+	/** Pure core: whole fuel items that fit under MaxFuel (never overfills, so
+	 *  no fractional item is destroyed). Static for headless testing. */
+	static int32 ComputeAcceptedFuelItems(float CurrentFuel, float MaxFuel, float FuelPerItem, int32 Offered);
 
 	/**
 	 * Consume fuel items from the station's inventory and add to fuel.

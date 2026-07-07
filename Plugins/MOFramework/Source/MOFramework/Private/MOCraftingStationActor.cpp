@@ -201,23 +201,37 @@ bool AMOCraftingStationActor::HandleSecondaryInteract(AController* Controller)
 	return Super::HandleSecondaryInteract(Controller);
 }
 
-float AMOCraftingStationActor::AddFuel(FName ItemDefinitionId, int32 Quantity)
+int32 AMOCraftingStationActor::ComputeAcceptedFuelItems(float CurrentFuel, float MaxFuel, float FuelPerItem, int32 Offered)
 {
-	// Check if this item is accepted as fuel
+	if (Offered <= 0 || FuelPerItem <= 0.0f)
+	{
+		return 0;
+	}
+	const float Space = MaxFuel - CurrentFuel;
+	if (Space <= 0.0f)
+	{
+		return 0;
+	}
+	// Whole items only — never accept an item that would overfill (its excess
+	// fuel would be lost = matter destroyed). A near-full fire simply declines
+	// the log and the carrier keeps it.
+	return FMath::Min(Offered, FMath::FloorToInt(Space / FuelPerItem));
+}
+
+int32 AMOCraftingStationActor::AddFuel(FName ItemDefinitionId, int32 Quantity)
+{
 	if (!AcceptedFuelItems.Contains(ItemDefinitionId))
 	{
-		return 0.0f;
+		return 0;
 	}
 
-	// Add fuel (simple: each item adds 10 fuel)
-	float FuelToAdd = Quantity * 10.0f;
-	float PreviousFuel = CurrentFuel;
-	CurrentFuel = FMath::Min(MaxFuel, CurrentFuel + FuelToAdd);
+	const int32 Accepted = ComputeAcceptedFuelItems(CurrentFuel, MaxFuel, FuelPerItemUnit, Quantity);
+	CurrentFuel = FMath::Min(MaxFuel, CurrentFuel + Accepted * FuelPerItemUnit);
 
-	float ActualAdded = CurrentFuel - PreviousFuel;
-	UE_LOG(LogMOFramework, Log, TEXT("[MOCraftingStationActor] Added %.1f fuel (item: %s x%d)"), ActualAdded, *ItemDefinitionId.ToString(), Quantity);
+	UE_LOG(LogMOFramework, Log, TEXT("[MOCraftingStationActor] Accepted %d/%d fuel item(s) '%s' (fuel now %.1f/%.1f)"),
+		Accepted, Quantity, *ItemDefinitionId.ToString(), CurrentFuel, MaxFuel);
 
-	return ActualAdded;
+	return Accepted;
 }
 
 float AMOCraftingStationActor::ConsumeFuelFromInventory()
@@ -233,20 +247,22 @@ float AMOCraftingStationActor::ConsumeFuelFromInventory()
 	TArray<FMOInventoryEntry> Entries;
 	StationInventory->GetInventoryEntries(Entries);
 
-	// Find and consume fuel items
+	// Find and consume fuel items — only the count the tank actually accepts;
+	// the rest of the stack stays in the station's inventory (no matter lost).
 	for (const FMOInventoryEntry& Entry : Entries)
 	{
 		if (AcceptedFuelItems.Contains(Entry.ItemDefinitionId))
 		{
-			// Add fuel from this stack
-			float FuelAdded = AddFuel(Entry.ItemDefinitionId, Entry.Quantity);
-			TotalFuelAdded += FuelAdded;
+			const int32 Accepted = AddFuel(Entry.ItemDefinitionId, Entry.Quantity);
+			if (Accepted <= 0)
+			{
+				continue; // tank full — leave this stack untouched
+			}
+			TotalFuelAdded += Accepted * FuelPerItemUnit;
+			StationInventory->RemoveItemByGuid(Entry.ItemGuid, Accepted);
 
-			// Remove the items from inventory
-			StationInventory->RemoveItemByGuid(Entry.ItemGuid, Entry.Quantity);
-
-			UE_LOG(LogMOFramework, Log, TEXT("[MOCraftingStationActor] Consumed %d x %s for %.1f fuel"),
-				Entry.Quantity, *Entry.ItemDefinitionId.ToString(), FuelAdded);
+			UE_LOG(LogMOFramework, Log, TEXT("[MOCraftingStationActor] Consumed %d/%d x %s for %.1f fuel"),
+				Accepted, Entry.Quantity, *Entry.ItemDefinitionId.ToString(), Accepted * FuelPerItemUnit);
 		}
 	}
 

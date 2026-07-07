@@ -17,6 +17,7 @@
 #include "MOEquipmentComponent.h"
 #include "MOItemDefinitionRow.h"
 #include "MOAmbientEnvironmentProvider.h"
+#include "MOCraftingStationActor.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -472,6 +473,37 @@ bool FMOColony_LocalHeat_Falloff::RunTest(const FString& Parameters)
 	Fire.bActive = true;
 	TestEqual(TEXT("unregistered = nothing even when lit"),
 		Registry->GetLocalHeatDeltaAt(FVector::ZeroVector), 0.0f);
+	return true;
+}
+
+// ============================================================================
+// F1/T3: fuel is transactional — a full tank never destroys unburned items
+// ============================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOColony_Fuel_NoMatterDestroyed,
+	"MOFramework.Colony.Fuel.NoMatterDestroyed",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+bool FMOColony_Fuel_NoMatterDestroyed::RunTest(const FString& Parameters)
+{
+	using Station = AMOCraftingStationActor;
+	// Empty/half tank accepts everything offered.
+	TestEqual(TEXT("empty tank accepts all 5"),
+		Station::ComputeAcceptedFuelItems(0.0f, 100.0f, 10.0f, 5), 5);
+	TestEqual(TEXT("half tank (50 space) fits all 5"),
+		Station::ComputeAcceptedFuelItems(50.0f, 100.0f, 10.0f, 5), 5);
+	// The codex failure scenario: 95/100, 5 items @ 10 each. Old code destroyed
+	// all 5 for +5 fuel; now 0 whole items fit, so the carrier keeps every one.
+	TestEqual(TEXT("near-full fire declines the log (was: 45 fuel-worth vanished)"),
+		Station::ComputeAcceptedFuelItems(95.0f, 100.0f, 10.0f, 5), 0);
+	// Partial space: 45 free, 10/item -> only 4 whole items, 1 stays.
+	TestEqual(TEXT("partial space accepts whole items only"),
+		Station::ComputeAcceptedFuelItems(55.0f, 100.0f, 10.0f, 5), 4);
+	TestEqual(TEXT("offer fewer than fit -> take the offer"),
+		Station::ComputeAcceptedFuelItems(0.0f, 100.0f, 10.0f, 3), 3);
+	TestEqual(TEXT("full tank accepts nothing"),
+		Station::ComputeAcceptedFuelItems(100.0f, 100.0f, 10.0f, 5), 0);
+	TestEqual(TEXT("degenerate per-item value guards to 0"),
+		Station::ComputeAcceptedFuelItems(0.0f, 100.0f, 0.0f, 5), 0);
 	return true;
 }
 
