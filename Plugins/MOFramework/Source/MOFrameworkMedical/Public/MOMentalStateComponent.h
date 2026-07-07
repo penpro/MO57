@@ -107,7 +107,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOOnMentalStateChanged);
 // ============================================================================
 
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOMentalStateSaveData
+struct MOFRAMEWORKMEDICAL_API FMOMentalStateSaveData
 {
 	GENERATED_BODY()
 
@@ -124,7 +124,7 @@ struct MOFRAMEWORK_API FMOMentalStateSaveData
  * Handles consciousness levels, shock accumulation, and visual/motor effects.
  */
 UCLASS(ClassGroup=(MO), meta=(BlueprintSpawnableComponent))
-class MOFRAMEWORK_API UMOMentalStateComponent : public UActorComponent
+class MOFRAMEWORKMEDICAL_API UMOMentalStateComponent : public UActorComponent
 {
 	GENERATED_BODY()
 

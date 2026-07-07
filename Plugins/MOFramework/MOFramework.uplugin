@@ -21,6 +21,11 @@
 			"LoadingPhase": "Default"
 		},
 		{
+			"Name": "MOFrameworkMedical",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		},
+		{
 			"Name": "MOFramework",
 			"Type": "Runtime",
 			"LoadingPhase": "Default"

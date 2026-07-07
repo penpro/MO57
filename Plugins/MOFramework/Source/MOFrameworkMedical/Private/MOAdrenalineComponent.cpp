@@ -2,7 +2,7 @@
 #include "MOVitalsComponent.h"
 #include "MOAnatomyComponent.h"
 #include "MOMentalStateComponent.h"
-#include "MOSkillsComponent.h"
+#include "MOSkillLevelSourceInterface.h"
 #include "MOMedicalProviderInterface.h"
 #include "MOGameClockSubsystem.h"
 #include "Net/UnrealNetwork.h"
@@ -624,7 +624,15 @@ void UMOAdrenalineComponent::RefreshCachedComponents()
 		}
 
 		// Skills component not part of medical interface
-		CachedSkillsComp = Owner->FindComponentByClass<UMOSkillsComponent>();
+		CachedSkillSource = nullptr;
+		for (UActorComponent* Comp : Owner->GetComponents())
+		{
+			if (Comp && Comp->GetClass()->ImplementsInterface(UMOSkillLevelSource::StaticClass()))
+			{
+				CachedSkillSource = Cast<IMOSkillLevelSource>(Comp);
+				break;
+			}
+		}
 	}
 
 	RefreshCachedSkill();
@@ -634,9 +642,9 @@ void UMOAdrenalineComponent::RefreshCachedSkill()
 {
 	CachedCombatSkill = 0.0f;
 
-	if (CachedSkillsComp)
+	if (CachedSkillSource)
 	{
-		CachedCombatSkill = CachedSkillsComp->GetSkillLevel(Config.CombatSkillId);
+		CachedCombatSkill = CachedSkillSource->GetSkillLevelForQuery(Config.CombatSkillId);
 	}
 }
 

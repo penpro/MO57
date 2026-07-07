@@ -56,6 +56,10 @@ void UMOWeatherIntegrationSubsystem::Initialize(FSubsystemCollectionBase& Collec
 
 void UMOWeatherIntegrationSubsystem::Deinitialize()
 {
+	if (UMOAmbientEnvironmentRegistry* Ambient = UMOAmbientEnvironmentRegistry::Get(this))
+	{
+		Ambient->UnregisterProvider(this);
+	}
 	if (UWorld* W = GetWorld())
 	{
 		if (UGameInstance* GI = W->GetGameInstance())
@@ -91,6 +95,17 @@ void UMOWeatherIntegrationSubsystem::Deinitialize()
 void UMOWeatherIntegrationSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 {
 	Super::OnWorldBeginPlay(InWorld);
+
+	// Ambient-environment provider for the medical layer (C1 registry in Core).
+	if (UMOAmbientEnvironmentRegistry* Ambient = UMOAmbientEnvironmentRegistry::Get(&InWorld))
+	{
+		Ambient->RegisterProvider(this);
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOWeather] AMBIENT SEAM: provider registered for %s"), *InWorld.GetName());
+	}
+	else
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOWeather] AMBIENT SEAM: registry MISSING for %s"), *InWorld.GetName());
+	}
 
 	if (UGameInstance* GI = InWorld.GetGameInstance())
 	{

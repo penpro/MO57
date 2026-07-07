@@ -94,7 +94,7 @@
 
 class UDataTable;
 UCLASS()
-class MOFRAMEWORK_API UMOMedicalSubsystem : public UGameInstanceSubsystem
+class MOFRAMEWORKMEDICAL_API UMOMedicalSubsystem : public UGameInstanceSubsystem
 {
 	GENERATED_BODY()
 

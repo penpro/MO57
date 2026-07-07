@@ -71,6 +71,7 @@ public class MOFramework : ModuleRules
 			new string[]
 			{
 				"MOFrameworkCore",          // C1 split: types/interfaces/rows layer
+				"MOFrameworkMedical",       // C1 split: physiological simulation layer
 				"Core",
 				"UMG",
 				"InputCore",

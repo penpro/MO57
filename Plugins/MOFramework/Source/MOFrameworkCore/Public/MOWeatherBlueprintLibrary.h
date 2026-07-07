@@ -67,7 +67,7 @@
  * Use these to easily construct weather structs from UDS/UDW values.
  */
 UCLASS()
-class MOFRAMEWORK_API UMOWeatherBlueprintLibrary : public UBlueprintFunctionLibrary
+class MOFRAMEWORKCORE_API UMOWeatherBlueprintLibrary : public UBlueprintFunctionLibrary
 {
 	GENERATED_BODY()
 

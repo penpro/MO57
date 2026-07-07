@@ -48,7 +48,7 @@ class UDataTable;
  * Accessible via Project Settings -> Plugins -> MO Medical Database.
  */
 UCLASS(Config=Game, DefaultConfig, meta=(DisplayName="Medical Database"))
-class MOFRAMEWORK_API UMOMedicalDatabaseSettings : public UDeveloperSettings
+class MOFRAMEWORKMEDICAL_API UMOMedicalDatabaseSettings : public UDeveloperSettings
 {
 	GENERATED_BODY()
 

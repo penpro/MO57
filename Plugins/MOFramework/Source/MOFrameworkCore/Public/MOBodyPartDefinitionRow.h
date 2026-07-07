@@ -51,7 +51,7 @@
  * Used to configure HP, damage effects, and anatomical relationships.
  */
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOBodyPartDefinitionRow : public FTableRowBase
+struct MOFRAMEWORKCORE_API FMOBodyPartDefinitionRow : public FTableRowBase
 {
 	GENERATED_BODY()
 
@@ -156,7 +156,7 @@ struct MOFRAMEWORK_API FMOBodyPartDefinitionRow : public FTableRowBase
  * DataTable row defining properties of a wound type.
  */
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOWoundTypeDefinitionRow : public FTableRowBase
+struct MOFRAMEWORKCORE_API FMOWoundTypeDefinitionRow : public FTableRowBase
 {
 	GENERATED_BODY()
 
@@ -237,7 +237,7 @@ struct MOFRAMEWORK_API FMOWoundTypeDefinitionRow : public FTableRowBase
  * DataTable row defining properties of a medical condition.
  */
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOConditionDefinitionRow : public FTableRowBase
+struct MOFRAMEWORKCORE_API FMOConditionDefinitionRow : public FTableRowBase
 {
 	GENERATED_BODY()
 
@@ -332,7 +332,7 @@ struct MOFRAMEWORK_API FMOConditionDefinitionRow : public FTableRowBase
  * DataTable row defining a medical treatment.
  */
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOMedicalTreatmentRow : public FTableRowBase
+struct MOFRAMEWORKCORE_API FMOMedicalTreatmentRow : public FTableRowBase
 {
 	GENERATED_BODY()
 

@@ -1,5 +1,5 @@
 #include "MOVitalsComponent.h"
-#include "MOFramework.h"
+#include "MOFrameworkMedical.h"
 #include "MOAnatomyComponent.h"
 #include "MOMetabolismComponent.h"
 #include "MOMentalStateComponent.h"
@@ -7,7 +7,7 @@
 #include "MOMedicalProviderInterface.h"      // (H15) resolve adrenaline sibling
 #include "MOBodyPartTypes.h"
 #include "MOGameClockSubsystem.h"
-#include "MOWeatherIntegrationSubsystem.h"
+#include "MOAmbientEnvironmentProvider.h"
 #include "MOWeatherBlueprintLibrary.h"
 #include "MOWeatherTypes.h"
 #include "Net/UnrealNetwork.h"
@@ -97,7 +97,7 @@ void UMOVitalsComponent::ApplyBloodLoss(float AmountML)
 	if (BloodVolumePercent <= 20.0f && !bBloodLossDeathTriggered)
 	{
 		bBloodLossDeathTriggered = true;
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOVitals] CRITICAL BLOOD LOSS - triggering death (%.1f%% remaining)"),
+		UE_LOG(LogMOFrameworkMedical, Warning, TEXT("[MOVitals] CRITICAL BLOOD LOSS - triggering death (%.1f%% remaining)"),
 			BloodVolumePercent);
 
 		// Trigger death via anatomy component
@@ -1162,8 +1162,11 @@ void UMOVitalsComponent::UpdateWetness(float DeltaSeconds)
 
 	// Read the current weather state. Without rain there's nothing wetting
 	// the pawn — drive WetnessLevel toward 0.
-	UMOWeatherIntegrationSubsystem* WeatherSys = World->GetSubsystem<UMOWeatherIntegrationSubsystem>();
-	const float RainIntensity = WeatherSys ? WeatherSys->GetCurrentWeatherState().RainIntensity : 0.0f;
+	// Ambient inputs come through the Core registry (C1) — the medical layer
+	// never knows the weather subsystem.
+	UMOAmbientEnvironmentRegistry* Ambient = UMOAmbientEnvironmentRegistry::Get(this);
+	IMOAmbientEnvironmentProvider* Env = Ambient ? Ambient->GetProvider() : nullptr;
+	const float RainIntensity = Env ? Env->GetAmbientRainIntensity01() : 0.0f;
 
 	float NewLevel = WetnessLevel;
 
@@ -1224,14 +1227,23 @@ void UMOVitalsComponent::UpdateEnvironmentalTemperature(float DeltaSeconds)
 	// With no weather provider the subsystem returns its configured default
 	// (20°C), so this gently holds the pawn near comfort rather than doing
 	// anything dangerous.
-	UMOWeatherIntegrationSubsystem* WeatherSys = World->GetSubsystem<UMOWeatherIntegrationSubsystem>();
-	if (!WeatherSys)
+	UMOAmbientEnvironmentRegistry* Ambient = UMOAmbientEnvironmentRegistry::Get(this);
+	IMOAmbientEnvironmentProvider* Env = Ambient ? Ambient->GetProvider() : nullptr;
+	if (!Env)
 	{
-		return;
+		static bool bWarnedNoProvider = false;
+		if (!bWarnedNoProvider)
+		{
+			bWarnedNoProvider = true;
+			UE_LOG(LogMOFrameworkMedical, Warning,
+				TEXT("[MOVitals] AMBIENT SEAM: no environment provider (registry=%s) — env temperature drift disabled"),
+				Ambient ? TEXT("present") : TEXT("MISSING"));
+		}
+		return;   // no provider yet — hold at comfort rather than guess
 	}
 
 	const FVector Origin = Owner->GetActorLocation();
-	const float FeelsLikeC = WeatherSys->GetFeelsLikeTemperature(Origin, EMOTemperatureUnit::Celsius);
+	const float FeelsLikeC = Env->GetAmbientFeelsLikeCelsius(Origin);
 
 	// Insulation = tunable clothing default + a cheap shelter bonus (reusing the
 	// wetness trace's cached overhead cover — no extra trace). Clamped 0..1.

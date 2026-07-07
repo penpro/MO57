@@ -54,6 +54,7 @@
 #include "Subsystems/WorldSubsystem.h"
 #include "MOWeatherTypes.h"
 #include "MOSaveDomainInterface.h"
+#include "MOAmbientEnvironmentProvider.h"
 #include "MOWeatherIntegrationSubsystem.generated.h"
 
 class IMOWeatherProviderInterface;
@@ -93,7 +94,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOTimeOfDayChangedSignature, bool,
  * 4. Bind to delegates for weather change events
  */
 UCLASS()
-class MOFRAMEWORK_API UMOWeatherIntegrationSubsystem : public UTickableWorldSubsystem, public IMOSaveDomain
+class MOFRAMEWORK_API UMOWeatherIntegrationSubsystem : public UTickableWorldSubsystem, public IMOSaveDomain, public IMOAmbientEnvironmentProvider
 {
 	GENERATED_BODY()
 
@@ -104,6 +105,21 @@ public:
 	virtual void CaptureSaveDomain(UMOWorldSaveGame& Save) override;
 	virtual void ApplySaveDomain(const UMOWorldSaveGame& Save) override;
 	//~ End IMOSaveDomain
+
+	//~ Begin IMOAmbientEnvironmentProvider (the medical layer's window on weather)
+	virtual float GetAmbientFeelsLikeCelsius(const FVector& Location) const override
+	{
+		return GetFeelsLikeTemperature(Location, EMOTemperatureUnit::Celsius);
+	}
+	virtual FMOWeatherExposure GetAmbientExposure(const FVector& Location) const override
+	{
+		return GetWeatherExposureAtLocation(Location);
+	}
+	virtual float GetAmbientRainIntensity01() const override
+	{
+		return GetCurrentWeatherState().RainIntensity;
+	}
+	//~ End IMOAmbientEnvironmentProvider
 
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 	virtual void Deinitialize() override;

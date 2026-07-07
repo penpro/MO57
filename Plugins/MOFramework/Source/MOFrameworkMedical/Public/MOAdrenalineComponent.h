@@ -98,7 +98,7 @@
 class UMOVitalsComponent;
 class UMOAnatomyComponent;
 class UMOMentalStateComponent;
-class UMOSkillsComponent;
+class IMOSkillLevelSource;
 
 // ============================================================================
 // DELEGATES
@@ -115,7 +115,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOOnAdrenalineCrashEnded);
 // ============================================================================
 
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOAdrenalineSaveData
+struct MOFRAMEWORKMEDICAL_API FMOAdrenalineSaveData
 {
 	GENERATED_BODY()
 
@@ -144,7 +144,7 @@ struct MOFRAMEWORK_API FMOAdrenalineSaveData
  * - Crash Phase: When adrenaline fades, masked effects come back
  */
 UCLASS(ClassGroup=(MO), meta=(BlueprintSpawnableComponent))
-class MOFRAMEWORK_API UMOAdrenalineComponent : public UActorComponent
+class MOFRAMEWORKMEDICAL_API UMOAdrenalineComponent : public UActorComponent
 {
 	GENERATED_BODY()
 
@@ -417,8 +417,9 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UMOMentalStateComponent> CachedMentalComp;
 
-	UPROPERTY(Transient)
-	TObjectPtr<UMOSkillsComponent> CachedSkillsComp;
+	/** Skill levels reach the medical layer only through the Core
+	 *  IMOSkillLevelSource contract (C1) — never the skills component. */
+	IMOSkillLevelSource* CachedSkillSource = nullptr;
 
 	// ============================================================================
 	// INTERNAL METHODS

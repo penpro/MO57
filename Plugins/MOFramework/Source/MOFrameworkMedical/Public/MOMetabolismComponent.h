@@ -109,7 +109,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOOnMetabolismChanged);
 // ============================================================================
 
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMODigestingFoodSaveEntry
+struct MOFRAMEWORKMEDICAL_API FMODigestingFoodSaveEntry
 {
 	GENERATED_BODY()
 
@@ -145,7 +145,7 @@ struct MOFRAMEWORK_API FMODigestingFoodSaveEntry
 };
 
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOMetabolismSaveData
+struct MOFRAMEWORKMEDICAL_API FMOMetabolismSaveData
 {
 	GENERATED_BODY()
 
@@ -174,7 +174,7 @@ struct MOFRAMEWORK_API FMOMetabolismSaveData
  * Handles food digestion, calorie expenditure, fitness training, and nutrient tracking.
  */
 UCLASS(ClassGroup=(MO), meta=(BlueprintSpawnableComponent))
-class MOFRAMEWORK_API UMOMetabolismComponent : public UActorComponent
+class MOFRAMEWORKMEDICAL_API UMOMetabolismComponent : public UActorComponent
 {
 	GENERATED_BODY()
 

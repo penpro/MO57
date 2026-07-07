@@ -77,7 +77,6 @@
 
 #include "CoreMinimal.h"
 #include "Subsystems/WorldSubsystem.h"
-#include "MOSaveDomainInterface.h"
 #include "MOGameClockSubsystem.generated.h"
 
 /**
@@ -85,7 +84,7 @@
  * playtime + game time elapsed + in-game date/time survive save/reload.
  */
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOGameClockSaveData
+struct MOFRAMEWORKCORE_API FMOGameClockSaveData
 {
 	GENERATED_BODY()
 
@@ -148,18 +147,11 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOGameClockHourChanged, int32, New
  * Authoritative game time clock. See file header for design + scope.
  */
 UCLASS()
-class MOFRAMEWORK_API UMOGameClockSubsystem : public UTickableWorldSubsystem, public IMOSaveDomain
+class MOFRAMEWORKCORE_API UMOGameClockSubsystem : public UTickableWorldSubsystem
 {
 	GENERATED_BODY()
 
 public:
-	//~ Begin IMOSaveDomain (GameClock save data lives here, not in the persistence subsystem)
-	virtual FName GetSaveDomainName() const override { return TEXT("GameClock"); }
-	virtual int32 GetSaveDomainApplyPriority() const override { return 50; }
-	virtual void CaptureSaveDomain(UMOWorldSaveGame& Save) override;
-	virtual void ApplySaveDomain(const UMOWorldSaveGame& Save) override;
-	//~ End IMOSaveDomain
-
 	/** Convenience accessor. Returns nullptr only if the world has no subsystem (PIE shutdown, etc). */
 	UFUNCTION(BlueprintPure, Category="MO|Clock", meta=(WorldContext="WorldContextObject"))
 	static UMOGameClockSubsystem* Get(const UObject* WorldContextObject);

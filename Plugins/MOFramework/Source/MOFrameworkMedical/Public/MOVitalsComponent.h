@@ -125,7 +125,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOOnWetnessStateChanged, EMOWetnes
 // ============================================================================
 
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOVitalsSaveData
+struct MOFRAMEWORKMEDICAL_API FMOVitalsSaveData
 {
 	GENERATED_BODY()
 
@@ -148,7 +148,7 @@ struct MOFRAMEWORK_API FMOVitalsSaveData
  * Tracks blood volume, heart rate, blood pressure, SpO2, temperature, glucose.
  */
 UCLASS(ClassGroup=(MO), meta=(BlueprintSpawnableComponent))
-class MOFRAMEWORK_API UMOVitalsComponent : public UActorComponent
+class MOFRAMEWORKMEDICAL_API UMOVitalsComponent : public UActorComponent
 {
 	GENERATED_BODY()
 

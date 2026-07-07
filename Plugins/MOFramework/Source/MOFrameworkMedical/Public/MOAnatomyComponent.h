@@ -106,7 +106,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOOnDeathTimer, EMOBodyPartType, P
 // ============================================================================
 
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOBodyPartSaveEntry
+struct MOFRAMEWORKMEDICAL_API FMOBodyPartSaveEntry
 {
 	GENERATED_BODY()
 
@@ -127,7 +127,7 @@ struct MOFRAMEWORK_API FMOBodyPartSaveEntry
 };
 
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOWoundSaveEntry
+struct MOFRAMEWORKMEDICAL_API FMOWoundSaveEntry
 {
 	GENERATED_BODY()
 
@@ -169,7 +169,7 @@ struct MOFRAMEWORK_API FMOWoundSaveEntry
 };
 
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOConditionSaveEntry
+struct MOFRAMEWORKMEDICAL_API FMOConditionSaveEntry
 {
 	GENERATED_BODY()
 
@@ -193,7 +193,7 @@ struct MOFRAMEWORK_API FMOConditionSaveEntry
 };
 
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOAnatomySaveData
+struct MOFRAMEWORKMEDICAL_API FMOAnatomySaveData
 {
 	GENERATED_BODY()
 
@@ -216,7 +216,7 @@ struct MOFRAMEWORK_API FMOAnatomySaveData
  * Tracks damage to individual body parts with finger/toe-level granularity.
  */
 UCLASS(ClassGroup=(MO), meta=(BlueprintSpawnableComponent))
-class MOFRAMEWORK_API UMOAnatomyComponent : public UActorComponent, public IMOWoundListOwner
+class MOFRAMEWORKMEDICAL_API UMOAnatomyComponent : public UActorComponent, public IMOWoundListOwner
 {
 	GENERATED_BODY()
 

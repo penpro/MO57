@@ -1,6 +1,6 @@
 #include "MOMedicalDatabaseSettings.h"
 #include "Engine/DataTable.h"
-#include "MOFramework.h"
+#include "MOFrameworkMedical.h"
 
 const UMOMedicalDatabaseSettings* UMOMedicalDatabaseSettings::Get()
 {
@@ -89,25 +89,25 @@ void UMOMedicalDatabaseSettings::ValidateConfiguration()
 
 	if (Settings->BodyPartDefinitionsTable.IsNull())
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("MO Medical Database: BodyPartDefinitionsTable is not configured. "
+		UE_LOG(LogMOFrameworkMedical, Warning, TEXT("MO Medical Database: BodyPartDefinitionsTable is not configured. "
 			"Configure it in Project Settings -> Plugins -> MO Medical Database."));
 	}
 
 	if (Settings->WoundTypeDefinitionsTable.IsNull())
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("MO Medical Database: WoundTypeDefinitionsTable is not configured. "
+		UE_LOG(LogMOFrameworkMedical, Warning, TEXT("MO Medical Database: WoundTypeDefinitionsTable is not configured. "
 			"Wound types will use default values."));
 	}
 
 	if (Settings->ConditionDefinitionsTable.IsNull())
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("MO Medical Database: ConditionDefinitionsTable is not configured. "
+		UE_LOG(LogMOFrameworkMedical, Warning, TEXT("MO Medical Database: ConditionDefinitionsTable is not configured. "
 			"Conditions will use default values."));
 	}
 
 	if (Settings->MedicalTreatmentsTable.IsNull())
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("MO Medical Database: MedicalTreatmentsTable is not configured. "
+		UE_LOG(LogMOFrameworkMedical, Warning, TEXT("MO Medical Database: MedicalTreatmentsTable is not configured. "
 			"Medical treatments will not be available."));
 	}
 }

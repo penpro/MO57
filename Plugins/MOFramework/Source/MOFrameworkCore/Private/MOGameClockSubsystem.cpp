@@ -4,9 +4,7 @@
  */
 
 #include "MOGameClockSubsystem.h"
-#include "MOPersistenceSubsystem.h"
-#include "MOworldSaveGame.h"
-#include "MOFramework.h"
+#include "MOFrameworkCore.h"
 #include "Engine/World.h"
 
 UMOGameClockSubsystem* UMOGameClockSubsystem::Get(const UObject* WorldContextObject)
@@ -34,24 +32,14 @@ void UMOGameClockSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
 	RefreshDaytimeState();
 
-	UE_LOG(LogMOFramework, Log,
+	UE_LOG(LogMOFrameworkCore, Log,
 		TEXT("[MOGameClock] Initialized — TimeScale=%.2f, GameDateTime=%s (%s)"),
 		TimeScale, *GameDateTime.ToString(), bIsDaytime ? TEXT("DAY") : TEXT("NIGHT"));
 }
 
 void UMOGameClockSubsystem::Deinitialize()
 {
-	if (UWorld* W = GetWorld())
-	{
-		if (UGameInstance* GI = W->GetGameInstance())
-		{
-			if (UMOPersistenceSubsystem* Persist = GI->GetSubsystem<UMOPersistenceSubsystem>())
-			{
-				Persist->UnregisterSaveDomain(this);
-			}
-		}
-	}
-	UE_LOG(LogMOFramework, Log, TEXT("[MOGameClock] Deinitialize — RealPlayTime=%.1fs, GameTime=%.1fs"),
+	UE_LOG(LogMOFrameworkCore, Log, TEXT("[MOGameClock] Deinitialize — RealPlayTime=%.1fs, GameTime=%.1fs"),
 		RealSecondsAccumulated, GameSecondsAccumulated);
 	Super::Deinitialize();
 }
@@ -95,7 +83,7 @@ void UMOGameClockSubsystem::SetTimeScale(float NewScale)
 	}
 	const float Old = TimeScale;
 	TimeScale = Clamped;
-	UE_LOG(LogMOFramework, Log, TEXT("[MOGameClock] TimeScale %.3f -> %.3f"), Old, TimeScale);
+	UE_LOG(LogMOFrameworkCore, Log, TEXT("[MOGameClock] TimeScale %.3f -> %.3f"), Old, TimeScale);
 	OnTimeScaleChanged.Broadcast(Old, TimeScale);
 }
 
@@ -116,7 +104,7 @@ void UMOGameClockSubsystem::SetGameDateTime(const FDateTime& NewDateTime)
 	}
 
 	GameDateTime = NewDateTime;
-	UE_LOG(LogMOFramework, Log, TEXT("[MOGameClock] SetGameDateTime -> %s"), *GameDateTime.ToString());
+	UE_LOG(LogMOFrameworkCore, Log, TEXT("[MOGameClock] SetGameDateTime -> %s"), *GameDateTime.ToString());
 
 	// Re-evaluate daytime + hour state after the jump. If we skipped from
 	// 5 PM to 7 AM (a "sleep until morning" jump), both delegates fire —
@@ -136,7 +124,7 @@ void UMOGameClockSubsystem::RefreshDaytimeState()
 	}
 
 	bIsDaytime = bNowDaytime;
-	UE_LOG(LogMOFramework, Log, TEXT("[MOGameClock] Day/Night flipped -> %s at %s"),
+	UE_LOG(LogMOFrameworkCore, Log, TEXT("[MOGameClock] Day/Night flipped -> %s at %s"),
 		bIsDaytime ? TEXT("DAY") : TEXT("NIGHT"), *GameDateTime.ToString());
 	OnDayNightChanged.Broadcast(bIsDaytime, GameDateTime);
 }
@@ -150,7 +138,7 @@ void UMOGameClockSubsystem::RefreshHourState()
 	}
 
 	LastBroadcastHour = CurrentHour;
-	UE_LOG(LogMOFramework, Log, TEXT("[MOGameClock] Hour rolled -> %02d:00 at %s"),
+	UE_LOG(LogMOFrameworkCore, Log, TEXT("[MOGameClock] Hour rolled -> %02d:00 at %s"),
 		CurrentHour, *GameDateTime.ToString());
 	OnHourChanged.Broadcast(CurrentHour, GameDateTime);
 }
@@ -174,7 +162,7 @@ void UMOGameClockSubsystem::ApplySaveData(const FMOGameClockSaveData& SaveData)
 {
 	if (!SaveData.bIsValid)
 	{
-		UE_LOG(LogMOFramework, Log, TEXT("[MOGameClock] ApplySaveData skipped — save data marked invalid (fresh save?)"));
+		UE_LOG(LogMOFrameworkCore, Log, TEXT("[MOGameClock] ApplySaveData skipped — save data marked invalid (fresh save?)"));
 		return;
 	}
 
@@ -190,7 +178,7 @@ void UMOGameClockSubsystem::ApplySaveData(const FMOGameClockSaveData& SaveData)
 	// if the saved time crosses a day/night boundary from the default.
 	SetGameDateTime(SaveData.GameDateTime);
 
-	UE_LOG(LogMOFramework, Log,
+	UE_LOG(LogMOFrameworkCore, Log,
 		TEXT("[MOGameClock] ApplySaveData — RealPlayTime=%.1fs, GameTime=%.1fs, TimeScale=%.2f, GameDateTime=%s"),
 		RealSecondsAccumulated, GameSecondsAccumulated, TimeScale, *GameDateTime.ToString());
 }
@@ -199,27 +187,8 @@ void UMOGameClockSubsystem::ApplySaveData(const FMOGameClockSaveData& SaveData)
 // UWorldSubsystem lifetime is incompatible with IConsoleManager — see the
 // "DO NOT MAKE THIS A UWorldSubsystem" note in MOCheatSubsystem.h.
 
-// ---- IMOSaveDomain (GameClock) — see MOSaveDomainInterface.h ----
-
-void UMOGameClockSubsystem::CaptureSaveDomain(UMOWorldSaveGame& Save)
-{
-	Save.GameClockData = BuildSaveData();
-}
-
-void UMOGameClockSubsystem::ApplySaveDomain(const UMOWorldSaveGame& Save)
-{
-	// ApplySaveData no-ops internally on legacy/fresh saves (bIsValid=false).
-	ApplySaveData(Save.GameClockData);
-}
 
 void UMOGameClockSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 {
 	Super::OnWorldBeginPlay(InWorld);
-	if (UGameInstance* GI = InWorld.GetGameInstance())
-	{
-		if (UMOPersistenceSubsystem* Persist = GI->GetSubsystem<UMOPersistenceSubsystem>())
-		{
-			Persist->RegisterSaveDomain(this);
-		}
-	}
 }

@@ -82,6 +82,7 @@
 #include "Components/ActorComponent.h"
 #include "MOSkillDefinitionRow.h"
 
+#include "MOSkillLevelSourceInterface.h"
 #include "MOSkillsComponent.generated.h"
 
 /**
@@ -127,11 +128,15 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FMOOnExperienceGained, FName, Ski
  * Integrates with skill definition DataTable for XP curves.
  */
 UCLASS(ClassGroup=(MO), meta=(BlueprintSpawnableComponent))
-class MOFRAMEWORK_API UMOSkillsComponent : public UActorComponent
+class MOFRAMEWORK_API UMOSkillsComponent : public UActorComponent, public IMOSkillLevelSource
 {
 	GENERATED_BODY()
 
 public:
+	//~ Begin IMOSkillLevelSource (medical layer queries skill levels through Core)
+	virtual int32 GetSkillLevelForQuery(FName SkillId) const override { return GetSkillLevel(SkillId); }
+	//~ End IMOSkillLevelSource
+
 	UMOSkillsComponent();
 
 	/** Array of skill progress data. */

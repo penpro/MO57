@@ -49,7 +49,6 @@
  * - MOAnatomyComponent.h - Body parts, wounds
  * - MOMentalStateComponent.h - Consciousness, morale
  * - MOMetabolismComponent.h - Hunger, thirst, digestion
- * - MOAdrenalineComponent.h - Combat stress response
  *
  * LAST UPDATED: 2026-02-25
  * =============================================================================
@@ -77,7 +76,7 @@ class UMOMedicalProviderInterface : public UInterface
 	GENERATED_BODY()
 };
 
-class MOFRAMEWORK_API IMOMedicalProviderInterface
+class MOFRAMEWORKMEDICAL_API IMOMedicalProviderInterface
 {
 	GENERATED_BODY()
 

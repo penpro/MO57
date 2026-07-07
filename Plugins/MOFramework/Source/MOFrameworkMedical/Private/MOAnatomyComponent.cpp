@@ -1,5 +1,5 @@
 #include "MOAnatomyComponent.h"
-#include "MOFramework.h"
+#include "MOFrameworkMedical.h"
 #include "MOVitalsComponent.h"
 #include "MOMentalStateComponent.h"
 #include "MOBodyPartDefinitionRow.h"
@@ -123,14 +123,14 @@ bool UMOAnatomyComponent::InflictDamage(EMOBodyPartType Part, float Damage, EMOW
 
 	if (GetOwnerRole() != ROLE_Authority)
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOAnatomy] InflictDamage REJECTED: Not authority (Role=%d) on %s"),
+		UE_LOG(LogMOFrameworkMedical, Warning, TEXT("[MOAnatomy] InflictDamage REJECTED: Not authority (Role=%d) on %s"),
 			static_cast<int32>(GetOwnerRole()), Owner ? *Owner->GetName() : TEXT("NULL"));
 		return false;
 	}
 
 	if (Part == EMOBodyPartType::None || Damage <= 0.0f)
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOAnatomy] InflictDamage REJECTED: Invalid part (%d) or damage (%.1f)"),
+		UE_LOG(LogMOFrameworkMedical, Warning, TEXT("[MOAnatomy] InflictDamage REJECTED: Invalid part (%d) or damage (%.1f)"),
 			static_cast<int32>(Part), Damage);
 		return false;
 	}
@@ -138,7 +138,7 @@ bool UMOAnatomyComponent::InflictDamage(EMOBodyPartType Part, float Damage, EMOW
 	FMOBodyPartState* PartState = GetBodyPartStateMutable(Part);
 	if (!PartState || PartState->IsDestroyed())
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOAnatomy] InflictDamage REJECTED: PartState null or destroyed (Part=%d)"),
+		UE_LOG(LogMOFrameworkMedical, Warning, TEXT("[MOAnatomy] InflictDamage REJECTED: PartState null or destroyed (Part=%d)"),
 			static_cast<int32>(Part));
 		return false;
 	}
@@ -156,14 +156,14 @@ bool UMOAnatomyComponent::InflictDamage(EMOBodyPartType Part, float Damage, EMOW
 	float OldHP = PartState->CurrentHP;
 	PartState->CurrentHP = FMath::Max(0.0f, PartState->CurrentHP - ActualDamage);
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOAnatomy] InflictDamage: Part=%d, Damage=%.1f (actual=%.1f), HP %.1f -> %.1f"),
+	UE_LOG(LogMOFrameworkMedical, Log, TEXT("[MOAnatomy] InflictDamage: Part=%d, Damage=%.1f (actual=%.1f), HP %.1f -> %.1f"),
 		static_cast<int32>(Part), Damage, ActualDamage, OldHP, PartState->CurrentHP);
 
 	// Update status
 	if (PartState->CurrentHP <= 0.0f)
 	{
 		PartState->Status = EMOBodyPartStatus::Destroyed;
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOAnatomy] Body part %d DESTROYED! Checking death conditions..."),
+		UE_LOG(LogMOFrameworkMedical, Warning, TEXT("[MOAnatomy] Body part %d DESTROYED! Checking death conditions..."),
 			static_cast<int32>(Part));
 	}
 	else if (PartState->CurrentHP < PartState->MaxHP)

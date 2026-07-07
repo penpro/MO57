@@ -131,7 +131,7 @@ enum class EMOAdrenalinePhase : uint8
  * Configuration for adrenaline response based on combat skill level.
  */
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOAdrenalineSkillModifiers
+struct MOFRAMEWORKCORE_API FMOAdrenalineSkillModifiers
 {
 	GENERATED_BODY()
 
@@ -182,7 +182,7 @@ struct MOFRAMEWORK_API FMOAdrenalineSkillModifiers
  * Current adrenaline state - replicated for UI and effects.
  */
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOAdrenalineState
+struct MOFRAMEWORKCORE_API FMOAdrenalineState
 {
 	GENERATED_BODY()
 
@@ -298,7 +298,7 @@ struct MOFRAMEWORK_API FMOAdrenalineState
  * Configuration for adrenaline system behavior.
  */
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOAdrenalineConfig
+struct MOFRAMEWORKCORE_API FMOAdrenalineConfig
 {
 	GENERATED_BODY()
 
@@ -438,7 +438,7 @@ struct MOFRAMEWORK_API FMOAdrenalineConfig
  * Passed when registering combat threats.
  */
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOThreatInfo
+struct MOFRAMEWORKCORE_API FMOThreatInfo
 {
 	GENERATED_BODY()
 
