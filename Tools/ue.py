@@ -24,6 +24,7 @@ NOTE: dev-machine tooling — drives arbitrary local execution. Never ship.
 """
 import argparse
 import json
+import re
 import os
 import re
 import subprocess
@@ -579,7 +580,10 @@ EDITOR_APP = "EditorToolset.EditorAppToolset"
 
 def cmd_asset(a):
     """Asset verbs (pipeline A-track). shot = render an asset thumbnail or the
-    level/PIE viewport to a PNG the agent can Read for visual QA (A3)."""
+    level/PIE viewport to a PNG the agent can Read for visual QA (A3);
+    assign = set an art asset onto a DataTable row field (A2)."""
+    if a.action == "assign":
+        return cmd_asset_assign(a)
     if a.action == "shot":
         import base64
         out_path = os.path.abspath(a.out)
@@ -628,6 +632,63 @@ def cmd_asset(a):
         with open(out_path, "wb") as f:
             f.write(base64.b64decode(img["data"]))
         print(f"[shot] {a.target} -> {out_path} ({_size(out_path)} bytes, {img.get('mimeType', '?')})")
+
+
+def _run_validate_art():
+    """Run MO.Test.ValidateArt in the live game instance and print the fresh
+    summary. Needs PIE (the cheat subsystem registers verbs per game instance);
+    the main menu is enough."""
+    results_path = os.path.join(ROOT, "Saved", "MOTestResults.txt")
+    before = os.path.getmtime(results_path) if os.path.isfile(results_path) else 0
+    ok, _lines, _ = bridge_run(["MO.Test.ValidateArt"], timeout=15, want_log=False)
+    if not ok:
+        print("[assign] bridge not responding — ValidateArt not re-run")
+        return None
+    for _ in range(20):
+        time.sleep(1)
+        if os.path.isfile(results_path) and os.path.getmtime(results_path) > before:
+            break
+    try:
+        txt = open(results_path, "r", encoding="utf-8", errors="replace").read()
+    except OSError:
+        print("[assign] no results file — is PIE running? (ValidateArt needs a game instance)")
+        return None
+    if "Suite=ValidateArt" not in txt:
+        print("[assign] results file is stale (no ValidateArt suite) — is PIE running?")
+        return None
+    total_missing = 0
+    for line in txt.splitlines():
+        if "missing" in line:
+            print("[art] " + line.strip())
+            m = re.search(r"(\d+) missing", line)
+            if m:
+                total_missing += int(m.group(1))
+    print(f"[art] TOTAL missing: {total_missing}")
+    return total_missing
+
+
+def cmd_asset_assign(a):
+    """A2: assignment is a data operation. Nested field paths become nested
+    dicts for set_rows; readback-verify via the rows discipline; then re-run
+    ValidateArt so the art-debt number visibly moves."""
+    fields = a.asset_path
+    for key in reversed(a.field.split(".")):
+        fields = {key: fields}
+    okc, report = rows_set_safe(a.table, {a.row: fields})
+    for l in report:
+        print(l)
+        if l.startswith("save_assets ->") and "True" not in l:
+            print("[assign] WARNING: table edit is IN MEMORY but the save failed — "
+                  "EditorAssetLibrary is blocked while PIE runs. End PIE, then: "
+                  f"ue.py save {a.table}")
+    if okc != 1:
+        _die(1, f"assign failed verify: {a.row}.{a.field}")
+    # refresh runtime caches so a running PIE session sees the new path
+    bridge_run(['py:unreal.MORecipeDatabaseSettings.invalidate_cache(); '
+                'unreal.MOItemDatabaseSettings.invalidate_cache(); '
+                'out("caches invalidated")'], timeout=10, want_log=False)
+    if not a.no_validate:
+        _run_validate_art()
 
 
 def cmd_refresh_data(a):
@@ -843,11 +904,19 @@ def main():
     s.add_argument("--no-save", action="store_true")
     s.set_defaults(fn=cmd_rows)
 
-    s = sub.add_parser("asset", help="asset verbs: shot <assetPath|viewport> <out.png> (visual QA, A3)")
-    s.add_argument("action", choices=["shot"])
-    s.add_argument("target", help="asset path (/Game/...) for a thumbnail render, 'pie' for the game view (HighResShot), or 'viewport' for the editor scene view")
-    s.add_argument("out", help="output .png path")
-    s.set_defaults(fn=cmd_asset)
+    s = sub.add_parser("asset", help="asset verbs: shot (visual QA, A3) | assign (art slot -> row field, A2)")
+    asub = s.add_subparsers(dest="action", required=True)
+    a_shot = asub.add_parser("shot", help="render an asset thumbnail / viewport / PIE view to PNG")
+    a_shot.add_argument("target", help="asset path (/Game/...) for a thumbnail render, 'pie' for the game view (HighResShot), or 'viewport' for the editor scene view")
+    a_shot.add_argument("out", help="output .png path")
+    a_shot.set_defaults(fn=cmd_asset)
+    a_asn = asub.add_parser("assign", help="set an asset soft-path onto a DataTable row field (dots = nested struct), verify, re-run ValidateArt")
+    a_asn.add_argument("table", help="refPath, e.g. /MOFramework/Data/Recipes.Recipes")
+    a_asn.add_argument("row", help="row name, e.g. BuildWorkbench")
+    a_asn.add_argument("field", help="field path, e.g. PlacementData.PreviewMesh or Icon")
+    a_asn.add_argument("asset_path", help="/Game/... object path to assign")
+    a_asn.add_argument("--no-validate", action="store_true", help="skip the ValidateArt re-run")
+    a_asn.set_defaults(fn=cmd_asset)
 
     s = sub.add_parser("save", help="save an asset via MCP")
     s.add_argument("asset")
