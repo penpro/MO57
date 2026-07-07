@@ -46,6 +46,7 @@
 #include "GameFramework/SaveGame.h"
 #include "UObject/SoftObjectPath.h"
 #include "MOCraftingTypes.h"
+#include "MOColonyTypes.h"
 #include "MOBuildingTypes.h"
 #include "MOCharacterAppearance.h"
 #include "MOVitalsComponent.h"
@@ -416,6 +417,10 @@ public:
      */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Clock")
     FMOGameClockSaveData GameClockData;
+
+    /** Settlement layer (V1): settlement record, residency, mood, histories. */
+    UPROPERTY()
+    FMOColonySaveData ColonyData;
 
     // --- Resource Depletion Save Data (H37) ---
 

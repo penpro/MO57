@@ -24,20 +24,7 @@ public class MO57 : ModuleRules
 		PrivateDependencyModuleNames.AddRange(new string[] { });
 
 		PublicIncludePaths.AddRange(new string[] {
-			"MO57",
-			"MO57/Variant_Platforming",
-			"MO57/Variant_Platforming/Animation",
-			"MO57/Variant_Combat",
-			"MO57/Variant_Combat/AI",
-			"MO57/Variant_Combat/Animation",
-			"MO57/Variant_Combat/Gameplay",
-			"MO57/Variant_Combat/Interfaces",
-			"MO57/Variant_Combat/UI",
-			"MO57/Variant_SideScrolling",
-			"MO57/Variant_SideScrolling/AI",
-			"MO57/Variant_SideScrolling/Gameplay",
-			"MO57/Variant_SideScrolling/Interfaces",
-			"MO57/Variant_SideScrolling/UI"
+			"MO57"
 		});
 
 		// Uncomment if you are using Slate UI
