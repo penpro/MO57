@@ -292,8 +292,96 @@ def _deep_merge(base, patch):
     return out
 
 
+def _mcp_call_file(toolset, tool, args, timeout=90):
+    """mcp_call variant that passes the body via a temp file (curl -d @file).
+    REQUIRED for large payloads — a 197-row set_rows blows Windows' command
+    line limit (WinError 206) through the inline -d form."""
+    sid = None
+    try:
+        with open(SID_FILE) as f:
+            sid = f.read().strip() or None
+    except OSError:
+        pass
+    if not sid:
+        sid = mcp_connect()
+        if not sid:
+            return None
+    body = json.dumps({"jsonrpc": "2.0", "id": 2, "method": "tools/call",
+                       "params": {"name": "call_tool",
+                                  "arguments": {"toolset_name": toolset, "tool_name": tool, "arguments": args}}})
+    os.makedirs(TMP, exist_ok=True)
+    bp = os.path.join(TMP, "mcp_body.json")
+    with open(bp, "w", encoding="utf-8") as f:
+        f.write(body)
+    def _run(session):
+        cmd = ["curl", "-s", "-m", str(timeout), "-X", "POST", MCP_URL,
+               "-H", "Content-Type: application/json",
+               "-H", "Accept: application/json, text/event-stream",
+               "-H", "Mcp-Session-Id: " + session, "-d", "@" + bp]
+        try:
+            return _mcp_parse(subprocess.run(cmd, capture_output=True, text=True, timeout=timeout + 5).stdout)
+        except subprocess.TimeoutExpired:
+            return None
+    out = _run(sid)
+    if out is None or out == {}:
+        sid = mcp_connect()
+        if sid:
+            out = _run(sid)
+    return out
+
+
+def rows_set_bulk(table, rows, do_save=True):
+    """Batch path for LARGE row sets (3 MCP calls total: bulk read -> merged
+    bulk write -> bulk verify) instead of 4 calls per row. Dict-valued fields
+    are deep-merged against the bulk-read row (same struct-REPLACE protection
+    as rows_set_safe). Returns (ok_count, report)."""
+    report = []
+    names = list(rows.keys())
+    current = _mcp_call_file(DT, "get_rows", {"data_table": _table(table), "row_names": names})
+    if not isinstance(current, dict):
+        return 0, [f"bulk read failed: {current!r:.120}"]
+    values = {}
+    for n, fields in rows.items():
+        row = current.get(n, {})
+        row_ci = {str(k).lower(): k for k in row} if isinstance(row, dict) else {}
+        merged = {}
+        for k, v in fields.items():
+            cur_key = row_ci.get(k.lower())
+            base = row.get(cur_key) if cur_key else None
+            merged[k] = _deep_merge(base, v) if (isinstance(v, dict) and isinstance(base, dict)) else v
+        values[n] = merged
+    _mcp_call_file(DT, "set_rows", {"data_table": _table(table), "values": json.dumps(values)})
+    back = _mcp_call_file(DT, "get_rows", {"data_table": _table(table), "row_names": names})
+    ok = 0
+    for n, fields in rows.items():
+        row = back.get(n, {}) if isinstance(back, dict) else {}
+        row_ci = {str(k).lower(): v for k, v in row.items()} if isinstance(row, dict) else {}
+        good = True
+        for k, v in fields.items():
+            got = row_ci.get(k.lower())
+            if isinstance(v, (str, int, float, bool)):
+                if isinstance(got, str) and isinstance(v, str):
+                    good = good and (v in got)
+                elif got is not None and str(got) != str(v):
+                    good = False
+            elif isinstance(v, dict) and v:
+                got_l = {str(gk).lower(): gv for gk, gv in got.items()} if isinstance(got, dict) else {}
+                for vk, vv in v.items():
+                    if isinstance(vv, str) and vv not in str(got_l.get(vk.lower(), "")):
+                        good = False
+        ok += good
+        if not good:
+            report.append(f"{n:<28} MISMATCH")
+    report.append(f"bulk: {ok}/{len(names)} verified")
+    if do_save and ok:
+        report.append("save_assets -> %s" % _mcp_call_file(AT, "save_assets", {"asset_paths": [table]}))
+    return ok, report
+
+
 def rows_set_safe(table, rows, do_save=True):
     """Author rows ONE AT A TIME with readback verify. Returns (ok_count, report).
+    Row sets >20 automatically take the bulk path (rows_set_bulk) — the
+    per-row discipline is 4 MCP calls each and takes ~an hour at 200 rows.
 
     STRUCT-FIELD SAFETY: MCP set_rows REPLACES an entire nested struct with
     defaults for any field you omit — a partial {"PlacementData": {"PreviewMesh":
@@ -302,6 +390,8 @@ def rows_set_safe(table, rows, do_save=True):
     onto the CURRENT row before writing, so a nested write is always a full
     struct write. Readback keys are camelCased; match them case-insensitively.
     """
+    if len(rows) > 20:
+        return rows_set_bulk(table, rows, do_save=do_save)
     report, ok = [], 0
     for name, fields in rows.items():
         add = mcp_call(DT, "add_rows", {"data_table": _table(table), "row_names": [name]})

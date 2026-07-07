@@ -90,6 +90,56 @@ def make_graybox(recipe_id):
     return asset_path if ok else None
 
 
+# --- item debug meshes (V3-deferred stand-ins): one shape per EMOItemType ---
+
+ITEM_SHAPES = {
+    # type -> list of (kind, args) primitives; sizes in cm, debug-grade
+    "MATERIAL":   [("box", (0, 0, 0, 30, 20, 10))],
+    "TOOL":       [("box", (0, 0, 0, 6, 6, 50)), ("box", (0, 0, 50, 24, 10, 10))],
+    "CONSUMABLE": [("sphere", (0, 0, 6, 12))],
+    "WEAPON":     [("box", (0, 0, 0, 8, 3, 70)), ("box", (0, 0, 18, 20, 4, 4))],
+    "MISC":       [("box", (0, 0, 0, 15, 15, 15))],
+    "ARMOR":      [("box", (0, 0, 0, 30, 8, 25))],
+    "AMMO":       [("box", (0, 0, 0, 2, 2, 40)), ("box", (0, 0, 40, 4, 4, 6))],
+}
+
+
+def make_item_debug(type_name):
+    shapes = ITEM_SHAPES.get(type_name)
+    if not shapes:
+        return None
+    dyn = unreal.DynamicMesh()
+    opts = unreal.GeometryScriptPrimitiveOptions()
+    for kind, a in shapes:
+        if kind == "box":
+            _box(dyn, opts, a[0], a[1], a[2], a[3], a[4], a[5])
+        elif kind == "sphere":
+            xf = _xf(a[0], a[1], a[2])
+            unreal.GeometryScript_Primitives.append_sphere_box(dyn, opts, xf, a[3])
+    asset_path = "%s/Items/SM_GBI_%s" % (GRAYBOX_PATH, type_name.title())
+    opts_new = unreal.GeometryScriptCreateNewStaticMeshAssetOptions()
+    result = unreal.GeometryScript_NewAssetUtils.create_new_static_mesh_asset_from_mesh(dyn, asset_path, opts_new)
+    outcome = result[1] if isinstance(result, tuple) else result
+    return asset_path if outcome == unreal.GeometryScriptOutcomePins.SUCCESS else None
+
+
+def run_items(types):
+    made = []
+    for t in types:
+        try:
+            p = make_item_debug(t)
+        except Exception as e:  # noqa: BLE001
+            print("GRAYBOX ITEM %s -> ERROR %s" % (t, e))
+            made.append((t, None))
+            continue
+        print("GRAYBOX ITEM %s -> %s" % (t, p))
+        made.append((t, p))
+    if any(m[1] for m in made):
+        unreal.EditorAssetLibrary.save_directory(GRAYBOX_PATH + "/Items", only_if_is_dirty=False, recursive=True)
+    print("GRAYBOX ITEMS DONE %d/%d (saved)" % (len([m for m in made if m[1]]), len(made)))
+    return made
+
+
 def run(targets):
     made = []
     for rid in targets:
