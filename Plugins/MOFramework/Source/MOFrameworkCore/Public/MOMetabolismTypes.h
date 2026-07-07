@@ -62,14 +62,13 @@
 #include "MOMetabolismTypes.generated.h"
 
 // Forward declarations
-class UMOMetabolismComponent;
 
 /**
  * Body composition metrics.
  * See file header for energy flow and body composition details.
  */
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOBodyComposition
+struct MOFRAMEWORKCORE_API FMOBodyComposition
 {
 	GENERATED_BODY()
 
@@ -139,7 +138,7 @@ struct MOFRAMEWORK_API FMOBodyComposition
  * Nutrient storage levels.
  */
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMONutrientLevels
+struct MOFRAMEWORKCORE_API FMONutrientLevels
 {
 	GENERATED_BODY()
 
@@ -205,7 +204,7 @@ struct MOFRAMEWORK_API FMONutrientLevels
  * Food item currently being digested.
  */
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMODigestingFood : public FFastArraySerializerItem
+struct MOFRAMEWORKCORE_API FMODigestingFood : public FFastArraySerializerItem
 {
 	GENERATED_BODY()
 
@@ -313,18 +312,17 @@ struct MOFRAMEWORK_API FMODigestingFood : public FFastArraySerializerItem
 /**
  * FastArray container for digesting food.
  */
+
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMODigestingFoodList : public FFastArraySerializer
+struct MOFRAMEWORKCORE_API FMODigestingFoodList : public FFastArraySerializer
 {
 	GENERATED_BODY()
 
 	UPROPERTY()
 	TArray<FMODigestingFood> Items;
 
-	UPROPERTY(NotReplicated, Transient)
-	TObjectPtr<UMOMetabolismComponent> OwnerComponent;
-
-	void SetOwner(UMOMetabolismComponent* InOwner) { OwnerComponent = InOwner; }
+	// NOTE: no owner back-pointer — the replication callbacks are stubs and
+	// nothing ever used it (removed in the C1 decoupling).
 
 	void PostReplicatedAdd(const TArrayView<int32>& AddedIndices, int32 FinalSize);
 	void PostReplicatedChange(const TArrayView<int32>& ChangedIndices, int32 FinalSize);

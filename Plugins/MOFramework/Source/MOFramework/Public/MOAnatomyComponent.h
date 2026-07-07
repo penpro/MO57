@@ -216,7 +216,7 @@ struct MOFRAMEWORK_API FMOAnatomySaveData
  * Tracks damage to individual body parts with finger/toe-level granularity.
  */
 UCLASS(ClassGroup=(MO), meta=(BlueprintSpawnableComponent))
-class MOFRAMEWORK_API UMOAnatomyComponent : public UActorComponent
+class MOFRAMEWORK_API UMOAnatomyComponent : public UActorComponent, public IMOWoundListOwner
 {
 	GENERATED_BODY()
 

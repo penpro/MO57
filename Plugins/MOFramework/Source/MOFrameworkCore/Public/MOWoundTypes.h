@@ -69,14 +69,13 @@
 #include "MOWoundTypes.generated.h"
 
 // Forward declarations
-class UMOAnatomyComponent;
 
 /**
  * Represents an active wound on a body part.
  * See file header for wound lifecycle and treatment details.
  */
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOWound : public FFastArraySerializerItem
+struct MOFRAMEWORKCORE_API FMOWound : public FFastArraySerializerItem
 {
 	GENERATED_BODY()
 
@@ -137,18 +136,39 @@ struct MOFRAMEWORK_API FMOWound : public FFastArraySerializerItem
 /**
  * FastArray container for wounds.
  */
+
+/**
+ * Replication-callback contract for whoever owns the wound/condition lists.
+ * Plain C++ interface (deliberately NOT a UInterface): it must stay invisible
+ * to UHT so the types layer carries no component dependency — the C1 carve
+ * rule. The owning component implements this and outlives the lists it owns,
+ * so the raw back-pointer cannot dangle.
+ */
+class IMOWoundListOwner
+{
+public:
+	virtual ~IMOWoundListOwner() = default;
+	virtual void OnWoundReplicatedAdd(const FMOWound& Wound) = 0;
+	virtual void OnWoundReplicatedChange(const FMOWound& Wound) = 0;
+	virtual void OnWoundReplicatedRemove(const FMOWound& Wound) = 0;
+	virtual void OnConditionReplicatedAdd(const FMOCondition& Condition) = 0;
+	virtual void OnConditionReplicatedChange(const FMOCondition& Condition) = 0;
+	virtual void OnConditionReplicatedRemove(const FMOCondition& Condition) = 0;
+};
+
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOWoundList : public FFastArraySerializer
+struct MOFRAMEWORKCORE_API FMOWoundList : public FFastArraySerializer
 {
 	GENERATED_BODY()
 
 	UPROPERTY()
 	TArray<FMOWound> Wounds;
 
-	UPROPERTY(NotReplicated, Transient)
-	TObjectPtr<UMOAnatomyComponent> OwnerComponent;
+	/** Non-UPROPERTY on purpose: plain interface pointer keeps this header
+	 *  free of component types (C1). Owner outlives the list. */
+	IMOWoundListOwner* OwnerComponent = nullptr;
 
-	void SetOwner(UMOAnatomyComponent* InOwner) { OwnerComponent = InOwner; }
+	void SetOwner(IMOWoundListOwner* InOwner) { OwnerComponent = InOwner; }
 
 	void PostReplicatedAdd(const TArrayView<int32>& AddedIndices, int32 FinalSize);
 	void PostReplicatedChange(const TArrayView<int32>& ChangedIndices, int32 FinalSize);
@@ -179,7 +199,7 @@ struct TStructOpsTypeTraits<FMOWoundList> : public TStructOpsTypeTraitsBase2<FMO
  * Represents an active medical condition or disease.
  */
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOCondition : public FFastArraySerializerItem
+struct MOFRAMEWORKCORE_API FMOCondition : public FFastArraySerializerItem
 {
 	GENERATED_BODY()
 
@@ -217,17 +237,18 @@ struct MOFRAMEWORK_API FMOCondition : public FFastArraySerializerItem
  * FastArray container for conditions.
  */
 USTRUCT(BlueprintType)
-struct MOFRAMEWORK_API FMOConditionList : public FFastArraySerializer
+struct MOFRAMEWORKCORE_API FMOConditionList : public FFastArraySerializer
 {
 	GENERATED_BODY()
 
 	UPROPERTY()
 	TArray<FMOCondition> Conditions;
 
-	UPROPERTY(NotReplicated, Transient)
-	TObjectPtr<UMOAnatomyComponent> OwnerComponent;
+	/** Non-UPROPERTY on purpose: plain interface pointer keeps this header
+	 *  free of component types (C1). Owner outlives the list. */
+	IMOWoundListOwner* OwnerComponent = nullptr;
 
-	void SetOwner(UMOAnatomyComponent* InOwner) { OwnerComponent = InOwner; }
+	void SetOwner(IMOWoundListOwner* InOwner) { OwnerComponent = InOwner; }
 
 	void PostReplicatedAdd(const TArrayView<int32>& AddedIndices, int32 FinalSize);
 	void PostReplicatedChange(const TArrayView<int32>& ChangedIndices, int32 FinalSize);

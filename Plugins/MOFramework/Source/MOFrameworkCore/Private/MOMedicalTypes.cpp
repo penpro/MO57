@@ -1,6 +1,4 @@
 #include "MOMedicalTypes.h"
-#include "MOAnatomyComponent.h"
-#include "MOMetabolismComponent.h"
 
 // ============================================================================
 // FMOWoundList Implementation
@@ -8,7 +6,7 @@
 
 void FMOWoundList::PostReplicatedAdd(const TArrayView<int32>& AddedIndices, int32 FinalSize)
 {
-	if (UMOAnatomyComponent* Owner = OwnerComponent.Get())
+	if (IMOWoundListOwner* Owner = OwnerComponent)
 	{
 		for (int32 Index : AddedIndices)
 		{
@@ -22,7 +20,7 @@ void FMOWoundList::PostReplicatedAdd(const TArrayView<int32>& AddedIndices, int3
 
 void FMOWoundList::PostReplicatedChange(const TArrayView<int32>& ChangedIndices, int32 FinalSize)
 {
-	if (UMOAnatomyComponent* Owner = OwnerComponent.Get())
+	if (IMOWoundListOwner* Owner = OwnerComponent)
 	{
 		for (int32 Index : ChangedIndices)
 		{
@@ -36,7 +34,7 @@ void FMOWoundList::PostReplicatedChange(const TArrayView<int32>& ChangedIndices,
 
 void FMOWoundList::PreReplicatedRemove(const TArrayView<int32>& RemovedIndices, int32 FinalSize)
 {
-	if (UMOAnatomyComponent* Owner = OwnerComponent.Get())
+	if (IMOWoundListOwner* Owner = OwnerComponent)
 	{
 		for (int32 Index : RemovedIndices)
 		{
@@ -92,7 +90,7 @@ bool FMOWoundList::RemoveWound(const FGuid& WoundId)
 
 void FMOConditionList::PostReplicatedAdd(const TArrayView<int32>& AddedIndices, int32 FinalSize)
 {
-	if (UMOAnatomyComponent* Owner = OwnerComponent.Get())
+	if (IMOWoundListOwner* Owner = OwnerComponent)
 	{
 		for (int32 Index : AddedIndices)
 		{
@@ -106,7 +104,7 @@ void FMOConditionList::PostReplicatedAdd(const TArrayView<int32>& AddedIndices, 
 
 void FMOConditionList::PostReplicatedChange(const TArrayView<int32>& ChangedIndices, int32 FinalSize)
 {
-	if (UMOAnatomyComponent* Owner = OwnerComponent.Get())
+	if (IMOWoundListOwner* Owner = OwnerComponent)
 	{
 		for (int32 Index : ChangedIndices)
 		{
@@ -120,7 +118,7 @@ void FMOConditionList::PostReplicatedChange(const TArrayView<int32>& ChangedIndi
 
 void FMOConditionList::PreReplicatedRemove(const TArrayView<int32>& RemovedIndices, int32 FinalSize)
 {
-	if (UMOAnatomyComponent* Owner = OwnerComponent.Get())
+	if (IMOWoundListOwner* Owner = OwnerComponent)
 	{
 		for (int32 Index : RemovedIndices)
 		{

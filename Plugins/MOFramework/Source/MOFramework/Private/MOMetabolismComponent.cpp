@@ -12,7 +12,6 @@ UMOMetabolismComponent::UMOMetabolismComponent()
 	PrimaryComponentTick.bCanEverTick = false;
 	SetIsReplicatedByDefault(true);
 
-	DigestingFood.SetOwner(this);
 }
 
 void UMOMetabolismComponent::BeginPlay()
