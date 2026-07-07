@@ -177,6 +177,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "MO|Survivor|Jobs")
 	FMOSurvivorJobEntry GetCurrentJob() const;
 
+	/** The current job's resolved target actor (station/target), or null. Runs
+	 *  the GUID rehydration, so it returns the live actor even after a reload. */
+	UFUNCTION(BlueprintCallable, Category = "MO|Survivor|Jobs")
+	AActor* GetCurrentJobTargetActor() const;
+
 	/**
 	 * Get all jobs in the queue.
 	 */
@@ -332,6 +337,12 @@ private:
 
 	/** Create a new job entry with defaults. */
 	FMOSurvivorJobEntry CreateJobEntry(EMOSurvivorJobType JobType, int32 RepeatCount);
+
+	/** Re-resolve a job's TargetActor/StorageActor weak pointers from their
+	 *  persisted GUIDs (the weak ptrs are not serialized, so they come back
+	 *  null after a disk load). No-op when the refs are already live or the
+	 *  GUIDs are unset — cheap in the common live-session path. (H39 residual) */
+	void ResolveJobActorRefs(FMOSurvivorJobEntry& Job) const;
 
 	/** Remove completed/failed jobs from the queue. */
 	void CleanupFinishedJobs();

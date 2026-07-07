@@ -124,6 +124,12 @@ See `PCG_Integration_Plan.md`. Hybrid ISM + Actor approach.
 
 *Full audit May 17, 2026 (6 agents, 467 files). **Re-audit June 11, 2026** (15 agents + adversarial verification, 511 files): all 27 issues re-verified against master with file:line evidence; statuses below are current.*
 
+> **Persistence/permadeath cluster re-verification — July 7, 2026** (14-agent workflow, adversarial verify per finding). The June-11 statuses for this cluster were badly stale — most were fixed in the days AFTER the audit. Verdicts against current master:
+> - **ALREADY FIXED (do NOT re-implement):** **H28** (MarkPawnDeceased now called from AMOCharacter::HandleInstantDeath; restore honors bIsDeceased) · **H30** (shared ApplyPawnComponentState restores all 7 components on both load paths) · **H31** (TransferItem forwards CurrentDurability via AddItemByGuidWithDurability) · **H33** (ResetAllQuests called from HandlePendingNewGame + quest is a save domain) · **H35** (AdoptRestoredEntity wired into RespawnPersistedPawns) · **C9** (ResetForNewWorld wired into both HandlePendingNewGame branches, commit 9af6d657) · **H39 core** (job queue persists + restores).
+> - **REFUTED:** **H38** — combat weapon state IS persisted (FMOCombatSaveData, captured+applied); the equip durability-reset is dead code (EquipMainHandWeapon/OffHand have zero callers). *Separate real gap to file:* the combat weapon subsystem is never wired to equipment slots (MainHandWeapon/OffHandWeapon never populated → ApplyWeaponDurabilityLoss never fires).
+> - **STILL OPEN:** **H29** (PARTIAL — the despawned-pawn merge exists but SaveWorldToSlot never advances LoadedWorldSave, so never-loaded sessions lose despawned pawns and loaded sessions revert them to load-time state; fix: `LoadedWorldSave = SaveObject; SessionPlayTimeSeconds = 0;` at the save success chokepoint) · **H36** (CONFIRMED — crafting queue fast-forwards by real wall-clock offline time, 7-day clamp, the only pawn system that does; Principle-11 violation) · **H39 residual** — station-targeted jobs reloaded with null TargetActor/StorageActor weak ptrs (GUIDs survived, weak ptrs don't serialize); **FIXED July 7** via ResolveJobActorRefs GUID→actor rehydration in the job queue.
+> - New lethality gap surfaced (distinct from H28): the vitals OnCardiacArrest/OnRespiratoryFailure broadcasts have zero subscribers, so asystole/hypoxia never actually kill — tracked with the thermal-extremes item (codex P1).
+
 ### CRITICAL — Architectural
 
 | Code | Issue | Location | Status (Jun 11) |

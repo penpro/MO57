@@ -2,6 +2,7 @@
 #include "MOFramework.h"
 #include "MOSurvivorJobDatabaseSettings.h"
 #include "MOIdentityComponent.h"
+#include "MOIdentityRegistrySubsystem.h"
 #include "Net/UnrealNetwork.h"
 
 UMOSurvivorJobQueueComponent::UMOSurvivorJobQueueComponent()
@@ -281,14 +282,49 @@ bool UMOSurvivorJobQueueComponent::ReorderJob(const FGuid& JobId, int32 NewIndex
 // JOB STATE
 // ============================================================================
 
+void UMOSurvivorJobQueueComponent::ResolveJobActorRefs(FMOSurvivorJobEntry& Job) const
+{
+	const bool bNeedTarget = Job.TargetActorGuid.IsValid() && !Job.TargetActor.IsValid();
+	const bool bNeedStorage = Job.StorageActorGuid.IsValid() && !Job.StorageActor.IsValid();
+	if (!bNeedTarget && !bNeedStorage)
+	{
+		return; // live-session fast path — refs already valid, or the job has no actor GUIDs
+	}
+
+	const UWorld* World = GetWorld();
+	UMOIdentityRegistrySubsystem* Registry = World ? World->GetSubsystem<UMOIdentityRegistrySubsystem>() : nullptr;
+	if (!Registry)
+	{
+		return;
+	}
+	if (bNeedTarget)
+	{
+		Job.TargetActor = Registry->ResolveActorOrNull(Job.TargetActorGuid);
+	}
+	if (bNeedStorage)
+	{
+		Job.StorageActor = Registry->ResolveActorOrNull(Job.StorageActorGuid);
+	}
+}
+
 FMOSurvivorJobEntry UMOSurvivorJobQueueComponent::GetCurrentJob() const
 {
 	const FMOSurvivorJobEntry* Current = JobQueue.GetCurrentJob();
 	if (Current)
 	{
-		return *Current;
+		FMOSurvivorJobEntry Copy = *Current;
+		// After a disk load the weak ptrs are null but the GUIDs survive —
+		// rehydrate at consumption (ordering-immune: the world is fully loaded
+		// by the time a job is picked up). No-op in the live session.
+		ResolveJobActorRefs(Copy);
+		return Copy;
 	}
 	return FMOSurvivorJobEntry();
+}
+
+AActor* UMOSurvivorJobQueueComponent::GetCurrentJobTargetActor() const
+{
+	return GetCurrentJob().TargetActor.Get();
 }
 
 TArray<FMOSurvivorJobEntry> UMOSurvivorJobQueueComponent::GetAllJobs() const
@@ -500,6 +536,14 @@ bool UMOSurvivorJobQueueComponent::ApplySaveDataAuthority(const FMOSurvivorJobQu
 	JobQueue.Jobs = InSaveData.Jobs;
 	HomeLocation = InSaveData.HomeLocation;
 	HomeBuildingGuid = InSaveData.HomeBuildingGuid;
+
+	// Best-effort eager rehydration of actor refs from their persisted GUIDs
+	// (weak ptrs aren't serialized). Any target not yet spawned at restore
+	// time is caught lazily by GetCurrentJob. (H39 residual)
+	for (FMOSurvivorJobEntry& Job : JobQueue.Jobs)
+	{
+		ResolveJobActorRefs(Job);
+	}
 
 	MarkQueueDirty();
 	OnQueueChanged.Broadcast();
