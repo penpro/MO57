@@ -12,6 +12,9 @@
 #include "MOColonyTypes.h"
 #include "MOSkillsComponent.h"
 #include "MOCharacterHistoryComponent.h"
+#include "MOWeatherIntegrationSubsystem.h"
+#include "MOMetabolismComponent.h"
+#include "MOItemDefinitionRow.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -278,6 +281,78 @@ bool FMOColony_Rel_GrowthBeatsDrift::RunTest(const FString& Parameters)
 		Strength = UMOCharacterHistoryComponent::ComputeStrengthDelta(Strength, 0.0f, 16.0f);
 	}
 	TestTrue(TEXT("30 days of village life forms a friend-grade bond"), Strength > 0.35f);
+	return true;
+}
+
+// ============================================================================
+// V2.4 seasons math
+// ============================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOColony_Season_MonthMapping,
+	"MOFramework.Colony.Seasons.MonthMapping",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+bool FMOColony_Season_MonthMapping::RunTest(const FString& Parameters)
+{
+	TestEqual(TEXT("March = Spring"), UMOWeatherIntegrationSubsystem::SeasonIndexFromMonth(3), 0);
+	TestEqual(TEXT("July = Summer"), UMOWeatherIntegrationSubsystem::SeasonIndexFromMonth(7), 1);
+	TestEqual(TEXT("October = Autumn"), UMOWeatherIntegrationSubsystem::SeasonIndexFromMonth(10), 2);
+	TestEqual(TEXT("January = Winter"), UMOWeatherIntegrationSubsystem::SeasonIndexFromMonth(1), 3);
+	TestEqual(TEXT("December = Winter"), UMOWeatherIntegrationSubsystem::SeasonIndexFromMonth(12), 3);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOColony_Season_BaselineClimate,
+	"MOFramework.Colony.Seasons.BaselineClimate",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+bool FMOColony_Season_BaselineClimate::RunTest(const FString& Parameters)
+{
+	// Midsummer noon vs midwinter night — the poles of the climate model.
+	const float SummerDay = UMOWeatherIntegrationSubsystem::ComputeSeasonalBaselineCelsius(202, 15.0f);
+	const float WinterNight = UMOWeatherIntegrationSubsystem::ComputeSeasonalBaselineCelsius(20, 3.0f);
+	TestTrue(TEXT("midsummer afternoon is warm (>20C)"), SummerDay > 20.0f);
+	TestTrue(TEXT("midwinter night is below freezing"), WinterNight < 0.0f);
+	// Diurnal: any given day, 15:00 beats 03:00.
+	const float WinterDay = UMOWeatherIntegrationSubsystem::ComputeSeasonalBaselineCelsius(20, 15.0f);
+	TestTrue(TEXT("day warmer than night in the same season"), WinterDay > WinterNight);
+	// Annual mean holds: equinox mid-morning sits near the configured mean.
+	const float Spring = UMOWeatherIntegrationSubsystem::ComputeSeasonalBaselineCelsius(111, 9.0f);
+	TestTrue(TEXT("spring equinox near annual mean (11C +/- 6)"), FMath::Abs(Spring - 11.0f) < 6.0f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOColony_Season_ColdThermogenesis,
+	"MOFramework.Colony.Seasons.ColdThermogenesis",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+bool FMOColony_Season_ColdThermogenesis::RunTest(const FString& Parameters)
+{
+	// Comfortable core temp: no extra burn.
+	TestEqual(TEXT("neutral at 37.0C"), UMOMetabolismComponent::ComputeColdThermogenesisMultiplier(37.0f), 1.0f);
+	TestEqual(TEXT("neutral at exactly 36.5C"), UMOMetabolismComponent::ComputeColdThermogenesisMultiplier(36.5f), 1.0f);
+	// Mid-ramp: 35.25C is halfway to 34.0 -> halfway to 2.5x.
+	TestEqual(TEXT("half-ramp at 35.25C"), UMOMetabolismComponent::ComputeColdThermogenesisMultiplier(35.25f), 1.75f, 0.001f);
+	// Full shiver at 34.0C, clamped below.
+	TestEqual(TEXT("max at 34.0C"), UMOMetabolismComponent::ComputeColdThermogenesisMultiplier(34.0f), 2.5f, 0.001f);
+	TestEqual(TEXT("clamped below 34.0C"), UMOMetabolismComponent::ComputeColdThermogenesisMultiplier(30.0f), 2.5f, 0.001f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOColony_Season_ForageWindow,
+	"MOFramework.Colony.Seasons.ForageWindow",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+bool FMOColony_Season_ForageWindow::RunTest(const FString& Parameters)
+{
+	FMOItemDefinitionRow Item;
+	// Empty window = year-round.
+	for (int32 SeasonIdx = 0; SeasonIdx < 4; ++SeasonIdx)
+	{
+		TestTrue(TEXT("empty window is year-round"), Item.IsInForageSeason(SeasonIdx));
+	}
+	// Berry window: summer + autumn only.
+	Item.ForageSeasons = TEXT("Summer,Autumn");
+	TestFalse(TEXT("berries not in spring"), Item.IsInForageSeason(0));
+	TestTrue(TEXT("berries in summer"), Item.IsInForageSeason(1));
+	TestTrue(TEXT("berries in autumn"), Item.IsInForageSeason(2));
+	TestFalse(TEXT("berries not in winter"), Item.IsInForageSeason(3));
 	return true;
 }
 

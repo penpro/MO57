@@ -40,6 +40,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Item Database", meta=(DisplayName="Get Item Definition"))
 	static bool GetItemDefinition(FName ItemDefinitionId, FMOItemDefinitionRow& OutDefinition);
 
+	/** Forage window check (V2.4): true when the item can be gathered in the
+	 *  given season (0=Spring..3=Winter). Unknown items are year-round. */
+	UFUNCTION(BlueprintPure, Category="MO|Items")
+	static bool IsItemInForageSeason(FName ItemDefinitionId, int32 SeasonIndex);
+
 	/** Get just the icon for an item (loads synchronously). Returns nullptr if not found. */
 	UFUNCTION(BlueprintCallable, Category="MO|Item Database")
 	static UTexture2D* GetItemIconSmall(FName ItemDefinitionId);

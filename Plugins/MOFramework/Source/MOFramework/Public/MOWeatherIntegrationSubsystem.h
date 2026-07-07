@@ -148,6 +148,29 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO|Weather")
 	float GetGlobalTemperature(EMOTemperatureUnit Unit = EMOTemperatureUnit::Celsius) const;
 
+	// =========================================================================
+	// SEASONS (V2.4) — the game clock is the season authority
+	// =========================================================================
+
+	/** Season index per FMOTimeOfDay convention: 0=Spring 1=Summer 2=Autumn 3=Winter. */
+	UFUNCTION(BlueprintPure, Category="MO|Weather|Season")
+	static int32 SeasonIndexFromMonth(int32 Month);
+
+	/** Current season derived from the game clock's date (save-stable). */
+	UFUNCTION(BlueprintPure, Category="MO|Weather|Season")
+	int32 GetCurrentSeasonIndex() const;
+
+	/**
+	 * THE climate baseline — pure math for headless tests. No-provider ambient
+	 * temperature: annual sinusoid (peak ~Jul 21) + diurnal sinusoid (peak
+	 * 15:00). Replaces the old flat 20C default so winter EXISTS even before
+	 * a UDS provider is wired: cold nights drive the vitals->metabolism->food
+	 * cascade with no further code.
+	 */
+	UFUNCTION(BlueprintPure, Category="MO|Weather|Season")
+	static float ComputeSeasonalBaselineCelsius(int32 DayOfYear, float Hour,
+		float AnnualMeanC = 11.0f, float AnnualAmplitudeC = 13.0f, float DiurnalAmplitudeC = 5.0f);
+
 	/**
 	 * Convert temperature between units.
 	 */
@@ -284,6 +307,20 @@ public:
 	/** Default temperature when no provider is registered (Celsius). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Weather|Config")
 	float DefaultTemperatureCelsius = 20.0f;
+
+	/** Use the seasonal baseline (clock-driven) instead of the flat default
+	 *  when no weather provider is registered. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Weather|Season")
+	bool bSeasonalFallback = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Weather|Season")
+	float AnnualMeanCelsius = 11.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Weather|Season")
+	float AnnualAmplitudeCelsius = 13.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Weather|Season")
+	float DiurnalAmplitudeCelsius = 5.0f;
 
 	// ============================================================================
 	// PERSISTENCE
@@ -451,6 +488,9 @@ private:
 
 	/** Delegate handle for the UI sub's OnActivatableWidgetRegistered. */
 	FDelegateHandle ActivatableWidgetRegisteredHandle;
+
+	/** No-provider ambient: seasonal baseline from the clock, or the flat default. */
+	float GetFallbackTemperatureCelsius() const;
 
 	/** The registered weather provider. */
 	UPROPERTY()

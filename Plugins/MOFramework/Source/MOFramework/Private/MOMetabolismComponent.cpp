@@ -609,10 +609,32 @@ void UMOMetabolismComponent::ProcessDigestingFood(FMODigestingFood& Food, float 
 					IronAbsorb, CalciumAbsorb, PotassiumAbsorb, SodiumAbsorb);
 }
 
+float UMOMetabolismComponent::ComputeColdThermogenesisMultiplier(float BodyTempC,
+	float NeutralTempC, float MaxMultiplierTempC, float MaxMultiplier)
+{
+	if (BodyTempC >= NeutralTempC)
+	{
+		return 1.0f;
+	}
+	const float Range = FMath::Max(NeutralTempC - MaxMultiplierTempC, KINDA_SMALL_NUMBER);
+	const float Alpha = FMath::Clamp((NeutralTempC - BodyTempC) / Range, 0.0f, 1.0f);
+	return FMath::Lerp(1.0f, MaxMultiplier, Alpha);
+}
+
+float UMOMetabolismComponent::GetCurrentThermogenesisMultiplier() const
+{
+	if (CachedVitalsComp)
+	{
+		return ComputeColdThermogenesisMultiplier(CachedVitalsComp->GetVitalSigns().BodyTemperature);
+	}
+	return 1.0f;
+}
+
 void UMOMetabolismComponent::ProcessBasalMetabolism(float DeltaTime)
 {
-	// BMR is in kcal/day, convert to kcal/second
-	float BMRPerSecond = GetCurrentBMR() / 86400.0f;
+	// BMR is in kcal/day, convert to kcal/second. A cold body burns MORE —
+	// shivering thermogenesis defends core temp with fuel (winter upkeep spike).
+	float BMRPerSecond = GetCurrentBMR() * GetCurrentThermogenesisMultiplier() / 86400.0f;
 	float CaloriesBurned = BMRPerSecond * DeltaTime;
 
 	// Apply without tracking (basal is separate from activity)

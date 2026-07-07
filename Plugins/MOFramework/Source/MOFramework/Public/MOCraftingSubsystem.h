@@ -266,8 +266,19 @@ struct MOFRAMEWORK_API FMOCraftResult
 	/** True only when the inventory legitimately rejected an add. */
 	bool HasFailedItems() const { return FailedItems.Num() > 0; }
 
+	/**
+	 * Items skipped because they are out of season (ItemDefId -> attempts).
+	 * Distinct from depletion — "the bush has no berries in winter" needs a
+	 * different message than "this bush is picked clean".
+	 */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Crafting")
+	TMap<FName, int32> OutOfSeasonItems;
+
 	/** True when at least one yield was skipped because the node is depleted. */
 	bool HasDepletedItems() const { return DepletedItems.Num() > 0; }
+
+	/** True when at least one yield was skipped as out of season. */
+	bool HasOutOfSeasonItems() const { return OutOfSeasonItems.Num() > 0; }
 };
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOOnCraftCompleted, FName, RecipeId, const FMOCraftResult&, Result);

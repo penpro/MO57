@@ -260,7 +260,9 @@ public:
 	 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="MO|Vitals|Temperature",
 		meta=(ClampMin="0.0", ClampMax="1.0"))
-	float DefaultInsulationFactor = 0.5f;
+	float DefaultInsulationFactor = 0.75f;   // assumes basic clothing; at 0.5 a 10C
+	                                         // night pins body temp at the 30C death
+	                                         // threshold (equilibrium = ambient + 10/exposure)
 
 	/**
 	 * (H12) Extra insulation granted by full overhead cover (a roof). Scaled by

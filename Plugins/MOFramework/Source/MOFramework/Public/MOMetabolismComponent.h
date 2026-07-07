@@ -305,6 +305,20 @@ public:
 	float GetCurrentBMR() const;
 
 	/**
+	 * THE cold-burn function — pure math for headless tests (V2.4). The body
+	 * defends core temperature by burning fuel (shivering thermogenesis):
+	 * 1.0 at/above 36.5C, ramping linearly to 2.5x at 34.0C and holding.
+	 * This is what makes winter EXPENSIVE — same work, more food.
+	 */
+	UFUNCTION(BlueprintPure, Category="MO|Metabolism|Calories")
+	static float ComputeColdThermogenesisMultiplier(float BodyTempC,
+		float NeutralTempC = 36.5f, float MaxMultiplierTempC = 34.0f, float MaxMultiplier = 2.5f);
+
+	/** Live multiplier from the owner's current body temperature. */
+	UFUNCTION(BlueprintPure, Category="MO|Metabolism|Calories")
+	float GetCurrentThermogenesisMultiplier() const;
+
+	/**
 	 * Get total daily energy expenditure (BMR * activity multiplier).
 	 */
 	UFUNCTION(BlueprintPure, Category="MO|Metabolism|Calories")

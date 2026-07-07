@@ -796,6 +796,15 @@ void UMOCraftingUIController::HandleHarvestCompleted(bool bCompleted, const FMOC
 						4.0f
 					);
 				}
+				else if (Result.HasOutOfSeasonItems() && !bAnyProduced)
+				{
+					// Everything this action yields is out of season — say so,
+					// don't pretend the node is broken or the inventory full.
+					NotifComp->ShowWarningNotification(
+						NSLOCTEXT("MO", "OutOfSeason", "Out of season. Nothing to gather here this time of year."),
+						4.0f
+					);
+				}
 				// If some yields produced and others depleted, the produced notifications
 				// already gave positive feedback — don't pile on a warning.
 			}

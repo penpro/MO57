@@ -264,18 +264,63 @@ float UMOWeatherIntegrationSubsystem::GetTemperatureAtLocation(const FVector& Lo
 {
 	if (!HasWeatherProvider())
 	{
-		return ConvertTemperature(DefaultTemperatureCelsius, EMOTemperatureUnit::Celsius, Unit);
+		return ConvertTemperature(GetFallbackTemperatureCelsius(), EMOTemperatureUnit::Celsius, Unit);
 	}
 
 	return IMOWeatherProviderInterface::Execute_GetTemperatureAtLocation(
 		WeatherProvider.GetObject(), Location, Unit);
 }
 
+int32 UMOWeatherIntegrationSubsystem::SeasonIndexFromMonth(int32 Month)
+{
+	// FMOTimeOfDay convention: 0=Spring 1=Summer 2=Autumn 3=Winter.
+	switch (Month)
+	{
+	case 3: case 4: case 5:   return 0;
+	case 6: case 7: case 8:   return 1;
+	case 9: case 10: case 11: return 2;
+	default:                  return 3;   // Dec/Jan/Feb (and bad input)
+	}
+}
+
+int32 UMOWeatherIntegrationSubsystem::GetCurrentSeasonIndex() const
+{
+	const UWorld* World = GetWorld();
+	const UMOGameClockSubsystem* Clock = World ? World->GetSubsystem<UMOGameClockSubsystem>() : nullptr;
+	return Clock ? SeasonIndexFromMonth(Clock->GetGameDateTime().GetMonth()) : 1;
+}
+
+float UMOWeatherIntegrationSubsystem::ComputeSeasonalBaselineCelsius(int32 DayOfYear, float Hour,
+	float AnnualMeanC, float AnnualAmplitudeC, float DiurnalAmplitudeC)
+{
+	// Annual wave peaks ~Jul 21 (day 202); diurnal wave peaks 15:00 (thermal
+	// lag past solar noon). Both plain cosines — no randomness, save-stable.
+	const float AnnualPhase = 2.0f * PI * (static_cast<float>(DayOfYear) - 202.0f) / 365.0f;
+	const float DiurnalPhase = 2.0f * PI * (Hour - 15.0f) / 24.0f;
+	return AnnualMeanC
+		+ AnnualAmplitudeC * FMath::Cos(AnnualPhase)
+		+ DiurnalAmplitudeC * FMath::Cos(DiurnalPhase);
+}
+
+float UMOWeatherIntegrationSubsystem::GetFallbackTemperatureCelsius() const
+{
+	const UWorld* World = GetWorld();
+	const UMOGameClockSubsystem* Clock = World ? World->GetSubsystem<UMOGameClockSubsystem>() : nullptr;
+	if (!bSeasonalFallback || !Clock)
+	{
+		return DefaultTemperatureCelsius;
+	}
+	const FDateTime Now = Clock->GetGameDateTime();
+	const float Hour = static_cast<float>(Now.GetHour()) + static_cast<float>(Now.GetMinute()) / 60.0f;
+	return ComputeSeasonalBaselineCelsius(Now.GetDayOfYear(), Hour,
+		AnnualMeanCelsius, AnnualAmplitudeCelsius, DiurnalAmplitudeCelsius);
+}
+
 float UMOWeatherIntegrationSubsystem::GetGlobalTemperature(EMOTemperatureUnit Unit) const
 {
 	if (!HasWeatherProvider())
 	{
-		return ConvertTemperature(DefaultTemperatureCelsius, EMOTemperatureUnit::Celsius, Unit);
+		return ConvertTemperature(GetFallbackTemperatureCelsius(), EMOTemperatureUnit::Celsius, Unit);
 	}
 
 	return IMOWeatherProviderInterface::Execute_GetGlobalTemperature(
@@ -418,7 +463,13 @@ FVector UMOWeatherIntegrationSubsystem::GetWindVelocityAtLocation(const FVector&
 
 float UMOWeatherIntegrationSubsystem::GetFeelsLikeTemperature(const FVector& Location, EMOTemperatureUnit Unit) const
 {
-	float Temperature = GetTemperatureAtLocation(Location, EMOTemperatureUnit::Celsius);
+	// Base on GLOBAL temperature, not the provider's location query. UDS's
+	// location temp blends toward interior warmth under occlusion — tree
+	// canopy reads as "indoors" and a -10C winter night comes back as +17C,
+	// so nobody outdoors ever feels winter (V2.4 probe, July 2026). Local
+	// microclimate is OUR domain: wind/wet exposure below, and roof shelter
+	// via the vitals insulation bonus (CachedOverheadCover).
+	float Temperature = GetGlobalTemperature(EMOTemperatureUnit::Celsius);
 	const FMOWeatherExposure Exposure = GetWeatherExposureAtLocation(Location);
 
 	// Wind chill calculation (simplified)

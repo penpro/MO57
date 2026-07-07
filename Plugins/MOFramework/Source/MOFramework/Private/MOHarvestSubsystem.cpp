@@ -1,4 +1,6 @@
 #include "MOHarvestSubsystem.h"
+#include "MOItemDatabaseSettings.h"
+#include "MOWeatherIntegrationSubsystem.h"
 #include "MOFramework.h"
 #include "MORecipeDatabaseSettings.h"
 #include "MOResourceDatabaseSettings.h"
@@ -713,12 +715,36 @@ FMOCraftResult UMOHarvestSubsystem::CompleteHarvest(
 			*YieldList);
 	}
 
+	// Season for forage windows (V2.4) — resolved once per harvest.
+	int32 SeasonIndex = 1;
+	if (const UWorld* World = GetWorld())
+	{
+		if (const UMOWeatherIntegrationSubsystem* WeatherSys = World->GetSubsystem<UMOWeatherIntegrationSubsystem>())
+		{
+			SeasonIndex = WeatherSys->GetCurrentSeasonIndex();
+		}
+	}
+
 	if (IsValid(Inventory))
 	{
 		for (const FName& ItemId : HarvestAction->YieldsItems)
 		{
 			if (ItemId.IsNone())
 			{
+				continue;
+			}
+
+			// Forage window (V2.4): berries do not exist in winter. Out of
+			// season is NOT depletion and NOT an inventory failure — it gets
+			// its own bucket so the UI can say the truthful thing.
+			FMOItemDefinitionRow ItemDef;
+			if (UMOItemDatabaseSettings::GetItemDefinition(ItemId, ItemDef)
+				&& !ItemDef.IsInForageSeason(SeasonIndex))
+			{
+				Result.OutOfSeasonItems.FindOrAdd(ItemId) += 1;
+				MOHARVEST_LOG(this, "Harvest",
+					"  Yield '%s' OUT OF SEASON (season=%d window='%s') — skipping",
+					*ItemId.ToString(), SeasonIndex, *ItemDef.ForageSeasons);
 				continue;
 			}
 

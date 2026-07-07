@@ -448,6 +448,30 @@ struct MOFRAMEWORK_API FMOItemDefinitionRow : public FTableRowBase
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Core")
 	EMOItemType ItemType = EMOItemType::None;
 
+	/**
+	 * Seasonal forage window (V2.4). Empty = available year-round. Otherwise
+	 * a comma list of season names ("Summer,Autumn") — harvesting this item
+	 * from a resource node outside its window yields nothing (berries do not
+	 * exist in winter). Season indices: 0=Spring 1=Summer 2=Autumn 3=Winter.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Item|Core")
+	FString ForageSeasons;
+
+	/** True when this item can be foraged in the given season (see ForageSeasons). */
+	bool IsInForageSeason(int32 SeasonIndex) const
+	{
+		if (ForageSeasons.IsEmpty())
+		{
+			return true;
+		}
+		static const TCHAR* Names[] = { TEXT("Spring"), TEXT("Summer"), TEXT("Autumn"), TEXT("Winter") };
+		if (SeasonIndex < 0 || SeasonIndex > 3)
+		{
+			return true;
+		}
+		return ForageSeasons.Contains(Names[SeasonIndex]);
+	}
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Core")
 	EMOItemRarity Rarity = EMOItemRarity::Common;
 
