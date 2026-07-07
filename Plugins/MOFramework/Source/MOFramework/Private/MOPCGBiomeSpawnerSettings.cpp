@@ -178,6 +178,43 @@ bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 				continue;
 			}
 
+			// EDGE BLEND (P4 round 2): feather density near biome boundaries
+			// instead of hard cuts. Four taps at half the blend width — the
+			// fraction that agree with this point's biome scales acceptance,
+			// so density ramps across EdgeBlendWidth rather than stepping.
+			float EdgeScale = 1.0f;
+			const float BlendW = Chosen->Row->EdgeBlendWidth;
+			if (BlendW > 1.0f)
+			{
+				int32 Agree = 0;
+				const float R = BlendW * 0.5f;
+				static const FVector2D Taps[4] = { {1, 0}, {-1, 0}, {0, 1}, {0, -1} };
+				for (const FVector2D& T : Taps)
+				{
+					const FVector Probe(Location.X + T.X * R, Location.Y + T.Y * R, Location.Z);
+					const float M2 = UMOBiomeDatabaseSettings::ClimateNoise(Probe, Settings->MoistureNoisePeriod, Seed);
+					const float T2 = UMOBiomeDatabaseSettings::ClimateNoise(Probe, Settings->TemperatureNoisePeriod, Seed + 7919);
+					const FBiomeEntry* NeighborBiome = nullptr;
+					for (const FBiomeEntry& E : Biomes)
+					{
+						// Same Z/slope as the center: the blend is a CLIMATE
+						// feather; elevation/slope band edges stay crisp (a
+						// cliff line should not dither).
+						if (E.Row->Contains(Location.Z, SlopeDeg, M2, T2))
+						{
+							NeighborBiome = &E;
+							break;
+						}
+					}
+					if (NeighborBiome == Chosen)
+					{
+						++Agree;
+					}
+				}
+				// interior = 1.0; deep edge (0-1 agreeing) thins toward 0.25
+				EdgeScale = FMath::Lerp(0.25f, 1.0f, Agree / 4.0f);
+			}
+
 			// Density-scaled species pick: each point is one scatter slot;
 			// expected instances/point for species s = Density_s / InputPPH.
 			// ClusterGroup >= 0: species in the same group sample ONE shared
@@ -191,7 +228,7 @@ bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 			for (int32 i = 0; i < NumSpecies; ++i)
 			{
 				const FMOBiomeSpeciesEntry& Sp = Chosen->Row->Species[i];
-				float P = (Chosen->LoadedMeshes[i] ? Sp.DensityPerHectare / Settings->InputPointsPerHectare : 0.0f);
+				float P = (Chosen->LoadedMeshes[i] ? EdgeScale * Sp.DensityPerHectare / Settings->InputPointsPerHectare : 0.0f);
 				if (P > 0.0f && Sp.ClusterGroup >= 0)
 				{
 					// Shared field per (biome, group): offsets depend on the

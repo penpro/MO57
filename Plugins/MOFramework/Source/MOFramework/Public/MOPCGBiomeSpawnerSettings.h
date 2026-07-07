@@ -26,7 +26,8 @@
  * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
  * =============================================================================
  *
- * [2026-07] EDGE BLEND: EdgeBlendWidth is authored in DT_Biomes but NOT yet
+ * [2026-07] EDGE BLEND: wired (P4 r2) — 4 climate taps at BlendW/2 feather
+ *   acceptance 0.25..1 across boundaries; elevation/slope edges stay crisp.
  *   applied - bands are hard until P4 (transitions). Noise-driven masks keep
  *   borders organic in the meantime.
  *
