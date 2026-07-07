@@ -26,7 +26,6 @@ import argparse
 import json
 import re
 import os
-import re
 import subprocess
 import sys
 import time
@@ -282,12 +281,41 @@ def rows_get(table, names):
     return mcp_call(DT, "get_rows", {"data_table": _table(table), "row_names": names})
 
 
+def _deep_merge(base, patch):
+    """dict-into-dict merge: patch wins on leaves, base fills the rest."""
+    out = dict(base) if isinstance(base, dict) else {}
+    for k, v in patch.items():
+        if isinstance(v, dict) and isinstance(out.get(k), dict):
+            out[k] = _deep_merge(out[k], v)
+        else:
+            out[k] = v
+    return out
+
+
 def rows_set_safe(table, rows, do_save=True):
-    """Author rows ONE AT A TIME with readback verify. Returns (ok_count, report)."""
+    """Author rows ONE AT A TIME with readback verify. Returns (ok_count, report).
+
+    STRUCT-FIELD SAFETY: MCP set_rows REPLACES an entire nested struct with
+    defaults for any field you omit — a partial {"PlacementData": {"PreviewMesh":
+    X}} write silently nuked BuildableActorClass and every placement flag on 11
+    building rows (2026-07-07). Dict-valued fields are therefore deep-merged
+    onto the CURRENT row before writing, so a nested write is always a full
+    struct write. Readback keys are camelCased; match them case-insensitively.
+    """
     report, ok = [], 0
     for name, fields in rows.items():
         add = mcp_call(DT, "add_rows", {"data_table": _table(table), "row_names": [name]})
         add_note = "" if (isinstance(add, str) and "already exist" in add) else f" add={add}"
+        if any(isinstance(v, dict) for v in fields.values()):
+            cur = rows_get(table, [name])
+            cur_row = cur.get(name, {}) if isinstance(cur, dict) else {}
+            cur_ci = {str(k).lower(): v for k, v in cur_row.items()} if isinstance(cur_row, dict) else {}
+            merged = {}
+            for k, v in fields.items():
+                base = cur_ci.get(k.lower())
+                merged[k] = _deep_merge(base, v) if (isinstance(v, dict) and isinstance(base, dict)) else v
+            fields = merged
+            rows[name] = fields   # verify against what we actually wrote
         mcp_call(DT, "set_rows", {"data_table": _table(table),
                                   "values": json.dumps({name: fields})})
         back = rows_get(table, [name])
