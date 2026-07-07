@@ -379,3 +379,13 @@ void UMOItemDatabaseSettings::ValidateConfiguration()
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOFramework] Item Database not configured. Set 'ItemDefinitionsDataTable' in Project Settings > Plugins > MO Item Database for inventory/item features to work."));
 	}
 }
+
+bool UMOItemDatabaseSettings::IsItemInForageSeason(FName ItemDefinitionId, int32 SeasonIndex)
+{
+	FMOItemDefinitionRow ItemDef;
+	if (!GetItemDefinition(ItemDefinitionId, ItemDef))
+	{
+		return true;
+	}
+	return ItemDef.IsInForageSeason(SeasonIndex);
+}
