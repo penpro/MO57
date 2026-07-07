@@ -212,6 +212,16 @@ public:
 	float WetnessDecayPerSecond = 0.005f;
 
 	/**
+	 * Drying-rate boost per °C of local heat (F1: fire dries clothes). At the
+	 * default 0.5, a campfire's +20°C dries ~11x faster than open air — soaked
+	 * to dry in ~18s by the fire vs ~200s without. Applied even in rain: a hot
+	 * fire under cover out-dries a drizzle.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Vitals|Wetness",
+		meta=(ClampMin="0.0", ClampMax="5.0"))
+	float HeatDryingBoostPerCelsius = 0.5f;
+
+	/**
 	 * Seconds between weather/shelter polls. Wetness update is cheap once we
 	 * have a rain intensity + overhead coverage number; the EXPENSIVE part
 	 * is the 9-ray shelter trace. Default 2s = trace cost amortized.

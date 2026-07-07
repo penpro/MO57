@@ -1171,12 +1171,19 @@ void UMOVitalsComponent::UpdateWetness(float DeltaSeconds)
 
 	float NewLevel = WetnessLevel;
 
+	// F1: warmth from a nearby fire dries clothing regardless of weather —
+	// the drying rate scales with the local heat boost, and it applies even
+	// while rain falls, so a hot fire under cover out-dries a drizzle.
+	const FVector Origin = Owner->GetActorLocation();
+	const float LocalHeat = Ambient ? Ambient->GetLocalHeatDeltaAt(Origin) : 0.0f;
+	const float DryRatePerSecond =
+		WetnessDecayPerSecond * (1.0f + LocalHeat * HeatDryingBoostPerCelsius);
+
 	if (RainIntensity > KINDA_SMALL_NUMBER)
 	{
 		// Cheap overhead shelter test — 9 line traces. WetnessPollInterval
 		// (default 2s) caps the trace rate. Pass owner so its own collision
 		// doesn't block the rays.
-		const FVector Origin = Owner->GetActorLocation();
 		const FMOExposureShelter Shelter = UMOWeatherBlueprintLibrary::TestOverheadCover(
 			World, Origin, Owner);
 
@@ -1186,14 +1193,14 @@ void UMOVitalsComponent::UpdateWetness(float DeltaSeconds)
 
 		// Coverage 0 = fully exposed, 1 = fully covered. Effective rain on
 		// the pawn = intensity × (1 − coverage). Damp/Wet/Soaked accumulator
-		// then ticks up over DeltaSeconds.
+		// then ticks up over DeltaSeconds, minus whatever a fire dries off.
 		const float EffectiveRain = RainIntensity * FMath::Max(0.0f, 1.0f - CachedOverheadCover);
-		NewLevel += EffectiveRain * WetnessGainPerSecond * DeltaSeconds;
+		NewLevel += (EffectiveRain * WetnessGainPerSecond - DryRatePerSecond) * DeltaSeconds;
 	}
 	else
 	{
-		// No rain — clothing dries.
-		NewLevel -= WetnessDecayPerSecond * DeltaSeconds;
+		// No rain — clothing dries (faster by a fire).
+		NewLevel -= DryRatePerSecond * DeltaSeconds;
 
 		// (H12) No trace fires in clear weather, so the cached overhead-cover
 		// would go stale. Decay it toward 0 (treat as "no shelter info") so a

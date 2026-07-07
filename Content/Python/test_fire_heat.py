@@ -1,11 +1,12 @@
-"""F1 gate: a lit campfire warms the air around it (pipeline F1 unit 1).
+"""F1 gate: a lit campfire warms the air around it and dries wet clothes.
 
     python Tools/ue.py seq Content/Python/test_fire_heat.py --timeout 600
 
 Places a REAL campfire station, then walks the whole chain:
   (a) UNLIT: fresh campfire (fuel required, none loaded) contributes nothing
   (b) LIT: fueled + activated -> heat delta near the fire, zero beyond radius
-  (c) DEPLETED: heat dies with the fuel (the fire is a consumer, not a toggle)
+  (c) DRYING: a soaked pawn by the fire dries far faster than open-air decay
+  (d) DEPLETED: heat dies with the fuel (the fire is a consumer, not a toggle)
 """
 import unreal
 
@@ -89,7 +90,34 @@ def sequence(ctx):
     ctx.assert_true("LIT: warm near the fire (%.2f > 10)" % h_near, h_near > 10.0)
     ctx.assert_true("LIT: falloff reaches zero beyond radius (%.2f)" % h_far, h_far == 0.0)
 
-    # (c) DEPLETED: burn the fuel down -> the warmth dies with it.
+    # (c) DRYING: soak the player, park them by the fire, and compare the dry
+    # rate against the same window in open air. Same real duration, same pawn,
+    # same weather — the only variable is the fire.
+    vit = player.get_component_by_class(unreal.MOVitalsComponent)
+    if not ctx.guard("player has vitals", vit is not None):
+        return
+    away = unreal.Vector(floc.x + 3000.0, floc.y, floc.z + 50.0)
+
+    player.set_actor_location(away, False, False)
+    vit.set_wetness_level(1.0)
+    for _ in range(4):
+        yield 10   # ~8s real: a few wetness polls
+    wet_away = vit.get_wetness_level()
+    dried_away = 1.0 - wet_away
+
+    player.set_actor_location(near, False, False)
+    vit.set_wetness_level(1.0)
+    for _ in range(4):
+        yield 10
+    wet_fire = vit.get_wetness_level()
+    dried_fire = 1.0 - wet_fire
+
+    ctx.out("dried in open air: %.3f | dried by the fire: %.3f" % (dried_away, dried_fire))
+    ctx.assert_true(
+        "DRYING: fire dries clothes far faster (%.3f > 4x %.3f)" % (dried_fire, dried_away),
+        dried_fire > 4.0 * max(dried_away, 0.001) and dried_fire > 0.05)
+
+    # (d) DEPLETED: burn the fuel down -> the warmth dies with it.
     # 50 fuel at 0.1/s is realistic (~8 min); config-for-test: drain directly
     # and let the station's own tick notice the empty hearth.
     fire.set_editor_property("current_fuel", 0.05)
