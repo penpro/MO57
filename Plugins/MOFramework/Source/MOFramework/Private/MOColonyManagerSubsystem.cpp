@@ -8,6 +8,7 @@
 #include "MOBuildableActor.h"
 #include "MOIdentityComponent.h"
 #include "MOIdentityRegistrySubsystem.h"
+#include "NavigationSystem.h"
 #include "MORecruitmentComponent.h"
 #include "MOMetabolismComponent.h"
 #include "MOMentalStateComponent.h"
@@ -1191,7 +1192,25 @@ void UMOColonyManagerSubsystem::RunShelterPass(const TArray<APawn*>& Roster)
 		{
 			if (AActor* House = Registry->ResolveActorOrNull(Residency[PawnGuid]))
 			{
-				AI->SetStayAtLocation(House->GetActorLocation() + FVector(100.0f, 0.0f, 0.0f));
+				// DOORSTEP, not doorway: a point inside the building's hull
+				// wedges the pawn in collision (three overlapping lean-tos
+				// bricked an entire soak, 2026-07-07). Project to navigable
+				// ground beside the house; fall back to a generous offset.
+				FVector StayPoint = House->GetActorLocation() + FVector(300.0f, 300.0f, 0.0f);
+				if (UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World))
+				{
+					FNavLocation Projected;
+					if (Nav->ProjectPointToNavigation(House->GetActorLocation(), Projected, FVector(500.0f, 500.0f, 300.0f)))
+					{
+						StayPoint = Projected.Location;
+					}
+				}
+				// A stay ORDER suspends job processing — an in-flight job would
+				// wedge forever (and its quota slot with it). Abort cleanly:
+				// too cold to work is an honest job failure; the quota pass
+				// reassigns once they have warmed back up.
+				AI->AbortCurrentJob();
+				AI->SetStayAtLocation(StayPoint);
 				ShelteringVillagers.Add(PawnGuid);
 				if (UMOCharacterHistoryComponent* Hist = Villager->FindComponentByClass<UMOCharacterHistoryComponent>())
 				{

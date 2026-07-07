@@ -13,19 +13,10 @@ void UMOWeatherIntegrationSubsystem::Initialize(FSubsystemCollectionBase& Collec
 {
 	Super::Initialize(Collection);
 
-	// Subscribe to the central clock's day/night transitions so this
-	// subsystem's own OnDayNightChanged delegate continues firing for
-	// existing listeners. The clock is the authoritative source — this
-	// subsystem is now a forwarder for backward compat (Phase 2 of clock
-	// centralization; see Docs/PAUSE_POLICY.md + MOGameClockSubsystem.h).
-	if (UMOGameClockSubsystem* Clock = UMOGameClockSubsystem::Get(this))
-	{
-		Clock->OnDayNightChanged.AddDynamic(this, &UMOWeatherIntegrationSubsystem::HandleClockDayNightChanged);
-		Clock->OnHourChanged.AddDynamic(this, &UMOWeatherIntegrationSubsystem::HandleClockHourChanged);
-		// Seed our cache from the clock's current state so any consumer
-		// that reads bCachedIsDaytime gets the right answer immediately.
-		bCachedIsDaytime = Clock->IsDaytime();
-	}
+	// NOTE: the clock binding moved to OnWorldBeginPlay (codex review,
+	// 2026-07-07) — same rationale as the UI hook below: never fetch a
+	// sibling subsystem from Initialize (UE5.8 cook/commandlet trap), even
+	// one that currently exists in every world. One rule, no exceptions.
 
 	// NOTE: the UI hook (OnActivatableWidgetRegistered) is bound in
 	// OnWorldBeginPlay(), NOT here. UMOGameUIManagerSubsystem only creates for
@@ -96,11 +87,21 @@ void UMOWeatherIntegrationSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 {
 	Super::OnWorldBeginPlay(InWorld);
 
+	// Clock forwarding (moved from Initialize — cook-trap rule, no exceptions).
+	if (UMOGameClockSubsystem* Clock = UMOGameClockSubsystem::Get(this))
+	{
+		Clock->OnDayNightChanged.RemoveDynamic(this, &UMOWeatherIntegrationSubsystem::HandleClockDayNightChanged);
+		Clock->OnDayNightChanged.AddDynamic(this, &UMOWeatherIntegrationSubsystem::HandleClockDayNightChanged);
+		Clock->OnHourChanged.RemoveDynamic(this, &UMOWeatherIntegrationSubsystem::HandleClockHourChanged);
+		Clock->OnHourChanged.AddDynamic(this, &UMOWeatherIntegrationSubsystem::HandleClockHourChanged);
+		bCachedIsDaytime = Clock->IsDaytime();
+	}
+
 	// Ambient-environment provider for the medical layer (C1 registry in Core).
 	if (UMOAmbientEnvironmentRegistry* Ambient = UMOAmbientEnvironmentRegistry::Get(&InWorld))
 	{
 		Ambient->RegisterProvider(this);
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOWeather] AMBIENT SEAM: provider registered for %s"), *InWorld.GetName());
+		UE_LOG(LogMOFramework, Log, TEXT("[MOWeather] Ambient provider registered for %s"), *InWorld.GetName());
 	}
 	else
 	{

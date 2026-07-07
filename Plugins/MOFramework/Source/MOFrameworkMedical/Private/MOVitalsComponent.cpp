@@ -8,6 +8,7 @@
 #include "MOBodyPartTypes.h"
 #include "MOGameClockSubsystem.h"
 #include "MOAmbientEnvironmentProvider.h"
+#include "MOInsulationSourceInterface.h"
 #include "MOWeatherBlueprintLibrary.h"
 #include "MOWeatherTypes.h"
 #include "Net/UnrealNetwork.h"
@@ -1231,16 +1232,17 @@ void UMOVitalsComponent::UpdateEnvironmentalTemperature(float DeltaSeconds)
 	IMOAmbientEnvironmentProvider* Env = Ambient ? Ambient->GetProvider() : nullptr;
 	if (!Env)
 	{
-		static bool bWarnedNoProvider = false;
-		if (!bWarnedNoProvider)
+		// Per-instance latch (a process-static would mask later PIE sessions).
+		if (!bWarnedNoAmbientProvider)
 		{
-			bWarnedNoProvider = true;
+			bWarnedNoAmbientProvider = true;
 			UE_LOG(LogMOFrameworkMedical, Warning,
 				TEXT("[MOVitals] AMBIENT SEAM: no environment provider (registry=%s) — env temperature drift disabled"),
 				Ambient ? TEXT("present") : TEXT("MISSING"));
 		}
 		return;   // no provider yet — hold at comfort rather than guess
 	}
+	bWarnedNoAmbientProvider = false;
 
 	const FVector Origin = Owner->GetActorLocation();
 	const float FeelsLikeC = Env->GetAmbientFeelsLikeCelsius(Origin);
@@ -1248,11 +1250,28 @@ void UMOVitalsComponent::UpdateEnvironmentalTemperature(float DeltaSeconds)
 	// Insulation = tunable clothing default + a cheap shelter bonus (reusing the
 	// wetness trace's cached overhead cover — no extra trace). Clamped 0..1.
 	// FLAG: clothing warmth is a flat default until equipment exposes a real
-	// per-item warmth field (see report). DefaultInsulationFactor is deliberately
+	// per-item warmth field (see report). BaseInsulationFactor is deliberately
 	// forgiving so an un-tuned game never cooks/freezes the player.
+	// Clothing warmth comes from whatever component implements the Core
+	// IMOInsulationSource contract (equipment sums equipped Warmth scalars) —
+	// vitals consumes the number, it does not own clothing policy.
+	float ClothingBonus = 0.0f;
+	if (const AActor* InsulOwner = GetOwner())
+	{
+		for (UActorComponent* Comp : InsulOwner->GetComponents())
+		{
+			if (Comp && Comp->GetClass()->ImplementsInterface(UMOInsulationSource::StaticClass()))
+			{
+				if (const IMOInsulationSource* Source = Cast<IMOInsulationSource>(Comp))
+				{
+					ClothingBonus += Source->GetClothingInsulationBonus01();
+				}
+			}
+		}
+	}
 	const float Insulation = FMath::Clamp(
-		DefaultInsulationFactor + ShelterInsulationBonus * CachedOverheadCover,
-		0.0f, 1.0f);
+		BaseInsulationFactor + ClothingBonus + ShelterInsulationBonus * CachedOverheadCover,
+		0.0f, 0.95f);
 
 	// Pass the real elapsed interval so drift integrates correctly despite the
 	// throttle (ApplyEnvironmentalTemperature still applies the clock TimeScale).

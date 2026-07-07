@@ -289,3 +289,65 @@ tooling), **V** (village), **P** (PCG). The serial spine if working alone:
 → `P1→P2` (world becomes places) → `S1` → `V1` → `A4/A5` → `P3` → `V2` → `P4`
 → `P5` → `V3`. Re-evaluate at every ◆ milestone against the charter's four gates
 (co-op-correct / legible / fun / verified) before descending further.
+
+---
+
+## Codex design-review reconciliation (2026-07-07)
+
+External review of the game's design direction, mapped against actual state.
+The review's core thesis is already this project's thesis (body -> world ->
+tools -> survivor -> job -> settlement, no sim-breaking), and its north-star
+slice ("one villager, one real job") shipped July 4 as V0. What follows is
+only the delta.
+
+| Recommendation | Status | Action |
+|---|---|---|
+| One villager, one real job | **DONE** (V0, gate 5/5) | — |
+| Colony through need, not UI | **DONE** (V1 shipped sim-first; UI is minimal by design) | — |
+| Settlement need loop | **DONE** (V1 feeding/mood/housing + V2.1 quotas) | — |
+| Seasons -> settlement planning | **PARTIAL** (winter kcal V2.4, clothing warmth 2026-07-07) | firewood demand + wet-wood drying ride the F1 fire card |
+| Shelters matter before fancy buildings | **PARTIAL** (roof=insulation, wetness, shelter AI) | F1 below |
+| While-you-were-away summaries | **PARTIAL** (history component logs everything) | A6 below |
+| First-hour readability | **PARTIAL** (moodles, craft/harvest failure buckets) | R1 below |
+| Tedium -> assignable jobs | **PARTIAL** (quotas, craft queue) | T1-T3 below |
+| Blocked-task intelligence | **NEW** | B1 below — first up (pure engineering, rule-6 shaped) |
+| Water progression ladder | **NEW TRACK** | W1-W4 proposed below — **design fork for Wes** |
+| Creature ecology over breadth | Planned (MobAIPlan) | unchanged |
+
+### New cards
+
+**B1 — blocked-job reasons at the data layer.** EMOJobBlockReason
+(MissingIngredient / NoPath / TooCold / TooTired / NoStation / StorageFull /
+ToolMissing / ThreatNearby) on the survivor job machine; jobs report WHY they
+stopped; colony upkeep raises a tier-2 alert; MO.Colony.Status prints it.
+Gate: force each blocker in a seq, assert the reason surfaces.
+
+**A6 — possession-transition summary.** On repossess, surface the pawn's
+recent history: actions, consumption, health/mood delta, interruptions,
+learning. Data-layer API on UMOCharacterHistoryComponent first
+(BuildAwaySummary(sinceGameSeconds)), UI panel later. Gate: possess-away-
+repossess seq asserts the summary contains the villager's real activity.
+
+**F1 — fire as a local heat source.** Campfire/forge emit warmth: local
+ambient override near heat sources (extend the ambient-provider seam with
+point sources aggregated by the registry), wet clothing dries near fire,
+wet wood burns poorly (fuel quality). Makes winter logistics real: firewood
+demand joins food demand in colony upkeep.
+
+**T1 — transfer-all with combined timer** (take all / deposit matching —
+one gesture, real total duration). **T2 — sweep pickup** (timed radius
+gather, visible + interruptible). **T3 — haul/restock survivor jobs**
+(source -> storage; firewood/water/food restocking as standing orders).
+
+**R1 — readability audit.** Environmental "why" readout (cold because wet +
+wind + no roof), action timers visible everywhere, "why failed" strings for
+every failure bucket that already exists at the data layer.
+
+### W-track proposal (NEEDS WES APPROVAL — new pillar)
+
+W1: drink from world water (ocean unsafe -> illness risk; containers fill).
+W2: freshwater spring as a discoverable world feature (World_Features arch),
+limited flow. W3: rain collector building (weather -> reliability). W4:
+pawn water-hauling as a T3 job. Rationale: gives exploration survival
+meaning and feeds the settlement-logistics chain. Fork logged rather than
+built: it is a new world-features + illness-model commitment.

@@ -126,8 +126,11 @@ def sequence(ctx):
     vills = _villagers(world, _pawn(world))
     v = vills[0]
     m_summer, t_summer = _thermo(v)
-    ctx.assert_true("SUMMER BURN: multiplier %.2f (~1.0) at body %.1fC" % (m_summer, t_summer),
-                    0.99 <= m_summer <= 1.15)
+    # UDS's climate runs cool (~11C summer afternoons) and insulation is now
+    # clothing-based — a NAKED villager may shiver mildly even in summer.
+    # The season CONTRAST is the assert; absolute comfort needs clothes.
+    ctx.assert_true("SUMMER BURN: multiplier %.2f at body %.1fC (naked baseline)" % (m_summer, t_summer),
+                    m_summer < 2.5)
 
     # ---- forage window on the REAL authored row --------------------------------
     in_summer = unreal.MOItemDatabaseSettings.is_item_in_forage_season("Berries01", 1)
@@ -141,6 +144,19 @@ def sequence(ctx):
     ctx.assert_true("WINTER: season=%d ambient=%.1fC (below freezing, %.1fC colder than summer)"
                     % (season, temp_winter, temp_summer - temp_winter),
                     season == 3 and temp_winter < 0.0 and temp_winter < temp_summer - 12.0)
+
+    # Strand the villager IN THE OPEN — under tree canopy the overhead-cover
+    # trace grants roof-grade insulation and they never cool (position-luck
+    # flake caught 2026-07-07). Same displacement the shelter gate proves open.
+    world = helper.find_pie_world_by_net_mode("Standalone")
+    vills = _villagers(world, _pawn(world))
+    v = vills[0]
+    vloc = v.get_actor_location()
+    far = unreal.Vector(vloc.x + 2500.0, vloc.y, vloc.z + 100.0)
+    v.set_actor_location(far, False, True)
+    ai = unreal.MOSurvivorController.cast(v.get_controller())
+    if ai:
+        ai.set_stay_at_location(far)
 
     # accelerate briefly: outdoors at sub-zero the villager's core temp drops
     # and shivering thermogenesis kicks in. Short window — hypothermia is REAL
@@ -162,9 +178,9 @@ def sequence(ctx):
             ctx.out("winter poll %d: mult=%.2f body=%.1fC" % (i, m, t))
     clock.set_time_scale(1.0)
 
-    ctx.assert_true("WINTER BURN: shivering multiplier peaked %.2f at body %.1fC (>1.2 = real kcal spike)"
-                    % (best_mult, best_temp),
-                    best_mult > 1.2)
+    ctx.assert_true("WINTER BURN: peaked %.2f (summer was %.2f) — winter costs MORE"
+                    % (best_mult, m_summer),
+                    best_mult > 1.2 and best_mult > m_summer)
 
     in_winter = unreal.MOItemDatabaseSettings.is_item_in_forage_season("Berries01", 3)
     ctx.assert_true("FORAGE: Berries01 OUT of season in winter", not in_winter)

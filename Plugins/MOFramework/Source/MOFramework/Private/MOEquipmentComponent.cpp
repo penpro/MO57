@@ -503,3 +503,37 @@ void UMOEquipmentComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>
 
 	DOREPLIFETIME(UMOEquipmentComponent, EquippedSlots);
 }
+
+// ---- IMOInsulationSource (codex review: equipment owns clothing policy) ----
+
+float UMOEquipmentComponent::ComputeInsulationFromWarmth(const TArray<float>& ItemWarmths, float MaxClothingInsulation)
+{
+	float Sum = 0.0f;
+	for (float W : ItemWarmths)
+	{
+		Sum += FMath::Max(W, 0.0f);
+	}
+	return FMath::Clamp(Sum, 0.0f, MaxClothingInsulation);
+}
+
+float UMOEquipmentComponent::GetClothingInsulationBonus01() const
+{
+	TArray<FMOEquippedItem> Equipped;
+	GetAllEquippedItems(Equipped);
+	TArray<float> Warmths;
+	for (const FMOEquippedItem& Item : Equipped)
+	{
+		FMOItemDefinitionRow Def;
+		if (UMOItemDatabaseSettings::GetItemDefinition(Item.ItemDefinitionId, Def))
+		{
+			for (const FMOItemScalarProperty& Prop : Def.ScalarProperties)
+			{
+				if (Prop.Key == TEXT("Warmth"))
+				{
+					Warmths.Add(Prop.Value);
+				}
+			}
+		}
+	}
+	return ComputeInsulationFromWarmth(Warmths);
+}

@@ -315,6 +315,11 @@ protected:
 	UPROPERTY(BlueprintReadOnly, Category = "MO|Survivor|State")
 	FVector SimpleJobTargetLocation = FVector::ZeroVector;
 
+	/** Move-leg no-progress watchdog (wedged-pawn failsafe, B1). */
+	float SimpleJobTotalSeconds = 0.0f;
+	float MoveLegBestDistance = FLT_MAX;
+	float MoveLegNoProgressSeconds = 0.0f;
+
 	/** Timer for job actions (like digging duration). */
 	UPROPERTY(BlueprintReadOnly, Category = "MO|Survivor|State")
 	float SimpleJobTimer = 0.0f;

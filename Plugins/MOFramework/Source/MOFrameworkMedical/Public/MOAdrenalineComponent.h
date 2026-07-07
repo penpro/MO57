@@ -61,7 +61,8 @@
  * 2. CRASH TIMING: Crash phase can be dangerous - pain returns suddenly.
  *    Player should be warned or have recovery period.
  *
- * 3. ACCURACY INTEGRATION: Combat/weapon system must call GetAccuracyPenalty()
+ * 3. ACCURACY INTEGRATION (PENDING RANGED COMBAT): no spread/accuracy
+ *    surface exists in MOCombatComponent yet — wire GetAccuracyPenalty()
  *    and apply it. Not automatic.
  *
  * 4. HEART RATE MODIFIER: Applied to VitalsComponent. Ensure no double

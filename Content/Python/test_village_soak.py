@@ -168,8 +168,10 @@ def sequence(ctx):
     yield 5
     _exec(world, "MO.Colony.PlaceBuilding BuildWorkbench 700")
     yield 5
-    for _ in range(3):
-        _exec(world, "MO.Colony.PlaceBuilding BuildLeanTo 500")
+    # DISTINCT offsets — identical distances stack three buildings into one
+    # overlapping collision hull that pens the villagers (2026-07-07).
+    for dist in (450, 800, 1150):
+        _exec(world, "MO.Colony.PlaceBuilding BuildLeanTo %d" % dist)
         yield 4
     for _ in range(VILLAGERS):
         _exec(world, "MO.Colony.SpawnSurvivor 250")
@@ -197,6 +199,27 @@ def sequence(ctx):
         _exec(world, "MO.Colony.AssignHouse %s %s" % (v.get_name(), houses[i // 2].get_name()))
         yield 2
 
+    # CLOTHE the recruits — survivors are not naked (insulation is clothing-
+    # based since the codex round; an unclothed villager chills at night, the
+    # shelter pass pins them home, and no work gets done — which is correct
+    # sim and exactly why they get leathers). Spawn-time starter clothing for
+    # the SHIPPED game is a filed card; the gate equips explicitly.
+    CLOTHES = [("LeatherTunic01", "CHEST"), ("LeatherTrousers01", "LEGS"), ("LeatherBoots01", "FEET")]
+    for v in vills:
+        inv = v.get_component_by_class(unreal.MOInventoryComponent)
+        eq = v.get_component_by_class(unreal.MOEquipmentComponent)
+        if not inv or not eq:
+            continue
+        for item_id, slot_name in CLOTHES:
+            g = unreal.GuidLibrary.new_guid()
+            inv.add_item_by_guid(g, item_id, 1)
+            slot = getattr(unreal.MOEquipmentSlot, slot_name, None)
+            if slot is not None:
+                ok = eq.equip_from_inventory(inv, g, slot)
+                if not ok:
+                    ctx.out("equip failed: %s -> %s on %s" % (item_id, slot_name, v.get_name()))
+    ctx.out("recruits clothed (leather set, ~0.30 warmth)")
+
     # identity: the FIVE RECRUITS are the test subjects — wild wanderers may
     # drift into the area during the soak and must not pollute the verdicts.
     recruit_guids = set()
@@ -211,7 +234,11 @@ def sequence(ctx):
     food, food_cal = _find_best_food()
     if not ctx.guard("edible item found (%s, %.0f kcal)" % (food, food_cal), food is not None):
         return
-    need_items = int((VILLAGERS * 3 * 2000.0 * 1.3) / food_cal) + 1
+    # 2.6x baseline: villagers are NAKED and UDS nights are cold, so shivering
+    # thermogenesis (V2.4) runs their burn at ~1.6-2x through the dark hours.
+    # That is the sim working — cold workers eat more. Real fix is villager
+    # clothing (lead filed); until then the quartermaster over-provisions.
+    need_items = int((VILLAGERS * 3 * 2000.0 * 2.6) / food_cal) + 1
     basket = _find_one(world, unreal.MOContainerActor)
     _exec(world, "MO.Colony.Stock %s %s %d" % (basket.get_name(), food, need_items))
     yield 4

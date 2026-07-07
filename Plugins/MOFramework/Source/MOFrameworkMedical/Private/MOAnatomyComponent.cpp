@@ -1,4 +1,5 @@
 #include "MOAnatomyComponent.h"
+#include "MOAdrenalineComponent.h"
 #include "MOFrameworkMedical.h"
 #include "MOVitalsComponent.h"
 #include "MOMentalStateComponent.h"
@@ -780,6 +781,16 @@ void UMOAnatomyComponent::TickAnatomy()
 	for (int32 i = Wounds.Wounds.Num() - 1; i >= 0; --i)
 	{
 		TotalBleedRate += ProcessWound(Wounds.Wounds[i], ScaledDeltaTime);
+	}
+
+	// Adrenaline vasoconstriction slows bleeding (codex review: the producer
+	// consumes GetBleedReductionPercent instead of leaving it dangling).
+	if (TotalBleedRate > 0.0f)
+	{
+		if (const UMOAdrenalineComponent* Adrenaline = GetOwner() ? GetOwner()->FindComponentByClass<UMOAdrenalineComponent>() : nullptr)
+		{
+			TotalBleedRate *= FMath::Clamp(1.0f - Adrenaline->GetBleedReductionPercent() / 100.0f, 0.0f, 1.0f);
+		}
 	}
 
 	// Apply blood loss to vitals

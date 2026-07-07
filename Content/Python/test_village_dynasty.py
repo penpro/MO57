@@ -113,7 +113,7 @@ def sequence(ctx):
     # ---- settlement: one house, two villagers, both residents ---------------
     _exec(world, "MO.Colony.Found FirstLanding 30000")
     yield 5
-    _exec(world, "MO.Colony.PlaceBuilding BuildLeanTo 400")
+    _exec(world, "MO.Colony.PlaceBuilding BuildLeanTo 450")
     yield 5
     for _ in range(2):
         _exec(world, "MO.Colony.SpawnSurvivor 250")

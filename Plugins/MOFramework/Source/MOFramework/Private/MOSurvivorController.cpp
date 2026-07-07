@@ -1056,6 +1056,9 @@ void AMOSurvivorController::StartCraftJobExecution()
 
 	SimpleJobState = 10; // moving to storage (withdraw leg)
 	SimpleJobTimer = 0.0f;
+	SimpleJobTotalSeconds = 0.0f;
+	MoveLegBestDistance = FLT_MAX;
+	MoveLegNoProgressSeconds = 0.0f;
 	SimpleJobTargetLocation = Storage->GetActorLocation();
 	MoveToLocation(SimpleJobTargetLocation, 150.0f);
 
@@ -1078,6 +1081,20 @@ void AMOSurvivorController::UpdateCraftJobExecution(float DeltaTime)
 		return;
 	}
 
+	// GLOBAL JOB WATCHDOG (B1): a full craft cycle takes ~35s real; any job
+	// alive past 120s is wedged SOMEWHERE (a silent state is exactly how a
+	// soak bricked twice on 2026-07-07). Fail loudly, NAME the state, free
+	// the quota slot for reassignment.
+	SimpleJobTotalSeconds += DeltaTime;
+	if (SimpleJobTotalSeconds > 120.0f)
+	{
+		UE_LOG(LogMOFramework, Warning,
+			TEXT("[MOSurvivorController] Craft job WEDGED in state %d after %.0fs (recipe %s) - failing"),
+			SimpleJobState, SimpleJobTotalSeconds, *CraftJobRecipeId.ToString());
+		CompleteSimpleJob(false);
+		return;
+	}
+
 	// Building actors have real footprints: accept arrival within interaction
 	// range, and treat a stalled path within a generous radius as arrival
 	// (nav edge vs mesh bounds), otherwise fail honestly - crafting REQUIRES
@@ -1089,6 +1106,27 @@ void AMOSurvivorController::UpdateCraftJobExecution(float DeltaTime)
 		{
 			StopMovement();
 			return 1; // arrived
+		}
+		// NO-PROGRESS WATCHDOG: a pawn wedged in collision keeps path status
+		// "Moving" at zero velocity FOREVER — the status check below never
+		// fires and the job (and its quota in-flight slot) is wedged with it.
+		// Fail honestly after 15s real without 50uu of progress. (B1
+		// blocked-task intelligence, minimal cut; found via a bricked soak.)
+		if (Distance + 50.0f < MoveLegBestDistance)
+		{
+			MoveLegBestDistance = Distance;
+			MoveLegNoProgressSeconds = 0.0f;
+		}
+		else
+		{
+			MoveLegNoProgressSeconds += DeltaTime;
+			if (MoveLegNoProgressSeconds > 15.0f)
+			{
+				UE_LOG(LogMOFramework, Warning,
+					TEXT("[MOSurvivorController] Craft job move leg NO PROGRESS for 15s (%.0fuu out, likely wedged) - failing"), Distance);
+				StopMovement();
+				return -1;
+			}
 		}
 		if (GetMoveStatus() != EPathFollowingStatus::Moving)
 		{
@@ -1142,6 +1180,8 @@ void AMOSurvivorController::UpdateCraftJobExecution(float DeltaTime)
 				AActor* Station = CraftStationActor.Get();
 				if (!Station) { CompleteSimpleJob(false); return; }
 				SimpleJobState = 12;
+				MoveLegBestDistance = FLT_MAX;
+				MoveLegNoProgressSeconds = 0.0f;
 				SimpleJobTimer = 0.0f;
 				SimpleJobTargetLocation = Station->GetActorLocation();
 				MoveToLocation(SimpleJobTargetLocation, 150.0f);
@@ -1201,6 +1241,8 @@ void AMOSurvivorController::UpdateCraftJobExecution(float DeltaTime)
 				AActor* Storage = CraftStorageActor.Get();
 				if (!Storage) { CompleteSimpleJob(false); return; }
 				SimpleJobState = 14;
+				MoveLegBestDistance = FLT_MAX;
+				MoveLegNoProgressSeconds = 0.0f;
 				SimpleJobTimer = 0.0f;
 				SimpleJobTargetLocation = Storage->GetActorLocation();
 				MoveToLocation(SimpleJobTargetLocation, 150.0f);

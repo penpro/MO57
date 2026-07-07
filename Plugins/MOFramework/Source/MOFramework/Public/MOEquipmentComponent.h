@@ -83,6 +83,7 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "MOInsulationSourceInterface.h"
 #include "MOEquipmentComponent.generated.h"
 
 class UMOInventoryComponent;
@@ -196,11 +197,19 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOOnSwapCompleted, EMOEquipmentSlot
  * - Heavy (rifle, two-handed): 900ms
  */
 UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))
-class MOFRAMEWORK_API UMOEquipmentComponent : public UActorComponent
+class MOFRAMEWORK_API UMOEquipmentComponent : public UActorComponent, public IMOInsulationSource
 {
 	GENERATED_BODY()
 
 public:
+	//~ Begin IMOInsulationSource (vitals reads clothing warmth through Core)
+	virtual float GetClothingInsulationBonus01() const override;
+	//~ End IMOInsulationSource
+
+	/** THE clothing-warmth math — pure static for headless tests. Sum of
+	 *  per-item Warmth scalars, clamped to the wearable ceiling. */
+	static float ComputeInsulationFromWarmth(const TArray<float>& ItemWarmths, float MaxClothingInsulation = 0.4f);
+
 	UMOEquipmentComponent();
 
 	// ============================================================================

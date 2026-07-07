@@ -260,20 +260,24 @@ public:
 	 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="MO|Vitals|Temperature",
 		meta=(ClampMin="0.0", ClampMax="1.0"))
-	float DefaultInsulationFactor = 0.75f;   // assumes basic clothing; at 0.5 a 10C
-	                                         // night pins body temp at the 30C death
-	                                         // threshold (equilibrium = ambient + 10/exposure)
+	float BaseInsulationFactor = 0.55f;   // skin + underclothes baseline. REAL warmth
+	                                      // now comes from equipped clothing via
+	                                      // IMOInsulationSource (Warmth item scalars) —
+	                                      // dress for winter or stay by the fire.
 
 	/**
 	 * (H12) Extra insulation granted by full overhead cover (a roof). Scaled by
 	 * the OverheadCover value from the shelter trace (0 open sky → 1 fully
-	 * covered) and ADDED to DefaultInsulationFactor, then clamped to 1.0. Being
+	 * covered) and ADDED to BaseInsulationFactor, then clamped to 1.0. Being
 	 * under cover blunts environmental drift (out of wind/sun/radiative loss).
 	 * Default 0.35 → standing under a solid roof reaches ~0.85 insulation.
 	 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="MO|Vitals|Temperature",
 		meta=(ClampMin="0.0", ClampMax="1.0"))
 	float ShelterInsulationBonus = 0.35f;
+
+	/** One-shot missing-ambient-provider warning latch (per instance). */
+	bool bWarnedNoAmbientProvider = false;
 
 	// NOTE: TimeScaleMultiplier removed. The single source of truth is now
 	// UMOGameClockSubsystem::GetTimeScale(). Tick handlers in this component

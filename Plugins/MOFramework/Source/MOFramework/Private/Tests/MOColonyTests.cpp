@@ -14,6 +14,7 @@
 #include "MOCharacterHistoryComponent.h"
 #include "MOWeatherIntegrationSubsystem.h"
 #include "MOMetabolismComponent.h"
+#include "MOEquipmentComponent.h"
 #include "MOItemDefinitionRow.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -389,6 +390,27 @@ bool FMOColony_Family_GestationClock::RunTest(const FString& Parameters)
 		UMOColonyManagerSubsystem::ComputePregnancyProgress(0.0, 6480.0 * H, 6480.0f) >= 1.0f);
 	TestEqual(TEXT("degenerate gestation guards to 0"),
 		UMOColonyManagerSubsystem::ComputePregnancyProgress(0.0, 100.0, 0.0f), 0.0f);
+	return true;
+}
+
+// ============================================================================
+// Codex review: clothing insulation math (H12 family)
+// ============================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOColony_Insulation_WarmthSum,
+	"MOFramework.Colony.Insulation.WarmthSum",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+bool FMOColony_Insulation_WarmthSum::RunTest(const FString& Parameters)
+{
+	// A full winter kit sums per-piece warmth, capped at the wearable ceiling.
+	TestEqual(TEXT("no clothes = no bonus"),
+		UMOEquipmentComponent::ComputeInsulationFromWarmth({}), 0.0f);
+	TestEqual(TEXT("kit sums (0.15+0.1+0.05)"),
+		UMOEquipmentComponent::ComputeInsulationFromWarmth({0.15f, 0.1f, 0.05f}), 0.3f, 0.001f);
+	TestEqual(TEXT("stacked furs cap at the ceiling (0.4)"),
+		UMOEquipmentComponent::ComputeInsulationFromWarmth({0.3f, 0.3f, 0.3f}), 0.4f, 0.001f);
+	TestEqual(TEXT("negative warmth ignored, never chills"),
+		UMOEquipmentComponent::ComputeInsulationFromWarmth({-0.5f, 0.2f}), 0.2f, 0.001f);
 	return true;
 }
 
