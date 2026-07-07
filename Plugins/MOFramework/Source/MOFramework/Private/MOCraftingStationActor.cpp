@@ -124,22 +124,24 @@ void AMOCraftingStationActor::InitializeBuilding(FName InRecipeId)
 
 	// Fire stations warm their surroundings. Type defaults apply only when the
 	// instance hasn't been configured (HeatOutputCelsius == 0), so a recipe or
-	// placed instance can still override. An open campfire throws warmth
-	// further than a forge, whose heat lives inside the chimney draft.
+	// placed instance can still override. Values are radiant-heat scaled: a
+	// campfire at arm's length (~1.5m -> ~75% falloff) must beat a winter
+	// night hard enough that a body RECOVERS there, not merely stops freezing
+	// (vitals regulation fully wins once local ambient clears ~15C).
 	if (HeatOutputCelsius <= 0.0f)
 	{
 		switch (StationType)
 		{
 		case EMOCraftingStation::Campfire:
-			HeatOutputCelsius = 25.0f;
+			HeatOutputCelsius = 40.0f;
 			HeatRadiusCm = 600.0f;
 			break;
 		case EMOCraftingStation::Forge:
-			HeatOutputCelsius = 30.0f;
+			HeatOutputCelsius = 40.0f;
 			HeatRadiusCm = 450.0f;
 			break;
 		case EMOCraftingStation::Kitchen:
-			HeatOutputCelsius = 15.0f;
+			HeatOutputCelsius = 20.0f;
 			HeatRadiusCm = 400.0f;
 			break;
 		default:

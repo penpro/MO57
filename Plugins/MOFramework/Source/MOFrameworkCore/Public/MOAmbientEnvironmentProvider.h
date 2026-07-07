@@ -97,6 +97,11 @@ public:
 	/** Null when no provider is up yet — consumers keep their own fallback. */
 	IMOAmbientEnvironmentProvider* GetProvider() const { return Provider; }
 
+	/** All registered sources, lit or not — callers filter on IsHeatActive().
+	 *  For AI that SEEKS warmth (colony shelter pass); thermal queries should
+	 *  use GetLocalHeatDeltaAt instead. */
+	const TArray<IMOLocalHeatSource*>& GetHeatSources() const { return HeatSources; }
+
 	void RegisterHeatSource(IMOLocalHeatSource* InSource) { HeatSources.AddUnique(InSource); }
 	void UnregisterHeatSource(const IMOLocalHeatSource* InSource)
 	{

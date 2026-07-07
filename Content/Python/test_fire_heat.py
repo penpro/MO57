@@ -105,10 +105,19 @@ def sequence(ctx):
     wet_away = vit.get_wetness_level()
     dried_away = 1.0 - wet_away
 
-    player.set_actor_location(near, False, False)
+    # Stand OUTSIDE the fire's collision hull (teleporting to 1m overlaps it
+    # and depenetration shoves the pawn out past the heat radius — found by
+    # instrumented polls 2026-07-07). 2.5m is still deep in the warmth.
+    near_stand = unreal.Vector(floc.x + 250.0, floc.y, floc.z + 50.0)
+    player.set_actor_location(near_stand, False, False)
     vit.set_wetness_level(1.0)
     for _ in range(4):
         yield 10
+        ploc = player.get_actor_location()
+        ctx.out("  near-fire poll: heat_at_pawn=%.2fC dist_to_fire=%.0fuu wet=%.3f fuel=%.1f active=%s"
+                % (_heat_at(world, ploc), (ploc - floc).length(),
+                   vit.get_wetness_level(), fire.get_editor_property("current_fuel"),
+                   fire.is_station_active()))
     wet_fire = vit.get_wetness_level()
     dried_fire = 1.0 - wet_fire
 

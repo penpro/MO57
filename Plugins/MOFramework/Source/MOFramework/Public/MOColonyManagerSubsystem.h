@@ -227,9 +227,10 @@ public:
 	float ConceptionChancePerGameDay = 0.10f;
 
 	// =========================================================================
-	// WINTER SHELTER (V2.5) — cold villagers go home. Body temp below the
-	// seek threshold sends an AI villager to its residence (roof cover =
-	// insulation, see MOVitalsComponent); recovery past the release
+	// WINTER SHELTER (V2.5/F1) — cold villagers seek warmth. Body temp below
+	// the seek threshold sends an AI villager to the nearest LIT hearth
+	// (F1 heat sources), or its residence when nothing burns nearby (roof
+	// cover = insulation, see MOVitalsComponent); recovery past the release
 	// threshold frees them back to work.
 	// =========================================================================
 
@@ -238,6 +239,10 @@ public:
 
 	UPROPERTY(EditAnywhere, Category="MO|Colony|Shelter")
 	float ColdShelterReleaseBodyTempC = 36.8f;
+
+	/** How far a cold villager will walk to a lit fire (cm). */
+	UPROPERTY(EditAnywhere, Category="MO|Colony|Shelter", meta=(ClampMin="0.0"))
+	float HearthSeekRadiusCm = 15000.0f;
 
 	// =========================================================================
 	// UPKEEP (driven by timer; public so tests can force a tick)

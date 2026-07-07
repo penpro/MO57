@@ -8,6 +8,7 @@
 #include "MOBuildableActor.h"
 #include "MOIdentityComponent.h"
 #include "MOIdentityRegistrySubsystem.h"
+#include "MOAmbientEnvironmentProvider.h"
 #include "NavigationSystem.h"
 #include "MORecruitmentComponent.h"
 #include "MOMetabolismComponent.h"
@@ -1188,19 +1189,54 @@ void UMOColonyManagerSubsystem::RunShelterPass(const TArray<APawn*>& Roster)
 		}
 		const float BodyTemp = Vitals->GetVitalSigns().BodyTemperature;
 		const bool bSheltering = ShelteringVillagers.Contains(PawnGuid);
-		if (!bSheltering && BodyTemp < ColdSeekShelterBodyTempC && Residency.Contains(PawnGuid))
+		if (!bSheltering && BodyTemp < ColdSeekShelterBodyTempC)
 		{
-			if (AActor* House = Registry->ResolveActorOrNull(Residency[PawnGuid]))
+			// Warm-up target, best first: a LIT hearth beats a cold doorstep,
+			// and it's the only recourse a homeless villager has. Falls back
+			// to the assigned house for residents when nothing burns nearby.
+			TOptional<FVector> WarmTarget;
+			const TCHAR* WhereWarm = TEXT("by the fire");
+			if (const UMOAmbientEnvironmentRegistry* Ambient = UMOAmbientEnvironmentRegistry::Get(World))
 			{
-				// DOORSTEP, not doorway: a point inside the building's hull
+				float BestDistSq = FMath::Square(HearthSeekRadiusCm);
+				for (const IMOLocalHeatSource* Fire : Ambient->GetHeatSources())
+				{
+					if (!Fire || !Fire->IsHeatActive())
+					{
+						continue;
+					}
+					const float DistSq = FVector::DistSquared(Villager->GetActorLocation(), Fire->GetHeatLocation());
+					if (DistSq < BestDistSq)
+					{
+						BestDistSq = DistSq;
+						// Stand at arm's length on the villager's side of the
+						// fire — deep in the heat falloff, outside the pit.
+						// Nav projection alone can land 3m+ out, where a
+						// winter night out-pulls the warmth.
+						const FVector Toward = (Villager->GetActorLocation() - Fire->GetHeatLocation()).GetSafeNormal2D();
+						WarmTarget = Fire->GetHeatLocation() + Toward * 140.0f;
+					}
+				}
+			}
+			if (!WarmTarget.IsSet() && Residency.Contains(PawnGuid))
+			{
+				if (const AActor* House = Registry->ResolveActorOrNull(Residency[PawnGuid]))
+				{
+					WarmTarget = House->GetActorLocation();
+					WhereWarm = TEXT("at home");
+				}
+			}
+			if (WarmTarget.IsSet())
+			{
+				// DOORSTEP, not doorway: a point inside the target's hull
 				// wedges the pawn in collision (three overlapping lean-tos
 				// bricked an entire soak, 2026-07-07). Project to navigable
-				// ground beside the house; fall back to a generous offset.
-				FVector StayPoint = House->GetActorLocation() + FVector(300.0f, 300.0f, 0.0f);
+				// ground beside it; fall back to a generous offset.
+				FVector StayPoint = WarmTarget.GetValue() + FVector(300.0f, 300.0f, 0.0f);
 				if (UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World))
 				{
 					FNavLocation Projected;
-					if (Nav->ProjectPointToNavigation(House->GetActorLocation(), Projected, FVector(500.0f, 500.0f, 300.0f)))
+					if (Nav->ProjectPointToNavigation(WarmTarget.GetValue(), Projected, FVector(500.0f, 500.0f, 300.0f)))
 					{
 						StayPoint = Projected.Location;
 					}
@@ -1215,7 +1251,7 @@ void UMOColonyManagerSubsystem::RunShelterPass(const TArray<APawn*>& Roster)
 				if (UMOCharacterHistoryComponent* Hist = Villager->FindComponentByClass<UMOCharacterHistoryComponent>())
 				{
 					Hist->AddEntry(EHistoryEntryType::Activity,
-						FString::Printf(TEXT("Went home to warm up (%.1fC)"), BodyTemp));
+						FString::Printf(TEXT("Went to warm up %s (%.1fC)"), WhereWarm, BodyTemp));
 				}
 			}
 		}
