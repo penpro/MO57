@@ -146,6 +146,78 @@ void UMOPersistenceSubsystem::Deinitialize()
     Super::Deinitialize();
 }
 
+// ============================================================================
+// SAVE DOMAINS (C2 fix) — extension without modification. See
+// MOSaveDomainInterface.h for the contract and how to add a domain.
+// ============================================================================
+
+void UMOPersistenceSubsystem::RegisterSaveDomain(const TScriptInterface<IMOSaveDomain>& Domain)
+{
+    IMOSaveDomain* Interface = Domain.GetInterface();
+    UObject* Object = Domain.GetObject();
+    if (!Interface || !Object)
+    {
+        return;
+    }
+    for (const TWeakInterfacePtr<IMOSaveDomain>& Existing : SaveDomains)
+    {
+        if (Existing.GetObject() == Object)
+        {
+            return;   // idempotent — PIE relaunch / world travel re-registers
+        }
+    }
+    SaveDomains.Add(TWeakInterfacePtr<IMOSaveDomain>(Interface));
+    UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Save domain registered: %s (apply priority %d)"),
+        *Interface->GetSaveDomainName().ToString(), Interface->GetSaveDomainApplyPriority());
+}
+
+void UMOPersistenceSubsystem::UnregisterSaveDomain(const UObject* DomainObject)
+{
+    SaveDomains.RemoveAll([DomainObject](const TWeakInterfacePtr<IMOSaveDomain>& Entry)
+    {
+        return !Entry.IsValid() || Entry.GetObject() == DomainObject;
+    });
+}
+
+void UMOPersistenceSubsystem::CaptureRegisteredDomains(UMOWorldSaveGame* SaveObject)
+{
+    if (!SaveObject)
+    {
+        return;
+    }
+    SaveDomains.RemoveAll([](const TWeakInterfacePtr<IMOSaveDomain>& Entry) { return !Entry.IsValid(); });
+    for (const TWeakInterfacePtr<IMOSaveDomain>& Entry : SaveDomains)
+    {
+        if (IMOSaveDomain* Domain = Entry.Get())
+        {
+            Domain->CaptureSaveDomain(*SaveObject);
+        }
+    }
+    UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Captured %d registered save domain(s)"), SaveDomains.Num());
+}
+
+void UMOPersistenceSubsystem::ApplyRegisteredDomains(const UMOWorldSaveGame* SaveObject)
+{
+    if (!SaveObject)
+    {
+        return;
+    }
+    SaveDomains.RemoveAll([](const TWeakInterfacePtr<IMOSaveDomain>& Entry) { return !Entry.IsValid(); });
+    TArray<TWeakInterfacePtr<IMOSaveDomain>> Sorted = SaveDomains;
+    Sorted.Sort([](const TWeakInterfacePtr<IMOSaveDomain>& A, const TWeakInterfacePtr<IMOSaveDomain>& B)
+    {
+        return A.Get()->GetSaveDomainApplyPriority() < B.Get()->GetSaveDomainApplyPriority();
+    });
+    for (const TWeakInterfacePtr<IMOSaveDomain>& Entry : Sorted)
+    {
+        if (IMOSaveDomain* Domain = Entry.Get())
+        {
+            Domain->ApplySaveDomain(*SaveObject);
+        }
+    }
+    UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Applied %d registered save domain(s)"), Sorted.Num());
+}
+
 void UMOPersistenceSubsystem::ResetForNewWorld(const FString& NewSlotName)
 {
     LoadedWorldSave = nullptr;
@@ -298,13 +370,10 @@ bool UMOPersistenceSubsystem::SaveWorldToSlot(const FString& SlotName)
     CapturePersistedPawnsAndInventories(World, SaveObject);
     CaptureWorldItems(World, SaveObject);
     CaptureBuildings(World, SaveObject);
-    CaptureVoxelSculptData(World, SaveObject);
-    CaptureQuestData(SaveObject);
-    CaptureWeatherData(World, SaveObject);
-    CaptureTerrainModificationData(World, SaveObject);
-    CaptureGameClockData(World, SaveObject);          // (H34) in-game date/time, TimeScale, accumulators
-    CaptureColonyData(World, SaveObject);             // (V1) settlement, residency, mood, histories
-    CaptureResourceDepletionData(World, SaveObject);  // (H37) per-node yield depletion + respawn timers
+    // Registered save domains (quest, weather, terrain zones, clock, colony,
+    // depletion, voxel sculpt, ...) — see MOSaveDomainInterface.h. New domains
+    // register themselves; this call site never changes.
+    CaptureRegisteredDomains(SaveObject);
 
     const bool bOk = UGameplayStatics::SaveGameToSlot(SaveObject, SlotName, 0);
 
@@ -545,13 +614,9 @@ FMOLoadResult UMOPersistenceSubsystem::LoadWorldFromSlotWithResult(const FString
     RespawnPersistedPawns(World, LoadedTyped->PersistedPawns, LastLoadResult);
     RespawnWorldItems(World, LoadedTyped->WorldItems, LastLoadResult);
     RespawnBuildings(World, LoadedTyped->Buildings, LastLoadResult);
-    RestoreVoxelSculptData(World, LoadedTyped->VoxelSculptData);
-    RestoreQuestData(LoadedTyped->QuestData);
-    RestoreWeatherData(World, LoadedTyped->WeatherData);
-    RestoreTerrainModificationData(World, LoadedTyped->TerrainModificationData);
-    RestoreGameClockData(World, LoadedTyped->GameClockData);                 // (H34)
-    RestoreColonyData(World, LoadedTyped->ColonyData);                       // (V1)
-    RestoreResourceDepletionData(World, LoadedTyped->ResourceDepletionData); // (H37)
+    // Registered save domains, priority-ordered (voxel sculpt first, then
+    // quest/weather/terrain/clock/colony/depletion — see MOSaveDomainInterface.h).
+    ApplyRegisteredDomains(LoadedTyped);
 
     ApplyInventoriesToSpawnedPawns(World, LoadedTyped->PawnInventoriesByGuid);
 
@@ -2299,155 +2364,7 @@ void UMOPersistenceSubsystem::RespawnBuildings(UWorld* World, const TArray<FMOPe
 // VOXEL SCULPT PERSISTENCE
 // ============================================================================
 
-void UMOPersistenceSubsystem::CaptureVoxelSculptData(UWorld* World, UMOWorldSaveGame* SaveObject) const
-{
-    if (!World || !SaveObject)
-    {
-        return;
-    }
 
-    SaveObject->VoxelSculptData.Reset();
-
-    // Capture height sculpt actors (facade hides the Voxel actor type + async save)
-    TArray<AActor*> HeightActors;
-    MOVoxel::GetHeightSculptActors(World, HeightActors);
-
-    for (AActor* HeightActor : HeightActors)
-    {
-        if (!IsValid(HeightActor))
-        {
-            continue;
-        }
-
-        FMOVoxelSculptSaveRecord Record;
-        Record.ActorName = HeightActor->GetName();
-        Record.bIsVolumeSculpt = false;
-
-        if (MOVoxel::SaveHeightSculpt(HeightActor, Record.SculptData))
-        {
-            Record.bHasValidData = true;
-            UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Captured height sculpt '%s': %d bytes"),
-                *Record.ActorName, Record.SculptData.Num());
-            SaveObject->VoxelSculptData.Add(Record);
-        }
-        else
-        {
-            UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Height sculpt '%s' has no modifications to save"),
-                *Record.ActorName);
-        }
-    }
-
-    // Capture volume sculpt actors
-    TArray<AActor*> VolumeActors;
-    MOVoxel::GetVolumeSculptActors(World, VolumeActors);
-
-    for (AActor* VolumeActor : VolumeActors)
-    {
-        if (!IsValid(VolumeActor))
-        {
-            continue;
-        }
-
-        FMOVoxelSculptSaveRecord Record;
-        Record.ActorName = VolumeActor->GetName();
-        Record.bIsVolumeSculpt = true;
-
-        if (MOVoxel::SaveVolumeSculpt(VolumeActor, Record.SculptData))
-        {
-            Record.bHasValidData = true;
-            UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Captured volume sculpt '%s': %d bytes"),
-                *Record.ActorName, Record.SculptData.Num());
-            SaveObject->VoxelSculptData.Add(Record);
-        }
-        else
-        {
-            UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Volume sculpt '%s' has no modifications to save"),
-                *Record.ActorName);
-        }
-    }
-
-    UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Captured %d voxel sculpt actor(s) with modifications"),
-        SaveObject->VoxelSculptData.Num());
-}
-
-void UMOPersistenceSubsystem::RestoreVoxelSculptData(UWorld* World, const TArray<FMOVoxelSculptSaveRecord>& SculptData)
-{
-    if (!World || SculptData.Num() == 0)
-    {
-        return;
-    }
-
-    UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Restoring %d voxel sculpt record(s)"), SculptData.Num());
-
-    for (const FMOVoxelSculptSaveRecord& Record : SculptData)
-    {
-        if (!Record.bHasValidData || Record.SculptData.Num() == 0)
-        {
-            UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] Skipping invalid sculpt record '%s'"),
-                *Record.ActorName);
-            continue;
-        }
-
-        if (Record.bIsVolumeSculpt)
-        {
-            // Find the volume sculpt actor by name (facade hides the Voxel type + async load)
-            TArray<AActor*> VolumeActors;
-            MOVoxel::GetVolumeSculptActors(World, VolumeActors);
-
-            AActor* FoundActor = nullptr;
-            for (AActor* Actor : VolumeActors)
-            {
-                if (Actor->GetName() == Record.ActorName)
-                {
-                    FoundActor = Actor;
-                    break;
-                }
-            }
-
-            if (!FoundActor)
-            {
-                UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] Volume sculpt actor '%s' not found in world"),
-                    *Record.ActorName);
-                continue;
-            }
-
-            if (MOVoxel::LoadVolumeSculpt(FoundActor, Record.SculptData))
-            {
-                UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Restored volume sculpt '%s'"),
-                    *Record.ActorName);
-            }
-        }
-        else
-        {
-            // Find the height sculpt actor by name
-            TArray<AActor*> HeightActors;
-            MOVoxel::GetHeightSculptActors(World, HeightActors);
-
-            AActor* FoundActor = nullptr;
-            for (AActor* Actor : HeightActors)
-            {
-                if (Actor->GetName() == Record.ActorName)
-                {
-                    FoundActor = Actor;
-                    break;
-                }
-            }
-
-            if (!FoundActor)
-            {
-                UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] Height sculpt actor '%s' not found in world"),
-                    *Record.ActorName);
-                continue;
-            }
-
-            if (MOVoxel::LoadHeightSculpt(FoundActor, Record.SculptData))
-            {
-                UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Restored height sculpt '%s'"),
-                    *Record.ActorName);
-            }
-        }
-    }
-}
 
 // ============================================================================
 // SPECTATOR CAMERA SETUP
@@ -2536,109 +2453,13 @@ void UMOPersistenceSubsystem::SetupSpectatorCameraForLoad(UWorld* World, const U
 // QUEST PERSISTENCE
 // ============================================================================
 
-void UMOPersistenceSubsystem::CaptureQuestData(UMOWorldSaveGame* SaveObject) const
-{
-    if (!SaveObject)
-    {
-        return;
-    }
 
-    UMOQuestSubsystem* QuestSubsystem = GetGameInstance()->GetSubsystem<UMOQuestSubsystem>();
-    if (!QuestSubsystem)
-    {
-        UE_LOG(LogMOFramework, Verbose, TEXT("[MOPersist] CaptureQuestData: No quest subsystem"));
-        return;
-    }
-
-    QuestSubsystem->BuildSaveData(SaveObject->QuestData);
-
-    UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Captured quest data: %d active, %d completed"),
-        SaveObject->QuestData.ActiveQuests.Num(),
-        SaveObject->QuestData.CompletedQuestIds.Num());
-}
-
-void UMOPersistenceSubsystem::RestoreQuestData(const FMOQuestSaveData& QuestData)
-{
-    UMOQuestSubsystem* QuestSubsystem = GetGameInstance()->GetSubsystem<UMOQuestSubsystem>();
-    if (!QuestSubsystem)
-    {
-        UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] RestoreQuestData: No quest subsystem"));
-        return;
-    }
-
-    QuestSubsystem->ApplySaveData(QuestData);
-
-    UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Restored quest data: %d active, %d completed"),
-        QuestData.ActiveQuests.Num(),
-        QuestData.CompletedQuestIds.Num());
-}
 
 // ============================================================================
 // WEATHER/TIME PERSISTENCE
 // ============================================================================
 
-void UMOPersistenceSubsystem::CaptureWeatherData(UWorld* World, UMOWorldSaveGame* SaveObject) const
-{
-    if (!SaveObject)
-    {
-        return;
-    }
 
-    if (!World)
-    {
-        UE_LOG(LogMOFramework, Verbose, TEXT("[MOPersist] CaptureWeatherData: No world"));
-        return;
-    }
-
-    UMOWeatherIntegrationSubsystem* WeatherSubsystem = World->GetSubsystem<UMOWeatherIntegrationSubsystem>();
-    if (!WeatherSubsystem)
-    {
-        UE_LOG(LogMOFramework, Verbose, TEXT("[MOPersist] CaptureWeatherData: No weather integration subsystem"));
-        return;
-    }
-
-    if (!WeatherSubsystem->HasWeatherProvider())
-    {
-        UE_LOG(LogMOFramework, Verbose, TEXT("[MOPersist] CaptureWeatherData: No weather provider registered"));
-        return;
-    }
-
-    SaveObject->WeatherData = WeatherSubsystem->BuildWeatherSaveData();
-
-    UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Captured weather data: DateTime=%s, Weather=%s, Valid=%s"),
-        *SaveObject->WeatherData.DateTime.ToString(),
-        *GetNameSafe(SaveObject->WeatherData.WeatherPresetObject.Get()),
-        SaveObject->WeatherData.bIsValid ? TEXT("Yes") : TEXT("No"));
-}
-
-void UMOPersistenceSubsystem::RestoreWeatherData(UWorld* World, const FMOWeatherSaveData& WeatherData)
-{
-    if (!World)
-    {
-        UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] RestoreWeatherData: No world"));
-        return;
-    }
-
-    if (!WeatherData.bIsValid)
-    {
-        UE_LOG(LogMOFramework, Verbose, TEXT("[MOPersist] RestoreWeatherData: Save data is not valid (possibly old save or no weather provider when saved)"));
-        return;
-    }
-
-    UMOWeatherIntegrationSubsystem* WeatherSubsystem = World->GetSubsystem<UMOWeatherIntegrationSubsystem>();
-    if (!WeatherSubsystem)
-    {
-        UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] RestoreWeatherData: No weather integration subsystem"));
-        return;
-    }
-
-    // Always call ApplyWeatherSaveData - it will store as pending if no provider yet
-    const bool bApplied = WeatherSubsystem->ApplyWeatherSaveData(WeatherData);
-
-    UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Restored weather data: DateTime=%s, Applied=%s"),
-        *WeatherData.DateTime.ToString(),
-        bApplied ? TEXT("Yes") : TEXT("No"));
-}
 
 // ============================================================================
 // TERRAIN MODIFICATION PERSISTENCE
@@ -2648,148 +2469,18 @@ void UMOPersistenceSubsystem::RestoreWeatherData(UWorld* World, const FMOWeather
 // save (which handles the terrain mesh). This is just the bookkeeping that
 // keeps PCG/foliage out of areas the player has modified.
 
-void UMOPersistenceSubsystem::CaptureTerrainModificationData(UWorld* World, UMOWorldSaveGame* SaveObject) const
-{
-    if (!SaveObject || !World)
-    {
-        return;
-    }
 
-    UMOTerrainModificationSubsystem* Subsystem = World->GetSubsystem<UMOTerrainModificationSubsystem>();
-    if (!Subsystem)
-    {
-        UE_LOG(LogMOFramework, Verbose, TEXT("[MOPersist] CaptureTerrainModificationData: No terrain-modification subsystem"));
-        return;
-    }
-
-    Subsystem->BuildSaveData(SaveObject->TerrainModificationData);
-
-    UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Captured terrain modification data: %d zone(s)"),
-        SaveObject->TerrainModificationData.Zones.Num());
-}
-
-void UMOPersistenceSubsystem::RestoreTerrainModificationData(UWorld* World, const FMOTerrainModificationSaveData& TerrainModData)
-{
-    if (!World)
-    {
-        UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] RestoreTerrainModificationData: No world"));
-        return;
-    }
-
-    UMOTerrainModificationSubsystem* Subsystem = World->GetSubsystem<UMOTerrainModificationSubsystem>();
-    if (!Subsystem)
-    {
-        UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] RestoreTerrainModificationData: No terrain-modification subsystem"));
-        return;
-    }
-
-    Subsystem->ApplySaveDataAuthority(TerrainModData);
-
-    UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Restored terrain modification data: %d zone(s)"),
-        TerrainModData.Zones.Num());
-}
 
 // ============================================================================
 // GAME CLOCK PERSISTENCE  (H34)
 // ============================================================================
 
-void UMOPersistenceSubsystem::CaptureColonyData(UWorld* World, UMOWorldSaveGame* SaveObject) const
-{
-    if (UMOColonyManagerSubsystem* Colony = World ? World->GetSubsystem<UMOColonyManagerSubsystem>() : nullptr)
-    {
-        SaveObject->ColonyData = Colony->BuildSaveData();
-    }
-}
 
-void UMOPersistenceSubsystem::RestoreColonyData(UWorld* World, const FMOColonySaveData& ColonyData)
-{
-    if (UMOColonyManagerSubsystem* Colony = World ? World->GetSubsystem<UMOColonyManagerSubsystem>() : nullptr)
-    {
-        Colony->ApplySaveDataAuthority(ColonyData);
-    }
-}
 
-void UMOPersistenceSubsystem::CaptureGameClockData(UWorld* World, UMOWorldSaveGame* SaveObject) const
-{
-    if (!SaveObject || !World)
-    {
-        return;
-    }
 
-    UMOGameClockSubsystem* Clock = UMOGameClockSubsystem::Get(World);
-    if (!Clock)
-    {
-        UE_LOG(LogMOFramework, Verbose, TEXT("[MOPersist] CaptureGameClockData: No game clock subsystem"));
-        return;
-    }
-
-    SaveObject->GameClockData = Clock->BuildSaveData();
-
-    UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Captured game clock data (GameDateTime=%s, TimeScale=%.2f)"),
-        *SaveObject->GameClockData.GameDateTime.ToString(), SaveObject->GameClockData.TimeScale);
-}
-
-void UMOPersistenceSubsystem::RestoreGameClockData(UWorld* World, const FMOGameClockSaveData& ClockData)
-{
-    if (!World)
-    {
-        return;
-    }
-
-    UMOGameClockSubsystem* Clock = UMOGameClockSubsystem::Get(World);
-    if (!Clock)
-    {
-        UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] RestoreGameClockData: No game clock subsystem"));
-        return;
-    }
-
-    // ApplySaveData no-ops internally on legacy/fresh saves (bIsValid=false),
-    // leaving the clock at its fresh-start defaults.
-    Clock->ApplySaveData(ClockData);
-
-    UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Restored game clock data"));
-}
 
 // ============================================================================
 // RESOURCE DEPLETION PERSISTENCE  (H37)
 // ============================================================================
 
-void UMOPersistenceSubsystem::CaptureResourceDepletionData(UWorld* World, UMOWorldSaveGame* SaveObject) const
-{
-    if (!SaveObject || !World)
-    {
-        return;
-    }
 
-    UMOResourceDepletionSubsystem* Subsystem = World->GetSubsystem<UMOResourceDepletionSubsystem>();
-    if (!Subsystem)
-    {
-        UE_LOG(LogMOFramework, Verbose, TEXT("[MOPersist] CaptureResourceDepletionData: No resource-depletion subsystem"));
-        return;
-    }
-
-    Subsystem->BuildSaveData(SaveObject->ResourceDepletionData);
-
-    UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Captured resource depletion data: %d node(s)"),
-        SaveObject->ResourceDepletionData.Entries.Num());
-}
-
-void UMOPersistenceSubsystem::RestoreResourceDepletionData(UWorld* World, const FMOResourceDepletionSaveData& DepletionData)
-{
-    if (!World)
-    {
-        return;
-    }
-
-    UMOResourceDepletionSubsystem* Subsystem = World->GetSubsystem<UMOResourceDepletionSubsystem>();
-    if (!Subsystem)
-    {
-        UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] RestoreResourceDepletionData: No resource-depletion subsystem"));
-        return;
-    }
-
-    Subsystem->ApplySaveDataAuthority(DepletionData);
-
-    UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Restored resource depletion data: %d node(s)"),
-        DepletionData.Entries.Num());
-}

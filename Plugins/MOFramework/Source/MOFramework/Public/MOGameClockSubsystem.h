@@ -77,6 +77,7 @@
 
 #include "CoreMinimal.h"
 #include "Subsystems/WorldSubsystem.h"
+#include "MOSaveDomainInterface.h"
 #include "MOGameClockSubsystem.generated.h"
 
 /**
@@ -147,11 +148,18 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOGameClockHourChanged, int32, New
  * Authoritative game time clock. See file header for design + scope.
  */
 UCLASS()
-class MOFRAMEWORK_API UMOGameClockSubsystem : public UTickableWorldSubsystem
+class MOFRAMEWORK_API UMOGameClockSubsystem : public UTickableWorldSubsystem, public IMOSaveDomain
 {
 	GENERATED_BODY()
 
 public:
+	//~ Begin IMOSaveDomain (GameClock save data lives here, not in the persistence subsystem)
+	virtual FName GetSaveDomainName() const override { return TEXT("GameClock"); }
+	virtual int32 GetSaveDomainApplyPriority() const override { return 50; }
+	virtual void CaptureSaveDomain(UMOWorldSaveGame& Save) override;
+	virtual void ApplySaveDomain(const UMOWorldSaveGame& Save) override;
+	//~ End IMOSaveDomain
+
 	/** Convenience accessor. Returns nullptr only if the world has no subsystem (PIE shutdown, etc). */
 	UFUNCTION(BlueprintPure, Category="MO|Clock", meta=(WorldContext="WorldContextObject"))
 	static UMOGameClockSubsystem* Get(const UObject* WorldContextObject);
@@ -159,6 +167,7 @@ public:
 	//~ Begin USubsystem Interface
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 	virtual void Deinitialize() override;
+	virtual void OnWorldBeginPlay(UWorld& InWorld) override;
 	//~ End USubsystem Interface
 
 	//~ Begin UTickableWorldSubsystem Interface

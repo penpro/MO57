@@ -24,6 +24,7 @@
 
 #include "CoreMinimal.h"
 #include "Subsystems/WorldSubsystem.h"
+#include "MOSaveDomainInterface.h"
 #include "MOResourceDepletionSubsystem.generated.h"
 
 class UInstancedStaticMeshComponent;
@@ -111,13 +112,21 @@ struct MOFRAMEWORK_API FMOResourceNodeDepletion
 };
 
 UCLASS(Config = Game, DefaultConfig)
-class MOFRAMEWORK_API UMOResourceDepletionSubsystem : public UWorldSubsystem
+class MOFRAMEWORK_API UMOResourceDepletionSubsystem : public UWorldSubsystem, public IMOSaveDomain
 {
 	GENERATED_BODY()
 
 public:
+	//~ Begin IMOSaveDomain (ResourceDepletion save data lives here, not in the persistence subsystem)
+	virtual FName GetSaveDomainName() const override { return TEXT("ResourceDepletion"); }
+	virtual int32 GetSaveDomainApplyPriority() const override { return 70; }
+	virtual void CaptureSaveDomain(UMOWorldSaveGame& Save) override;
+	virtual void ApplySaveDomain(const UMOWorldSaveGame& Save) override;
+	//~ End IMOSaveDomain
+
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 	virtual void Deinitialize() override;
+	virtual void OnWorldBeginPlay(UWorld& InWorld) override;
 	virtual bool ShouldCreateSubsystem(UObject* Outer) const override;
 
 	/** Convenience static accessor. */

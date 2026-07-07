@@ -129,7 +129,7 @@ See `PCG_Integration_Plan.md`. Hybrid ISM + Actor approach.
 | Code | Issue | Location | Status (Jun 11) |
 |------|-------|----------|--------|
 | C1 | **Monolithic runtime module** — all ~60 runtime systems in one MOFramework module. | `MOFramework.Build.cs` | **PARTIAL** — MOFrameworkEditor module split exists now (6 files), but runtime monolith grew 467→505 files and Build.cs:116-128 still pulls editor deps under bBuildEditor. No Core/Inventory/Medical/UI split. |
-| C2 | **MOPersistenceSubsystem god-class** — single orchestration point for every save domain; each new domain edits this class (violates extension-without-modification). | `MOPersistenceSubsystem.cpp` | **OPEN, GREW** — 2415→2550 LOC, ~14 responsibilities (added since May: voxel sculpt, quest, weather/clock, terrain zones, spectator cam). Mitigating: new domains are thin ~20-35-line delegators to their subsystems — right shape, wrong home. |
+| C2 | ~~MOPersistenceSubsystem god-class~~ | `MOPersistenceSubsystem.cpp` | **FIXED 2026-07-06 (IMOSaveDomain registry)** — save domains register via `MOSaveDomainInterface.h`; persistence iterates the registry and no longer names any domain. 7 domains migrated to their owners (quest/weather/terrain/clock/colony/depletion + new `UMOVoxelSculptSaveDomain`); 2795→~2490 LOC. Adding a domain now touches the new domain + its UMOWorldSaveGame field, NEVER this class. Pawns/world-items/buildings/slots remain (genuine core). |
 | C3 | **GameInstance subsystem binding to UWorld** — manually tracks/re-binds per-world objects across level transitions. | `MOPersistenceSubsystem.h:349-353` | **OPEN** — unchanged (members moved to ~349 only because header grew). Header's own pitfall #3 documents the hazard. |
 
 ### HIGH — Performance / Correctness

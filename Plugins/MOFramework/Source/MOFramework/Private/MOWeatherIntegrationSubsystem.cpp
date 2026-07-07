@@ -1,4 +1,6 @@
 #include "MOWeatherIntegrationSubsystem.h"
+#include "MOPersistenceSubsystem.h"
+#include "MOworldSaveGame.h"
 #include "MOWeatherProviderInterface.h"
 #include "MOGameClockSubsystem.h"
 #include "MOGameUIManagerSubsystem.h"
@@ -54,6 +56,16 @@ void UMOWeatherIntegrationSubsystem::Initialize(FSubsystemCollectionBase& Collec
 
 void UMOWeatherIntegrationSubsystem::Deinitialize()
 {
+	if (UWorld* W = GetWorld())
+	{
+		if (UGameInstance* GI = W->GetGameInstance())
+		{
+			if (UMOPersistenceSubsystem* Persist = GI->GetSubsystem<UMOPersistenceSubsystem>())
+			{
+				Persist->UnregisterSaveDomain(this);
+			}
+		}
+	}
 	// Unhook from the clock so the dynamic delegate doesn't leak across
 	// subsystem teardown ordering surprises.
 	if (UMOGameClockSubsystem* Clock = UMOGameClockSubsystem::Get(this))
@@ -79,6 +91,14 @@ void UMOWeatherIntegrationSubsystem::Deinitialize()
 void UMOWeatherIntegrationSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 {
 	Super::OnWorldBeginPlay(InWorld);
+
+	if (UGameInstance* GI = InWorld.GetGameInstance())
+	{
+		if (UMOPersistenceSubsystem* Persist = GI->GetSubsystem<UMOPersistenceSubsystem>())
+		{
+			Persist->RegisterSaveDomain(this);
+		}
+	}
 
 	// Bind the UI hook here, not in Initialize(): this runs only when a world
 	// begins play (PIE / packaged game), by which point UMOGameUIManagerSubsystem
@@ -735,4 +755,25 @@ void UMOWeatherIntegrationSubsystem::SetWeatherPreset(UObject* PresetObject)
 		*GetNameSafe(WeatherProvider.GetObject()));
 
 	IMOWeatherProviderInterface::Execute_SetWeatherPreset(WeatherProvider.GetObject(), PresetObject);
+}
+
+// ---- IMOSaveDomain (Weather) — see MOSaveDomainInterface.h ----
+
+void UMOWeatherIntegrationSubsystem::CaptureSaveDomain(UMOWorldSaveGame& Save)
+{
+	if (!HasWeatherProvider())
+	{
+		return;   // nothing meaningful to capture without a provider
+	}
+	Save.WeatherData = BuildWeatherSaveData();
+}
+
+void UMOWeatherIntegrationSubsystem::ApplySaveDomain(const UMOWorldSaveGame& Save)
+{
+	if (!Save.WeatherData.bIsValid)
+	{
+		return;   // old save or no provider when saved
+	}
+	// Stores as pending internally if the provider is not up yet.
+	ApplyWeatherSaveData(Save.WeatherData);
 }

@@ -55,6 +55,7 @@
 
 #include "CoreMinimal.h"
 #include "Subsystems/WorldSubsystem.h"
+#include "MOSaveDomainInterface.h"
 #include "MOTerrainModificationSubsystem.generated.h"
 
 /**
@@ -99,13 +100,21 @@ struct MOFRAMEWORK_API FMOTerrainModificationSaveData
 };
 
 UCLASS()
-class MOFRAMEWORK_API UMOTerrainModificationSubsystem : public UTickableWorldSubsystem
+class MOFRAMEWORK_API UMOTerrainModificationSubsystem : public UTickableWorldSubsystem, public IMOSaveDomain
 {
 	GENERATED_BODY()
 
 public:
+	//~ Begin IMOSaveDomain (TerrainModification save data lives here, not in the persistence subsystem)
+	virtual FName GetSaveDomainName() const override { return TEXT("TerrainModification"); }
+	virtual int32 GetSaveDomainApplyPriority() const override { return 40; }
+	virtual void CaptureSaveDomain(UMOWorldSaveGame& Save) override;
+	virtual void ApplySaveDomain(const UMOWorldSaveGame& Save) override;
+	//~ End IMOSaveDomain
+
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 	virtual void Deinitialize() override;
+	virtual void OnWorldBeginPlay(UWorld& InWorld) override;
 	virtual bool ShouldCreateSubsystem(UObject* Outer) const override;
 
 	// UTickableWorldSubsystem

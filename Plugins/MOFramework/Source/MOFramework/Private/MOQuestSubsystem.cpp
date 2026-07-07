@@ -1,4 +1,6 @@
 #include "MOQuestSubsystem.h"
+#include "MOPersistenceSubsystem.h"
+#include "MOworldSaveGame.h"
 #include "MOFramework.h"
 #include "MOCraftingSubsystem.h"
 #include "MOSkillsComponent.h"
@@ -15,6 +17,14 @@ void UMOQuestSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
 
+	// Save-domain registration: persistence is a sibling GameInstance
+	// subsystem — force init order, then register (see MOSaveDomainInterface.h).
+	Collection.InitializeDependency(UMOPersistenceSubsystem::StaticClass());
+	if (UMOPersistenceSubsystem* Persist = GetGameInstance()->GetSubsystem<UMOPersistenceSubsystem>())
+	{
+		Persist->RegisterSaveDomain(this);
+	}
+
 	// Load quest definitions from DataTable
 	LoadQuestDefinitions();
 
@@ -29,6 +39,13 @@ void UMOQuestSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
 void UMOQuestSubsystem::Deinitialize()
 {
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (UMOPersistenceSubsystem* Persist = GI->GetSubsystem<UMOPersistenceSubsystem>())
+		{
+			Persist->UnregisterSaveDomain(this);
+		}
+	}
 	FWorldDelegates::OnPostWorldInitialization.Remove(WorldInitializedHandle);
 
 	// Unbind from crafting subsystem if bound
@@ -898,4 +915,16 @@ void UMOQuestSubsystem::RebuildActiveEventListeners()
 
 	UE_LOG(LogMOFramework, Verbose, TEXT("[MOQuestSubsystem] Rebuilt event listener cache: %d entries"),
 		ActiveEventListeners.Num());
+}
+
+// ---- IMOSaveDomain (Quest) — see MOSaveDomainInterface.h ----
+
+void UMOQuestSubsystem::CaptureSaveDomain(UMOWorldSaveGame& Save)
+{
+	BuildSaveData(Save.QuestData);
+}
+
+void UMOQuestSubsystem::ApplySaveDomain(const UMOWorldSaveGame& Save)
+{
+	ApplySaveData(Save.QuestData);
 }

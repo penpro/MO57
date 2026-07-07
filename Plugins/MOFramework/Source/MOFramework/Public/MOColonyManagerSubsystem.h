@@ -36,6 +36,7 @@
 #include "Subsystems/WorldSubsystem.h"
 #include "MOColonyTypes.h"
 
+#include "MOSaveDomainInterface.h"
 #include "MOColonyManagerSubsystem.generated.h"
 
 class AMOContainerActor;
@@ -44,11 +45,18 @@ class APawn;
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOOnVillagerMoodChanged, const FGuid&, PawnGuid, float, NewMood);
 
 UCLASS()
-class MOFRAMEWORK_API UMOColonyManagerSubsystem : public UWorldSubsystem
+class MOFRAMEWORK_API UMOColonyManagerSubsystem : public UWorldSubsystem, public IMOSaveDomain
 {
 	GENERATED_BODY()
 
 public:
+	//~ Begin IMOSaveDomain (Colony save data lives here, not in the persistence subsystem)
+	virtual FName GetSaveDomainName() const override { return TEXT("Colony"); }
+	virtual int32 GetSaveDomainApplyPriority() const override { return 60; }
+	virtual void CaptureSaveDomain(UMOWorldSaveGame& Save) override;
+	virtual void ApplySaveDomain(const UMOWorldSaveGame& Save) override;
+	//~ End IMOSaveDomain
+
 	static UMOColonyManagerSubsystem* Get(const UObject* WorldContext);
 
 	virtual void OnWorldBeginPlay(UWorld& InWorld) override;

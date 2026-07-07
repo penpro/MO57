@@ -1,4 +1,6 @@
 #include "MOResourceDepletionSubsystem.h"
+#include "MOPersistenceSubsystem.h"
+#include "MOworldSaveGame.h"
 #include "MOFramework.h"
 #include "MOHarvestDebugSubsystem.h"
 #include "Components/InstancedStaticMeshComponent.h"
@@ -51,6 +53,16 @@ void UMOResourceDepletionSubsystem::Initialize(FSubsystemCollectionBase& Collect
 
 void UMOResourceDepletionSubsystem::Deinitialize()
 {
+	if (UWorld* W = GetWorld())
+	{
+		if (UGameInstance* GI = W->GetGameInstance())
+		{
+			if (UMOPersistenceSubsystem* Persist = GI->GetSubsystem<UMOPersistenceSubsystem>())
+			{
+				Persist->UnregisterSaveDomain(this);
+			}
+		}
+	}
 	if (UWorld* World = GetWorld())
 	{
 		World->GetTimerManager().ClearTimer(RespawnCheckTimerHandle);
@@ -287,5 +299,29 @@ void UMOResourceDepletionSubsystem::CheckRespawns()
 		UE_LOG(LogMOFramework, Log,
 			TEXT("[ResourceDepletion] Respawned %d node(s); %d still depleted"),
 			ToRemove.Num(), DepletionMap.Num());
+	}
+}
+
+// ---- IMOSaveDomain (ResourceDepletion) — see MOSaveDomainInterface.h ----
+
+void UMOResourceDepletionSubsystem::CaptureSaveDomain(UMOWorldSaveGame& Save)
+{
+	BuildSaveData(Save.ResourceDepletionData);
+}
+
+void UMOResourceDepletionSubsystem::ApplySaveDomain(const UMOWorldSaveGame& Save)
+{
+	ApplySaveDataAuthority(Save.ResourceDepletionData);
+}
+
+void UMOResourceDepletionSubsystem::OnWorldBeginPlay(UWorld& InWorld)
+{
+	Super::OnWorldBeginPlay(InWorld);
+	if (UGameInstance* GI = InWorld.GetGameInstance())
+	{
+		if (UMOPersistenceSubsystem* Persist = GI->GetSubsystem<UMOPersistenceSubsystem>())
+		{
+			Persist->RegisterSaveDomain(this);
+		}
 	}
 }

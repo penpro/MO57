@@ -1,4 +1,6 @@
 #include "MOColonyManagerSubsystem.h"
+#include "MOPersistenceSubsystem.h"
+#include "MOworldSaveGame.h"
 #include "MOFramework.h"
 #include "MOCharacter.h"
 #include "MOContainerActor.h"
@@ -34,6 +36,14 @@ void UMOColonyManagerSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 {
 	Super::OnWorldBeginPlay(InWorld);
 
+	if (UGameInstance* GI = InWorld.GetGameInstance())
+	{
+		if (UMOPersistenceSubsystem* Persist = GI->GetSubsystem<UMOPersistenceSubsystem>())
+		{
+			Persist->RegisterSaveDomain(this);
+		}
+	}
+
 	// Server-only loop; clients get colony state via queries/replicated comps.
 	if (InWorld.GetNetMode() == NM_Client)
 	{
@@ -45,6 +55,16 @@ void UMOColonyManagerSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 
 void UMOColonyManagerSubsystem::Deinitialize()
 {
+	if (UWorld* W = GetWorld())
+	{
+		if (UGameInstance* GI = W->GetGameInstance())
+		{
+			if (UMOPersistenceSubsystem* Persist = GI->GetSubsystem<UMOPersistenceSubsystem>())
+			{
+				Persist->UnregisterSaveDomain(this);
+			}
+		}
+	}
 	if (UWorld* World = GetWorld())
 	{
 		World->GetTimerManager().ClearTimer(UpkeepTimer);
@@ -914,4 +934,16 @@ bool UMOColonyManagerSubsystem::ApplySaveDataAuthority(const FMOColonySaveData& 
 	UE_LOG(LogMOFramework, Warning, TEXT("[MOColony] Restored settlement '%s' (%d residents housed)"),
 		*Settlement.DisplayName.ToString(), Residency.Num());
 	return true;
+}
+
+// ---- IMOSaveDomain (Colony) — see MOSaveDomainInterface.h ----
+
+void UMOColonyManagerSubsystem::CaptureSaveDomain(UMOWorldSaveGame& Save)
+{
+	Save.ColonyData = BuildSaveData();
+}
+
+void UMOColonyManagerSubsystem::ApplySaveDomain(const UMOWorldSaveGame& Save)
+{
+	ApplySaveDataAuthority(Save.ColonyData);
 }

@@ -81,6 +81,8 @@
 #include "Engine/World.h" // UWorld::InitializationValues
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "MOworldSaveGame.h"
+#include "MOSaveDomainInterface.h"
+#include "UObject/WeakInterfacePtr.h"
 #include "MOSaveGameTypes.h"
 #include "MOPersistenceSubsystem.generated.h"
 
@@ -144,6 +146,19 @@ class MOFRAMEWORK_API UMOPersistenceSubsystem : public UGameInstanceSubsystem
     GENERATED_BODY()
 
 public:
+	// =========================================================================
+	// SAVE DOMAINS (C2 fix) — see MOSaveDomainInterface.h.
+	// Subsystems that own save data register here; this class iterates them
+	// and never learns their names. NEVER add per-domain Capture/Restore
+	// methods to this class again.
+	// =========================================================================
+
+	/** Register a save domain (idempotent; weak — stale entries are pruned). */
+	void RegisterSaveDomain(const TScriptInterface<IMOSaveDomain>& Domain);
+
+	/** Unregister on domain Deinitialize (safe to skip — weak registry). */
+	void UnregisterSaveDomain(const UObject* DomainObject);
+
     virtual void Initialize(FSubsystemCollectionBase& Collection) override;
     virtual void Deinitialize() override;
 
@@ -290,6 +305,7 @@ private:
     UFUNCTION()
     void HandleIdentityRegistered(const FGuid& StableGuid, AActor* Actor);
 
+
     UFUNCTION()
     void HandleIdentityDestroyed(const FGuid& StableGuid);
 
@@ -318,30 +334,16 @@ private:
     void RespawnBuildings(UWorld* World, const TArray<FMOPersistedBuildingRecord>& Buildings, FMOLoadResult& OutResult);
 
     // Voxel sculpt persistence
-    void CaptureVoxelSculptData(UWorld* World, UMOWorldSaveGame* SaveObject) const;
-    void RestoreVoxelSculptData(UWorld* World, const TArray<FMOVoxelSculptSaveRecord>& SculptData);
 
     // Quest persistence
-    void CaptureQuestData(UMOWorldSaveGame* SaveObject) const;
-    void RestoreQuestData(const FMOQuestSaveData& QuestData);
 
     // Weather/time persistence (UDS/UDW integration)
-    void CaptureWeatherData(UWorld* World, UMOWorldSaveGame* SaveObject) const;
-    void RestoreWeatherData(UWorld* World, const FMOWeatherSaveData& WeatherData);
 
     // Terrain-modification persistence (modified-zone tracker for foliage cleanup)
-    void CaptureTerrainModificationData(UWorld* World, UMOWorldSaveGame* SaveObject) const;
-    void RestoreTerrainModificationData(UWorld* World, const FMOTerrainModificationSaveData& TerrainModData);
 
     // (H34) Game clock persistence (in-game date/time, TimeScale, accumulators)
-    void CaptureGameClockData(UWorld* World, UMOWorldSaveGame* SaveObject) const;
-    void RestoreGameClockData(UWorld* World, const FMOGameClockSaveData& ClockData);
-    void CaptureColonyData(UWorld* World, UMOWorldSaveGame* SaveObject) const;   // (V1)
-    void RestoreColonyData(UWorld* World, const FMOColonySaveData& ColonyData);  // (V1)
 
     // (H37) Resource depletion persistence (per-node yield counts + respawn timers)
-    void CaptureResourceDepletionData(UWorld* World, UMOWorldSaveGame* SaveObject) const;
-    void RestoreResourceDepletionData(UWorld* World, const FMOResourceDepletionSaveData& DepletionData);
 
     /**
      * (H30) Shared per-pawn component-state restoration. Applies the 7 component
@@ -397,6 +399,12 @@ private:
     // Current save slot name (set on load or save)
     UPROPERTY()
     FString CurrentSlotName;
+
+	/** Registered save domains (weak — owners control lifetime). */
+	TArray<TWeakInterfacePtr<IMOSaveDomain>> SaveDomains;
+
+	void CaptureRegisteredDomains(UMOWorldSaveGame* SaveObject);
+	void ApplyRegisteredDomains(const UMOWorldSaveGame* SaveObject);
 
     // Time to suppress destroyed GUID recording after load (seconds)
     static constexpr float LoadSuppressionDuration = 0.25f;

@@ -5,6 +5,8 @@
  */
 
 #include "MOTerrainModificationSubsystem.h"
+#include "MOPersistenceSubsystem.h"
+#include "MOworldSaveGame.h"
 #include "MOFramework.h"
 #include "MOHarvestDebugSubsystem.h"
 #include "Components/InstancedStaticMeshComponent.h"
@@ -36,6 +38,16 @@ void UMOTerrainModificationSubsystem::Initialize(FSubsystemCollectionBase& Colle
 
 void UMOTerrainModificationSubsystem::Deinitialize()
 {
+	if (UWorld* W = GetWorld())
+	{
+		if (UGameInstance* GI = W->GetGameInstance())
+		{
+			if (UMOPersistenceSubsystem* Persist = GI->GetSubsystem<UMOPersistenceSubsystem>())
+			{
+				Persist->UnregisterSaveDomain(this);
+			}
+		}
+	}
 	if (UWorld* World = GetWorld())
 	{
 		World->GetTimerManager().ClearTimer(SweepTimerHandle);
@@ -583,5 +595,29 @@ void UMOTerrainModificationSubsystem::RebuildSpatialIndex()
 	for (int32 i = 0; i < Zones.Num(); ++i)
 	{
 		IndexZone(i);
+	}
+}
+
+// ---- IMOSaveDomain (TerrainModification) — see MOSaveDomainInterface.h ----
+
+void UMOTerrainModificationSubsystem::CaptureSaveDomain(UMOWorldSaveGame& Save)
+{
+	BuildSaveData(Save.TerrainModificationData);
+}
+
+void UMOTerrainModificationSubsystem::ApplySaveDomain(const UMOWorldSaveGame& Save)
+{
+	ApplySaveDataAuthority(Save.TerrainModificationData);
+}
+
+void UMOTerrainModificationSubsystem::OnWorldBeginPlay(UWorld& InWorld)
+{
+	Super::OnWorldBeginPlay(InWorld);
+	if (UGameInstance* GI = InWorld.GetGameInstance())
+	{
+		if (UMOPersistenceSubsystem* Persist = GI->GetSubsystem<UMOPersistenceSubsystem>())
+		{
+			Persist->RegisterSaveDomain(this);
+		}
 	}
 }

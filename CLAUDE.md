@@ -456,7 +456,7 @@ Before implementing custom solutions, check:
 
 | Subsystem | Type | Responsibility |
 |-----------|------|----------------|
-| `UMOPersistenceSubsystem` | GameInstance | Save/load, pawn records, destroyed GUID tracking |
+| `UMOPersistenceSubsystem` | GameInstance | Save/load slots, pawn records, destroyed GUID tracking. Save DOMAINS live on their owning subsystems via `IMOSaveDomain` (MOSaveDomainInterface.h) — register, don't edit persistence |
 | `UMOIdentityRegistrySubsystem` | World | GUID-to-Actor mapping, identity lifecycle events |
 | `UMOInteractionSubsystem` | World | Interaction system coordination |
 | `UMOCraftingSubsystem` | World | Recipe validation, crafting operations |

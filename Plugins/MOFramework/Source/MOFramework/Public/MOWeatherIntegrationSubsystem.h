@@ -53,6 +53,7 @@
 #include "CoreMinimal.h"
 #include "Subsystems/WorldSubsystem.h"
 #include "MOWeatherTypes.h"
+#include "MOSaveDomainInterface.h"
 #include "MOWeatherIntegrationSubsystem.generated.h"
 
 class IMOWeatherProviderInterface;
@@ -92,11 +93,18 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOTimeOfDayChangedSignature, bool,
  * 4. Bind to delegates for weather change events
  */
 UCLASS()
-class MOFRAMEWORK_API UMOWeatherIntegrationSubsystem : public UTickableWorldSubsystem
+class MOFRAMEWORK_API UMOWeatherIntegrationSubsystem : public UTickableWorldSubsystem, public IMOSaveDomain
 {
 	GENERATED_BODY()
 
 public:
+	//~ Begin IMOSaveDomain (Weather save data lives here, not in the persistence subsystem)
+	virtual FName GetSaveDomainName() const override { return TEXT("Weather"); }
+	virtual int32 GetSaveDomainApplyPriority() const override { return 30; }
+	virtual void CaptureSaveDomain(UMOWorldSaveGame& Save) override;
+	virtual void ApplySaveDomain(const UMOWorldSaveGame& Save) override;
+	//~ End IMOSaveDomain
+
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 	virtual void Deinitialize() override;
 	virtual void OnWorldBeginPlay(UWorld& InWorld) override;

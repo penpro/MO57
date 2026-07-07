@@ -4,6 +4,8 @@
  */
 
 #include "MOGameClockSubsystem.h"
+#include "MOPersistenceSubsystem.h"
+#include "MOworldSaveGame.h"
 #include "MOFramework.h"
 #include "Engine/World.h"
 
@@ -39,6 +41,16 @@ void UMOGameClockSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
 void UMOGameClockSubsystem::Deinitialize()
 {
+	if (UWorld* W = GetWorld())
+	{
+		if (UGameInstance* GI = W->GetGameInstance())
+		{
+			if (UMOPersistenceSubsystem* Persist = GI->GetSubsystem<UMOPersistenceSubsystem>())
+			{
+				Persist->UnregisterSaveDomain(this);
+			}
+		}
+	}
 	UE_LOG(LogMOFramework, Log, TEXT("[MOGameClock] Deinitialize — RealPlayTime=%.1fs, GameTime=%.1fs"),
 		RealSecondsAccumulated, GameSecondsAccumulated);
 	Super::Deinitialize();
@@ -186,3 +198,28 @@ void UMOGameClockSubsystem::ApplySaveData(const FMOGameClockSaveData& SaveData)
 // Console commands (MO.Clock.*) moved to UMOCheatSubsystem.
 // UWorldSubsystem lifetime is incompatible with IConsoleManager — see the
 // "DO NOT MAKE THIS A UWorldSubsystem" note in MOCheatSubsystem.h.
+
+// ---- IMOSaveDomain (GameClock) — see MOSaveDomainInterface.h ----
+
+void UMOGameClockSubsystem::CaptureSaveDomain(UMOWorldSaveGame& Save)
+{
+	Save.GameClockData = BuildSaveData();
+}
+
+void UMOGameClockSubsystem::ApplySaveDomain(const UMOWorldSaveGame& Save)
+{
+	// ApplySaveData no-ops internally on legacy/fresh saves (bIsValid=false).
+	ApplySaveData(Save.GameClockData);
+}
+
+void UMOGameClockSubsystem::OnWorldBeginPlay(UWorld& InWorld)
+{
+	Super::OnWorldBeginPlay(InWorld);
+	if (UGameInstance* GI = InWorld.GetGameInstance())
+	{
+		if (UMOPersistenceSubsystem* Persist = GI->GetSubsystem<UMOPersistenceSubsystem>())
+		{
+			Persist->RegisterSaveDomain(this);
+		}
+	}
+}

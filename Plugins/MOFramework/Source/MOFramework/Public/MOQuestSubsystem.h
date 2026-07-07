@@ -48,6 +48,7 @@
 #include "Engine/DeveloperSettings.h"
 #include "MOQuestTypes.h"
 #include "MOQuestDelegates.h"
+#include "MOSaveDomainInterface.h"
 #include "MOQuestSubsystem.generated.h"
 
 class UDataTable;
@@ -103,11 +104,18 @@ public:
  * 5. All required objectives done → OnQuestCompleted
  */
 UCLASS()
-class MOFRAMEWORK_API UMOQuestSubsystem : public UGameInstanceSubsystem
+class MOFRAMEWORK_API UMOQuestSubsystem : public UGameInstanceSubsystem, public IMOSaveDomain
 {
 	GENERATED_BODY()
 
 public:
+	//~ Begin IMOSaveDomain (Quest save data lives here, not in the persistence subsystem)
+	virtual FName GetSaveDomainName() const override { return TEXT("Quest"); }
+	virtual int32 GetSaveDomainApplyPriority() const override { return 20; }
+	virtual void CaptureSaveDomain(UMOWorldSaveGame& Save) override;
+	virtual void ApplySaveDomain(const UMOWorldSaveGame& Save) override;
+	//~ End IMOSaveDomain
+
 	// =========================================================================
 	// LIFECYCLE
 	// =========================================================================
