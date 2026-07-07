@@ -56,3 +56,12 @@ Tools/__pycache__/
 .codex/
 .cursor/
 .gemini/
+
+# agent / MCP tooling — local, not game content (cleanup 2026-07-07)
+.agents/
+.mcp.json
+# AGENTS.md is a byte-identical codex mirror of the committed CLAUDE.md
+/AGENTS.md
+# MCP bridge test scratch (unreferenced by any map/config)
+Content/Penumbra/MCPTest/
+Content/Penumbra/Maps/MCPTestLevel.umap
