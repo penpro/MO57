@@ -45,9 +45,33 @@ public:
 };
 
 /**
+ * A point source of warmth in the world — campfire, forge, hearth. Actors
+ * above register while they burn; the medical layer feels the aggregate
+ * through the registry without knowing any fire exists.
+ */
+class IMOLocalHeatSource
+{
+public:
+	virtual ~IMOLocalHeatSource() = default;
+
+	/** World position the heat radiates from. */
+	virtual FVector GetHeatLocation() const = 0;
+
+	/** Temperature boost at the source itself (°C above ambient). */
+	virtual float GetHeatDeltaCelsius() const = 0;
+
+	/** Distance at which the boost falls to zero (cm). */
+	virtual float GetHeatRadius() const = 0;
+
+	/** False while unlit or out of fuel — contributes nothing. */
+	virtual bool IsHeatActive() const = 0;
+};
+
+/**
  * Core-level locator the provider registers into. Lives in Core so both the
  * provider (above) and the consumers (medical layer) can reach it without
- * knowing each other.
+ * knowing each other. Also aggregates registered point heat sources —
+ * mechanics only; what emits heat and how much is decided above.
  */
 UCLASS()
 class MOFRAMEWORKCORE_API UMOAmbientEnvironmentRegistry : public UWorldSubsystem
@@ -73,8 +97,47 @@ public:
 	/** Null when no provider is up yet — consumers keep their own fallback. */
 	IMOAmbientEnvironmentProvider* GetProvider() const { return Provider; }
 
+	void RegisterHeatSource(IMOLocalHeatSource* InSource) { HeatSources.AddUnique(InSource); }
+	void UnregisterHeatSource(const IMOLocalHeatSource* InSource)
+	{
+		HeatSources.RemoveAll([InSource](const IMOLocalHeatSource* S) { return S == InSource; });
+	}
+
+	/**
+	 * Warmth contributed by point sources at a location (°C above ambient,
+	 * >= 0). Linear falloff to the source radius; overlapping fires take the
+	 * strongest, not the sum — standing between two campfires is not twice
+	 * as warm.
+	 */
+	float GetLocalHeatDeltaAt(const FVector& Location) const
+	{
+		float Best = 0.0f;
+		for (const IMOLocalHeatSource* Source : HeatSources)
+		{
+			if (!Source || !Source->IsHeatActive())
+			{
+				continue;
+			}
+			const float Radius = Source->GetHeatRadius();
+			if (Radius <= 0.0f)
+			{
+				continue;
+			}
+			const float Dist = FVector::Dist(Location, Source->GetHeatLocation());
+			if (Dist < Radius)
+			{
+				Best = FMath::Max(Best, Source->GetHeatDeltaCelsius() * (1.0f - Dist / Radius));
+			}
+		}
+		return Best;
+	}
+
 private:
 	/** Raw on purpose: the registering subsystem unregisters in Deinitialize,
 	 *  and both live in the same world lifetime. */
 	IMOAmbientEnvironmentProvider* Provider = nullptr;
+
+	/** Raw on purpose: sources unregister in EndPlay (always runs before the
+	 *  world tears the subsystem down). */
+	TArray<IMOLocalHeatSource*> HeatSources;
 };

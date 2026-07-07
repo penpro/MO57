@@ -149,6 +149,15 @@ public:
 		bool bIsSheltered);
 
 	/**
+	 * Warmth from registered point heat sources (campfire, forge) at a world
+	 * location — °C above ambient, 0 when nothing burns nearby. Reads the
+	 * ambient registry; usable by UI readouts ("warm: near fire") and gates.
+	 */
+	UFUNCTION(BlueprintPure, Category="MO|Weather",
+		meta=(DisplayName="Get Local Heat Delta At", WorldContext="WorldContextObject"))
+	static float GetLocalHeatDeltaAt(const UObject* WorldContextObject, FVector Location);
+
+	/**
 	 * Convert a UObject pointer to its FSoftObjectPath (for saving asset
 	 * references that survive disk save/load). BP-equivalent built-ins are
 	 * inconsistent across UE versions; this helper is the canonical path.

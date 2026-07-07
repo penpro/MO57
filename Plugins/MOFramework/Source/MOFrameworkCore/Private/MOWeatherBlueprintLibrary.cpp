@@ -1,4 +1,5 @@
 #include "MOWeatherBlueprintLibrary.h"
+#include "MOAmbientEnvironmentProvider.h"
 
 #include "Engine/Engine.h"
 #include "Engine/World.h"
@@ -172,6 +173,12 @@ float UMOWeatherBlueprintLibrary::DateTimeToUDSTimeValue(const FDateTime& DateTi
 int32 UMOWeatherBlueprintLibrary::DateTimeToDayOfYear(const FDateTime& DateTime)
 {
 	return DateTime.GetDayOfYear();
+}
+
+float UMOWeatherBlueprintLibrary::GetLocalHeatDeltaAt(const UObject* WorldContextObject, FVector Location)
+{
+	const UMOAmbientEnvironmentRegistry* Ambient = UMOAmbientEnvironmentRegistry::Get(WorldContextObject);
+	return Ambient ? Ambient->GetLocalHeatDeltaAt(Location) : 0.0f;
 }
 
 FSoftObjectPath UMOWeatherBlueprintLibrary::MakeSoftPathFromObject(const UObject* Object)

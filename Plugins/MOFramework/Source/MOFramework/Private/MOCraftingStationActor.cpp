@@ -48,6 +48,22 @@ AMOCraftingStationActor::AMOCraftingStationActor()
 void AMOCraftingStationActor::BeginPlay()
 {
 	Super::BeginPlay();
+
+	// Every station registers; the registry skips sources whose IsHeatActive()
+	// is false, so cold stations cost one comparison per query.
+	if (UMOAmbientEnvironmentRegistry* Ambient = UMOAmbientEnvironmentRegistry::Get(this))
+	{
+		Ambient->RegisterHeatSource(this);
+	}
+}
+
+void AMOCraftingStationActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	if (UMOAmbientEnvironmentRegistry* Ambient = UMOAmbientEnvironmentRegistry::Get(this))
+	{
+		Ambient->UnregisterHeatSource(this);
+	}
+	Super::EndPlay(EndPlayReason);
 }
 
 void AMOCraftingStationActor::Tick(float DeltaTime)
@@ -106,8 +122,33 @@ void AMOCraftingStationActor::InitializeBuilding(FName InRecipeId)
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOCraftingStationActor] Could not find recipe: %s"), *InRecipeId.ToString());
 	}
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOCraftingStationActor] Initialized station type %d from recipe %s"),
-		(int32)StationType, *InRecipeId.ToString());
+	// Fire stations warm their surroundings. Type defaults apply only when the
+	// instance hasn't been configured (HeatOutputCelsius == 0), so a recipe or
+	// placed instance can still override. An open campfire throws warmth
+	// further than a forge, whose heat lives inside the chimney draft.
+	if (HeatOutputCelsius <= 0.0f)
+	{
+		switch (StationType)
+		{
+		case EMOCraftingStation::Campfire:
+			HeatOutputCelsius = 25.0f;
+			HeatRadiusCm = 600.0f;
+			break;
+		case EMOCraftingStation::Forge:
+			HeatOutputCelsius = 30.0f;
+			HeatRadiusCm = 450.0f;
+			break;
+		case EMOCraftingStation::Kitchen:
+			HeatOutputCelsius = 15.0f;
+			HeatRadiusCm = 400.0f;
+			break;
+		default:
+			break;
+		}
+	}
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOCraftingStationActor] Initialized station type %d from recipe %s (heat %.0fC @ %.0fcm)"),
+		(int32)StationType, *InRecipeId.ToString(), HeatOutputCelsius, HeatRadiusCm);
 }
 
 void AMOCraftingStationActor::OnCompleteInteracted_Implementation(AController* Controller)

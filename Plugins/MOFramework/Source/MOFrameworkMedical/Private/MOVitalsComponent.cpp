@@ -1245,7 +1245,10 @@ void UMOVitalsComponent::UpdateEnvironmentalTemperature(float DeltaSeconds)
 	bWarnedNoAmbientProvider = false;
 
 	const FVector Origin = Owner->GetActorLocation();
-	const float FeelsLikeC = Env->GetAmbientFeelsLikeCelsius(Origin);
+	// Point heat sources (campfire, forge) add on top of the global feels-like.
+	// The registry aggregates whatever registered above; vitals just feels it.
+	const float FeelsLikeC = Env->GetAmbientFeelsLikeCelsius(Origin)
+		+ Ambient->GetLocalHeatDeltaAt(Origin);
 
 	// Insulation = tunable clothing default + a cheap shelter bonus (reusing the
 	// wetness trace's cached overhead cover — no extra trace). Clamped 0..1.

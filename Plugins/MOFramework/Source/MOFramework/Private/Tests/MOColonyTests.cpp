@@ -16,6 +16,7 @@
 #include "MOMetabolismComponent.h"
 #include "MOEquipmentComponent.h"
 #include "MOItemDefinitionRow.h"
+#include "MOAmbientEnvironmentProvider.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -411,6 +412,66 @@ bool FMOColony_Insulation_WarmthSum::RunTest(const FString& Parameters)
 		UMOEquipmentComponent::ComputeInsulationFromWarmth({0.3f, 0.3f, 0.3f}), 0.4f, 0.001f);
 	TestEqual(TEXT("negative warmth ignored, never chills"),
 		UMOEquipmentComponent::ComputeInsulationFromWarmth({-0.5f, 0.2f}), 0.2f, 0.001f);
+	return true;
+}
+
+// ============================================================================
+// F1: local heat sources — registry aggregation + falloff
+// ============================================================================
+
+namespace
+{
+	/** Stand-in fire for registry math tests. */
+	struct FMOTestHeatSource : public IMOLocalHeatSource
+	{
+		FVector Location = FVector::ZeroVector;
+		float DeltaC = 25.0f;
+		float Radius = 600.0f;
+		bool bActive = true;
+
+		virtual FVector GetHeatLocation() const override { return Location; }
+		virtual float GetHeatDeltaCelsius() const override { return DeltaC; }
+		virtual float GetHeatRadius() const override { return Radius; }
+		virtual bool IsHeatActive() const override { return bActive; }
+	};
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOColony_LocalHeat_Falloff,
+	"MOFramework.Colony.LocalHeat.Falloff",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+bool FMOColony_LocalHeat_Falloff::RunTest(const FString& Parameters)
+{
+	UMOAmbientEnvironmentRegistry* Registry = NewObject<UMOAmbientEnvironmentRegistry>();
+
+	FMOTestHeatSource Fire;
+	Registry->RegisterHeatSource(&Fire);
+
+	// Linear falloff: full at the source, half at half radius, zero at the edge.
+	TestEqual(TEXT("at the fire = full delta"),
+		Registry->GetLocalHeatDeltaAt(FVector::ZeroVector), 25.0f, 0.001f);
+	TestEqual(TEXT("half radius = half delta"),
+		Registry->GetLocalHeatDeltaAt(FVector(300, 0, 0)), 12.5f, 0.001f);
+	TestEqual(TEXT("beyond radius = nothing"),
+		Registry->GetLocalHeatDeltaAt(FVector(600, 0, 0)), 0.0f);
+
+	// Two overlapping fires: strongest wins, they don't sum.
+	FMOTestHeatSource SecondFire;
+	SecondFire.Location = FVector(100, 0, 0);
+	Registry->RegisterHeatSource(&SecondFire);
+	const float Between = Registry->GetLocalHeatDeltaAt(FVector(50, 0, 0));
+	TestEqual(TEXT("between two fires = strongest, not the sum"),
+		Between, 25.0f * (1.0f - 50.0f / 600.0f), 0.001f);
+
+	// Unlit fires warm nobody; unregistered fires are forgotten.
+	Fire.bActive = false;
+	SecondFire.bActive = false;
+	TestEqual(TEXT("unlit = nothing"),
+		Registry->GetLocalHeatDeltaAt(FVector::ZeroVector), 0.0f);
+	Registry->UnregisterHeatSource(&Fire);
+	Registry->UnregisterHeatSource(&SecondFire);
+	Fire.bActive = true;
+	TestEqual(TEXT("unregistered = nothing even when lit"),
+		Registry->GetLocalHeatDeltaAt(FVector::ZeroVector), 0.0f);
 	return true;
 }
 

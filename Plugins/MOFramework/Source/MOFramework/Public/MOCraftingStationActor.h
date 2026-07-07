@@ -76,6 +76,7 @@
 #include "MORecipeDefinitionRow.h"
 #include "MOInventoryHolderInterface.h"
 #include "MOMaterialSourceInterface.h"
+#include "MOAmbientEnvironmentProvider.h"
 #include "MOCraftingStationActor.generated.h"
 
 class UMOInventoryComponent;
@@ -86,7 +87,8 @@ class UPointLightComponent;
 UCLASS()
 class MOFRAMEWORK_API AMOCraftingStationActor : public AMOBuildableActor,
 	public IMOInventoryHolderInterface,
-	public IMOMaterialSourceInterface
+	public IMOMaterialSourceInterface,
+	public IMOLocalHeatSource
 {
 	GENERATED_BODY()
 
@@ -184,6 +186,27 @@ public:
 	/** Item IDs that can be used as fuel. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|CraftingStation|Fuel")
 	TArray<FName> AcceptedFuelItems;
+
+	// ============================================================================
+	// HEAT EMISSION (IMOLocalHeatSource)
+	// ============================================================================
+
+	/** Temperature boost at the fire itself, °C above ambient. 0 = this station
+	 *  emits no heat (workbench, loom). Fire stations get type defaults in
+	 *  InitializeBuilding; override per instance if a recipe needs to. Heat only
+	 *  radiates while IsStationActive() — an unlit or unfueled fire warms nobody. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|CraftingStation|Heat", meta=(ClampMin="0.0"))
+	float HeatOutputCelsius = 0.0f;
+
+	/** Distance the warmth reaches (cm); linear falloff to zero at this range. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|CraftingStation|Heat", meta=(ClampMin="0.0"))
+	float HeatRadiusCm = 0.0f;
+
+	// IMOLocalHeatSource
+	virtual FVector GetHeatLocation() const override { return GetActorLocation(); }
+	virtual float GetHeatDeltaCelsius() const override { return HeatOutputCelsius; }
+	virtual float GetHeatRadius() const override { return HeatRadiusCm; }
+	virtual bool IsHeatActive() const override { return HeatOutputCelsius > 0.0f && IsStationActive(); }
 
 	// ============================================================================
 	// FUEL SYSTEM
@@ -288,6 +311,7 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void Tick(float DeltaTime) override;
 
 	/** Override to open crafting menu when complete. */
