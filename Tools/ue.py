@@ -578,12 +578,48 @@ def cmd_save(a):
 EDITOR_APP = "EditorToolset.EditorAppToolset"
 
 
+def cmd_asset_import(a):
+    """A4: files on disk -> uassets. The MCP AssetTools toolset has no import
+    tool (verified 2026-07-07: write/read/find/move/save only), so this rides
+    the known-good editor API: unreal.AssetImportTask via the bridge.
+    Blocked while PIE runs (same as every asset write)."""
+    src = os.path.abspath(a.file).replace("\\", "/")
+    if not os.path.isfile(src):
+        _die(1, f"no such file: {src}")
+    code = "\n".join([
+        "import unreal",
+        "task = unreal.AssetImportTask()",
+        f"task.filename = r'{src}'",
+        f"task.destination_path = '{a.dest}'",
+        "task.automated = True",
+        "task.save = True",
+        "task.replace_existing = True",
+        "unreal.AssetToolsHelpers.get_asset_tools().import_asset_tasks([task])",
+        "paths = list(task.get_editor_property('imported_object_paths'))",
+        "out('IMPORTED: ' + (';'.join(str(x) for x in paths) if paths else 'NOTHING'))",
+        "",
+    ])
+    ok, lines, _ = bridge_run([_wrap_py(code)], timeout=120, want_log=False)
+    if not ok:
+        _die(2, "bridge not responding")
+    imported = None
+    for l in lines:
+        print(l)
+        if "IMPORTED: " in l and "NOTHING" not in l:
+            imported = l.split("IMPORTED: ", 1)[1].strip()
+    if not imported:
+        _die(1, "import produced no assets (unsupported format? PIE running?)")
+    print(f"[import] {src} -> {imported}")
+
+
 def cmd_asset(a):
     """Asset verbs (pipeline A-track). shot = render an asset thumbnail or the
     level/PIE viewport to a PNG the agent can Read for visual QA (A3);
     assign = set an art asset onto a DataTable row field (A2)."""
     if a.action == "assign":
         return cmd_asset_assign(a)
+    if a.action == "import":
+        return cmd_asset_import(a)
     if a.action == "shot":
         import base64
         out_path = os.path.abspath(a.out)
@@ -917,6 +953,10 @@ def main():
     a_asn.add_argument("asset_path", help="/Game/... object path to assign")
     a_asn.add_argument("--no-validate", action="store_true", help="skip the ValidateArt re-run")
     a_asn.set_defaults(fn=cmd_asset)
+    a_imp = asub.add_parser("import", help="import a disk file (FBX/glTF/PNG/...) to a /Game path (A4; AssetImportTask fallback — the MCP AssetTools has no import tool)")
+    a_imp.add_argument("file", help="source file on disk")
+    a_imp.add_argument("dest", help="destination content folder, e.g. /Game/Dev/Imports")
+    a_imp.set_defaults(fn=cmd_asset)
 
     s = sub.add_parser("save", help="save an asset via MCP")
     s.add_argument("asset")
