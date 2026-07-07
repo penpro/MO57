@@ -3,6 +3,7 @@
  */
 
 #include "MOCheatSubsystem.h"
+#include "MOWorldItem.h"
 #include "MOFramework.h"
 #include "MOAudioSubsystem.h"
 #include "MOAudioTypes.h"
@@ -1023,6 +1024,50 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 			const FName RecipeId = Args.Num() > 0 ? FName(*Args[0]) : FName(TEXT("KnapFlintFlakes"));
 			// Deferred so client-world RPCs really transport (see RunOnNextTick).
 			RunOnNextTick(World, [RecipeId](UWorld* W) { RunCraftTest(W, RecipeId); });
+		}),
+		ECVF_Default));
+
+	// ---------- MO.Test.PickupNearest [radius=400] ----------
+	// S1: the CLIENT-side half of the drop/pickup identity assert. The host
+	// gives+drops an item with a python-known GUID; this verb (deferred, so
+	// the interact RPC really transports off the editor-Python stack) picks
+	// up the nearest world item; the gate then asserts the SAME GUID landed
+	// back in the pawn's host-side proxy inventory.
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Test.PickupNearest"),
+		TEXT("Interact with the nearest AMOWorldItem within radius (default 400uu). Deferred for real RPC transport. Usage: MO.Test.PickupNearest [radius]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			const float Radius = Args.Num() > 0 ? FCString::Atof(*Args[0]) : 400.0f;
+			RunOnNextTick(World, [Radius](UWorld* W)
+			{
+				APawn* Pawn = ResolveLocalPawn(W);
+				UMOInteractorComponent* Interactor = Pawn ? Pawn->FindComponentByClass<UMOInteractorComponent>() : nullptr;
+				if (!Pawn || !Interactor)
+				{
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] FAIL PickupNearest: no pawn/interactor"));
+					return;
+				}
+				AMOWorldItem* Nearest = nullptr;
+				float BestSq = Radius * Radius;
+				for (TActorIterator<AMOWorldItem> It(W); It; ++It)
+				{
+					const float DistSq = FVector::DistSquared((*It)->GetActorLocation(), Pawn->GetActorLocation());
+					if (DistSq <= BestSq)
+					{
+						BestSq = DistSq;
+						Nearest = *It;
+					}
+				}
+				if (!Nearest)
+				{
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] FAIL PickupNearest: no world item within %.0fuu"), Radius);
+					return;
+				}
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] PickupNearest: interacting with %s at %.0fuu"),
+					*Nearest->GetName(), FMath::Sqrt(BestSq));
+				Interactor->RequestInteractWithActor(Nearest);
+			});
 		}),
 		ECVF_Default));
 

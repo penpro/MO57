@@ -194,4 +194,36 @@ def sequence(ctx):
             ctx.out("phase 5 exception: %s" % e)
             ctx.assert_true("craft RPC phase ran without exception", False)
 
+    # ---- Phase 6 (S1): client PICKUP identity round-trip -------------------
+    # Host (authority) gives + drops an item with a GUID python knows; the
+    # CLIENT picks it up via the deferred MO.Test.PickupNearest verb (real
+    # interact-RPC transport); the host-side proxy inventory must get the
+    # ORIGINAL GUID back — item identity survives a full co-op round trip.
+    host = helper.find_pie_world_by_net_mode("ListenServer")
+    fresh_client = helper.find_pie_world_by_net_mode("Client")
+    proxy = _pawn(host, 1) if host else None
+    if proxy and fresh_client:
+        try:
+            inv = proxy.get_component_by_class(unreal.MOInventoryComponent)
+            guid = unreal.GuidLibrary.new_guid()
+            gave = inv.add_item_by_guid(guid, "Stick01", 1)
+            drop_loc = proxy.get_actor_location() + unreal.Vector(120.0, 0.0, 10.0)
+            world_item = inv.drop_item_by_guid(guid, drop_loc, unreal.Rotator(0.0, 0.0, 0.0))
+            ctx.out("host gave+dropped Stick01 gave=%s item=%s" % (
+                gave, world_item.get_name() if world_item else None))
+            if world_item:
+                yield 15                      # replicate the world item to the client
+                _exec(fresh_client, "MO.Test.PickupNearest 600")
+                yield 20                      # next-tick + interact RPC + pickup + replication
+                entry_back = inv.try_get_entry_by_guid(guid)
+                ok = entry_back[0] if isinstance(entry_back, tuple) else bool(entry_back)
+                ctx.assert_true("client pickup returned the ORIGINAL GUID to the proxy inventory", ok)
+            else:
+                ctx.assert_true("host drop produced a world item", False)
+        except Exception as e:  # noqa: BLE001
+            ctx.out("phase 6 exception: %s" % e)
+            ctx.assert_true("pickup identity phase ran without exception", False)
+    else:
+        ctx.assert_true("phase 6 preconditions (proxy pawn + client world)", False)
+
     ctx.out("2-client smoke complete")
