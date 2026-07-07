@@ -78,6 +78,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|History|Relationships")
 	void SetRelationshipType(const FGuid& OtherGuid, ERelationshipType Type);
 
+	/** Stamp when the bond turned Romantic (V2.5 courtship clock). */
+	void StampRomantic(const FGuid& OtherGuid, double GameSeconds);
+
 	UFUNCTION(BlueprintPure, Category="MO|History|Relationships")
 	FMOCharacterRelationship GetRelationship(const FGuid& OtherGuid) const;
 

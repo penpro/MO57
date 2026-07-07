@@ -7,6 +7,7 @@
 #include "MOCraftingStationActor.h"
 #include "MOBuildableActor.h"
 #include "MOIdentityComponent.h"
+#include "MOIdentityRegistrySubsystem.h"
 #include "MORecruitmentComponent.h"
 #include "MOMetabolismComponent.h"
 #include "MOMentalStateComponent.h"
@@ -719,6 +720,12 @@ void UMOColonyManagerSubsystem::RunUpkeepTick()
 	// Relationships: REAL shared time builds bonds; absence fades them (V2.3).
 	RunRelationshipPass(Roster, GameHoursElapsed);
 
+	// Family: courtship -> marriage -> children on real clocks (V2.5).
+	RunFamilyPass(Roster, GameHoursElapsed, NowGameSeconds);
+
+	// Winter shelter: cold villagers head home to warm up (V2.5).
+	RunShelterPass(Roster);
+
 	for (APawn* Villager : Roster)
 	{
 		const FGuid PawnGuid = GetPawnGuid(Villager);
@@ -890,6 +897,7 @@ FMOColonySaveData UMOColonyManagerSubsystem::BuildSaveData() const
 	FMOColonySaveData Data;
 	Data.Settlement = Settlement;
 	Data.Quotas = Quotas;
+	Data.Pregnancies = Pregnancies;
 	Data.Residency = Residency;
 	Data.VillagerMood = VillagerMood;
 	Data.VillagerUnhousedHours = VillagerUnhousedHours;
@@ -915,6 +923,7 @@ bool UMOColonyManagerSubsystem::ApplySaveDataAuthority(const FMOColonySaveData& 
 	}
 	Settlement = InData.Settlement;
 	Quotas = InData.Quotas;
+	Pregnancies = InData.Pregnancies;
 	Residency = InData.Residency;
 	VillagerMood = InData.VillagerMood;
 	VillagerUnhousedHours = InData.VillagerUnhousedHours;
@@ -947,3 +956,255 @@ void UMOColonyManagerSubsystem::ApplySaveDomain(const UMOWorldSaveGame& Save)
 {
 	ApplySaveDataAuthority(Save.ColonyData);
 }
+
+// =============================================================================
+// FAMILY / DYNASTY (V2.5)
+// =============================================================================
+
+bool UMOColonyManagerSubsystem::ShouldBecomeRomantic(float StrengthAB, float StrengthBA, float MutualThreshold)
+{
+	return StrengthAB >= MutualThreshold && StrengthBA >= MutualThreshold;
+}
+
+float UMOColonyManagerSubsystem::ComputePregnancyProgress(double ConceivedGameSeconds, double NowGameSeconds, float InGestationGameHours)
+{
+	if (InGestationGameHours <= 0.0f || NowGameSeconds <= ConceivedGameSeconds)
+	{
+		return 0.0f;
+	}
+	return static_cast<float>((NowGameSeconds - ConceivedGameSeconds) / (InGestationGameHours * 3600.0));
+}
+
+void UMOColonyManagerSubsystem::RunFamilyPass(const TArray<APawn*>& Roster, float GameHoursElapsed, double NowGameSeconds)
+{
+	UWorld* World = GetWorld();
+	if (!World || GameHoursElapsed <= 0.0f)
+	{
+		return;
+	}
+
+	// Pairwise pass over co-located roster villagers.
+	for (int32 i = 0; i < Roster.Num(); ++i)
+	{
+		APawn* A = Roster[i];
+		const FGuid GuidA = GetPawnGuid(A);
+		UMOCharacterHistoryComponent* HistA = A->FindComponentByClass<UMOCharacterHistoryComponent>();
+		if (!GuidA.IsValid() || !HistA)
+		{
+			continue;
+		}
+		for (int32 j = i + 1; j < Roster.Num(); ++j)
+		{
+			APawn* B = Roster[j];
+			const FGuid GuidB = GetPawnGuid(B);
+			UMOCharacterHistoryComponent* HistB = B->FindComponentByClass<UMOCharacterHistoryComponent>();
+			if (!GuidB.IsValid() || !HistB)
+			{
+				continue;
+			}
+			if (FVector::DistSquared2D(A->GetActorLocation(), B->GetActorLocation())
+				> FMath::Square(FamiliarityRadius))
+			{
+				continue;
+			}
+			FMOCharacterRelationship RelAB = HistA->GetRelationship(GuidB);
+			FMOCharacterRelationship RelBA = HistB->GetRelationship(GuidA);
+
+			// Spouses skip courtship but proceed to conception below; blood
+			// family (parent/child) skips this pair entirely.
+			if (RelAB.RelationshipType == ERelationshipType::Parent || RelAB.RelationshipType == ERelationshipType::Child
+				|| RelBA.RelationshipType == ERelationshipType::Parent || RelBA.RelationshipType == ERelationshipType::Child)
+			{
+				continue;
+			}
+			auto IsMarried = [](const UMOCharacterHistoryComponent* Hist)
+			{
+				for (const FMOCharacterRelationship& R : Hist->GetRelationships())
+				{
+					if (R.RelationshipType == ERelationshipType::Spouse)
+					{
+						return true;
+					}
+				}
+				return false;
+			};
+
+			// COURTSHIP: strong mutual bond, both single -> Romantic.
+			const bool bTypedFree =
+				(RelAB.RelationshipType == ERelationshipType::None || RelAB.RelationshipType == ERelationshipType::Friend) &&
+				(RelBA.RelationshipType == ERelationshipType::None || RelBA.RelationshipType == ERelationshipType::Friend);
+			if (bTypedFree && !IsMarried(HistA) && !IsMarried(HistB)
+				&& ShouldBecomeRomantic(RelAB.Strength, RelBA.Strength, RomanceMutualStrengthThreshold))
+			{
+				HistA->SetRelationshipType(GuidB, ERelationshipType::Romantic);
+				HistB->SetRelationshipType(GuidA, ERelationshipType::Romantic);
+				HistA->StampRomantic(GuidB, NowGameSeconds);
+				HistB->StampRomantic(GuidA, NowGameSeconds);
+				HistA->AddEntry(EHistoryEntryType::RelationshipChange,
+					FString::Printf(TEXT("Fell for %s"), *B->GetName()));
+				HistB->AddEntry(EHistoryEntryType::RelationshipChange,
+					FString::Printf(TEXT("Fell for %s"), *A->GetName()));
+				continue;
+			}
+
+			// MARRIAGE: romance that lasted the courtship clock.
+			if (RelAB.RelationshipType == ERelationshipType::Romantic
+				&& RelBA.RelationshipType == ERelationshipType::Romantic
+				&& RelAB.RomanticSinceGameSeconds >= 0.0
+				&& (NowGameSeconds - RelAB.RomanticSinceGameSeconds) >= MarryAfterRomanticGameHours * 3600.0)
+			{
+				Marry(A, B);
+				continue;
+			}
+
+			// CONCEPTION: married, sharing a residence, neither expecting.
+			if (RelAB.RelationshipType == ERelationshipType::Spouse
+				&& Residency.Contains(GuidA) && Residency.Contains(GuidB)
+				&& Residency[GuidA] == Residency[GuidB]
+				&& !Pregnancies.Contains(GuidA) && !Pregnancies.Contains(GuidB))
+			{
+				const float Chance = ConceptionChancePerGameDay * (GameHoursElapsed / 24.0f);
+				if (FMath::FRand() < Chance)
+				{
+					// No biological-sex model: the lower GUID carries (abstraction).
+					const bool bALower = GuidA < GuidB;
+					const FGuid MotherGuid = bALower ? GuidA : GuidB;
+					const FGuid FatherGuid = bALower ? GuidB : GuidA;
+					FMOPregnancy P;
+					P.FatherGuid = FatherGuid;
+					P.ConceivedGameSeconds = NowGameSeconds;
+					Pregnancies.Add(MotherGuid, P);
+					(bALower ? HistA : HistB)->AddEntry(EHistoryEntryType::RelationshipChange, TEXT("Expecting a child"));
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOColony] Conception: mother=%s father=%s"),
+						*MotherGuid.ToString(EGuidFormats::Short), *FatherGuid.ToString(EGuidFormats::Short));
+				}
+			}
+		}
+	}
+
+	// BIRTHS: gestation complete -> a real new villager.
+	TArray<FGuid> Due;
+	for (const TPair<FGuid, FMOPregnancy>& Pair : Pregnancies)
+	{
+		if (ComputePregnancyProgress(Pair.Value.ConceivedGameSeconds, NowGameSeconds, GestationGameHours) >= 1.0f)
+		{
+			Due.Add(Pair.Key);
+		}
+	}
+	for (const FGuid& MotherGuid : Due)
+	{
+		APawn* Mother = nullptr;
+		for (APawn* Villager : Roster)
+		{
+			if (GetPawnGuid(Villager) == MotherGuid)
+			{
+				Mother = Villager;
+				break;
+			}
+		}
+		if (Mother)
+		{
+			SpawnChild(Mother, MotherGuid, Pregnancies[MotherGuid]);
+		}
+		Pregnancies.Remove(MotherGuid);
+	}
+}
+
+void UMOColonyManagerSubsystem::SpawnChild(APawn* Mother, const FGuid& MotherGuid, const FMOPregnancy& Pregnancy)
+{
+	UWorld* World = GetWorld();
+	if (!World || !Mother)
+	{
+		return;
+	}
+	FActorSpawnParameters Params;
+	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+	const FVector Loc = Mother->GetActorLocation() + Mother->GetActorForwardVector() * 120.0f;
+	APawn* Child = World->SpawnActor<APawn>(Mother->GetClass(), Loc, Mother->GetActorRotation(), Params);
+	if (!Child)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOColony] Birth FAILED to spawn child pawn"));
+		return;
+	}
+	if (UMOIdentityComponent* Identity = Child->FindComponentByClass<UMOIdentityComponent>())
+	{
+		Identity->GetOrCreateGuid();
+	}
+	if (UMORecruitmentComponent* Recruit = Child->FindComponentByClass<UMORecruitmentComponent>())
+	{
+		Recruit->ForceRecruit();   // a child of the colony is OF the colony
+	}
+	RecordParentage(Mother, Child);
+	APawn* Father = nullptr;
+	for (APawn* Villager : GetColonyRoster())
+	{
+		if (GetPawnGuid(Villager) == Pregnancy.FatherGuid)
+		{
+			Father = Villager;
+			break;
+		}
+	}
+	if (Father)
+	{
+		RecordParentage(Father, Child);
+	}
+	if (UMOCharacterHistoryComponent* Hist = Mother->FindComponentByClass<UMOCharacterHistoryComponent>())
+	{
+		Hist->AddEntry(EHistoryEntryType::RelationshipChange,
+			FString::Printf(TEXT("Gave birth to %s"), *Child->GetName()));
+	}
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOColony] BIRTH: %s born to mother=%s father=%s"),
+		*Child->GetName(), *MotherGuid.ToString(EGuidFormats::Short),
+		*Pregnancy.FatherGuid.ToString(EGuidFormats::Short));
+	// NOTE: the child spawns as an adult-sized villager — visual childhood
+	// (scaled meshes, growth) is an art/animation problem, flagged for V3+.
+}
+
+// =============================================================================
+// WINTER SHELTER (V2.5)
+// =============================================================================
+
+void UMOColonyManagerSubsystem::RunShelterPass(const TArray<APawn*>& Roster)
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+	UMOIdentityRegistrySubsystem* Registry = World->GetSubsystem<UMOIdentityRegistrySubsystem>();
+	if (!Registry)
+	{
+		return;
+	}
+	for (APawn* Villager : Roster)
+	{
+		const FGuid PawnGuid = GetPawnGuid(Villager);
+		AMOSurvivorController* AI = Cast<AMOSurvivorController>(Villager->GetController());
+		const UMOVitalsComponent* Vitals = Villager->FindComponentByClass<UMOVitalsComponent>();
+		if (!PawnGuid.IsValid() || !AI || !Vitals)
+		{
+			continue;
+		}
+		const float BodyTemp = Vitals->GetVitalSigns().BodyTemperature;
+		const bool bSheltering = ShelteringVillagers.Contains(PawnGuid);
+		if (!bSheltering && BodyTemp < ColdSeekShelterBodyTempC && Residency.Contains(PawnGuid))
+		{
+			if (AActor* House = Registry->ResolveActorOrNull(Residency[PawnGuid]))
+			{
+				AI->SetStayAtLocation(House->GetActorLocation() + FVector(100.0f, 0.0f, 0.0f));
+				ShelteringVillagers.Add(PawnGuid);
+				if (UMOCharacterHistoryComponent* Hist = Villager->FindComponentByClass<UMOCharacterHistoryComponent>())
+				{
+					Hist->AddEntry(EHistoryEntryType::Activity,
+						FString::Printf(TEXT("Went home to warm up (%.1fC)"), BodyTemp));
+				}
+			}
+		}
+		else if (bSheltering && BodyTemp >= ColdShelterReleaseBodyTempC)
+		{
+			AI->ClearStayLocation();
+			ShelteringVillagers.Remove(PawnGuid);
+		}
+	}
+}
+

@@ -260,6 +260,11 @@ struct MOFRAMEWORKCORE_API FMOCharacterRelationship
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Relationship")
 	FDateTime EstablishedDate;
 
+	/** Game-time stamp when this bond turned Romantic (V2.5 courtship);
+	 *  -1 = never. Drives the courtship -> marriage clock. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Relationship")
+	double RomanticSinceGameSeconds = -1.0;
+
 	FMOCharacterRelationship()
 	{
 		EstablishedDate = FDateTime::Now();
@@ -444,6 +449,24 @@ struct MOFRAMEWORKCORE_API FMOVillagerMoodInputs
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Mood") float MoodVarianceModifier = 1.0f; // personality Stability (0.5 stable .. 1.5 volatile)
 };
 
+/**
+ * A pregnancy in progress (V2.5). Real gestation on the game clock — birth
+ * fires when PregnancyProgress reaches 1. The "mother" is the map key in
+ * UMOColonyManagerSubsystem::Pregnancies (no biological-sex model yet; the
+ * lower-GUID spouse carries — an abstraction, revisit with the body sim).
+ */
+USTRUCT(BlueprintType)
+struct MOFRAMEWORKCORE_API FMOPregnancy
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Family")
+	FGuid FatherGuid;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Family")
+	double ConceivedGameSeconds = 0.0;
+};
+
 /** A standing order (V2.1): keep TargetCount of an item in communal storage
  *  by crafting RecipeId. The Medieval-Dynasty-style scale abstraction — the
  *  PLAYER sets intent, villagers do the real labor through the V0 job flow. */
@@ -480,5 +503,8 @@ struct MOFRAMEWORKCORE_API FMOColonySaveData
 	UPROPERTY() TMap<FGuid, float> VillagerUnhousedHours;
 	UPROPERTY() TMap<FGuid, FMOCharacterHistorySaveData> VillagerHistory;
 	UPROPERTY() TArray<FMOColonyQuota> Quotas;
+
+	/** In-progress pregnancies, mother GUID -> record (V2.5). */
+	UPROPERTY() TMap<FGuid, FMOPregnancy> Pregnancies;
 	UPROPERTY() bool bHasValidData = false;
 };

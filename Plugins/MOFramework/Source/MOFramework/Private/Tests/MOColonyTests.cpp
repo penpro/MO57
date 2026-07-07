@@ -356,4 +356,40 @@ bool FMOColony_Season_ForageWindow::RunTest(const FString& Parameters)
 	return true;
 }
 
+// ============================================================================
+// V2.5 family math
+// ============================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOColony_Family_RomanceIsMutual,
+	"MOFramework.Colony.Family.RomanceIsMutual",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+bool FMOColony_Family_RomanceIsMutual::RunTest(const FString& Parameters)
+{
+	TestTrue(TEXT("mutual strong bond forms romance"),
+		UMOColonyManagerSubsystem::ShouldBecomeRomantic(0.7f, 0.65f, 0.6f));
+	TestFalse(TEXT("one-sided fondness is not a couple"),
+		UMOColonyManagerSubsystem::ShouldBecomeRomantic(0.9f, 0.3f, 0.6f));
+	TestFalse(TEXT("threshold is inclusive-exact both ways"),
+		UMOColonyManagerSubsystem::ShouldBecomeRomantic(0.59f, 0.9f, 0.6f));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOColony_Family_GestationClock,
+	"MOFramework.Colony.Family.GestationClock",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+bool FMOColony_Family_GestationClock::RunTest(const FString& Parameters)
+{
+	// 6480 game-hours gestation: halfway at 3240h, due at 6480h.
+	const double H = 3600.0;
+	TestEqual(TEXT("conception = 0 progress"),
+		UMOColonyManagerSubsystem::ComputePregnancyProgress(1000.0, 1000.0, 6480.0f), 0.0f);
+	TestEqual(TEXT("halfway"),
+		UMOColonyManagerSubsystem::ComputePregnancyProgress(0.0, 3240.0 * H, 6480.0f), 0.5f, 0.001f);
+	TestTrue(TEXT("due at term"),
+		UMOColonyManagerSubsystem::ComputePregnancyProgress(0.0, 6480.0 * H, 6480.0f) >= 1.0f);
+	TestEqual(TEXT("degenerate gestation guards to 0"),
+		UMOColonyManagerSubsystem::ComputePregnancyProgress(0.0, 100.0, 0.0f), 0.0f);
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

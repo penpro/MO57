@@ -193,6 +193,53 @@ public:
 	float RecruitStandingThreshold = 0.15f;
 
 	// =========================================================================
+	// FAMILY / DYNASTY (V2.5) — courtship, marriage, children as REAL sim:
+	// bonds must grow to romance, romance must last to marry, gestation runs
+	// on the game clock, and a birth is a REAL new villager with parents.
+	// =========================================================================
+
+	/** THE courtship gate — pure math for headless tests. Romance forms only
+	 *  when the bond is strong BOTH ways (one-sided fondness is not a couple). */
+	UFUNCTION(BlueprintPure, Category="MO|Colony|Family")
+	static bool ShouldBecomeRomantic(float StrengthAB, float StrengthBA, float MutualThreshold);
+
+	/** THE gestation clock — pure math for headless tests. 0..1. */
+	UFUNCTION(BlueprintPure, Category="MO|Colony|Family")
+	static float ComputePregnancyProgress(double ConceivedGameSeconds, double NowGameSeconds, float InGestationGameHours);
+
+	UFUNCTION(BlueprintPure, Category="MO|Colony|Family")
+	int32 GetPregnancyCount() const { return Pregnancies.Num(); }
+
+	/** Mutual bond strength required before a pair turns Romantic. */
+	UPROPERTY(EditAnywhere, Category="MO|Colony|Family")
+	float RomanceMutualStrengthThreshold = 0.6f;
+
+	/** Romantic + co-located this many game hours -> marriage. */
+	UPROPERTY(EditAnywhere, Category="MO|Colony|Family")
+	float MarryAfterRomanticGameHours = 48.0f;
+
+	/** Real gestation on the game clock (~9 game-months by default). */
+	UPROPERTY(EditAnywhere, Category="MO|Colony|Family")
+	float GestationGameHours = 6480.0f;
+
+	/** Conception chance per shared game-day for a married, co-housed couple. */
+	UPROPERTY(EditAnywhere, Category="MO|Colony|Family")
+	float ConceptionChancePerGameDay = 0.10f;
+
+	// =========================================================================
+	// WINTER SHELTER (V2.5) — cold villagers go home. Body temp below the
+	// seek threshold sends an AI villager to its residence (roof cover =
+	// insulation, see MOVitalsComponent); recovery past the release
+	// threshold frees them back to work.
+	// =========================================================================
+
+	UPROPERTY(EditAnywhere, Category="MO|Colony|Shelter")
+	float ColdSeekShelterBodyTempC = 36.2f;
+
+	UPROPERTY(EditAnywhere, Category="MO|Colony|Shelter")
+	float ColdShelterReleaseBodyTempC = 36.8f;
+
+	// =========================================================================
 	// UPKEEP (driven by timer; public so tests can force a tick)
 	// =========================================================================
 
@@ -220,6 +267,9 @@ private:
 	void RunQuotaPass(const TArray<APawn*>& Roster);
 	void RunSchoolPass(const TArray<APawn*>& Roster, float GameHoursElapsed);
 	void RunRelationshipPass(const TArray<APawn*>& Roster, float GameHoursElapsed);
+	void RunFamilyPass(const TArray<APawn*>& Roster, float GameHoursElapsed, double NowGameSeconds);
+	void RunShelterPass(const TArray<APawn*>& Roster);
+	void SpawnChild(APawn* Mother, const FGuid& MotherGuid, const FMOPregnancy& Pregnancy);
 	static FGuid GetPawnGuid(const APawn* Pawn);
 
 	UPROPERTY() FMOSettlementRecord Settlement;
@@ -227,6 +277,10 @@ private:
 	UPROPERTY() TMap<FGuid, FGuid> Residency;
 	UPROPERTY() TMap<FGuid, float> VillagerMood;
 	UPROPERTY() TMap<FGuid, float> VillagerUnhousedHours;
+	UPROPERTY() TMap<FGuid, FMOPregnancy> Pregnancies;
+
+	/** Villagers currently ordered home to warm up (transient, not saved). */
+	TSet<FGuid> ShelteringVillagers;
 
 	FTimerHandle UpkeepTimer;
 	double LastUpkeepGameSeconds = -1.0;

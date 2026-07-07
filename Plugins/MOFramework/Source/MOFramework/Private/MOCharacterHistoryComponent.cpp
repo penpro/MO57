@@ -145,6 +145,20 @@ void UMOCharacterHistoryComponent::SetRelationshipType(const FGuid& OtherGuid, E
 	}
 }
 
+void UMOCharacterHistoryComponent::StampRomantic(const FGuid& OtherGuid, double GameSeconds)
+{
+	AActor* Owner = GetOwner();
+	if (!Owner || !Owner->HasAuthority() || !OtherGuid.IsValid())
+	{
+		return;
+	}
+	FMOCharacterRelationship* Rel = FindOrAddRelationship(OtherGuid);
+	if (Rel->RomanticSinceGameSeconds < 0.0)
+	{
+		Rel->RomanticSinceGameSeconds = GameSeconds;
+	}
+}
+
 FMOCharacterRelationship UMOCharacterHistoryComponent::GetRelationship(const FGuid& OtherGuid) const
 {
 	for (const FMOCharacterRelationship& Rel : Relationships)
