@@ -180,9 +180,18 @@ See `PCG_Integration_Plan.md`. Hybrid ISM + Actor approach.
 
 | Code | Issue | Location | Fix direction |
 |------|-------|----------|---------------|
+> **Verification sweep 2026-07-06 (graph-guided deep dive):** C4, C5, C7, C8, C9
+> below are all FIXED in code — fix signatures confirmed at their cited sites
+> (C4: CreateWeakLambda + stored/cancelled handles; C5: TStrongObjectPtr root;
+> C7: UE_BUILD_SHIPPING hard-reject + spatial clamps; C8:
+> ValidateInstanceHarvestRequest wired into both ISM RPCs; C9: ResetForNewWorld
+> called from the new-game flow). C6 verified fixed and struck above. The
+> status column of this table was stale — trust the code, then this note,
+> then the table.
+
 | C4 | **Audio async-load use-after-free** — FStreamableManager continuations capture raw `this` (GameInstance subsystem) and the returned FStreamableHandle is discarded, so loads in flight at PIE-end/exit fire into a destroyed subsystem and nothing can cancel them. | `MOAudioSubsystem.cpp:689` (+342, 369, 887, 938, 1200) | CreateWeakLambda + store handles per request; CancelHandle in Deinitialize. |
 | C5 | **Mod recipe overlay is GC-invisible** — mod rows (containing hard `TSubclassOf<AMOBuildableActor>`) copied into a plain static TMap that is neither UPROPERTY nor FGCObject; GC collects the Blueprint class → dangling UClass* crash on next build-menu open. | `MORecipeDatabaseSettings.cpp:315` (map at `.h:175`) | Root merged tables via `TStrongObjectPtr<UDataTable>` cleared by ClearModRecipes, or FGCObject::AddReferencedObjects. |
-| C6 | **TickAnatomy reads `Wounds[i]` after ProcessWound may remove it** — loop re-indexes the array after a callee that can `RemoveWound` on heal completion → out-of-bounds read the tick a wound finishes healing. | `MOAnatomyComponent.cpp:781` | Accumulate BleedRate from the reference *before* possible removal; have ProcessWound signal completion instead of removing in place. |
+| C6 | ~~TickAnatomy reads `Wounds[i]` after ProcessWound may remove it~~ | `MOAnatomyComponent.cpp` | **FIXED (verified 2026-07-06)** — reverse iteration + bleed contribution returned by value; ProcessWound removes via captured HealedId then returns immediately, never touching the dead reference. Tracker was stale. |
 | C7 | **Client spawn-anything RPCs** — `ServerSpawnActorNearController` / `ServerSpawnAndPossessPawn` forward a client-supplied `TSubclassOf<AActor>` to SpawnActor with no class whitelist, distance clamp, or rate limit. | `MOPossessionSubsystem.cpp:164`, `MOPossessionComponent.h:91-95` | Config whitelist + distance/rate validation at the subsystem layer, or move behind UCheatManager for shipping. |
 | C8 | **ISM/HISM harvest RPCs unvalidated** — server accepts any component + instance index with no distance, LOS, or rate check; a client can harvest the entire world remotely. The parallel actor-interaction path (`ServerExecuteInteract`) implements all of these checks. | `MOInteractorComponent.cpp:485-546` | Mirror ServerExecuteInteract's validation against InstanceTransform location. |
 | C9 | **New Game never resets GameInstance persistence state** — LoadedWorldSave, CurrentSlotName, SessionDestroyedGuids, SessionPlayTimeSeconds survive "play save A → main menu → New Game": cross-save contamination, and a careless save overwrites slot A. Same family: quest/tutorial state also survives (H33). | `MOGameMode.cpp:139`, `MOPersistenceSubsystem.cpp` | `ResetForNewWorld()` protocol on the persistence subsystem; new-game flow calls it + `ResetAllQuests()`. |

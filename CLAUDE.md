@@ -25,6 +25,12 @@ This project has a graphify knowledge graph at `graphify-out/` (11k nodes,
 
 **CSV files = NEVER edit directly. Always use `Tools/ue_csv_utils.py`**
 
+**Live DataTable authoring = `python Tools/ue.py rows set <refPath> --file x.json`**
+(readback-verified; preferred over CSV round-trips for row edits). TRAP: the
+MCP `set_rows` REPLACES an entire nested struct — omitted fields reset to
+defaults. `rows_set_safe` deep-merges dict fields onto the current row to
+compensate; never call the raw MCP set_rows with a partial struct.
+
 ---
 
 ## Engineering Principles (MANDATORY — read every session)
@@ -712,11 +718,13 @@ See `Docs/PROJECT_STATUS.md` for full status of all pending work.
 - CommonUI layer stacks already configured via WBP_PrimaryGameLayout (Stage 3A COMPLETE)
 - Colony management components (MOColonyTypes.h, UMOPersonalityComponent already created in Stage 1)
 
+## Plugins (installed)
+- **Voxel Plugin (open-source dev-phy build)** - vendored in `Plugins/Voxel`; sculpt API wrapped behind the `MOVoxel` facade (never include Voxel headers directly)
+- **Ultra Dynamic Sky** - lives in `Content/UltraDynamicSky`; registers the weather provider (`IMOWeatherProviderInterface`) that drives ambient temperature. NOTE: feels-like temperature bases on GLOBAL temp (UDS location queries blend canopy toward interior warmth — see MOWeatherIntegrationSubsystem)
+
 ## Planned Plugins
-- **Ultra Dynamic Sky** - Dynamic sky/atmosphere system
-- **Ultra Dynamic Weather** - Weather effects and systems
-- **Oceanology** - Ocean/water simulation
-- **Voxel Plugin (open-source dev-phy build)** - Voxel terrain/world generation
+- **Ultra Dynamic Weather** - weather effects (UDS covers the current needs)
+- **Oceanology** - ocean/water simulation
 
 ---
 

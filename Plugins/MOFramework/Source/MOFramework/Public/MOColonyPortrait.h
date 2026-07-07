@@ -29,7 +29,8 @@
  *   is ready, SetPortraitFromCharacter() will need to resolve portraits.
  *
  * =============================================================================
- * RELATED FILES: MOColonyTypes.h, MOColonyBarWidget.h, MOColonyOverviewWidget.h
+ * RELATED FILES: MOColonyTypes.h, MOColonyOverviewWidget.h
+ *   (MOColonyBarWidget is PLANNED, not built - do not look for it)
  * LAST UPDATED: 2026-03-28
  * =============================================================================
  */
