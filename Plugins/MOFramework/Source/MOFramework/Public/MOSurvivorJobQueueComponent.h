@@ -133,6 +133,18 @@ public:
 	FGuid EnqueueCraftJob(FName RecipeId, AActor* Station, AActor* Storage, int32 RepeatCount = 1);
 
 	/**
+	 * Add a RefuelStation job (F1/T3): withdraw fuel items from Storage, carry
+	 * them to Station, load its fuel tank, and relight it if it burned out.
+	 * @param Station - Fuel-burning crafting station (campfire, forge)
+	 * @param Storage - Container actor holding the fuel
+	 * @param FuelItemId - Fuel item to haul (must be accepted by the station)
+	 * @param Quantity - Items to withdraw per trip (capped by storage stock)
+	 * @return GUID of the new job entry
+	 */
+	UFUNCTION(BlueprintCallable, Category = "MO|Survivor|Jobs")
+	FGuid EnqueueRefuelJob(AActor* Station, AActor* Storage, FName FuelItemId, int32 Quantity = 5);
+
+	/**
 	 * Cancel a specific job.
 	 * @param JobId - GUID of the job to cancel
 	 * @return True if job was found and cancelled

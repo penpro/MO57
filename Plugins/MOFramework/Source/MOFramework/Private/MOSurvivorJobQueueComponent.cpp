@@ -157,6 +157,47 @@ FGuid UMOSurvivorJobQueueComponent::EnqueueCraftJob(FName RecipeId, AActor* Stat
 	return NewJob.JobId;
 }
 
+FGuid UMOSurvivorJobQueueComponent::EnqueueRefuelJob(AActor* Station, AActor* Storage, FName FuelItemId, int32 Quantity)
+{
+	if (!IsValid(Station) || !IsValid(Storage) || FuelItemId.IsNone() || Quantity <= 0)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorJobQueue] EnqueueRefuelJob rejected: station/storage/fuel missing"));
+		return FGuid();
+	}
+
+	if (!GetOwner()->HasAuthority())
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorJobQueue] EnqueueRefuelJob called on non-authority"));
+		return FGuid();
+	}
+
+	FMOSurvivorJobEntry NewJob = CreateJobEntry(EMOSurvivorJobType::RefuelStation, 1);
+	NewJob.TargetActor = Station;                     // station in the shared target slot
+	NewJob.TargetLocation = Station->GetActorLocation();
+	NewJob.StorageActor = Storage;
+	NewJob.FuelItemId = FuelItemId;
+	NewJob.FuelQuantity = Quantity;
+
+	// Best-effort GUIDs so a saved/replicated job can re-resolve its actors.
+	if (const UMOIdentityComponent* StationId = Station->FindComponentByClass<UMOIdentityComponent>())
+	{
+		NewJob.TargetActorGuid = StationId->GetGuid();
+	}
+	if (const UMOIdentityComponent* StorageId = Storage->FindComponentByClass<UMOIdentityComponent>())
+	{
+		NewJob.StorageActorGuid = StorageId->GetGuid();
+	}
+
+	JobQueue.Jobs.Add(NewJob);
+	MarkQueueDirty();
+
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorJobQueue] Enqueued refuel job %s: %dx %s to %s from %s"),
+		*NewJob.JobId.ToString(), Quantity, *FuelItemId.ToString(), *Station->GetName(), *Storage->GetName());
+
+	OnQueueChanged.Broadcast();
+	return NewJob.JobId;
+}
+
 bool UMOSurvivorJobQueueComponent::CancelJob(const FGuid& JobId)
 {
 	if (!GetOwner()->HasAuthority())

@@ -420,6 +420,31 @@ private:
 	UPROPERTY(EditAnywhere, Category = "MO|Survivor|Config")
 	float CraftHandlingDuration = 2.0f;
 
+	// =========================================================================
+	// REFUEL-STATION JOB (F1/T3: keep the home fire burning)
+	// =========================================================================
+	// SimpleJobState:
+	//   20 = moving to storage (fuel withdraw leg)
+	//   21 = withdrawing fuel (timed handling action)
+	//   22 = moving to station
+	//   23 = loading the fuel tank + relighting a dead fire (timed handling)
+
+	/** Resolve actors + start the fuel withdraw leg. */
+	void StartRefuelJobExecution();
+
+	/** Tick the refuel-leg state machine (states 20-23). */
+	void UpdateRefuelJobExecution(float DeltaTime);
+
+	/** Shared move-leg step for multi-leg jobs: arrival check + no-progress
+	 *  and stall watchdogs (B1). Returns 1 arrived, 0 moving, -1 failed. */
+	int32 UpdateJobMoveLeg(float DeltaTime, float ArriveDist, float StallDist);
+
+	/** Fuel item the refuel job hauls. */
+	FName RefuelItemId;
+
+	/** Fuel items actually withdrawn from storage this trip. */
+	int32 RefuelCarried = 0;
+
 	/** Find nearest HISM resource matching the job type for gather jobs. */
 	bool FindNearestGatherResource(EMOSurvivorJobType JobType);
 

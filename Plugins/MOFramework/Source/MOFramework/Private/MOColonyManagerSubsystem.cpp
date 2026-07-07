@@ -728,6 +728,9 @@ void UMOColonyManagerSubsystem::RunUpkeepTick()
 	// Winter shelter: cold villagers head home to warm up (V2.5).
 	RunShelterPass(Roster);
 
+	// Hearths: keep settlement fires fed — firewood demand is real (F1/T3).
+	RunHearthPass(Roster);
+
 	for (APawn* Villager : Roster)
 	{
 		const FGuid PawnGuid = GetPawnGuid(Villager);
@@ -1259,6 +1262,137 @@ void UMOColonyManagerSubsystem::RunShelterPass(const TArray<APawn*>& Roster)
 		{
 			AI->ClearStayLocation();
 			ShelteringVillagers.Remove(PawnGuid);
+		}
+	}
+}
+
+void UMOColonyManagerSubsystem::RunHearthPass(const TArray<APawn*>& Roster)
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+	// Settlement fuel-burning heat stations running low — includes burned-out
+	// fires (a refueling villager relights them). Iterate stations directly:
+	// the hearth pass tends STATIONS; the heat-source interface is for
+	// thermal queries, and a plain C++ base can't be downcast under UE's
+	// no-RTTI builds anyway.
+	TArray<AMOCraftingStationActor*> Hungry;
+	for (TActorIterator<AMOCraftingStationActor> It(World); It; ++It)
+	{
+		AMOCraftingStationActor* Station = *It;
+		if (!IsValid(Station) || !Station->bRequiresFuel || Station->HeatOutputCelsius <= 0.0f)
+		{
+			continue;
+		}
+		if (!IsInSettlement(Station->GetActorLocation()))
+		{
+			continue;
+		}
+		if (Station->GetFuelPercent() <= HearthRefuelBelowPercent)
+		{
+			Hungry.Add(Station);
+		}
+	}
+	if (Hungry.Num() == 0)
+	{
+		return;
+	}
+
+	// Idle villagers + stations already being tended (one tender per fire).
+	TArray<APawn*> Idle;
+	TSet<const AActor*> Tended;
+	for (APawn* Villager : Roster)
+	{
+		if (!Villager->GetController() || !Villager->GetController()->IsA<AMOSurvivorController>())
+		{
+			continue;
+		}
+		if (ShelteringVillagers.Contains(GetPawnGuid(Villager)))
+		{
+			continue; // too cold to work — the shelter pass owns them
+		}
+		const UMOSurvivorJobQueueComponent* JobQueue = Villager->FindComponentByClass<UMOSurvivorJobQueueComponent>();
+		if (!JobQueue)
+		{
+			continue;
+		}
+		const FMOSurvivorJobEntry Current = JobQueue->GetCurrentJob();
+		if (Current.IsValid())
+		{
+			if (Current.JobType == EMOSurvivorJobType::RefuelStation && Current.TargetActor.IsValid())
+			{
+				Tended.Add(Current.TargetActor.Get());
+			}
+		}
+		else
+		{
+			Idle.Add(Villager);
+		}
+	}
+
+	int32 IdleIndex = 0;
+	for (AMOCraftingStationActor* Station : Hungry)
+	{
+		if (IdleIndex >= Idle.Num())
+		{
+			break;
+		}
+		if (Tended.Contains(Station))
+		{
+			continue;
+		}
+
+		// Fuel source: nearest settlement container actually holding an item
+		// the station accepts. No fuel in storage = an honest unmet demand
+		// (the colony log will want this once B1 reasons land).
+		AMOContainerActor* Storage = nullptr;
+		FName FuelItem = NAME_None;
+		float BestD = TNumericLimits<float>::Max();
+		for (TActorIterator<AMOContainerActor> It(World); It; ++It)
+		{
+			if (!IsValid(*It) || !IsInSettlement(It->GetActorLocation()))
+			{
+				continue;
+			}
+			const UMOInventoryComponent* Inv = It->FindComponentByClass<UMOInventoryComponent>();
+			if (!Inv)
+			{
+				continue;
+			}
+			for (const FName& Accepted : Station->AcceptedFuelItems)
+			{
+				if (Inv->GetItemCountByDefinitionId(Accepted) > 0)
+				{
+					const float D = FVector::DistSquared(It->GetActorLocation(), Station->GetActorLocation());
+					if (D < BestD)
+					{
+						BestD = D;
+						Storage = *It;
+						FuelItem = Accepted;
+					}
+					break;
+				}
+			}
+		}
+		if (!Storage)
+		{
+			UE_LOG(LogMOFramework, Log,
+				TEXT("[MOColony] Hearth %s is low (%.0f%%) but no settlement storage holds accepted fuel"),
+				*Station->GetName(), Station->GetFuelPercent() * 100.0f);
+			continue;
+		}
+
+		APawn* Tender = Idle[IdleIndex++];
+		if (UMOSurvivorJobQueueComponent* JobQueue = Tender->FindComponentByClass<UMOSurvivorJobQueueComponent>())
+		{
+			JobQueue->EnqueueRefuelJob(Station, Storage, FuelItem, HearthFuelWithdrawCount);
+			if (UMOCharacterHistoryComponent* Hist = Tender->FindComponentByClass<UMOCharacterHistoryComponent>())
+			{
+				Hist->AddEntry(EHistoryEntryType::Activity,
+					FString::Printf(TEXT("Went to tend the fire at %s"), *Station->GetName()));
+			}
 		}
 	}
 }

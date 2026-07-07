@@ -81,6 +81,11 @@ enum class EMOSurvivorJobType : uint8
 	// queue at its real duration, walk back, deposit the real output.
 	CraftAtStation,
 
+	// Restock jobs (F1/T3): walk to storage, withdraw fuel items, walk to the
+	// station, load its fuel tank, relight it if it burned out. The colony
+	// hearth pass issues these — winter's firewood demand made real.
+	RefuelStation,
+
 	// Future expansion
 	// Hunt,
 	// Farm,
@@ -166,6 +171,16 @@ struct MOFRAMEWORK_API FMOSurvivorJobEntry : public FFastArraySerializerItem
 	/** Storage actor GUID for replication/persistence. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Job", meta = (IgnoreForMemberInitializationTest))
 	FGuid StorageActorGuid;
+
+	// --- RefuelStation fields (unused for other job types) ---
+
+	/** Fuel item to haul (must be in the station's AcceptedFuelItems). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Job")
+	FName FuelItemId;
+
+	/** How many fuel items to withdraw per trip (capped by what storage has). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Job")
+	int32 FuelQuantity = 5;
 
 	FMOSurvivorJobEntry()
 		: JobId(FGuid::NewGuid())

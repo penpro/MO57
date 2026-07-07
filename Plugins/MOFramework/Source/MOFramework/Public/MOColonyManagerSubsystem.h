@@ -244,6 +244,15 @@ public:
 	UPROPERTY(EditAnywhere, Category="MO|Colony|Shelter", meta=(ClampMin="0.0"))
 	float HearthSeekRadiusCm = 15000.0f;
 
+	/** Hearth pass (F1/T3): a settlement fuel station at or below this fuel
+	 *  fraction gets a refuel job issued to an idle villager. */
+	UPROPERTY(EditAnywhere, Category="MO|Colony|Shelter", meta=(ClampMin="0.0", ClampMax="1.0"))
+	float HearthRefuelBelowPercent = 0.4f;
+
+	/** Fuel items a refueling villager withdraws per trip. */
+	UPROPERTY(EditAnywhere, Category="MO|Colony|Shelter", meta=(ClampMin="1"))
+	int32 HearthFuelWithdrawCount = 5;
+
 	// =========================================================================
 	// UPKEEP (driven by timer; public so tests can force a tick)
 	// =========================================================================
@@ -270,6 +279,7 @@ private:
 	void TryFeedVillager(APawn* Villager, const FGuid& PawnGuid);
 	AMOContainerActor* FindCommunalFood(FName& OutItemId) const;
 	void RunQuotaPass(const TArray<APawn*>& Roster);
+	void RunHearthPass(const TArray<APawn*>& Roster);
 	void RunSchoolPass(const TArray<APawn*>& Roster, float GameHoursElapsed);
 	void RunRelationshipPass(const TArray<APawn*>& Roster, float GameHoursElapsed);
 	void RunFamilyPass(const TArray<APawn*>& Roster, float GameHoursElapsed, double NowGameSeconds);

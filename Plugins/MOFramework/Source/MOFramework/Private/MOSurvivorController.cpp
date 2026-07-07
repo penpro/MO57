@@ -576,6 +576,7 @@ bool AMOSurvivorController::CanExecuteSimply(EMOSurvivorJobType JobType) const
 	case EMOSurvivorJobType::GatherStone:
 	case EMOSurvivorJobType::GatherFiber:
 	case EMOSurvivorJobType::CraftAtStation:
+	case EMOSurvivorJobType::RefuelStation:
 		return true;
 	default:
 		return false;
@@ -617,6 +618,12 @@ void AMOSurvivorController::StartSimpleJobExecution()
 	if (CurrentJob.JobType == EMOSurvivorJobType::CraftAtStation)
 	{
 		StartCraftJobExecution();
+		return;
+	}
+	// Refuel jobs likewise (states 20-23).
+	if (CurrentJob.JobType == EMOSurvivorJobType::RefuelStation)
+	{
+		StartRefuelJobExecution();
 		return;
 	}
 
@@ -710,7 +717,12 @@ void AMOSurvivorController::UpdateSimpleJobExecution(float DeltaTime)
 		return;
 	}
 
-	// Craft-leg states live in their own machine.
+	// Craft-leg (10-15) and refuel-leg (20-23) states live in their own machines.
+	if (SimpleJobState >= 20)
+	{
+		UpdateRefuelJobExecution(DeltaTime);
+		return;
+	}
 	if (SimpleJobState >= 10)
 	{
 		UpdateCraftJobExecution(DeltaTime);
@@ -1095,53 +1107,6 @@ void AMOSurvivorController::UpdateCraftJobExecution(float DeltaTime)
 		return;
 	}
 
-	// Building actors have real footprints: accept arrival within interaction
-	// range, and treat a stalled path within a generous radius as arrival
-	// (nav edge vs mesh bounds), otherwise fail honestly - crafting REQUIRES
-	// standing at the station/storage, there is no craft-from-afar fallback.
-	auto UpdateMoveLeg = [&](float ArriveDist, float StallDist) -> int32
-	{
-		const float Distance = FVector::Dist2D(ControlledPawn->GetActorLocation(), SimpleJobTargetLocation);
-		if (Distance <= ArriveDist)
-		{
-			StopMovement();
-			return 1; // arrived
-		}
-		// NO-PROGRESS WATCHDOG: a pawn wedged in collision keeps path status
-		// "Moving" at zero velocity FOREVER — the status check below never
-		// fires and the job (and its quota in-flight slot) is wedged with it.
-		// Fail honestly after 15s real without 50uu of progress. (B1
-		// blocked-task intelligence, minimal cut; found via a bricked soak.)
-		if (Distance + 50.0f < MoveLegBestDistance)
-		{
-			MoveLegBestDistance = Distance;
-			MoveLegNoProgressSeconds = 0.0f;
-		}
-		else
-		{
-			MoveLegNoProgressSeconds += DeltaTime;
-			if (MoveLegNoProgressSeconds > 15.0f)
-			{
-				UE_LOG(LogMOFramework, Warning,
-					TEXT("[MOSurvivorController] Craft job move leg NO PROGRESS for 15s (%.0fuu out, likely wedged) - failing"), Distance);
-				StopMovement();
-				return -1;
-			}
-		}
-		if (GetMoveStatus() != EPathFollowingStatus::Moving)
-		{
-			if (Distance <= StallDist)
-			{
-				StopMovement();
-				return 1; // close enough - nav stopped at the building's bounds
-			}
-			UE_LOG(LogMOFramework, Warning,
-				TEXT("[MOSurvivorController] Craft job move leg stalled %.0fuu from target - failing"), Distance);
-			return -1; // unreachable
-		}
-		return 0; // still moving
-	};
-
 	auto SetProgress = [&](float Progress)
 	{
 		if (JobQueue)
@@ -1154,7 +1119,7 @@ void AMOSurvivorController::UpdateCraftJobExecution(float DeltaTime)
 	{
 	case 10: // moving to storage (withdraw leg)
 		{
-			const int32 Arrive = UpdateMoveLeg(250.0f, 600.0f);
+			const int32 Arrive = UpdateJobMoveLeg(DeltaTime, 250.0f, 600.0f);
 			if (Arrive < 0) { CompleteSimpleJob(false); return; }
 			if (Arrive > 0)
 			{
@@ -1192,7 +1157,7 @@ void AMOSurvivorController::UpdateCraftJobExecution(float DeltaTime)
 
 	case 12: // moving to station
 		{
-			const int32 Arrive = UpdateMoveLeg(250.0f, 600.0f);
+			const int32 Arrive = UpdateJobMoveLeg(DeltaTime, 250.0f, 600.0f);
 			if (Arrive < 0) { CompleteSimpleJob(false); return; }
 			if (Arrive > 0)
 			{
@@ -1265,7 +1230,7 @@ void AMOSurvivorController::UpdateCraftJobExecution(float DeltaTime)
 
 	case 14: // returning to storage (deposit leg)
 		{
-			const int32 Arrive = UpdateMoveLeg(250.0f, 600.0f);
+			const int32 Arrive = UpdateJobMoveLeg(DeltaTime, 250.0f, 600.0f);
 			if (Arrive < 0) { CompleteSimpleJob(false); return; }
 			if (Arrive > 0)
 			{
@@ -1294,6 +1259,222 @@ void AMOSurvivorController::UpdateCraftJobExecution(float DeltaTime)
 				{
 					StartSimpleJobExecution(); // next iteration: full loop again
 				}
+			}
+			break;
+		}
+
+	default:
+		CompleteSimpleJob(false);
+		break;
+	}
+}
+
+int32 AMOSurvivorController::UpdateJobMoveLeg(float DeltaTime, float ArriveDist, float StallDist)
+{
+	// Building actors have real footprints: accept arrival within interaction
+	// range, and treat a stalled path within a generous radius as arrival
+	// (nav edge vs mesh bounds), otherwise fail honestly — these jobs REQUIRE
+	// standing at the station/storage, there is no work-from-afar fallback.
+	APawn* ControlledPawn = GetPawn();
+	if (!ControlledPawn)
+	{
+		return -1;
+	}
+	const float Distance = FVector::Dist2D(ControlledPawn->GetActorLocation(), SimpleJobTargetLocation);
+	if (Distance <= ArriveDist)
+	{
+		StopMovement();
+		return 1; // arrived
+	}
+	// NO-PROGRESS WATCHDOG: a pawn wedged in collision keeps path status
+	// "Moving" at zero velocity FOREVER — the status check below never
+	// fires and the job (and its quota in-flight slot) is wedged with it.
+	// Fail honestly after 15s real without 50uu of progress. (B1
+	// blocked-task intelligence, minimal cut; found via a bricked soak.)
+	if (Distance + 50.0f < MoveLegBestDistance)
+	{
+		MoveLegBestDistance = Distance;
+		MoveLegNoProgressSeconds = 0.0f;
+	}
+	else
+	{
+		MoveLegNoProgressSeconds += DeltaTime;
+		if (MoveLegNoProgressSeconds > 15.0f)
+		{
+			UE_LOG(LogMOFramework, Warning,
+				TEXT("[MOSurvivorController] Job move leg NO PROGRESS for 15s (%.0fuu out, likely wedged) - failing"), Distance);
+			StopMovement();
+			return -1;
+		}
+	}
+	if (GetMoveStatus() != EPathFollowingStatus::Moving)
+	{
+		if (Distance <= StallDist)
+		{
+			StopMovement();
+			return 1; // close enough - nav stopped at the building's bounds
+		}
+		UE_LOG(LogMOFramework, Warning,
+			TEXT("[MOSurvivorController] Job move leg stalled %.0fuu from target - failing"), Distance);
+		return -1; // unreachable
+	}
+	return 0; // still moving
+}
+
+void AMOSurvivorController::StartRefuelJobExecution()
+{
+	CraftStationActor = CurrentJob.TargetActor;
+	CraftStorageActor = CurrentJob.StorageActor;
+	RefuelItemId = CurrentJob.FuelItemId;
+	RefuelCarried = 0;
+
+	AMOCraftingStationActor* Station = Cast<AMOCraftingStationActor>(CraftStationActor.Get());
+	AActor* Storage = CraftStorageActor.Get();
+	if (!Station || !Storage || RefuelItemId.IsNone() ||
+		!Station->AcceptedFuelItems.Contains(RefuelItemId))
+	{
+		UE_LOG(LogMOFramework, Warning,
+			TEXT("[MOSurvivorController] Refuel job invalid (station=%s storage=%s fuel=%s)"),
+			CraftStationActor.IsValid() ? *CraftStationActor->GetName() : TEXT("null"),
+			Storage ? *Storage->GetName() : TEXT("null"),
+			*RefuelItemId.ToString());
+		CompleteSimpleJob(false);
+		return;
+	}
+
+	SimpleJobState = 20; // moving to storage (fuel withdraw leg)
+	SimpleJobTimer = 0.0f;
+	SimpleJobTotalSeconds = 0.0f;
+	MoveLegBestDistance = FLT_MAX;
+	MoveLegNoProgressSeconds = 0.0f;
+	SimpleJobTargetLocation = Storage->GetActorLocation();
+	MoveToLocation(SimpleJobTargetLocation, 150.0f);
+
+	if (UMOSurvivorJobQueueComponent* JobQueue = GetJobQueue())
+	{
+		JobQueue->SetJobState(CurrentJob.JobId, EMOSurvivorJobState::MovingToTarget);
+	}
+
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorController] Refuel job started: %dx %s to %s (storage %s)"),
+		CurrentJob.FuelQuantity, *RefuelItemId.ToString(), *Station->GetName(), *Storage->GetName());
+}
+
+void AMOSurvivorController::UpdateRefuelJobExecution(float DeltaTime)
+{
+	UMOSurvivorJobQueueComponent* JobQueue = GetJobQueue();
+	if (!GetPawn())
+	{
+		CompleteSimpleJob(false);
+		return;
+	}
+
+	// GLOBAL JOB WATCHDOG (B1) — same contract as the craft machine.
+	SimpleJobTotalSeconds += DeltaTime;
+	if (SimpleJobTotalSeconds > 120.0f)
+	{
+		UE_LOG(LogMOFramework, Warning,
+			TEXT("[MOSurvivorController] Refuel job WEDGED in state %d after %.0fs (fuel %s) - failing"),
+			SimpleJobState, SimpleJobTotalSeconds, *RefuelItemId.ToString());
+		CompleteSimpleJob(false);
+		return;
+	}
+
+	auto SetProgress = [&](float Progress)
+	{
+		if (JobQueue)
+		{
+			JobQueue->UpdateJobProgress(CurrentJob.JobId, Progress);
+		}
+	};
+
+	switch (SimpleJobState)
+	{
+	case 20: // moving to storage (fuel withdraw leg)
+		{
+			const int32 Arrive = UpdateJobMoveLeg(DeltaTime, 250.0f, 600.0f);
+			if (Arrive < 0) { CompleteSimpleJob(false); return; }
+			if (Arrive > 0)
+			{
+				SimpleJobState = 21;
+				SimpleJobTimer = 0.0f;
+				if (JobQueue) { JobQueue->SetJobState(CurrentJob.JobId, EMOSurvivorJobState::Performing); }
+			}
+			SetProgress(0.15f);
+			break;
+		}
+
+	case 21: // withdrawing fuel (timed handling)
+		{
+			SimpleJobTimer += DeltaTime;
+			SetProgress(0.15f + 0.2f * FMath::Clamp(SimpleJobTimer / FMath::Max(0.1f, CraftHandlingDuration), 0.0f, 1.0f));
+			if (SimpleJobTimer >= CraftHandlingDuration)
+			{
+				UMOInventoryComponent* StorageInv = GetActorInventory(CraftStorageActor.Get());
+				UMOInventoryComponent* PawnInv = GetPawn()->FindComponentByClass<UMOInventoryComponent>();
+				const int32 Available = StorageInv ? StorageInv->GetItemCountByDefinitionId(RefuelItemId) : 0;
+				const int32 Take = FMath::Min(Available, FMath::Max(1, CurrentJob.FuelQuantity));
+				if (Take <= 0 || !PawnInv || !StorageInv->RemoveItemByDefinitionId(RefuelItemId, Take))
+				{
+					UE_LOG(LogMOFramework, Warning,
+						TEXT("[MOSurvivorController] Refuel job: storage has no %s - failing"),
+						*RefuelItemId.ToString());
+					CompleteSimpleJob(false);
+					return;
+				}
+				// Carry on the pawn, not in the void — an aborted trip keeps
+				// the fuel recoverable in the villager's pack.
+				PawnInv->AddItemByGuid(FGuid::NewGuid(), RefuelItemId, Take);
+				RefuelCarried = Take;
+
+				AActor* Station = CraftStationActor.Get();
+				if (!Station) { CompleteSimpleJob(false); return; }
+				SimpleJobState = 22;
+				MoveLegBestDistance = FLT_MAX;
+				MoveLegNoProgressSeconds = 0.0f;
+				SimpleJobTargetLocation = Station->GetActorLocation();
+				MoveToLocation(SimpleJobTargetLocation, 150.0f);
+				if (JobQueue) { JobQueue->SetJobState(CurrentJob.JobId, EMOSurvivorJobState::MovingToTarget); }
+			}
+			break;
+		}
+
+	case 22: // moving to station
+		{
+			const int32 Arrive = UpdateJobMoveLeg(DeltaTime, 250.0f, 600.0f);
+			if (Arrive < 0) { CompleteSimpleJob(false); return; }
+			if (Arrive > 0)
+			{
+				SimpleJobState = 23;
+				SimpleJobTimer = 0.0f;
+				if (JobQueue) { JobQueue->SetJobState(CurrentJob.JobId, EMOSurvivorJobState::Performing); }
+			}
+			SetProgress(0.6f);
+			break;
+		}
+
+	case 23: // loading the fuel tank + relighting (timed handling)
+		{
+			SimpleJobTimer += DeltaTime;
+			SetProgress(0.6f + 0.4f * FMath::Clamp(SimpleJobTimer / FMath::Max(0.1f, CraftHandlingDuration), 0.0f, 1.0f));
+			if (SimpleJobTimer >= CraftHandlingDuration)
+			{
+				AMOCraftingStationActor* Station = Cast<AMOCraftingStationActor>(CraftStationActor.Get());
+				UMOInventoryComponent* PawnInv = GetPawn()->FindComponentByClass<UMOInventoryComponent>();
+				if (!Station || !PawnInv) { CompleteSimpleJob(false); return; }
+				PawnInv->RemoveItemByDefinitionId(RefuelItemId, RefuelCarried);
+				const float Added = Station->AddFuel(RefuelItemId, RefuelCarried);
+				// Tending the fire includes lighting it: a burned-out station
+				// relights once it has fuel again.
+				if (Added > 0.0f && !Station->IsStationActive())
+				{
+					Station->SetStationActive(true);
+				}
+				UE_LOG(LogMOFramework, Warning,
+					TEXT("[MOSurvivorController] Refuel job done: +%.0f fuel to %s (%s now %s)"),
+					Added, *Station->GetName(), *RefuelItemId.ToString(),
+					Station->IsStationActive() ? TEXT("BURNING") : TEXT("cold"));
+				RefuelCarried = 0;
+				CompleteSimpleJob(true);
 			}
 			break;
 		}
