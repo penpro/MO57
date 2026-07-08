@@ -629,7 +629,41 @@ bool UMOTerraformingComponent::RemoveFoliage(const FVector& WorldLocation)
 }
 
 // ============================================================================
-// TIMED ACTION (5-second progress, with interrupt support)
+// VOLUME-BASED DURATION
+// ============================================================================
+
+float UMOTerraformingComponent::ComputeTerraformDurationSeconds(
+	float RadiusUU, float DepthMeters, float SecondsPerCubicMeter, float MinSeconds)
+{
+	const float RadiusMeters = FMath::Max(0.0f, RadiusUU) * 0.01f;   // UU (cm) -> m
+	const float FootprintM2 = PI * RadiusMeters * RadiusMeters;
+	const float VolumeM3 = FootprintM2 * FMath::Max(0.0f, DepthMeters);
+	const float Duration = VolumeM3 * FMath::Max(0.0f, SecondsPerCubicMeter);
+	return FMath::Max(MinSeconds, Duration);
+}
+
+float UMOTerraformingComponent::GetActionDepthMeters(EMOTerraformMode Mode) const
+{
+	switch (Mode)
+	{
+	case EMOTerraformMode::Dig:
+	case EMOTerraformMode::Raise:
+		// Surface displacement scales with brush strength.
+		return Config.RaiseLowerStrength * TerraformDepthPerStrengthMeters;
+	case EMOTerraformMode::Flatten:
+		// Cut+fill moves a terrain-dependent amount; use half the full-strength
+		// displacement as a representative earth-moved estimate.
+		return 0.5f * TerraformDepthPerStrengthMeters;
+	case EMOTerraformMode::Smooth:
+		return 0.1f * TerraformDepthPerStrengthMeters;
+	case EMOTerraformMode::RemoveFoliage:
+	default:
+		return 0.0f;   // no earth moved -> min-seconds floor
+	}
+}
+
+// ============================================================================
+// TIMED ACTION (volume-based progress, with interrupt support)
 // ============================================================================
 
 bool UMOTerraformingComponent::BeginTerraform()
@@ -658,7 +692,12 @@ bool UMOTerraformingComponent::BeginTerraform()
 	PendingAction.TargetLocation = HitLocation;
 	PendingAction.TargetNormal = HitNormal;
 	PendingAction.ElapsedTime = 0.0f;
-	PendingAction.TotalTime = FMath::Max(0.1f, TerraformDurationSeconds);
+	// Volume-based duration: moving earth takes time proportional to how much
+	// earth this brush moves (footprint × displacement). Floored at the legacy
+	// duration so trivial ops aren't instant.
+	PendingAction.TotalTime = ComputeTerraformDurationSeconds(
+		Config.Radius, GetActionDepthMeters(CurrentMode),
+		TerraformSecondsPerCubicMeter, FMath::Max(0.1f, TerraformDurationSeconds));
 
 	if (CurrentMode == EMOTerraformMode::Flatten)
 	{

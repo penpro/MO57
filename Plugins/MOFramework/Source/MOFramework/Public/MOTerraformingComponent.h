@@ -316,11 +316,48 @@ public:
 	TWeakObjectPtr<AActor> VolumeSculptActor;
 
 	/**
-	 * Duration (seconds) of the progress timer on every terraform action.
-	 * Default 5s per design — applies to all modes uniformly.
+	 * Legacy floor / fallback duration (seconds). The real per-action duration is
+	 * now VOLUME-BASED (see ComputeTerraformDurationSeconds) — moving earth takes
+	 * time proportional to how much earth is moved. This is only the minimum.
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Terraforming", meta=(ClampMin="0.1"))
 	float TerraformDurationSeconds = 5.0f;
+
+	// ============================================================================
+	// VOLUME-BASED DURATION (realism: earth-moving takes real time)
+	// ============================================================================
+	//
+	// Duration = (earth volume moved) × TerraformSecondsPerCubicMeter, floored at
+	// TerraformDurationSeconds. The default rate reproduces the design anchor:
+	// lowering 1 cm over 1 m² = 0.01 m³ → 300 s = 5 real minutes. That makes a
+	// house-sized excavation take many hours (a proper dig is days/months of
+	// chipping), which is intentional AND collapses terraform RPC frequency.
+	// Big excavation is meant to be delegated to pawns; a player chips incrementally.
+
+	/** Real seconds to move one cubic metre of earth. Default 30000 (5 min per
+	 *  0.01 m³, the design anchor). The single knob to tune terraform "feel". */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Terraforming|Duration", meta=(ClampMin="1.0"))
+	float TerraformSecondsPerCubicMeter = 30000.0f;
+
+	/** Metres of surface displacement a full-strength (1.0) Raise/Dig produces —
+	 *  used to convert brush Strength into an earth-volume estimate. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Terraforming|Duration", meta=(ClampMin="0.001"))
+	float TerraformDepthPerStrengthMeters = 1.0f;
+
+	/**
+	 * Pure volume→time model (static for headless testing). Earth volume is the
+	 * brush footprint (π·radius²) times the vertical displacement, in cubic metres
+	 * (RadiusUU and DepthMeters: RadiusUU is centimetres). Returns the floored
+	 * real-seconds duration.
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Terraforming|Duration")
+	static float ComputeTerraformDurationSeconds(float RadiusUU, float DepthMeters,
+		float SecondsPerCubicMeter, float MinSeconds);
+
+	/** Effective vertical displacement (metres) this action moves, per mode —
+	 *  Dig/Raise scale with brush Strength; Flatten/Smooth use nominal fractions;
+	 *  RemoveFoliage moves no earth. Feeds the volume estimate. */
+	float GetActionDepthMeters(EMOTerraformMode Mode) const;
 
 	// ============================================================================
 	// TIMED ACTION (preferred API)

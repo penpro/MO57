@@ -7,6 +7,7 @@
 #include "MOItemDatabaseSettings.h"
 #include "MOSkillDatabaseSettings.h"
 #include "MORecipeDatabaseSettings.h"
+#include "MOTerraformingComponent.h"
 #include "Engine/DataTable.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -422,6 +423,41 @@ bool FMOIntegration_SkillsAndKnowledge_WorkTogether::RunTest(const FString& Para
 	ItemTable->RemoveRow(TestItemId);
 	UMOItemDatabaseSettings::InvalidateCache();
 
+	return true;
+}
+
+//=============================================================================
+// Terraforming: earth-volume -> real-time duration (realism)
+//=============================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOTerraform_Duration_VolumeScaling,
+	"MOFramework.Terraform.Duration.VolumeScaling",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+bool FMOTerraform_Duration_VolumeScaling::RunTest(const FString& Parameters)
+{
+	using T = UMOTerraformingComponent;
+	// Design anchor: lowering 1 cm over 1 m^2 (=0.01 m^3) at 30000 s/m^3 = 5 min.
+	// A 1 m^2 circular footprint needs radius = sqrt(1/pi) m = 56.4189 cm (UU).
+	const float R1m2 = 56.4189f;
+	TestEqual(TEXT("anchor: 1cm over 1m^2 = 300s (5 min)"),
+		T::ComputeTerraformDurationSeconds(R1m2, 0.01f, 30000.0f, 5.0f), 300.0f, 1.0f);
+
+	// Footprint ~ radius^2: doubling radius quadruples the duration.
+	const float d100 = T::ComputeTerraformDurationSeconds(100.0f, 0.1f, 30000.0f, 5.0f);
+	const float d200 = T::ComputeTerraformDurationSeconds(200.0f, 0.1f, 30000.0f, 5.0f);
+	TestEqual(TEXT("2x radius -> 4x duration"), d200, 4.0f * d100, d100 * 0.01f);
+
+	// Depth (displacement) scales linearly.
+	const float dShallow = T::ComputeTerraformDurationSeconds(100.0f, 0.05f, 30000.0f, 5.0f);
+	TestEqual(TEXT("2x depth -> 2x duration"), d100, 2.0f * dShallow, dShallow * 0.01f);
+
+	// No earth moved -> floored at MinSeconds (not instant, not zero).
+	TestEqual(TEXT("zero depth floors at MinSeconds"),
+		T::ComputeTerraformDurationSeconds(100.0f, 0.0f, 30000.0f, 5.0f), 5.0f);
+
+	// A house-sized flatten is HOURS, by design (sanity: 5 m radius, 0.5 m avg).
+	const float dHouse = T::ComputeTerraformDurationSeconds(500.0f, 0.5f, 30000.0f, 5.0f);
+	TestTrue(TEXT("house-scale flatten takes many hours"), dHouse > 3600.0f * 4.0f);
 	return true;
 }
 
