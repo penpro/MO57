@@ -8,6 +8,7 @@
 #include "MOSkillDatabaseSettings.h"
 #include "MORecipeDatabaseSettings.h"
 #include "MOTerraformingComponent.h"
+#include "MOGameClockSubsystem.h"
 #include "Engine/DataTable.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -458,6 +459,34 @@ bool FMOTerraform_Duration_VolumeScaling::RunTest(const FString& Parameters)
 	// A house-sized flatten is HOURS, by design (sanity: 5 m radius, 0.5 m avg).
 	const float dHouse = T::ComputeTerraformDurationSeconds(500.0f, 0.5f, 30000.0f, 5.0f);
 	TestTrue(TEXT("house-scale flatten takes many hours"), dHouse > 3600.0f * 4.0f);
+	return true;
+}
+
+//=============================================================================
+// Game clock: offline advance is capped (no starvation / no year-of-work bank)
+//=============================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOClock_OfflineAdvance_Cap,
+	"MOFramework.Clock.OfflineAdvanceCap",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+bool FMOClock_OfflineAdvance_Cap::RunTest(const FString& Parameters)
+{
+	using C = UMOGameClockSubsystem;
+	// A short gap advances 1:1.
+	TestTrue(TEXT("1h gap advances 1h"),
+		FMath::IsNearlyEqual(C::ComputeOfflineAdvanceSeconds(3600.0, 4.0), 3600.0, 0.001));
+	// A year offline caps at 4h — you can't bank a year of queued work.
+	TestTrue(TEXT("1yr gap caps at 4h"),
+		FMath::IsNearlyEqual(C::ComputeOfflineAdvanceSeconds(365.0 * 24 * 3600, 4.0), 4.0 * 3600.0, 0.001));
+	// Exactly at the cap stays at the cap.
+	TestTrue(TEXT("exactly 4h stays 4h"),
+		FMath::IsNearlyEqual(C::ComputeOfflineAdvanceSeconds(4.0 * 3600, 4.0), 4.0 * 3600.0, 0.001));
+	// Clock skew / same instant never rewinds.
+	TestTrue(TEXT("negative gap -> 0"),
+		FMath::IsNearlyEqual(C::ComputeOfflineAdvanceSeconds(-500.0, 4.0), 0.0, 0.001));
+	// A zero cap disables offline advance entirely.
+	TestTrue(TEXT("zero cap -> 0"),
+		FMath::IsNearlyEqual(C::ComputeOfflineAdvanceSeconds(9999.0, 0.0), 0.0, 0.001));
 	return true;
 }
 

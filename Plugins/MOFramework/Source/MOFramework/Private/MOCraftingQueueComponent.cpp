@@ -1,5 +1,6 @@
 #include "MOCraftingQueueComponent.h"
 #include "MOFramework.h"
+#include "MOGameClockSubsystem.h"
 #include "MOCraftingSubsystem.h"
 #include "MOInventoryComponent.h"
 #include "MORecipeDiscoveryComponent.h"
@@ -659,8 +660,15 @@ bool UMOCraftingQueueComponent::ApplySaveData(const FMOCraftingQueueSaveData& In
 		FTimespan Elapsed = Now - InSaveData.PausedAt;
 		float ElapsedSeconds = static_cast<float>(Elapsed.GetTotalSeconds());
 
-		// Clamp to reasonable maximum (e.g., 7 days) to prevent issues
-		const float MaxOfflineSeconds = 7.0f * 24.0f * 60.0f * 60.0f;
+		// Cap offline progress at the SAME bound the game clock uses for its
+		// offline advance (default 4h) — was 7 days, which let a queue bank a
+		// year of work while the rest of the sim stayed frozen (Principle 11 /
+		// H36). Queued crafts advance up to the cap; nothing runs a year ahead.
+		float MaxOfflineSeconds = 4.0f * 60.0f * 60.0f;
+		if (const UMOGameClockSubsystem* Clock = UMOGameClockSubsystem::Get(this))
+		{
+			MaxOfflineSeconds = static_cast<float>(Clock->GetOfflineAdvanceMaxHours() * 3600.0);
+		}
 		ElapsedSeconds = FMath::Min(ElapsedSeconds, MaxOfflineSeconds);
 
 		if (ElapsedSeconds > 0.0f)

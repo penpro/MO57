@@ -155,7 +155,14 @@ FMOGameClockSaveData UMOGameClockSubsystem::BuildSaveData() const
 	Data.TimeScale = TimeScale;
 	Data.GameDateTime = GameDateTime;
 	Data.bIsValid = true;
+	Data.SavedAtRealTime = FDateTime::UtcNow();   // for capped offline advance on load
 	return Data;
+}
+
+double UMOGameClockSubsystem::ComputeOfflineAdvanceSeconds(double RealElapsedSeconds, double MaxHours)
+{
+	const double MaxSeconds = FMath::Max(0.0, MaxHours) * 3600.0;
+	return FMath::Clamp(RealElapsedSeconds, 0.0, MaxSeconds);
 }
 
 void UMOGameClockSubsystem::ApplySaveData(const FMOGameClockSaveData& SaveData)
@@ -174,9 +181,28 @@ void UMOGameClockSubsystem::ApplySaveData(const FMOGameClockSaveData& SaveData)
 	// from the default.
 	SetTimeScale(SaveData.TimeScale);
 
+	// Offline advance: jump the clock forward by the real time the game was
+	// closed, capped at OfflineAdvanceMaxHours. Time passes while you're away,
+	// bounded so a long absence can't starve pawns or bank a year of queued work.
+	LastOfflineAdvanceSeconds = 0.0;
+	FDateTime RestoredDateTime = SaveData.GameDateTime;
+	if (SaveData.SavedAtRealTime != FDateTime(0))
+	{
+		const double RealElapsed = (FDateTime::UtcNow() - SaveData.SavedAtRealTime).GetTotalSeconds();
+		LastOfflineAdvanceSeconds = ComputeOfflineAdvanceSeconds(RealElapsed, OfflineAdvanceMaxHours);
+		if (LastOfflineAdvanceSeconds > 0.0)
+		{
+			GameSecondsAccumulated += LastOfflineAdvanceSeconds;
+			RestoredDateTime += FTimespan::FromSeconds(LastOfflineAdvanceSeconds);
+			UE_LOG(LogMOFrameworkCore, Log,
+				TEXT("[MOGameClock] Offline advance +%.0fs (real gap %.0fs, cap %.1fh)"),
+				LastOfflineAdvanceSeconds, RealElapsed, OfflineAdvanceMaxHours);
+		}
+	}
+
 	// Restore DateTime through SetGameDateTime so OnDayNightChanged fires
-	// if the saved time crosses a day/night boundary from the default.
-	SetGameDateTime(SaveData.GameDateTime);
+	// if the saved (+ offline-advanced) time crosses a day/night boundary.
+	SetGameDateTime(RestoredDateTime);
 
 	UE_LOG(LogMOFrameworkCore, Log,
 		TEXT("[MOGameClock] ApplySaveData — RealPlayTime=%.1fs, GameTime=%.1fs, TimeScale=%.2f, GameDateTime=%s"),

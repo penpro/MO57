@@ -107,6 +107,13 @@ struct MOFRAMEWORKCORE_API FMOGameClockSaveData
 	/** True if this struct was populated from a real save (vs. default-init). */
 	UPROPERTY()
 	bool bIsValid = false;
+
+	/** Real-world UTC when this save was written. On load the clock jumps forward
+	 *  by the real elapsed offline gap (capped by OfflineAdvanceMaxHours), so time
+	 *  passes while you're away — bounded so a long absence neither starves pawns
+	 *  nor lets a queue bank a year of work. FDateTime(0) = pre-field save (no jump). */
+	UPROPERTY()
+	FDateTime SavedAtRealTime = FDateTime(0);
 };
 
 /**
@@ -296,7 +303,28 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Clock|Persistence")
 	void ApplySaveData(const FMOGameClockSaveData& SaveData);
 
+	/** Max in-game hours the clock jumps forward for an offline gap on load. */
+	double GetOfflineAdvanceMaxHours() const { return OfflineAdvanceMaxHours; }
+
+	/** Seconds the clock advanced for the last load's offline gap (0 if none).
+	 *  Offline-aware systems (crafting) advance by the same bounded amount. */
+	UFUNCTION(BlueprintCallable, Category="MO|Clock|Persistence")
+	double GetLastOfflineAdvanceSeconds() const { return LastOfflineAdvanceSeconds; }
+
+	/** Pure: how many seconds to advance for a real offline gap, capped at
+	 *  MaxHours (never negative). Static for headless testing. */
+	static double ComputeOfflineAdvanceSeconds(double RealElapsedSeconds, double MaxHours);
+
 protected:
+	/**
+	 * On load, advance the clock (and offline-aware systems) forward by the real
+	 * time the game was closed, capped at this many in-game hours. 4h keeps a long
+	 * absence from starving pawns while still letting queued work progress a bit;
+	 * the cap also closes the "queue a year, come back a year later" exploit.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="MO|Clock", meta=(ClampMin="0.0"))
+	double OfflineAdvanceMaxHours = 4.0;
+
 	/**
 	 * Time-scale multiplier. EditDefaultsOnly — at runtime use SetTimeScale
 	 * (which fires OnTimeScaleChanged). Default 1.0; tune in project
@@ -336,6 +364,9 @@ protected:
 	// "DO NOT MAKE THIS A UWorldSubsystem" note in MOCheatSubsystem.h.
 
 private:
+	/** Seconds the clock jumped on the last load's offline gap (0 if none). */
+	double LastOfflineAdvanceSeconds = 0.0;
+
 	/** Cumulative real seconds since this clock started ticking (or since save load). */
 	double RealSecondsAccumulated = 0.0;
 
