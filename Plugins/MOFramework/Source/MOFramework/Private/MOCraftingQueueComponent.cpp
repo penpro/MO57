@@ -330,7 +330,20 @@ bool UMOCraftingQueueComponent::StartCrafting()
 	}
 
 	bIsCraftingActive = true;
-	CurrentCraftStartTime = FDateTime::UtcNow();
+	// (H25) Back-date the progress anchor by whatever the front entry has already
+	// accumulated. ProcessCraftingTick derives Progress from
+	// (Now - CurrentCraftStartTime)/Duration, so a bare UtcNow() anchor made the
+	// next tick recompute ~0 and OVERWRITE the saved Progress — pause/resume and
+	// every save/load silently wiped a partial craft (time/matter vanishing,
+	// Principle 11). A fresh craft has Progress==0 and maps to UtcNow() unchanged;
+	// a resumed or restored craft continues exactly where it left off.
+	{
+		const FMOCraftingQueueEntry& Front = Queue.Entries[0];
+		const float FrontDuration = GetEffectiveCraftDuration(Front.RecipeId);
+		const float ResumeProgress = FMath::Clamp(Front.Progress, 0.0f, 1.0f);
+		CurrentCraftStartTime = FDateTime::UtcNow()
+			- FTimespan::FromSeconds(static_cast<double>(ResumeProgress) * FrontDuration);
+	}
 
 	// Enable ticking
 	SetComponentTickEnabled(true);
