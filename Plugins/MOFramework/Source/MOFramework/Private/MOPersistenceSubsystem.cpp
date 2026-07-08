@@ -380,6 +380,17 @@ bool UMOPersistenceSubsystem::SaveWorldToSlot(const FString& SlotName)
     if (bOk)
     {
         CurrentSlotName = SlotName;
+        // (H29) Advance the in-memory authoritative snapshot to the just-written
+        // state. SaveObject is a complete superset here (live captures + the
+        // merged unspawned-pawn records + domains), so the NEXT save's
+        // despawned-pawn merge and the playtime base read current data instead
+        // of the stale load-time copy — or null in a never-loaded session, which
+        // previously skipped the merge entirely and lost despawned pawns.
+        LoadedWorldSave = SaveObject;
+        // Session time was just folded into SaveObject->TotalPlayTimeSeconds
+        // (BasePlayTime + SessionPlayTimeSeconds, above). Reset it — mirroring
+        // the load-time reset — or the next save double-counts this session.
+        SessionPlayTimeSeconds = 0.0f;
     }
 
     UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] Save slot=%s ok=%d destroyed=%d pawns=%d inventories=%d worldItems=%d buildings=%d netmode=%d"),
