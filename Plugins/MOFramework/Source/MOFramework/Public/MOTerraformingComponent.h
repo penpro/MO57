@@ -377,6 +377,57 @@ public:
 	float GetActionDepthMeters(EMOTerraformMode Mode) const;
 
 	// ============================================================================
+	// EXCAVATION (unit 3: dug earth becomes a carryable spoil resource)
+	// ============================================================================
+	//
+	// The designation-based pawn excavation loop (Docs/Terraform_Excavation_Plan.md)
+	// composes bounded Dig/Raise ops: a pawn digs earth from a designated zone,
+	// which becomes a carryable Dirt item, and either raises terrain at a fill zone
+	// (consuming the Dirt — conservation of earth) or deposits it into a container.
+	// These primitives are the fork-independent foundation (Stage 1).
+
+	/** Carryable spoil items produced per cubic metre of earth dug (and consumed
+	 *  per m³ raised, for conservation). Default 80 ≈ one shovelful per item — the
+	 *  tuning knob for how granular hauling feels. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Terraforming|Excavation", meta=(ClampMin="0.1"))
+	float ExcavationItemsPerCubicMeter = 80.0f;
+
+	/** Item definition id the dug earth becomes in a pawn's inventory / a container. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Terraforming|Excavation")
+	FName ExcavationSpoilItemId = FName("Dirt01");
+
+	/**
+	 * Parameterized authoritative earth-move for the excavation loop. Applies a
+	 * height Dig (lower) or Raise (add) at WorldLocation with EXPLICIT radius +
+	 * strength — it does NOT read or mutate the shared Config brush, so a pawn job
+	 * driving precise increments can't stomp the component's player-facing settings
+	 * (and it's re-entrancy safe across a job driving one component). Registers the
+	 * worked zone (persistence + foliage sweep) like TerraformAtLocation.
+	 *
+	 * Only Dig and Raise are supported (the ops the excavation loop composes; Flatten
+	 * decomposes into paired Dig/Raise at the job layer). Other modes return 0.
+	 *
+	 * @return Estimated earth volume moved, in cubic metres (0 on failure / no-op /
+	 *         unsupported mode / no authority). This is the conserved quantity: dig V
+	 *         at A then raise V at B and the earth balances by construction.
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Terraforming|Excavation")
+	float TerraformAtLocationEx(const FVector& WorldLocation, EMOTerraformMode Mode,
+		float RadiusUU, float Strength);
+
+	/** Estimated earth volume (m³) a single height Dig/Raise moves: footprint
+	 *  (π·radiusMeters²) × displacement (Strength·DepthPerStrengthMeters). Static +
+	 *  BlueprintCallable so the conservation/haul math is headless-testable. */
+	UFUNCTION(BlueprintCallable, Category="MO|Terraforming|Excavation")
+	static float ComputeMovedVolumeCubicMeters(float RadiusUU, float Strength,
+		float DepthPerStrengthMeters);
+
+	/** Spoil item count for a dug volume = floor(VolumeM3 × ItemsPerCubicMeter).
+	 *  The single volume→item mapping used at dig (produce) and fill (consume). */
+	UFUNCTION(BlueprintCallable, Category="MO|Terraforming|Excavation")
+	static int32 SpoilItemsForVolume(float VolumeM3, float ItemsPerCubicMeter);
+
+	// ============================================================================
 	// TIMED ACTION (preferred API)
 	// ============================================================================
 

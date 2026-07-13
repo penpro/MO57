@@ -697,6 +697,77 @@ float UMOTerraformingComponent::GetActionDepthMeters(EMOTerraformMode Mode) cons
 }
 
 // ============================================================================
+// EXCAVATION PRIMITIVES (unit 3 stage 1)
+// ============================================================================
+
+float UMOTerraformingComponent::TerraformAtLocationEx(
+	const FVector& WorldLocation, EMOTerraformMode Mode, float RadiusUU, float Strength)
+{
+	// Authority-only — same contract as TerraformAtLocation: the voxel edit and the
+	// RegisterModifiedZone persistence record must run server-side (H17).
+	AActor* Owner = GetOwner();
+	if (!Owner || !Owner->HasAuthority())
+	{
+		return 0.0f;
+	}
+
+	// Only Dig/Raise compose the excavation loop. Flatten decomposes into paired
+	// Dig/Raise at the job layer; the other modes aren't bounded earth-moves.
+	if (Mode != EMOTerraformMode::Dig && Mode != EMOTerraformMode::Raise)
+	{
+		return 0.0f;
+	}
+
+	AActor* SculptActor = HeightSculptActor.Get();
+	if (!IsValid(SculptActor))
+	{
+		// Lazy resolve in case BeginPlay hadn't found the world sculpt actor yet
+		// (e.g. an AI pawn's component driven before its own BeginPlay ran).
+		AutoFindSculptActors();
+		SculptActor = HeightSculptActor.Get();
+		if (!IsValid(SculptActor))
+		{
+			return 0.0f;
+		}
+	}
+
+	const float SafeRadius = FMath::Max(1.0f, RadiusUU);
+	const float SafeStrength = FMath::Clamp(Strength, 0.0f, 1.0f);
+	const bool bAdd = (Mode == EMOTerraformMode::Raise);
+
+	// Explicit radius/strength straight into the facade — does NOT read or mutate
+	// Config, so a pawn job driving precise increments can't stomp the component's
+	// player-facing brush settings.
+	MOVoxel::HeightSculpt(SculptActor, FVector2D(WorldLocation.X, WorldLocation.Y),
+		SafeRadius, SafeStrength, bAdd);
+
+	// Persist the worked zone + clear foliage inside it, like TerraformAtLocation.
+	// NOTE: this synchronous sweep is the per-op perf cost the excavation job bounds
+	// by batching ops (see Docs/Terraform_Excavation_Plan.md gotchas).
+	if (UMOTerrainModificationSubsystem* TerrainMod = UMOTerrainModificationSubsystem::Get(this))
+	{
+		TerrainMod->RegisterModifiedZone(WorldLocation, SafeRadius);
+		TerrainMod->SweepModifiedZones();
+	}
+
+	return ComputeMovedVolumeCubicMeters(SafeRadius, SafeStrength, TerraformDepthPerStrengthMeters);
+}
+
+float UMOTerraformingComponent::ComputeMovedVolumeCubicMeters(
+	float RadiusUU, float Strength, float DepthPerStrengthMeters)
+{
+	const float RadiusMeters = FMath::Max(0.0f, RadiusUU) * 0.01f;   // UU (cm) -> m
+	const float FootprintM2 = PI * RadiusMeters * RadiusMeters;
+	const float DepthMeters = FMath::Clamp(Strength, 0.0f, 1.0f) * FMath::Max(0.0f, DepthPerStrengthMeters);
+	return FootprintM2 * DepthMeters;
+}
+
+int32 UMOTerraformingComponent::SpoilItemsForVolume(float VolumeM3, float ItemsPerCubicMeter)
+{
+	return FMath::FloorToInt(FMath::Max(0.0f, VolumeM3) * FMath::Max(0.0f, ItemsPerCubicMeter));
+}
+
+// ============================================================================
 // TIMED ACTION (volume-based progress, with interrupt support)
 // ============================================================================
 
