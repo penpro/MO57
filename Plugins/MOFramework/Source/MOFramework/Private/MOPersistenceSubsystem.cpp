@@ -159,11 +159,26 @@ void UMOPersistenceSubsystem::RegisterSaveDomain(const TScriptInterface<IMOSaveD
     {
         return;
     }
+    const int32 IncomingPriority = Interface->GetSaveDomainApplyPriority();
     for (const TWeakInterfacePtr<IMOSaveDomain>& Existing : SaveDomains)
     {
         if (Existing.GetObject() == Object)
         {
             return;   // idempotent — PIE relaunch / world travel re-registers
+        }
+        // Apply priorities must be UNIQUE: ApplyRegisteredDomains sorts by priority
+        // with an unstable sort, so two domains sharing a priority have a
+        // non-deterministic relative apply order (an intermittent, platform-dependent
+        // load bug). Surface a collision loudly at registration instead of shipping it.
+        if (Existing.IsValid() && Existing->GetSaveDomainApplyPriority() == IncomingPriority)
+        {
+            UE_LOG(LogMOFramework, Warning,
+                TEXT("[MOPersist] Save domain '%s' shares apply priority %d with '%s' — priorities must be unique (apply sort is unstable). Give it its own decade (see MOSaveDomainInterface.h)."),
+                *Interface->GetSaveDomainName().ToString(), IncomingPriority,
+                *Existing->GetSaveDomainName().ToString());
+            ensureMsgf(false, TEXT("Duplicate save-domain apply priority %d ('%s' vs '%s')"),
+                IncomingPriority, *Interface->GetSaveDomainName().ToString(),
+                *Existing->GetSaveDomainName().ToString());
         }
     }
     SaveDomains.Add(TWeakInterfacePtr<IMOSaveDomain>(Interface));

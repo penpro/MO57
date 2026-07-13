@@ -24,7 +24,9 @@
  * APPLY ORDER: ApplySaveDomain runs on load AFTER pawns/world-items/buildings
  * are respawned, sorted by GetSaveDomainApplyPriority (ascending). Existing
  * domains: VoxelSculpt=10, Quest=20, Weather=30, TerrainMod=40, Clock=50,
- * Colony=60, ResourceDepletion=70. Capture order is unspecified.
+ * Colony=60, ResourceDepletion=70, Designation=80. Capture order is unspecified.
+ * Keep priorities UNIQUE — the sort is not stable, so ties are not deterministic;
+ * pick the next free decade for a new domain and add it to this list.
  *
  * =============================================================================
  * RELATED FILES: MOPersistenceSubsystem.h, MOworldSaveGame.h
