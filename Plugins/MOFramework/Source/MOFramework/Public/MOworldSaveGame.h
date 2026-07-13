@@ -63,6 +63,7 @@
 #include "MOCombatComponent.h"       // (H38) FMOCombatSaveData
 #include "MOGameClockSubsystem.h"    // (H34) FMOGameClockSaveData
 #include "MOResourceDepletionSubsystem.h" // (H37) FMOResourceNodeDepletionSaveEntry
+#include "MODesignationTypes.h"           // (unit 3) FMODesignationSaveData
 #include "MOworldSaveGame.generated.h"
 
 USTRUCT(BlueprintType)
@@ -431,4 +432,14 @@ public:
      */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Resources")
     FMOResourceDepletionSaveData ResourceDepletionData;
+
+    // --- Terraform excavation designations (unit 3) ---
+
+    /**
+     * Player-placed dig / dump / flatten work areas. Owned + serialized by
+     * UMODesignationSubsystem via IMOSaveDomain. Default-constructs empty for
+     * old saves.
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Designation")
+    FMODesignationSaveData DesignationData;
 };
