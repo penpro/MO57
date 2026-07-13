@@ -64,17 +64,20 @@ inventory transfer, context-menu popup) is an existing seam we plug into.
 
 ## Staged plan (each stage = one gated, committable unit)
 
-| Stage | What | Gate | Fork-dep |
+| Stage | What | Gate | Status |
 |-------|------|------|----------|
-| **1. Earth primitive + conservation core** | `TerraformAtLocationEx` returning moved-volume; `ItemsPerCubicMeter` knob; add `Dirt01` to DT_Items | Headless/PIE: dig V at A + raise V at B → ledger balances, Dirt count matches | none |
-| **2. Designation subsystem + dev verbs** | `UMODesignationSubsystem` (IMOSaveDomain) owning `FMODigZone`/`FMODumpZone` (center+extent+kind+remaining-volume+default dump target); `MO.Terraform.Designate*`/`Designations` verbs | Designate zones → save/reload → persist | geometry, scoping |
-| **3. ExcavateAndHaul pawn job** | job type + entry fields (dig anchor, dump discriminator+GUID/loc, Dirt id+count) + `EnqueueExcavateJob` + `CanExecuteSimply` + `Start/UpdateExcavateJobExecution` (band 30+, mirror RefuelStation 20-23); **batch sculpt ops** to avoid per-op world sweep | Enqueue on a survivor → digs (terrain drops, Dirt produced) → hauls → deposits (fill-zone raise OR container); conservation holds | — |
-| **4. Colony dispatch pass** | `RunExcavationPass` in upkeep tick: idle villagers auto-assigned, one-worker-per-zone, `ShelteringVillagers`-excluded | Designate dig+dump, recruit villagers, run upkeep → auto-excavation, no manual assign | scoping |
-| **5. Flatten decomposition** | flatten designation → paired dig-high/fill-low work under conservation | Designate flatten over uneven ground → levels toward target | geometry |
-| **6. UI: designate tool + dump popup** | `DesignateZoneAction` input + `UMODumpDestinationContextMenu` (clone `UMOKeepOnHarvestContextMenu`) + nearby-container enumeration + `FMODumpDestination{Kind,GUID}` routing | Computer-PIE / widget smoke + dev-verb backend | geometry |
-| **7. (later) Cart actor** | minimal mobile container (`AActor` + `UMOInventoryComponent` + `IMOInventoryHolderInterface`) for "fill nearby inventory" | overlap-enumerated + deposit | — |
+| **1. Earth primitive + conservation core** | `TerraformAtLocationEx` returning moved-volume; `ExcavationItemsPerCubicMeter` knob + `SpoilItemsForVolume` | `test_excavation_primitive.py` | ✅ DONE `0583d1ed` (7/7) |
+| **1b. `Dirt01` item** | add `Dirt01` (Material, MaxStack 20, Weight ~15, bCanDrop) to `DT_Items` | inventory add | ⛔ BLOCKED on codex's M21 DT_Items work (binary asset) — coordinate before writing |
+| **2. Designation subsystem** | `UMODesignationSubsystem` (IMOSaveDomain) owning `FMODesignationZone` (sphere: center+radius+kind+remaining-volume+default dump target); CRUD + persistence | `test_designation_persist.py` | ✅ DONE `ebac9e92` (7/7) |
+| **3. ExcavateAndHaul pawn job** | job type + entry fields (dig-zone GUID, dump discriminator+GUID/loc, Dirt id+count) + `EnqueueExcavateJob` + `CanExecuteSimply` + `Start/UpdateExcavateJobExecution` (band 30+, mirror RefuelStation 20-23); **batch sculpt ops** to avoid per-op world sweep | Enqueue on a survivor → digs (terrain drops, Dirt produced) → hauls → deposits (fill-zone raise OR container); conservation holds | ⏳ NEXT — needs 1b (Dirt01) for the deposit gate |
+| **4. Colony dispatch pass** | `RunExcavationPass` in upkeep tick: idle villagers auto-assigned, one-worker-per-zone, `ShelteringVillagers`-excluded | Designate dig+dump, recruit villagers, run upkeep → auto-excavation, no manual assign | pending |
+| **5. Flatten decomposition** | flatten designation → paired dig-high/fill-low work under conservation | Designate flatten over uneven ground → levels toward target | pending |
+| **6. UI: designate tool + dump popup** | `DesignateZoneAction` input + `UMODumpDestinationContextMenu` (clone `UMOKeepOnHarvestContextMenu`) + nearby-container enumeration + `FMODumpDestination{Kind,GUID}` routing; also the `MO.Terraform.Designate*` dev verbs (deferred here) | Computer-PIE / widget smoke + dev-verb backend | pending |
+| **7. (later) Cart actor** | minimal mobile container (`AActor` + `UMOInventoryComponent` + `IMOInventoryHolderInterface`) for "fill nearby inventory" | overlap-enumerated + deposit | optional |
 
 Stages **1–5 are backend** (headless/PIE gate-able autonomously); **6 is UI**; **7 optional**.
+Stage 3 is the next unblocked backend stage once `Dirt01` (1b) exists — the job references
+the spoil item by `UMOTerraformingComponent::ExcavationSpoilItemId` (default `"Dirt01"`).
 
 ## Key integration anchors (from the map)
 
