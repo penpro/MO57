@@ -29,7 +29,17 @@ void UMOHarvestSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
 void UMOHarvestSubsystem::Deinitialize()
 {
-	CancelHarvest();
+	// (H23) Tear down ALL in-flight harvests — unregister each harvester's
+	// interrupt listener, then drop the map. Iterate on a copied key list since
+	// CancelHarvest mutates ContextsByHarvester.
+	TArray<TWeakObjectPtr<AActor>> Harvesters;
+	ContextsByHarvester.GetKeys(Harvesters);
+	for (const TWeakObjectPtr<AActor>& H : Harvesters)
+	{
+		CancelHarvest(H.Get());
+	}
+	ContextsByHarvester.Empty();
+
 	HarvestRecipeCache.Empty();
 	CachedResourceDataTable.Reset();
 	Super::Deinitialize();
@@ -472,10 +482,18 @@ bool UMOHarvestSubsystem::BeginHarvest(
 	UMOInventoryComponent* Inventory
 )
 {
-	// Cancel any existing harvest
-	if (IsHarvestInProgress())
+	AActor* Harvester = ResolveHarvester(Inventory);
+	if (!Harvester)
 	{
-		CancelHarvest();
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOHarvest] BeginHarvest: no harvester (inventory has no owner)"));
+		return false;
+	}
+
+	// (H23) Cancel only THIS harvester's in-flight harvest, not everyone else's —
+	// contexts are per-harvester so concurrent harvesters don't interrupt each other.
+	if (IsHarvestInProgress(Harvester))
+	{
+		CancelHarvest(Harvester);
 	}
 
 	if (!IsValid(ISMComponent))
@@ -490,31 +508,32 @@ bool UMOHarvestSubsystem::BeginHarvest(
 		return false;
 	}
 
-	// Setup context
-	CurrentContext.Reset();
-	CurrentContext.ISMComponent = ISMComponent;
+	// Setup this harvester's context (fresh).
+	FMOHarvestContext& Ctx = ContextsByHarvester.FindOrAdd(Harvester);
+	Ctx = FMOHarvestContext();
+	Ctx.ISMComponent = ISMComponent;
 
 	// Check if it's actually an HISM
 	if (UHierarchicalInstancedStaticMeshComponent* HISM = Cast<UHierarchicalInstancedStaticMeshComponent>(ISMComponent))
 	{
-		CurrentContext.HISMComponent = HISM;
+		Ctx.HISMComponent = HISM;
 	}
 
-	CurrentContext.InstanceIndex = InstanceIndex;
-	ISMComponent->GetInstanceTransform(InstanceIndex, CurrentContext.InstanceTransform, true);
-	CurrentContext.TargetTags = CollectTargetTags(ISMComponent);
-	CurrentContext.ActiveActionId = ActionId;
-	CurrentContext.ElapsedTime = 0.0f;
+	Ctx.InstanceIndex = InstanceIndex;
+	ISMComponent->GetInstanceTransform(InstanceIndex, Ctx.InstanceTransform, true);
+	Ctx.TargetTags = CollectTargetTags(ISMComponent);
+	Ctx.ActiveActionId = ActionId;
+	Ctx.ElapsedTime = 0.0f;
 
 	// Extract ResourceNodeId and look up the HarvestAction from resource definition
-	CurrentContext.ResourceNodeId = ExtractResourceNodeId(CurrentContext.TargetTags);
+	Ctx.ResourceNodeId = ExtractResourceNodeId(Ctx.TargetTags);
 
 	const FMOResourceNodeDefinitionRow* ResourceDef = nullptr;
 	const FMOResourceHarvestAction* HarvestAction = nullptr;
 
-	if (!CurrentContext.ResourceNodeId.IsNone())
+	if (!Ctx.ResourceNodeId.IsNone())
 	{
-		ResourceDef = GetResourceDefinition(CurrentContext.ResourceNodeId);
+		ResourceDef = GetResourceDefinition(Ctx.ResourceNodeId);
 		if (ResourceDef)
 		{
 			HarvestAction = ResourceDef->FindAction(ActionId);
@@ -524,8 +543,8 @@ bool UMOHarvestSubsystem::BeginHarvest(
 	if (!HarvestAction)
 	{
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOHarvest] BeginHarvest: Action '%s' not found in resource '%s'"),
-			*ActionId.ToString(), *CurrentContext.ResourceNodeId.ToString());
-		CurrentContext.Reset();
+			*ActionId.ToString(), *Ctx.ResourceNodeId.ToString());
+		ContextsByHarvester.Remove(Harvester);
 		return false;
 	}
 
@@ -543,14 +562,14 @@ bool UMOHarvestSubsystem::BeginHarvest(
 		}
 	}
 
-	CurrentContext.TotalTime = BaseTime;
+	Ctx.TotalTime = BaseTime;
 
 	// (H23) Capture the authoritative start timestamp. CompleteHarvest validates
 	// that at least TotalTime real seconds elapse before granting yields/XP, so a
 	// premature (or forged) completion call can't collect a zero-duration harvest.
 	// Same clock source as the progress widget (FPlatformTime::Seconds) so the
 	// comparison is apples-to-apples.
-	CurrentContext.StartTimeSeconds = FPlatformTime::Seconds();
+	Ctx.StartTimeSeconds = FPlatformTime::Seconds();
 
 	// Subscribe to the harvester's "I started moving" broadcast. Movement
 	// cancels the harvest entirely — no partial progress kept (gathering is a
@@ -558,54 +577,34 @@ bool UMOHarvestSubsystem::BeginHarvest(
 	RegisterWithHarvesterForInterrupts(Inventory);
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOHarvest] Started harvest action '%s' on resource '%s' instance %d (time: %.1fs)"),
-		*ActionId.ToString(), *CurrentContext.ResourceNodeId.ToString(), InstanceIndex, CurrentContext.TotalTime);
+		*ActionId.ToString(), *Ctx.ResourceNodeId.ToString(), InstanceIndex, Ctx.TotalTime);
 
 	return true;
 }
 
 bool UMOHarvestSubsystem::UpdateHarvest(float DeltaTime)
 {
-	if (!IsHarvestInProgress())
-	{
-		return false;
-	}
-
-	// Verify target still exists
-	if (!CurrentContext.ISMComponent.IsValid())
-	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOHarvest] UpdateHarvest: Target component no longer valid"));
-		CancelHarvest();
-		return false;
-	}
-
-	// Update elapsed time
-	CurrentContext.ElapsedTime += DeltaTime;
-
-	// Broadcast progress
-	float Progress = GetHarvestProgress();
-	float TimeRemaining = FMath::Max(0.0f, CurrentContext.TotalTime - CurrentContext.ElapsedTime);
-	OnHarvestProgress.Broadcast(Progress, TimeRemaining);
-
-	// Check if complete
-	if (CurrentContext.ElapsedTime >= CurrentContext.TotalTime)
-	{
-		UE_LOG(LogMOFramework, Log, TEXT("[MOHarvest] Harvest complete after %.1fs"), CurrentContext.ElapsedTime);
-		return false; // No longer in progress
-	}
-
-	return true;
+	// (H23) Unused. Progress is driven per-harvester by the UI widget's own
+	// wall-clock tick (which then calls CompleteHarvest), and pawn harvests
+	// complete atomically. There is no single global "current" harvest to tick
+	// now that contexts are per-harvester, so this is a no-op kept only for the
+	// Blueprint-callable signature. See header notes.
+	return false;
 }
 
-void UMOHarvestSubsystem::CancelHarvest()
+void UMOHarvestSubsystem::CancelHarvest(AActor* Harvester)
 {
-	if (IsHarvestInProgress())
+	FMOHarvestContext* Ctx = ContextsByHarvester.Find(Harvester);
+	if (Ctx && Ctx->IsValid() && !Ctx->ActiveActionId.IsNone())
 	{
-		UE_LOG(LogMOFramework, Log, TEXT("[MOHarvest] Cancelled harvest action '%s'"), *CurrentContext.ActiveActionId.ToString());
+		UE_LOG(LogMOFramework, Log, TEXT("[MOHarvest] Cancelled harvest action '%s' for %s"),
+			*Ctx->ActiveActionId.ToString(), *GetNameSafe(Harvester));
 		OnHarvestCancelled.Broadcast();
 	}
 
-	UnregisterFromHarvesterInterrupts();
-	CurrentContext.Reset();
+	// Drop only THIS harvester's interrupt registration and context.
+	UnregisterFromHarvesterInterrupts(Harvester);
+	ContextsByHarvester.Remove(Harvester);
 }
 
 FMOCraftResult UMOHarvestSubsystem::CompleteHarvest(
@@ -616,11 +615,16 @@ FMOCraftResult UMOHarvestSubsystem::CompleteHarvest(
 {
 	FMOCraftResult Result;
 
-	if (!CurrentContext.IsValid() || CurrentContext.ActiveActionId.IsNone())
+	// (H23) Resolve THIS harvester's context — multiple harvesters run concurrently,
+	// so completion targets the caller's own harvest, not a global "current" one.
+	AActor* Harvester = ResolveHarvester(Inventory);
+	FMOHarvestContext* CtxPtr = ContextsByHarvester.Find(Harvester);
+	if (!CtxPtr || !CtxPtr->IsValid() || CtxPtr->ActiveActionId.IsNone())
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOHarvest] CompleteHarvest: No valid harvest in progress"));
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOHarvest] CompleteHarvest: No valid harvest in progress for %s"), *GetNameSafe(Harvester));
 		return Result;
 	}
+	FMOHarvestContext& Ctx = *CtxPtr;
 
 	// (H23) Authoritative duration validation. The completion call is driven by the
 	// UI widget's wall-clock, but the subsystem is the source of truth for whether
@@ -628,51 +632,52 @@ FMOCraftResult UMOHarvestSubsystem::CompleteHarvest(
 	// context intact (do NOT Reset) so a subsequent legitimate completion can fire.
 	// Callers that already simulated the duration via their own timer (AI survivors)
 	// pass bAllowSkipTimer=true.
-	if (!bAllowSkipTimer && CurrentContext.TotalTime > 0.0f)
+	if (!bAllowSkipTimer && Ctx.TotalTime > 0.0f)
 	{
-		const double ElapsedSeconds = FPlatformTime::Seconds() - CurrentContext.StartTimeSeconds;
+		const double ElapsedSeconds = FPlatformTime::Seconds() - Ctx.StartTimeSeconds;
 		// Small tolerance for frame-time/scheduling jitter so a legitimate completion
 		// landing a hair early (e.g. TotalTime - 0.02s) isn't spuriously rejected.
-		const double RequiredSeconds = static_cast<double>(CurrentContext.TotalTime) - 0.05;
+		const double RequiredSeconds = static_cast<double>(Ctx.TotalTime) - 0.05;
 		if (ElapsedSeconds < RequiredSeconds)
 		{
 			UE_LOG(LogMOFramework, Warning,
 				TEXT("[MOHarvest] CompleteHarvest REJECTED for action '%s': only %.2fs elapsed of required %.2fs (premature/forged completion). Context kept."),
-				*CurrentContext.ActiveActionId.ToString(), ElapsedSeconds, CurrentContext.TotalTime);
+				*Ctx.ActiveActionId.ToString(), ElapsedSeconds, Ctx.TotalTime);
 			Result.bSuccess = false;
 			return Result;
 		}
 	}
 
 	// Look up the HarvestAction from resource definition
-	const FMOResourceNodeDefinitionRow* ResourceDef = GetResourceDefinition(CurrentContext.ResourceNodeId);
+	const FMOResourceNodeDefinitionRow* ResourceDef = GetResourceDefinition(Ctx.ResourceNodeId);
 	const FMOResourceHarvestAction* HarvestAction = nullptr;
 
 	if (ResourceDef)
 	{
-		HarvestAction = ResourceDef->FindAction(CurrentContext.ActiveActionId);
+		HarvestAction = ResourceDef->FindAction(Ctx.ActiveActionId);
 	}
 
 	if (!HarvestAction)
 	{
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOHarvest] CompleteHarvest: Action '%s' not found in resource '%s'"),
-			*CurrentContext.ActiveActionId.ToString(), *CurrentContext.ResourceNodeId.ToString());
-		CurrentContext.Reset();
+			*Ctx.ActiveActionId.ToString(), *Ctx.ResourceNodeId.ToString());
+		UnregisterFromHarvesterInterrupts(Harvester);
+		ContextsByHarvester.Remove(Harvester);
 		return Result;
 	}
 
 	// If bDestroysResource, remove the instance
 	if (HarvestAction->bDestroysResource)
 	{
-		if (CurrentContext.HISMComponent.IsValid())
+		if (Ctx.HISMComponent.IsValid())
 		{
-			CurrentContext.HISMComponent->RemoveInstance(CurrentContext.InstanceIndex);
+			Ctx.HISMComponent->RemoveInstance(Ctx.InstanceIndex);
 		}
-		else if (CurrentContext.ISMComponent.IsValid())
+		else if (Ctx.ISMComponent.IsValid())
 		{
-			CurrentContext.ISMComponent->RemoveInstance(CurrentContext.InstanceIndex);
+			Ctx.ISMComponent->RemoveInstance(Ctx.InstanceIndex);
 		}
-		UE_LOG(LogMOFramework, Log, TEXT("[MOHarvest] Destroyed target instance %d"), CurrentContext.InstanceIndex);
+		UE_LOG(LogMOFramework, Log, TEXT("[MOHarvest] Destroyed target instance %d"), Ctx.InstanceIndex);
 	}
 
 	// Produce yields from the HarvestAction
@@ -685,13 +690,13 @@ FMOCraftResult UMOHarvestSubsystem::CompleteHarvest(
 	UInstancedStaticMeshComponent* MeshCompForLog = nullptr;
 	{
 		UInstancedStaticMeshComponent* MeshComp =
-			CurrentContext.HISMComponent.IsValid() ?
-				static_cast<UInstancedStaticMeshComponent*>(CurrentContext.HISMComponent.Get()) :
-				CurrentContext.ISMComponent.Get();
+			Ctx.HISMComponent.IsValid() ?
+				static_cast<UInstancedStaticMeshComponent*>(Ctx.HISMComponent.Get()) :
+				Ctx.ISMComponent.Get();
 		MeshCompForLog = MeshComp;
 		if (MeshComp)
 		{
-			NodeKey = UMOResourceDepletionSubsystem::MakeNodeKey(MeshComp, CurrentContext.InstanceIndex);
+			NodeKey = UMOResourceDepletionSubsystem::MakeNodeKey(MeshComp, Ctx.InstanceIndex);
 		}
 	}
 	UMOResourceDepletionSubsystem* Depletion = UMOResourceDepletionSubsystem::Get(this);
@@ -706,10 +711,10 @@ FMOCraftResult UMOHarvestSubsystem::CompleteHarvest(
 		}
 		MOHARVEST_LOG(this, "Harvest",
 			"CompleteHarvest action='%s' resource='%s' MeshComp=%s InstanceIndex=%d NodeKey='%s' Depletion=%s yields=[%s]",
-			*CurrentContext.ActiveActionId.ToString(),
-			*CurrentContext.ResourceNodeId.ToString(),
+			*Ctx.ActiveActionId.ToString(),
+			*Ctx.ResourceNodeId.ToString(),
 			MeshCompForLog ? *MeshCompForLog->GetClass()->GetName() : TEXT("<null>"),
-			CurrentContext.InstanceIndex,
+			Ctx.InstanceIndex,
 			*NodeKey,
 			Depletion ? TEXT("OK") : TEXT("NULL"),
 			*YieldList);
@@ -803,11 +808,12 @@ FMOCraftResult UMOHarvestSubsystem::CompleteHarvest(
 			*HarvestAction->SkillId.ToString(), HarvestAction->SkillXPReward);
 	}
 
-	FName CompletedActionId = CurrentContext.ActiveActionId;
-	CurrentContext.Reset();
+	FName CompletedActionId = Ctx.ActiveActionId;
 
-	// Harvest is done — stop listening for harvester movement.
-	UnregisterFromHarvesterInterrupts();
+	// Harvest is done — stop listening for this harvester's movement and drop its
+	// context. (Ctx is a reference into the map; don't touch it after Remove.)
+	UnregisterFromHarvesterInterrupts(Harvester);
+	ContextsByHarvester.Remove(Harvester);
 
 	OnHarvestComplete.Broadcast(CompletedActionId, Result.bSuccess);
 
@@ -820,7 +826,11 @@ FMOCraftResult UMOHarvestSubsystem::CompleteHarvest(
 
 void UMOHarvestSubsystem::NotifyInterrupt_Implementation(const FMOInterruptContext& Context)
 {
-	if (!IsHarvestInProgress())
+	// (H23) The interrupt names the actor it affects (the character sets
+	// AffectedActor=itself when it broadcasts). Cancel ONLY that harvester's
+	// harvest — one survivor moving must not cancel another survivor's gathering.
+	AActor* Affected = Context.AffectedActor.Get();
+	if (!Affected || !IsHarvestInProgress(Affected))
 	{
 		return;
 	}
@@ -838,11 +848,11 @@ void UMOHarvestSubsystem::NotifyInterrupt_Implementation(const FMOInterruptConte
 	case EMOInterruptReason::LostControl:
 	case EMOInterruptReason::External:
 		UE_LOG(LogMOFramework, Log,
-			TEXT("[MOHarvest] Interrupt reason=%d — cancelling harvest (no progress preserved)"),
-			(int32)Context.Reason);
+			TEXT("[MOHarvest] Interrupt reason=%d for %s — cancelling that harvest (no progress preserved)"),
+			(int32)Context.Reason, *GetNameSafe(Affected));
 		// CancelHarvest broadcasts OnHarvestCancelled (the progress widget
-		// listens to that to tear itself down) and unregisters us.
-		CancelHarvest();
+		// listens to that to tear itself down) and unregisters that harvester.
+		CancelHarvest(Affected);
 		break;
 
 	case EMOInterruptReason::UserCancel:
@@ -859,31 +869,50 @@ void UMOHarvestSubsystem::RegisterWithHarvesterForInterrupts(UMOInventoryCompone
 		return;
 	}
 
-	AMOCharacter* Harvester = Cast<AMOCharacter>(HarvesterInventory->GetOwner());
-	if (!IsValid(Harvester))
+	// Only character harvesters broadcast movement interrupts. RegisterInterruptListener
+	// de-dupes, so registering the subsystem once per active character is safe even
+	// though the subsystem is a single shared listener across all harvesters.
+	if (AMOCharacter* Harvester = Cast<AMOCharacter>(HarvesterInventory->GetOwner()))
 	{
-		return;
+		Harvester->RegisterInterruptListener(this);
 	}
-
-	Harvester->RegisterInterruptListener(this);
-	RegisteredHarvesterCharacter = Harvester;
 }
 
-void UMOHarvestSubsystem::UnregisterFromHarvesterInterrupts()
+void UMOHarvestSubsystem::UnregisterFromHarvesterInterrupts(AActor* Harvester)
 {
-	if (AMOCharacter* Harvester = RegisteredHarvesterCharacter.Get())
+	// Derive the character from the harvester actor (the map key) — no separate
+	// bookkeeping needed. Only unregister from THIS harvester so other in-flight
+	// harvests keep receiving their own interrupts.
+	if (AMOCharacter* Character = Cast<AMOCharacter>(Harvester))
 	{
-		Harvester->UnregisterInterruptListener(this);
+		Character->UnregisterInterruptListener(this);
 	}
-	RegisteredHarvesterCharacter.Reset();
 }
 
-float UMOHarvestSubsystem::GetHarvestProgress() const
+AActor* UMOHarvestSubsystem::ResolveHarvester(const UMOInventoryComponent* HarvesterInventory)
 {
-	if (!IsHarvestInProgress() || CurrentContext.TotalTime <= 0.0f)
+	return IsValid(HarvesterInventory) ? HarvesterInventory->GetOwner() : nullptr;
+}
+
+bool UMOHarvestSubsystem::IsHarvestInProgress(AActor* Harvester) const
+{
+	const FMOHarvestContext* Ctx = ContextsByHarvester.Find(Harvester);
+	return Ctx && Ctx->IsValid() && !Ctx->ActiveActionId.IsNone();
+}
+
+const FMOHarvestContext* UMOHarvestSubsystem::GetHarvestContext(AActor* Harvester) const
+{
+	const FMOHarvestContext* Ctx = ContextsByHarvester.Find(Harvester);
+	return (Ctx && Ctx->IsValid() && !Ctx->ActiveActionId.IsNone()) ? Ctx : nullptr;
+}
+
+float UMOHarvestSubsystem::GetHarvestProgress(AActor* Harvester) const
+{
+	const FMOHarvestContext* Ctx = ContextsByHarvester.Find(Harvester);
+	if (!Ctx || !Ctx->IsValid() || Ctx->ActiveActionId.IsNone() || Ctx->TotalTime <= 0.0f)
 	{
 		return 0.0f;
 	}
 
-	return FMath::Clamp(CurrentContext.ElapsedTime / CurrentContext.TotalTime, 0.0f, 1.0f);
+	return FMath::Clamp(Ctx->ElapsedTime / Ctx->TotalTime, 0.0f, 1.0f);
 }

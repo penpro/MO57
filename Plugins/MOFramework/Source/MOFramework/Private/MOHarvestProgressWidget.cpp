@@ -77,9 +77,10 @@ void UMOHarvestProgressWidget::StartHarvest(
 	BoundHarvestSubsystem = HarvestSubsystem;
 	BindSubsystemCancellation();
 
-	// Get the duration from the subsystem's context
-	const FMOHarvestContext& Context = HarvestSubsystem->GetCurrentContext();
-	const float HarvestDuration = FMath::Max(0.1f, Context.TotalTime);
+	// Get the duration from THIS harvester's context (H23: per-harvester now).
+	AActor* HarvesterActor = InInventory ? InInventory->GetOwner() : nullptr;
+	const FMOHarvestContext* Context = HarvestSubsystem->GetHarvestContext(HarvesterActor);
+	const float HarvestDuration = FMath::Max(0.1f, Context ? Context->TotalTime : 0.1f);
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOHarvestProgress] Started harvest action '%s' (duration: %.1fs)"),
 		*InActionId.ToString(), HarvestDuration);
@@ -101,10 +102,11 @@ void UMOHarvestProgressWidget::CancelHarvest()
 	// CancelHarvest a second time (double-broadcast, redundant deactivate).
 	UnbindSubsystemCancellation();
 
-	// Cancel in subsystem
+	// Cancel THIS harvester's harvest in the subsystem (H23: per-harvester now).
 	if (UMOHarvestSubsystem* HarvestSubsystem = GetWorld()->GetSubsystem<UMOHarvestSubsystem>())
 	{
-		HarvestSubsystem->CancelHarvest();
+		AActor* HarvesterActor = InventoryComponent.IsValid() ? InventoryComponent->GetOwner() : nullptr;
+		HarvestSubsystem->CancelHarvest(HarvesterActor);
 	}
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOHarvestProgress] Harvest cancelled for action '%s'"), *HarvestActionId.ToString());

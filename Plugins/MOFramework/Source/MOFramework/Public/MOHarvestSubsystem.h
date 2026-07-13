@@ -56,18 +56,20 @@
  *   granting yields/XP, closing the zero-duration "free XP" path. AI callers that
  *   already waited via their own timer pass bAllowSkipTimer=true.
  *
- * [2026-06] (H23 STILL OPEN) SINGLE GLOBAL CONTEXT: There is exactly ONE
- *   CurrentContext for the whole world. BeginHarvest cancels any in-flight harvest,
- *   so two harvesters at once (co-op, or player + AI survivor) CLOBBER each other —
- *   the second Begin cancels the first. The clock is also still effectively *driven*
- *   by the UI widget's NativeTick calling CompleteProgress->CompleteHarvest (the
- *   subsystem only *vetoes* via the duration check; UpdateHarvest remains unused).
- *   FULL FIX (deferred — needs runtime + co-op testing): clone the
- *   UMOTerraformingComponent model — make harvest a COMPONENT-owned, tick-advanced,
- *   per-harvester action (TMap<harvester, FMOHarvestContext> here, or move the
- *   context onto a per-pawn UMOHarvestComponent), route OnHarvestProgress/Cancelled/
- *   Complete per-harvester, and have the component auto-complete on its own tick so
- *   the widget becomes a pure view. See PROJECT_STATUS.md H23.
+ * [2026-07] (H23 FIXED) PER-HARVESTER CONTEXTS: Contexts live in a
+ *   TMap<TWeakObjectPtr<AActor>, FMOHarvestContext> keyed by harvester (the
+ *   inventory's owner). Multiple harvesters — the player plus any number of AI
+ *   survivors, or co-op players — harvest CONCURRENTLY without clobbering each
+ *   other: BeginHarvest cancels only the caller's own prior harvest, and
+ *   Begin/Complete/Cancel/IsHarvestInProgress/GetHarvestProgress/GetHarvestContext
+ *   all take (or derive) the harvester so they target one harvest, not a global.
+ *   Interrupts are routed per-harvester too: NotifyInterrupt cancels only
+ *   Context.AffectedActor's harvest (the character sets AffectedActor=itself), so
+ *   one survivor moving doesn't cancel another's gathering. The clock is still
+ *   *driven* by the player UI widget's NativeTick calling CompleteHarvest (the
+ *   subsystem *vetoes* early completion via the duration check); pawn harvests
+ *   complete atomically with bAllowSkipTimer after their own AI timer. UpdateHarvest
+ *   is now a no-op (there is no single global harvest to tick). See PROJECT_STATUS.md H23.
  *
  * =============================================================================
  * RELATED FILES
@@ -90,6 +92,7 @@
 #include "MOInterruptibleInterface.h"
 #include "MOHarvestSubsystem.generated.h"
 
+class AActor;
 class AMOCharacter;
 class UMOKnowledgeComponent;
 class UMOSkillsComponent;
@@ -402,10 +405,11 @@ public:
 	bool UpdateHarvest(float DeltaTime);
 
 	/**
-	 * Cancel the current harvest operation.
+	 * Cancel the given harvester's harvest (if any). Only that harvester's
+	 * context is dropped — other harvesters keep going.
 	 */
 	UFUNCTION(BlueprintCallable, Category="MO|Harvest")
-	void CancelHarvest();
+	void CancelHarvest(AActor* Harvester);
 
 	/**
 	 * Complete the current harvest operation.
@@ -432,26 +436,27 @@ public:
 	);
 
 	/**
-	 * Check if a harvest operation is currently in progress.
+	 * Is the given harvester mid-harvest? (H23) Contexts are per-harvester so
+	 * multiple actors — the player and any number of survivors — can harvest at
+	 * the same time without cancelling each other.
 	 */
 	UFUNCTION(BlueprintPure, Category="MO|Harvest")
-	bool IsHarvestInProgress() const { return CurrentContext.IsValid() && !CurrentContext.ActiveActionId.IsNone(); }
+	bool IsHarvestInProgress(AActor* Harvester) const;
 
-	/**
-	 * Get the current harvest context (read-only).
-	 */
-	UFUNCTION(BlueprintPure, Category="MO|Harvest")
-	const FMOHarvestContext& GetCurrentContext() const { return CurrentContext; }
+	/** The harvester's current context, or null if it isn't harvesting. */
+	const FMOHarvestContext* GetHarvestContext(AActor* Harvester) const;
 
-	/**
-	 * Get the progress of the current harvest (0-1).
-	 */
+	/** Progress (0-1) of the given harvester's harvest, or 0 if none. */
 	UFUNCTION(BlueprintPure, Category="MO|Harvest")
-	float GetHarvestProgress() const;
+	float GetHarvestProgress(AActor* Harvester) const;
+
+	/** The actor doing the harvest = the inventory's owner. Null-safe. */
+	static AActor* ResolveHarvester(const UMOInventoryComponent* HarvesterInventory);
 
 private:
-	/** Current harvest operation context. */
-	FMOHarvestContext CurrentContext;
+	/** In-flight harvests keyed by harvester actor (inventory owner). One entry
+	 *  per harvester; multiple harvesters run concurrently (H23). */
+	TMap<TWeakObjectPtr<AActor>, FMOHarvestContext> ContextsByHarvester;
 
 	/** Cache of all harvest recipes (built on initialize). */
 	TArray<const FMORecipeDefinitionRow*> HarvestRecipeCache;
@@ -459,19 +464,14 @@ private:
 	/** Cached reference to the resource definitions DataTable. */
 	TWeakObjectPtr<UDataTable> CachedResourceDataTable;
 
-	/**
-	 * Character we registered with for interrupt notifications. Set in
-	 * BeginHarvest, cleared in CompleteHarvest/CancelHarvest. Kept separately
-	 * from CurrentContext so we can unregister even if the harvest succeeds
-	 * (which Resets the context).
-	 */
-	TWeakObjectPtr<AMOCharacter> RegisteredHarvesterCharacter;
-
-	/** Subscribe to the harvester's interrupt broadcast. */
+	/** Subscribe the subsystem to THIS harvester character's interrupt broadcast
+	 *  (movement etc. cancels its harvest). We register per harvester; the
+	 *  character we unregister from is derived from the harvester actor, so no
+	 *  separate bookkeeping is needed. */
 	void RegisterWithHarvesterForInterrupts(UMOInventoryComponent* HarvesterInventory);
 
-	/** Drop the harvester interrupt registration (if any). */
-	void UnregisterFromHarvesterInterrupts();
+	/** Drop this harvester's interrupt registration (if it was a character). */
+	void UnregisterFromHarvesterInterrupts(AActor* Harvester);
 
 	/** Build the harvest recipe cache from the recipe DataTable. */
 	void BuildHarvestRecipeCache();
