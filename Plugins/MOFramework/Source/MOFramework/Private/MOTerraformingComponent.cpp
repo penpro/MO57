@@ -48,14 +48,48 @@ void UMOTerraformingComponent::TickComponent(float DeltaTime, ELevelTick TickTyp
 	// Broadcast progress so any UI display can update.
 	OnTerraformProgress.Broadcast(PendingAction.GetProgress01(), PendingAction.GetTimeRemaining());
 
-	// Completion: apply the sculpt, then tear down state. We use >= so even
-	// a small frame-time overshoot (TotalTime + 0.001 etc.) triggers exactly
-	// once instead of being skipped.
+	// Incremental dig/raise: move a little earth each time progress crosses the
+	// next step threshold, so the ground changes gradually AND an interruption
+	// keeps the partial work already moved (see CancelTerraform). Authority-only:
+	// a remote client's tick must never edit the voxel world — it forwards the
+	// whole op at completion via ApplyPendingTerraform (H17). Flatten/smooth,
+	// volume-sphere, and remote clients apply atomically at completion below.
+	const bool bIncremental = IsIncrementalTerraformMode(PendingAction.Mode)
+		&& GetOwner()->HasAuthority();
+	if (bIncremental)
+	{
+		const int32 N = FMath::Max(1, TerraformIncrementSteps);
+		const int32 TargetStep = FMath::FloorToInt(PendingAction.GetProgress01() * N);
+		while (PendingAction.AppliedSteps < TargetStep && PendingAction.AppliedSteps < N)
+		{
+			ApplyTerraformHeightIncrement(N);
+			PendingAction.AppliedSteps++;
+		}
+	}
+
+	// Completion: finish/apply the sculpt, then tear down state. We use >= so even
+	// a small frame-time overshoot triggers exactly once instead of being skipped.
 	if (PendingAction.ElapsedTime >= PendingAction.TotalTime)
 	{
-		// Snapshot the bool BEFORE Reset so we can still broadcast Completed
-		// reflecting whether the sculpt actually went through.
-		const bool bSuccess = ApplyPendingTerraform();
+		bool bSuccess = false;
+		if (bIncremental)
+		{
+			// Flush any steps rounding left unapplied, then register the worked
+			// zone once (the increments already edited the voxels each step).
+			const int32 N = FMath::Max(1, TerraformIncrementSteps);
+			while (PendingAction.AppliedSteps < N)
+			{
+				ApplyTerraformHeightIncrement(N);
+				PendingAction.AppliedSteps++;
+			}
+			RegisterTerraformZone();
+			bSuccess = true;
+		}
+		else
+		{
+			// Atomic modes (flatten/smooth/volume) + remote-client forward.
+			bSuccess = ApplyPendingTerraform();
+		}
 
 		PendingAction.Reset();
 		SetComponentTickEnabled(false);
@@ -763,6 +797,14 @@ void UMOTerraformingComponent::CancelTerraform()
 		return;
 	}
 
+	// Interrupted mid-dig: keep the earth already moved. The incremental steps
+	// already edited the voxels; register the worked zone so the partial change
+	// persists and clears foliage, exactly as a completed action would.
+	if (PendingAction.AppliedSteps > 0)
+	{
+		RegisterTerraformZone();
+	}
+
 	PendingAction.Reset();
 	SetComponentTickEnabled(false);
 	UnregisterFromInterrupts();
@@ -870,35 +912,61 @@ bool UMOTerraformingComponent::ApplyPendingTerraform()
 
 	if (bSuccess)
 	{
-		// Any successful terraform action turns the affected area into "worked
-		// ground." Report it to the world's terrain-modification subsystem,
-		// which owns the zone list, the sweep timer, and save/load.
-		if (UMOTerrainModificationSubsystem* TerrainMod = UMOTerrainModificationSubsystem::Get(this))
-		{
-			TerrainMod->RegisterModifiedZone(PendingAction.TargetLocation, Config.Radius);
-
-			// Immediate sweep: catches any foliage currently in radius and
-			// any PCG instances that PCG already had on the ground before the
-			// player got here. This is also why we don't need to call
-			// RemoveFoliage directly — the subsystem's sweep covers it.
-			TerrainMod->SweepModifiedZones();
-		}
-		else
-		{
-			MOHARVEST_LOG(this, "Terrain-Sculpt",
-				"  WARNING: UMOTerrainModificationSubsystem not found — falling back to one-shot foliage clear");
-			// Subsystem missing — fall back to a one-shot foliage clear in
-			// the local radius so at least the immediate action looks right.
-			// This shouldn't happen in normal gameplay (game worlds always
-			// have the subsystem) but it's a defensive path for tools/tests.
-			if (PendingAction.Mode != EMOTerraformMode::RemoveFoliage)
-			{
-				RemoveFoliage(PendingAction.TargetLocation);
-			}
-		}
+		RegisterTerraformZone();
 	}
 
 	return bSuccess;
+}
+
+void UMOTerraformingComponent::RegisterTerraformZone()
+{
+	// Any successful terraform action turns the affected area into "worked
+	// ground." Report it to the world's terrain-modification subsystem, which
+	// owns the zone list, the sweep timer, and save/load.
+	if (UMOTerrainModificationSubsystem* TerrainMod = UMOTerrainModificationSubsystem::Get(this))
+	{
+		TerrainMod->RegisterModifiedZone(PendingAction.TargetLocation, Config.Radius);
+
+		// Immediate sweep: catches any foliage currently in radius and any PCG
+		// instances that PCG already had on the ground before the player got
+		// here. This is also why we don't need to call RemoveFoliage directly —
+		// the subsystem's sweep covers it.
+		TerrainMod->SweepModifiedZones();
+	}
+	else
+	{
+		MOHARVEST_LOG(this, "Terrain-Sculpt",
+			"  WARNING: UMOTerrainModificationSubsystem not found — falling back to one-shot foliage clear");
+		// Subsystem missing — fall back to a one-shot foliage clear in the local
+		// radius so at least the immediate action looks right. Shouldn't happen in
+		// normal gameplay (game worlds always have the subsystem); defensive path.
+		if (PendingAction.Mode != EMOTerraformMode::RemoveFoliage)
+		{
+			RemoveFoliage(PendingAction.TargetLocation);
+		}
+	}
+}
+
+bool UMOTerraformingComponent::IsIncrementalTerraformMode(EMOTerraformMode Mode) const
+{
+	// Only the height-sculpt dig/raise path carries a fractionable Strength.
+	// Volume-sphere sculpts are all-or-nothing, and flatten/smooth converge to a
+	// target rather than accumulating — those stay atomic-at-completion.
+	return !bUseVolumeSculpting
+		&& (Mode == EMOTerraformMode::Dig || Mode == EMOTerraformMode::Raise);
+}
+
+void UMOTerraformingComponent::ApplyTerraformHeightIncrement(int32 TotalSteps)
+{
+	AActor* Actor = HeightSculptActor.Get();
+	if (!IsValid(Actor) || TotalSteps <= 0)
+	{
+		return;
+	}
+	const FVector2D Loc(PendingAction.TargetLocation.X, PendingAction.TargetLocation.Y);
+	const float StepStrength = Config.RaiseLowerStrength / static_cast<float>(TotalSteps);
+	const bool bAdd = (PendingAction.Mode == EMOTerraformMode::Raise);
+	MOVoxel::HeightSculpt(Actor, Loc, Config.Radius, StepStrength, bAdd);
 }
 
 bool UMOTerraformingComponent::ResolveCharacterGroundZ(float& OutGroundZ) const

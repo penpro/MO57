@@ -201,6 +201,11 @@ struct MOFRAMEWORK_API FMOTerraformPendingAction
 	UPROPERTY(BlueprintReadOnly, Category="MO|Terraforming")
 	float TotalTime = 5.0f;
 
+	/** Incremental sculpt steps already applied to the world (dig/raise only).
+	 *  Lets an interrupted terraform keep the partial earth it already moved. */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Terraforming")
+	int32 AppliedSteps = 0;
+
 	void Reset()
 	{
 		bActive = false;
@@ -210,6 +215,7 @@ struct MOFRAMEWORK_API FMOTerraformPendingAction
 		FlattenTargetHeight = 0.0f;
 		ElapsedTime = 0.0f;
 		TotalTime = 5.0f;
+		AppliedSteps = 0;
 	}
 
 	float GetProgress01() const
@@ -343,6 +349,17 @@ public:
 	 *  used to convert brush Strength into an earth-volume estimate. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Terraforming|Duration", meta=(ClampMin="0.001"))
 	float TerraformDepthPerStrengthMeters = 1.0f;
+
+	/**
+	 * How many sub-steps a dig/raise is applied over its (long) duration. The
+	 * ground lowers/rises gradually rather than snapping at the end, and an
+	 * interruption keeps whatever fraction was already moved. Bounds the sculpt
+	 * count per action (one voxel edit per step), so a multi-hour dig is still
+	 * only ~this many edits total. Height-sculpt modes only; flatten/smooth and
+	 * volume-sphere sculpts stay atomic-at-completion.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Terraforming|Duration", meta=(ClampMin="1", ClampMax="200"))
+	int32 TerraformIncrementSteps = 20;
 
 	/**
 	 * Pure volume→time model (static for headless testing). Earth volume is the
@@ -600,6 +617,20 @@ private:
 	 * PendingAction; doesn't mutate it (the caller resets after).
 	 */
 	bool ApplyPendingTerraform();
+
+	/** True for modes applied incrementally (height dig/raise): the strength can
+	 *  be fractioned across steps. Flatten/smooth and volume-sphere sculpts are
+	 *  atomic. Requires height-sculpt mode (!bUseVolumeSculpting). */
+	bool IsIncrementalTerraformMode(EMOTerraformMode Mode) const;
+
+	/** Apply one of TotalSteps fractional height sculpts for the pending dig/raise
+	 *  at the pending target — moves 1/TotalSteps of the brush's displacement. */
+	void ApplyTerraformHeightIncrement(int32 TotalSteps);
+
+	/** Register the pending target/radius as worked ground with the terrain-mod
+	 *  subsystem (persistence + foliage sweep). Called once at completion, or on
+	 *  an interrupt that already moved partial earth. */
+	void RegisterTerraformZone();
 
 	/**
 	 * Compute the Z of the character's feet — i.e., the surface they're
