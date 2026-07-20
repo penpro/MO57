@@ -86,11 +86,30 @@ enum class EMOSurvivorJobType : uint8
 	// hearth pass issues these — winter's firewood demand made real.
 	RefuelStation,
 
+	// Excavation (unit 3): walk to a designated Dig zone, remove a bounded volume
+	// of earth (which becomes carryable spoil), haul it, and deposit it either by
+	// raising terrain at a designated Fill zone (conservation of earth) or into a
+	// container. Issued by the colony excavation pass. See
+	// Docs/Terraform_Excavation_Plan.md.
+	ExcavateAndHaul,
+
 	// Future expansion
 	// Hunt,
 	// Farm,
 	// Build,
 	// Guard,
+};
+
+/** Where an ExcavateAndHaul job puts the earth it digs — mirrors the
+ *  dump-destination popup's options (a designated fill zone or a container). */
+UENUM(BlueprintType)
+enum class EMOExcavateDumpMode : uint8
+{
+	/** Raise terrain at a designated Dump/Fill zone, consuming the carried spoil
+	 *  (conservation of earth — dig here, fill there). */
+	FillZone,
+	/** Deposit the carried spoil into a container's inventory (cart/sack/chest). */
+	Container,
 };
 
 /**
@@ -181,6 +200,25 @@ struct MOFRAMEWORK_API FMOSurvivorJobEntry : public FFastArraySerializerItem
 	/** How many fuel items to withdraw per trip (capped by what storage has). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Job")
 	int32 FuelQuantity = 5;
+
+	// --- ExcavateAndHaul fields (unit 3, unused for other job types) ---
+
+	/** Designation Dig zone GUID this job excavates from. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Job", meta = (IgnoreForMemberInitializationTest))
+	FGuid DigZoneId;
+
+	/** Where the dug earth goes (a fill zone, or a container). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Job")
+	EMOExcavateDumpMode ExcavateDumpMode = EMOExcavateDumpMode::FillZone;
+
+	/** Designation Dump/Fill zone GUID (FillZone mode). Container mode uses
+	 *  StorageActor/StorageActorGuid for the destination container instead. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Job", meta = (IgnoreForMemberInitializationTest))
+	FGuid DumpZoneId;
+
+	/** Item the dug earth becomes when carried/deposited (default Dirt01). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Job")
+	FName SpoilItemId = FName("Dirt01");
 
 	FMOSurvivorJobEntry()
 		: JobId(FGuid::NewGuid())

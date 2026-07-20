@@ -145,6 +145,18 @@ public:
 	FGuid EnqueueRefuelJob(AActor* Station, AActor* Storage, FName FuelItemId, int32 Quantity = 5);
 
 	/**
+	 * Add an ExcavateAndHaul job (unit 3): dig a bounded volume of earth from a
+	 * designated Dig zone (producing carryable spoil), haul it, and deposit it
+	 * either by raising terrain at a designated Fill zone (DumpMode=FillZone,
+	 * DumpZoneId set) or into a container (DumpMode=Container, DumpContainer set).
+	 * The dig/dump zone GUIDs reference UMODesignationSubsystem zones.
+	 * @return GUID of the new job entry (invalid on bad args / no authority).
+	 */
+	UFUNCTION(BlueprintCallable, Category = "MO|Survivor|Jobs")
+	FGuid EnqueueExcavateJob(FGuid DigZoneId, EMOExcavateDumpMode DumpMode, FGuid DumpZoneId,
+		AActor* DumpContainer, FName SpoilItemId);
+
+	/**
 	 * Cancel a specific job.
 	 * @param JobId - GUID of the job to cancel
 	 * @return True if job was found and cancelled

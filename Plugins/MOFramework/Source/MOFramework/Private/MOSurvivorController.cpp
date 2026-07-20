@@ -10,6 +10,8 @@
 #include "MOHISMHarvestHelper.h"
 #include "MOItemDatabaseSettings.h"
 #include "MOInventoryComponent.h"
+#include "MOTerraformingComponent.h"   // (unit 3) TerraformAtLocationEx + excavation config
+#include "MODesignationSubsystem.h"    // (unit 3) dig/dump zone lookup + budget
 #include "MOKnowledgeComponent.h"
 #include "MOCraftingSubsystem.h"
 #include "MOCraftingQueueComponent.h"
@@ -577,6 +579,7 @@ bool AMOSurvivorController::CanExecuteSimply(EMOSurvivorJobType JobType) const
 	case EMOSurvivorJobType::GatherFiber:
 	case EMOSurvivorJobType::CraftAtStation:
 	case EMOSurvivorJobType::RefuelStation:
+	case EMOSurvivorJobType::ExcavateAndHaul:
 		return true;
 	default:
 		return false;
@@ -624,6 +627,12 @@ void AMOSurvivorController::StartSimpleJobExecution()
 	if (CurrentJob.JobType == EMOSurvivorJobType::RefuelStation)
 	{
 		StartRefuelJobExecution();
+		return;
+	}
+	// Excavate-and-haul jobs run the dig->haul->dump machine (states 30-33).
+	if (CurrentJob.JobType == EMOSurvivorJobType::ExcavateAndHaul)
+	{
+		StartExcavateJobExecution();
 		return;
 	}
 
@@ -717,7 +726,14 @@ void AMOSurvivorController::UpdateSimpleJobExecution(float DeltaTime)
 		return;
 	}
 
-	// Craft-leg (10-15) and refuel-leg (20-23) states live in their own machines.
+	// Excavate-leg (30-33), refuel-leg (20-23), and craft-leg (10-15) states live
+	// in their own machines. Dispatch highest band first — the >= checks below
+	// would otherwise swallow the higher bands.
+	if (SimpleJobState >= 30)
+	{
+		UpdateExcavateJobExecution(DeltaTime);
+		return;
+	}
 	if (SimpleJobState >= 20)
 	{
 		UpdateRefuelJobExecution(DeltaTime);
@@ -834,6 +850,14 @@ void AMOSurvivorController::CompleteSimpleJob(bool bSuccess)
 	CraftStationActor.Reset();
 	CraftStorageActor.Reset();
 	CraftJobRecipeId = NAME_None;
+
+	// Clear excavate-job scratch (unit 3) — else spoil/zone state leaks into the next job.
+	ExcavateDigZoneId.Invalidate();
+	ExcavateDumpZoneId.Invalidate();
+	ExcavateSpoilItemId = NAME_None;
+	ExcavateCarried = 0;
+	ExcavateBiteVolumeM3 = 0.0f;
+	ExcavateDumpLocation = FVector::ZeroVector;
 
 	UMOSurvivorJobQueueComponent* JobQueue = GetJobQueue();
 	if (JobQueue && CurrentJob.IsValid())
@@ -1480,6 +1504,242 @@ void AMOSurvivorController::UpdateRefuelJobExecution(float DeltaTime)
 					*RefuelItemId.ToString(), Station->IsStationActive() ? TEXT("BURNING") : TEXT("cold"),
 					RefuelCarried - Accepted);
 				RefuelCarried = 0;
+				CompleteSimpleJob(true);
+			}
+			break;
+		}
+
+	default:
+		CompleteSimpleJob(false);
+		break;
+	}
+}
+
+void AMOSurvivorController::StartExcavateJobExecution()
+{
+	APawn* ControlledPawn = GetPawn();
+	UWorld* World = GetWorld();
+	if (!ControlledPawn || !World) { CompleteSimpleJob(false); return; }
+
+	UMODesignationSubsystem* Desig = UMODesignationSubsystem::Get(this);
+	UMOTerraformingComponent* Terra = ControlledPawn->FindComponentByClass<UMOTerraformingComponent>();
+	if (!Desig || !Terra)
+	{
+		UE_LOG(LogMOFramework, Warning,
+			TEXT("[MOSurvivorController] Excavate job: no designation subsystem or terraform component - failing"));
+		CompleteSimpleJob(false);
+		return;
+	}
+
+	ExcavateDigZoneId = CurrentJob.DigZoneId;
+	ExcavateDumpZoneId = CurrentJob.DumpZoneId;
+	ExcavateDumpMode = CurrentJob.ExcavateDumpMode;
+	ExcavateSpoilItemId = CurrentJob.SpoilItemId.IsNone() ? FName("Dirt01") : CurrentJob.SpoilItemId;
+	ExcavateCarried = 0;
+
+	FMODesignationZone DigZone;
+	if (!Desig->FindZone(ExcavateDigZoneId, DigZone) || DigZone.RemainingVolumeM3 <= 0.0f)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorController] Excavate job: dig zone missing/exhausted - failing"));
+		CompleteSimpleJob(false);
+		return;
+	}
+
+	// Resolve where the spoil goes.
+	if (ExcavateDumpMode == EMOExcavateDumpMode::FillZone)
+	{
+		FMODesignationZone DumpZone;
+		if (!Desig->FindZone(ExcavateDumpZoneId, DumpZone))
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorController] Excavate job: fill zone missing - failing"));
+			CompleteSimpleJob(false);
+			return;
+		}
+		ExcavateDumpLocation = DumpZone.Center;
+	}
+	else // Container
+	{
+		AActor* Container = CurrentJob.StorageActor.Get();
+		if (!Container)
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorController] Excavate job: dump container missing - failing"));
+			CompleteSimpleJob(false);
+			return;
+		}
+		ExcavateDumpLocation = Container->GetActorLocation();
+	}
+
+	// Bite geometry + REAL volume-based timing (the point of unit 3 — digging takes
+	// time proportional to earth moved). Don't dig more than the zone has left.
+	const float BiteRadius = Terra->ExcavationDigRadius;
+	const float BiteStrength = Terra->ExcavationDigStrength;
+	const float DepthPer = Terra->TerraformDepthPerStrengthMeters;
+	ExcavateBiteVolumeM3 = FMath::Min(
+		UMOTerraformingComponent::ComputeMovedVolumeCubicMeters(BiteRadius, BiteStrength, DepthPer),
+		DigZone.RemainingVolumeM3);
+	const float BiteDepth = BiteStrength * DepthPer;
+	ExcavateBiteDuration = UMOTerraformingComponent::ComputeTerraformDurationSeconds(
+		BiteRadius, BiteDepth, Terra->TerraformSecondsPerCubicMeter, Terra->TerraformDurationSeconds);
+	// The wedge watchdog must clear the (possibly hours-long) dig + deposit + travel.
+	ExcavateWatchdogSeconds = FMath::Max(120.0f, ExcavateBiteDuration * 2.5f + 60.0f);
+
+	SimpleJobState = 30; // moving to the dig zone
+	SimpleJobTimer = 0.0f;
+	SimpleJobTotalSeconds = 0.0f;
+	MoveLegBestDistance = FLT_MAX;
+	MoveLegNoProgressSeconds = 0.0f;
+	SimpleJobTargetLocation = DigZone.Center;
+	MoveToLocation(SimpleJobTargetLocation, 150.0f);
+
+	if (UMOSurvivorJobQueueComponent* JobQueue = GetJobQueue())
+	{
+		JobQueue->SetJobState(CurrentJob.JobId, EMOSurvivorJobState::MovingToTarget);
+	}
+
+	UE_LOG(LogMOFramework, Warning,
+		TEXT("[MOSurvivorController] Excavate job started: dig %s -> %s (bite %.3fm3, %.1fs/leg, watchdog %.0fs)"),
+		*ExcavateDigZoneId.ToString(EGuidFormats::Short),
+		ExcavateDumpMode == EMOExcavateDumpMode::FillZone ? TEXT("fill zone") : TEXT("container"),
+		ExcavateBiteVolumeM3, ExcavateBiteDuration, ExcavateWatchdogSeconds);
+}
+
+void AMOSurvivorController::UpdateExcavateJobExecution(float DeltaTime)
+{
+	UMOSurvivorJobQueueComponent* JobQueue = GetJobQueue();
+	APawn* ControlledPawn = GetPawn();
+	if (!ControlledPawn) { CompleteSimpleJob(false); return; }
+
+	// Global job watchdog — sized to the (long) volume-based bite in StartExcavateJobExecution.
+	SimpleJobTotalSeconds += DeltaTime;
+	if (SimpleJobTotalSeconds > ExcavateWatchdogSeconds)
+	{
+		UE_LOG(LogMOFramework, Warning,
+			TEXT("[MOSurvivorController] Excavate job WEDGED in state %d after %.0fs (limit %.0f) - failing"),
+			SimpleJobState, SimpleJobTotalSeconds, ExcavateWatchdogSeconds);
+		CompleteSimpleJob(false);
+		return;
+	}
+
+	auto SetProgress = [&](float P) { if (JobQueue) { JobQueue->UpdateJobProgress(CurrentJob.JobId, P); } };
+
+	UMOTerraformingComponent* Terra = ControlledPawn->FindComponentByClass<UMOTerraformingComponent>();
+	if (!Terra) { CompleteSimpleJob(false); return; }
+
+	switch (SimpleJobState)
+	{
+	case 30: // moving to the dig zone
+		{
+			const int32 Arrive = UpdateJobMoveLeg(DeltaTime, 250.0f, 600.0f);
+			if (Arrive < 0) { CompleteSimpleJob(false); return; }
+			if (Arrive > 0)
+			{
+				SimpleJobState = 31;
+				SimpleJobTimer = 0.0f;
+				if (JobQueue) { JobQueue->SetJobState(CurrentJob.JobId, EMOSurvivorJobState::Performing); }
+			}
+			SetProgress(0.1f);
+			break;
+		}
+
+	case 31: // digging one bite (timed, volume-based) -> produces spoil
+		{
+			SimpleJobTimer += DeltaTime;
+			SetProgress(0.1f + 0.3f * FMath::Clamp(SimpleJobTimer / FMath::Max(0.1f, ExcavateBiteDuration), 0.0f, 1.0f));
+			if (SimpleJobTimer >= ExcavateBiteDuration)
+			{
+				// Remove earth at the dig point; the moved volume becomes carryable spoil.
+				const float MovedVol = Terra->TerraformAtLocationEx(SimpleJobTargetLocation,
+					EMOTerraformMode::Dig, Terra->ExcavationDigRadius, Terra->ExcavationDigStrength);
+				if (MovedVol <= 0.0f)
+				{
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorController] Excavate job: dig moved no earth - failing"));
+					CompleteSimpleJob(false);
+					return;
+				}
+				ExcavateBiteVolumeM3 = MovedVol;
+				const int32 SpoilCount = UMOTerraformingComponent::SpoilItemsForVolume(
+					MovedVol, Terra->ExcavationItemsPerCubicMeter);
+				if (UMOInventoryComponent* PawnInv = ControlledPawn->FindComponentByClass<UMOInventoryComponent>())
+				{
+					if (SpoilCount > 0) { PawnInv->AddItemByGuid(FGuid::NewGuid(), ExcavateSpoilItemId, SpoilCount); }
+				}
+				ExcavateCarried = SpoilCount;
+
+				// Debit the dig zone's earth budget (drops the zone when exhausted).
+				if (UMODesignationSubsystem* Desig = UMODesignationSubsystem::Get(this))
+				{
+					Desig->ConsumeZoneVolume(ExcavateDigZoneId, MovedVol);
+				}
+
+				SimpleJobState = 32; // haul to the dump target
+				MoveLegBestDistance = FLT_MAX;
+				MoveLegNoProgressSeconds = 0.0f;
+				SimpleJobTargetLocation = ExcavateDumpLocation;
+				MoveToLocation(SimpleJobTargetLocation, 150.0f);
+				if (JobQueue) { JobQueue->SetJobState(CurrentJob.JobId, EMOSurvivorJobState::MovingToTarget); }
+			}
+			break;
+		}
+
+	case 32: // hauling to the dump target
+		{
+			const int32 Arrive = UpdateJobMoveLeg(DeltaTime, 250.0f, 600.0f);
+			if (Arrive < 0) { CompleteSimpleJob(false); return; }
+			if (Arrive > 0)
+			{
+				SimpleJobState = 33;
+				SimpleJobTimer = 0.0f;
+				if (JobQueue) { JobQueue->SetJobState(CurrentJob.JobId, EMOSurvivorJobState::Performing); }
+			}
+			SetProgress(0.6f);
+			break;
+		}
+
+	case 33: // depositing the spoil
+		{
+			// Filling a zone is earth-moving (volume-based); a container deposit is quick handling.
+			const float DepositDuration = (ExcavateDumpMode == EMOExcavateDumpMode::FillZone)
+				? ExcavateBiteDuration : CraftHandlingDuration;
+			SimpleJobTimer += DeltaTime;
+			SetProgress(0.6f + 0.4f * FMath::Clamp(SimpleJobTimer / FMath::Max(0.1f, DepositDuration), 0.0f, 1.0f));
+			if (SimpleJobTimer >= DepositDuration)
+			{
+				UMOInventoryComponent* PawnInv = ControlledPawn->FindComponentByClass<UMOInventoryComponent>();
+
+				if (ExcavateDumpMode == EMOExcavateDumpMode::FillZone)
+				{
+					// Raise terrain at the fill zone, consuming the carried spoil (conservation).
+					const float Raised = Terra->TerraformAtLocationEx(ExcavateDumpLocation,
+						EMOTerraformMode::Raise, Terra->ExcavationDigRadius, Terra->ExcavationDigStrength);
+					if (PawnInv && ExcavateCarried > 0)
+					{
+						PawnInv->RemoveItemByDefinitionId(ExcavateSpoilItemId, ExcavateCarried);
+					}
+					if (UMODesignationSubsystem* Desig = UMODesignationSubsystem::Get(this))
+					{
+						Desig->ConsumeZoneVolume(ExcavateDumpZoneId, Raised > 0.0f ? Raised : ExcavateBiteVolumeM3);
+					}
+					UE_LOG(LogMOFramework, Warning,
+						TEXT("[MOSurvivorController] Excavate job done: filled %.3fm3, consumed %d spoil"),
+						Raised, ExcavateCarried);
+				}
+				else // Container
+				{
+					UMOInventoryComponent* ContainerInv = GetActorInventory(CurrentJob.StorageActor.Get());
+					int32 Deposited = 0;
+					if (ContainerInv && PawnInv && ExcavateCarried > 0
+						&& ContainerInv->CanAddItemByDefinitionId(ExcavateSpoilItemId, ExcavateCarried))
+					{
+						ContainerInv->AddItemByGuid(FGuid::NewGuid(), ExcavateSpoilItemId, ExcavateCarried);
+						PawnInv->RemoveItemByDefinitionId(ExcavateSpoilItemId, ExcavateCarried);
+						Deposited = ExcavateCarried;
+					}
+					UE_LOG(LogMOFramework, Warning,
+						TEXT("[MOSurvivorController] Excavate job done: deposited %d/%d spoil into container (rest kept)"),
+						Deposited, ExcavateCarried);
+				}
+
+				ExcavateCarried = 0;
 				CompleteSimpleJob(true);
 			}
 			break;

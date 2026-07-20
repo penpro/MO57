@@ -199,6 +199,57 @@ FGuid UMOSurvivorJobQueueComponent::EnqueueRefuelJob(AActor* Station, AActor* St
 	return NewJob.JobId;
 }
 
+FGuid UMOSurvivorJobQueueComponent::EnqueueExcavateJob(FGuid DigZoneId, EMOExcavateDumpMode DumpMode,
+	FGuid DumpZoneId, AActor* DumpContainer, FName SpoilItemId)
+{
+	if (!DigZoneId.IsValid())
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorJobQueue] EnqueueExcavateJob rejected: no dig zone"));
+		return FGuid();
+	}
+	// The dump target must be resolvable: a fill-zone GUID, or a container actor.
+	if (DumpMode == EMOExcavateDumpMode::FillZone && !DumpZoneId.IsValid())
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorJobQueue] EnqueueExcavateJob rejected: FillZone mode with no dump zone"));
+		return FGuid();
+	}
+	if (DumpMode == EMOExcavateDumpMode::Container && !IsValid(DumpContainer))
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorJobQueue] EnqueueExcavateJob rejected: Container mode with no container"));
+		return FGuid();
+	}
+	if (!GetOwner()->HasAuthority())
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorJobQueue] EnqueueExcavateJob called on non-authority"));
+		return FGuid();
+	}
+
+	FMOSurvivorJobEntry NewJob = CreateJobEntry(EMOSurvivorJobType::ExcavateAndHaul, 1);
+	NewJob.DigZoneId = DigZoneId;
+	NewJob.ExcavateDumpMode = DumpMode;
+	NewJob.DumpZoneId = DumpZoneId;
+	NewJob.SpoilItemId = SpoilItemId.IsNone() ? FName("Dirt01") : SpoilItemId;
+
+	if (DumpMode == EMOExcavateDumpMode::Container && IsValid(DumpContainer))
+	{
+		NewJob.StorageActor = DumpContainer;
+		if (const UMOIdentityComponent* ContainerId = DumpContainer->FindComponentByClass<UMOIdentityComponent>())
+		{
+			NewJob.StorageActorGuid = ContainerId->GetGuid();
+		}
+	}
+
+	JobQueue.Jobs.Add(NewJob);
+	MarkQueueDirty();
+
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorJobQueue] Enqueued excavate job %s: dig %s -> %s"),
+		*NewJob.JobId.ToString(), *DigZoneId.ToString(EGuidFormats::Short),
+		DumpMode == EMOExcavateDumpMode::FillZone ? TEXT("fill zone") : TEXT("container"));
+
+	OnQueueChanged.Broadcast();
+	return NewJob.JobId;
+}
+
 bool UMOSurvivorJobQueueComponent::CancelJob(const FGuid& JobId)
 {
 	if (!GetOwner()->HasAuthority())

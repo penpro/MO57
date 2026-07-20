@@ -445,6 +445,48 @@ private:
 	/** Fuel items actually withdrawn from storage this trip. */
 	int32 RefuelCarried = 0;
 
+	// =========================================================================
+	// EXCAVATE-AND-HAUL JOB (unit 3: pawn-automated dig -> haul -> dump)
+	// =========================================================================
+	// SimpleJobState:
+	//   30 = moving to the Dig zone
+	//   31 = digging one bounded bite (timed, volume-based) -> produces spoil
+	//   32 = moving to the dump target (Fill zone center, or container)
+	//   33 = depositing (Fill zone: raise terrain consuming spoil; Container: transfer)
+
+	/** Resolve zones + start the move-to-dig leg. */
+	void StartExcavateJobExecution();
+
+	/** Tick the excavate-leg state machine (states 30-33). */
+	void UpdateExcavateJobExecution(float DeltaTime);
+
+	/** Dig zone GUID this job excavates (a UMODesignationSubsystem zone). */
+	FGuid ExcavateDigZoneId;
+
+	/** Fill zone GUID for FillZone dumps (a UMODesignationSubsystem zone). */
+	FGuid ExcavateDumpZoneId;
+
+	/** Where the dug earth goes this job. */
+	EMOExcavateDumpMode ExcavateDumpMode = EMOExcavateDumpMode::FillZone;
+
+	/** Item the dug earth becomes. */
+	FName ExcavateSpoilItemId;
+
+	/** Spoil items carried this trip (produced at dig, consumed/deposited at dump). */
+	int32 ExcavateCarried = 0;
+
+	/** Earth volume (m³) moved by one bite — the conserved quantity dug then filled. */
+	float ExcavateBiteVolumeM3 = 0.0f;
+
+	/** Real seconds one dig/deposit bite takes (volume × rate), computed at start. */
+	float ExcavateBiteDuration = 4.0f;
+
+	/** Per-job wedge watchdog, sized to the (possibly long) bite duration. */
+	float ExcavateWatchdogSeconds = 120.0f;
+
+	/** World location of the dump target (Fill zone center, or container). */
+	FVector ExcavateDumpLocation = FVector::ZeroVector;
+
 	/** Find nearest HISM resource matching the job type for gather jobs. */
 	bool FindNearestGatherResource(EMOSurvivorJobType JobType);
 

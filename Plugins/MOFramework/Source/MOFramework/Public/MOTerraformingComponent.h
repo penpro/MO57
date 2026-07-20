@@ -396,6 +396,19 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Terraforming|Excavation")
 	FName ExcavationSpoilItemId = FName("Dirt01");
 
+	/** Brush radius (UU) for ONE pawn excavation "bite" — the earth a survivor
+	 *  moves per dig/deposit leg of an ExcavateAndHaul job. Smaller than the
+	 *  player's Config brush so a hauling trip carries a sane load. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Terraforming|Excavation", meta=(ClampMin="10.0"))
+	float ExcavationDigRadius = 120.0f;
+
+	/** Brush strength (0-1) for one pawn excavation bite. Bite volume =
+	 *  π·radius² × (strength·TerraformDepthPerStrengthMeters); the trip duration
+	 *  is that volume × TerraformSecondsPerCubicMeter (realistically long — a real
+	 *  gate lowers the rate as config-for-test, it does not skip the sim). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Terraforming|Excavation", meta=(ClampMin="0.0", ClampMax="1.0"))
+	float ExcavationDigStrength = 0.15f;
+
 	/**
 	 * Parameterized authoritative earth-move for the excavation loop. Applies a
 	 * height Dig (lower) or Raise (add) at WorldLocation with EXPLICIT radius +
