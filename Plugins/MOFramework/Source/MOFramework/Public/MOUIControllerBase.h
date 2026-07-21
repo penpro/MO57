@@ -83,6 +83,7 @@
 
 class APlayerController;
 class UUserWidget;
+class UCommonActivatableWidgetContainerBase;
 class UMOUIManagerComponent;
 class UMOInventoryComponent;
 class UMOSkillsComponent;
@@ -241,7 +242,12 @@ protected:
 	void PopWidgetFromLayer(UCommonActivatableWidget* Widget);
 
 	/**
-	 * Cache a widget reference AND bind to its OnDeactivated so the cache auto-clears
+	 * Cache a widget reference and bind to OnDeactivated without confusing temporary
+	 * stack suspension with closure. Pushing a new CommonUI entry deactivates the
+	 * covered widget; its cache must survive so ownership returns when it reactivates.
+	 * The cache clears only when the deactivated widget is not covered by another entry.
+	 *
+	 * Handles every real close path
 	 * regardless of how the widget closes — controller's CloseX, outside-click handler,
 	 * stack pop, Escape key, anything.
 	 *
@@ -264,10 +270,16 @@ protected:
 		Cache = Widget;
 
 		TWeakObjectPtr<UMOUIControllerBase> WeakSelf(this);
+		TWeakObjectPtr<TWidget> WeakWidget(Widget);
 		TWeakObjectPtr<TWidget>* CachePtr = &Cache;
-		Widget->OnDeactivated().AddLambda([WeakSelf, CachePtr]()
+		Widget->OnDeactivated().RemoveAll(this);
+		Widget->OnDeactivated().AddWeakLambda(this, [WeakSelf, WeakWidget, CachePtr]()
 		{
-			if (WeakSelf.IsValid())
+			UMOUIControllerBase* Self = WeakSelf.Get();
+			TWidget* DeactivatedWidget = WeakWidget.Get();
+			if (Self && DeactivatedWidget
+				&& !Self->IsWidgetCoveredByAnotherLayerEntry(DeactivatedWidget)
+				&& CachePtr->Get() == DeactivatedWidget)
 			{
 				CachePtr->Reset();
 			}
@@ -280,9 +292,9 @@ protected:
 	 *
 	 * Two flavors of cached widget need two different checks:
 	 *
-	 *   1. UCommonActivatableWidget (stack-managed) — cache is cleared on deactivate by
-	 *      RegisterCachedMenu's OnDeactivated lambda. So `IsValid(W)` is reliable, AND
-	 *      we deliberately do NOT call IsInViewport on these: stack widgets are nested
+	 *   1. UCommonActivatableWidget (stack-managed) — a valid cache may be temporarily
+	 *      covered, so top-of-stack ownership is the displayed/open truth. We do
+	 *      NOT call IsInViewport on these: stack widgets are nested
 	 *      inside a UCommonActivatableWidgetContainer, so IsInViewport returns false
 	 *      even when they're visibly active. Using IsInViewport here causes the
 	 *      "menu thinks it's closed while still showing" bug → close-then-reopen bounce
@@ -301,15 +313,23 @@ protected:
 		UWidget* W = Cache.Get();
 		if (!IsValid(W)) return false;
 
-		if (Cast<UCommonActivatableWidget>(W))
+		if (UCommonActivatableWidget* Activatable = Cast<UCommonActivatableWidget>(W))
 		{
-			// Activatable: RegisterCachedMenu auto-clears Cache on deactivate, so
-			// a valid Cache means the widget is still in the activation lifecycle.
-			return true;
+			return IsCachedActivatableMenuOpen(Activatable);
 		}
 		// Non-activatable popup: cache can outlive viewport presence.
 		return W->IsInViewport();
 	}
+
+	/** Find the CommonUI layer stack that currently owns a widget. */
+	UCommonActivatableWidgetContainerBase* FindLayerStackContainingWidget(
+		UCommonActivatableWidget* Widget) const;
+
+	/** True when deactivation means temporary stack suspension, not closure. */
+	bool IsWidgetCoveredByAnotherLayerEntry(UCommonActivatableWidget* Widget) const;
+
+	/** Top-of-stack ownership is the stable open predicate across activation transitions. */
+	bool IsCachedActivatableMenuOpen(UCommonActivatableWidget* Widget) const;
 
 	// =========================================================================
 	// PAWN COMPONENT ACCESS

@@ -52,8 +52,10 @@ void UMOBuildWidget::InitializeMenu(
 	if (RecipeList)
 	{
 		RecipeList->OnRecipeSelected.RemoveDynamic(this, &UMOBuildWidget::HandleRecipeSelected);
+		RecipeList->OnSelectionCleared.RemoveDynamic(this, &UMOBuildWidget::HandleRecipeSelectionCleared);
 		RecipeList->InitializeList(InInventory, InSkills, InDiscovery);
 		RecipeList->OnRecipeSelected.AddDynamic(this, &UMOBuildWidget::HandleRecipeSelected);
+		RecipeList->OnSelectionCleared.AddDynamic(this, &UMOBuildWidget::HandleRecipeSelectionCleared);
 	}
 
 	if (DetailPanel)
@@ -96,17 +98,14 @@ void UMOBuildWidget::InitializeForBuilding(AMOBuildableActor* Target)
 		}
 	}
 
-	// Display the recipe in the detail panel
-	if (DetailPanel)
-	{
-		DetailPanel->DisplayRecipe(TargetRecipeId);
-	}
-
 	// Select the recipe in the list
-	SelectedRecipeId = TargetRecipeId;
 	if (RecipeList)
 	{
 		RecipeList->SelectRecipe(TargetRecipeId);
+	}
+	else if (DetailPanel)
+	{
+		DetailPanel->DisplayRecipe(TargetRecipeId);
 	}
 }
 
@@ -208,32 +207,29 @@ void UMOBuildWidget::RefreshRecipeList()
 	if (RecipeList)
 	{
 		RecipeList->PopulateRecipes(BuildingRecipeIds);
-
-		// Restore selection if still valid
-		if (!SelectedRecipeId.IsNone() && BuildingRecipeIds.Contains(SelectedRecipeId))
-		{
-			RecipeList->SelectRecipe(SelectedRecipeId);
-		}
 	}
 }
 
 void UMOBuildWidget::SelectRecipe(FName RecipeId)
 {
-	SelectedRecipeId = RecipeId;
-
 	if (RecipeList)
 	{
 		RecipeList->SelectRecipe(RecipeId);
 	}
-
-	if (DetailPanel)
+	else if (DetailPanel && !RecipeId.IsNone())
 	{
 		DetailPanel->DisplayRecipe(RecipeId);
 	}
 }
 
+FName UMOBuildWidget::GetSelectedRecipeId() const
+{
+	return RecipeList ? RecipeList->GetSelectedRecipeId() : NAME_None;
+}
+
 bool UMOBuildWidget::BuildSelectedRecipe(int32 Count)
 {
+	const FName SelectedRecipeId = GetSelectedRecipeId();
 	if (SelectedRecipeId.IsNone() || Count <= 0)
 	{
 		return false;
@@ -292,6 +288,15 @@ void UMOBuildWidget::NativeDestruct()
 	{
 		Inventory->OnInventoryChanged.RemoveDynamic(this, &UMOBuildWidget::HandleInventoryChanged);
 	}
+	if (RecipeList)
+	{
+		RecipeList->OnRecipeSelected.RemoveDynamic(this, &UMOBuildWidget::HandleRecipeSelected);
+		RecipeList->OnSelectionCleared.RemoveDynamic(this, &UMOBuildWidget::HandleRecipeSelectionCleared);
+	}
+	if (DetailPanel)
+	{
+		DetailPanel->OnBuildRequested.RemoveDynamic(this, &UMOBuildWidget::HandleBuildRequested);
+	}
 
 	Super::NativeDestruct();
 }
@@ -312,17 +317,23 @@ FReply UMOBuildWidget::NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEv
 
 void UMOBuildWidget::HandleRecipeSelected(FName RecipeId)
 {
-	SelectedRecipeId = RecipeId;
-
 	if (DetailPanel)
 	{
 		DetailPanel->DisplayRecipe(RecipeId);
 	}
 }
 
+void UMOBuildWidget::HandleRecipeSelectionCleared()
+{
+	if (DetailPanel)
+	{
+		DetailPanel->ClearDisplay();
+	}
+}
+
 void UMOBuildWidget::HandleBuildRequested(FName RecipeId, int32 Count)
 {
-	if (RecipeId == SelectedRecipeId)
+	if (RecipeId == GetSelectedRecipeId())
 	{
 		// If we have a target building (ghost configuration mode), broadcast OnStartBuild
 		if (TargetBuilding.IsValid())

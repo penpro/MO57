@@ -296,12 +296,18 @@ void UMOBuildingQueueWidget::NativeConstruct()
 
 	if (CancelAllButton)
 	{
+		CancelAllButton->OnClicked().RemoveAll(this);
 		CancelAllButton->OnClicked().AddUObject(this, &UMOBuildingQueueWidget::HandleCancelAllClicked);
 	}
 }
 
 void UMOBuildingQueueWidget::NativeDestruct()
 {
+	if (CancelAllButton)
+	{
+		CancelAllButton->OnClicked().RemoveAll(this);
+	}
+
 	// Unbind from progress component
 	if (UMOBuildProgressComponent* Component = ProgressComponent.Get())
 	{

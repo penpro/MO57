@@ -13,7 +13,7 @@
  *
  * SUBCLASSES:
  * - UMORecipeEntryWidget (existing - consider migrating)
- * - UMOBuildingEntryWidget (existing - consider migrating)
+ * - UMOBuildingRecipeEntryWidget (building recipe presentation)
  * - UMOSkillEntryWidget (existing - consider migrating)
  * - UMOColonyCharacterEntry (planned)
  *
@@ -29,10 +29,15 @@
  *   OnClicked().AddUObject(), NOT OnClicked.AddDynamic().
  *
  * [2026-03] DATA BINDING: SetEntryId() stores the ID. Subclasses override
- *   OnDataBound() to update visuals. Always call Super.
+ *   OnDataBound() to update visuals. Reassigning the same stable ID is
+ *   idempotent and does not invoke OnDataBound twice. Always call Super.
  *
- * [2026-03] SELECTION STATE: SetSelected() updates visual and broadcasts
- *   delegate. Parent list should listen to OnEntrySelected.
+ * [2026-07] SELECTION STATE: SetSelected() updates visual state only.
+ *   User activation broadcasts OnEntrySelected from HandleButtonClicked().
+ *
+ * [2026-07] ENABLED VS AVAILABLE: SetEntryEnabled() controls whether a row can
+ *   be selected. Do not use it for domain action availability. Inspectable
+ *   unavailable rows must stay enabled so details can explain requirements.
  *
  * =============================================================================
  * RELATED FILES: MOScrollListBase.h, MOCommonButton.h, MOUIDelegates.h

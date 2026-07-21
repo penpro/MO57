@@ -6,11 +6,10 @@
  * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
  * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
  *
- * PURPOSE:
- * Main building menu widget combining recipe list, detail panel, and queue.
- * Mirrors UMOCraftingMenu for crafting. Supports two modes:
- * 1. Recipe browser: Shows all building recipes for selection
- * 2. Ghost configuration: Configures a placed ghost building before construction
+ * DEPRECATED:
+ * This parallel building workspace was never assigned to a live Widget
+ * Blueprint. Use UMOBuildingMenu for recipe selection and
+ * UMOGhostContextMenu for placed-building configuration/progress.
  *
  * WIDGET BINDINGS (required in Blueprint):
  * - RecipeList (UMOBuildingRecipeListWidget) - Scrollable recipe list
@@ -33,7 +32,7 @@
  *
  * =============================================================================
  * RELATED FILES: MOBuildingMenu.h, MOBuildingDetailPanel.h, MOBuildingUIController.h
- * LAST UPDATED: 2026-02-25
+ * LAST UPDATED: 2026-07-13 - Deprecated after live referencer verification
  * =============================================================================
  */
 
@@ -70,8 +69,8 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOOnStartBuildSignature);
  * - DetailPanel (UMOBuildingDetailPanel)
  * - QueueWidget (UMOBuildingQueueWidget) [optional]
  */
-UCLASS(Abstract, Blueprintable)
-class MOFRAMEWORK_API UMOBuildWidget : public UUserWidget
+UCLASS(Abstract, Blueprintable, meta=(DeprecationMessage="Use UMOBuildingMenu and UMOGhostContextMenu"))
+class UE_DEPRECATED(5.8, "Use UMOBuildingMenu and UMOGhostContextMenu") MOFRAMEWORK_API UMOBuildWidget : public UUserWidget
 {
 	GENERATED_BODY()
 
@@ -122,7 +121,7 @@ public:
 
 	/** Get the currently selected recipe ID. */
 	UFUNCTION(BlueprintPure, Category="MO|Building|UI")
-	FName GetSelectedRecipeId() const { return SelectedRecipeId; }
+	FName GetSelectedRecipeId() const;
 
 	// --- Building ---
 
@@ -176,6 +175,10 @@ protected:
 	UFUNCTION()
 	void HandleRecipeSelected(FName RecipeId);
 
+	/** Called when a refresh removes the selected recipe. */
+	UFUNCTION()
+	void HandleRecipeSelectionCleared();
+
 	/** Called when the build button is pressed. */
 	UFUNCTION()
 	void HandleBuildRequested(FName RecipeId, int32 Count);
@@ -224,7 +227,6 @@ private:
 	TWeakObjectPtr<AMOBuildableActor> TargetBuilding;
 
 	// Current state
-	FName SelectedRecipeId = NAME_None;
 	FName CategoryFilter = NAME_None;
 	bool bShowOnlyBuildable = false;
 };

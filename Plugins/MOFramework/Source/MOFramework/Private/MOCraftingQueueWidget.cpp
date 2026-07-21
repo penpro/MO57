@@ -300,12 +300,18 @@ void UMOCraftingQueueWidget::NativeConstruct()
 
 	if (CancelAllButton)
 	{
+		CancelAllButton->OnClicked().RemoveAll(this);
 		CancelAllButton->OnClicked().AddUObject(this, &UMOCraftingQueueWidget::HandleCancelAllClicked);
 	}
 }
 
 void UMOCraftingQueueWidget::NativeDestruct()
 {
+	if (CancelAllButton)
+	{
+		CancelAllButton->OnClicked().RemoveAll(this);
+	}
+
 	// Unbind from queue component
 	if (UMOCraftingQueueComponent* Queue = QueueComponent.Get())
 	{

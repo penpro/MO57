@@ -4,6 +4,7 @@
 
 #include "MOBuildingRecipeEntryWidget.h"
 #include "MOFramework.h"
+#include "MOUIInteractionState.h"
 #include "Components/TextBlock.h"
 #include "Components/Image.h"
 #include "Components/Border.h"
@@ -17,9 +18,13 @@ void UMOBuildingRecipeEntryWidget::SetupEntry(const FMOBuildRecipeListEntryData&
 {
 	EntryData = InData;
 
-	// Sync base class state
+	// Buildings may be inspected and placed before all materials are on hand.
+	// Keep selection independent from the material-readiness visual state.
+	const FMOInspectableEntryState InteractionState =
+		MOUIInteractionState::MakeInspectableEntry(InData.bCanBuild);
+	SetEntryId(InData.RecipeId);
 	UMOListEntryBase::SetSelected(InData.bIsSelected);
-	SetEntryEnabled(InData.bCanBuild);
+	SetEntryEnabled(InteractionState.bSelectable);
 
 	UpdateVisuals();
 }
@@ -38,7 +43,7 @@ void UMOBuildingRecipeEntryWidget::SetCanBuild(bool bInCanBuild)
 	if (EntryData.bCanBuild != bInCanBuild)
 	{
 		EntryData.bCanBuild = bInCanBuild;
-		SetEntryEnabled(bInCanBuild);
+		UpdateVisuals();
 	}
 }
 
@@ -106,6 +111,11 @@ void UMOBuildingRecipeEntryWidget::UpdateVisuals_Implementation()
 
 void UMOBuildingRecipeEntryWidget::HandleButtonClicked()
 {
+	if (!IsEntryEnabled())
+	{
+		return;
+	}
+
 	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingRecipeEntryWidget] HandleButtonClicked - Recipe: %s"), *EntryData.RecipeId.ToString());
 
 	// Call base to broadcast generic OnEntrySelected

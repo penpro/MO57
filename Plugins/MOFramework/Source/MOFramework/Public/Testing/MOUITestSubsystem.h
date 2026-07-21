@@ -10,7 +10,7 @@
  *
  * USAGE:
  * - Run tests via editor menu: MO Framework > UI Tests > Run All Tests
- * - Or call directly: UMOUITestSubsystem::Get(World)->RunAllTests()
+ * - Or call directly: UMOUITestSubsystem::Get(World)->StartAllTests()
  * - Results logged to: Content/Python/test_output/ui_test_results.txt
  *
  * =============================================================================
@@ -112,7 +112,18 @@ public:
 	// TEST EXECUTION
 	// =========================================================================
 
-	/** Run all UI tests. Returns summary when complete. */
+	/** Start all UI tests, advancing one test per frame. Completion broadcasts OnTestsComplete. */
+	UFUNCTION(BlueprintCallable, Category = "MO|UI|Testing")
+	bool StartAllTests();
+
+	/** Start tests matching a pattern, advancing one test per frame. */
+	UFUNCTION(BlueprintCallable, Category = "MO|UI|Testing")
+	bool StartTestsMatching(const FString& Pattern);
+
+	/**
+	 * Legacy synchronous batch API. It cannot advance UI frames between tests.
+	 * Prefer StartAllTests for any menu/controller test suite.
+	 */
 	UFUNCTION(BlueprintCallable, Category = "MO|UI|Testing")
 	FMOUITestSummary RunAllTests();
 
@@ -120,7 +131,7 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "MO|UI|Testing")
 	FMOUITestResult RunTest(const FString& TestName);
 
-	/** Run tests matching a pattern (e.g., "Inventory*"). */
+	/** Legacy synchronous matching API. Prefer StartTestsMatching. */
 	UFUNCTION(BlueprintCallable, Category = "MO|UI|Testing")
 	FMOUITestSummary RunTestsMatching(const FString& Pattern);
 
@@ -220,6 +231,59 @@ public:
 	bool WaitForCondition(TFunction<bool()> Condition, float TimeoutSeconds = 1.0f);
 
 private:
+	enum class EMOUIFrameTestActionType : uint8
+	{
+		OpenMenu,
+		OpenInGameDirect,
+		ToggleMenu,
+		Escape,
+		Tab,
+		CloseAllMenus,
+		AssertMenuOpen,
+		AssertMenuClosed,
+		AssertAnyMenuActive,
+		AssertCursorVisible,
+		AssertMoveBlocked,
+		AssertMoveRestored,
+		AssertLookBlocked,
+		AssertNoActiveMenus,
+		CaptureLayerCount,
+		AssertLayerCountDecreased,
+		Pass
+	};
+
+	struct FMOUIFrameTestAction
+	{
+		EMOUIFrameTestActionType Type = EMOUIFrameTestActionType::Pass;
+		FString Argument;
+		FString FailureMessage;
+		FGameplayTag LayerTag;
+		int32 ScratchSlot = 0;
+
+		FMOUIFrameTestAction() = default;
+		FMOUIFrameTestAction(
+			EMOUIFrameTestActionType InType,
+			FString InArgument = FString(),
+			FString InFailureMessage = FString(),
+			FGameplayTag InLayerTag = FGameplayTag(),
+			int32 InScratchSlot = 0)
+			: Type(InType)
+			, Argument(MoveTemp(InArgument))
+			, FailureMessage(MoveTemp(InFailureMessage))
+			, LayerTag(InLayerTag)
+			, ScratchSlot(InScratchSlot)
+		{
+		}
+	};
+
+	enum class EMOUIFrameTestActionOutcome : uint8
+	{
+		Continue,
+		Retry,
+		Complete,
+		Failed
+	};
+
 	// =========================================================================
 	// TEST IMPLEMENTATIONS
 	// =========================================================================
@@ -415,6 +479,38 @@ private:
 	/** Register all test cases. */
 	void RegisterTests();
 
+	/** Register action sequences for tests that require real frame boundaries. */
+	void RegisterFrameSteppedTests();
+
+	/** Begin a frame-stepped batch with a deterministic ordered test list. */
+	bool BeginFrameSteppedRun(TArray<FString> TestNames);
+
+	/** Execute one pending test and schedule the next frame. */
+	void RunNextTestStep();
+
+	/** Execute one action of the active frame-stepped test. */
+	void RunNextFrameTestAction();
+
+	/** Execute an action and optionally return a terminal result. */
+	EMOUIFrameTestActionOutcome ExecuteFrameTestAction(
+		const FMOUIFrameTestAction& Action,
+		FMOUITestResult& OutResult);
+
+	/** Add one completed test to the active batch summary. */
+	void RecordBatchResult(FMOUITestResult Result);
+
+	/** Close all UI and require a clean CommonUI frame before the next test. */
+	void BeginBatchCleanup();
+
+	/** Toggle a named menu through the same UI manager entry point as gameplay. */
+	bool ToggleMenuForTest(const FString& MenuName);
+
+	/** Schedule the next batch step without re-entering the current frame. */
+	void ScheduleNextTestStep();
+
+	/** Finalize, persist, and broadcast the active batch summary. */
+	void FinishFrameSteppedRun();
+
 	/** Log a test message. */
 	void LogTest(const FString& Message);
 
@@ -428,11 +524,35 @@ private:
 	/** Map of test name to test function. */
 	TMap<FString, TFunction<FMOUITestResult()>> TestRegistry;
 
+	/** Declarative action sequences for tests that require frame settling. */
+	TMap<FString, TArray<FMOUIFrameTestAction>> FrameSteppedTestRegistry;
+
 	/** Whether tests are currently running. */
 	bool bIsRunningTests = false;
 
 	/** Last test summary. */
 	FMOUITestSummary LastTestSummary;
+
+	/** State for the active one-test-per-frame batch. */
+	TArray<FString> PendingTestNames;
+	int32 NextPendingTestIndex = 0;
+	FMOUITestSummary ActiveTestSummary;
+	double ActiveTestStartTime = 0.0;
+	FTimerHandle TestStepTimerHandle;
+
+	/** State for the currently executing declarative test, if any. */
+	FString ActiveFrameTestName;
+	TArray<FMOUIFrameTestAction> ActiveFrameTestActions;
+	int32 NextFrameTestActionIndex = 0;
+	double ActiveFrameTestStartTime = 0.0;
+	double ActiveFrameActionDeadline = 0.0;
+	TArray<int32> FrameTestScratch;
+
+	/** Inter-test isolation: wait for stacks to empty, then observe one clean frame. */
+	bool bWaitingForBatchCleanup = false;
+	bool bObservedCleanBatchFrame = false;
+	int32 BatchCleanupPollCount = 0;
+	double BatchCleanupDeadline = 0.0;
 
 	/** Current test logs (accumulated during test). */
 	TArray<FString> CurrentTestLogs;

@@ -6,9 +6,10 @@
  * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
  * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
  *
- * PURPOSE:
- * Individual building entry in the building menu list. Shows building name,
- * preview image, build time, and material summary.
+ * DEPRECATED:
+ * This pre-CommonUI entry has no live Blueprint child or callsite. Use
+ * UMOBuildingRecipeEntryWidget, which participates in the authoritative
+ * UMOScrollListBase selection lifecycle.
  *
  * DISPLAYS:
  * - NameText: Building name from recipe
@@ -31,7 +32,7 @@
  *
  * =============================================================================
  * RELATED FILES: MOBuildingMenu.h, MOBuildingRecipeListWidget.h, MORecipeDefinitionRow.h
- * LAST UPDATED: 2026-02-25
+ * LAST UPDATED: 2026-07-13 - Deprecated after live referencer verification
  * =============================================================================
  */
 
@@ -50,8 +51,8 @@ struct FMORecipeDefinitionRow;
  * Delegate for when a building entry is clicked.
  */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOOnBuildingEntryClickedSignature, FName, RecipeId);
-UCLASS()
-class MOFRAMEWORK_API UMOBuildingEntryWidget : public UUserWidget
+UCLASS(meta=(DeprecationMessage="Use UMOBuildingRecipeEntryWidget"))
+class UE_DEPRECATED(5.8, "Use UMOBuildingRecipeEntryWidget") MOFRAMEWORK_API UMOBuildingEntryWidget : public UUserWidget
 {
 	GENERATED_BODY()
 

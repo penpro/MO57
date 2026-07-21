@@ -5,6 +5,7 @@
 #include "MOInventoryComponent.h"
 #include "MORecipeDiscoveryComponent.h"
 #include "MOSkillsComponent.h"
+#include "MOKnowledgeComponent.h"
 #include "MORecipeDatabaseSettings.h"
 #include "MOItemDatabaseSettings.h"
 #include "MOIdentifiableInterface.h"
@@ -121,6 +122,27 @@ bool UMOCraftingQueueComponent::EnqueueCraft(FName RecipeId, int32 Count, EMOCra
 	if (!Recipe)
 	{
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOCraftingQueue] Recipe not found: %s"), *RecipeId.ToString());
+		return false;
+	}
+
+	// Validate at the authoritative mutation boundary. UI state is advisory and
+	// remote clients can call the RPC directly, so station, unlock, skill, tool,
+	// and ingredient requirements must all be checked here before consumption.
+	if (!CachedCraftingSubsystem.IsValid() || !CachedInventory.IsValid())
+	{
+		CacheComponents();
+	}
+	UMOCraftingSubsystem* Crafting = CachedCraftingSubsystem.Get();
+	AActor* OwnerActor = GetOwner();
+	UMOKnowledgeComponent* Knowledge = OwnerActor ? OwnerActor->FindComponentByClass<UMOKnowledgeComponent>() : nullptr;
+	UMOSkillsComponent* Skills = OwnerActor ? OwnerActor->FindComponentByClass<UMOSkillsComponent>() : nullptr;
+	const FMOCraftingValidation Validation = Crafting
+		? Crafting->CanCraftRecipe(RecipeId, Knowledge, Skills, CachedInventory.Get(), Station)
+		: FMOCraftingValidation();
+	if (!Validation.bCanCraft)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOCraftingQueue] Validation rejected %s: %s"),
+			*RecipeId.ToString(), *Validation.FailureReason.ToString());
 		return false;
 	}
 

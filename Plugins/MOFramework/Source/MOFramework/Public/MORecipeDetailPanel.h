@@ -49,6 +49,8 @@
 #include "MORecipeDetailPanel.generated.h"
 
 class UTextBlock;
+class UMOKnowledgeComponent;
+struct FMOCraftingValidation;
 
 // Legacy delegate - prefer FMOUICraftRequest from MOUIDelegates.h for new code
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOCraftRequestedSignature, FName, RecipeId, int32, Count);
@@ -148,6 +150,12 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO|Crafting|UI")
 	bool CanCraftCurrentRecipe() const { return CanPerformAction(); }
 
+	/** Supply the context used by the authoritative crafting validator. */
+	UFUNCTION(BlueprintCallable, Category="MO|Crafting|UI")
+	void SetCraftingContext(UMOKnowledgeComponent* InKnowledge, EMOCraftingStation InStation);
+
+	virtual FText GetActionUnavailableReason() const override;
+
 	// --- Data Access for Blueprints ---
 
 	/** Get ingredient display data for the current recipe. */
@@ -196,7 +204,14 @@ protected:
 	TObjectPtr<UTextBlock> RequiredStationText;
 
 private:
+	FMOCraftingValidation GetCurrentValidation() const;
+
 	// Cached recipe data for Blueprint access
 	TArray<FMOIngredientDisplayData> CachedIngredients;
 	TArray<FMOOutputDisplayData> CachedOutputs;
+
+	UPROPERTY()
+	TWeakObjectPtr<UMOKnowledgeComponent> KnowledgeComponent;
+
+	EMOCraftingStation CurrentStation = EMOCraftingStation::None;
 };

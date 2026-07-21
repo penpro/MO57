@@ -140,7 +140,7 @@ public:
 
 	/** Get the currently selected recipe ID. */
 	UFUNCTION(BlueprintPure, Category="MO|Crafting|UI")
-	FName GetSelectedRecipeId() const { return SelectedRecipeId; }
+	FName GetSelectedRecipeId() const;
 
 	// --- Crafting ---
 
@@ -197,6 +197,10 @@ protected:
 	/** Called when a recipe is selected in the list. */
 	UFUNCTION()
 	void HandleRecipeSelected(FName RecipeId);
+
+	/** Called when a refresh removes the selected recipe. */
+	UFUNCTION()
+	void HandleRecipeSelectionCleared();
 
 	/** Called when the craft button is pressed. */
 	UFUNCTION()
@@ -265,7 +269,6 @@ private:
 
 	// Current state
 	EMOCraftingStation CurrentStation = EMOCraftingStation::None;
-	FName SelectedRecipeId = NAME_None;
 	FName CategoryFilter = NAME_None;
 	bool bShowOnlyCraftable = false;
 	bool bShowAllKnownRecipes = false;

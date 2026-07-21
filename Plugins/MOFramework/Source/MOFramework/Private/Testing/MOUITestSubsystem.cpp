@@ -27,6 +27,7 @@
 #include "HAL/PlatformTime.h"
 #include "Engine/World.h"
 #include "Engine/GameViewportClient.h"
+#include "TimerManager.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogMOUITest, Log, All);
 
@@ -38,11 +39,27 @@ void UMOUITestSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
 	RegisterTests();
+	RegisterFrameSteppedTests();
 	UE_LOG(LogMOUITest, Log, TEXT("MOUITestSubsystem initialized with %d tests"), TestRegistry.Num());
 }
 
 void UMOUITestSubsystem::Deinitialize()
 {
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(TestStepTimerHandle);
+	}
+	bIsRunningTests = false;
+	PendingTestNames.Reset();
+	ActiveTestSummary = FMOUITestSummary();
+	ActiveFrameTestName.Reset();
+	ActiveFrameTestActions.Reset();
+	FrameTestScratch.Reset();
+	bWaitingForBatchCleanup = false;
+	bObservedCleanBatchFrame = false;
+	BatchCleanupPollCount = 0;
+	BatchCleanupDeadline = 0.0;
+	FrameSteppedTestRegistry.Empty();
 	TestRegistry.Empty();
 	Super::Deinitialize();
 }
@@ -232,6 +249,243 @@ void UMOUITestSubsystem::RegisterTests()
 	TestRegistry.Add(TEXT("CommonUI.WidgetDeactivation"), [this]() { return Test_CommonUI_WidgetDeactivation(); });
 }
 
+void UMOUITestSubsystem::RegisterFrameSteppedTests()
+{
+	using ActionType = EMOUIFrameTestActionType;
+
+	auto Basic = [](ActionType Type)
+	{
+		return FMOUIFrameTestAction(Type);
+	};
+	auto Named = [](ActionType Type, const TCHAR* Argument, const TCHAR* Failure)
+	{
+		return FMOUIFrameTestAction(Type, Argument, Failure);
+	};
+	auto Layer = [](ActionType Type, FGameplayTag LayerTag, int32 ScratchSlot, const TCHAR* Failure)
+	{
+		return FMOUIFrameTestAction(Type, FString(), Failure, LayerTag, ScratchSlot);
+	};
+	auto Add = [this](const TCHAR* TestName, TArray<FMOUIFrameTestAction> Actions)
+	{
+		FrameSteppedTestRegistry.Add(TestName, MoveTemp(Actions));
+	};
+	auto AddCloseToggle = [&Add, &Named, &Basic](const TCHAR* TestName, const TCHAR* MenuName)
+	{
+		Add(TestName, {
+			Named(ActionType::OpenMenu, MenuName, TEXT("Failed to open menu")),
+			Named(ActionType::ToggleMenu, MenuName, TEXT("Failed to toggle menu")),
+			Named(ActionType::AssertMenuClosed, MenuName, TEXT("Menu still open after toggle")),
+			Basic(ActionType::Pass)
+		});
+	};
+	auto AddCloseKey = [&Add, &Named, &Basic](
+		const TCHAR* TestName,
+		const TCHAR* MenuName,
+		ActionType CloseAction)
+	{
+		Add(TestName, {
+			Named(ActionType::OpenMenu, MenuName, TEXT("Failed to open menu")),
+			Named(ActionType::AssertAnyMenuActive, TEXT(""), TEXT("Menu layer did not activate before close key")),
+			Basic(CloseAction),
+			Named(ActionType::AssertMenuClosed, MenuName, TEXT("Menu remained open after close key")),
+			Basic(ActionType::Pass)
+		});
+	};
+	auto AddInputState = [&Add, &Named, &Basic](
+		const TCHAR* TestName, const TCHAR* MenuName, bool bCheckMove, bool bCheckLook)
+	{
+		TArray<FMOUIFrameTestAction> Actions = {
+			Named(ActionType::OpenMenu, MenuName, TEXT("Failed to open menu")),
+			Named(ActionType::AssertCursorVisible, TEXT(""), TEXT("Cursor not visible"))
+		};
+		if (bCheckMove)
+		{
+			Actions.Add(Named(ActionType::AssertMoveBlocked, TEXT(""), TEXT("Movement not blocked")));
+		}
+		if (bCheckLook)
+		{
+			Actions.Add(Named(ActionType::AssertLookBlocked, TEXT(""), TEXT("Look not blocked")));
+		}
+		Actions.Add(Basic(ActionType::Pass));
+		Add(TestName, MoveTemp(Actions));
+	};
+	auto AddToggleCycle = [&Add, &Named, &Basic](const TCHAR* TestName, const TCHAR* MenuName)
+	{
+		Add(TestName, {
+			Basic(ActionType::CloseAllMenus),
+			Named(ActionType::ToggleMenu, MenuName, TEXT("Toggle failed")),
+			Named(ActionType::AssertMenuOpen, MenuName, TEXT("Toggle did not open menu")),
+			Named(ActionType::ToggleMenu, MenuName, TEXT("Toggle failed")),
+			Named(ActionType::AssertMenuClosed, MenuName, TEXT("Toggle did not close menu")),
+			Basic(ActionType::Pass)
+		});
+	};
+
+	Add(TEXT("Building.CloseEscape"), {
+		Named(ActionType::OpenMenu, TEXT("Building"), TEXT("Failed to open building menu")),
+		Named(ActionType::AssertAnyMenuActive, TEXT(""), TEXT("Building menu did not activate before Escape")),
+		Basic(ActionType::Escape),
+		Named(ActionType::AssertMenuClosed, TEXT("Building"), TEXT("Building still open after Escape")),
+		Basic(ActionType::Pass)
+	});
+	Add(TEXT("Building.CloseTab"), {
+		Named(ActionType::OpenMenu, TEXT("Building"), TEXT("Failed to open building menu")),
+		Named(ActionType::AssertAnyMenuActive, TEXT(""), TEXT("Building menu did not activate before Tab")),
+		Basic(ActionType::Tab),
+		Named(ActionType::AssertMenuClosed, TEXT("Building"), TEXT("Building still open after Tab")),
+		Basic(ActionType::Pass)
+	});
+	AddCloseToggle(TEXT("Building.CloseToggle"), TEXT("Building"));
+	AddInputState(TEXT("Building.InputState"), TEXT("Building"), false, false);
+	AddCloseKey(TEXT("Crafting.CloseEscape"), TEXT("Crafting"), ActionType::Escape);
+	AddCloseKey(TEXT("Crafting.CloseTab"), TEXT("Crafting"), ActionType::Tab);
+	AddCloseKey(TEXT("Inventory.CloseEscape"), TEXT("Inventory"), ActionType::Escape);
+	AddCloseKey(TEXT("Inventory.CloseTab"), TEXT("Inventory"), ActionType::Tab);
+	AddCloseKey(TEXT("Inventory.FocusAfterButtonClick"), TEXT("Inventory"), ActionType::Escape);
+	AddCloseKey(TEXT("Skills.CloseEscape"), TEXT("Skills"), ActionType::Escape);
+	AddCloseKey(TEXT("Skills.CloseTab"), TEXT("Skills"), ActionType::Tab);
+	AddCloseKey(TEXT("Status.CloseEscape"), TEXT("Status"), ActionType::Escape);
+	AddCloseKey(TEXT("Status.CloseTab"), TEXT("Status"), ActionType::Tab);
+	AddCloseKey(TEXT("InGame.CloseEscape"), TEXT("InGame"), ActionType::Escape);
+
+	const FGameplayTag MenuLayerTag = FGameplayTag::RequestGameplayTag(FName("MO.UI.Layer.Menu"));
+	Add(TEXT("CommonUI.LayerStackPop"), {
+		Named(ActionType::OpenMenu, TEXT("Inventory"), TEXT("Failed to open inventory")),
+		Layer(ActionType::CaptureLayerCount, MenuLayerTag, 0, TEXT("")),
+		Named(ActionType::AssertAnyMenuActive, TEXT(""), TEXT("Inventory did not activate before layer pop")),
+		Basic(ActionType::Escape),
+		Layer(ActionType::AssertLayerCountDecreased, MenuLayerTag, 0, TEXT("Menu layer count did not decrease")),
+		Basic(ActionType::Pass)
+	});
+	AddInputState(TEXT("CommonUI.MenuInputModeAll"), TEXT("Inventory"), false, false);
+	AddCloseKey(TEXT("CommonUI.BackActionHandler"), TEXT("Inventory"), ActionType::Escape);
+	AddInputState(TEXT("CommonUI.ModalInputModeMenu"), TEXT("InGame"), true, true);
+	Add(TEXT("CommonUI.ModalBlocksInput"), {
+		Named(ActionType::OpenMenu, TEXT("Inventory"), TEXT("Failed to open inventory")),
+		Named(ActionType::OpenInGameDirect, TEXT("InGame"), TEXT("Failed to open in-game menu")),
+		Named(ActionType::AssertMenuOpen, TEXT("InGame"), TEXT("In-game menu did not open")),
+		Named(ActionType::AssertMoveBlocked, TEXT(""), TEXT("Modal did not block movement")),
+		Named(ActionType::AssertLookBlocked, TEXT(""), TEXT("Modal did not block look input")),
+		Basic(ActionType::Pass)
+	});
+	Add(TEXT("CommonUI.FocusRestoration"), {
+		Named(ActionType::OpenMenu, TEXT("Inventory"), TEXT("Failed to open inventory")),
+		Named(ActionType::AssertAnyMenuActive, TEXT(""), TEXT("Inventory did not activate before modal push")),
+		Named(ActionType::OpenInGameDirect, TEXT("InGame"), TEXT("Failed to open in-game menu")),
+		Named(ActionType::AssertMenuOpen, TEXT("InGame"), TEXT("In-game menu did not open")),
+		Named(ActionType::AssertAnyMenuActive, TEXT(""), TEXT("In-game menu did not activate before Escape")),
+		Basic(ActionType::Escape),
+		Named(ActionType::AssertMenuOpen, TEXT("Inventory"), TEXT("Inventory did not remain open after modal close")),
+		Basic(ActionType::Escape),
+		Named(ActionType::AssertMenuClosed, TEXT("Inventory"), TEXT("Inventory did not close on second Escape")),
+		Basic(ActionType::Pass)
+	});
+	Add(TEXT("CommonUI.WidgetActivation"), {
+		Named(ActionType::OpenMenu, TEXT("Inventory"), TEXT("Failed to open inventory")),
+		Named(ActionType::AssertCursorVisible, TEXT(""), TEXT("Activation did not apply cursor state")),
+		Named(ActionType::AssertMoveBlocked, TEXT(""), TEXT("Activation did not block movement")),
+		Basic(ActionType::Pass)
+	});
+	Add(TEXT("CommonUI.WidgetDeactivation"), {
+		Named(ActionType::OpenMenu, TEXT("Inventory"), TEXT("Failed to open inventory")),
+		Basic(ActionType::Escape),
+		Named(ActionType::AssertMenuClosed, TEXT("Inventory"), TEXT("Menu remained open after deactivation")),
+		Named(ActionType::AssertMoveRestored, TEXT(""), TEXT("Deactivation did not restore movement")),
+		Basic(ActionType::Pass)
+	});
+
+	AddCloseToggle(TEXT("Crafting.CloseToggle"), TEXT("Crafting"));
+	AddInputState(TEXT("Crafting.InputState"), TEXT("Crafting"), true, false);
+	Add(TEXT("Focus.RestoredAfterMenuClose"), {
+		Named(ActionType::OpenMenu, TEXT("Inventory"), TEXT("Failed to open inventory")),
+		Basic(ActionType::Escape),
+		Named(ActionType::AssertNoActiveMenus, TEXT(""), TEXT("Menus still active after close")),
+		Basic(ActionType::Pass)
+	});
+	Add(TEXT("Focus.ReturnToGameAfterAllClosed"), {
+		Named(ActionType::OpenMenu, TEXT("Inventory"), TEXT("Failed to open inventory")),
+		Basic(ActionType::CloseAllMenus),
+		Named(ActionType::AssertNoActiveMenus, TEXT(""), TEXT("Menus still open")),
+		Basic(ActionType::Pass)
+	});
+	AddInputState(TEXT("InGame.InputBlocking"), TEXT("InGame"), true, true);
+	AddInputState(TEXT("InputState.CursorVisibleWhenMenuOpen"), TEXT("Inventory"), false, false);
+	Add(TEXT("InputState.LookBlockedWhenMenuOpen"), {
+		Named(ActionType::OpenMenu, TEXT("Inventory"), TEXT("Failed to open inventory")),
+		Named(ActionType::AssertLookBlocked, TEXT(""), TEXT("Look not blocked")),
+		Basic(ActionType::Pass)
+	});
+	Add(TEXT("InputState.MovementBlockedWhenMenuOpen"), {
+		Named(ActionType::OpenMenu, TEXT("Inventory"), TEXT("Failed to open inventory")),
+		Named(ActionType::AssertMoveBlocked, TEXT(""), TEXT("Movement not blocked")),
+		Basic(ActionType::Pass)
+	});
+	Add(TEXT("InputState.MovementRestoredAfterAllMenusClosed"), {
+		Named(ActionType::OpenMenu, TEXT("Inventory"), TEXT("Failed to open inventory")),
+		Named(ActionType::AssertMoveBlocked, TEXT(""), TEXT("Movement not blocked when menu is open")),
+		Basic(ActionType::CloseAllMenus),
+		Named(ActionType::AssertMoveRestored, TEXT(""), TEXT("Movement still blocked after all menus closed")),
+		Basic(ActionType::Pass)
+	});
+
+	AddCloseToggle(TEXT("Inventory.CloseToggle"), TEXT("Inventory"));
+	AddInputState(TEXT("Inventory.InputState"), TEXT("Inventory"), true, false);
+	Add(TEXT("Inventory.ReopenAfterClose"), {
+		Named(ActionType::OpenMenu, TEXT("Inventory"), TEXT("First open failed")),
+		Basic(ActionType::Escape),
+		Named(ActionType::AssertMenuClosed, TEXT("Inventory"), TEXT("Failed to close")),
+		Named(ActionType::OpenMenu, TEXT("Inventory"), TEXT("Reopen failed")),
+		Named(ActionType::AssertMenuOpen, TEXT("Inventory"), TEXT("Inventory not open after reopen")),
+		Basic(ActionType::Pass)
+	});
+	Add(TEXT("MenuSwitch.SkillsToStatus"), {
+		Named(ActionType::OpenMenu, TEXT("Skills"), TEXT("Failed to open skills")),
+		Named(ActionType::ToggleMenu, TEXT("Status"), TEXT("Failed to toggle status")),
+		Named(ActionType::AssertMenuClosed, TEXT("Skills"), TEXT("Skills still open")),
+		Named(ActionType::AssertMenuOpen, TEXT("Status"), TEXT("Status not open")),
+		Basic(ActionType::Pass)
+	});
+	AddCloseToggle(TEXT("Skills.CloseToggle"), TEXT("Skills"));
+	AddInputState(TEXT("Skills.InputState"), TEXT("Skills"), true, false);
+	AddCloseToggle(TEXT("Status.CloseToggle"), TEXT("Status"));
+	AddInputState(TEXT("Status.InputState"), TEXT("Status"), true, false);
+
+	TArray<FMOUIFrameTestAction> RapidOpenCloseActions;
+	for (int32 Cycle = 0; Cycle < 10; ++Cycle)
+	{
+		RapidOpenCloseActions.Add(Named(ActionType::OpenMenu, TEXT("Inventory"), TEXT("Rapid cycle failed to open")));
+		RapidOpenCloseActions.Add(Named(ActionType::AssertAnyMenuActive, TEXT(""), TEXT("Rapid cycle menu did not activate")));
+		RapidOpenCloseActions.Add(Basic(ActionType::Escape));
+		RapidOpenCloseActions.Add(Named(ActionType::AssertMenuClosed, TEXT("Inventory"), TEXT("Rapid cycle failed to close")));
+	}
+	RapidOpenCloseActions.Add(Basic(ActionType::Pass));
+	Add(TEXT("Stress.RapidOpenClose"), MoveTemp(RapidOpenCloseActions));
+
+	TArray<FMOUIFrameTestAction> RapidSwitchActions;
+	for (int32 Cycle = 0; Cycle < 5; ++Cycle)
+	{
+		RapidSwitchActions.Add(Named(ActionType::ToggleMenu, TEXT("Inventory"), TEXT("Inventory toggle failed")));
+		RapidSwitchActions.Add(Named(ActionType::ToggleMenu, TEXT("Crafting"), TEXT("Crafting toggle failed")));
+		RapidSwitchActions.Add(Named(ActionType::ToggleMenu, TEXT("Building"), TEXT("Building toggle failed")));
+		RapidSwitchActions.Add(Named(ActionType::ToggleMenu, TEXT("Skills"), TEXT("Skills toggle failed")));
+		RapidSwitchActions.Add(Named(ActionType::ToggleMenu, TEXT("Status"), TEXT("Status toggle failed")));
+	}
+	RapidSwitchActions.Add(Basic(ActionType::CloseAllMenus));
+	RapidSwitchActions.Add(Named(ActionType::AssertNoActiveMenus, TEXT(""), TEXT("Menus stuck open after rapid switching")));
+	RapidSwitchActions.Add(Basic(ActionType::Pass));
+	Add(TEXT("Stress.RapidMenuSwitch"), MoveTemp(RapidSwitchActions));
+
+	AddToggleCycle(TEXT("ToggleKey.BuildingOpensAndCloses"), TEXT("Building"));
+	AddToggleCycle(TEXT("ToggleKey.CraftingOpensAndCloses"), TEXT("Crafting"));
+	AddToggleCycle(TEXT("ToggleKey.InventoryOpensAndCloses"), TEXT("Inventory"));
+	Add(TEXT("ToggleKey.WorksAfterButtonClick"), {
+		Named(ActionType::OpenMenu, TEXT("Inventory"), TEXT("Failed to open inventory")),
+		Named(ActionType::ToggleMenu, TEXT("Inventory"), TEXT("Toggle failed")),
+		Named(ActionType::AssertMenuClosed, TEXT("Inventory"), TEXT("Toggle did not close")),
+		Basic(ActionType::Pass)
+	});
+}
+
 TArray<FString> UMOUITestSubsystem::GetAllTestNames() const
 {
 	TArray<FString> Names;
@@ -243,6 +497,431 @@ TArray<FString> UMOUITestSubsystem::GetAllTestNames() const
 // ============================================================================
 // TEST EXECUTION
 // ============================================================================
+
+bool UMOUITestSubsystem::StartAllTests()
+{
+	return BeginFrameSteppedRun(GetAllTestNames());
+}
+
+bool UMOUITestSubsystem::StartTestsMatching(const FString& Pattern)
+{
+	TArray<FString> MatchingTests;
+	for (const auto& Pair : TestRegistry)
+	{
+		if (Pair.Key.MatchesWildcard(Pattern))
+		{
+			MatchingTests.Add(Pair.Key);
+		}
+	}
+	return BeginFrameSteppedRun(MoveTemp(MatchingTests));
+}
+
+bool UMOUITestSubsystem::BeginFrameSteppedRun(TArray<FString> TestNames)
+{
+	if (bIsRunningTests)
+	{
+		UE_LOG(LogMOUITest, Warning, TEXT("UI test batch is already running"));
+		return false;
+	}
+
+	TestNames.Sort();
+	PendingTestNames = MoveTemp(TestNames);
+	NextPendingTestIndex = 0;
+	ActiveTestSummary = FMOUITestSummary();
+	ActiveTestSummary.TotalTests = PendingTestNames.Num();
+	ActiveTestStartTime = FPlatformTime::Seconds();
+	ActiveFrameTestName.Reset();
+	ActiveFrameTestActions.Reset();
+	NextFrameTestActionIndex = 0;
+	ActiveFrameTestStartTime = 0.0;
+	ActiveFrameActionDeadline = 0.0;
+	FrameTestScratch.Reset();
+	bWaitingForBatchCleanup = false;
+	bObservedCleanBatchFrame = false;
+	BatchCleanupPollCount = 0;
+	BatchCleanupDeadline = 0.0;
+	bIsRunningTests = true;
+
+	UE_LOG(LogMOUITest, Log, TEXT("========================================"));
+	UE_LOG(LogMOUITest, Log, TEXT("Starting frame-stepped UI Test Suite (%d tests)"), PendingTestNames.Num());
+	UE_LOG(LogMOUITest, Log, TEXT("========================================"));
+
+	CloseAllMenus();
+	BeginBatchCleanup();
+	ScheduleNextTestStep();
+	return true;
+}
+
+void UMOUITestSubsystem::ScheduleNextTestStep()
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		FinishFrameSteppedRun();
+		return;
+	}
+
+	FTimerDelegate StepDelegate;
+	StepDelegate.BindUObject(this, &UMOUITestSubsystem::RunNextTestStep);
+	TestStepTimerHandle = World->GetTimerManager().SetTimerForNextTick(StepDelegate);
+}
+
+void UMOUITestSubsystem::RunNextTestStep()
+{
+	if (!bIsRunningTests)
+	{
+		return;
+	}
+
+	if (bWaitingForBatchCleanup)
+	{
+		const bool bStacksAreClean = !IsAnyMenuOpen() && GetActiveMenuCount() == 0;
+		if (!bStacksAreClean)
+		{
+			bObservedCleanBatchFrame = false;
+		}
+		else if (bObservedCleanBatchFrame)
+		{
+			bWaitingForBatchCleanup = false;
+		}
+		else
+		{
+			bObservedCleanBatchFrame = true;
+		}
+
+		if (bWaitingForBatchCleanup)
+		{
+			++BatchCleanupPollCount;
+			if (FPlatformTime::Seconds() >= BatchCleanupDeadline)
+			{
+				UE_LOG(LogMOUITest, Error,
+					TEXT("UI test cleanup did not settle after %d frames; continuing so the affected test can report state"),
+					BatchCleanupPollCount);
+				bWaitingForBatchCleanup = false;
+			}
+			else
+			{
+				ScheduleNextTestStep();
+				return;
+			}
+		}
+	}
+
+	if (!ActiveFrameTestName.IsEmpty())
+	{
+		RunNextFrameTestAction();
+		return;
+	}
+
+	if (!PendingTestNames.IsValidIndex(NextPendingTestIndex))
+	{
+		FinishFrameSteppedRun();
+		return;
+	}
+
+	const FString TestName = PendingTestNames[NextPendingTestIndex++];
+	if (const TArray<FMOUIFrameTestAction>* Actions = FrameSteppedTestRegistry.Find(TestName))
+	{
+		CurrentTestLogs.Empty();
+		ActiveFrameTestName = TestName;
+		ActiveFrameTestActions = *Actions;
+		NextFrameTestActionIndex = 0;
+		ActiveFrameTestStartTime = FPlatformTime::Seconds();
+		ActiveFrameActionDeadline = 0.0;
+		FrameTestScratch.Init(0, 4);
+		RunNextFrameTestAction();
+		return;
+	}
+
+	RecordBatchResult(RunTest(TestName));
+	CloseAllMenus();
+	BeginBatchCleanup();
+	ScheduleNextTestStep();
+}
+
+void UMOUITestSubsystem::RunNextFrameTestAction()
+{
+	if (!bIsRunningTests || ActiveFrameTestName.IsEmpty())
+	{
+		return;
+	}
+
+	if (!ActiveFrameTestActions.IsValidIndex(NextFrameTestActionIndex))
+	{
+		FMOUITestResult Result = MakeResult(
+			ActiveFrameTestName,
+			false,
+			TEXT("Frame-stepped test ended without a terminal Pass action"));
+		Result.DurationMs = (FPlatformTime::Seconds() - ActiveFrameTestStartTime) * 1000.0f;
+		Result.Logs = CurrentTestLogs;
+		RecordBatchResult(MoveTemp(Result));
+		ActiveFrameTestName.Reset();
+		ActiveFrameTestActions.Reset();
+		NextFrameTestActionIndex = 0;
+		ActiveFrameTestStartTime = 0.0;
+		ActiveFrameActionDeadline = 0.0;
+		FrameTestScratch.Reset();
+		CloseAllMenus();
+		BeginBatchCleanup();
+		ScheduleNextTestStep();
+		return;
+	}
+
+	const FMOUIFrameTestAction Action = ActiveFrameTestActions[NextFrameTestActionIndex++];
+	if (ActiveFrameActionDeadline <= 0.0)
+	{
+		ActiveFrameActionDeadline = FPlatformTime::Seconds() + 3.0;
+	}
+	FMOUITestResult Result;
+	const EMOUIFrameTestActionOutcome Outcome = ExecuteFrameTestAction(Action, Result);
+	if (Outcome == EMOUIFrameTestActionOutcome::Retry)
+	{
+		--NextFrameTestActionIndex;
+		ScheduleNextTestStep();
+		return;
+	}
+	if (Outcome == EMOUIFrameTestActionOutcome::Continue)
+	{
+		ActiveFrameActionDeadline = 0.0;
+		ScheduleNextTestStep();
+		return;
+	}
+
+	Result.DurationMs = (FPlatformTime::Seconds() - ActiveFrameTestStartTime) * 1000.0f;
+	Result.Logs = CurrentTestLogs;
+	RecordBatchResult(MoveTemp(Result));
+
+	ActiveFrameTestName.Reset();
+	ActiveFrameTestActions.Reset();
+	NextFrameTestActionIndex = 0;
+	ActiveFrameTestStartTime = 0.0;
+	ActiveFrameActionDeadline = 0.0;
+	FrameTestScratch.Reset();
+	CloseAllMenus();
+	BeginBatchCleanup();
+	ScheduleNextTestStep();
+}
+
+UMOUITestSubsystem::EMOUIFrameTestActionOutcome UMOUITestSubsystem::ExecuteFrameTestAction(
+	const FMOUIFrameTestAction& Action,
+	FMOUITestResult& OutResult)
+{
+	auto Fail = [this, &Action, &OutResult](const FString& DefaultMessage)
+	{
+		const FString& Message = Action.FailureMessage.IsEmpty() ? DefaultMessage : Action.FailureMessage;
+		OutResult = MakeResult(ActiveFrameTestName, false, Message);
+		return EMOUIFrameTestActionOutcome::Failed;
+	};
+	auto RetryOrFail = [this, &Fail](const FString& DefaultMessage)
+	{
+		return FPlatformTime::Seconds() < ActiveFrameActionDeadline
+			? EMOUIFrameTestActionOutcome::Retry
+			: Fail(DefaultMessage);
+	};
+
+	switch (Action.Type)
+	{
+	case EMOUIFrameTestActionType::OpenMenu:
+		return OpenMenu(Action.Argument)
+			? EMOUIFrameTestActionOutcome::Continue
+			: Fail(FString::Printf(TEXT("Failed to open menu: %s"), *Action.Argument));
+
+	case EMOUIFrameTestActionType::OpenInGameDirect:
+		if (UMOUIManagerComponent* UIManager = GetUIManager())
+		{
+			UIManager->OpenInGameMenu();
+			return EMOUIFrameTestActionOutcome::Continue;
+		}
+		return Fail(TEXT("UIManager not found for direct in-game menu open"));
+
+	case EMOUIFrameTestActionType::ToggleMenu:
+		return ToggleMenuForTest(Action.Argument)
+			? EMOUIFrameTestActionOutcome::Continue
+			: Fail(FString::Printf(TEXT("Failed to toggle menu: %s"), *Action.Argument));
+
+	case EMOUIFrameTestActionType::Escape:
+		SimulateEscape();
+		return EMOUIFrameTestActionOutcome::Continue;
+
+	case EMOUIFrameTestActionType::Tab:
+		SimulateTab();
+		return EMOUIFrameTestActionOutcome::Continue;
+
+	case EMOUIFrameTestActionType::CloseAllMenus:
+		CloseAllMenus();
+		return EMOUIFrameTestActionOutcome::Continue;
+
+	case EMOUIFrameTestActionType::AssertMenuOpen:
+		return IsMenuOpen(Action.Argument)
+			? EMOUIFrameTestActionOutcome::Continue
+			: RetryOrFail(FString::Printf(TEXT("Menu is not open: %s"), *Action.Argument));
+
+	case EMOUIFrameTestActionType::AssertMenuClosed:
+		return !IsMenuOpen(Action.Argument)
+			? EMOUIFrameTestActionOutcome::Continue
+			: RetryOrFail(FString::Printf(TEXT("Menu is still open: %s"), *Action.Argument));
+
+	case EMOUIFrameTestActionType::AssertAnyMenuActive:
+		return IsAnyMenuOpen()
+			? EMOUIFrameTestActionOutcome::Continue
+			: RetryOrFail(TEXT("No active CommonUI menu was detected"));
+
+	case EMOUIFrameTestActionType::AssertCursorVisible:
+		return IsCursorVisible()
+			? EMOUIFrameTestActionOutcome::Continue
+			: RetryOrFail(TEXT("Cursor is not visible"));
+
+	case EMOUIFrameTestActionType::AssertMoveBlocked:
+		return IsMoveInputIgnored()
+			? EMOUIFrameTestActionOutcome::Continue
+			: RetryOrFail(TEXT("Movement input is not blocked"));
+
+	case EMOUIFrameTestActionType::AssertMoveRestored:
+		return !IsMoveInputIgnored()
+			? EMOUIFrameTestActionOutcome::Continue
+			: RetryOrFail(TEXT("Movement input is still blocked"));
+
+	case EMOUIFrameTestActionType::AssertLookBlocked:
+		return IsLookInputIgnored()
+			? EMOUIFrameTestActionOutcome::Continue
+			: RetryOrFail(TEXT("Look input is not blocked"));
+
+	case EMOUIFrameTestActionType::AssertNoActiveMenus:
+		return !IsAnyMenuOpen() && GetActiveMenuCount() == 0
+			? EMOUIFrameTestActionOutcome::Continue
+			: RetryOrFail(TEXT("One or more menus remain active"));
+
+	case EMOUIFrameTestActionType::CaptureLayerCount:
+		if (Action.ScratchSlot < 0)
+		{
+			return Fail(TEXT("Invalid layer-count scratch slot"));
+		}
+		if (!FrameTestScratch.IsValidIndex(Action.ScratchSlot))
+		{
+			FrameTestScratch.SetNumZeroed(Action.ScratchSlot + 1);
+		}
+		FrameTestScratch[Action.ScratchSlot] = GetLayerWidgetCount(Action.LayerTag);
+		return EMOUIFrameTestActionOutcome::Continue;
+
+	case EMOUIFrameTestActionType::AssertLayerCountDecreased:
+		if (!FrameTestScratch.IsValidIndex(Action.ScratchSlot))
+		{
+			return Fail(TEXT("Layer-count scratch slot was not captured"));
+		}
+		return GetLayerWidgetCount(Action.LayerTag) < FrameTestScratch[Action.ScratchSlot]
+			? EMOUIFrameTestActionOutcome::Continue
+			: RetryOrFail(TEXT("Layer widget count did not decrease"));
+
+	case EMOUIFrameTestActionType::Pass:
+		OutResult = MakeResult(ActiveFrameTestName, true);
+		return EMOUIFrameTestActionOutcome::Complete;
+	}
+
+	return Fail(TEXT("Unknown frame-stepped test action"));
+}
+
+void UMOUITestSubsystem::RecordBatchResult(FMOUITestResult Result)
+{
+	const FString TestName = Result.TestName;
+	ActiveTestSummary.Results.Add(Result);
+
+	if (Result.bPassed)
+	{
+		ActiveTestSummary.PassedTests++;
+		UE_LOG(LogMOUITest, Log, TEXT("[PASS] %s (%.1fms)"), *TestName, Result.DurationMs);
+	}
+	else
+	{
+		ActiveTestSummary.FailedTests++;
+		UE_LOG(LogMOUITest, Error, TEXT("[FAIL] %s: %s"), *TestName, *Result.ErrorMessage);
+	}
+}
+
+void UMOUITestSubsystem::BeginBatchCleanup()
+{
+	bWaitingForBatchCleanup = true;
+	bObservedCleanBatchFrame = false;
+	BatchCleanupPollCount = 0;
+	BatchCleanupDeadline = FPlatformTime::Seconds() + 3.0;
+}
+
+bool UMOUITestSubsystem::ToggleMenuForTest(const FString& MenuName)
+{
+	UMOUIManagerComponent* UIManager = GetUIManager();
+	if (!UIManager)
+	{
+		LogTest(TEXT("ERROR: UIManager not found"));
+		return false;
+	}
+
+	LogTest(FString::Printf(TEXT("Toggling menu: %s"), *MenuName));
+	if (MenuName.Equals(TEXT("Inventory"), ESearchCase::IgnoreCase))
+	{
+		UIManager->ToggleInventoryMenu();
+	}
+	else if (MenuName.Equals(TEXT("Crafting"), ESearchCase::IgnoreCase))
+	{
+		UIManager->ToggleCraftingMenu();
+	}
+	else if (MenuName.Equals(TEXT("Building"), ESearchCase::IgnoreCase))
+	{
+		UIManager->ToggleBuildingMenu();
+	}
+	else if (MenuName.Equals(TEXT("Skills"), ESearchCase::IgnoreCase))
+	{
+		UIManager->ToggleSkillsPanel();
+	}
+	else if (MenuName.Equals(TEXT("Status"), ESearchCase::IgnoreCase))
+	{
+		UIManager->TogglePlayerStatus();
+	}
+	else if (MenuName.Equals(TEXT("InGame"), ESearchCase::IgnoreCase))
+	{
+		UIManager->ToggleInGameMenu();
+	}
+	else
+	{
+		LogTest(FString::Printf(TEXT("ERROR: Unknown menu: %s"), *MenuName));
+		return false;
+	}
+
+	return true;
+}
+
+void UMOUITestSubsystem::FinishFrameSteppedRun()
+{
+	if (!bIsRunningTests)
+	{
+		return;
+	}
+
+	ActiveTestSummary.TotalDurationMs = (FPlatformTime::Seconds() - ActiveTestStartTime) * 1000.0f;
+	LastTestSummary = ActiveTestSummary;
+	bIsRunningTests = false;
+
+	UE_LOG(LogMOUITest, Log, TEXT("========================================"));
+	UE_LOG(LogMOUITest, Log, TEXT("Frame-stepped Test Suite Complete: %d/%d passed (%.1fms)"),
+		LastTestSummary.PassedTests, LastTestSummary.TotalTests, LastTestSummary.TotalDurationMs);
+	UE_LOG(LogMOUITest, Log, TEXT("========================================"));
+
+	const FString OutputPath = FPaths::ProjectContentDir() / TEXT("Python/test_output/ui_test_results.txt");
+	WriteResultsToFile(LastTestSummary, OutputPath);
+	OnTestsComplete.Broadcast(LastTestSummary);
+
+	PendingTestNames.Reset();
+	NextPendingTestIndex = 0;
+	ActiveTestSummary = FMOUITestSummary();
+	ActiveFrameTestName.Reset();
+	ActiveFrameTestActions.Reset();
+	NextFrameTestActionIndex = 0;
+	ActiveFrameTestStartTime = 0.0;
+	ActiveFrameActionDeadline = 0.0;
+	FrameTestScratch.Reset();
+	bWaitingForBatchCleanup = false;
+	bObservedCleanBatchFrame = false;
+	BatchCleanupPollCount = 0;
+	BatchCleanupDeadline = 0.0;
+}
 
 FMOUITestSummary UMOUITestSubsystem::RunAllTests()
 {
@@ -582,8 +1261,11 @@ void UMOUITestSubsystem::SimulateEscape()
 {
 	LogTest(TEXT("Simulating Escape key press via Slate"));
 
-	// Try Slate key event first
-	if (FSlateApplication::IsInitialized())
+	// A raw Escape that is not consumed during a frame-stepped editor batch is
+	// interpreted by the editor as "End PIE" on the following frame. Single
+	// interactive tests may still exercise Slate routing; batches use the
+	// deterministic UI-manager fallback below so the harness cannot stop itself.
+	if (FSlateApplication::IsInitialized() && !bIsRunningTests)
 	{
 		FKeyEvent KeyDownEvent(EKeys::Escape, FModifierKeysState(), 0, false, 0, 0);
 		FSlateApplication::Get().ProcessKeyDownEvent(KeyDownEvent);
@@ -592,6 +1274,10 @@ void UMOUITestSubsystem::SimulateEscape()
 		FSlateApplication::Get().ProcessKeyUpEvent(KeyUpEvent);
 
 		LogTest(TEXT("Escape key event sent to Slate"));
+	}
+	else if (bIsRunningTests)
+	{
+		LogTest(TEXT("Batch mode: skipped editor-level Slate Escape injection"));
 	}
 
 	// Slate key simulation is unreliable with CommonUI widgets.
@@ -617,8 +1303,9 @@ void UMOUITestSubsystem::SimulateTab()
 {
 	LogTest(TEXT("Simulating Tab key press via Slate"));
 
-	// Try Slate key event first
-	if (FSlateApplication::IsInitialized())
+	// Keep frame-stepped batches out of editor-level focus/key handling. The
+	// direct UI-manager route below is the stable batch contract.
+	if (FSlateApplication::IsInitialized() && !bIsRunningTests)
 	{
 		FKeyEvent KeyDownEvent(EKeys::Tab, FModifierKeysState(), 0, false, 0, 0);
 		FSlateApplication::Get().ProcessKeyDownEvent(KeyDownEvent);
@@ -627,6 +1314,10 @@ void UMOUITestSubsystem::SimulateTab()
 		FSlateApplication::Get().ProcessKeyUpEvent(KeyUpEvent);
 
 		LogTest(TEXT("Tab key event sent to Slate"));
+	}
+	else if (bIsRunningTests)
+	{
+		LogTest(TEXT("Batch mode: skipped editor-level Slate Tab injection"));
 	}
 
 	// Slate key simulation is unreliable with CommonUI widgets.

@@ -46,6 +46,7 @@
 #include "MOCombatComponent.h"
 #include "MOCraftingQueueComponent.h"
 #include "MOSkillsComponent.h"
+#include "MOKnowledgeComponent.h"
 #include "MOControllableInterface.h"
 #include "MOCommonButton.h"
 #include "AIController.h"
@@ -215,14 +216,16 @@ namespace
 			return { false, TEXT("Craft"), TEXT("no crafting queue component (are you in-game?)") };
 		}
 
-		// Self-setup: grant the recipe's ingredients AND its gating skill so the
-		// enqueue exercises the crafting PATH, isolated from content balance.
+		// Self-setup: grant the recipe's ingredients and unlock requirements so
+		// enqueue exercises the authoritative crafting path, isolated from balance.
 		// Tools/stations can't be fabricated here -- the detail reports if
 		// enqueue still fails so the remaining gate is diagnosable.
 		int32 Granted = 0;
-		FString SkillNote;
+		FString UnlockNote;
+		EMOCraftingStation TestStation = EMOCraftingStation::None;
 		if (const FMORecipeDefinitionRow* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(RecipeId))
 		{
+			TestStation = Recipe->RequiredStation;
 			if (UMOInventoryComponent* Inv = ResolveLocalInventory(World))
 			{
 				for (const FMORecipeIngredient& Ing : Recipe->Ingredients)
@@ -233,23 +236,42 @@ namespace
 					}
 				}
 			}
-			if (!Recipe->RequiredSkillId.IsNone() && Recipe->RequiredSkillLevel > 0)
+			if (UMOSkillsComponent* Skills = Pawn->FindComponentByClass<UMOSkillsComponent>())
 			{
-				if (UMOSkillsComponent* Skills = Pawn->FindComponentByClass<UMOSkillsComponent>())
+				auto EnsureSkill = [Skills, &UnlockNote](FName SkillId, int32 RequiredLevel)
 				{
-					if (!Skills->HasSkillLevel(Recipe->RequiredSkillId, Recipe->RequiredSkillLevel))
+					if (!SkillId.IsNone() && RequiredLevel > 0 && !Skills->HasSkillLevel(SkillId, RequiredLevel))
 					{
-						Skills->SetSkillLevel(Recipe->RequiredSkillId, Recipe->RequiredSkillLevel);
-						SkillNote = FString::Printf(TEXT(", set %s=%d"), *Recipe->RequiredSkillId.ToString(), Recipe->RequiredSkillLevel);
+						Skills->SetSkillLevel(SkillId, RequiredLevel);
+						UnlockNote += FString::Printf(TEXT(", set %s=%d"), *SkillId.ToString(), RequiredLevel);
+					}
+				};
+
+				EnsureSkill(Recipe->RequiredSkillId,
+					FMath::Max(Recipe->RequiredSkillLevel, Recipe->DiscoverySkillLevel));
+				if (Recipe->bRequiresDiscovery)
+				{
+					EnsureSkill(Recipe->DiscoveryKnowledgeId, Recipe->DiscoveryKnowledgeLevel);
+				}
+			}
+
+			if (UMOKnowledgeComponent* Knowledge = Pawn->FindComponentByClass<UMOKnowledgeComponent>())
+			{
+				for (const FName KnowledgeId : Recipe->RequiredKnowledge)
+				{
+					if (!KnowledgeId.IsNone() && !Knowledge->HasKnowledge(KnowledgeId))
+					{
+						Knowledge->GrantKnowledge(KnowledgeId);
+						UnlockNote += FString::Printf(TEXT(", granted %s"), *KnowledgeId.ToString());
 					}
 				}
 			}
 		}
 
-		const bool bOk = Queue->EnqueueCraft(RecipeId, 1, EMOCraftingStation::None);
+		const bool bOk = Queue->EnqueueCraft(RecipeId, 1, TestStation);
 		const FString Detail = bOk
-			? FString::Printf(TEXT("EnqueueCraft(%s)=true after granting %d ingredient(s)%s"), *RecipeId.ToString(), Granted, *SkillNote)
-			: FString::Printf(TEXT("EnqueueCraft(%s)=false even after granting %d ingredient(s)%s (needs tool/station?)"), *RecipeId.ToString(), Granted, *SkillNote);
+			? FString::Printf(TEXT("EnqueueCraft(%s)=true after granting %d ingredient(s)%s"), *RecipeId.ToString(), Granted, *UnlockNote)
+			: FString::Printf(TEXT("EnqueueCraft(%s)=false even after granting %d ingredient(s)%s (needs tool/station?)"), *RecipeId.ToString(), Granted, *UnlockNote);
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] %s Craft: %s"), bOk ? TEXT("PASS") : TEXT("FAIL"), *Detail);
 		return { bOk, TEXT("Craft"), Detail };
 	}

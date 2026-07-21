@@ -39,122 +39,40 @@ void UMOBuildingRecipeListWidget::PopulateRecipes(const TArray<FName>& RecipeIds
 {
 	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingRecipeListWidget] PopulateRecipes called with %d recipes"), RecipeIds.Num());
 
-	CurrentRecipeIds = RecipeIds;
-
-	// Clear existing entries
-	ClearRecipes();
-
-	// Get the container to add entries to
-	UPanelWidget* Container = GetContainer();
-	if (!Container)
-	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOBuildingRecipeListWidget] No container widget bound (need RecipeScrollBox or RecipeContainer)"));
-		return;
-	}
-
-	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingRecipeListWidget] Using container: %s"), *Container->GetName());
-
-	// Check if we have a valid entry widget class
 	if (!RecipeEntryWidgetClass)
 	{
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOBuildingRecipeListWidget] No RecipeEntryWidgetClass set - check Blueprint defaults"));
 		return;
 	}
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingRecipeListWidget] RecipeEntryWidgetClass: %s"), *RecipeEntryWidgetClass->GetName());
-
-	// Create entry widgets
-	int32 CreatedCount = 0;
-	for (const FName& RecipeId : RecipeIds)
-	{
-		UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingRecipeListWidget] Creating entry for recipe: %s"), *RecipeId.ToString());
-
-		UMOBuildingRecipeEntryWidget* EntryWidget = CreateWidget<UMOBuildingRecipeEntryWidget>(this, RecipeEntryWidgetClass);
-		if (!EntryWidget)
-		{
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOBuildingRecipeListWidget] Failed to create widget for recipe: %s"), *RecipeId.ToString());
-			continue;
-		}
-
-		// Build and set data
-		FMOBuildRecipeListEntryData EntryData = BuildEntryData(RecipeId);
-		EntryWidget->SetupEntry(EntryData);
-
-		// Bind click handler
-		EntryWidget->OnEntryClicked.AddDynamic(this, &UMOBuildingRecipeListWidget::HandleBuildingEntryClicked);
-
-		// Add to container
-		Container->AddChild(EntryWidget);
-		BuildingEntryWidgets.Add(EntryWidget);
-		CreatedCount++;
-
-		UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingRecipeListWidget] Entry widget created for: %s (DisplayName: %s)"),
-			*RecipeId.ToString(), *EntryData.DisplayName.ToString());
-	}
-
-	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingRecipeListWidget] Populated %d building recipes (created %d widgets)"), RecipeIds.Num(), CreatedCount);
+	EntryWidgetClass = RecipeEntryWidgetClass;
+	Super::PopulateList(RecipeIds);
+	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingRecipeListWidget] Populated %d building recipes"), GetEntryCount());
 }
 
 void UMOBuildingRecipeListWidget::ClearRecipes()
 {
-	// Remove all entry widgets
-	for (UMOBuildingRecipeEntryWidget* Entry : BuildingEntryWidgets)
-	{
-		if (Entry)
-		{
-			Entry->RemoveFromParent();
-		}
-	}
-	BuildingEntryWidgets.Empty();
-	SelectedRecipeId = NAME_None;
+	Super::ClearList();
 }
 
 void UMOBuildingRecipeListWidget::RefreshEntryStates()
 {
-	for (UMOBuildingRecipeEntryWidget* Entry : BuildingEntryWidgets)
-	{
-		if (!Entry)
-		{
-			continue;
-		}
-
-		FName RecipeId = Entry->GetRecipeId();
-		bool bCanBuild = CanBuildRecipe(RecipeId);
-		bool bIsSelected = (RecipeId == SelectedRecipeId);
-
-		Entry->SetCanBuild(bCanBuild);
-		Entry->SetSelected(bIsSelected);
-	}
+	Super::RefreshEntryStates();
 }
 
 void UMOBuildingRecipeListWidget::SelectRecipe(FName RecipeId)
 {
-	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingRecipeListWidget] SelectRecipe - RecipeId: %s (was: %s)"),
-		*RecipeId.ToString(), *SelectedRecipeId.ToString());
+	SelectEntry(RecipeId);
+}
 
-	FName OldSelection = SelectedRecipeId;
-	SelectedRecipeId = RecipeId;
-
-	// Update visual state of affected entries
-	for (UMOBuildingRecipeEntryWidget* Entry : BuildingEntryWidgets)
+void UMOBuildingRecipeListWidget::SelectEntry(FName EntryId)
+{
+	const FName PreviousId = GetSelectedEntryId();
+	Super::SelectEntry(EntryId);
+	const FName CurrentId = GetSelectedEntryId();
+	if (CurrentId != PreviousId && !CurrentId.IsNone())
 	{
-		if (!Entry)
-		{
-			continue;
-		}
-
-		FName EntryRecipeId = Entry->GetRecipeId();
-		if (EntryRecipeId == OldSelection || EntryRecipeId == SelectedRecipeId)
-		{
-			Entry->SetSelected(EntryRecipeId == SelectedRecipeId);
-		}
-	}
-
-	// Broadcast selection
-	if (SelectedRecipeId != OldSelection)
-	{
-		UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingRecipeListWidget] Broadcasting OnRecipeSelected: %s"), *SelectedRecipeId.ToString());
-		OnRecipeSelected.Broadcast(SelectedRecipeId);
+		OnRecipeSelected.Broadcast(CurrentId);
 	}
 }
 
@@ -170,22 +88,28 @@ void UMOBuildingRecipeListWidget::SetShowOnlyBuildable(bool bOnlyBuildable)
 	// Note: Caller should repopulate the list with filtered recipes
 }
 
-void UMOBuildingRecipeListWidget::NativeConstruct()
+void UMOBuildingRecipeListWidget::ConfigureEntry_Implementation(UMOListEntryBase* Entry, FName EntryId)
 {
-	Super::NativeConstruct();
+	if (UMOBuildingRecipeEntryWidget* BuildingEntry = Cast<UMOBuildingRecipeEntryWidget>(Entry))
+	{
+		BuildingEntry->SetupEntry(BuildEntryData(EntryId));
+	}
 }
 
-void UMOBuildingRecipeListWidget::HandleBuildingEntryClicked(FName RecipeId)
+void UMOBuildingRecipeListWidget::RefreshEntryState_Implementation(UMOListEntryBase* Entry, FName EntryId)
 {
-	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingRecipeListWidget] HandleBuildingEntryClicked - RecipeId: %s"), *RecipeId.ToString());
-	SelectRecipe(RecipeId);
+	if (UMOBuildingRecipeEntryWidget* BuildingEntry = Cast<UMOBuildingRecipeEntryWidget>(Entry))
+	{
+		BuildingEntry->SetCanBuild(CanBuildRecipe(EntryId));
+		BuildingEntry->SetSelected(EntryId == GetSelectedEntryId());
+	}
 }
 
 FMOBuildRecipeListEntryData UMOBuildingRecipeListWidget::BuildEntryData(FName RecipeId) const
 {
 	FMOBuildRecipeListEntryData Data;
 	Data.RecipeId = RecipeId;
-	Data.bIsSelected = (RecipeId == SelectedRecipeId);
+	Data.bIsSelected = (RecipeId == GetSelectedEntryId());
 	Data.bCanBuild = CanBuildRecipe(RecipeId);
 
 	// Check discovery

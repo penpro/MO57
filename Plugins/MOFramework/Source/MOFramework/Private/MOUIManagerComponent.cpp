@@ -10,6 +10,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "TimerManager.h"
+#include "Widgets/CommonActivatableWidgetContainer.h"
 
 #include "MOInventoryComponent.h"
 #include "MOInventoryMenu.h"
@@ -54,7 +55,6 @@
 #include "MOHarvestSubsystem.h"
 #include "MOCraftingSubsystem.h"
 #include "MOBuildingMenu.h"
-#include "MOBuildWidget.h"
 #include "MOGhostContextMenu.h"
 #include "MOStationContextMenu.h"
 #include "MOBuildableActor.h"
@@ -1078,6 +1078,7 @@ void UMOUIManagerComponent::CloseAllMenus()
 	// NOTE: Input state is handled automatically by CommonUI via GetDesiredInputConfig()
 	HideModalBackground();
 	UpdateReticleVisibility();
+	ScheduleMenuLayerReconciliation();
 }
 
 void UMOUIManagerComponent::CloseAllSwitchableMenus()
@@ -1122,6 +1123,74 @@ void UMOUIManagerComponent::CloseAllSwitchableMenus()
 	if (!IsAnyMenuOpen())
 	{
 		HideModalBackground();
+	}
+
+	// Controllers close the current menu and push the replacement in the same
+	// frame. CommonUI transitions the old entry asynchronously, so reconcile on
+	// the next frame once the replacement is known. This prevents a deactivated
+	// entry from surviving under the new top widget and later reactivating as an
+	// ownerless menu.
+	ScheduleMenuLayerReconciliation();
+}
+
+void UMOUIManagerComponent::ScheduleMenuLayerReconciliation()
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	TWeakObjectPtr<UMOUIManagerComponent> WeakThis(this);
+	World->GetTimerManager().SetTimerForNextTick(FTimerDelegate::CreateWeakLambda(this, [WeakThis]()
+	{
+		if (UMOUIManagerComponent* Self = WeakThis.Get())
+		{
+			Self->ReconcileMenuLayerEntries();
+		}
+	}));
+}
+
+void UMOUIManagerComponent::ReconcileMenuLayerEntries()
+{
+	UMOGameUIManagerSubsystem* UISubsystem = UMOGameUIManagerSubsystem::Get(GetWorld());
+	UMOPrimaryGameLayout* Layout = UISubsystem ? UISubsystem->GetRootLayout() : nullptr;
+	UCommonActivatableWidgetContainerBase* MenuStack = Layout
+		? Layout->GetLayerStack(MOUILayerTags::Layer_Menu)
+		: nullptr;
+	if (!MenuStack)
+	{
+		return;
+	}
+
+	const bool bHasKnownMenu =
+		IsInventoryMenuOpen()
+		|| IsCraftingMenuOpen()
+		|| IsBuildingMenuOpen()
+		|| IsSkillsPanelOpen()
+		|| IsPlayerStatusVisible()
+		|| IsPossessionMenuOpen()
+		|| IsQuestLogOpen()
+		|| IsInGameMenuOpen();
+
+	const TArray<UCommonActivatableWidget*> Entries = MenuStack->GetWidgetList();
+	if (!bHasKnownMenu)
+	{
+		// No controller owns a Menu-layer entry. Clear every stale transition
+		// survivor in one stack-native operation and return to root content.
+		MenuStack->ClearWidgets();
+		return;
+	}
+
+	// The newest entry is the intended switch target even if its activation
+	// transition has not completed yet. Remove every covered predecessor.
+	UCommonActivatableWidget* KeepEntry = Entries.Num() > 0 ? Entries.Last() : nullptr;
+	for (UCommonActivatableWidget* Entry : Entries)
+	{
+		if (Entry && Entry != KeepEntry)
+		{
+			MenuStack->RemoveWidget(*Entry);
+		}
 	}
 }
 

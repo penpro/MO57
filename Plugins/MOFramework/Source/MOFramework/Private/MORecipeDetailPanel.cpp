@@ -1,5 +1,7 @@
 #include "MORecipeDetailPanel.h"
 #include "MOFramework.h"
+#include "MOCraftingSubsystem.h"
+#include "MOKnowledgeComponent.h"
 #include "MOInventoryComponent.h"
 #include "MOSkillsComponent.h"
 #include "MORecipeDiscoveryComponent.h"
@@ -83,6 +85,11 @@ bool UMORecipeDetailPanel::CanPerformAction() const
 		return false;
 	}
 
+	if (!GetCurrentValidation().bCanCraft)
+	{
+		return false;
+	}
+
 	// Check all ingredients for requested amount
 	for (const FMOIngredientDisplayData& Ingredient : CachedIngredients)
 	{
@@ -94,6 +101,56 @@ bool UMORecipeDetailPanel::CanPerformAction() const
 	}
 
 	return true;
+}
+
+void UMORecipeDetailPanel::SetCraftingContext(UMOKnowledgeComponent* InKnowledge, EMOCraftingStation InStation)
+{
+	KnowledgeComponent = InKnowledge;
+	CurrentStation = InStation;
+	RefreshDisplay();
+}
+
+FMOCraftingValidation UMORecipeDetailPanel::GetCurrentValidation() const
+{
+	if (DisplayedRecipeId.IsNone())
+	{
+		FMOCraftingValidation Result;
+		Result.FailureReason = NSLOCTEXT("MOCrafting", "NoRecipeSelected", "Select a recipe.");
+		return Result;
+	}
+
+	if (UWorld* World = GetWorld())
+	{
+		if (const UMOCraftingSubsystem* Crafting = World->GetSubsystem<UMOCraftingSubsystem>())
+		{
+			return Crafting->CanCraftRecipe(
+				DisplayedRecipeId,
+				KnowledgeComponent.Get(),
+				SkillsComponent.Get(),
+				InventoryComponent.Get(),
+				CurrentStation);
+		}
+	}
+
+	FMOCraftingValidation Result;
+	Result.FailureReason = NSLOCTEXT("MOCrafting", "ValidationUnavailable", "Crafting validation is unavailable.");
+	return Result;
+}
+
+FText UMORecipeDetailPanel::GetActionUnavailableReason() const
+{
+	const FMOCraftingValidation Validation = GetCurrentValidation();
+	if (!Validation.FailureReason.IsEmpty())
+	{
+		return Validation.FailureReason;
+	}
+
+	if (GetMaxPerformableAmount() < GetActionAmount())
+	{
+		return NSLOCTEXT("MOCrafting", "InsufficientQuantity", "Not enough ingredients for this quantity.");
+	}
+
+	return Super::GetActionUnavailableReason();
 }
 
 void UMORecipeDetailPanel::OnDisplayRecipe(const FMORecipeDefinitionRow* Recipe)

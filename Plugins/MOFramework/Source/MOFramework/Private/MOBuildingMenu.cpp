@@ -41,7 +41,9 @@ void UMOBuildingMenu::NativeConstruct()
 	if (RecipeList)
 	{
 		RecipeList->OnRecipeSelected.RemoveDynamic(this, &UMOBuildingMenu::HandleRecipeSelected);
+		RecipeList->OnSelectionCleared.RemoveDynamic(this, &UMOBuildingMenu::HandleRecipeSelectionCleared);
 		RecipeList->OnRecipeSelected.AddDynamic(this, &UMOBuildingMenu::HandleRecipeSelected);
+		RecipeList->OnSelectionCleared.AddDynamic(this, &UMOBuildingMenu::HandleRecipeSelectionCleared);
 	}
 
 	// Bind to detail panel Build button - triggers placement mode
@@ -64,6 +66,7 @@ void UMOBuildingMenu::NativeDestruct()
 	if (RecipeList)
 	{
 		RecipeList->OnRecipeSelected.RemoveDynamic(this, &UMOBuildingMenu::HandleRecipeSelected);
+		RecipeList->OnSelectionCleared.RemoveDynamic(this, &UMOBuildingMenu::HandleRecipeSelectionCleared);
 	}
 	if (DetailPanel)
 	{
@@ -182,6 +185,14 @@ void UMOBuildingMenu::HandleRecipeSelected(FName RecipeId)
 		// No detail panel - fall back to immediate build mode (old behavior)
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOBuildingMenu] No DetailPanel bound - entering placement mode directly"));
 		OnBuildingSelected.Broadcast(RecipeId);
+	}
+}
+
+void UMOBuildingMenu::HandleRecipeSelectionCleared()
+{
+	if (DetailPanel)
+	{
+		DetailPanel->ClearDisplay();
 	}
 }
 

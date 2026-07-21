@@ -29,8 +29,14 @@ static FAutoConsoleCommandWithWorldAndArgs GMORunAllUITestsCmd(
 			return;
 		}
 
-		FMOUITestSummary Summary = TestSubsystem->RunAllTests();
-		UE_LOG(LogTemp, Log, TEXT("UI Test Suite Complete: %d/%d passed"), Summary.PassedTests, Summary.TotalTests);
+		if (TestSubsystem->StartAllTests())
+		{
+			UE_LOG(LogTemp, Log, TEXT("UI Test Suite started; results will be logged on completion"));
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("MO.UI.RunAllTests: A UI test batch is already running"));
+		}
 	})
 );
 
@@ -59,8 +65,14 @@ static FAutoConsoleCommandWithWorldAndArgs GMORunUITestsCmd(
 		}
 
 		FString Pattern = Args.Num() > 0 ? Args[0] : TEXT("*");
-		FMOUITestSummary Summary = TestSubsystem->RunTestsMatching(Pattern);
-		UE_LOG(LogTemp, Log, TEXT("UI Tests Complete (%s): %d/%d passed"), *Pattern, Summary.PassedTests, Summary.TotalTests);
+		if (TestSubsystem->StartTestsMatching(Pattern))
+		{
+			UE_LOG(LogTemp, Log, TEXT("UI Tests started (%s); results will be logged on completion"), *Pattern);
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("MO.UI.RunTests: A UI test batch is already running"));
+		}
 	})
 );
 
@@ -117,14 +129,20 @@ static FAutoConsoleCommandWithWorldAndArgs GMORunSingleUITestCmd(
 			return;
 		}
 
-		FMOUITestResult Result = TestSubsystem->RunTest(Args[0]);
-		if (Result.bPassed)
+		const FString& TestName = Args[0];
+		if (!TestSubsystem->GetAllTestNames().Contains(TestName))
 		{
-			UE_LOG(LogTemp, Log, TEXT("[PASS] %s (%.1fms)"), *Result.TestName, Result.DurationMs);
+			UE_LOG(LogTemp, Error, TEXT("MO.UI.RunTest: Test not found: %s"), *TestName);
+			return;
+		}
+
+		if (TestSubsystem->StartTestsMatching(TestName))
+		{
+			UE_LOG(LogTemp, Log, TEXT("UI Test started (%s); result will be logged on completion"), *TestName);
 		}
 		else
 		{
-			UE_LOG(LogTemp, Error, TEXT("[FAIL] %s: %s"), *Result.TestName, *Result.ErrorMessage);
+			UE_LOG(LogTemp, Warning, TEXT("MO.UI.RunTest: A UI test batch is already running"));
 		}
 	})
 );
@@ -209,16 +227,13 @@ static FAutoConsoleCommandWithWorldAndArgs GMOUIValidateSetupCmd(
 		}
 
 		UE_LOG(LogTemp, Log, TEXT("Running Setup Validation Tests..."));
-		FMOUITestSummary Summary = TestSubsystem->RunTestsMatching(TEXT("Setup.*"));
-
-		if (Summary.FailedTests == 0)
+		if (TestSubsystem->StartTestsMatching(TEXT("Setup.*")))
 		{
-			UE_LOG(LogTemp, Log, TEXT("All setup tests passed! CommonUI is properly configured."));
+			UE_LOG(LogTemp, Log, TEXT("Setup validation started; results will be logged on completion"));
 		}
 		else
 		{
-			UE_LOG(LogTemp, Error, TEXT("%d setup tests failed - CommonUI may not be properly configured."), Summary.FailedTests);
-			UE_LOG(LogTemp, Log, TEXT("Run MO.UI.Diagnose for detailed diagnostic information."));
+			UE_LOG(LogTemp, Warning, TEXT("MO.UI.ValidateSetup: A UI test batch is already running"));
 		}
 	})
 );
@@ -243,7 +258,13 @@ static FAutoConsoleCommandWithWorldAndArgs GMOUITestCommonUICmd(
 		}
 
 		UE_LOG(LogTemp, Log, TEXT("Running CommonUI Tests..."));
-		FMOUITestSummary Summary = TestSubsystem->RunTestsMatching(TEXT("CommonUI.*"));
-		UE_LOG(LogTemp, Log, TEXT("CommonUI Tests: %d/%d passed"), Summary.PassedTests, Summary.TotalTests);
+		if (TestSubsystem->StartTestsMatching(TEXT("CommonUI.*")))
+		{
+			UE_LOG(LogTemp, Log, TEXT("CommonUI tests started; results will be logged on completion"));
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("MO.UI.TestCommonUI: A UI test batch is already running"));
+		}
 	})
 );

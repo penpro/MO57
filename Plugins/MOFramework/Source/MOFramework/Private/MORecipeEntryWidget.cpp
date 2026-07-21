@@ -4,6 +4,7 @@
 
 #include "MORecipeEntryWidget.h"
 #include "MOFramework.h"
+#include "MOUIInteractionState.h"
 #include "Components/TextBlock.h"
 #include "Components/Image.h"
 #include "Components/Border.h"
@@ -17,9 +18,14 @@ void UMORecipeEntryWidget::SetupEntry(const FMORecipeListEntryData& InData)
 {
 	EntryData = InData;
 
-	// Sync base class state
+	// A known recipe remains selectable even when it cannot be crafted now.
+	// Selection opens the details that explain missing requirements; action
+	// availability belongs to the detail action, not the row button.
+	const FMOInspectableEntryState InteractionState =
+		MOUIInteractionState::MakeInspectableEntry(InData.bCanCraft);
+	SetEntryId(InData.RecipeId);
 	UMOListEntryBase::SetSelected(InData.bIsSelected);
-	SetEntryEnabled(InData.bCanCraft);
+	SetEntryEnabled(InteractionState.bSelectable);
 
 	UpdateVisuals();
 }
@@ -38,7 +44,7 @@ void UMORecipeEntryWidget::SetCanCraft(bool bInCanCraft)
 	if (EntryData.bCanCraft != bInCanCraft)
 	{
 		EntryData.bCanCraft = bInCanCraft;
-		SetEntryEnabled(bInCanCraft);
+		UpdateVisuals();
 	}
 }
 
@@ -106,6 +112,11 @@ void UMORecipeEntryWidget::UpdateVisuals_Implementation()
 
 void UMORecipeEntryWidget::HandleButtonClicked()
 {
+	if (!IsEntryEnabled())
+	{
+		return;
+	}
+
 	// Call base to broadcast generic OnEntrySelected
 	Super::HandleButtonClicked();
 

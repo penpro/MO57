@@ -34,9 +34,9 @@
  * [2026-03] WIDGET POOLING: Current implementation creates/destroys widgets.
  *   For 100+ entries, consider overriding with pooled implementation.
  *
- * [2026-03] REFRESH vs REPOPULATE: RefreshEntryStates() updates existing
- *   entries. PopulateList() recreates all entries. Use Refresh when only
- *   state changes, Populate when data changes.
+ * [2026-07] REFRESH vs REPOPULATE: RefreshEntryStates() updates existing
+ *   entries. PopulateList() recreates entries while preserving a still-valid
+ *   selection. A removed selection is cleared exactly once.
  *
  * =============================================================================
  * RELATED FILES: MOListEntryBase.h, MORecipeListWidget.h, MOUIDelegates.h
@@ -48,6 +48,7 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
+#include "MOListSelectionModel.h"
 #include "MOUIDelegates.h"
 #include "MOScrollListBase.generated.h"
 
@@ -107,7 +108,7 @@ public:
 	 * Get all current entry IDs.
 	 */
 	UFUNCTION(BlueprintPure, Category = "MO|UI|List")
-	const TArray<FName>& GetEntryIds() const { return CurrentEntryIds; }
+	const TArray<FName>& GetEntryIds() const { return SelectionModel.GetEntryIds(); }
 
 	// ============================================================================
 	// SELECTION
@@ -125,13 +126,13 @@ public:
 	 * @return Selected entry ID, or NAME_None if nothing selected
 	 */
 	UFUNCTION(BlueprintPure, Category = "MO|UI|List")
-	FName GetSelectedEntryId() const { return SelectedEntryId; }
+	FName GetSelectedEntryId() const { return SelectionModel.GetSelectedId(); }
 
 	/**
 	 * Check if any entry is selected.
 	 */
 	UFUNCTION(BlueprintPure, Category = "MO|UI|List")
-	bool HasSelection() const { return SelectedEntryId != NAME_None; }
+	bool HasSelection() const { return SelectionModel.HasSelection(); }
 
 	// ============================================================================
 	// ENTRY ACCESS
@@ -216,8 +217,14 @@ protected:
 	TObjectPtr<UVerticalBox> ContentContainer;
 
 private:
-	/** Current entry IDs. */
-	TArray<FName> CurrentEntryIds;
+	/** Remove entry widgets without mutating or broadcasting selection state. */
+	void ClearEntryWidgets();
+
+	/** Apply the visual and delegate effects of a state-model transition. */
+	void ApplySelectionTransition(const FMOListSelectionTransition& Transition);
+
+	/** Single authoritative collection and selection state. */
+	FMOListSelectionModel SelectionModel;
 
 	/** Created entry widgets. */
 	UPROPERTY()
@@ -226,6 +233,4 @@ private:
 	/** Temp array for GetAllEntries() return value. */
 	mutable TArray<UMOListEntryBase*> CachedEntryPtrs;
 
-	/** Currently selected entry ID. */
-	FName SelectedEntryId = NAME_None;
 };

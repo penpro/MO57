@@ -6,16 +6,11 @@
  * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
  * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
  *
- * PURPOSE:
- * Abstract base class for detail panels that show information about a
- * selected item. Provides title, description, icon, and action button
- * handling. Use for recipe details, building details, item info, etc.
+ * DEPRECATED:
+ * This generic scaffold was never adopted by production detail panels. Use a
+ * domain-specific presenter such as UMORecipeDetailPanelBase instead.
  *
- * SUBCLASSES:
- * - UMORecipeDetailPanel (existing - consider migrating)
- * - UMOBuildingDetailPanel (existing - consider migrating)
- * - UMOItemInfoPanel (existing - consider migrating)
- * - UMOCharacterDetailPanel (planned)
+ * The only Blueprint child is the unreferenced WBP_MODetailPanel scaffold.
  *
  * WIDGET BINDINGS (in Blueprint):
  * - TitleText (UTextBlock, optional) - Title display
@@ -35,7 +30,7 @@
  *
  * =============================================================================
  * RELATED FILES: MORecipeDetailPanel.h, MOScrollListBase.h, MOUIDelegates.h
- * LAST UPDATED: 2026-03-28
+ * LAST UPDATED: 2026-07-13 - Deprecated after live referencer verification
  * =============================================================================
  */
 
@@ -60,8 +55,8 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMODetailPanelActionDelegate, FName,
  * Base class for detail panel widgets.
  * See file header for usage and pitfalls.
  */
-UCLASS(Abstract, Blueprintable)
-class MOFRAMEWORK_API UMODetailPanelBase : public UUserWidget
+UCLASS(Abstract, Blueprintable, meta=(DeprecationMessage="Use a domain-specific detail presenter such as UMORecipeDetailPanelBase"))
+class UE_DEPRECATED(5.8, "Use a domain-specific detail presenter such as UMORecipeDetailPanelBase") MOFRAMEWORK_API UMODetailPanelBase : public UUserWidget
 {
 	GENERATED_BODY()
 

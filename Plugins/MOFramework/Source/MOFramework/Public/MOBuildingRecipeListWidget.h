@@ -135,6 +135,7 @@ public:
 
 	/** Refresh the visual state of all entries (buildability, selection). */
 	virtual void RefreshEntryStates() override;
+	virtual void SelectEntry(FName EntryId) override;
 
 	// --- Selection ---
 
@@ -144,7 +145,7 @@ public:
 
 	/** Get the currently selected recipe ID. */
 	UFUNCTION(BlueprintPure, Category="MO|Building|UI")
-	FName GetSelectedRecipeId() const { return SelectedRecipeId; }
+	FName GetSelectedRecipeId() const { return GetSelectedEntryId(); }
 
 	// --- Filtering ---
 
@@ -168,14 +169,11 @@ public:
 	TSubclassOf<UMOBuildingRecipeEntryWidget> RecipeEntryWidgetClass;
 
 protected:
-	virtual void NativeConstruct() override;
-
 	/** Override to use our specific widget bindings (RecipeScrollBox/RecipeContainer). */
 	virtual UPanelWidget* GetContainer() const;
 
-	/** Called when a building recipe entry is clicked. */
-	UFUNCTION()
-	void HandleBuildingEntryClicked(FName RecipeId);
+	virtual void ConfigureEntry_Implementation(UMOListEntryBase* Entry, FName EntryId) override;
+	virtual void RefreshEntryState_Implementation(UMOListEntryBase* Entry, FName EntryId) override;
 
 	/** Build visual data for a recipe. */
 	FMOBuildRecipeListEntryData BuildEntryData(FName RecipeId) const;
@@ -202,13 +200,7 @@ private:
 	UPROPERTY()
 	TWeakObjectPtr<UMORecipeDiscoveryComponent> DiscoveryComponent;
 
-	// Current building entries (domain-specific type, different from base's EntryWidgets)
-	UPROPERTY()
-	TArray<TObjectPtr<UMOBuildingRecipeEntryWidget>> BuildingEntryWidgets;
-
 	// Current state
-	TArray<FName> CurrentRecipeIds;
-	FName SelectedRecipeId = NAME_None;
 	FName CategoryFilter = NAME_None;
 	bool bShowOnlyBuildable = false;
 };

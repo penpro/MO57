@@ -130,6 +130,7 @@ public:
 
 protected:
 	virtual void NativeConstruct() override;
+	virtual void NativeDestruct() override;
 
 	/** Called when cancel button is clicked. */
 	UFUNCTION()

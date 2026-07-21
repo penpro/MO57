@@ -24,9 +24,6 @@ void UMOScrollListBase::NativeConstruct()
 
 void UMOScrollListBase::PopulateList(const TArray<FName>& EntryIds)
 {
-	// Clear existing entries
-	ClearList();
-
 	// Validate entry class
 	if (!EntryWidgetClass)
 	{
@@ -42,11 +39,11 @@ void UMOScrollListBase::PopulateList(const TArray<FName>& EntryIds)
 		return;
 	}
 
-	// Store entry IDs
-	CurrentEntryIds = EntryIds;
+	const FMOListSelectionTransition Transition = SelectionModel.ReplaceEntries(EntryIds);
+	ClearEntryWidgets();
 
 	// Create entry widgets
-	for (const FName& EntryId : EntryIds)
+	for (const FName& EntryId : SelectionModel.GetEntryIds())
 	{
 		UMOListEntryBase* Entry = CreateWidget<UMOListEntryBase>(this, EntryWidgetClass);
 		if (Entry)
@@ -59,15 +56,25 @@ void UMOScrollListBase::PopulateList(const TArray<FName>& EntryIds)
 
 			// Allow subclasses to configure
 			ConfigureEntry(Entry, EntryId);
+			Entry->SetSelected(EntryId == SelectionModel.GetSelectedId());
 
 			// Add to container
 			Container->AddChild(Entry);
 			EntryWidgets.Add(Entry);
 		}
 	}
+
+	ApplySelectionTransition(Transition);
 }
 
 void UMOScrollListBase::ClearList()
+{
+	const FMOListSelectionTransition Transition = SelectionModel.ClearEntries();
+	ClearEntryWidgets();
+	ApplySelectionTransition(Transition);
+}
+
+void UMOScrollListBase::ClearEntryWidgets()
 {
 	UPanelWidget* Container = GetContainer();
 
@@ -85,8 +92,6 @@ void UMOScrollListBase::ClearList()
 	}
 
 	EntryWidgets.Empty();
-	CurrentEntryIds.Empty();
-	SelectedEntryId = NAME_None;
 	CachedEntryPtrs.Empty();
 }
 
@@ -95,9 +100,9 @@ void UMOScrollListBase::RefreshEntryStates()
 	for (int32 i = 0; i < EntryWidgets.Num(); ++i)
 	{
 		UMOListEntryBase* Entry = EntryWidgets[i];
-		if (Entry && CurrentEntryIds.IsValidIndex(i))
+		if (Entry && SelectionModel.GetEntryIds().IsValidIndex(i))
 		{
-			RefreshEntryState(Entry, CurrentEntryIds[i]);
+			RefreshEntryState(Entry, SelectionModel.GetEntryIds()[i]);
 		}
 	}
 }
@@ -112,7 +117,7 @@ void UMOScrollListBase::RefreshEntryState_Implementation(UMOListEntryBase* Entry
 	// Base implementation just updates selection state
 	if (Entry)
 	{
-		Entry->SetSelected(EntryId == SelectedEntryId);
+		Entry->SetSelected(EntryId == SelectionModel.GetSelectedId());
 	}
 }
 
@@ -122,33 +127,31 @@ void UMOScrollListBase::RefreshEntryState_Implementation(UMOListEntryBase* Entry
 
 void UMOScrollListBase::SelectEntry(FName EntryId)
 {
-	// Clear previous selection
-	if (SelectedEntryId != NAME_None)
+	ApplySelectionTransition(SelectionModel.Select(EntryId));
+}
+
+void UMOScrollListBase::ApplySelectionTransition(const FMOListSelectionTransition& Transition)
+{
+	if (Transition.Change == EMOListSelectionChange::None)
 	{
-		UMOListEntryBase* PrevEntry = GetEntryById(SelectedEntryId);
-		if (PrevEntry)
-		{
-			PrevEntry->SetSelected(false);
-		}
+		return;
 	}
 
-	// Set new selection
-	SelectedEntryId = EntryId;
-
-	if (EntryId != NAME_None)
+	if (UMOListEntryBase* PreviousEntry = GetEntryById(Transition.PreviousId))
 	{
-		UMOListEntryBase* NewEntry = GetEntryById(EntryId);
-		if (NewEntry)
-		{
-			NewEntry->SetSelected(true);
-		}
+		PreviousEntry->SetSelected(false);
+	}
 
-		// Broadcast selection
-		OnEntrySelected.Broadcast(EntryId);
+	if (Transition.Change == EMOListSelectionChange::Selected)
+	{
+		if (UMOListEntryBase* CurrentEntry = GetEntryById(Transition.CurrentId))
+		{
+			CurrentEntry->SetSelected(true);
+		}
+		OnEntrySelected.Broadcast(Transition.CurrentId);
 	}
 	else
 	{
-		// Selection cleared
 		OnSelectionCleared.Broadcast();
 	}
 }
@@ -159,9 +162,10 @@ void UMOScrollListBase::SelectEntry(FName EntryId)
 
 UMOListEntryBase* UMOScrollListBase::GetEntryById(FName EntryId) const
 {
-	for (int32 i = 0; i < CurrentEntryIds.Num(); ++i)
+	const TArray<FName>& EntryIds = SelectionModel.GetEntryIds();
+	for (int32 i = 0; i < EntryIds.Num(); ++i)
 	{
-		if (CurrentEntryIds[i] == EntryId && EntryWidgets.IsValidIndex(i))
+		if (EntryIds[i] == EntryId && EntryWidgets.IsValidIndex(i))
 		{
 			return EntryWidgets[i];
 		}

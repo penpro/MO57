@@ -174,6 +174,10 @@ private:
 	UFUNCTION()
 	void HandleRecipeSelected(FName RecipeId);
 
+	/** Called when a refresh removes the selected recipe. */
+	UFUNCTION()
+	void HandleRecipeSelectionCleared();
+
 	/** Called when Build is clicked in the detail panel - broadcasts OnBuildingSelected. */
 	UFUNCTION()
 	void HandleBuildRequested(FName RecipeId, int32 Count);

@@ -40,6 +40,11 @@ void UMOListEntryBase::NativeDestruct()
 
 void UMOListEntryBase::SetEntryId(FName InEntryId)
 {
+	if (EntryId == InEntryId)
+	{
+		return;
+	}
+
 	EntryId = InEntryId;
 	OnDataBound(InEntryId);
 }

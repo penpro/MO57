@@ -466,6 +466,12 @@ void UMOActivatableWidget::NativeOnDeactivated()
 	// Unregister the CloseAction binding (symmetric with activation).
 	if (CloseActionBinding.IsValid())
 	{
+		// RemoveActionBinding only detaches the handle from the current routing
+		// collection; it does not unregister the global FUIActionBinding record.
+		// Pooled CommonUI widgets then fail to bind the same action when reused.
+		// UCommonUserWidget::RemoveUIAction performs these same two operations but
+		// is not exported from CommonUI in UE 5.8, so call its exported primitives.
+		CloseActionBinding.Unregister();
 		RemoveActionBinding(CloseActionBinding);
 		CloseActionBinding = FUIActionBindingHandle();
 	}

@@ -2,6 +2,8 @@
 #include "MOFramework.h"
 #include "MOInventoryComponent.h"
 #include "MOSkillsComponent.h"
+#include "MOKnowledgeComponent.h"
+#include "MOCraftingSubsystem.h"
 #include "MORecipeDiscoveryComponent.h"
 #include "MORecipeEntryWidget.h"
 #include "MORecipeDatabaseSettings.h"
@@ -35,118 +37,57 @@ void UMORecipeListWidget::InitializeList(
 	DiscoveryComponent = InDiscovery;
 }
 
+void UMORecipeListWidget::SetCraftingContext(UMOKnowledgeComponent* InKnowledge, EMOCraftingStation InStation)
+{
+	KnowledgeComponent = InKnowledge;
+	StationFilter = InStation;
+	RefreshEntryStates();
+}
+
 void UMORecipeListWidget::PopulateRecipes(const TArray<FName>& RecipeIds)
 {
-	CurrentRecipeIds = RecipeIds;
-
-	// Clear existing entries
-	ClearRecipes();
-
-	// Get the container to add entries to
-	UPanelWidget* Container = GetContainer();
-	if (!Container)
-	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MORecipeListWidget] No container widget bound"));
-		return;
-	}
-
-	// Check if we have a valid entry widget class
 	if (!RecipeEntryWidgetClass)
 	{
 		UE_LOG(LogMOFramework, Warning, TEXT("[MORecipeListWidget] No RecipeEntryWidgetClass set"));
 		return;
 	}
 
-	// Create entry widgets
-	for (const FName& RecipeId : RecipeIds)
-	{
-		UMORecipeEntryWidget* EntryWidget = CreateWidget<UMORecipeEntryWidget>(this, RecipeEntryWidgetClass);
-		if (!EntryWidget)
-		{
-			continue;
-		}
-
-		// Build and set data
-		FMORecipeListEntryData EntryData = BuildEntryData(RecipeId);
-		EntryWidget->SetupEntry(EntryData);
-
-		// Bind click handler
-		EntryWidget->OnEntryClicked.AddDynamic(this, &UMORecipeListWidget::HandleRecipeEntryClicked);
-
-		// Add to container
-		Container->AddChild(EntryWidget);
-		RecipeEntryWidgets.Add(EntryWidget);
-	}
-
-	UE_LOG(LogMOFramework, Log, TEXT("[MORecipeListWidget] Populated %d recipes"), RecipeIds.Num());
+	EntryWidgetClass = RecipeEntryWidgetClass;
+	Super::PopulateList(RecipeIds);
+	UE_LOG(LogMOFramework, Log, TEXT("[MORecipeListWidget] Populated %d recipes"), GetEntryCount());
 }
 
 void UMORecipeListWidget::ClearRecipes()
 {
-	// Remove all entry widgets
-	for (UMORecipeEntryWidget* Entry : RecipeEntryWidgets)
-	{
-		if (Entry)
-		{
-			Entry->RemoveFromParent();
-		}
-	}
-	RecipeEntryWidgets.Empty();
-	SelectedRecipeId = NAME_None;
+	Super::ClearList();
 }
 
 void UMORecipeListWidget::RefreshEntryStates()
 {
-	for (UMORecipeEntryWidget* Entry : RecipeEntryWidgets)
-	{
-		if (!Entry)
-		{
-			continue;
-		}
-
-		FName RecipeId = Entry->GetRecipeId();
-		bool bCanCraft = CanCraftRecipe(RecipeId);
-		bool bIsSelected = (RecipeId == SelectedRecipeId);
-
-		Entry->SetCanCraft(bCanCraft);
-		Entry->SetSelected(bIsSelected);
-	}
+	Super::RefreshEntryStates();
 }
 
 void UMORecipeListWidget::SelectRecipe(FName RecipeId)
 {
-	FName OldSelection = SelectedRecipeId;
-	SelectedRecipeId = RecipeId;
+	SelectEntry(RecipeId);
+}
 
-	// Update visual state of affected entries
-	for (UMORecipeEntryWidget* Entry : RecipeEntryWidgets)
+void UMORecipeListWidget::SelectEntry(FName EntryId)
+{
+	const FName PreviousId = GetSelectedEntryId();
+	Super::SelectEntry(EntryId);
+	const FName CurrentId = GetSelectedEntryId();
+	if (CurrentId != PreviousId && !CurrentId.IsNone())
 	{
-		if (!Entry)
-		{
-			continue;
-		}
-
-		FName EntryRecipeId = Entry->GetRecipeId();
-		if (EntryRecipeId == OldSelection || EntryRecipeId == SelectedRecipeId)
-		{
-			Entry->SetSelected(EntryRecipeId == SelectedRecipeId);
-		}
-	}
-
-	// Broadcast selection
-	if (SelectedRecipeId != OldSelection)
-	{
-		// Broadcast standard delegate (prefer this for new code)
-		OnRecipeSelection.Broadcast(SelectedRecipeId);
-		// Broadcast legacy delegate for backward compatibility
-		OnRecipeSelected.Broadcast(SelectedRecipeId);
+		OnRecipeSelection.Broadcast(CurrentId);
+		OnRecipeSelected.Broadcast(CurrentId);
 	}
 }
 
 void UMORecipeListWidget::SetStationFilter(EMOCraftingStation Station)
 {
 	StationFilter = Station;
-	// Note: Caller should repopulate the list with filtered recipes
+	RefreshEntryStates();
 }
 
 void UMORecipeListWidget::SetCategoryFilter(FName Category)
@@ -161,21 +102,28 @@ void UMORecipeListWidget::SetShowOnlyCraftable(bool bOnlyCraftable)
 	// Note: Caller should repopulate the list with filtered recipes
 }
 
-void UMORecipeListWidget::NativeConstruct()
+void UMORecipeListWidget::ConfigureEntry_Implementation(UMOListEntryBase* Entry, FName EntryId)
 {
-	Super::NativeConstruct();
+	if (UMORecipeEntryWidget* RecipeEntry = Cast<UMORecipeEntryWidget>(Entry))
+	{
+		RecipeEntry->SetupEntry(BuildEntryData(EntryId));
+	}
 }
 
-void UMORecipeListWidget::HandleRecipeEntryClicked(FName RecipeId)
+void UMORecipeListWidget::RefreshEntryState_Implementation(UMOListEntryBase* Entry, FName EntryId)
 {
-	SelectRecipe(RecipeId);
+	if (UMORecipeEntryWidget* RecipeEntry = Cast<UMORecipeEntryWidget>(Entry))
+	{
+		RecipeEntry->SetCanCraft(CanCraftRecipe(EntryId));
+		RecipeEntry->SetSelected(EntryId == GetSelectedEntryId());
+	}
 }
 
 FMORecipeListEntryData UMORecipeListWidget::BuildEntryData(FName RecipeId) const
 {
 	FMORecipeListEntryData Data;
 	Data.RecipeId = RecipeId;
-	Data.bIsSelected = (RecipeId == SelectedRecipeId);
+	Data.bIsSelected = (RecipeId == GetSelectedEntryId());
 	Data.bCanCraft = CanCraftRecipe(RecipeId);
 
 	// Check discovery
@@ -215,42 +163,18 @@ FMORecipeListEntryData UMORecipeListWidget::BuildEntryData(FName RecipeId) const
 
 bool UMORecipeListWidget::CanCraftRecipe(FName RecipeId) const
 {
-	const FMORecipeDefinitionRow* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(RecipeId);
-	if (!Recipe)
+	if (UWorld* World = GetWorld())
 	{
-		return false;
-	}
-
-	UMOInventoryComponent* Inventory = InventoryComponent.Get();
-	if (!Inventory)
-	{
-		return false;
-	}
-
-	// Check all ingredients
-	for (const FMORecipeIngredient& Ingredient : Recipe->Ingredients)
-	{
-		if (!Inventory->HasItem(Ingredient.ItemDefinitionId, Ingredient.Quantity))
+		if (const UMOCraftingSubsystem* Crafting = World->GetSubsystem<UMOCraftingSubsystem>())
 		{
-			return false;
+			return Crafting->CanCraftRecipe(
+				RecipeId,
+				KnowledgeComponent.Get(),
+				SkillsComponent.Get(),
+				InventoryComponent.Get(),
+				StationFilter).bCanCraft;
 		}
 	}
 
-	// Check skill requirements
-	if (!Recipe->RequiredSkillId.IsNone() && Recipe->RequiredSkillLevel > 0)
-	{
-		if (UMOSkillsComponent* Skills = SkillsComponent.Get())
-		{
-			if (!Skills->HasSkillLevel(Recipe->RequiredSkillId, Recipe->RequiredSkillLevel))
-			{
-				return false;
-			}
-		}
-		else
-		{
-			return false;
-		}
-	}
-
-	return true;
+	return false;
 }

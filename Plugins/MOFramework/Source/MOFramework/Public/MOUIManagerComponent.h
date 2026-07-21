@@ -856,6 +856,10 @@ public:
 	FText GetCurrentFocusHintText() const { return CurrentFocusHintText; }
 
 private:
+	/** Reconcile the Menu layer after same-frame close-then-push switch transactions. */
+	void ScheduleMenuLayerReconciliation();
+	void ReconcileMenuLayerEntries();
+
 	/** Cached reference to notification component on same owner. Mutable to allow caching in const methods. */
 	UPROPERTY(Transient)
 	mutable TWeakObjectPtr<UMONotificationComponent> CachedNotificationComponent;

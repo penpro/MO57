@@ -9,18 +9,19 @@
  * PURPOSE:
  * Specialized UI controller for building system interfaces. Manages building
  * menu for recipe selection, ghost context menus for placed ghosts, and
- * build widgets showing construction progress. Part of UIManager split.
+ * ghost context widgets showing construction configuration and progress.
+ * Part of the UIManager split.
  *
  * KEY RESPONSIBILITIES:
  * 1. Manage Building menu (open/close/toggle)
  * 2. Show ghost context menus for placed building ghosts
- * 3. Display build widget during construction
+ * 3. Display the ghost context menu during construction
  * 4. Track current build target actor
  *
  * UI WIDGETS MANAGED:
  * - BuildingMenu: Recipe browser and selection interface
  * - GhostContextMenu: Actions for building ghost (build, cancel)
- * - BuildWidget: Construction progress display
+ * - GhostContextMenu: Construction configuration and progress display
  *
  * BUILDING FLOW:
  * Player opens Building menu -> Selects recipe -> Ghost spawned
@@ -33,7 +34,7 @@
  *    ToggleBuildingMenu() -> HandleBuildingSelected(RecipeId)
  *    -> Spawn ghost via MOBuildingSubsystem
  *
- * 2. Build Widget:
+ * 2. Ghost Context Menu:
  *    ShowBuildWidget(Target) -> Track CurrentBuildTarget
  *    -> Display construction requirements and progress
  *    -> HideBuildWidget() on cancel or complete
@@ -55,7 +56,6 @@
  * RELATED FILES:
  * - MOUIControllerBase.h - Base class with shared utilities
  * - MOBuildingMenu.h - Recipe selection widget
- * - MOBuildWidget.h - Construction progress widget
  * - MOGhostContextMenu.h - Ghost action menu widget
  * - MOBuildingSubsystem.h - Building logic subsystem
  * - MOBuildableActor.h - Building ghost and complete actors
@@ -79,7 +79,6 @@
 #include "MOBuildingUIController.generated.h"
 
 class UMOBuildingMenu;
-class UMOBuildWidget;
 class UMOGhostContextMenu;
 class AMOBuildableActor;
 

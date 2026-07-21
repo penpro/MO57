@@ -5,6 +5,7 @@
 #include "MOGameUIManagerSubsystem.h"
 #include "MOPrimaryGameLayout.h"
 #include "CommonActivatableWidget.h"
+#include "Widgets/CommonActivatableWidgetContainer.h"
 #include "GameFramework/PlayerController.h"
 
 UMOUIControllerBase::UMOUIControllerBase()
@@ -208,11 +209,82 @@ void UMOUIControllerBase::PopWidgetFromLayer(UCommonActivatableWidget* Widget)
 	{
 		Widget->DeactivateWidget();
 	}
+	else if (UCommonActivatableWidgetContainerBase* Stack = FindLayerStackContainingWidget(Widget))
+	{
+		// A covered stack entry is inactive but still owned by the stack.
+		// Explicit removal is required; DeactivateWidget would be a no-op.
+		Stack->RemoveWidget(*Widget);
+	}
 	else if (Widget->IsInViewport())
 	{
 		// Widget was added via AddToViewport (context menus, fallback path)
 		Widget->RemoveFromParent();
 	}
+}
+
+UCommonActivatableWidgetContainerBase* UMOUIControllerBase::FindLayerStackContainingWidget(
+	UCommonActivatableWidget* Widget) const
+{
+	if (!Widget)
+	{
+		return nullptr;
+	}
+
+	UMOGameUIManagerSubsystem* UISubsystem = UMOGameUIManagerSubsystem::Get(this);
+	UMOPrimaryGameLayout* Layout = UISubsystem ? UISubsystem->GetRootLayout() : nullptr;
+	if (!Layout)
+	{
+		return nullptr;
+	}
+
+	const FGameplayTag LayerTags[] = {
+		MOUILayerTags::Layer_HUD,
+		MOUILayerTags::Layer_Game,
+		MOUILayerTags::Layer_GameOverlay,
+		MOUILayerTags::Layer_Menu,
+		MOUILayerTags::Layer_Modal
+	};
+
+	for (const FGameplayTag LayerTag : LayerTags)
+	{
+		UCommonActivatableWidgetContainerBase* Stack = Layout->GetLayerStack(LayerTag);
+		if (Stack && Stack->GetWidgetList().Contains(Widget))
+		{
+			return Stack;
+		}
+	}
+
+	return nullptr;
+}
+
+bool UMOUIControllerBase::IsWidgetCoveredByAnotherLayerEntry(
+	UCommonActivatableWidget* Widget) const
+{
+	const UCommonActivatableWidgetContainerBase* Stack = FindLayerStackContainingWidget(Widget);
+	if (!Stack)
+	{
+		return false;
+	}
+
+	const TArray<UCommonActivatableWidget*>& Widgets = Stack->GetWidgetList();
+	return Widgets.Num() > 0 && Widgets.Last() != Widget;
+}
+
+bool UMOUIControllerBase::IsCachedActivatableMenuOpen(UCommonActivatableWidget* Widget) const
+{
+	if (!Widget)
+	{
+		return false;
+	}
+
+	if (const UCommonActivatableWidgetContainerBase* Stack = FindLayerStackContainingWidget(Widget))
+	{
+		const TArray<UCommonActivatableWidget*>& Widgets = Stack->GetWidgetList();
+		return Widgets.Num() > 0 && Widgets.Last() == Widget;
+	}
+
+	// Viewport fallback widgets are not owned by a CommonUI layer stack.
+	return Widget->IsActivated();
 }
 
 // =============================================================================

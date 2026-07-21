@@ -66,15 +66,19 @@ void UMOCraftingMenu::InitializeMenu(
 	// Initialize child widgets (remove then add to avoid duplicate bindings)
 	if (RecipeList)
 	{
-		RecipeList->OnRecipeSelected.RemoveDynamic(this, &UMOCraftingMenu::HandleRecipeSelected);
+		RecipeList->OnRecipeSelection.RemoveDynamic(this, &UMOCraftingMenu::HandleRecipeSelected);
+		RecipeList->OnSelectionCleared.RemoveDynamic(this, &UMOCraftingMenu::HandleRecipeSelectionCleared);
 		RecipeList->InitializeList(InInventory, InSkills, InDiscovery);
-		RecipeList->OnRecipeSelected.AddDynamic(this, &UMOCraftingMenu::HandleRecipeSelected);
+		RecipeList->SetCraftingContext(InKnowledge, CurrentStation);
+		RecipeList->OnRecipeSelection.AddDynamic(this, &UMOCraftingMenu::HandleRecipeSelected);
+		RecipeList->OnSelectionCleared.AddDynamic(this, &UMOCraftingMenu::HandleRecipeSelectionCleared);
 	}
 
 	if (DetailPanel)
 	{
 		DetailPanel->OnCraftRequested.RemoveDynamic(this, &UMOCraftingMenu::HandleCraftRequested);
 		DetailPanel->InitializePanel(InInventory, InSkills, InDiscovery);
+		DetailPanel->SetCraftingContext(InKnowledge, CurrentStation);
 		DetailPanel->OnCraftRequested.AddDynamic(this, &UMOCraftingMenu::HandleCraftRequested);
 	}
 
@@ -100,6 +104,14 @@ void UMOCraftingMenu::SetCraftingStation(EMOCraftingStation InStation)
 	if (CurrentStation != InStation)
 	{
 		CurrentStation = InStation;
+		if (RecipeList)
+		{
+			RecipeList->SetCraftingContext(KnowledgeComponent.Get(), CurrentStation);
+		}
+		if (DetailPanel)
+		{
+			DetailPanel->SetCraftingContext(KnowledgeComponent.Get(), CurrentStation);
+		}
 		UpdateStationDisplay();
 		RefreshRecipeList();
 	}
@@ -162,27 +174,39 @@ void UMOCraftingMenu::RefreshRecipeList()
 
 	TArray<FName> RecipeIds;
 
-	// When "Show All Known" is checked, ignore station filter
-	// This shows all discovered recipes but marks unavailable ones with "Requires: X"
-	EMOCraftingStation StationForQuery = bShowAllKnownRecipes ? EMOCraftingStation::None : CurrentStation;
-
-	// Get available recipes based on current settings
+	// "Craftable only" always means executable in the current station context.
 	if (bShowOnlyCraftable)
 	{
 		CraftingSub->GetCraftableRecipes(
 			KnowledgeComponent.Get(),
 			SkillsComponent.Get(),
 			InventoryComponent.Get(),
-			StationForQuery,
+			CurrentStation,
 			RecipeIds
 		);
+	}
+	else if (bShowAllKnownRecipes)
+	{
+		// Passing Station=None to GetAvailableRecipes does not mean "any station";
+		// it means hand crafting. Query the recipe catalog and intentionally apply
+		// only unlock availability here. Entry/action validation still uses the
+		// real CurrentStation and explains why a recipe cannot execute now.
+		UMORecipeDatabaseSettings::GetCraftableRecipes(RecipeIds);
+		RecipeIds.RemoveAll([this, CraftingSub](const FName& RecipeId)
+		{
+			const FMORecipeDefinitionRow* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(RecipeId);
+			return !Recipe
+				|| Recipe->bIsHarvestRecipe
+				|| !CraftingSub->IsRecipeAvailable(
+					RecipeId, KnowledgeComponent.Get(), SkillsComponent.Get()).bIsAvailable;
+		});
 	}
 	else
 	{
 		CraftingSub->GetAvailableRecipes(
 			KnowledgeComponent.Get(),
 			SkillsComponent.Get(),
-			StationForQuery,
+			CurrentStation,
 			RecipeIds
 		);
 	}
@@ -207,35 +231,51 @@ void UMOCraftingMenu::RefreshRecipeList()
 	// Populate the list
 	if (RecipeList)
 	{
+		RecipeList->SetCraftingContext(KnowledgeComponent.Get(), CurrentStation);
 		RecipeList->PopulateRecipes(RecipeIds);
-
-		// Restore selection if still valid
-		if (!SelectedRecipeId.IsNone() && RecipeIds.Contains(SelectedRecipeId))
-		{
-			RecipeList->SelectRecipe(SelectedRecipeId);
-		}
 	}
 }
 
 void UMOCraftingMenu::SelectRecipe(FName RecipeId)
 {
-	SelectedRecipeId = RecipeId;
-
 	if (RecipeList)
 	{
 		RecipeList->SelectRecipe(RecipeId);
 	}
-
-	if (DetailPanel)
+	else if (DetailPanel && !RecipeId.IsNone())
 	{
 		DetailPanel->DisplayRecipe(RecipeId);
 	}
 }
 
+FName UMOCraftingMenu::GetSelectedRecipeId() const
+{
+	return RecipeList ? RecipeList->GetSelectedRecipeId() : NAME_None;
+}
+
 bool UMOCraftingMenu::CraftSelectedRecipe(int32 Count)
 {
+	const FName SelectedRecipeId = GetSelectedRecipeId();
 	if (SelectedRecipeId.IsNone() || Count <= 0)
 	{
+		return false;
+	}
+
+	UMOCraftingSubsystem* CraftingSub = CraftingSubsystem.Get();
+	if (!CraftingSub)
+	{
+		return false;
+	}
+
+	const FMOCraftingValidation Validation = CraftingSub->CanCraftRecipe(
+		SelectedRecipeId,
+		KnowledgeComponent.Get(),
+		SkillsComponent.Get(),
+		InventoryComponent.Get(),
+		CurrentStation);
+	if (!Validation.bCanCraft)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOCraftingMenu] Craft rejected: %s"), *Validation.FailureReason.ToString());
 		return false;
 	}
 
@@ -246,7 +286,7 @@ bool UMOCraftingMenu::CraftSelectedRecipe(int32 Count)
 	}
 
 	// Otherwise, try immediate craft via subsystem
-	if (UMOCraftingSubsystem* CraftingSub = CraftingSubsystem.Get())
+	if (CraftingSub)
 	{
 		for (int32 i = 0; i < Count; ++i)
 		{
@@ -353,23 +393,38 @@ void UMOCraftingMenu::NativeDestruct()
 	{
 		Inventory->OnInventoryChanged.RemoveDynamic(this, &UMOCraftingMenu::HandleInventoryChanged);
 	}
+	if (RecipeList)
+	{
+		RecipeList->OnRecipeSelection.RemoveDynamic(this, &UMOCraftingMenu::HandleRecipeSelected);
+		RecipeList->OnSelectionCleared.RemoveDynamic(this, &UMOCraftingMenu::HandleRecipeSelectionCleared);
+	}
+	if (DetailPanel)
+	{
+		DetailPanel->OnCraftRequested.RemoveDynamic(this, &UMOCraftingMenu::HandleCraftRequested);
+	}
 
 	Super::NativeDestruct();
 }
 
 void UMOCraftingMenu::HandleRecipeSelected(FName RecipeId)
 {
-	SelectedRecipeId = RecipeId;
-
 	if (DetailPanel)
 	{
 		DetailPanel->DisplayRecipe(RecipeId);
 	}
 }
 
+void UMOCraftingMenu::HandleRecipeSelectionCleared()
+{
+	if (DetailPanel)
+	{
+		DetailPanel->ClearDisplay();
+	}
+}
+
 void UMOCraftingMenu::HandleCraftRequested(FName RecipeId, int32 Count)
 {
-	if (RecipeId == SelectedRecipeId)
+	if (RecipeId == GetSelectedRecipeId())
 	{
 		CraftSelectedRecipe(Count);
 	}

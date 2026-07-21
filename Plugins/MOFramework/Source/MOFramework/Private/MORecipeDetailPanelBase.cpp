@@ -167,6 +167,11 @@ void UMORecipeDetailPanelBase::ClearDisplay()
 	{
 		CraftButton->SetIsEnabled(false);
 	}
+	if (ActionUnavailableText)
+	{
+		ActionUnavailableText->SetText(FText::GetEmpty());
+		ActionUnavailableText->SetVisibility(ESlateVisibility::Collapsed);
+	}
 }
 
 void UMORecipeDetailPanelBase::RefreshDisplay()
@@ -283,10 +288,26 @@ void UMORecipeDetailPanelBase::HandleAmountChanged(float Value)
 
 void UMORecipeDetailPanelBase::UpdateActionButtonState()
 {
+	const bool bCanPerform = CanPerformAction();
 	if (CraftButton)
 	{
-		CraftButton->SetIsEnabled(CanPerformAction());
+		CraftButton->SetIsEnabled(bCanPerform);
 	}
+
+	if (ActionUnavailableText)
+	{
+		const FText Reason = bCanPerform ? FText::GetEmpty() : GetActionUnavailableReason();
+		ActionUnavailableText->SetText(Reason);
+		ActionUnavailableText->SetVisibility(
+			Reason.IsEmpty() ? ESlateVisibility::Collapsed : ESlateVisibility::Visible);
+	}
+}
+
+FText UMORecipeDetailPanelBase::GetActionUnavailableReason() const
+{
+	return DisplayedRecipeId.IsNone()
+		? NSLOCTEXT("MORecipeUI", "NoRecipeSelected", "Select a recipe to see its requirements.")
+		: FText::GetEmpty();
 }
 
 float UMORecipeDetailPanelBase::GetRecipeTime(const FMORecipeDefinitionRow* Recipe) const

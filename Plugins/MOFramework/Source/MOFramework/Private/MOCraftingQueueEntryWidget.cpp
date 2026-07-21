@@ -41,12 +41,28 @@ void UMOCraftingQueueEntryWidget::NativeConstruct()
 	// Bind cancel button
 	if (CancelButton)
 	{
+		CancelButton->OnClicked().RemoveAll(this);
 		CancelButton->OnClicked().AddUObject(this, &UMOCraftingQueueEntryWidget::HandleCancelClicked);
 	}
 	else if (CancelButtonSimple)
 	{
+		CancelButtonSimple->OnClicked.RemoveDynamic(this, &UMOCraftingQueueEntryWidget::HandleCancelClicked);
 		CancelButtonSimple->OnClicked.AddDynamic(this, &UMOCraftingQueueEntryWidget::HandleCancelClicked);
 	}
+}
+
+void UMOCraftingQueueEntryWidget::NativeDestruct()
+{
+	if (CancelButton)
+	{
+		CancelButton->OnClicked().RemoveAll(this);
+	}
+	if (CancelButtonSimple)
+	{
+		CancelButtonSimple->OnClicked.RemoveDynamic(this, &UMOCraftingQueueEntryWidget::HandleCancelClicked);
+	}
+
+	Super::NativeDestruct();
 }
 
 void UMOCraftingQueueEntryWidget::HandleCancelClicked()

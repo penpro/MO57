@@ -37,9 +37,9 @@
  * [2024-02] REFRESH TIMING: Call RefreshEntryStates() when inventory changes
  *   or skills level up. Ingredient availability affects bCanCraft state.
  *
- * [2024-02] FILTER APPLICATION: SetStationFilter(), SetCategoryFilter(), and
- *   SetShowOnlyCraftable() store values but don't refresh. Call
- *   RefreshEntryStates() after changing filters to update visibility.
+ * [2026-07] FILTER APPLICATION: Station context refreshes entry availability.
+ *   Category/show-only setters still store query policy; the owning menu
+ *   repopulates the visible recipe IDs after changing those filters.
  *
  * [2024-02] NULL COMPONENTS: InventoryComponent, SkillsComponent, and
  *   DiscoveryComponent are TWeakObjectPtr. BuildEntryData() and
@@ -77,6 +77,7 @@
 
 class UMOInventoryComponent;
 class UMOSkillsComponent;
+class UMOKnowledgeComponent;
 class UMORecipeDiscoveryComponent;
 class UMORecipeEntryWidget;
 
@@ -143,6 +144,10 @@ public:
 		UMORecipeDiscoveryComponent* InDiscovery
 	);
 
+	/** Supply knowledge/station context for authoritative action availability. */
+	UFUNCTION(BlueprintCallable, Category="MO|Crafting|UI")
+	void SetCraftingContext(UMOKnowledgeComponent* InKnowledge, EMOCraftingStation InStation);
+
 	// --- Recipe Population ---
 
 	/**
@@ -158,6 +163,7 @@ public:
 
 	/** Refresh the visual state of all entries (craftability, selection). */
 	virtual void RefreshEntryStates() override;
+	virtual void SelectEntry(FName EntryId) override;
 
 	// --- Selection ---
 
@@ -167,7 +173,7 @@ public:
 
 	/** Get the currently selected recipe ID. */
 	UFUNCTION(BlueprintPure, Category="MO|Crafting|UI")
-	FName GetSelectedRecipeId() const { return SelectedRecipeId; }
+	FName GetSelectedRecipeId() const { return GetSelectedEntryId(); }
 
 	// --- Filtering ---
 
@@ -200,14 +206,11 @@ public:
 	TSubclassOf<UMORecipeEntryWidget> RecipeEntryWidgetClass;
 
 protected:
-	virtual void NativeConstruct() override;
-
 	/** Override to use our specific widget bindings (RecipeScrollBox/RecipeContainer). */
 	virtual UPanelWidget* GetContainer() const;
 
-	/** Called when a recipe entry is clicked. */
-	UFUNCTION()
-	void HandleRecipeEntryClicked(FName RecipeId);
+	virtual void ConfigureEntry_Implementation(UMOListEntryBase* Entry, FName EntryId) override;
+	virtual void RefreshEntryState_Implementation(UMOListEntryBase* Entry, FName EntryId) override;
 
 	/** Build visual data for a recipe. */
 	FMORecipeListEntryData BuildEntryData(FName RecipeId) const;
@@ -232,15 +235,12 @@ private:
 	TWeakObjectPtr<UMOSkillsComponent> SkillsComponent;
 
 	UPROPERTY()
+	TWeakObjectPtr<UMOKnowledgeComponent> KnowledgeComponent;
+
+	UPROPERTY()
 	TWeakObjectPtr<UMORecipeDiscoveryComponent> DiscoveryComponent;
 
-	// Current recipe entries (domain-specific type, different from base's EntryWidgets)
-	UPROPERTY()
-	TArray<TObjectPtr<UMORecipeEntryWidget>> RecipeEntryWidgets;
-
 	// Current state
-	TArray<FName> CurrentRecipeIds;
-	FName SelectedRecipeId = NAME_None;
 	EMOCraftingStation StationFilter = EMOCraftingStation::None;
 	FName CategoryFilter = NAME_None;
 	bool bShowOnlyCraftable = false;

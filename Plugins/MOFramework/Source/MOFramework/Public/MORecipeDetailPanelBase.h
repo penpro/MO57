@@ -154,6 +154,10 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO|UI|Recipe")
 	virtual bool CanPerformAction() const { return false; }
 
+	/** Player-facing reason the current action is unavailable. */
+	UFUNCTION(BlueprintPure, Category="MO|UI|Recipe")
+	virtual FText GetActionUnavailableReason() const;
+
 protected:
 	virtual void NativeConstruct() override;
 
@@ -264,6 +268,10 @@ protected:
 	/** Main action button (Craft/Build). */
 	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
 	TObjectPtr<UMOCommonButton> CraftButton;
+
+	/** Optional explanation shown while the primary action is unavailable. */
+	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
+	TObjectPtr<UTextBlock> ActionUnavailableText;
 
 	/** Action max button (Craft Max/Build Max). */
 	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))

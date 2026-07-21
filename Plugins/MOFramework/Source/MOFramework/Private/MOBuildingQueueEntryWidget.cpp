@@ -41,12 +41,28 @@ void UMOBuildingQueueEntryWidget::NativeConstruct()
 	// Bind cancel button
 	if (CancelButton)
 	{
+		CancelButton->OnClicked().RemoveAll(this);
 		CancelButton->OnClicked().AddUObject(this, &UMOBuildingQueueEntryWidget::HandleCancelClicked);
 	}
 	else if (CancelButtonSimple)
 	{
+		CancelButtonSimple->OnClicked.RemoveDynamic(this, &UMOBuildingQueueEntryWidget::HandleCancelClicked);
 		CancelButtonSimple->OnClicked.AddDynamic(this, &UMOBuildingQueueEntryWidget::HandleCancelClicked);
 	}
+}
+
+void UMOBuildingQueueEntryWidget::NativeDestruct()
+{
+	if (CancelButton)
+	{
+		CancelButton->OnClicked().RemoveAll(this);
+	}
+	if (CancelButtonSimple)
+	{
+		CancelButtonSimple->OnClicked.RemoveDynamic(this, &UMOBuildingQueueEntryWidget::HandleCancelClicked);
+	}
+
+	Super::NativeDestruct();
 }
 
 void UMOBuildingQueueEntryWidget::HandleCancelClicked()
