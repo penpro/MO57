@@ -14,9 +14,12 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$CmdFile = "C:\Users\penum\AppData\Local\Temp\claude\ue_cmd.txt"
-$OutFile = "C:\Users\penum\AppData\Local\Temp\claude\ue_out.txt"
-$GameLog = "D:\UEProjects\MO57\Saved\Logs\MO57.log"
+$ProjectRoot = Split-Path -Parent $PSScriptRoot
+$BridgeDir = if ($env:MO57_BRIDGE_DIR) { $env:MO57_BRIDGE_DIR } else { Join-Path ([System.IO.Path]::GetTempPath()) "claude" }
+$CmdFile = Join-Path $BridgeDir "ue_cmd.txt"
+$OutFile = Join-Path $BridgeDir "ue_out.txt"
+$GameLog = Join-Path $ProjectRoot "Saved\Logs\MO57.log"
+New-Item -ItemType Directory -Path $BridgeDir -Force | Out-Null
 
 function Send-Bridge([string]$line) {
     Add-Content $CmdFile -Value $line -Encoding ascii

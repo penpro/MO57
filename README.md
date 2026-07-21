@@ -1,1023 +1,143 @@
 # MO57
 
-**Ultra-realistic procedural open-world survival game** with fully destructible voxel terrain. Minecraft's freedom meets hardcore realism - no fantasy creatures, grounded physics, and detailed medical/survival simulation.
+MO57 is an ultra-realistic procedural open-world survival game built with Unreal Engine 5.8. Its core pillars are real-world simulation, emergent settlement growth, mutable voxel terrain, small-group cooperative play, and a framework designed for extension and modding.
 
-*Developed with Unreal Engine 5.8*
+The project is under active development. Start with [Project Status](Docs/PROJECT_STATUS.md) for the current implementation state and known-issue tracker rather than treating this README as a feature-completeness claim.
 
----
+## Requirements
 
-## Latest Update (2026-06-30)
+- Windows development environment
+- Unreal Engine 5.8 source build
+- Voxel Plugin open-source `dev-phy` build, vendored at `Plugins/Voxel`
+- Rider for Unreal Engine is the primary IDE, although it is not required by the build
+- Python 3 for repository utilities
 
-**Unreal Engine 5.8 Upgrade + Open-Source Voxel Migration.** Upgraded from UE 5.7 to 5.8 and swapped the Voxel Plugin to the open-source dev-phy build (the only line with 5.8 support). Root-caused the long-standing voxel "spawn in water" / teleport bug to `ACharacter::SetBase`'s changed 5.8 signature — `AMOCharacter` only overrode the old one, so the engine never called it. Got a clean, playable *packaged* build back: fixed a cook-blocking ensure in the weather subsystem, repointed five medical/skills DataTables that weren't cooking, restored Nanite/foliage usage flags on Megascans materials, and fixed packaged-only main-menu issues (music over the intro video, the Exit button not quitting). The Voxel sculpt API is now wrapped behind a `MOVoxel` facade so the rest of the codebase stays decoupled from plugin churn. See `PATCH_NOTES.md` for the full writeup.
+The project descriptor declares `EngineAssociation: 5.8`. The default local engine location is `D:\UnrealEngine\UE_5.8`; set `UE_ENGINE_ROOT` when using another installation.
 
----
+## Repository structure
 
-## Table of Contents
+| Path | Responsibility |
+|---|---|
+| `Source/MO57` | Project runtime module and game-specific entry points |
+| `Plugins/MOFramework/Source/MOFrameworkCore` | Shared types, contracts, delegates, and policy-free runtime services |
+| `Plugins/MOFramework/Source/MOFrameworkMedical` | Anatomy, vitals, metabolism, mental state, and medical simulation |
+| `Plugins/MOFramework/Source/MOFramework` | Gameplay systems, persistence, UI, AI, PCG, voxel integration, and test support |
+| `Plugins/MOFramework/Source/MOFrameworkEditor` | Editor-only toolbox and widget utilities |
+| `Content/Python` | In-editor automation bridge, multi-frame test sequences, and scenario scripts |
+| `Tools` | Unified Unreal CLI, DataTable utilities, build metadata, and content helpers |
+| `Docs` | Active technical, design, policy, status, and audit documentation |
 
-1. [Vision & Core Pillars](#vision--core-pillars)
-2. [Gameplay Systems](#gameplay-systems)
-3. [Architecture Overview](#architecture-overview)
-4. [MOFramework Plugin](#moframework-plugin)
-5. [UI Implementation Guide](#ui-implementation-guide)
-6. [Technical Debt & Known Issues](#technical-debt--known-issues)
-7. [Development Setup](#development-setup)
-8. [Roadmap](#roadmap)
+The Voxel Plugin API is intentionally isolated behind the `MOVoxel` facade. Code outside that facade should not include Voxel headers directly.
 
----
+## Development setup
 
-## Vision & Core Pillars
-
-### Core Pillars
-
-| Pillar | Description |
-|--------|-------------|
-| **Realism First** | All systems rooted in real-world mechanics (medical, crafting, physics) |
-| **Emergent Civilization** | Solo primitive survival → multi-pawn settlements → castle cities |
-| **Total World Mutability** | Dig, mine, build, terraform via Voxel Plugin (open-source dev-phy build) |
-| **Modding Foundation** | Full C++ mod support; base game is a realistic framework others can reskin/extend |
-
-### Multiplayer
-
-- **Steam-based co-op** (Satisfactory-style): Play solo or invite friends to help
-- Not MMO - small group collaboration on shared worlds
-
-### World Generation
-
-- Voxel Plugin (open-source dev-phy build) for destructible/buildable terrain
-- Finite large flat world with world border
-- Procedurally generated biomes, resources, points of interest
-- Chunked loading for performance
-
-### Lore
-
-Players are colonists with encoded genetic memory, sent to seed new planets. Knowledge unlocks feel like "remembering" rather than inventing. Sci-fi origins revealed in late-game/DLC content.
-
----
-
-## Gameplay Systems
-
-### Pawn System
-
-| Feature | Description |
-|---------|-------------|
-| **Possession** | Player can possess any pawn they control; idle pawns run on AI |
-| **Assignments** | Assign pawns to jobs (gather wood, teach, craft) and bind to house + workplace |
-| **Relationships** | Pawns have family, loyalty, morale; villages can ally or wage war |
-| **AI Autonomy** | Full survival instincts (eat, sleep, flee) with streamlined routines for jobs |
-| **Permadeath** | Pawn death is permanent; if last pawn dies, respawn ~5 miles away as new pawn |
-| **Population Cap** | Soft cap via resource/survival difficulty, not arbitrary limits |
-
-### Skills & Progression
-
-- **Extensive Skill Trees**: Primitive crafting (knapping, pitch-making) through medieval engineering
-- **Learning Methods**:
-  - Direct action (slow)
-  - Being taught by skilled pawn (2x speed)
-  - Schools maintain entire skill tree (prevents decay)
-- **Skill Decay**: Unused skills degrade over time unless maintained via schooling
-- **Tech Accessibility**: No hard locks; "genetic memory" allows attempts at any tech, but practical prerequisites make skipping difficult
-
-### Medical System
-
-Detailed anatomical simulation with cascading effects:
-
-```
-Wounds (bleed) → Vitals (blood volume) → Mental (consciousness)
-                      ↓
-              Heart/Lung damage → SpO2/BP → Death timers
-                      ↓
-Metabolism (glucose) → Vitals (blood glucose) → Mental (confusion)
-                      ↓
-Dehydration → Vitals (+HR, -BP, +Temp) → Performance penalties
-```
-
-**Body Parts**: ~55 anatomically correct body parts with individual damage tracking
-**Treatments**: Wound care, splinting, surgery with skill requirements
-**Status Effects**: Pain, shock, tremors, limping provide feedback
-
-### Crafting System
-
-- **Queue-based crafting** with time-based progression
-- **Tool requirements** with durability and quality modifiers
-- **Recipe discovery** through experimentation, schematics, or skill unlocks
-- **Crafting stations** (forge, workbench, campfire) with fuel requirements
-
-### Inventory System
-
-- **Slot-based inventory** with drag-drop support
-- **Item durability** tracking for tools
-- **World dropping** - items can be dropped into the world
-- **GUID-based persistence** for stable cross-session references
-
-### Ground Foraging System
-
-- **Search Nearby**: Right-click ground to reveal PCG-spawned items within skill-scaled radius
-- **Dig for Supplies**: Chance-based spawning of roots, stones, flint based on Foraging skill
-- Revealed HISM instances convert to pickable AMOWorldItem actors
-- Foraging radius scales: Base 300 + (5 * SkillLevel), max 800 units
-- XP rewards: 2 XP per revealed item, 5 XP per dug item
-
----
-
-## Architecture Overview
-
-### Subsystem Architecture
-
-| Subsystem | Type | Responsibility |
-|-----------|------|----------------|
-| `UMOPersistenceSubsystem` | GameInstance | Save/load, pawn records, destroyed GUID tracking |
-| `UMOIdentityRegistrySubsystem` | World | GUID-to-Actor mapping, identity lifecycle events |
-| `UMOInteractionSubsystem` | World | Interaction system coordination |
-| `UMOCraftingSubsystem` | World | Recipe validation, crafting operations |
-| `UMOPossessionSubsystem` | World | Pawn possession management |
-| `UMOMedicalSubsystem` | GameInstance | DataTable lookups for medical definitions |
-| `UMOForagingSubsystem` | World | HISM query, item reveal, dig mechanics |
-| `UMOPCGInteractionSubsystem` | World | Mesh-to-item lookup, tag-based harvesting |
-| `UMOSpawnManagerSubsystem` | World | Spawn point registration and management |
-
-### Component Architecture
-
-**Player Controller Components (AMOPlayerController):**
-- `UMOUIManagerComponent` - All UI management (menus, dialogs, notifications)
-- `UMOPossessionComponent` - Pawn possession state
-
-**Pawn Components (AMOCharacter):**
-
-| Component | Responsibility | Tick Rate |
-|-----------|---------------|-----------|
-| `UMOIdentityComponent` | GUID-based persistence identity | N/A |
-| `UMOInventoryComponent` | Item storage with slot system | N/A |
-| `UMOAnatomyComponent` | Body parts, wounds, conditions | 1.0s |
-| `UMOVitalsComponent` | HR, BP, SpO2, temp, glucose, blood | 0.5s |
-| `UMOMetabolismComponent` | Nutrition, digestion, body composition | 1.0s |
-| `UMOMentalStateComponent` | Consciousness, shock, effects | 0.5s |
-| `UMOSkillsComponent` | Skill levels and XP | N/A |
-| `UMOKnowledgeComponent` | Known recipes/techniques | N/A |
-| `UMOCraftingQueueComponent` | Per-pawn crafting queue | Tick |
-| `UMORecipeDiscoveryComponent` | Discovered recipes tracking | N/A |
-| `UMOSurvivorJobQueueComponent` | Per-pawn survivor job queue | N/A |
-| `UMORecruitmentComponent` | Recruitment state tracking | N/A |
-
-### Interface-Based Decoupling
-
-**IMOControllableInterface** - Pawn control delegation
-- Used by: `AMOPlayerController` to send input to any pawn type
-- Methods: `RequestMove`, `RequestLook`, `RequestJumpStart/End`, `RequestInteract`
-
-**IMOInteractionInterface** - Interaction system
-- Used by: `UMOInteractorComponent` to interact with world objects
-- Implementors: Items, doors, containers, NPCs
-
-### Main Menu & Game Flow
-
-**Level Structure:**
-- `LoadingLevel` - Main menu with intro video (BP_MainMenuGameMode)
-- `MOPCGScattering` - Gameplay world (BP_MOGameMode)
-
-**New Game Flow:**
-1. Main menu sets `PendingNewGame` flag in `UMOGameSettings`
-2. `OpenLevel()` transitions to gameplay level
-3. `AMOGameMode::BeginPlay()` detects pending new game
-4. Waits for voxel terrain via `AVoxelWorld::OnNextStateRendered()`
-5. `FindSafeSpawnLocation()` raycasts to find land above water
-6. Spawns and possesses initial pawn
-
-**Spawn Point Detection (`AMOGameMode`):**
-- Configurable `SpawnSearchCenter`, `SpawnSearchRadius`, `WaterLevelZ`
-- Uses `ECC_WorldStatic` channel for voxel terrain collision
-- Tracks best candidate (highest Z above water) across attempts
-- Detailed logging for debugging spawn issues
-
-**Intro Video:**
-- Uses UE Media Framework (`UMediaPlayer`, `UMediaTexture`, `UMediaSoundComponent`)
-- Controller creates media assets, passes material to widget
-- Skippable with any key press
-- `bPlayIntro` flag prevents replay after first run
-
-### Creature AI Architecture
-
-**Classes:**
-| Class | Purpose |
-|-------|---------|
-| `AMOCreature` | Base pawn for all AI creatures, inherits medical systems from AMOCharacter |
-| `AMOCreatureController` | AI controller with perception (sight + hearing), threat tracking |
-| `EMOCreatureActivityState` | Activity enum: Active, Resting, Sleeping, Fleeing, Fighting, Dead |
-
-**Behavior Tree Nodes:**
-| Node | Type | Purpose |
-|------|------|---------|
-| `BTTask_FleeFromThreat` | Task | Find safe location away from threat, sprint to it |
-| `BTTask_CreatureWander` | Task | Random wandering within home radius |
-| `BTTask_CreatureAttack` | Task | Attack current threat target |
-| `BTTask_CreatureRest` | Task | Play rest/sleep animation for duration |
-| `BTService_CreatureActivity` | Service | Manage rest/sleep based on time of day |
-| `BTService_UpdateCreatureState` | Service | Update blackboard with creature state |
-
-**AI Perception:**
-- Sight: Configurable radius, peripheral vision angle, lose-sight radius
-- Hearing: Footstep noise from `AMOCharacter::Tick()` via `MakeNoise()`
-- Threat memory: Creatures remember threats for configurable duration after losing sight
-
-**Activity State Flow:**
-```
-Active ──(night)──► Sleeping ──(day)──► Active
-   │                    │
-   │ (random chance)    │ (threat)
-   ▼                    ▼
-Resting ──(duration)──► Active ◄── Fleeing ◄── (threat detected)
-```
-
-### Survivor AI Architecture
-
-**Overview:** Recruited survivors can be commanded and assigned jobs via right-click context menu.
-
-**Classes:**
-| Class | Purpose |
-|-------|---------|
-| `AMOSurvivorController` | AI controller for recruited survivors with Follow/Stay/GoHome commands |
-| `UMOSurvivorJobQueueComponent` | Per-pawn replicated job queue (like crafting queue) |
-| `UMORecruitmentComponent` | Tracks recruitment state and possession eligibility |
-
-**Job Types:**
-| Job Type | Behavior |
-|----------|----------|
-| `GatherWood` | Find trees with GivesStick tag, execute harvest recipe, collect sticks |
-| `GatherStone` | Find and collect stone resources |
-| `GatherFiber` | Find and collect plant fiber |
-| `ForageNearby` | Pick up ground spawns via PCG interaction |
-| `DigForSupplies` | Dig for random supplies based on skill |
-
-**Command Flow:**
-```
-Player RMB on Survivor
-    ↓
-MOSystemMenuUIController::ShowSurvivorContextMenu()
-    ↓
-UMOSurvivorContextMenu displayed
-    ├─ Follow Me → AMOSurvivorController::SetFollowTarget()
-    ├─ Stay Here → AMOSurvivorController::SetStayAtLocation()
-    ├─ Go Home → AMOSurvivorController::GoToHome()
-    └─ Open Tasks → UMOSurvivorTaskMenu displayed
-                        ↓
-                    UMOSurvivorJobQueueComponent::EnqueueJob()
-                        ↓
-                    AMOSurvivorController executes job
-```
-
-**Job Execution States:**
-```
-Queued → Active → MovingToTarget → Performing → Completed
-                                       ↓
-                              Award XP via UMOSkillsComponent
-```
-
-**Configuration:**
-- Job definitions stored in `DT_SurvivorJobs` DataTable
-- Search radius, duration, skill XP all configurable per job type
-- Centralized via `UMOSurvivorJobDatabaseSettings` (Project Settings)
-
-### DataTable-Driven Design
-
-| Row Type | DataTable | Purpose |
-|----------|-----------|---------|
-| `FMOItemDefinitionRow` | DT_ItemDefinitions | Items, nutrition, equipment |
-| `FMOSkillDefinitionRow` | DT_SkillDefinitions | Skills, XP curves |
-| `FMORecipeDefinitionRow` | DT_RecipeDefinitions | Crafting recipes |
-| `FMOBodyPartDefinitionRow` | DT_BodyPartDefinitions | ~55 body parts |
-| `FMOMedicalTreatmentRow` | DT_MedicalTreatments | Wound treatments |
-| `FMOCreatureDefinitionRow` | DT_CreatureDefinitions | Creature stats, perception, loot |
-| `FMOSurvivorJobDefinitionRow` | DT_SurvivorJobs | Survivor job types, search radius, XP |
-
-### PCG Nodes
-
-Custom PCG nodes for world generation:
-
-| Node | Purpose |
-|------|---------|
-| `MO Mesh Spawner` | All-in-one: selects items, spawns HISM, tags for foraging discovery |
-| `MO Item Spawner` | Assigns item metadata to points (use with Static Mesh Spawner) |
-| `MO HISM Tagger` | Tags existing HISM components for foraging discovery |
-
-**MO Mesh Spawner** is recommended for ground items - it combines item selection, mesh spawning, and tagging in one node. Items spawned this way are automatically discoverable by the Search Nearby foraging action.
-
-### Replication Patterns
-
-- **FastArraySerializer** for efficient array replication (inventory, wounds, conditions)
-- **GUID-Based Identity** for stable cross-session references
-- **Authority-Only State Modification** pattern for all components
-
----
-
-## MOFramework Plugin
-
-The MOFramework plugin (`Plugins/MOFramework/`) provides all core gameplay systems.
-
-### Module Structure
-
-```
-Plugins/MOFramework/
-├── Source/MOFramework/
-│   ├── Public/           # Headers (70+ classes)
-│   │   ├── MO*Component.h
-│   │   ├── MO*Subsystem.h
-│   │   ├── MO*Widget.h
-│   │   ├── MO*Interface.h
-│   │   ├── MOMainMenuPlayerController.h
-│   │   ├── MOMainMenuWidget.h
-│   │   └── MOIntroWidget.h
-│   └── Private/          # Implementations
-└── Content/
-    └── UI/               # Widget Blueprints
-```
-
-### Key Design Patterns
-
-**UDeveloperSettings** - Project Settings integration:
-```cpp
-UCLASS(config=Game, defaultconfig, meta=(DisplayName="Item Database"))
-class UMOItemDatabaseSettings : public UDeveloperSettings
-{
-    UPROPERTY(Config, EditAnywhere)
-    FSoftObjectPath ItemDefinitionTable;
-};
-```
-
-**Save/Load Pattern**:
-```cpp
-// All components follow this pattern
-void BuildSaveData(FMOSaveData& OutSaveData) const;  // Any caller
-bool ApplySaveDataAuthority(const FMOSaveData& InSaveData);  // Server only
-```
-
----
-
-## UI Implementation Guide
-
-### Recommended Content Folder Structure
-
-```
-Content/
-└── UI/
-    ├── Common/
-    │   ├── WBP_MOCommonButton.uasset
-    │   └── WBP_DragVisual.uasset
-    ├── HUD/
-    │   ├── WBP_PlayerStatus.uasset
-    │   ├── WBP_Reticle.uasset
-    │   └── WBP_Notification.uasset
-    ├── Inventory/
-    │   ├── WBP_InventoryMenu.uasset
-    │   ├── WBP_InventoryGrid.uasset
-    │   ├── WBP_InventorySlot.uasset
-    │   ├── WBP_ItemInfoPanel.uasset
-    │   └── WBP_ItemContextMenu.uasset
-    ├── Crafting/
-    │   ├── WBP_CraftingMenu.uasset
-    │   ├── WBP_RecipeList.uasset
-    │   ├── WBP_RecipeEntry.uasset
-    │   ├── WBP_RecipeDetailPanel.uasset
-    │   ├── WBP_CraftingQueue.uasset
-    │   └── WBP_CraftingQueueEntry.uasset
-    ├── Status/
-    │   ├── WBP_StatusPanel.uasset
-    │   ├── WBP_StatusField.uasset
-    │   └── WBP_CharacterInfoEntry.uasset
-    ├── Possession/
-    │   ├── WBP_PossessionMenu.uasset
-    │   └── WBP_PawnEntry.uasset
-    └── Menu/
-        ├── WBP_InGameMenu.uasset
-        ├── WBP_OptionsPanel.uasset
-        ├── WBP_SavePanel.uasset
-        ├── WBP_LoadPanel.uasset
-        └── WBP_SaveSlotEntry.uasset
-```
-
-### Widget Reference
-
-#### Legend
-- **Required** (`BindWidget`): Widget MUST exist with exact name
-- **Optional** (`BindWidgetOptional`): Widget is optional but uses exact name if present
-
----
-
-### Common Widgets
-
-#### WBP_MOCommonButton
-**Parent Class:** `UMOCommonButton` (extends `UCommonButtonBase`)
-
-Base button for all MOFramework UI. Override `UpdateButtonText` event to set your text widget.
-
-**Properties:** `ButtonLabel` (FText)
-
----
-
-### Inventory Widgets
-
-#### WBP_InventoryMenu
-**Parent Class:** `UMOInventoryMenu`
-
-| Widget | Type | Required |
-|--------|------|----------|
-| `InventoryGrid` | UMOInventoryGrid | **Required** |
-| `ItemInfoPanel` | UMOItemInfoPanel | **Required** |
-
-#### WBP_InventoryGrid
-**Parent Class:** `UMOInventoryGrid`
-
-| Widget | Type | Required |
-|--------|------|----------|
-| `SlotsUniformGrid` | UUniformGridPanel | **Required** |
-
-**Config:** `SlotWidgetClass`, `Columns`, `MinimumVisibleSlotCount`
-
-#### WBP_InventorySlot
-**Parent Class:** `UMOInventorySlot`
-
-| Widget | Type | Required |
-|--------|------|----------|
-| `SlotButton` | UButton | **Required** |
-| `ItemIconImage` | UImage | Optional |
-| `QuantityText` | UTextBlock | Optional |
-| `QuantityBox` | UWidget | Optional |
-| `SlotBorder` | UBorder | Optional |
-
-#### WBP_ItemContextMenu
-**Parent Class:** `UMOItemContextMenu`
-
-| Widget | Type | Required |
-|--------|------|----------|
-| `ButtonContainer` | UPanelWidget | **Required** |
-| `UseButton` | UMOCommonButton | **Required** |
-| `Drop1Button` | UMOCommonButton | **Required** |
-| `DropAllButton` | UMOCommonButton | **Required** |
-| `InspectButton` | UMOCommonButton | **Required** |
-| `SplitStackButton` | UMOCommonButton | **Required** |
-| `CraftButton` | UMOCommonButton | **Required** |
-
----
-
-### Crafting Widgets
-
-#### WBP_CraftingMenu
-**Parent Class:** `UMOCraftingMenu`
-
-| Widget | Type | Required |
-|--------|------|----------|
-| `RecipeList` | UMORecipeListWidget | **Required** |
-| `DetailPanel` | UMORecipeDetailPanel | **Required** |
-| `QueueWidget` | UMOCraftingQueueWidget | Optional |
-| `CloseButton` | UMOCommonButton | Optional |
-
-#### WBP_RecipeList
-**Parent Class:** `UMORecipeListWidget`
-
-| Widget | Type | Required |
-|--------|------|----------|
-| `RecipeScrollBox` | UScrollBox | Optional |
-| `RecipeContainer` | UVerticalBox | Optional |
-
-**Config:** `RecipeEntryWidgetClass`
-
-#### WBP_RecipeEntry
-**Parent Class:** `UMORecipeEntryWidget`
-
-| Widget | Type | Required |
-|--------|------|----------|
-| `EntryButton` | UButton | Optional |
-| `RecipeNameText` | UTextBlock | Optional |
-| `RecipeIcon` | UImage | Optional |
-| `BackgroundBorder` | UBorder | Optional |
-
-#### WBP_RecipeDetailPanel
-**Parent Class:** `UMORecipeDetailPanel`
-
-| Widget | Type | Required |
-|--------|------|----------|
-| `RecipeNameText` | UTextBlock | Optional |
-| `RecipeDescriptionText` | UTextBlock | Optional |
-| `RecipeIcon` | UImage | Optional |
-| `IngredientsContainer` | UVerticalBox | Optional |
-| `OutputsContainer` | UVerticalBox | Optional |
-| `SkillRequirementText` | UTextBlock | Optional |
-| `CraftTimeText` | UTextBlock | Optional |
-| `CraftButton` | UMOCommonButton | Optional |
-| `CraftAmountSpinBox` | USpinBox | Optional |
-
-#### WBP_CraftingQueue
-**Parent Class:** `UMOCraftingQueueWidget`
-
-| Widget | Type | Required |
-|--------|------|----------|
-| `QueueScrollBox` | UScrollBox | Optional |
-| `CurrentCraftNameText` | UTextBlock | Optional |
-| `CurrentProgressBar` | UProgressBar | Optional |
-| `TimeRemainingText` | UTextBlock | Optional |
-| `CancelAllButton` | UMOCommonButton | Optional |
-
-**Config:** `QueueEntryWidgetClass`, `ProgressUpdateInterval`
-
-#### WBP_CraftingQueueEntry
-**Parent Class:** `UMOCraftingQueueEntryWidget`
-
-| Widget | Type | Required |
-|--------|------|----------|
-| `RecipeNameText` | UTextBlock | Optional |
-| `RecipeIcon` | UImage | Optional |
-| `CountText` | UTextBlock | Optional |
-| `ProgressBar` | UProgressBar | Optional |
-| `TimeRemainingText` | UTextBlock | Optional |
-| `CancelButton` | UMOCommonButton | Optional |
-
----
-
-### Status Widgets
-
-#### WBP_StatusPanel
-**Parent Class:** `UMOStatusPanel`
-
-| Widget | Type | Required |
-|--------|------|----------|
-| `CategorySwitcher` | UWidgetSwitcher | **Required** |
-| `InfoScrollBox` | UScrollBox | **Required** |
-| `VitalsScrollBox` | UScrollBox | **Required** |
-| `NutritionScrollBox` | UScrollBox | **Required** |
-| `NutrientsScrollBox` | UScrollBox | **Required** |
-| `FitnessScrollBox` | UScrollBox | **Required** |
-| `MentalScrollBox` | UScrollBox | **Required** |
-| `WoundsScrollBox` | UScrollBox | **Required** |
-| `ConditionsScrollBox` | UScrollBox | **Required** |
-| Tab buttons (8x) | UMOCommonButton | Optional |
-
-**Config:** `StatusFieldClass`, `CharacterInfoEntryClass`, `FieldConfigs`
-
-#### WBP_StatusField
-**Parent Class:** `UMOStatusField`
-
-| Widget | Type | Required |
-|--------|------|----------|
-| `TitleText` | UTextBlock | Optional |
-| `ValueText` | UTextBlock | Optional |
-| `ValueBar` | UProgressBar | Optional |
-| `IconImage` | UImage | Optional |
-
----
-
-### Possession Widgets
-
-#### WBP_PossessionMenu
-**Parent Class:** `UMOPossessionMenu`
-
-| Widget | Type | Required |
-|--------|------|----------|
-| `PawnListScrollBox` | UScrollBox | **Required** |
-| `CreateCharacterButton` | UMOCommonButton | Optional |
-| `CloseButton` | UMOCommonButton | Optional |
-
-**Config:** `PawnEntryWidgetClass`
-
-#### WBP_PawnEntry
-**Parent Class:** `UMOPawnEntryWidget`
-
-| Widget | Type | Required |
-|--------|------|----------|
-| `NameText` | UTextBlock | Optional |
-| `AgeText` | UTextBlock | Optional |
-| `HealthBar` | UProgressBar | Optional |
-| `PossessButton` | UMOCommonButton | Optional |
-
----
-
-### Menu Widgets
-
-#### WBP_MainMenu
-**Parent Class:** `UMOMainMenuWidget`
-
-| Widget | Type | Required |
-|--------|------|----------|
-| `NewGameButton` | UMOCommonButton | **Required** |
-| `LoadGameButton` | UMOCommonButton | **Required** |
-| `OptionsButton` | UMOCommonButton | **Required** |
-| `ExitButton` | UMOCommonButton | **Required** |
-| `FocusWindowSwitcher` | UWidgetSwitcher | **Required** |
-| `LoadPanel` | UMOLoadPanel | Optional |
-| `OptionsPanel` | UMOOptionsPanel | Optional |
-
-**Switcher Indices:** 0=None, 1=Load, 2=Options
-
-#### WBP_IntroVideo
-**Parent Class:** `UMOIntroWidget`
-
-| Widget | Type | Required |
-|--------|------|----------|
-| `VideoImage` | UImage | **Required** |
-| `SkipHintText` | UTextBlock | Optional |
-
-Receives video material from controller via `SetVideoMaterial()`. Press any key to skip.
-
-#### WBP_InGameMenu
-**Parent Class:** `UMOInGameMenu`
-
-| Widget | Type | Required |
-|--------|------|----------|
-| `ButtonsBox` | UPanelWidget | **Required** |
-| `OptionsButton` | UMOCommonButton | **Required** |
-| `SaveButton` | UMOCommonButton | **Required** |
-| `LoadButton` | UMOCommonButton | **Required** |
-| `ExitToMainMenuButton` | UMOCommonButton | **Required** |
-| `ExitGameButton` | UMOCommonButton | **Required** |
-| `FocusWindowSwitcher` | UWidgetSwitcher | **Required** |
-
-**Switcher Indices:** 0=None, 1=Options, 2=Save, 3=Load
-
-#### WBP_SavePanel / WBP_LoadPanel
-**Parent Class:** `UMOSavePanel` / `UMOLoadPanel`
-
-| Widget | Type | Required |
-|--------|------|----------|
-| `SaveSlotsScrollBox` | UScrollBox | **Required** |
-| `NewSaveButton` | UMOCommonButton | **Required** (Save only) |
-| `BackButton` | UMOCommonButton | **Required** |
-
-**Config:** `SaveSlotEntryClass`
-
----
-
-### Creating Widget Blueprints
-
-1. **Create the Blueprint**: Right-click > User Interface > Widget Blueprint, select parent class
-2. **Add Required Widgets**: Use exact names from tables above, mark as "Is Variable"
-3. **Set Class References**: In Class Defaults, set `*WidgetClass` properties
-4. **Configure Properties**: Set colors, thresholds in Class Defaults
-
----
-
-## Technical Debt & Known Issues
-
-### UE5.8 Native Refactoring Roadmap
-
-*Full audit completed March 18, 2026 - see `Docs/UE57_Refactoring_Plan.md`*
-
-The codebase was audited to identify custom implementations that could leverage UE5.8 native features:
-
-| Priority | System | Native Alternative | Impact |
-|----------|--------|-------------------|--------|
-| 1 | UI Controllers | CommonUI widget stacks, `UGameUIManagerSubsystem` | ~3000 LOC reduction |
-| 2 | AI Queries | Environment Query System (EQS) | O(n) → O(log n) |
-| 3 | Enums | Gameplay Tags (`EMOConditionType`, `EMOEquipmentSlot`, etc.) | Modding support |
-| 4 | Interaction | Smart Objects | Modern UE pattern |
-| 5 | Data Loading | Data Registry | Async loading |
-| 6 | Hustle Input | Enhanced Input Triggers | Quick win |
-| 7 | PCG Culling | Native PCG distance filtering | Remove custom node |
-| Deferred | AI Architecture | StateTree | BT works fine |
-| Deferred | Combat | Gameplay Ability System | Medical integration complex |
-
-**Correctly Custom (No Change Needed):**
-- Persistence/Identity system (native `ActorGuid` only works in dev builds)
-- Medical simulation (GAS overkill for physiological simulation)
-- Building system (no native alternative for weighted parts)
-- `FastArraySerializer` usage (already correct)
-- `TSoftObjectPtr` usage (already correct)
-
-### Code Audit Summary
-
-The MOFramework has solid core systems but has accumulated technical debt in several areas:
-
-### Critical Issues
-
-| Issue | Location | Impact |
-|-------|----------|--------|
-| Debug logging in production | `MOInventoryComponent.cpp:868-909` | Performance, log spam |
-| Subsystem direct coupling | `MOInteractorComponent.cpp:179` | Architecture violation |
-
-### High Priority
-
-| Issue | Location | Impact |
-|-------|----------|--------|
-| MOUIManagerComponent god object | `MOUIManagerComponent.cpp` | 7+ UI responsibilities |
-| Duplicate viewpoint resolution | 3 files | Code duplication |
-| Poor save/load error handling | `MOPersistenceSubsystem.cpp` | Silent failures |
-| Missing server validation | `MOCraftingQueueComponent.cpp` | Security |
-
-### Known Coupling Issues
-
-**CRITICAL - Persistence↔Inventory Circular Dependency:**
-- `MOInventoryComponent.DropItemByGuid()` calls `MOPersistenceSubsystem.IsGuidDestroyed()`
-- **Mitigation**: Consider `IMOPersistenceProvider` interface
-
-**HIGH - UIManager Orchestration Bottleneck:**
-- `MOUIManagerComponent` knows about Persistence, Possession, Inventory subsystems
-- **Mitigation**: Break into specialized UI controllers per system
-
-**MEDIUM - Monolithic Module Structure:**
-- All 60+ classes in single `MOFramework` module
-- **Future**: Split into Core, Interaction, Inventory, Medical, UI submodules
-
-### Recent Changes
-
-*Last updated: 2026-02-24*
-
-#### Survivor AI & Task Assignment System (NEW)
-- [x] `AMOSurvivorController` - AI controller with Follow/Stay/GoHome commands
-- [x] `UMOSurvivorJobQueueComponent` - Replicated job queue per survivor
-- [x] Job types: GatherWood, GatherStone, GatherFiber, ForageNearby, DigForSupplies
-- [x] `UMOSurvivorContextMenu` - Right-click context menu for survivors
-- [x] `UMOSurvivorTaskMenu` - Full task assignment panel
-- [x] `UMOSurvivorJobDatabaseSettings` - Centralized job definitions via Project Settings
-- [x] GatherWood uses harvest recipes (trees → sticks)
-- [x] ForageNearby picks up ground spawns via PCG interaction
-- [x] XP awards for completed jobs via existing skill system
-- [x] `UMORecruitmentComponent` - Recruitment state tracking
-- [x] Behavior tree tasks: `BTTask_SurvivorGather`, `BTTask_SurvivorForage`
-- [x] `BTService_SurvivorJobProcessor` - Job queue monitoring service
-
-#### Save/Load System Fixes
-- [x] Fixed voxel terrain generating with wrong seed on load (critical)
-- [x] Fixed unrecruited survivors appearing possessable in possession menu
-- [x] Fixed character names not preserved across save/load
-- [x] Fixed recruited pawns missing AI controller after load
-- [x] `bAutoInitializeVoxelWithSeed` now defaults to `true`
-- [x] Fixed creatures (deer, wolves) incorrectly recruitable via `bIsRecruitable` flag
-- [x] `EnsureSurvivorAIController()` spawns AI on recruited state load
-
-#### Spawn Management System (NEW)
-- [x] `UMOSpawnManagerSubsystem` - World subsystem for spawn points
-- [x] `AMOSpawnPoint` - Actor-based spawn points with visual debugging
-- [x] `UMOSpawnSettings` - UDeveloperSettings for spawn configuration
-- [x] PCG spawn point integration
-
-#### Ground Foraging System
-- [x] Right-click ground context menu with Search Nearby / Dig for Supplies
-- [x] `UMOForagingSubsystem` for HISM query and dig mechanics
-- [x] `MO Mesh Spawner` PCG node - all-in-one spawner with tagging
-- [x] Tag-based item discovery via `MOPCGInteractionSubsystem`
-- [x] Skill-scaled foraging radius and XP rewards
-
-#### Character Customization (NEW)
-- [x] Jiggle physics for character models
-- [x] Animation-based character customization stream started
-- [x] Morph target slider support
-
-#### World Item Interactions (NEW)
-- [x] Right-click context menu for nearby items panel
-- [x] Split Stack for world items - takes half into inventory, leaves rest in world
-- [x] Details panel for world items without picking them up
-- [x] `SetItemByDefinitionId()` for displaying item info without inventory lookup
-
-#### Loading Screen & UX Polish (NEW)
-- [x] Loading overlay appears BEFORE level load (no frozen menu)
-- [x] Timer-based delayed level load for readable loading screens
-- [x] Widget-based loading overlay with fade-out animation
-- [x] Pawn landing detection - loading screen persists until character is grounded
-- [x] Camera shoulder toggle with smooth animated transition
-
-#### PCG World Generation (NEW)
-- [x] PCG flower patch clustering using Copy Points node
-- [x] Distance culling with PCG Invoker component on player
-- [x] Flint nodules and branches added to ground spawns
-
-#### Weather Integration (NEW)
-- [x] `IMOWeatherProviderInterface` for UDS/UDW integration
-- [x] Weather save/load support with `FMOWeatherSaveData`
-- [x] DateTime and weather preset persistence
-- [x] Pending save data system for async provider registration
-
-#### Quest System (NEW)
-- [x] `UMOQuestSubsystem` for quest management
-- [x] DataTable-driven quest definitions
-- [x] Event-based objective completion
-- [x] Quest HUD tracker and full quest log panel
-- [x] Auto-start quests when prerequisites met
-
-#### Terrain-Aware Spawning
-- [x] Beach spawn system - characters spawn on beaches, not peaks
-- [x] Configurable height range filters (100-3000cm above water)
-- [x] Voxel height graph seed parameter support
-- [x] Mid-game save loading with terrain regeneration
-
-#### Creature AI System
-- [x] `MOCreature` base class for all AI creatures (prey/predators)
-- [x] `MOCreatureController` with AI perception (sight + hearing)
-- [x] Creature activity states: Active, Resting, Sleeping, Fleeing, Fighting, Dead
-- [x] Behavior tree tasks: Flee, Wander, Attack, Rest
-- [x] `BTService_CreatureActivity` for day/night rest/sleep cycles
-- [x] Fall-through safety system for voxel terrain gaps
-
-#### Character Appearance System
-- [x] `MOAppearanceSubsystem` for managing character visuals
-- [x] `MOCharacterAppearance` component for per-pawn appearance data
-- [x] `MOCustomizableCharacter` with MetaHuman integration
-
-#### Main Menu System
-- [x] Main menu widget with New Game/Load Game/Options/Exit
-- [x] Intro video playback with audio (UMediaPlayer-based)
-- [x] Skip intro with any key press
-- [x] New Game panel with world seed input
-
-#### Inventory QoL
-- [x] Double-click items to transfer between inventories
-- [x] Nearby panel auto-refresh after split operations
-- [x] Fixed inventory grid showing exact slot count
-
-### Tracked TODOs
-
-*Last updated: 2026-02-12*
-
-#### Medical System
-- [ ] `MOAnatomyComponent.cpp:257` - Get treatment definition from DataTable and apply effects
-- [ ] `MOAnatomyComponent.cpp:737` - Add setter in VitalsComponent for external access
-- [ ] `MOAnatomyComponent.cpp:823` - Get condition definition from DataTable
-- [ ] `MOAnatomyComponent.cpp:968` - Implement DataTable lookup via MOMedicalSubsystem
-- [ ] `MOAnatomyComponent.cpp:975` - Implement DataTable lookup via MOMedicalSubsystem
-- [ ] `MOVitalsComponent.cpp:557` - Integrate lung damage from anatomy component
-
-#### Crafting System
-- [ ] `MOCraftingQueueComponent.cpp:356` - Store active station GUID when AMOCraftingStationActor is implemented (Phase 3)
-- [ ] `MOCraftingQueueComponent.cpp:655` - Apply tool quality modifiers when tool system is integrated
-
-#### UI System
-- [ ] `MOUIManagerComponent.cpp:1114` - Implement inspection (show detailed item info, grant knowledge XP)
-- [ ] `MOUIManagerComponent.cpp:1119` - Implement stack splitting UI
-- [ ] `MOUIManagerComponent.cpp:1124` - Implement crafting UI filtered to this item
-- [ ] `MOStatusPanel.cpp:190` - Expose threshold setters on UMOStatusField
-- [ ] `MOStatusPanel.cpp:439` - Add visual selected state to buttons
-- [ ] `MOStatusPanel.cpp:971` - Show an input dialog to change the value
-- [ ] `MOStatusPanel.cpp:980` - Show name change dialog
-
-#### Save/Load System
-- [ ] `MOSaveSlotEntry.cpp:72` - Load screenshot thumbnail from ScreenshotPath if available
-- [ ] `MOSavePanel.cpp:104` - Load actual metadata from save file
-
-### Portability Score: 6.5/10
-
-Good fundamentals with interface-based decoupling, but needs abstraction layer work before scaling to complex multiplayer scenarios.
-
----
-
-## Development Setup
-
-### Environment
-
-- **IDE**: Rider for C++
-- **Engine**: Unreal Engine 5.8 (source build)
-- **Engine Path**: `D:\UnrealEngine\UE_5.8`
-
-### Build Commands (PowerShell)
+1. Clone the repository with its required plugin content.
+2. Confirm that `MO57.uproject` resolves to the intended UE 5.8 installation.
+3. Generate/open the project through Unreal or Rider.
+4. Review [Project Status](Docs/PROJECT_STATUS.md), [Technical Reference](Docs/TECHNICAL_REFERENCE.md), and the relevant system-specific document before changing a subsystem.
+5. Use the unified tooling entry point from the repository root:
 
 ```powershell
-# Build Editor (Development)
-& 'D:\UnrealEngine\UE_5.8\Engine\Binaries\DotNET\UnrealBuildTool\UnrealBuildTool.exe' MO57Editor Win64 Development '-Project=D:\ueprojects\mo57\mo57.uproject'
-
-# Build Game (Development)
-& 'D:\UnrealEngine\UE_5.8\Engine\Binaries\DotNET\UnrealBuildTool\UnrealBuildTool.exe' MO57 Win64 Development '-Project=D:\ueprojects\mo57\mo57.uproject'
+python Tools/ue.py status
 ```
 
-### Workflow Rules
+To inspect the resolved project, engine, MCP, and bridge locations without starting Unreal:
 
-1. **Before compiling**: Close Unreal Editor (Live Coding blocks CLI builds)
-2. **After successful compile**: `git add -A && git commit -m "checkpoint" && git push`
-
-### Code Conventions
-
-- Always call `RemoveAll(this)` before binding delegates in `NativeConstruct()`
-- UI widgets use CommonUI (`UCommonActivatableWidget`, `UCommonButtonBase`)
-- Use Warning log level for important flow events, Log for routine
-- **Input action handling always in C++** - All handlers go in `AMOPlayerController::SetupInputComponent()`
-
-### Planned Plugins
-
-- **Ultra Dynamic Sky** - Dynamic sky/atmosphere
-- **Ultra Dynamic Weather** - Weather effects
-- **Oceanology** - Ocean/water simulation
-- **Voxel Plugin (open-source dev-phy build)** - Voxel terrain/world generation
-
----
-
-## Data Import & Modding
-
-### CSV-Based Content Definition
-
-Items and recipes are defined in CSV files for easy bulk editing and modding support.
-
-**File Locations:**
-- `Content/Data/Items.csv` - 200 item definitions
-- `Content/Data/Recipes.csv` - 92 recipe definitions
-- `Content/Data/Skills.csv` - 22 skill definitions
-- `Content/Data/TechProgression.txt` - Complete progression documentation
-
-### Technology Progression
-
-The game features a historical technology progression spanning 9 eras:
-
-| Era | Period | Key Technologies |
-|-----|--------|------------------|
-| 1 | Primitive | Knapping, basic cordage, fire-starting |
-| 2 | Early Stone Age | Stone tools, trapping, hide processing |
-| 3 | Late Stone Age | Bow-making, pottery, weaving basics |
-| 4 | Copper Age | Smelting, bronze tools, wheel |
-| 5 | Early Bronze | Alloys, advanced metalwork |
-| 6 | Late Bronze | Charcoal production, bellows |
-| 7 | Iron Age | Iron smelting, steel basics |
-| 8 | Early Medieval | Advanced smithing, textiles |
-| 9 | High Medieval | Complex machinery, refined crafts |
-
-See `TechProgression.txt` for complete crafting chains, skill requirements, and recipe dependencies.
-
-### CSV Formats
-
-#### Items.csv
-```csv
-RowName,DisplayName,ItemType,Rarity,MaxStackSize,Weight,bConsumable,bIsTool,ToolType,ToolQuality,MaxDurability,Calories,Water,Protein,Carbs,Fat,Fiber,Tags,Description
-stone,Stone,Material,Common,50,1.0,false,false,,0,0,0,0,0,0,0,0,Material|Primitive|Stone,A common stone.
-flint_knife,Flint Knife,Tool,Common,1,0.3,false,true,Knife,0.6,40,0,0,0,0,0,0,Tool|Primitive|Knife,Sharp flint blade.
-```
-
-| Field | Values |
-|-------|--------|
-| ItemType | None, Consumable, Material, Tool, Weapon, Ammo, Armor, KeyItem, Quest, Currency, Misc |
-| Rarity | Common, Uncommon, Rare, Epic, Legendary |
-| Tags | Pipe-separated: `Food\|Raw\|Meat` |
-
-#### Recipes.csv
-```csv
-RowName,DisplayName,CraftTime,Station,SkillId,SkillLevel,SkillXP,Category,bRequiresDiscovery,Ingredients,Outputs,Tools,Description
-cook_meat,Cook Meat,60.0,Campfire,Cooking,0,20,Food,false,raw_meat:1,cooked_meat:1,,Roast meat over fire.
-craft_stone_axe,Stone Axe,25.0,None,Woodworking,2,35,Tools,false,hand_axe:1|stick:2|cordage:2,stone_axe:1,,Haft a stone head.
-```
-
-| Field | Format |
-|-------|--------|
-| Station | None, Campfire, Workbench, Forge, Alchemy, Kitchen, Loom |
-| Ingredients | `itemId:quantity\|itemId:quantity` |
-| Outputs | `itemId:quantity\|itemId:quantity:chance` (chance optional, default 1.0) |
-| Tools | `toolType:minQuality:durability` (quality/durability optional) |
-
-### Import Commands
-
-**From Editor (Blueprint):**
-```cpp
-UMODataImportCommandlet::ImportItemsFromCSV("Data/Items.csv", false);
-UMODataImportCommandlet::ImportRecipesFromCSV("Data/Recipes.csv", false);
-UMODataImportCommandlet::ImportAllFromDirectory("Data/", false);
-```
-
-**From Command Line:**
 ```powershell
-UE5Editor.exe MO57 -run=MODataImport -items=Content/Data/Items.csv -recipes=Content/Data/Recipes.csv
-UE5Editor.exe MO57 -run=MODataImport -dir=Content/Data
+python Tools/ue.py config
 ```
 
-**Export (for templates):**
-```cpp
-UMODataImportCommandlet::ExportItemsToCSV("Content/Data/Items_Export.csv");
-UMODataImportCommandlet::ExportRecipesToCSV("Content/Data/Recipes_Export.csv");
+`Tools/ue.py` discovers the repository, `.uproject`, engine association, and `.mcp.json` automatically. Optional overrides are:
+
+| Environment variable | Purpose |
+|---|---|
+| `MO57_ROOT` | Repository root |
+| `MO57_UPROJECT` | Explicit `.uproject` path |
+| `UE_ENGINE_ROOT` | Unreal Engine installation root |
+| `MO57_MCP_URL` | Unreal MCP streamable-HTTP endpoint |
+| `MO57_BRIDGE_DIR` | Directory containing bridge command/output files |
+
+## Build and validation
+
+Before compiling, close Unreal Editor. Live Coding can block command-line builds. The unified CLI refuses a normal build while it detects the editor:
+
+```powershell
+python Tools/ue.py build
 ```
 
-### Modding Workflow
+Useful validation commands include:
 
-1. **Create mod folder**: `Content/Mods/MyMod/Data/`
-2. **Copy template CSVs** or export existing data
-3. **Edit CSVs** in spreadsheet software (Excel, Google Sheets, LibreOffice)
-4. **Import** using commandlet or Editor Utility Blueprint
-5. **Save DataTables** in Editor
+```powershell
+# Offline tests for the local tooling
+python -m unittest discover -s Tools/tests -p "test_*.py" -v
 
-### Tips for Modders
+# Headless Unreal automation; editor must be closed
+python Tools/ue.py auto
 
-- Row names must be unique across all imports
-- Use descriptive prefixes for mod content: `mymod_iron_sword`
-- Comments start with `#` or `//`
-- Empty rows are skipped
-- Fields with quotes can contain commas: `"A, B, C"`
+# Runtime regression suite; editor and bridge must be running
+python Tools/ue.py test
 
----
+# Two-client listen-server smoke test
+python Tools/ue.py mptest
+```
 
-## Roadmap
+A successful compile proves type/build correctness, not gameplay correctness. Every behavior change should include a concrete reproduction and runtime verification appropriate to the affected system. Do not commit or push unless explicitly requested.
 
-### Development Phases
+## Unreal MCP and autonomous tooling
 
-| Phase | Focus | Status |
-|-------|-------|--------|
-| **MVP** | Solo survival loop - single pawn, primitive survival, core medical/crafting | In Progress |
-| **Pawn Discovery** | Find survivors after ~100mi² exploration, simple automated tasks | Planned |
-| **Full Pawn AI** | Autonomous survival behavior, job systems, relationships | Planned |
-| **Civilization Building** | Housing, workplaces, teaching, population growth | Planned |
-| **Multiplayer Polish** | Steam integration, world sharing | Planned |
-| **DLC Pipeline** | Medieval → Industrial → Modern → Sci-fi expansion | Future |
+The UE 5.8 experimental Model Context Protocol server is configured by `.mcp.json` and normally runs at `http://127.0.0.1:8000/mcp`. `Tools/ue.py` is the preferred MO57-facing orchestration layer for MCP asset operations, DataTables, editor lifecycle, builds, PIE, logs, and tests.
 
-### Design Principles
+The MCP Programmatic toolset and `Content/Python/claude_bridge.py` can execute arbitrary local Python. They are trusted developer tooling:
 
-1. **Tiered Complexity** - Simple overview for quick checks, detailed view for interested players
-2. **Visual Feedback Over Numbers** - Use moodles/icons for quick status, reserve numbers for inspection
-3. **Graceful Degradation** - Injuries impair, don't immediately kill; time to react and treat
-4. **Automation at Scale** - Single pawn: manual control; many pawns: priorities/schedules/jobs
-5. **Emergent Narrative** - Character traits create stories, relationships matter
+- keep the MCP bound to loopback;
+- never expose it directly to an untrusted network;
+- never ship the Python bridge as a gameplay feature;
+- prefer semantic project commands and readback-verified wrappers over arbitrary execution.
 
----
+See [Autonomous Tooling](Docs/AUTONOMOUS_TOOLING.md) and [Agent PIE Testing](Docs/Agent_PIE_Testing.md) for the operating model.
+
+## DataTable authoring
+
+Do not edit DataTable CSV files directly.
+
+- For live row authoring, use `python Tools/ue.py rows set <refPath> --file <rows.json>`. It deep-merges nested structures, reads changes back, and saves explicitly.
+- For Unreal DataTable JSON exports, use `Tools/ue_json_utils.py`.
+- If CSV work is unavoidable, use `Tools/ue_csv_utils.py`; add columns through its `add-column` command.
+
+Raw MCP `set_rows` replaces nested structs. Omitting fields can reset them to defaults, which is why the safe wrapper must be used for partial updates.
+
+## Architectural policies
+
+- Diagnose the layer that creates incorrect state before proposing a fix.
+- Centralize behavior shared by multiple systems rather than copying it.
+- Treat defaults as project policy.
+- Keep failure modes distinguishable where they originate.
+- Preserve real simulation time while eliminating repetitive UX gestures through batching or pawn delegation.
+- Input action handlers belong in `AMOPlayerController::SetupInputComponent()`.
+- UI uses CommonUI and `UMOCommonButton`.
+- The game never pauses. Read [Pause Policy](Docs/PAUSE_POLICY.md) before touching pause or input-mode behavior.
+
+The complete mandatory engineering rules live in `AGENTS.md`.
+
+## Documentation map
+
+| Document | Use it for |
+|---|---|
+| [Project Status](Docs/PROJECT_STATUS.md) | Current progress, audit tracker, recent work, and known issues |
+| [Technical Reference](Docs/TECHNICAL_REFERENCE.md) | Architecture patterns, APIs, networking, performance, and subsystem guidance |
+| [Master Plan](Docs/MO57_Master_Plan.md) | Staged implementation plans |
+| [Autonomous Tooling](Docs/AUTONOMOUS_TOOLING.md) | MCP, editor bridge, build, PIE, and validation workflow |
+| [UI Overhaul Architecture](Docs/UI_Overhaul_Architecture.md) | CommonUI work and known pitfalls |
+| [World Features Architecture](Docs/World_Features_Architecture.md) | Caves, rivers, POIs, resources, and player-built world features |
+| [Voxel Plugin Reference](Docs/Voxel_Plugin_Reference.md) | Voxel integration, sculpting, caves, and mining |
+| [Audit Session State](Docs/agent/SESSION_STATE.md) | Current repository/MCP audit state and exact continuation point |
+
+Documentation under `Docs/Archive` is historical and should not guide new implementation.
+
+## Current phase
+
+The current focus is the solo survival foundation followed by pawn discovery, autonomous pawn jobs, settlement growth, cooperative multiplayer hardening, and broader modding support. Consult the project status and issue tracker for evidence-backed completion rather than the phase names alone.
 
 ## License
 
-[License information here]
-
-## Contributing
-
-[Contributing guidelines here]
+No repository license has been documented yet. Do not assume redistribution rights for the project or bundled third-party assets/plugins.

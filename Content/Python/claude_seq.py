@@ -65,16 +65,20 @@ ctx API
 NOTE: dev-machine tooling only, never ship. Executes arbitrary local files.
 """
 import os
+import tempfile
 import time
 import traceback
 
 import unreal
 
-OUT_PATH = r"C:\Users\penum\AppData\Local\Temp\claude\ue_out.txt"
+BRIDGE_DIR = os.path.abspath(os.environ.get(
+    "MO57_BRIDGE_DIR", os.path.join(tempfile.gettempdir(), "claude")))
+OUT_PATH = os.path.join(BRIDGE_DIR, "ue_out.txt")
 
 
 def _append(msg):
     try:
+        os.makedirs(BRIDGE_DIR, exist_ok=True)
         with open(OUT_PATH, "a", encoding="utf-8") as f:
             f.write(f"[{time.strftime('%H:%M:%S')}] {msg}\n")
     except Exception:

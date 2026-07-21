@@ -23,28 +23,80 @@ Design rules baked in from the 2026-06/07 fix campaign:
 NOTE: dev-machine tooling — drives arbitrary local execution. Never ship.
 """
 import argparse
+import hashlib
 import json
 import re
 import os
+from pathlib import Path
 import subprocess
 import sys
+import tempfile
 import time
 import uuid
 
-# --- environment constants (match claude_bridge.py / agent_boot_newgame.ps1) ---
-ROOT = r"D:\UEProjects\MO57"
-UPROJECT = ROOT + r"\MO57.uproject"
-GAMELOG = ROOT + r"\Saved\Logs\MO57.log"
-RESULTS = ROOT + r"\Saved\MOTestResults.txt"
-BOOT_PS1 = ROOT + r"\Tools\agent_boot_newgame.ps1"
-TMP = r"C:\Users\penum\AppData\Local\Temp\claude"  # bridge hardcodes this path
+# --- environment/configuration (shared with bridge scripts) -----------------
+
+
+def _read_json(path):
+    try:
+        with open(path, "r", encoding="utf-8-sig") as f:
+            return json.load(f)
+    except (OSError, ValueError, TypeError):
+        return {}
+
+
+def _find_uproject(root):
+    explicit = os.environ.get("MO57_UPROJECT")
+    if explicit:
+        return os.path.abspath(explicit)
+    preferred = os.path.join(root, "MO57.uproject")
+    if os.path.isfile(preferred):
+        return preferred
+    matches = sorted(Path(root).glob("*.uproject"))
+    return str(matches[0]) if len(matches) == 1 else preferred
+
+
+def _engine_root(uproject):
+    explicit = os.environ.get("UE_ENGINE_ROOT")
+    if explicit:
+        return os.path.abspath(explicit)
+    association = str(_read_json(uproject).get("EngineAssociation", "5.8"))
+    candidates = [
+        rf"D:\UnrealEngine\UE_{association}",
+        rf"C:\Program Files\Epic Games\UE_{association}",
+    ]
+    return next((p for p in candidates if os.path.isdir(p)), candidates[0])
+
+
+def _mcp_url(root):
+    explicit = os.environ.get("MO57_MCP_URL")
+    if explicit:
+        return explicit
+    servers = _read_json(os.path.join(root, ".mcp.json")).get("mcpServers", {})
+    configured = servers.get("unreal-mcp", {}) if isinstance(servers, dict) else {}
+    return configured.get("url", "http://127.0.0.1:8000/mcp")
+
+
+ROOT = os.path.abspath(os.environ.get(
+    "MO57_ROOT", os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)))
+UPROJECT = _find_uproject(ROOT)
+ENGINE_ROOT = _engine_root(UPROJECT)
+GAMELOG = os.path.join(ROOT, "Saved", "Logs", "MO57.log")
+RESULTS = os.path.join(ROOT, "Saved", "MOTestResults.txt")
+BOOT_PS1 = os.path.join(ROOT, "Tools", "agent_boot_newgame.ps1")
+TMP = os.path.abspath(os.environ.get(
+    "MO57_BRIDGE_DIR", os.path.join(tempfile.gettempdir(), "claude")))
 CMD_FILE = os.path.join(TMP, "ue_cmd.txt")
 OUT_FILE = os.path.join(TMP, "ue_out.txt")
-SID_FILE = os.path.join(TMP, "mcp_session.txt")
-UBT = r"D:\UnrealEngine\UE_5.8\Engine\Binaries\DotNET\UnrealBuildTool\UnrealBuildTool.exe"
-EDITOR_EXE = r"D:\UnrealEngine\UE_5.8\Engine\Binaries\Win64\UnrealEditor.exe"
-EDITOR_CMD = r"D:\UnrealEngine\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe"
-MCP_URL = "http://127.0.0.1:8000/mcp"
+MCP_URL = _mcp_url(ROOT)
+_SESSION_KEY = hashlib.sha256(
+    (os.path.normcase(ROOT) + "\0" + MCP_URL).encode("utf-8")).hexdigest()[:12]
+SID_FILE = os.path.join(TMP, f"mcp_session_{_SESSION_KEY}.txt")
+MCP_BODY_FILE = os.path.join(TMP, f"mcp_body_{_SESSION_KEY}.json")
+UBT = os.path.join(ENGINE_ROOT, "Engine", "Binaries", "DotNET",
+                   "UnrealBuildTool", "UnrealBuildTool.exe")
+EDITOR_EXE = os.path.join(ENGINE_ROOT, "Engine", "Binaries", "Win64", "UnrealEditor.exe")
+EDITOR_CMD = os.path.join(ENGINE_ROOT, "Engine", "Binaries", "Win64", "UnrealEditor-Cmd.exe")
 
 # Toolset aliases -> full MCP toolset names
 TOOLSETS = {
@@ -182,6 +234,42 @@ def _curl(body, sid=None, headers=False, timeout=25):
         return ""
 
 
+class MCPError(dict):
+    """Structured MCP failure that remains printable/backward-compatible."""
+
+    def __init__(self, code=None, message="MCP request failed", data=None, kind="jsonrpc"):
+        super().__init__(error=True, kind=kind, code=code, message=message)
+        if data is not None:
+            self["data"] = data
+
+    def __str__(self):
+        code = f" ({self['code']})" if self.get("code") is not None else ""
+        return f"MCP {self['kind']} error{code}: {self['message']}"
+
+
+def _json_messages(raw):
+    """Yield JSON-RPC messages from a JSON or streamable-HTTP SSE response."""
+    normalized = raw.replace("\r", "")
+    candidates = []
+    if any(line.startswith("data:") for line in normalized.splitlines()):
+        for event in re.split(r"\n\s*\n", normalized):
+            data_lines = [line[5:].lstrip() for line in event.splitlines()
+                          if line.startswith("data:")]
+            if data_lines:
+                candidates.append("\n".join(data_lines))
+    else:
+        candidates.append(normalized.strip())
+    for candidate in candidates:
+        if not candidate or candidate == "[DONE]":
+            continue
+        try:
+            value = json.loads(candidate)
+        except (TypeError, ValueError):
+            continue
+        if isinstance(value, dict):
+            yield value
+
+
 def mcp_connect():
     hdr = _curl(json.dumps({
         "jsonrpc": "2.0", "id": 1, "method": "initialize",
@@ -206,26 +294,36 @@ def mcp_connect():
 def _mcp_parse(raw):
     if not raw or not raw.strip():
         return None
-    raw = raw.replace("\r", "")
-    for ln in raw.splitlines():  # tools/call answers arrive as SSE
-        if ln.startswith("data: "):
-            raw = ln[6:]
-            break
-    try:
-        result = json.loads(raw).get("result", {})
-    except Exception:
-        return None
+    messages = list(_json_messages(raw))
+    if not messages:
+        return MCPError(message="response was neither JSON nor valid SSE", kind="protocol")
+    message = next((m for m in reversed(messages) if "result" in m or "error" in m), messages[-1])
+    if "error" in message:
+        error = message.get("error") or {}
+        return MCPError(error.get("code"), error.get("message", "JSON-RPC error"),
+                        error.get("data"))
+    result = message.get("result", {})
     if "content" in result:
-        text = result["content"][0]["text"]
+        content = result.get("content") or []
+        text_parts = [part.get("text", "") for part in content
+                      if isinstance(part, dict) and part.get("type", "text") == "text"]
+        text = "\n".join(text_parts)
+        if result.get("isError"):
+            return MCPError(message=text or "tool reported failure", kind="tool")
         try:
             obj = json.loads(text)
             if isinstance(obj, dict) and "returnValue" in obj:
                 rv = obj["returnValue"]
                 return json.loads(rv) if isinstance(rv, str) and rv.strip()[:1] in "{[" else rv
             return obj
-        except Exception:
+        except (TypeError, ValueError):
             return text
     return result
+
+
+def _is_stale_session(value):
+    return (isinstance(value, MCPError)
+            and "unknown session id" in value.get("message", "").lower())
 
 
 def mcp_call(toolset, tool, args, _retried=False):
@@ -246,11 +344,9 @@ def mcp_call(toolset, tool, args, _retried=False):
                                                 "tool_name": tool,
                                                 "arguments": args}}})
     out = _mcp_parse(_curl(body, sid))
-    # {} means the server rejected our SESSION (a jsonrpc error has no
-    # "result" key, so parse yields {}) — happens after every editor
-    # relaunch while the cached session id points at the dead instance.
-    # Reconnect once, same as a dead-transport None.
-    if (out is None or out == {}) and not _retried:
+    # Editor relaunch invalidates cached sessions. Retry only transport
+    # failures or the server's explicit unknown-session response.
+    if (out is None or _is_stale_session(out)) and not _retried:
         if mcp_connect():
             return mcp_call(toolset, tool, args, _retried=True)
     return out
@@ -310,7 +406,7 @@ def _mcp_call_file(toolset, tool, args, timeout=90):
                        "params": {"name": "call_tool",
                                   "arguments": {"toolset_name": toolset, "tool_name": tool, "arguments": args}}})
     os.makedirs(TMP, exist_ok=True)
-    bp = os.path.join(TMP, "mcp_body.json")
+    bp = MCP_BODY_FILE
     with open(bp, "w", encoding="utf-8") as f:
         f.write(body)
     def _run(session):
@@ -323,7 +419,7 @@ def _mcp_call_file(toolset, tool, args, timeout=90):
         except subprocess.TimeoutExpired:
             return None
     out = _run(sid)
-    if out is None or out == {}:
+    if out is None or _is_stale_session(out):
         sid = mcp_connect()
         if sid:
             out = _run(sid)
@@ -513,6 +609,21 @@ def build(target="MO57Editor"):
 # =============================================================================
 # Subcommands
 # =============================================================================
+
+def cmd_config(a):
+    """Print resolved local paths without requiring Unreal Editor."""
+    values = {
+        "root": ROOT,
+        "uproject": UPROJECT,
+        "engine": ENGINE_ROOT,
+        "editor": EDITOR_EXE,
+        "mcp": MCP_URL,
+        "bridge": TMP,
+        "session": SID_FILE,
+    }
+    for name, value in values.items():
+        print(f"{name:<8}: {value}")
+
 
 def cmd_status(a):
     ed = editor_running()
@@ -1000,6 +1111,7 @@ def main():
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
 
+    sub.add_parser("config", help="print resolved project/engine/MCP paths (offline)").set_defaults(fn=cmd_config)
     sub.add_parser("status", help="editor/bridge/MCP/PIE state in one shot").set_defaults(fn=cmd_status)
 
     s = sub.add_parser("run", help="run a console command via the bridge, correlated")

@@ -26,14 +26,14 @@ Screenshots are only for *visual* verification (HUD layout, world rendering) —
 | Step | Command / fact |
 |------|----------------|
 | Is it running? | `Get-Process UnrealEditor` (window title becomes "MO57 - Unreal Editor" when loaded) |
-| Launch | `Start-Process "D:\UnrealEngine\UE_5.7\Engine\Binaries\Win64\UnrealEditor.exe" -ArgumentList '"D:\UEProjects\MO57\MO57.uproject"'` then poll for MainWindowTitle (≈3-4 min cold) |
+| Launch | `python Tools/ue.py editor start` resolves the UE 5.8 installation, starts MCP explicitly, and waits for the bridge |
 | Computer-use grant | `request_access` with **"UnrealEditor.exe"** — the exe filename. Display names don't resolve. |
 | Foreground | Win32 `SetForegroundWindow` via PowerShell Add-Type. **Never `open_application`** — it launches a second, project-less editor instance (kill the newer PID if it happens). Use `ShowWindow(hwnd, 3)` (SW_MAXIMIZE), **not 9/SW_RESTORE** which un-maximizes. |
 | Bridge auto-load | `init_unreal.py` imports `claude_bridge` at editor startup. For an already-running editor without it: one Cmd-box click → `py "D:/UEProjects/MO57/Content/Python/claude_bridge.py"`. |
 
 ## 2. The command bridge (the workhorse)
 
-`Content/Python/claude_bridge.py` polls `C:\Users\penum\AppData\Local\Temp\claude\ue_cmd.txt` every 0.25 s on the Slate tick and appends results to `ue_out.txt`.
+`Content/Python/claude_bridge.py` polls `%TEMP%\claude\ue_cmd.txt` every 0.25 s on the Slate tick and appends results to `ue_out.txt`. Set `MO57_BRIDGE_DIR` when separate editor/agent instances need isolated bridge files.
 
 - **Console command line** → executed on the **PIE world if active**, else the editor world: `MO.Clock.SetTime 12 0`
 - **`py:` line** → exec'd with `unreal`, `world` (PIE world or editor world), `game`, `editor`, `out(msg)` in scope.
@@ -45,7 +45,7 @@ Screenshots are only for *visual* verification (HUD layout, world rendering) —
 ## 3. Boot a new game — ONE COMMAND, seed-safe, zero screenshots
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File D:\UEProjects\MO57\Tools\agent_boot_newgame.ps1 -Seed 4242
+powershell -ExecutionPolicy Bypass -File Tools\agent_boot_newgame.ps1 -Seed 4242
 ```
 
 That's the whole thing. The script drives the **normal** boot flow entirely in-process (proven June 12, ~10 s warm / ~45 s cold):

@@ -13,18 +13,22 @@ Load once per editor session:  py "D:/UEProjects/MO57/Content/Python/claude_brid
 NOTE: this executes arbitrary local commands — dev-machine tooling only, never ship.
 """
 import os
+import tempfile
 import time
 import traceback
 
 import unreal
 
-CMD_PATH = r"C:\Users\penum\AppData\Local\Temp\claude\ue_cmd.txt"
-OUT_PATH = r"C:\Users\penum\AppData\Local\Temp\claude\ue_out.txt"
+BRIDGE_DIR = os.path.abspath(os.environ.get(
+    "MO57_BRIDGE_DIR", os.path.join(tempfile.gettempdir(), "claude")))
+CMD_PATH = os.path.join(BRIDGE_DIR, "ue_cmd.txt")
+OUT_PATH = os.path.join(BRIDGE_DIR, "ue_out.txt")
 POLL_INTERVAL = 0.25  # seconds
 
 
 def _append(msg):
     try:
+        os.makedirs(BRIDGE_DIR, exist_ok=True)
         with open(OUT_PATH, "a", encoding="utf-8") as f:
             f.write(f"[{time.strftime('%H:%M:%S')}] {msg}\n")
     except Exception:
