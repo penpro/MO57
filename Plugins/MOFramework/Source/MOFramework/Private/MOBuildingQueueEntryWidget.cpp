@@ -1,11 +1,11 @@
+/**
+ * MOBuildingQueueEntryWidget.cpp - building compat over the shared queue row
+ * (migration Stage 3). See the header for the compatibility contract.
+ */
+
 #include "MOBuildingQueueEntryWidget.h"
 #include "MOFramework.h"
-#include "MOCommonButton.h"
-#include "Components/TextBlock.h"
-#include "Components/Image.h"
-#include "Components/ProgressBar.h"
-#include "Components/Button.h"
-#include "Components/Border.h"
+#include "MOBuildingQueueWidget.h"
 
 UMOBuildingQueueEntryWidget::UMOBuildingQueueEntryWidget(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -14,123 +14,44 @@ UMOBuildingQueueEntryWidget::UMOBuildingQueueEntryWidget(const FObjectInitialize
 
 void UMOBuildingQueueEntryWidget::SetupEntry(const FMOBuildQueueEntryDisplayData& InData)
 {
-	EntryData = InData;
-	UpdateVisuals();
+	// Legacy entry point (BP/tests): mirror the legacy struct, translate to the
+	// neutral row (3-state mapping preserved), render, fire the legacy event.
+	LegacyData = InData;
+
+	FMOQueueDisplayRow NeutralRow;
+	NeutralRow.RowId = InData.EntryId;
+	NeutralRow.SourceId = InData.RecipeId;
+	NeutralRow.Title = InData.RecipeName;
+	NeutralRow.Icon = InData.Icon;
+	NeutralRow.CountText = InData.CountText;
+	NeutralRow.Progress = InData.Progress;
+	NeutralRow.TimeRemainingText = InData.TimeRemainingText;
+	NeutralRow.State = UMOBuildingQueueWidget::RowStateForBuildState(InData.State);
+	SetRow(NeutralRow);
+
+	NotifyVisualsUpdated();
 }
 
 void UMOBuildingQueueEntryWidget::UpdateProgress(float NewProgress, const FText& NewTimeRemaining)
 {
-	EntryData.Progress = NewProgress;
-	EntryData.TimeRemainingText = NewTimeRemaining;
-
-	if (ProgressBar)
-	{
-		ProgressBar->SetPercent(NewProgress);
-	}
-
-	if (TimeRemainingText)
-	{
-		TimeRemainingText->SetText(NewTimeRemaining);
-	}
+	UpdateLiveProgress(NewProgress, NewTimeRemaining);
+	LegacyData.Progress = NewProgress;
+	LegacyData.TimeRemainingText = NewTimeRemaining;
 }
 
-void UMOBuildingQueueEntryWidget::NativeConstruct()
+void UMOBuildingQueueEntryWidget::NotifyVisualsUpdated()
 {
-	Super::NativeConstruct();
-
-	// Bind cancel button
-	if (CancelButton)
-	{
-		CancelButton->OnClicked().RemoveAll(this);
-		CancelButton->OnClicked().AddUObject(this, &UMOBuildingQueueEntryWidget::HandleCancelClicked);
-	}
-	else if (CancelButtonSimple)
-	{
-		CancelButtonSimple->OnClicked.RemoveDynamic(this, &UMOBuildingQueueEntryWidget::HandleCancelClicked);
-		CancelButtonSimple->OnClicked.AddDynamic(this, &UMOBuildingQueueEntryWidget::HandleCancelClicked);
-	}
+	OnVisualsUpdated(LegacyData);
 }
 
-void UMOBuildingQueueEntryWidget::NativeDestruct()
+void UMOBuildingQueueEntryWidget::NotifyCancelIntent(const FGuid& InRowId)
 {
-	if (CancelButton)
-	{
-		CancelButton->OnClicked().RemoveAll(this);
-	}
-	if (CancelButtonSimple)
-	{
-		CancelButtonSimple->OnClicked.RemoveDynamic(this, &UMOBuildingQueueEntryWidget::HandleCancelClicked);
-	}
-
-	Super::NativeDestruct();
-}
-
-void UMOBuildingQueueEntryWidget::HandleCancelClicked()
-{
-	OnCancelRequested.Broadcast(EntryData.EntryId);
+	// Legacy delegate keeps broadcasting for existing BP listeners.
+	OnCancelRequested.Broadcast(InRowId);
 }
 
 void UMOBuildingQueueEntryWidget::UpdateVisuals()
 {
-	// Update recipe name
-	if (RecipeNameText)
-	{
-		RecipeNameText->SetText(EntryData.RecipeName);
-	}
-
-	// Update icon
-	if (RecipeIcon && !EntryData.Icon.IsNull())
-	{
-		UTexture2D* IconTexture = EntryData.Icon.LoadSynchronous();
-		if (IconTexture)
-		{
-			RecipeIcon->SetBrushFromTexture(IconTexture);
-			RecipeIcon->SetVisibility(ESlateVisibility::Visible);
-		}
-		else
-		{
-			RecipeIcon->SetVisibility(ESlateVisibility::Hidden);
-		}
-	}
-	else if (RecipeIcon)
-	{
-		RecipeIcon->SetVisibility(ESlateVisibility::Hidden);
-	}
-
-	// Update count text
-	if (CountText)
-	{
-		CountText->SetText(EntryData.CountText);
-	}
-
-	// Update progress bar
-	if (ProgressBar)
-	{
-		ProgressBar->SetPercent(EntryData.Progress);
-
-		// Different color for active vs queued vs paused
-		FLinearColor ProgressColor;
-		switch (EntryData.State)
-		{
-		case EMOBuildState::Constructing:
-			ProgressColor = ActiveColor;
-			break;
-		case EMOBuildState::Paused:
-			ProgressColor = PausedColor;
-			break;
-		default:
-			ProgressColor = QueuedColor;
-			break;
-		}
-		ProgressBar->SetFillColorAndOpacity(ProgressColor);
-	}
-
-	// Update time remaining
-	if (TimeRemainingText)
-	{
-		TimeRemainingText->SetText(EntryData.TimeRemainingText);
-	}
-
-	// Notify Blueprint
-	OnVisualsUpdated(EntryData);
+	UpdateRowVisuals();
+	NotifyVisualsUpdated();
 }

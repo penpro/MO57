@@ -1,6 +1,6 @@
 # UI Audit Session State
 
-Updated: 2026-07-13 (America/Los_Angeles)
+Updated: 2026-07-20 (America/Los_Angeles) — Stage 3 completed by Claude (Touch 030)
 
 ## Objective
 
@@ -47,7 +47,7 @@ Consolidate MO57's repeated catalog/detail/action/queue UI without forcing unrel
 
 ## Known boundaries and remaining work
 
-- Stage 3 queue-presentation consolidation is next. Crafting, building, and survivor-task queues still duplicate row/empty/progress/cancel presentation but require domain adapters at the command boundary.
+- Stage 3 is DONE (Touch 030): queue presentation consolidated behind `UMOQueueRendererBase`/`UMOQueueRowWidgetBase` + the pure `FMOQueueDisplayRow` model; crafting and building are thin compat adapters (cancel executes at the adapter boundary, renderer emits intents only). Gates: headless 127/127, WBP 15/15, cold Escape 7/7, live aggregate 84/84, queue PIE contract 6/6. Deferred by design: the survivor-queue adapter (the contract admits it — FGuid ids, pull progress, completion-as-removal); the building cancel/refund-semantics fork (queue path full-refund-world-drops vs ghost-menu skill-partial — Wes's call); wiring the shared renderer into a LIVE building surface (the building queue widget remains dormant).
 - Stage 4 should extract skills/knowledge and quest collection lifecycle while preserving their specialized presenters and subscriptions.
 - Optional workspace composition should wait until Stages 3/4 quantify what duplication remains.
 - Layer policy (`Layer_Menu` versus the unused `Layer_Game`) remains a separate design decision.
@@ -56,8 +56,7 @@ Consolidate MO57's repeated catalog/detail/action/queue UI without forcing unrel
 
 ## Exact resume point
 
-1. Read `TOUCH_LOG.md` from the newest entry and check `claude-codex-coop.md` for fresh claims.
-2. Begin Migration Stage 3 with a Graphify trace of crafting, building, and survivor queue data/event/command flows.
-3. Define a domain-neutral display row and renderer contract before changing any concrete queue widget.
-4. Preserve concrete WBP parents through thin adapters and add live progress/removal/cancel/source-swap/reconstruction tests before migration.
-5. Keep appending each coherent inspection, edit, and validation unit to `TOUCH_LOG.md`.
+1. Read `TOUCH_LOG.md` from the newest entry (Touch 030) and check `claude-codex-coop.md` for fresh claims.
+2. Begin Migration Stage 4: extract skills/knowledge and quest collection lifecycle (see MIGRATION_PLAN.md Stage 4) — a Graphify trace of `UMOSkillsPanel` and `UMOQuestLogPanel` data/event flows first.
+3. Alternatively resolve the deferred Stage-3 forks: survivor-queue adapter over `UMOQueueRendererBase`, the building cancel/refund-semantics decision (needs Wes), or wiring the shared renderer into a live building surface.
+4. Keep appending each coherent inspection, edit, and validation unit to `TOUCH_LOG.md`. Gate numbers are now: headless 127, live aggregate 84, catalog+queue headless 10, WBP 15, cold Escape 7.

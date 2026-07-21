@@ -1,15 +1,19 @@
+/**
+ * MOBuildingQueueWidget.cpp - building adapter over the shared queue renderer
+ * (migration Stage 3). See the header for the compatibility contract and the
+ * liveness/cancel-semantics notes.
+ */
+
 #include "MOBuildingQueueWidget.h"
 #include "MOFramework.h"
 #include "MOBuildProgressComponent.h"
 #include "MOBuildingQueueEntryWidget.h"
+#include "MOQueueRowWidgetBase.h"
 #include "MORecipeDatabaseSettings.h"
-#include "MOCommonButton.h"
+#include "MORecipeDefinitionRow.h"
+#include "MOIdentityComponent.h"
 #include "MOUIUtils.h"
-#include "Components/ScrollBox.h"
-#include "Components/VerticalBox.h"
-#include "Components/TextBlock.h"
-#include "Components/ProgressBar.h"
-#include "Components/PanelWidget.h"
+#include "GameFramework/Actor.h"
 
 UMOBuildingQueueWidget::UMOBuildingQueueWidget(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -18,7 +22,7 @@ UMOBuildingQueueWidget::UMOBuildingQueueWidget(const FObjectInitializer& ObjectI
 
 void UMOBuildingQueueWidget::InitializeQueue(UMOBuildProgressComponent* InProgressComponent)
 {
-	// Unbind from previous component
+	// Unbind from previous component (source-swap safe, legacy discipline).
 	if (UMOBuildProgressComponent* OldComponent = ProgressComponent.Get())
 	{
 		OldComponent->OnConstructionStateChanged.RemoveDynamic(this, &UMOBuildingQueueWidget::HandleConstructionStateChanged);
@@ -28,250 +32,52 @@ void UMOBuildingQueueWidget::InitializeQueue(UMOBuildProgressComponent* InProgre
 
 	ProgressComponent = InProgressComponent;
 
-	// Bind to new component
+	// Stable row id for this construction: the buildable's identity GUID when
+	// present, else one GUID minted per BOUND COMPONENT (never per refresh —
+	// the legacy per-refresh NewGuid could not round-trip a cancel intent).
+	StableRowId.Invalidate();
 	if (InProgressComponent)
 	{
+		if (const AActor* Owner = InProgressComponent->GetOwner())
+		{
+			if (const UMOIdentityComponent* Identity = Owner->FindComponentByClass<UMOIdentityComponent>())
+			{
+				StableRowId = Identity->GetGuid();
+			}
+		}
+		if (!StableRowId.IsValid())
+		{
+			StableRowId = FGuid::NewGuid();
+		}
+
 		InProgressComponent->OnConstructionStateChanged.AddDynamic(this, &UMOBuildingQueueWidget::HandleConstructionStateChanged);
 		InProgressComponent->OnConstructionProgress.AddDynamic(this, &UMOBuildingQueueWidget::HandleConstructionProgress);
 		InProgressComponent->OnConstructionCompleted.AddDynamic(this, &UMOBuildingQueueWidget::HandleConstructionCompleted);
 	}
 
-	RefreshQueue();
+	SyncRowWidgetClass();
+	RefreshRows();
 }
 
 void UMOBuildingQueueWidget::RefreshQueue()
 {
-	// Clear existing entries
-	for (UMOBuildingQueueEntryWidget* Entry : EntryWidgets)
-	{
-		if (Entry)
-		{
-			Entry->RemoveFromParent();
-		}
-	}
-	EntryWidgets.Empty();
-
-	UMOBuildProgressComponent* Component = ProgressComponent.Get();
-	if (!Component)
-	{
-		return;
-	}
-
-	// Get container
-	UPanelWidget* Container = QueueScrollBox ? Cast<UPanelWidget>(QueueScrollBox) : Cast<UPanelWidget>(QueueContainer);
-
-	// Check if we have an active construction
-	EMOBuildState State = Component->GetState();
-	bool bHasActiveConstruction = (State == EMOBuildState::Constructing || State == EMOBuildState::Paused);
-
-	// Update empty state visibility
-	if (EmptyQueueText)
-	{
-		EmptyQueueText->SetVisibility(!bHasActiveConstruction ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
-	}
-
-	if (!Container || !QueueEntryWidgetClass || !bHasActiveConstruction)
-	{
-		OnQueueUpdated(bHasActiveConstruction ? 1 : 0);
-		return;
-	}
-
-	// Create entry widget for the current construction
-	UMOBuildingQueueEntryWidget* EntryWidget = CreateWidget<UMOBuildingQueueEntryWidget>(this, QueueEntryWidgetClass);
-	if (EntryWidget)
-	{
-		// Build display data
-		FMOBuildQueueEntryDisplayData DisplayData;
-		DisplayData.EntryId = FGuid::NewGuid(); // Use a unique ID for tracking
-		DisplayData.RecipeId = Component->GetRecipeId();
-		DisplayData.Progress = Component->GetProgress();
-		DisplayData.bIsActive = (State == EMOBuildState::Constructing);
-		DisplayData.State = State;
-
-		// Get recipe info
-		const FMORecipeDefinitionRow* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(DisplayData.RecipeId);
-		if (Recipe)
-		{
-			DisplayData.RecipeName = Recipe->DisplayName;
-			DisplayData.Icon = Recipe->Icon;
-		}
-		else
-		{
-			DisplayData.RecipeName = FText::FromName(DisplayData.RecipeId);
-		}
-
-		// Format part count
-		int32 CurrentPart = Component->GetCurrentPartIndex() + 1;
-		int32 TotalParts = Recipe ? Recipe->BuildParts.Num() : 1;
-		DisplayData.CountText = FText::Format(
-			NSLOCTEXT("MOBuilding", "PartCount", "{0}/{1}"),
-			FText::AsNumber(CurrentPart),
-			FText::AsNumber(TotalParts)
-		);
-
-		// Calculate time remaining
-		DisplayData.TimeRemainingText = UMOUIUtils::FormatDurationAsText(Component->GetTimeRemaining());
-
-		EntryWidget->SetupEntry(DisplayData);
-		EntryWidget->OnCancelRequested.AddDynamic(this, &UMOBuildingQueueWidget::HandleEntryCancelRequested);
-
-		Container->AddChild(EntryWidget);
-		EntryWidgets.Add(EntryWidget);
-	}
-
-	// Update current construction display
-	if (bHasActiveConstruction)
-	{
-		const FMORecipeDefinitionRow* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(Component->GetRecipeId());
-
-		if (CurrentCraftNameText && Recipe)
-		{
-			CurrentCraftNameText->SetText(Recipe->DisplayName);
-		}
-
-		float Progress = Component->GetProgress();
-
-		if (CurrentProgressBar)
-		{
-			CurrentProgressBar->SetPercent(Progress);
-		}
-
-		if (ProgressText)
-		{
-			ProgressText->SetText(FText::Format(
-				NSLOCTEXT("MOBuilding", "ProgressPercent", "{0}%"),
-				FText::AsNumber(FMath::RoundToInt(Progress * 100))
-			));
-		}
-
-		FText TimeRemaining = UMOUIUtils::FormatDurationAsText(Component->GetTimeRemaining());
-
-		if (TimeRemainingText)
-		{
-			TimeRemainingText->SetText(TimeRemaining);
-		}
-
-		if (TotalTimeRemainingText)
-		{
-			TotalTimeRemainingText->SetText(TimeRemaining);
-		}
-	}
-	else
-	{
-		// No active construction - clear the display
-		if (CurrentCraftNameText)
-		{
-			CurrentCraftNameText->SetText(FText::GetEmpty());
-		}
-
-		if (CurrentProgressBar)
-		{
-			CurrentProgressBar->SetPercent(0.0f);
-		}
-
-		if (ProgressText)
-		{
-			ProgressText->SetText(FText::GetEmpty());
-		}
-
-		if (TimeRemainingText)
-		{
-			TimeRemainingText->SetText(FText::GetEmpty());
-		}
-
-		if (TotalTimeRemainingText)
-		{
-			TotalTimeRemainingText->SetText(FText::GetEmpty());
-		}
-	}
-
-	OnQueueUpdated(bHasActiveConstruction ? 1 : 0);
+	SyncRowWidgetClass();
+	RefreshRows();
 }
 
 void UMOBuildingQueueWidget::UpdateProgress()
 {
-	UMOBuildProgressComponent* Component = ProgressComponent.Get();
-	if (!Component)
-	{
-		return;
-	}
-
-	EMOBuildState State = Component->GetState();
-	bool bHasActiveConstruction = (State == EMOBuildState::Constructing || State == EMOBuildState::Paused);
-
-	if (!bHasActiveConstruction)
-	{
-		// No active construction, ensure display is cleared
-		if (CurrentProgressBar)
-		{
-			CurrentProgressBar->SetPercent(0.0f);
-		}
-		if (ProgressText)
-		{
-			ProgressText->SetText(FText::GetEmpty());
-		}
-		if (TimeRemainingText)
-		{
-			TimeRemainingText->SetText(FText::GetEmpty());
-		}
-		if (TotalTimeRemainingText)
-		{
-			TotalTimeRemainingText->SetText(FText::GetEmpty());
-		}
-		OnProgressUpdated(0.0f, FText::GetEmpty());
-		return;
-	}
-
-	float Progress = Component->GetProgress();
-	FText TimeRemaining = UMOUIUtils::FormatDurationAsText(Component->GetTimeRemaining());
-
-	if (CurrentProgressBar)
-	{
-		CurrentProgressBar->SetPercent(Progress);
-	}
-
-	if (ProgressText)
-	{
-		ProgressText->SetText(FText::Format(
-			NSLOCTEXT("MOBuilding", "ProgressPercent", "{0}%"),
-			FText::AsNumber(FMath::RoundToInt(Progress * 100))
-		));
-	}
-
-	if (TimeRemainingText)
-	{
-		TimeRemainingText->SetText(TimeRemaining);
-	}
-
-	if (TotalTimeRemainingText)
-	{
-		TotalTimeRemainingText->SetText(TimeRemaining);
-	}
-
-	// Update entry widget
-	if (EntryWidgets.Num() > 0 && EntryWidgets[0])
-	{
-		EntryWidgets[0]->UpdateProgress(Progress, TimeRemaining);
-	}
-
-	OnProgressUpdated(Progress, TimeRemaining);
+	UpdateProgressDisplay();
 }
 
 bool UMOBuildingQueueWidget::IsQueueEmpty() const
 {
-	UMOBuildProgressComponent* Component = ProgressComponent.Get();
-	if (!Component)
-	{
-		return true;
-	}
-
-	EMOBuildState State = Component->GetState();
-	return (State == EMOBuildState::Ghost || State == EMOBuildState::Complete);
+	return !HasActiveConstruction();
 }
 
 int32 UMOBuildingQueueWidget::GetQueueLength() const
 {
-	return IsQueueEmpty() ? 0 : 1;
+	return HasActiveConstruction() ? 1 : 0;
 }
 
 float UMOBuildingQueueWidget::GetCurrentProgress() const
@@ -290,25 +96,120 @@ FText UMOBuildingQueueWidget::GetTimeRemainingText() const
 	return UMOUIUtils::FormatDurationAsText(Component->GetTimeRemaining());
 }
 
-void UMOBuildingQueueWidget::NativeConstruct()
+EMOQueueRowState UMOBuildingQueueWidget::RowStateForBuildState(EMOBuildState BuildState)
 {
-	Super::NativeConstruct();
-
-	if (CancelAllButton)
+	switch (BuildState)
 	{
-		CancelAllButton->OnClicked().RemoveAll(this);
-		CancelAllButton->OnClicked().AddUObject(this, &UMOBuildingQueueWidget::HandleCancelAllClicked);
+	case EMOBuildState::Constructing:
+		return EMOQueueRowState::Active;
+	case EMOBuildState::Paused:
+		return EMOQueueRowState::Paused;
+	default:
+		// Ghost/Complete never produce a row; callers gate on HasActiveConstruction.
+		return EMOQueueRowState::Queued;
+	}
+}
+
+bool UMOBuildingQueueWidget::HasQueueSource_Implementation() const
+{
+	return ProgressComponent.IsValid();
+}
+
+void UMOBuildingQueueWidget::BuildDisplayRows_Implementation(TArray<FMOQueueDisplayRow>& OutRows) const
+{
+	UMOBuildProgressComponent* Component = ProgressComponent.Get();
+	if (!Component || !HasActiveConstruction())
+	{
+		return;
+	}
+
+	const EMOBuildState State = Component->GetState();
+	const FMORecipeDefinitionRow* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(Component->GetRecipeId());
+
+	FMOQueueDisplayRow Row;
+	Row.RowId = StableRowId;
+	Row.SourceId = Component->GetRecipeId();
+	Row.Progress = Component->GetProgress();
+	Row.RemainingSeconds = FMath::Max(0.0f, Component->GetTimeRemaining());
+	Row.State = RowStateForBuildState(State);
+	Row.bCancellable = true;
+
+	if (Recipe)
+	{
+		Row.Title = Recipe->DisplayName;
+		Row.Icon = Recipe->Icon;
+	}
+	else
+	{
+		Row.Title = FText::FromName(Row.SourceId);
+	}
+
+	// Part display: "current part / total parts" (legacy format).
+	Row.CountCurrent = Component->GetCurrentPartIndex() + 1;
+	Row.CountTotal = Recipe ? Recipe->BuildParts.Num() : 1;
+
+	OutRows.Add(Row);
+}
+
+void UMOBuildingQueueWidget::GetHeaderDisplay_Implementation(FMOQueueHeaderDisplay& OutHeader) const
+{
+	// Building header mirrors its single row, but reads FRESH component state so
+	// the tick path notices completion/pause between rebuilds.
+	OutHeader = FMOQueueHeaderDisplay();
+	UMOBuildProgressComponent* Component = ProgressComponent.Get();
+	if (!Component || !HasActiveConstruction())
+	{
+		return;
+	}
+
+	OutHeader.bHasRows = true;
+	OutHeader.Progress = Component->GetProgress();
+	OutHeader.RemainingSeconds = FMath::Max(0.0f, Component->GetTimeRemaining());
+	const TArray<FMOQueueDisplayRow>& Rows = GetLastBuiltRows();
+	if (Rows.Num() > 0)
+	{
+		OutHeader.ActiveTitle = Rows[0].Title;
+	}
+}
+
+bool UMOBuildingQueueWidget::GetActiveRowLiveProgress_Implementation(float& OutProgress, float& OutRemainingSeconds) const
+{
+	UMOBuildProgressComponent* Component = ProgressComponent.Get();
+	if (!Component || !HasActiveConstruction())
+	{
+		return false;
+	}
+	OutProgress = Component->GetProgress();
+	OutRemainingSeconds = FMath::Max(0.0f, Component->GetTimeRemaining());
+	return true;
+}
+
+void UMOBuildingQueueWidget::ExecuteCancelRow_Implementation(const FGuid& RowId)
+{
+	// Verify the intent targets THIS construction (the stable id fix makes this
+	// check meaningful; the legacy path ignored the id entirely).
+	if (RowId != StableRowId)
+	{
+		UE_LOG(LogMOFramework, Warning,
+			TEXT("[MOBuildingQueue] Cancel intent for unknown row %s (current %s) - ignored"),
+			*RowId.ToString(EGuidFormats::Short), *StableRowId.ToString(EGuidFormats::Short));
+		return;
+	}
+	ExecuteCancelAll();
+}
+
+void UMOBuildingQueueWidget::ExecuteCancelAll_Implementation()
+{
+	// Single-operation domain: cancel-one == cancel-all. Full material refund as
+	// world drops, ghost survives (legacy semantics — see the header's fork note).
+	if (UMOBuildProgressComponent* Component = ProgressComponent.Get())
+	{
+		Component->CancelConstruction(/*bRefundMaterials=*/true);
 	}
 }
 
 void UMOBuildingQueueWidget::NativeDestruct()
 {
-	if (CancelAllButton)
-	{
-		CancelAllButton->OnClicked().RemoveAll(this);
-	}
-
-	// Unbind from progress component
 	if (UMOBuildProgressComponent* Component = ProgressComponent.Get())
 	{
 		Component->OnConstructionStateChanged.RemoveDynamic(this, &UMOBuildingQueueWidget::HandleConstructionStateChanged);
@@ -319,46 +220,69 @@ void UMOBuildingQueueWidget::NativeDestruct()
 	Super::NativeDestruct();
 }
 
-void UMOBuildingQueueWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
+void UMOBuildingQueueWidget::NotifyRowsRefreshed(int32 RowCount)
 {
-	Super::NativeTick(MyGeometry, InDeltaTime);
+	OnQueueUpdated(RowCount);
+}
 
-	// Periodic progress update
-	TimeSinceLastUpdate += InDeltaTime;
-	if (TimeSinceLastUpdate >= ProgressUpdateInterval)
+void UMOBuildingQueueWidget::NotifyProgressUpdated(float Progress, const FText& TimeRemaining)
+{
+	OnProgressUpdated(Progress, TimeRemaining);
+}
+
+void UMOBuildingQueueWidget::OnRowWidgetBound(UMOQueueRowWidgetBase* RowWidget, const FMOQueueDisplayRow& InRow)
+{
+	// Keep the legacy BP-visible display struct in sync on the compat entry,
+	// including the real EMOBuildState the neutral row abstracts away.
+	if (UMOBuildingQueueEntryWidget* LegacyEntry = Cast<UMOBuildingQueueEntryWidget>(RowWidget))
 	{
-		TimeSinceLastUpdate = 0.0f;
-		UpdateProgress();
+		FMOBuildQueueEntryDisplayData LegacyData;
+		LegacyData.EntryId = InRow.RowId;
+		LegacyData.RecipeId = InRow.SourceId;
+		LegacyData.RecipeName = InRow.Title;
+		LegacyData.Icon = InRow.Icon;
+		LegacyData.CountText = InRow.CountText;
+		LegacyData.Progress = InRow.Progress;
+		LegacyData.TimeRemainingText = InRow.TimeRemainingText;
+		LegacyData.bIsActive = (InRow.State == EMOQueueRowState::Active);
+		if (UMOBuildProgressComponent* Component = ProgressComponent.Get())
+		{
+			LegacyData.State = Component->GetState();
+		}
+		LegacyEntry->SetLegacyEntryData(LegacyData);
 	}
 }
 
 void UMOBuildingQueueWidget::HandleConstructionStateChanged(EMOBuildState NewState)
 {
-	RefreshQueue();
+	RefreshRows();
 }
 
 void UMOBuildingQueueWidget::HandleConstructionProgress(float Progress)
 {
-	// Progress is handled by tick-based updates for smoother display
+	// Progress is handled by tick-based updates for smoother display.
 }
 
 void UMOBuildingQueueWidget::HandleConstructionCompleted()
 {
-	RefreshQueue();
+	RefreshRows();
 }
 
-void UMOBuildingQueueWidget::HandleEntryCancelRequested(const FGuid& EntryId)
+bool UMOBuildingQueueWidget::HasActiveConstruction() const
 {
-	if (UMOBuildProgressComponent* Component = ProgressComponent.Get())
+	UMOBuildProgressComponent* Component = ProgressComponent.Get();
+	if (!Component)
 	{
-		Component->CancelConstruction(true); // true = refund materials
+		return false;
 	}
+	const EMOBuildState State = Component->GetState();
+	return State == EMOBuildState::Constructing || State == EMOBuildState::Paused;
 }
 
-void UMOBuildingQueueWidget::HandleCancelAllClicked()
+void UMOBuildingQueueWidget::SyncRowWidgetClass()
 {
-	if (UMOBuildProgressComponent* Component = ProgressComponent.Get())
+	if (QueueEntryWidgetClass)
 	{
-		Component->CancelConstruction(true); // true = refund materials
+		RowWidgetClass = QueueEntryWidgetClass;
 	}
 }

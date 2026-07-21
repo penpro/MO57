@@ -1,8 +1,10 @@
 # UI Consolidation Migration Plan
 
-Status: Audit complete; Stages 0-2 implemented and validated; Stage 3 is next.
+Status: Audit complete; Stages 0-3 implemented and validated; Stage 4 (skills/knowledge + quest collections) is next.
 
 Implementation note (2026-07-13): Stages 0/1 corrected inspectability, validation authority, and binding lifecycle. Stage 2 moved stable IDs, entry storage, and selection preservation/clearing into one collection lifecycle while retaining concrete Blueprint-compatible adapters. Final gates passed: catalog 7/7, full automation 124/124, affected/generic WBPs 15/15, crafting/building PIE contracts, cold Escape 7/7, and the live CommonUI aggregate 79/79. Stage 3 queue presentation is next.
+
+Implementation note (2026-07-20, Touch 030): Stage 3 is DONE. Queue presentation consolidated behind UMOQueueRendererBase/UMOQueueRowWidgetBase + the pure FMOQueueDisplayRow model; crafting/building are thin compat adapters (renderer emits cancel intents; adapters validate/execute; building gained a stable row id). Gates: headless 127/127 (+3 MOFramework.UI.Queue.*), WBP 15/15, cold Escape 7/7, live aggregate 84/84 (+5 Queue.*), queue PIE contract 6/6 (live progress, completion-as-removal, F18 menu-round-trip reconstruct). Survivor adapter deferred by plan; building cancel/refund fork logged for Wes.
 
 ## Target architecture
 

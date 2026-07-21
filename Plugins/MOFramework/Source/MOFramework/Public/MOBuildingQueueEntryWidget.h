@@ -1,57 +1,47 @@
 /**
  * =============================================================================
- * MOBuildingQueueEntryWidget.h - Single Build Queue Entry Widget
+ * MOBuildingQueueEntryWidget.h - Building Queue Entry (Stage-3 compat adapter)
  * =============================================================================
  *
  * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
  * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
  *
  * PURPOSE:
- * Widget representing a single entry in the building construction queue.
- * Mirrors UMOCraftingQueueEntryWidget for crafting. Shows recipe name, icon,
- * progress bar, time remaining, and cancel button.
- *
- * DISPLAY DATA:
- * - FMOBuildQueueEntryDisplayData: Visual data for queue entries
+ * Thin compatibility subclass of UMOQueueRowWidgetBase (migration Stage 3).
+ * The base renders the row (including the 3-state Active/Paused/Queued fill
+ * color the building domain introduced) and emits cancel intents; this class
+ * preserves the building-specific BP surface: FMOBuildQueueEntryDisplayData,
+ * SetupEntry, UpdateProgress, GetEntryId/GetEntryData, the legacy
+ * OnCancelRequested delegate, and the OnVisualsUpdated Blueprint event.
+ * WBP_BuildQueueEntry keeps this parent; bindings and colors moved to the base
+ * under their exact legacy names.
  *
  * =============================================================================
  * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
  * =============================================================================
  *
- * [2024-02] DUAL CANCEL BUTTONS: Both CancelButton (UMOCommonButton) and
- *   CancelButtonSimple (UButton) are supported. Bind only one in Blueprint.
- *
- * [2024-02] STATE COLORS: ActiveColor, QueuedColor, PausedColor control
- *   background based on EMOBuildState. UpdateVisuals() applies them.
- *
- * [2024-02] PROGRESS UPDATES: Call UpdateProgress() frequently for smooth
- *   progress bar animation. SetupEntry() for full refresh.
+ * [2026-07] LEGACY DATA IS A MIRROR: LegacyData is synthesized from the base's
+ *   neutral row (by the owning adapter or SetupEntry) — never a second source
+ *   of truth (F17).
  *
  * =============================================================================
- * RELATED FILES: MOBuildingQueueWidget.h, MOBuildProgressComponent.h,
+ * RELATED FILES: MOQueueRowWidgetBase.h, MOBuildingQueueWidget.h,
  *                MOBuildingTypes.h, MOCraftingQueueEntryWidget.h
- * LAST UPDATED: 2026-02-25
+ * LAST UPDATED: 2026-07-20 (Stage 3: reparented onto the shared queue row)
  * =============================================================================
  */
 
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Blueprint/UserWidget.h"
+#include "MOQueueRowWidgetBase.h"
 #include "MOBuildingTypes.h"
 #include "MOBuildingQueueEntryWidget.generated.h"
-
-class UTextBlock;
-class UProgressBar;
-class UImage;
-class UButton;
-class UMOCommonButton;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOBuildQueueEntryCancelRequestedSignature, const FGuid&, EntryId);
 
 /**
- * Visual data for a build queue entry.
- * Mirrors FMOQueueEntryDisplayData for crafting.
+ * Visual data for a build queue entry (legacy BP-visible struct, preserved).
  */
 USTRUCT(BlueprintType)
 struct MOFRAMEWORK_API FMOBuildQueueEntryDisplayData
@@ -92,18 +82,17 @@ struct MOFRAMEWORK_API FMOBuildQueueEntryDisplayData
 };
 
 /**
- * Widget representing a single entry in the build queue.
- * Mirrors UMOCraftingQueueEntryWidget for crafting.
+ * Building queue entry: thin compat subclass of the shared queue row.
  */
 UCLASS(Abstract, Blueprintable)
-class MOFRAMEWORK_API UMOBuildingQueueEntryWidget : public UUserWidget
+class MOFRAMEWORK_API UMOBuildingQueueEntryWidget : public UMOQueueRowWidgetBase
 {
 	GENERATED_BODY()
 
 public:
 	UMOBuildingQueueEntryWidget(const FObjectInitializer& ObjectInitializer);
 
-	// --- Setup ---
+	// --- Setup (legacy API) ---
 
 	UFUNCTION(BlueprintCallable, Category="MO|Building|UI")
 	void SetupEntry(const FMOBuildQueueEntryDisplayData& InData);
@@ -112,42 +101,30 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Building|UI")
 	void UpdateProgress(float NewProgress, const FText& NewTimeRemaining);
 
-	// --- Getters ---
+	// --- Getters (legacy API) ---
 
 	UFUNCTION(BlueprintPure, Category="MO|Building|UI")
-	FGuid GetEntryId() const { return EntryData.EntryId; }
+	FGuid GetEntryId() const { return LegacyData.EntryId; }
 
 	UFUNCTION(BlueprintPure, Category="MO|Building|UI")
-	const FMOBuildQueueEntryDisplayData& GetEntryData() const { return EntryData; }
+	const FMOBuildQueueEntryDisplayData& GetEntryData() const { return LegacyData; }
 
-	// --- Delegates ---
+	// --- Delegates (legacy; re-broadcast alongside the base OnCancelIntent) ---
 
 	UPROPERTY(BlueprintAssignable, Category="MO|Building|UI")
 	FMOBuildQueueEntryCancelRequestedSignature OnCancelRequested;
 
-	// --- Configuration ---
+	/** Store the legacy display mirror (no re-render) — called by the building
+	 *  adapter after the base binds a neutral row. */
+	void SetLegacyEntryData(const FMOBuildQueueEntryDisplayData& InData) { LegacyData = InData; }
 
-	/** Color for active entry background. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Building|UI")
-	FLinearColor ActiveColor = FLinearColor(0.2f, 0.4f, 0.2f, 1.0f);
+	// --- Base hooks ---
 
-	/** Color for queued entry background. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Building|UI")
-	FLinearColor QueuedColor = FLinearColor(0.15f, 0.15f, 0.15f, 1.0f);
-
-	/** Color for paused entry background. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Building|UI")
-	FLinearColor PausedColor = FLinearColor(0.4f, 0.3f, 0.1f, 1.0f);
+	virtual void NotifyVisualsUpdated() override;
+	virtual void NotifyCancelIntent(const FGuid& InRowId) override;
 
 protected:
-	virtual void NativeConstruct() override;
-	virtual void NativeDestruct() override;
-
-	/** Called when cancel button is clicked. */
-	UFUNCTION()
-	void HandleCancelClicked();
-
-	/** Update visuals based on current data. */
+	/** Update visuals based on current data (legacy API). */
 	UFUNCTION(BlueprintCallable, Category="MO|Building|UI")
 	void UpdateVisuals();
 
@@ -155,29 +132,7 @@ protected:
 	UFUNCTION(BlueprintImplementableEvent, Category="MO|Building|UI")
 	void OnVisualsUpdated(const FMOBuildQueueEntryDisplayData& Data);
 
-	// --- Widget Bindings (match MOCraftingQueueEntryWidget) ---
-
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<UTextBlock> RecipeNameText;
-
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<UImage> RecipeIcon;
-
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<UTextBlock> CountText;
-
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<UProgressBar> ProgressBar;
-
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<UTextBlock> TimeRemainingText;
-
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<UMOCommonButton> CancelButton;
-
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<UButton> CancelButtonSimple;
-
 private:
-	FMOBuildQueueEntryDisplayData EntryData;
+	/** Legacy BP-visible mirror of the base's neutral row (see pitfalls). */
+	FMOBuildQueueEntryDisplayData LegacyData;
 };

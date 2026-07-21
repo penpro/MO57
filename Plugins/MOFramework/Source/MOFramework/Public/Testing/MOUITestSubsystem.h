@@ -467,8 +467,37 @@ private:
 	FMOUITestResult Test_CommonUI_WidgetDeactivation();
 
 	// =========================================================================
+	// QUEUE RENDERER TESTS (migration Stage 3 — content-behavior coverage)
+	// =========================================================================
+	FMOUITestResult Test_Queue_CraftingRows();
+	FMOUITestResult Test_Queue_CancelOneIntent();
+	FMOUITestResult Test_Queue_CancelAllEmptyState();
+	FMOUITestResult Test_Queue_SourceSwapUnbind();
+	FMOUITestResult Test_Queue_ReconstructOneIntent();
+
+	// =========================================================================
 	// HELPERS
 	// =========================================================================
+
+	/** Queue-test fixture: find a craftable Station=None recipe, grant its
+	 *  ingredients, and enqueue DesiredEntries entries (1x then 2x). Returns the
+	 *  pawn's crafting queue component, or null with OutError set. */
+	class UMOCraftingQueueComponent* SetupCraftingQueueFixture(int32 DesiredEntries, FString& OutError);
+
+	/** Python/automation wrapper for the queue fixture (validate_ui_queue_pie.py). */
+	UFUNCTION(BlueprintCallable, Category = "MO|UI|Testing")
+	bool SetupQueueFixture(int32 DesiredEntries);
+
+	/** Python/automation wrapper for queue-fixture teardown. */
+	UFUNCTION(BlueprintCallable, Category = "MO|UI|Testing")
+	void CleanupQueueFixture();
+
+	/** Locate the live crafting queue widget instance in this world (inside the
+	 *  open crafting menu). */
+	class UMOCraftingQueueWidget* FindLiveCraftingQueueWidget() const;
+
+	/** Queue-test teardown: cancel remaining crafts + close all menus. */
+	void CleanupCraftingQueueFixture(class UMOCraftingQueueComponent* Queue);
 
 	/** Get the UI manager component. */
 	UMOUIManagerComponent* GetUIManager() const;

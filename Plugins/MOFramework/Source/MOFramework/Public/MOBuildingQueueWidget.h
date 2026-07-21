@@ -1,73 +1,73 @@
 /**
  * =============================================================================
- * MOBuildingQueueWidget.h - Building Construction Progress Widget
+ * MOBuildingQueueWidget.h - Building Construction Progress (Stage-3 compat adapter)
  * =============================================================================
  *
  * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
  * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
  *
  * PURPOSE:
- * Widget that displays current building construction progress and queue.
- * Mirrors UMOCraftingQueueWidget for crafting. Shows active build, progress
- * bar, time remaining, and queued entries with cancel options.
+ * The building ADAPTER over the shared queue renderer (migration Stage 3).
+ * Translates ONE UMOBuildProgressComponent (a single construction: at most one
+ * row, Constructing or Paused) into the neutral display-row contract, and
+ * executes validated cancellation. WBP_BuildingQueue keeps this parent; the
+ * widget bindings moved to the base under their exact (crafting-flavored,
+ * deliberately shared) legacy names.
  *
- * BINDINGS:
- * - Binds to UMOBuildProgressComponent for state updates
- * - Uses UMOBuildingQueueEntryWidget for individual queue entries
+ * LIVENESS NOTE (Stage-3 audit): this widget has NO live consumer — only the
+ * deprecated UMOBuildWidget ever calls InitializeQueue; the live building
+ * progress surface is UMOGhostContextMenu. It is kept behavior-correct behind
+ * the compat contract; wiring the shared renderer into the live building UI is
+ * an explicit separate decision (see Docs/agent/ui/SESSION_STATE.md).
  *
  * =============================================================================
  * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
  * =============================================================================
  *
- * [2024-02] TICK UPDATE: NativeTick updates progress at ProgressUpdateInterval
- *   (default 0.1s). RefreshQueue() rebuilds entire list - use sparingly.
+ * [2026-07] STABLE ROW ID: the legacy widget minted FGuid::NewGuid() per
+ *   refresh, so a cancel intent's id identified nothing. The adapter now keys
+ *   the row on the buildable's identity GUID (fallback: one GUID minted per
+ *   bound component), and ExecuteCancelRow verifies the id before cancelling.
  *
- * [2024-02] ENTRY WIDGET CLASS: QueueEntryWidgetClass must be set in Blueprint
- *   or entries won't spawn. Defaults to null.
- *
- * [2024-02] WEAK POINTER: ProgressComponent is TWeakObjectPtr. Check validity
- *   before use in all handlers.
+ * [2026-07] CANCEL SEMANTICS FORK (design call, NOT unified here): this path
+ *   cancels via CancelConstruction(true) = full refund as world drops, ghost
+ *   survives. The live ghost-menu path uses a skill-based partial refund to
+ *   inventory + ghost destruction. Do not silently reconcile.
  *
  * =============================================================================
- * RELATED FILES: MOBuildingQueueEntryWidget.h, MOBuildProgressComponent.h,
- *                MOBuildingUIController.h, MOCraftingQueueWidget.h
- * LAST UPDATED: 2026-02-25
+ * RELATED FILES: MOQueueRendererBase.h, MOBuildingQueueEntryWidget.h,
+ *                MOBuildProgressComponent.h, MOGhostContextMenu.h
+ * LAST UPDATED: 2026-07-20 (Stage 3: reparented onto the shared queue renderer)
  * =============================================================================
  */
 
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Blueprint/UserWidget.h"
+#include "MOQueueRendererBase.h"
 #include "MOBuildingTypes.h"
 #include "MOBuildingQueueWidget.generated.h"
 
 class UMOBuildProgressComponent;
 class UMOBuildingQueueEntryWidget;
-class UScrollBox;
-class UVerticalBox;
-class UTextBlock;
-class UProgressBar;
-class UMOCommonButton;
 
 /**
- * Widget that displays current building construction progress.
- * Mirrors UMOCraftingQueueWidget for crafting.
+ * Building construction display: thin domain adapter over UMOQueueRendererBase.
  */
 UCLASS(Abstract, Blueprintable)
-class MOFRAMEWORK_API UMOBuildingQueueWidget : public UUserWidget
+class MOFRAMEWORK_API UMOBuildingQueueWidget : public UMOQueueRendererBase
 {
 	GENERATED_BODY()
 
 public:
 	UMOBuildingQueueWidget(const FObjectInitializer& ObjectInitializer);
 
-	// --- Initialization ---
+	// --- Initialization (legacy API) ---
 
 	UFUNCTION(BlueprintCallable, Category="MO|Building|UI")
 	void InitializeQueue(UMOBuildProgressComponent* InProgressComponent);
 
-	// --- Refresh ---
+	// --- Refresh (legacy API, forwards to the shared renderer) ---
 
 	/** Rebuild the queue display from current state. */
 	UFUNCTION(BlueprintCallable, Category="MO|Building|UI")
@@ -77,7 +77,7 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Building|UI")
 	void UpdateProgress();
 
-	// --- Getters ---
+	// --- Getters (legacy API) ---
 
 	UFUNCTION(BlueprintPure, Category="MO|Building|UI")
 	bool IsQueueEmpty() const;
@@ -91,40 +91,44 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO|Building|UI")
 	FText GetTimeRemainingText() const;
 
-	// --- Configuration ---
+	// --- Configuration (legacy typed class, synced into base RowWidgetClass) ---
 
 	/** Widget class to use for queue entries. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Building|UI")
 	TSubclassOf<UMOBuildingQueueEntryWidget> QueueEntryWidgetClass;
 
-	/** How often to update progress display (seconds). */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Building|UI")
-	float ProgressUpdateInterval = 0.1f;
+	// --- Pure adapter translation (headless-testable; MOFramework.UI.Queue.*) ---
+
+	/** Neutral row state for a build state (Constructing->Active, Paused->Paused;
+	 *  Ghost/Complete produce no row at all). */
+	static EMOQueueRowState RowStateForBuildState(EMOBuildState BuildState);
+
+	// --- Domain hooks (adapter seam) ---
+
+	virtual bool HasQueueSource_Implementation() const override;
+	virtual void BuildDisplayRows_Implementation(TArray<FMOQueueDisplayRow>& OutRows) const override;
+	virtual void GetHeaderDisplay_Implementation(FMOQueueHeaderDisplay& OutHeader) const override;
+	virtual bool GetActiveRowLiveProgress_Implementation(float& OutProgress, float& OutRemainingSeconds) const override;
+	virtual void ExecuteCancelRow_Implementation(const FGuid& RowId) override;
+	virtual void ExecuteCancelAll_Implementation() override;
 
 protected:
-	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
-	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
+	virtual void NotifyRowsRefreshed(int32 RowCount) override;
+	virtual void NotifyProgressUpdated(float Progress, const FText& TimeRemaining) override;
+	virtual void OnRowWidgetBound(UMOQueueRowWidgetBase* RowWidget, const FMOQueueDisplayRow& InRow) override;
 
 	/** Handle construction state changed event. */
 	UFUNCTION()
 	void HandleConstructionStateChanged(EMOBuildState NewState);
 
-	/** Handle construction progress event. */
+	/** Handle construction progress event (unused — tick poll wins). */
 	UFUNCTION()
 	void HandleConstructionProgress(float Progress);
 
 	/** Handle construction completed event. */
 	UFUNCTION()
 	void HandleConstructionCompleted();
-
-	/** Handle entry cancel request. */
-	UFUNCTION()
-	void HandleEntryCancelRequested(const FGuid& EntryId);
-
-	/** Handle cancel all button. */
-	UFUNCTION()
-	void HandleCancelAllClicked();
 
 	/** Blueprint event when queue is updated. */
 	UFUNCTION(BlueprintImplementableEvent, Category="MO|Building|UI")
@@ -134,41 +138,17 @@ protected:
 	UFUNCTION(BlueprintImplementableEvent, Category="MO|Building|UI")
 	void OnProgressUpdated(float Progress, const FText& TimeRemaining);
 
-	// --- Widget Bindings (match MOCraftingQueueWidget) ---
-
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<UScrollBox> QueueScrollBox;
-
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<UVerticalBox> QueueContainer;
-
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<UTextBlock> CurrentCraftNameText;
-
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<UProgressBar> CurrentProgressBar;
-
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<UTextBlock> ProgressText;
-
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<UTextBlock> TimeRemainingText;
-
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<UTextBlock> TotalTimeRemainingText;
-
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<UMOCommonButton> CancelAllButton;
-
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<UTextBlock> EmptyQueueText;
-
 private:
 	UPROPERTY()
 	TWeakObjectPtr<UMOBuildProgressComponent> ProgressComponent;
 
-	UPROPERTY()
-	TArray<TObjectPtr<UMOBuildingQueueEntryWidget>> EntryWidgets;
+	/** Stable row id for the bound construction (identity GUID or minted once
+	 *  per bound component — never per refresh; see pitfalls). */
+	FGuid StableRowId;
 
-	float TimeSinceLastUpdate = 0.0f;
+	/** Does the component currently present a row (Constructing or Paused)? */
+	bool HasActiveConstruction() const;
+
+	/** Copy the legacy typed entry class into the base's generic RowWidgetClass. */
+	void SyncRowWidgetClass();
 };

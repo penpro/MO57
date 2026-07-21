@@ -1,14 +1,16 @@
+/**
+ * MOCraftingQueueWidget.cpp - crafting adapter over the shared queue renderer
+ * (migration Stage 3). See the header for the compatibility contract.
+ */
+
 #include "MOCraftingQueueWidget.h"
 #include "MOFramework.h"
 #include "MOCraftingQueueComponent.h"
 #include "MOCraftingQueueEntryWidget.h"
+#include "MOQueueRowWidgetBase.h"
 #include "MORecipeDatabaseSettings.h"
-#include "MOCommonButton.h"
+#include "MORecipeDefinitionRow.h"
 #include "MOUIUtils.h"
-#include "Components/ScrollBox.h"
-#include "Components/VerticalBox.h"
-#include "Components/TextBlock.h"
-#include "Components/ProgressBar.h"
 
 UMOCraftingQueueWidget::UMOCraftingQueueWidget(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -17,7 +19,7 @@ UMOCraftingQueueWidget::UMOCraftingQueueWidget(const FObjectInitializer& ObjectI
 
 void UMOCraftingQueueWidget::InitializeQueue(UMOCraftingQueueComponent* InQueueComponent)
 {
-	// Unbind from previous component
+	// Unbind from previous component (source-swap safe, legacy discipline).
 	if (UMOCraftingQueueComponent* OldQueue = QueueComponent.Get())
 	{
 		OldQueue->OnQueueChanged.RemoveDynamic(this, &UMOCraftingQueueWidget::HandleQueueChanged);
@@ -27,7 +29,6 @@ void UMOCraftingQueueWidget::InitializeQueue(UMOCraftingQueueComponent* InQueueC
 
 	QueueComponent = InQueueComponent;
 
-	// Bind to new component
 	if (InQueueComponent)
 	{
 		InQueueComponent->OnQueueChanged.AddDynamic(this, &UMOCraftingQueueWidget::HandleQueueChanged);
@@ -35,235 +36,19 @@ void UMOCraftingQueueWidget::InitializeQueue(UMOCraftingQueueComponent* InQueueC
 		InQueueComponent->OnCraftCompleted.AddDynamic(this, &UMOCraftingQueueWidget::HandleCraftCompleted);
 	}
 
-	RefreshQueue();
+	SyncRowWidgetClass();
+	RefreshRows();
 }
 
 void UMOCraftingQueueWidget::RefreshQueue()
 {
-	// Clear existing entries
-	for (UMOCraftingQueueEntryWidget* Entry : EntryWidgets)
-	{
-		if (Entry)
-		{
-			Entry->RemoveFromParent();
-		}
-	}
-	EntryWidgets.Empty();
-
-	UMOCraftingQueueComponent* Queue = QueueComponent.Get();
-	if (!Queue)
-	{
-		return;
-	}
-
-	// Get container
-	UPanelWidget* Container = QueueScrollBox ? Cast<UPanelWidget>(QueueScrollBox) : Cast<UPanelWidget>(QueueContainer);
-
-	// Get queue entries
-	TArray<FMOCraftingQueueEntry> QueueEntries;
-	Queue->GetAllQueueEntries(QueueEntries);
-
-	// Update empty state visibility
-	if (EmptyQueueText)
-	{
-		EmptyQueueText->SetVisibility(QueueEntries.Num() == 0 ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
-	}
-
-	if (!Container || !QueueEntryWidgetClass)
-	{
-		OnQueueUpdated(QueueEntries.Num());
-		return;
-	}
-
-	// Create entry widgets
-	for (int32 i = 0; i < QueueEntries.Num(); ++i)
-	{
-		const FMOCraftingQueueEntry& Entry = QueueEntries[i];
-
-		UMOCraftingQueueEntryWidget* EntryWidget = CreateWidget<UMOCraftingQueueEntryWidget>(this, QueueEntryWidgetClass);
-		if (!EntryWidget)
-		{
-			continue;
-		}
-
-		// Build display data
-		FMOQueueEntryDisplayData DisplayData;
-		DisplayData.EntryId = Entry.EntryId;
-		DisplayData.RecipeId = Entry.RecipeId;
-		DisplayData.Progress = Entry.Progress;
-		DisplayData.bIsActive = (i == 0);
-
-		// Get recipe info
-		const FMORecipeDefinitionRow* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(Entry.RecipeId);
-		if (Recipe)
-		{
-			DisplayData.RecipeName = Recipe->DisplayName;
-			DisplayData.Icon = Recipe->Icon;
-		}
-		else
-		{
-			DisplayData.RecipeName = FText::FromName(Entry.RecipeId);
-		}
-
-		// Format count
-		DisplayData.CountText = FText::Format(
-			NSLOCTEXT("MOCrafting", "QueueCount", "{0}/{1}"),
-			FText::AsNumber(Entry.CompletedCount + 1),
-			FText::AsNumber(Entry.Count)
-		);
-
-		// Calculate time remaining
-		if (i == 0)
-		{
-			float TimeRemaining = Queue->GetCurrentCraftTimeRemaining();
-			DisplayData.TimeRemainingText = UMOUIUtils::FormatDurationAsText(TimeRemaining);
-		}
-		else
-		{
-			// Calculate time for queued entries
-			float CraftDuration = Recipe ? Recipe->CraftTime : 0.0f;
-			float TimeRemaining = CraftDuration * Entry.Count;
-			DisplayData.TimeRemainingText = UMOUIUtils::FormatDurationAsText(TimeRemaining);
-		}
-
-		EntryWidget->SetupEntry(DisplayData);
-		EntryWidget->OnCancelRequested.AddDynamic(this, &UMOCraftingQueueWidget::HandleEntryCancelRequested);
-
-		Container->AddChild(EntryWidget);
-		EntryWidgets.Add(EntryWidget);
-	}
-
-	// Update current craft display
-	if (QueueEntries.Num() > 0)
-	{
-		const FMOCraftingQueueEntry& CurrentEntry = QueueEntries[0];
-		const FMORecipeDefinitionRow* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(CurrentEntry.RecipeId);
-
-		if (CurrentCraftNameText && Recipe)
-		{
-			CurrentCraftNameText->SetText(Recipe->DisplayName);
-		}
-
-		// Use overall queue progress for the main progress bar
-		float OverallProgress = Queue->GetOverallQueueProgress();
-
-		if (CurrentProgressBar)
-		{
-			CurrentProgressBar->SetPercent(OverallProgress);
-		}
-
-		if (ProgressText)
-		{
-			ProgressText->SetText(FText::Format(
-				NSLOCTEXT("MOCrafting", "ProgressPercent", "{0}%"),
-				FText::AsNumber(FMath::RoundToInt(OverallProgress * 100))
-			));
-		}
-
-		if (TimeRemainingText)
-		{
-			TimeRemainingText->SetText(UMOUIUtils::FormatDurationAsText(Queue->GetTotalTimeRemaining()));
-		}
-
-		if (TotalTimeRemainingText)
-		{
-			TotalTimeRemainingText->SetText(UMOUIUtils::FormatDurationAsText(Queue->GetTotalTimeRemaining()));
-		}
-	}
-	else
-	{
-		// Queue is empty - clear the display
-		if (CurrentCraftNameText)
-		{
-			CurrentCraftNameText->SetText(FText::GetEmpty());
-		}
-
-		if (CurrentProgressBar)
-		{
-			CurrentProgressBar->SetPercent(0.0f);
-		}
-
-		if (ProgressText)
-		{
-			ProgressText->SetText(FText::GetEmpty());
-		}
-
-		if (TimeRemainingText)
-		{
-			TimeRemainingText->SetText(FText::GetEmpty());
-		}
-
-		if (TotalTimeRemainingText)
-		{
-			TotalTimeRemainingText->SetText(FText::GetEmpty());
-		}
-	}
-
-	OnQueueUpdated(QueueEntries.Num());
+	SyncRowWidgetClass();
+	RefreshRows();
 }
 
 void UMOCraftingQueueWidget::UpdateProgress()
 {
-	UMOCraftingQueueComponent* Queue = QueueComponent.Get();
-	if (!Queue || Queue->IsQueueEmpty())
-	{
-		// Queue is empty, ensure display is cleared
-		if (CurrentProgressBar)
-		{
-			CurrentProgressBar->SetPercent(0.0f);
-		}
-		if (ProgressText)
-		{
-			ProgressText->SetText(FText::GetEmpty());
-		}
-		if (TimeRemainingText)
-		{
-			TimeRemainingText->SetText(FText::GetEmpty());
-		}
-		if (TotalTimeRemainingText)
-		{
-			TotalTimeRemainingText->SetText(FText::GetEmpty());
-		}
-		OnProgressUpdated(0.0f, FText::GetEmpty());
-		return;
-	}
-
-	// Use overall progress for the main display
-	float OverallProgress = Queue->GetOverallQueueProgress();
-	FText TotalTimeRemaining = UMOUIUtils::FormatDurationAsText(Queue->GetTotalTimeRemaining());
-
-	if (CurrentProgressBar)
-	{
-		CurrentProgressBar->SetPercent(OverallProgress);
-	}
-
-	if (ProgressText)
-	{
-		ProgressText->SetText(FText::Format(
-			NSLOCTEXT("MOCrafting", "ProgressPercent", "{0}%"),
-			FText::AsNumber(FMath::RoundToInt(OverallProgress * 100))
-		));
-	}
-
-	if (TimeRemainingText)
-	{
-		TimeRemainingText->SetText(TotalTimeRemaining);
-	}
-
-	if (TotalTimeRemainingText)
-	{
-		TotalTimeRemainingText->SetText(TotalTimeRemaining);
-	}
-
-	// Update first entry widget with current craft progress (not overall)
-	if (EntryWidgets.Num() > 0 && EntryWidgets[0])
-	{
-		float CurrentProgress = Queue->GetCurrentCraftProgress();
-		FText CurrentTimeRemaining = UMOUIUtils::FormatDurationAsText(Queue->GetCurrentCraftTimeRemaining());
-		EntryWidgets[0]->UpdateProgress(CurrentProgress, CurrentTimeRemaining);
-	}
-
-	OnProgressUpdated(OverallProgress, TotalTimeRemaining);
+	UpdateProgressDisplay();
 }
 
 bool UMOCraftingQueueWidget::IsQueueEmpty() const
@@ -294,25 +79,126 @@ FText UMOCraftingQueueWidget::GetTimeRemainingText() const
 	return UMOUIUtils::FormatDurationAsText(Queue->GetTotalTimeRemaining());
 }
 
-void UMOCraftingQueueWidget::NativeConstruct()
+FMOQueueDisplayRow UMOCraftingQueueWidget::BuildCraftingDisplayRow(
+	const FMOCraftingQueueEntry& Entry,
+	const FMORecipeDefinitionRow* Recipe,
+	bool bIsActive,
+	float ActiveRemainingSeconds)
 {
-	Super::NativeConstruct();
+	FMOQueueDisplayRow Row;
+	Row.RowId = Entry.EntryId;
+	Row.SourceId = Entry.RecipeId;
+	Row.Progress = Entry.Progress;
+	Row.State = bIsActive ? EMOQueueRowState::Active : EMOQueueRowState::Queued;
+	Row.bCancellable = true;
 
-	if (CancelAllButton)
+	if (Recipe)
 	{
-		CancelAllButton->OnClicked().RemoveAll(this);
-		CancelAllButton->OnClicked().AddUObject(this, &UMOCraftingQueueWidget::HandleCancelAllClicked);
+		Row.Title = Recipe->DisplayName;
+		Row.Icon = Recipe->Icon;
+	}
+	else
+	{
+		Row.Title = FText::FromName(Entry.RecipeId);
+	}
+
+	// Repeat display: "current iteration / total" (legacy format).
+	Row.CountCurrent = Entry.CompletedCount + 1;
+	Row.CountTotal = Entry.Count;
+
+	// Active row: authoritative remaining from the component. Queued rows:
+	// base CraftTime * Count estimate (legacy parity; tool bonuses not applied).
+	if (bIsActive)
+	{
+		Row.RemainingSeconds = FMath::Max(0.0f, ActiveRemainingSeconds);
+	}
+	else
+	{
+		const float CraftDuration = Recipe ? Recipe->CraftTime : 0.0f;
+		Row.RemainingSeconds = CraftDuration * Entry.Count;
+	}
+
+	return Row;
+}
+
+bool UMOCraftingQueueWidget::HasQueueSource_Implementation() const
+{
+	return QueueComponent.IsValid();
+}
+
+void UMOCraftingQueueWidget::BuildDisplayRows_Implementation(TArray<FMOQueueDisplayRow>& OutRows) const
+{
+	UMOCraftingQueueComponent* Queue = QueueComponent.Get();
+	if (!Queue)
+	{
+		return;
+	}
+
+	TArray<FMOCraftingQueueEntry> QueueEntries;
+	Queue->GetAllQueueEntries(QueueEntries);
+
+	const float ActiveRemaining = Queue->GetCurrentCraftTimeRemaining();
+	for (int32 i = 0; i < QueueEntries.Num(); ++i)
+	{
+		const FMORecipeDefinitionRow* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(QueueEntries[i].RecipeId);
+		OutRows.Add(BuildCraftingDisplayRow(QueueEntries[i], Recipe, i == 0, ActiveRemaining));
+	}
+}
+
+void UMOCraftingQueueWidget::GetHeaderDisplay_Implementation(FMOQueueHeaderDisplay& OutHeader) const
+{
+	// Crafting header semantics: OVERALL queue progress + TOTAL remaining
+	// (row 0 shows the per-craft values via the live-progress hook).
+	OutHeader = FMOQueueHeaderDisplay();
+	UMOCraftingQueueComponent* Queue = QueueComponent.Get();
+	if (!Queue || Queue->IsQueueEmpty())
+	{
+		return;
+	}
+
+	OutHeader.bHasRows = true;
+	OutHeader.Progress = Queue->GetOverallQueueProgress();
+	OutHeader.RemainingSeconds = FMath::Max(0.0f, Queue->GetTotalTimeRemaining());
+	const TArray<FMOQueueDisplayRow>& Rows = GetLastBuiltRows();
+	if (Rows.Num() > 0)
+	{
+		OutHeader.ActiveTitle = Rows[0].Title;
+	}
+}
+
+bool UMOCraftingQueueWidget::GetActiveRowLiveProgress_Implementation(float& OutProgress, float& OutRemainingSeconds) const
+{
+	UMOCraftingQueueComponent* Queue = QueueComponent.Get();
+	if (!Queue || Queue->IsQueueEmpty())
+	{
+		return false;
+	}
+	OutProgress = Queue->GetCurrentCraftProgress();
+	OutRemainingSeconds = FMath::Max(0.0f, Queue->GetCurrentCraftTimeRemaining());
+	return true;
+}
+
+void UMOCraftingQueueWidget::ExecuteCancelRow_Implementation(const FGuid& RowId)
+{
+	// Domain-owned cancellation: authority + refund policy live here (the
+	// component rejects non-authority calls). Refund remaining ingredients —
+	// the legacy policy, now expressed at the adapter boundary.
+	if (UMOCraftingQueueComponent* Queue = QueueComponent.Get())
+	{
+		Queue->CancelCraft(RowId, /*bRefundIngredients=*/true);
+	}
+}
+
+void UMOCraftingQueueWidget::ExecuteCancelAll_Implementation()
+{
+	if (UMOCraftingQueueComponent* Queue = QueueComponent.Get())
+	{
+		Queue->CancelAllCrafts(/*bRefundIngredients=*/true);
 	}
 }
 
 void UMOCraftingQueueWidget::NativeDestruct()
 {
-	if (CancelAllButton)
-	{
-		CancelAllButton->OnClicked().RemoveAll(this);
-	}
-
-	// Unbind from queue component
 	if (UMOCraftingQueueComponent* Queue = QueueComponent.Get())
 	{
 		Queue->OnQueueChanged.RemoveDynamic(this, &UMOCraftingQueueWidget::HandleQueueChanged);
@@ -323,46 +209,54 @@ void UMOCraftingQueueWidget::NativeDestruct()
 	Super::NativeDestruct();
 }
 
-void UMOCraftingQueueWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
+void UMOCraftingQueueWidget::NotifyRowsRefreshed(int32 RowCount)
 {
-	Super::NativeTick(MyGeometry, InDeltaTime);
+	OnQueueUpdated(RowCount);
+}
 
-	// Periodic progress update
-	TimeSinceLastUpdate += InDeltaTime;
-	if (TimeSinceLastUpdate >= ProgressUpdateInterval)
+void UMOCraftingQueueWidget::NotifyProgressUpdated(float Progress, const FText& TimeRemaining)
+{
+	OnProgressUpdated(Progress, TimeRemaining);
+}
+
+void UMOCraftingQueueWidget::OnRowWidgetBound(UMOQueueRowWidgetBase* RowWidget, const FMOQueueDisplayRow& InRow)
+{
+	// Keep the legacy BP-visible display struct in sync on the compat entry so
+	// OnVisualsUpdated/GetEntryData see the same values the base rendered.
+	if (UMOCraftingQueueEntryWidget* LegacyEntry = Cast<UMOCraftingQueueEntryWidget>(RowWidget))
 	{
-		TimeSinceLastUpdate = 0.0f;
-		UpdateProgress();
+		FMOQueueEntryDisplayData LegacyData;
+		LegacyData.EntryId = InRow.RowId;
+		LegacyData.RecipeId = InRow.SourceId;
+		LegacyData.RecipeName = InRow.Title;
+		LegacyData.Icon = InRow.Icon;
+		LegacyData.CountText = InRow.CountText;
+		LegacyData.Progress = InRow.Progress;
+		LegacyData.TimeRemainingText = InRow.TimeRemainingText;
+		LegacyData.bIsActive = (InRow.State == EMOQueueRowState::Active);
+		LegacyEntry->SetLegacyEntryData(LegacyData);
 	}
 }
 
 void UMOCraftingQueueWidget::HandleQueueChanged()
 {
-	RefreshQueue();
+	RefreshRows();
 }
 
 void UMOCraftingQueueWidget::HandleCraftProgress(const FGuid& EntryId, float Progress)
 {
-	// Progress is handled by tick-based updates for smoother display
+	// Progress is handled by tick-based updates for smoother display.
 }
 
 void UMOCraftingQueueWidget::HandleCraftCompleted(const FGuid& EntryId, const FMOCraftResult& Result)
 {
-	RefreshQueue();
+	RefreshRows();
 }
 
-void UMOCraftingQueueWidget::HandleEntryCancelRequested(const FGuid& EntryId)
+void UMOCraftingQueueWidget::SyncRowWidgetClass()
 {
-	if (UMOCraftingQueueComponent* Queue = QueueComponent.Get())
+	if (QueueEntryWidgetClass)
 	{
-		Queue->CancelCraft(EntryId, true); // true = refund ingredients
-	}
-}
-
-void UMOCraftingQueueWidget::HandleCancelAllClicked()
-{
-	if (UMOCraftingQueueComponent* Queue = QueueComponent.Get())
-	{
-		Queue->CancelAllCrafts(true); // true = refund ingredients
+		RowWidgetClass = QueueEntryWidgetClass;
 	}
 }

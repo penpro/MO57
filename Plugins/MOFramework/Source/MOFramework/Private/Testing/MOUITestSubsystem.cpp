@@ -28,6 +28,14 @@
 #include "Engine/World.h"
 #include "Engine/GameViewportClient.h"
 #include "TimerManager.h"
+#include "MOCraftingQueueComponent.h"
+#include "MOCraftingQueueWidget.h"
+#include "MOQueueRowWidgetBase.h"
+#include "MORecipeDatabaseSettings.h"
+#include "MORecipeDefinitionRow.h"
+#include "MOInventoryComponent.h"
+#include "Engine/DataTable.h"
+#include "UObject/UObjectIterator.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogMOUITest, Log, All);
 
@@ -247,6 +255,18 @@ void UMOUITestSubsystem::RegisterTests()
 	TestRegistry.Add(TEXT("CommonUI.FocusRestoration"), [this]() { return Test_CommonUI_FocusRestoration(); });
 	TestRegistry.Add(TEXT("CommonUI.WidgetActivation"), [this]() { return Test_CommonUI_WidgetActivation(); });
 	TestRegistry.Add(TEXT("CommonUI.WidgetDeactivation"), [this]() { return Test_CommonUI_WidgetDeactivation(); });
+
+	// =========================================================================
+	// QUEUE RENDERER TESTS (migration Stage 3 — the plan's validation checklist:
+	// initial rows / cancel-one / cancel-all+empty / source swap-unbind /
+	// reconstruct. Live progress + completion-removal need real frames and live
+	// in Tools/validate_ui_queue_pie.py.)
+	// =========================================================================
+	TestRegistry.Add(TEXT("Queue.CraftingRows"), [this]() { return Test_Queue_CraftingRows(); });
+	TestRegistry.Add(TEXT("Queue.CancelOneIntent"), [this]() { return Test_Queue_CancelOneIntent(); });
+	TestRegistry.Add(TEXT("Queue.CancelAllEmptyState"), [this]() { return Test_Queue_CancelAllEmptyState(); });
+	TestRegistry.Add(TEXT("Queue.SourceSwapUnbind"), [this]() { return Test_Queue_SourceSwapUnbind(); });
+	TestRegistry.Add(TEXT("Queue.ReconstructOneIntent"), [this]() { return Test_Queue_ReconstructOneIntent(); });
 }
 
 void UMOUITestSubsystem::RegisterFrameSteppedTests()
@@ -3051,3 +3071,386 @@ FMOUITestResult UMOUITestSubsystem::Test_CommonUI_WidgetDeactivation()
 
 	return MakeResult(TEXT("CommonUI.WidgetDeactivation"), true);
 }
+
+// ============================================================================
+// TEST IMPLEMENTATIONS - Queue renderer (migration Stage 3)
+// ============================================================================
+
+UMOCraftingQueueComponent* UMOUITestSubsystem::SetupCraftingQueueFixture(int32 DesiredEntries, FString& OutError)
+{
+	APlayerController* PC = GetPlayerController();
+	APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+	UMOCraftingQueueComponent* Queue = Pawn ? Pawn->FindComponentByClass<UMOCraftingQueueComponent>() : nullptr;
+	UMOInventoryComponent* Inventory = Pawn ? Pawn->FindComponentByClass<UMOInventoryComponent>() : nullptr;
+	if (!Queue || !Inventory)
+	{
+		OutError = TEXT("No pawn crafting queue / inventory component");
+		return nullptr;
+	}
+
+	// Clean slate: earlier fixtures may have left entries.
+	Queue->CancelAllCrafts(true);
+
+	// Find a genuinely craftable Station=None recipe: grant its ingredients and
+	// let the authoritative EnqueueCraft validation decide (knowledge/skills/
+	// inventory) -- self-adapting to data, no hardcoded recipe ids.
+	const UMORecipeDatabaseSettings* Settings = GetDefault<UMORecipeDatabaseSettings>();
+	UDataTable* RecipeTable = Settings ? Settings->GetRecipeDefinitionsDataTable() : nullptr;
+	if (!RecipeTable)
+	{
+		OutError = TEXT("No recipe DataTable configured");
+		return nullptr;
+	}
+
+	const int32 TotalRepeats = 3; // entry 1 = 1x, entry 2 = 2x
+	for (const TPair<FName, uint8*>& Pair : RecipeTable->GetRowMap())
+	{
+		const FMORecipeDefinitionRow* Recipe = reinterpret_cast<const FMORecipeDefinitionRow*>(Pair.Value);
+		if (!Recipe || Recipe->RequiredStation != EMOCraftingStation::None)
+		{
+			continue;
+		}
+
+		// Grant enough ingredients for every planned repeat (consumed at enqueue).
+		for (const FMORecipeIngredient& Ingredient : Recipe->Ingredients)
+		{
+			if (!Ingredient.ItemDefinitionId.IsNone())
+			{
+				Inventory->AddItemByGuid(FGuid::NewGuid(), Ingredient.ItemDefinitionId,
+					Ingredient.Quantity * TotalRepeats);
+			}
+		}
+
+		if (!Queue->EnqueueCraft(Pair.Key, 1, EMOCraftingStation::None))
+		{
+			continue; // validation rejected (unknown recipe, skill gate, ...) -- try the next
+		}
+		if (DesiredEntries >= 2)
+		{
+			if (!Queue->EnqueueCraft(Pair.Key, 2, EMOCraftingStation::None))
+			{
+				// First accepted but second refused: still usable for 1-entry tests.
+				LogTest(FString::Printf(TEXT("Queue fixture: second enqueue of %s refused"), *Pair.Key.ToString()));
+			}
+		}
+		LogTest(FString::Printf(TEXT("Queue fixture: enqueued recipe %s (%d entries)"),
+			*Pair.Key.ToString(), Queue->GetQueueLength()));
+		return Queue;
+	}
+
+	OutError = TEXT("No craftable Station=None recipe found for the fixture");
+	return nullptr;
+}
+
+UMOCraftingQueueWidget* UMOUITestSubsystem::FindLiveCraftingQueueWidget() const
+{
+	UWorld* World = GetWorld();
+	UMOCraftingQueueWidget* Fallback = nullptr;
+	for (TObjectIterator<UMOCraftingQueueWidget> It; It; ++It)
+	{
+		UMOCraftingQueueWidget* Widget = *It;
+		if (!IsValid(Widget) || Widget->GetWorld() != World || Widget->IsTemplate())
+		{
+			continue;
+		}
+		// Prefer the instance bound to a source (the one the open menu initialized).
+		if (Widget->HasQueueSource())
+		{
+			return Widget;
+		}
+		Fallback = Widget;
+	}
+	return Fallback;
+}
+
+void UMOUITestSubsystem::CleanupCraftingQueueFixture(UMOCraftingQueueComponent* Queue)
+{
+	if (Queue)
+	{
+		Queue->CancelAllCrafts(true);
+	}
+	CloseAllMenus();
+}
+
+bool UMOUITestSubsystem::SetupQueueFixture(int32 DesiredEntries)
+{
+	FString Error;
+	UMOCraftingQueueComponent* Queue = SetupCraftingQueueFixture(DesiredEntries, Error);
+	if (!Queue)
+	{
+		LogTest(FString::Printf(TEXT("SetupQueueFixture failed: %s"), *Error));
+	}
+	return Queue != nullptr;
+}
+
+void UMOUITestSubsystem::CleanupQueueFixture()
+{
+	APlayerController* PC = GetPlayerController();
+	APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+	CleanupCraftingQueueFixture(Pawn ? Pawn->FindComponentByClass<UMOCraftingQueueComponent>() : nullptr);
+}
+
+FMOUITestResult UMOUITestSubsystem::Test_Queue_CraftingRows()
+{
+	LogTest(TEXT("Testing: queue renderer builds initial rows from the crafting source"));
+
+	FString Error;
+	UMOCraftingQueueComponent* Queue = SetupCraftingQueueFixture(2, Error);
+	if (!Queue)
+	{
+		return MakeResult(TEXT("Queue.CraftingRows"), false, Error);
+	}
+	const int32 ExpectedEntries = Queue->GetQueueLength();
+
+	if (!OpenMenu(TEXT("Crafting")))
+	{
+		CleanupCraftingQueueFixture(Queue);
+		return MakeResult(TEXT("Queue.CraftingRows"), false, TEXT("Failed to open crafting menu"));
+	}
+
+	UMOCraftingQueueWidget* Widget = FindLiveCraftingQueueWidget();
+	if (!Widget)
+	{
+		CleanupCraftingQueueFixture(Queue);
+		return MakeResult(TEXT("Queue.CraftingRows"), false, TEXT("No live crafting queue widget found"));
+	}
+
+	bool bPassed = true;
+	FString Message;
+	if (Widget->GetRowCount() != ExpectedEntries)
+	{
+		bPassed = false;
+		Message = FString::Printf(TEXT("Row count %d != queue length %d"), Widget->GetRowCount(), ExpectedEntries);
+	}
+	else if (ExpectedEntries > 0)
+	{
+		TArray<FMOCraftingQueueEntry> Entries;
+		Queue->GetAllQueueEntries(Entries);
+		UMOQueueRowWidgetBase* Row0 = Widget->GetRowWidgetAt(0);
+		if (!Row0 || Row0->GetRowId() != Entries[0].EntryId)
+		{
+			bPassed = false;
+			Message = TEXT("Row 0 id does not match the active queue entry");
+		}
+		else if (Row0->GetRow().State != EMOQueueRowState::Active)
+		{
+			bPassed = false;
+			Message = TEXT("Row 0 is not in the Active state");
+		}
+		else if (ExpectedEntries >= 2)
+		{
+			UMOQueueRowWidgetBase* Row1 = Widget->GetRowWidgetAt(1);
+			if (!Row1 || Row1->GetRow().State != EMOQueueRowState::Queued)
+			{
+				bPassed = false;
+				Message = TEXT("Row 1 is not in the Queued state");
+			}
+		}
+	}
+
+	CleanupCraftingQueueFixture(Queue);
+	return MakeResult(TEXT("Queue.CraftingRows"), bPassed, Message);
+}
+
+FMOUITestResult UMOUITestSubsystem::Test_Queue_CancelOneIntent()
+{
+	LogTest(TEXT("Testing: one cancel intent on one row cancels exactly that entry"));
+
+	FString Error;
+	UMOCraftingQueueComponent* Queue = SetupCraftingQueueFixture(2, Error);
+	if (!Queue)
+	{
+		return MakeResult(TEXT("Queue.CancelOneIntent"), false, Error);
+	}
+	if (Queue->GetQueueLength() < 2)
+	{
+		CleanupCraftingQueueFixture(Queue);
+		return MakeResult(TEXT("Queue.CancelOneIntent"), false, TEXT("Fixture could not enqueue 2 entries"));
+	}
+
+	if (!OpenMenu(TEXT("Crafting")))
+	{
+		CleanupCraftingQueueFixture(Queue);
+		return MakeResult(TEXT("Queue.CancelOneIntent"), false, TEXT("Failed to open crafting menu"));
+	}
+
+	UMOCraftingQueueWidget* Widget = FindLiveCraftingQueueWidget();
+	UMOQueueRowWidgetBase* Row1 = Widget ? Widget->GetRowWidgetAt(1) : nullptr;
+	if (!Row1)
+	{
+		CleanupCraftingQueueFixture(Queue);
+		return MakeResult(TEXT("Queue.CancelOneIntent"), false, TEXT("No queued row widget to cancel"));
+	}
+
+	const int32 LengthBefore = Queue->GetQueueLength();
+	Row1->RequestCancel(); // intent -> adapter ExecuteCancelRow -> CancelCraft -> OnQueueChanged rebuild
+
+	bool bPassed = true;
+	FString Message;
+	if (Queue->GetQueueLength() != LengthBefore - 1)
+	{
+		bPassed = false;
+		Message = FString::Printf(TEXT("Queue length %d after one cancel intent (was %d)"),
+			Queue->GetQueueLength(), LengthBefore);
+	}
+	else if (Widget->GetRowCount() != LengthBefore - 1)
+	{
+		bPassed = false;
+		Message = TEXT("Rows did not rebuild after the cancel");
+	}
+
+	CleanupCraftingQueueFixture(Queue);
+	return MakeResult(TEXT("Queue.CancelOneIntent"), bPassed, Message);
+}
+
+FMOUITestResult UMOUITestSubsystem::Test_Queue_CancelAllEmptyState()
+{
+	LogTest(TEXT("Testing: cancel-all empties the queue and shows the empty state"));
+
+	FString Error;
+	UMOCraftingQueueComponent* Queue = SetupCraftingQueueFixture(2, Error);
+	if (!Queue)
+	{
+		return MakeResult(TEXT("Queue.CancelAllEmptyState"), false, Error);
+	}
+
+	if (!OpenMenu(TEXT("Crafting")))
+	{
+		CleanupCraftingQueueFixture(Queue);
+		return MakeResult(TEXT("Queue.CancelAllEmptyState"), false, TEXT("Failed to open crafting menu"));
+	}
+
+	UMOCraftingQueueWidget* Widget = FindLiveCraftingQueueWidget();
+	if (!Widget)
+	{
+		CleanupCraftingQueueFixture(Queue);
+		return MakeResult(TEXT("Queue.CancelAllEmptyState"), false, TEXT("No live crafting queue widget found"));
+	}
+
+	Widget->RequestCancelAll(); // intent -> adapter ExecuteCancelAll -> CancelAllCrafts -> rebuild
+
+	bool bPassed = true;
+	FString Message;
+	if (!Queue->IsQueueEmpty())
+	{
+		bPassed = false;
+		Message = TEXT("Queue not empty after cancel-all intent");
+	}
+	else if (Widget->GetRowCount() != 0)
+	{
+		bPassed = false;
+		Message = TEXT("Rows remain after cancel-all");
+	}
+	else if (!Widget->IsShowingEmptyState())
+	{
+		bPassed = false;
+		Message = TEXT("Empty state not shown after cancel-all");
+	}
+
+	CleanupCraftingQueueFixture(Queue);
+	return MakeResult(TEXT("Queue.CancelAllEmptyState"), bPassed, Message);
+}
+
+FMOUITestResult UMOUITestSubsystem::Test_Queue_SourceSwapUnbind()
+{
+	LogTest(TEXT("Testing: unbind clears rows safely; rebind restores them"));
+
+	FString Error;
+	UMOCraftingQueueComponent* Queue = SetupCraftingQueueFixture(1, Error);
+	if (!Queue)
+	{
+		return MakeResult(TEXT("Queue.SourceSwapUnbind"), false, Error);
+	}
+
+	if (!OpenMenu(TEXT("Crafting")))
+	{
+		CleanupCraftingQueueFixture(Queue);
+		return MakeResult(TEXT("Queue.SourceSwapUnbind"), false, TEXT("Failed to open crafting menu"));
+	}
+
+	UMOCraftingQueueWidget* Widget = FindLiveCraftingQueueWidget();
+	if (!Widget || Widget->GetRowCount() < 1)
+	{
+		CleanupCraftingQueueFixture(Queue);
+		return MakeResult(TEXT("Queue.SourceSwapUnbind"), false, TEXT("No live widget with rows"));
+	}
+
+	// Unbind: rows must clear without crashing; queries report empty.
+	Widget->InitializeQueue(nullptr);
+	bool bPassed = true;
+	FString Message;
+	if (Widget->GetRowCount() != 0 || !Widget->IsQueueEmpty())
+	{
+		bPassed = false;
+		Message = TEXT("Unbind did not clear rows / report empty");
+	}
+	else
+	{
+		// Rebind: rows return from the same source.
+		Widget->InitializeQueue(Queue);
+		if (Widget->GetRowCount() != Queue->GetQueueLength())
+		{
+			bPassed = false;
+			Message = TEXT("Rebind did not restore rows");
+		}
+	}
+
+	CleanupCraftingQueueFixture(Queue);
+	return MakeResult(TEXT("Queue.SourceSwapUnbind"), bPassed, Message);
+}
+
+FMOUITestResult UMOUITestSubsystem::Test_Queue_ReconstructOneIntent()
+{
+	LogTest(TEXT("Testing (F18): close/reopen then one cancel intent cancels exactly one entry"));
+
+	FString Error;
+	UMOCraftingQueueComponent* Queue = SetupCraftingQueueFixture(2, Error);
+	if (!Queue)
+	{
+		return MakeResult(TEXT("Queue.ReconstructOneIntent"), false, Error);
+	}
+	if (Queue->GetQueueLength() < 2)
+	{
+		CleanupCraftingQueueFixture(Queue);
+		return MakeResult(TEXT("Queue.ReconstructOneIntent"), false, TEXT("Fixture could not enqueue 2 entries"));
+	}
+
+	// Row-level reconstruct (F18): every RefreshQueue destroys and recreates
+	// all row widgets, re-running their bind lifecycle. Two refreshes then one
+	// intent must cancel exactly one entry. (The MENU-level close/reopen
+	// reconstruct needs real frame boundaries — CommonUI reconciles same-frame
+	// close+push on the next tick, F21 — so that variant lives in
+	// Tools/validate_ui_queue_pie.py.)
+	if (!OpenMenu(TEXT("Crafting")))
+	{
+		CleanupCraftingQueueFixture(Queue);
+		return MakeResult(TEXT("Queue.ReconstructOneIntent"), false, TEXT("Failed to open crafting menu"));
+	}
+
+	UMOCraftingQueueWidget* Widget = FindLiveCraftingQueueWidget();
+	if (Widget)
+	{
+		Widget->RefreshQueue();
+		Widget->RefreshQueue();
+	}
+	UMOQueueRowWidgetBase* Row1 = Widget ? Widget->GetRowWidgetAt(1) : nullptr;
+	if (!Row1)
+	{
+		CleanupCraftingQueueFixture(Queue);
+		return MakeResult(TEXT("Queue.ReconstructOneIntent"), false, TEXT("No queued row after reconstruct"));
+	}
+
+	const int32 LengthBefore = Queue->GetQueueLength();
+	Row1->RequestCancel();
+
+	// Exactly ONE entry gone: a doubled binding would cancel more than one
+	// (or re-enter), a torn binding would cancel none.
+	bool bPassed = (Queue->GetQueueLength() == LengthBefore - 1);
+	const FString Message = bPassed ? FString()
+		: FString::Printf(TEXT("Queue length %d after one intent post-reconstruct (was %d)"),
+			Queue->GetQueueLength(), LengthBefore);
+
+	CleanupCraftingQueueFixture(Queue);
+	return MakeResult(TEXT("Queue.ReconstructOneIntent"), bPassed, Message);
+}
+

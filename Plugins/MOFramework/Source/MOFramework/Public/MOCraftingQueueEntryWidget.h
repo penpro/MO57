@@ -1,55 +1,49 @@
 /**
  * =============================================================================
- * MOCraftingQueueEntryWidget.h - Single Crafting Queue Entry Widget
+ * MOCraftingQueueEntryWidget.h - Crafting Queue Entry (Stage-3 compat adapter)
  * =============================================================================
  *
  * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
  * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
  *
  * PURPOSE:
- * Widget representing a single entry in the crafting queue. Displays recipe
- * name, icon, progress bar, count, time remaining, and cancel button.
- *
- * DISPLAY DATA:
- * - FMOQueueEntryDisplayData: Visual data for queue entries
+ * Thin compatibility subclass of UMOQueueRowWidgetBase (migration Stage 3).
+ * The base renders the row and emits cancel intents; this class preserves the
+ * crafting-specific BP surface: FMOQueueEntryDisplayData, SetupEntry,
+ * UpdateProgress, GetEntryId/GetEntryData, the legacy OnCancelRequested
+ * delegate, and the OnVisualsUpdated Blueprint event. WBP_CraftQueueEntry
+ * keeps this parent; all widget bindings and colors moved to the base under
+ * their exact legacy names.
  *
  * =============================================================================
  * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
  * =============================================================================
  *
- * [2024-02] DUAL CANCEL BUTTONS: Both CancelButton (UMOCommonButton) and
- *   CancelButtonSimple (UButton) are supported. Bind only one in Blueprint.
+ * [2024-02] DUAL CANCEL BUTTONS: handled by the base (CancelButton preferred
+ *   over CancelButtonSimple; bind only one in Blueprint).
  *
- * [2024-02] ACTIVE COLOR: ActiveColor vs QueuedColor backgrounds distinguish
- *   currently crafting entry from queued entries.
- *
- * [2024-02] PROGRESS UPDATES: Call UpdateProgress() frequently (each tick)
- *   for smooth progress bar. SetupEntry() for full refresh only.
+ * [2026-07] LEGACY DATA IS A MIRROR: LegacyData is synthesized from the base's
+ *   neutral row (by the owning adapter or SetupEntry) — it is presentation
+ *   compatibility state, never a second source of truth (F17).
  *
  * =============================================================================
- * RELATED FILES: MOCraftingQueueWidget.h, MOCraftingQueueComponent.h,
+ * RELATED FILES: MOQueueRowWidgetBase.h, MOCraftingQueueWidget.h,
  *                MOCraftingTypes.h, MOBuildingQueueEntryWidget.h
- * LAST UPDATED: 2026-02-25
+ * LAST UPDATED: 2026-07-20 (Stage 3: reparented onto the shared queue row)
  * =============================================================================
  */
 
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Blueprint/UserWidget.h"
+#include "MOQueueRowWidgetBase.h"
 #include "MOCraftingTypes.h"
 #include "MOCraftingQueueEntryWidget.generated.h"
-
-class UTextBlock;
-class UProgressBar;
-class UImage;
-class UButton;
-class UMOCommonButton;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOQueueEntryCancelRequestedSignature, const FGuid&, EntryId);
 
 /**
- * Visual data for a queue entry.
+ * Visual data for a queue entry (legacy BP-visible struct, preserved verbatim).
  */
 USTRUCT(BlueprintType)
 struct MOFRAMEWORK_API FMOQueueEntryDisplayData
@@ -86,17 +80,17 @@ struct MOFRAMEWORK_API FMOQueueEntryDisplayData
 };
 
 /**
- * Widget representing a single entry in the crafting queue.
+ * Crafting queue entry: thin compat subclass of the shared queue row.
  */
 UCLASS(Abstract, Blueprintable)
-class MOFRAMEWORK_API UMOCraftingQueueEntryWidget : public UUserWidget
+class MOFRAMEWORK_API UMOCraftingQueueEntryWidget : public UMOQueueRowWidgetBase
 {
 	GENERATED_BODY()
 
 public:
 	UMOCraftingQueueEntryWidget(const FObjectInitializer& ObjectInitializer);
 
-	// --- Setup ---
+	// --- Setup (legacy API) ---
 
 	UFUNCTION(BlueprintCallable, Category="MO|Crafting|UI")
 	void SetupEntry(const FMOQueueEntryDisplayData& InData);
@@ -105,38 +99,30 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Crafting|UI")
 	void UpdateProgress(float NewProgress, const FText& NewTimeRemaining);
 
-	// --- Getters ---
+	// --- Getters (legacy API) ---
 
 	UFUNCTION(BlueprintPure, Category="MO|Crafting|UI")
-	FGuid GetEntryId() const { return EntryData.EntryId; }
+	FGuid GetEntryId() const { return LegacyData.EntryId; }
 
 	UFUNCTION(BlueprintPure, Category="MO|Crafting|UI")
-	const FMOQueueEntryDisplayData& GetEntryData() const { return EntryData; }
+	const FMOQueueEntryDisplayData& GetEntryData() const { return LegacyData; }
 
-	// --- Delegates ---
+	// --- Delegates (legacy; re-broadcast alongside the base OnCancelIntent) ---
 
 	UPROPERTY(BlueprintAssignable, Category="MO|Crafting|UI")
 	FMOQueueEntryCancelRequestedSignature OnCancelRequested;
 
-	// --- Configuration ---
+	/** Store the legacy display mirror (no re-render) — called by the crafting
+	 *  adapter after the base binds a neutral row. */
+	void SetLegacyEntryData(const FMOQueueEntryDisplayData& InData) { LegacyData = InData; }
 
-	/** Color for active entry background. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Crafting|UI")
-	FLinearColor ActiveColor = FLinearColor(0.2f, 0.4f, 0.2f, 1.0f);
+	// --- Base hooks ---
 
-	/** Color for queued entry background. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Crafting|UI")
-	FLinearColor QueuedColor = FLinearColor(0.15f, 0.15f, 0.15f, 1.0f);
+	virtual void NotifyVisualsUpdated() override;
+	virtual void NotifyCancelIntent(const FGuid& InRowId) override;
 
 protected:
-	virtual void NativeConstruct() override;
-	virtual void NativeDestruct() override;
-
-	/** Called when cancel button is clicked. */
-	UFUNCTION()
-	void HandleCancelClicked();
-
-	/** Update visuals based on current data. */
+	/** Update visuals based on current data (legacy API). */
 	UFUNCTION(BlueprintCallable, Category="MO|Crafting|UI")
 	void UpdateVisuals();
 
@@ -144,29 +130,7 @@ protected:
 	UFUNCTION(BlueprintImplementableEvent, Category="MO|Crafting|UI")
 	void OnVisualsUpdated(const FMOQueueEntryDisplayData& Data);
 
-	// --- Widget Bindings ---
-
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<UTextBlock> RecipeNameText;
-
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<UImage> RecipeIcon;
-
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<UTextBlock> CountText;
-
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<UProgressBar> ProgressBar;
-
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<UTextBlock> TimeRemainingText;
-
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<UMOCommonButton> CancelButton;
-
-	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
-	TObjectPtr<UButton> CancelButtonSimple;
-
 private:
-	FMOQueueEntryDisplayData EntryData;
+	/** Legacy BP-visible mirror of the base's neutral row (see pitfalls). */
+	FMOQueueEntryDisplayData LegacyData;
 };
