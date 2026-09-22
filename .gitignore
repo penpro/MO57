@@ -65,3 +65,9 @@ Tools/__pycache__/
 # MCP bridge test scratch (unreferenced by any map/config)
 Content/Penumbra/MCPTest/
 Content/Penumbra/Maps/MCPTestLevel.umap
+
+# generated / machine-local (cleanup 2026-09-22): catch __pycache__ anywhere,
+# not just the two hardcoded paths above; ui_test_results.txt is a fresh
+# artifact every UI test batch run
+__pycache__/
+Content/Python/test_output/

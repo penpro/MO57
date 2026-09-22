@@ -45,7 +45,12 @@
       "mcp__mcp-registry__suggest_connectors",
       "mcp__scheduled-tasks__create_scheduled_task",
       "mcp__scheduled-tasks__list_scheduled_tasks",
-      "mcp__scheduled-tasks__update_scheduled_task"
+      "mcp__scheduled-tasks__update_scheduled_task",
+      "PowerShell(Get-Process UnrealEditor -ErrorAction SilentlyContinue)"
     ]
-  }
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "unreal-mcp"
+  ]
 }
