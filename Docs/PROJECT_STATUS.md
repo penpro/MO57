@@ -2,6 +2,20 @@
 
 *Last updated: June 11, 2026 (full re-audit). Single source of truth for metrics, progress, and tracked issues.*
 
+*Freshness note (2026-09-22): the metrics/audit-tracker content below is the
+June 11 re-audit and is stale in places — individual H/C/M items were
+corrected inline as they were re-verified (search for "FIXED" / "STILL OPEN"
+dates), but whole tracks below have moved past this doc entirely. Two systems
+with substantial post-June work tracked elsewhere, not reconciled into this
+file:*
+- *Terraform excavation (unit 3, designation-based pawn digging): see
+  `Docs/Terraform_Excavation_Plan.md`. Stages 1/1b/2/3 shipped; 4-7 pending.*
+- *UI consolidation: see `Docs/agent/ui/{SESSION_STATE,MIGRATION_PLAN,TOUCH_LOG}.md`
+  — a DIFFERENT, newer plan than the "UI Refactor Track" table immediately
+  below, which predates it and was superseded rather than followed. Stages
+  0-3 shipped (catalog/list consolidation, CommonUI lifecycle fixes, queue
+  presentation); Stage 4 (skills/knowledge/quests) is next.*
+
 ---
 
 ## Codebase Metrics
@@ -50,7 +64,7 @@ an informational `Data:Art` line without failing the standing gate.
 | 2 | Python WBP Batch Generator | COMPLETE |
 | 3A | CommonUI Layer Stack + Validation Tests | COMPLETE |
 
-### UI Refactor Track (NOT STARTED)
+### UI Refactor Track (this specific plan: NOT STARTED — superseded, see freshness note above)
 
 | Stage | Name | Key Work |
 |-------|------|----------|
