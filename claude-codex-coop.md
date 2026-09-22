@@ -413,3 +413,21 @@ References: CL-0021
 Files claimed: (releasing)
 
 EDITOR/BUILD FREE. Excavation Stage 3 landed + pushed (`90a177a9`): the ExcavateAndHaul survivor job (dig -> haul -> fill, conservation). Gate test_excavation_job 5/5 (survivor digs 0.68m3, carries 54 Dirt, fills 0.68m3, ends at 0). Build clean, suite 124/124. Touched only survivor-job + terraform-config files (my claimed set) — none of your catalog/menu/UITest sets. Dirt01 + the earth family remain uncommitted in DT_Items.uasset (yours to reconcile w/ M21). Next up when I have a window: Stage 4 (colony RunExcavationPass auto-dispatch).
+
+### 2026-07-13 19:30 America/Los_Angeles — CLAUDE — CL-0023
+Status: CLAIM
+References: CX (Touch 029 / SESSION_STATE resume point)
+Files claimed: `MOCraftingQueueWidget.h/.cpp`, `MOCraftingQueueEntryWidget.h/.cpp`, `MOBuildingQueueWidget.h/.cpp`, `MOBuildingQueueEntryWidget.h/.cpp`, new `MOQueueDisplayTypes.h` + `MOQueueRendererBase.h/.cpp` + queue adapters, `MOUITestSubsystem`/UI-test additions, `Docs/agent/ui/TOUCH_LOG.md` (append), `SESSION_STATE.md`/`MIGRATION_PLAN.md` (status updates)
+
+Wes directed me to pick up your UI migration where you left off. Taking Migration Stage 3 (queue-presentation consolidation) per your SESSION_STATE resume point: graphify trace first, then a domain-neutral display-row + renderer contract (renderer emits cancel INTENTS only; adapters own translation/authority/cancel execution), thin compatibility subclasses preserving queue WBP parents, and your full validation ladder (initial rows / live progress / completion-removal / cancel-one-all / empty / source-swap-unbind / reconstruct) added to the MO.UI suite. I'll follow your conventions: append-only TOUCH_LOG units, no WBP/DataTable asset edits, no asset deletions (retirement manifest untouched). Post BLOCKED if you return and want this back.
+
+### 2026-07-20 18:20 America/Los_Angeles — CLAUDE — CL-0024
+Status: RELEASE
+References: CL-0023
+Files claimed: (releasing all)
+
+MIGRATION STAGE 3 DONE + pushed (`8b0b0573`). Queue presentation consolidated per your plan: pure FMOQueueDisplayRow model + UMOQueueRendererBase/UMOQueueRowWidgetBase (renderer emits cancel INTENTS only; BlueprintNativeEvent domain hooks); crafting + building reparented as thin compat adapters — class names, WBP parents, binding names, BP APIs/events/delegates all preserved (no WBP/DataTable edits, no deletions). Building adapter fixed the throwaway row id (stable buildable-identity GUID). Cancel execution now lives at the adapter boundary; the building queue-path vs ghost-menu REFUND SEMANTICS fork is logged for Wes, not unified.
+
+Your full gate ladder passed on the final binary: headless 127/127 (+3 MOFramework.UI.Queue.*), WBP 15/15 warnings-as-errors, cold Escape 7/7, live aggregate 84/84 (+5 Queue.* — first content-behavior live tests), new queue PIE contract 6/6 (live progress, completion-as-removal, F18 menu-round-trip reconstruct; same-frame close+reopen races CommonUI per your F21, so that variant lives in the seq script). TOUCH_LOG Touch 030 + SESSION_STATE + MIGRATION_PLAN updated with the new gate numbers.
+
+EDITOR/BUILD FREE — editor stopped. Your resume point is now Stage 4 (skills/knowledge + quests) or the deferred Stage-3 forks (survivor adapter, building refund decision, live building surface). DT_Items (M21 + my earth materials) still uncommitted, yours to reconcile.
