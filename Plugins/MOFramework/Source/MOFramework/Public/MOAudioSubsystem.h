@@ -360,6 +360,16 @@ protected:
 	/** Apply current volume value to a SoundClass. */
 	void ApplyVolumeToSoundClass(USoundClass* SoundClass, float Volume);
 
+	/**
+	 * Push MasterVolume to the audio device's transient primary volume — a
+	 * SEPARATE engine-level multiplier from the SoundClass mix (it "multiplies
+	 * with all other volume settings" per FAudioDevice's own contract). Called
+	 * from both Initialize (boot) and SetMasterVolume (live) so this stays in
+	 * sync wherever MasterVolume is set, instead of only when the Options panel's
+	 * Apply flow happens to also call MOGameSettings::ApplyAudioSettings.
+	 */
+	void ApplyMasterVolumeToAudioDevice() const;
+
 	// =========================================================================
 	// INTERNAL — spatialization
 	// =========================================================================

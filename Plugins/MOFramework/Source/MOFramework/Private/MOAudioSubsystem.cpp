@@ -9,6 +9,7 @@
 #include "MOGameSettings.h"
 #include "MOMainMenuGameMode.h"
 
+#include "AudioDevice.h"
 #include "Camera/PlayerCameraManager.h"
 #include "Components/AudioComponent.h"
 #include "Engine/AssetManager.h"
@@ -69,6 +70,14 @@ void UMOAudioSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 		SFXVolume = FMath::Clamp(UserSettings->SFXVolume, 0.0f, 1.0f);
 		WeatherVolume = FMath::Clamp(UserSettings->WeatherVolume, 0.0f, 1.0f);
 	}
+
+	// (H9 follow-up) The block above only fixed the SoundClass-based per-category
+	// mix. MasterVolume ALSO drives a separate engine-level multiplier — the audio
+	// device's transient primary volume — which MOGameSettings::ApplyAudioSettings
+	// pushes, but nothing calls that at boot (only the Options panel's Apply flow
+	// does). Without this, the device stayed at its own default (full volume) every
+	// session until Options was opened once, regardless of the saved Master slider.
+	ApplyMasterVolumeToAudioDevice();
 
 	// Try to load the default audio bank if configured. Lazy — if it's
 	// not set, we just don't have a bank; playback no-ops cleanly.
@@ -579,7 +588,17 @@ void UMOAudioSubsystem::SetMasterVolume(float Volume)
 	ApplyVolumeToSoundClass(GetSoundClassForCategory(EMOAudioCategory::Ambient), AmbientVolume * MasterVolume);
 	ApplyVolumeToSoundClass(GetSoundClassForCategory(EMOAudioCategory::SFX), SFXVolume * MasterVolume);
 	ApplyVolumeToSoundClass(GetSoundClassForCategory(EMOAudioCategory::UI), UIVolume * MasterVolume);
+	ApplyMasterVolumeToAudioDevice();
 	UE_LOG(LogMOFramework, Log, TEXT("[MOAudio] MasterVolume -> %.2f"), MasterVolume);
+}
+
+void UMOAudioSubsystem::ApplyMasterVolumeToAudioDevice() const
+{
+	if (FAudioDeviceHandle AudioDevice = GEngine ? GEngine->GetMainAudioDevice() : FAudioDeviceHandle())
+	{
+		AudioDevice->SetTransientPrimaryVolume(MasterVolume);
+		UE_LOG(LogMOFramework, Log, TEXT("[MOAudio] AudioDevice transient primary volume -> %.2f"), MasterVolume);
+	}
 }
 
 void UMOAudioSubsystem::SetMusicVolume(float Volume)
