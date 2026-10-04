@@ -3,7 +3,7 @@
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
 
-bool UMOTravelUtils::TravelToGameplayLevel(UObject* WorldContextObject, const FString& LevelPath)
+bool UMOTravelUtils::TravelToGameplayLevel(UObject* WorldContextObject, const FString& LevelPath, bool bAsListenServer)
 {
 	UWorld* World = WorldContextObject ? WorldContextObject->GetWorld() : nullptr;
 	if (!World || LevelPath.IsEmpty())
@@ -15,6 +15,16 @@ bool UMOTravelUtils::TravelToGameplayLevel(UObject* WorldContextObject, const FS
 	switch (World->GetNetMode())
 	{
 	case NM_Standalone:
+		if (bAsListenServer)
+		{
+			// Becoming a host: the "listen" URL option is what makes OpenLevel
+			// spin up a net driver and flip Standalone -> ListenServer in one
+			// travel. Every travel AFTER this one lands in the branch below
+			// and uses ServerTravel instead, keeping the session intact.
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOTravel] OpenLevel (standalone -> listen server): %s"), *LevelPath);
+			UGameplayStatics::OpenLevel(WorldContextObject, FName(*LevelPath), true, TEXT("listen"));
+			return true;
+		}
 		// Single-player: identical to the pre-2026-07 behavior.
 		UE_LOG(LogMOFramework, Log, TEXT("[MOTravel] OpenLevel (standalone): %s"), *LevelPath);
 		UGameplayStatics::OpenLevel(WorldContextObject, FName(*LevelPath));

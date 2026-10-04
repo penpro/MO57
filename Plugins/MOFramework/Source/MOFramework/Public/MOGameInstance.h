@@ -111,6 +111,18 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO|LoadingScreen")
 	bool IsLoadingOverlayVisible() const;
 
+	/**
+	 * Immediately remove the loading overlay outside the normal level-transition
+	 * flow. DismissLoadingScreen() gates on bWaitingForManualDismiss, which is
+	 * only ever set by an actual level transition (BeginLoadingScreen via the
+	 * PreLoadMap delegate) — so it silently no-ops for a caller that showed the
+	 * overlay directly and then hit an error before any travel happened (e.g.
+	 * AMOMainMenuPlayerController::HostSession failing before CreateSession
+	 * completes). Use this instead in that situation.
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|LoadingScreen")
+	void HideLoadingOverlayImmediate();
+
 protected:
 	/** Called before a map starts loading. */
 	UFUNCTION()

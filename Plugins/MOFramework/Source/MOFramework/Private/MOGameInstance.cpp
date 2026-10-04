@@ -211,3 +211,14 @@ bool UMOGameInstance::IsLoadingOverlayVisible() const
 {
 	return LoadingOverlayWidget && LoadingOverlayWidget->IsOverlayVisible();
 }
+
+void UMOGameInstance::HideLoadingOverlayImmediate()
+{
+	if (LoadingOverlayWidget)
+	{
+		LoadingOverlayWidget->RemoveFromParent();
+		LoadingOverlayWidget = nullptr;
+	}
+
+	bWaitingForManualDismiss = false;
+}
