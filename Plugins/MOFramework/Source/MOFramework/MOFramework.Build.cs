@@ -110,7 +110,9 @@ public class MOFramework : ModuleRules
 				"Media",        // Required for UMediaPlayer (intro video)
 				"MediaAssets",  // Required for UMediaSource, UMediaTexture
 				"AudioMixer",   // Required for UMediaSoundComponent (inherits USynthComponent)
-				"MoviePlayer"   // Required for loading screen during level transitions
+				"MoviePlayer",  // Required for loading screen during level transitions
+				"OnlineSubsystem",       // IOnlineSubsystem/IOnlineSession abstraction (MOSessionSubsystem)
+				"OnlineSubsystemUtils"   // FOnlineSessionSettings/FOnlineSessionSearch helpers
 			}
 			);
 
