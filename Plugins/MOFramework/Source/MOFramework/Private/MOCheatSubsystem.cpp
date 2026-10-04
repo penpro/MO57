@@ -24,6 +24,8 @@
 #include "MOCharacterHistoryComponent.h"
 #include "MOColonyOverviewWidget.h"
 #include "MOSurvivorController.h"
+#include "MOSessionSubsystem.h"
+#include "MOMainMenuPlayerController.h"
 #include "MOGameUIManagerSubsystem.h"
 #include "MOPrimaryGameLayout.h"
 #include "MOIdentityComponent.h"
@@ -3094,6 +3096,119 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 				TEXT("[MO.AI.StressSpawn] Done. Total added: %d (%d Prey + %d Predator) "
 				     "in ring [%.0f-%.0f]cm. Run MO.AI.DumpFreezeState to see them."),
 				PreyCount + PredatorCount, PreyCount, PredatorCount, MinRadius, MaxRadius);
+		}),
+		ECVF_Default));
+
+	// =========================================================================
+	// MO.Session.* — dev verbs for UMOSessionSubsystem (Host/Find/Join), added
+	// so the Steam session plumbing can be driven and verified before the
+	// Multiplayer UI panel exists. Host goes through AMOMainMenuPlayerController
+	// (the only thing that knows GameplayLevelPath) so it exercises the exact
+	// call the real Host button makes; Find/Join go straight to the subsystem
+	// since neither needs level-path knowledge. All three are async — there's
+	// nothing to print synchronously here, watch the [MOSession] log lines
+	// (HandleFindSessionsComplete logs one line per result, including the
+	// index to pass to MO.Session.Join).
+	// =========================================================================
+
+	// ---------- MO.Session.Host <DisplayName> [MaxPlayers=4] ----------
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Session.Host"),
+		TEXT("Dev: host a co-op session (must be at the main menu). Usage: MO.Session.Host <DisplayName> [MaxPlayers=4]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			if (Args.Num() < 1)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] SESSION Host usage: <DisplayName> [MaxPlayers=4]"));
+				return;
+			}
+			AMOMainMenuPlayerController* MenuPC = World ? Cast<AMOMainMenuPlayerController>(World->GetFirstPlayerController()) : nullptr;
+			if (!MenuPC)
+			{
+				UE_LOG(LogMOFramework, Warning,
+					TEXT("[MOQUERY] SESSION Host FAILED: no AMOMainMenuPlayerController in this world — hosting starts a fresh world from the main menu, run this there"));
+				return;
+			}
+			const FString DisplayName = Args[0];
+			const int32 MaxPlayers = Args.Num() > 1 ? FCString::Atoi(*Args[1]) : 4;
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] SESSION Host '%s' (max %d) — watch for [MOSession] log lines"), *DisplayName, MaxPlayers);
+			MenuPC->HostSession(DisplayName, MaxPlayers);
+		}),
+		ECVF_Default));
+
+	// ---------- MO.Session.Find ----------
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Session.Find"),
+		TEXT("Dev: search for joinable sessions. Usage: MO.Session.Find"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			UMOSessionSubsystem* Sessions = UMOSessionSubsystem::Get(World);
+			if (!Sessions)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] SESSION Find FAILED: no session subsystem"));
+				return;
+			}
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] SESSION Find — watch for [MOSession] log lines"));
+			Sessions->FindSessions();
+		}),
+		ECVF_Default));
+
+	// ---------- MO.Session.Join <ResultIndex> ----------
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Session.Join"),
+		TEXT("Dev: join a session found by MO.Session.Find. Usage: MO.Session.Join <ResultIndex>"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			if (Args.Num() < 1)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] SESSION Join usage: <ResultIndex> (run MO.Session.Find first)"));
+				return;
+			}
+			UMOSessionSubsystem* Sessions = UMOSessionSubsystem::Get(World);
+			if (!Sessions)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] SESSION Join FAILED: no session subsystem"));
+				return;
+			}
+			const int32 Index = FCString::Atoi(*Args[0]);
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] SESSION Join index=%d — watch for [MOSession] log lines"), Index);
+			Sessions->JoinSessionByIndex(Index);
+		}),
+		ECVF_Default));
+
+	// ---------- MO.Session.Leave ----------
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Session.Leave"),
+		TEXT("Dev: destroy/leave the current session. Usage: MO.Session.Leave"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			UMOSessionSubsystem* Sessions = UMOSessionSubsystem::Get(World);
+			if (!Sessions)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] SESSION Leave FAILED: no session subsystem"));
+				return;
+			}
+			Sessions->LeaveSession();
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] SESSION Leave requested"));
+		}),
+		ECVF_Default));
+
+	// ---------- MO.Session.Status ----------
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Session.Status"),
+		TEXT("Dev: print online subsystem + session state. Usage: MO.Session.Status"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			UMOSessionSubsystem* Sessions = UMOSessionSubsystem::Get(World);
+			if (!Sessions)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] SESSION Status FAILED: no session subsystem"));
+				return;
+			}
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] SESSION Status: subsystem=%s activeSession=%s searching=%s"),
+				Sessions->IsUsingRealOnlineSubsystem() ? TEXT("Steam") : TEXT("Null/offline"),
+				Sessions->HasActiveSession() ? TEXT("yes") : TEXT("no"),
+				Sessions->IsSearchInProgress() ? TEXT("yes") : TEXT("no"));
 		}),
 		ECVF_Default));
 }

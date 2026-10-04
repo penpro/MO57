@@ -25,6 +25,9 @@
  *   MO.Audio.*        — audio bank (Info, AmbientVolume, ...)
  *   MO.AI.*           — spawn-manager freeze pipeline (DumpFreezeState,
  *                       ForceFreezeAll, ForceWakeAll, StressSpawn)
+ *   MO.Session.*      — UMOSessionSubsystem dev verbs (Host, Find, Join,
+ *                       Leave, Status) — drives Host/Find/Join without the
+ *                       Multiplayer UI panel; see MOSessionSubsystem.h
  *
  * Per-system debug commands (MO.UI.*, MO.Harvest.*) live in their respective
  * subsystems — this file is only for cross-cutting cheats that need access
