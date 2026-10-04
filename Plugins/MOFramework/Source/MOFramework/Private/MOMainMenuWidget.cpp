@@ -5,6 +5,7 @@
 #include "MONewGamePanel.h"
 #include "MOLoadPanel.h"
 #include "MOOptionsPanel.h"
+#include "MOMultiplayerPanel.h"
 #include "Components/PanelWidget.h"
 #include "Components/TextBlock.h"
 #include "Components/WidgetSwitcher.h"
@@ -74,6 +75,14 @@ void UMOMainMenuWidget::NativeConstruct()
 					UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] Found OptionsPanel by type at index %d"), i);
 				}
 			}
+			if (!MultiplayerPanel)
+			{
+				if (UMOMultiplayerPanel* FoundMultiplayerPanel = Cast<UMOMultiplayerPanel>(Widget))
+				{
+					MultiplayerPanel = FoundMultiplayerPanel;
+					UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] Found MultiplayerPanel by type at index %d"), i);
+				}
+			}
 		}
 	}
 
@@ -120,6 +129,10 @@ void UMOMainMenuWidget::NativeDestruct()
 	{
 		ExitGameButton->OnClicked().RemoveAll(this);
 	}
+	if (MultiplayerButton)
+	{
+		MultiplayerButton->OnClicked().RemoveAll(this);
+	}
 
 	// Clean up panel delegate bindings
 	if (NewGamePanel)
@@ -135,6 +148,11 @@ void UMOMainMenuWidget::NativeDestruct()
 	if (OptionsPanel)
 	{
 		OptionsPanel->OnRequestClose.RemoveDynamic(this, &UMOMainMenuWidget::HandlePanelRequestClose);
+	}
+	if (MultiplayerPanel)
+	{
+		MultiplayerPanel->OnRequestClose.RemoveDynamic(this, &UMOMainMenuWidget::HandlePanelRequestClose);
+		MultiplayerPanel->OnHostRequested.RemoveDynamic(this, &UMOMainMenuWidget::HandleMultiplayerHostRequested);
 	}
 
 	Super::NativeDestruct();
@@ -202,6 +220,25 @@ void UMOMainMenuWidget::ShowLoadPanel()
 	if (LoadPanel)
 	{
 		LoadPanel->RefreshSaveList();
+	}
+}
+
+void UMOMainMenuWidget::ShowMultiplayerPanel()
+{
+	UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] ShowMultiplayerPanel called"));
+	SwitchToPanel(PanelIndex_Multiplayer);
+
+	if (MultiplayerPanel)
+	{
+		MultiplayerPanel->ShowHostTab();
+	}
+}
+
+void UMOMainMenuWidget::NotifyHostSessionResult(bool bSuccess, const FString& ErrorMessage)
+{
+	if (MultiplayerPanel)
+	{
+		MultiplayerPanel->NotifyHostResult(bSuccess, ErrorMessage);
 	}
 }
 
@@ -282,6 +319,14 @@ void UMOMainMenuWidget::BindButtonEvents()
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOMainMenuWidget] ExitGameButton is NULL"));
 	}
 
+	// Multiplayer button (optional)
+	if (MultiplayerButton)
+	{
+		MultiplayerButton->OnClicked().RemoveAll(this);
+		MultiplayerButton->OnClicked().AddUObject(this, &UMOMainMenuWidget::HandleMultiplayerClicked);
+		UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] MultiplayerButton bound"));
+	}
+
 	// Bind panel delegates
 	if (NewGamePanel)
 	{
@@ -311,6 +356,15 @@ void UMOMainMenuWidget::BindButtonEvents()
 		OptionsPanel->OnRequestClose.RemoveDynamic(this, &UMOMainMenuWidget::HandlePanelRequestClose);
 		OptionsPanel->OnRequestClose.AddDynamic(this, &UMOMainMenuWidget::HandlePanelRequestClose);
 		UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] OptionsPanel bound"));
+	}
+
+	if (MultiplayerPanel)
+	{
+		MultiplayerPanel->OnRequestClose.RemoveDynamic(this, &UMOMainMenuWidget::HandlePanelRequestClose);
+		MultiplayerPanel->OnHostRequested.RemoveDynamic(this, &UMOMainMenuWidget::HandleMultiplayerHostRequested);
+		MultiplayerPanel->OnRequestClose.AddDynamic(this, &UMOMainMenuWidget::HandlePanelRequestClose);
+		MultiplayerPanel->OnHostRequested.AddDynamic(this, &UMOMainMenuWidget::HandleMultiplayerHostRequested);
+		UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] MultiplayerPanel bound"));
 	}
 }
 
@@ -354,6 +408,12 @@ void UMOMainMenuWidget::HandleOptionsClicked()
 	ShowOptionsPanel();
 }
 
+void UMOMainMenuWidget::HandleMultiplayerClicked()
+{
+	UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] Multiplayer button clicked"));
+	ShowMultiplayerPanel();
+}
+
 void UMOMainMenuWidget::HandleExitGameClicked()
 {
 	UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] Exit Game button clicked"));
@@ -380,4 +440,14 @@ void UMOMainMenuWidget::HandleNewGamePanelStartRequested()
 
 	// Broadcast the new game request - controller will handle level load
 	OnNewGameRequested.Broadcast();
+}
+
+void UMOMainMenuWidget::HandleMultiplayerHostRequested(const FString& DisplayName, int32 MaxPlayers)
+{
+	UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] Host requested: '%s' (max %d)"), *DisplayName, MaxPlayers);
+
+	// Unlike New Game, do NOT close the panel here — CreateSession is async and
+	// can fail (e.g. Steam unavailable). The panel stays open showing "Creating
+	// session..." until the controller calls back via NotifyHostSessionResult.
+	OnHostSessionRequested.Broadcast(DisplayName, MaxPlayers);
 }

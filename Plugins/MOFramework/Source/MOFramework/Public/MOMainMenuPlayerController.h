@@ -133,6 +133,14 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|MainMenu")
 	void LoadGame(const FString& SlotName);
 
+	/**
+	 * Host a co-op session — creates an online session (via UMOSessionSubsystem)
+	 * and, once that succeeds, travels into GameplayLevelPath as a listen
+	 * server. See MOSessionSubsystem.h for the Host/Find/Join contract.
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|MainMenu")
+	void HostSession(const FString& SessionDisplayName, int32 MaxPlayers);
+
 	/** Exit the game. */
 	UFUNCTION(BlueprintCallable, Category="MO|MainMenu")
 	void ExitGame();
@@ -172,6 +180,14 @@ protected:
 	UFUNCTION()
 	void HandleExitGameRequested();
 
+	/** Called when a co-op host is requested from the Multiplayer panel. */
+	UFUNCTION()
+	void HandleHostSessionRequested(const FString& DisplayName, int32 MaxPlayers);
+
+	/** Called when UMOSessionSubsystem::HostSession's CreateSession resolves. */
+	UFUNCTION()
+	void HandleHostSessionComplete(bool bSuccess, const FString& ErrorMessage);
+
 	// ============================================================================
 	// MEDIA CALLBACKS
 	// ============================================================================
@@ -196,6 +212,13 @@ protected:
 
 	/** Get or create the media source for the intro video. */
 	UMediaSource* GetOrCreateIntroMediaSource();
+
+	/**
+	 * Shared "does GameplayLevelPath actually exist" guard — StartNewGame,
+	 * LoadGame, and HostSession all travel there and need the same check.
+	 * Logs + shows an on-screen error and returns false if missing.
+	 */
+	bool ValidateGameplayLevelExists() const;
 
 private:
 	// ============================================================================

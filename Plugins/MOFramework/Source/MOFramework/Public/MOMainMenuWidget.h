@@ -53,11 +53,13 @@ class UWidgetSwitcher;
 class UMOLoadPanel;
 class UMOOptionsPanel;
 class UMONewGamePanel;
+class UMOMultiplayerPanel;
 class UPanelWidget;
 class UTextBlock;
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOMainMenuNewGameSignature);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOMainMenuLoadGameSignature, const FString&, SlotName);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOMainMenuExitGameSignature);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOMainMenuHostSessionSignature, const FString&, DisplayName, int32, MaxPlayers);
 
 UCLASS(Abstract, Blueprintable)
 class MOFRAMEWORK_API UMOMainMenuWidget : public UMOActivatableWidget
@@ -83,6 +85,10 @@ public:
 	UPROPERTY(BlueprintAssignable, Category="MO|MainMenu")
 	FMOMainMenuExitGameSignature OnExitGameRequested;
 
+	/** Called when a co-op session host is requested from the Multiplayer panel. */
+	UPROPERTY(BlueprintAssignable, Category="MO|MainMenu")
+	FMOMainMenuHostSessionSignature OnHostSessionRequested;
+
 	// ============================================================================
 	// PANEL CONTROL
 	// ============================================================================
@@ -98,6 +104,18 @@ public:
 	/** Show the load panel in the focus window. */
 	UFUNCTION(BlueprintCallable, Category="MO|MainMenu")
 	void ShowLoadPanel();
+
+	/** Show the multiplayer host/join panel in the focus window. */
+	UFUNCTION(BlueprintCallable, Category="MO|MainMenu")
+	void ShowMultiplayerPanel();
+
+	/**
+	 * Forward a host-attempt result from the controller back to the open
+	 * Multiplayer panel (so it can un-stick its Host button on failure).
+	 * No-op if the panel isn't currently the open one.
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|MainMenu")
+	void NotifyHostSessionResult(bool bSuccess, const FString& ErrorMessage);
 
 	/** Close the current focus panel (return to none). */
 	UFUNCTION(BlueprintCallable, Category="MO|MainMenu")
@@ -131,6 +149,7 @@ private:
 	UFUNCTION() void HandleNewGameClicked();
 	UFUNCTION() void HandleLoadGameClicked();
 	UFUNCTION() void HandleOptionsClicked();
+	UFUNCTION() void HandleMultiplayerClicked();
 	UFUNCTION() void HandleExitGameClicked();
 
 	// ============================================================================
@@ -140,6 +159,7 @@ private:
 	UFUNCTION() void HandlePanelRequestClose();
 	UFUNCTION() void HandleLoadPanelLoadRequested(const FString& SlotName);
 	UFUNCTION() void HandleNewGamePanelStartRequested();
+	UFUNCTION() void HandleMultiplayerHostRequested(const FString& DisplayName, int32 MaxPlayers);
 
 	// ============================================================================
 	// INTERNAL
@@ -168,6 +188,10 @@ private:
 	UPROPERTY(meta=(BindWidget))
 	TObjectPtr<UMOCommonButton> OptionsButton;
 
+	/** Multiplayer button - opens Host/Join panel. */
+	UPROPERTY(meta=(BindWidgetOptional))
+	TObjectPtr<UMOCommonButton> MultiplayerButton;
+
 	/** Exit Game button - quits application. */
 	UPROPERTY(meta=(BindWidget))
 	TObjectPtr<UMOCommonButton> ExitGameButton;
@@ -178,6 +202,7 @@ private:
 	 * Index 1: New Game panel (seed configuration)
 	 * Index 2: Load panel
 	 * Index 3: Options panel
+	 * Index 4: Multiplayer panel (host/join)
 	 */
 	UPROPERTY(meta=(BindWidget))
 	TObjectPtr<UWidgetSwitcher> FocusWindowSwitcher;
@@ -197,6 +222,10 @@ private:
 	/** Options panel (optional - can be added directly to switcher in WBP). */
 	UPROPERTY(meta=(BindWidgetOptional))
 	TObjectPtr<UMOOptionsPanel> OptionsPanel;
+
+	/** Multiplayer host/join panel (optional - can be added directly to switcher in WBP). */
+	UPROPERTY(meta=(BindWidgetOptional))
+	TObjectPtr<UMOMultiplayerPanel> MultiplayerPanel;
 
 	/**
 	 * Optional text block showing project version + commit hash + branch.
@@ -220,4 +249,5 @@ private:
 	static constexpr int32 PanelIndex_NewGame = 1;
 	static constexpr int32 PanelIndex_Load = 2;
 	static constexpr int32 PanelIndex_Options = 3;
+	static constexpr int32 PanelIndex_Multiplayer = 4;
 };

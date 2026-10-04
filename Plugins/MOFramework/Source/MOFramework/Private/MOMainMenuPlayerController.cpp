@@ -8,6 +8,7 @@
 #include "MOGameInstance.h"
 #include "MOGameUIManagerSubsystem.h"
 #include "MOPrimaryGameLayout.h"
+#include "MOSessionSubsystem.h"
 #include "Blueprint/UserWidget.h"
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetSystemLibrary.h"
@@ -134,6 +135,7 @@ void AMOMainMenuPlayerController::ShowMainMenu()
 			MainMenuWidget->OnNewGameRequested.AddDynamic(this, &AMOMainMenuPlayerController::HandleNewGameRequested);
 			MainMenuWidget->OnLoadGameRequested.AddDynamic(this, &AMOMainMenuPlayerController::HandleLoadGameRequested);
 			MainMenuWidget->OnExitGameRequested.AddDynamic(this, &AMOMainMenuPlayerController::HandleExitGameRequested);
+			MainMenuWidget->OnHostSessionRequested.AddDynamic(this, &AMOMainMenuPlayerController::HandleHostSessionRequested);
 
 			UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuPlayerController] Main menu pushed to Menu layer"));
 			return;
@@ -161,6 +163,7 @@ void AMOMainMenuPlayerController::ShowMainMenu()
 		MainMenuWidget->OnNewGameRequested.AddDynamic(this, &AMOMainMenuPlayerController::HandleNewGameRequested);
 		MainMenuWidget->OnLoadGameRequested.AddDynamic(this, &AMOMainMenuPlayerController::HandleLoadGameRequested);
 		MainMenuWidget->OnExitGameRequested.AddDynamic(this, &AMOMainMenuPlayerController::HandleExitGameRequested);
+		MainMenuWidget->OnHostSessionRequested.AddDynamic(this, &AMOMainMenuPlayerController::HandleHostSessionRequested);
 	}
 }
 
@@ -296,31 +299,38 @@ void AMOMainMenuPlayerController::SkipIntroVideo()
 	}
 }
 
-void AMOMainMenuPlayerController::StartNewGame()
+bool AMOMainMenuPlayerController::ValidateGameplayLevelExists() const
 {
-	UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuPlayerController] Starting new game"));
-
-	// Verify the gameplay level exists before attempting travel
 	FString LevelPackagePath = GameplayLevelPath;
 	if (!LevelPackagePath.StartsWith(TEXT("/Game/")))
 	{
 		LevelPackagePath = FString::Printf(TEXT("/Game/%s"), *GameplayLevelPath);
 	}
 
-	// Check if level package exists
-	if (!FPackageName::DoesPackageExist(LevelPackagePath))
+	if (FPackageName::DoesPackageExist(LevelPackagePath))
 	{
-		UE_LOG(LogMOFramework, Error, TEXT("[MOMainMenuPlayerController] Gameplay level not found: %s"), *LevelPackagePath);
-		UE_LOG(LogMOFramework, Error, TEXT("[MOMainMenuPlayerController] Make sure the level is included in packaging settings (MapsToCook or DirectoriesToAlwaysCook)"));
+		return true;
+	}
+
+	UE_LOG(LogMOFramework, Error, TEXT("[MOMainMenuPlayerController] Gameplay level not found: %s"), *LevelPackagePath);
+	UE_LOG(LogMOFramework, Error, TEXT("[MOMainMenuPlayerController] Make sure the level is included in packaging settings (MapsToCook or DirectoriesToAlwaysCook)"));
 
 #if !UE_BUILD_SHIPPING
-		// Show error to user via on-screen message
-		if (GEngine)
-		{
-			GEngine->AddOnScreenDebugMessage(-1, 10.0f, FColor::Red,
-				FString::Printf(TEXT("ERROR: Level '%s' not found! Check packaging settings."), *GameplayLevelPath));
-		}
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 10.0f, FColor::Red,
+			FString::Printf(TEXT("ERROR: Level '%s' not found! Check packaging settings."), *GameplayLevelPath));
+	}
 #endif
+	return false;
+}
+
+void AMOMainMenuPlayerController::StartNewGame()
+{
+	UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuPlayerController] Starting new game"));
+
+	if (!ValidateGameplayLevelExists())
+	{
 		return;
 	}
 
@@ -358,26 +368,8 @@ void AMOMainMenuPlayerController::LoadGame(const FString& SlotName)
 {
 	UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuPlayerController] Loading game from slot: %s"), *SlotName);
 
-	// Verify the gameplay level exists before attempting travel
-	FString LevelPackagePath = GameplayLevelPath;
-	if (!LevelPackagePath.StartsWith(TEXT("/Game/")))
+	if (!ValidateGameplayLevelExists())
 	{
-		LevelPackagePath = FString::Printf(TEXT("/Game/%s"), *GameplayLevelPath);
-	}
-
-	// Check if level package exists
-	if (!FPackageName::DoesPackageExist(LevelPackagePath))
-	{
-		UE_LOG(LogMOFramework, Error, TEXT("[MOMainMenuPlayerController] Gameplay level not found: %s"), *LevelPackagePath);
-
-#if !UE_BUILD_SHIPPING
-		// Show error to user
-		if (GEngine)
-		{
-			GEngine->AddOnScreenDebugMessage(-1, 10.0f, FColor::Red,
-				FString::Printf(TEXT("ERROR: Level '%s' not found! Check packaging settings."), *GameplayLevelPath));
-		}
-#endif
 		return;
 	}
 
@@ -406,6 +398,103 @@ void AMOMainMenuPlayerController::LoadGame(const FString& SlotName)
 		2.0f,  // 2 second delay - let player read loading screen
 		false
 	);
+}
+
+void AMOMainMenuPlayerController::HostSession(const FString& SessionDisplayName, int32 MaxPlayers)
+{
+	UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuPlayerController] HostSession requested: '%s' (max %d)"),
+		*SessionDisplayName, MaxPlayers);
+
+	if (!ValidateGameplayLevelExists())
+	{
+		if (MainMenuWidget)
+		{
+			MainMenuWidget->NotifyHostSessionResult(false, TEXT("Gameplay level not found."));
+		}
+		return;
+	}
+
+	UMOSessionSubsystem* SessionSubsystem = UMOSessionSubsystem::Get(this);
+	if (!SessionSubsystem)
+	{
+		UE_LOG(LogMOFramework, Error, TEXT("[MOMainMenuPlayerController] HostSession: no session subsystem"));
+		if (MainMenuWidget)
+		{
+			MainMenuWidget->NotifyHostSessionResult(false, TEXT("No online subsystem available."));
+		}
+		return;
+	}
+
+	// Hosting always starts a fresh world — same pending-new-game setup as
+	// StartNewGame; "host an existing save" is a future feature.
+	UMOGameSettings* Settings = UMOGameSettings::GetMOGameSettings();
+	if (Settings)
+	{
+		Settings->bPendingNewGame = true;
+		Settings->bIsLoadingIntoGameplay = true;
+		Settings->PendingNewGameSlot = FString::Printf(TEXT("World_%s"), *FDateTime::Now().ToString(TEXT("%Y%m%d_%H%M%S")));
+		Settings->SaveSettings();
+	}
+
+	// Show the loading overlay now — CreateSession's own round-trip to Steam
+	// provides the visible wait; unlike StartNewGame/LoadGame there's no
+	// separate artificial delay timer here, and no ExecuteDelayedLevelLoad —
+	// UMOSessionSubsystem drives the actual travel itself once CreateSession
+	// succeeds (TravelToGameplayLevel with bAsListenServer=true).
+	if (UMOGameInstance* GameInstance = Cast<UMOGameInstance>(GetGameInstance()))
+	{
+		GameInstance->ShowLoadingOverlay();
+	}
+
+	SessionSubsystem->OnHostComplete.RemoveDynamic(this, &AMOMainMenuPlayerController::HandleHostSessionComplete);
+	SessionSubsystem->OnHostComplete.AddDynamic(this, &AMOMainMenuPlayerController::HandleHostSessionComplete);
+	SessionSubsystem->HostSession(SessionDisplayName, MaxPlayers, GameplayLevelPath);
+}
+
+void AMOMainMenuPlayerController::HandleHostSessionComplete(bool bSuccess, const FString& ErrorMessage)
+{
+	if (UMOSessionSubsystem* SessionSubsystem = UMOSessionSubsystem::Get(this))
+	{
+		SessionSubsystem->OnHostComplete.RemoveDynamic(this, &AMOMainMenuPlayerController::HandleHostSessionComplete);
+	}
+
+	if (MainMenuWidget)
+	{
+		MainMenuWidget->NotifyHostSessionResult(bSuccess, ErrorMessage);
+	}
+
+	if (bSuccess)
+	{
+		// Travel is already underway (UMOSessionSubsystem drives it once
+		// CreateSession succeeds) — nothing further to do here.
+		return;
+	}
+
+	UE_LOG(LogMOFramework, Error, TEXT("[MOMainMenuPlayerController] HostSession failed: %s"), *ErrorMessage);
+
+	// Undo the pending-new-game state and drop the loading overlay so the
+	// player isn't stuck staring at a black screen after a failed host attempt.
+	if (UMOGameSettings* Settings = UMOGameSettings::GetMOGameSettings())
+	{
+		Settings->bPendingNewGame = false;
+		Settings->bIsLoadingIntoGameplay = false;
+		Settings->SaveSettings();
+	}
+	if (UMOGameInstance* GameInstance = Cast<UMOGameInstance>(GetGameInstance()))
+	{
+		// DismissLoadingScreen() would no-op here: it gates on
+		// bWaitingForManualDismiss, which only a real level transition sets,
+		// and no travel ever happened on this failure path.
+		GameInstance->HideLoadingOverlayImmediate();
+	}
+
+#if !UE_BUILD_SHIPPING
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 10.0f, FColor::Red,
+			FString::Printf(TEXT("Failed to host session: %s"), *ErrorMessage));
+	}
+#endif
 }
 
 void AMOMainMenuPlayerController::ExitGame()
@@ -510,6 +599,11 @@ void AMOMainMenuPlayerController::HandleLoadGameRequested(const FString& SlotNam
 void AMOMainMenuPlayerController::HandleExitGameRequested()
 {
 	ExitGame();
+}
+
+void AMOMainMenuPlayerController::HandleHostSessionRequested(const FString& DisplayName, int32 MaxPlayers)
+{
+	HostSession(DisplayName, MaxPlayers);
 }
 
 void AMOMainMenuPlayerController::SetupMediaPlayer()
