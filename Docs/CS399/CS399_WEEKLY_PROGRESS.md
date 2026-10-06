@@ -31,6 +31,7 @@ Evidence levels follow the closure document: **V** verified directly, **P** part
 | 2026-09-22 | Add console verbs for testing first, then build the real menu UI | Student |
 | 2026-09-22 | Fix the gray-material defect with project-local material duplicates instead of editing the engine install | Assistant proposed; student accepted the verified result |
 | 2026-10-04 | Recommended deliverable: integrated two-player co-op vertical slice, first tag `v0.1.0` | Assistant recommended; **student to confirm** |
+| 2026-10-05 | Replace the single Host/Join "Multiplayer" panel with separate Host Game and Join Game panels, each behind its own main-menu button (same pairing as New Game and Load Game), so the student can build the Join UI by copying and renaming existing buttons | Student asked for a Join Game button with C++ backing; assistant chose the split design; **student to confirm** |
 
 ---
 
@@ -107,11 +108,11 @@ Nothing is pushed yet and `cs399-f26-baseline` is not yet tagged. Left uncommitt
 **Measurable outcomes:** *(commits, tests, items re-verified)*
 **Difficulties:** *(to be filled)*
 **Commits:** *(to be filled)*
-**Next priorities:** Week 3, Multiplayer panel widgets and the two-process LAN test.
+**Next priorities:** Week 3, Host Game and Join Game widgets and the two-process LAN test.
 
 ## Week 3 (Oct 12-18): Core integration I, M1
 
-**Planned objectives:** main-menu Multiplayer button and panel widgets (Host / Join tabs, session list); two-process LAN test script; **M1: 10 of 10 consecutive runs pass.** Send a short recording with the next written status.
+**Planned objectives:** main-menu Host Game / Join Game buttons and panel widgets (C++ done on Oct 5: `UMOHostGamePanel`, `UMOJoinGamePanel`; copy-and-rename work remains in the blueprints); two-process LAN test script; **M1: 10 of 10 consecutive runs pass.** Send a short recording with the next written status.
 **Work performed / outcomes / difficulties / commits / next:** *(to be filled)*
 
 ## Week 4 (Oct 19-25): Core integration II

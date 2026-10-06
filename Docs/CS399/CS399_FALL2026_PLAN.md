@@ -56,7 +56,7 @@
 
 **In scope**
 
-- Player-facing co-op session flow: main-menu Host / Join UI, session creation, discovery, joining, travel (LAN first).
+- Player-facing co-op session flow: main-menu Host Game / Join Game buttons and panels, session creation, discovery, joining, travel (LAN first).
 - Server-authority hardening for core-loop actions (harvest, craft, build, terraform, possession) and the two known open items (H17, C7).
 - Persistence: explicit save-format versioning, migration test, and co-op save/load verification.
 - Terrain under co-op: seed determinism across host and client, terraform edit replication.
@@ -90,7 +90,7 @@
 
 | # | Deliverable | Form |
 |---|---|---|
-| D1 | `UMOSessionSubsystem` plus Multiplayer panel (Host / Join tabs, session list) wired into the main menu | Committed code and widget assets |
+| D1 | `UMOSessionSubsystem` plus Host Game and Join Game panels (`UMOHostGamePanel`, `UMOJoinGamePanel`, session list) wired into the main menu through `HostGameButton` and `JoinGameButton` | Committed code and widget assets |
 | D2 | Scripted two-process LAN session test (host process, join process, exit-coded) | `ue.py` command and script |
 | D3 | Extended 2-client authority suite (client harvest, craft, build, terraform, possession) | Automated tests, count tracked weekly |
 | D4 | H17, C7 and H19-residual fixes with negative tests (rejected request is observed) | Code and tests |
@@ -137,7 +137,7 @@ Each meeting is preceded by a short written status (progress, risks, next steps)
 | 0 | Sep 21-27 | Setup and baseline: re-verify the whole suite on a cold build; cleanup commits; volume, material, and session-backend work (see weekly progress) | 5 commits; 127/127 | Done |
 | 1 | Sep 28-Oct 4 | Repository audit and historical reconciliation | Closure matrix; this plan; baseline snapshot | This package |
 | 2 | Oct 5-11 | Land pending verified work as small commits; architecture review; defect register re-verified against code; systems map; backlog prioritized. **Check-in 1: Wed Oct 7** | Commits; systems map; defect register | No unverified claims carried forward |
-| 3 | Oct 12-18 | **Core integration I:** Multiplayer panel and widgets (main-menu button, Host/Join tabs, session list); two-process LAN test script | Code, widgets, test | **M1** |
+| 3 | Oct 12-18 | **Core integration I:** Host Game and Join Game buttons, panels and widgets (the C++ is written; the work is the widget blueprints); two-process LAN test script | Code, widgets, test | **M1** |
 | 4 | Oct 19-25 | **Core integration II:** H17, C7 and the H19 placement residual (reach and collision recheck); extend the 2-client suite (client harvest, craft, build, terraform); disconnect and reconnect behavior; benchmark scene defined, a small C++ benchmark command (`MO.Bench.Run`, because the Python bridge is editor-only) written, and the first baseline captured | Code and tests; Appendix C row 1 | Suite green |
 | 5 | Oct 26-Nov 1 | **Persistence, inventory, interaction verification:** save-format version plus migration test; co-op save/load round trip; headless tests for inventory and persistence; **midterm demo**; stretch decision gate | Tests; demo | **M2**; cut list reviewed |
 | 6 | Nov 2-8 | **Procedural-world integration** (the world exists; this week proves it under co-op): seed determinism across host and client; terraform replication; world-load time | Terrain test; demonstration | Test green |
