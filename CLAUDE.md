@@ -861,43 +861,30 @@ git log --oneline -10
 
 ## UE Python Widget Blueprint Automation
 
-**Documentation:** See `Content/Python/README_WIDGET_AUTOMATION.md` for full details.
-
-### Quick Reference
-
-| Operation | Works? | Function |
-|-----------|--------|----------|
-| Find widget by name | ✅ | `unreal.EditorUtilityLibrary.find_source_widget_by_name(wbp, Name)` |
-| Add new widget | ✅ | `unreal.EditorUtilityLibrary.add_source_widget(wbp, class, name, parent)` |
-| Set IsVariable flag | ❌ | **NOT EXPOSED** - `b_is_variable` not accessible via Python |
-| Access widget tree | ❌ | **NOT EXPOSED** - `widget_tree()` returns None |
-| Rename widget | ❌ | **NO API** - must delete and recreate |
-
-### Critical Limitation: IsVariable Flag
-
-The "Is Variable" checkbox (required for `BindWidget` meta) is stored in WidgetTree metadata and **cannot be set via Python API**.
-
-**Workarounds:**
-1. Manual fix: Right-click widget in hierarchy → "Set as Variable"
-2. Use `add_source_widget()` when creating new widgets (may auto-mark as variable - needs testing)
-3. Expose a custom C++ editor utility to set `bIsVariable`
-
-### Available Scripts
+**Do NOT build UMG by hand or by screen control.** UI is data: `python Tools/ue.py ui ...` builds, checks and
+exercises Widget Blueprints from spec files. Guide: `Docs/UI_TOOLING.md` (spec format, verbs, limits).
 
 ```bash
-# Inspect widget blueprints and check IsVariable status
-py "D:/UEProjects/MO57/Content/Python/inspect_widget_blueprints.py"
-
-# Explore available API methods
-py "D:/UEProjects/MO57/Content/Python/explore_widget_tree.py"
-
-# Add missing widgets to blueprints
-py "D:/UEProjects/MO57/Content/Python/setup_widget_bindings.py"
+python Tools/ue.py ui contract MOJoinGamePanel        # BindWidget contract parsed from the C++ headers
+python Tools/ue.py ui build Content/Python/ui_specs/coop_menu.py   # idempotent: create/update, Is Variable, compile, save, check
+python Tools/ue.py ui check /MOFramework/UI/MainMenu_UI/WBP_JoinGamePanel
+python Tools/ue.py ui menu && python Tools/ue.py ui click JoinGameButton && python Tools/ue.py ui shot out.png
 ```
+
+| Operation | Works? | How |
+|-----------|--------|-----|
+| Create WBP / add widgets / set props + slots / class defaults | ✅ | `ui build` (wraps `EditorUtilityLibrary.add_source_widget` + property coercion) |
+| Set IsVariable | ✅ | `unreal.MOWidgetEditorUtils.set_widget_is_variable_by_name` (forced on for every contract name by `ui build`) |
+| Rename widget | ✅ | `MOWidgetEditorUtils.rename_widget` |
+| Read the live tree | ✅ | `ui dump <asset>` |
+| **Remove / reparent a widget** | ❌ | no API — fix by hand once, or add `RemoveWidget`/`MoveWidget` to `MOFrameworkEditor` |
+
+Runtime queries need a *painted* PIE viewport: `ui menu` closes asset tabs first (a tab in front of the level
+viewport makes `FindWidget` match nothing). The old `inspect_widget_blueprints.py` / `setup_widget_bindings.py`
+scripts and `Content/Python/README_WIDGET_AUTOMATION.md` are legacy.
 
 ### When BindWidget Fails
 
-If Blueprint compilation fails with "required widget binding not found":
-1. Run `inspect_widget_blueprints.py` to check if widget exists and IsVariable status
-2. If widget exists but `[NOT VAR]`: Manual fix required (right-click → Set as Variable)
-3. If widget missing: Run `setup_widget_bindings.py` or add manually
+If Blueprint compilation fails with "required widget binding not found": `python Tools/ue.py ui check <asset>`
+lists each contract member as `ok` / `absent` (optional) / `MISSING` (required) / `BAD` (wrong type or
+`Is Variable is OFF`); fix the spec and re-run `ui build`.

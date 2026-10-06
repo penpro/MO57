@@ -23,6 +23,7 @@ Design rules baked in from the 2026-06/07 fix campaign:
 NOTE: dev-machine tooling — drives arbitrary local execution. Never ship.
 """
 import argparse
+import base64
 import hashlib
 import json
 import re
@@ -956,6 +957,153 @@ def cmd_asset_assign(a):
         _run_validate_art()
 
 
+# =============================================================================
+# UI toolset: spec-driven Widget Blueprint building (Content/Python/mo_ui.py)
+# =============================================================================
+# Everything a designer does in the UMG Designer is reachable through the editor's
+# Python API, so UI work is data: a spec file describes the widget tree, `ui build`
+# applies it (idempotent), `ui check` verifies it against the C++ BindWidget contract,
+# `ui shot` / `ui menu` / `ui click` look at and exercise the result. Guide: Docs/UI_TOOLING.md
+
+def _unmsys(p):
+    """Git Bash rewrites '/MOFramework/...' into 'C:/Program Files/Git/MOFramework/...' before Python sees it."""
+    m = re.match(r"^[A-Za-z]:[/\\]Program Files[/\\]Git[/\\](.*)$", p or "")
+    return "/" + m.group(1).replace("\\", "/") if m else p
+
+
+def _ui_run(args, timeout=120):
+    """Run mo_ui.cli(args) inside the editor; returns the output lines (exits 2 if the bridge is down)."""
+    code = ("import importlib, mo_ui_contract, mo_ui\n"
+            "importlib.reload(mo_ui_contract)\n"
+            "importlib.reload(mo_ui)\n"
+            f"out(mo_ui.cli({json.dumps(json.dumps(args))}))\n")
+    ok, lines, _ = bridge_run([_wrap_py(code)], timeout=timeout, want_log=False)
+    if not ok:
+        _die(2, "bridge not responding (editor closed? -> ue.py editor start)")
+    return [l for l in lines if not l.startswith("[py-ok]")]
+
+
+def _in_pie():
+    ok, lines, _ = bridge_run(['py:out("PIE=" + str(unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)'
+                               '.is_in_play_in_editor()))'], timeout=10, want_log=False)
+    return ok and any("PIE=True" in l for l in lines)
+
+
+def _capture_editor(out_path):
+    """PNG of the whole editor window via the MCP (no OS-level screen capture, no focus needed)."""
+    r = mcp_call(EDITOR_APP, "CaptureEditorImage", {})
+    if not (isinstance(r, dict) and r.get("data")):
+        _die(2, f"editor capture failed (MCP down? -> python Tools/ue.py status): {r!r:.300}")
+    os.makedirs(os.path.dirname(os.path.abspath(out_path)) or ".", exist_ok=True)
+    with open(out_path, "wb") as f:
+        f.write(base64.b64decode(r["data"]))
+    print(f"[ui] editor capture -> {os.path.abspath(out_path)} ({_size(out_path)} bytes)")
+
+
+def _ui_menu():
+    """PIE at the main menu, intro skipped, level viewport visible (asset tabs closed so it renders)."""
+    if not _in_pie():
+        for l in _ui_run({"verb": "close_tabs"}):
+            print(l)
+        cmd_pie(argparse.Namespace(action="begin"))
+        time.sleep(8)
+        bridge_run(["py:import agent_test_lib as atl; atl.skip_intro(world, out)"], timeout=10, want_log=False)
+    deadline = time.time() + 45
+    while time.time() < deadline:
+        ok, _, delta = bridge_run(["MO.Test.FindWidget NewGameButton"], timeout=10, log_grep=r"FindWidget\(", log_wait=3)
+        m = re.search(r"FindWidget\('NewGameButton'\): (\d+) match", delta or "")
+        if m and int(m.group(1)) > 0:
+            print("[ui] main menu is up (PIE running, NewGameButton found)")
+            return
+        time.sleep(2)
+    # FindWidget reads painted geometry, and a PIE viewport that sits behind an asset-editor tab (or any
+    # other tab) is never painted -- every widget then reports zero size and matches nothing.
+    _die(1, "main menu not found within 45s. If PIE was already running with an asset editor tab in front, "
+            "its viewport is not painted: `ue.py ui stop` then `ue.py ui menu` (that closes the tabs first). "
+            "Otherwise check that the intro was skipped.")
+
+
+def cmd_ui(a):
+    v, args = a.verb, a.args
+
+    def need(n, usage):
+        if len(args) < n:
+            _die(2, f"usage: ue.py ui {usage}")
+
+    lines = None
+    if v == "build":
+        need(1, "build <spec.py>")
+        lines = _ui_run({"verb": "build", "spec": os.path.abspath(args[0])}, timeout=300)
+    elif v == "check":
+        need(1, "check <asset>")
+        lines = _ui_run({"verb": "check", "asset": _unmsys(args[0])})
+    elif v == "dump":
+        need(1, "dump <asset> [--no-props] [--out file.json]")
+        lines = _ui_run({"verb": "dump", "asset": _unmsys(args[0]), "props": not a.no_props})
+    elif v == "contract":
+        need(1, "contract <ClassName | /Script/Mod.Class>")
+        lines = _ui_run({"verb": "contract", "parent": args[0]})
+    elif v == "scaffold":
+        need(2, "scaffold <ClassName> <new asset path> [--out spec.py]")
+        lines = _ui_run({"verb": "scaffold", "parent": args[0], "asset": _unmsys(args[1])})
+    elif v == "list":
+        lines = _ui_run({"verb": "list", "folder": _unmsys(args[0]) if args else "",
+                         "parent": args[1] if len(args) > 1 else ""})
+    elif v == "compile":
+        need(1, "compile <asset>")
+        lines = _ui_run({"verb": "compile", "asset": _unmsys(args[0])})
+    elif v == "preview":
+        if a.clear:
+            lines = _ui_run({"verb": "preview_clear"})
+        else:
+            need(1, "preview <asset> | preview --clear")
+            lines = _ui_run({"verb": "preview", "asset": _unmsys(args[0]), "z": a.z})
+    elif v == "close-tabs":
+        lines = _ui_run({"verb": "close_tabs"})
+    elif v == "open":
+        need(1, "open <asset>")
+        r = mcp_call(EDITOR_APP, "OpenEditorForAsset", {"assetPath": _unmsys(args[0])})
+        if isinstance(r, dict) and r.get("error"):
+            _die(1, f"open failed: {r}")
+        print(f"[ui] opened {_unmsys(args[0])}")
+        return
+    elif v == "shot":
+        out_path = args[-1] if args and args[-1].lower().endswith(".png") else \
+            os.path.join(ROOT, "Saved", "UIShots", time.strftime("ui_%Y%m%d_%H%M%S.png"))
+        if a.asset:
+            r = mcp_call(EDITOR_APP, "OpenEditorForAsset", {"assetPath": _unmsys(a.asset)})
+            if isinstance(r, dict) and r.get("error"):
+                _die(1, f"open failed: {r}")
+            time.sleep(a.wait)
+        _capture_editor(out_path)
+        return
+    elif v == "menu":
+        _ui_menu()
+        return
+    elif v == "stop":
+        cmd_pie(argparse.Namespace(action="end"))
+        return
+    elif v in ("click", "find"):
+        need(1, f"{v} <widget name substring>")
+        cmd = ("MO.Test.ClickWidget " if v == "click" else "MO.Test.FindWidget ") + args[0]
+        ok, _, delta = bridge_run([cmd], timeout=15, log_grep=r"MOTEST|MOQUERY", log_wait=5)
+        if not ok:
+            _die(2, "bridge not responding")
+        hits = [l for l in (delta or "").splitlines() if "[MOTEST]" in l or "[MOQUERY]" in l]
+        for l in hits:
+            print(l.split("LogMOFramework:", 1)[-1].strip())
+        sys.exit(1 if any("FAIL" in l for l in hits) or not hits else 0)
+    text = "\n".join(lines or [])
+    if a.out:
+        os.makedirs(os.path.dirname(os.path.abspath(a.out)) or ".", exist_ok=True)
+        with open(a.out, "w", encoding="utf-8") as f:
+            f.write(text + "\n")
+        print(f"[ui] {v} -> {os.path.abspath(a.out)} ({len(text)} chars)")
+    else:
+        print(text)
+    sys.exit(1 if ("UI ERROR" in text or "problem(s)" in text or "[py-err]" in text) else 0)
+
+
 def cmd_refresh_data(a):
     ok, lines, _ = bridge_run([
         'py:unreal.MORecipeDatabaseSettings.invalidate_cache(); '
@@ -1187,6 +1335,24 @@ def main():
     a_imp.add_argument("file", help="source file on disk")
     a_imp.add_argument("dest", help="destination content folder, e.g. /Game/Dev/Imports")
     a_imp.set_defaults(fn=cmd_asset)
+
+    s = sub.add_parser(
+        "ui", help="spec-driven Widget Blueprint toolset (guide: Docs/UI_TOOLING.md)",
+        description="UI toolset. Build: build <spec.py> | scaffold <Class> <asset> | compile <asset>. "
+                    "Inspect: check <asset> | dump <asset> | contract <Class> | list [folder] [parent]. "
+                    "Look: open <asset> | shot [--asset A] [out.png] | menu | stop | preview <asset> | close-tabs. "
+                    "Exercise (PIE): click <name> | find <name>. Run from Git Bash with MSYS_NO_PATHCONV=1 "
+                    "for /Game paths (the tool also repairs the rewrite).")
+    s.add_argument("verb", choices=["build", "check", "dump", "contract", "scaffold", "list", "compile", "preview",
+                                    "close-tabs", "open", "shot", "menu", "stop", "click", "find"])
+    s.add_argument("args", nargs="*")
+    s.add_argument("--out", help="write the text result (dump/scaffold/...) to this file")
+    s.add_argument("--no-props", action="store_true", help="dump: structure only")
+    s.add_argument("--asset", help="shot: open this asset's editor first")
+    s.add_argument("--wait", type=float, default=3.0, help="shot --asset: seconds to let the editor draw")
+    s.add_argument("--clear", action="store_true", help="preview: remove preview widgets")
+    s.add_argument("--z", type=int, default=50, help="preview: viewport z-order")
+    s.set_defaults(fn=cmd_ui)
 
     s = sub.add_parser("save", help="save an asset via MCP")
     s.add_argument("asset")

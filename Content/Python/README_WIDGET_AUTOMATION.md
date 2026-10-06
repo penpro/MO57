@@ -1,5 +1,12 @@
 # UE5 Widget Blueprint Python Automation
 
+> **SUPERSEDED (2026-10-05) — use `python Tools/ue.py ui ...` (`Docs/UI_TOOLING.md`).**
+> The limitations below were written 2026-03-29 against the stock API only. With `unreal.MOWidgetEditorUtils`
+> (`MOFrameworkEditor`) the editor Python API CAN set `Is Variable` (`set_widget_is_variable_by_name`), rename
+> widgets (`rename_widget`) and read layout (`get_all_widget_layout_info`); `add_source_widget` works for the
+> root (empty tree, parent "None") and children. Still true: there is no remove/reparent API.
+> `Content/Python/mo_ui.py` wraps all of this behind declarative specs; the scripts below are legacy.
+
 ## Overview
 
 This document covers findings from automating Widget Blueprint manipulation via UE's Python API.

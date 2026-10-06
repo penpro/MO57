@@ -27,6 +27,7 @@ it bakes in every transport lesson below.
 | `ue.py build` | UBT 5.8 (refuses if editor running) | |
 | `ue.py editor start\|stop\|wait` | lifecycle incl. wait-for-bridge | |
 | `ue.py cycle [--boot --seed N] [--test]` | **the whole compile-verify loop as one command**: close → build → relaunch → wait bridge → boot → RunAll | |
+| `ue.py ui build\|check\|dump\|contract\|scaffold\|menu\|click\|find\|shot\|stop ...` | **spec-driven Widget Blueprint toolset** — UI is data: spec file → idempotent build → C++ contract check → PIE click/find/shot | **no Designer clicking, no screen control**; guide: `Docs/UI_TOOLING.md` |
 
 Correlation design: every bridge call is bracketed with begin/end markers in
 `ue_out.txt`, so output is attributed to *the* command — plus the game-log
@@ -58,7 +59,8 @@ PowerShell 5.1 mangles embedded quotes in native args.
 | Material flags (Nanite/ISM), params | **MCP** `Material*` / `ObjectTools` | |
 | Asset/object props, `UDeveloperSettings`, soft refs | **MCP** `ObjectTools` | |
 | Level: place/remove/swap actors, lighting, camera | **MCP** `Scene/Actor/PrimitiveTools` | |
-| Blueprint graphs / widget setup | **MCP** `BlueprintTools` | was a hard gap pre-5.8; verify scope per task |
+| **Widget Blueprints (UMG layout, BindWidget wiring, class defaults)** | **`ue.py ui build <spec>`** (editor Python, `Content/Python/mo_ui.py`) | the MCP has no UMG toolset; this does the whole tree + Is Variable + compile + contract check — `Docs/UI_TOOLING.md` |
+| Blueprint graphs | **MCP** `BlueprintTools` | was a hard gap pre-5.8; verify scope per task |
 | Localization / string tables | **MCP** `StringTableTools` | |
 | `.ini` config | **Bash/Edit** | text file |
 | Build / cook / package | **Bash** (UBT / RunUAT) | **editor must be closed** |
