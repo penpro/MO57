@@ -180,7 +180,7 @@ protected:
 	UFUNCTION()
 	void HandleExitGameRequested();
 
-	/** Called when a co-op host is requested from the Multiplayer panel. */
+	/** Called when a co-op host is requested from the Host Game panel. */
 	UFUNCTION()
 	void HandleHostSessionRequested(const FString& DisplayName, int32 MaxPlayers);
 

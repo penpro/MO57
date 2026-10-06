@@ -6,12 +6,12 @@
  * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
  *
  * PURPOSE:
- * UMOListEntryBase subclass for the Multiplayer panel's Join tab. Displays one
+ * UMOListEntryBase subclass for the Join Game panel's session list. Displays one
  * FMOFoundSessionInfo (host name, player count, ping) and disables itself when
  * the session is full.
  *
  * =============================================================================
- * RELATED FILES: MOSessionListWidget.h, MOSessionSubsystem.h, MOMultiplayerPanel.h
+ * RELATED FILES: MOSessionListWidget.h, MOSessionSubsystem.h, MOJoinGamePanel.h
  * LAST UPDATED: 2026-09-22
  * =============================================================================
  */

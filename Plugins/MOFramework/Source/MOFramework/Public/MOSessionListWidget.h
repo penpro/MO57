@@ -6,7 +6,7 @@
  * CLAUDE: READ THIS HEADER EVERY TIME YOU TOUCH THIS FILE
  *
  * PURPOSE:
- * Thin UMOScrollListBase specialization for the Multiplayer panel's Join tab.
+ * Thin UMOScrollListBase specialization for the Join Game panel's session list.
  * The base class only knows FName entry ids; this widget keeps the actual
  * FMOFoundSessionInfo data on the side (keyed by the same ResultIndex-derived
  * FName each UMOSessionListEntry row uses) and hands it to each row via
@@ -14,7 +14,7 @@
  *
  * =============================================================================
  * RELATED FILES: MOScrollListBase.h, MOSessionListEntry.h, MOSessionSubsystem.h,
- *                MOMultiplayerPanel.h
+ *                MOJoinGamePanel.h
  * LAST UPDATED: 2026-09-22
  * =============================================================================
  */

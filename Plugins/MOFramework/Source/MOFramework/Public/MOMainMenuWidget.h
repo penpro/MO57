@@ -7,21 +7,35 @@
  * CLAUDE: UPDATE "KNOWN PITFALLS" WHEN ISSUES ARISE
  *
  * PURPOSE:
- * Main menu displayed on game launch. Provides New Game, Load Game, Options,
- * and Exit buttons. Layout mirrors MOInGameMenu for consistency.
+ * Main menu displayed on game launch. Provides New Game, Load Game, Host Game,
+ * Join Game, Options, and Exit buttons. Layout mirrors MOInGameMenu for
+ * consistency. Host Game and Join Game are optional: omit their buttons from the
+ * WBP and the menu behaves exactly as it did before co-op existed.
  *
  * LAYOUT:
  * +------------------+------------------------+
  * | New Game         |                        |
  * | Load Game        |     Focus Window       |
- * | Options          |   (contextual panel)   |
+ * | Host Game        |   (contextual panel)   |
+ * | Join Game        |                        |
+ * | Options          |                        |
  * | Exit Game        |                        |
  * +------------------+------------------------+
  *
- * CONTENT PANELS:
- * - NewGamePanel: World seed, game settings
- * - LoadPanel: Save slot selection
- * - OptionsPanel: Settings (shared with in-game)
+ * CONTENT PANELS (button -> panel; panels are found by TYPE inside
+ * FocusWindowSwitcher, so only the BUTTONS need exact widget names):
+ * - NewGameButton  -> NewGamePanel : World seed, game settings
+ * - LoadGameButton -> LoadPanel    : Save slot selection
+ * - HostGameButton -> HostGamePanel: Name a co-op camp and start hosting
+ * - JoinGameButton -> JoinGamePanel: Browse and join a hosted camp
+ * - OptionsButton  -> OptionsPanel : Settings (shared with in-game)
+ *
+ * ADDING THE CO-OP BUTTONS TO WBP_MOInGameMenu1 (the main menu blueprint):
+ * 1. Duplicate an existing button (e.g. LoadGameButton) and rename it EXACTLY
+ *    HostGameButton / JoinGameButton. Keep it a UMOCommonButton.
+ * 2. Add WBP_HostGamePanel / WBP_JoinGamePanel (see MOHostGamePanel.h and
+ *    MOJoinGamePanel.h for their widget lists) to FocusWindowSwitcher. Order does
+ *    not matter: the switcher index is looked up from the panel widget itself.
  *
  * =============================================================================
  * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
@@ -35,10 +49,22 @@
  *
  * [2024-02] PANEL INDICES: Widget switcher indices must match button order.
  *   See CLAUDE.md "New Game Panel Blueprint Setup" for index mapping.
+ *   (None=0, NewGame=1, Load=2, Options=3 are fixed by convention.)
+ *
+ * [2026-10] CO-OP PANELS RESOLVE THEIR OWN INDEX: Host and Join panels use
+ *   FocusWindowSwitcher->GetChildIndex(Panel) and have no fixed index. A
+ *   hard-coded index would silently show the wrong panel (or nothing) when a
+ *   designer adds only one of the two or in a different order. A co-op button
+ *   whose panel is missing from the switcher logs a warning and does nothing.
+ *
+ * [2026-10] HOST RESULT ROUTING: the Host panel does NOT close itself on request
+ *   (CreateSession is async and can fail). The controller reports back through
+ *   NotifyHostSessionResult, which forwards to the Host panel.
  *
  * =============================================================================
- * RELATED FILES: MOMainMenuGameMode.h, MONewGamePanel.h, MOLoadPanel.h
- * LAST UPDATED: 2026-02-25
+ * RELATED FILES: MOMainMenuGameMode.h, MONewGamePanel.h, MOLoadPanel.h,
+ *                MOHostGamePanel.h, MOJoinGamePanel.h, MOMainMenuPlayerController.h
+ * LAST UPDATED: 2026-10-05
  * =============================================================================
  */
 
@@ -53,7 +79,8 @@ class UWidgetSwitcher;
 class UMOLoadPanel;
 class UMOOptionsPanel;
 class UMONewGamePanel;
-class UMOMultiplayerPanel;
+class UMOHostGamePanel;
+class UMOJoinGamePanel;
 class UPanelWidget;
 class UTextBlock;
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOMainMenuNewGameSignature);
@@ -85,7 +112,7 @@ public:
 	UPROPERTY(BlueprintAssignable, Category="MO|MainMenu")
 	FMOMainMenuExitGameSignature OnExitGameRequested;
 
-	/** Called when a co-op session host is requested from the Multiplayer panel. */
+	/** Called when a co-op session host is requested from the Host Game panel. */
 	UPROPERTY(BlueprintAssignable, Category="MO|MainMenu")
 	FMOMainMenuHostSessionSignature OnHostSessionRequested;
 
@@ -105,14 +132,20 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|MainMenu")
 	void ShowLoadPanel();
 
-	/** Show the multiplayer host/join panel in the focus window. */
+	/** Show the Host Game panel in the focus window. No-op (with a warning) if the
+	 *  WBP has no UMOHostGamePanel in FocusWindowSwitcher. */
 	UFUNCTION(BlueprintCallable, Category="MO|MainMenu")
-	void ShowMultiplayerPanel();
+	void ShowHostGamePanel();
+
+	/** Show the Join Game panel in the focus window and start a session search.
+	 *  No-op (with a warning) if the WBP has no UMOJoinGamePanel in FocusWindowSwitcher. */
+	UFUNCTION(BlueprintCallable, Category="MO|MainMenu")
+	void ShowJoinGamePanel();
 
 	/**
-	 * Forward a host-attempt result from the controller back to the open
-	 * Multiplayer panel (so it can un-stick its Host button on failure).
-	 * No-op if the panel isn't currently the open one.
+	 * Forward a host-attempt result from the controller back to the Host Game
+	 * panel (so it can un-stick its Host button on failure).
+	 * No-op if the WBP has no Host Game panel.
 	 */
 	UFUNCTION(BlueprintCallable, Category="MO|MainMenu")
 	void NotifyHostSessionResult(bool bSuccess, const FString& ErrorMessage);
@@ -149,7 +182,8 @@ private:
 	UFUNCTION() void HandleNewGameClicked();
 	UFUNCTION() void HandleLoadGameClicked();
 	UFUNCTION() void HandleOptionsClicked();
-	UFUNCTION() void HandleMultiplayerClicked();
+	UFUNCTION() void HandleHostGameClicked();
+	UFUNCTION() void HandleJoinGameClicked();
 	UFUNCTION() void HandleExitGameClicked();
 
 	// ============================================================================
@@ -159,7 +193,7 @@ private:
 	UFUNCTION() void HandlePanelRequestClose();
 	UFUNCTION() void HandleLoadPanelLoadRequested(const FString& SlotName);
 	UFUNCTION() void HandleNewGamePanelStartRequested();
-	UFUNCTION() void HandleMultiplayerHostRequested(const FString& DisplayName, int32 MaxPlayers);
+	UFUNCTION() void HandleHostPanelHostRequested(const FString& DisplayName, int32 MaxPlayers);
 
 	// ============================================================================
 	// INTERNAL
@@ -167,6 +201,13 @@ private:
 
 	void BindButtonEvents();
 	void SwitchToPanel(int32 PanelIndex);
+
+	/**
+	 * Switcher index of a co-op panel, looked up from the widget itself so the
+	 * designer's child order doesn't matter. Returns INDEX_NONE if the panel is
+	 * missing or not a child of FocusWindowSwitcher.
+	 */
+	int32 FindPanelIndex(const UWidget* Panel) const;
 
 	// ============================================================================
 	// BIND WIDGETS
@@ -188,9 +229,13 @@ private:
 	UPROPERTY(meta=(BindWidget))
 	TObjectPtr<UMOCommonButton> OptionsButton;
 
-	/** Multiplayer button - opens Host/Join panel. */
+	/** Host Game button - opens the Host Game panel (optional: co-op UI). */
 	UPROPERTY(meta=(BindWidgetOptional))
-	TObjectPtr<UMOCommonButton> MultiplayerButton;
+	TObjectPtr<UMOCommonButton> HostGameButton;
+
+	/** Join Game button - opens the Join Game panel and starts a search (optional: co-op UI). */
+	UPROPERTY(meta=(BindWidgetOptional))
+	TObjectPtr<UMOCommonButton> JoinGameButton;
 
 	/** Exit Game button - quits application. */
 	UPROPERTY(meta=(BindWidget))
@@ -202,7 +247,8 @@ private:
 	 * Index 1: New Game panel (seed configuration)
 	 * Index 2: Load panel
 	 * Index 3: Options panel
-	 * Index 4: Multiplayer panel (host/join)
+	 * Index 4+: Host Game and Join Game panels, in any order (looked up by widget, see
+	 *              FindPanelIndex, so no fixed index is needed)
 	 */
 	UPROPERTY(meta=(BindWidget))
 	TObjectPtr<UWidgetSwitcher> FocusWindowSwitcher;
@@ -223,9 +269,13 @@ private:
 	UPROPERTY(meta=(BindWidgetOptional))
 	TObjectPtr<UMOOptionsPanel> OptionsPanel;
 
-	/** Multiplayer host/join panel (optional - can be added directly to switcher in WBP). */
+	/** Host Game panel (optional - found by type if not named; see MOHostGamePanel.h). */
 	UPROPERTY(meta=(BindWidgetOptional))
-	TObjectPtr<UMOMultiplayerPanel> MultiplayerPanel;
+	TObjectPtr<UMOHostGamePanel> HostGamePanel;
+
+	/** Join Game panel (optional - found by type if not named; see MOJoinGamePanel.h). */
+	UPROPERTY(meta=(BindWidgetOptional))
+	TObjectPtr<UMOJoinGamePanel> JoinGamePanel;
 
 	/**
 	 * Optional text block showing project version + commit hash + branch.
@@ -249,5 +299,5 @@ private:
 	static constexpr int32 PanelIndex_NewGame = 1;
 	static constexpr int32 PanelIndex_Load = 2;
 	static constexpr int32 PanelIndex_Options = 3;
-	static constexpr int32 PanelIndex_Multiplayer = 4;
+	// Host Game / Join Game panels have no constant: see FindPanelIndex.
 };

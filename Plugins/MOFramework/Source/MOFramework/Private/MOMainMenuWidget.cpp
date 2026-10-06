@@ -5,7 +5,8 @@
 #include "MONewGamePanel.h"
 #include "MOLoadPanel.h"
 #include "MOOptionsPanel.h"
-#include "MOMultiplayerPanel.h"
+#include "MOHostGamePanel.h"
+#include "MOJoinGamePanel.h"
 #include "Components/PanelWidget.h"
 #include "Components/TextBlock.h"
 #include "Components/WidgetSwitcher.h"
@@ -75,12 +76,20 @@ void UMOMainMenuWidget::NativeConstruct()
 					UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] Found OptionsPanel by type at index %d"), i);
 				}
 			}
-			if (!MultiplayerPanel)
+			if (!HostGamePanel)
 			{
-				if (UMOMultiplayerPanel* FoundMultiplayerPanel = Cast<UMOMultiplayerPanel>(Widget))
+				if (UMOHostGamePanel* FoundHostGamePanel = Cast<UMOHostGamePanel>(Widget))
 				{
-					MultiplayerPanel = FoundMultiplayerPanel;
-					UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] Found MultiplayerPanel by type at index %d"), i);
+					HostGamePanel = FoundHostGamePanel;
+					UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] Found HostGamePanel by type at index %d"), i);
+				}
+			}
+			if (!JoinGamePanel)
+			{
+				if (UMOJoinGamePanel* FoundJoinGamePanel = Cast<UMOJoinGamePanel>(Widget))
+				{
+					JoinGamePanel = FoundJoinGamePanel;
+					UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] Found JoinGamePanel by type at index %d"), i);
 				}
 			}
 		}
@@ -104,10 +113,12 @@ void UMOMainMenuWidget::NativeConstruct()
 
 	CurrentPanelIndex = PanelIndex_None;
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] Panels found: NewGame=%s, Load=%s, Options=%s"),
+	UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] Panels found: NewGame=%s, Load=%s, Options=%s, HostGame=%s, JoinGame=%s"),
 		NewGamePanel ? TEXT("YES") : TEXT("NO"),
 		LoadPanel ? TEXT("YES") : TEXT("NO"),
-		OptionsPanel ? TEXT("YES") : TEXT("NO"));
+		OptionsPanel ? TEXT("YES") : TEXT("NO"),
+		HostGamePanel ? TEXT("YES") : TEXT("NO"),
+		JoinGamePanel ? TEXT("YES") : TEXT("NO"));
 }
 
 void UMOMainMenuWidget::NativeDestruct()
@@ -129,9 +140,13 @@ void UMOMainMenuWidget::NativeDestruct()
 	{
 		ExitGameButton->OnClicked().RemoveAll(this);
 	}
-	if (MultiplayerButton)
+	if (HostGameButton)
 	{
-		MultiplayerButton->OnClicked().RemoveAll(this);
+		HostGameButton->OnClicked().RemoveAll(this);
+	}
+	if (JoinGameButton)
+	{
+		JoinGameButton->OnClicked().RemoveAll(this);
 	}
 
 	// Clean up panel delegate bindings
@@ -149,10 +164,14 @@ void UMOMainMenuWidget::NativeDestruct()
 	{
 		OptionsPanel->OnRequestClose.RemoveDynamic(this, &UMOMainMenuWidget::HandlePanelRequestClose);
 	}
-	if (MultiplayerPanel)
+	if (HostGamePanel)
 	{
-		MultiplayerPanel->OnRequestClose.RemoveDynamic(this, &UMOMainMenuWidget::HandlePanelRequestClose);
-		MultiplayerPanel->OnHostRequested.RemoveDynamic(this, &UMOMainMenuWidget::HandleMultiplayerHostRequested);
+		HostGamePanel->OnRequestClose.RemoveDynamic(this, &UMOMainMenuWidget::HandlePanelRequestClose);
+		HostGamePanel->OnHostRequested.RemoveDynamic(this, &UMOMainMenuWidget::HandleHostPanelHostRequested);
+	}
+	if (JoinGamePanel)
+	{
+		JoinGamePanel->OnRequestClose.RemoveDynamic(this, &UMOMainMenuWidget::HandlePanelRequestClose);
 	}
 
 	Super::NativeDestruct();
@@ -223,23 +242,58 @@ void UMOMainMenuWidget::ShowLoadPanel()
 	}
 }
 
-void UMOMainMenuWidget::ShowMultiplayerPanel()
+void UMOMainMenuWidget::ShowHostGamePanel()
 {
-	UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] ShowMultiplayerPanel called"));
-	SwitchToPanel(PanelIndex_Multiplayer);
+	UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] ShowHostGamePanel called"));
 
-	if (MultiplayerPanel)
+	const int32 PanelIndex = FindPanelIndex(HostGamePanel);
+	if (PanelIndex == INDEX_NONE)
 	{
-		MultiplayerPanel->ShowHostTab();
+		UE_LOG(LogMOFramework, Warning,
+			TEXT("[MOMainMenuWidget] ShowHostGamePanel: no UMOHostGamePanel inside FocusWindowSwitcher - add WBP_HostGamePanel to the switcher"));
+		return;
 	}
+
+	SwitchToPanel(PanelIndex);
+	HostGamePanel->PrepareForDisplay();
+}
+
+void UMOMainMenuWidget::ShowJoinGamePanel()
+{
+	UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] ShowJoinGamePanel called"));
+
+	const int32 PanelIndex = FindPanelIndex(JoinGamePanel);
+	if (PanelIndex == INDEX_NONE)
+	{
+		UE_LOG(LogMOFramework, Warning,
+			TEXT("[MOMainMenuWidget] ShowJoinGamePanel: no UMOJoinGamePanel inside FocusWindowSwitcher - add WBP_JoinGamePanel to the switcher"));
+		return;
+	}
+
+	SwitchToPanel(PanelIndex);
+
+	// Start searching as soon as the panel opens, so the player sees results
+	// without having to press Refresh first.
+	JoinGamePanel->RefreshSessions();
 }
 
 void UMOMainMenuWidget::NotifyHostSessionResult(bool bSuccess, const FString& ErrorMessage)
 {
-	if (MultiplayerPanel)
+	if (HostGamePanel)
 	{
-		MultiplayerPanel->NotifyHostResult(bSuccess, ErrorMessage);
+		HostGamePanel->NotifyHostResult(bSuccess, ErrorMessage);
 	}
+}
+
+int32 UMOMainMenuWidget::FindPanelIndex(const UWidget* Panel) const
+{
+	if (!Panel || !FocusWindowSwitcher)
+	{
+		return INDEX_NONE;
+	}
+
+	// GetChildIndex returns INDEX_NONE if the widget is not a direct child.
+	return FocusWindowSwitcher->GetChildIndex(Panel);
 }
 
 void UMOMainMenuWidget::CloseFocusPanel()
@@ -319,12 +373,18 @@ void UMOMainMenuWidget::BindButtonEvents()
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOMainMenuWidget] ExitGameButton is NULL"));
 	}
 
-	// Multiplayer button (optional)
-	if (MultiplayerButton)
+	// Host Game / Join Game buttons (optional co-op UI)
+	if (HostGameButton)
 	{
-		MultiplayerButton->OnClicked().RemoveAll(this);
-		MultiplayerButton->OnClicked().AddUObject(this, &UMOMainMenuWidget::HandleMultiplayerClicked);
-		UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] MultiplayerButton bound"));
+		HostGameButton->OnClicked().RemoveAll(this);
+		HostGameButton->OnClicked().AddUObject(this, &UMOMainMenuWidget::HandleHostGameClicked);
+		UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] HostGameButton bound"));
+	}
+	if (JoinGameButton)
+	{
+		JoinGameButton->OnClicked().RemoveAll(this);
+		JoinGameButton->OnClicked().AddUObject(this, &UMOMainMenuWidget::HandleJoinGameClicked);
+		UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] JoinGameButton bound"));
 	}
 
 	// Bind panel delegates
@@ -358,19 +418,26 @@ void UMOMainMenuWidget::BindButtonEvents()
 		UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] OptionsPanel bound"));
 	}
 
-	if (MultiplayerPanel)
+	if (HostGamePanel)
 	{
-		MultiplayerPanel->OnRequestClose.RemoveDynamic(this, &UMOMainMenuWidget::HandlePanelRequestClose);
-		MultiplayerPanel->OnHostRequested.RemoveDynamic(this, &UMOMainMenuWidget::HandleMultiplayerHostRequested);
-		MultiplayerPanel->OnRequestClose.AddDynamic(this, &UMOMainMenuWidget::HandlePanelRequestClose);
-		MultiplayerPanel->OnHostRequested.AddDynamic(this, &UMOMainMenuWidget::HandleMultiplayerHostRequested);
-		UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] MultiplayerPanel bound"));
+		HostGamePanel->OnRequestClose.RemoveDynamic(this, &UMOMainMenuWidget::HandlePanelRequestClose);
+		HostGamePanel->OnHostRequested.RemoveDynamic(this, &UMOMainMenuWidget::HandleHostPanelHostRequested);
+		HostGamePanel->OnRequestClose.AddDynamic(this, &UMOMainMenuWidget::HandlePanelRequestClose);
+		HostGamePanel->OnHostRequested.AddDynamic(this, &UMOMainMenuWidget::HandleHostPanelHostRequested);
+		UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] HostGamePanel bound"));
+	}
+
+	if (JoinGamePanel)
+	{
+		JoinGamePanel->OnRequestClose.RemoveDynamic(this, &UMOMainMenuWidget::HandlePanelRequestClose);
+		JoinGamePanel->OnRequestClose.AddDynamic(this, &UMOMainMenuWidget::HandlePanelRequestClose);
+		UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] JoinGamePanel bound"));
 	}
 }
 
 void UMOMainMenuWidget::SwitchToPanel(int32 PanelIndex)
 {
-	UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] SwitchToPanel: %d (None=0, NewGame=1, Load=2, Options=3)"), PanelIndex);
+	UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] SwitchToPanel: %d (None=0, NewGame=1, Load=2, Options=3; co-op panels resolved by widget)"), PanelIndex);
 
 	if (FocusWindowSwitcher)
 	{
@@ -408,10 +475,16 @@ void UMOMainMenuWidget::HandleOptionsClicked()
 	ShowOptionsPanel();
 }
 
-void UMOMainMenuWidget::HandleMultiplayerClicked()
+void UMOMainMenuWidget::HandleHostGameClicked()
 {
-	UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] Multiplayer button clicked"));
-	ShowMultiplayerPanel();
+	UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] Host Game button clicked"));
+	ShowHostGamePanel();
+}
+
+void UMOMainMenuWidget::HandleJoinGameClicked()
+{
+	UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] Join Game button clicked"));
+	ShowJoinGamePanel();
 }
 
 void UMOMainMenuWidget::HandleExitGameClicked()
@@ -442,7 +515,7 @@ void UMOMainMenuWidget::HandleNewGamePanelStartRequested()
 	OnNewGameRequested.Broadcast();
 }
 
-void UMOMainMenuWidget::HandleMultiplayerHostRequested(const FString& DisplayName, int32 MaxPlayers)
+void UMOMainMenuWidget::HandleHostPanelHostRequested(const FString& DisplayName, int32 MaxPlayers)
 {
 	UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] Host requested: '%s' (max %d)"), *DisplayName, MaxPlayers);
 

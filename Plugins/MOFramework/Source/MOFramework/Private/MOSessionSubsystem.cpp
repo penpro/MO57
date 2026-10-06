@@ -39,6 +39,11 @@ UMOSessionSubsystem* UMOSessionSubsystem::Get(const UObject* WorldContextObject)
 	return GameInstance ? GameInstance->GetSubsystem<UMOSessionSubsystem>() : nullptr;
 }
 
+int32 UMOSessionSubsystem::ClampMaxPlayers(int32 Requested)
+{
+	return FMath::Clamp(Requested, MinPlayers, MaxPlayersLimit);
+}
+
 IOnlineSessionPtr UMOSessionSubsystem::GetSessionInterface() const
 {
 	const IOnlineSubsystem* OnlineSub = IOnlineSubsystem::Get();
@@ -88,8 +93,10 @@ bool UMOSessionSubsystem::HostSession(const FString& DisplayName, int32 MaxPlaye
 
 	PendingHostLevelPath = GameplayLevelPath;
 
+	const int32 EffectiveMaxPlayers = ClampMaxPlayers(MaxPlayers);
+
 	FOnlineSessionSettings SessionSettings;
-	SessionSettings.NumPublicConnections = FMath::Max(1, MaxPlayers);
+	SessionSettings.NumPublicConnections = EffectiveMaxPlayers;
 	SessionSettings.bShouldAdvertise = true;
 	SessionSettings.bIsLANMatch = false;
 	SessionSettings.bIsDedicated = false;
@@ -102,8 +109,8 @@ bool UMOSessionSubsystem::HostSession(const FString& DisplayName, int32 MaxPlaye
 	CreateSessionCompleteHandle = Sessions->AddOnCreateSessionCompleteDelegate_Handle(
 		FOnCreateSessionCompleteDelegate::CreateUObject(this, &UMOSessionSubsystem::HandleCreateSessionComplete));
 
-	UE_LOG(LogMOFramework, Warning, TEXT("[MOSession] HostSession: creating '%s' (max %d, %s)"),
-		*DisplayName, MaxPlayers, IsUsingRealOnlineSubsystem() ? TEXT("Steam") : TEXT("Null/offline"));
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOSession] HostSession: creating '%s' (max %d, requested %d, %s)"),
+		*DisplayName, EffectiveMaxPlayers, MaxPlayers, IsUsingRealOnlineSubsystem() ? TEXT("Steam") : TEXT("Null/offline"));
 
 	if (!Sessions->CreateSession(*LocalPlayer->GetPreferredUniqueNetId(), NAME_GameSession, SessionSettings))
 	{

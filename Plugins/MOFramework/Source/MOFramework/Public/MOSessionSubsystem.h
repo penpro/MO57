@@ -52,8 +52,8 @@
  *
  * =============================================================================
  * RELATED FILES: MOTravelUtils.h, MOMainMenuPlayerController.h,
- *                MOMultiplayerPanel.h
- * LAST UPDATED: 2026-09-22
+ *                MOHostGamePanel.h, MOJoinGamePanel.h
+ * LAST UPDATED: 2026-10-05
  * =============================================================================
  */
 
@@ -114,13 +114,28 @@ public:
 	static UMOSessionSubsystem* Get(const UObject* WorldContextObject);
 
 	// ============================================================================
+	// PLAYER-COUNT POLICY (single source of truth)
+	// ============================================================================
+
+	/** Co-op is a small group, not an MMO (see project vision): 1..8 players, default 4. */
+	static constexpr int32 MinPlayers = 1;
+	static constexpr int32 MaxPlayersLimit = 8;
+	static constexpr int32 DefaultMaxPlayers = 4;
+
+	/** Clamp a requested player count into [MinPlayers, MaxPlayersLimit]. HostSession
+	 *  applies this itself, so every caller (UI panel, console command) gets the same
+	 *  limit; UI uses it only to echo the effective value back to the player. */
+	static int32 ClampMaxPlayers(int32 Requested);
+
+	// ============================================================================
 	// HOST
 	// ============================================================================
 
 	/**
 	 * Create a session and, on success, travel to GameplayLevelPath as a listen
 	 * server. DisplayName is shown to other players browsing sessions (e.g. via
-	 * FindSessions); MaxPlayers bounds NumPublicConnections.
+	 * FindSessions); MaxPlayers is clamped by ClampMaxPlayers and bounds
+	 * NumPublicConnections.
 	 * @return false immediately if no online subsystem/session interface is
 	 *         available, or a session is already active (call LeaveSession first).
 	 */
