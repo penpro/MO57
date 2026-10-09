@@ -39,8 +39,11 @@ for c in chars:
         hum = (ctrl is not None and isinstance(ctrl, unreal.PlayerController))
         try: lc = c.is_locally_controlled()
         except Exception: lc = "?"
-        out("PV  char=%s class=%s loc=(%.0f,%.0f,%.0f) dist=%.0f hidden=%s controller=%s playerctl=%s localctl=%s localrole=%s remoterole=%s netcull=%s" % (
-            c.get_name(), c.get_class().get_name(), loc.x, loc.y, loc.z, dist, g(c, "hidden"), ctl, hum, lc, g(c, "local_role"), g(c, "remote_role"), g(c, "net_cull_distance_squared")))
+        cm = c.get_editor_property("character_movement")
+        mm = str(cm.get_editor_property("movement_mode")).split(".")[-1] if cm else "?"
+        vel = cm.get_editor_property("velocity") if cm else None
+        out("PV  char=%s class=%s loc=(%.0f,%.0f,%.0f) dist=%.0f hidden=%s controller=%s playerctl=%s localctl=%s localrole=%s remoterole=%s netcull=%s mm=%s vz=%s" % (
+            c.get_name(), c.get_class().get_name(), loc.x, loc.y, loc.z, dist, g(c, "hidden"), ctl, hum, lc, g(c, "local_role"), g(c, "remote_role"), g(c, "net_cull_distance_squared"), mm, ("%.0f" % vel.z) if vel else "?"))
         if hum or dist < 5000:
             for m in c.get_components_by_class(unreal.SkeletalMeshComponent):
                 sm = g(m, "skeletal_mesh_asset", None) or g(m, "skeletal_mesh", None)

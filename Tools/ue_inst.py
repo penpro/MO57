@@ -1444,7 +1444,9 @@ def _buried_pawns(rep, host, client):
                 blocker = re.search(r"rescue found no ground at [^;]*; blocking hits on the sky line \(top first\):(.*)", log)
                 rep.step(f"CONTROL ({who}): with the OLD first-hit rule and a block over the ground, the rescue cannot find the ground",
                          bool(first) and first.group(1) == "No valid terrain found", first.group(0) if first else "no rescue line within 20 s")
-                rep.step(f"the failed rescue names what is in the way ({who})", bool(blocker) and "StaticMeshActor" in blocker.group(1), (blocker.group(1)[:140] if blocker else "no 'rescue found no ground' line"))
+                first_blocker = (blocker.group(1).split("[1]")[0] if blocker else "")
+                rep.step(f"the failed rescue names what is in the way ({who}): the first thing on the sky line is NOT the terrain (the roof, or a forest tree's collision)",
+                         bool(blocker) and "[0]" in first_blocker and "Voxel" not in first_blocker, (blocker.group(1)[:200] if blocker else "no 'rescue found no ground' line"))
                 console(host, "MO.Rescue.FirstHitOnly 0")
                 _wait_on_surface(host, idx, gz, 30)  # whatever the old rule left behind is put right by the fixed one
             off = log_size(host)
@@ -1457,6 +1459,68 @@ def _buried_pawns(rep, host, client):
                      f"ground z={gz:.0f}; pawn z={freed[2] if freed else None}; first rescue line: {first.group(0) if first else None}")
         finally:
             console(host, "MO.Test.ClearRoof")
+
+
+def _remote_copy(client, hx, hy):
+    """The CLIENT's copy of the host's pawn: (z, movement mode, vertical velocity) of the character near (hx, hy) that is not the local pawn, or None."""
+    out = _probe(client,
+        "me = unreal.GameplayStatics.get_player_pawn(world, 0); "
+        "cs = [c for c in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOCharacter) if me is None or c.get_name() != me.get_name()]; "
+        f"near = [c for c in cs if abs(c.get_actor_location().x - {hx}) < 200 and abs(c.get_actor_location().y - {hy}) < 200]; "
+        "c = near[0] if near else None; "
+        "cm = c.get_editor_property('character_movement') if c else None; "
+        "out('COPY found=%s z=%s mm=%s vz=%s' % (bool(c), ('%.0f' % c.get_actor_location().z) if c else '?', str(cm.get_editor_property('movement_mode')).split('.')[-1].split(':')[0] if cm else '?', ('%.0f' % cm.get_editor_property('velocity').z) if cm else '?'))")
+    m = re.search(r"COPY found=(\w+) z=(-?[\d.]+|\?) mm=(\S+) vz=(-?[\d.]+|\?)", out)
+    if not m or m.group(1) != "True":
+        return None
+    return float(m.group(2)), m.group(3), float(m.group(4))
+
+
+def _client_ground(client, on):
+    """Turn the client's voxel terrain collision on/off (what a remote pawn standing outside the client's own terrain radius, or before its runtime exists, has no floor)."""
+    flag = "True" if on else "False"
+    _probe(client, f"n = [a.set_actor_enable_collision({flag}) for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.Actor) if a.get_name().startswith('VoxelLandscape')]; "
+                   f"out('GROUND {flag} actors=%d' % len(n))")
+
+
+def _remote_pawn_stays_put(rep, host, client):
+    """The bug Wes reported ("the client can't see the host's pawn"), second half: a CLIENT draws the host's pawn as a simulated proxy; with no floor under it the engine predicts a fall,
+    and a pawn that stands still gets no position updates to correct that -- it fell at terminal velocity for ever (z=-498790 after a minute). Gravity is never simulated on a proxy now.
+    No local floor is made by switching the client's voxel collision off. CONTROL: MO.RemotePawn.SimGravity 1 (the stock engine behaviour) must make the copy fall, so the check can fail."""
+    p = _pawn_xyz(host, 0)
+    if not rep.step("host: located its own pawn", bool(p), str(p)):
+        return
+    hx, hy, hz = p
+
+    def nudge():  # a tiny server-side move: the next replication reaches the client as a position update (where the flag is decided)
+        _probe(host, f"p = unreal.GameplayStatics.get_player_pawn(world, 0); l = p.get_actor_location(); p.set_actor_location(unreal.Vector(l.x + 1.0, l.y, l.z), False, True); out('NUDGED')")
+
+    copy = _remote_copy(client, hx, hy)
+    rep.step("client: sees the host's pawn at the host's height (standing, not falling)", bool(copy) and abs(copy[0] - hz) < 250 and copy[1] != "MOVE_FALLING",
+             f"host z={hz:.0f}; client's copy {copy}")
+    try:
+        console(client, "MO.RemotePawn.SimGravity 1")
+        _client_ground(client, False)
+        nudge()
+        time.sleep(7)
+        fell = _remote_copy(client, hx + 1.0, hy) or _remote_copy(client, hx, hy)
+        rep.step("CONTROL: with the stock engine behaviour and no floor under it, the client's copy of the host's pawn FALLS",
+                 bool(fell) and fell[0] < hz - 1500, f"host z={hz:.0f}; client's copy {fell}")
+        console(client, "MO.RemotePawn.SimGravity 0")
+        _client_ground(client, True)
+        nudge()  # the server's position snaps the copy back
+        time.sleep(4)
+        back = _remote_copy(client, hx + 2.0, hy) or _remote_copy(client, hx, hy)
+        rep.step("client: the next position update puts the copy back at the host's height", bool(back) and abs(back[0] - hz) < 250, f"client's copy {back}")
+        _client_ground(client, False)
+        nudge()
+        time.sleep(7)
+        held = _remote_copy(client, hx + 3.0, hy) or _remote_copy(client, hx, hy)
+        rep.step("client: with NO floor under it the copy of the host's pawn now stays where the server says", bool(held) and abs(held[0] - hz) < 250,
+                 f"host z={hz:.0f}; client's copy {held}")
+    finally:
+        console(client, "MO.RemotePawn.SimGravity 0")
+        _client_ground(client, True)
 
 
 def _count_buildables(host):
@@ -1584,7 +1648,7 @@ def actions_test(uproject, editor_exe, keep=False, boot_timeout=300):
             start(n, uproject, editor_exe, pos=pos, nosteam=True)
         if not _host_and_join(rep, host, client, "ActionsTest", boot_timeout):
             return False
-        for fn in (_client_pickup, _client_craft, _client_attack, _trust_placement, _trust_pickup_far, _trust_possess_other, _trust_terraform, _buried_pawns):
+        for fn in (_client_pickup, _client_craft, _client_attack, _trust_placement, _trust_pickup_far, _trust_possess_other, _trust_terraform, _buried_pawns, _remote_pawn_stays_put):
             try:
                 fn(rep, host, client)
             except Exception as e:  # noqa: BLE001 - one verb's harness error must not hide the others

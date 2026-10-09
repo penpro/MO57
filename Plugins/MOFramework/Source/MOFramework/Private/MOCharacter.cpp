@@ -1961,6 +1961,23 @@ void AMOCharacter::NotifyControllerChanged()
 	}
 }
 
+namespace
+{
+	/** TEST ONLY control: let simulated proxies predict falls like the stock engine (the original bug). */
+	TAutoConsoleVariable<bool> CVarRemotePawnSimGravity(
+		TEXT("MO.RemotePawn.SimGravity"), false,
+		TEXT("TEST ONLY: remote players' pawns on a client apply simulated gravity (stock engine behaviour; with no local floor they fall forever)."), ECVF_Cheat);
+}
+
+void AMOCharacter::OnUpdateSimulatedPosition(const FVector& OldLocation, const FQuat& OldRotation)
+{
+	Super::OnUpdateSimulatedPosition(OldLocation, OldRotation); // resets bSimGravityDisabled, then sets it only if the proxy is encroaching geometry
+	if (GetLocalRole() == ROLE_SimulatedProxy && !CVarRemotePawnSimGravity.GetValueOnGameThread())
+	{
+		bSimGravityDisabled = true;
+	}
+}
+
 void AMOCharacter::SetLoadHold(bool bHold)
 {
 	bSuppressFallThroughDuringLoad = bHold;

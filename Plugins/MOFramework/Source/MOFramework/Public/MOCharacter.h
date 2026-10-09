@@ -582,6 +582,15 @@ protected:
 	 */
 	virtual void NotifyControllerChanged() override;
 
+	/**
+	 * A CLIENT draws every other player's pawn as a simulated proxy: it takes the server's position and PREDICTS between updates, and with no floor under the proxy the
+	 * engine predicts a fall ("No floor, must fall"). Voxel terrain exists on a machine only around ITS OWN human-driven pawns (VoxelCollisionInvoker), and not at all before the
+	 * client's runtime has been created from the host's seed -- so the host's pawn, standing still (no further position updates to correct it), fell through the client's world at
+	 * terminal velocity forever: z=-498790 after a minute, invisible ("the client can't see the host's pawn"). Gravity is therefore never simulated on a proxy: its height is the
+	 * server's. (MO.RemotePawn.SimGravity 1 restores the engine behaviour, for the test control.)
+	 */
+	virtual void OnUpdateSimulatedPosition(const FVector& OldLocation, const FQuat& OldRotation) override;
+
 	// ============================================================================
 	// COMPONENTS
 	// ============================================================================
