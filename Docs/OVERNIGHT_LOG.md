@@ -228,3 +228,15 @@ Not building: colonist ground far from players (design fork for Wes).
 3. **Colonist ground far from players** (design fork, deliberately not built).
 4. **No build/harvest MO.Test verbs exist** to run from a client; `MO.Test.DropPickup` is a host/PIE test by design (local inventory). Logged, not built.
 5. **The in-game (not main-menu) Load panel** has no screenshot proof of the hidden Host button.
+
+### Real-window checks (done with the PC free; packaged Development build, real keyboard and mouse via computer-use, MO57.exe only)
+- **Tilde popup + `starter`: PASS.** The real ~ key opened the Console popup (`[MOConsole] popup opened`); typed `starter`, clicked Run -> `[MOCheat] starter kit: 50/50 x Stick01 20/20 x Stone01`
+  and the result showed on screen as a notification. The popup remembers the last command ("Recent: starter").
+- **In-game Load panel hides Host: PASS, with its control.** Made a save through the popup (`MO.Save.SaveAs zz_realwin` -> `.sav` written). In-game (Esc -> Load) the row shows only
+  **Delete / Rename**. After Main Menu -> Exit (confirmation dialog), the MAIN-menu Load panel shows **Delete / Rename / Host** for the same row.
+- **Bonus, packaged: Host on that row** (real click) -> `Host requested for saved slot: zz_realwin` -> `CreateSession succeeded` -> `Save loaded successfully: 9 pawns ... seed=1915807424`
+  (the saved seed) -> `Auto-possessed last-played pawn`; the resumed world rendered with the pawn.
+- Cleanup: game stopped by recorded pid, my `zz_realwin.sav` deleted from the STAGED build's own SaveGames; the project's `Saved/SaveGames` (Harper_Wright-01, Test158, v1gate) was not touched.
+- Note: the first click on the window landed on the desktop (Explorer had focus) and was ignored; the second focused the game. A real player would not hit that.
+- **Found, not fixed:** during that save the packaged build logged a non-fatal render ensure, `FD3D12DynamicRHI::RHIReadSurfaceData: Ensure condition failed: InRHITexture` (D3D12RenderTarget.cpp:599),
+  most likely the save-thumbnail capture reading a null render target. The save itself succeeded (and loaded). Worth a look at the thumbnail code path; not a gameplay blocker.
