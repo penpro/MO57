@@ -58,6 +58,33 @@ def headers(src_root=None):
     return classes
 
 
+# Roots of the engine's UserWidget family. A class deriving from any of these is a UserWidget.
+USERWIDGET_ROOTS = {"UUserWidget", "UCommonUserWidget", "UCommonButtonBase", "UCommonActivatableWidget"}
+
+
+def is_bare_native_userwidget(class_name, derives_from_userwidget):
+    """True for a native (C++) UserWidget class used directly as a widget.
+
+    A UserWidget gets its Slate content from a widget TREE, and only a Widget Blueprint has one. The bare native class
+    builds an empty, hit-test-invisible spacer: nothing draws and clicks pass through, yet every simulated check
+    (SimulateClick, a bound delegate) still "works" -- so the bug only shows with a real mouse. Blueprint-generated
+    classes end in `_C`; native ones do not.
+    """
+    return bool(derives_from_userwidget) and not class_name.endswith("_C")
+
+
+def derives_from_userwidget(cname, src_root=None):
+    """Does the native class `cname` (e.g. 'UMOCommonButton') derive from the engine's UserWidget family?"""
+    classes = headers(src_root)
+    seen = set()
+    while cname and cname not in seen:
+        if cname in USERWIDGET_ROOTS:
+            return True
+        seen.add(cname)
+        cname = classes[cname]["base"] if cname in classes else None
+    return False
+
+
 def native_name(parent):
     """'/Script/MOFramework.MOJoinGamePanel' | 'MOJoinGamePanel' | 'UMOJoinGamePanel' -> 'UMOJoinGamePanel'."""
     cname = parent.split(".")[-1].strip("'\"")

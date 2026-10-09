@@ -27,7 +27,15 @@ void UMOSessionSubsystem::Deinitialize()
 		Sessions->ClearOnFindSessionsCompleteDelegate_Handle(FindSessionsCompleteHandle);
 		Sessions->ClearOnJoinSessionCompleteDelegate_Handle(JoinSessionCompleteHandle);
 		Sessions->ClearOnDestroySessionCompleteDelegate_Handle(DestroySessionCompleteHandle);
+
+		// The online subsystem outlives this game instance (always in the editor, where it persists across PIE
+		// runs; and Steam keeps a lobby listed until it is left). Fire-and-forget: nothing is left to listen.
+		if (Sessions->GetNamedSession(NAME_GameSession))
+		{
+			Sessions->DestroySession(NAME_GameSession);
+		}
 	}
+	AfterDestroy = nullptr;
 
 	Super::Deinitialize();
 }
@@ -56,6 +64,11 @@ bool UMOSessionSubsystem::IsUsingRealOnlineSubsystem() const
 	return OnlineSub && OnlineSub->GetSubsystemName() != NULL_SUBSYSTEM;
 }
 
+bool UMOSessionSubsystem::IsLanMode() const
+{
+	return !IsUsingRealOnlineSubsystem();
+}
+
 bool UMOSessionSubsystem::HasActiveSession() const
 {
 	const IOnlineSessionPtr Sessions = GetSessionInterface();
@@ -67,6 +80,26 @@ bool UMOSessionSubsystem::HasActiveSession() const
 // ============================================================================
 
 bool UMOSessionSubsystem::HostSession(const FString& DisplayName, int32 MaxPlayers, const FString& GameplayLevelPath)
+{
+	if (!GetSessionInterface().IsValid())
+	{
+		return HostSessionNow(DisplayName, MaxPlayers, GameplayLevelPath);  // reports the missing subsystem
+	}
+
+	if (bDestroyInFlight || HasActiveSession())
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOSession] HostSession: a stale session is registered -- destroying it first"));
+		DestroyThen([this, DisplayName, MaxPlayers, GameplayLevelPath]()
+		{
+			HostSessionNow(DisplayName, MaxPlayers, GameplayLevelPath);
+		});
+		return true;
+	}
+
+	return HostSessionNow(DisplayName, MaxPlayers, GameplayLevelPath);
+}
+
+bool UMOSessionSubsystem::HostSessionNow(const FString& DisplayName, int32 MaxPlayers, const FString& GameplayLevelPath)
 {
 	const IOnlineSessionPtr Sessions = GetSessionInterface();
 	if (!Sessions.IsValid())
@@ -98,7 +131,7 @@ bool UMOSessionSubsystem::HostSession(const FString& DisplayName, int32 MaxPlaye
 	FOnlineSessionSettings SessionSettings;
 	SessionSettings.NumPublicConnections = EffectiveMaxPlayers;
 	SessionSettings.bShouldAdvertise = true;
-	SessionSettings.bIsLANMatch = false;
+	SessionSettings.bIsLANMatch = IsLanMode();
 	SessionSettings.bIsDedicated = false;
 	SessionSettings.bAllowJoinInProgress = true;
 	SessionSettings.bUsesPresence = IsUsingRealOnlineSubsystem();
@@ -110,7 +143,7 @@ bool UMOSessionSubsystem::HostSession(const FString& DisplayName, int32 MaxPlaye
 		FOnCreateSessionCompleteDelegate::CreateUObject(this, &UMOSessionSubsystem::HandleCreateSessionComplete));
 
 	UE_LOG(LogMOFramework, Warning, TEXT("[MOSession] HostSession: creating '%s' (max %d, requested %d, %s)"),
-		*DisplayName, EffectiveMaxPlayers, MaxPlayers, IsUsingRealOnlineSubsystem() ? TEXT("Steam") : TEXT("Null/offline"));
+		*DisplayName, EffectiveMaxPlayers, MaxPlayers, IsUsingRealOnlineSubsystem() ? TEXT("Steam") : TEXT("Null/LAN"));
 
 	if (!Sessions->CreateSession(*LocalPlayer->GetPreferredUniqueNetId(), NAME_GameSession, SessionSettings))
 	{
@@ -181,14 +214,14 @@ void UMOSessionSubsystem::FindSessions()
 
 	SessionSearch = MakeShared<FOnlineSessionSearch>();
 	SessionSearch->MaxSearchResults = 50;
-	SessionSearch->bIsLanQuery = false;
+	SessionSearch->bIsLanQuery = IsLanMode();
 	SessionSearch->QuerySettings.Set(SEARCH_LOBBIES, IsUsingRealOnlineSubsystem(), EOnlineComparisonOp::Equals);
 
 	FindSessionsCompleteHandle = Sessions->AddOnFindSessionsCompleteDelegate_Handle(
 		FOnFindSessionsCompleteDelegate::CreateUObject(this, &UMOSessionSubsystem::HandleFindSessionsComplete));
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOSession] FindSessions: searching (%s)"),
-		IsUsingRealOnlineSubsystem() ? TEXT("Steam") : TEXT("Null/offline"));
+		IsUsingRealOnlineSubsystem() ? TEXT("Steam") : TEXT("Null/LAN"));
 
 	if (!Sessions->FindSessions(*LocalPlayer->GetPreferredUniqueNetId(), SessionSearch.ToSharedRef()))
 	{
@@ -250,6 +283,21 @@ void UMOSessionSubsystem::HandleFindSessionsComplete(bool bWasSuccessful)
 // ============================================================================
 
 bool UMOSessionSubsystem::JoinSessionByIndex(int32 ResultIndex)
+{
+	if (GetSessionInterface().IsValid() && (bDestroyInFlight || HasActiveSession()))
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOSession] JoinSessionByIndex: a stale session is registered -- destroying it first"));
+		DestroyThen([this, ResultIndex]()
+		{
+			JoinSessionNow(ResultIndex);
+		});
+		return true;
+	}
+
+	return JoinSessionNow(ResultIndex);
+}
+
+bool UMOSessionSubsystem::JoinSessionNow(int32 ResultIndex)
 {
 	const IOnlineSessionPtr Sessions = GetSessionInterface();
 	if (!Sessions.IsValid())
@@ -332,17 +380,52 @@ void UMOSessionSubsystem::HandleJoinSessionComplete(FName SessionName, EOnJoinSe
 
 void UMOSessionSubsystem::LeaveSession()
 {
-	const IOnlineSessionPtr Sessions = GetSessionInterface();
-	if (!Sessions.IsValid() || !Sessions->GetNamedSession(NAME_GameSession))
+	DestroyThen(nullptr);
+}
+
+void UMOSessionSubsystem::ReleaseStaleSession()
+{
+	if (HasActiveSession() && !bDestroyInFlight)
 	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOSession] ReleaseStaleSession: leaving a session that outlived its world"));
+		LeaveSession();
+	}
+}
+
+void UMOSessionSubsystem::DestroyThen(TFunction<void()> Continuation)
+{
+	if (bDestroyInFlight)
+	{
+		if (Continuation)
+		{
+			AfterDestroy = MoveTemp(Continuation);
+		}
 		return;
 	}
 
+	const IOnlineSessionPtr Sessions = GetSessionInterface();
+	if (!Sessions.IsValid() || !Sessions->GetNamedSession(NAME_GameSession))
+	{
+		if (Continuation)
+		{
+			Continuation();
+		}
+		return;
+	}
+
+	bDestroyInFlight = true;
+	AfterDestroy = MoveTemp(Continuation);
 	DestroySessionCompleteHandle = Sessions->AddOnDestroySessionCompleteDelegate_Handle(
 		FOnDestroySessionCompleteDelegate::CreateUObject(this, &UMOSessionSubsystem::HandleDestroySessionComplete));
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOSession] LeaveSession: destroying session"));
-	Sessions->DestroySession(NAME_GameSession);
+
+	// Some subsystems complete synchronously (the delegate fires inside the call), others later. If the call itself
+	// fails to start, no delegate will ever fire, so complete it ourselves -- unless it already did.
+	if (!Sessions->DestroySession(NAME_GameSession) && bDestroyInFlight)
+	{
+		HandleDestroySessionComplete(NAME_GameSession, false);
+	}
 }
 
 void UMOSessionSubsystem::HandleDestroySessionComplete(FName SessionName, bool bWasSuccessful)
@@ -354,4 +437,11 @@ void UMOSessionSubsystem::HandleDestroySessionComplete(FName SessionName, bool b
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOSession] DestroySession '%s' complete: %s"),
 		*SessionName.ToString(), bWasSuccessful ? TEXT("success") : TEXT("failed"));
+
+	bDestroyInFlight = false;
+	if (TFunction<void()> Next = MoveTemp(AfterDestroy))
+	{
+		AfterDestroy = nullptr;
+		Next();
+	}
 }

@@ -37,14 +37,17 @@ SESSION_ENTRY = {
     "root": {"type": "Border", "name": "BackgroundBorder", "color": [0, 0, 0, 0.25], "children": [
         {"type": "SizeBox", "name": "EntrySizeBox", "height": 72, "children": [
             {"type": "Overlay", "name": "EntryOverlay", "children": [
-                # the clickable surface; text sits above it and must not eat the click
-                {"type": "MOCommonButton", "name": "EntryButton", "props": {"style": BTN_STYLE},
-                 "slot": {"horizontal_alignment": "Fill", "vertical_alignment": "Fill"}},
+                # Row visuals: BackgroundBorder (selection colour) + this text. Text must not eat the click.
                 {"type": "VerticalBox", "name": "TextColumn", "props": {"visibility": "HitTestInvisible"},
                  "slot": {"padding": [16, 8], "horizontal_alignment": "Fill", "vertical_alignment": "Center"}, "children": [
                     {"type": "TextBlock", "name": "SessionNameText", "text": "Session Name", "font_size": 22},
                     {"type": "TextBlock", "name": "SessionDetailText", "text": "0/4 players - 0 ms", "font_size": 14, "color": GREY},
                 ]},
+                # The clickable surface: LAST child of the overlay so it is topmost, invisible (render opacity 0 still
+                # hit-tests) so the row visuals show through. It must be the Widget Blueprint (alias MOButton): the bare
+                # native MOCommonButton has no widget tree and real mouse clicks pass straight through it.
+                {"type": "MOButton", "name": "EntryButton", "props": {"style": BTN_STYLE, "render_opacity": 0.0},
+                 "slot": {"horizontal_alignment": "Fill", "vertical_alignment": "Fill"}},
             ]}]}]},
 }
 

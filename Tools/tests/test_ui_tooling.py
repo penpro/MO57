@@ -190,5 +190,37 @@ class SpecContractTests(unittest.TestCase):
             self.assertFalse(dupes, f"{fname}: duplicate widget names {dupes} (UMG requires unique names)")
 
 
+class BareNativeUserWidgetTests(unittest.TestCase):
+    """A native UserWidget class used directly as a node has no widget tree: it builds an empty, hit-test-invisible
+    spacer. Real mouse clicks pass through it while SimulateClick and bound delegates still work, so it only shows up
+    with a real mouse (this is how the session-list rows could not be clicked). Catch it before the editor."""
+
+    def test_naming_rule(self):
+        self.assertTrue(uc.is_bare_native_userwidget("MOCommonButton", True))
+        self.assertFalse(uc.is_bare_native_userwidget("WBP_MOCommonButton_C", True))  # blueprint-generated
+        self.assertFalse(uc.is_bare_native_userwidget("TextBlock", False))  # not a UserWidget at all
+
+    def test_userwidget_family_detected_from_the_headers(self):
+        for cname in ("UMOCommonButton", "UMOJoinGamePanel", "UMOSessionListWidget", "UMOListEntryBase"):
+            self.assertTrue(uc.derives_from_userwidget(cname), cname)
+        for cname in ("UMOSessionSubsystem", "UVerticalBox", "UNoSuchThing"):
+            self.assertFalse(uc.derives_from_userwidget(cname), cname)
+
+    def test_no_spec_node_is_a_bare_native_userwidget(self):
+        for path in sorted((PY_DIR / "ui_specs").glob("*.py")):
+            for spec in runpy.run_path(str(path))["SPECS"]:
+                tree = {}
+                if "root" in spec:
+                    SpecContractTests.walk(spec["root"], tree)
+                for att in spec.get("attach", []):
+                    SpecContractTests.walk(att["node"], tree)
+                for name, node_type in tree.items():
+                    cname = uc.native_name(node_type) if (node_type.startswith("/Script/") or node_type[:2] == "MO") else None
+                    if cname and cname in uc.headers():
+                        self.assertFalse(uc.derives_from_userwidget(cname),
+                                         f"{path.name}: node '{name}' uses native UserWidget {node_type}; use a Widget "
+                                         f"Blueprint (type 'MOButton' for buttons)")
+
+
 if __name__ == "__main__":
     unittest.main()

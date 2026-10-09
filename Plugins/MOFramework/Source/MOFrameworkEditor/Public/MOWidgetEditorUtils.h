@@ -326,6 +326,18 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "MO|Editor|Widget")
 	static bool RenameWidget(UWidgetBlueprint* WidgetBlueprint, FName OldName, FName NewName);
 
+	/**
+	 * Remove a widget AND all of its descendants from a blueprint's widget tree (what the Designer's Delete does).
+	 * The removed objects are moved to the transient package so the names are free to reuse immediately, e.g. to
+	 * re-create a widget with a different class under the same BindWidget name.
+	 *
+	 * @param WidgetBlueprint The widget blueprint
+	 * @param WidgetName Widget to remove (the root is allowed; the tree is then empty)
+	 * @return True if the widget existed and was removed
+	 */
+	UFUNCTION(BlueprintCallable, Category = "MO|Editor|Widget")
+	static bool RemoveWidget(UWidgetBlueprint* WidgetBlueprint, FName WidgetName);
+
 	// ========== Query Functions ==========
 
 	/**

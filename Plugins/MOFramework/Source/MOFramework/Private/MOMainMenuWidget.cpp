@@ -159,6 +159,7 @@ void UMOMainMenuWidget::NativeDestruct()
 	{
 		LoadPanel->OnRequestClose.RemoveDynamic(this, &UMOMainMenuWidget::HandlePanelRequestClose);
 		LoadPanel->OnLoadRequested.RemoveDynamic(this, &UMOMainMenuWidget::HandleLoadPanelLoadRequested);
+		LoadPanel->OnHostRequested.RemoveDynamic(this, &UMOMainMenuWidget::HandleLoadPanelHostRequested);
 	}
 	if (OptionsPanel)
 	{
@@ -216,7 +217,7 @@ bool UMOMainMenuWidget::NativeOnCloseKeyRequested(const FKeyEvent& InKeyEvent)
 void UMOMainMenuWidget::ShowNewGamePanel()
 {
 	UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] ShowNewGamePanel called"));
-	SwitchToPanel(PanelIndex_NewGame);
+	SwitchToPanel(ResolvePanelIndex(NewGamePanel, PanelIndex_NewGame));
 
 	// Generate a fresh random seed when opening
 	if (NewGamePanel)
@@ -227,13 +228,13 @@ void UMOMainMenuWidget::ShowNewGamePanel()
 
 void UMOMainMenuWidget::ShowOptionsPanel()
 {
-	SwitchToPanel(PanelIndex_Options);
+	SwitchToPanel(ResolvePanelIndex(OptionsPanel, PanelIndex_Options));
 }
 
 void UMOMainMenuWidget::ShowLoadPanel()
 {
 	UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] ShowLoadPanel called"));
-	SwitchToPanel(PanelIndex_Load);
+	SwitchToPanel(ResolvePanelIndex(LoadPanel, PanelIndex_Load));
 
 	// Refresh load list when opening
 	if (LoadPanel)
@@ -279,10 +280,35 @@ void UMOMainMenuWidget::ShowJoinGamePanel()
 
 void UMOMainMenuWidget::NotifyHostSessionResult(bool bSuccess, const FString& ErrorMessage)
 {
+	// Answer whichever panel started the request.
+	if (bHostRequestFromLoadPanel)
+	{
+		bHostRequestFromLoadPanel = false;
+		if (LoadPanel)
+		{
+			LoadPanel->SetHostStatus(bSuccess ? NSLOCTEXT("MOMainMenu", "HostingSaveOk", "Session created - loading the world...")
+			                                  : FText::Format(NSLOCTEXT("MOMainMenu", "HostingSaveFailed", "Could not host: {0}"),
+			                                                  FText::FromString(ErrorMessage)));
+		}
+		return;
+	}
 	if (HostGamePanel)
 	{
 		HostGamePanel->NotifyHostResult(bSuccess, ErrorMessage);
 	}
+}
+
+int32 UMOMainMenuWidget::ResolvePanelIndex(const UWidget* Panel, int32 LegacyIndex) const
+{
+	const int32 Found = FindPanelIndex(Panel);
+	if (Found != INDEX_NONE)
+	{
+		return Found;
+	}
+	UE_LOG(LogMOFramework, Warning,
+		TEXT("[MOMainMenuWidget] panel %s is not a child of FocusWindowSwitcher; falling back to legacy index %d"),
+		Panel ? *Panel->GetName() : TEXT("<null>"), LegacyIndex);
+	return LegacyIndex;
 }
 
 int32 UMOMainMenuWidget::FindPanelIndex(const UWidget* Panel) const
@@ -406,8 +432,12 @@ void UMOMainMenuWidget::BindButtonEvents()
 
 		LoadPanel->OnRequestClose.RemoveDynamic(this, &UMOMainMenuWidget::HandlePanelRequestClose);
 		LoadPanel->OnLoadRequested.RemoveDynamic(this, &UMOMainMenuWidget::HandleLoadPanelLoadRequested);
+		LoadPanel->OnHostRequested.RemoveDynamic(this, &UMOMainMenuWidget::HandleLoadPanelHostRequested);
 		LoadPanel->OnRequestClose.AddDynamic(this, &UMOMainMenuWidget::HandlePanelRequestClose);
 		LoadPanel->OnLoadRequested.AddDynamic(this, &UMOMainMenuWidget::HandleLoadPanelLoadRequested);
+		LoadPanel->OnHostRequested.AddDynamic(this, &UMOMainMenuWidget::HandleLoadPanelHostRequested);
+		// The main menu is the one place a session can be started, so this is the one place the Host action is offered.
+		LoadPanel->SetHostActionEnabled(true);
 		UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] LoadPanel bound (filter disabled for main menu)"));
 	}
 
@@ -437,7 +467,7 @@ void UMOMainMenuWidget::BindButtonEvents()
 
 void UMOMainMenuWidget::SwitchToPanel(int32 PanelIndex)
 {
-	UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] SwitchToPanel: %d (None=0, NewGame=1, Load=2, Options=3; co-op panels resolved by widget)"), PanelIndex);
+	UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] SwitchToPanel: %d (0 = blank; every other panel's index is resolved from the widget)"), PanelIndex);
 
 	if (FocusWindowSwitcher)
 	{
@@ -502,6 +532,20 @@ void UMOMainMenuWidget::HandleLoadPanelLoadRequested(const FString& SlotName)
 {
 	UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] Load requested for slot: %s"), *SlotName);
 	OnLoadGameRequested.Broadcast(SlotName);
+}
+
+void UMOMainMenuWidget::HandleLoadPanelHostRequested(const FString& SlotName)
+{
+	UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] Host requested for saved slot: %s"), *SlotName);
+
+	// Like the Host Game panel (and unlike Load), do NOT close the panel: CreateSession is async and can fail, and the
+	// failure has to land somewhere the player is looking. NotifyHostSessionResult routes it back here.
+	bHostRequestFromLoadPanel = true;
+	if (LoadPanel)
+	{
+		LoadPanel->SetHostStatus(NSLOCTEXT("MOMainMenu", "HostingSave", "Starting this world as a co-op host..."));
+	}
+	OnHostSavedGameRequested.Broadcast(SlotName);
 }
 
 void UMOMainMenuWidget::HandleNewGamePanelStartRequested()

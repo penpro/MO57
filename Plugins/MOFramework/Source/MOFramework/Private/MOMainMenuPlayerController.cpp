@@ -9,6 +9,7 @@
 #include "MOGameUIManagerSubsystem.h"
 #include "MOPrimaryGameLayout.h"
 #include "MOSessionSubsystem.h"
+#include "MOPersistenceSubsystem.h"
 #include "Blueprint/UserWidget.h"
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetSystemLibrary.h"
@@ -32,9 +33,29 @@ AMOMainMenuPlayerController::AMOMainMenuPlayerController()
 	// on the main menu widget. Do not set bShowMouseCursor manually.
 }
 
+void AMOMainMenuPlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	// The intro's fallback timer lives in the GAME INSTANCE's timer manager, which outlives this controller (and its world): travelling
+	// away from the menu before it fired (hosting a session, joining a friend's invite, loading a save) left a callback holding a dead
+	// `this`, and it crashed the packaged game five seconds later (UMediaPlayer::IsPlaying, access violation).
+	if (const UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(VideoFallbackTimerHandle);
+	}
+	Super::EndPlay(EndPlayReason);
+}
+
 void AMOMainMenuPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
+
+	// Arriving at the main menu means no game is running. A session still registered here outlived its world
+	// (quit to menu, disconnect, travel failure): destroy it so hosting/joining works again and a Steam lobby stops
+	// being advertised. This is the one place every route out of gameplay converges.
+	if (UMOSessionSubsystem* Sessions = UMOSessionSubsystem::Get(this))
+	{
+		Sessions->ReleaseStaleSession();
+	}
 
 	UE_LOG(LogMOFramework, Warning, TEXT("[MOMainMenuPlayerController] BeginPlay called"));
 	UE_LOG(LogMOFramework, Warning, TEXT("[MOMainMenuPlayerController] MainMenuWidgetClass: %s"),
@@ -136,6 +157,7 @@ void AMOMainMenuPlayerController::ShowMainMenu()
 			MainMenuWidget->OnLoadGameRequested.AddDynamic(this, &AMOMainMenuPlayerController::HandleLoadGameRequested);
 			MainMenuWidget->OnExitGameRequested.AddDynamic(this, &AMOMainMenuPlayerController::HandleExitGameRequested);
 			MainMenuWidget->OnHostSessionRequested.AddDynamic(this, &AMOMainMenuPlayerController::HandleHostSessionRequested);
+			MainMenuWidget->OnHostSavedGameRequested.AddDynamic(this, &AMOMainMenuPlayerController::HandleHostSavedGameRequested);
 
 			UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuPlayerController] Main menu pushed to Menu layer"));
 			return;
@@ -164,6 +186,7 @@ void AMOMainMenuPlayerController::ShowMainMenu()
 		MainMenuWidget->OnLoadGameRequested.AddDynamic(this, &AMOMainMenuPlayerController::HandleLoadGameRequested);
 		MainMenuWidget->OnExitGameRequested.AddDynamic(this, &AMOMainMenuPlayerController::HandleExitGameRequested);
 		MainMenuWidget->OnHostSessionRequested.AddDynamic(this, &AMOMainMenuPlayerController::HandleHostSessionRequested);
+		MainMenuWidget->OnHostSavedGameRequested.AddDynamic(this, &AMOMainMenuPlayerController::HandleHostSavedGameRequested);
 	}
 }
 
@@ -255,7 +278,7 @@ void AMOMainMenuPlayerController::PlayIntroVideo()
 			UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuPlayerController] Opening media source: %s"), *MediaSource->GetName());
 
 			// Set a fallback timer in case media fails to open
-			GetWorldTimerManager().SetTimer(VideoFallbackTimerHandle, [this]()
+			GetWorldTimerManager().SetTimer(VideoFallbackTimerHandle, FTimerDelegate::CreateWeakLambda(this, [this]()
 			{
 				if (bIntroPlaying && MediaPlayer && !MediaPlayer->IsPlaying())
 				{
@@ -263,7 +286,7 @@ void AMOMainMenuPlayerController::PlayIntroVideo()
 					CleanupMediaPlayer();
 					HandleIntroComplete();
 				}
-			}, 5.0f, false);  // 5 second timeout
+			}), 5.0f, false);  // 5 second timeout (weak: dropped if this controller is gone when it fires)
 
 			MediaPlayer->OpenSource(MediaSource);
 		}
@@ -402,8 +425,43 @@ void AMOMainMenuPlayerController::LoadGame(const FString& SlotName)
 
 void AMOMainMenuPlayerController::HostSession(const FString& SessionDisplayName, int32 MaxPlayers)
 {
-	UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuPlayerController] HostSession requested: '%s' (max %d)"),
-		*SessionDisplayName, MaxPlayers);
+	StartHosting(SessionDisplayName, MaxPlayers, FString());
+}
+
+void AMOMainMenuPlayerController::HostSavedGame(const FString& SlotName)
+{
+	FString DisplayName = SlotName;
+	bool bFound = false;
+	if (UMOPersistenceSubsystem* Persistence = GetGameInstance() ? GetGameInstance()->GetSubsystem<UMOPersistenceSubsystem>() : nullptr)
+	{
+		FMOSaveMetadata Meta;
+		if (Persistence->GetSaveSlotMetadata(SlotName, Meta))
+		{
+			bFound = true;
+			if (!Meta.DisplayName.IsEmpty())
+			{
+				DisplayName = Meta.DisplayName.ToString();
+			}
+		}
+	}
+	if (!bFound)
+	{
+		// Say so on the panel that asked, instead of loading a world that is not there.
+		UE_LOG(LogMOFramework, Error, TEXT("[MOMainMenuPlayerController] HostSavedGame: save slot '%s' not found"), *SlotName);
+		if (MainMenuWidget)
+		{
+			MainMenuWidget->NotifyHostSessionResult(false, FString::Printf(TEXT("Save '%s' could not be found."), *SlotName));
+		}
+		return;
+	}
+	StartHosting(DisplayName, UMOSessionSubsystem::DefaultMaxPlayers, SlotName);
+}
+
+void AMOMainMenuPlayerController::StartHosting(const FString& SessionDisplayName, int32 MaxPlayers, const FString& SaveSlotToResume)
+{
+	UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuPlayerController] Hosting requested: '%s' (max %d) %s"),
+		*SessionDisplayName, MaxPlayers,
+		SaveSlotToResume.IsEmpty() ? TEXT("-- new world") : *FString::Printf(TEXT("-- resuming save '%s'"), *SaveSlotToResume));
 
 	if (!ValidateGameplayLevelExists())
 	{
@@ -425,14 +483,27 @@ void AMOMainMenuPlayerController::HostSession(const FString& SessionDisplayName,
 		return;
 	}
 
-	// Hosting always starts a fresh world — same pending-new-game setup as
-	// StartNewGame; "host an existing save" is a future feature.
+	// Same pending-world setup as StartNewGame (fresh world) or LoadGame (resume a save); the listen-server GameMode
+	// then runs the exact path a single-player game would, and publishes the world seed to joiners.
 	UMOGameSettings* Settings = UMOGameSettings::GetMOGameSettings();
 	if (Settings)
 	{
-		Settings->bPendingNewGame = true;
 		Settings->bIsLoadingIntoGameplay = true;
-		Settings->PendingNewGameSlot = FString::Printf(TEXT("World_%s"), *FDateTime::Now().ToString(TEXT("%Y%m%d_%H%M%S")));
+		if (SaveSlotToResume.IsEmpty())
+		{
+			Settings->bPendingNewGame = true;
+			Settings->PendingNewGameSlot = FString::Printf(TEXT("World_%s"), *FDateTime::Now().ToString(TEXT("%Y%m%d_%H%M%S")));
+			// Fresh world = fresh seed. PendingWorldSeed is never cleared, so without this a hosted world reused whatever
+			// seed the last New Game panel / loaded save / hosted game left behind (every hosted world had the same
+			// terrain). 0 = "pick a random seed" in AMOGameMode::HandlePendingNewGame.
+			Settings->PendingWorldSeed = 0;
+		}
+		else
+		{
+			// Not a new game: PendingNewGameSlot doubles as the slot to load, and the seed comes from the save itself.
+			Settings->bPendingNewGame = false;
+			Settings->PendingNewGameSlot = SaveSlotToResume;
+		}
 		Settings->SaveSettings();
 	}
 
@@ -604,6 +675,11 @@ void AMOMainMenuPlayerController::HandleExitGameRequested()
 void AMOMainMenuPlayerController::HandleHostSessionRequested(const FString& DisplayName, int32 MaxPlayers)
 {
 	HostSession(DisplayName, MaxPlayers);
+}
+
+void AMOMainMenuPlayerController::HandleHostSavedGameRequested(const FString& SlotName)
+{
+	HostSavedGame(SlotName);
 }
 
 void AMOMainMenuPlayerController::SetupMediaPlayer()

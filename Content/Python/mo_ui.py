@@ -100,6 +100,11 @@ def resolve_class(spec):
         cls = py.static_class() if py is not None else None
     if cls is None:
         raise UIError(f"cannot resolve widget class '{spec}'")
+    cdo = unreal.get_default_object(cls)
+    if mo_ui_contract.is_bare_native_userwidget(cls.get_name(), isinstance(cdo, unreal.UserWidget)):
+        raise UIError(f"'{spec}' is a native UserWidget with no Widget Blueprint: it has no widget tree, so it renders "
+                      f"as an empty spacer that real mouse clicks pass straight through (simulated clicks still "
+                      f"'work', which hides it). Use a Widget Blueprint instead -- type 'MOButton' for buttons.")
     return cls
 
 
@@ -314,6 +319,14 @@ def check(asset):
         if issues:
             bad += 1
         lines.append(f"  {'BAD    ' if issues else 'ok     '} {tag:8} {m['name']}: {m['type']}" + (("  <- " + "; ".join(issues)) if issues else ""))
+    # Any widget in the tree, contract member or not: a bare native UserWidget draws nothing and eats no clicks.
+    for n in sorted(names):
+        w = EUL.find_source_widget_by_name(wbp, n)
+        if w is not None and mo_ui_contract.is_bare_native_userwidget(w.get_class().get_name(),
+                                                                      isinstance(w, unreal.UserWidget)):
+            bad += 1
+            lines.append(f"  BAD    bare native UserWidget '{n}' ({w.get_class().get_name()}): no widget tree, so it is "
+                         f"invisible to the mouse -- replace it with a Widget Blueprint (see `ui remove`)")
     lines.append("RESULT: " + ("contract satisfied" if bad == 0 else f"{bad} problem(s)"))
     return "\n".join(lines)
 
@@ -508,6 +521,18 @@ def preview_clear():
     return f"removed {n} preview widget(s)"
 
 
+def remove(asset, widget):
+    """Delete a widget and its subtree (MOWidgetEditorUtils.RemoveWidget), then compile + save."""
+    wbp = EAL.load_asset(asset)
+    if wbp is None:
+        raise UIError(f"asset not found: {asset}")
+    if not MOU.remove_widget(wbp, widget):
+        raise UIError(f"widget '{widget}' not found in {asset}")
+    unreal.BlueprintEditorLibrary.compile_blueprint(wbp)
+    EAL.save_loaded_asset(wbp)
+    return f"removed '{widget}' (and its children) from {asset}; compiled and saved"
+
+
 def close_tabs():
     if unreal.get_editor_subsystem(unreal.LevelEditorSubsystem).is_in_play_in_editor():
         return "NOT closed: asset editors cannot be closed during PIE (end PIE first)"
@@ -545,6 +570,8 @@ def cli(args_json):
             return json.dumps(dump(a["asset"], a.get("props", True)), indent=1)
         if verb == "build":
             return build_file(a["spec"])
+        if verb == "remove":
+            return remove(a["asset"], a["widget"])
         if verb == "compile":
             wbp = EAL.load_asset(a["asset"])
             unreal.BlueprintEditorLibrary.compile_blueprint(wbp)

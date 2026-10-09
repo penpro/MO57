@@ -45,7 +45,10 @@
 #include "MOSaveSlotListPanel.h"
 #include "MOLoadPanel.generated.h"
 
+class UTextBlock;
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOLoadPanelLoadRequestedSignature, const FString&, SlotName);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOLoadPanelHostRequestedSignature, const FString&, SlotName);
 
 /**
  * Load-flavored slot panel. Adds OnLoadRequested + runtime world-filter
@@ -69,6 +72,23 @@ public:
 	UPROPERTY(BlueprintAssignable, Category="MO|UI|LoadPanel")
 	FMOLoadPanelLoadRequestedSignature OnLoadRequested;
 
+	/**
+	 * Fired when the player presses an entry's Host action: start THIS save as a co-op server. Only fires after the
+	 * hosting context (main menu) called SetHostActionEnabled(true). The caller handles the session + level transition.
+	 */
+	UPROPERTY(BlueprintAssignable, Category="MO|UI|LoadPanel")
+	FMOLoadPanelHostRequestedSignature OnHostRequested;
+
+	/** Show a line of host progress/failure text under the list (no-op if the Blueprint has no StatusText). */
+	UFUNCTION(BlueprintCallable, Category="MO|UI|LoadPanel")
+	void SetHostStatus(const FText& Text);
+
 protected:
 	virtual void HandleSlotSelected(const FString& SlotName) override;
+	virtual void HandleSlotHostRequested(const FString& SlotName) override;
+
+private:
+	/** Optional one-line status ("Starting <save> as a co-op host...", or why that failed). */
+	UPROPERTY(meta=(BindWidgetOptional))
+	TObjectPtr<UTextBlock> StatusText;
 };

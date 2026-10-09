@@ -37,8 +37,10 @@
  *   Steamworks partner site yet), OnlineSubsystemSteam logs "Unable to create
  *   OnlineSubsystem instance Steam" and the engine falls back to the Null
  *   subsystem per Config/DefaultEngine.ini's fallback NetDriverDefinitions.
- *   Sessions still "work" against Null (useful for solo dev testing of this
- *   subsystem's plumbing) but won't be visible to real Steam friends/players.
+ *   Against Null, sessions are LAN sessions (IsLanMode()): the Null OSS only
+ *   answers searches for a host whose settings say bIsLANMatch, so Host and
+ *   Find both derive their LAN flags from that one predicate. They are visible
+ *   to other game processes on the same network, not to Steam friends/players.
  *   IsUsingRealOnlineSubsystem() reports which one is actually active.
  *
  * [2026-09] SESSION NAME IS FIXED: uses the engine's NAME_GameSession constant
@@ -136,8 +138,10 @@ public:
 	 * server. DisplayName is shown to other players browsing sessions (e.g. via
 	 * FindSessions); MaxPlayers is clamped by ClampMaxPlayers and bounds
 	 * NumPublicConnections.
-	 * @return false immediately if no online subsystem/session interface is
-	 *         available, or a session is already active (call LeaveSession first).
+	 * A session still registered when this is called is stale (hosting is only reachable from the main menu, where
+	 * no game is running), so it is destroyed first and hosting continues once that completes.
+	 * @return false immediately if no online subsystem/session interface is available. true means the request
+	 *         was accepted (it may first be tearing down a stale session); the outcome arrives via OnHostComplete.
 	 */
 	UFUNCTION(BlueprintCallable, Category="MO|Session")
 	bool HostSession(const FString& DisplayName, int32 MaxPlayers, const FString& GameplayLevelPath);
@@ -183,6 +187,16 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Session")
 	void LeaveSession();
 
+	/**
+	 * Destroy a session that outlived its world. A session lives in the online subsystem, not in the level, so it
+	 * survives every OpenLevel: quitting to the main menu (or being dropped back there by a disconnect) leaves a
+	 * registered session behind, which (a) blocks hosting/joining again and (b) keeps a host's Steam lobby listed
+	 * after the game is gone. The main menu calls this on arrival, the one place every route out of gameplay
+	 * converges. No-op when nothing is registered.
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Session")
+	void ReleaseStaleSession();
+
 	UFUNCTION(BlueprintPure, Category="MO|Session")
 	bool HasActiveSession() const;
 
@@ -192,6 +206,12 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO|Session")
 	bool IsUsingRealOnlineSubsystem() const;
 
+	/** True when sessions must be created/searched as LAN sessions: the Null fallback has no online service, so
+	 *  a host only advertises (and a search only finds it) over the LAN broadcast beacon. The single place the
+	 *  Host and Find paths take their bIsLANMatch / bIsLanQuery flags from. */
+	UFUNCTION(BlueprintPure, Category="MO|Session")
+	bool IsLanMode() const;
+
 private:
 	IOnlineSessionPtr GetSessionInterface() const;
 
@@ -199,6 +219,18 @@ private:
 	void HandleFindSessionsComplete(bool bWasSuccessful);
 	void HandleJoinSessionComplete(FName SessionName, EOnJoinSessionCompleteResult::Type Result);
 	void HandleDestroySessionComplete(FName SessionName, bool bWasSuccessful);
+
+	/** HostSession / JoinSessionByIndex bodies, run once no stale session is registered. */
+	bool HostSessionNow(const FString& DisplayName, int32 MaxPlayers, const FString& GameplayLevelPath);
+	bool JoinSessionNow(int32 ResultIndex);
+
+	/** Destroy the registered session (if any), then run `Continuation` -- also when destroy fails or nothing was
+	 *  registered, so callers never hang. A request made while a destroy is already running replaces the pending
+	 *  continuation: only the newest intent matters. */
+	void DestroyThen(TFunction<void()> Continuation);
+
+	bool bDestroyInFlight = false;
+	TFunction<void()> AfterDestroy;
 
 	/** Gameplay level path captured at HostSession time — consumed once the
 	 *  create-session delegate fires (async, so can't be a local variable). */

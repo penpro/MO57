@@ -132,6 +132,12 @@ protected:
 	virtual void HandleSlotSelected(const FString& SlotName) PURE_VIRTUAL(UMOSaveSlotListPanel::HandleSlotSelected, );
 
 	/**
+	 * Subclass hook -- the player pressed an entry's Host action ("start this save as a co-op server"). Default does
+	 * nothing: only a panel that can start a session (the main menu's Load panel) overrides it and enables the button.
+	 */
+	virtual void HandleSlotHostRequested(const FString& SlotName) {}
+
+	/**
 	 * Called after RefreshSaveList rebuilds the entry widgets. Override in BP
 	 * to update any subclass-specific UI (e.g., enabling/disabling other
 	 * buttons based on slot count).
@@ -143,6 +149,7 @@ protected:
 	UFUNCTION() void HandleEntrySelected(const FString& SlotName);
 	UFUNCTION() void HandleEntryRenameRequested(const FString& SlotName);
 	UFUNCTION() void HandleEntryDeleteRequested(const FString& SlotName);
+	UFUNCTION() void HandleEntryHostRequested(const FString& SlotName);
 
 	// ========================================================================
 	// REQUIRED BIND WIDGETS (subclasses must NOT redeclare these)
@@ -204,6 +211,17 @@ protected:
 
 	UPROPERTY()
 	TArray<TObjectPtr<UMOSaveSlotEntry>> SlotEntryWidgets;
+
+public:
+	/**
+	 * Offer the per-entry Host action. Off by default (Save panel, in-game Load panel). Applies to the entries that
+	 * exist now AND to every entry built by later refreshes.
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|UI|SaveSlotList")
+	void SetHostActionEnabled(bool bEnabled);
+
+private:
+	bool bHostActionEnabled = false;
 
 private:
 	void PopulateSaveList();

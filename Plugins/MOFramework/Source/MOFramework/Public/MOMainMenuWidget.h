@@ -87,6 +87,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOMainMenuNewGameSignature);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOMainMenuLoadGameSignature, const FString&, SlotName);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOMainMenuExitGameSignature);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOMainMenuHostSessionSignature, const FString&, DisplayName, int32, MaxPlayers);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOMainMenuHostSavedGameSignature, const FString&, SlotName);
 
 UCLASS(Abstract, Blueprintable)
 class MOFRAMEWORK_API UMOMainMenuWidget : public UMOActivatableWidget
@@ -115,6 +116,10 @@ public:
 	/** Called when a co-op session host is requested from the Host Game panel. */
 	UPROPERTY(BlueprintAssignable, Category="MO|MainMenu")
 	FMOMainMenuHostSessionSignature OnHostSessionRequested;
+
+	/** Called when the Load panel's Host action is pressed: start this SAVED world as a co-op server. */
+	UPROPERTY(BlueprintAssignable, Category="MO|MainMenu")
+	FMOMainMenuHostSavedGameSignature OnHostSavedGameRequested;
 
 	// ============================================================================
 	// PANEL CONTROL
@@ -192,6 +197,7 @@ private:
 
 	UFUNCTION() void HandlePanelRequestClose();
 	UFUNCTION() void HandleLoadPanelLoadRequested(const FString& SlotName);
+	UFUNCTION() void HandleLoadPanelHostRequested(const FString& SlotName);
 	UFUNCTION() void HandleNewGamePanelStartRequested();
 	UFUNCTION() void HandleHostPanelHostRequested(const FString& DisplayName, int32 MaxPlayers);
 
@@ -208,6 +214,13 @@ private:
 	 * missing or not a child of FocusWindowSwitcher.
 	 */
 	int32 FindPanelIndex(const UWidget* Panel) const;
+
+	/**
+	 * Index of `Panel` in the switcher, falling back to the legacy hard-coded index if the panel is not a child. EVERY panel
+	 * is resolved this way: the hard-coded Load=2/Options=3 no longer matched the asset's child order (Options=2, Load=3), so
+	 * the main menu's Load button opened the Options panel and Options opened the Load panel.
+	 */
+	int32 ResolvePanelIndex(const UWidget* Panel, int32 LegacyIndex) const;
 
 	// ============================================================================
 	// BIND WIDGETS
@@ -293,6 +306,9 @@ private:
 
 	/** Currently active panel index. */
 	int32 CurrentPanelIndex = 0;
+
+	/** True while a host request that came from the Load panel awaits its NotifyHostSessionResult (routes the answer there). */
+	bool bHostRequestFromLoadPanel = false;
 
 	/** Panel indices. */
 	static constexpr int32 PanelIndex_None = 0;

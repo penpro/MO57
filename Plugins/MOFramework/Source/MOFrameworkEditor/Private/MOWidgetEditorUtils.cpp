@@ -580,6 +580,63 @@ bool UMOWidgetEditorUtils::RenameWidget(UWidgetBlueprint* WidgetBlueprint, FName
 #endif
 }
 
+namespace
+{
+	/** Descendants of `Widget`, deepest first, so removing them in order never detaches a child from a removed parent. */
+	void CollectDescendantsDeepestFirst(const UWidget* Widget, TArray<UWidget*>& Out)
+	{
+		if (const UPanelWidget* Panel = Cast<UPanelWidget>(Widget))
+		{
+			for (UWidget* Child : Panel->GetAllChildren())
+			{
+				CollectDescendantsDeepestFirst(Child, Out);
+				Out.Add(Child);
+			}
+		}
+	}
+}
+
+bool UMOWidgetEditorUtils::RemoveWidget(UWidgetBlueprint* WidgetBlueprint, FName WidgetName)
+{
+#if WITH_EDITOR
+	if (!WidgetBlueprint || !WidgetBlueprint->WidgetTree)
+	{
+		return false;
+	}
+
+	UWidgetTree* Tree = WidgetBlueprint->WidgetTree;
+	UWidget* Widget = Tree->FindWidget(WidgetName);
+	if (!Widget)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("MOWidgetEditorUtils: Widget '%s' not found for removal"), *WidgetName.ToString());
+		return false;
+	}
+
+	WidgetBlueprint->Modify();
+	Tree->Modify();
+
+	TArray<UWidget*> ToRemove;
+	CollectDescendantsDeepestFirst(Widget, ToRemove);
+	ToRemove.Add(Widget);
+
+	for (UWidget* Doomed : ToRemove)
+	{
+		WidgetBlueprint->WidgetVariableNameToGuidMap.Remove(Doomed->GetFName());
+		Tree->RemoveWidget(Doomed);
+		// A removed widget stays outered to the tree, reserving its name until GC. Park it in the transient
+		// package under a unique name so the same name can be created again right away.
+		Doomed->Rename(*MakeUniqueObjectName(GetTransientPackage(), Doomed->GetClass(), Doomed->GetFName()).ToString(),
+			GetTransientPackage(), REN_DontCreateRedirectors | REN_ForceNoResetLoaders);
+	}
+
+	FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(WidgetBlueprint);
+	UE_LOG(LogTemp, Log, TEXT("MOWidgetEditorUtils: Removed '%s' (+%d descendant(s))"), *WidgetName.ToString(), ToRemove.Num() - 1);
+	return true;
+#else
+	return false;
+#endif
+}
+
 // ========== Query Functions ==========
 
 TArray<FString> UMOWidgetEditorUtils::GetWidgetsByType(UWidgetBlueprint* WidgetBlueprint, const FString& WidgetTypeName)

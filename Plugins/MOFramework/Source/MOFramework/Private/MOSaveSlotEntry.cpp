@@ -33,6 +33,27 @@ void UMOSaveSlotEntry::NativeConstruct()
 		DeleteButton->OnClicked().RemoveAll(this);
 		DeleteButton->OnClicked().AddUObject(this, &UMOSaveSlotEntry::HandleDeleteButtonClicked);
 	}
+	if (HostButton)
+	{
+		HostButton->SetButtonText(NSLOCTEXT("MOSaveSlot", "HostButton", "Host"));
+		HostButton->OnClicked().RemoveAll(this);
+		HostButton->OnClicked().AddUObject(this, &UMOSaveSlotEntry::HandleHostButtonClicked);
+	}
+	ApplyHostActionVisibility();
+}
+
+void UMOSaveSlotEntry::SetHostActionVisible(bool bVisible)
+{
+	bHostActionVisible = bVisible;
+	ApplyHostActionVisibility();
+}
+
+void UMOSaveSlotEntry::ApplyHostActionVisibility()
+{
+	if (HostButton)
+	{
+		HostButton->SetVisibility(bHostActionVisible ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+	}
 }
 
 void UMOSaveSlotEntry::NativeOnClicked()
@@ -49,6 +70,11 @@ void UMOSaveSlotEntry::HandleRenameButtonClicked()
 void UMOSaveSlotEntry::HandleDeleteButtonClicked()
 {
 	OnDeleteRequested.Broadcast(Metadata.SlotName);
+}
+
+void UMOSaveSlotEntry::HandleHostButtonClicked()
+{
+	OnHostRequested.Broadcast(Metadata.SlotName);
 }
 
 void UMOSaveSlotEntry::InitializeFromMetadata(const FMOSaveMetadata& InMetadata)

@@ -54,6 +54,7 @@ class UMOCommonButton;
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOSaveSlotSelectedSignature, const FString&, SlotName);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOSaveSlotRenameRequestedSignature, const FString&, SlotName);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOSaveSlotDeleteRequestedSignature, const FString&, SlotName);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOSaveSlotHostRequestedSignature, const FString&, SlotName);
 
 /**
  * Individual save slot entry displayed in the save/load scroll box.
@@ -89,6 +90,20 @@ public:
 	UPROPERTY(BlueprintAssignable, Category="MO|UI|SaveSlot")
 	FMOSaveSlotDeleteRequestedSignature OnDeleteRequested;
 
+	/**
+	 * Fired when the player clicks the Host action: "start THIS save as a co-op server". Only meaningful where
+	 * hosting is possible (the main menu's Load panel); the hosting panel turns the button on via SetHostActionVisible.
+	 */
+	UPROPERTY(BlueprintAssignable, Category="MO|UI|SaveSlot")
+	FMOSaveSlotHostRequestedSignature OnHostRequested;
+
+	/**
+	 * Show/hide the optional HostButton. Hidden by default so the Save panel and the in-game Load panel (where you
+	 * cannot start a session from a running world) never offer it. No-op if the Blueprint has no HostButton.
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|UI|SaveSlot")
+	void SetHostActionVisible(bool bVisible);
+
 protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeOnClicked() override;
@@ -103,8 +118,12 @@ protected:
 	UFUNCTION()
 	void HandleDeleteButtonClicked();
 
+	UFUNCTION()
+	void HandleHostButtonClicked();
+
 private:
 	void RefreshDisplay();
+	void ApplyHostActionVisibility();
 
 private:
 	// ============================================================
@@ -155,12 +174,22 @@ private:
 	UPROPERTY(meta=(BindWidgetOptional))
 	TObjectPtr<UMOCommonButton> DeleteButton;
 
+	/**
+	 * Optional "Host" action: start this save as a co-op server (listen host). Hidden until the hosting panel calls
+	 * SetHostActionVisible(true) -- only the main menu's Load panel can start a session.
+	 */
+	UPROPERTY(meta=(BindWidgetOptional))
+	TObjectPtr<UMOCommonButton> HostButton;
+
 	// ============================================================
 	// State
 	// ============================================================
 
 	UPROPERTY()
 	FMOSaveMetadata Metadata;
+
+	/** Whether the hosting panel wants the Host action offered (applied in NativeConstruct and by SetHostActionVisible). */
+	bool bHostActionVisible = false;
 
 	/** Cached texture for screenshot (prevents GC). */
 	UPROPERTY()

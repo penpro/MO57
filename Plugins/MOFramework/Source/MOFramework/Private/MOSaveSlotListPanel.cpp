@@ -41,6 +41,7 @@ void UMOSaveSlotListPanel::NativeDestruct()
 			Entry->OnSlotSelected.RemoveDynamic(this, &UMOSaveSlotListPanel::HandleEntrySelected);
 			Entry->OnRenameRequested.RemoveDynamic(this, &UMOSaveSlotListPanel::HandleEntryRenameRequested);
 			Entry->OnDeleteRequested.RemoveDynamic(this, &UMOSaveSlotListPanel::HandleEntryDeleteRequested);
+			Entry->OnHostRequested.RemoveDynamic(this, &UMOSaveSlotListPanel::HandleEntryHostRequested);
 		}
 	}
 
@@ -235,6 +236,8 @@ void UMOSaveSlotListPanel::PopulateSaveList()
 		Entry->OnSlotSelected.AddDynamic(this, &UMOSaveSlotListPanel::HandleEntrySelected);
 		Entry->OnRenameRequested.AddDynamic(this, &UMOSaveSlotListPanel::HandleEntryRenameRequested);
 		Entry->OnDeleteRequested.AddDynamic(this, &UMOSaveSlotListPanel::HandleEntryDeleteRequested);
+		Entry->OnHostRequested.AddDynamic(this, &UMOSaveSlotListPanel::HandleEntryHostRequested);
+		Entry->SetHostActionVisible(bHostActionEnabled);
 
 		SaveSlotsScrollBox->AddChild(Entry);
 		SlotEntryWidgets.Add(Entry);
@@ -295,6 +298,23 @@ void UMOSaveSlotListPanel::HandleEntryRenameRequested(const FString& SlotName)
 
 	// No dialog class configured → broadcast for a custom consumer.
 	OnSlotRenameRequested.Broadcast(SlotName);
+}
+
+void UMOSaveSlotListPanel::SetHostActionEnabled(bool bEnabled)
+{
+	bHostActionEnabled = bEnabled;
+	for (UMOSaveSlotEntry* Entry : SlotEntryWidgets)
+	{
+		if (Entry)
+		{
+			Entry->SetHostActionVisible(bEnabled);
+		}
+	}
+}
+
+void UMOSaveSlotListPanel::HandleEntryHostRequested(const FString& SlotName)
+{
+	HandleSlotHostRequested(SlotName);
 }
 
 void UMOSaveSlotListPanel::HandleEntryDeleteRequested(const FString& SlotName)

@@ -145,6 +145,14 @@ void UMOJoinGamePanel::HandleBackClicked()
 
 void UMOJoinGamePanel::HandleSessionSelected(FName /*SelectedId*/)
 {
+	// Say why Join is (not) available instead of leaving a silently greyed-out button.
+	FMOFoundSessionInfo Selected;
+	if (!bJoinInFlight && SessionListWidget && SessionListWidget->GetSelectedSessionInfo(Selected))
+	{
+		SetStatus(Selected.bIsFull
+			? FString::Printf(TEXT("'%s' is full."), *Selected.DisplayName)
+			: FString::Printf(TEXT("'%s' selected - press Join."), *Selected.DisplayName));
+	}
 	UpdateButtonStates();
 }
 
@@ -170,7 +178,7 @@ void UMOJoinGamePanel::HandleSearchComplete(bool bSuccess, const TArray<FMOFound
 	}
 	else
 	{
-		SetStatus(FString::Printf(TEXT("%d session(s) found."), Results.Num()));
+		SetStatus(FString::Printf(TEXT("%d session(s) found - select one to join."), Results.Num()));
 	}
 
 	UpdateButtonStates();
@@ -209,6 +217,11 @@ void UMOJoinGamePanel::UpdateButtonStates()
 	{
 		JoinButton->SetIsEnabled(bJoinableSelection && !bSearching && !bJoinInFlight);
 	}
+
+	// One line per evaluation so a "Join is greyed out" report can be read straight from the log.
+	UE_LOG(LogMOFramework, Log, TEXT("[MOJoinGamePanel] Buttons: searching=%d joining=%d hasSelection=%d full=%d -> Join %s"),
+		bSearching, bJoinInFlight, SessionListWidget && SessionListWidget->GetSelectedSessionInfo(Selected),
+		Selected.bIsFull, (bJoinableSelection && !bSearching && !bJoinInFlight) ? TEXT("enabled") : TEXT("DISABLED"));
 }
 
 void UMOJoinGamePanel::SetStatus(const FString& Message) const

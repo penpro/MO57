@@ -141,6 +141,14 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|MainMenu")
 	void HostSession(const FString& SessionDisplayName, int32 MaxPlayers);
 
+	/**
+	 * Host a SAVED world: the same session flow as HostSession, but the listen server resumes `SlotName` (its pawns,
+	 * buildings, sculpted terrain and world seed) instead of starting a fresh world. The session is advertised under
+	 * the save's display name with the default player cap.
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|MainMenu")
+	void HostSavedGame(const FString& SlotName);
+
 	/** Exit the game. */
 	UFUNCTION(BlueprintCallable, Category="MO|MainMenu")
 	void ExitGame();
@@ -151,6 +159,7 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void SetupInputComponent() override;
 
 	// ============================================================================
@@ -183,6 +192,10 @@ protected:
 	/** Called when a co-op host is requested from the Host Game panel. */
 	UFUNCTION()
 	void HandleHostSessionRequested(const FString& DisplayName, int32 MaxPlayers);
+
+	/** Main menu Load panel's Host action. */
+	UFUNCTION()
+	void HandleHostSavedGameRequested(const FString& SlotName);
 
 	/** Called when UMOSessionSubsystem::HostSession's CreateSession resolves. */
 	UFUNCTION()
@@ -219,6 +232,13 @@ protected:
 	 * Logs + shows an on-screen error and returns false if missing.
 	 */
 	bool ValidateGameplayLevelExists() const;
+
+	/**
+	 * The one hosting flow. SaveSlotToResume empty = start a fresh world (HostSession); set = resume that save
+	 * (HostSavedGame). Everything else -- level check, session subsystem, loading overlay, the CreateSession round trip
+	 * and the travel -- is shared, so a fix to one is a fix to both.
+	 */
+	void StartHosting(const FString& SessionDisplayName, int32 MaxPlayers, const FString& SaveSlotToResume);
 
 private:
 	// ============================================================================
