@@ -71,3 +71,6 @@ Content/Penumbra/Maps/MCPTestLevel.umap
 # artifact every UI test batch run
 __pycache__/
 Content/Python/test_output/
+
+# The unattended-run task script Claude rewrites for each job (Tools/ov.bat runs and archives it; see Tools/ov_run.sh)
+Tools/ov_task.sh

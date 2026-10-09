@@ -1,8 +1,9 @@
 # Terraform Unit 3 — Designation-Based Pawn Excavation
 
-**Status:** design / awaiting fork sign-off (July 13 2026). Units 1 (volume→duration
-`14e0d432`) + 2 (incremental partial-on-interrupt `bd893aac`) landed. This is the
-"account for the dug-up soil" half of Wes's terraform directive.
+**Status (refreshed 2026-10-09 against current master):** forks LOCKED (sphere zones, settlement-scoped dispatch, 80 items/m3, solo player digs manually).
+**Stages 1, 1b, 2, 3 are LANDED and in the code** (`TerraformAtLocationEx`, `Dirt01` + earth materials, `UMODesignationSubsystem` + `MODesignationTypes.h`,
+`ExcavateAndHaul` job in `MOSurvivorController` / `MOSurvivorJobQueueComponent`); **Stages 4-7 are not started** (`RunExcavationPass` does not exist yet).
+Units 1 (volume->duration `14e0d432`) + 2 (incremental partial-on-interrupt `bd893aac`) landed earlier. See "Remaining work" at the bottom.
 
 ## Goal (Wes, binding)
 
@@ -134,3 +135,18 @@ the spoil item by `UMOTerraformingComponent::ExcavationSpoilItemId` (default `"D
 3. **Volume→item constant** — default `ExcavationItemsPerCubicMeter = 80` (~1 shovelful/item),
    config-tunable.
 4. **Solo player** keeps digging manually via the existing terraform tool; designation drives pawns.
+
+
+## Remaining work (written 2026-10-09; nothing below is built)
+
+Order is the table's: 4 -> 5 -> 6 (-> 7). Each is a gated, committable unit; 4 and 5 are backend and can be proven with a headless/seq gate or a `ue.py nettest` run; 6 has UX surface and needs Wes's checkpoint before it is built.
+
+**Stage 4 - `RunExcavationPass` (colony dispatch).** Tasks: (a) pure static `DecideExcavationWork(idle roster, zones, claimed set)` returning (pawn, zone, dump target) pairs, unit-testable like `DecideQuotaWork`; (b) the pass in `RunUpkeepTick` next to the hearth pass; (c) claimed set rebuilt from in-flight `ExcavateAndHaul` jobs every pass (one worker per zone); exclude `ShelteringVillagers`; (d) budget exhaustion: a zone with `RemainingVolumeM3 <= 0` is skipped and (policy to confirm) removed. Gate: designate dig + fill, recruit two villagers, run upkeep: both work different zones, nobody doubles up, conservation holds (`test_excavation_job.py` pattern + the claimed-set control). Risk: the 120 s wedge watchdog (`MOSurvivorController.cpp` ~1373) assumes a ~35 s cycle; a long dig needs a per-trip reset.
+
+**Stage 5 - flatten decomposition.** Tasks: (a) flatten zone = target height + sphere; sample ground on a small grid; (b) split into dig-high / fill-low work items with equal volume (conservation by construction, as the primitive's estimate); (c) re-sample after each pair and stop within tolerance. Gate: uneven ground -> within X cm of target, dug volume == filled volume +- one bite. Open question for Wes: what is the target height when the player does not say (mean of the sphere's ground, or the height at its centre)?
+
+**Stage 6 - UI (needs Wes's checkpoint first).** Tasks: designate tool input action (C++ in `AMOPlayerController::SetupInputComponent`, per the project rule), a zone preview in the world, `UMODumpDestinationContextMenu` cloned from `UMOKeepOnHarvestContextMenu` (payload `{Kind, GUID}`), nearby-container enumeration cloned from `FindMaterialSources`, and the `MO.Terraform.Designate*` dev verbs. **Co-op:** a client must create/edit zones through a server RPC that applies the SAME trust rules the placement fix added (reach from the requesting pawn + a zone-count cap + settlement membership); add a `nettest actions` case with a far-away designation as the refusal control. UI is built with the spec toolset (`python Tools/ue.py ui ...`, remember the SizeBox fix in `Docs/UI_TOOLING.md`) and checked in a packaged window with real clicks (Docs/AUTONOMOUS_TOOLING.md).
+
+**Stage 7 (optional) - cart actor.** Only if "fill nearby inventory" needs something to fill besides existing containers.
+
+**Decisions only Wes can make** (none is blocking Stage 4): flatten target height (above); whether an exhausted zone deletes itself; the per-zone `RemainingVolumeM3` default when the player draws a zone; whether zones are visible to other players in co-op (recommend yes -- but `UMODesignationSubsystem` has no replication at all today (checked: no replicated state, no RPCs), so a client would see nothing until Stage 6 adds it); the dump popup's default choice.

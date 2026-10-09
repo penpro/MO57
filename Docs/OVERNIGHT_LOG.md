@@ -297,3 +297,27 @@ Not building: colonist ground far from players (design fork for Wes).
   recorded in `Docs/Voxel_Plugin_Reference.md` ("Local patches"). Compiled and cooked into the packages above; nothing else exercised it.
 - **Gotcha for next time:** computer-use `open_application` on an already-running game LAUNCHES A SECOND COPY (full-screen intro). I stopped that one by pid; use `request_access` + clicks, never `open_application`, for a
   running game.
+- **Wes's report: "the pawn on the client can't see the pawn controlled by the host, but the host can see the one controlled by the client" -- diagnosed, fixed, verified.**
+  *Reproduced* with two editor-binary -game processes (`Tools/pawnvis_probe.py`): the HOST's own pawn sat at z between -2900 and 200 while the voxel ground under it was z=1667 (the client's pawn stood on the
+  ground at z=1774); the host log had "Fall-through detected! No valid terrain found, teleporting to default height Z=200" every few seconds. Both machines had the same seed and the same ground.
+  *Why (two layers):* (1) the new-game spawn is traced against collision that exists BEFORE the pawn does; the pawn is the voxel invoker, so the collision around it is regenerated afterwards -- over 8 fresh worlds the
+  final ground differed from the spawn trace's by -589..+346 cm, so a pawn spawned 200 cm above the old surface can end up under the new one and fall out of the world. (2) The rescue could not find the ground:
+  `MOSpawnClearance::TraceVoxelGround` used a multi trace BY CHANNEL, which ends at the first BLOCKING hit, so a tree/roof/prop over the ground hid the terrain behind it ("no ground"); the rescue then used the
+  fixed Z=200, which is under the ground on this map.
+  *My first explanation was WRONG and I said so to Wes mid-run:* I blamed the map's PCGVolume brush. `MO.Test.RescueTrace` showed the brush does not block the channel trace (it only appears in the object-type probe), and a
+  control that passed at an arbitrary spot proved nothing about the failing column. The real blocker class was found by hosting 8 fresh worlds (`rescue_probe.py --hunt`): the first settle prototype timed out in 5 of 8.
+  *Fix:* spawn settle in `AMOGameMode` (hold the new pawn, poll the ground until it is stable for 1.5 s, place the pawn on it, THEN release queued joiners); `TraceVoxelGround` is now an object-type multi trace;
+  every rescue trace goes through `AMOCharacter::TraceTerrainLine`; the rescue's fallback is the pawn's last grounded spot instead of Z=200; a failed rescue logs what blocks the sky line (so the next report's log tail says why).
+  *Verified:* hunt over 8 fresh worlds: 8/8 settled in ~2 s (pawn moved -589..+196 cm), standing height 84.4-85.9 cm, 0 rescues (before: 2/8 spawned under the ground; first prototype 5/8 timeouts).
+  `nettest actions` (buried pawn 15 m under the surface with a solid block over the ground): the OLD first-hit rule (`MO.Rescue.FirstHitOnly 1`, the control) says "No valid terrain found" and the new log line names the block;
+  the fixed rule says "Found safe terrain" and puts both the host's pawn and the joiner's back on the ground. The control asserts on the rescue's LOG, not the pawn's final z, because the fixed-height fallback happens to be
+  above the ground in worlds whose ground is below Z=200 and would have hidden the failure. 146/146 automation tests, 94 Python tests.
+  *Not verified:* that THIS was the only cause of what Wes saw (his run may differ; the new log line will say); the settle's effect on a client JOINING a world mid-settle beyond `nettest game/hostsave/churn` (queued below).
+- **`nettest churn` (new): rounds all PASS (3 leave/rejoin cycles keep and hand back the same pawn, save-while-connected OK, no rescues/errors on either machine) but the item RACE is still not proven.** Trial 1 passes
+  (exactly one winner, 104-302 ms apart); trials 2-4 fail in the harness's own setup (a python error in the host probe; the setup now clears other world items and uses a different material per trial -- two real harness bugs
+  fixed along the way: stacks merging, and wrapper objects never comparing equal -- the third is still hidden behind a `py-err` line). Logged, not hidden; the mode reports FAIL until the race trials run.
+- **Audit/other overnight items:** `UMOGameUIManagerSubsystem::NotifyPlayerRemoved` use-after-free read fixed (`RemoveAndCopyValue`; nothing calls it yet, and the freed memory cannot be observed deterministically, so no
+  automated test -- said plainly); Voxel PCG `ensure(Component)` (57 of 72 uploaded crash reports) patched in the vendored plugin (`Plugins/Voxel/` is gitignored: recorded in `Docs/Voxel_Plugin_Reference.md`); the terraform excavation
+  plan was refreshed against the code (stages 1-3 had already landed; 4-7 not started) with a remaining-work breakdown and the decisions only Wes can make; weather-bridge investigation NOT done yet (probe script ready).
+- **Unattended-run runner (Wes: "I have to click accept every 20 seconds"):** `Tools/ov.bat` is the one stable command; it runs `Tools/ov_task.sh` (rewritten per job, untracked) from a snapshot archived in
+  `Saved/Logs/ov_history/`. Every run since then went through it.
