@@ -117,6 +117,16 @@ class and asset references as package paths. Aliases: `MOButton`, `MOListEntry`,
 - **The in-editor MCP has no UMG toolset** and `BlueprintTools.compile_blueprint` returns null; errors are only
   in the log. `build` compiles via Python and reports problems.
 - **Editor must be OPEN** (bridge + MCP). C++ changes still need the editor closed to build.
+- **SizeBox overrides need their setter (fixed 2026-10-09).** `width`/`height` (and min/max desired, aspect) were written with `set_editor_property`, which stores the VALUE
+  but leaves the `bOverride_*` enable flag off -- the dump showed `height_override: 100.0` while the packaged game laid the box out at its content size (the bug report
+  form's multi-line boxes were one line high and its preview ran off the screen). `set_props` now also calls the SizeBox setter (`set_height_override` ...), which turns the
+  flag on (verified: the same form, repackaged, has 100 px / 70 px multi-line boxes, a 110 px scrolling preview and 64 px buttons). **Specs built before this fix probably have inert
+  SizeBox sizes too** (not checked): `coop_menu.py`'s 800x800 panel footprints and 72 px button rows, `load_host.py`, `save_slot_layout.py` and `bug_report_button.py` -- re-running
+  `build` would apply the sizes that were written down, which can change how those panels look; check each with a screenshot before keeping it.
+- **`ui preview` cannot create the widget in 5.8** (`WidgetBlueprintLibrary::Create` is not exposed to Python, so `ui find` on a previewed panel finds nothing). Look at a new panel in a
+  packaged build or a `ue.py inst` window, with a real click to open it, until a console verb exists for it.
+- **A bare native class is fine as the PARENT of a new Widget Blueprint** (`parent` in a spec); only a native class used as a NODE in a tree is the empty-spacer trap
+  (`resolve_class(..., as_parent=True)`).
 
 ## Verified end to end (2026-10-05)
 

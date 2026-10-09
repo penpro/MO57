@@ -1238,3 +1238,12 @@ already dispatches to `VolumeDig` / etc.).
 | **Chunk** | The unit voxel data loads/streams in. Configurable; default ~3200³ voxel units. |
 | **LOD** | Level of detail. Voxel auto-downsamples distant chunks. |
 | **HWRT vs SWRT** | Hardware vs Software ray tracing. Voxel 2.0 P7 supports only SWRT for Lumen. |
+
+---
+
+## Local patches to the vendored plugin (`Plugins/Voxel/` is gitignored: re-apply after any re-vendor)
+
+| File | Patch | Why |
+|------|-------|-----|
+| `Source/VoxelPCG/Private/PCGWaitForVoxelWorld.cpp` `PrepareDataInternal` | forward `Context->InputData` wholesale and re-pin | UE 5.8: `FPCGDataCollection::DataCrcs` is no longer a parallel array to `TaggedData` at PrepareData time; the old per-index pairing tripped an ensure and dropped the node's output (matches the dev-phy upstream fix) |
+| same file, `ExecuteInternal` (2026-10-09) | `if (!Component) return true;` instead of `if (!ensure(Component))` | the execution source is a weak reference: when the PCG component is destroyed while a task is queued (partition unload, level teardown, travel) there is nothing to wait for. The ensure fired 57 times in ~3 days of play-testing (Development editor, 80% of the uploaded crash reports) with nothing wrong. Found by `Tools/crash_triage.py` |

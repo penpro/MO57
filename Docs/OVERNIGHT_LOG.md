@@ -260,3 +260,40 @@ Not building: colonist ground far from players (design fork for Wes).
   Text column Fill 2 : buttons Fill 1 and the thumbnail column Auto: the name starts right next to the picture and gets ~669 px (was 357, +87%); buttons 389 -> 351 px.
   PIE rects confirm both tile variants; packaged real-window check: the name now reads "ThisIsAnExtremelyLongSaveGameNameThat..." (was "...Lon..."), clear of Delete/Rename.
   The thumbnail's stored PNG is 43 KB at 128 px (was ~20 KB at 80 px). Test saves deleted again; Harper_Wright-01 / Test158 / v1gate untouched. Still uncommitted.
+
+## Overnight 2026-10-09 (approved by Wes; commit + push approved; plan: Docs/OVERNIGHT_PLAN_2026-10-09.md)
+- **Item 0 done:** today's UI work pushed in two commits -- `d9b3494e` (thumbnail capture, readable text fields, tile clip + tests) and `7162de34` (bigger thumbnail + text layout asset/spec, plan, log).
+  Hourly resume job `c440dad6` (:41) scheduled; keep-awake held.
+- **Client trust boundary (pushed, `076e81ed`).** `nettest actions` now has a hostile-client section, each case with a control: `ServerPlaceBuilding` far from the pawn was accepted
+  (audit H19) -> the server now holds it to `MaxPlacementDistance + 600 cm` (test control `MO.Building.ServerReach.Disable 1` lets it through again); a pickup 45 m away is refused (server reach 30 m);
+  possessing the host's pawn is refused; terraform 3 m ahead changes the ground (control) and 100 m away is refused. **Open, logged, not fixed:** no collision/slope/rate limit on placement;
+  `ServerApplyTerraform` has no server-side timer or tool requirement; the Development-only `ServerSpawnActorNearController`. Also fixed: the spawn manager ticked on clients (client-side creature
+  spawning) and the main-menu intro timer fired after `EndPlay` (a startup crash in the packaged game).
+- **`nettest packaged` (pushed):** two copies of the packaged Development game, judged from their logs (no crash/ensure, same seed, client follows host clock + weather, only the host spawns). It found
+  the intro-timer crash, client-side spawning and the blank save thumbnail that the editor-binary `-game` runs could not.
+- **Bug Report button (pushed, `36449f8d`):** opens `UMOCommunitySettings::BugReportUrl` (Discord invite, `Config/DefaultGame.ini`, QUOTED: an unquoted `//` is an ini comment and the packaged game read the URL as `https:`)
+  in the default browser; clipboard + notice when no browser can be launched (test CVar `MO.BugReport.SimulateBrowserFailure`). Real click verified in the packaged build, both branches.
+- **Crash archive (Wes's `mo-crashes-2026-10-09.tar.gz`, 72 uploads):** no user crashes. 57x Voxel PCG `ensure(Component)` (dev-editor PIE noise), 10x `InRHITexture` (the old thumbnail `ReadPixels`, fixed), 2x module-not-loaded
+  assertion at startup, 3 single events with no recoverable stack (editor, dev game, one Shipping). Parsers promoted to `Tools/ue_crash_bundle.py` + `Tools/crash_triage.py` (below).
+- **In-game bug report FORM (Wes: "add the bug report form, option A"; built, verified, committed).** The Bug Report button now opens a form (title, category, what happened, steps, optional contact, checkboxes for the
+  log tail and a screenshot, Preview, Send, Open Discord). It reuses the crash endpoint, so the website needed no change: a report is the engine's own "CR1" upload bundle (`MOBugReportBundle`, the layout read from
+  `CrashUpload.cpp`) marked `CrashType=BugReport` with `ReportKind=bugreport` in the query. `UMOBugReportSubsystem` collects the state through REGISTERED CONTRIBUTORS (Build, System, Session, Clock, Weather, Player; a new
+  system adds rows with one `RegisterContributor` call and nothing else changes), the log tail (256 KB), a UI-less screenshot taken when the form opens, and uploads over `FHttpModule`; a failed send is kept in
+  `Saved/BugReports/<id>.uecrash` and the player is told where. Privacy: user name, computer name and `C:\Users\<name>` are scrubbed from everything collected (UE writes the first two into its own log header), typed text is sent
+  as typed and shown by Preview (one builder for Preview and the file), contact is opt-in, one send per 60 s, 4 MB cap (screenshot dropped first, then log).
+- **Verification.** 146/146 automation tests (7 new: bundle round trip incl. the engine's own inflate, scrubber with controls, text helpers, endpoint rules incl. the user-info URL trick, report builder, screenshot encoding with an
+  averaging check, multi-line text style); 16 Python tests for the parser/receiver; `Tools/ue_crash_bundle.py` parses all 72 REAL uploaded crash bundles (so the layout derivation is right). `ue.py nettest bugreport --package`
+  (new, packaged game x3): accepted (valid bundle, state fields, log, JPEG, no user/computer name; control: the raw log DOES contain both), server 500 (NOT SENT, file kept, parses, player told), unreachable (same). The first run FAILED
+  one phase because the harness read the previous phase's log: fixed, re-run green -- reported rather than hidden. **Real window (packaged, real clicks and typing):** form opens from the menu button, typed text is dark and readable
+  in single- and multi-line boxes, Preview shows the report, Send -> "Thank you - your report was sent", the receiver holds exactly what I typed plus the screenshot (the game without any menu), and closing/reopening keeps the draft.
+- **Bugs the real window found (all fixed):** (1) SizeBox overrides written by `ui build` were inert -- `set_editor_property` stores the value but not the `bOverride_*` flag, so the multi-line boxes were one line high and the preview
+  ran off the screen; `mo_ui.set_props` now calls the SizeBox setters (a TOOL bug: other older specs probably carry inert sizes, see `Docs/UI_TOOLING.md`); (2) the "Show What Will Be Sent" label overflowed its button -> "Preview";
+  (3) the preview showed a 32-zero report id -> "(assigned when sent)" (tested); (4) the multi-line font was half the single-line size -> 16 in the spec (asset saved; not yet re-screenshotted -- covered by the morning package).
+  Also fixed in the tool: `ui preview` called a class that does not exist in 5.8 (it still cannot create the widget from Python; documented), and a native class is now allowed as the PARENT of a new Widget Blueprint.
+- **Not verified, said plainly:** the panel's Open Discord button after I moved the open-link code into `UMOCommunitySettings::OpenBugReportLink` (the same code was verified by a real click in the old place; opening a browser
+  tab on Wes's machine to re-check seemed worse than the risk; no clipboard test either, it would overwrite Wes's clipboard); the contact field with a value; a real send to the production endpoint (deliberately never done:
+  it would put a test report into the site's real data).
+- **Local-only patch:** `PCGWaitForVoxelWorld.cpp` `ensure(Component)` -> graceful return (57 of the 72 uploaded crash reports; weak execution source of a destroyed PCG component). `Plugins/Voxel/` is gitignored, so the patch is
+  recorded in `Docs/Voxel_Plugin_Reference.md` ("Local patches"). Compiled and cooked into the packages above; nothing else exercised it.
+- **Gotcha for next time:** computer-use `open_application` on an already-running game LAUNCHES A SECOND COPY (full-screen intro). I stopped that one by pid; use `request_access` + clicks, never `open_application`, for a
+  running game.
