@@ -259,5 +259,85 @@ class CliParsingTests(unittest.TestCase):
         self.assertEqual((m.group(3), m.group(4), m.group(5), m.group(6)), ("1", "1024.5", "2", "Sky/StaticMeshComponent"))
 
 
+class BugReportAnalyserTests(unittest.TestCase):
+    """analyse_bugreport_upload judges a received bug report. Every check has a case that must FAIL, or a check that is always green proves nothing."""
+
+    TITLE = "PackagedBugReport accepted 1"
+
+    def make(self, title=None, log="LogInit: Build: ++UE5\nLogMOFramework: ready\n", user_in="", extra_fields="", crash_type="BugReport", shot=True, category="Other"):
+        import ue_crash_bundle as cb
+        title = title or self.TITLE
+        fields = {"Build.Version": "0.0.0.1", "Build.Commit": "abc1234", "System.OS": "Windows 11", "System.GPU": "RTX", "Session.NetMode": "ListenServer",
+                  "Session.Map": "Gameplay", "Session.WorldSeed": "12345", "Clock.GameTime": "2026-01-01T08:00:00", "Player.Pawn": "BP_Human",
+                  "Player.Location": "1, 2, 3", "Report.Category": category}
+        rows = "".join(f'\t\t<Field name="{k}">{v}</Field>\n' for k, v in fields.items()) + extra_fields
+        xml = ("<FGenericCrashContext>\n<RuntimeProperties>\n<CrashType>%s</CrashType>\n<ErrorMessage>%s</ErrorMessage>\n</RuntimeProperties>\n<GameData>\n%s</GameData>\n</FGenericCrashContext>\n"
+               % (crash_type, title, rows))
+        files = [("CrashContext.runtime-xml", xml.encode()), ("BugReport.txt", ("--- Attachments ---\n" + user_in).encode()), ("game.log", (log + user_in).encode())]
+        if shot:
+            files.append(("Screenshot.jpg", b"\xff\xd8" + b"\x01" * 20000 + b"\xff\xd9"))
+        return cb.write_bundle("UECC-Windows-" + "B" * 32 + "_0000", files)
+
+    META = {"query": {"AppID": "CrashReporter", "AppVersion": "5.8.1", "UploadType": "crashreports", "ReportKind": "bugreport", "UserID": "abc||"}}
+
+    def judge(self, body, meta=None, **kw):
+        kw.setdefault("title", self.TITLE)
+        return ui.analyse_bugreport_upload(body, self.META if meta is None else meta, **kw)
+
+    def failed(self, rows):
+        return [label for label, ok, _ in rows if not ok]
+
+    def test_a_good_report_passes_every_check(self):
+        rows = self.judge(self.make(), user_name="penum", computer_name="PENUMPC")
+        self.assertEqual(self.failed(rows), [])
+        self.assertTrue(any("user" in label for label, _, _ in rows) and any("computer" in label for label, _, _ in rows))
+
+    def test_a_crash_is_not_accepted_as_a_bug_report(self):
+        self.assertIn("it is marked as a bug report, not a crash", self.failed(self.judge(self.make(crash_type="Crash"))))
+
+    def test_the_title_must_arrive_intact(self):
+        self.assertIn("the title the player typed arrived intact", self.failed(self.judge(self.make(title="something else"))))
+
+    def test_missing_query_parameters_are_caught(self):
+        meta = {"query": {"AppID": "CrashReporter", "UploadType": "crashreports"}}
+        self.assertTrue(any("the query carries" in label for label in self.failed(self.judge(self.make(), meta=meta))))
+
+    def test_a_missing_screenshot_is_caught_only_when_one_was_expected(self):
+        body = self.make(shot=False)
+        self.assertTrue(any("the bundle holds" in label for label in self.failed(self.judge(body))))
+        self.assertEqual(self.failed(self.judge(body, expect_screenshot=False)), [])
+
+    def test_the_user_name_in_the_log_is_caught_as_a_whole_word_only(self):
+        leak = self.judge(self.make(user_in="Loading C:/Users/penum/AppData\n"), user_name="penum")
+        self.assertTrue(any("user" in label for label in self.failed(leak)))
+        fine = self.judge(self.make(user_in="project penumbra loads\n"), user_name="penum")  # the name inside another word is not a leak
+        self.assertEqual(self.failed(fine), [])
+
+    def test_the_computer_name_is_caught_case_insensitively(self):
+        leak = self.judge(self.make(user_in="Computer: penumpc\n"), computer_name="PENUMPC")
+        self.assertTrue(any("computer" in label for label in self.failed(leak)))
+
+    def test_state_fields_are_required_and_the_world_ones_only_when_a_world_is_expected(self):
+        import ue_crash_bundle as cb
+        xml = "<FGenericCrashContext><RuntimeProperties><CrashType>BugReport</CrashType><ErrorMessage>%s</ErrorMessage></RuntimeProperties><GameData></GameData></FGenericCrashContext>" % self.TITLE
+        bare = cb.write_bundle("d", [("CrashContext.runtime-xml", xml.encode()), ("BugReport.txt", b"--- Attachments ---"), ("game.log", b"LogInit")])
+        self.assertIn("the game-state fields are filled in", self.failed(self.judge(bare, expect_screenshot=False)))
+
+    def test_garbage_is_one_failed_row_not_an_exception(self):
+        rows = self.judge(b"not a bundle")
+        self.assertEqual(len(rows), 1)
+        self.assertFalse(rows[0][1])
+
+    def test_result_line_regex_reads_the_games_log(self):
+        sent = "[2026.10.09-19.00.00:000][  1]LogMOFramework: Warning: [MOBugReport] SENT id=ab12cd34 http=200: Thank you - your report was sent. Its id is ab12cd34.\n"
+        m = ui.BUGREPORT_RESULT_RE.search(sent)
+        self.assertEqual((m.group(1), m.group(2), m.group(3)), ("SENT", "ab12cd34", "200"))
+        failed = ("LogMOFramework: Warning: [MOBugReport] NOT SENT id=ab12cd34 http=500: The server answered with error 500. Your report was saved to D:\\x\\ab12cd34.uecrash"
+                  " - you can attach that file on Discord.  [saved: D:\\x\\ab12cd34.uecrash]\n")
+        m = ui.BUGREPORT_RESULT_RE.search(failed)
+        self.assertEqual((m.group(1), m.group(3), m.group(5)), ("NOT SENT", "500", "D:\\x\\ab12cd34.uecrash"))
+        self.assertIn("saved to", m.group(4))
+
+
 if __name__ == "__main__":
     unittest.main()

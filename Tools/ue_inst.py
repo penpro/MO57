@@ -17,6 +17,7 @@ Isolation is two env vars, both honoured by ue.py and Content/Python/claude_brid
 SAFETY: only processes this module launched (pid recorded in inst_<name>/pid.txt and image-checked) are ever
 stopped, gracefully first. It never matches processes by name.
 """
+import json
 import os
 import re
 import subprocess
@@ -1682,6 +1683,214 @@ def packaged_test(package=False, withhold_sync=False, run_seconds=60, boot_timeo
         print(f"[nettest] packaged: {'PASS' if rep.rows and rep.ok else 'FAIL'}", flush=True)
         _pkg_stop(client_pid)
         _pkg_stop(host_pid)
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------------------
+# bugreport: the in-game bug report form's upload, end to end, with the PACKAGED game and a local stand-in for the crash endpoint
+# ---------------------------------------------------------------------------------------------------------------------------------------------
+
+BUGREPORT_RESULT_RE = re.compile(r"\[MOBugReport\] (SENT|NOT SENT) id=(\w+) http=(\d+): (.*?)(?:  \[saved: (.*?)\])?\s*$", re.M)
+
+
+def analyse_bugreport_upload(body, meta, title, user_name="", computer_name="", expect_screenshot=True, expect_world=True):
+    """Judge one received bug report from its bytes and the receiver's metadata. Pure: returns [(label, ok, evidence)].
+
+    Checks the contract that matters to whoever reads these on the website: it is a CR1 bundle, marked as a bug report (not a crash), carries the
+    player's words, the game-state fields, the log and the screenshot, arrived with the query the crash endpoint expects -- and contains nothing that
+    names this machine's user or computer (the log is the dangerous part: UE writes both into its own header lines)."""
+    import ue_crash_bundle as cb
+    rows = []
+    try:
+        bundle = cb.parse_bundle(body)
+    except cb.BundleError as e:
+        return [("the upload is a well-formed CR1 bundle", False, str(e))]
+    rows.append(("the upload is a well-formed CR1 bundle", True, f"{bundle.directory}; files {bundle.names()}"))
+
+    info = cb.summarise(bundle)
+    rows.append(("it is marked as a bug report, not a crash", info["kind"] == "bugreport", info["kind"]))
+    rows.append(("the title the player typed arrived intact", info["title"] == title, repr(info["title"])))
+    q = (meta or {}).get("query", {})
+    rows.append(("the query carries what the crash endpoint expects (AppID, UploadType, AppVersion, UserID) plus ReportKind=bugreport",
+                 q.get("AppID") == "CrashReporter" and q.get("UploadType") == "crashreports" and q.get("ReportKind") == "bugreport"
+                 and bool(q.get("AppVersion")) and bool(q.get("UserID")), json.dumps(q)))
+
+    needed = ["CrashContext.runtime-xml", "BugReport.txt", "game.log"] + (["Screenshot.jpg"] if expect_screenshot else [])
+    missing = [n for n in needed if bundle.get(n) is None]
+    rows.append(("the bundle holds the context, the readable report, the log" + (" and the screenshot" if expect_screenshot else ""), not missing,
+                 f"missing {missing}" if missing else ", ".join(f"{n} {len(bundle.get(n))} B" for n in needed)))
+
+    if expect_screenshot and bundle.get("Screenshot.jpg") is not None:
+        jpg = bundle.get("Screenshot.jpg")
+        rows.append(("the screenshot is a real JPEG of plausible size", jpg[:2] == b"\xff\xd8" and jpg[-2:] == b"\xff\xd9" and 5_000 < len(jpg) < 3_000_000, f"{len(jpg)} B"))
+
+    fields = info.get("fields", {})
+    wanted = ["Build.Version", "Build.Commit", "System.OS", "System.GPU", "Session.NetMode", "Session.Map"]
+    if expect_world:
+        wanted += ["Session.WorldSeed", "Clock.GameTime", "Player.Pawn", "Player.Location"]
+    absent = [k for k in wanted if not fields.get(k)]
+    rows.append(("the game-state fields are filled in", not absent, f"absent {absent}" if absent else f"{len(fields)} fields"))
+    if expect_world:
+        rows.append(("the report came from a listen-server session with a spawned pawn",
+                     fields.get("Session.NetMode") == "ListenServer" and fields.get("Player.Pawn", "(none)") != "(none)",
+                     f"NetMode={fields.get('Session.NetMode')} Pawn={fields.get('Player.Pawn')}"))
+
+    log = bundle.text("game.log")
+    rows.append(("the log tail is this game's log", "LogInit" in log or "LogMOFramework" in log, f"{len(log)} chars"))
+    rows.append(("the readable report lists the attachments and the player's category",
+                 "--- Attachments ---" in bundle.text("BugReport.txt") and bool(info.get("category")), info.get("category", "")))
+
+    def leaks(name):
+        out = []
+        for fname, data in bundle.files:
+            if fname.endswith(".jpg"):
+                continue
+            text = data.decode("utf-8", errors="replace")
+            if len(name) >= 3 and re.search(r"(?<![A-Za-z0-9_])" + re.escape(name) + r"(?![A-Za-z0-9_])", text, re.I):
+                out.append(fname)
+        return out
+
+    if user_name:
+        found = leaks(user_name)
+        rows.append((f"no file names this machine's user ('{user_name}')", not found, f"found in {found}" if found else "scrubbed"))
+    if computer_name:
+        found = leaks(computer_name)
+        rows.append((f"no file names this machine's computer ('{computer_name}')", not found, f"found in {found}" if found else "scrubbed"))
+    return rows
+
+
+def _free_port():
+    import socket
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
+def _start_receiver(out_dir, port, status=200):
+    import urllib.request
+    script = os.path.join(HERE, "bugreport_receiver.py")
+    log = open(os.path.join(out_dir, "receiver.log"), "wb")
+    proc = subprocess.Popen([sys.executable, script, "--port", str(port), "--out", os.path.join(out_dir, "received"), "--status", str(status)],
+                            stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL)
+    for _ in range(50):
+        try:
+            urllib.request.urlopen(f"http://127.0.0.1:{port}/health", timeout=1).read()
+            return proc
+        except OSError:
+            time.sleep(0.2)
+    proc.terminate()
+    return None
+
+
+def _received(out_dir):
+    """[(body bytes, meta dict)] in arrival order."""
+    items = []
+    for root, _, files in os.walk(os.path.join(out_dir, "received")):
+        for f in files:
+            if f.endswith(".json"):
+                with open(os.path.join(root, f), encoding="utf-8") as fh:
+                    meta = json.load(fh)
+                with open(os.path.join(root, f[:-5] + ".bin"), "rb") as fh:
+                    body = fh.read()
+                items.append((meta["receivedAt"], body, meta))
+    return [(b, m) for _, b, m in sorted(items, key=lambda t: t[0])]
+
+
+def bugreport_test(package=False, boot_timeout=180):
+    """The bug report upload with the PACKAGED game, three ways, judged from what a receiver gets and from the game's log:
+      1. accepted      host a world, send a report with a screenshot -> the receiver holds a valid bundle with the state, the log and no identity
+      2. server error  the endpoint answers 500 -> the game says NOT SENT and keeps the bundle in Saved/BugReports, which parses
+      3. unreachable   nothing listens -> same fallback, and the player is told why
+    A report is sent by `MO.BugReport.SendTest` (the same Submit the form's Send button calls) through -ExecCmds, so no window is driven; the form
+    itself is checked by hand in a real window (Docs/AUTONOMOUS_TOOLING.md)."""
+    import getpass
+    import shutil
+    sys.path.insert(0, HERE)
+    import ue_crash_bundle as cb
+
+    rep = Report()
+    pid = recv = None
+    work = tempfile.mkdtemp(prefix="mo_bugreport_")
+    saved_dir = os.path.join(PKG_ROOT, "MO57", "Saved", "BugReports")
+    user, computer = getpass.getuser(), os.environ.get("COMPUTERNAME", "")
+
+    def kept_files():
+        return set(os.listdir(saved_dir)) if os.path.isdir(saved_dir) else set()
+
+    try:
+        if package and not _package_build():
+            return rep.step("the Development package builds", False, "see Saved/Logs/package.log")
+        if not rep.step("the staged packaged build exists", os.path.exists(PKG_EXE), PKG_EXE):
+            return False
+        running = _pkg_alive_count()
+        if not rep.step("no other MO57.exe is running (this mode must own the logs and never touches others)", running == 0, f"{running} running"):
+            return False
+
+        phases = [("accepted", 200, True), ("server error", 500, False), ("unreachable", None, False)]
+        for index, (label, status, with_world) in enumerate(phases, 1):
+            out = os.path.join(work, f"phase{index}")
+            os.makedirs(out)
+            port = _free_port()
+            title = f"PackagedBugReport {label} {int(time.time())}"
+            if status is not None:
+                recv = _start_receiver(out, port, status)
+                if not rep.step(f"[{label}] the local receiver is up on 127.0.0.1:{port} (answering {status})", recv is not None):
+                    return False
+            before = kept_files()
+            # The previous phase's game may still own MO57.log for a moment after the new one starts: only a result with an id we have not seen counts.
+            stale_ids = {m.group(2) for m in BUGREPORT_RESULT_RE.finditer(_pkg_read("MO57.log"))}
+
+            host = "MO.Session.Host BugReportTest 4," if with_world else ""
+            delay = 55 if with_world else 25
+            cmds = (f"{host}MO.BugReport.EndpointOverride http://127.0.0.1:{port}/datarouter/crashes/test,MO.BugReport.CooldownSeconds 0,"
+                    f"MO.BugReport.SendTest -shot -delay={delay} {title}")
+            print(f"[nettest] bugreport [{label}]: launching the packaged game ...", flush=True)
+            pid = _pkg_launch(f'-NoSteam -windowed -ResX=960 -ResY=540 -WinX=0 -WinY=0 -ExecCmds="{cmds}"')
+            deadline, result = time.time() + boot_timeout + delay + 30, None
+            while time.time() < deadline and result is None:
+                result = next((m for m in BUGREPORT_RESULT_RE.finditer(_pkg_read("MO57.log")) if m.group(2) not in stale_ids), None)
+                time.sleep(2)
+            if not rep.step(f"[{label}] the game finished the send and logged the outcome", result is not None,
+                            result.group(0) if result else _pkg_read("MO57.log")[-300:].replace("\n", " | ")):
+                return False
+            sent, http, message, saved_path = result.group(1) == "SENT", int(result.group(3)), result.group(4), result.group(5)
+            rep.step(f"[{label}] outcome as expected", sent == (status == 200), f"{result.group(1)} http={http}: {message}")
+
+            if status == 200:
+                got = _received(out)
+                if rep.step(f"[{label}] the receiver holds exactly one upload", len(got) == 1, f"{len(got)}"):
+                    for row in analyse_bugreport_upload(got[0][0], got[0][1], title, user, computer, expect_screenshot=True, expect_world=with_world):
+                        rep.step(f"[{label}] {row[0]}", row[1], row[2])
+                raw = _pkg_read("MO57.log")
+                rep.step(f"[{label}] CONTROL: the game's own raw log DOES name this machine's user and computer (so 'scrubbed' above is a real result)",
+                         bool(user) and bool(computer) and re.search(re.escape(user), raw, re.I) is not None and re.search(re.escape(computer), raw, re.I) is not None,
+                         f"user '{user}' / computer '{computer}'")
+                rep.step(f"[{label}] nothing was kept on disk for a report that was sent", kept_files() == before)
+            else:
+                if status is not None:
+                    rep.step(f"[{label}] the receiver did see the POST (so the 500 was a real answer)", len(_received(out)) == 1, f"{len(_received(out))}")
+                kept = sorted(kept_files() - before)
+                if rep.step(f"[{label}] the unsent report was kept in Saved/BugReports", len(kept) == 1 and bool(saved_path), f"{kept}"):
+                    try:
+                        with open(os.path.join(saved_dir, kept[0]), "rb") as fh:
+                            info = cb.summarise(cb.parse_bundle(fh.read()))
+                        rep.step(f"[{label}] the kept file is the complete report (it parses, same title)", info["kind"] == "bugreport" and info["title"] == title, info["title"])
+                    except (cb.BundleError, OSError) as e:
+                        rep.step(f"[{label}] the kept file is the complete report", False, str(e))
+                rep.step(f"[{label}] the player is told what happened and where the file is",
+                         "saved to" in message and ("server answered" in message or "reach" in message), message)
+            _pkg_stop(pid)
+            pid = None
+            if recv:
+                recv.terminate()
+                recv = None
+            time.sleep(3)
+        return rep.ok
+    finally:
+        print(f"[nettest] bugreport: {'PASS' if rep.rows and rep.ok else 'FAIL'}", flush=True)
+        _pkg_stop(pid)
+        if recv:
+            recv.terminate()
+        shutil.rmtree(work, ignore_errors=True)
 
 
 def soak_test(uproject, editor_exe, rounds=6, boot_timeout=300):
