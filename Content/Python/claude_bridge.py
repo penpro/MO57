@@ -37,9 +37,38 @@ def _append(msg):
 
 def _get_worlds():
     ues = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem)
-    game = ues.get_game_world()
-    editor = ues.get_editor_world()
-    return game, editor
+    if ues is None:
+        # `UnrealEditor.exe -game` (a standalone game process, e.g. a 2nd client for multiplayer tests) has
+        # no GEditor, hence no editor subsystems. Python and this tick still run there; resolve the world
+        # from the game instance instead.
+        return _standalone_game_world(), None
+    return ues.get_game_world(), ues.get_editor_world()
+
+
+_world_paths = []
+
+
+def _standalone_game_world():
+    """World of a `-game` process: the loaded UWorld among the project's map assets, else None.
+
+    Without GEditor there is no PIE world and no editor-subsystem accessor, and the GameInstance is not
+    reachable from Python. A map loaded by a game process is a plain UWorld object named after its asset,
+    so look the (few) map assets up by path. Never call EditorLevelLibrary.* here: it dereferences GEditor
+    and takes the whole process down (found the hard way).
+    """
+    try:
+        if not _world_paths:
+            reg = unreal.AssetRegistryHelpers.get_asset_registry()
+            for ad in reg.get_assets_by_class(unreal.TopLevelAssetPath("/Script/Engine", "World")):
+                _world_paths.append(f"{ad.package_name}.{ad.asset_name}")
+        live = [w for w in (unreal.find_object(None, p) for p in _world_paths) if w is not None]
+        # After a travel the previous map's UWorld can linger until GC: prefer the one that has a player.
+        for w in live:
+            if unreal.GameplayStatics.get_player_controller(w, 0) is not None:
+                return w
+        return live[0] if live else None
+    except Exception:
+        return None
 
 
 def _execute(line):

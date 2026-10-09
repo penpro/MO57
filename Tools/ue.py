@@ -24,6 +24,7 @@ NOTE: dev-machine tooling — drives arbitrary local execution. Never ship.
 """
 import argparse
 import base64
+import glob
 import hashlib
 import json
 import re
@@ -44,6 +45,20 @@ def _read_json(path):
             return json.load(f)
     except (OSError, ValueError, TypeError):
         return {}
+
+
+def _gamelog():
+    """Log file of the running editor (or of the instance named by MO57_GAMELOG).
+
+    A restarted editor writes MO57_2.log while the previous process is still shutting down, so the fixed
+    MO57.log can be stale and every log-delta verb would silently read nothing. Pick the freshest.
+    """
+    override = os.environ.get("MO57_GAMELOG")
+    if override:
+        return override
+    found = [p for p in glob.glob(os.path.join(ROOT, "Saved", "Logs", "MO57*.log"))
+             if "-backup-" not in os.path.basename(p)]
+    return max(found, key=os.path.getmtime) if found else GAMELOG
 
 
 def _find_uproject(root):
@@ -82,7 +97,7 @@ ROOT = os.path.abspath(os.environ.get(
     "MO57_ROOT", os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)))
 UPROJECT = _find_uproject(ROOT)
 ENGINE_ROOT = _engine_root(UPROJECT)
-GAMELOG = os.path.join(ROOT, "Saved", "Logs", "MO57.log")
+GAMELOG = os.path.join(ROOT, "Saved", "Logs", "MO57.log")  # default; see _gamelog()
 RESULTS = os.path.join(ROOT, "Saved", "MOTestResults.txt")
 BOOT_PS1 = os.path.join(ROOT, "Tools", "agent_boot_newgame.ps1")
 TMP = os.path.abspath(os.environ.get(
@@ -159,7 +174,8 @@ def bridge_run(cmds, timeout=15.0, want_log=True, log_grep=None, log_wait=4.0):
     """
     mid = uuid.uuid4().hex[:8]
     out_off = _size(OUT_FILE)
-    log_off = _size(GAMELOG)
+    gamelog = _gamelog()
+    log_off = _size(gamelog)
     bridge_send([f'py:out("<B {mid}>")'] + list(cmds) + [f'py:out("<E {mid}>")'])
 
     deadline = time.time() + timeout
@@ -192,7 +208,7 @@ def bridge_run(cmds, timeout=15.0, want_log=True, log_grep=None, log_wait=4.0):
         # UE buffers its log file; poll briefly for the delta (or the grep hit).
         log_deadline = time.time() + log_wait
         while time.time() < log_deadline:
-            log_delta = _read_from(GAMELOG, log_off)
+            log_delta = _read_from(gamelog, log_off)
             if log_grep and re.search(log_grep, log_delta):
                 break
             if not log_grep and log_delta:
@@ -761,7 +777,7 @@ def cmd_results(a):
 
 
 def cmd_logs(a):
-    text = _read_from(GAMELOG, 0)
+    text = _read_from(_gamelog(), 0)
     lines = text.splitlines()
     if a.grep:
         lines = [l for l in lines if re.search(a.grep, l)]
@@ -1049,6 +1065,9 @@ def cmd_ui(a):
     elif v == "list":
         lines = _ui_run({"verb": "list", "folder": _unmsys(args[0]) if args else "",
                          "parent": args[1] if len(args) > 1 else ""})
+    elif v == "remove":
+        need(2, "remove <asset> <widget name>")
+        lines = _ui_run({"verb": "remove", "asset": _unmsys(args[0]), "widget": args[1]})
     elif v == "compile":
         need(1, "compile <asset>")
         lines = _ui_run({"verb": "compile", "asset": _unmsys(args[0])})
@@ -1102,6 +1121,70 @@ def cmd_ui(a):
     else:
         print(text)
     sys.exit(1 if ("UI ERROR" in text or "problem(s)" in text or "[py-err]" in text) else 0)
+
+
+# =============================================================================
+# Extra -game instances + networking tests (Tools/ue_inst.py)
+# =============================================================================
+
+def _inst_mod():
+    """Lazy import: ue_inst lives next to this file and is only needed by `inst` / `nettest`."""
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import ue_inst
+    return ue_inst
+
+
+def cmd_inst(a):
+    ui = _inst_mod()
+    v, name = a.verb, getattr(a, "name", None)
+    if v == "list":
+        found = [d[5:] for d in sorted(os.listdir(ui.TMP)) if d.startswith("inst_")] if os.path.isdir(ui.TMP) else []
+        for n in found:
+            pid = ui.read_pid(n)
+            print(f"{n:14} pid={pid}  {'RUNNING' if ui.is_alive(pid) else 'stopped'}  log={ui.game_log(n)}")
+        if not found:
+            print("no instances")
+        return
+    if not name:
+        _die(2, f"usage: ue.py inst {v} <name>")
+    if v == "start":
+        pos = tuple(int(x) for x in a.pos.split(","))
+        res = tuple(int(x) for x in a.res.lower().split("x"))
+        pid = ui.start(name, UPROJECT, EDITOR_EXE, pos=pos, res=res, nosteam=a.nosteam,
+                       extra=a.extra.split() if a.extra else ())
+        print(f"[inst] {name} launched (pid {pid}); waiting for bridge + world ...")
+        ok = ui.wait_ready(name, a.timeout)
+        print(f"[inst] {name} {'READY' if ok else 'NOT READY (see ' + ui.game_log(name) + ')'}")
+        sys.exit(0 if ok else 1)
+    if v == "stop":
+        print(f"[inst] {name}: {ui.stop(name)}")
+        return
+    if v == "do":
+        if not a.rest:
+            _die(2, "usage: ue.py inst do <name> <ue.py command and args...>")
+        rest = a.rest[1:] if a.rest[0] == "--" else a.rest
+        code, out = ui.call(name, rest, timeout=a.timeout)
+        print(out.rstrip())
+        sys.exit(code)
+
+
+_NETTEST_MAP = "/Game/Penumbra/Maps/TestMap"  # keep in sync with ue_inst.DEFAULT_MAP
+
+
+def cmd_nettest(a):
+    ui = _inst_mod()
+    if a.mode == "game":
+        sys.exit(0 if ui.game_test(UPROJECT, EDITOR_EXE, keep=a.keep, withhold_seed=a.withhold_seed, skew_seed=a.skew_seed, withhold_sync=a.withhold_sync) else 1)
+    if a.mode == "hostsave":
+        sys.exit(0 if ui.hostsave_test(UPROJECT, EDITOR_EXE, keep=a.keep) else 1)
+    if a.mode == "features":
+        sys.exit(0 if ui.features_test(UPROJECT, EDITOR_EXE, keep=a.keep) else 1)
+    if a.mode == "actions":
+        sys.exit(0 if ui.actions_test(UPROJECT, EDITOR_EXE, keep=a.keep) else 1)
+    if a.mode == "soak":
+        sys.exit(0 if ui.soak_test(UPROJECT, EDITOR_EXE, rounds=a.rounds) else 1)
+    fn = ui.lan_test if a.mode == "lan" else ui.steam_host_test
+    sys.exit(0 if fn(UPROJECT, EDITOR_EXE, keep=a.keep, map_path=a.map) else 1)
 
 
 def cmd_refresh_data(a):
@@ -1343,8 +1426,8 @@ def main():
                     "Look: open <asset> | shot [--asset A] [out.png] | menu | stop | preview <asset> | close-tabs. "
                     "Exercise (PIE): click <name> | find <name>. Run from Git Bash with MSYS_NO_PATHCONV=1 "
                     "for /Game paths (the tool also repairs the rewrite).")
-    s.add_argument("verb", choices=["build", "check", "dump", "contract", "scaffold", "list", "compile", "preview",
-                                    "close-tabs", "open", "shot", "menu", "stop", "click", "find"])
+    s.add_argument("verb", choices=["build", "check", "dump", "contract", "scaffold", "list", "compile", "remove",
+                                    "preview", "close-tabs", "open", "shot", "menu", "stop", "click", "find"])
     s.add_argument("args", nargs="*")
     s.add_argument("--out", help="write the text result (dump/scaffold/...) to this file")
     s.add_argument("--no-props", action="store_true", help="dump: structure only")
@@ -1365,6 +1448,45 @@ def main():
     s = sub.add_parser("mptest", help="2-client co-op PIE smoke (test_multiplayer.py); restores 1-player settings after")
     s.add_argument("--timeout", type=float, default=600)
     s.set_defaults(fn=cmd_mptest)
+
+    s = sub.add_parser("inst", help="extra -game instances with their own bridge (multiplayer / multi-process tests)")
+    # Real subparsers: a REMAINDER positional on a shared parser swallows `start`'s own options (--nosteam, --pos),
+    # silently launching the instance with defaults (found when "LAN" instances came up on Steam).
+    isub = s.add_subparsers(dest="verb", required=True)
+    ip = isub.add_parser("start", help="launch an instance and wait for bridge + world")
+    ip.add_argument("name", help="instance name (letters, digits, - _)")
+    ip.add_argument("--nosteam", action="store_true", help="disable the Steam OSS (Null OSS / LAN beacon)")
+    ip.add_argument("--pos", default="0,0", help="window position X,Y")
+    ip.add_argument("--res", default="640x360", help="window size WxH")
+    ip.add_argument("--extra", default="", help="extra command-line args (one quoted string)")
+    ip.add_argument("--timeout", type=int, default=240, help="boot wait, seconds")
+    ip.set_defaults(fn=cmd_inst)
+    ip = isub.add_parser("stop", help="graceful quit, then terminate by recorded pid")
+    ip.add_argument("name")
+    ip.set_defaults(fn=cmd_inst)
+    isub.add_parser("list", help="known instances").set_defaults(fn=cmd_inst)
+    ip = isub.add_parser("do", help="run a ue.py command against an instance: inst do NAME run \"MO.Test.State\"")
+    ip.add_argument("--timeout", type=int, default=90, help="per-call timeout, seconds (must precede NAME)")
+    ip.add_argument("name")
+    ip.add_argument("rest", nargs=argparse.REMAINDER, help="the ue.py command and its arguments")
+    ip.set_defaults(fn=cmd_inst)
+
+    s = sub.add_parser("nettest", help="two-process (lan) / real-Steam (steam-host) session test; PASS/FAIL + exit code")
+    s.add_argument("mode", choices=["lan", "steam-host", "game", "hostsave", "soak", "features", "actions"])
+    s.add_argument("--rounds", type=int, default=6, help="soak mode: how many fresh-seed host+join rounds (default 6)")
+    s.add_argument("--keep", action="store_true", help="leave the instances running afterwards")
+    s.add_argument("--withhold-sync", action="store_true",
+                   help="game mode only: NEGATIVE CONTROL -- the host does not publish its clock/weather; the client must NOT match it")
+    s.add_argument("--skew-seed", action="store_true",
+                   help="game mode only: NEGATIVE CONTROL -- the host publishes a DIFFERENT valid seed, so the client generates "
+                        "different terrain; the terrain-height comparison is expected to show the difference")
+    s.add_argument("--withhold-seed", action="store_true",
+                   help="game mode only: NEGATIVE CONTROL -- the host withholds its world seed (the original co-op terrain bug); "
+                        "the run should show the client with no terrain seed, proving the terrain check can fail")
+    s.add_argument("--map", default=_NETTEST_MAP,
+                   help="host map (default %(default)s: non-voxel; '' = the real gameplay map, which crashes a "
+                        "-game editor-binary process in Voxel's editor-only viewport code)")
+    s.set_defaults(fn=cmd_nettest)
 
     s = sub.add_parser("auto", help="run headless UE automation tests (editor must be closed); exit code = pass/fail")
     s.add_argument("--filter", default="MOFramework", help="Automation RunTests filter (default: MOFramework)")

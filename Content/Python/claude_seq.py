@@ -87,6 +87,12 @@ def _append(msg):
 
 def _worlds():
     ues = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem)
+    if ues is None:
+        # `UnrealEditor.exe -game` (a standalone/2nd-client process) has no GEditor, hence no editor subsystems: every
+        # sequence died in here with "'NoneType' has no attribute 'get_game_world'". Resolve the world the way the core
+        # bridge does for the same process type, so there is ONE implementation of "which world is live".
+        import claude_bridge
+        return claude_bridge._get_worlds()
     game = ues.get_game_world()
     editor = ues.get_editor_world()
     return game, editor
