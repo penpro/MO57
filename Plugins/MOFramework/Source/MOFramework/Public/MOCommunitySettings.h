@@ -39,6 +39,13 @@ public:
 	static FString GetBugReportUrl();
 
 	/**
+	 * Open the bug report link in the default browser; if the OS cannot launch one, copy the link to the clipboard instead. `OutMessage` is what to tell
+	 * the player in every case (opened / copied / not configured). True only when a browser was launched. The ONE implementation behind the in-game menu's
+	 * button and the bug report panel's Discord button.
+	 */
+	static bool OpenBugReportLink(FText& OutMessage);
+
+	/**
 	 * True for a link that is safe to hand to the OS URL handler: starts with "https://", has a host, and contains no whitespace or control characters.
 	 * Pure (no engine state): unit-tested.
 	 */

@@ -71,6 +71,7 @@
 #include "MOUIUtils.generated.h"
 
 class UEditableTextBox;
+class UMultiLineEditableTextBox;
 class UTextBlock;
 class UTexture2D;
 struct FMORecipeDefinitionRow;
@@ -205,6 +206,10 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category="MO|UI|Utils")
 	static void ApplyReadableTextInputStyle(UEditableTextBox* TextBox);
+
+	/** The same for a multi-line box (UHT has no overloaded UFUNCTIONs, hence the name). */
+	UFUNCTION(BlueprintCallable, Category="MO|UI|Utils")
+	static void ApplyReadableMultiLineTextInputStyle(UMultiLineEditableTextBox* TextBox);
 
 	// ============================================================================
 	// COLOR CONSTANTS

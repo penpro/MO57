@@ -106,6 +106,7 @@ public class MOFramework : ModuleRules
 				"Networking",  // Recommended when you are doing replication-heavy work
 				"DeveloperSettings", // Required for UDeveloperSettings (MOItemDatabaseSettings)
 				"ApplicationCore",   // FPlatformApplicationMisc::ClipboardCopy (bug report link fallback)
+				"HTTP",              // FHttpModule: the bug report upload (MOBugReport.cpp)
 				"ImageWrapper", // Required for PNG encoding/decoding (save thumbnails)
 				"RenderCore",   // Required for viewport pixel reading
 				"Media",        // Required for UMediaPlayer (intro video)

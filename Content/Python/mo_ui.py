@@ -82,8 +82,11 @@ def _asset_name(path):
     return path.rsplit("/", 1)[-1].split(".")[0]
 
 
-def resolve_class(spec):
-    """Class object from an alias, engine widget name, native class path, or BP widget asset path."""
+def resolve_class(spec, as_parent=False):
+    """Class object from an alias, engine widget name, native class path, or BP widget asset path.
+
+    `as_parent=True`: the class is the C++ PARENT of a Widget Blueprint about to be created, which is exactly what a native UserWidget class is for;
+    only a native class used as a NODE in a tree is the bare-spacer trap below."""
     if spec.startswith("TODO:"):
         raise UIError(f"spec still contains a placeholder type '{spec}': create that widget blueprint "
                       f"(or point the node at an existing one) before building")
@@ -101,7 +104,7 @@ def resolve_class(spec):
     if cls is None:
         raise UIError(f"cannot resolve widget class '{spec}'")
     cdo = unreal.get_default_object(cls)
-    if mo_ui_contract.is_bare_native_userwidget(cls.get_name(), isinstance(cdo, unreal.UserWidget)):
+    if not as_parent and mo_ui_contract.is_bare_native_userwidget(cls.get_name(), isinstance(cdo, unreal.UserWidget)):
         raise UIError(f"'{spec}' is a native UserWidget with no Widget Blueprint: it has no widget tree, so it renders "
                       f"as an empty spacer that real mouse clicks pass straight through (simulated clicks still "
                       f"'work', which hides it). Use a Widget Blueprint instead -- type 'MOButton' for buttons.")
@@ -171,6 +174,10 @@ def _coerce(name, cur, value):
     return value
 
 
+_SIZEBOX_OVERRIDES = {"width_override", "height_override", "min_desired_width", "min_desired_height", "max_desired_width", "max_desired_height",
+                      "min_aspect_ratio", "max_aspect_ratio"}
+
+
 def set_props(obj, props, what=""):
     for key, value in props.items():
         name = _snake(key)
@@ -179,7 +186,13 @@ def set_props(obj, props, what=""):
         except Exception as exc:
             raise UIError(f"{what}: no property '{name}' on {obj.get_class().get_name()} ({str(exc)[:60]})")
         try:
-            obj.set_editor_property(name, _coerce(name, cur, value))
+            coerced = _coerce(name, cur, value)
+            obj.set_editor_property(name, coerced)
+            # A SizeBox override (width/height/min/max/aspect) takes effect only while its enable flag (bOverride_*) is on, and set_editor_property
+            # writes the VALUE only. The flag is not reachable from Python; the setter UFUNCTION (SetHeightOverride ...) turns it on. Without this a
+            # spec's `height: 100` is stored but ignored at run time (the bug report form's boxes collapsed to one line).
+            if isinstance(obj, unreal.SizeBox) and name in _SIZEBOX_OVERRIDES:
+                getattr(obj, "set_" + name)(coerced)
         except UIError:
             raise
         except Exception as exc:
@@ -375,7 +388,7 @@ def ensure_wbp(asset, parent):
     if not parent:
         raise UIError(f"{asset} does not exist and the spec has no 'parent'")
     factory = unreal.WidgetBlueprintFactory()
-    factory.set_editor_property("parent_class", resolve_class(parent))
+    factory.set_editor_property("parent_class", resolve_class(parent, as_parent=True))
     wbp = unreal.AssetToolsHelpers.get_asset_tools().create_asset(name, folder, unreal.WidgetBlueprint, factory)
     if wbp is None:
         raise UIError(f"failed to create {asset}")
@@ -499,7 +512,7 @@ def preview(asset, z_order=50):
         raise UIError("no PIE world: start PIE first (python Tools/ue.py ui menu)")
     cls = resolve_class(asset)
     pc = unreal.GameplayStatics.get_player_controller(world, 0)
-    w = unreal.WidgetLibrary.create(world, cls, pc)
+    w = unreal.WidgetBlueprintLibrary.create(world, cls, pc)  # (was unreal.WidgetLibrary: no such class in 5.8)
     w.add_to_viewport(z_order)
     store = getattr(unreal, "_mo_ui_previews", None)
     if store is None:

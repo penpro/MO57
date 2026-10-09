@@ -3,12 +3,26 @@
 #include "MOItemDatabaseSettings.h"
 #include "Components/TextBlock.h"
 #include "Components/EditableTextBox.h"
+#include "Components/MultiLineEditableTextBox.h"
 
 // Color constants
 const FLinearColor UMOUIUtils::ColorAvailable = FLinearColor::White;
 const FLinearColor UMOUIUtils::ColorInsufficient = FLinearColor(1.0f, 0.3f, 0.3f, 1.0f);
 const FLinearColor UMOUIUtils::ColorDisabled = FLinearColor(0.5f, 0.5f, 0.5f, 1.0f);
 const FLinearColor UMOUIUtils::ColorTextInput = FLinearColor(0.03f, 0.03f, 0.03f, 1.0f);
+
+namespace
+{
+	/** The typed-text colours of a box style, all set to the dark input colour (shared by the single-line and multi-line boxes). */
+	void MakeStyleReadable(FEditableTextBoxStyle& Style)
+	{
+		const FSlateColor Dark(UMOUIUtils::ColorTextInput);
+		Style.SetForegroundColor(Dark);
+		Style.SetFocusedForegroundColor(Dark); // the colour the typed text really has while the box is focused (SEditableTextBox::DetermineForegroundColor)
+		Style.SetReadOnlyForegroundColor(Dark);
+		Style.TextStyle.SetColorAndOpacity(Dark);
+	}
+}
 
 void UMOUIUtils::ApplyReadableTextInputStyle(UEditableTextBox* TextBox)
 {
@@ -22,13 +36,19 @@ void UMOUIUtils::ApplyReadableTextInputStyle(UEditableTextBox* TextBox)
 	// NOT UEditableTextBox::SetWidgetStyle(Style): in UE 5.8 it copies the style into the member but hands Slate a pointer to its PARAMETER
 	// (MyEditableTextBlock->SetStyle(&InStyle)), i.e. to the caller's local. The pointer dangles as soon as the caller returns and the next
 	// text layout reads freed stack -- the packaged game crashed in FCachedTypefaceData the first time the console popup opened.
-	FEditableTextBoxStyle& Style = TextBox->WidgetStyle;
-	const FSlateColor Dark(ColorTextInput);
-	Style.SetForegroundColor(Dark);
-	Style.SetFocusedForegroundColor(Dark); // the colour the typed text really has while the box is focused (SEditableTextBox::DetermineForegroundColor)
-	Style.SetReadOnlyForegroundColor(Dark);
-	Style.TextStyle.SetColorAndOpacity(Dark);
+	MakeStyleReadable(TextBox->WidgetStyle);
 	TextBox->SynchronizeProperties(); // SetStyle(&WidgetStyle): a pointer to the member, which lives as long as the widget
+}
+
+void UMOUIUtils::ApplyReadableMultiLineTextInputStyle(UMultiLineEditableTextBox* TextBox)
+{
+	if (!TextBox)
+	{
+		return;
+	}
+	// Same in-place edit as above (UMultiLineEditableTextBox::SetTextStyle has the same pointer-to-parameter trap).
+	MakeStyleReadable(TextBox->WidgetStyle);
+	TextBox->SynchronizeProperties();
 }
 
 FText UMOUIUtils::FormatDurationAsText(float Seconds)

@@ -19,11 +19,17 @@
 #include "MOPersistenceSubsystem.h"
 #include "MOUIUtils.h"
 #include "MOCommunitySettings.h"
+#include "MOBugReport.h"
+#include "MOBugReportBundle.h"
 #include "Components/EditableTextBox.h"
+#include "Components/MultiLineEditableTextBox.h"
+#include "Misc/Compression.h"
+#include "HAL/PlatformProcess.h"
 #include "IImageWrapper.h"
 #include "IImageWrapperModule.h"
 #include "Modules/ModuleManager.h"
 #include "Engine/DataTable.h"
+#include "Engine/GameInstance.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -801,6 +807,346 @@ bool FMOCommunity_ConfiguredBugReportUrlLoads::RunTest(const FString& Parameters
 	// "https:" and the packaged button did nothing. This reads the real config, not the class default.
 	const FString Configured = UMOCommunitySettings::GetBugReportUrl();
 	TestTrue(FString::Printf(TEXT("the configured bug report link is openable (got '%s')"), *Configured), UMOCommunitySettings::IsOpenableUrl(Configured));
+	return true;
+}
+
+// ============================================================================
+// Bug report form: the bundle, the scrubber, the endpoint rules, the report builder
+// ============================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOBugReport_BundleRoundTrip,
+	"MOFramework.BugReport.BundleRoundTrip",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOBugReport_BundleRoundTrip::RunTest(const FString& Parameters)
+{
+	using namespace MOBugReportBundle;
+
+	// Binary payload with every byte value (a text-only encoder would corrupt it) plus a large, very compressible one.
+	TArray<FFile> Files;
+	{
+		FFile Text; Text.Name = TEXT("BugReport.txt"); Text.Data.Append(reinterpret_cast<const uint8*>("hello\nworld"), 11);
+		FFile Binary; Binary.Name = TEXT("Screenshot.jpg");
+		for (int32 I = 0; I < 1024; ++I) { Binary.Data.Add(static_cast<uint8>(I & 0xFF)); }
+		FFile Big; Big.Name = TEXT("game.log"); Big.Data.Init('x', 300000);
+		FFile Empty; Empty.Name = TEXT("empty.bin");
+		Files = { Text, Binary, Big, Empty };
+	}
+	const FGuid Id = FGuid::NewGuid();
+	const FString Directory = MakeDirectoryName(Id);
+
+	TArray<uint8> Bundle;
+	FString Error;
+	int32 RawSize = 0;
+	TestTrue(TEXT("Build succeeds"), Build(Directory, Files, Bundle, Error, &RawSize));
+	TestTrue(TEXT("zlib stream (78 xx header)"), Bundle.Num() > 2 && Bundle[0] == 0x78);
+	TestTrue(TEXT("the 300 KB of 'x' compressed well"), Bundle.Num() < 20000);
+
+	FString ParsedDirectory;
+	TArray<FFile> Parsed;
+	TestTrue(FString::Printf(TEXT("Parse succeeds (%s)"), *Error), Parse(Bundle, RawSize, ParsedDirectory, Parsed, Error));
+	TestEqual(TEXT("directory name round-trips"), ParsedDirectory, Directory);
+	if (TestEqual(TEXT("file count"), Parsed.Num(), Files.Num()))
+	{
+		for (int32 I = 0; I < Files.Num(); ++I)
+		{
+			TestEqual(FString::Printf(TEXT("file %d name"), I), Parsed[I].Name, Files[I].Name);
+			TestTrue(FString::Printf(TEXT("file %d bytes identical (%d)"), I, Files[I].Data.Num()), Parsed[I].Data == Files[I].Data);
+		}
+	}
+
+	// Layout against the crash reporter's own (CrashUpload.cpp): marker, 260-char name fields, size at offset 531, count after it.
+	TArray<uint8> Raw;
+	Raw.SetNumUninitialized(RawSize);
+	TestTrue(TEXT("inflates with the engine's own routine"), FCompression::UncompressMemory(NAME_Zlib, Raw.GetData(), Raw.Num(), Bundle.GetData(), Bundle.Num()));
+	TestTrue(TEXT("marker is CR1"), Raw[0] == 'C' && Raw[1] == 'R' && Raw[2] == '1');
+	int32 NameLength = 0, StoredSize = 0, StoredCount = 0;
+	FMemory::Memcpy(&NameLength, Raw.GetData() + 3, 4);
+	FMemory::Memcpy(&StoredSize, Raw.GetData() + 531, 4);
+	FMemory::Memcpy(&StoredCount, Raw.GetData() + 535, 4);
+	TestEqual(TEXT("name fields are 260 characters wide"), NameLength, 260);
+	TestEqual(TEXT("UncompressedSize sits at offset 531 and counts the whole stream"), StoredSize, 539 + (4 + 4 + 260 + 4 + 11) + (4 + 4 + 260 + 4 + 1024) + (4 + 4 + 260 + 4 + 300000) + (4 + 4 + 260 + 4));
+	TestEqual(TEXT("FileCount follows it"), StoredCount, 4);
+	TestTrue(TEXT("directory name is 'UECC-Windows-<32 upper-case hex>_0000'"), Directory.Len() == 13 + 32 + 5 && Directory.StartsWith(TEXT("UECC-Windows-")) && Directory.EndsWith(TEXT("_0000")) && Directory.Mid(13, 32) == Directory.Mid(13, 32).ToUpper());
+
+	// CONTROLS: bad input must fail, not return a half-parsed bundle. (The engine logs an Error for each undecodable stream: expected here.)
+	AddExpectedError(TEXT("appUncompressMemoryZLIB failed"), EAutomationExpectedErrorFlags::Contains, 0);
+	AddExpectedError(TEXT("Failed to uncompress memory"), EAutomationExpectedErrorFlags::Contains, 0);
+	FString Dir2; TArray<FFile> Out2;
+	TArray<uint8> Corrupt = Bundle; Corrupt[Corrupt.Num() / 2] ^= 0xFF;
+	TestFalse(TEXT("CONTROL: a corrupted stream does not parse"), Parse(Corrupt, RawSize, Dir2, Out2, Error));
+	TArray<uint8> Truncated = Bundle; Truncated.SetNum(Truncated.Num() / 3);
+	TestFalse(TEXT("CONTROL: a truncated stream does not parse"), Parse(Truncated, RawSize, Dir2, Out2, Error));
+	TArray<uint8> Noise; for (int32 I = 0; I < 400; ++I) { Noise.Add(static_cast<uint8>((I * 37) & 0xFF)); }
+	TestFalse(TEXT("CONTROL: noise does not parse"), Parse(Noise, RawSize, Dir2, Out2, Error));
+	TestFalse(TEXT("CONTROL: a wrong size is refused, not guessed"), Parse(Bundle, RawSize + 1, Dir2, Out2, Error));
+	TestFalse(TEXT("CONTROL: an empty file list is refused"), Build(Directory, {}, Bundle, Error));
+	FFile TooLong; TooLong.Name = FString::ChrN(260, TEXT('a')); TooLong.Data.Add(1);
+	TestFalse(TEXT("CONTROL: a 260-character file name does not fit the field"), Build(Directory, { TooLong }, Bundle, Error));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOBugReport_SanitizeRemovesIdentity,
+	"MOFramework.BugReport.SanitizeRemovesIdentity",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOBugReport_SanitizeRemovesIdentity::RunTest(const FString& Parameters)
+{
+	using namespace MOBugReportBundle;
+	const FString Sanitised = Sanitize(
+		TEXT("LogInit: user=Penum machine=DESKTOP-ABC1 path=C:\\Users\\Penum\\AppData\\Local\\MO57 and /Users/penum/Library and D:\\Users\\Other\\x"),
+		TEXT("penum"), TEXT("desktop-abc1"));
+	TestFalse(TEXT("the user name is gone, whatever its case"), Sanitised.Contains(TEXT("Penum"), ESearchCase::IgnoreCase));
+	TestFalse(TEXT("the computer name is gone, whatever its case"), Sanitised.Contains(TEXT("ABC1"), ESearchCase::IgnoreCase));
+	TestTrue(TEXT("the profile folder is replaced, the rest of the path survives"), Sanitised.Contains(TEXT("C:\\Users\\<user>\\AppData\\Local\\MO57")));
+	TestTrue(TEXT("a mac/linux style profile path too"), Sanitised.Contains(TEXT("/Users/<user>/Library")));
+	TestTrue(TEXT("ANY profile name is scrubbed, not just the current user's"), Sanitised.Contains(TEXT("D:\\Users\\<user>\\x")));
+
+	// CONTROLS: nothing else is touched.
+	TestEqual(TEXT("CONTROL: a word merely containing the name is not shredded"), Sanitize(TEXT("penumbra and penumbral"), TEXT("penum"), TEXT("")), FString(TEXT("penumbra and penumbral")));
+	TestEqual(TEXT("CONTROL: a 2-character name would shred ordinary words and is ignored"), Sanitize(TEXT("go to the zoo"), TEXT("go"), TEXT("zo")), FString(TEXT("go to the zoo")));
+	TestEqual(TEXT("CONTROL: the shared 'Public' profile is not a person"), Sanitize(TEXT("C:\\Users\\Public\\x"), TEXT(""), TEXT("")), FString(TEXT("C:\\Users\\Public\\x")));
+	TestEqual(TEXT("CONTROL: text with no identity passes through unchanged"), Sanitize(TEXT("LogMOFramework: ready"), TEXT("penum"), TEXT("desktop")), FString(TEXT("LogMOFramework: ready")));
+	TestEqual(TEXT("scrubbing twice changes nothing more"), Sanitize(Sanitised, TEXT("penum"), TEXT("desktop-abc1")), Sanitised);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOBugReport_TextHelpers,
+	"MOFramework.BugReport.TextHelpers",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOBugReport_TextHelpers::RunTest(const FString& Parameters)
+{
+	using namespace MOBugReportBundle;
+	TestEqual(TEXT("XmlEscape handles the five markup characters"), XmlEscape(TEXT("a<b>&\"c'")), FString(TEXT("a&lt;b&gt;&amp;&quot;c&apos;")));
+	TestEqual(TEXT("XmlEscape drops characters XML 1.0 cannot carry, keeps tab/newline"), XmlEscape(FString::Printf(TEXT("a%cb\tc\nd"), 0x01)), FString(TEXT("ab\tc\nd")));
+
+	const FString Xml = BuildContextXml({ { TEXT("CrashType"), TEXT("BugReport") }, { TEXT("ErrorMessage"), TEXT("a < b & c") } }, { { TEXT("Build.Commit"), TEXT("abc") }, { TEXT("Evil\"Name"), TEXT("</GameData>") } });
+	TestTrue(TEXT("runtime property present"), Xml.Contains(TEXT("<CrashType>BugReport</CrashType>")));
+	TestTrue(TEXT("property value is escaped"), Xml.Contains(TEXT("<ErrorMessage>a &lt; b &amp; c</ErrorMessage>")));
+	TestTrue(TEXT("game field present"), Xml.Contains(TEXT("<Field name=\"Build.Commit\">abc</Field>")));
+	TestTrue(TEXT("a hostile field cannot close the section early (name and value escaped)"), Xml.Contains(TEXT("<Field name=\"Evil&quot;Name\">&lt;/GameData&gt;</Field>")));
+	int32 Closings = 0; for (int32 At = 0; (At = Xml.Find(TEXT("</GameData>"), ESearchCase::CaseSensitive, ESearchDir::FromStart, At)) != INDEX_NONE; ++At) { ++Closings; }
+	TestEqual(TEXT("CONTROL: exactly one real </GameData>"), Closings, 1);
+
+	const FString Log = TEXT("line1\nline2\nline3\nline4\n");
+	TestEqual(TEXT("TailText: a log that fits is returned unchanged"), TailText(Log, 1000), Log);
+	const FString Tail = TailText(Log, 9); // "ne3\nline4\n" would start mid-line
+	TestTrue(TEXT("TailText: starts on a line boundary"), Tail.EndsWith(TEXT("line4\n")) && !Tail.Contains(TEXT("ne3")));
+	TestTrue(TEXT("TailText: says that earlier text was dropped"), Tail.StartsWith(TEXT("[... earlier log omitted ...]")));
+	TestTrue(TEXT("TailText: a cut that lands exactly on a line start keeps that line"), TailText(Log, 12).Contains(TEXT("line3\nline4\n")));
+
+	TestEqual(TEXT("ClampText leaves short text alone"), ClampText(TEXT("abc"), 10), FString(TEXT("abc")));
+	TestTrue(TEXT("ClampText cuts and marks long text"), ClampText(FString::ChrN(50, TEXT('z')), 10).Len() == 10 && ClampText(FString::ChrN(50, TEXT('z')), 10).EndsWith(TEXT("...")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOBugReport_EndpointRules,
+	"MOFramework.BugReport.EndpointRules",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOBugReport_EndpointRules::RunTest(const FString& Parameters)
+{
+	TestTrue(TEXT("the configured crash endpoint shape is accepted"), UMOBugReportSubsystem::IsAllowedEndpoint(TEXT("https://penumbra-tech.com/datarouter/crashes/abc"), false));
+	TestFalse(TEXT("CONTROL: plain http is not accepted in production"), UMOBugReportSubsystem::IsAllowedEndpoint(TEXT("http://penumbra-tech.com/x"), false));
+	TestFalse(TEXT("CONTROL: empty"), UMOBugReportSubsystem::IsAllowedEndpoint(FString(), false));
+	TestFalse(TEXT("CONTROL: whitespace"), UMOBugReportSubsystem::IsAllowedEndpoint(TEXT("https://a.com/x y"), false));
+	TestFalse(TEXT("CONTROL: no host"), UMOBugReportSubsystem::IsAllowedEndpoint(TEXT("https:///x"), false));
+
+	TestTrue(TEXT("the test override accepts a loopback receiver over http"), UMOBugReportSubsystem::IsAllowedEndpoint(TEXT("http://127.0.0.1:8765/crashes/t"), true));
+	TestTrue(TEXT("... and localhost"), UMOBugReportSubsystem::IsAllowedEndpoint(TEXT("http://localhost:8765/"), true));
+	TestFalse(TEXT("CONTROL: the override can never point at a remote host"), UMOBugReportSubsystem::IsAllowedEndpoint(TEXT("http://evil.example/x"), true));
+	TestFalse(TEXT("CONTROL: the override refuses the user-info trick (connects to evil.example, reads as localhost)"), UMOBugReportSubsystem::IsAllowedEndpoint(TEXT("http://localhost:pw@evil.example/x"), true));
+	TestFalse(TEXT("CONTROL: ... and its lookalike with the loopback address as the user"), UMOBugReportSubsystem::IsAllowedEndpoint(TEXT("http://127.0.0.1@evil.example/x"), true));
+	TestFalse(TEXT("CONTROL: a production endpoint with user-info is refused"), UMOBugReportSubsystem::IsAllowedEndpoint(TEXT("https://user:pw@penumbra-tech.com/x"), false));
+
+	const FString Url = UMOBugReportSubsystem::BuildUploadUrl(TEXT("https://h.example/p/tok"), TEXT("5.8.0-1+++UE5+Rel"), TEXT("abc||"));
+	TestTrue(TEXT("upload URL carries the crash reporter's parameters"), Url.Contains(TEXT("?AppID=CrashReporter&AppVersion=")) && Url.Contains(TEXT("&UploadType=crashreports")) && Url.Contains(TEXT("&AppEnvironment=Release")));
+	TestTrue(TEXT("... plus the bug report marker"), Url.Contains(TEXT("&ReportKind=bugreport")));
+	TestFalse(TEXT("the engine version is URL-encoded ('+' would read as a space)"), Url.Contains(TEXT("5.8.0-1+++UE5")));
+	TestTrue(TEXT("a base URL that already has a query gets '&'"), UMOBugReportSubsystem::BuildUploadUrl(TEXT("https://h/p?k=v"), TEXT("v"), TEXT("u")).Contains(TEXT("?k=v&AppID=")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOBugReport_ReportBuilder,
+	"MOFramework.BugReport.ReportBuilder",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOBugReport_ReportBuilder::RunTest(const FString& Parameters)
+{
+	using namespace MOBugReportBundle;
+	UGameInstance* Owner = NewObject<UGameInstance>(GetTransientPackage()); // UGameInstanceSubsystem has ClassWithin = UGameInstance
+	UMOBugReportSubsystem* Reports = NewObject<UMOBugReportSubsystem>(Owner);
+	TestNotNull(TEXT("subsystem object"), Reports);
+	if (!Reports) { return false; }
+
+	// Validation
+	FMOBugReportDraft Draft;
+	TestTrue(TEXT("CONTROL: an empty draft is not sendable"), !UMOBugReportSubsystem::ValidateDraft(Draft).IsEmpty());
+	Draft.Title = TEXT("ab");
+	TestTrue(TEXT("CONTROL: a 2-character title is not sendable"), !UMOBugReportSubsystem::ValidateDraft(Draft).IsEmpty());
+	Draft.Title = TEXT("   x  ");
+	TestTrue(TEXT("CONTROL: padding does not count"), !UMOBugReportSubsystem::ValidateDraft(Draft).IsEmpty());
+	Draft.Title = TEXT("Pickaxe <breaks> & vanishes");
+	TestTrue(TEXT("a real title is sendable"), UMOBugReportSubsystem::ValidateDraft(Draft).IsEmpty());
+
+	// Contributors: registered rows appear prefixed and scrubbed; re-registering replaces; unregistering removes.
+	Reports->RegisterContributor(TEXT("Fishing"), [](const UWorld*, FMOBugReportFields& Out)
+	{
+		Out.Emplace(TEXT("Rod"), TEXT("bamboo"));
+		Out.Emplace(TEXT("Where"), TEXT("C:\\Users\\SomeoneElse\\AppData\\x"));
+		Out.Emplace(TEXT("Long"), FString::ChrN(5000, TEXT('q')));
+	});
+	FMOBugReportFields Fields;
+	Reports->CollectFields(Fields);
+	auto FindField = [&Fields](const TCHAR* Name) -> const FString* { for (const auto& Row : Fields) { if (Row.Key == Name) { return &Row.Value; } } return nullptr; };
+	TestTrue(TEXT("the contributor's row appears with its id as prefix"), FindField(TEXT("Fishing.Rod")) && *FindField(TEXT("Fishing.Rod")) == TEXT("bamboo"));
+	TestTrue(TEXT("a profile path in a value is scrubbed"), FindField(TEXT("Fishing.Where")) && FindField(TEXT("Fishing.Where"))->Contains(TEXT("<user>")) && !FindField(TEXT("Fishing.Where"))->Contains(TEXT("SomeoneElse")));
+	TestTrue(TEXT("a value is capped"), FindField(TEXT("Fishing.Long")) && FindField(TEXT("Fishing.Long"))->Len() <= UMOBugReportSubsystem::MaxFieldValueChars);
+	Reports->RegisterContributor(TEXT("Fishing"), [](const UWorld*, FMOBugReportFields& Out) { Out.Emplace(TEXT("Rod"), TEXT("steel")); });
+	TestEqual(TEXT("re-registering replaces, it does not duplicate"), Reports->GetNumContributors(), 1);
+	Fields.Reset(); Reports->CollectFields(Fields);
+	TestTrue(TEXT("the replacement is what runs"), FindField(TEXT("Fishing.Rod")) && *FindField(TEXT("Fishing.Rod")) == TEXT("steel") && !FindField(TEXT("Fishing.Where")));
+
+	// The text, the preview and the bundle agree.
+	Draft.Description = TEXT("It happened while fishing.");
+	Draft.Category = TEXT("Gameplay");
+	Draft.Contact = TEXT("someone#1234");
+	Draft.bIncludeLog = false;
+	Draft.bIncludeScreenshot = true;
+	const FGuid Id = FGuid::NewGuid();
+	const FString Text = Reports->BuildReportText(Draft, Id, false);
+	TestTrue(TEXT("text carries title, description, category, a collected row and the contact"),
+		Text.Contains(Draft.Title) && Text.Contains(Draft.Description) && Text.Contains(TEXT("Gameplay")) && Text.Contains(TEXT("Fishing.Rod: steel")) && Text.Contains(TEXT("someone#1234")));
+	TestTrue(TEXT("a requested screenshot that was not captured is said so, not silently dropped"), Text.Contains(TEXT("Screenshot.jpg: could not be captured")));
+	TestTrue(TEXT("a declined log is listed as not included"), Text.Contains(TEXT("game.log: not included")));
+	TestTrue(TEXT("the preview is the same builder"), Reports->BuildReportText(Draft, Id, true).Contains(TEXT("Fishing.Rod: steel")));
+	TestTrue(TEXT("a preview has no id yet and says so (it once showed 32 zeros)"), Reports->BuildReportText(Draft, FGuid(), true).Contains(TEXT("Report id: (assigned when sent)")));
+	TestFalse(TEXT("CONTROL: a real report shows its id"), Text.Contains(TEXT("assigned when sent")));
+
+	TArray<uint8> Bundle;
+	FString Error;
+	int32 RawSize = 0;
+	TestTrue(FString::Printf(TEXT("BuildBundle succeeds (%s)"), *Error), Reports->BuildBundle(Draft, Id, Bundle, Error, &RawSize));
+	FString Directory;
+	TArray<FFile> Files;
+	TestTrue(TEXT("the bundle parses"), Parse(Bundle, RawSize, Directory, Files, Error));
+	TestEqual(TEXT("directory name derives from the report id"), Directory, MakeDirectoryName(Id));
+	TestEqual(TEXT("two files: context + text (no log, no screenshot were available)"), Files.Num(), 2);
+	auto FileText = [&Files](const TCHAR* Name) -> FString { for (const FFile& F : Files) { if (F.Name == Name) { FUTF8ToTCHAR C(reinterpret_cast<const ANSICHAR*>(F.Data.GetData()), F.Data.Num()); return FString(C.Length(), C.Get()); } } return FString(); };
+	const FString Xml = FileText(TEXT("CrashContext.runtime-xml"));
+	TestTrue(TEXT("context says BugReport, not a crash"), Xml.Contains(TEXT("<CrashType>BugReport</CrashType>")) && Xml.Contains(TEXT("<ReportKind>bugreport</ReportKind>")));
+	TestTrue(TEXT("title is escaped into ErrorMessage"), Xml.Contains(TEXT("<ErrorMessage>Pickaxe &lt;breaks&gt; &amp; vanishes</ErrorMessage>")));
+	TestTrue(TEXT("the contact is carried"), Xml.Contains(TEXT("someone#1234")));
+	TestTrue(TEXT("a collected row is in GameData"), Xml.Contains(TEXT("<Field name=\"Fishing.Rod\">steel</Field>")));
+	TestFalse(TEXT("CONTROL: the OS user name is not a property of the report"), Xml.Contains(TEXT("<UserName>")));
+	const FString Txt = FileText(TEXT("BugReport.txt"));
+	TestTrue(TEXT("BugReport.txt is the same text"), Txt.Contains(TEXT("Fishing.Rod: steel")) && Txt.Contains(Draft.Title));
+
+	// The log is attached when asked for, and scrubbed of this machine's profile path.
+	FMOBugReportDraft WithLog = Draft; WithLog.bIncludeLog = true; WithLog.bIncludeScreenshot = false;
+	TestTrue(TEXT("bundle with log builds"), Reports->BuildBundle(WithLog, Id, Bundle, Error, &RawSize) && Parse(Bundle, RawSize, Directory, Files, Error));
+	const FString LogText = FileText(TEXT("game.log"));
+	TestTrue(TEXT("game.log is attached and not empty"), LogText.Len() > 100);
+	const FString User = FPlatformProcess::UserName(false);
+	if (User.Len() >= 3)
+	{
+		TestFalse(TEXT("the log does not contain this machine's profile path"), LogText.Contains(FString::Printf(TEXT("\\Users\\%s\\"), *User), ESearchCase::IgnoreCase) || LogText.Contains(FString::Printf(TEXT("/Users/%s/"), *User), ESearchCase::IgnoreCase));
+	}
+
+	// Size cap: an oversized (incompressible) screenshot is dropped, not sent.
+	{
+		TArray<uint8> Huge; Huge.SetNumUninitialized(6 * 1024 * 1024);
+		FRandomStream Random(1234);
+		for (uint8& Byte : Huge) { Byte = static_cast<uint8>(Random.RandRange(0, 255)); }
+		Reports->SetScreenshot(MoveTemp(Huge), 1280, 720);
+		FMOBugReportDraft WithShot = Draft; WithShot.bIncludeScreenshot = true;
+		TestTrue(TEXT("an oversized screenshot does not make the report fail"), Reports->BuildBundle(WithShot, Id, Bundle, Error, &RawSize));
+		TestTrue(TEXT("the bundle stays under the cap"), Bundle.Num() <= UMOBugReportSubsystem::MaxBundleBytes);
+		TestTrue(TEXT("... because the screenshot was dropped"), Parse(Bundle, RawSize, Directory, Files, Error) && FileText(TEXT("BugReport.txt")).Contains(TEXT("Screenshot.jpg: not included")));
+
+		TArray<uint8> Small; Small.SetNumUninitialized(200 * 1024);
+		for (uint8& Byte : Small) { Byte = static_cast<uint8>(Random.RandRange(0, 255)); }
+		Reports->SetScreenshot(MoveTemp(Small), 640, 360);
+		TestTrue(TEXT("a normal-sized screenshot is kept"), Reports->BuildBundle(WithShot, Id, Bundle, Error, &RawSize) && Parse(Bundle, RawSize, Directory, Files, Error));
+		bool bHasShot = false; for (const FFile& F : Files) { bHasShot |= F.Name == TEXT("Screenshot.jpg"); }
+		TestTrue(TEXT("Screenshot.jpg is in the bundle"), bHasShot);
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOBugReport_ScreenshotEncoding,
+	"MOFramework.BugReport.ScreenshotEncoding",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOBugReport_ScreenshotEncoding::RunTest(const FString& Parameters)
+{
+	auto Gradient = [](int32 W, int32 H)
+	{
+		TArray<FColor> Frame;
+		Frame.SetNumUninitialized(W * H);
+		for (int32 Y = 0; Y < H; ++Y)
+		{
+			for (int32 X = 0; X < W; ++X)
+			{
+				Frame[Y * W + X] = FColor(static_cast<uint8>((X * 255) / W), static_cast<uint8>((Y * 255) / H), static_cast<uint8>(((X + Y) * 255) / (W + H)), 255);
+			}
+		}
+		return Frame;
+	};
+
+	TArray<uint8> Jpeg;
+	int32 OutW = 0, OutH = 0;
+	TestTrue(TEXT("a 1920x1080 frame encodes"), UMOBugReportSubsystem::EncodeScreenshotJpeg(1920, 1080, Gradient(1920, 1080), 1280, Jpeg, OutW, OutH));
+	TestEqual(TEXT("scaled down to the maximum width"), OutW, 1280);
+	TestEqual(TEXT("the aspect ratio is kept"), OutH, 720);
+	TestTrue(TEXT("output is a JPEG (FF D8 ... FF D9)"), Jpeg.Num() > 4 && Jpeg[0] == 0xFF && Jpeg[1] == 0xD8 && Jpeg.Last() == 0xD9 && Jpeg[Jpeg.Num() - 2] == 0xFF);
+	TestTrue(TEXT("and far smaller than raw pixels"), Jpeg.Num() < 1280 * 720);
+
+	TestTrue(TEXT("a small frame encodes"), UMOBugReportSubsystem::EncodeScreenshotJpeg(640, 360, Gradient(640, 360), 1280, Jpeg, OutW, OutH));
+	TestTrue(TEXT("a frame narrower than the maximum is NOT upscaled"), OutW == 640 && OutH == 360);
+
+	// The scale really averages: a black/white checkerboard halves to mid grey instead of picking one pixel.
+	{
+		TArray<FColor> Checker; Checker.SetNumUninitialized(8 * 8);
+		for (int32 I = 0; I < 64; ++I) { Checker[I] = (((I % 8) + (I / 8)) & 1) ? FColor::White : FColor::Black; }
+		TArray<uint8> J; int32 W2 = 0, H2 = 0;
+		TestTrue(TEXT("checkerboard encodes"), UMOBugReportSubsystem::EncodeScreenshotJpeg(8, 8, Checker, 4, J, W2, H2));
+		TestTrue(TEXT("checkerboard scales to 4x4"), W2 == 4 && H2 == 4);
+
+		IImageWrapperModule& ImageModule = FModuleManager::LoadModuleChecked<IImageWrapperModule>(FName("ImageWrapper"));
+		TSharedPtr<IImageWrapper> Decoder = ImageModule.CreateImageWrapper(EImageFormat::JPEG);
+		TArray64<uint8> Pixels;
+		if (TestTrue(TEXT("the JPEG decodes"), Decoder.IsValid() && Decoder->SetCompressed(J.GetData(), J.Num()) && Decoder->GetRaw(ERGBFormat::BGRA, 8, Pixels) && Pixels.Num() >= 4))
+		{
+			TestTrue(FString::Printf(TEXT("each output pixel is the AVERAGE of its block (mid grey), not one sampled source pixel (got %d,%d,%d)"), Pixels[0], Pixels[1], Pixels[2]),
+				Pixels[0] > 90 && Pixels[0] < 170 && Pixels[1] > 90 && Pixels[1] < 170 && Pixels[2] > 90 && Pixels[2] < 170);
+		}
+	}
+
+	TArray<FColor> Wrong; Wrong.SetNum(10);
+	TestFalse(TEXT("CONTROL: a pixel count that does not match the size is refused"), UMOBugReportSubsystem::EncodeScreenshotJpeg(100, 100, Wrong, 1280, Jpeg, OutW, OutH));
+	TestFalse(TEXT("CONTROL: zero size is refused"), UMOBugReportSubsystem::EncodeScreenshotJpeg(0, 0, TArray<FColor>(), 1280, Jpeg, OutW, OutH));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOUI_MultiLineTextInputStyleIsReadable,
+	"MOFramework.UI.MultiLineTextInputStyleIsReadable",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOUI_MultiLineTextInputStyleIsReadable::RunTest(const FString& Parameters)
+{
+	auto Luminance = [](const FSlateColor& C) { const FLinearColor L = C.GetSpecifiedColor(); return 0.2126f * L.R + 0.7152f * L.G + 0.0722f * L.B; };
+	UMultiLineEditableTextBox* Control = NewObject<UMultiLineEditableTextBox>(GetTransientPackage());
+	TestTrue(TEXT("CONTROL: the untouched multi-line box is NOT dark"), Luminance(Control->WidgetStyle.FocusedForegroundColor) > 0.2f);
+
+	UMultiLineEditableTextBox* Box = NewObject<UMultiLineEditableTextBox>(GetTransientPackage());
+	Box->TakeWidget();
+	UMOUIUtils::ApplyReadableMultiLineTextInputStyle(Box);
+	TestTrue(TEXT("focused colour is dark"), Luminance(Box->WidgetStyle.FocusedForegroundColor) < 0.1f);
+	TestTrue(TEXT("text style colour is dark"), Luminance(Box->WidgetStyle.TextStyle.ColorAndOpacity) < 0.1f);
+	TestTrue(TEXT("the Slate widget survives a layout pass (no dangling style pointer)"), Box->TakeWidget()->GetDesiredSize().X >= 0.f);
+	UMOUIUtils::ApplyReadableMultiLineTextInputStyle(nullptr); // null-safe
 	return true;
 }
 

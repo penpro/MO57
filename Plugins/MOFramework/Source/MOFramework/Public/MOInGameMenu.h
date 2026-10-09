@@ -57,6 +57,7 @@ class UWidgetSwitcher;
 class UMOSavePanel;
 class UMOLoadPanel;
 class UMOOptionsPanel;
+class UMOBugReportPanel;
 class UPanelWidget;
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOInGameMenuRequestCloseSignature);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOInGameMenuExitToMainMenuSignature);
@@ -124,6 +125,10 @@ protected:
 	UFUNCTION(BlueprintCallable, Category="MO|UI|InGameMenu")
 	void ShowLoadPanel();
 
+	/** Open the bug report form (and take the screenshot it attaches). */
+	UFUNCTION(BlueprintCallable, Category="MO|UI|InGameMenu")
+	void ShowBugReportPanel();
+
 	/** Close the focus window and return to button list. */
 	UFUNCTION(BlueprintCallable, Category="MO|UI|InGameMenu")
 	void CloseFocusPanel();
@@ -181,8 +186,8 @@ private:
 	TObjectPtr<UMOCommonButton> ExitGameButton;
 
 	/**
-	 * Bug report button (optional): opens UMOCommunitySettings::BugReportUrl in the player's default browser. If the browser cannot be launched the
-	 * link is copied to the clipboard instead and the player is told (HandleBugReportClicked). No button in the widget, no feature.
+	 * Bug report button (optional): opens the bug report form (BugReportPanel, found in the switcher by widget). A widget without that panel falls back to the old
+	 * behaviour -- UMOCommunitySettings::OpenBugReportLink (browser, else clipboard) -- so the button never does nothing. No button, no feature.
 	 */
 	UPROPERTY(meta=(BindWidgetOptional))
 	TObjectPtr<UMOCommonButton> BugReportButton;
@@ -193,6 +198,7 @@ private:
 	 * Index 1: Options panel
 	 * Index 2: Save panel
 	 * Index 3: Load panel
+	 * (The bug report panel is addressed by GetChildIndex, not by number.)
 	 */
 	UPROPERTY(meta=(BindWidget))
 	TObjectPtr<UWidgetSwitcher> FocusWindowSwitcher;
@@ -212,6 +218,10 @@ private:
 	/** Load panel (optional - can be added directly to switcher in WBP). */
 	UPROPERTY(meta=(BindWidgetOptional))
 	TObjectPtr<UMOLoadPanel> LoadPanel;
+
+	/** Bug report form (optional - a child of FocusWindowSwitcher in the WBP; its index is looked up, never assumed). */
+	UPROPERTY(meta=(BindWidgetOptional))
+	TObjectPtr<UMOBugReportPanel> BugReportPanel;
 
 	// ============================================================
 	// State

@@ -2,20 +2,10 @@
 #include "MOFramework.h"
 #include "MOCommonButton.h"
 #include "MOMainMenuGameMode.h"
+#include "MOBugReportPanel.h"
 #include "MOCommunitySettings.h"
 #include "MONotificationComponent.h"
 #include "MOPlayerController.h"
-#include "HAL/PlatformApplicationMisc.h"
-#include "HAL/PlatformProcess.h"
-#include "HAL/IConsoleManager.h"
-
-namespace
-{
-	/** TEST ONLY: pretend the OS could not launch a browser, so the clipboard fallback can be exercised (a real launch failure cannot be forced). */
-	TAutoConsoleVariable<bool> CVarSimulateBrowserFailure(
-		TEXT("MO.BugReport.SimulateBrowserFailure"), false,
-		TEXT("TEST ONLY: the Bug Report button behaves as if no browser could be launched (link goes to the clipboard)."), ECVF_Cheat);
-}
 #include "MOSavePanel.h"
 #include "MOLoadPanel.h"
 #include "MOOptionsPanel.h"
@@ -66,6 +56,10 @@ void UMOInGameMenu::NativeDestruct()
 	{
 		LoadPanel->OnRequestClose.RemoveDynamic(this, &UMOInGameMenu::HandlePanelRequestClose);
 		LoadPanel->OnLoadRequested.RemoveDynamic(this, &UMOInGameMenu::HandleLoadPanelLoadRequested);
+	}
+	if (BugReportPanel)
+	{
+		BugReportPanel->OnRequestClose.RemoveDynamic(this, &UMOInGameMenu::HandlePanelRequestClose);
 	}
 
 	Super::NativeDestruct();
@@ -136,6 +130,10 @@ void UMOInGameMenu::NativeConstruct()
 			if (!OptionsPanel)
 			{
 				OptionsPanel = Cast<UMOOptionsPanel>(Widget);
+			}
+			if (!BugReportPanel)
+			{
+				BugReportPanel = Cast<UMOBugReportPanel>(Widget);
 			}
 		}
 	}
@@ -315,6 +313,12 @@ void UMOInGameMenu::BindButtonEvents()
 		LoadPanel->OnRequestClose.AddDynamic(this, &UMOInGameMenu::HandlePanelRequestClose);
 		LoadPanel->OnLoadRequested.AddDynamic(this, &UMOInGameMenu::HandleLoadPanelLoadRequested);
 	}
+
+	if (BugReportPanel)
+	{
+		BugReportPanel->OnRequestClose.RemoveDynamic(this, &UMOInGameMenu::HandlePanelRequestClose);
+		BugReportPanel->OnRequestClose.AddDynamic(this, &UMOInGameMenu::HandlePanelRequestClose);
+	}
 }
 
 void UMOInGameMenu::SwitchToPanel(int32 PanelIndex)
@@ -351,50 +355,39 @@ void UMOInGameMenu::HandleExitGameClicked()
 	OnExitGame.Broadcast();
 }
 
+void UMOInGameMenu::ShowBugReportPanel()
+{
+	// The index comes from the widget, never from a constant: the switcher's child order is whatever the designer left it as (the main menu once opened
+	// the wrong panel for exactly this reason -- see Docs/UI_TOOLING.md).
+	const int32 Index = (BugReportPanel && FocusWindowSwitcher) ? FocusWindowSwitcher->GetChildIndex(BugReportPanel) : INDEX_NONE;
+	if (Index == INDEX_NONE)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInGameMenu] ShowBugReportPanel: no bug report panel in the focus window switcher"));
+		return;
+	}
+	BugReportPanel->PrepareForDisplay(); // fresh status and a new screenshot of the game behind the menu; the typed text is kept
+	SwitchToPanel(Index);
+}
+
 void UMOInGameMenu::HandleBugReportClicked()
 {
-	// Tell the player what happened: a click that does nothing visible reads as a broken button.
-	UMONotificationComponent* Notes = nullptr;
+	if (BugReportPanel && FocusWindowSwitcher && FocusWindowSwitcher->GetChildIndex(BugReportPanel) != INDEX_NONE)
+	{
+		ShowBugReportPanel();
+		return;
+	}
+
+	// This widget has no bug report form (an older WBP_MOInGameMenu): send the player to the community link instead, and say so --
+	// a click that does nothing visible reads as a broken button.
+	FText Message;
+	const bool bOpened = UMOCommunitySettings::OpenBugReportLink(Message);
 	if (const AMOPlayerController* PC = Cast<AMOPlayerController>(GetOwningPlayer()))
 	{
-		Notes = PC->GetNotificationComponent();
-	}
-	auto Tell = [Notes](const FText& Message, bool bWarning)
-	{
-		if (Notes)
+		if (UMONotificationComponent* Notes = PC->GetNotificationComponent())
 		{
-			bWarning ? Notes->ShowWarningNotification(Message, 8.0f) : Notes->ShowInfoNotification(Message, 6.0f);
+			bOpened ? Notes->ShowInfoNotification(Message, 6.0f) : Notes->ShowWarningNotification(Message, 8.0f);
 		}
-	};
-
-	const FString Url = UMOCommunitySettings::GetBugReportUrl();
-	if (!UMOCommunitySettings::IsOpenableUrl(Url))
-	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOInGameMenu] Bug report: the configured link '%s' is empty or not an https:// link (Project Settings > MOFramework > Community)"), *Url);
-		Tell(NSLOCTEXT("MOInGameMenu", "BugReportNotConfigured", "The bug report link isn't set up yet."), true);
-		return;
 	}
-
-	// LaunchURL reports a failure through Error (empty on success): then fall back to the clipboard, so the player can still paste it into a browser.
-	FString Error;
-	if (CVarSimulateBrowserFailure.GetValueOnGameThread())
-	{
-		Error = TEXT("simulated browser failure (MO.BugReport.SimulateBrowserFailure)");
-	}
-	else
-	{
-		FPlatformProcess::LaunchURL(*Url, nullptr, &Error);
-	}
-	if (Error.IsEmpty())
-	{
-		UE_LOG(LogMOFramework, Log, TEXT("[MOInGameMenu] Bug report: opened %s in the default browser"), *Url);
-		Tell(NSLOCTEXT("MOInGameMenu", "BugReportOpened", "Opening the bug report page in your browser..."), false);
-		return;
-	}
-
-	FPlatformApplicationMisc::ClipboardCopy(*Url);
-	UE_LOG(LogMOFramework, Warning, TEXT("[MOInGameMenu] Bug report: could not open a browser (%s); copied %s to the clipboard"), *Error, *Url);
-	Tell(FText::Format(NSLOCTEXT("MOInGameMenu", "BugReportCopied", "Couldn't open your browser. The bug report link was copied to your clipboard: {0}"), FText::FromString(Url)), true);
 }
 
 void UMOInGameMenu::HandlePanelRequestClose()
