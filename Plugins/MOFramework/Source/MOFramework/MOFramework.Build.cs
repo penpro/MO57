@@ -105,6 +105,7 @@ public class MOFramework : ModuleRules
 				"NetCore",     // Required for FastArraySerializer + push model symbols
 				"Networking",  // Recommended when you are doing replication-heavy work
 				"DeveloperSettings", // Required for UDeveloperSettings (MOItemDatabaseSettings)
+				"ApplicationCore",   // FPlatformApplicationMisc::ClipboardCopy (bug report link fallback)
 				"ImageWrapper", // Required for PNG encoding/decoding (save thumbnails)
 				"RenderCore",   // Required for viewport pixel reading
 				"Media",        // Required for UMediaPlayer (intro video)

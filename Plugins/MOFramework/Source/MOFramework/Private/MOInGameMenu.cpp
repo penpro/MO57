@@ -2,6 +2,20 @@
 #include "MOFramework.h"
 #include "MOCommonButton.h"
 #include "MOMainMenuGameMode.h"
+#include "MOCommunitySettings.h"
+#include "MONotificationComponent.h"
+#include "MOPlayerController.h"
+#include "HAL/PlatformApplicationMisc.h"
+#include "HAL/PlatformProcess.h"
+#include "HAL/IConsoleManager.h"
+
+namespace
+{
+	/** TEST ONLY: pretend the OS could not launch a browser, so the clipboard fallback can be exercised (a real launch failure cannot be forced). */
+	TAutoConsoleVariable<bool> CVarSimulateBrowserFailure(
+		TEXT("MO.BugReport.SimulateBrowserFailure"), false,
+		TEXT("TEST ONLY: the Bug Report button behaves as if no browser could be launched (link goes to the clipboard)."), ECVF_Cheat);
+}
 #include "MOSavePanel.h"
 #include "MOLoadPanel.h"
 #include "MOOptionsPanel.h"
@@ -32,6 +46,10 @@ void UMOInGameMenu::NativeDestruct()
 	if (ExitGameButton)
 	{
 		ExitGameButton->OnClicked().RemoveAll(this);
+	}
+	if (BugReportButton)
+	{
+		BugReportButton->OnClicked().RemoveAll(this);
 	}
 
 	// Clean up panel delegate bindings
@@ -268,6 +286,13 @@ void UMOInGameMenu::BindButtonEvents()
 		ExitGameButton->OnClicked().AddUObject(this, &UMOInGameMenu::HandleExitGameClicked);
 	}
 
+	if (BugReportButton)
+	{
+		BugReportButton->SetButtonText(NSLOCTEXT("MOInGameMenu", "BugReportButton", "Bug Report"));
+		BugReportButton->OnClicked().RemoveAll(this);
+		BugReportButton->OnClicked().AddUObject(this, &UMOInGameMenu::HandleBugReportClicked);
+	}
+
 	// Bind panel close requests
 	if (OptionsPanel)
 	{
@@ -324,6 +349,52 @@ void UMOInGameMenu::HandleExitToMainMenuClicked()
 void UMOInGameMenu::HandleExitGameClicked()
 {
 	OnExitGame.Broadcast();
+}
+
+void UMOInGameMenu::HandleBugReportClicked()
+{
+	// Tell the player what happened: a click that does nothing visible reads as a broken button.
+	UMONotificationComponent* Notes = nullptr;
+	if (const AMOPlayerController* PC = Cast<AMOPlayerController>(GetOwningPlayer()))
+	{
+		Notes = PC->GetNotificationComponent();
+	}
+	auto Tell = [Notes](const FText& Message, bool bWarning)
+	{
+		if (Notes)
+		{
+			bWarning ? Notes->ShowWarningNotification(Message, 8.0f) : Notes->ShowInfoNotification(Message, 6.0f);
+		}
+	};
+
+	const FString Url = UMOCommunitySettings::GetBugReportUrl();
+	if (!UMOCommunitySettings::IsOpenableUrl(Url))
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInGameMenu] Bug report: the configured link '%s' is empty or not an https:// link (Project Settings > MOFramework > Community)"), *Url);
+		Tell(NSLOCTEXT("MOInGameMenu", "BugReportNotConfigured", "The bug report link isn't set up yet."), true);
+		return;
+	}
+
+	// LaunchURL reports a failure through Error (empty on success): then fall back to the clipboard, so the player can still paste it into a browser.
+	FString Error;
+	if (CVarSimulateBrowserFailure.GetValueOnGameThread())
+	{
+		Error = TEXT("simulated browser failure (MO.BugReport.SimulateBrowserFailure)");
+	}
+	else
+	{
+		FPlatformProcess::LaunchURL(*Url, nullptr, &Error);
+	}
+	if (Error.IsEmpty())
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOInGameMenu] Bug report: opened %s in the default browser"), *Url);
+		Tell(NSLOCTEXT("MOInGameMenu", "BugReportOpened", "Opening the bug report page in your browser..."), false);
+		return;
+	}
+
+	FPlatformApplicationMisc::ClipboardCopy(*Url);
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOInGameMenu] Bug report: could not open a browser (%s); copied %s to the clipboard"), *Error, *Url);
+	Tell(FText::Format(NSLOCTEXT("MOInGameMenu", "BugReportCopied", "Couldn't open your browser. The bug report link was copied to your clipboard: {0}"), FText::FromString(Url)), true);
 }
 
 void UMOInGameMenu::HandlePanelRequestClose()

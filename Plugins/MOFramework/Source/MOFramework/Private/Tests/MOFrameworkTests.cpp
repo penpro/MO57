@@ -18,6 +18,7 @@
 #include "MOGameMode.h"
 #include "MOPersistenceSubsystem.h"
 #include "MOUIUtils.h"
+#include "MOCommunitySettings.h"
 #include "Components/EditableTextBox.h"
 #include "IImageWrapper.h"
 #include "IImageWrapperModule.h"
@@ -764,6 +765,42 @@ bool FMOUI_TextInputStyleIsReadable::RunTest(const FString& Parameters)
 	TestTrue(TEXT("the Slate widget survives a layout pass with the new style (no dangling style pointer)"), Box->TakeWidget()->GetDesiredSize().X >= 0.f);
 
 	UMOUIUtils::ApplyReadableTextInputStyle(nullptr); // null-safe
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOCommunity_BugReportUrlIsSafeToOpen,
+	"MOFramework.Community.BugReportUrlIsSafeToOpen",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOCommunity_BugReportUrlIsSafeToOpen::RunTest(const FString& Parameters)
+{
+	// The configured link goes straight to the OS URL handler, so only a plain https link may pass.
+	TestTrue(TEXT("a Discord invite is openable"), UMOCommunitySettings::IsOpenableUrl(TEXT("https://discord.gg/AbC123")));
+	TestTrue(TEXT("scheme case does not matter"), UMOCommunitySettings::IsOpenableUrl(TEXT("HTTPS://github.com/penpro/MO57/issues")));
+	TestTrue(TEXT("query and fragment are fine after a host"), UMOCommunitySettings::IsOpenableUrl(TEXT("https://example.com/a?b=1#c")));
+
+	TestFalse(TEXT("CONTROL: empty (the 'not configured' case)"), UMOCommunitySettings::IsOpenableUrl(FString()));
+	TestFalse(TEXT("CONTROL: plain http is not accepted"), UMOCommunitySettings::IsOpenableUrl(TEXT("http://discord.gg/AbC123")));
+	TestFalse(TEXT("CONTROL: a file path is not a link"), UMOCommunitySettings::IsOpenableUrl(TEXT("file:///C:/Windows/System32/cmd.exe")));
+	TestFalse(TEXT("CONTROL: another scheme is refused"), UMOCommunitySettings::IsOpenableUrl(TEXT("javascript:alert(1)")));
+	TestFalse(TEXT("CONTROL: a bare scheme has no host"), UMOCommunitySettings::IsOpenableUrl(TEXT("https://")));
+	TestFalse(TEXT("CONTROL: 'https:' -- what an unquoted // in an ini value is read as (the packaged game's first bug)"), UMOCommunitySettings::IsOpenableUrl(TEXT("https:")));
+	TestFalse(TEXT("CONTROL: a scheme followed by a path has no host"), UMOCommunitySettings::IsOpenableUrl(TEXT("https:///etc/passwd")));
+	TestFalse(TEXT("CONTROL: whitespace could smuggle a second argument"), UMOCommunitySettings::IsOpenableUrl(TEXT("https://discord.gg/x --flag")));
+	TestFalse(TEXT("CONTROL: control characters are refused"), UMOCommunitySettings::IsOpenableUrl(FString(TEXT("https://discord.gg/x")) + TEXT("\r\ncalc")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOCommunity_ConfiguredBugReportUrlLoads,
+	"MOFramework.Community.ConfiguredBugReportUrlLoads",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOCommunity_ConfiguredBugReportUrlLoads::RunTest(const FString& Parameters)
+{
+	// The URL as the SHIPPED config produces it. An unquoted `//` in an ini value starts a comment, so DefaultGame.ini's https://... was read back as
+	// "https:" and the packaged button did nothing. This reads the real config, not the class default.
+	const FString Configured = UMOCommunitySettings::GetBugReportUrl();
+	TestTrue(FString::Printf(TEXT("the configured bug report link is openable (got '%s')"), *Configured), UMOCommunitySettings::IsOpenableUrl(Configured));
 	return true;
 }
 

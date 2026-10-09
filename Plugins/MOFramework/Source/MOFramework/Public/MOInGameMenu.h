@@ -142,6 +142,7 @@ private:
 	UFUNCTION() void HandleLoadClicked();
 	UFUNCTION() void HandleExitToMainMenuClicked();
 	UFUNCTION() void HandleExitGameClicked();
+	UFUNCTION() void HandleBugReportClicked();
 
 	// Panel close handlers
 	UFUNCTION() void HandlePanelRequestClose();
@@ -178,6 +179,13 @@ private:
 	/** Exit game button. */
 	UPROPERTY(meta=(BindWidget))
 	TObjectPtr<UMOCommonButton> ExitGameButton;
+
+	/**
+	 * Bug report button (optional): opens UMOCommunitySettings::BugReportUrl in the player's default browser. If the browser cannot be launched the
+	 * link is copied to the clipboard instead and the player is told (HandleBugReportClicked). No button in the widget, no feature.
+	 */
+	UPROPERTY(meta=(BindWidgetOptional))
+	TObjectPtr<UMOCommonButton> BugReportButton;
 
 	/**
 	 * Widget switcher for the focus window on the right side.
