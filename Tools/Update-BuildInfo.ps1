@@ -103,7 +103,28 @@ $Body = @"
 "@
 
 # Use UTF-8 (no BOM) to match the rest of the C++ headers.
-[System.IO.File]::WriteAllText($OutputPath, $Body, [System.Text.UTF8Encoding]::new($false))
+#
+# This step runs once PER TARGET, and a packaging run builds MO57Editor and MO57 together, so two instances of this script
+# write the SAME file at the same moment (the content differs: it carries a timestamp). That raised "The process cannot
+# access the file ... because it is being used by another process" and failed `RunUAT BuildCookRun` (twice in a row, after one
+# lucky success). Serialise the writers with a named mutex, and retry briefly in case UBT itself has the header open.
+$buildInfoMutex = New-Object System.Threading.Mutex($false, 'Local\MO57_UpdateBuildInfo')
+$haveMutex = $false
+try {
+    try { $haveMutex = $buildInfoMutex.WaitOne(30000) } catch [System.Threading.AbandonedMutexException] { $haveMutex = $true }
+    for ($attempt = 1; $attempt -le 10; $attempt++) {
+        try {
+            [System.IO.File]::WriteAllText($OutputPath, $Body, [System.Text.UTF8Encoding]::new($false))
+            break
+        } catch [System.IO.IOException] {
+            if ($attempt -eq 10) { throw }
+            Start-Sleep -Milliseconds 300
+        }
+    }
+} finally {
+    if ($haveMutex) { $buildInfoMutex.ReleaseMutex() }
+    $buildInfoMutex.Dispose()
+}
 
 Write-Host "[BuildInfo] Wrote $OutputPath"
 Write-Host "[BuildInfo]   commit=$Hash branch=$Branch dirty=$IsDirty"
