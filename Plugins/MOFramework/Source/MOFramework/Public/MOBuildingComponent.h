@@ -176,6 +176,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Building|Placement")
 	float MaxPlacementDistance = 1000.0f;
 
+	/** Server-side slack on top of MaxPlacementDistance (camera behind the pawn, latency): a client placement farther than MaxPlacementDistance + this from the pawn is rejected. */
+	UPROPERTY(EditDefaultsOnly, Category="MO|Building|Placement", meta=(ClampMin="0"))
+	float ServerMaxPlacementMargin = 600.0f;
+
 	/** Collision channel for placement line trace. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Building|Placement")
 	TEnumAsByte<ECollisionChannel> PlacementTraceChannel = ECC_Visibility;

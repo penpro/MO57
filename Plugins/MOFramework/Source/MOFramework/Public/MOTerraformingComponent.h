@@ -611,6 +611,12 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO|Terraforming")
 	bool HasValidSculptActor() const;
 
+	/**
+	 * Send an already-resolved terraform apply to the server (ServerApplyTerraform). Public so the trust-boundary test (`ue.py nettest actions`)
+	 * can send, from a client process, exactly the request a hostile client would -- the server's reach / height checks are what it exercises.
+	 */
+	void SendTerraformApplyToServer(EMOTerraformMode Mode, const FVector& Location, float FlattenHeight) { ServerApplyTerraform(Mode, Location, FlattenHeight); }
+
 protected:
 	virtual void BeginPlay() override;
 

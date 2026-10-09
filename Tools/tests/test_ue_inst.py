@@ -91,6 +91,46 @@ class ParsingTests(unittest.TestCase):
             self.assertIsNone(ui.net_driver("nonexistent"))
 
 
+class PackagedAnalysisTests(unittest.TestCase):
+    HOST = ("LogMOFramework: Warning: [MOWorldSeed] host published world seed 42 (parameter 'Seed')\n"
+            "LogMOFramework: [SpawnManager] Category 0 first spawn - setting initial staggered cooldown: 7.4s\n")
+    CLIENT = ("LogMOFramework: Warning: [MOWorldSeed] client applied world seed 42: voxel runtime created\n"
+              "LogMOFramework: AMOPlayerController: Possessed BP_Pawn_C_1\n"
+              "LogMOFramework: Warning: [MOWorldSync] client clock was -44.6 game-s off the host's; snapping to 2026.06.01-08.00.44\n"
+              "LogMOFramework: Warning: [MOWorldSync] client following the host's weather preset /Game/UDS/Rain.Rain\n")
+
+    def verdicts(self, host=None, client=None, withheld=False):
+        rows = ui.analyse_packaged_logs(self.HOST if host is None else host, self.CLIENT if client is None else client, withheld)
+        return {label: ok for label, ok, _ in rows}
+
+    def test_a_healthy_pair_passes_every_check(self):
+        self.assertTrue(all(self.verdicts().values()), self.verdicts())
+
+    def test_a_crash_in_either_log_fails(self):
+        self.assertFalse(self.verdicts(host=self.HOST + "LogWindows: Error: Fatal error!\n")["host: no crash, ensure or assertion in its log"])
+        self.assertFalse(self.verdicts(client=self.CLIENT + "=== Handled ensure: ===\n")["client: no crash, ensure or assertion in its log"])
+
+    def test_a_seed_mismatch_fails(self):
+        v = self.verdicts(client=self.CLIENT.replace("seed 42", "seed 43"))
+        self.assertFalse(v["client: applied the SAME seed and built its voxel runtime"])
+
+    def test_a_client_that_spawns_creatures_fails_and_a_silent_host_voids_the_check(self):
+        spawn = "LogMOFramework: [SpawnManager] Fallback spawned Wolf_C at X=1\n"
+        self.assertFalse(self.verdicts(client=self.CLIENT + spawn)["client: its spawn manager spawned nothing"])
+        silent_host = "LogMOFramework: Warning: [MOWorldSeed] host published world seed 42\n"
+        self.assertFalse(self.verdicts(host=silent_host)["CONTROL: the host's spawn manager ran (so a silent client means something)"])
+
+    def test_missing_sync_fails_when_expected_and_passes_as_a_control_when_withheld(self):
+        client = "\n".join(l for l in self.CLIENT.splitlines() if "MOWorldSync" not in l) + "\n"
+        v = self.verdicts(client=client)
+        self.assertFalse(v["client: adopted the host's game clock"])
+        self.assertFalse(v["client: followed the host's weather preset through the bridge"])
+        w = self.verdicts(client=client, withheld=True)
+        self.assertTrue(all(ok for label, ok in w.items() if label.startswith("NEGATIVE CONTROL")), w)
+        # ...and if the client DID sync although the host withheld, the control fails (the check can see it)
+        self.assertFalse(all(ok for label, ok in self.verdicts(withheld=True).items() if label.startswith("NEGATIVE CONTROL")))
+
+
 class ReportTests(unittest.TestCase):
     def test_report_ok_only_if_every_step_passed(self):
         r = ui.Report()

@@ -25,6 +25,8 @@
 #include "MOPersistenceSubsystem.h"
 #include "MOSaveGameTypes.h"
 #include "MORecipeDatabaseSettings.h"
+#include "MOBuildingComponent.h"
+#include "MOTerraformingComponent.h"
 #include "MOSkillDatabaseSettings.h"
 #include "MOSkillDefinitionRow.h"
 #include "MOBiomeDatabaseSettings.h"
@@ -1293,11 +1295,12 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 	// back in the pawn's host-side proxy inventory.
 	ConsoleCommands.Add(CM.RegisterConsoleCommand(
 		TEXT("MO.Test.PickupNearest"),
-		TEXT("Interact with the nearest AMOWorldItem within radius (default 400uu). Deferred for real RPC transport. Usage: MO.Test.PickupNearest [radius]"),
+		TEXT("Interact with the nearest AMOWorldItem within radius (default 400uu), optionally only items at least MinDistance away (trust test). Deferred for real RPC transport. Usage: MO.Test.PickupNearest [radius] [minDistance]"),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
 		{
 			const float Radius = Args.Num() > 0 ? FCString::Atof(*Args[0]) : 400.0f;
-			RunOnNextTick(World, [Radius](UWorld* W)
+			const float MinDistance = Args.Num() > 1 ? FCString::Atof(*Args[1]) : 0.0f; // trust test: ask for an item FAR away
+			RunOnNextTick(World, [Radius, MinDistance](UWorld* W)
 			{
 				APawn* Pawn = ResolveLocalPawn(W);
 				UMOInteractorComponent* Interactor = Pawn ? Pawn->FindComponentByClass<UMOInteractorComponent>() : nullptr;
@@ -1311,7 +1314,7 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 				for (TActorIterator<AMOWorldItem> It(W); It; ++It)
 				{
 					const float DistSq = FVector::DistSquared((*It)->GetActorLocation(), Pawn->GetActorLocation());
-					if (DistSq <= BestSq)
+					if (DistSq <= BestSq && DistSq >= MinDistance * MinDistance)
 					{
 						BestSq = DistSq;
 						Nearest = *It;
@@ -1325,6 +1328,72 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] PickupNearest: interacting with %s at %.0fuu"),
 					*Nearest->GetName(), FMath::Sqrt(BestSq));
 				Interactor->RequestInteractWithActor(Nearest);
+			});
+		}),
+		ECVF_Default));
+
+	// ---------- MO.Test.PlaceBuildingRPC [recipeId=auto] [forwardCm=300] ----------
+	// TRUST-BOUNDARY test (run on a CLIENT): sends UMOBuildingComponent::ServerPlaceBuilding from THIS machine's controller with a transform
+	// `forwardCm` in front of the pawn -- near is what the placement UI sends, far is what a hostile client sends. The harness reads the result
+	// on the host (building count, rejection log line). Deferred so the RPC really transports (see RunOnNextTick).
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Test.PlaceBuildingRPC"),
+		TEXT("Client->server ServerPlaceBuilding at forwardCm in front of the pawn (trust-boundary test). Usage: MO.Test.PlaceBuildingRPC [recipeId=auto] [forwardCm=300]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			const FString RecipeArg = Args.Num() > 0 ? Args[0] : FString(TEXT("auto"));
+			const float Forward = Args.Num() > 1 ? FCString::Atof(*Args[1]) : 300.0f;
+			RunOnNextTick(World, [RecipeArg, Forward](UWorld* W)
+			{
+				APlayerController* PC = W->GetFirstPlayerController();
+				APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+				UMOBuildingComponent* Building = PC ? PC->FindComponentByClass<UMOBuildingComponent>() : nullptr;
+				if (!Pawn || !Building)
+				{
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] FAIL PlaceBuildingRPC: %s"), !Pawn ? TEXT("no pawn") : TEXT("no building component on the controller"));
+					return;
+				}
+				FName RecipeId = FName(*RecipeArg);
+				if (RecipeArg.Equals(TEXT("auto"), ESearchCase::IgnoreCase))
+				{
+					TArray<FName> Ids;
+					UMORecipeDatabaseSettings::GetBuildingRecipes(Ids);
+					RecipeId = Ids.Num() > 0 ? Ids[0] : NAME_None;
+				}
+				const FVector Location = Pawn->GetActorLocation() + Pawn->GetActorForwardVector() * Forward;
+				Building->ServerPlaceBuilding(RecipeId, FTransform(Pawn->GetActorRotation(), Location));
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] PlaceBuildingRPC: sent recipe=%s forward=%.0f cm authority=%d"),
+					*RecipeId.ToString(), Forward, Pawn->HasAuthority() ? 1 : 0);
+			});
+		}),
+		ECVF_Default));
+
+	// ---------- MO.Test.TerraformRPC <Dig|Raise|Flatten|Smooth|RemoveFoliage> [forwardCm=300] ----------
+	// Same idea for ServerApplyTerraform (which already holds the client to a 2500 cm reach and clamps FlattenHeight).
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Test.TerraformRPC"),
+		TEXT("Client->server ServerApplyTerraform at forwardCm in front of the pawn, on the ground (trust-boundary test). Usage: MO.Test.TerraformRPC [Dig|Raise|Flatten|Smooth|RemoveFoliage] [forwardCm=300]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			const FString ModeArg = Args.Num() > 0 ? Args[0] : FString(TEXT("Dig"));
+			const float Forward = Args.Num() > 1 ? FCString::Atof(*Args[1]) : 300.0f;
+			RunOnNextTick(World, [ModeArg, Forward](UWorld* W)
+			{
+				APawn* Pawn = ResolveLocalPawn(W);
+				UMOTerraformingComponent* Terraform = Pawn ? Pawn->FindComponentByClass<UMOTerraformingComponent>() : nullptr;
+				if (!Pawn || !Terraform)
+				{
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] FAIL TerraformRPC: %s"), !Pawn ? TEXT("no pawn") : TEXT("no terraforming component on the pawn"));
+					return;
+				}
+				EMOTerraformMode Mode = EMOTerraformMode::Dig;
+				if (ModeArg.Equals(TEXT("Raise"), ESearchCase::IgnoreCase)) { Mode = EMOTerraformMode::Raise; }
+				else if (ModeArg.Equals(TEXT("Flatten"), ESearchCase::IgnoreCase)) { Mode = EMOTerraformMode::Flatten; }
+				else if (ModeArg.Equals(TEXT("Smooth"), ESearchCase::IgnoreCase)) { Mode = EMOTerraformMode::Smooth; }
+				else if (ModeArg.Equals(TEXT("RemoveFoliage"), ESearchCase::IgnoreCase)) { Mode = EMOTerraformMode::RemoveFoliage; }
+				const FVector Ground = Pawn->GetActorLocation() + Pawn->GetActorForwardVector() * Forward - FVector(0.0f, 0.0f, 90.0f);
+				Terraform->SendTerraformApplyToServer(Mode, Ground, Ground.Z);
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] TerraformRPC: sent mode=%s forward=%.0f cm at %s"), *ModeArg, Forward, *Ground.ToCompactString());
 			});
 		}),
 		ECVF_Default));

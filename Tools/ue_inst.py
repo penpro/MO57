@@ -1176,6 +1176,11 @@ def hostsave_test(uproject, editor_exe, keep=False, boot_timeout=300):
         off = log_size(host)
         console(host, f"MO.Save.SaveAs {HOSTSAVE_SLOT}")
         saved = wait_log(host, r"\[MO\.Save\.SaveAs\] \w+ '[^']*' -> (OK|FAILED)", since=off, timeout=90)
+        thumb = wait_log(host, r"\[MOPersist\] Save thumbnail for '[^']*': (\d+)x(\d+) capture -> (\d+) bytes PNG, slot re-written ok=1", since=off, timeout=30)
+        # A BLANK thumbnail (the old FViewport::ReadPixels bug) is a ~200 byte PNG; a real 128x128 picture is thousands.
+        rep.step("host: the save has a real thumbnail (engine screenshot path), not a blank image",
+                 bool(thumb) and int(thumb.group(3)) > 1500 and "Handled ensure" not in read_log_from(host, off),
+                 thumb.group(0)[-80:] if thumb else "no '[MOPersist] Save thumbnail' line")
         if not rep.step("host: saved the world", bool(saved) and saved.group(1) == "OK", saved.group(0) if saved else "no result"):
             return False
 
@@ -1387,6 +1392,119 @@ def _client_attack(rep, host, client):
              f"{_combat_line(seen)}; client said: {mm.group(0) if mm else 'nothing'}")
 
 
+def _count_buildables(host):
+    out = _probe(host, "out('BUILDABLES=%d' % len(unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOBuildableActor)))")
+    m = re.search(r"BUILDABLES=(\d+)", out)
+    return int(m.group(1)) if m else None
+
+
+def _trust_placement(rep, host, client):
+    """Audit H19: ServerPlaceBuilding trusted the client's transform, so a hostile client could place buildings anywhere. The client
+    sends the same RPC twice, near (what the placement UI sends) and 200 m away (what a hostile client sends). With the server reach check
+    switched OFF the far request must succeed (the control: the refusal below is the check's doing); with it on, only the near one does."""
+    base = _count_buildables(host)
+    if not rep.step("host: can count buildings", base is not None, str(base)):
+        return
+
+    def send(forward_cm):
+        off = log_size(host)
+        console(client, f"MO.Test.PlaceBuildingRPC auto {forward_cm}")
+        time.sleep(6)  # next tick + RPC + the host spawning it
+        return _count_buildables(host), read_log_from(host, off)
+
+    after, log = send(300)
+    rep.step("trust: a placement 3 m in front of the pawn (the UI's own request) IS accepted", after == base + 1 and "ServerPlaceBuilding rejected" not in log,
+             f"buildings {base} -> {after}")
+    base = after
+
+    console(host, "MO.Building.ServerReach.Disable 1")
+    after, log = send(20000)
+    rep.step("CONTROL: with the server reach check disabled a placement 200 m away IS accepted (a hostile client could do this)", after == base + 1, f"buildings {base} -> {after}")
+    base = after
+    console(host, "MO.Building.ServerReach.Disable 0")
+
+    after, log = send(20000)
+    refused = re.search(r"ServerPlaceBuilding rejected: [^\n]*", log)
+    rep.step("trust: a placement 200 m away is REFUSED by the server", after == base and bool(refused), refused.group(0)[:150] if refused else f"buildings {base} -> {after}")
+
+
+def _trust_pickup_far(rep, host, client):
+    """The server holds ServerPickUpWorldItem to a reach (3000 cm). The host drops a stick 45 m from the joiner (inside network relevancy, outside
+    the reach); the client asks for the nearest world item at least 35 m away."""
+    setup = _probe(host,
+        "p = unreal.GameplayStatics.get_player_pawn(world, 1); inv = p.get_component_by_class(unreal.MOInventoryComponent); "
+        "g = unreal.GuidLibrary.new_guid(); gave = inv.add_item_by_guid(g, 'Stone01', 1); "
+        # a STONE, not a stick: a stick would merge into the joiner's existing stack, so its GUID would not exist to drop.
+        # The drop itself is only accepted near the owner (a good thing): drop beside the pawn, then carry the world item 45 m away.
+        "w = inv.drop_item_by_guid(g, p.get_actor_location() + unreal.Vector(120.0, 0.0, 10.0), unreal.Rotator(0.0, 0.0, 0.0)); "
+        "w and w.set_actor_location(p.get_actor_location() + unreal.Vector(4500.0, 0.0, 10.0), False, True); "
+        "out('FARDROP gave=%s item=%s' % (gave, w.get_name() if w else 'none'))")
+    m = re.search(r"FARDROP gave=(\w+) item=(\S+)", setup)
+    if not rep.step("host: dropped an item 45 m from the joiner (out of the server's 30 m reach)", bool(m) and m.group(1) == "True" and m.group(2) != "none",
+                    m.group(0) if m else setup.strip()[-160:]):
+        return
+    time.sleep(8)  # replicates to the client
+    off = log_size(host)
+    console(client, "MO.Test.PickupNearest 12000 3500")
+    time.sleep(6)
+    log = read_log_from(host, off)
+    refused = re.search(r"\[MOInteract\] ServerPickUpWorldItem: \S+ out of reach", log)
+    took = re.search(r"\[MOInteract\] ServerPickUpWorldItem: \S+ -> picked up", log)
+    cl = read_log_from(client, 0)
+    asked = re.search(r"\[MOTEST\] PickupNearest: interacting with \S+ at (\d+)uu", cl[-4000:])
+    if not asked:
+        rep.step("trust: there was a world item 35 m+ away to ask for", False, "client found none within 120 m (the world is empty here)")
+        return
+    rep.step("trust: a pickup request for an item 35 m+ away is REFUSED by the server", bool(refused) and not took,
+             f"asked at {asked.group(1)} uu; host: {refused.group(0) if refused else 'no out-of-reach line'}{'; ...and picked it up' if took else ''}")
+
+
+def _trust_possess_other(rep, host, client):
+    """A client asks to possess the HOST's pawn (another human is driving it). The server must refuse and leave both players where they are."""
+    probe = ("h = unreal.GameplayStatics.get_player_pawn(world, 0); c = unreal.GameplayStatics.get_player_pawn(world, 1); "
+             "g = unreal.GuidLibrary.conv_guid_to_string(h.get_component_by_class(unreal.MOIdentityComponent).get_or_create_guid()); "
+             "out('PAWNS host=%s client=%s guid=%s' % (h.get_name(), c.get_name(), g))")
+    before = re.search(r"PAWNS host=(\S+) client=(\S+) guid=([0-9A-Fa-f]{32})", _probe(host, probe))
+    if not rep.step("host: located both players' pawns", bool(before), before.group(0)[:100] if before else "no PAWNS line"):
+        return
+    off = log_size(host)
+    console(client, f"MO.Possess.Take {before.group(3)}")
+    time.sleep(6)
+    log = read_log_from(host, off)
+    after = re.search(r"PAWNS host=(\S+) client=(\S+)", _probe(host, probe))
+    refused = re.search(r"\[MOPossession\] \S+ may not take [^\n]*", log)
+    rep.step("trust: taking a pawn another PLAYER is driving is REFUSED, and nobody moved",
+             bool(refused) and bool(after) and after.group(1) == before.group(1) and after.group(2) == before.group(2),
+             (refused.group(0)[:120] if refused else "no 'may not take' line") + f"; pawns {before.group(1)}/{before.group(2)} -> {after.group(1) if after else '?'}/{after.group(2) if after else '?'}")
+
+
+def _trust_terraform(rep, host, client):
+    """ServerApplyTerraform holds the client to 2500 cm and clamps FlattenHeight. Dig 3 m ahead must change the ground (control); Dig 100 m away must be refused."""
+    probe = ("p = unreal.GameplayStatics.get_player_pawn(world, 1); l = p.get_actor_location(); f = p.get_actor_forward_vector(); "
+             "out('SPOT x=%f y=%f z=%f fx=%f fy=%f' % (l.x, l.y, l.z, f.x, f.y))")
+    m = re.search(r"SPOT x=(-?[\d.]+) y=(-?[\d.]+) z=(-?[\d.]+) fx=(-?[\d.]+) fy=(-?[\d.]+)", _probe(host, probe))
+    if not rep.step("host: located the joiner for the terraform test", bool(m), m.group(0) if m else "no SPOT line"):
+        return
+    x, y, z, fx, fy = (float(v) for v in m.groups())
+    tx, ty = x + fx * 300.0, y + fy * 300.0
+    before = _surface_z(host, tx, ty, z + 2000.0, z - 2000.0)
+    if not rep.step("host: can measure the ground 3 m ahead of the joiner", bool(before) and before[0] == 1, str(before)):
+        return
+    off = log_size(host)
+    console(client, "MO.Test.TerraformRPC Dig 300")
+    time.sleep(8)
+    after = _surface_z(host, tx, ty, z + 2000.0, z - 2000.0)
+    dug = bool(after) and after[0] == 1 and before[1] - after[1] > 1.0  # one dig lowers the surface by a couple of cm (measured: 2.7)
+    rep.step("trust: a dig 3 m ahead (the UI's own request) changes the ground", dug and "target out of reach" not in read_log_from(host, off),
+             f"ground z {before[1]:.0f} -> {after[1] if after else None}")
+    off = log_size(host)
+    console(client, "MO.Test.TerraformRPC Dig 10000")
+    time.sleep(6)
+    log = read_log_from(host, off)
+    refused = re.search(r"\[MOTerraforming\] ServerApplyTerraform: target out of reach -- rejected", log)
+    rep.step("trust: a dig 100 m away is REFUSED by the server", bool(refused), refused.group(0) if refused else "no 'target out of reach' line")
+
+
 def actions_test(uproject, editor_exe, keep=False, boot_timeout=300):
     """Gameplay verbs from a real CLIENT process against a real host (the PIE-era MO.Test.* suite never left one editor): pickup
     identity, crafting, attack. Each one's proof is read on the HOST -- what the authority ended up with -- not from the client's
@@ -1399,7 +1517,7 @@ def actions_test(uproject, editor_exe, keep=False, boot_timeout=300):
             start(n, uproject, editor_exe, pos=pos, nosteam=True)
         if not _host_and_join(rep, host, client, "ActionsTest", boot_timeout):
             return False
-        for fn in (_client_pickup, _client_craft, _client_attack):
+        for fn in (_client_pickup, _client_craft, _client_attack, _trust_placement, _trust_pickup_far, _trust_possess_other, _trust_terraform):
             try:
                 fn(rep, host, client)
             except Exception as e:  # noqa: BLE001 - one verb's harness error must not hide the others
@@ -1412,6 +1530,158 @@ def actions_test(uproject, editor_exe, keep=False, boot_timeout=300):
                 stop(n)
         else:
             print("[nettest] --keep: instances left running (ue.py inst stop acthost / actclient)")
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+# nettest packaged: the REAL packaged Development game, two copies, from the logs alone
+# ---------------------------------------------------------------------------------------------------------------------------------
+PKG_ROOT = os.path.abspath(os.path.join(HERE, "..", "Saved", "StagedBuilds_DevTest", "Windows"))
+PKG_EXE = os.path.join(PKG_ROOT, "MO57.exe")
+PKG_LOGS = os.path.join(PKG_ROOT, "MO57", "Saved", "Logs")
+PKG_FATAL_RE = re.compile(r"Fatal error|Unhandled Exception|Handled ensure|Assertion failed")
+PKG_HOST_SEED_RE = re.compile(r"\[MOWorldSeed\] host published world seed (-?\d+)")
+PKG_CLIENT_SEED_RE = re.compile(r"\[MOWorldSeed\] client applied world seed (-?\d+): voxel runtime created")
+PKG_CLOCK_SNAP_RE = re.compile(r"\[MOWorldSync\] client clock was (-?[\d.]+) game-s off the host's; snapping")
+PKG_WEATHER_RE = re.compile(r"\[MOWorldSync\] client following the host's weather preset (\S+)")
+
+
+def _first_line(text, regex):
+    m = regex.search(text)
+    if not m:
+        return None
+    start = text.rfind("\n", 0, m.start()) + 1
+    end = text.find("\n", m.end())
+    return text[start:end if end >= 0 else len(text)].strip()[:200]
+
+
+def analyse_packaged_logs(host_log, client_log, withheld=False):
+    """The packaged-build smoke verdicts, from the two game logs alone. Pure (unit-tested offline). -> [(label, ok, evidence)].
+
+    `withheld` = the host ran with MO.WorldSync.Withhold 1: the sync checks flip into NEGATIVE CONTROLS (the client must NOT have followed),
+    which proves the positive checks can fail."""
+    rows = []
+    for who, text in (("host", host_log), ("client", client_log)):
+        bad = _first_line(text, PKG_FATAL_RE)
+        rows.append((f"{who}: no crash, ensure or assertion in its log", bad is None, bad or f"{len(text.splitlines())} log lines, none"))
+
+    hs, cs = PKG_HOST_SEED_RE.search(host_log), PKG_CLIENT_SEED_RE.search(client_log)
+    rows.append(("host: published its world seed", bool(hs), hs.group(0) if hs else "no '[MOWorldSeed] host published' line"))
+    rows.append(("client: applied the SAME seed and built its voxel runtime", bool(hs) and bool(cs) and hs.group(1) == cs.group(1),
+                 f"host {hs.group(1) if hs else '-'}, client {cs.group(1) if cs else '-'}"))
+    rows.append(("client: possessed a pawn", "AMOPlayerController: Possessed" in client_log,
+                 "" if "AMOPlayerController: Possessed" in client_log else "no 'AMOPlayerController: Possessed' line"))
+
+    host_spawn, client_spawn = _first_line(host_log, SPAWN_RE_COMPILED), _first_line(client_log, SPAWN_RE_COMPILED)
+    rows.append(("CONTROL: the host's spawn manager ran (so a silent client means something)", host_spawn is not None, host_spawn or "no [SpawnManager] spawn line on the host"))
+    rows.append(("client: its spawn manager spawned nothing", client_spawn is None, client_spawn or "no spawn line on the client"))
+
+    snap, weather = PKG_CLOCK_SNAP_RE.search(client_log), PKG_WEATHER_RE.search(client_log)
+    if withheld:
+        rows.append(("NEGATIVE CONTROL: with the host's publish withheld the client never snapped its clock to the host's", snap is None,
+                     "no clock snap on the client" if snap is None else snap.group(0)))
+        rows.append(("NEGATIVE CONTROL: ... and never followed a weather preset", weather is None,
+                     "no weather follow on the client" if weather is None else weather.group(0)))
+    else:
+        rows.append(("client: adopted the host's game clock", bool(snap), snap.group(0) if snap else "no '[MOWorldSync] client clock was ... snapping' line"))
+        rows.append(("client: followed the host's weather preset through the bridge", bool(weather), weather.group(0) if weather else "no '[MOWorldSync] client following' line"))
+    return rows
+
+
+SPAWN_RE_COMPILED = re.compile(SPAWN_RE)
+
+
+def _pkg_alive_count():
+    out = subprocess.run(["tasklist", "/FI", "IMAGENAME eq MO57.exe", "/NH", "/FO", "CSV"], capture_output=True, text=True).stdout
+    return sum(1 for line in out.splitlines() if line.lower().startswith('"mo57.exe"'))
+
+
+def _pkg_read(name):
+    try:
+        with open(os.path.join(PKG_LOGS, name), "rb") as f:
+            return f.read().decode("utf-8", errors="replace")
+    except OSError:
+        return ""
+
+
+def _pkg_launch(args):
+    """Start a packaged copy WITHOUT a console window; returns the stub's pid. The command line is passed as ONE string: UE parses its own
+    quoting (-ExecCmds="a b,c d") and Python's list quoting would escape the inner quotes."""
+    cmd = f'"{PKG_EXE}" {args}'
+    flags = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+    return subprocess.Popen(cmd, creationflags=flags, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).pid
+
+
+def _pkg_stop(pid):
+    """Stop ONE process tree this module launched (the stub and the real game it spawned), by recorded pid."""
+    if pid:
+        subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"], capture_output=True)
+
+
+def _package_build():
+    """Re-package the Development build (RunUAT BuildCookRun, ~90 s). The editor must be closed."""
+    uat = r"D:\UnrealEngine\UE_5.8\Engine\Build\BatchFiles\RunUAT.bat"
+    project = os.path.abspath(os.path.join(HERE, "..", "MO57.uproject"))
+    log = os.path.abspath(os.path.join(HERE, "..", "Saved", "Logs", "package.log"))
+    stage = os.path.abspath(os.path.join(HERE, "..", "Saved", "StagedBuilds_DevTest"))
+    cmd = (f'"{uat}" BuildCookRun -project="{project}" -noP4 -platform=Win64 -clientconfig=Development -build -cook -stage -pak -iostore '
+           f'-compressed -stagingdirectory="{stage}" -unattended -utf8output')
+    print("[nettest] packaged: packaging the Development build (~90 s) ...", flush=True)
+    with open(log, "wb") as f:
+        rc = subprocess.run(cmd, stdout=f, stderr=subprocess.STDOUT).returncode
+    ok = rc == 0 and "BUILD SUCCESSFUL" in open(log, encoding="utf-8", errors="replace").read()
+    print(f"[nettest] packaged: packaging {'ok' if ok else 'FAILED (see Saved/Logs/package.log)'}", flush=True)
+    return ok
+
+
+def packaged_test(package=False, withhold_sync=False, run_seconds=60, boot_timeout=180):
+    """Two copies of the PACKAGED Development game (host via -ExecCmds, client via the address), judged from their logs alone: no crash / ensure,
+    same seed, the client follows the host's clock and weather, the client's spawn manager is silent while the host's runs.
+
+    Why it exists: the editor-binary `-game` processes the other modes use are not the shipped game; this found a startup crash (intro timer),
+    client-side creature spawning and a blank save thumbnail by hand -- now it is a command. Refuses to run if any MO57.exe is already running
+    (it only ever stops the two process trees it started)."""
+    rep = Report()
+    host_pid = client_pid = None
+    try:
+        if package and not _package_build():
+            return rep.step("the Development package builds", False, "see Saved/Logs/package.log")
+        if not rep.step("the staged packaged build exists", os.path.exists(PKG_EXE), PKG_EXE):
+            return False
+        running = _pkg_alive_count()
+        if not rep.step("no other MO57.exe is running (this mode must own the logs and never touches others)", running == 0, f"{running} running"):
+            return False
+
+        cmds = ("MO.WorldSync.Withhold 1," if withhold_sync else "") + "MO.Session.Host PackagedTest 4"
+        print(f"[nettest] packaged: launching the host (-ExecCmds=\"{cmds}\")" + (" -- NEGATIVE CONTROL: sync withheld" if withhold_sync else "") + " ...", flush=True)
+        host_pid = _pkg_launch(f'-NoSteam -windowed -ResX=960 -ResY=540 -WinX=0 -WinY=0 -ExecCmds="{cmds}"')
+        deadline, seeded = time.time() + boot_timeout, False
+        while time.time() < deadline and not seeded:
+            seeded = bool(PKG_HOST_SEED_RE.search(_pkg_read("MO57.log")))
+            time.sleep(2)
+        if not rep.step("host: the packaged game booted, hosted a world and published its seed", seeded,
+                        "" if seeded else _pkg_read("MO57.log")[-300:].replace("\n", " | ")):
+            return False
+
+        client_pid = _pkg_launch("127.0.0.1 -NoSteam -windowed -ResX=960 -ResY=540 -WinX=980 -WinY=0")
+        deadline, joined = time.time() + boot_timeout, False
+        while time.time() < deadline and not joined:
+            joined = bool(PKG_CLIENT_SEED_RE.search(_pkg_read("MO57_2.log")))
+            time.sleep(2)
+        rep.step("client: the second packaged copy joined and applied the host's seed", joined,
+                 "" if joined else _pkg_read("MO57_2.log")[-300:].replace("\n", " | "))
+
+        print(f"[nettest] packaged: running both for {run_seconds} s (spawn manager first-spawn, sync) ...", flush=True)
+        time.sleep(run_seconds)
+        alive = _pkg_alive_count()
+        rep.step("both packaged copies are still running (4 processes: two stubs + two games)", alive == 4, f"{alive} MO57.exe process(es)")
+
+        for row in analyse_packaged_logs(_pkg_read("MO57.log"), _pkg_read("MO57_2.log"), withheld=withhold_sync):
+            rep.step(*row)
+        return rep.ok
+    finally:
+        print(f"[nettest] packaged: {'PASS' if rep.rows and rep.ok else 'FAIL'}", flush=True)
+        _pkg_stop(client_pid)
+        _pkg_stop(host_pid)
 
 
 def soak_test(uproject, editor_exe, rounds=6, boot_timeout=300):

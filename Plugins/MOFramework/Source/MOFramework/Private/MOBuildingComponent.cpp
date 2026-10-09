@@ -506,6 +506,15 @@ bool UMOBuildingComponent::TryPlaceGhost()
 	return true;
 }
 
+namespace
+{
+	/** TEST ONLY: turns the server-side placement reach check off, so `ue.py nettest actions` can show that a hostile placement really succeeds without it
+	 *  (a refusal is only evidence if the same request is accepted when the check is off). */
+	TAutoConsoleVariable<bool> CVarDisableServerPlacementReach(
+		TEXT("MO.Building.ServerReach.Disable"), false,
+		TEXT("TEST ONLY: ServerPlaceBuilding does not hold the requested transform to the pawn's reach."), ECVF_Cheat);
+}
+
 void UMOBuildingComponent::ServerPlaceBuilding_Implementation(FName InRecipeId, FTransform PlacementTransform)
 {
 	UWorld* World = GetWorld();
@@ -518,6 +527,27 @@ void UMOBuildingComponent::ServerPlaceBuilding_Implementation(FName InRecipeId, 
 	if (!Recipe || !Recipe->bIsBuilding)
 	{
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOBuildingComponent] ServerPlaceBuilding: invalid building recipe %s"), *InRecipeId.ToString());
+		return;
+	}
+
+	// The client resolved PlacementTransform from its OWN camera trace (at most MaxPlacementDistance from the camera). Hold it to that: without
+	// this a hostile client can place buildings anywhere in the world, as many as it likes. The margin covers the camera sitting behind the
+	// pawn (third person) plus latency; ServerMaxPlacementMargin is the one place that number lives. (A collision / slope re-check, which the
+	// client does against its ghost, is a separate, larger item -- see the audit tracker.)
+	const APlayerController* RequestingController = Cast<APlayerController>(GetOwner());
+	const APawn* RequestingPawn = RequestingController ? RequestingController->GetPawn() : nullptr;
+	if (!RequestingPawn)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOBuildingComponent] ServerPlaceBuilding rejected: the requesting controller has no pawn"));
+		return;
+	}
+	const float MaxServerReach = MaxPlacementDistance + ServerMaxPlacementMargin;
+	if (!CVarDisableServerPlacementReach.GetValueOnGameThread()
+		&& FVector::DistSquared(RequestingPawn->GetActorLocation(), PlacementTransform.GetLocation()) > FMath::Square(MaxServerReach))
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOBuildingComponent] ServerPlaceBuilding rejected: %s is %.0f cm from the pawn (max %.0f) -- recipe %s"),
+			*PlacementTransform.GetLocation().ToCompactString(),
+			FVector::Dist(RequestingPawn->GetActorLocation(), PlacementTransform.GetLocation()), MaxServerReach, *InRecipeId.ToString());
 		return;
 	}
 
