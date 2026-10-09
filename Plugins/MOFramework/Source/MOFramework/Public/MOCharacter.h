@@ -972,6 +972,13 @@ private:
 	/** Last Z position to detect if we're truly falling (not just jumping). */
 	float LastZPosition = 0.f;
 
+	/** How many times this pawn's failed rescue has logged what blocks the sky-to-ground line (capped: the rescue repeats every few seconds). */
+	int32 RescueFailLogCount = 0;
+
+	/** Where this pawn last stood on the ground (authority). The fall-through rescue's fallback when no terrain can be found: back here, not to a fixed height. */
+	FVector LastGroundedLocation = FVector::ZeroVector;
+	bool bHasLastGrounded = false;
+
 	/** Check for and handle falling through the world. */
 	void CheckFallThroughSafety(float DeltaTime);
 
@@ -1010,6 +1017,15 @@ private:
 	 * @return True if a safe location was found
 	 */
 	bool FindSafeTerrainNearLocation(const FVector& NearLocation, FVector& OutSafeLocation) const;
+
+	/**
+	 * THE ground trace of the fall-through rescue: the first terrain hit along the vertical line Start -> End (same X/Y; sorted from Start).
+	 * With bSafetyTeleportOnlyVoxelTerrain it takes the first VOXEL hit and skips everything else that blocks WorldStatic -- the gameplay map's
+	 * PCGVolume brush, trees, props. A first-hit trace returned that brush instead of the terrain, so every "is there terrain here?" answer was
+	 * NO and a pawn buried under the surface was teleported to the fixed height (below the surface) again and again, forever -- the host's pawn
+	 * was invisible to every client (Wes: "the client can't see the host's pawn"). All four rescue traces go through here.
+	 */
+	bool TraceTerrainLine(const FVector& Start, const FVector& End, FHitResult& OutHit) const;
 
 	// ============================================================================
 	// MOVEMENT MODE API

@@ -1768,6 +1768,37 @@ void AMOCharacter::CheckEmbeddedSafety(float DeltaTime)
 	}
 }
 
+namespace
+{
+	/** TEST ONLY control: the rescue's old behaviour (first blocking hit, whatever it is) -- proves the buried-pawn test can fail. */
+	TAutoConsoleVariable<bool> CVarRescueFirstHitOnly(
+		TEXT("MO.Rescue.FirstHitOnly"), false,
+		TEXT("TEST ONLY: the fall-through rescue uses a single first-hit trace (the original bug) instead of skipping non-voxel blockers."), ECVF_Cheat);
+}
+
+bool AMOCharacter::TraceTerrainLine(const FVector& Start, const FVector& End, FHitResult& OutHit) const
+{
+	const UWorld* World = GetWorld();
+	if (!World)
+	{
+		return false;
+	}
+
+	if (bSafetyTeleportOnlyVoxelTerrain && !CVarRescueFirstHitOnly.GetValueOnGameThread())
+	{
+		return MOSpawnClearance::TraceVoxelGround(World, Start.X, Start.Y, Start.Z, End.Z, this, OutHit);
+	}
+
+	FCollisionQueryParams QueryParams;
+	QueryParams.AddIgnoredActor(this);
+	if (!World->LineTraceSingleByChannel(OutHit, Start, End, ECC_WorldStatic, QueryParams))
+	{
+		return false;
+	}
+	// First-hit mode: with the voxel-only rule on, a hit on anything else is "no terrain" (the legacy, buggy answer); with it off, any hit is ground.
+	return !bSafetyTeleportOnlyVoxelTerrain || (OutHit.GetActor() && OutHit.GetActor()->IsA<AVoxelWorld>());
+}
+
 bool AMOCharacter::FindSafeTerrainNearLocation(const FVector& NearLocation, FVector& OutSafeLocation) const
 {
 	UWorld* World = GetWorld();
@@ -1776,10 +1807,8 @@ bool AMOCharacter::FindSafeTerrainNearLocation(const FVector& NearLocation, FVec
 		return false;
 	}
 
-	FCollisionQueryParams QueryParams;
-	QueryParams.AddIgnoredActor(this);
-
-	// Helper lambda to check if a hit is valid voxel terrain with acceptable slope
+	// Helper lambda to check if a hit is valid voxel terrain with acceptable slope (the traces below go through TraceTerrainLine, which already
+	// skips non-voxel blockers; the voxel test here stays as the single place that also states the slope rule)
 	auto IsValidTerrainHit = [this](const FHitResult& Hit) -> bool
 	{
 		if (bSafetyTeleportOnlyVoxelTerrain)
@@ -1831,7 +1860,7 @@ bool AMOCharacter::FindSafeTerrainNearLocation(const FVector& NearLocation, FVec
 		const FVector UpTraceStart = NearLocation;
 		const FVector UpTraceEnd = NearLocation + FVector(0.f, 0.f, SafetyTerrainSearchDistance);
 
-		if (World->LineTraceSingleByChannel(UpHit, UpTraceStart, UpTraceEnd, ECC_WorldStatic, QueryParams))
+		if (TraceTerrainLine(UpTraceStart, UpTraceEnd, UpHit))
 		{
 			FVector Ground;
 			float NormalZ;
@@ -1856,7 +1885,7 @@ bool AMOCharacter::FindSafeTerrainNearLocation(const FVector& NearLocation, FVec
 		const FVector DownEnd(NearLocation.X, NearLocation.Y, NearLocation.Z - RaycastStartZ);
 
 		FHitResult DownHit;
-		if (World->LineTraceSingleByChannel(DownHit, DownStart, DownEnd, ECC_WorldStatic, QueryParams))
+		if (TraceTerrainLine(DownStart, DownEnd, DownHit))
 		{
 			FVector Ground;
 			float NormalZ;
@@ -1890,7 +1919,7 @@ bool AMOCharacter::FindSafeTerrainNearLocation(const FVector& NearLocation, FVec
 		const FVector TraceEnd = SampleXY - FVector(0.f, 0.f, RaycastStartZ * 2.f);
 
 		FHitResult Hit;
-		if (World->LineTraceSingleByChannel(Hit, SampleXY, TraceEnd, ECC_WorldStatic, QueryParams))
+		if (TraceTerrainLine(SampleXY, TraceEnd, Hit))
 		{
 			FVector Ground;
 			float NormalZ;
@@ -1995,6 +2024,12 @@ void AMOCharacter::CheckFallThroughSafety(float DeltaTime)
 	const float CurrentZ = CurrentLocation.Z;
 	const float VerticalVelocity = GetVelocity().Z;
 
+	if (MovementComp->IsMovingOnGround())
+	{
+		LastGroundedLocation = CurrentLocation; // the one place we KNOW the pawn was on solid ground
+		bHasLastGrounded = true;
+	}
+
 	// Check if we're falling (in air with significant downward velocity)
 	const bool bIsFalling = MovementComp->IsFalling() && VerticalVelocity < FallThroughVelocityThreshold;
 
@@ -2005,33 +2040,12 @@ void AMOCharacter::CheckFallThroughSafety(float DeltaTime)
 		// Only check for fall-through after exceeding time threshold
 		if (ContinuousFallTime >= FallThroughTimeThreshold)
 		{
-			// Helper lambda to check if a hit is valid voxel terrain
-			auto IsValidTerrainHit = [this](const FHitResult& Hit) -> bool
-			{
-				if (bSafetyTeleportOnlyVoxelTerrain)
-				{
-					AActor* HitActor = Hit.GetActor();
-					if (!HitActor || !HitActor->IsA<AVoxelWorld>())
-					{
-						return false;
-					}
-				}
-				return true;
-			};
-
-			// Raycast downward to check if there's valid terrain below
+			// Is there valid terrain below the pawn? (TraceTerrainLine skips non-voxel blockers: the first thing under a pawn is often a tree,
+			// a prop or the PCG volume brush, and that must not read as "no terrain".)
 			FHitResult DownHit;
 			const FVector TraceStart = CurrentLocation;
 			const FVector TraceEnd = CurrentLocation - FVector(0.f, 0.f, SafetyTerrainSearchDistance);
-
-			FCollisionQueryParams QueryParams;
-			QueryParams.AddIgnoredActor(this);
-
-			bool bFoundValidTerrainBelow = false;
-			if (GetWorld()->LineTraceSingleByChannel(DownHit, TraceStart, TraceEnd, ECC_WorldStatic, QueryParams))
-			{
-				bFoundValidTerrainBelow = IsValidTerrainHit(DownHit);
-			}
+			const bool bFoundValidTerrainBelow = TraceTerrainLine(TraceStart, TraceEnd, DownHit);
 
 			if (!bFoundValidTerrainBelow)
 			{
@@ -2044,10 +2058,32 @@ void AMOCharacter::CheckFallThroughSafety(float DeltaTime)
 				}
 				else
 				{
-					// No valid terrain found anywhere - teleport to a default safe height
-					SafeLocation = FVector(CurrentLocation.X, CurrentLocation.Y, SafetyTeleportHeight);
-					UE_LOG(LogMOFramework, Warning, TEXT("[MOCharacter] %s: Fall-through detected! No valid terrain found, teleporting to default height Z=%.0f"),
-						*GetName(), SafeLocation.Z);
+					// No valid terrain found anywhere - say WHAT is in the way (first few times), then teleport to a default safe height.
+					// This line is the evidence a bug report's log tail needs: a rescue that cannot find ground is invisible otherwise (the host's pawn
+					// sat under the terrain for minutes and every client saw it as missing).
+					if (RescueFailLogCount < 3)
+					{
+						++RescueFailLogCount;
+						TArray<FHitResult> SkyHits;
+						FCollisionQueryParams SkyParams;
+						SkyParams.AddIgnoredActor(this);
+						GetWorld()->LineTraceMultiByChannel(SkyHits, CurrentLocation + FVector(0.f, 0.f, 50000.f), CurrentLocation - FVector(0.f, 0.f, 50000.f), ECC_WorldStatic, SkyParams);
+						FString Described;
+						for (int32 i = 0; i < SkyHits.Num() && i < 6; ++i)
+						{
+							Described += FString::Printf(TEXT(" [%d] %s/%s z=%.0f nZ=%.2f"), i, *GetNameSafe(SkyHits[i].GetActor()), *GetNameSafe(SkyHits[i].GetComponent()),
+								SkyHits[i].ImpactPoint.Z, SkyHits[i].ImpactNormal.Z);
+						}
+						UE_LOG(LogMOFramework, Warning, TEXT("[MOCharacter] %s: rescue found no ground at %s; blocking hits on the sky line (top first):%s"),
+							*GetName(), *CurrentLocation.ToCompactString(), SkyHits.Num() ? *Described : TEXT(" none"));
+					}
+					// Back to where the pawn last stood on the ground when it has stood anywhere; the fixed height is only the last resort (it is a
+					// constant, and on this map the ground is often above it -- a pawn put at Z=200 under 1500+ cm of terrain just falls again).
+					SafeLocation = bHasLastGrounded
+						? LastGroundedLocation + FVector(0.f, 0.f, SafetyTeleportHeight * 0.25f)
+						: FVector(CurrentLocation.X, CurrentLocation.Y, SafetyTeleportHeight);
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOCharacter] %s: Fall-through detected! No valid terrain found, teleporting to %s Z=%.0f"),
+						*GetName(), bHasLastGrounded ? TEXT("where it last stood") : TEXT("default height"), SafeLocation.Z);
 				}
 
 				// Teleport to safety

@@ -1185,6 +1185,8 @@ def cmd_nettest(a):
         sys.exit(0 if ui.bugreport_test(package=a.package) else 1)
     if a.mode == "actions":
         sys.exit(0 if ui.actions_test(UPROJECT, EDITOR_EXE, keep=a.keep) else 1)
+    if a.mode == "churn":
+        sys.exit(0 if ui.churn_test(UPROJECT, EDITOR_EXE, rounds=a.rounds if a.rounds != 6 else 3, keep=a.keep) else 1)
     if a.mode == "soak":
         sys.exit(0 if ui.soak_test(UPROJECT, EDITOR_EXE, rounds=a.rounds) else 1)
     fn = ui.lan_test if a.mode == "lan" else ui.steam_host_test
@@ -1476,8 +1478,8 @@ def main():
     ip.set_defaults(fn=cmd_inst)
 
     s = sub.add_parser("nettest", help="two-process (lan) / real-Steam (steam-host) session test; PASS/FAIL + exit code")
-    s.add_argument("mode", choices=["lan", "steam-host", "game", "hostsave", "soak", "features", "actions", "packaged", "bugreport"])
-    s.add_argument("--rounds", type=int, default=6, help="soak mode: how many fresh-seed host+join rounds (default 6)")
+    s.add_argument("mode", choices=["lan", "steam-host", "game", "hostsave", "soak", "features", "actions", "packaged", "bugreport", "churn"])
+    s.add_argument("--rounds", type=int, default=6, help="soak mode: how many fresh-seed host+join rounds (default 6); churn mode: leave/rejoin rounds (default 3)")
     s.add_argument("--keep", action="store_true", help="leave the instances running afterwards")
     s.add_argument("--package", action="store_true", help="packaged mode only: re-package the Development build first (~90 s; the editor must be closed)")
     s.add_argument("--withhold-sync", action="store_true",

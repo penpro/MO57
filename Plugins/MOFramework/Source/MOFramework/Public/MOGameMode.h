@@ -171,6 +171,27 @@ public:
 	float RecoveryLiftOffset = 5000.0f;
 
 	// =========================================================================
+	// SPAWN SETTLE (new game: wait for the ground under the pawn to stop changing)
+	// =========================================================================
+	//
+	// The spawn point is found with traces against the collision that exists BEFORE the player's pawn does -- and the voxel collision around the
+	// pawn (its invoker) is regenerated once the pawn is there: measured over 8 fresh worlds, the final ground differed from the spawn trace's
+	// by -570 .. +346 cm. A pawn spawned 200 cm above the old surface that ends up under the new one falls out of the world, and the host's pawn
+	// was then invisible to every client. So the new pawn is HELD (no gravity, no rescue) until the ground under it is stable, then placed on it.
+
+	/** How long the ground height under the new pawn must stay within SpawnSettleToleranceCm before the pawn is placed on it. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Spawn|Settle")
+	float SpawnSettleStableSeconds = 1.5f;
+
+	/** Give up waiting after this long (the pawn is released where it is; the fall-through rescue is the safety net). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Spawn|Settle")
+	float SpawnSettleMaxSeconds = 12.0f;
+
+	/** Ground height changes up to this much count as "stable". */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Spawn|Settle")
+	float SpawnSettleToleranceCm = 4.0f;
+
+	// =========================================================================
 	// LOAD-GAME REGROUNDING
 	// =========================================================================
 	//
@@ -526,6 +547,24 @@ private:
 	 * recovery. Safe to call multiple times; resets the existing timer.
 	 */
 	void ArmLandingTimeout();
+
+	/**
+	 * The landing wait itself (the tail of SpawnInitialPawn): an already-grounded pawn finishes at once, otherwise bind LandedDelegate and arm the
+	 * recovery timeout. Runs after the settle step.
+	 */
+	void BeginLandingWait(APawn* NewPawn);
+
+	/** Hold `Pawn` and start polling the ground under it (SpawnSettle*). Ends in BeginLandingWait. */
+	void BeginSpawnSettle(class AMOCharacter* Pawn);
+	void PollSpawnSettle();
+	void FinishSpawnSettle(bool bGroundFound);
+
+	FTimerHandle SpawnSettleTimerHandle;
+	TWeakObjectPtr<class AMOCharacter> SettlingPawn;
+	float SettleElapsed = 0.f;
+	float SettleLastGroundZ = 0.f;
+	float SettleStableTime = 0.f;
+	bool bSettleHaveGround = false;
 
 	/** Timer handle for the one-shot landing timeout (drives RecoverStuckSpawn). */
 	FTimerHandle PawnLandingTimerHandle;

@@ -7,6 +7,7 @@
 #include "MOWorldSeedSubsystem.h"
 #include "MOPlayerController.h"
 #include "Kismet/GameplayStatics.h"
+#include "MOSpawnClearance.h"
 #include "Engine/StaticMeshActor.h"
 #include "Components/StaticMeshComponent.h"
 #include "Testing/MOUITestSubsystem.h"
@@ -1099,6 +1100,100 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 			}
 			Test->SimulateKeyPress(Key);
 			UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] PASS PressKey: %s"), *Key.ToString());
+		}),
+		ECVF_Default));
+
+	// ---------- MO.Test.RescueTrace [PlayerIndex=0] ----------
+	// What the fall-through rescue's ground traces SEE from a pawn's current spot: the exact traces it runs (below / up / down from 50 km up), then every blocking
+	// WorldStatic hit along the sky-to-ground line in order, and the voxel-only answer. Diagnostic for "why did the rescue not find the ground here?".
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Test.RescueTrace"),
+		TEXT("Dev: log what the fall-through rescue's ground traces hit from a player's pawn. Usage: MO.Test.RescueTrace [PlayerIndex=0]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			const int32 Index = Args.Num() > 0 ? FCString::Atoi(*Args[0]) : 0;
+			APawn* Pawn = World ? UGameplayStatics::GetPlayerPawn(World, Index) : nullptr;
+			if (!Pawn)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] FAIL RescueTrace: no pawn for player index %d"), Index);
+				return;
+			}
+			const FVector L = Pawn->GetActorLocation();
+			FCollisionQueryParams Params;
+			Params.AddIgnoredActor(Pawn);
+			auto Describe = [](const FHitResult& H) -> FString
+			{
+				return FString::Printf(TEXT("%s/%s z=%.1f normalZ=%.2f"), *GetNameSafe(H.GetActor()), *GetNameSafe(H.GetComponent()), H.ImpactPoint.Z, H.ImpactNormal.Z);
+			};
+			auto Single = [&](const TCHAR* Label, const FVector& A, const FVector& B)
+			{
+				FHitResult H;
+				const bool bHit = World->LineTraceSingleByChannel(H, A, B, ECC_WorldStatic, Params);
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] RescueTrace %s: %s"), Label, bHit ? *Describe(H) : TEXT("no hit"));
+			};
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] RescueTrace pawn %s at %s"), *Pawn->GetName(), *L.ToCompactString());
+			Single(TEXT("below(50000)"), L, L - FVector(0, 0, 50000.f));
+			Single(TEXT("up(50000)"), L, L + FVector(0, 0, 50000.f));
+			Single(TEXT("down-from-sky(+50000)"), L + FVector(0, 0, 50000.f), L - FVector(0, 0, 50000.f));
+			TArray<FHitResult> Hits;
+			World->LineTraceMultiByChannel(Hits, L + FVector(0, 0, 50000.f), L - FVector(0, 0, 50000.f), ECC_WorldStatic, Params);
+			for (int32 i = 0; i < Hits.Num() && i < 8; ++i)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] RescueTrace sky-line blocking hit #%d: %s blocking=%d"), i, *Describe(Hits[i]), Hits[i].bBlockingHit ? 1 : 0);
+			}
+			FHitResult V;
+			const bool bVoxel = MOSpawnClearance::TraceVoxelGround(World, L.X, L.Y, L.Z + 50000.f, L.Z - 50000.f, Pawn, V);
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] RescueTrace voxel-only ground: %s"), bVoxel ? *Describe(V) : TEXT("none"));
+		}),
+		ECVF_Default));
+
+	// ---------- MO.Test.RoofAbove [PlayerIndex=0] [HeightAboveGroundCm=1500] [HalfExtentCm=600] / MO.Test.ClearRoof ----------
+	// A solid block hanging in the sky above a player's spot: a stand-in for ANY non-terrain thing that blocks WorldStatic over the ground (a tree's collision, a roof,
+	// a prop). The fall-through rescue's ground trace must look past it to the voxel terrain; with the old first-hit rule it did not.
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Test.RoofAbove"),
+		TEXT("Dev: hang a solid block above a player's spot. Usage: MO.Test.RoofAbove [PlayerIndex=0] [HeightAboveGroundCm=1500] [HalfExtentCm=600]. Undo: MO.Test.ClearRoof"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			const int32 Index = Args.Num() > 0 ? FCString::Atoi(*Args[0]) : 0;
+			const float Height = Args.Num() > 1 ? FCString::Atof(*Args[1]) : 1500.f;
+			const float Half = Args.Num() > 2 ? FMath::Max(50.f, FCString::Atof(*Args[2])) : 600.f;
+			APawn* Pawn = World ? UGameplayStatics::GetPlayerPawn(World, Index) : nullptr;
+			UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
+			if (!Pawn || !Cube)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] FAIL RoofAbove: %s"), !Pawn ? TEXT("no pawn for that player index") : TEXT("cube mesh missing"));
+				return;
+			}
+			const FVector L = Pawn->GetActorLocation();
+			FHitResult Ground;
+			const bool bGround = MOSpawnClearance::TraceVoxelGround(World, L.X, L.Y, L.Z + 50000.f, L.Z - 50000.f, Pawn, Ground);
+			const float BaseZ = bGround ? Ground.ImpactPoint.Z : L.Z;
+			AStaticMeshActor* Roof = World->SpawnActor<AStaticMeshActor>(FVector(L.X, L.Y, BaseZ + Height), FRotator::ZeroRotator);
+			Roof->SetMobility(EComponentMobility::Movable);
+			Roof->GetStaticMeshComponent()->SetStaticMesh(Cube);
+			Roof->GetStaticMeshComponent()->SetCollisionProfileName(TEXT("BlockAll"));
+			Roof->SetActorScale3D(FVector(Half / 50.0f));
+			Roof->Tags.Add(TEXT("MOTestRoof"));
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] PASS RoofAbove: %.0f cm block %.0f cm above the ground (z=%.0f) over %s"), Half * 2.f, Height, BaseZ, *Pawn->GetName());
+		}),
+		ECVF_Default));
+
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Test.ClearRoof"),
+		TEXT("Dev: remove every block MO.Test.RoofAbove made."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			int32 Removed = 0;
+			for (TActorIterator<AStaticMeshActor> It(World); It; ++It)
+			{
+				if (It->Tags.Contains(TEXT("MOTestRoof")))
+				{
+					It->Destroy();
+					++Removed;
+				}
+			}
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] ClearRoof: removed %d block(s)"), Removed);
 		}),
 		ECVF_Default));
 

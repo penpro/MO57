@@ -1393,6 +1393,72 @@ def _client_attack(rep, host, client):
              f"{_combat_line(seen)}; client said: {mm.group(0) if mm else 'nothing'}")
 
 
+def _pawn_xyz(host, idx):
+    out = _probe(host, f"p = unreal.GameplayStatics.get_player_pawn(world, {idx}); l = p.get_actor_location(); out('PAWNXYZ %f %f %f' % (l.x, l.y, l.z))")
+    m = re.search(r"PAWNXYZ (-?[\d.]+) (-?[\d.]+) (-?[\d.]+)", out)
+    return tuple(float(v) for v in m.groups()) if m else None
+
+
+def _wait_on_surface(host, idx, ground_z, timeout):
+    """Poll until pawn `idx` stands within [ground-20, ground+600] (the rescue puts it at ground+200, then it settles), or the timeout. -> last (x, y, z)."""
+    deadline, last = time.time() + timeout, None
+    while time.time() < deadline:
+        last = _pawn_xyz(host, idx)
+        if last and ground_z - 20 <= last[2] <= ground_z + 600:
+            return last
+        time.sleep(2)
+    return _pawn_xyz(host, idx) or last
+
+
+def _buried_pawns(rep, host, client):
+    """A pawn UNDER the terrain surface must be found and lifted back onto it by the fall-through rescue, even with a solid block over the ground (a stand-in for a tree's
+    collision, a roof, any non-terrain blocker) -- host's own pawn first, then the joiner's, as the server sees them.
+
+    The bug (Wes: the client could not see the host's pawn): the ground trace stopped at the first BLOCKING hit, so with something solid over the ground the voxel terrain behind it
+    was never returned, the rescue said 'No valid terrain found' and put the pawn at a fixed height -- under the surface on a map whose ground is often above it -- over and over.
+    The CONTROL runs the old first-hit rule (MO.Rescue.FirstHitOnly 1) and asserts on what the rescue LOGGED (not on where the pawn ends up: the fixed fallback height happens to be above
+    the ground in some worlds, which would hide the failure): the old rule must say 'No valid terrain found' and name the block; the fixed rule must say 'Found safe terrain'."""
+    for who, idx, with_control in (("the host's own pawn", 0, True), ("the joiner's pawn", 1, False)):
+        p = _pawn_xyz(host, idx)
+        if not rep.step(f"{who}: located by the host", bool(p), str(p)):
+            continue
+        x, y, z = p
+        ground = _surface_z(host, x, y, 30000, -30000)
+        if not rep.step(f"{who}: the voxel ground under it is measurable", bool(ground) and ground[0] == 1, str(ground)):
+            continue
+        gz = ground[1]
+
+        def bury():
+            _probe(host, f"p = unreal.GameplayStatics.get_player_pawn(world, {idx}); "
+                         f"p.set_actor_location(unreal.Vector({x}, {y}, {gz - 1500.0}), False, True); p.get_character_movement().stop_movement_immediately(); out('BURIED')")
+
+        console(host, f"MO.Test.RoofAbove {idx} 1500 600")  # a block 15 m over the ground, 12 m wide
+        try:
+            if with_control:
+                console(host, "MO.Rescue.FirstHitOnly 1")
+                off = log_size(host)
+                bury()
+                wait_log(host, r"Fall-through detected! (Found safe terrain|No valid terrain found)", since=off, timeout=20)
+                log = read_log_from(host, off)
+                first = re.search(r"Fall-through detected! (Found safe terrain|No valid terrain found)", log)
+                blocker = re.search(r"rescue found no ground at [^;]*; blocking hits on the sky line \(top first\):(.*)", log)
+                rep.step(f"CONTROL ({who}): with the OLD first-hit rule and a block over the ground, the rescue cannot find the ground",
+                         bool(first) and first.group(1) == "No valid terrain found", first.group(0) if first else "no rescue line within 20 s")
+                rep.step(f"the failed rescue names what is in the way ({who})", bool(blocker) and "StaticMeshActor" in blocker.group(1), (blocker.group(1)[:140] if blocker else "no 'rescue found no ground' line"))
+                console(host, "MO.Rescue.FirstHitOnly 0")
+                _wait_on_surface(host, idx, gz, 30)  # whatever the old rule left behind is put right by the fixed one
+            off = log_size(host)
+            bury()
+            wait_log(host, r"Fall-through detected! (Found safe terrain|No valid terrain found)", since=off, timeout=20)
+            first = re.search(r"Fall-through detected! (Found safe terrain|No valid terrain found)", read_log_from(host, off))
+            freed = _wait_on_surface(host, idx, gz, 30)
+            rep.step(f"{who}: buried 15 m under the surface with a block over the ground, the rescue FINDS the ground and lifts it back onto it",
+                     bool(first) and first.group(1) == "Found safe terrain" and bool(freed) and gz - 20 <= freed[2] <= gz + 600,
+                     f"ground z={gz:.0f}; pawn z={freed[2] if freed else None}; first rescue line: {first.group(0) if first else None}")
+        finally:
+            console(host, "MO.Test.ClearRoof")
+
+
 def _count_buildables(host):
     out = _probe(host, "out('BUILDABLES=%d' % len(unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOBuildableActor)))")
     m = re.search(r"BUILDABLES=(\d+)", out)
@@ -1518,7 +1584,7 @@ def actions_test(uproject, editor_exe, keep=False, boot_timeout=300):
             start(n, uproject, editor_exe, pos=pos, nosteam=True)
         if not _host_and_join(rep, host, client, "ActionsTest", boot_timeout):
             return False
-        for fn in (_client_pickup, _client_craft, _client_attack, _trust_placement, _trust_pickup_far, _trust_possess_other, _trust_terraform):
+        for fn in (_client_pickup, _client_craft, _client_attack, _trust_placement, _trust_pickup_far, _trust_possess_other, _trust_terraform, _buried_pawns):
             try:
                 fn(rep, host, client)
             except Exception as e:  # noqa: BLE001 - one verb's harness error must not hide the others
@@ -1683,6 +1749,214 @@ def packaged_test(package=False, withhold_sync=False, run_seconds=60, boot_timeo
         print(f"[nettest] packaged: {'PASS' if rep.rows and rep.ok else 'FAIL'}", flush=True)
         _pkg_stop(client_pid)
         _pkg_stop(host_pid)
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+# nettest churn: join/leave cycles, two players grabbing the same item at once, saving while a client is connected
+# ---------------------------------------------------------------------------------------------------------------------------------
+CHURN_SLOT = "zz_nettest_churn"
+CHURN_FATAL_RE = re.compile(r"Fatal error|Unhandled Exception|Ensure condition failed|Assertion failed")
+CHURN_MO_ERROR_RE = re.compile(r"\bLogMO\w*: Error:")
+FALLTHROUGH_RE = re.compile(r"Fall-through detected")
+LOG_STAMP_RE = re.compile(r"^\[(\d{4})\.(\d\d)\.(\d\d)-(\d\d)\.(\d\d)\.(\d\d):(\d{3})\]")
+
+
+def distinct_log_lines(text, regex):
+    """The distinct lines of `text` matching `regex`, with the timestamp / frame prefix removed (the same fault logged ten times is one line)."""
+    out = {}
+    for line in text.splitlines():
+        if regex.search(line):
+            key = re.sub(r"^\[[^\]]*\]\[[^\]]*\]", "", line).strip()[:220]
+            out[key] = out.get(key, 0) + 1
+    return out
+
+
+def log_stamp_ms(line):
+    """Milliseconds since midnight of a log line's timestamp, or None (day rollover is ignored: a test lasts minutes)."""
+    m = LOG_STAMP_RE.match(line)
+    if not m:
+        return None
+    _, _, _, hh, mm, ss, ms = (int(g) for g in m.groups())
+    return ((hh * 60 + mm) * 60 + ss) * 1000 + ms
+
+
+def analyse_churn_logs(host_log, client_log):
+    """What the host and the client logged WHILE the churn ran -> [(label, ok, evidence)]. Pure (unit-tested): nobody fell through the ground and was
+    rescued, nothing crashed or hit an ensure, and the game's own code logged no Error-level line."""
+    rows = []
+    for who, text in (("host", host_log), ("client", client_log)):
+        rescued = len(FALLTHROUGH_RE.findall(text))
+        rows.append((f"{who}: no fall-through rescue during the churn", rescued == 0, f"{rescued} rescue line(s)"))
+        fatal = distinct_log_lines(text, CHURN_FATAL_RE)
+        rows.append((f"{who}: no crash, ensure or assertion during the churn", not fatal, "; ".join(list(fatal)[:2]) or f"{len(text.splitlines())} log lines, none"))
+        errors = distinct_log_lines(text, CHURN_MO_ERROR_RE)
+        rows.append((f"{who}: the game's own code logged no Error-level line during the churn", not errors,
+                     "; ".join(f"{k} (x{n})" for k, n in list(errors.items())[:3]) or "none"))
+    return rows
+
+
+def _leave_and_rejoin(rep, host, client, label):
+    """The client goes back to the main menu and joins again. The host must keep the leaver's pawn as an idle colonist and hand the SAME pawn back
+    (no second pawn for the same player), and end with two players that each have a pawn."""
+    leave_off = log_size(host)
+    call(client, ["py", "-c", f'unreal.GameplayStatics.open_level(world, "{MENU_MAP}")'], timeout=30)
+    reached, st = _wait_state(client, "Standalone", MENU_MAP, 120)
+    if not rep.step(f"{label}: client is back at the main menu", reached, str(st)):
+        return False
+    stayed = wait_log(host, r"left: pawn \S+ stays in the world as an idle colonist", since=leave_off, timeout=30)
+    rep.step(f"{label}: host keeps the leaver's pawn as an idle colonist", bool(stayed), stayed.group(0) if stayed else "no 'stays in the world' line")
+
+    call(client, ["py", "-c", "import agent_test_lib as atl; atl.skip_intro(world, out)"], timeout=30)
+    found = None
+    for _ in range(5):
+        off = log_size(client)
+        console(client, "MO.Session.Find")
+        m = wait_log(client, FOUND_RE.pattern, since=off, timeout=30)
+        found = int(FOUND_RE.search(m.group(0)).group(1)) if m else None
+        if found:
+            break
+        time.sleep(3)
+    if not rep.step(f"{label}: client finds the session again", bool(found), f"{found} result(s)"):
+        return False
+    host_off = log_size(host)
+    console(client, "MO.Session.Join 0")
+    reached, cst = _wait_state(client, "Client", "", 300)
+    if not rep.step(f"{label}: client rejoins and possesses a pawn", reached, str(cst)):
+        return False
+    time.sleep(4)
+    rejoin = read_log_from(host, host_off)
+    took = re.search(r"took existing pawn [^ ]+ \(previous=(yes|none)\)", rejoin)
+    rep.step(f"{label}: host handed the player their previous pawn back and spawned no new one",
+             bool(took) and took.group(1) == "yes" and "spawning a new one" not in rejoin, took.group(0) if took else "no 'took existing pawn' line")
+    out = _probe(host, PROBE_CONTROLLERS)
+    m = re.search(r"PCS=(\d+) WITHPAWN=(\d+)", out)
+    return rep.step(f"{label}: host sees two players, each with a pawn", bool(m) and m.group(1) == "2" and m.group(2) == "2", m.group(0) if m else out.strip()[-60:])
+
+
+def _race_trial(host, client, item_id):
+    """One race: an item on the ground exactly between the host's pawn and the joiner's, both asked to pick it up at the same moment. -> dict."""
+    import threading
+    setup = _probe(host,
+        "import builtins; h = unreal.GameplayStatics.get_player_pawn(world, 0); c = unreal.GameplayStatics.get_player_pawn(world, 1); "
+        "hi = h.get_component_by_class(unreal.MOInventoryComponent); g = unreal.GuidLibrary.new_guid(); builtins.MO_RACE_GUID = g; "
+        "hl = h.get_actor_location(); c.set_actor_location(hl + unreal.Vector(0.0, 130.0, 0.0), False, True); "
+        f"gave = hi.add_item_by_guid(g, '{item_id}', 1); "
+        # a different material every trial: a second item of a type the host already holds MERGES into that stack, its GUID stops existing
+        # and the drop fails ("entry not found") -- which is what trials 2-4 of the first version did. Dropped equidistant from both pawns
+        "w = hi.drop_item_by_guid(g, hl + unreal.Vector(110.0, 65.0, 10.0), unreal.Rotator(0.0, 0.0, 0.0)); "
+        # "nearest world item" must be THE item: clear every other world item near the pawns first (this is a throw-away test world; the first
+        # version left earlier trials' stones and world scatter on the ground, and the two players then targeted different items)
+        # (compare by NAME: every get_all_actors call returns fresh wrapper objects, so `a != w` is True for the very item just dropped)
+        "wn = w.get_name() if w else 'none'; "
+        "others = [a for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOWorldItem) if a.get_name() != wn and (a.get_actor_location() - hl).size() < 2500.0]; "
+        "[a.destroy_actor() for a in others]; "
+        "out('RACE_SETUP gave=%s item=%s cleared=%d' % (gave, wn, len(others)))")
+    m = re.search(r"RACE_SETUP gave=(\w+) item=(\S+)", setup)
+    if not (m and m.group(1) == "True" and m.group(2) != "none"):
+        # the probe's output is mostly game log noise: keep only what says why
+        why = [ln.strip()[:200] for ln in setup.splitlines() if re.search(r"RACE_SETUP|Traceback|Error|Exception|not found|DropItem|AddItem|py-err", ln)]
+        return {"setup": False, "evidence": " | ".join(why[-4:]) or setup.strip()[-160:]}
+    time.sleep(6)  # the item and the moved pawn replicate
+
+    probe = ("import builtins; h = unreal.GameplayStatics.get_player_pawn(world, 0); c = unreal.GameplayStatics.get_player_pawn(world, 1); g = builtins.MO_RACE_GUID; "
+             "def_has = lambda p: (lambda r: (r[0] if isinstance(r, tuple) else bool(r)))(p.get_component_by_class(unreal.MOInventoryComponent).try_get_entry_by_guid(g)); "
+             "out('HOLD host=%s joiner=%s' % (def_has(h), def_has(c)))")
+    off_h, off_c = log_size(host), log_size(client)
+    barrier = threading.Barrier(2)
+
+    def fire(name):
+        barrier.wait()
+        console(name, "MO.Test.PickupNearest 600")
+
+    threads = [threading.Thread(target=fire, args=(n,)) for n in (host, client)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=60)
+    time.sleep(2)
+    lines = {}
+    for who, name, off in (("host", host, off_h), ("joiner", client, off_c)):
+        mm = re.search(r"^.*\[MOTEST\] (?:PickupNearest: interacting with (\S+)|FAIL PickupNearest[^\n]*)", read_log_from(name, off), re.M)
+        lines[who] = (mm.group(0), mm.group(1)) if mm else (None, None)
+    holders = None
+    for _ in range(10):  # let the slower side finish too: a duplicate would show up late
+        time.sleep(1.5)
+        holders = _probe(host, probe)
+    hm = re.search(r"HOLD host=(\w+) joiner=(\w+)", holders or "")
+    stamps = [log_stamp_ms(lines[w][0]) if lines[w][0] else None for w in ("host", "joiner")]
+    skew = abs(stamps[0] - stamps[1]) if all(s is not None for s in stamps) else None
+    return {"setup": True, "item_host": lines["host"][1], "item_joiner": lines["joiner"][1], "skew_ms": skew,
+            "host_has": hm.group(1) == "True" if hm else None, "joiner_has": hm.group(2) == "True" if hm else None,
+            "evidence": f"host: {lines['host'][0] and lines['host'][0][-70:]} | joiner: {lines['joiner'][0] and lines['joiner'][0][-70:]}"}
+
+
+def _concurrent_pickup(rep, host, client, trials=4):
+    """Two players ask for the SAME dropped item at the same moment: exactly one may end up holding it (an item duplicated by a race is the classic
+    multiplayer inventory bug). A trial only counts when both really targeted the same item."""
+    valid = 0
+    materials = ["Stone01", "Sandstone01", "Clay01", "Sand01", "Gravel01", "Silt01"]
+    for i in range(1, trials + 1):
+        r = _race_trial(host, client, materials[(i - 1) % len(materials)])
+        if not r["setup"]:
+            rep.step(f"race {i}: the host could set the item and the two pawns up", False, r["evidence"])
+            continue
+        same = bool(r["item_host"]) and r["item_host"] == r["item_joiner"]
+        if not same:
+            print(f"[nettest]   race {i}: inconclusive -- the players targeted different items ({r['item_host']} / {r['item_joiner']})", flush=True)
+            continue
+        valid += 1
+        both, neither = bool(r["host_has"]) and bool(r["joiner_has"]), not r["host_has"] and not r["joiner_has"]
+        skew = f"{r['skew_ms']} ms apart" if r["skew_ms"] is not None else "skew unknown"
+        rep.step(f"race {i}: exactly one of the two players ended up holding the item ({skew})", not both and not neither,
+                 f"host has it: {r['host_has']}, joiner has it: {r['joiner_has']}" + (" -- DUPLICATED" if both else " -- NOBODY got it" if neither else ""))
+    rep.step("the race ran with both players targeting the same item at least twice", valid >= 2, f"{valid} valid of {trials} trial(s)")
+
+
+def _save_while_connected(rep, host):
+    """Saving the world while a client is connected must succeed and must not disturb the connection."""
+    off = log_size(host)
+    console(host, f"MO.Save.SaveAs {CHURN_SLOT}")
+    m = wait_log(host, r"\[MO\.Save\.SaveAs\] (?:Overwrote|Created) '[^']+' -> (OK|FAILED)", since=off, timeout=60)
+    rep.step("host: saving the world while a client is connected succeeds", bool(m) and m.group(1) == "OK", m.group(0) if m else "no SaveAs result line")
+    time.sleep(3)
+    out = _probe(host, PROBE_CONTROLLERS)
+    mm = re.search(r"PCS=(\d+) WITHPAWN=(\d+)", out)
+    rep.step("host: the client is still connected, with its pawn, after the save", bool(mm) and mm.group(1) == "2" and mm.group(2) == "2", mm.group(0) if mm else out.strip()[-60:])
+
+
+def churn_test(uproject, editor_exe, rounds=3, keep=False, boot_timeout=300):
+    """Host + one client on the real gameplay map, then: N leave/rejoin cycles (the player's pawn is kept and handed back, never duplicated), several races
+    for one dropped item between the host's pawn and the joiner's (exactly one winner), and a save while both are connected. The logs of both machines
+    must show no fall-through rescue, no crash/ensure and no Error from the game's code over the whole run.
+    (A second client was the plan; the host's own pawn is the second racer instead -- a third editor-binary process does not fit in 24 GB of VRAM next to the desktop.)"""
+    rep = Report()
+    host, client = names = ("churnhost", "churnclient")
+    try:
+        print(f"[nettest] churn: host + client on the REAL gameplay map; {rounds} leave/rejoin rounds, item races, a save ...", flush=True)
+        for n, pos in zip(names, ((0, 0), (680, 0))):
+            start(n, uproject, editor_exe, pos=pos, nosteam=True)
+        if not _host_and_join(rep, host, client, "ChurnTest", boot_timeout):
+            return False
+        base_host, base_client = log_size(host), log_size(client)
+        for r in range(1, rounds + 1):
+            if not _leave_and_rejoin(rep, host, client, f"round {r}/{rounds}"):
+                break
+        _concurrent_pickup(rep, host, client)
+        _save_while_connected(rep, host)
+        for row in analyse_churn_logs(read_log_from(host, base_host), read_log_from(client, base_client)):
+            rep.step(*row)
+        return rep.ok
+    finally:
+        print(f"[nettest] churn: {'PASS' if rep.rows and rep.ok else 'FAIL'}", flush=True)
+        try:
+            console(host, f"MO.Save.Delete {CHURN_SLOT}")  # never leave the test save in the player's Load list
+        except Exception as e:  # noqa: BLE001 - cleanup must not mask the verdict
+            print(f"[nettest] could not delete test save {CHURN_SLOT}: {e}", flush=True)
+        if not keep:
+            for n in names:
+                stop(n)
+        else:
+            print(f"[nettest] --keep: instances left running (ue.py inst stop {host} / {client}); test save {CHURN_SLOT} deleted")
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------------------

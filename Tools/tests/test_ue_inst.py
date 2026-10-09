@@ -339,5 +339,44 @@ class BugReportAnalyserTests(unittest.TestCase):
         self.assertIn("saved to", m.group(4))
 
 
+class ChurnAnalyserTests(unittest.TestCase):
+    """analyse_churn_logs / log helpers: each verdict has an input that must make it FAIL."""
+
+    CLEAN = "[2026.10.09-19.00.00:000][  1]LogMOFramework: Warning: [MOCharacter] fine\n[2026.10.09-19.00.01:000][  2]LogNet: Error: some engine noise\n"
+
+    def failed(self, rows):
+        return [label for label, ok, _ in rows if not ok]
+
+    def test_clean_logs_pass_and_engine_noise_is_not_ours(self):
+        rows = ui.analyse_churn_logs(self.CLEAN, self.CLEAN)
+        self.assertEqual(self.failed(rows), [])
+        self.assertEqual(len(rows), 6)
+
+    def test_a_rescue_on_either_machine_fails(self):
+        bad = self.CLEAN + "[2026.10.09-19.00.02:000][ 3]LogMOFramework: Warning: [MOCharacter] BP_X: Fall-through detected! Found safe terrain, teleporting to X\n"
+        self.assertEqual(self.failed(ui.analyse_churn_logs(bad, self.CLEAN)), ["host: no fall-through rescue during the churn"])
+        self.assertEqual(self.failed(ui.analyse_churn_logs(self.CLEAN, bad)), ["client: no fall-through rescue during the churn"])
+
+    def test_an_ensure_or_a_crash_fails(self):
+        for line in ("LogOutputDevice: Error: Ensure condition failed: Component", "LogWindows: Error: Fatal error: [File:x] y", "Assertion failed: x"):
+            self.assertIn("host: no crash, ensure or assertion during the churn", self.failed(ui.analyse_churn_logs(self.CLEAN + line + "\n", self.CLEAN)), line)
+
+    def test_a_game_error_fails_and_repeats_are_one_line(self):
+        err = "[2026.10.09-19.00.03:111][ 4]LogMOFramework: Error: [X] something broke\n"
+        rows = ui.analyse_churn_logs(self.CLEAN + err * 3, self.CLEAN)
+        self.assertEqual(self.failed(rows), ["host: the game's own code logged no Error-level line during the churn"])
+        evidence = [e for label, ok, e in rows if "Error-level" in label and not ok][0]
+        self.assertIn("(x3)", evidence)
+
+    def test_timestamps_and_skew(self):
+        self.assertEqual(ui.log_stamp_ms("[2026.10.09-19.47.54:265][153]LogX: y"), ((19 * 60 + 47) * 60 + 54) * 1000 + 265)
+        self.assertIsNone(ui.log_stamp_ms("no stamp here"))
+
+    def test_distinct_lines_ignore_the_prefix(self):
+        import re
+        out = ui.distinct_log_lines("[2026.10.09-19.00.00:001][  1]A: Error: x\n[2026.10.09-19.00.09:999][ 77]A: Error: x\nB: ok\n", re.compile("Error:"))
+        self.assertEqual(out, {"A: Error: x": 2})
+
+
 if __name__ == "__main__":
     unittest.main()

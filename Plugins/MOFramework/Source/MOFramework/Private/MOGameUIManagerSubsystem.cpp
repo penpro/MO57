@@ -236,19 +236,24 @@ void UMOGameUIManagerSubsystem::NotifyPlayerAdded(APlayerController* PlayerContr
 
 void UMOGameUIManagerSubsystem::NotifyPlayerRemoved(APlayerController* PlayerController)
 {
-	if (TObjectPtr<UMOPrimaryGameLayout>* FoundLayout = PlayerLayouts.Find(PlayerController))
+	// RemoveAndCopyValue takes the layout out of the map in one step. The previous version kept the pointer Find() returned -- a pointer INTO the map's
+	// storage -- across Remove() and dereferenced it afterwards for the cache comparison: a read of a removed element (use after free; invisible without
+	// a sanitizer, which is why it survived). Nothing calls this yet; it is fixed so the first caller does not inherit the bug.
+	TObjectPtr<UMOPrimaryGameLayout> RemovedLayout;
+	if (!PlayerLayouts.RemoveAndCopyValue(PlayerController, RemovedLayout))
 	{
-		if (UMOPrimaryGameLayout* Layout = *FoundLayout)
-		{
-			Layout->RemoveFromParent();
-		}
-		PlayerLayouts.Remove(PlayerController);
+		return;
+	}
 
-		// Update cached reference if it was for this player
-		if (CachedPrimaryLayout.Get() == *FoundLayout)
-		{
-			CachedPrimaryLayout.Reset();
-		}
+	if (UMOPrimaryGameLayout* Layout = RemovedLayout)
+	{
+		Layout->RemoveFromParent();
+	}
+
+	// Update cached reference if it was for this player
+	if (CachedPrimaryLayout.Get() == RemovedLayout)
+	{
+		CachedPrimaryLayout.Reset();
 	}
 }
 

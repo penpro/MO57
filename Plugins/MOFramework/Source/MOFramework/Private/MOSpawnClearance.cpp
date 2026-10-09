@@ -43,13 +43,18 @@ namespace MOSpawnClearance
 		{
 			return false;
 		}
+		// BY OBJECT TYPE, not by channel. A multi-trace BY CHANNEL stops at the first BLOCKING hit: with a tree's collision, a roof or any other
+		// WorldStatic blocker over the ground, the voxel terrain behind it is never returned, so this helper answered "no ground" -- the spawn
+		// settle never found the ground under a pawn in a forest, and the fall-through rescue never found it either (the host's pawn sat under the
+		// terrain, invisible to every client). An object-type query reports every WorldStatic object on the line, blocking or not, in order from
+		// StartZ -- the same walk MO.Voxel.SurfaceZ has always done -- so the first voxel hit is the topmost terrain surface.
 		FCollisionQueryParams Params(SCENE_QUERY_STAT(MOSpawnGround), /*bTraceComplex=*/false, Ignore);
 		TArray<FHitResult> Hits;
-		World->LineTraceMultiByChannel(Hits, FVector(X, Y, StartZ), FVector(X, Y, EndZ), ECC_WorldStatic, Params);
+		World->LineTraceMultiByObjectType(Hits, FVector(X, Y, StartZ), FVector(X, Y, EndZ), FCollisionObjectQueryParams(ECC_WorldStatic), Params);
 		for (const FHitResult& Hit : Hits)
 		{
 			const AActor* HitActor = Hit.GetActor();
-			if (Hit.bBlockingHit && HitActor && HitActor->IsA<AVoxelWorld>())
+			if (HitActor && HitActor->IsA<AVoxelWorld>())
 			{
 				OutHit = Hit;
 				return true;

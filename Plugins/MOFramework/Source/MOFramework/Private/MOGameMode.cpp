@@ -992,49 +992,161 @@ void AMOGameMode::SpawnInitialPawn()
 		PC->Possess(NewPawn);
 		UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Player controller possessed initial pawn"));
 
-		// World is now spawnable — release any remote players who joined while
-		// the voxel world was still generating (co-op join-spawn, S0).
-		bWorldReadyForJoins = true;
-		FlushPendingJoinControllers();
+		// (Remote players who joined while the voxel world was generating are released in BeginLandingWait -- i.e. AFTER the host's pawn has settled:
+		// a joiner is placed relative to the host's pawn, and the host's spawn spot is only trustworthy once the ground under it has stopped changing.)
 
-		// Event-driven landing detection.
-		//
-		// Replaces the old 10Hz polling loop. The pawn spawns SpawnHeightOffset
-		// (default 200cm) above detected terrain, so it falls a moment and
-		// triggers ACharacter::LandedDelegate on contact. We bind that here and
-		// arm a single MaxLandingWaitSeconds timeout as the safety net — if no
-		// land event arrives in time, RecoverStuckSpawn runs and re-arms.
-		//
-		// Edge case: if the spawn collision handler nudged the pawn to a
-		// settled position (no falling at all), LandedDelegate would never
-		// fire — so we check IsMovingOnGround immediately and short-circuit
-		// to OnPawnLandedSafely if the pawn is already grounded at t=0.
+		// Hold the new pawn until the ground under it has settled (see SpawnSettle* in the header), then run the landing wait. A pawn type that
+		// is not an AMOCharacter has no hold mechanism: it goes straight to the landing wait, as before.
 		PendingLandingPawn = NewPawn;
 		LandingRecoveryAttempts = 0;
-
-		if (ACharacter* Character = Cast<ACharacter>(NewPawn))
+		if (AMOCharacter* MOChar = Cast<AMOCharacter>(NewPawn))
 		{
-			UCharacterMovementComponent* Movement = Character->GetCharacterMovement();
-			if (Movement && !Movement->IsFalling() && Movement->IsMovingOnGround())
-			{
-				UE_LOG(LogMOFramework, Log,
-					TEXT("[MOGameMode] Initial pawn spawned already grounded — skipping landing wait"));
-				OnPawnLandedSafely();
-				return;
-			}
+			BeginSpawnSettle(MOChar);
+			return;
+		}
+		BeginLandingWait(NewPawn);
+	}
+}
 
-			Character->LandedDelegate.RemoveDynamic(this, &AMOGameMode::HandlePawnLanded);
-			Character->LandedDelegate.AddDynamic(this, &AMOGameMode::HandlePawnLanded);
-			ArmLandingTimeout();
+void AMOGameMode::BeginLandingWait(APawn* NewPawn)
+{
+	// Event-driven landing detection.
+	//
+	// Replaces the old 10Hz polling loop. The pawn spawns SpawnHeightOffset
+	// (default 200cm) above detected terrain, so it falls a moment and
+	// triggers ACharacter::LandedDelegate on contact. We bind that here and
+	// arm a single MaxLandingWaitSeconds timeout as the safety net -- if no
+	// land event arrives in time, RecoverStuckSpawn runs and re-arms.
+	//
+	// Edge case: if the spawn collision handler nudged the pawn to a
+	// settled position (no falling at all), LandedDelegate would never
+	// fire -- so we check IsMovingOnGround immediately and short-circuit
+	// to OnPawnLandedSafely if the pawn is already grounded at t=0.
+	PendingLandingPawn = NewPawn;
+
+	// World is now spawnable -- release any remote players who joined while the voxel world was still generating (co-op join-spawn, S0).
+	bWorldReadyForJoins = true;
+	FlushPendingJoinControllers();
+
+	if (ACharacter* Character = Cast<ACharacter>(NewPawn))
+	{
+		UCharacterMovementComponent* Movement = Character->GetCharacterMovement();
+		if (Movement && !Movement->IsFalling() && Movement->IsMovingOnGround())
+		{
+			UE_LOG(LogMOFramework, Log,
+				TEXT("[MOGameMode] Initial pawn spawned already grounded -- skipping landing wait"));
+			OnPawnLandedSafely();
+			return;
+		}
+
+		Character->LandedDelegate.RemoveDynamic(this, &AMOGameMode::HandlePawnLanded);
+		Character->LandedDelegate.AddDynamic(this, &AMOGameMode::HandlePawnLanded);
+		ArmLandingTimeout();
+	}
+	else
+	{
+		// Non-character pawn -- no landing concept, succeed immediately.
+		UE_LOG(LogMOFramework, Log,
+			TEXT("[MOGameMode] Initial pawn is not a Character -- dismissing loading screen immediately"));
+		OnPawnLandedSafely();
+	}
+}
+
+void AMOGameMode::BeginSpawnSettle(AMOCharacter* Pawn)
+{
+	UWorld* World = GetWorld();
+	if (!World || !Pawn)
+	{
+		BeginLandingWait(Pawn);
+		return;
+	}
+	SettlingPawn = Pawn;
+	SettleElapsed = 0.f;
+	SettleStableTime = 0.f;
+	bSettleHaveGround = false;
+	Pawn->SetLoadHold(true); // no gravity, no fall-through rescue: the pawn stays exactly where it was spawned while the collision under it changes
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOGameMode] Spawn settle: holding %s at %s until the ground under it is stable (%.1fs within %.0fcm, max %.0fs)"),
+		*Pawn->GetName(), *Pawn->GetActorLocation().ToCompactString(), SpawnSettleStableSeconds, SpawnSettleToleranceCm, SpawnSettleMaxSeconds);
+	World->GetTimerManager().SetTimer(SpawnSettleTimerHandle, this, &AMOGameMode::PollSpawnSettle, 0.25f, /*bLoop=*/true);
+}
+
+void AMOGameMode::PollSpawnSettle()
+{
+	AMOCharacter* Pawn = SettlingPawn.Get();
+	UWorld* World = GetWorld();
+	if (!Pawn || !World)
+	{
+		FinishSpawnSettle(false);
+		return;
+	}
+
+	SettleElapsed += 0.25f;
+	FHitResult Hit;
+	const FVector L = Pawn->GetActorLocation();
+	if (MOSpawnClearance::TraceVoxelGround(World, L.X, L.Y, L.Z + 6000.f, L.Z - 6000.f, Pawn, Hit))
+	{
+		const float GroundZ = Hit.ImpactPoint.Z;
+		if (bSettleHaveGround && FMath::Abs(GroundZ - SettleLastGroundZ) <= SpawnSettleToleranceCm)
+		{
+			SettleStableTime += 0.25f;
 		}
 		else
 		{
-			// Non-character pawn — no landing concept, succeed immediately.
-			UE_LOG(LogMOFramework, Log,
-				TEXT("[MOGameMode] Initial pawn is not a Character — dismissing loading screen immediately"));
-			OnPawnLandedSafely();
+			if (bSettleHaveGround)
+			{
+				UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Spawn settle: ground under the pawn moved %.0f -> %.0f"), SettleLastGroundZ, GroundZ);
+			}
+			SettleStableTime = 0.f;
 		}
+		SettleLastGroundZ = GroundZ;
+		bSettleHaveGround = true;
 	}
+	else
+	{
+		bSettleHaveGround = false;
+		SettleStableTime = 0.f;
+	}
+
+	if (bSettleHaveGround && SettleStableTime >= SpawnSettleStableSeconds)
+	{
+		FinishSpawnSettle(true);
+	}
+	else if (SettleElapsed >= SpawnSettleMaxSeconds)
+	{
+		FinishSpawnSettle(bSettleHaveGround);
+	}
+}
+
+void AMOGameMode::FinishSpawnSettle(bool bGroundFound)
+{
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(SpawnSettleTimerHandle);
+	}
+	AMOCharacter* Pawn = SettlingPawn.Get();
+	SettlingPawn.Reset();
+	if (!Pawn)
+	{
+		BeginLandingWait(PendingLandingPawn.Get());
+		return;
+	}
+
+	if (bGroundFound)
+	{
+		const MOSpawnClearance::FCapsule Capsule = MOSpawnClearance::CapsuleOf(Pawn);
+		const FVector Before = Pawn->GetActorLocation();
+		const FVector Target(Before.X, Before.Y, SettleLastGroundZ + Capsule.HalfHeight + 6.0f);
+		Pawn->SetActorLocation(Target, /*bSweep=*/false, nullptr, ETeleportType::TeleportPhysics);
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOGameMode] Spawn settle: ground stable at z=%.0f after %.1fs; %s moved from z=%.0f to z=%.0f (%+.0f cm)"),
+			SettleLastGroundZ, SettleElapsed, *Pawn->GetName(), Before.Z, Target.Z, Target.Z - Before.Z);
+	}
+	else
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOGameMode] Spawn settle: no stable ground under %s after %.1fs -- releasing it where it is (the fall-through rescue is the safety net)"),
+			*Pawn->GetName(), SettleElapsed);
+	}
+	Pawn->SetLoadHold(false);
+	BeginLandingWait(Pawn);
 }
 
 // ============================================================================

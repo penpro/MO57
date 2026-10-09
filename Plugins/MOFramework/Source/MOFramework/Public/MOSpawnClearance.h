@@ -40,6 +40,11 @@ namespace MOSpawnClearance
 	/**
 	 * First VOXEL-terrain hit by a vertical trace at (X, Y). Trees, rocks and buildings above the ground are skipped, not
 	 * mistaken for ground. Returns false if no voxel collision lies on the line (not generated near here).
+	 *
+	 * IMPLEMENTATION RULE: an object-type multi trace, never a channel one. A multi trace BY CHANNEL ends at the first BLOCKING hit, so a
+	 * tree/roof/prop over the ground hid the terrain behind it and this returned false -- the spawn settle and the fall-through rescue both
+	 * relied on it and both failed in forests (a host pawn buried under the terrain, invisible to clients). Pinned by `nettest actions`
+	 * (buried pawn under a block, old rule as control) and the `rescue_probe --hunt` over fresh worlds.
 	 */
 	MOFRAMEWORK_API bool TraceVoxelGround(const UWorld* World, float X, float Y, float StartZ, float EndZ, const AActor* Ignore, FHitResult& OutHit);
 
