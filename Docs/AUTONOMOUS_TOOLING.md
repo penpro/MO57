@@ -35,6 +35,113 @@ delta from the command's start offset (`--grep` to filter). No more guessing
 which tail lines were yours. Shell note: quote args from bash/git-bash;
 PowerShell 5.1 mangles embedded quotes in native args.
 
+### Multi-process / online-session testing (2026-10-05) — `ue.py inst` + `ue.py nettest`
+
+PIE puts every "client" in ONE process, so it can never exercise the online-subsystem path (create / find / join a
+session). `Tools/ue_inst.py` launches extra standalone game processes (`UnrealEditor.exe <proj> -game`), each with its
+own command bridge + log (`MO57_BRIDGE_DIR`, `MO57_GAMELOG`), and drives them with the same `ue.py` verbs.
+
+| Command | Does |
+|---------|------|
+| `ue.py inst start NAME [--nosteam] [--pos X,Y] [--res WxH]` | launch an instance, wait for bridge + world |
+| `ue.py inst do NAME run "MO.Session.Status"` | run any `ue.py` command against it (`py`, `run`, ...) |
+| `ue.py inst stop NAME` / `inst list` | graceful `quit`, then terminate by recorded pid only |
+| `ue.py nettest lan` | **host + client, Null OSS (`-NoSteam`), LAN beacon**: host → find → join → both see 2 players. PASS/FAIL + exit code |
+| `ue.py nettest steam-host` | one instance on **real Steam**: init, license, lobby create, listen-server travel, asserts the Steam net driver |
+| `ue.py nettest game` | **the REAL gameplay map, the way a player hits it**: Host-button path, late join, first-join pawn spawn, joiner control setup, **world seed handoff + ground-height comparison (settle time series, 3 spots, 11x11 grid)**, a WALKING client vs the server's view of it, a remote pawn 150 m from the host, leave -> pawn stays idle -> rejoin reuses it, the possession menu's list + possess requests for a remote client, and the first tutorial popup. Add `--keep` to leave both windows up for hands-on checks |
+| `ue.py nettest game --skew-seed` / `--withhold-seed` | **negative controls**: the host publishes seed+1 (client terrain must differ: ~147 m) / publishes nothing (client must apply nothing). A check that has never been seen failing proves nothing |
+| `ue.py nettest hostsave` | the Load panel's **Host** button end to end: fresh world + recruited colonist -> save -> menu -> `MO.Session.HostSave` -> client joins; asserts the save loads, the host gets its pawn back, the saved seed is what is published, terrain matches, the joiner takes a saved colonist. Deletes its `zz_nettest_hostsave` slot afterwards |
+| `ue.py nettest game --withhold-sync` | **negative control for clock/weather sync**: the host stops publishing; the client's clock AND the sky's own time of day must differ from the host's and the client must run no MO weather sync (the weather LABEL still follows: see traps) |
+| `ue.py nettest actions` | **gameplay verbs from a real CLIENT process**, each proved on the HOST with a control: pickup returns the SAME item GUID (control: not in the inventory while on the ground), craft (control: refused without ingredients/skill; after the host's `MO.Test.GrantRecipe 1 <recipe>` the joiner's queue grows), attack puts the joiner's pawn in combat |
+| `ue.py nettest soak --rounds N` | repeats fresh-random-seed host+join N times with the same two processes and compares the ground each time (intermittent bugs need a rate, not one run) |
+| `ue.py nettest features` | one real-map instance, fresh hosted world: a new game starts at 08:00 under `Clear_Skies` (polled until the transition finishes), `starter` adds 50 sticks + 20 stones (inventory counted), the Tilde popup opens on a real Slate key event and does not stack, `MO.Console.Run` strips a leading tilde and reports a result, the engine console no longer owns Tilde |
+
+Facts learned by running it (each was a silent failure before):
+- **Never fire an RPC from editor-Python, or from a console command that runs synchronously under it.** The editor script
+  guard (`GAllowActorScriptExecutionInEditor`) makes `AActor::GetFunctionCallspace` return LOCAL for every function, so
+  a "Server" RPC called from a client just runs on the client (it even looks like it worked: logs appear, on the wrong
+  machine). `MOCheatSubsystem::RunOnNextTick` exists for exactly this. Use `MO.Possess.List` / `MO.Possess.Take <guid>`
+  (deferred a tick) or the real UI. This cost a long detour once: Python-driven "RPCs never reach the server".
+- **`GAllowActorScriptExecutionInEditor` also makes server-only calls misleading from Python in general**: prefer
+  asserting on the log lines the GAME writes (host and client logs) over values read back through Python.
+- **A real keypress/click into a `-game` window (computer-use)** is the ground truth for UI paths. `request_access` for
+  `UnrealEditor.exe`; the first click may not bring the window forward (the tool reports another app as frontmost) -
+  click inside the window once more, then send the key. The grant also covers the user's editor: click only inside the
+  test window.
+- **Client-side "fall-through rescue" teleported other players' pawns under the terrain**: `AMOCharacter::CheckFallThroughSafety`
+  ran on every machine; a client has voxel collision only near its own camera, so it saw other pawns as falling with
+  no terrain and teleported them to `SafetyTeleportHeight` (Z=200), under the real surface, every ~2.5 s (237 times in
+  ~6 min, 0 on the host). Authority-only now. The server-side fallback (no terrain anywhere -> teleport to Z=200) still
+  exists and can bury a pawn when the real cause is terrain not generated yet: seen once on the HOST's own pawn
+  (47 teleports in one run, 1 in the next). Open item: freeze the pawn instead of teleporting.
+- **OnPossess/OnUnPossess run only on the server.** A remote client learns its pawn through replication
+  (OnRep_Pawn -> `AController::SetPawn`), so pawn-control setup (`CachedControllablePawn`, UI pawn caches) must also run
+  from `AMOPlayerController::SetPawn` on the owning client, or the joiner cannot control the pawn he sees.
+- **`Possess()` is authority-only**: the possession menu used to call it on the client (silent no-op). It now asks the
+  server (`AMOPlayerController::ServerPossessPawnByGuid`), whose answer is built from the SERVER's pawns.
+- **The engine destroys a leaving player's pawn** (`APlayerController::PawnLeavingGame`). `AMOPlayerController` overrides
+  it so a recruited colonist stays as an idle AI-run pawn, and joiners reuse an available pawn before spawning one.
+- **Tutorial popup order was hash-order.** `GetActiveTutorialHint` returned the first active quest in `TMap` iteration
+  order and ignored `SortOrder`; it now picks the lowest `SortOrder` (ties by QuestId), pinned by an automation test.
+- **A single Steam account cannot join its own lobby**, so `steam-host` proves everything up to the second player. The
+  real two-player test needs a second account/machine, both licensed for the App ID (or Spacewar 480).
+- **Steam never starts inside the editor/PIE process** (`FOnlineSubsystemSteam::IsEnabled` is false under `UE_EDITOR`
+  unless running as a game/server), so editor logs show Null/offline by design. Steam works in `-game` processes.
+- **`-game` of the editor binary crashes in a voxel world** (Voxel's `WITH_EDITOR` `EnsureViewportIsUpToDate` calls
+  `GEditor`, null there). The tests host on `/Game/Penumbra/Maps/TestMap` (no voxel content, real `BP_MOGameMode`; it
+  spawns no pawn). A packaged game is unaffected. `--map ''` uses the real gameplay map (will crash today).
+- **Never call `unreal.EditorLevelLibrary.*` in a `-game` process** — it dereferences GEditor and kills the process.
+  `claude_bridge.py` finds the world there via the asset registry + `find_object` instead.
+- `EditDefaultsOnly` properties (e.g. `GameplayLevelPath`) are not reachable from Python; call the UFUNCTION
+  (`unreal.MOSessionSubsystem.get(world).host_session(name, max, map)`).
+- **A simulated click proves nothing about hit-testing.** `MO.Test.ClickWidget` uses `SimulateClick` for MO buttons, so
+  a row whose button had no widget tree (clicks passed straight through) looked perfectly clickable until a real
+  mouse was used. For anything a player must click, do one real click: `request_access` for `UnrealEditor.exe`, take a
+  screenshot, click the widget in the `ue.py inst` window, then read the result from the instance log. The test
+  instances log `[MOJoinGamePanel] Buttons: ... -> Join enabled|DISABLED` for exactly this.
+- **The in-game Host button travels to the REAL gameplay map.** That used to crash a `-game` editor-binary window
+  (Voxel's `EnsureViewportIsUpToDate` dereferenced the null `GEditor`); the guard in
+  `Plugins/Voxel/.../VoxelSystemUtilities.cpp` fixed it, and `nettest game` / `nettest hostsave` now run the real map.
+  `nettest lan` still hosts the non-voxel TestMap by default (faster boot).
+- **Sessions outlive worlds.** The session lives in the online subsystem, so quit-to-menu / disconnect left a stale
+  session (host: "Already in a session" and a ghost Steam lobby). `UMOSessionSubsystem::ReleaseStaleSession()` runs
+  when the main menu loads; Host/Join also replace a stale session first. `nettest lan` covers it (quit both to the
+  menu, then host and join again).
+- **Every machine generates its OWN voxel terrain**; ground collision exists only where the Voxel world has an invoker.
+  (1) The seed used to be applied only in host-only `AMOGameMode`, so a client had no terrain (the level's `AVoxelWorld` has
+  `bCreateRuntimeOnBeginPlay` off): now `AMOGameState::WorldSeed` + `UMOWorldSeedSubsystem`. (2) The default invoker is each
+  machine's camera, so a joining client's ground kept changing for ~7-9 s after "ready" (up to 3.7 m, either direction; 3 of
+  6 fresh joins) and a remote pawn away from the host camera had no ground on the server (20 fall-through rescues in 32 s):
+  `AMOCharacter::VoxelCollisionInvoker` (`bWaitForVoxelWorld`), enabled in `NotifyControllerChanged` while a human drives the pawn.
+- **Measure ground with `MO.Voxel.SurfaceGrid` / `SurfaceZ`, which accept only voxel-collision hits.** Two checks I wrote
+  were vacuous and had to be retracted: a first-hit trace "agreed" at z=30000 (the trace origin: a PCGVolume brush) on both
+  machines; and "client pawn z == server z" passes with NO client terrain (the client just reports the server's position).
+- **Clock vs sky vs weather in co-op.** The game clock is per machine: `UMOWorldSyncSubsystem` publishes the host's clock (+ time scale) in
+  `AMOGameState` and clients snap/adopt it; without it a mid-day joiner ran its own 08:00 (control `--withhold-sync`). The SKY is checked
+  separately (`MO.Weather.SkyTime` asks the bridge what the Ultra Dynamic Sky actor shows): a clock label can agree while the sky does not.
+  **Weather is carried by Ultra Dynamic Weather's own replication** (`Ultra_Dynamic_Sky_C` / `Ultra_Dynamic_Weather_C` replicate; `BP_WeatherBridge_C`
+  does not): with the actors' replication switched off the client got the host's preset through the bridge (`SetWeatherPreset ... dispatching to
+  provider`) and stayed on its own weather, because UDW's Change Weather is server-only. So the weather LABEL is not a negative control; the
+  `--withhold-sync` weather control asserts only that the MO sync did not run. Open fork: a client-side apply in `BP_WeatherBridge` would let the
+  bridge be the single path (Wes prefers the bridge to native UDS).
+- **Stuck in a tree.** Spawns/teleports used a thin line trace; the pawn's capsule overlapped trunks. `MOSpawnClearance` ("does a capsule fit
+  here?", ring search to the nearest clear ground) is used by the join spawn, first spawn, fall-through rescue; `AMOCharacter::CheckEmbeddedSafety`
+  frees a human-driven pawn that STAYS inside solid geometry (>= 3 s). Test: `MO.Test.EmbedPawn` wraps the joiner in a cube **and pins it
+  (MOVE_None)** -- unpinned, character movement's depenetration freed it from the same block in one run and not in the next (829 cm vs 22 cm), so
+  the control was flaky. Pinned: control stays 0 cm, rescue moves ~840 cm. `MO.EmbeddedRescue.Disable 1` is the control switch.
+- **Do not trust a PASS you have not seen FAIL**: every new check here has a control that must fail (`--skew-seed`).
+- **Loading a save**: pawns respawned from a save fell ~70 m while the voxel terrain regenerated (z 1019 -> -6123) and the host's
+  pawn was teleported km away. `AMOCharacter::SetLoadHold` (no gravity, no rescue) now spans WaitForVoxelAndRegroundPawns -> FinishLoadHandoff.
+- **`claude_seq` sequences work in `-game` processes** (its `_worlds()` reuses the bridge's resolution). `ue.py seq` prints only
+  DONE/FAILED: read `inst_<name>/ue_out.txt` for a traceback. `str(<enum>)` in Python is `<MovementMode.MOVE_WALKING: 1>`.
+- `ue.py` follows the **freshest `MO57*.log`**: a restarted editor writes `MO57_2.log` while the old process is still
+  shutting down, which used to blind every log-delta verb.
+- Net-driver config traps (pinned by `Tools/tests/test_ue_inst.py`): the engine takes the FIRST `NetDriverDefinitions`
+  entry per DefName (so `!NetDriverDefinitions=ClearArray` is required), and a driver class that does not exist in
+  this engine version silently falls back to `IpNetDriver` (5.8's Steam driver is `/Script/SteamSockets.SteamSocketsNetDriver`).
+- `bIsLANMatch` must be true on the Null OSS or the host never answers a search — now derived in ONE place,
+  `UMOSessionSubsystem::IsLanMode()`.
+
 ## The three layers
 
 | Layer | Reaches | Editor state |
@@ -268,3 +375,24 @@ sequence runner) — dev-machine tooling, never ship. Prefer driving all of this
 **Fallback when NOT using the bridge:** the CommonUI menu captures viewport keyboard input, so the
 in-game `~` console can't receive typed text over a menu — run `MO.Test.*` from the **editor's Output Log
 console command box** (press Shift+F1 first if in-game to free the mouse) and read the Output Log search filter.
+
+## Packaging a Development build for real-account testing (2026-10-07)
+
+Editor closed, nothing from `ue.py inst` running (the cook wants the machine). Development config, because a Shipping build writes no
+log and a real two-account test without logs cannot be diagnosed:
+
+```powershell
+& 'D:\UnrealEngine\UE_5.8\Engine\Build\BatchFiles\RunUAT.bat' BuildCookRun -project='D:\UEProjects\MO57\MO57.uproject' `
+  -noP4 -platform=Win64 -clientconfig=Development -build -cook -stage -pak -iostore -compressed `
+  -stagingdirectory='D:\UEProjects\MO57\Saved\StagedBuilds_DevTest' -unattended -utf8output *> Saved\Logs\package.log
+```
+
+~1-3 min with a warm DDC. The exe is `StagedBuilds_DevTest\Windows\MO57.exe` (a stub; the game is `MO57\Binaries\Win64\MO57.exe`).
+Its logs land in `StagedBuilds_DevTest\Windows\MO57\Saved\Logs\MO57.log` (a second copy writes `MO57_2.log`), and its saves in the
+staged folder's own `Saved`, NOT the project's. Smoke test it with `-NoSteam -log -windowed`; a second copy joins a first with
+`MO57.exe 127.0.0.1 -NoSteam` (direct connect; the same world/seed/pawn logic as a session join).
+
+**Build race (fixed):** `Tools/Update-BuildInfo.ps1` is a PreBuildStep that runs once PER TARGET, and `BuildCookRun` builds
+`MO57Editor` and `MO57` together, so two copies wrote `MOBuildInfoGenerated.h` (timestamped, so never identical) at the same
+moment: "The process cannot access the file ... being used by another process", `BUILD FAILED` (twice in a row after one lucky
+pass). It now serialises writers with a named mutex and retries on IOException.

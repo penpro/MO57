@@ -877,7 +877,9 @@ python Tools/ue.py ui menu && python Tools/ue.py ui click JoinGameButton && pyth
 | Set IsVariable | ✅ | `unreal.MOWidgetEditorUtils.set_widget_is_variable_by_name` (forced on for every contract name by `ui build`) |
 | Rename widget | ✅ | `MOWidgetEditorUtils.rename_widget` |
 | Read the live tree | ✅ | `ui dump <asset>` |
-| **Remove / reparent a widget** | ❌ | no API — fix by hand once, or add `RemoveWidget`/`MoveWidget` to `MOFrameworkEditor` |
+| Remove a widget (+ subtree) | ✅ | `ui remove <asset> <widget>` (`MOWidgetEditorUtils.RemoveWidget`); then re-run `ui build` |
+| Reparent / reorder siblings | ❌ | no API — remove the later siblings and let `build` re-create them in spec order |
+| **Native UserWidget as a node** | ❌ never | a C++ `UCommonButtonBase`/`UUserWidget` class has no widget tree: invisible to the mouse. Use a Widget Blueprint (`MOButton`). `build` refuses it, `check` flags it |
 
 Runtime queries need a *painted* PIE viewport: `ui menu` closes asset tabs first (a tab in front of the level
 viewport makes `FindWidget` match nothing). The old `inspect_widget_blueprints.py` / `setup_widget_bindings.py`

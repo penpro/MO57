@@ -53,6 +53,7 @@ python Tools/ue.py ui stop
 | `dump <asset> [--no-props] [--out f]` | the live tree as a spec-shaped dict, non-default properties only — the way to learn property names |
 | `list [folder] [parent]` | Widget Blueprints and their native parents |
 | `compile <asset>` | compile + save |
+| `remove <asset> <widget>` | delete a widget and its subtree (`MOWidgetEditorUtils.RemoveWidget`), compile, save. Use it to replace a node, then re-run `build` |
 | `open <asset>` | open the Designer tab (MCP) |
 | `shot [--asset A] [out.png]` | PNG of the editor window (MCP `CaptureEditorImage`, ~1280 px wide) |
 | `menu` | close asset tabs, begin PIE, skip the intro, wait until the main menu is painted |
@@ -94,8 +95,17 @@ class and asset references as package paths. Aliases: `MOButton`, `MOListEntry`,
 
 ## Limits (found by use)
 
-- **No remove / reparent.** The editor Python API cannot delete or move a widget, so a wrong node is fixed by
-  hand once (or by phase-2 C++ in `MOFrameworkEditor`: `RemoveWidget`, `MoveWidget`).
+- **Reparent / reorder.** `ui remove` deletes a node, but nothing moves a widget between parents or reorders
+  siblings. `build` appends new children last, so to put a node *before* an existing sibling, remove the sibling
+  too and let `build` re-create both in spec order. (z-order inside an Overlay = child order, last is topmost.)
+- **Never use a native UserWidget class as a node** (`MOCommonButton`, any C++ `UCommonButtonBase`/`UUserWidget`
+  subclass). It has no widget tree: it renders as an empty, hit-test-invisible spacer, so real mouse clicks pass
+  through it, while `SimulateClick` and bound delegates still "work". Use a Widget Blueprint (`MOButton` for
+  buttons). `build` refuses it, `check` flags it, and `Tools/tests/test_ui_tooling.py` fails a spec that has one.
+- **Simulated clicks are not real clicks.** `ui click` (`MO.Test.ClickWidget`) calls `SimulateClick` on MO buttons,
+  skipping Slate hit-testing, and its pointer path does not click CommonUI buttons at all. Anything that must work
+  with a mouse needs one real click, e.g. through computer-use on a `ue.py inst` window (see
+  `Docs/AUTONOMOUS_TOOLING.md`).
 - **PIE must be painted for runtime queries.** `FindWidget` reads painted geometry. With an asset-editor tab in
   front of the level viewport, PIE draws nothing, every widget reports zero size and `find` matches nothing.
   `ui menu` closes the tabs first; if PIE was already running behind a tab: `ui stop` → `ui menu`.
@@ -115,3 +125,20 @@ and attached both panels to `WBP_MOInGameMenu1` in one run; `check` reports `con
 In PIE: Join opens, searches (`No sessions found.`), Host opens, **Host creates the session and travels as a
 listen server with a spawned pawn** (Null OSS); populated session rows render (injected via
 `MOSessionListWidget::SetSessionResults`).
+
+## Load panel "Host" button (2026-10-07) -- a second end-to-end example, and what it taught
+
+`Content/Python/ui_specs/load_host.py` adds `HostButton` (an `MOButton`) to the existing `WBP_MOSaveSlot` next to Rename/Delete
+(attach to `VerticalBox_454`) and a collapsed `StatusText` to `WBP_LoadPanel` (attach to `VerticalBox_0`). `ui dump <asset>` first
+to find the container names. Verified with a REAL mouse click (computer-use) on the Host button of a test save in a `ue.py inst`
+window: the click reached `UMOMainMenuWidget`, `StartHosting` resumed the save, a session was created, the listen server loaded it.
+
+Pitfalls this run hit:
+- **Hard-coded switcher indices rot.** `UMOMainMenuWidget` had Load=2/Options=3 while the asset's `FocusWindowSwitcher` order was
+  Options=2/Load=3, so the Load button opened the Options panel. Every panel is now resolved from the widget
+  (`ResolvePanelIndex`). Rule: never address a child of a designer-ordered container by number.
+- **`MO.Test.ClickWidget <substring>` clicks the first visible MO button that matches, and hidden WidgetSwitcher children count
+  as visible.** `HostButton` also matched the Host Game panel's own button and hosted a *fresh* world; the later "session
+  created" PASS lines were from that wrong click. Use a real click at coordinates from `MO.Test.FindWidget`, and find the row by
+  its text first (the Load list shows the player's real saves: never click a row you did not create).
+- A screenshot beats a log line: `FindWidget 'Back'` returning 0 was the clue; one screenshot showed the Options panel.
