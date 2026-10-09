@@ -353,9 +353,15 @@ class ChurnAnalyserTests(unittest.TestCase):
         self.assertEqual(len(rows), 6)
 
     def test_a_rescue_on_either_machine_fails(self):
-        bad = self.CLEAN + "[2026.10.09-19.00.02:000][ 3]LogMOFramework: Warning: [MOCharacter] BP_X: Fall-through detected! Found safe terrain, teleporting to X\n"
-        self.assertEqual(self.failed(ui.analyse_churn_logs(bad, self.CLEAN)), ["host: no fall-through rescue during the churn"])
-        self.assertEqual(self.failed(ui.analyse_churn_logs(self.CLEAN, bad)), ["client: no fall-through rescue during the churn"])
+        bad = self.CLEAN + "[2026.10.09-19.00.02:000][ 3]LogMOFramework: Warning: [MOCharacter] BP_MOMetaHuman_Female_C_0: Fall-through detected! Found safe terrain, teleporting to X\n"
+        self.assertEqual(self.failed(ui.analyse_churn_logs(bad, self.CLEAN)), ["host: no fall-through rescue of a player or colonist during the churn"])
+        self.assertEqual(self.failed(ui.analyse_churn_logs(self.CLEAN, bad)), ["client: no fall-through rescue of a player or colonist during the churn"])
+
+    def test_a_creature_rescue_is_not_a_player_rescue(self):
+        deer = self.CLEAN + "[2026.10.09-19.00.02:000][ 3]LogMOFramework: Warning: [MOCharacter] BP_Deer_C_0: Fall-through detected! Found safe terrain, teleporting to X\n"
+        rows = ui.analyse_churn_logs(deer, self.CLEAN)
+        self.assertEqual(self.failed(rows), [])
+        self.assertIn("1 creature rescue", [e for l, ok, e in rows if "rescue of a player" in l][0] + " ")
 
     def test_an_ensure_or_a_crash_fails(self):
         for line in ("LogOutputDevice: Error: Ensure condition failed: Component", "LogWindows: Error: Fatal error: [File:x] y", "Assertion failed: x"):

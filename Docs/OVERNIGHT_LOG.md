@@ -297,7 +297,7 @@ Not building: colonist ground far from players (design fork for Wes).
   recorded in `Docs/Voxel_Plugin_Reference.md` ("Local patches"). Compiled and cooked into the packages above; nothing else exercised it.
 - **Gotcha for next time:** computer-use `open_application` on an already-running game LAUNCHES A SECOND COPY (full-screen intro). I stopped that one by pid; use `request_access` + clicks, never `open_application`, for a
   running game.
-- **Wes's report: "the pawn on the client can't see the pawn controlled by the host, but the host can see the one controlled by the client" -- diagnosed, fixed, verified.**
+- **Wes's report: "the pawn on the client can't see the pawn controlled by the host, but the host can see the one controlled by the client" -- two causes found, three fixes, verified (first half here, second half below).**
   *Reproduced* with two editor-binary -game processes (`Tools/pawnvis_probe.py`): the HOST's own pawn sat at z between -2900 and 200 while the voxel ground under it was z=1667 (the client's pawn stood on the
   ground at z=1774); the host log had "Fall-through detected! No valid terrain found, teleporting to default height Z=200" every few seconds. Both machines had the same seed and the same ground.
   *Why (two layers):* (1) the new-game spawn is traced against collision that exists BEFORE the pawn does; the pawn is the voxel invoker, so the collision around it is regenerated afterwards -- over 8 fresh worlds the
@@ -312,10 +312,18 @@ Not building: colonist ground far from players (design fork for Wes).
   `nettest actions` (buried pawn 15 m under the surface with a solid block over the ground): the OLD first-hit rule (`MO.Rescue.FirstHitOnly 1`, the control) says "No valid terrain found" and the new log line names the block;
   the fixed rule says "Found safe terrain" and puts both the host's pawn and the joiner's back on the ground. The control asserts on the rescue's LOG, not the pawn's final z, because the fixed-height fallback happens to be
   above the ground in worlds whose ground is below Z=200 and would have hidden the failure. 146/146 automation tests, 94 Python tests.
-  *Not verified:* that THIS was the only cause of what Wes saw (his run may differ; the new log line will say); the settle's effect on a client JOINING a world mid-settle beyond `nettest game/hostsave/churn` (queued below).
-- **`nettest churn` (new): rounds all PASS (3 leave/rejoin cycles keep and hand back the same pawn, save-while-connected OK, no rescues/errors on either machine) but the item RACE is still not proven.** Trial 1 passes
-  (exactly one winner, 104-302 ms apart); trials 2-4 fail in the harness's own setup (a python error in the host probe; the setup now clears other world items and uses a different material per trial -- two real harness bugs
-  fixed along the way: stacks merging, and wrapper objects never comparing equal -- the third is still hidden behind a `py-err` line). Logged, not hidden; the mode reports FAIL until the race trials run.
+  *Not verified:* that these are the ONLY causes of what Wes saw (his run may differ; the new rescue log line will say); a player's view in a real window of the fixed build (the two probe windows showed both pawns standing on grass,
+  but I did not walk a real client up to the host's pawn).
+- **SECOND half of the same bug (found by looking at the fixed build, `pawnvis_probe` with movement mode + velocity): the host's pawn was fine on the HOST (MOVE_WALKING, z=619) but the CLIENT's simulated copy of it was
+  MOVE_FALLING at vz=-4000 and z=-498790 after a minute.** A client predicts a fall for any simulated proxy with no floor under it (`UCharacterMovementComponent::SimulateMovement`: "No floor, must fall"); voxel terrain exists on a
+  machine only around ITS OWN human-driven pawns (30 m invoker) and not at all before the client's runtime is created from the host's seed; a standing pawn sends no position updates to correct the prediction. That is why the host
+  sees the client's pawn (the client drives it: the server mirrors its moves) and the client does not see the host's. *Fix:* `AMOCharacter::OnUpdateSimulatedPosition` never lets a proxy apply gravity (its height is the server's).
+  *Verified (`nettest actions`, with a control):* the client's collision is switched off under the host's pawn; with `MO.RemotePawn.SimGravity 1` (stock engine behaviour) the copy falls (z=-22637..-23505, MOVE_FALLING, vz=-4000);
+  the next position update snaps it back; with the fix and no floor it stays at the host's height (z=1510/2344). `nettest game`, `hostsave` and `churn` still pass with all three fixes.
+- **`nettest churn` (new): PASS.** 3 leave/rejoin cycles keep and hand back the same pawn (no second pawn, two players each with a pawn), save-while-connected OK and the client stays connected, 4 of 4 item races
+  have exactly one winner (180-356 ms apart; the joiner won every time -- the host's own console pickup is the slower path, so this proves "no duplication", not fairness), and no player/colonist rescue, crash/ensure or game
+  Error on either machine. It took four runs to get a trustworthy race: harness bugs found and fixed, each reported as a FAIL when it happened -- stacks merging into the previous trial's stack, `unreal` wrapper objects never
+  comparing equal (the setup deleted the item it had just dropped), `Vector` having no `.size()`, and the analyser counting the spawn manager's deer (which land off-terrain and are rescued by the same code) as a player rescue.
 - **Audit/other overnight items:** `UMOGameUIManagerSubsystem::NotifyPlayerRemoved` use-after-free read fixed (`RemoveAndCopyValue`; nothing calls it yet, and the freed memory cannot be observed deterministically, so no
   automated test -- said plainly); Voxel PCG `ensure(Component)` (57 of 72 uploaded crash reports) patched in the vendored plugin (`Plugins/Voxel/` is gitignored: recorded in `Docs/Voxel_Plugin_Reference.md`); the terraform excavation
   plan was refreshed against the code (stages 1-3 had already landed; 4-7 not started) with a remaining-work breakdown and the decisions only Wes can make; weather-bridge investigation NOT done yet (probe script ready).

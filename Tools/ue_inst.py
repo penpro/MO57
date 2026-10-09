@@ -1822,6 +1822,7 @@ CHURN_SLOT = "zz_nettest_churn"
 CHURN_FATAL_RE = re.compile(r"Fatal error|Unhandled Exception|Ensure condition failed|Assertion failed")
 CHURN_MO_ERROR_RE = re.compile(r"\bLogMO\w*: Error:")
 FALLTHROUGH_RE = re.compile(r"Fall-through detected")
+HUMAN_FALLTHROUGH_RE = re.compile(r"\[MOCharacter\] BP_MOMetaHuman\w*: Fall-through detected")  # players and colonists; the spawn manager's deer/wolves recover the same way
 LOG_STAMP_RE = re.compile(r"^\[(\d{4})\.(\d\d)\.(\d\d)-(\d\d)\.(\d\d)\.(\d\d):(\d{3})\]")
 
 
@@ -1849,8 +1850,10 @@ def analyse_churn_logs(host_log, client_log):
     rescued, nothing crashed or hit an ensure, and the game's own code logged no Error-level line."""
     rows = []
     for who, text in (("host", host_log), ("client", client_log)):
-        rescued = len(FALLTHROUGH_RE.findall(text))
-        rows.append((f"{who}: no fall-through rescue during the churn", rescued == 0, f"{rescued} rescue line(s)"))
+        rescued = len(HUMAN_FALLTHROUGH_RE.findall(text))
+        creatures = len(FALLTHROUGH_RE.findall(text)) - rescued
+        rows.append((f"{who}: no fall-through rescue of a player or colonist during the churn", rescued == 0,
+                     f"{rescued} human rescue line(s)" + (f" ({creatures} creature rescue(s): the spawn manager's animals landing off-terrain, recovered by the same code, not counted)" if creatures else "")))
         fatal = distinct_log_lines(text, CHURN_FATAL_RE)
         rows.append((f"{who}: no crash, ensure or assertion during the churn", not fatal, "; ".join(list(fatal)[:2]) or f"{len(text.splitlines())} log lines, none"))
         errors = distinct_log_lines(text, CHURN_MO_ERROR_RE)
@@ -1912,7 +1915,7 @@ def _race_trial(host, client, item_id):
         # version left earlier trials' stones and world scatter on the ground, and the two players then targeted different items)
         # (compare by NAME: every get_all_actors call returns fresh wrapper objects, so `a != w` is True for the very item just dropped)
         "wn = w.get_name() if w else 'none'; "
-        "others = [a for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOWorldItem) if a.get_name() != wn and (a.get_actor_location() - hl).size() < 2500.0]; "
+        "others = [a for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOWorldItem) if a.get_name() != wn and (((a.get_actor_location().x - hl.x) ** 2 + (a.get_actor_location().y - hl.y) ** 2 + (a.get_actor_location().z - hl.z) ** 2) ** 0.5) < 2500.0]; "
         "[a.destroy_actor() for a in others]; "
         "out('RACE_SETUP gave=%s item=%s cleared=%d' % (gave, wn, len(others)))")
     m = re.search(r"RACE_SETUP gave=(\w+) item=(\S+)", setup)
