@@ -1,5 +1,6 @@
 #include "MOTextInputDialog.h"
 #include "MOFramework.h"
+#include "MOUIUtils.h"
 
 #include "Components/EditableTextBox.h"
 #include "Components/TextBlock.h"
@@ -46,6 +47,7 @@ void UMOTextInputDialog::NativeConstruct()
 
 	if (TextInput)
 	{
+		UMOUIUtils::ApplyReadableTextInputStyle(TextInput);
 		TextInput->OnTextCommitted.RemoveDynamic(this, &UMOTextInputDialog::HandleTextCommitted);
 		TextInput->OnTextCommitted.AddDynamic(this, &UMOTextInputDialog::HandleTextCommitted);
 

@@ -1,5 +1,6 @@
 #include "MOCharacterInfoEntry.h"
 #include "MOCommonButton.h"
+#include "MOUIUtils.h"
 #include "Components/TextBlock.h"
 #include "Components/EditableTextBox.h"
 
@@ -31,6 +32,7 @@ void UMOCharacterInfoEntry::NativeConstruct()
 	// Bind text commit (Enter key)
 	if (EditTextBox)
 	{
+		UMOUIUtils::ApplyReadableTextInputStyle(EditTextBox);
 		EditTextBox->OnTextCommitted.RemoveAll(this);
 		EditTextBox->OnTextCommitted.AddDynamic(this, &UMOCharacterInfoEntry::HandleTextCommitted);
 	}

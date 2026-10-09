@@ -2,6 +2,8 @@
 #include "MOFramework.h"
 #include "MOCommonButton.h"
 #include "Components/TextBlock.h"
+#include "Components/PanelWidget.h"
+#include "Components/SizeBoxSlot.h"
 #include "Components/Image.h"
 #include "Engine/Texture2D.h"
 #include "IImageWrapper.h"
@@ -11,6 +13,31 @@
 void UMOSaveSlotEntry::NativeConstruct()
 {
 	Super::NativeConstruct();
+
+	// A long save name must be cut off inside its own column, not run on underneath the Delete/Rename/Host buttons. Set in code so every slot
+	// (and any future slot widget) gets it without per-asset setup.
+	//  - Ellipsis puts a "..." where the text is cut off.
+	//  - It is cut off where the PAINT is clipped, and a text block's geometry is wider than its column (measured in PIE: the name's box ran
+	//    ~19 px under the buttons), so the column is clipped to its bounds -- otherwise the name simply runs on beneath the buttons.
+	//  - A right margin keeps the "..." clear of the buttons.
+	for (UTextBlock* Text : { SaveNameText.Get(), TimestampText.Get(), PlayTimeText.Get() })
+	{
+		if (Text)
+		{
+			Text->SetTextOverflowPolicy(ETextOverflowPolicy::Ellipsis);
+		}
+	}
+	if (SaveNameText)
+	{
+		if (UPanelWidget* Column = SaveNameText->GetParent())
+		{
+			Column->SetClipping(EWidgetClipping::ClipToBounds);
+			if (USizeBoxSlot* ColumnSlot = Cast<USizeBoxSlot>(Column->Slot))
+			{
+				ColumnSlot->SetPadding(FMargin(0.0f, 0.0f, 32.0f, 0.0f));
+			}
+		}
+	}
 
 	// Bind rename/delete buttons if the BP author added them. These broadcast
 	// to the hosting panel (Save/Load) which decides how to confirm and execute.

@@ -2,6 +2,7 @@
 #include "MOFramework.h"
 #include "MOCommonButton.h"
 #include "MOSessionSubsystem.h"
+#include "MOUIUtils.h"
 #include "Components/EditableTextBox.h"
 #include "Components/TextBlock.h"
 
@@ -14,6 +15,9 @@ UMOHostGamePanel::UMOHostGamePanel(const FObjectInitializer& ObjectInitializer)
 void UMOHostGamePanel::NativeConstruct()
 {
 	Super::NativeConstruct();
+
+	UMOUIUtils::ApplyReadableTextInputStyle(SessionNameInputBox);
+	UMOUIUtils::ApplyReadableTextInputStyle(MaxPlayersInputBox);
 
 	if (HostButton)
 	{

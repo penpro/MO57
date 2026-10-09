@@ -70,6 +70,7 @@
 #include "Kismet/BlueprintFunctionLibrary.h"
 #include "MOUIUtils.generated.h"
 
+class UEditableTextBox;
 class UTextBlock;
 class UTexture2D;
 struct FMORecipeDefinitionRow;
@@ -193,8 +194,24 @@ public:
 	static UTexture2D* LoadItemIconSmall(FName ItemDefId);
 
 	// ============================================================================
+	// TEXT FIELDS
+	// ============================================================================
+
+	/**
+	 * The ONE definition of how a field the player types into reads: dark text on the field's light background. The engine's default UMG
+	 * style is mid-grey text on a light-grey field, which is barely legible. Call this from NativeConstruct of every widget that binds a
+	 * UEditableTextBox; it leaves the font, background and hint text alone and changes only the typed-text colours (normal, focused,
+	 * read-only), including the text style, which overrides the plain foreground colour.
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|UI|Utils")
+	static void ApplyReadableTextInputStyle(UEditableTextBox* TextBox);
+
+	// ============================================================================
 	// COLOR CONSTANTS
 	// ============================================================================
+
+	/** Colour of text typed into a field (near-black; the fields are light). */
+	static const FLinearColor ColorTextInput;
 
 	/** Color for available/sufficient quantities (white). */
 	static const FLinearColor ColorAvailable;

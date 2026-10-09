@@ -16,6 +16,12 @@
 #include "MOWorldSyncSubsystem.h"
 #include "MOPlayerController.h"
 #include "MOGameMode.h"
+#include "MOPersistenceSubsystem.h"
+#include "MOUIUtils.h"
+#include "Components/EditableTextBox.h"
+#include "IImageWrapper.h"
+#include "IImageWrapperModule.h"
+#include "Modules/ModuleManager.h"
 #include "Engine/DataTable.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -668,6 +674,96 @@ bool FMOWorldSync_SnapThresholdScalesWithTimeScale::RunTest(const FString& Param
 	TestEqual(TEXT("1x: one game-second"), UMOWorldSyncSubsystem::SnapThresholdGameSeconds(1.0f), 1.0);
 	TestEqual(TEXT("60x: scales up"), UMOWorldSyncSubsystem::SnapThresholdGameSeconds(60.0f), 15.0);
 	TestTrue(TEXT("never below one second (slow-motion clocks)"), UMOWorldSyncSubsystem::SnapThresholdGameSeconds(0.1f) >= 1.0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOPersistence_ThumbnailEncoding,
+	"MOFramework.Persistence.ThumbnailEncoding",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOPersistence_ThumbnailEncoding::RunTest(const FString& Parameters)
+{
+	// The packaged game once wrote a BLANK 193-byte thumbnail (the viewport read failed and the zeros were encoded anyway). The encoder is
+	// pure now, so pin what a thumbnail must be: square, the picture's centre (not a squashed 16:9 frame), and not uniform.
+	const int32 N = UMOPersistenceSubsystem::ThumbnailSize;
+	auto Decode = [this, N](const TArray<uint8>& Png, TArray<FColor>& Out) -> bool
+	{
+		IImageWrapperModule& Module = FModuleManager::LoadModuleChecked<IImageWrapperModule>(FName("ImageWrapper"));
+		TSharedPtr<IImageWrapper> Wrapper = Module.CreateImageWrapper(EImageFormat::PNG);
+		TArray64<uint8> Raw;
+		if (!Wrapper.IsValid() || !Wrapper->SetCompressed(Png.GetData(), Png.Num()) || !Wrapper->GetRaw(ERGBFormat::BGRA, 8, Raw)
+			|| Wrapper->GetWidth() != N || Wrapper->GetHeight() != N)
+		{
+			return false;
+		}
+		Out.SetNumUninitialized(N * N);
+		FMemory::Memcpy(Out.GetData(), Raw.GetData(), N * N * sizeof(FColor));
+		return true;
+	};
+
+	// 160x90 frame: left half red, right half blue, with a per-pixel green pattern so it compresses like a picture and not like a flat fill
+	// (a flat two-colour frame is as small as a blank one, which would make the control below meaningless).
+	const int32 W = 160, H = 90;
+	TArray<FColor> Frame;
+	Frame.SetNumUninitialized(W * H);
+	for (int32 Y = 0; Y < H; ++Y)
+	{
+		for (int32 X = 0; X < W; ++X)
+		{
+			const uint8 Detail = static_cast<uint8>((X * 7 + Y * 13 + (X * Y) % 31) & 0xFF);
+			Frame[Y * W + X] = X < W / 2 ? FColor(255, Detail, 0, 255) : FColor(0, Detail, 255, 255);
+		}
+	}
+	TArray<uint8> Png;
+	TestTrue(TEXT("a normal frame encodes"), UMOPersistenceSubsystem::EncodeThumbnailPng(W, H, Frame, Png));
+	TArray<FColor> Pixels;
+	if (TestTrue(TEXT("and decodes to a ThumbnailSize x ThumbnailSize image"), Decode(Png, Pixels)))
+	{
+		const FColor Left = Pixels[(N / 2) * N + 2], Right = Pixels[(N / 2) * N + N - 3];
+		TestTrue(TEXT("left edge of the crop is red"), Left.R > 200 && Left.B < 50);
+		TestTrue(TEXT("right edge of the crop is blue"), Right.B > 200 && Right.R < 50);
+	}
+
+	// CONTROL: the failure that shipped was a uniform image. It must encode to something far smaller than a real picture, so a size check
+	// (and a "has more than one colour" check) can tell the two apart.
+	TArray<FColor> Blank;
+	Blank.Init(FColor(0, 0, 0, 255), W * H);
+	TArray<uint8> BlankPng;
+	TestTrue(TEXT("a blank frame still encodes"), UMOPersistenceSubsystem::EncodeThumbnailPng(W, H, Blank, BlankPng));
+	TestTrue(TEXT("CONTROL: a blank frame is much smaller than a real one (the bug's 193-byte signature)"), BlankPng.Num() < Png.Num());
+
+	// Bad input is refused, not encoded as zeros.
+	TArray<uint8> Unused;
+	TestFalse(TEXT("an empty bitmap is refused"), UMOPersistenceSubsystem::EncodeThumbnailPng(W, H, TArray<FColor>(), Unused));
+	TestFalse(TEXT("a mis-sized bitmap is refused"), UMOPersistenceSubsystem::EncodeThumbnailPng(W + 1, H, Frame, Unused));
+	TestFalse(TEXT("zero width is refused"), UMOPersistenceSubsystem::EncodeThumbnailPng(0, H, Frame, Unused));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOUI_TextInputStyleIsReadable,
+	"MOFramework.UI.TextInputStyleIsReadable",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOUI_TextInputStyleIsReadable::RunTest(const FString& Parameters)
+{
+	// The default UMG field is mid-grey text on a light-grey box. Typed text takes its colour from FocusedForegroundColor while the box has
+	// focus, so that one matters most; the style is edited IN PLACE (UEditableTextBox::SetWidgetStyle leaves Slate pointing at its parameter).
+	auto Luminance = [](const FSlateColor& C) { const FLinearColor L = C.GetSpecifiedColor(); return 0.2126f * L.R + 0.7152f * L.G + 0.0722f * L.B; };
+
+	UEditableTextBox* Control = NewObject<UEditableTextBox>(GetTransientPackage());
+	// CONTROL: the engine default is a mid grey (measured: linear luminance 0.285 for all three), so "dark" below is a real change.
+	TestTrue(TEXT("CONTROL: the untouched default field's typed-text colour is NOT dark (the complaint)"),
+		Luminance(Control->WidgetStyle.FocusedForegroundColor) > 0.2f && Luminance(Control->WidgetStyle.TextStyle.ColorAndOpacity) > 0.2f);
+
+	UEditableTextBox* Box = NewObject<UEditableTextBox>(GetTransientPackage());
+	Box->TakeWidget(); // the Slate widget exists, as in a live panel, when the style is applied
+	UMOUIUtils::ApplyReadableTextInputStyle(Box);
+	TestTrue(TEXT("focused (typing) colour is dark"), Luminance(Box->WidgetStyle.FocusedForegroundColor) < 0.1f);
+	TestTrue(TEXT("unfocused colour is dark"), Luminance(Box->WidgetStyle.ForegroundColor) < 0.1f);
+	TestTrue(TEXT("text style colour is dark (it overrides the plain foreground colour)"), Luminance(Box->WidgetStyle.TextStyle.ColorAndOpacity) < 0.1f);
+	TestTrue(TEXT("the Slate widget survives a layout pass with the new style (no dangling style pointer)"), Box->TakeWidget()->GetDesiredSize().X >= 0.f);
+
+	UMOUIUtils::ApplyReadableTextInputStyle(nullptr); // null-safe
 	return true;
 }
 

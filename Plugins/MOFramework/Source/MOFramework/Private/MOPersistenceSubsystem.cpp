@@ -52,6 +52,8 @@
 
 // For screenshot capture
 #include "Engine/GameViewportClient.h"
+#include "UnrealClient.h"
+#include "Misc/App.h"
 #include "IImageWrapper.h"
 #include "IImageWrapperModule.h"
 #include "Modules/ModuleManager.h"
@@ -135,6 +137,7 @@ void UMOPersistenceSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
 void UMOPersistenceSubsystem::Deinitialize()
 {
+    ClearPendingThumbnail();
     UnbindFromWorld();
 
     if (PostWorldInitHandle.IsValid())
@@ -369,8 +372,8 @@ bool UMOPersistenceSubsystem::SaveWorldToSlot(const FString& SlotName)
     UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Saving world seed: %d"), SaveObject->WorldSeed);
     MOHARVEST_LOG(this, "Seed", "SAVE: writing WorldSeed=%d to slot='%s'", SaveObject->WorldSeed, *SlotName);
 
-    // Screenshot capture (80x80 thumbnail)
-    CaptureScreenshotForSave(SaveObject);
+    // Screenshot thumbnail: asynchronous, applied (and the slot re-written) when the viewport next draws -- see RequestThumbnailForSave.
+    // It is requested right after the write below so the slot never waits on it.
 
     // ============================================================================
     // WORLD DATA
@@ -394,6 +397,7 @@ bool UMOPersistenceSubsystem::SaveWorldToSlot(const FString& SlotName)
 
     if (bOk)
     {
+        RequestThumbnailForSave(SaveObject, SlotName);
         CurrentSlotName = SlotName;
         // (H29) Advance the in-memory authoritative snapshot to the just-written
         // state. SaveObject is a complete superset here (live captures + the
@@ -448,106 +452,99 @@ FString UMOPersistenceSubsystem::GenerateAutoSaveSlotName() const
     return FString::Printf(TEXT("AutoSave_%s_%s"), *WorldName, *Timestamp);
 }
 
-void UMOPersistenceSubsystem::CaptureScreenshotForSave(UMOWorldSaveGame* SaveObject) const
+bool UMOPersistenceSubsystem::EncodeThumbnailPng(int32 Width, int32 Height, const TArray<FColor>& Bitmap, TArray<uint8>& OutPng)
 {
-    if (!SaveObject)
+    OutPng.Reset();
+    if (Width <= 0 || Height <= 0 || Bitmap.Num() != Width * Height)
     {
-        return;
+        return false;
     }
 
-    // Get game viewport
-    UGameViewportClient* ViewportClient = GEngine ? GEngine->GameViewport : nullptr;
-    if (!ViewportClient)
-    {
-        UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] Cannot capture screenshot - no viewport client"));
-        return;
-    }
+    // Centre-crop to a square (a 16:9 frame squashed into a square looks wrong), then nearest-neighbour down to the thumbnail size.
+    const int32 Side = FMath::Min(Width, Height);
+    const int32 OffsetX = (Width - Side) / 2;
+    const int32 OffsetY = (Height - Side) / 2;
 
-    FViewport* Viewport = ViewportClient->Viewport;
-    if (!Viewport)
-    {
-        UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] Cannot capture screenshot - no viewport"));
-        return;
-    }
-
-    // Read pixels from viewport
-    TArray<FColor> Bitmap;
-    FIntVector ViewportSize(Viewport->GetSizeXY().X, Viewport->GetSizeXY().Y, 0);
-
-    if (ViewportSize.X <= 0 || ViewportSize.Y <= 0)
-    {
-        UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] Cannot capture screenshot - invalid viewport size"));
-        return;
-    }
-
-    bool bReadSuccess = Viewport->ReadPixels(Bitmap, FReadSurfaceDataFlags(RCM_UNorm, CubeFace_MAX));
-    if (!bReadSuccess || Bitmap.Num() == 0)
-    {
-        UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] Failed to read pixels from viewport"));
-        return;
-    }
-
-    // Target thumbnail size
-    constexpr int32 ThumbnailSize = 80;
-
-    // Resize to 80x80 (simple bilinear-ish downsampling)
-    TArray<FColor> ResizedBitmap;
-    ResizedBitmap.SetNumUninitialized(ThumbnailSize * ThumbnailSize);
-
-    const float ScaleX = static_cast<float>(ViewportSize.X) / ThumbnailSize;
-    const float ScaleY = static_cast<float>(ViewportSize.Y) / ThumbnailSize;
-
+    TArray<FColor> Resized;
+    Resized.SetNumUninitialized(ThumbnailSize * ThumbnailSize);
     for (int32 Y = 0; Y < ThumbnailSize; ++Y)
     {
+        const int32 SrcY = OffsetY + FMath::Min(Side - 1, (Y * Side) / ThumbnailSize);
         for (int32 X = 0; X < ThumbnailSize; ++X)
         {
-            const int32 SrcX = FMath::Clamp(FMath::FloorToInt(X * ScaleX), 0, ViewportSize.X - 1);
-            const int32 SrcY = FMath::Clamp(FMath::FloorToInt(Y * ScaleY), 0, ViewportSize.Y - 1);
-            const int32 SrcIndex = SrcY * ViewportSize.X + SrcX;
-            const int32 DstIndex = Y * ThumbnailSize + X;
-
-            if (SrcIndex < Bitmap.Num())
-            {
-                ResizedBitmap[DstIndex] = Bitmap[SrcIndex];
-            }
-            else
-            {
-                ResizedBitmap[DstIndex] = FColor::Black;
-            }
+            const int32 SrcX = OffsetX + FMath::Min(Side - 1, (X * Side) / ThumbnailSize);
+            Resized[Y * ThumbnailSize + X] = Bitmap[SrcY * Width + SrcX];
         }
     }
 
-    // Compress to PNG using ImageWrapper module
     IImageWrapperModule& ImageWrapperModule = FModuleManager::LoadModuleChecked<IImageWrapperModule>(FName("ImageWrapper"));
     TSharedPtr<IImageWrapper> ImageWrapper = ImageWrapperModule.CreateImageWrapper(EImageFormat::PNG);
-
-    if (!ImageWrapper.IsValid())
+    if (!ImageWrapper.IsValid()
+        || !ImageWrapper->SetRaw(Resized.GetData(), Resized.Num() * sizeof(FColor), ThumbnailSize, ThumbnailSize, ERGBFormat::BGRA, 8))
     {
-        UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] Failed to create image wrapper for PNG"));
+        return false;
+    }
+
+    const TArray64<uint8> Compressed = ImageWrapper->GetCompressed(90);
+    if (Compressed.Num() == 0)
+    {
+        return false;
+    }
+    OutPng.Append(Compressed.GetData(), Compressed.Num());
+    return true;
+}
+
+void UMOPersistenceSubsystem::RequestThumbnailForSave(UMOWorldSaveGame* SaveObject, const FString& SlotName)
+{
+    // No picture without a drawing viewport (dedicated server, commandlet, null RHI): the save simply has no thumbnail.
+    if (!SaveObject || !GEngine || !GEngine->GameViewport || IsRunningDedicatedServer() || IsRunningCommandlet() || !FApp::CanEverRender())
+    {
         return;
     }
 
-    // SetRaw expects raw BGRA data
-    if (!ImageWrapper->SetRaw(ResizedBitmap.GetData(), ResizedBitmap.Num() * sizeof(FColor), ThumbnailSize, ThumbnailSize, ERGBFormat::BGRA, 8))
+    PendingThumbnailSave = SaveObject; // a newer request supersedes a pending one: the thumbnail belongs to the latest save
+    PendingThumbnailSlot = SlotName;
+
+    if (!ThumbnailCaptureHandle.IsValid())
     {
-        UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] Failed to set raw image data"));
+        ThumbnailCaptureHandle = UGameViewportClient::OnScreenshotCaptured().AddUObject(this, &UMOPersistenceSubsystem::HandleThumbnailCaptured);
+    }
+    FScreenshotRequest::RequestScreenshot(/*bInShowUI=*/false);
+}
+
+void UMOPersistenceSubsystem::HandleThumbnailCaptured(int32 Width, int32 Height, const TArray<FColor>& Bitmap)
+{
+    UMOWorldSaveGame* SaveObject = PendingThumbnailSave;
+    const FString SlotName = PendingThumbnailSlot;
+    ClearPendingThumbnail(); // one shot, whatever happens next
+
+    if (!SaveObject || SlotName.IsEmpty())
+    {
         return;
     }
 
-    // Get compressed PNG data
-    TArray64<uint8> CompressedData = ImageWrapper->GetCompressed(90);
-    if (CompressedData.Num() == 0)
+    TArray<uint8> Png;
+    if (!EncodeThumbnailPng(Width, Height, Bitmap, Png))
     {
-        UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] Failed to compress image to PNG"));
+        UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] Save thumbnail: could not encode the %dx%d capture (%d pixels)"), Width, Height, Bitmap.Num());
         return;
     }
 
-    // Store in save object
-    SaveObject->ScreenshotData.Reset(CompressedData.Num());
-    SaveObject->ScreenshotData.Append(CompressedData.GetData(), CompressedData.Num());
+    SaveObject->ScreenshotData = Png;
+    const bool bOk = UGameplayStatics::SaveGameToSlot(SaveObject, SlotName, 0);
+    UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Save thumbnail for '%s': %dx%d capture -> %d bytes PNG, slot re-written ok=%d"),
+        *SlotName, Width, Height, Png.Num(), bOk ? 1 : 0);
+}
 
-    UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Captured screenshot thumbnail: %dx%d -> %d bytes PNG"),
-        ViewportSize.X, ViewportSize.Y, SaveObject->ScreenshotData.Num());
+void UMOPersistenceSubsystem::ClearPendingThumbnail()
+{
+    if (ThumbnailCaptureHandle.IsValid())
+    {
+        UGameViewportClient::OnScreenshotCaptured().Remove(ThumbnailCaptureHandle);
+        ThumbnailCaptureHandle.Reset();
+    }
+    PendingThumbnailSave = nullptr;
+    PendingThumbnailSlot.Reset();
 }
 
 bool UMOPersistenceSubsystem::LoadWorldFromSlot(const FString& SlotName)

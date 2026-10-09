@@ -22,7 +22,7 @@
  * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
  * =============================================================================
  *
- * [2024-02] SCREENSHOT DATA: ScreenshotData is PNG compressed, 80x80 pixels.
+ * [2024-02] SCREENSHOT DATA: ScreenshotData is PNG compressed, square (128x128 since 2026-10; older saves are 80x80).
  *   Use UMOUIUtils::LoadTextureFromData() to convert to UTexture2D for display.
  *
  * [2024-02] PLAYTIME: PlayTime is FTimespan, NOT float seconds. Use
@@ -89,7 +89,7 @@ struct MOFRAMEWORK_API FMOSaveMetadata
 	UPROPERTY(BlueprintReadOnly, Category="MO|Save")
 	FString ScreenshotPath;
 
-	/** Screenshot thumbnail data (PNG compressed, 80x80). */
+	/** Screenshot thumbnail data (PNG compressed, square: 128x128, older saves 80x80). */
 	UPROPERTY(BlueprintReadOnly, Category="MO|Save")
 	TArray<uint8> ScreenshotData;
 };

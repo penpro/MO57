@@ -334,7 +334,7 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Metadata")
     bool bIsAutosave = false;
 
-    /** Screenshot thumbnail data (PNG compressed, 80x80). */
+    /** Screenshot thumbnail data (PNG compressed, square: 128x128, older saves 80x80). */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Metadata")
     TArray<uint8> ScreenshotData;
 

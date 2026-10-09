@@ -54,8 +54,10 @@
  * 4. VOXEL SCULPT DATA: Large sculpts can bloat save files. Consider
  *    chunking or compression for large worlds.
  *
- * 5. SCREENSHOT CAPTURE: CaptureScreenshotForSave() may fail silently
- *    if no viewport is rendering. Check for null/empty data.
+ * 5. SCREENSHOT CAPTURE: the thumbnail is captured ASYNCHRONOUSLY (RequestThumbnailForSave): the engine services a screenshot request from
+ *    inside the viewport's own draw and hands the pixels to HandleThumbnailCaptured, which stores the PNG and re-writes the slot. Reading the
+ *    viewport directly (FViewport::ReadPixels) from game code fires an RHI ensure and yields a BLANK image in packaged builds, because the
+ *    viewport's render target only exists while it is drawing. A save made with no viewport (dedicated server, null RHI) has no thumbnail.
  *
  * RELATED FILES:
  * - MOWorldSaveGame.h - USaveGame class holding all persisted data
@@ -362,8 +364,26 @@ private:
     // Generate a unique slot name for auto-save when no slot has been set
     FString GenerateAutoSaveSlotName() const;
 
-    // Capture a screenshot and store it in the save object
-    void CaptureScreenshotForSave(UMOWorldSaveGame* SaveObject) const;
+    /**
+     * Ask the engine for a frame capture to use as this save's thumbnail (see item 5 above). The slot is written immediately WITHOUT it;
+     * when the pixels arrive (the viewport's next draw) the PNG is stored in `SaveObject` and the slot is written again. A newer request
+     * replaces a pending one, so the thumbnail always lands on the latest save.
+     */
+    void RequestThumbnailForSave(UMOWorldSaveGame* SaveObject, const FString& SlotName);
+
+public:
+    /**
+     * Centre-crop `Bitmap` (Width x Height, tightly packed) to a square, scale it to ThumbnailSize x ThumbnailSize and PNG-encode it.
+     * Pure (no engine state): the one place the thumbnail format is defined. Returns false for an empty / mis-sized bitmap.
+     */
+    static bool EncodeThumbnailPng(int32 Width, int32 Height, const TArray<FColor>& Bitmap, TArray<uint8>& OutPng);
+
+    /** Edge length (pixels) of the saved thumbnail. 128 so the picture stays crisp when the Load tile shows it at ~104 px (older saves keep their 80 px thumbnail). */
+    static constexpr int32 ThumbnailSize = 128;
+
+protected:
+    void HandleThumbnailCaptured(int32 Width, int32 Height, const TArray<FColor>& Bitmap);
+    void ClearPendingThumbnail();
 
 private:
     UPROPERTY()
@@ -376,6 +396,13 @@ private:
     TSet<FGuid> PawnInventoryGuidsAppliedThisLoad;
 
     FDelegateHandle PostWorldInitHandle;
+
+    /** The save waiting for its thumbnail (kept alive here), its slot, and our one-shot subscription to the engine's screenshot delegate. */
+    UPROPERTY()
+    TObjectPtr<UMOWorldSaveGame> PendingThumbnailSave;
+
+    FString PendingThumbnailSlot;
+    FDelegateHandle ThumbnailCaptureHandle;
 
     UPROPERTY()
     TWeakObjectPtr<UWorld> BoundWorld;

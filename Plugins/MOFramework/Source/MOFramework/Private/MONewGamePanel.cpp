@@ -3,6 +3,7 @@
 #include "MOCommonButton.h"
 #include "MOGameSettings.h"
 #include "MOSpawnManagerSubsystem.h"
+#include "MOUIUtils.h"
 #include "Components/EditableTextBox.h"
 #include "Components/TextBlock.h"
 #include "Kismet/GameplayStatics.h"
@@ -40,6 +41,9 @@ void UMONewGamePanel::NativeConstruct()
 		BackButton->OnClicked().AddUObject(this, &UMONewGamePanel::HandleBackClicked);
 		UE_LOG(LogMOFramework, Log, TEXT("[MONewGamePanel] BackButton bound"));
 	}
+
+	UMOUIUtils::ApplyReadableTextInputStyle(WorldNameInputBox);
+	UMOUIUtils::ApplyReadableTextInputStyle(SeedInputBox);
 
 	// Bind text box commit event
 	if (SeedInputBox)
