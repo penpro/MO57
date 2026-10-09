@@ -240,3 +240,23 @@ Not building: colonist ground far from players (design fork for Wes).
 - Note: the first click on the window landed on the desktop (Explorer had focus) and was ignored; the second focused the game. A real player would not hit that.
 - **Found, not fixed:** during that save the packaged build logged a non-fatal render ensure, `FD3D12DynamicRHI::RHIReadSurfaceData: Ensure condition failed: InRHITexture` (D3D12RenderTarget.cpp:599),
   most likely the save-thumbnail capture reading a null render target. The save itself succeeded (and loaded). Worth a look at the thumbnail code path; not a gameplay blocker.
+
+### 2026-10-09 follow-up: thumbnail ensure, save-tile overflow, unreadable text fields (UNCOMMITTED; verified in a packaged build with real input)
+- **Thumbnail ensure fixed at its cause.** `FViewport::ReadPixels` from game code reads the viewport's render target, which only exists while the viewport draws: RHI ensure
+  (`InRHITexture`) and a BLANK 193-byte PNG was being saved. `UMOPersistenceSubsystem` now asks the engine for a screenshot (`FScreenshotRequest` +
+  `UGameViewportClient::OnScreenshotCaptured`), encodes it with the pure `EncodeThumbnailPng` (centre-crop to a square, 80x80) and re-writes the slot. Packaged: `Save thumbnail ...:
+  1280x720 capture -> 19819 bytes PNG, slot re-written ok=1`, no ensure, and the Load tile shows the picture. Test `MOFramework.Persistence.ThumbnailEncoding` (with a blank-image control).
+- **Long save names truncate inside their column.** Ellipsis alone was not enough: the name's text box was wider than its column (measured in PIE, 389 px vs 370; it ran 19 px under the
+  buttons), so `UMOSaveSlotEntry` also clips the column and adds a right margin. PIE rects and a packaged screenshot: "ThisIsAnExtremelyLon..." ends well before Delete/Rename.
+- **Text fields readable.** Typed text in every `UEditableTextBox` is now near-black on the light field via one helper, `UMOUIUtils::ApplyReadableTextInputStyle` (called by the console popup /
+  text-input dialog, Host panel x2, New Game panel x2, character info entry). Test `MOFramework.UI.TextInputStyleIsReadable` (control: the engine default is a mid grey, luminance 0.285).
+- **Engine bug hit on the way:** `UEditableTextBox::SetWidgetStyle` hands Slate a pointer to its PARAMETER; my first version of the helper used it and the packaged game crashed the first
+  time the console popup opened (`FCachedTypefaceData`). The helper edits `WidgetStyle` in place and calls `SynchronizeProperties()` instead (see memory `ue58-ui-render-traps`).
+- 137/137 automation tests. Test saves I made were deleted (staged build folder and project `Saved/SaveGames`; Harper_Wright-01 / Test158 / v1gate untouched).
+- **Save tile layout (Wes: bigger thumbnail, text further left):** measured first, then changed as data (`Content/Python/ui_specs/save_slot_layout.py`, applied with `ui build`).
+  Before: the tile's three columns were equal shares, so the 80 px thumbnail sat at the left of a 383 px column and the text began 260 px after it, with only ~357 px of width.
+  Thumbnail 80 -> **104 px (+30%)**: the largest square that fits the tightest tile (in-game Load panel with Host hidden: row pitch 112 px, two buttons 96 px), vertically centred so it
+  does not hang from the top of the taller main-menu tile. Stored thumbnail raised 80 -> 128 px so it stays crisp at that size (older saves keep their 80 px picture).
+  Text column Fill 2 : buttons Fill 1 and the thumbnail column Auto: the name starts right next to the picture and gets ~669 px (was 357, +87%); buttons 389 -> 351 px.
+  PIE rects confirm both tile variants; packaged real-window check: the name now reads "ThisIsAnExtremelyLongSaveGameNameThat..." (was "...Lon..."), clear of Delete/Rename.
+  The thumbnail's stored PNG is 43 KB at 128 px (was ~20 KB at 80 px). Test saves deleted again; Harper_Wright-01 / Test158 / v1gate untouched. Still uncommitted.
