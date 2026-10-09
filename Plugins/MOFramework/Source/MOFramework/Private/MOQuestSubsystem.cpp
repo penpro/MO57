@@ -750,6 +750,15 @@ const FMOQuestObjective* UMOQuestSubsystem::GetCurrentSequentialObjective(
 // TUTORIAL HINT API
 // ============================================================================
 
+bool UMOQuestSubsystem::TutorialHintPrecedes(int32 SortOrderA, FName QuestIdA, int32 SortOrderB, FName QuestIdB)
+{
+	if (SortOrderA != SortOrderB)
+	{
+		return SortOrderA < SortOrderB;
+	}
+	return QuestIdA.LexicalLess(QuestIdB);
+}
+
 bool UMOQuestSubsystem::GetActiveTutorialHint(FName& OutQuestId, FName& OutObjectiveId,
 	FText& OutHintTitle, FText& OutHintBody) const
 {
@@ -763,17 +772,29 @@ bool UMOQuestSubsystem::GetActiveTutorialHint(FName& OutQuestId, FName& OutObjec
 		return false;
 	}
 
-	// Pick the first active tutorial quest with an incomplete objective that
-	// wants to surface a popup AND is currently allowed to be active (sequential
-	// gating). The "silent-gate + popup-payload" pattern relies on this — a
-	// silent sequential objective comes first, and the popup objective only
-	// shows once that gate has fired. Without honoring sequential here, the
-	// popup objective would surface immediately when the quest starts.
+	// Pick the active tutorial quest with the LOWEST SortOrder (ties: QuestId) that has an incomplete objective wanting
+	// a popup AND is currently allowed to be active (sequential gating). The "silent-gate + popup-payload" pattern
+	// relies on the sequential check -- a silent sequential objective comes first, and the popup objective only shows
+	// once that gate has fired. Without honoring sequential here, the popup objective would surface immediately.
+	//
+	// Ordering is by the designer's SortOrder column, NOT by ActiveQuests iteration order: a TMap's order is an
+	// accident of insertion/hash, so "which hint is first" used to depend on the row order of the data table.
+	const FMOQuestObjective* BestObjective = nullptr;
+	FName BestQuestId;
+	int32 BestSortOrder = TNumericLimits<int32>::Max();
+
 	for (const auto& Pair : ActiveQuests)
 	{
 		const FMOQuestState& State = Pair.Value;
 		const FMOQuestDefinitionRow* Definition = QuestDefinitions.Find(Pair.Key);
 		if (!Definition || !Definition->bIsTutorial)
+		{
+			continue;
+		}
+
+		const bool bBeatsBest = !BestObjective
+			|| TutorialHintPrecedes(Definition->SortOrder, Pair.Key, BestSortOrder, BestQuestId);
+		if (!bBeatsBest)
 		{
 			continue;
 		}
@@ -804,12 +825,20 @@ bool UMOQuestSubsystem::GetActiveTutorialHint(FName& OutQuestId, FName& OutObjec
 				}
 			}
 
-			OutQuestId = Pair.Key;
-			OutObjectiveId = Objective.ObjectiveId;
-			OutHintTitle = Objective.HintTitle;
-			OutHintBody = Objective.HintBody;
-			return true;
+			BestObjective = &Objective;
+			BestQuestId = Pair.Key;
+			BestSortOrder = Definition->SortOrder;
+			break;  // first eligible objective of this quest; other quests may still win on SortOrder
 		}
+	}
+
+	if (BestObjective)
+	{
+		OutQuestId = BestQuestId;
+		OutObjectiveId = BestObjective->ObjectiveId;
+		OutHintTitle = BestObjective->HintTitle;
+		OutHintBody = BestObjective->HintBody;
+		return true;
 	}
 
 	return false;

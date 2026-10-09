@@ -211,6 +211,9 @@ public:
 	// ============================================================================
 	// VOXEL SEED INTEGRATION
 	// ============================================================================
+	// The mechanics live in UMOWorldSeedSubsystem (shared by host and client -- every machine generates its own
+	// terrain, so a client must apply the HOST's seed). The functions below are the host-side/Blueprint API and
+	// forward to it; InitializeVoxelWorldWithSeed() additionally publishes the seed to clients via AMOGameState.
 
 	/**
 	 * Apply the pending world seed to all voxel stamp components in the level.
@@ -312,7 +315,26 @@ protected:
 	virtual void PostLogin(APlayerController* NewPlayer) override;
 	virtual void HandleSeamlessTravelPlayer(AController*& C) override;
 
+public:
+	/** A player is leaving while driving `Pawn` (called from AMOPlayerController::PawnLeavingGame). The pawn stays in
+	 *  the world; remember the pairing so the same player gets that pawn back when they return. */
+	void NotePlayerLeavingWithPawn(const APlayerController* PC, const APawn* Pawn);
+
+	/** New character for a player that has none (possession menu "Create Character"): a join-style spawn near the host,
+	 *  named, recruited, possessed and registered with persistence. Server only. */
+	APawn* CreateCharacterForPlayer(APlayerController* PC);
+
 private:
+	/** Give a joining remote player a pawn: an existing colonist nobody is driving if there is one (their own previous
+	 *  pawn first, else the nearest), otherwise spawn a new one. */
+	APawn* AssignPawnToJoiner(APlayerController* PC);
+
+	/** Where a joiner is anchored: the host's pawn (else any player pawn). Zero when no player has a pawn yet. */
+	FVector FindJoinAnchorLocation() const;
+
+	/** Stable per-player key (online id, else name) -> the pawn they last drove in this session. */
+	TMap<FString, FGuid> LastPawnByPlayerKey;
+
 	/** Common entry for both join doors: queue until world-ready, then spawn. */
 	void HandleRemotePlayerJoin(APlayerController* PC);
 

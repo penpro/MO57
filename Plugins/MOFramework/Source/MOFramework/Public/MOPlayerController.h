@@ -4,6 +4,7 @@
 #include "GameFramework/PlayerController.h"
 #include "InputActionValue.h"
 #include "MOUIContractInterface.h"
+#include "MOPossessionTypes.h"
 #include "MOPlayerController.generated.h"
 
 /**
@@ -129,6 +130,7 @@ class UInputAction;
 class UMOUIManagerComponent;
 class UMOPossessionComponent;
 class UMONotificationComponent;
+class UMOTextInputDialog;
 class UMOBuildingComponent;
 class UEnhancedInputLocalPlayerSubsystem;
 
@@ -549,6 +551,39 @@ protected:
 	virtual void SetupInputComponent() override;
 	virtual void OnPossess(APawn* InPawn) override;
 	virtual void OnUnPossess() override;
+
+	/** Runs on the server AND on the owning client (replication -> OnRep_Pawn -> SetPawn). OnPossess/OnUnPossess run
+	 *  only where Possess() was called, i.e. the server, so a remote client needs this hook to set up its pawn. */
+	virtual void SetPawn(APawn* InPawn) override;
+
+	/** The player left (server side). The engine default destroys the pawn; a recruited colonist stays instead. */
+	virtual void PawnLeavingGame() override;
+
+public:
+	// ------------------------------------------------------------------------
+	// POSSESSION MENU RPCs (called through UMOPossessionComponent::Request*)
+	// They live on the controller -- the actor that owns the client's connection -- and forward to the possession
+	// component's authority-side bodies. The server decides everything (UMOPossessionSubsystem validates); the client
+	// only asks. Verified through the real menu: a remote client's request is received, validated and applied.
+	// ------------------------------------------------------------------------
+	UFUNCTION(Server, Reliable)
+	void ServerPossessPawnByGuid(FGuid PawnGuid);
+
+	UFUNCTION(Server, Reliable)
+	void ServerCreateCharacter();
+
+	UFUNCTION(Server, Reliable)
+	void ServerRequestPossessionList();
+
+	UFUNCTION(Client, Reliable)
+	void ClientReceivePossessionList(const TArray<FMOPossessionListEntry>& Entries);
+
+protected:
+
+	/** Input routing + UI caches for the pawn this controller now drives. Shared by the server (OnPossess) and the
+	 *  owning client (SetPawn); without the client call a joiner's input never reaches his pawn. */
+	void CachePossessedPawn(APawn* InPawn);
+	void ClearPossessedPawnCache();
 	virtual void PlayerTick(float DeltaTime) override;
 
 	/**
@@ -641,6 +676,50 @@ protected:
 
 	/** Handle possess action. */
 	void HandlePossess(const FInputActionValue& Value);
+
+	// ============================================================================
+	// DEV CONSOLE POPUP (Tilde)
+	// ============================================================================
+	// A text box that pops up on the Tilde key and runs whatever you type as a console command. The key is HARD-CODED on
+	// purpose (requested): the InputKey override below, not an Input Action asset. Development builds only --
+	// compiled out of Shipping, because a typed-console is a cheat surface (see CLAUDE.md: no creative mode in shipped
+	// builds). Reuses the existing text-input modal (WBP_TextInputModal); results come back as a notification + the log.
+	// NOTE: the engine's own console was also bound to Tilde and consumed the key before this controller saw it, so Tilde
+	// is removed from [/Script/Engine.InputSettings] ConsoleKeys in DefaultInput.ini.
+
+	/** Tilde pressed: open the console popup (no-op in Shipping, or if one is already open). */
+	void HandleOpenDevConsole();
+
+public:
+	/** Sees every key before the action bindings do; this is where the hard-coded Tilde is caught. */
+	virtual bool InputKey(const FInputKeyEventArgs& Params) override;
+
+protected:
+
+	/** The modal this controller opens for the console. Hard-coded default: the project's text-input modal. */
+	UPROPERTY(EditDefaultsOnly, Category="MO|DevConsole")
+	TSoftClassPtr<UMOTextInputDialog> DevConsoleDialogClass = TSoftClassPtr<UMOTextInputDialog>(
+		FSoftObjectPath(TEXT("/MOFramework/UI/WBP_TextInputModal.WBP_TextInputModal_C")));
+
+	UFUNCTION()
+	void HandleDevConsoleConfirmed(const FText& EnteredText);
+
+public:
+	/**
+	 * What the popup should actually run: trimmed, and without the Tilde/backtick that opened it (that keystroke can arrive as a
+	 * typed character in the freshly focused text box). A leading `~` is never a valid command, so stripping it is lossless.
+	 */
+	static FString SanitizeDevConsoleInput(const FString& Raw);
+
+	/** Run one console command line as this player and report what it printed (Run in the popup calls this; tests may too). */
+	void RunDevConsoleCommand(const FString& CommandLine);
+
+protected:
+	/** The popup currently open, if any (prevents stacking a second one). */
+	TWeakObjectPtr<UMOTextInputDialog> DevConsoleDialog;
+
+	/** Last few commands, shown in the popup as a reminder. */
+	TArray<FString> DevConsoleHistory;
 
 	// ============================================================================
 	// INPUT HANDLERS - BUILDING

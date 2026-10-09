@@ -334,15 +334,19 @@ public:
 	// =========================================================================
 
 	/**
-	 * Get the active tutorial hint, if any. Picks the first tutorial quest
-	 * (bIsTutorial=true) with an active objective that has
-	 * bShowAsTutorialPopup=true.
+	 * Get the active tutorial hint, if any. Picks the tutorial quest
+	 * (bIsTutorial=true) with the LOWEST SortOrder (ties: QuestId) that has an
+	 * active objective with bShowAsTutorialPopup=true.
 	 *
 	 * @return True if a tutorial hint should be displayed.
 	 */
 	UFUNCTION(BlueprintPure, Category="MO|Quest|Tutorial")
 	bool GetActiveTutorialHint(FName& OutQuestId, FName& OutObjectiveId,
 		FText& OutHintTitle, FText& OutHintBody) const;
+
+	/** True if tutorial quest A should be shown before quest B: lower SortOrder first, ties broken by QuestId so the
+	 *  answer never depends on map/hash iteration order. */
+	static bool TutorialHintPrecedes(int32 SortOrderA, FName QuestIdA, int32 SortOrderB, FName QuestIdB);
 
 	/**
 	 * Skip the current tutorial objective — marks it complete without firing

@@ -177,6 +177,14 @@ bool UMOSpawnManagerSubsystem::ShouldCreateSubsystem(UObject* Outer) const
 
 void UMOSpawnManagerSubsystem::Tick(float DeltaTime)
 {
+	// Spawning (and the upkeep of what was spawned) is the SERVER's job. The subsystem is created in every game world, so a co-op
+	// CLIENT used to run its own spawn loop: it filled its copy of the world with creatures that exist nowhere else (invisible to the
+	// host, no AI controller -- "Wolf_C: NO CONTROLLER") on top of the real, replicated ones.
+	if (const UWorld* World = GetWorld(); World && World->GetNetMode() == NM_Client)
+	{
+		return;
+	}
+
 	TimeSinceLastCheck += DeltaTime;
 
 	// Only do expensive lookups when the spawn check interval elapses

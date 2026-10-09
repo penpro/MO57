@@ -9,6 +9,13 @@
 #include "MORecipeDatabaseSettings.h"
 #include "MOTerraformingComponent.h"
 #include "MOGameClockSubsystem.h"
+#include "MOQuestSubsystem.h"
+#include "MOPossessionTypes.h"
+#include "MOWorldSeedSubsystem.h"
+#include "MOGameState.h"
+#include "MOWorldSyncSubsystem.h"
+#include "MOPlayerController.h"
+#include "MOGameMode.h"
 #include "Engine/DataTable.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -487,6 +494,180 @@ bool FMOClock_OfflineAdvance_Cap::RunTest(const FString& Parameters)
 	// A zero cap disables offline advance entirely.
 	TestTrue(TEXT("zero cap -> 0"),
 		FMath::IsNearlyEqual(C::ComputeOfflineAdvanceSeconds(9999.0, 0.0), 0.0, 0.001));
+	return true;
+}
+
+//=============================================================================
+// Tutorial hint ordering + possession list entry
+//=============================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOQuest_TutorialHintOrdering_BySortOrderNotIteration,
+	"MOFramework.Quest.TutorialHintOrdering.BySortOrder",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOQuest_TutorialHintOrdering_BySortOrderNotIteration::RunTest(const FString& Parameters)
+{
+	using Q = UMOQuestSubsystem;
+
+	// Tutorial_Possession (SortOrder 0) must come before Tutorial_Movement (1) no matter which was activated first or
+	// how the data table happens to be ordered -- the old code returned whichever the TMap iterated first.
+	TestTrue(TEXT("possession (0) precedes movement (1)"), Q::TutorialHintPrecedes(0, TEXT("Tutorial_Possession"), 1, TEXT("Tutorial_Movement")));
+	TestFalse(TEXT("movement (1) does not precede possession (0)"), Q::TutorialHintPrecedes(1, TEXT("Tutorial_Movement"), 0, TEXT("Tutorial_Possession")));
+
+	// Equal SortOrder: deterministic by QuestId, and never "both precede each other".
+	TestTrue(TEXT("ties break by QuestId"), Q::TutorialHintPrecedes(5, TEXT("A_Quest"), 5, TEXT("B_Quest")));
+	TestFalse(TEXT("ties break by QuestId (reverse)"), Q::TutorialHintPrecedes(5, TEXT("B_Quest"), 5, TEXT("A_Quest")));
+	TestFalse(TEXT("a quest does not precede itself"), Q::TutorialHintPrecedes(5, TEXT("A_Quest"), 5, TEXT("A_Quest")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOPossessionListEntry_RoundTripsDisplayFields,
+	"MOFramework.Possession.ListEntry.RoundTrip",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOPossessionListEntry_RoundTripsDisplayFields::RunTest(const FString& Parameters)
+{
+	// The slim row a client receives must rebuild exactly the fields the pawn entry widget displays.
+	FMOPersistedPawnRecord Record;
+	Record.PawnGuid = FGuid::NewGuid();
+	Record.CharacterName = TEXT("Ada Quill");
+	Record.Gender = TEXT("Female");
+	Record.AgeInDays = 30 * 365;
+	Record.bIsDeceased = false;
+	Record.HealthPercent = 0.75f;
+	Record.StatusText = TEXT("Recruited");
+	Record.LocationName = TEXT("Riverbend");
+	Record.LastPlayedTime = FDateTime(2026, 10, 6, 12, 0, 0);
+
+	const FMOPersistedPawnRecord Back = FMOPossessionListEntry::FromRecord(Record).ToDisplayRecord();
+	TestEqual(TEXT("guid"), Back.PawnGuid, Record.PawnGuid);
+	TestEqual(TEXT("name"), Back.CharacterName, Record.CharacterName);
+	TestEqual(TEXT("gender"), Back.Gender, Record.Gender);
+	TestEqual(TEXT("age"), Back.AgeInDays, Record.AgeInDays);
+	TestEqual(TEXT("deceased"), Back.bIsDeceased, Record.bIsDeceased);
+	TestTrue(TEXT("health"), FMath::IsNearlyEqual(Back.HealthPercent, Record.HealthPercent));
+	TestEqual(TEXT("status"), Back.StatusText, Record.StatusText);
+	TestEqual(TEXT("location"), Back.LocationName, Record.LocationName);
+	TestEqual(TEXT("last played"), Back.LastPlayedTime, Record.LastPlayedTime);
+	TestTrue(TEXT("always player-controllable (the server only lists controllable pawns)"), Back.bIsPlayerControllable);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOWorldSeed_VoxelSeedStringIsDeterministic,
+	"MOFramework.WorldSeed.VoxelSeedString",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOWorldSeed_VoxelSeedStringIsDeterministic::RunTest(const FString& Parameters)
+{
+	// Host and client each turn the replicated int seed into the voxel seed string; if this were not a pure function the
+	// two machines would generate different terrain from the "same" seed.
+	const FString A1 = UMOWorldSeedSubsystem::IntSeedToVoxelSeedString(16423);
+	const FString A2 = UMOWorldSeedSubsystem::IntSeedToVoxelSeedString(16423);
+	const FString B = UMOWorldSeedSubsystem::IntSeedToVoxelSeedString(16424);
+	TestEqual(TEXT("same seed -> same string"), A1, A2);
+	TestNotEqual(TEXT("different seeds -> different strings"), A1, B);
+	TestEqual(TEXT("8 characters (the voxel plugin's exposed-seed format)"), A1.Len(), 8);
+	for (const TCHAR C : A1)
+	{
+		TestTrue(TEXT("A-Z only"), C >= TEXT('A') && C <= TEXT('Z'));
+	}
+	TestEqual(TEXT("the GameMode Blueprint forwarder agrees with the shared implementation"),
+		AMOGameMode::IntSeedToVoxelSeedString(16423), A1);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOWorldSeed_ReachesClientsThroughGameState,
+	"MOFramework.WorldSeed.Replication",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOWorldSeed_ReachesClientsThroughGameState::RunTest(const FString& Parameters)
+{
+	// The co-op terrain bug was "the seed exists only on the host". Pin the three things that carry it to clients.
+	const FProperty* Prop = AMOGameState::StaticClass()->FindPropertyByName(TEXT("WorldSeed"));
+	if (!TestNotNull(TEXT("AMOGameState::WorldSeed exists"), Prop))
+	{
+		return false;
+	}
+	TestTrue(TEXT("WorldSeed is replicated"), Prop->HasAnyPropertyFlags(CPF_Net));
+	TestTrue(TEXT("WorldSeed has an OnRep (the client regenerates terrain from it)"), Prop->HasAnyPropertyFlags(CPF_RepNotify));
+
+	const AMOGameMode* DefaultMode = GetDefault<AMOGameMode>();
+	TestTrue(TEXT("AMOGameMode uses AMOGameState, or nothing can publish the seed"),
+		DefaultMode->GameStateClass && DefaultMode->GameStateClass->IsChildOf(AMOGameState::StaticClass()));
+
+	TestFalse(TEXT("unpublished by default: a client must never generate terrain before the host has published a seed"),
+		FMOWorldSeedInfo().bPublished);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOClock_FreshWorldStartsAt8AM,
+	"MOFramework.Clock.FreshWorldStartsAt8AM",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOClock_FreshWorldStartsAt8AM::RunTest(const FString& Parameters)
+{
+	// "New games always start at 8 AM." The clock's default start is the policy for every fresh world (no save to restore).
+	const UMOGameClockSubsystem* Clock = GetDefault<UMOGameClockSubsystem>();
+	const FProperty* Prop = UMOGameClockSubsystem::StaticClass()->FindPropertyByName(TEXT("DefaultStartDateTime"));
+	if (!TestNotNull(TEXT("DefaultStartDateTime exists"), Prop))
+	{
+		return false;
+	}
+	const FDateTime* Start = Prop->ContainerPtrToValuePtr<FDateTime>(Clock);
+	TestEqual(TEXT("fresh worlds start at hour 8"), Start->GetHour(), 8);
+	TestEqual(TEXT("... and minute 0"), Start->GetMinute(), 0);
+	TestEqual(TEXT("... and second 0"), Start->GetSecond(), 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOConsole_PopupInputIsSanitised,
+	"MOFramework.Console.PopupInputIsSanitised",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOConsole_PopupInputIsSanitised::RunTest(const FString& Parameters)
+{
+	// The Tilde that opens the console popup can land in its text box as a typed character; it must not reach the console.
+	TestEqual(TEXT("plain command untouched"), AMOPlayerController::SanitizeDevConsoleInput(TEXT("starter")), FString(TEXT("starter")));
+	TestEqual(TEXT("leading backtick stripped"), AMOPlayerController::SanitizeDevConsoleInput(TEXT("`starter")), FString(TEXT("starter")));
+	TestEqual(TEXT("leading tildes and spaces stripped"), AMOPlayerController::SanitizeDevConsoleInput(TEXT("  ~~ MO.Clock.Info  ")), FString(TEXT("MO.Clock.Info")));
+	TestEqual(TEXT("only the opening key press is stripped"), AMOPlayerController::SanitizeDevConsoleInput(TEXT("a`b~c")), FString(TEXT("a`b~c")));
+	TestTrue(TEXT("a lone tilde becomes empty (nothing to run)"), AMOPlayerController::SanitizeDevConsoleInput(TEXT(" ` ")).IsEmpty());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOWorldSync_ClockAndWeatherReachClients,
+	"MOFramework.WorldSync.Replication",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOWorldSync_ClockAndWeatherReachClients::RunTest(const FString& Parameters)
+{
+	// Co-op clients used to run a private day and a private sky. The host's clock and weather travel on AMOGameState.
+	for (const TCHAR* Name : { TEXT("WorldClock"), TEXT("WorldWeather") })
+	{
+		const FProperty* Prop = AMOGameState::StaticClass()->FindPropertyByName(Name);
+		if (!TestNotNull(FString::Printf(TEXT("AMOGameState::%s exists"), Name), Prop))
+		{
+			return false;
+		}
+		TestTrue(FString::Printf(TEXT("%s is replicated"), Name), Prop->HasAnyPropertyFlags(CPF_Net));
+		TestTrue(FString::Printf(TEXT("%s has an OnRep (the client's clock / sky follows it)"), Name), Prop->HasAnyPropertyFlags(CPF_RepNotify));
+	}
+	TestFalse(TEXT("an unpublished clock must never touch a client's clock"), FMOWorldClockInfo().bPublished);
+	TestFalse(TEXT("an unpublished weather must never touch a client's sky"), FMOWorldWeatherInfo().bPublished);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOWorldSync_SnapThresholdScalesWithTimeScale,
+	"MOFramework.WorldSync.SnapThreshold",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOWorldSync_SnapThresholdScalesWithTimeScale::RunTest(const FString& Parameters)
+{
+	// Ordinary jitter between two machines is tens of milliseconds of REAL time; at 60x that is seconds of GAME time and must
+	// not read as drift, or a fast-forwarded clock would stutter. At normal speed the bar is one game-second.
+	TestEqual(TEXT("1x: one game-second"), UMOWorldSyncSubsystem::SnapThresholdGameSeconds(1.0f), 1.0);
+	TestEqual(TEXT("60x: scales up"), UMOWorldSyncSubsystem::SnapThresholdGameSeconds(60.0f), 15.0);
+	TestTrue(TEXT("never below one second (slow-motion clocks)"), UMOWorldSyncSubsystem::SnapThresholdGameSeconds(0.1f) >= 1.0);
 	return true;
 }
 

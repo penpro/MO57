@@ -18,6 +18,7 @@
 #include "MOCharacter.h"
 #include "MOPersistenceSubsystem.h"
 #include "MOPossessionSubsystem.h"
+#include "MOPossessionComponent.h"
 #include "MOIdentityRegistrySubsystem.h"
 #include "MOIdentityComponent.h"
 #include "MOIdentifiableInterface.h"
@@ -488,6 +489,14 @@ void UMOSystemMenuUIController::ClosePossessionMenu()
 	UMOPossessionMenu* MenuWidget = PossessionMenuWidget.Get();
 	PossessionMenuWidget.Reset();
 
+	if (APlayerController* OwningPC = ResolveOwningPlayerController())
+	{
+		if (UMOPossessionComponent* Possession = OwningPC->FindComponentByClass<UMOPossessionComponent>())
+		{
+			Possession->OnPossessionListReady.RemoveAll(this);
+		}
+	}
+
 	if (IsValid(MenuWidget) && MenuWidget->IsActivated())
 	{
 		PopWidgetFromLayer(MenuWidget);
@@ -509,100 +518,41 @@ bool UMOSystemMenuUIController::IsPossessionMenuOpen() const
 
 void UMOSystemMenuUIController::RefreshPossessionMenu()
 {
-	UMOPossessionMenu* MenuWidget = PossessionMenuWidget.Get();
-	if (!IsValid(MenuWidget))
+	if (!IsValid(PossessionMenuWidget.Get()))
 	{
 		return;
 	}
 
-	// Get pawn records from persistence subsystem
-	TArray<FMOPersistedPawnRecord> AllPawnRecords;
-	TSet<FGuid> KnownGuids;
-
-	UGameInstance* GameInstance = UGameplayStatics::GetGameInstance(this);
-	if (GameInstance)
+	APlayerController* PlayerController = ResolveOwningPlayerController();
+	UMOPossessionComponent* Possession = IsValid(PlayerController) ? PlayerController->FindComponentByClass<UMOPossessionComponent>() : nullptr;
+	if (!Possession)
 	{
-		UMOPersistenceSubsystem* Persistence = GameInstance->GetSubsystem<UMOPersistenceSubsystem>();
-		if (Persistence)
-		{
-			AllPawnRecords = Persistence->GetAllPawnRecords();
-			for (const FMOPersistedPawnRecord& Record : AllPawnRecords)
-			{
-				KnownGuids.Add(Record.PawnGuid);
-			}
-		}
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOSysUI] RefreshPossessionMenu: no UMOPossessionComponent on the player controller"));
+		return;
 	}
 
-	// Also scan world for possessable pawns not yet in persistence (e.g. newly recruited)
-	UWorld* World = GetWorld();
-	if (World)
+	// The rows come from the SERVER's pawns (UMOPossessionComponent): immediate on the host, a round trip on a client.
+	// A client's own local saves are not the world it is playing in.
+	Possession->OnPossessionListReady.RemoveAll(this);
+	Possession->OnPossessionListReady.AddDynamic(this, &UMOSystemMenuUIController::HandlePossessionListReady);
+	Possession->RequestPossessionList();
+}
+
+void UMOSystemMenuUIController::HandlePossessionListReady(const TArray<FMOPossessionListEntry>& Entries)
+{
+	UMOPossessionMenu* MenuWidget = PossessionMenuWidget.Get();
+	if (!IsValid(MenuWidget))
 	{
-		for (TActorIterator<APawn> It(World); It; ++It)
-		{
-			APawn* Pawn = *It;
-			if (!IsValid(Pawn) || Pawn->IsActorBeingDestroyed())
-			{
-				continue;
-			}
-
-			// Must have identity component
-			UMOIdentityComponent* IdentityComp = Pawn->FindComponentByClass<UMOIdentityComponent>();
-			if (!IdentityComp)
-			{
-				continue;
-			}
-
-			FGuid PawnGuid = IdentityComp->GetGuid();
-			if (!PawnGuid.IsValid() || KnownGuids.Contains(PawnGuid))
-			{
-				continue; // Already in persistence records
-			}
-
-			// Check if possessable via recruitment component
-			UMORecruitmentComponent* RecruitComp = Pawn->FindComponentByClass<UMORecruitmentComponent>();
-			if (RecruitComp && RecruitComp->IsPossessable())
-			{
-				// Create a temporary record for this world pawn
-				FMOPersistedPawnRecord WorldPawnRecord;
-				WorldPawnRecord.PawnGuid = PawnGuid;
-				WorldPawnRecord.Transform = Pawn->GetActorTransform();
-				WorldPawnRecord.PawnClassPath = FSoftClassPath(Pawn->GetClass());
-				WorldPawnRecord.bIsPlayerControllable = true;
-				WorldPawnRecord.bIsDeceased = false;
-
-				// Use display name from identity component, fall back to placeholder
-				FText DisplayName = IdentityComp->DisplayName;
-				if (DisplayName.IsEmpty())
-				{
-					WorldPawnRecord.CharacterName = FString::Printf(TEXT("Survivor_%s"), *PawnGuid.ToString().Right(4));
-				}
-				else
-				{
-					WorldPawnRecord.CharacterName = DisplayName.ToString();
-				}
-
-				WorldPawnRecord.StatusText = TEXT("Recruited");
-				WorldPawnRecord.LastPlayedTime = FDateTime::Now();
-
-				AllPawnRecords.Add(WorldPawnRecord);
-				KnownGuids.Add(PawnGuid);
-
-				UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] Added world pawn to possession menu: %s"), *WorldPawnRecord.CharacterName);
-			}
-		}
+		return;  // closed while the answer was in flight
 	}
 
-	// Filter to only player-controllable pawns (excludes creatures, NPCs, etc.)
-	TArray<FMOPersistedPawnRecord> PlayerPawns;
-	for (const FMOPersistedPawnRecord& Record : AllPawnRecords)
+	TArray<FMOPersistedPawnRecord> Records;
+	Records.Reserve(Entries.Num());
+	for (const FMOPossessionListEntry& Entry : Entries)
 	{
-		if (Record.bIsPlayerControllable)
-		{
-			PlayerPawns.Add(Record);
-		}
+		Records.Add(Entry.ToDisplayRecord());
 	}
-
-	MenuWidget->PopulatePawnList(PlayerPawns);
+	MenuWidget->PopulatePawnList(Records);
 }
 
 UMOPossessionMenu* UMOSystemMenuUIController::GetPossessionMenu() const
@@ -619,52 +569,18 @@ void UMOSystemMenuUIController::HandlePossessionMenuPawnSelected(const FGuid& Pa
 {
 	UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] Pawn selected for possession: %s"), *PawnGuid.ToString());
 
-	// Find and possess the pawn
-	UWorld* World = GetWorld();
-	if (!World)
-	{
-		return;
-	}
-
+	// Never PlayerController->Possess() here: it is authority-only and silently does nothing on a remote client. The
+	// component resolves it locally on the host and through an RPC on a client; the server may refuse (taken, dead...).
 	APlayerController* PlayerController = ResolveOwningPlayerController();
-	if (!IsValid(PlayerController))
+	UMOPossessionComponent* Possession = IsValid(PlayerController) ? PlayerController->FindComponentByClass<UMOPossessionComponent>() : nullptr;
+	if (!Possession || !Possession->RequestPossessPawn(PawnGuid))
 	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOSysUI] Could not request possession of pawn %s"), *PawnGuid.ToString());
 		return;
 	}
 
-	// Try to find the pawn in the world via identity registry
-	UMOIdentityRegistrySubsystem* IdentityRegistry = World->GetSubsystem<UMOIdentityRegistrySubsystem>();
-	if (IdentityRegistry)
-	{
-		AActor* FoundActor = IdentityRegistry->ResolveActorOrNull(PawnGuid);
-		if (APawn* FoundPawn = Cast<APawn>(FoundActor))
-		{
-			PlayerController->Possess(FoundPawn);
-			ClosePossessionMenu();
-			UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] Successfully possessed pawn %s"), *PawnGuid.ToString());
-			return;
-		}
-	}
-
-	// If pawn isn't in world, need to spawn it from save data
-	UGameInstance* GameInstance = UGameplayStatics::GetGameInstance(this);
-	if (GameInstance)
-	{
-		UMOPersistenceSubsystem* Persistence = GameInstance->GetSubsystem<UMOPersistenceSubsystem>();
-		if (Persistence)
-		{
-			APawn* SpawnedPawn = Persistence->SpawnPawnFromRecord(PawnGuid);
-			if (SpawnedPawn)
-			{
-				PlayerController->Possess(SpawnedPawn);
-				ClosePossessionMenu();
-				UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] Spawned and possessed pawn %s"), *PawnGuid.ToString());
-				return;
-			}
-		}
-	}
-
-	UE_LOG(LogMOFramework, Warning, TEXT("[MOSysUI] Failed to find or spawn pawn %s"), *PawnGuid.ToString());
+	// If the server accepts, the pawn change arrives through normal replication.
+	ClosePossessionMenu();
 }
 
 void UMOSystemMenuUIController::HandlePossessionMenuCreateCharacter()
@@ -672,83 +588,13 @@ void UMOSystemMenuUIController::HandlePossessionMenuCreateCharacter()
 	UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] Create new character requested"));
 
 	APlayerController* PlayerController = ResolveOwningPlayerController();
-	if (!IsValid(PlayerController))
+	UMOPossessionComponent* Possession = IsValid(PlayerController) ? PlayerController->FindComponentByClass<UMOPossessionComponent>() : nullptr;
+	if (!Possession || !Possession->RequestCreateCharacter())
 	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOSysUI] Could not request a new character (no possession component or not the local controller)"));
 		return;
 	}
-
-	UWorld* World = GetWorld();
-	if (!World)
-	{
-		return;
-	}
-
-	// Spawn a new pawn using the possession subsystem
-	UMOPossessionSubsystem* PossessionSubsystem = World->GetSubsystem<UMOPossessionSubsystem>();
-
-	// Diagnostic logging
-	UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] Spawn check: PossessionSubsystem=%s, DefaultPawnClass=%s"),
-		PossessionSubsystem ? TEXT("valid") : TEXT("NULL"),
-		DefaultPawnClassForNewCharacter ? *DefaultPawnClassForNewCharacter->GetName() : TEXT("NULL"));
-
-	if (PossessionSubsystem && DefaultPawnClassForNewCharacter)
-	{
-		APawn* NewPawn = PossessionSubsystem->ServerSpawnAndPossessPawn(
-			PlayerController,
-			DefaultPawnClassForNewCharacter,
-			300.0f,
-			FVector::ZeroVector,
-			true
-		);
-
-		if (NewPawn)
-		{
-			// Register the new pawn with the persistence subsystem
-			UGameInstance* GameInstance = UGameplayStatics::GetGameInstance(this);
-			if (GameInstance)
-			{
-				UMOPersistenceSubsystem* Persistence = GameInstance->GetSubsystem<UMOPersistenceSubsystem>();
-				if (Persistence)
-				{
-					// Get the pawn's identity GUID via interface
-					FGuid PawnGuid;
-					if (NewPawn->Implements<UMOIdentifiableInterface>())
-					{
-						if (UMOIdentityComponent* IdentityComp = IMOIdentifiableInterface::Execute_GetIdentityComponent(NewPawn))
-						{
-							PawnGuid = IdentityComp->GetOrCreateGuid();
-						}
-					}
-
-					if (PawnGuid.IsValid())
-					{
-						// Create a new pawn record
-						FMOPersistedPawnRecord NewRecord;
-						NewRecord.PawnGuid = PawnGuid;
-						NewRecord.Transform = NewPawn->GetActorTransform();
-						NewRecord.PawnClassPath = FSoftClassPath(NewPawn->GetClass());
-						NewRecord.CharacterName = FString::Printf(TEXT("Character %d"), FMath::RandRange(1, 9999));
-						NewRecord.Gender = TEXT("Unknown");
-						NewRecord.AgeInDays = FMath::RandRange(18 * 365, 40 * 365); // 18-40 years old
-						NewRecord.bIsDeceased = false;
-						NewRecord.HealthPercent = 1.0f;
-						NewRecord.StatusText = TEXT("Healthy");
-						NewRecord.LastPlayedTime = FDateTime::Now();
-
-						Persistence->RegisterPawnRecord(NewRecord);
-						UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] Registered new pawn record: %s (%s)"),
-							*NewRecord.CharacterName, *PawnGuid.ToString());
-					}
-				}
-			}
-
-			ClosePossessionMenu();
-			UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] Created and possessed new character"));
-			return;
-		}
-	}
-
-	UE_LOG(LogMOFramework, Warning, TEXT("[MOSysUI] Failed to create new character. Check DefaultPawnClassForNewCharacter is set."));
+	ClosePossessionMenu();
 }
 
 // =============================================================================

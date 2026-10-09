@@ -1,5 +1,7 @@
 #include "MOCharacter.h"
 #include "MOFramework.h"
+#include "MOSpawnClearance.h"
+#include "HAL/IConsoleManager.h"
 #include "MOInterruptibleInterface.h"
 
 #include "Camera/CameraComponent.h"
@@ -43,6 +45,7 @@
 #include "Engine/DataTable.h"
 #include "Perception/AISense_Hearing.h"
 #include "VoxelWorld.h"
+#include "Collision/VoxelCollisionInvoker.h"
 
 AMOCharacter::AMOCharacter()
 {
@@ -136,6 +139,15 @@ AMOCharacter::AMOCharacter()
 	// Navigation invoker - tells voxel world to generate navmesh around this character
 	NavigationInvoker = CreateDefaultSubobject<UNavigationInvokerComponent>(TEXT("NavigationInvoker"));
 	NavigationInvoker->SetGenerationRadii(3000.f, 5000.f); // Generate within 30m, remove beyond 50m
+
+	// Voxel collision invoker -- off until a human drives this pawn (NotifyControllerChanged). See the header comment.
+	VoxelCollisionInvoker = CreateDefaultSubobject<UVoxelCollisionInvokerComponent>(TEXT("VoxelCollisionInvoker"));
+	VoxelCollisionInvoker->SetupAttachment(RootComponent);
+	VoxelCollisionInvoker->bEnabled = false;
+	VoxelCollisionInvoker->Radius = 3000.f;           // 30 m of ground around a human-driven pawn
+	VoxelCollisionInvoker->bWaitForVoxelWorld = true; // compute missing chunks inline instead of letting the pawn fall
+	VoxelCollisionInvoker->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	VoxelCollisionInvoker->SetCanEverAffectNavigation(false);
 
 	// Held item mesh components (attached to hand sockets)
 	LeftHandMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("LeftHandMesh"));
@@ -329,6 +341,7 @@ void AMOCharacter::Tick(float DeltaTime)
 	if (bEnableFallThroughSafety)
 	{
 		CheckFallThroughSafety(DeltaTime);
+		CheckEmbeddedSafety(DeltaTime);
 	}
 
 	// Generate movement noise for AI perception
@@ -1692,6 +1705,69 @@ void AMOCharacter::ClearHeldItemMesh(EMOEquipmentSlot EquipSlot)
 // FALL-THROUGH SAFETY
 // ============================================================================
 
+namespace
+{
+	/** TEST ONLY: turns the embedded rescue off so a harness can prove the "stuck in geometry" test really sees a stuck pawn. */
+	TAutoConsoleVariable<bool> CVarDisableEmbeddedRescue(
+		TEXT("MO.EmbeddedRescue.Disable"), false,
+		TEXT("TEST ONLY: do not free a human-driven pawn that is embedded in solid geometry."), ECVF_Cheat);
+}
+
+void AMOCharacter::CheckEmbeddedSafety(float DeltaTime)
+{
+	// Server decides where a pawn is; only HUMAN-driven pawns (an AI colonist's own path-following copes, and testing every NPC would
+	// cost collision queries for nothing). Not during a load: terrain is still regenerating and the pawns are held in place.
+	if (!HasAuthority() || bSuppressFallThroughDuringLoad || !IsPlayerControlled() || CVarDisableEmbeddedRescue.GetValueOnGameThread())
+	{
+		EmbeddedSeconds = 0.f;
+		return;
+	}
+
+	EmbeddedCheckTimer += DeltaTime;
+	if (EmbeddedCheckTimer < 1.0f)
+	{
+		return;
+	}
+	const float Elapsed = EmbeddedCheckTimer;
+	EmbeddedCheckTimer = 0.f;
+
+	UWorld* World = GetWorld();
+	const MOSpawnClearance::FCapsule Capsule = MOSpawnClearance::CapsuleOf(this);
+	FString Blocker;
+	if (!World || !MOSpawnClearance::IsCapsuleBlocked(World, GetActorLocation(), Capsule, this, /*bIgnorePawns=*/true, &Blocker))
+	{
+		EmbeddedSeconds = 0.f;
+		return;
+	}
+
+	// Brief overlaps happen (a door swinging, a building being placed); only a pawn that STAYS embedded is stuck.
+	EmbeddedSeconds += Elapsed;
+	if (EmbeddedSeconds < 3.0f)
+	{
+		return;
+	}
+	EmbeddedSeconds = 0.f;
+
+	const FVector Feet = GetActorLocation() - FVector(0.f, 0.f, Capsule.HalfHeight);
+	FVector Ground;
+	if (MOSpawnClearance::FindClearGround(World, Feet, Capsule, this, Ground, 2500.0f))
+	{
+		const FVector Target = Ground + FVector(0.f, 0.f, Capsule.HalfHeight + 20.0f);
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOCharacter] %s is stuck inside %s -- moving it from %s to clear ground at %s"),
+			*GetName(), *Blocker, *GetActorLocation().ToCompactString(), *Target.ToCompactString());
+		TeleportTo(Target, GetActorRotation(), /*bIsATest=*/false, /*bNoCheck=*/true);
+		if (UCharacterMovementComponent* Move = GetCharacterMovement())
+		{
+			Move->StopMovementImmediately();
+			Move->SetMovementMode(MOVE_Falling); // land normally
+		}
+	}
+	else
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOCharacter] %s is stuck inside %s and no clear ground was found within 25 m"), *GetName(), *Blocker);
+	}
+}
+
 bool AMOCharacter::FindSafeTerrainNearLocation(const FVector& NearLocation, FVector& OutSafeLocation) const
 {
 	UWorld* World = GetWorld();
@@ -1724,6 +1800,28 @@ bool AMOCharacter::FindSafeTerrainNearLocation(const FVector& NearLocation, FVec
 		return true;
 	};
 
+	// Every spot this returns must be somewhere the pawn's CAPSULE fits. The traces below are thin lines: one that passes a few
+	// centimetres from a tree trunk hits terrain, but the capsule overlaps the trunk, and the rescue used to put the pawn into the
+	// tree where it stayed stuck (reported by Wes). Re-grounds on the voxel when it has to move.
+	const MOSpawnClearance::FCapsule Capsule = MOSpawnClearance::CapsuleOf(this);
+	auto ClearGroundFor = [&](const FHitResult& Hit, FVector& OutGround, float& OutNormalZ) -> bool
+	{
+		OutGround = Hit.Location;
+		OutNormalZ = Hit.ImpactNormal.Z;
+		if (MOSpawnClearance::IsStandingSpotClear(World, Hit.Location, Capsule, this))
+		{
+			return true;
+		}
+		FVector Moved;
+		if (MOSpawnClearance::FindClearGround(World, Hit.Location, Capsule, this, Moved, 1500.0f))
+		{
+			OutGround = Moved;
+			OutNormalZ = 1.0f; // FindClearGround only returns ground it vetted for slope
+			return true;
+		}
+		return false;
+	};
+
 	const float RaycastStartZ = 50000.0f;
 
 	// FIRST: try the immediate area directly above (handles "stuck below terrain"
@@ -1735,10 +1833,12 @@ bool AMOCharacter::FindSafeTerrainNearLocation(const FVector& NearLocation, FVec
 
 		if (World->LineTraceSingleByChannel(UpHit, UpTraceStart, UpTraceEnd, ECC_WorldStatic, QueryParams))
 		{
-			if (IsValidTerrainHit(UpHit))
+			FVector Ground;
+			float NormalZ;
+			if (IsValidTerrainHit(UpHit) && ClearGroundFor(UpHit, Ground, NormalZ))
 			{
-				const float SlopeMultiplier = 1.0f + (1.0f - UpHit.ImpactNormal.Z) * 2.5f;
-				OutSafeLocation = UpHit.Location + FVector(0.f, 0.f, SafetyTeleportHeight * SlopeMultiplier);
+				const float SlopeMultiplier = 1.0f + (1.0f - NormalZ) * 2.5f;
+				OutSafeLocation = Ground + FVector(0.f, 0.f, SafetyTeleportHeight * SlopeMultiplier);
 				return true;
 			}
 		}
@@ -1758,10 +1858,12 @@ bool AMOCharacter::FindSafeTerrainNearLocation(const FVector& NearLocation, FVec
 		FHitResult DownHit;
 		if (World->LineTraceSingleByChannel(DownHit, DownStart, DownEnd, ECC_WorldStatic, QueryParams))
 		{
-			if (IsValidTerrainHit(DownHit))
+			FVector Ground;
+			float NormalZ;
+			if (IsValidTerrainHit(DownHit) && ClearGroundFor(DownHit, Ground, NormalZ))
 			{
-				const float SlopeMultiplier = 1.0f + (1.0f - DownHit.ImpactNormal.Z) * 2.5f;
-				OutSafeLocation = DownHit.Location + FVector(0.f, 0.f, SafetyTeleportHeight * SlopeMultiplier);
+				const float SlopeMultiplier = 1.0f + (1.0f - NormalZ) * 2.5f;
+				OutSafeLocation = Ground + FVector(0.f, 0.f, SafetyTeleportHeight * SlopeMultiplier);
 				return true;
 			}
 		}
@@ -1790,13 +1892,15 @@ bool AMOCharacter::FindSafeTerrainNearLocation(const FVector& NearLocation, FVec
 		FHitResult Hit;
 		if (World->LineTraceSingleByChannel(Hit, SampleXY, TraceEnd, ECC_WorldStatic, QueryParams))
 		{
-			if (IsValidTerrainHit(Hit))
+			FVector Ground;
+			float NormalZ;
+			if (IsValidTerrainHit(Hit) && ClearGroundFor(Hit, Ground, NormalZ))
 			{
-				if (Hit.ImpactNormal.Z > BestSlopeZ)
+				if (NormalZ > BestSlopeZ)
 				{
-					BestSlopeZ = Hit.ImpactNormal.Z;
-					const float SlopeMultiplier = 1.0f + (1.0f - Hit.ImpactNormal.Z) * 2.5f;
-					BestLocation = Hit.Location + FVector(0.f, 0.f, SafetyTeleportHeight * SlopeMultiplier);
+					BestSlopeZ = NormalZ;
+					const float SlopeMultiplier = 1.0f + (1.0f - NormalZ) * 2.5f;
+					BestLocation = Ground + FVector(0.f, 0.f, SafetyTeleportHeight * SlopeMultiplier);
 					bFoundValid = true;
 				}
 			}
@@ -1815,8 +1919,61 @@ bool AMOCharacter::FindSafeTerrainNearLocation(const FVector& NearLocation, FVec
 	return false;
 }
 
+void AMOCharacter::NotifyControllerChanged()
+{
+	Super::NotifyControllerChanged();
+
+	if (VoxelCollisionInvoker)
+	{
+		const bool bHumanDriven = Controller && Controller->IsPlayerController();
+		VoxelCollisionInvoker->bEnabled = bHumanDriven;
+		UE_LOG(LogMOFramework, Verbose, TEXT("[MOCharacter] %s: voxel collision invoker %s (controller %s)"),
+			*GetName(), bHumanDriven ? TEXT("ON") : TEXT("off"), Controller ? *Controller->GetName() : TEXT("none"));
+	}
+}
+
+void AMOCharacter::SetLoadHold(bool bHold)
+{
+	bSuppressFallThroughDuringLoad = bHold;
+
+	UCharacterMovementComponent* Move = GetCharacterMovement();
+	if (!Move)
+	{
+		return;
+	}
+	if (bHold)
+	{
+		if (Move->MovementMode != MOVE_None)
+		{
+			Move->StopMovementImmediately();
+			Move->SetMovementMode(MOVE_None);
+			bMovementHeldByLoad = true;
+		}
+	}
+	else if (bMovementHeldByLoad)
+	{
+		bMovementHeldByLoad = false;
+		if (Move->MovementMode == MOVE_None)
+		{
+			Move->SetDefaultMovementMode();
+		}
+	}
+}
+
 void AMOCharacter::CheckFallThroughSafety(float DeltaTime)
 {
+	// A character's position is SERVER-authoritative (CharacterMovement replicates it; clients only predict). A client
+	// has voxel collision only around its own camera, so it sees every other pawn -- and its own, until local terrain
+	// streams in -- as "falling with no terrain below". This rescue then teleported the pawn to a fixed low height
+	// (SafetyTeleportHeight), under the real terrain, every couple of seconds: other players' characters were yanked
+	// underground on every client (measured: 237 teleports in ~6 minutes on one client, 0 on the host). Only the
+	// authority, which owns the pawn's real position, may decide it has fallen out of the world.
+	if (!HasAuthority())
+	{
+		ContinuousFallTime = 0.f;
+		return;
+	}
+
 	// Suppressed during world load: voxel collision hasn't generated yet, so
 	// the pawn LOOKS like it's falling through the world — but it's just
 	// waiting for terrain. Triggering the "find safe terrain" rescue here

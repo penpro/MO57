@@ -2,12 +2,19 @@
 #include "MOAudioSubsystem.h"
 #include "MOFramework.h"
 #include "MOVoxelReadinessSubsystem.h"
+#include "MOWorldSeedSubsystem.h"
+#include "MOSpawnClearance.h"
+#include "MOWeatherIntegrationSubsystem.h"
+#include "MOGameState.h"
 #include "MOCharacter.h"
 #include "MORecruitmentComponent.h"
 #include "MOIdentityComponent.h"
 #include "MOSpawnManagerSubsystem.h" // (H51) GenerateRandomSurvivorName — shared name generator
 #include "MOPCGInteractionSubsystem.h"
 #include "MOPersistenceSubsystem.h"
+#include "MOPossessionSubsystem.h"
+#include "GameFramework/PlayerState.h"
+#include "GameFramework/OnlineReplStructs.h"
 #include "MOQuestSubsystem.h"
 #include "MOGameSettings.h"
 #include "MOGameInstance.h"
@@ -44,6 +51,10 @@ AMOGameMode::AMOGameMode()
 	// Login/PostLogin — any join-flow logic added there must handle both paths.
 	// AMOMainMenuGameMode inherits this, which is what drives menu->game travel.
 	bUseSeamlessTravel = true;
+
+	// Replicated world state (the world seed). Clients generate their own voxel terrain, so they need the host's
+	// seed before they create it -- see UMOWorldSeedSubsystem. The Blueprint subclass does not override this.
+	GameStateClass = AMOGameState::StaticClass();
 }
 
 void AMOGameMode::BeginPlay()
@@ -193,6 +204,15 @@ void AMOGameMode::HandlePendingNewGame()
 			if (UMOQuestSubsystem* Quests = GameInstance->GetSubsystem<UMOQuestSubsystem>())
 			{
 				Quests->ResetAllQuests();
+			}
+		}
+
+		// A new game opens at 08:00 (the clock's default start) under clear skies. NEW GAME ONLY: a load restores its own weather.
+		if (UWorld* NewGameWorld = GetWorld())
+		{
+			if (UMOWeatherIntegrationSubsystem* Weather = NewGameWorld->GetSubsystem<UMOWeatherIntegrationSubsystem>())
+			{
+				Weather->ApplyNewGameStartConditions();
 			}
 		}
 
@@ -362,21 +382,21 @@ void AMOGameMode::WaitForVoxelAndRegroundPawns()
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Subscribing to OnVoxelReady for pawn regrounding..."));
 
-	// Suppress fall-through safety on every MOCharacter for the duration of
-	// the voxel-load + regrounding window. Without this, the per-character
-	// CheckFallThroughSafety tick sees the pawn falling (no voxel collision
-	// yet) and teleports it ~20m off its saved spot via FindSafeTerrainNearLocation.
+	// Hold every MOCharacter for the duration of the voxel-load + regrounding window (SetLoadHold): the
+	// per-character CheckFallThroughSafety tick would see the pawn falling (no voxel collision yet) and teleport it
+	// ~20m off its saved spot, AND with gravity on the pawns just fall away from their saved Z while the terrain
+	// regenerates (they were ~70 m down by the time RegroundAllPawns ran, outside its search window).
 	int32 SuppressedCount = 0;
 	for (TActorIterator<AMOCharacter> It(World); It; ++It)
 	{
 		if (AMOCharacter* C = *It)
 		{
-			C->bSuppressFallThroughDuringLoad = true;
+			C->SetLoadHold(true);
 			++SuppressedCount;
 		}
 	}
 	UE_LOG(LogMOFramework, Warning,
-		TEXT("[MOGameMode] Suppressed fall-through safety on %d characters during load"),
+		TEXT("[MOGameMode] Held %d characters in place (no gravity, no fall-through rescue) during load"),
 		SuppressedCount);
 
 	UMOVoxelReadinessSubsystem* Voxel = UMOVoxelReadinessSubsystem::Get(World);
@@ -869,7 +889,7 @@ void AMOGameMode::FinishLoadHandoff()
 	{
 		if (AMOCharacter* C = *It)
 		{
-			C->bSuppressFallThroughDuringLoad = false;
+			C->SetLoadHold(false);
 			++UnsuppressedCount;
 		}
 	}
@@ -1063,7 +1083,7 @@ void AMOGameMode::HandleRemotePlayerJoin(APlayerController* PC)
 		return;
 	}
 
-	SpawnJoinPawnForController(PC);
+	AssignPawnToJoiner(PC);
 }
 
 void AMOGameMode::FlushPendingJoinControllers()
@@ -1079,7 +1099,7 @@ void AMOGameMode::FlushPendingJoinControllers()
 		APlayerController* PC = WeakPC.Get();
 		if (PC && !PC->GetPawn())
 		{
-			SpawnJoinPawnForController(PC);
+			AssignPawnToJoiner(PC);
 		}
 	}
 	PendingJoinControllers.Reset();
@@ -1150,6 +1170,121 @@ APawn* AMOGameMode::SpawnJoinPawnForController(APlayerController* PC)
 	return NewPawn;
 }
 
+namespace
+{
+	FString MakePlayerKey(const APlayerController* PC)
+	{
+		if (const APlayerState* PlayerState = PC ? PC->PlayerState.Get() : nullptr)
+		{
+			const FUniqueNetIdRepl& Id = PlayerState->GetUniqueId();
+			if (Id.IsValid())
+			{
+				return Id->ToString();
+			}
+			return PlayerState->GetPlayerName();
+		}
+		return FString();
+	}
+}
+
+void AMOGameMode::NotePlayerLeavingWithPawn(const APlayerController* PC, const APawn* Pawn)
+{
+	const UMOIdentityComponent* Identity = Pawn ? Pawn->FindComponentByClass<UMOIdentityComponent>() : nullptr;
+	const FString Key = MakePlayerKey(PC);
+	if (Identity && Identity->GetGuid().IsValid() && !Key.IsEmpty())
+	{
+		LastPawnByPlayerKey.Add(Key, Identity->GetGuid());
+	}
+}
+
+FVector AMOGameMode::FindJoinAnchorLocation() const
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return FVector::ZeroVector;
+	}
+	FVector Fallback = FVector::ZeroVector;
+	for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
+	{
+		const APlayerController* PC = It->Get();
+		const APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+		if (!Pawn)
+		{
+			continue;
+		}
+		if (PC->IsLocalController())
+		{
+			return Pawn->GetActorLocation();   // the host
+		}
+		if (Fallback.IsNearlyZero())
+		{
+			Fallback = Pawn->GetActorLocation();
+		}
+	}
+	return Fallback;
+}
+
+APawn* AMOGameMode::AssignPawnToJoiner(APlayerController* PC)
+{
+	if (!PC)
+	{
+		return nullptr;
+	}
+
+	UWorld* World = GetWorld();
+	if (UMOPossessionSubsystem* Possession = World ? World->GetSubsystem<UMOPossessionSubsystem>() : nullptr)
+	{
+		FGuid Preferred;
+		if (const FGuid* Previous = LastPawnByPlayerKey.Find(MakePlayerKey(PC)))
+		{
+			Preferred = *Previous;
+		}
+
+		if (APawn* Existing = Possession->FindAvailablePawnForJoiner(PC, Preferred, FindJoinAnchorLocation()))
+		{
+			PC->Possess(Existing);
+			UE_LOG(LogMOFramework, Warning,
+				TEXT("[MOGameMode] Remote player %s took existing pawn %s (previous=%s) -- no new pawn spawned"),
+				*PC->GetName(), *Existing->GetName(), Preferred.IsValid() ? TEXT("yes") : TEXT("none"));
+			return Existing;
+		}
+	}
+
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOGameMode] No available pawn for remote player %s -- spawning a new one"), *PC->GetName());
+	return SpawnJoinPawnForController(PC);
+}
+
+APawn* AMOGameMode::CreateCharacterForPlayer(APlayerController* PC)
+{
+	APawn* NewPawn = SpawnJoinPawnForController(PC);
+	if (!NewPawn)
+	{
+		return nullptr;
+	}
+
+	// Register with persistence so it shows up in the possession list and in saves.
+	UMOIdentityComponent* Identity = NewPawn->FindComponentByClass<UMOIdentityComponent>();
+	UGameInstance* GameInstance = GetGameInstance();
+	UMOPersistenceSubsystem* Persistence = GameInstance ? GameInstance->GetSubsystem<UMOPersistenceSubsystem>() : nullptr;
+	if (Identity && Persistence)
+	{
+		FMOPersistedPawnRecord Record;
+		Record.PawnGuid = Identity->GetOrCreateGuid();
+		Record.Transform = NewPawn->GetActorTransform();
+		Record.PawnClassPath = FSoftClassPath(NewPawn->GetClass());
+		Record.CharacterName = Identity->DisplayName.ToString();
+		Record.Gender = TEXT("Unknown");
+		Record.AgeInDays = FMath::RandRange(18 * 365, 40 * 365);
+		Record.bIsDeceased = false;
+		Record.HealthPercent = 1.0f;
+		Record.StatusText = TEXT("Healthy");
+		Record.LastPlayedTime = FDateTime::Now();
+		Persistence->RegisterPawnRecord(Record);
+	}
+	return NewPawn;
+}
+
 FVector AMOGameMode::FindJoinSpawnNearHost() const
 {
 	UWorld* World = GetWorld();
@@ -1168,24 +1303,32 @@ FVector AMOGameMode::FindJoinSpawnNearHost() const
 			continue;
 		}
 		const FVector Base = Anchor->GetActorLocation();
+		// The joiner's pawn must FIT where it lands: a thin line past a tree trunk finds ground the capsule cannot stand on, which
+		// is how join pawns were spawned into trees and stuck (MOSpawnClearance.h). Ground = the VOXEL surface, never a tree top.
+		const MOSpawnClearance::FCapsule JoinCapsule = MOSpawnClearance::CapsuleOf(DefaultNewGamePawnClass);
+
 		// Ring roll: close enough to share the generated area, far enough not
 		// to spawn inside the host. Ground-trace each candidate.
-		for (int32 Attempt = 0; Attempt < 8; ++Attempt)
+		for (int32 Attempt = 0; Attempt < 12; ++Attempt)
 		{
 			const float Angle = FMath::FRandRange(0.0f, 2.0f * PI);
 			const float Dist = FMath::FRandRange(600.0f, 1500.0f);
 			const FVector Candidate = Base + FVector(FMath::Cos(Angle) * Dist, FMath::Sin(Angle) * Dist, 0.0f);
 			FHitResult Hit;
-			FCollisionQueryParams QP;
-			QP.AddIgnoredActor(Anchor);
-			if (World->LineTraceSingleByChannel(Hit,
-				Candidate + FVector(0, 0, 3000.0f), Candidate - FVector(0, 0, 3000.0f),
-				ECC_WorldStatic, QP))
+			if (MOSpawnClearance::TraceVoxelGround(World, Candidate.X, Candidate.Y, Candidate.Z + 3000.0f, Candidate.Z - 3000.0f, Anchor, Hit)
+				&& Hit.ImpactNormal.Z >= 0.6f
+				&& MOSpawnClearance::IsStandingSpotClear(World, Hit.Location, JoinCapsule, Anchor))
 			{
 				return Hit.Location + FVector(0, 0, SpawnHeightOffset);
 			}
 		}
-		// Traces all missed (host mid-air?) — drop the joiner right beside them.
+		// Every candidate was blocked or missed (host mid-air? a dense wood?): nearest clear ground around the host instead.
+		FVector ClearGround;
+		const FVector AnchorFeet = Base - FVector(0.0f, 0.0f, MOSpawnClearance::CapsuleOf(Anchor).HalfHeight);
+		if (MOSpawnClearance::FindClearGround(World, AnchorFeet, JoinCapsule, Anchor, ClearGround, 2500.0f))
+		{
+			return ClearGround + FVector(0, 0, SpawnHeightOffset);
+		}
 		return Base + FVector(300.0f, 300.0f, SpawnHeightOffset);
 	}
 	return FVector::ZeroVector;
@@ -1260,13 +1403,15 @@ FVector AMOGameMode::FindSafeSpawnLocation() const
 	int32 HitsAboveWater = 0;
 	int32 HitsRejectedNotVoxel = 0;
 	int32 HitsRejectedTooSteep = 0;
+	int32 HitsRejectedBlocked = 0;
+	const MOSpawnClearance::FCapsule SpawnCapsule = MOSpawnClearance::CapsuleOf(DefaultNewGamePawnClass);
 
 	FCollisionQueryParams Params;
 	Params.bTraceComplex = false;  // Use simple collision for voxel terrain
 	Params.bReturnPhysicalMaterial = false;
 
 	// Helper lambda to validate a hit result
-	auto IsValidSpawnHit = [this, &HitsRejectedNotVoxel, &HitsRejectedTooSteep](const FHitResult& Hit) -> bool
+	auto IsValidSpawnHit = [this, World, &SpawnCapsule, &HitsRejectedNotVoxel, &HitsRejectedTooSteep, &HitsRejectedBlocked](const FHitResult& Hit) -> bool
 	{
 		// Check if we hit voxel terrain (AVoxelWorld)
 		if (bSpawnOnlyOnVoxelTerrain)
@@ -1284,6 +1429,14 @@ FVector AMOGameMode::FindSafeSpawnLocation() const
 		if (Hit.ImpactNormal.Z < MinSpawnSurfaceNormalZ)
 		{
 			++HitsRejectedTooSteep;
+			return false;
+		}
+
+		// The pawn's capsule must FIT on this ground. A line that slips past a tree trunk still hits terrain; the capsule does not
+		// slip past (MOSpawnClearance.h).
+		if (!MOSpawnClearance::IsStandingSpotClear(World, Hit.Location, SpawnCapsule, nullptr))
+		{
+			++HitsRejectedBlocked;
 			return false;
 		}
 
@@ -1627,130 +1780,12 @@ void AMOGameMode::OnPawnLandedSafely()
 
 FString AMOGameMode::IntSeedToVoxelSeedString(int32 Seed)
 {
-	// Replicate the algorithm from FVoxelExposedSeed::Randomize()
-	// Generates an 8-character uppercase string (A-Z) from the seed
-	const FRandomStream Stream(Seed);
-
-	FString Result;
-	Result.Reserve(8);
-	for (int32 Index = 0; Index < 8; Index++)
-	{
-		Result += TCHAR(Stream.RandRange(TEXT('A'), TEXT('Z')));
-	}
-
-	return Result;
+	return UMOWorldSeedSubsystem::IntSeedToVoxelSeedString(Seed);
 }
 
 int32 AMOGameMode::ApplySeedToVoxelStamps(int32 WorldSeed)
 {
-	UWorld* World = GetWorld();
-	if (!World)
-	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOGameMode] ApplySeedToVoxelStamps: No world available"));
-		return 0;
-	}
-
-	// Convert integer seed to voxel seed string format
-	const FString VoxelSeedString = IntSeedToVoxelSeedString(WorldSeed);
-
-	UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Applying voxel seed: %d (%s)"), WorldSeed, *VoxelSeedString);
-
-	int32 StampsUpdated = 0;
-	int32 TotalStampsFound = 0;
-
-	// Find all VoxelStampComponent instances in the world
-	for (TActorIterator<AActor> ActorIt(World); ActorIt; ++ActorIt)
-	{
-		AActor* Actor = *ActorIt;
-		if (!Actor)
-		{
-			continue;
-		}
-
-		// Get all stamp components on this actor
-		TArray<UVoxelStampComponent*> StampComponents;
-		Actor->GetComponents<UVoxelStampComponent>(StampComponents);
-
-		for (UVoxelStampComponent* StampComp : StampComponents)
-		{
-			if (!StampComp)
-			{
-				continue;
-			}
-
-			TotalStampsFound++;
-
-			// Get the current stamp, modify its seed
-			FVoxelStampRef StampRef = StampComp->GetStamp();
-			if (StampRef.IsValid())
-			{
-				// Log the old seed before changing
-				const FString OldSeed = StampRef->StampSeed.Seed;
-
-				// 1) Set the StampSeed (placement-RNG field).
-				StampRef->StampSeed.Seed = VoxelSeedString;
-				StampsUpdated++;
-
-				UE_LOG(LogMOFramework, Verbose, TEXT("[MOGameMode] Stamp in '%s': StampSeed '%s' -> '%s'"),
-					*Actor->GetName(), *OldSeed, *VoxelSeedString);
-
-				// 2) CRITICAL FIX (2026-05): If this stamp is a HeightGraphStamp
-				// (the level's world-gen stamp using VHG_Flat), it has its OWN
-				// "Seed" parameter override that drives terrain generation —
-				// SEPARATE from the StampSeed above. The graph asset's own
-				// Seed override is IGNORED in favor of the stamp's override.
-				// Per the user's editor screenshot, the world-gen stamp has
-				// a "Seed" parameter set inside the stamp itself (not on the
-				// underlying graph asset). Need to call SetParameter on the
-				// stamp via its IVoxelParameterOverridesOwner interface.
-				if (StampRef.IsA<FVoxelHeightGraphStamp>())
-				{
-					FVoxelHeightGraphStamp* HGStamp = StampRef.As<FVoxelHeightGraphStamp>();
-					if (HGStamp)
-					{
-						IVoxelParameterOverridesOwner* StampOwner = static_cast<IVoxelParameterOverridesOwner*>(HGStamp);
-						if (StampOwner->HasParameter(VoxelSeedParameterName))
-						{
-							FVoxelExposedSeed StampSeedValue;
-							StampSeedValue.Seed = VoxelSeedString;
-							FString StampError;
-							if (StampOwner->SetParameter(VoxelSeedParameterName, FVoxelPinValue::Make(StampSeedValue), &StampError))
-							{
-								MOHARVEST_LOG(this, "Seed",
-									"  HGStamp '%s': Set 'Seed' param='%s' (stamp's overrides now=%d) — THIS is the world-gen seed",
-									*Actor->GetName(), *VoxelSeedString,
-									StampOwner->GetParameterOverrides().GuidToValueOverride.Num());
-							}
-							else
-							{
-								MOHARVEST_LOG(this, "Seed",
-									"  HGStamp '%s': FAILED to set Seed: %s",
-									*Actor->GetName(), *StampError);
-							}
-						}
-						else
-						{
-							MOHARVEST_LOG(this, "Seed",
-								"  HGStamp '%s': no 'Seed' parameter on this stamp",
-								*Actor->GetName());
-						}
-
-						// Tell the runtime the stamp changed so it re-runs.
-						StampRef.Update();
-					}
-				}
-			}
-			else
-			{
-				UE_LOG(LogMOFramework, Verbose, TEXT("[MOGameMode] Stamp in '%s': no stamp data"),
-					*Actor->GetName());
-			}
-		}
-	}
-
-	UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Voxel seed applied to %d/%d stamps"), StampsUpdated, TotalStampsFound);
-
-	return StampsUpdated;
+	return UMOWorldSeedSubsystem::ApplySeedToStamps(GetWorld(), WorldSeed, VoxelSeedParameterName, this);
 }
 
 void AMOGameMode::DebugLogVoxelStampSeeds()
@@ -1834,218 +1869,23 @@ void AMOGameMode::InitializeVoxelWorldWithSeed()
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOGameMode] InitializeVoxelWorldWithSeed: No seed set in game settings"));
 	}
 
-	// Apply seed to all stamp components (for runtime stamps)
-	const int32 StampsUpdated = ApplySeedToVoxelStamps(WorldSeed);
-
-	// Apply seed to height graph parameters (for base terrain generation)
-	const bool bGraphParameterSet = ApplySeedToHeightGraphParameter(WorldSeed);
-
-	// Find and initialize the voxel world
-	AVoxelWorld* VoxelWorld = nullptr;
-	for (TActorIterator<AVoxelWorld> It(World); It; ++It)
+	// Every machine generates its own terrain from the seed, so tell the clients (current and future) which one this is
+	// BEFORE anything else: AMOGameState replicates it, and each client regenerates from it (UMOWorldSeedSubsystem).
+	UMOWorldSeedSubsystem* Seeds = UMOWorldSeedSubsystem::Get(World);
+	if (Seeds)
 	{
-		VoxelWorld = *It;
-		break;
+		Seeds->PublishWorldSeed(WorldSeed, VoxelSeedParameterName);
+	}
+	else
+	{
+		UE_LOG(LogMOFramework, Error, TEXT("[MOGameMode] InitializeVoxelWorldWithSeed: no UMOWorldSeedSubsystem -- clients will not get the seed"));
 	}
 
-	if (!VoxelWorld)
-	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOGameMode] InitializeVoxelWorldWithSeed: No VoxelWorld found in level"));
-		return;
-	}
-
-	// Check if runtime is already created (mid-game load scenario)
-	if (VoxelWorld->IsRuntimeCreated())
-	{
-		UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] VoxelWorld runtime already exists - destroying and recreating with seed %d"), WorldSeed);
-		VoxelWorld->DestroyRuntime();
-
-		// Re-apply seed parameters after destroying runtime (they may have been cleared)
-		ApplySeedToVoxelStamps(WorldSeed);
-		ApplySeedToHeightGraphParameter(WorldSeed);
-	}
-
-	// Create the runtime to start generation with the new seed
-	UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Creating VoxelWorld runtime with seed %d (stamps=%d, graphParam=%s)"),
-		WorldSeed, StampsUpdated, bGraphParameterSet ? TEXT("SET") : TEXT("NOT SET"));
-	MOHARVEST_LOG(this, "Seed",
-		"CreateRuntime: seed=%d stamps=%d graphParamSet=%d",
-		WorldSeed, StampsUpdated, bGraphParameterSet ? 1 : 0);
-	VoxelWorld->CreateRuntime();
+	// The host's own terrain: same shared code the clients run.
+	UMOWorldSeedSubsystem::RegenerateVoxelWorld(World, WorldSeed, VoxelSeedParameterName, this);
 }
 
 bool AMOGameMode::ApplySeedToHeightGraphParameter(int32 WorldSeed)
 {
-	// Create the seed value in Voxel's expected format
-	FVoxelExposedSeed SeedValue;
-	SeedValue.Seed = IntSeedToVoxelSeedString(WorldSeed);
-
-	UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Attempting to set seed parameter '%s' = '%s' on height graphs"),
-		*VoxelSeedParameterName.ToString(), *SeedValue.Seed);
-
-	// PACKAGED-BUILD FIX (2026-05): In packaged builds, UVoxelHeightGraph
-	// assets are loaded LAZILY — the height graph referenced by the level's
-	// VoxelWorld actor may not be in memory yet when this runs (the level
-	// has spawned the actor but the actor's CreateRuntime() hasn't pulled
-	// in the graph reference yet). TObjectIterator below only sees
-	// in-memory objects, so without an explicit pre-load it returns 0
-	// graphs in packaged → seed silently doesn't apply → terrain
-	// regenerates with the default seed baked into the cooked graph →
-	// saved voxel sculpt data lands at world positions that no longer match
-	// the heightmap (looks like a pit).
-	//
-	// Force-load every cooked UVoxelHeightGraph asset via Asset Registry
-	// before iterating. The user's project has only one or two graphs, so
-	// the cost is negligible and the iteration below is now guaranteed to
-	// see them.
-	int32 PreloadCount = 0;
-	{
-		IAssetRegistry& AssetRegistry = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry").Get();
-		TArray<FAssetData> GraphAssets;
-		AssetRegistry.GetAssetsByClass(UVoxelHeightGraph::StaticClass()->GetClassPathName(), GraphAssets, /*bSearchSubClasses=*/true);
-		MOHARVEST_LOG(this, "Seed", "ApplySeedToHeightGraphParameter: AssetRegistry returned %d UVoxelHeightGraph assets", GraphAssets.Num());
-		for (const FAssetData& AD : GraphAssets)
-		{
-			// .GetAsset() forces synchronous load if not already in memory
-			UObject* Loaded = AD.GetAsset();
-			UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Pre-loaded height graph for seed application: %s (%s)"),
-				*AD.AssetName.ToString(), Loaded ? TEXT("ok") : TEXT("FAILED"));
-			MOHARVEST_LOG(this, "Seed", "Pre-load attempt: %s -> %s", *AD.AssetName.ToString(), Loaded ? TEXT("OK") : TEXT("NULL"));
-			if (Loaded) ++PreloadCount;
-		}
-	}
-
-	int32 GraphsUpdated = 0;
-	int32 GraphsChecked = 0;
-
-	// Iterate through all loaded UVoxelHeightGraph assets and set the seed parameter
-	// UVoxelGraph (parent of UVoxelHeightGraph) implements IVoxelParameterOverridesObjectOwner
-	// which provides the SetParameter method
-	for (TObjectIterator<UVoxelHeightGraph> It; It; ++It)
-	{
-		UVoxelHeightGraph* Graph = *It;
-		if (!Graph)
-		{
-			continue;
-		}
-
-		// Skip transient/template objects
-		if (Graph->HasAnyFlags(RF_Transient | RF_ClassDefaultObject))
-		{
-			continue;
-		}
-
-		GraphsChecked++;
-
-		// Check if this graph has a parameter with the expected name
-		if (!Graph->HasParameter(VoxelSeedParameterName))
-		{
-			UE_LOG(LogMOFramework, Verbose, TEXT("[MOGameMode] Graph '%s' has no parameter named '%s'"),
-				*Graph->GetName(), *VoxelSeedParameterName.ToString());
-			continue;
-		}
-
-		// Set the parameter value
-		// UVoxelGraph implements IVoxelParameterOverridesObjectOwner which provides SetParameter
-		FString Error;
-		const FVoxelPinValue PinValue = FVoxelPinValue::Make(SeedValue);
-
-		if (Graph->SetParameter(VoxelSeedParameterName, PinValue, &Error))
-		{
-			GraphsUpdated++;
-			UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Set seed='%s' on HeightGraph '%s'"),
-				*SeedValue.Seed, *Graph->GetName());
-		}
-		else
-		{
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOGameMode] Failed to set seed on '%s': %s"),
-				*Graph->GetName(), *Error);
-		}
-	}
-
-	UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Seed parameter set on %d/%d height graphs"),
-		GraphsUpdated, GraphsChecked);
-	MOHARVEST_LOG(this, "Seed",
-		"ApplySeedToHeightGraphParameter result: seedString='%s' preloaded=%d graphsChecked=%d graphsUpdated=%d",
-		*SeedValue.Seed, PreloadCount, GraphsChecked, GraphsUpdated);
-
-	// DIAGNOSTIC: dump the FULL parameter list AND the current override map
-	// on every UVoxelGraph. Same seed string applied in both new-game and
-	// load produced different terrain. Now logging the OVERRIDE MAP (which
-	// is what the runtime actually reads) — if it differs between sessions
-	// despite identical SetParameter calls, that proves the divergence is
-	// in another override owner (a stamp, a scatter actor, etc) that we're
-	// not seeing.
-	for (TObjectIterator<UVoxelGraph> GraphIt; GraphIt; ++GraphIt)
-	{
-		UVoxelGraph* G = *GraphIt;
-		if (!G) continue;
-		if (G->HasAnyFlags(RF_Transient | RF_ClassDefaultObject)) continue;
-		const int32 ParamCount = G->NumParameters();
-		const FVoxelParameterOverrides& Overrides = G->GetParameterOverrides();
-		MOHARVEST_LOG(this, "Seed", "ParamDump graph '%s' (class=%s, params=%d, overrides=%d):",
-			*G->GetName(), *G->GetClass()->GetName(), ParamCount, Overrides.GuidToValueOverride.Num());
-		G->ForeachParameter([this, G](const FGuid& Guid, const FVoxelParameter& Param)
-		{
-			MOHARVEST_LOG(this, "Seed", "  '%s' name='%s' type='%s'",
-				*G->GetName(), *Param.Name.ToString(),
-				*Param.Type.ToString());
-		});
-		for (const auto& OPair : Overrides.GuidToValueOverride)
-		{
-			MOHARVEST_LOG(this, "Seed",
-				"  override guid=%s enable=%d valueType='%s'",
-				*OPair.Key.ToString(), OPair.Value.bEnable ? 1 : 0,
-				*OPair.Value.Value.GetType().ToString());
-		}
-	}
-
-	// Also enumerate all UObjects implementing IVoxelParameterOverridesObjectOwner
-	// — these are stamp components, scatter actors, etc that have their OWN
-	// override maps that take precedence over the graph asset's defaults.
-	// If the terrain bug is from one of these, we'll see it here.
-	int32 OwnerCount = 0;
-	for (TObjectIterator<UObject> ObjIt; ObjIt; ++ObjIt)
-	{
-		UObject* Obj = *ObjIt;
-		if (!Obj) continue;
-		if (Obj->HasAnyFlags(RF_Transient | RF_ClassDefaultObject)) continue;
-		if (!Obj->Implements<UVoxelParameterOverridesObjectOwner>()) continue;
-
-		IVoxelParameterOverridesObjectOwner* OwnerObj = Cast<IVoxelParameterOverridesObjectOwner>(Obj);
-		if (!OwnerObj) continue;
-		IVoxelParameterOverridesOwner* ParamOwner = static_cast<IVoxelParameterOverridesOwner*>(OwnerObj);
-		++OwnerCount;
-		const UVoxelGraph* OwnerGraph = ParamOwner->GetGraph();
-		const FVoxelParameterOverrides& OwnerOverrides = ParamOwner->GetParameterOverrides();
-		MOHARVEST_LOG(this, "Seed",
-			"ParamOwner #%d: obj='%s' class='%s' graph='%s' overrides=%d",
-			OwnerCount, *Obj->GetName(), *Obj->GetClass()->GetName(),
-			OwnerGraph ? *OwnerGraph->GetName() : TEXT("<null>"),
-			OwnerOverrides.GuidToValueOverride.Num());
-
-		// If this owner has a "Seed" parameter, apply our seed to it too —
-		// the runtime may use this owner's override chain instead of the
-		// graph asset's own defaults.
-		if (ParamOwner->HasParameter(VoxelSeedParameterName))
-		{
-			FString OwnerError;
-			if (ParamOwner->SetParameter(VoxelSeedParameterName, FVoxelPinValue::Make(SeedValue), &OwnerError))
-			{
-				MOHARVEST_LOG(this, "Seed",
-					"  -> applied Seed='%s' to owner '%s' (its overrides now=%d)",
-					*SeedValue.Seed, *Obj->GetName(),
-					ParamOwner->GetParameterOverrides().GuidToValueOverride.Num());
-			}
-			else
-			{
-				MOHARVEST_LOG(this, "Seed",
-					"  -> FAILED to apply Seed on owner '%s': %s",
-					*Obj->GetName(), *OwnerError);
-			}
-		}
-	}
-	MOHARVEST_LOG(this, "Seed", "Total IVoxelParameterOverridesObjectOwner instances found: %d", OwnerCount);
-
-	return GraphsUpdated > 0;
+	return UMOWorldSeedSubsystem::ApplySeedToHeightGraphs(WorldSeed, VoxelSeedParameterName, this);
 }

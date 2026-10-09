@@ -4,6 +4,7 @@
 #include "GameFramework/PlayerController.h"
 
 #include "MOPossessionSubsystem.h"
+#include "MOPlayerController.h"
 
 UMOPossessionComponent::UMOPossessionComponent()
 {
@@ -107,6 +108,116 @@ void UMOPossessionComponent::ServerSpawnActorNearController_Implementation(TSubc
 
 	PossessionSubsystem->ServerSpawnActorNearController(PlayerController, ActorClassToSpawn, SpawnDistance, SpawnOffset, bUseViewRotation);
 #endif
+}
+
+UMOPossessionSubsystem* UMOPossessionComponent::GetAuthoritySubsystem(APlayerController*& OutController) const
+{
+	OutController = Cast<APlayerController>(GetOwner());
+	if (!IsValid(OutController))
+	{
+		return nullptr;
+	}
+	UWorld* World = OutController->GetWorld();
+	if (!World || World->GetNetMode() == NM_Client)
+	{
+		return nullptr;
+	}
+	return World->GetSubsystem<UMOPossessionSubsystem>();
+}
+
+void UMOPossessionComponent::ApplyPossessByGuid(const FGuid& PawnGuid)
+{
+	APlayerController* PC = nullptr;
+	if (UMOPossessionSubsystem* Subsystem = GetAuthoritySubsystem(PC))
+	{
+		Subsystem->ServerPossessPawnByGuid(PC, PawnGuid);
+	}
+}
+
+void UMOPossessionComponent::ApplyCreateCharacter()
+{
+	APlayerController* PC = nullptr;
+	if (UMOPossessionSubsystem* Subsystem = GetAuthoritySubsystem(PC))
+	{
+		Subsystem->ServerCreateCharacter(PC);
+	}
+}
+
+void UMOPossessionComponent::BuildList(TArray<FMOPossessionListEntry>& Out) const
+{
+	APlayerController* PC = nullptr;
+	if (UMOPossessionSubsystem* Subsystem = GetAuthoritySubsystem(PC))
+	{
+		Subsystem->BuildPossessionEntries(PC, Out);
+	}
+}
+
+bool UMOPossessionComponent::RequestPossessPawn(const FGuid& PawnGuid)
+{
+	const APlayerController* PC = Cast<APlayerController>(GetOwner());
+	if (!IsValid(PC) || !PC->IsLocalController() || !PawnGuid.IsValid())
+	{
+		return false;
+	}
+	if (PC->HasAuthority())
+	{
+		ApplyPossessByGuid(PawnGuid);
+	}
+	else if (AMOPlayerController* MOPC = Cast<AMOPlayerController>(GetOwner()))
+	{
+		MOPC->ServerPossessPawnByGuid(PawnGuid);
+	}
+	else
+	{
+		return false;
+	}
+	return true;
+}
+
+bool UMOPossessionComponent::RequestCreateCharacter()
+{
+	const APlayerController* PC = Cast<APlayerController>(GetOwner());
+	if (!IsValid(PC) || !PC->IsLocalController())
+	{
+		return false;
+	}
+	if (PC->HasAuthority())
+	{
+		ApplyCreateCharacter();
+	}
+	else if (AMOPlayerController* MOPC = Cast<AMOPlayerController>(GetOwner()))
+	{
+		MOPC->ServerCreateCharacter();
+	}
+	else
+	{
+		return false;
+	}
+	return true;
+}
+
+void UMOPossessionComponent::RequestPossessionList()
+{
+	const APlayerController* PC = Cast<APlayerController>(GetOwner());
+	if (!IsValid(PC) || !PC->IsLocalController())
+	{
+		return;
+	}
+	if (PC->HasAuthority())
+	{
+		TArray<FMOPossessionListEntry> Entries;
+		BuildList(Entries);
+		OnPossessionListReady.Broadcast(Entries);
+	}
+	else if (AMOPlayerController* MOPC = Cast<AMOPlayerController>(GetOwner()))
+	{
+		MOPC->ServerRequestPossessionList();
+	}
+}
+
+void UMOPossessionComponent::NotifyPossessionListReceived(const TArray<FMOPossessionListEntry>& Entries)
+{
+	OnPossessionListReady.Broadcast(Entries);
 }
 
 bool UMOPossessionComponent::TrySpawnAndPossessPawn(TSubclassOf<APawn> PawnClassToSpawn, float SpawnDistance, FVector SpawnOffset, bool bUseViewRotation)

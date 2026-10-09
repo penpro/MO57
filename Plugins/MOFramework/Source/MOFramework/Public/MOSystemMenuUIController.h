@@ -86,6 +86,7 @@
 
 #include "CoreMinimal.h"
 #include "MOUIControllerBase.h"
+#include "MOPossessionTypes.h"
 #include "MOSystemMenuUIController.generated.h"
 
 class UMOInGameMenu;
@@ -271,6 +272,8 @@ private:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|System Menu|Possession", meta=(ClampMin="0", AllowPrivateAccess="true"))
 	int32 PossessionMenuZOrder = 100;
 
+	/** UNUSED since possession is routed through the server (UMOPossessionComponent): the server picks the pawn class
+	 *  (AMOGameMode::DefaultNewGamePawnClass). Kept only so existing Blueprint values do not dangle. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|System Menu|Possession", meta=(AllowPrivateAccess="true"))
 	TSubclassOf<APawn> DefaultPawnClassForNewCharacter;
 
@@ -288,6 +291,10 @@ private:
 
 	UFUNCTION()
 	void HandlePossessionMenuCreateCharacter();
+
+	/** The possession list arrived (immediately on the host, from the server on a client). */
+	UFUNCTION()
+	void HandlePossessionListReady(const TArray<FMOPossessionListEntry>& Entries);
 
 	// --- Confirmation Dialog ---
 

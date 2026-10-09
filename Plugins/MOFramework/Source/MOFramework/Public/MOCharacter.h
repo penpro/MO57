@@ -218,6 +218,7 @@ class UAnimInstance;
 class UStaticMeshComponent;
 class USphereComponent;
 class UNavigationInvokerComponent;
+class UVoxelCollisionInvokerComponent;
 struct FMOEquippedItem;
 enum class EMOEquipmentSlot : uint8;
 
@@ -575,6 +576,12 @@ protected:
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void UnPossessed() override;
 
+	/**
+	 * Runs on the server (PossessedBy/UnPossessed) AND on the owning client (OnRep_Controller): the one place that decides
+	 * whether a human is driving this pawn, which is when it needs guaranteed voxel ground (VoxelCollisionInvoker).
+	 */
+	virtual void NotifyControllerChanged() override;
+
 	// ============================================================================
 	// COMPONENTS
 	// ============================================================================
@@ -696,6 +703,17 @@ public:
 	/** Navigation invoker - tells voxel world to generate navmesh around this character. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO|Navigation")
 	TObjectPtr<UNavigationInvokerComponent> NavigationInvoker;
+
+	/**
+	 * Voxel COLLISION invoker. Ground collision only exists where the Voxel world has an invoker, and the default invoker
+	 * is each machine's own camera. So (a) on the server a remote player's pawn away from the host's camera had NO ground
+	 * and fell, over and over, through the fall-through rescue (20 rescues in 32 s measured at 150 m), and (b) on a joining
+	 * client the ground under the pawn kept changing for ~7-9 s after "ready" (up to 3.7 m). With bWaitForVoxelWorld the
+	 * plugin computes the chunks under the pawn inline, which is its documented way to keep players from falling through.
+	 * Enabled only while a human controls the pawn (see NotifyControllerChanged) so NPCs don't each cost collision chunks.
+	 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO|Voxel")
+	TObjectPtr<UVoxelCollisionInvokerComponent> VoxelCollisionInvoker;
 
 	// ============================================================================
 	// HELD ITEM VISUALS
@@ -897,6 +915,21 @@ public:
 	UPROPERTY(BlueprintReadWrite, Category="MO|Safety")
 	bool bSuppressFallThroughDuringLoad = false;
 
+	/**
+	 * The load window, as ONE mechanism: suppress the fall-through rescue AND hold the character in place (no gravity).
+	 * Suppressing the rescue alone was not enough -- loaded pawns are respawned at their saved spots while the voxel
+	 * terrain is still regenerating, so they FELL ~70 m before RegroundAllPawns ran, and its +/-30 m search around the
+	 * fallen position found no ground (hosting a saved world buried the colonists and teleported the host's pawn km away).
+	 * GameMode sets this in WaitForVoxelAndRegroundPawns and releases it in FinishLoadHandoff.
+	 */
+	void SetLoadHold(bool bHold);
+
+private:
+	/** True only if SetLoadHold(true) is what put the movement into MOVE_None (so release never wakes a dead/ragdolled pawn). */
+	bool bMovementHeldByLoad = false;
+
+public:
+
 	/** How long to fall before triggering safety teleport (seconds). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Safety")
 	float FallThroughTimeThreshold = 2.0f;
@@ -941,6 +974,17 @@ private:
 
 	/** Check for and handle falling through the world. */
 	void CheckFallThroughSafety(float DeltaTime);
+
+	/**
+	 * Server: a HUMAN-driven pawn whose capsule overlaps something solid that is not the terrain (a tree trunk, a rock, a
+	 * building) for a few seconds is STUCK -- it could be spawned, teleported or have something generated into it, and
+	 * character movement cannot always push it out. Move it to the nearest clear ground. Prevention is in the spawn paths
+	 * (MOSpawnClearance.h); this catches whatever still ends up embedded.
+	 */
+	void CheckEmbeddedSafety(float DeltaTime);
+
+	float EmbeddedCheckTimer = 0.f;
+	float EmbeddedSeconds = 0.f;
 
 	// ============================================================================
 	// INTERRUPT EVENT BUS INTERNALS

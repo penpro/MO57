@@ -3,6 +3,14 @@
  */
 
 #include "MOCheatSubsystem.h"
+#include "MOPossessionComponent.h"
+#include "MOWorldSeedSubsystem.h"
+#include "MOPlayerController.h"
+#include "Kismet/GameplayStatics.h"
+#include "Engine/StaticMeshActor.h"
+#include "Components/StaticMeshComponent.h"
+#include "Testing/MOUITestSubsystem.h"
+#include "MOVoxelReadinessSubsystem.h"
 #include "MOWorldItem.h"
 #include "MOFramework.h"
 #include "MOAudioSubsystem.h"
@@ -74,6 +82,8 @@
 #include "Engine/DataTable.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/Pawn.h"
+#include "GameFramework/Character.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "HAL/IConsoleManager.h"
 #include "TimerManager.h"
 #include "Misc/FileHelper.h"
@@ -99,6 +109,60 @@ namespace
 	{
 		APawn* Pawn = ResolveLocalPawn(World);
 		return Pawn ? Pawn->FindComponentByClass<UMOInventoryComponent>() : nullptr;
+	}
+
+	/**
+	 * The ONE definition of "give the local pawn a cheat item" (MO.Player.GiveItem and the starter kit both use it):
+	 *  - refuses an id that is not in the item database (an unvalidated id creates a phantom "debug item" that every consumer
+	 *    downstream -- UI, crafting, save -- has to cope with),
+	 *  - authority only (inventory mutations are server-side; a co-op CLIENT cannot cheat items into its pawn),
+	 *  - if the full count does not fit and bAllowPartial is set, adds as many as do.
+	 * Returns how many were added (0 = refused; OutWhy says why).
+	 */
+	int32 GiveItemToLocalPawn(UWorld* World, FName ItemId, int32 Count, bool bAllowPartial, FString& OutWhy)
+	{
+		UMOInventoryComponent* Inv = ResolveLocalInventory(World);
+		if (!Inv)
+		{
+			OutWhy = TEXT("no inventory on the local pawn (are you in-game?)");
+			return 0;
+		}
+
+		FMOItemDefinitionRow ItemDef;
+		if (!UMOItemDatabaseSettings::GetItemDefinition(ItemId, ItemDef))
+		{
+			OutWhy = FString::Printf(TEXT("'%s' is not in the item database (check the exact, case-sensitive row name)"), *ItemId.ToString());
+			return 0;
+		}
+
+		if (!Inv->GetOwner() || !Inv->GetOwner()->HasAuthority())
+		{
+			OutWhy = TEXT("needs authority -- run it on the host or in single player");
+			return 0;
+		}
+
+		int32 ToAdd = Count;
+		while (ToAdd > 0 && !Inv->CanAddItemByDefinitionId(ItemId, ToAdd))
+		{
+			if (!bAllowPartial)
+			{
+				ToAdd = 0;
+				break;
+			}
+			--ToAdd;
+		}
+		if (ToAdd <= 0)
+		{
+			OutWhy = FString::Printf(TEXT("the inventory cannot hold %s%d x %s"), bAllowPartial ? TEXT("even 1 of ") : TEXT(""), Count, *ItemId.ToString());
+			return 0;
+		}
+
+		if (!Inv->AddItemByGuid(FGuid::NewGuid(), ItemId, ToAdd))
+		{
+			OutWhy = FString::Printf(TEXT("AddItemByGuid failed for %d x %s"), ToAdd, *ItemId.ToString());
+			return 0;
+		}
+		return ToAdd;
 	}
 
 	/**
@@ -207,6 +271,60 @@ namespace
 		return { bOk, TEXT("Attack"), Detail };
 	}
 
+	/**
+	 * The ONE definition of "set a pawn up to craft this recipe" for tests: its ingredients, the skill level and the knowledge it
+	 * needs. Authority only (inventory / skill / knowledge writes are server-side). Tools and stations can't be fabricated here.
+	 * Returns the number of ingredient units granted; OutStation is the recipe's station, OutNote lists the skill/knowledge granted.
+	 */
+	int32 GrantRecipeRequirements(APawn* Pawn, FName RecipeId, EMOCraftingStation& OutStation, FString& OutNote)
+	{
+		int32 Granted = 0;
+		const FMORecipeDefinitionRow* Recipe = Pawn ? UMORecipeDatabaseSettings::GetRecipeDefinition(RecipeId) : nullptr;
+		if (!Recipe)
+		{
+			return 0;
+		}
+		OutStation = Recipe->RequiredStation;
+		if (UMOInventoryComponent* Inv = Pawn->FindComponentByClass<UMOInventoryComponent>())
+		{
+			for (const FMORecipeIngredient& Ing : Recipe->Ingredients)
+			{
+				if (!Ing.ItemDefinitionId.IsNone() && Inv->AddItemByGuid(FGuid::NewGuid(), Ing.ItemDefinitionId, Ing.Quantity))
+				{
+					Granted += Ing.Quantity;
+				}
+			}
+		}
+		if (UMOSkillsComponent* Skills = Pawn->FindComponentByClass<UMOSkillsComponent>())
+		{
+			auto EnsureSkill = [Skills, &OutNote](FName SkillId, int32 RequiredLevel)
+			{
+				if (!SkillId.IsNone() && RequiredLevel > 0 && !Skills->HasSkillLevel(SkillId, RequiredLevel))
+				{
+					Skills->SetSkillLevel(SkillId, RequiredLevel);
+					OutNote += FString::Printf(TEXT(", set %s=%d"), *SkillId.ToString(), RequiredLevel);
+				}
+			};
+			EnsureSkill(Recipe->RequiredSkillId, FMath::Max(Recipe->RequiredSkillLevel, Recipe->DiscoverySkillLevel));
+			if (Recipe->bRequiresDiscovery)
+			{
+				EnsureSkill(Recipe->DiscoveryKnowledgeId, Recipe->DiscoveryKnowledgeLevel);
+			}
+		}
+		if (UMOKnowledgeComponent* Knowledge = Pawn->FindComponentByClass<UMOKnowledgeComponent>())
+		{
+			for (const FName KnowledgeId : Recipe->RequiredKnowledge)
+			{
+				if (!KnowledgeId.IsNone() && !Knowledge->HasKnowledge(KnowledgeId))
+				{
+					Knowledge->GrantKnowledge(KnowledgeId);
+					OutNote += FString::Printf(TEXT(", granted %s"), *KnowledgeId.ToString());
+				}
+			}
+		}
+		return Granted;
+	}
+
 	/** H20 crafting: grant the recipe's ingredients, then enqueue (server-gated). */
 	FMOTestResult RunCraftTest(UWorld* World, FName RecipeId)
 	{
@@ -218,57 +336,11 @@ namespace
 			return { false, TEXT("Craft"), TEXT("no crafting queue component (are you in-game?)") };
 		}
 
-		// Self-setup: grant the recipe's ingredients and unlock requirements so
-		// enqueue exercises the authoritative crafting path, isolated from balance.
-		// Tools/stations can't be fabricated here -- the detail reports if
-		// enqueue still fails so the remaining gate is diagnosable.
+		// Self-setup (authority only -- on a remote client the grants are refused and the detail says "granted 0"): see GrantRecipeRequirements.
 		int32 Granted = 0;
 		FString UnlockNote;
 		EMOCraftingStation TestStation = EMOCraftingStation::None;
-		if (const FMORecipeDefinitionRow* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(RecipeId))
-		{
-			TestStation = Recipe->RequiredStation;
-			if (UMOInventoryComponent* Inv = ResolveLocalInventory(World))
-			{
-				for (const FMORecipeIngredient& Ing : Recipe->Ingredients)
-				{
-					if (!Ing.ItemDefinitionId.IsNone() && Inv->AddItemByGuid(FGuid::NewGuid(), Ing.ItemDefinitionId, Ing.Quantity))
-					{
-						Granted += Ing.Quantity;
-					}
-				}
-			}
-			if (UMOSkillsComponent* Skills = Pawn->FindComponentByClass<UMOSkillsComponent>())
-			{
-				auto EnsureSkill = [Skills, &UnlockNote](FName SkillId, int32 RequiredLevel)
-				{
-					if (!SkillId.IsNone() && RequiredLevel > 0 && !Skills->HasSkillLevel(SkillId, RequiredLevel))
-					{
-						Skills->SetSkillLevel(SkillId, RequiredLevel);
-						UnlockNote += FString::Printf(TEXT(", set %s=%d"), *SkillId.ToString(), RequiredLevel);
-					}
-				};
-
-				EnsureSkill(Recipe->RequiredSkillId,
-					FMath::Max(Recipe->RequiredSkillLevel, Recipe->DiscoverySkillLevel));
-				if (Recipe->bRequiresDiscovery)
-				{
-					EnsureSkill(Recipe->DiscoveryKnowledgeId, Recipe->DiscoveryKnowledgeLevel);
-				}
-			}
-
-			if (UMOKnowledgeComponent* Knowledge = Pawn->FindComponentByClass<UMOKnowledgeComponent>())
-			{
-				for (const FName KnowledgeId : Recipe->RequiredKnowledge)
-				{
-					if (!KnowledgeId.IsNone() && !Knowledge->HasKnowledge(KnowledgeId))
-					{
-						Knowledge->GrantKnowledge(KnowledgeId);
-						UnlockNote += FString::Printf(TEXT(", granted %s"), *KnowledgeId.ToString());
-					}
-				}
-			}
-		}
+		Granted = GrantRecipeRequirements(Pawn, RecipeId, TestStation, UnlockNote);
 
 		const bool bOk = Queue->EnqueueCraft(RecipeId, 1, TestStation);
 		const FString Detail = bOk
@@ -276,6 +348,41 @@ namespace
 			: FString::Printf(TEXT("EnqueueCraft(%s)=false even after granting %d ingredient(s)%s (needs tool/station?)"), *RecipeId.ToString(), Granted, *UnlockNote);
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] %s Craft: %s"), bOk ? TEXT("PASS") : TEXT("FAIL"), *Detail);
 		return { bOk, TEXT("Craft"), Detail };
+	}
+
+	/**
+	 * Voxel TERRAIN height at world X,Y: the first voxel-collision hit of a vertical trace. A first-hit trace is not enough
+	 * (the first version "measured" z=30000 on both machines -- the trace origin, a PCG volume -- and agreed vacuously), so
+	 * every WorldStatic hit is walked and non-voxel ones are skipped and counted. Matched by class name so the Voxel headers
+	 * stay out of this file. Returns false if no voxel collision lies on the line (e.g. not generated near this machine yet).
+	 */
+	bool SampleVoxelSurfaceZ(UWorld* World, float X, float Y, float StartZ, float EndZ, float& OutZ, int32& OutSkipped, FString& OutFirstOther,
+		FString* OutHitComponent = nullptr)
+	{
+		OutSkipped = 0;
+		OutFirstOther.Reset();
+		TArray<FHitResult> Hits;
+		World->LineTraceMultiByObjectType(Hits, FVector(X, Y, StartZ), FVector(X, Y, EndZ),
+			FCollisionObjectQueryParams(ECC_WorldStatic), FCollisionQueryParams(SCENE_QUERY_STAT(MOVoxelSurfaceZ), false));
+		for (const FHitResult& H : Hits)
+		{
+			const UPrimitiveComponent* Comp = H.GetComponent();
+			if (Comp && Comp->GetClass()->GetName().Contains(TEXT("VoxelCollision")))
+			{
+				OutZ = H.ImpactPoint.Z;
+				if (OutHitComponent)
+				{
+					// Which collision the pawn is really standing on: the component, its owner and its (chunk) name.
+					*OutHitComponent = FString::Printf(TEXT("%s/%s"), *Comp->GetClass()->GetName(), *Comp->GetName());
+				}
+				return true;
+			}
+			if (OutSkipped++ == 0)
+			{
+				OutFirstOther = Comp ? FString::Printf(TEXT("%s/%s"), *GetNameSafe(H.GetActor()), *Comp->GetClass()->GetName()) : TEXT("null");
+			}
+		}
+		return false;
 	}
 
 	/**
@@ -954,12 +1061,6 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 		TEXT("Add an item to the local pawn's inventory. Usage: MO.Player.GiveItem <ItemId> [Count=1]"),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
 		{
-			UMOInventoryComponent* Inv = ResolveLocalInventory(World);
-			if (!Inv)
-			{
-				UE_LOG(LogMOFramework, Warning, TEXT("[MOCheat] No inventory on local pawn"));
-				return;
-			}
 			if (Args.Num() < 1)
 			{
 				UE_LOG(LogMOFramework, Warning, TEXT("[MOCheat] Usage: MO.Player.GiveItem <ItemId> [Count=1]"));
@@ -968,45 +1069,152 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 			const FName ItemId(*Args[0]);
 			const int32 Count = (Args.Num() > 1) ? FMath::Max(1, FCString::Atoi(*Args[1])) : 1;
 
-			// VALIDATE THE ITEM ID FIRST. The inventory's AddItemByGuid accepts
-			// any FName and creates the entry; if the ID doesn't resolve to a
-			// real row in the item database, every consumer downstream (UI,
-			// crafting, save) treats it as a phantom "debug item". So we gate
-			// on the database lookup here — typos error out immediately
-			// instead of polluting the inventory.
-			FMOItemDefinitionRow ItemDef;
-			if (!UMOItemDatabaseSettings::GetItemDefinition(ItemId, ItemDef))
+			FString Why;
+			const int32 Added = GiveItemToLocalPawn(World, ItemId, Count, /*bAllowPartial=*/false, Why);
+			if (Added > 0)
 			{
-				UE_LOG(LogMOFramework, Warning,
-					TEXT("[MOCheat] GiveItem refused — '%s' is not in the item database. "
-					     "Check Items.csv for the exact row name (case-sensitive)."),
-					*ItemId.ToString());
-				return;
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOCheat] GiveItem %d x %s -> OK"), Added, *ItemId.ToString());
 			}
-
-			// Authority-only check — inventory mutations must run on the server.
-			// PIE standalone host satisfies this; dedicated client would need an RPC.
-			if (!Inv->GetOwner() || !Inv->GetOwner()->HasAuthority())
+			else
 			{
-				UE_LOG(LogMOFramework, Warning, TEXT("[MOCheat] GiveItem requires authority — run from server/standalone"));
-				return;
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOCheat] GiveItem refused: %s"), *Why);
 			}
-
-			if (!Inv->CanAddItemByDefinitionId(ItemId, Count))
-			{
-				UE_LOG(LogMOFramework, Warning, TEXT("[MOCheat] GiveItem refused — inventory can't hold %d x %s"),
-					Count, *ItemId.ToString());
-				return;
-			}
-
-			const FGuid NewGuid = FGuid::NewGuid();
-			const bool bOk = Inv->AddItemByGuid(NewGuid, ItemId, Count);
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOCheat] GiveItem %d x %s -> %s (Guid=%s)"),
-				Count, *ItemId.ToString(),
-				bOk ? TEXT("OK") : TEXT("FAILED"),
-				*NewGuid.ToString(EGuidFormats::DigitsWithHyphens));
 		}),
 		ECVF_Default));
+
+	// ---------- MO.Test.PressKey <KeyName> ----------
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Test.PressKey"),
+		TEXT("Dev: press and release a key through Slate (the same route as the keyboard). Usage: MO.Test.PressKey <KeyName>  (e.g. Tilde, Escape, P)"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			UMOUITestSubsystem* Test = UMOUITestSubsystem::Get(World);
+			const FKey Key(Args.Num() > 0 ? FName(*Args[0]) : NAME_None);
+			if (!Test || !Key.IsValid())
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] FAIL PressKey: %s"), !Test ? TEXT("no UI test subsystem") : TEXT("unknown key name"));
+				return;
+			}
+			Test->SimulateKeyPress(Key);
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] PASS PressKey: %s"), *Key.ToString());
+		}),
+		ECVF_Default));
+
+	// ---------- MO.Test.EmbedPawn [PlayerIndex=1] [HalfExtentCm=800] / MO.Test.ClearEmbed ----------
+	// Wraps a player's pawn in a solid cube (a tree trunk is a thin version of this) and PINS it (MOVE_None). Pinning is deliberate:
+	// character movement's depenetration sometimes frees a pawn from a block this size within seconds and sometimes does not (one run
+	// moved 22 cm in 10 s, the next 829 cm), so an unpinned test cannot tell "the rescue worked" from "movement got out by itself".
+	// The embedded rescue is what must free a pinned pawn. Server-side (run on the host).
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Test.EmbedPawn"),
+		TEXT("Dev: wrap a player's pawn in a solid cube to reproduce 'stuck in a tree'. Usage: MO.Test.EmbedPawn [PlayerIndex=1] [HalfExtentCm=800]. Undo: MO.Test.ClearEmbed"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			const int32 Index = Args.Num() > 0 ? FCString::Atoi(*Args[0]) : 1;
+			const float Half = Args.Num() > 1 ? FMath::Max(50.f, FCString::Atof(*Args[1])) : 800.f;
+			APlayerController* PC = World ? UGameplayStatics::GetPlayerController(World, Index) : nullptr;
+			APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+			UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
+			if (!Pawn || !Cube)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] FAIL EmbedPawn: %s"), !Pawn ? TEXT("no pawn for that player index") : TEXT("cube mesh missing"));
+				return;
+			}
+			AStaticMeshActor* Block = World->SpawnActor<AStaticMeshActor>(Pawn->GetActorLocation(), FRotator::ZeroRotator);
+			Block->SetMobility(EComponentMobility::Movable);
+			Block->GetStaticMeshComponent()->SetStaticMesh(Cube);
+			Block->GetStaticMeshComponent()->SetCollisionProfileName(TEXT("BlockAll"));
+			Block->SetActorScale3D(FVector(Half / 50.0f)); // the engine cube is 100 uu: half extent 50
+			Block->Tags.Add(TEXT("MOTestEmbedBlock"));
+			if (ACharacter* Character = Cast<ACharacter>(Pawn))
+			{
+				if (UCharacterMovementComponent* Move = Character->GetCharacterMovement())
+				{
+					Move->StopMovementImmediately();
+					Move->SetMovementMode(MOVE_None);
+				}
+			}
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] PASS EmbedPawn: %s wrapped in a %.0f cm half-extent block at %s"),
+				*Pawn->GetName(), Half, *Pawn->GetActorLocation().ToCompactString());
+		}),
+		ECVF_Default));
+
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Test.ClearEmbed"),
+		TEXT("Dev: remove every block MO.Test.EmbedPawn made."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			int32 Removed = 0;
+			for (TActorIterator<AStaticMeshActor> It(World); It; ++It)
+			{
+				if (It->Tags.Contains(TEXT("MOTestEmbedBlock")))
+				{
+					It->Destroy();
+					++Removed;
+				}
+			}
+			for (TActorIterator<ACharacter> It(World); It; ++It) // un-pin whoever the rescue did not already free
+			{
+				UCharacterMovementComponent* Move = It->GetCharacterMovement();
+				if (Move && Move->MovementMode == MOVE_None)
+				{
+					Move->SetMovementMode(MOVE_Falling);
+				}
+			}
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] ClearEmbed: removed %d block(s)"), Removed);
+		}),
+		ECVF_Default));
+
+	// ---------- MO.Console.Run <command ...> ----------
+	// Runs a line through EXACTLY what the Tilde console popup's Run button does (input sanitising, execution as the local
+	// player, result capture, notification), so it is scriptable: a harness cannot type into the popup's text box.
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Console.Run"),
+		TEXT("Run a console line through the console popup's execution path. Usage: MO.Console.Run <command ...>"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			AMOPlayerController* PC = World ? Cast<AMOPlayerController>(World->GetFirstPlayerController()) : nullptr;
+			if (!PC || Args.Num() == 0)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOConsole] MO.Console.Run needs a player controller and a command"));
+				return;
+			}
+			PC->RunDevConsoleCommand(FString::Join(Args, TEXT(" ")));
+		}),
+		ECVF_Default));
+
+	// ---------- starter / MO.Player.Starter ----------
+	// A quick kit for testing: 50 sticks + 20 stones, into the local pawn's inventory. (Plain "starter" so it can be typed
+	// into the console popup with no prefix; MO.Player.Starter is the same command under the project's naming.)
+	{
+		auto StarterKit = [](const TArray<FString>& Args, UWorld* World)
+		{
+			struct FKitEntry { const TCHAR* ItemId; int32 Count; };
+			static const FKitEntry Kit[] = { { TEXT("Stick01"), 50 }, { TEXT("Stone01"), 20 } };
+
+			FString Summary;
+			for (const FKitEntry& Entry : Kit)
+			{
+				FString Why;
+				const int32 Added = GiveItemToLocalPawn(World, FName(Entry.ItemId), Entry.Count, /*bAllowPartial=*/true, Why);
+				Summary += Added > 0
+					? FString::Printf(TEXT(" %d/%d x %s"), Added, Entry.Count, Entry.ItemId)
+					: FString::Printf(TEXT(" 0/%d x %s (%s)"), Entry.Count, Entry.ItemId, *Why);
+			}
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOCheat] starter kit:%s"), *Summary);
+		};
+
+		ConsoleCommands.Add(CM.RegisterConsoleCommand(
+			TEXT("starter"),
+			TEXT("Give the local pawn a starter kit: 50 sticks (Stick01) and 20 stones (Stone01). Host / single player."),
+			FConsoleCommandWithWorldAndArgsDelegate::CreateLambda(StarterKit),
+			ECVF_Default));
+		ConsoleCommands.Add(CM.RegisterConsoleCommand(
+			TEXT("MO.Player.Starter"),
+			TEXT("Same as 'starter': 50 sticks + 20 stones into the local pawn's inventory."),
+			FConsoleCommandWithWorldAndArgsDelegate::CreateLambda(StarterKit),
+			ECVF_Default));
+	}
 
 	// =========================================================================
 	// MO.Test.* — automated MP-authority test harness (#132). Each command drives
@@ -1048,6 +1256,32 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 			const FName RecipeId = Args.Num() > 0 ? FName(*Args[0]) : FName(TEXT("KnapFlintFlakes"));
 			// Deferred so client-world RPCs really transport (see RunOnNextTick).
 			RunOnNextTick(World, [RecipeId](UWorld* W) { RunCraftTest(W, RecipeId); });
+		}),
+		ECVF_Default));
+
+	// ---------- MO.Test.GrantRecipe [PlayerIndex=1] [RecipeId=KnapFlintFlakes] ----------
+	// Authority-side setup for a CLIENT-driven craft test: grants a (remote) player's pawn everything the recipe needs, so the client's own
+	// MO.Test.Craft then exercises the server-gated enqueue instead of being refused for missing ingredients. Run it on the host.
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Test.GrantRecipe"),
+		TEXT("Dev (host): give player N's pawn the ingredients/skill/knowledge for a recipe. Usage: MO.Test.GrantRecipe [PlayerIndex=1] [RecipeId=KnapFlintFlakes]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			const int32 Index = Args.Num() > 0 ? FCString::Atoi(*Args[0]) : 1;
+			const FName RecipeId = Args.Num() > 1 ? FName(*Args[1]) : FName(TEXT("KnapFlintFlakes"));
+			APlayerController* PC = World ? UGameplayStatics::GetPlayerController(World, Index) : nullptr;
+			APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+			if (!Pawn || !Pawn->HasAuthority() || !UMORecipeDatabaseSettings::GetRecipeDefinition(RecipeId))
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] FAIL GrantRecipe: %s"),
+					!Pawn ? TEXT("no pawn for that player index") : !Pawn->HasAuthority() ? TEXT("needs authority -- run it on the host") : TEXT("recipe not found"));
+				return;
+			}
+			EMOCraftingStation Station = EMOCraftingStation::None;
+			FString Note;
+			const int32 Granted = GrantRecipeRequirements(Pawn, RecipeId, Station, Note);
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] PASS GrantRecipe: %s got %d ingredient unit(s) for %s%s"),
+				*Pawn->GetName(), Granted, *RecipeId.ToString(), *Note);
 		}),
 		ECVF_Default));
 
@@ -1195,6 +1429,132 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 				Recruit->ForceRecruit();
 				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] COLONY Recruit %s possessable=%d"),
 					*Pawn->GetName(), Recruit->IsPossessable() ? 1 : 0);
+			});
+		}),
+		ECVF_Default));
+
+	// ---------- MO.Voxel.Seed / MO.Voxel.SurfaceZ <x> <y> ----------
+	// Co-op terrain-agreement probes. Run the SAME command on the host and on a client: the seed must match, and the
+	// terrain surface at one XY must be at the same height (the client used to generate terrain from its own default
+	// seed, so a pawn standing on the host's land was "falling" under the client's different ground).
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Voxel.Seed"),
+		TEXT("Dev: log the world seed this machine's voxel terrain was generated from and whether the voxel runtime is ready. Usage: MO.Voxel.Seed"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			const UMOWorldSeedSubsystem* Seeds = UMOWorldSeedSubsystem::Get(World);
+			const UMOVoxelReadinessSubsystem* Ready = UMOVoxelReadinessSubsystem::Get(World);
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] VOXEL Seed has=%d seed=%d ready=%d netmode=%d"),
+				(Seeds && Seeds->HasActiveSeed()) ? 1 : 0, Seeds ? Seeds->GetActiveSeed() : 0,
+				(Ready && Ready->IsReady()) ? 1 : 0, World ? static_cast<int32>(World->GetNetMode()) : -1);
+		}),
+		ECVF_Default));
+
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Voxel.SurfaceZ"),
+		TEXT("Dev: log the VOXEL TERRAIN surface height (cm) at world X,Y: the first voxel-collision hit of a vertical trace (other WorldStatic hits are skipped and counted). Needs local voxel collision (near this machine's pawn). Usage: MO.Voxel.SurfaceZ <x> <y> [startZ=30000] [endZ=-30000]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			if (!World || Args.Num() < 2)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] VOXEL SurfaceZ FAILED: usage MO.Voxel.SurfaceZ <x> <y> [startZ] [endZ]"));
+				return;
+			}
+			const float X = FCString::Atof(*Args[0]);
+			const float Y = FCString::Atof(*Args[1]);
+			const float StartZ = Args.Num() > 2 ? FCString::Atof(*Args[2]) : 30000.f;
+			const float EndZ = Args.Num() > 3 ? FCString::Atof(*Args[3]) : -30000.f;
+
+			float Z = 0.f;
+			int32 Skipped = 0;
+			FString FirstOther, HitComponent;
+			const bool bHit = SampleVoxelSurfaceZ(World, X, Y, StartZ, EndZ, Z, Skipped, FirstOther, &HitComponent);
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] VOXEL SurfaceZ x=%.0f y=%.0f hit=%d z=%.1f skipped=%d firstOther=%s comp=%s"),
+				X, Y, bHit ? 1 : 0, bHit ? Z : 0.f, Skipped, Skipped ? *FirstOther : TEXT("-"), bHit ? *HitComponent : TEXT("-"));
+		}),
+		ECVF_Default));
+
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Voxel.SurfaceGrid"),
+		TEXT("Dev: terrain surface heights over a square grid in ONE log line (same sampler as MO.Voxel.SurfaceZ; 'x' = no voxel collision there). Usage: MO.Voxel.SurfaceGrid <cx> <cy> <half> <step> [startZ=30000] [endZ=-30000]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			if (!World || Args.Num() < 4)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] VOXEL SurfaceGrid FAILED: usage MO.Voxel.SurfaceGrid <cx> <cy> <half> <step> [startZ] [endZ]"));
+				return;
+			}
+			const float Cx = FCString::Atof(*Args[0]);
+			const float Cy = FCString::Atof(*Args[1]);
+			const int32 Half = FMath::Clamp(FCString::Atoi(*Args[2]), 1, 20);
+			const float Step = FMath::Max(10.f, FCString::Atof(*Args[3]));
+			const float StartZ = Args.Num() > 4 ? FCString::Atof(*Args[4]) : 30000.f;
+			const float EndZ = Args.Num() > 5 ? FCString::Atof(*Args[5]) : -30000.f;
+
+			FString Row;
+			int32 Hits = 0, Total = 0;
+			for (int32 Iy = -Half; Iy <= Half; ++Iy)
+			{
+				for (int32 Ix = -Half; Ix <= Half; ++Ix)
+				{
+					float Z = 0.f;
+					int32 Skipped = 0;
+					FString Other;
+					++Total;
+					if (SampleVoxelSurfaceZ(World, Cx + Ix * Step, Cy + Iy * Step, StartZ, EndZ, Z, Skipped, Other))
+					{
+						++Hits;
+						Row += FString::Printf(TEXT("%.0f;"), Z);
+					}
+					else
+					{
+						Row += TEXT("x;");
+					}
+				}
+			}
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] VOXEL SurfaceGrid cx=%.0f cy=%.0f half=%d step=%.0f hits=%d/%d z=%s"),
+				Cx, Cy, Half, Step, Hits, Total, *Row);
+		}),
+		ECVF_Default));
+
+	// ---------- MO.Possess.List / MO.Possess.Take <guid> ----------
+	// The possession menu's two requests, as the LOCAL player. Deferred a tick (RunOnNextTick) for the same reason as the
+	// other MP tests: a Server RPC issued while editor-Python is on the stack runs LOCALLY instead of transporting.
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Possess.List"),
+		TEXT("Dev: ask the server for the possession-menu pawn list as the local player (what opening the menu does). The answer is logged by AMOPlayerController. Usage: MO.Possess.List"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			RunOnNextTick(World, [](UWorld* W)
+			{
+				APlayerController* PC = W->GetFirstPlayerController();
+				UMOPossessionComponent* Possession = PC ? PC->FindComponentByClass<UMOPossessionComponent>() : nullptr;
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] POSSESS List component=%s"), Possession ? TEXT("yes") : TEXT("NONE"));
+				if (Possession)
+				{
+					Possession->RequestPossessionList();
+				}
+			});
+		}),
+		ECVF_Default));
+
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Possess.Take"),
+		TEXT("Dev: ask the server to put the local player in the pawn with this GUID (what clicking Possess in the menu does). Usage: MO.Possess.Take <32-hex-guid>"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			FGuid Guid;
+			if (Args.Num() < 1 || !FGuid::Parse(Args[0], Guid))
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] POSSESS Take FAILED: usage MO.Possess.Take <32-hex-guid>"));
+				return;
+			}
+			RunOnNextTick(World, [Guid](UWorld* W)
+			{
+				APlayerController* PC = W->GetFirstPlayerController();
+				UMOPossessionComponent* Possession = PC ? PC->FindComponentByClass<UMOPossessionComponent>() : nullptr;
+				const bool bSent = Possession && Possession->RequestPossessPawn(Guid);
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] POSSESS Take %s requested=%d"), *Guid.ToString(), bSent ? 1 : 0);
 			});
 		}),
 		ECVF_Default));
@@ -2143,6 +2503,20 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 		ECVF_Default));
 
 	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Weather.SkyTime"),
+		TEXT("Print the time of day the SKY shows (asked of the weather bridge), next to the game clock's. They should agree."),
+		FConsoleCommandWithWorldDelegate::CreateLambda([](UWorld* World)
+		{
+			UMOWeatherIntegrationSubsystem* Sys = World ? World->GetSubsystem<UMOWeatherIntegrationSubsystem>() : nullptr;
+			if (!Sys || !Sys->HasWeatherProvider()) { UE_LOG(LogMOFramework, Warning, TEXT("[MOWeather] SkyTime: no weather provider")); return; }
+			const FDateTime Sky = Sys->GetSkyDateTime();
+			const UMOGameClockSubsystem* Clock = UMOGameClockSubsystem::Get(World);
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOWeather] SkyTime=%02d:%02d:%02d clock=%s"),
+				Sky.GetHour(), Sky.GetMinute(), Sky.GetSecond(), Clock ? *Clock->GetGameDateTime().ToString() : TEXT("none"));
+		}),
+		ECVF_Default));
+
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
 		TEXT("MO.Weather.ListPresets"),
 		TEXT("List the UDS weather presets MO.Weather.SetPreset accepts (built-in UDS Weather_Presets folder)."),
 		FConsoleCommandWithWorldDelegate::CreateLambda([](UWorld* /*World*/)
@@ -2183,32 +2557,12 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 				return;
 			}
 
-			// UDS weather presets are INSTANCES of UDS_Weather_Settings_C saved
-			// as data assets, NOT subclasses. Load path is:
-			//   /Game/UltraDynamicSky/Blueprints/Weather_Effects/Weather_Presets/<Name>.<Name>
-			// (object name = asset name, no _C suffix — that would be the class).
+			// The shared loader knows where UDS keeps its presets (and logs the path it tried).
 			const FString& PresetName = Args[0];
-			const FString InstancePath = FString::Printf(
-				TEXT("/Game/UltraDynamicSky/Blueprints/Weather_Effects/Weather_Presets/%s.%s"),
-				*PresetName, *PresetName);
-
-			UObject* PresetInstance = LoadObject<UObject>(nullptr, *InstancePath);
-
-			// Fallback: maybe this version of UDS uses subclasses (older versions?)
+			UObject* PresetInstance = UMOWeatherIntegrationSubsystem::LoadUdsWeatherPreset(PresetName);
 			if (!PresetInstance)
 			{
-				const FString ClassPath = InstancePath + TEXT("_C");
-				if (UClass* PresetClass = LoadClass<UObject>(nullptr, *ClassPath))
-				{
-					PresetInstance = PresetClass->GetDefaultObject();
-				}
-			}
-
-			if (!PresetInstance)
-			{
-				UE_LOG(LogMOFramework, Warning,
-					TEXT("[MOWeather] Preset '%s' not found at %s. Try MO.Weather.ListPresets."),
-					*PresetName, *InstancePath);
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOWeather] Preset '%s' not found. Try MO.Weather.ListPresets."), *PresetName);
 				return;
 			}
 
@@ -3136,6 +3490,29 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 		}),
 		ECVF_Default));
 
+	// ---------- MO.Session.HostSave <SlotName> ----------
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Session.HostSave"),
+		TEXT("Dev: host a SAVED world as a co-op session -- what the Load panel's Host button does (must be at the main menu). Usage: MO.Session.HostSave <SlotName>"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			if (Args.Num() < 1)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] SESSION HostSave usage: <SlotName>"));
+				return;
+			}
+			AMOMainMenuPlayerController* MenuPC = World ? Cast<AMOMainMenuPlayerController>(World->GetFirstPlayerController()) : nullptr;
+			if (!MenuPC)
+			{
+				UE_LOG(LogMOFramework, Warning,
+					TEXT("[MOQUERY] SESSION HostSave FAILED: no AMOMainMenuPlayerController in this world -- run this at the main menu"));
+				return;
+			}
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] SESSION HostSave '%s' -- watch for [MOSession] log lines"), *Args[0]);
+			MenuPC->HostSavedGame(Args[0]);
+		}),
+		ECVF_Default));
+
 	// ---------- MO.Session.Find ----------
 	ConsoleCommands.Add(CM.RegisterConsoleCommand(
 		TEXT("MO.Session.Find"),
@@ -3206,7 +3583,7 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 				return;
 			}
 			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] SESSION Status: subsystem=%s activeSession=%s searching=%s"),
-				Sessions->IsUsingRealOnlineSubsystem() ? TEXT("Steam") : TEXT("Null/offline"),
+				Sessions->IsUsingRealOnlineSubsystem() ? TEXT("Steam") : TEXT("Null/LAN"),
 				Sessions->HasActiveSession() ? TEXT("yes") : TEXT("no"),
 				Sessions->IsSearchInProgress() ? TEXT("yes") : TEXT("no"));
 		}),

@@ -266,6 +266,9 @@ void UMOWeatherIntegrationSubsystem::RegisterWeatherProvider(TScriptInterface<IM
 		PendingSaveData = FMOWeatherSaveData(); // Clear
 	}
 
+	// A new game asked for clear skies before this provider existed.
+	TryApplyPendingClearSkies();
+
 	// Initialize cached state
 	CachedWeatherState = GetCurrentWeatherState();
 	bCachedIsDaytime = IsDaytime();
@@ -462,6 +465,11 @@ FDateTime UMOWeatherIntegrationSubsystem::GetDateTime() const
 		return IMOWeatherProviderInterface::Execute_GetDateTime(WeatherProvider.GetObject());
 	}
 	return FDateTime::Now();
+}
+
+FDateTime UMOWeatherIntegrationSubsystem::GetSkyDateTime() const
+{
+	return HasWeatherProvider() ? IMOWeatherProviderInterface::Execute_GetDateTime(WeatherProvider.GetObject()) : FDateTime();
 }
 
 bool UMOWeatherIntegrationSubsystem::IsDaytime() const
@@ -753,6 +761,72 @@ void UMOWeatherIntegrationSubsystem::SetDateTime(const FDateTime& DateTime)
 	}
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOWeatherIntegration] Set date/time to %s"), *DateTime.ToString());
+}
+
+UObject* UMOWeatherIntegrationSubsystem::LoadUdsWeatherPreset(const FString& PresetName)
+{
+	// UDS weather presets are INSTANCES of UDS_Weather_Settings_C saved as data assets, NOT subclasses. Load path is
+	//   /Game/UltraDynamicSky/Blueprints/Weather_Effects/Weather_Presets/<Name>.<Name>
+	// (object name = asset name, no _C suffix -- that would be the class).
+	const FString InstancePath = FString::Printf(
+		TEXT("/Game/UltraDynamicSky/Blueprints/Weather_Effects/Weather_Presets/%s.%s"), *PresetName, *PresetName);
+
+	UObject* PresetInstance = LoadObject<UObject>(nullptr, *InstancePath);
+
+	// Fallback: maybe this version of UDS uses subclasses (older versions?)
+	if (!PresetInstance)
+	{
+		const FString ClassPath = InstancePath + TEXT("_C");
+		if (UClass* PresetClass = LoadClass<UObject>(nullptr, *ClassPath))
+		{
+			PresetInstance = PresetClass->GetDefaultObject();
+		}
+	}
+
+	if (!PresetInstance)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOWeatherIntegration] UDS weather preset '%s' not found at %s"), *PresetName, *InstancePath);
+	}
+	return PresetInstance;
+}
+
+FSoftObjectPath UMOWeatherIntegrationSubsystem::GetCurrentWeatherPresetPath() const
+{
+	if (!HasWeatherProvider())
+	{
+		return FSoftObjectPath();
+	}
+	const FMOWeatherSaveData Data = IMOWeatherProviderInterface::Execute_BuildWeatherSaveData(WeatherProvider.GetObject());
+	if (Data.WeatherPresetPath.IsValid())
+	{
+		return Data.WeatherPresetPath;
+	}
+	return Data.WeatherPresetObject ? FSoftObjectPath(Data.WeatherPresetObject) : FSoftObjectPath();
+}
+
+void UMOWeatherIntegrationSubsystem::ApplyNewGameStartConditions()
+{
+	bPendingClearSkies = true;
+	TryApplyPendingClearSkies();
+	if (bPendingClearSkies)
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOWeatherIntegration] New game: weather provider not registered yet; clear skies queued"));
+	}
+}
+
+void UMOWeatherIntegrationSubsystem::TryApplyPendingClearSkies()
+{
+	if (!bPendingClearSkies || !HasWeatherProvider())
+	{
+		return;
+	}
+	bPendingClearSkies = false;
+
+	if (UObject* ClearSkies = LoadUdsWeatherPreset(TEXT("Clear_Skies")))
+	{
+		SetWeatherPreset(ClearSkies);
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOWeatherIntegration] New game: applied weather preset 'Clear_Skies'"));
+	}
 }
 
 void UMOWeatherIntegrationSubsystem::SetWeatherPreset(UObject* PresetObject)

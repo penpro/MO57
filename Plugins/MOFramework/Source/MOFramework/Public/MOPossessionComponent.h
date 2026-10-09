@@ -61,7 +61,10 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "MOPossessionTypes.h"
 #include "MOPossessionComponent.generated.h"
+
+class UMOPossessionSubsystem;
 
 UCLASS(ClassGroup=(MO), meta=(BlueprintSpawnableComponent))
 class MOFRAMEWORK_API UMOPossessionComponent : public UActorComponent
@@ -82,6 +85,29 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Possession")
 	bool TrySpawnAndPossessPawn(TSubclassOf<APawn> PawnClassToSpawn, float SpawnDistance = 300.0f, FVector SpawnOffset = FVector::ZeroVector, bool bUseViewRotation = true);
 
+	// ------------------------------------------------------------------------
+	// POSSESSION MENU (works for EVERY player)
+	// APlayerController::Possess() is authority-only: on a remote client it silently does nothing. The menu therefore
+	// never possesses directly -- it asks through here, which resolves locally on the host and via an RPC on a client.
+	// ------------------------------------------------------------------------
+
+	/** Take over the pawn with this GUID. Returns false if the request could not even be made. */
+	UFUNCTION(BlueprintCallable, Category="MO|Possession")
+	bool RequestPossessPawn(const FGuid& PawnGuid);
+
+	/** Create a new character for this player (only valid while they have none). */
+	UFUNCTION(BlueprintCallable, Category="MO|Possession")
+	bool RequestCreateCharacter();
+
+	/** Ask for the rows of the possession menu. The answer arrives on OnPossessionListReady (at once on the host,
+	 *  after a round trip on a client -- built from the SERVER's pawns, not the client's own saves). */
+	UFUNCTION(BlueprintCallable, Category="MO|Possession")
+	void RequestPossessionList();
+
+	DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOPossessionListReadySignature, const TArray<FMOPossessionListEntry>&, Entries);
+	UPROPERTY(BlueprintAssignable, Category="MO|Possession")
+	FMOPossessionListReadySignature OnPossessionListReady;
+
 protected:
 	virtual void BeginPlay() override;
 
@@ -93,4 +119,23 @@ protected:
 
 	UFUNCTION(Server, Reliable)
 	void ServerSpawnAndPossessPawn(TSubclassOf<APawn> PawnClassToSpawn, float SpawnDistance, FVector SpawnOffset, bool bUseViewRotation);
+
+public:
+	// ------------------------------------------------------------------------
+	// The RPCs for the menu requests live on AMOPlayerController, the connection-owning actor, and forward into these
+	// authority-side bodies; this component is the API the menu calls. (TESTING: never fire these from editor-Python.
+	// Under the editor script guard AActor::GetFunctionCallspace maps every RPC to LOCAL, so the "server" request just
+	// runs on the client. Use MO.Possess.List / MO.Possess.Take, which defer a tick, or the real menu.)
+	// ------------------------------------------------------------------------
+
+	/** Authority only: the server-side bodies behind the controller's RPCs and the host's direct path. */
+	void ApplyPossessByGuid(const FGuid& PawnGuid);
+	void ApplyCreateCharacter();
+	void BuildList(TArray<FMOPossessionListEntry>& Out) const;
+
+	/** The controller received the server's list: hand it to whoever is listening (the possession menu). */
+	void NotifyPossessionListReceived(const TArray<FMOPossessionListEntry>& Entries);
+
+private:
+	UMOPossessionSubsystem* GetAuthoritySubsystem(APlayerController*& OutController) const;
 };

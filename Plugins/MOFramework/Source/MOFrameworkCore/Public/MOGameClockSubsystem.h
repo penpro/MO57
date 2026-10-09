@@ -343,10 +343,12 @@ protected:
 
 	/**
 	 * Initial in-game DateTime when a fresh save starts (no clock save
-	 * data to restore from). Default: June 1, 2026, 06:00:00.
+	 * data to restore from). Default: June 1, 2026, 08:00:00 -- a new game
+	 * always opens at 8 AM (it used to open at 6 AM, i.e. in the dark twilight).
+	 * Pinned by the MOFramework.Clock.FreshWorldStartsAt8AM automation test.
 	 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="MO|Clock|DateTime")
-	FDateTime DefaultStartDateTime = FDateTime(2026, 6, 1, 6, 0, 0);
+	FDateTime DefaultStartDateTime = FDateTime(2026, 6, 1, 8, 0, 0);
 
 	/** Recompute bIsDaytime from current GameDateTime; broadcast if state flipped. */
 	void RefreshDaytimeState();

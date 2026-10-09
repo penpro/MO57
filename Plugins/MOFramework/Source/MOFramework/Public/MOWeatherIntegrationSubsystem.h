@@ -260,6 +260,13 @@ public:
 	FDateTime GetDateTime() const;
 
 	/**
+	 * The time of day the SKY is showing, asked of the weather bridge itself (BP_WeatherBridge::GetDateTime reads it straight off
+	 * the Ultra Dynamic Sky actor) rather than of the game clock. The two are meant to agree; a test that wants to know whether
+	 * the sky a player looks at follows the clock needs this one. Invalid (default FDateTime) when there is no provider.
+	 */
+	FDateTime GetSkyDateTime() const;
+
+	/**
 	 * Check if it's daytime.
 	 */
 	UFUNCTION(BlueprintPure, Category="MO|Weather")
@@ -448,6 +455,29 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Weather")
 	void SetWeatherPreset(UObject* PresetObject);
 
+	/**
+	 * Load a UDS weather preset by name (e.g. "Clear_Skies", "Rain"). UDS presets are INSTANCES of UDS_Weather_Settings_C saved as
+	 * data assets under /Game/UltraDynamicSky/Blueprints/Weather_Effects/Weather_Presets/<Name>; falls back to a class default
+	 * object for UDS versions that ship them as subclasses. Returns nullptr (and logs) if not found. Shared by the
+	 * MO.Weather.SetPreset cheat and ApplyNewGameStartConditions so there is ONE definition of "where the presets live".
+	 */
+	static UObject* LoadUdsWeatherPreset(const FString& PresetName);
+
+	/**
+	 * A NEW game opens under clear skies (together with the clock's 08:00 start, UMOGameClockSubsystem::DefaultStartDateTime).
+	 * If the weather provider (the UDS bridge Blueprint) has not registered yet -- it registers during BeginPlay, which can
+	 * come after GameMode's new-game setup -- the request is queued and applied the moment it does. Never call this on a LOAD:
+	 * a loaded world restores its own saved weather.
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Weather")
+	void ApplyNewGameStartConditions();
+
+	/**
+	 * Path of the weather preset the sky is showing, asked of the provider WITHOUT BuildWeatherSaveData's per-call Warning log
+	 * (UMOWorldSyncSubsystem asks every few seconds). Invalid when there is no provider or the bridge reports no preset.
+	 */
+	FSoftObjectPath GetCurrentWeatherPresetPath() const;
+
 	// ============================================================================
 	// DELEGATES
 	// ============================================================================
@@ -546,6 +576,12 @@ private:
 
 	/** Whether we have pending save data waiting for a provider. */
 	bool bHasPendingSaveData = false;
+
+	/** A new game asked for clear skies before the provider registered (see ApplyNewGameStartConditions). */
+	bool bPendingClearSkies = false;
+
+	/** Apply a queued ApplyNewGameStartConditions request if a provider is now present. */
+	void TryApplyPendingClearSkies();
 
 	/** Check for weather changes and fire delegates. */
 	void CheckForWeatherChanges();

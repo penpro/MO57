@@ -7,6 +7,8 @@
 #include "GameFramework/PawnMovementComponent.h"
 #include "MOUIManagerComponent.h"
 #include "MOPossessionComponent.h"
+#include "MOGameMode.h"
+#include "MORecruitmentComponent.h"
 #include "MONotificationComponent.h"
 #include "MOBuildingComponent.h"
 #include "MOBuildableActor.h"
@@ -15,6 +17,9 @@
 #include "MOIdentityComponent.h"
 #include "MOKeyBindingManager.h"
 #include "MOGameUIManagerSubsystem.h"
+#include "MOTextInputDialog.h"
+#include "Misc/OutputDevice.h"
+#include "Misc/ScopeLock.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "InputMappingContext.h"
@@ -408,7 +413,31 @@ void AMOPlayerController::SetupInputComponent()
 void AMOPlayerController::OnPossess(APawn* InPawn)
 {
 	Super::OnPossess(InPawn);
+	CachePossessedPawn(InPawn);
+}
 
+void AMOPlayerController::SetPawn(APawn* InPawn)
+{
+	Super::SetPawn(InPawn);
+
+	// A remote client never runs OnPossess/OnUnPossess (Possess() is a server call); it learns its pawn through
+	// replication, which lands here. Without this, CachedControllablePawn -- the target of every input handler -- and
+	// the UI manager's pawn components stay empty on the client: it sees its pawn but cannot control it.
+	if (!HasAuthority() && IsLocalController())
+	{
+		if (InPawn)
+		{
+			CachePossessedPawn(InPawn);
+		}
+		else
+		{
+			ClearPossessedPawnCache();
+		}
+	}
+}
+
+void AMOPlayerController::CachePossessedPawn(APawn* InPawn)
+{
 	// Cache the pawn if it implements the controllable interface
 	if (InPawn && InPawn->Implements<UMOControllableInterface>())
 	{
@@ -449,6 +478,12 @@ void AMOPlayerController::OnPossess(APawn* InPawn)
 
 void AMOPlayerController::OnUnPossess()
 {
+	ClearPossessedPawnCache();
+	Super::OnUnPossess();
+}
+
+void AMOPlayerController::ClearPossessedPawnCache()
+{
 	// Clear cached pawn components before unpossessing
 	if (UIManagerComponent)
 	{
@@ -460,8 +495,70 @@ void AMOPlayerController::OnUnPossess()
 	// Disable spectator input when unpossessing - camera stays fixed until a pawn is possessed
 	bSpectatorInputEnabled = false;
 	UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController: Unpossessed - spectator input disabled"));
+}
 
-	Super::OnUnPossess();
+void AMOPlayerController::ServerPossessPawnByGuid_Implementation(FGuid PawnGuid)
+{
+	UE_LOG(LogMOFramework, Log, TEXT("[MOPlayerController] %s asked to possess pawn %s"), *GetName(), *PawnGuid.ToString());
+	if (PossessionComponent)
+	{
+		PossessionComponent->ApplyPossessByGuid(PawnGuid);
+	}
+}
+
+void AMOPlayerController::ServerCreateCharacter_Implementation()
+{
+	UE_LOG(LogMOFramework, Log, TEXT("[MOPlayerController] %s asked to create a character"), *GetName());
+	if (PossessionComponent)
+	{
+		PossessionComponent->ApplyCreateCharacter();
+	}
+}
+
+void AMOPlayerController::ServerRequestPossessionList_Implementation()
+{
+	if (PossessionComponent)
+	{
+		TArray<FMOPossessionListEntry> Entries;
+		PossessionComponent->BuildList(Entries);
+		ClientReceivePossessionList(Entries);
+	}
+}
+
+void AMOPlayerController::ClientReceivePossessionList_Implementation(const TArray<FMOPossessionListEntry>& Entries)
+{
+	UE_LOG(LogMOFramework, Log, TEXT("[MOPlayerController] received %d possession list entr(y/ies) from the server"), Entries.Num());
+	if (PossessionComponent)
+	{
+		PossessionComponent->NotifyPossessionListReceived(Entries);
+	}
+}
+
+void AMOPlayerController::PawnLeavingGame()
+{
+	// Called when this controller is destroyed on the server because its player left. The engine default DESTROYS the
+	// pawn. A recruited survivor is a colony member, not a disposable avatar: it stays in the world (AMOCharacter hands
+	// it to an AI controller when unpossessed) so the same player -- or another one -- can take it later, instead of
+	// every join spawning a fresh pawn and every leave deleting one.
+	if (APawn* Leaving = GetPawn())
+	{
+		const UMORecruitmentComponent* Recruit = Leaving->FindComponentByClass<UMORecruitmentComponent>();
+		if (Recruit && Recruit->IsPossessable())
+		{
+			if (UWorld* World = GetWorld())
+			{
+				if (AMOGameMode* GameMode = World->GetAuthGameMode<AMOGameMode>())
+				{
+					GameMode->NotePlayerLeavingWithPawn(this, Leaving);
+				}
+			}
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOPlayerController] %s left: pawn %s stays in the world as an idle colonist"),
+				*GetName(), *Leaving->GetName());
+			UnPossess();
+			return;
+		}
+	}
+	Super::PawnLeavingGame();
 }
 
 // ============================================================================
@@ -1149,11 +1246,166 @@ void AMOPlayerController::HandlePossess(const FInputActionValue& Value)
 	{
 		UE_LOG(LogMOFramework, Log, TEXT("AMOPlayerController::HandlePossess - Calling TogglePossessionMenu"));
 		UIManagerComponent->TogglePossessionMenu();
+		// Tutorial objective "press P to open the possession menu" (Tutorial_Possession).
+		BroadcastTutorialEvent(TEXT("PlayerOpenedPossessionMenu"));
 	}
 	else
 	{
 		UE_LOG(LogMOFramework, Warning, TEXT("AMOPlayerController::HandlePossess - UIManagerComponent is NULL!"));
 	}
+}
+
+// ============================================================================
+// DEV CONSOLE POPUP
+// ============================================================================
+
+namespace
+{
+	/** Collects what the game logs while one console command runs, so the popup can show a result (most MO commands only log). */
+	class FMOConsoleLogCapture : public FOutputDevice
+	{
+	public:
+		virtual void Serialize(const TCHAR* Message, ELogVerbosity::Type Verbosity, const FName& Category) override
+		{
+			// Only the game's own categories, plus anything at Display or worse: engine chatter is not a command result.
+			if (Verbosity > ELogVerbosity::Display && !Category.ToString().StartsWith(TEXT("LogMO")))
+			{
+				return;
+			}
+			FScopeLock Lock(&Mutex);
+			if (Lines.Num() < 12)
+			{
+				Lines.Add(FString(Message));
+			}
+		}
+		TArray<FString> TakeLines()
+		{
+			FScopeLock Lock(&Mutex);
+			return MoveTemp(Lines);
+		}
+
+	private:
+		FCriticalSection Mutex;
+		TArray<FString> Lines;
+	};
+}
+
+bool AMOPlayerController::InputKey(const FInputKeyEventArgs& Params)
+{
+#if !UE_BUILD_SHIPPING
+	// Dev console popup on the Tilde key. Hard-coded (requested) and deliberately NOT an Input Action: UEnhancedInputComponent deletes
+	// the legacy BindKey, and a mapping context would only add assets to forget. InputKey sees every key before action bindings.
+	if (Params.Key == EKeys::Tilde && Params.Event == IE_Pressed)
+	{
+		HandleOpenDevConsole();
+		return true;
+	}
+#endif
+	return Super::InputKey(Params);
+}
+
+void AMOPlayerController::HandleOpenDevConsole()
+{
+#if !UE_BUILD_SHIPPING
+	if (DevConsoleDialog.IsValid())
+	{
+		return; // already open: do not stack a second popup
+	}
+
+	UClass* DialogClass = DevConsoleDialogClass.LoadSynchronous();
+	if (!DialogClass)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOConsole] Cannot open the console popup: %s did not load"), *DevConsoleDialogClass.ToString());
+		return;
+	}
+
+	UCommonActivatableWidget* Pushed = UMOGameUIManagerSubsystem::PushModalWidget(this, DialogClass);
+	UMOTextInputDialog* Dialog = Cast<UMOTextInputDialog>(Pushed);
+	if (!Dialog)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOConsole] Cannot open the console popup: modal push returned %s"), *GetNameSafe(Pushed));
+		return;
+	}
+
+	FString Recent;
+	for (const FString& Cmd : DevConsoleHistory)
+	{
+		Recent += (Recent.IsEmpty() ? FString() : FString(TEXT("   |   "))) + Cmd;
+	}
+	Dialog->ConfigureWithText(
+		NSLOCTEXT("MOConsole", "Title", "Console"),
+		Recent.IsEmpty() ? NSLOCTEXT("MOConsole", "Message", "Type a console command (try: starter)")
+		                 : FText::Format(NSLOCTEXT("MOConsole", "MessageRecent", "Recent: {0}"), FText::FromString(Recent)),
+		FText::GetEmpty(),
+		/*MaxLength=*/256,
+		NSLOCTEXT("MOConsole", "Hint", "command"),
+		NSLOCTEXT("MOConsole", "Run", "Run"),
+		NSLOCTEXT("MOConsole", "Close", "Close"));
+	Dialog->OnTextConfirmed.AddDynamic(this, &AMOPlayerController::HandleDevConsoleConfirmed);
+	DevConsoleDialog = Dialog;
+	UE_LOG(LogMOFramework, Log, TEXT("[MOConsole] popup opened"));
+#endif
+}
+
+void AMOPlayerController::HandleDevConsoleConfirmed(const FText& EnteredText)
+{
+	DevConsoleDialog.Reset();
+	RunDevConsoleCommand(EnteredText.ToString());
+}
+
+FString AMOPlayerController::SanitizeDevConsoleInput(const FString& Raw)
+{
+	FString Command = Raw;
+	Command.TrimStartAndEndInline();
+	while (Command.StartsWith(TEXT("`")) || Command.StartsWith(TEXT("~")))
+	{
+		Command.RightChopInline(1);
+		Command.TrimStartInline();
+	}
+	return Command;
+}
+
+void AMOPlayerController::RunDevConsoleCommand(const FString& RawCommandLine)
+{
+#if !UE_BUILD_SHIPPING
+	const FString Command = SanitizeDevConsoleInput(RawCommandLine);
+	if (Command.IsEmpty())
+	{
+		return;
+	}
+
+	DevConsoleHistory.Remove(Command);
+	DevConsoleHistory.Add(Command);
+	while (DevConsoleHistory.Num() > 4)
+	{
+		DevConsoleHistory.RemoveAt(0);
+	}
+
+	FMOConsoleLogCapture Capture;
+	GLog->AddOutputDevice(&Capture);
+	const FString Printed = ConsoleCommand(Command, /*bWriteToLog=*/true);
+	// The log redirector buffers lines for its own thread; without this flush the command's lines reach the capture device only
+	// AFTER it is removed, and the popup reports an empty result for a command that did print.
+	GLog->FlushThreadedLogs();
+	GLog->RemoveOutputDevice(&Capture);
+
+	// Result = what the command wrote to the output device, else what the game logged while it ran.
+	FString Result = Printed.TrimStartAndEnd();
+	if (Result.IsEmpty())
+	{
+		Result = FString::Join(Capture.TakeLines(), TEXT("\n"));
+	}
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOConsole] > %s%s%s"), *Command, Result.IsEmpty() ? TEXT("") : TEXT("  =>  "),
+		*Result.Replace(TEXT("\n"), TEXT(" | ")));
+
+	if (NotificationComponent)
+	{
+		const FText Shown = Result.IsEmpty()
+			? FText::Format(NSLOCTEXT("MOConsole", "Ran", "> {0}"), FText::FromString(Command))
+			: FText::Format(NSLOCTEXT("MOConsole", "RanResult", "> {0}\n{1}"), FText::FromString(Command), FText::FromString(Result));
+		NotificationComponent->ShowInfoNotification(Shown, 6.0f);
+	}
+#endif
 }
 
 // ============================================================================

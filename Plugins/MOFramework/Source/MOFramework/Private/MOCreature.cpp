@@ -41,8 +41,9 @@ void AMOCreature::BeginPlay()
 
 	UE_LOG(LogMOFramework, Verbose, TEXT("[MOCreature] %s BeginPlay"), *GetName());
 
-	// Validate controller (Error only if missing)
-	if (!GetController())
+	// Validate controller (Error only if missing). AI controllers exist ONLY on the authority: on a client (co-op joiner) every
+	// replicated creature legitimately has none, and this used to log an Error per creature on every client.
+	if (HasAuthority() && !GetController())
 	{
 		UE_LOG(LogMOFramework, Error, TEXT("[MOCreature] %s: NO CONTROLLER! AutoPossessAI may have failed."), *GetName());
 	}
@@ -161,7 +162,7 @@ void AMOCreature::ApplyCreatureDefinition()
 			}
 		}
 	}
-	else
+	else if (HasAuthority()) // clients have no AI controller by design (see BeginPlay)
 	{
 		UE_LOG(LogMOFramework, Error, TEXT("[MOCreature] %s: GetCreatureController() returned NULL!"), *GetName());
 	}

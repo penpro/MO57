@@ -74,6 +74,7 @@
 
 #include "CoreMinimal.h"
 #include "Subsystems/WorldSubsystem.h"
+#include "MOPossessionTypes.h"
 #include "MOPossessionSubsystem.generated.h"
 
 UCLASS()
@@ -107,6 +108,30 @@ public:
 	/** Spawn a pawn and immediately possess it (server only). */
 	UFUNCTION(BlueprintCallable, Category="MO|Possession")
 	APawn* ServerSpawnAndPossessPawn(APlayerController* PlayerController, TSubclassOf<APawn> PawnClassToSpawn, float SpawnDistance = 300.0f, FVector SpawnOffset = FVector::ZeroVector, bool bUseViewRotation = true);
+
+	// ------------------------------------------------------------------------
+	// WHO MAY TAKE WHICH PAWN (authority only)
+	// One definition, used by the possession menu list, possess-by-GUID and join-time pawn reuse, so the three can
+	// never disagree about what is "available".
+	// ------------------------------------------------------------------------
+
+	/** A pawn `Requester` may take over: alive, identified, recruited (possessable), and not currently driven by a
+	 *  DIFFERENT human. An idle colonist run by AI, an uncontrolled pawn, or the requester's own pawn all qualify. */
+	bool IsPawnAvailableTo(const APawn* Pawn, const AController* Requester) const;
+
+	/** Pick an existing pawn for a player who just joined: their previous pawn if it is still available, else the
+	 *  available pawn nearest `AnchorLocation`. nullptr when every colonist is taken (the caller then spawns one). */
+	APawn* FindAvailablePawnForJoiner(const AController* Joiner, const FGuid& PreferredPawnGuid, const FVector& AnchorLocation) const;
+
+	/** Possession-menu rows for `Requester`: saved records + live world pawns, never a pawn another human is driving. */
+	void BuildPossessionEntries(const APlayerController* Requester, TArray<FMOPossessionListEntry>& OutEntries) const;
+
+	/** Possess the pawn with this GUID for `PlayerController`. Resolves it in the world, else respawns it from its
+	 *  save record; refuses pawns the player may not take. Returns the pawn, or nullptr. */
+	APawn* ServerPossessPawnByGuid(APlayerController* PlayerController, const FGuid& PawnGuid);
+
+	/** Create a new character for a player that has none (possession menu "Create Character"). Returns it, or nullptr. */
+	APawn* ServerCreateCharacter(APlayerController* PlayerController);
 
 private:
 	bool ResolveViewpoint(APlayerController* PlayerController, FVector& OutViewLocation, FRotator& OutViewRotation) const;
