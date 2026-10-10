@@ -8,8 +8,10 @@
  * voxel-surface sample points into biome vegetation/rock scatter:
  *
  *   1. Resolves the biome at each point: height/slope from the point,
- *      moisture/temperature from seeded low-frequency noise over world XY,
- *      candidate rows from DT_Biomes (highest Priority wins).
+ *      moisture/temperature from the shared world generator (FMOWorldGen -- the
+ *      same climate the MO Terrain voxel node paints the ground from) or, with
+ *      bUseWorldGenerator off, from legacy seeded noise; candidate rows from
+ *      DT_Biomes (highest Priority wins).
  *   2. Picks a species from the biome palette with density-scaled acceptance
  *      (DensityPerHectare vs. InputPointsPerHectare), cluster-noise weighted
  *      when ClusterRadius > 0.
@@ -83,14 +85,22 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Biome", meta = (PCG_Overridable))
 	int32 SeedOffset = 0;
 
-	/** Moisture noise period in UU (low frequency = large coherent regions).
+	/**
+	 * Resolve moisture/temperature through the shared world generator (FMOWorldGen, the same math and the same terrain seed as the MO Terrain
+	 * voxel node), so vegetation follows the terrain's own climate and biome map. Temperature gets the lapse rate for the point's height.
+	 * OFF = the legacy per-spawner noise below (kept so old worlds/graphs and A/B comparisons still work).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Biome", meta = (PCG_Overridable))
+	bool bUseWorldGenerator = true;
+
+	/** LEGACY (only when bUseWorldGenerator is off): moisture noise period in UU (low frequency = large coherent regions).
 	 *  A biome region spans roughly half a period — 300k UU ≈ 1.5 km regions
 	 *  (look-review verdict 2026-07-04: the small test regions read as noise,
 	 *  real biomes should be 10-50x that). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Biome", meta = (PCG_Overridable, ClampMin = "1000"))
 	float MoistureNoisePeriod = 300000.0f;
 
-	/** Temperature noise period in UU. */
+	/** LEGACY (only when bUseWorldGenerator is off): temperature noise period in UU. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Biome", meta = (PCG_Overridable, ClampMin = "1000"))
 	float TemperatureNoisePeriod = 450000.0f;
 

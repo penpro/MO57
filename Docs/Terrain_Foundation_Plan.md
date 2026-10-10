@@ -1,5 +1,9 @@
 # Terrain Foundation Plan
 
+> See also `Docs/Terrain_Generation_Exploration.md` (2026-10-09): an exploration of driving terrain from a C++
+> generator through a custom Voxel graph node (plus a Minecraft-style, physically-based biome model) instead of
+> hand-wiring the graph recipes below. Nothing there is built yet; this plan is still the only authored path.
+
 **Audience:** designer/programmer building the voxel height graph in-editor.
 **Goal:** move from `VHG_Flat`'s single-noise terrain to a foundation that
 supports rich biomes / rivers / erosion later. Implements rungs 1–3 of the

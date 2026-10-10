@@ -1,5 +1,6 @@
 #include "MOBiomeDatabaseSettings.h"
 #include "MOFramework.h"
+#include "MOWorldGen.h"
 #include "Engine/DataTable.h"
 
 TWeakObjectPtr<UDataTable> UMOBiomeDatabaseSettings::CachedDataTable;
@@ -70,6 +71,14 @@ float UMOBiomeDatabaseSettings::ClimateNoise(const FVector& Location, float Peri
 	const float OffsetY = ((Seed / 8887) % 8887) * 313.1f;
 	const FVector2D Sample(Location.X / PeriodUU + OffsetX, Location.Y / PeriodUU + OffsetY);
 	return FMath::Clamp(FMath::PerlinNoise2D(Sample) * 0.5f + 0.5f, 0.0f, 1.0f);
+}
+
+FName UMOBiomeDatabaseSettings::ResolveBiomeAtWorld(FVector Location, float SlopeDeg, int32 TerrainSeed)
+{
+	const FMOWorldGenParamsRef Params = FMOWorldGenParamsProvider::Get();
+	const FMOClimateSample Climate = FMOWorldGen::SampleClimate(*Params, Location.X, Location.Y, TerrainSeed);
+	const float Temperature = FMOWorldGen::TemperatureAtHeight(*Params, Climate.TemperatureSeaLevel, (float)Location.Z);
+	return Params->GetBiomeId(FMOWorldGen::ResolveBiome(*Params, (float)Location.Z, SlopeDeg, Climate.Moisture, Temperature));
 }
 
 FName UMOBiomeDatabaseSettings::ResolveBiomeAt(FVector Location, float Height, float SlopeDeg,

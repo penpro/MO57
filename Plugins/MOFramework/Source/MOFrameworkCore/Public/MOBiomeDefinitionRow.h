@@ -166,6 +166,14 @@ struct MOFRAMEWORKCORE_API FMOBiomeDefinitionRow : public FTableRowBase
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Biome|Bands")
 	int32 Priority = 0;
 
+	/**
+	 * Ground material painted under this biome by the MO terrain node (a UVoxelSurfaceTypeInterface asset -- typed as UObject here because
+	 * this module has no Voxel dependency). None = the node writes no surface for this biome and the voxel material graph decides.
+	 * The vegetation spawner never reads this; it resolves the SAME biome through FMOWorldGen, so material and species cannot disagree.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Biome|Terrain", meta=(AllowedClasses="/Script/CoreUObject.Object"))
+	TSoftObjectPtr<UObject> GroundSurfaceType;
+
 	/** Density cross-fade width at biome borders, in UU. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Biome|Bands", meta=(ClampMin="0.0"))
 	float EdgeBlendWidth = 5000.0f;

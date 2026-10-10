@@ -9,6 +9,7 @@
 #include "MOSkillDefinitionRow.h"
 #include "MOPersistenceSettings.h"
 #include "MOMedicalDatabaseSettings.h"
+#include "MOWorldGenSettings.h"
 #include "Engine/DataTable.h"
 
 // Define the log category
@@ -21,6 +22,10 @@ void FMOFrameworkModule::StartupModule()
 	// Force-load all database tables to ensure they are included in cooked builds.
 	// TSoftObjectPtr references in DeveloperSettings won't be cooked unless something loads them.
 	PreloadDatabaseTables();
+
+	// Publish the world-generator snapshot (tuning + DT_Biomes) so editor graph previews, PIE and the PCG spawner have data before any world exists.
+	// Also loads DT_Biomes here, which is what gets it cooked. Re-published before every voxel runtime (UMOWorldSeedSubsystem::RegenerateVoxelWorld).
+	UMOWorldGenSettings::RefreshPublishedParams();
 
 	// Validate configuration settings - logs warnings if required settings aren't configured.
 	// Skip validation during commandlet runs (cooking, packaging, etc.) to avoid noise.

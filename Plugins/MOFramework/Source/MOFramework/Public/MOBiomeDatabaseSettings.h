@@ -69,6 +69,14 @@ public:
 	static FName ResolveBiomeAt(FVector Location, float Height, float SlopeDeg,
 		int32 Seed, float MoistureNoisePeriod, float TemperatureNoisePeriod);
 
+	/**
+	 * Same question answered by the world generator: the climate the MO Terrain voxel node paints from, at Location (height = Location.Z), with the
+	 * caller's slope. TerrainSeed = UMOWorldSeedSubsystem::GetActiveTerrainSeed(). This is what the PCG biome spawner resolves, so tools/tests/AI can
+	 * ask "what biome is that spot" and get the spawner's own answer.
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Biome Database")
+	static FName ResolveBiomeAtWorld(FVector Location, float SlopeDeg, int32 TerrainSeed);
+
 private:
 	/** Cached pointer to loaded DataTable to avoid repeated loading. */
 	static TWeakObjectPtr<UDataTable> CachedDataTable;

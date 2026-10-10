@@ -52,6 +52,12 @@ public:
 	/** Same 8-letter format as FVoxelExposedSeed::Randomize(); a given int seed always yields the same string. */
 	static FString IntSeedToVoxelSeedString(int32 Seed);
 
+	/**
+	 * The int a Voxel graph sees for this world seed: the graph's `Seed` parameter is the string above, and FVoxelExposedSeed::GetSeed() is its CRC32.
+	 * This is the seed the MO terrain node receives and therefore the one every other FMOWorldGen consumer (PCG biome spawner, tools) must use.
+	 */
+	static int32 TerrainSeedFromWorldSeed(int32 WorldSeed);
+
 	/** Set the seed on every VoxelStampComponent (and the height-graph stamp's own override). Returns stamps updated. */
 	static int32 ApplySeedToStamps(UWorld* World, int32 WorldSeed, FName VoxelSeedParameterName, const UObject* LogContext);
 
@@ -90,6 +96,9 @@ public:
 
 	/** The seed this machine's terrain was generated from. Only meaningful if HasActiveSeed(). */
 	int32 GetActiveSeed() const { return ActiveSeed; }
+
+	/** TerrainSeedFromWorldSeed(GetActiveSeed()). Only meaningful if HasActiveSeed(). */
+	int32 GetActiveTerrainSeed() const { return TerrainSeedFromWorldSeed(ActiveSeed); }
 
 protected:
 	virtual void OnWorldBeginPlay(UWorld& InWorld) override;

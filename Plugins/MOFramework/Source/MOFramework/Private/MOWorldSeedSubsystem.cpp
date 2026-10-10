@@ -8,6 +8,7 @@
 #include "MOFramework.h"
 #include "MOGameState.h"
 #include "MOVoxelReadinessSubsystem.h"
+#include "MOWorldGenSettings.h"
 #include "MOHarvestDebugSubsystem.h"
 #include "VoxelWorld.h"
 #include "VoxelStampComponent.h"
@@ -85,6 +86,11 @@ FString UMOWorldSeedSubsystem::IntSeedToVoxelSeedString(int32 Seed)
 	}
 
 	return Result;
+}
+
+int32 UMOWorldSeedSubsystem::TerrainSeedFromWorldSeed(int32 WorldSeed)
+{
+	return FCrc::StrCrc32(*IntSeedToVoxelSeedString(WorldSeed));
 }
 
 int32 UMOWorldSeedSubsystem::ApplySeedToStamps(UWorld* World, int32 WorldSeed, FName VoxelSeedParameterName, const UObject* LogContext)
@@ -381,6 +387,10 @@ bool UMOWorldSeedSubsystem::RegenerateVoxelWorld(UWorld* World, int32 WorldSeed,
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOWorldSeed] RegenerateVoxelWorld: No world available"));
 		return false;
 	}
+
+	// The MO terrain node reads an immutable snapshot of the generator tuning + DT_Biomes. Publish it NOW, on the game thread, before any
+	// voxel runtime exists (host and client both come through here), so the first chunk already sees the final data.
+	UMOWorldGenSettings::RefreshPublishedParams();
 
 	// Apply seed to all stamp components (for runtime stamps)
 	const int32 StampsUpdated = ApplySeedToStamps(World, WorldSeed, VoxelSeedParameterName, LogContext);

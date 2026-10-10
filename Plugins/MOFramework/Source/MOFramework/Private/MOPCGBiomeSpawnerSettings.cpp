@@ -1,6 +1,9 @@
 #include "MOPCGBiomeSpawnerSettings.h"
 #include "MOFramework.h"
 #include "MOBiomeDatabaseSettings.h"
+#include "MOWorldGen.h"
+#include "MOWorldGenSettings.h"
+#include "MOWorldSeedSubsystem.h"
 #include "MOResourceNodeDefinitionRow.h"
 #include "MOPCGInteractionSubsystem.h"
 #include "MOTerrainModificationSubsystem.h"
@@ -134,6 +137,32 @@ bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 	const int32 Seed = Context->GetSeed() + Settings->SeedOffset;
 	FRandomStream RandomStream(Seed);
 
+	// Climate source. Shared generator (default): the SAME function and terrain seed the MO Terrain voxel node uses, so planting follows the
+	// terrain's own climate/biome map. Refresh the snapshot first so DT_Biomes / tuning edits made since the last generation are seen.
+	FMOWorldGenParamsRef GenParams = FMOWorldGenParamsProvider::MakeDefault();
+	int32 TerrainSeed = Seed;
+	if (Settings->bUseWorldGenerator)
+	{
+		GenParams = UMOWorldGenSettings::RefreshPublishedParams();
+		const UMOWorldSeedSubsystem* SeedSubsystem = UMOWorldSeedSubsystem::Get(TargetActor);
+		TerrainSeed = (SeedSubsystem && SeedSubsystem->HasActiveSeed()) ? SeedSubsystem->GetActiveTerrainSeed() : Seed;
+	}
+	// Moisture + temperature (temperature already includes the lapse rate for L.Z in generator mode).
+	auto ClimateAt = [&](const FVector& L, float& OutMoisture, float& OutTemperature)
+	{
+		if (Settings->bUseWorldGenerator)
+		{
+			const FMOClimateSample C = FMOWorldGen::SampleClimate(*GenParams, L.X, L.Y, TerrainSeed);
+			OutMoisture = C.Moisture;
+			OutTemperature = FMOWorldGen::TemperatureAtHeight(*GenParams, C.TemperatureSeaLevel, (float)L.Z);
+		}
+		else
+		{
+			OutMoisture = UMOBiomeDatabaseSettings::ClimateNoise(L, Settings->MoistureNoisePeriod, Seed);
+			OutTemperature = UMOBiomeDatabaseSettings::ClimateNoise(L, Settings->TemperatureNoisePeriod, Seed + 7919);
+		}
+	};
+
 	// (mesh, biome) -> bucket of accepted transforms
 	TMap<FString, FSpeciesBucket> Buckets;
 	int32 TotalIn = 0, TotalAccepted = 0, TotalSuppressed = 0;
@@ -159,8 +188,8 @@ bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 
 			// Shared mask math (UMOBiomeDatabaseSettings) so tests/tools can
 			// query the same field this spawner realizes.
-			const float Moisture = UMOBiomeDatabaseSettings::ClimateNoise(Location, Settings->MoistureNoisePeriod, Seed);
-			const float Temperature = UMOBiomeDatabaseSettings::ClimateNoise(Location, Settings->TemperatureNoisePeriod, Seed + 7919);
+			float Moisture = 0.0f, Temperature = 0.0f;
+			ClimateAt(Location, Moisture, Temperature);
 			const float SlopeDeg = PointSlopeDeg(Point);
 
 			// Highest-priority biome whose bands contain this sample.
@@ -192,8 +221,8 @@ bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 				for (const FVector2D& T : Taps)
 				{
 					const FVector Probe(Location.X + T.X * R, Location.Y + T.Y * R, Location.Z);
-					const float M2 = UMOBiomeDatabaseSettings::ClimateNoise(Probe, Settings->MoistureNoisePeriod, Seed);
-					const float T2 = UMOBiomeDatabaseSettings::ClimateNoise(Probe, Settings->TemperatureNoisePeriod, Seed + 7919);
+					float M2 = 0.0f, T2 = 0.0f;
+					ClimateAt(Probe, M2, T2);
 					const FBiomeEntry* NeighborBiome = nullptr;
 					for (const FBiomeEntry& E : Biomes)
 					{
