@@ -1,5 +1,37 @@
 # Overnight log (Wes asleep)
 
+## SUMMARY OF THE 2026-10-09 RUN (read this first; details in the sections below)
+
+**Final state:** everything is committed and pushed (last code commit `bf241ba4`, docs/tools through `b21b827d` plus the commit that adds this summary). Full battery on the final binaries, all green:
+95 Python tests, 146 automation tests, `nettest game / hostsave / features / actions / churn` PASS, the Development package re-built and smoke-tested with two packaged copies (`nettest packaged`) PASS, the packaged bug-report
+upload (accepted / server error / unreachable, `nettest bugreport`) PASS, code graph refreshed. Real-window checks (packaged build, real clicks and typing) done for the bug report form.
+
+**What changed for the player:**
+1. **In-game Bug Report form** (Wes asked for "option A"): title, category, what happened, steps, optional contact, log tail + screenshot; Preview shows exactly what leaves the machine; sent to the existing crash endpoint as a CR1
+   bundle (no website change); a failed send is kept in `Saved/BugReports`. Names/paths scrubbed. (Spec + tools: `Docs/AUTONOMOUS_TOOLING.md`.)
+2. **"The client can't see the host's pawn" -- two causes found and fixed** (new-game spawn under the regenerated terrain + ground trace blind behind trees; the client's simulated copy of a standing remote pawn free-falls with no local
+   floor). Each has a test with a control. My first explanation (the PCG volume brush) was WRONG and was retracted mid-run -- see the section.
+3. Co-op trust boundary: the server refuses far placements/pickups/terraforms/possessions from a client; spawn manager no longer runs on clients; packaged-build startup crash (intro timer) fixed; real save thumbnails;
+   readable text fields; save tiles that stay inside their column; Bug Report button.
+
+**What changed for tooling:** `Tools/ov.bat` (stable unattended runner, Wes's request), `nettest packaged / bugreport / churn`, `Tools/ue_crash_bundle.py` + `crash_triage.py` (read the website's uploads), `bugreport_receiver.py`,
+`pawnvis_probe.py`, `rescue_probe.py [--hunt]`, `weather_probe.py`, SizeBox-override fix in the UI build tool (older specs probably have inert sizes: `Docs/UI_TOOLING.md`).
+
+**Open / not done (honest list):**
+- Not verified: that those two causes are the ONLY ones behind Wes's observation in his own run (the rescue now logs what blocks the ground; the bug report log tail will carry it). No real client was walked up to the host's pawn in a window.
+- The Open Discord button of the bug report form after the code move (shared function; verified in its old place; not re-clicked: it would open a browser tab on Wes's machine); contact field with a value.
+- Weather bridge: investigation + spec only (`Docs/Weather_Bridge_Coop_Investigation.md`); my numeric probe was inconclusive, so no claim about a client gap; recommendation = keep native replication ON.
+- Terraform excavation: plan refreshed against the code (stages 1-3 landed, 4-7 not started), nothing built (as planned). Decisions only Wes can make are listed there.
+- Audit: UI manager use-after-free read fixed (no deterministic test possible); Voxel PCG `ensure` patched in the gitignored vendored plugin (recorded in `Docs/Voxel_Plugin_Reference.md`). Still open from the trust-boundary work: no
+  collision/slope/rate limit on `ServerPlaceBuilding`; no server-side timer/tool requirement on `ServerApplyTerraform`; the dev-only `ServerSpawnActorNearController`.
+- Observed, not investigated: the spawn manager's "Fallback spawned" creatures can land at z=-5610 / far off-terrain and get rescued by teleport (they show up as creature rescues in the logs).
+- Still the same design forks as before: `BP_WeatherBridge` client-side apply (Wes's Blueprint), colonist ground far from players (not to be built).
+
+**Mistakes/negative results this run (kept, not hidden):** the PCG-brush diagnosis; four harness bugs in the churn race (each reported as a FAIL when it happened); the first bug-report harness run misread the previous phase's log;
+`open_application` launched a second game copy (stopped by pid); a probe of UDW's live state that proved nothing.
+
+---
+
 Standing goal from Wes: finish the multiplayer fixes, add a **Host** button to the Load game options (start that saved
 world in server hosting mode), then keep testing / working the list. Nothing in this log is committed; verify the staged
 column before any commit (git add fails silently on this repo).
