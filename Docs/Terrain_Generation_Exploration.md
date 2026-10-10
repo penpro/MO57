@@ -2,36 +2,45 @@
 
 ## Implementation status (2026-10-09, later the same day)
 
-**Built (S0, S1 minus the in-editor graph, and the PCG half of S2):**
+**Built and verified end to end (S0, S1 and the PCG half of S2):**
 
 | Piece | Where | State |
 |---|---|---|
-| Pure generator (climate, height, biome; deterministic, IEEE-exact ops only) | `MOFrameworkCore/Public/MOWorldGen.h`, `Private/MOWorldGen.cpp` | built, 8 automation tests green |
+| Pure generator (climate, height, biome; deterministic, IEEE-exact ops only) | `MOFrameworkCore/Public/MOWorldGen.h`, `Private/MOWorldGen.cpp` | built, 9 automation tests green |
 | Tuning (Project Settings -> MOFramework -> World Generation) + snapshot builder/publisher | `MOWorldGenSettings.{h,cpp}` | built; published at module start, before every voxel runtime (`RegenerateVoxelWorld`), and by the PCG spawner |
-| **The Voxel node `MO Terrain Sample`** | `MOTerrainFunctionLibrary.{h,cpp}` | built; registered; its UFUNCTION translates to a valid graph node (2 inputs, 7 outputs, all pin types valid -- checked by `MOFramework.WorldGen.TerrainNode`) |
-| PCG biome spawner on the shared generator (`bUseWorldGenerator`, default on; legacy noise kept behind the flag) | `MOPCGBiomeSpawnerSettings.{h,cpp}`, `UMOBiomeDatabaseSettings::ResolveBiomeAtWorld` | built; live P2 biome gate (`Content/Python/test_biomes_p2.py`) 5/5 |
+| **Voxel nodes `MO Terrain Sample` and `MO Terrain Bounds`** | `MOTerrainFunctionLibrary.{h,cpp}` | built, registered, found by the graph editor palette (MO -> Terrain), **wired in a real graph: `Content/Penumbra/Maps/VHG_MOTerrain`** |
+| **Live check: the real game's terrain IS the generator** | `MO.WorldGen.Compare` / `MO.WorldGen.Sample` (MOCheatSubsystem) | with the level's stamp pointed at `VHG_MOTerrain` (temporary, reverted): new game, world seed 12345 -> terrain seed -524743771; **169/169 voxel-collision samples within 0.5 cm of `FMOWorldGen`, mean 0.1 cm**; PCG spawner ran on the same biome map |
+| PCG biome spawner on the shared generator (`bUseWorldGenerator`, default on; legacy noise kept behind the flag) | `MOPCGBiomeSpawnerSettings.{h,cpp}`, `UMOBiomeDatabaseSettings::ResolveBiomeAtWorld` | built; live P2 biome gate (`Content/Python/test_biomes_p2.py`) 5/5; packaged build smoke passed |
 | PNG map dump (look at a whole world headless) | `MOFramework.WorldGen.DumpMaps` -> `Saved/WorldGen/*.png` | built |
 | Per-biome ground material | `FMOBiomeDefinitionRow::GroundSurfaceType` (new, empty) | built; needs surface-type assets authored in the editor |
 
-**NOT done / NOT verified:** (1) the node has not been placed in a real Voxel graph and run in PIE or a packaged build -- see "Wiring it up"
-below; (2) generator-vs-terrain agreement in a live world (impossible until (1)); (3) cross-CPU determinism probe (S4); (4) the density /
-caves node (S3), macro bake / rivers (S5); (5) smooth per-biome material cross-fades; (6) slope-banded biomes are resolved only by the PCG
-spawner (the node assumes flat; see `MOWorldGen.h` PITFALLS).
+**Found only by wiring the graph (unit tests could not see it):** the stamp evaluates `OutputHeight.Bounds` and `.HeightRange` once at initialisation, in a context with
+NO position. They were first outputs of the position-driven node, and the graph reported "Get Position 2D (double): Cannot query positions here". They are now a separate
+no-input node, `MO Terrain Bounds`; the node test asserts it has no input pins.
+
+**NOT done / NOT verified:** (1) the game's own level (`MOPCGScattering`) still uses `VHG_Flat` -- switching it is one dropdown on the stamp (below) and changes every
+world's ground, so it is Wes's call; (2) cross-CPU determinism probe (S4); (3) the density / caves node (S3), macro bake / rivers (S5); (4) smooth per-biome material
+cross-fades; (5) slope-banded biomes are resolved only by the PCG spawner (the node assumes flat; see `MOWorldGen.h` PITFALLS); (6) the graph's `Surface Type` pin is unwired
+(empty until biome rows get a `GroundSurfaceType`).
 
 **Defaults I chose (design forks, section 10):** heightfield base + (later) volume carving; normalised 0..1 moisture/temperature with a lapse
 rate (physical units deferred -- the existing DT rows use 0..1); the existing priority-ordered band rows kept for biome resolution (nearest-match
 cells deferred); generator in `MOFrameworkCore`; own C++ noise.
 
-### Wiring it up (one-time, ~1 minute in the Voxel graph editor)
+### Using it
 
-1. Content Browser -> right-click -> Voxel -> Voxel Height Graph, e.g. `VHG_MOTerrain`. Delete the pre-seeded Advanced Noise 2D and Make Box 2D From Radius nodes.
-2. Add a graph parameter of type Seed named exactly `Seed` (`MOWorldSeedSubsystem` sets it by that name).
-3. Add `Get Position 2D (double)` with Space = World. Add the node **MO Terrain Sample** (category MO|Terrain).
-4. Wire: position -> `WorldPosition`; `Seed` parameter -> `Seed` (directly: no Mix Seeds). Then `Height` -> OutputHeight.Height, `HeightRange` -> OutputHeight.HeightRange
-   (its default of +-10 m would flatten the mountains), `Bounds` -> OutputHeight.Bounds. `SurfaceType` is optional (empty until biome rows get a `GroundSurfaceType`).
-   `BiomeIndex` / `Moisture` / `Temperature` can feed float metadata layers for stock PCG graphs.
-5. Point the level's height stamp at `VHG_MOTerrain`; its transform must be the identity (positions in, heights out are absolute world values).
-6. Look first without launching anything: `python Tools/ue.py auto --filter MOFramework.WorldGen.DumpMaps`, then open `Saved/WorldGen/world_seed12345_relief.png`.
+`VHG_MOTerrain` already exists (Seed parameter -> `MO Terrain Sample`; `Get Position 2D (double)` in World space -> `World Position`; `MO Terrain Sample.Height` ->
+`Output Height.Height`; `MO Terrain Bounds` -> `Output Height.Bounds` and `.Height Range`).
+
+1. Select the level's height stamp (`VHG_Flat Max DefaultHeightLayer 0 HeightGraph` in `MOPCGScattering`), set **Graph** to `VHG_MOTerrain`, save the level. Its transform must stay
+   the identity (positions in, heights out are absolute world values).
+2. Verify in the real game: `python Tools/ue.py boot --seed 12345`, then `python Tools/ue.py run "MO.WorldGen.Compare 1500 250" --grep MOQUERY` -> expect `hits=169/169` and
+   `maxDiff` under a voxel (it was 0.5 cm).
+3. Look at a world without launching anything: `python Tools/ue.py auto --filter MOFramework.WorldGen.DumpMaps`, then open `Saved/WorldGen/world_seed12345_relief.png`.
+4. Tune in Project Settings -> MOFramework -> World Generation (restart PIE to regenerate).
+
+To build such a graph again by hand: Add -> Voxel -> Stamps -> Voxel Height Graph; delete the pre-seeded Advanced Noise 2D + Make Box nodes; drag from the `World Position` pin
+and pick `Get Position 2D (double)` (set World); right-click the node's `Seed` pin -> Promote to parameter (the parameter must be named exactly `Seed`); add `MO Terrain Bounds`.
 
 ### How PCG sees the biome (the question that shaped the build)
 

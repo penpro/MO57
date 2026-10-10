@@ -6,6 +6,7 @@
 #include "Misc/ScopeRWLock.h"
 
 VOXEL_REGISTER_FUNCTION(UMOTerrainFunctionLibrary, MOTerrain);
+VOXEL_REGISTER_FUNCTION(UMOTerrainFunctionLibrary, MOTerrainBounds);
 
 namespace
 {
@@ -68,12 +69,23 @@ void UMOTerrainFunctionLibrary::MOTerrain(
 	FVoxelFloatBuffer& BiomeIndex,
 	FVoxelFloatBuffer& Moisture,
 	FVoxelFloatBuffer& Temperature,
-	FVoxelSurfaceTypeBlendBuffer& SurfaceType,
-	FVoxelBox2D& Bounds,
-	FVoxelFloatRange& HeightRange) const
+	FVoxelSurfaceTypeBlendBuffer& SurfaceType) const
 {
 	const FVoxelGraphParameters::FLOD* LODParameter = Query->FindParameter<FVoxelGraphParameters::FLOD>();
-	Compute(WorldPosition, Seed, LODParameter ? LODParameter->Value : 0, Height, BiomeIndex, Moisture, Temperature, SurfaceType, Bounds, HeightRange);
+	Compute(WorldPosition, Seed, LODParameter ? LODParameter->Value : 0, Height, BiomeIndex, Moisture, Temperature, SurfaceType);
+}
+
+void UMOTerrainFunctionLibrary::MOTerrainBounds(FVoxelBox2D& Bounds, FVoxelFloatRange& HeightRange) const
+{
+	ComputeBounds(Bounds, HeightRange);
+}
+
+void UMOTerrainFunctionLibrary::ComputeBounds(FVoxelBox2D& Bounds, FVoxelFloatRange& HeightRange)
+{
+	const FMOWorldGenParamsRef Params = FMOWorldGenParamsProvider::Get();
+	const float Half = Params->Tuning.WorldHalfSizeCm;
+	Bounds = FVoxelBox2D(FVector2D(-Half, -Half), FVector2D(Half, Half));
+	HeightRange = FVoxelFloatRange(Params->MinHeightCm, Params->MaxHeightCm);
 }
 
 void UMOTerrainFunctionLibrary::Compute(
@@ -84,9 +96,7 @@ void UMOTerrainFunctionLibrary::Compute(
 	FVoxelFloatBuffer& BiomeIndex,
 	FVoxelFloatBuffer& Moisture,
 	FVoxelFloatBuffer& Temperature,
-	FVoxelSurfaceTypeBlendBuffer& SurfaceType,
-	FVoxelBox2D& Bounds,
-	FVoxelFloatRange& HeightRange)
+	FVoxelSurfaceTypeBlendBuffer& SurfaceType)
 {
 	const FMOWorldGenParamsRef Params = FMOWorldGenParamsProvider::Get();
 	const FMOWorldGenParams& P = *Params;
@@ -119,7 +129,4 @@ void UMOTerrainFunctionLibrary::Compute(
 		SurfaceType.Set(I, (bUseSurfaces && S.BiomeIndex != INDEX_NONE) ? Surfaces->BiomeBlends[S.BiomeIndex] : EmptyBlend);
 	}
 
-	const float Half = P.Tuning.WorldHalfSizeCm;
-	Bounds = FVoxelBox2D(FVector2D(-Half, -Half), FVector2D(Half, Half));
-	HeightRange = FVoxelFloatRange(P.MinHeightCm, P.MaxHeightCm);
 }

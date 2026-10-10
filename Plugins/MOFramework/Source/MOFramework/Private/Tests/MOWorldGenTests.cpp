@@ -349,12 +349,24 @@ bool FMOWorldGen_TerrainNode::RunTest(const FString& Parameters)
 		{
 			TestTrue(*FString::Printf(TEXT("input pin '%s'"), Name), Inputs.Contains(FName(Name)));
 		}
-		for (const TCHAR* Name : { TEXT("Height"), TEXT("BiomeIndex"), TEXT("Moisture"), TEXT("Temperature"), TEXT("SurfaceType"), TEXT("Bounds"), TEXT("HeightRange") })
+		for (const TCHAR* Name : { TEXT("Height"), TEXT("BiomeIndex"), TEXT("Moisture"), TEXT("Temperature"), TEXT("SurfaceType") })
 		{
 			TestTrue(*FString::Printf(TEXT("output pin '%s'"), Name), Outputs.Contains(FName(Name)));
 		}
 		TestEqual(TEXT("exactly 2 input pins"), Inputs.Num(), 2);
-		TestEqual(TEXT("exactly 7 output pins"), Outputs.Num(), 7);
+		TestEqual(TEXT("exactly 5 output pins (Bounds/HeightRange are NOT here: see the header PITFALLS)"), Outputs.Num(), 5);
+	}
+
+	// The bounds node must have NO inputs: the stamp evaluates it where no position exists.
+	const UFunction* BoundsFunction = UMOTerrainFunctionLibrary::StaticClass()->FindFunctionByName(TEXT("MOTerrainBounds"));
+	if (TestNotNull(TEXT("the MOTerrainBounds UFUNCTION is reflected"), BoundsFunction))
+	{
+		TestTrue(TEXT("MOTerrainBounds is registered with the plugin"), FVoxelFunctionLibraryRegistry::FindFunction(*BoundsFunction) != nullptr);
+		const TSharedRef<FVoxelNode_UFunction> BoundsNode = FVoxelNode_UFunction::Make(const_cast<UFunction*>(BoundsFunction));
+		int32 NumIn = 0, NumOut = 0;
+		for (const FVoxelPin& Pin : BoundsNode->GetPins()) { (Pin.bIsInput ? NumIn : NumOut)++; }
+		TestEqual(TEXT("MOTerrainBounds has no input pins"), NumIn, 0);
+		TestEqual(TEXT("MOTerrainBounds has Bounds + HeightRange outputs"), NumOut, 2);
 	}
 
 	// Array input: every output matches FMOWorldGen exactly.
@@ -371,9 +383,10 @@ bool FMOWorldGen_TerrainNode::RunTest(const FString& Parameters)
 	}
 	FVoxelFloatBuffer Height, Biome, Moisture, Temperature;
 	FVoxelSurfaceTypeBlendBuffer Surface;
+	UMOTerrainFunctionLibrary::Compute(Position, TestSeed, 0, Height, Biome, Moisture, Temperature, Surface);
 	FVoxelBox2D Bounds;
 	FVoxelFloatRange Range;
-	UMOTerrainFunctionLibrary::Compute(Position, TestSeed, 0, Height, Biome, Moisture, Temperature, Surface, Bounds, Range);
+	UMOTerrainFunctionLibrary::ComputeBounds(Bounds, Range);
 
 	int32 Wrong = 0;
 	for (int32 I = 0; I < Num; ++I)
@@ -394,9 +407,7 @@ bool FMOWorldGen_TerrainNode::RunTest(const FString& Parameters)
 	One.Y.SetConstant(-654321.0);
 	FVoxelFloatBuffer H1, B1, M1, T1;
 	FVoxelSurfaceTypeBlendBuffer S1;
-	FVoxelBox2D Bounds1;
-	FVoxelFloatRange Range1;
-	UMOTerrainFunctionLibrary::Compute(One, TestSeed, 0, H1, B1, M1, T1, S1, Bounds1, Range1);
+	UMOTerrainFunctionLibrary::Compute(One, TestSeed, 0, H1, B1, M1, T1, S1);
 	const FMOTerrainSample Expected = FMOWorldGen::SampleColumn(*P, 123456.0, -654321.0, TestSeed, P->Tuning.VoxelSizeCm);
 	TestEqual(TEXT("constant input: one value"), H1.Num(), 1);
 	TestEqual(TEXT("constant input: same height as FMOWorldGen"), H1[0], Expected.HeightCm);
@@ -404,9 +415,7 @@ bool FMOWorldGen_TerrainNode::RunTest(const FString& Parameters)
 	// LOD: coarser LOD asks the generator for coarser spacing (a different, smoother answer is allowed, never a wild one).
 	FVoxelFloatBuffer H4, B4, M4, T4;
 	FVoxelSurfaceTypeBlendBuffer S4;
-	FVoxelBox2D Bounds4;
-	FVoxelFloatRange Range4;
-	UMOTerrainFunctionLibrary::Compute(Position, TestSeed, 4, H4, B4, M4, T4, S4, Bounds4, Range4);
+	UMOTerrainFunctionLibrary::Compute(Position, TestSeed, 4, H4, B4, M4, T4, S4);
 	float MaxDelta = 0.0f;
 	for (int32 I = 0; I < Num; ++I) { MaxDelta = FMath::Max(MaxDelta, FMath::Abs(H4[I] - Height[I])); }
 	TestTrue(FString::Printf(TEXT("LOD 4 output stays within 900 cm of LOD 0 (max %.0f)"), MaxDelta), MaxDelta < 900.0f);

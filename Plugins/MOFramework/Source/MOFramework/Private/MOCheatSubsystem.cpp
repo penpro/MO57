@@ -31,6 +31,7 @@
 #include "MOSkillDatabaseSettings.h"
 #include "MOSkillDefinitionRow.h"
 #include "MOBiomeDatabaseSettings.h"
+#include "MOWorldGen.h"
 #include "MOColonyManagerSubsystem.h"
 #include "MOCharacterHistoryComponent.h"
 #include "MOColonyOverviewWidget.h"
@@ -1678,6 +1679,77 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 			}
 			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] VOXEL SurfaceGrid cx=%.0f cy=%.0f half=%d step=%.0f hits=%d/%d z=%s"),
 				Cx, Cy, Half, Step, Hits, Total, *Row);
+		}),
+		ECVF_Default));
+
+	// ---------- MO.WorldGen.Sample <x> <y> / MO.WorldGen.Compare [radius] [step] ----------
+	// The generator's own answer, and the live-terrain-vs-generator check: with the MO Terrain node in the active height graph the voxel surface must sit where
+	// FMOWorldGen says it does (within about a voxel; collision is built at CollisionVoxelSize). Compare needs voxel collision, i.e. a pawn standing on the terrain.
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.WorldGen.Sample"),
+		TEXT("Dev: log what the C++ world generator says at world X,Y (height, climate, biome) with this world's terrain seed. Usage: MO.WorldGen.Sample <x> <y>"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			const UMOWorldSeedSubsystem* Seeds = UMOWorldSeedSubsystem::Get(World);
+			if (!World || Args.Num() < 2 || !Seeds || !Seeds->HasActiveSeed())
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDGEN Sample FAILED: usage MO.WorldGen.Sample <x> <y> (needs an active world seed)"));
+				return;
+			}
+			const double X = FCString::Atod(*Args[0]);
+			const double Y = FCString::Atod(*Args[1]);
+			const FMOWorldGenParamsRef P = FMOWorldGenParamsProvider::Get();
+			const FMOTerrainSample S = FMOWorldGen::SampleColumn(*P, X, Y, Seeds->GetActiveTerrainSeed(), P->Tuning.VoxelSizeCm);
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDGEN Sample x=%.0f y=%.0f seed=%d z=%.1f moisture=%.3f temp=%.3f continent=%.3f erosion=%.3f biome=%s"),
+				X, Y, Seeds->GetActiveTerrainSeed(), S.HeightCm, S.Moisture, S.Temperature, S.Continentalness, S.Erosion, *P->GetBiomeId(S.BiomeIndex).ToString());
+		}),
+		ECVF_Default));
+
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.WorldGen.Compare"),
+		TEXT("Dev: compare the LIVE voxel terrain with the C++ generator on a square grid around the local pawn (one line: hits, mean and max |difference| in cm). Needs voxel collision. Usage: MO.WorldGen.Compare [radius=1500] [step=300]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
+			const APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+			const UMOWorldSeedSubsystem* Seeds = UMOWorldSeedSubsystem::Get(World);
+			if (!Pawn || !Seeds || !Seeds->HasActiveSeed())
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDGEN Compare FAILED: needs a local pawn and an active world seed"));
+				return;
+			}
+			const float Radius = Args.Num() > 0 ? FMath::Clamp(FCString::Atof(*Args[0]), 100.f, 2800.f) : 1500.f;
+			const float Step = Args.Num() > 1 ? FMath::Max(50.f, FCString::Atof(*Args[1])) : 300.f;
+			const int32 TerrainSeed = Seeds->GetActiveTerrainSeed();
+			const FMOWorldGenParamsRef P = FMOWorldGenParamsProvider::Get();
+			const FVector C = Pawn->GetActorLocation();
+
+			int32 Total = 0, Hits = 0;
+			double SumDiff = 0.0;
+			float MaxDiff = 0.f;
+			const int32 N = FMath::FloorToInt(Radius / Step);
+			for (int32 Iy = -N; Iy <= N; ++Iy)
+			{
+				for (int32 Ix = -N; Ix <= N; ++Ix)
+				{
+					const double X = C.X + Ix * Step, Y = C.Y + Iy * Step;
+					const float GenZ = FMOWorldGen::SampleHeightCm(*P, X, Y, TerrainSeed, P->Tuning.VoxelSizeCm);
+					float Z = 0.f;
+					int32 Skipped = 0;
+					FString Other;
+					++Total;
+					if (SampleVoxelSurfaceZ(World, (float)X, (float)Y, GenZ + 8000.f, GenZ - 8000.f, Z, Skipped, Other))
+					{
+						++Hits;
+						const float D = FMath::Abs(Z - GenZ);
+						SumDiff += D;
+						MaxDiff = FMath::Max(MaxDiff, D);
+					}
+				}
+			}
+			const FMOTerrainSample AtPawn = FMOWorldGen::SampleColumn(*P, C.X, C.Y, TerrainSeed, P->Tuning.VoxelSizeCm);
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDGEN Compare seed=%d pawn=(%.0f,%.0f,%.0f) generatorZ@pawn=%.0f hits=%d/%d meanDiff=%.1f maxDiff=%.1f biome@pawn=%s"),
+				TerrainSeed, C.X, C.Y, C.Z, AtPawn.HeightCm, Hits, Total, Hits ? SumDiff / Hits : -1.0, MaxDiff, *P->GetBiomeId(AtPawn.BiomeIndex).ToString());
 		}),
 		ECVF_Default));
 

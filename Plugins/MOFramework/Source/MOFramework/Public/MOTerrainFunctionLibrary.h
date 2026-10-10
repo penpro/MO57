@@ -11,10 +11,10 @@
  *   [Get Position 2D (double), World] --> WorldPosition
  *   [Seed parameter]                  --> Seed              (wire it STRAIGHT in: no Mix Seeds, no autocast detours)
  *                                         MO Terrain Sample  --Height-------> OutputHeight.Height
- *                                                            --HeightRange--> OutputHeight.HeightRange
- *                                                            --Bounds-------> OutputHeight.Bounds
  *                                                            --SurfaceType--> OutputHeight.SurfaceType   (optional)
  *                                                            --BiomeIndex / Moisture / Temperature -----> metadata (optional)
+ *   (no inputs)                           MO Terrain Bounds  --HeightRange--> OutputHeight.HeightRange
+ *                                                            --Bounds-------> OutputHeight.Bounds
  *
  * The stamp that runs this graph must sit at the origin with an IDENTITY transform: positions and heights are
  * absolute world values (a moved stamp would translate the terrain's inputs but not its outputs).
@@ -28,6 +28,9 @@
  * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
  * =============================================================================
  *
+ * [2026-10] BOUNDS / HEIGHT RANGE ARE A SEPARATE NODE ON PURPOSE. The stamp evaluates OutputHeight.Bounds and .HeightRange once at initialisation, in a context that
+ *   has NO position parameter. When they were outputs of the position-driven node the graph reported "Get Position 2D: Cannot query positions here" (found by wiring the
+ *   graph in the editor -- unit tests cannot see it). Anything wired to those two pins must not depend on a position.
  * [2026-10] Every UFUNCTION on a UVoxelFunctionLibrary subclass needs a VOXEL_REGISTER_FUNCTION line in the .cpp or the plugin logs an
  *   error at startup (non-shipping check in VoxelFunctionLibrary.cpp). Compute() is deliberately NOT a UFUNCTION so tests can call it
  *   without a graph query.
@@ -65,8 +68,6 @@ public:
 	 * @param Moisture 0..1 climate moisture.
 	 * @param Temperature 0..1 climate temperature at the ground height (lapse rate applied).
 	 * @param SurfaceType Per-biome ground material from the biome rows (empty where the biome has none).
-	 * @param Bounds The generated world's footprint. Feed OutputHeight.Bounds.
-	 * @param HeightRange Hard bounds of Height. Feed OutputHeight.HeightRange (its default of +-10 m would flatten the mountains).
 	 */
 	UFUNCTION(Category = "MO|Terrain", DisplayName = "MO Terrain Sample")
 	void MOTerrain(
@@ -76,7 +77,16 @@ public:
 		FVoxelFloatBuffer& BiomeIndex,
 		FVoxelFloatBuffer& Moisture,
 		FVoxelFloatBuffer& Temperature,
-		FVoxelSurfaceTypeBlendBuffer& SurfaceType,
+		FVoxelSurfaceTypeBlendBuffer& SurfaceType) const;
+
+	/**
+	 * The generated world footprint and the hard bounds of the heights, from the published snapshot. No inputs: the stamp evaluates these at initialisation
+	 * where no position exists (see PITFALLS).
+	 * @param Bounds Feed OutputHeight.Bounds.
+	 * @param HeightRange Feed OutputHeight.HeightRange (its default of +-50 m would flatten the mountains).
+	 */
+	UFUNCTION(Category = "MO|Terrain", DisplayName = "MO Terrain Bounds")
+	void MOTerrainBounds(
 		FVoxelBox2D& Bounds,
 		FVoxelFloatRange& HeightRange) const;
 
@@ -89,9 +99,10 @@ public:
 		FVoxelFloatBuffer& BiomeIndex,
 		FVoxelFloatBuffer& Moisture,
 		FVoxelFloatBuffer& Temperature,
-		FVoxelSurfaceTypeBlendBuffer& SurfaceType,
-		FVoxelBox2D& Bounds,
-		FVoxelFloatRange& HeightRange);
+		FVoxelSurfaceTypeBlendBuffer& SurfaceType);
+
+	/** MOTerrainBounds body, graph-free. */
+	static void ComputeBounds(FVoxelBox2D& Bounds, FVoxelFloatRange& HeightRange);
 
 	/**
 	 * Resolve each biome's GroundSurfaceType asset into a ready-made blend (game thread). Called by UMOWorldGenSettings::RefreshPublishedParams
