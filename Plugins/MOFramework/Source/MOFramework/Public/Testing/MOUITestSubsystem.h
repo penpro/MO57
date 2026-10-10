@@ -249,6 +249,14 @@ private:
 		AssertNoActiveMenus,
 		CaptureLayerCount,
 		AssertLayerCountDecreased,
+		AssertTutorialTextShown,
+		AssertTutorialTextHidden,
+		BroadcastTutorialHintChanged,
+		CaptureTutorialFlips,
+		AssertTutorialFlipsSince,
+		HideQuestTracker,
+		ShowQuestTracker,
+		AssertQuestTrackerStaysOff,
 		Pass
 	};
 
@@ -423,6 +431,10 @@ private:
 	// =========================================================================
 	FMOUITestResult Test_HUD_ReticleVisibleInGame();
 	FMOUITestResult Test_HUD_ReticleHiddenWhenMenuOpen();
+	FMOUITestResult Test_HUD_TutorialTextYieldsToMenus();
+	/** The hint banner + quest tracker are on screen / are held back by a menu (see UMOQuestUIController::SetHUDYieldedToMenus). */
+	bool TutorialTextIsShown() const;
+	bool TutorialTextIsHidden() const;
 	FMOUITestResult Test_HUD_NotificationDisplays();
 	FMOUITestResult Test_HUD_NotificationAutoDismisses();
 

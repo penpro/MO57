@@ -28,6 +28,18 @@
  * [2024-02] CONTROLLER BASE: Inherits from MOUIControllerBase, not
  *   UActorComponent. Has access to GetPawn, GetPlayerController, etc.
  *
+ * [2026-10] TUTORIAL TEXT YIELDS TO MENUS: the hint banner and the quest tracker
+ *   hide while any menu is open (SetHUDYieldedToMenus, driven by
+ *   UMOUIManagerComponent::UpdateReticleVisibility). Two traps:
+ *   (1) a controller's UpdateReticleVisibility() right after PushWidgetToLayer
+ *   reads the menu count BEFORE CommonUI lists the widget as active (count 0), so
+ *   the only call that sees the menu is the one in UMOActivatableWidget::
+ *   NativeOnActivated -- do not remove it. (2) Opening one menu closes the others,
+ *   so Inventory -> Crafting is a switch; the flip counter (GetHUDYieldFlipCount)
+ *   is how HUD.TutorialTextYieldsToMenus proves it never flashes back in between.
+ *   The hint widget keeps its own "suppressed" flag because a tutorial objective
+ *   completing under an open menu re-pulls the hint by itself.
+ *
  * =============================================================================
  * RELATED FILES: MOUIControllerBase.h, MOQuestLogPanel.h, MOQuestHUDWidget.h
  * LAST UPDATED: 2026-02-25
@@ -38,6 +50,7 @@
 
 #include "CoreMinimal.h"
 #include "MOUIControllerBase.h"
+#include "Components/SlateWrapperTypes.h"
 #include "MOQuestUIController.generated.h"
 
 class UMOQuestLogPanel;
@@ -107,8 +120,28 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO|Quest|UI")
 	UMOQuestHUDWidget* GetQuestHUD() const;
 
+	/** Get the tutorial hint banner widget (may be null if not created). */
+	UFUNCTION(BlueprintPure, Category="MO|Quest|UI")
+	UMOTutorialHintWidget* GetTutorialHint() const { return TutorialHintWidget.Get(); }
+
 	/** Create and show the quest HUD. Called during BeginPlay if configured. */
 	void CreateQuestHUD();
+
+	// ==========================================================================
+	// HUD YIELDS TO MENUS
+	// ==========================================================================
+
+	/**
+	 * The tutorial text on the HUD (the hint banner and the quest tracker) goes away while any menu is open and comes back when the last one closes. Called by
+	 * UMOUIManagerComponent::UpdateReticleVisibility -- the one chokepoint every menu open/close path already runs through -- so a new menu needs no code here.
+	 */
+	void SetHUDYieldedToMenus(bool bMenuOpen);
+
+	/** How many times the tutorial text has switched between hidden and shown because of menus (diagnostics + tests: switching menus must not flash it back). */
+	int32 GetHUDYieldFlipCount() const { return HUDYieldFlipCount; }
+
+	/** The quest tracker's visibility rule in one pure function (unit-tested): hidden when nobody wants it shown, or when a menu is open and yielding is enabled. */
+	static ESlateVisibility ComputeQuestHUDVisibility(bool bWantedVisible, bool bMenuOpen, bool bYieldEnabled);
 
 protected:
 	virtual void BeginPlay() override;
@@ -161,6 +194,25 @@ private:
 
 	UPROPERTY(Transient)
 	TWeakObjectPtr<UMOQuestHUDWidget> QuestHUDWidget;
+
+	/** Hide the quest tracker while any menu is open (it returns when the last menu closes). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Quest|UI", meta=(AllowPrivateAccess="true"))
+	bool bHideQuestHUDWhileMenuOpen = true;
+
+	/** Hide the tutorial hint banner while any menu is open (it returns when the last menu closes). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Quest|UI|Tutorial", meta=(AllowPrivateAccess="true"))
+	bool bHideTutorialHintWhileMenuOpen = true;
+
+	/** Whether the quest tracker is meant to be on screen (ShowQuestHUD / HideQuestHUD), independent of a menu hiding it for a while. */
+	bool bQuestHUDWantedVisible = true;
+
+	/** Last state passed to SetHUDYieldedToMenus; applied to widgets created while a menu is already open. */
+	bool bMenuOpenForHUD = false;
+
+	int32 HUDYieldFlipCount = 0;
+
+	/** Push the current wanted/yielded state onto the quest tracker widget. */
+	void ApplyQuestHUDVisibility();
 
 	// --- Tutorial Hint Widget ---
 

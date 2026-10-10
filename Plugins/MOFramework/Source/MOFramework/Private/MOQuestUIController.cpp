@@ -298,20 +298,22 @@ void UMOQuestUIController::CreateQuestHUD()
 
 	QuestHUDWidget = NewHUD;
 	NewHUD->AddToViewport(QuestHUDZOrder);
-	NewHUD->SetVisibility(ESlateVisibility::HitTestInvisible);
+	bQuestHUDWantedVisible = true;
+	ApplyQuestHUDVisibility(); // HitTestInvisible, or Collapsed if a menu is already open
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOQuestUI] Quest HUD widget created."));
 }
 
 void UMOQuestUIController::ShowQuestHUD()
 {
+	bQuestHUDWantedVisible = true;
 	if (UMOQuestHUDWidget* HUDWidget = QuestHUDWidget.Get())
 	{
 		if (!HUDWidget->IsInViewport())
 		{
 			HUDWidget->AddToViewport(QuestHUDZOrder);
 		}
-		HUDWidget->SetVisibility(ESlateVisibility::HitTestInvisible);
+		ApplyQuestHUDVisibility();
 	}
 	else if (QuestHUDWidgetClass)
 	{
@@ -321,21 +323,43 @@ void UMOQuestUIController::ShowQuestHUD()
 
 void UMOQuestUIController::HideQuestHUD()
 {
-	if (UMOQuestHUDWidget* HUDWidget = QuestHUDWidget.Get())
-	{
-		HUDWidget->SetVisibility(ESlateVisibility::Collapsed);
-	}
+	bQuestHUDWantedVisible = false;
+	ApplyQuestHUDVisibility();
 }
 
 bool UMOQuestUIController::IsQuestHUDVisible() const
 {
-	const UMOQuestHUDWidget* HUDWidget = QuestHUDWidget.Get();
-	if (!IsValid(HUDWidget))
+	// "Meant to be on screen": a menu hiding the tracker for a while does not make it "hidden" for callers (the widget's own visibility is Collapsed then).
+	return IsValid(QuestHUDWidget.Get()) && bQuestHUDWantedVisible;
+}
+
+ESlateVisibility UMOQuestUIController::ComputeQuestHUDVisibility(bool bWantedVisible, bool bMenuOpen, bool bYieldEnabled)
+{
+	return (bWantedVisible && !(bMenuOpen && bYieldEnabled)) ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed;
+}
+
+void UMOQuestUIController::ApplyQuestHUDVisibility()
+{
+	if (UMOQuestHUDWidget* HUDWidget = QuestHUDWidget.Get())
 	{
-		return false;
+		HUDWidget->SetVisibility(ComputeQuestHUDVisibility(bQuestHUDWantedVisible, bMenuOpenForHUD, bHideQuestHUDWhileMenuOpen));
 	}
-	return HUDWidget->GetVisibility() != ESlateVisibility::Collapsed &&
-	       HUDWidget->GetVisibility() != ESlateVisibility::Hidden;
+}
+
+void UMOQuestUIController::SetHUDYieldedToMenus(bool bMenuOpen)
+{
+	if (bMenuOpenForHUD == bMenuOpen)
+	{
+		return;
+	}
+	bMenuOpenForHUD = bMenuOpen;
+	++HUDYieldFlipCount;
+	ApplyQuestHUDVisibility();
+	if (UMOTutorialHintWidget* HintWidget = TutorialHintWidget.Get())
+	{
+		HintWidget->SetSuppressedByMenu(bHideTutorialHintWhileMenuOpen && bMenuOpen);
+	}
+	UE_LOG(LogMOFramework, Log, TEXT("[MOQuestUI] HUD tutorial text %s (a menu %s)"), bMenuOpen ? TEXT("hidden") : TEXT("shown"), bMenuOpen ? TEXT("opened") : TEXT("closed"));
 }
 
 UMOQuestHUDWidget* UMOQuestUIController::GetQuestHUD() const
@@ -380,6 +404,7 @@ void UMOQuestUIController::CreateTutorialHintWidget()
 
 	TutorialHintWidget = NewHint;
 	NewHint->AddToViewport(TutorialHintZOrder);
+	NewHint->SetSuppressedByMenu(bHideTutorialHintWhileMenuOpen && bMenuOpenForHUD); // created while a menu is open: stays hidden until it closes
 	// CommonActivatableWidget controls its own visibility via Activate/Deactivate;
 	// we do NOT call SetVisibility here — the widget starts deactivated and
 	// activates itself when there's a hint to show.

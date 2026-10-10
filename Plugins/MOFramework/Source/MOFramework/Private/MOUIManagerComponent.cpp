@@ -1203,6 +1203,12 @@ void UMOUIManagerComponent::UpdateReticleVisibility()
 		SetReticleVisible(!bMenuOpen);
 	}
 
+	// The tutorial text (hint banner + quest tracker) yields to menus through the same chokepoint as the reticle: every open/close path already calls this.
+	if (UMOQuestUIController* QuestController = GetQuestController())
+	{
+		QuestController->SetHUDYieldedToMenus(bMenuOpen);
+	}
+
 	// Note: bHideStatusPanelWhenMenuOpen is handled differently - the status panel
 	// IS a menu, so it shouldn't hide itself. This flag would be for hiding a
 	// persistent HUD-style status display, which we don't currently have.

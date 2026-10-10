@@ -56,6 +56,22 @@ void UMOTutorialHintWidget::NativeDestruct()
 	Super::NativeDestruct();
 }
 
+ESlateVisibility UMOTutorialHintWidget::ComputeVisibility(bool bInHaveHint, bool bInSuppressedByMenu)
+{
+	return (bInHaveHint && !bInSuppressedByMenu) ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed;
+}
+
+void UMOTutorialHintWidget::SetSuppressedByMenu(bool bSuppress)
+{
+	if (bSuppressedByMenu == bSuppress)
+	{
+		return;
+	}
+	bSuppressedByMenu = bSuppress;
+	SetVisibility(ComputeVisibility(bHaveHint, bSuppressedByMenu));
+	UE_LOG(LogMOFramework, Verbose, TEXT("[MOTutorialHintWidget] %s (hint active: %d)"), bSuppress ? TEXT("hidden: a menu is open") : TEXT("shown again: no menu open"), bHaveHint ? 1 : 0);
+}
+
 void UMOTutorialHintWidget::HandleTutorialHintChanged()
 {
 	UMOQuestSubsystem* Quest = BoundSubsystem.Get();
@@ -66,9 +82,10 @@ void UMOTutorialHintWidget::HandleTutorialHintChanged()
 
 	FName QuestId, ObjectiveId;
 	FText HintTitle, HintBody;
-	const bool bHaveHint = Quest->GetActiveTutorialHint(QuestId, ObjectiveId, HintTitle, HintBody);
+	const bool bGotHint = Quest->GetActiveTutorialHint(QuestId, ObjectiveId, HintTitle, HintBody);
+	bHaveHint = bGotHint;
 
-	if (!bHaveHint)
+	if (!bGotHint)
 	{
 		// Nothing to show — deactivate AND collapse. We use both because:
 		//   - DeactivateWidget triggers any CommonUI Deactivated animations the
@@ -102,9 +119,9 @@ void UMOTutorialHintWidget::HandleTutorialHintChanged()
 
 	CurrentObjectiveId = ObjectiveId;
 
-	// Make sure we're visible (counters any prior Collapsed) and activated
-	// (so CommonUI animations fire and input config applies).
-	SetVisibility(ESlateVisibility::HitTestInvisible);
+	// Make sure we're visible (counters any prior Collapsed) -- unless a menu is open, in which case the banner stays hidden until it closes -- and
+	// activated (so CommonUI animations fire and input config applies).
+	SetVisibility(ComputeVisibility(bHaveHint, bSuppressedByMenu));
 	if (!IsActivated())
 	{
 		ActivateWidget();

@@ -13,6 +13,11 @@
 #include "MOCharacterUIController.h"
 #include "MOSystemMenuUIController.h"
 #include "MOStatusPanel.h"
+#include "MOQuestUIController.h"
+#include "MOQuestHUDWidget.h"
+#include "MOTutorialHintWidget.h"
+#include "MOQuestSubsystem.h"
+#include "Engine/GameInstance.h"
 #include "MOMenuWidgetBase.h"
 #include "GameFramework/PlayerController.h"
 #include "Engine/LocalPlayer.h"
@@ -224,6 +229,7 @@ void UMOUITestSubsystem::RegisterTests()
 	// HUD TESTS
 	// =========================================================================
 	TestRegistry.Add(TEXT("HUD.ReticleHiddenWhenMenuOpen"), [this]() { return Test_HUD_ReticleHiddenWhenMenuOpen(); });
+	TestRegistry.Add(TEXT("HUD.TutorialTextYieldsToMenus"), [this]() { return Test_HUD_TutorialTextYieldsToMenus(); });
 
 	// =========================================================================
 	// TOGGLE KEY TESTS (comprehensive)
@@ -340,6 +346,38 @@ void UMOUITestSubsystem::RegisterFrameSteppedTests()
 			Basic(ActionType::Pass)
 		});
 	};
+
+	// The tutorial text yields to menus. Every step that follows an open/close retries (up to 3 s) because CommonUI activates/removes a menu a tick after the push/deactivate.
+	// Opening one menu closes the others (Inventory -> Crafting is a SWITCH, not two stacked menus), and the gap between the old menu leaving and the new one activating must not flash
+	// the text back: the flip counter must read exactly 2 (hidden once, shown once) across open -> switch -> close.
+	Add(TEXT("HUD.TutorialTextYieldsToMenus"), {
+		Basic(ActionType::CloseAllMenus),
+		Named(ActionType::AssertNoActiveMenus, TEXT(""), TEXT("Menus did not close before the baseline")),
+		Named(ActionType::AssertTutorialTextShown, TEXT(""), TEXT("Baseline: tutorial text not shown with no menu open")),
+		FMOUIFrameTestAction(ActionType::CaptureTutorialFlips, FString(), FString(), FGameplayTag(), 1),
+		Named(ActionType::OpenMenu, TEXT("Inventory"), TEXT("Failed to open Inventory")),
+		Named(ActionType::AssertTutorialTextHidden, TEXT(""), TEXT("Inventory open: tutorial text not hidden")),
+		Basic(ActionType::BroadcastTutorialHintChanged),
+		Named(ActionType::AssertTutorialTextHidden, TEXT(""), TEXT("A tutorial hint change under an open menu popped the banner back over it")),
+		Named(ActionType::ToggleMenu, TEXT("Crafting"), TEXT("Failed to switch to Crafting")),
+		Named(ActionType::AssertMenuOpen, TEXT("Crafting"), TEXT("Crafting did not open")),
+		Named(ActionType::AssertTutorialTextHidden, TEXT(""), TEXT("Switched Inventory -> Crafting: tutorial text not hidden")),
+		Named(ActionType::AssertTutorialTextHidden, TEXT(""), TEXT("Switched Inventory -> Crafting (next frame): tutorial text not hidden")),
+		Basic(ActionType::CloseAllMenus),
+		Named(ActionType::AssertNoActiveMenus, TEXT(""), TEXT("Menus did not close")),
+		Named(ActionType::AssertTutorialTextShown, TEXT(""), TEXT("All menus closed: tutorial text did not come back")),
+		FMOUIFrameTestAction(ActionType::AssertTutorialFlipsSince, TEXT("2"), TEXT("The tutorial text flashed back while switching menus"), FGameplayTag(), 1),
+		Basic(ActionType::HideQuestTracker),
+		Named(ActionType::OpenMenu, TEXT("Inventory"), TEXT("Failed to open Inventory (hidden-tracker case)")),
+		Named(ActionType::AssertAnyMenuActive, TEXT(""), TEXT("Inventory did not activate (hidden-tracker case)")),
+		Basic(ActionType::CloseAllMenus),
+		Named(ActionType::AssertNoActiveMenus, TEXT(""), TEXT("Menus did not close (hidden-tracker case)")),
+		Basic(ActionType::AssertQuestTrackerStaysOff),
+		Basic(ActionType::AssertQuestTrackerStaysOff), // a second frame: the close path re-applies visibility a tick after the menu leaves the stack
+		Basic(ActionType::ShowQuestTracker),
+		Named(ActionType::AssertTutorialTextShown, TEXT(""), TEXT("ShowQuestHUD did not restore the tracker")),
+		Basic(ActionType::Pass)
+	});
 
 	Add(TEXT("Building.CloseEscape"), {
 		Named(ActionType::OpenMenu, TEXT("Building"), TEXT("Failed to open building menu")),
@@ -831,6 +869,82 @@ UMOUITestSubsystem::EMOUIFrameTestActionOutcome UMOUITestSubsystem::ExecuteFrame
 		return GetLayerWidgetCount(Action.LayerTag) < FrameTestScratch[Action.ScratchSlot]
 			? EMOUIFrameTestActionOutcome::Continue
 			: RetryOrFail(TEXT("Layer widget count did not decrease"));
+
+	case EMOUIFrameTestActionType::AssertTutorialTextShown:
+		return TutorialTextIsShown()
+			? EMOUIFrameTestActionOutcome::Continue
+			: RetryOrFail(TEXT("Tutorial text (hint banner / quest tracker) is not shown"));
+
+	case EMOUIFrameTestActionType::AssertTutorialTextHidden:
+		return TutorialTextIsHidden()
+			? EMOUIFrameTestActionOutcome::Continue
+			: RetryOrFail(TEXT("Tutorial text (hint banner / quest tracker) is still shown while a menu is open"));
+
+	case EMOUIFrameTestActionType::BroadcastTutorialHintChanged:
+		// What a tutorial objective completing UNDER an open menu does: the banner re-pulls the current hint on its own, and must not pop back over the menu.
+		if (UGameInstance* GI = GetWorld() ? GetWorld()->GetGameInstance() : nullptr)
+		{
+			if (UMOQuestSubsystem* QuestSubsystem = GI->GetSubsystem<UMOQuestSubsystem>())
+			{
+				QuestSubsystem->OnTutorialHintChanged.Broadcast();
+				return EMOUIFrameTestActionOutcome::Continue;
+			}
+		}
+		return Fail(TEXT("no quest subsystem"));
+
+	case EMOUIFrameTestActionType::CaptureTutorialFlips:
+	case EMOUIFrameTestActionType::AssertTutorialFlipsSince:
+		if (UMOUIManagerComponent* UIManager = GetUIManager())
+		{
+			if (const UMOQuestUIController* Quest = UIManager->GetQuestController())
+			{
+				if (Action.ScratchSlot < 0)
+				{
+					return Fail(TEXT("Invalid flip-count scratch slot"));
+				}
+				if (!FrameTestScratch.IsValidIndex(Action.ScratchSlot))
+				{
+					FrameTestScratch.SetNumZeroed(Action.ScratchSlot + 1);
+				}
+				if (Action.Type == EMOUIFrameTestActionType::CaptureTutorialFlips)
+				{
+					FrameTestScratch[Action.ScratchSlot] = Quest->GetHUDYieldFlipCount();
+					return EMOUIFrameTestActionOutcome::Continue;
+				}
+				const int32 Flips = Quest->GetHUDYieldFlipCount() - FrameTestScratch[Action.ScratchSlot];
+				const int32 Expected = FCString::Atoi(*Action.Argument);
+				return Flips == Expected
+					? EMOUIFrameTestActionOutcome::Continue
+					: Fail(FString::Printf(TEXT("%s (hidden<->shown flips since capture: %d, expected %d)"), *Action.FailureMessage, Flips, Expected));
+			}
+		}
+		return Fail(TEXT("no quest UI controller"));
+
+	case EMOUIFrameTestActionType::HideQuestTracker:
+	case EMOUIFrameTestActionType::ShowQuestTracker:
+		if (UMOUIManagerComponent* UIManager = GetUIManager())
+		{
+			if (UMOQuestUIController* Quest = UIManager->GetQuestController())
+			{
+				if (Action.Type == EMOUIFrameTestActionType::HideQuestTracker) Quest->HideQuestHUD(); else Quest->ShowQuestHUD();
+				return EMOUIFrameTestActionOutcome::Continue;
+			}
+		}
+		return Fail(TEXT("no quest UI controller"));
+
+	case EMOUIFrameTestActionType::AssertQuestTrackerStaysOff:
+		// One-shot, no retry: a tracker that was hidden on purpose must not reappear when a menu closes.
+		if (UMOUIManagerComponent* UIManager = GetUIManager())
+		{
+			if (const UMOQuestUIController* Quest = UIManager->GetQuestController())
+			{
+				const UMOQuestHUDWidget* Tracker = Quest->GetQuestHUD();
+				return (Tracker && Tracker->GetVisibility() == ESlateVisibility::Collapsed)
+					? EMOUIFrameTestActionOutcome::Continue
+					: Fail(TEXT("The quest tracker was hidden on purpose and came back when a menu closed"));
+			}
+		}
+		return Fail(TEXT("no quest UI controller"));
 
 	case EMOUIFrameTestActionType::Pass:
 		OutResult = MakeResult(ActiveFrameTestName, true);
@@ -2487,6 +2601,48 @@ FMOUITestResult UMOUITestSubsystem::Test_HUD_ReticleHiddenWhenMenuOpen()
 	if (!OpenMenu(TEXT("Inventory"))) return MakeResult(TEXT("HUD.ReticleHiddenWhenMenuOpen"), false, TEXT("Failed to open"));
 	LogTest(TEXT("  Reticle visibility check requires widget access - manual verification"));
 	return MakeResult(TEXT("HUD.ReticleHiddenWhenMenuOpen"), true);
+}
+
+FMOUITestResult UMOUITestSubsystem::Test_HUD_TutorialTextYieldsToMenus()
+{
+	const FString Name = TEXT("HUD.TutorialTextYieldsToMenus");
+	LogTest(TEXT("Testing: tutorial text (hint banner + quest tracker) hides while a menu is open and returns when it closes"));
+
+	// Legacy synchronous entry: only the closed-menu baseline can be checked in one frame. CommonUI activates a menu a tick after it is pushed, so the
+	// open/close behaviour is the frame-stepped sequence of the same name (RegisterFrameSteppedTests), which is what the batch runners execute.
+	UMOUIManagerComponent* UIManager = GetUIManager();
+	UMOQuestUIController* Quest = UIManager ? UIManager->GetQuestController() : nullptr;
+	if (!Quest) return MakeResult(Name, false, TEXT("no quest UI controller"));
+	if (!Quest->GetQuestHUD()) return MakeResult(Name, false, TEXT("quest tracker widget was not created (QuestHUDWidgetClass unset?)"));
+	if (!TutorialTextIsShown()) return MakeResult(Name, false, TEXT("baseline: tutorial text is not shown with no menu open"));
+	return MakeResult(Name, true);
+}
+
+bool UMOUITestSubsystem::TutorialTextIsShown() const
+{
+	UMOUIManagerComponent* UIManager = GetUIManager();
+	UMOQuestUIController* Quest = UIManager ? UIManager->GetQuestController() : nullptr;
+	const UMOQuestHUDWidget* Tracker = Quest ? Quest->GetQuestHUD() : nullptr;
+	if (!Tracker || Tracker->GetVisibility() != ESlateVisibility::HitTestInvisible)
+	{
+		return false;
+	}
+	const UMOTutorialHintWidget* Hint = Quest->GetTutorialHint();
+	// The banner is only on screen while a hint is active; what must hold with no menu open is that it is NOT held back.
+	return !Hint || (!Hint->IsSuppressedByMenu() && (!Hint->HasActiveHint() || Hint->GetVisibility() == ESlateVisibility::HitTestInvisible));
+}
+
+bool UMOUITestSubsystem::TutorialTextIsHidden() const
+{
+	UMOUIManagerComponent* UIManager = GetUIManager();
+	UMOQuestUIController* Quest = UIManager ? UIManager->GetQuestController() : nullptr;
+	const UMOQuestHUDWidget* Tracker = Quest ? Quest->GetQuestHUD() : nullptr;
+	if (!Tracker || Tracker->GetVisibility() != ESlateVisibility::Collapsed)
+	{
+		return false;
+	}
+	const UMOTutorialHintWidget* Hint = Quest->GetTutorialHint();
+	return !Hint || (Hint->IsSuppressedByMenu() && Hint->GetVisibility() == ESlateVisibility::Collapsed);
 }
 
 FMOUITestResult UMOUITestSubsystem::Test_ToggleKey_InventoryOpensAndCloses()

@@ -18,6 +18,8 @@
 #include "MOGameMode.h"
 #include "MOPersistenceSubsystem.h"
 #include "MOUIUtils.h"
+#include "MOTutorialHintWidget.h"
+#include "MOQuestUIController.h"
 #include "MOCommunitySettings.h"
 #include "MOBugReport.h"
 #include "MOBugReportBundle.h"
@@ -1147,6 +1149,27 @@ bool FMOUI_MultiLineTextInputStyleIsReadable::RunTest(const FString& Parameters)
 	TestTrue(TEXT("text style colour is dark"), Luminance(Box->WidgetStyle.TextStyle.ColorAndOpacity) < 0.1f);
 	TestTrue(TEXT("the Slate widget survives a layout pass (no dangling style pointer)"), Box->TakeWidget()->GetDesiredSize().X >= 0.f);
 	UMOUIUtils::ApplyReadableMultiLineTextInputStyle(nullptr); // null-safe
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOTutorialText_YieldsToMenus,
+	"MOFramework.UI.TutorialTextYieldsToMenus",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOTutorialText_YieldsToMenus::RunTest(const FString& Parameters)
+{
+	// Hint banner: shown only when there is a hint AND no menu is open.
+	TestEqual(TEXT("hint, no menu: shown"), UMOTutorialHintWidget::ComputeVisibility(true, false), ESlateVisibility::HitTestInvisible);
+	TestEqual(TEXT("hint, menu open: hidden"), UMOTutorialHintWidget::ComputeVisibility(true, true), ESlateVisibility::Collapsed);
+	TestEqual(TEXT("CONTROL: no hint, no menu: hidden"), UMOTutorialHintWidget::ComputeVisibility(false, false), ESlateVisibility::Collapsed);
+	TestEqual(TEXT("CONTROL: no hint, menu open: hidden (a closing menu must not conjure a banner)"), UMOTutorialHintWidget::ComputeVisibility(false, true), ESlateVisibility::Collapsed);
+
+	// Quest tracker: wanted AND not (menu open AND yielding enabled).
+	TestEqual(TEXT("tracker wanted, no menu: shown"), UMOQuestUIController::ComputeQuestHUDVisibility(true, false, true), ESlateVisibility::HitTestInvisible);
+	TestEqual(TEXT("tracker wanted, menu open: hidden"), UMOQuestUIController::ComputeQuestHUDVisibility(true, true, true), ESlateVisibility::Collapsed);
+	TestEqual(TEXT("tracker wanted, menu open, yielding disabled: stays shown"), UMOQuestUIController::ComputeQuestHUDVisibility(true, true, false), ESlateVisibility::HitTestInvisible);
+	TestEqual(TEXT("CONTROL: tracker not wanted, no menu: hidden"), UMOQuestUIController::ComputeQuestHUDVisibility(false, false, true), ESlateVisibility::Collapsed);
+	TestEqual(TEXT("CONTROL: tracker not wanted, yielding disabled, menu open: hidden"), UMOQuestUIController::ComputeQuestHUDVisibility(false, true, false), ESlateVisibility::Collapsed);
 	return true;
 }
 

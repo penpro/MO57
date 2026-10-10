@@ -328,6 +328,17 @@ void UMOActivatableWidget::NativeOnActivated()
 			*GetName(), *CloseAction->GetName());
 	}
 
+	// SYMMETRIC with NativeOnDeactivated: a controller's synchronous UpdateReticleVisibility() right after PushWidgetToLayer runs BEFORE CommonUI lists the
+	// widget as the stack's active one (menu count still 0), so nothing else ever tells the HUD (reticle, tutorial text) that a menu has appeared -- it only
+	// learned on the way out. Refresh here, when the widget really is active; idempotent, so passive overlays (progress bars, the tutorial hint) are harmless.
+	if (APlayerController* PC = GetOwningPlayer())
+	{
+		if (UMOUIManagerComponent* UIManager = PC->FindComponentByClass<UMOUIManagerComponent>())
+		{
+			UIManager->RequestUpdateReticleVisibility();
+		}
+	}
+
 	MOUI_LOG(this, "Activate", "EXIT   %s", *GetName());
 	MOUI_DUMP_STATE(this, FString::Printf(TEXT("After activate %s"), *GetName()));
 }
