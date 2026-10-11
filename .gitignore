@@ -74,3 +74,6 @@ Content/Python/test_output/
 
 # The unattended-run task script Claude rewrites for each job (Tools/ov.bat runs and archives it; see Tools/ov_run.sh)
 Tools/ov_task.sh
+
+# Marketplace plugins (Oceanology etc.): licensed, multi-GB, re-install from the Epic launcher / Fab. The uproject + uplugin reference them by name.
+Plugins/Marketplace/
