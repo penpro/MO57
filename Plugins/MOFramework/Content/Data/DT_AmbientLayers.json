@@ -390,5 +390,70 @@
 		"PitchJitterMax": 1.12,
 		"DominanceShiftIntervalMin": 60.0,
 		"DominanceShiftIntervalMax": 120.0
+	},
+	{
+		"Name": "Ambient.Cave",
+		"BaseLayers": [
+			{
+				"AudioId": "Ambient.Air.CalmHollow1",
+				"Volume": 1.0,
+				"DelayBetweenLoopsMin": 0.0,
+				"DelayBetweenLoopsMax": 0.0
+			},
+			{
+				"AudioId": "Ambient.Water.HollowDrip1",
+				"Volume": 0.7,
+				"DelayBetweenLoopsMin": 3.0,
+				"DelayBetweenLoopsMax": 9.0
+			}
+		],
+		"BaseLayerVolume": 0.9,
+		"EventGroups": [
+			{
+				"GroupName": "Drips",
+				"AudioIds": [
+					"Ambient.Water.WaterDrip1",
+					"Ambient.Water.WaterDrip2",
+					"Ambient.Water.HollowDrip2",
+					"Ambient.Night.GlowMushroomDrip1",
+					"Ambient.Night.GlowMushroomDrip2"
+				],
+				"CooldownSeconds": 8.0,
+				"DominantWeight": 6.0,
+				"BackgroundWeight": 2.0
+			},
+			{
+				"GroupName": "Bats",
+				"AudioIds": [
+					"Ambient.Animal.BatFlutter1",
+					"Ambient.Animal.BatFlutter2",
+					"Ambient.Night.BatEchoes1",
+					"Ambient.Night.BatEchoes2"
+				],
+				"CooldownSeconds": 40.0,
+				"DominantWeight": 3.0,
+				"BackgroundWeight": 0.6
+			},
+			{
+				"GroupName": "Air",
+				"AudioIds": [
+					"Ambient.Air.CalmHollow2",
+					"Ambient.Air.ShadowWind1",
+					"Ambient.Air.ShadowWind2"
+				],
+				"CooldownSeconds": 30.0,
+				"DominantWeight": 3.0,
+				"BackgroundWeight": 1.0
+			}
+		],
+		"EventIntervalMin": 6.0,
+		"EventIntervalMax": 20.0,
+		"EventVolume": 0.8,
+		"VolumeJitterMin": 0.3,
+		"VolumeJitterMax": 1.0,
+		"PitchJitterMin": 0.9,
+		"PitchJitterMax": 1.08,
+		"DominanceShiftIntervalMin": 60.0,
+		"DominanceShiftIntervalMax": 120.0
 	}
 ]
