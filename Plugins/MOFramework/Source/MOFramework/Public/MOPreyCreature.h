@@ -60,7 +60,7 @@ class MOFRAMEWORK_API AMOPreyCreature : public AMOCreature
 	GENERATED_BODY()
 
 public:
-	AMOPreyCreature();
+	AMOPreyCreature(const FObjectInitializer& ObjectInitializer);
 
 	// ============================================================================
 	// PREY BEHAVIOR

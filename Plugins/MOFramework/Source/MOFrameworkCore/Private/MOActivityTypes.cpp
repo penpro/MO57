@@ -117,6 +117,18 @@ FMOActivityConfig FMOActivityConfig::GetDefaultConfig(EMOActivityLevel Level)
 		Config.MinimumStaminaToStart = 0.1f;
 		break;
 
+	case EMOActivityLevel::Swimming:
+		Config.CalorieMultiplier = 7.0f;
+		Config.ExertionLevel = 60.0f;
+		Config.StaminaDrainPerSecond = 2.5f;   // a sustained crawl is slower than a jog but cannot be rested in: drains steadily
+		Config.FatiguePerHour = 10.0f;
+		Config.bIsCardioTraining = true;
+		Config.bIsStrengthTraining = false;
+		Config.TrainingIntensity = 0.6f;
+		Config.bRequiresStamina = true;
+		Config.MinimumStaminaToStart = 0.0f;   // you cannot refuse to swim once you are in deep water: treading water is the floor
+		break;
+
 	default:
 		// Default to idle
 		Config.CalorieMultiplier = 1.0f;

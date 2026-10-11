@@ -7,7 +7,8 @@
 #include "Kismet/GameplayStatics.h"
 #include "GameFramework/CharacterMovementComponent.h"
 
-AMOPredatorCreature::AMOPredatorCreature()
+AMOPredatorCreature::AMOPredatorCreature(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
 {
 	AutoPossessAI = EAutoPossessAI::PlacedInWorldOrSpawned;
 }

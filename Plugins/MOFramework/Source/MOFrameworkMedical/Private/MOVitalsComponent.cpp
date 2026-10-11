@@ -233,6 +233,12 @@ void UMOVitalsComponent::SetActivityLevel(EMOActivityLevel NewActivity)
 	}
 }
 
+void UMOVitalsComponent::SetAirwayOxygenReserve(float Reserve01, float SpO2Cap)
+{
+	AirwayOxygenReserve = FMath::Clamp(Reserve01, 0.0f, 1.0f);
+	AirwaySpO2Cap = FMath::Clamp(SpO2Cap, 0.0f, 100.0f);
+}
+
 FMOActivityConfig UMOVitalsComponent::GetCurrentActivityConfig() const
 {
 	return FMOActivityConfig::GetDefaultConfig(Activity.CurrentActivity);
@@ -836,6 +842,7 @@ void UMOVitalsComponent::CalculateOxygenSaturation()
 	}
 
 	Vitals.SpO2 = BaseSpO2 + VolumeMod + LungMod + TempMod;
+	Vitals.SpO2 = FMath::Min(Vitals.SpO2, AirwaySpO2Cap);   // a closed airway (water, later smoke) caps the saturation: UMORespirationComponent
 	Vitals.SpO2 = FMath::Clamp(Vitals.SpO2, 0.0f, 100.0f);
 
 	CheckAndBroadcastChange(FName("SpO2"), OldSpO2, Vitals.SpO2, 2.0f);

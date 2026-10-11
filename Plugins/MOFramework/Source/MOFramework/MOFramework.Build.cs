@@ -109,6 +109,7 @@ public class MOFramework : ModuleRules
 				"HTTP",              // FHttpModule: the bug report upload (MOBugReport.cpp)
 				"ImageWrapper", // Required for PNG encoding/decoding (save thumbnails)
 				"RenderCore",   // Required for viewport pixel reading
+				"RHI",          // MO.Perf.Bench: GPU frame cycles + draw-call counters (MOPerfBench.cpp)
 				"Media",        // Required for UMediaPlayer (intro video)
 				"MediaAssets",  // Required for UMediaSource, UMediaTexture
 				"AudioMixer",   // Required for UMediaSoundComponent (inherits USynthComponent)

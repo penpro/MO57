@@ -7,6 +7,10 @@
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "MOCharacterMovementComponent.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "Animation/AnimInstance.h"
+#include "Animation/AnimSequence.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "MOIdentityComponent.h"
 #include "MOPersistenceSubsystem.h"
@@ -20,6 +24,7 @@
 #include "MOMentalStateComponent.h"
 #include "MOAnatomyComponent.h"
 #include "MOAdrenalineComponent.h"
+#include "MORespirationComponent.h"
 #include "MOCraftingQueueComponent.h"
 #include "MORecipeDiscoveryComponent.h"
 #include "MOEquipmentComponent.h"
@@ -48,7 +53,8 @@
 #include "VoxelWorld.h"
 #include "Collision/VoxelCollisionInvoker.h"
 
-AMOCharacter::AMOCharacter()
+AMOCharacter::AMOCharacter(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer.SetDefaultSubobjectClass<UMOCharacterMovementComponent>(ACharacter::CharacterMovementComponentName))
 {
 	// Capsule defaults (same as ThirdPerson template)
 	GetCapsuleComponent()->InitCapsuleSize(42.f, 96.0f);
@@ -104,6 +110,16 @@ AMOCharacter::AMOCharacter()
 	MentalStateComponent = CreateDefaultSubobject<UMOMentalStateComponent>(TEXT("MentalStateComponent"));
 	AnatomyComponent = CreateDefaultSubobject<UMOAnatomyComponent>(TEXT("AnatomyComponent"));
 	AdrenalineComponent = CreateDefaultSubobject<UMOAdrenalineComponent>(TEXT("AdrenalineComponent"));
+	RespirationComponent = CreateDefaultSubobject<UMORespirationComponent>(TEXT("RespirationComponent"));
+
+	// Swim animations (retargeted Oceanology set, Content/Characters/Swim): the default for every MO pawn that has a MetaHuman-skeleton body.
+	SwimTreadAnim = TSoftObjectPtr<UAnimSequence>(FSoftObjectPath(TEXT("/MOFramework/Characters/Swim/Swim_Surface_Idle_MH.Swim_Surface_Idle_MH")));
+	SwimSlowAnim = TSoftObjectPtr<UAnimSequence>(FSoftObjectPath(TEXT("/MOFramework/Characters/Swim/Swim_Surface_Slow_Forward_MH.Swim_Surface_Slow_Forward_MH")));
+	SwimCrawlAnim = TSoftObjectPtr<UAnimSequence>(FSoftObjectPath(TEXT("/MOFramework/Characters/Swim/Swim_Surface_Forward_MH.Swim_Surface_Forward_MH")));
+	SwimUnderIdleAnim = TSoftObjectPtr<UAnimSequence>(FSoftObjectPath(TEXT("/MOFramework/Characters/Swim/Swimming_Underwater_MH.Swimming_Underwater_MH")));
+	SwimUnderForwardAnim = TSoftObjectPtr<UAnimSequence>(FSoftObjectPath(TEXT("/MOFramework/Characters/Swim/Swim_Underwater_Forward_MH.Swim_Underwater_Forward_MH")));
+	SwimUnderUpAnim = TSoftObjectPtr<UAnimSequence>(FSoftObjectPath(TEXT("/MOFramework/Characters/Swim/Swim_Underwater_Forward_Up_MH.Swim_Underwater_Forward_Up_MH")));
+	SwimUnderDownAnim = TSoftObjectPtr<UAnimSequence>(FSoftObjectPath(TEXT("/MOFramework/Characters/Swim/Swim_Underwater_Forward_Down_MH.Swim_Underwater_Forward_Down_MH")));
 
 	// MO Components - Terraforming
 	TerraformingComponent = CreateDefaultSubobject<UMOTerraformingComponent>(TEXT("TerraformingComponent"));
@@ -251,6 +267,10 @@ void AMOCharacter::BeginPlay()
 	{
 		AnatomyComponent->OnInstantDeath.AddDynamic(this, &AMOCharacter::HandleInstantDeath);
 	}
+	if (RespirationComponent)
+	{
+		RespirationComponent->OnAsphyxiaDeath.AddDynamic(this, &AMOCharacter::HandleAsphyxiaDeath);
+	}
 
 	Super::BeginPlay();
 }
@@ -263,6 +283,10 @@ void AMOCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	if (AnatomyComponent)
 	{
 		AnatomyComponent->OnInstantDeath.RemoveDynamic(this, &AMOCharacter::HandleInstantDeath);
+	}
+	if (RespirationComponent)
+	{
+		RespirationComponent->OnAsphyxiaDeath.RemoveDynamic(this, &AMOCharacter::HandleAsphyxiaDeath);
 	}
 
 	Super::EndPlay(EndPlayReason);
@@ -337,6 +361,8 @@ void AMOCharacter::UnPossessed()
 void AMOCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+
+	TickWater(DeltaTime);
 
 	// Check for falling through the world
 	if (bEnableFallThroughSafety)
@@ -516,7 +542,17 @@ void AMOCharacter::RequestMove_Implementation(FVector2D MovementInput)
 		const FRotator Rotation = Controller->GetControlRotation();
 		const FRotator YawRotation(0, Rotation.Yaw, 0);
 
-		const FVector ForwardDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
+		// Swimming steers by the camera direction: look down and stroke forward to dive, look up to rise. A dead zone of +-12 degrees around the horizon keeps a swimmer who merely looks around
+		// level (otherwise a slightly downward glance is a slow dive and the head goes under); beyond it the pitch ramps up to the full angle.
+		FRotator SwimRotation = Rotation;
+		if (IsSwimming())
+		{
+			constexpr float DeadZone = 12.0f;
+			const float Pitch = FRotator::NormalizeAxis(Rotation.Pitch);
+			const float Excess = FMath::Max(FMath::Abs(Pitch) - DeadZone, 0.0f);
+			SwimRotation.Pitch = FMath::Sign(Pitch) * Excess * (90.0f / (90.0f - DeadZone));
+		}
+		const FVector ForwardDirection = IsSwimming() ? SwimRotation.Vector() : FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
 		const FVector RightDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
 
 		AddMovementInput(ForwardDirection, MovementInput.Y);
@@ -553,6 +589,11 @@ void AMOCharacter::RequestLook_Implementation(FVector2D LookInput)
 
 void AMOCharacter::RequestJumpStart_Implementation()
 {
+	if (IsSwimming())
+	{
+		bSwimUpHeld = true;   // rise while held (TickWater adds the input)
+		return;
+	}
 	if (CanJump_Implementation())
 	{
 		Jump();
@@ -561,6 +602,7 @@ void AMOCharacter::RequestJumpStart_Implementation()
 
 void AMOCharacter::RequestJumpEnd_Implementation()
 {
+	bSwimUpHeld = false;
 	StopJumping();
 }
 
@@ -926,6 +968,10 @@ void AMOCharacter::UpdateMovementSpeed()
 
 float AMOCharacter::GetCurrentMET() const
 {
+	if (IsSwimming())
+	{
+		return SwimmingMET;
+	}
 	switch (CurrentMovementMode)
 	{
 	case EMOMovementMode::Jogging:
@@ -940,6 +986,10 @@ float AMOCharacter::GetCurrentMET() const
 
 float AMOCharacter::GetCurrentExertionLevel() const
 {
+	if (IsSwimming())
+	{
+		return SwimmingExertion;
+	}
 	switch (CurrentMovementMode)
 	{
 	case EMOMovementMode::Jogging:
@@ -993,8 +1043,8 @@ void AMOCharacter::StopMovementPhysiologyTracking()
 
 void AMOCharacter::ApplyMovementPhysiologyEffects(float DeltaTime)
 {
-	// Only apply effects if we're actually moving
-	if (!GetCharacterMovement() || GetVelocity().Size2D() < 10.0f)
+	// Only apply effects if we're actually moving (a swimmer treading water is working: it never rests)
+	if (!GetCharacterMovement() || (GetVelocity().Size2D() < 10.0f && !IsSwimming()))
 	{
 		// Not moving - set exertion to resting
 		if (VitalsComponent)
@@ -1073,6 +1123,10 @@ void AMOCharacter::ApplyMovementPhysiologyEffects(float DeltaTime)
 		default:
 			break;
 		}
+		if (IsSwimming())
+		{
+			StaminaCost = SwimmingStaminaCostPerSecond * DeltaTime;
+		}
 
 		if (StaminaCost > 0.0f)
 		{
@@ -1091,7 +1145,7 @@ void AMOCharacter::ApplyMovementPhysiologyEffects(float DeltaTime)
 	// ============================================================================
 	if (SkillsComponent && !AthleticsSkillId.IsNone())
 	{
-		float XPGained = 0.0f;
+		float XPGained = IsSwimming() ? JoggingXPPerSecond * DeltaTime : 0.0f;
 		switch (CurrentMovementMode)
 		{
 		case EMOMovementMode::Walking:
@@ -1155,6 +1209,194 @@ void AMOCharacter::HandleRecipeDiscovered(FName RecipeId, EMODiscoveryMethod Met
 			NotificationComp->ShowRecipeUnlockedNotification(RecipeId);
 		}
 	}
+}
+
+bool AMOCharacter::IsSwimming() const
+{
+	const UCharacterMovementComponent* Move = GetCharacterMovement();
+	return Move && Move->IsSwimming();
+}
+
+void AMOCharacter::HandleAsphyxiaDeath()
+{
+	HandleInstantDeath(EMOBodyPartType::Brain);   // drowning kills by hypoxia of the brain
+}
+
+AMOCharacter::ESwimPose AMOCharacter::ChooseSwimPose() const
+{
+	const UMOCharacterMovementComponent* Move = Cast<UMOCharacterMovementComponent>(GetCharacterMovement());
+	if (!Move)
+	{
+		return ESwimPose::None;
+	}
+	const FVector Velocity = GetVelocity();
+	const float Horizontal = Velocity.Size2D();
+	const bool bMoving = Horizontal > 15.0f || FMath::Abs(Velocity.Z) > 25.0f;
+	if (Move->IsHeadUnderwater())
+	{
+		if (!bMoving)
+		{
+			return ESwimPose::UnderIdle;
+		}
+		if (FMath::Abs(Velocity.Z) > 25.0f && FMath::Abs(Velocity.Z) > 0.5f * Horizontal)
+		{
+			return Velocity.Z > 0.0f ? ESwimPose::UnderUp : ESwimPose::UnderDown;
+		}
+		return ESwimPose::UnderForward;
+	}
+	if (Horizontal < 15.0f)
+	{
+		return ESwimPose::Tread;
+	}
+	return Horizontal > 0.7f * Move->GetMaxSpeed() ? ESwimPose::Crawl : ESwimPose::Slow;
+}
+
+void AMOCharacter::UpdateSwimAnimation(float DeltaTime, bool bSwimming)
+{
+	USkeletalMeshComponent* Body = GetMesh();
+	if (!Body)
+	{
+		return;
+	}
+
+	// Leaving the water (or dying): give the mesh back to the locomotion animation blueprint.
+	if (!bSwimming)
+	{
+		if (CurrentSwimPose != ESwimPose::None)
+		{
+			CurrentSwimPose = ESwimPose::None;
+			PendingSwimPose = ESwimPose::None;
+			Body->SetAnimationMode((EAnimationMode::Type)SavedAnimMode);
+			if (SavedAnimClass)
+			{
+				Body->SetAnimInstanceClass(SavedAnimClass);
+			}
+			Body->SetRelativeLocation(SavedMeshRelativeLocation);
+			SwimMeshRaise = 0.0f;
+		}
+		return;
+	}
+
+	// Debounce: a pose must be wanted for a quarter second before it replaces the current one (the speed hovers around the thresholds).
+	const ESwimPose Wanted = ChooseSwimPose();
+	if (Wanted != CurrentSwimPose)
+	{
+		if (Wanted != PendingSwimPose)
+		{
+			PendingSwimPose = Wanted;
+			PendingSwimPoseSeconds = 0.0f;
+		}
+		PendingSwimPoseSeconds += DeltaTime;
+		if (CurrentSwimPose == ESwimPose::None || PendingSwimPoseSeconds >= 0.25f)
+		{
+			const TSoftObjectPtr<UAnimSequence>* Source = nullptr;
+			switch (Wanted)
+			{
+			default: check(false);
+			case ESwimPose::Tread: Source = &SwimTreadAnim; break;
+			case ESwimPose::Slow: Source = &SwimSlowAnim; break;
+			case ESwimPose::Crawl: Source = &SwimCrawlAnim; break;
+			case ESwimPose::UnderIdle: Source = &SwimUnderIdleAnim; break;
+			case ESwimPose::UnderForward: Source = &SwimUnderForwardAnim; break;
+			case ESwimPose::UnderUp: Source = &SwimUnderUpAnim; break;
+			case ESwimPose::UnderDown: Source = &SwimUnderDownAnim; break;
+			case ESwimPose::None: break;
+			}
+			UAnimSequence* Anim = (Source && !Source->IsNull()) ? Source->LoadSynchronous() : nullptr;
+			if (Anim)
+			{
+				if (CurrentSwimPose == ESwimPose::None)
+				{
+					SavedAnimMode = (uint8)Body->GetAnimationMode();
+					SavedAnimClass = Body->GetAnimClass();
+					SavedMeshRelativeLocation = Body->GetRelativeLocation();
+				}
+				Body->PlayAnimation(Anim, /*bLooping=*/true);
+				CurrentSwimPose = Wanted;
+			}
+			PendingSwimPose = ESwimPose::None;
+			PendingSwimPoseSeconds = 0.0f;
+		}
+	}
+	else
+	{
+		PendingSwimPose = ESwimPose::None;
+		PendingSwimPoseSeconds = 0.0f;
+	}
+
+	// A horizontal swimmer rides the surface: lift the mesh until the body line is at the water (the capsule's centre is ~60 cm below it while floating). Upright and underwater poses keep the capsule's frame.
+	if (CurrentSwimPose != ESwimPose::None)
+	{
+		float TargetRaise = 0.0f;
+		if (CurrentSwimPose == ESwimPose::Slow || CurrentSwimPose == ESwimPose::Crawl)
+		{
+			float Surface = 0.0f;
+			const UMOCharacterMovementComponent* Move = Cast<UMOCharacterMovementComponent>(GetCharacterMovement());
+			if (Move && Move->GetWaterSurfaceZ(Surface))
+			{
+				TargetRaise = FMath::Clamp(Surface - GetActorLocation().Z - 6.0f, 0.0f, 70.0f);
+			}
+		}
+		SwimMeshRaise = FMath::FInterpTo(SwimMeshRaise, TargetRaise, DeltaTime, 6.0f);
+		Body->SetRelativeLocation(SavedMeshRelativeLocation + FVector(0.0f, 0.0f, SwimMeshRaise));
+	}
+}
+
+void AMOCharacter::TickWater(float DeltaTime)
+{
+	UMOCharacterMovementComponent* Move = Cast<UMOCharacterMovementComponent>(GetCharacterMovement());
+	if (!Move)
+	{
+		return;
+	}
+	const bool bSwimming = Move->IsSwimming();
+
+	// Rise while Space is held: the local input; the movement component replicates the resulting move like any other.
+	if (bSwimming && bSwimUpHeld && !bIsDead && IsLocallyControlled())
+	{
+		AddMovementInput(FVector::UpVector, 1.0f);
+	}
+	if (!bSwimming)
+	{
+		bSwimUpHeld = false;
+	}
+
+	if (HasAuthority())
+	{
+		// The airway is closed while the eyes are under water: the respiration component runs the breath-hold from here.
+		if (RespirationComponent)
+		{
+			RespirationComponent->SetAirwayClosedBy(TEXT("Water"), !bIsDead && Move->IsHeadUnderwater());
+		}
+		// Clothes soak through as the water rises (the existing wetness pipeline: cold, drying by fire, moodle).
+		if (VitalsComponent && Move->GetImmersion() > 0.05f)
+		{
+			const float Target = FMath::Clamp(Move->GetImmersion() * 1.25f, 0.0f, 1.0f);   // chest deep = soaked
+			if (VitalsComponent->GetWetnessLevel() < Target)
+			{
+				VitalsComponent->SetWetnessLevel(FMath::Min(Target, VitalsComponent->GetWetnessLevel() + DeltaTime * 0.6f));
+			}
+		}
+	}
+
+	// Effort: a hustle stroke is faster; with no stamina left the swimmer can barely keep afloat.
+	float Scale = 1.0f;
+	if (bSwimming)
+	{
+		if (bIsSprinting)
+		{
+			Scale = SwimHustleSpeedScale;
+		}
+		if (SurvivalStatsComponent && SurvivalStatsComponent->GetStatCurrent(TEXT("Stamina")) <= 0.0f)
+		{
+			Scale = ExhaustedSwimSpeedScale;
+		}
+	}
+	Move->SwimSpeedScale = Scale;
+
+	UpdateSwimAnimation(DeltaTime, bSwimming && !bIsDead);
+
+	bWasSwimmingLastTick = bSwimming;
 }
 
 void AMOCharacter::HandleInstantDeath(EMOBodyPartType CausePart)

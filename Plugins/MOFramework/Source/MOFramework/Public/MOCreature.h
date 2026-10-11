@@ -74,7 +74,7 @@ class MOFRAMEWORK_API AMOCreature : public AMOCharacter
 	GENERATED_BODY()
 
 public:
-	AMOCreature();
+	AMOCreature(const FObjectInitializer& ObjectInitializer);
 
 	// ============================================================================
 	// DEFINITION

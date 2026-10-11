@@ -30,7 +30,6 @@ namespace
 		float Radius = 0.0f, Depth = 0.0f;
 	};
 
-	FORCEINLINE float Unit16(uint32 Bits) { return (float)(Bits & 0xFFFFu) * (1.0f / 65535.0f); }
 
 	/** The cell's sinkhole without touching the ground (cheap, pure hashing). The 18% jitter margin keeps a sinkhole inside its own cell. */
 	bool SinkholeBasics(const FMOWorldGenTuning& T, int64 CellX, int64 CellY, int32 Seed, FSinkholeBasics& Out)

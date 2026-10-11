@@ -8,7 +8,7 @@
 
 namespace
 {
-	FMOWorldGenParamsRef MakeWaterParams()
+	FMOWorldGenParamsRef MakeMaskTestParams()
 	{
 		TSharedRef<FMOWorldGenParams, ESPMode::ThreadSafe> P = MakeShared<FMOWorldGenParams, ESPMode::ThreadSafe>();
 		P->Finalize();
@@ -41,7 +41,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOPCG_WaterMask,
 
 bool FMOPCG_WaterMask::RunTest(const FString& Parameters)
 {
-	const FMOWorldGenParamsRef P = MakeWaterParams();
+	const FMOWorldGenParamsRef P = MakeMaskTestParams();
 	constexpr int32 Seed = 424242;
 	const FMOPCGWaterMask Mask(P, Seed);
 	const FMOPCGWaterMask Off;
@@ -100,7 +100,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOWorldGen_UplandLakeBed,
 
 bool FMOWorldGen_UplandLakeBed::RunTest(const FString& Parameters)
 {
-	const FMOWorldGenParamsRef P = MakeWaterParams();
+	const FMOWorldGenParamsRef P = MakeMaskTestParams();
 	constexpr int32 Seed = 424242;
 	const TArray<FMOWorldGen::FLake> Lakes = FindLakes(*P, Seed, 40);
 	if (!TestTrue(TEXT("the test world has upland lakes"), Lakes.Num() >= 10))
@@ -156,7 +156,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOPCG_MayHaveShore,
 bool FMOPCG_MayHaveShore::RunTest(const FString& Parameters)
 {
 	// MayHaveShore is the shore tier's cheap per-cell skip. It must be SOUND: a cell it rejects may not contain a single point with a shore factor, or the reed belt would silently miss stretches of bank.
-	const FMOWorldGenParamsRef P = MakeWaterParams();
+	const FMOWorldGenParamsRef P = MakeMaskTestParams();
 	constexpr int32 Seed = 90210;
 	const FMOPCGWaterMask Mask(P, Seed);
 	const FMOPCGWaterMask Off;

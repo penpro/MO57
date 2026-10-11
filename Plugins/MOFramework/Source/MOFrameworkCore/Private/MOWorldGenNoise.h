@@ -33,6 +33,9 @@ namespace MOWorldGenNoise
 		return (uint32)H;
 	}
 
+	/** The low 16 bits of a hash as a float in [0, 1]. */
+	FORCEINLINE float Unit16(uint32 Bits) { return (float)(Bits & 0xFFFFu) * (1.0f / 65535.0f); }
+
 	FORCEINLINE uint32 HashLattice3(int64 X, int64 Y, int64 Z, uint32 Salt)
 	{
 		uint64 H = (uint64)X * 0x9E3779B97F4A7C15ull;

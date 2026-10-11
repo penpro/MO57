@@ -465,6 +465,16 @@ public:
 	void SetActivityLevel(EMOActivityLevel NewActivity);
 
 	/**
+	 * The breath-hold process (UMORespirationComponent) reports the oxygen reserve of the lungs + blood and the blood oxygen saturation it implies. SpO2 is capped to that value (it never RAISES the
+	 * body's normal reading); a reserve of 1 lifts the cap. Authority-side.
+	 */
+	void SetAirwayOxygenReserve(float Reserve01, float SpO2Cap);
+
+	/** Oxygen reserve last reported by the respiration component (1 = full). */
+	UFUNCTION(BlueprintPure, Category="MO|Vitals")
+	float GetAirwayOxygenReserve() const { return AirwayOxygenReserve; }
+
+	/**
 	 * Get current activity level.
 	 */
 	UFUNCTION(BlueprintPure, Category="MO|Vitals|Activity")
@@ -709,6 +719,10 @@ private:
 
 	/** Calculate respiratory rate. */
 	void CalculateRespiratoryRate();
+
+	/** Oxygen reserve + the SpO2 cap it implies, from UMORespirationComponent (defaults: full reserve, no cap). */
+	float AirwayOxygenReserve = 1.0f;
+	float AirwaySpO2Cap = 100.0f;
 
 	/** Calculate oxygen saturation. */
 	void CalculateOxygenSaturation();

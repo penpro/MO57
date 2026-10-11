@@ -70,7 +70,7 @@ class MOFRAMEWORK_API AMOMetaHumanCharacter : public AMOCharacter
 	GENERATED_BODY()
 
 public:
-	AMOMetaHumanCharacter();
+	AMOMetaHumanCharacter(const FObjectInitializer& ObjectInitializer);
 
 	// ============================================================================
 	// METAHUMAN COMPONENT ACCESSORS

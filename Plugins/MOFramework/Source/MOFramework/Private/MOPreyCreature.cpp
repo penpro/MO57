@@ -3,7 +3,8 @@
 #include "BehaviorTree/BehaviorTree.h"
 #include "GameFramework/CharacterMovementComponent.h"
 
-AMOPreyCreature::AMOPreyCreature()
+AMOPreyCreature::AMOPreyCreature(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
 {
 	// Prey creatures auto-possess for AI
 	AutoPossessAI = EAutoPossessAI::PlacedInWorldOrSpawned;

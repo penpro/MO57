@@ -3,7 +3,8 @@
 #include "MOAppearanceSubsystem.h"
 #include "Components/SkeletalMeshComponent.h"
 
-AMOMetaHumanCharacter::AMOMetaHumanCharacter()
+AMOMetaHumanCharacter::AMOMetaHumanCharacter(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
 {
 	// Face mesh follows Body via Leader Pose
 	FaceMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("FaceMesh"));

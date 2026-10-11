@@ -1,0 +1,36 @@
+// "Where is the water" for gameplay (swimming, floating objects, later boats): the generator's open-water surfaces, queried by world position.
+//
+// The visible water is generated, not placed: the infinite ocean mesh fills everything under SeaLevelCm (the sea, rivers, ponds, sea-level lake basins and any pit dug below the plane) and each upland
+// lake is a plane over its ellipse at its own surface height. FMOWorldGen::GetWaterSurfaceCm answers with exactly those surfaces, so gameplay and visuals cannot disagree.
+//
+// The swim volume: UCharacterMovementComponent decides "in water" from its APhysicsVolume (bWaterVolume). The world's placed volumes cannot describe generated water, so this subsystem owns ONE brushless
+// APhysicsVolume with bWaterVolume set, which UMOCharacterMovementComponent::GetPhysicsVolume returns while a character swims (nothing else ever overlaps it: it has no shape).
+
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Subsystems/WorldSubsystem.h"
+#include "MOWaterSubsystem.generated.h"
+
+class APhysicsVolume;
+
+UCLASS()
+class MOFRAMEWORK_API UMOWaterSubsystem : public UWorldSubsystem
+{
+	GENERATED_BODY()
+
+public:
+	virtual bool DoesSupportWorldType(const EWorldType::Type WorldType) const override;
+
+	static UMOWaterSubsystem* Get(const UObject* WorldContext);
+
+	/** The open-water surface height (cm) at X, Y. False when there is no active world seed or water is off (the main menu, a world without a generator). Cheap: safe to call every movement update. */
+	bool GetSurfaceZ(double X, double Y, float& OutSurfaceZ) const;
+
+	/** The world's one shared brushless water volume (bWaterVolume, a high fluid friction so a swimmer's motion damps like a swimmer's). Spawned on first use; null if it cannot be spawned. */
+	APhysicsVolume* GetSwimVolume();
+
+private:
+	UPROPERTY(Transient)
+	TObjectPtr<APhysicsVolume> SwimVolume;
+};

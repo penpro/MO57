@@ -20,8 +20,15 @@
 #include "Engine/DataTable.h"
 #include "Animation/AnimInstance.h"
 
-AMOCreature::AMOCreature()
+AMOCreature::AMOCreature(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
 {
+	// Wildlife wades (the movement component slows it in water) but does not swim yet: swimming animals are their own unit (animations, AI that chooses to cross water).
+	if (GetCharacterMovement())
+	{
+		GetCharacterMovement()->NavAgentProps.bCanSwim = false;
+	}
+
 	// Set default AI controller class
 	AIControllerClass = AMOCreatureController::StaticClass();
 	AutoPossessAI = EAutoPossessAI::PlacedInWorldOrSpawned;

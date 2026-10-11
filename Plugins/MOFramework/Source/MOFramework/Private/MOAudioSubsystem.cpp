@@ -23,6 +23,7 @@
 #include "Sound/SoundAttenuation.h"
 #include "Sound/SoundBase.h"
 #include "Sound/SoundClass.h"
+#include "MOAudioMixGuard.h"
 #include "Sound/SoundWave.h"
 #include "TimerManager.h"
 #include "UObject/SoftObjectPath.h"
@@ -124,6 +125,13 @@ void UMOAudioSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 			     "and assign it in Project Settings > MO Framework > Audio > AmbientLayersTable."));
 	}
 
+	// Mixes pushed by plugin blueprints (weather, water) can reference sound classes the device never registered; the engine then logs a failed lookup on every audio update. Register them as they appear.
+	MixGuardHandle = FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([](float)
+	{
+		MOAudioMix::Inspect(/*bRegisterOrphans=*/true, /*bLogAll=*/false);
+		return true;
+	}), 1.0f);
+
 	// Apply initial volumes to whatever SoundClasses exist. If the soft refs
 	// haven't been set up yet (fresh project), these are silent no-ops.
 	ApplyVolumeToSoundClass(GetSoundClassForCategory(EMOAudioCategory::Music), MusicVolume * MasterVolume);
@@ -214,6 +222,12 @@ void UMOAudioSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
 void UMOAudioSubsystem::Deinitialize()
 {
+	if (MixGuardHandle.IsValid())
+	{
+		FTSTicker::GetCoreTicker().RemoveTicker(MixGuardHandle);
+		MixGuardHandle.Reset();
+	}
+
 	if (WorldBeginPlayHandle.IsValid())
 	{
 		FCoreUObjectDelegates::PostLoadMapWithWorld.Remove(WorldBeginPlayHandle);

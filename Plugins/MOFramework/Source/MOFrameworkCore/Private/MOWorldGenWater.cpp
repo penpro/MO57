@@ -32,7 +32,6 @@ namespace
 		return Tier == 0 ? FTier{ T.PondCellCm, T.PondChance, T.PondRadiusMinCm, T.PondRadiusMaxCm } : FTier{ T.LakeCellCm, T.LakeChance, T.LakeRadiusMinCm, T.LakeRadiusMaxCm };
 	}
 
-	FORCEINLINE float Unit16(uint32 Bits) { return (float)(Bits & 0xFFFFu) * (1.0f / 65535.0f); }
 
 	/** Bank reach: a basin is only evaluated out to this many radii (beyond it the ground is untouched). The cell jitter margin (20%) must cover it. */
 	constexpr float BasinReachRadii = 2.5f;
@@ -435,6 +434,33 @@ bool FMOWorldGen::IsInUplandLakeZone(const FMOWorldGenParams& Params, double X, 
 	const float Lx = (L.CosAngle * Dx + L.SinAngle * Dy) / L.RadiusCm;
 	const float Ly = (-L.SinAngle * Dx + L.CosAngle * Dy) / (L.RadiusCm * L.Aspect);
 	return Lx * Lx + Ly * Ly <= ZoneRadii * ZoneRadii;
+}
+
+bool FMOWorldGen::GetWaterSurfaceCm(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, float& OutSurfaceCm)
+{
+	const FMOWorldGenTuning& T = Params.Tuning;
+	if (!T.bEnableWater)
+	{
+		return false;
+	}
+	if (T.bEnableUplandLakes)
+	{
+		const double Cell = (double)T.UplandLakeCellCm;
+		FLake L;
+		if (ResolveBasin(Params, 2, (int64)FMath::FloorToDouble(X / Cell), (int64)FMath::FloorToDouble(Y / Cell), Seed, L))
+		{
+			const float Dx = (float)(X - L.Center.X), Dy = (float)(Y - L.Center.Y);
+			const float Lx = (L.CosAngle * Dx + L.SinAngle * Dy) / L.RadiusCm;
+			const float Ly = (-L.SinAngle * Dx + L.CosAngle * Dy) / (L.RadiusCm * L.Aspect);
+			if (Lx * Lx + Ly * Ly <= 1.0f)
+			{
+				OutSurfaceCm = L.SurfaceCm;
+				return true;
+			}
+		}
+	}
+	OutSurfaceCm = T.SeaLevelCm;
+	return true;
 }
 
 float FMOWorldGen::UplandLakeBedWeight(const FMOWorldGenParams& Params, double X, double Y, int32 Seed)

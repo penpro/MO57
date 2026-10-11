@@ -68,7 +68,7 @@ class MOFRAMEWORK_API AMOPredatorCreature : public AMOCreature
 	GENERATED_BODY()
 
 public:
-	AMOPredatorCreature();
+	AMOPredatorCreature(const FObjectInitializer& ObjectInitializer);
 
 	// ============================================================================
 	// PACK BEHAVIOR

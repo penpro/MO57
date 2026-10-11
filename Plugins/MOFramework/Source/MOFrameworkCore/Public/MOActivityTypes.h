@@ -141,6 +141,9 @@ enum class EMOActivityLevel : uint8
 	/** Active combat: fighting, dodging. Maximum exertion. */
 	Combat,
 
+	/** Swimming (surface or underwater): a whole-body, sustained effort (about 6-8 METs), and the airway is at the mercy of the water. Appended last so saved activity values keep their meaning. */
+	Swimming,
+
 	MAX UMETA(Hidden)
 };
 

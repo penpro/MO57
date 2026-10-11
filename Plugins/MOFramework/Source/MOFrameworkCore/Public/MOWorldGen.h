@@ -786,6 +786,13 @@ struct MOFRAMEWORKCORE_API FMOWorldGen
 	static bool IsInUplandLakeZone(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, float ZoneRadii = 1.0f);
 
 	/**
+	 * The OPEN-WATER surface height at (X, Y): an upland lake's own surface where (X, Y) is inside its shore ellipse, otherwise the ocean plane (SeaLevelCm: the sea, rivers, ponds and sea-level lake
+	 * basins are all terrain below it, and the ocean mesh fills every point under the plane, so a dug pit below sea level shows water too). False when water is off. This is what a swimmer, a boat or a
+	 * float should treat as "the water here"; the visible water meshes are exactly these surfaces.
+	 */
+	static bool GetWaterSurfaceCm(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, float& OutSurfaceCm);
+
+	/**
 	 * How much of the ground at (X, Y) is an upland lake's BED: 1 inside the shore ellipse, falling to 0 over the first ~10% of a radius past the shore with a noise breakup (so the edge is a damp, ragged rim,
 	 * never a clean curve); 0 away from every lake and when upland lakes are off. The terrain node paints the lake-bed surface (mud / rock instead of the biome's forest floor) where this is >= 0.5.
 	 */

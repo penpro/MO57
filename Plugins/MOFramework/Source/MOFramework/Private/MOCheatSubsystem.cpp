@@ -47,6 +47,7 @@
 #include "MOSurvivorController.h"
 #include "MOSessionSubsystem.h"
 #include "MOMainMenuPlayerController.h"
+#include "MOGameSettings.h"
 #include "MOGameUIManagerSubsystem.h"
 #include "MOPrimaryGameLayout.h"
 #include "MOIdentityComponent.h"
@@ -4746,6 +4747,32 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 	// (HandleFindSessionsComplete logs one line per result, including the
 	// index to pass to MO.Session.Join).
 	// =========================================================================
+
+	// ---------- MO.NewGame [seed] ----------
+	// The New Game panel's path without the panel: seed into the settings, then the real StartNewGame() (normal level transition). Lets a packaged build start a deterministic world from the command line
+	// (-ExecCmds="MO.NewGame 7; MO.Perf.Tour"). Must run at the main menu.
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.NewGame"),
+		TEXT("Dev: start a new game from the main menu with an optional world seed. Usage: MO.NewGame [seed]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			AMOMainMenuPlayerController* MenuPC = World ? Cast<AMOMainMenuPlayerController>(World->GetFirstPlayerController()) : nullptr;
+			if (!MenuPC)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] NEWGAME FAILED: no AMOMainMenuPlayerController in this world (run it at the main menu)"));
+				return;
+			}
+			const int32 Seed = Args.Num() > 0 ? FCString::Atoi(*Args[0]) : 0;
+			if (Seed != 0)
+			{
+				UMOGameSettings* Settings = UMOGameSettings::GetMOGameSettings();
+				Settings->PendingWorldSeed = Seed;
+				Settings->SaveSettings();
+			}
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] NEWGAME starting (seed %s)"), Seed != 0 ? *FString::FromInt(Seed) : TEXT("from the panel"));
+			MenuPC->StartNewGame();
+		}),
+		ECVF_Default));
 
 	// ---------- MO.Session.Host <DisplayName> [MaxPlayers=4] ----------
 	ConsoleCommands.Add(CM.RegisterConsoleCommand(

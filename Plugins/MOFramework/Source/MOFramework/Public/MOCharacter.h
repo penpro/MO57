@@ -203,6 +203,10 @@ class UMOMetabolismComponent;
 class UMOMentalStateComponent;
 class UMOAnatomyComponent;
 class UMOAdrenalineComponent;
+class UMORespirationComponent;
+class UAnimSequence;
+class UAnimInstance;
+class UMOCharacterMovementComponent;
 class UMOCraftingQueueComponent;
 class UMORecipeDiscoveryComponent;
 class UMOTerraformingComponent;
@@ -240,7 +244,8 @@ class MOFRAMEWORK_API AMOCharacter : public ACharacter,
 	GENERATED_BODY()
 
 public:
-	AMOCharacter();
+	/** Takes the object initializer so every pawn class swaps in UMOCharacterMovementComponent (water: wading, swimming, buoyancy). */
+	AMOCharacter(const FObjectInitializer& ObjectInitializer);
 
 	virtual void Tick(float DeltaTime) override;
 
@@ -337,6 +342,13 @@ public:
 
 	UFUNCTION(BlueprintPure, Category="MO")
 	UMOAdrenalineComponent* GetAdrenalineComponent() const { return AdrenalineComponent; }
+
+	UFUNCTION(BlueprintPure, Category="MO")
+	UMORespirationComponent* GetRespirationComponent() const { return RespirationComponent; }
+
+	/** True while the movement component is in swimming mode (water above the chest, see UMOCharacterMovementComponent). */
+	UFUNCTION(BlueprintPure, Category="MO|Water")
+	bool IsSwimming() const;
 
 	UFUNCTION(BlueprintPure, Category="MO")
 	UMOCraftingQueueComponent* GetCraftingQueueComponent() const { return CraftingQueueComponent; }
@@ -669,6 +681,10 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO")
 	TObjectPtr<UMOAdrenalineComponent> AdrenalineComponent;
 
+	/** Breath-hold physiology: oxygen reserve, drowning (UMORespirationComponent). The head under water closes the airway. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO")
+	TObjectPtr<UMORespirationComponent> RespirationComponent;
+
 	/** Crafting queue component (timed crafting). */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO")
 	TObjectPtr<UMOCraftingQueueComponent> CraftingQueueComponent;
@@ -795,6 +811,26 @@ public:
 	/** Exertion level for sprinting (0-100). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Movement|Physiology", meta=(ClampMin="0", ClampMax="100"))
 	float SprintingExertion = 90.0f;
+
+	/** MET value for swimming (a steady crawl, 6-8 METs). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Movement|Physiology")
+	float SwimmingMET = 7.0f;
+
+	/** Exertion level for swimming (0-100): raises heart rate and burns the oxygen reserve while the head is under. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Movement|Physiology", meta=(ClampMin="0", ClampMax="100"))
+	float SwimmingExertion = 60.0f;
+
+	/** Stamina cost per second while swimming (a little under a jog: sustained, and you cannot rest in deep water). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Movement|Physiology")
+	float SwimmingStaminaCostPerSecond = 1.6f;
+
+	/** Swim speed multiplier while the hustle input is held (a harder stroke). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Water", meta=(ClampMin="1", ClampMax="2"))
+	float SwimHustleSpeedScale = 1.35f;
+
+	/** Swim speed multiplier when the stamina is gone (an exhausted swimmer can barely keep afloat). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Water", meta=(ClampMin="0.1", ClampMax="1"))
+	float ExhaustedSwimSpeedScale = 0.35f;
 
 	/** Temperature increase per second while walking (°C). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Movement|Physiology")
@@ -1063,6 +1099,65 @@ private:
 	/** Stop sprinting (release hold). */
 	UFUNCTION(BlueprintCallable, Category="MO|Movement")
 	void StopSprint();
+
+	/** Water each tick: swim input, the airway (head under water closes it), wetness, the swim speed from effort and stamina. */
+	void TickWater(float DeltaTime);
+
+	/** The respiration component reports the body failed with the airway closed: drowning. */
+	UFUNCTION()
+	void HandleAsphyxiaDeath();
+
+	/** Space is held while swimming: rise (a local input flag; the movement component replicates the resulting move). */
+	bool bSwimUpHeld = false;
+	bool bWasSwimmingLastTick = false;
+
+	// ---- swim animation ----
+	// While swimming the body mesh plays swim poses in single-node mode (the locomotion animation blueprint has no swim states); leaving the water restores the blueprint. The animations are the
+	// Oceanology mannequin set retargeted to the MetaHuman skeleton (Content/Characters/Swim/, RTG_OceanologyToMetaHuman). Soft paths: a pawn without them keeps its normal locomotion.
+
+	enum class ESwimPose : uint8 { None, Tread, Slow, Crawl, UnderIdle, UnderForward, UnderUp, UnderDown };
+
+	/** Upright, treading water: head and shoulders out. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Water|Animation", meta=(AllowPrivateAccess="true"))
+	TSoftObjectPtr<UAnimSequence> SwimTreadAnim;
+
+	/** A slow stroke on the surface. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Water|Animation", meta=(AllowPrivateAccess="true"))
+	TSoftObjectPtr<UAnimSequence> SwimSlowAnim;
+
+	/** A hard crawl on the surface (the hustle stroke). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Water|Animation", meta=(AllowPrivateAccess="true"))
+	TSoftObjectPtr<UAnimSequence> SwimCrawlAnim;
+
+	/** Holding still under water. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Water|Animation", meta=(AllowPrivateAccess="true"))
+	TSoftObjectPtr<UAnimSequence> SwimUnderIdleAnim;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Water|Animation", meta=(AllowPrivateAccess="true"))
+	TSoftObjectPtr<UAnimSequence> SwimUnderForwardAnim;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Water|Animation", meta=(AllowPrivateAccess="true"))
+	TSoftObjectPtr<UAnimSequence> SwimUnderUpAnim;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Water|Animation", meta=(AllowPrivateAccess="true"))
+	TSoftObjectPtr<UAnimSequence> SwimUnderDownAnim;
+
+	/** Choose the swim pose from the movement and the water, and apply it (single-node playback on the body mesh). Runs on every machine: it is cosmetic and driven by replicated movement. */
+	void UpdateSwimAnimation(float DeltaTime, bool bSwimming);
+
+	/** The pose a swimmer in this state should hold. */
+	ESwimPose ChooseSwimPose() const;
+
+	ESwimPose CurrentSwimPose = ESwimPose::None;
+	ESwimPose PendingSwimPose = ESwimPose::None;
+	float PendingSwimPoseSeconds = 0.0f;
+
+	/** The animation setup to restore when the swimmer leaves the water. */
+	UPROPERTY(Transient)
+	TSubclassOf<UAnimInstance> SavedAnimClass;
+	uint8 SavedAnimMode = 0;   // EAnimationMode::Type (0 = AnimationBlueprint), kept as a byte so the header needs no animation includes
+	FVector SavedMeshRelativeLocation = FVector::ZeroVector;
+	float SwimMeshRaise = 0.0f;
 
 protected:
 	/** Apply physiological effects of current movement mode. */
