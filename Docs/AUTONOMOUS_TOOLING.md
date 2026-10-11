@@ -436,3 +436,48 @@ bundle capped at 4 MB (screenshot dropped first, then log); an unsent report is 
 **Unattended runs:** `Tools/ov.bat` (never edited) runs `Tools/ov_task.sh` (rewritten per job, untracked) from a snapshot kept in `Saved/Logs/ov_history/<stamp>.sh` + `.log`.
 
 **Remote pawns on a client (same bug, second half):** `nettest actions` also switches the client's voxel collision off under the host's pawn (python on the client: `set_actor_enable_collision(False)` on the `VoxelLandscape*` actors) and nudges the host's pawn so a position update reaches the client: with `MO.RemotePawn.SimGravity 1` (stock engine, the control) the client's copy falls at 4000 cm/s; with the fix (`AMOCharacter::OnUpdateSimulatedPosition` never lets a proxy apply gravity) it stays at the server's height. `Tools/pawnvis_probe.py` prints each machine's view of every character with movement mode and vertical velocity -- read BOTH machines.
+
+## Looking at the world: photo camera, test lights, world-generator probes (2026-10-10)
+
+Visual QA of terrain, caves, water and lighting without driving the third-person pawn. All are console commands (use `python Tools/ue.py run "<cmd>"`) registered in `MOCheatSubsystem`.
+
+| Command | Does |
+|---|---|
+| `MO.Cam.LookAt cx cy cz tx ty tz [fov]` / `MO.Cam.Reset` | view target becomes a camera at (cx,cy,cz) aimed at (tx,ty,tz); Reset gives the view back to the pawn |
+| `MO.Player.Teleport x y z` | move the pawn (it falls to the ground / into a cave) |
+| `MO.Light.Test pitch yaw lux [shadows]` / `MO.Light.Cube x y z size` / `MO.Light.Off` | a directional light you place (pitch > 0 shines UP = a light below the world) and a plain occluder cube; Off removes both |
+| `MO.Light.BlockFromBelow 0/1` | A/B the below-the-horizon light attenuation (`UMOSubterraneanLightingSubsystem`) |
+| `MO.WorldGen.Sinkholes [r]`, `.FindCave [r]`, `.FindWater [r]`, `.CaveSample x y z`, `.Sample x y`, `.Compare [r] [step]` | where the generator put caves / water, and whether the live voxel terrain still equals the generator |
+| `MO.WorldGen.Checksum` | cross-build determinism fingerprint: must print `match=1` in the editor AND in a packaged build (and on a second PC) |
+
+Recipe (worked, ~6 commands): `python Tools/ue.py boot --seed 12345` -> `MO.WorldGen.Sinkholes 40000` (or FindCave / FindWater) -> `MO.Player.Teleport` near the spot -> `ShowFlag.InstancedStaticMeshes 0` (hides vegetation) ->
+`MO.Cam.LookAt ...` -> screenshot the PIE viewport (computer-use, grant `UnrealEditor.exe`), `viewmode unlit` to see geometry without lighting.
+Rules learned: **keep the editor window focused** (click the Output Log panel) or PIE throttles to ~3 FPS; **close graph-editor asset tabs** or they cover the PIE viewport;
+editor Python while PIE is running: `unreal.EditorLevelLibrary.get_game_world()` is the PIE world, `GameplayStatics.get_player_pawn(world, 0)` the pawn, but `EditorAssetLibrary.does_asset_exist/save_*`
+and the MCP `save_assets` are blocked during PIE -- save with `unreal.EditorLoadingAndSavingUtils.save_packages([asset.get_package()], False)` or end PIE first.
+Cross-build determinism: `Tools/ov_task.sh` history shows the whole packaging + `-ExecCmds="MO.WorldGen.Checksum"` run (RunUAT through `powershell -Command`, ~4 min); the packaged log is
+`Saved/StagedBuilds_DevTest/Windows/MO57/Saved/Logs/MO57.log`. The first such run found that the packaged game compiled the generator `/fp:fast` (editor: `/fp:precise`) and printed different bits;
+`MOFrameworkCore.Build.cs` now pins `FPSemantics = Precise`.
+
+## Night of 2026-10-10: terrain v4 tooling (commands, scripts, traps)
+
+| Tool | Does |
+|---|---|
+| `MO.WorldGen.FindCoast [go]` | where a NEW game starts in this world (shore, facing the water); `go` teleports the pawn there |
+| `MO.WorldGen.SeedSurvey [first] [count]` | ranks world seeds by new-game coast quality: forest share, inland hills, skyline across the water (no world seed needed; runs in any PIE) |
+| `MO.WorldGen.BiomeStats` / `MO.WorldGen.FindBiome <id> [go]` | share of the land per biome (real DT_Biomes bands); teleport to the nearest place of a biome |
+| `MO.WorldGen.FindLake [radius]` | the upland lakes near the pawn with their surface heights (lake water bodies are live actors named `WaterBodyCustom_N`, tag `MOUplandLake`) |
+| `MO.Water.Underwater` | the Water plugin's underwater-camera test replayed step by step at the camera (sweep hits with their `blocking` flag, camera below impact, overlap, water query) and the generator's sea level / ground there |
+| `MO.Water.UnderwaterTrace [0\|1\|all]` | per rendered view: `cached(prev)` = what the plugin concluded last frame (> 0 underwater, -1 not) + a replay at the view location; `all` logs every view of every frame (other views show as OTHER VIEW) |
+| `MO.Dev.ScatterCollision [filter]` | proof that scatter blocks the pawn: sweeps a capsule into spawned instances, per mesh `swept=N blocked=M` (NoCollision grass is the control: 0) |
+| `weather [preset]` / `time [8am\|2pm\|14]` (Tilde console) | the quick-pick popups; with an argument they act directly. Server-authoritative (RPC on the player controller) |
+| `MO.Weather.Director 0\|1` (cvar), `MO.Weather.Director.Info`, `.Next` | the weather that changes by itself |
+| `QUIT_EDITOR` (`python Tools/ue.py run QUIT_EDITOR`) | leaves the editor with NO save prompt. The window close box (CloseMainWindow) raises a "Save Content" dialog for LoadingLevel every time since the menu level holds the generated terrain |
+| `python Tools/ue.py ui menu` then `python Tools/ue.py asset shot pie out.png` | PIE at the main menu and a full-resolution game-view capture (the capture has no UMG; `ui shot` has) |
+| `Content/Python/biome_palettes.py` | the biome palettes as data -> `Saved/Logs/biome_palettes.json` -> `ue.py rows set /MOFramework/Data/DT_Biomes.DT_Biomes --file ...` |
+| `Content/Python/audit_mesh_collision.py` (PIE) / `audit_table_mesh_collision.py` / `fix_mesh_collision.py` | collision audit of what is spawned / of every mesh the tables can place / the fix |
+
+Traps met (each cost a build cycle): a `TAutoConsoleVariable` and a console COMMAND with the same name are a **fatal** error at the first PIE ("can't be replaced with the new one of different type"): name commands `.Info`/`.Next`;
+`EditorStaticMeshLibrary` collision counts are -1 while PIE runs; `LevelEditorSubsystem.load_level` right after a PIE ended crashed the editor once (let PIE finish; then it worked); cheat commands are registered by a GameInstance subsystem,
+so they do not exist in the idle editor (start PIE first); a spline component attached to the actor that flies along it runs away (make it absolute); `SpawnActor` with a Template composes the transform with the template's;
+editor Python struct arrays that are empty come back as a one-element placeholder (do not read aggregate geometry through Python).

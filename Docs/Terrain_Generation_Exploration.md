@@ -1,5 +1,384 @@
 # Terrain Generation from C++ — Exploration (2026-10-09) + implementation status
 
+## Update (2026-10-11, night): Oceanology IS the water now (Epic Water is out of the levels and the code)
+
+Wes: "im installing oceanology so let's switch to that ... you should be able to use most of the oceanology features for what we're doing". Uncommitted. Plugin: `Plugins/Marketplace/Oceanology_Plugin` ("Oceanology Legacy" 5.9.0 for UE 5.8, source +
+Win64 binaries, enabled in MO57.uproject and a dependency of MOFramework).
+
+### What changed
+- **Levels** (`MOPCGScattering`, `LoadingLevel`): the Epic `WaterBodyCustom` is gone, each level has one `BP_OceanologyInfiniteOcean` (preset `03_Beaufort_GentleBreeze`). The menu fly-by over the new ocean looks right (checked in play).
+  Pre-swap level files are in the session scratchpad `level_backup/` (copied before the first Oceanology edit).
+- **`MOOceanologyIntegration.h/.cpp`** (`UMOOceanologyIntegrationSubsystem`, a tickable game-world subsystem): the project's facts about Oceanology in this engine -- the underwater-volume fix and the distortion cap below.
+- **`UMOUplandLakeSubsystem`** now spawns `AOceanologyLake` from `BP_OceanologyLake` (async-loaded, `/Oceanology_Plugin/Design/Lake` in DirectoriesToAlwaysCook), replication OFF, plane sized from the generator (see below).
+  12 lakes within 4 km spawn in the test world; no Oceanology warnings or errors in the log.
+- Cheats: `MO.Water.Underwater` is rewritten for Oceanology (per water actor: camera inside its underwater volume, volume queryable, camera below the waves, the post process state AND the engine's own volume-test distance);
+  `MO.Water.UnderwaterTrace` (Epic-specific) is gone; `MO.Water.FixUnderwaterVolume 0|1` (dev switch: reproduces the bug); `MO.Water.UnderwaterDistortion` (the cap).
+- Tests: `MOFramework.Water.LevelOceans` (one Oceanology ocean per level, no Epic water actor), `MOFramework.Water.UnderwaterVolumeEncompassesCamera`, `MOFramework.WorldGen.UplandLakePlane`. Full suite 180/180.
+  The Epic `WaterTrace` collision channel / `WaterBodyCollision` ini edits from earlier today are now dead config (nothing in the game uses Epic Water); left in place so a level that still has an Epic body keeps working.
+
+### Findings (each one cost a diagnosis)
+1. **The underwater look never applied to the infinite ocean** -- the plugin's box volume has NO collision and its post process is a bounded volume attached to it. In the live game the box has a physics object but no physics STATE, and
+   `UPostProcessComponent::EncompassesPoint` (physics-object branch) answers "distance = FLT_MAX" for a camera in the middle of it (measured: `MO.Water.FixUnderwaterVolume 0` + `MO.Water.Underwater`). The demo map hides it with a separate post
+   process volume. Fix: give the box a query-only body that ignores every channel (`MOOceanology::EnsureUnderwaterVolumeQueryable`, applied at world begin play and on spawn). Verified in play: the deep-blue underwater look at the seabed,
+   NO tint above the water (the plugin's material is waterline-gated), nothing hits the 160 km box. The headless test world builds a body for the no-collision box where the game does not, so the control there is information only.
+2. **A lake cannot be rotated.** Oceanology's water mesh is a quad tree over WORLD-aligned bounds, so the plane is the ellipse's axis-aligned bounding box (`FLake::PlaneHalfSizeCm`, margin 2%), not the rotated box the generator buried.
+   `UplandLakePlane` measured 46 of 2470 lakes (0.04% of samples, worst 3 m) with water over low ground in the corners; the generator (`ComputeUplandLake` step 2b) now also buries that rectangle (+3 m, 60 cm freeboard).
+   **Golden height pin re-pinned 0x4DA7FD20 -> 0xB0A52BB6** (lake surfaces moved for a few lakes; the water-off anchor is untouched).
+3. **The plane is whole tiles from a grid-snapped centre**: half-size = TileSize x floor(ExtentInTiles x actor scale), centred on the actor snapped to the tile grid. SpawnLake counts the tiles, rounds up, and snaps, so the plane always covers the shore.
+   **Do not size a lake by scaling the actor to a large factor**: the quad tree pre-allocates ~(2 x ExtentInTiles x scale)^2 x 4/3 nodes. Upland lakes are 70-130 m radius (scale ~9-15, fine); a 3 km lake would need ~270 MB, so a big water body needs a bigger TileSize instead.
+4. **Oceanology actors replicate** (`bReplicates = true` in the parent): the upland lakes are spawned per machine from the seed, so SpawnLake turns replication off before FinishSpawning (else the host's copy doubles them on clients).
+5. **Caustics**: the plugin's only caustics are a projected, scrolling texture (`T_Caustics`: the surface/underwater PP, and a decal under each lake) -- the cheap "fake" kind, already on by default. There is no heavier mode to avoid.
+6. **Underwater wobble** (Wes: "really strong and looks pretty bad, make it 1/4"): `FOceanologyUnderwater::DistortionIntensity` and `VignetteDistortion` (0.05 each) warp the whole frame. Presets overwrite them on every load, so the project ENFORCES a cap
+   (`MO.Water.UnderwaterDistortion`, default 0.0125, re-clamped every 0.5 s). Checked in play at the lake: the trunk and the seabed no longer swim.
+7. **Buoyancy / swimming (investigated, NOT integrated)**: `UOceanBuoyancyComponent` = pontoons (sphere samples on sockets/offsets) applying Archimedes forces + damping + optional wave force to the owner's physics mesh or the character movement;
+   `UOceanSwimmingComponent` = swim / surface-lock / sprint / dive state, head-pontoon enter/exit events, bubbles/trail effects, and a TIMER-based drowning that kills. Both need an `AOceanologyWaterVolume` (an `APhysicsVolume`, which cannot be spawned with new brush
+   geometry at run time) around the water, and Blueprint-side input. AMOCharacter is a plain ACharacter, so it would plug into the stock CMC swimming mode. Today the pawn WALKS ON THE SEABED 60 m down and cannot drown.
+   **The swim animations are already in the plugin -- no download needed**: `Oceanology_Plugin/Content/Character/Mannequins/Animations/Swimming/` has surface swim (idle, forward, slow forward, left/right) and underwater swim (forward, up, down, left/right) clips plus three blend spaces,
+   the Manny/Quinn animation blueprints, and Enhanced Input actions `IA_SwimFast / IA_SwimUpOrDown / IA_DiveUp / IA_SurfaceLockedSwimming` (`Character/Input/Actions`). They are for the UE5 mannequins; retarget Manny -> the MetaHuman skeleton with an IK Retargeter. (A web search for a separate free pack found only paid Fab listings; none was confirmed free.)
+   Design notes for the swim unit: drowning must come from the medical sim (head under -> SpO2 falls; the plugin's timer death is turned off), swimming costs energy, and the water-volume problem for upland lakes needs an answer (a volume per lake is a box: reuse one level-placed brush volume per size class, or drive CMC swimming from our own water query).
+
+8. **Cooking (found by the packaged co-op test, fixed)**: Oceanology loads its materials, effects and sounds through SOFT paths in `UOceanologyRuntimeSettings`, which the cooker does not follow. The first packaged run crashed in
+   `UOceanologyUnderwaterComponent::InitBubbles` (null bubbles material) the first time an upland lake spawned; the editor never shows it because the assets are on disk. `Config/DefaultGame.ini` now always-cooks `/Oceanology_Plugin/` Design/Lake,
+   Design/Audio/Cue, Design/Ocean/{Blueprints/Effects, MaterialCollections, Materials}, Effects/Particles/Water and Niagara, and `MOFramework.Water.OceanologyAssetsAreCooked` reads every soft path of the settings and fails if one is outside those
+   directories (it failed before the ini fix, so it can fail). Packaged Development build re-verified: checksum match (height 0xB0A52BB6), packaged two-process co-op test PASS, "[MOLakes] 5 lake surface(s) created" in the packaged log, no crash.
+
+### Overnight 2026-10-11: PCG made biome-aware (tiers, water edge, native chains)
+
+Wes went to bed with: keep working; biomes + assets; snapshot each biome and check it ("doesn't have weird shit like trees spawning in water"). Tooling built for that loop: `MO.PCG.WaterAudit [radius]` (instances standing in water), `MO.WorldGen.FindBiomeSpot <id> [radius_km] [rough] [go]`
+(dry, flat, deep-inside spots of a biome) and the tour driver (`scratchpad/tour.sh <seed> <dir> <wait> <biomes...>`: boot, go, wait for PCG, 3 screenshots + audit per biome).
+
+**What the tour showed (baseline):** every biome looked like "lush grass + black locust + alder" -- Meadow had big forest trees, the rocky highland was a grass slope, the dry scrub green. Cause: `MOPCG_StampScatter1` holds BIOME-BLIND native chains (Static Mesh Spawners with only an elevation node,
+sampler 50 points / m^2 for the grass chain) laid over the one biome-aware node, and the biome spawner itself sat on the small GRID16 chain, so beyond that chain's radius the "biome" content was simply absent.
+**Two facts that were wrong in the first version of this note (measured later the same night, see "The sampler lattice" below):** the graphs carry `HiGenGridSizeMultiplier = 4`, so GRID16 is a 64 m cell with a 128 m generation radius (not 16 m / 32 m), GRID32 = 128 m / 256 m, GRID128 = 512 m / 1 km;
+and the Voxel Sampler can place AT MOST ONE point per `CellSize` lattice cell, so a node's `points_per_squared_meter` only thins below that cap. The biome spawner's samplers had 10 m and 25 m lattices, i.e. a ceiling of 100 and 16 points / ha while the node was told 2000 and 1200: every authored density was realised at 5 % or 1.4 % -- that is why forests read as open parkland.
+
+**Fix (data + one filter, no new graph concepts):**
+- `UMOPCGElevationBandsSettings::AllowedBiomeIds` (+ `bExcludeWater`): the shared elevation node of a native chain now says which biomes the chain belongs to. Grass / flower chains: not on bare rock or in dry scrub; the 4 km alder forest: forest biomes only
+  (`MOPCG_FarTrees` too).
+- `UMOPCGBiomeSpawnerSettings::SpeciesFilter` (ground cover / large / all, split by HISMTag): the biome spawner now runs TWICE -- ground cover on the GRID16 chain (64 m cells, 128 m radius; sampler 0.2 / m^2 = 2000 / ha on a 150 cm lattice), and LARGE species (trees, shrubs, bushes, boulders) on a
+  GRID32 chain (128 m cells, 256 m radius; sampler 0.12 / m^2 = 1200 / ha on a 250 cm lattice): palette-driven forests per biome out to 256 m instead of black locust everywhere. Measured in the log: ~820 input points per 64 m cell and ~1950 per 128 m cell, 2-14 ms each. The biome-blind black-locust tree chain and the native resource chain are OFF (the biome rows carry those resources already).
+- **Water edge:** `FMOBiomeDefinitionRow::WaterEdgeSpecies` + `WaterEdgeBandCm`: per-biome shoreline flora (reeds = the tall `smdrailr` grass at 420 / ha per variant, wet grass, shore flowers, stones), planted ADDITIVELY on dry ground within the band above the local water surface and within 25 m of the water,
+  density falling from the waterline (`FMOPCGWaterMask::ShoreFactor`: upland-lake ellipse or the sea / river / pond test). Seven biomes have rows (rocky / alpine / dry at 40-50%). Replace the stand-in reeds with real reed / rush / cattail meshes when Wes allows a download (ElectricDreamsEnv has Taro / ferns / ground cover to try first).
+
+**The sampler lattice (the rule to remember).** `Voxel Sampler`: `Ratio = (area * PointsPerSquaredMeter) / CellCount` clamped to 1, one candidate per `CellSize` cell. Realised density = min(PointsPerSquaredMeter, 1e4 / CellSize^2) (CellSize in cm). Pick `CellSize <= ~0.7 * 100 / sqrt(rho)` cm
+so the target is reached with random thinning (rho 0.2 / m^2 -> 150 cm; rho 0.12 -> 250 cm). The biome spawner logs `[MOBiomeSpawner] in=N ... ms= inBounds=` per execution: `in / area_ha` is the real emission rate and must equal the node's `InputPointsPerHectare`, otherwise every `DensityPerHectare` in `DT_Biomes` is scaled by the ratio.
+The pre-existing native chains have the same cap (grass: 50 / m^2 on a 60 cm lattice = 27.8 / m^2; far alder: 0.12 on 5000 cm = 4 / ha).
+
+**Later the same night (final state of the PCG / biome pass).**
+- **Three tiers now, one node type:** ground cover (GRID16, 0.2 / m^2 on a 150 cm lattice), large species (GRID32, 0.12 / m^2 on 250 cm), and a SHORE tier (`SpeciesFilter = WaterEdgeOnly`, GRID16, 2 / m^2 on a 60 cm lattice, input 20,000 / ha) that plants only the biome rows' `WaterEdgeSpecies` and is skipped for any 64 m cell
+  with no water near it (`FMOPCGWaterMask::MayHaveShore`, a 10 m height grid + the lake list; soundness test `MOFramework.PCG.MayHaveShore`). The shore tier's own mask (`EdgeMask`, bank margin 1.008) lets reeds stand right at the waterline, in the strip every other species is kept out of (margin 1.05).
+  Density: reeds 4000 / ha per variant (x 0.4-1.0 by biome), wet grass 1200, shore flowers 400, stones 70; band `waterEdgeBandCm` = 120 cm above the water. Measured at a lake: 130 plants in the 64 m cell holding its east bank (was 52 with the first numbers, 0 before the bank strip existed).
+  The reeds are STAND-INS (the tall `smdrailr` grass): they read as tufts at the waterline, not as reed beds. Real reed / rush / cattail meshes need a download (Wes's yes) or an ElectricDreams asset.
+- **Summits were untextured grey:** every biome ended at 1000 m (the mountain ranges reach 2.4 km) and no biome covered the cold temperatures up there, so those points had NO surface type. New row `AlpineRock` (height >= 950 m, any slope / climate, priority 22, `VST_Cliff`, the rocky species at 60 %). `BiomeStats` now reports "(none) 0.0 %" (was 3.7 % at mean height 1400 m).
+  Regression test: `MOFramework.WorldGen.BiomesFromDataTable` sweeps height x slope x moisture x sea-level temperature and asserts every point has a biome (verified to FAIL when AlpineRock starts at 2000 m: 237 uncovered combinations, first at 1050 m).
+- **Alpine ground:** `AlpineHeath` painted pale `VST_MI_Gravel` (read as desert behind the grass); now `VST_MI_AlpineHeath` (`Content/Python/make_alpine_material.py`: the muddy-leaves set tinted olive-brown, registered in the mega material).
+- **Verified by tour (seed 7, one spot per biome + a lake bank + a summit):** `MO.PCG.WaterAudit` = 0 instances in water in every biome; TemperateForest / LocustWoodland / Rainforest show real tree stands out to ~250 m; Meadow open with scattered saplings; DryScrub / RockyHighland / ShoreStrand visibly different grounds.
+- **Tool traps:** the editor throttles PIE to ~3 fps when its window is not foreground (PCG needs 70-100 s per spot, not 20); never run two `tour.sh` at once (the script now takes `tour.lock`); a Python `get_instance_transform` census over thousands of instances takes ~30 s.
+
+### To-do (Wes, 2026-10-11) -- not done yet
+- [x] **PCG must not plant in lakes** -- DONE (overnight 2026-10-11). Diagnosis: only the biome spawner had a lake check (1.05 radii) and it did not take effect; EVERY other chain (native Static Mesh Spawners, the MO item / resource / spawn-point
+  nodes) only knew the sea plane (the "Ocean" elevation band, Z < 0), and upland lakes are ABOVE sea level. `MO.PCG.WaterAudit` measured 51,374 of 56,937 instances within 200 m of one lake in the water. Fix at the chokepoint: `FMOPCGWaterMask`
+  (`MOPCGWaterMask.h`: sea plane via the point's own ground Z + the generator's upland-lake zone) applied inside `UMOPCGElevationBandsSettings` (every spawner chain passes through one; `bExcludeWater` default ON, not cacheable / main thread while on)
+  and by the biome spawner. Result at the same lake: 0 in water (5,795 instances nearby, 95 on the dry bank 1.0-1.05 radii); a temperate forest spot: 42,772 instances, 0 in water. Tests: `MOFramework.PCG.WaterMask`. Tool: `MO.PCG.WaterAudit [radius]`.
+- [ ] **Shoreline flourish / level design**: water reeds, rushes, cattails (and whatever fits) along lake and river shores, in the shallows and on the bank; a PCG species set keyed to "within N m of water, ground within X cm of the surface". Needs reed meshes (Megascans/Fab) -- ask before downloading.
+- [x] **Lake basin material** -- DONE (overnight 2026-10-11): the bowl was the surrounding biome's ground (the forest's muddy leaves under 5 m of water). `FMOWorldGen::UplandLakeBedWeight` (1 inside the shore ellipse, ragged rim over the next ~10% of a
+  radius) drives the terrain node (`UMOTerrainFunctionLibrary`): where it is >= 0.5 the voxel surface is `UMOWorldGenSettings::UplandLakeBedSurfaceType` (default `VST_MI_Gravel`: grey rock + rocky trail, already in the mega material). Looks right in play
+  (clear water over gravel, ragged gravel rim, caustics on the stones). A softer MUD bed is a texture-set job (`Content/Python/make_sand_material.py` is the recipe; ElectricDreamsEnv `SwampWater` / `DriedGrassOnDampSoil` are candidates).
+  Tests: `MOFramework.WorldGen.UplandLakeBed`.
+
+**Where to get the assets for the shore items (Wes, 2026-10-11): `D:\UEProjects\ElectricDreamsEnv`** -- Epic's Electric Dreams Environment sample (44 GB content, intensive PCG, great-looking Megascans). Surveyed read-only; nothing copied yet. Moving assets = the editor's Migrate tool, selectively (the 3D assets alone are 21 GB).
+- Basin / bank materials (Megascans Surfaces): `SwampWater`, `DriedGrassOnDampSoil` (damp mud-grass), `MossyRockyGround`, `IcelandicQuarryRock`, `JungleGround`; 3D assets `DryRiverBed`, `GrassyEmbankment`, `MossyEmbankment`, `NordicBeachRock(s)`, `NordicBeachRockyGround`, `BeachSandWithPebbles`, `SmoothRockShelf`, `ErodedRockyGround`, `SmallStonesPack`.
+- Shore plants (Megascans 3D_Plants): `Taro` (big-leaf water-edge plant), `Periwinkle`, `KikuyuGrass`, `GroundCover`, ferns (`Fern`, `BostonFern`, `SilverLadyFern`, `BeechFern`), `CustomMoss`, `Lichen`. No reed / cattail / rush asset by name: those still need a source (ask before downloading).
+- PCG to learn from: `PCG/Graphs/Ditch` (a water-channel graph), `Ground`, `Forest` (+ `ForestCliffs`, `DiscardPointsInBumpyAreas`), `SmallAssembly` / `LargeAssembly`; river-bank "assemblies" `Asmbly/Assemblies/BPP_*Embankment_Mud*` (mud bank with root, rock and vegetation layers) -- exactly the shore look Wes wants.
+- [ ] Swim / dive / drown unit (see finding 7): CMC swimming + Oceanology water volumes, drowning through the vitals, swim and dive animations (the plugin ships a Manny/Quinn swim set to retarget to the MetaHuman; no download needed).
+- [ ] Float-able objects: Oceanology buoyancy on dropped items / logs / boats (supersedes the legacy `MOBuoyancyComponent` + `AMOWaterActorBase` Gerstner actors, which no level uses).
+- [ ] Lake look: the default lake is bright turquoise; tune toward a freshwater highland colour (lake preset, surface scattering) once the shores are planted.
+- [ ] Lake cost: 12 lakes live within 4 km (SpawnRadiusCm 400000); measure GPU/CPU and shrink the radius if needed.
+- [ ] Hair buns vanishing under the water effect (Single Layer Water vs hair strand depth): the engine patch is still waiting for Wes's yes; re-check with the Oceanology look first.
+
+## Update (2026-10-11, later): generator v6 -- mountain RANGES, not towers
+
+Wes: "the mountains are still super fucked looking ... smooth out the larger features so they don't collapse to points or empty cells at the far LODs, enough mass to never collapse, a range of larger mountains with some sheer cliff details closer
+up but not huge regions of thin sheer cliffs ... the height is good, but it's too steep and there's too many valleys, 1000 really tall skinny mountains instead of larger masses with 1000 small steep features". Uncommitted. Goldens re-pinned (Height 0x4DA7FD20, Cave 0x31D4E2B5;
+the water-off probe anchor 0x9C4AE2B3 is untouched: `bRangeMountains = false` there). Generator version 6.
+
+### Diagnosis (a numpy replica of the generator, `reproduced the real test numbers` before it was trusted: slope p50 4.0 / p90 38.5 / p99 77.2 vs the test's 3.9 / 36.1 / 77.8)
+- **Every wavelength in the tuning is in CENTIMETRES.** The fields that decide WHERE mountains stand (erosion 450000 = 4.5 km, weirdness 300000 = 3 km) and the biome's hill / mountain scale (looked up from the LOCAL moisture, 175000 = 1.75 km, blended over
+  0.12 climate units = ~150 m) were km-scale, while the ridge noise inside has a 10 km wavelength. The mountain mask went 0 -> 1 over ~600 m and the biome mountain scale 0.03 -> 1 over ~150 m: every km-sized patch was a full-height tower with vertical walls
+  (3.4% of the land steeper than 60 degrees). Isolated, the ridged noise at full strength is just rolling dunes (p99 35 degrees); the "mountains" were the cliffs of the mask.
+- At a coarse LOD this is a wall the mesher cannot represent: around a summit, 6% of adjacent samples at a 128 m step were steeper than 45 degrees (max 84) and 4% at 512 m -- the shards and holes in the distant mountains.
+
+### The fix, at the layers that made the bad state
+1. **Range scale.** `MountainRegion*`: a 2-octave field of 30 km, smoothstep Low..High (-0.25..0.33) x gain 1.6, times the inland factor -> wide soft ramps (km-scale, never a wall). The old erosion / weirdness mask still exists for the legacy path.
+2. **Regional biome relief.** `ReliefRegionWavelengthCm` (30 km): `FMOClimateSample::MoistureRegion / TemperatureRegion` feed `BiomeReliefAt`; a biome patch is 2-3 km, a range is tens of km. (The prairie-flatness test classifies by the regional moisture now: dry 360 cm vs moist 2638 cm of change per 800 m.)
+3. **A layered mountain** (`RangeShapeM`, metres before VerticalScale 2): a broad **massif** (smoothstep of a 2-octave 18 km field, 515 m: the MASS, it survives every LOD) + ridged **peaks** with ROUNDED crests (pseudo-Huber crest, `PeakSoftness` 0.22, 4 octaves from 4.2 km, 580 m, needing the massif's support:
+   `0.15 + 0.85 x support`) - **erosion gullies** (ridged valley lines, 600 m, 25 m deep, cut where the base is steep: slope 0.15..0.55 from a 60 m finite difference) + sparse **crags** (sharp-edged ledges, 150 m, 12 m, only on slope 0.30..0.65 and only where a noise says so: the sheer detail up close, never a region-wide wall).
+   Gullies and crags fade out over the LODs (full at 6x resolvable, gone at 1x) and every fine octave is culled below 2 x StepCm, so a coarse LOD sees only the massif and the big peaks.
+4. `ErodedFbm` got a crest-softness parameter (0 = the exact old math); lake placement got a dense burial re-check (the sparse grid missed a dip between samples on the new foothills: 1 lake in 2470 showed a bare water plane).
+
+### Measured (real tests, 4 seeds)
+| | v5.1 | v6 |
+|---|---|---|
+| land slope p50 / p90 / p99 over 40 m | 3.9 / 36.1 / 77.8 | 3.3 / 10.9 / 34.8 |
+| land steeper than 45 / 60 / 70 deg | 6.9% / 3.4% / 1.9% | 0.3% / 0.02% / 0.00% |
+| highest ground (MakeReliefParams) | 1.45-1.65 km | 1.43-1.86 km |
+| around a summit, adjacent samples steeper than 45 deg at 128 m / 512 m LOD step | 6% / 4% | 0.5-0.8% / 0-0.6%; walls (> 63 deg): 0.00-0.02% / 0.00% |
+| summit height kept at a 128 m / 512 m step | | 99-100% / 94-98% |
+| neighbouring-LOD surface mismatch p99 (64/128, 128/256, 256/512 m) | | 25 / 7 / 51 m |
+| SampleColumn at LOD0 | 0.95 us | 1.5 us (the slope needs 3 base evaluations, only above 25 m of base) |
+New tests: `MOFramework.WorldGen.RangeCoarseLOD` (walls and mass at the LODs the voxel world uses), `RangeLODSeams`; `MountainsAreTall` tightened (< 2.5% over 45, < 0.5% over 60, p99 < 55 degrees); the sinkhole test now measures the ground at the probe, not at the axis.
+Dev tools: `MO.WorldGen.FindPeak [radius_km] [go [dist_km]]` (the highest summits; `go` puts the pawn short of the highest, hovering) + the existing `MO.Cam.LookAt` for photo shots; `MO.WorldGen.DebugNoLodCull 1` (cheat cvar: the base height ignores the LOD).
+
+### What is NOT explained by the generator
+A small TEAR in the farthest LOD (12 km): a V-shaped gap between two coarse faceted peaks, seen through to the sky, present in the user's shot and still there. It is identical with `MO.WorldGen.DebugNoLodCull 1` (no octave culling at all), so it is not our LOD mismatch; it is how the Voxel plugin meshes the farthest chunks.
+Worth a look next: the voxel world's LOD quality / max LOD settings, or a Voxel bug report.
+
+## Update (2026-10-11): deep ocean (v5.1), a world twice as wide, and why the underwater effect only worked looking up
+
+All uncommitted. Generator **v5.1**: goldens re-pinned (Height 0x0CF8AC95, Cave 0x64490A6D; the water-off probe is still the v1 anchor 0x9C4AE2B3).
+
+### Ocean and shoreline (Wes: "the ocean depth is really shallow and the shoreline meanders WAAAAYYYY out into the water")
+- Diagnosis: the continent spline had a sea floor at -6 m (x2 = -12 m) and the hill noise rode on that near-flat shelf, so noise decided where the waterline fell and it wandered far out. Two layers: `ContinentSplineM` now drops
+  fast below the waterline (0 m at continentalness -0.55, -14 m at -0.60, -45 m at -0.70, -80 m at -1; x `VerticalScale` 2) and the hill noise fades out over open sea (`HillSeaFadeLow/High` = -0.62 / -0.42, a smoothstep of the continentalness).
+- Measured (test `MOFramework.WorldGen.OceanDepth`): sea shallower than 20 m 99% -> 8%, deeper than 100 m 67%, deepest -162 m (was -31 m); 234 of 300 shore points drop 20 m within 400 m in their steepest seaward direction.
+  The spawn island check and the `Landmass` test needed a shallow-sea control because the deeper sea no longer produces islets.
+- The water-off probe restores the old spline and `HillSeaFade` off (if you add another v5-style default, add it to `RunProbe(false)` too).
+- Sand: `ShoreStrand` is now everything from the sea floor up to +4 m (heightMin -100000), so nothing below sea level is muddy leaves.
+- World: `WorldHalfSizeCm` 3 -> 6 million (120 km edge); PCG volumes in both levels scaled x1.3 (+-65 km). Biomes halved again (moisture 175 km / temperature 375 km wavelengths).
+- **Distant-mountain raggedness is NOT fixed** by any of this. Tried: 2x world, removing the cave stamp, the voxel world's game LOD quality in the editor (`always_use_game_quality`). Mountain meshes look smooth in the shots; the speckle I could
+  reproduce at seed 7 is the dithered distant trees. Wes's holes were not reproduced. If it persists: send the seed, location and a 1:1 screenshot.
+
+### Underwater post process: why it only worked looking up (root cause, fixed by configuration + level data)
+- Symptom: the underwater look appeared when the camera pointed at the water surface, not when it pointed at the character.
+- Diagnosis (instrumented, not guessed -- `MO.Water.UnderwaterTrace`): `UWaterSubsystem::ComputeUnderwaterPostProcess` only runs its underwater test `if (World->SweepMultiByChannel(...))`, which is true only for a
+  **blocking** hit on `CollisionChannelForWaterTraces`. That channel defaulted to WorldStatic, which the game's ground / drop / placement traces use, so the ocean could not block it: the level's ocean actor had the
+  `OverlapAll` profile. The sweep returned false, the whole test was skipped, `cached depth = -1` -- except when the character's own mesh (blocks WorldStatic) happened to be within 100 cm of the camera, i.e. when the
+  third-person camera swung up beside the pawn. Replaying the plugin's steps on the game thread said "underwater" at every pitch, which is why that replay alone was misleading: it never checked the sweep's return value.
+- Fix: a dedicated trace channel **WaterTrace** (`ECC_GameTraceChannel2`, default response Ignore for every profile) set as `CollisionChannelForWaterTraces` (`[/Script/Water.WaterRuntimeSettings]`), and the
+  `WaterBodyCollision` profile now blocks it, overlaps WorldStatic (as the old OverlapAll ocean did) and blocks nothing else. The ocean actor in `MOPCGScattering` and `LoadingLevel` uses `WaterBodyCollision`; upland lakes get it
+  from the class default. Tests: `MOFramework.Water.TraceChannel` (channel is dedicated, only the water profile blocks it, the water profile blocks no gameplay channel) and `MOFramework.Water.LevelOceans` (loads both levels, every
+  water body uses the water profile). Seen: seabed camera at pitch 0 / 25 / 60 and 1.4 m under the surface at pitch 0 all have the effect; above water there is none (hits=0).
+- Tools: `MO.Water.Underwater` (the plugin's steps at the camera), `MO.Water.UnderwaterTrace [0|1|all]` (per rendered view: the plugin's result as `cached(prev)` -- native multicast delegates run in REVERSE binding order, so a
+  handler of ours runs BEFORE the water subsystem's and `View->UnderwaterDepth` still reads -1 there -- plus the replay).
+
+### Hair buns vanish under the water effect (open: engine-level, no project-side fix found)
+- Not groom LOD: the character's hair is strands only (`r.HairStrands.Strands 0` leaves a bald head, `Cards 0` changes nothing; 3 hair groups, no cards in use).
+- Cause: the post process fogs every pixel by `SceneDepth`; hair-strand pixels over the water (buns, flyaways) have no depth of their own there, so they read the far water-surface depth and are replaced by fog colour. Hair over
+  the skull survives because the head's depth is behind it. Evidence (same pose, seabed, pitch 0): `r.Water.SingleLayer 0` brings the buns back; capping the post process's `Max Depth` at 10 cm brings them back and 30 / 150 / 300 / 600 / 1500 cm
+  dissolve them progressively; `r.Water.SingleLayer.DepthPrepass 0`, `r.HairStrands.Visibility.UseHWRaster 1`, `r.HairStrands.Visibility.MSAA.SamplePerPixel 8` change nothing.
+- Why (engine source, UE 5.8): after `RenderSingleLayerWater`, `DeferredShadingRenderer.cpp` replaces `SceneTextures.Depth` with the SLW depth prepass (scene + water, no hair), and `AddHairVisibilityComposeSamplePass`
+  then skips writing depth (`bWriteDepth = !bReadSLWDepth`, "already written"), so hair never reaches the depth every post process reads. (Read from the source, not proven by a patch.)
+- Tried and DISPROVEN (do not retry): a copy of the water post process using `SceneDepthWithoutWater`, one using `Min(SceneDepth, CustomDepth)` with Render CustomDepth on the grooms (a debug post process showed custom depth is
+  far everywhere, hair included), forcing hair cards.
+- Candidate engine fix (NOT applied: it edits the source build at D:\UnrealEngine\UE_5.8 and needs Wes's yes): in `HairStrandsComposition.cpp` `AddHairVisibilityComposeSamplePass`, write depth also in the SLW case
+  (`bWriteDepth = true`), since the main depth was replaced after the earlier hair pass wrote into the old one; Renderer module rebuild, then re-run the seabed-pitch-0 shot.
+
+### Oceanology (asked about 2026-10-11)
+Not installed in any engine on this machine (UE_5.3 / 5.5 / 5.7 / 5.8 Marketplace folders: no); the older projects under D:\Transfer reference it by marketplace id only. The Fab listing for **Oceanology Legacy** (Galidar,
+$189.99, UE 5.4-5.8, C++ plugin) lists: Gerstner waves, local lakes, a buoyancy component, a swimming component with animations and breath, an underwater post process with caustics / absorption / god rays, shoreline foam. It would
+REPLACE Epic's Water plugin here (ocean actor, upland-lake spawner, the collision fix above), so it is a design fork, not a switch to flip. It must be installed from the Epic Launcher library for UE_5.8 (not scriptable from here).
+The listing metadata says "Allows usage with AI: No": read the license before pointing an AI tool at its source.
+
+## Update (2026-10-10, afternoon): generator v5 — per-biome relief, tall mountains, half-size biomes, an island edge, sand, a rainforest, recruitment feedback
+
+Wes's asks: mountains "many times higher" while lowland prairie stays flat (per-biome height variance); biomes about half the size; land that falls off into water at the edges so the world border is never met on land; a
+rainforest in the spirit of Epic's PCG forest project; sand on the sea-level shores (voxel material and all); more Megascans for beaches; the small green bush that stops the pawn; and a survivor who could no longer be
+recruited with nothing on screen saying why. All uncommitted. Generator **v5**, goldens re-pinned (Height 0xA310F037, Cave 0xEF77D093; the water-off probe is still the v1 anchor 0x9C4AE2B3).
+
+### The land (FMOWorldGen v5)
+| Piece | What | Numbers |
+|---|---|---|
+| **Per-biome relief** | `DT_Biomes` columns `reliefScale` (hills + the continent's height above a 20 m lowland cap) and `mountainScale` (mountain ranges + coastal ranges). The biome that applies is chosen from the **climate alone** (moisture + sea-level temperature) as a *soft first-match-wins* over the biomes that have no height band and no minimum slope (`BiomeReliefAt`): the height/slope-banded biomes (shore, alpine, rocky) are consequences of the terrain, so they cannot also shape it. Continuous: relief changes over `ReliefClimateBlend` (0.12 of a climate unit), never at a line | prairie (Meadow) 0.25 / 0.03, arid DryScrub 0.35 / 0.15, TemperateForest 1 / 1, LocustWoodland (cool + moist) 1.2 / 1.6, Rainforest 1.1 / 1. Inside one dry climate the ground changes **5.8 m over 800 m (0.4 degrees)** against 100+ m in a moist one |
+| **Taller mountains** | `MountainAmplitudeM` 320 -> 1000, wavelength 8 -> 10 km, new `MountainGain` 0.38 (0.5 = every octave adds the same slope, six octaves of a tall range were near-vertical cliffs) | highest ground 1.3-1.7 km (was ~0.4); land p99 0.9-1.2 km; slopes over 40 m: p90 27 deg, **1.9% of the land steeper than 60 deg** |
+| **Small biomes** | v5: moisture 700 -> 350 km, temperature 1500 -> 750 km, erosion 900 -> 450 km, weirdness 600 -> 300 km (wavelengths, cm x 1e5). **Halved again the same day for moisture and temperature only** (the biome deciders): 175 km / 375 km, about 1.75 km per biome patch. Erosion and weirdness stay, so mountain ranges keep their size. The continent (landmass) wavelength is unchanged | a walk crosses >= 3x as many moist/dry borders as before v5 (test `BiomesAreSmaller`) |
+| **Island edge** | the continent field is pulled to open ocean between 62% and 93% of the half-size (squarish norm from two square roots: IEEE-exact), and hills / mountains / coastal ranges fade with it (`FMOClimateSample::EdgeLand`) so no islet survives | the outer 6% of the world is >= 5 m under water on 4 seeds x 4800 samples; 65-90% of the inner world is land (`IslandEdge`) |
+| Upland lakes retuned | cell 180 -> 130 km (radius cap follows: 0.1 x cell), candidates 3 -> 6, footprint relief 18 -> 24 m: the taller relief had thinned them to 1 per 11 km^2 | 1 per 5.7 km^2 |
+
+`FMOWorldGenBiome::IsClimateBiome()` is the rule for who shapes relief; `FMOWorldGen::BiomeReliefAt()` is the one function. With every scale at 1 the multipliers are exactly 1 and the v1-v4 bits are untouched (the anchor pins it). The v5 defaults moved four
+wavelengths, the mountain numbers and the edge: **`RunProbe(false)` restores all of them** to stay the v1 anchor; if you add a v5-style default, add it there too.
+**Trap found by measuring:** the first flatness test compared a dry point with a point 1.5 km away and read 170 m "flat prairie" -- the second point was in a moist climate (biomes are 3.5 km now), so it measured the BORDER. A flatness test must keep start, middle and end inside one climate class.
+**Trap:** a biome's hill scale below 1 must also flatten the continent spline (`LowlandCapM`), which alone is ~130 m of change per 1.5 km; scaling only the hill noise did nothing visible.
+**Trap:** the cave-field gradient limit (20) assumed gentle ground: the depth taper contributes ~10 per cm of depth change and a horizontal step changes depth by the ground slope, so 75 degree slopes read ~25-35. Now 40 (a real jump reads 100+).
+**Spawn:** the island check flood-filled on two lattices 4-connected; a land strip running diagonally between lattice points read as cut (one seed failed the independent 250 m cross-check). Now 8-connected on 175 / 250 / 350 m, cross-check at 225 m.
+
+### Ground and plants
+- **Sand**: no sand surface existed anywhere on the machine (Megascans here: one Sand Rock mesh). `Tools/gen_sand_textures.py` makes a seamless 2K albedo / normal / roughness / height set (FFT-filtered noise: periodic by construction; seam ratio 0.99-1.00),
+  `Content/Python/make_sand_material.py` imports it, duplicates MI_Gravel -> `MI_Sand` and VST_MI_Gravel -> `VST_MI_Sand` (same parent and tiling), adds the new surface types to the **VoxelMegaMaterial's `surface_types`** (a surface type the mega material does not list is not painted),
+  and builds a darker greener `VST_MI_JungleFloor` for the rainforest. `ShoreStrand` (priority 13) paints sand from **everything below sea level up to +4 m**: beaches, river banks, the sea floor (it first stopped at -5 m, and deeper seabed showed muddy leaves).
+- **Rainforest** (`Rainforest`, moisture >= 0.70 and temperature >= 0.55, priority 12, JungleFloor ground, hill 1.1): modelled on `PCGBiomeSample`'s structure (read from the engine plugin: biome assets with *child assets* scattered around their parents -- saplings, then seedlings, then boulders -- and sun / water-distance / flow filters).
+  Here as ClusterGroups: group 4 = the tree stand (emergent giants 1.5-2.2x at the clump cores, 7 canopy species, 6 saplings and 2 seedlings in the ring), group 5 = the shrub thicket; lush tall grass, 9 flower families, mossy boulders, fallen trunks and branches. 2520 instances/ha (forest 1270).
+  Not taken from the sample (no equivalent here yet): sun-exposure and water-distance filters per species (shade plants, riparian plants).
+- **Walk-through species (`EMOSpeciesCollision`: `Auto` / `Passable` / `Solid` on `FMOBiomeSpeciesEntry`)** -- CORRECTED 2026-10-10 evening. I first blamed the BlackAlder *saplings* for "the small green bush that stops the pawn", made every `Sapling_*` `Passable`, and Wes
+  had to tell me they were not it (I had guessed from the resource type instead of asking which bush or sweeping the thing under the crosshair). **Saplings are `Auto` again** (solid like trees). The real culprits: every **Black Locust variant is a ground-level plant** (0.5-1.5 m tall,
+  up to 1.8 m wide) that the resource table calls a *Tree*, so it blocked like an oak -- and last night's collision pass had made it worse (trunk capsules on the variants, and the legacy PCG node `MOPCG_StampScatter1/StaticMeshSpawner_3`, which places locust A/B/C, set to `BlockAll`). Now every `wdvhberja` species is `Passable`
+  (`OverlapAllDynamic`, still reached by interaction traces) via the one rule in `biome_palettes.py::species()`, and node 3 is `OverlapAllDynamic` (`fix_mesh_collision.py`). The enum stays: it is how a species overrides its resource type's default.
+- **Megascans**: the local library (`Documents/Megascans Library`) held 6 unused rocks (Sand Rock, Stone, Mossy Forest Boulder -- tagged "tropical jungle" --, three Nordic rocks). Copied to `Content/Megascans/3D_Assets/<Name>/` (their internal references point there), reparented onto `M_MS_Base` with a flat ORM by
+  `Content/Python/fix_megascans_import.py` (the export pointed at an `M_MS_Default_Material` this project does not have, so every MI had no parent), convex collision by `fix_mesh_collision.py` (now also covers `Collision = Solid` species). Placed on the shore, in the rainforest / woodland / highland. Driftwood = the existing Bent Branch, Spruce Branch and Broken Bark scans.
+  **Nothing new can be downloaded here** (Fab / Bridge need an account): more beach packs (shells, dune grass, driftwood) are a download for you, then they drop into `biome_palettes.py`.
+
+### Recruitment: why it did nothing, and what it does now
+Diagnosis (layers): `UMOColonyManagerSubsystem::CanRecruitByStanding` gates a stranger on **trust built by shared game time** (2% per hour: ~8 game hours standing within 12 m), and its "bootstrap" test (`OthersOnRoster == 0`) never fired because the founder IS on the roster. On the real-time clock that is ~8 real hours before the first survivor will join -- and the gate
+refused with `return false` + a log line, so the player saw an interaction that did nothing, no quest, no message. Fixes at those layers: the gate only judges a colony of >= `RecruitGateMinRoster` (3) settlers (the first survivors you meet just join);
+`BeginInteractionDetailed` returns an `EMORecruitmentOutcome` (+ standing / needed / hours-to-pass computed by the bond function itself, `HoursToReachStanding`); `AMOCharacter::HandleRecruitmentInteraction` sends every outcome to the player through the new `AMOPlayerController::ClientShowNotification` (a Client RPC: works for a joined client).
+Seen in PIE: a lone founder -> the first survivor "joins you"; a colony of 3 -> yellow notice "does not know your settlement well enough to join yet (trust 0% of the 15% needed). Spend about 8 more hours of game time near them." Tests: `MOFramework.Colony.Recruit.GateMath`.
+No quest ever appears because no survivor has `PossibleQuests` configured (the component rolls one only when the list is non-empty): quests are a data task, not a bug.
+
+### Follow-up the same evening: audio, editor exit, menu fade
+- **"Exit Game" on the main menu closed the whole EDITOR from inside PIE.** The log of the session that lost its editor shows `Exit Game button clicked` -> `Cmd: quit force` -> `Engine exit requested (reason: Win RequestExit)` -> a normal shutdown, not a crash. `QuitGame(... bIgnorePlatformRestrictions = true)` issues `quit force`; in PIE `AMOMainMenuPlayerController::ExitGame` now calls `GEditor->RequestEndPlayMap()` and returns (packaged builds still quit).
+- **The start-of-game blast was the intro video.** Its `UMediaSoundComponent` had no sound class, so it played at full volume and ignored the Music / SFX / Ambient sliders (Wes had 0.27 / 0.53 / 0.20 = a ~4x blast). It now plays at music x master.
+- **My ambience driver flapped.** `FindWaterNear` sampled rings whose radius depended on the previous state (35 m to enter, 56 m to stay): with two rings per radius a narrow river or pool was hit by the 17 m ring and missed by the 28 m one, so a stationary listener flipped Water <-> Outdoor every second and every flip restarted every ambient layer (3 s crossfade each) -- a wall of overlapping sound.
+  Now `DistanceToWaterCm` measures ONCE on fixed 7 m rings and the entry / exit distances are compared against that one number (a position settles in one step, test `MOFramework.Audio.AmbientEnvironment`), and a state is held `MinDwellSeconds` (4 s) before it can change.
+- **Main menu fades in from black over `MenuFadeInSeconds` (2 s)**: a camera fade over the menu level plus the menu widget's own opacity, started the first time the menu is shown (after the intro the first time; straight away on every later visit, where the level streaming in is what it hides).
+
+### Open items / forks
+- The sand ripple look is a first guess (MI_Sand NormalStrength 0.6): tune by eye. The shore band above sea level is +4 m.
+- AlpineHeath is still "everything above 320 m": with 1-2 km mountains that is a lot of gravel; a bare-rock / snow-cap biome for the top is the obvious next biome.
+- The rainforest is temperate-looking trees in a dense layered stand (the packs have no palms / tropical broadleaf); real jungle variety needs a tropical pack.
+- Seabed is walkable (no swimming): the sea floor runs out to the world edge at ~12 m depth, so the pawn can still wade out there; only LAND no longer meets the boundary.
+- The main-menu flyby uses the same generator, so it now shows the new coast; its start point was chosen against v4 land (re-check the first frame).
+
+## Update (2026-10-10, night): generator v4 — relief x2, coastal ranges, upland lakes, a coastal new-game start, fuller biomes
+
+Wes's asks this session: spawn near an ocean (not an island), lakes above sea level (~1 per 5 km^2), `weather` / `time` console popups, "double the height delta", check collision of rocks and
+other props, a flyby on the main menu, and keep making the land feel alive. What changed, why, and how it was measured (all uncommitted; the world generator is **v4**, goldens re-pinned).
+
+### The land (FMOWorldGen v4)
+| Piece | What | Numbers |
+|---|---|---|
+| `VerticalScale` (new tuning, default **2**) | multiplies the whole height sum (continents + mountains + coastal ranges + hills + detail), above and below sea level | `1` + `CoastalRangeAmplitudeM = 0` reproduces v1-v3 bit for bit (the `RunProbe(false)` golden pins it) |
+| Coastal ranges (`CoastalRange*`) | ridged hills/mountains that rise from the shore (a band starting at continentalness -0.52, fading out where the continental mountains take over, with a slow presence field so only ~60% of coast has them) | exist because only 8 of 40 seeds had ground 1 deg above the horizon across open water; with them (and x2): **36 of 40** seeds, median 2.1 deg |
+| Upland lakes (tier 2 of the basin code, `UplandLake*`) | one site per 1.8 km cell; a few jittered candidates roll downhill into the nearest low spot; the flattest one whose footprint is high (>= 19 m above sea, clear of the river zone), level and walled-in wins; **water surface = lowest ground around the lake minus a freeboard** (so the shore is always a dry bank, and a square water plane laid over the ellipse stays buried outside it); the ellipse is carved into a bowl | **677 lakes in a 60 km world = one per 4.9 km^2** (1 per 5.5 before the x2); radius 70-180 m; surfaces 17-241 m above sea |
+| Sinkholes | keep out of lake zones (a hole in a lake bed) | test: 0 inside a zone, and the gate has work to do |
+
+`MOFramework.WorldGen.UplandLakes` checks: density 3-8 km^2, surface above the limit, reach inside the cell (a column only asks its own cell), bowl cut to depth, dry bank all round, **ground >= surface + 20 cm everywhere
+outside the ellipse inside the water plane's box** (the plane can never hover over a hillside), continuity, determinism, zone helper, sinkhole gate.
+
+### Water surfaces for the upland lakes: `UMOUplandLakeSubsystem`
+The world's water plane is at sea level, so a bowl in the hills needs its own surface. The subsystem spawns an `AWaterBodyCustom` of the level's ocean actor's class once per lake near any player
+(spawn 4 km, despawn 5 km), laid at the lake's surface height and scaled to the ellipse, then gives it the ocean's mesh, material and underwater post process. Four traps found by looking (all fixed, all in the file header): **SpawnActor with the ocean actor as `Template` composes the spawn transform with the template's own root transform**
+(the ocean's scale of 100000 made every lake 80 000x too big and flooded the horizon), **and copies its replication Role** (a level-placed actor on a client is a simulated proxy: "Actor has an invalid Role" ensure, found only by the packaged two-process net test), so the lake is a plain actor of the ocean's class;
+the class default is **Static** mobility so the water body's runtime `SetStaticMesh` is refused (9 warnings per lake, no surface), so it is made Movable before `FinishSpawning`; and the ocean is
+the source of the look, so a level without one gets bowls but no water (warned once). The same subsystem runs in the main-menu world, so the flyby sees lakes too. The PCG biome spawner skips points inside a lake's ellipse
+(`IsInUplandLakeZone`); the legacy native Static Mesh Spawner nodes in the scatter graph are not lake-aware (trees can stand in a lake from those).
+
+### New-game start: the shore, facing the water, never on an island (`FMOWorldGen::FindCoastalSpawn`, `AMOGameMode::FindNewGameSpawn`)
+1. Coarse grid (400 m cells, +-24 km, base height only) -> shore cells (land next to water) -> 16 rays each: unbroken open water (fetch) and the far ground's **elevation angle** (height above the eye / distance, within 6.4 km behind the water); a view needs the +-22.5 deg
+   neighbours to be open water too (rules out rivers/inlets/ponds). Score = skyline + fetch - a mild pull toward the origin.
+2. **Not an island**: 4-connected land components of the coarse grid (>= 600 km^2, or >= 30% of that when touching the grid edge), then the picked spawn is flood-filled on the REAL terrain at 200 m and again at 300 m
+   (`MeasureLandmassCells`, a neck one cell wide at 200 m is cut by the coarser lattice): both must reach 600 km^2. The spawn also needs 10 of 16 dry points on 150 m / 300 m rings (not a spit), water within 400 m ahead and 85% water over the next 1.5 km at 25 m steps, slope < 26 deg, no sinkhole / lake.
+3. Costs 5-30 ms. The pawn is spawned at generator height + 200 cm (the generator matches the voxel surface to 0.5 cm), held by the existing spawn-settle (45 s allowance for a coastal start because the voxel world has to stream somewhere the loading screen never looked), and the control rotation faces the water.
+`MOFramework.WorldGen.CoastalSpawn` (40 seeds): 40/40 found, distance p50 12.8 km, open water p50 4.4 km, 36/40 with >= 1 deg skyline, no island by an independent 250 m cross-check, deterministic.
+`MO.WorldGen.FindCoast [go]`, `MO.WorldGen.SeedSurvey [first] [count]` (ranks seeds by forest + inland hills + skyline: seeds 7, 18, 19, 49 are the best of the first 120).
+
+### Main-menu backdrop (`AMOMenuFlyby`, LoadingLevel)
+LoadingLevel (the menu map; the code finds it by name) is no longer empty: the terrain stack of the game level (voxel world + MO terrain graph, cave stamp, sky, weather, ocean, PCG volume) was copied in with the editor's copy/paste
+and one `AMOMenuFlyby` placed. At BeginPlay it applies a seed (`UMOWorldSeedSubsystem::ApplyBackdropSeed`, default 7), asks the generator for that seed's new-game coast, lays a 23 km loop along the shore and back through the land (shifted until
+~70% of it is over land), becomes the view target and flies it at 9 m/s, 70 m over the ground (the generator knows the ground; it looks ahead 150 m so it rises before a ridge), looking a little toward the sea. A lap takes ~44 minutes. **The flight starts at the first point of the loop with ground under the camera and open water ahead** (seed 7: 13.6 km along it) --
+the first version started at distance 0, which for seed 7 is over the sea: the packaged build's menu opened on bare water for minutes at 9 m/s, and its biome spawner logged `accepted=0 suppressed=N` for every cell (points under the sea are dropped by design). Found by launching the packaged exe and looking, not by the editor frames (which had been captured at chosen fractions).
+Traps: the spline must be absolute (attached, it rode the camera and ran away exponentially: 390 km from the origin in a minute), dedicated servers skip it, `QUIT_EDITOR` (not the window close box) leaves the editor without the save prompt the generated menu level triggers.
+Dev: `unreal.MOMenuFlyby.jump_to_fraction(0.3)` through the editor Python bridge moves the camera for screenshots.
+
+### Biomes (DT_Biomes as data: `Content/Python/biome_palettes.py`)
+The forest was three tree meshes and one grass; the meadow two grasses; the world used two of ~110 meadow flowers. Palettes now use the packs' growth stages (BlackAlder canopy -> saplings -> seedlings, CommonHazel shrubs), 8 wild-grass and 6 dune-grass variants, dead shrubs, raspberry
+and locust variants, 10-15 flower families per biome. **New biome AlpineHeath** (height >= 320 m, gravel, boulders, stunted trees, tough grass, late flowers) for the doubled relief. Instances/ha: forest ~1270, meadow ~2180, woodland ~840, scrub ~1020, shore ~720, highland ~430, alpine ~790.
+`MO.WorldGen.BiomeStats` (share of the land per biome) and `MO.WorldGen.FindBiome <id> [go]` (teleport to the nearest) are the tools for tuning; seed 12345: woodland 25%, forest 23.5%, scrub 16%, meadow 8.4%, shore 4.7%.
+
+### Collision of scattered things (found because a rock "had no collision")
+Cause, by layer: **the biome spawner gave EVERY species the node's single `CollisionProfile`, which the graph set to NoCollision**, so every tree and rock it placed was walk-through. Fix at that layer: harvestable species take
+`FMOResourceNodeDefinitionRow::GetPlacementCollisionProfile()` (tree / rock / ore / generic -> BlockAll; bush / herb -> OverlapAllDynamic), only decorative species (no ResourceNodeId: grass, flowers) use the node's `DecorativeCollisionProfile`
+(NoCollision). Also fixed: the spring POI's boulders and the locust woodland's native spawner entries (NoCollision / IgnoreOnlyPawn -> BlockAll), and two locust variants got a trunk capsule. **Trap: `EditorStaticMeshLibrary` collision counts read -1 while PIE is running**, which first made every mesh look collision-less; the
+meshes had convex hulls all along. Proof it works: `MO.Dev.ScatterCollision [filter]` sweeps a pawn capsule into spawned instances (grass control: blocked = 0, boulders / trees: all blocked);
+`MOFramework.Data.SolidMeshCollision` fails if a solid-kind mesh in the biome table has no collision geometry; `Content/Python/audit_table_mesh_collision.py` / `fix_mesh_collision.py` / `audit_mesh_collision.py`.
+
+### Weather that changes by itself (`UMOWeatherDirectorSubsystem`) and the dev popups
+The director holds a weather for a spell of GAME time, then follows a Markov chain over the UDS presets (45% fair / 13% wet / 0.5% thunderstorm over a long run); a wet front falls as snow below ~0.5 C. It respects a weather set by anyone else (adopts it, holds it 6 game hours). `MO.Weather.Director 0|1` (cvar), `.Info`, `.Next`.
+**The default clock is real time, so a spell is hours of real time unless the time scale is raised** (`MO.Clock.SetTimeScale 24` -> a day per hour): the one-line change that makes day/night and weather visibly dynamic is a design call left for Wes.
+Typing `weather` / `time` in the Tilde console opens a quick-pick modal (`UMOQuickPickDialog`, `WBP_QuickPickModal`, built from `Content/Python/ui_specs/quick_pick.py`); the buttons call Server RPCs on the player controller (works from a joined client). `weather rain` / `time 2pm` skip the popup.
+`time` moves the clock FORWARD to the next occurrence (`UMOGameClockSubsystem::AdvanceToTimeOfDay`; time never rewinds, so nothing timed on the DateTime sees a negative age).
+
+### Ambience that follows the ground (`UMOAmbientEnvironmentSubsystem`)
+The audio subsystem had Cave / Water layer states nothing ever set. A local-player ticker (0.75 s) now classifies the listener from the generator: **Cave** when more than 12 m under the generator's surface (leaves at 8 m; a sinkhole shaft counts), **Water** within 35 m of
+water (sea-level water by the generator's height, or an upland lake's ellipse; leaves beyond 56 m; not when the listener is >30 m above the surface), else back to the clock's Day / Night. Indoor is left alone (a building decides its own sound). Pure `Classify()` is tested (`MOFramework.Audio.AmbientEnvironment`, shore found by scanning seeds, expectations built from the generator's own heights).
+New data row `Ambient.Cave` in `DT_AmbientLayers` (calm hollow + drip loops; drip / bat / air event groups from the existing cave sounds). Seen in PIE: shore -> `Outdoor_Day -> Water` (3 base / 4 event groups), falling down a sinkhole -> `Water -> Cave` (2 base / 3 groups, dominant Bats), back up -> `Outdoor_Day`.
+
+### Open items / forks
+- Swimming: the water planes (ocean and lakes) still do not make the pawn swim.
+- The legacy native PCG spawner nodes (grass/locust/field trees) are not lake-aware or biome-aware; the biome spawner is where new variety belongs.
+- Lakes are static levels (no flow, no seasons); rivers are sea-level channels only.
+- `VerticalScale` 2 doubles every slope: re-tune anything that assumed the old relief (biome bands are in real metres; `AlpineHeath` starts at 320 m).
+
+## Update (2026-10-10): the level runs on the generator; caves, water and below-world light
+
+**State: all of this is uncommitted work on top of commit `5b9461f6` (the rollback point).**
+
+| Piece | Where | State |
+|---|---|---|
+| The game level `MOPCGScattering` uses `VHG_MOTerrain` (was `VHG_Flat`) | the height stamp's Graph (set from python: `get_stamp().export_text()` -> replace the graph path -> `VoxelStampRef.import_text` -> `set_stamp`) | done; `MO.WorldGen.Compare 3000 500`: 121/121 hits, mean 0.1 cm, max 0.4 cm |
+| **`VHG_MOTerrain` SurfaceType pin wired** (it was not: the whole terrain rendered as the grey WorldGrid checker) | graph | done |
+| Biome ground surfaces | `DT_Biomes.groundSurfaceType`: forest/meadow = `VST_MI_MuddyLeaves`, shore/scrub = `VST_MI_Gravel`, rocky = `Cliff/VST_Cliff` | done (RockyHighland cannot win in the node: slope is assumed 0; slope rock needs a Smart Surface Type) |
+| Three new biomes from the Megascans plants/rocks in `Content/Fab`: `ShoreStrand`, `DryScrub`, `LocustWoodland` | `DT_Biomes` (6 rows, 23 species, `MO.Test.ValidateData` green) | done |
+| **Caves**: spaghetti tunnels, caverns, sinkholes | `FMOWorldGen::SampleCaveDistanceAtGround`, `MOWorldGenCaves.cpp`; nodes `MO Terrain Caves` + `MO Terrain Caves Bounds`; graph `Content/Penumbra/Maps/VVG_MOCaves`; stamp actor `MOCaveStamp` (Subtractive, DefaultVolumeLayer) | done, verified in game |
+| **Rivers + lake/pond basins** carved into low ground at sea level | `FMOWorldGen::ApplyWater`, `MOWorldGenWater.cpp` | done, verified in game |
+| Below-the-world light gate | `UMOSubterraneanLightingSubsystem` | done, verified A/B |
+| Determinism probe (the "cpu check") | `FMOWorldGen::RunProbe`, `MO.WorldGen.Checksum`, pins in `MOWorldGen.h` | editor verified; packaged / second PC still to compare (one console line each) |
+| Dev tools | `MO.Cam.LookAt/Reset`, `MO.Light.Test/Cube/Off`, `MO.WorldGen.Sinkholes/FindCave/FindWater/CaveSample/Checksum` | done |
+
+### Caves
+
+Shape: three feature types, all a signed distance in cm (negative = cave air) that a **Subtractive volume stamp** carves out of the height terrain.
+- **Tunnels**: `sqrt(A^2 + B^2)` of two independent 3D gradient-noise fields is small along the curve where both are zero: a winding passage ~3.2 m radius (varies +-35%), flatter than
+  tall (vertical squash 1.6). Distance scale from the measured noise (`|gradient| ~1.2 per lattice cell`).
+- **Caverns**: a smooth 3D field above a threshold, at least 35 m down.
+- **Sinkholes**: one candidate per 300 m cell (60%), a shaft that flares at the rim, wobbles +-25% and ends in a flattened chamber. The ONLY features that reach the surface (tunnels and
+  caverns keep 9 m of rock above them and taper in over 16 m). `DistanceToSinkholeRimZone` lets PCG keep clear.
+- Where: only under ground more than 3 m above sea level (6 m ramp), so the lowland spawn has none; caves live inland / on hills. Not deeper than 140 m below the ground.
+- **Every gate is a continuous penalty that saturates at `CaveFarCm` = 3000 cm.** The first version closed its gates with `return Far` and had a 146 cm/cm cliff in the field; the test now
+  measures `max |gradient|` (it is ~13 where the 16 m taper ramps, never 100+) and the mean gradient at a cave wall (0.97, ~unit, which is what marching cubes interpolates on).
+- LOD: features smaller than the sample spacing are skipped (tunnels beyond LOD 1, caverns beyond LOD 4, sinkholes beyond LOD 3), so far chunks see solid ground.
+- Cost (single thread, Development editor, 34^3 chunk): **12.6 ms underground, 4.3 ms in the air** (a per-call column memo shares the 2D ground height across the Z layers). Cave air is 0.87% of the rock
+  between 10 and 120 m down; 156 sinkholes per 16 x 16 cells (4.8 km square).
+- The sample's `VVG_CaveTunnels` / `VVG_CavePockets` (`D:/UEProjects/CavesShadowsTest`, the old Voxel 2.0 `CanyonsAndCaves` content) showed the technique: 2D simplex iso-lines as tunnel paths, a Chebyshev box
+  distance, 3D Perlin surface warp, `Make Box` bounds. We keep the idea (zero-contour tunnels, Subtractive stamp) but compute it in C++ so it shares the terrain's seed, ground height and tests.
+
+Wiring (a graph, ~8 nodes, all of it adapter): `Get Position 3D (double)` (World space) -> `MO Terrain Caves.WorldPosition`; the SAME `Seed` parameter (type Seed, named exactly `Seed`) -> `.Seed`;
+`.Distance` -> `Output Volume.Distance`; `MO Terrain Caves Bounds` -> `Output Volume.Bounds`; `Output Volume.Surface Type` default = `VST_Cliff` (the cave walls). The stamp actor is a
+`VoxelVolumeGraphStamp` with Blend Mode **Subtractive**, layer `DefaultVolumeLayer`, identity transform. `UMOWorldSeedSubsystem::ApplySeedToStamps` seeds every graph stamp (height AND volume)
+through `IVoxelParameterOverridesOwner`; seeding only the height stamp would carve caves that do not line up with the ground.
+
+PCG: the biome spawner skips points inside a sinkhole's rim zone and points more than 2 m below the generator's ground (cave walls/floors), and (water) points below sea level.
+
+### Water
+
+Rivers and lakes need **no water actor and no flow**: the world already has a water plane at sea level (`WaterBodyCustom_0`, scale 100000), so everything below `SeaLevelCm` is under water. A river is a
+channel whose bed is below sea level; a pond or lake is a bowl. They sit at sea level, in lowland only.
+- **Rivers**: the zero contour of a smooth 2-octave noise field (`distance ~ |field| / |gradient|`, gradient floored so flats do not swell the river), width 24 m +-30%, 1.3 m deep at the centre,
+  banks rising 9 degrees. They fade out as the ground rises past 12 m (+6 m) above sea level: no headwaters are carved.
+- **Basins**: one candidate per 600 m cell (ponds, 15-48 m radius) and per 2 km cell (lakes, 60-115 m), elliptical, only where the WHOLE rim (16 samples of the base terrain) sits 0.6-11 m above sea
+  level; a bowl `sea - depth * (1 - q^2)` inside the shore, a bank `sea + 0.22 * R * (q - 1)` outside. `height = min(base, river, bowls)`: water only ever lowers ground.
+- Cost: nothing above 12 m of ground is touched (the early-out); basin rim checks are memoised per thread. `MinHeightCm` (the stamp's HeightRange) accounts for the deepest basin.
+- The base terrain is pinned separately: `RunProbe(false)` (water off) must equal the v1 base golden `0x9C4AE2B3` (a test); everything else is `GeneratorVersion` 3.
+- Seen in game: a turquoise lake with a gravel beach and forest behind it (Shore biome = gravel surface); rivers read as 24 m channels. 1.4% of low land is water with the first defaults, rivers 0.7%
+  (`MOFramework.WorldGen.Water` prints it). Rivers/lakes are flat sea-level water (no current, no elevated mountain lakes): flowing water and lakes at altitude need their own water bodies (the project already has
+  `AMOLakeActor` / `AMOWaterActorBase` Gerstner actors without a material, and the Water plugin's `WaterBodyLake`, which auto-creates a `WaterZone` -- neither is used yet).
+
+### Below-the-world light (Lumen "sun beneath the world")
+
+Measured with `MO.Light.Test <pitch> <yaw> <lux>` (a 20 000 lux directional light you place) in a sinkhole chamber:
+- a light from **above** (pitch -50) leaves the chamber dark (blue sky bounce only) and an enclosed tunnel is **pitch black at noon**: terrain blocks sun and sky correctly, no leak;
+- a light from **below** (pitch +40) lights the walls like direct sun, with shadows ON or OFF identically.
+It was NOT fixed by: the mega material's `bGenerateTwoSidedMaterial` (the generated Nanite material verifiably was two-sided), `VoxelWorld.ComponentSettings.bCastShadowAsTwoSided`,
+non-Nanite voxel meshes, virtual shadow maps off, or a 180 km down-facing shadow quad 200 m under the caves. (The engine's Nanite shadow raster takes two-sidedness from the material only; the one-sided
+voxel surface has no bottom to be a front face for a light below.) The fix is `UMOSubterraneanLightingSubsystem`: every directional light's intensity is attenuated by how far below the horizon it points
+(full at the horizon, zero at 5 degrees below), keeping the intensity Ultra Dynamic Sky writes. Verified A/B in the same view: `MO.Light.BlockFromBelow 0` -> lit rock, `1` -> black.
+Traps: `ULightComponent::bAffectsWorld` cannot be changed at runtime; `SetVisibility` is overwritten by the sky blueprint.
+
+### The "cpu check" (determinism across machines and builds)
+
+Co-op worlds are generated on each machine from the seed, so two machines must produce identical bits. `MO.WorldGen.Checksum` prints the fixed fingerprints (heights, caves) and `match=1` if they equal
+the pinned values (`FMOWorldGen::PinnedProbe*`). Editor / Development / i9-14900K: `height=0xA8159C7B cave=0x2DB9B6B5 version=3 match=1`. The generator uses only IEEE-exact operations and
+integer hashing, so a given binary is deterministic on every CPU; the checks that remain are *different binaries* (packaged client vs editor: run the command in each) and a second physical PC.
+Do the second one by running the packaged build there and typing `MO.WorldGen.Checksum` in the dev console.
+
 ## Implementation status (2026-10-09, later the same day)
 
 **Built and verified end to end (S0, S1 and the PCG half of S2):**
@@ -18,10 +397,8 @@
 NO position. They were first outputs of the position-driven node, and the graph reported "Get Position 2D (double): Cannot query positions here". They are now a separate
 no-input node, `MO Terrain Bounds`; the node test asserts it has no input pins.
 
-**NOT done / NOT verified:** (1) the game's own level (`MOPCGScattering`) still uses `VHG_Flat` -- switching it is one dropdown on the stamp (below) and changes every
-world's ground, so it is Wes's call; (2) cross-CPU determinism probe (S4); (3) the density / caves node (S3), macro bake / rivers (S5); (4) smooth per-biome material
-cross-fades; (5) slope-banded biomes are resolved only by the PCG spawner (the node assumes flat; see `MOWorldGen.h` PITFALLS); (6) the graph's `Surface Type` pin is unwired
-(empty until biome rows get a `GroundSurfaceType`).
+**Status when this section was written (all of (1)-(3), (6) are done in the 2026-10-10 update above):** (4) smooth per-biome material cross-fades are still open; (5) slope-banded biomes are
+resolved only by the PCG spawner (the node assumes flat; see `MOWorldGen.h` PITFALLS), so slope rock needs a Smart Surface Type graph.
 
 **Defaults I chose (design forks, section 10):** heightfield base + (later) volume carving; normalised 0..1 moisture/temperature with a lapse
 rate (physical units deferred -- the existing DT rows use 0..1); the existing priority-ordered band rows kept for biome resolution (nearest-match
