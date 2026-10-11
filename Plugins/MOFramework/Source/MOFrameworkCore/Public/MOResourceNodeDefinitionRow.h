@@ -361,6 +361,17 @@ struct MOFRAMEWORKCORE_API FMOResourceNodeDefinitionRow : public FTableRowBase
 	// HELPERS
 	// ============================================================================
 
+	/**
+	 * The collision profile an INSTANCE of this resource is placed with. ONE policy for every spawner that places resources by definition: trees, rocks, ore and anything
+	 * generic block the pawn; bushes and herbs are walk-through but are still hit by interaction traces. (A profile chosen per spawner NODE instead puts a boulder and a
+	 * blade of grass under the same setting: the biome spawner's single NoCollision made every tree and rock it placed walk-through.)
+	 * Note the mesh must have collision GEOMETRY as well -- see MOFramework.Data.SolidMeshCollision.
+	 */
+	FName GetPlacementCollisionProfile() const
+	{
+		return (ResourceType == EMOResourceType::Bush || ResourceType == EMOResourceType::Plant) ? FName(TEXT("OverlapAllDynamic")) : FName(TEXT("BlockAll"));
+	}
+
 	/** Get all auto-generated tags for this resource node. */
 	TArray<FName> GetAllTags() const
 	{

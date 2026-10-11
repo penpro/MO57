@@ -4,6 +4,7 @@
 #include "MOWorldGen.h"
 #include "MOWorldGenSettings.h"
 #include "MOWorldSeedSubsystem.h"
+#include "MOPCGWaterMask.h"
 #include "MOResourceNodeDefinitionRow.h"
 #include "MOPCGInteractionSubsystem.h"
 #include "MOTerrainModificationSubsystem.h"
@@ -65,6 +66,36 @@ TArray<FPCGPinProperties> UMOPCGBiomeSpawnerSettings::OutputPinProperties() cons
 
 namespace
 {
+	/** Trees, rocks, bushes and shrubs are the LARGE species (placed on the larger hi-gen grid); grass, flowers and debris are ground cover. By HISMTag so a new species needs no flag. */
+	bool IsLargeSpecies(const FMOBiomeSpeciesEntry& Sp)
+	{
+		static const FName Tags[] = { FName(TEXT("MOResource_Tree")), FName(TEXT("MOResource_Rock")), FName(TEXT("MOResource_Bush")), FName(TEXT("MOBiomeCover_Shrub")) };
+		for (const FName& T : Tags)
+		{
+			if (Sp.HISMTag == T)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/** A biome's MAIN species (Species): which tier plants them. */
+	bool PassesSpeciesFilter(EMOBiomeSpeciesFilter Filter, const FMOBiomeSpeciesEntry& Sp)
+	{
+		if (Filter == EMOBiomeSpeciesFilter::WaterEdgeOnly)
+		{
+			return false;   // the shore tier plants only the biome rows' water-edge list
+		}
+		return Filter == EMOBiomeSpeciesFilter::All || (Filter == EMOBiomeSpeciesFilter::LargeOnly) == IsLargeSpecies(Sp);
+	}
+
+	/** A biome's WATER-EDGE species (WaterEdgeSpecies): only the dense shore tier (and the legacy All node) plants them. */
+	bool PassesWaterEdgeFilter(EMOBiomeSpeciesFilter Filter)
+	{
+		return Filter == EMOBiomeSpeciesFilter::All || Filter == EMOBiomeSpeciesFilter::WaterEdgeOnly;
+	}
+
 	/** Surface slope in degrees from the point's up vector (identity = flat). */
 	float PointSlopeDeg(const FPCGPoint& Point)
 	{
@@ -99,7 +130,8 @@ bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 	{
 		FName Id;
 		const FMOBiomeDefinitionRow* Row = nullptr;
-		TArray<UStaticMesh*> LoadedMeshes;   // parallel to Row->Species
+		TArray<UStaticMesh*> LoadedMeshes;       // parallel to Row->Species
+		TArray<UStaticMesh*> LoadedEdgeMeshes;   // parallel to Row->WaterEdgeSpecies
 	};
 	TArray<FBiomeEntry> Biomes;
 	for (const FName& Id : BiomeIds)
@@ -119,6 +151,15 @@ bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 						*Sp.Mesh.ToString(), *Id.ToString());
 				}
 				E.LoadedMeshes.Add(Loaded);
+			}
+			for (const FMOBiomeSpeciesEntry& Sp : Row->WaterEdgeSpecies)
+			{
+				UStaticMesh* Loaded = Sp.Mesh.LoadSynchronous();
+				if (!Loaded)
+				{
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOBiomeSpawner] water-edge species mesh FAILED to load: %s (biome %s)"), *Sp.Mesh.ToString(), *Id.ToString());
+				}
+				E.LoadedEdgeMeshes.Add(Loaded);
 			}
 		}
 	}
@@ -147,6 +188,10 @@ bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 		const UMOWorldSeedSubsystem* SeedSubsystem = UMOWorldSeedSubsystem::Get(TargetActor);
 		TerrainSeed = (SeedSubsystem && SeedSubsystem->HasActiveSeed()) ? SeedSubsystem->GetActiveTerrainSeed() : Seed;
 	}
+	// Water (the sea, rivers, ponds, upland lakes): the same mask the elevation-bands node uses, built from THIS node's params and terrain seed.
+	const FMOPCGWaterMask WaterMask = Settings->bUseWorldGenerator ? FMOPCGWaterMask(GenParams, TerrainSeed) : FMOPCGWaterMask();
+	// The same mask with the bank margin shrunk to the waterline: the WATER-EDGE species (reeds, rushes) stand right at the water, in the strip between the shore and the 1.05 margin that keeps every other species away.
+	const FMOPCGWaterMask EdgeMask = Settings->bUseWorldGenerator ? FMOPCGWaterMask(GenParams, TerrainSeed, 1.008f) : FMOPCGWaterMask();
 	// Moisture + temperature (temperature already includes the lapse rate for L.Z in generator mode).
 	auto ClimateAt = [&](const FVector& L, float& OutMoisture, float& OutTemperature)
 	{
@@ -163,11 +208,33 @@ bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 		}
 	};
 
+	const double PlantStartTime = FPlatformTime::Seconds();
 	// (mesh, biome) -> bucket of accepted transforms
 	TMap<FString, FSpeciesBucket> Buckets;
 	int32 TotalIn = 0, TotalAccepted = 0, TotalSuppressed = 0;
+	FBox InputBounds(ForceInit);   // diagnostics: where the sampler actually put this execution's points
 
 	TArray<FPCGTaggedData> Inputs = Context->InputData.GetInputsByPin(PCGPinConstants::DefaultInputLabel);
+
+	// The shore tier is dense (about one point per square metre): skip a cell outright when no water can be near it (the mask samples a 10 m grid, the points would each cost a height sample).
+	if (Settings->SpeciesFilter == EMOBiomeSpeciesFilter::WaterEdgeOnly && EdgeMask.IsActive())
+	{
+		FBox2D CellBox(ForceInit);
+		for (const FPCGTaggedData& Input : Inputs)
+		{
+			if (const UPCGPointData* Data = Cast<UPCGPointData>(Input.Data))
+			{
+				for (const FPCGPoint& Point : Data->GetPoints())
+				{
+					CellBox += FVector2D(Point.Transform.GetLocation().X, Point.Transform.GetLocation().Y);
+				}
+			}
+		}
+		if (CellBox.bIsValid && !EdgeMask.MayHaveShore(CellBox.Min.X, CellBox.Min.Y, CellBox.Max.X, CellBox.Max.Y, 3000.0))
+		{
+			return true;
+		}
+	}
 	for (const FPCGTaggedData& Input : Inputs)
 	{
 		const UPCGPointData* InputPointData = Cast<UPCGPointData>(Input.Data);
@@ -179,11 +246,28 @@ bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 		{
 			++TotalIn;
 			const FVector Location = Point.Transform.GetLocation();
+			InputBounds += Location;
 
 			if (TerrainMod && TerrainMod->IsLocationModified(Location))
 			{
 				++TotalSuppressed;
 				continue;
+			}
+
+			// Caves: nothing is planted in a sinkhole's rim zone, and a point far below the ground height is a CAVE surface (wall/floor of a tunnel,
+			// cavern or shaft), not a place for meadow grass or trees. Same generator, same terrain seed as the voxel stamp that carved the cave.
+			bool bBankStrip = false;   // dry ground in the first metres past an upland lake's shore: only the water-edge species may stand here
+			if (Settings->bUseWorldGenerator)
+			{
+				const float GroundZ = FMOWorldGen::SampleHeightCm(*GenParams, Location.X, Location.Y, TerrainSeed, GenParams->Tuning.VoxelSizeCm);
+				// ... and nothing is planted under water: rivers, lakes and the sea are terrain below SeaLevelCm, and an upland lake's water is the ellipse of its bowl (FMOPCGWaterMask).
+				if (Location.Z < GroundZ - 200.0f || EdgeMask.IsInWater(Location.X, Location.Y, Location.Z)
+					|| FMOWorldGen::DistanceToSinkholeRimZone(*GenParams, Location.X, Location.Y, TerrainSeed) <= 0.0f)
+				{
+					++TotalSuppressed;
+					continue;
+				}
+				bBankStrip = WaterMask.IsInWater(Location.X, Location.Y, Location.Z);
 			}
 
 			// Shared mask math (UMOBiomeDatabaseSettings) so tests/tools can
@@ -244,6 +328,34 @@ bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 				EdgeScale = FMath::Lerp(0.25f, 1.0f, Agree / 4.0f);
 			}
 
+			// The candidates for this slot: the biome's species (density scaled by the climate edge feather), then -- on dry ground at the water's edge -- the biome's WATER-EDGE species (density scaled by how
+			// close to the waterline the point is: FMOPCGWaterMask::ShoreFactor).
+			struct FCandidate { const FMOBiomeSpeciesEntry* Species; UStaticMesh* Mesh; float Scale; };
+			TArray<FCandidate, TInlineAllocator<96>> Candidates;
+			const int32 NumSpecies = bBankStrip ? 0 : FMath::Min(Chosen->Row->Species.Num(), 64);
+			for (int32 i = 0; i < NumSpecies; ++i)
+			{
+				if (PassesSpeciesFilter(Settings->SpeciesFilter, Chosen->Row->Species[i]))
+				{
+					Candidates.Add({ &Chosen->Row->Species[i], Chosen->LoadedMeshes[i], EdgeScale });
+				}
+			}
+			if (Chosen->Row->WaterEdgeSpecies.Num() > 0 && EdgeMask.IsActive())
+			{
+				const float Shore = EdgeMask.ShoreFactor(Location.X, Location.Y, Location.Z, Chosen->Row->WaterEdgeBandCm);
+				if (Shore > 0.0f)
+				{
+					const int32 NumEdge = FMath::Min(Chosen->Row->WaterEdgeSpecies.Num(), 32);
+					for (int32 i = 0; i < NumEdge; ++i)
+					{
+						if (PassesWaterEdgeFilter(Settings->SpeciesFilter))
+						{
+							Candidates.Add({ &Chosen->Row->WaterEdgeSpecies[i], Chosen->LoadedEdgeMeshes[i], Shore });
+						}
+					}
+				}
+			}
+
 			// Density-scaled species pick: each point is one scatter slot;
 			// expected instances/point for species s = Density_s / InputPPH.
 			// ClusterGroup >= 0: species in the same group sample ONE shared
@@ -251,13 +363,13 @@ bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 			// canopy trees at clump cores, undergrowth in the wider ring
 			// around them (oasis/top-cap look). Acceptance is rescaled by the
 			// surviving area fraction so authored per-hectare rates hold.
-			float Acceptance[64];
+			TArray<float, TInlineAllocator<96>> Acceptance;
+			Acceptance.SetNumZeroed(Candidates.Num());
 			float TotalAcceptance = 0.0f;
-			const int32 NumSpecies = FMath::Min(Chosen->Row->Species.Num(), 64);
-			for (int32 i = 0; i < NumSpecies; ++i)
+			for (int32 i = 0; i < Candidates.Num(); ++i)
 			{
-				const FMOBiomeSpeciesEntry& Sp = Chosen->Row->Species[i];
-				float P = (Chosen->LoadedMeshes[i] ? EdgeScale * Sp.DensityPerHectare / Settings->InputPointsPerHectare : 0.0f);
+				const FMOBiomeSpeciesEntry& Sp = *Candidates[i].Species;
+				float P = (Candidates[i].Mesh ? Candidates[i].Scale * Sp.DensityPerHectare / Settings->InputPointsPerHectare : 0.0f);
 				if (P > 0.0f && Sp.ClusterGroup >= 0)
 				{
 					// Shared field per (biome, group): offsets depend on the
@@ -301,14 +413,14 @@ bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 			// Pick which species filled the slot.
 			float Pick = Roll * (TotalAcceptance / FMath::Min(TotalAcceptance, 1.0f));
 			int32 Selected = 0;
-			for (int32 i = 0; i < NumSpecies; ++i)
+			for (int32 i = 0; i < Candidates.Num(); ++i)
 			{
 				if (Pick < Acceptance[i]) { Selected = i; break; }
 				Pick -= Acceptance[i];
 				Selected = i;
 			}
-			const FMOBiomeSpeciesEntry& Sp = Chosen->Row->Species[Selected];
-			UStaticMesh* Mesh = Chosen->LoadedMeshes[Selected];
+			const FMOBiomeSpeciesEntry& Sp = *Candidates[Selected].Species;
+			UStaticMesh* Mesh = Candidates[Selected].Mesh;
 			if (!Mesh)
 			{
 				continue;
@@ -341,6 +453,7 @@ bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 			Bucket.BiomeId = Chosen->Id;
 			Bucket.ResourceNodeId = Sp.ResourceNodeId;
 			Bucket.bAutoSweep = Sp.bAutoSweepOnTerraform;
+			Bucket.Collision = Sp.Collision;
 			Bucket.Transforms.Add(Xf);
 			++TotalAccepted;
 		}
@@ -366,7 +479,7 @@ bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 		FPCGISMComponentBuilderParams Params;
 		Params.Descriptor.StaticMesh = Bucket.Mesh;
 		Params.Descriptor.ComponentClass = UHierarchicalInstancedStaticMeshComponent::StaticClass();
-		Params.Descriptor.BodyInstance.SetCollisionProfileName(Settings->CollisionProfile.Name);
+		Params.Descriptor.BodyInstance.SetCollisionProfileName(Settings->DecorativeCollisionProfile.Name);   // overridden below for harvestable species
 		Params.Descriptor.bCastShadow = Settings->bCastShadows;
 		Params.Descriptor.bAffectDistanceFieldLighting = false;
 		Params.Descriptor.bAffectDynamicIndirectLighting = false;
@@ -390,6 +503,7 @@ bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 		}
 		if (ResourceDef)
 		{
+			Params.Descriptor.BodyInstance.SetCollisionProfileName(ResourceDef->GetPlacementCollisionProfile());
 			for (const FName& Tag : ResourceDef->GetAllTags())
 			{
 				Params.Descriptor.ComponentTags.AddUnique(Tag);
@@ -412,6 +526,15 @@ bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 		else if (!Bucket.HISMTag.IsNone())
 		{
 			Params.Descriptor.ComponentTags.Add(Bucket.HISMTag);
+		}
+		// The species' own say wins over the resource type's default (see EMOSpeciesCollision): saplings are harvestable trees you can still walk through.
+		if (Bucket.Collision == EMOSpeciesCollision::Passable)
+		{
+			Params.Descriptor.BodyInstance.SetCollisionProfileName(TEXT("OverlapAllDynamic"));
+		}
+		else if (Bucket.Collision == EMOSpeciesCollision::Solid)
+		{
+			Params.Descriptor.BodyInstance.SetCollisionProfileName(TEXT("BlockAll"));
 		}
 		Params.Descriptor.ComponentTags.Add(FName(*FString::Printf(TEXT("MOBiome_%s"), *Bucket.BiomeId.ToString())));
 		if (Bucket.bAutoSweep)
@@ -459,8 +582,10 @@ bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 			Pair.Value.Transforms.Num());
 	}
 	UE_LOG(LogMOFramework, Warning,
-		TEXT("[MOBiomeSpawner] in=%d accepted=%d suppressed=%d components=%d biomes=%d |%s"),
-		TotalIn, TotalAccepted, TotalSuppressed, Components, Biomes.Num(), *BucketSummary);
+		TEXT("[MOBiomeSpawner] in=%d accepted=%d suppressed=%d components=%d biomes=%d ms=%.0f inBounds=%s |%s"),
+		TotalIn, TotalAccepted, TotalSuppressed, Components, Biomes.Num(), (FPlatformTime::Seconds() - PlantStartTime) * 1000.0,
+		InputBounds.IsValid ? *FString::Printf(TEXT("(%.0f,%.0f)-(%.0f,%.0f)"), InputBounds.Min.X, InputBounds.Min.Y, InputBounds.Max.X, InputBounds.Max.Y) : TEXT("none"),
+		*BucketSummary);
 
 	return true;
 }

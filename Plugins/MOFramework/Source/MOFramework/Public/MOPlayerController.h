@@ -5,6 +5,7 @@
 #include "InputActionValue.h"
 #include "MOUIContractInterface.h"
 #include "MOPossessionTypes.h"
+#include "MONotificationWidget.h"   // EMONotificationType (ClientShowNotification)
 #include "MOPlayerController.generated.h"
 
 /**
@@ -131,6 +132,8 @@ class UMOUIManagerComponent;
 class UMOPossessionComponent;
 class UMONotificationComponent;
 class UMOTextInputDialog;
+class UMOQuickPickDialog;
+struct FMOQuickPickOption;
 class UMOBuildingComponent;
 class UEnhancedInputLocalPlayerSubsystem;
 
@@ -578,6 +581,13 @@ public:
 	UFUNCTION(Client, Reliable)
 	void ClientReceivePossessionList(const TArray<FMOPossessionListEntry>& Entries);
 
+	/**
+	 * Show a message on THIS player's screen from server code. The one way gameplay that runs on the server (an interaction, a refusal, a quest) tells a particular player something;
+	 * without it a server-side `return false` was silent and the player was left guessing (survivor recruitment). Runs locally on a listen-server host.
+	 */
+	UFUNCTION(Client, Reliable)
+	void ClientShowNotification(const FText& Message, float Duration, EMONotificationType Type);
+
 protected:
 
 	/** Input routing + UI caches for the pawn this controller now drives. Shared by the server (OnPossess) and the
@@ -714,9 +724,41 @@ public:
 	/** Run one console command line as this player and report what it printed (Run in the popup calls this; tests may too). */
 	void RunDevConsoleCommand(const FString& CommandLine);
 
+	// ------------------------------------------------------------------------
+	// DEV PICKERS: `weather` and `time` typed into the console popup open a small modal of choices
+	// ------------------------------------------------------------------------
+	// Both change the SERVER's world (weather and the game clock are server-authoritative; clients follow through the replicated sky and the world-sync
+	// subsystem), so the buttons call a Server RPC: from the host's own controller it runs locally, from a client it is sent. Development builds only --
+	// the RPCs exist in every build (the replication layout must match) but do nothing in Shipping, like the console popup itself.
+
+	/** Open the weather picker (Clear, Partly Cloudy, Overcast, Fog, rain, snow ...). With a preset name it skips the popup and sets that weather. */
+	void OpenDevWeatherPicker(const FString& PresetName = FString());
+
+	/** Open the time picker (8 am, 2 pm, 8 pm, 2 am). With an hour (0-23) it skips the popup and moves the clock to that time. */
+	void OpenDevTimePicker(int32 Hour = -1);
+
+	/** Set the server's weather to the UDS preset of this name (see UMOWeatherIntegrationSubsystem::GetPresetChoices). */
+	UFUNCTION(Server, Reliable)
+	void ServerDevSetWeather(FName PresetName);
+
+	/** Move the server's clock FORWARD to the next Hour:Minute (UMOGameClockSubsystem::AdvanceToTimeOfDay). */
+	UFUNCTION(Server, Reliable)
+	void ServerDevAdvanceToTime(int32 Hour, int32 Minute);
+
 protected:
 	/** The popup currently open, if any (prevents stacking a second one). */
 	TWeakObjectPtr<UMOTextInputDialog> DevConsoleDialog;
+
+	/** The modal the pickers open. Hard-coded default: the project's quick-pick modal (Content/Python/ui_specs/quick_pick.py builds it). */
+	UPROPERTY(EditDefaultsOnly, Category="MO|DevConsole")
+	TSoftClassPtr<UMOQuickPickDialog> DevQuickPickDialogClass = TSoftClassPtr<UMOQuickPickDialog>(
+		FSoftObjectPath(TEXT("/MOFramework/UI/WBP_QuickPickModal.WBP_QuickPickModal_C")));
+
+	/** The picker currently open, if any. */
+	TWeakObjectPtr<UMOQuickPickDialog> DevQuickPickDialog;
+
+	/** Shared body of the pickers: push the modal, fill it, call OnChosen with the clicked option's Id. */
+	void OpenDevQuickPick(const FText& Title, const FText& Message, const TArray<FMOQuickPickOption>& Options, int32 Columns, TFunction<void(FName)> OnChosen);
 
 	/** Last few commands, shown in the popup as a reminder. */
 	TArray<FString> DevConsoleHistory;

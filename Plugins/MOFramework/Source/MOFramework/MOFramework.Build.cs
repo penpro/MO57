@@ -114,7 +114,8 @@ public class MOFramework : ModuleRules
 				"AudioMixer",   // Required for UMediaSoundComponent (inherits USynthComponent)
 				"MoviePlayer",  // Required for loading screen during level transitions
 				"OnlineSubsystem",       // IOnlineSubsystem/IOnlineSession abstraction (MOSessionSubsystem)
-				"OnlineSubsystemUtils"   // FOnlineSessionSettings/FOnlineSessionSearch helpers
+				"OnlineSubsystemUtils",  // FOnlineSessionSettings/FOnlineSessionSearch helpers
+				"Oceanology_Plugin"      // AOceanologyLake / AOceanologyWaterParent: the water surfaces of the upland lakes (MOUplandLakeSubsystem) and the ocean fixes (MOOceanologyIntegration)
 			}
 			);
 

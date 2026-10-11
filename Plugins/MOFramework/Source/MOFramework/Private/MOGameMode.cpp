@@ -3,6 +3,7 @@
 #include "MOFramework.h"
 #include "MOVoxelReadinessSubsystem.h"
 #include "MOWorldSeedSubsystem.h"
+#include "MOWorldGen.h"
 #include "MOSpawnClearance.h"
 #include "MOWeatherIntegrationSubsystem.h"
 #include "MOGameState.h"
@@ -921,10 +922,11 @@ void AMOGameMode::SpawnInitialPawn()
 		return;
 	}
 
-	// Find safe spawn location
-	FVector SpawnLocation = FindSafeSpawnLocation();
+	// Find the spawn location: the sea shore of the generated world, else safe open ground.
+	FRotator SpawnFacing = FRotator::ZeroRotator;
+	FVector SpawnLocation = FindNewGameSpawn(SpawnFacing);
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Spawning initial pawn at: %s"), *SpawnLocation.ToString());
+	UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Spawning initial pawn at: %s facing yaw %.0f"), *SpawnLocation.ToString(), SpawnFacing.Yaw);
 
 	// Spawn the pawn
 	FActorSpawnParameters SpawnParams;
@@ -936,7 +938,7 @@ void AMOGameMode::SpawnInitialPawn()
 		return;
 	}
 
-	APawn* NewPawn = World->SpawnActor<APawn>(DefaultNewGamePawnClass, SpawnLocation, FRotator::ZeroRotator, SpawnParams);
+	APawn* NewPawn = World->SpawnActor<APawn>(DefaultNewGamePawnClass, SpawnLocation, FRotator(0.0f, SpawnFacing.Yaw, 0.0f), SpawnParams);
 	if (!NewPawn)
 	{
 		UE_LOG(LogMOFramework, Error, TEXT("[MOGameMode] Failed to spawn initial pawn"));
@@ -991,6 +993,10 @@ void AMOGameMode::SpawnInitialPawn()
 	{
 		PC->Possess(NewPawn);
 		UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Player controller possessed initial pawn"));
+		if (!SpawnFacing.IsNearlyZero())
+		{
+			PC->SetControlRotation(SpawnFacing);   // the first view crosses the water
+		}
 
 		// (Remote players who joined while the voxel world was generating are released in BeginLandingWait -- i.e. AFTER the host's pawn has settled:
 		// a joiner is placed relative to the host's pawn, and the host's spawn spot is only trustworthy once the ground under it has stopped changing.)
@@ -1061,12 +1067,13 @@ void AMOGameMode::BeginSpawnSettle(AMOCharacter* Pawn)
 		return;
 	}
 	SettlingPawn = Pawn;
+	ActiveSettleMaxSeconds = bSettlingCoastalSpawn ? FMath::Max(SpawnSettleMaxSeconds, CoastalSpawnSettleMaxSeconds) : SpawnSettleMaxSeconds;
 	SettleElapsed = 0.f;
 	SettleStableTime = 0.f;
 	bSettleHaveGround = false;
 	Pawn->SetLoadHold(true); // no gravity, no fall-through rescue: the pawn stays exactly where it was spawned while the collision under it changes
 	UE_LOG(LogMOFramework, Warning, TEXT("[MOGameMode] Spawn settle: holding %s at %s until the ground under it is stable (%.1fs within %.0fcm, max %.0fs)"),
-		*Pawn->GetName(), *Pawn->GetActorLocation().ToCompactString(), SpawnSettleStableSeconds, SpawnSettleToleranceCm, SpawnSettleMaxSeconds);
+		*Pawn->GetName(), *Pawn->GetActorLocation().ToCompactString(), SpawnSettleStableSeconds, SpawnSettleToleranceCm, ActiveSettleMaxSeconds);
 	World->GetTimerManager().SetTimer(SpawnSettleTimerHandle, this, &AMOGameMode::PollSpawnSettle, 0.25f, /*bLoop=*/true);
 }
 
@@ -1111,7 +1118,7 @@ void AMOGameMode::PollSpawnSettle()
 	{
 		FinishSpawnSettle(true);
 	}
-	else if (SettleElapsed >= SpawnSettleMaxSeconds)
+	else if (SettleElapsed >= ActiveSettleMaxSeconds)
 	{
 		FinishSpawnSettle(bSettleHaveGround);
 	}
@@ -1482,6 +1489,31 @@ void AMOGameMode::RescueFallenPawns()
 			}
 		}
 	}
+}
+
+FVector AMOGameMode::FindNewGameSpawn(FRotator& OutFacing) const
+{
+	OutFacing = FRotator::ZeroRotator;
+	bSettlingCoastalSpawn = false;
+
+	const UMOWorldSeedSubsystem* Seeds = UMOWorldSeedSubsystem::Get(GetWorld());
+	if (bCoastalNewGameSpawn && Seeds && Seeds->HasActiveSeed() && FMOWorldGenParamsProvider::HasPublished())
+	{
+		const FMOWorldGenParamsRef Params = FMOWorldGenParamsProvider::Get();
+		FMOCoastalSpawn Coast;
+		const double T0 = FPlatformTime::Seconds();
+		if (FMOWorldGen::FindCoastalSpawn(*Params, Seeds->GetActiveTerrainSeed(), Coast))
+		{
+			bSettlingCoastalSpawn = true;
+			OutFacing = FRotator(-6.0f, Coast.YawDegrees, 0.0f);   // a little downward: the water, not the sky
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOGameMode] Coastal spawn (%.0f ms): (%.0f, %.0f) ground z=%.0f, %.1f km from the origin, %.1f km of open water ahead, %.0f m of relief %.1f km away across it, on a landmass of at least %.0f km^2, yaw %.0f"),
+				(FPlatformTime::Seconds() - T0) * 1000.0, Coast.Location.X, Coast.Location.Y, Coast.GroundCm, Coast.DistanceFromOriginCm / 100000.0f, Coast.OpenWaterCm / 100000.0f,
+				Coast.FarReliefCm / 100.0f, Coast.FarDistanceCm / 100000.0f, Coast.LandmassKm2, Coast.YawDegrees);
+			return FVector(Coast.Location.X, Coast.Location.Y, Coast.GroundCm + SpawnHeightOffset);
+		}
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOGameMode] No coastal spawn within range of this world -- using the open-ground search"));
+	}
+	return FindSafeSpawnLocation();
 }
 
 FVector AMOGameMode::FindSafeSpawnLocation() const

@@ -55,6 +55,11 @@
  * 1. REPLICATION: RecruitmentState replicated, OnRep updates locally
  * 2. QUEST TIMEOUT: CheckQuestTimeout runs in Tick, may despawn survivor
  * 3. AI CONTROLLER: EnsureSurvivorAIController needed after load
+ * 4. SILENT REFUSAL (fixed 2026-10-10): the standing gate used to return a bare `false` and log a warning, so a survivor you could not recruit looked like a broken interaction
+ *    ("no quest or anything pops up"). BeginInteractionDetailed returns an EMORecruitmentOutcome (+ the standing numbers) and AMOCharacter::HandleRecruitmentInteraction sends it to the
+ *    player's screen through AMOPlayerController::ClientShowNotification. Add a new refusal reason as a new outcome, never as another `return false`.
+ * 5. THE GATE AND THE FIRST SURVIVOR: UMOColonyManagerSubsystem::RecruitGateMinRoster (3) -- the standing gate only judges strangers once the colony has that many settlers; before that
+ *    the survivors you meet simply join (the founder alone counted as "the colony" and made the first recruit take ~8 real hours on the real-time clock).
  *
  * RELATED FILES:
  * - MOSpawnTypes.h - EMORecruitmentState, FMORecruitmentQuest
@@ -108,6 +113,44 @@ struct MOFRAMEWORK_API FMORecruitmentSaveData
 	/** Whether this save data is valid/populated */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Save")
 	bool bHasValidData = false;
+};
+
+/**
+ * What came of a player's interaction with a survivor. Every refusal has its own value so the UI can say WHY: a bare `false` used to leave the player standing in front of a survivor
+ * who "did nothing", with no quest and no message (the standing gate refused silently).
+ */
+UENUM(BlueprintType)
+enum class EMORecruitmentOutcome : uint8
+{
+	NotRecruitable		UMETA(DisplayName = "Not recruitable"),		// animals and other pawns that never join
+	Unavailable			UMETA(DisplayName = "Unavailable"),			// dead
+	AlreadyRecruited	UMETA(DisplayName = "Already recruited"),
+	DeclinedStanding	UMETA(DisplayName = "Declined (standing)"),	// does not know the colony well enough yet: see Standing / StandingNeeded / HoursToPass
+	QuestStarted		UMETA(DisplayName = "Quest started"),		// the survivor asked for something; the quest is now active
+	QuestPending		UMETA(DisplayName = "Quest pending"),		// a quest is active and its requirements are not met yet
+	Recruited			UMETA(DisplayName = "Recruited")
+};
+
+USTRUCT(BlueprintType)
+struct MOFRAMEWORK_API FMORecruitmentResult
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "Recruitment")
+	EMORecruitmentOutcome Outcome = EMORecruitmentOutcome::NotRecruitable;
+
+	/** DeclinedStanding: the candidate's standing toward the colony, what is needed, and how many game hours of shared time that still takes. */
+	UPROPERTY(BlueprintReadOnly, Category = "Recruitment")
+	float Standing = 0.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Recruitment")
+	float StandingNeeded = 0.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Recruitment")
+	float HoursToPass = 0.0f;
+
+	/** The interaction moved the recruitment forward (quest given, or joined). */
+	bool Succeeded() const { return Outcome == EMORecruitmentOutcome::Recruited || Outcome == EMORecruitmentOutcome::QuestStarted; }
 };
 
 /**
@@ -198,9 +241,13 @@ public:
 	// API
 	// ============================================================================
 
-	/** Begin interaction with this survivor. Returns true if interaction started successfully. */
+	/** Begin interaction with this survivor. Returns true if interaction started successfully (quest given or joined); BeginInteractionDetailed says what happened when it did not. */
 	UFUNCTION(BlueprintCallable, Category = "Recruitment")
 	bool BeginInteraction(APawn* InteractingPawn);
+
+	/** Same interaction, with the full outcome (and the standing numbers behind a refusal). */
+	UFUNCTION(BlueprintCallable, Category = "Recruitment")
+	FMORecruitmentResult BeginInteractionDetailed(APawn* InteractingPawn);
 
 	/** Attempt to complete the active quest. Returns true if quest completed. */
 	UFUNCTION(BlueprintCallable, Category = "Recruitment")

@@ -270,23 +270,17 @@ bool FMOWorldGen_GoldenChecksum::RunTest(const FString& Parameters)
 {
 	// If this fails after you changed the generator ON PURPOSE: bump FMOWorldGenParams::CurrentGeneratorVersion and paste the new value.
 	// If it fails on ANOTHER MACHINE with the same binary: the generator is not deterministic across CPUs -- that desyncs co-op worlds.
-	constexpr uint32 Expected = 0x9C4AE2B3u;   // generator v1; on an intentional change: bump CurrentGeneratorVersion, rerun, paste the printed value
+	constexpr uint32 Expected = FMOWorldGen::PinnedProbeHeight;   // pinned in MOWorldGen.h; on an intentional change: bump CurrentGeneratorVersion, rerun, paste the printed value there
 
-	const FMOWorldGenParamsRef P = MakeTestParams();
-	uint32 H = 2166136261u;
-	for (int32 Y = 0; Y < 64; ++Y)
-	{
-		for (int32 X = 0; X < 64; ++X)
-		{
-			const FMOTerrainSample S = FMOWorldGen::SampleColumn(*P, -3.0e6 + 97003.0 * X, -3.0e6 + 97001.0 * Y, TestSeed, 100.0f);
-			H = FnvF(H, S.HeightCm);
-			H = FnvF(H, S.Moisture);
-			H = FnvF(H, S.Temperature);
-			H = (H ^ (uint32)(S.BiomeIndex + 1)) * 16777619u;
-		}
-	}
-	AddInfo(FString::Printf(TEXT("GOLDEN checksum = 0x%08X, params hash = 0x%08X"), H, P->ComputeHash()));
+	const FMOWorldGenProbe Probe = FMOWorldGen::RunProbe();
+	const uint32 H = Probe.Height;
+	AddInfo(FString::Printf(TEXT("GOLDEN checksum = 0x%08X, params hash = 0x%08X, generator v%u"), H, Probe.ParamsHash, Probe.GeneratorVersion));
 	TestTrue(FString::Printf(TEXT("golden checksum of 4096 samples is 0x%08X (got 0x%08X)"), Expected, H), H == Expected);
+
+	// With water switched off the generator must reproduce the v1 BASE terrain bit for bit: the continents/hills/mountains math is pinned separately from the carving.
+	const uint32 NoWater = FMOWorldGen::RunProbe(false).Height;
+	TestTrue(FString::Printf(TEXT("golden checksum with water OFF is the v1 base terrain 0x%08X (got 0x%08X)"), FMOWorldGen::PinnedProbeHeightNoWater, NoWater),
+		NoWater == FMOWorldGen::PinnedProbeHeightNoWater);
 	return true;
 }
 
@@ -299,10 +293,50 @@ bool FMOWorldGen_BiomesFromDataTable::RunTest(const FString& Parameters)
 	// Module startup published the snapshot from DT_Biomes; rebuilding it must agree.
 	const FMOWorldGenParamsRef Built = UMOWorldGenSettings::BuildParams();
 	TestTrue(TEXT("DT_Biomes produced biomes"), Built->Biomes.Num() >= 3);
-	TestTrue(TEXT("highest priority first: RockyHighland leads"), Built->GetBiomeId(0) == FName("RockyHighland"));
-	TestTrue(TEXT("then TemperateForest"), Built->GetBiomeId(1) == FName("TemperateForest"));
-	TestTrue(TEXT("then Meadow"), Built->GetBiomeId(2) == FName("Meadow"));
+	TestTrue(TEXT("highest priority first: the AlpineRock summit biome leads, RockyHighland (steep ground) follows"),
+		Built->GetBiomeId(0) == FName("AlpineRock") && Built->GetBiomeId(1) == FName("RockyHighland"));
+	TestTrue(TEXT("the catch-all Meadow (lowest priority) is last"), Built->GetBiomeId(Built->Biomes.Num() - 1) == FName("Meadow"));
+	bool bSorted = true;
+	for (int32 I = 1; I < Built->Biomes.Num(); ++I)
+	{
+		bSorted &= Built->Biomes[I - 1].Priority >= Built->Biomes[I].Priority;
+	}
+	TestTrue(TEXT("biomes are sorted by priority, highest first (the first band match wins)"), bSorted);
+	for (const TCHAR* Id : { TEXT("AlpineRock"), TEXT("RockyHighland"), TEXT("TemperateForest"), TEXT("Meadow"), TEXT("ShoreStrand"), TEXT("DryScrub"), TEXT("LocustWoodland") })
+	{
+		TestTrue(*FString::Printf(TEXT("biome '%s' is in DT_Biomes"), Id), Built->FindBiomeIndex(FName(Id)) != INDEX_NONE);
+	}
 	TestTrue(TEXT("the published snapshot exists and matches a fresh build"), FMOWorldGenParamsProvider::HasPublished() && FMOWorldGenParamsProvider::Get()->ComputeHash() == Built->ComputeHash());
+
+	// No ground is left without a biome. A point with no biome is painted with NO surface type: untextured flat grey (the Oct 2026 grey mountain tops: every biome ended at 1000 m, the ranges
+	// reach 1.4 km+; the cold temperatures up there also fell outside every [0,1] temperature band). Sweep land from the beach to 6 km, every slope, the whole moisture range and the whole
+	// sea-level temperature range (the lapse rate takes it below 0 on the summits).
+	{
+		int32 Uncovered = 0, Checked = 0;
+		FString First;
+		for (float H = 0.0f; H <= 600000.0f; H += 5000.0f)
+		{
+			for (const float Slope : { 0.0f, 20.0f, 45.0f, 70.0f, 90.0f })
+			{
+				for (const float Moisture : { 0.0f, 0.25f, 0.5f, 0.75f, 1.0f })
+				{
+					for (const float TempSea : { 0.0f, 0.25f, 0.5f, 0.75f, 1.0f })
+					{
+						++Checked;
+						const float Temp = FMOWorldGen::TemperatureAtHeight(*Built, TempSea, H);
+						if (FMOWorldGen::ResolveBiome(*Built, H, Slope, Moisture, Temp) == INDEX_NONE)
+						{
+							if (Uncovered++ == 0)
+							{
+								First = FString::Printf(TEXT("height %.0f m slope %.0f moisture %.2f sea-level temp %.2f (temp at height %.2f)"), H / 100.0f, Slope, Moisture, TempSea, Temp);
+							}
+						}
+					}
+				}
+			}
+		}
+		TestEqual(*FString::Printf(TEXT("every land point has a biome (%d combinations; first uncovered: %s)"), Checked, *First), Uncovered, 0);
+	}
 
 	// The shared resolver and the generator agree (this is the PCG spawner's biome question).
 	FRandomStream R(5);

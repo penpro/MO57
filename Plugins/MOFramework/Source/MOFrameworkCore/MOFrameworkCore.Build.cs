@@ -16,6 +16,11 @@ public class MOFrameworkCore : ModuleRules
 	{
 		PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
 
+		// The world generator (MOWorldGen*.cpp, MOWorldGenNoise.h) must produce BIT-IDENTICAL results in every build: co-op clients generate their own terrain from the seed.
+		// Editor targets default to /fp:precise but Game / Client / Server default to /fp:fast, which fuses and reassociates the same source differently (MEASURED 2026-10-10:
+		// the packaged game printed a different MO.WorldGen.Checksum than the editor on the same CPU, same params hash). Pin this module to precise in every target.
+		FPSemantics = FPSemanticsMode.Precise;
+
 		PublicDependencyModuleNames.AddRange(new string[]
 		{
 			"Core",

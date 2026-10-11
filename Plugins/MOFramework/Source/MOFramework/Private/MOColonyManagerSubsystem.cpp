@@ -624,11 +624,19 @@ float UMOColonyManagerSubsystem::GetColonyStanding(APawn* Candidate) const
 
 bool UMOColonyManagerSubsystem::CanRecruitByStanding(APawn* Candidate) const
 {
+	return Candidate && EvaluateRecruitGate(Candidate).bPasses;
+}
+
+UMOColonyManagerSubsystem::FStandingGate UMOColonyManagerSubsystem::EvaluateRecruitGate(APawn* Candidate) const
+{
+	FStandingGate Gate;
+	Gate.Needed = RecruitStandingThreshold;
 	if (!Candidate)
 	{
-		return false;
+		Gate.bPasses = false;
+		return Gate;
 	}
-	// Bootstrap: with nobody (else) in the colony there is no one to know.
+	// Bootstrap: a colony smaller than RecruitGateMinRoster (besides the candidate) has no standing to judge a stranger by.
 	const FGuid CandidateGuid = GetPawnGuid(Candidate);
 	int32 OthersOnRoster = 0;
 	for (const APawn* Settler : GetColonyRoster())
@@ -639,11 +647,31 @@ bool UMOColonyManagerSubsystem::CanRecruitByStanding(APawn* Candidate) const
 			++OthersOnRoster;
 		}
 	}
-	if (OthersOnRoster == 0)
+	Gate.Standing = OthersOnRoster > 0 ? GetColonyStanding(Candidate) : 0.0f;
+	if (!GateApplies(OthersOnRoster, RecruitGateMinRoster))
 	{
-		return true;
+		return Gate;   // bGateActive false, passes
 	}
-	return GetColonyStanding(Candidate) >= RecruitStandingThreshold;
+	Gate.bGateActive = true;
+	Gate.bPasses = Gate.Standing >= Gate.Needed;
+	Gate.HoursToPass = Gate.bPasses ? 0.0f : HoursToReachStanding(Gate.Standing, Gate.Needed);
+	return Gate;
+}
+
+float UMOColonyManagerSubsystem::HoursToReachStanding(float Standing, float Needed)
+{
+	if (Standing >= Needed)
+	{
+		return 0.0f;
+	}
+	// Bisection on the bond function itself (never a re-derived formula that could drift from it).
+	float Lo = 0.0f, Hi = 24.0f * 365.0f;
+	for (int32 I = 0; I < 40; ++I)
+	{
+		const float Mid = 0.5f * (Lo + Hi);
+		(UMOCharacterHistoryComponent::ComputeStrengthDelta(Standing, Mid, 0.0f) >= Needed ? Hi : Lo) = Mid;
+	}
+	return Hi;
 }
 
 bool UMOColonyManagerSubsystem::Marry(APawn* A, APawn* B)

@@ -34,6 +34,14 @@ void AMOCreatureController::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
+	// The blackboard asset is bound AFTER OnPossess (the behavior tree starts later), and a blackboard component with no asset has no keys, so the initial push that used to
+	// run in OnPossess wrote nothing and logged a bogus "key does not exist" error. Push the initial values (home location, activity state, ...) the first tick it exists.
+	if (!bBlackboardPrimed && BlackboardComponent && BlackboardComponent->GetBlackboardAsset())
+	{
+		bBlackboardPrimed = true;
+		UpdateBlackboardThreatInfo();
+	}
+
 	// Throttle blackboard updates to 5Hz (was every frame)
 	ThreatUpdateAccumulator += DeltaTime;
 	if (ThreatUpdateAccumulator >= ThreatUpdateInterval)
@@ -59,8 +67,7 @@ void AMOCreatureController::OnPossess(APawn* InPawn)
 		HomeLocation = InPawn->GetActorLocation();
 	}
 
-	// Initialize blackboard threat info
-	UpdateBlackboardThreatInfo();
+	// (The initial blackboard push happens in Tick, once the behavior tree has bound the blackboard asset.)
 }
 
 void AMOCreatureController::OnUnPossess()
@@ -125,7 +132,23 @@ void AMOCreatureController::FinalizePerceptionSetup()
 		return;
 	}
 
-	// Now that listener ID is valid, configure the senses
+	// The perception system registers a component as a listener (and hands it an id) on ITS tick, which can run after our next-tick timer: wait for the id.
+	// ConfigureSense before it exists logs "Listener must have a valid id to update its sense config" and the config is dropped.
+	if (PerceptionComp->GetListenerId() == FPerceptionListenerID::InvalidID() && PerceptionFinalizeAttempts < MaxPerceptionFinalizeAttempts)
+	{
+		++PerceptionFinalizeAttempts;
+		if (UWorld* World = GetWorld())
+		{
+			World->GetTimerManager().SetTimerForNextTick(FTimerDelegate::CreateWeakLambda(this, [this]() { FinalizePerceptionSetup(); }));
+		}
+		return;
+	}
+	if (PerceptionComp->GetListenerId() == FPerceptionListenerID::InvalidID())
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOCreatureController] %s: the perception listener never got an id in %d frames; configuring the senses anyway"), *GetNameSafe(this), MaxPerceptionFinalizeAttempts);
+	}
+
+	bPerceptionFinalized = true;
 	if (SightConfig)
 	{
 		PerceptionComp->ConfigureSense(*SightConfig);
@@ -147,8 +170,9 @@ void AMOCreatureController::ApplyPerceptionSettings(const FMOCreatureDefinitionR
 {
 	UAIPerceptionComponent* PerceptionComp = GetPerceptionComponent();
 
-	// Check if perception is ready (sense configs created in SetupPerception during OnPossess)
-	bool bPerceptionReady = SightConfig != nullptr && HearingConfig != nullptr;
+	// Perception is ready only after FinalizePerceptionSetup: the sense configs exist from OnPossess on, but the listener has no id until the next tick, and
+	// ConfigureSense before that logs "Listener must have a valid id to update its sense config" (once per sense per creature).
+	const bool bPerceptionReady = bPerceptionFinalized && SightConfig != nullptr && HearingConfig != nullptr;
 
 	if (!bPerceptionReady)
 	{
@@ -411,6 +435,10 @@ void AMOCreatureController::UpdateBlackboardThreatInfo()
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOCreatureController] UpdateBlackboardThreatInfo - NO BLACKBOARD COMPONENT!"));
 		return;
 	}
+	if (!BlackboardComponent->GetBlackboardAsset())
+	{
+		return;   // not bound yet: no keys exist to set (Tick primes the blackboard the first frame it is)
+	}
 
 	bool bHasTarget = CurrentThreatActor.IsValid();
 	float DistanceToTarget = GetDistanceToThreat();
@@ -430,7 +458,8 @@ void AMOCreatureController::UpdateBlackboardThreatInfo()
 		static bool bLoggedOnce = false;
 		if (!bLoggedOnce)
 		{
-			UE_LOG(LogMOFramework, Error, TEXT("[MOCreatureController] BLACKBOARD KEY 'IsInAttackRange' DOES NOT EXIST! Add Bool key to BB_Creature."));
+			UE_LOG(LogMOFramework, Error, TEXT("[MOCreatureController] BLACKBOARD KEY 'IsInAttackRange' DOES NOT EXIST in blackboard '%s' (pawn '%s', controller '%s')! Add a Bool key to that blackboard, or the controller is running the wrong one."),
+				*GetNameSafe(BlackboardComponent->GetBlackboardAsset()), *GetNameSafe(GetPawn()), *GetNameSafe(this));
 			bLoggedOnce = true;
 		}
 	}

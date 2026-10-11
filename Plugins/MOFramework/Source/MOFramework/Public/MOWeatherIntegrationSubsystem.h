@@ -93,6 +93,15 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOTimeOfDayChangedSignature, bool,
  * 3. Query weather data via this subsystem's functions
  * 4. Bind to delegates for weather change events
  */
+
+/** A weather that can be asked for by name: the UDS preset it loads, how to show it, and whether it belongs in a short "basic" list. */
+struct FMOWeatherPresetChoice
+{
+	FName Id;          // the UDS preset asset name (what LoadUdsWeatherPreset takes)
+	FText Label;
+	bool bBasic = true;
+};
+
 UCLASS()
 class MOFRAMEWORK_API UMOWeatherIntegrationSubsystem : public UTickableWorldSubsystem, public IMOSaveDomain, public IMOAmbientEnvironmentProvider
 {
@@ -462,6 +471,15 @@ public:
 	 * MO.Weather.SetPreset cheat and ApplyNewGameStartConditions so there is ONE definition of "where the presets live".
 	 */
 	static UObject* LoadUdsWeatherPreset(const FString& PresetName);
+
+	/** Every UDS preset the project knows by name, in the order a picker should show them. THE list: MO.Weather.ListPresets and the dev `weather` popup both read it. */
+	static const TArray<FMOWeatherPresetChoice>& GetPresetChoices();
+
+	/**
+	 * Load a preset by name and hand it to the provider (LoadUdsWeatherPreset + SetWeatherPreset). Server-authoritative like every weather change: on a client
+	 * the provider has no effect. False (and a log) if the preset does not exist or there is no provider.
+	 */
+	bool SetWeatherPresetByName(const FString& PresetName);
 
 	/**
 	 * A NEW game opens under clear skies (together with the clock's 08:00 start, UMOGameClockSubsystem::DefaultStartDateTime).

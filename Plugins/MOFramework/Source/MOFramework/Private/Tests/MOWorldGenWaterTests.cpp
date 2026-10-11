@@ -1,0 +1,157 @@
+// Tests for the water half of the world generator: rivers and lake basins carved into low ground at sea level. Headless-safe. The PNG dump (DumpMaps) shows them
+// as the blue below-sea-level areas of the relief maps.
+
+#include "Misc/AutomationTest.h"
+#include "MOWorldGen.h"
+
+#if WITH_DEV_AUTOMATION_TESTS
+
+namespace
+{
+	constexpr int32 WaterTestSeed = 424242;
+
+	FMOWorldGenParamsRef MakeWaterParams(TFunctionRef<void(FMOWorldGenTuning&)> Modify = [](FMOWorldGenTuning&) {})
+	{
+		TSharedRef<FMOWorldGenParams, ESPMode::ThreadSafe> P = MakeShared<FMOWorldGenParams, ESPMode::ThreadSafe>();
+		P->Tuning.bEnableUplandLakes = false;   // this test is about the SEA-LEVEL water (it asserts high ground is never touched); upland lakes have their own test, MOWorldGenCoastTests.cpp
+		Modify(P->Tuning);
+		P->Finalize();
+		return FMOWorldGenParamsRef(P);
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOWorldGen_Water,
+	"MOFramework.WorldGen.Water",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOWorldGen_Water::RunTest(const FString& Parameters)
+{
+	const FMOWorldGenParamsRef P = MakeWaterParams();
+	const FMOWorldGenTuning& T = P->Tuning;
+	FRandomStream R(31);
+
+	// 1. Water only ever LOWERS the ground, never touches high ground, and is exact when switched off.
+	{
+		const FMOWorldGenParamsRef Off = MakeWaterParams([](FMOWorldGenTuning& Tuning) { Tuning.bEnableWater = false; });
+		int32 Raised = 0, HighTouched = 0, OffDiffers = 0, Carved = 0, Low = 0;
+		for (int32 I = 0; I < 60000; ++I)
+		{
+			const double X = R.FRandRange(-2.5e6f, 2.5e6f), Y = R.FRandRange(-2.5e6f, 2.5e6f);
+			const float Base = FMOWorldGen::SampleBaseHeightCm(*P, X, Y, WaterTestSeed);
+			const float H = FMOWorldGen::SampleHeightCm(*P, X, Y, WaterTestSeed);
+			Raised += (H > Base) ? 1 : 0;
+			HighTouched += (Base > T.SeaLevelCm + 6000.0f && H != Base) ? 1 : 0;
+			OffDiffers += (FMOWorldGen::SampleHeightCm(*Off, X, Y, WaterTestSeed) != Base) ? 1 : 0;
+			if (Base > T.SeaLevelCm && Base < T.SeaLevelCm + 1100.0f)
+			{
+				++Low;
+				Carved += (H < T.SeaLevelCm) ? 1 : 0;
+			}
+		}
+		TestEqual(TEXT("water never raises the ground"), Raised, 0);
+		TestEqual(TEXT("ground more than 60 m above sea level is never touched"), HighTouched, 0);
+		TestEqual(TEXT("bEnableWater = false: SampleHeightCm equals SampleBaseHeightCm exactly"), OffDiffers, 0);
+		const float Fraction = Low > 0 ? (float)Carved / Low : 0.0f;
+		AddInfo(FString::Printf(TEXT("%.1f%% of the low land (0..11 m above sea) is carved under water (%d of %d samples)"), Fraction * 100.0f, Carved, Low));
+		TestTrue(FString::Printf(TEXT("between 1%% and 35%% of low land becomes water (got %.1f%%)"), Fraction * 100.0f), Fraction > 0.01f && Fraction < 0.35f);
+	}
+
+	// 2. Rivers alone (basins off): they exist, are narrow channels, and only in lowland.
+	{
+		const FMOWorldGenParamsRef RiversOnly = MakeWaterParams([](FMOWorldGenTuning& Tuning) { Tuning.PondChance = 0.0f; Tuning.LakeChance = 0.0f; });
+		int32 Wet = 0, Low = 0, WetHigh = 0;
+		for (int32 I = 0; I < 80000; ++I)
+		{
+			const double X = R.FRandRange(-2.0e6f, 2.0e6f), Y = R.FRandRange(-2.0e6f, 2.0e6f);
+			const float Base = FMOWorldGen::SampleBaseHeightCm(*RiversOnly, X, Y, WaterTestSeed);
+			const float H = FMOWorldGen::SampleHeightCm(*RiversOnly, X, Y, WaterTestSeed);
+			if (Base > T.SeaLevelCm && Base < T.SeaLevelCm + T.RiverMaxGroundAboveSeaCm + 600.0f)
+			{
+				++Low;
+				Wet += (H < T.SeaLevelCm) ? 1 : 0;
+			}
+			WetHigh += (Base > T.SeaLevelCm + T.RiverMaxGroundAboveSeaCm + 600.0f && H != Base) ? 1 : 0;
+		}
+		const float Fraction = Low > 0 ? (float)Wet / Low : 0.0f;
+		AddInfo(FString::Printf(TEXT("rivers cover %.2f%% of the low land (%d of %d samples)"), Fraction * 100.0f, Wet, Low));
+		TestTrue(FString::Printf(TEXT("rivers exist but are narrow: 0.3%% .. 12%% of low land (got %.2f%%)"), Fraction * 100.0f), Fraction > 0.003f && Fraction < 0.12f);
+		TestEqual(TEXT("no river above the headwater height"), WetHigh, 0);
+	}
+
+	// 3. Basins: found, a bowl under sea level with a shore at sea level, fit rim, banks above.
+	{
+		int32 Found[2] = { 0, 0 };
+		int32 CentreWet = 0, ShoreOk = 0, RimDry = 0, Checked = 0;
+		for (int32 Tier = 0; Tier < 2; ++Tier)
+		{
+			const int32 Half = Tier == 0 ? 20 : 8;
+			for (int64 Cy = -Half; Cy < Half; ++Cy)
+			{
+				for (int64 Cx = -Half; Cx < Half; ++Cx)
+				{
+					FMOWorldGen::FLake L;
+					if (!FMOWorldGen::GetLakeInCell(*P, Tier, Cx, Cy, WaterTestSeed, L))
+					{
+						continue;
+					}
+					++Found[Tier];
+					++Checked;
+					CentreWet += (FMOWorldGen::SampleHeightCm(*P, L.Center.X, L.Center.Y, WaterTestSeed) <= T.SeaLevelCm - L.DepthCm * 0.95f) ? 1 : 0;
+					// On the long axis a hair inside the shore: still water; a hair outside: the bank just above sea level.
+					const double Ax = L.Center.X + L.CosAngle * L.RadiusCm * 0.98, Ay = L.Center.Y + L.SinAngle * L.RadiusCm * 0.98;
+					const double Bx = L.Center.X + L.CosAngle * L.RadiusCm * 1.06, By = L.Center.Y + L.SinAngle * L.RadiusCm * 1.06;
+					const float Inside = FMOWorldGen::SampleHeightCm(*P, Ax, Ay, WaterTestSeed), Outside = FMOWorldGen::SampleHeightCm(*P, Bx, By, WaterTestSeed);
+					ShoreOk += (Inside < T.SeaLevelCm && Outside >= T.SeaLevelCm) ? 1 : 0;
+					// Every rim point of a basin was fit (low land): the carved rim stays dry.
+					const double Cxw = L.Center.X - L.CosAngle * L.RadiusCm * 1.15, Cyw = L.Center.Y - L.SinAngle * L.RadiusCm * 1.15;
+					RimDry += (FMOWorldGen::SampleHeightCm(*P, Cxw, Cyw, WaterTestSeed) >= T.SeaLevelCm) ? 1 : 0;
+				}
+			}
+		}
+		AddInfo(FString::Printf(TEXT("%d ponds in 40 x 40 cells (%.0f m) and %d lakes in 16 x 16 cells (%.0f m) have a basin"), Found[0], T.PondCellCm / 100.0f, Found[1], T.LakeCellCm / 100.0f));
+		TestTrue(TEXT("ponds are found"), Found[0] > 0);
+		TestTrue(TEXT("lakes are found"), Found[1] > 0);
+		TestEqual(TEXT("every basin centre is carved to ~its full depth below sea level"), CentreWet, Checked);
+		// (A river can cross a basin, so the shore / bank checks tolerate a few exceptions.)
+		TestTrue(FString::Printf(TEXT("at least 90%% of basins have water just inside the shore and dry bank just outside it (%d of %d)"), ShoreOk, Checked), ShoreOk * 10 >= Checked * 9);
+		TestTrue(FString::Printf(TEXT("at least 90%% of basins keep the far bank above water (%d of %d)"), RimDry, Checked), RimDry * 10 >= Checked * 9);
+	}
+
+	// 4. Continuous: no cliff where a channel or bowl meets the land (the same 10 cm step test as the base terrain, but across wet ground).
+	{
+		float MaxStep = 0.0f;
+		int32 Wet = 0;
+		for (int32 Line = 0; Line < 200; ++Line)
+		{
+			double X0 = R.FRandRange(-2.0e6f, 2.0e6f), Y0 = R.FRandRange(-2.0e6f, 2.0e6f);
+			if (FMOWorldGen::SampleBaseHeightCm(*P, X0, Y0, WaterTestSeed) > T.SeaLevelCm + 1200.0f)
+			{
+				continue;
+			}
+			float Prev = FMOWorldGen::SampleHeightCm(*P, X0, Y0, WaterTestSeed);
+			for (int32 I = 1; I <= 300; ++I)
+			{
+				const float H = FMOWorldGen::SampleHeightCm(*P, X0 + 10.0 * I, Y0, WaterTestSeed);
+				MaxStep = FMath::Max(MaxStep, FMath::Abs(H - Prev));
+				Wet += (H < T.SeaLevelCm) ? 1 : 0;
+				Prev = H;
+			}
+		}
+		TestTrue(TEXT("the test lines cross water"), Wet > 0);
+		TestTrue(FString::Printf(TEXT("no cliff at a shore: max height change over a 10 cm step is %.1f cm (limit 60)"), MaxStep), MaxStep < 60.0f);
+	}
+
+	// 5. Pure.
+	{
+		bool bIdentical = true;
+		for (int32 I = 0; I < 3000; ++I)
+		{
+			const double X = R.FRandRange(-2.0e6f, 2.0e6f), Y = R.FRandRange(-2.0e6f, 2.0e6f);
+			bIdentical &= FMOWorldGen::SampleHeightCm(*P, X, Y, WaterTestSeed) == FMOWorldGen::SampleHeightCm(*P, X, Y, WaterTestSeed);
+		}
+		TestTrue(TEXT("the same (params, seed, position) is bit-identical every call (the thread-local basin cache never changes a result)"), bIdentical);
+	}
+	return true;
+}
+
+#endif // WITH_DEV_AUTOMATION_TESTS

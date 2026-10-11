@@ -790,6 +790,52 @@ UObject* UMOWeatherIntegrationSubsystem::LoadUdsWeatherPreset(const FString& Pre
 	return PresetInstance;
 }
 
+const TArray<FMOWeatherPresetChoice>& UMOWeatherIntegrationSubsystem::GetPresetChoices()
+{
+	static const TArray<FMOWeatherPresetChoice> Choices = []
+	{
+		TArray<FMOWeatherPresetChoice> Out;
+		auto Add = [&Out](const TCHAR* Id, const FText& Label, bool bBasic)
+		{
+			FMOWeatherPresetChoice& C = Out.AddDefaulted_GetRef();
+			C.Id = FName(Id);
+			C.Label = Label;
+			C.bBasic = bBasic;
+		};
+		Add(TEXT("Clear_Skies"), NSLOCTEXT("MOWeather", "ClearSkies", "Clear"), true);
+		Add(TEXT("Partly_Cloudy"), NSLOCTEXT("MOWeather", "PartlyCloudy", "Partly Cloudy"), true);
+		Add(TEXT("Cloudy"), NSLOCTEXT("MOWeather", "Cloudy", "Cloudy"), false);
+		Add(TEXT("Overcast"), NSLOCTEXT("MOWeather", "Overcast", "Overcast"), true);
+		Add(TEXT("Foggy"), NSLOCTEXT("MOWeather", "Foggy", "Fog"), true);
+		Add(TEXT("Rain_Light"), NSLOCTEXT("MOWeather", "RainLight", "Light Rain"), true);
+		Add(TEXT("Rain"), NSLOCTEXT("MOWeather", "Rain", "Rain"), true);
+		Add(TEXT("Rain_Thunderstorm"), NSLOCTEXT("MOWeather", "Thunderstorm", "Thunderstorm"), true);
+		Add(TEXT("Snow_Light"), NSLOCTEXT("MOWeather", "SnowLight", "Light Snow"), true);
+		Add(TEXT("Snow"), NSLOCTEXT("MOWeather", "Snow", "Snow"), true);
+		Add(TEXT("Snow_Blizzard"), NSLOCTEXT("MOWeather", "Blizzard", "Blizzard"), true);
+		Add(TEXT("Sand_Dust_Calm"), NSLOCTEXT("MOWeather", "DustCalm", "Dust"), false);
+		Add(TEXT("Sand_Dust_Storm"), NSLOCTEXT("MOWeather", "DustStorm", "Dust Storm"), false);
+		return Out;
+	}();
+	return Choices;
+}
+
+bool UMOWeatherIntegrationSubsystem::SetWeatherPresetByName(const FString& PresetName)
+{
+	if (!HasWeatherProvider())
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOWeatherIntegration] SetWeatherPresetByName('%s'): no weather provider"), *PresetName);
+		return false;
+	}
+	UObject* Preset = LoadUdsWeatherPreset(PresetName);
+	if (!Preset)
+	{
+		return false;
+	}
+	SetWeatherPreset(Preset);
+	return true;
+}
+
 FSoftObjectPath UMOWeatherIntegrationSubsystem::GetCurrentWeatherPresetPath() const
 {
 	if (!HasWeatherProvider())

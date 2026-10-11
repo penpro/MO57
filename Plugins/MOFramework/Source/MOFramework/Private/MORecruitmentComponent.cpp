@@ -66,28 +66,34 @@ void UMORecruitmentComponent::OnRep_RecruitmentState()
 
 bool UMORecruitmentComponent::BeginInteraction(APawn* InteractingPawn)
 {
+	return BeginInteractionDetailed(InteractingPawn).Succeeded();
+}
+
+FMORecruitmentResult UMORecruitmentComponent::BeginInteractionDetailed(APawn* InteractingPawn)
+{
+	FMORecruitmentResult Result;   // NotRecruitable until something says otherwise
 	if (!InteractingPawn)
 	{
-		return false;
+		return Result;
 	}
 
 	// Check if this pawn can be recruited at all (e.g., creatures like deer cannot)
 	if (!bIsRecruitable)
 	{
 		UE_LOG(LogMOFramework, Verbose, TEXT("[Recruitment] %s is not recruitable"), *GetOwner()->GetName());
-		return false;
+		return Result;
 	}
 
 	if (RecruitmentState == EMORecruitmentState::Recruited)
 	{
-		// Already recruited
-		return false;
+		Result.Outcome = EMORecruitmentOutcome::AlreadyRecruited;
+		return Result;
 	}
 
 	if (RecruitmentState == EMORecruitmentState::Dead)
 	{
-		// Can't interact with dead
-		return false;
+		Result.Outcome = EMORecruitmentOutcome::Unavailable;
+		return Result;
 	}
 
 	// STANDING GATE (V2.3): once a colony exists, strangers only agree to join
@@ -103,12 +109,20 @@ bool UMORecruitmentComponent::BeginInteraction(APawn* InteractingPawn)
 			if (UMOColonyManagerSubsystem* Colony = World->GetSubsystem<UMOColonyManagerSubsystem>())
 			{
 				APawn* OwnerPawn = Cast<APawn>(GetOwner());
-				if (OwnerPawn && !Colony->CanRecruitByStanding(OwnerPawn))
+				if (OwnerPawn)
 				{
-					UE_LOG(LogMOFramework, Warning,
-						TEXT("[Recruitment] %s declines to join: colony standing %.2f below %.2f — spend time together first"),
-						*GetOwner()->GetName(), Colony->GetColonyStanding(OwnerPawn), Colony->RecruitStandingThreshold);
-					return false;
+					const UMOColonyManagerSubsystem::FStandingGate Gate = Colony->EvaluateRecruitGate(OwnerPawn);
+					if (Gate.bGateActive && !Gate.bPasses)
+					{
+						UE_LOG(LogMOFramework, Warning,
+							TEXT("[Recruitment] %s declines to join: colony standing %.2f below %.2f (about %.1f more shared game hours)"),
+							*GetOwner()->GetName(), Gate.Standing, Gate.Needed, Gate.HoursToPass);
+						Result.Outcome = EMORecruitmentOutcome::DeclinedStanding;
+						Result.Standing = Gate.Standing;
+						Result.StandingNeeded = Gate.Needed;
+						Result.HoursToPass = Gate.HoursToPass;
+						return Result;
+					}
 				}
 			}
 		}
@@ -129,23 +143,26 @@ bool UMORecruitmentComponent::BeginInteraction(APawn* InteractingPawn)
 				*UEnum::GetValueAsString(ActiveQuest.QuestType),
 				ActiveQuest.TimeoutSeconds / 3600.0f);
 
-			return true;
+			Result.Outcome = EMORecruitmentOutcome::QuestStarted;
+			return Result;
 		}
 		else
 		{
 			// No quest - immediate recruitment
 			ForceRecruit();
-			return true;
+			Result.Outcome = RecruitmentState == EMORecruitmentState::Recruited ? EMORecruitmentOutcome::Recruited : EMORecruitmentOutcome::NotRecruitable;
+			return Result;
 		}
 	}
 
 	// Already interacted/questing - try to complete
 	if (RecruitmentState == EMORecruitmentState::QuestActive || RecruitmentState == EMORecruitmentState::Interacted)
 	{
-		return TryCompleteQuest(InteractingPawn);
+		Result.Outcome = TryCompleteQuest(InteractingPawn) ? EMORecruitmentOutcome::Recruited : EMORecruitmentOutcome::QuestPending;
+		return Result;
 	}
 
-	return false;
+	return Result;
 }
 
 bool UMORecruitmentComponent::TryCompleteQuest(APawn* InteractingPawn)

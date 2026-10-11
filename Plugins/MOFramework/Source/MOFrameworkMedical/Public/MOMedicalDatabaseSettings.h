@@ -64,22 +64,22 @@ public:
 
 	/** DataTable containing FMOBodyPartDefinitionRow rows. */
 	UPROPERTY(EditAnywhere, Config, Category="DataTables",
-		meta=(RequiredAssetDataTags="RowStructure=/Script/MOFramework.MOBodyPartDefinitionRow"))
+		meta=(RequiredAssetDataTags="RowStructure=/Script/MOFrameworkCore.MOBodyPartDefinitionRow"))
 	TSoftObjectPtr<UDataTable> BodyPartDefinitionsTable;
 
 	/** DataTable containing FMOWoundTypeDefinitionRow rows. */
 	UPROPERTY(EditAnywhere, Config, Category="DataTables",
-		meta=(RequiredAssetDataTags="RowStructure=/Script/MOFramework.MOWoundTypeDefinitionRow"))
+		meta=(RequiredAssetDataTags="RowStructure=/Script/MOFrameworkCore.MOWoundTypeDefinitionRow"))
 	TSoftObjectPtr<UDataTable> WoundTypeDefinitionsTable;
 
 	/** DataTable containing FMOConditionDefinitionRow rows. */
 	UPROPERTY(EditAnywhere, Config, Category="DataTables",
-		meta=(RequiredAssetDataTags="RowStructure=/Script/MOFramework.MOConditionDefinitionRow"))
+		meta=(RequiredAssetDataTags="RowStructure=/Script/MOFrameworkCore.MOConditionDefinitionRow"))
 	TSoftObjectPtr<UDataTable> ConditionDefinitionsTable;
 
 	/** DataTable containing FMOMedicalTreatmentRow rows. */
 	UPROPERTY(EditAnywhere, Config, Category="DataTables",
-		meta=(RequiredAssetDataTags="RowStructure=/Script/MOFramework.MOMedicalTreatmentRow"))
+		meta=(RequiredAssetDataTags="RowStructure=/Script/MOFrameworkCore.MOMedicalTreatmentRow"))
 	TSoftObjectPtr<UDataTable> MedicalTreatmentsTable;
 
 	// ============================================================================

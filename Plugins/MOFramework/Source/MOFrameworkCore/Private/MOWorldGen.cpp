@@ -3,6 +3,12 @@
 #include "MOWorldGen.h"
 
 #include "Misc/ScopeRWLock.h"
+#include "HAL/IConsoleManager.h"
+#include "MOWorldGenNoise.h"
+
+// DEBUG ONLY (2026-10-11): 1 = the base height ignores the LOD (every octave at every LOD). Two chunks of neighbouring LODs meet at a seam that is only watertight if the coarse samples equal the
+// fine values at the same positions; the octave cut makes them differ. This switch exists to SEE whether that is what tears the far mountains. Never set it in a shipped build: it changes the ground.
+static TAutoConsoleVariable<int32> CVarMODebugNoLodCull(TEXT("MO.WorldGen.DebugNoLodCull"), 0, TEXT("Debug: 1 = the base height ignores the LOD (no octave culling). Changes the generated ground; test seams only."), ECVF_Default);
 
 // ============================================================================
 // TUNING DEFAULTS
@@ -10,9 +16,11 @@
 
 FMOWorldGenTuning::FMOWorldGenTuning()
 {
-	// Continentalness -> metres above sea level. Basins are modest (there is no water in the game yet; they are lake-ready).
+	// Continentalness -> metres above sea level (before VerticalScale). Above the waterline the land rises gently (beaches, lowland); below it the ground drops away FAST: 12 m under at -0.58,
+	// 28 m at -0.62, 50 m at -0.70, then a deep ocean floor (80 m, doubled by VerticalScale = 160 m). The first version had a sea floor at -6 m, i.e. a shelf so flat that noise made the shoreline wander out into the sea.
 	ContinentSplineM = {
-		FVector2D(-1.00, -6.0), FVector2D(-0.55, 0.0), FVector2D(-0.30, 6.0), FVector2D(-0.15, 12.0),
+		FVector2D(-1.00, -80.0), FVector2D(-0.85, -72.0), FVector2D(-0.70, -50.0), FVector2D(-0.62, -28.0), FVector2D(-0.58, -12.0), FVector2D(-0.55, 0.0),
+		FVector2D(-0.30, 6.0), FVector2D(-0.15, 12.0),
 		FVector2D(0.00, 18.0), FVector2D(0.25, 32.0), FVector2D(0.55, 55.0), FVector2D(1.00, 90.0) };
 
 	// Erosion -> ruggedness. Low erosion = mountains.
@@ -106,14 +114,45 @@ void FMOWorldGenParams::Finalize()
 	T.ContinentSplineM.Sort([](const FVector2D& A, const FVector2D& B) { return A.X < B.X; });
 	T.ErosionReliefSpline.Sort([](const FVector2D& A, const FVector2D& B) { return A.X < B.X; });
 
+	// An upland basin reaches 2.5 radii from its centre and the centre is jittered to within 0.25 cell of the cell border: the reach must stay inside the cell, because
+	// a column only ever asks its OWN cell for a lake (see MOWorldGenWater.cpp).
+	T.UplandLakeRadiusMaxCm = FMath::Min(T.UplandLakeRadiusMaxCm, 0.1f * T.UplandLakeCellCm);
+	T.UplandLakeRadiusMinCm = FMath::Min(T.UplandLakeRadiusMinCm, T.UplandLakeRadiusMaxCm);
+
 	float MinBase = 0.0f, MaxBase = 0.0f, MinRelief = 0.0f, MaxRelief = 0.0f;
 	SplineRange(T.ContinentSplineM, MinBase, MaxBase);
 	SplineRange(T.ErosionReliefSpline, MinRelief, MaxRelief);
 	MaxRelief = FMath::Max(MaxRelief, 0.0f);
 
+	// Biome relief: only climate biomes shape it (see FMOWorldGenBiome::IsClimateBiome); with every scale at 1 the relief term is skipped entirely so the v1-v4 math stays bit for bit.
+	bBiomeRelief = false;
+	MaxHillScale = 1.0f;
+	MaxMountainScale = 1.0f;
+	for (const FMOWorldGenBiome& B : Biomes)
+	{
+		if (B.IsClimateBiome() && (B.ReliefScale != 1.0f || B.MountainScale != 1.0f))
+		{
+			bBiomeRelief = true;
+			MaxHillScale = FMath::Max(MaxHillScale, B.ReliefScale);
+			MaxMountainScale = FMath::Max(MaxMountainScale, B.MountainScale);
+		}
+	}
+
 	// Every noise term is bounded by 1 (see the generator), so these are hard bounds, not estimates.
-	MaxHeightCm = T.SeaLevelCm + 100.0f * (MaxBase + T.MountainAmplitudeM * MaxRelief + T.HillAmplitudeM + T.DetailAmplitudeM);
-	MinHeightCm = T.SeaLevelCm + 100.0f * (MinBase - T.HillAmplitudeM - T.DetailAmplitudeM);
+	// v6: the range term is mask (<= 1) x (massif + peaks), each <= its amplitude; the gullies only ever subtract.
+	const float MountainBoundM = T.bRangeMountains ? (T.MassifAmplitudeM + T.PeakAmplitudeM + T.CragAmplitudeM) : (T.MountainAmplitudeM * MaxRelief);
+	MaxHeightCm = T.SeaLevelCm + 100.0f * T.VerticalScale * (MaxBase + (MountainBoundM + T.CoastalRangeAmplitudeM) * MaxMountainScale + T.HillAmplitudeM * MaxHillScale + T.DetailAmplitudeM);
+	MinHeightCm = T.SeaLevelCm + 100.0f * T.VerticalScale * (MinBase - T.HillAmplitudeM * MaxHillScale - T.DetailAmplitudeM);
+	if (T.bEnableWater)
+	{
+		// Rivers and basins dig below sea level: the deepest is a lake centre (base + per-radius) or the river bed.
+		const float DeepestWater = FMath::Max(T.RiverDepthCm, T.BasinDepthBaseCm + T.BasinDepthPerRadius * FMath::Max(T.LakeRadiusMaxCm, T.PondRadiusMaxCm));
+		MinHeightCm = FMath::Min(MinHeightCm, T.SeaLevelCm - DeepestWater - 10.0f);
+	}
+
+	// Caves live between the deepest point under the lowest ground and a little above the highest ground (a flared sinkhole rim can poke above the surface).
+	CaveMaxZCm = MaxHeightCm + 500.0f;
+	CaveMinZCm = MinHeightCm - (T.CaveMaxDepthCm + T.CaveFadeCm);
 	GeneratorVersion = CurrentGeneratorVersion;
 	CachedHash = ComputeHash();
 }
@@ -130,6 +169,43 @@ uint32 FMOWorldGenParams::ComputeHash() const
 	{
 		H = FnvAddFloat(H, V);
 	}
+	H = FnvAddInt(H, T.bEnableWater ? 1 : 0);
+	for (const float V : { T.RiverWavelengthCm, T.RiverWidthCm, T.RiverDepthCm, T.RiverBankSlope, T.RiverMaxGroundAboveSeaCm, T.PondCellCm, T.PondChance, T.PondRadiusMinCm,
+		T.PondRadiusMaxCm, T.LakeCellCm, T.LakeChance, T.LakeRadiusMinCm, T.LakeRadiusMaxCm, T.BasinRimMinAboveSeaCm, T.BasinRimMaxAboveSeaCm, T.BasinDepthBaseCm,
+		T.BasinDepthPerRadius, T.BasinBankSlope })
+	{
+		H = FnvAddFloat(H, V);
+	}
+	// Upland lakes (v4).
+	for (const float V : { T.CoastalRangeAmplitudeM, T.CoastalRangeWavelengthCm, T.CoastalRangePresenceWavelengthCm, T.VerticalScale })
+	{
+		H = FnvAddFloat(H, V);
+	}
+	// v5: relief blend and the island edge.
+	for (const float V : { T.ReliefClimateBlend, T.EdgeFalloffStart, T.EdgeFalloffEnd, T.MountainGain, T.LowlandCapM, T.HillSeaFadeLow, T.HillSeaFadeHigh })
+	{
+		H = FnvAddFloat(H, V);
+	}
+	// v6: mountain ranges.
+	H = FnvAddInt(H, T.bRangeMountains ? 1 : 0);
+	for (const float V : { T.MountainRegionWavelengthCm, T.MountainRegionLow, T.MountainRegionHigh, T.MountainRegionGain, T.ReliefRegionWavelengthCm, T.MassifAmplitudeM, T.MassifWavelengthCm,
+		T.PeakAmplitudeM, T.PeakWavelengthCm, (float)T.PeakOctaves, T.PeakGain, T.PeakSoftness, T.GullyAmplitudeM, T.GullyWavelengthCm, (float)T.GullyOctaves, T.GullySlopeLow, T.GullySlopeHigh,
+		T.CragAmplitudeM, T.CragWavelengthCm, T.CragSlopeLow, T.CragSlopeHigh, T.CragEdge })
+	{
+		H = FnvAddFloat(H, V);
+	}
+	H = FnvAddInt(H, T.bEnableUplandLakes ? 1 : 0);
+	for (const float V : { T.UplandLakeCellCm, T.UplandLakeChance, T.UplandLakeRadiusMinCm, T.UplandLakeRadiusMaxCm, (float)T.UplandLakeCandidates, T.UplandLakeMinGroundAboveSeaCm,
+		T.UplandLakeMaxReliefCm, T.UplandLakeFreeboardCm, T.UplandLakeDepthBaseCm, T.UplandLakeDepthPerRadius })
+	{
+		H = FnvAddFloat(H, V);
+	}
+	H = FnvAddInt(H, T.bEnableCaves ? 1 : 0);
+	for (const float V : { T.CaveCoverCm, T.CaveFadeCm, T.CaveMaxDepthCm, T.CaveMinGroundAboveSeaCm, T.TunnelWavelengthCm, T.TunnelRadiusCm, T.TunnelRadiusVariation,
+		T.TunnelVerticalSquash, T.CavernWavelengthCm, T.CavernThreshold, T.CavernMinDepthCm, T.SinkholeCellCm, T.SinkholeChance, T.SinkholeRadiusCm, T.SinkholeDepthCm })
+	{
+		H = FnvAddFloat(H, V);
+	}
 	for (const FVector2D& K : T.ContinentSplineM) { H = FnvAddFloat(FnvAddFloat(H, (float)K.X), (float)K.Y); }
 	for (const FVector2D& K : T.ErosionReliefSpline) { H = FnvAddFloat(FnvAddFloat(H, (float)K.X), (float)K.Y); }
 	for (const FMOWorldGenBiome& B : Biomes)
@@ -141,6 +217,7 @@ uint32 FMOWorldGenParams::ComputeHash() const
 			H = FnvAddFloat(H, V);
 		}
 		H = FnvAddInt(H, B.Priority);
+		H = FnvAddFloat(FnvAddFloat(H, B.ReliefScale), B.MountainScale);
 		// The ground surface does not change the generated numbers but it does change what the Voxel adapter must rebuild (its surface table).
 		const FString Surface = B.GroundSurfaceType.ToString();
 		H = FnvAdd(H, *Surface, Surface.Len() * (int32)sizeof(TCHAR));
@@ -204,67 +281,9 @@ bool FMOWorldGenParamsProvider::HasPublished()
 
 namespace
 {
-	// 16 unit gradient directions, literal constants (no sin/cos at runtime: see RULES in the header).
-	constexpr float GGrad[16][2] = {
-		{ 1.0f, 0.0f }, { 0.92387953f, 0.38268343f }, { 0.70710678f, 0.70710678f }, { 0.38268343f, 0.92387953f },
-		{ 0.0f, 1.0f }, { -0.38268343f, 0.92387953f }, { -0.70710678f, 0.70710678f }, { -0.92387953f, 0.38268343f },
-		{ -1.0f, 0.0f }, { -0.92387953f, -0.38268343f }, { -0.70710678f, -0.70710678f }, { -0.38268343f, -0.92387953f },
-		{ 0.0f, -1.0f }, { 0.38268343f, -0.92387953f }, { 0.70710678f, -0.70710678f }, { 0.92387953f, -0.38268343f } };
-
-	FORCEINLINE uint32 HashLattice(int64 X, int64 Y, uint32 Salt)
-	{
-		uint64 H = (uint64)X * 0x9E3779B97F4A7C15ull;
-		H ^= ((uint64)Y + 0xC2B2AE3D27D4EB4Full) * 0xD6E8FEB86659FD93ull;
-		H ^= (uint64)Salt * 0xFF51AFD7ED558CCDull;
-		H ^= H >> 32;
-		H *= 0xD6E8FEB86659FD93ull;
-		H ^= H >> 32;
-		H *= 0xD6E8FEB86659FD93ull;
-		H ^= H >> 32;
-		return (uint32)H;
-	}
-
-	struct FNoise
-	{
-		float Value;
-		float Dx;
-		float Dy;
-	};
-
-	/** Output range ~[-1, 1] (unit-gradient 2D noise peaks at sqrt(2)/2, scaled up). Derivatives are w.r.t. the input coordinates. */
-	FNoise GradientNoise(double X, double Y, uint32 Salt)
-	{
-		const double FloorX = FMath::FloorToDouble(X);
-		const double FloorY = FMath::FloorToDouble(Y);
-		const int64 Xi = (int64)FloorX;
-		const int64 Yi = (int64)FloorY;
-		const float Fx = (float)(X - FloorX);
-		const float Fy = (float)(Y - FloorY);
-
-		const float Ux = Fx * Fx * Fx * (Fx * (Fx * 6.0f - 15.0f) + 10.0f);
-		const float Uy = Fy * Fy * Fy * (Fy * (Fy * 6.0f - 15.0f) + 10.0f);
-		const float Dux = 30.0f * Fx * Fx * (Fx - 1.0f) * (Fx - 1.0f);
-		const float Duy = 30.0f * Fy * Fy * (Fy - 1.0f) * (Fy - 1.0f);
-
-		const float* Ga = GGrad[HashLattice(Xi, Yi, Salt) & 15u];
-		const float* Gb = GGrad[HashLattice(Xi + 1, Yi, Salt) & 15u];
-		const float* Gc = GGrad[HashLattice(Xi, Yi + 1, Salt) & 15u];
-		const float* Gd = GGrad[HashLattice(Xi + 1, Yi + 1, Salt) & 15u];
-
-		const float Va = Ga[0] * Fx + Ga[1] * Fy;
-		const float Vb = Gb[0] * (Fx - 1.0f) + Gb[1] * Fy;
-		const float Vc = Gc[0] * Fx + Gc[1] * (Fy - 1.0f);
-		const float Vd = Gd[0] * (Fx - 1.0f) + Gd[1] * (Fy - 1.0f);
-
-		const float K = Va - Vb - Vc + Vd;
-		constexpr float Scale = 1.41421356f;
-
-		FNoise Result;
-		Result.Value = Scale * (Va + Ux * (Vb - Va) + Uy * (Vc - Va) + Ux * Uy * K);
-		Result.Dx = Scale * (Ga[0] + Ux * (Gb[0] - Ga[0]) + Uy * (Gc[0] - Ga[0]) + Ux * Uy * (Ga[0] - Gb[0] - Gc[0] + Gd[0]) + Dux * (Uy * K + Vb - Va));
-		Result.Dy = Scale * (Ga[1] + Ux * (Gb[1] - Ga[1]) + Uy * (Gc[1] - Ga[1]) + Ux * Uy * (Ga[1] - Gb[1] - Gc[1] + Gd[1]) + Duy * (Ux * K + Vc - Va));
-		return Result;
-	}
+	// 2D gradient noise with analytic derivatives lives in MOWorldGenNoise.h (shared with the cave and water halves of the generator).
+	using FNoise = MOWorldGenNoise::FNoise2;
+	FORCEINLINE FNoise GradientNoise(double X, double Y, uint32 Salt) { return MOWorldGenNoise::GradientNoise2(X, Y, Salt); }
 
 	FORCEINLINE uint32 OctaveSalt(uint32 Base, int32 Octave)
 	{
@@ -314,7 +333,7 @@ namespace
 	 * and valley floors fill in. Octaves with wavelength < MinWavelengthCm are skipped (LOD). Normalised by the FULL amplitude
 	 * sum so a culled octave only loses its own energy (LOD-stable). Result in [-1,1] (plain) or [0,1] (ridged).
 	 */
-	float ErodedFbm(double X, double Y, uint32 Salt, int32 Octaves, float Gain, float WavelengthCm, float MinWavelengthCm, bool bRidged)
+	float ErodedFbm(double X, double Y, uint32 Salt, int32 Octaves, float Gain, float WavelengthCm, float MinWavelengthCm, bool bRidged, float Soft = 0.0f)
 	{
 		double Px = X / WavelengthCm;
 		double Py = Y / WavelengthCm;
@@ -333,7 +352,8 @@ namespace
 				const FNoise N = GradientNoise(Px, Py, OctaveSalt(Salt, K));
 				// Ridged: fold the value (1 - |v|) but accumulate the RAW gradient. Flipping the gradient's sign across the crease made the
 				// damping term -- and therefore the height -- jump there (found by MOFramework.WorldGen.ContinuityAndRange).
-				const float V = bRidged ? 1.0f - FMath::Abs(N.Value) : N.Value;
+				// Soft > 0 rounds the crest (pseudo-Huber |v|): a ridge gets a width instead of a knife edge. Soft == 0 is the exact old math.
+				const float V = bRidged ? 1.0f - (Soft > 0.0f ? FMath::Sqrt(N.Value * N.Value + Soft * Soft) - Soft : FMath::Abs(N.Value)) : N.Value;
 				Dx += N.Dx;
 				Dy += N.Dy;
 				Sum += Amp * V / (1.0f + Dx * Dx + Dy * Dy);
@@ -349,8 +369,20 @@ namespace
 	enum : uint32
 	{
 		SaltWarpX = 0xA101u, SaltWarpY = 0xA102u, SaltContinent = 0xC001u, SaltErosion = 0xE002u, SaltWeird = 0xD003u,
-		SaltMoisture = 0xB004u, SaltTemperature = 0xF005u, SaltMountain = 0x7006u, SaltHills = 0x5007u, SaltDetail = 0x3008u
+		SaltMoisture = 0xB004u, SaltTemperature = 0xF005u, SaltMountain = 0x7006u, SaltHills = 0x5007u, SaltDetail = 0x3008u,
+		SaltCoastRange = 0x4009u, SaltCoastPresence = 0x400Au,
+		SaltMountainRegion = 0x7201u, SaltMassif = 0x7301u, SaltPeak = 0x7302u, SaltGully = 0x7303u, SaltCrag = 0x7304u, SaltMoistureRegion = 0xB105u, SaltTemperatureRegion = 0xF106u
 	};
+
+	/** Soft box membership: 1 inside [Lo, Hi], falling smoothly to 0 over Blend outside it (a band that spans all of 0..1 is 1 everywhere). */
+	FORCEINLINE float SoftBand(float V, float Lo, float Hi, float Blend)
+	{
+		if (Blend <= 0.0f)
+		{
+			return (V >= Lo && V <= Hi) ? 1.0f : 0.0f;
+		}
+		return SmoothStep(Lo - Blend, Lo, V) * (1.0f - SmoothStep(Hi, Hi + Blend, V));
+	}
 
 	void Warp(const FMOWorldGenTuning& T, double& X, double& Y, int32 Seed)
 	{
@@ -379,6 +411,17 @@ namespace
 
 		FMOClimateSample S;
 		S.Continentalness = Field(SaltContinent, 4, T.ContinentWavelengthCm);
+		if (T.EdgeFalloffEnd > T.EdgeFalloffStart)
+		{
+			// Island shaping: a squarish distance to the centre (p = 4 norm from two square roots: IEEE-exact), 0 at the middle, 1 at the border. The continent is pulled toward
+			// open ocean (-1) between Start and End, so the land is gone before the border and the shore is organic (the position is the warped one).
+			const float Nx = (float)(Xw / (double)T.WorldHalfSizeCm), Ny = (float)(Yw / (double)T.WorldHalfSizeCm);
+			const float Nx2 = Nx * Nx, Ny2 = Ny * Ny;
+			const float Edge = FMath::Sqrt(FMath::Sqrt(Nx2 * Nx2 + Ny2 * Ny2));
+			const float Pull = SmoothStep(T.EdgeFalloffStart, T.EdgeFalloffEnd, Edge);
+			S.Continentalness += (-1.0f - S.Continentalness) * Pull;
+			S.EdgeLand = 1.0f - Pull;
+		}
 		S.Erosion = Field(SaltErosion, 3, T.ErosionWavelengthCm);
 		const float Weird = Field(SaltWeird, 3, T.WeirdnessWavelengthCm);
 		// Minecraft-style peaks & valleys: fold weirdness so both its extremes and its zero crossings differ.
@@ -391,6 +434,18 @@ namespace
 		float Temp = 0.5f + 0.45f * Fbm(Xw, Yw, (uint32)FMOWorldGen::HashSeed(Seed, SaltTemperature), 3, 0.5f, T.TemperatureWavelengthCm) * T.FieldContrast;
 		Temp += 0.5f * T.LatitudeTemperatureGradient * (float)FMath::Clamp(Yw / (double)T.WorldHalfSizeCm, -1.0, 1.0);
 		S.TemperatureSeaLevel = FMath::Clamp(Temp, 0.0f, 1.0f);
+
+		// v6: the climate at RANGE scale, for the biome's hill / mountain scale only (the local patch is 2-3 km: a relief scale that follows it makes a cliff at every biome border).
+		S.MoistureRegion = S.Moisture;
+		S.TemperatureRegion = S.TemperatureSeaLevel;
+		if (T.bRangeMountains && T.ReliefRegionWavelengthCm > 0.0f)
+		{
+			const float MoistRegion = 0.5f + 0.45f * Fbm(Xw, Yw, (uint32)FMOWorldGen::HashSeed(Seed, SaltMoistureRegion), 2, 0.5f, T.ReliefRegionWavelengthCm) * T.FieldContrast;
+			S.MoistureRegion = FMath::Clamp(MoistRegion + T.CoastalMoistureBoost * Coastal, 0.0f, 1.0f);
+			float TempRegion = 0.5f + 0.45f * Fbm(Xw, Yw, (uint32)FMOWorldGen::HashSeed(Seed, SaltTemperatureRegion), 2, 0.5f, T.ReliefRegionWavelengthCm) * T.FieldContrast;
+			TempRegion += 0.5f * T.LatitudeTemperatureGradient * (float)FMath::Clamp(Yw / (double)T.WorldHalfSizeCm, -1.0, 1.0);
+			S.TemperatureRegion = FMath::Clamp(TempRegion, 0.0f, 1.0f);
+		}
 		return S;
 	}
 }
@@ -398,6 +453,59 @@ namespace
 // ============================================================================
 // GENERATOR
 // ============================================================================
+
+namespace
+{
+	/** The v6 range term WITHOUT the gullies: massif + peaks, metres before VerticalScale (see FMOWorldGenTuning::bRangeMountains). */
+	float RangeBaseM(const FMOWorldGenTuning& T, double X, double Y, int32 Seed, float MinWavelengthCm)
+	{
+		const float Mass = SmoothStep(-0.5f, 1.0f, Fbm(X, Y, (uint32)FMOWorldGen::HashSeed(Seed, SaltMassif), 2, 0.5f, T.MassifWavelengthCm, MinWavelengthCm));
+		float Peak = 0.0f;
+		if (T.PeakAmplitudeM > 0.0f)
+		{
+			Peak = FMath::Max(ErodedFbm(X, Y, (uint32)FMOWorldGen::HashSeed(Seed, SaltPeak), T.PeakOctaves, T.PeakGain, T.PeakWavelengthCm, MinWavelengthCm, true, T.PeakSoftness), 0.0f);
+		}
+		// Peaks need the massif under them: a thin skin of them stands on the plain, the full height only on the massif.
+		const float Support = SmoothStep(0.05f, 0.75f, Mass);
+		return T.MassifAmplitudeM * Mass + T.PeakAmplitudeM * Peak * (0.15f + 0.85f * Support);
+	}
+
+	/**
+	 * The v6 mountain term in metres before VerticalScale and before the range mask / biome scale: massif + peaks, minus erosion gullies. The gullies are ridged valley lines cut where the
+	 * base is steep (slope from a short finite difference of the same base terms), so they run down the flanks and leave the summits and the plains alone. Every fine octave (peak octaves,
+	 * gullies) is skipped when its wavelength is below the LOD's resolution (2 x StepCm), so at a coarse LOD only the massif and the big peaks remain: the mass never collapses.
+	 */
+	float RangeShapeM(const FMOWorldGenTuning& T, double X, double Y, int32 Seed, float MinWavelengthCm)
+	{
+		const float Base0 = RangeBaseM(T, X, Y, Seed, MinWavelengthCm);
+		float Base = Base0;
+		// Gullies fade out with the LOD (see FMOWorldGenTuning::GullyAmplitudeM) and only exist where there is a mountain to cut (on the plain the base is ~0 and so is its slope: skip the extra
+		// base evaluations, the hot path of every lowland column).
+		const float GullyFade = T.GullyAmplitudeM > 0.0f ? SmoothStep(1.0f, 6.0f, T.GullyWavelengthCm / MinWavelengthCm) : 0.0f;
+		const float CragFade = T.CragAmplitudeM > 0.0f ? SmoothStep(1.0f, 6.0f, T.CragWavelengthCm / MinWavelengthCm) : 0.0f;
+		if ((GullyFade > 0.0f || CragFade > 0.0f) && Base0 > 25.0f)
+		{
+			constexpr double E = 6000.0;   // a 60 m baseline: the gullies are 600 m wide
+			const float Bx = RangeBaseM(T, X + E, Y, Seed, MinWavelengthCm) - Base0;
+			const float By = RangeBaseM(T, X, Y + E, Seed, MinWavelengthCm) - Base0;
+			const float Slope = FMath::Sqrt(Bx * Bx + By * By) / (float)E * 100.0f * T.VerticalScale;   // rise over run as the player sees it (VerticalScale included)
+			const float Steep = SmoothStep(T.GullySlopeLow, T.GullySlopeHigh, Slope);
+			if (GullyFade > 0.0f && Steep > 0.0f)
+			{
+				const float R = ErodedFbm(X, Y, (uint32)FMOWorldGen::HashSeed(Seed, SaltGully), T.GullyOctaves, 0.5f, T.GullyWavelengthCm, MinWavelengthCm, true, 0.05f);
+				Base -= T.GullyAmplitudeM * GullyFade * Steep * (1.0f - FMath::Clamp(R * 1.3f, 0.0f, 1.0f));
+			}
+			const float Ledge = SmoothStep(T.CragSlopeLow, T.CragSlopeHigh, Slope);
+			if (CragFade > 0.0f && Ledge > 0.0f)
+			{
+				// Sharp-edged blobs (a narrow smoothstep of a noise) on the steepest ground: rock outcrops and ledges, a rim a few metres wide, never a region-wide wall.
+				const float N = 0.5f + 0.5f * Fbm(X, Y, (uint32)FMOWorldGen::HashSeed(Seed, SaltCrag), 2, 0.5f, T.CragWavelengthCm, MinWavelengthCm);
+				Base += T.CragAmplitudeM * CragFade * Ledge * SmoothStep(T.CragEdge - 0.03f, T.CragEdge + 0.03f, N);
+			}
+		}
+		return Base;
+	}
+}
 
 int32 FMOWorldGen::HashSeed(int32 Seed, uint32 Salt)
 {
@@ -417,7 +525,39 @@ FMOClimateSample FMOWorldGen::SampleClimate(const FMOWorldGenParams& Params, dou
 	return ClimateWarped(Params, Xw, Yw, Seed);
 }
 
-float FMOWorldGen::SampleHeightCm(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, float StepCm, FMOClimateSample* OutClimate)
+FMOBiomeRelief FMOWorldGen::BiomeReliefAt(const FMOWorldGenParams& Params, float Moisture, float TemperatureSeaLevel)
+{
+	FMOBiomeRelief Out;
+	if (!Params.bBiomeRelief)
+	{
+		return Out;   // exactly 1 and 1: the v1-v4 height math is untouched
+	}
+	// Soft first-match-wins over the climate biomes (Params.Biomes is sorted highest Priority first): each claims what is left of the unit weight in proportion to how well the climate
+	// fits its band; whatever nobody claims is neutral (1). Continuous in (Moisture, Temperature), so relief changes over the blend width, never at a line.
+	const float Blend = Params.Tuning.ReliefClimateBlend;
+	float Remaining = 1.0f, HillSum = 0.0f, MountainSum = 0.0f;
+	for (const FMOWorldGenBiome& B : Params.Biomes)
+	{
+		if (!B.IsClimateBiome())
+		{
+			continue;
+		}
+		const float Fit = SoftBand(Moisture, B.MoistureMin, B.MoistureMax, Blend) * SoftBand(TemperatureSeaLevel, B.TemperatureMin, B.TemperatureMax, Blend);
+		HillSum += Remaining * Fit * B.ReliefScale;
+		MountainSum += Remaining * Fit * B.MountainScale;
+		Remaining *= 1.0f - Fit;
+		if (Remaining <= 1.0e-4f)
+		{
+			Remaining = 0.0f;
+			break;
+		}
+	}
+	Out.Hill = HillSum + Remaining;
+	Out.Mountain = MountainSum + Remaining;
+	return Out;
+}
+
+float FMOWorldGen::SampleBaseHeightCm(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, float StepCm, FMOClimateSample* OutClimate)
 {
 	const FMOWorldGenTuning& T = Params.Tuning;
 
@@ -429,28 +569,69 @@ float FMOWorldGen::SampleHeightCm(const FMOWorldGenParams& Params, double X, dou
 		*OutClimate = Clim;
 	}
 
-	const float MinWavelengthCm = 2.0f * FMath::Max(StepCm, 1.0f);
+	const float MinWavelengthCm = CVarMODebugNoLodCull.GetValueOnAnyThread() != 0 ? 2.0f : 2.0f * FMath::Max(StepCm, 1.0f);
 
-	const float BaseM = EvalSpline(T.ContinentSplineM, Clim.Continentalness);
+	float BaseM = EvalSpline(T.ContinentSplineM, Clim.Continentalness);
 	const float Inland = SmoothStep(-0.15f, 0.4f, Clim.Continentalness);
 	const float Relief = FMath::Max(EvalSpline(T.ErosionReliefSpline, Clim.Erosion), 0.0f);
 	const float PvFactor = FMath::Clamp(0.5f + 0.5f * Clim.PeaksValleys, 0.0f, 1.0f);
+	// The climate's say in how hilly / how mountainous this ground is, faded to nothing at the world border (so the sea there is open water, not a field of islets). Exactly 1 away from both effects.
+	const FMOBiomeRelief BiomeRelief = BiomeReliefAt(Params, Clim.MoistureRegion, Clim.TemperatureRegion);
+	const float HillScale = BiomeRelief.Hill * Clim.EdgeLand, MountainScale = BiomeRelief.Mountain * Clim.EdgeLand;
+	if (BiomeRelief.Hill < 1.0f)
+	{
+		// A calm biome flattens the continent too: the land above the lowland cap is pulled toward it (never when the scale is exactly 1: the v1-v4 bits stay).
+		const float FlatM = FMath::Min(BaseM, T.LowlandCapM);
+		BaseM = FlatM + BiomeRelief.Hill * (BaseM - FlatM);
+	}
 
 	// Mountains are a REGIONAL feature: where the land is inland, unworn (low erosion) and the peaks-and-valleys field agrees, a smoothstep turns
 	// the ranges fully on (full amplitude + a raised base); elsewhere there are none at all. (A plain product of the fields averaged ~7% of the
 	// amplitude everywhere -- hills, never mountains.)
 	float MountainM = 0.0f;
-	const float Mountainous = SmoothStep(0.2f, 0.75f, Inland * Relief * (0.6f + 0.4f * PvFactor));
-	if (T.MountainAmplitudeM > 0.0f && Mountainous > 0.0f)
+	if (T.bRangeMountains)
 	{
-		const float Ridge = ErodedFbm(Xw, Yw, (uint32)HashSeed(Seed, SaltMountain), 6, 0.5f, T.MountainWavelengthCm, MinWavelengthCm, true);
-		MountainM = T.MountainAmplitudeM * Mountainous * Ridge;
+		// v6: ranges stand where a broad regional field says so (wide soft ramps, never a wall), only inland, scaled by the biome's REGIONAL mountain scale.
+		const float RegionField = FMath::Clamp(Fbm(Xw, Yw, (uint32)HashSeed(Seed, SaltMountainRegion), 2, 0.5f, T.MountainRegionWavelengthCm) * T.MountainRegionGain, -1.0f, 1.0f);
+		const float RangeMask = SmoothStep(T.MountainRegionLow, T.MountainRegionHigh, RegionField) * Inland;
+		if (RangeMask > 0.0f && MountainScale > 0.0f)
+		{
+			MountainM = RangeMask * MountainScale * RangeShapeM(T, Xw, Yw, Seed, MinWavelengthCm);
+		}
+	}
+	else
+	{
+		const float Mountainous = SmoothStep(0.2f, 0.75f, Inland * Relief * (0.6f + 0.4f * PvFactor));
+		if (T.MountainAmplitudeM > 0.0f && Mountainous > 0.0f)
+		{
+			const float Ridge = ErodedFbm(Xw, Yw, (uint32)HashSeed(Seed, SaltMountain), 6, T.MountainGain, T.MountainWavelengthCm, MinWavelengthCm, true);
+			MountainM = T.MountainAmplitudeM * Mountainous * Ridge * MountainScale;
+		}
+	}
+
+	// Coastal ranges: a band that starts at the shore (continentalness ~ -0.55, where the spline crosses sea level) and fades out as the continental mountains take over, a slow
+	// presence field that decides which stretches of coast have ranges at all, and the same ridged, slope-damped fBm the mountains use. All smooth: no cliff anywhere.
+	float CoastalM = 0.0f;
+	if (T.CoastalRangeAmplitudeM > 0.0f)
+	{
+		const float Band = SmoothStep(-0.52f, -0.28f, Clim.Continentalness) * (1.0f - SmoothStep(-0.05f, 0.3f, Clim.Continentalness));
+		if (Band > 0.0f)
+		{
+			const float Presence = SmoothStep(-0.3f, 0.6f, Fbm(Xw, Yw, (uint32)HashSeed(Seed, SaltCoastPresence), 2, 0.5f, T.CoastalRangePresenceWavelengthCm));
+			if (Presence > 0.0f)
+			{
+				const float Ridge = ErodedFbm(Xw, Yw, (uint32)HashSeed(Seed, SaltCoastRange), 6, 0.5f, T.CoastalRangeWavelengthCm, MinWavelengthCm, true);
+				CoastalM = T.CoastalRangeAmplitudeM * Band * Presence * Ridge * MountainScale;
+			}
+		}
 	}
 
 	float HillM = 0.0f;
 	if (T.HillAmplitudeM > 0.0f)
 	{
-		HillM = T.HillAmplitudeM * (0.35f + 0.65f * FMath::Min(Relief, 1.0f))
+		// Over open sea the hill noise fades out (HillSeaFadeLow/High, see the tuning): exactly 1 when the fade is off, so the v1-v4 bits stay.
+		const float HillSeaFade = T.HillSeaFadeHigh > T.HillSeaFadeLow ? SmoothStep(T.HillSeaFadeLow, T.HillSeaFadeHigh, Clim.Continentalness) : 1.0f;
+		HillM = T.HillAmplitudeM * (0.35f + 0.65f * FMath::Min(Relief, 1.0f)) * HillScale * HillSeaFade
 			* ErodedFbm(Xw, Yw, (uint32)HashSeed(Seed, SaltHills), 4, 0.5f, T.HillWavelengthCm, MinWavelengthCm, false);
 	}
 
@@ -461,8 +642,13 @@ float FMOWorldGen::SampleHeightCm(const FMOWorldGenParams& Params, double X, dou
 		DetailM = FMath::Clamp(DetailM, -T.DetailAmplitudeM, T.DetailAmplitudeM);
 	}
 
-	const float HeightCm = T.SeaLevelCm + 100.0f * (BaseM + MountainM + HillM + DetailM);
+	const float HeightCm = T.SeaLevelCm + 100.0f * T.VerticalScale * (BaseM + MountainM + CoastalM + HillM + DetailM);
 	return FMath::Clamp(HeightCm, Params.MinHeightCm, Params.MaxHeightCm);
+}
+
+float FMOWorldGen::SampleHeightCm(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, float StepCm, FMOClimateSample* OutClimate)
+{
+	return ApplyWater(Params, X, Y, Seed, SampleBaseHeightCm(Params, X, Y, Seed, StepCm, OutClimate));
 }
 
 float FMOWorldGen::TemperatureAtHeight(const FMOWorldGenParams& Params, float TemperatureSeaLevel, float HeightCm)

@@ -205,7 +205,7 @@ public:
 	 * All ResourcesToSpawn entries reference rows from this table.
 	 * Set once here to avoid redundant DataTable references per entry.
 	 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Resources", meta=(RowType="/Script/MOFramework.MOResourceNodeDefinitionRow"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Resources", meta=(RowType="/Script/MOFrameworkCore.MOResourceNodeDefinitionRow"))
 	TObjectPtr<UDataTable> ResourceNodeDataTable;
 
 	/**

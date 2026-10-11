@@ -105,6 +105,14 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category="MO|MainMenu")
 	FString GameplayLevelPath = TEXT("/Game/VoxelExamples/PCGScattering/MOPCGScattering");
 
+	/**
+	 * Seconds the main menu takes to fade in from black: a camera fade over the menu level AND the menu widget's own opacity. It hides the menu level (the little flyover world) streaming in:
+	 * without it the first frames of the menu showed terrain and trees popping into place. 0 = no fade. Runs once, the first time the menu is shown after this controller starts (after the
+	 * intro video the first time, straight away on every later visit to the menu).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|MainMenu", meta=(ClampMin="0"))
+	float MenuFadeInSeconds = 2.0f;
+
 	// ============================================================================
 	// MAIN MENU ACTIONS
 	// ============================================================================
@@ -280,6 +288,13 @@ private:
 
 	/** Timer handle for video fallback timeout. */
 	FTimerHandle VideoFallbackTimerHandle;
+
+	/** The menu's fade-in from black (see MenuFadeInSeconds): started by ShowMainMenu, driven by a short repeating timer. */
+	void StartMenuFadeIn();
+	void ApplyMenuFadeOpacity();
+	bool bMenuFadeStarted = false;
+	double MenuFadeStartSeconds = 0.0;
+	FTimerHandle MenuFadeTimerHandle;
 
 	/** Timer handle for delayed level load (lets loading screen render first). */
 	FTimerHandle DelayedLevelLoadTimerHandle;

@@ -35,6 +35,20 @@
 class UStaticMesh;
 
 /**
+ * How a scattered species treats the pawn. Auto follows the resource type (solid for trees, rocks, ore and generic nodes; walk-through for bushes and herbs).
+ * Passable is for things that are "trees" in the resource table but ground-level plants in the world: every Black Locust variant is 0.5 - 1.5 m tall, yet its resource node is a Tree, so
+ * by resource type it blocked the pawn like an oak (you walked into a knee-high bush and stopped). It is the override for that mismatch; interaction traces still reach the species.
+ * Solid forces BlockAll (a decorative log or stump with no resource node).
+ */
+UENUM(BlueprintType)
+enum class EMOSpeciesCollision : uint8
+{
+	Auto		UMETA(DisplayName = "Auto (from resource type)"),
+	Passable	UMETA(DisplayName = "Walk-through"),
+	Solid		UMETA(DisplayName = "Solid")
+};
+
+/**
  * One scatterable species inside a biome's palette (a tree, bush, rock...).
  */
 USTRUCT(BlueprintType)
@@ -111,6 +125,10 @@ struct MOFRAMEWORKCORE_API FMOBiomeSpeciesEntry
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Biome|Species")
 	bool bAutoSweepOnTerraform = false;
 
+	/** Does this species stop the pawn? Auto = by resource type (see EMOSpeciesCollision). Interaction traces still reach a walk-through species. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Biome|Species")
+	EMOSpeciesCollision Collision = EMOSpeciesCollision::Auto;
+
 	/** Random uniform scale range applied per instance. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Biome|Species", meta=(ClampMin="0.01"))
 	float MinScale = 0.85f;
@@ -178,11 +196,34 @@ struct MOFRAMEWORKCORE_API FMOBiomeDefinitionRow : public FTableRowBase
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Biome|Bands", meta=(ClampMin="0.0"))
 	float EdgeBlendWidth = 5000.0f;
 
+	/**
+	 * How rugged the ground is where this biome's CLIMATE applies: multiplies the HILLS of the terrain generator (1 = unchanged, 0.3 = prairie that stays
+	 * gently rolling, 1.2 = hilly). Only biomes without a height band or a minimum slope shape the relief (see FMOWorldGenTuning::ReliefClimateBlend); for the others it is ignored.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Biome|Terrain", meta=(ClampMin="0.0"))
+	float ReliefScale = 1.0f;
+
+	/** The same for MOUNTAIN RANGES (and the ranges that rise from the coast): 0.03 keeps a prairie free of mountains, 1 = unchanged, 1.3 = more rugged. Climate-only biomes only. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Biome|Terrain", meta=(ClampMin="0.0"))
+	float MountainScale = 1.0f;
+
 	// --- What grows here ---
 
 	/** Scatterable species palette. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Biome|Species")
 	TArray<FMOBiomeSpeciesEntry> Species;
+
+	/**
+	 * Species that grow at the WATER'S EDGE in this biome: reeds, rushes, sedge, damp-ground ferns. Planted ADDITIVELY to Species on dry ground within WaterEdgeBandCm above the local water surface and
+	 * within ~25 m of the water -- the sea, rivers, ponds and upland lakes alike (FMOPCGWaterMask::ShoreFactor). Their density falls linearly from the waterline (full DensityPerHectare) to the edge of the band (0).
+	 * Empty = nothing special grows at the water in this biome. The input sampler's emission rate (MOPCGBiomeSpawnerSettings::InputPointsPerHectare) caps the density.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Biome|Species")
+	TArray<FMOBiomeSpeciesEntry> WaterEdgeSpecies;
+
+	/** Height above the local water surface (cm) over which the water-edge species grow. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Biome|Species", meta=(ClampMin="0.0"))
+	float WaterEdgeBandCm = 250.0f;
 
 	/** Band test shared by the spawner and the mask query — keep in ONE place. */
 	bool Contains(float Height, float SlopeDeg, float Moisture, float Temperature) const

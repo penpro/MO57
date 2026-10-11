@@ -35,6 +35,7 @@
 #include "MOSurvivorController.h"
 #include "AIController.h"
 #include "MOUIManagerComponent.h"
+#include "MOPlayerController.h"
 #include "MOModeIndicatorWidget.h"
 #include "MOItemDatabaseSettings.h"
 #include "MOItemDefinitionRow.h"
@@ -1541,25 +1542,65 @@ bool AMOCharacter::HandleRecruitmentInteraction(AController* InteractorControlle
 		return false;
 	}
 
-	// Attempt recruitment interaction
-	const bool bResult = RecruitmentComponent->BeginInteraction(InteractingPawn);
+	// Attempt recruitment interaction and TELL the player what came of it: every outcome, refusals included, reaches their screen (a silent refusal looked like a broken interaction).
+	const FMORecruitmentResult Result = RecruitmentComponent->BeginInteractionDetailed(InteractingPawn);
 
-	if (bResult)
+	FText Name = NSLOCTEXT("MORecruitment", "TheSurvivor", "The survivor");
+	if (const UMOIdentityComponent* Identity = FindComponentByClass<UMOIdentityComponent>())
 	{
-		if (RecruitmentComponent->IsPossessable())
+		if (!Identity->DisplayName.IsEmpty())
 		{
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOCharacter] %s has been recruited!"), *GetName());
-			// TODO: Show UI notification that survivor has been recruited
-		}
-		else if (RecruitmentComponent->HasActiveQuest())
-		{
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOCharacter] %s has a quest: %s"),
-				*GetName(), *RecruitmentComponent->GetQuestProgressText().ToString());
-			// TODO: Show UI with quest requirements
+			Name = Identity->DisplayName;
 		}
 	}
 
-	return bResult;
+	FText Message;
+	EMONotificationType Type = EMONotificationType::Info;
+	float Duration = 5.0f;
+	switch (Result.Outcome)
+	{
+	case EMORecruitmentOutcome::Recruited:
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOCharacter] %s has been recruited!"), *GetName());
+		Message = FText::Format(NSLOCTEXT("MORecruitment", "Recruited", "{0} joins you."), Name);
+		Type = EMONotificationType::Success;
+		break;
+	case EMORecruitmentOutcome::QuestStarted:
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOCharacter] %s has a quest: %s"), *GetName(), *RecruitmentComponent->GetQuestProgressText().ToString());
+		const FText& Dialogue = RecruitmentComponent->ActiveQuest.QuestDialogue;
+		Message = Dialogue.IsEmpty()
+			? FText::Format(NSLOCTEXT("MORecruitment", "QuestStarted", "{0} needs help before joining you: {1}"), Name, RecruitmentComponent->GetQuestProgressText())
+			: FText::Format(NSLOCTEXT("MORecruitment", "QuestStartedDialogue", "{0}: \"{1}\""), Name, Dialogue);
+		Duration = 8.0f;
+		break;
+	}
+	case EMORecruitmentOutcome::QuestPending:
+		Message = FText::Format(NSLOCTEXT("MORecruitment", "QuestPending", "{0} is still waiting for you: {1}"), Name, RecruitmentComponent->GetQuestProgressText());
+		Type = EMONotificationType::Warning;
+		break;
+	case EMORecruitmentOutcome::DeclinedStanding:
+		Message = FText::Format(NSLOCTEXT("MORecruitment", "DeclinedStanding",
+			"{0} does not know your settlement well enough to join yet (trust {1}% of the {2}% needed). Spend about {3} more hours of game time near them."),
+			Name, FText::AsNumber(FMath::RoundToInt(Result.Standing * 100.0f)), FText::AsNumber(FMath::RoundToInt(Result.StandingNeeded * 100.0f)),
+			FText::AsNumber(FMath::Max(1, FMath::RoundToInt(Result.HoursToPass))));
+		Type = EMONotificationType::Warning;
+		Duration = 8.0f;
+		break;
+	case EMORecruitmentOutcome::Unavailable:
+		Message = FText::Format(NSLOCTEXT("MORecruitment", "Unavailable", "{0} is dead."), Name);
+		break;
+	default:
+		break;   // an animal, or someone already with you: nothing to say
+	}
+	if (!Message.IsEmpty())
+	{
+		if (AMOPlayerController* PlayerController = Cast<AMOPlayerController>(InteractorController))
+		{
+			PlayerController->ClientShowNotification(Message, Duration, Type);
+		}
+	}
+
+	return Result.Succeeded();
 }
 
 void AMOCharacter::UpdateHeldItemMesh(EMOEquipmentSlot EquipSlot, const FMOEquippedItem& EquippedItem)

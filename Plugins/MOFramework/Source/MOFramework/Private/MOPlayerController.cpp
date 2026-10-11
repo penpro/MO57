@@ -18,6 +18,9 @@
 #include "MOKeyBindingManager.h"
 #include "MOGameUIManagerSubsystem.h"
 #include "MOTextInputDialog.h"
+#include "MOQuickPickDialog.h"
+#include "MOWeatherIntegrationSubsystem.h"
+#include "MOGameClockSubsystem.h"
 #include "Misc/OutputDevice.h"
 #include "Misc/ScopeLock.h"
 #include "EnhancedInputComponent.h"
@@ -531,6 +534,14 @@ void AMOPlayerController::ClientReceivePossessionList_Implementation(const TArra
 	if (PossessionComponent)
 	{
 		PossessionComponent->NotifyPossessionListReceived(Entries);
+	}
+}
+
+void AMOPlayerController::ClientShowNotification_Implementation(const FText& Message, float Duration, EMONotificationType Type)
+{
+	if (NotificationComponent)
+	{
+		NotificationComponent->ShowNotification(Message, Duration, Type);
 	}
 }
 
@@ -1404,6 +1415,107 @@ void AMOPlayerController::RunDevConsoleCommand(const FString& RawCommandLine)
 			? FText::Format(NSLOCTEXT("MOConsole", "Ran", "> {0}"), FText::FromString(Command))
 			: FText::Format(NSLOCTEXT("MOConsole", "RanResult", "> {0}\n{1}"), FText::FromString(Command), FText::FromString(Result));
 		NotificationComponent->ShowInfoNotification(Shown, 6.0f);
+	}
+#endif
+}
+
+// ============================================================================
+// DEV PICKERS (`weather`, `time`)
+// ============================================================================
+
+void AMOPlayerController::OpenDevQuickPick(const FText& Title, const FText& Message, const TArray<FMOQuickPickOption>& Options, int32 Columns, TFunction<void(FName)> OnChosen)
+{
+#if !UE_BUILD_SHIPPING
+	if (DevQuickPickDialog.IsValid())
+	{
+		return; // already open
+	}
+	UClass* DialogClass = DevQuickPickDialogClass.LoadSynchronous();
+	if (!DialogClass)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOConsole] Cannot open the picker: %s did not load (build it: python Tools/ue.py ui build Content/Python/ui_specs/quick_pick.py)"), *DevQuickPickDialogClass.ToString());
+		return;
+	}
+	UMOQuickPickDialog* Dialog = Cast<UMOQuickPickDialog>(UMOGameUIManagerSubsystem::PushModalWidget(this, DialogClass));
+	if (!Dialog)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOConsole] Cannot open the picker: the modal push returned nothing"));
+		return;
+	}
+	Dialog->Configure(Title, Message, Options, Columns);
+	Dialog->OnChosen.AddWeakLambda(this, [this, OnChosen = MoveTemp(OnChosen)](FName Id) { DevQuickPickDialog.Reset(); OnChosen(Id); });
+	Dialog->OnCancelled.AddWeakLambda(this, [this]() { DevQuickPickDialog.Reset(); });
+	DevQuickPickDialog = Dialog;
+#endif
+}
+
+void AMOPlayerController::OpenDevWeatherPicker(const FString& PresetName)
+{
+#if !UE_BUILD_SHIPPING
+	if (!PresetName.IsEmpty())
+	{
+		ServerDevSetWeather(FName(*PresetName));
+		return;
+	}
+	TArray<FMOQuickPickOption> Options;
+	for (const FMOWeatherPresetChoice& Choice : UMOWeatherIntegrationSubsystem::GetPresetChoices())
+	{
+		if (Choice.bBasic)
+		{
+			Options.Add({ Choice.Id, Choice.Label });
+		}
+	}
+	OpenDevQuickPick(NSLOCTEXT("MOConsole", "WeatherTitle", "Weather"), NSLOCTEXT("MOConsole", "WeatherMessage", "Sets the server's weather."), Options, /*Columns=*/3,
+		[this](FName Id) { ServerDevSetWeather(Id); });
+#endif
+}
+
+void AMOPlayerController::OpenDevTimePicker(int32 Hour)
+{
+#if !UE_BUILD_SHIPPING
+	if (Hour >= 0)
+	{
+		ServerDevAdvanceToTime(FMath::Min(Hour, 23), 0);
+		return;
+	}
+	const TArray<FMOQuickPickOption> Options = {
+		{ FName(TEXT("8")), NSLOCTEXT("MOConsole", "Time8am", "8 AM") },
+		{ FName(TEXT("14")), NSLOCTEXT("MOConsole", "Time2pm", "2 PM") },
+		{ FName(TEXT("20")), NSLOCTEXT("MOConsole", "Time8pm", "8 PM") },
+		{ FName(TEXT("2")), NSLOCTEXT("MOConsole", "Time2am", "2 AM") } };
+	OpenDevQuickPick(NSLOCTEXT("MOConsole", "TimeTitle", "Time of day"), NSLOCTEXT("MOConsole", "TimeMessage", "Moves the server's clock forward to the next time."), Options, /*Columns=*/2,
+		[this](FName Id) { ServerDevAdvanceToTime(FCString::Atoi(*Id.ToString()), 0); });
+#endif
+}
+
+void AMOPlayerController::ServerDevSetWeather_Implementation(FName PresetName)
+{
+#if !UE_BUILD_SHIPPING
+	UMOWeatherIntegrationSubsystem* Weather = GetWorld() ? GetWorld()->GetSubsystem<UMOWeatherIntegrationSubsystem>() : nullptr;
+	const bool bOk = Weather && Weather->SetWeatherPresetByName(PresetName.ToString());
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOConsole] weather -> %s: %s"), *PresetName.ToString(), bOk ? TEXT("applied") : TEXT("FAILED (unknown preset or no weather provider)"));
+	if (NotificationComponent)
+	{
+		NotificationComponent->ShowInfoNotification(FText::Format(NSLOCTEXT("MOConsole", "WeatherSet", "Weather: {0}{1}"), FText::FromName(PresetName),
+			bOk ? FText::GetEmpty() : NSLOCTEXT("MOConsole", "WeatherFailed", " (failed: see the log)")), 4.0f);
+	}
+#endif
+}
+
+void AMOPlayerController::ServerDevAdvanceToTime_Implementation(int32 Hour, int32 Minute)
+{
+#if !UE_BUILD_SHIPPING
+	UMOGameClockSubsystem* Clock = UMOGameClockSubsystem::Get(GetWorld());
+	if (!Clock)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOConsole] time -> %02d:%02d: FAILED (no game clock)"), Hour, Minute);
+		return;
+	}
+	const FDateTime Now = Clock->AdvanceToTimeOfDay(Hour, Minute);
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOConsole] time -> %02d:%02d: clock now %s"), Hour, Minute, *Now.ToString());
+	if (NotificationComponent)
+	{
+		NotificationComponent->ShowInfoNotification(FText::Format(NSLOCTEXT("MOConsole", "TimeSet", "Time: {0}"), FText::FromString(Now.ToString(TEXT("%Y-%m-%d %H:%M")))), 4.0f);
 	}
 #endif
 }

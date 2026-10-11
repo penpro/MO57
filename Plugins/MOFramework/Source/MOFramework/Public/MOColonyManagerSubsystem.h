@@ -175,6 +175,31 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Colony|Relationships")
 	bool CanRecruitByStanding(APawn* Candidate) const;
 
+	/** The standing gate for a candidate WITH the numbers behind it, so a refusal can tell the player why (and how long it would take). */
+	struct FStandingGate
+	{
+		bool bGateActive = false;     // false: the colony is too small to judge a stranger (see RecruitGateMinRoster)
+		bool bPasses = true;
+		float Standing = 0.0f;        // the candidate's mean standing toward the roster, 0..1
+		float Needed = 0.0f;
+		float HoursToPass = 0.0f;     // game hours of shared time still needed at the current standing (0 when it passes)
+	};
+	FStandingGate EvaluateRecruitGate(APawn* Candidate) const;
+
+	/** Pure: does the standing gate judge strangers in a colony with this many settlers (besides the candidate)? Only from RecruitGateMinRoster up. */
+	static bool GateApplies(int32 OthersOnRoster, int32 MinRoster) { return OthersOnRoster >= MinRoster; }
+
+	/** Pure: game hours of shared time (by the same bond function the standing grows with) until a standing of `Standing` reaches `Needed`; 0 if it already has. */
+	static float HoursToReachStanding(float Standing, float Needed);
+
+	/**
+	 * The gate only applies once the colony has at least this many settlers besides the candidate. A founder alone (or a founder and one friend) is not a settlement that
+	 * strangers have to be vouched into: the first survivors you meet simply team up with you. (The gate used to apply to the very FIRST recruit -- the founder counted as "the colony" --
+	 * and with standing growing 2% per shared game hour on a real-time clock that took ~8 real hours standing next to her, with nothing on screen saying so.)
+	 */
+	UPROPERTY(EditAnywhere, Category="MO|Colony|Relationships", meta=(ClampMin="1"))
+	int32 RecruitGateMinRoster = 3;
+
 	/** Marriage — V2.3 DATA MODEL only (courtship sim is V2.5). Sets Spouse
 	 *  both ways with the family strength floor. */
 	UFUNCTION(BlueprintCallable, Category="MO|Colony|Relationships")

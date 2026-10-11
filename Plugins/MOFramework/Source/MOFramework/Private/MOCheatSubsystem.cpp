@@ -21,6 +21,7 @@
 #include "MOItemDatabaseSettings.h"
 #include "MOItemDefinitionRow.h"
 #include "MOWeatherIntegrationSubsystem.h"
+#include "MOWeatherDirector.h"
 #include "MOWeatherTypes.h"
 #include "MOSpawnManagerSubsystem.h"
 #include "MOPersistenceSubsystem.h"
@@ -32,6 +33,14 @@
 #include "MOSkillDefinitionRow.h"
 #include "MOBiomeDatabaseSettings.h"
 #include "MOWorldGen.h"
+#include "Camera/CameraActor.h"
+#include "Engine/DirectionalLight.h"
+#include "HAL/PlatformMisc.h"
+#include "Misc/App.h"
+#include "Engine/StaticMesh.h"
+#include "Components/InstancedStaticMeshComponent.h"
+#include "Components/DirectionalLightComponent.h"
+#include "Camera/CameraComponent.h"
 #include "MOColonyManagerSubsystem.h"
 #include "MOCharacterHistoryComponent.h"
 #include "MOColonyOverviewWidget.h"
@@ -85,6 +94,13 @@
 #include "Engine/World.h"
 #include "Engine/DataTable.h"
 #include "GameFramework/PlayerController.h"
+#include "Camera/PlayerCameraManager.h"
+#include "Actors/OceanologyWaterParentActor.h"
+#include "Components/BoxComponent.h"
+#include "Components/PostProcessComponent.h"
+#include "MOOceanologyIntegration.h"
+#include "MOPCGWaterMask.h"
+#include "SceneView.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -1737,6 +1753,10 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 					float Z = 0.f;
 					int32 Skipped = 0;
 					FString Other;
+					if (FMOWorldGen::DistanceToSinkholeRimZone(*P, X, Y, TerrainSeed) <= 100.f)
+					{
+						continue;   // a sinkhole is a hole in the ground ON PURPOSE: the live surface there is the shaft floor, not the generator's height
+					}
 					++Total;
 					if (SampleVoxelSurfaceZ(World, (float)X, (float)Y, GenZ + 8000.f, GenZ - 8000.f, Z, Skipped, Other))
 					{
@@ -1750,6 +1770,783 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 			const FMOTerrainSample AtPawn = FMOWorldGen::SampleColumn(*P, C.X, C.Y, TerrainSeed, P->Tuning.VoxelSizeCm);
 			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDGEN Compare seed=%d pawn=(%.0f,%.0f,%.0f) generatorZ@pawn=%.0f hits=%d/%d meanDiff=%.1f maxDiff=%.1f biome@pawn=%s"),
 				TerrainSeed, C.X, C.Y, C.Z, AtPawn.HeightCm, Hits, Total, Hits ? SumDiff / Hits : -1.0, MaxDiff, *P->GetBiomeId(AtPawn.BiomeIndex).ToString());
+		}),
+		ECVF_Default));
+
+	// ---------- MO.Cam.LookAt cx cy cz tx ty tz [fov] / MO.Cam.Reset ----------
+	// A photo camera for LOOKING at the world from a chosen vantage (terrain, caves, water, lighting) without driving the third-person pawn: the view target
+	// becomes a camera actor placed at (cx,cy,cz) aimed at (tx,ty,tz). MO.Cam.Reset gives the view back to the pawn. The pawn keeps simulating (and gets hungry).
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Cam.LookAt"),
+		TEXT("Dev: view the world from a camera at <cx cy cz> aimed at <tx ty tz> (optional FOV, default 90). MO.Cam.Reset returns to the pawn. Usage: MO.Cam.LookAt cx cy cz tx ty tz [fov]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
+			if (!PC || Args.Num() < 6)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] CAM LookAt FAILED: usage MO.Cam.LookAt cx cy cz tx ty tz [fov]"));
+				return;
+			}
+			const FVector From(FCString::Atod(*Args[0]), FCString::Atod(*Args[1]), FCString::Atod(*Args[2]));
+			const FVector To(FCString::Atod(*Args[3]), FCString::Atod(*Args[4]), FCString::Atod(*Args[5]));
+			const float Fov = Args.Num() > 6 ? FMath::Clamp(FCString::Atof(*Args[6]), 20.f, 150.f) : 90.f;
+
+			static TWeakObjectPtr<ACameraActor> PhotoCamera;
+			if (!PhotoCamera.IsValid() || PhotoCamera->GetWorld() != World)
+			{
+				FActorSpawnParameters Params;
+				Params.ObjectFlags |= RF_Transient;
+				PhotoCamera = World->SpawnActor<ACameraActor>(From, FRotator::ZeroRotator, Params);
+			}
+			if (ACameraActor* Cam = PhotoCamera.Get())
+			{
+				Cam->SetActorLocationAndRotation(From, (To - From).Rotation());
+				Cam->GetCameraComponent()->FieldOfView = Fov;
+				PC->SetViewTarget(Cam);
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] CAM LookAt from (%.0f,%.0f,%.0f) to (%.0f,%.0f,%.0f) fov=%.0f"), From.X, From.Y, From.Z, To.X, To.Y, To.Z, Fov);
+			}
+		}),
+		ECVF_Default));
+
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Cam.Reset"),
+		TEXT("Dev: give the view back to the local pawn after MO.Cam.LookAt."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			if (APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr)
+			{
+				PC->SetViewTarget(PC->GetPawn());
+			}
+		}),
+		ECVF_Default));
+
+	// ---------- MO.Light.Test pitch yaw lux [shadows=1] / MO.Light.Off ----------
+	// A controllable directional light for lighting QA: the experiment "does terrain block a sun that is BELOW the world" needs a light at a chosen angle and
+	// intensity that the day/night sky does not overwrite. Pitch > 0 shines UP (the light is below the horizon). The pawn's own sky/UDS lights stay as they are:
+	// run it at night (MO.Clock.SetTime 0 0) so this is the only strong light.
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Light.Test"),
+		TEXT("Dev: spawn/update a test directional light. Usage: MO.Light.Test <pitch> <yaw> <lux> [shadows=1]  (pitch > 0 = light shines UP, i.e. comes from below the world)"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			if (!World || Args.Num() < 3)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] LIGHT Test FAILED: usage MO.Light.Test <pitch> <yaw> <lux> [shadows=1]"));
+				return;
+			}
+			static TWeakObjectPtr<ADirectionalLight> TestLight;
+			if (!TestLight.IsValid() || TestLight->GetWorld() != World)
+			{
+				FActorSpawnParameters Params;
+				Params.ObjectFlags |= RF_Transient;
+				TestLight = World->SpawnActor<ADirectionalLight>(FVector::ZeroVector, FRotator::ZeroRotator, Params);
+				if (TestLight.IsValid())
+				{
+					TestLight->SetMobility(EComponentMobility::Movable);
+				}
+			}
+			if (ADirectionalLight* Light = TestLight.Get())
+			{
+				const float Pitch = FCString::Atof(*Args[0]), Yaw = FCString::Atof(*Args[1]), Lux = FCString::Atof(*Args[2]);
+				const bool bShadows = Args.Num() > 3 ? FCString::Atoi(*Args[3]) != 0 : true;
+				Light->SetActorRotation(FRotator(Pitch, Yaw, 0.f));
+				if (UDirectionalLightComponent* Comp = Cast<UDirectionalLightComponent>(Light->GetLightComponent()))
+				{
+					Comp->SetIntensity(Lux);
+					Comp->SetCastShadows(bShadows);
+				}
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] LIGHT Test pitch=%.0f yaw=%.0f lux=%.1f shadows=%d"), Pitch, Yaw, Lux, bShadows ? 1 : 0);
+			}
+		}),
+		ECVF_Default));
+
+	// MO.Light.Cube x y z size: a plain test occluder (engine cube) for the lighting experiments -- does ANY shadow reach a surface from this light? Removed by MO.Light.Off.
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Light.Cube"),
+		TEXT("Dev: spawn a test occluder cube (transient) at <x y z> with edge length <size> cm. MO.Light.Off removes it. Usage: MO.Light.Cube x y z size"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			if (!World || Args.Num() < 4)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] LIGHT Cube FAILED: usage MO.Light.Cube x y z size"));
+				return;
+			}
+			UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
+			FActorSpawnParameters Params;
+			Params.ObjectFlags |= RF_Transient;
+			Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+			const FVector At(FCString::Atod(*Args[0]), FCString::Atod(*Args[1]), FCString::Atod(*Args[2]));
+			if (AStaticMeshActor* Actor = Cube ? World->SpawnActor<AStaticMeshActor>(At, FRotator::ZeroRotator, Params) : nullptr)
+			{
+				Actor->SetMobility(EComponentMobility::Movable);
+				Actor->GetStaticMeshComponent()->SetStaticMesh(Cube);
+				Actor->SetActorScale3D(FVector(FCString::Atof(*Args[3]) / 100.f));
+				Actor->GetStaticMeshComponent()->SetCastShadow(true);
+				Actor->Tags.Add(FName("MOLightTestCube"));
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] LIGHT Cube at (%.0f,%.0f,%.0f) size=%s"), At.X, At.Y, At.Z, *Args[3]);
+			}
+		}),
+		ECVF_Default));
+
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Light.Off"),
+		TEXT("Dev: remove the MO.Light.Test light."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			for (TActorIterator<ADirectionalLight> It(World); It; ++It)
+			{
+				if (It->HasAnyFlags(RF_Transient))
+				{
+					It->Destroy();
+				}
+			}
+			for (TActorIterator<AStaticMeshActor> It(World); It; ++It)
+			{
+				if (It->ActorHasTag(FName("MOLightTestCube")))
+				{
+					It->Destroy();
+				}
+			}
+		}),
+		ECVF_Default));
+
+	// ---------- MO.WorldGen.Checksum ----------
+	// The cross-machine / cross-build determinism check. Prints the generator's fixed fingerprints and whether they equal the pinned values. Run it in the editor, in a
+	// packaged build, on another PC: every line must say match=1 (co-op worlds are generated on each machine from the seed and must be bit-identical).
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.WorldGen.Checksum"),
+		TEXT("Dev: fingerprint the world generator (heights + caves) and compare with the pinned values. Every machine/build must print match=1. Usage: MO.WorldGen.Checksum"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			const FMOWorldGenProbe Probe = FMOWorldGen::RunProbe();
+			const uint32 BaseHeight = FMOWorldGen::RunProbe(false).Height;   // water off: the continents/hills/mountains math alone
+			const bool bHeightOk = Probe.Height == FMOWorldGen::PinnedProbeHeight;
+			const bool bCaveOk = Probe.Cave == FMOWorldGen::PinnedProbeCave;
+			const bool bBaseOk = BaseHeight == FMOWorldGen::PinnedProbeHeightNoWater;
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDGEN Checksum height=0x%08X base=0x%08X cave=0x%08X version=%u params=0x%08X match=%d (height %d, base %d, cave %d) cpu='%s' build=%s"),
+				Probe.Height, BaseHeight, Probe.Cave, Probe.GeneratorVersion, Probe.ParamsHash, (bHeightOk && bCaveOk && bBaseOk) ? 1 : 0, bHeightOk ? 1 : 0, bBaseOk ? 1 : 0, bCaveOk ? 1 : 0,
+				*FPlatformMisc::GetCPUBrand(), LexToString(FApp::GetBuildConfiguration()));
+		}),
+		ECVF_Default));
+
+	// ---------- MO.WorldGen.FindWater [radius] ----------
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.WorldGen.FindWater"),
+		TEXT("Dev: scan around the local pawn for river / lake / pond water (ground carved below sea level on land that was above it) and log the nearest spots. Usage: MO.WorldGen.FindWater [radius_cm=100000]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
+			const APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+			const UMOWorldSeedSubsystem* Seeds = UMOWorldSeedSubsystem::Get(World);
+			if (!Pawn || !Seeds || !Seeds->HasActiveSeed())
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDGEN FindWater FAILED: needs a local pawn and an active world seed"));
+				return;
+			}
+			const float Radius = Args.Num() > 0 ? FMath::Clamp(FCString::Atof(*Args[0]), 5000.f, 400000.f) : 100000.f;
+			const int32 TerrainSeed = Seeds->GetActiveTerrainSeed();
+			const FMOWorldGenParamsRef P = FMOWorldGenParamsProvider::Get();
+			const FVector C = Pawn->GetActorLocation();
+			const float Step = FMath::Max(300.f, Radius / 220.f);
+
+			struct FHit { float Dist; FVector2D Pos; float Depth; };
+			TArray<FHit> Hits;
+			const int32 N = FMath::FloorToInt(Radius / Step);
+			for (int32 Iy = -N; Iy <= N; ++Iy)
+			{
+				for (int32 Ix = -N; Ix <= N; ++Ix)
+				{
+					const double X = C.X + Ix * Step, Y = C.Y + Iy * Step;
+					const float Base = FMOWorldGen::SampleBaseHeightCm(*P, X, Y, TerrainSeed, P->Tuning.VoxelSizeCm);
+					if (Base <= P->Tuning.SeaLevelCm + 20.f)
+					{
+						continue;   // already sea / coast: only water that was CARVED into dry land counts
+					}
+					const float H = FMOWorldGen::SampleHeightCm(*P, X, Y, TerrainSeed, P->Tuning.VoxelSizeCm);
+					if (H < P->Tuning.SeaLevelCm - 60.f)
+					{
+						Hits.Add({ (float)FVector2D::Distance(FVector2D(X, Y), FVector2D(C.X, C.Y)), FVector2D(X, Y), P->Tuning.SeaLevelCm - H });
+					}
+				}
+			}
+			Hits.Sort([](const FHit& A, const FHit& B) { return A.Dist < B.Dist; });
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDGEN FindWater radius=%.0f step=%.0f carved-water samples=%d"), Radius, Step, Hits.Num());
+			int32 Listed = 0;
+			TArray<FVector2D> Taken;
+			for (const FHit& H : Hits)
+			{
+				bool bNear = false;
+				for (const FVector2D& T : Taken) { bNear |= FVector2D::Distance(T, H.Pos) < 4000.0; }
+				if (bNear) { continue; }
+				Taken.Add(H.Pos);
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDGEN Water #%d dist=%.0f x=%.0f y=%.0f depth=%.0f"), Listed, H.Dist, H.Pos.X, H.Pos.Y, H.Depth);
+				if (++Listed >= 6) { break; }
+			}
+		}),
+		ECVF_Default));
+
+	// ---------- MO.PCG.WaterAudit [radius_cm] ----------
+	// Is anything planted in water? Walks every instanced mesh within the radius of the local pawn (default 300 m) and asks the generator about each instance: is its ground under the sea plane (the sea, rivers,
+	// ponds and sea-level lakes are all terrain below SeaLevel), is it inside an upland lake's zone (1.0 = the shore, 1.05 = the bank's first metres), or does it stand on the lake bed. Logs the totals, the offenders by mesh,
+	// and the first few positions. The number a polish pass drives to zero: `WATERAUDIT inWater=0` for every biome.
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.PCG.WaterAudit"),
+		TEXT("Dev: count spawned instanced meshes (trees, grass, rocks...) that stand in water -- ground under the sea plane or inside an upland lake -- within a radius of the local pawn, by mesh. Usage: MO.PCG.WaterAudit [radius_cm=30000]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
+			const APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+			const UMOWorldSeedSubsystem* Seeds = UMOWorldSeedSubsystem::Get(World);
+			if (!Pawn || !Seeds || !Seeds->HasActiveSeed())
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WATERAUDIT FAILED: needs a local pawn and an active world seed"));
+				return;
+			}
+			const double Radius = Args.Num() > 0 ? FMath::Clamp((double)FCString::Atof(*Args[0]), 2000.0, 400000.0) : 30000.0;
+			const int32 TerrainSeed = Seeds->GetActiveTerrainSeed();
+			const FMOWorldGenParamsRef P = FMOWorldGenParamsProvider::Get();
+			const FVector C = Pawn->GetActorLocation();
+			struct FTally { int32 Instances = 0, UnderSea = 0, InLake = 0, OnLakeBed = 0; };
+			TMap<FString, FTally> Tally;
+			TArray<FString> Samples;
+			int32 Total = 0, Bad = 0, Bank = 0;
+			for (TActorIterator<AActor> ActorIt(World); ActorIt; ++ActorIt)
+			{
+				TArray<UInstancedStaticMeshComponent*> Comps;
+				ActorIt->GetComponents<UInstancedStaticMeshComponent>(Comps);
+				for (UInstancedStaticMeshComponent* Ism : Comps)
+				{
+					const UStaticMesh* Mesh = Ism->GetStaticMesh();
+					if (!Mesh || Ism->GetInstanceCount() == 0 || Ism->Bounds.GetBox().ComputeSquaredDistanceToPoint(C) > Radius * Radius)
+					{
+						continue;
+					}
+					for (int32 I = 0; I < Ism->GetInstanceCount(); ++I)
+					{
+						FTransform Xf;
+						if (!Ism->GetInstanceTransform(I, Xf, /*bWorldSpace=*/true))
+						{
+							continue;
+						}
+						const FVector L = Xf.GetLocation();
+						if (FVector2D::DistSquared(FVector2D(L.X, L.Y), FVector2D(C.X, C.Y)) > Radius * Radius)
+						{
+							continue;
+						}
+						++Total;
+						FTally& T = Tally.FindOrAdd(Mesh->GetName());
+						++T.Instances;
+						const float Ground = FMOWorldGen::SampleHeightCm(*P, L.X, L.Y, TerrainSeed, P->Tuning.VoxelSizeCm);
+						const bool bUnderSea = Ground < P->Tuning.SeaLevelCm + 15.0f;
+						const bool bInLake = FMOWorldGen::IsInUplandLakeZone(*P, L.X, L.Y, TerrainSeed, 1.0f);
+						const bool bBank = !bInLake && FMOWorldGen::IsInUplandLakeZone(*P, L.X, L.Y, TerrainSeed, 1.05f);
+						Bank += bBank ? 1 : 0;
+						if (bUnderSea || bInLake)
+						{
+							++Bad;
+							T.UnderSea += bUnderSea ? 1 : 0;
+							T.InLake += bInLake ? 1 : 0;
+							T.OnLakeBed += bBank ? 1 : 0;
+							if (Samples.Num() < 6)
+							{
+								Samples.Add(FString::Printf(TEXT("%s at (%.0f, %.0f, %.0f) ground=%.0f%s%s%s"), *Mesh->GetName(), L.X, L.Y, L.Z, Ground, bUnderSea ? TEXT(" UNDER-SEA") : TEXT(""), bInLake ? TEXT(" IN-LAKE") : TEXT(""), bBank ? TEXT(" LAKE-BANK") : TEXT("")));
+							}
+						}
+					}
+				}
+			}
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WATERAUDIT radius=%.0f centre=(%.0f, %.0f) instances=%d inWater=%d (%.3f%%) onLakeBank=%d (the first metres past an upland lake's shore: dry land, not an error)"), Radius, C.X, C.Y, Total, Bad, Total > 0 ? 100.0 * Bad / Total : 0.0, Bank);
+			TArray<TPair<FString, FTally>> Rows;
+			for (const TPair<FString, FTally>& Pair : Tally)
+			{
+				Rows.Add(Pair);
+			}
+			Rows.Sort([](const TPair<FString, FTally>& A, const TPair<FString, FTally>& B) { return (A.Value.UnderSea + A.Value.InLake) > (B.Value.UnderSea + B.Value.InLake); });
+			int32 Listed = 0;
+			for (const TPair<FString, FTally>& R : Rows)
+			{
+				if (R.Value.UnderSea + R.Value.InLake == 0 || ++Listed > 12)
+				{
+					break;
+				}
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WATERAUDIT   %s: %d of %d in water (under sea %d, in upland lake %d; lake bank %d)"), *R.Key, R.Value.UnderSea + R.Value.InLake, R.Value.Instances, R.Value.UnderSea, R.Value.InLake, R.Value.OnLakeBed);
+			}
+			for (const FString& Sample : Samples)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WATERAUDIT   e.g. %s"), *Sample);
+			}
+		}),
+		ECVF_Default));
+
+	// ---------- MO.Dev.ScatterCollision [filter] ----------
+	// Proof that scattered things really block the pawn: for every instanced scatter mesh whose name contains the filter, sweep a pawn-sized capsule (Pawn channel) into
+	// up to 8 of its instances and count the sweeps whose hits include THAT instance's component. NoCollision grass is the control: it must report blocked=0.
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Dev.ScatterCollision"),
+		TEXT("Dev: sweep a pawn capsule into spawned scatter instances (meshes whose name contains <filter>, default all) and log how many block it per mesh. Usage: MO.Dev.ScatterCollision [filter]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			if (!World)
+			{
+				return;
+			}
+			const FString Filter = Args.Num() > 0 ? Args[0] : FString();
+			struct FTally { int32 Swept = 0, Blocked = 0, Instances = 0; FName Profile; };
+			TMap<FString, FTally> Tally;
+			for (TActorIterator<AActor> ActorIt(World); ActorIt; ++ActorIt)
+			{
+				TArray<UInstancedStaticMeshComponent*> Comps;
+				ActorIt->GetComponents<UInstancedStaticMeshComponent>(Comps);
+				for (UInstancedStaticMeshComponent* Ism : Comps)
+				{
+					const UStaticMesh* Mesh = Ism->GetStaticMesh();
+					if (!Mesh || Ism->GetInstanceCount() == 0 || (!Filter.IsEmpty() && !Mesh->GetName().Contains(Filter)))
+					{
+						continue;
+					}
+					FTally& T = Tally.FindOrAdd(Mesh->GetName());
+					T.Instances += Ism->GetInstanceCount();
+					T.Profile = Ism->GetCollisionProfileName();
+					const int32 Stride = FMath::Max(1, Ism->GetInstanceCount() / 8);
+					for (int32 I = 0; I < Ism->GetInstanceCount() && T.Swept < 8; I += Stride)
+					{
+						FTransform Xf;
+						if (!Ism->GetInstanceTransform(I, Xf, /*bWorldSpace=*/true))
+						{
+							continue;
+						}
+						const FVector Centre = Xf.GetLocation() + FVector(0, 0, FMath::Max(Mesh->GetBounds().BoxExtent.Z * Xf.GetScale3D().Z * 0.5, 60.0));
+						TArray<FHitResult> Hits;
+						++T.Swept;
+						World->SweepMultiByChannel(Hits, Centre - FVector(500, 0, 0), Centre, FQuat::Identity, ECC_Pawn, FCollisionShape::MakeCapsule(34.f, 60.f));
+						for (const FHitResult& H : Hits)
+						{
+							if (H.bBlockingHit && H.GetComponent() == Ism)
+							{
+								++T.Blocked;
+								break;
+							}
+						}
+					}
+				}
+			}
+			for (const TPair<FString, FTally>& P : Tally)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] SCATTERCOLL mesh=%s instances=%d profile=%s swept=%d blocked=%d"), *P.Key, P.Value.Instances, *P.Value.Profile.ToString(), P.Value.Swept, P.Value.Blocked);
+			}
+		}),
+		ECVF_Default));
+
+	// ---------- MO.Water.Underwater ----------
+	// Why is (or is not) the camera "underwater"? Lists every Oceanology water actor in the world and, for each, the three things the underwater look depends on: (1) is the camera inside the actor's
+	// underwater volume (the box the bounded post process is attached to), (2) can the engine measure the camera against that volume (it needs a physics body: collision on -- an ocean box with no
+	// collision NEVER encompasses the camera in UE 5.8, found 2026-10-11, see MOOceanologyIntegration.h), (3) is the camera below the wave surface at its XY. The post process itself is waterline-gated by the
+	// plugin's material, so (1) and (2) true with (3) false is the normal "in the air near the sea" case. Also logs the post process component's state and the generator's sea level.
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Water.Underwater"),
+		TEXT("Dev: log, for every Oceanology water actor, whether the camera is inside its underwater volume, whether that volume can be measured (collision), and whether the camera is below its waves. Usage: MO.Water.Underwater"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
+			const APlayerCameraManager* Cam = PC ? PC->PlayerCameraManager : nullptr;
+			if (!Cam)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] UNDERWATER FAILED: needs a player camera"));
+				return;
+			}
+			const FVector View = Cam->GetCameraLocation();
+			const FRotator Rot = Cam->GetCameraRotation();
+			int32 Count = 0;
+			for (TActorIterator<AOceanologyWaterParent> It(World); It; ++It)
+			{
+				AOceanologyWaterParent* Water = *It;
+				++Count;
+				const UBoxComponent* Box = Water->UnderwaterBoxVolumeComponent;
+				UPostProcessComponent* PP = Water->UnderwaterPostProcessComponent;
+				bool bInside = false;
+				FString BoxText = TEXT("no volume");
+				if (Box)
+				{
+					const FBoxSphereBounds B = Box->Bounds;
+					bInside = B.GetBox().IsInsideOrOn(View);
+					BoxText = FString::Printf(TEXT("volume centre=(%.0f, %.0f, %.0f) extent=(%.0f, %.0f, %.0f) collision=%d"), B.Origin.X, B.Origin.Y, B.Origin.Z, B.BoxExtent.X, B.BoxExtent.Y, B.BoxExtent.Z, (int32)Box->GetCollisionEnabled());
+				}
+				// The engine's own answer, the one the renderer asks (UPostProcessComponent::EncompassesPoint): distance to the view; the volume applies when it is 0..BlendRadius.
+				float EngineDistance = -2.0f;
+				if (PP)
+				{
+					PP->EncompassesPoint(View, 0.0f, &EngineDistance);
+				}
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] UNDERWATER   engine volume test at the camera: distance=%.1f (applies when 0..%.0f) | box physicsState=%d physicsObjects=%d registered=%d"), EngineDistance, PP ? PP->BlendRadius : -1.0f,
+					Box && Box->IsPhysicsStateCreated() ? 1 : 0, Box ? Box->GetAllPhysicsObjects().Num() : -1, Box && Box->IsRegistered() ? 1 : 0);
+				const double SurfaceZ = Water->GetWaveHeightAtLocation(View).Z;
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] UNDERWATER %s (%s) at (%.0f, %.0f, %.0f) | camera=(%.0f, %.0f, %.0f) pitch=%.1f | %s | insideVolume=%d queryable=%d | waveSurfaceZ=%.1f cameraBelowSurface=%d | postProcess enabled=%d unbound=%d priority=%.0f blendables=%d"),
+					*Water->GetName(), *Water->GetClass()->GetName(), Water->GetActorLocation().X, Water->GetActorLocation().Y, Water->GetActorLocation().Z, View.X, View.Y, View.Z, Rot.Pitch, *BoxText,
+					bInside ? 1 : 0, MOOceanology::IsUnderwaterVolumeQueryable(*Water) ? 1 : 0, SurfaceZ, View.Z < SurfaceZ ? 1 : 0,
+					PP ? (PP->bEnabled ? 1 : 0) : -1, PP ? (PP->bUnbound ? 1 : 0) : -1, PP ? PP->Priority : -1.0f, PP ? PP->Settings.WeightedBlendables.Array.Num() : -1);
+			}
+			if (Count == 0)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] UNDERWATER no Oceanology water actor in this world"));
+			}
+			const FMOWorldGenParamsRef P = FMOWorldGenParamsProvider::Get();
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] UNDERWATER generator: sea level z=%.0f, ground at the camera XY = %.0f"), P->Tuning.SeaLevelCm,
+				FMOWorldGen::SampleHeightCm(*P, View.X, View.Y, UMOWorldSeedSubsystem::Get(World) ? UMOWorldSeedSubsystem::Get(World)->GetActiveTerrainSeed() : 0, 100.0f));
+		}),
+		ECVF_Default));
+
+	// ---------- MO.WorldGen.FindBiomeSpot <id> [radius_km=20] [rough] [go [rank]] ----------
+	// The biome tour's eyes (MO.WorldGen.FindBiome gives the nearest cell of a biome, usually on its edge): the best spots of a biome within radius_km of the pawn -- dry land, no water near, flat (unless `rough`), and the biome
+	// (slope-aware, like FindBiome) on all sides 35 m out, so it is the middle of one -- nearest first; `go` puts the pawn at the spot of that rank (default 0), 250 cm above the ground, facing a random direction.
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.WorldGen.FindBiomeSpot"),
+		TEXT("Dev: the nearest dry spots deep inside a biome (flat unless `rough`), for snapshots; add `go [rank]` to teleport there. Usage: MO.WorldGen.FindBiomeSpot <BiomeId> [radius_km=20] [rough] [go [rank]]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			const UMOWorldSeedSubsystem* Seeds = UMOWorldSeedSubsystem::Get(World);
+			APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
+			if (!Seeds || !Seeds->HasActiveSeed() || !PC || !PC->GetPawn())
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] FINDSPOT FAILED: needs an active world seed and a pawn"));
+				return;
+			}
+			const FString IdArg = Args.Num() > 0 ? Args[0] : TEXT("list");
+			const bool bRough = Args.ContainsByPredicate([](const FString& A) { return A.Equals(TEXT("rough"), ESearchCase::IgnoreCase); });
+			const double RadiusCm = (Args.Num() > 1 && Args[1].IsNumeric() ? FMath::Clamp((double)FCString::Atof(*Args[1]), 2.0, 60.0) : 20.0) * 100000.0;
+			const int32 GoIndex = Args.IndexOfByPredicate([](const FString& A) { return A.Equals(TEXT("go"), ESearchCase::IgnoreCase); });
+			const bool bGo = GoIndex != INDEX_NONE;
+			const int32 Rank = (bGo && Args.IsValidIndex(GoIndex + 1) && Args[GoIndex + 1].IsNumeric()) ? FMath::Max(0, FCString::Atoi(*Args[GoIndex + 1])) : 0;
+			const int32 TerrainSeed = Seeds->GetActiveTerrainSeed();
+			const FMOWorldGenParamsRef P = FMOWorldGenParamsProvider::Get();
+			const FVector C = PC->GetPawn()->GetActorLocation();
+			const FMOPCGWaterMask Water(P, TerrainSeed, 1.3f);
+			const int32 Wanted = P->FindBiomeIndex(FName(*IdArg));
+			if (Wanted == INDEX_NONE)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] FINDSPOT FAILED: no biome '%s' (MO.WorldGen.BiomeStats lists them by share)"), *IdArg);
+				return;
+			}
+			// The biome at (X, Y) the way the PCG spawner sees it: the real DT_Biomes bands with the generator's own slope.
+			auto BiomeOf = [&P, TerrainSeed](double X, double Y, float& OutHeight) -> int32
+			{
+				const FMOTerrainSample S = FMOWorldGen::SampleColumn(*P, X, Y, TerrainSeed, P->Tuning.VoxelSizeCm);
+				OutHeight = S.HeightCm;
+				const float Dx = FMOWorldGen::SampleHeightCm(*P, X + 200.0, Y, TerrainSeed, P->Tuning.VoxelSizeCm) - FMOWorldGen::SampleHeightCm(*P, X - 200.0, Y, TerrainSeed, P->Tuning.VoxelSizeCm);
+				const float Dy = FMOWorldGen::SampleHeightCm(*P, X, Y + 200.0, TerrainSeed, P->Tuning.VoxelSizeCm) - FMOWorldGen::SampleHeightCm(*P, X, Y - 200.0, TerrainSeed, P->Tuning.VoxelSizeCm);
+				const float SlopeDeg = FMath::RadiansToDegrees(FMath::Atan(FMath::Sqrt(Dx * Dx + Dy * Dy) / 400.0f));
+				return FMOWorldGen::ResolveBiome(*P, S.HeightCm, SlopeDeg, S.Moisture, S.Temperature);
+			};
+			const double Step = FMath::Max(400.0, RadiusCm * 2.0 / 160.0);
+			const int32 N = FMath::FloorToInt(RadiusCm / Step);
+			int32 Land = 0;
+			struct FSpot { double X, Y; float Ground; double Dist; };
+			TArray<FSpot> Spots;
+			const float Sea = P->Tuning.SeaLevelCm;
+			for (int32 Iy = -N; Iy <= N; ++Iy)
+			{
+				for (int32 Ix = -N; Ix <= N; ++Ix)
+				{
+					const double X = C.X + Ix * Step, Y = C.Y + Iy * Step;
+					float Ground = 0.0f;
+					if (BiomeOf(X, Y, Ground) != Wanted || Ground <= Sea + 80.0f || Water.IsInWater(X, Y, Ground))
+					{
+						continue;
+					}
+					++Land;
+					// Deep inside the biome, dry, and flat enough to stand on: the ring 35 m out is the same biome, above water, and within 3.5 m of this height.
+					bool bGood = true;
+					for (int32 K = 0; K < 8 && bGood; ++K)
+					{
+						const double Ax = X + 3500.0 * FMath::Cos(K * UE_PI / 4.0), Ay = Y + 3500.0 * FMath::Sin(K * UE_PI / 4.0);
+						float RingGround = 0.0f;
+						bGood = BiomeOf(Ax, Ay, RingGround) == Wanted && !Water.IsInWater(Ax, Ay, RingGround) && (bRough || FMath::Abs(RingGround - Ground) < 350.0f);
+					}
+					if (bGood)
+					{
+						Spots.Add({ X, Y, Ground, FVector2D::Distance(FVector2D(X, Y), FVector2D(C.X, C.Y)) });
+					}
+				}
+			}
+			Spots.Sort([](const FSpot& A, const FSpot& B) { return A.Dist < B.Dist; });
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] FINDSPOT %s: %d good spot(s) within %.0f km (%d dry grid cells of this biome)"), *IdArg, Spots.Num(), RadiusCm / 100000.0, Land);
+			for (int32 I = 0; I < FMath::Min(Spots.Num(), 5); ++I)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] FINDSPOT   #%d x=%.0f y=%.0f z=%.0f dist=%.1f km"), I, Spots[I].X, Spots[I].Y, Spots[I].Ground, Spots[I].Dist / 100000.0);
+			}
+			if (bGo && Spots.Num() > 0)
+			{
+				const FSpot& Spot = Spots[FMath::Min(Rank, Spots.Num() - 1)];
+				PC->GetPawn()->SetActorLocation(FVector(Spot.X, Spot.Y, Spot.Ground + 250.0), false, nullptr, ETeleportType::TeleportPhysics);
+				PC->SetControlRotation(FRotator(-6.0f, FMath::FRand() * 360.0f, 0.0f));
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] FINDSPOT went to x=%.0f y=%.0f z=%.0f"), Spot.X, Spot.Y, Spot.Ground + 250.0);
+			}
+		}),
+		ECVF_Default));
+
+	// ---------- MO.WorldGen.FindCoast [go] / MO.WorldGen.FindLake [radius] ----------
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.WorldGen.FindCoast"),
+		TEXT("Dev: log where a NEW GAME would spawn in this world (the sea shore the generator picks); `go` also teleports the local pawn there, facing the water. Usage: MO.WorldGen.FindCoast [go]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			const UMOWorldSeedSubsystem* Seeds = UMOWorldSeedSubsystem::Get(World);
+			if (!World || !Seeds || !Seeds->HasActiveSeed())
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDGEN FindCoast FAILED: needs an active world seed"));
+				return;
+			}
+			const FMOWorldGenParamsRef P = FMOWorldGenParamsProvider::Get();
+			FMOCoastalSpawn Coast;
+			const double T0 = FPlatformTime::Seconds();
+			if (!FMOWorldGen::FindCoastalSpawn(*P, Seeds->GetActiveTerrainSeed(), Coast))
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDGEN FindCoast none within range"));
+				return;
+			}
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDGEN FindCoast ms=%.0f x=%.0f y=%.0f z=%.0f yaw=%.0f distKm=%.1f openKm=%.1f reliefM=%.0f farKm=%.1f landKm2>=%.0f score=%.2f"),
+				(FPlatformTime::Seconds() - T0) * 1000.0, Coast.Location.X, Coast.Location.Y, Coast.GroundCm, Coast.YawDegrees, Coast.DistanceFromOriginCm / 100000.0f,
+				Coast.OpenWaterCm / 100000.0f, Coast.FarReliefCm / 100.0f, Coast.FarDistanceCm / 100000.0f, Coast.LandmassKm2, Coast.Score);
+			APlayerController* PC = World->GetFirstPlayerController();
+			if (Args.Num() > 0 && Args[0].Equals(TEXT("go"), ESearchCase::IgnoreCase) && PC && PC->GetPawn())
+			{
+				PC->GetPawn()->SetActorLocation(FVector(Coast.Location.X, Coast.Location.Y, Coast.GroundCm + 250.0), false, nullptr, ETeleportType::TeleportPhysics);
+				PC->SetControlRotation(FRotator(-6.0f, Coast.YawDegrees, 0.0f));
+			}
+		}),
+		ECVF_Default));
+
+	// ---------- MO.WorldGen.FindPeak [radius_km=25] [go [dist_km=5]] ----------
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.WorldGen.FindPeak"),
+		TEXT("Dev: the highest summits within radius_km of the local pawn (generator ground, 250 m grid, summits >= 3 km apart); `go` puts the pawn dist_km short of the highest one, 400 m above the ground there, looking at it. Usage: MO.WorldGen.FindPeak [radius_km=25] [go [dist_km=5]]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			const UMOWorldSeedSubsystem* Seeds = UMOWorldSeedSubsystem::Get(World);
+			APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
+			if (!Seeds || !Seeds->HasActiveSeed() || !PC || !PC->GetPawn())
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDGEN FindPeak FAILED: needs an active world seed and a pawn"));
+				return;
+			}
+			const float RadiusKm = Args.Num() > 0 && Args[0].IsNumeric() ? FMath::Clamp(FCString::Atof(*Args[0]), 2.0f, 55.0f) : 25.0f;
+			const bool bGo = Args.ContainsByPredicate([](const FString& A) { return A.Equals(TEXT("go"), ESearchCase::IgnoreCase); });
+			const int32 GoIndex = Args.IndexOfByPredicate([](const FString& A) { return A.Equals(TEXT("go"), ESearchCase::IgnoreCase); });
+			const float DistKm = (bGo && Args.IsValidIndex(GoIndex + 1) && Args[GoIndex + 1].IsNumeric()) ? FMath::Clamp(FCString::Atof(*Args[GoIndex + 1]), 0.5f, 30.0f) : 5.0f;
+
+			const FMOWorldGenParamsRef P = FMOWorldGenParamsProvider::Get();
+			const int32 Seed = Seeds->GetActiveTerrainSeed();
+			const FVector Origin = PC->GetPawn()->GetActorLocation();
+			const double StepCm = 25000.0, Half = RadiusKm * 100000.0;
+			struct FSummit { double X, Y; float HeightCm; };
+			TArray<FSummit> All;
+			for (double Dy = -Half; Dy <= Half; Dy += StepCm)
+			{
+				for (double Dx = -Half; Dx <= Half; Dx += StepCm)
+				{
+					const double X = Origin.X + Dx, Y = Origin.Y + Dy;
+					if (FMath::Abs(X) > P->Tuning.WorldHalfSizeCm || FMath::Abs(Y) > P->Tuning.WorldHalfSizeCm)
+					{
+						continue;
+					}
+					const float H = FMOWorldGen::SampleHeightCm(*P, X, Y, Seed, 100.0f);
+					if (H > P->Tuning.SeaLevelCm + 30000.0f)
+					{
+						All.Add({ X, Y, H });
+					}
+				}
+			}
+			All.Sort([](const FSummit& A, const FSummit& B) { return A.HeightCm > B.HeightCm; });
+			TArray<FSummit> Top;
+			for (const FSummit& C : All)
+			{
+				if (Top.Num() >= 5)
+				{
+					break;
+				}
+				if (!Top.ContainsByPredicate([&C](const FSummit& T) { return FVector2D::Distance(FVector2D(T.X, T.Y), FVector2D(C.X, C.Y)) < 300000.0; }))
+				{
+					Top.Add(C);
+				}
+			}
+			for (int32 I = 0; I < Top.Num(); ++I)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDGEN FindPeak #%d x=%.0f y=%.0f height=%.0f m (%.1f km from the pawn)"), I + 1, Top[I].X, Top[I].Y, Top[I].HeightCm / 100.0f,
+					FVector2D::Distance(FVector2D(Top[I].X, Top[I].Y), FVector2D(Origin.X, Origin.Y)) / 100000.0f);
+			}
+			if (bGo && Top.Num() > 0)
+			{
+				// Stand dist_km short of the summit on the side the pawn came from (the pawn's own bearing when it IS the summit), on the ground there + 400 m.
+				FVector2D Dir = FVector2D(Origin.X - Top[0].X, Origin.Y - Top[0].Y);
+				Dir = Dir.IsNearlyZero() ? FVector2D(1.0, 0.0) : Dir.GetSafeNormal();
+				const double Sx = Top[0].X + Dir.X * DistKm * 100000.0, Sy = Top[0].Y + Dir.Y * DistKm * 100000.0;
+				const float Ground = FMOWorldGen::SampleHeightCm(*P, Sx, Sy, Seed, 100.0f);
+				const FVector Dest(Sx, Sy, Ground + 40000.0f);
+				PC->GetPawn()->SetActorLocation(Dest, false, nullptr, ETeleportType::TeleportPhysics);
+				const FVector Look(Top[0].X - Sx, Top[0].Y - Sy, Top[0].HeightCm - Dest.Z);
+				PC->SetControlRotation(Look.Rotation());
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDGEN FindPeak go: pawn at (%.0f, %.0f, %.0f), looking at the %.0f m summit"), Dest.X, Dest.Y, Dest.Z, Top[0].HeightCm / 100.0f);
+			}
+		}),
+		ECVF_Default));
+
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.WorldGen.FindLake"),
+		TEXT("Dev: list the upland lakes (above sea level) near the local pawn, nearest first, with their surface height. Usage: MO.WorldGen.FindLake [radius_cm=400000]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
+			const APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+			const UMOWorldSeedSubsystem* Seeds = UMOWorldSeedSubsystem::Get(World);
+			if (!Pawn || !Seeds || !Seeds->HasActiveSeed())
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDGEN FindLake FAILED: needs a local pawn and an active world seed"));
+				return;
+			}
+			const double Radius = Args.Num() > 0 ? FMath::Clamp((double)FCString::Atof(*Args[0]), 5000.0, 3000000.0) : 400000.0;
+			const FMOWorldGenParamsRef P = FMOWorldGenParamsProvider::Get();
+			const FVector C = Pawn->GetActorLocation();
+			TArray<FMOWorldGen::FLake> Lakes;
+			FMOWorldGen::GetUplandLakesNear(*P, C.X, C.Y, Radius, Seeds->GetActiveTerrainSeed(), Lakes);
+			Lakes.Sort([&C](const FMOWorldGen::FLake& A, const FMOWorldGen::FLake& B)
+			{
+				return FVector2D::DistSquared(A.Center, FVector2D(C.X, C.Y)) < FVector2D::DistSquared(B.Center, FVector2D(C.X, C.Y));
+			});
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDGEN FindLake radius=%.0f upland lakes=%d"), Radius, Lakes.Num());
+			for (int32 I = 0; I < FMath::Min(Lakes.Num(), 8); ++I)
+			{
+				const FMOWorldGen::FLake& L = Lakes[I];
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDGEN Lake #%d dist=%.0f x=%.0f y=%.0f surfaceZ=%.0f radius=%.0f aspect=%.2f depth=%.0f"), I,
+					FVector2D::Distance(L.Center, FVector2D(C.X, C.Y)), L.Center.X, L.Center.Y, L.SurfaceCm, L.RadiusCm, L.Aspect, L.DepthCm);
+			}
+		}),
+		ECVF_Default));
+
+	// ---------- MO.WorldGen.FindCave [radius] ----------
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.WorldGen.FindCave"),
+		TEXT("Dev: scan around the local pawn for cave air (tunnels / caverns, 15-90 m down) and log the nearest spots to teleport to. Usage: MO.WorldGen.FindCave [radius_cm=15000]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
+			const APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+			const UMOWorldSeedSubsystem* Seeds = UMOWorldSeedSubsystem::Get(World);
+			if (!Pawn || !Seeds || !Seeds->HasActiveSeed())
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDGEN FindCave FAILED: needs a local pawn and an active world seed"));
+				return;
+			}
+			const float Radius = Args.Num() > 0 ? FMath::Clamp(FCString::Atof(*Args[0]), 2000.f, 60000.f) : 15000.f;
+			const int32 TerrainSeed = Seeds->GetActiveTerrainSeed();
+			const FMOWorldGenParamsRef P = FMOWorldGenParamsProvider::Get();
+			const FVector C = Pawn->GetActorLocation();
+			const float Step = 300.f;
+
+			struct FHit { float Dist; FVector Pos; float Depth; float D; };
+			TArray<FHit> Hits;
+			const int32 N = FMath::FloorToInt(Radius / Step);
+			for (int32 Iy = -N; Iy <= N; ++Iy)
+			{
+				for (int32 Ix = -N; Ix <= N; ++Ix)
+				{
+					const double X = C.X + Ix * Step, Y = C.Y + Iy * Step;
+					if (FVector2D::Distance(FVector2D(X - C.X, Y - C.Y), FVector2D::ZeroVector) > Radius || FMOWorldGen::DistanceToSinkholeRimZone(*P, X, Y, TerrainSeed) < 4000.f)
+					{
+						continue;   // inside the ring around a sinkhole: that is the shaft, not an enclosed cave
+					}
+					const float Ground = FMOWorldGen::SampleHeightCm(*P, X, Y, TerrainSeed, P->Tuning.VoxelSizeCm);
+					for (float Depth = 1500.f; Depth <= 9000.f; Depth += 750.f)
+					{
+						const float D = FMOWorldGen::SampleCaveDistanceAtGround(*P, X, Y, Ground - Depth, Ground, TerrainSeed, P->Tuning.VoxelSizeCm);
+						if (D < -150.f)
+						{
+							Hits.Add({ (float)FVector2D::Distance(FVector2D(X, Y), FVector2D(C.X, C.Y)), FVector(X, Y, Ground - Depth), Depth, D });
+						}
+					}
+				}
+			}
+			Hits.Sort([](const FHit& A, const FHit& B) { return A.Dist < B.Dist; });
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDGEN FindCave radius=%.0f candidates=%d"), Radius, Hits.Num());
+			int32 Listed = 0;
+			TArray<FVector> Taken;
+			for (const FHit& H : Hits)
+			{
+				bool bNear = false;
+				for (const FVector& T : Taken) { bNear |= FVector::Dist(T, H.Pos) < 2500.f; }
+				if (bNear) { continue; }
+				Taken.Add(H.Pos);
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDGEN Cave #%d dist=%.0f x=%.0f y=%.0f z=%.0f depth=%.0f d=%.0f"), Listed, H.Dist, H.Pos.X, H.Pos.Y, H.Pos.Z, H.Depth, H.D);
+				if (++Listed >= 6) { break; }
+			}
+		}),
+		ECVF_Default));
+
+	// ---------- MO.WorldGen.Sinkholes [radius] / MO.WorldGen.CaveSample x y z ----------
+	// Find caves without wandering: the nearest sinkholes of this world (paste a position into MO.Player.Teleport), and the cave field at a point.
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.WorldGen.Sinkholes"),
+		TEXT("Dev: log the sinkholes (cave entrances) near the local pawn, nearest first. Usage: MO.WorldGen.Sinkholes [radius_cm=150000]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
+			const APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+			const UMOWorldSeedSubsystem* Seeds = UMOWorldSeedSubsystem::Get(World);
+			if (!Pawn || !Seeds || !Seeds->HasActiveSeed())
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDGEN Sinkholes FAILED: needs a local pawn and an active world seed"));
+				return;
+			}
+			const float Radius = Args.Num() > 0 ? FMath::Clamp(FCString::Atof(*Args[0]), 1000.f, 1000000.f) : 150000.f;
+			const FMOWorldGenParamsRef P = FMOWorldGenParamsProvider::Get();
+			const double Cell = (double)P->Tuning.SinkholeCellCm;
+			const FVector C = Pawn->GetActorLocation();
+			const int32 TerrainSeed = Seeds->GetActiveTerrainSeed();
+
+			TArray<TPair<float, FMOSinkhole>> Found;
+			const int64 Cx0 = (int64)FMath::FloorToDouble((C.X - Radius) / Cell), Cx1 = (int64)FMath::FloorToDouble((C.X + Radius) / Cell);
+			const int64 Cy0 = (int64)FMath::FloorToDouble((C.Y - Radius) / Cell), Cy1 = (int64)FMath::FloorToDouble((C.Y + Radius) / Cell);
+			for (int64 Cy = Cy0; Cy <= Cy1; ++Cy)
+			{
+				for (int64 Cx = Cx0; Cx <= Cx1; ++Cx)
+				{
+					FMOSinkhole S;
+					if (FMOWorldGen::GetSinkholeInCell(*P, Cx, Cy, TerrainSeed, S))
+					{
+						const float Dist = (float)FVector2D::Distance(FVector2D(C.X, C.Y), S.Center);
+						if (Dist <= Radius)
+						{
+							Found.Add(TPair<float, FMOSinkhole>(Dist, S));
+						}
+					}
+				}
+			}
+			Found.Sort([](const TPair<float, FMOSinkhole>& A, const TPair<float, FMOSinkhole>& B) { return A.Key < B.Key; });
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDGEN Sinkholes seed=%d radius=%.0f found=%d"), TerrainSeed, Radius, Found.Num());
+			for (int32 I = 0; I < FMath::Min(Found.Num(), 8); ++I)
+			{
+				const FMOSinkhole& S = Found[I].Value;
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDGEN Sinkhole #%d dist=%.0f x=%.0f y=%.0f groundZ=%.0f radius=%.0f depth=%.0f"),
+					I, Found[I].Key, S.Center.X, S.Center.Y, S.GroundCm, S.RadiusCm, S.DepthCm);
+			}
+		}),
+		ECVF_Default));
+
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.WorldGen.CaveSample"),
+		TEXT("Dev: log the cave field (signed distance to cave air, cm; negative = inside a cave) at world X,Y,Z with this world's terrain seed. Usage: MO.WorldGen.CaveSample <x> <y> <z>"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			const UMOWorldSeedSubsystem* Seeds = UMOWorldSeedSubsystem::Get(World);
+			if (!World || Args.Num() < 3 || !Seeds || !Seeds->HasActiveSeed())
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDGEN CaveSample FAILED: usage MO.WorldGen.CaveSample <x> <y> <z> (needs an active world seed)"));
+				return;
+			}
+			const double X = FCString::Atod(*Args[0]), Y = FCString::Atod(*Args[1]), Z = FCString::Atod(*Args[2]);
+			const FMOWorldGenParamsRef P = FMOWorldGenParamsProvider::Get();
+			const int32 TerrainSeed = Seeds->GetActiveTerrainSeed();
+			const float Ground = FMOWorldGen::SampleHeightCm(*P, X, Y, TerrainSeed, P->Tuning.VoxelSizeCm);
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDGEN CaveSample x=%.0f y=%.0f z=%.0f groundZ=%.0f depth=%.0f caveDistance=%.1f"),
+				X, Y, Z, Ground, Ground - Z, FMOWorldGen::SampleCaveDistanceAtGround(*P, X, Y, Z, Ground, TerrainSeed, P->Tuning.VoxelSizeCm));
 		}),
 		ECVF_Default));
 
@@ -2688,11 +3485,7 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 		{
 			UMOGameClockSubsystem* Sys = UMOGameClockSubsystem::Get(World);
 			if (!Sys) { UE_LOG(LogMOFramework, Warning, TEXT("[MOClock] No subsystem")); return; }
-			const FDateTime Current = Sys->GetGameDateTime();
-			FDateTime Target(Current.GetYear(), Current.GetMonth(), Current.GetDay(), 6, 0, 0);
-			if (Target <= Current) Target += FTimespan::FromDays(1);
-			Sys->SetGameDateTime(Target);
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOClock] Skipped to %s"), *Target.ToString());
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOClock] Skipped to %s"), *Sys->AdvanceToTimeOfDay(6, 0).ToString());
 		}),
 		ECVF_Default));
 
@@ -2703,11 +3496,7 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 		{
 			UMOGameClockSubsystem* Sys = UMOGameClockSubsystem::Get(World);
 			if (!Sys) { UE_LOG(LogMOFramework, Warning, TEXT("[MOClock] No subsystem")); return; }
-			const FDateTime Current = Sys->GetGameDateTime();
-			FDateTime Target(Current.GetYear(), Current.GetMonth(), Current.GetDay(), 18, 0, 0);
-			if (Target <= Current) Target += FTimespan::FromDays(1);
-			Sys->SetGameDateTime(Target);
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOClock] Skipped to %s"), *Target.ToString());
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOClock] Skipped to %s"), *Sys->AdvanceToTimeOfDay(18, 0).ToString());
 		}),
 		ECVF_Default));
 
@@ -2757,25 +3546,10 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 		TEXT("List the UDS weather presets MO.Weather.SetPreset accepts (built-in UDS Weather_Presets folder)."),
 		FConsoleCommandWithWorldDelegate::CreateLambda([](UWorld* /*World*/)
 		{
-			static const TCHAR* Presets[] = {
-				TEXT("Clear_Skies"),
-				TEXT("Partly_Cloudy"),
-				TEXT("Cloudy"),
-				TEXT("Overcast"),
-				TEXT("Foggy"),
-				TEXT("Rain_Light"),
-				TEXT("Rain"),
-				TEXT("Rain_Thunderstorm"),
-				TEXT("Snow_Light"),
-				TEXT("Snow"),
-				TEXT("Snow_Blizzard"),
-				TEXT("Sand_Dust_Calm"),
-				TEXT("Sand_Dust_Storm"),
-			};
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOWeather] Available UDS presets:"));
-			for (const TCHAR* P : Presets)
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOWeather] Available UDS presets (* = in the `weather` popup):"));
+			for (const FMOWeatherPresetChoice& Choice : UMOWeatherIntegrationSubsystem::GetPresetChoices())
 			{
-				UE_LOG(LogMOFramework, Warning, TEXT("  %s"), P);
+				UE_LOG(LogMOFramework, Warning, TEXT("  %s%s  (%s)"), Choice.bBasic ? TEXT("* ") : TEXT("  "), *Choice.Id.ToString(), *Choice.Label.ToString());
 			}
 		}),
 		ECVF_Default));
@@ -2805,6 +3579,278 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 			Sys->SetWeatherPreset(PresetInstance);
 			UE_LOG(LogMOFramework, Warning, TEXT("[MOWeather] Applied preset '%s' (object=%s, class=%s)"),
 				*PresetName, *GetNameSafe(PresetInstance), *GetNameSafe(PresetInstance->GetClass()));
+		}),
+		ECVF_Default));
+
+	// ---------- MO.Weather.Director (a cvar in MOWeatherDirector.cpp: 1 = the weather changes by itself, 0 = it stays) / .Info / .Next ----------
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Weather.Director.Info"),
+		TEXT("Print what the weather director is holding and when it moves on (switch it off with the cvar: MO.Weather.Director 0)."),
+		FConsoleCommandWithWorldDelegate::CreateLambda([](UWorld* World)
+		{
+			UMOWeatherDirectorSubsystem* Dir = World ? World->GetSubsystem<UMOWeatherDirectorSubsystem>() : nullptr;
+			if (!Dir)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOWeatherDirector] none in this world (clients follow the server's sky)"));
+				return;
+			}
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOWeatherDirector] enabled=%d holding=%s until %s"), Dir->IsDirectorEnabled() ? 1 : 0, *Dir->GetCurrentPreset().ToString(), *Dir->GetNextChange().ToString());
+		}),
+		ECVF_Default));
+
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Weather.Director.Next"),
+		TEXT("Dev: move the weather on to the next front now."),
+		FConsoleCommandWithWorldDelegate::CreateLambda([](UWorld* World)
+		{
+			if (UMOWeatherDirectorSubsystem* Dir = World ? World->GetSubsystem<UMOWeatherDirectorSubsystem>() : nullptr)
+			{
+				Dir->AdvanceNow();
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOWeatherDirector] now %s until %s"), *Dir->GetCurrentPreset().ToString(), *Dir->GetNextChange().ToString());
+			}
+		}),
+		ECVF_Default));
+
+	// ---------- MO.WorldGen.BiomeStats / MO.WorldGen.FindBiome ----------
+	// What the generator makes of the land: which biome (by the real DT_Biomes bands, slope from the generator's own gradient) covers how much, and where the nearest of each is.
+	auto BiomeAt = [](const FMOWorldGenParams& P, double X, double Y, int32 Seed, float& OutHeight) -> int32
+	{
+		const FMOTerrainSample S = FMOWorldGen::SampleColumn(P, X, Y, Seed, P.Tuning.VoxelSizeCm);
+		OutHeight = S.HeightCm;
+		const float Dx = FMOWorldGen::SampleHeightCm(P, X + 200.0, Y, Seed, P.Tuning.VoxelSizeCm) - FMOWorldGen::SampleHeightCm(P, X - 200.0, Y, Seed, P.Tuning.VoxelSizeCm);
+		const float Dy = FMOWorldGen::SampleHeightCm(P, X, Y + 200.0, Seed, P.Tuning.VoxelSizeCm) - FMOWorldGen::SampleHeightCm(P, X, Y - 200.0, Seed, P.Tuning.VoxelSizeCm);
+		const float SlopeDeg = FMath::RadiansToDegrees(FMath::Atan(FMath::Sqrt(Dx * Dx + Dy * Dy) / 400.0f));
+		return FMOWorldGen::ResolveBiome(P, S.HeightCm, SlopeDeg, S.Moisture, S.Temperature);
+	};
+
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.WorldGen.BiomeStats"),
+		TEXT("Dev: share of the LAND covered by each biome over the whole world (60 x 60 grid), with mean height. Usage: MO.WorldGen.BiomeStats"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([BiomeAt](const TArray<FString>& Args, UWorld* World)
+		{
+			const UMOWorldSeedSubsystem* Seeds = UMOWorldSeedSubsystem::Get(World);
+			if (!World || !Seeds || !Seeds->HasActiveSeed())
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDGEN BiomeStats FAILED: needs an active world seed"));
+				return;
+			}
+			const FMOWorldGenParamsRef P = FMOWorldGenParamsProvider::Get();
+			const int32 Seed = Seeds->GetActiveTerrainSeed();
+			constexpr int32 N = 60;
+			const double Step = 2.0 * (double)P->Tuning.WorldHalfSizeCm / (double)N;
+			TArray<int32> Count;
+			TArray<double> HeightSum;
+			Count.Init(0, P->Biomes.Num() + 1);
+			HeightSum.Init(0.0, P->Biomes.Num() + 1);
+			int32 Land = 0;
+			for (int32 Iy = 0; Iy < N; ++Iy)
+			{
+				for (int32 Ix = 0; Ix < N; ++Ix)
+				{
+					const double X = -(double)P->Tuning.WorldHalfSizeCm + (Ix + 0.5) * Step, Y = -(double)P->Tuning.WorldHalfSizeCm + (Iy + 0.5) * Step;
+					float H = 0.0f;
+					const int32 B = BiomeAt(*P, X, Y, Seed, H);
+					if (H <= P->Tuning.SeaLevelCm + 5.0f)
+					{
+						continue;
+					}
+					++Land;
+					const int32 Slot = B == INDEX_NONE ? P->Biomes.Num() : B;
+					++Count[Slot];
+					HeightSum[Slot] += H;
+				}
+			}
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDGEN BiomeStats land cells=%d of %d"), Land, N * N);
+			for (int32 I = 0; I <= P->Biomes.Num(); ++I)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDGEN Biome %s %.1f%% of the land, mean height %.0f m"), I < P->Biomes.Num() ? *P->Biomes[I].Id.ToString() : TEXT("(none)"),
+					Land > 0 ? 100.0 * Count[I] / Land : 0.0, Count[I] > 0 ? HeightSum[I] / Count[I] / 100.0 : 0.0);
+			}
+		}),
+		ECVF_Default));
+
+	// ---------- MO.WorldGen.SeedSurvey [first] [count] ----------
+	// Which world seeds start (and fly the menu) somewhere worth looking at? For each seed: the new-game coast, then what lies within 3 km of it -- land share, how high the ground
+	// rises inland, forest share -- and the skyline across the water. Ranked best first. Needs no world seed (it takes the published generator params and tries seeds itself).
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.WorldGen.SeedSurvey"),
+		TEXT("Dev: rank world seeds by how good their new-game coast looks (forest, hills inland, a skyline across the water). Usage: MO.WorldGen.SeedSurvey [first=1] [count=40]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([BiomeAt](const TArray<FString>& Args, UWorld* World)
+		{
+			const int32 First = Args.Num() > 0 ? FCString::Atoi(*Args[0]) : 1;
+			const int32 Count = Args.Num() > 1 ? FMath::Clamp(FCString::Atoi(*Args[1]), 1, 400) : 40;
+			const FMOWorldGenParamsRef P = FMOWorldGenParamsProvider::Get();
+			const int32 ForestA = P->FindBiomeIndex(FName("TemperateForest")), ForestB = P->FindBiomeIndex(FName("LocustWoodland"));
+			struct FRow { int32 WorldSeed; float Score, Land, Forest, RiseM, SkylineDeg; FVector2D At; };
+			TArray<FRow> Rows;
+			for (int32 I = 0; I < Count; ++I)
+			{
+				const int32 WorldSeed = First + I;
+				const int32 TerrainSeed = UMOWorldSeedSubsystem::TerrainSeedFromWorldSeed(WorldSeed);
+				FMOCoastalSpawn Coast;
+				if (!FMOWorldGen::FindCoastalSpawn(*P, TerrainSeed, Coast))
+				{
+					continue;
+				}
+				int32 Land = 0, Forest = 0, Total = 0;
+				float MaxH = 0.0f;
+				for (int32 Iy = -7; Iy <= 7; ++Iy)
+				{
+					for (int32 Ix = -7; Ix <= 7; ++Ix)
+					{
+						const double X = Coast.Location.X + Ix * 40000.0, Y = Coast.Location.Y + Iy * 40000.0;
+						if (FMath::Square(Ix) + FMath::Square(Iy) > 56)
+						{
+							continue;   // a disc of ~3 km
+						}
+						float H = 0.0f;
+						const int32 B = BiomeAt(*P, X, Y, TerrainSeed, H);
+						++Total;
+						if (H > P->Tuning.SeaLevelCm + 50.0f)
+						{
+							++Land;
+							Forest += (B == ForestA || B == ForestB) ? 1 : 0;
+							MaxH = FMath::Max(MaxH, H - P->Tuning.SeaLevelCm);
+						}
+					}
+				}
+				const float LandShare = Total > 0 ? (float)Land / Total : 0.0f;
+				const float ForestShare = Land > 0 ? (float)Forest / Land : 0.0f;
+				const float SkylineDeg = FMath::RadiansToDegrees(FMath::Atan2(Coast.FarReliefCm - 200.0f, FMath::Max(Coast.FarDistanceCm, 1.0f)));
+				// Wants: forest under foot, ground that rises (hills), a skyline across the water, and a coast that is not all sea or all land.
+				const float Score = 3.0f * ForestShare + FMath::Clamp(MaxH / 15000.0f, 0.0f, 1.0f) + FMath::Clamp(SkylineDeg / 2.5f, 0.0f, 1.0f) + (LandShare > 0.4f && LandShare < 0.8f ? 0.6f : 0.0f);
+				Rows.Add({ WorldSeed, Score, LandShare, ForestShare, MaxH / 100.0f, SkylineDeg, Coast.Location });
+			}
+			Rows.Sort([](const FRow& A, const FRow& B) { return A.Score > B.Score; });
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDGEN SeedSurvey %d seeds with a coast, best first:"), Rows.Num());
+			for (int32 I = 0; I < FMath::Min(Rows.Num(), 10); ++I)
+			{
+				const FRow& R = Rows[I];
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDGEN Seed #%d seed=%d score=%.2f land=%.0f%% forest=%.0f%% inland rise=%.0f m skyline=%.1f deg coast=(%.0f, %.0f)"), I, R.WorldSeed, R.Score, 100.0f * R.Land, 100.0f * R.Forest,
+					R.RiseM, R.SkylineDeg, R.At.X, R.At.Y);
+			}
+		}),
+		ECVF_Default));
+
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.WorldGen.FindBiome"),
+		TEXT("Dev: log the nearest place (around the local pawn) of a biome; `go` teleports the pawn there. Usage: MO.WorldGen.FindBiome <BiomeId> [go] [radius_cm=1500000]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([BiomeAt](const TArray<FString>& Args, UWorld* World)
+		{
+			APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
+			const APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+			const UMOWorldSeedSubsystem* Seeds = UMOWorldSeedSubsystem::Get(World);
+			if (!Pawn || !Seeds || !Seeds->HasActiveSeed() || Args.Num() < 1)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDGEN FindBiome FAILED: usage MO.WorldGen.FindBiome <BiomeId> [go] [radius]; needs a pawn and a world seed"));
+				return;
+			}
+			const FMOWorldGenParamsRef P = FMOWorldGenParamsProvider::Get();
+			const int32 Want = P->FindBiomeIndex(FName(*Args[0]));
+			if (Want == INDEX_NONE)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDGEN FindBiome: no biome %s"), *Args[0]);
+				return;
+			}
+			bool bGo = false;
+			double Radius = 1500000.0;
+			for (int32 I = 1; I < Args.Num(); ++I)
+			{
+				if (Args[I].Equals(TEXT("go"), ESearchCase::IgnoreCase)) { bGo = true; }
+				else { Radius = FMath::Clamp((double)FCString::Atof(*Args[I]), 20000.0, 3000000.0); }
+			}
+			const int32 Seed = Seeds->GetActiveTerrainSeed();
+			const FVector C = Pawn->GetActorLocation();
+			const double Step = FMath::Max(4000.0, Radius / 90.0);
+			FVector2D Best(0, 0);
+			double BestDist = TNumericLimits<double>::Max();
+			int32 Cells = 0;
+			const int32 Half = (int32)(Radius / Step);
+			for (int32 Iy = -Half; Iy <= Half; ++Iy)
+			{
+				for (int32 Ix = -Half; Ix <= Half; ++Ix)
+				{
+					const double X = C.X + Ix * Step, Y = C.Y + Iy * Step;
+					if (FMath::Abs(X) > P->Tuning.WorldHalfSizeCm || FMath::Abs(Y) > P->Tuning.WorldHalfSizeCm)
+					{
+						continue;
+					}
+					float H = 0.0f;
+					if (BiomeAt(*P, X, Y, Seed, H) != Want || H <= P->Tuning.SeaLevelCm + 50.0f)
+					{
+						continue;
+					}
+					++Cells;
+					const double D = FVector2D::Distance(FVector2D(X, Y), FVector2D(C.X, C.Y));
+					if (D < BestDist)
+					{
+						BestDist = D;
+						Best = FVector2D(X, Y);
+					}
+				}
+			}
+			if (BestDist == TNumericLimits<double>::Max())
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDGEN FindBiome %s: none within %.0f cm"), *Args[0], Radius);
+				return;
+			}
+			const float Ground = FMOWorldGen::SampleHeightCm(*P, Best.X, Best.Y, Seed, P->Tuning.VoxelSizeCm);
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDGEN FindBiome %s: nearest x=%.0f y=%.0f z=%.0f dist=%.0f (%d cells within %.0f cm)"), *Args[0], Best.X, Best.Y, Ground, BestDist, Cells, Radius);
+			if (bGo)
+			{
+				PC->GetPawn()->SetActorLocation(FVector(Best.X, Best.Y, Ground + 400.0), false, nullptr, ETeleportType::TeleportPhysics);
+			}
+		}),
+		ECVF_Default));
+
+	// ---------- weather / time: the dev console's pickers ----------
+	// Typed into the Tilde popup: `weather` opens a small popup of weathers, `time` one of 8 AM / 2 PM / 8 PM / 2 AM. Both set the SERVER's world (the buttons call a
+	// Server RPC on the player controller, so it works from a joined client as well as from the host). `weather rain` / `time 2pm` skip the popup.
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("weather"),
+		TEXT("Dev: pop up a small weather picker that sets the server's weather. Usage: weather [preset]  (try MO.Weather.ListPresets)"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			AMOPlayerController* PC = World ? Cast<AMOPlayerController>(World->GetFirstPlayerController()) : nullptr;
+			if (!PC)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOConsole] weather: needs a local player controller"));
+				return;
+			}
+			PC->OpenDevWeatherPicker(Args.Num() > 0 ? Args[0] : FString());
+		}),
+		ECVF_Default));
+
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("time"),
+		TEXT("Dev: pop up a small time-of-day picker (8 AM / 2 PM / 8 PM / 2 AM) that moves the server's clock forward to it. Usage: time [8am|2pm|14|...]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			AMOPlayerController* PC = World ? Cast<AMOPlayerController>(World->GetFirstPlayerController()) : nullptr;
+			if (!PC)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOConsole] time: needs a local player controller"));
+				return;
+			}
+			int32 Hour = -1;
+			if (Args.Num() > 0)
+			{
+				FString Text = Args[0].ToLower();
+				const bool bPm = Text.EndsWith(TEXT("pm")), bAm = Text.EndsWith(TEXT("am"));
+				if (bPm || bAm)
+				{
+					Text.LeftChopInline(2);
+				}
+				if (!Text.IsNumeric())
+				{
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOConsole] time: '%s' is not an hour. Usage: time [8am|2pm|14]"), *Args[0]);
+					return;
+				}
+				Hour = FMath::Clamp(FCString::Atoi(*Text), 0, 23);
+				if (bPm && Hour < 12) { Hour += 12; }
+				if (bAm && Hour == 12) { Hour = 0; }
+			}
+			PC->OpenDevTimePicker(Hour);
 		}),
 		ECVF_Default));
 

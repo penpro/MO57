@@ -258,6 +258,15 @@ public:
 	void SetGameDateTime(const FDateTime& NewDateTime);
 
 	/**
+	 * Move the clock FORWARD to the next occurrence of Hour:Minute: today if it is still ahead, otherwise tomorrow. Time only runs forward -- "make it 8 am" at
+	 * 3 pm means tomorrow morning, never a rewind that would hand a negative age to anything timed on the DateTime. Goes through SetGameDateTime, so the day/night
+	 * and hour events fire for the destination. Returns the new DateTime. (The one place that logic lives: MO.Clock.SkipToDay/SkipToNight and the dev `time`
+	 * popup all call it.)
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Clock|DateTime")
+	FDateTime AdvanceToTimeOfDay(int32 Hour, int32 Minute = 0);
+
+	/**
 	 * True if the in-game time is within the configured daytime hour window
 	 * [DaytimeStartHour, DaytimeEndHour). Default 6 AM – 6 PM.
 	 *

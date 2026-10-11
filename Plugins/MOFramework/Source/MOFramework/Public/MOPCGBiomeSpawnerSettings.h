@@ -53,6 +53,22 @@ class UStaticMesh;
 class UInstancedStaticMeshComponent;
 class UDataTable;
 
+/**
+ * Which species of the biome palettes a spawner node handles. One graph runs this node at SEVERAL hierarchical grid sizes (the PCG hi-gen idea: small things on a small, near grid; big things on a larger grid
+ * that reaches further): ground cover (grass, flowers, debris) at GRID16 reaches 32 m, large species (trees, shrubs, bushes, boulders) at GRID128 reach 256 m. The split is by the species' HISMTag, so a new
+ * species needs no flag: MOResource_Tree / MOResource_Rock / MOResource_Bush / MOBiomeCover_Shrub are LARGE, everything else is ground cover.
+ * The biome rows' WATER-EDGE species (reeds, rushes) are NOT part of ground cover / large: they belong to their own tier, WaterEdgeOnly, which runs on a much denser sampler (a reed belt wants about one clump per square
+ * metre at the waterline, far more than the ground-cover sampler emits) and skips every cell with no water in or near it. All = everything (the legacy single node).
+ */
+UENUM(BlueprintType)
+enum class EMOBiomeSpeciesFilter : uint8
+{
+	All UMETA(DisplayName = "All species"),
+	GroundCoverOnly UMETA(DisplayName = "Ground cover only (grass, flowers, debris)"),
+	LargeOnly UMETA(DisplayName = "Large only (trees, shrubs, bushes, boulders)"),
+	WaterEdgeOnly UMETA(DisplayName = "Water-edge species only (reeds, rushes, shore flowers)")
+};
+
 UCLASS(BlueprintType, ClassGroup=(MO))
 class MOFRAMEWORK_API UMOPCGBiomeSpawnerSettings : public UPCGSettings
 {
@@ -115,6 +131,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Density", meta = (PCG_Overridable, ClampMin = "1"))
 	float InputPointsPerHectare = 2000.0f;
 
+	/** Which species this node places (see EMOBiomeSpeciesFilter): run one node per tier on its own hierarchical grid. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Density", meta = (PCG_Overridable))
+	EMOBiomeSpeciesFilter SpeciesFilter = EMOBiomeSpeciesFilter::All;
+
 	// ============================================================================
 	// SPAWNING (mirrors MOPCGMeshSpawnerSettings)
 	// ============================================================================
@@ -135,9 +155,13 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawning")
 	bool bRegisterWithSubsystem = true;
 
-	/** Collision profile for the created HISM components. */
+	/**
+	 * Collision profile for DECORATIVE species (no ResourceNodeId: grass, flowers). Harvestable species (trees, rocks, bushes) take the profile of their resource type from
+	 * DT_Resources (FMOResourceNodeDefinitionRow::GetPlacementCollisionProfile): this node used to give EVERY species its one profile, which was NoCollision, so every tree
+	 * and rock it placed could be walked through.
+	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawning")
-	FCollisionProfileName CollisionProfile = FCollisionProfileName(TEXT("BlockAll"));
+	FCollisionProfileName DecorativeCollisionProfile = FCollisionProfileName(TEXT("NoCollision"));
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawning")
 	bool bCastShadows = true;
@@ -164,6 +188,7 @@ private:
 		FName BiomeId;
 		FName ResourceNodeId;
 		bool bAutoSweep = false;
+		EMOSpeciesCollision Collision = EMOSpeciesCollision::Auto;
 		TArray<FTransform> Transforms;
 	};
 };

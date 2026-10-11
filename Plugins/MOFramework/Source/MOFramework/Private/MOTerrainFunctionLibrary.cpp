@@ -7,6 +7,8 @@
 
 VOXEL_REGISTER_FUNCTION(UMOTerrainFunctionLibrary, MOTerrain);
 VOXEL_REGISTER_FUNCTION(UMOTerrainFunctionLibrary, MOTerrainBounds);
+VOXEL_REGISTER_FUNCTION(UMOTerrainFunctionLibrary, MOTerrainCaves);
+VOXEL_REGISTER_FUNCTION(UMOTerrainFunctionLibrary, MOTerrainCavesBounds);
 
 namespace
 {
@@ -20,6 +22,9 @@ namespace
 		uint32 ParamsHash = 0;
 		TArray<FVoxelSurfaceTypeBlend> BiomeBlends;   // NumLayers == 0 => the biome paints nothing
 		TArray<bool> bHasSurface;
+		FSoftObjectPath LakeBedPath;                  // the path the lake-bed blend was built from (a changed setting is noticed)
+		FVoxelSurfaceTypeBlend LakeBedBlend;
+		bool bHasLakeBed = false;
 	};
 
 	FRWLock GSurfaceLock;
@@ -57,9 +62,26 @@ void UMOTerrainFunctionLibrary::RefreshSurfaceTable(const FMOWorldGenParams& Par
 		++NumSurfaces;
 	}
 
+	// The bed of the upland lakes (see FMOWorldGen::UplandLakeBedWeight).
+	Table->LakeBedPath = Params.UplandLakeBedSurfaceType;
+	if (!Params.UplandLakeBedSurfaceType.IsNull())
+	{
+		if (UVoxelSurfaceTypeInterface* Surface = Cast<UVoxelSurfaceTypeInterface>(Params.UplandLakeBedSurfaceType.TryLoad()))
+		{
+			FVoxelSurfaceTypeBlendBuilder Builder;
+			Builder.AddLayer(FVoxelSurfaceType(Surface), 1.0f);
+			Builder.Build(Table->LakeBedBlend);
+			Table->bHasLakeBed = true;
+		}
+		else
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOTerrain] UplandLakeBedSurfaceType '%s' is not a UVoxelSurfaceTypeInterface asset: lakes keep the biome ground"), *Params.UplandLakeBedSurfaceType.ToString());
+		}
+	}
+
 	FWriteScopeLock Lock(GSurfaceLock);
 	GSurfaceTable = Table;
-	UE_LOG(LogMOFramework, Log, TEXT("[MOTerrain] Surface table: %d of %d biomes have a ground surface"), NumSurfaces, Params.Biomes.Num());
+	UE_LOG(LogMOFramework, Log, TEXT("[MOTerrain] Surface table: %d of %d biomes have a ground surface; upland lake bed surface: %s"), NumSurfaces, Params.Biomes.Num(), Table->bHasLakeBed ? *Params.UplandLakeBedSurfaceType.ToString() : TEXT("none"));
 }
 
 void UMOTerrainFunctionLibrary::MOTerrain(
@@ -78,6 +100,78 @@ void UMOTerrainFunctionLibrary::MOTerrain(
 void UMOTerrainFunctionLibrary::MOTerrainBounds(FVoxelBox2D& Bounds, FVoxelFloatRange& HeightRange) const
 {
 	ComputeBounds(Bounds, HeightRange);
+}
+
+void UMOTerrainFunctionLibrary::MOTerrainCaves(
+	const FVoxelDoubleVectorBuffer& WorldPosition,
+	const FVoxelSeed& Seed,
+	FVoxelFloatBuffer& Distance) const
+{
+	const FVoxelGraphParameters::FLOD* LODParameter = Query->FindParameter<FVoxelGraphParameters::FLOD>();
+	ComputeCaves(WorldPosition, Seed, LODParameter ? LODParameter->Value : 0, Distance);
+}
+
+void UMOTerrainFunctionLibrary::MOTerrainCavesBounds(FVoxelBox& Bounds) const
+{
+	ComputeCavesBounds(Bounds);
+}
+
+void UMOTerrainFunctionLibrary::ComputeCavesBounds(FVoxelBox& Bounds)
+{
+	const FMOWorldGenParamsRef Params = FMOWorldGenParamsProvider::Get();
+	const float Half = Params->Tuning.WorldHalfSizeCm;
+	Bounds = FVoxelBox(FVector(-Half, -Half, Params->CaveMinZCm), FVector(Half, Half, Params->CaveMaxZCm));
+}
+
+void UMOTerrainFunctionLibrary::ComputeCaves(
+	const FVoxelDoubleVectorBuffer& WorldPosition,
+	const int32 Seed,
+	const int32 LOD,
+	FVoxelFloatBuffer& Distance)
+{
+	const FMOWorldGenParamsRef Params = FMOWorldGenParamsProvider::Get();
+	const FMOWorldGenParams& P = *Params;
+
+	const int32 Num = WorldPosition.Num();
+	const float StepCm = P.Tuning.VoxelSizeCm * (float)(1 << FMath::Clamp(LOD, 0, 24));
+	Distance.Allocate(Num);
+
+	// A chunk is a 3D grid: the same (X, Y) column repeats once per Z layer and the ground height (~0.5 us) is the same for all of them. A small direct-mapped
+	// memo keyed on the exact XY bits shares it; a miss just recomputes, so it can never change a result.
+	struct FColumn
+	{
+		double X = 0.0, Y = 0.0;
+		float Ground = 0.0f;
+		bool bValid = false;
+	};
+	constexpr int32 CacheSize = 4096;
+	TArray<FColumn> Columns;
+	Columns.SetNum(CacheSize);
+
+	for (int32 I = 0; I < Num; ++I)
+	{
+		const double X = WorldPosition.X[I], Y = WorldPosition.Y[I], Z = WorldPosition.Z[I];
+		if (Z > P.CaveMaxZCm || Z < P.CaveMinZCm)
+		{
+			Distance.Set(I, FMOWorldGen::CaveFarCm);   // outside the band caves can occupy: skip even the height sample
+			continue;
+		}
+
+		uint64 BitsX, BitsY;
+		FMemory::Memcpy(&BitsX, &X, sizeof(BitsX));
+		FMemory::Memcpy(&BitsY, &Y, sizeof(BitsY));
+		const uint32 Slot = (uint32)(((BitsX * 0x9E3779B97F4A7C15ull) ^ (BitsY * 0xC2B2AE3D27D4EB4Full)) >> 40) & (CacheSize - 1);
+
+		FColumn& Column = Columns[Slot];
+		if (!Column.bValid || Column.X != X || Column.Y != Y)
+		{
+			Column.X = X;
+			Column.Y = Y;
+			Column.Ground = FMOWorldGen::SampleHeightCm(P, X, Y, Seed, StepCm);
+			Column.bValid = true;
+		}
+		Distance.Set(I, FMOWorldGen::SampleCaveDistanceAtGround(P, X, Y, Z, Column.Ground, Seed, StepCm));
+	}
 }
 
 void UMOTerrainFunctionLibrary::ComputeBounds(FVoxelBox2D& Bounds, FVoxelFloatRange& HeightRange)
@@ -108,6 +202,7 @@ void UMOTerrainFunctionLibrary::Compute(
 	}
 	// A table built for a different snapshot is ignored (biome indices would not line up).
 	const bool bUseSurfaces = Surfaces.IsValid() && Surfaces->ParamsHash == P.GetHash() && Surfaces->BiomeBlends.Num() == P.Biomes.Num();
+	const bool bLakeBeds = bUseSurfaces && Surfaces->bHasLakeBed && Surfaces->LakeBedPath == P.UplandLakeBedSurfaceType && P.Tuning.bEnableWater && P.Tuning.bEnableUplandLakes;
 
 	const int32 Num = WorldPosition.Num();
 	const float StepCm = P.Tuning.VoxelSizeCm * (float)(1 << FMath::Clamp(LOD, 0, 24));
@@ -126,6 +221,11 @@ void UMOTerrainFunctionLibrary::Compute(
 		BiomeIndex.Set(I, (float)S.BiomeIndex);
 		Moisture.Set(I, S.Moisture);
 		Temperature.Set(I, S.Temperature);
+		if (bLakeBeds && FMOWorldGen::UplandLakeBedWeight(P, WorldPosition.X[I], WorldPosition.Y[I], Seed) >= 0.5f)
+		{
+			SurfaceType.Set(I, Surfaces->LakeBedBlend);   // the bowl and its damp rim: rock / mud, not the forest floor
+			continue;
+		}
 		SurfaceType.Set(I, (bUseSurfaces && S.BiomeIndex != INDEX_NONE) ? Surfaces->BiomeBlends[S.BiomeIndex] : EmptyBlend);
 	}
 

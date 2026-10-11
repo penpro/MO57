@@ -280,6 +280,19 @@ protected:
 	UPROPERTY()
 	TWeakObjectPtr<AActor> RememberedThreatActor;
 
+	/**
+	 * True once FinalizePerceptionSetup has run: the perception listener has an id and ConfigureSense is allowed. The sense configs EXIST earlier (SetupPerception,
+	 * during OnPossess) but configuring a sense before the listener is registered logs "Listener must have a valid id" -- so readiness is THIS flag, not "the configs exist".
+	 */
+	bool bPerceptionFinalized = false;
+
+	/** FinalizePerceptionSetup retries (one per frame) until the perception system has registered this listener. */
+	int32 PerceptionFinalizeAttempts = 0;
+	static constexpr int32 MaxPerceptionFinalizeAttempts = 180;
+
+	/** True once the initial blackboard values were pushed. The blackboard asset is bound AFTER OnPossess (the behavior tree starts later), so this is done on the first tick it exists. */
+	bool bBlackboardPrimed = false;
+
 	/** Pending perception settings to apply after SetupPerception. */
 	float PendingSightRadius = -1.f;
 	float PendingLoseSightRadius = -1.f;

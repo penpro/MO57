@@ -12,6 +12,7 @@ FMOWorldGenParamsRef UMOWorldGenSettings::BuildParams()
 	if (const UMOWorldGenSettings* Settings = GetDefault<UMOWorldGenSettings>())
 	{
 		Params->Tuning = Settings->Tuning;
+		Params->UplandLakeBedSurfaceType = Settings->UplandLakeBedSurfaceType;
 	}
 
 	TArray<FName> BiomeIds;
@@ -35,6 +36,8 @@ FMOWorldGenParamsRef UMOWorldGenSettings::BuildParams()
 		B.TemperatureMax = Row->TemperatureMax;
 		B.Priority = Row->Priority;
 		B.EdgeBlendWidth = Row->EdgeBlendWidth;
+		B.ReliefScale = Row->ReliefScale;
+		B.MountainScale = Row->MountainScale;
 		B.GroundSurfaceType = Row->GroundSurfaceType.ToSoftObjectPath();
 	}
 

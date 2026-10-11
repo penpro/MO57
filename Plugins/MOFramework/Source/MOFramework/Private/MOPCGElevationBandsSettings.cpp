@@ -1,5 +1,6 @@
 #include "MOPCGElevationBandsSettings.h"
 #include "MOFramework.h"
+#include "MOPCGWaterMask.h"
 
 #include "PCGContext.h"
 #include "PCGPoint.h"
@@ -100,6 +101,20 @@ TArray<FPCGPinProperties> UMOPCGElevationBandsSettings::OutputPinProperties() co
 // ELEMENT
 // ============================================================================
 
+bool FMOPCGElevationBandsElement::CanExecuteOnlyOnMainThread(FPCGContext* Context) const
+{
+	// The water mask reads the world's seed subsystem.
+	const UMOPCGElevationBandsSettings* Settings = Context ? Context->GetInputSettings<UMOPCGElevationBandsSettings>() : nullptr;
+	return Settings && (Settings->bExcludeWater || Settings->AllowedBiomeIds.Num() > 0);
+}
+
+bool FMOPCGElevationBandsElement::IsCacheable(const UPCGSettings* InSettings) const
+{
+	// With the water exclusion on, the output depends on the world seed as well as on the input points: never serve a cached result from another world.
+	const UMOPCGElevationBandsSettings* Settings = Cast<UMOPCGElevationBandsSettings>(InSettings);
+	return !(Settings && (Settings->bExcludeWater || Settings->AllowedBiomeIds.Num() > 0));
+}
+
 bool FMOPCGElevationBandsElement::ExecuteInternal(FPCGContext* Context) const
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE(FMOPCGElevationBandsElement::Execute);
@@ -123,6 +138,25 @@ bool FMOPCGElevationBandsElement::ExecuteInternal(FPCGContext* Context) const
 
 	// Create random stream for density filtering
 	FRandomStream RandomStream(Context->GetSeed() + Settings->SeedOffset);
+
+	// Water: the sea / river / pond ground and the upland lakes (see MOPCGWaterMask.h). Inactive (nothing is water) until the world has an active seed.
+	const bool bNeedsMask = Settings->bExcludeWater || Settings->AllowedBiomeIds.Num() > 0;
+	const FMOPCGWaterMask WaterMask = bNeedsMask ? FMOPCGWaterMask::ForActor(Context->GetTargetActor(nullptr), Settings->WaterBankRadii) : FMOPCGWaterMask();
+	int32 DroppedInWater = 0, DroppedByBiome = 0;
+	TArray<int32> AllowedBiomes;
+	for (const FName& Id : Settings->AllowedBiomeIds)
+	{
+		const int32 Index = WaterMask.FindBiome(Id);
+		if (Index != INDEX_NONE)
+		{
+			AllowedBiomes.AddUnique(Index);
+		}
+		else if (WaterMask.IsActive())
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOPCGElevationBands] AllowedBiomeIds names '%s', which is not a biome in DT_Biomes"), *Id.ToString());
+		}
+	}
+	const bool bFilterBiomes = Settings->AllowedBiomeIds.Num() > 0 && WaterMask.IsActive();   // no world seed yet: nothing to filter by, pass everything
 
 	// NOTE: We use the point's position directly - PCG points should already be in the correct coordinate space
 	// The execution source transform is the PCG component's location, NOT a transform to apply to points
@@ -159,8 +193,24 @@ bool FMOPCGElevationBandsElement::ExecuteInternal(FPCGContext* Context) const
 		// Process each input point
 		for (const FPCGPoint& InputPoint : InputPoints)
 		{
+			const FVector PointLocation = InputPoint.Transform.GetLocation();
+			if (Settings->bExcludeWater && WaterMask.IsActive() && WaterMask.IsInWater(PointLocation.X, PointLocation.Y, PointLocation.Z))
+			{
+				++DroppedInWater;
+				continue;
+			}
+			if (bFilterBiomes)
+			{
+				const float SlopeDeg = FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(InputPoint.Transform.GetRotation().GetUpVector().Z, -1.0f, 1.0f)));
+				if (!AllowedBiomes.Contains(WaterMask.BiomeAt(PointLocation.X, PointLocation.Y, PointLocation.Z, SlopeDeg)))
+				{
+					++DroppedByBiome;
+					continue;
+				}
+			}
+
 			// Calculate height relative to sea level
-			const float Height = InputPoint.Transform.GetLocation().Z - SeaLevelZ;
+			const float Height = PointLocation.Z - SeaLevelZ;
 
 			// Check each band
 			for (int32 BandIdx = 0; BandIdx < NumBands; ++BandIdx)
@@ -196,6 +246,10 @@ bool FMOPCGElevationBandsElement::ExecuteInternal(FPCGContext* Context) const
 		}
 	}
 
+	if (bNeedsMask)
+	{
+		UE_LOG(LogMOFramework, Verbose, TEXT("[MOPCGElevationBands] %s: maskActive=%d filterBiomes=%d (%d allowed) dropped %d point(s) in water, %d outside the allowed biomes"), *Context->GetTargetActor(nullptr)->GetName(), WaterMask.IsActive() ? 1 : 0, bFilterBiomes ? 1 : 0, AllowedBiomes.Num(), DroppedInWater, DroppedByBiome);
+	}
 	return true;
 }
 

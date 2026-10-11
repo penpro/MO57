@@ -26,6 +26,10 @@
 #include "TimerManager.h"
 #include "Misc/PackageName.h"
 #include "Engine/Engine.h"
+#include "Camera/PlayerCameraManager.h"
+#if WITH_EDITOR
+#include "Editor.h"   // GEditor: ending a Play-In-Editor session
+#endif
 
 AMOMainMenuPlayerController::AMOMainMenuPlayerController()
 {
@@ -134,6 +138,9 @@ void AMOMainMenuPlayerController::ShowMainMenu()
 		return;
 	}
 
+	// From black over the first seconds of the menu: hides the menu level streaming in. (Before the widget exists so the very first frame is already dark.)
+	StartMenuFadeIn();
+
 	// Push to the Menu layer of the primary game layout — the stack handles
 	// activation, input config, focus, and registers the widget with the UI
 	// manager. This puts the main menu inside the same CommonUI lifecycle
@@ -160,6 +167,7 @@ void AMOMainMenuPlayerController::ShowMainMenu()
 			MainMenuWidget->OnHostSavedGameRequested.AddDynamic(this, &AMOMainMenuPlayerController::HandleHostSavedGameRequested);
 
 			UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuPlayerController] Main menu pushed to Menu layer"));
+			ApplyMenuFadeOpacity();   // the widget starts transparent, not for one frame fully visible
 			return;
 		}
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOMainMenuPlayerController] PushWidgetToLayer returned non-MainMenu widget; falling back to AddToViewport"));
@@ -187,6 +195,41 @@ void AMOMainMenuPlayerController::ShowMainMenu()
 		MainMenuWidget->OnExitGameRequested.AddDynamic(this, &AMOMainMenuPlayerController::HandleExitGameRequested);
 		MainMenuWidget->OnHostSessionRequested.AddDynamic(this, &AMOMainMenuPlayerController::HandleHostSessionRequested);
 		MainMenuWidget->OnHostSavedGameRequested.AddDynamic(this, &AMOMainMenuPlayerController::HandleHostSavedGameRequested);
+		ApplyMenuFadeOpacity();
+	}
+}
+
+void AMOMainMenuPlayerController::StartMenuFadeIn()
+{
+	UWorld* World = GetWorld();
+	if (bMenuFadeStarted || MenuFadeInSeconds <= 0.0f || !World)
+	{
+		return;
+	}
+	bMenuFadeStarted = true;
+	MenuFadeStartSeconds = FPlatformTime::Seconds();
+	if (PlayerCameraManager)
+	{
+		PlayerCameraManager->StartCameraFade(1.0f, 0.0f, MenuFadeInSeconds, FLinearColor::Black, /*bShouldFadeAudio=*/false, /*bHoldWhenFinished=*/false);
+	}
+	World->GetTimerManager().SetTimer(MenuFadeTimerHandle, this, &AMOMainMenuPlayerController::ApplyMenuFadeOpacity, 0.02f, true);
+	UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuPlayerController] Menu fade-in from black started (%.1f s)"), MenuFadeInSeconds);
+}
+
+void AMOMainMenuPlayerController::ApplyMenuFadeOpacity()
+{
+	if (!bMenuFadeStarted || MenuFadeInSeconds <= 0.0f)
+	{
+		return;
+	}
+	const float Alpha = FMath::Clamp((float)((FPlatformTime::Seconds() - MenuFadeStartSeconds) / (double)MenuFadeInSeconds), 0.0f, 1.0f);
+	if (MainMenuWidget)
+	{
+		MainMenuWidget->SetRenderOpacity(Alpha);
+	}
+	if (Alpha >= 1.0f)
+	{
+		GetWorldTimerManager().ClearTimer(MenuFadeTimerHandle);
 	}
 }
 
@@ -585,6 +628,16 @@ void AMOMainMenuPlayerController::ExitGame()
 	// observed to no-op in packaged builds, so we follow with a hard platform
 	// exit request as a fallback (harmless if the engine is already tearing down).
 	UWorld* World = GetWorld();
+#if WITH_EDITOR
+	// Inside Play-In-Editor "Exit Game" must end the PREVIEW, not the editor: QuitGame with bIgnorePlatformRestrictions issues `quit force`, and the log of a session that lost its editor
+	// showed exactly that (`quit force` -> RequestExit -> "Engine exit requested (reason: Win RequestExit)" about two seconds after the menu appeared).
+	if (World && World->WorldType == EWorldType::PIE && GEditor)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOMainMenuPlayerController] ExitGame in Play-In-Editor: ending the preview (the editor stays open)"));
+		GEditor->RequestEndPlayMap();
+		return;
+	}
+#endif
 	UKismetSystemLibrary::QuitGame(World ? static_cast<UObject*>(World) : static_cast<UObject*>(this),
 		this, EQuitPreference::Quit, /*bIgnorePlatformRestrictions=*/true);
 	FPlatformMisc::RequestExit(/*Force=*/false);
@@ -710,8 +763,16 @@ void AMOMainMenuPlayerController::SetupMediaPlayer()
 	if (MediaSoundComponent)
 	{
 		MediaSoundComponent->SetMediaPlayer(MediaPlayer);
+		// The intro has no sound class, so it used to play at FULL volume whatever the player's sliders said (Music 0.27, Ambient 0.20 and the intro at 1.0 is a ~4x blast on every start).
+		// It is a soundtrack: it follows the music volume, the same level the menu music plays at.
+		float IntroVolume = 1.0f;
+		if (const UMOAudioSubsystem* Audio = UMOAudioSubsystem::Get(GetWorld()))
+		{
+			IntroVolume = Audio->GetMusicVolume() * Audio->GetMasterVolume();
+		}
+		MediaSoundComponent->SetVolumeMultiplier(IntroVolume);
 		MediaSoundComponent->RegisterComponent();
-		UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuPlayerController] MediaSoundComponent created and registered"));
+		UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuPlayerController] MediaSoundComponent created and registered (intro volume x%.2f = music x master)"), IntroVolume);
 	}
 
 	// Create dynamic material instance from the video material

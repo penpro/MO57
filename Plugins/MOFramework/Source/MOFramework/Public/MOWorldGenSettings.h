@@ -48,6 +48,13 @@ public:
 	UPROPERTY(EditAnywhere, Config, Category="Generator")
 	FMOWorldGenTuning Tuning;
 
+	/**
+	 * The voxel surface type painted on an upland lake's bed (a VST_ asset listed in NaniteMegaMaterial.surface_types): rock / gravel / mud instead of the surrounding biome's ground (the forest's
+	 * muddy leaves under 5 m of water read as a flooded forest floor). Empty = the biome's ground continues under the water.
+	 */
+	UPROPERTY(EditAnywhere, Config, Category="Water", meta=(AllowedClasses="/Script/VoxelCore.VoxelSurfaceTypeInterface"))
+	FSoftObjectPath UplandLakeBedSurfaceType = FSoftObjectPath(TEXT("/Game/VoxelExamples/NaniteMaterials/Materials/VST_MI_Gravel.VST_MI_Gravel"));
+
 	/** Build a fresh snapshot from the current settings + DT_Biomes (game thread). Does not publish. */
 	static FMOWorldGenParamsRef BuildParams();
 

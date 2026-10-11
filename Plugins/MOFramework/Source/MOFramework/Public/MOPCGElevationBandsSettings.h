@@ -33,6 +33,11 @@
  * [2024-02] MAX 8 BANDS: OutputPinProperties generates pins for bands 0-7.
  *   Adding more bands will have no output.
  *
+ * [2026-10] WATER (bExcludeWater, default ON): every spawner chain in the scatter graphs passes through one of these nodes, so it is THE chokepoint that keeps trees, grass, stones and spawn
+ *   points out of water -- the sea / rivers / ponds (ground under the sea plane) AND the upland lakes, which sit ABOVE sea level and which the bands alone cannot see (MO.PCG.WaterAudit found
+ *   51,374 of 56,937 instances in one lake). The test is FMOPCGWaterMask (MOPCGWaterMask.h). Because the answer depends on the world seed, not only on the input points, the element is neither cacheable
+ *   nor off the main thread while the exclusion is on.
+ *
  * =============================================================================
  * RELATED FILES: MOPCGDistanceCullingSettings.h
  * LAST UPDATED: 2026-02-25
@@ -152,6 +157,24 @@ public:
 	/** Random seed offset for density filtering. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Settings", meta=(PCG_Overridable))
 	int32 SeedOffset = 0;
+
+	/**
+	 * Drop every input point that stands in water (under the sea plane, or inside an upland lake) before banding. ON by default: nothing in this game is planted in water. A graph that really wants
+	 * aquatic scatter (reeds in the shallows) turns it off on ITS elevation node and filters with its own water band.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Water", meta=(PCG_Overridable))
+	bool bExcludeWater = true;
+
+	/**
+	 * Keep only points that stand in one of these biomes (DT_Biomes row ids, resolved the way the biome spawner does: the point's height, slope and the generator's climate). Empty = every biome. This
+	 * lets a plain Static Mesh Spawner chain ("black locust trees") belong to the biomes it suits instead of covering the whole world; the node is then not cacheable (the answer depends on the world seed).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Biome", meta=(PCG_Overridable))
+	TArray<FName> AllowedBiomeIds;
+
+	/** How far past an upland lake's shore (1.0 = the shore ellipse) still counts as water. 1.05 = the bank's first metres. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Water", meta=(PCG_Overridable, ClampMin="1.0", ClampMax="2.0", EditCondition="bExcludeWater"))
+	float WaterBankRadii = 1.05f;
 };
 
 /**
@@ -160,8 +183,8 @@ public:
 class FMOPCGElevationBandsElement : public IPCGElement
 {
 public:
-	virtual bool CanExecuteOnlyOnMainThread(FPCGContext* Context) const override { return false; }
-	virtual bool IsCacheable(const UPCGSettings* InSettings) const override { return true; }
+	virtual bool CanExecuteOnlyOnMainThread(FPCGContext* Context) const override;
+	virtual bool IsCacheable(const UPCGSettings* InSettings) const override;
 
 protected:
 	virtual bool ExecuteInternal(FPCGContext* Context) const override;

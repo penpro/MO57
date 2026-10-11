@@ -80,6 +80,12 @@ public:
 	 */
 	void PublishWorldSeed(int32 WorldSeed, FName VoxelSeedParameterName);
 
+	/**
+	 * Menu / offline backdrop worlds (AMOMenuFlyby): record the seed as this world's active seed WITHOUT publishing it (no GameState, nothing to replicate) and regenerate the
+	 * voxel runtime from it. A gameplay world never calls this: it publishes.
+	 */
+	bool ApplyBackdropSeed(int32 WorldSeed, FName VoxelSeedParameterName);
+
 	// =========================================================================
 	// CLIENT: receive
 	// =========================================================================

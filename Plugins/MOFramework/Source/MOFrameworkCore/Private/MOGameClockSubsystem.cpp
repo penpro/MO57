@@ -113,6 +113,18 @@ void UMOGameClockSubsystem::SetGameDateTime(const FDateTime& NewDateTime)
 	RefreshHourState();
 }
 
+FDateTime UMOGameClockSubsystem::AdvanceToTimeOfDay(int32 Hour, int32 Minute)
+{
+	const FDateTime Current = GameDateTime;
+	FDateTime Target(Current.GetYear(), Current.GetMonth(), Current.GetDay(), FMath::Clamp(Hour, 0, 23), FMath::Clamp(Minute, 0, 59), 0);
+	if (Target <= Current)
+	{
+		Target += FTimespan::FromDays(1);
+	}
+	SetGameDateTime(Target);
+	return Target;
+}
+
 void UMOGameClockSubsystem::RefreshDaytimeState()
 {
 	const int32 Hour = GameDateTime.GetHour();

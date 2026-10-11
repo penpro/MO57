@@ -291,6 +291,27 @@ bool FMOColony_Rel_GrowthBeatsDrift::RunTest(const FString& Parameters)
 // V2.4 seasons math
 // ============================================================================
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOColony_Recruit_GateMath,
+	"MOFramework.Colony.Recruit.GateMath",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOColony_Recruit_GateMath::RunTest(const FString& Parameters)
+{
+	// The first survivors you meet are not vouched-for strangers: the gate only judges a colony of RecruitGateMinRoster settlers or more.
+	TestFalse(TEXT("a founder alone: the gate does not apply (the first survivor just joins)"), UMOColonyManagerSubsystem::GateApplies(1, 3));
+	TestFalse(TEXT("a founder and one friend: still no gate"), UMOColonyManagerSubsystem::GateApplies(2, 3));
+	TestTrue(TEXT("a settlement of three: strangers need standing"), UMOColonyManagerSubsystem::GateApplies(3, 3));
+
+	// The "how long" the refusal tells the player is the bond function's own answer.
+	const float Hours = UMOColonyManagerSubsystem::HoursToReachStanding(0.0f, 0.15f);
+	TestTrue(FString::Printf(TEXT("0 -> 0.15 standing takes ~8 shared game hours (got %.2f)"), Hours), FMath::IsNearlyEqual(Hours, 8.04f, 0.1f));
+	TestTrue(TEXT("spending exactly that long reaches the threshold"), UMOCharacterHistoryComponent::ComputeStrengthDelta(0.0f, Hours + 0.01f, 0.0f) >= 0.15f);
+	TestTrue(TEXT("a few minutes less does not"), UMOCharacterHistoryComponent::ComputeStrengthDelta(0.0f, Hours - 0.1f, 0.0f) < 0.15f);
+	TestEqual(TEXT("already at the threshold: nothing left to wait"), UMOColonyManagerSubsystem::HoursToReachStanding(0.2f, 0.15f), 0.0f);
+	TestTrue(TEXT("half way there takes less time"), UMOColonyManagerSubsystem::HoursToReachStanding(0.08f, 0.15f) < Hours);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOColony_Season_MonthMapping,
 	"MOFramework.Colony.Seasons.MonthMapping",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)

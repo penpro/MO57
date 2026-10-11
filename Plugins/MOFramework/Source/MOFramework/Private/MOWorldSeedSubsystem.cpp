@@ -19,6 +19,7 @@
 #include "VoxelParameterOverridesOwner.h"
 #include "VoxelPinValue.h"
 #include "Graphs/VoxelHeightGraphStamp.h"
+#include "Graphs/VoxelVolumeGraphStamp.h"
 #include "EngineUtils.h"
 #include "Engine/World.h"
 #include "TimerManager.h"
@@ -145,50 +146,53 @@ int32 UMOWorldSeedSubsystem::ApplySeedToStamps(UWorld* World, int32 WorldSeed, F
 				UE_LOG(LogMOFramework, Verbose, TEXT("[MOWorldSeed] Stamp in '%s': StampSeed '%s' -> '%s'"),
 					*Actor->GetName(), *OldSeed, *VoxelSeedString);
 
-				// 2) CRITICAL FIX (2026-05): If this stamp is a HeightGraphStamp
-				// (the level's world-gen stamp using VHG_Flat), it has its OWN
-				// "Seed" parameter override that drives terrain generation —
-				// SEPARATE from the StampSeed above. The graph asset's own
-				// Seed override is IGNORED in favor of the stamp's override.
-				// Per the user's editor screenshot, the world-gen stamp has
-				// a "Seed" parameter set inside the stamp itself (not on the
-				// underlying graph asset). Need to call SetParameter on the
-				// stamp via its IVoxelParameterOverridesOwner interface.
-				if (StampRef.IsA<FVoxelHeightGraphStamp>())
+				// 2) CRITICAL FIX (2026-05): a GRAPH stamp has its OWN "Seed" parameter override that drives generation -- SEPARATE from the StampSeed
+				// above, and the graph asset's own Seed override is IGNORED in favour of the stamp's. That is the level's world-gen HeightGraphStamp
+				// (VHG_MOTerrain) and, since the caves, the Subtractive VolumeGraphStamp (VVG_MOCaves): both must see the SAME seed or the caves
+				// would not line up with the terrain they are carved from. Set it through the stamp's IVoxelParameterOverridesOwner.
+				IVoxelParameterOverridesOwner* StampOwner = nullptr;
+				const TCHAR* StampKind = TEXT("");
+				if (FVoxelHeightGraphStamp* HGStamp = StampRef.As<FVoxelHeightGraphStamp>())
 				{
-					FVoxelHeightGraphStamp* HGStamp = StampRef.As<FVoxelHeightGraphStamp>();
-					if (HGStamp)
+					StampOwner = static_cast<IVoxelParameterOverridesOwner*>(HGStamp);
+					StampKind = TEXT("HGStamp");
+				}
+				else if (FVoxelVolumeGraphStamp* VGStamp = StampRef.As<FVoxelVolumeGraphStamp>())
+				{
+					StampOwner = static_cast<IVoxelParameterOverridesOwner*>(VGStamp);
+					StampKind = TEXT("VGStamp");
+				}
+
+				if (StampOwner)
+				{
+					if (StampOwner->HasParameter(VoxelSeedParameterName))
 					{
-						IVoxelParameterOverridesOwner* StampOwner = static_cast<IVoxelParameterOverridesOwner*>(HGStamp);
-						if (StampOwner->HasParameter(VoxelSeedParameterName))
+						FVoxelExposedSeed StampSeedValue;
+						StampSeedValue.Seed = VoxelSeedString;
+						FString StampError;
+						if (StampOwner->SetParameter(VoxelSeedParameterName, FVoxelPinValue::Make(StampSeedValue), &StampError))
 						{
-							FVoxelExposedSeed StampSeedValue;
-							StampSeedValue.Seed = VoxelSeedString;
-							FString StampError;
-							if (StampOwner->SetParameter(VoxelSeedParameterName, FVoxelPinValue::Make(StampSeedValue), &StampError))
-							{
-								MOHARVEST_LOG(LogContext, "Seed",
-									"  HGStamp '%s': Set 'Seed' param='%s' (stamp's overrides now=%d) — THIS is the world-gen seed",
-									*Actor->GetName(), *VoxelSeedString,
-									StampOwner->GetParameterOverrides().GuidToValueOverride.Num());
-							}
-							else
-							{
-								MOHARVEST_LOG(LogContext, "Seed",
-									"  HGStamp '%s': FAILED to set Seed: %s",
-									*Actor->GetName(), *StampError);
-							}
+							MOHARVEST_LOG(LogContext, "Seed",
+								"  %s '%s': Set 'Seed' param='%s' (stamp's overrides now=%d) — THIS is the world-gen seed",
+								StampKind, *Actor->GetName(), *VoxelSeedString,
+								StampOwner->GetParameterOverrides().GuidToValueOverride.Num());
 						}
 						else
 						{
 							MOHARVEST_LOG(LogContext, "Seed",
-								"  HGStamp '%s': no 'Seed' parameter on this stamp",
-								*Actor->GetName());
+								"  %s '%s': FAILED to set Seed: %s",
+								StampKind, *Actor->GetName(), *StampError);
 						}
-
-						// Tell the runtime the stamp changed so it re-runs.
-						StampRef.Update();
 					}
+					else
+					{
+						MOHARVEST_LOG(LogContext, "Seed",
+							"  %s '%s': no 'Seed' parameter on this stamp",
+							StampKind, *Actor->GetName());
+					}
+
+					// Tell the runtime the stamp changed so it re-runs.
+					StampRef.Update();
 				}
 			}
 			else
@@ -436,6 +440,14 @@ bool UMOWorldSeedSubsystem::RegenerateVoxelWorld(UWorld* World, int32 WorldSeed,
 // ============================================================================
 // HOST: PUBLISH
 // ============================================================================
+
+bool UMOWorldSeedSubsystem::ApplyBackdropSeed(int32 WorldSeed, FName VoxelSeedParameterName)
+{
+	bHasActiveSeed = true;
+	ActiveSeed = WorldSeed;
+	ActiveParameterName = VoxelSeedParameterName;
+	return RegenerateVoxelWorld(GetWorld(), WorldSeed, VoxelSeedParameterName, this);
+}
 
 void UMOWorldSeedSubsystem::PublishWorldSeed(int32 WorldSeed, FName VoxelSeedParameterName)
 {

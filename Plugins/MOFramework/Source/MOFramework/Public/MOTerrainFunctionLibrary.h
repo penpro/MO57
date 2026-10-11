@@ -90,6 +90,32 @@ public:
 		FVoxelBox2D& Bounds,
 		FVoxelFloatRange& HeightRange) const;
 
+	/**
+	 * Cave carving field for a VOLUME graph: tunnels, caverns and sinkholes from the C++ generator. Wire Get Position 3D (double, World) and the Seed
+	 * parameter in, Distance into OutputVolume.Distance, and run the graph in a Subtractive volume stamp on the terrain's stack (identity transform).
+	 * @param WorldPosition World-space XYZ (cm), double precision.
+	 * @param Seed The terrain seed (the SAME Seed parameter the height graph uses).
+	 * @param Distance Signed distance to the nearest cave air (cm): negative inside a cave, +100000 where there is none.
+	 */
+	UFUNCTION(Category = "MO|Terrain", DisplayName = "MO Terrain Caves")
+	void MOTerrainCaves(
+		const FVoxelDoubleVectorBuffer& WorldPosition,
+		const FVoxelSeed& Seed,
+		FVoxelFloatBuffer& Distance) const;
+
+	/**
+	 * The volume the cave stamp covers (the world footprint x the Z band caves can occupy), from the published snapshot. No inputs, like MO Terrain Bounds.
+	 * @param Bounds Feed OutputVolume.Bounds.
+	 */
+	UFUNCTION(Category = "MO|Terrain", DisplayName = "MO Terrain Caves Bounds")
+	void MOTerrainCavesBounds(FVoxelBox& Bounds) const;
+
+	/** MOTerrainCaves body, graph-free. Worker-thread safe. */
+	static void ComputeCaves(const FVoxelDoubleVectorBuffer& WorldPosition, int32 Seed, int32 LOD, FVoxelFloatBuffer& Distance);
+
+	/** MOTerrainCavesBounds body, graph-free. */
+	static void ComputeCavesBounds(FVoxelBox& Bounds);
+
 	/** The node's whole body, graph-free (the UFUNCTION above only adds the LOD lookup). Worker-thread safe. */
 	static void Compute(
 		const FVoxelDoubleVector2DBuffer& WorldPosition,
