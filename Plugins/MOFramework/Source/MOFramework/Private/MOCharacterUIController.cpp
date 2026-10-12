@@ -996,6 +996,7 @@ void UMOCharacterUIController::HandleThermalComfortChanged(EMOThermalComfort Old
 
 void UMOCharacterUIController::RefreshThermalMoodle(EMOThermalComfort Comfort)
 {
+	EnsureDefaultMoodleIcons();
 	UMOUIManagerComponent* UIManager = GetUIManager();
 	UMOHUDRootWidget* HUDRoot = UIManager ? UIManager->GetHUDRoot() : nullptr;
 	UMOStatusEffectStripWidget* Strip = HUDRoot ? HUDRoot->GetStatusStrip() : nullptr;
@@ -1059,6 +1060,32 @@ void UMOCharacterUIController::RefreshThermalMoodle(EMOThermalComfort Comfort)
 	Strip->AddOrUpdateMoodle(M);
 }
 
+void UMOCharacterUIController::EnsureDefaultMoodleIcons()
+{
+	if (bDefaultMoodleIconsEnsured)
+	{
+		return;
+	}
+	bDefaultMoodleIconsEnsured = true;
+	auto Fill = [](TArray<TObjectPtr<UTexture2D>>& Icons, std::initializer_list<const TCHAR*> Names)
+	{
+		if (Icons.Num() > 0)
+		{
+			return;   // a designer authored this one
+		}
+		for (const TCHAR* Name : Names)
+		{
+			const FString Path = FString::Printf(TEXT("/MOFramework/UI/Icons/Moodles/T_Moodle_%s.T_Moodle_%s"), Name, Name);
+			Icons.Add(LoadObject<UTexture2D>(nullptr, *Path));   // null if the asset is missing: that level stays label-only
+		}
+	};
+	Fill(ThermalMoodleIcons, { TEXT("VeryCold"), TEXT("Cold"), TEXT("Cold"), TEXT("Hot"), TEXT("VeryHot") });   // [2] Comfortable is unused (no moodle then)
+	Fill(WetMoodleIcons, { TEXT("Damp"), TEXT("Wet"), TEXT("Soaked") });
+	Fill(HungerMoodleIcons, { TEXT("Hungry"), TEXT("Starving") });
+	Fill(ThirstMoodleIcons, { TEXT("Thirsty"), TEXT("Dehydrated") });
+	Fill(EnergyMoodleIcons, { TEXT("Tired"), TEXT("Exhausted") });
+}
+
 UTexture2D* UMOCharacterUIController::PickIconForLevel(const TArray<TObjectPtr<UTexture2D>>& Icons, int32 Level)
 {
 	if (Icons.Num() == 0)
@@ -1071,6 +1098,7 @@ UTexture2D* UMOCharacterUIController::PickIconForLevel(const TArray<TObjectPtr<U
 
 void UMOCharacterUIController::RefreshWetMoodle(EMOWetnessState State)
 {
+	EnsureDefaultMoodleIcons();
 	UMOUIManagerComponent* UIManager = GetUIManager();
 	UMOHUDRootWidget* HUDRoot = UIManager ? UIManager->GetHUDRoot() : nullptr;
 	UMOStatusEffectStripWidget* Strip = HUDRoot ? HUDRoot->GetStatusStrip() : nullptr;
@@ -1209,6 +1237,7 @@ void UMOCharacterUIController::HandleSurvivalStatChanged(FName StatName, float /
 
 void UMOCharacterUIController::RefreshSurvivalStatMoodle(FName StatName)
 {
+	EnsureDefaultMoodleIcons();
 	UMOSurvivalStatsComponent* Stats = BoundSurvivalStats.Get();
 	if (!Stats) return;
 

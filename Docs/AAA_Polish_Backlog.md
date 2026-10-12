@@ -73,8 +73,9 @@ design forks are logged under "Forks", not built blind.
   WBP_ItemContextMenu (TransferButton, PickupButton), WBP_JournalPanel (AbandonButton, TrackButtonText), WBP_BuildingRecipeDetail (craft amount spin / slider / text, resource-source checkboxes), WBP_EquipmentPanel (swap
   progress bars), WBP_MOColonyPortrait (ClickButton, NameLabel, ActivityIndicator), WBP_HUDRoot (WindIndicator: needs an authored up-pointing arrow texture). For each: wire it or delete the dead C++ member. Also
   bare native `EntryButton` in WBP_MOListEntry (mouse-dead; is it used?), and ~15 legacy WBPs in `/MOFramework/UI/` root that `ui check` cannot resolve (duplicates of the subfolder versions?).
-- [ ] **Moodle icons**: the strip works with a tinted square + label; the icon arrays on `UMOCharacterUIController` (thermal, wet, hunger ...) are empty (art debt). A fresh pawn also shows Dehydrated (critical) and
-  Hungry within about a minute of a new game: check the metabolism rates against the realism pillar.
+- [~] **Moodle icons**: a generated glyph set (`Tools/gen_moodle_icons.py` -> `Content/UI/Icons/Moodles/T_Moodle_*`, imported with `Content/Python/import_moodle_icons.py`) fills the controller's EMPTY icon arrays
+  (a designer-authored array is never touched): snowflake / thermometers / sun, droplets x1-3, fork+knife, glass, moon, a ring at the critical level. They are placeholders in style; a hand-drawn set can replace the
+  textures (same names) without code changes. (A fresh pawn showing Dehydrated / Hungry within a minute: see the survival pacing fork.)
 - [ ] UI polish pass over the CommonUI screens (consistent spacing / focus / controller). Known: the Options panel's dark-grey labels (0.28) on a 20 %-alpha panel are hard to read over a bright backdrop
   (every section; the group titles are fainter still); "Graphics Quality" / "VSync" sit at the END of the Graphics section (no reorder API: rebuild the later rows to move them).
 
