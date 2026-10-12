@@ -68,6 +68,7 @@ struct MOFRAMEWORK_API FMOFootPlantDetector
 	float SwingFraction = 0.65f;              // faster than this fraction of the body speed = the swing
 	float PlantFraction = 0.30f;              // back under this fraction = planted
 	float ReferenceFloorCmPerSec = 100.0f;    // the body speed is not taken below this: a pawn shuffling on the spot makes no step
+	float MinSwingSeconds = 0.2f;             // a real swing lasts longer than this: a shorter dip in the foot's speed (measured mid-swing in the crouch walk) is not a plant
 	float MaxSwingSeconds = 1.5f;             // a swing never lasts this long: a stuck "swing" is dropped without a step
 
 	/** Feed the foot's world horizontal speed and the body's each tick. Returns true on the tick the foot plants. */
@@ -168,7 +169,6 @@ private:
 	bool bBonesMissingLogged = false;
 
 	double LastStepTime[2] = { -100.0, -100.0 };
-	double LastAnyStepTime = -100.0;
 	int32 NextVariant = 0;
 	int32 StepCount = 0;
 

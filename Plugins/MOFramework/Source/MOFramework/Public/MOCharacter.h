@@ -206,6 +206,7 @@ class UMOAdrenalineComponent;
 class UMORespirationComponent;
 class UMOFootstepComponent;
 class UAnimSequence;
+class UAnimMontage;
 class UAnimInstance;
 class UMOCharacterMovementComponent;
 class UMOCraftingQueueComponent;
@@ -1146,6 +1147,48 @@ private:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Water|Animation", meta=(AllowPrivateAccess="true"))
 	TSoftObjectPtr<UAnimSequence> SwimUnderDownAnim;
+
+	// ---- crouch ----
+	// ACharacter::Crouch() is a silent no-op unless NavAgentProps.bCanCrouch is set (it never was: CanEverCrouch() was false). The capsule shrinks and the walk slows; the pose comes from the locomotion
+	// animation blueprint's DefaultSlot as a looping dynamic montage (the blueprint has no crouch states, and a slot blends in and out where the swim override snaps). The clips are the engine's Manny
+	// crouch set retargeted to the MetaHuman skeleton (Content/Characters/Crouch/). Soft paths: a pawn without them crouches with its standing pose (shorter capsule, slower).
+
+public:
+	/** Crouched capsule half height (cm; the standing half height is 96). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Movement|Crouch", meta=(ClampMin="30.0"))
+	float CrouchedHalfHeightCm = 60.0f;
+
+	/** Walk speed while crouched (cm/s; the standing walk is 400). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Movement|Crouch", meta=(ClampMin="0.0"))
+	float CrouchedWalkSpeed = 200.0f;
+
+	virtual void OnEndCrouch(float HalfHeightAdjust, float ScaledHalfHeightAdjust) override;
+
+private:
+	/** Holding still, crouched. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Movement|Crouch", meta=(AllowPrivateAccess="true"))
+	TSoftObjectPtr<UAnimSequence> CrouchIdleAnim;
+
+	/** Walking forward, crouched. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Movement|Crouch", meta=(AllowPrivateAccess="true"))
+	TSoftObjectPtr<UAnimSequence> CrouchWalkAnim;
+
+	/** The ground speed (cm/s) the crouch-walk clip was authored for: the play rate follows speed / this. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Movement|Crouch", meta=(AllowPrivateAccess="true", ClampMin="1.0"))
+	float CrouchWalkAnimSpeedCm = 294.0f;
+
+	enum class ECrouchPose : uint8 { None, Idle, Walk };
+
+	/** Choose the crouch pose from the movement and play it on the animation blueprint's DefaultSlot. Cosmetic: runs on every machine from replicated movement. */
+	void UpdateCrouchAnimation(float DeltaTime, bool bSwimming);
+	void StopCrouchPose(float BlendOutSeconds);
+
+	ECrouchPose CurrentCrouchPose = ECrouchPose::None;
+	ECrouchPose WantedCrouchPose = ECrouchPose::None;
+	float WantedCrouchPoseSeconds = 0.0f;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UAnimMontage> CrouchMontage;
 
 	/** Water sounds for the body in water: the splash of feet entering, wading steps, swim strokes. Local presentation on every machine (it follows replicated movement). */
 	void UpdateWaterSounds(float DeltaTime);

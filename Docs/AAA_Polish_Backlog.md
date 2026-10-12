@@ -28,6 +28,9 @@ design forks are logged under "Forks", not built blind.
   at 8 % immersion. Verified in the editor in every biome. `MO.Footstep.*` verbs, `MOFramework.Footsteps.*` tests.
 - Graphics quality: `UMOGameSettings` levels Low..Epic over the engine's scalability groups, first-run hardware benchmark (`EnsureGraphicsQualityChosen`, opt-out `-NoQualityBenchmark`), Options panel quality combo +
   VSync + the display's real resolution list, `Config/DefaultScalability.ini` with the measured MO-specific cuts. Options bugs fixed (motion-blur checkbox and weather label never bound).
+- Crouch / sneak (LeftCtrl): it was a silent no-op (`bCanCrouch` never set). Now the capsule shrinks to 60 cm half height, walk 200 cm/s, the jump key stands up first, nobody crouches in water; the pose is a looping
+  dynamic montage on the animation blueprint's DefaultSlot (idle <-> walk cross-fade, play rate follows speed), clips = the engine's Manny crouch set (MoverExamples, mounted with `UMOEditorContentUtils`, no plugin
+  enabled) retargeted to the MetaHuman skeleton in `Content/Characters/Crouch/`; the footstep Sneak gait (quiet) now engages. Verified in the editor (screenshots, probes, step alternation 18/18).
 - Tooling: `MO.Perf.Bench/Tour`, `MO.NewGame`, `MO.Water.*` (incl. `MO.Water.Meter`), `MO.Audio.Mixes`, `Tools/check_unity_collisions.py`; editor PIE no longer throttled to 3 fps (user EditorSettings.ini).
 
 ## Backlog (ordered; the first unchecked item is next)
@@ -62,8 +65,6 @@ design forks are logged under "Forks", not built blind.
   the interface on the actors; props on top of terrain read as wood today), rain / snow overlays on the steps, interior / exterior mix, UDW outdoor mix failing in `RecursiveApplyAdjuster` (silenced via LogAudio=Warning).
 - [ ] UI polish pass over the CommonUI screens (consistent spacing / focus / controller). Known: the Options panel's dark-grey labels (0.28) on a 20 %-alpha panel are hard to read over a bright backdrop
   (every section; the group titles are fainter still); "Graphics Quality" / "VSync" sit at the END of the Graphics section (no reorder API: rebuild the later rows to move them).
-- [ ] **Crouch / sneak does not work**: `bCanCrouch` is never set, `CanEverCrouch()` is false for MO pawns, so `RequestCrouchToggle` is a silent no-op (measured: `MO.Footstep.Probe` crouched=0 canCrouch=0). Needs
-  `NavAgentProps.bCanCrouch`, crouched half height / speed, a crouch animation set (none retargeted yet) and the camera drop; the footstep Sneak gait (quieter) is already wired and waits for it.
 
 ## Forks (need Wes)
 - Thermal model scale: replace the equilibrium-style temperature drift with a heat balance over a thermal mass (realistic rates: hours, not minutes, to hypothermia), or keep it gamey? Until decided, a lake swim

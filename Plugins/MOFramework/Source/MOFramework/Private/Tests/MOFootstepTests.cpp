@@ -103,6 +103,25 @@ bool FMOFootstep_PlantDetector::RunTest(const FString& Parameters)
 	TestEqual(TEXT("standing makes no step"), CountPlants(10.0f, 0.71f, 0.0f, 0.0f, 0.0f), 0);
 	TestEqual(TEXT("shuffling on the spot (a 55 cm/s foot twitch) makes no step"), CountPlants(10.0f, 0.71f, 0.0f, 5.0f, 55.0f), 0);
 
+	// A dip in the swinging foot's speed is not a plant (measured in the crouch walk: 227 -> 44 -> 198 cm/s within 0.1 s, mid-swing): exactly one plant for the whole swing.
+	{
+		FMOFootPlantDetector Dip;
+		int32 DipPlants = 0;
+		const float DipDt = 1.0f / 60.0f;
+		auto Feed = [&](float Speed, float Seconds)
+		{
+			for (float T = 0.0f; T < Seconds; T += DipDt)
+			{
+				DipPlants += Dip.Update(Speed, 200.0f, DipDt) ? 1 : 0;
+			}
+		};
+		Feed(300.0f, 0.05f);   // the swing starts
+		Feed(40.0f, 0.04f);    // a dip well under the plant threshold (60 cm/s at this body speed), too short to be a stance
+		Feed(350.0f, 0.25f);   // and the swing carries on
+		Feed(15.0f, 0.3f);     // the real plant
+		TestEqual(TEXT("a mid-swing dip makes no extra step"), DipPlants, 1);
+	}
+
 	// A swing that never ends is dropped quietly: the foot hovers between the swing and plant thresholds for 3 s (animation frozen, pawn dragged); no step comes out of it, and the detector recovers.
 	FMOFootPlantDetector Detector;
 	int32 Plants = 0;
@@ -114,7 +133,10 @@ bool FMOFootstep_PlantDetector::RunTest(const FString& Parameters)
 	}
 	TestEqual(TEXT("a swing that never ends makes no step"), Plants, 0);
 	TestFalse(TEXT("... and is dropped"), Detector.IsSwinging());
-	Detector.Update(400.0f, 250.0f, Dt);   // a fresh swing
+	for (float T = 0.0f; T < 0.25f; T += Dt)
+	{
+		Detector.Update(400.0f, 250.0f, Dt);   // a fresh swing, long enough to be a real one
+	}
 	TestTrue(TEXT("the detector recovers: the next swing is seen"), Detector.IsSwinging());
 	TestTrue(TEXT("... and plants"), Detector.Update(10.0f, 250.0f, Dt));
 

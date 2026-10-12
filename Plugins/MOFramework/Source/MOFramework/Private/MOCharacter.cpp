@@ -10,6 +10,7 @@
 #include "MOCharacterMovementComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Animation/AnimInstance.h"
+#include "Animation/AnimMontage.h"
 #include "Animation/AnimSequence.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "MOIdentityComponent.h"
@@ -89,6 +90,13 @@ AMOCharacter::AMOCharacter(const FObjectInitializer& ObjectInitializer)
 	GetCharacterMovement()->MinAnalogWalkSpeed = 20.f;
 	GetCharacterMovement()->BrakingDecelerationWalking = 2000.f;
 	GetCharacterMovement()->BrakingDecelerationFalling = 1500.0f;
+
+	// Crouching: without bCanCrouch ACharacter::Crouch() does nothing at all.
+	GetCharacterMovement()->NavAgentProps.bCanCrouch = true;
+	GetCharacterMovement()->SetCrouchedHalfHeight(CrouchedHalfHeightCm);
+	GetCharacterMovement()->MaxWalkSpeedCrouched = CrouchedWalkSpeed;
+	CrouchIdleAnim = TSoftObjectPtr<UAnimSequence>(FSoftObjectPath(TEXT("/MOFramework/Characters/Crouch/MM_Unarmed_Crouch_Idle_MH.MM_Unarmed_Crouch_Idle_MH")));
+	CrouchWalkAnim = TSoftObjectPtr<UAnimSequence>(FSoftObjectPath(TEXT("/MOFramework/Characters/Crouch/MM_Unarmed_Crouch_Walk_Fwd_MH.MM_Unarmed_Crouch_Walk_Fwd_MH")));
 
 	// MO Components - Core Identity
 	IdentityComponent = CreateDefaultSubobject<UMOIdentityComponent>(TEXT("IdentityComponent"));
@@ -595,6 +603,11 @@ void AMOCharacter::RequestJumpStart_Implementation()
 	if (IsSwimming())
 	{
 		bSwimUpHeld = true;   // rise while held (TickWater adds the input)
+		return;
+	}
+	if (bIsCrouched)
+	{
+		UnCrouch();   // the jump key stands up first (a crouched pawn cannot jump)
 		return;
 	}
 	if (CanJump_Implementation())
@@ -1315,6 +1328,89 @@ AMOCharacter::ESwimPose AMOCharacter::ChooseSwimPose() const
 	return Horizontal > 0.7f * Move->GetMaxSpeed() ? ESwimPose::Crawl : ESwimPose::Slow;
 }
 
+void AMOCharacter::OnEndCrouch(float HalfHeightAdjust, float ScaledHalfHeightAdjust)
+{
+	Super::OnEndCrouch(HalfHeightAdjust, ScaledHalfHeightAdjust);
+	StopCrouchPose(0.3f);
+}
+
+void AMOCharacter::StopCrouchPose(float BlendOutSeconds)
+{
+	if (CrouchMontage)
+	{
+		if (USkeletalMeshComponent* Body = GetMesh())
+		{
+			if (UAnimInstance* Anim = Body->GetAnimInstance())
+			{
+				Anim->Montage_Stop(BlendOutSeconds, CrouchMontage);
+			}
+		}
+	}
+	CrouchMontage = nullptr;
+	CurrentCrouchPose = ECrouchPose::None;
+	WantedCrouchPose = ECrouchPose::None;
+	WantedCrouchPoseSeconds = 0.0f;
+}
+
+void AMOCharacter::UpdateCrouchAnimation(float DeltaTime, bool bSwimming)
+{
+	if (IsNetMode(NM_DedicatedServer))
+	{
+		return;   // cosmetic
+	}
+	USkeletalMeshComponent* Body = GetMesh();
+	UCharacterMovementComponent* Move = GetCharacterMovement();
+	// The swim override replaces the animation blueprint (no DefaultSlot then); a dead or airborne pawn is not in a crouch pose.
+	const bool bWantPose = Body && Move && bIsCrouched && !bSwimming && !bIsDead && Move->IsMovingOnGround() && CurrentSwimPose == ESwimPose::None;
+	if (!bWantPose)
+	{
+		if (CurrentCrouchPose != ECrouchPose::None)
+		{
+			StopCrouchPose(0.25f);
+		}
+		return;
+	}
+	UAnimInstance* Anim = Body->GetAnimInstance();
+	if (!Anim)
+	{
+		return;
+	}
+
+	const float Speed2D = GetVelocity().Size2D();
+	const ECrouchPose Wanted = Speed2D > 25.0f ? ECrouchPose::Walk : ECrouchPose::Idle;
+	if (Wanted == CurrentCrouchPose)
+	{
+		WantedCrouchPose = Wanted;
+		WantedCrouchPoseSeconds = 0.0f;
+		if (CurrentCrouchPose == ECrouchPose::Walk && CrouchMontage)
+		{
+			Anim->Montage_SetPlayRate(CrouchMontage, FMath::Clamp(Speed2D / CrouchWalkAnimSpeedCm, 0.5f, 1.6f));
+		}
+		return;
+	}
+
+	// Debounce: the speed hovers around the threshold while starting and stopping.
+	if (Wanted != WantedCrouchPose)
+	{
+		WantedCrouchPose = Wanted;
+		WantedCrouchPoseSeconds = 0.0f;
+	}
+	WantedCrouchPoseSeconds += DeltaTime;
+	if (CurrentCrouchPose != ECrouchPose::None && WantedCrouchPoseSeconds < 0.12f)
+	{
+		return;
+	}
+
+	UAnimSequence* Sequence = (Wanted == ECrouchPose::Walk ? CrouchWalkAnim : CrouchIdleAnim).LoadSynchronous();
+	if (!Sequence)
+	{
+		return;   // the clips are not in this build: keep the standing pose
+	}
+	// A new montage in the same slot blends the previous one out: idle <-> walk cross-fades. 100000 loops = until stopped.
+	CrouchMontage = Anim->PlaySlotAnimationAsDynamicMontage(Sequence, TEXT("DefaultSlot"), 0.25f, 0.25f, 1.0f, 100000);
+	CurrentCrouchPose = Wanted;
+}
+
 void AMOCharacter::UpdateSwimAnimation(float DeltaTime, bool bSwimming)
 {
 	USkeletalMeshComponent* Body = GetMesh();
@@ -1463,7 +1559,12 @@ void AMOCharacter::TickWater(float DeltaTime)
 	}
 	Move->SwimSpeedScale = Scale;
 
+	if (bSwimming && bIsCrouched)
+	{
+		UnCrouch();   // nobody swims crouched
+	}
 	UpdateSwimAnimation(DeltaTime, bSwimming && !bIsDead);
+	UpdateCrouchAnimation(DeltaTime, bSwimming);
 	if (!bIsDead)
 	{
 		UpdateWaterSounds(DeltaTime);

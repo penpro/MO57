@@ -34,6 +34,7 @@ public class MOFrameworkEditor : ModuleRules
 				"Blutility",
 				"EditorScriptingUtilities",
 				"PythonScriptPlugin",
+				"AssetRegistry",
 			}
 		);
 	}

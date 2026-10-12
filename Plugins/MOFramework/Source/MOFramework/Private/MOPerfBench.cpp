@@ -103,9 +103,11 @@ namespace
 		{
 			return;
 		}
-		if (Ms > 50.0f)
+		if (Ms > 25.0f)
 		{
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOPERF] HITCH %.0f ms while sampling (yaw %.0f)"), Ms, GBenchYawForLog);
+			// Which side stalled: the game thread (PCG, GC, streaming completions), the render thread, or the GPU. (The frame time is the max of them.)
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOPERF] HITCH %.0f ms while sampling (yaw %.0f) game=%.1f render=%.1f gpu=%.1f ms"), Ms, GBenchYawForLog,
+				FPlatformTime::ToMilliseconds(GGameThreadTime), FPlatformTime::ToMilliseconds(GRenderThreadTime), FPlatformTime::ToMilliseconds(RHIGetGPUFrameCycles(0)));
 		}
 		S.FrameMs.Add(Ms);
 		const uint32 Gpu = RHIGetGPUFrameCycles(0);

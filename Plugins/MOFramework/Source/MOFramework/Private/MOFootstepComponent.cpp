@@ -80,7 +80,7 @@ bool FMOFootPlantDetector::Update(float FootSpeedCm, float BodySpeedCm, float De
 		return false;
 	}
 	SwingSeconds += DeltaSeconds;
-	if (FootSpeedCm < PlantFraction * Reference)
+	if (FootSpeedCm < PlantFraction * Reference && SwingSeconds >= MinSwingSeconds)
 	{
 		bSwinging = false;
 		return true;
@@ -248,7 +248,7 @@ void UMOFootstepComponent::TickComponent(float DeltaTime, ELevelTick TickType, F
 		if (bPlanted[I])
 		{
 			bAnyPlant = true;
-			if (Now - LastStepTime[I] > 0.15 && Now - LastAnyStepTime > 0.08)
+			if (Now - LastStepTime[I] > 0.15)   // per foot only: the two feet of a crouched or sprinting stride can plant within a few hundredths of a second of each other
 			{
 				EmitStep(I, EStepSource::Plant, 1.0f);
 			}
@@ -371,7 +371,6 @@ void UMOFootstepComponent::EmitStep(int32 FootIndex, EStepSource Source, float V
 	++StepCount;
 	const double Now = World->GetTimeSeconds();
 	LastStepTime[FootIndex] = Now;
-	LastAnyStepTime = Now;
 
 	if (bDebugLog)
 	{

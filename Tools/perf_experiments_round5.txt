@@ -1,0 +1,4 @@
+yawrot|||0
+yawfixed|||1
+pcgframe2||pcg.FrameTime 2|0
+pcgframe2fixed||pcg.FrameTime 2|1
