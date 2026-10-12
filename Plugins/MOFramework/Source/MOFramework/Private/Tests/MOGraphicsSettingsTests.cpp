@@ -60,7 +60,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOGraphics_ScalabilityFile,
 bool FMOGraphics_ScalabilityFile::RunTest(const FString& Parameters)
 {
 	// The project's overrides (Config/DefaultScalability.ini) are read through GScalabilityIni together with the engine's BaseScalability.ini: every [Group@Level] the project writes must be a group
-	// the engine knows, and every cvar line must name a registered cvar (a typo would silently do nothing: the tier would not cost what we measured).
+	// the engine knows, and every cvar line must name a registered cvar that carries ECVF_Scalability (a typo would silently do nothing, and a cvar without the flag fails the cook with an ensure).
 	const FString ProjectFile = FPaths::ProjectConfigDir() / TEXT("DefaultScalability.ini");
 	if (!FPaths::FileExists(ProjectFile))
 	{
@@ -80,7 +80,14 @@ bool FMOGraphics_ScalabilityFile::RunTest(const FString& Parameters)
 		for (const TPair<FName, FConfigValue>& Entry : Section.Value)
 		{
 			++NumOverrides;
-			TestNotNull(*FString::Printf(TEXT("[%s] %s is a registered cvar"), *Name, *Entry.Key.ToString()), IConsoleManager::Get().FindConsoleVariable(*Entry.Key.ToString()));
+			const IConsoleVariable* CVar = IConsoleManager::Get().FindConsoleVariable(*Entry.Key.ToString());
+			TestNotNull(*FString::Printf(TEXT("[%s] %s is a registered cvar"), *Name, *Entry.Key.ToString()), CVar);
+			// The engine ENSURES (fatal in the cook commandlet) on a scalability cvar that does not carry ECVF_Scalability: "Scalability.ini can only set ECVF_Scalability console variables".
+			if (CVar)
+			{
+				TestTrue(*FString::Printf(TEXT("[%s] %s carries ECVF_Scalability (scalability files may only set such cvars)"), *Name, *Entry.Key.ToString()),
+					CVar->TestFlags(ECVF_Scalability) || CVar->TestFlags(ECVF_ScalabilityGroup));
+			}
 		}
 	}
 	TestTrue(TEXT("the file overrides at least one cvar"), NumOverrides > 0);

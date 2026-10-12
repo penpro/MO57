@@ -23,22 +23,28 @@ design forks are logged under "Forks", not built blind.
 - Swimming + drowning: movement component, water oracle, breath-hold physiology, retargeted swim animations, steering, stamina/MET hooks; `MOFramework.Water.*` tests.
 - Swim feedback: splash / wading / stroke sounds (the bank IDs resolve; `[MOWater] splash` log lines), the procedural HUD breath meter (`MOBreathMeterWidget`: full-screen overlay, bar aligned bottom-centre,
   fades in underwater, blue -> amber -> pulsing red; verified in the editor swim test), cold-water heat exchange through the vitals pipeline (`MOFramework.Water.ColdWater`).
+- Footsteps by surface (`UMOFootstepComponent`): steps from the animation (a foot whose world speed collapses from swing to stance has planted; walk 2.65 steps/s alternating, sprint 3.5/s), surface from the
+  thing stood on (`IMOFootstepSurfaceInterface`), else the world generator (structure / underground / the BIOME: `FMOBiomeDefinitionRow::FootstepSet`, all 9 biomes set), landing step, hand-off to the water sounds
+  at 8 % immersion. Verified in the editor in every biome. `MO.Footstep.*` verbs, `MOFramework.Footsteps.*` tests.
+- Graphics quality: `UMOGameSettings` levels Low..Epic over the engine's scalability groups, first-run hardware benchmark (`EnsureGraphicsQualityChosen`, opt-out `-NoQualityBenchmark`), Options panel quality combo +
+  VSync + the display's real resolution list, `Config/DefaultScalability.ini` with the measured MO-specific cuts. Options bugs fixed (motion-blur checkbox and weather label never bound).
 - Tooling: `MO.Perf.Bench/Tour`, `MO.NewGame`, `MO.Water.*` (incl. `MO.Water.Meter`), `MO.Audio.Mixes`, `Tools/check_unity_collisions.py`; editor PIE no longer throttled to 3 fps (user EditorSettings.ini).
 
 ## Backlog (ordered; the first unchecked item is next)
 
 ### P0 - measure and fix what players feel first
-- [ ] **Frame time**: read the per-biome GPU pass tree (`PERF_PROFILE_GPU=1`), find the fixed ~11 ms GPU floor and the Rainforest +6 ms; decide scalability tiers (Lumen / VSM / TSR / foliage cull distances).
-  Exit: p95 <= 16.6 ms at 1080p on the 4090 in all nine biomes AND a documented Low / Medium / High / Epic scalability set with measured costs.
-- [ ] **Hitches**: worst frames of 200-333 ms (AlpineHeath, ShoreStrand) and p99 up to 36 ms (LocustWoodland) - find what generates them (PCG partition generation, voxel mesh, async loads, GC) and spread or hide it.
-  Exit: worst frame <= 50 ms in the tour.
-- [x] Per-frame log spam (`RecursiveApplyAdjuster`): `MOAudioMixGuard` registers the orphan sound classes; verify with the next packaged run.
+- [~] **Frame time**: the scalability set exists and is validated on the packaged build (`Config/DefaultScalability.ini`, `Tools/perf_experiments_round3.txt` / `round4.txt`; avg fps Rainforest / Temperate / Meadow,
+  4090, 1080p): Epic 60 / 64 / 68 (p95 19.6 / 17.5 / 17.0 ms), High 73 / 81 / 85 (p95 16.2 / 14.5 / 13.8), Medium 80 / 90 / 93, Low 121 / 129 / 122 (the GPU floor is ~5-7 ms). The auto-benchmark picks the level on first
+  run. Open: Epic misses 60 fps p95 in the Rainforest (the 16.6 ms target holds from High down); Nanite pixel error (+3 fps) and hair deep-shadow size cannot live in a scalability file (not ECVF_Scalability: a C++
+  quality table would be needed); hair strands cost ~6 fps in the Rainforest (cards LODs would be the big lever); find what the ~6 ms at Low is (`PERF_PROFILE_GPU=1` at Low).
+- [ ] **Hitches** (below).
 
 ### P1 - traversal and survival feel
 - [ ] **Swim polish** (splash / wading / stroke sounds, the HUD breath meter and cold-water heat exchange are done and verified in the editor; see Done): load-dependent buoyancy, fall damage into water, `Space` surfacing feel,
   clothing deformation on the horizontal poses, a swimming-pose blend (single-node playback snaps), creatures that swim. Exit: a naive-player swim loop (wade, swim, dive, get tired, nearly drown, recover, get out) with no glitches in a recorded editor run.
 - [ ] **Thermal model has no thermal mass** (found by the cold-water test): `ApplyEnvironmentalTemperature` moves core temperature by `gap x exposure x 0.01` per game second against a flat +0.1 C/s regulation, so any
-  cold ambient is lethal within minutes. Measured: a swimmer in 13 C lake water loses ~0.09 C per real second (36.6 -> 33.4 C in 36 s, 31.8 C at 70 s; <35 = "severe hypothermia" moodle, <32 mental impairment,
+  cold ambient drives core temperature into severe hypothermia within a minute or two (shock term below 32 C, shaking, the hypothermia moodle; death by cold is NOT wired: `OnCardiacArrest` / `OnRespiratoryFailure`
+  have no subscribers, the known lethality gap, so a swimmer does not die of it). Measured: a swimmer in 13 C lake water loses ~0.09 C per real second (36.6 -> 33.4 C in 36 s, 31.8 C at 70 s; <35 = "severe hypothermia" moodle, <32 mental impairment,
   <30 extreme). Real cold-water cooling is ~1 C per 15-20 min (net 200 W / 260 kJ per C), i.e. ~100x slower. Fix = a real heat balance (production incl. exertion + shivering vs loss in W, over the body's thermal
   mass), not a constant: it also corrects air exposure. Design fork for Wes (see Forks); the water coupling (`ApplyWaterToExposure`, `WaterTemperatureForAir`) stays as the input and is unit-tested.
 - [ ] **Floating objects / boats** through Oceanology buoyancy (supersedes the unused `MOBuoyancyComponent`).
@@ -52,8 +58,12 @@ design forks are logged under "Forks", not built blind.
 
 ### P3 - game-wide quality
 - [ ] A naive-player first-ten-minutes pass (main menu -> new game -> tutorial -> first craft) with screenshots of every screen; fix every rough edge found.
-- [ ] Audio pass: footsteps by surface (no C++ trigger exists today), water, interior / exterior mix.
-- [ ] UI polish pass over the CommonUI screens (consistent spacing / focus / controller).
+- [ ] Audio pass: footsteps done for humans (see Done); open: creature footsteps (hooves / paws: the skeleton has no ball_l / ball_r), structure / prop surfaces (stone, rock, metal: needs physical materials or
+  the interface on the actors; props on top of terrain read as wood today), rain / snow overlays on the steps, interior / exterior mix, UDW outdoor mix failing in `RecursiveApplyAdjuster` (silenced via LogAudio=Warning).
+- [ ] UI polish pass over the CommonUI screens (consistent spacing / focus / controller). Known: the Options panel's dark-grey labels (0.28) on a 20 %-alpha panel are hard to read over a bright backdrop
+  (every section; the group titles are fainter still); "Graphics Quality" / "VSync" sit at the END of the Graphics section (no reorder API: rebuild the later rows to move them).
+- [ ] **Crouch / sneak does not work**: `bCanCrouch` is never set, `CanEverCrouch()` is false for MO pawns, so `RequestCrouchToggle` is a silent no-op (measured: `MO.Footstep.Probe` crouched=0 canCrouch=0). Needs
+  `NavAgentProps.bCanCrouch`, crouched half height / speed, a crouch animation set (none retargeted yet) and the camera drop; the footstep Sneak gait (quieter) is already wired and waits for it.
 
 ## Forks (need Wes)
 - Thermal model scale: replace the equilibrium-style temperature drift with a heat balance over a thermal mass (realistic rates: hours, not minutes, to hypothermia), or keep it gamey? Until decided, a lake swim

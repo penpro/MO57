@@ -98,6 +98,10 @@ class and asset references as package paths. Aliases: `MOButton`, `MOListEntry`,
 - **Reparent / reorder.** `ui remove` deletes a node, but nothing moves a widget between parents or reorders
   siblings. `build` appends new children last, so to put a node *before* an existing sibling, remove the sibling
   too and let `build` re-create both in spec order. (z-order inside an Overlay = child order, last is topmost.)
+- **Renaming a widget by case only needs two steps.** `unreal.MOWidgetEditorUtils.rename_widget(wbp, "MotionBlurCheckBox", "MotionBlurCheckbox")` returns False (FNames are case-insensitive: old == new), so go
+  through a temporary name (`... -> "Tmp" -> "MotionBlurCheckbox"`), then `compile_blueprint` + `save_loaded_asset`. Found by `ui check` reporting an `absent` optional member on the Options panel: a name
+  that differs from the BindWidget member only in case (or at all, e.g. `MasterVolumeText_1` for `WeatherVolumeText`) leaves the C++ control unbound and the option silently dead. Run `ui check` on every
+  existing panel once in a while; an `absent` line on an *optional* member is the only symptom.
 - **Never use a native UserWidget class as a node** (`MOCommonButton`, any C++ `UCommonButtonBase`/`UUserWidget`
   subclass). It has no widget tree: it renders as an empty, hit-test-invisible spacer, so real mouse clicks pass
   through it, while `SimulateClick` and bound delegates still "work". Use a Widget Blueprint (`MOButton` for
