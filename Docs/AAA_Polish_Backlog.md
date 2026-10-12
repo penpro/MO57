@@ -31,6 +31,9 @@ design forks are logged under "Forks", not built blind.
 - Crouch / sneak (LeftCtrl): it was a silent no-op (`bCanCrouch` never set). Now the capsule shrinks to 60 cm half height, walk 200 cm/s, the jump key stands up first, nobody crouches in water; the pose is a looping
   dynamic montage on the animation blueprint's DefaultSlot (idle <-> walk cross-fade, play rate follows speed), clips = the engine's Manny crouch set (MoverExamples, mounted with `UMOEditorContentUtils`, no plugin
   enabled) retargeted to the MetaHuman skeleton in `Content/Characters/Crouch/`; the footstep Sneak gait (quiet) now engages. Verified in the editor (screenshots, probes, step alternation 18/18).
+- UI contract sweep (`ui check` over all 88 Widget Blueprints): found and fixed (a) the confirmation dialog (exit / main menu / overwrite / load) had bare native buttons that real mouse clicks pass through
+  (`confirm_buttons.py`), (b) the HUD status-effect strip did not exist at all: the code pushes moodles (thermal, wetness, hunger ...) but `WBP_StatusEffectStrip` / `WBP_StatusMoodle` were never authored, so no status
+  icon was ever shown (`hud_moodles.py`; verified live: "Freezing / Soaked / Dehydrated / Hungry" appear on their own in a cold lake), (c) the Options motion-blur / weather-label bindings.
 - Tooling: `MO.Perf.Bench/Tour`, `MO.NewGame`, `MO.Water.*` (incl. `MO.Water.Meter`), `MO.Audio.Mixes`, `Tools/check_unity_collisions.py`; editor PIE no longer throttled to 3 fps (user EditorSettings.ini).
 
 ## Backlog (ordered; the first unchecked item is next)
@@ -63,6 +66,12 @@ design forks are logged under "Forks", not built blind.
 - [ ] A naive-player first-ten-minutes pass (main menu -> new game -> tutorial -> first craft) with screenshots of every screen; fix every rough edge found.
 - [ ] Audio pass: footsteps done for humans (see Done); open: creature footsteps (hooves / paws: the skeleton has no ball_l / ball_r), structure / prop surfaces (stone, rock, metal: needs physical materials or
   the interface on the actors; props on top of terrain read as wood today), rain / snow overlays on the steps, interior / exterior mix, UDW outdoor mix failing in `RecursiveApplyAdjuster` (silenced via LogAudio=Warning).
+- [ ] **Unbound optional widgets** (`ui check` `absent` lines, features that exist in C++ with no control in the blueprint): WBP_UnifiedInventory (CloseButton, loot-nearby buttons, secondary stack-organise),
+  WBP_ItemContextMenu (TransferButton, PickupButton), WBP_JournalPanel (AbandonButton, TrackButtonText), WBP_BuildingRecipeDetail (craft amount spin / slider / text, resource-source checkboxes), WBP_EquipmentPanel (swap
+  progress bars), WBP_MOColonyPortrait (ClickButton, NameLabel, ActivityIndicator), WBP_HUDRoot (WindIndicator: needs an authored up-pointing arrow texture). For each: wire it or delete the dead C++ member. Also
+  bare native `EntryButton` in WBP_MOListEntry (mouse-dead; is it used?), and ~15 legacy WBPs in `/MOFramework/UI/` root that `ui check` cannot resolve (duplicates of the subfolder versions?).
+- [ ] **Moodle icons**: the strip works with a tinted square + label; the icon arrays on `UMOCharacterUIController` (thermal, wet, hunger ...) are empty (art debt). A fresh pawn also shows Dehydrated (critical) and
+  Hungry within about a minute of a new game: check the metabolism rates against the realism pillar.
 - [ ] UI polish pass over the CommonUI screens (consistent spacing / focus / controller). Known: the Options panel's dark-grey labels (0.28) on a 20 %-alpha panel are hard to read over a bright backdrop
   (every section; the group titles are fainter still); "Graphics Quality" / "VSync" sit at the END of the Graphics section (no reorder API: rebuild the later rows to move them).
 
