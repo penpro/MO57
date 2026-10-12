@@ -309,9 +309,12 @@ def mountain_rocks(k=1.0, big=1.0, plates=1.0):
         ed_rock("MossyForestRock", "SM_MossyForestRock_02", 12.0 * k, cluster=2000.0, smin=0.8, smax=1.8),
         ed_rock("MossyForestBoulder", "SM_MossyForestBoulder_04", 2.0 * big, cluster=3200.0, smin=0.5, smax=1.1),
         ed_rock("NordicBeachRocks", "SM_NordicBeachRocks_01", 1.5 * big, res="BeachBoulder", cluster=3200.0, smin=0.6, smax=1.2),
-        ed_plate("ErodedRockyGround", "SM_ErodedRockyGround_01", 12.0 * plates), ed_plate("ErodedRockyGround", "SM_ErodedRockyGround_03", 10.0 * plates),
-        ed_plate("SmoothRockShelf", "SM_SmoothRockShelf_01", 8.0 * plates), ed_plate("MossyRocks", "SM_MossyRocks_02", 8.0 * plates),
-        ed_plate("SandstoneRockyGround", "SM_SandstoneRockyGround_01", 8.0 * plates, sink_cm=8.0),
+        # dark / grey slabs carry the ground; the PALE ones (ErodedRockyGround_03 pink-white, SmoothRockShelf cream, SandstoneRockyGround) read as white paper scraps on dark volcanic rock and green moss
+        # (seen on the Alpine Rock / Heath slopes, 2026-10-12), so they are an accent, not the base. TundraMossyBoulder is the sample's dark moss-skinned slab boulder.
+        ed_plate("ErodedRockyGround", "SM_ErodedRockyGround_01", 12.0 * plates), ed_plate("MossyRocks", "SM_MossyRocks_02", 10.0 * plates),
+        ed_plate("ErodedRockyGround", "SM_ErodedRockyGround_03", 2.5 * plates), ed_plate("SmoothRockShelf", "SM_SmoothRockShelf_01", 2.0 * plates),
+        ed_plate("SandstoneRockyGround", "SM_SandstoneRockyGround_01", 2.5 * plates, sink_cm=8.0),
+        ed_rock("TundraMossyBoulder", "SM_TundraMossyBoulder_01", 3.0 * k, cluster=2800.0, smin=0.5, smax=1.1),
     ]
 
 
@@ -340,8 +343,8 @@ ROW_EDITS["RockyHighland"] = {"groundSurfaceType": surface("MossyRockyGround")}
 ROW_EDITS["Meadow"] = {**ROW_EDITS["Meadow"], "groundSurfaceType": surface("MossyGrass")}
 ROW_EDITS["DryScrub"] = {**ROW_EDITS["DryScrub"], "groundSurfaceType": surface("DriedGrassOnDampSoil")}
 ALPINE["groundSurfaceType"] = surface("NordicMoss")   # tundra: moss over the gravel (was pale gravel: it read as desert)
-# the sample's tundra set (migrated 2026-10-12): long moss-skinned boulders and the rocky ground slabs of the heath
-ALPINE["species"] = ALPINE["species"] + [ed_rock("TundraMossyBoulder", "SM_TundraMossyBoulder_01", 2.2, cluster=3000.0, smin=0.5, smax=1.1), ed_plate("TundraRockyGround", "SM_TundraRockyGround_01", 5.0)]
+# the sample's tundra rocky-ground slab for the heath (its moss-skinned boulder is part of mountain_rocks)
+ALPINE["species"] = ALPINE["species"] + [ed_plate("TundraRockyGround", "SM_TundraRockyGround_01", 3.0)]
 
 ALPINE_ROCK = {
     "displayName": "Alpine Rock",
