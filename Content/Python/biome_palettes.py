@@ -64,13 +64,14 @@ def rock(folder, code):
     return ROCK % (folder, code, code, code)
 
 
-def species(path, density, res="None", tag="", cluster=0.0, group=-1, core=0.6, align=False, tilt=8.0, sweep=False, smin=0.85, smax=1.25, collision="Auto"):
+def species(path, density, res="None", tag="", cluster=0.0, group=-1, core=0.6, align=False, tilt=8.0, sweep=False, smin=0.85, smax=1.25, collision="Auto", sink=-1.0, sink_cm=0.0):
     # Every Black Locust variant is a GROUND-LEVEL plant (0.5 - 1.5 m tall, up to 1.8 m wide) that the resource table calls a Tree, so by resource type it blocks the pawn like an oak: you walk
     # into a knee-high bush and stop. They are walk-through (found 2026-10-10 by Wes: "a small locust bush, or a collection of them"; I had first blamed the saplings and been wrong).
     if collision == "Auto" and "wdvhberja" in path:
         collision = "Passable"
     return {"Mesh": path, "DensityPerHectare": density, "ClusterRadius": cluster, "ClusterGroup": group, "ClusterCore": core, "HISMTag": tag or "None",
-            "ResourceNodeId": res, "bAlignToSurfaceNormal": align, "MaxRandomTiltDeg": tilt, "bAutoSweepOnTerraform": sweep, "MinScale": smin, "MaxScale": smax, "Collision": collision}
+            "ResourceNodeId": res, "bAlignToSurfaceNormal": align, "MaxRandomTiltDeg": tilt, "bAutoSweepOnTerraform": sweep, "MinScale": smin, "MaxScale": smax, "Collision": collision,
+            "SinkFraction": sink, "SinkMinCm": sink_cm}   # sink: fraction of the mesh height buried along its up axis (-1 = auto: 0.25 for aligned rocks / debris, 0 for plants); sink_cm: extra burial
 
 
 def tree(name, density, group=0, core=0.7, res="BlackAlder", smin=0.8, smax=1.3):
@@ -93,8 +94,9 @@ def drift(folder, code, density, cluster=2500.0, collision="Passable", smin=0.8,
 
 
 def undergrowth(path, density, group=0, core=0.45, smin=0.7, smax=1.1, tag="MOBiomeCover_Shrub", cluster=2500.0):
-    """Decorative woody undergrowth (seedlings, hazel): clumps with the canopy, no collision, swept by digging."""
-    return species(path, density, tag=tag, cluster=cluster, group=group, core=core, sweep=True, smin=smin, smax=smax)
+    """Decorative woody undergrowth (seedlings, hazel): clumps with the canopy, swept by digging. Walk-through, EXCEPT saplings: a 1.5-2 m sapling is a trunk you cannot walk through (2026-10-12: Wes
+    found hazel saplings without collision; they are decorative, so by resource type they had none; their meshes carry convex collision shapes, so Solid is enough)."""
+    return species(path, density, tag=tag, cluster=cluster, group=group, core=core, sweep=True, smin=smin, smax=smax, collision="Solid" if "Sapling" in path else "Auto")
 
 
 def cover(path, density, cluster=0.0, tag="MOBiomeCover_Grass", smin=0.8, smax=1.2):
@@ -188,7 +190,7 @@ PALETTES = {
 ALPINE = {
     "displayName": "Alpine Heath",
     "heightMin": 32000.0, "heightMax": 100000.0, "slopeMinDeg": 0.0, "slopeMaxDeg": 40.0, "moistureMin": 0.0, "moistureMax": 1.0, "temperatureMin": 0.0, "temperatureMax": 1.0,
-    "priority": 14, "groundSurfaceType": "/Game/VoxelExamples/NaniteMaterials/Materials/VST_MI_Gravel.VST_MI_Gravel", "edgeBlendWidth": 9000.0,
+    "priority": 14, "groundSurfaceType": "/Game/VoxelExamples/NaniteMaterials/Materials/VST_MI_Gravel.VST_MI_Gravel", "edgeBlendWidth": 9000.0,   # (ground replaced below)
     "species": [
         boulder("forest", 14.0, 2500.0, 0.6, 1.7), boulder("beach_c", 20.0, 1500.0, 0.5, 1.4), boulder("beach_b", 14.0, 1800.0, 0.5, 1.3),
         tree("Forest_08", 3.0, group=-1, core=0.6, smin=0.7, smax=1.0), tree("Forest_09", 2.5, group=-1, core=0.6, smin=0.7, smax=1.0),
@@ -260,15 +262,293 @@ ROW_EDITS = {
 }
 
 
+# --- MOUNTAINS (2026-10-12, Wes: "the mountains are really shitty looking, a lot of grass but not much else") ---------------------------------------------------------------------------------
+# The Electric Dreams migration brought Nanite scans that fit steep ground: boulders (collision added by prep_rock_meshes.py), flat rock PLATES (ErodedRockyGround, SmoothRockShelf, MossyRocks,
+# SandstoneRockyGround: lie flush in the slope, edges buried), 11-22 m sandstone cliff slabs and the SmallStonesPack scree. Everything aligned to the terrain normal and buried (spawner sink math);
+# slopes get rock, scree and scrub, the grass drops to patches.
+ED = GAME + "/Megascans/3D_Assets/%s/%s.%s"
+
+
+def surface(name):
+    """A voxel surface type made from an Electric Dreams ground scan (Content/Python/ed_surfaces_import.py)."""
+    return "/Game/VoxelExamples/NaniteMaterials/Materials/%s/VST_MI_%s.VST_MI_%s" % (name, name, name)
+
+
+def ed(folder, mesh):
+    return ED % (folder, mesh, mesh)
+
+
+def ed_rock(folder, mesh, density, res="ForestBoulder", cluster=1800.0, smin=0.8, smax=1.8, sink=-1.0, sink_cm=0.0, collision="Auto"):
+    """A solid scanned rock (harvestable stone, blocks the pawn by its resource type), aligned to the surface and buried a quarter of its height."""
+    return species(ed(folder, mesh), density, res=res, tag="MOResource_Rock", cluster=cluster, align=True, tilt=0.0, smin=smin, smax=smax, sink=sink, sink_cm=sink_cm, collision=collision)
+
+
+def ed_plate(folder, mesh, density, cluster=2600.0, smin=0.9, smax=1.7, sink_cm=14.0):
+    """A flat rock slab (open geometry, 0.2-0.4 m thick, 2-7 m wide): decorative, walk-through (the terrain under it is what you stand on), aligned to the slope and sunk by its thickness so
+    neither its edge nor its open underside shows."""
+    return species(ed(folder, mesh), density, tag="MOBiomeCover_Rock", cluster=cluster, align=True, tilt=0.0, sweep=True, smin=smin, smax=smax, sink=0.5, sink_cm=sink_cm, collision="Passable")
+
+
+def ed_cliff(mesh, density, cluster=6000.0, smin=0.7, smax=1.3, folder="HugeSandstoneCliff"):
+    """A 11-22 m cliff slab (sandstone by default, `folder` picks another): solid, aligned, buried a fifth of its height."""
+    return species(ed(folder, mesh), density, tag="MOBiomeCover_Rock", cluster=cluster, align=True, tilt=0.0, smin=smin, smax=smax, sink=0.2, collision="Solid")
+
+
+def scree(density_each, smin=1.2, smax=2.8):
+    """SmallStonesPack 08-14 (10-18 cm stones, the low-poly variants): a talus of them, a little embedded."""
+    return [species(ed("SmallStonesPack", "SM_SmallStonesPack_%02d" % i), density_each, tag="MOBiomeCover_Debris", cluster=900.0, align=True, tilt=0.0, sweep=True, smin=smin, smax=smax, sink=0.3, collision="Passable")
+            for i in range(8, 15)]
+
+
+def mountain_rocks(k=1.0, big=1.0, plates=1.0):
+    """The shared rock set, scaled: k = boulders, big = the 2-5 m rocks, plates = ground slabs."""
+    return [
+        ed_rock("MossyForestBoulder", "SM_MossyForestBoulder_02", 26.0 * k, cluster=1600.0, smin=0.8, smax=2.0),
+        ed_rock("MossyForestBoulder", "SM_MossyForestBoulder_05", 20.0 * k, cluster=1800.0, smin=0.8, smax=2.0),
+        ed_rock("LichenedForestBoulder", "SM_LichenedForestBoulder_01", 16.0 * k, cluster=1600.0, smin=0.9, smax=2.2),
+        ed_rock("MossyForestRock", "SM_MossyForestRock_02", 12.0 * k, cluster=2000.0, smin=0.8, smax=1.8),
+        ed_rock("MossyForestBoulder", "SM_MossyForestBoulder_04", 2.0 * big, cluster=3200.0, smin=0.5, smax=1.1),
+        ed_rock("NordicBeachRocks", "SM_NordicBeachRocks_01", 1.5 * big, res="BeachBoulder", cluster=3200.0, smin=0.6, smax=1.2),
+        ed_plate("ErodedRockyGround", "SM_ErodedRockyGround_01", 12.0 * plates), ed_plate("ErodedRockyGround", "SM_ErodedRockyGround_03", 10.0 * plates),
+        ed_plate("SmoothRockShelf", "SM_SmoothRockShelf_01", 8.0 * plates), ed_plate("MossyRocks", "SM_MossyRocks_02", 8.0 * plates),
+        ed_plate("SandstoneRockyGround", "SM_SandstoneRockyGround_01", 8.0 * plates, sink_cm=8.0),
+    ]
+
+
+def thin(species_list, factor, tags=("MOBiomeCover_Grass", "MOBiomeCover_Flower")):
+    for sp in species_list:
+        if sp["HISMTag"] in tags:
+            sp["DensityPerHectare"] = round(sp["DensityPerHectare"] * factor, 1)
+    return species_list
+
+
+# steep ground (slope >= 28 deg, any height): rock first. The old list kept for the plants (trees / scrub / grass at a third), the rocks replaced.
+PALETTES["RockyHighland"] = (mountain_rocks(1.0, 1.0, 1.0) + scree(55.0)
+    + [ed_cliff("SM_HugeSandstoneCliff_07", 0.25), ed_cliff("SM_HugeSandstoneCliff_04", 0.2)]
+    + thin([sp for sp in PALETTES["RockyHighland"] if sp["HISMTag"] != "MOResource_Rock"], 0.4, ("MOBiomeCover_Grass", "MOBiomeCover_Flower", "MOResource_Tree", "MOResource_Bush")))
+
+# alpine heath (>= 320 m, gentler ground): scrub and heath, boulders and some slabs
+ALPINE["species"] = (mountain_rocks(0.4, 0.5, 0.5) + scree(20.0) + [sp for sp in ALPINE["species"] if sp["HISMTag"] != "MOResource_Rock"]
+    # the heath itself: seedlings, low scrub and flowers between the tussocks (the first pass was gravel and boulders: a desert)
+    + [undergrowth(ba("Seedling_01"), 70, group=-1, core=0.0, smin=0.8, smax=1.4, cluster=2200.0), undergrowth(ba("Seedling_02"), 45, group=-1, core=0.0, smin=0.8, smax=1.3, cluster=2600.0),
+       flower("19_03", 110, 1500.0), flower("11_02", 80, 1700.0), flower("12_02", 70, 1800.0), flower("17_04", 50, 2000.0), flower("09_02", 60, 1600.0),
+       species(dead_shrub("A"), 40.0, res="DeadShrub", tag="MOResource_Bush", cluster=1600.0, smin=0.8, smax=1.4), species(dead_shrub("C"), 26.0, res="DeadShrub", tag="MOResource_Bush", cluster=1800.0)])
+
+# alpine rock (>= 950 m): bare rock. Scree, slabs, big boulders; no soil plants. (Row exists in DT_Biomes; the palette lives here so it is DATA like the others.)
+# ground surfaces from the Electric Dreams scans (2026-10-12): the biomes' ground was a handful of brown / grey / pale materials
+ROW_EDITS["RockyHighland"] = {"groundSurfaceType": surface("MossyRockyGround")}
+ROW_EDITS["Meadow"] = {**ROW_EDITS["Meadow"], "groundSurfaceType": surface("MossyGrass")}
+ROW_EDITS["DryScrub"] = {**ROW_EDITS["DryScrub"], "groundSurfaceType": surface("DriedGrassOnDampSoil")}
+ALPINE["groundSurfaceType"] = surface("NordicMoss")   # tundra: moss over the gravel (was pale gravel: it read as desert)
+# the sample's tundra set (migrated 2026-10-12): long moss-skinned boulders and the rocky ground slabs of the heath
+ALPINE["species"] = ALPINE["species"] + [ed_rock("TundraMossyBoulder", "SM_TundraMossyBoulder_01", 2.2, cluster=3000.0, smin=0.5, smax=1.1), ed_plate("TundraRockyGround", "SM_TundraRockyGround_01", 5.0)]
+
+ALPINE_ROCK = {
+    "displayName": "Alpine Rock",
+    "heightMin": 95000.0, "heightMax": 100000000.0, "slopeMinDeg": 0.0, "slopeMaxDeg": 90.0, "moistureMin": 0.0, "moistureMax": 1.0, "temperatureMin": 0.0, "temperatureMax": 1.0,
+    "priority": 22, "groundSurfaceType": surface("IcelandicQuarryRock"), "edgeBlendWidth": 5000.0,   # dark volcanic rock above the heath
+    "species": mountain_rocks(0.5, 1.4, 1.2) + scree(95.0, 1.4, 3.2)
+    + [boulder("forest", 8.0, 2000.0, 0.8, 2.2), boulder("beach_a", 5.0, 2600.0, 0.8, 2.0), ed_cliff("SM_HugeSandstoneCliff_04", 0.15)],
+}
+
+# --- ELECTRIC FOREST (2026-10-12, Wes: "try to make a 1:1 copy of the electric dreams demo as a biome") ---------------------------------------------------------------------------------------
+# Composition read from the sample's own PCG graphs (Saved/EDDump/PCGDemo_Forest.txt via Tools/ed_pcg_dump.py): European hornbeam in every growth stage (Forest_01-10 canopy, Field_01-04 lone giants,
+# Saplings, Seedlings), elderberry and fern understory, dead leaves, mossy forest boulders / rocks, forest roots, rock shelves and formations, standing dead trees. The sample's densities come from
+# noise-driven stand masks (410 nodes); here the same cast is placed through the biome table with clump groups: group 6 = the stand (tall cores, young ring), group 7 = lone giants in clearings.
+HB = GAME + "/Megascans/3D_Plants/EuropeanHornbeam/Geometry/SimpleWind/SM_EuropeanHornbeam_%s.SM_EuropeanHornbeam_%s"
+ELD = GAME + "/Megascans/3D_Plants/Elderberry/SM_Elderberry_%s.SM_Elderberry_%s"
+FERN = GAME + "/Megascans/3D_Plants/Fern/SM_Fern_%s.SM_Fern_%s"
+LEAVES = GAME + "/Megascans/3D_Plants/DeadLeaves/SM_DeadLeaves_%s.SM_DeadLeaves_%s"
+
+
+# The hornbeam set renders fine in the editor and in -game, but COOKING it fails (2026-10-12): M_Foliage (MS_Foliage_Material_LATEST) trips the engine's material consistency check ("Material shader map
+# M_Foliage ... is missing expected shader type FAnisotropyPS: DIFF [bHasAnisotropyConnected] Conservative=false vs Compilation=true") on every hornbeam material instance, which aborts the whole
+# package. Until that master is fixed (anisotropy is set inside the MF_* functions through SetMaterialAttributes, where the static analysis does not see it) the biome uses the BlackAlder trees
+# (the same shapes: field / forest / sapling / seedling) and the hornbeam assets stay migrated but UNREFERENCED, so they are not cooked. Flip HORNBEAM_COOKS to True once a package builds with them.
+HORNBEAM_COOKS = False
+HB_TO_BA = {"Forest_10": "Forest_09", "Sapling_07": "Sapling_03", "Sapling_08": "Sapling_04", "Seedling_03": "Seedling_01", "Seedling_04": "Seedling_02", "Seedling_05": "Seedling_02", "Field_04": "Field_05"}
+
+
+def hb(name):
+    if not HORNBEAM_COOKS:
+        return ba(HB_TO_BA.get(name, name))
+    return HB % (name, name)
+
+
+def hb_tree(name, density, group=6, core=0.7, smin=0.85, smax=1.3, cluster=3000.0):
+    return species(hb(name), density, res="BlackAlder", tag="MOResource_Tree", cluster=cluster, group=group, core=core, smin=smin, smax=smax)
+
+
+def eld(n, density, group=6, core=0.3, cluster=2200.0):
+    return undergrowth(ELD % (n, n), density, group=group, core=core, smin=0.8, smax=1.35, cluster=cluster)
+
+
+def fern(n, density, cluster=1800.0):
+    return undergrowth(FERN % (n, n), density, group=-1, core=0.0, smin=0.8, smax=1.4, cluster=cluster)
+
+
+def leaves(n, density, cluster=1500.0):
+    return species(LEAVES % (n, n), density, tag="MOBiomeCover_Debris", cluster=cluster, align=True, tilt=0.0, sweep=True, smin=0.9, smax=1.6, collision="Passable", sink=0.0)
+
+
+ELECTRIC_FOREST = {
+    "displayName": "Electric Forest",
+    "heightMin": -100000.0, "heightMax": 30000.0, "slopeMinDeg": 0.0, "slopeMaxDeg": 32.0, "moistureMin": 0.42, "moistureMax": 0.66, "temperatureMin": 0.28, "temperatureMax": 0.62,
+    "priority": 15, "groundSurfaceType": surface("ForestLitter"), "edgeBlendWidth": 7000.0,
+    "reliefScale": 0.9, "mountainScale": 0.8, "footstepSet": "LeafCrunch",
+    "species": [
+        # the stand: weights follow the sample's (Forest_10 the commonest, Forest_07 the tall ones, 01-04 scattered tall trees)
+        hb_tree("Forest_10", 34, core=0.60, smin=0.9, smax=1.3), hb_tree("Forest_09", 14, core=0.62), hb_tree("Forest_08", 10, core=0.64), hb_tree("Forest_07", 20, core=0.70),
+        hb_tree("Forest_06", 8, core=0.66), hb_tree("Forest_05", 8, core=0.66), hb_tree("Forest_04", 12, core=0.74), hb_tree("Forest_03", 12, core=0.74),
+        hb_tree("Forest_02", 12, core=0.76), hb_tree("Forest_01", 12, core=0.76),
+        # lone giants in the clearings
+        hb_tree("Field_01", 1.5, group=7, core=0.85, smin=0.9, smax=1.3), hb_tree("Field_02", 2.0, group=7, core=0.85, smin=0.9, smax=1.3),
+        hb_tree("Field_03", 2.0, group=7, core=0.85, smin=0.9, smax=1.3), hb_tree("Field_04", 1.5, group=7, core=0.85, smin=0.9, smax=1.3),
+        # young trees ring the stand (harvestable, solid), seedlings and elderberry fill the gaps (decorative, walk-through)
+        hb_tree("Sapling_02", 22, core=0.46, smin=0.8, smax=1.2), hb_tree("Sapling_06", 16, core=0.46, smin=0.8, smax=1.2), hb_tree("Sapling_01", 12, core=0.44, smin=0.8, smax=1.2),
+        hb_tree("Sapling_07", 10, core=0.44, smin=0.8, smax=1.2),
+        undergrowth(hb("Seedling_01"), 52, group=6, core=0.32), undergrowth(hb("Seedling_03"), 36, group=6, core=0.32), undergrowth(hb("Seedling_02"), 30, group=6, core=0.30),
+        undergrowth(hb("Seedling_04"), 24, group=6, core=0.30),
+        eld("02", 28), eld("03", 30), eld("07", 17), eld("08", 17), eld("04", 14), eld("05", 11),
+        fern("01", 190), fern("02", 110), fern("03", 90), fern("04", 60),
+        # the floor
+        leaves("01", 60), leaves("12", 30), leaves("05", 24), leaves("08", 20),
+        cover(wild_grass("F"), 140, 900.0), cover(wild_grass("D"), 70, 1300.0),
+        flower("11_02", 24, 1600.0), flower("19_03", 30, 1500.0),
+        # mossy boulders and rocks, roots, rock shelves and formations (aligned + buried by the spawner)
+        ed_rock("MossyForestBoulder", "SM_MossyForestBoulder_03", 12.0, cluster=1800.0, smin=0.8, smax=1.8), ed_rock("MossyForestBoulder", "SM_MossyForestBoulder_02", 8.0, cluster=1800.0, smin=0.8, smax=1.8),
+        ed_rock("MossyForestBoulder", "SM_MossyForestBoulder_06", 6.0, cluster=2000.0, smin=0.8, smax=1.8), ed_rock("MossyForestBoulder", "SM_MossyForestBoulder_04", 2.0, cluster=3200.0, smin=0.6, smax=1.1),
+        ed_rock("MossyForestRock", "SM_MossyForestRock_02", 10.0, cluster=2000.0, smin=0.8, smax=1.7), ed_rock("LichenedForestBoulder", "SM_LichenedForestBoulder_01", 6.0, cluster=1800.0, smin=0.9, smax=2.0),
+        ed_plate("ForestRoots", "SM_ForestRoots_01", 6.0, cluster=2200.0, smin=0.9, smax=1.5, sink_cm=4.0), ed_plate("ForestRoots", "SM_ForestRoots_02", 5.0, cluster=2200.0, smin=0.9, smax=1.5, sink_cm=3.0),
+        ed_plate("SmoothRockShelf", "SM_SmoothRockShelf_01", 3.0), ed_plate("MossyRocks", "SM_MossyRocks_01", 5.0), ed_plate("RockyForestPath", "SM_RockyForestPath_01", 2.0, sink_cm=6.0),
+        ed_plate("ForestRockFormation", "SM_ForestRockFormation_05", 1.5, cluster=4000.0), ed_plate("ForestRockFormation", "SM_ForestRockFormation_06", 1.5, cluster=4000.0),
+        # standing dead trees (decorative, but solid: a trunk you cannot walk through)
+        species(ed("DeadTree", "SM_DeadTree_01"), 1.2, tag="MOBiomeCover_Shrub", cluster=3000.0, sweep=True, smin=0.9, smax=1.3, tilt=3.0, collision="Solid"),
+        species(ed("DeadTree", "SM_DeadTree_02"), 1.2, tag="MOBiomeCover_Shrub", cluster=3000.0, sweep=True, smin=0.9, smax=1.3, tilt=3.0, collision="Solid"),
+    ],
+}
+
+# --- NORDIC STRAND (2026-10-12, Wes: "some very distinct biomes from megascans stuff like nordic beach") ----------------------------------------------------------------------------------------
+# Cold shores (the sea-level band ShoreStrand holds, but cool): dark volcanic ground, big wet-black beach boulders, smooth rock shelves, a talus of stones, hardy dune grass, driftwood and a few rock
+# pillars standing in the shallows' edge. Warm shores keep the sand (ShoreStrand, priority 13); this wins where it is cold (priority 14).
+NORDIC_STRAND = {
+    "displayName": "Nordic Strand",
+    "heightMin": -100000.0, "heightMax": 450.0, "slopeMinDeg": 0.0, "slopeMaxDeg": 38.0, "moistureMin": 0.0, "moistureMax": 1.0, "temperatureMin": 0.0, "temperatureMax": 0.34,
+    "priority": 14, "groundSurfaceType": surface("DarkPebbles"), "edgeBlendWidth": 4500.0, "reliefScale": 1.0, "mountainScale": 1.0, "footstepSet": "StoneStep",
+    "species": [
+        ed_rock("NordicBeachRocks", "SM_NordicBeachRocks_01", 12.0, res="BeachBoulder", cluster=2200.0, smin=0.8, smax=1.9), ed_rock("NordicBeachRock", "SM_NordicBeachRock_01", 9.0, res="BeachBoulder", cluster=1800.0, smin=0.8, smax=1.8),
+        ed_rock("MossyForestBoulder", "SM_MossyForestBoulder_01", 3.0, cluster=2600.0, smin=0.8, smax=1.6),
+        boulder("beach_b", 14.0, 1500.0, 0.6, 1.5), boulder("beach_c", 10.0, 1800.0, 0.6, 1.4), boulder("beach_a", 5.0, 2600.0, 0.7, 1.7),
+        ed_plate("SmoothRockShelf", "SM_SmoothRockShelf_01", 5.0), ed_plate("MossyRocks", "SM_MossyRocks_01", 3.0), ed_plate("ErodedRockyGround", "SM_ErodedRockyGround_01", 5.0),
+        # the sample's Nordic coast set (migrated 2026-10-12): house-sized wet boulders, rocky-ground slabs, one coastal cliff in a few hectares
+        ed_rock("NordicBoulder", "SM_NordicBoulder_01", 1.4, res="BeachBoulder", cluster=3600.0, smin=0.45, smax=0.9), ed_rock("NordicBoulder", "SM_NordicBoulder_02", 1.4, res="BeachBoulder", cluster=3600.0, smin=0.45, smax=0.9),
+        ed_plate("NordicBeachRockyGround", "SM_NordicBeachRockyGround_01", 5.0), ed_plate("NordicBeachRockyGround", "SM_NordicBeachRockyGround_02", 7.0),
+        ed_cliff("SM_MassiveNordicCoastalCliff_01", 0.18, cluster=7000.0, smin=0.45, smax=0.8, folder="MassiveNordicCoastalCliff"),
+    ] + scree(48.0, 1.0, 2.4) + [
+        cover(dune_grass("A"), 150, 1000.0, smin=0.8, smax=1.2), cover(dune_grass("C"), 90, 1400.0), cover(wild_grass("A"), 40, 1400.0, smin=0.7, smax=1.1),
+        flower("10_01", 18, 2200.0, 1.0, 1.5), flower("20_02", 20, 2000.0, 1.0, 1.4),
+        lib_rock("Stone_vd3edgg", "S_Stone_vd3edgg_lod3", 26.0, res="BeachBoulder", cluster=1400.0, smin=0.7, smax=1.8),
+        drift("Broken_Tree_Bark_wjhiecy", "wjhiecy", 2.0, 3500.0, collision="Solid", smin=0.7, smax=1.2),
+        drift("Bent_Branch_paErt", "paErt", 8.0, 2200.0), drift("Common_Spruce_Branch_uehjfcofa", "uehjfcofa", 5.0, 2200.0),
+    ],
+}
+
+# --- grass tiers (2026-10-12, Wes: "thin out the grass quite a bit"; "a near grass and a far grass so the far grass can extend a lot further and hide the popping in and out") ---------------
+# NEAR grass (tag MOBiomeCover_Grass, placed on the 64 m grid within ~130 m) is thinned to GRASS_THIN of what the palettes above author. The FAR tier (tag MOFar_Grass, placed on the 512 m grid out to
+# ~1 km, never closer than the spawner's MinDistanceFromViewerCm) repeats every grass species of a biome as a sparse stand of larger tufts: coverage at distance for a fraction of the instances.
+GRASS_THIN = 0.55
+FAR_RATIO = 0.16     # far tufts per hectare as a fraction of the (thinned) near density of the same species
+FAR_SCALE = 2.1      # far tufts are this much larger than the near ones (one big tuft stands in for several)
+
+
+def far_grass(species_list):
+    far = []
+    for sp in species_list:
+        if sp["HISMTag"] == "MOBiomeCover_Grass":
+            f = dict(sp)
+            f["HISMTag"] = "MOFar_Grass"
+            f["DensityPerHectare"] = round(sp["DensityPerHectare"] * FAR_RATIO, 1)
+            f["ClusterRadius"] = sp["ClusterRadius"] * 2.5
+            f["MinScale"] = round(sp["MinScale"] * FAR_SCALE, 3)
+            f["MaxScale"] = round(sp["MaxScale"] * FAR_SCALE, 3)
+            f["bAutoSweepOnTerraform"] = True
+            far.append(f)
+    return far
+
+
+# FAR TREES (2026-10-12, Wes: "a fuck ton of proper distance trees"): every tall tree of a biome also stands as a sparser, larger stand-in (tag MOFar_Tree) on the far-tree tier (1 km cells out to
+# ~4 km, node chain add_far_tree_chain.py). Bigger crowns at a fraction of the density keep the canopy closed from a distance for a fraction of the instances. The stand-ins are decorative (no
+# resource node, no collision) and are never drawn inside the node's MinDistanceFromViewerCm (descriptor InstanceMinDrawDistance), where the real trees stand.
+FAR_TREE_RATIO = 0.40
+FAR_TREE_SCALE = 1.5
+FAR_TREE_CAP = 100.0   # stand-ins per hectare at most (the far sampler offers ~112 candidate points / ha)
+
+
+def far_trees(species_list):
+    far = []
+    for sp in species_list:
+        path = sp["Mesh"]
+        if sp["HISMTag"] != "MOResource_Tree" or "Sapling" in path or "Seedling" in path or "wdvhberja" in path:   # (Black Locust is a knee-high plant: no stand-in)
+            continue
+        f = dict(sp)
+        f["HISMTag"] = "MOFar_Tree"
+        f["ResourceNodeId"] = "None"
+        f["Collision"] = "Passable"
+        f["bAutoSweepOnTerraform"] = True
+        f["ClusterRadius"] = sp["ClusterRadius"] * 1.4
+        f["MinScale"] = round(sp["MinScale"] * FAR_TREE_SCALE, 3)
+        f["MaxScale"] = round(sp["MaxScale"] * FAR_TREE_SCALE, 3)
+        f["DensityPerHectare"] = sp["DensityPerHectare"] * FAR_TREE_RATIO
+        far.append(f)
+    total = sum(f["DensityPerHectare"] for f in far)
+    k = min(1.0, FAR_TREE_CAP / total) if total > 0 else 1.0
+    for f in far:
+        f["DensityPerHectare"] = round(f["DensityPerHectare"] * k, 2)
+    return far
+
+
+def thin_and_far(species_list):
+    for sp in species_list:
+        if sp["HISMTag"] == "MOBiomeCover_Grass":
+            sp["DensityPerHectare"] = round(sp["DensityPerHectare"] * GRASS_THIN, 1)
+    return species_list + far_grass(species_list) + far_trees(species_list)
+
+
+for _name in list(PALETTES):
+    PALETTES[_name] = thin_and_far(PALETTES[_name])
+ALPINE["species"] = thin_and_far(ALPINE["species"])
+ALPINE_ROCK["species"] = thin_and_far(ALPINE_ROCK["species"])
+RAINFOREST["species"] = thin_and_far(RAINFOREST["species"])
+
+
+def merge_same_mesh(species_list):
+    """Entries with the same mesh, tag and clump group become one (densities add): the hornbeam -> BlackAlder fallback maps several hornbeam shapes onto one BlackAlder mesh."""
+    merged = {}
+    for sp in species_list:
+        key = (sp["Mesh"], sp["HISMTag"], sp["ClusterGroup"])
+        if key in merged:
+            merged[key]["DensityPerHectare"] = round(merged[key]["DensityPerHectare"] + sp["DensityPerHectare"], 2)
+        else:
+            merged[key] = dict(sp)
+    return list(merged.values())
+
+
+ELECTRIC_FOREST["species"] = thin_and_far(merge_same_mesh(ELECTRIC_FOREST["species"]))
+NORDIC_STRAND["species"] = thin_and_far(NORDIC_STRAND["species"])
+
+
 def write_plan():
     out = {name: {"species": sp} for name, sp in PALETTES.items()}
     for name, edit in ROW_EDITS.items():
         out.setdefault(name, {}).update(edit)
     out["AlpineHeath"] = ALPINE
+    out["AlpineRock"] = ALPINE_ROCK
     out["Rainforest"] = RAINFOREST
+    out["ElectricForest"] = ELECTRIC_FOREST
+    out["NordicStrand"] = NORDIC_STRAND
     with open("D:/UEProjects/MO57/Saved/Logs/biome_palettes.json", "w", encoding="utf-8") as f:
         json.dump(out, f, indent=1)
-    for name, sp in list(PALETTES.items()) + [("AlpineHeath", ALPINE["species"]), ("Rainforest", RAINFOREST["species"])]:
+    for name, sp in list(PALETTES.items()) + [("AlpineHeath", ALPINE["species"]), ("AlpineRock", ALPINE_ROCK["species"]), ("Rainforest", RAINFOREST["species"]), ("ElectricForest", ELECTRIC_FOREST["species"]), ("NordicStrand", NORDIC_STRAND["species"])]:
         total = sum(s["DensityPerHectare"] for s in sp)
         trees = sum(s["DensityPerHectare"] for s in sp if s["HISMTag"] == "MOResource_Tree")
         print("PALETTE %-16s %2d species, %5.0f instances/ha (%4.0f trees)" % (name, len(sp), total, trees))

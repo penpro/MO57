@@ -62,6 +62,13 @@ struct MOFRAMEWORK_API FMOPCGWaterMask
 	 */
 	int32 BiomeAt(double X, double Y, double GroundZ, float SlopeDeg) const;
 
+	/**
+	 * Is a surface point part of the CAVE system rather than the open ground: inside a sinkhole's rim zone (the shaft and its flared mouth) or well below the height terrain (200 cm: the wall / floor of a tunnel,
+	 * cavern or shaft). The cave stamp carves those out of the height terrain, but some PCG chains sample the terrain's HEIGHT and so plant grass and trees on the plug that is no longer there (seen 2026-10-12:
+	 * a green disc over a 5 m shaft). False when the mask is inactive or the cave system is off.
+	 */
+	bool IsInCave(double X, double Y, double Z) const;
+
 	/** The index of a biome id in the params' list (INDEX_NONE if unknown or inactive). */
 	int32 FindBiome(FName BiomeId) const;
 

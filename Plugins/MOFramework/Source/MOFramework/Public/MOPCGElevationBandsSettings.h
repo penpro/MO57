@@ -166,6 +166,14 @@ public:
 	bool bExcludeWater = true;
 
 	/**
+	 * Drop every input point that belongs to the cave system: inside a sinkhole's rim zone, or far below the height terrain (a tunnel / cavern surface). ON by default: the cave stamp carves holes the
+	 * height terrain does not know about, and a chain that samples that height planted grass and trees across the openings. The test is FMOPCGWaterMask::IsInCave; same reasoning as the water exclusion
+	 * (the answer depends on the world seed, so the node is neither cacheable nor off the main thread while it is on).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Caves", meta=(PCG_Overridable))
+	bool bExcludeCaves = true;
+
+	/**
 	 * Keep only points that stand in one of these biomes (DT_Biomes row ids, resolved the way the biome spawner does: the point's height, slope and the generator's climate). Empty = every biome. This
 	 * lets a plain Static Mesh Spawner chain ("black locust trees") belong to the biomes it suits instead of covering the whole world; the node is then not cacheable (the answer depends on the world seed).
 	 */

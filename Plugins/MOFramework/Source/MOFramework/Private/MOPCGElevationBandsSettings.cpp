@@ -105,14 +105,14 @@ bool FMOPCGElevationBandsElement::CanExecuteOnlyOnMainThread(FPCGContext* Contex
 {
 	// The water mask reads the world's seed subsystem.
 	const UMOPCGElevationBandsSettings* Settings = Context ? Context->GetInputSettings<UMOPCGElevationBandsSettings>() : nullptr;
-	return Settings && (Settings->bExcludeWater || Settings->AllowedBiomeIds.Num() > 0);
+	return Settings && (Settings->bExcludeWater || Settings->bExcludeCaves || Settings->AllowedBiomeIds.Num() > 0);
 }
 
 bool FMOPCGElevationBandsElement::IsCacheable(const UPCGSettings* InSettings) const
 {
 	// With the water exclusion on, the output depends on the world seed as well as on the input points: never serve a cached result from another world.
 	const UMOPCGElevationBandsSettings* Settings = Cast<UMOPCGElevationBandsSettings>(InSettings);
-	return !(Settings && (Settings->bExcludeWater || Settings->AllowedBiomeIds.Num() > 0));
+	return !(Settings && (Settings->bExcludeWater || Settings->bExcludeCaves || Settings->AllowedBiomeIds.Num() > 0));
 }
 
 bool FMOPCGElevationBandsElement::ExecuteInternal(FPCGContext* Context) const
@@ -140,9 +140,9 @@ bool FMOPCGElevationBandsElement::ExecuteInternal(FPCGContext* Context) const
 	FRandomStream RandomStream(Context->GetSeed() + Settings->SeedOffset);
 
 	// Water: the sea / river / pond ground and the upland lakes (see MOPCGWaterMask.h). Inactive (nothing is water) until the world has an active seed.
-	const bool bNeedsMask = Settings->bExcludeWater || Settings->AllowedBiomeIds.Num() > 0;
+	const bool bNeedsMask = Settings->bExcludeWater || Settings->bExcludeCaves || Settings->AllowedBiomeIds.Num() > 0;
 	const FMOPCGWaterMask WaterMask = bNeedsMask ? FMOPCGWaterMask::ForActor(Context->GetTargetActor(nullptr), Settings->WaterBankRadii) : FMOPCGWaterMask();
-	int32 DroppedInWater = 0, DroppedByBiome = 0;
+	int32 DroppedInWater = 0, DroppedByBiome = 0, DroppedInCave = 0;
 	TArray<int32> AllowedBiomes;
 	for (const FName& Id : Settings->AllowedBiomeIds)
 	{
@@ -199,6 +199,11 @@ bool FMOPCGElevationBandsElement::ExecuteInternal(FPCGContext* Context) const
 				++DroppedInWater;
 				continue;
 			}
+			if (Settings->bExcludeCaves && WaterMask.IsActive() && WaterMask.IsInCave(PointLocation.X, PointLocation.Y, PointLocation.Z))
+			{
+				++DroppedInCave;
+				continue;
+			}
 			if (bFilterBiomes)
 			{
 				const float SlopeDeg = FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(InputPoint.Transform.GetRotation().GetUpVector().Z, -1.0f, 1.0f)));
@@ -248,7 +253,7 @@ bool FMOPCGElevationBandsElement::ExecuteInternal(FPCGContext* Context) const
 
 	if (bNeedsMask)
 	{
-		UE_LOG(LogMOFramework, Verbose, TEXT("[MOPCGElevationBands] %s: maskActive=%d filterBiomes=%d (%d allowed) dropped %d point(s) in water, %d outside the allowed biomes"), *Context->GetTargetActor(nullptr)->GetName(), WaterMask.IsActive() ? 1 : 0, bFilterBiomes ? 1 : 0, AllowedBiomes.Num(), DroppedInWater, DroppedByBiome);
+		UE_LOG(LogMOFramework, Verbose, TEXT("[MOPCGElevationBands] %s: maskActive=%d filterBiomes=%d (%d allowed) dropped %d point(s) in water, %d in caves, %d outside the allowed biomes"), *Context->GetTargetActor(nullptr)->GetName(), WaterMask.IsActive() ? 1 : 0, bFilterBiomes ? 1 : 0, AllowedBiomes.Num(), DroppedInWater, DroppedInCave, DroppedByBiome);
 	}
 	return true;
 }

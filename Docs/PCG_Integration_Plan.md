@@ -337,3 +337,12 @@ This is less performant but much simpler to implement initially.
 - VoxelPCG module (add to MOFramework.Build.cs)
 - Existing MOFramework inventory system
 - Existing MOFramework interaction system
+
+## How PCG is hosted in the levels (checked 2026-10-12, Wes asked whether a PCG volume is a leftover)
+
+Each gameplay level (`/Game/VoxelExamples/PCGScattering/MOPCGScattering`) and the menu level (`/Game/Penumbra/Maps/LoadingLevel`) has exactly ONE PCG component, and it lives on the `PCGVolume` actor (plus the engine's `PCGWorldActor`).
+That component is already the runtime generator: `GenerationTrigger = GENERATE_AT_RUNTIME`, `is_component_partitioned = True` (hierarchical generation: the radii per grid size, `HiGenGridSizeMultiplier`, see `Docs/ElectricDreams_Lessons.md`),
+so PCG spawns AROUND the generation sources (the local player's pawn / camera) and nothing is generated anywhere else. The volume is the component's HOST: its brush is the generation bounds (about +-65 km) and it holds the graph instance.
+It is NOT a second, competing system, and deleting it would delete every PCG spawner (trees, grass, shore flora) because no other actor owns a PCG component. (`MO.PCG.WaterAudit` / the tours verify what it generates.)
+`VoxelSandBox.umap` (an old sandbox map, not a gameplay level) still has its own PCGVolume + partition actors; it is never loaded by the game.
+The "invoker" in this project's docs is the VOXEL invoker (`AMOCharacter::VoxelCollisionInvoker`: terrain chunks + collision around the pawn), which is separate from PCG.

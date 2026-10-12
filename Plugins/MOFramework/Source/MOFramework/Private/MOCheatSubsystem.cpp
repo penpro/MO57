@@ -3,6 +3,7 @@
  */
 
 #include "MOCheatSubsystem.h"
+#include "Containers/Ticker.h"
 #include "MOPossessionComponent.h"
 #include "MOWorldSeedSubsystem.h"
 #include "MOPlayerController.h"
@@ -3091,6 +3092,228 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 				IMOControllableInterface::Execute_CanMove(Pawn) ? TEXT("Y") : TEXT("N"),
 				IMOControllableInterface::Execute_CanJump(Pawn) ? TEXT("Y") : TEXT("N"),
 				*Pawn->GetVelocity().ToCompactString());
+		}),
+		ECVF_Default));
+
+	// ---------- MO.PCG.Census [radius_cm] ----------
+	// What is planted around the pawn and HOW it sits: per mesh the count, the angle between the instance's up axis and the terrain normal (rocks should be ~0), how deep its pivot is under the generator's ground
+	// (positive = buried), and the mesh's thinness (smallest / largest bounds extent: < 0.15 is a plane or a slab, open geometry that shows its edge and its back).
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.PCG.Census"),
+		TEXT("Dev: per-mesh census of the spawned instances around the local pawn with alignment-to-terrain and burial statistics. Usage: MO.PCG.Census [radius_cm=4000]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
+			const APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+			const UMOWorldSeedSubsystem* Seeds = UMOWorldSeedSubsystem::Get(World);
+			if (!Pawn || !Seeds || !Seeds->HasActiveSeed())
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] CENSUS FAILED: needs a local pawn and an active world seed"));
+				return;
+			}
+			const double Radius = Args.Num() > 0 ? FMath::Clamp((double)FCString::Atof(*Args[0]), 500.0, 100000.0) : 4000.0;
+			const int32 TerrainSeed = Seeds->GetActiveTerrainSeed();
+			const FMOWorldGenParamsRef P = FMOWorldGenParamsProvider::Get();
+			const FVector C = Pawn->GetActorLocation();
+			struct FRow { int32 Count = 0; int32 Band[3] = { 0, 0, 0 }; double TiltSum = 0, SinkSum = 0; float Thin = 1.0f; FVector Extent = FVector::ZeroVector; };
+			TMap<FString, FRow> Rows;
+			int32 Total = 0;
+			for (TActorIterator<AActor> ActorIt(World); ActorIt; ++ActorIt)
+			{
+				TArray<UInstancedStaticMeshComponent*> Comps;
+				ActorIt->GetComponents<UInstancedStaticMeshComponent>(Comps);
+				for (UInstancedStaticMeshComponent* Ism : Comps)
+				{
+					const UStaticMesh* Mesh = Ism->GetStaticMesh();
+					if (!Mesh || Ism->GetInstanceCount() == 0 || Ism->Bounds.GetBox().ComputeSquaredDistanceToPoint(C) > Radius * Radius)
+					{
+						continue;
+					}
+					const FVector Ext = Mesh->GetBounds().BoxExtent;
+					const float Thin = Ext.GetMax() > 0.0f ? Ext.GetMin() / Ext.GetMax() : 1.0f;
+					for (int32 I = 0; I < Ism->GetInstanceCount(); ++I)
+					{
+						FTransform Xf;
+						if (!Ism->GetInstanceTransform(I, Xf, /*bWorldSpace=*/true))
+						{
+							continue;
+						}
+						const FVector L = Xf.GetLocation();
+						if (FVector2D::DistSquared(FVector2D(L.X, L.Y), FVector2D(C.X, C.Y)) > Radius * Radius)
+						{
+							continue;
+						}
+						const float Step = 120.0f, Vox = P->Tuning.VoxelSizeCm;
+						const float Hx0 = FMOWorldGen::SampleHeightCm(*P, L.X - Step, L.Y, TerrainSeed, Vox), Hx1 = FMOWorldGen::SampleHeightCm(*P, L.X + Step, L.Y, TerrainSeed, Vox);
+						const float Hy0 = FMOWorldGen::SampleHeightCm(*P, L.X, L.Y - Step, TerrainSeed, Vox), Hy1 = FMOWorldGen::SampleHeightCm(*P, L.X, L.Y + Step, TerrainSeed, Vox);
+						const FVector Normal = FVector(-(Hx1 - Hx0), -(Hy1 - Hy0), 2.0f * Step).GetSafeNormal();
+						const float Ground = FMOWorldGen::SampleHeightCm(*P, L.X, L.Y, TerrainSeed, Vox);
+						FRow& R = Rows.FindOrAdd(Ism->ComponentHasTag(TEXT("MOFar_Grass")) ? Mesh->GetName() + TEXT(" [far grass]") : Ism->ComponentHasTag(TEXT("MOFar_Tree")) ? Mesh->GetName() + TEXT(" [far tree]") : Mesh->GetName());
+						++R.Count;
+						{
+							const double D = FVector2D::Distance(FVector2D(L.X, L.Y), FVector2D(C.X, C.Y));
+							++R.Band[D <= 13000.0 ? 0 : D <= 40000.0 ? 1 : 2];   // <= 130 m (the near tier), <= 400 m, beyond
+						}
+						++Total;
+						R.TiltSum += FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(FVector::DotProduct(Xf.GetRotation().GetUpVector(), Normal), -1.0f, 1.0f)));
+						R.SinkSum += Ground - L.Z;
+						R.Thin = Thin;
+						R.Extent = Ext;
+					}
+				}
+			}
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] CENSUS radius=%.0f centre=(%.0f, %.0f, %.0f) instances=%d (tilt = degrees between the instance's up and the terrain normal; sink = cm the pivot is under the generator's ground; thin = min/max bounds extent)"), Radius, C.X, C.Y, C.Z, Total);
+			TArray<TPair<FString, FRow>> Sorted;
+			for (const TPair<FString, FRow>& Pair : Rows) { Sorted.Add(Pair); }
+			Sorted.Sort([](const TPair<FString, FRow>& A, const TPair<FString, FRow>& B) { return A.Value.Count > B.Value.Count; });
+			for (int32 I = 0; I < FMath::Min(Sorted.Num(), 40); ++I)
+			{
+				const FRow& R = Sorted[I].Value;
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] CENSUS %6d (<130m %5d, <400m %5d, far %5d) | tilt %5.1f | sink %6.1f | thin %.2f | ext (%.0f,%.0f,%.0f) | %s"), R.Count, R.Band[0], R.Band[1], R.Band[2], R.TiltSum / R.Count, R.SinkSum / R.Count, R.Thin, R.Extent.X, R.Extent.Y, R.Extent.Z, *Sorted[I].Key);
+			}
+		}),
+		ECVF_Default));
+
+	// ---------- MO.PCG.Rings ----------
+	// How far each kind of vegetation reaches: spawned instances per distance ring around the camera, by component tag (cheap: no terrain sampling, any distance).
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.PCG.Rings"),
+		TEXT("Dev: spawned instance counts per distance ring (0-130 m, -400 m, -1.4 km, -2.5 km, -4 km, beyond) by vegetation kind (tree, far tree, grass, far grass, shrub, rock, other)."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
+			const FVector C = (PC && PC->PlayerCameraManager) ? PC->PlayerCameraManager->GetCameraLocation() : FVector::ZeroVector;
+			static const double Edges[5] = { 13000.0, 40000.0, 140000.0, 250000.0, 400000.0 };
+			static const TCHAR* Kinds[] = { TEXT("tree"), TEXT("far tree"), TEXT("grass"), TEXT("far grass"), TEXT("shrub"), TEXT("rock"), TEXT("other") };
+			int32 Counts[7][6] = {};
+			for (TActorIterator<AActor> ActorIt(World); ActorIt; ++ActorIt)
+			{
+				TArray<UInstancedStaticMeshComponent*> Comps;
+				ActorIt->GetComponents<UInstancedStaticMeshComponent>(Comps);
+				for (UInstancedStaticMeshComponent* Ism : Comps)
+				{
+					const int32 Num = Ism->GetInstanceCount();
+					if (Num == 0 || !Ism->GetStaticMesh())
+					{
+						continue;
+					}
+					const int32 Kind = Ism->ComponentHasTag(TEXT("MOFar_Tree")) ? 1 : Ism->ComponentHasTag(TEXT("MOFar_Grass")) ? 3 : Ism->ComponentHasTag(TEXT("MOResource_Tree")) ? 0
+						: Ism->ComponentHasTag(TEXT("MOBiomeCover_Grass")) ? 2 : Ism->ComponentHasTag(TEXT("MOBiomeCover_Shrub")) ? 4 : (Ism->ComponentHasTag(TEXT("MOResource_Rock")) || Ism->ComponentHasTag(TEXT("MOBiomeCover_Rock"))) ? 5 : 6;
+					FTransform Xf;
+					for (int32 I = 0; I < Num; ++I)
+					{
+						if (Ism->GetInstanceTransform(I, Xf, /*bWorldSpace=*/true))
+						{
+							const double D = FVector2D::Distance(FVector2D(Xf.GetLocation().X, Xf.GetLocation().Y), FVector2D(C.X, C.Y));
+							int32 Ring = 5;
+							for (int32 E = 0; E < 5; ++E) { if (D <= Edges[E]) { Ring = E; break; } }
+							++Counts[Kind][Ring];
+						}
+					}
+				}
+			}
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] RINGS centre=(%.0f, %.0f) :: kind: <130m, <400m, <1.4km, <2.5km, <4km, beyond"), C.X, C.Y);
+			for (int32 K = 0; K < 7; ++K)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] RINGS %-9s %7d %7d %7d %7d %7d %7d"), Kinds[K], Counts[K][0], Counts[K][1], Counts[K][2], Counts[K][3], Counts[K][4], Counts[K][5]);
+			}
+		}),
+		ECVF_Default));
+
+	// ---------- MO.Test.Showcase <spacingCm> <meshPath> [meshPath...] / MO.Test.ShowcaseClear ----------
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Test.Showcase"),
+		TEXT("Dev: stand static meshes in a row in front of the local pawn on the ground (to LOOK at rocks / trees / their pivots) and log each one's bounds, pivot offset and triangle count. Usage: MO.Test.Showcase <spacingCm> <meshPath> [meshPath...]; MO.Test.ShowcaseClear removes them."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			APawn* Pawn = ResolveLocalPawn(World);
+			if (!World || !Pawn || Args.Num() < 2)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] FAIL Showcase: usage MO.Test.Showcase <spacingCm> <meshPath> [meshPath...] with a pawn"));
+				return;
+			}
+			const float Spacing = FCString::Atof(*Args[0]);
+			const int32 Count = Args.Num() - 1;
+			const FVector Forward = Pawn->GetActorForwardVector().GetSafeNormal2D();
+			const FVector Right = FVector::CrossProduct(FVector::UpVector, Forward).GetSafeNormal();
+			const FVector Origin = Pawn->GetActorLocation() + Forward * 450.0f;
+			for (int32 i = 0; i < Count; ++i)
+			{
+				UStaticMesh* Mesh = LoadObject<UStaticMesh>(nullptr, *Args[i + 1]);
+				if (!Mesh)
+				{
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] Showcase: cannot load %s"), *Args[i + 1]);
+					continue;
+				}
+				FVector Spot = Origin + Right * ((i - 0.5f * (Count - 1)) * Spacing);
+				FHitResult Hit;
+				if (World->LineTraceSingleByChannel(Hit, Spot + FVector(0, 0, 6000), Spot - FVector(0, 0, 6000), ECC_WorldStatic))
+				{
+					Spot = Hit.ImpactPoint;
+				}
+				FActorSpawnParameters Params;
+				Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+				AStaticMeshActor* Actor = World->SpawnActor<AStaticMeshActor>(Spot, FRotator::ZeroRotator, Params);
+				if (!Actor)
+				{
+					continue;
+				}
+				Actor->SetMobility(EComponentMobility::Movable);
+				Actor->GetStaticMeshComponent()->SetStaticMesh(Mesh);
+				Actor->GetStaticMeshComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+				Actor->Tags.Add(TEXT("MOShowcase"));
+				const FBoxSphereBounds B = Mesh->GetBounds();
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] Showcase %d %s | extent=(%.0f, %.0f, %.0f) cm | pivot->boundsCentre=(%.0f, %.0f, %.0f) | tris=%d lods=%d sections=%d"),
+					i, *Args[i + 1], B.BoxExtent.X, B.BoxExtent.Y, B.BoxExtent.Z, B.Origin.X, B.Origin.Y, B.Origin.Z,
+					Mesh->GetNumTriangles(0), Mesh->GetNumLODs(), Mesh->GetNumSections(0));
+			}
+		}),
+		ECVF_Default));
+
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Test.ShowcaseClear"),
+		TEXT("Dev: remove the meshes MO.Test.Showcase placed."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			int32 Removed = 0;
+			for (TActorIterator<AStaticMeshActor> It(World); It; ++It)
+			{
+				if (It->Tags.Contains(TEXT("MOShowcase")))
+				{
+					It->Destroy();
+					++Removed;
+				}
+			}
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] ShowcaseClear: removed %d"), Removed);
+		}),
+		ECVF_Default));
+
+	// ---------- MO.Test.MoveFor <X> <Y> <Seconds> ----------
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Test.MoveFor"),
+		TEXT("Hold a move input on the local pawn for N seconds (a per-frame RequestMove, so locomotion / crouch-walk animations actually run). Usage: MO.Test.MoveFor <X> <Y> <Seconds>  (X = right, Y = forward)"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			APawn* Pawn = ResolveLocalPawn(World);
+			if (!Pawn || !Pawn->GetClass()->ImplementsInterface(UMOControllableInterface::StaticClass()) || Args.Num() < 3)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] FAIL MoveFor: usage MO.Test.MoveFor <X> <Y> <Seconds> with a controllable pawn"));
+				return;
+			}
+			const FVector2D Direction(FCString::Atof(*Args[0]), FCString::Atof(*Args[1]));
+			const double EndSeconds = FPlatformTime::Seconds() + FCString::Atof(*Args[2]);
+			TWeakObjectPtr<APawn> WeakPawn(Pawn);
+			FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([WeakPawn, Direction, EndSeconds](float)
+			{
+				APawn* P = WeakPawn.Get();
+				if (!P || FPlatformTime::Seconds() >= EndSeconds)
+				{
+					return false;
+				}
+				IMOControllableInterface::Execute_RequestMove(P, Direction);
+				return true;
+			}));
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] PASS MoveFor: %s for %s s"), *Direction.ToString(), *Args[2]);
 		}),
 		ECVF_Default));
 

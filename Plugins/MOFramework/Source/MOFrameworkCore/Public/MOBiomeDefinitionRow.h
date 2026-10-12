@@ -112,6 +112,17 @@ struct MOFRAMEWORKCORE_API FMOBiomeSpeciesEntry
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Biome|Species")
 	bool bAlignToSurfaceNormal = false;
 
+	/**
+	 * How deep the species is buried, as a fraction of its own (scaled) height, pushed along its up axis. Rocks and debris that merely rest ON the surface read as dropped props; buried a quarter of their
+	 * height they read as part of the terrain. -1 (default) = auto: 0.25 for species that align to the terrain normal (rocks, debris), 0 for upright plants and trees.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Biome|Species", meta=(ClampMin="-1.0", ClampMax="0.9"))
+	float SinkFraction = -1.0f;
+
+	/** Extra burial in cm on top of SinkFraction (a trunk flare, a root ball, an open-bottomed scan that must not show its edge). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Biome|Species", meta=(ClampMin="0.0", ClampMax="200.0"))
+	float SinkMinCm = 0.0f;
+
 	/** Max random tilt from vertical in degrees (world-up species). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Biome|Species", meta=(ClampMin="0.0", ClampMax="45.0"))
 	float MaxRandomTiltDeg = 8.0f;

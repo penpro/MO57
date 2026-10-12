@@ -17,6 +17,8 @@
 #include "Components/HierarchicalInstancedStaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
+#include "HAL/IConsoleManager.h"
+#include "GameFramework/PlayerController.h"
 
 #define LOCTEXT_NAMESPACE "MOPCGBiomeSpawner"
 
@@ -66,10 +68,13 @@ TArray<FPCGPinProperties> UMOPCGBiomeSpawnerSettings::OutputPinProperties() cons
 
 namespace
 {
+	/** Live multiplier on the NEAR ground cover's density (grass, flowers, debris), on top of the authored per-hectare rates: the one knob for "thin out the grass". Takes effect on the next generation (pcg.RuntimeGeneration.Refresh). */
+	TAutoConsoleVariable<float> CVarGroundCoverScale(TEXT("mo.PCG.GroundCoverScale"), 1.0f, TEXT("Multiplier on near ground-cover species density (0..2)."), ECVF_Default);
+
 	/** Trees, rocks, bushes and shrubs are the LARGE species (placed on the larger hi-gen grid); grass, flowers and debris are ground cover. By HISMTag so a new species needs no flag. */
 	bool IsLargeSpecies(const FMOBiomeSpeciesEntry& Sp)
 	{
-		static const FName Tags[] = { FName(TEXT("MOResource_Tree")), FName(TEXT("MOResource_Rock")), FName(TEXT("MOResource_Bush")), FName(TEXT("MOBiomeCover_Shrub")) };
+		static const FName Tags[] = { FName(TEXT("MOResource_Tree")), FName(TEXT("MOResource_Rock")), FName(TEXT("MOResource_Bush")), FName(TEXT("MOBiomeCover_Shrub")), FName(TEXT("MOBiomeCover_Rock")) };
 		for (const FName& T : Tags)
 		{
 			if (Sp.HISMTag == T)
@@ -80,6 +85,20 @@ namespace
 		return false;
 	}
 
+	/** Far-tier stand-ins (MOFar_Grass tufts, MOFar_Tree proxies) are tagged with the MOFar_ prefix; they belong to the far nodes only. */
+	bool IsFarGroundCover(const FMOBiomeSpeciesEntry& Sp) { return Sp.HISMTag == FName(TEXT("MOFar_Grass")); }
+	bool IsFarLargeTag(const FName& Tag) { return Tag == FName(TEXT("MOFar_Tree")); }
+	bool IsFarLarge(const FMOBiomeSpeciesEntry& Sp) { return IsFarLargeTag(Sp.HISMTag); }
+	/** Saplings and seedlings carry the tree tag (they are harvestable) but stand 0.5-3 m tall: they belong with the shrubs on the large-species grid, not out on the tree grid. */
+	bool IsYoungTree(const FMOBiomeSpeciesEntry& Sp)
+	{
+		const FString Path = Sp.Mesh.ToString();
+		return Path.Contains(TEXT("Sapling")) || Path.Contains(TEXT("Seedling"));
+	}
+
+	/** Trees stand on a grid of their own (TreesOnly): a forest has to be seen from much farther than the undergrowth, rocks and shrubs around it. */
+	bool IsTreeSpecies(const FMOBiomeSpeciesEntry& Sp) { return Sp.HISMTag == FName(TEXT("MOResource_Tree")) && !IsYoungTree(Sp); }
+
 	/** A biome's MAIN species (Species): which tier plants them. */
 	bool PassesSpeciesFilter(EMOBiomeSpeciesFilter Filter, const FMOBiomeSpeciesEntry& Sp)
 	{
@@ -87,7 +106,16 @@ namespace
 		{
 			return false;   // the shore tier plants only the biome rows' water-edge list
 		}
-		return Filter == EMOBiomeSpeciesFilter::All || (Filter == EMOBiomeSpeciesFilter::LargeOnly) == IsLargeSpecies(Sp);
+		const bool bFarGround = IsFarGroundCover(Sp), bFarLarge = IsFarLarge(Sp);
+		switch (Filter)
+		{
+		case EMOBiomeSpeciesFilter::All:                return true;
+		case EMOBiomeSpeciesFilter::FarGroundCoverOnly: return bFarGround;
+		case EMOBiomeSpeciesFilter::FarLargeOnly:       return bFarLarge;
+		case EMOBiomeSpeciesFilter::TreesOnly:          return IsTreeSpecies(Sp);
+		case EMOBiomeSpeciesFilter::LargeOnly:          return !bFarGround && !bFarLarge && !IsTreeSpecies(Sp) && IsLargeSpecies(Sp);
+		default:                                        return !bFarGround && !bFarLarge && !IsLargeSpecies(Sp);   // GroundCoverOnly
+		}
 	}
 
 	/** A biome's WATER-EDGE species (WaterEdgeSpecies): only the dense shore tier (and the legacy All node) plants them. */
@@ -208,6 +236,22 @@ bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 		}
 	};
 
+	// Far tiers keep out of the dense near zone: where the viewer is at generation time (the camera, so the main menu flyby counts too).
+	FVector2D ViewerXY = FVector2D::ZeroVector;
+	bool bHaveViewer = false;
+	if (Settings->MinDistanceFromViewerCm > 0.0f && TargetActor && TargetActor->GetWorld())
+	{
+		if (const APlayerController* ViewerPC = TargetActor->GetWorld()->GetFirstPlayerController())
+		{
+			FVector ViewLocation;
+			FRotator ViewRotation;
+			ViewerPC->GetPlayerViewPoint(ViewLocation, ViewRotation);
+			ViewerXY = FVector2D(ViewLocation.X, ViewLocation.Y);
+			bHaveViewer = true;
+		}
+	}
+	const float MinViewerDistSq = FMath::Square(Settings->MinDistanceFromViewerCm);
+
 	const double PlantStartTime = FPlatformTime::Seconds();
 	// (mesh, biome) -> bucket of accepted transforms
 	TMap<FString, FSpeciesBucket> Buckets;
@@ -247,6 +291,11 @@ bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 			++TotalIn;
 			const FVector Location = Point.Transform.GetLocation();
 			InputBounds += Location;
+
+			if (bHaveViewer && FVector2D::DistSquared(FVector2D(Location.X, Location.Y), ViewerXY) < MinViewerDistSq)
+			{
+				continue;   // inside the near zone: the dense tier owns it
+			}
 
 			if (TerrainMod && TerrainMod->IsLocationModified(Location))
 			{
@@ -370,6 +419,10 @@ bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 			{
 				const FMOBiomeSpeciesEntry& Sp = *Candidates[i].Species;
 				float P = (Candidates[i].Mesh ? Candidates[i].Scale * Sp.DensityPerHectare / Settings->InputPointsPerHectare : 0.0f);
+				if (P > 0.0f && !IsLargeSpecies(Sp) && !IsFarGroundCover(Sp) && !IsFarLarge(Sp))
+				{
+					P *= FMath::Clamp(CVarGroundCoverScale.GetValueOnAnyThread(), 0.0f, 2.0f);
+				}
 				if (P > 0.0f && Sp.ClusterGroup >= 0)
 				{
 					// Shared field per (biome, group): offsets depend on the
@@ -432,8 +485,9 @@ bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 			const float Yaw = RandomStream.FRandRange(0.0f, 2.0f * PI);
 			if (Sp.bAlignToSurfaceNormal)
 			{
-				// Rocks/debris: sit on the surface as sampled, random yaw.
-				Xf.SetRotation(FQuat(FVector::UpVector, Yaw) * Xf.GetRotation());
+				// Rocks/debris: sit ON the surface normal the sampler gave the point, spun about THEIR OWN up axis. (The old `FQuat(WorldUp, Yaw) * PointRotation` spun the already
+				// aligned rock about WORLD up, which swings its up axis around the normal: on a slope every rock leaned in a random direction, up to twice the slope angle off the ground.)
+				Xf.SetRotation(Xf.GetRotation() * FQuat(FVector::UpVector, Yaw));
 			}
 			else
 			{
@@ -444,6 +498,23 @@ bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 				const float TiltDir = RandomStream.FRandRange(0.0f, 2.0f * PI);
 				const FQuat Tilt(FVector(FMath::Cos(TiltDir), FMath::Sin(TiltDir), 0.0f), TiltRad);
 				Xf.SetRotation(Tilt * FQuat(FVector::UpVector, Yaw));
+			}
+
+			// Burial: aligned species (rocks, debris) are first lifted so the mesh BOTTOM (whatever its pivot) touches the surface, then sunk SinkFraction of their height into it.
+			// Both along the instance's own up axis, so a rock on a slope goes into the slope, not into the air below it.
+			{
+				const FBoxSphereBounds MeshBounds = Mesh->GetBounds();
+				const float HeightCm = MeshBounds.BoxExtent.Z * 2.0f * Scale;
+				const float SinkFraction = Sp.SinkFraction >= 0.0f ? Sp.SinkFraction : (Sp.bAlignToSurfaceNormal ? 0.25f : 0.0f);
+				float Offset = -(SinkFraction * HeightCm + Sp.SinkMinCm);
+				if (Sp.bAlignToSurfaceNormal)
+				{
+					Offset -= (MeshBounds.Origin.Z - MeshBounds.BoxExtent.Z) * Scale;   // pivot to bottom: negative bottom (a centred pivot) lifts the mesh onto the surface
+				}
+				if (!FMath::IsNearlyZero(Offset))
+				{
+					Xf.AddToTranslation(Xf.GetRotation().GetUpVector() * Offset);
+				}
 			}
 
 			const FString Key = FString::Printf(TEXT("%s|%s"), *Mesh->GetPathName(), *Chosen->Id.ToString());
@@ -483,6 +554,25 @@ bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 		Params.Descriptor.bCastShadow = Settings->bCastShadows;
 		Params.Descriptor.bAffectDistanceFieldLighting = false;
 		Params.Descriptor.bAffectDynamicIndirectLighting = false;
+
+		// What is worth rendering depends on the tier. The FAR tiers (stand-in trees out to 4 km, far grass tufts) are seen as silhouettes: no shadow of their own (their shadows would be the
+		// biggest line in the shadow pass for nothing visible), no ray-tracing / reflection presence, no wind, and never drawn inside the distance the NEAR tiers own: InstanceMinDrawDistance is
+		// the engine's per-instance minimum, so a far cell that becomes near leaves no oversized ghost trees beside the real ones whatever the generation-time viewer position was.
+		// GROUND COVER (grass, flowers, debris) casts no shadow and stays out of the ray-traced scene either: millions of blades add cost to those passes and no visible shading.
+		const bool bFarTier = IsFarLargeTag(Bucket.HISMTag) || Bucket.HISMTag == FName(TEXT("MOFar_Grass"));
+		const bool bGroundCover = Bucket.HISMTag == FName(TEXT("MOBiomeCover_Grass")) || Bucket.HISMTag == FName(TEXT("MOBiomeCover_Flower")) || Bucket.HISMTag == FName(TEXT("MOBiomeCover_Debris"));
+		if (bFarTier || bGroundCover)
+		{
+			Params.Descriptor.bCastShadow = false;
+			Params.Descriptor.bVisibleInRayTracing = false;
+			Params.Descriptor.bVisibleInReflections = false;
+		}
+		if (bFarTier)
+		{
+			Params.Descriptor.bEvaluateWorldPositionOffset = false;
+			Params.Descriptor.bUseAsOccluder = false;
+			Params.Descriptor.InstanceMinDrawDistance = FMath::RoundToInt(Settings->MinDistanceFromViewerCm);
+		}
 
 		// HARVESTABLE species: apply the exact tag bundle the native resource
 		// spawner derives from DT_ResourceNodes (Name/MOResource_/Action_/

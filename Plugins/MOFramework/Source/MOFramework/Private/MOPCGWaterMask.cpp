@@ -14,6 +14,24 @@ FMOPCGWaterMask FMOPCGWaterMask::ForActor(const AActor* Actor, float InBankRadii
 	return FMOPCGWaterMask(UMOWorldGenSettings::RefreshPublishedParams(), Seeds->GetActiveTerrainSeed(), InBankRadii);
 }
 
+bool FMOPCGWaterMask::IsInCave(double X, double Y, double Z) const
+{
+	if (!bActive || !Params.IsSet())
+	{
+		return false;
+	}
+	const FMOWorldGenParams& P = *Params.GetValue();
+	if (!P.Tuning.bEnableCaves)
+	{
+		return false;
+	}
+	if (FMOWorldGen::DistanceToSinkholeRimZone(P, X, Y, TerrainSeed) <= 0.0f)
+	{
+		return true;
+	}
+	return Z < (double)FMOWorldGen::SampleHeightCm(P, X, Y, TerrainSeed, P.Tuning.VoxelSizeCm) - 200.0;
+}
+
 bool FMOPCGWaterMask::IsInWater(double X, double Y, double GroundZ) const
 {
 	if (!bActive || !Params.IsSet())

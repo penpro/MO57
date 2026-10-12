@@ -66,7 +66,13 @@ enum class EMOBiomeSpeciesFilter : uint8
 	All UMETA(DisplayName = "All species"),
 	GroundCoverOnly UMETA(DisplayName = "Ground cover only (grass, flowers, debris)"),
 	LargeOnly UMETA(DisplayName = "Large only (trees, shrubs, bushes, boulders)"),
-	WaterEdgeOnly UMETA(DisplayName = "Water-edge species only (reeds, rushes, shore flowers)")
+	WaterEdgeOnly UMETA(DisplayName = "Water-edge species only (reeds, rushes, shore flowers)"),
+	/** The FAR ground cover tier: species whose HISMTag starts with MOFar_ and is MOFar_Grass (sparse, larger tufts that carry the grass out to hundreds of metres past the dense near tier). */
+	FarGroundCoverOnly UMETA(DisplayName = "Far ground cover only (MOFar_Grass)"),
+	/** The FAR large tier: species tagged MOFar_Tree (stand-ins for distant trees: proxies, low LODs). */
+	FarLargeOnly UMETA(DisplayName = "Far large only (MOFar_Tree)"),
+	/** TREES only (HISMTag MOResource_Tree), on their own large hierarchical grid so the forest reaches far past the shrubs, rocks and undergrowth of the LargeOnly tier. */
+	TreesOnly UMETA(DisplayName = "Trees only (MOResource_Tree)")
 };
 
 UCLASS(BlueprintType, ClassGroup=(MO))
@@ -130,6 +136,13 @@ public:
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Density", meta = (PCG_Overridable, ClampMin = "1"))
 	float InputPointsPerHectare = 2000.0f;
+
+	/**
+	 * Drop points closer than this (2D, cm) to the local viewer at generation time. The FAR tiers set it to about the near tier's radius so their larger, sparser stand-ins do not stack on top of
+	 * the dense near vegetation around the player (cells are generated once, where the player stood then). 0 = off.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Density", meta = (PCG_Overridable, ClampMin = "0"))
+	float MinDistanceFromViewerCm = 0.0f;
 
 	/** Which species this node places (see EMOBiomeSpeciesFilter): run one node per tier on its own hierarchical grid. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Density", meta = (PCG_Overridable))
