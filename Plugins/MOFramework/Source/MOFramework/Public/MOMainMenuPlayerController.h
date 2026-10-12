@@ -42,6 +42,7 @@
 
 class UMOMainMenuWidget;
 class UMOIntroWidget;
+class UMOSplashWidget;
 class UMediaSource;
 class UMediaPlayer;
 class UMediaTexture;
@@ -128,6 +129,9 @@ public:
 	/** Play the intro video. */
 	UFUNCTION(BlueprintCallable, Category="MO|MainMenu")
 	void PlayIntroVideo();
+
+	/** The splash cards (Project Settings > MO Splash Screens) over the live menu world, then the intro video. Falls through to PlayIntroVideo() when there are no cards or no layout. */
+	void PlaySplashThenIntro();
 
 	/** Skip the intro video immediately. */
 	UFUNCTION(BlueprintCallable, Category="MO|MainMenu")
@@ -259,6 +263,16 @@ private:
 	UPROPERTY()
 	TObjectPtr<UMOIntroWidget> IntroWidget;
 
+	/** The running splash sequence, if any. */
+	UPROPERTY()
+	TObjectPtr<UMOSplashWidget> SplashWidget;
+
+	/** The dev verb / a skip asked to skip the intro too: set while the splash is up so its end goes straight to the menu. */
+	bool bSkipIntroAfterSplash = false;
+
+	UFUNCTION()
+	void HandleSplashFinished();
+
 	// ============================================================================
 	// MEDIA COMPONENTS
 	// ============================================================================
@@ -289,10 +303,17 @@ private:
 	/** Timer handle for video fallback timeout. */
 	FTimerHandle VideoFallbackTimerHandle;
 
-	/** The menu's fade-in from black (see MenuFadeInSeconds): started by ShowMainMenu, driven by a short repeating timer. */
+	/**
+	 * The menu's reveal (see MenuFadeInSeconds): started by ShowMainMenu. While the flyby's world is still being built (UMOWorldReadinessSubsystem: terrain, PCG
+	 * vegetation, streaming) the loading overlay holds the screen black with the stage text; the moment the world is ready the overlay fades out and the menu
+	 * fades in with it (HandleWorldReadyReveal). With no overlay / readiness available it falls back to a plain timed fade from black.
+	 */
 	void StartMenuFadeIn();
 	void ApplyMenuFadeOpacity();
+	void HandleWorldReadyReveal();
 	bool bMenuFadeStarted = false;
+	/** True from ShowMainMenu until the world is ready: the menu widget stays fully transparent. */
+	bool bAwaitingWorldReady = false;
 	double MenuFadeStartSeconds = 0.0;
 	FTimerHandle MenuFadeTimerHandle;
 

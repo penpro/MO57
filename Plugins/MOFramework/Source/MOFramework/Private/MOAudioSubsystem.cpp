@@ -130,10 +130,10 @@ void UMOAudioSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
 	// Apply initial volumes to whatever SoundClasses exist. If the soft refs
 	// haven't been set up yet (fresh project), these are silent no-ops.
-	ApplyVolumeToSoundClass(GetSoundClassForCategory(EMOAudioCategory::Music), MusicVolume * MasterVolume);
-	ApplyVolumeToSoundClass(GetSoundClassForCategory(EMOAudioCategory::Ambient), AmbientVolume * MasterVolume);
-	ApplyVolumeToSoundClass(GetSoundClassForCategory(EMOAudioCategory::SFX), SFXVolume * MasterVolume);
-	ApplyVolumeToSoundClass(GetSoundClassForCategory(EMOAudioCategory::UI), UIVolume * MasterVolume);
+	ApplyVolumeToSoundClass(GetSoundClassForCategory(EMOAudioCategory::Music), MusicVolume);
+	ApplyVolumeToSoundClass(GetSoundClassForCategory(EMOAudioCategory::Ambient), AmbientVolume);
+	ApplyVolumeToSoundClass(GetSoundClassForCategory(EMOAudioCategory::SFX), SFXVolume);
+	ApplyVolumeToSoundClass(GetSoundClassForCategory(EMOAudioCategory::UI), UIVolume);
 
 	// Build a sensible default attenuation for spatialized ambient events.
 	// Used unless the user assigns a custom USoundAttenuation in settings.
@@ -588,14 +588,17 @@ bool UMOAudioSubsystem::PlayOneShotAtLocation(const UObject* WorldContextObject,
 void UMOAudioSubsystem::SetMasterVolume(float Volume)
 {
 	MasterVolume = FMath::Clamp(Volume, 0.0f, 1.0f);
-	ApplyVolumeToSoundClass(GetSoundClassForCategory(EMOAudioCategory::Music), MusicVolume * MasterVolume);
-	ApplyVolumeToSoundClass(GetSoundClassForCategory(EMOAudioCategory::Ambient), AmbientVolume * MasterVolume);
-	ApplyVolumeToSoundClass(GetSoundClassForCategory(EMOAudioCategory::SFX), SFXVolume * MasterVolume);
-	ApplyVolumeToSoundClass(GetSoundClassForCategory(EMOAudioCategory::UI), UIVolume * MasterVolume);
+	ApplyVolumeToSoundClass(GetSoundClassForCategory(EMOAudioCategory::Music), MusicVolume);
+	ApplyVolumeToSoundClass(GetSoundClassForCategory(EMOAudioCategory::Ambient), AmbientVolume);
+	ApplyVolumeToSoundClass(GetSoundClassForCategory(EMOAudioCategory::SFX), SFXVolume);
+	ApplyVolumeToSoundClass(GetSoundClassForCategory(EMOAudioCategory::UI), UIVolume);
 	ApplyMasterVolumeToAudioDevice();
 	UE_LOG(LogMOFramework, Log, TEXT("[MOAudio] MasterVolume -> %.2f"), MasterVolume);
 }
 
+// THE MASTER VOLUME IS APPLIED HERE AND NOWHERE ELSE: the audio device's transient primary volume multiplies EVERY sound (sound classes, the intro video, weather, UI). The category volumes
+// (music / ambient / SFX / UI / weather) are the sound classes' own volumes. (Until 2026-10-12 each class volume was ALSO multiplied by MasterVolume, so a Master slider at 0.49 played everything at
+// 0.24 -- and with SFX / ambient also turned down, at -27 dB: "the sound is broken". Same for the intro video volume and the weather volume.)
 void UMOAudioSubsystem::ApplyMasterVolumeToAudioDevice() const
 {
 	if (FAudioDeviceHandle AudioDevice = GEngine ? GEngine->GetMainAudioDevice() : FAudioDeviceHandle())
@@ -609,9 +612,9 @@ void UMOAudioSubsystem::SetMusicVolume(float Volume)
 {
 	MusicVolume = FMath::Clamp(Volume, 0.0f, 1.0f);
 	USoundClass* SC = GetSoundClassForCategory(EMOAudioCategory::Music);
-	ApplyVolumeToSoundClass(SC, MusicVolume * MasterVolume);
-	UE_LOG(LogMOFramework, Log, TEXT("[MOAudio] MusicVolume -> %.2f (final=%.2f, soundclass=%s)"),
-		MusicVolume, MusicVolume * MasterVolume,
+	ApplyVolumeToSoundClass(SC, MusicVolume);
+	UE_LOG(LogMOFramework, Log, TEXT("[MOAudio] MusicVolume -> %.2f (soundclass=%s)"),
+		MusicVolume,
 		SC ? *SC->GetName() : TEXT("(none — assets must have Sound Class set)"));
 }
 
@@ -619,9 +622,9 @@ void UMOAudioSubsystem::SetAmbientVolume(float Volume)
 {
 	AmbientVolume = FMath::Clamp(Volume, 0.0f, 1.0f);
 	USoundClass* SC = GetSoundClassForCategory(EMOAudioCategory::Ambient);
-	ApplyVolumeToSoundClass(SC, AmbientVolume * MasterVolume);
-	UE_LOG(LogMOFramework, Log, TEXT("[MOAudio] AmbientVolume -> %.2f (final=%.2f, soundclass=%s)"),
-		AmbientVolume, AmbientVolume * MasterVolume,
+	ApplyVolumeToSoundClass(SC, AmbientVolume);
+	UE_LOG(LogMOFramework, Log, TEXT("[MOAudio] AmbientVolume -> %.2f (soundclass=%s)"),
+		AmbientVolume,
 		SC ? *SC->GetName() : TEXT("(none — assets must have Sound Class set)"));
 }
 
@@ -629,9 +632,9 @@ void UMOAudioSubsystem::SetSFXVolume(float Volume)
 {
 	SFXVolume = FMath::Clamp(Volume, 0.0f, 1.0f);
 	USoundClass* SC = GetSoundClassForCategory(EMOAudioCategory::SFX);
-	ApplyVolumeToSoundClass(SC, SFXVolume * MasterVolume);
-	UE_LOG(LogMOFramework, Log, TEXT("[MOAudio] SFXVolume -> %.2f (final=%.2f, soundclass=%s)"),
-		SFXVolume, SFXVolume * MasterVolume,
+	ApplyVolumeToSoundClass(SC, SFXVolume);
+	UE_LOG(LogMOFramework, Log, TEXT("[MOAudio] SFXVolume -> %.2f (soundclass=%s)"),
+		SFXVolume,
 		SC ? *SC->GetName() : TEXT("(none — assets must have Sound Class set)"));
 }
 
@@ -639,9 +642,9 @@ void UMOAudioSubsystem::SetUIVolume(float Volume)
 {
 	UIVolume = FMath::Clamp(Volume, 0.0f, 1.0f);
 	USoundClass* SC = GetSoundClassForCategory(EMOAudioCategory::UI);
-	ApplyVolumeToSoundClass(SC, UIVolume * MasterVolume);
-	UE_LOG(LogMOFramework, Log, TEXT("[MOAudio] UIVolume -> %.2f (final=%.2f, soundclass=%s)"),
-		UIVolume, UIVolume * MasterVolume,
+	ApplyVolumeToSoundClass(SC, UIVolume);
+	UE_LOG(LogMOFramework, Log, TEXT("[MOAudio] UIVolume -> %.2f (soundclass=%s)"),
+		UIVolume,
 		SC ? *SC->GetName() : TEXT("(none — assets must have Sound Class set)"));
 }
 
@@ -650,9 +653,9 @@ void UMOAudioSubsystem::SetWeatherVolume(float Volume)
 	WeatherVolume = FMath::Clamp(Volume, 0.0f, 1.0f);
 	// UDW lives outside our SoundClass hierarchy. Broadcast so the bridge BP
 	// (or any other listener) can apply the value to UDW's audio.
-	OnWeatherVolumeChanged.Broadcast(WeatherVolume * MasterVolume);
-	UE_LOG(LogMOFramework, Log, TEXT("[MOAudio] WeatherVolume -> %.2f (final=%.2f)"),
-		WeatherVolume, WeatherVolume * MasterVolume);
+	OnWeatherVolumeChanged.Broadcast(WeatherVolume);
+	UE_LOG(LogMOFramework, Log, TEXT("[MOAudio] WeatherVolume -> %.2f"),
+		WeatherVolume);
 }
 
 // =============================================================================

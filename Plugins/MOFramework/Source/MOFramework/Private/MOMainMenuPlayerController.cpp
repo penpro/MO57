@@ -6,6 +6,9 @@
 #include "MOIntroWidget.h"
 #include "MOGameSettings.h"
 #include "MOGameInstance.h"
+#include "MOWorldReadinessSubsystem.h"
+#include "MOSplashSettings.h"
+#include "MOSplashWidget.h"
 #include "MOGameUIManagerSubsystem.h"
 #include "MOPrimaryGameLayout.h"
 #include "MOSessionSubsystem.h"
@@ -45,6 +48,10 @@ void AMOMainMenuPlayerController::EndPlay(const EEndPlayReason::Type EndPlayReas
 	if (const UWorld* World = GetWorld())
 	{
 		World->GetTimerManager().ClearTimer(VideoFallbackTimerHandle);
+	}
+	if (UMOGameInstance* GameInstance = Cast<UMOGameInstance>(GetGameInstance()))
+	{
+		GameInstance->OnLoadingOverlayReleased.RemoveAll(this);   // the game instance outlives this controller
 	}
 	Super::EndPlay(EndPlayReason);
 }
@@ -96,14 +103,28 @@ void AMOMainMenuPlayerController::BeginPlay()
 	SetInputMode(InitialInputMode);
 	bShowMouseCursor = true;
 
+	// The flyby backdrop's world (voxel terrain, PCG vegetation, streaming) builds while the intro plays; the reveal waits for it. Nothing else starts the voxel
+	// poll on this map, so ask for it.
+	if (UMOWorldReadinessSubsystem* Readiness = UMOWorldReadinessSubsystem::Get(this))
+	{
+		Readiness->BeginTracking(/*bStartVoxelPolling=*/true);
+	}
+
+	// Hold the 3D world black from the first frame: the menu level is still building behind the splash cards and the intro video, and every widget swap between them
+	// (cards -> video -> loading overlay) would otherwise flash the half-built world for a frame. Released when the overlay / the menu fade takes over (StartMenuFadeIn).
+	if (PlayerCameraManager)
+	{
+		PlayerCameraManager->StartCameraFade(1.0f, 1.0f, 0.001f, FLinearColor::Black, /*bShouldFadeAudio=*/false, /*bHoldWhenFinished=*/true);
+	}
+
 	// Check if we should play the intro
 	UMOGameSettings* Settings = UMOGameSettings::GetMOGameSettings();
 	const bool bShouldPlayIntro = Settings ? Settings->bPlayIntro : true;
 
 	if (bShouldPlayIntro)
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOMainMenuPlayerController] Playing intro video"));
-		PlayIntroVideo();
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOMainMenuPlayerController] Playing splash cards, then the intro video"));
+		PlaySplashThenIntro();
 	}
 	else
 	{
@@ -206,6 +227,29 @@ void AMOMainMenuPlayerController::StartMenuFadeIn()
 	{
 		return;
 	}
+
+	// The world behind the menu is still being built: hold the loading overlay (black, stage text, progress) and reveal when it is ready.
+	UMOWorldReadinessSubsystem* Readiness = UMOWorldReadinessSubsystem::Get(this);
+	UMOGameInstance* GameInstance = Cast<UMOGameInstance>(GetGameInstance());
+	if (Readiness && GameInstance && Readiness->IsTracking())
+	{
+		GameInstance->ShowLoadingOverlay();
+		if (GameInstance->IsLoadingOverlayVisible())
+		{
+			if (PlayerCameraManager)
+			{
+				PlayerCameraManager->StopCameraFade();   // the black overlay is up: it carries the black from here
+			}
+			bMenuFadeStarted = true;
+			bAwaitingWorldReady = true;
+			GameInstance->OnLoadingOverlayReleased.RemoveAll(this);
+			GameInstance->OnLoadingOverlayReleased.AddUObject(this, &AMOMainMenuPlayerController::HandleWorldReadyReveal);
+			GameInstance->ReleaseLoadingOverlayWhenWorldReady(MenuFadeInSeconds);
+			UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuPlayerController] Menu reveal waits for the world (%s)"), *Readiness->DescribeState());
+			return;
+		}
+	}
+
 	bMenuFadeStarted = true;
 	MenuFadeStartSeconds = FPlatformTime::Seconds();
 	if (PlayerCameraManager)
@@ -216,8 +260,33 @@ void AMOMainMenuPlayerController::StartMenuFadeIn()
 	UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuPlayerController] Menu fade-in from black started (%.1f s)"), MenuFadeInSeconds);
 }
 
+void AMOMainMenuPlayerController::HandleWorldReadyReveal()
+{
+	if (UMOGameInstance* GameInstance = Cast<UMOGameInstance>(GetGameInstance()))
+	{
+		GameInstance->OnLoadingOverlayReleased.RemoveAll(this);
+	}
+	UWorld* World = GetWorld();
+	if (!bAwaitingWorldReady || !World)
+	{
+		return;
+	}
+	bAwaitingWorldReady = false;
+	MenuFadeStartSeconds = FPlatformTime::Seconds();   // the overlay fades out over the same MenuFadeInSeconds: the menu rises with it
+	World->GetTimerManager().SetTimer(MenuFadeTimerHandle, this, &AMOMainMenuPlayerController::ApplyMenuFadeOpacity, 0.02f, true);
+	UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuPlayerController] World ready: revealing the menu (%.1f s)"), MenuFadeInSeconds);
+}
+
 void AMOMainMenuPlayerController::ApplyMenuFadeOpacity()
 {
+	if (bAwaitingWorldReady)
+	{
+		if (MainMenuWidget)
+		{
+			MainMenuWidget->SetRenderOpacity(0.0f);   // under the black overlay, not for one frame visible
+		}
+		return;
+	}
 	if (!bMenuFadeStarted || MenuFadeInSeconds <= 0.0f)
 	{
 		return;
@@ -239,6 +308,37 @@ void AMOMainMenuPlayerController::HideMainMenu()
 	{
 		MainMenuWidget->SetVisibility(ESlateVisibility::Collapsed);
 	}
+}
+
+void AMOMainMenuPlayerController::PlaySplashThenIntro()
+{
+	const UMOSplashSettings* Settings = GetDefault<UMOSplashSettings>();
+	TSubclassOf<UMOSplashWidget> SplashClass = (Settings && Settings->bEnabled && Settings->Cards.Num() > 0) ? Settings->WidgetClass.LoadSynchronous() : nullptr;
+	UMOGameUIManagerSubsystem* UISubsystem = UMOGameUIManagerSubsystem::Get(this);
+	UMOPrimaryGameLayout* Layout = UISubsystem ? UISubsystem->GetRootLayoutForPlayer(this) : nullptr;
+	if (SplashClass && Layout)
+	{
+		SplashWidget = Cast<UMOSplashWidget>(Layout->PushWidgetToLayer(MOUILayerTags::Layer_Modal, SplashClass));
+	}
+	if (!SplashWidget)
+	{
+		PlayIntroVideo();   // no cards / no widget / no layout: the intro as before
+		return;
+	}
+	SplashWidget->OnSplashFinished.AddDynamic(this, &AMOMainMenuPlayerController::HandleSplashFinished);
+	SplashWidget->BeginSequence(Settings->Cards, Settings->FadeSeconds);
+}
+
+void AMOMainMenuPlayerController::HandleSplashFinished()
+{
+	SplashWidget = nullptr;
+	if (bSkipIntroAfterSplash)
+	{
+		bSkipIntroAfterSplash = false;
+		HandleIntroComplete();
+		return;
+	}
+	PlayIntroVideo();
 }
 
 void AMOMainMenuPlayerController::PlayIntroVideo()
@@ -349,6 +449,12 @@ void AMOMainMenuPlayerController::PlayIntroVideo()
 
 void AMOMainMenuPlayerController::SkipIntroVideo()
 {
+	if (SplashWidget && SplashWidget->IsSequenceRunning())
+	{
+		bSkipIntroAfterSplash = true;   // the verb means "get me to the menu": the splash and the intro both
+		SplashWidget->SkipSequence();
+		return;
+	}
 	if (bIntroPlaying)
 	{
 		// Stop media playback
@@ -768,7 +874,7 @@ void AMOMainMenuPlayerController::SetupMediaPlayer()
 		float IntroVolume = 1.0f;
 		if (const UMOAudioSubsystem* Audio = UMOAudioSubsystem::Get(GetWorld()))
 		{
-			IntroVolume = Audio->GetMusicVolume() * Audio->GetMasterVolume();
+			IntroVolume = Audio->GetMusicVolume();   // the master volume is applied once, at the audio device (UMOAudioSubsystem::ApplyMasterVolumeToAudioDevice)
 		}
 		MediaSoundComponent->SetVolumeMultiplier(IntroVolume);
 		MediaSoundComponent->RegisterComponent();
