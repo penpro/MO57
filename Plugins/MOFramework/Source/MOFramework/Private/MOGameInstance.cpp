@@ -2,6 +2,7 @@
 #include "MOFramework.h"
 #include "MOGameSettings.h"
 #include "MOLoadingOverlay.h"
+#include "MOWorldReadinessSubsystem.h"
 #include "Blueprint/UserWidget.h"
 #include "Engine/Engine.h"
 #include "HAL/IConsoleManager.h"
@@ -37,6 +38,13 @@ void UMOGameInstance::Init()
 {
 	Super::Init();
 
+	// A player-facing build must not paint developer print strings over the HUD ("BP_WeatherBridge: SetDateTime fired", the voxel task counter). The editor keeps them for debugging;
+	// `-ScreenMessages` turns them back on in a game window (and `DisableAllScreenMessages` / `EnableAllScreenMessages` still toggle them at run time).
+	if (GEngine && !GIsEditor && !FParse::Param(FCommandLine::Get(), TEXT("ScreenMessages")))
+	{
+		GEngine->bEnableOnScreenDebugMessages = false;
+	}
+
 	// Reset intro playback flag on fresh game launch
 	// This ensures the intro plays when the game starts, but not when
 	// returning to main menu from gameplay (which sets bPlayIntro = false)
@@ -56,6 +64,8 @@ void UMOGameInstance::Shutdown()
 	// Unbind loading screen delegates
 	FCoreUObjectDelegates::PreLoadMap.RemoveAll(this);
 	FCoreUObjectDelegates::PostLoadMapWithWorld.RemoveAll(this);
+
+	GetTimerManager().ClearTimer(OverlayHoldTimerHandle);
 
 	// Clean up loading overlay
 	if (LoadingOverlayWidget)
@@ -84,6 +94,7 @@ void UMOGameInstance::ShowLoadingOverlay()
 	}
 
 	// Remove any existing overlay
+	GetTimerManager().ClearTimer(OverlayHoldTimerHandle);
 	if (LoadingOverlayWidget)
 	{
 		LoadingOverlayWidget->RemoveFromParent();
@@ -195,7 +206,7 @@ void UMOGameInstance::DismissLoadingScreen()
 			TEXT("[MOGameInstance] DismissLoadingScreen: starting %.1fs fade-out"),
 			LoadingScreenFadeOutSeconds);
 
-		LoadingOverlayWidget->FadeOutAndRemove(LoadingScreenFadeOutSeconds);
+		ReleaseLoadingOverlayWhenWorldReady(LoadingScreenFadeOutSeconds);
 		// Don't null the pointer - the widget will remove itself after fade
 	}
 
@@ -213,8 +224,56 @@ bool UMOGameInstance::IsLoadingOverlayVisible() const
 	return LoadingOverlayWidget && LoadingOverlayWidget->IsOverlayVisible();
 }
 
+void UMOGameInstance::ReleaseLoadingOverlayWhenWorldReady(float FadeSeconds)
+{
+	GetTimerManager().ClearTimer(OverlayHoldTimerHandle);
+	if (!LoadingOverlayWidget)
+	{
+		return;
+	}
+	OverlayHoldFadeSeconds = FadeSeconds;
+	UMOWorldReadinessSubsystem* Readiness = UMOWorldReadinessSubsystem::Get(this);
+	if (!Readiness || !Readiness->IsTracking())
+	{
+		FadeOutHeldOverlay();   // ready already, or nothing is tracking this world (an error path that must not hold the player)
+		return;
+	}
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOGameInstance] Holding the loading overlay until the world is ready (%s)"), *Readiness->DescribeState());
+	OverlayHoldReadiness = Readiness;
+	GetTimerManager().SetTimer(OverlayHoldTimerHandle, this, &UMOGameInstance::PollOverlayHold, 0.2f, /*bLoop=*/true, /*FirstDelay=*/0.0f);
+}
+
+void UMOGameInstance::PollOverlayHold()
+{
+	UMOWorldReadinessSubsystem* Readiness = OverlayHoldReadiness.Get();
+	if (!LoadingOverlayWidget)
+	{
+		GetTimerManager().ClearTimer(OverlayHoldTimerHandle);
+		return;
+	}
+	if (!Readiness || !Readiness->IsTracking())
+	{
+		GetTimerManager().ClearTimer(OverlayHoldTimerHandle);   // ready, or the world it tracked is gone
+		FadeOutHeldOverlay();
+		return;
+	}
+	LoadingOverlayWidget->SetLoadingText(Readiness->GetStatusText());
+	LoadingOverlayWidget->SetProgress01(Readiness->GetProgress01());
+}
+
+void UMOGameInstance::FadeOutHeldOverlay()
+{
+	if (LoadingOverlayWidget)
+	{
+		LoadingOverlayWidget->SetProgress01(1.0f);
+		LoadingOverlayWidget->FadeOutAndRemove(OverlayHoldFadeSeconds);
+	}
+	OnLoadingOverlayReleased.Broadcast();
+}
+
 void UMOGameInstance::HideLoadingOverlayImmediate()
 {
+	GetTimerManager().ClearTimer(OverlayHoldTimerHandle);
 	if (LoadingOverlayWidget)
 	{
 		LoadingOverlayWidget->RemoveFromParent();

@@ -2,6 +2,7 @@
 #include "MOAudioSubsystem.h"
 #include "MOFramework.h"
 #include "MOVoxelReadinessSubsystem.h"
+#include "MOWorldReadinessSubsystem.h"
 #include "MOWorldSeedSubsystem.h"
 #include "MOWorldGen.h"
 #include "MOSpawnClearance.h"
@@ -21,6 +22,7 @@
 #include "MOGameInstance.h"
 #include "MOHarvestDebugSubsystem.h"
 #include "GameFramework/PlayerController.h"
+#include "Camera/CameraActor.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Kismet/GameplayStatics.h"
@@ -353,6 +355,8 @@ void AMOGameMode::WaitForVoxelWorldAndSpawn()
 		return;
 	}
 
+	BeginLoadingFocus();
+
 	UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Subscribing to OnVoxelReady for initial pawn spawn"));
 
 	// Subscribe FIRST, then BeginPolling — the subsystem doesn't replay events
@@ -361,6 +365,12 @@ void AMOGameMode::WaitForVoxelWorldAndSpawn()
 	// listeners on the next ready transition.
 	Voxel->OnVoxelReady.AddUObject(this, &AMOGameMode::HandleVoxelReadyForNewGame);
 	Voxel->BeginPolling();
+
+	// The loading overlay lifts on "world ready" (terrain + PCG vegetation + streaming), not on the voxel runtime alone: see UMOWorldReadinessSubsystem.
+	if (UMOWorldReadinessSubsystem* Readiness = UMOWorldReadinessSubsystem::Get(World))
+	{
+		Readiness->BeginTracking();
+	}
 }
 
 void AMOGameMode::HandleVoxelReadyForNewGame()
@@ -413,6 +423,11 @@ void AMOGameMode::WaitForVoxelAndRegroundPawns()
 
 	Voxel->OnVoxelReady.AddUObject(this, &AMOGameMode::HandleVoxelReadyForLoad);
 	Voxel->BeginPolling();
+
+	if (UMOWorldReadinessSubsystem* Readiness = UMOWorldReadinessSubsystem::Get(World))
+	{
+		Readiness->BeginTracking();
+	}
 }
 
 void AMOGameMode::HandleVoxelReadyForLoad()
@@ -914,6 +929,43 @@ void AMOGameMode::FinishLoadHandoff()
 	}
 }
 
+void AMOGameMode::BeginLoadingFocus()
+{
+	UWorld* World = GetWorld();
+	APlayerController* PC = World ? UGameplayStatics::GetPlayerController(this, 0) : nullptr;
+	if (!World || !PC || PC->GetPawn() || LoadingFocusCamera)
+	{
+		return;
+	}
+	// Only the coastal (seed-determined) spawn is known this early; the open-ground search needs the terrain itself.
+	FRotator Facing = FRotator::ZeroRotator;
+	const FVector Spawn = FindNewGameSpawn(Facing);
+	if (!bSettlingCoastalSpawn)
+	{
+		return;
+	}
+	FActorSpawnParameters Params;
+	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	Params.ObjectFlags |= RF_Transient;
+	ACameraActor* Camera = World->SpawnActor<ACameraActor>(Spawn + FVector(0.0f, 0.0f, 170.0f), Facing, Params);
+	if (!Camera)
+	{
+		return;
+	}
+	LoadingFocusCamera = Camera;
+	PC->SetViewTarget(Camera);
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOGameMode] Loading focus: the view waits at the spawn (%.0f, %.0f) so the terrain and vegetation there build during the loading screen"), Spawn.X, Spawn.Y);
+}
+
+void AMOGameMode::EndLoadingFocus()
+{
+	if (LoadingFocusCamera)
+	{
+		LoadingFocusCamera->Destroy();
+		LoadingFocusCamera = nullptr;
+	}
+}
+
 void AMOGameMode::SpawnInitialPawn()
 {
 	if (!DefaultNewGamePawnClass)
@@ -992,6 +1044,7 @@ void AMOGameMode::SpawnInitialPawn()
 	if (PC)
 	{
 		PC->Possess(NewPawn);
+		EndLoadingFocus();
 		UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Player controller possessed initial pawn"));
 		if (!SpawnFacing.IsNearlyZero())
 		{

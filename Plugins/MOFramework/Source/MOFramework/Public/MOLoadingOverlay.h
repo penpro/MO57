@@ -42,6 +42,7 @@
 #include "MOLoadingOverlay.generated.h"
 
 class UImage;
+class UProgressBar;
 class UTextBlock;
 
 /**
@@ -78,6 +79,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Loading")
 	void SetLoadingText(const FText& InText);
 
+	/** Fill the optional progress bar (0..1; a negative value hides it). Driven by the world readiness stages while the overlay is held. */
+	UFUNCTION(BlueprintCallable, Category="MO|Loading")
+	void SetProgress01(float InProgress);
+
 	/** Whether the overlay is currently visible (not fading out). */
 	UFUNCTION(BlueprintPure, Category="MO|Loading")
 	bool IsOverlayVisible() const { return bIsVisible && !bIsFadingOut; }
@@ -97,6 +102,10 @@ protected:
 	/** Optional loading text. */
 	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
 	TObjectPtr<UTextBlock> LoadingText;
+
+	/** Optional thin progress bar under the text (the world readiness stages fill it). */
+	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
+	TObjectPtr<UProgressBar> LoadingProgressBar;
 
 	// ============================================================================
 	// CONFIGURATION

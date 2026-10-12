@@ -48,6 +48,8 @@
 #include "MOGameInstance.generated.h"
 
 class UMOLoadingOverlay;
+class UMOWorldReadinessSubsystem;
+
 UCLASS()
 class MOFRAMEWORK_API UMOGameInstance : public UGameInstance
 {
@@ -123,6 +125,18 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|LoadingScreen")
 	void HideLoadingOverlayImmediate();
 
+	/**
+	 * Lift the overlay the way the player should see it: at once when the world is ready (or its readiness is not tracked), otherwise keep it up
+	 * showing the readiness stage ("Raising the terrain" ... plus the progress bar) and fade it out over FadeSeconds the moment UMOWorldReadinessSubsystem
+	 * reports the terrain, vegetation and streaming in. DismissLoadingScreen() and the main menu reveal both end here, so the overlay never lifts on a bare
+	 * landscape that fills in afterwards.
+	 */
+	void ReleaseLoadingOverlayWhenWorldReady(float FadeSeconds);
+
+	/** Fired when a held overlay is released (the world became ready) and its fade-out starts: the main menu starts its own fade-in on this. */
+	DECLARE_MULTICAST_DELEGATE(FMOOnLoadingOverlayReleased);
+	FMOOnLoadingOverlayReleased OnLoadingOverlayReleased;
+
 protected:
 	/** Called before a map starts loading. */
 	UFUNCTION()
@@ -142,4 +156,11 @@ private:
 
 	/** Whether we're waiting for manual dismissal (gameplay transitions). */
 	bool bWaitingForManualDismiss = false;
+
+	/** The hold on a released overlay: polls the readiness subsystem, mirrors its stage onto the overlay, fades out when ready. */
+	FTimerHandle OverlayHoldTimerHandle;
+	float OverlayHoldFadeSeconds = 1.0f;
+	TWeakObjectPtr<UMOWorldReadinessSubsystem> OverlayHoldReadiness;
+	void PollOverlayHold();
+	void FadeOutHeldOverlay();
 };

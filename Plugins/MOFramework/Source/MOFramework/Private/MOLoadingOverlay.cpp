@@ -1,6 +1,7 @@
 #include "MOLoadingOverlay.h"
 #include "MOFramework.h"
 #include "Components/Image.h"
+#include "Components/ProgressBar.h"
 #include "Components/TextBlock.h"
 
 UMOLoadingOverlay::UMOLoadingOverlay(const FObjectInitializer& ObjectInitializer)
@@ -71,6 +72,15 @@ void UMOLoadingOverlay::SetLoadingText(const FText& InText)
 	if (LoadingText)
 	{
 		LoadingText->SetText(InText);
+	}
+}
+
+void UMOLoadingOverlay::SetProgress01(float InProgress)
+{
+	if (LoadingProgressBar)
+	{
+		LoadingProgressBar->SetVisibility(InProgress < 0.0f ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible);
+		LoadingProgressBar->SetPercent(FMath::Clamp(InProgress, 0.0f, 1.0f));
 	}
 }
 

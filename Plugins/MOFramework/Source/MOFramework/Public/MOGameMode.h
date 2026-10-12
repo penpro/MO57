@@ -413,6 +413,18 @@ private:
 	/** Spawn the initial pawn for a new game. */
 	void SpawnInitialPawn();
 
+	/**
+	 * New game: point the player's VIEW at the spawn spot while the world loads. The voxel terrain and PCG both build their state around the local player controller's view point; with no
+	 * pawn yet that is the world ORIGIN, 17 km from the coastal spawn, so the whole real surroundings (terrain refinement, PCG, ~26 s of work) only started AFTER the pawn arrived and the
+	 * loading screen had already lifted on a half-built shore. A camera actor at the (seed-determined) spawn, made the view target, moves that work into the loading wait.
+	 * Ended when the initial pawn is possessed (EndLoadingFocus).
+	 */
+	void BeginLoadingFocus();
+	void EndLoadingFocus();
+
+	UPROPERTY(Transient)
+	TObjectPtr<AActor> LoadingFocusCamera;
+
 	/** Wait for voxel world to be ready, then spawn pawn. */
 	void WaitForVoxelWorldAndSpawn();
 
