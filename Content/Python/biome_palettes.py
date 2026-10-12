@@ -162,10 +162,13 @@ PALETTES = {
         drift("Bent_Branch_paErt", "paErt", 9.0, 2200.0), drift("Common_Spruce_Branch_uehjfcofa", "uehjfcofa", 6.0, 2200.0),
     ],
     "DryScrub": [
-        species(dead_shrub("A"), 55.0, res="DeadShrub", tag="MOResource_Bush", cluster=1800.0, group=1), species(dead_shrub("C"), 38.0, res="DeadShrub", tag="MOResource_Bush", cluster=1800.0, group=1),
-        species(dead_shrub("F"), 26.0, res="DeadShrub", tag="MOResource_Bush", cluster=2000.0, group=1), species(dead_shrub("H"), 18.0, res="DeadShrub", tag="MOResource_Bush", cluster=2000.0, group=1),
-        species(locust("B"), 3.0, res="BlackLocust", tag="MOResource_Tree", smin=0.8, smax=1.15), species(locust("H"), 6.0, res="BlackLocust", tag="MOResource_Tree", cluster=2500.0, smin=0.8, smax=1.2),
-        cover(dune_grass("B"), 440, 0.0), cover(dune_grass("D"), 150, 1500.0), cover(dune_grass("F"), 110, 1800.0),
+        # scrubland, not a plain: shrubs in thickets (clump group 1) with tufts of dry grass between them; at the old densities (55 / 38 / 26 / 18 per ha and 440 tufts) the biome read as bare brown dirt
+        species(dead_shrub("A"), 110.0, res="DeadShrub", tag="MOResource_Bush", cluster=1800.0, group=1), species(dead_shrub("C"), 76.0, res="DeadShrub", tag="MOResource_Bush", cluster=1800.0, group=1),
+        species(dead_shrub("F"), 52.0, res="DeadShrub", tag="MOResource_Bush", cluster=2000.0, group=1), species(dead_shrub("H"), 36.0, res="DeadShrub", tag="MOResource_Bush", cluster=2000.0, group=1),
+        species(dead_shrub("E"), 40.0, res="DeadShrub", tag="MOResource_Bush", cluster=2200.0, group=1), species(dead_shrub("G"), 30.0, res="DeadShrub", tag="MOResource_Bush", cluster=2200.0, group=1),
+        species(locust("B"), 12.0, res="BlackLocust", tag="MOResource_Tree", cluster=2600.0, group=1, core=0.5, smin=0.8, smax=1.15), species(locust("H"), 18.0, res="BlackLocust", tag="MOResource_Tree", cluster=2600.0, group=1, core=0.5, smin=0.8, smax=1.2),
+        species(locust("D"), 30.0, tag="MOBiomeCover_Shrub", cluster=2600.0, group=1, core=0.45, sweep=True, smin=0.7, smax=1.3),   # waist-high thickets, walk-through: the visible mass of the scrub
+        cover(dune_grass("B"), 900, 0.0), cover(dune_grass("D"), 380, 1500.0), cover(dune_grass("F"), 300, 1800.0), cover(wild_grass("B"), 120, 2200.0),
         flower("09_05", 50, 2000.0), flower("16_04", 40, 1800.0), flower("19_04", 45, 1600.0), flower("20_03", 30, 2200.0),
         boulder("beach_b", 4.0, 2500.0, 0.5, 1.2), boulder("forest", 1.2, 3000.0, 0.5, 1.2),
         lib_rock("Sand_Rock_vd5scco", "S_Sand_Rock_vd5scco_lod3_Var1", 10.0, res="BeachBoulder", cluster=2200.0, smin=0.8, smax=2.0),
@@ -436,7 +439,7 @@ ELECTRIC_FOREST = {
 NORDIC_STRAND = {
     "displayName": "Nordic Strand",
     "heightMin": -100000.0, "heightMax": 450.0, "slopeMinDeg": 0.0, "slopeMaxDeg": 38.0, "moistureMin": 0.0, "moistureMax": 1.0, "temperatureMin": 0.0, "temperatureMax": 0.34,
-    "priority": 14, "groundSurfaceType": surface("DarkPebbles"), "edgeBlendWidth": 4500.0, "reliefScale": 1.0, "mountainScale": 1.0, "footstepSet": "StoneStep",
+    "priority": 14, "groundSurfaceType": surface("DarkPebbles"), "edgeBlendWidth": 4500.0, "reliefScale": 0.5, "mountainScale": 0.35, "footstepSet": "StoneStep",   # a stony shore: gentle relief (at 1.0 it grew 5-10 m smooth domes)
     "species": [
         ed_rock("NordicBeachRocks", "SM_NordicBeachRocks_01", 12.0, res="BeachBoulder", cluster=2200.0, smin=0.8, smax=1.9), ed_rock("NordicBeachRock", "SM_NordicBeachRock_01", 9.0, res="BeachBoulder", cluster=1800.0, smin=0.8, smax=1.8),
         ed_rock("MossyForestBoulder", "SM_MossyForestBoulder_01", 3.0, cluster=2600.0, smin=0.8, smax=1.6),

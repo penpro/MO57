@@ -15,7 +15,7 @@ import time
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 UE = [sys.executable, os.path.join(ROOT, "Tools", "ue.py")]
 ROUGH = {"RockyHighland", "RockyScree"}
-DEEP = {"ElectricForest", "Rainforest", "TemperateForest", "LocustWoodland"}   # forests: stand well inside the biome, not on its nearest edge cell
+DEEP = {"ElectricForest", "Rainforest", "TemperateForest", "LocustWoodland", "DryScrub"}   # forests: stand well inside the biome, not on its nearest edge cell
 LOG = os.path.join(os.environ.get("TEMP", ""), "claude", "inst_ui", "game.log")
 
 
