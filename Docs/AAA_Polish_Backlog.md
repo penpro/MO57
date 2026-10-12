@@ -76,6 +76,11 @@ design forks are logged under "Forks", not built blind.
   (every section; the group titles are fainter still); "Graphics Quality" / "VSync" sit at the END of the Graphics section (no reorder API: rebuild the later rows to move them).
 
 ## Forks (need Wes)
+- **Survival stat pacing (found with the moodle strip)**: `UMOSurvivalStatsComponent` (the stats that drive the Hunger / Thirst / Energy moodles, and that eating / drinking restore) decays at 0.5 / 0.8 / 0.2 per REAL
+  second with no clock scaling while `UMOGameClockSubsystem` runs at TimeScale 1.0. Measured: Thirst 82 -> 33 and Hunger 89 -> 58 in ONE minute: a new pawn is "Dehydrated" (critical) in ~2 min, "Starving" in ~3.3 min,
+  "Exhausted" in ~8 min. The realistic model (`UMOMetabolismComponent`: glycogen 500 g, hydration 99.995 % after 14 s, 2.5 L/day) runs in parallel at realistic rates and drives no HUD. Options: (A, recommended) derive
+  Hunger / Thirst / Energy from the metabolism nutrient levels so there is one realistic source of truth (pillar 11: "hunger decreases 1/sec" is the named anti-example); (B) scale the decay by the clock and run a faster
+  clock; (C) keep the arcade pacing. Not changed: it sets the pacing of the whole early game (tutorial, food, crafting).
 - Thermal model scale: replace the equilibrium-style temperature drift with a heat balance over a thermal mass (realistic rates: hours, not minutes, to hypothermia), or keep it gamey? Until decided, a lake swim
   reaches "severe hypothermia" in ~40 s.
 - Real reed meshes: a Fab / Megascans download, or reuse the Electric Dreams plants (Taro, ferns) from the local sample project?
