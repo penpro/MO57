@@ -77,3 +77,43 @@ Tools/ov_task.sh
 
 # Marketplace plugins (Oceanology etc.): licensed, multi-GB, re-install from the Epic launcher / Fab. The uproject + uplugin reference them by name.
 Plugins/Marketplace/
+
+# Epic's Electric Dreams Environment sample slice (Tools/ede_migrate.py; list in Docs/ElectricDreams_Migrated.md): ~7 GB of third-party content, regenerable, kept out of git/LFS like UltraDynamicSky
+Content/Asmbly/
+Content/Custom/
+Content/Effects/
+Content/FX/
+Content/Meshes/
+Content/PhysicalMaterials/
+Content/Textures/
+Content/MSPresets/MSVTTextures/
+Content/MSPresets/MS_Foliage_Material_LATEST/
+Content/MSPresets/M_MS_Decal_Material/
+Content/MSPresets/M_MS_Decal_Material_VT/
+Content/MSPresets/M_MS_Default_Fuzz_Material_VT/
+Content/MSPresets/M_MS_Surface_Material/
+Content/MSPresets/M_MS_Surface_Material_VT/
+Content/Megascans/3D_Plants/
+Content/Megascans/Decals/
+Content/Megascans/Surfaces/
+Content/Megascans/3D_Assets/BeachSandWithPebbles/
+Content/Megascans/3D_Assets/DryBranches/
+Content/Megascans/3D_Assets/DryRiverBed/
+Content/Megascans/3D_Assets/ErodedRockyGround/
+Content/Megascans/3D_Assets/ForestRoots/
+Content/Megascans/3D_Assets/ForestTerrain/
+Content/Megascans/3D_Assets/GrassyEmbankment/
+Content/Megascans/3D_Assets/HugeNordicCoastalCliff/
+Content/Megascans/3D_Assets/HugeSandstoneCliff/
+Content/Megascans/3D_Assets/LichenedForestBoulder/
+Content/Megascans/3D_Assets/MossyEmbankment/
+Content/Megascans/3D_Assets/MossyForestBoulder/
+Content/Megascans/3D_Assets/MossyForestRock/
+Content/Megascans/3D_Assets/MossyRocks/
+Content/Megascans/3D_Assets/NordicBeachRock/
+Content/Megascans/3D_Assets/NordicBeachRocks/
+Content/Megascans/3D_Assets/OakBranch/
+Content/Megascans/3D_Assets/OldTreeBranch/
+Content/Megascans/3D_Assets/SandstoneRockyGround/
+Content/Megascans/3D_Assets/SmallStonesPack/
+Content/Megascans/3D_Assets/SmoothRockShelf/

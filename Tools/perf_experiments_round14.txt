@@ -1,0 +1,5 @@
+base|||1
+ed_foliage0||r.Lumen.Reflections.MaxRoughnessToTraceForFoliage 0,r.Lumen.Reflections.MaxRoughnessToTraceForFoliage|1
+ed_transvol64||r.Lumen.TranslucencyVolume.GridPixelSize 64,r.Lumen.TranslucencyVolume.GridPixelSize|1
+ed_cell1024|-ini:Engine:[SystemSettings]:r.SceneCulling.MinCellSize=1024|r.SceneCulling.MinCellSize|1
+ed_all|-ini:Engine:[SystemSettings]:r.SceneCulling.MinCellSize=1024|r.Lumen.Reflections.MaxRoughnessToTraceForFoliage 0,r.Lumen.TranslucencyVolume.GridPixelSize 64,r.SceneCulling.MinCellSize|1
