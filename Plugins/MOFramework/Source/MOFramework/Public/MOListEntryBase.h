@@ -126,7 +126,7 @@ public:
 
 	/** Color when entry is selected. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MO|UI|List|Style")
-	FLinearColor SelectedColor = FLinearColor(0.2f, 0.4f, 0.8f, 1.0f);
+	FLinearColor SelectedColor = FLinearColor(0.17f, 0.33f, 0.58f, 0.92f);
 
 	/** Color when entry is not selected. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MO|UI|List|Style")

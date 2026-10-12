@@ -104,11 +104,11 @@ public:
 
 	/** Color when entry is not selected but buildable. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MO|Building|UI|Style")
-	FLinearColor BuildableColor = FLinearColor(0.15f, 0.15f, 0.15f, 1.0f);
+	FLinearColor BuildableColor = FLinearColor(0.13f, 0.14f, 0.15f, 0.80f);
 
 	/** Color when entry cannot be built. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MO|Building|UI|Style")
-	FLinearColor UnbuildableColor = FLinearColor(0.3f, 0.1f, 0.1f, 0.5f);
+	FLinearColor UnbuildableColor = FLinearColor(0.06f, 0.06f, 0.07f, 0.55f);   // darker and dimmer, not a hue (see UMORecipeEntryWidget::UncraftableColor)
 
 	/** Color for text when buildable. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MO|Building|UI|Style")
@@ -116,7 +116,7 @@ public:
 
 	/** Color for text when not buildable. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MO|Building|UI|Style")
-	FSlateColor TextColorUnbuildable = FSlateColor(FLinearColor(0.5f, 0.5f, 0.5f, 1.0f));
+	FSlateColor TextColorUnbuildable = FSlateColor(FLinearColor(0.62f, 0.62f, 0.62f, 1.0f));
 
 protected:
 	virtual void NativePreConstruct() override;

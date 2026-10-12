@@ -109,7 +109,9 @@ public:
 	virtual void DisplayRecipe(FName RecipeId);
 
 	/**
-	 * Clear the panel (show empty state).
+	 * Clear the panel (show empty state). The empty state HIDES the whole panel: its widgets carry design-time placeholder text and an unset
+	 * icon ("Text Block", a white square) that must never reach the player, and the panel starts in this state (NativeConstruct).
+	 * DisplayRecipe with a valid recipe shows it again.
 	 */
 	UFUNCTION(BlueprintCallable, Category="MO|UI|Recipe")
 	virtual void ClearDisplay();

@@ -45,6 +45,9 @@ void UMORecipeDetailPanelBase::DisplayRecipe(FName RecipeId)
 		return;
 	}
 
+	// SelfHitTestInvisible is the UserWidget default: the panel itself does not eat clicks, its buttons still receive them
+	SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+
 	// Update name
 	if (RecipeNameText)
 	{
@@ -139,6 +142,9 @@ void UMORecipeDetailPanelBase::ClearDisplay()
 {
 	DisplayedRecipeId = NAME_None;
 
+	// Hidden (not Collapsed): the surrounding menu's layout keeps the panel's footprint
+	SetVisibility(ESlateVisibility::Hidden);
+
 	// Clear text widgets
 	ClearTextWidgets(IngredientTextWidgets);
 	ClearTextWidgets(OutputTextWidgets);
@@ -208,6 +214,11 @@ void UMORecipeDetailPanelBase::SetActionAmount(int32 Amount)
 void UMORecipeDetailPanelBase::NativeConstruct()
 {
 	Super::NativeConstruct();
+
+	if (DisplayedRecipeId.IsNone())
+	{
+		ClearDisplay();   // start empty: the designer-authored defaults ("Text Block", unset icon) are not content
+	}
 
 	// Bind action button
 	if (CraftButton)

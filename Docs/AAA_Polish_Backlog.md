@@ -76,6 +76,11 @@ design forks are logged under "Forks", not built blind.
 - [~] **Moodle icons**: a generated glyph set (`Tools/gen_moodle_icons.py` -> `Content/UI/Icons/Moodles/T_Moodle_*`, imported with `Content/Python/import_moodle_icons.py`) fills the controller's EMPTY icon arrays
   (a designer-authored array is never touched): snowflake / thermometers / sun, droplets x1-3, fork+knife, glass, moon, a ring at the critical level. They are placeholders in style; a hand-drawn set can replace the
   textures (same names) without code changes. (A fresh pawn showing Dehydrated / Hungry within a minute: see the survival pacing fork.)
+- [~] **UI design system (blocks the polish pass below)**: the screens were built one by one and share no panel / button / list-row / text language. The brief for Claude Design is `Docs/UI_Design_Brief_Prompt.md`
+  (tokens, 9-slice kit, icon set, per-screen specs); when its output arrives: tokens -> `MOCommonButtonStyle` / panel kit -> HUD -> inventory -> crafting / building -> status -> the rest, via `ui build` specs.
+  Landed meanwhile (screen-independent defects found in the packaged captures): recipe lists were one pink wall (the uncraftable / unbuildable default was a red tint; now neutral, dimmer), the recipe detail panel
+  showed "Text Block" / a white square until a recipe was picked (now hidden until `DisplayRecipe`, starts empty), list selection colour muted. Still open there: the crafting list rows are 12 px text and a 0.5-scaled
+  button, the amount spin box is a white native box, the "Characters" possession screen is unstyled, `FuelTimeText` / "Current:" placeholders.
 - [ ] UI polish pass over the CommonUI screens (consistent spacing / focus / controller). Known: the Options panel's dark-grey labels (0.28) on a 20 %-alpha panel are hard to read over a bright backdrop
   (every section; the group titles are fainter still); "Graphics Quality" / "VSync" sit at the END of the Graphics section (no reorder API: rebuild the later rows to move them).
 

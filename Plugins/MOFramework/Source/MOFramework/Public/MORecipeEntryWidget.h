@@ -116,11 +116,11 @@ public:
 
 	/** Color when entry is not selected but craftable. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MO|Crafting|UI|Style")
-	FLinearColor CraftableColor = FLinearColor(0.15f, 0.15f, 0.15f, 1.0f);
+	FLinearColor CraftableColor = FLinearColor(0.13f, 0.14f, 0.15f, 0.80f);
 
-	/** Color when entry cannot be crafted. */
+	/** Color when entry cannot be crafted: darker and dimmer than a craftable one, NOT a hue (a red default stacked into one pink wall when nothing was craftable; the grey text carries the state too). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MO|Crafting|UI|Style")
-	FLinearColor UncraftableColor = FLinearColor(0.3f, 0.1f, 0.1f, 0.5f);
+	FLinearColor UncraftableColor = FLinearColor(0.06f, 0.06f, 0.07f, 0.55f);
 
 	/** Color for text when craftable. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MO|Crafting|UI|Style")
@@ -128,7 +128,7 @@ public:
 
 	/** Color for text when not craftable. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MO|Crafting|UI|Style")
-	FSlateColor TextColorUncraftable = FSlateColor(FLinearColor(0.5f, 0.5f, 0.5f, 1.0f));
+	FSlateColor TextColorUncraftable = FSlateColor(FLinearColor(0.62f, 0.62f, 0.62f, 1.0f));
 
 protected:
 	virtual void NativePreConstruct() override;
