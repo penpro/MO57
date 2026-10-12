@@ -1,4 +1,5 @@
 #include "MOWorldSyncSubsystem.h"
+#include "MOTickWatchdog.h"
 #include "MOFramework.h"
 #include "MOGameState.h"
 #include "MOGameClockSubsystem.h"
@@ -39,6 +40,7 @@ double UMOWorldSyncSubsystem::SnapThresholdGameSeconds(float TimeScale)
 
 void UMOWorldSyncSubsystem::Tick(float DeltaTime)
 {
+	MO_TICK_WATCH(TEXT("UMOWorldSyncSubsystem"));
 	Super::Tick(DeltaTime);
 
 	UWorld* World = GetWorld();

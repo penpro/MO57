@@ -125,12 +125,8 @@ void UMOAudioSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 			     "and assign it in Project Settings > MO Framework > Audio > AmbientLayersTable."));
 	}
 
-	// Mixes pushed by plugin blueprints (weather, water) can reference sound classes the device never registered; the engine then logs a failed lookup on every audio update. Register them as they appear.
-	MixGuardHandle = FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([](float)
-	{
-		MOAudioMix::Inspect(/*bRegisterOrphans=*/true, /*bLogAll=*/false);
-		return true;
-	}), 1.0f);
+	// (No periodic sound-mix guard here any more. It walked EVERY UObject (TObjectIterator<USoundClass>) once a second: ~30 ms on the core ticker, outside the game-thread counter, i.e. the 1 Hz hitch measured
+	// in the packaged tour with a fixed camera. It never fixed the log spam either (that is [Core.Log] LogAudio=Warning). Diagnose by hand with MO.Audio.Mixes [register] / MO.Audio.ClearMixes.)
 
 	// Apply initial volumes to whatever SoundClasses exist. If the soft refs
 	// haven't been set up yet (fresh project), these are silent no-ops.
@@ -222,12 +218,6 @@ void UMOAudioSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
 void UMOAudioSubsystem::Deinitialize()
 {
-	if (MixGuardHandle.IsValid())
-	{
-		FTSTicker::GetCoreTicker().RemoveTicker(MixGuardHandle);
-		MixGuardHandle.Reset();
-	}
-
 	if (WorldBeginPlayHandle.IsValid())
 	{
 		FCoreUObjectDelegates::PostLoadMapWithWorld.Remove(WorldBeginPlayHandle);

@@ -40,7 +40,7 @@ design forks are logged under "Forks", not built blind.
   4090, 1080p): Epic 60 / 64 / 68 (p95 19.6 / 17.5 / 17.0 ms), High 73 / 81 / 85 (p95 16.2 / 14.5 / 13.8), Medium 80 / 90 / 93, Low 121 / 129 / 122 (the GPU floor is ~5-7 ms). The auto-benchmark picks the level on first
   run. Open: Epic misses 60 fps p95 in the Rainforest (the 16.6 ms target holds from High down); Nanite pixel error (+3 fps) and hair deep-shadow size cannot live in a scalability file (not ECVF_Scalability: a C++
   quality table would be needed); hair strands cost ~6 fps in the Rainforest (cards LODs would be the big lever); find what the ~6 ms at Low is (`PERF_PROFILE_GPU=1` at Low).
-- [ ] **Hitches** (below).
+- [x] **Hitches**: a once-a-second 30 ms game-thread stall (`UMOUplandLakeSubsystem` re-ran an 8 km lake-grid query on the game thread every second: median 29.6 ms) found with the CSV profiler (`Exclusive/GameThread/Tickables`) and `MO_TICK_WATCH`; the query is now cached and runs on a worker thread. Packaged, fixed camera: Meadow p99 30.8 -> 14.8 ms, worst 36 -> 21 ms (74 -> 80 fps); Rainforest p99 39.2 -> 24.4 ms. Open: the remaining Rainforest frames over 25 ms are render-thread bound (a GPU cost, not a stall).
 
 ### P1 - traversal and survival feel
 - [ ] **Swim polish** (splash / wading / stroke sounds, the HUD breath meter and cold-water heat exchange are done and verified in the editor; see Done): load-dependent buoyancy, fall damage into water, `Space` surfacing feel,

@@ -1376,6 +1376,15 @@ void AMOCharacter::UpdateCrouchAnimation(float DeltaTime, bool bSwimming)
 		return;
 	}
 
+	// The animation instance can be replaced under us (an appearance change swaps the mesh and its blueprint): the montage is then gone while the state still says a pose is playing. Start over.
+	if (CurrentCrouchPose != ECrouchPose::None && (!CrouchMontage || !Anim->Montage_IsPlaying(CrouchMontage)))
+	{
+		CrouchMontage = nullptr;
+		CurrentCrouchPose = ECrouchPose::None;
+		WantedCrouchPose = ECrouchPose::None;
+		WantedCrouchPoseSeconds = 0.0f;
+	}
+
 	const float Speed2D = GetVelocity().Size2D();
 	const ECrouchPose Wanted = Speed2D > 25.0f ? ECrouchPose::Walk : ECrouchPose::Idle;
 	if (Wanted == CurrentCrouchPose)

@@ -93,7 +93,21 @@ namespace
 			*R.Label, R.Frames, R.AvgMs > 0.0f ? 1000.0f / R.AvgMs : 0.0f, R.AvgMs, R.P50, R.P95, R.P99, R.Worst, R.Gpu, R.Game, R.Render, R.Draws, R.MemMb);
 	}
 
+	/** MO.Perf.Csv 1: the tour wraps its sample window in the engine's CSV profiler (Saved/Profiling/CSV): per-frame times of every instrumented game-thread scope, to name what the hitch frames spend their time in. */
+	TAutoConsoleVariable<int32> CVarPerfCsv(TEXT("MO.Perf.Csv"), 0, TEXT("Dev: 1 = MO.Perf.Tour records the CSV profiler over each sample window."), ECVF_Default);
+
 	float GBenchYawForLog = -1.0f;   // the tour's camera heading while sampling (hitch lines say where the camera pointed)
+
+	/** The last frames' numbers (a ring), so a hitch can be shown with what came just before and after it: the GPU / render counters lag the game thread by a frame or two. */
+	struct FFrameNumbers
+	{
+		float Ms = 0.0f, Game = 0.0f, Render = 0.0f, Gpu = 0.0f;
+	};
+	FFrameNumbers GRecentFrames[4];
+	int32 GRecentIndex = 0;
+	int32 GHitchAfterFrames = 0;   // frames still to log after a hitch (the numbers of the frames that FOLLOW it)
+	float GHitchMs = 0.0f;
+	FString GHitchHistory;
 
 	/** One frame's numbers into the sample (called once per engine tick). */
 	void AddFrame(FBenchSample& S)
@@ -103,21 +117,44 @@ namespace
 		{
 			return;
 		}
-		if (Ms > 25.0f)
+		FFrameNumbers Now;
+		Now.Ms = Ms;
+		Now.Game = (float)FPlatformTime::ToMilliseconds(GGameThreadTime);
+		Now.Render = (float)FPlatformTime::ToMilliseconds(GRenderThreadTime);
+		Now.Gpu = (float)FPlatformTime::ToMilliseconds(RHIGetGPUFrameCycles(0));
+		auto Describe = [](const FFrameNumbers& F) { return FString::Printf(TEXT("[%.0f g%.1f r%.1f u%.1f]"), F.Ms, F.Game, F.Render, F.Gpu); };
+
+		if (GHitchAfterFrames > 0)
 		{
-			// Which side stalled: the game thread (PCG, GC, streaming completions), the render thread, or the GPU. (The frame time is the max of them.)
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOPERF] HITCH %.0f ms while sampling (yaw %.0f) game=%.1f render=%.1f gpu=%.1f ms"), Ms, GBenchYawForLog,
-				FPlatformTime::ToMilliseconds(GGameThreadTime), FPlatformTime::ToMilliseconds(GRenderThreadTime), FPlatformTime::ToMilliseconds(RHIGetGPUFrameCycles(0)));
+			GHitchHistory += TEXT(" ") + Describe(Now);
+			if (--GHitchAfterFrames == 0)
+			{
+				// frame ms, game, render, gpu (u) of: the 3 frames before the hitch, the hitch (marked), the 3 frames after
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOPERF] HITCH %.0f ms while sampling (yaw %.0f) context%s"), GHitchMs, GBenchYawForLog, *GHitchHistory);
+			}
 		}
-		S.FrameMs.Add(Ms);
-		const uint32 Gpu = RHIGetGPUFrameCycles(0);
-		if (Gpu > 0)
+		else if (Ms > 25.0f)
 		{
-			S.SumGpuMs += FPlatformTime::ToMilliseconds(Gpu);
+			GHitchMs = Ms;
+			GHitchAfterFrames = 3;
+			GHitchHistory.Reset();
+			for (int32 I = 1; I <= 3; ++I)
+			{
+				GHitchHistory += TEXT(" ") + Describe(GRecentFrames[(GRecentIndex + 4 - (4 - I)) % 4]);   // oldest first
+			}
+			GHitchHistory += TEXT(" HITCH") + Describe(Now);
+		}
+		GRecentFrames[GRecentIndex] = Now;
+		GRecentIndex = (GRecentIndex + 1) % 4;
+
+		S.FrameMs.Add(Ms);
+		if (Now.Gpu > 0.0f)
+		{
+			S.SumGpuMs += Now.Gpu;
 			++S.GpuFrames;
 		}
-		S.SumGameMs += FPlatformTime::ToMilliseconds(GGameThreadTime);
-		S.SumRenderMs += FPlatformTime::ToMilliseconds(GRenderThreadTime);
+		S.SumGameMs += Now.Game;
+		S.SumRenderMs += Now.Render;
 		S.SumDraws += GNumDrawCallsRHI[0];
 		S.MemMb = (double)FPlatformMemory::GetStats().UsedPhysical / (1024.0 * 1024.0);
 	}
@@ -239,6 +276,10 @@ namespace
 				T.Sample = FBenchSample();
 				T.Phase = FTourRun::EPhase::Sample;
 				T.PhaseStart = Now;
+				if (CVarPerfCsv.GetValueOnGameThread() != 0 && World)
+				{
+					GEngine->Exec(World, TEXT("csvprofile start"));
+				}
 			}
 			return true;
 		case FTourRun::EPhase::Sample:
@@ -262,6 +303,10 @@ namespace
 			}
 			if (Now - T.PhaseStart >= T.BenchS)
 			{
+				if (CVarPerfCsv.GetValueOnGameThread() != 0 && World)
+				{
+					GEngine->Exec(World, TEXT("csvprofile stop"));
+				}
 				T.Results.Add(Summarize(T.Biomes[T.Index], T.Sample));
 				LogResult(T.Results.Last());
 				T.Phase = FTourRun::EPhase::WaitWorld;

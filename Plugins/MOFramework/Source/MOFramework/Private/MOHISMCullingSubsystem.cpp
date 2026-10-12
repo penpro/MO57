@@ -1,6 +1,7 @@
 // Copyright MO57. All Rights Reserved.
 
 #include "MOHISMCullingSubsystem.h"
+#include "MOTickWatchdog.h"
 #include "PCGComponent.h"
 #include "PCGCommon.h"
 #include "EngineUtils.h"
@@ -32,6 +33,7 @@ TStatId UMOHISMCullingSubsystem::GetStatId() const
 
 void UMOHISMCullingSubsystem::Tick(float DeltaTime)
 {
+	MO_TICK_WATCH(TEXT("UMOHISMCullingSubsystem"));
 	Super::Tick(DeltaTime);
 
 #if WITH_EDITOR

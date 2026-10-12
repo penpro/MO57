@@ -3,6 +3,7 @@
  */
 
 #include "MOOceanologyIntegration.h"
+#include "MOTickWatchdog.h"
 #include "MOFramework.h"
 #include "Actors/OceanologyWaterParentActor.h"
 #include "Components/BoxComponent.h"
@@ -86,6 +87,7 @@ TStatId UMOOceanologyIntegrationSubsystem::GetStatId() const
 
 void UMOOceanologyIntegrationSubsystem::Tick(float DeltaTime)
 {
+	MO_TICK_WATCH(TEXT("UMOOceanologyIntegrationSubsystem"));
 	Super::Tick(DeltaTime);
 	TimeSinceTune += DeltaTime;
 	if (TimeSinceTune < TuneIntervalSeconds)

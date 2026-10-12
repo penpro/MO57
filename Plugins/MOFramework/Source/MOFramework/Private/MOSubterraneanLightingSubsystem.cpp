@@ -1,4 +1,5 @@
 #include "MOSubterraneanLightingSubsystem.h"
+#include "MOTickWatchdog.h"
 #include "MOFramework.h"
 #include "Components/DirectionalLightComponent.h"
 #include "Engine/World.h"
@@ -53,6 +54,7 @@ void UMOSubterraneanLightingSubsystem::Deinitialize()
 
 void UMOSubterraneanLightingSubsystem::Tick(float DeltaTime)
 {
+	MO_TICK_WATCH(TEXT("UMOSubterraneanLightingSubsystem"));
 	Super::Tick(DeltaTime);
 	TimeSinceCheck += DeltaTime;
 	if (TimeSinceCheck >= CheckIntervalSeconds)

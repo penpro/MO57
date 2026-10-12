@@ -3,10 +3,12 @@
  */
 
 #include "MOUplandLakeSubsystem.h"
+#include "MOTickWatchdog.h"
 #include "MOFramework.h"
 #include "MOWorldSeedSubsystem.h"
 #include "Actors/OceanologyLakeActor.h"
 #include "Engine/AssetManager.h"
+#include "Async/Async.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/Pawn.h"
@@ -51,12 +53,13 @@ void UMOUplandLakeSubsystem::Deinitialize()
 
 void UMOUplandLakeSubsystem::Tick(float DeltaTime)
 {
+	MO_TICK_WATCH(TEXT("UMOUplandLakeSubsystem"));
 	Super::Tick(DeltaTime);
 	TimeSinceRefresh += DeltaTime;
 	if (TimeSinceRefresh >= RefreshIntervalSeconds)
 	{
 		TimeSinceRefresh = 0.0f;
-		RefreshNow();
+		Refresh(/*bAllowAsync=*/true);
 	}
 }
 
@@ -127,9 +130,47 @@ void UMOUplandLakeSubsystem::DestroyAll()
 		}
 	}
 	Bodies.Empty();
+	bHaveLakeCache = false;
+	++QueryGeneration;   // a query still running belongs to the world that was just torn down
+}
+
+bool UMOUplandLakeSubsystem::IsQueryFresh(const TArray<FVector2D>& CachedPositions, const TArray<FVector>& Viewers, float ToleranceCm)
+{
+	if (CachedPositions.Num() != Viewers.Num() || Viewers.IsEmpty())
+	{
+		return false;
+	}
+	for (int32 I = 0; I < Viewers.Num(); ++I)
+	{
+		if (FVector2D::Distance(CachedPositions[I], FVector2D(Viewers[I].X, Viewers[I].Y)) > ToleranceCm)
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
+UMOUplandLakeSubsystem::FLakeQuery UMOUplandLakeSubsystem::RunLakeQuery(FMOWorldGenParamsRef Params, int32 Seed, int32 Generation, TArray<FVector2D> Positions, double RadiusCm)
+{
+	FLakeQuery Result;
+	Result.ParamsHash = Params->GetHash();
+	Result.Seed = Seed;
+	Result.Generation = Generation;
+	Result.PerViewer.SetNum(Positions.Num());
+	for (int32 I = 0; I < Positions.Num(); ++I)
+	{
+		FMOWorldGen::GetUplandLakesNear(*Params, Positions[I].X, Positions[I].Y, RadiusCm, Seed, Result.PerViewer[I]);
+	}
+	Result.Positions = MoveTemp(Positions);
+	return Result;
 }
 
 void UMOUplandLakeSubsystem::RefreshNow()
+{
+	Refresh(/*bAllowAsync=*/false);
+}
+
+void UMOUplandLakeSubsystem::Refresh(bool bAllowAsync)
 {
 	UWorld* World = GetWorld();
 	const UMOWorldSeedSubsystem* Seeds = UMOWorldSeedSubsystem::Get(World);
@@ -205,15 +246,62 @@ void UMOUplandLakeSubsystem::RefreshNow()
 		}
 	}
 
-	// Near: lakes within SpawnRadius of any player that have no actor yet.
+	// The lake query (the lake grid of an 8 km square: ~30 ms) is the expensive part and its answer barely changes while the players walk: take a finished worker-thread result, reuse the cached one while
+	// the viewers stay within RequeryDistanceCm of where it was made, and otherwise start a new one (this tick: on a worker thread; RefreshNow: right now).
+	if (bQueryPending && PendingQuery.IsReady())
+	{
+		FLakeQuery Done = PendingQuery.Get();
+		bQueryPending = false;
+		if (Done.Generation == QueryGeneration)
+		{
+			LakeCache = MoveTemp(Done);
+			bHaveLakeCache = true;
+		}
+	}
+	if (bHaveLakeCache && (LakeCache.Seed != Seed || LakeCache.ParamsHash != Params->GetHash()))
+	{
+		bHaveLakeCache = false;   // another world's lakes
+	}
+	if (!bHaveLakeCache || !IsQueryFresh(LakeCache.Positions, Viewers, RequeryDistanceCm))
+	{
+		TArray<FVector2D> Positions;
+		for (const FVector& V : Viewers)
+		{
+			Positions.Add(FVector2D(V.X, V.Y));
+		}
+		const double QueryRadius = (double)SpawnRadiusCm + (double)RequeryDistanceCm;
+		if (!bAllowAsync)
+		{
+			LakeCache = RunLakeQuery(Params, Seed, QueryGeneration, MoveTemp(Positions), QueryRadius);
+			bHaveLakeCache = true;
+			bQueryPending = false;
+		}
+		else if (!bQueryPending)
+		{
+			bQueryPending = true;
+			PendingQuery = Async(EAsyncExecution::ThreadPool, [Params, Seed, Gen = QueryGeneration, Positions = MoveTemp(Positions), QueryRadius]() mutable
+			{
+				return RunLakeQuery(Params, Seed, Gen, MoveTemp(Positions), QueryRadius);
+			});
+		}
+	}
+	if (!bHaveLakeCache || LakeCache.PerViewer.Num() != Viewers.Num())
+	{
+		return;   // the first query has not landed yet: the lakes appear a few frames after it does
+	}
+
+	// Near: lakes within SpawnRadius of any player that have no actor yet (the cached lists are supersets: the exact test is at the CURRENT position).
 	UClass* Class = nullptr;
 	int32 Spawned = 0;
-	for (const FVector& V : Viewers)
+	for (int32 ViewerIndex = 0; ViewerIndex < Viewers.Num(); ++ViewerIndex)
 	{
-		TArray<FMOWorldGen::FLake> Lakes;
-		FMOWorldGen::GetUplandLakesNear(*Params, V.X, V.Y, SpawnRadiusCm, Seed, Lakes);
-		for (const FMOWorldGen::FLake& Lake : Lakes)
+		const FVector& V = Viewers[ViewerIndex];
+		for (const FMOWorldGen::FLake& Lake : LakeCache.PerViewer[ViewerIndex])
 		{
+			if (FVector2D::Distance(FVector2D(V.X, V.Y), Lake.Center) - (double)Lake.RadiusCm > (double)SpawnRadiusCm)
+			{
+				continue;
+			}
 			const FIntPoint Key((int32)Lake.CellX, (int32)Lake.CellY);
 			if (Bodies.Contains(Key))
 			{

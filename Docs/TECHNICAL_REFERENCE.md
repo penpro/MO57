@@ -146,6 +146,19 @@ All existing timers follow this pattern correctly. New timers must too.
 - **UI widget refresh**: Pre-cache icons or use `RequestAsyncLoad()` (H3)
 - **AI activation**: Preload behavior trees in `OnPossess()`, not in tick (H1)
 
+### Periodic work: never walk the world (found Oct 2026)
+
+- **`TObjectIterator<T>` visits EVERY UObject** (GUObjectArray: hundreds of thousands in a world with PCG / foliage instances), whatever `T` is. A once-a-second ticker doing it (the removed audio mix guard) cost ~30 ms: a
+  1 Hz hitch in the packaged tour that is invisible to `GGameThreadTime` (core tickers run outside it), to the render thread and to the GPU, and independent of where the camera looks. `TActorIterator` /
+  `GetAllActorsOfClass` scale with the actor count the same way. Periodic code keeps its own registry (register / unregister, like `UMOIdentityRegistrySubsystem`) instead of searching.
+- **The actual cause (Oct 2026): `UMOUplandLakeSubsystem` ran `FMOWorldGen::GetUplandLakesNear` (the lake grid of an 8 km square, ~30 ms) on the game thread once a second.** The audio guard's `TObjectIterator` (removed) was a
+  decoy that cost a build cycle: the bisection of GPU features (Lumen, VSM, TSR, sky, clouds, fog, hair) changed nothing because the stall was on the game thread, and the counters I logged LAG the frame-time measurement
+  by one frame (the hitch frame's own `GGameThreadTime` shows up in the NEXT frame's log: log a ring of frames, not one). The CSV profiler (`MO.Perf.Csv 1` in the tour -> `Saved/Profiling/CSV`, rank columns by how much they
+  rise on hitch frames) pointed at `Exclusive/GameThread/Tickables`, and `MO_TICK_WATCH(TEXT("Name"))` (MOTickWatchdog.h, in every tickable subsystem's Tick) named the subsystem. Fix pattern: cache the answer and re-run it only after the
+  viewers moved far enough, on a worker thread when it is a pure function of immutable data (`FMOWorldGenParamsRef` is thread-safe).
+- **How it was found**: `MO.Perf.Tour ... fixed_yaw` (is the hitch view dependent? no) + the `[MOPERF] HITCH` lines (frame ms vs game / render / gpu ms: all four numbers must add up; when the frame is 30 ms and every
+  thread is under 14, the time is spent somewhere none of them counts) + the hitch spacing (a constant ~9 degrees of tour yaw = once a second).
+
 ### Container Performance
 
 - Inventory GUID lookup is O(n) linear scan (H4) — add `TMap<FGuid, int32>` index
@@ -298,6 +311,30 @@ Three axes, float -1.0 to 1.0:
 | 4 | Log | Routine activities | History only |
 
 ---
+
+## Presentation Systems (Oct 2026)
+
+How the player-facing "feel" systems are built. Backlog and status: `Docs/AAA_Polish_Backlog.md`.
+
+### Footsteps (`UMOFootstepComponent`, one per `AMOCharacter`)
+- **When**: the animation decides. A foot's WORLD horizontal speed against the body's: swing = faster than 0.65 x max(body speed, 100) cm/s for at least 0.2 s, plant = back under 0.30 x. Measured on the MO walk / sprint /
+  crouch clips (walk 2.65 steps/s alternating L-R; a height signal was tried first and is useless here). Fallback: walked distance; landing: a heavy step. No steps in water (the water sounds own wading).
+- **What**: `IMOFootstepSurfaceInterface` on the actor stood on, else the world generator (floor vs the generated surface: structure / underground / the BIOME, `FMOBiomeDefinitionRow::FootstepSet`). The set name is the middle
+  of the sound-bank ids `SFX.Footsteps.<Set>1` / `<Set>2`: a new surface = bank rows + a data value, never code. Crouched = Sneak gait (quiet).
+- Dev verbs: `MO.Footstep.Probe|Log|Heights <s> [full]|Walk [s] [sprint|sneak]|Count`. Tests: `MOFramework.Footsteps.*`.
+
+### Crouch
+`NavAgentProps.bCanCrouch` must be set (it was not: `Crouch()` was a silent no-op). Capsule 60 cm, 200 cm/s; the pose is a looping dynamic montage on the locomotion ABP's `DefaultSlot` (clips: `Content/Characters/Crouch`,
+retargeted Manny set, see the memory note on the retarget pipeline). The swim override still replaces the ABP; crouch and swim never overlap.
+
+### Graphics quality
+`UMOGameSettings` (a `UGameUserSettings`): level 0 Low .. 3 Epic over the engine's scalability groups; `EnsureGraphicsQualityChosen()` benchmarks once per machine (not in the editor / on servers / `-unattended` /
+`-NoQualityBenchmark`: every test harness passes it). `Config/DefaultScalability.ini` holds the MO-specific cuts: ONLY `ECVF_Scalability` cvars are allowed (anything else is an ensure, fatal in the cook), and a cvar overridden at
+a lower level must also be pinned at Epic. `ApplyMOSettings()` applies the non-resolution engine settings (the class skips `Super::ApplySettings` on purpose to avoid viewport rebuilds). Options panel: quality combo, VSync,
+the display's real resolution list. Tests: `MOFramework.Graphics.*`. Measured tiers and the experiment tooling: `Tools/perf_experiments*.sh` + `perf_experiments_round*.txt`.
+
+### HUD: breath meter
+`UMOBreathMeterWidget` is full-screen with its bar aligned bottom-centre (`SetPositionInViewport` resets viewport-slot anchors, so a point-anchored HUD bar placed that way ends up off-screen). `MO.Water.Meter` reports its state.
 
 ## Data Pipeline
 

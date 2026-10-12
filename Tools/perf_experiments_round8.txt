@@ -1,0 +1,9 @@
+base|||1
+nolumen||r.Lumen.DiffuseIndirect.Allow 0,r.Lumen.Reflections.Allow 0|1
+novsm||r.Shadow.Virtual.Enable 0|1
+noclouds||r.VolumetricCloud 0|1
+nofog||r.VolumetricFog 0|1
+nohair||r.HairStrands.Strands 0|1
+notsr||r.AntiAliasingMethod 0|1
+nonanite||r.Nanite 0|1
+nosky||r.SkyAtmosphere 0|1

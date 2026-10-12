@@ -1,4 +1,5 @@
 #include "MOSpawnManagerSubsystem.h"
+#include "MOTickWatchdog.h"
 #include "MOFramework.h"
 #include "MOGameSettings.h"
 #include "MOSpawnPoint.h"
@@ -177,6 +178,7 @@ bool UMOSpawnManagerSubsystem::ShouldCreateSubsystem(UObject* Outer) const
 
 void UMOSpawnManagerSubsystem::Tick(float DeltaTime)
 {
+	MO_TICK_WATCH(TEXT("UMOSpawnManagerSubsystem"));
 	// Spawning (and the upkeep of what was spawned) is the SERVER's job. The subsystem is created in every game world, so a co-op
 	// CLIENT used to run its own spawn loop: it filled its copy of the world with creatures that exist nowhere else (invisible to the
 	// host, no AI controller -- "Wolf_C: NO CONTROLLER") on top of the real, replicated ones.

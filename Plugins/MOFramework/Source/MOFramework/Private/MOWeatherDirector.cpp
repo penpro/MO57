@@ -3,6 +3,7 @@
  */
 
 #include "MOWeatherDirector.h"
+#include "MOTickWatchdog.h"
 #include "MOFramework.h"
 #include "MOGameClockSubsystem.h"
 #include "MOGameMode.h"
@@ -138,6 +139,7 @@ void UMOWeatherDirectorSubsystem::SetDirectorEnabled(bool bEnable)
 
 void UMOWeatherDirectorSubsystem::Tick(float DeltaTime)
 {
+	MO_TICK_WATCH(TEXT("UMOWeatherDirectorSubsystem"));
 	Super::Tick(DeltaTime);
 	TimeSinceEvaluate += DeltaTime;
 	if (TimeSinceEvaluate >= 5.0f)

@@ -4,6 +4,7 @@
  */
 
 #include "MOGameClockSubsystem.h"
+#include "MOTickWatchdog.h"
 #include "MOFrameworkCore.h"
 #include "Engine/World.h"
 
@@ -46,6 +47,7 @@ void UMOGameClockSubsystem::Deinitialize()
 
 void UMOGameClockSubsystem::Tick(float DeltaTime)
 {
+	MO_TICK_WATCH(TEXT("UMOGameClockSubsystem"));
 	// MO57 doesn't pause (Docs/PAUSE_POLICY.md). Real time is monotonic;
 	// no "is paused?" gate needed here. Every tick advances all
 	// accumulators + the in-game DateTime.

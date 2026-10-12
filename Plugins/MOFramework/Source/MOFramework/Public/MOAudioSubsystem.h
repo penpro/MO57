@@ -445,9 +445,6 @@ private:
 	FMOAmbientLayerConfig CurrentLayerConfig;
 
 	/** Timer handles. Cleared when ambient state changes. */
-	/** Once a second: register sound classes that active sound mixes reference but the audio device does not know (see MOAudioMixGuard.cpp: stops the engine's 'RecursiveApplyAdjuster failed' log spam). */
-	FTSTicker::FDelegateHandle MixGuardHandle;
-
 	FTimerHandle EventTimerHandle;
 	FTimerHandle DominanceShiftTimerHandle;
 	FTimerHandle BaseLayerBreatheTimerHandle;

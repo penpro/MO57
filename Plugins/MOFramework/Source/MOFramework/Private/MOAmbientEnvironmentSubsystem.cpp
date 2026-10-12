@@ -3,6 +3,7 @@
  */
 
 #include "MOAmbientEnvironmentSubsystem.h"
+#include "MOTickWatchdog.h"
 #include "MOAudioSubsystem.h"
 #include "MOFramework.h"
 #include "MOGameClockSubsystem.h"
@@ -98,6 +99,7 @@ EMOAmbientState UMOAmbientEnvironmentSubsystem::Classify(const FMOWorldGenParams
 
 void UMOAmbientEnvironmentSubsystem::Tick(float DeltaTime)
 {
+	MO_TICK_WATCH(TEXT("UMOAmbientEnvironmentSubsystem"));
 	Super::Tick(DeltaTime);
 	TimeSinceEvaluate += DeltaTime;
 	TimeSinceChange += DeltaTime;

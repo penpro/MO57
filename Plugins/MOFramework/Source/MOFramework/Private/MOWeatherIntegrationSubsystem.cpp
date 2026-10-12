@@ -1,4 +1,5 @@
 #include "MOWeatherIntegrationSubsystem.h"
+#include "MOTickWatchdog.h"
 #include "MOPersistenceSubsystem.h"
 #include "MOworldSaveGame.h"
 #include "MOWeatherProviderInterface.h"
@@ -207,6 +208,7 @@ void UMOWeatherIntegrationSubsystem::DoUdsSyncInternal(const FDateTime& Now)
 
 void UMOWeatherIntegrationSubsystem::Tick(float DeltaTime)
 {
+	MO_TICK_WATCH(TEXT("UMOWeatherIntegrationSubsystem"));
 	Super::Tick(DeltaTime);
 
 	TimeSinceLastCheck += DeltaTime;

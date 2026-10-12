@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Perf experiments on the PACKAGED build: for each experiment (label | extra command-line args | console commands, comma separated), start a new game (seed 7), run MO.Perf.Tour over a few biomes and
-# keep the [MOPERF] lines in Saved/PerfRuns/exp_<label>.txt. Prints a comparison table at the end (avg fps / p95 / gpu ms per biome).
+# keep the [MOPERF] lines in Saved/PerfRuns/exp_<label>.txt (4th field: 1 = hold the camera heading fixed while sampling, 0 = the tour turns 360 degrees). Prints a comparison table at the end (avg fps / p95 / gpu ms per biome).
 #
 #   Tools/perf_experiments.sh                       (the default experiment list below; SETTLE / BENCH / BIOMES override the tour)
 #   EXPERIMENTS_FILE=my.txt Tools/perf_experiments.sh   one experiment per line:  label|extra args|cmd1,cmd2
@@ -14,6 +14,7 @@ SETTLE="${SETTLE:-60}"
 BENCH="${BENCH:-20}"
 BIOMES="${BIOMES:-Rainforest TemperateForest Meadow}"
 mkdir -p Saved/PerfRuns
+LOGARG="-log"; [ "${NOLOG:-0}" = "1" ] && LOGARG=""   # NOLOG=1: no console window (a packaged game with -log writes every line to a Windows console as well)
 
 if [ -n "${EXPERIMENTS_FILE:-}" ]; then
   mapfile -t EXPS < "$EXPERIMENTS_FILE"
@@ -30,14 +31,14 @@ else
 fi
 
 for E in "${EXPS[@]}"; do
-  IFS='|' read -r LABEL ARGS CMDS <<< "$E"
+  IFS='|' read -r LABEL ARGS CMDS YAW <<< "$E"
   [ -z "$LABEL" ] && continue
   echo "=== $LABEL  args='$ARGS'  cmds='$CMDS'"
   rm -f "$LOGDIR/MO57.log"
   EXEC="MO.NewGame 7"
   [ -n "$CMDS" ] && EXEC="$EXEC,$CMDS"
-  EXEC="$EXEC,MO.Perf.Tour $SETTLE $BENCH 1 0 $BIOMES"
-  "$EXE" -NoSteam -NoQualityBenchmark -log -windowed -ResX=1920 -ResY=1080 $ARGS -ExecCmds="$EXEC" > /dev/null 2>&1 &
+  EXEC="$EXEC,MO.Perf.Tour $SETTLE $BENCH 1 0 ${YAW:-0} $BIOMES"
+  "$EXE" -NoSteam -NoQualityBenchmark $LOGARG -windowed -ResX=1920 -ResY=1080 $ARGS -ExecCmds="$EXEC" > /dev/null 2>&1 &
   PID=$!
   for i in $(seq 1 120); do
     sleep 10
@@ -48,6 +49,7 @@ for E in "${EXPS[@]}"; do
   kill $PID 2>/dev/null
   sleep 4
   grep -a -h "\[MOPERF\]" "$LOGDIR/MO57.log" | grep -a "frames=" | tail -n $(echo $BIOMES | wc -w) | sed 's/^.*Warning: //' > "Saved/PerfRuns/exp_${LABEL}.txt"
+  grep -a -h "HITCH" "$LOGDIR/MO57.log" | sed 's/^.*Warning: //' > "Saved/PerfRuns/hitch_${LABEL}.txt"
   cat "Saved/PerfRuns/exp_${LABEL}.txt" | cut -c1-200
 done
 

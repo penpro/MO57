@@ -28,6 +28,7 @@
 
 #include "CoreMinimal.h"
 #include "Subsystems/WorldSubsystem.h"
+#include "Async/Future.h"
 #include "Engine/StreamableManager.h"
 #include "MOWorldGen.h"
 #include "MOUplandLakeSubsystem.generated.h"
@@ -49,8 +50,18 @@ public:
 
 	static UMOUplandLakeSubsystem* Get(const UObject* WorldContextObject);
 
-	/** Create the lakes near the players and destroy the far ones now (Tick does this once a second; tests and tools call it directly). */
+	/** Create the lakes near the players and destroy the far ones now, SYNCHRONOUSLY (tests and tools call it directly). Tick uses the asynchronous path: see Refresh(). */
 	void RefreshNow();
+
+	/**
+	 * Is a lake query made at CachedPositions still good for Viewers? Same viewers (count and order), each within ToleranceCm of where it was. Pure; the automation tests use it.
+	 * (The lake grid of an 8 km square costs ~30 ms; the players move a few metres a second: re-running it every refresh was a 1 Hz hitch on the game thread.)
+	 */
+	static bool IsQueryFresh(const TArray<FVector2D>& CachedPositions, const TArray<FVector>& Viewers, float ToleranceCm);
+
+	/** How far (cm) the viewers may move before the lake query is re-run. The query asks for SpawnRadiusCm + this, so a lake that comes within SpawnRadiusCm meanwhile is already in the result. */
+	UPROPERTY(EditAnywhere, Category = "MO|Lakes", meta = (ClampMin = "1000"))
+	float RequeryDistanceCm = 20000.0f;
 
 	/** Lakes with a live water actor right now. */
 	int32 GetNumLakeBodies() const { return Bodies.Num(); }
@@ -87,8 +98,28 @@ private:
 		FVector2D Center = FVector2D::ZeroVector;
 	};
 
+	/** One lake query: the lakes within SpawnRadius + tolerance of each viewer position, valid for that params hash and seed. A pure function of immutable data: it may run on any thread. */
+	struct FLakeQuery
+	{
+		uint32 ParamsHash = 0;
+		int32 Seed = 0;
+		int32 Generation = 0;
+		TArray<FVector2D> Positions;
+		TArray<TArray<FMOWorldGen::FLake>> PerViewer;
+	};
+	static FLakeQuery RunLakeQuery(FMOWorldGenParamsRef Params, int32 Seed, int32 Generation, TArray<FVector2D> Positions, double RadiusCm);
+
+	/** The shared body of RefreshNow (bAllowAsync = false: the query runs now) and Tick (true: it runs on a worker thread and lakes appear when it lands). */
+	void Refresh(bool bAllowAsync);
+
 	AOceanologyLake* SpawnLake(const FMOWorldGen::FLake& Lake, UClass* Class);
 	void DestroyAll();
+
+	FLakeQuery LakeCache;
+	bool bHaveLakeCache = false;
+	TFuture<FLakeQuery> PendingQuery;
+	bool bQueryPending = false;
+	int32 QueryGeneration = 0;   // bumped by DestroyAll: a query that was started for another world / seed is dropped when it lands
 
 	TMap<FIntPoint, FLakeBody> Bodies;
 	TSharedPtr<FStreamableHandle> LakeClassHandle;

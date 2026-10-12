@@ -5,6 +5,7 @@
  */
 
 #include "MOTerrainModificationSubsystem.h"
+#include "MOTickWatchdog.h"
 #include "MOPersistenceSubsystem.h"
 #include "MOworldSaveGame.h"
 #include "MOFramework.h"
@@ -519,6 +520,7 @@ void UMOTerrainModificationSubsystem::ExtendBurstSweepWindow()
 
 void UMOTerrainModificationSubsystem::Tick(float DeltaTime)
 {
+	MO_TICK_WATCH(TEXT("UMOTerrainModificationSubsystem"));
 	Super::Tick(DeltaTime);
 
 	if (UWorld* World = GetWorld())
