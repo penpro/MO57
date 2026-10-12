@@ -63,7 +63,7 @@ def build_launch_args(uproject, log_path, pos=(0, 0), res=(640, 360), nosteam=Fa
     take over -- exactly what the editor itself runs on.
     """
     args = [uproject, "-game", "-windowed", f"-ResX={res[0]}", f"-ResY={res[1]}", f"-WinX={pos[0]}",
-            f"-WinY={pos[1]}", "-nosplash", "-nosound", "-forcelogflush", f"-abslog={log_path}"]
+            f"-WinY={pos[1]}", "-nosplash", "-nosound", "-forcelogflush", f"-abslog={log_path}", "-NoQualityBenchmark"]
     if nosteam:
         args.append("-NoSteam")
     return args + list(extra)
@@ -1784,7 +1784,7 @@ def packaged_test(package=False, withhold_sync=False, run_seconds=60, boot_timeo
 
         cmds = ("MO.WorldSync.Withhold 1," if withhold_sync else "") + "MO.Session.Host PackagedTest 4"
         print(f"[nettest] packaged: launching the host (-ExecCmds=\"{cmds}\")" + (" -- NEGATIVE CONTROL: sync withheld" if withhold_sync else "") + " ...", flush=True)
-        host_pid = _pkg_launch(f'-NoSteam -windowed -ResX=960 -ResY=540 -WinX=0 -WinY=0 -ExecCmds="{cmds}"')
+        host_pid = _pkg_launch(f'-NoSteam -NoQualityBenchmark -windowed -ResX=960 -ResY=540 -WinX=0 -WinY=0 -ExecCmds="{cmds}"')
         deadline, seeded = time.time() + boot_timeout, False
         while time.time() < deadline and not seeded:
             seeded = bool(PKG_HOST_SEED_RE.search(_pkg_read("MO57.log")))
@@ -1793,7 +1793,7 @@ def packaged_test(package=False, withhold_sync=False, run_seconds=60, boot_timeo
                         "" if seeded else _pkg_read("MO57.log")[-300:].replace("\n", " | ")):
             return False
 
-        client_pid = _pkg_launch("127.0.0.1 -NoSteam -windowed -ResX=960 -ResY=540 -WinX=980 -WinY=0")
+        client_pid = _pkg_launch("127.0.0.1 -NoSteam -NoQualityBenchmark -windowed -ResX=960 -ResY=540 -WinX=980 -WinY=0")
         deadline, joined = time.time() + boot_timeout, False
         while time.time() < deadline and not joined:
             joined = bool(PKG_CLIENT_SEED_RE.search(_pkg_read("MO57_2.log")))
@@ -2185,7 +2185,7 @@ def bugreport_test(package=False, boot_timeout=180):
             cmds = (f"{host}MO.BugReport.EndpointOverride http://127.0.0.1:{port}/datarouter/crashes/test,MO.BugReport.CooldownSeconds 0,"
                     f"MO.BugReport.SendTest -shot -delay={delay} {title}")
             print(f"[nettest] bugreport [{label}]: launching the packaged game ...", flush=True)
-            pid = _pkg_launch(f'-NoSteam -windowed -ResX=960 -ResY=540 -WinX=0 -WinY=0 -ExecCmds="{cmds}"')
+            pid = _pkg_launch(f'-NoSteam -NoQualityBenchmark -windowed -ResX=960 -ResY=540 -WinX=0 -WinY=0 -ExecCmds="{cmds}"')
             deadline, result = time.time() + boot_timeout + delay + 30, None
             while time.time() < deadline and result is None:
                 result = next((m for m in BUGREPORT_RESULT_RE.finditer(_pkg_read("MO57.log")) if m.group(2) not in stale_ids), None)

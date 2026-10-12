@@ -172,7 +172,10 @@ public:
 	/** Play a one-shot at a world location. Spatialized via the source asset's attenuation settings. */
 	UFUNCTION(BlueprintCallable, Category="MO|Audio|SFX",
 		meta=(WorldContext="WorldContextObject"))
-	bool PlayOneShotAtLocation(const UObject* WorldContextObject, FName AudioId, FVector Location);
+	bool PlayOneShotAtLocation(const UObject* WorldContextObject, FName AudioId, FVector Location, float VolumeScale = 1.0f, float PitchScale = 1.0f);
+
+	/** True if the bank has a row with this id (no copy, no warning): callers with a fallback ask first instead of triggering the "not in bank" warning. */
+	bool HasAudioId(FName AudioId) const { return AudioIdLookup.Contains(AudioId); }
 
 	// =========================================================================
 	// VOLUME CONTROLS

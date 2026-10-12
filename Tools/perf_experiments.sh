@@ -37,7 +37,7 @@ for E in "${EXPS[@]}"; do
   EXEC="MO.NewGame 7"
   [ -n "$CMDS" ] && EXEC="$EXEC,$CMDS"
   EXEC="$EXEC,MO.Perf.Tour $SETTLE $BENCH 1 0 $BIOMES"
-  "$EXE" -NoSteam -log -windowed -ResX=1920 -ResY=1080 $ARGS -ExecCmds="$EXEC" > /dev/null 2>&1 &
+  "$EXE" -NoSteam -NoQualityBenchmark -log -windowed -ResX=1920 -ResY=1080 $ARGS -ExecCmds="$EXEC" > /dev/null 2>&1 &
   PID=$!
   for i in $(seq 1 120); do
     sleep 10

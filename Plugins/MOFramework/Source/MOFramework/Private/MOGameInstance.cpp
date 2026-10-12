@@ -43,6 +43,7 @@ void UMOGameInstance::Init()
 	if (UMOGameSettings* Settings = UMOGameSettings::GetMOGameSettings())
 	{
 		Settings->bPlayIntro = true;
+		Settings->EnsureGraphicsQualityChosen();   // first run on a real machine: pick the quality for this hardware
 	}
 
 	// Bind loading screen delegates

@@ -204,6 +204,7 @@ class UMOMentalStateComponent;
 class UMOAnatomyComponent;
 class UMOAdrenalineComponent;
 class UMORespirationComponent;
+class UMOFootstepComponent;
 class UAnimSequence;
 class UAnimInstance;
 class UMOCharacterMovementComponent;
@@ -684,6 +685,10 @@ public:
 	/** Breath-hold physiology: oxygen reserve, drowning (UMORespirationComponent). The head under water closes the airway. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO")
 	TObjectPtr<UMORespirationComponent> RespirationComponent;
+
+	/** Surface-aware footsteps (dormant on skeletons without the foot bones, e.g. creatures; no-op on a dedicated server). */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO")
+	TObjectPtr<UMOFootstepComponent> FootstepComponent;
 
 	/** Crafting queue component (timed crafting). */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO")

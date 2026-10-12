@@ -8,6 +8,11 @@
 #include "Engine/Engine.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
+#include "HAL/PlatformTime.h"
+#include "Misc/App.h"
+#include "Misc/CommandLine.h"
+#include "Misc/CoreMisc.h"
+#include "Misc/Parse.h"
 
 UMOGameSettings::UMOGameSettings()
 {
@@ -44,6 +49,7 @@ void UMOGameSettings::SetToDefaults()
 	FieldOfView = 90.0f;
 	MaxFrameRate = 0;
 	bEnableMotionBlur = true;
+	bGraphicsQualityChosen = false;   // Reset -> the quality is detected for this hardware again (Super::SetToDefaults restored the engine's fallback groups)
 
 	// Audio
 	MasterVolume = 1.0f;
@@ -70,6 +76,8 @@ void UMOGameSettings::SetToDefaults()
 
 void UMOGameSettings::ApplyMOSettings()
 {
+	// The scalability groups, vsync and the other non-resolution engine settings first: ApplyGraphicsSettings below owns t.MaxFPS and must come after the engine's frame-rate limit.
+	ApplyNonResolutionSettings();
 	ApplyAudioSettings();
 	ApplyGraphicsSettings();
 
@@ -148,6 +156,44 @@ void UMOGameSettings::ApplyGraphicsSettings()
 	{
 		MotionBlurCVar->Set(bEnableMotionBlur ? 4 : 0);
 	}
+}
+
+FText UMOGameSettings::GraphicsQualityLevelName(int32 Level)
+{
+	switch (Level)
+	{
+	case 0: return NSLOCTEXT("MOGameSettings", "QualityLow", "Low");
+	case 1: return NSLOCTEXT("MOGameSettings", "QualityMedium", "Medium");
+	case 2: return NSLOCTEXT("MOGameSettings", "QualityHigh", "High");
+	case 3: return NSLOCTEXT("MOGameSettings", "QualityEpic", "Epic");
+	default: return NSLOCTEXT("MOGameSettings", "QualityCustom", "Custom");
+	}
+}
+
+void UMOGameSettings::SetGraphicsQualityLevel(int32 Level)
+{
+	SetOverallScalabilityLevel(FMath::Clamp(Level, 0, MaxGraphicsQualityLevel));
+	bGraphicsQualityChosen = true;
+}
+
+bool UMOGameSettings::ShouldRunQualityBenchmark(bool bAlreadyChosen, bool bEditor, bool bDedicatedServer, bool bUnattended, bool bSuppressedByCommandLine)
+{
+	return !bAlreadyChosen && !bEditor && !bDedicatedServer && !bUnattended && !bSuppressedByCommandLine;
+}
+
+void UMOGameSettings::EnsureGraphicsQualityChosen()
+{
+	if (!ShouldRunQualityBenchmark(bGraphicsQualityChosen, GIsEditor, IsRunningDedicatedServer(), FApp::IsUnattended(), FParse::Param(FCommandLine::Get(), TEXT("NoQualityBenchmark"))))
+	{
+		return;
+	}
+	const double Start = FPlatformTime::Seconds();
+	RunHardwareBenchmark();
+	ApplyHardwareBenchmarkResults();   // applies the suggested groups and saves
+	bGraphicsQualityChosen = true;
+	SaveSettings();
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOGameSettings] first run: the hardware benchmark (%.1f s, CPU index %.0f, GPU index %.0f) chose graphics quality level %d (%s)"),
+		FPlatformTime::Seconds() - Start, GetLastCPUBenchmarkResult(), GetLastGPUBenchmarkResult(), GetOverallScalabilityLevel(), *GraphicsQualityLevelName(GetOverallScalabilityLevel()).ToString());
 }
 
 void UMOGameSettings::ResetIntroPlayback()

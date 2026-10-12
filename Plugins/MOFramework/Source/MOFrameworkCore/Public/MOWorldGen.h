@@ -542,6 +542,9 @@ struct MOFRAMEWORKCORE_API FMOWorldGenBiome
 	/** Asset path of the UVoxelSurfaceTypeInterface painted under this biome (resolved by the Voxel adapter, not here). */
 	FSoftObjectPath GroundSurfaceType;
 
+	/** Footstep sound set (bank ids "SFX.Footsteps.<Set>1/2"). Not part of the world hash. */
+	FName FootstepSet = FName(TEXT("GrassTread"));
+
 	/** THE band test (the DT row's own Contains delegates to the same rule). */
 	bool Contains(float Height, float SlopeDeg, float Moisture, float Temperature) const
 	{

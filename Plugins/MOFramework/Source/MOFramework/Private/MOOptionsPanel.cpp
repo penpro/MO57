@@ -16,6 +16,7 @@
 #include "GameFramework/PlayerController.h"
 #include "InputAction.h"
 #include "InputMappingContext.h"
+#include "Kismet/KismetSystemLibrary.h"
 
 UMOOptionsPanel::UMOOptionsPanel(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -139,6 +140,7 @@ void UMOOptionsPanel::NativeConstruct()
 		ResolutionComboBox->OnSelectionChanged.AddDynamic(this, &UMOOptionsPanel::HandleResolutionChanged);
 		PopulateResolutionOptions();
 	}
+	PopulateQualityOptions();
 
 	// Key bindings
 	if (ResetAllBindingsButton)
@@ -183,28 +185,31 @@ void UMOOptionsPanel::RefreshUIFromSettings()
 	// Graphics options - Resolution and Fullscreen
 	if (ResolutionComboBox)
 	{
+		// The exact current resolution (PopulateResolutionOptions makes sure it is in the list): matching to a "closest standard" size would change an ultrawide or 16:10 display on the next Apply.
 		const FIntPoint CurrentRes = Settings->GetScreenResolution();
-		FString ResString;
+		ResolutionComboBox->SetSelectedOption(FString::Printf(TEXT("%d x %d"), CurrentRes.X, CurrentRes.Y));
+	}
 
-		// Match to closest standard resolution
-		if (CurrentRes.Y >= 2160)
+	if (QualityComboBox)
+	{
+		const int32 Level = Settings->GetGraphicsQualityLevel();
+		if (Level < 0)
 		{
-			ResString = TEXT("4K (3840x2160)");
-		}
-		else if (CurrentRes.Y >= 1440)
-		{
-			ResString = TEXT("1440p (2560x1440)");
-		}
-		else if (CurrentRes.Y >= 1080)
-		{
-			ResString = TEXT("1080p (1920x1080)");
+			const FString Custom = UMOGameSettings::GraphicsQualityLevelName(-1).ToString();
+			if (QualityComboBox->FindOptionIndex(Custom) == INDEX_NONE)
+			{
+				QualityComboBox->AddOption(Custom);
+			}
+			QualityComboBox->SetSelectedOption(Custom);
 		}
 		else
 		{
-			ResString = TEXT("720p (1280x720)");
+			QualityComboBox->SetSelectedOption(UMOGameSettings::GraphicsQualityLevelName(Level).ToString());
 		}
-
-		ResolutionComboBox->SetSelectedOption(ResString);
+	}
+	if (VSyncCheckbox)
+	{
+		VSyncCheckbox->SetIsChecked(Settings->IsVSyncEnabled());
 	}
 
 	if (FullscreenCheckbox)
@@ -334,6 +339,20 @@ void UMOOptionsPanel::ReadUIToSettings()
 		Settings->SetFullscreenMode(WindowMode);
 	}
 
+	if (QualityComboBox)
+	{
+		const int32 Picked = QualityComboBox->GetSelectedIndex();
+		// "Custom" (past the four levels) is not a choice: leave the mixed groups as they are.
+		if (Picked >= 0 && Picked <= UMOGameSettings::MaxGraphicsQualityLevel && Picked != Settings->GetGraphicsQualityLevel())
+		{
+			Settings->SetGraphicsQualityLevel(Picked);
+		}
+	}
+	if (VSyncCheckbox)
+	{
+		Settings->SetVSyncEnabled(VSyncCheckbox->IsChecked());
+	}
+
 	if (FOVSlider)
 	{
 		// Convert 0-1 slider to 60-120 FOV
@@ -422,6 +441,7 @@ void UMOOptionsPanel::ResetToDefaults()
 	if (Settings)
 	{
 		Settings->SetToDefaults();
+		Settings->EnsureGraphicsQualityChosen();   // a real machine re-detects its quality level (no-op in the editor)
 		RefreshUIFromSettings();
 		UE_LOG(LogMOFramework, Log, TEXT("[MOOptionsPanel] Settings reset to defaults"));
 	}
@@ -527,39 +547,64 @@ void UMOOptionsPanel::PopulateResolutionOptions()
 
 	ResolutionComboBox->ClearOptions();
 
-	// Standard 16:9 resolutions
-	ResolutionComboBox->AddOption(TEXT("720p (1280x720)"));
-	ResolutionComboBox->AddOption(TEXT("1080p (1920x1080)"));
-	ResolutionComboBox->AddOption(TEXT("1440p (2560x1440)"));
-	ResolutionComboBox->AddOption(TEXT("4K (3840x2160)"));
-
-	// Default to 1080p if nothing selected
-	if (ResolutionComboBox->GetSelectedOption().IsEmpty())
+	// What the display actually supports (ultrawide, 16:10, 1.5K ... included), smallest first; the current resolution is always in the list so Apply never silently changes it.
+	TArray<FIntPoint> Resolutions;
+	UKismetSystemLibrary::GetSupportedFullscreenResolutions(Resolutions);
+	Resolutions.RemoveAll([](const FIntPoint& R) { return R.X < 1024 || R.Y < 576; });
+	if (const UMOGameSettings* Settings = UMOGameSettings::GetMOGameSettings())
 	{
-		ResolutionComboBox->SetSelectedOption(TEXT("1080p (1920x1080)"));
+		Resolutions.AddUnique(Settings->GetScreenResolution());
+	}
+	if (Resolutions.Num() == 0)
+	{
+		Resolutions = { FIntPoint(1280, 720), FIntPoint(1920, 1080), FIntPoint(2560, 1440), FIntPoint(3840, 2160) };
+	}
+	Resolutions.Sort([](const FIntPoint& A, const FIntPoint& B) { return A.X != B.X ? A.X < B.X : A.Y < B.Y; });
+	for (const FIntPoint& R : Resolutions)
+	{
+		ResolutionComboBox->AddOption(FString::Printf(TEXT("%d x %d"), R.X, R.Y));
+	}
+}
+
+void UMOOptionsPanel::PopulateQualityOptions()
+{
+	if (!QualityComboBox)
+	{
+		return;
+	}
+	QualityComboBox->ClearOptions();
+	for (int32 Level = 0; Level <= UMOGameSettings::MaxGraphicsQualityLevel; ++Level)
+	{
+		QualityComboBox->AddOption(UMOGameSettings::GraphicsQualityLevelName(Level).ToString());
 	}
 }
 
 FIntPoint UMOOptionsPanel::GetResolutionFromString(const FString& ResString) const
 {
-	if (ResString.Contains(TEXT("720p")))
-	{
-		return FIntPoint(1280, 720);
-	}
-	else if (ResString.Contains(TEXT("1080p")))
-	{
-		return FIntPoint(1920, 1080);
-	}
-	else if (ResString.Contains(TEXT("1440p")))
-	{
-		return FIntPoint(2560, 1440);
-	}
-	else if (ResString.Contains(TEXT("4K")))
-	{
-		return FIntPoint(3840, 2160);
-	}
+	return ParseResolution(ResString);
+}
 
-	// Default to 1080p
+FIntPoint UMOOptionsPanel::ParseResolution(const FString& ResString)
+{
+	// "1920 x 1080". (An older layout labelled the choices "1080p (1920x1080)": the numbers are still the last two integers in the text.)
+	TArray<int32> Numbers;
+	FString Digits;
+	for (const TCHAR C : ResString + TEXT(" "))
+	{
+		if (FChar::IsDigit(C))
+		{
+			Digits.AppendChar(C);
+		}
+		else if (!Digits.IsEmpty())
+		{
+			Numbers.Add(FCString::Atoi(*Digits));
+			Digits.Reset();
+		}
+	}
+	if (Numbers.Num() >= 2 && Numbers[Numbers.Num() - 2] >= 640 && Numbers.Last() >= 360)
+	{
+		return FIntPoint(Numbers[Numbers.Num() - 2], Numbers.Last());
+	}
 	return FIntPoint(1920, 1080);
 }
 

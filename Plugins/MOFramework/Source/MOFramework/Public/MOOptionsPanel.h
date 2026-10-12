@@ -98,6 +98,9 @@ public:
 	UPROPERTY(BlueprintAssignable, Category="MO|UI|Options")
 	FMOOptionsPanelRequestCloseSignature OnRequestClose;
 
+	/** "1920 x 1080" (or any text whose last two integers are the size, e.g. the old "1080p (1920x1080)") -> the resolution; 1920 x 1080 when the text holds no plausible size. */
+	static FIntPoint ParseResolution(const FString& ResString);
+
 protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
@@ -131,6 +134,7 @@ private:
 
 	void UpdateVolumeLabel(UTextBlock* Label, float Value);
 	void PopulateResolutionOptions();
+	void PopulateQualityOptions();
 	FIntPoint GetResolutionFromString(const FString& ResString) const;
 
 private:
@@ -189,6 +193,14 @@ private:
 	/** Enable motion blur. */
 	UPROPERTY(meta=(BindWidgetOptional))
 	TObjectPtr<UCheckBox> MotionBlurCheckbox;
+
+	/** Overall graphics quality: Low / Medium / High / Epic (a "Custom" entry shows while the groups were mixed by hand). */
+	UPROPERTY(meta=(BindWidgetOptional))
+	TObjectPtr<UComboBoxString> QualityComboBox;
+
+	/** Vertical sync. */
+	UPROPERTY(meta=(BindWidgetOptional))
+	TObjectPtr<UCheckBox> VSyncCheckbox;
 
 	// ============================================================
 	// AUDIO OPTIONS

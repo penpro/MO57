@@ -570,7 +570,7 @@ bool UMOAudioSubsystem::PlayOneShot2D(FName AudioId)
 	return true;
 }
 
-bool UMOAudioSubsystem::PlayOneShotAtLocation(const UObject* WorldContextObject, FName AudioId, FVector Location)
+bool UMOAudioSubsystem::PlayOneShotAtLocation(const UObject* WorldContextObject, FName AudioId, FVector Location, float VolumeScale, float PitchScale)
 {
 	const FMOAudioBankRow* Row = AudioIdLookup.FindRef(AudioId);
 	if (!Row)
@@ -587,7 +587,7 @@ bool UMOAudioSubsystem::PlayOneShotAtLocation(const UObject* WorldContextObject,
 	}
 
 	UGameplayStatics::PlaySoundAtLocation(WorldContextObject, Sound, Location,
-		Row->VolumeMultiplier, Row->PitchMultiplier);
+		Row->VolumeMultiplier * VolumeScale, Row->PitchMultiplier * PitchScale);
 	return true;
 }
 

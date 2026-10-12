@@ -25,6 +25,7 @@
 #include "MOAnatomyComponent.h"
 #include "MOAdrenalineComponent.h"
 #include "MORespirationComponent.h"
+#include "MOFootstepComponent.h"
 #include "MOAudioSubsystem.h"
 #include "MOCraftingQueueComponent.h"
 #include "MORecipeDiscoveryComponent.h"
@@ -112,6 +113,7 @@ AMOCharacter::AMOCharacter(const FObjectInitializer& ObjectInitializer)
 	AnatomyComponent = CreateDefaultSubobject<UMOAnatomyComponent>(TEXT("AnatomyComponent"));
 	AdrenalineComponent = CreateDefaultSubobject<UMOAdrenalineComponent>(TEXT("AdrenalineComponent"));
 	RespirationComponent = CreateDefaultSubobject<UMORespirationComponent>(TEXT("RespirationComponent"));
+	FootstepComponent = CreateDefaultSubobject<UMOFootstepComponent>(TEXT("FootstepComponent"));
 
 	// Swim animations (retargeted Oceanology set, Content/Characters/Swim): the default for every MO pawn that has a MetaHuman-skeleton body.
 	SwimTreadAnim = TSoftObjectPtr<UAnimSequence>(FSoftObjectPath(TEXT("/MOFramework/Characters/Swim/Swim_Surface_Idle_MH.Swim_Surface_Idle_MH")));

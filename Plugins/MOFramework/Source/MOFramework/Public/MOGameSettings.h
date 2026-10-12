@@ -91,6 +91,13 @@ public:
 	UPROPERTY(Config, BlueprintReadWrite, Category="Graphics")
 	bool bEnableMotionBlur = true;
 
+	/**
+	 * True once a graphics quality level has been picked: by the first-run hardware benchmark or by the player. Until then EnsureGraphicsQualityChosen() measures the machine once.
+	 * The level itself lives in the engine's scalability groups (GameUserSettings.ini [ScalabilityGroups]).
+	 */
+	UPROPERTY(Config, BlueprintReadWrite, Category="Graphics")
+	bool bGraphicsQualityChosen = false;
+
 	// ============================================================================
 	// AUDIO OPTIONS
 	// ============================================================================
@@ -259,6 +266,31 @@ public:
 	/** Reset the intro playback flag so the intro plays again on next launch. */
 	UFUNCTION(BlueprintCallable, Category="MO|Settings")
 	void ResetIntroPlayback();
+
+	// ----- Graphics quality: the engine's scalability groups (shadows, GI, reflections, post, textures, effects, foliage, shading, view distance) behind one overall level -----
+
+	static constexpr int32 MaxGraphicsQualityLevel = 3;   // 0 Low, 1 Medium, 2 High, 3 Epic
+
+	/** "Low" .. "Epic"; "Custom" for -1 (the groups were mixed by hand, e.g. from the console). */
+	UFUNCTION(BlueprintPure, Category="MO|Settings")
+	static FText GraphicsQualityLevelName(int32 Level);
+
+	/** The overall level the groups add up to (0 Low .. 3 Epic), or -1 for a custom mix. */
+	UFUNCTION(BlueprintPure, Category="MO|Settings")
+	int32 GetGraphicsQualityLevel() const { return GetOverallScalabilityLevel(); }
+
+	/** Set all the scalability groups to one level. Takes effect with the next ApplySettings(); marks the quality as chosen. */
+	UFUNCTION(BlueprintCallable, Category="MO|Settings")
+	void SetGraphicsQualityLevel(int32 Level);
+
+	/**
+	 * First run on a real machine: benchmark the hardware once, apply the level it suggests, remember. Does nothing afterwards, in the editor, on a dedicated server, for automated runs
+	 * (-unattended) or with -NoQualityBenchmark (perf measurements and test harnesses pin their own settings).
+	 */
+	void EnsureGraphicsQualityChosen();
+
+	/** The decision of EnsureGraphicsQualityChosen as a pure function (the automation tests cover it). */
+	static bool ShouldRunQualityBenchmark(bool bAlreadyChosen, bool bEditor, bool bDedicatedServer, bool bUnattended, bool bSuppressedByCommandLine);
 
 protected:
 	/** Apply audio settings to sound mix. */

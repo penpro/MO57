@@ -192,6 +192,13 @@ struct MOFRAMEWORKCORE_API FMOBiomeDefinitionRow : public FTableRowBase
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Biome|Terrain", meta=(AllowedClasses="/Script/CoreUObject.Object"))
 	TSoftObjectPtr<UObject> GroundSurfaceType;
 
+	/**
+	 * What walking on this biome's ground sounds like: the middle of the sound-bank ids "SFX.Footsteps.<Set>1" / "<Set>2" (GrassTread, LeafCrunch, MossPad, MuddyStep, SandTrail, RockScuff, StoneStep, ...).
+	 * A new surface is new bank rows plus this value, never code. Not part of the world hash: it shapes no terrain. See UMOFootstepComponent.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Biome|Terrain")
+	FName FootstepSet = FName(TEXT("GrassTread"));
+
 	/** Density cross-fade width at biome borders, in UU. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Biome|Bands", meta=(ClampMin="0.0"))
 	float EdgeBlendWidth = 5000.0f;

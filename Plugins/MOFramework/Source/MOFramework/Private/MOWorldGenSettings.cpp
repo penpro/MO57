@@ -39,6 +39,7 @@ FMOWorldGenParamsRef UMOWorldGenSettings::BuildParams()
 		B.ReliefScale = Row->ReliefScale;
 		B.MountainScale = Row->MountainScale;
 		B.GroundSurfaceType = Row->GroundSurfaceType.ToSoftObjectPath();
+		B.FootstepSet = Row->FootstepSet.IsNone() ? FName(TEXT("GrassTread")) : Row->FootstepSet;
 	}
 
 	Params->Finalize();
