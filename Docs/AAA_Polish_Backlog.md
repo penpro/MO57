@@ -66,9 +66,9 @@ design forks are logged under "Forks", not built blind.
 - [ ] A naive-player first-ten-minutes pass (main menu -> new game -> tutorial -> first craft) with screenshots of every screen; fix every rough edge found.
 - [ ] Audio pass: footsteps done for humans (see Done); open: creature footsteps (hooves / paws: the skeleton has no ball_l / ball_r), structure / prop surfaces (stone, rock, metal: needs physical materials or
   the interface on the actors; props on top of terrain read as wood today), rain / snow overlays on the steps, interior / exterior mix, UDW outdoor mix failing in `RecursiveApplyAdjuster` (silenced via LogAudio=Warning).
-- [ ] HUD review of the packaged build (`Tools/win_input.ps1 -Action shot`, PrintWindow: works while another window covers the game, never moves the cursor): the quest tracker's task text runs past its panel edge ("Inspect a tree
-  to learn about its resources"); a very large, very faint "Possession Menu / Press [P] ..." hint sits in the middle of the sky for the whole start (a fading tutorial hint? at ~20 % alpha it reads as a rendering fault);
-  the new status strip is a placeholder look until icons exist. The tool REFUSES real input unless the game window is the foreground window (another application was in front when it was first used).
+- [x] HUD review of the packaged build (`Tools/win_input.ps1 -Action shot`, PrintWindow: works while another window covers the game, never moves the cursor): the tutorial banner was dark grey text with no panel
+  (read as a rendering fault on a bright sky) and the quest tracker text ran past its panel: fixed (`hud_text_fixes.py`; the tracker's progress bar was also named `ProgressBar_0`, so the C++ `ProgressBar` member was
+  never bound). The tool REFUSES real input unless the game window is the foreground window (another application was in front when it was first used: do not drive the mouse while the machine is in use).
 - [ ] **Unbound optional widgets** (`ui check` `absent` lines, features that exist in C++ with no control in the blueprint): WBP_UnifiedInventory (CloseButton, loot-nearby buttons, secondary stack-organise),
   WBP_ItemContextMenu (TransferButton, PickupButton), WBP_JournalPanel (AbandonButton, TrackButtonText), WBP_BuildingRecipeDetail (craft amount spin / slider / text, resource-source checkboxes), WBP_EquipmentPanel (swap
   progress bars), WBP_MOColonyPortrait (ClickButton, NameLabel, ActivityIndicator), WBP_HUDRoot (WindIndicator: needs an authored up-pointing arrow texture). For each: wire it or delete the dead C++ member. Also
