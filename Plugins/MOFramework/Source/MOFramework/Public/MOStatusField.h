@@ -124,6 +124,14 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MO|Status|Colors")
 	float CriticalThreshold = 0.25f;
 
+	/**
+	 * Take the three colours below from the design tokens (color.severity.ok / warning / critical) instead of the per-instance values: ONE palette for every status row, and it follows the
+	 * colour-blind / high-contrast token swaps. The engine's pure green / yellow / red are what these defaults used to be, which is why every row read as lime on near-black. Turn off to
+	 * author a row's own colours.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MO|Status|Colors")
+	bool bUseSeverityTokens = true;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MO|Status|Colors")
 	FLinearColor HealthyColor = FLinearColor::Green;
 

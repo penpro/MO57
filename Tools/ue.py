@@ -244,9 +244,10 @@ def _curl(body, sid=None, headers=False, timeout=25):
             "-H", "Accept: application/json, text/event-stream"]
     if sid:
         cmd += ["-H", "Mcp-Session-Id: " + sid]
-    cmd += ["-d", body]
+    # The body goes over stdin: a big DataTable row (a 56-species biome) overran the Windows command-line limit (WinError 206) as a -d argument.
+    cmd += ["-d", "@-"]
     try:
-        return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout + 5).stdout
+        return subprocess.run(cmd, input=body, capture_output=True, text=True, encoding="utf-8", timeout=timeout + 5).stdout
     except subprocess.TimeoutExpired:
         return ""
 
@@ -989,9 +990,10 @@ def _unmsys(p):
 
 def _ui_run(args, timeout=120):
     """Run mo_ui.cli(args) inside the editor; returns the output lines (exits 2 if the bridge is down)."""
-    code = ("import importlib, mo_ui_contract, mo_ui\n"
+    code = ("import importlib, mo_ui_contract, mo_ui, kit_lib\n"
             "importlib.reload(mo_ui_contract)\n"
             "importlib.reload(mo_ui)\n"
+            "importlib.reload(kit_lib)   # specs import it: a stale copy made `K.place` 'missing' after an edit\n"
             f"out(mo_ui.cli({json.dumps(json.dumps(args))}))\n")
     ok, lines, _ = bridge_run([_wrap_py(code)], timeout=timeout, want_log=False)
     if not ok:

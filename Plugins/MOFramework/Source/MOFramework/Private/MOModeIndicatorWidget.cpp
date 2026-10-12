@@ -60,7 +60,7 @@ void UMOModeIndicatorWidget::UpdateDisplay_Implementation()
 {
 	if (ModeText)
 	{
-		ModeText->SetText(GetModeDisplayName(CurrentMode));
+		ModeText->SetText(GetModeDisplayName(CurrentMode).ToUpper());   // kit label type: upper case
 		ModeText->SetColorAndOpacity(FSlateColor(GetModeColor(CurrentMode)));
 	}
 }

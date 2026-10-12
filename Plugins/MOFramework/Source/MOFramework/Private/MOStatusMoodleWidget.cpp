@@ -15,6 +15,15 @@ void UMOStatusMoodleWidget::NativeConstruct()
 	ApplyMoodleToWidgets();
 }
 
+void UMOStatusMoodleWidget::SetExpanded(bool bInExpanded)
+{
+	if (bExpanded != bInExpanded)
+	{
+		bExpanded = bInExpanded;
+		ApplyMoodleToWidgets();
+	}
+}
+
 void UMOStatusMoodleWidget::SetMoodle(const FMOStatusMoodle& InMoodle)
 {
 	CurrentMoodle = InMoodle;
@@ -38,6 +47,16 @@ void UMOStatusMoodleWidget::ApplyMoodleToWidgets()
 	{
 		SeverityShapeImage->SetBrushFromTexture(UMOUITokens::Icon(ShapeIconForSeverity(CurrentMoodle.Severity)), /*bMatchSize*/ false);
 		SeverityShapeImage->SetColorAndOpacity(Tint);
+		SeverityShapeImage->SetVisibility(bExpanded ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+	}
+	if (MoodlePlate)
+	{
+		FLinearColor PlateColor = UMOUITokens::Color("color.hud.plate");
+		if (!bExpanded)
+		{
+			PlateColor.A *= CompactPlateOpacity / FMath::Max(0.01f, UMOUITokens::Number("opacity.hud.plate", 0.82f));
+		}
+		MoodlePlate->SetColorAndOpacity(PlateColor);
 	}
 	if (CriticalBorder)
 	{
@@ -54,13 +73,13 @@ void UMOStatusMoodleWidget::ApplyMoodleToWidgets()
 		LabelText->SetText(CurrentMoodle.Label);
 		// Collapse the label widget when there's no text rather than render an
 		// empty slot — keeps the strip tight when most moodles are icon-only.
-		LabelText->SetVisibility(CurrentMoodle.Label.IsEmpty()
+		LabelText->SetVisibility(!bExpanded || CurrentMoodle.Label.IsEmpty()
 			? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible);
 	}
 
 	if (StackText)
 	{
-		if (CurrentMoodle.Stack > 0)
+		if (bExpanded && CurrentMoodle.Stack > 0)
 		{
 			StackText->SetText(FText::Format(NSLOCTEXT("MO", "MoodleStackFormat", "x{0}"),
 				FText::AsNumber(CurrentMoodle.Stack)));

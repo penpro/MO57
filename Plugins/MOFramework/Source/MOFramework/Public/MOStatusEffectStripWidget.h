@@ -43,7 +43,9 @@
 #include "MOStatusMoodleTypes.h"
 #include "MOStatusEffectStripWidget.generated.h"
 
-class UHorizontalBox;
+class UVerticalBox;
+class UTextBlock;
+class UWidget;
 class UMOStatusMoodleWidget;
 
 UCLASS()
@@ -64,6 +66,15 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|HUD|StatusStrip")
 	void RemoveMoodle(FName MoodleId);
 
+	/**
+	 * Compact (icon only, default) or expanded (labels): applies to every entry, present and future. The HUD root expands it while the player status panel is open.
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|HUD|StatusStrip")
+	void SetExpanded(bool bInExpanded);
+
+	UFUNCTION(BlueprintPure, Category="MO|HUD|StatusStrip")
+	bool IsExpanded() const { return bExpanded; }
+
 	/** Drop every moodle. */
 	UFUNCTION(BlueprintCallable, Category="MO|HUD|StatusStrip")
 	void ClearAllMoodles();
@@ -80,9 +91,24 @@ protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
 
-	/** Required horizontal box that hosts every moodle entry. */
+	/** Required vertical box that hosts every moodle entry (kit: a stack in the bottom-left corner, critical nearest the corner). */
 	UPROPERTY(BlueprintReadOnly, meta=(BindWidget))
-	TObjectPtr<UHorizontalBox> MoodleBox;
+	TObjectPtr<UVerticalBox> MoodleBox;
+
+	/** Optional "+N more" pill (kit: more than 6 moodles shows the 6 worst and this pill). Put it in the box in the WBP; the strip places it last. */
+	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
+	TObjectPtr<UWidget> OverflowPill;
+
+	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
+	TObjectPtr<UTextBlock> OverflowText;
+
+	/** How many moodles show before the rest fold into the "+N more" pill. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="MO|HUD|StatusStrip")
+	int32 MaxVisibleMoodles = 6;
+
+	/** The first (worst) moodle sits nearest the corner and the list grows UPWARD: the box is filled in reverse. Off = top-down. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="MO|HUD|StatusStrip")
+	bool bStackUpward = true;
 
 	/**
 	 * Subclass for each entry. Set this in the WBP defaults to WBP_StatusMoodle.
@@ -104,4 +130,9 @@ private:
 	TMap<FName, TObjectPtr<UMOStatusMoodleWidget>> ActiveMoodles;
 
 	void UpdateVisibility();
+
+	bool bExpanded = false;
+
+	/** Sort by severity (Critical, Warning, Info, Buff, then Id), keep the first MaxVisibleMoodles, fold the rest into the overflow pill, and lay them out in the box. */
+	void RebuildOrder();
 };

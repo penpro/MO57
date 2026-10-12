@@ -230,6 +230,15 @@ private:
 	/** Currently active panel index in the switcher. */
 	int32 CurrentPanelIndex = 0;
 
+	/**
+	 * Optional: the plate behind the focus panels (kit: save / load / options / bug report share one 1200x888 panel). It is shown only while a panel is open, so the menu rail
+	 * is not followed by an empty box.
+	 */
+	UPROPERTY(meta=(BindWidgetOptional))
+	TObjectPtr<UWidget> PanelShell;
+
+	void UpdatePanelShell();
+
 	/** Panel indices. */
 	static constexpr int32 PanelIndex_None = 0;
 	static constexpr int32 PanelIndex_Options = 1;

@@ -147,6 +147,15 @@ void UMOInGameMenu::NativeConstruct()
 	}
 
 	CurrentPanelIndex = PanelIndex_None;
+	UpdatePanelShell();
+}
+
+void UMOInGameMenu::UpdatePanelShell()
+{
+	if (PanelShell)
+	{
+		PanelShell->SetVisibility(CurrentPanelIndex == PanelIndex_None ? ESlateVisibility::Collapsed : ESlateVisibility::SelfHitTestInvisible);
+	}
 }
 
 UWidget* UMOInGameMenu::NativeGetDesiredFocusTarget() const
@@ -328,6 +337,7 @@ void UMOInGameMenu::SwitchToPanel(int32 PanelIndex)
 		FocusWindowSwitcher->SetActiveWidgetIndex(PanelIndex);
 	}
 	CurrentPanelIndex = PanelIndex;
+	UpdatePanelShell();
 }
 
 void UMOInGameMenu::HandleOptionsClicked()

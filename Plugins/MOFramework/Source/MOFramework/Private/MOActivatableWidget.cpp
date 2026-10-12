@@ -72,6 +72,17 @@ FReply UMOActivatableWidget::NativeOnPreviewKeyDown(const FGeometry& InGeometry,
 			return FReply::Handled();
 		}
 	}
+	else if (!InKeyEvent.IsRepeat() && IsUISurface() && !IsKeyboardFocusInEditableText(InKeyEvent))
+	{
+		// The key that OPENED a menu closes it again (I, P, K, C, J, Y, B). Menu input mode blocks game input, so the controller's toggle handlers never see it twice: ask it here.
+		if (AMOPlayerController* MOPC = Cast<AMOPlayerController>(GetOwningPlayer()))
+		{
+			if (MOPC->TryCloseMenuForToggleKey(PressedKey))
+			{
+				return FReply::Handled();
+			}
+		}
+	}
 	return Super::NativeOnPreviewKeyDown(InGeometry, InKeyEvent);
 }
 
@@ -133,6 +144,12 @@ UWidget* UMOActivatableWidget::NativeGetDesiredFocusTarget() const
 	else
 	{
 		Target = Super::NativeGetDesiredFocusTarget();
+	}
+	if (!Target && IsFocusable())
+	{
+		// A menu with no focusable child still must hold keyboard focus ITSELF: with focus left on the viewport, Menu input mode blocks the game's keys AND no widget sees them,
+		// so Tab / Esc / the toggle key do nothing until the player clicks into the window.
+		Target = const_cast<UMOActivatableWidget*>(this);
 	}
 
 	MOUI_LOG(this, "Focus", "GetDesiredFocusTarget on %s -> %s",

@@ -1,5 +1,6 @@
 #include "MOStatusField.h"
 #include "MOFramework.h"
+#include "MOUITokens.h"
 #include "Components/TextBlock.h"
 #include "Components/ProgressBar.h"
 #include "Components/Image.h"
@@ -64,7 +65,13 @@ void UMOStatusField::SetStatusColor(FLinearColor Color)
 
 void UMOStatusField::SetStatusFromNormalizedValue(float NormalizedValue)
 {
-	FLinearColor Color = HealthyColor;
+	// Authored colours, unless the row follows the design tokens (the default).
+	const bool bTokens = bUseSeverityTokens && UMOUITokens::IsLoaded();
+	const FLinearColor Healthy = bTokens ? UMOUITokens::Color("color.severity.ok") : HealthyColor;
+	const FLinearColor Warning = bTokens ? UMOUITokens::Color("color.severity.warning") : WarningColor;
+	const FLinearColor Critical = bTokens ? UMOUITokens::Color("color.severity.critical") : CriticalColor;
+
+	FLinearColor Color = Healthy;
 
 	if (bInvertThresholds)
 	{
@@ -72,11 +79,11 @@ void UMOStatusField::SetStatusFromNormalizedValue(float NormalizedValue)
 		// Higher values are worse (e.g., infection severity)
 		if (NormalizedValue >= (1.0f - CriticalThreshold))
 		{
-			Color = CriticalColor;
+			Color = Critical;
 		}
 		else if (NormalizedValue >= (1.0f - WarningThreshold))
 		{
-			Color = WarningColor;
+			Color = Warning;
 		}
 	}
 	else
@@ -84,11 +91,11 @@ void UMOStatusField::SetStatusFromNormalizedValue(float NormalizedValue)
 		// Lower values are worse (e.g., health, hunger)
 		if (NormalizedValue <= CriticalThreshold)
 		{
-			Color = CriticalColor;
+			Color = Critical;
 		}
 		else if (NormalizedValue <= WarningThreshold)
 		{
-			Color = WarningColor;
+			Color = Warning;
 		}
 	}
 

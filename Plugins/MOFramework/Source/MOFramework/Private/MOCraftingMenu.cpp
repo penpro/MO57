@@ -456,6 +456,13 @@ void UMOCraftingMenu::UpdateStationDisplay()
 		StationNameText->SetText(GetStationDisplayName());
 	}
 
+	// The "Fuel" caption (a plain label in the WBP, found by name) goes with the fuel readout: hand crafting has no fuel, so neither shows.
+	if (UWidget* FuelLabel = GetWidgetFromName(TEXT("FuelLabel")))
+	{
+		const AMOCraftingStationActor* LabelStation = ActiveStationActor.Get();
+		FuelLabel->SetVisibility(LabelStation && LabelStation->bRequiresFuel ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed);
+	}
+
 	// Update fuel time
 	if (FuelTimeText)
 	{

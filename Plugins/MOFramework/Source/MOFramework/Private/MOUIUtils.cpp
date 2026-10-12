@@ -1,4 +1,5 @@
 #include "MOUIUtils.h"
+#include "MOUITokens.h"
 #include "MORecipeDefinitionRow.h"
 #include "MOItemDatabaseSettings.h"
 #include "Components/TextBlock.h"
@@ -180,19 +181,18 @@ UTextBlock* UMOUIUtils::CreateSimpleTextWidget(UObject* Outer, const FText& Text
 	TextWidget->SetText(Text);
 	TextWidget->SetAutoWrapText(true);
 
-	// Set font size
-	FSlateFontInfo FontInfo = TextWidget->GetFont();
-	FontInfo.Size = FontSize;
-	TextWidget->SetFont(FontInfo);
-
-	// Set color based on whether we have enough
-	if (bHasEnough)
+	if (UMOUITokens::IsLoaded())
 	{
-		TextWidget->SetColorAndOpacity(FSlateColor(ColorAvailable));
+		// Kit look: the body face; an ingredient we have is the ok colour, one we lack is the critical colour in the STRONG face (colour is never the only cue).
+		TextWidget->SetFont(UMOUITokens::Font(bHasEnough ? FName(TEXT("body")) : FName(TEXT("body.strong"))));
+		TextWidget->SetColorAndOpacity(UMOUITokens::SlateColor(bHasEnough ? FName(TEXT("color.severity.ok")) : FName(TEXT("color.severity.critical"))));
 	}
 	else
 	{
-		TextWidget->SetColorAndOpacity(FSlateColor(ColorInsufficient));
+		FSlateFontInfo FontInfo = TextWidget->GetFont();
+		FontInfo.Size = FontSize;
+		TextWidget->SetFont(FontInfo);
+		TextWidget->SetColorAndOpacity(FSlateColor(bHasEnough ? ColorAvailable : ColorInsufficient));
 	}
 
 	return TextWidget;

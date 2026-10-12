@@ -8,6 +8,7 @@ Left third sits on a sky-coloured band (HUD text must read over bright sky and s
 import kit_lib as K
 
 C = []   # canvas children
+FILL_ALL = K.fill_slot()
 RECT = K.slot_rect
 
 
@@ -89,6 +90,27 @@ for i, n in enumerate(icons):
     if n.startswith("sev_"):
         tint = {"sev_ok": "color.severity.ok", "sev_notice": "color.severity.notice", "sev_warning": "color.severity.warning", "sev_critical": "color.severity.critical", "sev_info": "color.severity.info"}[n]
     add(K.icon_node("Ic_%s" % n, "ic_" + n, tint, 40, slot=RECT(1300 + (i % 12) * 52, 52 + (i // 12) * 52, 40, 40)))
+
+# ---- section: tabs, rows, native controls
+add(K.text("HdrCtl", "label", "TABS / ROWS / CONTROLS", "color.text.secondary", slot=RECT(40, 720, 560, 22)))
+for i, (lbl, sel) in enumerate((("Skills", True), ("Knowledge", False), ("Quests", False))):
+    add({"type": "MOButton", "name": "Tab%d" % i, "label": lbl, "props": {"style": K.btn_style("Tab"), "selectable": True}, "slot": RECT(40 + i * 150, 752, 140, 48)})
+for i, lbl in enumerate(("Row  Make Splint", "Row  Make Bandage")):
+    add({"type": "MOButton", "name": "RowBtn%d" % i, "label": lbl, "props": {"style": K.btn_style("Row")}, "slot": RECT(40, 816 + i * 52, 420, 48)})
+add(K.checkbox("ChkOff", slot=RECT(500, 820, 24, 24)))
+add(K.checkbox("ChkOn", slot=RECT(540, 820, 24, 24), checked_state="Checked"))
+add(K.checkbox("TglOff", toggle=True, slot=RECT(500, 870, 52, 28)))
+add(K.checkbox("TglOn", toggle=True, slot=RECT(570, 870, 52, 28), checked_state="Checked"))
+add(K.slider("Sld", slot=RECT(500, 920, 260, 28), value=0.6))
+add(K.text_input("InputBox", "Type here", slot=RECT(500, 960, 300, 48)))
+add(K.text_input("InputMulti", "Details", multiline=True, slot=RECT(40, 930, 420, 90)))
+
+# ---- diagnosis: how a baked 9-slice behaves as an Image / Border background
+add({"type": "Image", "name": "DiagImage", "props": {"brush": K.baked_brush("T_Row_normal")}, "slot": RECT(1000, 720, 300, 90)})
+add({"type": "Border", "name": "DiagBorder", "props": {"background": K.baked_brush("T_Row_normal")}, "slot": RECT(1330, 720, 300, 90)})
+add({"type": "SizeBox", "name": "DiagBox", "height": 90, "slot": RECT(1000, 830, 300, 90), "children": [{"type": "Overlay", "name": "DiagOv", "children": [
+    {"type": "Image", "name": "DiagImage2", "props": {"brush": K.baked_brush("T_Row_normal")}, "slot": FILL_ALL}]}]})
+add({"type": "/MOFramework/UI/WBP_MOSaveSlot", "name": "DiagSlot", "slot": RECT(1000, 940, 800, 120)})
 
 SPECS = [{
     "asset": "/MOFramework/UI/Kit/WBP_KitGallery",

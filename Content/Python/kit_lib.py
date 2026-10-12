@@ -15,6 +15,8 @@ KIT_UI = "/MOFramework/UI/Kit"
 
 TOKENS = json.load(open(os.path.join(KIT, "tokens.json"), encoding="utf-8"))
 PIECES = json.load(open(os.path.join(KIT, "nineslice", "manifest.json"), encoding="utf-8"))["pieces"]
+# baked composites (Tools/kit_bake.py writes the manifest): piece -> {size (2x px), margin (UMG 0..1), draw, folder}
+BAKED = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "kit_baked_manifest.json"), encoding="utf-8"))
 
 # font faces: `font.face.<Family>.<Weight>` rows of DT_UITokens (kit_import.py writes them from this dict). STAND-INS until the kit fonts are imported (they need a yes to download).
 FACES = {
@@ -115,6 +117,15 @@ def brush_9(piece, tint=None, alpha=None):
     return b
 
 
+def baked_brush(piece, tint=None):
+    """FSlateBrush property dict for a baked piece (a button / row / tab state, an input well, a check box, a toggle, a slider part)."""
+    b = BAKED[piece]
+    d = {"resource_object": "%s/%s/%s" % (KIT_UI, b["folder"], piece), "draw_as": b["draw"], "margin": b["margin"], "image_size": {"x": b["size"][0] / 2.0, "y": b["size"][1] / 2.0}}
+    if tint is not None:
+        d["tint_color"] = {"specified_color": color(tint)}
+    return d
+
+
 def brush_icon(icon, tint=None, size=24):
     """FSlateBrush for a kit icon (`ic_moodle_cold`): the white glyph, tinted by a token."""
     b = {"resource_object": "%s/Icons/T_%s" % (KIT_UI, icon), "draw_as": "Image", "image_size": {"x": float(size), "y": float(size)}}
@@ -124,15 +135,15 @@ def brush_icon(icon, tint=None, size=24):
 
 
 # ------------------------------------------------------------------------------------------------ spec node builders
-def text(name, role, value, tint="color.text.primary", justification=None, wrap=False, slot=None, var=None, **props):
-    """A TextBlock node set up from a type token."""
+def text(name, role, value, tint="color.text.primary", justification=None, wrap=False, slot=None, var=None, kind="TextBlock", **props):
+    """A TextBlock (or kind="CommonTextBlock") node set up from a type token."""
     p = {"font": font(role), "color_and_opacity": {"specified_color": color(tint)}}
     if justification:
         p["justification"] = justification
     if wrap:
         p["auto_wrap_text"] = True
     p.update(props)
-    node = {"type": "TextBlock", "name": name, "text": value, "props": p}
+    node = {"type": kind, "name": name, "text": value, "props": p}
     if slot:
         node["slot"] = slot
     if var is not None:
@@ -157,6 +168,42 @@ def icon_node(name, icon, tint="color.text.primary", size=24, slot=None, var=Non
         node["slot"] = slot
     if var is not None:
         node["var"] = var
+    return node
+
+
+_ANCHORS = {"Left": 0.0, "Center": 0.5, "Right": 1.0, "Top": 0.0, "Bottom": 1.0}
+
+
+def place(x, y, w, h, anchor="TopLeft", auto_height=False):
+    """Canvas slot for a kit rect (1920x1080 coordinates) with the kit's anchor name (TopLeft, TopCenter, TopRight, Left, Center, Right, BottomLeft, BottomCenter, BottomRight).
+    Point anchor + alignment, so the widget keeps its margin to that edge at any resolution (the canvas scales with DPI)."""
+    v = "Top" if anchor.startswith("Top") else "Bottom" if anchor.startswith("Bottom") else "Center"
+    hz = "Left" if anchor.endswith("Left") else "Right" if anchor.endswith("Right") else "Center"
+    ax, ay = _ANCHORS[hz], _ANCHORS[v]
+    ox = x + w * ax - 1920.0 * ax
+    oy = y + h * ay - 1080.0 * ay
+    return slot_anchored((ax, ay), (ax, ay), left=ox, top=oy, right=w, bottom=h, align=(ax, ay), auto_size=auto_height)
+
+
+def solid(name, token, w=None, h=None, slot=None, alpha=None):
+    """A flat colour rectangle (a Border with a brush colour) of a token, optionally sized."""
+    node = {"type": "Border", "name": name, "props": {"brush_color": color(token, alpha)}}
+    if w is not None or h is not None:
+        node = {"type": "SizeBox", "name": name + "Size", **({"width": w} if w is not None else {}), **({"height": h} if h is not None else {}), "children": [node]}
+    if slot:
+        node["slot"] = slot
+    return node
+
+
+def progress_bar(name, fill_token="color.data.fill", fill_piece="progress_fill", var=True, slot=None, **props):
+    """A ProgressBar styled with the kit track + fill pieces (8 px high when wrapped in a SizeBox by the caller)."""
+    p = {"widget_style": {"background_image": brush_9("progress_track", "color.data.track"), "fill_image": brush_9(fill_piece, fill_token)}}
+    p.update(props)
+    node = {"type": "ProgressBar", "name": name, "props": p}
+    if var is not None:
+        node["var"] = var
+    if slot:
+        node["slot"] = slot
     return node
 
 
@@ -189,3 +236,161 @@ def panel(name, elev, children, w=None, h=None, slot=None, padding=None):
             sized["slot"] = node.pop("slot")
         return sized
     return node
+
+
+# ------------------------------------------------------------------------------------------------ native controls in the kit look
+def btn_style(variant):
+    """Path of a kit CommonButtonStyle class: Primary / Secondary / Tertiary / Danger [Lg], Icon, IconTertiary, Tab, Row."""
+    return "%s/Styles/BS_%s.BS_%s_C" % (KIT_UI, variant, variant)
+
+
+def button(name, label, variant="Secondary", slot=None, var=True, **props):
+    """An MOButton with a kit style. Size the slot (44 / 56 high)."""
+    p = {"style": btn_style(variant)}
+    p.update(props)
+    node = {"type": "MOButton", "name": name, "label": label, "props": p}
+    if var is not None:
+        node["var"] = var
+    if slot:
+        node["slot"] = slot
+    return node
+
+
+def checkbox(name, toggle=False, var=True, slot=None, **props):
+    """A CheckBox (24 px box, or a 52 x 28 toggle) with the baked kit images."""
+    t_ = "Tgl" if toggle else "Chk"
+    sz = (52.0, 28.0) if toggle else (24.0, 24.0)
+
+    def img(state):
+        b = baked_brush("T_%s_%s" % (t_, state))
+        b["image_size"] = {"x": sz[0], "y": sz[1]}
+        return b
+    style = {"unchecked_image": img("off"), "unchecked_hovered_image": img("off_hover"), "unchecked_pressed_image": img("off_hover"),
+             "checked_image": img("on"), "checked_hovered_image": img("on_hover"), "checked_pressed_image": img("on_hover"),
+             "undetermined_image": img("off"), "undetermined_hovered_image": img("off_hover"), "undetermined_pressed_image": img("off_hover"),
+             "background_image": {}, "padding": [0, 0, 0, 0]}
+    p = {"widget_style": style}
+    p.update(props)
+    node = {"type": "CheckBox", "name": name, "props": p}
+    if var is not None:
+        node["var"] = var
+    if slot:
+        node["slot"] = slot
+    return node
+
+
+def slider(name, var=True, slot=None, **props):
+    """A Slider: 6 px track, 20 x 28 knob (accent when hovered)."""
+    style = {"normal_bar_image": baked_brush("T_Sld_bar"), "hovered_bar_image": baked_brush("T_Sld_bar"), "disabled_bar_image": baked_brush("T_Sld_bar"),
+             "normal_thumb_image": {**baked_brush("T_Sld_thumb"), "image_size": {"x": 20.0, "y": 28.0}}, "hovered_thumb_image": {**baked_brush("T_Sld_thumb_hover"), "image_size": {"x": 20.0, "y": 28.0}},
+             "disabled_thumb_image": {**baked_brush("T_Sld_thumb"), "image_size": {"x": 20.0, "y": 28.0}}, "bar_thickness": 6.0}
+    p = {"widget_style": style, "slider_bar_color": [1, 1, 1, 1], "slider_handle_color": [1, 1, 1, 1]}
+    p.update(props)
+    node = {"type": "Slider", "name": name, "props": p}
+    if var is not None:
+        node["var"] = var
+    if slot:
+        node["slot"] = slot
+    return node
+
+
+def _input_style():
+    f = font("body")
+    return {"background_image_normal": baked_brush("T_Input_normal"), "background_image_hovered": baked_brush("T_Input_normal"), "background_image_focused": baked_brush("T_Input_focused"),
+            "background_image_read_only": baked_brush("T_Input_disabled"), "padding": [12, 8, 12, 10], "foreground_color": {"specified_color": color("color.text.primary")},
+            "focused_foreground_color": {"specified_color": color("color.text.primary")}, "read_only_foreground_color": {"specified_color": color("color.text.disabled")},
+            "text_style": {"font": f, "color_and_opacity": {"specified_color": color("color.text.primary")}}}
+
+
+def text_input(name, hint="", multiline=False, var=True, slot=None, **props):
+    """An (optionally multi-line) editable text box in the kit input look (surface.0 well, ruled bottom edge, accent when focused)."""
+    p = {"widget_style": _input_style(), "hint_text": hint}
+    p.update(props)
+    node = {"type": "MultiLineEditableTextBox" if multiline else "EditableTextBox", "name": name, "props": p}
+    if var is not None:
+        node["var"] = var
+    if slot:
+        node["slot"] = slot
+    return node
+
+
+def solid_brush(tint, alpha=None):
+    """A flat colour FSlateBrush (no texture)."""
+    return {"draw_as": "Box", "tint_color": {"specified_color": color(tint, alpha)}}
+
+
+def combo(name, var=True, slot=None, **props):
+    """A ComboBoxString in the kit input look; the dropdown rows use the kit row pieces."""
+    btn = {"normal": baked_brush("T_Input_normal"), "hovered": baked_brush("T_Input_normal"), "pressed": baked_brush("T_Input_focused"), "disabled": baked_brush("T_Input_disabled"),
+           "normal_padding": [12, 8, 12, 10], "pressed_padding": [12, 8, 12, 10]}
+    style = {"combo_button_style": {"button_style": btn, "down_arrow_image": brush_icon("ic_ui_arrow_down", "color.text.secondary", 20), "menu_border_brush": brush_9("panel_fill", "color.surface.3"),
+                                    "menu_border_padding": 4, "content_padding": [0, 0, 0, 0], "down_arrow_padding": [0, 0, 12, 0]},
+             "content_padding": [0, 0, 0, 0], "menu_row_padding": [0, 2, 0, 2]}
+    item = {"active_brush": baked_brush("T_Row_selected"), "active_hovered_brush": baked_brush("T_Row_hovered"), "inactive_brush": baked_brush("T_Row_selected"), "inactive_hovered_brush": baked_brush("T_Row_hovered"),
+            "even_row_background_brush": baked_brush("T_Row_normal"), "odd_row_background_brush": baked_brush("T_Row_normal"),
+            "even_row_background_hovered_brush": baked_brush("T_Row_hovered"), "odd_row_background_hovered_brush": baked_brush("T_Row_hovered"),
+            "text_color": {"specified_color": color("color.text.primary")}, "selected_text_color": {"specified_color": color("color.text.primary")}}
+    p = {"widget_style": style, "item_style": item, "font": font("body"), "foreground_color": {"specified_color": color("color.text.primary")}, "content_padding": [0, 0, 0, 0]}
+    p.update(props)
+    node = {"type": "ComboBoxString", "name": name, "props": p}
+    if var is not None:
+        node["var"] = var
+    if slot:
+        node["slot"] = slot
+    return node
+
+
+def spin(name, var=True, slot=None, **props):
+    """A SpinBox in the kit input look."""
+    clear = {"tint_color": {"specified_color": [0, 0, 0, 0]}}
+    style = {"background_brush": baked_brush("T_Input_normal"), "hovered_background_brush": baked_brush("T_Input_normal"), "active_background_brush": baked_brush("T_Input_focused"),
+             "active_fill_brush": clear, "hovered_fill_brush": clear, "inactive_fill_brush": clear, "text_padding": [12, 6, 12, 8]}
+    p = {"widget_style": style, "font": font("numeric"), "foreground_color": {"specified_color": color("color.text.primary")}}
+    p.update(props)
+    node = {"type": "SpinBox", "name": name, "props": p}
+    if var is not None:
+        node["var"] = var
+    if slot:
+        node["slot"] = slot
+    return node
+
+
+def scrollbar_style():
+    """FScrollBarStyle properties: a 6 px thumb that brightens on hover / drag, no track."""
+    return {"thickness": 6.0, "normal_thumb_image": solid_brush("color.border.strong"), "hovered_thumb_image": solid_brush("color.text.secondary"), "dragged_thumb_image": solid_brush("color.accent"),
+            "horizontal_background_image": solid_brush("color.surface.0", 0.0), "vertical_background_image": solid_brush("color.surface.0", 0.0),
+            "horizontal_top_slot_image": solid_brush("color.surface.0", 0.0), "horizontal_bottom_slot_image": solid_brush("color.surface.0", 0.0),
+            "vertical_top_slot_image": solid_brush("color.surface.0", 0.0), "vertical_bottom_slot_image": solid_brush("color.surface.0", 0.0)}
+
+
+def scroll_box(name, children=None, var=True, slot=None, **props):
+    p = {"widget_bar_style": scrollbar_style()}
+    p.update(props)
+    node = {"type": "ScrollBox", "name": name, "props": p}
+    if children:
+        node["children"] = children
+    if var is not None:
+        node["var"] = var
+    if slot:
+        node["slot"] = slot
+    return node
+
+
+def divider(name, tint="color.border.subtle", slot=None):
+    """A 1 px horizontal rule."""
+    return solid(name, tint, h=1, slot=slot)
+
+
+def section_label(name, value, slot=None):
+    """A section heading inside a panel: type.label (caps, tracked), secondary colour."""
+    return text(name, "label", value.upper(), "color.text.secondary", slot=slot)
+
+
+def row(name, label, control, label_w=440, h=56, label_name=None, extra=None, var=None):
+    """A settings row: body label in a fixed column, then the control (and optional extra widgets such as a value readout)."""
+    kids = [{"type": "SizeBox", "name": name + "LabelBox", "width": label_w, "slot": {"vertical_alignment": "V_ALIGN_CENTER"},
+             "children": [text(label_name or name + "Label", "body", label, "color.text.primary", var=var)]},
+            control]
+    if extra:
+        kids.extend(extra)
+    return {"type": "SizeBox", "name": name + "RowBox", "height": h, "children": [{"type": "HorizontalBox", "name": name + "Row", "children": kids}]}

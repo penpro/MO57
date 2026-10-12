@@ -1230,6 +1230,20 @@ void UMOUIManagerComponent::UpdateReticleVisibility()
 		SetReticleVisible(!bMenuOpen);
 	}
 
+	// Kit: a menu replaces the HUD. The moodle strip, wind dial and mode plate would sit on top of the 1600x880 menu panel, so they yield to menus through this same chokepoint
+	// (the reticle, the tutorial text and the quest tracker already do).
+	if (bHideHUDPlatesWhenMenuOpen)
+	{
+		if (UMOHUDRootWidget* Root = HUDRootWidget.Get())
+		{
+			Root->SetMenuState(bMenuOpen, IsPlayerStatusVisible());   // the moodles expand for the status panel, everything else yields
+		}
+		if (UMOModeIndicatorWidget* Mode = ModeIndicatorWidget.Get())
+		{
+			Mode->SetVisibility(bMenuOpen ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible);
+		}
+	}
+
 	// The tutorial text (hint banner + quest tracker) yields to menus through the same chokepoint as the reticle: every open/close path already calls this.
 	if (UMOQuestUIController* QuestController = GetQuestController())
 	{

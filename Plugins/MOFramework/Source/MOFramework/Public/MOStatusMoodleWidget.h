@@ -51,6 +51,16 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|HUD|Moodle")
 	void SetMoodle(const FMOStatusMoodle& InMoodle);
 
+	/**
+	 * Compact (default): just the severity-tinted icon, the clean immersion HUD. Expanded: icon + label + stack count + severity shape glyph (the status panel opens it up, so the detail is
+	 * one key press away, never on the screen by default). Critical still pulses its border in both modes: it must not be missed.
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|HUD|Moodle")
+	void SetExpanded(bool bInExpanded);
+
+	UFUNCTION(BlueprintPure, Category="MO|HUD|Moodle")
+	bool IsExpanded() const { return bExpanded; }
+
 	/** Read the current moodle (handy for tooltip composition in BP). */
 	UFUNCTION(BlueprintPure, Category="MO|HUD|Moodle")
 	const FMOStatusMoodle& GetMoodle() const { return CurrentMoodle; }
@@ -92,6 +102,15 @@ protected:
 	UPROPERTY(meta=(BindWidgetOptional))
 	TObjectPtr<UWidget> CriticalBorder;
 
+	/**
+	 * Optional: the pill's plate image. In compact mode (the default) its alpha drops to CompactPlateOpacity so a lone icon sits quietly on the world.
+	 */
+	UPROPERTY(meta=(BindWidgetOptional))
+	TObjectPtr<UImage> MoodlePlate;
+
+	UPROPERTY(EditDefaultsOnly, Category="MO|HUD|Moodle")
+	float CompactPlateOpacity = 0.55f;
+
 	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 
 private:
@@ -107,4 +126,5 @@ private:
 	FLinearColor TintForSeverity(EMOStatusMoodleSeverity Severity) const;
 
 	float PulseClock = 0.0f;
+	bool bExpanded = false;
 };

@@ -78,29 +78,25 @@ void UMOBuildingRecipeEntryWidget::UpdateVisuals_Implementation()
 		}
 		else
 		{
-			RecipeIcon->SetVisibility(ESlateVisibility::Hidden);
+			RecipeIcon->SetVisibility(ESlateVisibility::Collapsed);   // no icon: the name takes the space
 		}
 	}
 	else if (RecipeIcon)
 	{
-		RecipeIcon->SetVisibility(ESlateVisibility::Hidden);
+		RecipeIcon->SetVisibility(ESlateVisibility::Collapsed);   // no icon: the name takes the space
 	}
 
 	// Update background color (3-state: selected, buildable, unbuildable)
 	if (BackgroundBorder)
 	{
 		FLinearColor BackgroundColor;
-		if (EntryData.bIsSelected)
+		if (!bUseThemeColors)
 		{
-			BackgroundColor = SelectedColor;
-		}
-		else if (EntryData.bCanBuild)
-		{
-			BackgroundColor = BuildableColor;
+			BackgroundColor = EntryData.bIsSelected ? SelectedColor : EntryData.bCanBuild ? BuildableColor : UnbuildableColor;
 		}
 		else
 		{
-			BackgroundColor = UnbuildableColor;
+			BackgroundColor = ResolveRowColor(EntryData.bIsSelected, !EntryData.bCanBuild);
 		}
 		BackgroundBorder->SetBrushColor(BackgroundColor);
 	}

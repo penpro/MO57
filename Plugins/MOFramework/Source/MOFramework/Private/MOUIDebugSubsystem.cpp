@@ -20,6 +20,31 @@
 #include "Widgets/CommonActivatableWidgetContainer.h"
 #include "CommonActivatableWidget.h"
 #include "Input/CommonUIActionRouterBase.h"
+#include "Framework/Application/IInputProcessor.h"
+
+namespace
+{
+	/** Pre-processor that only observes: the raw key stream as Slate receives it, before any widget or the game sees it. */
+	class FMOKeyLogProcessor : public IInputProcessor
+	{
+	public:
+		explicit FMOKeyLogProcessor(UMOUIDebugSubsystem* InOwner) : Owner(InOwner) {}
+		virtual void Tick(const float DeltaTime, FSlateApplication& SlateApp, TSharedRef<ICursor> Cursor) override {}
+		virtual bool HandleKeyDownEvent(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent) override
+		{
+			if (UMOUIDebugSubsystem* Dbg = Owner.Get(); Dbg && Dbg->IsEnabled())
+			{
+				const TSharedPtr<SWidget> Focused = SlateApp.GetUserFocusedWidget(InKeyEvent.GetUserIndex());
+				Dbg->Log(TEXT("Key"), FString::Printf(TEXT("%s down%s | keyboard focus: %s | window active: %s"), *InKeyEvent.GetKey().ToString(), InKeyEvent.IsRepeat() ? TEXT(" (repeat)") : TEXT(""),
+					Focused.IsValid() ? *Focused->GetTypeAsString() : TEXT("<none>"), SlateApp.GetActiveTopLevelWindow().IsValid() ? TEXT("yes") : TEXT("NO")));
+			}
+			return false;   // observe only
+		}
+		virtual const TCHAR* GetDebugName() const override { return TEXT("MOKeyLog"); }
+	private:
+		TWeakObjectPtr<UMOUIDebugSubsystem> Owner;
+	};
+}
 
 bool UMOUIDebugSubsystem::bGloballyEnabled = false;
 
@@ -110,6 +135,11 @@ void UMOUIDebugSubsystem::HookFocusEvents()
 	{
 		FocusChangingHandle = FSlateApplication::Get().OnFocusChanging().AddUObject(
 			this, &UMOUIDebugSubsystem::HandleFocusChanging);
+		if (!KeyLogger.IsValid())
+		{
+			KeyLogger = MakeShared<FMOKeyLogProcessor>(this);
+			FSlateApplication::Get().RegisterInputPreProcessor(KeyLogger);
+		}
 	}
 }
 
@@ -120,6 +150,11 @@ void UMOUIDebugSubsystem::UnhookFocusEvents()
 		FSlateApplication::Get().OnFocusChanging().Remove(FocusChangingHandle);
 		FocusChangingHandle.Reset();
 	}
+	if (KeyLogger.IsValid() && FSlateApplication::IsInitialized())
+	{
+		FSlateApplication::Get().UnregisterInputPreProcessor(KeyLogger);
+	}
+	KeyLogger.Reset();
 }
 
 void UMOUIDebugSubsystem::HandleFocusChanging(const FFocusEvent& FocusEvent,

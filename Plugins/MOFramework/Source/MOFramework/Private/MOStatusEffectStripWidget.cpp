@@ -5,8 +5,10 @@
 #include "MOStatusEffectStripWidget.h"
 #include "MOStatusMoodleWidget.h"
 #include "MOFramework.h"
-#include "Components/HorizontalBox.h"
-#include "Components/HorizontalBoxSlot.h"
+#include "Algo/Reverse.h"
+#include "Components/TextBlock.h"
+#include "Components/VerticalBox.h"
+#include "Components/VerticalBoxSlot.h"
 
 void UMOStatusEffectStripWidget::NativeConstruct()
 {
@@ -45,6 +47,7 @@ void UMOStatusEffectStripWidget::AddOrUpdateMoodle(const FMOStatusMoodle& Moodle
 		if (UMOStatusMoodleWidget* Existing = ExistingPtr->Get())
 		{
 			Existing->SetMoodle(Moodle);
+			RebuildOrder();   // the severity may have changed: the order follows it
 			return;
 		}
 		// Stale entry — drop it and fall through to creation.
@@ -67,9 +70,10 @@ void UMOStatusEffectStripWidget::AddOrUpdateMoodle(const FMOStatusMoodle& Moodle
 		return;
 	}
 
-	MoodleBox->AddChildToHorizontalBox(NewEntry);
+	NewEntry->SetExpanded(bExpanded);
 	NewEntry->SetMoodle(Moodle);
 	ActiveMoodles.Add(Moodle.Id, NewEntry);
+	RebuildOrder();   // places the entry (and re-sorts) instead of appending
 
 	UpdateVisibility();
 
@@ -87,11 +91,28 @@ void UMOStatusEffectStripWidget::RemoveMoodle(FName MoodleId)
 			Existing->RemoveFromParent();
 		}
 		ActiveMoodles.Remove(MoodleId);
+		RebuildOrder();
 		UpdateVisibility();
 
 		UE_LOG(LogMOFramework, Verbose,
 			TEXT("[MOStatusStrip] Removed moodle '%s' (%d remaining)"),
 			*MoodleId.ToString(), ActiveMoodles.Num());
+	}
+}
+
+void UMOStatusEffectStripWidget::SetExpanded(bool bInExpanded)
+{
+	if (bExpanded == bInExpanded)
+	{
+		return;
+	}
+	bExpanded = bInExpanded;
+	for (const TPair<FName, TObjectPtr<UMOStatusMoodleWidget>>& Pair : ActiveMoodles)
+	{
+		if (UMOStatusMoodleWidget* W = Pair.Value)
+		{
+			W->SetExpanded(bExpanded);
+		}
 	}
 }
 
@@ -105,7 +126,84 @@ void UMOStatusEffectStripWidget::ClearAllMoodles()
 		}
 	}
 	ActiveMoodles.Empty();
+	RebuildOrder();
 	UpdateVisibility();
+}
+
+namespace
+{
+	int32 MoodleSeverityRank(EMOStatusMoodleSeverity Severity)
+	{
+		switch (Severity)
+		{
+		case EMOStatusMoodleSeverity::Critical: return 0;
+		case EMOStatusMoodleSeverity::Warning:  return 1;
+		case EMOStatusMoodleSeverity::Info:     return 2;
+		case EMOStatusMoodleSeverity::Buff:     return 3;
+		default:                                return 4;
+		}
+	}
+}
+
+void UMOStatusEffectStripWidget::RebuildOrder()
+{
+	if (!MoodleBox)
+	{
+		return;
+	}
+	TArray<UMOStatusMoodleWidget*> Sorted;
+	for (const TPair<FName, TObjectPtr<UMOStatusMoodleWidget>>& Pair : ActiveMoodles)
+	{
+		if (UMOStatusMoodleWidget* W = Pair.Value)
+		{
+			Sorted.Add(W);
+		}
+	}
+	Sorted.Sort([](const UMOStatusMoodleWidget& A, const UMOStatusMoodleWidget& B)
+	{
+		const int32 RA = MoodleSeverityRank(A.GetMoodle().Severity);
+		const int32 RB = MoodleSeverityRank(B.GetMoodle().Severity);
+		return RA != RB ? RA < RB : A.GetMoodle().Id.LexicalLess(B.GetMoodle().Id);
+	});
+
+	const int32 Shown = FMath::Min(Sorted.Num(), FMath::Max(1, MaxVisibleMoodles));
+	const int32 Folded = Sorted.Num() - Shown;
+
+	TArray<UWidget*> Order;
+	for (int32 i = 0; i < Shown; ++i)
+	{
+		Order.Add(Sorted[i]);
+	}
+	if (OverflowPill)
+	{
+		if (Folded > 0)
+		{
+			if (OverflowText)
+			{
+				OverflowText->SetText(FText::Format(NSLOCTEXT("MO", "MoodleOverflow", "+{0} more"), FText::AsNumber(Folded)));
+			}
+			OverflowPill->SetVisibility(ESlateVisibility::HitTestInvisible);
+			Order.Add(OverflowPill);
+		}
+		else
+		{
+			OverflowPill->SetVisibility(ESlateVisibility::Collapsed);
+		}
+	}
+	if (bStackUpward)
+	{
+		Algo::Reverse(Order);   // the worst entry ends up nearest the corner the strip is anchored to
+	}
+
+	MoodleBox->ClearChildren();
+	for (UWidget* Entry : Order)
+	{
+		if (UVerticalBoxSlot* BoxSlot = MoodleBox->AddChildToVerticalBox(Entry))
+		{
+			BoxSlot->SetPadding(FMargin(0.0f, 4.0f));   // 8 px between pills
+			BoxSlot->SetHorizontalAlignment(HAlign_Left);
+		}
+	}
 }
 
 bool UMOStatusEffectStripWidget::HasMoodle(FName MoodleId) const

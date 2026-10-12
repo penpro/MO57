@@ -1223,6 +1223,36 @@ void AMOPlayerController::HandleBuild(const FInputActionValue& Value)
 	}
 }
 
+bool AMOPlayerController::TryCloseMenuForToggleKey(const FKey& Key)
+{
+	UEnhancedInputLocalPlayerSubsystem* Input = GetEnhancedInputSubsystem();
+	if (!Input || !UIManagerComponent)
+	{
+		return false;
+	}
+	UMOUIManagerComponent* UI = UIManagerComponent;
+	struct FToggle { const UInputAction* Action; bool bOpen; TFunction<void()> Close; };
+	const FToggle Toggles[] = {
+		{ InventoryAction,    UI->IsInventoryMenuOpen(), [UI]() { UI->ToggleInventoryMenu(); } },
+		{ CraftAction,        UI->IsCraftingMenuOpen(),  [UI]() { UI->ToggleCraftingMenu(); } },
+		{ SkillsAction,       UI->IsSkillsPanelOpen(),   [UI]() { UI->ToggleSkillsPanel(); } },
+		{ JournalAction,      UI->IsQuestLogOpen(),      [UI]() { UI->ToggleQuestLog(); } },
+		{ BuildAction,        UI->IsBuildingMenuOpen(),  [UI]() { UI->ToggleBuildingMenu(); } },
+		{ PossessAction,      UI->IsPossessionMenuOpen(),[UI]() { UI->TogglePossessionMenu(); } },
+		{ PlayerStatusAction, UI->IsPlayerStatusVisible(), [UI]() { UI->TogglePlayerStatus(); } },
+	};
+	for (const FToggle& T : Toggles)
+	{
+		if (T.Action && T.bOpen && Input->QueryKeysMappedToAction(T.Action).Contains(Key))
+		{
+			MOUI_LOG(this, "PC", "%s closes the menu it toggles", *Key.ToString());
+			T.Close();
+			return true;
+		}
+	}
+	return false;
+}
+
 void AMOPlayerController::HandleBackMenu(const FInputActionValue& Value)
 {
 	MOUI_LOG(this, "PC", "HandleBackMenu FIRED via Enhanced Input");

@@ -1,5 +1,7 @@
 #include "MOQuestLogEntry.h"
 #include "MOCommonButton.h"
+#include "MOUITokens.h"
+#include "Components/Border.h"
 #include "Components/TextBlock.h"
 
 UMOQuestLogEntry::UMOQuestLogEntry(const FObjectInitializer& ObjectInitializer)
@@ -15,6 +17,16 @@ void UMOQuestLogEntry::NativeConstruct()
 	{
 		SelectButton->OnClicked().RemoveAll(this);
 		SelectButton->OnClicked().AddUObject(this, &UMOQuestLogEntry::HandleSelectClicked);
+	}
+	ApplyRowLook();
+}
+
+void UMOQuestLogEntry::ApplyRowLook()
+{
+	if (BackgroundBorder)
+	{
+		const FLinearColor Row = UMOUITokens::Color("color.surface.2");
+		BackgroundBorder->SetBrushColor(bIsSelected ? FMath::Lerp(Row, UMOUITokens::Color("color.accent"), 0.18f) : Row);
 	}
 }
 
@@ -32,6 +44,7 @@ void UMOQuestLogEntry::SetSelected(bool bSelected)
 	}
 
 	bIsSelected = bSelected;
+	ApplyRowLook();
 	OnSelectionChanged(bSelected);
 }
 

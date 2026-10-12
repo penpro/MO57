@@ -449,6 +449,13 @@ public:
 	bool IsInputContextActive(EMOInputContext Context) const;
 
 	/**
+	 * A menu is open and the player pressed Key: if it is the key that TOGGLES that very menu (I with the inventory open, P with the possession menu, K, C, J, Y, B), close it. While a menu is up
+	 * CommonUI's Menu input mode blocks game input, so the Enhanced Input toggle handlers never see the key a second time; the active menu widget forwards it here from its preview key handler instead.
+	 * Returns true when it closed a menu (the key is then consumed). Other keys, and keys of menus that are not open, return false: pressing C inside the inventory does not stack a crafting menu.
+	 */
+	bool TryCloseMenuForToggleKey(const FKey& Key);
+
+	/**
 	 * Get the current primary input context.
 	 */
 	UFUNCTION(BlueprintPure, Category="MO|Input")

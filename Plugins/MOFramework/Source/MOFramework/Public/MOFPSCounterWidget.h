@@ -93,15 +93,6 @@ private:
 	/** Last time we calculated FPS (FPlatformTime::Seconds). */
 	double LastFPSCalculationTime = 0.0;
 
-	/** Color for good FPS (60+). */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|FPS", meta=(AllowPrivateAccess="true"))
-	FSlateColor GoodFPSColor = FSlateColor(FLinearColor(0.2f, 1.0f, 0.2f, 1.0f));
 
-	/** Color for okay FPS (30-60). */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|FPS", meta=(AllowPrivateAccess="true"))
-	FSlateColor OkayFPSColor = FSlateColor(FLinearColor(1.0f, 1.0f, 0.2f, 1.0f));
 
-	/** Color for bad FPS (<30). */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|FPS", meta=(AllowPrivateAccess="true"))
-	FSlateColor BadFPSColor = FSlateColor(FLinearColor(1.0f, 0.2f, 0.2f, 1.0f));
 };

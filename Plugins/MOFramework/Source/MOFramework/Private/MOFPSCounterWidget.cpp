@@ -1,4 +1,5 @@
 #include "MOFPSCounterWidget.h"
+#include "MOUITokens.h"
 #include "MOGameSettings.h"
 #include "MOFramework.h"
 #include "Components/TextBlock.h"
@@ -83,15 +84,15 @@ void UMOFPSCounterWidget::UpdateFPSDisplay()
 	// Color based on performance
 	if (DisplayFPS >= 60)
 	{
-		FPSText->SetColorAndOpacity(GoodFPSColor);
+		FPSText->SetColorAndOpacity(UMOUITokens::SlateColor("color.severity.ok"));
 	}
 	else if (DisplayFPS >= 30)
 	{
-		FPSText->SetColorAndOpacity(OkayFPSColor);
+		FPSText->SetColorAndOpacity(UMOUITokens::SlateColor("color.severity.notice"));
 	}
 	else
 	{
-		FPSText->SetColorAndOpacity(BadFPSColor);
+		FPSText->SetColorAndOpacity(UMOUITokens::SlateColor("color.severity.critical"));
 	}
 
 	// Optional frame time display

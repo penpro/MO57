@@ -70,11 +70,32 @@ void UMOGameUIManagerSubsystem::HandleFocusChanging(const FFocusEvent& FocusEven
 	const FWeakWidgetPath& /*OldFocusedWidgetPath*/, const TSharedPtr<SWidget>& /*OldFocusedWidget*/,
 	const FWidgetPath& /*NewFocusedWidgetPath*/, const TSharedPtr<SWidget>& NewFocusedWidget)
 {
-	// We only care about mouse clicks that land outside any UI and on the game viewport.
-	// Anything else (programmatic focus, keyboard nav, hover transitions) is irrelevant here.
-	if (FocusEvent.GetCause() != EFocusCause::Mouse) return;
 	if (!NewFocusedWidget.IsValid()) return;
 	if (NewFocusedWidget->GetTypeAsString() != TEXT("SViewport")) return;
+
+	// Focus going to the viewport for any reason OTHER than a click (the window being re-activated after alt-tab or a notification, a focus clear, the engine's own reset) while a UI surface
+	// is up: the menu would be left with no keyboard focus, and Menu input mode blocks the game's keys, so Tab / Esc / the toggle key would be dead until the player clicked into the window
+	// ("needs a re-focus for inputs to close menus"). Take the focus back once Slate has finished this change.
+	if (FocusEvent.GetCause() != EFocusCause::Mouse)
+	{
+		if (UMOActivatableWidget* Top = GetTopmostActiveWidget())
+		{
+			if (UWorld* World = GetWorld())
+			{
+				MOUI_LOG(this, "Focus", "focus went to the viewport (cause %d) under %s -> reclaiming next tick", (int32)FocusEvent.GetCause(), *Top->GetName());
+				TWeakObjectPtr<UMOActivatableWidget> WeakTop(Top);
+				World->GetTimerManager().SetTimerForNextTick([WeakTop]()
+				{
+					UMOActivatableWidget* Reclaim = WeakTop.Get();
+					if (Reclaim && Reclaim->IsActivated() && Reclaim->IsUISurface())
+					{
+						Reclaim->ClaimFocusForReactivation();
+					}
+				});
+			}
+		}
+		return;
+	}
 
 	// The topmost-active widget is the authoritative answer to "which UI surface was the
 	// user interacting with?" — it's maintained by NativeOnActivated/Deactivated, so it

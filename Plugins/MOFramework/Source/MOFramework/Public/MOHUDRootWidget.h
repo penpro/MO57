@@ -126,6 +126,12 @@ protected:
 	TObjectPtr<UMOWindDirectionWidget> WindIndicator;
 
 public:
+	/**
+	 * The HUD yields to menus (kit: a menu replaces the HUD) EXCEPT the moodle strip while the player status panel is open: the strip then expands (labels + severity shapes) so the status
+	 * panel and the strip read as one thing. Called by the UI manager whenever a menu opens or closes.
+	 */
+	void SetMenuState(bool bAnyMenuOpen, bool bStatusPanelOpen);
+
 	/** Accessor for sources/cheats that need to push moodles. May be null if WBP doesn't include the strip. */
 	UFUNCTION(BlueprintPure, Category="MO|HUD")
 	UMOStatusEffectStripWidget* GetStatusStrip() const { return StatusStrip; }

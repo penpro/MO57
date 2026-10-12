@@ -116,6 +116,9 @@ protected:
 	UFUNCTION(BlueprintCallable, Category="MO|Quest|UI")
 	void RefreshDisplay();
 
+	/** Row background colour for the current selection state (no-op without a BackgroundBorder). */
+	void ApplyRowLook();
+
 	/** Blueprint-callable selection event. */
 	UFUNCTION(BlueprintImplementableEvent, Category="MO|Quest|UI")
 	void OnSelectionChanged(bool bSelected);
@@ -136,6 +139,10 @@ protected:
 	/** Progress text (e.g., "3/5 objectives"). */
 	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
 	TObjectPtr<UTextBlock> ProgressText;
+
+	/** Optional row background (a white rounded fill in the WBP): tinted with the kit row tokens, an accent wash when this quest is the selected one. */
+	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
+	TObjectPtr<class UBorder> BackgroundBorder;
 
 	/** Cached display data. */
 	UPROPERTY(BlueprintReadOnly, Category="MO|Quest|UI")

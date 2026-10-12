@@ -51,6 +51,8 @@ n1 = import_textures(sorted(glob.glob(os.path.join(KIT, "nineslice", "2x", "T_UI
 n2 = import_textures(sorted(glob.glob(os.path.join(KIT, "icons", "png128", "ic_*.png"))), DST + "/Icons", lambda s: "T_" + s)
 # baked composites (Tools/kit_bake.py): one texture per button state, still valid 9-slices
 n3 = import_textures(sorted(glob.glob(r"D:\UEProjects\MO57\Saved\KitBake\Buttons\T_Btn_*.png")), DST + "/Buttons", lambda s: s)
+for folder in ("Rows", "Tabs", "Controls", "Backdrops"):   # rows, tabs, inputs, check boxes, toggles, slider, menu backdrop (Tools/kit_bake.py)
+    n3 += import_textures(sorted(glob.glob(r"D:\UEProjects\MO57\Saved\KitBake\%s\T_*.png" % folder)), DST + "/" + folder, lambda s: s)
 
 # tokens: create the table once, refill every run (the CSV is the source of truth)
 dt_path = DST + "/DT_UITokens"

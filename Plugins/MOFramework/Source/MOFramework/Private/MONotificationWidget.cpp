@@ -89,7 +89,9 @@ void UMONotificationWidget::SetIcon(UTexture2D* Icon)
 	}
 	else
 	{
-		IconImage->SetVisibility(ESlateVisibility::Collapsed);
+		// no caller icon: show the type's own glyph (ApplyTypeColors collapses the image only for a type with none)
+		bIconExplicit = false;
+		ApplyTypeColors();
 	}
 }
 
@@ -173,6 +175,10 @@ void UMONotificationWidget::ApplyTypeColors()
 			{
 				IconImage->SetBrushFromTexture(Glyph, /*bMatchSize*/ false);
 				IconImage->SetVisibility(ESlateVisibility::HitTestInvisible);
+			}
+			else
+			{
+				IconImage->SetVisibility(ESlateVisibility::Collapsed);
 			}
 		}
 		IconImage->SetColorAndOpacity(TypeColor);

@@ -112,6 +112,7 @@ void UMOMainMenuWidget::NativeConstruct()
 	}
 
 	CurrentPanelIndex = PanelIndex_None;
+	UpdatePanelShell();
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOMainMenuWidget] Panels found: NewGame=%s, Load=%s, Options=%s, HostGame=%s, JoinGame=%s"),
 		NewGamePanel ? TEXT("YES") : TEXT("NO"),
@@ -474,6 +475,15 @@ void UMOMainMenuWidget::SwitchToPanel(int32 PanelIndex)
 		FocusWindowSwitcher->SetActiveWidgetIndex(PanelIndex);
 	}
 	CurrentPanelIndex = PanelIndex;
+	UpdatePanelShell();
+}
+
+void UMOMainMenuWidget::UpdatePanelShell()
+{
+	if (PanelShell)
+	{
+		PanelShell->SetVisibility(CurrentPanelIndex == PanelIndex_None ? ESlateVisibility::Collapsed : ESlateVisibility::SelfHitTestInvisible);
+	}
 }
 
 void UMOMainMenuWidget::HandleNewGameClicked()

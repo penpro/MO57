@@ -3,6 +3,7 @@
  */
 
 #include "MOListEntryBase.h"
+#include "MOUITokens.h"
 #include "MOCommonButton.h"
 #include "Components/Border.h"
 
@@ -95,22 +96,40 @@ void UMOListEntryBase::UpdateVisuals_Implementation()
 {
 	if (BackgroundBorder)
 	{
-		FLinearColor Color;
-		if (!bIsEnabled)
-		{
-			Color = DisabledColor;
-		}
-		else if (bIsSelected)
-		{
-			Color = SelectedColor;
-		}
-		else
-		{
-			Color = NormalColor;
-		}
-
-		BackgroundBorder->SetBrushColor(Color);
+		BackgroundBorder->SetBrushColor(ResolveRowColor(bIsSelected, !bIsEnabled));
 	}
+}
+
+FLinearColor UMOListEntryBase::ResolveRowColor(bool bSelected, bool bDimmed) const
+{
+	if (!bUseThemeColors)
+	{
+		return bDimmed ? DisabledColor : bSelected ? SelectedColor : NormalColor;
+	}
+	const FLinearColor Row = UMOUITokens::Color("color.surface.2");
+	if (bDimmed)
+	{
+		return UMOUITokens::Color("color.surface.1");
+	}
+	if (bSelected)
+	{
+		return FMath::Lerp(Row, UMOUITokens::Color("color.accent"), 0.18f);   // kit: accent muted over the row
+	}
+	return bIsHovered ? UMOUITokens::Color("color.surface.3") : Row;
+}
+
+void UMOListEntryBase::NativeOnMouseEnter(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
+{
+	Super::NativeOnMouseEnter(InGeometry, InMouseEvent);
+	bIsHovered = true;
+	UpdateVisuals();
+}
+
+void UMOListEntryBase::NativeOnMouseLeave(const FPointerEvent& InMouseEvent)
+{
+	Super::NativeOnMouseLeave(InMouseEvent);
+	bIsHovered = false;
+	UpdateVisuals();
 }
 
 // ============================================================================

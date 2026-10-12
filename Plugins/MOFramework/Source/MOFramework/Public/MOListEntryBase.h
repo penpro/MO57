@@ -136,7 +136,22 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MO|UI|List|Style")
 	FLinearColor DisabledColor = FLinearColor(0.1f, 0.1f, 0.1f, 0.5f);
 
+	/**
+	 * Row colours come from the design tokens (kit row: surface.2, hover surface.3, selected = accent wash over surface.2, dim = surface.1). Turn this off to use the three colour properties above
+	 * (a designer override).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MO|UI|List|Style")
+	bool bUseThemeColors = true;
+
 protected:
+	/** The row background for a state, from the tokens (or the property colours when bUseThemeColors is off). Subclasses with their own states call this instead of owning colours. */
+	FLinearColor ResolveRowColor(bool bSelected, bool bDimmed) const;
+
+	bool bIsHovered = false;
+
+	virtual void NativeOnMouseEnter(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
+	virtual void NativeOnMouseLeave(const FPointerEvent& InMouseEvent) override;
+
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
 

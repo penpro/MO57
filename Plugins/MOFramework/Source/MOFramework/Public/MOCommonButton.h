@@ -107,6 +107,14 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|UI|Button|Test")
 	bool SimulateClick();
 
+	/**
+	 * Select or deselect from code, whichever way round. CommonUI's SetIsSelected(false) is a NO-OP on a button that is not toggleable (it only honours a deselect for toggles; a button group clears
+	 * its members through ClearSelection()), so a tab row that called SetIsSelected(i == Selected) on selectable, non-toggleable tabs left every earlier tab selected (underlined) -- found in the
+	 * status panel and in UMOTabBarWidget. Use this for any selectable button whose selection your code owns.
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|UI|Button")
+	void SetSelectedState(bool bInSelected);
+
 protected:
 	virtual void NativePreConstruct() override;
 	virtual void NativeConstruct() override;
@@ -118,9 +126,15 @@ protected:
 	virtual void NativeOnAddedToFocusPath(const FFocusEvent& InFocusEvent) override;
 	virtual void NativeOnRemovedFromFocusPath(const FFocusEvent& InFocusEvent) override;
 
-	/** Optional: an Image (kit `focus_ring` 9-slice, tint color.focus.ring) padded -4 around the button, in the button's own overlay so a scroll box cannot clip it. */
+	/**
+	 * Optional: an Image (kit `focus_ring` 9-slice, tint color.focus.ring) in the button's own overlay so a scroll box cannot clip it. Its slot padding is owned by FitFocusRingToButton(): the button's
+	 * content (this widget) sits INSIDE the style's button padding, so a fixed -4 drew the ring around the content area, narrower than the button by the padding on each side.
+	 */
 	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
 	TObjectPtr<UWidget> FocusRing;
+
+	/** Grow the FocusRing slot outward by the style's button padding plus the 4 px (2 px ring + 2 px gap) the kit asks for, so the ring hugs the button's drawn bounds for every style (Lg, icon, tab, row). */
+	void FitFocusRingToButton();
 
 	void ApplyCurrentTextStyleToLabels();
 

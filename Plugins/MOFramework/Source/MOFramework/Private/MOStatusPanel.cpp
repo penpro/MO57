@@ -30,6 +30,7 @@ void UMOStatusPanel::NativeConstruct()
 	Super::NativeConstruct();
 
 	BindTabButtons();
+	UpdateTabButtonStates();
 
 	// Populate field configs from Blueprint or C++
 	PopulateFieldConfigs();
@@ -441,9 +442,21 @@ void UMOStatusPanel::HandleBackClicked()
 
 void UMOStatusPanel::UpdateTabButtonStates()
 {
-	// TODO: Add visual selected state to buttons
-	// This could use SetIsSelected() if using CommonUI toggle buttons
-	// For now, buttons don't show selected state visually
+	// The kit tab style (BS_Tab) draws a selected state (accent underline); same recipe as UMOTabBarWidget: selectable, NOT toggleable (clicking the open tab again keeps it selected),
+	// exactly one selected. Without this the first tab stayed the only highlighted one whichever page was showing.
+	const TPair<UMOCommonButton*, EMOStatusCategory> Tabs[] = {
+		{InfoTabButton, EMOStatusCategory::Info},           {VitalsTabButton, EMOStatusCategory::Vitals},   {NutritionTabButton, EMOStatusCategory::Nutrition},
+		{NutrientsTabButton, EMOStatusCategory::Nutrients}, {FitnessTabButton, EMOStatusCategory::Fitness}, {MentalTabButton, EMOStatusCategory::Mental},
+		{WoundsTabButton, EMOStatusCategory::Wounds},       {ConditionsTabButton, EMOStatusCategory::Conditions}};
+	for (const TPair<UMOCommonButton*, EMOStatusCategory>& Tab : Tabs)
+	{
+		if (Tab.Key)
+		{
+			Tab.Key->SetIsSelectable(true);
+			Tab.Key->SetIsToggleable(false);
+			Tab.Key->SetSelectedState(Tab.Value == CurrentCategory);
+		}
+	}
 }
 
 void UMOStatusPanel::UpdateScrollBoxVisibility(EMOStatusCategory ActiveCategory)

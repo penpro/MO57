@@ -31,6 +31,7 @@ public static class W32 {
     [DllImport("user32.dll")] public static extern bool GetClientRect(IntPtr h, out RECT r);
     [DllImport("user32.dll")] public static extern bool ClientToScreen(IntPtr h, ref POINT p);
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+    [DllImport("user32.dll")] public static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extra);
     [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int cmd);
     [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
     [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
@@ -61,6 +62,8 @@ $h = [W32]::FindTopWindow([uint32]$ProcessId)
 if ($h -eq [IntPtr]::Zero) { Write-Output "ERROR: no visible window for pid $ProcessId"; exit 2 }
 if ($Action -ne "shot" -and $Action -ne "info") {
     [void][W32]::ShowWindow($h, 9)
+    # Windows only lets the process that last received input take the foreground: a synthetic Alt tap (nothing in UE binds a bare Alt) makes this process eligible.
+    [W32]::keybd_event(0x12, 0, 0, [UIntPtr]::Zero); [W32]::keybd_event(0x12, 0, 2, [UIntPtr]::Zero)
     [void][W32]::SetForegroundWindow($h)
     Start-Sleep -Milliseconds 300
     if ([W32]::GetForegroundWindow() -ne $h) {

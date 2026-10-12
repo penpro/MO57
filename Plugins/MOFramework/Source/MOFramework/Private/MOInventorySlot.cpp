@@ -1,5 +1,6 @@
 #include "MOInventorySlot.h"
 #include "MOUIDebugSubsystem.h"
+#include "MOUITokens.h"
 #include "MOFramework.h"
 
 #include "Components/Button.h"
@@ -70,10 +71,11 @@ void UMOInventorySlot::NativeConstruct()
 		QuantityBox->SetVisibility(ESlateVisibility::Collapsed);
 	}
 
-	// Initialize border to normal color
-	if (IsValid(SlotBorder))
+	// The inner border of the slot chrome (not a BindWidget: looked up by name so older slot WBPs without it still work).
+	SlotTicksBorder = Cast<UBorder>(GetWidgetFromName(TEXT("SlotBorderBorder")));
+	if (IsValid(ItemIconImage))
 	{
-		SlotBorder->SetBrushColor(NormalBorderColor);
+		IconDefaultVisibility = ItemIconImage->GetVisibility();
 	}
 
 	// If visual data was already set (e.g., via SetVisualData before NativeConstruct),
@@ -242,6 +244,48 @@ void UMOInventorySlot::ApplyVisualDataToWidget()
 		}
 
 		ItemIconImage->SetBrushFromTexture(DesiredTexture, true);
+
+		// An empty slot shows the kit's corner ticks only. The generic weave icon is hidden; a slot-specific
+		// silhouette (equipment slots set one via SetCustomEmptyIcon) stays, dimmed.
+		const bool bShowSilhouette = !CachedVisualData.bHasItem && IsValid(CustomEmptyIcon);
+		const bool bShowIcon = CachedVisualData.bHasItem || bShowSilhouette;
+		ItemIconImage->SetVisibility(bShowIcon ? IconDefaultVisibility : ESlateVisibility::Collapsed);
+		ItemIconImage->SetColorAndOpacity(bShowSilhouette ? FLinearColor(1.0f, 1.0f, 1.0f, 0.4f) : FLinearColor::White);
+	}
+
+	ApplySlotLook();
+}
+
+void UMOInventorySlot::ApplySlotLook()
+{
+	// Priority: the source of a drag, then a drop target under the cursor, then plain mouse hover.
+	FName FillToken = TEXT("color.surface.2");
+	FName TickToken = CachedVisualData.bHasItem ? FName(TEXT("color.border.subtle")) : FName(TEXT("color.border.strong"));
+	if (bIsBeingDragged)
+	{
+		FillToken = TEXT("color.surface.1");
+		TickToken = TEXT("color.border.subtle");
+	}
+	else if (bIsDragHovered)
+	{
+		FillToken = TEXT("color.accent.muted");
+		TickToken = TEXT("color.accent");
+	}
+	else if (bIsMouseHovered)
+	{
+		FillToken = TEXT("color.surface.3");
+		TickToken = TEXT("color.accent");
+	}
+
+	if (IsValid(SlotBorder))
+	{
+		SlotBorder->SetBrush(UMOUITokens::NineSliceBrush(TEXT("slot_fill"), FillToken));
+		SlotBorder->SetBrushColor(FLinearColor::White);   // the tint lives in the brush; BrushColor would multiply it
+	}
+	if (IsValid(SlotTicksBorder))
+	{
+		SlotTicksBorder->SetBrush(UMOUITokens::NineSliceBrush(TEXT("slot_ticks"), TickToken));
+		SlotTicksBorder->SetBrushColor(FLinearColor::White);
 	}
 }
 
@@ -304,10 +348,8 @@ void UMOInventorySlot::HandleSlotButtonReleased()
 	// Restore visual state if we were dragging
 	if (bWasDragging)
 	{
-		if (IsValid(SlotBorder))
-		{
-			SlotBorder->SetBrushColor(NormalBorderColor);
-		}
+		bIsBeingDragged = false;
+		ApplySlotLook();
 		if (IsValid(SlotButton))
 		{
 			SlotButton->SetColorAndOpacity(FLinearColor::White);
@@ -445,10 +487,8 @@ void UMOInventorySlot::NativeOnDragDetected(const FGeometry& InGeometry, const F
 	DragOp->Pivot = EDragPivot::CenterCenter;
 
 	// Visual feedback on source slot
-	if (IsValid(SlotBorder))
-	{
-		SlotBorder->SetBrushColor(DraggingBorderColor);
-	}
+	bIsBeingDragged = true;
+	ApplySlotLook();
 	if (IsValid(SlotButton))
 	{
 		SlotButton->SetColorAndOpacity(FLinearColor(0.5f, 0.5f, 0.5f, 0.5f));
@@ -466,10 +506,8 @@ void UMOInventorySlot::NativeOnDragCancelled(const FDragDropEvent& InDragDropEve
 	if (IsValid(SlotDragOp) && SlotDragOp->SourceSlotIndex == SlotIndex)
 	{
 		// Restore visual state
-		if (IsValid(SlotBorder))
-		{
-			SlotBorder->SetBrushColor(NormalBorderColor);
-		}
+		bIsBeingDragged = false;
+		ApplySlotLook();
 		if (IsValid(SlotButton))
 		{
 			SlotButton->SetColorAndOpacity(FLinearColor::White);
@@ -650,16 +688,7 @@ void UMOInventorySlot::NativeOnMouseEnter(const FGeometry& InGeometry, const FPo
 
 	bIsMouseHovered = true;
 
-	// Show hover visual on border (subtle highlight)
-	if (IsValid(SlotBorder) && !bIsDragHovered)
-	{
-		// Slight lightening of border on hover
-		FLinearColor HoverTint = NormalBorderColor;
-		HoverTint.R = FMath::Min(1.0f, HoverTint.R + 0.15f);
-		HoverTint.G = FMath::Min(1.0f, HoverTint.G + 0.15f);
-		HoverTint.B = FMath::Min(1.0f, HoverTint.B + 0.15f);
-		SlotBorder->SetBrushColor(HoverTint);
-	}
+	ApplySlotLook();
 }
 
 void UMOInventorySlot::NativeOnMouseLeave(const FPointerEvent& InMouseEvent)
@@ -668,11 +697,7 @@ void UMOInventorySlot::NativeOnMouseLeave(const FPointerEvent& InMouseEvent)
 
 	bIsMouseHovered = false;
 
-	// Restore normal border color (unless drag-hovering)
-	if (IsValid(SlotBorder) && !bIsDragHovered)
-	{
-		SlotBorder->SetBrushColor(NormalBorderColor);
-	}
+	ApplySlotLook();
 }
 
 UUserWidget* UMOInventorySlot::CreateDragVisual()
@@ -707,11 +732,7 @@ void UMOInventorySlot::SetDragHoverVisual(bool bHovered)
 {
 	bIsDragHovered = bHovered;
 
-	// Update border color for hover feedback
-	if (IsValid(SlotBorder))
-	{
-		SlotBorder->SetBrushColor(bHovered ? HoverBorderColor : NormalBorderColor);
-	}
+	ApplySlotLook();
 
 	// Also tint the button slightly for extra feedback (optional)
 	if (IsValid(SlotButton))

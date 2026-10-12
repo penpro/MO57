@@ -352,17 +352,23 @@ private:
 	UPROPERTY(Transient)
 	FVector2D PressedMousePosition = FVector2D::ZeroVector;
 
-	/** Border color when slot is in normal state. */
-	UPROPERTY(EditDefaultsOnly, Category="MO|Inventory|UI|Colors")
-	FLinearColor NormalBorderColor = FLinearColor(0.1f, 0.1f, 0.1f, 1.0f);
+	/** Item being dragged FROM this slot (set between drag-detected and release/cancel). */
+	UPROPERTY(Transient)
+	bool bIsBeingDragged = false;
 
-	/** Border color when hovering during drag. */
-	UPROPERTY(EditDefaultsOnly, Category="MO|Inventory|UI|Colors")
-	FLinearColor HoverBorderColor = FLinearColor(0.2f, 0.8f, 0.2f, 1.0f);
+	/** Inner border ("SlotBorderBorder" in the WBP, found by name at construct): carries the kit corner ticks. */
+	UPROPERTY(Transient)
+	TObjectPtr<class UBorder> SlotTicksBorder;
 
-	/** Border color when this slot is being dragged. */
-	UPROPERTY(EditDefaultsOnly, Category="MO|Inventory|UI|Colors")
-	FLinearColor DraggingBorderColor = FLinearColor(0.8f, 0.8f, 0.2f, 1.0f);
+	/** Visibility the icon image had in the WBP; restored when the slot holds an item. */
+	ESlateVisibility IconDefaultVisibility = ESlateVisibility::SelfHitTestInvisible;
+
+	/**
+	 * Re-skins the slot from the UI kit tokens for its current state. Priority: dragging (source) > drag target >
+	 * mouse hover > normal. SlotBorder carries the 9-slice "slot_fill" body, the inner border the "slot_ticks"
+	 * corner marks; empty slots keep only the stronger ticks. The single place slot colours are decided.
+	 */
+	void ApplySlotLook();
 
 	UUserWidget* CreateDragVisual();
 	void SetDragHoverVisual(bool bHovered);

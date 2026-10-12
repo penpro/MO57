@@ -63,6 +63,9 @@ private:
 
 	void HookFocusEvents();
 	void UnhookFocusEvents();
+
+	/** Logs every raw key press Slate sees (key, what holds keyboard focus): "does the key reach the UI at all?" when a menu will not close. Registered with the focus hook. */
+	TSharedPtr<class IInputProcessor> KeyLogger;
 	void HandleFocusChanging(const FFocusEvent& FocusEvent, const FWeakWidgetPath& OldFocusedWidgetPath,
 		const TSharedPtr<SWidget>& OldFocusedWidget, const FWidgetPath& NewFocusedWidgetPath,
 		const TSharedPtr<SWidget>& NewFocusedWidget);

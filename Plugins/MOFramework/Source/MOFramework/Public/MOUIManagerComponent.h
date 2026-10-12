@@ -607,6 +607,10 @@ private:
 	bool bCreateReticleOnBeginPlay = true;
 
 	/** Whether to hide the reticle when inventory menu is open. */
+	/** The moodle strip, wind dial and mode plate (the HUD root + mode indicator) collapse while any menu is open (kit: a menu replaces the HUD). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|HUD", meta=(AllowPrivateAccess="true"))
+	bool bHideHUDPlatesWhenMenuOpen = true;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Reticle", meta=(AllowPrivateAccess="true"))
 	bool bHideReticleWhenMenuOpen = true;
 

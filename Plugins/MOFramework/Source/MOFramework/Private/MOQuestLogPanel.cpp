@@ -1,4 +1,6 @@
 #include "MOQuestLogPanel.h"
+#include "MOUITokens.h"
+#include "Components/VerticalBoxSlot.h"
 #include "CommonInputModeTypes.h"
 #include "MOQuestSubsystem.h"
 #include "MOQuestLogEntry.h"
@@ -351,7 +353,14 @@ void UMOQuestLogPanel::PopulateObjectives(const FMOQuestState& State, const FMOQ
 		}
 
 		ObjectiveText->SetText(FText::FromString(ObjectiveString));
-		ObjectivesContainer->AddChild(ObjectiveText);
+		// kit look: the body face, primary while open, secondary once done; wraps inside the detail plate
+		ObjectiveText->SetFont(UMOUITokens::Font(FName(TEXT("body"))));
+		ObjectiveText->SetColorAndOpacity(UMOUITokens::SlateColor(bIsComplete ? FName(TEXT("color.text.secondary")) : FName(TEXT("color.text.primary"))));
+		ObjectiveText->SetAutoWrapText(true);
+		if (UVerticalBoxSlot* ObjectiveSlot = Cast<UVerticalBoxSlot>(ObjectivesContainer->AddChild(ObjectiveText)))
+		{
+			ObjectiveSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 8.0f));
+		}
 	}
 }
 

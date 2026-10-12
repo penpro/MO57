@@ -100,9 +100,156 @@ STATES = {
 }
 
 os.makedirs(OUT, exist_ok=True)
+MANIFEST = {}   # baked piece -> {"size": [w, h], "margin": [l, t, r, b] (UMG 0..1), "draw": "Box"|"Image"}; written to Content/Python/kit_baked_manifest.json for kit_lib
+BOX64 = [0.125, 0.125, 0.125, 0.125]
+
+
+def save(im, name, margin, draw="Box", folder=None):
+    d = os.path.join(os.path.dirname(OUT), folder) if folder else OUT
+    os.makedirs(d, exist_ok=True)
+    im.save(os.path.join(d, name + ".png"))
+    MANIFEST[name] = {"size": list(im.size), "margin": margin, "draw": draw, "folder": folder or "Buttons"}
+
+
 n = 0
 for variant, states in STATES.items():
     for state, (fill, stroke) in states.items():
-        bake(fill, stroke).save(os.path.join(OUT, "T_Btn_%s_%s.png" % (variant, state)))
+        save(bake(fill, stroke), "T_Btn_%s_%s" % (variant, state), BOX64)
         n += 1
 print("baked %d button state textures into %s" % (n, OUT))
+
+# ---- rows (CSS .row: s2, hover s3, selected = accent muted over s2 + 1 px accent @ 55 %, disabled text only) : panel_fill + panel_stroke masks (margin 8 of 64)
+PF, PS = mask("panel_fill"), mask("panel_stroke")
+
+
+def bake_pf(fill, stroke=None):
+    im = Image.new("RGBA", PF.size, (0, 0, 0, 0))
+    im.alpha_composite(tint(PF, fill))
+    if stroke is not None:
+        im.alpha_composite(tint(PS, stroke))
+    return im
+
+
+accent_m = t("color.accent.muted")
+accent55 = t("color.accent")[:3] + (int(round(0.55 * 255)),)
+s2 = t("color.surface.2")
+row = {"normal": (s2, None), "hovered": (t("color.surface.3"), None), "selected": (mix(s2, accent_m), accent55), "disabled": (s2, None)}
+for k, (f, st) in row.items():
+    save(bake_pf(f, st), "T_Row_" + k, BOX64, folder="Rows")
+
+# ---- tabs (CSS .tab: 48 high, selected = primary text + 4 px accent underline inset 8 px, hover white 6 %) : the underline lives in the bottom margin row of a 64x64 9-slice
+def tab_img(fill, underline):
+    im = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+    if fill is not None:
+        im.alpha_composite(Image.new("RGBA", (64, 64), fill))
+    if underline is not None:
+        bar = Image.new("RGBA", (48, 8), underline)   # 4 px at 1x: rows 56..64, inset 8 px each side
+        im.alpha_composite(bar, (8, 56))
+    return im
+
+
+tabs = {"normal": (None, None), "hovered": (WHITE6, None), "pressed": (BLACK20, None), "selected": (None, accent), "selected_hovered": (WHITE6, accent), "disabled": (None, None)}
+for k, (f, u) in tabs.items():
+    save(tab_img(f, u), "T_Tab_" + k, BOX64, folder="Tabs")
+
+# ---- text inputs / dropdowns / spin boxes (CSS .input: s0 well, 1 px line2 + 2 px bottom rule; focus accent; error critical) : input_fill + input_stroke masks, margins 8,8,8,12 of 64
+IF, IS = mask("input_fill"), mask("input_stroke")
+IN_MARGIN = [0.125, 0.125, 0.125, 0.1875]
+
+
+def bake_in(stroke, fill=None):
+    im = Image.new("RGBA", IF.size, (0, 0, 0, 0))
+    im.alpha_composite(tint(IF, fill or t("color.surface.0")))
+    im.alpha_composite(tint(IS, stroke))
+    return im
+
+
+for k, st in {"normal": line2, "focused": accent, "error": t("color.severity.critical"), "disabled": t("color.border.subtle")}.items():
+    save(bake_in(st), "T_Input_" + k, IN_MARGIN, folder="Controls")
+
+# ---- check boxes (24 px) and toggles (52 x 28): drawn procedurally at 2x, from the kit CSS (.check / .toggle)
+from PIL import ImageDraw  # noqa: E402
+
+
+def rr(draw, box, r, fill=None, outline=None, width=0):
+    draw.rounded_rectangle(box, radius=r, fill=fill, outline=outline, width=width)
+
+
+def ss(w, h, fn):
+    """supersample 4x then reduce: smooth edges."""
+    big = Image.new("RGBA", (w * 4, h * 4), (0, 0, 0, 0))
+    fn(ImageDraw.Draw(big), 4)
+    return big.resize((w, h), Image.LANCZOS)
+
+
+ink, tx2, tx = t("color.accent.ink"), t("color.text.secondary"), t("color.text.primary")
+s0, s4 = t("color.surface.0"), t("color.surface.4")
+
+
+def check_img(on, hover):
+    W = 48   # 24 px @2x
+    def f(d, k):
+        if on:
+            rr(d, (0, 0, W * k - 1, W * k - 1), 4 * k, fill=accent if not hover else accent_h)
+            # check mark
+            d.line([(12 * k, 25 * k), (20 * k, 33 * k), (36 * k, 15 * k)], fill=ink, width=5 * k, joint="curve")
+        else:
+            rr(d, (0, 0, W * k - 1, W * k - 1), 4 * k, fill=s0, outline=tx2 if hover else line2, width=4 * k)
+    return ss(W, W, f)
+
+
+def toggle_img(on, hover):
+    w, h = 104, 56   # 52 x 28 @2x
+    def f(d, k):
+        rr(d, (0, 0, w * k - 1, h * k - 1), (h // 2) * k, fill=(accent_h if hover else accent) if on else s4)
+        if not on:
+            rr(d, (1 * k, 1 * k, w * k - 2 * k, h * k - 2 * k), (h // 2) * k, outline=tx2 if hover else line2, width=2 * k)
+        cx = (w - 28) if on else 28
+        d.ellipse(((cx - 20) * k, (h // 2 - 20) * k, (cx + 20) * k, (h // 2 + 20) * k), fill=ink if on else tx2)
+    return ss(w, h, f)
+
+
+for on in (False, True):
+    for hover in (False, True):
+        nm = ("on" if on else "off") + ("_hover" if hover else "")
+        save(check_img(on, hover), "T_Chk_" + nm, [0, 0, 0, 0], draw="Image", folder="Controls")
+        save(toggle_img(on, hover), "T_Tgl_" + nm, [0, 0, 0, 0], draw="Image", folder="Controls")
+
+# ---- slider (CSS .slider: 6 px track s4, knob 20 x 28 text primary with a 2 px s1 ring)
+def bar_img():
+    def f(d, k):
+        rr(d, (0, 0, 32 * 2 * k - 1, 12 * k - 1), 2 * k, fill=s4)
+    return ss(64, 12, f)
+
+
+def thumb_img(hover):
+    w, h = 40, 56
+    def f(d, k):
+        rr(d, (0, 0, w * k - 1, h * k - 1), 4 * k, fill=t("color.surface.1"))
+        rr(d, (4 * k, 4 * k, w * k - 5 * k, h * k - 5 * k), 2 * k, fill=accent_h if hover else tx)
+    return ss(w, h, f)
+
+
+save(bar_img(), "T_Sld_bar", [0.0469, 0.25, 0.0469, 0.25], folder="Controls")
+save(thumb_img(False), "T_Sld_thumb", [0, 0, 0, 0], draw="Image", folder="Controls")
+save(thumb_img(True), "T_Sld_thumb_hover", [0, 0, 0, 0], draw="Image", folder="Controls")
+
+# ---- menu backdrop: a black-to-clear gradient behind a left-hand button rail (legibility over a bright 3D backdrop; hard-edged scrims look heavy)
+def left_gradient():
+    w, h = 512, 8
+    im = Image.new("RGBA", (w, h))
+    px = im.load()
+    for x in range(w):
+        a = max(0.0, 1.0 - x / (w - 1)) ** 1.6 * 0.82   # ease-out: dense behind the rail, gone by the panels
+        for y in range(h):
+            px[x, y] = (7, 6, 5, int(round(a * 255)))
+    return im
+
+
+save(left_gradient(), "T_Backdrop_left", [0, 0, 0, 0], draw="Image", folder="Backdrops")
+
+import json as _json  # noqa: E402
+
+with open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "Content", "Python", "kit_baked_manifest.json"), "w") as f:
+    _json.dump(MANIFEST, f, indent=1)
+print("baked manifest: %d pieces (buttons, rows, tabs, inputs, check boxes, toggles, slider)" % len(MANIFEST))

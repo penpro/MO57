@@ -2,10 +2,23 @@
 #include "Components/TextBlock.h"
 #include "CommonTextBlock.h"
 #include "Blueprint/WidgetTree.h"
+#include "Components/OverlaySlot.h"
 
 UMOCommonButton::UMOCommonButton(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
+}
+
+void UMOCommonButton::SetSelectedState(bool bInSelected)
+{
+	if (bInSelected)
+	{
+		SetIsSelected(true, /*bGiveClickFeedback=*/false);
+	}
+	else if (GetSelected())
+	{
+		ClearSelection();
+	}
 }
 
 void UMOCommonButton::NativePreConstruct()
@@ -13,6 +26,7 @@ void UMOCommonButton::NativePreConstruct()
 	Super::NativePreConstruct();
 	// Call Blueprint event to update text during design time
 	UpdateButtonText(ButtonLabel);
+	FitFocusRingToButton();
 }
 
 void UMOCommonButton::NativeConstruct()
@@ -24,7 +38,21 @@ void UMOCommonButton::NativeConstruct()
 	{
 		FocusRing->SetVisibility(ESlateVisibility::Collapsed);
 	}
+	FitFocusRingToButton();
 	ApplyCurrentTextStyleToLabels();
+}
+
+void UMOCommonButton::FitFocusRingToButton()
+{
+	UOverlaySlot* RingSlot = FocusRing ? Cast<UOverlaySlot>(FocusRing->Slot) : nullptr;
+	if (!RingSlot)
+	{
+		return;
+	}
+	constexpr float RingReach = 4.0f;   // kit focus_ring: 2 px ring + 2 px gap, outside the button
+	FMargin ButtonPadding;
+	GetCurrentButtonPadding(ButtonPadding);
+	RingSlot->SetPadding(FMargin(-(ButtonPadding.Left + RingReach), -(ButtonPadding.Top + RingReach), -(ButtonPadding.Right + RingReach), -(ButtonPadding.Bottom + RingReach)));
 }
 
 void UMOCommonButton::ApplyCurrentTextStyleToLabels()

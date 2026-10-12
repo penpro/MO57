@@ -44,3 +44,18 @@ void UMOHUDRootWidget::NativeOnInitialized()
 		TEXT("[MOHUDRoot]   WindIndicator: BindWidget=%s"),
 		WindIndicator ? *WindIndicator->GetName() : TEXT("NULL (add WBP_WindDirection to WBP_HUDRoot, name it 'WindIndicator', tick 'Is Variable')"));
 }
+
+void UMOHUDRootWidget::SetMenuState(bool bAnyMenuOpen, bool bStatusPanelOpen)
+{
+	// the root stays in the viewport; what yields is its content (a Collapsed root would also hide the moodles the status panel wants)
+	const bool bShowStrip = !bAnyMenuOpen || bStatusPanelOpen;
+	if (StatusStrip)
+	{
+		StatusStrip->SetExpanded(bStatusPanelOpen);
+		StatusStrip->SetRenderOpacity(bShowStrip ? 1.0f : 0.0f);
+	}
+	if (WindIndicator)
+	{
+		WindIndicator->SetRenderOpacity(bAnyMenuOpen ? 0.0f : 1.0f);
+	}
+}

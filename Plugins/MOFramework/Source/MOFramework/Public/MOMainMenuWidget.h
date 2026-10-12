@@ -83,6 +83,7 @@ class UMOHostGamePanel;
 class UMOJoinGamePanel;
 class UPanelWidget;
 class UTextBlock;
+class UWidget;
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOMainMenuNewGameSignature);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOMainMenuLoadGameSignature, const FString&, SlotName);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOMainMenuExitGameSignature);
@@ -299,6 +300,15 @@ private:
 	 */
 	UPROPERTY(meta=(BindWidgetOptional))
 	TObjectPtr<UTextBlock> BuildInfoLabel;
+
+	/**
+	 * Optional: the plate that frames the focus panels. It is shown only while a panel is open (the switcher's child 0 is the blank placeholder), so the menu rail is not followed by an empty
+	 * box. Put the switcher INSIDE it and the plate grows to the open panel's size.
+	 */
+	UPROPERTY(meta=(BindWidgetOptional))
+	TObjectPtr<UWidget> PanelShell;
+
+	void UpdatePanelShell();
 
 	// ============================================================================
 	// STATE
