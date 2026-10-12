@@ -361,11 +361,10 @@ FERN = GAME + "/Megascans/3D_Plants/Fern/SM_Fern_%s.SM_Fern_%s"
 LEAVES = GAME + "/Megascans/3D_Plants/DeadLeaves/SM_DeadLeaves_%s.SM_DeadLeaves_%s"
 
 
-# The hornbeam set renders fine in the editor and in -game, but COOKING it fails (2026-10-12): M_Foliage (MS_Foliage_Material_LATEST) trips the engine's material consistency check ("Material shader map
-# M_Foliage ... is missing expected shader type FAnisotropyPS: DIFF [bHasAnisotropyConnected] Conservative=false vs Compilation=true") on every hornbeam material instance, which aborts the whole
-# package. Until that master is fixed (anisotropy is set inside the MF_* functions through SetMaterialAttributes, where the static analysis does not see it) the biome uses the BlackAlder trees
-# (the same shapes: field / forest / sapling / seedling) and the hornbeam assets stay migrated but UNREFERENCED, so they are not cooked. Flip HORNBEAM_COOKS to True once a package builds with them.
-HORNBEAM_COOKS = False
+# The hornbeam set could not be COOKED at first (2026-10-12): M_Foliage took its shading model from MaterialAttributes, which trips the 5.8 shader-map consistency check (missing FAnisotropyPS,
+# see fix_substrate_shading_model_pin.py). Content/Python/fix_hornbeam_masters.py splits it into a DefaultLit and a TwoSidedFoliage master (constant shading models) and sorts the instances,
+# and a package passes with the hornbeams. False falls back to the BlackAlder shapes (same roles) if a re-migration ever brings the problem back before that script is re-run.
+HORNBEAM_COOKS = True
 HB_TO_BA = {"Forest_10": "Forest_09", "Sapling_07": "Sapling_03", "Sapling_08": "Sapling_04", "Seedling_03": "Seedling_01", "Seedling_04": "Seedling_02", "Seedling_05": "Seedling_02", "Field_04": "Field_05"}
 
 
