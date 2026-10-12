@@ -1142,6 +1142,12 @@ private:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Water|Animation", meta=(AllowPrivateAccess="true"))
 	TSoftObjectPtr<UAnimSequence> SwimUnderDownAnim;
 
+	/** Water sounds for the body in water: the splash of feet entering, wading steps, swim strokes. Local presentation on every machine (it follows replicated movement). */
+	void UpdateWaterSounds(float DeltaTime);
+
+	float WaterSfxTimer = 0.0f;
+	float LastImmersionForSfx = 0.0f;
+
 	/** Choose the swim pose from the movement and the water, and apply it (single-node playback on the body mesh). Runs on every machine: it is cosmetic and driven by replicated movement. */
 	void UpdateSwimAnimation(float DeltaTime, bool bSwimming);
 

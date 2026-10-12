@@ -1,0 +1,41 @@
+// The breath meter: a thin bar low on the screen that appears while the player's airway is closed (head under water) or the reserve is still recovering, and fades away when the lungs are full.
+//
+// Procedural (no Widget Blueprint): the whole tree is built in NativeOnInitialized, so the HUD works without any designer asset. It reads the local pawn's UMORespirationComponent (the oxygen reserve is
+// replicated to the owner, so clients show it too) and colours itself by how much time is left: calm blue, an amber warning once the urge to breathe is strong, a pulsing red when the blackout is close.
+
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Blueprint/UserWidget.h"
+#include "MOBreathMeterWidget.generated.h"
+
+class UProgressBar;
+class UTextBlock;
+class UMORespirationComponent;
+
+UCLASS()
+class MOFRAMEWORK_API UMOBreathMeterWidget : public UUserWidget
+{
+	GENERATED_BODY()
+
+public:
+	/** Colour / visibility for a reserve: pure so the automation tests check the thresholds. Returns the bar colour; OutPulse = 0..1 red pulse strength. */
+	static FLinearColor ColorForReserve(float Reserve01, float UrgeReserve, float& OutPulse);
+
+	/** Should the meter show: head under water (airway closed) or the reserve not yet back to full. */
+	static bool ShouldShow(bool bAirwayClosed, float Reserve01);
+
+protected:
+	virtual void NativeOnInitialized() override;
+	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
+
+private:
+	UPROPERTY(Transient)
+	TObjectPtr<UProgressBar> Bar;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UTextBlock> Label;
+
+	float Alpha = 0.0f;
+	float PulseTime = 0.0f;
+};

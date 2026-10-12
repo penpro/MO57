@@ -670,6 +670,11 @@ private:
 	UPROPERTY(Transient)
 	TWeakObjectPtr<UMOFPSCounterWidget> FPSCounterWidget;
 
+	/** The breath meter (procedural widget, no asset): shown while the airway is closed or the reserve is recovering. */
+	TWeakObjectPtr<class UMOBreathMeterWidget> BreathMeterWidget;
+
+	void CreateBreathMeter();
+
 	/** Create the FPS counter widget (called on BeginPlay if setting is enabled). */
 	void CreateFPSCounter();
 

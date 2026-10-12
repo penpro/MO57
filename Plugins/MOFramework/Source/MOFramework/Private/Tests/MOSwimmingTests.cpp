@@ -5,6 +5,7 @@
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
+#include "MOBreathMeterWidget.h"
 #include "MOCharacterMovementComponent.h"
 #include "MORespirationComponent.h"
 #include "MOVitalsComponent.h"
@@ -177,6 +178,64 @@ bool FMOSwim_BreathMath::RunTest(const FString& Parameters)
 	TestTrue(TEXT("SpO2 never falls as the reserve rises"), bMonotonic);
 	TestTrue(TEXT("the unconscious line (SpO2 < 70) comes while there is still reserve to lose"), FMOBreathMath::SpO2ForReserve(P, 0.12f) < 85.0f);
 	TestTrue(TEXT("the floor is below the respiratory-failure line (50)"), P.EmptyReserveSpO2 < 50.0f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOSwim_ColdWater,
+	"MOFramework.Water.ColdWater",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOSwim_ColdWater::RunTest(const FString& Parameters)
+{
+	// Dry: nothing changes.
+	float Ambient = 20.0f, Insulation = 0.55f;
+	UMOVitalsComponent::ApplyWaterToExposure(0.0f, 20.0f, Ambient, Insulation);
+	TestEqual(TEXT("on land the ambient is the air's"), Ambient, 20.0f);
+	TestEqual(TEXT("... and the insulation is intact"), Insulation, 0.55f);
+
+	// Fully immersed on a mild day: the water is colder than the air and the clothes stop insulating.
+	Ambient = 20.0f;
+	Insulation = 0.55f;
+	UMOVitalsComponent::ApplyWaterToExposure(1.0f, 20.0f, Ambient, Insulation);
+	TestEqual(TEXT("fully immersed: the ambient is the water temperature"), Ambient, UMOVitalsComponent::WaterTemperatureForAir(20.0f));
+	TestTrue(TEXT("water on a 20 C day is colder than the air (a lake lags the air)"), Ambient < 20.0f);
+	TestTrue(TEXT("soaked clothes insulate at most 15 % of what dry ones do"), Insulation <= 0.55f * 0.151f);
+
+	// Half immersed: in between.
+	Ambient = 20.0f;
+	Insulation = 0.55f;
+	UMOVitalsComponent::ApplyWaterToExposure(0.5f, 20.0f, Ambient, Insulation);
+	TestTrue(TEXT("half immersed is between air and water"), Ambient < 20.0f && Ambient > UMOVitalsComponent::WaterTemperatureForAir(20.0f));
+	TestTrue(TEXT("... and about half-way through the insulation"), Insulation < 0.55f && Insulation > 0.55f * 0.15f);
+
+	// The heat loss: in cold water the exposure (1 - insulation) times the temperature difference to the body is several times the dry value.
+	const float DryLoss = (20.0f - 37.0f) * (1.0f - 0.55f);
+	const float WetLoss = (UMOVitalsComponent::WaterTemperatureForAir(20.0f) - 37.0f) * (1.0f - 0.55f * 0.15f);
+	TestTrue(*FString::Printf(TEXT("a swimmer loses heat %.1fx faster than a dry person in the same air (%.1f vs %.1f)"), WetLoss / DryLoss, WetLoss, DryLoss), WetLoss / DryLoss > 1.8f);
+	TestTrue(TEXT("water temperature is always liveable-range bounded"), UMOVitalsComponent::WaterTemperatureForAir(-30.0f) >= 1.0f && UMOVitalsComponent::WaterTemperatureForAir(60.0f) <= 26.0f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOSwim_BreathMeter,
+	"MOFramework.Water.BreathMeter",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOSwim_BreathMeter::RunTest(const FString& Parameters)
+{
+	TestFalse(TEXT("lungs full, airway open: the meter stays hidden"), UMOBreathMeterWidget::ShouldShow(false, 1.0f));
+	TestTrue(TEXT("head under water: shown even with a full reserve"), UMOBreathMeterWidget::ShouldShow(true, 1.0f));
+	TestTrue(TEXT("recovering after a dive: shown until the lungs are full again"), UMOBreathMeterWidget::ShouldShow(false, 0.6f));
+
+	float Pulse = -1.0f;
+	const FLinearColor Calm = UMOBreathMeterWidget::ColorForReserve(0.9f, 0.5f, Pulse);
+	TestEqual(TEXT("plenty of air: no pulse"), Pulse, 0.0f);
+	const FLinearColor Mid = UMOBreathMeterWidget::ColorForReserve(0.35f, 0.5f, Pulse);
+	TestEqual(TEXT("an urge to breathe: warning colour, still no pulse"), Pulse, 0.0f);
+	const FLinearColor Low = UMOBreathMeterWidget::ColorForReserve(0.05f, 0.5f, Pulse);
+	TestTrue(TEXT("almost out: pulsing"), Pulse > 0.4f);
+	TestTrue(TEXT("calm is blue (blue > red)"), Calm.B > Calm.R);
+	TestTrue(TEXT("danger is red (red > blue)"), Low.R > Low.B + 0.5f);
+	TestTrue(TEXT("the warning colour is warmer than the calm one"), Mid.R > Calm.R);
 	return true;
 }
 

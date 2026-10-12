@@ -233,6 +233,22 @@ void UMOVitalsComponent::SetActivityLevel(EMOActivityLevel NewActivity)
 	}
 }
 
+float UMOVitalsComponent::WaterTemperatureForAir(float AirFeelsLikeC)
+{
+	return FMath::Clamp(0.7f * AirFeelsLikeC + 3.0f, 1.0f, 26.0f);
+}
+
+void UMOVitalsComponent::ApplyWaterToExposure(float Immersion01, float AirFeelsLikeC, float& InOutAmbientC, float& InOutInsulation)
+{
+	const float W = FMath::Clamp(Immersion01, 0.0f, 1.0f);
+	if (W <= 0.0f)
+	{
+		return;
+	}
+	InOutAmbientC = FMath::Lerp(InOutAmbientC, WaterTemperatureForAir(AirFeelsLikeC), W);
+	InOutInsulation *= (1.0f - 0.85f * W);
+}
+
 void UMOVitalsComponent::SetAirwayOxygenReserve(float Reserve01, float SpO2Cap)
 {
 	AirwayOxygenReserve = FMath::Clamp(Reserve01, 0.0f, 1.0f);
@@ -1290,7 +1306,12 @@ void UMOVitalsComponent::UpdateEnvironmentalTemperature(float DeltaSeconds)
 		BaseInsulationFactor + ClothingBonus + ShelterInsulationBonus * CachedOverheadCover,
 		0.0f, 0.95f);
 
+	// In water the body exchanges heat with the water (colder than the air, far better conducting) through soaked clothes: see ApplyWaterToExposure.
+	float AmbientForBody = FeelsLikeC;
+	float InsulationForBody = Insulation;
+	ApplyWaterToExposure(WaterImmersion, FeelsLikeC, AmbientForBody, InsulationForBody);
+
 	// Pass the real elapsed interval so drift integrates correctly despite the
 	// throttle (ApplyEnvironmentalTemperature still applies the clock TimeScale).
-	ApplyEnvironmentalTemperature(FeelsLikeC, Insulation, DeltaSeconds);
+	ApplyEnvironmentalTemperature(AmbientForBody, InsulationForBody, DeltaSeconds);
 }

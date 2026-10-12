@@ -1,0 +1,6 @@
+base||
+hairrt0||r.HairStrands.Raytracing 0
+hairlow||r.HairStrands.Raytracing 0,r.HairStrands.DeepShadow.Resolution 512,r.HairStrands.Visibility.Compute.SamplePerPixel 4
+comboA||r.Shadow.Virtual.ResolutionLodBiasDirectional 1,r.Shadow.Virtual.ResolutionLodBiasLocal 1,r.Nanite.MaxPixelsPerEdge 2
+comboB||r.Shadow.Virtual.ResolutionLodBiasDirectional 1,r.Shadow.Virtual.ResolutionLodBiasLocal 1,r.Nanite.MaxPixelsPerEdge 2,r.HairStrands.Raytracing 0,r.Lumen.HardwareRayTracing 0,r.Lumen.Reflections.HardwareRayTracing 0
+comboC|-NoRayTracing|r.Shadow.Virtual.ResolutionLodBiasDirectional 1,r.Shadow.Virtual.ResolutionLodBiasLocal 1,r.Nanite.MaxPixelsPerEdge 2,r.Lumen.HardwareRayTracing 0,r.Lumen.Reflections.HardwareRayTracing 0,r.HairStrands.DeepShadow.Resolution 512,r.HairStrands.Visibility.Compute.SamplePerPixel 4

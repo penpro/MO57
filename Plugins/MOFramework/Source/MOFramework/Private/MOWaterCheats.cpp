@@ -4,6 +4,7 @@
 //   MO.Water.GoToLake [rank=0] [dry]     teleport the local pawn into the rank-th nearest upland lake (centre, a metre under the surface so it floats up); `dry` = onto the bank a few metres from the shore
 //   MO.Water.SetBreath <0..1>            set the local pawn's oxygen reserve (tests)
 //   MO.Water.Stroke [seconds=5] [up|down] hold a swimming stroke along the camera direction (or straight up / down) for a few seconds: the held keys, for tests
+//   MO.Water.Meter                       the breath meter widget's visibility, opacity and on-screen rectangle
 
 #include "CoreMinimal.h"
 
@@ -14,6 +15,7 @@
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
 #include "HAL/IConsoleManager.h"
+#include "MOBreathMeterWidget.h"
 #include "MOCharacter.h"
 #include "MOCharacterMovementComponent.h"
 #include "MOFramework.h"
@@ -49,12 +51,13 @@ namespace
 			const UMORespirationComponent* Breath = Pawn->GetRespirationComponent();
 			const UMOVitalsComponent* Vitals = Pawn->GetVitalsComponent();
 			UE_LOG(LogMOFramework, Warning,
-				TEXT("[MOQUERY] WATER Swim pos=(%.0f, %.0f, %.0f) surface=%s%.0f immersion=%.2f depth=%.0fcm mode=%s swimming=%d headUnder=%d | airwayClosed=%d reserve=%.2f spo2=%.1f asphyxiating=%.1fs | stamina=%.1f speed=%.0f cm/s"),
+				TEXT("[MOQUERY] WATER Swim pos=(%.0f, %.0f, %.0f) surface=%s%.0f immersion=%.2f depth=%.0fcm mode=%s swimming=%d headUnder=%d | airwayClosed=%d reserve=%.2f spo2=%.1f asphyxiating=%.1fs | stamina=%.1f speed=%.0f cm/s | bodyTemp=%.2fC vitalsImmersion=%.2f wet=%.2f"),
 				Pawn->GetActorLocation().X, Pawn->GetActorLocation().Y, Pawn->GetActorLocation().Z,
 				bHave ? TEXT("") : TEXT("(none) "), Surface, Move ? Move->GetImmersion() : 0.0f, Move ? Move->GetWaterDepthCm() : 0.0f,
 				Move ? *UEnum::GetValueAsString(Move->MovementMode.GetValue()) : TEXT("?"), Pawn->IsSwimming() ? 1 : 0, (Move && Move->IsHeadUnderwater()) ? 1 : 0,
 				(Breath && Breath->IsAirwayClosed()) ? 1 : 0, Breath ? Breath->GetOxygenReserve() : -1.0f, Vitals ? Vitals->Vitals.SpO2 : -1.0f, Breath ? Breath->GetSecondsAsphyxiating() : 0.0f,
-				Pawn->GetSurvivalStatsComponent() ? Pawn->GetSurvivalStatsComponent()->GetStatCurrent(TEXT("Stamina")) : -1.0f, Pawn->GetVelocity().Size());
+				Pawn->GetSurvivalStatsComponent() ? Pawn->GetSurvivalStatsComponent()->GetStatCurrent(TEXT("Stamina")) : -1.0f, Pawn->GetVelocity().Size(),
+				Vitals ? Vitals->Vitals.BodyTemperature : -1.0f, Vitals ? Vitals->GetWaterImmersion() : -1.0f, Vitals ? Vitals->GetWetnessLevel() : -1.0f);
 		}));
 
 	FAutoConsoleCommandWithWorldAndArgs GGoToLakeCmd(
@@ -181,6 +184,31 @@ namespace
 				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WATER SetBreath %.2f"), Pawn->GetRespirationComponent()->GetOxygenReserve());
 			}
 		}));
+	FAutoConsoleCommandWithWorldAndArgs GMeterCmd(
+		TEXT("MO.Water.Meter"),
+		TEXT("Dev: report the breath meter widgets' state (visibility, opacity, on-screen rectangle). Usage: MO.Water.Meter"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			int32 Count = 0;
+			for (TObjectIterator<UMOBreathMeterWidget> It; It; ++It)
+			{
+				if (It->GetWorld() != World)
+				{
+					continue;
+				}
+				++Count;
+				const FGeometry& Geo = It->GetCachedGeometry();
+				const FVector2D Abs = Geo.GetAbsolutePosition();
+				const FVector2D Size = Geo.GetAbsoluteSize();
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WATER Meter visibility=%d opacity=%.2f inViewport=%d rect=(%.0f, %.0f) size=(%.0f x %.0f) desired=(%.0f x %.0f)"),
+					(int32)It->GetVisibility(), It->GetRenderOpacity(), It->IsInViewport() ? 1 : 0, Abs.X, Abs.Y, Size.X, Size.Y, It->GetDesiredSize().X, It->GetDesiredSize().Y);
+			}
+			if (Count == 0)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WATER Meter: no breath meter widget in this world"));
+			}
+		}));
+
 }
 
 #endif // !UE_BUILD_SHIPPING

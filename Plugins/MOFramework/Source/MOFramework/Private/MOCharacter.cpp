@@ -25,6 +25,7 @@
 #include "MOAnatomyComponent.h"
 #include "MOAdrenalineComponent.h"
 #include "MORespirationComponent.h"
+#include "MOAudioSubsystem.h"
 #include "MOCraftingQueueComponent.h"
 #include "MORecipeDiscoveryComponent.h"
 #include "MOEquipmentComponent.h"
@@ -1222,6 +1223,67 @@ void AMOCharacter::HandleAsphyxiaDeath()
 	HandleInstantDeath(EMOBodyPartType::Brain);   // drowning kills by hypoxia of the brain
 }
 
+void AMOCharacter::UpdateWaterSounds(float DeltaTime)
+{
+	const UMOCharacterMovementComponent* Move = Cast<UMOCharacterMovementComponent>(GetCharacterMovement());
+	if (!Move || IsNetMode(NM_DedicatedServer))
+	{
+		return;
+	}
+	const float Immersion = Move->GetImmersion();
+	const float Previous = LastImmersionForSfx;
+	LastImmersionForSfx = Immersion;
+	WaterSfxTimer = FMath::Max(0.0f, WaterSfxTimer - DeltaTime);
+
+	UMOAudioSubsystem* Audio = UMOAudioSubsystem::Get(this);
+	if (!Audio)
+	{
+		return;
+	}
+	auto Splash = [&](const FVector& At)
+	{
+		const FName Id = FMath::RandBool() ? FName(TEXT("SFX.Footsteps.WaterSplash1")) : FName(TEXT("SFX.Footsteps.WaterSplash2"));
+		const bool bPlayed = Audio->PlayOneShotAtLocation(this, Id, At);
+		UE_LOG(LogMOFramework, Log, TEXT("[MOWater] splash %s %s (immersion %.2f, speed %.0f)"), *Id.ToString(), bPlayed ? TEXT("played") : TEXT("NOT PLAYED"), Immersion, GetVelocity().Size2D());
+	};
+
+	float Surface = 0.0f;
+	if (!Move->GetWaterSurfaceZ(Surface))
+	{
+		return;
+	}
+	const FVector Feet = GetActorLocation() - FVector(0.0f, 0.0f, GetSimpleCollisionHalfHeight());
+	const FVector OnWater(GetActorLocation().X, GetActorLocation().Y, Surface);
+	const float Speed2D = GetVelocity().Size2D();
+
+	// The feet reach the water (a step in, a landing) and the water reaches the chest (the plunge into a swim): one splash each.
+	if (Previous < 0.10f && Immersion >= 0.10f)
+	{
+		Splash(Feet);
+		WaterSfxTimer = 0.4f;
+	}
+	else if (Previous < 0.70f && Immersion >= 0.70f)
+	{
+		Splash(OnWater);
+		WaterSfxTimer = 0.6f;
+	}
+	else if (WaterSfxTimer <= 0.0f)
+	{
+		if (Move->IsSwimming() && !Move->IsHeadUnderwater() && Speed2D > 30.0f)
+		{
+			// A stroke: about every 0.9 s slow, 0.6 s at a crawl, at the hands in front of the swimmer.
+			Splash(OnWater + GetActorForwardVector() * 45.0f);
+			WaterSfxTimer = Speed2D > 0.7f * Move->GetMaxSpeed() ? 0.6f : 0.9f;
+		}
+		else if (!Move->IsSwimming() && Immersion > 0.08f && Speed2D > 40.0f && Move->IsMovingOnGround())
+		{
+			// A wading step: the cadence follows the speed (a walk is about two steps a second).
+			Splash(Feet);
+			WaterSfxTimer = FMath::Clamp(0.62f * 250.0f / Speed2D, 0.3f, 0.9f);
+		}
+	}
+}
+
 AMOCharacter::ESwimPose AMOCharacter::ChooseSwimPose() const
 {
 	const UMOCharacterMovementComponent* Move = Cast<UMOCharacterMovementComponent>(GetCharacterMovement());
@@ -1368,6 +1430,11 @@ void AMOCharacter::TickWater(float DeltaTime)
 		{
 			RespirationComponent->SetAirwayClosedBy(TEXT("Water"), !bIsDead && Move->IsHeadUnderwater());
 		}
+		// The body exchanges heat with the water (colder than the air, soaked clothes do not insulate): the vitals' environmental temperature pipeline.
+		if (VitalsComponent)
+		{
+			VitalsComponent->SetWaterImmersion(Move->GetImmersion());
+		}
 		// Clothes soak through as the water rises (the existing wetness pipeline: cold, drying by fire, moodle).
 		if (VitalsComponent && Move->GetImmersion() > 0.05f)
 		{
@@ -1395,6 +1462,10 @@ void AMOCharacter::TickWater(float DeltaTime)
 	Move->SwimSpeedScale = Scale;
 
 	UpdateSwimAnimation(DeltaTime, bSwimming && !bIsDead);
+	if (!bIsDead)
+	{
+		UpdateWaterSounds(DeltaTime);
+	}
 
 	bWasSwimmingLastTick = bSwimming;
 }

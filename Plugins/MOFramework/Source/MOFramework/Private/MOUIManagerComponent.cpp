@@ -16,6 +16,7 @@
 #include "MOInventoryMenu.h"
 #include "MOReticleWidget.h"
 #include "MOFPSCounterWidget.h"
+#include "MOBreathMeterWidget.h"
 #include "MOGameSettings.h"
 #include "MOInGameMenu.h"
 #include "MOItemContextMenu.h"
@@ -138,6 +139,8 @@ void UMOUIManagerComponent::BeginPlay()
 		// Always create FPS counter (visibility controlled by settings)
 		CreateFPSCounter();
 
+		CreateBreathMeter();
+
 		// Start focus hint timer if enabled
 		if (bFocusHintEnabled)
 		{
@@ -157,6 +160,12 @@ void UMOUIManagerComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 		Reticle->RemoveFromParent();
 	}
 	ReticleWidget.Reset();
+
+	if (UMOBreathMeterWidget* Meter = BreathMeterWidget.Get())
+	{
+		Meter->RemoveFromParent();
+	}
+	BreathMeterWidget.Reset();
 
 	// Clean up FPS counter widget
 	if (UMOFPSCounterWidget* FPSCounter = FPSCounterWidget.Get())
@@ -423,6 +432,24 @@ void UMOUIManagerComponent::CreateReticle()
 	NewReticle->AddToViewport(ReticleZOrder);
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Reticle widget created and added to viewport."));
+}
+
+void UMOUIManagerComponent::CreateBreathMeter()
+{
+	APlayerController* PlayerController = ResolveOwningPlayerController();
+	if (!IsValid(PlayerController) || BreathMeterWidget.IsValid())
+	{
+		return;
+	}
+	UMOBreathMeterWidget* Meter = CreateWidget<UMOBreathMeterWidget>(PlayerController, UMOBreathMeterWidget::StaticClass());
+	if (!IsValid(Meter))
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOUI] Failed to create the breath meter widget."));
+		return;
+	}
+	BreathMeterWidget = Meter;
+	Meter->AddToPlayerScreen(40);   // full screen; the widget places its own bar low and centred
+	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Breath meter created."));
 }
 
 void UMOUIManagerComponent::CreateFPSCounter()

@@ -470,6 +470,25 @@ public:
 	 */
 	void SetAirwayOxygenReserve(float Reserve01, float SpO2Cap);
 
+	/**
+	 * The fraction (0..1) of the body in water, reported by the movement component. The environmental temperature pipeline then exchanges heat with the WATER instead of the air, through clothes that
+	 * no longer insulate (water conducts about 25 times better than air and soaks the layers). Authority-side; 0 on land.
+	 */
+	void SetWaterImmersion(float Immersion01) { WaterImmersion = FMath::Clamp(Immersion01, 0.0f, 1.0f); }
+
+	UFUNCTION(BlueprintPure, Category="MO|Vitals|Temperature")
+	float GetWaterImmersion() const { return WaterImmersion; }
+
+	/** Temperature (C) of open water given the local air feels-like temperature: lakes and seas follow the air slowly and never quite reach it (cold mountain lakes ~5 C, a warm summer sea ~24 C). */
+	UFUNCTION(BlueprintPure, Category="MO|Vitals|Temperature")
+	static float WaterTemperatureForAir(float AirFeelsLikeC);
+
+	/**
+	 * The heat exchange with the surroundings of a body Immersion (0..1) in water: blends the ambient toward the water temperature and strips the insulation (x (1 - 0.85 x immersion)).
+	 * Pure (no actor state) so the automation tests can check it.
+	 */
+	static void ApplyWaterToExposure(float Immersion01, float AirFeelsLikeC, float& InOutAmbientC, float& InOutInsulation);
+
 	/** Oxygen reserve last reported by the respiration component (1 = full). */
 	UFUNCTION(BlueprintPure, Category="MO|Vitals")
 	float GetAirwayOxygenReserve() const { return AirwayOxygenReserve; }
@@ -723,6 +742,9 @@ private:
 	/** Oxygen reserve + the SpO2 cap it implies, from UMORespirationComponent (defaults: full reserve, no cap). */
 	float AirwayOxygenReserve = 1.0f;
 	float AirwaySpO2Cap = 100.0f;
+
+	/** Fraction of the body in water (SetWaterImmersion). */
+	float WaterImmersion = 0.0f;
 
 	/** Calculate oxygen saturation. */
 	void CalculateOxygenSaturation();
