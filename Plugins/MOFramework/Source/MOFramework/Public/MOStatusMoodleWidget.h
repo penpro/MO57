@@ -39,6 +39,7 @@
 
 class UImage;
 class UTextBlock;
+class UWidget;
 
 UCLASS()
 class MOFRAMEWORK_API UMOStatusMoodleWidget : public UUserWidget
@@ -81,22 +82,17 @@ protected:
 	TObjectPtr<UTextBlock> StackText;
 
 	/**
-	 * Severity → tint mapping. Designers can override per-WBP in Class
-	 * Defaults to rebrand without C++ changes. Defaults follow standard
-	 * status-bar conventions (info=neutral, warning=amber, critical=red,
-	 * buff=green).
+	 * Severity is shown by colour AND shape (never colour alone): an optional glyph (kit ic_sev_*: circle-check / diamond / triangle / octagon) and, for Critical, the kit's double border that pulses
+	 * (alpha 1 -> 0.55 over `motion.pulse.critical`; static when reduced motion sets the token to 0). The tint colours are tokens (color.severity.*, colour-blind block honoured), not properties.
 	 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="MO|HUD|Moodle|Style")
-	FLinearColor InfoTint = FLinearColor(0.8f, 0.8f, 0.8f, 1.f);
+	UPROPERTY(meta=(BindWidgetOptional))
+	TObjectPtr<UImage> SeverityShapeImage;
 
-	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="MO|HUD|Moodle|Style")
-	FLinearColor WarningTint = FLinearColor(1.f, 0.7f, 0.2f, 1.f);
+	/** Optional: any widget; shown only while the moodle is Critical and pulsed. The kit `critical_border` 9-slice, padded -6 around the pill. */
+	UPROPERTY(meta=(BindWidgetOptional))
+	TObjectPtr<UWidget> CriticalBorder;
 
-	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="MO|HUD|Moodle|Style")
-	FLinearColor CriticalTint = FLinearColor(1.f, 0.25f, 0.25f, 1.f);
-
-	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="MO|HUD|Moodle|Style")
-	FLinearColor BuffTint = FLinearColor(0.4f, 1.f, 0.5f, 1.f);
+	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 
 private:
 	/** Last data set — applied to widgets on construct / SetMoodle. */
@@ -106,5 +102,9 @@ private:
 	/** Cached severity to detect changes so OnSeverityChanged only fires on actual transitions. */
 	EMOStatusMoodleSeverity LastAppliedSeverity = EMOStatusMoodleSeverity::Info;
 
+	static FName ColorTokenForSeverity(EMOStatusMoodleSeverity Severity);
+	static FName ShapeIconForSeverity(EMOStatusMoodleSeverity Severity);
 	FLinearColor TintForSeverity(EMOStatusMoodleSeverity Severity) const;
+
+	float PulseClock = 0.0f;
 };

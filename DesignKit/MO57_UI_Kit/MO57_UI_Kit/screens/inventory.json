@@ -1,0 +1,193 @@
+{
+  "title": "Inventory",
+  "layer": "Menu",
+  "input": "menu",
+  "grid": "Panel 1600x880 centred (160,100); 24px padding; 3 columns 400 / 568 / 536, 24 gutters",
+  "elements": [
+    {
+      "id": "Panel",
+      "widget": "WBP_MOPanel(elev1)",
+      "rect": [
+        160,
+        100,
+        1600,
+        880
+      ],
+      "anchor": "Center",
+      "tokens": {
+        "bg": "color.surface.1",
+        "edge": "color.border.subtle"
+      },
+      "focus": 0
+    },
+    {
+      "id": "Header",
+      "widget": "WBP_PanelHeader",
+      "rect": [
+        184,
+        116,
+        1552,
+        56
+      ],
+      "anchor": "Center",
+      "tokens": {
+        "title": "type.title",
+        "weight": "type.numeric",
+        "close": "icon button 44"
+      },
+      "focus": 0
+    },
+    {
+      "id": "PaperDoll",
+      "widget": "WBP_EquipmentDoll",
+      "rect": [
+        184,
+        196,
+        400,
+        760
+      ],
+      "anchor": "Center",
+      "tokens": {
+        "slot": "slot 64",
+        "silhouette": "color.surface.3 line art"
+      },
+      "focus": 2,
+      "note": "12 slots: head, face, neck, torso-inner, torso-outer, back, hands, belt, legs, feet, L hand, R hand"
+    },
+    {
+      "id": "BackpackHeader",
+      "widget": "WBP_SectionHeader",
+      "rect": [
+        608,
+        196,
+        568,
+        40
+      ],
+      "anchor": "Center",
+      "tokens": {
+        "text": "type.label",
+        "capacity": "type.numeric.small"
+      },
+      "focus": 0
+    },
+    {
+      "id": "BackpackGrid",
+      "widget": "WBP_InventoryGrid",
+      "rect": [
+        608,
+        244,
+        568,
+        424
+      ],
+      "anchor": "Center",
+      "tokens": {
+        "slot": "64 gap 8",
+        "cols": 8,
+        "rows": 6
+      },
+      "focus": 1,
+      "note": "initial focus"
+    },
+    {
+      "id": "NearbyHeader",
+      "widget": "WBP_SectionHeader+Actions",
+      "rect": [
+        608,
+        692,
+        568,
+        44
+      ],
+      "anchor": "Center",
+      "tokens": {
+        "actions": "Take all / Deposit matching (secondary, h44)"
+      },
+      "focus": 3
+    },
+    {
+      "id": "NearbyList",
+      "widget": "WBP_ItemList",
+      "rect": [
+        608,
+        740,
+        568,
+        216
+      ],
+      "anchor": "Center",
+      "tokens": {
+        "row": "row.height 48",
+        "count": "type.numeric"
+      },
+      "focus": 4
+    },
+    {
+      "id": "ItemInfo",
+      "widget": "WBP_ItemInfoPanel(elev2)",
+      "rect": [
+        1200,
+        196,
+        536,
+        680
+      ],
+      "anchor": "Center",
+      "tokens": {
+        "name": "type.heading",
+        "stats": "type.body + type.numeric",
+        "condition": "progress segmented"
+      },
+      "focus": 5
+    },
+    {
+      "id": "ItemActions",
+      "widget": "WBP_ButtonRow",
+      "rect": [
+        1200,
+        892,
+        536,
+        56
+      ],
+      "anchor": "Center",
+      "tokens": {
+        "primary": "Use (56)",
+        "secondary": "Split / Drop"
+      },
+      "focus": 6
+    },
+    {
+      "id": "ContextMenu",
+      "widget": "WBP_ContextMenu",
+      "rect": [
+        0,
+        0,
+        280,
+        0
+      ],
+      "anchor": "Cursor",
+      "tokens": {
+        "row": 44,
+        "bg": "surface.3 + shadow"
+      },
+      "focus": 0,
+      "note": "spawns at slot; gamepad: face_west"
+    },
+    {
+      "id": "DragVisual",
+      "widget": "WBP_DragVisual",
+      "rect": [
+        0,
+        0,
+        64,
+        64
+      ],
+      "anchor": "Cursor",
+      "tokens": {
+        "opacity": 0.85,
+        "count": "type.numeric.small"
+      },
+      "focus": 0
+    }
+  ],
+  "referenceResolution": [
+    1920,
+    1080
+  ]
+}

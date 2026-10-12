@@ -1,4 +1,5 @@
 #include "MOCharacterUIController.h"
+#include "MOUITokens.h"
 #include "MOFramework.h"
 
 #include "GameFramework/PlayerController.h"
@@ -1075,15 +1076,14 @@ void UMOCharacterUIController::EnsureDefaultMoodleIcons()
 		}
 		for (const TCHAR* Name : Names)
 		{
-			const FString Path = FString::Printf(TEXT("/MOFramework/UI/Icons/Moodles/T_Moodle_%s.T_Moodle_%s"), Name, Name);
-			Icons.Add(LoadObject<UTexture2D>(nullptr, *Path));   // null if the asset is missing: that level stays label-only
+			Icons.Add(UMOUITokens::Icon(FName(*FString::Printf(TEXT("ic_moodle_%s"), Name))));   // the kit glyph set (white on transparent); null if missing: that level stays label-only
 		}
 	};
-	Fill(ThermalMoodleIcons, { TEXT("VeryCold"), TEXT("Cold"), TEXT("Cold"), TEXT("Hot"), TEXT("VeryHot") });   // [2] Comfortable is unused (no moodle then)
-	Fill(WetMoodleIcons, { TEXT("Damp"), TEXT("Wet"), TEXT("Soaked") });
-	Fill(HungerMoodleIcons, { TEXT("Hungry"), TEXT("Starving") });
-	Fill(ThirstMoodleIcons, { TEXT("Thirsty"), TEXT("Dehydrated") });
-	Fill(EnergyMoodleIcons, { TEXT("Tired"), TEXT("Exhausted") });
+	Fill(ThermalMoodleIcons, { TEXT("very_cold"), TEXT("cold"), TEXT("cold"), TEXT("hot"), TEXT("very_hot") });   // [2] Comfortable is unused (no moodle then)
+	Fill(WetMoodleIcons, { TEXT("damp"), TEXT("wet"), TEXT("soaked") });
+	Fill(HungerMoodleIcons, { TEXT("hungry"), TEXT("starving") });
+	Fill(ThirstMoodleIcons, { TEXT("thirsty"), TEXT("dehydrated") });
+	Fill(EnergyMoodleIcons, { TEXT("tired"), TEXT("exhausted") });
 }
 
 UTexture2D* UMOCharacterUIController::PickIconForLevel(const TArray<TObjectPtr<UTexture2D>>& Icons, int32 Level)

@@ -81,6 +81,10 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Reticle")
 	FLinearColor ReticleColor = FLinearColor::White;
 
+	/** The reticle takes color.text.primary from the theme tokens; SetReticleColor (or this off) pins ReticleColor instead. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Reticle")
+	bool bUseThemeColor = true;
+
 	/** Total size of the crosshair (distance from center to end of line). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Reticle", meta=(ClampMin="1.0"))
 	float ReticleSize = 10.0f;

@@ -162,34 +162,18 @@ protected:
 	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
 	TObjectPtr<UImage> IconImage;
 
-	// --- Type Colors (Configurable in Blueprint) ---
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Notification|Colors")
-	FLinearColor InfoColor = FLinearColor(0.2f, 0.6f, 1.0f, 1.0f);  // Blue
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Notification|Colors")
-	FLinearColor SuccessColor = FLinearColor(0.2f, 0.8f, 0.2f, 1.0f);  // Green
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Notification|Colors")
-	FLinearColor WarningColor = FLinearColor(1.0f, 0.8f, 0.2f, 1.0f);  // Yellow/Gold
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Notification|Colors")
-	FLinearColor ErrorColor = FLinearColor(1.0f, 0.2f, 0.2f, 1.0f);  // Red
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Notification|Colors")
-	FLinearColor ItemPickupColor = FLinearColor(0.8f, 0.8f, 0.8f, 1.0f);  // Light Gray
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Notification|Colors")
-	FLinearColor SkillGainColor = FLinearColor(0.6f, 0.4f, 1.0f, 1.0f);  // Purple
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Notification|Colors")
-	FLinearColor BackgroundColorBase = FLinearColor(0.0f, 0.0f, 0.0f, 0.7f);  // Semi-transparent black
+	/** Optional: the 4 px leading bar, tinted by the notification's severity colour (kit: severity = icon + leading bar, never text colour alone). */
+	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
+	TObjectPtr<UBorder> SeverityBar;
 
 private:
 	/** Current notification type. */
 	EMONotificationType CurrentType = EMONotificationType::Info;
 
 	/** Pending message to set after construct. */
+	/** True once a caller supplied its own icon: the type's default glyph must not replace it. */
+	bool bIconExplicit = false;
+
 	FText PendingMessage;
 	bool bHasPendingMessage = false;
 

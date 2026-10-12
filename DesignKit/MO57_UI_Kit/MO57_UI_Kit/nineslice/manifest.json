@@ -1,0 +1,467 @@
+{
+  "note": "All textures white; tint from tokens. UMG Brush: DrawAs=Box, Margin = px/texture size (given). Stack fill+stroke(+shadow) in an Overlay.",
+  "pieces": {
+    "panel_fill": {
+      "file1x": "1x/T_UI_panel_fill.png",
+      "file2x": "2x/T_UI_panel_fill@2x.png",
+      "size1x": [
+        32,
+        32
+      ],
+      "marginPx": {
+        "left": 4,
+        "top": 4,
+        "right": 4,
+        "bottom": 4
+      },
+      "umgMargin": {
+        "Left": 0.125,
+        "Top": 0.125,
+        "Right": 0.125,
+        "Bottom": 0.125
+      },
+      "drawAs": "Box",
+      "usage": "Panel/card/tooltip body. Tint: color.surface.N. Grain baked in luminance (<=6%)."
+    },
+    "panel_stroke": {
+      "file1x": "1x/T_UI_panel_stroke.png",
+      "file2x": "2x/T_UI_panel_stroke@2x.png",
+      "size1x": [
+        32,
+        32
+      ],
+      "marginPx": {
+        "left": 4,
+        "top": 4,
+        "right": 4,
+        "bottom": 4
+      },
+      "umgMargin": {
+        "Left": 0.125,
+        "Top": 0.125,
+        "Right": 0.125,
+        "Bottom": 0.125
+      },
+      "drawAs": "Box",
+      "usage": "1px panel edge. Tint: color.border.subtle (elev 0/1) or border.strong (inputs)."
+    },
+    "panel_shadow": {
+      "file1x": "1x/T_UI_panel_shadow.png",
+      "file2x": "2x/T_UI_panel_shadow@2x.png",
+      "size1x": [
+        64,
+        64
+      ],
+      "marginPx": {
+        "left": 24,
+        "top": 24,
+        "right": 24,
+        "bottom": 24
+      },
+      "umgMargin": {
+        "Left": 0.375,
+        "Top": 0.375,
+        "Right": 0.375,
+        "Bottom": 0.375
+      },
+      "drawAs": "Box",
+      "usage": "Soft drop shadow, draw 16px outside the panel rect (padding -16). Tint black; alpha 0.5 elev 2, 0.7 modal."
+    },
+    "modal_rule": {
+      "file1x": "1x/T_UI_modal_rule.png",
+      "file2x": "2x/T_UI_modal_rule@2x.png",
+      "size1x": [
+        32,
+        32
+      ],
+      "marginPx": {
+        "left": 6,
+        "top": 6,
+        "right": 6,
+        "bottom": 6
+      },
+      "umgMargin": {
+        "Left": 0.1875,
+        "Top": 0.1875,
+        "Right": 0.1875,
+        "Bottom": 0.1875
+      },
+      "drawAs": "Box",
+      "usage": "Ledger double rule for modals: 1px outer + 1px inner at 3px inset. Tint: border.strong."
+    },
+    "button_fill": {
+      "file1x": "1x/T_UI_button_fill.png",
+      "file2x": "2x/T_UI_button_fill@2x.png",
+      "size1x": [
+        32,
+        32
+      ],
+      "marginPx": {
+        "left": 4,
+        "top": 4,
+        "right": 4,
+        "bottom": 4
+      },
+      "umgMargin": {
+        "Left": 0.125,
+        "Top": 0.125,
+        "Right": 0.125,
+        "Bottom": 0.125
+      },
+      "drawAs": "Box",
+      "usage": "Button body (all variants). Tint per state from tokens; no grain (clean hit area)."
+    },
+    "button_stroke": {
+      "file1x": "1x/T_UI_button_stroke.png",
+      "file2x": "2x/T_UI_button_stroke@2x.png",
+      "size1x": [
+        32,
+        32
+      ],
+      "marginPx": {
+        "left": 4,
+        "top": 4,
+        "right": 4,
+        "bottom": 4
+      },
+      "umgMargin": {
+        "Left": 0.125,
+        "Top": 0.125,
+        "Right": 0.125,
+        "Bottom": 0.125
+      },
+      "drawAs": "Box",
+      "usage": "Button edge 1px (secondary/tertiary). Tint border.strong; selected = accent."
+    },
+    "focus_ring": {
+      "file1x": "1x/T_UI_focus_ring.png",
+      "file2x": "2x/T_UI_focus_ring@2x.png",
+      "size1x": [
+        40,
+        40
+      ],
+      "marginPx": {
+        "left": 8,
+        "top": 8,
+        "right": 8,
+        "bottom": 8
+      },
+      "umgMargin": {
+        "Left": 0.2,
+        "Top": 0.2,
+        "Right": 0.2,
+        "Bottom": 0.2
+      },
+      "drawAs": "Box",
+      "usage": "Focus ring: draw at padding -4 around ANY focusable. 2px ring, 2px gap. Tint color.focus.ring. Never clipped: put it in the widget's own Overlay, scroll boxes need 4px inner padding."
+    },
+    "input_fill": {
+      "file1x": "1x/T_UI_input_fill.png",
+      "file2x": "2x/T_UI_input_fill@2x.png",
+      "size1x": [
+        32,
+        32
+      ],
+      "marginPx": {
+        "left": 4,
+        "top": 4,
+        "right": 4,
+        "bottom": 4
+      },
+      "umgMargin": {
+        "Left": 0.125,
+        "Top": 0.125,
+        "Right": 0.125,
+        "Bottom": 0.125
+      },
+      "drawAs": "Box",
+      "usage": "Text input / dropdown / spin box body. Tint surface.0 (wells sit below the panel)."
+    },
+    "input_stroke": {
+      "file1x": "1x/T_UI_input_stroke.png",
+      "file2x": "2x/T_UI_input_stroke@2x.png",
+      "size1x": [
+        32,
+        32
+      ],
+      "marginPx": {
+        "left": 4,
+        "top": 4,
+        "right": 4,
+        "bottom": 6
+      },
+      "umgMargin": {
+        "Left": 0.125,
+        "Top": 0.125,
+        "Right": 0.125,
+        "Bottom": 0.1875
+      },
+      "drawAs": "Box",
+      "usage": "Input edge: 1px all round + 2px bottom rule (ruled-ledger line). Tint border.strong / accent (focus) / severity.critical (error)."
+    },
+    "slot_fill": {
+      "file1x": "1x/T_UI_slot_fill.png",
+      "file2x": "2x/T_UI_slot_fill@2x.png",
+      "size1x": [
+        64,
+        64
+      ],
+      "marginPx": {
+        "left": 8,
+        "top": 8,
+        "right": 8,
+        "bottom": 8
+      },
+      "umgMargin": {
+        "Left": 0.125,
+        "Top": 0.125,
+        "Right": 0.125,
+        "Bottom": 0.125
+      },
+      "drawAs": "Box",
+      "usage": "Inventory slot body. Tint surface.2; hover +hover.overlay; valid drop accent.muted; invalid critical @ 18%."
+    },
+    "slot_ticks": {
+      "file1x": "1x/T_UI_slot_ticks.png",
+      "file2x": "2x/T_UI_slot_ticks@2x.png",
+      "size1x": [
+        64,
+        64
+      ],
+      "marginPx": {
+        "left": 12,
+        "top": 12,
+        "right": 12,
+        "bottom": 12
+      },
+      "umgMargin": {
+        "Left": 0.1875,
+        "Top": 0.1875,
+        "Right": 0.1875,
+        "Bottom": 0.1875
+      },
+      "drawAs": "Box",
+      "usage": "Ledger corner ticks (8px L marks). Empty slot = ticks only at border.strong; selected = accent; equipped = text.secondary."
+    },
+    "slot_hatch": {
+      "file1x": "1x/T_UI_slot_hatch.png",
+      "file2x": "2x/T_UI_slot_hatch@2x.png",
+      "size1x": [
+        64,
+        64
+      ],
+      "marginPx": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "umgMargin": {
+        "Left": 0.0,
+        "Top": 0.0,
+        "Right": 0.0,
+        "Bottom": 0.0
+      },
+      "drawAs": "Image",
+      "usage": "Diagonal hatch overlay (Tile, not Box). Damaged = warning @ 35%; spoiled = critical @ 35%; locked = text.disabled @ 25%. Carries state without colour."
+    },
+    "tab_indicator": {
+      "file1x": "1x/T_UI_tab_indicator.png",
+      "file2x": "2x/T_UI_tab_indicator@2x.png",
+      "size1x": [
+        16,
+        4
+      ],
+      "marginPx": {
+        "left": 4,
+        "top": 0,
+        "right": 4,
+        "bottom": 0
+      },
+      "umgMargin": {
+        "Left": 0.25,
+        "Top": 0.0,
+        "Right": 0.25,
+        "Bottom": 0.0
+      },
+      "drawAs": "Box",
+      "usage": "Selected-tab underline, 4px high under the tab label. Tint accent."
+    },
+    "progress_track": {
+      "file1x": "1x/T_UI_progress_track.png",
+      "file2x": "2x/T_UI_progress_track@2x.png",
+      "size1x": [
+        16,
+        8
+      ],
+      "marginPx": {
+        "left": 3,
+        "top": 3,
+        "right": 3,
+        "bottom": 3
+      },
+      "umgMargin": {
+        "Left": 0.1875,
+        "Top": 0.375,
+        "Right": 0.1875,
+        "Bottom": 0.375
+      },
+      "drawAs": "Box",
+      "usage": "Progress / meter track. Tint data.track."
+    },
+    "progress_fill": {
+      "file1x": "1x/T_UI_progress_fill.png",
+      "file2x": "2x/T_UI_progress_fill@2x.png",
+      "size1x": [
+        16,
+        8
+      ],
+      "marginPx": {
+        "left": 3,
+        "top": 3,
+        "right": 3,
+        "bottom": 3
+      },
+      "umgMargin": {
+        "Left": 0.1875,
+        "Top": 0.375,
+        "Right": 0.1875,
+        "Bottom": 0.375
+      },
+      "drawAs": "Box",
+      "usage": "Progress fill (use as UMG ProgressBar FillImage, Box draw). Tint data.fill or severity."
+    },
+    "progress_marker": {
+      "file1x": "1x/T_UI_progress_marker.png",
+      "file2x": "2x/T_UI_progress_marker@2x.png",
+      "size1x": [
+        4,
+        16
+      ],
+      "marginPx": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "umgMargin": {
+        "Left": 0.0,
+        "Top": 0.0,
+        "Right": 0.0,
+        "Bottom": 0.0
+      },
+      "drawAs": "Image",
+      "usage": "Threshold marker (2px line + 1px halo) drawn 4px taller than the bar. Tint text.primary."
+    },
+    "critical_border": {
+      "file1x": "1x/T_UI_critical_border.png",
+      "file2x": "2x/T_UI_critical_border@2x.png",
+      "size1x": [
+        32,
+        32
+      ],
+      "marginPx": {
+        "left": 8,
+        "top": 8,
+        "right": 8,
+        "bottom": 8
+      },
+      "umgMargin": {
+        "Left": 0.25,
+        "Top": 0.25,
+        "Right": 0.25,
+        "Bottom": 0.25
+      },
+      "drawAs": "Box",
+      "usage": "Critical double border (2px, 2px gap, 2px). Draw at padding -6. Tint severity.critical; pulse alpha 1->0.55 over motion.pulse.critical, static when reduced-motion."
+    },
+    "keycap_fill": {
+      "file1x": "1x/T_UI_keycap_fill.png",
+      "file2x": "2x/T_UI_keycap_fill@2x.png",
+      "size1x": [
+        32,
+        32
+      ],
+      "marginPx": {
+        "left": 8,
+        "top": 6,
+        "right": 8,
+        "bottom": 10
+      },
+      "umgMargin": {
+        "Left": 0.25,
+        "Top": 0.1875,
+        "Right": 0.25,
+        "Bottom": 0.3125
+      },
+      "drawAs": "Box",
+      "usage": "Key-cap body with 3px lower lip. Tint text.primary; label text.inverse. Min height 32, min width 32."
+    },
+    "hud_plate": {
+      "file1x": "1x/T_UI_hud_plate.png",
+      "file2x": "2x/T_UI_hud_plate@2x.png",
+      "size1x": [
+        32,
+        32
+      ],
+      "marginPx": {
+        "left": 6,
+        "top": 6,
+        "right": 6,
+        "bottom": 6
+      },
+      "umgMargin": {
+        "Left": 0.1875,
+        "Top": 0.1875,
+        "Right": 0.1875,
+        "Bottom": 0.1875
+      },
+      "drawAs": "Box",
+      "usage": "Backing plate for ALL HUD text over the world. Tint color.hud.plate (82%). No grain."
+    },
+    "divider": {
+      "file1x": "1x/T_UI_divider.png",
+      "file2x": "2x/T_UI_divider@2x.png",
+      "size1x": [
+        8,
+        1
+      ],
+      "marginPx": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "umgMargin": {
+        "Left": 0.0,
+        "Top": 0.0,
+        "Right": 0.0,
+        "Bottom": 0.0
+      },
+      "drawAs": "Tile",
+      "usage": "1px rule. Tile horizontally. Tint border.subtle (panel) / paper.rule (paper)."
+    },
+    "portrait_frame": {
+      "file1x": "1x/T_UI_portrait_frame.png",
+      "file2x": "2x/T_UI_portrait_frame@2x.png",
+      "size1x": [
+        64,
+        64
+      ],
+      "marginPx": {
+        "left": 6,
+        "top": 6,
+        "right": 6,
+        "bottom": 6
+      },
+      "umgMargin": {
+        "Left": 0.0938,
+        "Top": 0.0938,
+        "Right": 0.0938,
+        "Bottom": 0.0938
+      },
+      "drawAs": "Box",
+      "usage": "Pawn portrait frame, 2px. Tint border.strong; selected accent; critical uses critical_border on top."
+    }
+  }
+}

@@ -1,0 +1,118 @@
+{
+  "title": "Main menu",
+  "layer": "Menu",
+  "input": "menu",
+  "grid": "Left rail 480 from x=120; content panel 760 at x=720",
+  "elements": [
+    {
+      "id": "Wordmark",
+      "widget": "TextBlock",
+      "rect": [
+        120,
+        120,
+        480,
+        72
+      ],
+      "anchor": "Left",
+      "tokens": {
+        "text": "type.display, letter-spacing 0.12em"
+      },
+      "focus": 0
+    },
+    {
+      "id": "Nav",
+      "widget": "WBP_MenuRail",
+      "rect": [
+        120,
+        300,
+        400,
+        456
+      ],
+      "anchor": "Left",
+      "tokens": {
+        "button": "56h primary-tertiary, gap 8"
+      },
+      "focus": 1
+    },
+    {
+      "id": "ContentPanel",
+      "widget": "WBP_MOPanel(elev1)",
+      "rect": [
+        720,
+        200,
+        760,
+        680
+      ],
+      "anchor": "Center",
+      "tokens": {
+        "bg": "surface.1"
+      },
+      "focus": 2
+    },
+    {
+      "id": "SeedInput",
+      "widget": "WBP_TextInput+IconButton(random)",
+      "rect": [
+        752,
+        360,
+        696,
+        56
+      ],
+      "anchor": "Center",
+      "tokens": {},
+      "focus": 3
+    },
+    {
+      "id": "SessionList",
+      "widget": "WBP_SessionList",
+      "rect": [
+        752,
+        360,
+        696,
+        400
+      ],
+      "anchor": "Center",
+      "tokens": {
+        "row": "56: host, players 2/4, ping, version"
+      },
+      "focus": 0,
+      "note": "Join tab"
+    },
+    {
+      "id": "Version",
+      "widget": "TextBlock",
+      "rect": [
+        120,
+        1016,
+        400,
+        24
+      ],
+      "anchor": "BottomLeft",
+      "tokens": {
+        "text": "type.caption text.secondary"
+      },
+      "focus": 0
+    },
+    {
+      "id": "LoadingOverlay",
+      "widget": "WBP_LoadingOverlay",
+      "rect": [
+        0,
+        0,
+        1920,
+        1080
+      ],
+      "anchor": "Fill",
+      "tokens": {
+        "bg": "surface.0",
+        "bar": "progress 4px at bottom 64",
+        "tip": "type.body"
+      },
+      "focus": 0
+    }
+  ],
+  "referenceResolution": [
+    1920,
+    1080
+  ]
+}

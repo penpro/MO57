@@ -7,6 +7,7 @@
 #include "Components/Image.h"
 #include "Components/TextBlock.h"
 #include "Engine/Texture2D.h"
+#include "MOUITokens.h"
 
 void UMOStatusMoodleWidget::NativeConstruct()
 {
@@ -31,6 +32,21 @@ void UMOStatusMoodleWidget::ApplyMoodleToWidgets()
 			IconImage->SetBrushFromTexture(CurrentMoodle.Icon, /*bMatchSize*/ false);
 		}
 		IconImage->SetColorAndOpacity(Tint);
+	}
+
+	if (SeverityShapeImage)
+	{
+		SeverityShapeImage->SetBrushFromTexture(UMOUITokens::Icon(ShapeIconForSeverity(CurrentMoodle.Severity)), /*bMatchSize*/ false);
+		SeverityShapeImage->SetColorAndOpacity(Tint);
+	}
+	if (CriticalBorder)
+	{
+		const bool bCritical = CurrentMoodle.Severity == EMOStatusMoodleSeverity::Critical;
+		CriticalBorder->SetVisibility(bCritical ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+		if (!bCritical)
+		{
+			CriticalBorder->SetRenderOpacity(1.0f);
+		}
 	}
 
 	if (LabelText)
@@ -71,14 +87,48 @@ void UMOStatusMoodleWidget::ApplyMoodleToWidgets()
 	}
 }
 
-FLinearColor UMOStatusMoodleWidget::TintForSeverity(EMOStatusMoodleSeverity Severity) const
+FName UMOStatusMoodleWidget::ColorTokenForSeverity(EMOStatusMoodleSeverity Severity)
 {
 	switch (Severity)
 	{
-	case EMOStatusMoodleSeverity::Warning:  return WarningTint;
-	case EMOStatusMoodleSeverity::Critical: return CriticalTint;
-	case EMOStatusMoodleSeverity::Buff:     return BuffTint;
+	case EMOStatusMoodleSeverity::Warning:  return FName("color.severity.warning");
+	case EMOStatusMoodleSeverity::Critical: return FName("color.severity.critical");
+	case EMOStatusMoodleSeverity::Buff:     return FName("color.severity.ok");
 	case EMOStatusMoodleSeverity::Info:
-	default:                                return InfoTint;
+	default:                                return FName("color.severity.info");
+	}
+}
+
+FName UMOStatusMoodleWidget::ShapeIconForSeverity(EMOStatusMoodleSeverity Severity)
+{
+	switch (Severity)
+	{
+	case EMOStatusMoodleSeverity::Warning:  return FName("ic_sev_warning");
+	case EMOStatusMoodleSeverity::Critical: return FName("ic_sev_critical");
+	case EMOStatusMoodleSeverity::Buff:     return FName("ic_sev_ok");
+	case EMOStatusMoodleSeverity::Info:
+	default:                                return FName("ic_sev_info");
+	}
+}
+
+FLinearColor UMOStatusMoodleWidget::TintForSeverity(EMOStatusMoodleSeverity Severity) const
+{
+	return UMOUITokens::Color(ColorTokenForSeverity(Severity));
+}
+
+void UMOStatusMoodleWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
+{
+	Super::NativeTick(MyGeometry, InDeltaTime);
+	if (CriticalBorder && CurrentMoodle.Severity == EMOStatusMoodleSeverity::Critical)
+	{
+		const float PeriodS = UMOUITokens::Seconds("motion.pulse.critical");
+		if (PeriodS <= KINDA_SMALL_NUMBER)
+		{
+			CriticalBorder->SetRenderOpacity(1.0f);   // reduced motion: a static double border
+			return;
+		}
+		PulseClock = FMath::Fmod(PulseClock + InDeltaTime, PeriodS);
+		const float Phase = 0.5f + 0.5f * FMath::Cos(2.0f * PI * PulseClock / PeriodS);   // 1 -> 0 -> 1
+		CriticalBorder->SetRenderOpacity(0.55f + 0.45f * Phase);
 	}
 }

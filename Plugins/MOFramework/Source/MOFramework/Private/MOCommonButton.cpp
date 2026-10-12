@@ -20,6 +20,66 @@ void UMOCommonButton::NativeConstruct()
 	Super::NativeConstruct();
 	// Call Blueprint event to update text at runtime
 	UpdateButtonText(ButtonLabel);
+	if (FocusRing)
+	{
+		FocusRing->SetVisibility(ESlateVisibility::Collapsed);
+	}
+	ApplyCurrentTextStyleToLabels();
+}
+
+void UMOCommonButton::ApplyCurrentTextStyleToLabels()
+{
+	const TSubclassOf<UCommonTextStyle> TextStyleClass = GetCurrentTextStyleClass();
+	if (!TextStyleClass || !WidgetTree)
+	{
+		return;
+	}
+	TArray<UWidget*> AllWidgets;
+	WidgetTree->GetAllWidgets(AllWidgets);
+	for (UWidget* Widget : AllWidgets)
+	{
+		if (UCommonTextBlock* Label = Cast<UCommonTextBlock>(Widget))
+		{
+			Label->SetStyle(TextStyleClass);
+		}
+		else if (UTextBlock* Plain = Cast<UTextBlock>(Widget))
+		{
+			// a plain text block (the button WBP's label: its UpdateButtonText graph owns it as a Text object) takes the style's font and colour directly
+			if (const UCommonTextStyle* StyleObject = TextStyleClass.GetDefaultObject())
+			{
+				FSlateFontInfo Font;
+				FLinearColor Color;
+				StyleObject->GetFont(Font);
+				StyleObject->GetColor(Color);
+				Plain->SetFont(Font);
+				Plain->SetColorAndOpacity(FSlateColor(Color));
+			}
+		}
+	}
+}
+
+void UMOCommonButton::NativeOnCurrentTextStyleChanged()
+{
+	Super::NativeOnCurrentTextStyleChanged();
+	ApplyCurrentTextStyleToLabels();
+}
+
+void UMOCommonButton::NativeOnAddedToFocusPath(const FFocusEvent& InFocusEvent)
+{
+	Super::NativeOnAddedToFocusPath(InFocusEvent);
+	if (FocusRing && InFocusEvent.GetCause() != EFocusCause::Mouse)
+	{
+		FocusRing->SetVisibility(ESlateVisibility::HitTestInvisible);
+	}
+}
+
+void UMOCommonButton::NativeOnRemovedFromFocusPath(const FFocusEvent& InFocusEvent)
+{
+	Super::NativeOnRemovedFromFocusPath(InFocusEvent);
+	if (FocusRing)
+	{
+		FocusRing->SetVisibility(ESlateVisibility::Collapsed);
+	}
 }
 
 void UMOCommonButton::SetButtonText(const FText& InText)

@@ -1,0 +1,105 @@
+{
+  "title": "Options",
+  "layer": "Menu",
+  "input": "menu",
+  "grid": "Panel 1280x880 centred (320,100); tab bar 56; rows 56; label col 440, control col 720",
+  "elements": [
+    {
+      "id": "Panel",
+      "widget": "WBP_MOPanel(elev1)",
+      "rect": [
+        320,
+        100,
+        1280,
+        880
+      ],
+      "anchor": "Center",
+      "tokens": {
+        "bg": "color.surface.1",
+        "edge": "color.border.subtle"
+      },
+      "focus": 0
+    },
+    {
+      "id": "Title",
+      "widget": "TextBlock",
+      "rect": [
+        344,
+        116,
+        600,
+        48
+      ],
+      "anchor": "Center",
+      "tokens": {
+        "text": "type.title"
+      },
+      "focus": 0
+    },
+    {
+      "id": "Tabs",
+      "widget": "WBP_TabBar",
+      "rect": [
+        344,
+        172,
+        1232,
+        56
+      ],
+      "anchor": "Center",
+      "tokens": {
+        "tab": "h48 + 4px indicator; LB/RB cycle"
+      },
+      "focus": 1
+    },
+    {
+      "id": "Rows",
+      "widget": "WBP_SettingsList",
+      "rect": [
+        344,
+        244,
+        1232,
+        600
+      ],
+      "anchor": "Center",
+      "tokens": {
+        "row": "56: label body 440w | control 720w | badge",
+        "section": "type.label"
+      },
+      "focus": 2
+    },
+    {
+      "id": "Footer",
+      "widget": "WBP_FooterBar",
+      "rect": [
+        344,
+        868,
+        1232,
+        88
+      ],
+      "anchor": "Center",
+      "tokens": {
+        "buttons": "Defaults (tertiary) | Revert (secondary) | Apply (primary 56)"
+      },
+      "focus": 3
+    },
+    {
+      "id": "KeyCapture",
+      "widget": "WBP_KeyCaptureModal",
+      "rect": [
+        720,
+        420,
+        480,
+        240
+      ],
+      "anchor": "Center",
+      "tokens": {
+        "text": "type.heading 'Press a key for Sprint'",
+        "esc": "Esc / face_east cancels"
+      },
+      "focus": 0
+    }
+  ],
+  "referenceResolution": [
+    1920,
+    1080
+  ]
+}

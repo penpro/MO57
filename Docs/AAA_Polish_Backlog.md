@@ -60,6 +60,8 @@ design forks are logged under "Forks", not built blind.
 ### P2 - world richness
 - [ ] Per-biome fauna and POI density review (run `MO.WorldGen.SeedSurvey`, walk each biome for 3 minutes, log empty / repetitive stretches).
 - [ ] Far terrain LOD tear on the mountains (known, "not ours": voxel far LOD) - confirm or fix.
+- [ ] **Terrain material look (Wes, 2026-10-12; details in `Docs/Terrain_Generation_Exploration.md` To-do)**: (1) distant mountains: snow caps with dark rock, materials that switch with distance; (2) a fade + noise breakup on EVERY elevation / climate material split
+  (no hard bands); (3) several sand materials so beaches and deserts stop repeating.
 - [ ] Weather per biome (rain / snow line at altitude) and the sound layers that go with it.
 
 ### P3 - game-wide quality

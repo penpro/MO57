@@ -1,0 +1,85 @@
+{
+  "title": "Journal: Quests",
+  "layer": "Menu",
+  "input": "menu",
+  "grid": "Panel 1600x880; list 520 | detail 1008 (paper)",
+  "elements": [
+    {
+      "id": "Panel",
+      "widget": "WBP_MOPanel(elev1)",
+      "rect": [
+        160,
+        100,
+        1600,
+        880
+      ],
+      "anchor": "Center",
+      "tokens": {
+        "bg": "color.surface.1",
+        "edge": "color.border.subtle"
+      },
+      "focus": 0
+    },
+    {
+      "id": "Tabs",
+      "widget": "WBP_TabBar",
+      "rect": [
+        184,
+        116,
+        1552,
+        56
+      ],
+      "anchor": "Center",
+      "tokens": {},
+      "focus": 1
+    },
+    {
+      "id": "QuestList",
+      "widget": "WBP_QuestList",
+      "rect": [
+        184,
+        188,
+        520,
+        768
+      ],
+      "anchor": "Center",
+      "tokens": {
+        "row": 56,
+        "groups": "Active / Completed / Failed"
+      },
+      "focus": 2
+    },
+    {
+      "id": "QuestDetail",
+      "widget": "WBP_QuestDetail(paper)",
+      "rect": [
+        728,
+        188,
+        1008,
+        680
+      ],
+      "anchor": "Center",
+      "tokens": {},
+      "focus": 3
+    },
+    {
+      "id": "Actions",
+      "widget": "WBP_ButtonRow",
+      "rect": [
+        728,
+        884,
+        1008,
+        72
+      ],
+      "anchor": "Center",
+      "tokens": {
+        "buttons": "Abandon (danger tertiary) | Track (primary)"
+      },
+      "focus": 4
+    }
+  ],
+  "referenceResolution": [
+    1920,
+    1080
+  ]
+}

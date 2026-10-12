@@ -1,0 +1,102 @@
+{
+  "title": "Modals, context menus, states",
+  "layer": "Modal",
+  "input": "modal (captures all)",
+  "grid": "Modal widths 480 / 640; 24 padding; footer buttons right-aligned, primary rightmost",
+  "elements": [
+    {
+      "id": "Confirm",
+      "widget": "WBP_ConfirmModal",
+      "rect": [
+        720,
+        380,
+        480,
+        0
+      ],
+      "anchor": "Center",
+      "tokens": {
+        "title": "type.heading",
+        "body": "type.body",
+        "buttons": "2-3, h56"
+      },
+      "focus": 1,
+      "note": "default focus = the SAFE option"
+    },
+    {
+      "id": "TextInput",
+      "widget": "WBP_TextInputModal",
+      "rect": [
+        640,
+        360,
+        640,
+        0
+      ],
+      "anchor": "Center",
+      "tokens": {},
+      "focus": 0
+    },
+    {
+      "id": "QuickPick",
+      "widget": "WBP_QuickPickModal",
+      "rect": [
+        720,
+        300,
+        480,
+        0
+      ],
+      "anchor": "Center",
+      "tokens": {
+        "row": 48
+      },
+      "focus": 0
+    },
+    {
+      "id": "Toast",
+      "widget": "WBP_Toast",
+      "rect": [
+        1480,
+        40,
+        400,
+        72
+      ],
+      "anchor": "TopRight",
+      "tokens": {},
+      "focus": 0
+    },
+    {
+      "id": "BugReport",
+      "widget": "WBP_BugReportModal",
+      "rect": [
+        560,
+        140,
+        800,
+        800
+      ],
+      "anchor": "Center",
+      "tokens": {
+        "fields": "summary input, category dropdown, details multiline, attach-screenshot toggle, log toggle"
+      },
+      "focus": 0
+    },
+    {
+      "id": "ContextMenu",
+      "widget": "WBP_ContextMenu",
+      "rect": [
+        0,
+        0,
+        280,
+        0
+      ],
+      "anchor": "Cursor",
+      "tokens": {
+        "row": 44,
+        "keys": "right-aligned keycap hints"
+      },
+      "focus": 0
+    }
+  ],
+  "referenceResolution": [
+    1920,
+    1080
+  ]
+}

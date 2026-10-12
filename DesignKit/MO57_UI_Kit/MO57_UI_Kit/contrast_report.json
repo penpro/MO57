@@ -1,0 +1,314 @@
+[
+  {
+    "pair": "text.primary on surface.1",
+    "fg": "#EEE7D7",
+    "bg": "#181612",
+    "ratio": 14.67,
+    "required": 7.0,
+    "pass": true
+  },
+  {
+    "pair": "text.primary on surface.2",
+    "fg": "#EEE7D7",
+    "bg": "#221F1A",
+    "ratio": 13.33,
+    "required": 7.0,
+    "pass": true
+  },
+  {
+    "pair": "text.primary on surface.3",
+    "fg": "#EEE7D7",
+    "bg": "#2C2822",
+    "ratio": 11.89,
+    "required": 7.0,
+    "pass": true
+  },
+  {
+    "pair": "text.secondary on surface.1",
+    "fg": "#BDB3A0",
+    "bg": "#181612",
+    "ratio": 8.71,
+    "required": 4.5,
+    "pass": true
+  },
+  {
+    "pair": "text.secondary on surface.2",
+    "fg": "#BDB3A0",
+    "bg": "#221F1A",
+    "ratio": 7.91,
+    "required": 4.5,
+    "pass": true
+  },
+  {
+    "pair": "text.secondary on surface.3",
+    "fg": "#BDB3A0",
+    "bg": "#2C2822",
+    "ratio": 7.06,
+    "required": 4.5,
+    "pass": true
+  },
+  {
+    "pair": "text.disabled on surface.1",
+    "fg": "#7D7466",
+    "bg": "#181612",
+    "ratio": 3.92,
+    "required": 3.0,
+    "pass": true
+  },
+  {
+    "pair": "accent.ink on accent",
+    "fg": "#0B1916",
+    "bg": "#6CB8A9",
+    "ratio": 7.78,
+    "required": 7.0,
+    "pass": true
+  },
+  {
+    "pair": "accent text on surface.1",
+    "fg": "#6CB8A9",
+    "bg": "#181612",
+    "ratio": 7.8,
+    "required": 4.5,
+    "pass": true
+  },
+  {
+    "pair": "text.primary on selection(row)",
+    "fg": "#EEE7D7",
+    "bg": "#2F3B34",
+    "ratio": 9.49,
+    "required": 7.0,
+    "pass": true
+  },
+  {
+    "pair": "focus.ring vs surface.1 (non-text 3:1)",
+    "fg": "#F3E2B3",
+    "bg": "#181612",
+    "ratio": 14.06,
+    "required": 3.0,
+    "pass": true
+  },
+  {
+    "pair": "focus.ring vs accent fill (non-text 3:1)",
+    "fg": "#F3E2B3",
+    "bg": "#4E9A8C",
+    "ratio": 2.58,
+    "required": 1.5,
+    "pass": true
+  },
+  {
+    "pair": "paper.ink on paper",
+    "fg": "#1C1914",
+    "bg": "#E6DDC8",
+    "ratio": 12.97,
+    "required": 7.0,
+    "pass": true
+  },
+  {
+    "pair": "paper.ink2 on paper",
+    "fg": "#4B4438",
+    "bg": "#E6DDC8",
+    "ratio": 7.12,
+    "required": 4.5,
+    "pass": true
+  },
+  {
+    "pair": "text.primary on critical.fill",
+    "fg": "#EEE7D7",
+    "bg": "#7A2318",
+    "ratio": 8.19,
+    "required": 4.5,
+    "pass": true
+  },
+  {
+    "pair": "text.primary on warning.fill",
+    "fg": "#EEE7D7",
+    "bg": "#5E3E12",
+    "ratio": 7.84,
+    "required": 4.5,
+    "pass": true
+  },
+  {
+    "pair": "HUD text on plate over WHITE snow",
+    "fg": "#EEE7D7",
+    "bg": "#393937",
+    "ratio": 9.4,
+    "required": 4.5,
+    "pass": true
+  },
+  {
+    "pair": "HUD text on plate over sky #9CC8F0",
+    "fg": "#EEE7D7",
+    "bg": "#282F34",
+    "ratio": 11.02,
+    "required": 4.5,
+    "pass": true
+  },
+  {
+    "pair": "HUD text on plate over cave #050505",
+    "fg": "#EEE7D7",
+    "bg": "#0C0C0A",
+    "ratio": 15.89,
+    "required": 7.0,
+    "pass": true
+  },
+  {
+    "pair": "severity.ok on surface.1",
+    "fg": "#8FBF6A",
+    "bg": "#181612",
+    "ratio": 8.46,
+    "required": 4.5,
+    "pass": true
+  },
+  {
+    "pair": "severity.ok on HUD plate over snow",
+    "fg": "#8FBF6A",
+    "bg": "#393937",
+    "ratio": 5.42,
+    "required": 3.0,
+    "pass": true
+  },
+  {
+    "pair": "severity.notice on surface.1",
+    "fg": "#D8C56A",
+    "bg": "#181612",
+    "ratio": 10.42,
+    "required": 4.5,
+    "pass": true
+  },
+  {
+    "pair": "severity.notice on HUD plate over snow",
+    "fg": "#D8C56A",
+    "bg": "#393937",
+    "ratio": 6.68,
+    "required": 3.0,
+    "pass": true
+  },
+  {
+    "pair": "severity.warning on surface.1",
+    "fg": "#E7A042",
+    "bg": "#181612",
+    "ratio": 8.18,
+    "required": 4.5,
+    "pass": true
+  },
+  {
+    "pair": "severity.warning on HUD plate over snow",
+    "fg": "#E7A042",
+    "bg": "#393937",
+    "ratio": 5.24,
+    "required": 3.0,
+    "pass": true
+  },
+  {
+    "pair": "severity.critical on surface.1",
+    "fg": "#EE6550",
+    "bg": "#181612",
+    "ratio": 5.69,
+    "required": 4.5,
+    "pass": true
+  },
+  {
+    "pair": "severity.critical on HUD plate over snow",
+    "fg": "#EE6550",
+    "bg": "#393937",
+    "ratio": 3.64,
+    "required": 3.0,
+    "pass": true
+  },
+  {
+    "pair": "severity.info on surface.1",
+    "fg": "#7EA8DE",
+    "bg": "#181612",
+    "ratio": 7.35,
+    "required": 4.5,
+    "pass": true
+  },
+  {
+    "pair": "severity.info on HUD plate over snow",
+    "fg": "#7EA8DE",
+    "bg": "#393937",
+    "ratio": 4.71,
+    "required": 3.0,
+    "pass": true
+  },
+  {
+    "pair": "paper.severity.ok on paper",
+    "fg": "#3A6422",
+    "bg": "#E6DDC8",
+    "ratio": 5.14,
+    "required": 4.5,
+    "pass": true
+  },
+  {
+    "pair": "paper.severity.notice on paper",
+    "fg": "#6B5E10",
+    "bg": "#E6DDC8",
+    "ratio": 4.81,
+    "required": 4.5,
+    "pass": true
+  },
+  {
+    "pair": "paper.severity.warning on paper",
+    "fg": "#7A4E06",
+    "bg": "#E6DDC8",
+    "ratio": 5.32,
+    "required": 4.5,
+    "pass": true
+  },
+  {
+    "pair": "paper.severity.critical on paper",
+    "fg": "#9E2716",
+    "bg": "#E6DDC8",
+    "ratio": 5.64,
+    "required": 4.5,
+    "pass": true
+  },
+  {
+    "pair": "paper.severity.info on paper",
+    "fg": "#2E5A8C",
+    "bg": "#E6DDC8",
+    "ratio": 5.26,
+    "required": 4.5,
+    "pass": true
+  },
+  {
+    "pair": "CB severity.ok on surface.1",
+    "fg": "#56B4E9",
+    "bg": "#181612",
+    "ratio": 7.83,
+    "required": 4.5,
+    "pass": true
+  },
+  {
+    "pair": "CB severity.notice on surface.1",
+    "fg": "#F0E442",
+    "bg": "#181612",
+    "ratio": 13.66,
+    "required": 4.5,
+    "pass": true
+  },
+  {
+    "pair": "CB severity.warning on surface.1",
+    "fg": "#E69F00",
+    "bg": "#181612",
+    "ratio": 8.02,
+    "required": 4.5,
+    "pass": true
+  },
+  {
+    "pair": "CB severity.critical on surface.1",
+    "fg": "#E890C4",
+    "bg": "#181612",
+    "ratio": 7.93,
+    "required": 4.5,
+    "pass": true
+  },
+  {
+    "pair": "CB severity.info on surface.1",
+    "fg": "#C9D3E3",
+    "bg": "#181612",
+    "ratio": 11.97,
+    "required": 4.5,
+    "pass": true
+  }
+]

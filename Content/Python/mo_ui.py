@@ -486,7 +486,8 @@ def build(spec, save=True):
         report.append("~ class defaults: " + ", ".join(spec["class_defaults"]))
         unreal.BlueprintEditorLibrary.compile_blueprint(wbp)
     if save:
-        EAL.save_loaded_asset(wbp)
+        # only_if_is_dirty=False: a class-default change on the CDO does not dirty the package, and the default (skip when clean) silently dropped it (the button's 0.356 tint 'fix' never reached disk)
+        EAL.save_loaded_asset(wbp, False)
     report.append(check(asset))
     return "\n".join(report)
 

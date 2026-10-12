@@ -1,0 +1,73 @@
+{
+  "title": "Journal: Skills",
+  "layer": "Menu",
+  "input": "menu",
+  "grid": "Panel 1600x880; tabs; list 920 | knowledge 608 (paper)",
+  "elements": [
+    {
+      "id": "Panel",
+      "widget": "WBP_MOPanel(elev1)",
+      "rect": [
+        160,
+        100,
+        1600,
+        880
+      ],
+      "anchor": "Center",
+      "tokens": {
+        "bg": "color.surface.1",
+        "edge": "color.border.subtle"
+      },
+      "focus": 0
+    },
+    {
+      "id": "Tabs",
+      "widget": "WBP_TabBar",
+      "rect": [
+        184,
+        116,
+        1552,
+        56
+      ],
+      "anchor": "Center",
+      "tokens": {
+        "tabs": "Skills / Knowledge / Quests"
+      },
+      "focus": 1
+    },
+    {
+      "id": "SkillList",
+      "widget": "WBP_SkillList",
+      "rect": [
+        184,
+        188,
+        920,
+        768
+      ],
+      "anchor": "Center",
+      "tokens": {
+        "row": "64: icon, name, level, XP bar with decay marker, 'rusty' tag"
+      },
+      "focus": 2
+    },
+    {
+      "id": "Knowledge",
+      "widget": "WBP_KnowledgePanel(paper)",
+      "rect": [
+        1128,
+        188,
+        608,
+        768
+      ],
+      "anchor": "Center",
+      "tokens": {
+        "bg": "paper.surface"
+      },
+      "focus": 3
+    }
+  ],
+  "referenceResolution": [
+    1920,
+    1080
+  ]
+}

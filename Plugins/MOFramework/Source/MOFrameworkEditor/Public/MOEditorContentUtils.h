@@ -10,6 +10,8 @@
 
 #include "CoreMinimal.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
+#include "Engine/Font.h"
+#include "Engine/FontFace.h"
 #include "MOEditorContentUtils.generated.h"
 
 UCLASS()
@@ -21,4 +23,12 @@ public:
 	/** Register RootPath (e.g. "/MoverExamples/") -> DiskContentDir and have the asset registry scan it. Returns false if the directory does not exist. Safe to call twice. */
 	UFUNCTION(BlueprintCallable, Category="MO|Editor")
 	static bool MountContentPath(const FString& RootPath, const FString& DiskContentDir);
+
+	/**
+	 * Create or update a COMPOSITE Font asset at AssetPath (e.g. "/MOFramework/UI/Kit/Fonts/F_IBMPlexSans") whose typefaces are TypefaceNames[i] -> Faces[i] (the first is the default typeface).
+	 * Why here: Slate resolves an FSlateFontInfo through IFontProviderInterface, which only UFont implements (a bare UFontFace as the font object falls back to a glyph-less path: tofu), and Python
+	 * cannot author the composite structure. Returns the font (not saved: save it like any asset).
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Editor")
+	static UFont* MakeCompositeFont(const FString& AssetPath, const TArray<FName>& TypefaceNames, const TArray<UFontFace*>& Faces);
 };

@@ -1,4 +1,5 @@
 #include "MOModeIndicatorWidget.h"
+#include "MOUITokens.h"
 #include "Components/TextBlock.h"
 
 void UMOModeIndicatorWidget::NativeConstruct()
@@ -43,15 +44,15 @@ FLinearColor UMOModeIndicatorWidget::GetModeColor(EMOGameplayMode Mode) const
 	switch (Mode)
 	{
 	case EMOGameplayMode::Explore:
-		return ExploreColor;
+		return UMOUITokens::Color("color.text.primary");
 	case EMOGameplayMode::Build:
-		return BuildColor;
+		return UMOUITokens::Color("color.accent");
 	case EMOGameplayMode::Terraform:
-		return TerraformColor;
+		return UMOUITokens::Color("color.severity.notice");
 	case EMOGameplayMode::Combat:
-		return CombatColor;
+		return UMOUITokens::Color("color.severity.critical");
 	default:
-		return FLinearColor::White;
+		return UMOUITokens::Color("color.text.primary");
 	}
 }
 

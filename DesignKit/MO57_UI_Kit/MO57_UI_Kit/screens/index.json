@@ -1,0 +1,13 @@
+{
+  "hud": "screens/hud.json",
+  "inventory": "screens/inventory.json",
+  "crafting": "screens/crafting.json",
+  "medical": "screens/medical.json",
+  "options": "screens/options.json",
+  "main_menu": "screens/main_menu.json",
+  "ingame_menu": "screens/ingame_menu.json",
+  "colony": "screens/colony.json",
+  "skills": "screens/skills.json",
+  "quests": "screens/quests.json",
+  "modals": "screens/modals.json"
+}

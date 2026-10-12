@@ -91,11 +91,16 @@ def native_name(parent):
     return cname if cname.startswith("U") and cname[1:2].isupper() else "U" + cname
 
 
+ENGINE_BASES_NO_CONTRACT = {"UUserWidget", "UCommonUserWidget", "UCommonActivatableWidget"}
+
+
 def contract(parent, src_root=None):
     """BindWidget members (required first, then declaration order) for a native class and its bases."""
     cname = native_name(parent)
     classes = headers(src_root)
     if cname not in classes:
+        if cname in ENGINE_BASES_NO_CONTRACT:
+            return []   # a plain engine base class (the kit gallery, a dev preview widget): no BindWidget contract
         raise KeyError(f"class {cname} not found under {src_root or SRC_ROOT}")
     members, seen, cur = [], set(), cname
     while cur in classes:

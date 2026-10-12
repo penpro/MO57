@@ -1,4 +1,5 @@
 #include "MONotificationWidget.h"
+#include "MOUITokens.h"
 #include "Components/TextBlock.h"
 #include "Components/Border.h"
 #include "Components/Image.h"
@@ -80,6 +81,7 @@ void UMONotificationWidget::SetIcon(UTexture2D* Icon)
 		return;
 	}
 
+	bIconExplicit = Icon != nullptr;
 	if (Icon)
 	{
 		IconImage->SetBrushFromTexture(Icon);
@@ -107,69 +109,73 @@ void UMONotificationWidget::SetBackgroundColor(FLinearColor Color)
 	}
 }
 
+namespace
+{
+	FName NotificationColorToken(EMONotificationType Type)
+	{
+		switch (Type)
+		{
+		case EMONotificationType::Info:       return FName("color.severity.info");
+		case EMONotificationType::Success:    return FName("color.severity.ok");
+		case EMONotificationType::Warning:    return FName("color.severity.warning");
+		case EMONotificationType::Error:      return FName("color.severity.critical");
+		case EMONotificationType::ItemPickup: return FName("color.text.secondary");
+		case EMONotificationType::SkillGain:  return FName("color.accent");
+		case EMONotificationType::Custom:
+		default:                              return FName("color.text.primary");
+		}
+	}
+
+	FName NotificationShapeIcon(EMONotificationType Type)
+	{
+		switch (Type)
+		{
+		case EMONotificationType::Info:       return FName("ic_sev_info");
+		case EMONotificationType::Success:    return FName("ic_sev_ok");
+		case EMONotificationType::Warning:    return FName("ic_sev_warning");
+		case EMONotificationType::Error:      return FName("ic_sev_critical");
+		case EMONotificationType::ItemPickup: return FName("ic_item_unknown");
+		case EMONotificationType::SkillGain:  return FName("ic_ui_skill");
+		case EMONotificationType::Custom:
+		default:                              return NAME_None;
+		}
+	}
+}
+
 FLinearColor UMONotificationWidget::GetColorForType(EMONotificationType Type)
 {
-	// Static default colors - instance colors can override via properties
-	switch (Type)
-	{
-	case EMONotificationType::Info:
-		return FLinearColor(0.2f, 0.6f, 1.0f, 1.0f);  // Blue
-	case EMONotificationType::Success:
-		return FLinearColor(0.2f, 0.8f, 0.2f, 1.0f);  // Green
-	case EMONotificationType::Warning:
-		return FLinearColor(1.0f, 0.8f, 0.2f, 1.0f);  // Yellow/Gold
-	case EMONotificationType::Error:
-		return FLinearColor(1.0f, 0.2f, 0.2f, 1.0f);  // Red
-	case EMONotificationType::ItemPickup:
-		return FLinearColor(0.8f, 0.8f, 0.8f, 1.0f);  // Light Gray
-	case EMONotificationType::SkillGain:
-		return FLinearColor(0.6f, 0.4f, 1.0f, 1.0f);  // Purple
-	case EMONotificationType::Custom:
-	default:
-		return FLinearColor::White;
-	}
+	return UMOUITokens::Color(NotificationColorToken(Type));
 }
 
 void UMONotificationWidget::ApplyTypeColors()
 {
-	FLinearColor TypeColor;
+	const FLinearColor TypeColor = GetColorForType(CurrentType);
 
-	switch (CurrentType)
-	{
-	case EMONotificationType::Info:
-		TypeColor = InfoColor;
-		break;
-	case EMONotificationType::Success:
-		TypeColor = SuccessColor;
-		break;
-	case EMONotificationType::Warning:
-		TypeColor = WarningColor;
-		break;
-	case EMONotificationType::Error:
-		TypeColor = ErrorColor;
-		break;
-	case EMONotificationType::ItemPickup:
-		TypeColor = ItemPickupColor;
-		break;
-	case EMONotificationType::SkillGain:
-		TypeColor = SkillGainColor;
-		break;
-	case EMONotificationType::Custom:
-	default:
-		TypeColor = FLinearColor::White;
-		break;
-	}
-
-	// Apply text color with full opacity
+	// The message reads as primary text; the SEVERITY lives in the glyph and the leading bar (shape + colour, never text colour alone)
 	if (MessageText)
 	{
-		MessageText->SetColorAndOpacity(FSlateColor(TypeColor));
+		MessageText->SetColorAndOpacity(FSlateColor(UMOUITokens::Color("color.text.primary")));
 	}
-
-	// Apply background color (use base background with type-tinted border if desired)
 	if (BackgroundBorder)
 	{
-		BackgroundBorder->SetBrushColor(BackgroundColorBase);
+		BackgroundBorder->SetBrushColor(UMOUITokens::Color("color.hud.plate"));
+	}
+	if (SeverityBar)
+	{
+		SeverityBar->SetBrushColor(TypeColor);
+	}
+	if (IconImage)
+	{
+		if (!bIconExplicit)
+		{
+			const FName Shape = NotificationShapeIcon(CurrentType);
+			if (UTexture2D* Glyph = Shape.IsNone() ? nullptr : UMOUITokens::Icon(Shape))
+			{
+				IconImage->SetBrushFromTexture(Glyph, /*bMatchSize*/ false);
+				IconImage->SetVisibility(ESlateVisibility::HitTestInvisible);
+			}
+		}
+		IconImage->SetColorAndOpacity(TypeColor);
 	}
 }
 

@@ -1,0 +1,71 @@
+{
+  "title": "Colony",
+  "layer": "Menu",
+  "input": "menu",
+  "grid": "Panel 1600x880; roster 560 | character card 968; task queue below roster",
+  "elements": [
+    {
+      "id": "Panel",
+      "widget": "WBP_MOPanel(elev1)",
+      "rect": [
+        160,
+        100,
+        1600,
+        880
+      ],
+      "anchor": "Center",
+      "tokens": {
+        "bg": "color.surface.1",
+        "edge": "color.border.subtle"
+      },
+      "focus": 0
+    },
+    {
+      "id": "Tabs",
+      "widget": "WBP_TabBar",
+      "rect": [
+        184,
+        116,
+        1552,
+        56
+      ],
+      "anchor": "Center",
+      "tokens": {
+        "tabs": "Roster / Tasks / Relationships"
+      },
+      "focus": 1
+    },
+    {
+      "id": "Roster",
+      "widget": "WBP_PawnRoster",
+      "rect": [
+        184,
+        188,
+        560,
+        768
+      ],
+      "anchor": "Center",
+      "tokens": {
+        "row": "72: portrait 56, name, mood, activity, health bar, alerts"
+      },
+      "focus": 2
+    },
+    {
+      "id": "CharacterCard",
+      "widget": "WBP_CharacterCard(elev2)",
+      "rect": [
+        768,
+        188,
+        968,
+        768
+      ],
+      "anchor": "Center",
+      "tokens": {},
+      "focus": 3
+    }
+  ],
+  "referenceResolution": [
+    1920,
+    1080
+  ]
+}

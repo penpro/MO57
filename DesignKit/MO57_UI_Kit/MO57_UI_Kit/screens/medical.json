@@ -1,0 +1,124 @@
+{
+  "title": "Character status (medical)",
+  "layer": "Menu",
+  "input": "menu",
+  "grid": "Panel 1600x880; summary strip 96; body 456 | wounds 560 | vitals 488; paper inserts",
+  "elements": [
+    {
+      "id": "Panel",
+      "widget": "WBP_MOPanel(elev1)",
+      "rect": [
+        160,
+        100,
+        1600,
+        880
+      ],
+      "anchor": "Center",
+      "tokens": {
+        "bg": "color.surface.1",
+        "edge": "color.border.subtle"
+      },
+      "focus": 0
+    },
+    {
+      "id": "Summary",
+      "widget": "WBP_StatusSummary",
+      "rect": [
+        184,
+        116,
+        1552,
+        96
+      ],
+      "anchor": "Center",
+      "tokens": {
+        "state": "type.heading + severity shape",
+        "chips": "consciousness / shock / blood loss / temperature"
+      },
+      "focus": 0
+    },
+    {
+      "id": "BodyToggle",
+      "widget": "WBP_SegmentedTabs",
+      "rect": [
+        184,
+        228,
+        456,
+        44
+      ],
+      "anchor": "Center",
+      "tokens": {
+        "tabs": "Front / Back"
+      },
+      "focus": 2
+    },
+    {
+      "id": "BodyDiagram",
+      "widget": "WBP_BodyDiagram",
+      "rect": [
+        184,
+        284,
+        456,
+        672
+      ],
+      "anchor": "Center",
+      "tokens": {
+        "part": "fill by worst wound severity; hatched = bandaged; outline = selected"
+      },
+      "focus": 1,
+      "note": "~55 parts; gamepad moves between parts by spatial nav"
+    },
+    {
+      "id": "WoundList",
+      "widget": "WBP_WoundList(paper)",
+      "rect": [
+        664,
+        228,
+        560,
+        728
+      ],
+      "anchor": "Center",
+      "tokens": {
+        "bg": "color.paper.surface",
+        "text": "color.paper.ink",
+        "row": "56: part, wound type, state tags, time since"
+      },
+      "focus": 3
+    },
+    {
+      "id": "Vitals",
+      "widget": "WBP_VitalsPanel(paper)",
+      "rect": [
+        1248,
+        228,
+        488,
+        480
+      ],
+      "anchor": "Center",
+      "tokens": {
+        "value": "type.numeric.large",
+        "range": "type.caption 'normal 60-100'",
+        "trend": "trend_up/down/flat 24"
+      },
+      "focus": 4
+    },
+    {
+      "id": "Nutrition",
+      "widget": "WBP_NutritionPanel",
+      "rect": [
+        1248,
+        724,
+        488,
+        232
+      ],
+      "anchor": "Center",
+      "tokens": {
+        "bars": "segmented progress with threshold markers"
+      },
+      "focus": 5
+    }
+  ],
+  "referenceResolution": [
+    1920,
+    1080
+  ]
+}

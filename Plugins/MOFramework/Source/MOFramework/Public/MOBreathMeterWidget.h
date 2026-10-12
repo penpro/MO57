@@ -1,7 +1,8 @@
 // The breath meter: a thin bar low on the screen that appears while the player's airway is closed (head under water) or the reserve is still recovering, and fades away when the lungs are full.
 //
 // Procedural (no Widget Blueprint): the whole tree is built in NativeOnInitialized, so the HUD works without any designer asset. It reads the local pawn's UMORespirationComponent (the oxygen reserve is
-// replicated to the owner, so clients show it too) and colours itself by how much time is left: calm blue, an amber warning once the urge to breathe is strong, a pulsing red when the blackout is close.
+// replicated to the owner, so clients show it too) and colours itself by how much time is left (kit tokens): info blue, a warning amber once the urge to breathe is strong, a critical red that pulses when the blackout is close. Drawn as the kit's
+// segmented bar (10 segments x 36 px, gap 4) on a HUD plate; severity also reads from how many segments are lit.
 
 #pragma once
 
@@ -9,7 +10,7 @@
 #include "Blueprint/UserWidget.h"
 #include "MOBreathMeterWidget.generated.h"
 
-class UProgressBar;
+class UImage;
 class UTextBlock;
 class UMORespirationComponent;
 
@@ -30,8 +31,10 @@ protected:
 	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 
 private:
+	static constexpr int32 SegmentCount = 10;
+
 	UPROPERTY(Transient)
-	TObjectPtr<UProgressBar> Bar;
+	TArray<TObjectPtr<UImage>> Segments;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UTextBlock> Label;

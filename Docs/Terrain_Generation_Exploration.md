@@ -98,6 +98,15 @@ The pre-existing native chains have the same cap (grass: 50 / m^2 on a 60 cm lat
 - [ ] Lake look: the default lake is bright turquoise; tune toward a freshwater highland colour (lake preset, surface scattering) once the shores are planted.
 - [ ] Lake cost: 12 lakes live within 4 km (SpawnRadiusCm 400000); measure GPU/CPU and shrink the radius if needed.
 - [ ] Hair buns vanishing under the water effect (Single Layer Water vs hair strand depth): the engine patch is still waiting for Wes's yes; re-check with the Oceanology look first.
+- [ ] **Distant mountains look bland (Wes, 2026-10-12)**: far mountains read as one uniform material with a hard elevation split. Wanted: snow caps with dark rock showing through (steep faces and ridges dark, flatter high ground snow), and the
+  material set switching out with distance (a far-LOD look: macro colour variation, darker rock bands, snow line that follows slope / curvature / aspect, not a flat height cut). Related: the known far-LOD tear on the mountains (P2 in `Docs/AAA_Polish_Backlog.md`);
+  `AlpineRock` (>= 950 m, `VST_Cliff`) and `AlpineHeath` are the current summit biomes. Check first how the Voxel far LOD / material blending actually resolves surface types at distance, then decide between a distance material LOD and a better near/far-consistent rule.
+- [ ] **Soften every elevation / climate split in the ground materials (Wes, 2026-10-12)**: height, slope, moisture and temperature thresholds in `FMOWorldGen` / the terrain node currently switch the surface type abruptly (hard bands). Every split should have a blend
+  band (fade width) AND a noise term that breaks the edge up (the Electric Dreams landscape material's `Breakup Tiling / Intensity / Contrast` and per-layer `Slope Offset / Hardness / Contrast` are the reference, `Docs/ElectricDreams_Lessons.md` section 1). One chokepoint
+  for it (a shared "soft threshold" helper used by every material rule), plus a test that the transition has width and is deterministic (no ISPC / sin / cos, see the determinism rules).
+- [ ] **Sand variety (Wes, 2026-10-12)**: one bare sand material makes beaches and deserts repetitive. Wanted: a few sand materials (colour / grain / ripple / pebble / wet-dark near the waterline / dry-pale dunes / sand over rock) distributed by a low-frequency noise and by
+  distance to water, blended with the same soft-threshold rule. Recipe for a voxel material from a texture set: `Content/Python/make_sand_material.py`; migrated candidates in `Docs/ElectricDreams_Migrated.md` (`DriedGrassOnDampSoil` for the damp edge, `BeachSandWithPebbles` meshes
+  for pebble scatter); more sand sets may need a download (ask Wes first).
 
 ## Update (2026-10-11, later): generator v6 -- mountain RANGES, not towers
 

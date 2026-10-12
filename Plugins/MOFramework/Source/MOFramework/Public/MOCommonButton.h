@@ -111,6 +111,19 @@ protected:
 	virtual void NativePreConstruct() override;
 	virtual void NativeConstruct() override;
 
+	/** Push the style's per-state text style (NormalTextStyle / Hovered / Selected / Disabled) to the label: CommonUI only does this for you in Blueprint (OnCurrentTextStyleChanged). */
+	virtual void NativeOnCurrentTextStyleChanged() override;
+
+	/** Keyboard / gamepad focus (not mouse hover) shows the kit's focus ring: 2 px tallow ring, 2 px gap, drawn outside the button, so hover, focus and selected never look alike. */
+	virtual void NativeOnAddedToFocusPath(const FFocusEvent& InFocusEvent) override;
+	virtual void NativeOnRemovedFromFocusPath(const FFocusEvent& InFocusEvent) override;
+
+	/** Optional: an Image (kit `focus_ring` 9-slice, tint color.focus.ring) padded -4 around the button, in the button's own overlay so a scroll box cannot clip it. */
+	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
+	TObjectPtr<UWidget> FocusRing;
+
+	void ApplyCurrentTextStyleToLabels();
+
 	/**
 	 * Called when the button text needs to be updated.
 	 *

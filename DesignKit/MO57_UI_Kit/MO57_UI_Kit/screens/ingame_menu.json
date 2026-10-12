@@ -1,0 +1,89 @@
+{
+  "title": "In-game menu + Save/Load",
+  "layer": "Menu",
+  "input": "menu (game keeps running)",
+  "grid": "Scrim 72%; left rail 400 at x=120; world-continues readout top; save/load panel 960 at x=600",
+  "elements": [
+    {
+      "id": "Scrim",
+      "widget": "Border",
+      "rect": [
+        0,
+        0,
+        1920,
+        1080
+      ],
+      "anchor": "Fill",
+      "tokens": {
+        "bg": "color.overlay.scrim"
+      },
+      "focus": 0
+    },
+    {
+      "id": "WorldClock",
+      "widget": "WBP_WorldContinues",
+      "rect": [
+        120,
+        96,
+        400,
+        112
+      ],
+      "anchor": "TopLeft",
+      "tokens": {
+        "time": "type.numeric.large",
+        "label": "type.caption",
+        "pulse": "clock icon ticks each in-game minute"
+      },
+      "focus": 0
+    },
+    {
+      "id": "Nav",
+      "widget": "WBP_MenuRail",
+      "rect": [
+        120,
+        240,
+        400,
+        400
+      ],
+      "anchor": "Left",
+      "tokens": {
+        "button": 56
+      },
+      "focus": 1
+    },
+    {
+      "id": "SavePanel",
+      "widget": "WBP_SaveLoadPanel(elev1)",
+      "rect": [
+        600,
+        96,
+        1200,
+        888
+      ],
+      "anchor": "Center",
+      "tokens": {},
+      "focus": 2
+    },
+    {
+      "id": "SlotCard",
+      "widget": "WBP_SaveSlotCard",
+      "rect": [
+        624,
+        168,
+        1152,
+        120
+      ],
+      "anchor": "Center",
+      "tokens": {
+        "thumb": "192x108",
+        "name": "type.heading",
+        "meta": "type.caption + type.numeric.small"
+      },
+      "focus": 0
+    }
+  ],
+  "referenceResolution": [
+    1920,
+    1080
+  ]
+}

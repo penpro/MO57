@@ -3,9 +3,12 @@
 #include "MORespirationComponent.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
+#include "Components/HorizontalBox.h"
+#include "Components/HorizontalBoxSlot.h"
+#include "Components/Image.h"
+#include "MOUITokens.h"
 #include "Components/Overlay.h"
 #include "Components/OverlaySlot.h"
-#include "Components/ProgressBar.h"
 #include "Components/SizeBox.h"
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
@@ -15,21 +18,17 @@
 FLinearColor UMOBreathMeterWidget::ColorForReserve(float Reserve01, float UrgeReserve, float& OutPulse)
 {
 	OutPulse = 0.0f;
-	const FLinearColor Calm(0.55f, 0.82f, 1.00f);
-	const FLinearColor Warn(1.00f, 0.72f, 0.18f);
-	const FLinearColor Danger(1.00f, 0.18f, 0.12f);
 	if (Reserve01 > UrgeReserve)
 	{
-		return Calm;
+		return UMOUITokens::Color("color.severity.info");
 	}
-	const float DangerReserve = 0.18f;
+	const float DangerReserve = 0.10f;   // kit: warning below the urge, critical below 10 %
 	if (Reserve01 > DangerReserve)
 	{
-		// amber in the middle of the urge range, easing toward red
-		return FMath::Lerp(Warn, Danger, 1.0f - FMath::Clamp((Reserve01 - DangerReserve) / FMath::Max(UrgeReserve - DangerReserve, 0.01f), 0.0f, 1.0f));
+		return UMOUITokens::Color("color.severity.warning");
 	}
 	OutPulse = 1.0f - FMath::Clamp(Reserve01 / DangerReserve, 0.0f, 1.0f) * 0.5f;   // pulses harder as it empties
-	return Danger;
+	return UMOUITokens::Color("color.severity.critical");
 }
 
 bool UMOBreathMeterWidget::ShouldShow(bool bAirwayClosed, float Reserve01)
@@ -59,30 +58,41 @@ void UMOBreathMeterWidget::NativeOnInitialized()
 		ColumnSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 150.0f));   // above where a hotbar would sit
 	}
 
+	// the plate (kit hud_plate, color.hud.plate) around the label and the segments
+	UBorder* Plate = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("BreathPlate"));
+	Plate->SetBrush(UMOUITokens::NineSliceBrush("hud_plate", "color.hud.plate"));
+	Plate->SetPadding(FMargin(14.0f, 8.0f));
+	Column->AddChildToVerticalBox(Plate);
+	UVerticalBox* Inner = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("BreathInner"));
+	Plate->SetContent(Inner);
+
 	Label = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("BreathLabel"));
 	Label->SetText(NSLOCTEXT("MOBreath", "BreathLabel", "BREATH"));
-	FSlateFontInfo Font = Label->GetFont();
-	Font.Size = 11;
-	Label->SetFont(Font);
+	Label->SetFont(UMOUITokens::Font("label"));
 	Label->SetJustification(ETextJustify::Center);
-	Label->SetColorAndOpacity(FSlateColor(FLinearColor(0.85f, 0.92f, 1.0f, 0.9f)));
-	if (UVerticalBoxSlot* LabelSlot = Column->AddChildToVerticalBox(Label))
+	Label->SetColorAndOpacity(FSlateColor(UMOUITokens::Color("color.text.secondary")));
+	if (UVerticalBoxSlot* LabelSlot = Inner->AddChildToVerticalBox(Label))
 	{
 		LabelSlot->SetHorizontalAlignment(HAlign_Center);
-		LabelSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 3.0f));
+		LabelSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 6.0f));
 	}
 
-	USizeBox* Box = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("BreathBox"));
-	Box->SetWidthOverride(280.0f);
-	Box->SetHeightOverride(10.0f);
-	Bar = WidgetTree->ConstructWidget<UProgressBar>(UProgressBar::StaticClass(), TEXT("BreathBar"));
-	Bar->SetPercent(1.0f);
-	FProgressBarStyle Style = Bar->GetWidgetStyle();
-	Style.BackgroundImage.TintColor = FSlateColor(FLinearColor(0.02f, 0.05f, 0.09f, 0.55f));
-	Bar->SetWidgetStyle(Style);
-	Bar->SetFillColorAndOpacity(FLinearColor(0.55f, 0.82f, 1.0f));
-	Box->AddChild(Bar);
-	Column->AddChildToVerticalBox(Box);
+	UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("BreathSegments"));
+	Inner->AddChildToVerticalBox(Row);
+	for (int32 i = 0; i < SegmentCount; ++i)
+	{
+		USizeBox* Cell = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
+		Cell->SetWidthOverride(36.0f);
+		Cell->SetHeightOverride(10.0f);
+		UImage* Segment = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass());
+		Segment->SetBrush(UMOUITokens::NineSliceBrush("progress_fill", "color.data.track"));
+		Cell->AddChild(Segment);
+		if (UHorizontalBoxSlot* CellSlot = Row->AddChildToHorizontalBox(Cell))
+		{
+			CellSlot->SetPadding(FMargin(i == 0 ? 0.0f : 4.0f, 0.0f, 0.0f, 0.0f));
+		}
+		Segments.Add(Segment);
+	}
 
 	SetVisibility(ESlateVisibility::HitTestInvisible);
 	SetRenderOpacity(0.0f);
@@ -104,17 +114,22 @@ void UMOBreathMeterWidget::NativeTick(const FGeometry& MyGeometry, float InDelta
 		{
 			Target = 1.0f;
 		}
-		if (Bar)
+		if (Segments.Num() > 0)
 		{
 			float Pulse = 0.0f;
 			FLinearColor Color = ColorForReserve(Reserve, Breath->Params.UrgeReserve, Pulse);
-			if (Pulse > 0.0f)
+			if (Pulse > 0.0f && UMOUITokens::Number("motion.pulse.critical") > 0.0f)   // reduced motion: static
 			{
 				PulseTime += InDeltaTime * (5.0f + 6.0f * Pulse);
 				Color.A = 0.65f + 0.35f * (0.5f + 0.5f * FMath::Sin(PulseTime));
 			}
-			Bar->SetPercent(Reserve);
-			Bar->SetFillColorAndOpacity(Color);
+			const FLinearColor Track = UMOUITokens::Color("color.data.track");
+			const float Lit = FMath::Clamp(Reserve, 0.0f, 1.0f) * SegmentCount;
+			for (int32 i = 0; i < Segments.Num(); ++i)
+			{
+				const float Fill = FMath::Clamp(Lit - i, 0.0f, 1.0f);   // the boundary segment is part-lit
+				Segments[i]->SetColorAndOpacity(FMath::Lerp(Track, Color, Fill));
+			}
 		}
 	}
 	Alpha = FMath::FInterpConstantTo(Alpha, Target, InDeltaTime, Target > Alpha ? 5.0f : 1.5f);   // quick in, slow out

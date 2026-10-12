@@ -1,0 +1,222 @@
+{
+  "title": "HUD",
+  "layer": "Game",
+  "input": "game (no focus)",
+  "grid": "40px safe margin; corners own clusters; centre column reserved for reticle/prompt/progress",
+  "elements": [
+    {
+      "id": "ColonyBar",
+      "widget": "WBP_ColonyBar",
+      "rect": [
+        40,
+        40,
+        618,
+        108
+      ],
+      "anchor": "TopLeft",
+      "tokens": {
+        "card": "72x108, gap 6",
+        "portrait": "portrait.size 64",
+        "caption": "type.caption + outline"
+      },
+      "focus": 0,
+      "note": "max 8 cards, then +N card; hidden when solo"
+    },
+    {
+      "id": "ModeIndicator",
+      "widget": "WBP_ModeIndicator",
+      "rect": [
+        40,
+        164,
+        220,
+        36
+      ],
+      "anchor": "TopLeft",
+      "tokens": {
+        "bg": "color.hud.plate",
+        "text": "type.label",
+        "icon": 24
+      },
+      "focus": 0
+    },
+    {
+      "id": "TutorialBanner",
+      "widget": "WBP_TutorialBanner",
+      "rect": [
+        680,
+        40,
+        560,
+        112
+      ],
+      "anchor": "TopCenter",
+      "tokens": {
+        "bg": "color.hud.plate",
+        "title": "type.heading",
+        "body": "type.body",
+        "rule": "color.accent 2px top"
+      },
+      "focus": 0
+    },
+    {
+      "id": "Notifications",
+      "widget": "WBP_NotificationStack",
+      "rect": [
+        1480,
+        40,
+        400,
+        312
+      ],
+      "anchor": "TopRight",
+      "tokens": {
+        "item": "400x72 gap 8",
+        "severity": "icon 24 + 4px leading bar",
+        "text": "type.body"
+      },
+      "focus": 0,
+      "note": "max 4 visible; info 4s, warning 8s, critical sticky until resolved"
+    },
+    {
+      "id": "QuestTracker",
+      "widget": "WBP_QuestTracker",
+      "rect": [
+        1520,
+        392,
+        360,
+        152
+      ],
+      "anchor": "TopRight",
+      "tokens": {
+        "bg": "color.hud.plate",
+        "title": "type.body.strong",
+        "objective": "type.body (wrap)",
+        "bar": "progress 8px"
+      },
+      "focus": 0
+    },
+    {
+      "id": "Reticle",
+      "widget": "WBP_Reticle",
+      "rect": [
+        956,
+        536,
+        8,
+        8
+      ],
+      "anchor": "Center",
+      "tokens": {
+        "color": "color.text.primary",
+        "outline": "1px #000 @80%"
+      },
+      "focus": 0
+    },
+    {
+      "id": "InteractionPrompt",
+      "widget": "WBP_InteractionPrompt",
+      "rect": [
+        760,
+        572,
+        400,
+        44
+      ],
+      "anchor": "Center",
+      "tokens": {
+        "keycap": "keycap 32",
+        "text": "type.hud",
+        "bg": "color.hud.plate"
+      },
+      "focus": 0
+    },
+    {
+      "id": "TimedAction",
+      "widget": "WBP_TimedActionProgress",
+      "rect": [
+        760,
+        628,
+        400,
+        76
+      ],
+      "anchor": "Center",
+      "tokens": {
+        "label": "type.hud",
+        "time": "type.numeric",
+        "bar": "progress 8px data.fill",
+        "hint": "type.caption text.secondary"
+      },
+      "focus": 0
+    },
+    {
+      "id": "BreathMeter",
+      "widget": "WBP_BreathMeter",
+      "rect": [
+        760,
+        872,
+        400,
+        40
+      ],
+      "anchor": "BottomCenter",
+      "tokens": {
+        "segments": "10 x 36w gap 4",
+        "fill": "color.severity.info -> warning <30% -> critical <10%"
+      },
+      "focus": 0,
+      "note": "only while submerged"
+    },
+    {
+      "id": "Moodles",
+      "widget": "WBP_MoodleStrip",
+      "rect": [
+        40,
+        760,
+        300,
+        280
+      ],
+      "anchor": "BottomLeft",
+      "tokens": {
+        "pill": "h40, icon 24, type.hud",
+        "gap": 8,
+        "warning": "severity.warning + triangle",
+        "critical": "severity.critical + octagon + critical_border"
+      },
+      "focus": 0,
+      "note": "stack upward, critical first; >6 = '+N more' pill opens status"
+    },
+    {
+      "id": "Wind",
+      "widget": "WBP_WindIndicator",
+      "rect": [
+        1792,
+        912,
+        88,
+        128
+      ],
+      "anchor": "BottomRight",
+      "tokens": {
+        "ring": "wind_ring 64",
+        "arrow": "wind_arrow 32 rotated to wind-relative-to-camera",
+        "speed": "type.numeric.small"
+      },
+      "focus": 0
+    },
+    {
+      "id": "Debug",
+      "widget": "WBP_FPSCounter",
+      "rect": [
+        1736,
+        8,
+        176,
+        24
+      ],
+      "anchor": "TopRight",
+      "tokens": {
+        "text": "type.numeric.small",
+        "bg": "color.hud.plate"
+      },
+      "focus": 0,
+      "note": "dev builds only, above safe area"
+    }
+  ],
+  "referenceResolution": [
+    1920,
+    1080
+  ]
+}

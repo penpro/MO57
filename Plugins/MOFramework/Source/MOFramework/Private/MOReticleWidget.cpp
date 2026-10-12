@@ -1,4 +1,5 @@
 #include "MOReticleWidget.h"
+#include "MOUITokens.h"
 
 #include "Widgets/Images/SImage.h"
 #include "Widgets/Layout/SBox.h"
@@ -22,64 +23,25 @@ TSharedRef<SWidget> UMOReticleWidget::RebuildWidget()
 
 	const float LineLength = ReticleSize - ReticleGap;
 	const float HalfThickness = ReticleThickness * 0.5f;
+	const FLinearColor Fill = bUseThemeColor ? UMOUITokens::Color("color.text.primary") : ReticleColor;
+	const FLinearColor Outline = UMOUITokens::Color("color.hud.outline");   // 1 px dark edge so the reticle reads on snow and on sky
 
-	// Top line - positioned above center
-	Canvas->AddSlot()
-		.Anchors(FAnchors(0.5f, 0.5f, 0.5f, 0.5f))
-		.Offset(FMargin(-HalfThickness, -(ReticleGap + LineLength), ReticleThickness, LineLength))
-		.AutoSize(false)
-		[
-			SNew(SImage)
-			.Image(&WhiteBrush)
-			.ColorAndOpacity(ReticleColor)
-		];
+	// each shape is drawn twice: a dark copy 1 px larger on every side, then the coloured one
+	auto AddShape = [&](const FMargin& Offset)
+	{
+		const FMargin Grown(Offset.Left - 1.0f, Offset.Top - 1.0f, Offset.Right + 2.0f, Offset.Bottom + 2.0f);
+		Canvas->AddSlot().Anchors(FAnchors(0.5f, 0.5f, 0.5f, 0.5f)).Offset(Grown).AutoSize(false)[SNew(SImage).Image(&WhiteBrush).ColorAndOpacity(Outline)];
+		Canvas->AddSlot().Anchors(FAnchors(0.5f, 0.5f, 0.5f, 0.5f)).Offset(Offset).AutoSize(false)[SNew(SImage).Image(&WhiteBrush).ColorAndOpacity(Fill)];
+	};
 
-	// Bottom line - positioned below center
-	Canvas->AddSlot()
-		.Anchors(FAnchors(0.5f, 0.5f, 0.5f, 0.5f))
-		.Offset(FMargin(-HalfThickness, ReticleGap, ReticleThickness, LineLength))
-		.AutoSize(false)
-		[
-			SNew(SImage)
-			.Image(&WhiteBrush)
-			.ColorAndOpacity(ReticleColor)
-		];
-
-	// Left line - positioned left of center
-	Canvas->AddSlot()
-		.Anchors(FAnchors(0.5f, 0.5f, 0.5f, 0.5f))
-		.Offset(FMargin(-(ReticleGap + LineLength), -HalfThickness, LineLength, ReticleThickness))
-		.AutoSize(false)
-		[
-			SNew(SImage)
-			.Image(&WhiteBrush)
-			.ColorAndOpacity(ReticleColor)
-		];
-
-	// Right line - positioned right of center
-	Canvas->AddSlot()
-		.Anchors(FAnchors(0.5f, 0.5f, 0.5f, 0.5f))
-		.Offset(FMargin(ReticleGap, -HalfThickness, LineLength, ReticleThickness))
-		.AutoSize(false)
-		[
-			SNew(SImage)
-			.Image(&WhiteBrush)
-			.ColorAndOpacity(ReticleColor)
-		];
-
-	// Center dot
+	AddShape(FMargin(-HalfThickness, -(ReticleGap + LineLength), ReticleThickness, LineLength));   // top
+	AddShape(FMargin(-HalfThickness, ReticleGap, ReticleThickness, LineLength));                   // bottom
+	AddShape(FMargin(-(ReticleGap + LineLength), -HalfThickness, LineLength, ReticleThickness));   // left
+	AddShape(FMargin(ReticleGap, -HalfThickness, LineLength, ReticleThickness));                   // right
 	if (bShowCenterDot)
 	{
 		const float HalfDot = CenterDotSize * 0.5f;
-		Canvas->AddSlot()
-			.Anchors(FAnchors(0.5f, 0.5f, 0.5f, 0.5f))
-			.Offset(FMargin(-HalfDot, -HalfDot, CenterDotSize, CenterDotSize))
-			.AutoSize(false)
-			[
-				SNew(SImage)
-				.Image(&WhiteBrush)
-				.ColorAndOpacity(ReticleColor)
-			];
+		AddShape(FMargin(-HalfDot, -HalfDot, CenterDotSize, CenterDotSize));
 	}
 
 	RootCanvas = Canvas;
@@ -109,6 +71,7 @@ void UMOReticleWidget::RebuildReticle()
 void UMOReticleWidget::SetReticleColor(FLinearColor InColor)
 {
 	ReticleColor = InColor;
+	bUseThemeColor = false;
 	RebuildReticle();
 }
 

@@ -1,0 +1,200 @@
+---,Value,Kind,Notes
+color.surface.0,#0E0D0B,Color,Backdrop / deepest well; HUD plate base
+color.surface.1,#181612,Color,Panel (elevation 1) - default menu panel
+color.surface.2,#221F1A,Color,"Raised: cards, list rows, slots"
+color.surface.3,#2C2822,Color,"Inputs, secondary buttons, row hover"
+color.surface.4,#38332B,Color,Pressed / active fill
+color.paper.surface,#E6DDC8,Color,"Paper insert: medical chart, journal page, ledger"
+color.paper.ink,#1C1914,Color,Body text on paper
+color.paper.ink2,#4B4438,Color,Secondary text on paper
+color.paper.rule,#BFB297,Color,Ruled lines / dividers on paper
+color.border.subtle,#3A342C,Color,"Dividers, panel edge"
+color.border.strong,#5C5447,Color,Input + secondary button edge
+color.text.primary,#EEE7D7,Color,"Body, labels (tallow-paper white)"
+color.text.secondary,#BDB3A0,Color,"Secondary, captions"
+color.text.disabled,#7D7466,Color,"Disabled (WCAG-exempt, still >= 3:1 on surface.1)"
+color.text.inverse,#15130F,Color,Text on light fills
+color.accent,#6CB8A9,Color,Verdigris - the ONE accent: interactive / selected
+color.accent.hover,#88CBBE,Color,Accent hover
+color.accent.pressed,#4E9A8C,Color,Accent pressed
+color.accent.ink,#0B1916,Color,Text/icon on accent fill
+color.accent.muted,#6CB8A92E,Color,Selection fill (accent @ 18%)
+color.focus.ring,#F3E2B3,Color,Focus ring - candle-light; never used for hover
+color.hover.overlay,#FFFFFF0F,Color,Hover wash (white @ 6%) over any surface
+color.pressed.overlay,#00000033,Color,Pressed wash (black @ 20%)
+color.overlay.scrim,#070605B8,Color,Modal scrim (@ 72%) - world stays visible
+color.hud.plate,#0E0D0BD1,Color,HUD backing plate (surface.0 @ 82%)
+color.hud.outline,#000000CC,Color,Text outline over the world (@ 80%)
+color.severity.ok,#8FBF6A,Color,Moss - shape: circle + check
+color.severity.notice,#D8C56A,Color,Straw - shape: diamond
+color.severity.warning,#E7A042,Color,Amber - shape: triangle
+color.severity.critical,#EE6550,Color,Blood - shape: octagon + double border
+color.severity.info,#7EA8DE,Color,Slate blue - shape: square
+color.severity.critical.fill,#7A2318,Color,Critical fill behind primary text (danger button)
+color.severity.warning.fill,#5E3E12,Color,Warning fill behind primary text
+color.paper.severity.ok,#3A6422,Color,Severity on paper inserts (ink-dark)
+color.paper.severity.notice,#6B5E10,Color,Severity on paper
+color.paper.severity.warning,#7A4E06,Color,Severity on paper
+color.paper.severity.critical,#9E2716,Color,Severity on paper
+color.paper.severity.info,#2E5A8C,Color,Severity on paper
+color.data.track,#2C2822,Color,Progress track
+color.data.fill,#BDB3A0,Color,"Neutral progress fill (time, xp)"
+colorblind.color.severity.ok,#56B4E9,Color,CB: sky blue
+colorblind.color.severity.notice,#F0E442,Color,CB: yellow
+colorblind.color.severity.warning,#E69F00,Color,CB: orange
+colorblind.color.severity.critical,#E890C4,Color,CB: reddish purple (lightened Okabe-Ito)
+colorblind.color.severity.info,#C9D3E3,Color,CB: blue-grey
+colorblind.color.severity.critical.fill,#6B2450,Color,CB critical fill
+type.display.font,Bitter,String,
+type.display.weight,600,Float,
+type.display.size,48,Float,
+type.display.umgSize,36,Float,
+type.display.lineHeight,56,Float,
+type.display.letterSpacing,0.0,Float,
+type.display.letterSpacingUMG,0,Float,
+type.display.case,none,String,
+type.title.font,Bitter,String,
+type.title.weight,600,Float,
+type.title.size,32,Float,
+type.title.umgSize,24,Float,
+type.title.lineHeight,40,Float,
+type.title.letterSpacing,0.0,Float,
+type.title.letterSpacingUMG,0,Float,
+type.title.case,none,String,
+type.heading.font,Bitter,String,
+type.heading.weight,600,Float,
+type.heading.size,24,Float,
+type.heading.umgSize,18,Float,
+type.heading.lineHeight,32,Float,
+type.heading.letterSpacing,0.0,Float,
+type.heading.letterSpacingUMG,0,Float,
+type.heading.case,none,String,
+type.label.font,IBM Plex Sans,String,
+type.label.weight,600,Float,
+type.label.size,15,Float,
+type.label.umgSize,11,Float,
+type.label.lineHeight,20,Float,
+type.label.letterSpacing,0.08,Float,
+type.label.letterSpacingUMG,80,Float,
+type.label.case,upper,String,
+type.body.font,IBM Plex Sans,String,
+type.body.weight,400,Float,
+type.body.size,18,Float,
+type.body.umgSize,14,Float,
+type.body.lineHeight,26,Float,
+type.body.letterSpacing,0.0,Float,
+type.body.letterSpacingUMG,0,Float,
+type.body.case,none,String,
+type.body.strong.font,IBM Plex Sans,String,
+type.body.strong.weight,600,Float,
+type.body.strong.size,18,Float,
+type.body.strong.umgSize,14,Float,
+type.body.strong.lineHeight,26,Float,
+type.body.strong.letterSpacing,0.0,Float,
+type.body.strong.letterSpacingUMG,0,Float,
+type.body.strong.case,none,String,
+type.caption.font,IBM Plex Sans,String,
+type.caption.weight,400,Float,
+type.caption.size,15,Float,
+type.caption.umgSize,11,Float,
+type.caption.lineHeight,20,Float,
+type.caption.letterSpacing,0.01,Float,
+type.caption.letterSpacingUMG,10,Float,
+type.caption.case,none,String,
+type.hud.font,IBM Plex Sans,String,
+type.hud.weight,600,Float,
+type.hud.size,18,Float,
+type.hud.umgSize,14,Float,
+type.hud.lineHeight,22,Float,
+type.hud.letterSpacing,0.01,Float,
+type.hud.letterSpacingUMG,10,Float,
+type.hud.case,none,String,
+type.numeric.font,IBM Plex Mono,String,
+type.numeric.weight,500,Float,
+type.numeric.size,18,Float,
+type.numeric.umgSize,14,Float,
+type.numeric.lineHeight,24,Float,
+type.numeric.letterSpacing,0.0,Float,
+type.numeric.letterSpacingUMG,0,Float,
+type.numeric.case,none,String,
+type.numeric.large.font,IBM Plex Mono,String,
+type.numeric.large.weight,500,Float,
+type.numeric.large.size,32,Float,
+type.numeric.large.umgSize,24,Float,
+type.numeric.large.lineHeight,36,Float,
+type.numeric.large.letterSpacing,-0.01,Float,
+type.numeric.large.letterSpacingUMG,-10,Float,
+type.numeric.large.case,none,String,
+type.numeric.small.font,IBM Plex Mono,String,
+type.numeric.small.weight,500,Float,
+type.numeric.small.size,15,Float,
+type.numeric.small.umgSize,11,Float,
+type.numeric.small.lineHeight,20,Float,
+type.numeric.small.letterSpacing,0.0,Float,
+type.numeric.small.letterSpacingUMG,0,Float,
+type.numeric.small.case,none,String,
+space.0,0,Float,
+space.1,4,Float,
+space.2,8,Float,
+space.3,12,Float,
+space.4,16,Float,
+space.5,24,Float,
+space.6,32,Float,
+space.7,48,Float,
+space.8,64,Float,
+space.9,96,Float,
+radius.0,0,Float,
+radius.1,2,Float,
+radius.2,4,Float,
+radius.pill,999,Float,
+border.thin,1,Float,
+border.thick,2,Float,
+focus.ring.width,2,Float,
+focus.ring.offset,2,Float,
+critical.border.width,2,Float,
+critical.border.gap,2,Float,
+opacity.hud.plate,0.82,Float,
+opacity.scrim,0.72,Float,
+opacity.panel,1.0,Float,
+opacity.selection,0.18,Float,
+opacity.hover,0.06,Float,
+opacity.pressed,0.2,Float,
+opacity.disabled.icon,0.45,Float,
+opacity.texture.max,0.08,Float,
+motion.instant,0,Float,
+motion.fast,80,Float,
+motion.base,140,Float,
+motion.slow,200,Float,
+motion.pulse.critical,1200,Float,
+motion.ease.out,"cubic-bezier(0.2,0,0,1)",String,
+motion.ease.in,"cubic-bezier(0.4,0,1,1)",String,
+motion.ease.inout,"cubic-bezier(0.4,0,0.2,1)",String,
+icon.size.16,16,Float,
+icon.size.24,24,Float,
+icon.size.32,32,Float,
+icon.size.48,48,Float,
+icon.size.64,64,Float,
+control.height.min,44,Float,
+control.height.primary,56,Float,
+row.height,48,Float,
+row.height.dense,44,Float,
+slot.size,64,Float,
+slot.gap,8,Float,
+portrait.size,64,Float,
+tab.height,48,Float,
+keycap.height,32,Float,
+safe.margin,40,Float,
+panel.padding,24,Float,
+modal.width.s,480,Float,
+modal.width.m,640,Float,
+menu.panel.w,1600,Float,
+menu.panel.h,880,Float,
+text.world.outline.size,1,Float,
+text.world.outline.color,color.hud.outline,String,
+text.world.shadow.offset,"[0, 2]",String,
+text.world.shadow.color,#00000099,String,
+text.world.plate,color.hud.plate,String,
+a11y.textScale.options,"[1.0, 1.25, 1.5]",String,
+a11y.reducedMotion,all motion.* -> 0 except motion.fast fades; motion.pulse.critical -> static double border,String,
+a11y.colorblind,swap color.severity.* with the colorblind block; shapes unchanged,String,
+a11y.highContrast,hud.plate opacity 0.82 -> 0.95; text.secondary -> text.primary,String,

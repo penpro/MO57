@@ -113,21 +113,7 @@ protected:
 	// CONFIGURATION
 	// ============================================================================
 
-	/** Color for Explore mode. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Mode|Colors")
-	FLinearColor ExploreColor = FLinearColor(0.7f, 0.9f, 1.0f, 1.0f); // Light blue
-
-	/** Color for Build mode. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Mode|Colors")
-	FLinearColor BuildColor = FLinearColor(1.0f, 0.8f, 0.2f, 1.0f); // Gold
-
-	/** Color for Terraform mode. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Mode|Colors")
-	FLinearColor TerraformColor = FLinearColor(0.6f, 0.4f, 0.2f, 1.0f); // Brown/Earth
-
-	/** Color for Combat mode. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|UI|Mode|Colors")
-	FLinearColor CombatColor = FLinearColor(1.0f, 0.3f, 0.3f, 1.0f); // Red
+	// Mode colours are design tokens (Explore = primary text, Build = accent, Terraform = notice, Combat = critical), resolved in GetModeColor.
 
 private:
 	EMOGameplayMode CurrentMode = EMOGameplayMode::Explore;
