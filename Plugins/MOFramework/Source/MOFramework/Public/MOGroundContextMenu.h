@@ -30,7 +30,8 @@
  *
  * [2026-06] (H22) TIMED ACTION: Clicking Search/Dig no longer executes instantly.
  *   It starts a timed, interruptible foraging action (ForagingActionDuration);
- *   items + XP are only granted on completion in FinishForagingAction(). Movement
+ *   items + XP are only granted on completion in FinishForagingAction(), BY THE SERVER
+ *   (AMOPlayerController::ServerForage; the result count comes back to ShowForagingResult). Movement
  *   or other interrupts (IMOInterruptibleInterface) cancel it with no reward.
  *   ShouldCloseOnMouseLeave() is suppressed while the action runs (mirrors
  *   UMOGhostContextMenu's build-timer guard) so cursor drift doesn't cancel it.
@@ -65,12 +66,6 @@ enum class EMOGroundForageAction : uint8
 	SearchNearby,
 	DigForSupplies
 };
-
-/**
- * Delegate fired when a foraging action completes.
- * @param RevealedItems - Array of world items that were revealed/spawned
- */
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOForagingCompleteSignature, const TArray<AMOWorldItem*>&, RevealedItems);
 
 /**
  * Context menu shown when right-clicking on ground (no interactable target).
@@ -117,18 +112,6 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category="MO|Foraging")
 	void SetMenuPosition(FVector2D ScreenPosition);
-
-	// ============================================================================
-	// DELEGATES
-	// ============================================================================
-
-	/** Called when Search Nearby completes. */
-	UPROPERTY(BlueprintAssignable, Category="MO|Foraging")
-	FMOForagingCompleteSignature OnSearchComplete;
-
-	/** Called when Dig for Supplies completes. */
-	UPROPERTY(BlueprintAssignable, Category="MO|Foraging")
-	FMOForagingCompleteSignature OnDigComplete;
 
 	// ============================================================================
 	// GETTERS

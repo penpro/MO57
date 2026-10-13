@@ -1372,6 +1372,61 @@ def _combat_line(text):
     return m.group(0) if m else text.strip()[-80:]
 
 
+def _client_forage(rep, host, client):
+    """CLIENT foraging (the ground menu's Search / Dig): the menu used to run the foraging subsystem ON THE CLIENT, so a joiner's finds existed on the
+    joiner only. Now it asks AMOPlayerController::ServerForage. Control first: the old direct call on the client must be refused and reach nothing on
+    the host. Then the real call: the HOST runs the dig and logs it, the items it made replicate to the client, and an immediate second forage is
+    refused (MinForageIntervalSeconds)."""
+    items_near = ("p = unreal.GameplayStatics.get_player_pawn(world, %d); loc = p.get_actor_location(); "
+                  "n = sum(1 for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOWorldItem) if (a.get_actor_location() - loc).length() < 600.0); "
+                  "out('NEARITEMS=%%d' %% n)")
+    hoff, coff = log_size(host), log_size(client)
+    console(client, "MO.Test.Forage dig 150 direct")
+    wait_log(client, r"\[MOTEST\] Forage direct[^\n]*", since=coff, timeout=15)
+    time.sleep(2)
+    cl, hl = read_log_from(client, coff), read_log_from(host, hoff)
+    refused = re.search(r"\[MOForagingSubsystem\] \S+ refused on a client", cl)
+    direct = re.search(r"\[MOTEST\] Forage direct \(dig\) on a CLIENT: (\d+) item", cl)
+    rep.step("CONTROL: the old path (the foraging subsystem called on the CLIENT) is refused and spawns nothing",
+             bool(refused) and bool(direct) and direct.group(1) == "0", (refused.group(0) if refused else "no refusal line") + (f"; {direct.group(0)}" if direct else ""))
+    rep.step("CONTROL: ... and the host saw no forage", "[MOForaging]" not in hl, "no [MOForaging] line on the host" if "[MOForaging]" not in hl else "host logged a forage")
+
+    m0 = re.search(r"NEARITEMS=(\d+)", _probe(client, items_near % 0))
+    before = int(m0.group(1)) if m0 else -1
+    hoff, coff = log_size(host), log_size(client)
+    console(client, "MO.Test.Forage dig 150")
+    done = wait_log(host, r"\[MOForaging\] \S+: dig at [^\n]*-> (\d+) item", since=hoff, timeout=20)
+    hl = read_log_from(host, hoff)
+    dug = re.search(r"\[MOForaging\] \S+: dig at [^\n]*-> (\d+) item", hl)
+    if not rep.step("client dig: the HOST ran it (ServerForage) and logged the result", bool(dug), dug.group(0)[:140] if dug else "no '[MOForaging] ...: dig at' line on the host"):
+        return
+    count = int(dug.group(1))
+    if count > 0:
+        seen = -1
+        for _ in range(10):
+            time.sleep(1.5)
+            m1 = re.search(r"NEARITEMS=(\d+)", _probe(client, items_near % 0))
+            seen = int(m1.group(1)) if m1 else -1
+            if seen >= before + count:
+                break
+        rep.step(f"client dig: the {count} item(s) the host made replicate to the client", seen >= before + count, f"world items within 6 m of the joiner: {before} -> {seen}")
+    else:
+        rep.step("client dig: the host's roll found nothing this time (no items to replicate)", True, dug.group(0)[:140])
+    result = re.search(r"\[MOInventoryUI\] Foraging dig complete - (\d+) item", read_log_from(client, coff))
+    rep.step("client dig: the result came back to the client's UI (ClientForageResult)", bool(result) and int(result.group(1)) == count,
+             result.group(0) if result else "no '[MOInventoryUI] Foraging dig complete' line on the client")
+    time.sleep(3)   # past MinForageIntervalSeconds: the first of the next two is a fresh forage
+    hoff = log_size(host)
+    console(client, "MO.Test.Forage dig 150 twice")   # two requests in the same tick
+    wait_log(host, r"\[MOForaging\] [^\n]*forage refused[^\n]*", since=hoff, timeout=15)
+    time.sleep(1)
+    again = read_log_from(host, hoff)
+    n_dug = len(re.findall(r"\[MOForaging\] \S+: dig at", again))
+    n_refused = len(re.findall(r"\[MOForaging\] [^\n]*forage refused", again))
+    rep.step("trust: of two forages sent in the same tick the server takes ONE and refuses the other (MinForageIntervalSeconds)", n_dug == 1 and n_refused == 1,
+             f"host: {n_dug} dig(s) accepted, {n_refused} refused")
+
+
 def _client_attack(rep, host, client):
     """CLIENT attack: the client calls StartLightAttack (forwarded as ServerStartAttack); the host's combat component for the joiner's
     pawn must enter combat. Control: not in combat before. (bInCombat holds for ~5 s after an action, so poll right away.)"""
@@ -1649,7 +1704,7 @@ def actions_test(uproject, editor_exe, keep=False, boot_timeout=300):
             start(n, uproject, editor_exe, pos=pos, nosteam=True)
         if not _host_and_join(rep, host, client, "ActionsTest", boot_timeout):
             return False
-        for fn in (_client_pickup, _client_craft, _client_attack, _trust_placement, _trust_pickup_far, _trust_possess_other, _trust_terraform, _buried_pawns, _remote_pawn_stays_put):
+        for fn in (_client_pickup, _client_craft, _client_forage, _client_attack, _trust_placement, _trust_pickup_far, _trust_possess_other, _trust_terraform, _buried_pawns, _remote_pawn_stays_put):
             try:
                 fn(rep, host, client)
             except Exception as e:  # noqa: BLE001 - one verb's harness error must not hide the others

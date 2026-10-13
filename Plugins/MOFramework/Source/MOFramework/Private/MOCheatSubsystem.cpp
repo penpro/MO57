@@ -7,6 +7,8 @@
 #include "MOPossessionComponent.h"
 #include "MOWorldSeedSubsystem.h"
 #include "MOPlayerController.h"
+#include "MOForagingSubsystem.h"
+#include "MOGroundContextMenu.h"
 #include "Kismet/GameplayStatics.h"
 #include "MOSpawnClearance.h"
 #include "Engine/StaticMeshActor.h"
@@ -1700,6 +1702,46 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] PickupNearest: interacting with %s at %.0fuu"),
 					*Nearest->GetName(), FMath::Sqrt(BestSq));
 				Interactor->RequestInteractWithActor(Nearest);
+			});
+		}),
+		ECVF_Default));
+
+	// ---------- MO.Test.Forage [search|dig] [distance_cm=150] [direct] ----------
+	// The ground menu's foraging as a co-op client does it: AMOPlayerController::ServerForage at a point distance_cm ahead of the pawn (deferred a tick:
+	// real RPC transport). `direct` calls the foraging subsystem locally instead -- what the menu used to do -- which a client must now refuse (control).
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Test.Forage"),
+		TEXT("Forage like the ground menu: ServerForage at a point ahead of the pawn (real RPC). `direct` = call the subsystem locally (must be refused on a client); `twice` = two requests in the same tick (the server must take one). Usage: MO.Test.Forage [search|dig] [distance_cm=150] [direct|twice]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			const bool bDig = Args.Num() > 0 && Args[0].Equals(TEXT("dig"), ESearchCase::IgnoreCase);
+			const float Distance = Args.Num() > 1 ? FCString::Atof(*Args[1]) : 150.0f;
+			const bool bDirect = Args.ContainsByPredicate([](const FString& A) { return A.Equals(TEXT("direct"), ESearchCase::IgnoreCase); });
+			const bool bTwice = Args.ContainsByPredicate([](const FString& A) { return A.Equals(TEXT("twice"), ESearchCase::IgnoreCase); });
+			RunOnNextTick(World, [bDig, Distance, bDirect, bTwice](UWorld* W)
+			{
+				APawn* Pawn = ResolveLocalPawn(W);
+				AMOPlayerController* PC = Pawn ? Cast<AMOPlayerController>(Pawn->GetController()) : nullptr;
+				UMOForagingSubsystem* Foraging = W->GetSubsystem<UMOForagingSubsystem>();
+				if (!Pawn || !PC || !Foraging)
+				{
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] FAIL Forage: no pawn / MO player controller / foraging subsystem"));
+					return;
+				}
+				const FVector Target = Pawn->GetActorLocation() + Pawn->GetActorForwardVector().GetSafeNormal2D() * Distance;
+				if (bDirect)
+				{
+					const int32 Count = bDig ? Foraging->DigForSupplies(Target, Foraging->GetForagingLevel(Pawn), Pawn).Num()
+						: Foraging->RevealHISMInstancesInRadius(Target, Foraging->CalculateSearchRadius(Foraging->GetForagingLevel(Pawn)), Pawn).Num();
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] Forage direct (%s) on %s: %d item(s)"), bDig ? TEXT("dig") : TEXT("search"),
+						W->GetNetMode() == NM_Client ? TEXT("a CLIENT") : TEXT("the server"), Count);
+					return;
+				}
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] Forage: ServerForage(%s) %.0f cm ahead%s"), bDig ? TEXT("dig") : TEXT("search"), Distance, bTwice ? TEXT(", twice") : TEXT(""));
+				for (int32 N = 0; N < (bTwice ? 2 : 1); ++N)
+				{
+					PC->ServerForage(static_cast<uint8>(bDig ? EMOGroundForageAction::DigForSupplies : EMOGroundForageAction::SearchNearby), Target);
+				}
 			});
 		}),
 		ECVF_Default));

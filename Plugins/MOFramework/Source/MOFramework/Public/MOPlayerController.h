@@ -599,7 +599,29 @@ public:
 	UFUNCTION(Client, Reliable)
 	void ClientShowNotification(const FText& Message, float Duration, EMONotificationType Type);
 
+	/**
+	 * Foraging (the ground menu's Search Nearby / Dig for Supplies, timed and interruptible in the menu) changes the SERVER's world: it spawns world items,
+	 * removes the revealed ground instances through the removal ledger and grants XP. The menu asks here when its timer completes; from the host's own
+	 * controller this runs locally, from a co-op client it is sent. The server re-derives skill level and radius from the pawn, refuses a target beyond
+	 * MaxForageReachCm or a second forage sooner than MinForageIntervalSeconds, and reports the count back. Action = EMOGroundForageAction as uint8.
+	 */
+	UFUNCTION(Server, Reliable)
+	void ServerForage(uint8 Action, FVector_NetQuantize Location);
+
+	UFUNCTION(Client, Reliable)
+	void ClientForageResult(uint8 Action, int32 ItemCount);
+
 protected:
+	/** ServerForage: the farthest the target may be from the pawn (the ground menu traces 20 m from the camera). */
+	UPROPERTY(EditDefaultsOnly, Category="MO|Foraging")
+	float MaxForageReachCm = 2500.0f;
+
+	/** ServerForage: the least time between two forages (the menu's action takes 3 s; a little slack for latency). */
+	UPROPERTY(EditDefaultsOnly, Category="MO|Foraging")
+	float MinForageIntervalSeconds = 2.5f;
+
+	/** Server: world time of this player's last accepted forage (-1 = none yet). */
+	double LastForageServerTime = -1.0;
 
 	/** Input routing + UI caches for the pawn this controller now drives. Shared by the server (OnPossess) and the
 	 *  owning client (SetPawn); without the client call a joiner's input never reaches his pawn. */

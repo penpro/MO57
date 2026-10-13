@@ -59,8 +59,6 @@ void UMOInventoryUIController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	if (UMOGroundContextMenu* GroundMenu = GroundContextMenuWidget.Get())
 	{
 		GroundMenu->OnCloseRequested.RemoveDynamic(this, &UMOInventoryUIController::HandleGroundContextMenuClosed);
-		GroundMenu->OnSearchComplete.RemoveDynamic(this, &UMOInventoryUIController::HandleForagingSearchComplete);
-		GroundMenu->OnDigComplete.RemoveDynamic(this, &UMOInventoryUIController::HandleForagingDigComplete);
 		GroundMenu->RemoveFromParent();
 	}
 	GroundContextMenuWidget.Reset();
@@ -1160,8 +1158,6 @@ void UMOInventoryUIController::ShowGroundContextMenu(FVector WorldLocation, FVec
 
 	// Bind delegates
 	MenuWidget->OnCloseRequested.AddDynamic(this, &UMOInventoryUIController::HandleGroundContextMenuClosed);
-	MenuWidget->OnSearchComplete.AddDynamic(this, &UMOInventoryUIController::HandleForagingSearchComplete);
-	MenuWidget->OnDigComplete.AddDynamic(this, &UMOInventoryUIController::HandleForagingDigComplete);
 
 	// Initialize with location and pawn for skill lookup
 	APawn* ForagingPawn = PlayerController->GetPawn();
@@ -1223,86 +1219,29 @@ void UMOInventoryUIController::HandleGroundContextMenuClosed()
 	// Widget handles input state restoration via NativeOnDeactivated
 }
 
-void UMOInventoryUIController::HandleForagingSearchComplete(const TArray<AMOWorldItem*>& RevealedItems)
+void UMOInventoryUIController::ShowForagingResult(uint8 Action, int32 ItemCount)
 {
-	// Close the ground context menu
+	const bool bDig = static_cast<EMOGroundForageAction>(Action) == EMOGroundForageAction::DigForSupplies;
 	CloseGroundContextMenu();
+	UE_LOG(LogMOFramework, Log, TEXT("[MOInventoryUI] Foraging %s complete - %d item(s)"), bDig ? TEXT("dig") : TEXT("search"), ItemCount);
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOInventoryUI] Foraging search complete - revealed %d items"), RevealedItems.Num());
-
-	// Open unified inventory menu to show nearby items
-	if (RevealedItems.Num() > 0)
+	UMOUIManagerComponent* UIManager = GetUIManager();
+	if (ItemCount > 0)
 	{
-		// Open inventory (will auto-detect nearby items via QueryNearbyWorldItems)
+		// The items are server world items: the nearby tab finds them as they replicate in (QueryNearbyWorldItems).
 		OpenInventoryMenu();
-
-		// Show the nearby tab
-		UMOUnifiedInventoryMenu* MenuWidget = UnifiedInventoryWidget.Get();
-		if (IsValid(MenuWidget))
+		if (UMOUnifiedInventoryMenu* MenuWidget = UnifiedInventoryWidget.Get(); IsValid(MenuWidget))
 		{
 			MenuWidget->ShowNearbyTab();
 		}
-
-		// Show notification
-		UMOUIManagerComponent* UIManager = GetUIManager();
 		if (UIManager)
 		{
-			FText Message = FText::Format(
-				NSLOCTEXT("MO", "ForagingFoundFormat", "Found {0} item(s) nearby"),
-				FText::AsNumber(RevealedItems.Num())
-			);
-			UIManager->ShowNotification(Message, 2.0f);
+			UIManager->ShowNotification(FText::Format(bDig ? NSLOCTEXT("MO", "DiggingFoundFormat", "Dug up {0} item(s)") : NSLOCTEXT("MO", "ForagingFoundFormat", "Found {0} item(s) nearby"),
+				FText::AsNumber(ItemCount)), 2.0f);
 		}
 	}
-	else
+	else if (UIManager)
 	{
-		// Show "nothing found" notification
-		UMOUIManagerComponent* UIManager = GetUIManager();
-		if (UIManager)
-		{
-			UIManager->ShowNotification(NSLOCTEXT("MO", "ForagingNothingFound", "Nothing found nearby"), 2.0f);
-		}
-	}
-}
-
-void UMOInventoryUIController::HandleForagingDigComplete(const TArray<AMOWorldItem*>& DugItems)
-{
-	// Close the ground context menu
-	CloseGroundContextMenu();
-
-	UE_LOG(LogMOFramework, Log, TEXT("[MOInventoryUI] Foraging dig complete - found %d items"), DugItems.Num());
-
-	// Open unified inventory menu to show nearby items
-	if (DugItems.Num() > 0)
-	{
-		// Open inventory (will auto-detect nearby items via QueryNearbyWorldItems)
-		OpenInventoryMenu();
-
-		// Show the nearby tab
-		UMOUnifiedInventoryMenu* MenuWidget = UnifiedInventoryWidget.Get();
-		if (IsValid(MenuWidget))
-		{
-			MenuWidget->ShowNearbyTab();
-		}
-
-		// Show notification
-		UMOUIManagerComponent* UIManager = GetUIManager();
-		if (UIManager)
-		{
-			FText Message = FText::Format(
-				NSLOCTEXT("MO", "DiggingFoundFormat", "Dug up {0} item(s)"),
-				FText::AsNumber(DugItems.Num())
-			);
-			UIManager->ShowNotification(Message, 2.0f);
-		}
-	}
-	else
-	{
-		// Show "nothing found" notification
-		UMOUIManagerComponent* UIManager = GetUIManager();
-		if (UIManager)
-		{
-			UIManager->ShowNotification(NSLOCTEXT("MO", "DiggingNothingFound", "Nothing found in the ground"), 2.0f);
-		}
+		UIManager->ShowNotification(bDig ? NSLOCTEXT("MO", "DiggingNothingFound", "Nothing found in the ground") : NSLOCTEXT("MO", "ForagingNothingFound", "Nothing found nearby"), 2.0f);
 	}
 }

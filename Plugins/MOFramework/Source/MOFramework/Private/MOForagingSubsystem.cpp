@@ -192,6 +192,12 @@ TArray<FMOHISMInstanceData> UMOForagingSubsystem::QueryHISMInstancesInRadius(FVe
 
 TArray<AMOWorldItem*> UMOForagingSubsystem::RevealHISMInstancesInRadius(FVector Origin, float Radius, APawn* ForagingPawn)
 {
+	if (GetWorld() && GetWorld()->GetNetMode() == NM_Client)
+	{
+		// World items and the removal ledger are the server's: a client asks through AMOPlayerController::ServerForage (H22 residual: the menu used to run this on the client).
+		UE_LOG(LogMOForaging, Warning, TEXT("[MOForagingSubsystem] %s refused on a client: foraging runs on the server"), TEXT(__FUNCTION__));
+		return {};
+	}
 	TArray<AMOWorldItem*> SpawnedItems;
 
 	// Query instances
@@ -301,6 +307,12 @@ TArray<AMOWorldItem*> UMOForagingSubsystem::RevealHISMInstancesInRadius(FVector 
 
 TArray<AMOWorldItem*> UMOForagingSubsystem::DigForSupplies(FVector Location, int32 ForagingLevel, APawn* ForagingPawn)
 {
+	if (GetWorld() && GetWorld()->GetNetMode() == NM_Client)
+	{
+		// World items and the removal ledger are the server's: a client asks through AMOPlayerController::ServerForage (H22 residual: the menu used to run this on the client).
+		UE_LOG(LogMOForaging, Warning, TEXT("[MOForagingSubsystem] %s refused on a client: foraging runs on the server"), TEXT(__FUNCTION__));
+		return {};
+	}
 	TArray<AMOWorldItem*> SpawnedItems;
 
 	if (DigDropTable.Num() == 0)
@@ -372,6 +384,12 @@ TArray<AMOWorldItem*> UMOForagingSubsystem::DigForSupplies(FVector Location, int
 
 int32 UMOForagingSubsystem::DigForSuppliesToInventory(FVector Location, int32 ForagingLevel, APawn* TargetPawn)
 {
+	if (GetWorld() && GetWorld()->GetNetMode() == NM_Client)
+	{
+		// World items and the removal ledger are the server's: a client asks through AMOPlayerController::ServerForage (H22 residual: the menu used to run this on the client).
+		UE_LOG(LogMOForaging, Warning, TEXT("[MOForagingSubsystem] %s refused on a client: foraging runs on the server"), TEXT(__FUNCTION__));
+		return {};
+	}
 	if (!TargetPawn)
 	{
 		UE_LOG(LogMOForaging, Warning, TEXT("[MOForagingSubsystem] DigForSuppliesToInventory: No target pawn"));
@@ -436,6 +454,12 @@ int32 UMOForagingSubsystem::DigForSuppliesToInventory(FVector Location, int32 Fo
 
 int32 UMOForagingSubsystem::ForageToInventory(FVector Origin, float Radius, APawn* TargetPawn)
 {
+	if (GetWorld() && GetWorld()->GetNetMode() == NM_Client)
+	{
+		// World items and the removal ledger are the server's: a client asks through AMOPlayerController::ServerForage (H22 residual: the menu used to run this on the client).
+		UE_LOG(LogMOForaging, Warning, TEXT("[MOForagingSubsystem] %s refused on a client: foraging runs on the server"), TEXT(__FUNCTION__));
+		return {};
+	}
 	if (!TargetPawn)
 	{
 		UE_LOG(LogMOForaging, Warning, TEXT("[MOForagingSubsystem] ForageToInventory: No target pawn"));

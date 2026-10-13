@@ -30,6 +30,8 @@
 
 // UI Controllers
 #include "MOInventoryUIController.h"
+#include "MOForagingSubsystem.h"
+#include "MOGroundContextMenu.h"
 #include "MOCraftingUIController.h"
 #include "MOBuildingUIController.h"
 #include "MOCharacterUIController.h"
@@ -556,6 +558,50 @@ void AMOPlayerController::ClientShowNotification_Implementation(const FText& Mes
 	if (NotificationComponent)
 	{
 		NotificationComponent->ShowNotification(Message, Duration, Type);
+	}
+}
+
+void AMOPlayerController::ServerForage_Implementation(uint8 Action, FVector_NetQuantize Location)
+{
+	const EMOGroundForageAction Kind = static_cast<EMOGroundForageAction>(Action);
+	APawn* ForagingPawn = GetPawn();
+	UWorld* World = GetWorld();
+	UMOForagingSubsystem* Foraging = World ? World->GetSubsystem<UMOForagingSubsystem>() : nullptr;
+	if (!ForagingPawn || !Foraging || (Kind != EMOGroundForageAction::SearchNearby && Kind != EMOGroundForageAction::DigForSupplies))
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOForaging] %s: forage refused (no pawn, no foraging subsystem or unknown action %d)"), *GetName(), Action);
+		return;
+	}
+	const float Distance = FVector::Dist(ForagingPawn->GetActorLocation(), Location);
+	if (Distance > MaxForageReachCm)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOForaging] %s: forage refused, target %.0f cm from the pawn (max %.0f)"), *GetName(), Distance, MaxForageReachCm);
+		ClientShowNotification(NSLOCTEXT("MO", "ForageTooFar", "Too far away to forage there"), 2.0f, EMONotificationType::Warning);
+		return;
+	}
+	const double Now = World->GetTimeSeconds();
+	if (LastForageServerTime >= 0.0 && Now - LastForageServerTime < MinForageIntervalSeconds)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOForaging] %s: forage refused, %.2f s after the last one (min %.1f)"), *GetName(), Now - LastForageServerTime, MinForageIntervalSeconds);
+		return;
+	}
+	LastForageServerTime = Now;
+
+	// Skill level and radius from the server's own view of the pawn (never the client's numbers).
+	const int32 Level = Foraging->GetForagingLevel(ForagingPawn);
+	const int32 Count = Kind == EMOGroundForageAction::SearchNearby
+		? Foraging->RevealHISMInstancesInRadius(Location, Foraging->CalculateSearchRadius(Level), ForagingPawn).Num()
+		: Foraging->DigForSupplies(Location, Level, ForagingPawn).Num();
+	UE_LOG(LogMOFramework, Log, TEXT("[MOForaging] %s: %s at (%.0f, %.0f, %.0f), level %d -> %d item(s)"), *GetName(),
+		Kind == EMOGroundForageAction::SearchNearby ? TEXT("search") : TEXT("dig"), Location.X, Location.Y, Location.Z, Level, Count);
+	ClientForageResult(Action, Count);
+}
+
+void AMOPlayerController::ClientForageResult_Implementation(uint8 Action, int32 ItemCount)
+{
+	if (UMOInventoryUIController* UI = FindComponentByClass<UMOInventoryUIController>())
+	{
+		UI->ShowForagingResult(Action, ItemCount);
 	}
 }
 

@@ -1,5 +1,6 @@
 #include "MOGroundContextMenu.h"
 #include "MOForagingSubsystem.h"
+#include "MOPlayerController.h"
 #include "MOCommonButton.h"
 #include "MOCharacter.h"
 #include "MOInterruptTypes.h"
@@ -183,26 +184,16 @@ void UMOGroundContextMenu::FinishForagingAction()
 	PendingForageAction = EMOGroundForageAction::None;
 	ForageActionElapsed = 0.0f;
 
-	UMOForagingSubsystem* ForagingSubsystem = World ? World->GetSubsystem<UMOForagingSubsystem>() : nullptr;
-	if (!ForagingSubsystem)
+	// Now the action has taken time -- ask for the result. Foraging changes the SERVER's world (it spawns world items, removes the revealed ground instances
+	// through the removal ledger, grants XP), so it runs there: from the host's own controller the Server RPC runs locally, from a co-op client it is sent.
+	// (It used to run right here, so a client's finds existed on that client only.) The count comes back through ClientForageResult -> ShowForagingResult.
+	if (AMOPlayerController* PC = Cast<AMOPlayerController>(GetOwningPlayer()))
 	{
-		UE_LOG(LogMOGroundMenu, Warning, TEXT("[MOGroundContextMenu] FinishForagingAction: No foraging subsystem"));
-		RequestClose();
-		return;
+		PC->ServerForage(static_cast<uint8>(Action), TargetLocation);
 	}
-
-	// Now the action has taken time — grant the result.
-	if (Action == EMOGroundForageAction::SearchNearby)
+	else
 	{
-		TArray<AMOWorldItem*> RevealedItems = ForagingSubsystem->RevealHISMInstancesInRadius(
-			TargetLocation, SearchRadius, ForagingPawn.Get());
-		OnSearchComplete.Broadcast(RevealedItems);
-	}
-	else if (Action == EMOGroundForageAction::DigForSupplies)
-	{
-		TArray<AMOWorldItem*> DugItems = ForagingSubsystem->DigForSupplies(
-			TargetLocation, ForagingLevel, ForagingPawn.Get());
-		OnDigComplete.Broadcast(DugItems);
+		UE_LOG(LogMOGroundMenu, Warning, TEXT("[MOGroundContextMenu] FinishForagingAction: no MO player controller owns the menu"));
 	}
 
 	RequestClose();

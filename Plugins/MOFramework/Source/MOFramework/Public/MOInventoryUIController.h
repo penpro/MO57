@@ -52,8 +52,8 @@
  * 2. WORLD ITEM CONTEXT: ContextMenuWorldItem tracks world item target.
  *    Must clear when context menu closes to avoid stale reference.
  *
- * 3. FORAGING COMPLETION: HandleForagingSearchComplete/DigComplete receive
- *    item arrays. Items may spawn at player feet - avoid overlap.
+ * 3. FORAGING COMPLETION: the ground menu asks the server (AMOPlayerController::ServerForage);
+ *    ShowForagingResult gets only the COUNT back -- the items are server world items that replicate in.
  *
  * 4. INVENTORY FULL: Transfer/loot operations may fail if inventory full.
  *    Show notification to player.
@@ -312,11 +312,14 @@ private:
 	UFUNCTION()
 	void HandleGroundContextMenuClosed();
 
-	UFUNCTION()
-	void HandleForagingSearchComplete(const TArray<AMOWorldItem*>& RevealedItems);
+public:
+	/**
+	 * A foraging action finished ON THE SERVER (AMOPlayerController::ServerForage -> ClientForageResult): show what it found. The items themselves are server
+	 * world items that replicate in; the nearby tab picks them up. Action is EMOGroundForageAction as uint8 (SearchNearby / DigForSupplies).
+	 */
+	void ShowForagingResult(uint8 Action, int32 ItemCount);
 
-	UFUNCTION()
-	void HandleForagingDigComplete(const TArray<AMOWorldItem*>& DugItems);
+private:
 
 	// --- Nearby Items ---
 
