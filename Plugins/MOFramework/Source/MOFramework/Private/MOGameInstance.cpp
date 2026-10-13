@@ -2,6 +2,9 @@
 #include "MOFramework.h"
 #include "MOGameSettings.h"
 #include "MOLoadingOverlay.h"
+#include "MOUITokens.h"
+#include "Engine/AssetManager.h"
+#include "Engine/StreamableManager.h"
 #include "MOWorldReadinessSubsystem.h"
 #include "Blueprint/UserWidget.h"
 #include "Engine/Engine.h"
@@ -57,6 +60,21 @@ void UMOGameInstance::Init()
 	// Bind loading screen delegates
 	FCoreUObjectDelegates::PreLoadMap.AddUObject(this, &UMOGameInstance::BeginLoadingScreen);
 	FCoreUObjectDelegates::PostLoadMapWithWorld.AddUObject(this, &UMOGameInstance::EndLoadingScreen);
+
+	// The UI kit's icons and 9-slices load by name (UMOUITokens::Icon / NineSlice), so the first critical moodle or warning toast of a session loaded its texture on the
+	// game thread mid-play. ~100 small textures: request them all now, in the background, and keep them for the session.
+	TArray<FSoftObjectPath> KitTextures;
+	UMOUITokens::GetKitTexturePaths(KitTextures);
+	if (KitTextures.Num() > 0)
+	{
+		const int32 Num = KitTextures.Num();
+		const double StartSeconds = FPlatformTime::Seconds();
+		UIKitPreloadHandle = UAssetManager::GetStreamableManager().RequestAsyncLoad(MoveTemp(KitTextures),
+			FStreamableDelegate::CreateWeakLambda(this, [Num, StartSeconds]()
+			{
+				UE_LOG(LogMOFramework, Log, TEXT("[MOGameInstance] %d UI kit textures resident (async preload %.2f s)"), Num, FPlatformTime::Seconds() - StartSeconds);
+			}));
+	}
 }
 
 void UMOGameInstance::Shutdown()
@@ -66,6 +84,11 @@ void UMOGameInstance::Shutdown()
 	FCoreUObjectDelegates::PostLoadMapWithWorld.RemoveAll(this);
 
 	GetTimerManager().ClearTimer(OverlayHoldTimerHandle);
+	if (UIKitPreloadHandle.IsValid())
+	{
+		UIKitPreloadHandle->CancelHandle();
+		UIKitPreloadHandle.Reset();
+	}
 
 	// Clean up loading overlay
 	if (LoadingOverlayWidget)

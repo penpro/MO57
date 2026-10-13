@@ -27,6 +27,11 @@
 #include "Sound/SoundWave.h"
 #include "TimerManager.h"
 #include "UObject/SoftObjectPath.h"
+#include "HAL/IConsoleManager.h"
+
+/** 1 (default) = keep every SFX / UI one-shot of the banks resident (async preload when a bank loads), 0 = each one loads on the game thread at its first play (A/B). */
+static TAutoConsoleVariable<int32> CVarAudioPreloadOneShots(TEXT("mo.Audio.PreloadOneShots"), 1,
+	TEXT("1 = keep every SFX / UI one-shot resident (async preload when a bank loads), 0 = load each on its first play."), ECVF_Default);
 
 // =============================================================================
 // LIFECYCLE
@@ -241,6 +246,11 @@ void UMOAudioSubsystem::Deinitialize()
 		}
 	}
 	ActiveStreamHandles.Reset();
+	if (OneShotPreloadHandle.IsValid())
+	{
+		OneShotPreloadHandle->CancelHandle();
+		OneShotPreloadHandle.Reset();
+	}
 
 	StopAllAudio();
 
@@ -686,6 +696,41 @@ void UMOAudioSubsystem::LoadBank(UDataTable* Bank)
 	{
 		const FMOAudioBankRow* Row = reinterpret_cast<const FMOAudioBankRow*>(Pair.Value);
 		AudioIdLookup.Add(Pair.Key, Row);
+	}
+	PreloadOneShots();
+}
+
+void UMOAudioSubsystem::PreloadOneShots()
+{
+	if (CVarAudioPreloadOneShots.GetValueOnGameThread() == 0)
+	{
+		return;
+	}
+	TArray<FSoftObjectPath> Paths;
+	for (const TPair<FName, const FMOAudioBankRow*>& Pair : AudioIdLookup)
+	{
+		const FMOAudioBankRow* Row = Pair.Value;
+		if (Row && (Row->Category == EMOAudioCategory::SFX || Row->Category == EMOAudioCategory::UI) && !Row->Sound.IsNull())
+		{
+			Paths.AddUnique(Row->Sound.ToSoftObjectPath());
+		}
+	}
+	if (Paths.Num() == 0)
+	{
+		return;
+	}
+	// The new request covers every bank loaded so far (AudioIdLookup is cumulative); the previous handle is released only after it, so nothing already resident drops out.
+	const TSharedPtr<FStreamableHandle> Previous = OneShotPreloadHandle;
+	const int32 Num = Paths.Num();
+	const double StartSeconds = FPlatformTime::Seconds();
+	OneShotPreloadHandle = UAssetManager::GetStreamableManager().RequestAsyncLoad(MoveTemp(Paths),
+		FStreamableDelegate::CreateWeakLambda(this, [Num, StartSeconds]()
+		{
+			UE_LOG(LogMOFramework, Log, TEXT("[MOAudio] %d one-shots resident (async preload %.2f s)"), Num, FPlatformTime::Seconds() - StartSeconds);
+		}));
+	if (Previous.IsValid())
+	{
+		Previous->ReleaseHandle();
 	}
 }
 

@@ -16,6 +16,7 @@
 #include "Fonts/SlateFontInfo.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
 #include "Styling/SlateColor.h"
+#include "UObject/SoftObjectPath.h"
 
 #include "MOUITokens.generated.h"
 
@@ -114,6 +115,12 @@ public:
 
 	/** A box brush for a kit 9-slice piece: the texture, DrawAs Box (Image / Tile for the pieces that are), the slice margin from the token table, tinted by a colour token. */
 	static FSlateBrush NineSliceBrush(FName Piece, FName ColorToken);
+
+	/**
+	 * Every texture Icon() / NineSlice() can return (the kit's Icons and NineSlice folders, from the asset registry), for a holder to keep resident: Icon() and
+	 * NineSlice() load by name on the game thread, so a widget's first warning icon (a moodle turning critical mid-game) otherwise loads its package right then.
+	 */
+	static void GetKitTexturePaths(TArray<FSoftObjectPath>& OutPaths);
 
 	/** "l,t,r,b" token as a margin (UMG 0..1 fractions for the 9-slice rows). */
 	UFUNCTION(BlueprintPure, Category = "MO|UI|Tokens")

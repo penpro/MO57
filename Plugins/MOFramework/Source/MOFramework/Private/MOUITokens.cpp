@@ -1,5 +1,6 @@
 #include "MOUITokens.h"
 
+#include "AssetRegistry/AssetRegistryModule.h"
 #include "Engine/Font.h"
 #include "Engine/Texture2D.h"
 #include "Styling/SlateBrush.h"
@@ -317,6 +318,24 @@ UTexture2D* UMOUITokens::Icon(FName IconName)
 		WarnUITokenMissing(FName(*(FString(TEXT("icon:")) + IconName.ToString())));
 	}
 	return Tex;
+}
+
+void UMOUITokens::GetKitTexturePaths(TArray<FSoftObjectPath>& OutPaths)
+{
+	const IAssetRegistry& Registry = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry").Get();
+	TArray<FAssetData> Assets;
+	for (const TCHAR* Folder : { TEXT("/MOFramework/UI/Kit/Icons"), TEXT("/MOFramework/UI/Kit/NineSlice") })
+	{
+		Assets.Reset();
+		Registry.GetAssetsByPath(FName(Folder), Assets, /*bRecursive*/ false);
+		for (const FAssetData& Asset : Assets)
+		{
+			if (Asset.AssetClassPath == UTexture2D::StaticClass()->GetClassPathName())
+			{
+				OutPaths.Add(Asset.GetSoftObjectPath());
+			}
+		}
+	}
 }
 
 UTexture2D* UMOUITokens::NineSlice(FName Piece)

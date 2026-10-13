@@ -528,6 +528,14 @@ private:
 	void TrackStreamHandle(TSharedPtr<struct FStreamableHandle> Handle);
 
 	/**
+	 * Keeps every SFX / UI one-shot of the loaded banks resident: requested asynchronously each time a bank loads (PreloadOneShots). One-shots play through
+	 * LoadSynchronous, so without it each sound's FIRST play (the first water splash, the first twig snap) loaded its package on the game thread, and a sound
+	 * nothing else referenced could be collected after playing and loaded again later. Music / ambient stay on their own async paths. mo.Audio.PreloadOneShots 0 = off.
+	 */
+	TSharedPtr<struct FStreamableHandle> OneShotPreloadHandle;
+	void PreloadOneShots();
+
+	/**
 	 * Immediately stop all music/ambient + cancel all event/dominance/breathe
 	 * timers. No fade — used when the level is about to unload (PreLoadMap)
 	 * or when the subsystem is shutting down (Deinitialize). Audio components

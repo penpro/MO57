@@ -79,4 +79,10 @@ private:
 
 	FDelegateHandle ActorSpawnedHandle;
 	float TimeSinceTune = 0.0f;
+
+	/**
+	 * Oceanology's wave / underwater cues (every USoundBase soft property of UOceanologyRuntimeSettings), requested async at begin play and kept for the world:
+	 * the plugin's getters LoadSynchronous them, so the first dive loaded Cue_Underwater_Lake on the game thread mid-plunge.
+	 */
+	TSharedPtr<struct FStreamableHandle> SoundPreloadHandle;
 };

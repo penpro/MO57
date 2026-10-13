@@ -165,6 +165,9 @@ private:
 
 	/** The hold on a released overlay: polls the readiness subsystem, mirrors its stage onto the overlay, fades out when ready. */
 	FTimerHandle OverlayHoldTimerHandle;
+
+	/** Keeps the UI kit's textures (UMOUITokens::GetKitTexturePaths) resident for the whole session: requested async at Init, released at Shutdown. */
+	TSharedPtr<struct FStreamableHandle> UIKitPreloadHandle;
 	float OverlayHoldFadeSeconds = 1.0f;
 	TWeakObjectPtr<UMOWorldReadinessSubsystem> OverlayHoldReadiness;
 	void PollOverlayHold();

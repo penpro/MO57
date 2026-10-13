@@ -8,6 +8,10 @@
 #include "Actors/OceanologyWaterParentActor.h"
 #include "Components/BoxComponent.h"
 #include "Components/OceanologyUnderwaterComponent.h"
+#include "OceanologyRuntimeSettings.h"
+#include "Engine/AssetManager.h"
+#include "Engine/StreamableManager.h"
+#include "Sound/SoundBase.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Structs/OceanologyUnderwater.h"
 #include "Engine/World.h"
@@ -128,10 +132,34 @@ void UMOOceanologyIntegrationSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 	{
 		MOOceanology::EnsureUnderwaterVolumeQueryable(**It);
 	}
+
+	// The plugin's cues (private config properties, read by reflection so the plugin stays untouched).
+	TArray<FSoftObjectPath> Cues;
+	const UOceanologyRuntimeSettings* Settings = GetDefault<UOceanologyRuntimeSettings>();
+	for (TFieldIterator<FSoftObjectProperty> It(UOceanologyRuntimeSettings::StaticClass()); It; ++It)
+	{
+		if (It->PropertyClass && It->PropertyClass->IsChildOf(USoundBase::StaticClass()))
+		{
+			const FSoftObjectPath Path = It->GetPropertyValue_InContainer(Settings).ToSoftObjectPath();
+			if (!Path.IsNull())
+			{
+				Cues.Add(Path);
+			}
+		}
+	}
+	if (Cues.Num() > 0)
+	{
+		SoundPreloadHandle = UAssetManager::GetStreamableManager().RequestAsyncLoad(MoveTemp(Cues));
+	}
 }
 
 void UMOOceanologyIntegrationSubsystem::Deinitialize()
 {
+	if (SoundPreloadHandle.IsValid())
+	{
+		SoundPreloadHandle->CancelHandle();
+		SoundPreloadHandle.Reset();
+	}
 	if (UWorld* World = GetWorld())
 	{
 		World->RemoveOnActorSpawnedHandler(ActorSpawnedHandle);
