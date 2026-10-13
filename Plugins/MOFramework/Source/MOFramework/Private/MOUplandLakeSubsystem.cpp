@@ -9,6 +9,7 @@
 #include "Actors/OceanologyLakeActor.h"
 #include "Engine/AssetManager.h"
 #include "Async/Async.h"
+#include "HAL/IConsoleManager.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/Pawn.h"
@@ -19,6 +20,34 @@ namespace
 	const FName LakeActorTag(TEXT("MOUplandLake"));
 
 	constexpr const TCHAR* DefaultLakeClassPath = TEXT("/Oceanology_Plugin/Design/Lake/Blueprints/Lake/BP_OceanologyLake.BP_OceanologyLake_C");
+
+	// The look of the upland lakes' water ("R,G,B,A" as Oceanology's FOceanologySurfaceScattering Absorption / Scattering; empty = the lake blueprint's own value).
+	// The plugin's default (Absorption 10,25,30 / Scattering 0.0075,0.065,0.125) is a tropical turquoise pool over a pale bed. Absorption acts as how far each channel
+	// travels (bigger = clearer; the plugin's units): 2.5 / 4.5 / 3 keeps the deep water dark and the shallows green, a highland freshwater lake (A/B shots 2026-10-13; 35/30/45 went clear
+	// and pink). Applied at spawn (the lake pushes it into its material in Init).
+	TAutoConsoleVariable<FString> CVarLakeAbsorption(TEXT("mo.Lakes.Absorption"), TEXT("2.5 4.5 3 50"), TEXT("Upland lake water absorption \"R G B A\" or \"R,G,B,A\" (empty = the lake blueprint's). Takes effect for lakes spawned afterwards."), ECVF_Default);
+	TAutoConsoleVariable<FString> CVarLakeScattering(TEXT("mo.Lakes.Scattering"), TEXT("0.005 0.012 0.008 2"), TEXT("Upland lake water scattering \"R G B A\" or \"R,G,B,A\" (empty = the lake blueprint's). Takes effect for lakes spawned afterwards."), ECVF_Default);
+
+	/** "R,G,B,A" or "R G B A" (-ExecCmds splits on commas, so a launch line needs the spaces) -> colour; false (Out untouched) when the text is empty or malformed. */
+	bool ParseLakeColor(const FString& Text, FLinearColor& Out)
+	{
+		TArray<FString> Parts;
+		static const TCHAR* Delims[] = { TEXT(","), TEXT(" ") };
+		Text.ParseIntoArray(Parts, Delims, UE_ARRAY_COUNT(Delims), /*CullEmpty=*/true);
+		if (Parts.Num() != 4)
+		{
+			return false;
+		}
+		for (const FString& P : Parts)
+		{
+			if (!P.TrimStartAndEnd().IsNumeric())
+			{
+				return false;
+			}
+		}
+		Out = FLinearColor(FCString::Atof(*Parts[0]), FCString::Atof(*Parts[1]), FCString::Atof(*Parts[2]), FCString::Atof(*Parts[3]));
+		return true;
+	}
 }
 
 UMOUplandLakeSubsystem::UMOUplandLakeSubsystem()
@@ -108,6 +137,8 @@ AOceanologyLake* UMOUplandLakeSubsystem::SpawnLake(const FMOWorldGen::FLake& Lak
 	// Every machine derives the same lakes from the seed and spawns its own: a replicated copy from the host would double them on the clients.
 	Water->SetReplicates(false);
 	Water->SetReplicateMovement(false);
+	ParseLakeColor(CVarLakeAbsorption.GetValueOnGameThread(), Water->SurfaceScattering.Absorption);
+	ParseLakeColor(CVarLakeScattering.GetValueOnGameThread(), Water->SurfaceScattering.Scattering);
 	Water->FinishSpawning(Where);
 	Water->Tags.AddUnique(LakeActorTag);
 #if WITH_EDITOR
