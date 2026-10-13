@@ -905,6 +905,18 @@ void UMOTerraformingComponent::ServerApplyTerraform_Implementation(EMOTerraformM
 	}
 	FlattenHeight = FMath::Clamp(FlattenHeight, Location.Z - 5000.0f, Location.Z + 5000.0f);
 
+	// Rate: a remote client forwards each WHOLE action once, at completion, and every action takes at least TerraformDurationSeconds (the volume-based
+	// duration is floored there). So two applies from one pawn closer together than most of that floor are not two real actions: refuse the second
+	// (H17 residual -- a modified client could otherwise fire instant craters as fast as it liked).
+	const double Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+	const double MinInterval = 0.8 * FMath::Max(0.1f, TerraformDurationSeconds);
+	if (LastServerTerraformTime >= 0.0 && Now - LastServerTerraformTime < MinInterval)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOTerraforming] ServerApplyTerraform: %.2f s after the last apply (min %.1f) -- rejected"), Now - LastServerTerraformTime, MinInterval);
+		return;
+	}
+	LastServerTerraformTime = Now;
+
 	if (Mode != EMOTerraformMode::RemoveFoliage && !HasValidSculptActor())
 	{
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOTerraforming] ServerApplyTerraform: no valid sculpt actor"));

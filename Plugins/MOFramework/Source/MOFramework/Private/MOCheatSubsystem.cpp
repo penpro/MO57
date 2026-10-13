@@ -2096,12 +2096,13 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 	// Same idea for ServerApplyTerraform (which already holds the client to a 2500 cm reach and clamps FlattenHeight).
 	ConsoleCommands.Add(CM.RegisterConsoleCommand(
 		TEXT("MO.Test.TerraformRPC"),
-		TEXT("Client->server ServerApplyTerraform at forwardCm in front of the pawn, on the ground (trust-boundary test). Usage: MO.Test.TerraformRPC [Dig|Raise|Flatten|Smooth|RemoveFoliage] [forwardCm=300]"),
+		TEXT("Client->server ServerApplyTerraform at forwardCm in front of the pawn, on the ground (trust-boundary test). Usage: MO.Test.TerraformRPC [Dig|Raise|Flatten|Smooth|RemoveFoliage] [forwardCm=300] [twice]"),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
 		{
 			const FString ModeArg = Args.Num() > 0 ? Args[0] : FString(TEXT("Dig"));
 			const float Forward = Args.Num() > 1 ? FCString::Atof(*Args[1]) : 300.0f;
-			RunOnNextTick(World, [ModeArg, Forward](UWorld* W)
+			const bool bTwice = Args.ContainsByPredicate([](const FString& A) { return A.Equals(TEXT("twice"), ESearchCase::IgnoreCase); });   // two requests in one tick (rate-limit test)
+			RunOnNextTick(World, [ModeArg, Forward, bTwice](UWorld* W)
 			{
 				APawn* Pawn = ResolveLocalPawn(W);
 				UMOTerraformingComponent* Terraform = Pawn ? Pawn->FindComponentByClass<UMOTerraformingComponent>() : nullptr;
@@ -2116,7 +2117,10 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 				else if (ModeArg.Equals(TEXT("Smooth"), ESearchCase::IgnoreCase)) { Mode = EMOTerraformMode::Smooth; }
 				else if (ModeArg.Equals(TEXT("RemoveFoliage"), ESearchCase::IgnoreCase)) { Mode = EMOTerraformMode::RemoveFoliage; }
 				const FVector Ground = Pawn->GetActorLocation() + Pawn->GetActorForwardVector() * Forward - FVector(0.0f, 0.0f, 90.0f);
-				Terraform->SendTerraformApplyToServer(Mode, Ground, Ground.Z);
+				for (int32 N = 0; N < (bTwice ? 2 : 1); ++N)
+				{
+					Terraform->SendTerraformApplyToServer(Mode, Ground, Ground.Z);
+				}
 				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] TerraformRPC: sent mode=%s forward=%.0f cm at %s"), *ModeArg, Forward, *Ground.ToCompactString());
 			});
 		}),

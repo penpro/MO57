@@ -640,6 +640,9 @@ protected:
 	void ServerApplyTerraform(EMOTerraformMode Mode, FVector Location, float FlattenHeight);
 
 private:
+	/** Server: world time of this pawn's last accepted ServerApplyTerraform (-1 = none yet); the next one must wait 80 % of TerraformDurationSeconds. */
+	double LastServerTerraformTime = -1.0;
+
 	bool ResolveViewpoint(FVector& OutLocation, FRotator& OutRotation) const;
 
 	/** Register a successful sculpt as worked ground (zone + immediate sweep).

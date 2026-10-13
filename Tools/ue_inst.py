@@ -1690,6 +1690,16 @@ def _trust_terraform(rep, host, client):
     log = read_log_from(host, off)
     refused = re.search(r"\[MOTerraforming\] ServerApplyTerraform: target out of reach -- rejected", log)
     rep.step("trust: a dig 100 m away is REFUSED by the server", bool(refused), refused.group(0) if refused else "no 'target out of reach' line")
+    # Rate: every real action takes at least TerraformDurationSeconds, so two applies in one tick cannot both be real (H17 residual).
+    time.sleep(5)
+    off = log_size(host)
+    console(client, "MO.Test.TerraformRPC Dig 300 twice")
+    wait_log(host, r"\[MOTerraforming\] ServerApplyTerraform: [\d.]+ s after the last apply[^\n]*", since=off, timeout=15)
+    time.sleep(1)
+    log = read_log_from(host, off)
+    rejected = re.findall(r"\[MOTerraforming\] ServerApplyTerraform: [\d.]+ s after the last apply[^\n]*", log)
+    rep.step("trust: of two terraform applies sent in the same tick the server takes ONE and rejects the other", len(rejected) == 1 and "out of reach" not in log,
+             rejected[0] if rejected else "no rate rejection on the host")
 
 
 def actions_test(uproject, editor_exe, keep=False, boot_timeout=300):
