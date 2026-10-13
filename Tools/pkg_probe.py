@@ -26,7 +26,7 @@ ROOT = os.path.dirname(HERE)
 EXE = os.path.join(ROOT, "Saved", "StagedBuilds_DevTest", "Windows", "MO57.exe")
 LOG = os.path.join(ROOT, "Saved", "StagedBuilds_DevTest", "Windows", "MO57", "Saved", "Logs", "MO57.log")
 KEEP_DIR = os.path.join(ROOT, "Saved", "Logs", "pkg_probe")
-BASE_ARGS = "-NoSteam -NoQualityBenchmark -windowed -ResX=960 -ResY=540 -WinX=0 -WinY=0"
+BASE_ARGS = "-NoSteam -NoQualityBenchmark -windowed -WinX=0 -WinY=0"
 CRASH_RE = re.compile(r"Fatal error|Unhandled Exception|Assertion failed|=== Critical error ===")
 
 
@@ -74,6 +74,7 @@ def main():
     ap.add_argument("--grep", nargs="*", default=[r"\[MOReadiness\] (READY|holding|released|vegetation stage capped)"], help="regexes of log lines to print")
     ap.add_argument("--timeout", type=float, default=240.0)
     ap.add_argument("--extra", default="", help="extra command-line arguments")
+    ap.add_argument("--res", default="960x540", help="window size WxH (perf runs: say which; the default suits functional probes)")
     ap.add_argument("--keep-log", default="", help="label: copy the log to Saved/Logs/pkg_probe/<label>.log")
     ap.add_argument("--package", action="store_true", help="re-package the Development build first (RunUAT BuildCookRun; the editor must be closed)")
     a = ap.parse_args()
@@ -92,7 +93,8 @@ def main():
     if os.path.exists(LOG):
         os.remove(LOG)
     cmds = ",".join(c.replace(",", " ") for c in a.cmds)
-    cmdline = f'"{EXE}" {BASE_ARGS} {a.extra} -ExecCmds="{cmds}"'
+    rx, ry = (int(v) for v in a.res.lower().split("x"))
+    cmdline = f'"{EXE}" {BASE_ARGS} -ResX={rx} -ResY={ry} {a.extra} -ExecCmds="{cmds}"'
     flags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
     proc = subprocess.Popen(cmdline, creationflags=flags, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     until = re.compile(a.until)

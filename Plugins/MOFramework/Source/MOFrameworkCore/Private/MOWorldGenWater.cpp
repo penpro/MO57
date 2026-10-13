@@ -228,10 +228,15 @@ namespace
 			bool bValid = false, bHasLake = false;
 			FMOWorldGen::FLake Lake;
 		};
-		thread_local FEntry Cache[256];
+		// One direct-mapped table PER TIER. Every height sample looks up three basins (tiers 0, 1 and 2 via ApplyWater); with one shared table, a tier-2 lake
+		// cell and a tier-0/1 cell that hash to the same slot evicted each other on EVERY sample, so each point recomputed the upland lake
+		// (ComputeUplandLake: hundreds of base-height samples) -- 304 us a height sample in one 500 m cell of seed 1029024224 against 0.6 elsewhere, a
+		// 550 ms spawner hitch in every packaged perf tour (Oct 13 2026; MOFramework.PCG.SampleCosts "SLOW CELL"). Separate tables: the three lookups of a
+		// sample can no longer collide.
+		thread_local FEntry Cache[3][256];
 
-		const uint32 Slot = (uint32)(((uint64)CellX * 73856093ull) ^ ((uint64)CellY * 19349663ull) ^ ((uint64)Tier * 83492791ull)) & 255u;
-		FEntry& E = Cache[Slot];
+		const uint32 Slot = (uint32)(((uint64)CellX * 73856093ull) ^ ((uint64)CellY * 19349663ull)) & 255u;
+		FEntry& E = Cache[FMath::Clamp(Tier, 0, 2)][Slot];
 		if (E.bValid && E.CellX == CellX && E.CellY == CellY && E.Tier == Tier && E.Seed == (uint32)Seed && E.ParamsHash == P.GetHash())
 		{
 			Out = E.Lake;

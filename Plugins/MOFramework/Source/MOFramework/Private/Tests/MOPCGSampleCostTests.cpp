@@ -6,6 +6,7 @@
 #include "MOWorldGen.h"
 #include "MOWorldGenSettings.h"
 #include "MOPCGWaterMask.h"
+#include "MOWorldSeedSubsystem.h"
 #include "MOFramework.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -60,6 +61,42 @@ bool FMOPCG_SampleCosts::RunTest(const FString& Parameters)
 	Time(TEXT("DistanceToSinkholeRimZone"), [&](const FVector& P) { return FMOWorldGen::DistanceToSinkholeRimZone(*Params, P.X, P.Y, Seed); });
 	Time(TEXT("PerlinNoise2D (clump field)"), [&](const FVector& P) { return FMath::PerlinNoise2D(FVector2D(P.X / 12000.0, P.Y / 12000.0)); });
 	UE_LOG(LogMOFramework, Display, TEXT("[MOPCGCOST] one point of the tree tier ~= height + 5 x climate (centre + 4 edge-blend taps) + 2 water + sinkhole: the edge blend alone is %.1f us"), 4.0 * ClimateUs);
+
+	// The SLOW CELL of the packaged perf tour (Oct 13 2026): the tree-tier cell at (1024002, -767984) of world seed 1029024224 spent ~690 us a point in the
+	// generator stage (mo.PCG.BiomeSpawnerProfile: "gen 5178 ms" for 7545 points) -- the same queries at the same place, with the game's own terrain seed.
+	{
+		const int32 SlowSeed = UMOWorldSeedSubsystem::TerrainSeedFromWorldSeed(1029024224);
+		const FMOPCGWaterMask SlowWater(Params, SlowSeed);
+		const FMOPCGWaterMask SlowEdge(Params, SlowSeed, 1.008f);
+		TArray<FVector> Slow;
+		for (int32 J = 0; J < 48; ++J)
+		{
+			for (int32 I = 0; I < 48; ++I)
+			{
+				const double X = 1024002.0 + I * 1070.0, Y = -767984.0 + J * 1070.0;
+				Slow.Add(FVector(X, Y, FMOWorldGen::SampleHeightCm(*Params, X, Y, SlowSeed, Params->Tuning.VoxelSizeCm)));
+			}
+		}
+		auto TimeSlow = [&](const TCHAR* Name, TFunctionRef<double(const FVector&)> Fn)
+		{
+			const double T0 = FPlatformTime::Seconds();
+			double Acc = 0.0;
+			for (const FVector& P : Slow)
+			{
+				Acc += Fn(P);
+			}
+			Sink += Acc;
+			const double Us = (FPlatformTime::Seconds() - T0) * 1.0e6 / Slow.Num();
+			UE_LOG(LogMOFramework, Display, TEXT("[MOPCGCOST] SLOW CELL %-28s %10.2f us/point"), Name, Us);
+			AddInfo(FString::Printf(TEXT("SLOW CELL %s: %.2f us/point"), Name, Us));
+		};
+		TimeSlow(TEXT("SampleHeightCm"), [&](const FVector& P) { return FMOWorldGen::SampleHeightCm(*Params, P.X, P.Y, SlowSeed, Params->Tuning.VoxelSizeCm); });
+		TimeSlow(TEXT("EdgeMask.IsInWater"), [&](const FVector& P) { return SlowEdge.IsInWater(P.X, P.Y, P.Z) ? 1.0 : 0.0; });
+		TimeSlow(TEXT("WaterMask.IsInWater"), [&](const FVector& P) { return SlowWater.IsInWater(P.X, P.Y, P.Z) ? 1.0 : 0.0; });
+		TimeSlow(TEXT("DistanceToSinkholeRimZone"), [&](const FVector& P) { return FMOWorldGen::DistanceToSinkholeRimZone(*Params, P.X, P.Y, SlowSeed); });
+		TimeSlow(TEXT("SampleClimate"), [&](const FVector& P) { return FMOWorldGen::SampleClimate(*Params, P.X, P.Y, SlowSeed).Moisture; });
+	}
+
 	TestTrue(TEXT("the queries return finite values"), FMath::IsFinite(Sink));
 	TestTrue(TEXT("the height query was timed"), HeightUs > 0.0);
 	return true;
