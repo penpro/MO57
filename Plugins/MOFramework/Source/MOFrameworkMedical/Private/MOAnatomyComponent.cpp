@@ -23,6 +23,7 @@ UMOAnatomyComponent::UMOAnatomyComponent()
 
 void UMOAnatomyComponent::BeginPlay()
 {
+	QUICK_SCOPE_CYCLE_COUNTER(STAT_UMOAnatomyComponent_BeginPlay);   // spawn-cost breakdown in traces (-statnamedevents)
 	Super::BeginPlay();
 
 	// Cache sibling components via interface - avoids FindComponentByClass chains

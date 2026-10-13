@@ -21,6 +21,7 @@ UMOInteractorComponent::UMOInteractorComponent()
 
 void UMOInteractorComponent::BeginPlay()
 {
+	QUICK_SCOPE_CYCLE_COUNTER(STAT_UMOInteractorComponent_BeginPlay);   // spawn-cost breakdown in traces (-statnamedevents)
 	Super::BeginPlay();
 }
 

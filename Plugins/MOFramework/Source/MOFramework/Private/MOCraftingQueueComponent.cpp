@@ -22,6 +22,7 @@ UMOCraftingQueueComponent::UMOCraftingQueueComponent()
 
 void UMOCraftingQueueComponent::BeginPlay()
 {
+	QUICK_SCOPE_CYCLE_COUNTER(STAT_UMOCraftingQueueComponent_BeginPlay);   // spawn-cost breakdown in traces (-statnamedevents)
 	Super::BeginPlay();
 	CacheComponents();
 	Queue.SetOwner(this);

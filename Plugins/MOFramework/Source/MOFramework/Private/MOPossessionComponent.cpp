@@ -14,6 +14,7 @@ UMOPossessionComponent::UMOPossessionComponent()
 
 void UMOPossessionComponent::BeginPlay()
 {
+	QUICK_SCOPE_CYCLE_COUNTER(STAT_UMOPossessionComponent_BeginPlay);   // spawn-cost breakdown in traces (-statnamedevents)
 	Super::BeginPlay();
 }
 

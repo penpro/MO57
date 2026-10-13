@@ -27,26 +27,46 @@ namespace
 	UMOHarvestDebugSubsystem* GHarvestDebugConsoleOwner = nullptr;
 }
 
+bool UMOHarvestDebugSubsystem::bGloballyEnabled = false;
+
 void UMOHarvestDebugSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
 
-	OpenLogFile();
+	// Console commands always exist so MO.Harvest.Enable can turn logging on; the file opens only then (default OFF).
 	if (GHarvestDebugConsoleOwner == nullptr)
 	{
 		RegisterConsoleCommands();
 		GHarvestDebugConsoleOwner = this;
 	}
+}
 
-	Log(TEXT("System"), TEXT("=========================================="));
-	Log(TEXT("System"), FString::Printf(TEXT("Harvest Debug log started — %s"), *FDateTime::Now().ToString()));
-	Log(TEXT("System"), FString::Printf(TEXT("Log path: %s"), *LogFilePath));
-	Log(TEXT("System"), TEXT("=========================================="));
+void UMOHarvestDebugSubsystem::SetEnabled(bool bInEnabled)
+{
+	if (bInEnabled && !LogFileHandle)
+	{
+		OpenLogFile();
+	}
+	const bool bWasEnabled = bEnabled;
+	bEnabled = bInEnabled;
+	bGloballyEnabled = bInEnabled;
+	if (bInEnabled && !bWasEnabled)
+	{
+		Log(TEXT("System"), TEXT("=========================================="));
+		Log(TEXT("System"), FString::Printf(TEXT("Harvest Debug log started — %s"), *FDateTime::Now().ToString()));
+		Log(TEXT("System"), FString::Printf(TEXT("Log path: %s"), *LogFilePath));
+		Log(TEXT("System"), TEXT("=========================================="));
+	}
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOHarvestDebugSubsystem] harvest debug log %s%s"), bInEnabled ? TEXT("ON: ") : TEXT("OFF"), bInEnabled ? *LogFilePath : TEXT(""));
 }
 
 void UMOHarvestDebugSubsystem::Deinitialize()
 {
 	Log(TEXT("System"), TEXT("Harvest Debug log closing"));
+	if (bEnabled)
+	{
+		bGloballyEnabled = false;
+	}
 	if (GHarvestDebugConsoleOwner == this)
 	{
 		UnregisterConsoleCommands();
@@ -154,6 +174,17 @@ void UMOHarvestDebugSubsystem::CloseLogFile()
 void UMOHarvestDebugSubsystem::RegisterConsoleCommands()
 {
 	IConsoleManager& CM = IConsoleManager::Get();
+
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Harvest.Enable"),
+		TEXT("Turn the harvest / depletion debug file log on (1, opens Saved/Logs/HarvestDebug_<time>.log) or off (0). Default off. Usage: MO.Harvest.Enable [0|1]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			if (UMOHarvestDebugSubsystem* Sys = UMOHarvestDebugSubsystem::Get(World))
+			{
+				Sys->SetEnabled(Args.Num() == 0 || Args[0] != TEXT("0"));
+			}
+		})));
 
 	ConsoleCommands.Add(CM.RegisterConsoleCommand(
 		TEXT("MO.Harvest.DumpState"),

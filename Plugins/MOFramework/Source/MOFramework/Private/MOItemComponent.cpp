@@ -21,6 +21,7 @@ UMOItemComponent::UMOItemComponent()
 
 void UMOItemComponent::BeginPlay()
 {
+	QUICK_SCOPE_CYCLE_COUNTER(STAT_UMOItemComponent_BeginPlay);   // spawn-cost breakdown in traces (-statnamedevents)
 	Super::BeginPlay();
 
 	// Ensure correct visual/collision state on both server and clients.

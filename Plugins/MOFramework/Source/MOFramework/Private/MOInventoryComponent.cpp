@@ -26,6 +26,7 @@ UMOInventoryComponent::UMOInventoryComponent()
 
 void UMOInventoryComponent::BeginPlay()
 {
+	QUICK_SCOPE_CYCLE_COUNTER(STAT_UMOInventoryComponent_BeginPlay);   // spawn-cost breakdown in traces (-statnamedevents)
 	Super::BeginPlay();
 
 	Inventory.SetOwner(this);
@@ -243,8 +244,11 @@ bool UMOInventoryComponent::AddItemByGuid(const FGuid& ItemGuid, const FName Ite
 		{
 			OnItemAdded.Broadcast(ItemDefinitionId, ActuallyAdded);
 
-			// Notify quest subsystem directly
-			if (UWorld* World = GetWorld())
+			// Notify quest subsystem directly -- only for what a PLAYER gathers: not a survivor's or a container's inventory, and not a spawn kit
+			// (ApplyStartingItems). Every add used to count as the player's "pickup", so a survivor spawning nearby with its 10 cobbles and 20 sticks
+			// completed the player's gather tutorial steps (logs, Oct 13 2026).
+			const APawn* OwnerPawn = Cast<APawn>(GetOwner());
+			if (UWorld* World = (!bApplyingStartingItems && OwnerPawn && OwnerPawn->IsPlayerControlled()) ? GetWorld() : nullptr)
 			{
 				if (UGameInstance* GI = World->GetGameInstance())
 				{
@@ -1801,6 +1805,8 @@ void UMOInventoryComponent::ApplyStartingItems()
 	}
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOInventory] Applying %d starting items"), StartingItems.Num());
+
+	TGuardValue<bool> KitGuard(bApplyingStartingItems, true);   // a spawn kit is not a pickup (quests)
 
 	for (const FMOStartingInventoryItem& StartingItem : StartingItems)
 	{

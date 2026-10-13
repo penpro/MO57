@@ -48,6 +48,7 @@ UMOCombatComponent::UMOCombatComponent()
 
 void UMOCombatComponent::BeginPlay()
 {
+	QUICK_SCOPE_CYCLE_COUNTER(STAT_UMOCombatComponent_BeginPlay);   // spawn-cost breakdown in traces (-statnamedevents)
 	Super::BeginPlay();
 	CacheComponents();
 }

@@ -203,6 +203,7 @@ AMOCharacter::AMOCharacter(const FObjectInitializer& ObjectInitializer)
 
 void AMOCharacter::BeginPlay()
 {
+	QUICK_SCOPE_CYCLE_COUNTER(STAT_AMOCharacter_BeginPlay_Total);   // spawn-cost breakdown: the whole BeginPlay (Super = its components + Blueprint part)
 	// Load and apply default mesh if not already set
 	if (!GetMesh()->GetSkeletalMeshAsset())
 	{
@@ -288,7 +289,10 @@ void AMOCharacter::BeginPlay()
 		VitalsComponent->OnSystemicDeath.AddDynamic(this, &AMOCharacter::HandleSystemicDeath);
 	}
 
-	Super::BeginPlay();
+	{
+		QUICK_SCOPE_CYCLE_COUNTER(STAT_AMOCharacter_BeginPlay_Super);   // components' BeginPlay + the Blueprint's BeginPlay event
+		Super::BeginPlay();
+	}
 }
 
 void AMOCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)

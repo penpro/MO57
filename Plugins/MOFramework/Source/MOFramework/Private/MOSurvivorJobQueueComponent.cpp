@@ -13,6 +13,7 @@ UMOSurvivorJobQueueComponent::UMOSurvivorJobQueueComponent()
 
 void UMOSurvivorJobQueueComponent::BeginPlay()
 {
+	QUICK_SCOPE_CYCLE_COUNTER(STAT_UMOSurvivorJobQueueComponent_BeginPlay);   // spawn-cost breakdown in traces (-statnamedevents)
 	Super::BeginPlay();
 
 	// Set owner reference for FastArray callbacks

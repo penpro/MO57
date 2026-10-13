@@ -12,6 +12,7 @@ UMORecipeDiscoveryComponent::UMORecipeDiscoveryComponent()
 
 void UMORecipeDiscoveryComponent::BeginPlay()
 {
+	QUICK_SCOPE_CYCLE_COUNTER(STAT_UMORecipeDiscoveryComponent_BeginPlay);   // spawn-cost breakdown in traces (-statnamedevents)
 	Super::BeginPlay();
 
 	// Cache crafting subsystem

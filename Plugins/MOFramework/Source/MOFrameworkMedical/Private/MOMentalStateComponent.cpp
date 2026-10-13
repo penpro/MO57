@@ -15,6 +15,7 @@ UMOMentalStateComponent::UMOMentalStateComponent()
 
 void UMOMentalStateComponent::BeginPlay()
 {
+	QUICK_SCOPE_CYCLE_COUNTER(STAT_UMOMentalStateComponent_BeginPlay);   // spawn-cost breakdown in traces (-statnamedevents)
 	Super::BeginPlay();
 
 	// Cache sibling components via interface - avoids FindComponentByClass chains

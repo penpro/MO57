@@ -12,6 +12,7 @@ UMOIdentityComponent::UMOIdentityComponent()
 
 void UMOIdentityComponent::BeginPlay()
 {
+	QUICK_SCOPE_CYCLE_COUNTER(STAT_UMOIdentityComponent_BeginPlay);   // spawn-cost breakdown in traces (-statnamedevents)
 	Super::BeginPlay();
 
 	AActor* OwnerActor = GetOwner();

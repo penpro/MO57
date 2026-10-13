@@ -67,6 +67,7 @@ UMOVitalsComponent* UMORespirationComponent::ResolveVitals() const
 
 void UMORespirationComponent::BeginPlay()
 {
+	QUICK_SCOPE_CYCLE_COUNTER(STAT_UMORespirationComponent_BeginPlay);   // spawn-cost breakdown in traces (-statnamedevents)
 	Super::BeginPlay();
 	if (AActor* Owner = GetOwner())
 	{

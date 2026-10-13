@@ -45,6 +45,7 @@ UMOSurvivalStatsComponent::UMOSurvivalStatsComponent()
 
 void UMOSurvivalStatsComponent::BeginPlay()
 {
+	QUICK_SCOPE_CYCLE_COUNTER(STAT_UMOSurvivalStatsComponent_BeginPlay);   // spawn-cost breakdown in traces (-statnamedevents)
 	Super::BeginPlay();
 
 	// Only tick on server/authority

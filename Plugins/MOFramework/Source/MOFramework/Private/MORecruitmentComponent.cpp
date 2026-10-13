@@ -17,6 +17,7 @@ UMORecruitmentComponent::UMORecruitmentComponent()
 
 void UMORecruitmentComponent::BeginPlay()
 {
+	QUICK_SCOPE_CYCLE_COUNTER(STAT_UMORecruitmentComponent_BeginPlay);   // spawn-cost breakdown in traces (-statnamedevents)
 	Super::BeginPlay();
 
 	// Roll for quest on spawn if we have possible quests

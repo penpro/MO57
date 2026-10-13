@@ -106,6 +106,7 @@ UMOBuildingComponent::UMOBuildingComponent()
 
 void UMOBuildingComponent::BeginPlay()
 {
+	QUICK_SCOPE_CYCLE_COUNTER(STAT_UMOBuildingComponent_BeginPlay);   // spawn-cost breakdown in traces (-statnamedevents)
 	Super::BeginPlay();
 }
 

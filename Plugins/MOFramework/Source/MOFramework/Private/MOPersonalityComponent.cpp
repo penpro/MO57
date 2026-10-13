@@ -13,6 +13,7 @@ UMOPersonalityComponent::UMOPersonalityComponent()
 
 void UMOPersonalityComponent::BeginPlay()
 {
+	QUICK_SCOPE_CYCLE_COUNTER(STAT_UMOPersonalityComponent_BeginPlay);   // spawn-cost breakdown in traces (-statnamedevents)
 	Super::BeginPlay();
 }
 

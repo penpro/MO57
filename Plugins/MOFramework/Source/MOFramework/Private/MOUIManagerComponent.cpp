@@ -91,6 +91,7 @@ UMOUIManagerComponent::UMOUIManagerComponent()
 
 void UMOUIManagerComponent::BeginPlay()
 {
+	QUICK_SCOPE_CYCLE_COUNTER(STAT_UMOUIManagerComponent_BeginPlay);   // spawn-cost breakdown in traces (-statnamedevents)
 	Super::BeginPlay();
 
 	if (IsLocalOwningPlayerController())

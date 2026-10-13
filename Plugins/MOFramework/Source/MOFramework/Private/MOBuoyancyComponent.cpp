@@ -21,6 +21,7 @@ UMOBuoyancyComponent::UMOBuoyancyComponent()
 
 void UMOBuoyancyComponent::BeginPlay()
 {
+	QUICK_SCOPE_CYCLE_COUNTER(STAT_UMOBuoyancyComponent_BeginPlay);   // spawn-cost breakdown in traces (-statnamedevents)
 	Super::BeginPlay();
 
 	if (bAutoFindWater && !WaterActor.IsValid())

@@ -104,6 +104,7 @@ void UMOTerraformingComponent::TickComponent(float DeltaTime, ELevelTick TickTyp
 
 void UMOTerraformingComponent::BeginPlay()
 {
+	QUICK_SCOPE_CYCLE_COUNTER(STAT_UMOTerraformingComponent_BeginPlay);   // spawn-cost breakdown in traces (-statnamedevents)
 	Super::BeginPlay();
 
 	// Auto-find sculpt actors if not set

@@ -27,6 +27,7 @@ UMOAdrenalineComponent::UMOAdrenalineComponent()
 
 void UMOAdrenalineComponent::BeginPlay()
 {
+	QUICK_SCOPE_CYCLE_COUNTER(STAT_UMOAdrenalineComponent_BeginPlay);   // spawn-cost breakdown in traces (-statnamedevents)
 	Super::BeginPlay();
 
 	RefreshCachedComponents();

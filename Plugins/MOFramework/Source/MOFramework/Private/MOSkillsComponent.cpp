@@ -270,6 +270,7 @@ bool UMOSkillsComponent::ApplySaveData(const FMOSkillsSaveData& InSaveData)
 
 void UMOSkillsComponent::BeginPlay()
 {
+	QUICK_SCOPE_CYCLE_COUNTER(STAT_UMOSkillsComponent_BeginPlay);   // spawn-cost breakdown in traces (-statnamedevents)
 	Super::BeginPlay();
 	AActor* Owner = GetOwner();
 	if (Owner && Owner->HasAuthority())

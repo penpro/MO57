@@ -20,6 +20,7 @@ UMONotificationComponent::UMONotificationComponent()
 
 void UMONotificationComponent::BeginPlay()
 {
+	QUICK_SCOPE_CYCLE_COUNTER(STAT_UMONotificationComponent_BeginPlay);   // spawn-cost breakdown in traces (-statnamedevents)
 	Super::BeginPlay();
 }
 

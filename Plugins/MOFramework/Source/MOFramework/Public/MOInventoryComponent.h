@@ -501,6 +501,9 @@ protected:
 	void ApplyStartingItems();
 
 private:
+	/** True while ApplyStartingItems runs: those adds are a spawn kit, not something the player gathered (no quest "pickup"). */
+	bool bApplyingStartingItems = false;
+
 	int32 FindEntryIndexByGuid(const FGuid& ItemGuid) const;
 
 	/** O(1) GUID-to-index lookup. Rebuilt after structural changes. */

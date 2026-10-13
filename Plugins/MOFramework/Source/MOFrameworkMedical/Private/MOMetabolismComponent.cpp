@@ -16,6 +16,7 @@ UMOMetabolismComponent::UMOMetabolismComponent()
 
 void UMOMetabolismComponent::BeginPlay()
 {
+	QUICK_SCOPE_CYCLE_COUNTER(STAT_UMOMetabolismComponent_BeginPlay);   // spawn-cost breakdown in traces (-statnamedevents)
 	Super::BeginPlay();
 
 	// Cache sibling components via interface - avoids FindComponentByClass chains

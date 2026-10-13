@@ -33,6 +33,7 @@ UMOVitalsComponent::UMOVitalsComponent()
 
 void UMOVitalsComponent::BeginPlay()
 {
+	QUICK_SCOPE_CYCLE_COUNTER(STAT_UMOVitalsComponent_BeginPlay);   // spawn-cost breakdown in traces (-statnamedevents)
 	Super::BeginPlay();
 
 	// Cache sibling components
