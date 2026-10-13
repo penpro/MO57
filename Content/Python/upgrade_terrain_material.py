@@ -13,6 +13,11 @@ What the graph gets (all parameters are overridable per material instance; defau
      fades toward FarColor between FarTintStartCm and FarTintEndCm, scaled by FarTintAmount: a forest floor becomes dark canopy green, so a far forested mountain stops reading as bare yellow litter), and
      SNOW (above SnowLineCm +- noise, flat-ish faces only, the slope limit relaxing with altitude; SnowColor, flattened normal, rougher-than-rock but glossy-ish roughness).
   3. Break -> MO_Finish -> Make MaterialAttributes (every attribute passes through; only BaseColor / Roughness / Normal are replaced).
+  4. MO_NormalMod: patchy relief strength, snow flattening, and (Oct 13 evening) the FAR detail-normal fade: past ~250 m the few-metre detail normal maps light every
+     tile alike and a far slope reads as a checker; they fade toward the mesh normal by FarNormalFlatten (0.85; cliff / quarry rock 0.15, because a coarse LOD's flat-shaded
+     rock triangles show self-shadow stripes without them).
+NO AXIS-ALIGNED SINGLE READS of the noise at mid scales: one read repeats exactly at its period (a 180 m read printed rows of identical snow patches on every mountain).
+Each mid-scale term is two reads on rotated grids at unrelated scales; the snow line wanders on the 1.1 km / 4.7 km reads.
 Idempotent: on a graph that already has the MO_ nodes only their shader code is updated (see main()); on the pristine graph it builds them.
 Output lines start with TERRAINMAT.
 """
@@ -66,12 +71,16 @@ return float3(a.r - 0.5, a.g - 0.5, b.r - 0.5) * 2.0 * WarpAmp;
 
 FINISH_CODE = """
 float d = max(D, 1.0);
-float2 uv1 = P.xy / 2500.0;
-float2 uv2 = P.xy / 18000.0 + float2(0.37, 0.11);
-float2 uv3 = P.xy / 110000.0 + float2(0.71, 0.53);
-float m1 = NoiseTex.SampleLevel(NoiseTexSampler, uv1, max(0.0, log2(d / 2500.0))).r;
-float m2 = NoiseTex.SampleLevel(NoiseTexSampler, uv2, max(0.0, log2(d / 18000.0))).g;
-float m3 = NoiseTex.SampleLevel(NoiseTexSampler, uv3, max(0.0, log2(d / 110000.0))).b;
+// One texture read on one axis-aligned grid repeats EXACTLY at its period: the 180 m read printed rows of identical snow patches across a mountainside
+// (Oct 13 2026). Each mid-scale term is now two reads on grids rotated against each other, at scales with no common multiple: their sum never lines up.
+float2 r1 = float2(0.80 * P.x - 0.60 * P.y, 0.60 * P.x + 0.80 * P.y);   // grid rotated 36.9 deg
+float2 r2 = float2(0.28 * P.x + 0.96 * P.y, -0.96 * P.x + 0.28 * P.y);  // grid rotated 73.7 deg
+float m1 = NoiseTex.SampleLevel(NoiseTexSampler, P.xy / 2500.0, max(0.0, log2(d / 2500.0))).r;
+float m2a = NoiseTex.SampleLevel(NoiseTexSampler, r1 / 18000.0 + float2(0.37, 0.11), max(0.0, log2(d / 18000.0))).g;
+float m2b = NoiseTex.SampleLevel(NoiseTexSampler, r2 / 29300.0 + float2(0.13, 0.61), max(0.0, log2(d / 29300.0))).r;
+float m2 = 0.5 + (m2a + m2b - 1.0) * 0.7071;   // the sum of two keeps one read's contrast
+float m3 = NoiseTex.SampleLevel(NoiseTexSampler, P.xy / 110000.0 + float2(0.71, 0.53), max(0.0, log2(d / 110000.0))).b;
+float m4 = NoiseTex.SampleLevel(NoiseTexSampler, r1 / 470000.0 + float2(0.29, 0.83), max(0.0, log2(d / 470000.0))).g;   // 4.7 km: the snow line's own wander
 // the 25 m blotches only up close: at a grazing angle they smear into long rays pointing at the horizon
 float w1 = saturate(1.0 - d / 70000.0);
 float w2 = saturate(1.0 - d / 500000.0);
@@ -86,12 +95,16 @@ float far = smoothstep(FarStart, max(FarEnd, FarStart + 1.0), d) * FarAmount;
 c = lerp(c, FarColor * (1.0 + v * 0.55), far);
 
 // snow: altitude line broken up by noise, flat-ish faces only, steeper faces hold snow higher up
-float n = (m2 - 0.5) * 2.0;
-float h = P.z + n * SnowNoise + (m1 - 0.5) * SnowNoise * 0.6;
+// the snow line wanders on the LARGE scales (a mountain's snow is not polka dots); the 180 m term only frays its edge
+float n = ((m4 - 0.5) * 0.45 + (m3 - 0.5) * 0.35 + (m2 - 0.5) * 0.30) * 2.0;
+float h = P.z + n * SnowNoise + (m1 - 0.5) * SnowNoise * 0.6 * w1;
 float snowH = smoothstep(SnowLine - SnowBand, SnowLine + SnowBand, h);
 float up = saturate(VN.z);
 float slopeMin = lerp(0.80, 0.42, saturate((h - SnowLine) / (SnowBand * 5.0)));
-float slopeMask = smoothstep(slopeMin - 0.10, slopeMin + 0.06, up + n * 0.04);
+// far voxel LODs are coarse and each triangle has its own normal: a narrow slope window flips snow on and off triangle by triangle (a checker on the rock faces);
+// the window widens with distance so the far snow follows the face's general slope
+float soft = smoothstep(30000.0, 250000.0, d);
+float slopeMask = smoothstep(slopeMin - 0.10 - 0.22 * soft, slopeMin + 0.06 + 0.12 * soft, up + n * 0.04);
 // far voxel LODs are coarse: their per-triangle normals checker the snow into blocks, so the slope term fades out and the far snow cap follows altitude alone
 slopeMask = lerp(slopeMask, 1.0, smoothstep(150000.0, 600000.0, d));
 float snow = snowH * slopeMask * SnowAmount;
@@ -102,11 +115,17 @@ return float4(c, snow);
 NORMAL_CODE = """
 float d = max(D, 1.0);
 float a = NoiseTex.SampleLevel(NoiseTexSampler, P.xy / 3200.0 + float2(0.19, 0.83), max(0.0, log2(d / 3200.0))).r;
-float b = NoiseTex.SampleLevel(NoiseTexSampler, P.xy / 21000.0 + float2(0.52, 0.27), max(0.0, log2(d / 21000.0))).g;
+float2 rr = float2(0.80 * P.x - 0.60 * P.y, 0.60 * P.x + 0.80 * P.y);   // rotated against the first read: no shared grid
+float b = NoiseTex.SampleLevel(NoiseTexSampler, rr / 21000.0 + float2(0.52, 0.27), max(0.0, log2(d / 21000.0))).g;
 float t = smoothstep(0.30, 0.70, a * 0.6 + b * 0.4);
 float k = lerp(1.0 - Var, 1.0 + 0.20 * Var, t);      // the surface's relief is stronger in some patches and softer in others: ripples / grain stop being one repeating field
 float3 nn = normalize(float3(N.xy * k, N.z));
-return normalize(lerp(nn, float3(0.0, 0.0, 1.0), Snow));
+// The detail normal maps repeat every few metres: past a few hundred metres the sun lights every tile the same way and the slope reads as a checker of
+// shading (the colour fade cannot touch it, Oct 13 2026). The relief they carry is unresolvable there anyway: fade them toward the mesh normal with distance,
+// by FarFlatten per surface (FarNormalFlatten): soil / grass / heath fully, cliff rock barely -- a coarse LOD's rock faces are flat-shaded triangles whose self-shadow
+// stripes the detail normals hide. (Screen derivatives of the position are zero in this Nanite pass, so the steepness cannot be measured here.)
+float farFlat = smoothstep(25000.0, 220000.0, d) * FarFlatten;
+return normalize(lerp(nn, float3(0.0, 0.0, 1.0), max(Snow, farFlat)));
 """
 
 
@@ -191,6 +210,7 @@ def main():
     p["SnowNoiseCm"] = scalar(m, "SnowNoiseCm", 16000.0, X0, Y0 + 800)
     p["SnowAmount"] = scalar(m, "SnowAmount", 1.0, X0, Y0 + 900)
     p["NormalVariation"] = scalar(m, "NormalVariation", 0.30, X0, Y0 + 950)
+    p["FarNormalFlatten"] = scalar(m, "FarNormalFlatten", 0.85, X0, Y0 + 975)
     p["FarColor"] = vector(m, "FarColor", (0.030, 0.045, 0.026), X0, Y0 + 1000)
     p["SnowColor"] = vector(m, "SnowColor", (0.78, 0.82, 0.88), X0, Y0 + 1100)
     tex = MEL.create_material_expression(m, unreal.MaterialExpressionTextureObjectParameter, X0, Y0 - 150)
@@ -257,13 +277,14 @@ def main():
     connect(snow_rough, "", rough, "B")
     connect(snow, "", rough, "Alpha")
 
-    nrm = custom(m, "MO_NormalMod", NORMAL_CODE, ["N", "P", "D", "NoiseTex", "Var", "Snow"], unreal.CustomMaterialOutputType.CMOT_FLOAT3, X0 + 2600, Y0 + 400)
+    nrm = custom(m, "MO_NormalMod", NORMAL_CODE, ["N", "P", "D", "NoiseTex", "Var", "Snow", "FarFlatten"], unreal.CustomMaterialOutputType.CMOT_FLOAT3, X0 + 2600, Y0 + 400)
     connect(brk, "Normal", nrm, "N")
     connect(wp, "", nrm, "P")
     connect(depth, "", nrm, "D")
     connect(tex, "", nrm, "NoiseTex")
     connect(p["NormalVariation"], "", nrm, "Var")
     connect(snow, "", nrm, "Snow")
+    connect(p["FarNormalFlatten"], "", nrm, "FarFlatten")
 
     # pass every attribute through; replace BaseColor / Roughness / Normal
     # (MF_BaseLayer sets exactly BaseColor / Roughness / Normal / Displacement and MF_BlendLayers blends those; everything else is the default, which an unconnected Make pin also is.
@@ -282,19 +303,21 @@ def main():
 
 # What covers the ground seen from far away (linear colours), per surface material instance: FarTintAmount, FarColor, + optional per-surface knobs.
 # Forest floors become canopy (dark, slightly different greens), grass stays lush, rock / sand / gravel barely shift.
+# Far tint (Oct 13 evening): the open-ground and rock surfaces now fade toward their mean colour from 400-500 m (was 1.5-2 km, 0.30-0.55): their few-metre texture tiles
+# repeat hundreds of times across a far slope and read as a checker; the far colour keeps the (non-periodic) macro variation, so the distance does not go flat.
 SURFACES = {
     "MuddyLeaves":          dict(far=0.95, color=(0.020, 0.034, 0.016), start=90000.0,  end=500000.0),
     "ForestLitter":         dict(far=0.95, color=(0.022, 0.036, 0.018), start=90000.0,  end=500000.0),
     "JungleFloor":          dict(far=0.95, color=(0.014, 0.032, 0.013), start=90000.0,  end=450000.0),
-    "MossyGrass":           dict(far=0.55, color=(0.060, 0.085, 0.030), start=150000.0, end=600000.0),
-    "DriedGrassOnDampSoil": dict(far=0.45, color=(0.110, 0.090, 0.050), start=150000.0, end=600000.0),
-    "AlpineHeath":          dict(far=0.45, color=(0.070, 0.074, 0.040), start=150000.0, end=600000.0),
-    "NordicMoss":           dict(far=0.50, color=(0.052, 0.066, 0.036), start=150000.0, end=600000.0),
-    "MossyRockyGround":     dict(far=0.50, color=(0.058, 0.062, 0.048), start=150000.0, end=600000.0),
-    "IcelandicQuarryRock":  dict(far=0.30, color=(0.040, 0.040, 0.045), start=200000.0, end=700000.0),
-    "Cliff":                dict(far=0.30, color=(0.075, 0.068, 0.060), start=200000.0, end=700000.0),
-    "Gravel":               dict(far=0.30, color=(0.090, 0.090, 0.090), start=200000.0, end=700000.0),
-    "DarkPebbles":          dict(far=0.30, color=(0.060, 0.060, 0.062), start=200000.0, end=700000.0),
+    "MossyGrass":           dict(far=0.70, color=(0.060, 0.085, 0.030), start=40000.0,  end=300000.0),
+    "DriedGrassOnDampSoil": dict(far=0.65, color=(0.110, 0.090, 0.050), start=40000.0,  end=300000.0),
+    "AlpineHeath":          dict(far=0.65, color=(0.070, 0.074, 0.040), start=40000.0,  end=300000.0),
+    "NordicMoss":           dict(far=0.65, color=(0.052, 0.066, 0.036), start=40000.0,  end=300000.0),
+    "MossyRockyGround":     dict(far=0.65, color=(0.058, 0.062, 0.048), start=40000.0,  end=300000.0),
+    "IcelandicQuarryRock":  dict(far=0.55, color=(0.040, 0.040, 0.045), start=50000.0,  end=350000.0, far_normal=0.15),
+    "Cliff":                dict(far=0.55, color=(0.075, 0.068, 0.060), start=50000.0,  end=350000.0, far_normal=0.15),
+    "Gravel":               dict(far=0.55, color=(0.090, 0.090, 0.090), start=50000.0,  end=350000.0),
+    "DarkPebbles":          dict(far=0.55, color=(0.060, 0.060, 0.062), start=50000.0,  end=350000.0),
     "Sand":                 dict(far=0.25, color=(0.300, 0.240, 0.150), start=200000.0, end=700000.0, macro=0.50, normal_var=0.45, warp=70.0, warp_scale=1500.0),
 }
 
@@ -313,6 +336,7 @@ def apply_surface_overrides():
         MEL.set_material_instance_vector_parameter_value(mi, "FarColor", unreal.LinearColor(c[0], c[1], c[2], 1.0))
         if "macro" in v:
             MEL.set_material_instance_scalar_parameter_value(mi, "MacroAmount", v["macro"])
+        MEL.set_material_instance_scalar_parameter_value(mi, "FarNormalFlatten", v.get("far_normal", 0.85))
         if "normal_var" in v:
             MEL.set_material_instance_scalar_parameter_value(mi, "NormalVariation", v["normal_var"])
         if "warp" in v:
