@@ -384,6 +384,22 @@ void AMOCharacter::GatherRuntimeAssets(TArray<FSoftObjectPath>& Out) const
 	{
 		GetDefault<AMOAIController>(AIControllerClass.Get())->GatherRuntimeAssets(Out);
 	}
+	// What this class resolves with LoadSynchronous itself: the default mesh / anim blueprint (BeginPlay) and the crouch / swim poses (the first crouch or swim
+	// stroke of a pawn otherwise loads them on the game thread mid-movement).
+	const auto Add = [&Out](const FSoftObjectPath& Path)
+	{
+		if (Path.IsValid())
+		{
+			Out.AddUnique(Path);
+		}
+	};
+	Add(DefaultMesh.ToSoftObjectPath());
+	Add(DefaultAnimBlueprint.ToSoftObjectPath());
+	for (const TSoftObjectPtr<UAnimSequence>* Anim : { &SwimTreadAnim, &SwimSlowAnim, &SwimCrawlAnim, &SwimUnderIdleAnim, &SwimUnderForwardAnim, &SwimUnderUpAnim,
+		&SwimUnderDownAnim, &CrouchIdleAnim, &CrouchWalkAnim })
+	{
+		Add(Anim->ToSoftObjectPath());
+	}
 }
 
 void AMOCharacter::Tick(float DeltaTime)
