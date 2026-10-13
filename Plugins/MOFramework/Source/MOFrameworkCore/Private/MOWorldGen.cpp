@@ -681,6 +681,139 @@ int32 FMOWorldGen::ResolveBiome(const FMOWorldGenParams& Params, float HeightCm,
 	return INDEX_NONE;
 }
 
+float FMOWorldGen::SoftThreshold(float Value, float Edge, float Width, float Breakup)
+{
+	const float E = Edge + Breakup;
+	if (Width <= 0.0f)
+	{
+		return Value >= E ? 1.0f : 0.0f;
+	}
+	return MOWorldGenNoise::Smooth01(E - 0.5f * Width, E + 0.5f * Width, Value);
+}
+
+int32 FMOWorldGen::SampleSurfaceBiomeWeights(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, float HeightCm, float Moisture, float Temperature, FBiomeWeight* Out, int32 MaxOut)
+{
+	if (!Out || MaxOut <= 0 || Params.Biomes.Num() == 0)
+	{
+		return 0;
+	}
+	const FMOWorldGenTuning& T = Params.Tuning;
+	// One breakup sample per column, shared by every edge (a second, offset read for the climate edges so height and climate edges do not wander in lockstep).
+	constexpr uint32 SaltSurfaceBreakup = 0x5A01u;
+	const double Inv = 1.0 / FMath::Max((double)T.SurfaceBreakupWavelengthCm, 100.0);
+	const float NoiseH = MOWorldGenNoise::GradientNoise2(X * Inv, Y * Inv, (uint32)HashSeed(Seed, SaltSurfaceBreakup)).Value;
+	const float NoiseC = MOWorldGenNoise::GradientNoise2(X * Inv * 0.7 + 13.7, Y * Inv * 0.7 - 5.3, (uint32)HashSeed(Seed, SaltSurfaceBreakup + 1u)).Value;
+	const float WC = T.SurfaceClimateBlend;
+	const float BreakC = NoiseC * T.SurfaceBreakup * 0.5f * WC;
+	// A height edge's band scales with how high above the sea it lies (see SurfaceHeightBlendFraction); its breakup scales with its band.
+	const auto HeightBand = [&T](float Edge)
+	{
+		return FMath::Clamp(T.SurfaceHeightBlendFraction * FMath::Max(Edge - T.SeaLevelCm, 0.0f), T.SurfaceHeightBlendMinCm, FMath::Max(T.SurfaceHeightBlendCm, T.SurfaceHeightBlendMinCm));
+	};
+	const auto HeightInside = [&](float V, float Lo, float Hi, bool bLoOpen, bool bHiOpen)
+	{
+		const float WLo = HeightBand(Lo), WHi = HeightBand(Hi);
+		const float AboveLo = bLoOpen ? 1.0f : SoftThreshold(V, Lo, WLo, NoiseH * T.SurfaceBreakup * 0.5f * WLo);
+		const float BelowHi = bHiOpen ? 1.0f : 1.0f - SoftThreshold(V, Hi, WHi, NoiseH * T.SurfaceBreakup * 0.5f * WHi);
+		return AboveLo * BelowHi;
+	};
+
+	// Soft "inside [Lo, Hi]": an open end (the band's default sentinel) is no edge.
+	const auto Inside = [](float V, float Lo, float Hi, bool bLoOpen, bool bHiOpen, float W, float Break)
+	{
+		const float AboveLo = bLoOpen ? 1.0f : SoftThreshold(V, Lo, W, Break);
+		const float BelowHi = bHiOpen ? 1.0f : 1.0f - SoftThreshold(V, Hi, W, Break);
+		return AboveLo * BelowHi;
+	};
+
+	// First-match-wins, softly: in priority order each biome claims its membership of what is left (ResolveBiome's hard rule is the W -> 0 limit).
+	TArray<FBiomeWeight, TInlineAllocator<16>> All;
+	float Remaining = 1.0f;
+	for (int32 I = 0; I < Params.Biomes.Num() && Remaining > 1.0e-4f; ++I)
+	{
+		const FMOWorldGenBiome& B = Params.Biomes[I];
+		if (B.SlopeMinDeg > 0.0f)
+		{
+			continue;   // a slope band never applies at SampleColumn's slope 0
+		}
+		const float M = HeightInside(HeightCm, B.HeightMin, B.HeightMax, B.HeightMin <= -50000.0f, B.HeightMax >= 50000.0f)
+			* Inside(Moisture, B.MoistureMin, B.MoistureMax, B.MoistureMin <= 0.0f, B.MoistureMax >= 1.0f, WC, BreakC)
+			* Inside(Temperature, B.TemperatureMin, B.TemperatureMax, B.TemperatureMin <= 0.0f, B.TemperatureMax >= 1.0f, WC, -BreakC);
+		const float W = Remaining * M;
+		if (W > 1.0e-4f)
+		{
+			All.Add({ I, W });
+			Remaining -= W;
+		}
+	}
+	if (All.Num() == 0)
+	{
+		const int32 Hard = ResolveBiome(Params, HeightCm, 0.0f, Moisture, Temperature);
+		if (Hard == INDEX_NONE)
+		{
+			return 0;
+		}
+		Out[0] = { Hard, 1.0f };
+		return 1;
+	}
+	All.Sort([](const FBiomeWeight& A, const FBiomeWeight& Bw) { return A.Weight > Bw.Weight || (A.Weight == Bw.Weight && A.Biome < Bw.Biome); });
+	const int32 N = FMath::Min(All.Num(), MaxOut);
+	float Sum = 0.0f;
+	for (int32 K = 0; K < N; ++K)
+	{
+		Sum += All[K].Weight;
+	}
+	for (int32 K = 0; K < N; ++K)
+	{
+		Out[K] = { All[K].Biome, All[K].Weight / Sum };
+	}
+	return N;
+}
+
+int32 FMOWorldGen::PickSurfaceBiome(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, float HeightCm, float SlopeDeg, float Moisture, float Temperature)
+{
+	const int32 Hard = ResolveBiome(Params, HeightCm, SlopeDeg, Moisture, Temperature);
+	if (Hard != INDEX_NONE && Params.Biomes[Hard].SlopeMinDeg > 0.0f)
+	{
+		return Hard;   // a slope band (cliff rock) keeps its crisp edge
+	}
+	FBiomeWeight W[3];
+	const int32 N = SampleSurfaceBiomeWeights(Params, X, Y, Seed, HeightCm, Moisture, Temperature, W, 3);
+	float Sum = 0.0f;
+	for (int32 K = 0; K < N; ++K)
+	{
+		const FMOWorldGenBiome& B = Params.Biomes[W[K].Biome];
+		if (SlopeDeg < B.SlopeMinDeg || SlopeDeg > B.SlopeMaxDeg)
+		{
+			W[K].Weight = 0.0f;   // a biome that would never hold this slope does not get the point
+		}
+		Sum += W[K].Weight;
+	}
+	if (Sum <= 0.0f)
+	{
+		return Hard;
+	}
+	constexpr uint32 SaltSurfacePick = 0x5A10u;
+	const uint32 Bits = MOWorldGenNoise::HashLattice2((int64)FMath::FloorToDouble(X * 0.1), (int64)FMath::FloorToDouble(Y * 0.1), (uint32)HashSeed(Seed, SaltSurfacePick));
+	float Roll = (float)(Bits >> 8) * (1.0f / 16777216.0f) * Sum;   // [0, Sum)
+	for (int32 K = 0; K < N; ++K)
+	{
+		if (W[K].Weight > 0.0f && Roll < W[K].Weight)
+		{
+			return W[K].Biome;
+		}
+		Roll -= W[K].Weight;
+	}
+	for (int32 K = N - 1; K >= 0; --K)   // float rounding left the roll just past the last share
+	{
+		if (W[K].Weight > 0.0f)
+		{
+			return W[K].Biome;
+		}
+	}
+	return Hard;
+}
+
 FMOTerrainSample FMOWorldGen::SampleColumn(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, float StepCm)
 {
 	FMOClimateSample Clim;

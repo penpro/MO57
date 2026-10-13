@@ -144,7 +144,7 @@ int32 FMOPCGWaterMask::BiomeAt(double X, double Y, double GroundZ, float SlopeDe
 	}
 	const FMOWorldGenParams& P = *Params.GetValue();
 	const FMOClimateSample C = FMOWorldGen::SampleClimate(P, X, Y, TerrainSeed);
-	return FMOWorldGen::ResolveBiome(P, (float)GroundZ, SlopeDeg, C.Moisture, FMOWorldGen::TemperatureAtHeight(P, C.TemperatureSeaLevel, (float)GroundZ));
+	return FMOWorldGen::PickSurfaceBiome(P, X, Y, TerrainSeed, (float)GroundZ, SlopeDeg, C.Moisture, FMOWorldGen::TemperatureAtHeight(P, C.TemperatureSeaLevel, (float)GroundZ));
 }
 
 int32 FMOPCGWaterMask::FindBiome(FName BiomeId) const

@@ -76,6 +76,8 @@ namespace
 	TAutoConsoleVariable<int32> CVarBiomeSpawnerParallel(TEXT("mo.PCG.BiomeSpawnerParallel"), 1, TEXT("1 = biome spawner per-point work in parallel (ParallelFor), 0 = single-threaded (A/B timing)."), ECVF_Default);
 	/** 1 = add the per-stage CPU breakdown (generator / climate / edge blend / rest) to each [MOBiomeSpawner] line. */
 	TAutoConsoleVariable<int32> CVarBiomeSpawnerProfile(TEXT("mo.PCG.BiomeSpawnerProfile"), 0, TEXT("1 = per-stage CPU breakdown in the [MOBiomeSpawner] log line."), ECVF_Default);
+	/** 1 (default) = generator mode picks each point's biome by FMOWorldGen::PickSurfaceBiome (foliage thins out across the soft band the ground fades over); 0 = the old hard first match + 4-tap climate feather (A/B). */
+	TAutoConsoleVariable<int32> CVarBiomeSoftPick(TEXT("mo.PCG.BiomeSoftPick"), 1, TEXT("1 = per-point biome pick across soft biome boundaries (matches the ground blend), 0 = hard first-match + climate feather."), ECVF_Default);
 
 	/** Live multiplier on the NEAR ground cover's density (grass, flowers, debris), on top of the authored per-hectare rates: the one knob for "thin out the grass". Takes effect on the next generation (pcg.RuntimeGeneration.Refresh). */
 	TAutoConsoleVariable<float> CVarGroundCoverScale(TEXT("mo.PCG.GroundCoverScale"), 1.0f, TEXT("Multiplier on near ground-cover species density (0..2)."), ECVF_Default);
@@ -319,6 +321,18 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 		const UMOWorldSeedSubsystem* SeedSubsystem = UMOWorldSeedSubsystem::Get(TargetActor);
 		TerrainSeed = (SeedSubsystem && SeedSubsystem->HasActiveSeed()) ? SeedSubsystem->GetActiveTerrainSeed() : Seed;
 	}
+	// Soft biome boundaries (generator mode): the generator's biome index -> this node's entry, for FMOWorldGen::PickSurfaceBiome.
+	const bool bSoftPick = Settings->bUseWorldGenerator && CVarBiomeSoftPick.GetValueOnGameThread() != 0;
+	TArray<int32> SpawnerIndexOfGenBiome;
+	SpawnerIndexOfGenBiome.Init(INDEX_NONE, GenParams->Biomes.Num());
+	for (int32 B = 0; B < Biomes.Num(); ++B)
+	{
+		const int32 GenIndex = GenParams->FindBiomeIndex(Biomes[B].Id);
+		if (GenIndex != INDEX_NONE)
+		{
+			SpawnerIndexOfGenBiome[GenIndex] = B;
+		}
+	}
 	// Water (the sea, rivers, ponds, upland lakes): the same mask the elevation-bands node uses, built from THIS node's params and terrain seed.
 	const FMOPCGWaterMask WaterMask = Settings->bUseWorldGenerator ? FMOPCGWaterMask(GenParams, TerrainSeed) : FMOPCGWaterMask();
 	// The same mask with the bank margin shrunk to the waterline: the WATER-EDGE species (reeds, rushes) stand right at the water, in the strip between the shore and the 1.05 margin that keeps every other species away.
@@ -451,14 +465,25 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 			{
 				FCyScope ClimateStage(Cy.Climate, bProfile);
 				ClimateAt(Location, Moisture, Temperature);
-				// Highest-priority biome whose bands contain this sample.
-				for (int32 B = 0; B < Biomes.Num(); ++B)
+				if (bSoftPick)
 				{
-					if (Biomes[B].Row->Contains(Location.Z, SlopeDeg, Moisture, Temperature))
+					// The ground's own soft boundary (FMOWorldGen::SampleSurfaceBiomeWeights): inside the band each point rolls for its biome by the ground's mix, so the two biomes' plants interleave and thin out
+					// where their ground does.
+					const int32 GenIndex = FMOWorldGen::PickSurfaceBiome(*GenParams, Location.X, Location.Y, TerrainSeed, (float)Location.Z, SlopeDeg, Moisture, Temperature);
+					ChosenIndex = SpawnerIndexOfGenBiome.IsValidIndex(GenIndex) ? SpawnerIndexOfGenBiome[GenIndex] : INDEX_NONE;
+					Chosen = ChosenIndex != INDEX_NONE ? &Biomes[ChosenIndex] : nullptr;
+				}
+				else
+				{
+					// Highest-priority biome whose bands contain this sample.
+					for (int32 B = 0; B < Biomes.Num(); ++B)
 					{
-						Chosen = &Biomes[B];
-						ChosenIndex = B;
-						break;
+						if (Biomes[B].Row->Contains(Location.Z, SlopeDeg, Moisture, Temperature))
+						{
+							Chosen = &Biomes[B];
+							ChosenIndex = B;
+							break;
+						}
 					}
 				}
 			}
@@ -471,11 +496,12 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 			// instead of hard cuts. Four taps at half the blend width — the
 			// fraction that agree with this point's biome scales acceptance,
 			// so density ramps across EdgeBlendWidth rather than stepping.
+			// (Not with the soft pick: the per-point roll already spreads the boundary, and the feather would thin both biomes in the band.)
 			float EdgeScale = 1.0f;
 			const float BlendW = Chosen->Row->EdgeBlendWidth;
 			// (the far tiers skip the feather: it costs four climate samples per point and moves a density ramp nobody can see from kilometres away)
 			const bool bFarTierFilter = Settings->SpeciesFilter == EMOBiomeSpeciesFilter::FarCanopyOnly || Settings->SpeciesFilter == EMOBiomeSpeciesFilter::FarLargeOnly || Settings->SpeciesFilter == EMOBiomeSpeciesFilter::FarGroundCoverOnly;
-			if (BlendW > 1.0f && !bFarTierFilter)
+			if (BlendW > 1.0f && !bFarTierFilter && !bSoftPick)
 			{
 				FCyScope BlendStage(Cy.Blend, bProfile);
 				int32 Agree = 0;

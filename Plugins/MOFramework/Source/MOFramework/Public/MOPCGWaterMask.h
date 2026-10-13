@@ -59,6 +59,7 @@ struct MOFRAMEWORK_API FMOPCGWaterMask
 	/**
 	 * The biome (index into the params' biome list, INDEX_NONE if none) a point on the ground belongs to, the way the biome spawner decides it: the real DT_Biomes bands with the point's own height, the slope
 	 * of its up vector and the generator's climate at its position. Lets any PCG node filter by biome (MOPCGElevationBandsSettings::AllowedBiomeIds). INDEX_NONE when the mask is inactive.
+	 * Inside a soft biome boundary the answer is FMOWorldGen::PickSurfaceBiome's per-point roll, so filtered foliage thins out across the band the ground fades over.
 	 */
 	int32 BiomeAt(double X, double Y, double GroundZ, float SlopeDeg) const;
 

@@ -21,6 +21,7 @@ namespace
 	{
 		uint32 ParamsHash = 0;
 		TArray<FVoxelSurfaceTypeBlend> BiomeBlends;   // NumLayers == 0 => the biome paints nothing
+		TArray<FVoxelSurfaceType> BiomeSurfaces;      // the same surfaces as types, for mixing biomes at a soft boundary (FMOWorldGen::SampleSurfaceBiomeWeights)
 		TArray<bool> bHasSurface;
 		FSoftObjectPath LakeBedPath;                  // the path the lake-bed blend was built from (a changed setting is noticed)
 		FVoxelSurfaceTypeBlend LakeBedBlend;
@@ -38,6 +39,7 @@ void UMOTerrainFunctionLibrary::RefreshSurfaceTable(const FMOWorldGenParams& Par
 	TSharedRef<FSurfaceTable, ESPMode::ThreadSafe> Table = MakeShared<FSurfaceTable, ESPMode::ThreadSafe>();
 	Table->ParamsHash = Params.GetHash();
 	Table->BiomeBlends.SetNum(Params.Biomes.Num());
+	Table->BiomeSurfaces.SetNum(Params.Biomes.Num());
 	Table->bHasSurface.Init(false, Params.Biomes.Num());
 
 	int32 NumSurfaces = 0;
@@ -55,8 +57,9 @@ void UMOTerrainFunctionLibrary::RefreshSurfaceTable(const FMOWorldGenParams& Par
 				*Params.Biomes[I].Id.ToString(), *Path.ToString());
 			continue;
 		}
+		Table->BiomeSurfaces[I] = FVoxelSurfaceType(Surface);
 		FVoxelSurfaceTypeBlendBuilder Builder;
-		Builder.AddLayer(FVoxelSurfaceType(Surface), 1.0f);
+		Builder.AddLayer(Table->BiomeSurfaces[I], 1.0f);
 		Builder.Build(Table->BiomeBlends[I]);
 		Table->bHasSurface[I] = true;
 		++NumSurfaces;
@@ -219,6 +222,7 @@ void UMOTerrainFunctionLibrary::Compute(
 	SurfaceType.Allocate(Num);
 
 	const FVoxelSurfaceTypeBlend EmptyBlend;
+	FVoxelSurfaceTypeBlendBuilder Mix;
 	for (int32 I = 0; I < Num; ++I)
 	{
 		const FMOTerrainSample S = FMOWorldGen::SampleColumn(P, WorldPosition.X[I], WorldPosition.Y[I], Seed, StepCm);
@@ -231,7 +235,36 @@ void UMOTerrainFunctionLibrary::Compute(
 			SurfaceType.Set(I, Surfaces->LakeBedBlend);   // the bowl and its damp rim: rock / mud, not the forest floor
 			continue;
 		}
-		SurfaceType.Set(I, (bUseSurfaces && S.BiomeIndex != INDEX_NONE) ? Surfaces->BiomeBlends[S.BiomeIndex] : EmptyBlend);
+		if (!bUseSurfaces)
+		{
+			SurfaceType.Set(I, EmptyBlend);
+			continue;
+		}
+		// Soft biome boundaries (FMOWorldGen::SampleSurfaceBiomeWeights / SoftThreshold): inside a biome one weight -> its ready-made blend; in a boundary band the
+		// biomes' surfaces mixed by weight, so the ground fades over the band with a noisy edge instead of switching at a line.
+		FMOWorldGen::FBiomeWeight Weights[3];
+		const int32 NumWeights = FMOWorldGen::SampleSurfaceBiomeWeights(P, WorldPosition.X[I], WorldPosition.Y[I], Seed, S.HeightCm, S.Moisture, S.Temperature, Weights, 3);
+		if (NumWeights == 1 || (NumWeights > 1 && Weights[0].Weight >= 0.999f))
+		{
+			SurfaceType.Set(I, Surfaces->BiomeBlends[Weights[0].Biome]);
+			continue;
+		}
+		if (NumWeights == 0)
+		{
+			SurfaceType.Set(I, S.BiomeIndex != INDEX_NONE ? Surfaces->BiomeBlends[S.BiomeIndex] : EmptyBlend);
+			continue;
+		}
+		Mix.Reset();
+		for (int32 K = 0; K < NumWeights; ++K)
+		{
+			if (Surfaces->bHasSurface[Weights[K].Biome])
+			{
+				Mix.AddLayer(Surfaces->BiomeSurfaces[Weights[K].Biome], Weights[K].Weight);
+			}
+		}
+		FVoxelSurfaceTypeBlend Blend;
+		Mix.Build(Blend);
+		SurfaceType.Set(I, Blend);
 	}
 
 }

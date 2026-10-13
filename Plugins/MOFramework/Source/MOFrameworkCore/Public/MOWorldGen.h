@@ -282,6 +282,37 @@ struct MOFRAMEWORKCORE_API FMOWorldGenTuning
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Height", meta=(ClampMin="0"))
 	float ReliefClimateBlend = 0.12f;
 
+	// --- Ground-surface transitions (looks only: NOT in the world hash) --------------------------
+	// Every biome split of the ground material goes through FMOWorldGen::SoftThreshold (Wes, 2026-10-12: "every split should have a blend band AND a noise term that breaks
+	// the edge up"). Before, the surface switched at the exact band edge: a hard line at every height / climate threshold, stair-stepped by the voxel grid at a distance.
+
+	/**
+	 * Blend band of a biome HEIGHT edge: this fraction of the edge's height above sea level, between SurfaceHeightBlendMinCm and SurfaceHeightBlendCm. One fixed width
+	 * cannot serve both ends: 40 m suits the alpine edges (AlpineRock above 950 m) but spread the shore biomes (which end 4 m above the sea) over kilometres of a flat
+	 * coastal plain. Shore edge -> 1.2 m band (~60 m across a 2 % beach), AlpineHeath (320 m) -> 26 m, AlpineRock -> 40 m.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Surfaces", meta=(ClampMin="0", ClampMax="1"))
+	float SurfaceHeightBlendFraction = 0.08f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Surfaces", meta=(ClampMin="0"))
+	float SurfaceHeightBlendMinCm = 120.0f;
+
+	/** The widest height band (cm). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Surfaces", meta=(ClampMin="0"))
+	float SurfaceHeightBlendCm = 4000.0f;
+
+	/** Width of the blend band on every MOISTURE / TEMPERATURE edge (those fields run 0..1). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Surfaces", meta=(ClampMin="0", ClampMax="0.3"))
+	float SurfaceClimateBlend = 0.03f;
+
+	/** How far the edge wanders, as a fraction of its band width on each side (deterministic gradient noise): the band never follows a contour line. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Surfaces", meta=(ClampMin="0", ClampMax="2"))
+	float SurfaceBreakup = 0.6f;
+
+	/** Wavelength (cm) of the edge-breakup noise. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Surfaces", meta=(ClampMin="100"))
+	float SurfaceBreakupWavelengthCm = 9000.0f;
+
 	/**
 	 * A biome's hill scale below 1 also flattens the CONTINENT relief: the land above this height (metres, before VerticalScale) is pulled toward it by (1 - scale), so a prairie is a low
 	 * plain, not a high plateau with a few small hills on it (the continent spline alone is ~130 m of change per 1.5 km, which no hill scale touches).
@@ -852,4 +883,31 @@ struct MOFRAMEWORKCORE_API FMOWorldGen
 
 	/** Highest-Priority biome whose bands contain the sample, or INDEX_NONE. */
 	static int32 ResolveBiome(const FMOWorldGenParams& Params, float HeightCm, float SlopeDeg, float Moisture, float Temperature);
+
+	/**
+	 * THE soft threshold of every ground-material split: 0 below the edge, 1 above it, a Hermite ramp of total width Width centred on Edge + Breakup (the caller's
+	 * deterministic noise offset, so the edge wanders instead of following a contour). Width <= 0 = a hard step at Edge + Breakup. Pure, IEEE-exact.
+	 */
+	static float SoftThreshold(float Value, float Edge, float Width, float Breakup = 0.0f);
+
+	struct FBiomeWeight
+	{
+		int32 Biome = INDEX_NONE;
+		float Weight = 0.0f;
+	};
+
+	/**
+	 * Which biomes' GROUND SURFACE shows at a column, and how much: each biome's height / moisture / temperature band through SoftThreshold (band widths and the edge
+	 * breakup from the Surface* tuning), composited first-match-wins in priority order (the same rule ResolveBiome applies hard), so a boundary is a band of mixed
+	 * ground with a noisy edge. Writes the strongest MaxOut biomes (weights sum to 1), returns how many. Ground looks and PickSurfaceBiome (PCG) use it; gameplay keeps ResolveBiome.
+	 * Slope-banded biomes follow SampleColumn's slope 0 (they never apply to the column surface).
+	 */
+	static int32 SampleSurfaceBiomeWeights(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, float HeightCm, float Moisture, float Temperature, FBiomeWeight* Out, int32 MaxOut);
+
+	/**
+	 * The biome a PCG point (a tree, a grass clump) belongs to, so foliage thins out across the SAME soft band the ground fades over instead of stopping at ResolveBiome's line:
+	 * a deterministic per-position roll (10 cm grid, seeded) against SampleSurfaceBiomeWeights, restricted to the biomes whose slope range holds SlopeDeg. A slope-banded biome
+	 * (cliffs) that ResolveBiome picks wins outright -- slope edges stay crisp. Same inputs -> same answer on every machine. INDEX_NONE when no biome applies.
+	 */
+	static int32 PickSurfaceBiome(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, float HeightCm, float SlopeDeg, float Moisture, float Temperature);
 };
