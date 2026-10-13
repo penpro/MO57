@@ -1726,6 +1726,13 @@ def _pkg_alive_count():
     return sum(1 for line in out.splitlines() if line.lower().startswith('"mo57.exe"'))
 
 
+def _pkg_wait_none(timeout=30):
+    """Wait for every MO57.exe to be gone: the previous run's tree-kill returns before the process has finished exiting, so a run started right after it saw "1 running" and refused (a seed sweep lost 2 of 10 runs to this)."""
+    deadline = time.time() + timeout
+    while time.time() < deadline and _pkg_alive_count() > 0:
+        time.sleep(1)
+
+
 def _pkg_read(name):
     try:
         with open(os.path.join(PKG_LOGS, name), "rb") as f:
@@ -1779,6 +1786,7 @@ def packaged_deathflow_test(package=False, seed=1029024224, boot_timeout=420):
             return rep.step("the Development package builds", False, "see Saved/Logs/package.log")
         if not rep.step("the staged packaged build exists", os.path.exists(PKG_EXE), PKG_EXE):
             return False
+        _pkg_wait_none()
         running = _pkg_alive_count()
         if not rep.step("no other MO57.exe is running (this mode must own the log and never touches others)", running == 0, f"{running} running"):
             return False
@@ -1818,6 +1826,7 @@ def packaged_test(package=False, withhold_sync=False, run_seconds=60, boot_timeo
             return rep.step("the Development package builds", False, "see Saved/Logs/package.log")
         if not rep.step("the staged packaged build exists", os.path.exists(PKG_EXE), PKG_EXE):
             return False
+        _pkg_wait_none()
         running = _pkg_alive_count()
         if not rep.step("no other MO57.exe is running (this mode must own the logs and never touches others)", running == 0, f"{running} running"):
             return False
@@ -2202,6 +2211,7 @@ def bugreport_test(package=False, boot_timeout=180):
             return rep.step("the Development package builds", False, "see Saved/Logs/package.log")
         if not rep.step("the staged packaged build exists", os.path.exists(PKG_EXE), PKG_EXE):
             return False
+        _pkg_wait_none()
         running = _pkg_alive_count()
         if not rep.step("no other MO57.exe is running (this mode must own the logs and never touches others)", running == 0, f"{running} running"):
             return False
