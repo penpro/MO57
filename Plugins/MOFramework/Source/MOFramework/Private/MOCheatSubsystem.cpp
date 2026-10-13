@@ -96,6 +96,7 @@
 #include "BehaviorTree/Blackboard/BlackboardKeyType_Enum.h"
 #include "BehaviorTree/Blackboard/BlackboardKeyType_Object.h"
 #include "EngineUtils.h"
+#include "Components/QuadTree/OceanologyWaterMeshComponent.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Components/Widget.h"
 #include "Blueprint/UserWidget.h"
@@ -2572,10 +2573,28 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 			const int32 TerrainSeed = Seeds->GetActiveTerrainSeed();
 			const FMOWorldGenParamsRef P = FMOWorldGenParamsProvider::Get();
 			const FVector C = Pawn->GetActorLocation();
-			struct FTally { int32 Instances = 0, UnderSea = 0, InLake = 0, OnLakeBed = 0; };
+			struct FTally { int32 Instances = 0, UnderSea = 0, InLake = 0, OnLakeBed = 0, UnderVisible = 0; };
 			TMap<FString, FTally> Tally;
-			TArray<FString> Samples;
-			int32 Total = 0, Bad = 0, Bank = 0;
+			TArray<FString> Samples, VisibleSamples;
+			int32 Total = 0, Bad = 0, Bank = 0, UnderVisibleWater = 0;
+			// The VISIBLE water, as drawn: the sea plane (the ocean mesh fills every point under it) and each upland lake's water actor (a world-aligned plane of whole quad-tree
+			// tiles around its snapped centre, at the lake's surface). The planting masks use the generator's ellipse; an instance whose pivot sits under the drawn water where the
+			// mask says "dry" is the mismatch this second count catches (H08).
+			struct FVisibleLake { FBox2D Box; double SurfaceZ; };
+			TArray<FVisibleLake> VisibleLakes;
+			for (TActorIterator<AActor> LakeIt(World); LakeIt; ++LakeIt)
+			{
+				if (LakeIt->Tags.Contains(FName(TEXT("MOUplandLake"))))
+				{
+					// The water MESH's bounds: the actor's own bounds also hold its underwater volume.
+					const UOceanologyWaterMeshComponent* WaterMesh = LakeIt->FindComponentByClass<UOceanologyWaterMeshComponent>();
+					const FBox B = WaterMesh ? WaterMesh->Bounds.GetBox() : LakeIt->GetComponentsBoundingBox(/*bNonColliding=*/true);
+					if (B.IsValid)
+					{
+						VisibleLakes.Add({ FBox2D(FVector2D(B.Min), FVector2D(B.Max)), LakeIt->GetActorLocation().Z });
+					}
+				}
+			}
 			for (TActorIterator<AActor> ActorIt(World); ActorIt; ++ActorIt)
 			{
 				TArray<UInstancedStaticMeshComponent*> Comps;
@@ -2607,6 +2626,20 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 						const bool bInLake = FMOWorldGen::IsInUplandLakeZone(*P, L.X, L.Y, TerrainSeed, 1.0f);
 						const bool bBank = !bInLake && FMOWorldGen::IsInUplandLakeZone(*P, L.X, L.Y, TerrainSeed, 1.05f);
 						Bank += bBank ? 1 : 0;
+						bool bUnderVisible = L.Z < (double)P->Tuning.SeaLevelCm - 5.0;
+						for (const FVisibleLake& VL : VisibleLakes)
+						{
+							bUnderVisible = bUnderVisible || (VL.Box.IsInside(FVector2D(L.X, L.Y)) && L.Z < VL.SurfaceZ - 5.0);
+						}
+						if (bUnderVisible)
+						{
+							++UnderVisibleWater;
+							++T.UnderVisible;
+							if (VisibleSamples.Num() < 6)
+							{
+								VisibleSamples.Add(FString::Printf(TEXT("%s at (%.0f, %.0f, %.0f) ground=%.0f mask=%s"), *Mesh->GetName(), L.X, L.Y, L.Z, Ground, (bUnderSea || bInLake) ? TEXT("water") : TEXT("DRY")));
+							}
+						}
 						if (bUnderSea || bInLake)
 						{
 							++Bad;
@@ -2640,6 +2673,11 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 			for (const FString& Sample : Samples)
 			{
 				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WATERAUDIT   e.g. %s"), *Sample);
+			}
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WATERAUDIT visible: %d instance(s) with the pivot under the DRAWN water (sea plane, %d lake water actor(s) in the level)"), UnderVisibleWater, VisibleLakes.Num());
+			for (const FString& Sample : VisibleSamples)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WATERAUDIT   under drawn water: %s"), *Sample);
 			}
 		}),
 		ECVF_Default));

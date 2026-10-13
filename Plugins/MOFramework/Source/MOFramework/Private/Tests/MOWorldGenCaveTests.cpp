@@ -237,6 +237,8 @@ bool FMOWorldGen_NoCavesOnHighGround::RunTest(const FString& Parameters)
 	const FMOWorldGenTuning& T = P->Tuning;
 	FRandomStream R(11);
 	int32 HighColumns = 0, CavesFound = 0, CavesFoundBelow = 0, BelowChecked = 0;
+	struct FHighSample { double X, Y; float Z, Ground; };
+	TArray<FHighSample> HighSamples;   // replayed by the negative control below
 	for (int32 I = 0; I < 120000 && HighColumns < 400; ++I)
 	{
 		const double X = R.FRandRange(-1.5e6f, 1.5e6f), Y = R.FRandRange(-1.5e6f, 1.5e6f);
@@ -247,6 +249,7 @@ bool FMOWorldGen_NoCavesOnHighGround::RunTest(const FString& Parameters)
 			for (int32 K = 0; K < 12; ++K)
 			{
 				const float Depth = R.FRandRange(-100.0f, T.CaveMaxDepthCm);
+				HighSamples.Add({ X, Y, Ground - Depth, Ground });
 				CavesFound += (FMOWorldGen::SampleCaveDistanceAtGround(*P, X, Y, Ground - Depth, Ground, CaveTestSeed) < 0.0f) ? 1 : 0;
 			}
 		}
@@ -260,6 +263,17 @@ bool FMOWorldGen_NoCavesOnHighGround::RunTest(const FString& Parameters)
 	TestTrue(TEXT("the sample found enough high ground to mean something"), HighColumns >= 50);
 	TestEqual(TEXT("no cave under ground at or above the ceiling"), CavesFound, 0);
 	TestTrue(TEXT("caves still exist below the taper band"), CavesFoundBelow > 0);
+
+	// NEGATIVE CONTROL: the same high-ground samples with the ceiling switched off (CaveMaxGroundCm <= 0 disables the gate: HighGround is 0 in SampleCaveDistanceAtGround)
+	// must find caves -- otherwise "no cave up there" above would pass for a reason other than the gate (Codex H07: this test was never negative-controlled).
+	const FMOWorldGenParamsRef NoCeiling = MakeCaveParams([](FMOWorldGenTuning& Tuning) { Tuning.CaveMaxGroundCm = 0.0f; });
+	int32 ControlCaves = 0;
+	for (const FHighSample& S : HighSamples)
+	{
+		ControlCaves += (FMOWorldGen::SampleCaveDistanceAtGround(*NoCeiling, S.X, S.Y, S.Z, S.Ground, CaveTestSeed) < 0.0f) ? 1 : 0;
+	}
+	AddInfo(FString::Printf(TEXT("control (ceiling off): %d of the same %d high-ground samples are cave"), ControlCaves, HighSamples.Num()));
+	TestTrue(TEXT("CONTROL: with the ceiling off, caves appear under the same high ground"), ControlCaves > 0);
 	return true;
 }
 
