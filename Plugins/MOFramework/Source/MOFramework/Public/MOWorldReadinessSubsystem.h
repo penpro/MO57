@@ -21,6 +21,12 @@
  *   Ready       - OnWorldReady broadcast once
  * The whole cycle is capped by MaxTotalSeconds (force-ready + a warning in the log).
  *
+ * FAR-GRID HOLD (2026-10-13): the PCG runtime scheduler always generates the LARGEST hi-gen grid first (UE 5.8 PCGRuntimeGenScheduler: priority = grid size
+ * + a 0..1 distance term), nearest-first only within a grid. A far tier on a big grid (the canopy clumps: 2 km cells out to 7.5 km, ~50 cells) is therefore
+ * generated in full before the first near cell, and the reveal waited for it (READY 29 s -> 46 s in the packaged build). While a cycle runs, every grid of
+ * mo.Readiness.HoldGridsFrom (the UNSCALED size, as the HiGenGridSize node names it) and larger gets no generation radius on each runtime-generated PCG
+ * component; Finish / StopTracking / Deinitialize put the authored radii back, and the far field fills in behind the reveal.
+ *
  * OWNERSHIP:
  *   Whoever owns the world's boot calls BeginTracking(): AMOGameMode (new game / load, right after the voxel poll starts) and
  *   AMOMainMenuPlayerController (the flyby backdrop; it also starts the voxel poll, since nothing else does on that map).
@@ -30,7 +36,8 @@
  *   mo.Readiness.Enabled 0|1          0 = every cycle is ready immediately (autonomous harnesses that do not want the extra wait)
  *   mo.Readiness.PcgQuietSeconds      1.5
  *   mo.Readiness.MinPcgSeconds        2.0
- *   mo.Readiness.MaxPcgSeconds        15  (vegetation stage cap: the PCG scheduler works nearest-first, so the far field may still fill behind the reveal)
+ *   mo.Readiness.MaxPcgSeconds        15  (vegetation stage cap; past it the stage holds on for the near-instance count, up to MaxPcgHardSeconds 32)
+ *   mo.Readiness.HoldGridsFrom        512 (FAR-GRID HOLD, below; 0 = off)
  *   mo.Readiness.MaxStreamingSeconds  4.0
  *   mo.Readiness.StreamingWantMax     8
  *   mo.Readiness.MaxTotalSeconds      60
@@ -41,8 +48,11 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "PCGCommon.h"
 #include "Subsystems/WorldSubsystem.h"
 #include "MOWorldReadinessSubsystem.generated.h"
+
+class UPCGComponent;
 
 UENUM(BlueprintType)
 enum class EMOWorldReadyStage : uint8
@@ -101,6 +111,16 @@ public:
 	/** One line with the stage and every raw signal (the MO.Readiness.Dump verb prints it). */
 	FString DescribeState() const;
 
+	/** FAR-GRID HOLD on one radii set: every grid of HoldFromUnscaledGrid (512 = GRID512) and larger gets GetHeldRadiusCm(), default and per-quality values alike. */
+	static void HoldRadii(FPCGRuntimeGenerationRadii& Radii, int32 HoldFromUnscaledGrid);
+	/** Write the authored values of every grid back into Radii, in place (the per-quality maps keep their allocation). */
+	static void RestoreRadii(FPCGRuntimeGenerationRadii& Radii, const FPCGRuntimeGenerationRadii& Authored);
+	/** The radius of a held grid: negative by more than any cell, so the scheduler walks no cell of it (0 would still generate the viewer's own cell). */
+	static float GetHeldRadiusCm();
+	/** The radius field of an UNSCALED hi-gen grid (512 -> Radius51200; the fields are protected, reached through reflection). Null for a grid with no field of its own. */
+	static FPerQualityLevelFloat* GetMutableRadiusField(FPCGRuntimeGenerationRadii& Radii, int32 UnscaledGrid);
+	static const FPerQualityLevelFloat* GetRadiusField(const FPCGRuntimeGenerationRadii& Radii, int32 UnscaledGrid);
+
 protected:
 	virtual bool ShouldCreateSubsystem(UObject* Outer) const override;
 	virtual void Deinitialize() override;
@@ -136,4 +156,16 @@ private:
 
 	mutable double NextNearCountSeconds = 0.0;
 	mutable int32 LastNearCount = 0;
+
+	/** FAR-GRID HOLD (see the file header): take the radii of the held grids away from every runtime-generated PCG component, remembering the authored ones. Idempotent. */
+	void HoldFarGrids();
+	/** Put the remembered radii back (no-op when nothing is held). */
+	void ReleaseFarGrids();
+
+	struct FHeldGenerationRadii
+	{
+		TWeakObjectPtr<UPCGComponent> Component;
+		FPCGRuntimeGenerationRadii Authored;
+	};
+	TArray<FHeldGenerationRadii> HeldRadii;
 };

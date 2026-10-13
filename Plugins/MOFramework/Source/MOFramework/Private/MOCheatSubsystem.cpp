@@ -913,6 +913,22 @@ UMOCheatSubsystem* UMOCheatSubsystem::Get(const UObject* WorldContextObject)
 	return GI ? GI->GetSubsystem<UMOCheatSubsystem>() : nullptr;
 }
 
+void UMOCheatSubsystem::ExecAsLocalPlayer(UWorld* World, const FString& Command)
+{
+	if (APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr)
+	{
+		if (PC->IsLocalController() && PC->Player)
+		{
+			PC->ConsoleCommand(Command, /*bWriteToLog=*/true);
+			return;
+		}
+	}
+	if (GEngine)
+	{
+		GEngine->Exec(World, *Command);
+	}
+}
+
 namespace
 {
 	/**
@@ -1139,7 +1155,7 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 						if (Character && !Character->IsDead() && Character->GetCharacterMovement() && Character->GetCharacterMovement()->IsMovingOnGround() && (!Readiness || !Readiness->IsTracking()))
 						{
 							UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] AfterReady: running '%s' after %.0fs"), *Command, FPlatformTime::Seconds() - *Start);
-							GEngine->Exec(W, *Command);
+							UMOCheatSubsystem::ExecAsLocalPlayer(W, Command);
 							return false;
 						}
 					}

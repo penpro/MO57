@@ -22,6 +22,7 @@
 #include "HAL/PlatformMisc.h"
 #include "Misc/App.h"
 #include "MOFramework.h"
+#include "MOCheatSubsystem.h"
 #include "MOWorldSeedSubsystem.h"
 #include "RHI.h"
 #include "RHIStats.h"
@@ -380,10 +381,7 @@ namespace
 				{
 					World = GEngine->GetWorldContexts().Num() > 0 ? GEngine->GetWorldContexts()[0].World() : nullptr;
 				}
-				if (GEngine)
-				{
-					GEngine->Exec(World, *Command);
-				}
+				UMOCheatSubsystem::ExecAsLocalPlayer(World, Command);
 				UE_LOG(LogMOFramework, Warning, TEXT("[MOPERF] MO.Delay ran: %s"), *Command);
 				return false;
 			}), 0.25f);

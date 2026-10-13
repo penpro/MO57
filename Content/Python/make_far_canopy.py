@@ -25,11 +25,18 @@ def log(msg):
     unreal.log("FARCANOPY " + msg)
 
 
+def set_usage(m):
+    """The clumps are drawn by instanced (HISM) components: a cooked game cannot compile the ISM permutation on demand, so without the flag it renders them with the DEFAULT material
+    ("missing usage flag InstancedStaticMeshes! Default Material will be used in game" -- the packaged build of 2026-10-13 shipped grey canopy). The editor compiles it on the fly and hides it."""
+    m.set_editor_property("used_with_instanced_static_meshes", True)
+
+
 def build_material():
     path = DIR + "/M_FarCanopy"
     if EAL.does_asset_exist(path):
         # exists: only the colour / surface PARAMETERS are refreshed in place (deleting the asset or its expressions from editor Python crashed the editor twice, 2026-10-13)
         m = unreal.load_asset(path)
+        set_usage(m)
         want = {"CanopyDark": (0.006, 0.014, 0.006), "CanopyLight": (0.017, 0.030, 0.010), "TrunkColor": (0.030, 0.022, 0.016)}
         for e in MEL.get_material_expressions(m):
             if isinstance(e, unreal.MaterialExpressionVectorParameter) and str(e.get_editor_property("parameter_name")) in want:
@@ -47,6 +54,7 @@ def build_material():
         return m
     m = TOOLS.create_asset("M_FarCanopy", DIR, unreal.Material, unreal.MaterialFactoryNew())
     m.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_DEFAULT_LIT)
+    set_usage(m)
 
     def vec(name, rgb, x, y):
         n = MEL.create_material_expression(m, unreal.MaterialExpressionVectorParameter, x, y)

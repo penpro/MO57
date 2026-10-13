@@ -52,6 +52,20 @@
 class UStaticMesh;
 class UInstancedStaticMeshComponent;
 class UDataTable;
+struct FISMComponentDescriptorBase;
+
+namespace MOPCGBiomeSpawner
+{
+	/** The end draw distance that goes with a near floor: beyond every generation radius (the canopy tier reaches 7.5 km, x1.1 cleanup margin). It only exists to switch the floor on. */
+	inline constexpr int32 NearFloorEndCullCm = 1500000;
+
+	/**
+	 * A node's near floor (MinDistanceFromViewerCm) on its components' descriptor: a per-frame minimum DRAW distance. The engine honours InstanceMinDrawDistance ONLY together with an end
+	 * distance -- the Nanite and the classic instanced proxies both return no draw-distance range from GetInstanceDrawDistanceMinMax while InstanceEndCullDistance is 0 (UE 5.8
+	 * NaniteResources.cpp, InstancedStaticMesh.cpp) -- so a minimum alone is silently ignored. The start distance stays 0 (a start turns on the classic proxy's per-instance fade). 0 = no floor.
+	 */
+	MOFRAMEWORK_API void ApplyNearDrawFloor(FISMComponentDescriptorBase& Descriptor, float MinDistanceCm);
+}
 
 /**
  * Which species of the biome palettes a spawner node handles. One graph runs this node at SEVERAL hierarchical grid sizes (the PCG hi-gen idea: small things on a small, near grid; big things on a larger grid
@@ -140,8 +154,9 @@ public:
 	float InputPointsPerHectare = 2000.0f;
 
 	/**
-	 * Drop points closer than this (2D, cm) to the local viewer at generation time. The FAR tiers set it to about the near tier's radius so their larger, sparser stand-ins do not stack on top of
-	 * the dense near vegetation around the player (cells are generated once, where the player stood then). 0 = off.
+	 * Near floor of this node's instances (cm from the camera): they are not DRAWN closer than this (the components' InstanceMinDrawDistance, re-evaluated every frame). The FAR tiers set it to
+	 * about the reach of the tier below them, so their larger, sparser stand-ins never stack on the dense near vegetation around the player wherever the cell was generated from. Every point
+	 * is still planted (a generation-time cut left bald circles where the player used to stand). 0 = off. The name predates the change; it is kept so authored graphs keep their values.
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Density", meta = (PCG_Overridable, ClampMin = "0"))
 	float MinDistanceFromViewerCm = 0.0f;

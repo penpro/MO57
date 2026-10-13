@@ -8,6 +8,7 @@
 #include "HAL/IConsoleManager.h"
 #include "MOFramework.h"
 #include "MOVoxelReadinessSubsystem.h"
+#include "PCGComponent.h"
 #include "Subsystems/PCGSubsystem.h"
 #include "TimerManager.h"
 #include "VoxelWorld.h"
@@ -18,7 +19,8 @@ namespace
 	TAutoConsoleVariable<float> CVarPcgQuietSeconds(TEXT("mo.Readiness.PcgQuietSeconds"), 1.5f, TEXT("Seconds with no PCG graph executing before vegetation counts as populated."));
 	TAutoConsoleVariable<float> CVarMinPcgSeconds(TEXT("mo.Readiness.MinPcgSeconds"), 2.0f, TEXT("Floor for the vegetation stage once PCG was seen working."));
 	TAutoConsoleVariable<float> CVarNoPcgActivityGraceSeconds(TEXT("mo.Readiness.PcgNoActivityGraceSeconds"), 4.0f, TEXT("Floor for the vegetation stage when PCG was never seen working (the generation source may not exist yet)."));
-	TAutoConsoleVariable<float> CVarMaxPcgSeconds(TEXT("mo.Readiness.MaxPcgSeconds"), 15.0f, TEXT("Cap for the vegetation stage. The PCG scheduler generates nearest-first, so after this long the near and mid field is in and only the far field is still filling behind the reveal."));
+	TAutoConsoleVariable<float> CVarMaxPcgSeconds(TEXT("mo.Readiness.MaxPcgSeconds"), 15.0f, TEXT("Cap for the vegetation stage. Past it the stage keeps holding for mo.Readiness.NearInstanceMin: the PCG scheduler generates the LARGEST grid first, so the ground cover around the player arrives last."));
+	TAutoConsoleVariable<int32> CVarHoldGridsFrom(TEXT("mo.Readiness.HoldGridsFrom"), 512, TEXT("While a readiness cycle runs, PCG hi-gen grids of this UNSCALED size (512 = GRID512, the far-canopy tier) and larger generate nothing; the authored radii come back at Ready. The scheduler always generates the largest grid first, so a far tier on a big grid would hold back every near cell. 0 = off."));
 	TAutoConsoleVariable<int32> CVarNearInstanceMin(TEXT("mo.Readiness.NearInstanceMin"), 200, TEXT("Past mo.Readiness.MaxPcgSeconds the vegetation stage keeps holding until this many spawned instances exist near the player (0 = off), up to mo.Readiness.MaxPcgHardSeconds."));
 	TAutoConsoleVariable<float> CVarNearInstanceRadiusCm(TEXT("mo.Readiness.NearInstanceRadiusCm"), 6000.0f, TEXT("Radius (cm) around the camera for the near-vegetation count."));
 	TAutoConsoleVariable<float> CVarMaxPcgHardSeconds(TEXT("mo.Readiness.MaxPcgHardSeconds"), 32.0f, TEXT("Hard cap for the vegetation stage when the near-vegetation count is still below its minimum."));
@@ -29,6 +31,34 @@ namespace
 	constexpr float PollIntervalSeconds = 0.2f;
 	constexpr float TerrainEnd = 0.40f;
 	constexpr float VegetationEnd = 0.85f;
+
+	/**
+	 * The radius a held grid gets: negative by more than a cell. The scheduler walks ceil(radius / cell) cells around each generation source, so a negative radius walks none; 0, or anything
+	 * above minus one cell, still generates the cell the viewer stands in (it compares SQUARED distances). Cleanup compares squared distances too, so cells of a held grid that already exist
+	 * (a respawn far away) are left alone until the release, when the normal cleanup takes them.
+	 */
+	constexpr float HeldRadiusCm = -1.0e9f;
+
+	/** The unscaled hi-gen grids that own a radius field (the fields are named by it: Radius51200 = GRID512, whatever the graph's grid-size multiplier); grids above 2048 derive from Radius204800. */
+	constexpr int32 GridsWithRadiusField[] = { 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048 };
+
+	/** The radius fields are PROTECTED UPROPERTYs of FPCGRuntimeGenerationRadii (UE 5.8): reached through reflection, as the editor and Python reach them. */
+	const FStructProperty* RadiusFieldProperty(int32 UnscaledGrid)
+	{
+		return FindFProperty<FStructProperty>(FPCGRuntimeGenerationRadii::StaticStruct(), *FString::Printf(TEXT("Radius%d"), UnscaledGrid * 100));
+	}
+}
+
+FPerQualityLevelFloat* UMOWorldReadinessSubsystem::GetMutableRadiusField(FPCGRuntimeGenerationRadii& Radii, int32 UnscaledGrid)
+{
+	const FStructProperty* P = RadiusFieldProperty(UnscaledGrid);
+	return P ? P->ContainerPtrToValuePtr<FPerQualityLevelFloat>(&Radii) : nullptr;
+}
+
+const FPerQualityLevelFloat* UMOWorldReadinessSubsystem::GetRadiusField(const FPCGRuntimeGenerationRadii& Radii, int32 UnscaledGrid)
+{
+	const FStructProperty* P = RadiusFieldProperty(UnscaledGrid);
+	return P ? P->ContainerPtrToValuePtr<FPerQualityLevelFloat>(&Radii) : nullptr;
 }
 
 UMOWorldReadinessSubsystem* UMOWorldReadinessSubsystem::Get(const UObject* WorldContextObject)
@@ -49,8 +79,110 @@ void UMOWorldReadinessSubsystem::Deinitialize()
 	{
 		World->GetTimerManager().ClearTimer(PollTimerHandle);
 	}
+	ReleaseFarGrids();
 	OnWorldReady.Clear();
 	Super::Deinitialize();
+}
+
+float UMOWorldReadinessSubsystem::GetHeldRadiusCm()
+{
+	return HeldRadiusCm;
+}
+
+void UMOWorldReadinessSubsystem::HoldRadii(FPCGRuntimeGenerationRadii& Radii, int32 HoldFromUnscaledGrid)
+{
+	if (HoldFromUnscaledGrid <= 0)
+	{
+		return;
+	}
+	for (const int32 Grid : GridsWithRadiusField)
+	{
+		FPerQualityLevelFloat* R = Grid >= HoldFromUnscaledGrid ? GetMutableRadiusField(Radii, Grid) : nullptr;
+		if (R)
+		{
+			R->Default = HeldRadiusCm;
+			for (TPair<int32, float>& Q : R->PerQuality)
+			{
+				Q.Value = HeldRadiusCm;
+			}
+		}
+	}
+	Radii.ComputeHash();   // the struct caches its hash ("call this anytime the values are changed"); the scheduler's change detector keys on it
+}
+
+void UMOWorldReadinessSubsystem::RestoreRadii(FPCGRuntimeGenerationRadii& Radii, const FPCGRuntimeGenerationRadii& Authored)
+{
+	// Field by field, values only: the hold changed no keys, so no map is rebuilt under a reader.
+	for (const int32 Grid : GridsWithRadiusField)
+	{
+		FPerQualityLevelFloat* R = GetMutableRadiusField(Radii, Grid);
+		const FPerQualityLevelFloat* A = GetRadiusField(Authored, Grid);
+		if (!R || !A)
+		{
+			continue;
+		}
+		R->Default = A->Default;
+		for (TPair<int32, float>& Q : R->PerQuality)
+		{
+			if (const float* AuthoredValue = A->PerQuality.Find(Q.Key))
+			{
+				Q.Value = *AuthoredValue;
+			}
+		}
+	}
+	Radii.ComputeHash();
+}
+
+void UMOWorldReadinessSubsystem::HoldFarGrids()
+{
+	const int32 HoldFrom = CVarHoldGridsFrom.GetValueOnGameThread();
+	UWorld* World = GetWorld();
+	if (HoldFrom <= 0 || !World || HeldRadii.Num() > 0)   // already held: a restarted cycle keeps the authored radii it saved first
+	{
+		return;
+	}
+	int32 Skipped = 0;
+	for (TActorIterator<AActor> ActorIt(World); ActorIt; ++ActorIt)
+	{
+		TArray<UPCGComponent*> Comps;
+		ActorIt->GetComponents<UPCGComponent>(Comps);
+		for (UPCGComponent* Comp : Comps)
+		{
+			if (!Comp || Comp->IsLocalComponent() || !Comp->IsManagedByRuntimeGenSystem())
+			{
+				continue;
+			}
+			if (!Comp->bOverrideGenerationRadii)
+			{
+				++Skipped;   // radii come from the graph asset: not ours to edit at runtime
+				continue;
+			}
+			FHeldGenerationRadii& Held = HeldRadii.AddDefaulted_GetRef();
+			Held.Component = Comp;
+			Held.Authored = Comp->GenerationRadii;
+			HoldRadii(Comp->GenerationRadii, HoldFrom);
+		}
+	}
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOReadiness] holding PCG grids >= %d on %d runtime component(s) until ready (%d without a radius override left alone)"), HoldFrom, HeldRadii.Num(), Skipped);
+}
+
+void UMOWorldReadinessSubsystem::ReleaseFarGrids()
+{
+	if (HeldRadii.Num() == 0)
+	{
+		return;
+	}
+	int32 Released = 0;
+	for (const FHeldGenerationRadii& Held : HeldRadii)
+	{
+		if (UPCGComponent* Comp = Held.Component.Get())
+		{
+			RestoreRadii(Comp->GenerationRadii, Held.Authored);
+			++Released;
+		}
+	}
+	HeldRadii.Reset();
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOReadiness] released the held PCG grids on %d component(s) at +%.1fs"), Released, FPlatformTime::Seconds() - CycleStartSeconds);
 }
 
 FText UMOWorldReadinessSubsystem::GetStatusText() const
@@ -158,6 +290,7 @@ void UMOWorldReadinessSubsystem::BeginTracking(bool bStartVoxelPolling)
 		return;
 	}
 
+	HoldFarGrids();
 	EnterStage(EMOWorldReadyStage::Terrain);
 	World->GetTimerManager().SetTimer(PollTimerHandle, this, &UMOWorldReadinessSubsystem::Poll, PollIntervalSeconds, /*bLoop=*/true, /*FirstDelay=*/0.0f);
 }
@@ -168,6 +301,7 @@ void UMOWorldReadinessSubsystem::StopTracking()
 	{
 		World->GetTimerManager().ClearTimer(PollTimerHandle);
 	}
+	ReleaseFarGrids();
 	Stage = EMOWorldReadyStage::Inactive;
 	Progress = 0.0f;
 }
@@ -202,6 +336,7 @@ void UMOWorldReadinessSubsystem::Finish(const TCHAR* Reason)
 		World->GetTimerManager().ClearTimer(PollTimerHandle);
 	}
 	UE_LOG(LogMOFramework, Warning, TEXT("[MOReadiness] READY after %.1fs (%s)"), FPlatformTime::Seconds() - CycleStartSeconds, Reason);
+	ReleaseFarGrids();
 	Stage = EMOWorldReadyStage::Ready;
 	Progress = 1.0f;
 	OnWorldReady.Broadcast();
@@ -333,11 +468,13 @@ FString UMOWorldReadinessSubsystem::DescribeState() const
 	const UMOVoxelReadinessSubsystem* Voxel = UMOVoxelReadinessSubsystem::Get(this);
 	bool bHasPcg = false;
 	const bool bBusy = IsPcgBusy(bHasPcg);
-	return FString::Printf(TEXT("stage=%s progress=%.2f voxelPhase=%s pcg=%s pcgQuiet=%.1fs pcgSeenBusy=%d streamWanting=%d"),
+	// The near count is what the vegetation cap waits for: traced through the whole stage, so a slow reveal shows WHEN the near tiers arrived (not only the count at the cap).
+	const int32 Near = Stage == EMOWorldReadyStage::Vegetation ? CountNearPcgInstances() : -1;
+	return FString::Printf(TEXT("stage=%s progress=%.2f voxelPhase=%s pcg=%s pcgQuiet=%.1fs pcgSeenBusy=%d near=%d heldComps=%d streamWanting=%d"),
 		*UEnum::GetValueAsString(Stage), Progress,
 		Voxel ? *UEnum::GetValueAsString(Voxel->GetPhase()) : TEXT("none"),
 		!bHasPcg ? TEXT("none") : bBusy ? TEXT("busy") : TEXT("idle"),
-		PcgQuietSeconds, bPcgSeenBusy ? 1 : 0, IStreamingManager::Get().GetNumWantingResources());
+		PcgQuietSeconds, bPcgSeenBusy ? 1 : 0, Near, HeldRadii.Num(), IStreamingManager::Get().GetNumWantingResources());
 }
 
 #if !UE_BUILD_SHIPPING

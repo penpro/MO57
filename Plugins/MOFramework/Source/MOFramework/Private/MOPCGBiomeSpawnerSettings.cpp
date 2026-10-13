@@ -18,7 +18,10 @@
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
 #include "HAL/IConsoleManager.h"
-#include "GameFramework/PlayerController.h"
+#include "Engine/CollisionProfile.h"
+#include "ISMPartition/ISMComponentDescriptor.h"
+#include "Async/ParallelFor.h"
+#include "Helpers/PCGHelpers.h"
 
 #define LOCTEXT_NAMESPACE "MOPCGBiomeSpawner"
 
@@ -68,6 +71,11 @@ TArray<FPCGPinProperties> UMOPCGBiomeSpawnerSettings::OutputPinProperties() cons
 
 namespace
 {
+	/** 1 (default) = the per-point work of a biome spawner execution runs on the task graph (ParallelFor); 0 = on the game thread alone, for A/B timing ([MOBiomeSpawner] ... ms=). */
+	TAutoConsoleVariable<int32> CVarBiomeSpawnerParallel(TEXT("mo.PCG.BiomeSpawnerParallel"), 1, TEXT("1 = biome spawner per-point work in parallel (ParallelFor), 0 = single-threaded (A/B timing)."), ECVF_Default);
+	/** 1 = add the per-stage CPU breakdown (generator / climate / edge blend / rest) to each [MOBiomeSpawner] line. */
+	TAutoConsoleVariable<int32> CVarBiomeSpawnerProfile(TEXT("mo.PCG.BiomeSpawnerProfile"), 0, TEXT("1 = per-stage CPU breakdown in the [MOBiomeSpawner] log line."), ECVF_Default);
+
 	/** Live multiplier on the NEAR ground cover's density (grass, flowers, debris), on top of the authored per-hectare rates: the one knob for "thin out the grass". Takes effect on the next generation (pcg.RuntimeGeneration.Refresh). */
 	TAutoConsoleVariable<float> CVarGroundCoverScale(TEXT("mo.PCG.GroundCoverScale"), 1.0f, TEXT("Multiplier on near ground-cover species density (0..2)."), ECVF_Default);
 
@@ -85,12 +93,19 @@ namespace
 		return false;
 	}
 
+	// The tags as constants: FName(TEXT("...")) is a lookup in the global name table, and these helpers once ran for every species of every point -- under the parallel per-point loop
+	// the threads queued on the name table's lock (161 us of CPU a point, Oct 13 2026). The per-point loop now reads a per-execution classification (FBiomeEntry::FilteredSpecies).
+	const FName NAME_MOFarGrass(TEXT("MOFar_Grass"));
+	const FName NAME_MOFarTree(TEXT("MOFar_Tree"));
+	const FName NAME_MOFarCanopy(TEXT("MOFar_Canopy"));
+	const FName NAME_MOResourceTree(TEXT("MOResource_Tree"));
+
 	/** Far-tier stand-ins (MOFar_Grass tufts, MOFar_Tree proxies) are tagged with the MOFar_ prefix; they belong to the far nodes only. */
-	bool IsFarGroundCover(const FMOBiomeSpeciesEntry& Sp) { return Sp.HISMTag == FName(TEXT("MOFar_Grass")); }
-	bool IsFarLargeTag(const FName& Tag) { return Tag == FName(TEXT("MOFar_Tree")); }
+	bool IsFarGroundCover(const FMOBiomeSpeciesEntry& Sp) { return Sp.HISMTag == NAME_MOFarGrass; }
+	bool IsFarLargeTag(const FName& Tag) { return Tag == NAME_MOFarTree; }
 	bool IsFarLarge(const FMOBiomeSpeciesEntry& Sp) { return IsFarLargeTag(Sp.HISMTag); }
 	/** The third far tier: solid crown proxies for the forest 3-9 km away (tag MOFar_Canopy). Like every far tag it belongs to its own node only. */
-	bool IsFarCanopyTag(const FName& Tag) { return Tag == FName(TEXT("MOFar_Canopy")); }
+	bool IsFarCanopyTag(const FName& Tag) { return Tag == NAME_MOFarCanopy; }
 	bool IsFarCanopy(const FMOBiomeSpeciesEntry& Sp) { return IsFarCanopyTag(Sp.HISMTag); }
 	/** Saplings and seedlings carry the tree tag (they are harvestable) but stand 0.5-3 m tall: they belong with the shrubs on the large-species grid, not out on the tree grid. */
 	bool IsYoungTree(const FMOBiomeSpeciesEntry& Sp)
@@ -100,7 +115,7 @@ namespace
 	}
 
 	/** Trees stand on a grid of their own (TreesOnly): a forest has to be seen from much farther than the undergrowth, rocks and shrubs around it. */
-	bool IsTreeSpecies(const FMOBiomeSpeciesEntry& Sp) { return Sp.HISMTag == FName(TEXT("MOResource_Tree")) && !IsYoungTree(Sp); }
+	bool IsTreeSpecies(const FMOBiomeSpeciesEntry& Sp) { return Sp.HISMTag == NAME_MOResourceTree && !IsYoungTree(Sp); }
 
 	/** A biome's MAIN species (Species): which tier plants them. */
 	bool PassesSpeciesFilter(EMOBiomeSpeciesFilter Filter, const FMOBiomeSpeciesEntry& Sp)
@@ -137,9 +152,20 @@ namespace
 	}
 }
 
+void MOPCGBiomeSpawner::ApplyNearDrawFloor(FISMComponentDescriptorBase& Descriptor, float MinDistanceCm)
+{
+	if (MinDistanceCm <= 0.0f)
+	{
+		return;
+	}
+	Descriptor.InstanceMinDrawDistance = FMath::RoundToInt(MinDistanceCm);
+	Descriptor.InstanceEndCullDistance = FMath::Max(Descriptor.InstanceEndCullDistance, NearFloorEndCullCm);
+}
+
 bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE(FMOPCGBiomeSpawnerElement::Execute);
+	const double ExecStartTime = FPlatformTime::Seconds();   // diagnostics: the setup (biome catalog + mesh resolves + generator params) before the per-point work
 
 	const UMOPCGBiomeSpawnerSettings* Settings = Context->GetInputSettings<UMOPCGBiomeSpawnerSettings>();
 	check(Settings);
@@ -165,7 +191,13 @@ bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 		const FMOBiomeDefinitionRow* Row = nullptr;
 		TArray<UStaticMesh*> LoadedMeshes;       // parallel to Row->Species
 		TArray<UStaticMesh*> LoadedEdgeMeshes;   // parallel to Row->WaterEdgeSpecies
+		// Classified ONCE per execution (the node's filter does not change between points): the species indices this node plants (first 64, in row order), and per species whether
+		// its density follows mo.PCG.GroundCoverScale. The per-point loop reads these instead of re-deriving them from tags and mesh paths for every point.
+		TArray<int32> FilteredSpecies;
+		TArray<bool> GroundCoverScaled;          // parallel to Row->Species
+		TArray<bool> EdgeGroundCoverScaled;      // parallel to Row->WaterEdgeSpecies
 	};
+	auto ScalesWithGroundCover = [](const FMOBiomeSpeciesEntry& Sp) { return !IsLargeSpecies(Sp) && !IsFarGroundCover(Sp) && !IsFarLarge(Sp); };
 	TArray<FBiomeEntry> Biomes;
 	for (const FName& Id : BiomeIds)
 	{
@@ -175,8 +207,9 @@ bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 			E.Id = Id;
 			E.Row = Row;
 			E.LoadedMeshes.Reserve(Row->Species.Num());
-			for (const FMOBiomeSpeciesEntry& Sp : Row->Species)
+			for (int32 i = 0; i < Row->Species.Num(); ++i)
 			{
+				const FMOBiomeSpeciesEntry& Sp = Row->Species[i];
 				UStaticMesh* Loaded = Sp.Mesh.LoadSynchronous();   // main thread — ok
 				if (!Loaded)
 				{
@@ -184,6 +217,11 @@ bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 						*Sp.Mesh.ToString(), *Id.ToString());
 				}
 				E.LoadedMeshes.Add(Loaded);
+				E.GroundCoverScaled.Add(ScalesWithGroundCover(Sp));
+				if (i < 64 && PassesSpeciesFilter(Settings->SpeciesFilter, Sp))
+				{
+					E.FilteredSpecies.Add(i);
+				}
 			}
 			for (const FMOBiomeSpeciesEntry& Sp : Row->WaterEdgeSpecies)
 			{
@@ -193,9 +231,12 @@ bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 					UE_LOG(LogMOFramework, Warning, TEXT("[MOBiomeSpawner] water-edge species mesh FAILED to load: %s (biome %s)"), *Sp.Mesh.ToString(), *Id.ToString());
 				}
 				E.LoadedEdgeMeshes.Add(Loaded);
+				E.EdgeGroundCoverScaled.Add(ScalesWithGroundCover(Sp));
 			}
 		}
 	}
+	const bool bPlantsWaterEdge = PassesWaterEdgeFilter(Settings->SpeciesFilter);
+	const float GroundCoverScale = FMath::Clamp(CVarGroundCoverScale.GetValueOnGameThread(), 0.0f, 2.0f);
 	// Highest priority first so the first band match wins.
 	Biomes.Sort([](const FBiomeEntry& A, const FBiomeEntry& B) { return A.Row->Priority > B.Row->Priority; });
 
@@ -208,8 +249,7 @@ bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 		}
 	}
 
-	const int32 Seed = Context->GetSeed() + Settings->SeedOffset;
-	FRandomStream RandomStream(Seed);
+	const int32 Seed = Context->GetSeed() + Settings->SeedOffset;   // combined with each point's own seed (one random stream per point, see the parallel loop)
 
 	// Climate source. Shared generator (default): the SAME function and terrain seed the MO Terrain voxel node uses, so planting follows the
 	// terrain's own climate/biome map. Refresh the snapshot first so DT_Biomes / tuning edits made since the last generation are seen.
@@ -241,21 +281,8 @@ bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 		}
 	};
 
-	// Far tiers keep out of the dense near zone: where the viewer is at generation time (the camera, so the main menu flyby counts too).
-	FVector2D ViewerXY = FVector2D::ZeroVector;
-	bool bHaveViewer = false;
-	if (Settings->MinDistanceFromViewerCm > 0.0f && TargetActor && TargetActor->GetWorld())
-	{
-		if (const APlayerController* ViewerPC = TargetActor->GetWorld()->GetFirstPlayerController())
-		{
-			FVector ViewLocation;
-			FRotator ViewRotation;
-			ViewerPC->GetPlayerViewPoint(ViewLocation, ViewRotation);
-			ViewerXY = FVector2D(ViewLocation.X, ViewLocation.Y);
-			bHaveViewer = true;
-		}
-	}
-	const float MinViewerDistSq = FMath::Square(Settings->MinDistanceFromViewerCm);
+	// (No viewer test here. Far tiers once dropped their points within MinDistanceFromViewerCm of where the viewer stood at GENERATION time; a cell is generated once, so walking away left
+	// a bald circle around the old position (up to the canopy tier's 2.2 km) that nothing ever refilled. The near floor is a per-frame DRAW distance now: see the descriptor below.)
 
 	const double PlantStartTime = FPlatformTime::Seconds();
 	// (mesh, biome) -> bucket of accepted transforms
@@ -284,28 +311,60 @@ bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 			return true;
 		}
 	}
+	// The per-point work (height, water, sinkhole and climate samples, the biome bands, the edge-feather taps, the clump noise) runs IN PARALLEL: it was 75-220 ms of game-thread time per
+	// cell (13.5 us a point on the 512 m tree tier), the whole budget of a load and a 3 fps stutter while the far field filled in behind the reveal (packaged, Oct 13 2026). Everything it
+	// reads is const for the duration (the generator's caches are thread_local, the water masks are value types, the terrain-mod zones only change on the game thread, which waits here).
+	// Each point rolls its own random stream from its PCG seed, so the result does not depend on the order the workers take the points; the buckets are filled afterwards, in input order.
+	TArray<const FPCGPoint*> Points;
 	for (const FPCGTaggedData& Input : Inputs)
 	{
-		const UPCGPointData* InputPointData = Cast<UPCGPointData>(Input.Data);
-		if (!InputPointData)
+		if (const UPCGPointData* InputPointData = Cast<UPCGPointData>(Input.Data))
 		{
-			continue;
-		}
-		for (const FPCGPoint& Point : InputPointData->GetPoints())
-		{
-			++TotalIn;
-			const FVector Location = Point.Transform.GetLocation();
-			InputBounds += Location;
-
-			if (bHaveViewer && FVector2D::DistSquared(FVector2D(Location.X, Location.Y), ViewerXY) < MinViewerDistSq)
+			for (const FPCGPoint& Point : InputPointData->GetPoints())
 			{
-				continue;   // inside the near zone: the dense tier owns it
+				Points.Add(&Point);
+				InputBounds += Point.Transform.GetLocation();
 			}
+		}
+	}
+	TotalIn = Points.Num();
+	enum class EPointOutcome : uint8 { Empty, Suppressed, Planted };
+	struct FPointResult
+	{
+		EPointOutcome Outcome = EPointOutcome::Empty;
+		int32 BiomeIndex = INDEX_NONE;
+		const FMOBiomeSpeciesEntry* Species = nullptr;
+		UStaticMesh* Mesh = nullptr;
+		FTransform Xf;
+	};
+	TArray<FPointResult> Results;
+	Results.SetNum(Points.Num());
+	const bool bSingleThread = CVarBiomeSpawnerParallel.GetValueOnAnyThread() == 0;
+	// mo.PCG.BiomeSpawnerProfile 1: CPU time per stage, summed over the workers, in the [MOBiomeSpawner] line (which query to make cheaper). One accumulator per task (no shared
+	// counters: 24 threads adding to one cache line would be a cost of its own); off by default.
+	struct FStageCycles { uint64 Total = 0, Gen = 0, Climate = 0, Blend = 0; };
+	struct FCyScope
+	{
+		uint64* Acc;
+		uint64 T0;
+		FCyScope(uint64& InAcc, bool bOn) : Acc(bOn ? &InAcc : nullptr), T0(bOn ? FPlatformTime::Cycles64() : 0) {}
+		~FCyScope() { if (Acc) { *Acc += FPlatformTime::Cycles64() - T0; } }
+	};
+	const bool bProfile = CVarBiomeSpawnerProfile.GetValueOnGameThread() != 0;
+	TArray<FStageCycles> StageContexts;
+	ParallelForWithTaskContext(StageContexts, Points.Num(), [&](FStageCycles& Cy, int32 PointIndex)
+	{
+		FCyScope WholePoint(Cy.Total, bProfile);
+		const FPCGPoint& Point = *Points[PointIndex];
+		FPointResult& Result = Results[PointIndex];
+		FRandomStream RandomStream(PCGHelpers::ComputeSeed(Seed, Point.Seed));
+		{
+			const FVector Location = Point.Transform.GetLocation();
 
 			if (TerrainMod && TerrainMod->IsLocationModified(Location))
 			{
-				++TotalSuppressed;
-				continue;
+				Result.Outcome = EPointOutcome::Suppressed;
+				return;
 			}
 
 			// Caves: nothing is planted in a sinkhole's rim zone, and a point far below the ground height is a CAVE surface (wall/floor of a tunnel,
@@ -313,13 +372,14 @@ bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 			bool bBankStrip = false;   // dry ground in the first metres past an upland lake's shore: only the water-edge species may stand here
 			if (Settings->bUseWorldGenerator)
 			{
+				FCyScope GenStage(Cy.Gen, bProfile);
 				const float GroundZ = FMOWorldGen::SampleHeightCm(*GenParams, Location.X, Location.Y, TerrainSeed, GenParams->Tuning.VoxelSizeCm);
 				// ... and nothing is planted under water: rivers, lakes and the sea are terrain below SeaLevelCm, and an upland lake's water is the ellipse of its bowl (FMOPCGWaterMask).
 				if (Location.Z < GroundZ - 200.0f || EdgeMask.IsInWater(Location.X, Location.Y, Location.Z)
 					|| FMOWorldGen::DistanceToSinkholeRimZone(*GenParams, Location.X, Location.Y, TerrainSeed) <= 0.0f)
 				{
-					++TotalSuppressed;
-					continue;
+					Result.Outcome = EPointOutcome::Suppressed;
+					return;
 				}
 				bBankStrip = WaterMask.IsInWater(Location.X, Location.Y, Location.Z);
 			}
@@ -327,22 +387,26 @@ bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 			// Shared mask math (UMOBiomeDatabaseSettings) so tests/tools can
 			// query the same field this spawner realizes.
 			float Moisture = 0.0f, Temperature = 0.0f;
-			ClimateAt(Location, Moisture, Temperature);
 			const float SlopeDeg = PointSlopeDeg(Point);
-
-			// Highest-priority biome whose bands contain this sample.
 			const FBiomeEntry* Chosen = nullptr;
-			for (const FBiomeEntry& E : Biomes)
+			int32 ChosenIndex = INDEX_NONE;
 			{
-				if (E.Row->Contains(Location.Z, SlopeDeg, Moisture, Temperature))
+				FCyScope ClimateStage(Cy.Climate, bProfile);
+				ClimateAt(Location, Moisture, Temperature);
+				// Highest-priority biome whose bands contain this sample.
+				for (int32 B = 0; B < Biomes.Num(); ++B)
 				{
-					Chosen = &E;
-					break;
+					if (Biomes[B].Row->Contains(Location.Z, SlopeDeg, Moisture, Temperature))
+					{
+						Chosen = &Biomes[B];
+						ChosenIndex = B;
+						break;
+					}
 				}
 			}
 			if (!Chosen)
 			{
-				continue;
+				return;
 			}
 
 			// EDGE BLEND (P4 round 2): feather density near biome boundaries
@@ -355,6 +419,7 @@ bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 			const bool bFarTierFilter = Settings->SpeciesFilter == EMOBiomeSpeciesFilter::FarCanopyOnly || Settings->SpeciesFilter == EMOBiomeSpeciesFilter::FarLargeOnly || Settings->SpeciesFilter == EMOBiomeSpeciesFilter::FarGroundCoverOnly;
 			if (BlendW > 1.0f && !bFarTierFilter)
 			{
+				FCyScope BlendStage(Cy.Blend, bProfile);
 				int32 Agree = 0;
 				const float R = BlendW * 0.5f;
 				static const FVector2D Taps[4] = { {1, 0}, {-1, 0}, {0, 1}, {0, -1} };
@@ -386,17 +451,16 @@ bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 
 			// The candidates for this slot: the biome's species (density scaled by the climate edge feather), then -- on dry ground at the water's edge -- the biome's WATER-EDGE species (density scaled by how
 			// close to the waterline the point is: FMOPCGWaterMask::ShoreFactor).
-			struct FCandidate { const FMOBiomeSpeciesEntry* Species; UStaticMesh* Mesh; float Scale; };
+			struct FCandidate { const FMOBiomeSpeciesEntry* Species; UStaticMesh* Mesh; float Scale; bool bGroundCoverScaled; };
 			TArray<FCandidate, TInlineAllocator<96>> Candidates;
-			const int32 NumSpecies = bBankStrip ? 0 : FMath::Min(Chosen->Row->Species.Num(), 64);
-			for (int32 i = 0; i < NumSpecies; ++i)
+			if (!bBankStrip)
 			{
-				if (PassesSpeciesFilter(Settings->SpeciesFilter, Chosen->Row->Species[i]))
+				for (const int32 i : Chosen->FilteredSpecies)
 				{
-					Candidates.Add({ &Chosen->Row->Species[i], Chosen->LoadedMeshes[i], EdgeScale });
+					Candidates.Add({ &Chosen->Row->Species[i], Chosen->LoadedMeshes[i], EdgeScale, Chosen->GroundCoverScaled[i] });
 				}
 			}
-			if (Chosen->Row->WaterEdgeSpecies.Num() > 0 && EdgeMask.IsActive())
+			if (bPlantsWaterEdge && Chosen->Row->WaterEdgeSpecies.Num() > 0 && EdgeMask.IsActive())
 			{
 				const float Shore = EdgeMask.ShoreFactor(Location.X, Location.Y, Location.Z, Chosen->Row->WaterEdgeBandCm);
 				if (Shore > 0.0f)
@@ -404,10 +468,7 @@ bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 					const int32 NumEdge = FMath::Min(Chosen->Row->WaterEdgeSpecies.Num(), 32);
 					for (int32 i = 0; i < NumEdge; ++i)
 					{
-						if (PassesWaterEdgeFilter(Settings->SpeciesFilter))
-						{
-							Candidates.Add({ &Chosen->Row->WaterEdgeSpecies[i], Chosen->LoadedEdgeMeshes[i], Shore });
-						}
+						Candidates.Add({ &Chosen->Row->WaterEdgeSpecies[i], Chosen->LoadedEdgeMeshes[i], Shore, Chosen->EdgeGroundCoverScaled[i] });
 					}
 				}
 			}
@@ -426,9 +487,9 @@ bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 			{
 				const FMOBiomeSpeciesEntry& Sp = *Candidates[i].Species;
 				float P = (Candidates[i].Mesh ? Candidates[i].Scale * Sp.DensityPerHectare / Settings->InputPointsPerHectare : 0.0f);
-				if (P > 0.0f && !IsLargeSpecies(Sp) && !IsFarGroundCover(Sp) && !IsFarLarge(Sp))
+				if (P > 0.0f && Candidates[i].bGroundCoverScaled)
 				{
-					P *= FMath::Clamp(CVarGroundCoverScale.GetValueOnAnyThread(), 0.0f, 2.0f);
+					P *= GroundCoverScale;
 				}
 				if (P > 0.0f && Sp.ClusterGroup >= 0)
 				{
@@ -462,13 +523,13 @@ bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 			}
 			if (TotalAcceptance <= 0.0f)
 			{
-				continue;
+				return;
 			}
 
 			const float Roll = RandomStream.FRand();
 			if (Roll >= FMath::Min(TotalAcceptance, 1.0f))
 			{
-				continue;   // slot stays empty — that's most points
+				return;   // slot stays empty — that's most points
 			}
 			// Pick which species filled the slot.
 			float Pick = Roll * (TotalAcceptance / FMath::Min(TotalAcceptance, 1.0f));
@@ -483,7 +544,7 @@ bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 			UStaticMesh* Mesh = Candidates[Selected].Mesh;
 			if (!Mesh)
 			{
-				continue;
+				return;
 			}
 
 			FTransform Xf = Point.Transform;
@@ -524,17 +585,54 @@ bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 				}
 			}
 
-			const FString Key = FString::Printf(TEXT("%s|%s"), *Mesh->GetPathName(), *Chosen->Id.ToString());
-			FSpeciesBucket& Bucket = Buckets.FindOrAdd(Key);
-			Bucket.Mesh = Mesh;
-			Bucket.HISMTag = Sp.HISMTag;
-			Bucket.BiomeId = Chosen->Id;
-			Bucket.ResourceNodeId = Sp.ResourceNodeId;
-			Bucket.bAutoSweep = Sp.bAutoSweepOnTerraform;
-			Bucket.Collision = Sp.Collision;
-			Bucket.Transforms.Add(Xf);
-			++TotalAccepted;
+			Result.Outcome = EPointOutcome::Planted;
+			Result.BiomeIndex = ChosenIndex;
+			Result.Species = &Sp;
+			Result.Mesh = Mesh;
+			Result.Xf = Xf;
 		}
+	}, bSingleThread ? EParallelForFlags::ForceSingleThread : EParallelForFlags::None);
+	const double ParallelDoneTime = FPlatformTime::Seconds();
+
+	// Merge in input order (the buckets' instance order, and so the components' instance indices, stay deterministic).
+	for (const FPointResult& R : Results)
+	{
+		if (R.Outcome == EPointOutcome::Suppressed)
+		{
+			++TotalSuppressed;
+			continue;
+		}
+		if (R.Outcome != EPointOutcome::Planted)
+		{
+			continue;
+		}
+		const FBiomeEntry& Chosen = Biomes[R.BiomeIndex];
+		const FMOBiomeSpeciesEntry& Sp = *R.Species;
+		const FString Key = FString::Printf(TEXT("%s|%s"), *R.Mesh->GetPathName(), *Chosen.Id.ToString());
+		FSpeciesBucket& Bucket = Buckets.FindOrAdd(Key);
+		Bucket.Mesh = R.Mesh;
+		Bucket.HISMTag = Sp.HISMTag;
+		Bucket.BiomeId = Chosen.Id;
+		Bucket.ResourceNodeId = Sp.ResourceNodeId;
+		Bucket.bAutoSweep = Sp.bAutoSweepOnTerraform;
+		Bucket.Collision = Sp.Collision;
+		Bucket.Transforms.Add(R.Xf);
+		++TotalAccepted;
+	}
+
+	const double PlantMs = (FPlatformTime::Seconds() - PlantStartTime) * 1000.0;   // the per-point work (parallel) + the merge; the rest is components + instances (game thread)
+	FString StageSummary = FString::Printf(TEXT("setup %.0f parallel %.0f merge %.0f"),
+		(PlantStartTime - ExecStartTime) * 1000.0, (ParallelDoneTime - PlantStartTime) * 1000.0, (FPlatformTime::Seconds() - ParallelDoneTime) * 1000.0);
+	if (bProfile)
+	{
+		FStageCycles Sum;
+		for (const FStageCycles& C : StageContexts)
+		{
+			Sum.Total += C.Total; Sum.Gen += C.Gen; Sum.Climate += C.Climate; Sum.Blend += C.Blend;
+		}
+		const double CyMs = FPlatformTime::GetSecondsPerCycle64() * 1000.0;
+		StageSummary += FString::Printf(TEXT("; cpu %.0f ms: gen %.0f climate %.0f blend %.0f other %.0f"), Sum.Total * CyMs, Sum.Gen * CyMs, Sum.Climate * CyMs, Sum.Blend * CyMs,
+			(double)(Sum.Total - Sum.Gen - Sum.Climate - Sum.Blend) * CyMs);
 	}
 
 	// Create managed HISMs per (mesh, biome).
@@ -562,9 +660,8 @@ bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 		Params.Descriptor.bAffectDistanceFieldLighting = false;
 		Params.Descriptor.bAffectDynamicIndirectLighting = false;
 
-		// What is worth rendering depends on the tier. The FAR tiers (stand-in trees out to 4 km, far grass tufts) are seen as silhouettes: no shadow of their own (their shadows would be the
-		// biggest line in the shadow pass for nothing visible), no ray-tracing / reflection presence, no wind, and never drawn inside the distance the NEAR tiers own: InstanceMinDrawDistance is
-		// the engine's per-instance minimum, so a far cell that becomes near leaves no oversized ghost trees beside the real ones whatever the generation-time viewer position was.
+		// What is worth rendering depends on the tier. The FAR tiers (stand-in trees, canopy clumps, far grass tufts) are seen as silhouettes: no shadow of their own (their shadows would be the
+		// biggest line in the shadow pass for nothing visible), no ray-tracing / reflection presence, no wind, and never drawn inside the distance the NEAR tiers own (below).
 		// GROUND COVER (grass, flowers, debris) casts no shadow and stays out of the ray-traced scene either: millions of blades add cost to those passes and no visible shading.
 		const bool bFarTier = IsFarLargeTag(Bucket.HISMTag) || IsFarCanopyTag(Bucket.HISMTag) || Bucket.HISMTag == FName(TEXT("MOFar_Grass"));
 		const bool bGroundCover = Bucket.HISMTag == FName(TEXT("MOBiomeCover_Grass")) || Bucket.HISMTag == FName(TEXT("MOBiomeCover_Flower")) || Bucket.HISMTag == FName(TEXT("MOBiomeCover_Debris"));
@@ -578,8 +675,10 @@ bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 		{
 			Params.Descriptor.bEvaluateWorldPositionOffset = false;
 			Params.Descriptor.bUseAsOccluder = false;
-			Params.Descriptor.InstanceMinDrawDistance = FMath::RoundToInt(Settings->MinDistanceFromViewerCm);
 		}
+		// The near floor is a per-frame DRAW distance: a far cell plants its whole area and the camera decides what is drawn, so a cell generated around one position still fills in when the
+		// player walks away (the generation-time cut it replaced left bald circles). See ApplyNearDrawFloor for the end distance the engine needs before it honours the floor at all.
+		MOPCGBiomeSpawner::ApplyNearDrawFloor(Params.Descriptor, Settings->MinDistanceFromViewerCm);
 
 		// HARVESTABLE species: apply the exact tag bundle the native resource
 		// spawner derives from DT_ResourceNodes (Name/MOResource_/Action_/
@@ -633,6 +732,16 @@ bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 		{
 			Params.Descriptor.BodyInstance.SetCollisionProfileName(TEXT("BlockAll"));
 		}
+		// Far tiers are draw-only, whatever the palette row says: no physics body per instance (there are a hundred thousand of them) and nothing for a trace to hit around the player, where
+		// they now stand undrawn under the near tiers.
+		if (bFarTier)
+		{
+			Params.Descriptor.BodyInstance.SetCollisionProfileName(UCollisionProfile::NoCollision_ProfileName);
+		}
+		if (bFarTier || bGroundCover)
+		{
+			Params.Descriptor.bCanEverAffectNavigation = false;
+		}
 		Params.Descriptor.ComponentTags.Add(FName(*FString::Printf(TEXT("MOBiome_%s"), *Bucket.BiomeId.ToString())));
 		if (Bucket.bAutoSweep)
 		{
@@ -665,7 +774,8 @@ bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 			UE_LOG(LogMOFramework, Warning, TEXT("[MOBiomeSpawner] Failed HISM for %s"), *Bucket.Mesh->GetName());
 			continue;
 		}
-		ISM->AddInstances(Bucket.Transforms, false, true);
+		// Navigation: only what can block a walker matters to the nav mesh. Far stand-ins (draw-only) and ground cover (passable) skip the per-instance navigation update.
+		ISM->AddInstances(Bucket.Transforms, /*bShouldReturnIndices=*/false, /*bWorldSpace=*/true, /*bUpdateNavigation=*/!(bFarTier || bGroundCover));
 		++Components;
 	}
 
@@ -679,8 +789,9 @@ bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 			Pair.Value.Transforms.Num());
 	}
 	UE_LOG(LogMOFramework, Warning,
-		TEXT("[MOBiomeSpawner] in=%d accepted=%d suppressed=%d components=%d biomes=%d ms=%.0f inBounds=%s |%s"),
-		TotalIn, TotalAccepted, TotalSuppressed, Components, Biomes.Num(), (FPlatformTime::Seconds() - PlantStartTime) * 1000.0,
+		TEXT("[MOBiomeSpawner] in=%d accepted=%d suppressed=%d components=%d biomes=%d ms=%.0f (plant %.0f, build %.0f; %s) inBounds=%s |%s"),
+		TotalIn, TotalAccepted, TotalSuppressed, Components, Biomes.Num(), (FPlatformTime::Seconds() - PlantStartTime) * 1000.0, PlantMs,
+		(FPlatformTime::Seconds() - PlantStartTime) * 1000.0 - PlantMs, *StageSummary,
 		InputBounds.IsValid ? *FString::Printf(TEXT("(%.0f,%.0f)-(%.0f,%.0f)"), InputBounds.Min.X, InputBounds.Min.Y, InputBounds.Max.X, InputBounds.Max.Y) : TEXT("none"),
 		*BucketSummary);
 

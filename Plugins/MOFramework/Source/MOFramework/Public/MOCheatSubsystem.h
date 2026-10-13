@@ -92,6 +92,13 @@ public:
 	virtual void Deinitialize() override;
 	//~ End USubsystem Interface
 
+	/**
+	 * Run a console command the way a player typing it would: through the first local player controller (local player -> game viewport client -> engine), so the VIEWPORT
+	 * commands work too (HighResShot, show flags, ...). GEngine->Exec alone never reaches the viewport client: `MO.Delay 55 HighResShot 1920x1080` from -ExecCmds silently took no
+	 * shot (Oct 13 2026). Falls back to GEngine->Exec when the world has no local player. The one dispatch path for MO.Delay and MO.Test.AfterReady.
+	 */
+	static void ExecAsLocalPlayer(UWorld* World, const FString& Command);
+
 private:
 	/** Register MO.Player.* / MO.World.* commands. */
 	void RegisterConsoleCommands();

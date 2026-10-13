@@ -10,6 +10,7 @@
 #include "PCGEdge.h"
 #include "MOPCGBiomeSpawnerSettings.h"
 #include "PCGVoxelSampler.h"
+#include "ISMPartition/ISMComponentDescriptor.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -92,6 +93,232 @@ bool FMOPCG_BiomeSamplerLattice::RunTest(const FString& Parameters)
 			Sampler->PointsPerSquaredMeter <= 0.9 * LatticeCap);
 	}
 	TestTrue(TEXT("the scatter graph has at least one biome spawner"), Spawners >= 1);
+	return true;
+}
+
+// The far tiers (stand-in trees, canopy clumps, far grass) plant their whole cell and keep out of the near field by a per-frame DRAW floor (MinDistanceFromViewerCm -> the descriptor's
+// InstanceMinDrawDistance). The engine honours that floor only with an end distance set (GetInstanceDrawDistanceMinMax returns nothing while InstanceEndCullDistance is 0, Nanite and classic
+// proxies alike): a far node without a floor, or a floor without an end, draws giant stand-ins and clumps among the real trees around the player (Oct 2026: the floor alone was silently ignored).
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOPCG_FarTiersDrawFloor,
+	"MOFramework.PCG.FarTiersDrawFloor",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOPCG_FarTiersDrawFloor::RunTest(const FString& Parameters)
+{
+	// The descriptor rule itself.
+	FISMComponentDescriptor Floored;
+	MOPCGBiomeSpawner::ApplyNearDrawFloor(Floored, 150000.0f);
+	TestEqual(TEXT("a floor of 1.5 km sets InstanceMinDrawDistance"), Floored.InstanceMinDrawDistance, 150000);
+	TestTrue(TEXT("a floor comes with an end distance past it (the engine ignores a minimum without one)"), Floored.InstanceEndCullDistance > Floored.InstanceMinDrawDistance);
+	TestEqual(TEXT("a floor leaves the start distance at 0 (a start turns on the classic proxy's per-instance fade)"), Floored.InstanceStartCullDistance, 0);
+	FISMComponentDescriptor Unfloored;
+	MOPCGBiomeSpawner::ApplyNearDrawFloor(Unfloored, 0.0f);
+	TestTrue(TEXT("no floor leaves both distances at 0"), Unfloored.InstanceMinDrawDistance == 0 && Unfloored.InstanceEndCullDistance == 0);
+
+	// Every far node of the shipped graph has a floor, and the end distance clears every far generation radius (the canopy tier reaches 7.5 km).
+	static const TCHAR* GraphPath = TEXT("/Game/VoxelExamples/PCGScattering/MOPCG_StampScatter1.MOPCG_StampScatter1");
+	const UPCGGraph* Graph = LoadObject<UPCGGraph>(nullptr, GraphPath);
+	if (!TestNotNull(TEXT("the scatter graph loads"), Graph))
+	{
+		return false;
+	}
+	int32 FarNodes = 0;
+	for (const UPCGNode* Node : Graph->GetNodes())
+	{
+		const UMOPCGBiomeSpawnerSettings* Spawner = Node ? Cast<UMOPCGBiomeSpawnerSettings>(Node->GetSettings()) : nullptr;
+		if (!Spawner || !Spawner->bEnabled)
+		{
+			continue;
+		}
+		const EMOBiomeSpeciesFilter F = Spawner->SpeciesFilter;
+		if (F != EMOBiomeSpeciesFilter::FarLargeOnly && F != EMOBiomeSpeciesFilter::FarCanopyOnly && F != EMOBiomeSpeciesFilter::FarGroundCoverOnly)
+		{
+			continue;
+		}
+		++FarNodes;
+		TestTrue(*FString::Printf(TEXT("%s (%s) has a near draw floor"), *Node->GetName(), *UEnum::GetValueAsString(F)), Spawner->MinDistanceFromViewerCm > 0.0f);
+		TestTrue(*FString::Printf(TEXT("%s: the end distance (%d cm) clears its floor (%.0f cm)"), *Node->GetName(), MOPCGBiomeSpawner::NearFloorEndCullCm, Spawner->MinDistanceFromViewerCm),
+			MOPCGBiomeSpawner::NearFloorEndCullCm > Spawner->MinDistanceFromViewerCm);
+	}
+	TestTrue(TEXT("the scatter graph has far-tier nodes"), FarNodes >= 2);
+	TestTrue(TEXT("the end distance clears the 7.5 km canopy reach with the x1.1 cleanup margin"), MOPCGBiomeSpawner::NearFloorEndCullCm >= 825000);
+	return true;
+}
+
+
+namespace
+{
+	// UPCGRandomChoiceSettings is not exported from the PCG module: read it through reflection.
+	float RandomChoiceRatio(const UPCGNode* Node, bool& bOutFixed)
+	{
+		const UPCGSettings* S = Node ? Node->GetSettings() : nullptr;
+		bOutFixed = true;
+		if (!S || S->GetClass()->GetName() != TEXT("PCGRandomChoiceSettings"))
+		{
+			return -1.0f;
+		}
+		const FFloatProperty* RatioProp = FindFProperty<FFloatProperty>(S->GetClass(), TEXT("Ratio"));
+		const FBoolProperty* FixedProp = FindFProperty<FBoolProperty>(S->GetClass(), TEXT("bFixedMode"));
+		bOutFixed = FixedProp && FixedProp->GetPropertyValue_InContainer(S);
+		return RatioProp ? RatioProp->GetPropertyValue_InContainer(S) : -1.0f;
+	}
+
+	TArray<const UPCGNode*> DownstreamOf(const UPCGNode* Node, FName PinLabel)
+	{
+		TArray<const UPCGNode*> Out;
+		if (const UPCGPin* Pin = Node ? Node->GetOutputPin(PinLabel) : nullptr)
+		{
+			for (const UPCGEdge* Edge : Pin->Edges)
+			{
+				if (Edge && Edge->OutputPin && Edge->OutputPin->Node)
+				{
+					Out.Add(Edge->OutputPin->Node.Get());
+				}
+			}
+		}
+		return Out;
+	}
+
+	const UPCGGraph* LoadScatterGraph()
+	{
+		return LoadObject<UPCGGraph>(nullptr, TEXT("/Game/VoxelExamples/PCGScattering/MOPCG_StampScatter1.MOPCG_StampScatter1"));
+	}
+}
+
+// The ground ITEM clutter (sticks, bark, stones) is 5 % of the band's points: RandomChoice_3 (0.5) -> its own thinning Random Choice (0.1) -> RandomChoice_1 (the item spawners' split).
+// (RandomChoice_3's Discarded half once fed CopyPoints_1 -> ... -> StaticMeshSpawner_3, the native black-locust clusters. That spawner is DISABLED -- the biome tier places locusts -- so
+// the branch was pure wasted work; cut_pcg_dead_branches.py disconnects it and MOFramework.PCG.NoDeadBranches keeps it disconnected.)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOPCG_ItemThinning,
+	"MOFramework.PCG.ItemThinning",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOPCG_ItemThinning::RunTest(const FString& Parameters)
+{
+	const UPCGGraph* Graph = LoadScatterGraph();
+	if (!TestNotNull(TEXT("the scatter graph loads"), Graph))
+	{
+		return false;
+	}
+	const UPCGNode* RC3 = nullptr;
+	for (const UPCGNode* Node : Graph->GetNodes())
+	{
+		if (Node && Node->GetName() == TEXT("RandomChoice_3"))
+		{
+			RC3 = Node;
+		}
+	}
+	if (!TestNotNull(TEXT("RandomChoice_3 (the item share of the elevation band) exists"), RC3))
+	{
+		return false;
+	}
+	bool bFixed3 = true;
+	const float Ratio3 = RandomChoiceRatio(RC3, bFixed3);
+	TestFalse(TEXT("RandomChoice_3 works by ratio"), bFixed3);
+
+	const TArray<const UPCGNode*> AfterChosen = DownstreamOf(RC3, TEXT("Chosen"));
+	TestEqual(TEXT("RandomChoice_3.Chosen feeds exactly one node (the item thinning)"), AfterChosen.Num(), 1);
+	const UPCGNode* Thin = AfterChosen.Num() == 1 ? AfterChosen[0] : nullptr;
+	bool bThinFixed = true;
+	const float ThinRatio = RandomChoiceRatio(Thin, bThinFixed);
+	TestFalse(TEXT("the item thinning works by ratio"), bThinFixed);
+	const float Share = Ratio3 * ThinRatio;
+	TestTrue(*FString::Printf(TEXT("the items get 3-8 %% of the band's points (%.3f x %.3f = %.3f): about ten times fewer than the authored 0.5"), Ratio3, ThinRatio, Share), Share >= 0.03f && Share <= 0.08f);
+	const TArray<const UPCGNode*> AfterThin = DownstreamOf(Thin, TEXT("Chosen"));
+	TestTrue(TEXT("the item thinning feeds RandomChoice_1 (the item spawners' split)"), AfterThin.Num() == 1 && AfterThin[0]->GetName() == TEXT("RandomChoice_1"));
+	TestEqual(TEXT("the item thinning's Discarded output goes nowhere"), DownstreamOf(Thin, TEXT("Discarded")).Num(), 0);
+	return true;
+}
+
+// Every edge that carries data must lead to work that reaches an ENABLED sink (a node with no outgoing edge: a spawner). A disabled PCG node passes its input through, it does not stop
+// the upstream work: three native chains (black-locust clusters, Field_05 trees, the old resource spawner) ended in disabled spawners and were still computed for every cell -- the
+// packaged reveal took 47.8 s with the locust chain fed 95 % of the item points vs ~40 s at 50 % (Oct 13 2026). Cut a dead chain at its root (Content/Python/cut_pcg_dead_branches.py).
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOPCG_NoDeadBranches,
+	"MOFramework.PCG.NoDeadBranches",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOPCG_NoDeadBranches::RunTest(const FString& Parameters)
+{
+	const UPCGGraph* Graph = LoadScatterGraph();
+	if (!TestNotNull(TEXT("the scatter graph loads"), Graph))
+	{
+		return false;
+	}
+	struct FEdgeRef { const UPCGNode* From; FName FromPin; const UPCGNode* To; };
+	TArray<FEdgeRef> Edges;
+	TSet<const UPCGNode*> HasOut;
+	TMap<const UPCGNode*, TArray<const UPCGNode*>> Up;
+	for (const UPCGNode* Node : Graph->GetNodes())
+	{
+		if (!Node)
+		{
+			continue;
+		}
+		for (const UPCGPin* Pin : Node->GetOutputPins())
+		{
+			if (!Pin)
+			{
+				continue;
+			}
+			for (const UPCGEdge* Edge : Pin->Edges)
+			{
+				const UPCGNode* To = (Edge && Edge->OutputPin) ? Edge->OutputPin->Node.Get() : nullptr;
+				if (To)
+				{
+					Edges.Add({ Node, Pin->Properties.Label, To });
+					HasOut.Add(Node);
+					Up.FindOrAdd(To).Add(Node);
+				}
+			}
+		}
+	}
+	auto IsEnabled = [](const UPCGNode* N) { return !N->GetSettings() || N->GetSettings()->bEnabled; };
+	TSet<const UPCGNode*> Live;
+	TArray<const UPCGNode*> Stack;
+	for (const UPCGNode* Node : Graph->GetNodes())
+	{
+		if (Node && !HasOut.Contains(Node) && IsEnabled(Node))
+		{
+			Stack.Add(Node);   // an enabled sink: a spawner (or a node that consumes its input)
+		}
+	}
+	while (Stack.Num() > 0)
+	{
+		const UPCGNode* N = Stack.Pop();
+		if (Live.Contains(N))
+		{
+			continue;
+		}
+		Live.Add(N);
+		if (const TArray<const UPCGNode*>* Ups = Up.Find(N))
+		{
+			Stack.Append(*Ups);
+		}
+	}
+	int32 Dead = 0;
+	for (const FEdgeRef& E : Edges)
+	{
+		const bool bCarriesData = Live.Contains(E.From) || E.From->GetInputPins().Num() == 0;   // a live node, or a source that makes data from nothing (Get Actor Data, Create Points Grid)
+		if (bCarriesData && !Live.Contains(E.To))
+		{
+			++Dead;
+			AddError(FString::Printf(TEXT("%s.%s feeds %s, whose chain reaches no enabled spawner: its work is computed for every cell and thrown away (cut it at this edge)"),
+				*E.From->GetName(), *E.FromPin.ToString(), *E.To->GetName()));
+		}
+	}
+	TestEqual(TEXT("no edge feeds a dead chain"), Dead, 0);
+	TestTrue(TEXT("the graph has live spawners"), Live.Num() > 10);
+
+	// TRAP (measured, packaged build, Oct 13 2026): a Hierarchical Generation Grid Size node left with NO edge at all stopped ALL runtime generation of the graph -- not one cell, no error
+	// in the log. Cut a dead chain at its root only; the grid node keeps its downstream edge.
+	for (const UPCGNode* Node : Graph->GetNodes())
+	{
+		if (Node && Node->GetSettings() && Node->GetSettings()->GetClass()->GetName() == TEXT("PCGHiGenGridSizeSettings"))
+		{
+			const bool bHasOut = HasOut.Contains(Node);
+			const bool bHasIn = Up.Contains(Node);
+			TestTrue(*FString::Printf(TEXT("%s (a grid-size node) is not fully disconnected (in=%d out=%d)"), *Node->GetName(), bHasIn ? 1 : 0, bHasOut ? 1 : 0), bHasIn || bHasOut);
+		}
+	}
 	return true;
 }
 
