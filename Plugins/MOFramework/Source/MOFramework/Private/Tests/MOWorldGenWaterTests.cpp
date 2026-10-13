@@ -154,4 +154,49 @@ bool FMOWorldGen_Water::RunTest(const FString& Parameters)
 	return true;
 }
 
+// A coarse LOD skips the basins it cannot resolve (FMOWorldGen::IsWaterTierResolved). Before the gate, the far voxel chunks of every new game looked up an upland lake per
+// sample -- each one hundreds of full-detail base samples -- for lakes narrower than one of their voxels: 5 s per 32 km chunk, the 10 s second voxel state (Oct 13 2026).
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOWorldGen_WaterLodGate,
+	"MOFramework.WorldGen.WaterLodGate",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOWorldGen_WaterLodGate::RunTest(const FString& Parameters)
+{
+	TSharedRef<FMOWorldGenParams, ESPMode::ThreadSafe> Lakes = MakeShared<FMOWorldGenParams, ESPMode::ThreadSafe>();
+	Lakes->Finalize();
+	TSharedRef<FMOWorldGenParams, ESPMode::ThreadSafe> NoUpland = MakeShared<FMOWorldGenParams, ESPMode::ThreadSafe>();
+	NoUpland->Tuning.bEnableUplandLakes = false;
+	NoUpland->Finalize();
+	const FMOWorldGenTuning& T = Lakes->Tuning;
+
+	// 1. The rule: every tier is resolved at the voxel size and just under its largest radius, none at a spacing as wide as its largest radius.
+	for (int32 Tier = 0; Tier < 3; ++Tier)
+	{
+		const float MaxRadiusCm = Tier == 0 ? T.PondRadiusMaxCm : Tier == 1 ? T.LakeRadiusMaxCm : T.UplandLakeRadiusMaxCm;
+		TestTrue(FString::Printf(TEXT("tier %d is resolved at the voxel size"), Tier), FMOWorldGen::IsWaterTierResolved(*Lakes, Tier, T.VoxelSizeCm));
+		TestTrue(FString::Printf(TEXT("tier %d is resolved just under its largest radius"), Tier), FMOWorldGen::IsWaterTierResolved(*Lakes, Tier, 0.99f * MaxRadiusCm));
+		TestFalse(FString::Printf(TEXT("tier %d is skipped at a spacing as wide as its largest radius"), Tier), FMOWorldGen::IsWaterTierResolved(*Lakes, Tier, MaxRadiusCm));
+	}
+
+	// 2. A real upland lake: carved at the voxel size; at a spacing past every tier the height is exactly the height without upland lakes (rivers still apply to both).
+	TArray<FMOWorldGen::FLake> Found;
+	for (double RadiusCm = 1.0e6; Found.Num() == 0 && RadiusCm <= 1.6e7; RadiusCm *= 2.0)
+	{
+		FMOWorldGen::GetUplandLakesNear(*Lakes, 0.0, 0.0, RadiusCm, WaterTestSeed, Found);
+	}
+	if (!TestTrue(TEXT("the seed has an upland lake"), Found.Num() > 0))
+	{
+		return false;
+	}
+	const FMOWorldGen::FLake& L = Found[0];
+	const float Fine = T.VoxelSizeCm;
+	const float Coarse = 2.0f * FMath::Max3(T.PondRadiusMaxCm, T.LakeRadiusMaxCm, T.UplandLakeRadiusMaxCm);
+	const float FineWith = FMOWorldGen::SampleHeightCm(*Lakes, L.Center.X, L.Center.Y, WaterTestSeed, Fine);
+	const float FineWithout = FMOWorldGen::SampleHeightCm(*NoUpland, L.Center.X, L.Center.Y, WaterTestSeed, Fine);
+	TestTrue(FString::Printf(TEXT("at the voxel size the lake carves its centre (%.0f cm with, %.0f without)"), FineWith, FineWithout), FineWith < FineWithout - 100.0f);
+	TestEqual(TEXT("past every tier's spacing the lake is skipped: the same height as without upland lakes"),
+		FMOWorldGen::SampleHeightCm(*Lakes, L.Center.X, L.Center.Y, WaterTestSeed, Coarse), FMOWorldGen::SampleHeightCm(*NoUpland, L.Center.X, L.Center.Y, WaterTestSeed, Coarse));
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

@@ -648,7 +648,18 @@ float FMOWorldGen::SampleBaseHeightCm(const FMOWorldGenParams& Params, double X,
 
 float FMOWorldGen::SampleHeightCm(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, float StepCm, FMOClimateSample* OutClimate)
 {
-	return ApplyWater(Params, X, Y, Seed, SampleBaseHeightCm(Params, X, Y, Seed, StepCm, OutClimate));
+	return ApplyWater(Params, X, Y, Seed, SampleBaseHeightCm(Params, X, Y, Seed, StepCm, OutClimate), StepCm);
+}
+
+bool FMOWorldGen::IsWaterTierResolved(const FMOWorldGenParams& Params, int32 Tier, float StepCm)
+{
+	if (CVarMODebugNoLodCull.GetValueOnAnyThread() != 0)
+	{
+		return true;
+	}
+	const FMOWorldGenTuning& T = Params.Tuning;
+	const float MaxRadiusCm = Tier == 0 ? T.PondRadiusMaxCm : Tier == 1 ? T.LakeRadiusMaxCm : T.UplandLakeRadiusMaxCm;
+	return StepCm < MaxRadiusCm;
 }
 
 float FMOWorldGen::TemperatureAtHeight(const FMOWorldGenParams& Params, float TemperatureSeaLevel, float HeightCm)

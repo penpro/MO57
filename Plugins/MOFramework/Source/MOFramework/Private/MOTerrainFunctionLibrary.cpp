@@ -201,11 +201,13 @@ void UMOTerrainFunctionLibrary::Compute(
 		Surfaces = GSurfaceTable;
 	}
 	// A table built for a different snapshot is ignored (biome indices would not line up).
-	const bool bUseSurfaces = Surfaces.IsValid() && Surfaces->ParamsHash == P.GetHash() && Surfaces->BiomeBlends.Num() == P.Biomes.Num();
-	const bool bLakeBeds = bUseSurfaces && Surfaces->bHasLakeBed && Surfaces->LakeBedPath == P.UplandLakeBedSurfaceType && P.Tuning.bEnableWater && P.Tuning.bEnableUplandLakes;
-
 	const int32 Num = WorldPosition.Num();
 	const float StepCm = P.Tuning.VoxelSizeCm * (float)(1 << FMath::Clamp(LOD, 0, 24));
+
+	const bool bUseSurfaces = Surfaces.IsValid() && Surfaces->ParamsHash == P.GetHash() && Surfaces->BiomeBlends.Num() == P.Biomes.Num();
+	// The bed is painted only where the height carves the bowl: a LOD too coarse for upland lakes has neither (and the bed lookup is the same per-cell lake search).
+	const bool bLakeBeds = bUseSurfaces && Surfaces->bHasLakeBed && Surfaces->LakeBedPath == P.UplandLakeBedSurfaceType && P.Tuning.bEnableWater && P.Tuning.bEnableUplandLakes
+		&& FMOWorldGen::IsWaterTierResolved(P, 2, StepCm);
 
 	Height.Allocate(Num);
 	BiomeIndex.Allocate(Num);

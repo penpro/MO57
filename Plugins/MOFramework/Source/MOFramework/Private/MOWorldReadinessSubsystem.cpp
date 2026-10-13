@@ -470,9 +470,23 @@ FString UMOWorldReadinessSubsystem::DescribeState() const
 	const bool bBusy = IsPcgBusy(bHasPcg);
 	// The near count is what the vegetation cap waits for: traced through the whole stage, so a slow reveal shows WHEN the near tiers arrived (not only the count at the cap).
 	const int32 Near = Stage == EMOWorldReadyStage::Vegetation ? CountNearPcgInstances() : -1;
-	return FString::Printf(TEXT("stage=%s progress=%.2f voxelPhase=%s pcg=%s pcgQuiet=%.1fs pcgSeenBusy=%d near=%d heldComps=%d streamWanting=%d"),
+	// The voxel world's own work after its first ready state (a new state when the viewer moves, far LODs): the Voxel PCG samplers run on the same
+	// BackgroundLow task pool, so a busy voxel world can starve the near tiers -- traced so the gap between "voxel ready" and "near tiers in" is explained.
+	int32 VoxelPending = -1;
+	bool bVoxelNewState = false;
+	if (const UWorld* World = GetWorld())
+	{
+		for (TActorIterator<AVoxelWorld> It(World); It; ++It)
+		{
+			VoxelPending = It->GetNumPendingTasks();
+			bVoxelNewState = It->IsProcessingNewState();
+			break;
+		}
+	}
+	return FString::Printf(TEXT("stage=%s progress=%.2f voxelPhase=%s voxelNewState=%d voxelPending=%d pcg=%s pcgQuiet=%.1fs pcgSeenBusy=%d near=%d heldComps=%d streamWanting=%d"),
 		*UEnum::GetValueAsString(Stage), Progress,
 		Voxel ? *UEnum::GetValueAsString(Voxel->GetPhase()) : TEXT("none"),
+		bVoxelNewState ? 1 : 0, VoxelPending,
 		!bHasPcg ? TEXT("none") : bBusy ? TEXT("busy") : TEXT("idle"),
 		PcgQuietSeconds, bPcgSeenBusy ? 1 : 0, Near, HeldRadii.Num(), IStreamingManager::Get().GetNumWantingResources());
 }

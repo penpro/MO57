@@ -97,6 +97,59 @@ bool FMOPCG_SampleCosts::RunTest(const FString& Parameters)
 		TimeSlow(TEXT("SampleClimate"), [&](const FVector& P) { return FMOWorldGen::SampleClimate(*Params, P.X, P.Y, SlowSeed).Moisture; });
 	}
 
+	// SWEEP: the cost of a height sample cell by cell over a 15 km square around the coast spawn (30 x 30 cells of 512 m, 64 samples each, in raster order
+	// like a spawner cell). A cache pathology shows as one cell hundreds of times slower than the rest (the basin collision above was 500x).
+	{
+		const int32 SweepSeed = UMOWorldSeedSubsystem::TerrainSeedFromWorldSeed(1029024224);
+		TArray<TPair<double, FVector2D>> Cells;
+		double Total = 0.0;
+		for (int32 CY = 0; CY < 30; ++CY)
+		{
+			for (int32 CX = 0; CX < 30; ++CX)
+			{
+				const double X0c = 1222000.0 - 768000.0 + CX * 51200.0, Y0c = -680000.0 - 768000.0 + CY * 51200.0;
+				const double T0 = FPlatformTime::Seconds();
+				double Acc = 0.0;
+				for (int32 J = 0; J < 8; ++J)
+				{
+					for (int32 I = 0; I < 8; ++I)
+					{
+						Acc += FMOWorldGen::SampleHeightCm(*Params, X0c + I * 6400.0, Y0c + J * 6400.0, SweepSeed, Params->Tuning.VoxelSizeCm);
+					}
+				}
+				Sink += Acc;
+				const double Us = (FPlatformTime::Seconds() - T0) * 1.0e6 / 64.0;
+				Total += Us;
+				Cells.Add({ Us, FVector2D(X0c, Y0c) });
+			}
+		}
+		Cells.Sort([](const TPair<double, FVector2D>& A, const TPair<double, FVector2D>& B) { return A.Key > B.Key; });
+		const double Mean = Total / Cells.Num();
+		UE_LOG(LogMOFramework, Display, TEXT("[MOPCGCOST] SWEEP 900 cells: mean %.2f us/sample, worst %.2f at (%.0f, %.0f), 2nd %.2f, 10th %.2f"), Mean, Cells[0].Key,
+			Cells[0].Value.X, Cells[0].Value.Y, Cells[1].Key, Cells[9].Key);
+		AddInfo(FString::Printf(TEXT("SWEEP: mean %.2f us, worst %.2f us at (%.0f, %.0f), 2nd %.2f, 10th %.2f"), Mean, Cells[0].Key, Cells[0].Value.X, Cells[0].Value.Y, Cells[1].Key, Cells[9].Key));
+	}
+
+	// COARSE CHUNK: what the voxel mesher asks of a far LOD-11 chunk (32 km, a 1 km step) -- the chunk (-3276800, 0) of the coast spawn's world that took 5 s to mesh
+	// while every sample looked up an upland lake (FMOWorldGen::IsWaterTierResolved now skips basins the step cannot resolve).
+	{
+		const int32 CoarseSeed = UMOWorldSeedSubsystem::TerrainSeedFromWorldSeed(1029024224);
+		const float Step = Params->Tuning.VoxelSizeCm * 2048.0f;
+		const double T0 = FPlatformTime::Seconds();
+		double Acc = 0.0;
+		for (int32 J = 0; J < 33; ++J)
+		{
+			for (int32 I = 0; I < 33; ++I)
+			{
+				Acc += FMOWorldGen::SampleColumn(*Params, -3276800.0 + I * (double)Step, J * (double)Step, CoarseSeed, Step).HeightCm;
+			}
+		}
+		Sink += Acc;
+		const double Ms = (FPlatformTime::Seconds() - T0) * 1000.0;
+		UE_LOG(LogMOFramework, Display, TEXT("[MOPCGCOST] COARSE CHUNK LOD 11: 1089 columns in %.1f ms (%.2f us/column)"), Ms, Ms * 1000.0 / 1089.0);
+		AddInfo(FString::Printf(TEXT("COARSE CHUNK LOD 11: %.1f ms for 1089 columns"), Ms));
+	}
+
 	TestTrue(TEXT("the queries return finite values"), FMath::IsFinite(Sink));
 	TestTrue(TEXT("the height query was timed"), HeightUs > 0.0);
 	return true;

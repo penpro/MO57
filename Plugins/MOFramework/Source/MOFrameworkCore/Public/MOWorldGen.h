@@ -759,8 +759,20 @@ struct MOFRAMEWORKCORE_API FMOWorldGen
 	/** The land before any water is carved (continents, hills, mountains). Rivers and lakes are a pure function of this. */
 	static float SampleBaseHeightCm(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, float StepCm = 100.0f, FMOClimateSample* OutClimate = nullptr);
 
-	/** Cuts rivers and lake basins into BaseHeightCm (never raises ground). Returns BaseHeightCm unchanged away from low ground and water. */
-	static float ApplyWater(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, float BaseHeightCm);
+	/**
+	 * Cuts rivers and lake basins into BaseHeightCm (never raises ground). Returns BaseHeightCm unchanged away from low ground and water. StepCm = sample spacing: a basin tier
+	 * the spacing does not resolve is skipped (IsWaterTierResolved), as the octaves finer than 2x StepCm are.
+	 */
+	static float ApplyWater(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, float BaseHeightCm, float StepCm);
+
+	/**
+	 * Does a sample spacing of StepCm resolve the basins of this tier (0 = pond, 1 = lake, 2 = upland lake): true while the tier's largest radius is wider than the spacing, i.e.
+	 * a basin spans at least two samples -- the octave rule (wavelength below 2 x StepCm is skipped) applied to a basin's diameter. A coarser LOD skips the tier: a basin narrower
+	 * than one voxel can only alias into a pit, and finding it costs hundreds of full-detail base samples per cell. Without this gate a 32 km LOD-11 chunk touched ~600 upland-lake
+	 * cells (5 s of meshing per chunk; the 10 s second voxel state of every new game that the near vegetation waited for, Oct 13 2026). MO.WorldGen.DebugNoLodCull 1 resolves
+	 * every tier at every spacing.
+	 */
+	static bool IsWaterTierResolved(const FMOWorldGenParams& Params, int32 Tier, float StepCm);
 
 	/** One lake / pond basin (a grid cell holds at most one per tier: 0 = pond, 1 = lake, 2 = upland lake). Tiers 0 and 1 sit at sea level, tier 2 at its own SurfaceCm; the basin floor is below it. */
 	struct FLake

@@ -362,7 +362,7 @@ namespace
 	}
 }
 
-float FMOWorldGen::ApplyWater(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, float BaseHeightCm)
+float FMOWorldGen::ApplyWater(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, float BaseHeightCm, float StepCm)
 {
 	const FMOWorldGenTuning& T = Params.Tuning;
 	if (!T.bEnableWater)
@@ -378,12 +378,19 @@ float FMOWorldGen::ApplyWater(const FMOWorldGenParams& Params, double X, double 
 	if (AboveSea <= FMath::Max(T.RiverMaxGroundAboveSeaCm + 600.0f, HighestBank))
 	{
 		H = FMath::Min(H, RiverHeight(Params, X, Y, Seed, BaseHeightCm));
-		H = FMath::Min(H, BasinHeight(Params, 0, X, Y, Seed));
-		H = FMath::Min(H, BasinHeight(Params, 1, X, Y, Seed));
+		// A coarse LOD skips the basins it cannot resolve (each one is a cache-missing cell lookup there, and sub-voxel anyway).
+		if (IsWaterTierResolved(Params, 0, StepCm))
+		{
+			H = FMath::Min(H, BasinHeight(Params, 0, X, Y, Seed));
+		}
+		if (IsWaterTierResolved(Params, 1, StepCm))
+		{
+			H = FMath::Min(H, BasinHeight(Params, 1, X, Y, Seed));
+		}
 	}
 
 	// Upland lakes: a basin only ever lowers ground down to its own floor, and no floor is lower than this -- ground under it needs no lookup.
-	if (T.bEnableUplandLakes)
+	if (T.bEnableUplandLakes && IsWaterTierResolved(Params, 2, StepCm))
 	{
 		const float LowestUplandFloor = T.UplandLakeMinGroundAboveSeaCm - T.UplandLakeFreeboardCm * T.VerticalScale - (T.UplandLakeDepthBaseCm + T.UplandLakeDepthPerRadius * T.UplandLakeRadiusMaxCm);
 		if (AboveSea > LowestUplandFloor)
