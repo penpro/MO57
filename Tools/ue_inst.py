@@ -1674,6 +1674,8 @@ PKG_FATAL_RE = re.compile(r"Fatal error|Unhandled Exception|Handled ensure|Asser
 PKG_HOST_SEED_RE = re.compile(r"\[MOWorldSeed\] host published world seed (-?\d+)")
 PKG_CLIENT_SEED_RE = re.compile(r"\[MOWorldSeed\] client applied world seed (-?\d+): voxel runtime created")
 PKG_CLOCK_SNAP_RE = re.compile(r"\[MOWorldSync\] client clock was (-?[\d.]+) game-s off the host's; snapping")
+# The client logs its FIRST host clock sample whether or not it snapped (a snap line alone appears only when the drift happens to exceed the threshold: the check flaked).
+PKG_CLOCK_SYNC_RE = re.compile(r"\[MOWorldSync\] client clock (was (-?[\d.]+) game-s off the host's; snapping|follows the host's: first sample .*)")
 PKG_WEATHER_RE = re.compile(r"\[MOWorldSync\] client following the host's weather preset (\S+)")
 
 
@@ -1707,14 +1709,14 @@ def analyse_packaged_logs(host_log, client_log, withheld=False):
     rows.append(("CONTROL: the host's spawn manager ran (so a silent client means something)", host_spawn is not None, host_spawn or "no [SpawnManager] spawn line on the host"))
     rows.append(("client: its spawn manager spawned nothing", client_spawn is None, client_spawn or "no spawn line on the client"))
 
-    snap, weather = PKG_CLOCK_SNAP_RE.search(client_log), PKG_WEATHER_RE.search(client_log)
+    snap, weather = PKG_CLOCK_SYNC_RE.search(client_log), PKG_WEATHER_RE.search(client_log)
     if withheld:
-        rows.append(("NEGATIVE CONTROL: with the host's publish withheld the client never snapped its clock to the host's", snap is None,
-                     "no clock snap on the client" if snap is None else snap.group(0)))
+        rows.append(("NEGATIVE CONTROL: with the host's publish withheld the client never received the host's clock", snap is None,
+                     "no clock sync on the client" if snap is None else snap.group(0)))
         rows.append(("NEGATIVE CONTROL: ... and never followed a weather preset", weather is None,
                      "no weather follow on the client" if weather is None else weather.group(0)))
     else:
-        rows.append(("client: adopted the host's game clock", bool(snap), snap.group(0) if snap else "no '[MOWorldSync] client clock was ... snapping' line"))
+        rows.append(("client: adopted the host's game clock", bool(snap), snap.group(0) if snap else "no '[MOWorldSync] client clock follows / was ... snapping' line"))
         rows.append(("client: followed the host's weather preset through the bridge", bool(weather), weather.group(0) if weather else "no '[MOWorldSync] client following' line"))
     return rows
 
@@ -1901,6 +1903,12 @@ def packaged_test(package=False, withhold_sync=False, run_seconds=60, boot_timeo
         rep.step("client: the second packaged copy joined and applied the host's seed", joined,
                  "" if joined else _pkg_read("MO57_2.log")[-300:].replace("\n", " | "))
 
+        # A joiner is held until the HOST's pawn has settled on its ground (coastal settle up to 45 s, after a voxel start that took 44 s on one seed with two
+        # games sharing the CPU): wait for the client's possession before the fixed observation window, or a slow seed reads as "client never possessed".
+        deadline = time.time() + boot_timeout
+        while time.time() < deadline and "AMOPlayerController: Possessed" not in _pkg_read("MO57_2.log"):
+            time.sleep(2)
+
         print(f"[nettest] packaged: running both for {run_seconds} s (spawn manager first-spawn, sync) ...", flush=True)
         time.sleep(run_seconds)
         alive = _pkg_alive_count()
@@ -1911,6 +1919,62 @@ def packaged_test(package=False, withhold_sync=False, run_seconds=60, boot_timeo
         return rep.ok
     finally:
         print(f"[nettest] packaged: {'PASS' if rep.rows and rep.ok else 'FAIL'}", flush=True)
+        _pkg_stop(client_pid)
+        _pkg_stop(host_pid)
+
+
+PKG_REMOVAL_HOST_RE = re.compile(r"\[MOTEST\] (PASS|FAIL) RemovalPersists: (.*)")
+PKG_REMOVAL_AUDIT_RE = re.compile(r"\[MOTEST\] (PASS|FAIL) WorldRemovalAudit: (.*)")
+PKG_REMOVAL_SWEEP_RE = re.compile(r"\[MOWorldRemoval\] removed (\d+) spawned instance\(s\) for (\d+) recorded removal\(s\)")
+
+
+def packaged_removal_test(package=False, boot_timeout=180, host_fell_after=70, run_timeout=420):
+    """Co-op: a tree felled on the HOST disappears on the CLIENT, and stays gone when PCG regenerates (UMOWorldRemovalSubsystem + AMOGameState's
+    replicated FMORemovedInstanceArray). Before Oct 2026 a removal never reached a client at all: each machine generates its own PCG instances.
+    Host: MO.Session.Host, then (after its world is ready) MO.Test.RemovalPersists -- fells the tree nearest its pawn through the one removal path and
+    regenerates its PCG. Client: joins, then MO.Test.WorldRemovalAudit -- waits for the replicated record and checks nothing recorded still stands there.
+    The client's '[MOWorldRemoval] removed N spawned instance(s)' line proves it HAD the tree and the replicated removal took it away."""
+    rep = Report()
+    host_pid = client_pid = None
+    try:
+        if package and not _package_build():
+            return rep.step("the Development package builds", False, "see Saved/Logs/package.log")
+        if not rep.step("the staged packaged build exists", os.path.exists(PKG_EXE), PKG_EXE):
+            return False
+        _pkg_wait_none()
+        if not rep.step("no other MO57.exe is running", _pkg_alive_count() == 0, f"{_pkg_alive_count()} running"):
+            return False
+        cmds = f"MO.Session.Host RemovalTest 4,MO.Test.AfterReady MO.Delay {host_fell_after} MO.Test.RemovalPersists 20"
+        print(f"[nettest] packaged-removal: launching the host (-ExecCmds=\"{cmds}\") ...", flush=True)
+        host_pid = _pkg_launch(f'-NoSteam -NoQualityBenchmark -windowed -ResX=960 -ResY=540 -WinX=0 -WinY=0 -ExecCmds="{cmds}"')
+        deadline, seeded = time.time() + boot_timeout, False
+        while time.time() < deadline and not seeded:
+            seeded = bool(PKG_HOST_SEED_RE.search(_pkg_read("MO57.log")))
+            time.sleep(2)
+        if not rep.step("host: hosted a world and published its seed", seeded):
+            return False
+        client_pid = _pkg_launch('127.0.0.1 -NoSteam -NoQualityBenchmark -windowed -ResX=960 -ResY=540 -WinX=980 -WinY=0 -ExecCmds="MO.Test.WorldRemovalAudit 360"')
+        deadline = time.time() + run_timeout
+        host_line = audit_line = None
+        while time.time() < deadline and not (host_line and audit_line):
+            host_line = PKG_REMOVAL_HOST_RE.search(_pkg_read("MO57.log"))
+            audit_line = PKG_REMOVAL_AUDIT_RE.search(_pkg_read("MO57_2.log"))
+            time.sleep(3)
+        client_log = _pkg_read("MO57_2.log")
+        rep.step("client: joined and applied the host's seed", bool(PKG_CLIENT_SEED_RE.search(client_log)))
+        rep.step("host: felled a tree that stayed felled through its own PCG regeneration", bool(host_line) and host_line.group(1) == "PASS",
+                 host_line.group(0) if host_line else "no RemovalPersists verdict on the host")
+        rep.step("client: the host's removal arrived and nothing recorded stands in the client's world", bool(audit_line) and audit_line.group(1) == "PASS",
+                 audit_line.group(0) if audit_line else "no WorldRemovalAudit verdict on the client")
+        sweep = PKG_REMOVAL_SWEEP_RE.search(client_log)
+        rep.step("client: the replicated removal took away the client's OWN copy of the tree (it had generated it)", bool(sweep),
+                 sweep.group(0) if sweep else "no '[MOWorldRemoval] removed N spawned instance(s)' line on the client -- it may never have generated that cell (inconclusive)")
+        for who, text in (("host", _pkg_read("MO57.log")), ("client", client_log)):
+            bad = CHURN_FATAL_RE.search(text)
+            rep.step(f"{who}: no crash, ensure or assertion", bad is None, bad.group(0) if bad else "none")
+        return rep.ok
+    finally:
+        print(f"[nettest] packaged-removal: {'PASS' if rep.rows and rep.ok else 'FAIL'}", flush=True)
         _pkg_stop(client_pid)
         _pkg_stop(host_pid)
 

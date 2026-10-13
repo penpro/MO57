@@ -64,6 +64,7 @@
 #include "MOGameClockSubsystem.h"    // (H34) FMOGameClockSaveData
 #include "MOResourceDepletionSubsystem.h" // (H37) FMOResourceNodeDepletionSaveEntry
 #include "MODesignationTypes.h"           // (unit 3) FMODesignationSaveData
+#include "MOWorldRemovalTypes.h"          // FMOWorldRemovalSaveData
 #include "MOworldSaveGame.generated.h"
 
 USTRUCT(BlueprintType)
@@ -432,6 +433,13 @@ public:
      */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Resources")
     FMOResourceDepletionSaveData ResourceDepletionData;
+
+    /**
+     * World instances removed for good (picked-up PCG items, felled trees, quarried boulders), by place + mesh.
+     * Owned + serialized by UMOWorldRemovalSubsystem via IMOSaveDomain. Empty for older saves.
+     */
+    UPROPERTY()
+    FMOWorldRemovalSaveData WorldRemovalData;
 
     // --- Terraform excavation designations (unit 3) ---
 

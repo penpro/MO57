@@ -148,6 +148,12 @@ void UMOWorldSyncSubsystem::HandleReplicatedClock(const FMOWorldClockInfo& Info)
 	const FDateTime Expected(Info.GameDateTimeTicks + FTimespan::FromSeconds(AgeSeconds * Info.TimeScale).GetTicks());
 
 	const double DriftSeconds = (Clock->GetGameDateTime() - Expected).GetTotalSeconds();
+	if (!bLoggedFirstClockSync)
+	{
+		bLoggedFirstClockSync = true;
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOWorldSync] client clock follows the host's: first sample %s, drift %.1f game-s (snap threshold %.1f)"),
+			*Expected.ToString(), DriftSeconds, SnapThresholdGameSeconds(Info.TimeScale));
+	}
 	if (FMath::Abs(DriftSeconds) > SnapThresholdGameSeconds(Info.TimeScale))
 	{
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOWorldSync] client clock was %.1f game-s off the host's; snapping to %s"),

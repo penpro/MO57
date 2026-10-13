@@ -40,6 +40,9 @@
 #include "Misc/App.h"
 #include "Engine/StaticMesh.h"
 #include "Components/InstancedStaticMeshComponent.h"
+#include "MOHISMHarvestHelper.h"
+#include "MOWorldRemovalSubsystem.h"
+#include "MOGameState.h"
 #include "Components/DirectionalLightComponent.h"
 #include "Camera/CameraComponent.h"
 #include "MOColonyManagerSubsystem.h"
@@ -1675,6 +1678,263 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 					*Nearest->GetName(), FMath::Sqrt(BestSq));
 				Interactor->RequestInteractWithActor(Nearest);
 			});
+		}),
+		ECVF_Default));
+
+	// ---------- MO.Test.RemovalPersists [waitSeconds=25] [control] ----------
+	// A felled tree must stay felled when its PCG cell is generated again (UMOWorldRemovalSubsystem). Fells the biome tree nearest the pawn through
+	// FMOHISMHarvestHelper (the one removal path), regenerates every runtime PCG cell (pcg.RuntimeGeneration.Refresh), waits, then checks that the tree's
+	// place is empty while the trees of that mesh around it came back (so the cell really regenerated). `control` removes the instance WITHOUT recording
+	// it: the tree must come back, and the test must report FAIL -- proof that it can fail.
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Test.RemovalPersists"),
+		TEXT("Test: fell the nearest biome tree, regenerate PCG, check it stays felled while its neighbours return. Logs [MOTEST] PASS / FAIL RemovalPersists. Usage: MO.Test.RemovalPersists [waitSeconds=25] [control]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			const float WaitSeconds = Args.Num() > 0 && Args[0].IsNumeric() ? FMath::Clamp(FCString::Atof(*Args[0]), 5.0f, 300.0f) : 25.0f;
+			const bool bControl = Args.ContainsByPredicate([](const FString& A) { return A.Equals(TEXT("control"), ESearchCase::IgnoreCase); });
+			const bool bSaveLoad = Args.ContainsByPredicate([](const FString& A) { return A.Equals(TEXT("saveload"), ESearchCase::IgnoreCase); });
+			RunOnNextTick(World, [WaitSeconds, bControl, bSaveLoad](UWorld* W)
+			{
+				APawn* Pawn = ResolveLocalPawn(W);
+				if (!Pawn)
+				{
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] FAIL RemovalPersists: no local pawn"));
+					return;
+				}
+				const FVector P = Pawn->GetActorLocation();
+				UInstancedStaticMeshComponent* BestComp = nullptr;
+				int32 BestIndex = INDEX_NONE;
+				double BestSq = FMath::Square(8000.0);
+				FTransform Xf;
+				for (TActorIterator<AActor> It(W); It; ++It)
+				{
+					TArray<UInstancedStaticMeshComponent*> Comps;
+					It->GetComponents<UInstancedStaticMeshComponent>(Comps);
+					for (UInstancedStaticMeshComponent* C : Comps)
+					{
+						if (!C || !C->GetStaticMesh() || !C->ComponentHasTag(TEXT("MOResource_Tree")))
+						{
+							continue;
+						}
+						for (int32 I = 0; I < C->GetInstanceCount(); ++I)
+						{
+							if (C->GetInstanceTransform(I, Xf, true) && FVector::DistSquared2D(Xf.GetLocation(), P) < BestSq)
+							{
+								BestSq = FVector::DistSquared2D(Xf.GetLocation(), P);
+								BestComp = C;
+								BestIndex = I;
+							}
+						}
+					}
+				}
+				if (!BestComp)
+				{
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] FAIL RemovalPersists: no biome tree (MOResource_Tree) within 80 m of the pawn"));
+					return;
+				}
+				BestComp->GetInstanceTransform(BestIndex, Xf, true);
+				const FVector Place = Xf.GetLocation();
+				const TWeakObjectPtr<UStaticMesh> Mesh = BestComp->GetStaticMesh();
+				const FName MeshName = Mesh->GetFName();   // by name: after a level load the mesh may be a reloaded object
+				auto CountAround = [Place, MeshName](UWorld* InWorld, int32& OutAtPlace) -> int32
+				{
+					int32 Around = 0;
+					OutAtPlace = 0;
+					FTransform T;
+					for (TActorIterator<AActor> It(InWorld); It; ++It)
+					{
+						TArray<UInstancedStaticMeshComponent*> Comps;
+						It->GetComponents<UInstancedStaticMeshComponent>(Comps);
+						for (UInstancedStaticMeshComponent* C : Comps)
+						{
+							if (!C || !C->GetStaticMesh() || C->GetStaticMesh()->GetFName() != MeshName)
+							{
+								continue;
+							}
+							for (int32 I = 0; I < C->GetInstanceCount(); ++I)
+							{
+								if (C->GetInstanceTransform(I, T, true))
+								{
+									const double D = FVector::Dist2D(T.GetLocation(), Place);
+									Around += D < 6000.0 ? 1 : 0;
+									OutAtPlace += D < 15.0 ? 1 : 0;
+								}
+							}
+						}
+					}
+					return Around;
+				};
+				int32 AtPlaceBefore = 0;
+				const int32 AroundBefore = CountAround(W, AtPlaceBefore);
+				if (bControl)
+				{
+					BestComp->RemoveInstance(BestIndex);   // NOT recorded: the negative control
+				}
+				else
+				{
+					FMOHISMHarvestHelper::RemoveInstance(BestComp, BestIndex, /*bRespectKeepOnHarvest=*/false);
+				}
+				int32 AtPlaceAfterRemove = 0;
+				CountAround(W, AtPlaceAfterRemove);
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] RemovalPersists%s: felled %s at (%.0f, %.0f) %.0f m from the pawn; %d of that mesh within 60 m, %d left at the place; regenerating PCG, checking in %.0f s"),
+					bControl ? TEXT(" (CONTROL: not recorded)") : TEXT(""), *Mesh->GetName(), Place.X, Place.Y, FMath::Sqrt(BestSq) / 100.0, AroundBefore, AtPlaceAfterRemove, WaitSeconds);
+				UMOCheatSubsystem::ExecAsLocalPlayer(W, TEXT("pcg.RuntimeGeneration.Refresh"));
+				const double CheckAt = FPlatformTime::Seconds() + WaitSeconds;
+				const TWeakObjectPtr<UWorld> WeakWorld = W;
+				FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([CheckAt, WeakWorld, CountAround, AroundBefore, bControl, bSaveLoad](float) -> bool
+				{
+					if (FPlatformTime::Seconds() < CheckAt)
+					{
+						return true;
+					}
+					UWorld* InWorld = WeakWorld.Get();
+					if (!InWorld)
+					{
+						return false;
+					}
+					int32 AtPlace = 0;
+					const int32 Around = CountAround(InWorld, AtPlace);
+					const bool bRegenerated = Around >= AroundBefore - 1 && Around > 0;
+					const bool bPass = bRegenerated && AtPlace == 0;
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] %s RemovalPersists%s: after regeneration %d of that mesh within 60 m (was %d: %s), %d at the felled place (want 0)"),
+						bPass ? TEXT("PASS") : TEXT("FAIL"), bControl ? TEXT(" (CONTROL)") : TEXT(""), Around, AroundBefore,
+						bRegenerated ? TEXT("the cell regenerated") : TEXT("the cell did NOT regenerate -- inconclusive"), AtPlace);
+					if (!bSaveLoad || !bPass)
+					{
+						return false;
+					}
+					// SAVE / LOAD: the record must come back FROM THE SAVE. Save, load the slot (in place: the world is kept, every save domain is re-applied, the
+					// removal ledger is rebuilt from the file), regenerate PCG again and look: only the loaded record can keep the tree away now.
+					UMOCheatSubsystem::ExecAsLocalPlayer(InWorld, TEXT("MO.Save.SaveAs MOTestRemoval"));
+					const double LoadAt = FPlatformTime::Seconds() + 3.0;
+					const double RefreshAt = LoadAt + 10.0;
+					const double FinalCheckAt = RefreshAt + 30.0;
+					TSharedRef<int32> Step = MakeShared<int32>(0);
+					FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([CountAround, LoadAt, RefreshAt, FinalCheckAt, Step](float) -> bool
+					{
+						const double Now = FPlatformTime::Seconds();
+						UWorld* Game = nullptr;
+						for (const FWorldContext& Ctx : GEngine->GetWorldContexts())
+						{
+							if (Ctx.WorldType == EWorldType::Game && Ctx.World())
+							{
+								Game = Ctx.World();
+							}
+						}
+						if (!Game)
+						{
+							return Now < FinalCheckAt + 120.0;
+						}
+						if (*Step == 0 && Now >= LoadAt)
+						{
+							UMOCheatSubsystem::ExecAsLocalPlayer(Game, TEXT("MO.Save.LoadFrom MOTestRemoval"));
+							UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] RemovalPersists: saved to MOTestRemoval, loading it back"));
+							*Step = 1;
+						}
+						else if (*Step == 1 && Now >= RefreshAt)
+						{
+							UMOCheatSubsystem::ExecAsLocalPlayer(Game, TEXT("pcg.RuntimeGeneration.Refresh"));
+							*Step = 2;
+						}
+						else if (*Step == 2 && Now >= FinalCheckAt)
+						{
+							int32 AtPlace = 0;
+							const int32 Around = CountAround(Game, AtPlace);
+							const UMOWorldRemovalSubsystem* Removal = UMOWorldRemovalSubsystem::Get(Game);
+							const bool bPass = Around > 0 && AtPlace == 0 && Removal && Removal->GetNumRemoved() >= 1;
+							UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] %s RemovalPersistsLoad: after load + regeneration %d of that mesh within 60 m, %d at the felled place (want 0); the loaded record holds %d removal(s)"),
+								bPass ? TEXT("PASS") : TEXT("FAIL"), Around, AtPlace, Removal ? Removal->GetNumRemoved() : -1);
+							return false;
+						}
+						return true;
+					}), 1.0f);
+					return false;
+				}), 1.0f);
+			});
+		}),
+		ECVF_Default));
+
+	// ---------- MO.Test.WorldRemovalAudit [timeoutSeconds=240] ----------
+	// Runs on any machine (co-op client especially): waits until the replicated removal record (AMOGameState) holds at least one entry, then checks that
+	// THIS machine has no spawned instance at any recorded place. With the host felling a tree (MO.Test.RemovalPersists) this proves the removal reached the
+	// client; the client's "[MOWorldRemoval] removed N spawned instance(s)" line shows its own copy was taken away.
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Test.WorldRemovalAudit"),
+		TEXT("Test: wait for the replicated world-removal record, then check no recorded instance stands in this world. Logs [MOTEST] PASS / FAIL WorldRemovalAudit. Usage: MO.Test.WorldRemovalAudit [timeoutSeconds=240]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			const double GiveUpAt = FPlatformTime::Seconds() + (Args.Num() > 0 && Args[0].IsNumeric() ? FCString::Atod(*Args[0]) : 240.0);
+			TSharedRef<double> SeenAt = MakeShared<double>(0.0);
+			FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([GiveUpAt, SeenAt](float) -> bool
+			{
+				// The CURRENT game world each tick: from -ExecCmds this runs at the main menu, and a joining client travels to the host's map afterwards.
+				UWorld* W = nullptr;
+				for (const FWorldContext& Ctx : GEngine->GetWorldContexts())
+				{
+					if (Ctx.WorldType == EWorldType::Game && Ctx.World())
+					{
+						W = Ctx.World();
+					}
+				}
+				const AMOGameState* GameState = W ? W->GetGameState<AMOGameState>() : nullptr;
+				const int32 NumRecorded = GameState ? GameState->GetRemovedInstances().Num() : 0;
+				const double Now = FPlatformTime::Seconds();
+				if (NumRecorded == 0)
+				{
+					if (Now > GiveUpAt)
+					{
+						UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] FAIL WorldRemovalAudit: the removal record stayed empty (%s)"), GameState ? TEXT("nothing replicated") : TEXT("no AMOGameState"));
+						return false;
+					}
+					return true;
+				}
+				if (*SeenAt == 0.0)
+				{
+					*SeenAt = Now;   // give the replicated removal (and any in-flight generation) a few seconds to land
+					return true;
+				}
+				if (Now - *SeenAt < 5.0)
+				{
+					return true;
+				}
+				const TArray<FMORemovedInstance>& Recorded = GameState->GetRemovedInstances();
+				int32 Standing = 0;
+				FTransform T;
+				for (TActorIterator<AActor> It(W); It; ++It)
+				{
+					TArray<UInstancedStaticMeshComponent*> Comps;
+					It->GetComponents<UInstancedStaticMeshComponent>(Comps);
+					for (UInstancedStaticMeshComponent* C : Comps)
+					{
+						const UStaticMesh* Mesh = C ? C->GetStaticMesh() : nullptr;
+						if (!Mesh)
+						{
+							continue;
+						}
+						for (const FMORemovedInstance& E : Recorded)
+						{
+							if (E.Mesh != Mesh->GetFName())
+							{
+								continue;
+							}
+							const FVector2D Place(E.CellX * FMOWorldRemovalLedger::CellCm, E.CellY * FMOWorldRemovalLedger::CellCm);
+							for (int32 I = 0; I < C->GetInstanceCount(); ++I)
+							{
+								if (C->GetInstanceTransform(I, T, true) && FVector2D::Distance(FVector2D(T.GetLocation()), Place) < 15.0)
+								{
+									++Standing;
+								}
+							}
+						}
+					}
+				}
+				const UMOWorldRemovalSubsystem* Removal = UMOWorldRemovalSubsystem::Get(W);
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] %s WorldRemovalAudit: %d removal(s) recorded (%s), %d still standing in this world (want 0); local ledger %d"),
+					Standing == 0 ? TEXT("PASS") : TEXT("FAIL"), Recorded.Num(), W->GetNetMode() == NM_Client ? TEXT("replicated from the host") : TEXT("authority"),
+					Standing, Removal ? Removal->GetNumRemoved() : -1);
+				return false;
+			}), 1.0f);
 		}),
 		ECVF_Default));
 

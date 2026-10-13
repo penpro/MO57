@@ -10,6 +10,7 @@
 #include "MOCraftingSubsystem.h"
 #include "MOPCGInteractionSubsystem.h"
 #include "MOResourceDepletionSubsystem.h"
+#include "MOHISMHarvestHelper.h"
 #include "MOHarvestDebugSubsystem.h"
 #include "MOCharacter.h"
 #include "Components/InstancedStaticMeshComponent.h"
@@ -666,26 +667,11 @@ FMOCraftResult UMOHarvestSubsystem::CompleteHarvest(
 		return Result;
 	}
 
-	// If bDestroysResource, remove the instance
-	if (HarvestAction->bDestroysResource)
-	{
-		if (Ctx.HISMComponent.IsValid())
-		{
-			Ctx.HISMComponent->RemoveInstance(Ctx.InstanceIndex);
-		}
-		else if (Ctx.ISMComponent.IsValid())
-		{
-			Ctx.ISMComponent->RemoveInstance(Ctx.InstanceIndex);
-		}
-		UE_LOG(LogMOFramework, Log, TEXT("[MOHarvest] Destroyed target instance %d"), Ctx.InstanceIndex);
-	}
-
-	// Produce yields from the HarvestAction
-	Result.bSuccess = true;
-
 	// Compute a stable per-node key for the depletion subsystem. Identifies a single
 	// HISM/ISM instance (e.g. a particular tree) across game sessions via its
-	// world-space location.
+	// world-space location. BEFORE any removal below: once the instance is removed its
+	// index belongs to another instance (the key used to name the neighbour, so a felled
+	// tree's yields were charged to the tree next to it).
 	FString NodeKey;
 	UInstancedStaticMeshComponent* MeshCompForLog = nullptr;
 	{
@@ -700,6 +686,24 @@ FMOCraftResult UMOHarvestSubsystem::CompleteHarvest(
 		}
 	}
 	UMOResourceDepletionSubsystem* Depletion = UMOResourceDepletionSubsystem::Get(this);
+
+	// If bDestroysResource, remove the instance -- through the helper, which records it as removed for good (the felled tree does not regrow with its PCG
+	// cell, co-op clients drop their copy, the save keeps it).
+	if (HarvestAction->bDestroysResource)
+	{
+		if (Ctx.HISMComponent.IsValid())
+		{
+			FMOHISMHarvestHelper::RemoveInstance(Ctx.HISMComponent.Get(), Ctx.InstanceIndex, /*bRespectKeepOnHarvest=*/false);
+		}
+		else if (Ctx.ISMComponent.IsValid())
+		{
+			FMOHISMHarvestHelper::RemoveInstance(Ctx.ISMComponent.Get(), Ctx.InstanceIndex, /*bRespectKeepOnHarvest=*/false);
+		}
+		UE_LOG(LogMOFramework, Log, TEXT("[MOHarvest] Destroyed target instance %d"), Ctx.InstanceIndex);
+	}
+
+	// Produce yields from the HarvestAction
+	Result.bSuccess = true;
 
 	// Log the harvest attempt so we can see what's happening — particularly whether
 	// the NodeKey is non-empty and whether the depletion subsystem was found.

@@ -64,6 +64,10 @@ private:
 	FSoftObjectPath DesiredWeather;
 	bool bWeatherDirty = false;
 
+	/** Client: the first host clock received has been logged ("[MOWorldSync] client clock follows the host's"), whether or not it needed a snap. The co-op
+	 *  test reads this line: the snap line alone appears only when the drift happens to exceed the threshold, so the test flaked. */
+	bool bLoggedFirstClockSync = false;
+
 	void PublishClock(class AMOGameState& State);
 	void PublishWeather(class AMOGameState& State);
 	void TryApplyDesiredWeather();

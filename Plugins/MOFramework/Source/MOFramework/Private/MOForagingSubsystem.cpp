@@ -268,7 +268,8 @@ TArray<AMOWorldItem*> UMOForagingSubsystem::RevealHISMInstancesInRadius(FVector 
 
 		for (int32 Index : Indices)
 		{
-			if (ISM->RemoveInstance(Index))
+			// Through the helper: the revealed instance became an item actor, so it is recorded as removed for good (it must not regrow with its PCG cell).
+			if (FMOHISMHarvestHelper::RemoveInstance(ISM, Index, /*bRespectKeepOnHarvest=*/false))
 			{
 				RemovedCount++;
 			}

@@ -3,6 +3,7 @@
 #include "MOItemDefinitionRow.h"
 #include "MOPCGInteractionSubsystem.h"
 #include "MOTerrainModificationSubsystem.h"
+#include "MOWorldRemovalSubsystem.h"
 #include "MOHarvestDebugSubsystem.h"
 #include "MOWeightedSelector.h"
 
@@ -224,11 +225,17 @@ bool FMOPCGMeshSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 	// Create managed ISM components for each item type
 	int32 ComponentsCreated = 0;
 	int32 InstancesAdded = 0;
+	// Items already picked up stay picked up: a regenerated cell does not lay them out again (UMOWorldRemovalSubsystem).
+	const UMOWorldRemovalSubsystem* Removal = UMOWorldRemovalSubsystem::Get(TargetActor);
 
 	for (auto& Pair : ItemDataMap)
 	{
 		FItemSpawnData& ItemData = Pair.Value;
 
+		if (Removal && Removal->GetNumRemoved() > 0 && ItemData.Mesh)
+		{
+			ItemData.Transforms.RemoveAll([Removal, Mesh = ItemData.Mesh](const FTransform& Xf) { return Removal->IsRemoved(Xf.GetLocation(), Mesh); });
+		}
 		if (ItemData.Transforms.Num() == 0 || !ItemData.Mesh)
 		{
 			continue;

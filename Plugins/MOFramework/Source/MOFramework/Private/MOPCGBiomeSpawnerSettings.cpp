@@ -8,6 +8,7 @@
 #include "MOResourceNodeDefinitionRow.h"
 #include "MOPCGInteractionSubsystem.h"
 #include "MOTerrainModificationSubsystem.h"
+#include "MOWorldRemovalSubsystem.h"
 
 #include "PCGComponent.h"
 #include "PCGContext.h"
@@ -595,6 +596,9 @@ bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 	const double ParallelDoneTime = FPlatformTime::Seconds();
 
 	// Merge in input order (the buckets' instance order, and so the components' instance indices, stay deterministic).
+	// A tree felled or a boulder quarried stays gone when its cell is generated again (UMOWorldRemovalSubsystem).
+	const UMOWorldRemovalSubsystem* Removal = UMOWorldRemovalSubsystem::Get(TargetActor);
+	const bool bAnyRemoved = Removal && Removal->GetNumRemoved() > 0;
 	for (const FPointResult& R : Results)
 	{
 		if (R.Outcome == EPointOutcome::Suppressed)
@@ -604,6 +608,11 @@ bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 		}
 		if (R.Outcome != EPointOutcome::Planted)
 		{
+			continue;
+		}
+		if (bAnyRemoved && Removal->IsRemoved(R.Xf.GetLocation(), R.Mesh))
+		{
+			++TotalSuppressed;
 			continue;
 		}
 		const FBiomeEntry& Chosen = Biomes[R.BiomeIndex];

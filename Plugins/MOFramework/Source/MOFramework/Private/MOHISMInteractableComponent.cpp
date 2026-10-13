@@ -1,6 +1,7 @@
 #include "MOHISMInteractableComponent.h"
 #include "MOFramework.h"
 #include "MOInventoryComponent.h"
+#include "MOHISMHarvestHelper.h"
 #include "Components/HierarchicalInstancedStaticMeshComponent.h"
 #include "GameFramework/Pawn.h"
 
@@ -74,9 +75,9 @@ bool UMOHISMInteractableComponent::HarvestInstance(UHierarchicalInstancedStaticM
 	FTransform InstanceTransform;
 	HISMComponent->GetInstanceTransform(InstanceIndex, InstanceTransform, true);
 
-	// Remove the instance from HISM
+	// Remove the instance from HISM -- through the helper, which records it as removed for good (it must not regrow with its PCG cell, and co-op clients drop their copy).
 	// Note: RemoveInstance causes index shifting, but that's OK for one-off harvests
-	const bool bRemoved = HISMComponent->RemoveInstance(InstanceIndex);
+	const bool bRemoved = FMOHISMHarvestHelper::RemoveInstance(HISMComponent, InstanceIndex, /*bRespectKeepOnHarvest=*/false);
 	if (!bRemoved)
 	{
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOHISMInteractable] HarvestInstance: Failed to remove instance %d"), InstanceIndex);

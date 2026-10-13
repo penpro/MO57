@@ -1,7 +1,21 @@
 #include "MOHISMHarvestHelper.h"
 #include "MOFramework.h"
+#include "MOWorldRemovalSubsystem.h"
 #include "Components/HierarchicalInstancedStaticMeshComponent.h"
 #include "Components/InstancedStaticMeshComponent.h"
+
+namespace
+{
+	/** Every removal through this helper is for good (picked up, felled, quarried, foraged into an item actor): record it BEFORE the index goes away, so the
+	 *  instance stays gone when its PCG cell is generated again, on every co-op machine and in the save (UMOWorldRemovalSubsystem). */
+	void RecordPermanentRemoval(const UInstancedStaticMeshComponent* ISM, int32 InstanceIndex)
+	{
+		if (UMOWorldRemovalSubsystem* Removal = UMOWorldRemovalSubsystem::Get(ISM))
+		{
+			Removal->RecordInstanceRemoval(ISM, InstanceIndex);
+		}
+	}
+}
 
 // ============================================================================
 // SINGLE INSTANCE OPERATIONS
@@ -32,6 +46,7 @@ bool FMOHISMHarvestHelper::RemoveInstance(
 		return true; // Return true - operation "succeeded" by keeping the instance
 	}
 
+	RecordPermanentRemoval(HISM, InstanceIndex);
 	const bool bRemoved = HISM->RemoveInstance(InstanceIndex);
 	if (!bRemoved)
 	{
@@ -66,6 +81,7 @@ bool FMOHISMHarvestHelper::RemoveInstance(
 		return true;
 	}
 
+	RecordPermanentRemoval(ISM, InstanceIndex);
 	const bool bRemoved = ISM->RemoveInstance(InstanceIndex);
 	if (!bRemoved)
 	{
@@ -134,6 +150,7 @@ FMOHISMRemovalResult FMOHISMHarvestHelper::RemoveInstancesBatch(
 		{
 			if (Index >= 0 && Index < HISM->GetInstanceCount())
 			{
+				RecordPermanentRemoval(HISM, Index);
 				if (HISM->RemoveInstance(Index))
 				{
 					Result.RemovedCount++;
@@ -183,6 +200,7 @@ FMOHISMRemovalResult FMOHISMHarvestHelper::RemoveInstances(
 	{
 		if (Index >= 0 && Index < HISM->GetInstanceCount())
 		{
+			RecordPermanentRemoval(HISM, Index);
 			if (HISM->RemoveInstance(Index))
 			{
 				Result.RemovedCount++;
