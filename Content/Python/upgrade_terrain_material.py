@@ -114,11 +114,15 @@ return float4(c, snow);
 
 NORMAL_CODE = """
 float d = max(D, 1.0);
-float a = NoiseTex.SampleLevel(NoiseTexSampler, P.xy / 3200.0 + float2(0.19, 0.83), max(0.0, log2(d / 3200.0))).r;
+float2 rq = float2(0.28 * P.x + 0.96 * P.y, -0.96 * P.x + 0.28 * P.y);   // rotated 73.7 deg
+float a = NoiseTex.SampleLevel(NoiseTexSampler, rq / 3170.0 + float2(0.19, 0.83), max(0.0, log2(d / 3170.0))).r;
 float2 rr = float2(0.80 * P.x - 0.60 * P.y, 0.60 * P.x + 0.80 * P.y);   // rotated against the first read: no shared grid
 float b = NoiseTex.SampleLevel(NoiseTexSampler, rr / 21000.0 + float2(0.52, 0.27), max(0.0, log2(d / 21000.0))).g;
 float t = smoothstep(0.30, 0.70, a * 0.6 + b * 0.4);
-float k = lerp(1.0 - Var, 1.0 + 0.20 * Var, t);      // the surface's relief is stronger in some patches and softer in others: ripples / grain stop being one repeating field
+// the surface's relief is stronger in some patches and softer in others: ripples / grain stop being one repeating field. A NEAR-ground effect: from afar
+// the 32 m read only printed its own period as a lattice of light / dark scales on the far cliffs (Oct 13 2026), so it fades out by ~600 m.
+float vw = saturate(1.0 - d / 60000.0);
+float k = lerp(1.0, lerp(1.0 - Var, 1.0 + 0.20 * Var, t), vw);
 float3 nn = normalize(float3(N.xy * k, N.z));
 // The detail normal maps repeat every few metres: past a few hundred metres the sun lights every tile the same way and the slope reads as a checker of
 // shading (the colour fade cannot touch it, Oct 13 2026). The relief they carry is unresolvable there anyway: fade them toward the mesh normal with distance,
