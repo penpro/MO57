@@ -55,7 +55,7 @@ design forks are logged under "Forks", not built blind.
   mass), not a constant: it also corrects air exposure. Design fork for Wes (see Forks); the water coupling (`ApplyWaterToExposure`, `WaterTemperatureForAir`) stays as the input and is unit-tested.
 - [ ] **Floating objects / boats** through Oceanology buoyancy (supersedes the unused `MOBuoyancyComponent`).
 - [ ] Real reed / rush / cattail meshes for the shore tier (stand-ins today); needs a download decision (see Forks).
-- [ ] Mud lake bed (gravel today).
+- [x] Mud lake bed (gravel today). **2026-10-13:** `UMOWorldGenSettings::UplandLakeBedSurfaceType` now defaults to `VST_MI_DarkPebbles` (dark wet stone): the bright white gravel ring around every lake is gone (packaged shots `pkg_probe/lake_final.log` vs `lake_bed.log`). A real silt / mud surface would need a new voxel material (none of the 13 is mud).
 
 ### P2 - world richness
 - [ ] Per-biome fauna and POI density review (run `MO.WorldGen.SeedSurvey`, walk each biome for 3 minutes, log empty / repetitive stretches).

@@ -53,7 +53,7 @@ public:
 	 * muddy leaves under 5 m of water read as a flooded forest floor). Empty = the biome's ground continues under the water.
 	 */
 	UPROPERTY(EditAnywhere, Config, Category="Water", meta=(AllowedClasses="/Script/VoxelCore.VoxelSurfaceTypeInterface"))
-	FSoftObjectPath UplandLakeBedSurfaceType = FSoftObjectPath(TEXT("/Game/VoxelExamples/NaniteMaterials/Materials/VST_MI_Gravel.VST_MI_Gravel"));
+	FSoftObjectPath UplandLakeBedSurfaceType = FSoftObjectPath(TEXT("/Game/VoxelExamples/NaniteMaterials/Materials/DarkPebbles/VST_MI_DarkPebbles.VST_MI_DarkPebbles"));
 
 	/** Build a fresh snapshot from the current settings + DT_Biomes (game thread). Does not publish. */
 	static FMOWorldGenParamsRef BuildParams();
