@@ -235,11 +235,20 @@ protected:
 	UCommonActivatableWidget* PushWidgetInstanceToLayer(FGameplayTag LayerTag, UCommonActivatableWidget* Widget);
 
 	/**
-	 * Pop/deactivate a widget from its layer.
+	 * Pop/deactivate a widget from its layer, whatever state it is in:
+	 *   - active                  -> DeactivateWidget(); the stack removes it and re-activates the one below.
+	 *   - pushed, not yet active  -> closed the tick AFTER CommonUI activates it (DeferCloseUntilActivated). CommonUI activates a stack's new widget only when the stack's
+	 *                                transition ends, a few frames after the push. Dropping the request leaves an orphan menu; yanking the widget out with RemoveWidget() mid-transition
+	 *                                leaves the stack with a stuck "active" entry (the transition ends onto a released widget) -- both found by the live UI suite.
+	 *   - covered by another entry -> removed from its stack (the engine-supported yank for a widget that is not displayed).
+	 *   - viewport popup           -> RemoveFromParent.
 	 *
 	 * @param Widget The widget to remove/deactivate
 	 */
 	void PopWidgetFromLayer(UCommonActivatableWidget* Widget);
+
+	/** Deactivate a pushed-but-not-yet-active widget as soon as CommonUI activates it. Gives up (and logs) after a few seconds if it never does. */
+	void DeferCloseUntilActivated(UCommonActivatableWidget* Widget);
 
 	/**
 	 * Cache a widget reference and bind to OnDeactivated without confusing temporary
@@ -319,6 +328,28 @@ protected:
 		}
 		// Non-activatable popup: cache can outlive viewport presence.
 		return W->IsInViewport();
+	}
+
+	/**
+	 * The close-side twin of IsCachedMenuOpen: close a controller-cached activatable widget wherever it is in its life.
+	 *
+	 * Resets the cache FIRST (IsXOpen() is false at once -- that is what de-bounces a toggle key firing twice in a frame), then pops the widget. It deliberately does NOT gate on IsActivated():
+	 * a widget that was just pushed is already in its stack's list (IsCachedMenuOpen says "open") but CommonUI only activates it when the stack's transition finishes, a few frames later.
+	 * A close request in that window used to be dropped -- cache cleared, widget left on the stack -- so the menu activated AFTER its "close" as an orphan no controller tracked: it could not be
+	 * closed again and the next open stacked a second copy (found by CommonUI.FocusRestoration, which failed whenever the frame rate let Escape land inside the window).
+	 * PopWidgetFromLayer handles every state (active, pushed-but-not-yet-active, covered, viewport popup) -- see its comment.
+	 * Use this for every close / "close the existing one first" path; do not hand-roll `if (W->IsActivated()) Pop(W)`.
+	 */
+	template<typename TWidget>
+	void CloseCachedMenu(TWeakObjectPtr<TWidget>& Cache)
+	{
+		static_assert(TIsDerivedFrom<TWidget, UCommonActivatableWidget>::Value, "CloseCachedMenu is for activatable widgets");
+		TWidget* Widget = Cache.Get();
+		Cache.Reset();
+		if (IsValid(Widget))
+		{
+			PopWidgetFromLayer(Widget);
+		}
 	}
 
 	/** Find the CommonUI layer stack that currently owns a widget. */

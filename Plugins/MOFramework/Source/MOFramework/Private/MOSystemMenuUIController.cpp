@@ -194,12 +194,7 @@ void UMOSystemMenuUIController::OpenInGameMenu()
 	}
 
 	// Close any existing menu first
-	UMOInGameMenu* ExistingMenu = InGameMenuWidget.Get();
-	if (IsValid(ExistingMenu) && ExistingMenu->IsActivated())
-	{
-		PopWidgetFromLayer(ExistingMenu);
-		InGameMenuWidget.Reset();
-	}
+	CloseCachedMenu(InGameMenuWidget);
 
 	// Push to MENU layer, not Modal. Per MOPrimaryGameLayout layer design:
 	//   Menu (150)  → system menus (in-game menu, possession menu)
@@ -250,13 +245,7 @@ void UMOSystemMenuUIController::CloseInGameMenu()
 	// IMPORTANT: Get reference before clearing cache
 	// Reset cache FIRST to ensure IsInGameMenuOpen() returns false immediately
 	// This prevents race conditions with toggle input that fires multiple times per frame
-	UMOInGameMenu* MenuWidget = InGameMenuWidget.Get();
-	InGameMenuWidget.Reset();
-
-	if (IsValid(MenuWidget) && MenuWidget->IsActivated())
-	{
-		PopWidgetFromLayer(MenuWidget);
-	}
+	CloseCachedMenu(InGameMenuWidget);
 
 	UpdateReticleVisibility();
 
@@ -443,12 +432,7 @@ void UMOSystemMenuUIController::OpenPossessionMenu()
 	UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] OpenPossessionMenu - All checks passed, creating menu"));
 
 	// Close any existing menu first
-	UMOPossessionMenu* ExistingMenu = PossessionMenuWidget.Get();
-	if (IsValid(ExistingMenu) && ExistingMenu->IsActivated())
-	{
-		PopWidgetFromLayer(ExistingMenu);
-		PossessionMenuWidget.Reset();
-	}
+	CloseCachedMenu(PossessionMenuWidget);
 
 	// Create new widget via CommonUI layer stack
 	ShowModalBackground();
@@ -499,10 +483,7 @@ void UMOSystemMenuUIController::ClosePossessionMenu()
 		}
 	}
 
-	if (IsValid(MenuWidget) && MenuWidget->IsActivated())
-	{
-		PopWidgetFromLayer(MenuWidget);
-	}
+	PopWidgetFromLayer(MenuWidget);   // not gated on IsActivated(): see CloseCachedMenu
 
 	UpdateReticleVisibility();
 
@@ -1103,14 +1084,7 @@ void UMOSystemMenuUIController::HandlePawnDied(AMOCharacter* DeadCharacter, EMOB
 
 	// If a previous recap is still showing (shouldn't happen — recap holds you
 	// until you click out — but defensive), pop the old one first.
-	if (UMODeathRecapWidget* Existing = DeathRecapWidget.Get())
-	{
-		if (Existing->IsActivated())
-		{
-			Existing->DeactivateWidget();
-		}
-		DeathRecapWidget.Reset();
-	}
+	CloseCachedMenu(DeathRecapWidget);
 
 	// Build the snapshot BEFORE pushing the widget so the data exists before
 	// NativeConstruct can ask for it. UMODeathRecapWidget::SetRecapData

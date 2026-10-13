@@ -183,12 +183,7 @@ void UMOCharacterUIController::OpenSkillsPanel()
 	}
 
 	// Close any existing panel first
-	UMOSkillsPanel* ExistingPanel = SkillsPanelWidget.Get();
-	if (IsValid(ExistingPanel) && ExistingPanel->IsActivated())
-	{
-		PopWidgetFromLayer(ExistingPanel);
-		SkillsPanelWidget.Reset();
-	}
+	CloseCachedMenu(SkillsPanelWidget);
 
 	// Create new widget via CommonUI layer stack
 	ShowModalBackground();
@@ -225,13 +220,7 @@ void UMOCharacterUIController::CloseSkillsPanel()
 	// IMPORTANT: Get reference before clearing cache
 	// Reset cache FIRST to ensure IsSkillsPanelOpen() returns false immediately
 	// This prevents race conditions with toggle input that fires multiple times per frame
-	UMOSkillsPanel* PanelWidget = SkillsPanelWidget.Get();
-	SkillsPanelWidget.Reset();
-
-	if (IsValid(PanelWidget) && PanelWidget->IsActivated())
-	{
-		PopWidgetFromLayer(PanelWidget);
-	}
+	CloseCachedMenu(SkillsPanelWidget);
 
 	// Modal background + reticle refresh handled by UMOActivatableWidget::NativeOnDeactivated.
 
@@ -324,12 +313,7 @@ void UMOCharacterUIController::SetPlayerStatusVisible(bool bVisible)
 		}
 
 		// Close any existing panel first
-		UMOStatusPanel* ExistingPanel = StatusPanelWidget.Get();
-		if (IsValid(ExistingPanel) && ExistingPanel->IsActivated())
-		{
-			PopWidgetFromLayer(ExistingPanel);
-			StatusPanelWidget.Reset();
-		}
+		CloseCachedMenu(StatusPanelWidget);
 
 		// Create new widget via CommonUI layer stack
 		ShowModalBackground();
@@ -360,13 +344,7 @@ void UMOCharacterUIController::SetPlayerStatusVisible(bool bVisible)
 		// IMPORTANT: Get reference before clearing cache
 		// Reset cache FIRST to ensure IsPlayerStatusVisible() returns false immediately
 		// This prevents race conditions with toggle input that fires multiple times per frame
-		UMOStatusPanel* Status = StatusPanelWidget.Get();
-		StatusPanelWidget.Reset();
-
-		if (IsValid(Status) && Status->IsActivated())
-		{
-			PopWidgetFromLayer(Status);
-		}
+		CloseCachedMenu(StatusPanelWidget);
 
 		// Modal background + reticle refresh handled by UMOActivatableWidget::NativeOnDeactivated.
 

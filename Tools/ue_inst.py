@@ -1576,13 +1576,14 @@ def _trust_pickup_far(rep, host, client):
         return
     time.sleep(8)  # replicates to the client
     off = log_size(host)
+    coff = log_size(client)   # the client's log segment since the command: a fixed "last 4000 chars" tail was flooded out by [MOBiomeSpawner] lines while the client's PCG ran, and the verdict flipped
     console(client, "MO.Test.PickupNearest 12000 3500")
     time.sleep(6)
     log = read_log_from(host, off)
     refused = re.search(r"\[MOInteract\] ServerPickUpWorldItem: \S+ out of reach", log)
     took = re.search(r"\[MOInteract\] ServerPickUpWorldItem: \S+ -> picked up", log)
-    cl = read_log_from(client, 0)
-    asked = re.search(r"\[MOTEST\] PickupNearest: interacting with \S+ at (\d+)uu", cl[-4000:])
+    cl = read_log_from(client, coff)
+    asked = re.search(r"\[MOTEST\] PickupNearest: interacting with \S+ at (\d+)uu", cl)
     if not asked:
         rep.step("trust: there was a world item 35 m+ away to ask for", False, "client found none within 120 m (the world is empty here)")
         return

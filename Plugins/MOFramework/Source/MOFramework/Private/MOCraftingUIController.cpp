@@ -194,12 +194,7 @@ void UMOCraftingUIController::OpenCraftingMenu()
 	}
 
 	// Close any existing menu first
-	UMOCraftingMenu* ExistingMenu = CraftingMenuWidget.Get();
-	if (IsValid(ExistingMenu) && ExistingMenu->IsActivated())
-	{
-		PopWidgetFromLayer(ExistingMenu);
-		CraftingMenuWidget.Reset();
-	}
+	CloseCachedMenu(CraftingMenuWidget);
 
 	// Create new widget via CommonUI layer stack
 	ShowModalBackground();
@@ -256,10 +251,7 @@ void UMOCraftingUIController::CloseCraftingMenu()
 		// Clear station reference to reset UI state
 		MenuWidget->SetActiveStationActor(nullptr);
 
-		if (MenuWidget->IsActivated())
-		{
-			PopWidgetFromLayer(MenuWidget);
-		}
+		PopWidgetFromLayer(MenuWidget);   // not gated on IsActivated(): see CloseCachedMenu
 	}
 
 	UpdateReticleVisibility();

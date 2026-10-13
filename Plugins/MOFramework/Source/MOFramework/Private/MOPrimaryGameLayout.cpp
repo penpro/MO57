@@ -65,7 +65,8 @@ void UMOPrimaryGameLayout::RegisterLayer(FGameplayTag LayerTag, UCommonActivatab
 	if (LayerStack && LayerTag.IsValid())
 	{
 		LayerStacks.Add(LayerTag, LayerStack);
-		UE_LOG(LogTemp, Verbose, TEXT("MOPrimaryGameLayout: Registered layer %s"), *LayerTag.ToString());
+		LayerStack->SetTransitionDuration(LayerTransitionSeconds);   // see LayerTransitionSeconds: 0 = a push activates synchronously
+		UE_LOG(LogMOFramework, Log, TEXT("MOPrimaryGameLayout: Registered layer %s (transition %.3f s)"), *LayerTag.ToString(), LayerStack->GetTransitionDuration());
 	}
 }
 

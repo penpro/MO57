@@ -146,6 +146,17 @@ protected:
 	virtual void NativeConstruct() override;
 	//~ End UUserWidget Interface
 
+	/**
+	 * Transition time (s) applied to every layer stack. 0 = a pushed widget is ACTIVE when PushWidget returns.
+	 *
+	 * The engine default is 0.4 s: a push then only enters the stack's list, the transition runs, and CommonUI activates the widget when it ends. In that window the widget
+	 * "is open" (IsCachedMenuOpen) but not activated, and a key pressed twice quickly -- or any open + close in one tick -- either dropped the close and left an orphan menu
+	 * or yanked the widget out mid-transition and left a stuck "active" entry. It also made every menu appear a fade late. MO's menus have no authored transition,
+	 * so the default is 0 (defaults are policy). PopWidgetFromLayer still handles a not-yet-active widget (DeferCloseUntilActivated) for anything that re-enables a transition.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "MO|UI|Layers", meta = (ClampMin = "0.0"))
+	float LayerTransitionSeconds = 0.0f;
+
 	/** Register a layer stack with a gameplay tag. Called from NativeConstruct. */
 	void RegisterLayer(FGameplayTag LayerTag, UCommonActivatableWidgetContainerBase* LayerStack);
 

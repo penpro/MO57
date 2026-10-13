@@ -7,6 +7,7 @@
 #include "CommonActivatableWidget.h"
 #include "Widgets/CommonActivatableWidgetContainer.h"
 #include "GameFramework/PlayerController.h"
+#include "Containers/Ticker.h"
 
 UMOUIControllerBase::UMOUIControllerBase()
 {
@@ -211,15 +212,64 @@ void UMOUIControllerBase::PopWidgetFromLayer(UCommonActivatableWidget* Widget)
 	}
 	else if (UCommonActivatableWidgetContainerBase* Stack = FindLayerStackContainingWidget(Widget))
 	{
-		// A covered stack entry is inactive but still owned by the stack.
-		// Explicit removal is required; DeactivateWidget would be a no-op.
-		Stack->RemoveWidget(*Widget);
+		const TArray<UCommonActivatableWidget*>& Entries = Stack->GetWidgetList();
+		const bool bTopmost = Entries.Num() > 0 && Entries.Last() == Widget;
+		if (Stack->GetActiveWidget() == Widget)
+		{
+			// Deactivated and still the displayed widget: the stack is already ditching it (HandleActiveWidgetDeactivated). Nothing to do.
+		}
+		else if (bTopmost)
+		{
+			// Pushed, not yet displayed or activated: the stack's transition onto it is still running. Do not yank it out of the switcher mid-transition.
+			DeferCloseUntilActivated(Widget);
+		}
+		else
+		{
+			// A covered stack entry is inactive but still owned by the stack.
+			// Explicit removal is required; DeactivateWidget would be a no-op.
+			Stack->RemoveWidget(*Widget);
+		}
 	}
 	else if (Widget->IsInViewport())
 	{
 		// Widget was added via AddToViewport (context menus, fallback path)
 		Widget->RemoveFromParent();
 	}
+}
+
+void UMOUIControllerBase::DeferCloseUntilActivated(UCommonActivatableWidget* Widget)
+{
+	if (!IsValid(Widget))
+	{
+		return;
+	}
+
+	const double Deadline = FPlatformTime::Seconds() + 5.0;
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOUIControllerBase] %s was closed before CommonUI activated it -- closing it as soon as it activates"), *Widget->GetName());
+	FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateWeakLambda(this,
+		[this, WeakWidget = TWeakObjectPtr<UCommonActivatableWidget>(Widget), Deadline](float) -> bool
+		{
+			UCommonActivatableWidget* W = WeakWidget.Get();
+			if (!IsValid(W))
+			{
+				return false;
+			}
+			if (W->IsActivated())
+			{
+				W->DeactivateWidget();
+				return false;
+			}
+			if (!FindLayerStackContainingWidget(W))
+			{
+				return false;   // left its stack by another route; nothing to close
+			}
+			if (FPlatformTime::Seconds() > Deadline)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOUIControllerBase] %s never activated within 5 s of its close request; giving up (it stays on its stack)"), *W->GetName());
+				return false;
+			}
+			return true;
+		}), 0.0f);
 }
 
 UCommonActivatableWidgetContainerBase* UMOUIControllerBase::FindLayerStackContainingWidget(

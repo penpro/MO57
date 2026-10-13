@@ -35,8 +35,10 @@
  *   reads the menu count BEFORE CommonUI lists the widget as active (count 0), so
  *   the only call that sees the menu is the one in UMOActivatableWidget::
  *   NativeOnActivated -- do not remove it. (2) Opening one menu closes the others,
- *   so Inventory -> Crafting is a switch; the flip counter (GetHUDYieldFlipCount)
- *   is how HUD.TutorialTextYieldsToMenus proves it never flashes back in between.
+ *   so Inventory -> Crafting is a switch; HUD.TutorialTextYieldsToMenus proves it never
+ *   flashes back in between by sampling what is shown at each FRAME boundary (the layer
+ *   stacks activate synchronously, so the HUD is told "no menu" then "menu" inside one
+ *   tick -- GetHUDYieldFlipCount counts those invisible internal changes and is only a diagnostic).
  *   The hint widget keeps its own "suppressed" flag because a tutorial objective
  *   completing under an open menu re-pulls the hint by itself.
  *

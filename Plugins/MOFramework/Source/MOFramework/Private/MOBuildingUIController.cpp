@@ -130,12 +130,7 @@ void UMOBuildingUIController::OpenBuildingMenu()
 	}
 
 	// Close any existing menu first
-	UMOBuildingMenu* ExistingMenu = BuildingMenuWidget.Get();
-	if (IsValid(ExistingMenu) && ExistingMenu->IsActivated())
-	{
-		PopWidgetFromLayer(ExistingMenu);
-		BuildingMenuWidget.Reset();
-	}
+	CloseCachedMenu(BuildingMenuWidget);
 
 	// Create new widget via CommonUI layer stack
 	ShowModalBackground();
@@ -173,13 +168,7 @@ void UMOBuildingUIController::CloseBuildingMenu()
 	// IMPORTANT: Get reference before clearing cache
 	// Reset cache FIRST to ensure IsBuildingMenuOpen() returns false immediately
 	// This prevents race conditions with toggle input that fires multiple times per frame
-	UMOBuildingMenu* MenuWidget = BuildingMenuWidget.Get();
-	BuildingMenuWidget.Reset();
-
-	if (IsValid(MenuWidget) && MenuWidget->IsActivated())
-	{
-		PopWidgetFromLayer(MenuWidget);
-	}
+	CloseCachedMenu(BuildingMenuWidget);
 
 	UpdateReticleVisibility();
 

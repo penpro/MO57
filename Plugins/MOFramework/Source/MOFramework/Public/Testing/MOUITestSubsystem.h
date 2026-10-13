@@ -235,6 +235,8 @@ private:
 	{
 		OpenMenu,
 		OpenInGameDirect,
+		OpenAndCloseInGameSameFrame,   // push the in-game menu and close it in the SAME tick, i.e. before CommonUI has activated it
+		WaitSeconds,                   // Argument = seconds; lets deferred activation / transitions finish before an assert
 		ToggleMenu,
 		Escape,
 		Tab,
@@ -475,6 +477,7 @@ private:
 	FMOUITestResult Test_CommonUI_ModalBlocksInput();
 	FMOUITestResult Test_CommonUI_ToggleKeyPassthrough();
 	FMOUITestResult Test_CommonUI_FocusRestoration();
+	FMOUITestResult Test_CommonUI_CloseBeforeActivation();
 	FMOUITestResult Test_CommonUI_WidgetActivation();
 	FMOUITestResult Test_CommonUI_WidgetDeactivation();
 
@@ -588,6 +591,21 @@ private:
 	double ActiveFrameTestStartTime = 0.0;
 	double ActiveFrameActionDeadline = 0.0;
 	TArray<int32> FrameTestScratch;
+
+	/** Set while a test has forced the Menu layer's transition on (to open the pending-activation window); RestoreMenuTransition puts the policy value back when the test ends. */
+	TOptional<float> MenuTransitionBeforeOverride;
+	void RestoreMenuTransition();
+
+	/**
+	 * Tutorial-text "flash" detector, sampled once per harness step (= once per frame, BEFORE the step's action runs, so it sees what the previous frame rendered).
+	 * Counts hidden<->shown changes BETWEEN frames. A menu switch (Inventory -> Crafting) closes one and opens the other inside a single tick: with synchronous layer transitions
+	 * the HUD is told "no menu" and then "menu" within that tick, which is invisible -- so the raw UMOQuestUIController::GetHUDYieldFlipCount (every internal change) is not
+	 * the right measure of "flashed back"; what was on screen at the frame boundaries is.
+	 */
+	bool bTutorialFlipSampling = false;
+	bool bTutorialShownLastFrame = false;
+	int32 TutorialFrameFlips = 0;
+	void SampleTutorialFlips();
 
 	/** Inter-test isolation: wait for stacks to empty, then observe one clean frame. */
 	bool bWaitingForBatchCleanup = false;

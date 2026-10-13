@@ -185,12 +185,7 @@ void UMOQuestUIController::OpenQuestLog()
 	}
 
 	// Close any existing panel first
-	UMOQuestLogPanel* ExistingPanel = QuestLogPanelWidget.Get();
-	if (IsValid(ExistingPanel) && ExistingPanel->IsActivated())
-	{
-		PopWidgetFromLayer(ExistingPanel);
-		QuestLogPanelWidget.Reset();
-	}
+	CloseCachedMenu(QuestLogPanelWidget);
 
 	// Create new widget via CommonUI layer stack
 	ShowModalBackground();
@@ -223,13 +218,7 @@ void UMOQuestUIController::CloseQuestLog()
 	// IMPORTANT: Get reference before clearing cache
 	// Reset cache FIRST to ensure IsQuestLogOpen() returns false immediately
 	// This prevents race conditions with toggle input that fires multiple times per frame
-	UMOQuestLogPanel* PanelWidget = QuestLogPanelWidget.Get();
-	QuestLogPanelWidget.Reset();
-
-	if (IsValid(PanelWidget) && PanelWidget->IsActivated())
-	{
-		PopWidgetFromLayer(PanelWidget);
-	}
+	CloseCachedMenu(QuestLogPanelWidget);
 
 	UpdateReticleVisibility();
 

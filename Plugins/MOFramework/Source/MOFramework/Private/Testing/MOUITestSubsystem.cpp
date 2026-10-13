@@ -259,6 +259,7 @@ void UMOUITestSubsystem::RegisterTests()
 	TestRegistry.Add(TEXT("CommonUI.ModalBlocksInput"), [this]() { return Test_CommonUI_ModalBlocksInput(); });
 	TestRegistry.Add(TEXT("CommonUI.ToggleKeyPassthrough"), [this]() { return Test_CommonUI_ToggleKeyPassthrough(); });
 	TestRegistry.Add(TEXT("CommonUI.FocusRestoration"), [this]() { return Test_CommonUI_FocusRestoration(); });
+	TestRegistry.Add(TEXT("CommonUI.CloseBeforeActivation"), [this]() { return Test_CommonUI_CloseBeforeActivation(); });
 	TestRegistry.Add(TEXT("CommonUI.WidgetActivation"), [this]() { return Test_CommonUI_WidgetActivation(); });
 	TestRegistry.Add(TEXT("CommonUI.WidgetDeactivation"), [this]() { return Test_CommonUI_WidgetDeactivation(); });
 
@@ -436,6 +437,14 @@ void UMOUITestSubsystem::RegisterFrameSteppedTests()
 		Named(ActionType::AssertMenuOpen, TEXT("Inventory"), TEXT("Inventory did not remain open after modal close")),
 		Basic(ActionType::Escape),
 		Named(ActionType::AssertMenuClosed, TEXT("Inventory"), TEXT("Inventory did not close on second Escape")),
+		Basic(ActionType::Pass)
+	});
+	// Regression for the close-before-activation race: a widget just pushed to a CommonUI stack is only activated when the stack's transition ends, a few frames later. A close in that window used to be
+	// dropped (cache cleared, widget left on the stack) and the menu came up AFTER its "close" as an orphan nobody tracked. Deterministic: open + close in one tick, wait for any deferred activation, nothing may be left.
+	Add(TEXT("CommonUI.CloseBeforeActivation"), {
+		Named(ActionType::OpenAndCloseInGameSameFrame, TEXT(""), TEXT("Could not push and close the in-game menu")),
+		Named(ActionType::WaitSeconds, TEXT("1.5"), TEXT("")),
+		Named(ActionType::AssertNoActiveMenus, TEXT(""), TEXT("A menu closed before it finished activating came back as an orphan")),
 		Basic(ActionType::Pass)
 	});
 	Add(TEXT("CommonUI.WidgetActivation"), {
@@ -697,12 +706,42 @@ void UMOUITestSubsystem::RunNextTestStep()
 	ScheduleNextTestStep();
 }
 
+void UMOUITestSubsystem::RestoreMenuTransition()
+{
+	if (MenuTransitionBeforeOverride.IsSet())
+	{
+		if (UMOGameUIManagerSubsystem* UISubsystem = UMOGameUIManagerSubsystem::Get(GetWorld()))
+		{
+			if (UCommonActivatableWidgetContainerBase* Layer = UISubsystem->GetMenuLayer())
+			{
+				Layer->SetTransitionDuration(MenuTransitionBeforeOverride.GetValue());
+			}
+		}
+		MenuTransitionBeforeOverride.Reset();
+	}
+}
+
+void UMOUITestSubsystem::SampleTutorialFlips()
+{
+	if (!bTutorialFlipSampling)
+	{
+		return;
+	}
+	const bool bShown = TutorialTextIsShown();
+	if (bShown != bTutorialShownLastFrame)
+	{
+		++TutorialFrameFlips;
+		bTutorialShownLastFrame = bShown;
+	}
+}
+
 void UMOUITestSubsystem::RunNextFrameTestAction()
 {
 	if (!bIsRunningTests || ActiveFrameTestName.IsEmpty())
 	{
 		return;
 	}
+	SampleTutorialFlips();
 
 	if (!ActiveFrameTestActions.IsValidIndex(NextFrameTestActionIndex))
 	{
@@ -712,6 +751,7 @@ void UMOUITestSubsystem::RunNextFrameTestAction()
 			TEXT("Frame-stepped test ended without a terminal Pass action"));
 		Result.DurationMs = (FPlatformTime::Seconds() - ActiveFrameTestStartTime) * 1000.0f;
 		Result.Logs = CurrentTestLogs;
+		RestoreMenuTransition();
 		RecordBatchResult(MoveTemp(Result));
 		ActiveFrameTestName.Reset();
 		ActiveFrameTestActions.Reset();
@@ -747,6 +787,7 @@ void UMOUITestSubsystem::RunNextFrameTestAction()
 
 	Result.DurationMs = (FPlatformTime::Seconds() - ActiveFrameTestStartTime) * 1000.0f;
 	Result.Logs = CurrentTestLogs;
+	RestoreMenuTransition();
 	RecordBatchResult(MoveTemp(Result));
 
 	ActiveFrameTestName.Reset();
@@ -791,6 +832,37 @@ UMOUITestSubsystem::EMOUIFrameTestActionOutcome UMOUITestSubsystem::ExecuteFrame
 			return EMOUIFrameTestActionOutcome::Continue;
 		}
 		return Fail(TEXT("UIManager not found for direct in-game menu open"));
+
+	case EMOUIFrameTestActionType::OpenAndCloseInGameSameFrame:
+		if (UMOUIManagerComponent* UIManager = GetUIManager())
+		{
+			// The policy default (LayerTransitionSeconds = 0) activates a push synchronously, which closes the window this test is about. Force a transition on the Menu layer
+			// for the duration of the test so the open really is "in the stack but not yet active" (restored when the test ends).
+			if (UMOGameUIManagerSubsystem* UISubsystem = UMOGameUIManagerSubsystem::Get(GetWorld()))
+			{
+				if (UCommonActivatableWidgetContainerBase* Layer = UISubsystem->GetMenuLayer())
+				{
+					if (!MenuTransitionBeforeOverride.IsSet())
+					{
+						MenuTransitionBeforeOverride = Layer->GetTransitionDuration();
+					}
+					Layer->SetTransitionDuration(0.25f);
+				}
+			}
+			UIManager->OpenInGameMenu();
+			UIManager->CloseInGameMenu();
+			return EMOUIFrameTestActionOutcome::Continue;
+		}
+		return Fail(TEXT("UIManager not found for the same-frame open/close"));
+
+	case EMOUIFrameTestActionType::WaitSeconds:
+	{
+		// ActiveFrameActionDeadline was set to (start + 3 s) when this action first ran; Retry keeps it, so the start time is recoverable.
+		const double Start = ActiveFrameActionDeadline - 3.0;
+		return FPlatformTime::Seconds() >= Start + FCString::Atod(*Action.Argument)
+			? EMOUIFrameTestActionOutcome::Continue
+			: EMOUIFrameTestActionOutcome::Retry;
+	}
 
 	case EMOUIFrameTestActionType::ToggleMenu:
 		return ToggleMenuForTest(Action.Argument)
@@ -908,14 +980,20 @@ UMOUITestSubsystem::EMOUIFrameTestActionOutcome UMOUITestSubsystem::ExecuteFrame
 				}
 				if (Action.Type == EMOUIFrameTestActionType::CaptureTutorialFlips)
 				{
-					FrameTestScratch[Action.ScratchSlot] = Quest->GetHUDYieldFlipCount();
+					FrameTestScratch[Action.ScratchSlot] = Quest->GetHUDYieldFlipCount();   // raw internal changes, logged for diagnosis only
+					bTutorialFlipSampling = true;
+					bTutorialShownLastFrame = TutorialTextIsShown();
+					TutorialFrameFlips = 0;
 					return EMOUIFrameTestActionOutcome::Continue;
 				}
-				const int32 Flips = Quest->GetHUDYieldFlipCount() - FrameTestScratch[Action.ScratchSlot];
+				SampleTutorialFlips();
+				const int32 Flips = TutorialFrameFlips;
 				const int32 Expected = FCString::Atoi(*Action.Argument);
+				bTutorialFlipSampling = false;
 				return Flips == Expected
 					? EMOUIFrameTestActionOutcome::Continue
-					: Fail(FString::Printf(TEXT("%s (hidden<->shown flips since capture: %d, expected %d)"), *Action.FailureMessage, Flips, Expected));
+					: Fail(FString::Printf(TEXT("%s (hidden<->shown flips between frames since capture: %d, expected %d; internal changes: %d)"), *Action.FailureMessage, Flips, Expected,
+						Quest->GetHUDYieldFlipCount() - FrameTestScratch[Action.ScratchSlot]));
 			}
 		}
 		return Fail(TEXT("no quest UI controller"));
@@ -3137,6 +3215,21 @@ FMOUITestResult UMOUITestSubsystem::Test_CommonUI_ToggleKeyPassthrough()
 	}
 
 	return MakeResult(TEXT("CommonUI.ToggleKeyPassthrough"), true);
+}
+
+FMOUITestResult UMOUITestSubsystem::Test_CommonUI_CloseBeforeActivation()
+{
+	const FString Name = TEXT("CommonUI.CloseBeforeActivation");
+	LogTest(TEXT("Testing: a menu closed in the same tick it was pushed (before CommonUI activates it) must not come back"));
+
+	// Legacy synchronous entry: the orphan appears only AFTER the stack's transition finishes, which a single frame cannot observe -- the assertion is the frame-stepped sequence of the
+	// same name (RegisterFrameSteppedTests: open + close in one tick, wait, AssertNoActiveMenus), which is what the batch runners execute. Here: the immediate state only.
+	UMOUIManagerComponent* UIManager = GetUIManager();
+	if (!UIManager) return MakeResult(Name, false, TEXT("no UI manager"));
+	UIManager->OpenInGameMenu();
+	UIManager->CloseInGameMenu();
+	if (UIManager->IsInGameMenuOpen()) return MakeResult(Name, false, TEXT("the in-game menu still reports open right after its close"));
+	return MakeResult(Name, true);
 }
 
 FMOUITestResult UMOUITestSubsystem::Test_CommonUI_FocusRestoration()
