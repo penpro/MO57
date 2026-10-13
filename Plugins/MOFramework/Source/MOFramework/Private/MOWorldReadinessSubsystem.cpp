@@ -109,7 +109,7 @@ int32 UMOWorldReadinessSubsystem::CountNearPcgInstances() const
 		for (UInstancedStaticMeshComponent* Ism : Comps)
 		{
 			const int32 Num = Ism->GetInstanceCount();
-			if (Num == 0 || !Ism->GetStaticMesh() || Ism->ComponentHasTag(TEXT("MOFar_Tree")) || Ism->ComponentHasTag(TEXT("MOFar_Grass")))
+			if (Num == 0 || !Ism->GetStaticMesh() || Ism->ComponentHasTag(TEXT("MOFar_Tree")) || Ism->ComponentHasTag(TEXT("MOFar_Canopy")) || Ism->ComponentHasTag(TEXT("MOFar_Grass")))
 			{
 				continue;
 			}

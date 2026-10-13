@@ -89,6 +89,9 @@ namespace
 	bool IsFarGroundCover(const FMOBiomeSpeciesEntry& Sp) { return Sp.HISMTag == FName(TEXT("MOFar_Grass")); }
 	bool IsFarLargeTag(const FName& Tag) { return Tag == FName(TEXT("MOFar_Tree")); }
 	bool IsFarLarge(const FMOBiomeSpeciesEntry& Sp) { return IsFarLargeTag(Sp.HISMTag); }
+	/** The third far tier: solid crown proxies for the forest 3-9 km away (tag MOFar_Canopy). Like every far tag it belongs to its own node only. */
+	bool IsFarCanopyTag(const FName& Tag) { return Tag == FName(TEXT("MOFar_Canopy")); }
+	bool IsFarCanopy(const FMOBiomeSpeciesEntry& Sp) { return IsFarCanopyTag(Sp.HISMTag); }
 	/** Saplings and seedlings carry the tree tag (they are harvestable) but stand 0.5-3 m tall: they belong with the shrubs on the large-species grid, not out on the tree grid. */
 	bool IsYoungTree(const FMOBiomeSpeciesEntry& Sp)
 	{
@@ -106,15 +109,17 @@ namespace
 		{
 			return false;   // the shore tier plants only the biome rows' water-edge list
 		}
-		const bool bFarGround = IsFarGroundCover(Sp), bFarLarge = IsFarLarge(Sp);
+		const bool bFarGround = IsFarGroundCover(Sp), bFarLarge = IsFarLarge(Sp), bFarCanopy = IsFarCanopy(Sp);
+		const bool bAnyFar = bFarGround || bFarLarge || bFarCanopy;
 		switch (Filter)
 		{
 		case EMOBiomeSpeciesFilter::All:                return true;
 		case EMOBiomeSpeciesFilter::FarGroundCoverOnly: return bFarGround;
 		case EMOBiomeSpeciesFilter::FarLargeOnly:       return bFarLarge;
+		case EMOBiomeSpeciesFilter::FarCanopyOnly:      return bFarCanopy;
 		case EMOBiomeSpeciesFilter::TreesOnly:          return IsTreeSpecies(Sp);
-		case EMOBiomeSpeciesFilter::LargeOnly:          return !bFarGround && !bFarLarge && !IsTreeSpecies(Sp) && IsLargeSpecies(Sp);
-		default:                                        return !bFarGround && !bFarLarge && !IsLargeSpecies(Sp);   // GroundCoverOnly
+		case EMOBiomeSpeciesFilter::LargeOnly:          return !bAnyFar && !IsTreeSpecies(Sp) && IsLargeSpecies(Sp);
+		default:                                        return !bAnyFar && !IsLargeSpecies(Sp);   // GroundCoverOnly
 		}
 	}
 
@@ -346,7 +351,9 @@ bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 			// so density ramps across EdgeBlendWidth rather than stepping.
 			float EdgeScale = 1.0f;
 			const float BlendW = Chosen->Row->EdgeBlendWidth;
-			if (BlendW > 1.0f)
+			// (the far tiers skip the feather: it costs four climate samples per point and moves a density ramp nobody can see from kilometres away)
+			const bool bFarTierFilter = Settings->SpeciesFilter == EMOBiomeSpeciesFilter::FarCanopyOnly || Settings->SpeciesFilter == EMOBiomeSpeciesFilter::FarLargeOnly || Settings->SpeciesFilter == EMOBiomeSpeciesFilter::FarGroundCoverOnly;
+			if (BlendW > 1.0f && !bFarTierFilter)
 			{
 				int32 Agree = 0;
 				const float R = BlendW * 0.5f;
@@ -559,7 +566,7 @@ bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 		// biggest line in the shadow pass for nothing visible), no ray-tracing / reflection presence, no wind, and never drawn inside the distance the NEAR tiers own: InstanceMinDrawDistance is
 		// the engine's per-instance minimum, so a far cell that becomes near leaves no oversized ghost trees beside the real ones whatever the generation-time viewer position was.
 		// GROUND COVER (grass, flowers, debris) casts no shadow and stays out of the ray-traced scene either: millions of blades add cost to those passes and no visible shading.
-		const bool bFarTier = IsFarLargeTag(Bucket.HISMTag) || Bucket.HISMTag == FName(TEXT("MOFar_Grass"));
+		const bool bFarTier = IsFarLargeTag(Bucket.HISMTag) || IsFarCanopyTag(Bucket.HISMTag) || Bucket.HISMTag == FName(TEXT("MOFar_Grass"));
 		const bool bGroundCover = Bucket.HISMTag == FName(TEXT("MOBiomeCover_Grass")) || Bucket.HISMTag == FName(TEXT("MOBiomeCover_Flower")) || Bucket.HISMTag == FName(TEXT("MOBiomeCover_Debris"));
 		if (bFarTier || bGroundCover)
 		{

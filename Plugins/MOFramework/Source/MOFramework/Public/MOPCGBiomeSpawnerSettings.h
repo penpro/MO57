@@ -72,7 +72,9 @@ enum class EMOBiomeSpeciesFilter : uint8
 	/** The FAR large tier: species tagged MOFar_Tree (stand-ins for distant trees: proxies, low LODs). */
 	FarLargeOnly UMETA(DisplayName = "Far large only (MOFar_Tree)"),
 	/** TREES only (HISMTag MOResource_Tree), on their own large hierarchical grid so the forest reaches far past the shrubs, rocks and undergrowth of the LargeOnly tier. */
-	TreesOnly UMETA(DisplayName = "Trees only (MOResource_Tree)")
+	TreesOnly UMETA(DisplayName = "Trees only (MOResource_Tree)"),
+	/** The FAR CANOPY tier: species tagged MOFar_Canopy (solid low-poly crown proxies, 3-9 km): beyond the stand-in trees, where a real tree is a few pixels and its masked leaves only alias. */
+	FarCanopyOnly UMETA(DisplayName = "Far canopy only (MOFar_Canopy)")
 };
 
 UCLASS(BlueprintType, ClassGroup=(MO))

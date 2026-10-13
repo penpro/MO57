@@ -3364,7 +3364,7 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 						const float Hy0 = FMOWorldGen::SampleHeightCm(*P, L.X, L.Y - Step, TerrainSeed, Vox), Hy1 = FMOWorldGen::SampleHeightCm(*P, L.X, L.Y + Step, TerrainSeed, Vox);
 						const FVector Normal = FVector(-(Hx1 - Hx0), -(Hy1 - Hy0), 2.0f * Step).GetSafeNormal();
 						const float Ground = FMOWorldGen::SampleHeightCm(*P, L.X, L.Y, TerrainSeed, Vox);
-						FRow& R = Rows.FindOrAdd(Ism->ComponentHasTag(TEXT("MOFar_Grass")) ? Mesh->GetName() + TEXT(" [far grass]") : Ism->ComponentHasTag(TEXT("MOFar_Tree")) ? Mesh->GetName() + TEXT(" [far tree]") : Mesh->GetName());
+						FRow& R = Rows.FindOrAdd(Ism->ComponentHasTag(TEXT("MOFar_Grass")) ? Mesh->GetName() + TEXT(" [far grass]") : Ism->ComponentHasTag(TEXT("MOFar_Tree")) ? Mesh->GetName() + TEXT(" [far tree]") : Ism->ComponentHasTag(TEXT("MOFar_Canopy")) ? Mesh->GetName() + TEXT(" [far canopy]") : Mesh->GetName());
 						++R.Count;
 						{
 							const double D = FVector2D::Distance(FVector2D(L.X, L.Y), FVector2D(C.X, C.Y));
@@ -3400,8 +3400,8 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 			APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
 			const FVector C = (PC && PC->PlayerCameraManager) ? PC->PlayerCameraManager->GetCameraLocation() : FVector::ZeroVector;
 			static const double Edges[5] = { 13000.0, 40000.0, 140000.0, 250000.0, 400000.0 };
-			static const TCHAR* Kinds[] = { TEXT("tree"), TEXT("far tree"), TEXT("grass"), TEXT("far grass"), TEXT("shrub"), TEXT("rock"), TEXT("other") };
-			int32 Counts[7][6] = {};
+			static const TCHAR* Kinds[] = { TEXT("tree"), TEXT("far tree"), TEXT("grass"), TEXT("far grass"), TEXT("shrub"), TEXT("rock"), TEXT("other"), TEXT("canopy") };
+			int32 Counts[8][6] = {};
 			for (TActorIterator<AActor> ActorIt(World); ActorIt; ++ActorIt)
 			{
 				TArray<UInstancedStaticMeshComponent*> Comps;
@@ -3413,7 +3413,7 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 					{
 						continue;
 					}
-					const int32 Kind = Ism->ComponentHasTag(TEXT("MOFar_Tree")) ? 1 : Ism->ComponentHasTag(TEXT("MOFar_Grass")) ? 3 : Ism->ComponentHasTag(TEXT("MOResource_Tree")) ? 0
+					const int32 Kind = Ism->ComponentHasTag(TEXT("MOFar_Canopy")) ? 7 : Ism->ComponentHasTag(TEXT("MOFar_Tree")) ? 1 : Ism->ComponentHasTag(TEXT("MOFar_Grass")) ? 3 : Ism->ComponentHasTag(TEXT("MOResource_Tree")) ? 0
 						: Ism->ComponentHasTag(TEXT("MOBiomeCover_Grass")) ? 2 : Ism->ComponentHasTag(TEXT("MOBiomeCover_Shrub")) ? 4 : (Ism->ComponentHasTag(TEXT("MOResource_Rock")) || Ism->ComponentHasTag(TEXT("MOBiomeCover_Rock"))) ? 5 : 6;
 					FTransform Xf;
 					for (int32 I = 0; I < Num; ++I)
@@ -3429,7 +3429,7 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 				}
 			}
 			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] RINGS centre=(%.0f, %.0f) :: kind: <130m, <400m, <1.4km, <2.5km, <4km, beyond"), C.X, C.Y);
-			for (int32 K = 0; K < 7; ++K)
+			for (int32 K = 0; K < 8; ++K)
 			{
 				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] RINGS %-9s %7d %7d %7d %7d %7d %7d"), Kinds[K], Counts[K][0], Counts[K][1], Counts[K][2], Counts[K][3], Counts[K][4], Counts[K][5]);
 			}

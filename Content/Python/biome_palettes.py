@@ -484,9 +484,26 @@ def far_grass(species_list):
 # FAR TREES (2026-10-12, Wes: "a fuck ton of proper distance trees"): every tall tree of a biome also stands as a sparser, larger stand-in (tag MOFar_Tree) on the far-tree tier (1 km cells out to
 # ~4 km, node chain add_far_tree_chain.py). Bigger crowns at a fraction of the density keep the canopy closed from a distance for a fraction of the instances. The stand-ins are decorative (no
 # resource node, no collision) and are never drawn inside the node's MinDistanceFromViewerCm (descriptor InstanceMinDrawDistance), where the real trees stand.
-FAR_TREE_RATIO = 0.40
-FAR_TREE_SCALE = 1.5
+FAR_TREE_RATIO = 0.55
+FAR_TREE_SCALE = 1.1    # (was 1.5: the stand-ins read as GIANTS next to the real trees that replace them at the hand-off ring -- Wes saw them pop out and the small real ones pop in; the real
+                        #  tier averages x1.05, so the stand-ins are only a touch bigger, to carry a closed canopy at 55 % of the density)
 FAR_TREE_CAP = 100.0   # stand-ins per hectare at most (the far sampler offers ~112 candidate points / ha)
+
+# The THIRD far tier (MOFar_Canopy, 3 km out to 9 km): solid low-poly CLUMP proxies (Content/Python/make_far_canopy.py). A real tree out there is 2-6 px of aliasing masked leaves; a clump is a soft dark mass.
+# One clump stands for several trees: about 15 per hectare of forest (the 20 m lattice offers ~18), wider than a tree and low (see Tools/gen_far_canopy_meshes.py).
+FAR_CANOPY_CAP = 15.0
+FAR_CANOPY_PER_TREE = 0.16     # clumps per tall-tree-per-hectare, until the cap (a 217 /ha temperate forest hits the cap; a sparse meadow grove stays sparse)
+CANOPY_SMIN, CANOPY_SMAX = 1.0, 1.5
+PROXY = GAME + "/Penumbra/FarCanopy/SM_FarCanopy_%s.SM_FarCanopy_%s"
+PROXY_BY_TREE = {"Field_01": "Round", "Field_02": "Round", "Field_04": "Mid", "Forest_01": "Tall", "Forest_02": "Tall", "Forest_03": "Tall", "Forest_06": "Small", "Forest_07": "Small",
+                 "Forest_08": "Small", "Forest_09": "Small"}   # BlackAlder sizes measured in the editor (Tools: Saved/Tmp/tree_bounds.py); anything else (hornbeams, hazel) -> Mid
+
+
+def proxy_for(path):
+    for key, name in PROXY_BY_TREE.items():
+        if "BlackAlder_" + key + "_" in path:
+            return name
+    return "Mid"
 
 
 def far_trees(species_list):
@@ -512,11 +529,31 @@ def far_trees(species_list):
     return far
 
 
+def far_canopy(species_list):
+    """The MOFar_Canopy stand-ins of a biome: its tall trees' density, folded onto the four clump proxies by size."""
+    per_proxy = {}
+    for sp in species_list:
+        path = sp["Mesh"]
+        if sp["HISMTag"] != "MOResource_Tree" or "Sapling" in path or "Seedling" in path or "wdvhberja" in path:
+            continue
+        name = proxy_for(path)
+        per_proxy[name] = per_proxy.get(name, 0.0) + sp["DensityPerHectare"] * FAR_CANOPY_PER_TREE
+    total = sum(per_proxy.values())
+    k = min(1.0, FAR_CANOPY_CAP / total) if total > 0 else 1.0
+    out = []
+    for name in sorted(per_proxy):
+        d = round(per_proxy[name] * k, 2)
+        if d < 0.3:
+            continue
+        out.append(species(PROXY % (name, name), d, res="None", tag="MOFar_Canopy", cluster=0.0, group=-1, align=False, tilt=0.0, sweep=True, smin=CANOPY_SMIN, smax=CANOPY_SMAX, collision="Passable"))
+    return out
+
+
 def thin_and_far(species_list):
     for sp in species_list:
         if sp["HISMTag"] == "MOBiomeCover_Grass":
             sp["DensityPerHectare"] = round(sp["DensityPerHectare"] * GRASS_THIN, 1)
-    return species_list + far_grass(species_list) + far_trees(species_list)
+    return species_list + far_grass(species_list) + far_trees(species_list) + far_canopy(species_list)
 
 
 for _name in list(PALETTES):
