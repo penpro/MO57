@@ -14,6 +14,7 @@
 #include "Testing/MOUITestSubsystem.h"
 #include "MOVoxelReadinessSubsystem.h"
 #include "MOWorldItem.h"
+#include "MOItemComponent.h"
 #include "MOFramework.h"
 #include "MOAudioSubsystem.h"
 #include "MOAudioTypes.h"
@@ -3878,6 +3879,92 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 			{
 				const FRow& R = Sorted[I].Value;
 				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] CENSUS %6d (<130m %5d, <400m %5d, far %5d) | tilt %5.1f | sink %6.1f | thin %.2f | ext (%.0f,%.0f,%.0f) | %s"), R.Count, R.Band[0], R.Band[1], R.Band[2], R.TiltSum / R.Count, R.SinkSum / R.Count, R.Thin, R.Extent.X, R.Extent.Y, R.Extent.Z, *Sorted[I].Key);
+			}
+		}),
+		ECVF_Default));
+
+	// ---------- MO.PCG.ResourceCensus ----------
+	// What a new player can actually get near where they stand (H09: the tutorial asks for 10 cobbles, 10 bark, 10 sticks): per item, the harvest SOURCES (instances of
+	// components tagged Gives_<Item>: trees, boulders, bushes) and the LOOSE items lying on the ground (AMOWorldItem), each with a count and the nearest one.
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.PCG.ResourceCensus"),
+		TEXT("Dev: per item id, harvest sources (instances on components tagged Gives_<Item>) and loose world items within radius_m of the local pawn, with the nearest of each. Usage: MO.PCG.ResourceCensus [radius_m=150]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
+			const APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+			if (!Pawn)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] RESOURCES FAILED: needs a local pawn"));
+				return;
+			}
+			const double Radius = 100.0 * (Args.Num() > 0 ? FMath::Clamp((double)FCString::Atof(*Args[0]), 5.0, 2000.0) : 150.0);
+			const FVector2D C(Pawn->GetActorLocation().X, Pawn->GetActorLocation().Y);
+			struct FRow { int32 Sources = 0, Loose = 0; double NearestSource = TNumericLimits<double>::Max(), NearestLoose = TNumericLimits<double>::Max(); };
+			TMap<FName, FRow> Rows;
+			for (TActorIterator<AActor> ActorIt(World); ActorIt; ++ActorIt)
+			{
+				if (const AMOWorldItem* Item = Cast<AMOWorldItem>(*ActorIt))
+				{
+					const UMOItemComponent* Comp = Item->GetItemComponent();
+					const double D = FVector2D::Distance(FVector2D(Item->GetActorLocation().X, Item->GetActorLocation().Y), C);
+					if (Comp && !Comp->ItemDefinitionId.IsNone() && D <= Radius)
+					{
+						FRow& R = Rows.FindOrAdd(Comp->ItemDefinitionId);
+						++R.Loose;
+						R.NearestLoose = FMath::Min(R.NearestLoose, D);
+					}
+					continue;
+				}
+				TArray<UInstancedStaticMeshComponent*> Comps;
+				ActorIt->GetComponents<UInstancedStaticMeshComponent>(Comps);
+				for (UInstancedStaticMeshComponent* Ism : Comps)
+				{
+					if (Ism->GetInstanceCount() == 0 || Ism->Bounds.GetBox().ComputeSquaredDistanceToPoint(FVector(C, Ism->Bounds.Origin.Z)) > Radius * Radius)
+					{
+						continue;
+					}
+					TArray<FName, TInlineAllocator<4>> Gives;
+					for (const FName& Tag : Ism->ComponentTags)
+					{
+						FString S = Tag.ToString();
+						if (S.RemoveFromStart(TEXT("Gives_")) && !S.IsEmpty())
+						{
+							Gives.Add(FName(*S));
+						}
+					}
+					if (Gives.Num() == 0)
+					{
+						continue;
+					}
+					for (int32 I = 0; I < Ism->GetInstanceCount(); ++I)
+					{
+						FTransform Xf;
+						if (!Ism->GetInstanceTransform(I, Xf, /*bWorldSpace=*/true))
+						{
+							continue;
+						}
+						const double D = FVector2D::Distance(FVector2D(Xf.GetLocation().X, Xf.GetLocation().Y), C);
+						if (D > Radius)
+						{
+							continue;
+						}
+						for (const FName& Id : Gives)
+						{
+							FRow& R = Rows.FindOrAdd(Id);
+							++R.Sources;
+							R.NearestSource = FMath::Min(R.NearestSource, D);
+						}
+					}
+				}
+			}
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] RESOURCES radius=%.0f m at (%.0f, %.0f): %d item ids"), Radius / 100.0, C.X, C.Y, Rows.Num());
+			Rows.KeySort([](const FName& A, const FName& B) { return A.LexicalLess(B); });
+			for (const TPair<FName, FRow>& Pair : Rows)
+			{
+				const FRow& R = Pair.Value;
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] RESOURCES %-22s sources %5d (nearest %s) | loose %4d (nearest %s)"), *Pair.Key.ToString(), R.Sources,
+					R.Sources > 0 ? *FString::Printf(TEXT("%.0f m"), R.NearestSource / 100.0) : TEXT("-"), R.Loose, R.Loose > 0 ? *FString::Printf(TEXT("%.0f m"), R.NearestLoose / 100.0) : TEXT("-"));
 			}
 		}),
 		ECVF_Default));
