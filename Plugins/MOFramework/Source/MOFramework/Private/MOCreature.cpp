@@ -100,6 +100,30 @@ const FMOCreatureDefinitionRow* AMOCreature::GetCreatureDefinitionRow() const
 		CreatureDefinition.RowName, TEXT("GetCreatureDefinitionRow"));
 }
 
+void AMOCreature::GatherRuntimeAssets(TArray<FSoftObjectPath>& Out) const
+{
+	Super::GatherRuntimeAssets(Out);
+	if (CreatureControllerClass)
+	{
+		GetDefault<AMOCreatureController>(CreatureControllerClass.Get())->GatherRuntimeAssets(Out);
+	}
+	if (!BehaviorTreeOverride.IsNull())
+	{
+		Out.AddUnique(BehaviorTreeOverride.ToSoftObjectPath());
+	}
+	if (const FMOCreatureDefinitionRow* Definition = GetCreatureDefinitionRow())
+	{
+		if (!Definition->BehaviorTree.IsNull())
+		{
+			Out.AddUnique(Definition->BehaviorTree.ToSoftObjectPath());
+		}
+		if (!Definition->CarcassDataTable.IsNull())
+		{
+			Out.AddUnique(Definition->CarcassDataTable.ToSoftObjectPath());
+		}
+	}
+}
+
 AMOCreatureController* AMOCreature::GetCreatureController() const
 {
 	return Cast<AMOCreatureController>(GetController());

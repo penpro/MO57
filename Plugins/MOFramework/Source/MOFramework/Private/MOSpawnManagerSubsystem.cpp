@@ -2,7 +2,10 @@
 #include "MOTickWatchdog.h"
 #include "MOFramework.h"
 #include "MOGameSettings.h"
+#include "MOCharacter.h"
+#include "MOSpawnClearance.h"
 #include "MOSpawnPoint.h"
+#include "Engine/AssetManager.h"
 #include "MOSpawnSettings.h"
 #include "MOSpawnSettingsActor.h"
 #include "MOBuildableActor.h"
@@ -12,7 +15,6 @@
 #include "MOIdentityComponent.h"
 #include "MOInventoryComponent.h"
 #include "MOEquipmentComponent.h"
-#include "VoxelWorld.h"
 
 #include "EngineUtils.h"
 #include "AIController.h"
@@ -156,6 +158,11 @@ void UMOSpawnManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
 void UMOSpawnManagerSubsystem::Deinitialize()
 {
+	if (SpawnAssetsLoad.IsValid())
+	{
+		SpawnAssetsLoad->CancelHandle();
+		SpawnAssetsLoad.Reset();
+	}
 	SpawnedEntities.Empty();
 	LastSpawnTimes.Empty();
 	CurrentCooldowns.Empty();
@@ -217,6 +224,8 @@ void UMOSpawnManagerSubsystem::Tick(float DeltaTime)
 		return;
 	}
 
+	RequestSpawnAssetPreload();
+
 	FMOSpawnGlobalSettings GlobalSettings = AMOSpawnSettingsActor::GetGlobalSettings(this);
 	FMOSpawnDebugSettings DebugSettings = AMOSpawnSettingsActor::GetDebugSettings(this);
 
@@ -224,6 +233,39 @@ void UMOSpawnManagerSubsystem::Tick(float DeltaTime)
 	CachedSpawnCheckInterval = GlobalSettings.SpawnCheckInterval;
 
 	ProcessAllCategories();
+}
+
+void UMOSpawnManagerSubsystem::RequestSpawnAssetPreload()
+{
+	if (SpawnAssetsLoad.IsValid())
+	{
+		return;
+	}
+	// Everything a spawn resolves at runtime -- each spawnable class's own soft assets (AMOCharacter::GatherRuntimeAssets: behavior trees,
+	// carcass tables) and the survivor beacon class -- loads now, asynchronously, long before the first cooldown elapses. Each of them used to
+	// be a LoadSynchronous at the spawn: a FlushAsyncLoading on the game thread, a 60 ms frame for the first creature of each kind (Oct 13 2026).
+	// The spawn paths keep their synchronous resolve as the fallback for anything not in yet.
+	TArray<FSoftObjectPath> Paths;
+	if (const UMOSpawnSettings* SpawnSettings = UMOSpawnSettings::GetSpawnSettings(); SpawnSettings && !SpawnSettings->SurvivorBeaconActorClass.IsNull())
+	{
+		Paths.AddUnique(SpawnSettings->SurvivorBeaconActorClass.ToSoftObjectPath());
+	}
+	for (const FMOSpawnCategoryConfig& Listed : AMOSpawnSettingsActor::GetAllCategoryConfigs(this))
+	{
+		for (const TSubclassOf<APawn>& PawnClass : GetCategoryConfig(Listed.Category).SpawnableClasses)
+		{
+			if (PawnClass && PawnClass->IsChildOf(AMOCharacter::StaticClass()))
+			{
+				GetDefault<AMOCharacter>(PawnClass.Get())->GatherRuntimeAssets(Paths);
+			}
+		}
+	}
+	if (Paths.Num() == 0)
+	{
+		return;
+	}
+	SpawnAssetsLoad = UAssetManager::GetStreamableManager().RequestAsyncLoad(Paths);
+	UE_LOG(LogMOFramework, Log, TEXT("[SpawnManager] Preloading %d runtime asset(s) of the spawnable classes"), Paths.Num());
 }
 
 TStatId UMOSpawnManagerSubsystem::GetStatId() const
@@ -1221,36 +1263,36 @@ APawn* UMOSpawnManagerSubsystem::TryFallbackSpawn(EMOSpawnCategory Category, con
 
 		FVector SpawnLocation = PlayerLocation + Offset;
 
-		// Trace down to find ground — VOXEL ONLY. Single-trace would happily
-		// stop at the first hit, which is often a PCG-spawned tree/rock ISM,
-		// so the mob ends up perched in a tree. Use multi-trace and pick the
-		// first AVoxelWorld hit so we land on actual terrain.
-		TArray<FHitResult> GroundHits;
-		const FVector TraceStart = SpawnLocation + FVector(0, 0, 5000.0f);
-		const FVector TraceEnd = SpawnLocation - FVector(0, 0, 10000.0f);
-		float GroundZ = SpawnLocation.Z; // fallback if no voxel hit found
-		bool bHitVoxel = false;
-		if (World->LineTraceMultiByChannel(GroundHits, TraceStart, TraceEnd, ECC_Visibility))
-		{
-			for (const FHitResult& Hit : GroundHits)
-			{
-				if (Hit.GetActor() && Hit.GetActor()->IsA<AVoxelWorld>())
-				{
-					GroundZ = Hit.ImpactPoint.Z;
-					SpawnLocation = Hit.ImpactPoint + FVector(0, 0, 100.0f);
-					bHitVoxel = true;
-					break;
-				}
-			}
-		}
-
-		// If we didn't actually land on voxel terrain, this attempt is
-		// inherently unsafe (we'd be in air or perched on whatever the trace
-		// hit). Skip and try a different angle.
-		if (!bHitVoxel)
+		// Pick the class first: the standing-spot check below needs its capsule.
+		const int32 ClassIndex = FMath::RandRange(0, Config.SpawnableClasses.Num() - 1);
+		TSubclassOf<APawn> PawnClass = Config.SpawnableClasses[ClassIndex];
+		if (!PawnClass)
 		{
 			continue;
 		}
+
+		// Ground = the voxel terrain under the trees (MOSpawnClearance::TraceVoxelGround: an object-type trace -- the channel multi
+		// trace this used to do ended at the first tree / rock over the ground, so every forest attempt failed). No voxel collision on
+		// the line (not generated here) = this attempt is unsafe: try another angle.
+		FHitResult GroundHit;
+		if (!MOSpawnClearance::TraceVoxelGround(World, SpawnLocation.X, SpawnLocation.Y, SpawnLocation.Z + 5000.0f, SpawnLocation.Z - 10000.0f, PlayerPawn, GroundHit))
+		{
+			continue;
+		}
+		const float GroundZ = GroundHit.ImpactPoint.Z;
+
+		// Land pawns: ground under the sea or a lake is the bed, not a place to stand (a deer spawned on the sea floor, Oct 13 2026).
+		if (MOSpawnClearance::IsUnderOpenWater(World, GroundHit.ImpactPoint))
+		{
+			continue;
+		}
+
+		// The pawn must fit standing there (not inside a trunk or a boulder) -- the same rule as every other position-picking path.
+		if (!MOSpawnClearance::IsStandingSpotClear(World, GroundHit.ImpactPoint, MOSpawnClearance::CapsuleOf(PawnClass), PlayerPawn))
+		{
+			continue;
+		}
+		SpawnLocation = GroundHit.ImpactPoint + FVector(0, 0, 100.0f);
 
 		// Optional Z-range gate. Categories like Survivor restrict spawns to
 		// a terrain band (shoreline) where trees don't grow, eliminating
@@ -1275,15 +1317,6 @@ APawn* UMOSpawnManagerSubsystem::TryFallbackSpawn(EMOSpawnCategory Category, con
 		// Use half of MinSpawnDistance as the minimum separation, floor of 2 meters.
 		const float MinEntitySeparationCm = FMath::Max(200.0f, (Config.MinSpawnDistance * 100.0f) * 0.5f);
 		if (!IsLocationValidForSpawnNearEntities(SpawnLocation, MinEntitySeparationCm))
-		{
-			continue;
-		}
-
-		// Pick random class
-		const int32 ClassIndex = FMath::RandRange(0, Config.SpawnableClasses.Num() - 1);
-		TSubclassOf<APawn> PawnClass = Config.SpawnableClasses[ClassIndex];
-
-		if (!PawnClass)
 		{
 			continue;
 		}
@@ -1742,23 +1775,12 @@ void UMOSpawnManagerSubsystem::MaybeSpawnSurvivorBeacon(int32 RecordIndex)
 	{
 		// Trace from well above the offset down to well below it. Survivor
 		// might be on a slope; her actor Z isn't a reliable ground anchor.
-		// VOXEL ONLY — multi-trace and pick the first AVoxelWorld hit so the
-		// beacon doesn't end up perched on a tree branch.
-		TArray<FHitResult> BeaconHits;
-		const FVector TraceStart = BeaconLocation + FVector(0.0f, 0.0f, 500.0f);
-		const FVector TraceEnd = BeaconLocation - FVector(0.0f, 0.0f, 2000.0f);
-		FCollisionQueryParams Params(SCENE_QUERY_STAT(MOSurvivorBeaconGroundSnap), /*bTraceComplex=*/false);
-		Params.AddIgnoredActor(SurvivorPawn);
-		if (World->LineTraceMultiByChannel(BeaconHits, TraceStart, TraceEnd, ECC_Visibility, Params))
+		// VOXEL ONLY (MOSpawnClearance::TraceVoxelGround: an object-type trace, so a
+		// tree over the spot neither hides the ground nor holds the beacon).
+		FHitResult BeaconHit;
+		if (MOSpawnClearance::TraceVoxelGround(World, BeaconLocation.X, BeaconLocation.Y, BeaconLocation.Z + 500.0f, BeaconLocation.Z - 2000.0f, SurvivorPawn, BeaconHit))
 		{
-			for (const FHitResult& BHit : BeaconHits)
-			{
-				if (BHit.GetActor() && BHit.GetActor()->IsA<AVoxelWorld>())
-				{
-					BeaconLocation = BHit.ImpactPoint;
-					break;
-				}
-			}
+			BeaconLocation = BeaconHit.ImpactPoint;
 		}
 		// If the trace failed (e.g. void below), fall back to the unsnapped
 		// position — bad placement is preferable to no beacon at all.

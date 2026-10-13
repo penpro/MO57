@@ -271,6 +271,14 @@ public:
 
 	virtual void Tick(float DeltaTime) override;
 
+	/**
+	 * Soft assets this pawn class loads at RUNTIME (behavior trees, tables resolved on possession / death), appended to Out. Called on the class
+	 * default object by whoever spawns the class later (UMOSpawnManagerSubsystem), so they are loaded asynchronously behind the loading screen
+	 * instead of with LoadSynchronous on the game thread at the spawn (a 60 ms frame per first creature of a kind, Oct 13 2026). The base adds its
+	 * AI controller class's own (AMOAIController::GatherRuntimeAssets); a subclass adds what it resolves itself.
+	 */
+	virtual void GatherRuntimeAssets(TArray<FSoftObjectPath>& Out) const;
+
 	// ============================================================================
 	// VOXEL WORLD COMPATIBILITY
 	// ============================================================================

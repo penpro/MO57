@@ -76,6 +76,9 @@ class MOFRAMEWORK_API AMOCreature : public AMOCharacter
 public:
 	AMOCreature(const FObjectInitializer& ObjectInitializer);
 
+	/** + the behavior tree (override or the definition's), the carcass table, and the creature controller class's own. */
+	virtual void GatherRuntimeAssets(TArray<FSoftObjectPath>& Out) const override;
+
 	// ============================================================================
 	// DEFINITION
 	// ============================================================================

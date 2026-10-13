@@ -251,6 +251,12 @@ protected:
 	/** Cached spawn check interval to avoid lookups every frame */
 	float CachedSpawnCheckInterval = 5.0f;
 
+	/** Keeps the spawnable classes' runtime assets and the survivor beacon class loading (then loaded) from the first spawn check on (RequestSpawnAssetPreload). */
+	TSharedPtr<struct FStreamableHandle> SpawnAssetsLoad;
+
+	/** Once: async-load everything a spawn would otherwise LoadSynchronous on the game thread. */
+	void RequestSpawnAssetPreload();
+
 	// ============================================================================
 	// INTERNAL
 	// ============================================================================

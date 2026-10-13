@@ -1,5 +1,6 @@
 #include "MOSpawnClearance.h"
 #include "MOFramework.h"
+#include "MOWaterSubsystem.h"
 #include "VoxelWorld.h"
 #include "Engine/World.h"
 #include "Engine/OverlapResult.h"
@@ -143,5 +144,12 @@ namespace MOSpawnClearance
 			}
 		}
 		return false;
+	}
+
+	bool IsUnderOpenWater(const UWorld* World, const FVector& GroundLocation, float DepthToleranceCm)
+	{
+		const UMOWaterSubsystem* Water = World ? World->GetSubsystem<UMOWaterSubsystem>() : nullptr;
+		float SurfaceZ = 0.0f;
+		return Water && Water->GetSurfaceZ(GroundLocation.X, GroundLocation.Y, SurfaceZ) && SurfaceZ > GroundLocation.Z + DepthToleranceCm;
 	}
 }

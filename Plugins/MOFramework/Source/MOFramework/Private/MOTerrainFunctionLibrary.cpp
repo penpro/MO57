@@ -136,17 +136,14 @@ void UMOTerrainFunctionLibrary::ComputeCaves(
 	const float StepCm = P.Tuning.VoxelSizeCm * (float)(1 << FMath::Clamp(LOD, 0, 24));
 	Distance.Allocate(Num);
 
-	// A chunk is a 3D grid: the same (X, Y) column repeats once per Z layer and the ground height (~0.5 us) is the same for all of them. A small direct-mapped
-	// memo keyed on the exact XY bits shares it; a miss just recomputes, so it can never change a result.
-	struct FColumn
-	{
-		double X = 0.0, Y = 0.0;
-		float Ground = 0.0f;
-		bool bValid = false;
-	};
-	constexpr int32 CacheSize = 4096;
-	TArray<FColumn> Columns;
-	Columns.SetNum(CacheSize);
+	// A chunk is a 3D grid: the same (X, Y) column repeats once per Z layer and the ground height (~2 us with the water pass) is the same for all of them.
+	// Memoised per DISTINCT column (exact XY bits), so each column's ground is computed once per call whatever the sample order. The direct-mapped
+	// 4096-slot table this replaced recomputed it on hash collisions between a chunk's own columns, every Z layer.
+	TMap<TTuple<uint64, uint64>, float> Grounds;
+	Grounds.Reserve(FMath::Min(Num, 8192));
+	uint64 LastBitsX = 0, LastBitsY = 0;
+	float LastGround = 0.0f;
+	bool bHaveLast = false;
 
 	for (int32 I = 0; I < Num; ++I)
 	{
@@ -160,17 +157,23 @@ void UMOTerrainFunctionLibrary::ComputeCaves(
 		uint64 BitsX, BitsY;
 		FMemory::Memcpy(&BitsX, &X, sizeof(BitsX));
 		FMemory::Memcpy(&BitsY, &Y, sizeof(BitsY));
-		const uint32 Slot = (uint32)(((BitsX * 0x9E3779B97F4A7C15ull) ^ (BitsY * 0xC2B2AE3D27D4EB4Full)) >> 40) & (CacheSize - 1);
-
-		FColumn& Column = Columns[Slot];
-		if (!Column.bValid || Column.X != X || Column.Y != Y)
+		if (!bHaveLast || BitsX != LastBitsX || BitsY != LastBitsY)   // consecutive samples of one column (Z innermost) skip the map
 		{
-			Column.X = X;
-			Column.Y = Y;
-			Column.Ground = FMOWorldGen::SampleHeightCm(P, X, Y, Seed, StepCm);
-			Column.bValid = true;
+			const TTuple<uint64, uint64> Key(BitsX, BitsY);
+			if (const float* Found = Grounds.Find(Key))
+			{
+				LastGround = *Found;
+			}
+			else
+			{
+				LastGround = FMOWorldGen::SampleHeightCm(P, X, Y, Seed, StepCm);
+				Grounds.Add(Key, LastGround);
+			}
+			LastBitsX = BitsX;
+			LastBitsY = BitsY;
+			bHaveLast = true;
 		}
-		Distance.Set(I, FMOWorldGen::SampleCaveDistanceAtGround(P, X, Y, Z, Column.Ground, Seed, StepCm));
+		Distance.Set(I, FMOWorldGen::SampleCaveDistanceAtGround(P, X, Y, Z, LastGround, Seed, StepCm));
 	}
 }
 

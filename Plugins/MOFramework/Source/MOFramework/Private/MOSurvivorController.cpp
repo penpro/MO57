@@ -26,6 +26,15 @@
 #include "Navigation/PathFollowingComponent.h"
 #include "Components/InstancedStaticMeshComponent.h"
 
+void AMOSurvivorController::GatherRuntimeAssets(TArray<FSoftObjectPath>& Out) const
+{
+	Super::GatherRuntimeAssets(Out);
+	if (!DefaultSurvivorBehaviorTree.IsNull())
+	{
+		Out.AddUnique(DefaultSurvivorBehaviorTree.ToSoftObjectPath());
+	}
+}
+
 AMOSurvivorController::AMOSurvivorController()
 {
 	PrimaryActorTick.bCanEverTick = true;

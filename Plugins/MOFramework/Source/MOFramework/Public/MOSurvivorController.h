@@ -128,6 +128,8 @@ class MOFRAMEWORK_API AMOSurvivorController : public AMOAIController
 public:
 	AMOSurvivorController();
 
+	virtual void GatherRuntimeAssets(TArray<FSoftObjectPath>& Out) const override;
+
 	// ============================================================================
 	// COMMANDS (Immediate actions, not queued)
 	// ============================================================================

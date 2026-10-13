@@ -409,6 +409,31 @@ bool FMOWorldGen_CavePerformance::RunTest(const FString& Parameters)
 	const double InTheAir = TimeChunkMs(Ground + 3000.0);      // a chunk of sky above the surface: ground height only
 	AddInfo(FString::Printf(TEXT("cave chunk (34^3 samples): %.1f ms underground, %.1f ms in the air (single thread, Development editor build)"), Underground, InTheAir));
 	TestTrue(FString::Printf(TEXT("an underground chunk costs under 250 ms on one thread (got %.1f)"), Underground), Underground < 250.0);
+
+	// A voxel NAVIGATION chunk: 32 m at 50 cm = a 66^3 grid. Each AI pawn's navigation invoker asks for a few dozen of them, mostly solid ground or air (Oct 13 2026: ~0.5 s each
+	// in the packaged game, 224 of them when the first survivor and deer spawn).
+	{
+		constexpr int32 NavSide = 66;
+		FVoxelDoubleVectorBuffer NavPosition;
+		const int32 NavNum = NavSide * NavSide * NavSide;
+		NavPosition.X.Allocate(NavNum);
+		NavPosition.Y.Allocate(NavNum);
+		NavPosition.Z.Allocate(NavNum);
+		auto TimeNavMs = [&](double Oz)
+		{
+			int32 I = 0;
+			for (int32 Z = 0; Z < NavSide; ++Z) { for (int32 Y = 0; Y < NavSide; ++Y) { for (int32 X = 0; X < NavSide; ++X, ++I)
+			{
+				NavPosition.X.Set(I, 100000.0 + X * 50.0); NavPosition.Y.Set(I, 50000.0 + Y * 50.0); NavPosition.Z.Set(I, Oz + Z * 50.0);
+			} } }
+			const double T0 = FPlatformTime::Seconds();
+			UMOTerrainFunctionLibrary::ComputeCaves(NavPosition, CaveTestSeed, 0, Distance);
+			return (FPlatformTime::Seconds() - T0) * 1000.0;
+		};
+		const double NavUnder = TimeNavMs(Ground - 6400.0);
+		const double NavAir = TimeNavMs(Ground + 3200.0);
+		AddInfo(FString::Printf(TEXT("navigation chunk (66^3 samples): %.1f ms underground, %.1f ms in the air (single thread)"), NavUnder, NavAir));
+	}
 	return true;
 }
 

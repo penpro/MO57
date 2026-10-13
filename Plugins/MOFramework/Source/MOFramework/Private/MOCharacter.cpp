@@ -1,4 +1,5 @@
 #include "MOCharacter.h"
+#include "MOAIController.h"
 #include "MOFramework.h"
 #include "MOSpawnClearance.h"
 #include "HAL/IConsoleManager.h"
@@ -374,6 +375,14 @@ void AMOCharacter::UnPossessed()
 	else
 	{
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOCharacter] %s: UnPossessed - failed to spawn AI controller"), *GetName());
+	}
+}
+
+void AMOCharacter::GatherRuntimeAssets(TArray<FSoftObjectPath>& Out) const
+{
+	if (AIControllerClass && AIControllerClass->IsChildOf(AMOAIController::StaticClass()))
+	{
+		GetDefault<AMOAIController>(AIControllerClass.Get())->GatherRuntimeAssets(Out);
 	}
 }
 

@@ -163,9 +163,66 @@ void MOPCGBiomeSpawner::ApplyNearDrawFloor(FISMComponentDescriptorBase& Descript
 	Descriptor.InstanceEndCullDistance = FMath::Max(Descriptor.InstanceEndCullDistance, NearFloorEndCullCm);
 }
 
-bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
+namespace
+{
+	/** Instances added per AddInstances call while building: the unit of work between two frame-budget checks. */
+	TAutoConsoleVariable<int32> CVarBiomeSpawnerBatch(TEXT("mo.PCG.BiomeSpawnerBatch"), 512, TEXT("Instances per AddInstances call while a biome spawner builds (one batch, then the PCG frame budget is checked)."), ECVF_Default);
+}
+
+/** One execution's state between its time slices: planted once, then built a batch at a time (see FMOPCGBiomeSpawnerElement). */
+struct FMOPCGBiomeSpawnerContext : public FPCGContext
+{
+	bool bPlanted = false;
+	TWeakObjectPtr<AActor> TargetActor;
+	TWeakObjectPtr<UPCGComponent> SourceComponent;
+	TArray<FMOPCGBiomeSpawnerElement::FSpeciesBucket> Buckets;   // build order = the planting's bucket order
+	int32 NextBucket = 0;
+	int32 NextTransform = 0;                                     // in Buckets[NextBucket]
+	TWeakObjectPtr<UInstancedStaticMeshComponent> CurrentISM;   // the component Buckets[NextBucket] is being added to
+	int32 Components = 0;
+	int32 Slices = 0;
+	double BuildMs = 0.0;
+	// The planting's numbers, logged with the build time when the last instance is in.
+	int32 TotalIn = 0, TotalAccepted = 0, TotalSuppressed = 0, NumBiomes = 0;
+	double PlantMs = 0.0;
+	FString StageSummary, BoundsText, BucketSummary;
+
+	virtual void AddExtraStructReferencedObjects(FReferenceCollector& Collector) override
+	{
+		for (FMOPCGBiomeSpawnerElement::FSpeciesBucket& Bucket : Buckets)
+		{
+			Collector.AddReferencedObject(Bucket.Mesh);
+		}
+	}
+};
+
+FPCGContext* FMOPCGBiomeSpawnerElement::CreateContext()
+{
+	return new FMOPCGBiomeSpawnerContext();
+}
+
+bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* InContext) const
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE(FMOPCGBiomeSpawnerElement::Execute);
+	FMOPCGBiomeSpawnerContext* Context = static_cast<FMOPCGBiomeSpawnerContext*>(InContext);
+	if (!Context->bPlanted)
+	{
+		Context->bPlanted = true;
+		if (!Plant(Context))
+		{
+			return true;   // nothing to build
+		}
+		if (Context->AsyncState.ShouldStop())
+		{
+			return false;   // the planting spent this frame's budget: build from the next frame
+		}
+	}
+	return BuildSlice(Context);
+}
+
+bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
+{
+	TRACE_CPUPROFILER_EVENT_SCOPE(FMOPCGBiomeSpawnerElement::Plant);
 	const double ExecStartTime = FPlatformTime::Seconds();   // diagnostics: the setup (biome catalog + mesh resolves + generator params) before the per-point work
 
 	const UMOPCGBiomeSpawnerSettings* Settings = Context->GetInputSettings<UMOPCGBiomeSpawnerSettings>();
@@ -175,7 +232,7 @@ bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 	if (!TargetActor)
 	{
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOBiomeSpawner] No target actor found"));
-		return true;
+		return false;
 	}
 
 	// Load the biome catalog once per execution.
@@ -184,7 +241,7 @@ bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 	if (BiomeIds.Num() == 0)
 	{
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOBiomeSpawner] DT_Biomes empty or not configured"));
-		return true;
+		return false;
 	}
 	struct FBiomeEntry
 	{
@@ -309,7 +366,7 @@ bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 		}
 		if (CellBox.bIsValid && !EdgeMask.MayHaveShore(CellBox.Min.X, CellBox.Min.Y, CellBox.Max.X, CellBox.Max.Y, 3000.0))
 		{
-			return true;
+			return false;
 		}
 	}
 	// The per-point work (height, water, sinkhole and climate samples, the biome bands, the edge-feather taps, the clump noise) runs IN PARALLEL: it was 75-220 ms of game-thread time per
@@ -629,7 +686,6 @@ bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 		++TotalAccepted;
 	}
 
-	const double PlantMs = (FPlatformTime::Seconds() - PlantStartTime) * 1000.0;   // the per-point work (parallel) + the merge; the rest is components + instances (game thread)
 	FString StageSummary = FString::Printf(TEXT("setup %.0f parallel %.0f merge %.0f"),
 		(PlantStartTime - ExecStartTime) * 1000.0, (ParallelDoneTime - PlantStartTime) * 1000.0, (FPlatformTime::Seconds() - ParallelDoneTime) * 1000.0);
 	if (bProfile)
@@ -644,166 +700,208 @@ bool FMOPCGBiomeSpawnerElement::ExecuteInternal(FPCGContext* Context) const
 			(double)(Sum.Total - Sum.Gen - Sum.Climate - Sum.Blend) * CyMs);
 	}
 
-	// Create managed HISMs per (mesh, biome).
+	// The build runs in BuildSlice, a batch at a time inside PCG's frame budget.
 	UPCGComponent* SourceComponent = Cast<UPCGComponent>(Context->ExecutionSource.Get());
 	if (!SourceComponent)
 	{
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOBiomeSpawner] No source PCG component"));
-		return true;
+		return false;
 	}
-
-	int32 Components = 0;
+	Context->TargetActor = TargetActor;
+	Context->SourceComponent = SourceComponent;
+	Context->Buckets.Reserve(Buckets.Num());
 	for (auto& Pair : Buckets)
 	{
-		FSpeciesBucket& Bucket = Pair.Value;
-		if (!Bucket.Mesh || Bucket.Transforms.Num() == 0)
+		Context->BucketSummary += FString::Printf(TEXT(" %s/%s=%d"), *Pair.Value.BiomeId.ToString(), Pair.Value.Mesh ? *Pair.Value.Mesh->GetName() : TEXT("null"), Pair.Value.Transforms.Num());
+		if (Pair.Value.Mesh && Pair.Value.Transforms.Num() > 0)
 		{
-			continue;
+			Context->Buckets.Add(MoveTemp(Pair.Value));
 		}
+	}
+	Context->TotalIn = TotalIn;
+	Context->TotalAccepted = TotalAccepted;
+	Context->TotalSuppressed = TotalSuppressed;
+	Context->NumBiomes = Biomes.Num();
+	Context->PlantMs = (FPlatformTime::Seconds() - ExecStartTime) * 1000.0;
+	Context->StageSummary = MoveTemp(StageSummary);
+	Context->BoundsText = InputBounds.IsValid ? FString::Printf(TEXT("(%.0f,%.0f)-(%.0f,%.0f)"), InputBounds.Min.X, InputBounds.Min.Y, InputBounds.Max.X, InputBounds.Max.Y) : TEXT("none");
+	return true;
+}
 
-		FPCGISMComponentBuilderParams Params;
-		Params.Descriptor.StaticMesh = Bucket.Mesh;
-		Params.Descriptor.ComponentClass = UHierarchicalInstancedStaticMeshComponent::StaticClass();
-		Params.Descriptor.BodyInstance.SetCollisionProfileName(Settings->DecorativeCollisionProfile.Name);   // overridden below for harvestable species
-		Params.Descriptor.bCastShadow = Settings->bCastShadows;
-		Params.Descriptor.bAffectDistanceFieldLighting = false;
-		Params.Descriptor.bAffectDynamicIndirectLighting = false;
+bool FMOPCGBiomeSpawnerElement::BuildSlice(FMOPCGBiomeSpawnerContext* Context) const
+{
+	TRACE_CPUPROFILER_EVENT_SCOPE(FMOPCGBiomeSpawnerElement::Build);
+	const double SliceStart = FPlatformTime::Seconds();
+	const UMOPCGBiomeSpawnerSettings* Settings = Context->GetInputSettings<UMOPCGBiomeSpawnerSettings>();
+	AActor* TargetActor = Context->TargetActor.Get();
+	UPCGComponent* SourceComponent = Context->SourceComponent.Get();
+	if (!Settings || !TargetActor || !SourceComponent)
+	{
+		return true;   // torn down between two slices
+	}
+	const int32 BatchSize = FMath::Max(CVarBiomeSpawnerBatch.GetValueOnGameThread(), 1);
+	++Context->Slices;
 
-		// What is worth rendering depends on the tier. The FAR tiers (stand-in trees, canopy clumps, far grass tufts) are seen as silhouettes: no shadow of their own (their shadows would be the
-		// biggest line in the shadow pass for nothing visible), no ray-tracing / reflection presence, no wind, and never drawn inside the distance the NEAR tiers own (below).
-		// GROUND COVER (grass, flowers, debris) casts no shadow and stays out of the ray-traced scene either: millions of blades add cost to those passes and no visible shading.
-		const bool bFarTier = IsFarLargeTag(Bucket.HISMTag) || IsFarCanopyTag(Bucket.HISMTag) || Bucket.HISMTag == FName(TEXT("MOFar_Grass"));
+	while (Context->NextBucket < Context->Buckets.Num())
+	{
+		FSpeciesBucket& Bucket = Context->Buckets[Context->NextBucket];
+		const bool bFarTier = IsFarLargeTag(Bucket.HISMTag) || IsFarCanopyTag(Bucket.HISMTag) || Bucket.HISMTag == NAME_MOFarGrass;
 		const bool bGroundCover = Bucket.HISMTag == FName(TEXT("MOBiomeCover_Grass")) || Bucket.HISMTag == FName(TEXT("MOBiomeCover_Flower")) || Bucket.HISMTag == FName(TEXT("MOBiomeCover_Debris"));
-		if (bFarTier || bGroundCover)
-		{
-			Params.Descriptor.bCastShadow = false;
-			Params.Descriptor.bVisibleInRayTracing = false;
-			Params.Descriptor.bVisibleInReflections = false;
-		}
-		if (bFarTier)
-		{
-			Params.Descriptor.bEvaluateWorldPositionOffset = false;
-			Params.Descriptor.bUseAsOccluder = false;
-		}
-		// The near floor is a per-frame DRAW distance: a far cell plants its whole area and the camera decides what is drawn, so a cell generated around one position still fills in when the
-		// player walks away (the generation-time cut it replaced left bald circles). See ApplyNearDrawFloor for the end distance the engine needs before it honours the floor at all.
-		MOPCGBiomeSpawner::ApplyNearDrawFloor(Params.Descriptor, Settings->MinDistanceFromViewerCm);
 
-		// HARVESTABLE species: apply the exact tag bundle the native resource
-		// spawner derives from DT_ResourceNodes (Name/MOResource_/Action_/
-		// Gives_/RequiresTool_/KeepOnHarvest + ResourceNode_<Id>) and register
-		// the interaction mapping. Biome trees/rocks are REAL interaction
-		// targets, not scenery. Decorative species fall back to HISMTag.
-		const FMOResourceNodeDefinitionRow* ResourceDef = nullptr;
-		if (!Bucket.ResourceNodeId.IsNone() && Settings->ResourceNodeDataTable)
+		UInstancedStaticMeshComponent* ISM = Context->CurrentISM.Get();
+		if (!ISM)
 		{
-			ResourceDef = Settings->ResourceNodeDataTable->FindRow<FMOResourceNodeDefinitionRow>(
-				Bucket.ResourceNodeId, TEXT("MOBiomeSpawner"), /*bWarnIfRowMissing=*/false);
-			if (!ResourceDef)
+			// First batch of this bucket: the managed HISM per (mesh, biome).
+			FPCGISMComponentBuilderParams Params;
+			Params.Descriptor.StaticMesh = Bucket.Mesh;
+			Params.Descriptor.ComponentClass = UHierarchicalInstancedStaticMeshComponent::StaticClass();
+			Params.Descriptor.BodyInstance.SetCollisionProfileName(Settings->DecorativeCollisionProfile.Name);   // overridden below for harvestable species
+			Params.Descriptor.bCastShadow = Settings->bCastShadows;
+			Params.Descriptor.bAffectDistanceFieldLighting = false;
+			Params.Descriptor.bAffectDynamicIndirectLighting = false;
+
+			// What is worth rendering depends on the tier. The FAR tiers (stand-in trees, canopy clumps, far grass tufts) are seen as silhouettes: no shadow of their own (their shadows would be the
+			// biggest line in the shadow pass for nothing visible), no ray-tracing / reflection presence, no wind, and never drawn inside the distance the NEAR tiers own (below).
+			// GROUND COVER (grass, flowers, debris) casts no shadow and stays out of the ray-traced scene either: millions of blades add cost to those passes and no visible shading.
+			if (bFarTier || bGroundCover)
 			{
-				UE_LOG(LogMOFramework, Warning,
-					TEXT("[MOBiomeSpawner] ResourceNodeId '%s' not in ResourceNodeDataTable - species stays decorative"),
-					*Bucket.ResourceNodeId.ToString());
+				Params.Descriptor.bCastShadow = false;
+				Params.Descriptor.bVisibleInRayTracing = false;
+				Params.Descriptor.bVisibleInReflections = false;
 			}
-		}
-		if (ResourceDef)
-		{
-			Params.Descriptor.BodyInstance.SetCollisionProfileName(ResourceDef->GetPlacementCollisionProfile());
-			for (const FName& Tag : ResourceDef->GetAllTags())
+			if (bFarTier)
 			{
-				Params.Descriptor.ComponentTags.AddUnique(Tag);
+				Params.Descriptor.bEvaluateWorldPositionOffset = false;
+				Params.Descriptor.bUseAsOccluder = false;
 			}
-			Params.Descriptor.ComponentTags.AddUnique(
-				FName(*FString::Printf(TEXT("ResourceNode_%s"), *Bucket.ResourceNodeId.ToString())));
-			if (Settings->bRegisterWithSubsystem)
+			// The near floor is a per-frame DRAW distance: a far cell plants its whole area and the camera decides what is drawn, so a cell generated around one position still fills in when the
+			// player walks away (the generation-time cut it replaced left bald circles). See ApplyNearDrawFloor for the end distance the engine needs before it honours the floor at all.
+			MOPCGBiomeSpawner::ApplyNearDrawFloor(Params.Descriptor, Settings->MinDistanceFromViewerCm);
+
+			// HARVESTABLE species: apply the exact tag bundle the native resource
+			// spawner derives from DT_ResourceNodes (Name/MOResource_/Action_/
+			// Gives_/RequiresTool_/KeepOnHarvest + ResourceNode_<Id>) and register
+			// the interaction mapping. Biome trees/rocks are REAL interaction
+			// targets, not scenery. Decorative species fall back to HISMTag.
+			const FMOResourceNodeDefinitionRow* ResourceDef = nullptr;
+			if (!Bucket.ResourceNodeId.IsNone() && Settings->ResourceNodeDataTable)
 			{
-				if (UWorld* World = TargetActor->GetWorld())
+				ResourceDef = Settings->ResourceNodeDataTable->FindRow<FMOResourceNodeDefinitionRow>(
+					Bucket.ResourceNodeId, TEXT("MOBiomeSpawner"), /*bWarnIfRowMissing=*/false);
+				if (!ResourceDef)
 				{
-					if (UMOPCGInteractionSubsystem* PCGSubsystem = World->GetSubsystem<UMOPCGInteractionSubsystem>())
+					UE_LOG(LogMOFramework, Warning,
+						TEXT("[MOBiomeSpawner] ResourceNodeId '%s' not in ResourceNodeDataTable - species stays decorative"),
+						*Bucket.ResourceNodeId.ToString());
+				}
+			}
+			if (ResourceDef)
+			{
+				Params.Descriptor.BodyInstance.SetCollisionProfileName(ResourceDef->GetPlacementCollisionProfile());
+				for (const FName& Tag : ResourceDef->GetAllTags())
+				{
+					Params.Descriptor.ComponentTags.AddUnique(Tag);
+				}
+				Params.Descriptor.ComponentTags.AddUnique(
+					FName(*FString::Printf(TEXT("ResourceNode_%s"), *Bucket.ResourceNodeId.ToString())));
+				if (Settings->bRegisterWithSubsystem)
+				{
+					if (UWorld* World = TargetActor->GetWorld())
 					{
-						PCGSubsystem->RegisterTagItemMapping(
-							FName(*FString::Printf(TEXT("MOResource_%s"), *Bucket.ResourceNodeId.ToString())),
-							Bucket.ResourceNodeId);
+						if (UMOPCGInteractionSubsystem* PCGSubsystem = World->GetSubsystem<UMOPCGInteractionSubsystem>())
+						{
+							PCGSubsystem->RegisterTagItemMapping(
+								FName(*FString::Printf(TEXT("MOResource_%s"), *Bucket.ResourceNodeId.ToString())),
+								Bucket.ResourceNodeId);
+						}
 					}
 				}
 			}
-		}
-		else if (!Bucket.HISMTag.IsNone())
-		{
-			Params.Descriptor.ComponentTags.Add(Bucket.HISMTag);
-		}
-		// The species' own say wins over the resource type's default (see EMOSpeciesCollision): saplings are harvestable trees you can still walk through.
-		if (Bucket.Collision == EMOSpeciesCollision::Passable)
-		{
-			Params.Descriptor.BodyInstance.SetCollisionProfileName(TEXT("OverlapAllDynamic"));
-		}
-		else if (Bucket.Collision == EMOSpeciesCollision::Solid)
-		{
-			Params.Descriptor.BodyInstance.SetCollisionProfileName(TEXT("BlockAll"));
-		}
-		// Far tiers are draw-only, whatever the palette row says: no physics body per instance (there are a hundred thousand of them) and nothing for a trace to hit around the player, where
-		// they now stand undrawn under the near tiers.
-		if (bFarTier)
-		{
-			Params.Descriptor.BodyInstance.SetCollisionProfileName(UCollisionProfile::NoCollision_ProfileName);
-		}
-		if (bFarTier || bGroundCover)
-		{
-			Params.Descriptor.bCanEverAffectNavigation = false;
-		}
-		Params.Descriptor.ComponentTags.Add(FName(*FString::Printf(TEXT("MOBiome_%s"), *Bucket.BiomeId.ToString())));
-		if (Bucket.bAutoSweep)
-		{
-			// Opt decorative ground cover into the terrain-mod subsystem's
-			// terraform sweep (its AutoSweepTags allowlist — "grass").
-			// Harvestable species stay un-tagged and persist as interaction
-			// targets when nearby ground is dug.
-			Params.Descriptor.ComponentTags.Add(FName(TEXT("grass")));
-		}
-		Params.NumCustomDataFloats = 0;
-		// LOAD-BEARING, two layers (verified UE5.8 sources + live dumps):
-		// 1. FISMComponentDescriptor equality/hash EXCLUDES ComponentTags, so
-		//    descriptor-equal components merge across chains sharing a mesh.
-		// 2. SettingsCrc alone is NOT enough: nodes with an INVALID crc (the
-		//    native Static Mesh Spawners in this graph) take the crc-less
-		//    lookup path and reclaim ANY descriptor-equal managed resource —
-		//    they wiped this node's BlackAlder components every generation.
-		// RayTracingGroupId IS part of descriptor equality, so a unique
-		// per-(biome,species) id makes the descriptor untouchable by other
-		// chains; SettingsCrc additionally scopes reuse within this node.
-		// (HWRT grouping impact: none today; revisit in P5 Lumen/HWRT tuning.)
-		const uint32 BucketHash = (GetTypeHash(Bucket.BiomeId) ^ (GetTypeHash(Bucket.HISMTag) * 31) ^ 0x4D4F4249u) | 1u;
-		Params.Descriptor.RayTracingGroupId = (int32)(BucketHash & 0x7fffffffu);
-		Params.SettingsCrc = FPCGCrc(BucketHash);
+			else if (!Bucket.HISMTag.IsNone())
+			{
+				Params.Descriptor.ComponentTags.Add(Bucket.HISMTag);
+			}
+			// The species' own say wins over the resource type's default (see EMOSpeciesCollision): saplings are harvestable trees you can still walk through.
+			if (Bucket.Collision == EMOSpeciesCollision::Passable)
+			{
+				Params.Descriptor.BodyInstance.SetCollisionProfileName(TEXT("OverlapAllDynamic"));
+			}
+			else if (Bucket.Collision == EMOSpeciesCollision::Solid)
+			{
+				Params.Descriptor.BodyInstance.SetCollisionProfileName(TEXT("BlockAll"));
+			}
+			// Far tiers are draw-only, whatever the palette row says: no physics body per instance (there are a hundred thousand of them) and nothing for a trace to hit around the player, where
+			// they now stand undrawn under the near tiers.
+			if (bFarTier)
+			{
+				Params.Descriptor.BodyInstance.SetCollisionProfileName(UCollisionProfile::NoCollision_ProfileName);
+			}
+			if (bFarTier || bGroundCover)
+			{
+				Params.Descriptor.bCanEverAffectNavigation = false;
+			}
+			Params.Descriptor.ComponentTags.Add(FName(*FString::Printf(TEXT("MOBiome_%s"), *Bucket.BiomeId.ToString())));
+			if (Bucket.bAutoSweep)
+			{
+				// Opt decorative ground cover into the terrain-mod subsystem's
+				// terraform sweep (its AutoSweepTags allowlist — "grass").
+				// Harvestable species stay un-tagged and persist as interaction
+				// targets when nearby ground is dug.
+				Params.Descriptor.ComponentTags.Add(FName(TEXT("grass")));
+			}
+			Params.NumCustomDataFloats = 0;
+			// LOAD-BEARING, two layers (verified UE5.8 sources + live dumps):
+			// 1. FISMComponentDescriptor equality/hash EXCLUDES ComponentTags, so
+			//    descriptor-equal components merge across chains sharing a mesh.
+			// 2. SettingsCrc alone is NOT enough: nodes with an INVALID crc (the
+			//    native Static Mesh Spawners in this graph) take the crc-less
+			//    lookup path and reclaim ANY descriptor-equal managed resource —
+			//    they wiped this node's BlackAlder components every generation.
+			// RayTracingGroupId IS part of descriptor equality, so a unique
+			// per-(biome,species) id makes the descriptor untouchable by other
+			// chains; SettingsCrc additionally scopes reuse within this node.
+			// (HWRT grouping impact: none today; revisit in P5 Lumen/HWRT tuning.)
+			const uint32 BucketHash = (GetTypeHash(Bucket.BiomeId) ^ (GetTypeHash(Bucket.HISMTag) * 31) ^ 0x4D4F4249u) | 1u;
+			Params.Descriptor.RayTracingGroupId = (int32)(BucketHash & 0x7fffffffu);
+			Params.SettingsCrc = FPCGCrc(BucketHash);
 
-		UInstancedStaticMeshComponent* ISM = UPCGActorHelpers::GetOrCreateISMC(
-			TargetActor, SourceComponent, Params, Context);
-		if (!ISM)
-		{
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOBiomeSpawner] Failed HISM for %s"), *Bucket.Mesh->GetName());
-			continue;
+			ISM = UPCGActorHelpers::GetOrCreateISMC(TargetActor, SourceComponent, Params, Context);
+			if (!ISM)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOBiomeSpawner] Failed HISM for %s"), *Bucket.Mesh->GetName());
+				++Context->NextBucket;
+				Context->NextTransform = 0;
+				continue;
+			}
+			Context->CurrentISM = ISM;
+			++Context->Components;
 		}
+
 		// Navigation: only what can block a walker matters to the nav mesh. Far stand-ins (draw-only) and ground cover (passable) skip the per-instance navigation update.
-		ISM->AddInstances(Bucket.Transforms, /*bShouldReturnIndices=*/false, /*bWorldSpace=*/true, /*bUpdateNavigation=*/!(bFarTier || bGroundCover));
-		++Components;
+		const int32 Count = FMath::Min(BatchSize, Bucket.Transforms.Num() - Context->NextTransform);
+		const TArray<FTransform> Batch(Bucket.Transforms.GetData() + Context->NextTransform, Count);
+		ISM->AddInstances(Batch, /*bShouldReturnIndices=*/false, /*bWorldSpace=*/true, /*bUpdateNavigation=*/!(bFarTier || bGroundCover));
+		Context->NextTransform += Count;
+		if (Context->NextTransform >= Bucket.Transforms.Num())
+		{
+			Bucket.Transforms.Empty();
+			++Context->NextBucket;
+			Context->NextTransform = 0;
+			Context->CurrentISM = nullptr;
+		}
+		if (Context->NextBucket < Context->Buckets.Num() && Context->AsyncState.ShouldStop())
+		{
+			Context->BuildMs += (FPlatformTime::Seconds() - SliceStart) * 1000.0;
+			return false;   // the rest next frame
+		}
 	}
+	Context->BuildMs += (FPlatformTime::Seconds() - SliceStart) * 1000.0;
 
-	// Per-bucket breakdown so density tuning reads from the log, not guesses.
-	FString BucketSummary;
-	for (const auto& Pair : Buckets)
-	{
-		BucketSummary += FString::Printf(TEXT(" %s/%s=%d"),
-			*Pair.Value.BiomeId.ToString(),
-			Pair.Value.Mesh ? *Pair.Value.Mesh->GetName() : TEXT("null"),
-			Pair.Value.Transforms.Num());
-	}
+	// Per-bucket breakdown so density tuning reads from the log, not guesses. ms = the planting slice; build = the game-thread time of every build slice (slices = frames it took).
 	UE_LOG(LogMOFramework, Warning,
-		TEXT("[MOBiomeSpawner] in=%d accepted=%d suppressed=%d components=%d biomes=%d ms=%.0f (plant %.0f, build %.0f; %s) inBounds=%s |%s"),
-		TotalIn, TotalAccepted, TotalSuppressed, Components, Biomes.Num(), (FPlatformTime::Seconds() - PlantStartTime) * 1000.0, PlantMs,
-		(FPlatformTime::Seconds() - PlantStartTime) * 1000.0 - PlantMs, *StageSummary,
-		InputBounds.IsValid ? *FString::Printf(TEXT("(%.0f,%.0f)-(%.0f,%.0f)"), InputBounds.Min.X, InputBounds.Min.Y, InputBounds.Max.X, InputBounds.Max.Y) : TEXT("none"),
-		*BucketSummary);
-
+		TEXT("[MOBiomeSpawner] in=%d accepted=%d suppressed=%d components=%d biomes=%d ms=%.0f (build %.1f in %d slice(s); %s) inBounds=%s |%s"),
+		Context->TotalIn, Context->TotalAccepted, Context->TotalSuppressed, Context->Components, Context->NumBiomes, Context->PlantMs, Context->BuildMs, Context->Slices,
+		*Context->StageSummary, *Context->BoundsText, *Context->BucketSummary);
 	return true;
 }
 

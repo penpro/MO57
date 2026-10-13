@@ -117,6 +117,9 @@ class MOFRAMEWORK_API AMOAIController : public AAIController
 public:
 	AMOAIController();
 
+	/** Soft assets this controller class loads at runtime (its behavior trees), appended to Out. See AMOCharacter::GatherRuntimeAssets. */
+	virtual void GatherRuntimeAssets(TArray<FSoftObjectPath>& Out) const;
+
 	// ============================================================================
 	// COMPONENTS
 	// ============================================================================

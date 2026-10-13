@@ -59,6 +59,13 @@ namespace MOSpawnClearance
 	MOFRAMEWORK_API bool IsStandingSpotClear(const UWorld* World, const FVector& GroundLocation, const FCapsule& Capsule, const AActor* Ignore);
 
 	/**
+	 * True if `GroundLocation` lies under open water: the generator's water surface at (X, Y) (the sea plane, which also covers rivers, ponds and sea-level basins,
+	 * or an upland lake inside its shore -- UMOWaterSubsystem::GetSurfaceZ) is above the ground by more than `DepthToleranceCm`. A land pawn placed there stands on
+	 * the bed and drowns (a fallback deer spawned on the sea floor at Z -1014, Oct 13 2026). False when the world has no generated water (no active seed).
+	 */
+	MOFRAMEWORK_API bool IsUnderOpenWater(const UWorld* World, const FVector& GroundLocation, float DepthToleranceCm = 0.0f);
+
+	/**
 	 * `GroundLocation` if a pawn fits there, else the nearest ground within `SearchRadius` where it does (rings outward; every
 	 * candidate is re-grounded on the voxel and must not be too steep). Returns false if nothing fits.
 	 */

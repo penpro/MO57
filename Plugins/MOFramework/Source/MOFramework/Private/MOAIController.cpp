@@ -6,6 +6,14 @@
 #include "BehaviorTree/BehaviorTree.h"
 #include "Navigation/PathFollowingComponent.h"
 
+void AMOAIController::GatherRuntimeAssets(TArray<FSoftObjectPath>& Out) const
+{
+	if (!DefaultBehaviorTree.IsNull())
+	{
+		Out.AddUnique(DefaultBehaviorTree.ToSoftObjectPath());
+	}
+}
+
 AMOAIController::AMOAIController()
 {
 	// Create behavior tree component

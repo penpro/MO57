@@ -197,20 +197,23 @@ public:
 	bool bCastShadows = true;
 };
 
+struct FMOPCGBiomeSpawnerContext;
+
 /**
  * PCG Element for biome scatter. Main-thread (component creation), not
  * cacheable (reads DT_Biomes + terrain-mod state each execution).
+ *
+ * TIME-SLICED: the first slice plants (per-point work in parallel), the next ones add the instances a batch at a time while PCG's frame budget
+ * (pcg.FrameTime, 5 ms) lasts. Adding a whole cell at once was 10-30 ms of game thread per execution (ISM AddInstances: physics bodies, navigation),
+ * up to 70 ms frames while the far field filled in behind the reveal (CSV profile, Oct 13 2026).
  */
 class FMOPCGBiomeSpawnerElement : public IPCGElement
 {
 public:
 	virtual bool CanExecuteOnlyOnMainThread(FPCGContext* Context) const override { return true; }
 	virtual bool IsCacheable(const UPCGSettings* InSettings) const override { return false; }
+	virtual FPCGContext* CreateContext() override;
 
-protected:
-	virtual bool ExecuteInternal(FPCGContext* Context) const override;
-
-private:
 	struct FSpeciesBucket
 	{
 		TObjectPtr<UStaticMesh> Mesh = nullptr;
@@ -221,4 +224,13 @@ private:
 		EMOSpeciesCollision Collision = EMOSpeciesCollision::Auto;
 		TArray<FTransform> Transforms;
 	};
+
+protected:
+	virtual bool ExecuteInternal(FPCGContext* Context) const override;
+
+private:
+	/** The planting: fills the context's buckets and log fields. False = nothing to build (no target actor, no biomes, a shore cell with no water near). */
+	bool Plant(FMOPCGBiomeSpawnerContext* Context) const;
+	/** Adds instances until the frame budget is spent (at least one batch). True when every bucket is in. */
+	bool BuildSlice(FMOPCGBiomeSpawnerContext* Context) const;
 };
