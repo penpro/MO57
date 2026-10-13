@@ -168,4 +168,10 @@ private:
 		FPCGRuntimeGenerationRadii Authored;
 	};
 	TArray<FHeldGenerationRadii> HeldRadii;
+
+	/** VEGETATION BUDGET: pcg.FrameTime raised to mo.Readiness.PcgFrameTimeMs while the vegetation stage runs behind the overlay (the spawners are time-sliced), restored when it ends. */
+	void RaisePcgBudget();
+	void RestorePcgBudget();
+	bool bPcgBudgetRaised = false;
+	float SavedPcgFrameTimeMs = 0.0f;
 };

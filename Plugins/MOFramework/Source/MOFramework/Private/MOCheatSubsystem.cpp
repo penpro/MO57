@@ -1127,6 +1127,25 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 		}),
 		ECVF_Default));
 
+	// ---------- MO.Player.Continue ----------
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Player.Continue"),
+		TEXT("Dev: press Continue on the death recap in this world (its own OnContinueRequested: the next colony pawn, or the respawn ~5 miles away), so the respawn path can run unattended after MO.Player.Kill."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			for (TObjectIterator<UMODeathRecapWidget> It; It; ++It)
+			{
+				if (It->GetWorld() == World && It->IsActivated())
+				{
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOCheat] Continue: pressing Continue on %s"), *It->GetName());
+					It->OnContinueRequested.Broadcast();
+					return;
+				}
+			}
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOCheat] Continue: no active death recap in this world"));
+		}),
+		ECVF_Default));
+
 	// ---------- MO.Test.AfterReady <console command...> ----------
 	ConsoleCommands.Add(CM.RegisterConsoleCommand(
 		TEXT("MO.Test.AfterReady"),

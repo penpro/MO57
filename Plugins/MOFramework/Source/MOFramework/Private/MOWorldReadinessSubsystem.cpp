@@ -26,6 +26,7 @@ namespace
 	TAutoConsoleVariable<float> CVarMaxPcgHardSeconds(TEXT("mo.Readiness.MaxPcgHardSeconds"), 32.0f, TEXT("Hard cap for the vegetation stage when the near-vegetation count is still below its minimum."));
 	TAutoConsoleVariable<float> CVarMaxStreamingSeconds(TEXT("mo.Readiness.MaxStreamingSeconds"), 4.0f, TEXT("Cap for the streaming stage: a pool-limited scene never reaches zero textures wanting resources."));
 	TAutoConsoleVariable<int32> CVarStreamingWantMax(TEXT("mo.Readiness.StreamingWantMax"), 8, TEXT("Textures still wanting resources that the streaming stage tolerates."));
+	TAutoConsoleVariable<float> CVarPcgFrameTimeMs(TEXT("mo.Readiness.PcgFrameTimeMs"), 20.0f, TEXT("PCG's per-frame budget (pcg.FrameTime, normally 5 ms) during the vegetation stage, behind the loading overlay: the time-sliced spawners build a dense forest in 5 ms slices otherwise. Restored when the stage ends. 0 = leave pcg.FrameTime alone."));
 	TAutoConsoleVariable<float> CVarMaxTotalSeconds(TEXT("mo.Readiness.MaxTotalSeconds"), 60.0f, TEXT("Cap for the whole cycle: force-ready (and a warning) instead of a black screen that never lifts."));
 
 	constexpr float PollIntervalSeconds = 0.2f;
@@ -80,6 +81,7 @@ void UMOWorldReadinessSubsystem::Deinitialize()
 		World->GetTimerManager().ClearTimer(PollTimerHandle);
 	}
 	ReleaseFarGrids();
+	RestorePcgBudget();
 	OnWorldReady.Clear();
 	Super::Deinitialize();
 }
@@ -302,6 +304,7 @@ void UMOWorldReadinessSubsystem::StopTracking()
 		World->GetTimerManager().ClearTimer(PollTimerHandle);
 	}
 	ReleaseFarGrids();
+	RestorePcgBudget();
 	Stage = EMOWorldReadyStage::Inactive;
 	Progress = 0.0f;
 }
@@ -322,6 +325,44 @@ void UMOWorldReadinessSubsystem::EnterStage(EMOWorldReadyStage NewStage)
 	Stage = NewStage;
 	StageStartSeconds = Now;
 	PcgQuietSeconds = 0.0;
+	if (Stage == EMOWorldReadyStage::Vegetation)
+	{
+		RaisePcgBudget();
+	}
+	else
+	{
+		RestorePcgBudget();
+	}
+}
+
+void UMOWorldReadinessSubsystem::RaisePcgBudget()
+{
+	const float BudgetMs = CVarPcgFrameTimeMs.GetValueOnGameThread();
+	IConsoleVariable* FrameTime = IConsoleManager::Get().FindConsoleVariable(TEXT("pcg.FrameTime"));
+	if (bPcgBudgetRaised || BudgetMs <= 0.0f || !FrameTime)
+	{
+		return;
+	}
+	SavedPcgFrameTimeMs = FrameTime->GetFloat();
+	if (BudgetMs > SavedPcgFrameTimeMs)
+	{
+		FrameTime->Set(BudgetMs, ECVF_SetByCode);
+		bPcgBudgetRaised = true;
+		UE_LOG(LogMOFramework, Log, TEXT("[MOReadiness] pcg.FrameTime %.1f -> %.1f ms for the vegetation stage"), SavedPcgFrameTimeMs, BudgetMs);
+	}
+}
+
+void UMOWorldReadinessSubsystem::RestorePcgBudget()
+{
+	if (!bPcgBudgetRaised)
+	{
+		return;
+	}
+	bPcgBudgetRaised = false;
+	if (IConsoleVariable* FrameTime = IConsoleManager::Get().FindConsoleVariable(TEXT("pcg.FrameTime")))
+	{
+		FrameTime->Set(SavedPcgFrameTimeMs, ECVF_SetByCode);
+	}
 }
 
 void UMOWorldReadinessSubsystem::SetProgress(float NewProgress)
@@ -337,6 +378,7 @@ void UMOWorldReadinessSubsystem::Finish(const TCHAR* Reason)
 	}
 	UE_LOG(LogMOFramework, Warning, TEXT("[MOReadiness] READY after %.1fs (%s)"), FPlatformTime::Seconds() - CycleStartSeconds, Reason);
 	ReleaseFarGrids();
+	RestorePcgBudget();
 	Stage = EMOWorldReadyStage::Ready;
 	Progress = 1.0f;
 	OnWorldReady.Broadcast();
