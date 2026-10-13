@@ -195,6 +195,14 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawning")
 	bool bCastShadows = true;
+
+	/**
+	 * Past this distance (cm) the species' wind / world position offset stops (the component's WorldPositionOffsetDisableDistance; 0 = never). A swaying
+	 * instance invalidates its virtual-shadow-map pages EVERY frame, so dense foliage re-rendered its shadows constantly: Rainforest spent 4.1 ms of GPU in
+	 * shadow depths against 1.4 in Meadow (ProfileGPU, Oct 13 2026). Sway past ~80 m is barely visible; the cached shadows are not.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Spawning", meta = (ClampMin = "0"))
+	int32 WindDisableDistanceCm = 8000;
 };
 
 struct FMOPCGBiomeSpawnerContext;

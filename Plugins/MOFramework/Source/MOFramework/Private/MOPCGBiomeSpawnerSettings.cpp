@@ -774,6 +774,10 @@ bool FMOPCGBiomeSpawnerElement::BuildSlice(FMOPCGBiomeSpawnerContext* Context) c
 				Params.Descriptor.bEvaluateWorldPositionOffset = false;
 				Params.Descriptor.bUseAsOccluder = false;
 			}
+			else if (Settings->WindDisableDistanceCm > 0)
+			{
+				Params.Descriptor.WorldPositionOffsetDisableDistance = Settings->WindDisableDistanceCm;   // swaying instances re-render their shadow pages every frame
+			}
 			// The near floor is a per-frame DRAW distance: a far cell plants its whole area and the camera decides what is drawn, so a cell generated around one position still fills in when the
 			// player walks away (the generation-time cut it replaced left bald circles). See ApplyNearDrawFloor for the end distance the engine needs before it honours the floor at all.
 			MOPCGBiomeSpawner::ApplyNearDrawFloor(Params.Descriptor, Settings->MinDistanceFromViewerCm);
