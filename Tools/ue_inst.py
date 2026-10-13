@@ -1764,6 +1764,46 @@ def _package_build():
     return ok
 
 
+PKG_DEATHFLOW_RE = re.compile(r"\[MOTEST\] (PASS|FAIL) DeathFlow: (.*)")
+
+
+def packaged_deathflow_test(package=False, seed=1029024224, boot_timeout=420):
+    """The PACKAGED Development game, ONE copy: a new game on a FIXED seed (default 1029024224: its spawn used to settle on a stale coarse collision, the terrain rose over the pawn and it swam
+    underground), then MO.Test.DeathFlow drives it end to end -- kill the pawn, the death recap shows (the cooked build has WBP_DeathRecap), Continue,
+    a new survivor ~5 miles away is possessed and grounded -- and logs [MOTEST] PASS / FAIL DeathFlow, which this reads. Why it exists: a class loaded from a path string (the recap) is exactly what a
+    cook can leave out, and the editor cannot tell. Refuses to run if any MO57.exe is already running (it only ever stops the process tree it started)."""
+    rep = Report()
+    pid = None
+    try:
+        if package and not _package_build():
+            return rep.step("the Development package builds", False, "see Saved/Logs/package.log")
+        if not rep.step("the staged packaged build exists", os.path.exists(PKG_EXE), PKG_EXE):
+            return False
+        running = _pkg_alive_count()
+        if not rep.step("no other MO57.exe is running (this mode must own the log and never touches others)", running == 0, f"{running} running"):
+            return False
+        log_path = os.path.join(PKG_LOGS, "MO57.log")
+        if os.path.exists(log_path):
+            os.remove(log_path)   # a stale verdict from an earlier run must not be read
+        print(f"[nettest] packaged-death: launching one packaged copy (MO.NewGame {seed} + MO.Test.DeathFlow) ...", flush=True)
+        pid = _pkg_launch('-NoSteam -NoQualityBenchmark -windowed -ResX=960 -ResY=540 -WinX=0 -WinY=0 -ExecCmds="MO.NewGame {seed},MO.Test.DeathFlow"'.replace("{seed}", str(seed)))
+        deadline, verdict = time.time() + boot_timeout, None
+        while time.time() < deadline and verdict is None:
+            verdict = PKG_DEATHFLOW_RE.search(_pkg_read("MO57.log"))
+            time.sleep(3)
+        log = _pkg_read("MO57.log")
+        if verdict is None:
+            rep.step("DeathFlow reported a verdict", False, log[-300:].replace(chr(10), " | "))
+        else:
+            rep.step("DeathFlow: kill -> death recap -> Continue -> new survivor ~5 miles away, grounded", verdict.group(1) == "PASS", verdict.group(2))
+        fatal = PKG_FATAL_RE.search(log)
+        rep.step("no crash, ensure or assertion in the log", fatal is None, "" if fatal is None else fatal.group(0))
+        return rep.ok
+    finally:
+        print(f"[nettest] packaged-death: {'PASS' if rep.rows and rep.ok else 'FAIL'}", flush=True)
+        _pkg_stop(pid)
+
+
 def packaged_test(package=False, withhold_sync=False, run_seconds=60, boot_timeout=180):
     """Two copies of the PACKAGED Development game (host via -ExecCmds, client via the address), judged from their logs alone: no crash / ensure,
     same seed, the client follows the host's clock and weather, the client's spawn manager is silent while the host's runs.

@@ -54,6 +54,11 @@
 #include "MOIdentityComponent.h"
 #include "MOCharacter.h"
 #include "MOAnatomyComponent.h"
+#include "MODeathRecapWidget.h"
+#include "MOCommonButton.h"
+#include "MOWorldReadinessSubsystem.h"
+#include "GameFramework/CharacterMovementComponent.h"
+#include "UObject/UObjectIterator.h"
 #include "MOBuildableActor.h" // complete type for TSubclassOf<AMOBuildableActor> null-check (A1 art audit)
 #include "MOContainerActor.h"
 #include "MOCraftingStationActor.h"
@@ -1100,6 +1105,145 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 			}
 			UE_LOG(LogMOFramework, Warning, TEXT("[MOCheat] Kill %s via %d"), *Character->GetName(), static_cast<int32>(Part));
 			Anatomy->OnInstantDeath.Broadcast(Part);
+		}),
+		ECVF_Default));
+
+	// ---------- MO.Test.DeathFlow ----------
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Test.DeathFlow"),
+		TEXT("Test (asynchronous, works in packaged Development builds): once the world is ready, kill the local pawn, check the death recap shows, click Continue and check a NEW survivor ~5 miles away is possessed and grounded. Logs [MOTEST] PASS / FAIL DeathFlow."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			struct FDeathFlowState
+			{
+				int32 Phase = 0;   // 0 wait for a ready world + living grounded pawn, 1 wait for the recap, 2 wait for the respawn
+				double Start = 0.0;
+				double PhaseStart = 0.0;
+				FVector DeathLoc = FVector::ZeroVector;
+				TWeakObjectPtr<APawn> OldPawn;
+				bool bDone = false;
+			};
+			const TSharedRef<FDeathFlowState> S = MakeShared<FDeathFlowState>();
+			S->Start = S->PhaseStart = FPlatformTime::Seconds();
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] DeathFlow: armed (waits for a ready world and a grounded living pawn)"));
+
+			FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([S](float) -> bool
+			{
+				auto Finish = [&S](bool bPass, const FString& Detail)
+				{
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] %s DeathFlow: %s"), bPass ? TEXT("PASS") : TEXT("FAIL"), *Detail);
+					S->bDone = true;
+				};
+				const double Now = FPlatformTime::Seconds();
+				// The world this command was typed in is the MENU (the test is armed from -ExecCmds, before a world is hosted and travelled to), so look the gameplay world up on every tick.
+				UWorld* W = nullptr;
+				APlayerController* PC = nullptr;
+				if (GEngine)
+				{
+					for (const FWorldContext& Context : GEngine->GetWorldContexts())
+					{
+						UWorld* ContextWorld = Context.World();
+						if (ContextWorld && (Context.WorldType == EWorldType::Game || Context.WorldType == EWorldType::PIE))
+						{
+							APlayerController* Candidate = ContextWorld->GetFirstPlayerController();
+							if (Cast<AMOPlayerController>(Candidate))
+							{
+								W = ContextWorld;
+								PC = Candidate;
+								break;
+							}
+						}
+					}
+				}
+				if (!W || !PC)
+				{
+					if (Now - S->Start > 240.0)
+					{
+						Finish(false, TEXT("no gameplay world with a player controller within 240 s"));
+					}
+					return !S->bDone;
+				}
+				const UMOWorldReadinessSubsystem* Readiness = UMOWorldReadinessSubsystem::Get(W);
+				auto Grounded = [Readiness](const AMOCharacter* C)
+				{
+					return C && !C->IsDead() && C->GetCharacterMovement() && C->GetCharacterMovement()->IsMovingOnGround() && (!Readiness || !Readiness->IsTracking());
+				};
+
+				if (S->Phase == 0)
+				{
+					AMOCharacter* Character = Cast<AMOCharacter>(PC->GetPawn());
+					if (Grounded(Character) && Character->GetAnatomyComponent())
+					{
+						S->DeathLoc = Character->GetActorLocation();
+						S->OldPawn = Character;
+						UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] DeathFlow: killing %s at %s"), *Character->GetName(), *S->DeathLoc.ToCompactString());
+						Character->GetAnatomyComponent()->OnInstantDeath.Broadcast(EMOBodyPartType::Brain);
+						S->Phase = 1;
+						S->PhaseStart = Now;
+					}
+					else if (Now - S->Start > 240.0)
+					{
+						const UCharacterMovementComponent* Move = Character ? Character->GetCharacterMovement() : nullptr;
+						Finish(false, FString::Printf(TEXT("no ready, grounded, living pawn within 240 s (pawn=%s dead=%d moveMode=%d falling=%d onGround=%d readinessTracking=%d pos=%s)"),
+							Character ? *Character->GetName() : TEXT("none"), Character && Character->IsDead(), Move ? static_cast<int32>(Move->MovementMode.GetValue()) : -1, Move && Move->IsFalling(),
+							Move && Move->IsMovingOnGround(), Readiness && Readiness->IsTracking(), Character ? *Character->GetActorLocation().ToCompactString() : TEXT("-")));
+					}
+				}
+				else if (S->Phase == 1)
+				{
+					UMODeathRecapWidget* Recap = nullptr;
+					for (TObjectIterator<UMODeathRecapWidget> It; It; ++It)
+					{
+						if (It->GetWorld() == W && It->IsActivated())
+						{
+							Recap = *It;
+							break;
+						}
+					}
+					if (Recap)
+					{
+						UMOCommonButton* Continue = Cast<UMOCommonButton>(Recap->GetWidgetFromName(TEXT("ContinueButton")));
+						UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] DeathFlow: the death recap showed %.1fs after the kill"), Now - S->PhaseStart);
+						if (!Continue || !Continue->SimulateClick())
+						{
+							Finish(false, TEXT("the recap has no clickable ContinueButton"));
+						}
+						else
+						{
+							S->Phase = 2;
+							S->PhaseStart = Now;
+						}
+					}
+					else if (Now - S->PhaseStart > 20.0)
+					{
+						Finish(false, TEXT("no death recap within 20 s of the kill (class missing from the build?)"));
+					}
+				}
+				else
+				{
+					AMOCharacter* Character = Cast<AMOCharacter>(PC->GetPawn());
+					if (Character && Character != S->OldPawn.Get() && Grounded(Character))
+					{
+						const double Km = FVector::Dist2D(Character->GetActorLocation(), S->DeathLoc) / 100000.0;
+						if (Km >= 6.0 && Km <= 10.0)
+						{
+							Finish(true, FString::Printf(TEXT("recap shown, Continue respawned %s %.1f km from where the last pawn died, grounded %.1fs after Continue"), *Character->GetName(), Km, Now - S->PhaseStart));
+						}
+						else
+						{
+							Finish(false, FString::Printf(TEXT("the new survivor stands %.1f km away (expected about 8 km)"), Km));
+						}
+					}
+					else if (Now - S->PhaseStart > 120.0)
+					{
+						const UCharacterMovementComponent* Move = Character ? Character->GetCharacterMovement() : nullptr;
+						Finish(false, FString::Printf(TEXT("no grounded new survivor within 120 s of Continue (pawn=%s new=%d dead=%d moveMode=%d onGround=%d readinessTracking=%d km=%.1f)"),
+							Character ? *Character->GetName() : TEXT("none"), Character && Character != S->OldPawn.Get(), Character && Character->IsDead(), Move ? static_cast<int32>(Move->MovementMode.GetValue()) : -1,
+							Move && Move->IsMovingOnGround(), Readiness && Readiness->IsTracking(), Character ? FVector::Dist2D(Character->GetActorLocation(), S->DeathLoc) / 100000.0 : -1.0));
+					}
+				}
+				return !S->bDone;
+			}), 0.5f);
 		}),
 		ECVF_Default));
 

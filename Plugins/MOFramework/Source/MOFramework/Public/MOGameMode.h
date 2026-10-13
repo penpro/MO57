@@ -206,6 +206,15 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Spawn|Settle")
 	float SpawnSettleToleranceCm = 4.0f;
 
+	/**
+	 * The settle only accepts a traced ground height that agrees with the WORLD GENERATOR's ground at that spot to within this much. The generator is what the voxel terrain converges to (the live
+	 * terrain matches it to ~1 cm at full detail), but on the way there the first collision can be a coarse level of detail that is stable for seconds and 100+ cm off: seed 1029024224's spawn
+	 * settled on z=112, the final terrain rose to z=226 over the pawn, and it fell through to the sea plane and swam UNDERGROUND (found by the packaged death-flow test, 2026-10-13).
+	 * 0 = trust the trace alone (no generator / a terraformed spot).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Spawn|Settle")
+	float SpawnSettleGeneratorToleranceCm = 40.0f;
+
 	// =========================================================================
 	// PERMADEATH RESPAWN (project vision: "if the last pawn dies, respawn ~5 miles away as a new pawn; the old pawn's gear stays where it fell")
 
@@ -613,6 +622,12 @@ private:
 	void BeginLandingWait(APawn* NewPawn);
 
 	/** Hold `Pawn` and start polling the ground under it (SpawnSettle*). Ends in BeginLandingWait. */
+	/** The generator's ground height at (X, Y) for this world's seed (what the voxel terrain converges to). False when no generator / seed is available. */
+	bool TryGetGeneratedGroundCm(double X, double Y, float& OutGroundCm) const;
+
+	/** Last time (seconds) the settle logged that the traced ground disagrees with the generator (throttle). */
+	double SettleLastMismatchLogTime = 0.0;
+
 	void BeginSpawnSettle(class AMOCharacter* Pawn);
 	void PollSpawnSettle();
 	void FinishSpawnSettle(bool bGroundFound);

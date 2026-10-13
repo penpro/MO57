@@ -1134,6 +1134,18 @@ void AMOGameMode::BeginSpawnSettle(AMOCharacter* Pawn)
 	World->GetTimerManager().SetTimer(SpawnSettleTimerHandle, this, &AMOGameMode::PollSpawnSettle, 0.25f, /*bLoop=*/true);
 }
 
+bool AMOGameMode::TryGetGeneratedGroundCm(double X, double Y, float& OutGroundCm) const
+{
+	const UMOWorldSeedSubsystem* Seeds = UMOWorldSeedSubsystem::Get(GetWorld());
+	if (!Seeds || !Seeds->HasActiveSeed() || !FMOWorldGenParamsProvider::HasPublished())
+	{
+		return false;
+	}
+	const FMOWorldGenParamsRef Params = FMOWorldGenParamsProvider::Get();
+	OutGroundCm = FMOWorldGen::SampleHeightCm(*Params, X, Y, Seeds->GetActiveTerrainSeed(), Params->Tuning.VoxelSizeCm);
+	return true;
+}
+
 void AMOGameMode::PollSpawnSettle()
 {
 	AMOCharacter* Pawn = SettlingPawn.Get();
@@ -1147,7 +1159,10 @@ void AMOGameMode::PollSpawnSettle()
 	SettleElapsed += 0.25f;
 	FHitResult Hit;
 	const FVector L = Pawn->GetActorLocation();
-	if (MOSpawnClearance::TraceVoxelGround(World, L.X, L.Y, L.Z + 6000.f, L.Z - 6000.f, Pawn, Hit))
+	float GeneratedGround = 0.0f;
+	const bool bGeneratorKnown = SpawnSettleGeneratorToleranceCm > 0.0f && TryGetGeneratedGroundCm(L.X, L.Y, GeneratedGround);
+	if (MOSpawnClearance::TraceVoxelGround(World, L.X, L.Y, L.Z + 6000.f, L.Z - 6000.f, Pawn, Hit)
+		&& (!bGeneratorKnown || FMath::Abs(Hit.ImpactPoint.Z - GeneratedGround) <= SpawnSettleGeneratorToleranceCm))
 	{
 		const float GroundZ = Hit.ImpactPoint.Z;
 		if (bSettleHaveGround && FMath::Abs(GroundZ - SettleLastGroundZ) <= SpawnSettleToleranceCm)
@@ -1167,6 +1182,11 @@ void AMOGameMode::PollSpawnSettle()
 	}
 	else
 	{
+		if (bGeneratorKnown && Hit.bBlockingHit && FPlatformTime::Seconds() - SettleLastMismatchLogTime > 2.0)
+		{
+			SettleLastMismatchLogTime = FPlatformTime::Seconds();
+			UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Spawn settle: the terrain under the pawn is at z=%.0f but the generator says z=%.0f -- still refining, waiting"), Hit.ImpactPoint.Z, GeneratedGround);
+		}
 		bSettleHaveGround = false;
 		SettleStableTime = 0.f;
 	}
@@ -1177,7 +1197,17 @@ void AMOGameMode::PollSpawnSettle()
 	}
 	else if (SettleElapsed >= ActiveSettleMaxSeconds)
 	{
-		FinishSpawnSettle(bSettleHaveGround);
+		if (!bSettleHaveGround && bGeneratorKnown)
+		{
+			// The collision never agreed with the generator: put the pawn on the generator's ground (the surface the terrain converges to) instead of a stale coarse one.
+			SettleLastGroundZ = GeneratedGround;
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOGameMode] Spawn settle: no collision agreeing with the generator after %.0fs -- using the generator's ground z=%.0f"), SettleElapsed, GeneratedGround);
+			FinishSpawnSettle(true);
+		}
+		else
+		{
+			FinishSpawnSettle(bSettleHaveGround);
+		}
 	}
 }
 
