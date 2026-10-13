@@ -51,12 +51,13 @@
  *
  * CRITICAL PATTERNS:
  * 1. PERCEPTION SETUP: Call SetupPerception() in BeginPlay
- * 2. DEFERRED CONFIG: Perception finalized next tick via FinalizePerceptionSetup
+ * 2. LISTENER REGISTRATION: FinalizePerceptionSetup registers the listener itself (RequestStimuliListenerUpdate) before ConfigureSense: a component with no
+ *    senses at OnRegister is never registered by the engine, so waiting for an id never ends
  * 3. THREAT MEMORY: ThreatMemoryDuration keeps threat after losing sight
  * 4. BLACKBOARD SYNC: UpdateBlackboardThreatInfo() after threat changes
  *
  * KNOWN PITFALLS:
- * 1. PERCEPTION TIMING: Perception not ready until next tick after setup
+ * 1. PERCEPTION TIMING: ready at the end of OnPossess (settings applied earlier are kept as Pending* and applied then)
  * 2. PENDING SETTINGS: ApplyPerceptionSettings before setup stores to Pending*
  * 3. NULL VITALS: GetHealthPercent returns 1.0 if no vitals component
  *
@@ -280,15 +281,8 @@ protected:
 	UPROPERTY()
 	TWeakObjectPtr<AActor> RememberedThreatActor;
 
-	/**
-	 * True once FinalizePerceptionSetup has run: the perception listener has an id and ConfigureSense is allowed. The sense configs EXIST earlier (SetupPerception,
-	 * during OnPossess) but configuring a sense before the listener is registered logs "Listener must have a valid id" -- so readiness is THIS flag, not "the configs exist".
-	 */
+	/** True once FinalizePerceptionSetup has registered the perception listener and configured its senses (ConfigureSense is allowed from then on). */
 	bool bPerceptionFinalized = false;
-
-	/** FinalizePerceptionSetup retries (one per frame) until the perception system has registered this listener. */
-	int32 PerceptionFinalizeAttempts = 0;
-	static constexpr int32 MaxPerceptionFinalizeAttempts = 180;
 
 	/** True once the initial blackboard values were pushed. The blackboard asset is bound AFTER OnPossess (the behavior tree starts later), so this is done on the first tick it exists. */
 	bool bBlackboardPrimed = false;
@@ -306,10 +300,10 @@ protected:
 	static constexpr float ThreatUpdateInterval = 0.2f;
 
 private:
-	/** Setup perception component and sense configs (defers ConfigureSense to next tick). */
+	/** Creates the sense configs and binds the perception delegate, then finalizes (OnPossess). */
 	void SetupPerception();
 
-	/** Called next tick after SetupPerception to finalize when listener ID is valid. */
+	/** Registers the perception listener (it has no id otherwise), configures the senses, applies any pending settings. */
 	void FinalizePerceptionSetup();
 
 	/** Apply any pending perception settings that were requested before perception was ready. */

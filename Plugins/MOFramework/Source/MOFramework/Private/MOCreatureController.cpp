@@ -114,14 +114,7 @@ void AMOCreatureController::SetupPerception()
 	// Bind to perception updates
 	PerceptionComp->OnTargetPerceptionUpdated.AddDynamic(this, &AMOCreatureController::OnTargetPerceptionUpdated);
 
-	// Defer ConfigureSense to next frame when listener ID will be valid
-	if (UWorld* World = GetWorld())
-	{
-		World->GetTimerManager().SetTimerForNextTick(FTimerDelegate::CreateWeakLambda(this, [this]()
-		{
-			FinalizePerceptionSetup();
-		}));
-	}
+	FinalizePerceptionSetup();
 }
 
 void AMOCreatureController::FinalizePerceptionSetup()
@@ -132,20 +125,13 @@ void AMOCreatureController::FinalizePerceptionSetup()
 		return;
 	}
 
-	// The perception system registers a component as a listener (and hands it an id) on ITS tick, which can run after our next-tick timer: wait for the id.
-	// ConfigureSense before it exists logs "Listener must have a valid id to update its sense config" and the config is dropped.
-	if (PerceptionComp->GetListenerId() == FPerceptionListenerID::InvalidID() && PerceptionFinalizeAttempts < MaxPerceptionFinalizeAttempts)
-	{
-		++PerceptionFinalizeAttempts;
-		if (UWorld* World = GetWorld())
-		{
-			World->GetTimerManager().SetTimerForNextTick(FTimerDelegate::CreateWeakLambda(this, [this]() { FinalizePerceptionSetup(); }));
-		}
-		return;
-	}
+	// A listener gets its id from UAIPerceptionSystem::UpdateListener. The component calls that by itself only in OnRegister, and only when it already HAS
+	// senses then -- ours are made at possession, so nothing ever registered it: the old "wait for the id" ran out after 180 frames for every creature, each
+	// ConfigureSense then logged "Listener must have a valid id to update its sense config", and the creature was blind until a later settings update
+	// happened to register it (Oct 13 2026). Register the listener first, then configure the senses on it.
 	if (PerceptionComp->GetListenerId() == FPerceptionListenerID::InvalidID())
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOCreatureController] %s: the perception listener never got an id in %d frames; configuring the senses anyway"), *GetNameSafe(this), MaxPerceptionFinalizeAttempts);
+		PerceptionComp->RequestStimuliListenerUpdate();
 	}
 
 	bPerceptionFinalized = true;
@@ -162,6 +148,9 @@ void AMOCreatureController::FinalizePerceptionSetup()
 	// Set dominant sense to sight
 	PerceptionComp->SetDominantSense(UAISenseConfig_Sight::StaticClass());
 
+	// The listener entry was created before the senses existed: refresh it so the senses' mask and ranges are the configured ones.
+	PerceptionComp->RequestStimuliListenerUpdate();
+
 	// Apply any pending perception settings that were requested before perception was ready
 	ApplyPendingPerceptionSettings();
 }
@@ -170,8 +159,8 @@ void AMOCreatureController::ApplyPerceptionSettings(const FMOCreatureDefinitionR
 {
 	UAIPerceptionComponent* PerceptionComp = GetPerceptionComponent();
 
-	// Perception is ready only after FinalizePerceptionSetup: the sense configs exist from OnPossess on, but the listener has no id until the next tick, and
-	// ConfigureSense before that logs "Listener must have a valid id to update its sense config" (once per sense per creature).
+	// Perception is ready once FinalizePerceptionSetup (end of OnPossess) has registered the listener and configured the senses; a definition applied
+	// before that (the creature's BeginPlay can run first) is stored and applied there.
 	const bool bPerceptionReady = bPerceptionFinalized && SightConfig != nullptr && HearingConfig != nullptr;
 
 	if (!bPerceptionReady)
