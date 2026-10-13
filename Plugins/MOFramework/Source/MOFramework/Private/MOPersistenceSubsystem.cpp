@@ -1,4 +1,5 @@
 #include "MOPersistenceSubsystem.h"
+#include "MOWorldGen.h"
 #include "MOFramework.h"
 #include "MOHarvestDebugSubsystem.h"
 
@@ -370,6 +371,13 @@ bool UMOPersistenceSubsystem::SaveWorldToSlot(const FString& SlotName)
     // World seed (for voxel terrain regeneration)
     SaveObject->WorldSeed = UMOGameSettings::GetWorldSeed();
     UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Saving world seed: %d"), SaveObject->WorldSeed);
+    // The generator that made this land (the seed alone does not pin it: see UMOWorldSaveGame::GeneratorVersion).
+    if (FMOWorldGenParamsProvider::HasPublished())
+    {
+        const FMOWorldGenParamsRef Gen = FMOWorldGenParamsProvider::Get();
+        SaveObject->GeneratorVersion = static_cast<int32>(Gen->GeneratorVersion);
+        SaveObject->GeneratorParamsHash = static_cast<int64>(Gen->GetHash());
+    }
     MOHARVEST_LOG(this, "Seed", "SAVE: writing WorldSeed=%d to slot='%s'", SaveObject->WorldSeed, *SlotName);
 
     // Screenshot thumbnail: asynchronous, applied (and the slot re-written) when the viewport next draws -- see RequestThumbnailForSave.
@@ -649,6 +657,29 @@ FMOLoadResult UMOPersistenceSubsystem::LoadWorldFromSlotWithResult(const FString
     // Extract world seed from save and store it for voxel regeneration
     LastLoadResult.WorldSeed = LoadedTyped->WorldSeed;
     UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Loaded world seed: %d"), LastLoadResult.WorldSeed);
+
+    // Same seed, same generator? A different generator (or tuning) regenerates different ground under the saved buildings and terrain edits.
+    // Reported, not refused: the policy for old worlds is a design decision (H13). Unknown (0) = a save from before the field.
+    LastLoadResult.SavedGeneratorVersion = LoadedTyped->GeneratorVersion;
+    LastLoadResult.bGeneratorChanged = false;
+    if (FMOWorldGenParamsProvider::HasPublished())
+    {
+        const FMOWorldGenParamsRef Gen = FMOWorldGenParamsProvider::Get();
+        const int32 NowVersion = static_cast<int32>(Gen->GeneratorVersion);
+        const int64 NowHash = static_cast<int64>(Gen->GetHash());
+        if (LoadedTyped->GeneratorVersion == 0)
+        {
+            LastLoadResult.bGeneratorChanged = true;
+            UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] GENERATOR UNKNOWN: slot '%s' predates the recorded generator identity; it is loaded with generator v%d, so its land may differ from when it was saved"),
+                *SlotName, NowVersion);
+        }
+        else if (LoadedTyped->GeneratorVersion != NowVersion || LoadedTyped->GeneratorParamsHash != NowHash)
+        {
+            LastLoadResult.bGeneratorChanged = true;
+            UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] GENERATOR CHANGED: slot '%s' was made by generator v%d (params %lld), this build is v%d (params %lld) -- the land regenerates differently under its buildings and edits"),
+                *SlotName, LoadedTyped->GeneratorVersion, LoadedTyped->GeneratorParamsHash, NowVersion, NowHash);
+        }
+    }
     MOHARVEST_LOG(this, "Seed", "LOAD: read WorldSeed=%d from save slot='%s'", LastLoadResult.WorldSeed, *SlotName);
 
     // Surface the last-possessed pawn GUID so the game mode can re-possess

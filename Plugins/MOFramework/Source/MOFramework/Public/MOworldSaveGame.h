@@ -347,6 +347,18 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save|Metadata")
     int32 WorldSeed = 0;
 
+    /**
+     * The terrain generator that made this world: FMOWorldGenParams::GeneratorVersion and its parameter hash (tuning + biomes). The seed alone does not
+     * pin the land -- a newer generator (v7 took the caves out from under high ground) regenerates different ground under the saved buildings and
+     * terrain edits. 0 = a save from before this field. Compared on load (UMOPersistenceSubsystem: a mismatch is logged and reported in FMOLoadResult);
+     * whether old worlds may change or must be migrated is Wes's policy call (Docs/Handoff_2026-10-13.md, H13).
+     */
+    UPROPERTY()
+    int32 GeneratorVersion = 0;
+
+    UPROPERTY()
+    int64 GeneratorParamsHash = 0;
+
     // ============================================================================
     // WORLD DATA
     // ============================================================================

@@ -13,6 +13,17 @@
 #include "MOWeatherTypes.h"
 #include "Net/UnrealNetwork.h"
 #include "TimerManager.h"
+#include "HAL/IConsoleManager.h"
+
+namespace
+{
+	// How long a whole-body failure may last before it kills (game-scaled seconds). Circulatory arrest: the brain's ischaemic window (~4-6 min);
+	// respiratory failure: severe hypoxaemia brings the heart to arrest within minutes. Short values exist for tests (MO.Test.SystemicDeath).
+	TAutoConsoleVariable<float> CVarCardiacArrestDeathSeconds(TEXT("mo.Medical.CardiacArrestDeathSeconds"), 300.0f,
+		TEXT("Seconds a circulatory failure (heart under 10 / min, or blood under 30 %) may last before it is fatal."));
+	TAutoConsoleVariable<float> CVarRespiratoryFailureDeathSeconds(TEXT("mo.Medical.RespiratoryFailureDeathSeconds"), 240.0f,
+		TEXT("Seconds a respiratory failure (SpO2 under 50 %, or under 4 breaths / min) may last before it is fatal."));
+}
 
 UMOVitalsComponent::UMOVitalsComponent()
 {
@@ -101,11 +112,12 @@ void UMOVitalsComponent::ApplyBloodLoss(float AmountML)
 		UE_LOG(LogMOFrameworkMedical, Warning, TEXT("[MOVitals] CRITICAL BLOOD LOSS - triggering death (%.1f%% remaining)"),
 			BloodVolumePercent);
 
-		// Trigger death via anatomy component
-		if (UMOAnatomyComponent* Anatomy = CachedAnatomyComp.Get())
+		// Systemic death, through the one path every whole-body failure takes (OnSystemicDeath -> AMOCharacter::DieOf), so the recap says
+		// "Bled out". (It used to borrow anatomy's OnInstantDeath with body part None: the recap read "None destroyed".)
+		if (FatalSystemicFailure == EMOSystemicFailure::None)
 		{
-			// Use None as the body part since this is systemic blood loss, not organ destruction
-			Anatomy->OnInstantDeath.Broadcast(EMOBodyPartType::None);
+			FatalSystemicFailure = EMOSystemicFailure::Exsanguination;
+			OnSystemicDeath.Broadcast(EMOSystemicFailure::Exsanguination);
 		}
 	}
 }
@@ -538,7 +550,7 @@ void UMOVitalsComponent::TickVitals()
 	ProcessExertionRecovery(ScaledDeltaTime);
 
 	// Check for critical conditions
-	CheckCriticalConditions();
+	CheckCriticalConditions(ScaledDeltaTime);
 
 	// Consume glucose based on activity
 	float GlucoseConsumption = 0.01f;  // Base consumption per second
@@ -918,19 +930,67 @@ void UMOVitalsComponent::ProcessExertionRecovery(float DeltaTime)
 	Exertion.Fatigue = FMath::Max(0.0f, Exertion.Fatigue - FatigueRecovery);
 }
 
-void UMOVitalsComponent::CheckCriticalConditions()
+void UMOVitalsComponent::CheckCriticalConditions(float DeltaSeconds)
 {
-	// Check for cardiac arrest
-	if (Vitals.HeartRate < 10.0f || Vitals.BloodVolume < Vitals.MaxBloodVolume * 0.3f)
+	const EMOSystemicFailure Fatal = StepSystemicFailure(DeltaSeconds);
+	if (Fatal != EMOSystemicFailure::None)
 	{
+		OnSystemicDeath.Broadcast(Fatal);
+	}
+}
+
+EMOSystemicFailure UMOVitalsComponent::StepSystemicFailure(float DeltaSeconds)
+{
+	// These conditions used to be broadcast every tick to no listener at all (Oct 2026): a stopped heart, an SpO2 under 50 % or 20-30 % of the blood left
+	// never killed (only the instant bleed-out at 20 % in ApplyBloodLoss did). Now each failure runs a clock while it lasts and kills when it is
+	// SUSTAINED -- reversible until then (a transfusion, the airway cleared), as the body is.
+	const float ArrestLimit = FMath::Max(1.0f, CVarCardiacArrestDeathSeconds.GetValueOnAnyThread());
+	const float RespLimit = FMath::Max(1.0f, CVarRespiratoryFailureDeathSeconds.GetValueOnAnyThread());
+
+	const bool bBledOut = Vitals.BloodVolume < Vitals.MaxBloodVolume * 0.3f;
+	const bool bCirculatoryFailure = Vitals.HeartRate < 10.0f || bBledOut;
+	const bool bRespiratoryFailure = Vitals.SpO2 < 50.0f || Vitals.RespiratoryRate < 4.0f;
+
+	if (bCirculatoryFailure && CirculatoryFailureSeconds <= 0.0f)
+	{
+		UE_LOG(LogMOFrameworkMedical, Warning, TEXT("[MOVitals] %s: circulatory failure (HR %.0f, blood %.0f%%) -- fatal in %.0f s unless it recovers"),
+			*GetNameSafe(GetOwner()), Vitals.HeartRate, 100.0f * Vitals.BloodVolume / FMath::Max(Vitals.MaxBloodVolume, 1.0f), ArrestLimit);
 		OnCardiacArrest.Broadcast();
 	}
-
-	// Check for respiratory failure
-	if (Vitals.SpO2 < 50.0f || Vitals.RespiratoryRate < 4.0f)
+	else if (!bCirculatoryFailure && CirculatoryFailureSeconds > 0.0f && FatalSystemicFailure == EMOSystemicFailure::None)
 	{
+		UE_LOG(LogMOFrameworkMedical, Warning, TEXT("[MOVitals] %s: circulation recovered after %.0f s"), *GetNameSafe(GetOwner()), CirculatoryFailureSeconds);
+	}
+	if (bRespiratoryFailure && RespiratoryFailureSeconds <= 0.0f)
+	{
+		UE_LOG(LogMOFrameworkMedical, Warning, TEXT("[MOVitals] %s: respiratory failure (SpO2 %.0f%%, RR %.0f) -- fatal in %.0f s unless it recovers"),
+			*GetNameSafe(GetOwner()), Vitals.SpO2, Vitals.RespiratoryRate, RespLimit);
 		OnRespiratoryFailure.Broadcast();
 	}
+	else if (!bRespiratoryFailure && RespiratoryFailureSeconds > 0.0f && FatalSystemicFailure == EMOSystemicFailure::None)
+	{
+		UE_LOG(LogMOFrameworkMedical, Warning, TEXT("[MOVitals] %s: breathing recovered after %.0f s"), *GetNameSafe(GetOwner()), RespiratoryFailureSeconds);
+	}
+	CirculatoryFailureSeconds = bCirculatoryFailure ? CirculatoryFailureSeconds + DeltaSeconds : 0.0f;
+	RespiratoryFailureSeconds = bRespiratoryFailure ? RespiratoryFailureSeconds + DeltaSeconds : 0.0f;
+
+	if (FatalSystemicFailure != EMOSystemicFailure::None)
+	{
+		return EMOSystemicFailure::None;   // already fatal: never twice
+	}
+	if (CirculatoryFailureSeconds >= ArrestLimit)
+	{
+		FatalSystemicFailure = bBledOut ? EMOSystemicFailure::Exsanguination : EMOSystemicFailure::CardiacArrest;
+	}
+	else if (RespiratoryFailureSeconds >= RespLimit)
+	{
+		FatalSystemicFailure = EMOSystemicFailure::RespiratoryFailure;
+	}
+	if (FatalSystemicFailure != EMOSystemicFailure::None)
+	{
+		UE_LOG(LogMOFrameworkMedical, Warning, TEXT("[MOVitals] %s: %s became fatal"), *GetNameSafe(GetOwner()), *UEnum::GetValueAsString(FatalSystemicFailure));
+	}
+	return FatalSystemicFailure;
 }
 
 void UMOVitalsComponent::CheckAndBroadcastChange(FName VitalName, float OldValue, float NewValue, float Threshold)

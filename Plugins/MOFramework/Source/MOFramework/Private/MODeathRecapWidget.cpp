@@ -109,14 +109,31 @@ FMODeathRecapData UMODeathRecapWidget::BuildRecapData(AMOCharacter* DeadCharacte
 	// the UMETA(DisplayName=...) on EMOBodyPartType). For body parts without
 	// an explicit display name UE falls back to the C++ name, which is also
 	// readable ("Brain", "Heart", etc.) so we don't need a hand-maintained map.
-	const UEnum* BodyPartEnum = StaticEnum<EMOBodyPartType>();
-	const FText PartName = BodyPartEnum
-		? BodyPartEnum->GetDisplayNameTextByValue(static_cast<int64>(CausePart))
-		: FText::FromString(TEXT("Unknown"));
-
-	Data.CauseOfDeath = FText::Format(
-		NSLOCTEXT("MO", "DeathRecap.CauseFormat", "{0} destroyed"),
-		PartName);
+	// The cause first: a body part alone told a drowning as "Brain destroyed" and a bleed-out as "None destroyed" (AMOCharacter::DieOf carries it).
+	switch (DeadCharacter->GetDeathCause())
+	{
+	case EMODeathCause::Drowned:
+		Data.CauseOfDeath = NSLOCTEXT("MO", "DeathRecap.Drowned", "Drowned");
+		break;
+	case EMODeathCause::BledOut:
+		Data.CauseOfDeath = NSLOCTEXT("MO", "DeathRecap.BledOut", "Bled out");
+		break;
+	case EMODeathCause::CardiacArrest:
+		Data.CauseOfDeath = NSLOCTEXT("MO", "DeathRecap.CardiacArrest", "Heart stopped");
+		break;
+	case EMODeathCause::RespiratoryFailure:
+		Data.CauseOfDeath = NSLOCTEXT("MO", "DeathRecap.RespiratoryFailure", "Could not breathe");
+		break;
+	default:
+	{
+		const UEnum* BodyPartEnum = StaticEnum<EMOBodyPartType>();
+		const FText PartName = BodyPartEnum
+			? BodyPartEnum->GetDisplayNameTextByValue(static_cast<int64>(CausePart))
+			: FText::FromString(TEXT("Unknown"));
+		Data.CauseOfDeath = FText::Format(NSLOCTEXT("MO", "DeathRecap.CauseFormat", "{0} destroyed"), PartName);
+		break;
+	}
+	}
 
 	// World location — keep it compact. Player won't memorize coordinates,
 	// but a rough "where am I in the world" reading helps with respawn

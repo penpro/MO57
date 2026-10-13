@@ -1855,6 +1855,59 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 		}),
 		ECVF_Default));
 
+	// ---------- MO.Test.SystemicDeath [windowSeconds=10] ----------
+	// A sustained whole-body failure kills, with its own cause: bleed the local pawn to 25 % (above the instant bleed-out at 20 %), shorten the circulatory
+	// window to windowSeconds, and check that it dies of "Bled out" -- the cause on the pawn AND the recap text (before Oct 2026 this state never killed,
+	// and a bleed-out read "None destroyed").
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Test.SystemicDeath"),
+		TEXT("Test: bleed the local pawn to 25 %, check it dies of blood loss within the (shortened) circulatory window and the recap says so. Logs [MOTEST] PASS / FAIL SystemicDeath. Usage: MO.Test.SystemicDeath [windowSeconds=10]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			const float Window = Args.Num() > 0 && Args[0].IsNumeric() ? FMath::Clamp(FCString::Atof(*Args[0]), 2.0f, 300.0f) : 10.0f;
+			RunOnNextTick(World, [Window](UWorld* W)
+			{
+				AMOCharacter* Character = Cast<AMOCharacter>(ResolveLocalPawn(W));
+				UMOVitalsComponent* Vitals = Character ? Character->GetVitalsComponent() : nullptr;
+				if (!Character || !Vitals)
+				{
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] FAIL SystemicDeath: no local MO character with vitals"));
+					return;
+				}
+				IConsoleVariable* CVar = IConsoleManager::Get().FindConsoleVariable(TEXT("mo.Medical.CardiacArrestDeathSeconds"));
+				const float OldWindow = CVar ? CVar->GetFloat() : 300.0f;
+				if (CVar)
+				{
+					CVar->Set(Window, ECVF_SetByConsole);
+				}
+				const float Target = Vitals->Vitals.MaxBloodVolume * 0.25f;
+				Vitals->ApplyBloodLoss(FMath::Max(0.0f, Vitals->Vitals.BloodVolume - Target));
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] SystemicDeath: %s bled to %.0f%% (window %.0f s)"), *Character->GetName(),
+					100.0f * Vitals->Vitals.BloodVolume / FMath::Max(Vitals->Vitals.MaxBloodVolume, 1.0f), Window);
+				const TWeakObjectPtr<AMOCharacter> Weak = Character;
+				const double CheckAt = FPlatformTime::Seconds() + Window + 4.0;
+				FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([Weak, CheckAt, CVar, OldWindow](float) -> bool
+				{
+					AMOCharacter* C = Weak.Get();
+					if (C && !C->IsDead() && FPlatformTime::Seconds() < CheckAt)
+					{
+						return true;
+					}
+					if (CVar)
+					{
+						CVar->Set(OldWindow, ECVF_SetByConsole);
+					}
+					const bool bDead = C && C->IsDead();
+					const FText Recap = bDead ? UMODeathRecapWidget::BuildRecapData(C, C->GetDeathCausePart()).CauseOfDeath : FText::GetEmpty();
+					const bool bPass = bDead && C->GetDeathCause() == EMODeathCause::BledOut && Recap.ToString() == TEXT("Bled out");
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] %s SystemicDeath: dead=%d cause=%s recap='%s'"), bPass ? TEXT("PASS") : TEXT("FAIL"),
+						bDead ? 1 : 0, C ? *UEnum::GetValueAsString(C->GetDeathCause()) : TEXT("?"), *Recap.ToString());
+					return false;
+				}), 0.5f);
+			});
+		}),
+		ECVF_Default));
+
 	// ---------- MO.Test.WorldRemovalAudit [timeoutSeconds=240] ----------
 	// Runs on any machine (co-op client especially): waits until the replicated removal record (AMOGameState) holds at least one entry, then checks that
 	// THIS machine has no spawned instance at any recorded place. With the host felling a tree (MO.Test.RemovalPersists) this proves the removal reached the

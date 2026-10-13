@@ -166,6 +166,7 @@
 #include "MOCraftingTypes.h"
 #include "MOBodyPartTypes.h"
 #include "MOInterruptTypes.h"
+#include "MOVitalsComponent.h"   // EMOSystemicFailure (HandleSystemicDeath)
 #include "MOCharacter.generated.h"
 
 /**
@@ -179,6 +180,25 @@
  * dead), so subscribers don't need to guard against duplicate dispatches.
  */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOOnPawnDied, AMOCharacter*, DeadCharacter, EMOBodyPartType, CausePart);
+
+/**
+ * What killed a character, told apart at the source (the body part alone cannot: a drowning read "Brain destroyed", a bleed-out "None destroyed").
+ * Set by AMOCharacter::DieOf before the one death path runs; read with GetDeathCause (the death recap does).
+ */
+UENUM(BlueprintType)
+enum class EMODeathCause : uint8
+{
+	/** A vital body part was destroyed (anatomy). */
+	BodyPartDestroyed,
+	/** The airway was closed until the body failed (drowning). */
+	Drowned,
+	/** Circulatory arrest from blood loss. */
+	BledOut,
+	/** The heart stopped. */
+	CardiacArrest,
+	/** Breathing / oxygenation failed until the heart followed. */
+	RespiratoryFailure,
+};
 
 /**
  * Movement mode affecting speed and physiological effects.
@@ -504,6 +524,16 @@ public:
 	/** Check if character is dead. */
 	UFUNCTION(BlueprintPure, Category="MO|State")
 	bool IsDead() const { return bIsDead; }
+
+	/** What killed this character (meaningful once IsDead). */
+	UFUNCTION(BlueprintPure, Category="MO|State")
+	EMODeathCause GetDeathCause() const { return DeathCause; }
+
+	/** The body part tied to the death (the destroyed part; Brain / Heart / LungLeft for the systemic causes). */
+	EMOBodyPartType GetDeathCausePart() const { return DeathCausePart; }
+
+	/** THE death path with its cause: records it, then runs HandleInstantDeath (virtual: creatures add their own teardown). Single-fire. */
+	void DieOf(EMODeathCause Cause, EMOBodyPartType Part);
 
 	/**
 	 * Broadcast once on death — see FMOOnPawnDied above. Single-fire per
@@ -906,6 +936,11 @@ public:
 	UPROPERTY(BlueprintReadOnly, Category="MO|State")
 	bool bIsDead = false;
 
+	/** What killed it (DieOf); a death that arrives without a cause (anatomy's OnInstantDeath) is a destroyed body part. */
+	EMODeathCause DeathCause = EMODeathCause::BodyPartDestroyed;
+	EMOBodyPartType DeathCausePart = EMOBodyPartType::None;
+	bool bDeathCauseSet = false;
+
 	/** Whether the ragdoll has been frozen (physics disabled, pose preserved). */
 	UPROPERTY(BlueprintReadOnly, Category="MO|State")
 	bool bRagdollFrozen = false;
@@ -1112,6 +1147,10 @@ private:
 	/** The respiration component reports the body failed with the airway closed: drowning. */
 	UFUNCTION()
 	void HandleAsphyxiaDeath();
+
+	/** The vitals component reports a whole-body failure became fatal (bleed-out, cardiac arrest, respiratory failure). */
+	UFUNCTION()
+	void HandleSystemicDeath(EMOSystemicFailure Cause);
 
 	/** Space is held while swimming: rise (a local input flag; the movement component replicates the resulting move). */
 	bool bSwimUpHeld = false;

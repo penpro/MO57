@@ -1,6 +1,7 @@
 #include "MOSurvivalStatsComponent.h"
 #include "MOInventoryComponent.h"
 #include "MOItemDatabaseSettings.h"
+#include "MOMetabolismComponent.h"
 #include "MOFramework.h"
 #include "Net/UnrealNetwork.h"
 #include "TimerManager.h"
@@ -137,6 +138,15 @@ bool UMOSurvivalStatsComponent::ConsumeItem(UMOInventoryComponent* InventoryComp
 
 	// Apply nutrition from item
 	ApplyNutrition(ItemDef.Nutrition);
+
+	// ... and the BODY eats it: the physiological model digests what the player eats (glycogen, hydration, vitamins -> glucose, blood pressure, mental
+	// state). Until Oct 2026 only the counters above heard about a meal -- UMOMetabolismComponent::ConsumeFood had one caller, the colony manager's
+	// villagers -- so the player's physiology (and the Status panel, which reads it) ran down however much the player ate and drank.
+	// (Which of the two models the HUD's moodles show is an open design decision: Docs/Survival_Single_Source_Proposal.md.)
+	if (UMOMetabolismComponent* Metabolism = GetOwner() ? GetOwner()->FindComponentByClass<UMOMetabolismComponent>() : nullptr)
+	{
+		Metabolism->ConsumeFood(ItemDef.Nutrition, FoundEntry.ItemDefinitionId);
+	}
 
 	// Remove one from inventory
 	InventoryComponent->RemoveItemByGuid(ItemGuid, 1);

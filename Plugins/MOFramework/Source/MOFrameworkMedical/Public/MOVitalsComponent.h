@@ -107,6 +107,21 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FMOOnVitalSignChanged, FName, Vit
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOOnBloodLossStageChanged, EMOBloodLossStage, OldStage, EMOBloodLossStage, NewStage);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOOnCardiacArrest);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOOnRespiratoryFailure);
+
+/** A whole-body failure that kills when it is SUSTAINED (see UMOVitalsComponent::StepSystemicFailure). Distinct causes, so the death recap can say what happened. */
+UENUM(BlueprintType)
+enum class EMOSystemicFailure : uint8
+{
+	None,
+	/** Circulatory arrest from blood loss (blood volume under 30 % of normal): the brain dies of ischaemia. */
+	Exsanguination,
+	/** The heart stopped (rate under 10 / min) with the blood still there. */
+	CardiacArrest,
+	/** Oxygen saturation under 50 % or breathing under 4 / min: hypoxic cardiac arrest follows. */
+	RespiratoryFailure,
+};
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOOnSystemicDeath, EMOSystemicFailure, Cause);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOOnVitalsChanged);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOOnActivityChanged, EMOActivityLevel, OldActivity, EMOActivityLevel, NewActivity);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOOnStaminaChanged, float, OldStamina, float, NewStamina);
@@ -306,13 +321,33 @@ public:
 	UPROPERTY(BlueprintAssignable, Category="MO|Vitals|Events")
 	FMOOnBloodLossStageChanged OnBloodLossStageChanged;
 
-	/** Fired when heart stops (cardiac arrest). */
+	/** Fired ONCE when circulation fails (heart under 10 / min or blood volume under 30 %); fires again only after a recovery. */
 	UPROPERTY(BlueprintAssignable, Category="MO|Vitals|Events")
 	FMOOnCardiacArrest OnCardiacArrest;
 
-	/** Fired when breathing stops (respiratory failure). */
+	/** Fired ONCE when breathing fails (SpO2 under 50 % or under 4 breaths / min); fires again only after a recovery. */
 	UPROPERTY(BlueprintAssignable, Category="MO|Vitals|Events")
 	FMOOnRespiratoryFailure OnRespiratoryFailure;
+
+	/**
+	 * Fired once when a failure has lasted long enough to kill (mo.Medical.CardiacArrestDeathSeconds, default 300: the ischaemic window of the brain;
+	 * mo.Medical.RespiratoryFailureDeathSeconds, default 240). Until then it is reversible: restore the blood volume or the oxygen and the clock resets.
+	 * AMOCharacter turns it into its one death path (DieOf), with the cause carried to the death recap.
+	 */
+	UPROPERTY(BlueprintAssignable, Category="MO|Vitals|Events")
+	FMOOnSystemicDeath OnSystemicDeath;
+
+	/**
+	 * One step of the failure clocks (TickVitals calls it with the game-scaled tick). Public so tests can drive it without a world.
+	 * Returns the failure that just became fatal (None otherwise; never twice).
+	 */
+	EMOSystemicFailure StepSystemicFailure(float DeltaSeconds);
+
+	/** Seconds the current circulatory / respiratory failure has lasted (0 = none). */
+	float GetCirculatoryFailureSeconds() const { return CirculatoryFailureSeconds; }
+	float GetRespiratoryFailureSeconds() const { return RespiratoryFailureSeconds; }
+	/** The failure that killed (None while alive). */
+	EMOSystemicFailure GetFatalSystemicFailure() const { return FatalSystemicFailure; }
 
 	/** Fired when any vital sign changes (for UI updates). */
 	UPROPERTY(BlueprintAssignable, Category="MO|Vitals|Events")
@@ -746,6 +781,12 @@ private:
 	/** Fraction of the body in water (SetWaterImmersion). */
 	float WaterImmersion = 0.0f;
 
+	/** How long the current circulatory / respiratory failure has lasted (game-scaled seconds; 0 = none). */
+	float CirculatoryFailureSeconds = 0.0f;
+	float RespiratoryFailureSeconds = 0.0f;
+	/** Set once a failure became fatal: OnSystemicDeath never fires twice. */
+	EMOSystemicFailure FatalSystemicFailure = EMOSystemicFailure::None;
+
 	/** Calculate oxygen saturation. */
 	void CalculateOxygenSaturation();
 
@@ -756,7 +797,7 @@ private:
 	void ProcessExertionRecovery(float DeltaTime);
 
 	/** Check for critical conditions. */
-	void CheckCriticalConditions();
+	void CheckCriticalConditions(float DeltaSeconds);
 
 	/** Broadcast vital sign change if significant. */
 	void CheckAndBroadcastChange(FName VitalName, float OldValue, float NewValue, float Threshold = 1.0f);

@@ -128,6 +128,14 @@ struct FMOLoadResult
     UPROPERTY(BlueprintReadOnly)
     FString ErrorMessage;
 
+    /** The save was made by another terrain generator (version or tuning): the land regenerates differently under its buildings / edits. */
+    UPROPERTY(BlueprintReadOnly)
+    bool bGeneratorChanged = false;
+
+    /** Generator version recorded in the save (0 = a save from before the field). */
+    UPROPERTY(BlueprintReadOnly)
+    int32 SavedGeneratorVersion = 0;
+
     /** World seed from the loaded save (for voxel terrain regeneration). */
     UPROPERTY(BlueprintReadOnly)
     int32 WorldSeed = 0;

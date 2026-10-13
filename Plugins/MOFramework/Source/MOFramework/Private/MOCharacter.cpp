@@ -282,6 +282,10 @@ void AMOCharacter::BeginPlay()
 	{
 		RespirationComponent->OnAsphyxiaDeath.AddDynamic(this, &AMOCharacter::HandleAsphyxiaDeath);
 	}
+	if (VitalsComponent)
+	{
+		VitalsComponent->OnSystemicDeath.AddDynamic(this, &AMOCharacter::HandleSystemicDeath);
+	}
 
 	Super::BeginPlay();
 }
@@ -298,6 +302,10 @@ void AMOCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	if (RespirationComponent)
 	{
 		RespirationComponent->OnAsphyxiaDeath.RemoveDynamic(this, &AMOCharacter::HandleAsphyxiaDeath);
+	}
+	if (VitalsComponent)
+	{
+		VitalsComponent->OnSystemicDeath.RemoveDynamic(this, &AMOCharacter::HandleSystemicDeath);
 	}
 
 	Super::EndPlay(EndPlayReason);
@@ -1235,7 +1243,30 @@ bool AMOCharacter::IsSwimming() const
 
 void AMOCharacter::HandleAsphyxiaDeath()
 {
-	HandleInstantDeath(EMOBodyPartType::Brain);   // drowning kills by hypoxia of the brain
+	DieOf(EMODeathCause::Drowned, EMOBodyPartType::Brain);   // drowning kills by hypoxia of the brain
+}
+
+void AMOCharacter::HandleSystemicDeath(EMOSystemicFailure Cause)
+{
+	switch (Cause)
+	{
+	case EMOSystemicFailure::Exsanguination:     DieOf(EMODeathCause::BledOut, EMOBodyPartType::Heart); break;
+	case EMOSystemicFailure::CardiacArrest:      DieOf(EMODeathCause::CardiacArrest, EMOBodyPartType::Heart); break;
+	case EMOSystemicFailure::RespiratoryFailure: DieOf(EMODeathCause::RespiratoryFailure, EMOBodyPartType::LungLeft); break;
+	default: break;
+	}
+}
+
+void AMOCharacter::DieOf(EMODeathCause Cause, EMOBodyPartType Part)
+{
+	if (bIsDead)
+	{
+		return;
+	}
+	DeathCause = Cause;
+	DeathCausePart = Part;
+	bDeathCauseSet = true;
+	HandleInstantDeath(Part);   // virtual: AMOCreature adds its own teardown
 }
 
 void AMOCharacter::UpdateWaterSounds(float DeltaTime)
@@ -1590,9 +1621,15 @@ void AMOCharacter::HandleInstantDeath(EMOBodyPartType CausePart)
 	}
 
 	bIsDead = true;
+	if (!bDeathCauseSet)   // came straight from anatomy's OnInstantDeath: a destroyed body part
+	{
+		DeathCause = EMODeathCause::BodyPartDestroyed;
+		DeathCausePart = CausePart;
+		bDeathCauseSet = true;
+	}
 
-	UE_LOG(LogMOFramework, Warning, TEXT("[MOCharacter] %s DIED! Cause: Body part %d destroyed"),
-		*GetName(), static_cast<int32>(CausePart));
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOCharacter] %s DIED! Cause: %s (body part %d)"),
+		*GetName(), *UEnum::GetValueAsString(DeathCause), static_cast<int32>(CausePart));
 
 	// Broadcast the death event BEFORE the interrupt cascade tears down
 	// state. Listeners (death recap UI, kill feed, spectator handoff) get a
