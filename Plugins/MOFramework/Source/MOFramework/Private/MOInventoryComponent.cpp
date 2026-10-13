@@ -244,19 +244,12 @@ bool UMOInventoryComponent::AddItemByGuid(const FGuid& ItemGuid, const FName Ite
 		{
 			OnItemAdded.Broadcast(ItemDefinitionId, ActuallyAdded);
 
-			// Notify quest subsystem directly -- only for what a PLAYER gathers: not a survivor's or a container's inventory, and not a spawn kit
-			// (ApplyStartingItems). Every add used to count as the player's "pickup", so a survivor spawning nearby with its 10 cobbles and 20 sticks
-			// completed the player's gather tutorial steps (logs, Oct 13 2026).
-			const APawn* OwnerPawn = Cast<APawn>(GetOwner());
-			if (UWorld* World = (!bApplyingStartingItems && OwnerPawn && OwnerPawn->IsPlayerControlled()) ? GetWorld() : nullptr)
+			// Quests: credit the PLAYER whose pawn gathered it (UMOQuestSubsystem::ReportForActor: a joiner's own machine, nobody for a survivor or a
+			// container), never a spawn kit (ApplyStartingItems). Every add used to count as the host's "pickup": the player's own kit completed the
+			// gather tutorial steps at spawn and a survivor spawning nearby counted again (logs, Oct 13 2026).
+			if (!bApplyingStartingItems)
 			{
-				if (UGameInstance* GI = World->GetGameInstance())
-				{
-					if (UMOQuestSubsystem* QuestSub = GI->GetSubsystem<UMOQuestSubsystem>())
-					{
-						QuestSub->HandleItemPickedUp(ItemDefinitionId, ActuallyAdded);
-					}
-				}
+				UMOQuestSubsystem::ReportForActor(GetOwner(), EMOObjectiveType::ItemPickup, ItemDefinitionId, ActuallyAdded);
 			}
 		}
 	}

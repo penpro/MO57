@@ -611,6 +611,10 @@ public:
 	UFUNCTION(Client, Reliable)
 	void ClientForageResult(uint8 Action, int32 ItemCount);
 
+	/** A quest event this player's pawn caused on the server (UMOQuestSubsystem::ReportForActor): applied to THIS player's quests. Type = EMOObjectiveType as uint8. */
+	UFUNCTION(Client, Reliable)
+	void ClientReportQuestEvent(uint8 Type, FName TargetId, int32 Count);
+
 protected:
 	/** ServerForage: the farthest the target may be from the pawn (the ground menu traces 20 m from the camera). */
 	UPROPERTY(EditDefaultsOnly, Category="MO|Foraging")

@@ -597,6 +597,17 @@ void AMOPlayerController::ServerForage_Implementation(uint8 Action, FVector_NetQ
 	ClientForageResult(Action, Count);
 }
 
+void AMOPlayerController::ClientReportQuestEvent_Implementation(uint8 Type, FName TargetId, int32 Count)
+{
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (UMOQuestSubsystem* Quests = GI->GetSubsystem<UMOQuestSubsystem>())
+		{
+			Quests->ApplyReportedEvent(static_cast<EMOObjectiveType>(Type), TargetId, Count);
+		}
+	}
+}
+
 void AMOPlayerController::ClientForageResult_Implementation(uint8 Action, int32 ItemCount)
 {
 	if (UMOInventoryUIController* UI = FindComponentByClass<UMOInventoryUIController>())

@@ -1,4 +1,6 @@
 #include "MOQuestSubsystem.h"
+#include "MOPlayerController.h"
+#include "GameFramework/Pawn.h"
 #include "MOPersistenceSubsystem.h"
 #include "MOworldSaveGame.h"
 #include "MOFramework.h"
@@ -48,12 +50,6 @@ void UMOQuestSubsystem::Deinitialize()
 	}
 	FWorldDelegates::OnPostWorldInitialization.Remove(WorldInitializedHandle);
 
-	// Unbind from crafting subsystem if bound
-	if (UMOCraftingSubsystem* CraftingSub = BoundCraftingSubsystem.Get())
-	{
-		CraftingSub->OnCraftCompleted.RemoveDynamic(this, &UMOQuestSubsystem::HandleCraftCompleted);
-	}
-
 	Super::Deinitialize();
 }
 
@@ -64,21 +60,8 @@ void UMOQuestSubsystem::HandleWorldInitialized(UWorld* World, const UWorld::Init
 		return;
 	}
 
-	// Bind to crafting subsystem
-	if (UMOCraftingSubsystem* CraftingSub = World->GetSubsystem<UMOCraftingSubsystem>())
-	{
-		// Unbind from previous world's subsystem
-		if (UMOCraftingSubsystem* OldSub = BoundCraftingSubsystem.Get())
-		{
-			OldSub->OnCraftCompleted.RemoveDynamic(this, &UMOQuestSubsystem::HandleCraftCompleted);
-		}
-
-		CraftingSub->OnCraftCompleted.AddDynamic(this, &UMOQuestSubsystem::HandleCraftCompleted);
-		BoundCraftingSubsystem = CraftingSub;
-
-		UE_LOG(LogMOFramework, Verbose, TEXT("[MOQuestSubsystem] Bound to crafting subsystem for world %s"),
-			*World->GetName());
-	}
+	// (Crafts are reported by the crafting subsystem itself, with the crafter: ReportForActor. The quest system no longer listens to the
+	// crafting subsystem's broadcast, which does not say WHO crafted.)
 
 	// Check for auto-start quests
 	if (UMOQuestSettings::Get()->bAutoStartTutorials)
@@ -380,25 +363,54 @@ void UMOQuestSubsystem::ResetAllQuests()
 // EVENT HANDLERS
 // ============================================================================
 
-void UMOQuestSubsystem::HandleCraftCompleted(FName RecipeId, const FMOCraftResult& Result)
-{
-	if (!Result.bSuccess)
-	{
-		return;
-	}
-
-	// Process each produced item for ItemCraft objectives
-	for (const auto& Pair : Result.ProducedItems)
-	{
-		ProcessEventForObjectives(EMOObjectiveType::ItemCraft, Pair.Key, Pair.Value);
-	}
-}
-
 void UMOQuestSubsystem::HandleItemPickedUp(FName ItemId, int32 Quantity)
 {
 	UE_LOG(LogMOFramework, Log, TEXT("[MOQuestSubsystem] HandleItemPickedUp: %s x%d (ActiveQuests=%d)"),
 		*ItemId.ToString(), Quantity, ActiveQuests.Num());
 	ProcessEventForObjectives(EMOObjectiveType::ItemPickup, ItemId, Quantity);
+}
+
+void UMOQuestSubsystem::ReportForActor(const AActor* Actor, EMOObjectiveType Type, FName TargetId, int32 Count)
+{
+	if (!Actor || TargetId.IsNone() || Count <= 0 || !Actor->HasAuthority())
+	{
+		return;
+	}
+	const APawn* Pawn = Cast<APawn>(Actor);
+	if (!Pawn)
+	{
+		Pawn = Cast<APawn>(Actor->GetOwner());
+	}
+	APlayerController* PC = Pawn ? Cast<APlayerController>(Pawn->GetController()) : nullptr;
+	if (!PC)
+	{
+		return;   // an AI pawn, an unpossessed one, a container: no player's quest
+	}
+	if (PC->IsLocalController())
+	{
+		if (UGameInstance* GI = PC->GetGameInstance())
+		{
+			if (UMOQuestSubsystem* Quests = GI->GetSubsystem<UMOQuestSubsystem>())
+			{
+				Quests->ApplyReportedEvent(Type, TargetId, Count);
+			}
+		}
+	}
+	else if (AMOPlayerController* Remote = Cast<AMOPlayerController>(PC))
+	{
+		Remote->ClientReportQuestEvent(static_cast<uint8>(Type), TargetId, Count);
+	}
+}
+
+void UMOQuestSubsystem::ApplyReportedEvent(EMOObjectiveType Type, FName TargetId, int32 Count)
+{
+	if (Type == EMOObjectiveType::ItemPickup)
+	{
+		HandleItemPickedUp(TargetId, Count);   // keeps its log line
+		return;
+	}
+	UE_LOG(LogMOFramework, Log, TEXT("[MOQuestSubsystem] event %s %s x%d (ActiveQuests=%d)"), *UEnum::GetValueAsString(Type), *TargetId.ToString(), Count, ActiveQuests.Num());
+	ProcessEventForObjectives(Type, TargetId, Count);
 }
 
 void UMOQuestSubsystem::HandleSkillLevelUp(FName SkillId, int32 OldLevel, int32 NewLevel)
@@ -421,7 +433,7 @@ void UMOQuestSubsystem::HandleBuildingCompleted(FName RecipeId)
 	// uses Type=ItemCraft, TargetEventOrId="BuildCampfire" (the recipe ROW name)
 	// exactly as a regular hand-craft would. We route through the same ItemCraft
 	// objective type so designers don't need a new objective type for buildings.
-	// NOTE: the craft path (HandleCraftCompleted) keys objectives by PRODUCED
+	// NOTE: the craft path (UMOCraftingSubsystem -> ReportForActor) keys objectives by PRODUCED
 	// ITEM ids; this building path keys by RECIPE id — two id namespaces feed
 	// the same objective type, so quest authors must match the right one.
 	UE_LOG(LogMOFramework, Log, TEXT("[MOQuestSubsystem] HandleBuildingCompleted: %s"), *RecipeId.ToString());

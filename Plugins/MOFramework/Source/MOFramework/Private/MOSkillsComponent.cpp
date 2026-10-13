@@ -171,17 +171,8 @@ void UMOSkillsComponent::SetSkillLevel(FName SkillId, int32 Level)
 	{
 		OnSkillLevelUp.Broadcast(SkillId, OldLevel, ClampedLevel);
 
-		// Notify quest subsystem
-		if (UWorld* World = GetWorld())
-		{
-			if (UGameInstance* GI = World->GetGameInstance())
-			{
-				if (UMOQuestSubsystem* QuestSub = GI->GetSubsystem<UMOQuestSubsystem>())
-				{
-					QuestSub->HandleSkillLevelUp(SkillId, OldLevel, ClampedLevel);
-				}
-			}
-		}
+		// Quests: credit the player whose pawn this is (UMOQuestSubsystem::ReportForActor), one event per level gained
+		UMOQuestSubsystem::ReportForActor(GetOwner(), EMOObjectiveType::SkillLevelUp, SkillId, ClampedLevel - OldLevel);
 	}
 }
 
@@ -223,17 +214,8 @@ void UMOSkillsComponent::ProcessLevelUps(FMOSkillProgress& Progress, const FMOSk
 
 		OnSkillLevelUp.Broadcast(Progress.SkillId, OldLevel, Progress.Level);
 
-		// Notify quest subsystem
-		if (UWorld* World = GetWorld())
-		{
-			if (UGameInstance* GI = World->GetGameInstance())
-			{
-				if (UMOQuestSubsystem* QuestSub = GI->GetSubsystem<UMOQuestSubsystem>())
-				{
-					QuestSub->HandleSkillLevelUp(Progress.SkillId, OldLevel, Progress.Level);
-				}
-			}
-		}
+		// Quests: credit the player whose pawn this is (UMOQuestSubsystem::ReportForActor), one event per level gained
+		UMOQuestSubsystem::ReportForActor(GetOwner(), EMOObjectiveType::SkillLevelUp, Progress.SkillId, Progress.Level - OldLevel);
 
 		UE_LOG(LogMOFramework, Log, TEXT("[MOSkillsComponent] Skill '%s' leveled up: %d -> %d"),
 			*Progress.SkillId.ToString(), OldLevel, Progress.Level);

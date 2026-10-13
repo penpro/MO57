@@ -660,6 +660,9 @@ void UMOBuildProgressComponent::FinalizeConstruction()
 
 	SetComponentTickEnabled(false);
 
+	// Who finished it, before the builder references go (quests credit this pawn).
+	CompletedBy = BuilderInventory.IsValid() ? BuilderInventory->GetOwner() : static_cast<AActor*>(RegisteredBuilderCharacter.Get());
+
 	// Construction is done; no need for further movement notifications.
 	UnregisterFromBuilderInterrupts();
 

@@ -463,13 +463,25 @@ void AMOBuildableActor::OnConstructionCompleted_Implementation()
 	// wasn't routed through the crafting subsystem so we wire it directly
 	// here. RecipeId is set in InitializeBuilding and is the recipe ROW name
 	// (BuildCampfire, BuildFloor, etc) — not an item id.
-	if (!RecipeId.IsNone())
+	// The credit goes to the player whose pawn finished the construction, on their own machine (UMOQuestSubsystem::ReportForActor); it used to
+	// go to whichever machine ran this -- the host -- so a joiner's "Construct a campfire" could never complete.
+	if (!RecipeId.IsNone() && BuildProgressComponent)
 	{
-		if (UGameInstance* GI = GetGameInstance())
+		AActor* Builder = BuildProgressComponent->GetCompletedBy();
+		if (HasAuthority())
 		{
-			if (UMOQuestSubsystem* Quest = GI->GetSubsystem<UMOQuestSubsystem>())
+			UMOQuestSubsystem::ReportForActor(Builder, EMOObjectiveType::ItemCraft, RecipeId, 1);
+		}
+		else if (const APawn* BuilderPawn = Cast<APawn>(Builder); BuilderPawn && BuilderPawn->IsLocallyControlled())
+		{
+			// A joiner's construction still runs on the joiner's own copy of the building (StartConstruction has no server path -- see the
+			// handoff); the server never sees it finish, so credit this player's quests here, as before.
+			if (UGameInstance* GI = GetGameInstance())
 			{
-				Quest->HandleBuildingCompleted(RecipeId);
+				if (UMOQuestSubsystem* Quests = GI->GetSubsystem<UMOQuestSubsystem>())
+				{
+					Quests->ApplyReportedEvent(EMOObjectiveType::ItemCraft, RecipeId, 1);
+				}
 			}
 		}
 	}

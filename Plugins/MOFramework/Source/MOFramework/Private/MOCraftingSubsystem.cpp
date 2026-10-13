@@ -1,4 +1,5 @@
 #include "MOCraftingSubsystem.h"
+#include "MOQuestSubsystem.h"
 #include "MOKnowledgeComponent.h"
 #include "MOSkillsComponent.h"
 #include "MOInventoryComponent.h"
@@ -394,6 +395,11 @@ FMOCraftResult UMOCraftingSubsystem::ExecuteCraft(
 	Result.bSuccess = true;
 
 	OnCraftCompleted.Broadcast(RecipeId, Result);
+	// Quests: the crafter (the inventory's owner) gets the ItemCraft credit, on their own machine (UMOQuestSubsystem::ReportForActor).
+	for (const TPair<FName, int32>& Produced : Result.ProducedItems)
+	{
+		UMOQuestSubsystem::ReportForActor(InventoryComponent ? InventoryComponent->GetOwner() : nullptr, EMOObjectiveType::ItemCraft, Produced.Key, Produced.Value);
+	}
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOCraftingSubsystem] Crafted '%s' successfully"), *RecipeId.ToString());
 
@@ -462,6 +468,11 @@ FMOCraftResult UMOCraftingSubsystem::ProduceOutputsOnly(
 	Result.bSuccess = true;
 
 	OnCraftCompleted.Broadcast(RecipeId, Result);
+	// Quests: the crafter (the inventory's owner) gets the ItemCraft credit, on their own machine (UMOQuestSubsystem::ReportForActor).
+	for (const TPair<FName, int32>& Produced : Result.ProducedItems)
+	{
+		UMOQuestSubsystem::ReportForActor(InventoryComponent ? InventoryComponent->GetOwner() : nullptr, EMOObjectiveType::ItemCraft, Produced.Key, Produced.Value);
+	}
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOCraftingSubsystem] Produced outputs for '%s' successfully (ingredients pre-consumed)"), *RecipeId.ToString());
 

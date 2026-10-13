@@ -384,6 +384,19 @@ public:
 	 */
 	void HandleBuildingCompleted(FName RecipeId);
 
+	/**
+	 * THE way gameplay reports a quest event that an actor caused: an item gathered, a craft, a building finished, a skill level. Quests are a PLAYER's
+	 * (each machine's GameInstance keeps its own) but those events happen on the server, so this -- called on the authority -- credits the player whose
+	 * pawn did it: this machine's quests for a local player, the joiner's machine (AMOPlayerController::ClientReportQuestEvent) for a remote one, nobody
+	 * for an AI pawn, an unpossessed one or a container. Off the authority it does nothing (the server reports). Actor = the pawn, or a component's
+	 * owner (an inventory's, a skills component's). Before (Oct 13 2026) every add / craft / building credited the HOST's quests: a joiner's tutorial
+	 * could never finish its gather and build steps, and survivors' and chests' adds counted as the host's gathering.
+	 */
+	static void ReportForActor(const AActor* Actor, EMOObjectiveType Type, FName TargetId, int32 Count);
+
+	/** Apply an event to THIS machine's quests (where ReportForActor and the client RPC end). */
+	void ApplyReportedEvent(EMOObjectiveType Type, FName TargetId, int32 Count);
+
 private:
 	// =========================================================================
 	// INTERNAL EVENT HANDLERS
@@ -391,10 +404,6 @@ private:
 
 	/** Called when the world initializes - binds to world subsystems. */
 	void HandleWorldInitialized(UWorld* World, const UWorld::InitializationValues IVS);
-
-	/** Called when a craft completes. */
-	UFUNCTION()
-	void HandleCraftCompleted(FName RecipeId, const FMOCraftResult& Result);
 
 	// =========================================================================
 	// INTERNAL
@@ -445,8 +454,6 @@ private:
 	/** Delegate handle for world initialization. */
 	FDelegateHandle WorldInitializedHandle;
 
-	/** Weak reference to bound crafting subsystem. */
-	TWeakObjectPtr<UMOCraftingSubsystem> BoundCraftingSubsystem;
 
 	/**
 	 * Whether tutorial popups are currently allowed. Toggleable at runtime

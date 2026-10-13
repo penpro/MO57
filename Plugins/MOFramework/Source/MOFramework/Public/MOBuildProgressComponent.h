@@ -168,6 +168,9 @@ class MOFRAMEWORK_API UMOBuildProgressComponent : public UActorComponent,
 	GENERATED_BODY()
 
 public:
+	/** The pawn whose construction finished this building (null when nobody was building it, e.g. a loaded save). Quests credit it. */
+	AActor* GetCompletedBy() const { return CompletedBy.Get(); }
+
 	UMOBuildProgressComponent();
 
 	/**
@@ -434,6 +437,9 @@ private:
 	 * when StartConstruction runs.
 	 */
 	TWeakObjectPtr<AMOCharacter> RegisteredBuilderCharacter;
+
+	/** Who finished the construction (captured in FinalizeConstruction before the builder references are cleared): GetCompletedBy. */
+	TWeakObjectPtr<AActor> CompletedBy;
 
 	/**
 	 * Hook into the builder's interrupt broadcast for the duration of an

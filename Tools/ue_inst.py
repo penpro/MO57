@@ -1318,6 +1318,7 @@ def _client_pickup(rep, host, client):
     rep.step("CONTROL: before the client acts, the dropped stick is NOT in the joiner's inventory", not before,
              "already in the inventory" if before else "not in the inventory (it is on the ground)")
     off = log_size(client)
+    hoff = log_size(host)
     console(client, "MO.Test.PickupNearest 600")
     wait_log(client, r"\[MOTEST\] (PickupNearest: interacting|FAIL PickupNearest)[^\n]*", since=off, timeout=15)
     cl = read_log_from(client, off)
@@ -1330,6 +1331,14 @@ def _client_pickup(rep, host, client):
             break
     rep.step("client pickup: the SAME item GUID is in the joiner's inventory on the host", got,
              (mm.group(0) if mm else "client printed no PickupNearest line") + ("" if got else " -- GUID never arrived"))
+    if got:
+        # Quests are the player's: the joiner's pickup happens on the host but must count on the JOINER's machine (UMOQuestSubsystem::ReportForActor ->
+        # ClientReportQuestEvent), not the host's. Before: it counted for the host and the joiner's gather tutorial could never finish.
+        time.sleep(2)
+        on_client = re.search(r"\[MOQuestSubsystem\] HandleItemPickedUp: Stick01 x1[^\n]*", read_log_from(client, off))
+        on_host = re.search(r"\[MOQuestSubsystem\] HandleItemPickedUp: Stick01[^\n]*", read_log_from(host, hoff))
+        rep.step("client pickup: the quest pickup is credited on the JOINER's machine", bool(on_client), on_client.group(0) if on_client else "no HandleItemPickedUp line on the client")
+        rep.step("client pickup: ... and NOT on the host's", on_host is None, "nothing on the host" if on_host is None else on_host.group(0))
 
 
 def _client_craft(rep, host, client):
