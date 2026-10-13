@@ -361,9 +361,21 @@ private:
 	// The subscription rebinds when OnPossessedPawnChanged fires so the recap
 	// always tracks the live possessed pawn rather than the BeginPlay-time one.
 
-	/** Blueprint class for the death recap modal (assign WBP_DeathRecap here). */
+	/**
+	 * Blueprint class for the death recap modal. OPTIONAL: left empty it is /MOFramework/UI/WBP_DeathRecap (the kit's recap, ui_specs/kit_death.py); assign a different subclass to replace it.
+	 * (Until 2026-10 this had no default and no WBP existed, so a pawn's death showed nothing at all.)
+	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|System Menu|Death", meta=(AllowPrivateAccess="true"))
 	TSubclassOf<UMODeathRecapWidget> DeathRecapWidgetClass;
+
+	/** The class to push: the assigned one, else the default recap Widget Blueprint (null only if that asset is missing). */
+	TSubclassOf<UMODeathRecapWidget> ResolveDeathRecapClass() const;
+
+	/**
+	 * "Continue" on the recap. If the colony has another living pawn the player picks who to be next (possession menu); only the LAST pawn's death starts a new life: a new survivor ~5 miles away
+	 * (project vision), asked of the server through the controller.
+	 */
+	void ContinueAfterDeath(const AMOCharacter* DeadCharacter);
 
 	UPROPERTY(Transient)
 	TWeakObjectPtr<UMODeathRecapWidget> DeathRecapWidget;

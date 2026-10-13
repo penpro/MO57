@@ -130,6 +130,12 @@ void UMOGameInstance::ShowLoadingOverlay()
 	}
 }
 
+void UMOGameInstance::ShowRespawnLoadingOverlay()
+{
+	bWaitingForManualDismiss = true;
+	ShowLoadingOverlay();
+}
+
 void UMOGameInstance::BeginLoadingScreen(const FString& MapName)
 {
 	// Skip loading screen for initial launch to intro

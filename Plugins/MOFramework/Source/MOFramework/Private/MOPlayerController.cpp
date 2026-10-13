@@ -509,6 +509,20 @@ void AMOPlayerController::ServerPossessPawnByGuid_Implementation(FGuid PawnGuid)
 	}
 }
 
+void AMOPlayerController::ServerRequestRespawn_Implementation()
+{
+	const AMOCharacter* Current = Cast<AMOCharacter>(GetPawn());
+	if (Current && !Current->IsDead())
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOPlayerController] ServerRequestRespawn refused: %s is still alive"), *Current->GetName());
+		return;
+	}
+	if (AMOGameMode* GameMode = GetWorld() ? GetWorld()->GetAuthGameMode<AMOGameMode>() : nullptr)
+	{
+		GameMode->RespawnPlayerAfterDeath(this);
+	}
+}
+
 void AMOPlayerController::ServerCreateCharacter_Implementation()
 {
 	UE_LOG(LogMOFramework, Log, TEXT("[MOPlayerController] %s asked to create a character"), *GetName());

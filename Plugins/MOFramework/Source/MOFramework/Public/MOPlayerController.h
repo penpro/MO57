@@ -582,6 +582,10 @@ public:
 	UFUNCTION(Server, Reliable)
 	void ServerCreateCharacter();
 
+	/** The player's pawn died and they have no other pawn to take: ask the server for a new survivor ~5 miles away (AMOGameMode::RespawnPlayerAfterDeath). The server refuses while this player's pawn is alive. */
+	UFUNCTION(Server, Reliable)
+	void ServerRequestRespawn();
+
 	UFUNCTION(Server, Reliable)
 	void ServerRequestPossessionList();
 

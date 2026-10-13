@@ -1121,6 +1121,10 @@ void AMOGameMode::BeginSpawnSettle(AMOCharacter* Pawn)
 	}
 	SettlingPawn = Pawn;
 	ActiveSettleMaxSeconds = bSettlingCoastalSpawn ? FMath::Max(SpawnSettleMaxSeconds, CoastalSpawnSettleMaxSeconds) : SpawnSettleMaxSeconds;
+	if (bRespawnSettle)
+	{
+		ActiveSettleMaxSeconds = FMath::Max(ActiveSettleMaxSeconds, RespawnSettleMaxSeconds);
+	}
 	SettleElapsed = 0.f;
 	SettleStableTime = 0.f;
 	bSettleHaveGround = false;
@@ -1179,6 +1183,7 @@ void AMOGameMode::PollSpawnSettle()
 
 void AMOGameMode::FinishSpawnSettle(bool bGroundFound)
 {
+	bRespawnSettle = false;
 	if (UWorld* World = GetWorld())
 	{
 		World->GetTimerManager().ClearTimer(SpawnSettleTimerHandle);
@@ -1435,8 +1440,14 @@ APawn* AMOGameMode::CreateCharacterForPlayer(APlayerController* PC)
 		return nullptr;
 	}
 
+	RegisterPawnWithPersistence(NewPawn);
+	return NewPawn;
+}
+
+void AMOGameMode::RegisterPawnWithPersistence(APawn* NewPawn)
+{
 	// Register with persistence so it shows up in the possession list and in saves.
-	UMOIdentityComponent* Identity = NewPawn->FindComponentByClass<UMOIdentityComponent>();
+	UMOIdentityComponent* Identity = NewPawn ? NewPawn->FindComponentByClass<UMOIdentityComponent>() : nullptr;
 	UGameInstance* GameInstance = GetGameInstance();
 	UMOPersistenceSubsystem* Persistence = GameInstance ? GameInstance->GetSubsystem<UMOPersistenceSubsystem>() : nullptr;
 	if (Identity && Persistence)
@@ -1453,6 +1464,164 @@ APawn* AMOGameMode::CreateCharacterForPlayer(APlayerController* PC)
 		Record.StatusText = TEXT("Healthy");
 		Record.LastPlayedTime = FDateTime::Now();
 		Persistence->RegisterPawnRecord(Record);
+	}
+}
+
+FVector AMOGameMode::FindRespawnLocation(const FVector& From, FRotator& OutFacing) const
+{
+	OutFacing = FRotator(0.0f, FMath::FRandRange(0.0f, 360.0f), 0.0f);
+	const UMOWorldSeedSubsystem* Seeds = UMOWorldSeedSubsystem::Get(GetWorld());
+	if (!Seeds || !Seeds->HasActiveSeed() || !FMOWorldGenParamsProvider::HasPublished())
+	{
+		return FVector::ZeroVector;
+	}
+	const FMOWorldGenParamsRef Params = FMOWorldGenParamsProvider::Get();
+	const int32 Seed = Seeds->GetActiveTerrainSeed();
+	const float Step = Params->Tuning.VoxelSizeCm;
+	const float Sea = Params->Tuning.SeaLevelCm;
+	const double BorderLimit = static_cast<double>(Params->Tuning.WorldHalfSizeCm) - 600000.0;   // stay 6 km inside the world border (the view must not end at the edge of the world)
+
+	// Two passes: first only spots with dry land (almost) all the way from where the pawn died (a player has no boat; another island would be a prison), then any dry spot.
+	for (int32 Pass = 0; Pass < 2; ++Pass)
+	{
+		double BestScore = TNumericLimits<double>::Max();
+		FVector Best = FVector::ZeroVector;
+		for (int32 Attempt = 0; Attempt < 128; ++Attempt)
+		{
+			const double Angle = FMath::FRandRange(0.0f, 2.0f * PI);
+			const double Dist = RespawnDistanceCm * FMath::FRandRange(1.0f - RespawnDistanceJitter, 1.0f + RespawnDistanceJitter);
+			const double X = From.X + FMath::Cos(Angle) * Dist;
+			const double Y = From.Y + FMath::Sin(Angle) * Dist;
+			if (FMath::Abs(X) > BorderLimit || FMath::Abs(Y) > BorderLimit)
+			{
+				continue;
+			}
+			const float Ground = FMOWorldGen::SampleHeightCm(*Params, X, Y, Seed, Step);
+			const float Above = Ground - Sea;
+			if (Above < 300.0f || Above > 60000.0f)   // dry land (not under water or on a beach edge), not a summit
+			{
+				continue;
+			}
+			if (FMOWorldGen::IsInUplandLakeZone(*Params, X, Y, Seed, 1.8f))
+			{
+				continue;
+			}
+			// Gentle ground: the relief over a 25 m cross must be small (about 20 degrees at most).
+			float MaxDelta = 0.0f;
+			for (int32 K = 0; K < 4; ++K)
+			{
+				const double Ox = (K == 0 ? 2500.0 : K == 1 ? -2500.0 : 0.0);
+				const double Oy = (K == 2 ? 2500.0 : K == 3 ? -2500.0 : 0.0);
+				MaxDelta = FMath::Max(MaxDelta, FMath::Abs(FMOWorldGen::SampleHeightCm(*Params, X + Ox, Y + Oy, Seed, Step) - Ground));
+			}
+			if (MaxDelta > 900.0f)
+			{
+				continue;
+			}
+			if (Pass == 0)
+			{
+				constexpr int32 PathSamples = 24;
+				int32 Wet = 0;
+				for (int32 I = 1; I < PathSamples; ++I)
+				{
+					const double T = static_cast<double>(I) / PathSamples;
+					const float PathGround = FMOWorldGen::SampleHeightCm(*Params, FMath::Lerp(static_cast<double>(From.X), X, T), FMath::Lerp(static_cast<double>(From.Y), Y, T), Seed, Step * 4.0f);
+					Wet += (PathGround < Sea + 50.0f) ? 1 : 0;
+				}
+				if (Wet > 2)   // a river or two is fine (it is crossed on foot or around); open water is not
+				{
+					continue;
+				}
+			}
+			const double Score = MaxDelta + FMath::Abs(Above - 1500.0f) * 0.05;   // prefer gentle, low ground
+			if (Score < BestScore)
+			{
+				BestScore = Score;
+				Best = FVector(X, Y, Ground + SpawnHeightOffset);
+			}
+		}
+		if (!Best.IsZero())
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOGameMode] Respawn spot (pass %d): (%.0f, %.0f) ground z=%.0f, %.1f km from %s"), Pass, Best.X, Best.Y, Best.Z - SpawnHeightOffset,
+				FVector::Dist2D(Best, From) / 100000.0, *From.ToCompactString());
+			return Best;
+		}
+	}
+	return FVector::ZeroVector;
+}
+
+APawn* AMOGameMode::RespawnPlayerAfterDeath(APlayerController* PC)
+{
+	UWorld* World = GetWorld();
+	if (!HasAuthority() || !PC || !World || !DefaultNewGamePawnClass)
+	{
+		return nullptr;
+	}
+	if (SettlingPawn.IsValid() || PendingLandingPawn.IsValid())
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOGameMode] Respawn for %s refused: another spawn is still settling"), *PC->GetName());
+		return nullptr;
+	}
+
+	// Where the last pawn died: the controller's pawn (a corpse stays possessed), else where the camera is.
+	const FVector DeathLocation = PC->GetPawn() ? PC->GetPawn()->GetActorLocation() : PC->GetFocalLocation();
+	FRotator Facing = FRotator::ZeroRotator;
+	FVector SpawnLocation = FindRespawnLocation(DeathLocation, Facing);
+	if (SpawnLocation.IsZero())
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOGameMode] Respawn: no spot from the world generator -- falling back to the open-ground search"));
+		SpawnLocation = FindSafeSpawnLocation();
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+	APawn* NewPawn = World->SpawnActor<APawn>(DefaultNewGamePawnClass, SpawnLocation, Facing, SpawnParams);
+	if (!NewPawn)
+	{
+		UE_LOG(LogMOFramework, Error, TEXT("[MOGameMode] Respawn: failed to spawn a pawn for %s"), *PC->GetName());
+		return nullptr;
+	}
+
+	if (UMOIdentityComponent* IdentityComp = NewPawn->FindComponentByClass<UMOIdentityComponent>())
+	{
+		if (IdentityComp->DisplayName.IsEmpty())
+		{
+			IdentityComp->SetDisplayName(FText::FromString(UMOSpawnManagerSubsystem::GenerateRandomSurvivorName()));
+		}
+	}
+	if (UMORecruitmentComponent* RecruitComp = NewPawn->FindComponentByClass<UMORecruitmentComponent>())
+	{
+		RecruitComp->ForceRecruit();
+	}
+	RegisterPawnWithPersistence(NewPawn);
+
+	// Hold the loading overlay on the local player until the new place is built; remote players just see their pawn held (frozen) until the ground is stable.
+	if (PC->IsLocalController())
+	{
+		if (UMOGameInstance* MOGI = Cast<UMOGameInstance>(GetGameInstance()))
+		{
+			MOGI->ShowRespawnLoadingOverlay();
+		}
+		if (UMOWorldReadinessSubsystem* Readiness = UMOWorldReadinessSubsystem::Get(this))
+		{
+			Readiness->BeginTracking(/*bStartVoxelPolling=*/false);
+		}
+	}
+
+	PC->Possess(NewPawn);
+	PC->SetControlRotation(Facing);
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOGameMode] Respawn: %s possessed new survivor %s at %s (died at %s)"), *PC->GetName(), *NewPawn->GetName(), *SpawnLocation.ToCompactString(), *DeathLocation.ToCompactString());
+
+	PendingLandingPawn = NewPawn;
+	LandingRecoveryAttempts = 0;
+	if (AMOCharacter* MOChar = Cast<AMOCharacter>(NewPawn))
+	{
+		bRespawnSettle = true;
+		BeginSpawnSettle(MOChar);
+	}
+	else
+	{
+		BeginLandingWait(NewPawn);
 	}
 	return NewPawn;
 }

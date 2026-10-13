@@ -16,6 +16,8 @@
 #include "MOSurvivorTaskMenu.h"
 #include "MODeathRecapWidget.h"
 #include "MOCharacter.h"
+#include "MOColonyManagerSubsystem.h"
+#include "MOPlayerController.h"
 #include "MOPersistenceSubsystem.h"
 #include "MOPossessionSubsystem.h"
 #include "MOPossessionComponent.h"
@@ -1071,6 +1073,16 @@ void UMOSystemMenuUIController::UnbindDeathListener()
 	SubscribedDeathPawn.Reset();
 }
 
+TSubclassOf<UMODeathRecapWidget> UMOSystemMenuUIController::ResolveDeathRecapClass() const
+{
+	if (DeathRecapWidgetClass)
+	{
+		return DeathRecapWidgetClass;
+	}
+	// Default policy: the kit's recap, so a project that never assigned the class still shows one. /MOFramework is always cooked (DefaultGame.ini DirectoriesToAlwaysCook).
+	return LoadClass<UMODeathRecapWidget>(nullptr, TEXT("/MOFramework/UI/WBP_DeathRecap.WBP_DeathRecap_C"));
+}
+
 void UMOSystemMenuUIController::HandlePawnDied(AMOCharacter* DeadCharacter, EMOBodyPartType CausePart)
 {
 	if (!IsLocalOwningPlayerController())
@@ -1080,11 +1092,11 @@ void UMOSystemMenuUIController::HandlePawnDied(AMOCharacter* DeadCharacter, EMOB
 		return;
 	}
 
-	if (!DeathRecapWidgetClass)
+	const TSubclassOf<UMODeathRecapWidget> RecapClass = ResolveDeathRecapClass();
+	if (!RecapClass)
 	{
 		UE_LOG(LogMOFramework, Warning,
-			TEXT("[MOSysUI] Pawn '%s' died but DeathRecapWidgetClass is not set — recap suppressed. "
-			     "Assign WBP_DeathRecap on UMOSystemMenuUIController in BP defaults."),
+			TEXT("[MOSysUI] Pawn '%s' died but there is no death recap widget (DeathRecapWidgetClass unset and /MOFramework/UI/WBP_DeathRecap missing) — recap suppressed."),
 			DeadCharacter ? *DeadCharacter->GetName() : TEXT("NULL"));
 		return;
 	}
@@ -1107,7 +1119,7 @@ void UMOSystemMenuUIController::HandlePawnDied(AMOCharacter* DeadCharacter, EMOB
 	const FMODeathRecapData Data = UMODeathRecapWidget::BuildRecapData(DeadCharacter, CausePart);
 
 	UCommonActivatableWidget* Created = PushWidgetToLayer(
-		MOUILayerTags::Layer_Modal, DeathRecapWidgetClass);
+		MOUILayerTags::Layer_Modal, RecapClass);
 
 	UMODeathRecapWidget* RecapWidget = Cast<UMODeathRecapWidget>(Created);
 	if (!IsValid(RecapWidget))
@@ -1131,10 +1143,9 @@ void UMOSystemMenuUIController::HandlePawnDied(AMOCharacter* DeadCharacter, EMOB
 		}
 	});
 
-	// Continue (respawn) — no respawn flow yet, so this just closes the recap.
-	// MOGameMode-side respawn logic is a separate task; when wired up this
-	// lambda will call into it.
-	RecapWidget->OnContinueRequested.AddLambda([WeakSelf]()
+	// Continue: close the recap, then take the next life (another colony pawn, or a respawn ~5 miles away when this was the last one).
+	const TWeakObjectPtr<AMOCharacter> WeakDead(DeadCharacter);
+	RecapWidget->OnContinueRequested.AddLambda([WeakSelf, WeakDead]()
 	{
 		if (UMOSystemMenuUIController* Self = WeakSelf.Get())
 		{
@@ -1145,6 +1156,7 @@ void UMOSystemMenuUIController::HandlePawnDied(AMOCharacter* DeadCharacter, EMOB
 					W->DeactivateWidget();
 				}
 			}
+			Self->ContinueAfterDeath(WeakDead.Get());
 		}
 	});
 
@@ -1152,6 +1164,43 @@ void UMOSystemMenuUIController::HandlePawnDied(AMOCharacter* DeadCharacter, EMOB
 		TEXT("[MOSysUI] Death recap shown for '%s' (cause: %d)"),
 		DeadCharacter ? *DeadCharacter->GetName() : TEXT("NULL"),
 		static_cast<int32>(CausePart));
+}
+
+void UMOSystemMenuUIController::ContinueAfterDeath(const AMOCharacter* DeadCharacter)
+{
+	AMOPlayerController* PC = Cast<AMOPlayerController>(GetOwner());
+	UWorld* World = GetWorld();
+	if (!PC || !World)
+	{
+		return;
+	}
+
+	bool bHasSuccessor = false;
+	if (const UMOColonyManagerSubsystem* Colony = World->GetSubsystem<UMOColonyManagerSubsystem>())
+	{
+		for (APawn* Candidate : Colony->GetColonyRoster())
+		{
+			const AMOCharacter* Character = Cast<AMOCharacter>(Candidate);
+			if (Character && Character != DeadCharacter && !Character->IsDead())
+			{
+				bHasSuccessor = true;
+				break;
+			}
+		}
+	}
+
+	if (bHasSuccessor)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOSysUI] Death recap: the colony has another living pawn -- opening the possession menu"));
+		if (UMOUIManagerComponent* UIManager = GetUIManager())
+		{
+			UIManager->OpenPossessionMenu();
+		}
+		return;
+	}
+
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOSysUI] Death recap: that was the last pawn -- asking for a new survivor"));
+	PC->ServerRequestRespawn();
 }
 
 void UMOSystemMenuUIController::ReturnToMainMenuImmediate()

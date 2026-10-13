@@ -103,6 +103,12 @@ public:
 	void ShowLoadingOverlay();
 
 	/**
+	 * The overlay for a respawn into a place nothing has been generated at yet (no level transition happened, so nothing armed the manual dismiss): shows it and arms the dismiss that
+	 * AMOGameMode::OnPawnLandedSafely ends, which in turn waits for the world-readiness subsystem like any other load.
+	 */
+	void ShowRespawnLoadingOverlay();
+
+	/**
 	 * Dismiss the loading overlay with a fade out.
 	 * Call this when pawn has landed safely after a gameplay transition.
 	 */

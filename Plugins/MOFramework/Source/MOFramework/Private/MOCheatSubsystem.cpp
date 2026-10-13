@@ -52,6 +52,8 @@
 #include "MOGameUIManagerSubsystem.h"
 #include "MOPrimaryGameLayout.h"
 #include "MOIdentityComponent.h"
+#include "MOCharacter.h"
+#include "MOAnatomyComponent.h"
 #include "MOBuildableActor.h" // complete type for TSubclassOf<AMOBuildableActor> null-check (A1 art audit)
 #include "MOContainerActor.h"
 #include "MOCraftingStationActor.h"
@@ -1074,6 +1076,30 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 			const bool bOk = Pawn->SetActorLocation(Dest, /*bSweep*/false, /*OutSweepHit*/nullptr, ETeleportType::TeleportPhysics);
 			UE_LOG(LogMOFramework, Warning, TEXT("[MOCheat] Teleport %s -> (%.0f, %.0f, %.0f) [%s]"),
 				*Pawn->GetName(), Dest.X, Dest.Y, Dest.Z, bOk ? TEXT("OK") : TEXT("FAILED"));
+		}),
+		ECVF_Default));
+
+	// ---------- MO.Player.Kill [Brain|Heart|Head] ----------
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Player.Kill"),
+		TEXT("Dev: kill the locally controlled pawn through the anatomy's real instant-death event (what a destroyed brain / heart raises), so the death recap and everything else that listens to OnPawnDied runs. Usage: MO.Player.Kill [Brain|Heart|Head] (default Brain)"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			AMOCharacter* Character = Cast<AMOCharacter>(ResolveLocalPawn(World));
+			UMOAnatomyComponent* Anatomy = Character ? Character->GetAnatomyComponent() : nullptr;
+			if (!Anatomy)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOCheat] Kill: no locally controlled MOCharacter with an anatomy"));
+				return;
+			}
+			EMOBodyPartType Part = EMOBodyPartType::Brain;
+			if (Args.Num() > 0)
+			{
+				if (Args[0].Equals(TEXT("Heart"), ESearchCase::IgnoreCase)) { Part = EMOBodyPartType::Heart; }
+				else if (Args[0].Equals(TEXT("Head"), ESearchCase::IgnoreCase)) { Part = EMOBodyPartType::Head; }
+			}
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOCheat] Kill %s via %d"), *Character->GetName(), static_cast<int32>(Part));
+			Anatomy->OnInstantDeath.Broadcast(Part);
 		}),
 		ECVF_Default));
 

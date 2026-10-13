@@ -207,6 +207,21 @@ public:
 	float SpawnSettleToleranceCm = 4.0f;
 
 	// =========================================================================
+	// PERMADEATH RESPAWN (project vision: "if the last pawn dies, respawn ~5 miles away as a new pawn; the old pawn's gear stays where it fell")
+
+	/** How far from where the last pawn died the new survivor starts: 5 miles. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Spawn|Respawn")
+	float RespawnDistanceCm = 804672.0f;
+
+	/** The distance varies by +- this fraction so two deaths never share a spot. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Spawn|Respawn", meta=(ClampMin="0.0", ClampMax="0.6"))
+	float RespawnDistanceJitter = 0.2f;
+
+	/** The respawn lands where nothing has been generated yet (the voxel world only builds around the player), so its settle wait is the longest of all. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Spawn|Respawn")
+	float RespawnSettleMaxSeconds = 75.0f;
+
+	// =========================================================================
 	// LOAD-GAME REGROUNDING
 	// =========================================================================
 	//
@@ -360,6 +375,13 @@ public:
 	 *  named, recruited, possessed and registered with persistence. Server only. */
 	APawn* CreateCharacterForPlayer(APlayerController* PC);
 
+	/**
+	 * Permadeath respawn: a NEW survivor for a player whose pawn died, RespawnDistanceCm away on dry land (chosen from the world generator, so nothing has to exist there yet), reachable on foot
+	 * where the land allows, named, recruited, registered with persistence and possessed. The new pawn is held until the ground under it is stable (the new-game settle), behind the loading
+	 * overlay on the local player. The dead pawn stays where it fell with its gear. Server only. Null when a spawn settle is already running or the pawn class is unset.
+	 */
+	APawn* RespawnPlayerAfterDeath(APlayerController* PC);
+
 private:
 	/** Give a joining remote player a pawn: an existing colonist nobody is driving if there is one (their own previous
 	 *  pawn first, else the nearest), otherwise spawn a new one. */
@@ -387,6 +409,15 @@ private:
 	/** Ground-traced spawn point near an existing grounded player (join +
 	 *  rescue anchor). Zero vector if no player pawn exists yet. */
 	FVector FindJoinSpawnNearHost() const;
+
+	/** A dry-land spot RespawnDistanceCm from `From` (z = ground + SpawnHeightOffset), zero when the generator is not available. */
+	FVector FindRespawnLocation(const FVector& From, FRotator& OutFacing) const;
+
+	/** Register a freshly created player pawn with persistence so it appears in the possession list and in saves. */
+	void RegisterPawnWithPersistence(APawn* NewPawn);
+
+	/** Set while the pawn being settled is a respawn (longer wait). */
+	bool bRespawnSettle = false;
 
 	/** Authority safety net: recover player pawns that fell below the world
 	 *  (ungenerated voxel) instead of letting them plummet forever — a falling
