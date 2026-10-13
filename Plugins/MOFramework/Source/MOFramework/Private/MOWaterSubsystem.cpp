@@ -27,6 +27,18 @@ bool UMOWaterSubsystem::GetSurfaceZ(double X, double Y, float& OutSurfaceZ) cons
 	return FMOWorldGen::GetWaterSurfaceCm(*Params, X, Y, Seeds->GetActiveTerrainSeed(), OutSurfaceZ);
 }
 
+bool UMOWaterSubsystem::GetGroundZ(double X, double Y, float& OutGroundZ) const
+{
+	const UMOWorldSeedSubsystem* Seeds = UMOWorldSeedSubsystem::Get(GetWorld());
+	if (!Seeds || !Seeds->HasActiveSeed() || !FMOWorldGenParamsProvider::HasPublished())
+	{
+		return false;
+	}
+	const FMOWorldGenParamsRef Params = FMOWorldGenParamsProvider::Get();
+	OutGroundZ = FMOWorldGen::SampleHeightCm(*Params, X, Y, Seeds->GetActiveTerrainSeed(), Params->Tuning.VoxelSizeCm);
+	return true;
+}
+
 APhysicsVolume* UMOWaterSubsystem::GetSwimVolume()
 {
 	if (!SwimVolume && GetWorld())

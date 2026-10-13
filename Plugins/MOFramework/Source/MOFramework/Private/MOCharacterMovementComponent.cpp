@@ -30,6 +30,7 @@ bool UMOCharacterMovementComponent::ShouldSwim(bool bWasSwimming, float Immersio
 void UMOCharacterMovementComponent::RefreshWater()
 {
 	bWaterKnown = false;
+	bBuried = false;
 	Immersion = 0.0f;
 	if (!UpdatedComponent || !CharacterOwner)
 	{
@@ -47,9 +48,20 @@ void UMOCharacterMovementComponent::RefreshWater()
 		return;
 	}
 	const float HalfHeight = CharacterOwner->GetSimpleCollisionHalfHeight();
+	const float FeetZ = Location.Z - HalfHeight;
+	// Only below the surface can "buried" matter, and only then is the (cheap but not free) ground query worth making.
+	if (FeetZ < Surface)
+	{
+		float Ground = 0.0f;
+		if (Water->GetGroundZ(Location.X, Location.Y, Ground) && IsBuriedInTerrain(FeetZ, Ground, BuriedMarginCm))
+		{
+			bBuried = true;   // inside solid rock: no water here
+			return;
+		}
+	}
 	WaterSurfaceZ = Surface;
 	bWaterKnown = true;
-	Immersion = ComputeImmersion(Surface, Location.Z - HalfHeight, 2.0f * HalfHeight);
+	Immersion = ComputeImmersion(Surface, FeetZ, 2.0f * HalfHeight);
 }
 
 void UMOCharacterMovementComponent::UpdateCharacterStateBeforeMovement(float DeltaSeconds)
@@ -71,7 +83,8 @@ void UMOCharacterMovementComponent::UpdateCharacterStateBeforeMovement(float Del
 				FindFloor(UpdatedComponent->GetComponentLocation(), Floor, /*bCanUseCachedLocation=*/false);
 				bStandable = Floor.IsWalkableFloor() && Floor.FloorDist <= 20.0f;
 			}
-			const bool bShouldSwim = ShouldSwim(bSwimming, Immersion, SwimEnterImmersion, SwimExitImmersion, bStandable);
+			// Buried in the terrain: never "swim", and leave the swimming mode even with no floor (the keep-swimming-without-ground rule is for deep water, not rock): the fall-through rescue takes over.
+			const bool bShouldSwim = !bBuried && ShouldSwim(bSwimming, Immersion, SwimEnterImmersion, SwimExitImmersion, bStandable);
 			if (bShouldSwim && !bSwimming)
 			{
 				SetMovementMode(MOVE_Swimming);

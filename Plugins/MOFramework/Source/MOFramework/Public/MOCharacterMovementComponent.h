@@ -84,6 +84,18 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Water", meta=(ClampMin="0", ClampMax="2"))
 	float UnloadedBuoyancy = 1.27f;
 
+	/**
+	 * The generator's ocean plane fills everything under sea level, UNDERGROUND too (that is what lets a dug pit below sea level show water). So a pawn that ended up INSIDE the terrain below sea level
+	 * (the new-game spawn on a stale coarse collision, a fall through unbuilt terrain) was classed as swimming, floated at the plane, and the fall-through rescue (which only handles FALLING pawns) never
+	 * ran. A pawn whose feet are this far below the generator's ground is inside solid rock, not in open water: it does not swim, it falls, and the rescue lifts it. (Player-dug pits are above this line
+	 * in practice and stay swimmable until deeper than it: a pit that deep walks its floor in the water instead of swimming, which is harmless.)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Water", meta=(ClampMin="50"))
+	float BuriedMarginCm = 300.0f;
+
+	/** Pure decision: the feet are more than MarginCm below the ground, i.e. inside the terrain, not in open water. */
+	static bool IsBuriedInTerrain(float FeetZ, float GroundZ, float MarginCm) { return FeetZ < GroundZ - MarginCm; }
+
 	//~ Begin UCharacterMovementComponent interface
 	virtual void UpdateCharacterStateBeforeMovement(float DeltaSeconds) override;
 	virtual float ImmersionDepth() const override { return Immersion; }
@@ -99,4 +111,6 @@ private:
 	float Immersion = 0.0f;
 	float WaterSurfaceZ = 0.0f;
 	bool bWaterKnown = false;
+	/** Set by RefreshWater: the feet are buried (see BuriedMarginCm). */
+	bool bBuried = false;
 };

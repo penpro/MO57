@@ -23,6 +23,21 @@ namespace
 	}
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOSwim_BuriedInTerrain,
+	"MOFramework.Water.BuriedInTerrain",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOSwim_BuriedInTerrain::RunTest(const FString& Parameters)
+{
+	// The ocean plane fills everything under sea level, underground too: a pawn inside the terrain below z=0 used to count as swimming (and was never rescued, the rescue handles falling pawns).
+	TestTrue(TEXT("feet 15 m under a 2.3 m ground: buried"), UMOCharacterMovementComponent::IsBuriedInTerrain(-1042.0f, 238.0f, 300.0f));
+	TestTrue(TEXT("feet at -47 cm under ground at +226 (the spawn bug: 2.7 m under, margin 2.5 m): buried"), UMOCharacterMovementComponent::IsBuriedInTerrain(-137.0f, 226.0f, 250.0f));
+	TestFalse(TEXT("feet on the ground: not buried"), UMOCharacterMovementComponent::IsBuriedInTerrain(226.0f, 226.0f, 300.0f));
+	TestFalse(TEXT("feet in 2 m of water over a seabed 5 m down (ground far below): not buried"), UMOCharacterMovementComponent::IsBuriedInTerrain(-200.0f, -500.0f, 300.0f));
+	TestFalse(TEXT("feet 2 m under the ground (inside the margin): not buried (a shallow dug pit)"), UMOCharacterMovementComponent::IsBuriedInTerrain(24.0f, 226.0f, 300.0f));
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOSwim_Decisions,
 	"MOFramework.Water.SwimDecisions",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)

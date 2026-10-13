@@ -27,6 +27,9 @@ public:
 	/** The open-water surface height (cm) at X, Y. False when there is no active world seed or water is off (the main menu, a world without a generator). Cheap: safe to call every movement update. */
 	bool GetSurfaceZ(double X, double Y, float& OutSurfaceZ) const;
 
+	/** The generator's ground height at (X, Y) (what the voxel terrain converges to). False without a seed / generator. */
+	bool GetGroundZ(double X, double Y, float& OutGroundZ) const;
+
 	/** The world's one shared brushless water volume (bWaterVolume, a high fluid friction so a swimmer's motion damps like a swimmer's). Spawned on first use; null if it cannot be spawned. */
 	APhysicsVolume* GetSwimVolume();
 
