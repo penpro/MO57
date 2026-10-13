@@ -9,6 +9,7 @@
 //   MO.UI.Token <name>                                                                   print a design token as the runtime resolves it (colour / number / string)
 //   MO.UI.TokensReload                                                                   re-read DT_UITokens
 //   MO.UI.Accessibility <colorblind 0|1> <highcontrast 0|1> <reducedmotion 0|1> <textscale 1|1.25|1.5>
+//   MO.UI.AuditClasses                                                                   list every widget-class property on the local player controller's components that is NOT assigned (a feature whose class is unset is silently skipped: the death recap was)
 
 #include "CoreMinimal.h"
 
@@ -20,6 +21,8 @@
 #include "HAL/IConsoleManager.h"
 #include "MOFramework.h"
 #include "MOUIManagerComponent.h"
+#include "UObject/UnrealType.h"
+#include "Components/ActorComponent.h"
 #include "MOMainMenuPlayerController.h"
 #include "MONotificationComponent.h"
 #include "MOPlayerController.h"
@@ -32,6 +35,46 @@ namespace
 		APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
 		return PC ? PC->FindComponentByClass<UMOUIManagerComponent>() : nullptr;
 	}
+
+	FAutoConsoleCommandWithWorldAndArgs GUIAuditClassesCmd(
+		TEXT("MO.UI.AuditClasses"),
+		TEXT("Dev: log every widget-class (TSubclassOf<UUserWidget>) property on the local player controller and its components that is NOT assigned. A feature whose class is unset is skipped without a word."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
+			if (!PC)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOUIAudit] no local player controller"));
+				return;
+			}
+			int32 Checked = 0;
+			int32 Unset = 0;
+			auto AuditObject = [&](UObject* Object)
+			{
+				for (TFieldIterator<FClassProperty> It(Object->GetClass()); It; ++It)
+				{
+					const FClassProperty* Prop = *It;
+					if (!Prop->MetaClass || !Prop->MetaClass->IsChildOf(UUserWidget::StaticClass()))
+					{
+						continue;
+					}
+					++Checked;
+					if (!Prop->GetPropertyValue_InContainer(Object))
+					{
+						++Unset;
+						UE_LOG(LogMOFramework, Warning, TEXT("[MOUIAudit] NOT SET: %s.%s (%s)"), *Object->GetClass()->GetName(), *Prop->GetName(), *Prop->MetaClass->GetName());
+					}
+				}
+			};
+			AuditObject(PC);
+			TInlineComponentArray<UActorComponent*> Components;
+			PC->GetComponents(Components);
+			for (UActorComponent* Component : Components)
+			{
+				AuditObject(Component);
+			}
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOUIAudit] %d widget-class properties checked, %d not set"), Checked, Unset);
+		}));
 
 	FAutoConsoleCommandWithWorldAndArgs GUIOpenCmd(
 		TEXT("MO.UI.Open"),
