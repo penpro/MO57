@@ -3311,6 +3311,110 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 		}),
 		ECVF_Default));
 
+	// ---------- MO.PCG.HideTag <ComponentTag> [0|1] ----------
+	// Dev: hide (1, default) or show (0) every instanced mesh component carrying a tag (MOFar_Canopy, MOFar_Tree, MOFar_Grass, MOResource_Tree, MOBiomeCover_Grass, MOItem_Stick01 ...): isolates what a
+	// visual artefact (speckle, popping) or a cost belongs to. Components generated AFTER the call are not hidden; call it again.
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.PCG.HideTag"),
+		TEXT("Dev: hide / show every instanced mesh component with a component tag. Usage: MO.PCG.HideTag <Tag> [0|1]  (1 = hide, the default)"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			if (!World || Args.Num() < 1)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] HIDETAG usage: MO.PCG.HideTag <Tag> [0|1]"));
+				return;
+			}
+			const FName Tag(*Args[0]);
+			const bool bHide = Args.Num() < 2 || FCString::Atoi(*Args[1]) != 0;
+			int32 Comps = 0;
+			int64 Instances = 0;
+			for (TActorIterator<AActor> ActorIt(World); ActorIt; ++ActorIt)
+			{
+				TArray<UInstancedStaticMeshComponent*> Ismc;
+				ActorIt->GetComponents<UInstancedStaticMeshComponent>(Ismc);
+				for (UInstancedStaticMeshComponent* Ism : Ismc)
+				{
+					if (Ism->ComponentHasTag(Tag))
+					{
+						Ism->SetVisibility(!bHide, /*bPropagateToChildren=*/true);
+						++Comps;
+						Instances += Ism->GetInstanceCount();
+					}
+				}
+			}
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] HIDETAG %s %s: %d components, %lld instances"), *Tag.ToString(), bHide ? TEXT("hidden") : TEXT("shown"), Comps, Instances);
+		}),
+		ECVF_Default));
+
+	// ---------- MO.PCG.MeshSurvey [top=30] / MO.PCG.HideMesh <name substring> [0|1] ----------
+	// Dev: every instanced mesh in the world by mesh name: instances and how many lie in the distance bands from the camera (<1.5 km, <3 km, <6 km, beyond), plus the first component tag of its biggest
+	// component. HideMesh hides / shows every component whose mesh name contains the substring. Finds what a far-field artefact is made of when no tag explains it.
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.PCG.MeshSurvey"),
+		TEXT("Dev: instanced meshes by name with counts per distance band from the camera. Usage: MO.PCG.MeshSurvey [top=30]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
+			const FVector C = (PC && PC->PlayerCameraManager) ? PC->PlayerCameraManager->GetCameraLocation() : FVector::ZeroVector;
+			const int32 Top = Args.Num() > 0 ? FMath::Clamp(FCString::Atoi(*Args[0]), 1, 200) : 30;
+			struct FRow { int64 Total = 0; int64 Band[4] = { 0, 0, 0, 0 }; int32 Comps = 0; FString Tag; int32 TagCount = 0; };
+			TMap<FString, FRow> Rows;
+			static const double Edges[3] = { 150000.0, 300000.0, 600000.0 };
+			for (TActorIterator<AActor> ActorIt(World); ActorIt; ++ActorIt)
+			{
+				TArray<UInstancedStaticMeshComponent*> Ismc;
+				ActorIt->GetComponents<UInstancedStaticMeshComponent>(Ismc);
+				for (UInstancedStaticMeshComponent* Ism : Ismc)
+				{
+					const UStaticMesh* Mesh = Ism->GetStaticMesh();
+					const int32 N = Ism->GetInstanceCount();
+					if (!Mesh || N == 0) { continue; }
+					FRow& R = Rows.FindOrAdd(Mesh->GetName());
+					R.Total += N;
+					++R.Comps;
+					if (N > R.TagCount && Ism->ComponentTags.Num() > 0) { R.Tag = Ism->ComponentTags[0].ToString(); R.TagCount = N; }
+					// band by the component bounds centre (cheap; instance-exact is not needed to see what is where)
+					const double D = FVector2D::Distance(FVector2D(Ism->Bounds.Origin.X, Ism->Bounds.Origin.Y), FVector2D(C.X, C.Y));
+					R.Band[D <= Edges[0] ? 0 : D <= Edges[1] ? 1 : D <= Edges[2] ? 2 : 3] += N;
+				}
+			}
+			TArray<TPair<FString, FRow>> Sorted;
+			for (const auto& It : Rows) { Sorted.Add({ It.Key, It.Value }); }
+			Sorted.Sort([](const TPair<FString, FRow>& A, const TPair<FString, FRow>& B) { return A.Value.Total > B.Value.Total; });
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] MESHSURVEY %d meshes :: total, <1.5km, <3km, <6km, beyond | comps | tag"), Sorted.Num());
+			for (int32 I = 0; I < FMath::Min(Top, Sorted.Num()); ++I)
+			{
+				const FRow& R = Sorted[I].Value;
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] MESHSURVEY %-44s %8lld %8lld %8lld %8lld %8lld | %4d | %s"), *Sorted[I].Key, R.Total, R.Band[0], R.Band[1], R.Band[2], R.Band[3], R.Comps, *R.Tag);
+			}
+		}),
+		ECVF_Default));
+
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.PCG.HideMesh"),
+		TEXT("Dev: hide / show every instanced mesh component whose mesh name contains the substring. Usage: MO.PCG.HideMesh <substring> [0|1]  (1 = hide, the default)"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			if (!World || Args.Num() < 1) { return; }
+			const bool bHide = Args.Num() < 2 || FCString::Atoi(*Args[1]) != 0;
+			int32 Comps = 0; int64 Instances = 0;
+			for (TActorIterator<AActor> ActorIt(World); ActorIt; ++ActorIt)
+			{
+				TArray<UInstancedStaticMeshComponent*> Ismc;
+				ActorIt->GetComponents<UInstancedStaticMeshComponent>(Ismc);
+				for (UInstancedStaticMeshComponent* Ism : Ismc)
+				{
+					if (Ism->GetStaticMesh() && Ism->GetStaticMesh()->GetName().Contains(Args[0]))
+					{
+						Ism->SetVisibility(!bHide, true);
+						++Comps; Instances += Ism->GetInstanceCount();
+					}
+				}
+			}
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] HIDEMESH %s %s: %d components, %lld instances"), *Args[0], bHide ? TEXT("hidden") : TEXT("shown"), Comps, Instances);
+		}),
+		ECVF_Default));
+
 	// ---------- MO.PCG.Census [radius_cm] ----------
 	// What is planted around the pawn and HOW it sits: per mesh the count, the angle between the instance's up axis and the terrain normal (rocks should be ~0), how deep its pivot is under the generator's ground
 	// (positive = buried), and the mesh's thinness (smallest / largest bounds extent: < 0.15 is a plane or a slab, open geometry that shows its edge and its back).

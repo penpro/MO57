@@ -151,20 +151,23 @@ float FMOWorldGen::SampleCaveDistanceAtGround(const FMOWorldGenParams& Params, d
 
 	float D = CaveFarCm;
 
+	// No caves under the high ground (the mountain ranges): 0 below the taper band, 1 at / above the ceiling. A gate like the others: the penalty it adds keeps the field continuous.
+	const float HighGround = T.CaveMaxGroundCm > 0.0f ? Smooth01(T.CaveMaxGroundCm - T.CaveHighFadeCm, T.CaveMaxGroundCm, GroundCm) : 0.0f;
+
 	// Sinkholes: the only features that reach the ground. Skipped when the sample spacing cannot resolve a shaft.
-	if (StepCm <= T.SinkholeRadiusCm * 0.9f)
+	if (StepCm <= T.SinkholeRadiusCm * 0.9f && HighGround < 1.0f)
 	{
-		D = FMath::Min(D, SinkholeDistance(Params, X, Y, Z, Seed));
+		D = FMath::Min(D, SinkholeDistance(Params, X, Y, Z, Seed) + CaveFarCm * HighGround);
 	}
 
 	// Everything else stays under the cover, and not on low ground (coasts / basins). Each gate is a 0..1 factor that adds a penalty of at least CaveFarCm when
 	// it is 1, so the field is continuous where a feature is skipped (skipped == saturated).
 	const float LowGround = 1.0f - Smooth01(T.SeaLevelCm + T.CaveMinGroundAboveSeaCm, T.SeaLevelCm + T.CaveMinGroundAboveSeaCm + 600.0f, GroundCm);
-	if (Depth > T.CaveCoverCm && LowGround < 1.0f)
+	if (Depth > T.CaveCoverCm && LowGround < 1.0f && HighGround < 1.0f)
 	{
 		const float Shallow = 1.0f - Smooth01(T.CaveCoverCm, T.CaveCoverCm + T.CaveFadeCm, Depth);
 		const float DeepFade = Smooth01(T.CaveMaxDepthCm, T.CaveMaxDepthCm + T.CaveFadeCm, Depth);
-		const float Gate = FMath::Max3(Shallow, DeepFade, LowGround);
+		const float Gate = FMath::Max(FMath::Max3(Shallow, DeepFade, LowGround), HighGround);
 
 		// Tunnels: sqrt(A^2 + B^2) is small near the curve where two independent 3D noise fields are both zero.
 		if (StepCm <= T.TunnelRadiusCm * 0.6f)
@@ -192,7 +195,7 @@ float FMOWorldGen::SampleCaveDistanceAtGround(const FMOWorldGenParams& Params, d
 			const float Dc = (T.CavernThreshold - C) * (Lambda / CavernGradient);
 			const float CavernShallow = 1.0f - Smooth01(T.CavernMinDepthCm, T.CavernMinDepthCm + T.CaveFadeCm, Depth);
 			// The deepest interior is (Cmax - threshold) * wavelength / gradient <= 0.4 * wavelength over the allowed threshold range; cancel it and add CaveFarCm.
-			D = FMath::Min(D, Dc + (0.4f * Lambda + CaveFarCm) * FMath::Max3(CavernShallow, DeepFade, LowGround));
+			D = FMath::Min(D, Dc + (0.4f * Lambda + CaveFarCm) * FMath::Max(FMath::Max3(CavernShallow, DeepFade, LowGround), HighGround));
 		}
 	}
 

@@ -225,6 +225,44 @@ bool FMOWorldGen_Caves::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOWorldGen_NoCavesOnHighGround,
+	"MOFramework.WorldGen.NoCavesOnHighGround",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOWorldGen_NoCavesOnHighGround::RunTest(const FString& Parameters)
+{
+	// Wes, 2026-10-13: caves under the mountain ranges left thin rock the far voxel LODs cannot represent, so the summits tore at a distance. Under ground at or above CaveMaxGroundCm there is no cave at
+	// any depth (tunnel, cavern or sinkhole); the sinkhole mouth would breach the ground itself. The same sampler still carves below the taper band (the other cave tests).
+	const FMOWorldGenParamsRef P = MakeCaveParams();
+	const FMOWorldGenTuning& T = P->Tuning;
+	FRandomStream R(11);
+	int32 HighColumns = 0, CavesFound = 0, CavesFoundBelow = 0, BelowChecked = 0;
+	for (int32 I = 0; I < 120000 && HighColumns < 400; ++I)
+	{
+		const double X = R.FRandRange(-1.5e6f, 1.5e6f), Y = R.FRandRange(-1.5e6f, 1.5e6f);
+		const float Ground = FMOWorldGen::SampleHeightCm(*P, X, Y, CaveTestSeed);
+		if (Ground >= T.CaveMaxGroundCm)
+		{
+			++HighColumns;
+			for (int32 K = 0; K < 12; ++K)
+			{
+				const float Depth = R.FRandRange(-100.0f, T.CaveMaxDepthCm);
+				CavesFound += (FMOWorldGen::SampleCaveDistanceAtGround(*P, X, Y, Ground - Depth, Ground, CaveTestSeed) < 0.0f) ? 1 : 0;
+			}
+		}
+		else if (Ground < T.CaveMaxGroundCm - T.CaveHighFadeCm && BelowChecked < 4000)
+		{
+			++BelowChecked;
+			CavesFoundBelow += (FMOWorldGen::SampleCaveDistanceAtGround(*P, X, Y, Ground - R.FRandRange(1000.0f, 12000.0f), Ground, CaveTestSeed) < 0.0f) ? 1 : 0;
+		}
+	}
+	AddInfo(FString::Printf(TEXT("high columns checked: %d (ceiling %.0f cm), cave samples found there: %d; below the taper band: %d of %d samples are cave"), HighColumns, T.CaveMaxGroundCm, CavesFound, CavesFoundBelow, BelowChecked));
+	TestTrue(TEXT("the sample found enough high ground to mean something"), HighColumns >= 50);
+	TestEqual(TEXT("no cave under ground at or above the ceiling"), CavesFound, 0);
+	TestTrue(TEXT("caves still exist below the taper band"), CavesFoundBelow > 0);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOWorldGen_CaveGoldenChecksum,
 	"MOFramework.WorldGen.CaveGoldenChecksum",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)

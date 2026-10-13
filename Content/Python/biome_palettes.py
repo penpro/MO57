@@ -492,6 +492,7 @@ FAR_TREE_CAP = 100.0   # stand-ins per hectare at most (the far sampler offers ~
 # The THIRD far tier (MOFar_Canopy, 3 km out to 9 km): solid low-poly CLUMP proxies (Content/Python/make_far_canopy.py). A real tree out there is 2-6 px of aliasing masked leaves; a clump is a soft dark mass.
 # One clump stands for several trees: about 15 per hectare of forest (the 20 m lattice offers ~18), wider than a tree and low (see Tools/gen_far_canopy_meshes.py).
 FAR_CANOPY_CAP = 15.0
+FAR_CANOPY_MIN_TREES = 40.0     # tall trees per hectare a biome needs before it gets clumps
 FAR_CANOPY_PER_TREE = 0.16     # clumps per tall-tree-per-hectare, until the cap (a 217 /ha temperate forest hits the cap; a sparse meadow grove stays sparse)
 CANOPY_SMIN, CANOPY_SMAX = 1.0, 1.5
 PROXY = GAME + "/Penumbra/FarCanopy/SM_FarCanopy_%s.SM_FarCanopy_%s"
@@ -539,6 +540,8 @@ def far_canopy(species_list):
         name = proxy_for(path)
         per_proxy[name] = per_proxy.get(name, 0.0) + sp["DensityPerHectare"] * FAR_CANOPY_PER_TREE
     total = sum(per_proxy.values())
+    if total / FAR_CANOPY_PER_TREE < FAR_CANOPY_MIN_TREES:
+        return []   # a sparse grove (meadow, heath, scree) is a handful of single trees: stand-in trees cover it, and a 20 m wide clump on an open plain reads as a boulder
     k = min(1.0, FAR_CANOPY_CAP / total) if total > 0 else 1.0
     out = []
     for name in sorted(per_proxy):

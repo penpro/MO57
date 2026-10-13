@@ -6,7 +6,7 @@ set to GRID16 makes 64 m cells and looks its radius up in radius1600, GRID32 (12
 i.e. 32 m for the 64 m near tier, 512 m for the 1 km far-tree tier.) `MO.PCG.Rings` in a running game shows what really spawns at each distance.
 
 Overrides (cm): near ground cover + native grass + items (GRID16) 180 m; shrubs / rocks / saplings (GRID32) 300 m; far grass AND the tree tier (GRID128) 1.4 km (the trees are Nanite:
-the limit is generation cost, not draw cost); far-tree stand-ins (GRID256) 3.3 km; far-canopy clump proxies (GRID512, `add_far_canopy_chain.py`) 7.5 km. Every other field is put back to the engine default (twice its own grid). A lower FoliageQuality tier (pcg.Quality 0-2) gets a shorter reach: 35 / 50 / 75 % of these radii.
+the limit is generation cost, not draw cost); far-tree stand-ins (GRID256) 2.5 km; far-canopy clump proxies (GRID512, `add_far_canopy_chain.py`) 7.5 km. radius204800 = 10 m: the NATIVE "field tree" spawner (StaticMeshSpawner_5: SM_BlackAlder_Field_05_PP on GRID2048, one big oak per 50 m, biome-blind, ~90 k instances out to 12 km) is switched OFF -- it was the white-speckled mass of distant "trees" in every far view and the huge trees that popped out in the main-menu flyby; the biome tiers do its job. Every other field is put back to the engine default (twice its own grid). A lower FoliageQuality tier (pcg.Quality 0-2) gets a shorter reach: 35 / 50 / 75 % of these radii.
 
     python Tools/ue.py py --file Content/Python/set_game_radii.py        (editor open, not in PIE)
 """
@@ -14,7 +14,7 @@ import unreal
 
 MAP = "/Game/VoxelExamples/PCGScattering/MOPCGScattering"
 GRAPH = "/Game/VoxelExamples/PCGScattering/MOPCG_StampScatter1"
-OVERRIDES = {"radius1600": 18000.0, "radius3200": 30000.0, "radius12800": 150000.0, "radius25600": 330000.0, "radius51200": 750000.0}   # 2026-10-13: tree tier 1.5 km, stand-in trees 3.3 km, far-canopy clumps 7.5 km (GRID512: radius51200)
+OVERRIDES = {"radius1600": 18000.0, "radius3200": 30000.0, "radius12800": 150000.0, "radius25600": 250000.0, "radius51200": 750000.0, "radius204800": 1000.0}   # 2026-10-13: tree tier 1.5 km, stand-in trees 2.5 km, far-canopy clumps 7.5 km (GRID512: radius51200)
 # Quality: the FoliageQuality scalability group sets pcg.Quality 0..4 (Low .. Cine); a lower tier gets a shorter reach (per-quality value of the same field).
 QUALITY_SCALE = {0: 0.35, 1: 0.5, 2: 0.75, 3: 1.0, 4: 1.0}
 FIELDS = ("radius400", "radius800", "radius1600", "radius3200", "radius6400", "radius12800", "radius25600", "radius51200", "radius102400", "radius204800")

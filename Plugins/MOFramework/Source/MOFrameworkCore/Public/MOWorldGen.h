@@ -351,6 +351,17 @@ struct MOFRAMEWORKCORE_API FMOWorldGenTuning
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Caves", meta=(EditCondition="bEnableCaves", ClampMin="2000"))
 	float CaveMaxDepthCm = 14000.0f;
 
+	/**
+	 * No caves under ground higher than this (cm): they stay below where the mountain ranges rise. A cave (and its sinkhole mouth) under a summit leaves thin rock the far voxel LODs cannot represent, so the
+	 * peak tears when seen from a distance (Wes, 2026-10-13). Tunnels / caverns / sinkholes taper out over CaveHighFadeCm below this ceiling (the field stays continuous). 0 = no ceiling.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Caves", meta=(EditCondition="bEnableCaves", ClampMin="0"))
+	float CaveMaxGroundCm = 75000.0f;
+
+	/** Band (cm) below CaveMaxGroundCm over which caves taper out instead of ending at a contour. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Caves", meta=(EditCondition="bEnableCaves", ClampMin="100"))
+	float CaveHighFadeCm = 10000.0f;
+
 	/** Ground lower than this above sea level (cm) is never undermined (coasts, basins, lake floors keep their roof); caves fade in over the next 6 m of height. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Caves", meta=(EditCondition="bEnableCaves"))
 	float CaveMinGroundAboveSeaCm = 300.0f;
@@ -559,7 +570,7 @@ struct MOFRAMEWORKCORE_API FMOWorldGenBiome
 struct MOFRAMEWORKCORE_API FMOWorldGenParams
 {
 	/** Bump when the generator math changes (see RULES in the header). Stored with world saves. */
-	static constexpr uint32 CurrentGeneratorVersion = 6;   // v6: mountain ranges (regional mask + regional biome relief + massif / peaks / gullies; v5: per-biome relief, taller ranges, half-size regional fields, island edge; v4: upland lakes + coastal ranges; v3: rivers + sea-level lake basins; v2: caves; v1: the base height terrain)
+	static constexpr uint32 CurrentGeneratorVersion = 7;   // v7: no caves under ground above CaveMaxGroundCm (the summits tore); v6: mountain ranges (regional mask + regional biome relief + massif / peaks / gullies; v5: per-biome relief, taller ranges, half-size regional fields, island edge; v4: upland lakes + coastal ranges; v3: rivers + sea-level lake basins; v2: caves; v1: the base height terrain)
 
 	FMOWorldGenTuning Tuning;
 
@@ -707,7 +718,7 @@ struct MOFRAMEWORKCORE_API FMOWorldGen
 	static constexpr uint32 PinnedProbeHeight = 0xB0A52BB6u;   // v6 (mountain ranges: regional mask + regional biome relief + massif/peaks/gullies; v5: biome relief, taller ranges, half-size regional fields, island edge; v4: upland lakes, coastal ranges, VerticalScale 2; v3: rivers + sea-level lake basins)
 	/** The probe with water, coastal ranges and VerticalScale all switched OFF (RunProbe(false)) must reproduce the v1 base terrain exactly: this is the value v1 shipped. It pins the BASE height math. */
 	static constexpr uint32 PinnedProbeHeightNoWater = 0x9C4AE2B3u;
-	static constexpr uint32 PinnedProbeCave = 0x31D4E2B5u;     // v6 (caves on the v6 ground; v5: caves on the v5 ground; v4: the lake-carved, doubled-relief ground, sinkholes keep out of lakes)
+	static constexpr uint32 PinnedProbeCave = 0x69EA6A40u;     // v7 (no caves under ground above CaveMaxGroundCm: the summits tore; v6: caves on the v6 ground; v5: caves on the v5 ground; v4: the lake-carved, doubled-relief ground, sinkholes keep out of lakes)
 
 	/**
 	 * The cave distance saturates here (cm): "no cave within this far". Every gate in the cave field (cover, depth, low ground, sinkhole reach) is built so the

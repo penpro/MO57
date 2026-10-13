@@ -17,8 +17,9 @@ SHAPES = {
     "Round": (2400.0, 1900.0, 0.22, 90.0),
     "Small": (1050.0, 900.0, 0.18, 40.0),
 }
-SEGMENTS = 10
-RINGS = 6
+SEGMENTS = 8
+RINGS = 5
+LOBES = 4
 
 
 def norm(x, y, z):
@@ -27,6 +28,7 @@ def norm(x, y, z):
 
 
 def build(width, height, trunk_frac, trunk_r, seed):
+    """A clump = a main egg-shaped lobe plus LOBES-1 smaller lumps around it (a cauliflower silhouette instead of one smooth dome), on a short trunk."""
     rng = random.Random(seed)
     verts, uvs, normals, faces = [], [], [], []
 
@@ -40,44 +42,52 @@ def build(width, height, trunk_frac, trunk_r, seed):
     crown_h = height - crown_z0
     rx = width * 0.5
 
-    def radius_at(t):
-        return rx * math.pow(math.sin(math.pi * math.pow(t, 0.78)), 0.85)
+    def lobe(cx, cy, cz, lrx, lh):
+        def radius_at(t):
+            return lrx * math.pow(math.sin(math.pi * math.pow(t, 0.78)), 0.85)
+        ring_ids = []
+        for r in range(RINGS):
+            t = (r + 0.5) / RINGS
+            rr = radius_at(t)
+            z = cz + t * lh
+            ids = []
+            for sidx in range(SEGMENTS):
+                a = 2.0 * math.pi * sidx / SEGMENTS + 0.5 * r
+                lump = 0.80 + 0.40 * rng.random()
+                x, y = cx + math.cos(a) * rr * lump, cy + math.sin(a) * rr * lump
+                tilt = (t - 0.45) * 1.4
+                ids.append(add((x, y, z), norm(x - cx, y - cy, tilt * lrx * 0.9), (sidx / SEGMENTS, t)))
+            ring_ids.append(ids)
+        bottom = add((cx, cy, cz), (0.0, 0.0, -1.0), (0.5, 0.0))
+        top = add((cx, cy, cz + lh), (0.0, 0.0, 1.0), (0.5, 1.0))
+        for sidx in range(SEGMENTS):
+            s2 = (sidx + 1) % SEGMENTS
+            faces.append((bottom, ring_ids[0][s2], ring_ids[0][sidx]))
+            faces.append((top, ring_ids[RINGS - 1][sidx], ring_ids[RINGS - 1][s2]))
+            for r in range(RINGS - 1):
+                a, b, c, d = ring_ids[r][sidx], ring_ids[r][s2], ring_ids[r + 1][s2], ring_ids[r + 1][sidx]
+                faces.append((a, b, c))
+                faces.append((a, c, d))
 
-    ring_ids = []
-    for r in range(RINGS):
-        t = (r + 0.5) / RINGS
-        rr = radius_at(t)
-        z = crown_z0 + t * crown_h
-        ids = []
-        for s in range(SEGMENTS):
-            a = 2.0 * math.pi * s / SEGMENTS + 0.5 * r
-            lump = 0.82 + 0.36 * rng.random()
-            x, y = math.cos(a) * rr * lump, math.sin(a) * rr * lump
-            tilt = (t - 0.45) * 1.4
-            ids.append(add((x, y, z), norm(x, y, tilt * rx * 0.9), (s / SEGMENTS, t)))
-        ring_ids.append(ids)
-    bottom = add((0.0, 0.0, crown_z0), (0.0, 0.0, -1.0), (0.5, 0.0))
-    top = add((0.0, 0.0, height), (0.0, 0.0, 1.0), (0.5, 1.0))
-    for s in range(SEGMENTS):
-        s2 = (s + 1) % SEGMENTS
-        faces.append((bottom, ring_ids[0][s2], ring_ids[0][s]))
-        faces.append((top, ring_ids[RINGS - 1][s], ring_ids[RINGS - 1][s2]))
-        for r in range(RINGS - 1):
-            a, b, c, d = ring_ids[r][s], ring_ids[r][s2], ring_ids[r + 1][s2], ring_ids[r + 1][s]
-            faces.append((a, b, c))
-            faces.append((a, c, d))
+    lobe(0.0, 0.0, crown_z0, rx * 0.78, crown_h)                      # the main lobe
+    for k in range(LOBES - 1):
+        a = 2.0 * math.pi * (k / (LOBES - 1)) + rng.random() * 0.8
+        d = rx * (0.45 + 0.25 * rng.random())
+        lh = crown_h * (0.50 + 0.25 * rng.random())
+        lobe(math.cos(a) * d, math.sin(a) * d, crown_z0 + crown_h * (0.05 + 0.25 * rng.random()), rx * (0.38 + 0.18 * rng.random()), lh)
+
     TS = 6
     trunk_h = crown_z0 + crown_h * 0.15
     base, tip = [], []
-    for s in range(TS):
-        a = 2.0 * math.pi * s / TS
+    for sidx in range(TS):
+        a = 2.0 * math.pi * sidx / TS
         nx, ny = math.cos(a), math.sin(a)
-        base.append(add((nx * trunk_r, ny * trunk_r, 0.0), (nx, ny, 0.0), (s / TS, -1.0)))
-        tip.append(add((nx * trunk_r * 0.45, ny * trunk_r * 0.45, trunk_h), (nx, ny, 0.0), (s / TS, -1.0)))
-    for s in range(TS):
-        s2 = (s + 1) % TS
-        faces.append((base[s], base[s2], tip[s2]))
-        faces.append((base[s], tip[s2], tip[s]))
+        base.append(add((nx * trunk_r, ny * trunk_r, 0.0), (nx, ny, 0.0), (sidx / TS, -1.0)))
+        tip.append(add((nx * trunk_r * 0.45, ny * trunk_r * 0.45, trunk_h), (nx, ny, 0.0), (sidx / TS, -1.0)))
+    for sidx in range(TS):
+        s2 = (sidx + 1) % TS
+        faces.append((base[sidx], base[s2], tip[s2]))
+        faces.append((base[sidx], tip[s2], tip[sidx]))
     return verts, uvs, normals, faces
 
 

@@ -28,10 +28,24 @@ def log(msg):
 def build_material():
     path = DIR + "/M_FarCanopy"
     if EAL.does_asset_exist(path):
+        # exists: only the colour / surface PARAMETERS are refreshed in place (deleting the asset or its expressions from editor Python crashed the editor twice, 2026-10-13)
         m = unreal.load_asset(path)
-        MEL.delete_all_material_expressions(m)   # rebuilt in place (deleting the asset from editor Python is a crash risk)
-    else:
-        m = TOOLS.create_asset("M_FarCanopy", DIR, unreal.Material, unreal.MaterialFactoryNew())
+        want = {"CanopyDark": (0.006, 0.014, 0.006), "CanopyLight": (0.017, 0.030, 0.010), "TrunkColor": (0.030, 0.022, 0.016)}
+        for e in MEL.get_material_expressions(m):
+            if isinstance(e, unreal.MaterialExpressionVectorParameter) and str(e.get_editor_property("parameter_name")) in want:
+                c = want[str(e.get_editor_property("parameter_name"))]
+                e.set_editor_property("default_value", unreal.LinearColor(c[0], c[1], c[2], 1.0))
+            if isinstance(e, unreal.MaterialExpressionScalarParameter):
+                n = str(e.get_editor_property("parameter_name"))
+                if n == "Roughness":
+                    e.set_editor_property("default_value", 1.0)
+                if n == "Specular":
+                    e.set_editor_property("default_value", 0.04)
+        MEL.recompile_material(m)
+        EAL.save_loaded_asset(m)
+        log("refreshed the parameters of " + path)
+        return m
+    m = TOOLS.create_asset("M_FarCanopy", DIR, unreal.Material, unreal.MaterialFactoryNew())
     m.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_DEFAULT_LIT)
 
     def vec(name, rgb, x, y):
@@ -46,8 +60,8 @@ def build_material():
         n.set_editor_property("default_value", v)
         return n
 
-    deep = vec("CanopyDark", (0.012, 0.026, 0.010), -900, -200)       # conifer-dark green
-    lush = vec("CanopyLight", (0.034, 0.052, 0.018), -900, -50)       # sunlit olive green
+    deep = vec("CanopyDark", (0.006, 0.014, 0.006), -900, -200)       # conifer-dark green (far haze lightens it a lot)
+    lush = vec("CanopyLight", (0.017, 0.030, 0.010), -900, -50)       # sunlit olive green
     trunk = vec("TrunkColor", (0.030, 0.022, 0.016), -900, 300)
     rnd = MEL.create_material_expression(m, unreal.MaterialExpressionPerInstanceRandom, -900, 100)
     uv = MEL.create_material_expression(m, unreal.MaterialExpressionTextureCoordinate, -1200, 450)
@@ -68,8 +82,8 @@ def build_material():
     MEL.connect_material_expressions(trunk, "", lerp2, "B")
     MEL.connect_material_expressions(sat, "", lerp2, "Alpha")
     MEL.connect_material_property(lerp2, "", unreal.MaterialProperty.MP_BASE_COLOR)
-    MEL.connect_material_property(scal("Roughness", 0.92, -300, 250), "", unreal.MaterialProperty.MP_ROUGHNESS)
-    MEL.connect_material_property(scal("Specular", 0.10, -300, 350), "", unreal.MaterialProperty.MP_SPECULAR)
+    MEL.connect_material_property(scal("Roughness", 1.0, -300, 250), "", unreal.MaterialProperty.MP_ROUGHNESS)
+    MEL.connect_material_property(scal("Specular", 0.04, -300, 350), "", unreal.MaterialProperty.MP_SPECULAR)
     MEL.recompile_material(m)
     EAL.save_loaded_asset(m)
     log("built " + path)
