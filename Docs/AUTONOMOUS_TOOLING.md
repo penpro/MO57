@@ -59,6 +59,14 @@ own command bridge + log (`MO57_BRIDGE_DIR`, `MO57_GAMELOG`), and drives them wi
 | `ue.py nettest soak --rounds N` | repeats fresh-random-seed host+join N times with the same two processes and compares the ground each time (intermittent bugs need a rate, not one run) |
 | `ue.py nettest features` | one real-map instance, fresh hosted world: a new game starts at 08:00 under `Clear_Skies` (polled until the transition finishes), `starter` adds 50 sticks + 20 stones (inventory counted), the Tilde popup opens on a real Slate key event and does not stack, `MO.Console.Run` strips a leading tilde and reports a result, the engine console no longer owns Tilde |
 
+### Packaged-game probes and profiling (2026-10-13)
+
+| Command | Does |
+|---------|------|
+| `python Tools/pkg_probe.py [--package] --cmds "MO.NewGame 1029024224" "MO.Test.AfterReady MO.Delay 5 <cmd>" ... [--extra "..."] [--keep-log label]` | one packaged Development copy, console commands in order (`MO.Test.AfterReady` / `MO.Delay` sequence them after READY), stops at `--until`, keeps the log in `Saved/Logs/pkg_probe/` |
+| `python Tools/csv_frames.py <csv>` | CSV-profiler summary (`csvprofile start/stop` in the probe): percentiles + the worst frames with their biggest columns |
+| `python Tools/insights_export.py <utrace> <out.csv> [--threads] [--timers] [--start --end] [--tree] [--worst-frames N]` | **headless Unreal Insights**: capture with `--extra "-trace=cpu,frame,bookmark[,voxel] -statnamedevents -tracefile=D:/x.utrace"`, then export timing events / per-timer summary / a window's call tree / the N slowest game-thread frames explained. First use: the NavigationBuild spike = 44 tile tasks started in one frame |
+
 Facts learned by running it (each was a silent failure before):
 - **Never fire an RPC from editor-Python, or from a console command that runs synchronously under it.** The editor script
   guard (`GAllowActorScriptExecutionInEditor`) makes `AActor::GetFunctionCallspace` return LOCAL for every function, so
