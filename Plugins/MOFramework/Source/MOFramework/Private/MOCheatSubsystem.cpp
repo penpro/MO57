@@ -85,6 +85,8 @@
 #include "MOControllableInterface.h"
 #include "MOCommonButton.h"
 #include "AIController.h"
+#include "NavigationPath.h"
+#include "NavigationSystem.h"
 #include "BehaviorTree/BlackboardComponent.h"
 #include "BehaviorTree/BlackboardData.h"
 #include "BehaviorTree/Blackboard/BlackboardKeyType_Bool.h"
@@ -5003,6 +5005,50 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 				return;
 			}
 			Sys->DumpFreezeState();
+		}),
+		ECVF_Default));
+
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.AI.NavCheck"),
+		TEXT("Every AI-controlled pawn: on the navmesh (projected within 1 m), a path to a point 10 m ahead, metres moved since the previous NavCheck. "
+		     "A pathing smoke test for navmesh build settings (tile size, job cap): run it twice a few seconds apart after MO.AI.StressSpawn."),
+		FConsoleCommandWithWorldDelegate::CreateLambda([](UWorld* World)
+		{
+			static TMap<TWeakObjectPtr<APawn>, FVector> LastLocation;
+			UNavigationSystemV1* NavSys = World ? FNavigationSystem::GetCurrent<UNavigationSystemV1>(World) : nullptr;
+			if (!NavSys)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] NavCheck FAILED: no navigation system"));
+				return;
+			}
+			int32 Pawns = 0, OnNav = 0, WithPath = 0, Moved = 0;
+			for (TActorIterator<APawn> It(World); It; ++It)
+			{
+				APawn* Pawn = *It;
+				if (!Cast<AAIController>(Pawn->GetController()))
+				{
+					continue;
+				}
+				++Pawns;
+				const FVector Here = Pawn->GetActorLocation();
+				FNavLocation NavHere;
+				const bool bOnNav = NavSys->ProjectPointToNavigation(Here, NavHere, FVector(100.0f, 100.0f, 250.0f));
+				bool bPath = false;
+				if (bOnNav)
+				{
+					const FVector Ahead = Here + Pawn->GetActorForwardVector().GetSafeNormal2D() * 1000.0f;
+					const UNavigationPath* Path = UNavigationSystemV1::FindPathToLocationSynchronously(World, NavHere.Location, Ahead, Pawn);
+					bPath = Path && Path->IsValid() && !Path->IsPartial();
+				}
+				const FVector* Before = LastLocation.Find(Pawn);
+				const float MovedM = Before ? FVector::Dist2D(*Before, Here) / 100.0f : -1.0f;
+				LastLocation.Add(Pawn, Here);
+				OnNav += bOnNav ? 1 : 0;
+				WithPath += bPath ? 1 : 0;
+				Moved += MovedM > 0.5f ? 1 : 0;
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] NavCheck %s onNav=%d path10m=%d moved=%.1fm speed=%.0f"), *Pawn->GetName(), bOnNav ? 1 : 0, bPath ? 1 : 0, MovedM, Pawn->GetVelocity().Size2D());
+			}
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] NavCheck: %d AI pawns, %d on the navmesh, %d with a 10 m path, %d moved > 0.5 m since the last check"), Pawns, OnNav, WithPath, Moved);
 		}),
 		ECVF_Default));
 
