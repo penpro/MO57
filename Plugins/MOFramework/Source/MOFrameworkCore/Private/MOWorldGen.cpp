@@ -8,6 +8,7 @@
 
 // DEBUG ONLY (2026-10-11): 1 = the base height ignores the LOD (every octave at every LOD). Two chunks of neighbouring LODs meet at a seam that is only watertight if the coarse samples equal the
 // fine values at the same positions; the octave cut makes them differ. This switch exists to SEE whether that is what tears the far mountains. Never set it in a shipped build: it changes the ground.
+static TAutoConsoleVariable<int32> CVarMOWaterLodGate(TEXT("MO.WorldGen.WaterLodGate"), 1, TEXT("1 = a coarse LOD skips the water basins it cannot resolve (FMOWorldGen::IsWaterTierResolved); 0 = every basin at every LOD (A/B only: far chunks then take seconds each). Set before the world generates."), ECVF_Default);
 static TAutoConsoleVariable<int32> CVarMODebugNoLodCull(TEXT("MO.WorldGen.DebugNoLodCull"), 0, TEXT("Debug: 1 = the base height ignores the LOD (no octave culling). Changes the generated ground; test seams only."), ECVF_Default);
 
 // ============================================================================
@@ -653,7 +654,7 @@ float FMOWorldGen::SampleHeightCm(const FMOWorldGenParams& Params, double X, dou
 
 bool FMOWorldGen::IsWaterTierResolved(const FMOWorldGenParams& Params, int32 Tier, float StepCm)
 {
-	if (CVarMODebugNoLodCull.GetValueOnAnyThread() != 0)
+	if (CVarMODebugNoLodCull.GetValueOnAnyThread() != 0 || CVarMOWaterLodGate.GetValueOnAnyThread() == 0)
 	{
 		return true;
 	}
