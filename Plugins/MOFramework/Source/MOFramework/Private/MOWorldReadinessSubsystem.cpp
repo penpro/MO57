@@ -2,6 +2,9 @@
 #include "ContentStreaming.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
+#include "Components/InstancedStaticMeshComponent.h"
+#include "GameFramework/PlayerController.h"
+#include "Camera/PlayerCameraManager.h"
 #include "HAL/IConsoleManager.h"
 #include "MOFramework.h"
 #include "MOVoxelReadinessSubsystem.h"
@@ -16,6 +19,9 @@ namespace
 	TAutoConsoleVariable<float> CVarMinPcgSeconds(TEXT("mo.Readiness.MinPcgSeconds"), 2.0f, TEXT("Floor for the vegetation stage once PCG was seen working."));
 	TAutoConsoleVariable<float> CVarNoPcgActivityGraceSeconds(TEXT("mo.Readiness.PcgNoActivityGraceSeconds"), 4.0f, TEXT("Floor for the vegetation stage when PCG was never seen working (the generation source may not exist yet)."));
 	TAutoConsoleVariable<float> CVarMaxPcgSeconds(TEXT("mo.Readiness.MaxPcgSeconds"), 15.0f, TEXT("Cap for the vegetation stage. The PCG scheduler generates nearest-first, so after this long the near and mid field is in and only the far field is still filling behind the reveal."));
+	TAutoConsoleVariable<int32> CVarNearInstanceMin(TEXT("mo.Readiness.NearInstanceMin"), 200, TEXT("Past mo.Readiness.MaxPcgSeconds the vegetation stage keeps holding until this many spawned instances exist near the player (0 = off), up to mo.Readiness.MaxPcgHardSeconds."));
+	TAutoConsoleVariable<float> CVarNearInstanceRadiusCm(TEXT("mo.Readiness.NearInstanceRadiusCm"), 6000.0f, TEXT("Radius (cm) around the camera for the near-vegetation count."));
+	TAutoConsoleVariable<float> CVarMaxPcgHardSeconds(TEXT("mo.Readiness.MaxPcgHardSeconds"), 32.0f, TEXT("Hard cap for the vegetation stage when the near-vegetation count is still below its minimum."));
 	TAutoConsoleVariable<float> CVarMaxStreamingSeconds(TEXT("mo.Readiness.MaxStreamingSeconds"), 4.0f, TEXT("Cap for the streaming stage: a pool-limited scene never reaches zero textures wanting resources."));
 	TAutoConsoleVariable<int32> CVarStreamingWantMax(TEXT("mo.Readiness.StreamingWantMax"), 8, TEXT("Textures still wanting resources that the streaming stage tolerates."));
 	TAutoConsoleVariable<float> CVarMaxTotalSeconds(TEXT("mo.Readiness.MaxTotalSeconds"), 60.0f, TEXT("Cap for the whole cycle: force-ready (and a warning) instead of a black screen that never lifts."));
@@ -77,6 +83,55 @@ bool UMOWorldReadinessSubsystem::IsPcgBusy(bool& bOutHasPcg) const
 	UPCGSubsystem* Pcg = UPCGSubsystem::GetInstance(GetWorld());
 	bOutHasPcg = Pcg != nullptr;
 	return Pcg && Pcg->IsAnyGraphCurrentlyExecuting();
+}
+
+int32 UMOWorldReadinessSubsystem::CountNearPcgInstances() const
+{
+	const double Now = FPlatformTime::Seconds();
+	if (Now < NextNearCountSeconds)
+	{
+		return LastNearCount;
+	}
+	NextNearCountSeconds = Now + 1.0;
+	UWorld* World = GetWorld();
+	APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
+	if (!PC || !PC->PlayerCameraManager)
+	{
+		return LastNearCount;
+	}
+	const FVector C = PC->PlayerCameraManager->GetCameraLocation();
+	const double Radius = CVarNearInstanceRadiusCm.GetValueOnGameThread();
+	int32 Count = 0;
+	for (TActorIterator<AActor> ActorIt(World); ActorIt; ++ActorIt)
+	{
+		TArray<UInstancedStaticMeshComponent*> Comps;
+		ActorIt->GetComponents<UInstancedStaticMeshComponent>(Comps);
+		for (UInstancedStaticMeshComponent* Ism : Comps)
+		{
+			const int32 Num = Ism->GetInstanceCount();
+			if (Num == 0 || !Ism->GetStaticMesh() || Ism->ComponentHasTag(TEXT("MOFar_Tree")) || Ism->ComponentHasTag(TEXT("MOFar_Grass")))
+			{
+				continue;
+			}
+			// A partition cell's component is local to its cell: skip the ones whose bounds cannot reach the circle.
+			const FBox2D CellBox(FVector2D(Ism->Bounds.Origin.X - Ism->Bounds.BoxExtent.X, Ism->Bounds.Origin.Y - Ism->Bounds.BoxExtent.Y), FVector2D(Ism->Bounds.Origin.X + Ism->Bounds.BoxExtent.X, Ism->Bounds.Origin.Y + Ism->Bounds.BoxExtent.Y));
+			const FVector2D Nearest(FMath::Clamp(C.X, CellBox.Min.X, CellBox.Max.X), FMath::Clamp(C.Y, CellBox.Min.Y, CellBox.Max.Y));
+			if (FVector2D::Distance(Nearest, FVector2D(C.X, C.Y)) > Radius)
+			{
+				continue;
+			}
+			FTransform Xf;
+			for (int32 I = 0; I < Num; ++I)
+			{
+				if (Ism->GetInstanceTransform(I, Xf, /*bWorldSpace=*/true) && FVector2D::Distance(FVector2D(Xf.GetLocation().X, Xf.GetLocation().Y), FVector2D(C.X, C.Y)) <= Radius)
+				{
+					++Count;
+				}
+			}
+		}
+	}
+	LastNearCount = Count;
+	return Count;
 }
 
 void UMOWorldReadinessSubsystem::BeginTracking(bool bStartVoxelPolling)
@@ -239,14 +294,17 @@ void UMOWorldReadinessSubsystem::Poll()
 		const double Floor = bPcgSeenBusy ? CVarMinPcgSeconds.GetValueOnGameThread() : CVarNoPcgActivityGraceSeconds.GetValueOnGameThread();
 		const double Cap = CVarMaxPcgSeconds.GetValueOnGameThread();
 		const bool bQuiet = PcgQuietSeconds >= CVarPcgQuietSeconds.GetValueOnGameThread() && StageElapsed >= Floor;
-		const bool bCapped = StageElapsed >= Cap;
+		// At the cap, keep holding while the ground right around the player is still bare (the near tier arrives last) -- up to the hard cap.
+		const int32 NearMin = CVarNearInstanceMin.GetValueOnGameThread();
+		const int32 NearCount = (NearMin > 0 && StageElapsed >= Cap) ? CountNearPcgInstances() : NearMin;
+		const bool bCapped = StageElapsed >= Cap && (NearCount >= NearMin || StageElapsed >= CVarMaxPcgHardSeconds.GetValueOnGameThread());
 		// No denominator exists for "how many PCG cells are left", so the bar eases toward the stage end over the cap and completes when PCG goes quiet (or the cap hits).
 		SetProgress(TerrainEnd + (VegetationEnd - TerrainEnd) * 0.9f * (1.0f - FMath::Exp(-static_cast<float>(StageElapsed) / FMath::Max(static_cast<float>(Cap) * 0.4f, 1.0f))));
 		if (bQuiet || bCapped)
 		{
 			if (bCapped && !bQuiet)
 			{
-				UE_LOG(LogMOFramework, Warning, TEXT("[MOReadiness] vegetation stage capped at %.0fs with PCG still working (far field keeps filling behind the reveal)"), Cap);
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOReadiness] vegetation stage capped at %.0fs with PCG still working (%d spawned instances within %.0f m; far field keeps filling behind the reveal)"), StageElapsed, NearCount, CVarNearInstanceRadiusCm.GetValueOnGameThread() / 100.0f);
 			}
 			SetProgress(VegetationEnd);
 			EnterStage(EMOWorldReadyStage::Streaming);

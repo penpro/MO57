@@ -127,4 +127,13 @@ private:
 
 	bool WorldHasVoxel() const;
 	bool IsPcgBusy(bool& bOutHasPcg) const;
+
+	/**
+	 * Spawned vegetation / rock instances (every PCG tier except the far ones) within mo.Readiness.NearInstanceRadiusCm of the local camera. The PCG scheduler generates the largest grids
+	 * first, so the ground cover right around the player is the LAST thing to arrive: at the old 15 s cap the overlay lifted on a bare spot and the grass grew in during the reveal. Throttled to ~1 Hz.
+	 */
+	int32 CountNearPcgInstances() const;
+
+	mutable double NextNearCountSeconds = 0.0;
+	mutable int32 LastNearCount = 0;
 };
