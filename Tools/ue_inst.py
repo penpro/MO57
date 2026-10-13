@@ -1774,6 +1774,56 @@ def _package_build():
 PKG_DEATHFLOW_RE = re.compile(r"\[MOTEST\] (PASS|FAIL) DeathFlow: (.*)")
 
 
+PKG_SUITE_RE = re.compile(r"\[MOTEST\] ===== RunAll: (\d+) passed, (\d+) failed")
+
+
+def packaged_suite_test(package=False, seed=7, boot_timeout=420):
+    """The PACKAGED Development game, ONE copy: a new game on a fixed seed, then MO.Test.AfterReady MO.Test.RunAll (drop/pickup identity, attack, craft, data + art validation) once the world is ready.
+    The cooked game has different data paths than the editor (cooked DataTables, soft references, always-cook folders): this runs the regression gate against the artifact that ships."""
+    rep = Report()
+    pid = None
+    try:
+        if package and not _package_build():
+            return rep.step("the Development package builds", False, "see Saved/Logs/package.log")
+        if not rep.step("the staged packaged build exists", os.path.exists(PKG_EXE), PKG_EXE):
+            return False
+        _pkg_wait_none()
+        running = _pkg_alive_count()
+        if not rep.step("no other MO57.exe is running (this mode must own the log and never touches others)", running == 0, f"{running} running"):
+            return False
+        log_path = os.path.join(PKG_LOGS, "MO57.log")
+        if os.path.exists(log_path):
+            os.remove(log_path)
+        results_path = os.path.join(PKG_ROOT, "MO57", "Saved", "MOTestResults.txt")
+        if os.path.exists(results_path):
+            os.remove(results_path)
+        print(f"[nettest] packaged-suite: launching one packaged copy (MO.NewGame {seed} + MO.Test.RunAll after ready) ...", flush=True)
+        pid = _pkg_launch('-NoSteam -NoQualityBenchmark -windowed -ResX=960 -ResY=540 -WinX=0 -WinY=0 -ExecCmds="MO.NewGame {seed},MO.Test.AfterReady MO.Test.RunAll"'.replace("{seed}", str(seed)))
+        deadline, summary = time.time() + boot_timeout, None
+        while time.time() < deadline and summary is None:
+            summary = PKG_SUITE_RE.search(_pkg_read("MO57.log"))
+            time.sleep(3)
+        log = _pkg_read("MO57.log")
+        if summary is None:
+            rep.step("RunAll reported a summary", False, log[-300:].replace(chr(10), " | "))
+        else:
+            passed, failed = int(summary.group(1)), int(summary.group(2))
+            detail = f"{passed} passed, {failed} failed"
+            if failed:
+                try:
+                    with open(results_path, encoding="utf-8", errors="replace") as f:
+                        detail += " -- " + " ; ".join(l.strip() for l in f if l.startswith("FAIL"))[:700]
+                except OSError:
+                    pass
+            rep.step("MO.Test.RunAll in the cooked game", failed == 0 and passed > 0, detail)
+        fatal = PKG_FATAL_RE.search(log)
+        rep.step("no crash, ensure or assertion in the log", fatal is None, "" if fatal is None else fatal.group(0))
+        return rep.ok
+    finally:
+        print(f"[nettest] packaged-suite: {'PASS' if rep.rows and rep.ok else 'FAIL'}", flush=True)
+        _pkg_stop(pid)
+
+
 def packaged_deathflow_test(package=False, seed=1029024224, boot_timeout=420):
     """The PACKAGED Development game, ONE copy: a new game on a FIXED seed (default 1029024224: its spawn used to settle on a stale coarse collision, the terrain rose over the pawn and it swam
     underground), then MO.Test.DeathFlow drives it end to end -- kill the pawn, the death recap shows (the cooked build has WBP_DeathRecap), Continue,

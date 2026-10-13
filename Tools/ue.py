@@ -1183,6 +1183,8 @@ def cmd_nettest(a):
         sys.exit(0 if ui.features_test(UPROJECT, EDITOR_EXE, keep=a.keep) else 1)
     if a.mode == "packaged":
         sys.exit(0 if ui.packaged_test(package=a.package, withhold_sync=a.withhold_sync) else 1)
+    if a.mode == "packaged-suite":
+        sys.exit(0 if ui.packaged_suite_test(package=a.package, seed=a.seed) else 1)
     if a.mode == "packaged-death":
         sys.exit(0 if ui.packaged_deathflow_test(package=a.package, seed=a.seed) else 1)
     if a.mode == "bugreport":
@@ -1482,7 +1484,7 @@ def main():
     ip.set_defaults(fn=cmd_inst)
 
     s = sub.add_parser("nettest", help="two-process (lan) / real-Steam (steam-host) session test; PASS/FAIL + exit code")
-    s.add_argument("mode", choices=["lan", "steam-host", "game", "hostsave", "soak", "features", "actions", "packaged", "packaged-death", "bugreport", "churn"])
+    s.add_argument("mode", choices=["lan", "steam-host", "game", "hostsave", "soak", "features", "actions", "packaged", "packaged-death", "packaged-suite", "bugreport", "churn"])
     s.add_argument("--rounds", type=int, default=6, help="soak mode: how many fresh-seed host+join rounds (default 6); churn mode: leave/rejoin rounds (default 3)")
     s.add_argument("--keep", action="store_true", help="leave the instances running afterwards")
     s.add_argument("--seed", type=int, default=1029024224, help="packaged-death mode: the new-game world seed (default: the one whose spawn used to end underground)")

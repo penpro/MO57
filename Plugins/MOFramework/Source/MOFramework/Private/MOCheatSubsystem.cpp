@@ -1108,6 +1108,52 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 		}),
 		ECVF_Default));
 
+	// ---------- MO.Test.AfterReady <console command...> ----------
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Test.AfterReady"),
+		TEXT("Test: run a console command once the GAMEPLAY world is ready and the local pawn is on the ground. For -ExecCmds in packaged builds, which run at the main menu before any world exists: -ExecCmds=\"MO.NewGame 7,MO.Test.AfterReady MO.Test.RunAll\". Usage: MO.Test.AfterReady <command...>"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			if (Args.Num() < 1)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] AfterReady: usage MO.Test.AfterReady <console command...>"));
+				return;
+			}
+			const FString Command = FString::Join(Args, TEXT(" "));
+			const TSharedRef<double> Start = MakeShared<double>(FPlatformTime::Seconds());
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] AfterReady: armed '%s' (runs once the world is ready and the pawn is grounded)"), *Command);
+			FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([Command, Start](float) -> bool
+			{
+				if (GEngine)
+				{
+					for (const FWorldContext& Context : GEngine->GetWorldContexts())
+					{
+						UWorld* W = Context.World();
+						if (!W || (Context.WorldType != EWorldType::Game && Context.WorldType != EWorldType::PIE))
+						{
+							continue;
+						}
+						APlayerController* PC = W->GetFirstPlayerController();
+						const AMOCharacter* Character = Cast<AMOPlayerController>(PC) ? Cast<AMOCharacter>(PC->GetPawn()) : nullptr;
+						const UMOWorldReadinessSubsystem* Readiness = UMOWorldReadinessSubsystem::Get(W);
+						if (Character && !Character->IsDead() && Character->GetCharacterMovement() && Character->GetCharacterMovement()->IsMovingOnGround() && (!Readiness || !Readiness->IsTracking()))
+						{
+							UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] AfterReady: running '%s' after %.0fs"), *Command, FPlatformTime::Seconds() - *Start);
+							GEngine->Exec(W, *Command);
+							return false;
+						}
+					}
+				}
+				if (FPlatformTime::Seconds() - *Start > 300.0)
+				{
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] AfterReady: gave up on '%s' (no ready, grounded pawn within 300 s)"), *Command);
+					return false;
+				}
+				return true;
+			}), 0.5f);
+		}),
+		ECVF_Default));
+
 	// ---------- MO.Test.DeathFlow ----------
 	ConsoleCommands.Add(CM.RegisterConsoleCommand(
 		TEXT("MO.Test.DeathFlow"),
