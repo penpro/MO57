@@ -2,6 +2,16 @@
 
 *Last updated: June 11, 2026 (full re-audit). Single source of truth for metrics, progress, and tracked issues.*
 
+*Freshness note (2026-10-13, Claude): track labels re-checked against the code. **PCG world** is
+implemented, not "planned": biome spawner tiers (near / large / trees / shore / three far tiers) over
+`DT_Biomes`, the generator's water / cave masks, permanent removals (`UMOWorldRemovalSubsystem`,
+replicated + saved), new-game load 7 s. **Colony track** is partly built, not "not started":
+`UMOCharacterHistoryComponent`, `UMOPersonalityComponent`, `UMOColonyManagerSubsystem`,
+`UMOColonyOverviewWidget`, `UMOColonyPortrait` exist; the colony bar (4B), a task-assignment widget
+(6B; jobs exist via `UMOSurvivorJobQueueComponent`) and alert tiers (7B) do not. **Creature AI**:
+perception registration fixed Oct 13 (creatures were blind after spawning). Audit rows re-verified
+on Oct 13 carry their evidence inline. Current handoff: `Docs/Handoff_2026-10-13.md`.*
+
 *Freshness note (2026-09-22): the metrics/audit-tracker content below is the
 June 11 re-audit and is stale in places — individual H/C/M items were
 corrected inline as they were re-verified (search for "FIXED" / "STILL OPEN"
@@ -73,7 +83,7 @@ an informational `Data:Art` line without failing the standing gate.
 | 6A | Inventory + Crafting UI to Layer Push/Pop | Replace AddToViewport with layer stacks |
 | 7A | System Menus + Legacy Delegate Cleanup | Remove OnLegacyRequestClose |
 
-### Colony Feature Track (NOT STARTED)
+### Colony Feature Track (PARTIAL -- see the Oct 13 freshness note: 3B and 5B classes exist; 4B, 6B UI, 7B missing)
 
 | Stage | Name | Key Work |
 |-------|------|----------|
@@ -128,7 +138,7 @@ C++ infrastructure done. Blueprint setup pending.
 | 5: Recipe Discovery Methods | PARTIAL |
 | 6: Polish | NOT STARTED |
 
-### PCG World Items (PLANNED)
+### PCG World Items (IMPLEMENTED -- see the Oct 13 freshness note; this plan doc is historical)
 
 See `PCG_Integration_Plan.md`. Hybrid ISM + Actor approach.
 
