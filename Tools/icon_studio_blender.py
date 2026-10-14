@@ -12,11 +12,13 @@ square. Here every item gets the same studio:
     a blade shows its flat, not its edge;
   - the item turned so its long axis runs up the diagonal (PCA of the vertices in plan view), seen from above-front: steeper for
     flat items, lower for tall ones (a jar keeps its profile);
+  - the item row's non-uniform world scale applied (meta.json "scale"), so a squashed loaf renders as the flatbread it is;
   - an orthographic camera fitted to the item's projected silhouette with a fixed margin, so every icon fills the frame alike.
 Materials are rebuilt from the exported textures (base colour, normal, Megascans ORM / glTF metallic-roughness, foliage mask).
 Ambient occlusion maps are not used: Cycles shades occlusion itself, and glTF packs nothing in the red channel.
 Writes <root>/<Item>/icon.png. Output lines start with ICONSTUDIO.
 """
+import itertools
 import json
 import math
 import os
@@ -118,6 +120,19 @@ def build_material(item_dir, info):
     return material
 
 
+def apply_row_scale(obj, meta):
+    """The item row's world scale (meta "scale", UE axes). Which Blender axis is which UE axis after the FBX round trip is read
+    off the geometry: the permutation whose per-axis size ratios to the UE extent agree best (the unit factor is common)."""
+    scale, extent = meta.get("scale"), meta.get("extent")
+    if not scale or not extent or max(scale) - min(scale) < 1e-4:
+        return   # uniform: the orthographic fit makes it irrelevant
+    dims = list(obj.dimensions)
+    ratios = lambda p: [math.log(max(dims[i], 1e-6) / max(extent[p[i]], 1e-6)) for i in range(3)]
+    best = min(itertools.permutations(range(3)), key=lambda p: float(np.var(ratios(p))))
+    obj.scale = tuple(scale[best[i]] for i in range(3))
+    bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+
+
 def import_item(item_dir, meta):
     before = set(bpy.data.objects)
     bpy.ops.import_scene.fbx(filepath=os.path.join(item_dir, "mesh.fbx"))
@@ -134,6 +149,7 @@ def import_item(item_dir, meta):
         bpy.ops.object.join()
     obj = bpy.context.view_layer.objects.active
     bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+    apply_row_scale(obj, meta)
     for info in meta["slots"]:
         if info["slot"] < len(obj.material_slots):
             obj.material_slots[info["slot"]].material = build_material(item_dir, info)
