@@ -155,6 +155,13 @@ public:
 	void ClaimFocusForReactivation();
 
 	/**
+	 * Apply Config through CommonUI's action router now (no-op when it is already the router's config). A UI surface calls this when it becomes the
+	 * menu the player is using -- on activation, and when the menu above it closes -- instead of waiting for the router to pick it as the active root,
+	 * which it only does once the widget has been painted above the current root (playtest 2026-10-14 #23).
+	 */
+	void AssertInputConfig(const FUIInputConfig& Config);
+
+	/**
 	 * True if this widget is an interactive UI surface (menu, modal, dialog,
 	 * panel) — i.e. its desired input mode is Menu, not Game. Passive Game-mode
 	 * overlays (progress bars, tutorial hints, the input stub) return false.

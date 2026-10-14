@@ -6,6 +6,7 @@
 #include "MOUISettings.h"
 #include "MOActivatableWidget.h"
 #include "MOUIDebugSubsystem.h"
+#include "MOGameplayInputStub.h"
 #include "CommonActivatableWidget.h"
 #include "Widgets/CommonActivatableWidgetContainer.h"
 #include "GameFramework/PlayerController.h"
@@ -528,8 +529,7 @@ void UMOGameUIManagerSubsystem::RestoreContextMenuInputState(const UObject* Worl
 		// viewport focused for the next interaction trace).
 		PC->bShowMouseCursor = false;
 
-		FInputModeGameOnly GameOnlyMode;
-		PC->SetInputMode(GameOnlyMode);
+		UMOGameplayInputStub::ApplyGameplayInput(PC, WorldContextObject);   // router + viewport, never the viewport alone (#23)
 
 		if (FSlateApplication::IsInitialized() && PC->GetLocalPlayer())
 		{

@@ -11,6 +11,8 @@
 #include "MOPrimaryGameLayout.h"
 #include "Framework/Application/SlateApplication.h"
 #include "GameFramework/PlayerController.h"
+#include "Engine/LocalPlayer.h"
+#include "Input/CommonUIActionRouterBase.h"
 
 UMOGameplayInputStub::UMOGameplayInputStub(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -143,10 +145,31 @@ TOptional<FUIInputConfig> UMOGameplayInputStub::GetDesiredInputConfig() const
 	// direction, ending up on another monitor or outside the game window.
 	// Capture grabs the cursor; LockOnCapture confines it to the viewport
 	// for the duration of the capture.
+	return GameplayInputConfig();
+}
+
+FUIInputConfig UMOGameplayInputStub::GameplayInputConfig()
+{
 	return FUIInputConfig(
 		ECommonInputMode::Game,
 		EMouseCaptureMode::CapturePermanently_IncludingInitialMouseDown,
 		EMouseLockMode::LockOnCapture,
 		true  // bHideCursorDuringViewportCapture - cursor hidden in gameplay
 	);
+}
+
+void UMOGameplayInputStub::ApplyGameplayInput(APlayerController* PC, const UObject* Source)
+{
+	if (!PC)
+	{
+		return;
+	}
+	// 1. The router's cache: it must hold Game now, so the next menu's Menu request is a CHANGE and gets applied.
+	if (UCommonUIActionRouterBase* Router = PC->GetLocalPlayer() ? PC->GetLocalPlayer()->GetSubsystem<UCommonUIActionRouterBase>() : nullptr)
+	{
+		Router->SetActiveUIInputConfig(GameplayInputConfig(), Source);
+	}
+	// 2. The viewport itself: context menus set GameAndUI behind the router's back (UMOGameUIManagerSubsystem::ApplyContextMenuInputState), so a router
+	// that already held Game skips step 1 while the viewport is not in game input. The engine call makes the state true either way.
+	PC->SetInputMode(FInputModeGameOnly());
 }

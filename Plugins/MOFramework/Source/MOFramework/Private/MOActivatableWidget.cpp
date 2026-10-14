@@ -6,6 +6,7 @@
 #include "MOFramework.h"
 #include "MOUIDebugSubsystem.h"
 #include "MOGameUIManagerSubsystem.h"
+#include "MOGameplayInputStub.h"
 #include "MOUIManagerComponent.h"
 #include "CommonInputModeTypes.h"
 #include "GameFramework/PlayerController.h"
@@ -18,6 +19,7 @@
 #include "MOPlayerController.h"
 #include "InputAction.h"
 #include "Input/CommonUIInputTypes.h"
+#include "Input/CommonUIActionRouterBase.h"
 
 UMOActivatableWidget::UMOActivatableWidget(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -208,6 +210,17 @@ void UMOActivatableWidget::ClaimFocusForReactivation()
 	}
 }
 
+void UMOActivatableWidget::AssertInputConfig(const FUIInputConfig& Config)
+{
+	const APlayerController* PC = GetOwningPlayer();
+	const ULocalPlayer* LocalPlayer = PC ? PC->GetLocalPlayer() : GetOwningLocalPlayer();
+	if (UCommonUIActionRouterBase* Router = LocalPlayer ? LocalPlayer->GetSubsystem<UCommonUIActionRouterBase>() : nullptr)
+	{
+		Router->SetActiveUIInputConfig(Config, this);
+		MOUI_LOG(this, "Input", "  %s: asserted input config (mode %d) via the action router", *GetName(), (int32)Config.GetInputMode());
+	}
+}
+
 void UMOActivatableWidget::NativeOnActivated()
 {
 	UE_LOG(LogMOFramework, Verbose, TEXT("[Activatable] %s ACTIVATED"), *GetName());
@@ -267,6 +280,15 @@ void UMOActivatableWidget::NativeOnActivated()
 	TOptional<FUIInputConfig> ActivationConfig = GetDesiredInputConfig();
 	const bool bNeedsFocus = ActivationConfig.IsSet()
 		&& ActivationConfig->GetInputMode() != ECommonInputMode::Game;
+
+	if (bNeedsFocus)
+	{
+		// A UI surface asserts its own input config through the action router. CommonUI only makes an activated widget the active input root once it
+		// has been PAINTED above the current root (UCommonUIActionRouterBase::HandleRootNodeActivated / Tick): a menu shown for the first time, in
+		// the frame another one closed (inventory -> right-click -> Craft), lost to an empty layer's stub and sat on screen in game input, mouse
+		// captured (playtest 2026-10-14 #23). Equal to the router's current config = no-op.
+		AssertInputConfig(*ActivationConfig);
+	}
 
 	if (bNeedsFocus && FSlateApplication::IsInitialized())
 	{
@@ -450,6 +472,10 @@ void UMOActivatableWidget::NativeOnDeactivated()
 				const bool bNextWantsCursor = NextConfig.IsSet()
 					&& NextConfig->GetInputMode() != ECommonInputMode::Game;
 				PC->bShowMouseCursor = bNextWantsCursor;
+				if (NextConfig.IsSet())
+				{
+					RemainingActive->AssertInputConfig(*NextConfig);   // the menu underneath owns input again (same rule as activation, #23)
+				}
 
 				// Hand focus to the remaining widget, walking its
 				// desired-focus-target chain through any nested activatables to
@@ -480,9 +506,10 @@ void UMOActivatableWidget::NativeOnDeactivated()
 					}
 				}
 
-				FInputModeGameOnly GameOnlyMode;
-				PC->SetInputMode(GameOnlyMode);
-				MOUI_LOG(this, "Input", "  %s: applied FInputModeGameOnly", *GetName());
+				// Through the action router, never PC->SetInputMode: a direct call left the router's cached config at "Menu", so a menu opened in the same
+				// frame (inventory -> right-click -> Craft) asked for Menu, the router saw no change, and the viewport stayed in game capture (#23).
+				UMOGameplayInputStub::ApplyGameplayInput(PC, this);
+				MOUI_LOG(this, "Input", "  %s: applied gameplay input config via the action router", *GetName());
 			}
 		}
 	}

@@ -76,6 +76,16 @@ class MOFRAMEWORK_API UMOGameplayInputStub : public UCommonActivatableWidget
 public:
 	UMOGameplayInputStub(const FObjectInitializer& ObjectInitializer);
 
+	/** The one gameplay input config (Game mode, mouse captured + locked, cursor hidden): what the stub claims, and what a closing menu restores (UMOActivatableWidget). */
+	static FUIInputConfig GameplayInputConfig();
+
+	/**
+	 * Put the player back in gameplay input THROUGH CommonUI's action router. Never PlayerController::SetInputMode directly: the router caches the config it
+	 * last applied and skips a request equal to it, so a direct SetInputMode left it believing "Menu" while the viewport was in game capture -- the next menu's
+	 * Menu request was then a no-op and that menu sat on screen in game input (playtest 2026-10-14 #23: crafting opened from the inventory closed on any click).
+	 */
+	static void ApplyGameplayInput(APlayerController* PC, const UObject* Source);
+
 protected:
 	virtual void NativeOnActivated() override;
 
