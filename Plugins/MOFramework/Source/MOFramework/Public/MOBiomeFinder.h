@@ -16,6 +16,12 @@ struct MOFRAMEWORK_API FMOBiomeFinder
 	/** The biome at (X, Y) with the generator's slope there (index into Params->Biomes, INDEX_NONE if none); OutGround = generator ground. */
 	int32 BiomeAt(double X, double Y, float& OutGround) const;
 
+	/** Same, also giving the slope (degrees) it was resolved with. */
+	int32 BiomeAt(double X, double Y, float& OutGround, float& OutSlopeDeg) const;
+
+	/** Under the sea plane or inside an upland lake (FMOPCGWaterMask, banks included). */
+	bool IsInWater(double X, double Y, float Ground) const { return Water.IsInWater(X, Y, Ground); }
+
 	/**
 	 * The middle of BiomeIndex and somewhere to stand: dry land of that biome whose ring 35 m out is the same biome and dry -- and, unless bRough, within
 	 * 3.5 m of this height (flat enough to land on). OutGround = generator ground at (X, Y).

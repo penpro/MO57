@@ -4973,6 +4973,20 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 		}),
 		ECVF_Default));
 
+	// `poi` opens a picker of the world features (DT_WorldFeatures) and takes you next to the nearest one, facing it; `poi <FeatureId>` skips the popup.
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("poi"),
+		TEXT("Dev: pop up a point-of-interest picker; the pick takes you next to the nearest one, facing it. Usage: poi [FeatureId]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			AMOPlayerController* PC = World ? Cast<AMOPlayerController>(World->GetFirstPlayerController()) : nullptr;
+			if (PC)
+			{
+				PC->OpenDevFeaturePicker(Args.Num() > 0 ? Args[0] : FString());
+			}
+		}),
+		ECVF_Default));
+
 	ConsoleCommands.Add(CM.RegisterConsoleCommand(
 		TEXT("time"),
 		TEXT("Dev: pop up a small time-of-day picker (8 AM / 2 PM / 8 PM / 2 AM) that moves the server's clock forward to it. Usage: time [8am|2pm|14|...]"),

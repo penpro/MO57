@@ -7,14 +7,20 @@ FMOBiomeFinder::FMOBiomeFinder(const FMOWorldGenParamsRef& InParams, int32 InTer
 
 int32 FMOBiomeFinder::BiomeAt(double X, double Y, float& OutGround) const
 {
+	float SlopeDeg = 0.0f;
+	return BiomeAt(X, Y, OutGround, SlopeDeg);
+}
+
+int32 FMOBiomeFinder::BiomeAt(double X, double Y, float& OutGround, float& OutSlopeDeg) const
+{
 	const FMOWorldGenParams& P = *Params;
 	const float Step = P.Tuning.VoxelSizeCm;
 	const FMOTerrainSample S = FMOWorldGen::SampleColumn(P, X, Y, TerrainSeed, Step);
 	OutGround = S.HeightCm;
 	const float Dx = FMOWorldGen::SampleHeightCm(P, X + 200.0, Y, TerrainSeed, Step) - FMOWorldGen::SampleHeightCm(P, X - 200.0, Y, TerrainSeed, Step);
 	const float Dy = FMOWorldGen::SampleHeightCm(P, X, Y + 200.0, TerrainSeed, Step) - FMOWorldGen::SampleHeightCm(P, X, Y - 200.0, TerrainSeed, Step);
-	const float SlopeDeg = FMath::RadiansToDegrees(FMath::Atan(FMath::Sqrt(Dx * Dx + Dy * Dy) / 400.0f));
-	return FMOWorldGen::ResolveBiome(P, S.HeightCm, SlopeDeg, S.Moisture, S.Temperature);
+	OutSlopeDeg = FMath::RadiansToDegrees(FMath::Atan(FMath::Sqrt(Dx * Dx + Dy * Dy) / 400.0f));
+	return FMOWorldGen::ResolveBiome(P, S.HeightCm, OutSlopeDeg, S.Moisture, S.Temperature);
 }
 
 bool FMOBiomeFinder::IsDeepInside(double X, double Y, int32 BiomeIndex, bool bRough, float& OutGround) const

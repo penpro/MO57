@@ -5,6 +5,7 @@
 #include "MOWorldGenSettings.h"
 #include "MOWorldSeedSubsystem.h"
 #include "MOPCGWaterMask.h"
+#include "MOWorldFeatureSubsystem.h"
 #include "MOResourceNodeDefinitionRow.h"
 #include "MOPCGInteractionSubsystem.h"
 #include "MOTerrainModificationSubsystem.h"
@@ -404,6 +405,13 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 		}
 	}
 	TotalIn = Points.Num();
+	// World features (POIs) are self-contained, hand-tuned compositions: the scatter plants nothing inside one's footprint (UMOWorldFeatureSubsystem,
+	// a pure function of the seed -- the same exclusion on every machine, whether or not the feature's actor is spawned yet). Gathered once, here on the game thread.
+	TArray<FVector3f> FeatureFootprints;
+	if (UMOWorldFeatureSubsystem* Features = UMOWorldFeatureSubsystem::Get(TargetActor); Features && InputBounds.IsValid)
+	{
+		Features->GetFootprints(FBox2D(FVector2D(InputBounds.Min), FVector2D(InputBounds.Max)), FeatureFootprints);
+	}
 	enum class EPointOutcome : uint8 { Empty, Suppressed, Planted };
 	struct FPointResult
 	{
@@ -441,6 +449,14 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 			{
 				Result.Outcome = EPointOutcome::Suppressed;
 				return;
+			}
+			for (const FVector3f& Footprint : FeatureFootprints)
+			{
+				if (FMath::Square(Location.X - Footprint.X) + FMath::Square(Location.Y - Footprint.Y) < Footprint.Z)
+				{
+					Result.Outcome = EPointOutcome::Suppressed;
+					return;
+				}
 			}
 
 			// Caves: nothing is planted in a sinkhole's rim zone, and a point far below the ground height is a CAVE surface (wall/floor of a tunnel,

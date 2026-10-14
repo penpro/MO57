@@ -38,6 +38,16 @@ GROUPS = [
     ("fx: fog cards, water drips, falling leaves, puddle", ["/Game/FX", "/Game/Effects"]),
     ("shore assemblies (packed level blueprints)", [A + n for n in ("BPP_SmallEmbankment_01", "BPP_SmallEmbankment_02", "BPP_SmallRiverbedEmbankment_01", "BPP_SmallRiverbedEmbankment_02",
                                                                       "BPP_FernAssembly_01", "BPP_MediumEmbankment_Mud_01", "BPP_MediumGround_Mud_01")]),
+    # The LIVE assembly system (Wes, Oct 14 2026: "in the video demo they move the cliffs around at runtime and it re-builds on the fly"): the assembly actors whose own
+    # PCG component builds the cliff + its moss / vines / debris, their graphs and custom nodes, the assembly levels / PCG data they read, the hanging vines, cliff vines.
+    # SOFT references too (third element): PCG graphs and data assets name their meshes by soft path, so a hard-only closure would arrive hollow.
+    ("electric dreams live assemblies (PCG): cliffs, boulders, vines", ["/Game/PCG/Assets/BP_PCG_LargeAssembly", "/Game/PCG/Assets/BP_PCG_SmallAssembly", "/Game/PCG/Assets/BP_PCG_LocationMarker",
+                                                                         "/Game/PCG/Assets/PCGCustomNodes", "/Game/PCG/Assets/Blueprints", "/Game/PCG/Utilities", "/Game/PCG/Script",
+                                                                         "/Game/PCG/Graphs/LargeAssembly", "/Game/PCG/Graphs/SmallAssembly", "/Game/PCG/Graphs/Forest/PCGDemo_ForestCliffs",
+                                                                         "/Game/PCG/Assets/PCGAssemblies/Forest", "/Game/PCG/Assets/PCGAssemblies/LargeAssembly", "/Game/PCG/Assets/PCGAssemblies/SmallAssembly",
+                                                                         "/Game/Asmbly/BPP_Asmbl_HangingVines_00", "/Game/Asmbly/BPP_Asmbl_HangingVines_01", "/Game/Asmbly/BPP_Asmbl_HangingVines_02",
+                                                                         "/Game/Asmbly/BPP_Asmbl_HangingVines_03", "/Game/Asmbly/BPP_Asmbl_HangingVines_04", "/Game/Asmbly/BPP_Asmbl_HangingVines_05",
+                                                                         "/Game/Custom/IvyTest"], True),
 ]
 
 SCAN_SCRIPT = r'''
@@ -65,15 +75,32 @@ def closure(roots):
             continue
         seen.add(p); st.extend(deps(p))
     return seen
+soft_opts = unreal.AssetRegistryDependencyOptions()
+for k, v in (("include_hard_package_references", True), ("include_soft_package_references", True), ("include_searchable_names", False),
+             ("include_hard_management_references", False), ("include_soft_management_references", False)):
+    soft_opts.set_editor_property(k, v)
+sdc = {}
+def soft_closure(roots):
+    seen, st = set(), list(roots)
+    while st:
+        p = st.pop()
+        if p in seen or not p.startswith("/Game/"):
+            continue
+        seen.add(p)
+        if p not in sdc:
+            sdc[p] = [str(x) for x in ar.get_dependencies(unreal.Name(p), soft_opts)]
+        st.extend(sdc[p])
+    return seen
 def roots_of(entry):
     found = sorted({str(a.package_name) for a in ar.get_assets_by_path(entry, recursive=True)})
     return found if found else [entry]
 have, out = set(), {}
-for name, entries in GROUPS:
+for group in GROUPS:
+    name, entries = group[0], group[1]
     roots = []
     for e in entries:
         roots.extend(roots_of(e))
-    c = closure(roots)
+    c = soft_closure(roots) if len(group) > 2 and group[2] else closure(roots)
     out[name] = sorted(c - have)
     have |= c
 json.dump(out, open(OUT, "w"))
@@ -142,6 +169,15 @@ def copy(dry):
     print("new folders (for .gitignore):")
     for d in folded:
         print("  Content/" + d + "/")
+    if not dry and folded:
+        # Third-party content stays out of git: append the new folders (the doc said this happened; it only printed them -- Oct 14 2026 12 GB showed as untracked).
+        gitignore = os.path.join(os.path.dirname(DST_CONTENT), ".gitignore")
+        existing = open(gitignore, encoding="utf-8").read().splitlines() if os.path.exists(gitignore) else []
+        add = ["Content/" + d + "/" for d in folded if "Content/" + d + "/" not in existing]
+        if add:
+            with open(gitignore, "a", encoding="utf-8") as f:
+                f.write("\n# Electric Dreams slice (Tools/ede_migrate.py): third-party, re-created by `ede_migrate.py copy`\n" + "\n".join(add) + "\n")
+            print("  -> appended %d line(s) to .gitignore" % len(add))
     return folded, per_group, conflicts, copied, nbytes
 
 

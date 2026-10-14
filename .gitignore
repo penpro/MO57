@@ -129,3 +129,18 @@ Content/Megascans/3D_Assets/NordicBeachRockyGround/
 Content/Megascans/3D_Assets/NordicBoulder/
 Content/Megascans/3D_Assets/TundraMossyBoulder/
 Content/Megascans/3D_Assets/TundraRockyGround/
+
+# Electric Dreams live assemblies (Tools/ede_migrate.py, Oct 14 2026): third-party, re-created by `ede_migrate.py copy`
+Content/Audio/
+Content/Megascans/3D_Assets/BrokenStump/
+Content/Megascans/3D_Assets/FallenSpruceTree/
+Content/Megascans/3D_Assets/FallenTreeAssembly/
+Content/Megascans/3D_Assets/MassiveSandstoneCliff/
+Content/Megascans/3D_Assets/MassiveTundraRockFormation/
+Content/Megascans/3D_Assets/MossyForestRoots/
+Content/Megascans/3D_Assets/OldFallenTree/
+Content/Megascans/3D_Assets/RottenTreeStump/
+Content/Megascans/3D_Assets/SandstoneBoulder/
+Content/PCG/
+Content/SmartAssets/
+Content/__ExternalActors__/Asmbly/

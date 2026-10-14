@@ -816,6 +816,13 @@ public:
 	UFUNCTION(Server, Reliable)
 	void ServerDevTeleportToBiome(FName BiomeId);
 
+	/** Open the point-of-interest picker (every enabled DT_WorldFeatures row). With a feature id it skips the popup and goes there. */
+	void OpenDevFeaturePicker(const FString& FeatureId = FString());
+
+	/** Teleport THIS player's pawn next to the nearest site of a world feature (POI), facing it; held until the ground is there, like the biome teleport. */
+	UFUNCTION(Server, Reliable)
+	void ServerDevTeleportToFeature(FName FeatureId);
+
 protected:
 	/** The popup currently open, if any (prevents stacking a second one). */
 	TWeakObjectPtr<UMOTextInputDialog> DevConsoleDialog;
@@ -837,6 +844,8 @@ protected:
 	double DevTeleportStartSeconds = 0.0;
 	FTimerHandle DevTeleportTimer;
 	void PollDevTeleportLanding();
+	/** Put the pawn at Spot (generator ground), facing Facing, held until the voxel collision under it exists (PollDevTeleportLanding). */
+	void BeginDevTeleportLanding(class AMOCharacter* Traveller, const FVector& Spot, const FRotator& Facing);
 
 	/** Last few commands, shown in the popup as a reminder. */
 	TArray<FString> DevConsoleHistory;

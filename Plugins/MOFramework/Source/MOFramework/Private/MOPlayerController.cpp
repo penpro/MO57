@@ -13,6 +13,8 @@
 #include "MOBiomeFinder.h"
 #include "MOSpawnClearance.h"
 #include "MOWorldSeedSubsystem.h"
+#include "MOWorldFeatureSubsystem.h"
+#include "MOWorldFeatureSettings.h"
 #include "TimerManager.h"
 #include "MOBuildingComponent.h"
 #include "MOBuildableActor.h"
@@ -1696,17 +1698,86 @@ void AMOPlayerController::ServerDevTeleportToBiome_Implementation(FName BiomeId)
 		*BiomeId.ToString(), Spot.X, Spot.Y, Spot.Z, DistKm, Samples, Ms);
 	Say(FText::Format(NSLOCTEXT("MOConsole", "BiomeGo", "{0}: {1} km away"), FText::FromString(Label), FText::AsNumber(FMath::RoundToInt(DistKm * 10.0f) / 10.0f)));
 
+	BeginDevTeleportLanding(Traveller, Spot, FRotator(-6.0f, FMath::FRand() * 360.0f, 0.0f));
+#endif
+}
+
+void AMOPlayerController::BeginDevTeleportLanding(AMOCharacter* Traveller, const FVector& Spot, const FRotator& Facing)
+{
+	UWorld* World = GetWorld();
+	if (!World || !Traveller)
+	{
+		return;
+	}
 	// Stand on the generator's ground and hold there (no gravity, no fall-through rescue) until the voxel collision under the pawn exists.
 	const MOSpawnClearance::FCapsule Capsule = MOSpawnClearance::CapsuleOf(Traveller);
 	Traveller->SetLoadHold(true);
 	Traveller->SetActorLocation(FVector(Spot.X, Spot.Y, Spot.Z + Capsule.HalfHeight + 10.0f), false, nullptr, ETeleportType::TeleportPhysics);
-	const FRotator Facing(-6.0f, FMath::FRand() * 360.0f, 0.0f);
 	SetControlRotation(Facing);
 	ClientSetRotation(Facing);
 	DevTeleportPawn = Traveller;
 	DevTeleportTarget = Spot;
 	DevTeleportStartSeconds = FPlatformTime::Seconds();
 	World->GetTimerManager().SetTimer(DevTeleportTimer, this, &AMOPlayerController::PollDevTeleportLanding, 0.25f, /*bLoop=*/true);
+}
+
+void AMOPlayerController::OpenDevFeaturePicker(const FString& FeatureId)
+{
+#if !UE_BUILD_SHIPPING
+	if (!FeatureId.IsEmpty())
+	{
+		ServerDevTeleportToFeature(FName(*FeatureId));
+		return;
+	}
+	const UMOWorldFeatureSettings* Settings = GetDefault<UMOWorldFeatureSettings>();
+	const UDataTable* Table = Settings ? Settings->FeatureTable.LoadSynchronous() : nullptr;
+	if (!Table)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOConsole] poi: no DT_WorldFeatures"));
+		return;
+	}
+	TArray<FMOQuickPickOption> Options;
+	Table->ForeachRow<FMOWorldFeatureDefinitionRow>(TEXT("poi"), [&Options](const FName& Name, const FMOWorldFeatureDefinitionRow& Row)
+	{
+		if (Row.bEnabled)
+		{
+			Options.Add({ Name, Row.DisplayName.IsEmpty() ? FText::FromString(FName::NameToDisplayString(Name.ToString(), false)) : Row.DisplayName });
+		}
+	});
+	OpenDevQuickPick(NSLOCTEXT("MOConsole", "PoiTitle", "Point of interest"), NSLOCTEXT("MOConsole", "PoiMessage", "Takes you to the nearest one, facing it."), Options, /*Columns=*/2,
+		[this](FName Id) { ServerDevTeleportToFeature(Id); });
+#endif
+}
+
+void AMOPlayerController::ServerDevTeleportToFeature_Implementation(FName FeatureId)
+{
+#if !UE_BUILD_SHIPPING
+	AMOCharacter* Traveller = Cast<AMOCharacter>(GetPawn());
+	UMOWorldFeatureSubsystem* Features = UMOWorldFeatureSubsystem::Get(this);
+	FMOWorldFeatureSite Site;
+	if (!Traveller || !Features || !Features->FindNearestSite(FeatureId, FVector2D(Traveller->GetActorLocation()), 3000000.0, Site))
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOConsole] poi %s: none within 30 km (or no pawn / catalog)"), *FeatureId.ToString());
+		if (NotificationComponent)
+		{
+			NotificationComponent->ShowInfoNotification(FText::Format(NSLOCTEXT("MOConsole", "PoiNone", "{0}: none nearby"), FText::FromName(FeatureId)), 5.0f);
+		}
+		return;
+	}
+	// Stand outside the footprint, looking at the composition.
+	FVector2D Away = (FVector2D(Traveller->GetActorLocation()) - FVector2D(Site.Location)).GetSafeNormal();
+	if (Away.IsNearlyZero())
+	{
+		Away = FVector2D(1.0, 0.0);   // standing on the site already: approach from +X
+	}
+	const FVector2D StandXY = FVector2D(Site.Location) + Away * (Site.FootprintRadiusCm + 1500.0);
+	const FMOWorldGenParamsRef Params = FMOWorldGenParamsProvider::Get();
+	const UMOWorldSeedSubsystem* Seeds = UMOWorldSeedSubsystem::Get(this);
+	const float Ground = FMOWorldGen::SampleHeightCm(*Params, StandXY.X, StandXY.Y, Seeds ? Seeds->GetActiveTerrainSeed() : 0, Params->Tuning.VoxelSizeCm);
+	const FRotator Facing(-8.0f, FMath::RadiansToDegrees(FMath::Atan2(-Away.Y, -Away.X)), 0.0f);
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOConsole] poi %s: site at %s, %.1f km away"), *FeatureId.ToString(), *Site.Location.ToCompactString(),
+		FVector2D::Distance(FVector2D(Traveller->GetActorLocation()), FVector2D(Site.Location)) / 100000.0);
+	BeginDevTeleportLanding(Traveller, FVector(StandXY.X, StandXY.Y, Ground), Facing);
 #endif
 }
 
