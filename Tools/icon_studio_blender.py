@@ -1,0 +1,222 @@
+"""Icon studio, step 2 of 3 (Blender, headless): render each exported item to a transparent square icon.
+
+    blender -b --factory-startup --python Tools/icon_studio_blender.py -- <root> [Item1,Item2,...] [size]
+    (Tools/icon_studio.py runs this; <root> holds one folder per item from icon_studio_export.py)
+
+Why Blender and not the editor's thumbnail renderer: the old icons came from Content Browser thumbnails (fixed low side view,
+checker burnt in, removed afterwards by icon_fix_process.py), so long items (sticks, bark, cordage) filled a sliver of the
+square. Here every item gets the same studio:
+  - Cycles (GPU), transparent film, sun-light key/fill/rim plus a soft gray world, so the look does not depend on item size;
+  - the item turned so its long axis runs up the diagonal (PCA of the vertices in plan view), seen from above-front: steeper for
+    flat items, lower for tall ones (a jar keeps its profile);
+  - an orthographic camera fitted to the item's projected silhouette with a fixed margin, so every icon fills the frame alike.
+Materials are rebuilt from the exported textures (base colour, normal, Megascans ORM / glTF metallic-roughness, foliage mask).
+Ambient occlusion maps are not used: Cycles shades occlusion itself, and glTF packs nothing in the red channel.
+Writes <root>/<Item>/icon.png. Output lines start with ICONSTUDIO.
+"""
+import json
+import math
+import os
+import sys
+
+import bpy
+import numpy as np
+from mathutils import Matrix, Vector
+
+MARGIN = 1.10          # silhouette fills ~91% of the frame's longer side
+SAMPLES = 128
+
+
+def log(msg):
+    print("ICONSTUDIO " + msg, flush=True)
+
+
+def reset_scene(size):
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    scene = bpy.context.scene
+    scene.render.engine = "CYCLES"
+    try:
+        prefs = bpy.context.preferences.addons["cycles"].preferences
+        for device_type in ("OPTIX", "CUDA"):
+            try:
+                prefs.compute_device_type = device_type
+                break
+            except TypeError:
+                continue
+        prefs.get_devices()
+        for device in prefs.devices:
+            device.use = device.type != "CPU"
+        scene.cycles.device = "GPU"
+    except Exception as exc:   # CPU fallback still renders, just slower
+        log("GPU setup failed (%s); rendering on CPU" % exc)
+    scene.cycles.samples = SAMPLES
+    scene.cycles.use_denoising = True
+    scene.render.film_transparent = True
+    scene.render.resolution_x = scene.render.resolution_y = size
+    scene.render.image_settings.file_format = "PNG"
+    scene.render.image_settings.color_mode = "RGBA"
+    scene.view_settings.view_transform = "AgX"
+    world = bpy.data.worlds.new("IconWorld")
+    scene.world = world
+    world.use_nodes = True
+    background = world.node_tree.nodes["Background"]
+    background.inputs[0].default_value = (0.62, 0.64, 0.66, 1.0)
+    background.inputs[1].default_value = 0.45
+    return scene
+
+
+def build_material(item_dir, info):
+    material = bpy.data.materials.new(info.get("name") or "IconMat")
+    material.use_nodes = True
+    nodes, links = material.node_tree.nodes, material.node_tree.links
+    bsdf = nodes["Principled BSDF"]
+
+    def image(key, non_color):
+        node = nodes.new("ShaderNodeTexImage")
+        node.image = bpy.data.images.load(os.path.join(item_dir, info[key]))
+        if non_color:
+            node.image.colorspace_settings.name = "Non-Color"
+        return node
+
+    if "base" in info:
+        base = image("base", False)
+        links.new(base.outputs["Color"], bsdf.inputs["Base Color"])
+        if info["kind"] == "foliage" and "mask" not in info:
+            links.new(base.outputs["Alpha"], bsdf.inputs["Alpha"])
+    if "orm" in info:
+        split = nodes.new("ShaderNodeSeparateColor")
+        links.new(image("orm", True).outputs["Color"], split.inputs["Color"])
+        links.new(split.outputs["Green"], bsdf.inputs["Roughness"])
+        links.new(split.outputs["Blue"], bsdf.inputs["Metallic"])
+    if "mask" in info:
+        split = nodes.new("ShaderNodeSeparateColor")
+        links.new(image("mask", True).outputs["Color"], split.inputs["Color"])
+        links.new(split.outputs["Red"], bsdf.inputs["Alpha"])
+        links.new(split.outputs["Green"], bsdf.inputs["Roughness"])
+    if "normal" in info:
+        color = image("normal", True).outputs["Color"]
+        if not info.get("normal_opengl", False):   # DirectX (Megascans): flip green for Blender's OpenGL convention
+            split = nodes.new("ShaderNodeSeparateColor")
+            invert = nodes.new("ShaderNodeMath")
+            invert.operation = "SUBTRACT"
+            invert.inputs[0].default_value = 1.0
+            merge = nodes.new("ShaderNodeCombineColor")
+            links.new(color, split.inputs["Color"])
+            links.new(split.outputs["Green"], invert.inputs[1])
+            links.new(split.outputs["Red"], merge.inputs["Red"])
+            links.new(invert.outputs["Value"], merge.inputs["Green"])
+            links.new(split.outputs["Blue"], merge.inputs["Blue"])
+            color = merge.outputs["Color"]
+        normal_map = nodes.new("ShaderNodeNormalMap")
+        links.new(color, normal_map.inputs["Color"])
+        links.new(normal_map.outputs["Normal"], bsdf.inputs["Normal"])
+    return material
+
+
+def import_item(item_dir, meta):
+    before = set(bpy.data.objects)
+    bpy.ops.import_scene.fbx(filepath=os.path.join(item_dir, "mesh.fbx"))
+    meshes = [o for o in bpy.data.objects if o not in before and o.type == "MESH"]
+    for other in [o for o in bpy.data.objects if o not in before and o.type != "MESH"]:
+        bpy.data.objects.remove(other, do_unlink=True)
+    if not meshes:
+        return None
+    bpy.ops.object.select_all(action="DESELECT")
+    for o in meshes:
+        o.select_set(True)
+    bpy.context.view_layer.objects.active = meshes[0]
+    if len(meshes) > 1:
+        bpy.ops.object.join()
+    obj = bpy.context.view_layer.objects.active
+    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+    for info in meta["slots"]:
+        if info["slot"] < len(obj.material_slots):
+            obj.material_slots[info["slot"]].material = build_material(item_dir, info)
+    return obj
+
+
+def vertices(obj, limit=60000):
+    co = np.empty(len(obj.data.vertices) * 3, dtype=np.float64)
+    obj.data.vertices.foreach_get("co", co)
+    co = co.reshape(-1, 3)
+    if len(co) > limit:
+        co = co[:: len(co) // limit + 1]
+    return co
+
+
+def pose_and_frame(scene, obj):
+    pts = vertices(obj)
+    center = pts.mean(0)
+    xy = pts[:, :2] - center[:2]
+    evals, evecs = np.linalg.eigh(xy.T @ xy)
+    major = evecs[:, int(np.argmax(evals))]
+    extent = pts.max(0) - pts.min(0)
+    plan = max(extent[0], extent[1], 1e-6)
+    elongated = math.sqrt(max(evals.max(), 1e-12) / max(evals.min(), 1e-12)) > 1.8
+    flat = extent[2] < 0.6 * plan
+    # long axis up the diagonal: in plan it lands at +38 deg from screen-horizontal (world X)
+    turn = (math.radians(38) - math.atan2(major[1], major[0])) if elongated else math.radians(-20)
+    obj.matrix_world = Matrix.Rotation(turn, 4, "Z") @ Matrix.Translation(Vector((-center[0], -center[1], -center[2])))
+    elevation = math.radians(52 if flat else 24)
+
+    camera_data = bpy.data.cameras.new("IconCam")
+    camera_data.type = "ORTHO"
+    camera = bpy.data.objects.new("IconCam", camera_data)
+    scene.collection.objects.link(camera)
+    scene.camera = camera
+    distance = 10.0 * float(np.linalg.norm(extent)) + 1.0
+    direction = Vector((0.0, -math.cos(elevation), math.sin(elevation)))
+    camera.location = direction * distance
+    camera.rotation_euler = (-direction).to_track_quat("-Z", "Y").to_euler()
+    camera_data.clip_end = distance * 3.0
+
+    # fit the ortho frame to the posed silhouette
+    bpy.context.view_layer.update()
+    posed = np.array([tuple(obj.matrix_world @ Vector(p)) for p in pts])
+    view = np.array(camera.matrix_world.inverted())
+    cam_pts = (view[:3, :3] @ posed.T).T + view[:3, 3]
+    lo, hi = cam_pts[:, :2].min(0), cam_pts[:, :2].max(0)
+    span = float(max(hi - lo)) * MARGIN
+    camera_data.ortho_scale = span
+    middle = (lo + hi) / 2.0
+    camera_data.shift_x = float(middle[0] / span)
+    camera_data.shift_y = float(middle[1] / span)
+
+    def sun(name, strength, rotation, angle):
+        light = bpy.data.lights.new(name, "SUN")
+        light.energy = strength
+        light.angle = math.radians(angle)
+        node = bpy.data.objects.new(name, light)
+        node.rotation_euler = [math.radians(a) for a in rotation]
+        scene.collection.objects.link(node)
+
+    sun("Key", 3.2, (40, 0, -35), 8)      # upper left front
+    sun("Fill", 0.9, (60, 0, 70), 25)     # right
+    sun("Rim", 2.4, (-50, 0, 160), 6)     # behind, above
+    return "elongated" if elongated else ("flat" if flat else "upright")
+
+
+def main():
+    args = sys.argv[sys.argv.index("--") + 1:]
+    root = args[0]
+    wanted = [a for a in args[1].split(",") if a] if len(args) > 1 else []
+    size = int(args[2]) if len(args) > 2 else 512
+    items = wanted or sorted(d for d in os.listdir(root) if os.path.isfile(os.path.join(root, d, "meta.json")))
+    for item in items:
+        item_dir = os.path.join(root, item)
+        try:
+            meta = json.load(open(os.path.join(item_dir, "meta.json")))
+            scene = reset_scene(size)
+            obj = import_item(item_dir, meta)
+            if obj is None:
+                log("FAIL %s: no mesh in mesh.fbx" % item)
+                continue
+            pose = pose_and_frame(scene, obj)
+            scene.render.filepath = os.path.join(item_dir, "icon.png")
+            bpy.ops.render.render(write_still=True)
+            log("OK %s (%s)" % (item, pose))
+        except Exception as exc:
+            log("FAIL %s: %s" % (item, exc))
+
+
+main()
