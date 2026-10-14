@@ -133,6 +133,52 @@ namespace
 
 // ----------------------------------------------------------------------------------------------------------------------------------------
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOWorldGen_CliffsFaceDownhill,
+	"MOFramework.WorldGen.CliffsFaceDownhill",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOWorldGen_CliffsFaceDownhill::RunTest(const FString& Parameters)
+{
+	// Playtest 2026-10-14 #27 / #28: "these cliffs face uphill ... the sheer cliffs should always face downhill". On steep mountain flanks, wherever the full-detail ground is
+	// cliff-steep, its face must point the way the mountain falls (the gradient agrees with the broad slope), never back up it (a wall with a trench behind it).
+	// The broad slope comes from a coarse LOD sample (gullies and cliff bands fully faded there), the local face from 1 m differences at full detail.
+	const FMOWorldGenParamsRef P = MakeTestParams();
+	FRandomStream R(31);
+	int32 Flank = 0, Cliff = 0, Uphill = 0;
+	const auto H = [&P](double X, double Y, float Step) { return FMOWorldGen::SampleHeightCm(*P, X, Y, TestSeed, Step); };
+	for (int32 I = 0; I < 600000 && Flank < 6000; ++I)
+	{
+		const double X = R.FRandRange(-2.0e6f, 2.0e6f), Y = R.FRandRange(-2.0e6f, 2.0e6f);
+		constexpr float Coarse = 25600.0f;
+		constexpr double E = 12000.0;
+		const float Bx = (H(X + E, Y, Coarse) - H(X - E, Y, Coarse)) / (float)(2.0 * E);
+		const float By = (H(X, Y + E, Coarse) - H(X, Y - E, Coarse)) / (float)(2.0 * E);
+		if (Bx * Bx + By * By < 0.35f * 0.35f)
+		{
+			continue;
+		}
+		++Flank;
+		for (int32 K = 0; K < 6; ++K)
+		{
+			const double Px = X + R.FRandRange(-3000.0f, 3000.0f), Py = Y + R.FRandRange(-3000.0f, 3000.0f);
+			const float Lx = (H(Px + 100.0, Py, 50.0f) - H(Px - 100.0, Py, 50.0f)) / 200.0f;
+			const float Ly = (H(Px, Py + 100.0, 50.0f) - H(Px, Py - 100.0, 50.0f)) / 200.0f;
+			if (Lx * Lx + Ly * Ly < 1.5f * 1.5f)
+			{
+				continue;   // not a cliff (under ~56 degrees)
+			}
+			++Cliff;
+			Uphill += (Lx * Bx + Ly * By) < 0.0f ? 1 : 0;
+		}
+	}
+	const float UphillShare = Cliff > 0 ? (float)Uphill / (float)Cliff : 0.0f;
+	AddInfo(FString::Printf(TEXT("%d steep flank spots, %d cliff-steep samples, %d facing uphill (%.1f %%)"), Flank, Cliff, Uphill, 100.0f * UphillShare));
+	TestTrue(TEXT("enough steep mountain flanks were sampled"), Flank >= 500);
+	TestTrue(TEXT("the flanks carry cliff bands (cliff-steep samples exist)"), Cliff >= 50);
+	TestTrue(TEXT("cliffs face downhill: under 2 % of the cliff-steep samples face back up the mountain"), UphillShare < 0.02f);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOWorldGen_Determinism,
 	"MOFramework.WorldGen.Determinism",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)

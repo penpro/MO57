@@ -203,7 +203,7 @@ struct MOFRAMEWORKCORE_API FMOWorldGenTuning
 	 * seam between chunks of those LODs shows as a crack. Measured with a numpy replica of the generator: 70 m gullies cut hard = 95 m jump at the 512 m LOD; 25 m, faded = ~15 m.
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Height", meta=(EditCondition="bRangeMountains", ClampMin="0"))
-	float GullyAmplitudeM = 25.0f;
+	float GullyAmplitudeM = 15.0f;   // v8: 25 -> 15 (playtest 2026-10-14 #28 "smooth out the mountain detail features")
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Height", meta=(EditCondition="bRangeMountains", ClampMin="10000"))
 	float GullyWavelengthCm = 60000.0f;
@@ -218,11 +218,11 @@ struct MOFRAMEWORKCORE_API FMOWorldGenTuning
 	float GullySlopeHigh = 0.55f;
 
 	/**
-	 * Crags: sparse rock ledges (sharp-edged blobs of this wavelength, height in metres before VerticalScale) on the STEEP flanks only (slope Low..High): the sheer cliff detail you see up close,
-	 * patchy and never a region-wide wall (Edge = how much of the steep ground gets one). Faded out over the LODs like the gullies. 0 = none.
+	 * Cliff bands (v8; "crags" before): the STEEP flanks (slope Low..High) are terraced into steps of CragAmplitudeM metres (before VerticalScale) whose risers always face DOWNHILL,
+	 * in patches of this wavelength (Edge = how much of the steep ground gets them) with tilted band levels. Faded out over the LODs like the gullies. 0 = none.
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Height", meta=(EditCondition="bRangeMountains", ClampMin="0"))
-	float CragAmplitudeM = 12.0f;
+	float CragAmplitudeM = 9.0f;   // v8 riser height (x VerticalScale in the world: ~18 m)
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Height", meta=(EditCondition="bRangeMountains", ClampMin="5000"))
 	float CragWavelengthCm = 15000.0f;
@@ -234,7 +234,7 @@ struct MOFRAMEWORKCORE_API FMOWorldGenTuning
 	float CragSlopeHigh = 0.65f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Height", meta=(EditCondition="bRangeMountains", ClampMin="0.1", ClampMax="0.9"))
-	float CragEdge = 0.55f;
+	float CragEdge = 0.6f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Height", meta=(ClampMin="0"))
 	float HillAmplitudeM = 26.0f;
@@ -608,7 +608,7 @@ struct MOFRAMEWORKCORE_API FMOWorldGenBiome
 struct MOFRAMEWORKCORE_API FMOWorldGenParams
 {
 	/** Bump when the generator math changes (see RULES in the header). Stored with world saves. */
-	static constexpr uint32 CurrentGeneratorVersion = 7;   // v7: no caves under ground above CaveMaxGroundCm (the summits tore); v6: mountain ranges (regional mask + regional biome relief + massif / peaks / gullies; v5: per-biome relief, taller ranges, half-size regional fields, island edge; v4: upland lakes + coastal ranges; v3: rivers + sea-level lake basins; v2: caves; v1: the base height terrain)
+	static constexpr uint32 CurrentGeneratorVersion = 8;   // v8: cliff bands are terraces whose drops face downhill (the v6 crag blobs had uphill-facing rims), gullies 25 -> 15 m; v7: no caves under ground above CaveMaxGroundCm (the summits tore); v6: mountain ranges (regional mask + regional biome relief + massif / peaks / gullies; v5: per-biome relief, taller ranges, half-size regional fields, island edge; v4: upland lakes + coastal ranges; v3: rivers + sea-level lake basins; v2: caves; v1: the base height terrain)
 
 	FMOWorldGenTuning Tuning;
 
@@ -763,10 +763,10 @@ struct MOFRAMEWORKCORE_API FMOWorldGen
 	 * The values RunProbe() must produce for this generator version. THE single place they are pinned: the automation tests and MO.WorldGen.Checksum compare against
 	 * these. An intentional change to the generator math bumps FMOWorldGenParams::CurrentGeneratorVersion and updates them in the same commit.
 	 */
-	static constexpr uint32 PinnedProbeHeight = 0xB0A52BB6u;   // v6 (mountain ranges: regional mask + regional biome relief + massif/peaks/gullies; v5: biome relief, taller ranges, half-size regional fields, island edge; v4: upland lakes, coastal ranges, VerticalScale 2; v3: rivers + sea-level lake basins)
+	static constexpr uint32 PinnedProbeHeight = 0x3343B4EBu;   // v8 (cliff bands face downhill, gullies 15 m); v6 (mountain ranges: regional mask + regional biome relief + massif/peaks/gullies; v5: biome relief, taller ranges, half-size regional fields, island edge; v4: upland lakes, coastal ranges, VerticalScale 2; v3: rivers + sea-level lake basins)
 	/** The probe with water, coastal ranges and VerticalScale all switched OFF (RunProbe(false)) must reproduce the v1 base terrain exactly: this is the value v1 shipped. It pins the BASE height math. */
 	static constexpr uint32 PinnedProbeHeightNoWater = 0x9C4AE2B3u;
-	static constexpr uint32 PinnedProbeCave = 0x69EA6A40u;     // v7 (no caves under ground above CaveMaxGroundCm: the summits tore; v6: caves on the v6 ground; v5: caves on the v5 ground; v4: the lake-carved, doubled-relief ground, sinkholes keep out of lakes)
+	static constexpr uint32 PinnedProbeCave = 0xBD3BD520u;     // v8 (the v8 ground); v7 (no caves under ground above CaveMaxGroundCm: the summits tore; v6: caves on the v6 ground; v5: caves on the v5 ground; v4: the lake-carved, doubled-relief ground, sinkholes keep out of lakes)
 
 	/**
 	 * The cave distance saturates here (cm): "no cave within this far". Every gate in the cave field (cover, depth, low ground, sinkhole reach) is built so the

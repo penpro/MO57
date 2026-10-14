@@ -502,11 +502,25 @@ namespace
 				Base -= T.GullyAmplitudeM * GullyFade * Steep * (1.0f - FMath::Clamp(R * 1.3f, 0.0f, 1.0f));
 			}
 			const float Ledge = SmoothStep(T.CragSlopeLow, T.CragSlopeHigh, Slope);
-			if (CragFade > 0.0f && Ledge > 0.0f)
+			if (CragFade > 0.0f && Ledge > 0.0f && T.CragAmplitudeM > 0.0f)
 			{
-				// Sharp-edged blobs (a narrow smoothstep of a noise) on the steepest ground: rock outcrops and ledges, a rim a few metres wide, never a region-wide wall.
+				// v8 cliff bands: TERRACES of the ground's own height, so every riser faces DOWNHILL -- a drop-off, like rock strata. The v6/v7 crags were raised blobs with a
+				// sharp rim all round: on a slope the rim's UPHILL side was a wall facing uphill with a trench behind it (playtest 2026-10-14 #27 / #28, "cliffs facing uphill").
+				// Each step = a gentle bench (a quarter of the slope) then a steep riser over its top Riser fraction; continuous everywhere (no floor() seam). The band levels are
+				// tilted by a broad noise (strata dip, not contour rings) and the terracing comes in soft-edged patches on the steep flanks only, never region-wide.
+				// Natural, not a staircase: how sheer a riser is varies along the flank (some bands are sheer rock, some only a steeper roll) and the benches keep
+				// 40 % of the slope.
+				const float RiserNoise = 0.5f + 0.5f * Fbm(X, Y, (uint32)FMOWorldGen::HashSeed(Seed, SaltCrag + 2u), 2, 0.5f, T.CragWavelengthCm * 2.0f, MinWavelengthCm);
+				const float Riser = FMath::Lerp(0.14f, 0.45f, FMath::Clamp(RiserNoise, 0.0f, 1.0f));
+				const float Step = T.CragAmplitudeM;
+				const float Tilt = Fbm(X, Y, (uint32)FMOWorldGen::HashSeed(Seed, SaltCrag + 1u), 2, 0.5f, T.CragWavelengthCm * 4.0f, MinWavelengthCm) * Step * 1.5f;
+				const float Hs = (Base + Tilt) / Step;
+				const float K = FMath::FloorToFloat(Hs);
+				const float F = Hs - K;
+				const float Terraced = (K + 0.4f * F + 0.6f * SmoothStep(1.0f - Riser, 1.0f, F)) * Step - Tilt;
 				const float N = 0.5f + 0.5f * Fbm(X, Y, (uint32)FMOWorldGen::HashSeed(Seed, SaltCrag), 2, 0.5f, T.CragWavelengthCm, MinWavelengthCm);
-				Base += T.CragAmplitudeM * CragFade * Ledge * SmoothStep(T.CragEdge - 0.03f, T.CragEdge + 0.03f, N);
+				const float Patch = SmoothStep(T.CragEdge - 0.08f, T.CragEdge + 0.08f, N);
+				Base += CragFade * Ledge * Patch * (Terraced - Base);
 			}
 		}
 		return Base;
