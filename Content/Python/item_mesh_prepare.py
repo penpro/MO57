@@ -10,15 +10,18 @@ instance. Per mesh this:
   - enables Nanite when the mesh has more than NANITE_MIN_TRIS triangles (scans are 100k+);
   - gives it one convex hull if it has no simple collision, and turns off "use complex as simple" (dropped items simulate physics,
     which complex-as-simple cannot: Megascans plants ship that way);
-  - for each material slot whose material is an instance of a master OUTSIDE /Game, creates MI_<mesh>_MO next to the mesh on
+  - for each material slot whose material is an instance of a master OUTSIDE /Game -- or of a Fab plugin master that
+    fab_finalize_import.py could not reparent (no FabOverrides twin, e.g. the translucent M_MS_Base_Trm on fruit scans, which
+    Nanite cannot draw at all) -- creates MI_<mesh>_MO next to the mesh on
     /Game/Materials/FabOverrides/M_MS_Base with the same base colour / normal / metallic-roughness textures (glTF and Megascans
-    share those parameter names). glTF metallic-roughness has no AO in red, so AO Strength is set to 0.
+    share those parameter names). glTF metallic-roughness has no AO in red, so AO Strength is set to 0 for glTF sources.
 Saves what it touched. Output lines start with ITEMPREP. Idempotent.
 """
 import unreal
 
 PARENT = "/Game/Materials/FabOverrides/M_MS_Base"
 HEIGHT = "/Game/Fab/Textures/Standard/T_DefaultDisplacement"
+FAB_MASTERS = "/Game/Fab/Materials/"   # the Fab plugin's own masters: no Nanite / instanced usage, see fab_finalize_import.py
 NANITE_MIN_TRIS = 4000
 TEXTURE_PARAMS = ("BaseColorTexture", "NormalTexture", "MetallicRoughnessTexture")
 
@@ -42,7 +45,7 @@ def _master(material):
 
 def _project_material(mesh, slot_index, material):
     master = _master(material)
-    if master is None or master.get_path_name().startswith("/Game/"):
+    if master is None or (master.get_path_name().startswith("/Game/") and not master.get_path_name().startswith(FAB_MASTERS)):
         return None   # already a project master (FabOverrides, a pack's own material): leave it
     folder = mesh.get_path_name().rsplit("/", 1)[0].replace("/StaticMeshes", "/Materials")
     name = "MI_%s_MO%s" % (mesh.get_name(), "" if slot_index == 0 else "_%d" % slot_index)
@@ -55,7 +58,8 @@ def _project_material(mesh, slot_index, material):
         if tex:
             mel.set_material_instance_texture_parameter_value(mi, param, tex)
     mel.set_material_instance_texture_parameter_value(mi, "HeightTexture", unreal.load_asset(HEIGHT))
-    mel.set_material_instance_scalar_parameter_value(mi, "AO Strength", 0.0)
+    if not master.get_path_name().startswith(FAB_MASTERS):   # glTF: no AO in red. A Megascans ORM has real AO -- keep the parent's.
+        mel.set_material_instance_scalar_parameter_value(mi, "AO Strength", 0.0)
     mel.update_material_instance(mi)
     eal.save_loaded_asset(mi)
     return mi
