@@ -6,6 +6,7 @@
 #include "Components/ProgressBar.h"
 #include "Components/TextBlock.h"
 #include "CommonButtonBase.h"
+#include "MOGameUIManagerSubsystem.h"
 
 UMOProgressWidgetBase::UMOProgressWidgetBase(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -14,6 +15,15 @@ UMOProgressWidgetBase::UMOProgressWidgetBase(const FObjectInitializer& ObjectIni
 
 TOptional<FUIInputConfig> UMOProgressWidgetBase::GetDesiredInputConfig() const
 {
+	// Over an open menu the bar is only something to look at (its layer draws above the menus, see UMOPrimaryGameLayout): no preference, so CommonUI's router
+	// never takes Game input away from the menu even when it picks this higher-painted widget as its active root.
+	if (const UMOGameUIManagerSubsystem* UISub = UMOGameUIManagerSubsystem::Get(this))
+	{
+		if (UISub->GetTopmostActiveWidget() != nullptr)
+		{
+			return TOptional<FUIInputConfig>();
+		}
+	}
 	// Game mode — progress bars are passive HUD overlays, not interactive menus.
 	// ESC cancellation works via CommonUI back handler (bIsBackHandler on base class).
 	// Cursor stays hidden so the progress bar doesn't fight context menu cursor state.

@@ -7,6 +7,7 @@
 #include "MOUIDebugSubsystem.h"
 #include "CommonActivatableWidget.h"
 #include "Widgets/CommonActivatableWidgetContainer.h"
+#include "Components/CanvasPanelSlot.h"
 
 // Define gameplay tags for UI layers
 namespace MOUILayerTags
@@ -58,6 +59,23 @@ void UMOPrimaryGameLayout::NativeConstruct()
 	if (!ModalLayer) UE_LOG(LogMOFramework, Warning, TEXT("MOPrimaryGameLayout: ModalLayer is NULL - widget not bound in Blueprint!"));
 
 	UE_LOG(LogMOFramework, Warning, TEXT("MOPrimaryGameLayout: Registered %d/5 layers"), LayerStacks.Num());
+
+	// Action progress (the inspection / harvest / terraform timers) lives on GameOverlay and stays visible over an open menu: a timed action the player cannot
+	// see breaks "if something takes 30 seconds, the player must see it taking 30 seconds" (playtest 2026-10-14 #23: the inspection bar hid under the crafting
+	// menu). The layer draws between Menu and Modal; its widgets defer input to the open menu (UMOProgressWidgetBase::GetDesiredInputConfig).
+	if (GameOverlayLayer && MenuLayer)
+	{
+		UCanvasPanelSlot* OverlaySlot = Cast<UCanvasPanelSlot>(GameOverlayLayer->Slot);
+		const UCanvasPanelSlot* MenuSlot = Cast<UCanvasPanelSlot>(MenuLayer->Slot);
+		const UCanvasPanelSlot* ModalSlot = ModalLayer ? Cast<UCanvasPanelSlot>(ModalLayer->Slot) : nullptr;
+		if (OverlaySlot && MenuSlot)
+		{
+			const int32 MenuZ = MenuSlot->GetZOrder();
+			const int32 OverlayZ = (ModalSlot && ModalSlot->GetZOrder() > MenuZ + 1) ? (MenuZ + ModalSlot->GetZOrder()) / 2 : MenuZ + 1;
+			OverlaySlot->SetZOrder(OverlayZ);
+			UE_LOG(LogMOFramework, Log, TEXT("MOPrimaryGameLayout: GameOverlay (action progress) drawn at z %d, above Menu (%d)"), OverlayZ, MenuZ);
+		}
+	}
 }
 
 void UMOPrimaryGameLayout::RegisterLayer(FGameplayTag LayerTag, UCommonActivatableWidgetContainerBase* LayerStack)

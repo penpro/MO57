@@ -194,9 +194,12 @@ void UMONotificationComponent::ShowRecipeUnlockedNotification(FName RecipeId)
 		RecipeName = FText::FromString(RecipeString);
 	}
 
-	FText Message = FText::Format(
-		NSLOCTEXT("MO", "RecipeUnlocked", "You can now craft: {0}"),
-		RecipeName);
+	// A harvest recipe (Harvest Bark: "strip bark from a tree") never appears in the crafting menu -- it is an action on the source in the world. Saying "you can
+	// now craft" sent the player looking for it in the crafting list (playtest 2026-10-14 #23: "it says I unlocked strip bark but it's not showing as a recipe").
+	const FMORecipeDefinitionRow* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(RecipeId);
+	FText Message = (Recipe && Recipe->bIsHarvestRecipe)
+		? FText::Format(NSLOCTEXT("MO", "HarvestUnlocked", "New harvest action: {0} (interact with the source in the world to use it)"), RecipeName)
+		: FText::Format(NSLOCTEXT("MO", "RecipeUnlocked", "You can now craft: {0}"), RecipeName);
 
 	ShowNotification(Message, 4.0f, EMONotificationType::Success);
 }
