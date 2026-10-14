@@ -397,7 +397,11 @@ def hb_tree(name, density, group=6, core=0.7, smin=0.85, smax=1.3, cluster=3000.
 
 
 def eld(n, density, group=6, core=0.3, cluster=2200.0):
-    return undergrowth(ELD % (n, n), density, group=group, core=core, smin=0.8, smax=1.35, cluster=cluster)
+    """Elderberry: a 1.5-3 m berry shrub you gather from and cannot walk through (playtest 2026-10-14 #21: "berry bushes have 0 collision, would like to
+    harvest berries / interact"). A harvestable Bush resource (DT_Resources ElderberryBush: Gather Berries / Gather Twigs, kept on harvest), Solid:
+    fix_mesh_collision.py gives it a core capsule, so the stems stop you and the outer twigs do not."""
+    return species(ELD % (n, n), density, res="ElderberryBush", tag="MOResource_Bush", cluster=cluster, group=group, core=core, sweep=True, smin=0.8, smax=1.35,
+                   collision="Solid")
 
 
 def fern(n, density, cluster=1800.0):

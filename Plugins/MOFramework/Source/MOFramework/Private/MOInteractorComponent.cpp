@@ -317,6 +317,23 @@ bool UMOInteractorComponent::TryInteract()
 	// Handle instanced mesh targets (ISM/HISM)
 	if (Target.bIsInstancedMeshTarget)
 	{
+		// A RESOURCE NODE (a bush, a tree, a rock: KeepOnHarvest / ResourceNode_* / MOResource_* tags) is not an item to pick up: the instant-pickup RPC below
+		// found no item for it, logged a warning and did nothing, so pressing interact on a berry bush gave no response at all (playtest 2026-10-14 #21).
+		// It opens the same harvest menu as the secondary interact (Gather Berries / Gather Twigs ...); item-like instances keep the instant pickup.
+		if (const UInstancedStaticMeshComponent* TargetISM = Target.ISMComponent.Get())
+		{
+			bool bIsResourceNode = TargetISM->ComponentHasTag(TEXT("KeepOnHarvest"));
+			for (const FName& Tag : TargetISM->ComponentTags)
+			{
+				const FString TagString = Tag.ToString();
+				bIsResourceNode |= TagString.StartsWith(TEXT("ResourceNode_")) || TagString.StartsWith(TEXT("MOResource_"));
+			}
+			if (bIsResourceNode)
+			{
+				return TrySecondaryInteract();
+			}
+		}
+
 		AActor* OwnerOfISM = Target.TargetActor.Get();
 
 		if (Target.bIsHISM)
