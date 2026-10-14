@@ -189,6 +189,8 @@ def main():
         MEL.recompile_material(m)
         EAL.save_loaded_asset(m)
         log("updated the shader code of the existing MO_ nodes in place")
+        if not any(str(e.get_editor_property("desc")) == "MO_RoughnessFloor" for e in MEL.get_material_expressions(m)):
+            log("!! this graph predates MO_RoughnessFloor (RoughnessMin does nothing): `git checkout f78553e3 -- <M_QuixelBase.uasset>` with the editor closed, then rerun")
         apply_surface_overrides()
         return
 
@@ -217,6 +219,7 @@ def main():
     p["FarNormalFlatten"] = scalar(m, "FarNormalFlatten", 0.85, X0, Y0 + 975)
     p["FarColor"] = vector(m, "FarColor", (0.030, 0.045, 0.026), X0, Y0 + 1000)
     p["SnowColor"] = vector(m, "SnowColor", (0.78, 0.82, 0.88), X0, Y0 + 1100)
+    p["RoughnessMin"] = scalar(m, "RoughnessMin", 0.65, X0, Y0 + 1200)
     tex = MEL.create_material_expression(m, unreal.MaterialExpressionTextureObjectParameter, X0, Y0 - 150)
     tex.set_editor_property("parameter_name", "MacroNoise")
     tex.set_editor_property("texture", noise)
@@ -280,6 +283,12 @@ def main():
     connect(brk, "Roughness", rough, "A")
     connect(snow_rough, "", rough, "B")
     connect(snow, "", rough, "Alpha")
+    # Roughness floor (Oct 14 2026, playtest #8 "very shiny sand" / #22 "terrain very reflective"): the scans' roughness maps keep glossy texels that, under a
+    # low sun, glint like wet glass across dry sand and soil. Dry ground is rough; per surface by RoughnessMin (sand highest, rock lowest).
+    rough_floor = MEL.create_material_expression(m, unreal.MaterialExpressionMax, X0 + 2750, Y0 + 250)
+    rough_floor.set_editor_property("desc", "MO_RoughnessFloor")
+    connect(rough, "", rough_floor, "A")
+    connect(p["RoughnessMin"], "", rough_floor, "B")
 
     nrm = custom(m, "MO_NormalMod", NORMAL_CODE, ["N", "P", "D", "NoiseTex", "Var", "Snow", "FarFlatten"], unreal.CustomMaterialOutputType.CMOT_FLOAT3, X0 + 2600, Y0 + 400)
     connect(brk, "Normal", nrm, "N")
@@ -295,7 +304,7 @@ def main():
     #  ShadingModel is deliberately NOT passed: the voxel generator handles the surface's shading model itself.)
     connect(brk, "Displacement", mk, "Displacement")
     connect(rgb, "", mk, "BaseColor")
-    connect(rough, "", mk, "Roughness")
+    connect(rough_floor, "", mk, "Roughness")
     connect(nrm, "", mk, "Normal")
     MEL.connect_material_property(mk, "", unreal.MaterialProperty.MP_MATERIAL_ATTRIBUTES)
 
@@ -326,6 +335,13 @@ SURFACES = {
 }
 
 
+# Dry-ground roughness floor per surface (RoughnessMin): dry sand is the roughest thing on the ground, pebbles and rock keep some sheen.
+ROUGHNESS_MIN = {
+    "Sand": 0.85, "Gravel": 0.75, "DarkPebbles": 0.68, "DriedGrassOnDampSoil": 0.75, "MuddyLeaves": 0.72, "ForestLitter": 0.72, "JungleFloor": 0.66,
+    "MossyGrass": 0.72, "AlpineHeath": 0.72, "NordicMoss": 0.72, "MossyRockyGround": 0.65, "IcelandicQuarryRock": 0.6, "Cliff": 0.6,
+}
+
+
 def apply_surface_overrides():
     for name, v in SURFACES.items():
         path = "%s/%s/MI_%s" % (BASE, name, name)
@@ -341,6 +357,7 @@ def apply_surface_overrides():
         if "macro" in v:
             MEL.set_material_instance_scalar_parameter_value(mi, "MacroAmount", v["macro"])
         MEL.set_material_instance_scalar_parameter_value(mi, "FarNormalFlatten", v.get("far_normal", 0.85))
+        MEL.set_material_instance_scalar_parameter_value(mi, "RoughnessMin", ROUGHNESS_MIN.get(name, 0.65))
         if "normal_var" in v:
             MEL.set_material_instance_scalar_parameter_value(mi, "NormalVariation", v["normal_var"])
         if "warp" in v:

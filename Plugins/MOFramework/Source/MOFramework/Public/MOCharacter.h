@@ -816,6 +816,20 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Appearance")
 	TSoftClassPtr<UAnimInstance> DefaultAnimBlueprint;
 
+	/**
+	 * MetaHuman skin (and the clothing baked into the body texture) is tuned for studio light: under a low sun on a bright beach the arms and shoulders
+	 * read oily and the cloth like satin (playtest 2026-10-14 #7 / #12, "character VERY shiny"). Added to the skin materials' post-bake roughness and
+	 * multiplied into their post-bake specular on every skeletal mesh of the character (ApplySkinLook). 0 / 1 = the MetaHuman as shipped.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Appearance", meta=(ClampMin="0.0", ClampMax="0.5"))
+	float SkinRoughnessOffset = 0.15f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Appearance", meta=(ClampMin="0.0", ClampMax="1.0"))
+	float SkinSpecularMultiply = 0.7f;
+
+	/** Push SkinRoughnessOffset / SkinSpecularMultiply into every material of every skeletal mesh that has the MetaHuman post-bake parameters. */
+	void ApplySkinLook();
+
 	/** Walking speed (default movement). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Movement")
 	float WalkSpeed = 400.0f;

@@ -56,6 +56,7 @@
 #include "Perception/AISense_Hearing.h"
 #include "VoxelWorld.h"
 #include "Collision/VoxelCollisionInvoker.h"
+#include "Materials/MaterialInstanceDynamic.h"
 
 AMOCharacter::AMOCharacter(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer.SetDefaultSubobjectClass<UMOCharacterMovementComponent>(ACharacter::CharacterMovementComponentName))
@@ -201,6 +202,40 @@ AMOCharacter::AMOCharacter(const FObjectInitializer& ObjectInitializer)
 	// Set these in child Blueprints to avoid hard-coded asset paths.
 }
 
+void AMOCharacter::ApplySkinLook()
+{
+	static const FName RoughnessOffsetName(TEXT("Roughness Global Offset Post-Bake"));
+	static const FName SpecularMultiplyName(TEXT("Specular Global Multiply Post-Bake"));
+	if (GetNetMode() == NM_DedicatedServer)
+	{
+		return;
+	}
+	TInlineComponentArray<USkeletalMeshComponent*> Meshes(this);
+	for (USkeletalMeshComponent* SkinMesh : Meshes)
+	{
+		for (int32 Slot = 0; Slot < SkinMesh->GetNumMaterials(); ++Slot)
+		{
+			// Only the slots whose material HAS the MetaHuman skin parameter (body, face skin LODs): teeth, eyes and hidden slots are left as they are.
+			UMaterialInterface* Material = SkinMesh->GetMaterial(Slot);
+			float Current = 0.0f;
+			if (!Material || !Material->GetScalarParameterValue(FHashedMaterialParameterInfo(RoughnessOffsetName), Current))
+			{
+				continue;
+			}
+			UMaterialInstanceDynamic* Dynamic = Cast<UMaterialInstanceDynamic>(Material);
+			if (!Dynamic)
+			{
+				Dynamic = SkinMesh->CreateAndSetMaterialInstanceDynamic(Slot);
+			}
+			if (Dynamic)
+			{
+				Dynamic->SetScalarParameterValue(RoughnessOffsetName, SkinRoughnessOffset);
+				Dynamic->SetScalarParameterValue(SpecularMultiplyName, SkinSpecularMultiply);
+			}
+		}
+	}
+}
+
 void AMOCharacter::BeginPlay()
 {
 	QUICK_SCOPE_CYCLE_COUNTER(STAT_AMOCharacter_BeginPlay_Total);   // spawn-cost breakdown: the whole BeginPlay (Super = its components + Blueprint part)
@@ -216,6 +251,11 @@ void AMOCharacter::BeginPlay()
 			GetMesh()->SetSkeletalMesh(LoadedMesh);
 		}
 	}
+
+	// Skin look: now, and once more after the MetaHuman component has built its runtime face material instances.
+	ApplySkinLook();
+	FTimerHandle SkinLookTimer;
+	GetWorldTimerManager().SetTimer(SkinLookTimer, FTimerDelegate::CreateWeakLambda(this, [this]() { ApplySkinLook(); }), 1.0f, false);
 
 	// Load and apply default animation blueprint if not already set
 	if (!GetMesh()->GetAnimInstance() && !GetMesh()->GetAnimClass())
