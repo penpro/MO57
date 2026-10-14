@@ -335,11 +335,10 @@ SURFACES = {
 }
 
 
-# Dry-ground roughness floor per surface (RoughnessMin): dry sand is the roughest thing on the ground, pebbles and rock keep some sheen.
-ROUGHNESS_MIN = {
-    "Sand": 0.85, "Gravel": 0.75, "DarkPebbles": 0.68, "DriedGrassOnDampSoil": 0.75, "MuddyLeaves": 0.72, "ForestLitter": 0.72, "JungleFloor": 0.66,
-    "MossyGrass": 0.72, "AlpineHeath": 0.72, "NordicMoss": 0.72, "MossyRockyGround": 0.65, "IcelandicQuarryRock": 0.6, "Cliff": 0.6,
-}
+# Roughness floor (RoughnessMin) for every surface: Wes set 2.0 on all of them in the editor (Oct 14 2026, "it cut down the glare on everything") -- anything >= 1
+# means fully rough ground, no sheen at all. This script re-applies it, so a rebuild keeps his setting (the per-surface 0.6-0.85 floors it replaced still glinted).
+ROUGHNESS_MIN_ALL = 2.0
+ROUGHNESS_MIN = {}   # per-surface exceptions (none)
 
 
 def apply_surface_overrides():
@@ -357,7 +356,7 @@ def apply_surface_overrides():
         if "macro" in v:
             MEL.set_material_instance_scalar_parameter_value(mi, "MacroAmount", v["macro"])
         MEL.set_material_instance_scalar_parameter_value(mi, "FarNormalFlatten", v.get("far_normal", 0.85))
-        MEL.set_material_instance_scalar_parameter_value(mi, "RoughnessMin", ROUGHNESS_MIN.get(name, 0.65))
+        MEL.set_material_instance_scalar_parameter_value(mi, "RoughnessMin", ROUGHNESS_MIN.get(name, ROUGHNESS_MIN_ALL))
         if "normal_var" in v:
             MEL.set_material_instance_scalar_parameter_value(mi, "NormalVariation", v["normal_var"])
         if "warp" in v:
