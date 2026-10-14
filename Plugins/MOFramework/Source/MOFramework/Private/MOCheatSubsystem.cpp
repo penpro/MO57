@@ -23,6 +23,7 @@
 #include "MOGameClockSubsystem.h"
 #include "MOInventoryComponent.h"
 #include "MOItemDatabaseSettings.h"
+#include "MOItemSourceAnalysis.h"
 #include "MOItemDefinitionRow.h"
 #include "MOWeatherIntegrationSubsystem.h"
 #include "MOWeatherDirector.h"
@@ -455,14 +456,16 @@ namespace
 	}
 
 	void RunBiomeValidation(TArray<FMOTestResult>& OutResults); // defined below (P1)
+	void RunSourceValidation(UWorld* World, TArray<FMOTestResult>& OutResults); // defined below
 
 	/**
 	 * Content-integrity check (#65): every recipe/treatment reference must
 	 * resolve to a real item/skill row. This is the drift class that produced
 	 * H40/M21 (dangling item + treatment refs). Appends one result per table
-	 * and logs each dangling ref as an indented [MOTEST] line.
+	 * and logs each dangling ref as an indented [MOTEST] line. World (optional) lets
+	 * Data:Sources count the world's foraging dig table.
 	 */
-	void RunDataValidation(TArray<FMOTestResult>& OutResults)
+	void RunDataValidation(UWorld* World, TArray<FMOTestResult>& OutResults)
 	{
 		// ---- Recipes: ingredient/output/buildpart/fuel items + required skill ----
 		{
@@ -561,6 +564,46 @@ namespace
 
 		// ---- Biomes (P1): species mesh/tag integrity + band sanity ----
 		RunBiomeValidation(OutResults);
+
+		// ---- Sources (every recipe reachable from what the world yields) ----
+		RunSourceValidation(World, OutResults);
+	}
+
+	/**
+	 * Producer check: every recipe must be performable by a player starting from nothing but the world (FMOItemSourceAnalysis
+	 * -- resources, harvest recipes, carcasses, digging, ground pickups, then recipes in a fixpoint through their real gates).
+	 * Catches the drift ValidateData's dangling-ref check cannot: an item row that EXISTS but nothing produces (Oct 2026: knap
+	 * recipes ate Flint01 while foraging gave FlintNodule01), a discovery knowledge nothing grants, a station nothing builds.
+	 * Root causes (orphan items / knowledge) are logged first, then each blocked recipe with the first gate that stops it.
+	 */
+	void RunSourceValidation(UWorld* World, TArray<FMOTestResult>& OutResults)
+	{
+		const FMOItemSourceReport Report = FMOItemSourceAnalysis::Analyze(World);
+		for (const FName& Item : Report.OrphanItems)
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST]   Orphan item '%s': consumed by a recipe, produced by nothing"), *Item.ToString());
+		}
+		for (const FName& Knowledge : Report.OrphanKnowledge)
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST]   Orphan knowledge '%s': required, but no grant, recipe or harvest trains it"), *Knowledge.ToString());
+		}
+		for (const FMOBlockedRecipe& Blocked : Report.BlockedRecipes)
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST]   Blocked recipe '%s': %s"), *Blocked.RecipeId.ToString(), *Blocked.Reason);
+		}
+		FString Pickups;
+		for (const FName& Item : Report.PickupItems)
+		{
+			Pickups += (Pickups.IsEmpty() ? TEXT("") : TEXT(", ")) + Item.ToString();
+		}
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST]   Sources: %d obtainable items; ground pickups: %s"),
+			Report.SourceOf.Num(), Pickups.IsEmpty() ? TEXT("(none found)") : *Pickups);
+
+		const bool bPass = Report.BlockedRecipes.Num() == 0;
+		const FString Detail = FString::Printf(TEXT("%d recipes, %d reachable, %d blocked; %d orphan item(s), %d orphan knowledge"),
+			Report.RecipeCount, Report.ReachableRecipeCount, Report.BlockedRecipes.Num(), Report.OrphanItems.Num(), Report.OrphanKnowledge.Num());
+		OutResults.Add({ bPass, TEXT("Data:Sources"), Detail });
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] %s Data:Sources -- %s"), bPass ? TEXT("PASS") : TEXT("FAIL"), *Detail);
 	}
 
 	/**
@@ -2239,11 +2282,11 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 	// the main menu. Writes PASS/FAIL to Saved/MOTestResults.txt.
 	ConsoleCommands.Add(CM.RegisterConsoleCommand(
 		TEXT("MO.Test.ValidateData"),
-		TEXT("Validate DataTable integrity (dangling recipe/treatment item+skill refs, empty-output recipes). Writes Saved/MOTestResults.txt. Works at the main menu (no pawn needed)."),
+		TEXT("Validate DataTable integrity (dangling recipe/treatment item+skill refs, empty-output recipes, recipes no player can reach -- Data:Sources). Writes Saved/MOTestResults.txt. Works at the main menu (no pawn needed)."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
 		{
 			TArray<FMOTestResult> Results;
-			RunDataValidation(Results);
+			RunDataValidation(World, Results);
 			WriteTestResults(TEXT("ValidateData"), Results);
 		}),
 		ECVF_Default));
@@ -3737,7 +3780,7 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 			Results.Add(RunDropPickupTest(World, FName(TEXT("Stick01"))));
 			Results.Add(RunAttackTest(World));
 			Results.Add(RunCraftTest(World, FName(TEXT("KnapFlintFlakes"))));
-			RunDataValidation(Results);
+			RunDataValidation(World, Results);
 			// Art debt is a tracked BASELINE being burned down (pipeline
 			// A-track), not a regression: one always-informational line so the
 			// standing gate stays green while the debt exists by design. The

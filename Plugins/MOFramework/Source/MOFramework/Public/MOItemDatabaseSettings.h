@@ -40,6 +40,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Item Database", meta=(DisplayName="Get Item Definition"))
 	static bool GetItemDefinition(FName ItemDefinitionId, FMOItemDefinitionRow& OutDefinition);
 
+	/** Every item id GetItemDefinition resolves: the table's rows plus registered mod items. */
+	static void GetAllItemIds(TArray<FName>& OutItemIds);
+
 	/** Forage window check (V2.4): true when the item can be gathered in the
 	 *  given season (0=Spring..3=Winter). Unknown items are year-round. */
 	UFUNCTION(BlueprintPure, Category="MO|Items")

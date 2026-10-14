@@ -335,6 +335,19 @@ then `ue.py status` -> ALIVE (log: "Starting MCP server on port 8000"). Note
 StopServer only drops the route: the port still answers (HTTP 411), so "the
 port answers" is not "the MCP is up" -- `mcp_alive()` (a real `initialize`) is.
 
+Save-in-PIE trap (same day): the editor drops package saves while PIE runs but
+`save_assets` still answers True, so a `rows set` / `asset assign` made during
+play lives only in memory (git shows no change). `ue.py` now routes every save
+through `save_assets()`, which refuses with "REFUSED -- PIE is running" (exit 1).
+
+UI-test traps (same day): `MO.Test.ClickWidget <entry>` on a list entry uses a
+synthesized pointer click at desktop coordinates and can miss in an editor PIE
+window while still logging PASS. Select an entry with its own button instead:
+`entry.get_editor_property('entry_button').simulate_click()` (read the detail
+panel back to prove it). `MO.Test.PlaceBuildingRPC` places at the pawn's capsule
+centre with no ground trace, so the building floats ~60 cm: real placement goes
+through the ghost's trace.
+
 Retry trap (same day): an MCP call is re-sent after an EMPTY first response,
 but the first attempt may already have applied. `remove_rows` deleted the rows,
 then the retry reported "Rows do not exist". Errors from such a retry now carry

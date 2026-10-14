@@ -88,6 +88,26 @@ UDataTable* UMOItemDatabaseSettings::GetItemDefinitionsDataTable() const
 	return nullptr;
 }
 
+void UMOItemDatabaseSettings::GetAllItemIds(TArray<FName>& OutItemIds)
+{
+	OutItemIds.Reset();
+#if WITH_EDITOR
+	// Same source GetItemDefinition reads in editor builds: the live table, then the mod overlay.
+	const UMOItemDatabaseSettings* Settings = GetDefault<UMOItemDatabaseSettings>();
+	if (UDataTable* DataTable = Settings ? Settings->GetItemDefinitionsDataTable() : nullptr)
+	{
+		OutItemIds = DataTable->GetRowNames();
+	}
+	for (const TPair<FName, FMOItemDefinitionRow>& Mod : ModItemDefinitions)
+	{
+		OutItemIds.AddUnique(Mod.Key);
+	}
+#else
+	BuildCacheIfNeeded();   // the cache already merges the mod overlay
+	CachedItemDefinitions.GetKeys(OutItemIds);
+#endif
+}
+
 bool UMOItemDatabaseSettings::GetItemDefinition(FName ItemDefinitionId, FMOItemDefinitionRow& OutDefinition)
 {
 	OutDefinition = FMOItemDefinitionRow();

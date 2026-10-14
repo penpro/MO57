@@ -605,10 +605,27 @@ def editor_running():
     return "UnrealEditor.exe" in (r.stdout or "")
 
 
-def editor_stop(wait=60):
+def editor_stop(wait=90):
+    """Quit the editor the way a person would: QUIT_EDITOR through the bridge. Never force-kills -- Wes's rule (unsaved work
+    dies with a killed process; this used to be taskkill /F by image name). Refuses while packages are unsaved, since
+    QUIT_EDITOR would sit on the save dialog: save or discard them, then retry. True once the process is gone."""
     if not editor_running():
         return True
-    subprocess.run(["taskkill", "/IM", "UnrealEditor.exe", "/F"], capture_output=True)
+    if not bridge_alive():
+        print("editor_stop: bridge not responding -- close the editor by hand (no force-kill)")
+        return False
+    if _in_pie():
+        bridge_run(['py:unreal.get_editor_subsystem(unreal.LevelEditorSubsystem).editor_request_end_play()'],
+                   timeout=10, want_log=False)
+        time.sleep(3)
+    _, lines, _ = bridge_run(['py:L=unreal.EditorLoadingAndSavingUtils; out("DIRTY=" + ",".join(p.get_name() for p in '
+                              'list(L.get_dirty_content_packages()) + list(L.get_dirty_map_packages())))'],
+                             timeout=10, want_log=False)
+    dirty = next((l[len("DIRTY="):] for l in lines if l.startswith("DIRTY=")), "")
+    if dirty:
+        print("editor_stop: unsaved packages, not quitting (save or discard them first): " + dirty)
+        return False
+    bridge_run(["QUIT_EDITOR"], timeout=10, want_log=False)
     deadline = time.time() + wait
     while time.time() < deadline:
         if not editor_running():
