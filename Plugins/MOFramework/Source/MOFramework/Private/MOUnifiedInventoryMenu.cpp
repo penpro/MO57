@@ -284,6 +284,9 @@ void UMOUnifiedInventoryMenu::InitializeMenu(UMOInventoryComponent* PlayerInvent
 			{
 				CachedEquipmentComponent = EquipComp;
 				EquipmentPanel->InitializePanel(EquipComp, PlayerInventory);
+				// The menu is cached: InitializeMenu runs on EVERY open, so bind once (a second AddDynamic of the same pair trips the engine's
+				// duplicate-binding ensure -- 4 crash reports, Oct 13-14 2026).
+				EquipmentPanel->OnSlotDropReceived.RemoveDynamic(this, &UMOUnifiedInventoryMenu::HandleEquipmentSlotDropReceived);
 				EquipmentPanel->OnSlotDropReceived.AddDynamic(this, &UMOUnifiedInventoryMenu::HandleEquipmentSlotDropReceived);
 				UE_LOG(LogMOFramework, Log, TEXT("[UnifiedInventoryMenu] Initialized equipment panel"));
 			}
