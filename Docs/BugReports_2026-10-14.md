@@ -32,6 +32,7 @@ Status: **DONE** (fixed + verified), **OPEN** (not started), **LOGGED** (design 
 | 27, 28 | Cliffs facing uphill (holes in mountains); mountain "detail" features random | generator v6 crags / gullies: cliffs must face downhill; smooth the detail -- generator change (version bump) | LOGGED |
 | 29 | Lakes all one size, unadorned | upland lake size distribution + shore dressing (POIs) | LOGGED |
 | — | (live, Oct 14) "the biomes should have a lot more blending" | surface biome weights: climate band 0.03 -> 0.12 + 3-octave edge breakup (ground and scatter share it) | **DONE** (before/after `Saved/Screenshots/biome_blend_before_after.png`) |
+| — | (live, Oct 14) ED cliffs: drop 0.5 m, spread the base, 4x larger, fall through when jumping up | floor authored 2.6 m above the root + cliff meshes with no / few-hull collision | **DONE** (MO Conform To Ground node; composition rocks complex-as-simple; grid 398/398, pawn ledge test) |
 | — | (live, Oct 14) `~` does not open the console in the Shipping game | Shipping compiled the popup out; now Options > Gameplay > Developer mode (or `-devmode`) + the developer menu | **DONE** (verified in Shipping code) |
 
 Related asks in the same session: the Electric Dreams biome with its big rock features and vines -> world features (POIs) built as whole compositions,

@@ -107,7 +107,7 @@ struct MOFRAMEWORK_API FMOWorldFeatureDefinitionRow : public FTableRowBase
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Placement", meta=(EditCondition="bAlignToSlope", ClampMin="0.0", ClampMax="180.0"))
 	float AlignYawJitterDeg = 10.0f;
 
-	/** Buried this deep (cm): a composition authored on a flat floor shows no gap on uneven ground. */
+	/** Buried this deep (cm at scale 1; it grows with the site's scale): a composition authored on a flat floor shows no gap on uneven ground. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Placement", meta=(ClampMin="0.0"))
 	float SinkCm = 30.0f;
 

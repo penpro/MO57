@@ -3,6 +3,9 @@
     python Tools/ue.py py --file Content/Python/fix_mesh_collision.py        (editor open, PIE NOT running: saving is blocked in PIE)
 
 Idempotent: a mesh that already blocks (simple shapes, or "use complex as simple") is left alone.
+  * WORLD-FEATURE compositions (DT_WorldFeatures, manifest data/worldfeature_meshes.json from worldfeature_meshes.py) -> rocks / cliffs / logs: complex as simple
+                          (climbable hero terrain); standing trees: trunk capsule; plants stay walk-through. Electric Dreams meshes are gitignored and migrated
+                          per machine (Tools/ede_migrate.py): re-run this tool after a migration.
   * ROCK / ORE meshes  -> convex decomposition (a few hulls), so a boulder is as wide as it looks.
   * TREE meshes        -> one trunk capsule at the pivot (radius ~2.2% of the tree's height, 20..55 cm; length ~45% of the height, at most 6 m). A tree's collision must NOT be its
                           canopy: a bounding capsule of the whole tree would be an invisible wall 4 m from the trunk.
@@ -29,6 +32,11 @@ def blocks(mesh):
     if body.get_editor_property("collision_trace_flag").name == "CTF_USE_COMPLEX_AS_SIMPLE":
         return True
     return max(ESL.get_simple_collision_count(mesh), 0) + max(ESL.get_convex_collision_count(mesh), 0) > 0
+
+
+def complex_as_simple(mesh):
+    body = mesh.get_editor_property("body_setup")
+    return body is not None and body.get_editor_property("collision_trace_flag").name == "CTF_USE_COMPLEX_AS_SIMPLE"
 
 
 def table_rows(path):
@@ -62,6 +70,57 @@ def solid_meshes():
     return found
 
 
+# --------------------------------------------------------------------------- world-feature compositions (DT_WorldFeatures)
+# The manifest of what the compositions spawn (written by worldfeature_meshes.py in PIE: their meshes are PCG point attributes the asset registry cannot see).
+# A composition's rocks are hero terrain the player climbs (Wes, Oct 14 2026: "i fall through them if i try to jump up them"), so they collide with their
+# real surface (complex as simple), not a few hulls. Standing trees get the trunk capsule. Plants, vines, saplings stay walk-through.
+WF_MANIFEST = "data/worldfeature_meshes.json"
+WF_PLANT = ("Vine", "Ivy", "Fern", "Plant", "Sapling", "Palm", "Elderberry", "Grass", "Clover", "Leaves", "Leaf", "Flower", "Bush", "Shrub", "Branch", "Twig",
+            "Weed", "Nettle", "Seedling", "GroundCover", "Dracaena", "DragonTree", "Ginger", "Amaryllis", "Kikuyu", "Arrowhead", "Castor", "MistCard", "WaterPlane", "Icon",
+            "Circle_")
+WF_ROCK = ("Cliff", "Rock", "Boulder", "Embankment", "Formation", "Stone", "Ground", "RiverBed", "Terrain", "Path", "Roots", "Stump", "Fallen", "Log",
+           "Shelf", "Mud", "Bank", "Ledge", "Scree", "Slab")
+WF_TREE = ("Hornbeam", "DeadTree", "Tree", "Spruce", "Birch", "Beech", "Oak", "Pine")
+
+
+def worldfeature_kind(name):
+    """'Composition' (complex as simple), 'Tree' (trunk capsule), None (walk-through) or '?' (not classified: reported, left alone)."""
+    if any(k in name for k in ("Fallen", "Stump", "Log_")):
+        return "Composition"
+    if any(k in name for k in WF_PLANT):
+        return None
+    if any(k in name for k in WF_TREE):
+        return "Tree"
+    if any(k in name for k in WF_ROCK):
+        return "Composition"
+    return "?"
+
+
+def worldfeature_meshes():
+    """{mesh object path: (kind, who)} for the compositions' solid meshes; prints the unclassified ones."""
+    import json
+    import os
+    path = os.path.join(unreal.Paths.project_content_dir(), "Python", WF_MANIFEST)   # the bridge exec()s this file: no __file__
+    if not os.path.exists(path):
+        print("FIXCOLL no world-feature manifest (%s): run worldfeature_meshes.py in PIE first" % WF_MANIFEST)
+        return {}
+    found = {}
+    for mesh_path, rows in json.load(open(path, encoding="utf-8")).items():
+        name = mesh_path.rsplit("/", 1)[-1].split(".")[0]
+        kind = worldfeature_kind(name)
+        if kind == "?":
+            print("FIXCOLL unclassified world-feature mesh %s (%s): left alone" % (name, ",".join(rows)))
+        elif kind:
+            found[mesh_path] = (kind, "feature:" + ",".join(rows))
+    return found
+
+
+def fix_composition(mesh):
+    body = mesh.get_editor_property("body_setup")
+    body.set_editor_property("collision_trace_flag", unreal.CollisionTraceFlag.CTF_USE_COMPLEX_AS_SIMPLE)
+    return "complex as simple (climbable surface)"
+
+
 def fix_rock(mesh):
     hull = ESL.set_convex_decomposition_collisions(mesh, 4, 32, 100000)
     return "convex decomposition (%s)" % ("ok" if hull is None or hull else "FAILED")
@@ -84,18 +143,26 @@ def fix_tree(mesh):
     return "trunk capsule r=%.0f len=%.0f (tree height %.0f)" % (radius, length, height)
 
 
-def fix_meshes():
+def fix_meshes(dry=False):
     fixed = 0
-    for path, (kind, who) in sorted(solid_meshes().items()):
+    targets = solid_meshes()
+    targets.update(worldfeature_meshes())
+    for path, (kind, who) in sorted(targets.items()):
         mesh = unreal.load_asset(path.split(".")[0])
         if mesh is None:
             print("FIXCOLL MISSING %s" % path)
             continue
-        if blocks(mesh):
+        # A composition rock must collide with its REAL surface: hulls are fine for a boulder, but a scaled-up cliff's few hulls left 15-25 m
+        # drops where the rock is visibly there (grid test, Oct 14 2026: SM_Cliff_06 at 4x). So "has hulls" is not enough for these.
+        done = complex_as_simple(mesh) if kind == "Composition" else blocks(mesh)
+        if done:
             print("FIXCOLL ok      %s (%s, %s)" % (path.rsplit("/", 1)[-1].split(".")[0], kind, who))
             continue
+        if dry:
+            print("FIXCOLL would fix %s (%s, %s)" % (path.rsplit("/", 1)[-1].split(".")[0], kind, who))
+            continue
         mesh.modify()
-        note = fix_tree(mesh) if kind == "Tree" else fix_rock(mesh)
+        note = fix_tree(mesh) if kind == "Tree" else fix_composition(mesh) if kind == "Composition" else fix_rock(mesh)
         body = mesh.get_editor_property("body_setup")
         body.modify()
         try:
@@ -103,7 +170,7 @@ def fix_meshes():
         except Exception:
             pass
         saved = unreal.EditorAssetLibrary.save_loaded_asset(mesh)
-        now = blocks(mesh)
+        now = complex_as_simple(mesh) if kind == "Composition" else blocks(mesh)
         fixed += 1 if now else 0
         print("FIXCOLL %s %s (%s, %s): %s, saved=%s" % ("FIXED  " if now else "STILL-BROKEN", path.rsplit("/", 1)[-1].split(".")[0], kind, who, note, saved))
     return fixed
@@ -150,6 +217,7 @@ def fix_graph_nodes():
 
 
 if __name__ == "__main__" or True:
-    n = fix_meshes()
-    m = fix_graph_nodes()
+    DRY = globals().get("FIXCOLL_DRY", False)   # python Tools/ue.py py -c "FIXCOLL_DRY=True; exec(open('Content/Python/fix_mesh_collision.py').read())"
+    n = fix_meshes(DRY)
+    m = 0 if DRY else fix_graph_nodes()
     print("FIXCOLL summary: %d meshes given collision, %d graph entries changed" % (n, m))

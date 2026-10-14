@@ -122,7 +122,10 @@ bool FMOWorldFeaturePlacer::Candidate(int32 FeatureIndex, const FIntPoint& Slot,
 	}
 	const double X = (Slot.X + 0.25 + 0.5 * WorldFeatureU01(H, 1)) * Spacing;
 	const double Y = (Slot.Y + 0.25 + 0.5 * WorldFeatureU01(H, 2)) * Spacing;
-	const double Limit = Params->Tuning.WorldHalfSizeCm - R.FootprintRadiusCm - 50000.0;
+	// The site's scale first: every footprint check below covers the composition at the size it will stand (a 4x spire needs 4x the clear ground).
+	const float Scale = FMath::Lerp(R.MinScale, FMath::Max(R.MinScale, R.MaxScale), static_cast<float>(WorldFeatureU01(H, 4)));
+	const double Footprint = static_cast<double>(R.FootprintRadiusCm) * Scale;
+	const double Limit = Params->Tuning.WorldHalfSizeCm - Footprint - 50000.0;
 	if (FMath::Abs(X) > Limit || FMath::Abs(Y) > Limit)
 	{
 		return false;
@@ -130,14 +133,14 @@ bool FMOWorldFeaturePlacer::Candidate(int32 FeatureIndex, const FIntPoint& Slot,
 	float Ground = 0.0f, Slope = 0.0f;
 	const int32 Biome = Finder.BiomeAt(X, Y, Ground, Slope);
 	const float AboveSea = Ground - Params->Tuning.SeaLevelCm;
-	const bool bAlign = R.bAlignToSlope && R.FootprintRadiusCm > 0.0f;
+	const bool bAlign = R.bAlignToSlope && Footprint > 0.0;
 	FVector2D Gradient = FVector2D::ZeroVector;
 	float Deviation = 0.0f;
 	if (bAlign)
 	{
 		// A hillside composition: the slope that matters is the footprint's, not the centre's.
 		if ((F.BiomeIndices.Num() > 0 && !F.BiomeIndices.Contains(Biome))
-			|| !MeasureFootprintPlane(*Params, TerrainSeed, Finder, X, Y, R.FootprintRadiusCm, Ground, Gradient, Deviation))
+			|| !MeasureFootprintPlane(*Params, TerrainSeed, Finder, X, Y, Footprint, Ground, Gradient, Deviation))
 		{
 			return false;
 		}
@@ -145,7 +148,7 @@ bool FMOWorldFeaturePlacer::Candidate(int32 FeatureIndex, const FIntPoint& Slot,
 	}
 	if ((F.BiomeIndices.Num() > 0 && !F.BiomeIndices.Contains(Biome)) || Slope < R.SlopeMinDeg || Slope > R.SlopeMaxDeg
 		|| AboveSea < R.MinHeightAboveSeaCm || AboveSea > R.MaxHeightAboveSeaCm || Finder.IsInWater(X, Y, Ground)
-		|| FMOWorldGen::DistanceToSinkholeRimZone(*Params, X, Y, TerrainSeed) < R.FootprintRadiusCm)
+		|| FMOWorldGen::DistanceToSinkholeRimZone(*Params, X, Y, TerrainSeed) < Footprint)
 	{
 		return false;
 	}
@@ -156,11 +159,11 @@ bool FMOWorldFeaturePlacer::Candidate(int32 FeatureIndex, const FIntPoint& Slot,
 			return false;
 		}
 	}
-	else if (R.MaxFootprintReliefCm > 0.0f && R.FootprintRadiusCm > 0.0f)
+	else if (R.MaxFootprintReliefCm > 0.0f && Footprint > 0.0)
 	{
 		for (int32 K = 0; K < 8; ++K)
 		{
-			const double Ax = X + R.FootprintRadiusCm * FMath::Cos(K * UE_PI / 4.0), Ay = Y + R.FootprintRadiusCm * FMath::Sin(K * UE_PI / 4.0);
+			const double Ax = X + Footprint * FMath::Cos(K * UE_PI / 4.0), Ay = Y + Footprint * FMath::Sin(K * UE_PI / 4.0);
 			const float Edge = FMOWorldGen::SampleHeightCm(*Params, Ax, Ay, TerrainSeed, Params->Tuning.VoxelSizeCm);
 			if (FMath::Abs(Edge - Ground) > R.MaxFootprintReliefCm || Finder.IsInWater(Ax, Ay, Edge))
 			{
@@ -181,8 +184,8 @@ bool FMOWorldFeaturePlacer::Candidate(int32 FeatureIndex, const FIntPoint& Slot,
 	{
 		Out.YawDegrees = static_cast<float>(WorldFeatureU01(H, 3) * 360.0);
 	}
-	Out.Scale = FMath::Lerp(R.MinScale, FMath::Max(R.MinScale, R.MaxScale), static_cast<float>(WorldFeatureU01(H, 4)));
-	Out.FootprintRadiusCm = R.FootprintRadiusCm * Out.Scale;
+	Out.Scale = Scale;
+	Out.FootprintRadiusCm = static_cast<float>(Footprint);
 	Out.Seed = static_cast<int32>(WorldFeatureMix64(H ^ 0x5EEDULL) & 0x7fffffff);
 	return true;
 }
@@ -392,7 +395,8 @@ AActor* UMOWorldFeatureSubsystem::SpawnSite(const FMOWorldFeaturePlacer::FFeatur
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOWorldFeatures] %s: actor class %s did not load"), *Feature.Id.ToString(), *Feature.Row.ActorClass.ToString());
 		return nullptr;
 	}
-	const FTransform Transform(FRotator(0.0f, Site.YawDegrees, 0.0f), Site.Location - FVector(0.0, 0.0, Feature.Row.SinkCm), FVector(Site.Scale));
+	// The sink grows with the composition: a gap under a 4x outcrop is 4x the gap under the authored one.
+	const FTransform Transform(FRotator(0.0f, Site.YawDegrees, 0.0f), Site.Location - FVector(0.0, 0.0, Feature.Row.SinkCm * Site.Scale), FVector(Site.Scale));
 	AActor* Actor = World->SpawnActorDeferred<AActor>(Class, Transform, nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
 	if (!Actor)
 	{

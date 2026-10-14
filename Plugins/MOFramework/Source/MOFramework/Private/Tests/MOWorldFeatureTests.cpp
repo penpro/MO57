@@ -4,6 +4,7 @@
 #include "Misc/AutomationTest.h"
 #include "MOWorldFeatureSubsystem.h"
 #include "MOWorldFeatureActor.h"
+#include "MOPCGConformToGroundSettings.h"
 #include "MOWorldSeedSubsystem.h"
 #include "MOWorldGen.h"
 
@@ -205,6 +206,37 @@ bool FMOWorldFeature_SlopeAlign::RunTest(const FString& Parameters)
 	AddInfo(FString::Printf(TEXT("CONTROL unaligned: %d sites, %d facing downhill, %d on the slope range, %d flat"), LSites, LFacing, LSlopeOk, LFlat));
 	TestTrue(TEXT("CONTROL: random yaw mostly does not face downhill"), LFacing < LSites / 2);
 	TestTrue(TEXT("CONTROL: without the slope rule some sites stand on flat ground"), LFlat > 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOWorldFeature_ConformBaseWeight,
+	"MOFramework.WorldFeatures.ConformBaseWeight",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOWorldFeature_ConformBaseWeight::RunTest(const FString& Parameters)
+{
+	// MO Conform To Ground moves only a composition's base: full weight inside the band, a smooth fade, nothing above (the stacked column stays rigid).
+	TestEqual(TEXT("below the root"), UMOPCGConformToGroundSettings::BaseWeight(-200.0f, 400.0f, 100.0f), 1.0f);
+	TestEqual(TEXT("inside the band"), UMOPCGConformToGroundSettings::BaseWeight(400.0f, 400.0f, 100.0f), 1.0f);
+	TestEqual(TEXT("middle of the fade"), UMOPCGConformToGroundSettings::BaseWeight(450.0f, 400.0f, 100.0f), 0.5f);
+	TestEqual(TEXT("above the fade"), UMOPCGConformToGroundSettings::BaseWeight(500.0f, 400.0f, 100.0f), 0.0f);
+	TestEqual(TEXT("no fade: a hard cut"), UMOPCGConformToGroundSettings::BaseWeight(401.0f, 400.0f, 0.0f), 0.0f);
+	float Last = 1.0f;
+	bool bMonotonic = true;
+	for (float H = 400.0f; H <= 500.0f; H += 5.0f)
+	{
+		const float W = UMOPCGConformToGroundSettings::BaseWeight(H, 400.0f, 100.0f);
+		bMonotonic &= W <= Last + 1.0e-6f;
+		Last = W;
+	}
+	TestTrue(TEXT("the fade never rises"), bMonotonic);
+
+	// The lowest point of a placed mesh box: what the node rests on the ground.
+	const FBox Box(FVector(-100.0, -50.0, -20.0), FVector(100.0, 50.0, 80.0));
+	TestEqual(TEXT("identity: the box's floor"), UMOPCGConformToGroundSettings::LowestZ(Box, FTransform::Identity), -20.0, 1.0e-6);
+	TestEqual(TEXT("scaled x4 and raised 1 m"), UMOPCGConformToGroundSettings::LowestZ(Box, FTransform(FQuat::Identity, FVector(0, 0, 100), FVector(4.0))), 20.0, 1.0e-6);
+	TestEqual(TEXT("upside down: the old top is the floor"), UMOPCGConformToGroundSettings::LowestZ(Box, FTransform(FRotator(180.0, 0.0, 0.0))), -80.0, 1.0e-3);
+	TestTrue(TEXT("tilted 45 deg: a corner dips below the floor"), UMOPCGConformToGroundSettings::LowestZ(Box, FTransform(FRotator(45.0, 0.0, 0.0))) < -20.0);
 	return true;
 }
 

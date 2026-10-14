@@ -178,6 +178,10 @@ def copy(dry):
             with open(gitignore, "a", encoding="utf-8") as f:
                 f.write("\n# Electric Dreams slice (Tools/ede_migrate.py): third-party, re-created by `ede_migrate.py copy`\n" + "\n".join(add) + "\n")
             print("  -> appended %d line(s) to .gitignore" % len(add))
+    if not dry and copied:
+        # The copied meshes come with Electric Dreams' collision (many cliffs have none, or a few hulls a 4x outcrop falls through). The fix lives in
+        # these gitignored assets, so every machine re-applies it after a copy.
+        print("NEXT (editor open, PIE stopped): python Tools/ue.py py --file Content/Python/fix_mesh_collision.py   -- gives the world-feature rocks their real surface as collision")
     return folded, per_group, conflicts, copied, nbytes
 
 

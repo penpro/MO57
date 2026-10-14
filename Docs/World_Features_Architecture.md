@@ -25,6 +25,18 @@ Only the `Many` policy with composition actors exists. Everything else below is 
   slope-aligned site, half the dressing is buried and what shows is the same rock as the spire, for 155 ISM components. A real cliff WALL needs its own
   composition (massive cliff meshes chained along the contour of a steep slope, vines on the face, talus at the foot) or generator crags dressed
   with these meshes -- logged as a design fork, not built. Graphs for every set are in `/Game/WorldFeatures/Cliffs/` (reference the gitignored ED content).
+- **Standing on our terrain:** the `MO Conform To Ground` PCG node (after Copy Points, before the mesh spawner) spreads a composition's BASE pieces
+  (pivots within FollowBelowCm of the root, unscaled) by BaseSpread, measures each base piece's lowest mesh point against the generator ground (+ EmbedCm x scale),
+  moves the WHOLE composition by the median correction (the column stays on its foot) and settles each base piece the rest of its own way. Needed because
+  Electric Dreams authored its assemblies' floor ~2.6 m above the root: a 4x outcrop floated 7-11 m. Row `SinkCm` now scales with the site scale, and the
+  placer checks slope / relief / sinkholes over the SCALED footprint.
+- **Collision policy for compositions:** `Content/Python/fix_mesh_collision.py` covers every mesh the compositions spawn (manifest
+  `Content/Python/data/worldfeature_meshes.json`, written in PIE by `worldfeature_meshes.py` because the meshes are PCG point attributes the asset registry
+  cannot see): rocks / cliffs / logs = complex as simple (their real surface: hulls left 15-25 m drops on a 4x cliff), standing trees = trunk capsule,
+  plants / vines / saplings = walk-through. The ED meshes are gitignored, so re-run it after `Tools/ede_migrate.py copy` (the tool says so).
+  Verified: capsule grid over a 4x spire 398/398 on the rock; the pawn dropped on a 54 m ledge stands on it.
+- **ED_RockSpire is 4x** (Wes, Oct 14: "about 4 times larger", base cliffs spread 1.3x, embedded): scale 3.6-4.4 (~140 m tall), footprint 16 m x scale,
+  600 m spacing, 1 / km2, spawn 1.5 km, slope <= 12 deg, sink 0 (the node grounds it).
 - **Dev:** `poi` / `biome` pickers, `MO.WorldFeatures.Dump`. Traps are in the handoff (`Docs/Handoff_2026-10-13.md`, Oct 14 sections).
 
 **Anchored in:** CLAUDE.md Engineering Principle #2 ("If N systems need

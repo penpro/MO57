@@ -1,0 +1,841 @@
+{
+ "/Engine/BasicShapes/Sphere.Sphere": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Custom/IvyTest/SM_CliffVine_08.SM_CliffVine_08": [
+  "ED_CliffAssembly",
+  "ED_RockSpire"
+ ],
+ "/Game/Custom/IvyTest/SM_CliffVine_09.SM_CliffVine_09": [
+  "ED_CliffAssembly",
+  "ED_RockSpire"
+ ],
+ "/Game/Custom/IvyTest/SM_Embankment_01.SM_Embankment_01": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Custom/IvyTest/SM_Embankment_02.SM_Embankment_02": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Custom/IvyTest/SM_Embankment_03.SM_Embankment_03": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Custom/IvyTest/SM_Embankment_04.SM_Embankment_04": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Custom/IvyTest/SM_Embankment_05.SM_Embankment_05": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Custom/IvyTest/SM_Embankment_06.SM_Embankment_06": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Custom/IvyTest/SM_EuropeanHornbeam_04.SM_EuropeanHornbeam_04": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Custom/IvyTest/SM_EuropeanHornbeam_05.SM_EuropeanHornbeam_05": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Custom/IvyTest/SM_EuropeanHornbeam_Forest_09_PP2/SM_EuropeanHornbeam_Forest_09_PP_Vine_00.SM_EuropeanHornbeam_Forest_09_PP_Vine_00": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Custom/IvyTest/SM_EuropeanHornbeam_Forest_09_PP2/SM_EuropeanHornbeam_Forest_09_PP_Vine_01.SM_EuropeanHornbeam_Forest_09_PP_Vine_01": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Custom/IvyTest/SM_EuropeanHornbeam_Forest_09_PP2/SM_EuropeanHornbeam_Forest_09_PP_Vine_02.SM_EuropeanHornbeam_Forest_09_PP_Vine_02": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Custom/IvyTest/SM_EuropeanHornbeam_Forest_09_PP2/SM_EuropeanHornbeam_Forest_09_PP_Vine_03.SM_EuropeanHornbeam_Forest_09_PP_Vine_03": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Custom/IvyTest/SM_EuropeanHornbeam_Forest_09_PP2/SM_EuropeanHornbeam_Forest_09_PP_Vine_04.SM_EuropeanHornbeam_Forest_09_PP_Vine_04": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Custom/IvyTest/SM_EuropeanHornbeam_Forest_09_PP2/SM_EuropeanHornbeam_Forest_09_PP_Vine_05.SM_EuropeanHornbeam_Forest_09_PP_Vine_05": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Custom/IvyTest/SM_GroundVine_02.SM_GroundVine_02": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Custom/IvyTest/SM_GroundVine_03.SM_GroundVine_03": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Custom/IvyTest/SM_HangingVine_03.SM_HangingVine_03": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Custom/IvyTest/SM_HangingVine_04.SM_HangingVine_04": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Custom/IvyTest/SM_HangingVine_05.SM_HangingVine_05": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Custom/IvyTest/SM_HangingVine_06.SM_HangingVine_06": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Custom/IvyTest/SM_HangingVine_07.SM_HangingVine_07": [
+  "ED_CliffAssembly",
+  "ED_RockSpire"
+ ],
+ "/Game/Custom/IvyTest/SM_HangingVine_08.SM_HangingVine_08": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Custom/IvyTest/SM_HangingVine_09.SM_HangingVine_09": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly",
+  "ED_SmallAssembly"
+ ],
+ "/Game/Custom/IvyTest/SM_HangingVine_10.SM_HangingVine_10": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Custom/IvyTest/SM_HangingVine_11.SM_HangingVine_11": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly",
+  "ED_SmallAssembly"
+ ],
+ "/Game/Custom/IvyTest/SM_MoneyPlant_01.SM_MoneyPlant_01": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly",
+  "ED_SmallAssembly"
+ ],
+ "/Game/Custom/IvyTest/SM_RiverBankVine_01.SM_RiverBankVine_01": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Custom/IvyTest/SM_RiverBankVine_02.SM_RiverBankVine_02": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Custom/IvyTest/SM_RiverBankVine_03.SM_RiverBankVine_03": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly",
+  "ED_SmallAssembly"
+ ],
+ "/Game/Custom/IvyTest/SM_RiverBankVine_04.SM_RiverBankVine_04": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Custom/IvyTest/SM_RiverBankVine_05.SM_RiverBankVine_05": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Custom/IvyTest/SM_RiverBankVine_06.SM_RiverBankVine_06": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Custom/RS_Assets/EstuaryBank/SM_Pebbles_01.SM_Pebbles_01": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Custom/RS_Assets/MossyRock_29/SM_GrassGroundPatch_01.SM_GrassGroundPatch_01": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Custom/RootsTest/SM_Roots_07.SM_Roots_07": [
+  "ED_SmallAssembly"
+ ],
+ "/Game/Custom/RootsTest/SM_Roots_08.SM_Roots_08": [
+  "ED_SmallAssembly"
+ ],
+ "/Game/Custom/RootsTest/SM_Roots_09.SM_Roots_09": [
+  "ED_SmallAssembly"
+ ],
+ "/Game/Custom/RootsTest/SM_Roots_10.SM_Roots_10": [
+  "ED_SmallAssembly"
+ ],
+ "/Game/Custom/RootsTest/SM_Roots_11.SM_Roots_11": [
+  "ED_SmallAssembly"
+ ],
+ "/Game/Custom/RootsTest/SM_Roots_13.SM_Roots_13": [
+  "ED_SmallAssembly"
+ ],
+ "/Game/Megascans/3D_Assets/BrokenStump/SM_BrokenStump_01.SM_BrokenStump_01": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Assets/DryRiverBed/SM_DryRiverBed_02.SM_DryRiverBed_02": [
+  "ED_CliffAssembly",
+  "ED_RockSpire"
+ ],
+ "/Game/Megascans/3D_Assets/FallenSpruceTree/SM_FallenSpruceTree_01.SM_FallenSpruceTree_01": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Assets/ForestGround/SM_ForestGround_01.SM_ForestGround_01": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Assets/ForestRoots/SM_ForestRoots_01.SM_ForestRoots_01": [
+  "ED_CliffAssembly",
+  "ED_RockSpire"
+ ],
+ "/Game/Megascans/3D_Assets/ForestTerrain/SM_ForestTerrain_01.SM_ForestTerrain_01": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Assets/ForestTerrain/SM_ForestTerrain_02.SM_ForestTerrain_02": [
+  "ED_CliffAssembly",
+  "ED_RockSpire",
+  "ED_SmallAssembly"
+ ],
+ "/Game/Megascans/3D_Assets/GrassyEmbankment/SM_GrassyEmbankment_01.SM_GrassyEmbankment_01": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Assets/GrassyEmbankment/SM_GrassyEmbankment_02.SM_GrassyEmbankment_02": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Assets/HugeSandstoneCliff/SM_HugeSandstoneCliff_03.SM_HugeSandstoneCliff_03": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Assets/HugeSandstoneCliff/SM_HugeSandstoneCliff_04.SM_HugeSandstoneCliff_04": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Assets/LichenedForestBoulder/SM_LichenedForestBoulder_01.SM_LichenedForestBoulder_01": [
+  "ED_SmallAssembly"
+ ],
+ "/Game/Megascans/3D_Assets/MassiveSandstoneCliff/SM_MassiveSandstoneCliff_05.SM_MassiveSandstoneCliff_05": [
+  "ED_CliffAssembly",
+  "ED_RockSpire"
+ ],
+ "/Game/Megascans/3D_Assets/MassiveTundraRockFormation/SM_MassiveTundraRockFormation_01.SM_MassiveTundraRockFormation_01": [
+  "ED_CliffAssembly",
+  "ED_RockSpire"
+ ],
+ "/Game/Megascans/3D_Assets/MossyEmbankment/SM_MossyEmbankment_01.SM_MossyEmbankment_01": [
+  "ED_SmallAssembly"
+ ],
+ "/Game/Megascans/3D_Assets/MossyEmbankment/SM_MossyEmbankment_02.SM_MossyEmbankment_02": [
+  "ED_CliffAssembly",
+  "ED_RockSpire",
+  "ED_SmallAssembly"
+ ],
+ "/Game/Megascans/3D_Assets/MossyForestBoulder/SM_MossyForestBoulder_02.SM_MossyForestBoulder_02": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly",
+  "ED_SmallAssembly"
+ ],
+ "/Game/Megascans/3D_Assets/MossyForestBoulder/SM_MossyForestBoulder_03.SM_MossyForestBoulder_03": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Assets/MossyForestBoulder/SM_MossyForestBoulder_04.SM_MossyForestBoulder_04": [
+  "ED_CliffAssembly",
+  "ED_RockSpire",
+  "ED_SmallAssembly"
+ ],
+ "/Game/Megascans/3D_Assets/MossyForestBoulder/SM_MossyForestBoulder_05.SM_MossyForestBoulder_05": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly",
+  "ED_SmallAssembly"
+ ],
+ "/Game/Megascans/3D_Assets/MossyForestBoulder/SM_MossyForestBoulder_06.SM_MossyForestBoulder_06": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Assets/MossyForestRock/SM_MossyForestRock_02.SM_MossyForestRock_02": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly",
+  "ED_SmallAssembly"
+ ],
+ "/Game/Megascans/3D_Assets/MossyForestRoots/SM_MossyForestRoots_02.SM_MossyForestRoots_02": [
+  "ED_CliffAssembly",
+  "ED_RockSpire"
+ ],
+ "/Game/Megascans/3D_Assets/MossyRocks/SM_MossyRocks_01.SM_MossyRocks_01": [
+  "ED_CliffAssembly",
+  "ED_RockSpire",
+  "ED_SmallAssembly"
+ ],
+ "/Game/Megascans/3D_Assets/MossyRocks/SM_MossyRocks_02.SM_MossyRocks_02": [
+  "ED_CliffAssembly",
+  "ED_RockSpire"
+ ],
+ "/Game/Megascans/3D_Assets/NordicBeachRocks/SM_NordicBeachRocks_01.SM_NordicBeachRocks_01": [
+  "ED_CliffAssembly",
+  "ED_RockSpire"
+ ],
+ "/Game/Megascans/3D_Assets/NordicBoulder/SM_NordicBoulder_01.SM_NordicBoulder_01": [
+  "ED_SmallAssembly"
+ ],
+ "/Game/Megascans/3D_Assets/OakBranch/SM_OakBranch_01.SM_OakBranch_01": [
+  "ED_SmallAssembly"
+ ],
+ "/Game/Megascans/3D_Assets/OldTreeBranch/SM_OldTreeBranch_02.SM_OldTreeBranch_02": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly",
+  "ED_SmallAssembly"
+ ],
+ "/Game/Megascans/3D_Assets/OldTreeBranch/SM_OldTreeBranch_04.SM_OldTreeBranch_04": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly",
+  "ED_SmallAssembly"
+ ],
+ "/Game/Megascans/3D_Assets/OldTreeBranch/SM_OldTreeBranch_05.SM_OldTreeBranch_05": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Assets/RockyForestPath/SM_RockyForestPath_01.SM_RockyForestPath_01": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly",
+  "ED_RockSpire"
+ ],
+ "/Game/Megascans/3D_Assets/RottenTreeStump/SM_RottenTreeStump_01.SM_RottenTreeStump_01": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Assets/RottenTreeStump/SM_RottenTreeStump_02.SM_RottenTreeStump_02": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Assets/SandstoneBoulder/SM_SandstoneBoulder_01.SM_SandstoneBoulder_01": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Assets/SandstoneBoulder/SM_SandstoneBoulder_02.SM_SandstoneBoulder_02": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Assets/SandstoneBoulder/SM_SandstoneBoulder_03.SM_SandstoneBoulder_03": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Assets/SandstoneBoulder/SM_SandstoneBoulder_04.SM_SandstoneBoulder_04": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Assets/SandstoneBoulder/SM_SandstoneBoulder_05.SM_SandstoneBoulder_05": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Assets/SmallStonesPack/SM_SmallStonesPack_02.SM_SmallStonesPack_02": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Assets/TundraRockyGround/SM_TundraRockyGround_01.SM_TundraRockyGround_01": [
+  "ED_SmallAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/AlexandraPalm/SM_AlexandraPalm_01.SM_AlexandraPalm_01": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly",
+  "ED_RockSpire"
+ ],
+ "/Game/Megascans/3D_Plants/AlexandraPalm/SM_AlexandraPalm_02.SM_AlexandraPalm_02": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly",
+  "ED_RockSpire"
+ ],
+ "/Game/Megascans/3D_Plants/AlexandraPalm/SM_AlexandraPalm_03.SM_AlexandraPalm_03": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly",
+  "ED_RockSpire"
+ ],
+ "/Game/Megascans/3D_Plants/Amaryllis/SM_Amaryllis_01.SM_Amaryllis_01": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/Amaryllis/SM_Amaryllis_02.SM_Amaryllis_02": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/Amaryllis/SM_Amaryllis_04.SM_Amaryllis_04": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/ArrowheadPlant/SM_ArrowheadPlant_01.SM_ArrowheadPlant_01": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/ArrowheadPlant/SM_ArrowheadPlant_02.SM_ArrowheadPlant_02": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/ArrowheadPlant/SM_ArrowheadPlant_03.SM_ArrowheadPlant_03": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/ArrowheadPlant/SM_ArrowheadPlant_04.SM_ArrowheadPlant_04": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/ArrowheadPlant/SM_ArrowheadPlant_05.SM_ArrowheadPlant_05": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/BeechFern/SM_BeechFern_01.SM_BeechFern_01": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/BeechFern/SM_BeechFern_02.SM_BeechFern_02": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/BeechFern/SM_BeechFern_03.SM_BeechFern_03": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/BeechFern/SM_BeechFern_05.SM_BeechFern_05": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/BeechFern/SM_BeechFern_08.SM_BeechFern_08": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/BeechFern/SM_BeechFern_09.SM_BeechFern_09": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/BeechFern/SM_BeechFern_10.SM_BeechFern_10": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/BeechFern/SM_BeechFern_11.SM_BeechFern_11": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/BeechFern/SM_BeechFern_12.SM_BeechFern_12": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/BeechFern/SM_BeechFern_13.SM_BeechFern_13": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/BroadleafLadyPalm/SM_BroadleafLadyPalm_01.SM_BroadleafLadyPalm_01": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/CastorOilPlant/SM_CastorOilPlant_03.SM_CastorOilPlant_03": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly",
+  "ED_SmallAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/CastorOilPlant/SM_CastorOilPlant_04.SM_CastorOilPlant_04": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/CastorOilPlant/SM_CastorOilPlant_06.SM_CastorOilPlant_06": [
+  "ED_SmallAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/DeadLeaves/SM_DeadLeaves_01.SM_DeadLeaves_01": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/DeadLeaves/SM_DeadLeaves_12.SM_DeadLeaves_12": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/DeadLeaves/SM_DeadLeaves_13.SM_DeadLeaves_13": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly",
+  "ED_SmallAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/DeadLeaves/SM_DeadLeaves_14.SM_DeadLeaves_14": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly",
+  "ED_SmallAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/DragonTree/SM_DragonTree_03.SM_DragonTree_03": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/DragonTree/SM_DragonTree_04.SM_DragonTree_04": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/DragonTree/SM_DragonTree_05.SM_DragonTree_05": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/Elderberry/SM_Elderberry_01.SM_Elderberry_01": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly",
+  "ED_SmallAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/Elderberry/SM_Elderberry_02.SM_Elderberry_02": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly",
+  "ED_SmallAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/Elderberry/SM_Elderberry_03.SM_Elderberry_03": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly",
+  "ED_SmallAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/Elderberry/SM_Elderberry_04.SM_Elderberry_04": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly",
+  "ED_SmallAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/Elderberry/SM_Elderberry_05.SM_Elderberry_05": [
+  "ED_SmallAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/Elderberry/SM_Elderberry_06.SM_Elderberry_06": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly",
+  "ED_SmallAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/Elderberry/SM_Elderberry_07.SM_Elderberry_07": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly",
+  "ED_SmallAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/Elderberry/SM_Elderberry_08.SM_Elderberry_08": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly",
+  "ED_RockSpire",
+  "ED_SmallAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/Elderberry/SM_Elderberry_09.SM_Elderberry_09": [
+  "ED_CliffAssembly",
+  "ED_RockSpire",
+  "ED_SmallAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/Elderberry/SM_Elderberry_10.SM_Elderberry_10": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly",
+  "ED_SmallAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/Elderberry/SM_Elderberry_11.SM_Elderberry_11": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly",
+  "ED_SmallAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/Elderberry/SM_Elderberry_12.SM_Elderberry_12": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly",
+  "ED_SmallAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/Elderberry/SM_Elderberry_13.SM_Elderberry_13": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly",
+  "ED_SmallAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/EnglishIvy/SM_EnglishIvy_01.SM_EnglishIvy_01": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly",
+  "ED_SmallAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/EnglishIvy/SM_EnglishIvy_02.SM_EnglishIvy_02": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/EnglishIvy/SM_EnglishIvy_03.SM_EnglishIvy_03": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly",
+  "ED_SmallAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/EnglishIvy/SM_EnglishIvy_04.SM_EnglishIvy_04": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly",
+  "ED_SmallAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/EnglishIvy/SM_EnglishIvy_05.SM_EnglishIvy_05": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/EnglishIvy/SM_EnglishIvy_06.SM_EnglishIvy_06": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly",
+  "ED_SmallAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/EnglishIvy/SM_EnglishIvy_07.SM_EnglishIvy_07": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/EnglishIvy/SM_EnglishIvy_08.SM_EnglishIvy_08": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/EuropeanHornbeam/Geometry/SimpleWind/SM_EuropeanHornbeam_Forest_05.SM_EuropeanHornbeam_Forest_05": [
+  "ED_CliffAssembly",
+  "ED_RockSpire",
+  "ED_SmallAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/EuropeanHornbeam/Geometry/SimpleWind/SM_EuropeanHornbeam_Forest_06.SM_EuropeanHornbeam_Forest_06": [
+  "ED_CliffAssembly",
+  "ED_RockSpire"
+ ],
+ "/Game/Megascans/3D_Plants/EuropeanHornbeam/Geometry/SimpleWind/SM_EuropeanHornbeam_Forest_08.SM_EuropeanHornbeam_Forest_08": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/EuropeanHornbeam/Geometry/SimpleWind/SM_EuropeanHornbeam_Forest_09.SM_EuropeanHornbeam_Forest_09": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly",
+  "ED_RockSpire"
+ ],
+ "/Game/Megascans/3D_Plants/EuropeanHornbeam/Geometry/SimpleWind/SM_EuropeanHornbeam_Forest_10.SM_EuropeanHornbeam_Forest_10": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly",
+  "ED_RockSpire",
+  "ED_SmallAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/EuropeanHornbeam/Geometry/SimpleWind/SM_EuropeanHornbeam_Sapling_02.SM_EuropeanHornbeam_Sapling_02": [
+  "ED_RockSpire"
+ ],
+ "/Game/Megascans/3D_Plants/EuropeanHornbeam/Geometry/SimpleWind/SM_EuropeanHornbeam_Sapling_03.SM_EuropeanHornbeam_Sapling_03": [
+  "ED_CliffAssembly",
+  "ED_RockSpire"
+ ],
+ "/Game/Megascans/3D_Plants/EuropeanHornbeam/Geometry/SimpleWind/SM_EuropeanHornbeam_Sapling_04.SM_EuropeanHornbeam_Sapling_04": [
+  "ED_RockSpire"
+ ],
+ "/Game/Megascans/3D_Plants/EuropeanHornbeam/Geometry/SimpleWind/SM_EuropeanHornbeam_Sapling_06.SM_EuropeanHornbeam_Sapling_06": [
+  "ED_RockSpire"
+ ],
+ "/Game/Megascans/3D_Plants/Fern/SM_Fern_02.SM_Fern_02": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly",
+  "ED_SmallAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/Fern/SM_Fern_03.SM_Fern_03": [
+  "ED_SmallAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/Fern/SM_Fern_06.SM_Fern_06": [
+  "ED_SmallAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/GroundCover/SM_GroundCover_02.SM_GroundCover_02": [
+  "ED_SmallAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/GroundCover/SM_GroundCover_03.SM_GroundCover_03": [
+  "ED_SmallAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/JanetCraigDracaena/SM_JanetCraigDracaena_01.SM_JanetCraigDracaena_01": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/JanetCraigDracaena/SM_JanetCraigDracaena_02.SM_JanetCraigDracaena_02": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/JanetCraigDracaena/SM_JanetCraigDracaena_03.SM_JanetCraigDracaena_03": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/JanetCraigDracaena/SM_JanetCraigDracaena_04.SM_JanetCraigDracaena_04": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/JanetCraigDracaena/SM_JanetCraigDracaena_05.SM_JanetCraigDracaena_05": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/JungleGinger/SM_JungleGinger_02.SM_JungleGinger_02": [
+  "ED_SmallAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/JungleGinger/SM_JungleGinger_04.SM_JungleGinger_04": [
+  "ED_SmallAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/JungleGinger/SM_JungleGinger_05.SM_JungleGinger_05": [
+  "ED_SmallAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/JungleGinger/SM_JungleGinger_06.SM_JungleGinger_06": [
+  "ED_SmallAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/KikuyuGrass/SM_KikuyuGrass_01.SM_KikuyuGrass_01": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/KikuyuGrass/SM_KikuyuGrass_07.SM_KikuyuGrass_07": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/KikuyuGrass/SM_KikuyuGrass_09.SM_KikuyuGrass_09": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/MoneyPlant/SM_MoneyPlant_02.SM_MoneyPlant_02": [
+  "ED_SmallAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/MoneyPlant/SM_MoneyPlant_03.SM_MoneyPlant_03": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly",
+  "ED_SmallAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/MoneyPlant/SM_MoneyPlant_04.SM_MoneyPlant_04": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly",
+  "ED_RockSpire",
+  "ED_SmallAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/MoneyPlant/SM_MoneyPlant_05.SM_MoneyPlant_05": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly",
+  "ED_RockSpire",
+  "ED_SmallAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/MoneyPlant/SM_MoneyPlant_06.SM_MoneyPlant_06": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly",
+  "ED_SmallAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/Periwinkle/SM_Periwinkle_01.SM_Periwinkle_01": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/Periwinkle/SM_Periwinkle_02.SM_Periwinkle_02": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/Periwinkle/SM_Periwinkle_03.SM_Periwinkle_03": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/Periwinkle/SM_Periwinkle_04.SM_Periwinkle_04": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly",
+  "ED_SmallAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/SilverLadyFern/SM_SilverLadyFern_02.SM_SilverLadyFern_02": [
+  "ED_SmallAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/SilverLadyFern/SM_SilverLadyFern_03.SM_SilverLadyFern_03": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly",
+  "ED_SmallAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/SilverLadyFern/SM_SilverLadyFern_04.SM_SilverLadyFern_04": [
+  "ED_SmallAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/SilverLadyFern/SM_SilverLadyFern_06.SM_SilverLadyFern_06": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/SilverLadyFern/SM_SilverLadyFern_07.SM_SilverLadyFern_07": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/YellowArchangel/SM_YellowArchangel_01.SM_YellowArchangel_01": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/YellowArchangel/SM_YellowArchangel_02.SM_YellowArchangel_02": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/YellowArchangel/SM_YellowArchangel_03.SM_YellowArchangel_03": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/YellowArchangel/SM_YellowArchangel_04.SM_YellowArchangel_04": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/YellowArchangel/SM_YellowArchangel_06.SM_YellowArchangel_06": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/YellowArchangel/SM_YellowArchangel_08.SM_YellowArchangel_08": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/YellowArchangel/SM_YellowArchangel_09.SM_YellowArchangel_09": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/YellowArchangel/SM_YellowArchangel_10.SM_YellowArchangel_10": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/YellowArchangel/SM_YellowArchangel_11.SM_YellowArchangel_11": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/YellowArchangel/SM_YellowArchangel_12.SM_YellowArchangel_12": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/ZamiaPalm/SM_ZamiaPalm_01.SM_ZamiaPalm_01": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/ZamiaPalm/SM_ZamiaPalm_02.SM_ZamiaPalm_02": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Megascans/3D_Plants/ZamiaPalm/SM_ZamiaPalm_03.SM_ZamiaPalm_03": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Meshes/_GENERATED/RockFormation/SM_EuropeanHornbeam_01.SM_EuropeanHornbeam_01": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Meshes/_GENERATED/RockFormation/SM_GrassyEmbankment_01.SM_GrassyEmbankment_01": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Meshes/_GENERATED/RockFormation/SM_NordicBeach_01.SM_NordicBeach_01": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Meshes/_GENERATED/RockFormation/SM_RockFormation_03.SM_RockFormation_03": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Meshes/_GENERATED/RockFormation/SM_RockFormation_06.SM_RockFormation_06": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Meshes/_GENERATED/RockFormation/SM_SandstoneCliff_01.SM_SandstoneCliff_01": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/Meshes/_GENERATED/RockFormation/SM_SandstoneCliff_03.SM_SandstoneCliff_03": [
+  "ED_CliffAssembly",
+  "ED_EmbankmentAssembly"
+ ],
+ "/Game/SmartAssets/AssetMeshes/SM_Cliff_01.SM_Cliff_01": [
+  "ED_CliffAssembly",
+  "ED_RockSpire"
+ ],
+ "/Game/SmartAssets/AssetMeshes/SM_Cliff_02.SM_Cliff_02": [
+  "ED_CliffAssembly",
+  "ED_RockSpire"
+ ],
+ "/Game/SmartAssets/AssetMeshes/SM_Cliff_03.SM_Cliff_03": [
+  "ED_CliffAssembly",
+  "ED_RockSpire"
+ ],
+ "/Game/SmartAssets/AssetMeshes/SM_Cliff_04.SM_Cliff_04": [
+  "ED_CliffAssembly",
+  "ED_RockSpire"
+ ],
+ "/Game/SmartAssets/AssetMeshes/SM_Cliff_06.SM_Cliff_06": [
+  "ED_CliffAssembly",
+  "ED_RockSpire"
+ ],
+ "/Game/SmartAssets/AssetMeshes/SM_Cliff_08.SM_Cliff_08": [
+  "ED_CliffAssembly",
+  "ED_RockSpire"
+ ],
+ "/Game/SmartAssets/AssetMeshes/SM_Cliff_09.SM_Cliff_09": [
+  "ED_CliffAssembly",
+  "ED_RockSpire"
+ ]
+}
