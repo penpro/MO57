@@ -77,6 +77,36 @@ int32 FMOWorldFeaturePlacer::GetFeatureIndex(FName FeatureId) const
 	return Features.IndexOfByPredicate([FeatureId](const FFeature& F) { return F.Id == FeatureId; });
 }
 
+bool FMOWorldFeaturePlacer::MeasureFootprintPlane(const FMOWorldGenParams& InParams, int32 InTerrainSeed, const FMOBiomeFinder& InFinder, double X, double Y,
+	double RadiusCm, float CentreGroundCm, FVector2D& OutGradient, float& OutMaxDeviationCm)
+{
+	// Least squares over 8 evenly spaced points: the cos/sin sums cancel, so the plane is closed form (gradient = sum(h * dir) / (4 R)).
+	float Heights[8];
+	double Mean = 0.0, Gx = 0.0, Gy = 0.0;
+	for (int32 K = 0; K < 8; ++K)
+	{
+		const double C = FMath::Cos(K * UE_PI / 4.0), S = FMath::Sin(K * UE_PI / 4.0);
+		const double Ax = X + RadiusCm * C, Ay = Y + RadiusCm * S;
+		Heights[K] = FMOWorldGen::SampleHeightCm(InParams, Ax, Ay, InTerrainSeed, InParams.Tuning.VoxelSizeCm);
+		if (InFinder.IsInWater(Ax, Ay, Heights[K]))
+		{
+			return false;
+		}
+		Mean += Heights[K] / 8.0;
+		Gx += Heights[K] * C;
+		Gy += Heights[K] * S;
+	}
+	OutGradient = FVector2D(Gx / (4.0 * RadiusCm), Gy / (4.0 * RadiusCm));
+	double MaxDev = FMath::Abs(CentreGroundCm - Mean);
+	for (int32 K = 0; K < 8; ++K)
+	{
+		const double Plane = Mean + RadiusCm * (OutGradient.X * FMath::Cos(K * UE_PI / 4.0) + OutGradient.Y * FMath::Sin(K * UE_PI / 4.0));
+		MaxDev = FMath::Max(MaxDev, FMath::Abs(Heights[K] - Plane));
+	}
+	OutMaxDeviationCm = static_cast<float>(MaxDev);
+	return true;
+}
+
 bool FMOWorldFeaturePlacer::Candidate(int32 FeatureIndex, const FIntPoint& Slot, FMOWorldFeatureSite& Out) const
 {
 	const FFeature& F = Features[FeatureIndex];
@@ -100,13 +130,33 @@ bool FMOWorldFeaturePlacer::Candidate(int32 FeatureIndex, const FIntPoint& Slot,
 	float Ground = 0.0f, Slope = 0.0f;
 	const int32 Biome = Finder.BiomeAt(X, Y, Ground, Slope);
 	const float AboveSea = Ground - Params->Tuning.SeaLevelCm;
+	const bool bAlign = R.bAlignToSlope && R.FootprintRadiusCm > 0.0f;
+	FVector2D Gradient = FVector2D::ZeroVector;
+	float Deviation = 0.0f;
+	if (bAlign)
+	{
+		// A hillside composition: the slope that matters is the footprint's, not the centre's.
+		if ((F.BiomeIndices.Num() > 0 && !F.BiomeIndices.Contains(Biome))
+			|| !MeasureFootprintPlane(*Params, TerrainSeed, Finder, X, Y, R.FootprintRadiusCm, Ground, Gradient, Deviation))
+		{
+			return false;
+		}
+		Slope = static_cast<float>(FMath::RadiansToDegrees(FMath::Atan(Gradient.Size())));
+	}
 	if ((F.BiomeIndices.Num() > 0 && !F.BiomeIndices.Contains(Biome)) || Slope < R.SlopeMinDeg || Slope > R.SlopeMaxDeg
 		|| AboveSea < R.MinHeightAboveSeaCm || AboveSea > R.MaxHeightAboveSeaCm || Finder.IsInWater(X, Y, Ground)
 		|| FMOWorldGen::DistanceToSinkholeRimZone(*Params, X, Y, TerrainSeed) < R.FootprintRadiusCm)
 	{
 		return false;
 	}
-	if (R.MaxFootprintReliefCm > 0.0f && R.FootprintRadiusCm > 0.0f)
+	if (bAlign)
+	{
+		if (R.MaxFootprintReliefCm > 0.0f && Deviation > R.MaxFootprintReliefCm)
+		{
+			return false;
+		}
+	}
+	else if (R.MaxFootprintReliefCm > 0.0f && R.FootprintRadiusCm > 0.0f)
 	{
 		for (int32 K = 0; K < 8; ++K)
 		{
@@ -121,7 +171,16 @@ bool FMOWorldFeaturePlacer::Candidate(int32 FeatureIndex, const FIntPoint& Slot,
 	Out.FeatureId = F.Id;
 	Out.Slot = Slot;
 	Out.Location = FVector(X, Y, Ground);
-	Out.YawDegrees = static_cast<float>(WorldFeatureU01(H, 3) * 360.0);
+	if (bAlign)
+	{
+		const double Downhill = FMath::RadiansToDegrees(FMath::Atan2(-Gradient.Y, -Gradient.X));
+		const double Jitter = (2.0 * WorldFeatureU01(H, 3) - 1.0) * R.AlignYawJitterDeg;
+		Out.YawDegrees = static_cast<float>(FMath::Fmod(Downhill - R.AuthoredDownhillYawDeg + Jitter + 720.0, 360.0));
+	}
+	else
+	{
+		Out.YawDegrees = static_cast<float>(WorldFeatureU01(H, 3) * 360.0);
+	}
 	Out.Scale = FMath::Lerp(R.MinScale, FMath::Max(R.MinScale, R.MaxScale), static_cast<float>(WorldFeatureU01(H, 4)));
 	Out.FootprintRadiusCm = R.FootprintRadiusCm * Out.Scale;
 	Out.Seed = static_cast<int32>(WorldFeatureMix64(H ^ 0x5EEDULL) & 0x7fffffff);

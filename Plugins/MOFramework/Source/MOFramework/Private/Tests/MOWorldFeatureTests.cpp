@@ -3,7 +3,9 @@
 
 #include "Misc/AutomationTest.h"
 #include "MOWorldFeatureSubsystem.h"
+#include "MOWorldFeatureActor.h"
 #include "MOWorldSeedSubsystem.h"
+#include "MOWorldGen.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -106,6 +108,103 @@ bool FMOWorldFeature_Placer::RunTest(const FString& Parameters)
 		}
 	}
 	TestTrue(FString::Printf(TEXT("CONTROL: without the Big row, %d Small site(s) would overlap a Big footprint"), Inside), Inside > 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOWorldFeature_ChooseVariant,
+	"MOFramework.WorldFeatures.ChooseVariant",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOWorldFeature_ChooseVariant::RunTest(const FString& Parameters)
+{
+	// The site seed picks the composition: in range for every seed (negative too), the same on every call, and every variant gets used.
+	TestEqual(TEXT("no variants -> none"), AMOWorldFeatureActor::ChooseVariant(12345, 0), INDEX_NONE);
+	int32 Counts[6] = {};
+	int32 OutOfRange = 0, Unstable = 0;
+	for (int32 I = 0; I < 6000; ++I)
+	{
+		const int32 Seed = static_cast<int32>(static_cast<uint32>(I) * 2654435761u);   // spread over the whole int32 range, half negative
+		const int32 V = AMOWorldFeatureActor::ChooseVariant(Seed, 6);
+		OutOfRange += (V < 0 || V >= 6) ? 1 : 0;
+		Unstable += V != AMOWorldFeatureActor::ChooseVariant(Seed, 6) ? 1 : 0;
+		Counts[FMath::Clamp(V, 0, 5)]++;
+	}
+	TestEqual(TEXT("always in range"), OutOfRange, 0);
+	TestEqual(TEXT("deterministic"), Unstable, 0);
+	for (int32 V = 0; V < 6; ++V)
+	{
+		TestTrue(FString::Printf(TEXT("variant %d used (%d of 6000)"), V, Counts[V]), Counts[V] > 600);
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOWorldFeature_SlopeAlign,
+	"MOFramework.WorldFeatures.SlopeAlign",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOWorldFeature_SlopeAlign::RunTest(const FString& Parameters)
+{
+	// A hillside composition (bAlignToSlope) stands where the plane across its whole footprint has the row's slope, turned so its own downhill
+	// direction faces the terrain's; an unaligned twin is the control (random yaw: the facing check must be able to fail).
+	const FMOWorldGenParamsRef P = FMOWorldGenParamsProvider::Get();
+	const int32 Seed = UMOWorldSeedSubsystem::TerrainSeedFromWorldSeed(-1675528670);
+	FMOWorldFeatureDefinitionRow Hill;
+	Hill.DensityPerKm2 = 50.0f;            // saturates: every square that qualifies has a site
+	Hill.SpacingCm = 30000.0f;
+	Hill.FootprintRadiusCm = 15000.0f;
+	Hill.SlopeMinDeg = 8.0f;
+	Hill.SlopeMaxDeg = 25.0f;
+	Hill.MaxFootprintReliefCm = 2500.0f;
+	Hill.bAlignToSlope = true;
+	Hill.AuthoredDownhillYawDeg = 30.0f;
+	Hill.AlignYawJitterDeg = 10.0f;
+	FMOWorldFeatureDefinitionRow Loose = Hill;
+	Loose.bAlignToSlope = false;
+	Loose.SlopeMaxDeg = 90.0f;
+	Loose.MaxFootprintReliefCm = 0.0f;
+	Loose.SlopeMinDeg = 0.0f;
+
+	const FBox2D Area(FVector2D(-1000000.0, -1000000.0), FVector2D(1000000.0, 1000000.0));   // 20 x 20 km
+	auto Check = [&](const FMOWorldFeatureDefinitionRow& Row, int32& OutSites, int32& OutFacing, int32& OutSlopeOk, int32& OutFlat)
+	{
+		FMOWorldFeaturePlacer Placer(P, Seed, { { FName(TEXT("Hill")), Row } });
+		TArray<FMOWorldFeatureSite> Sites;
+		Placer.SitesTouching(Area, Sites);
+		const FMOBiomeFinder Finder(P, Seed);
+		OutSites = Sites.Num();
+		OutFacing = OutSlopeOk = OutFlat = 0;
+		for (const FMOWorldFeatureSite& S : Sites)
+		{
+			FVector2D G;
+			float Dev = 0.0f;
+			const float Ground = FMOWorldGen::SampleHeightCm(*P, S.Location.X, S.Location.Y, Seed, P->Tuning.VoxelSizeCm);
+			if (!FMOWorldFeaturePlacer::MeasureFootprintPlane(*P, Seed, Finder, S.Location.X, S.Location.Y, Hill.FootprintRadiusCm, Ground, G, Dev))
+			{
+				continue;
+			}
+			const float Slope = FMath::RadiansToDegrees(FMath::Atan(G.Size()));
+			OutSlopeOk += (Slope >= Hill.SlopeMinDeg - 0.01f && Slope <= Hill.SlopeMaxDeg + 0.01f && Dev <= Hill.MaxFootprintReliefCm + 1.0f) ? 1 : 0;
+			OutFlat += Slope < 3.0f ? 1 : 0;
+			const float Downhill = FMath::RadiansToDegrees(FMath::Atan2(-G.Y, -G.X));
+			const float Facing = FMath::FindDeltaAngleDegrees(Downhill, S.YawDegrees + Hill.AuthoredDownhillYawDeg);
+			OutFacing += FMath::Abs(Facing) <= Hill.AlignYawJitterDeg + 0.01f ? 1 : 0;
+		}
+	};
+	int32 Sites = 0, Facing = 0, SlopeOk = 0, Flat = 0;
+	Check(Hill, Sites, Facing, SlopeOk, Flat);
+	AddInfo(FString::Printf(TEXT("aligned: %d sites in 400 km^2"), Sites));
+	if (!TestTrue(TEXT("hillside sites exist"), Sites >= 10))
+	{
+		return false;
+	}
+	TestEqual(TEXT("every aligned site faces downhill (within the jitter)"), Facing, Sites);
+	TestEqual(TEXT("every aligned site's footprint plane has the row's slope and relief"), SlopeOk, Sites);
+
+	int32 LSites = 0, LFacing = 0, LSlopeOk = 0, LFlat = 0;
+	Check(Loose, LSites, LFacing, LSlopeOk, LFlat);
+	AddInfo(FString::Printf(TEXT("CONTROL unaligned: %d sites, %d facing downhill, %d on the slope range, %d flat"), LSites, LFacing, LSlopeOk, LFlat));
+	TestTrue(TEXT("CONTROL: random yaw mostly does not face downhill"), LFacing < LSites / 2);
+	TestTrue(TEXT("CONTROL: without the slope rule some sites stand on flat ground"), LFlat > 0);
 	return true;
 }
 

@@ -1,8 +1,31 @@
 # World Features Architecture
 
-**Status:** design plan. Nothing in this doc is built yet. This is the
+**Status:** design plan, partly built -- see "As built" just below. This is the
 target abstraction so we don't ship cave-system, river-system,
 POI-system, landmark-system as four piecemeal codebases.
+
+## As built (Oct 14 2026)
+
+Only the `Many` policy with composition actors exists. Everything else below is still the plan.
+
+- **Catalog:** `DT_WorldFeatures` (`FMOWorldFeatureDefinitionRow`, `MOWorldFeatureTypes.h`): the composition actor class + actor property values
+  (ImportText strings), biomes, density / spacing / footprint / priority, slope / height above sea / footprint relief, sink, scale, spawn distance.
+- **Placer:** `FMOWorldFeaturePlacer` -- pure and deterministic (every co-op machine computes the same sites): one jittered candidate per
+  SpacingCm square, the row's own rules, then higher-priority footprints win. **Slope-aligned rows** (`bAlignToSlope`): the slope is the plane
+  through 8 generator heights on the footprint's edge (`MeasureFootprintPlane`), relief is the deviation from that plane, and the yaw turns
+  the composition's `AuthoredDownhillYawDeg` to face the terrain's downhill (+- `AlignYawJitterDeg`). Tests `WorldFeatures.Placer`, `.SlopeAlign`.
+- **Registry:** `UMOWorldFeatureSubsystem` spawns the actors locally near every player (never replicated), despawns past 1.25x the spawn
+  distance, writes the site seed into the actor's PCG components; the biome scatter skips every footprint.
+- **Generic composition actor:** `AMOWorldFeatureActor` -- a PCG component + `Variants` (PCG graphs); the site seed picks one
+  (`ChooseVariant`, test `WorldFeatures.ChooseVariant`). A PCG-only POI is a graph + a row: no Blueprint, no code.
+- **Rows (Electric Dreams, ElectricForest):** ED_CliffAssembly / ED_EmbankmentAssembly / ED_SmallAssembly (ED's own BP_PCG_*Assembly, live PCG),
+  **ED_RockSpire** (`PL_LargeCliff_01b/01c`: ~35 m mossy rock formations with cliff vines, 500-830 instances), **ED_CliffWall disabled** (below).
+- **Finding -- the demo's "LargeCliff" sets are not walls.** `PL_LargeCliff_02b..02e` are ONE ~35 m formation plus ~8k dressing pieces laid on the demo
+  landscape's 15 deg, 84 m-deep hillside (fitted: authored downhill ~31 deg in the set's frame, ground ~21 m above the root). On our terrain, even on a
+  slope-aligned site, half the dressing is buried and what shows is the same rock as the spire, for 155 ISM components. A real cliff WALL needs its own
+  composition (massive cliff meshes chained along the contour of a steep slope, vines on the face, talus at the foot) or generator crags dressed
+  with these meshes -- logged as a design fork, not built. Graphs for every set are in `/Game/WorldFeatures/Cliffs/` (reference the gitignored ED content).
+- **Dev:** `poi` / `biome` pickers, `MO.WorldFeatures.Dump`. Traps are in the handoff (`Docs/Handoff_2026-10-13.md`, Oct 14 sections).
 
 **Anchored in:** CLAUDE.md Engineering Principle #2 ("If N systems need
 the same behavior, build one abstraction — not N copies") and #9

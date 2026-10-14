@@ -50,6 +50,11 @@ struct MOFRAMEWORK_API FMOWorldFeaturePlacer
 
 	int32 GetFeatureIndex(FName FeatureId) const;
 
+	/** The plane through 8 generator heights on a circle of RadiusCm around (X, Y): OutGradient = height change per cm (downhill = -gradient),
+	 *  OutMaxDeviationCm = the farthest of those points and the centre (CentreGroundCm) from that plane. False if an edge point is in water. */
+	static bool MeasureFootprintPlane(const FMOWorldGenParams& Params, int32 TerrainSeed, const FMOBiomeFinder& Finder, double X, double Y, double RadiusCm,
+		float CentreGroundCm, FVector2D& OutGradient, float& OutMaxDeviationCm);
+
 private:
 	FMOWorldGenParamsRef Params;
 	int32 TerrainSeed = 0;

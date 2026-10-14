@@ -89,9 +89,23 @@ struct MOFRAMEWORK_API FMOWorldFeatureDefinitionRow : public FTableRowBase
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Placement")
 	float MaxHeightAboveSeaCm = 100000.0f;
 
-	/** Max height difference (cm) between the centre and 8 points on the footprint's edge: compositions built on flat ground stay off bumps (0 = no check). */
+	/** Max height difference (cm) between the centre and 8 points on the footprint's edge: compositions built on flat ground stay off bumps (0 = no check).
+	 *  With bAlignToSlope: the edge points' distance from the plane through them (the hillside may be steep, not lumpy). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Placement", meta=(ClampMin="0.0"))
 	float MaxFootprintReliefCm = 0.0f;
+
+	/** Authored on a hillside (Electric Dreams' big cliff sets): the slope is the plane through the footprint's edge, not the centre's, and the
+	 *  composition turns so AuthoredDownhillYawDeg faces the terrain's downhill. SlopeMin/MaxDeg then bound that plane. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Placement")
+	bool bAlignToSlope = false;
+
+	/** The composition's own downhill direction (degrees in its local frame, 0 = +X, 90 = +Y). Only with bAlignToSlope. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Placement", meta=(EditCondition="bAlignToSlope"))
+	float AuthoredDownhillYawDeg = 0.0f;
+
+	/** Random turn either side of the aligned yaw (degrees). Only with bAlignToSlope. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Placement", meta=(EditCondition="bAlignToSlope", ClampMin="0.0", ClampMax="180.0"))
+	float AlignYawJitterDeg = 10.0f;
 
 	/** Buried this deep (cm): a composition authored on a flat floor shows no gap on uneven ground. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Placement", meta=(ClampMin="0.0"))
