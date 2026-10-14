@@ -2417,6 +2417,11 @@ def analyse_bugreport_upload(body, meta, title, user_name="", computer_name="", 
                      fields.get("Session.NetMode") == "ListenServer" and fields.get("Player.Pawn", "(none)") != "(none)",
                      f"NetMode={fields.get('Session.NetMode')} Pawn={fields.get('Player.Pawn')}"))
 
+        # "Item looked at" (FMOBugReportLookAt): the view is always recorded with a command that rebuilds it; then either what was hit or that nothing was.
+        look_ok = bool(fields.get("LookAt.View")) and fields.get("LookAt.Reproduce", "").startswith("MO.Cam.LookAt ")             and bool(fields.get("LookAt.Distance") or fields.get("LookAt.Hit"))
+        rows.append(("the report says what the player was looking at (LookAt.*)", look_ok,
+                     " | ".join(f"{k}={fields[k]}" for k in sorted(fields) if k.startswith("LookAt."))[:400] or "no LookAt rows"))
+
     log = bundle.text("game.log")
     rows.append(("the log tail is this game's log", "LogInit" in log or "LogMOFramework" in log, f"{len(log)} chars"))
     rows.append(("the readable report lists the attachments and the player's category",

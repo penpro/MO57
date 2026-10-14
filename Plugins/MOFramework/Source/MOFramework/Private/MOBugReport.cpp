@@ -1,5 +1,6 @@
 #include "MOBugReport.h"
 #include "MOBugReportBundle.h"
+#include "MOBugReportLookAt.h"
 #include "MOFramework.h"
 #include "MOBuildInfo.h"
 #include "MOGameClockSubsystem.h"
@@ -316,6 +317,19 @@ void UMOBugReportSubsystem::RegisterBuiltInContributors()
 		Out.Emplace(TEXT("Location"), FString::Printf(TEXT("%.0f, %.0f, %.0f"), Location.X, Location.Y, Location.Z));
 		Out.Emplace(TEXT("Speed"), FString::Printf(TEXT("%.0f"), Pawn->GetVelocity().Size()));
 	});
+
+	// What the player was looking at when the form opened (captured then: CaptureLookAt), so a report names the asset.
+	RegisterContributor(TEXT("LookAt"), [this](const UWorld*, FMOBugReportFields& Out)
+	{
+		Out.Append(LookAtFields);
+	});
+}
+
+void UMOBugReportSubsystem::CaptureLookAt()
+{
+	LookAtFields.Reset();
+	const UGameInstance* GameInstance = GetGameInstance();
+	FMOBugReportLookAt::Capture(GameInstance ? GameInstance->GetWorld() : nullptr, LookAtFields);
 }
 
 // ============================================================================
@@ -786,6 +800,7 @@ static FAutoConsoleCommandWithWorldAndArgs GBugReportPreviewCommand(
 			UE_LOG(LogMOFramework, Warning, TEXT("[MOBugReport] Preview: no bug report subsystem in this world"));
 			return;
 		}
+		Reports->CaptureLookAt();   // what the camera faces now (the form does this when it opens)
 		FMOBugReportDraft Draft;
 		Draft.Title = TEXT("Preview");
 		Draft.Category = UMOBugReportSubsystem::GetCategories()[0];
@@ -852,6 +867,10 @@ static FAutoConsoleCommandWithWorldAndArgs GBugReportSendTestCommand(
 		TWeakObjectPtr<UMOBugReportSubsystem> Weak(Reports);
 		auto CaptureThenSend = [SendNow, Weak, bShot]()
 		{
+			if (UMOBugReportSubsystem* Subsystem = Weak.Get())
+			{
+				Subsystem->CaptureLookAt();
+			}
 			if (!bShot)
 			{
 				SendNow(Weak);

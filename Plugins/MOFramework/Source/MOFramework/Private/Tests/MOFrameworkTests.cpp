@@ -32,6 +32,8 @@
 #include "Modules/ModuleManager.h"
 #include "Engine/DataTable.h"
 #include "Engine/GameInstance.h"
+#include "Engine/HitResult.h"
+#include "MOBugReportLookAt.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -1184,6 +1186,45 @@ bool FMOTutorialText_YieldsToMenus::RunTest(const FString& Parameters)
 	TestEqual(TEXT("tracker wanted, menu open, yielding disabled: stays shown"), UMOQuestUIController::ComputeQuestHUDVisibility(true, true, false), ESlateVisibility::HitTestInvisible);
 	TestEqual(TEXT("CONTROL: tracker not wanted, no menu: hidden"), UMOQuestUIController::ComputeQuestHUDVisibility(false, false, true), ESlateVisibility::Collapsed);
 	TestEqual(TEXT("CONTROL: tracker not wanted, yielding disabled, menu open: hidden"), UMOQuestUIController::ComputeQuestHUDVisibility(false, true, false), ESlateVisibility::Collapsed);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOBugReportLookAtRowsTest, "MOFramework.BugReport.LookAtRows",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOBugReportLookAtRowsTest::RunTest(const FString& Parameters)
+{
+	// The "item looked at" rows: the view is always there (with a command that rebuilds it), a miss says so, and a hit reports where it is.
+	const auto Find = [](const FMOBugReportFields& Rows, const TCHAR* Name) -> FString
+	{
+		for (const TPair<FString, FString>& Row : Rows)
+		{
+			if (Row.Key == Name)
+			{
+				return Row.Value;
+			}
+		}
+		return TEXT("<missing>");
+	};
+	FMOBugReportFields Miss;
+	FMOBugReportLookAt::Describe(nullptr, FVector(100.0, 200.0, 300.0), FRotator(-10.0, 90.0, 0.0), FHitResult(), Miss);
+	TestTrue(TEXT("a miss keeps the view"), Find(Miss, TEXT("View")).StartsWith(TEXT("100 200 300")));
+	TestTrue(TEXT("a miss can be reproduced"), Find(Miss, TEXT("Reproduce")).StartsWith(TEXT("MO.Cam.LookAt 100 200 300 ")));
+	TestEqual(TEXT("a miss says so"), Find(Miss, TEXT("Hit")), FString(TEXT("(nothing within 2000 m)")));
+	TestEqual(TEXT("a miss names no mesh"), Find(Miss, TEXT("Mesh")), FString(TEXT("<missing>")));
+
+	FHitResult Ground;
+	Ground.bBlockingHit = true;
+	Ground.ImpactPoint = FVector(100.0, 1200.0, 300.0);
+	Ground.ImpactNormal = FVector::UpVector;
+	Ground.Distance = 1000.0f;
+	FMOBugReportFields Hit;
+	FMOBugReportLookAt::Describe(nullptr, FVector(100.0, 200.0, 300.0), FRotator(0.0, 90.0, 0.0), Ground, Hit);
+	TestEqual(TEXT("distance in metres"), Find(Hit, TEXT("Distance")), FString(TEXT("10.0 m")));
+	TestEqual(TEXT("flat ground"), Find(Hit, TEXT("Slope")), FString(TEXT("0 deg")));
+	TestEqual(TEXT("the command looks at the hit point"), Find(Hit, TEXT("Reproduce")), FString(TEXT("MO.Cam.LookAt 100 200 300 100 1200 300")));
+	TestEqual(TEXT("no physical material -> default"), Find(Hit, TEXT("PhysMaterial")), FString(TEXT("(default)")));
+	TestEqual(TEXT("CONTROL: a hit has no miss row"), Find(Hit, TEXT("Hit")), FString(TEXT("<missing>")));
 	return true;
 }
 

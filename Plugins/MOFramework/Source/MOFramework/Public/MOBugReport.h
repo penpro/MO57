@@ -134,6 +134,10 @@ public:
 	int32 GetScreenshotBytes() const { return CapturedScreenshot.Num(); }
 	void DiscardScreenshot() { CapturedScreenshot.Reset(); }
 
+	/** Record what the player is looking at right now (FMOBugReportLookAt: the asset under the screen centre); reported as LookAt.* rows. Call it when the form
+	 *  opens, with the screenshot -- once the form covers the view the moment is gone. */
+	void CaptureLookAt();
+
 	/** Attach a ready-made JPEG instead of capturing one (tools, and the size-cap test). */
 	void SetScreenshot(TArray<uint8> Jpeg, int32 Width, int32 Height)
 	{
@@ -201,6 +205,9 @@ private:
 	FString SaveBundleToDisk(const TArray<uint8>& Bundle, const FGuid& ReportId) const;
 
 	TArray<FContributorEntry> Contributors;
+
+	/** What the player was looking at when the report was opened (CaptureLookAt). */
+	FMOBugReportFields LookAtFields;
 
 	/** JPEG of the frame the report was opened on. */
 	TArray<uint8> CapturedScreenshot;

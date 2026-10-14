@@ -404,6 +404,7 @@ AActor* UMOWorldFeatureSubsystem::SpawnSite(const FMOWorldFeaturePlacer::FFeatur
 	}
 	// Every machine builds its own copy from the same site (like PCG): never replicated, so a host's copy does not double a client's.
 	Actor->SetReplicates(false);
+	Actor->Tags.AddUnique(Feature.Id);   // the row id: a bug report's LookAt names the feature
 	for (const TPair<FName, FString>& Value : Feature.Row.ActorProperties)
 	{
 		FProperty* Property = Class->FindPropertyByName(Value.Key);

@@ -101,6 +101,7 @@ void UMOBugReportPanel::PrepareForDisplay()
 	}
 	if (UMOBugReportSubsystem* Reports = UMOBugReportSubsystem::Get(this))
 	{
+		Reports->CaptureLookAt();      // before the form covers the view: what the player was looking at
 		Reports->CaptureScreenshot();
 	}
 }

@@ -90,6 +90,13 @@ def main(argv=None) -> int:
             if info["description"]:
                 print("    ", info["description"][:200].replace("\n", " "))
             print(f"     build {info['build']} @ {info['commit']}   contact: {info['contact'] or '(none)'}   files: {', '.join(info['files'])}   id {meta['id'][:8]}")
+            f = info.get("fields", {})
+            if f.get("LookAt.Mesh") or f.get("LookAt.Actor") or f.get("LookAt.Hit"):
+                # What the player was looking at when the form opened (FMOBugReportLookAt): the asset first, then how to stand where they stood.
+                seen = f.get("LookAt.Mesh") or f.get("LookAt.Component") or f.get("LookAt.Hit", "")
+                extra = "; ".join(x for x in (f.get("LookAt.Actor", ""), f.get("LookAt.Instance", ""), f.get("LookAt.MeshCollision", ""), f.get("LookAt.Biome", "")) if x)
+                print(f"     looking at: {seen}  ({f.get('LookAt.Distance', '?')})  {extra}")
+                print(f"     reproduce:  {f.get('LookAt.Reproduce', '')}")
         print()
 
     for meta, err in broken:
