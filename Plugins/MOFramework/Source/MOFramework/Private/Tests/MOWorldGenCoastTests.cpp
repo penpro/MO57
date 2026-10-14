@@ -4,6 +4,7 @@
 #include "HAL/PlatformTime.h"
 #include "MOWorldGen.h"
 #include "MOUplandLakeSubsystem.h"
+#include "MOWorldSeedSubsystem.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -127,6 +128,76 @@ bool FMOWorldGen_CoastalSpawn::RunTest(const FString& Parameters)
 	TestEqual(TEXT("no spawn stands on an island (a landmass under the minimum area)"), OnIsland, 0);
 	TestTrue(FString::Printf(TEXT("most coasts look across the water at a real skyline: ground standing >= 1 degree above the horizon on at least 3 of 4 seeds (%d of %d)"), WithSkyline, Found), WithSkyline * 4 >= Found * 3);
 	TestTrue(FString::Printf(TEXT("the search is fast enough for a loading screen: worst %.0f ms (limit 1500)"), WorstMs), WorstMs < 1500.0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOWorldGen_CoastalSpawnOnVegetatedGround,
+	"MOFramework.WorldGen.CoastalSpawnOnVegetatedGround",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+// The spawn stands on CLIMATE-biome ground (forest / meadow / scrub), not on the shore strand: on a wide flat coast the old search took the first dry spot 50 m back from the
+// water, which is all shore sand (world seed -1675528670: the nearest tree 141 m away and nothing but sand in view, reported as "zero PCG"). Real biomes (published params).
+bool FMOWorldGen_CoastalSpawnOnVegetatedGround::RunTest(const FString& Parameters)
+{
+	const FMOWorldGenParamsRef P = FMOWorldGenParamsProvider::Get();
+	if (!TestTrue(TEXT("the published params have biomes"), P->Biomes.Num() >= 2))
+	{
+		return false;
+	}
+	auto ClimateShare = [&P](const FMOCoastalSpawn& S, int32 TerrainSeed)
+	{
+		FMOClimateSample Climate;
+		const float Height = FMOWorldGen::SampleHeightCm(*P, S.Location.X, S.Location.Y, TerrainSeed, P->Tuning.VoxelSizeCm, &Climate);
+		FMOWorldGen::FBiomeWeight Weights[3];
+		const int32 Num = FMOWorldGen::SampleSurfaceBiomeWeights(*P, S.Location.X, S.Location.Y, TerrainSeed, Height, Climate.Moisture,
+			FMOWorldGen::TemperatureAtHeight(*P, Climate.TemperatureSeaLevel, Height), Weights, 3);
+		float Share = 0.0f;
+		for (int32 I = 0; I < Num; ++I)
+		{
+			Share += P->Biomes.IsValidIndex(Weights[I].Biome) && P->Biomes[Weights[I].Biome].IsClimateBiome() ? Weights[I].Weight : 0.0f;
+		}
+		return Share;
+	};
+
+	TArray<int32> WorldSeeds = { -1675528670, 1029024224, 7, 2024, 42 };
+	for (int32 I = 0; I < 15; ++I)
+	{
+		WorldSeeds.Add(1000 + 7919 * I);
+	}
+	const FMOCoastalSearch Search;
+	FMOCoastalSearch Old = Search;
+	Old.MinClimateGroundWeight = 0.0f;
+	int32 Found = 0, OnBare = 0, OldOnBare = 0;
+	bool bReportedSeedOld = false;
+	for (const int32 WorldSeed : WorldSeeds)
+	{
+		const int32 TerrainSeed = UMOWorldSeedSubsystem::TerrainSeedFromWorldSeed(WorldSeed);
+		FMOCoastalSpawn S, O;
+		if (FMOWorldGen::FindCoastalSpawn(*P, TerrainSeed, O, Old))
+		{
+			const float OldShare = ClimateShare(O, TerrainSeed);
+			OldOnBare += OldShare < Search.MinClimateGroundWeight ? 1 : 0;
+			if (WorldSeed == -1675528670)
+			{
+				bReportedSeedOld = OldShare < Search.MinClimateGroundWeight;
+				AddInfo(FString::Printf(TEXT("world seed %d without the rule: (%.0f, %.0f), climate ground %.2f"), WorldSeed, O.Location.X, O.Location.Y, OldShare));
+			}
+		}
+		if (!FMOWorldGen::FindCoastalSpawn(*P, TerrainSeed, S, Search))
+		{
+			AddInfo(FString::Printf(TEXT("world seed %d: no coastal spawn on vegetated ground"), WorldSeed));
+			continue;
+		}
+		++Found;
+		const float Share = ClimateShare(S, TerrainSeed);
+		OnBare += Share < Search.MinClimateGroundWeight ? 1 : 0;
+		AddInfo(FString::Printf(TEXT("world seed %d: spawn (%.0f, %.0f), climate ground %.2f, %.0f m from the old spawn"), WorldSeed, S.Location.X, S.Location.Y, Share,
+			FVector2D::Distance(S.Location, O.Location) / 100.0f));
+	}
+	TestTrue(FString::Printf(TEXT("at least 90%% of seeds still find a coastal spawn (%d of %d)"), Found, WorldSeeds.Num()), Found * 10 >= WorldSeeds.Num() * 9);
+	TestEqual(TEXT("every spawn stands on climate-biome ground (>= MinClimateGroundWeight)"), OnBare, 0);
+	TestTrue(TEXT("CONTROL: the reported seed's spawn WITHOUT the rule is on shore ground (so the check above can fail)"), bReportedSeedOld);
+	AddInfo(FString::Printf(TEXT("without the rule %d of %d spawns stood on band-biome ground"), OldOnBare, WorldSeeds.Num()));
 	return true;
 }
 

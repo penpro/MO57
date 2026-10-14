@@ -732,6 +732,7 @@ struct FMOCoastalSearch
 	float FarElevationCap = 0.04f;       // the far ground's elevation angle (height / distance) that scores fully: 0.04 ~ 2.3 degrees, e.g. 200 m at 5 km
 	float MinLandmassKm2 = 600.0f;       // the spawn must stand on a landmass at least this big: never an island (there are no boats; an island start would be a prison)
 	float BorderMarginCm = 600000.0f;    // stay this far from the world border (6 km): the view must not end at the edge of the world
+	float MinClimateGroundWeight = 0.75f; // the spawn's ground must be at least this much CLIMATE biome (SampleSurfaceBiomeWeights): not shore sand / bare rock. 0 = off; no biomes = off
 };
 
 struct MOFRAMEWORKCORE_API FMOWorldGen

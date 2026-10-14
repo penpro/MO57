@@ -6,7 +6,8 @@
 //   1. A coarse grid over +-24 km (400 m cells, base height only: oceans are just base ground under sea level). Every shore cell (land next to water) casts 16 rays
 //      over the grid: unbroken open water in front of it (the "fetch") and the highest ground behind that water (the "far relief"). A real sea is open in a 45 degree cone, which
 //      rules out rivers, inlets and the odd sea-level pond; the score rewards a long view that ends in relief and mildly prefers the origin.
-//   2. The best candidates are refined on the real terrain (rivers, lakes, detail octaves): find the waterline, step inland, and accept the first dry, gentle, hole-free spot.
+//   2. The best candidates are refined on the real terrain (rivers, lakes, detail octaves): find the waterline, step inland, and accept the first dry, gentle, hole-free spot
+//      on vegetated (climate-biome) ground -- not the shore strand.
 
 #include "MOWorldGen.h"
 #include "MOWorldGenNoise.h"
@@ -30,6 +31,32 @@ namespace
 
 	/** True when `H` (a point of the real terrain) is open water. */
 	FORCEINLINE bool IsWater(float H, float SeaCm) { return H < SeaCm - WaterBelowSeaCm; }
+
+	/**
+	 * The share of the ground at (X, Y) that is CLIMATE biome (forest, meadow, scrub ...: no height or slope band) rather than a band biome (the shore strand,
+	 * alpine rock, cliffs), by the same surface weights the PCG spawner rolls each plant's biome against. 1 when there are no biomes to judge by.
+	 */
+	float ClimateGroundWeight(const FMOWorldGenParams& Params, double X, double Y, int32 Seed)
+	{
+		if (Params.Biomes.IsEmpty())
+		{
+			return 1.0f;
+		}
+		FMOClimateSample Climate;
+		const float Height = FMOWorldGen::SampleHeightCm(Params, X, Y, Seed, Params.Tuning.VoxelSizeCm, &Climate);
+		const float Temperature = FMOWorldGen::TemperatureAtHeight(Params, Climate.TemperatureSeaLevel, Height);
+		FMOWorldGen::FBiomeWeight Weights[3];
+		const int32 Num = FMOWorldGen::SampleSurfaceBiomeWeights(Params, X, Y, Seed, Height, Climate.Moisture, Temperature, Weights, 3);
+		float Climatic = 0.0f;
+		for (int32 I = 0; I < Num; ++I)
+		{
+			if (Params.Biomes.IsValidIndex(Weights[I].Biome) && Params.Biomes[Weights[I].Biome].IsClimateBiome())
+			{
+				Climatic += Weights[I].Weight;
+			}
+		}
+		return Climatic;
+	}
 }
 
 bool FMOWorldGen::FindCoastalSpawn(const FMOWorldGenParams& Params, int32 Seed, FMOCoastalSpawn& Out, const FMOCoastalSearch& Search)
@@ -258,7 +285,8 @@ bool FMOWorldGen::FindCoastalSpawn(const FMOWorldGenParams& Params, int32 Seed, 
 		int32 FineLandmass = -1;
 		bool bMainland = false;
 		const float LatticesCm[3] = { 17500.0f, 25000.0f, 35000.0f };
-		static constexpr float Setbacks[] = { 5000.0f, 3000.0f, 8000.0f, 12000.0f, 2000.0f, 18000.0f };
+		// Up to 350 m inland: on a wide flat shore the vegetated ground (below) starts well back from the water.
+		static constexpr float Setbacks[] = { 5000.0f, 3000.0f, 8000.0f, 12000.0f, 2000.0f, 18000.0f, 25000.0f, 35000.0f };
 		static constexpr float Laterals[] = { 0.0f, 4000.0f, -4000.0f };
 		for (const float Setback : Setbacks)
 		{
@@ -276,6 +304,12 @@ bool FMOWorldGen::FindCoastalSpawn(const FMOWorldGenParams& Params, int32 Seed, 
 					continue;   // steeper than ~26 degrees
 				}
 				if (DistanceToSinkholeRimZone(Params, Sx, Sy, Seed) < 3000.0f || IsInUplandLakeZone(Params, Sx, Sy, Seed, 2.6f))
+				{
+					continue;
+				}
+				// On vegetated ground: the first thing a new player sees around them. The shore band runs a few metres above the sea, so on a wide flat coast the first
+				// setbacks are all bare shore sand (seed -1675528670: the nearest tree 141 m away, nothing but sand in view -- it read as "no PCG at all").
+				if (Search.MinClimateGroundWeight > 0.0f && ClimateGroundWeight(Params, Sx, Sy, Seed) < Search.MinClimateGroundWeight)
 				{
 					continue;
 				}
