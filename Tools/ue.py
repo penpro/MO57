@@ -353,7 +353,7 @@ def mcp_call(toolset, tool, args, _retried=False):
     except OSError:
         pass
     if not sid:
-        sid = mcp_connect()
+        sid = _mcp_reconnect()
         if not sid:
             return None
     body = json.dumps({"jsonrpc": "2.0", "id": 2, "method": "tools/call",
@@ -365,13 +365,42 @@ def mcp_call(toolset, tool, args, _retried=False):
     # Editor relaunch invalidates cached sessions. Retry only transport
     # failures or the server's explicit unknown-session response.
     if (out is None or _is_stale_session(out)) and not _retried:
-        if mcp_connect():
-            return mcp_call(toolset, tool, args, _retried=True)
+        if _mcp_reconnect():
+            return _mark_retried(out, mcp_call(toolset, tool, args, _retried=True))
     return out
 
 
 def mcp_alive():
     return mcp_connect() is not None
+
+
+def mcp_ensure():
+    """MCP reachable, starting the server through the bridge when it is not.
+
+    Only loop-launched editors start it (editor_start passes -ModelContextProtocolStartServer; the config
+    flag must stay off, see there). An editor started by hand has a live bridge but no MCP until the
+    ModelContextProtocol.StartServer console command runs -- so run it instead of asking for a relaunch.
+    """
+    if mcp_alive():
+        return True
+    if not (editor_running() and bridge_alive()):
+        return False
+    bridge_run(["ModelContextProtocol.StartServer"], timeout=10, want_log=False)
+    return mcp_alive()
+
+
+def _mcp_reconnect():
+    """A fresh MCP session id, starting the server first if it is down (mcp_ensure); None if unreachable."""
+    return mcp_connect() or (mcp_ensure() and mcp_connect()) or None
+
+
+def _mark_retried(first, out):
+    """A call is re-sent after an EMPTY first response, but an empty body does not prove the first attempt did nothing: a
+    non-idempotent tool can then report a false failure (2026-10-14: remove_rows applied, the retry said "Rows do not exist").
+    Errors from such a retry say so, so the caller reads back before trusting them."""
+    if first is None and isinstance(out, MCPError):
+        out["message"] += " [retried after an empty first response -- the first attempt may have applied; read back before trusting this error]"
+    return out
 
 
 # --- DataTable verbs ---------------------------------------------------------
@@ -417,7 +446,7 @@ def _mcp_call_file(toolset, tool, args, timeout=90):
     except OSError:
         pass
     if not sid:
-        sid = mcp_connect()
+        sid = _mcp_reconnect()
         if not sid:
             return None
     body = json.dumps({"jsonrpc": "2.0", "id": 2, "method": "tools/call",
@@ -438,9 +467,10 @@ def _mcp_call_file(toolset, tool, args, timeout=90):
             return None
     out = _run(sid)
     if out is None or _is_stale_session(out):
-        sid = mcp_connect()
+        first = out
+        sid = _mcp_reconnect()
         if sid:
-            out = _run(sid)
+            out = _mark_retried(first, _run(sid))
     return out
 
 
@@ -646,7 +676,7 @@ def cmd_config(a):
 def cmd_status(a):
     ed = editor_running()
     br = bridge_alive() if ed else False
-    mc = mcp_alive() if ed else False
+    mc = (mcp_ensure() if br else mcp_alive()) if ed else False
     pie, ingame, statel = "?", "?", ""
     if br:
         ok, lines, delta = bridge_run(
@@ -662,7 +692,7 @@ def cmd_status(a):
         statel = delta.strip().splitlines()[-1] if delta.strip() else ""
     print(f"editor : {'RUNNING' if ed else 'DOWN   -> ue.py editor start'}")
     print(f"bridge : {'ALIVE' if br else ('DEAD   -> restart editor (init_unreal loads it)' if ed else '-')}")
-    print(f"mcp    : {'ALIVE' if mc else ('DEAD   -> editor hosts it; restart editor' if ed else '-')}")
+    print(f"mcp    : {'ALIVE' if mc else ('DEAD   -> StartServer via the bridge failed; check the editor log' if br else ('DEAD   -> needs the bridge' if ed else '-'))}")
     print(f"pie    : {pie}   inGame: {ingame}")
     if statel:
         print(f"state  : {statel[statel.find('[MOQUERY]'):]}")

@@ -153,7 +153,7 @@ def sequence(ctx):
                 inv = proxy.get_component_by_class(unreal.MOInventoryComponent)
                 skills = proxy.get_component_by_class(unreal.MOSkillsComponent)
                 if inv:
-                    inv.add_item_by_guid(unreal.GuidLibrary.new_guid(), "Flint01", 1)
+                    inv.add_item_by_guid(unreal.GuidLibrary.new_guid(), "FlintNodule01", 1)
                 if skills:
                     skills.set_skill_level("Stoneworking", 3)
                 # Queue is a private UPROPERTY (get_editor_property throws);

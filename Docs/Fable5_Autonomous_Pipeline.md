@@ -174,7 +174,7 @@ tooling), **V** (village), **P** (PCG). The serial spine if working alone:
      `MOBlackboardKeys.h`.
 - **Gate (seq test, committed as `Content/Python/test_village_v0.py`):** boot →
   spawn/recruit a survivor → place graybox workbench+storage via dev verbs →
-  stock 1× Flint01 → `AssignJob KnapFlintFlakes` → within N sim-minutes,
+  stock 1× FlintNodule01 → `AssignJob KnapFlintFlakes` → within N sim-minutes,
   `FlintFlake01` exists in communal storage and `MO.AI.DumpBlackboard` showed
   the job cycle. Exit-coded. **Co-op sub-gate (post-S0):** same via `mptest` —
   the villager is server-authoritative, client sees the result.

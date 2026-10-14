@@ -9,7 +9,7 @@ shot for the eyeball check.
 import unreal
 
 
-ITEMS = ["Flint01", "Berries01"]   # MATERIAL + CONSUMABLE — two shape families
+ITEMS = ["SodaAsh01", "Berries01"]   # MATERIAL + CONSUMABLE — two shape families (both still graybox: pick another if either gets real art)
 
 
 def _pawn(world, idx=0):

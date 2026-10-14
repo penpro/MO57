@@ -7,7 +7,7 @@ A claude_seq sequence: run via
 Flow:
   0  boot standalone (seed 4242) -> pawn
   1  found settlement; place workbench + basket; spawn/recruit/skill a villager;
-     stock 1x Flint01
+     stock 1x FlintNodule01
   2  MO.Colony.UI  -> colony overview (C++-built tree) on the Menu layer
   3  MO.Test.FindWidget ColonyAssignJob  (harness sees the button)
   4  MO.Test.ClickWidget ColonyAssignJob_0 -> EnqueueCraftJob fires through the
@@ -109,7 +109,7 @@ def sequence(ctx):
     _exec(world, "MO.Colony.SetSkill %s Stoneworking 3" % vill.get_name())
     yield 3
     basket = _find_one(world, unreal.MOContainerActor)
-    _exec(world, "MO.Colony.Stock %s Flint01 1" % basket.get_name())
+    _exec(world, "MO.Colony.Stock %s FlintNodule01 1" % basket.get_name())
     yield 5
 
     # ---- open the overview and drive the flow through UI ------------------

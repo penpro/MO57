@@ -7,7 +7,7 @@ A claude_seq sequence: run via
 Flow:
   0  boot standalone (seed 4242)
   1  found settlement; place basket + workbench; spawn/recruit/skill TWO
-     villagers; stock 2x Flint01
+     villagers; stock 2x FlintNodule01
   2  MO.Colony.SetQuota FlintFlake01 KnapFlintFlakes 8  — and NOTHING else:
      no AssignJob, no UI. The quota pass on the upkeep tick must notice the
      deficit, hand standing orders to idle villagers, and the V0 job flow
@@ -113,7 +113,7 @@ def sequence(ctx):
         _exec(world, "MO.Colony.SetSkill %s Stoneworking 3" % v.get_name())
         yield 2
     basket = _find_one(world, unreal.MOContainerActor)
-    _exec(world, "MO.Colony.Stock %s Flint01 2" % basket.get_name())
+    _exec(world, "MO.Colony.Stock %s FlintNodule01 2" % basket.get_name())
     yield 5
 
     # ---- the standing order, and then HANDS OFF -----------------------------

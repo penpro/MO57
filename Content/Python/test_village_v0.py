@@ -8,12 +8,12 @@ Flow (all via MO.Colony.* dev verbs -- deferred console bodies, real game code):
   0  1-player standalone PIE -> menu -> new game (seed 4242) -> pawn possessed
   1  place a COMPLETED BuildBasketContainer01 (storage) + BuildWorkbench (station)
   2  spawn + force-recruit a survivor; give it Stoneworking 3
-  3  stock the basket with 1x Flint01
+  3  stock the basket with 1x FlintNodule01
   4  AssignJob: CraftAtStation KnapFlintFlakes (station=workbench, storage=basket)
   5  poll: the survivor must walk to the basket, withdraw the flint, walk to
      the bench, run the REAL crafting queue (15s craft), walk back, and
      deposit FlintFlake01 x4 -- assert the basket ends with >=1 FlintFlake01
-     and 0 Flint01.
+     and 0 FlintNodule01.
 
 The job cycle is observable via [MOQUERY] COLONY Status dumps along the way.
 NOTE: unfocused PIE runs ~3 fps -- yield 10 ~= 3 s wall time.
@@ -22,8 +22,8 @@ import unreal
 
 
 SEED = 4242
-RECIPE = "KnapFlintFlakes"          # Flint01 x1 -> FlintFlake01 x4, 15s, Stoneworking 3
-INGREDIENT = "Flint01"
+RECIPE = "KnapFlintFlakes"          # FlintNodule01 x1 -> FlintFlake01 x4, 15s, Stoneworking 3
+INGREDIENT = "FlintNodule01"
 OUTPUT = "FlintFlake01"
 STORAGE_RECIPE = "BuildBasketContainer01"   # ContainerSlotCount=2 -> AMOContainerActor
 STATION_RECIPE = "BuildWorkbench"           # ProvidedStationType=Workbench -> AMOCraftingStationActor

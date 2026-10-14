@@ -86,7 +86,7 @@ def sequence(ctx):
                     eq2.equip_from_inventory(inv2, g, slot)
     v = vills[0]
     basket = next(iter(unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOContainerActor)), None)
-    _exec(world, "MO.Colony.Stock %s Flint01 6" % basket.get_name())
+    _exec(world, "MO.Colony.Stock %s FlintNodule01 6" % basket.get_name())
     yield 4
 
     # x480 FIRST (the failing regime), then the quota

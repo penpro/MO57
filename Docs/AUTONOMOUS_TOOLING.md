@@ -327,6 +327,19 @@ into the engine source (ModelContextProtocolEditor.cpp) for whenever the
 engine gets rebuilt. If the editor is ever launched OUTSIDE ue.py and needs
 MCP: console `ModelContextProtocol.StartServer`.
 
+Since 2026-10-14 `ue.py` does that itself: `mcp_ensure()` runs the
+StartServer console command through the bridge when the bridge is alive and
+the MCP is not (an editor Wes started by hand), from `ue.py status` and from
+every MCP call that cannot connect. Verified by `ModelContextProtocol.StopServer`
+then `ue.py status` -> ALIVE (log: "Starting MCP server on port 8000"). Note
+StopServer only drops the route: the port still answers (HTTP 411), so "the
+port answers" is not "the MCP is up" -- `mcp_alive()` (a real `initialize`) is.
+
+Retry trap (same day): an MCP call is re-sent after an EMPTY first response,
+but the first attempt may already have applied. `remove_rows` deleted the rows,
+then the retry reported "Rows do not exist". Errors from such a retry now carry
+"[retried after an empty first response ...]": read back before trusting them.
+
 ## Hit / miss record — P2 PCG biome layer (2026-07-04)
 
 **HITS**

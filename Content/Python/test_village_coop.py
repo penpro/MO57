@@ -123,7 +123,7 @@ def sequence(ctx):
     for a in unreal.GameplayStatics.get_all_actors_of_class(host, unreal.MOContainerActor):
         basket_host = a
         break
-    _exec(host, "MO.Colony.Stock %s Flint01 1" % basket_host.get_name())
+    _exec(host, "MO.Colony.Stock %s FlintNodule01 1" % basket_host.get_name())
     yield 4
     station = None
     for a in unreal.GameplayStatics.get_all_actors_of_class(host, unreal.MOCraftingStationActor):

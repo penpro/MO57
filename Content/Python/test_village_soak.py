@@ -242,7 +242,7 @@ def sequence(ctx):
     basket = _find_one(world, unreal.MOContainerActor)
     _exec(world, "MO.Colony.Stock %s %s %d" % (basket.get_name(), food, need_items))
     yield 4
-    _exec(world, "MO.Colony.Stock %s Flint01 6" % basket.get_name())
+    _exec(world, "MO.Colony.Stock %s FlintNodule01 6" % basket.get_name())
     yield 4
 
     # the standing order — then HANDS OFF
