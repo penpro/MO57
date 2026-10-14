@@ -45,11 +45,24 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO|Items")
 	static bool IsItemInForageSeason(FName ItemDefinitionId, int32 SeasonIndex);
 
-	/** Get just the icon for an item (loads synchronously). Returns nullptr if not found. */
+	/**
+	 * Shown wherever an item has no icon of its own yet -- most items until their real art is sourced (Wes, 2026-10-14: "just use the default icon for
+	 * stuff we don't have icons for"; icons will be rebuilt from the sourced meshes later).
+	 */
+	UPROPERTY(EditAnywhere, Config, Category="UI", meta=(AllowedClasses="/Script/Engine.Texture2D"))
+	FSoftObjectPath DefaultItemIcon = FSoftObjectPath(TEXT("/MOFramework/UI/Kit/Icons/T_ic_item_unknown.T_ic_item_unknown"));
+
+	/**
+	 * THE item icon rule, used by every UI that shows an item: the row's icon (large: IconLarge, else IconSmall; small: IconSmall, else IconLarge), else
+	 * DefaultItemIcon. Never null for a configured project. Reading Row.UI.IconSmall directly bypasses the default and leaves a blank square.
+	 */
+	static TSoftObjectPtr<UTexture2D> ResolveItemIcon(const FMOItemDefinitionRow& Definition, bool bLarge);
+
+	/** The item's small icon via ResolveItemIcon (loads synchronously); the default icon for an item without one; nullptr only for an unknown item id. */
 	UFUNCTION(BlueprintCallable, Category="MO|Item Database")
 	static UTexture2D* GetItemIconSmall(FName ItemDefinitionId);
 
-	/** Get the large icon for an item (loads synchronously). Returns nullptr if not found. */
+	/** The item's large icon via ResolveItemIcon (loads synchronously); the default icon for an item without one; nullptr only for an unknown item id. */
 	UFUNCTION(BlueprintCallable, Category="MO|Item Database")
 	static UTexture2D* GetItemIconLarge(FName ItemDefinitionId);
 

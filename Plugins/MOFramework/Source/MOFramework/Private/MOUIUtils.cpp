@@ -221,10 +221,7 @@ UTexture2D* UMOUIUtils::LoadRecipeIcon(const FMORecipeDefinitionRow* Recipe)
 		FMOItemDefinitionRow ItemDef;
 		if (UMOItemDatabaseSettings::GetItemDefinition(Recipe->Outputs[0].ItemDefinitionId, ItemDef))
 		{
-			if (!ItemDef.UI.IconSmall.IsNull())
-			{
-				return ItemDef.UI.IconSmall.LoadSynchronous();
-			}
+			return UMOItemDatabaseSettings::ResolveItemIcon(ItemDef, /*bLarge=*/false).LoadSynchronous();
 		}
 	}
 
@@ -236,10 +233,7 @@ UTexture2D* UMOUIUtils::LoadItemIconSmall(FName ItemDefId)
 	FMOItemDefinitionRow ItemDef;
 	if (UMOItemDatabaseSettings::GetItemDefinition(ItemDefId, ItemDef))
 	{
-		if (!ItemDef.UI.IconSmall.IsNull())
-		{
-			return ItemDef.UI.IconSmall.LoadSynchronous();
-		}
+		return UMOItemDatabaseSettings::ResolveItemIcon(ItemDef, /*bLarge=*/false).LoadSynchronous();
 	}
 	return nullptr;
 }

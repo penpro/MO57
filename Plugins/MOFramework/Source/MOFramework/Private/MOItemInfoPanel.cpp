@@ -366,15 +366,7 @@ void UMOItemInfoPanel::DisplayItemDefinition(const FMOItemDefinitionRow& ItemDef
 	// Icon
 	if (ItemIconImage)
 	{
-		UTexture2D* IconTexture = nullptr;
-		if (!ItemDef.UI.IconLarge.IsNull())
-		{
-			IconTexture = ItemDef.UI.IconLarge.LoadSynchronous();
-		}
-		if (!IconTexture && !ItemDef.UI.IconSmall.IsNull())
-		{
-			IconTexture = ItemDef.UI.IconSmall.LoadSynchronous();
-		}
+		UTexture2D* IconTexture = UMOItemDatabaseSettings::ResolveItemIcon(ItemDef, /*bLarge=*/true).LoadSynchronous();   // the item's icon or the default one
 
 		if (IconTexture)
 		{

@@ -307,6 +307,22 @@ int32 UMOItemDatabaseSettings::GetModItemCount()
 	return ModItemDefinitions.Num();
 }
 
+TSoftObjectPtr<UTexture2D> UMOItemDatabaseSettings::ResolveItemIcon(const FMOItemDefinitionRow& Definition, bool bLarge)
+{
+	const TSoftObjectPtr<UTexture2D>& First = bLarge ? Definition.UI.IconLarge : Definition.UI.IconSmall;
+	const TSoftObjectPtr<UTexture2D>& Second = bLarge ? Definition.UI.IconSmall : Definition.UI.IconLarge;
+	if (!First.IsNull())
+	{
+		return First;
+	}
+	if (!Second.IsNull())
+	{
+		return Second;
+	}
+	const UMOItemDatabaseSettings* Settings = GetDefault<UMOItemDatabaseSettings>();
+	return Settings ? TSoftObjectPtr<UTexture2D>(Settings->DefaultItemIcon) : TSoftObjectPtr<UTexture2D>();
+}
+
 UTexture2D* UMOItemDatabaseSettings::GetItemIconSmall(FName ItemDefinitionId)
 {
 	FMOItemDefinitionRow Definition;
@@ -317,20 +333,13 @@ UTexture2D* UMOItemDatabaseSettings::GetItemIconSmall(FName ItemDefinitionId)
 		return nullptr;
 	}
 
-	if (Definition.UI.IconSmall.IsNull())
-	{
-		UE_LOG(LogMOFramework, Verbose, TEXT("[MOItemDatabase] GetItemIconSmall: Item '%s' has no IconSmall set"),
-			*ItemDefinitionId.ToString());
-		return nullptr;
-	}
-
-	UTexture2D* Icon = Definition.UI.IconSmall.LoadSynchronous();
-	if (!Icon)
+	const TSoftObjectPtr<UTexture2D> IconPath = ResolveItemIcon(Definition, /*bLarge=*/false);
+	UTexture2D* Icon = IconPath.LoadSynchronous();
+	if (!Icon && !IconPath.IsNull())
 	{
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOItemDatabase] GetItemIconSmall: Failed to load icon '%s' for item '%s'"),
-			*Definition.UI.IconSmall.GetLongPackageName(), *ItemDefinitionId.ToString());
+			*IconPath.GetLongPackageName(), *ItemDefinitionId.ToString());
 	}
-
 	return Icon;
 }
 
@@ -341,13 +350,7 @@ UTexture2D* UMOItemDatabaseSettings::GetItemIconLarge(FName ItemDefinitionId)
 	{
 		return nullptr;
 	}
-
-	if (Definition.UI.IconLarge.IsNull())
-	{
-		return nullptr;
-	}
-
-	return Definition.UI.IconLarge.LoadSynchronous();
+	return ResolveItemIcon(Definition, /*bLarge=*/true).LoadSynchronous();
 }
 
 FText UMOItemDatabaseSettings::GetItemDisplayName(FName ItemDefinitionId)

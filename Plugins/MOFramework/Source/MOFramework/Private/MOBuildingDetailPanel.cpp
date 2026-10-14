@@ -273,7 +273,7 @@ FMOBuildPartDisplayData UMOBuildingDetailPanel::BuildPartData(const FMOBuildPart
 		if (UMOItemDatabaseSettings::GetItemDefinition(Part.ItemDefinitionId, ItemDef))
 		{
 			Data.DisplayName = ItemDef.DisplayName;
-			Data.Icon = ItemDef.UI.IconSmall;
+			Data.Icon = UMOItemDatabaseSettings::ResolveItemIcon(ItemDef, /*bLarge=*/false);
 		}
 		else
 		{

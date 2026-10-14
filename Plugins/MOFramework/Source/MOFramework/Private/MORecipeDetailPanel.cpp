@@ -276,7 +276,7 @@ FMOIngredientDisplayData UMORecipeDetailPanel::BuildIngredientData(const FMOReci
 	if (UMOItemDatabaseSettings::GetItemDefinition(Ingredient.ItemDefinitionId, ItemDef))
 	{
 		Data.DisplayName = ItemDef.DisplayName;
-		Data.Icon = ItemDef.UI.IconSmall;
+		Data.Icon = UMOItemDatabaseSettings::ResolveItemIcon(ItemDef, /*bLarge=*/false);
 	}
 	else
 	{
@@ -298,7 +298,7 @@ FMOOutputDisplayData UMORecipeDetailPanel::BuildOutputData(const FMORecipeOutput
 	if (UMOItemDatabaseSettings::GetItemDefinition(Output.ItemDefinitionId, ItemDef))
 	{
 		Data.DisplayName = ItemDef.DisplayName;
-		Data.Icon = ItemDef.UI.IconSmall;
+		Data.Icon = UMOItemDatabaseSettings::ResolveItemIcon(ItemDef, /*bLarge=*/false);
 	}
 	else
 	{

@@ -149,7 +149,7 @@ FMORecipeListEntryData UMORecipeListWidget::BuildEntryData(FName RecipeId) const
 			FMOItemDefinitionRow ItemDef;
 			if (UMOItemDatabaseSettings::GetItemDefinition(Recipe->Outputs[0].ItemDefinitionId, ItemDef))
 			{
-				Data.Icon = ItemDef.UI.IconSmall;
+				Data.Icon = UMOItemDatabaseSettings::ResolveItemIcon(ItemDef, /*bLarge=*/false);
 			}
 		}
 	}
