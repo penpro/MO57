@@ -346,6 +346,26 @@ public:
 	UFUNCTION(Server, Reliable)
 	void ServerPlaceBuilding(FName InRecipeId, FTransform PlacementTransform);
 
+	// ============================================================================
+	// CONSTRUCTION REQUESTS (co-op: the server runs every step on a placed building)
+	// ============================================================================
+
+	/**
+	 * Ask for a construction step on a placed building (the ghost menu and the build queue call this). On the server or in a standalone game it
+	 * runs now; on a client it goes to the server (ServerBuildRequest), which checks the pawn stands at the building and runs it there -- the
+	 * deposits, the inventories they come from and the build itself are server state, and replicate back (UMOBuildProgressComponent).
+	 * @param SourceFlags MOMaterialSourceBit bits AddMaterials / Start may draw from (7 = inventory, containers and the surroundings)
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Building")
+	void RequestBuildAction(AMOBuildableActor* Building, EMOBuildRequest Request, uint8 SourceFlags = 7);
+
+	UFUNCTION(Server, Reliable)
+	void ServerBuildRequest(AMOBuildableActor* Building, EMOBuildRequest Request, uint8 SourceFlags);
+
+	/** How far (cm) the requesting pawn may stand from the building it asks to build (the server's check). */
+	UPROPERTY(EditDefaultsOnly, Category="MO|Building|Construction", meta=(ClampMin="0"))
+	float MaxBuildRequestReachCm = 1500.0f;
+
 	/**
 	 * Handle primary action during placement mode (attempt to place).
 	 */
@@ -420,6 +440,9 @@ private:
 
 	/** Get the owning player controller. */
 	AMOPlayerController* GetOwningPlayerController() const;
+
+	/** Server: one construction step for this controller's pawn (reach-checked); RequestBuildAction / ServerBuildRequest end here. */
+	void ExecuteBuildRequest(AMOBuildableActor* Building, EMOBuildRequest Request, uint8 SourceFlags);
 
 	/** Spawn the ghost preview actor. */
 	bool SpawnGhostActor(const FMORecipeDefinitionRow& Recipe);

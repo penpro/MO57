@@ -19,8 +19,15 @@
  * [2024-02] STATE PERSISTENCE: FMOBuildProgress is saved. On load, construction
  *   resumes from ElapsedTime. Ensure CurrentPartIndex is correct.
  *
- * [2024-02] AUTHORITY: Construction tick only runs on server. Clients receive
- *   replicated progress values.
+ * [2026-10] AUTHORITY (made true Oct 13 2026 -- the line above it said so for two
+ *   years while nothing replicated and every client built on its own copy): the
+ *   server owns the build. Every mutator (Start / Deposit / Pause / Resume / Cancel /
+ *   Gather / ApplySaveData) refuses without authority; players reach them through
+ *   UMOBuildingComponent::RequestBuildAction (a Server RPC from a client). The server
+ *   publishes FMOBuildRepState (PublishRepState: state, elapsed time ~1 Hz, the
+ *   deposits ledger) and clients apply it in OnRep_RepState, re-broadcasting the same
+ *   delegates (state changed / started / completed / cancelled / deposits changed),
+ *   and advance the elapsed time locally between updates (display only).
  *
  * =============================================================================
  * RELATED FILES: MOBuildableActor.h, MOBuildingComponent.h, MOBuildingTypes.h
@@ -219,6 +226,10 @@ public:
 	UPROPERTY(BlueprintAssignable, Category="MO|Building")
 	FMOOnConstructionStateChangedSignature OnConstructionStateChanged;
 
+	/** Broadcast when the deposited-materials ledger changes (on the server at the change, on clients when it replicates). */
+	UPROPERTY(BlueprintAssignable, Category="MO|Building")
+	FMOOnConstructionDepositsChangedSignature OnDepositsChanged;
+
 	// ============================================================================
 	// STATE ACCESS
 	// ============================================================================
@@ -381,6 +392,33 @@ public:
 	TArray<AActor*> FindMaterialSources(float Range) const;
 
 	// ============================================================================
+	// PLAYER REQUESTS (server; UMOBuildingComponent::RequestBuildAction is the way in)
+	// ============================================================================
+
+	/**
+	 * Gather every material still missing from the enabled sources (SourceFlags: MOMaterialSourceBit) into the building: the builder's
+	 * inventory, then containers, then loose items within the gather range, by IMOMaterialSourceInterface priority. Authority only.
+	 * @return how many units were deposited
+	 */
+	int32 GatherMissingMaterials(UMOInventoryComponent* InBuilderInventory, uint8 SourceFlags);
+
+	/** Start construction (all materials deposited) or resume a paused one, drawing from SourceFlags. Authority only. */
+	bool StartOrResume(UMOInventoryComponent* InBuilderInventory, uint8 SourceFlags);
+
+	/**
+	 * The ghost menu's Cancel: refund the deposited materials to the builder's inventory -- all of them before construction started, after it
+	 * 50 % + up to 45 % with the Construction skill, the rarest kept first; what the inventory cannot take drops at the builder's feet --
+	 * then cancel and remove the building. Authority only. @return how many units were refunded
+	 */
+	int32 CancelAndRemove(UMOInventoryComponent* InBuilderInventory);
+
+	/** The refund for TotalDeposited units (see CancelAndRemove). Pure. */
+	static int32 CalculateRefundAmount(int32 TotalDeposited, bool bBuildStarted, int32 ConstructionSkillLevel);
+
+	/** The skill that scales the cancel refund. */
+	static const FName ConstructionSkillId;
+
+	// ============================================================================
 	// SAVE/LOAD
 	// ============================================================================
 
@@ -402,8 +440,31 @@ protected:
 	// ============================================================================
 
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 private:
+	/** The server's progress as clients see it (PublishRepState / OnRep_RepState). */
+	UPROPERTY(ReplicatedUsing=OnRep_RepState)
+	FMOBuildRepState RepState;
+
+	UFUNCTION()
+	void OnRep_RepState(const FMOBuildRepState& Previous);
+
+	/** Server: copy Progress into RepState (bForce = also when only the elapsed time moved less than a second). */
+	void PublishRepState(bool bForce = true);
+
+	/** Client: RepState -> Progress (state, elapsed, ledger); bBroadcast = fire the delegates for what changed since Previous. */
+	void ApplyRepState(const FMOBuildRepState& Previous, bool bBroadcast);
+
+	/** False (and a warning naming Caller) without authority: clients go through UMOBuildingComponent::RequestBuildAction. */
+	bool CheckAuthority(const TCHAR* Caller) const;
+
+	/** A client has received RepState at least once (InitializeFromRecipe re-applies it: the recipe can replicate after the state). */
+	bool bHasRepState = false;
+
+	/** Server elapsed time last published (the ~1 Hz throttle). */
+	float LastPublishedElapsed = 0.0f;
+
 	// ============================================================================
 	// STATE
 	// ============================================================================

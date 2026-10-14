@@ -2,27 +2,19 @@
 #include "MOBuildableActor.h"
 #include "MOBuildProgressComponent.h"
 #include "MOInventoryComponent.h"
-#include "MOSkillsComponent.h"
+#include "MOBuildingComponent.h"
 #include "MOItemDatabaseSettings.h"
 #include "MOItemDefinitionRow.h"
-#include "MOWorldItem.h"
-#include "MOWorldItemFactory.h"
-#include "MOItemComponent.h"
-#include "MOContainerActor.h"
 #include "MOBuildingTypes.h"
 #include "MOFramework.h"
 #include "MOCommonButton.h"
 #include "MOUIUtils.h"
-#include "MOMaterialSourceInterface.h"
 #include "Components/CheckBox.h"
 #include "Components/VerticalBox.h"
 #include "Components/TextBlock.h"
 #include "Components/ProgressBar.h"
-#include "Kismet/GameplayStatics.h"
-#include "Kismet/KismetSystemLibrary.h"
 #include "Engine/World.h"
-
-const FName UMOGhostContextMenu::BuildingSkillId = FName("Construction");
+#include "GameFramework/PlayerController.h"
 
 UMOGhostContextMenu::UMOGhostContextMenu(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -72,19 +64,6 @@ void UMOGhostContextMenu::InitializeForGhost(AMOBuildableActor* Target, UMOInven
 	// so this menu closes itself when construction transitions away from
 	// Constructing (movement interrupt, completion, external cancel).
 	BindBuildProgressEvents();
-
-	// Get skills component from the builder's owner
-	if (InBuilderInventory)
-	{
-		AActor* BuilderOwner = InBuilderInventory->GetOwner();
-		if (BuilderOwner)
-		{
-			BuilderSkills = BuilderOwner->FindComponentByClass<UMOSkillsComponent>();
-		}
-	}
-
-	// Clear any previous deposited materials tracking
-	DepositedMaterialsForRefund.Empty();
 
 	// Initialize checkboxes to default state
 	if (InventoryCheckbox)
@@ -162,119 +141,36 @@ void UMOGhostContextMenu::RefreshMaterialList()
 
 void UMOGhostContextMenu::AddMaterials()
 {
-	if (!BuildProgress.IsValid())
+	// The server gathers (the deposits and the inventories they come from are its state); the list refreshes when the ledger changes.
+	if (BuildProgress.IsValid())
 	{
-		return;
-	}
-
-	// Try to gather materials for each requirement that isn't complete
-	bool bGatheredAny = false;
-	for (FMOGhostMaterialEntry& Entry : MaterialEntries)
-	{
-		while (!Entry.IsComplete())
-		{
-			if (TryGatherMaterial(Entry.ItemId))
-			{
-				Entry.Deposited++;
-				bGatheredAny = true;
-			}
-			else
-			{
-				// Couldn't find more of this material
-				break;
-			}
-		}
-	}
-
-	if (bGatheredAny)
-	{
-		RefreshMaterialList();
+		RequestBuild(EMOBuildRequest::AddMaterials);
 	}
 }
 
 void UMOGhostContextMenu::StartBuild()
 {
-	UMOBuildProgressComponent* Progress = BuildProgress.Get();
-	if (!Progress)
+	if (!BuildProgress.IsValid())
 	{
 		return;
 	}
-
 	if (!AreAllMaterialsDeposited())
 	{
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOGhostContextMenu] Cannot start build - materials not deposited"));
 		return;
 	}
-
-	// Build options from checkbox states
-	FMOBuildProgress Options;
-	Options.bDrawFromInventory = InventoryCheckbox ? InventoryCheckbox->IsChecked() : true;
-	Options.bDrawFromNearbyContainers = ContainersCheckbox ? ContainersCheckbox->IsChecked() : true;
-	Options.bDrawFromSurroundingArea = SurroundingCheckbox ? SurroundingCheckbox->IsChecked() : true;
-
-	// Start construction
-	Progress->StartConstruction(Options, BuilderInventory.Get());
-
+	RequestBuild(EMOBuildRequest::Start);
 	OnBuildStarted.Broadcast();
-
-	UE_LOG(LogMOFramework, Log, TEXT("[MOGhostContextMenu] Build started!"));
+	UE_LOG(LogMOFramework, Log, TEXT("[MOGhostContextMenu] Build requested"));
 }
 
 void UMOGhostContextMenu::CancelBuild()
 {
-	UMOBuildProgressComponent* Progress = BuildProgress.Get();
-	AMOBuildableActor* Building = TargetBuilding.Get();
-
-	if (Progress && Building)
+	// The server refunds (Construction skill, rarest kept) and removes the building (UMOBuildProgressComponent::CancelAndRemove).
+	if (TargetBuilding.IsValid())
 	{
-		// Determine if build has started (construction in progress)
-		const bool bBuildStarted = (Progress->GetState() == EMOBuildState::Constructing ||
-			Progress->GetState() == EMOBuildState::Paused);
-
-		// Rebuild the refund list from the COMPONENT's ledger — the single
-		// owner. The widget-local list emptied on every menu reopen
-		// (InitializeForGhost), so cancel-after-reopen refunded nothing and
-		// destroyed every deposited material.
-		DepositedMaterialsForRefund.Empty();
-		TMap<FName, int32> ComponentLedger;
-		Progress->GetDepositedMaterials(ComponentLedger);
-		for (const auto& Pair : ComponentLedger)
-		{
-			FMODepositedMaterial DepositedMat;
-			DepositedMat.ItemId = Pair.Key;
-			FMOItemDefinitionRow ItemDef;
-			if (UMOItemDatabaseSettings::GetItemDefinition(Pair.Key, ItemDef))
-			{
-				DepositedMat.Rarity = ItemDef.Rarity;
-			}
-			for (int32 i = 0; i < Pair.Value; ++i)
-			{
-				DepositedMaterialsForRefund.Add(DepositedMat);
-			}
-		}
-
-		// Calculate refund based on build state and skill
-		const int32 TotalDeposited = DepositedMaterialsForRefund.Num();
-		const int32 RefundCount = CalculateRefundAmount(TotalDeposited, bBuildStarted);
-
-		UE_LOG(LogMOFramework, Log, TEXT("[MOGhostContextMenu] CancelBuild: TotalDeposited=%d, RefundCount=%d, bBuildStarted=%s"),
-			TotalDeposited, RefundCount, bBuildStarted ? TEXT("yes") : TEXT("no"));
-
-		// Return refunded materials to builder's inventory (fallback to world drop if no inventory)
-		RefundMaterialsToInventory(RefundCount);
-
-		UE_LOG(LogMOFramework, Log, TEXT("[MOGhostContextMenu] Cancel refund: %d/%d materials returned (build started: %s)"),
-			RefundCount, TotalDeposited, bBuildStarted ? TEXT("yes") : TEXT("no"));
-
-		// Cancel the construction
-		Progress->CancelConstruction(false); // Materials already handled
-
-		// Destroy the ghost building
-		Building->Destroy();
+		RequestBuild(EMOBuildRequest::CancelAndRemove);
 	}
-
-	// Clear tracking
-	DepositedMaterialsForRefund.Empty();
 
 	OnCancelled.Broadcast();
 	RequestClose();
@@ -372,6 +268,8 @@ void UMOGhostContextMenu::BindBuildProgressEvents()
 	// (no leaked duplicate bindings).
 	Progress->OnConstructionStateChanged.RemoveDynamic(this, &UMOGhostContextMenu::HandleBuildStateChanged);
 	Progress->OnConstructionStateChanged.AddDynamic(this, &UMOGhostContextMenu::HandleBuildStateChanged);
+	Progress->OnDepositsChanged.RemoveDynamic(this, &UMOGhostContextMenu::HandleDepositsChanged);
+	Progress->OnDepositsChanged.AddDynamic(this, &UMOGhostContextMenu::HandleDepositsChanged);
 }
 
 void UMOGhostContextMenu::UnbindBuildProgressEvents()
@@ -379,7 +277,34 @@ void UMOGhostContextMenu::UnbindBuildProgressEvents()
 	if (UMOBuildProgressComponent* Progress = BuildProgress.Get())
 	{
 		Progress->OnConstructionStateChanged.RemoveDynamic(this, &UMOGhostContextMenu::HandleBuildStateChanged);
+		Progress->OnDepositsChanged.RemoveDynamic(this, &UMOGhostContextMenu::HandleDepositsChanged);
 	}
+}
+
+void UMOGhostContextMenu::HandleDepositsChanged()
+{
+	RefreshMaterialList();
+}
+
+uint8 UMOGhostContextMenu::GetSourceFlags() const
+{
+	uint8 Flags = 0;
+	Flags |= (!InventoryCheckbox || InventoryCheckbox->IsChecked()) ? MOMaterialSourceBit(EMOMaterialSource::Inventory) : 0;
+	Flags |= (!ContainersCheckbox || ContainersCheckbox->IsChecked()) ? MOMaterialSourceBit(EMOMaterialSource::NearbyContainers) : 0;
+	Flags |= (!SurroundingCheckbox || SurroundingCheckbox->IsChecked()) ? MOMaterialSourceBit(EMOMaterialSource::SurroundingArea) : 0;
+	return Flags;
+}
+
+void UMOGhostContextMenu::RequestBuild(EMOBuildRequest Request)
+{
+	APlayerController* PC = GetOwningPlayer();
+	UMOBuildingComponent* Building = PC ? PC->FindComponentByClass<UMOBuildingComponent>() : nullptr;
+	if (!Building)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOGhostContextMenu] Build request %d dropped: the owning player has no UMOBuildingComponent"), static_cast<int32>(Request));
+		return;
+	}
+	Building->RequestBuildAction(TargetBuilding.Get(), Request, GetSourceFlags());
 }
 
 void UMOGhostContextMenu::HandleBuildStateChanged(EMOBuildState NewState)
@@ -609,116 +534,6 @@ void UMOGhostContextMenu::UpdateMaterialTextWidget(UTextBlock* Widget, const FMO
 	}
 }
 
-bool UMOGhostContextMenu::TryGatherMaterial(FName ItemId)
-{
-	UMOBuildProgressComponent* Progress = BuildProgress.Get();
-	if (!Progress)
-	{
-		return false;
-	}
-
-	// Check if we still need this material
-	int32 Required = Progress->GetRequiredCount(ItemId);
-	int32 Deposited = Progress->GetDepositedCount(ItemId);
-	if (Deposited >= Required)
-	{
-		return false;
-	}
-
-	// Get gather range from progress
-	float GatherRange = Progress->GetProgressData().GatherRange;
-	if (GatherRange <= 0.0f)
-	{
-		GatherRange = 500.0f; // Default range
-	}
-
-	// Get all material sources and sort by priority
-	TArray<AActor*> Sources = Progress->FindMaterialSources(GatherRange);
-
-	// Add builder (player) as a potential source if checkbox is checked
-	if (InventoryCheckbox && InventoryCheckbox->IsChecked())
-	{
-		UMOInventoryComponent* Inventory = BuilderInventory.Get();
-		if (Inventory)
-		{
-			AActor* OwnerActor = Inventory->GetOwner();
-			if (OwnerActor && !Sources.Contains(OwnerActor))
-			{
-				Sources.Add(OwnerActor);
-			}
-		}
-	}
-
-	// Sort by priority (highest first) using interface
-	Sources.Sort([](AActor& A, AActor& B) {
-		int32 PriorityA = A.Implements<UMOMaterialSourceInterface>()
-			? IMOMaterialSourceInterface::Execute_GetMaterialSourcePriority(&A) : 0;
-		int32 PriorityB = B.Implements<UMOMaterialSourceInterface>()
-			? IMOMaterialSourceInterface::Execute_GetMaterialSourcePriority(&B) : 0;
-		return PriorityA > PriorityB;
-	});
-
-	// Filter sources based on checkbox states
-	for (AActor* Source : Sources)
-	{
-		if (!Source->Implements<UMOMaterialSourceInterface>())
-		{
-			continue;
-		}
-
-		// Determine source type and check if enabled
-		int32 SourcePriority = IMOMaterialSourceInterface::Execute_GetMaterialSourcePriority(Source);
-
-		// SourcePriority 100 = Inventory (player), 50 = Containers, 25 = World Items
-		bool bSourceEnabled = false;
-		if (SourcePriority >= 100)
-		{
-			bSourceEnabled = InventoryCheckbox && InventoryCheckbox->IsChecked();
-		}
-		else if (SourcePriority >= 50)
-		{
-			bSourceEnabled = ContainersCheckbox && ContainersCheckbox->IsChecked();
-		}
-		else
-		{
-			bSourceEnabled = SurroundingCheckbox && SurroundingCheckbox->IsChecked();
-		}
-
-		if (!bSourceEnabled)
-		{
-			continue;
-		}
-
-		// Try to gather from this source via interface
-		if (IMOMaterialSourceInterface::Execute_CanProvideMaterial(Source, ItemId, 1))
-		{
-			int32 Gathered = IMOMaterialSourceInterface::Execute_GatherMaterial(Source, ItemId, 1);
-			if (Gathered > 0)
-			{
-				Progress->DepositMaterial(ItemId);
-
-				// Track deposited material for potential refund
-				FMODepositedMaterial DepositedMat;
-				DepositedMat.ItemId = ItemId;
-
-				// Get rarity from item definition
-				FMOItemDefinitionRow ItemDef;
-				if (UMOItemDatabaseSettings::GetItemDefinition(ItemId, ItemDef))
-				{
-					DepositedMat.Rarity = ItemDef.Rarity;
-				}
-				DepositedMaterialsForRefund.Add(DepositedMat);
-
-				UE_LOG(LogMOFramework, Log, TEXT("[MOGhostContextMenu] Gathered %s from %s (priority %d)"),
-					*ItemId.ToString(), *Source->GetName(), SourcePriority);
-				return true;
-			}
-		}
-	}
-
-	return false;
-}
-
 void UMOGhostContextMenu::PopulateMaterialList()
 {
 	UE_LOG(LogMOFramework, Log, TEXT("[MOGhostContextMenu] PopulateMaterialList called, MaterialEntries: %d"), MaterialEntries.Num());
@@ -747,165 +562,4 @@ void UMOGhostContextMenu::PopulateMaterialList()
 	}
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOGhostContextMenu] PopulateMaterialList complete, added %d widgets"), MaterialTextWidgets.Num());
-}
-
-int32 UMOGhostContextMenu::CalculateRefundAmount(int32 TotalDeposited, bool bBuildStarted) const
-{
-	if (TotalDeposited <= 0)
-	{
-		return 0;
-	}
-
-	// Before build starts: 100% refund
-	if (!bBuildStarted)
-	{
-		return TotalDeposited;
-	}
-
-	// After build starts: 50% base + skill bonus (0-45% for skill 0-100)
-	constexpr float BaseRefundPercent = 0.50f;
-	constexpr float MaxSkillBonus = 0.45f;
-
-	float SkillBonus = 0.0f;
-	if (UMOSkillsComponent* Skills = BuilderSkills.Get())
-	{
-		const int32 SkillLevel = Skills->GetSkillLevel(BuildingSkillId);
-		// Clamp to 0-100 and calculate bonus
-		const float NormalizedSkill = FMath::Clamp(static_cast<float>(SkillLevel), 0.0f, 100.0f) / 100.0f;
-		SkillBonus = NormalizedSkill * MaxSkillBonus;
-	}
-
-	const float TotalRefundPercent = BaseRefundPercent + SkillBonus;
-	const int32 RefundAmount = FMath::FloorToInt(TotalDeposited * TotalRefundPercent);
-
-	UE_LOG(LogMOFramework, Log, TEXT("[MOGhostContextMenu] Refund calc: %d total, %.1f%% base + %.1f%% skill = %d returned"),
-		TotalDeposited, BaseRefundPercent * 100.0f, SkillBonus * 100.0f, RefundAmount);
-
-	return RefundAmount;
-}
-
-void UMOGhostContextMenu::RefundMaterialsToInventory(int32 RefundCount)
-{
-	if (RefundCount <= 0 || DepositedMaterialsForRefund.Num() == 0)
-	{
-		UE_LOG(LogMOFramework, Log, TEXT("[MOGhostContextMenu] RefundMaterialsToInventory: Nothing to refund (RefundCount=%d, Deposited=%d)"),
-			RefundCount, DepositedMaterialsForRefund.Num());
-		return;
-	}
-
-	UMOInventoryComponent* Inventory = BuilderInventory.Get();
-	if (!Inventory)
-	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOGhostContextMenu] RefundMaterialsToInventory: No builder inventory, cannot refund!"));
-		return;
-	}
-
-	// Sort by rarity (lowest first) so we lose common items first, keep rarer items
-	DepositedMaterialsForRefund.Sort([](const FMODepositedMaterial& A, const FMODepositedMaterial& B) {
-		return static_cast<uint8>(A.Rarity) < static_cast<uint8>(B.Rarity);
-	});
-
-	// Materials to lose are at the front (lowest rarity)
-	// Materials to refund are at the back (highest rarity)
-	const int32 TotalDeposited = DepositedMaterialsForRefund.Num();
-	const int32 LoseCount = TotalDeposited - RefundCount;
-
-	// Consolidate materials to refund by ItemId (so stackable items stack properly)
-	TMap<FName, int32> ItemsToRefund;
-	for (int32 i = LoseCount; i < TotalDeposited; ++i)
-	{
-		const FMODepositedMaterial& Mat = DepositedMaterialsForRefund[i];
-		int32& Count = ItemsToRefund.FindOrAdd(Mat.ItemId);
-		Count++;
-	}
-
-	// Return consolidated materials to inventory
-	int32 RefundedCount = 0;
-	for (const auto& Pair : ItemsToRefund)
-	{
-		const FName& ItemId = Pair.Key;
-		const int32 Quantity = Pair.Value;
-
-		// Add stacked items with a single GUID
-		FGuid NewItemGuid = FGuid::NewGuid();
-		if (Inventory->AddItemByGuid(NewItemGuid, ItemId, Quantity))
-		{
-			RefundedCount += Quantity;
-			UE_LOG(LogMOFramework, Log, TEXT("[MOGhostContextMenu] Refunded %d x %s to inventory"), Quantity, *ItemId.ToString());
-		}
-		else
-		{
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOGhostContextMenu] Failed to add %d x %s to inventory (full?)"), Quantity, *ItemId.ToString());
-		}
-	}
-
-	UE_LOG(LogMOFramework, Log, TEXT("[MOGhostContextMenu] Refunded %d/%d materials to inventory"), RefundedCount, RefundCount);
-
-	// Log what was lost
-	if (LoseCount > 0)
-	{
-		UE_LOG(LogMOFramework, Log, TEXT("[MOGhostContextMenu] Lost %d materials (lowest rarity first)"), LoseCount);
-	}
-}
-
-void UMOGhostContextMenu::DropRefundedMaterials(int32 RefundCount, const FVector& DropLocation)
-{
-	if (RefundCount <= 0 || DepositedMaterialsForRefund.Num() == 0)
-	{
-		return;
-	}
-
-	// Sort by rarity (lowest first) so we lose common items first, keep rarer items
-	DepositedMaterialsForRefund.Sort([](const FMODepositedMaterial& A, const FMODepositedMaterial& B) {
-		return static_cast<uint8>(A.Rarity) < static_cast<uint8>(B.Rarity);
-	});
-
-	// Materials to lose are at the front (lowest rarity)
-	// Materials to refund are at the back (highest rarity)
-	const int32 TotalDeposited = DepositedMaterialsForRefund.Num();
-	const int32 LoseCount = TotalDeposited - RefundCount;
-
-	// Spawn refunded materials (skip the first LoseCount items) through the
-	// canonical factory. Item definitions carry meshes, not per-item actor
-	// classes, so spawning WorldVisual.WorldActorClass directly drops nothing.
-	UWorld* World = GetWorld();
-	UMOWorldItemFactory* Factory = World ? World->GetSubsystem<UMOWorldItemFactory>() : nullptr;
-	if (!Factory)
-	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOGhostContextMenu] DropRefundedMaterials: no world item factory, %d materials lost"),
-			TotalDeposited - LoseCount);
-		return;
-	}
-
-	// Consolidate by ItemId so stackable items drop as stacks
-	TMap<FName, int32> ItemsToDrop;
-	for (int32 i = LoseCount; i < TotalDeposited; ++i)
-	{
-		ItemsToDrop.FindOrAdd(DepositedMaterialsForRefund[i].ItemId)++;
-	}
-
-	for (const auto& Pair : ItemsToDrop)
-	{
-		// Scatter spawn locations slightly
-		const FVector SpawnLocation = DropLocation + FVector(
-			FMath::RandRange(-50.0f, 50.0f),
-			FMath::RandRange(-50.0f, 50.0f),
-			FMath::RandRange(0.0f, 30.0f)
-		);
-
-		if (Factory->SpawnDroppedItem(Pair.Key, Pair.Value, FGuid::NewGuid(), SpawnLocation, FRotator::ZeroRotator, nullptr))
-		{
-			UE_LOG(LogMOFramework, Verbose, TEXT("[MOGhostContextMenu] Dropped refund %d x %s"), Pair.Value, *Pair.Key.ToString());
-		}
-		else
-		{
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOGhostContextMenu] Failed to drop refund %d x %s"), Pair.Value, *Pair.Key.ToString());
-		}
-	}
-
-	// Log what was lost
-	if (LoseCount > 0)
-	{
-		UE_LOG(LogMOFramework, Log, TEXT("[MOGhostContextMenu] Lost %d materials (lowest rarity first)"), LoseCount);
-	}
 }

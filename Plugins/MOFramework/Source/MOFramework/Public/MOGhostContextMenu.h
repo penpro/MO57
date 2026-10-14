@@ -19,20 +19,23 @@
  * 6. "Build" starts construction timer
  * 7. "Cancel" destroys ghost, refunds materials (skill-based %)
  *
- * REFUND SYSTEM:
- * - Cancellation refunds based on Building skill level
- * - Lowest rarity items lost first
- * - DepositedMaterialsForRefund tracks order for loss
+ * A VIEW, NOT THE LOGIC (co-op, Oct 2026): Add / Build / Cancel are requests
+ * (UMOBuildingComponent::RequestBuildAction -> the server); gathering, the
+ * refund rule (Construction skill, rarest kept) and removing the building live in
+ * UMOBuildProgressComponent (GatherMissingMaterials / StartOrResume /
+ * CancelAndRemove). The list and buttons refresh from the component's
+ * replicated state (OnDepositsChanged / OnConstructionStateChanged).
  *
  * =============================================================================
  * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
  * =============================================================================
  *
- * [2024-02] MATERIAL SOURCES: Checkboxes control where to pull from.
- *   Default: Inventory only. Can add nearby containers, ground items.
+ * [2024-02] MATERIAL SOURCES: Checkboxes control where to pull from
+ *   (sent with the request as MOMaterialSourceBit flags).
  *
- * [2024-02] RARITY LOSS ORDER: When refund < 100%, lose lowest rarity first.
- *   DepositedMaterialsForRefund is sorted by rarity for this.
+ * [2026-10] The widget used to gather, deposit, refund and Destroy() the
+ *   building itself: on a co-op client all of that ran on the client's copy
+ *   (the server never saw it). Never put game state changes back in here.
  *
  * [2024-02] BUILD TIMER TICK: NativeTick updates progress bar during build.
  *   Don't tick when not building to save performance.
@@ -57,27 +60,11 @@
 class AMOBuildableActor;
 class UMOInventoryComponent;
 class UMOBuildProgressComponent;
-class UMOSkillsComponent;
 class UMOCommonButton;
 class UCheckBox;
 class UVerticalBox;
 class UTextBlock;
 class UProgressBar;
-
-/**
- * Tracks a single deposited material for refund purposes.
- */
-USTRUCT()
-struct FMODepositedMaterial
-{
-	GENERATED_BODY()
-
-	UPROPERTY()
-	FName ItemId = NAME_None;
-
-	UPROPERTY()
-	EMOItemRarity Rarity = EMOItemRarity::Common;
-};
 
 /**
  * Data for displaying a material requirement in the ghost context menu.
@@ -116,7 +103,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOGhostMenuBuildStartedSignature);
  * 4. Material list shows "Cordage 3/5" style progress
  * 5. Once all materials deposited, "Add" becomes "Build"
  * 6. "Build" starts the construction timer
- * 7. "Cancel" destroys ghost and drops deposited materials
+ * 7. "Cancel" removes the ghost; the server refunds the deposits (skill-scaled)
  */
 UCLASS(Abstract, Blueprintable)
 class MOFRAMEWORK_API UMOGhostContextMenu : public UMOContextMenuBase
@@ -308,7 +295,11 @@ private:
 	UFUNCTION()
 	void HandleBuildStateChanged(EMOBuildState NewState);
 
-	/** Bind to BuildProgress->OnConstructionStateChanged. Idempotent. */
+	/** The deposits ledger changed (here on the server, or replicated to a client): refresh the list and buttons. */
+	UFUNCTION()
+	void HandleDepositsChanged();
+
+	/** Bind to BuildProgress->OnConstructionStateChanged / OnDepositsChanged. Idempotent. */
 	void BindBuildProgressEvents();
 
 	/** Unbind from BuildProgress->OnConstructionStateChanged. */
@@ -327,9 +318,6 @@ private:
 	UPROPERTY()
 	TWeakObjectPtr<UMOBuildProgressComponent> BuildProgress;
 
-	UPROPERTY()
-	TWeakObjectPtr<UMOSkillsComponent> BuilderSkills;
-
 	/** Cached material entries */
 	UPROPERTY()
 	TArray<FMOGhostMaterialEntry> MaterialEntries;
@@ -337,10 +325,6 @@ private:
 	/** Dynamically created text widgets for material list */
 	UPROPERTY()
 	TArray<TObjectPtr<UTextBlock>> MaterialTextWidgets;
-
-	/** Tracks all deposited materials for refund (sorted by rarity for loss order) */
-	UPROPERTY()
-	TArray<FMODepositedMaterial> DepositedMaterialsForRefund;
 
 	// Mouse leave handling is inherited from UMOContextMenuBase
 
@@ -371,30 +355,12 @@ private:
 	/** Update material text widget */
 	void UpdateMaterialTextWidget(UTextBlock* Widget, const FMOGhostMaterialEntry& Entry);
 
-	/** Try to gather one unit of a material from sources */
-	bool TryGatherMaterial(FName ItemId);
-
 	/** Populate material list container with text widgets */
 	void PopulateMaterialList();
 
-	/** Calculate refund amount based on build state and skill level.
-	 * @param TotalDeposited - Total materials deposited
-	 * @param bBuildStarted - Whether construction has begun
-	 * @return Number of materials to refund
-	 */
-	int32 CalculateRefundAmount(int32 TotalDeposited, bool bBuildStarted) const;
+	/** The material-source checkboxes as MOMaterialSourceBit flags. */
+	uint8 GetSourceFlags() const;
 
-	/** Return refunded materials to builder's inventory, losing lowest rarity first.
-	 * @param RefundCount - Number of materials to return
-	 */
-	void RefundMaterialsToInventory(int32 RefundCount);
-
-	/** Drop refunded materials to world, losing lowest rarity first.
-	 * @param RefundCount - Number of materials to return
-	 * @param DropLocation - Where to spawn the items
-	 */
-	void DropRefundedMaterials(int32 RefundCount, const FVector& DropLocation);
-
-	/** Skill ID used for calculating refund bonus (e.g., "Construction", "Building") */
-	static const FName BuildingSkillId;
+	/** Send a construction step for TargetBuilding through the owning player's UMOBuildingComponent (the server runs it). */
+	void RequestBuild(EMOBuildRequest Request);
 };

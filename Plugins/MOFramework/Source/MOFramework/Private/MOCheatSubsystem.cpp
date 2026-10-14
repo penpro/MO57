@@ -2092,6 +2092,93 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 		}),
 		ECVF_Default));
 
+	// ---------- MO.Test.Build <add|start|pause|cancel|cancelkeep|state|direct|menu> [maxDistCm=2500] ----------
+	// Construction on the placed building nearest THIS machine's pawn, the way the ghost menu does it: add / start / pause / cancel / cancelkeep
+	// go through UMOBuildingComponent::RequestBuildAction (a Server RPC from a client). state logs what this machine sees; direct is the CONTROL
+	// (the component called right here -- refused on a client); menu sends the secondary interaction the right-click sends (the server handles
+	// it and the build menu must open on THIS machine). Deferred so RPCs really transport (see RunOnNextTick).
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Test.Build"),
+		TEXT("Construction on the nearest placed building through the real request path. Usage: MO.Test.Build <add|start|pause|cancel|cancelkeep|state|direct|menu> [maxDistCm=2500]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			const FString Op = Args.Num() > 0 ? Args[0].ToLower() : FString(TEXT("state"));
+			const float MaxDist = Args.Num() > 1 ? FCString::Atof(*Args[1]) : 2500.0f;
+			RunOnNextTick(World, [Op, MaxDist](UWorld* W)
+			{
+				APlayerController* PC = W->GetFirstPlayerController();
+				APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+				AMOBuildableActor* Nearest = nullptr;
+				float Best = MaxDist;
+				for (TActorIterator<AMOBuildableActor> It(W); Pawn && It; ++It)
+				{
+					const float D = FVector::Dist(It->GetActorLocation(), Pawn->GetActorLocation());
+					if (D < Best && It->BuildProgressComponent && !It->IsGhostMode())
+					{
+						Best = D;
+						Nearest = *It;
+					}
+				}
+				UMOBuildProgressComponent* Progress = Nearest ? Nearest->BuildProgressComponent.Get() : nullptr;
+				if (!Progress)
+				{
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] FAIL Build %s: no placed building within %.0f cm of the pawn"), *Op, MaxDist);
+					return;
+				}
+				auto Ledger = [](const TMap<FName, int32>& M)
+				{
+					FString S;
+					for (const TPair<FName, int32>& P : M) { S += FString::Printf(TEXT("%s%s:%d"), S.IsEmpty() ? TEXT("") : TEXT(","), *P.Key.ToString(), P.Value); }
+					return S.IsEmpty() ? FString(TEXT("-")) : S;
+				};
+				if (Op == TEXT("state"))
+				{
+					TMap<FName, int32> Deposited, Required;
+					Progress->GetDepositedMaterials(Deposited);
+					TArray<FName> Ids;
+					Progress->GetRequiredMaterials(Ids);
+					for (const FName& Id : Ids) { Required.Add(Id, Progress->GetRequiredCount(Id)); }
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] BuildState %s recipe=%s state=%d elapsed=%.1f total=%.1f deposited=%s required=%s authority=%d"),
+						*Nearest->GetName(), *Progress->GetRecipeId().ToString(), static_cast<int32>(Progress->GetState()), Progress->GetProgressData().ElapsedTime,
+						Progress->GetProgressData().TotalBuildTime, *Ledger(Deposited), *Ledger(Required), Nearest->HasAuthority() ? 1 : 0);
+					return;
+				}
+				if (Op == TEXT("direct"))
+				{
+					TArray<FName> Ids;
+					Progress->GetRequiredMaterials(Ids);
+					const bool bDeposited = Ids.Num() > 0 && Progress->DepositMaterial(Ids[0]);
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] Build direct on %s (authority=%d): DepositMaterial=%d"), *Nearest->GetName(), Nearest->HasAuthority() ? 1 : 0, bDeposited ? 1 : 0);
+					return;
+				}
+				if (Op == TEXT("menu"))
+				{
+					// The RPC the right-click sends (UMOInteractorComponent::TrySecondaryInteract -> ServerRequestSecondaryInteract, protected): called by
+					// name, so it goes through the same RPC transport without a crosshair trace.
+					UMOInteractorComponent* Interactor = Pawn->FindComponentByClass<UMOInteractorComponent>();
+					UFunction* Rpc = Interactor ? Interactor->FindFunction(TEXT("ServerRequestSecondaryInteract")) : nullptr;
+					if (Rpc)
+					{
+						struct { AActor* TargetActor; } Params{ Nearest };
+						Interactor->ProcessEvent(Rpc, &Params);
+					}
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] Build menu: secondary interaction sent for %s (rpc=%d)"), *Nearest->GetName(), Rpc ? 1 : 0);
+					return;
+				}
+				const EMOBuildRequest Request = Op == TEXT("add") ? EMOBuildRequest::AddMaterials : Op == TEXT("start") ? EMOBuildRequest::Start
+					: Op == TEXT("pause") ? EMOBuildRequest::Pause : Op == TEXT("cancel") ? EMOBuildRequest::CancelAndRemove : EMOBuildRequest::CancelKeepGhost;
+				UMOBuildingComponent* Requests = PC->FindComponentByClass<UMOBuildingComponent>();
+				if (!Requests)
+				{
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] FAIL Build %s: no UMOBuildingComponent on the controller"), *Op);
+					return;
+				}
+				Requests->RequestBuildAction(Nearest, Request, MOAllMaterialSources);
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] Build %s requested on %s (%.0f cm away, authority=%d)"), *Op, *Nearest->GetName(), Best, PC->HasAuthority() ? 1 : 0);
+			});
+		}),
+		ECVF_Default));
+
 	// ---------- MO.Test.TerraformRPC <Dig|Raise|Flatten|Smooth|RemoveFoliage> [forwardCm=300] ----------
 	// Same idea for ServerApplyTerraform (which already holds the client to a 2500 cm reach and clamps FlattenHeight).
 	ConsoleCommands.Add(CM.RegisterConsoleCommand(

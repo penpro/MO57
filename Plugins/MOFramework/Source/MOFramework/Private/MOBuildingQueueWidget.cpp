@@ -7,6 +7,9 @@
 #include "MOBuildingQueueWidget.h"
 #include "MOFramework.h"
 #include "MOBuildProgressComponent.h"
+#include "MOBuildableActor.h"
+#include "MOBuildingComponent.h"
+#include "GameFramework/PlayerController.h"
 #include "MOBuildingQueueEntryWidget.h"
 #include "MOQueueRowWidgetBase.h"
 #include "MORecipeDatabaseSettings.h"
@@ -202,9 +205,13 @@ void UMOBuildingQueueWidget::ExecuteCancelAll_Implementation()
 {
 	// Single-operation domain: cancel-one == cancel-all. Full material refund as
 	// world drops, ghost survives (legacy semantics — see the header's fork note).
-	if (UMOBuildProgressComponent* Component = ProgressComponent.Get())
+	// A request: the server cancels (UMOBuildingComponent::RequestBuildAction), in co-op too.
+	UMOBuildProgressComponent* Component = ProgressComponent.Get();
+	AMOBuildableActor* Building = Component ? Cast<AMOBuildableActor>(Component->GetOwner()) : nullptr;
+	APlayerController* PC = GetOwningPlayer();
+	if (UMOBuildingComponent* Requests = (Building && PC) ? PC->FindComponentByClass<UMOBuildingComponent>() : nullptr)
 	{
-		Component->CancelConstruction(/*bRefundMaterials=*/true);
+		Requests->RequestBuildAction(Building, EMOBuildRequest::CancelKeepGhost, MOAllMaterialSources);
 	}
 }
 

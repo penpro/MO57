@@ -146,6 +146,57 @@ enum class EMOMaterialSource : uint8
 	SurroundingArea UMETA(DisplayName="Surrounding Area")
 };
 
+/** EMOMaterialSource as one bit of a uint8 (the sources a build request may draw from). */
+inline constexpr uint8 MOMaterialSourceBit(EMOMaterialSource Source) { return static_cast<uint8>(1u << static_cast<uint8>(Source)); }
+inline constexpr uint8 MOAllMaterialSources = 0x7;
+
+/**
+ * A construction step a player asks for on a placed building. The server runs it (UMOBuildingComponent::RequestBuildAction): the building's
+ * state, the deposited materials and the inventories they come from are server state in co-op.
+ */
+UENUM(BlueprintType)
+enum class EMOBuildRequest : uint8
+{
+	AddMaterials UMETA(DisplayName="Add Materials"),         // gather what is still missing from the enabled sources into the building
+	Start UMETA(DisplayName="Start"),                        // start construction (all materials deposited), or resume a paused one
+	Pause UMETA(DisplayName="Pause"),
+	CancelAndRemove UMETA(DisplayName="Cancel And Remove"),  // ghost menu Cancel: skill-scaled refund to the builder, the building goes
+	CancelKeepGhost UMETA(DisplayName="Cancel Keep Ghost")   // build queue Cancel: every deposited material dropped beside it, the ghost stays
+};
+
+/** One entry of the deposited-materials ledger, as it replicates (TMap does not). */
+USTRUCT()
+struct MOFRAMEWORK_API FMOBuildDeposit
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	FName ItemId = NAME_None;
+
+	UPROPERTY()
+	int32 Count = 0;
+
+	bool operator==(const FMOBuildDeposit& Other) const { return ItemId == Other.ItemId && Count == Other.Count; }
+};
+
+/** What clients need of a building's progress: the server publishes it (UMOBuildProgressComponent::PublishRepState), clients apply it to their FMOBuildProgress. */
+USTRUCT()
+struct MOFRAMEWORK_API FMOBuildRepState
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	EMOBuildState State = EMOBuildState::Ghost;
+
+	/** Server elapsed time when published (refreshed about once a second while constructing; clients advance it locally in between). */
+	UPROPERTY()
+	float ElapsedTime = 0.0f;
+
+	/** Sorted by ItemId, so the same ledger always replicates the same bytes. */
+	UPROPERTY()
+	TArray<FMOBuildDeposit> Deposits;
+};
+
 /**
  * Build progress state for a building under construction.
  */
@@ -275,3 +326,6 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOOnMaterialNeededSignature, FName
 
 /** Broadcast when construction state changes. */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOOnConstructionStateChangedSignature, EMOBuildState, NewState);
+
+/** Broadcast when the deposited-materials ledger changes (a deposit, a cancel, or the server's ledger arriving on a client). */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOOnConstructionDepositsChangedSignature);

@@ -1436,6 +1436,110 @@ def _client_forage(rep, host, client):
              f"host: {n_dug} dig(s) accepted, {n_refused} refused")
 
 
+def _build_state(name):
+    """What `name` sees of the placed building nearest its pawn: dict(state, elapsed, deposited) from MO.Test.Build state, or None."""
+    off = log_size(name)
+    console(name, "MO.Test.Build state")
+    m = wait_log(name, r"\[MOTEST\] (BuildState \S+ recipe=\S+ state=(\d) elapsed=([\d.]+) total=[\d.]+ deposited=(\S+)[^\n]*|FAIL Build state[^\n]*)", since=off, timeout=15)
+    if not m or m.group(2) is None:
+        return None
+    return {"state": int(m.group(2)), "elapsed": float(m.group(3)), "deposited": m.group(4), "line": m.group(1)[:200]}
+
+
+def _client_build(rep, host, client):
+    """CLIENT construction (Wes, Oct 13 2026: "co-op build for sure needs to be server/host driven"). The ghost menu used to gather, deposit, start and
+    refund ON THE CLIENT's copy of the building -- the host never saw any of it, so the building never finished for anyone else -- and a joiner's
+    right-click opened the menu on the host's copy of the joiner's controller, i.e. nowhere. Now the menu's actions are requests the HOST runs
+    (UMOBuildingComponent::RequestBuildAction), the progress replicates (UMOBuildProgressComponent::RepState), and UI requests made on the server
+    go to the owning client (AMOPlayerController::ClientUIContractRequest). Proof is read on the HOST; the client's view is checked against it."""
+    inv = ("p = unreal.GameplayStatics.get_player_pawn(world, 1); inv = p.get_component_by_class(unreal.MOInventoryComponent); ")
+
+    def cobbles():
+        m = re.search(r"COBBLES=(-?\d+)", _probe(host, inv + "out('COBBLES=%d' % inv.get_item_count_by_definition_id('RiverCobble01'))"))
+        return int(m.group(1)) if m else -1
+
+    def give(n):
+        return "GAVE=True" in _probe(host, inv + f"out('GAVE=%s' % inv.add_item_by_guid(unreal.GuidLibrary.new_guid(), 'RiverCobble01', {n}))")
+
+    def place(forward_cm):
+        base = _count_buildables(host)
+        console(client, f"MO.Test.PlaceBuildingRPC BuildCampfire {forward_cm}")
+        for _ in range(10):
+            time.sleep(1.0)
+            if (_count_buildables(host) or 0) > (base or 0):
+                break
+        time.sleep(3)   # replicates to the client
+        return base, _count_buildables(host)
+
+    base, after = place(300)
+    if not rep.step("client build: a campfire ghost the joiner placed exists on the host", after == (base or 0) + 1, f"buildings {base} -> {after}"):
+        return
+    hs, cs = _build_state(host), _build_state(client)
+    rep.step("client build: host and client see the same empty ghost (state Ghost, nothing deposited)",
+             bool(hs and cs) and hs["state"] == 0 == cs["state"] and hs["deposited"] == "-" == cs["deposited"], f"host: {hs and hs['line']} | client: {cs and cs['line']}")
+
+    # The right-click: the server handles the interaction, the menu must open on the JOINER's screen.
+    coff = log_size(client)
+    console(client, "MO.Test.Build menu")
+    fwd = wait_log(client, r"\[MOUIContract\] the server asked this client for UI request \d+ on [^\n]*", since=coff, timeout=15)
+    shown = wait_log(client, r"\[MOBuildUI\] Projection: [^\n]*", since=coff, timeout=5)
+    rep.step("client build: the joiner's right-click opens the build menu ON THE JOINER (the server forwards the UI request)", bool(fwd) and bool(shown),
+             (fwd.group(0) if fwd else "no [MOUIContract] line on the client") + (" + menu shown" if shown else " -- menu never shown"))
+
+    if not rep.step("host: gave the joiner 10 river cobbles", give(10), ""):
+        return
+    before = cobbles()
+    # CONTROL: the old way -- the component called on the client -- is refused there and reaches nothing on the host.
+    coff = log_size(client)
+    console(client, "MO.Test.Build direct")
+    wait_log(client, r"\[MOTEST\] Build direct[^\n]*", since=coff, timeout=15)
+    cl = read_log_from(client, coff)
+    refused = re.search(r"\[MOBuildProgressComponent\] DepositMaterial refused[^\n]*", cl)
+    time.sleep(1)
+    hs = _build_state(host)
+    rep.step("CONTROL: the old path (the build component called on the CLIENT) is refused and the host's ledger stays empty",
+             bool(refused) and bool(hs) and hs["deposited"] == "-", (refused.group(0)[:120] if refused else "no refusal on the client") + f" | host: {hs and hs['deposited']}")
+
+    hoff = log_size(host)
+    console(client, "MO.Test.Build add")
+    got = wait_log(host, r"\[MOBuildProgressComponent\] GatherMissingMaterials: (\d+) unit[^\n]*", since=hoff, timeout=15)
+    time.sleep(2)
+    hs, cs, now = _build_state(host), _build_state(client), cobbles()
+    rep.step("client build: Add materials ran ON THE HOST: 10 cobbles went from the joiner's inventory (host's copy) into the building",
+             bool(got) and got.group(1) == "10" and before - now == 10 and bool(hs) and "RiverCobble01:10" in hs["deposited"],
+             f"{got.group(0)[:110] if got else 'no GatherMissingMaterials line on the host'} | joiner cobbles {before} -> {now} | host ledger {hs and hs['deposited']}")
+    rep.step("client build: ... and the deposits replicate to the client", bool(cs) and "RiverCobble01:10" in cs["deposited"], f"client ledger {cs and cs['deposited']}")
+
+    console(client, "MO.Test.Build start")
+    time.sleep(4)
+    hs, cs = _build_state(host), _build_state(client)
+    rep.step("client build: Build started construction on the HOST and the client sees it constructing (state 1, elapsed moving)",
+             bool(hs and cs) and hs["state"] == 1 and cs["state"] == 1 and cs["elapsed"] > 0.5, f"host: {hs and hs['line']} | client: {cs and cs['line']}")
+    coff, hoff = log_size(client), log_size(host)
+    done = wait_log(host, r"\[MOBuildProgressComponent\] Construction complete![^\n]*", since=hoff, timeout=45)
+    time.sleep(3)
+    hs, cs = _build_state(host), _build_state(client)
+    rep.step("client build: the campfire finished on the HOST (30 s build) and the client sees it complete", bool(done) and bool(hs and cs) and hs["state"] == 3 == cs["state"],
+             f"host: {hs and hs['line']} | client: {cs and cs['line']}")
+    quest = re.search(r"\[MOQuestSubsystem\] event \S*ItemCraft BuildCampfire x1[^\n]*", read_log_from(client, coff))
+    rep.step("client build: the construction counts for the JOINER's quests (on the joiner's machine)", bool(quest), quest.group(0) if quest else "no ItemCraft BuildCampfire event on the client")
+
+    # Cancel before starting: a full refund to the joiner, the building removed -- both by the host. Placed nearer than the finished one
+    # (MO.Test.Build works on the nearest building).
+    base, after = place(150)
+    give(10)
+    console(client, "MO.Test.Build add")
+    time.sleep(3)
+    before = cobbles()
+    hoff = log_size(host)
+    console(client, "MO.Test.Build cancel")
+    canc = wait_log(host, r"\[MOBuildProgressComponent\] CancelAndRemove [^\n]*", since=hoff, timeout=15)
+    time.sleep(3)
+    rep.step("client build: Cancel ran ON THE HOST: the 10 deposited cobbles came back to the joiner and the building is gone",
+             bool(canc) and cobbles() - before == 10 and _count_buildables(host) == base,
+             f"{canc.group(0)[:120] if canc else 'no CancelAndRemove line on the host'} | buildings {after} -> {_count_buildables(host)}")
+
+
 def _client_attack(rep, host, client):
     """CLIENT attack: the client calls StartLightAttack (forwarded as ServerStartAttack); the host's combat component for the joiner's
     pawn must enter combat. Control: not in combat before. (bInCombat holds for ~5 s after an action, so poll right away.)"""
@@ -1723,7 +1827,7 @@ def actions_test(uproject, editor_exe, keep=False, boot_timeout=300):
             start(n, uproject, editor_exe, pos=pos, nosteam=True)
         if not _host_and_join(rep, host, client, "ActionsTest", boot_timeout):
             return False
-        for fn in (_client_pickup, _client_craft, _client_forage, _client_attack, _trust_placement, _trust_pickup_far, _trust_possess_other, _trust_terraform, _buried_pawns, _remote_pawn_stays_put):
+        for fn in (_client_pickup, _client_craft, _client_forage, _client_build, _client_attack, _trust_placement, _trust_pickup_far, _trust_possess_other, _trust_terraform, _buried_pawns, _remote_pawn_stays_put):
             try:
                 fn(rep, host, client)
             except Exception as e:  # noqa: BLE001 - one verb's harness error must not hide the others

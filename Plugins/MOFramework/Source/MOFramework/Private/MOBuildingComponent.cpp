@@ -57,6 +57,8 @@
 
 #include "MOBuildingComponent.h"
 #include "MOBuildableActor.h"
+#include "MOBuildProgressComponent.h"
+#include "MOInventoryComponent.h"
 #include "MOContainerActor.h"
 #include "MOCraftingStationActor.h"
 #include "MOPlayerController.h"
@@ -581,6 +583,68 @@ void UMOBuildingComponent::ServerPlaceBuilding_Implementation(FName InRecipeId, 
 
 	Placed->InitializeBuilding(InRecipeId);
 	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingComponent] ServerPlaceBuilding: spawned %s for recipe %s"), *Placed->GetName(), *InRecipeId.ToString());
+}
+
+void UMOBuildingComponent::RequestBuildAction(AMOBuildableActor* Building, EMOBuildRequest Request, uint8 SourceFlags)
+{
+	if (!IsValid(Building) || !GetOwner())
+	{
+		return;
+	}
+	if (GetOwner()->HasAuthority())
+	{
+		ExecuteBuildRequest(Building, Request, SourceFlags);
+	}
+	else
+	{
+		ServerBuildRequest(Building, Request, SourceFlags);
+	}
+}
+
+void UMOBuildingComponent::ServerBuildRequest_Implementation(AMOBuildableActor* Building, EMOBuildRequest Request, uint8 SourceFlags)
+{
+	ExecuteBuildRequest(Building, Request, SourceFlags);
+}
+
+void UMOBuildingComponent::ExecuteBuildRequest(AMOBuildableActor* Building, EMOBuildRequest Request, uint8 SourceFlags)
+{
+	const APlayerController* PC = Cast<APlayerController>(GetOwner());
+	APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+	UMOBuildProgressComponent* Progress = IsValid(Building) ? Building->BuildProgressComponent.Get() : nullptr;
+	if (!PC || !PC->HasAuthority() || !Pawn || !Progress)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOBuildingComponent] Build request %d ignored: no pawn / building / authority"), static_cast<int32>(Request));
+		return;
+	}
+	// The builder stands at the building: a client cannot work (or empty its pockets into) a building across the map.
+	const float DistanceCm = FVector::Dist(Pawn->GetActorLocation(), Building->GetActorLocation());
+	if (DistanceCm > MaxBuildRequestReachCm)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOBuildingComponent] Build request %d on %s rejected: the pawn is %.0f cm away (max %.0f)"),
+			static_cast<int32>(Request), *Building->GetName(), DistanceCm, MaxBuildRequestReachCm);
+		return;
+	}
+	UMOInventoryComponent* Inventory = Pawn->FindComponentByClass<UMOInventoryComponent>();
+	const uint8 Sources = SourceFlags & MOAllMaterialSources;
+	switch (Request)
+	{
+	case EMOBuildRequest::AddMaterials:
+		Progress->GatherMissingMaterials(Inventory, Sources);
+		break;
+	case EMOBuildRequest::Start:
+		Progress->StartOrResume(Inventory, Sources);
+		break;
+	case EMOBuildRequest::Pause:
+		Progress->PauseConstruction();
+		break;
+	case EMOBuildRequest::CancelAndRemove:
+		Progress->CancelAndRemove(Inventory);
+		break;
+	case EMOBuildRequest::CancelKeepGhost:
+		Progress->CancelConstruction(/*bRefundMaterials=*/true);
+		break;
+	}
+	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingComponent] Build request %d on %s by %s"), static_cast<int32>(Request), *Building->GetName(), *Pawn->GetName());
 }
 
 void UMOBuildingComponent::HandlePlacementPrimaryAction()

@@ -9,14 +9,114 @@
 #include "MOItemDefinitionRow.h"
 #include "MOWorldItemFactory.h"
 #include "MOCharacter.h"
+#include "MOSkillsComponent.h"
+#include "MOMaterialSourceInterface.h"
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetSystemLibrary.h"
+#include "Net/UnrealNetwork.h"
+
+const FName UMOBuildProgressComponent::ConstructionSkillId = FName("Construction");
 
 UMOBuildProgressComponent::UMOBuildProgressComponent()
 {
 	PrimaryComponentTick.bCanEverTick = true;
 	PrimaryComponentTick.bStartWithTickEnabled = false;
+	SetIsReplicatedByDefault(true);
+}
+
+void UMOBuildProgressComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(UMOBuildProgressComponent, RepState);
+}
+
+bool UMOBuildProgressComponent::CheckAuthority(const TCHAR* Caller) const
+{
+	const AActor* Owner = GetOwner();
+	if (Owner && Owner->HasAuthority())
+	{
+		return true;
+	}
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOBuildProgressComponent] %s refused on %s: not the server (players go through UMOBuildingComponent::RequestBuildAction)"),
+		Caller, *GetNameSafe(Owner));
+	return false;
+}
+
+// ============================================================================
+// REPLICATION
+// ============================================================================
+
+void UMOBuildProgressComponent::PublishRepState(bool bForce)
+{
+	if (!bForce && FMath::Abs(Progress.ElapsedTime - LastPublishedElapsed) < 1.0f)
+	{
+		return;
+	}
+	RepState.State = Progress.State;
+	RepState.ElapsedTime = Progress.ElapsedTime;
+	LastPublishedElapsed = Progress.ElapsedTime;
+	RepState.Deposits.Reset(Progress.DepositedMaterials.Num());
+	for (const TPair<FName, int32>& Pair : Progress.DepositedMaterials)
+	{
+		if (Pair.Value > 0)
+		{
+			RepState.Deposits.Add(FMOBuildDeposit{ Pair.Key, Pair.Value });
+		}
+	}
+	RepState.Deposits.Sort([](const FMOBuildDeposit& A, const FMOBuildDeposit& B) { return A.ItemId.LexicalLess(B.ItemId); });
+}
+
+void UMOBuildProgressComponent::OnRep_RepState(const FMOBuildRepState& Previous)
+{
+	bHasRepState = true;
+	ApplyRepState(Previous, /*bBroadcast=*/true);
+}
+
+void UMOBuildProgressComponent::ApplyRepState(const FMOBuildRepState& Previous, bool bBroadcast)
+{
+	const EMOBuildState OldState = Progress.State;
+	Progress.State = RepState.State;
+	Progress.ElapsedTime = RepState.ElapsedTime;
+	Progress.DepositedMaterials.Reset();
+	for (const FMOBuildDeposit& Deposit : RepState.Deposits)
+	{
+		Progress.DepositedMaterials.Add(Deposit.ItemId, Deposit.Count);
+	}
+	if (Progress.State == EMOBuildState::Complete)
+	{
+		Progress.ElapsedTime = Progress.TotalBuildTime;
+		Progress.CurrentPartProgress = 1.0f;
+	}
+	// Between updates a client advances the elapsed time itself (display only: completion comes from the server).
+	SetComponentTickEnabled(Progress.State == EMOBuildState::Constructing);
+
+	if (!bBroadcast)
+	{
+		return;
+	}
+	if (Previous.Deposits != RepState.Deposits)
+	{
+		OnDepositsChanged.Broadcast();
+	}
+	if (OldState != Progress.State)
+	{
+		// The server's own broadcasts, in its order (FinalizeConstruction: completed, then state changed).
+		if (Progress.State == EMOBuildState::Constructing && OldState == EMOBuildState::Ghost)
+		{
+			OnConstructionStarted.Broadcast();
+		}
+		else if (Progress.State == EMOBuildState::Complete)
+		{
+			OnConstructionCompleted.Broadcast();
+		}
+		else if (Progress.State == EMOBuildState::Ghost)
+		{
+			OnConstructionCancelled.Broadcast();
+		}
+		OnConstructionStateChanged.Broadcast(Progress.State);
+	}
+	OnConstructionProgress.Broadcast(Progress.GetOverallProgress());
 }
 
 // ============================================================================
@@ -42,6 +142,16 @@ void UMOBuildProgressComponent::InitializeFromRecipe(const FMORecipeDefinitionRo
 	}
 
 	CalculateTotalWeight();
+
+	if (GetOwner() && GetOwner()->HasAuthority())
+	{
+		PublishRepState();
+	}
+	else if (bHasRepState)
+	{
+		// The recipe (the building's RecipeId) replicated after the progress did: the reset above wiped it, so take the server's again.
+		ApplyRepState(RepState, /*bBroadcast=*/false);
+	}
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildProgressComponent] Initialized with %d parts, total time: %.1fs"),
 		BuildParts.Num(), Progress.TotalBuildTime);
@@ -71,7 +181,7 @@ void UMOBuildProgressComponent::CalculateTotalWeight()
 
 void UMOBuildProgressComponent::StartConstruction(const FMOBuildProgress& Options, UMOInventoryComponent* InBuilderInventory)
 {
-	if (Progress.State == EMOBuildState::Constructing)
+	if (!CheckAuthority(TEXT("StartConstruction")) || Progress.State == EMOBuildState::Constructing || Progress.State == EMOBuildState::Complete)
 	{
 		return;
 	}
@@ -106,6 +216,7 @@ void UMOBuildProgressComponent::StartConstruction(const FMOBuildProgress& Option
 	// progress so the player can resume by interacting again.
 	RegisterWithBuilderForInterrupts();
 
+	PublishRepState();
 	OnConstructionStarted.Broadcast();
 	OnConstructionStateChanged.Broadcast(Progress.State);
 
@@ -124,7 +235,7 @@ void UMOBuildProgressComponent::SetBuilderInventory(UMOInventoryComponent* InInv
 
 bool UMOBuildProgressComponent::DepositMaterial(FName ItemId)
 {
-	if (ItemId.IsNone())
+	if (ItemId.IsNone() || !CheckAuthority(TEXT("DepositMaterial")))
 	{
 		return false;
 	}
@@ -141,6 +252,8 @@ bool UMOBuildProgressComponent::DepositMaterial(FName ItemId)
 
 	// Accept the deposit
 	Progress.DepositedMaterials.FindOrAdd(ItemId)++;
+	PublishRepState();
+	OnDepositsChanged.Broadcast();
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildProgressComponent] Deposited %s (%d/%d)"),
 		*ItemId.ToString(), Deposited + 1, Required);
@@ -199,7 +312,7 @@ void UMOBuildProgressComponent::GetRequiredMaterials(TArray<FName>& OutItemIds) 
 
 void UMOBuildProgressComponent::InterruptBuild(float PenaltyPercent)
 {
-	if (Progress.State != EMOBuildState::Constructing)
+	if (Progress.State != EMOBuildState::Constructing || !CheckAuthority(TEXT("InterruptBuild")))
 	{
 		return;
 	}
@@ -216,6 +329,7 @@ void UMOBuildProgressComponent::InterruptBuild(float PenaltyPercent)
 	// ResumeConstruction will re-register if it's later resumed.
 	UnregisterFromBuilderInterrupts();
 
+	PublishRepState();
 	OnConstructionStateChanged.Broadcast(Progress.State);
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildProgressComponent] Build interrupted! Lost %.1f%% (%.1fs). Progress now at %.1f%%"),
@@ -229,7 +343,7 @@ void UMOBuildProgressComponent::GetDepositedMaterials(TMap<FName, int32>& OutMat
 
 void UMOBuildProgressComponent::PauseConstruction()
 {
-	if (Progress.State != EMOBuildState::Constructing)
+	if (Progress.State != EMOBuildState::Constructing || !CheckAuthority(TEXT("PauseConstruction")))
 	{
 		return;
 	}
@@ -241,6 +355,7 @@ void UMOBuildProgressComponent::PauseConstruction()
 	// ResumeConstruction will re-register.
 	UnregisterFromBuilderInterrupts();
 
+	PublishRepState();
 	OnConstructionStateChanged.Broadcast(Progress.State);
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildProgressComponent] Construction paused at %.1f%%"),
@@ -249,7 +364,7 @@ void UMOBuildProgressComponent::PauseConstruction()
 
 void UMOBuildProgressComponent::ResumeConstruction()
 {
-	if (Progress.State != EMOBuildState::Paused)
+	if (Progress.State != EMOBuildState::Paused || !CheckAuthority(TEXT("ResumeConstruction")))
 	{
 		return;
 	}
@@ -261,6 +376,7 @@ void UMOBuildProgressComponent::ResumeConstruction()
 	// the build again.
 	RegisterWithBuilderForInterrupts();
 
+	PublishRepState();
 	OnConstructionStateChanged.Broadcast(Progress.State);
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildProgressComponent] Construction resumed"));
@@ -268,7 +384,7 @@ void UMOBuildProgressComponent::ResumeConstruction()
 
 void UMOBuildProgressComponent::CancelConstruction(bool bRefundMaterials)
 {
-	if (Progress.State == EMOBuildState::Complete)
+	if (Progress.State == EMOBuildState::Complete || !CheckAuthority(TEXT("CancelConstruction")))
 	{
 		return;
 	}
@@ -341,6 +457,8 @@ void UMOBuildProgressComponent::CancelConstruction(bool bRefundMaterials)
 	// Build is gone; stop listening for movement on the (former) builder.
 	UnregisterFromBuilderInterrupts();
 
+	PublishRepState();
+	OnDepositsChanged.Broadcast();
 	OnConstructionCancelled.Broadcast();
 	OnConstructionStateChanged.Broadcast(Progress.State);
 
@@ -353,7 +471,7 @@ void UMOBuildProgressComponent::CancelConstruction(bool bRefundMaterials)
 
 bool UMOBuildProgressComponent::TryGatherNextMaterial()
 {
-	if (Progress.CurrentPartIndex >= BuildParts.Num())
+	if (Progress.CurrentPartIndex >= BuildParts.Num() || !CheckAuthority(TEXT("TryGatherNextMaterial")))
 	{
 		return false;
 	}
@@ -429,6 +547,165 @@ TArray<AActor*> UMOBuildProgressComponent::FindMaterialSources(float Range) cons
 }
 
 // ============================================================================
+// PLAYER REQUESTS (the ghost menu's actions, run on the server)
+// ============================================================================
+
+int32 UMOBuildProgressComponent::GatherMissingMaterials(UMOInventoryComponent* InBuilderInventory, uint8 SourceFlags)
+{
+	if (!CheckAuthority(TEXT("GatherMissingMaterials")) || Progress.State == EMOBuildState::Complete)
+	{
+		return 0;
+	}
+	AActor* BuilderActor = InBuilderInventory ? InBuilderInventory->GetOwner() : nullptr;
+	const float Range = Progress.GatherRange > 0.0f ? Progress.GatherRange : 500.0f;
+	TArray<AActor*> Sources = FindMaterialSources(Range);
+	if ((SourceFlags & MOMaterialSourceBit(EMOMaterialSource::Inventory)) && BuilderActor)
+	{
+		Sources.AddUnique(BuilderActor);
+	}
+	// Priority 100 = a pawn's own inventory, 50 = a container or station, 25 = a loose item (IMOMaterialSourceInterface implementers). A pawn
+	// other than the builder is never a source: in co-op that would empty another player's (or a survivor's) pockets into this building.
+	Sources.RemoveAll([&](AActor* Source)
+	{
+		if (!IsValid(Source) || !Source->Implements<UMOMaterialSourceInterface>() || (Source->IsA<APawn>() && Source != BuilderActor))
+		{
+			return true;
+		}
+		const int32 Priority = IMOMaterialSourceInterface::Execute_GetMaterialSourcePriority(Source);
+		const EMOMaterialSource Kind = Priority >= 100 ? EMOMaterialSource::Inventory : Priority >= 50 ? EMOMaterialSource::NearbyContainers : EMOMaterialSource::SurroundingArea;
+		return (SourceFlags & MOMaterialSourceBit(Kind)) == 0;
+	});
+	Sources.StableSort([](AActor& A, AActor& B)
+	{
+		return IMOMaterialSourceInterface::Execute_GetMaterialSourcePriority(&A) > IMOMaterialSourceInterface::Execute_GetMaterialSourcePriority(&B);
+	});
+
+	TArray<FName> Required;
+	GetRequiredMaterials(Required);
+	int32 Deposited = 0;
+	for (const FName& ItemId : Required)
+	{
+		for (AActor* Source : Sources)
+		{
+			while (GetDepositedCount(ItemId) < GetRequiredCount(ItemId) && IMOMaterialSourceInterface::Execute_CanProvideMaterial(Source, ItemId, 1))
+			{
+				if (IMOMaterialSourceInterface::Execute_GatherMaterial(Source, ItemId, 1) <= 0)
+				{
+					break;
+				}
+				Progress.DepositedMaterials.FindOrAdd(ItemId)++;
+				++Deposited;
+				UE_LOG(LogMOFramework, Log, TEXT("[MOBuildProgressComponent] Gathered %s from %s"), *ItemId.ToString(), *Source->GetName());
+			}
+		}
+	}
+	if (Deposited > 0)
+	{
+		PublishRepState();
+		OnDepositsChanged.Broadcast();
+	}
+	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildProgressComponent] GatherMissingMaterials: %d unit(s) deposited into %s (sources 0x%x)"), Deposited, *GetNameSafe(GetOwner()), SourceFlags);
+	return Deposited;
+}
+
+bool UMOBuildProgressComponent::StartOrResume(UMOInventoryComponent* InBuilderInventory, uint8 SourceFlags)
+{
+	if (!CheckAuthority(TEXT("StartOrResume")))
+	{
+		return false;
+	}
+	FMOBuildProgress Options;
+	Options.bDrawFromInventory = (SourceFlags & MOMaterialSourceBit(EMOMaterialSource::Inventory)) != 0;
+	Options.bDrawFromNearbyContainers = (SourceFlags & MOMaterialSourceBit(EMOMaterialSource::NearbyContainers)) != 0;
+	Options.bDrawFromSurroundingArea = (SourceFlags & MOMaterialSourceBit(EMOMaterialSource::SurroundingArea)) != 0;
+	Options.GatherRange = Progress.GatherRange;   // the recipe's build range (a default-constructed option set would shrink it to 150)
+	StartConstruction(Options, InBuilderInventory);   // also resumes a paused build: the elapsed time is kept
+	return Progress.State == EMOBuildState::Constructing;
+}
+
+int32 UMOBuildProgressComponent::CalculateRefundAmount(int32 TotalDeposited, bool bBuildStarted, int32 ConstructionSkillLevel)
+{
+	if (TotalDeposited <= 0)
+	{
+		return 0;
+	}
+	if (!bBuildStarted)
+	{
+		return TotalDeposited;   // nothing was worked yet: everything comes back
+	}
+	constexpr float BaseRefund = 0.50f;
+	constexpr float MaxSkillBonus = 0.45f;   // skill 0..100
+	const float SkillBonus = FMath::Clamp(static_cast<float>(ConstructionSkillLevel), 0.0f, 100.0f) / 100.0f * MaxSkillBonus;
+	return FMath::FloorToInt(static_cast<float>(TotalDeposited) * (BaseRefund + SkillBonus));
+}
+
+int32 UMOBuildProgressComponent::CancelAndRemove(UMOInventoryComponent* InBuilderInventory)
+{
+	if (!CheckAuthority(TEXT("CancelAndRemove")) || Progress.State == EMOBuildState::Complete)
+	{
+		return 0;
+	}
+	const bool bStarted = Progress.State == EMOBuildState::Constructing || Progress.State == EMOBuildState::Paused;
+
+	// The ledger as single units, least rare first: what a partial refund loses goes first, the rarest come back.
+	struct FUnit
+	{
+		FName ItemId;
+		uint8 Rarity;
+	};
+	TArray<FUnit> Units;
+	for (const TPair<FName, int32>& Pair : Progress.DepositedMaterials)
+	{
+		FMOItemDefinitionRow ItemDef;
+		const uint8 Rarity = UMOItemDatabaseSettings::GetItemDefinition(Pair.Key, ItemDef) ? static_cast<uint8>(ItemDef.Rarity) : 0;
+		for (int32 I = 0; I < Pair.Value; ++I)
+		{
+			Units.Add(FUnit{ Pair.Key, Rarity });
+		}
+	}
+	Units.StableSort([](const FUnit& A, const FUnit& B) { return A.Rarity < B.Rarity; });
+
+	AActor* BuilderActor = InBuilderInventory ? InBuilderInventory->GetOwner() : nullptr;
+	const UMOSkillsComponent* Skills = BuilderActor ? BuilderActor->FindComponentByClass<UMOSkillsComponent>() : nullptr;
+	const int32 RefundCount = CalculateRefundAmount(Units.Num(), bStarted, Skills ? Skills->GetSkillLevel(ConstructionSkillId) : 0);
+	TMap<FName, int32> Refund;
+	for (int32 I = Units.Num() - RefundCount; I < Units.Num(); ++I)
+	{
+		Refund.FindOrAdd(Units[I].ItemId)++;
+	}
+
+	// Into the builder's inventory; what it cannot take goes on the ground at the builder's feet (or beside the building) -- never destroyed.
+	UMOWorldItemFactory* Factory = GetWorld() ? GetWorld()->GetSubsystem<UMOWorldItemFactory>() : nullptr;
+	const AActor* DropAt = BuilderActor ? BuilderActor : GetOwner();
+	int32 Returned = 0;
+	for (const TPair<FName, int32>& Pair : Refund)
+	{
+		if (InBuilderInventory && InBuilderInventory->AddItemByGuid(FGuid::NewGuid(), Pair.Key, Pair.Value))
+		{
+			Returned += Pair.Value;
+			continue;
+		}
+		if (Factory && DropAt && Factory->SpawnDroppedItem(Pair.Key, Pair.Value, FGuid::NewGuid(), DropAt->GetActorLocation() + FVector(0.0f, 0.0f, 50.0f), FRotator::ZeroRotator, BuilderActor))
+		{
+			Returned += Pair.Value;
+		}
+		else
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOBuildProgressComponent] CancelAndRemove: could not return %d x %s"), Pair.Value, *Pair.Key.ToString());
+		}
+	}
+	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildProgressComponent] CancelAndRemove %s: %d of %d deposited unit(s) returned (started=%d)"),
+		*GetNameSafe(GetOwner()), Returned, Units.Num(), bStarted ? 1 : 0);
+
+	CancelConstruction(/*bRefundMaterials=*/false);   // the refund above replaces the full drop
+	if (AActor* Owner = GetOwner())
+	{
+		Owner->Destroy();
+	}
+	return Returned;
+}
+
+// ============================================================================
 // SAVE/LOAD
 // ============================================================================
 
@@ -439,6 +716,10 @@ void UMOBuildProgressComponent::BuildSaveData(FMOBuildProgress& OutData) const
 
 void UMOBuildProgressComponent::ApplySaveData(const FMOBuildProgress& InData)
 {
+	if (!CheckAuthority(TEXT("ApplySaveData")))
+	{
+		return;
+	}
 	Progress = InData;
 
 	// Resume tick if was constructing
@@ -446,6 +727,7 @@ void UMOBuildProgressComponent::ApplySaveData(const FMOBuildProgress& InData)
 	{
 		SetComponentTickEnabled(true);
 	}
+	PublishRepState();
 }
 
 // ============================================================================
@@ -456,9 +738,20 @@ void UMOBuildProgressComponent::TickComponent(float DeltaTime, ELevelTick TickTy
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
-	if (Progress.State == EMOBuildState::Constructing)
+	if (Progress.State != EMOBuildState::Constructing)
+	{
+		return;
+	}
+	if (GetOwner() && GetOwner()->HasAuthority())
 	{
 		ProcessConstruction(DeltaTime);
+		PublishRepState(/*bForce=*/false);   // the elapsed time about once a second; state changes publish themselves
+	}
+	else
+	{
+		// A client between server updates: the bar keeps moving; completion comes from the server.
+		Progress.ElapsedTime = FMath::Min(Progress.ElapsedTime + DeltaTime, Progress.TotalBuildTime);
+		OnConstructionProgress.Broadcast(Progress.GetOverallProgress());
 	}
 }
 
@@ -666,6 +959,7 @@ void UMOBuildProgressComponent::FinalizeConstruction()
 	// Construction is done; no need for further movement notifications.
 	UnregisterFromBuilderInterrupts();
 
+	PublishRepState();
 	OnConstructionCompleted.Broadcast();
 	OnConstructionStateChanged.Broadcast(Progress.State);
 

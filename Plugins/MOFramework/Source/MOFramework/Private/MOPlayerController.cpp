@@ -1791,8 +1791,36 @@ void AMOPlayerController::RemoveMappingContext(UInputMappingContext* Context)
 // IMOUIContractInterface IMPLEMENTATION
 // ============================================================================
 
+bool AMOPlayerController::ForwardUIContractRequest(EMOUIContractRequest Request, AActor* Target, const FVector& WorldPosition, FName PartId)
+{
+	if (IsLocalController())
+	{
+		return false;
+	}
+	ClientUIContractRequest(Request, Target, WorldPosition, PartId);
+	return true;
+}
+
+void AMOPlayerController::ClientUIContractRequest_Implementation(EMOUIContractRequest Request, AActor* Target, FVector_NetQuantize WorldPosition, FName PartId)
+{
+	UE_LOG(LogMOFramework, Log, TEXT("[MOUIContract] the server asked this client for UI request %d on %s"), static_cast<int32>(Request), *GetNameSafe(Target));
+	switch (Request)
+	{
+	case EMOUIContractRequest::ShowBuildWidget:        RequestShowBuildWidget_Implementation(Target); break;
+	case EMOUIContractRequest::OpenContainerInventory: RequestOpenContainerInventory_Implementation(Target); break;
+	case EMOUIContractRequest::OpenCraftingMenu:       RequestOpenCraftingMenu_Implementation(Target); break;
+	case EMOUIContractRequest::ShowGhostContextMenu:   RequestShowGhostContextMenu_Implementation(Target, WorldPosition); break;
+	case EMOUIContractRequest::ShowStationContextMenu: RequestShowStationContextMenu_Implementation(Target, WorldPosition); break;
+	case EMOUIContractRequest::StartCarcassButchering: RequestStartCarcassButchering_Implementation(Target, PartId); break;
+	}
+}
+
 void AMOPlayerController::RequestShowBuildWidget_Implementation(AActor* BuildingActor)
 {
+	if (ForwardUIContractRequest(EMOUIContractRequest::ShowBuildWidget, BuildingActor))
+	{
+		return;
+	}
 	if (UIManagerComponent)
 	{
 		if (AMOBuildableActor* Buildable = Cast<AMOBuildableActor>(BuildingActor))
@@ -1804,6 +1832,10 @@ void AMOPlayerController::RequestShowBuildWidget_Implementation(AActor* Building
 
 void AMOPlayerController::RequestOpenContainerInventory_Implementation(AActor* ContainerActor)
 {
+	if (ForwardUIContractRequest(EMOUIContractRequest::OpenContainerInventory, ContainerActor))
+	{
+		return;
+	}
 	if (UIManagerComponent)
 	{
 		UIManagerComponent->OpenInventoryWithContainer(ContainerActor);
@@ -1812,6 +1844,10 @@ void AMOPlayerController::RequestOpenContainerInventory_Implementation(AActor* C
 
 void AMOPlayerController::RequestOpenCraftingMenu_Implementation(AActor* StationActor)
 {
+	if (ForwardUIContractRequest(EMOUIContractRequest::OpenCraftingMenu, StationActor))
+	{
+		return;
+	}
 	if (UIManagerComponent)
 	{
 		UIManagerComponent->OpenCraftingMenu();
@@ -1820,6 +1856,10 @@ void AMOPlayerController::RequestOpenCraftingMenu_Implementation(AActor* Station
 
 void AMOPlayerController::RequestShowGhostContextMenu_Implementation(AActor* GhostActor, FVector WorldPosition)
 {
+	if (ForwardUIContractRequest(EMOUIContractRequest::ShowGhostContextMenu, GhostActor, WorldPosition))
+	{
+		return;
+	}
 	// Ghost context menu is handled by ShowBuildWidget - it shows the context menu for ghost buildings
 	if (UIManagerComponent)
 	{
@@ -1832,6 +1872,10 @@ void AMOPlayerController::RequestShowGhostContextMenu_Implementation(AActor* Gho
 
 void AMOPlayerController::RequestShowStationContextMenu_Implementation(AActor* StationActor, FVector WorldPosition)
 {
+	if (ForwardUIContractRequest(EMOUIContractRequest::ShowStationContextMenu, StationActor, WorldPosition))
+	{
+		return;
+	}
 	if (UIManagerComponent)
 	{
 		UIManagerComponent->ShowStationContextMenu(StationActor, WorldPosition);
@@ -1840,6 +1884,10 @@ void AMOPlayerController::RequestShowStationContextMenu_Implementation(AActor* S
 
 void AMOPlayerController::RequestStartCarcassButchering_Implementation(AActor* CarcassActor, FName PartId)
 {
+	if (ForwardUIContractRequest(EMOUIContractRequest::StartCarcassButchering, CarcassActor, FVector::ZeroVector, PartId))
+	{
+		return;
+	}
 	if (UIManagerComponent)
 	{
 		if (AMOCarcassActor* Carcass = Cast<AMOCarcassActor>(CarcassActor))

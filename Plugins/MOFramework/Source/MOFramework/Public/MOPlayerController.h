@@ -158,6 +158,18 @@ enum class EMOInputContext : uint8
 	Menu				// Menu navigation
 };
 
+/** The IMOUIContractInterface request a ClientUIContractRequest carries (the server handled the interaction; the owning client shows the UI). */
+UENUM()
+enum class EMOUIContractRequest : uint8
+{
+	ShowBuildWidget,
+	OpenContainerInventory,
+	OpenCraftingMenu,
+	ShowGhostContextMenu,
+	ShowStationContextMenu,
+	StartCarcassButchering
+};
+
 /**
  * Base player controller for the MO Framework.
  * Centralizes all player input handling and delegates to possessed pawns via IMOControllableInterface.
@@ -552,7 +564,19 @@ public:
 	virtual void RequestShowStationContextMenu_Implementation(AActor* StationActor, FVector WorldPosition) override;
 	virtual void RequestStartCarcassButchering_Implementation(AActor* CarcassActor, FName PartId) override;
 
+	/**
+	 * The requests above usually come from SERVER-side interaction handlers (UMOInteractableComponent::ServerInteract -> the actor's handler ->
+	 * Execute_Request...(InteractorController)). For a co-op joiner that controller is the server's copy, which has no screen: every request used
+	 * to open the menu nowhere. Each implementation first calls ForwardUIContractRequest, which sends it to the owning client when this
+	 * controller is not local; the client runs the same implementation there.
+	 */
+	UFUNCTION(Client, Reliable)
+	void ClientUIContractRequest(EMOUIContractRequest Request, AActor* Target, FVector_NetQuantize WorldPosition, FName PartId);
+
 protected:
+	/** True when this controller is not local: the request went to the owning client (ClientUIContractRequest) and the caller must return. */
+	bool ForwardUIContractRequest(EMOUIContractRequest Request, AActor* Target, const FVector& WorldPosition = FVector::ZeroVector, FName PartId = NAME_None);
+
 	// ============================================================================
 	// OVERRIDES
 	// ============================================================================
@@ -858,6 +882,7 @@ protected:
 
 	/** Remove a mapping context from the input subsystem. */
 	void RemoveMappingContext(UInputMappingContext* Context);
+
 
 	/** Setup default input context on begin play. */
 	void SetupDefaultInputContext();

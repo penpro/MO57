@@ -150,6 +150,12 @@ void AMOBuildableActor::BeginPlay()
 	{
 		ApplyStructuralCollisionProfile(FName("IgnoreOnlyPawn"));
 	}
+
+	// A client that joins after the building was finished gets its replicated state before BeginPlay bound OnConstructionCompleted above.
+	if (!HasAuthority() && IsComplete())
+	{
+		EnterCompletedState();
+	}
 }
 
 // ============================================================================
@@ -229,6 +235,12 @@ void AMOBuildableActor::InitializeBuilding(FName InRecipeId)
 
 	// Keep the ghost material - it will be restored when construction completes
 	// SetGhostMode(false) is NOT called here - we want to keep the translucent look
+
+	// On a client the replicated build state can arrive before the recipe (OnRep_RecipeId lands here): a finished building looks finished.
+	if (!HasAuthority() && IsComplete() && HasActorBegunPlay())
+	{
+		EnterCompletedState();
+	}
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildableActor] Initialized building with recipe: %s (ghost visual maintained until built)"), *RecipeId.ToString());
 }
@@ -467,22 +479,11 @@ void AMOBuildableActor::OnConstructionCompleted_Implementation()
 	// go to whichever machine ran this -- the host -- so a joiner's "Construct a campfire" could never complete.
 	if (!RecipeId.IsNone() && BuildProgressComponent)
 	{
-		AActor* Builder = BuildProgressComponent->GetCompletedBy();
+		// Construction runs on the server (UMOBuildingComponent::RequestBuildAction), so this fires there; on clients it fires again from the
+		// replicated state (UMOBuildProgressComponent::OnRep_RepState) for the visuals above only.
 		if (HasAuthority())
 		{
-			UMOQuestSubsystem::ReportForActor(Builder, EMOObjectiveType::ItemCraft, RecipeId, 1);
-		}
-		else if (const APawn* BuilderPawn = Cast<APawn>(Builder); BuilderPawn && BuilderPawn->IsLocallyControlled())
-		{
-			// A joiner's construction still runs on the joiner's own copy of the building (StartConstruction has no server path -- see the
-			// handoff); the server never sees it finish, so credit this player's quests here, as before.
-			if (UGameInstance* GI = GetGameInstance())
-			{
-				if (UMOQuestSubsystem* Quests = GI->GetSubsystem<UMOQuestSubsystem>())
-				{
-					Quests->ApplyReportedEvent(EMOObjectiveType::ItemCraft, RecipeId, 1);
-				}
-			}
+			UMOQuestSubsystem::ReportForActor(BuildProgressComponent->GetCompletedBy(), EMOObjectiveType::ItemCraft, RecipeId, 1);
 		}
 	}
 
