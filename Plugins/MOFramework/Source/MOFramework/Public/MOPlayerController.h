@@ -806,6 +806,16 @@ public:
 	UFUNCTION(Server, Reliable)
 	void ServerDevAdvanceToTime(int32 Hour, int32 Minute);
 
+	/** Open the biome picker (every biome of the world generator). With a biome id it skips the popup and goes there. */
+	void OpenDevBiomePicker(const FString& BiomeId = FString());
+
+	/**
+	 * Teleport THIS player's pawn to the nearest spot deep inside a biome (FMOBiomeFinder::FindNearest over the whole world). The pawn is held at the
+	 * generator's ground (SetLoadHold) until the voxel collision under it exists, then set on it -- it never falls through terrain that is still streaming in.
+	 */
+	UFUNCTION(Server, Reliable)
+	void ServerDevTeleportToBiome(FName BiomeId);
+
 protected:
 	/** The popup currently open, if any (prevents stacking a second one). */
 	TWeakObjectPtr<UMOTextInputDialog> DevConsoleDialog;
@@ -820,6 +830,13 @@ protected:
 
 	/** Shared body of the pickers: push the modal, fill it, call OnChosen with the clicked option's Id. */
 	void OpenDevQuickPick(const FText& Title, const FText& Message, const TArray<FMOQuickPickOption>& Options, int32 Columns, TFunction<void(FName)> OnChosen);
+
+	/** ServerDevTeleportToBiome's landing: the held pawn, its target and the poll that sets it on the collision once it exists. */
+	TWeakObjectPtr<class AMOCharacter> DevTeleportPawn;
+	FVector DevTeleportTarget = FVector::ZeroVector;   // XY + generator ground
+	double DevTeleportStartSeconds = 0.0;
+	FTimerHandle DevTeleportTimer;
+	void PollDevTeleportLanding();
 
 	/** Last few commands, shown in the popup as a reminder. */
 	TArray<FString> DevConsoleHistory;

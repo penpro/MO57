@@ -5,6 +5,7 @@
 #include "MOWorldGen.h"
 #include "MOUplandLakeSubsystem.h"
 #include "MOWorldSeedSubsystem.h"
+#include "MOBiomeFinder.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -198,6 +199,63 @@ bool FMOWorldGen_CoastalSpawnOnVegetatedGround::RunTest(const FString& Parameter
 	TestEqual(TEXT("every spawn stands on climate-biome ground (>= MinClimateGroundWeight)"), OnBare, 0);
 	TestTrue(TEXT("CONTROL: the reported seed's spawn WITHOUT the rule is on shore ground (so the check above can fail)"), bReportedSeedOld);
 	AddInfo(FString::Printf(TEXT("without the rule %d of %d spawns stood on band-biome ground"), OldOnBare, WorldSeeds.Num()));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOWorldGen_BiomeFinder,
+	"MOFramework.WorldGen.BiomeFinder",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+// The `biome` teleport's search: for every biome it finds, the spot is that biome by the generator (and deep inside it), dry, and the search is deterministic;
+// a near biome is found near. Real biomes (published params), world seed -1675528670 (Wes's: ElectricForest 2.1 km from the spawn in the packaged game).
+bool FMOWorldGen_BiomeFinder::RunTest(const FString& Parameters)
+{
+	const FMOWorldGenParamsRef P = FMOWorldGenParamsProvider::Get();
+	if (!TestTrue(TEXT("the published params have biomes"), P->Biomes.Num() >= 2))
+	{
+		return false;
+	}
+	const int32 Seed = UMOWorldSeedSubsystem::TerrainSeedFromWorldSeed(-1675528670);
+	FMOCoastalSpawn Spawn;
+	if (!TestTrue(TEXT("the seed has a spawn to search from"), FMOWorldGen::FindCoastalSpawn(*P, Seed, Spawn)))
+	{
+		return false;
+	}
+	const FMOBiomeFinder Finder(P, Seed);
+	int32 Found = 0, Wrong = 0, Wet = 0, Nondet = 0;
+	double TotalMs = 0.0;
+	for (int32 B = 0; B < P->Biomes.Num(); ++B)
+	{
+		const double T0 = FPlatformTime::Seconds();
+		FVector A, Again;
+		int32 Samples = 0;
+		const bool bA = Finder.FindNearest(Spawn.Location, B, 40.0e5, /*bRough=*/true, A, &Samples);
+		TotalMs += (FPlatformTime::Seconds() - T0) * 1000.0;
+		if (!bA)
+		{
+			AddInfo(FString::Printf(TEXT("%s: none within 40 km (%d samples)"), *P->Biomes[B].Id.ToString(), Samples));
+			continue;
+		}
+		++Found;
+		float Ground = 0.0f;
+		Wrong += Finder.BiomeAt(A.X, A.Y, Ground) != B ? 1 : 0;
+		Wrong += Finder.IsDeepInside(A.X, A.Y, B, /*bRough=*/true, Ground) ? 0 : 1;
+		Wet += Ground <= P->Tuning.SeaLevelCm ? 1 : 0;
+		Finder.FindNearest(Spawn.Location, B, 40.0e5, true, Again);
+		Nondet += A != Again ? 1 : 0;
+		AddInfo(FString::Printf(TEXT("%s: %.1f km (%d samples)"), *P->Biomes[B].Id.ToString(), FVector2D::Distance(Spawn.Location, FVector2D(A)) / 100000.0, Samples));
+	}
+	TestTrue(FString::Printf(TEXT("most biomes are found within 40 km (%d of %d)"), Found, P->Biomes.Num()), Found * 2 >= P->Biomes.Num());
+	TestEqual(TEXT("every spot found is that biome by the generator, deep inside it"), Wrong, 0);
+	TestEqual(TEXT("every spot found is above the sea"), Wet, 0);
+	TestEqual(TEXT("the search is deterministic"), Nondet, 0);
+	const int32 Ef = P->FindBiomeIndex(FName(TEXT("ElectricForest")));
+	FVector EfSpot;
+	if (Ef != INDEX_NONE && Finder.FindNearest(Spawn.Location, Ef, 40.0e5, false, EfSpot))
+	{
+		TestTrue(TEXT("ElectricForest is found within 5 km of this seed's spawn (2.1 km in the packaged game)"), FVector2D::Distance(Spawn.Location, FVector2D(EfSpot)) < 5.0e5);
+	}
+	AddInfo(FString::Printf(TEXT("search time: %.0f ms for %d biomes"), TotalMs, P->Biomes.Num()));
 	return true;
 }
 

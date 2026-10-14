@@ -69,6 +69,7 @@
 #include "MOContainerActor.h"
 #include "MOCraftingStationActor.h"
 #include "MOBuildProgressComponent.h"
+#include "MOBiomeFinder.h"
 #include "MORecruitmentComponent.h"
 #include "MOSurvivorJobQueueComponent.h"
 #include "MOInventoryHolderInterface.h"
@@ -2959,23 +2960,13 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 			const int32 TerrainSeed = Seeds->GetActiveTerrainSeed();
 			const FMOWorldGenParamsRef P = FMOWorldGenParamsProvider::Get();
 			const FVector C = PC->GetPawn()->GetActorLocation();
-			const FMOPCGWaterMask Water(P, TerrainSeed, 1.3f);
+			const FMOBiomeFinder Finder(P, TerrainSeed);
 			const int32 Wanted = P->FindBiomeIndex(FName(*IdArg));
 			if (Wanted == INDEX_NONE)
 			{
 				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] FINDSPOT FAILED: no biome '%s' (MO.WorldGen.BiomeStats lists them by share)"), *IdArg);
 				return;
 			}
-			// The biome at (X, Y) the way the PCG spawner sees it: the real DT_Biomes bands with the generator's own slope.
-			auto BiomeOf = [&P, TerrainSeed](double X, double Y, float& OutHeight) -> int32
-			{
-				const FMOTerrainSample S = FMOWorldGen::SampleColumn(*P, X, Y, TerrainSeed, P->Tuning.VoxelSizeCm);
-				OutHeight = S.HeightCm;
-				const float Dx = FMOWorldGen::SampleHeightCm(*P, X + 200.0, Y, TerrainSeed, P->Tuning.VoxelSizeCm) - FMOWorldGen::SampleHeightCm(*P, X - 200.0, Y, TerrainSeed, P->Tuning.VoxelSizeCm);
-				const float Dy = FMOWorldGen::SampleHeightCm(*P, X, Y + 200.0, TerrainSeed, P->Tuning.VoxelSizeCm) - FMOWorldGen::SampleHeightCm(*P, X, Y - 200.0, TerrainSeed, P->Tuning.VoxelSizeCm);
-				const float SlopeDeg = FMath::RadiansToDegrees(FMath::Atan(FMath::Sqrt(Dx * Dx + Dy * Dy) / 400.0f));
-				return FMOWorldGen::ResolveBiome(*P, S.HeightCm, SlopeDeg, S.Moisture, S.Temperature);
-			};
 			const double Step = FMath::Max(400.0, RadiusCm * 2.0 / 160.0);
 			const int32 N = FMath::FloorToInt(RadiusCm / Step);
 			int32 Land = 0;
@@ -2988,27 +2979,19 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 				{
 					const double X = C.X + Ix * Step, Y = C.Y + Iy * Step;
 					float Ground = 0.0f;
-					if (BiomeOf(X, Y, Ground) != Wanted || Ground <= Sea + 80.0f || Water.IsInWater(X, Y, Ground))
+					if (Finder.BiomeAt(X, Y, Ground) != Wanted || Ground <= Sea + 80.0f)
 					{
 						continue;
 					}
 					++Land;
-					// Deep inside the biome, dry, and flat enough to stand on: the ring 35 m out is the same biome, above water, and within 3.5 m of this height.
-					bool bGood = true;
-					for (int32 K = 0; K < 8 && bGood; ++K)
-					{
-						const double Ax = X + 3500.0 * FMath::Cos(K * UE_PI / 4.0), Ay = Y + 3500.0 * FMath::Sin(K * UE_PI / 4.0);
-						float RingGround = 0.0f;
-						bGood = BiomeOf(Ax, Ay, RingGround) == Wanted && !Water.IsInWater(Ax, Ay, RingGround) && (bRough || FMath::Abs(RingGround - Ground) < 350.0f);
-					}
-					if (bGood)
+					if (Finder.IsDeepInside(X, Y, Wanted, bRough, Ground))   // the middle of the biome, dry and (unless rough) flat: see FMOBiomeFinder
 					{
 						Spots.Add({ X, Y, Ground, FVector2D::Distance(FVector2D(X, Y), FVector2D(C.X, C.Y)) });
 					}
 				}
 			}
 			Spots.Sort([](const FSpot& A, const FSpot& B) { return A.Dist < B.Dist; });
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] FINDSPOT %s: %d good spot(s) within %.0f km (%d dry grid cells of this biome)"), *IdArg, Spots.Num(), RadiusCm / 100000.0, Land);
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] FINDSPOT %s: %d good spot(s) within %.0f km (%d grid cells of this biome above the sea)"), *IdArg, Spots.Num(), RadiusCm / 100000.0, Land);
 			for (int32 I = 0; I < FMath::Min(Spots.Num(), 5); ++I)
 			{
 				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] FINDSPOT   #%d x=%.0f y=%.0f z=%.0f dist=%.1f km"), I, Spots[I].X, Spots[I].Y, Spots[I].Ground, Spots[I].Dist / 100000.0);
@@ -4970,6 +4953,23 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 				return;
 			}
 			PC->OpenDevWeatherPicker(Args.Num() > 0 ? Args[0] : FString());
+		}),
+		ECVF_Default));
+
+	// `biome` opens a picker of every biome and teleports you to the nearest place deep inside the one you click; `biome ElectricForest` skips the popup.
+	// The SERVER moves the pawn (Server RPC on the player controller), holding it until the terrain collision there exists.
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("biome"),
+		TEXT("Dev: pop up a biome picker; the pick teleports you to the nearest place deep inside that biome. Usage: biome [BiomeId]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			AMOPlayerController* PC = World ? Cast<AMOPlayerController>(World->GetFirstPlayerController()) : nullptr;
+			if (!PC)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOConsole] biome: needs a local player controller"));
+				return;
+			}
+			PC->OpenDevBiomePicker(Args.Num() > 0 ? Args[0] : FString());
 		}),
 		ECVF_Default));
 

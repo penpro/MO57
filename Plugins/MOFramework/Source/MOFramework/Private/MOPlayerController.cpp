@@ -10,6 +10,10 @@
 #include "MOGameMode.h"
 #include "MORecruitmentComponent.h"
 #include "MONotificationComponent.h"
+#include "MOBiomeFinder.h"
+#include "MOSpawnClearance.h"
+#include "MOWorldSeedSubsystem.h"
+#include "TimerManager.h"
 #include "MOBuildingComponent.h"
 #include "MOBuildableActor.h"
 #include "MOCarcassActor.h"
@@ -1619,6 +1623,116 @@ void AMOPlayerController::ServerDevAdvanceToTime_Implementation(int32 Hour, int3
 		NotificationComponent->ShowInfoNotification(FText::Format(NSLOCTEXT("MOConsole", "TimeSet", "Time: {0}"), FText::FromString(Now.ToString(TEXT("%Y-%m-%d %H:%M")))), 4.0f);
 	}
 #endif
+}
+
+void AMOPlayerController::OpenDevBiomePicker(const FString& BiomeId)
+{
+#if !UE_BUILD_SHIPPING
+	if (!BiomeId.IsEmpty())
+	{
+		ServerDevTeleportToBiome(FName(*BiomeId));
+		return;
+	}
+	if (!FMOWorldGenParamsProvider::HasPublished())
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOConsole] biome: no world generator in this world"));
+		return;
+	}
+	TArray<FMOQuickPickOption> Options;
+	for (const FMOWorldGenBiome& Biome : FMOWorldGenParamsProvider::Get()->Biomes)
+	{
+		Options.Add({ Biome.Id, FText::FromString(FName::NameToDisplayString(Biome.Id.ToString(), false)) });
+	}
+	Options.Sort([](const FMOQuickPickOption& A, const FMOQuickPickOption& B) { return A.Label.CompareTo(B.Label) < 0; });
+	OpenDevQuickPick(NSLOCTEXT("MOConsole", "BiomeTitle", "Biome"), NSLOCTEXT("MOConsole", "BiomeMessage", "Teleports you to the nearest place deep inside the biome."), Options, /*Columns=*/3,
+		[this](FName Id) { ServerDevTeleportToBiome(Id); });
+#endif
+}
+
+void AMOPlayerController::ServerDevTeleportToBiome_Implementation(FName BiomeId)
+{
+#if !UE_BUILD_SHIPPING
+	UWorld* World = GetWorld();
+	AMOCharacter* Traveller = Cast<AMOCharacter>(GetPawn());
+	const UMOWorldSeedSubsystem* Seeds = UMOWorldSeedSubsystem::Get(World);
+	auto Say = [this](const FText& Text)
+	{
+		if (NotificationComponent)
+		{
+			NotificationComponent->ShowInfoNotification(Text, 5.0f);
+		}
+	};
+	if (!World || !Traveller || !Seeds || !Seeds->HasActiveSeed() || !FMOWorldGenParamsProvider::HasPublished())
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOConsole] biome %s: needs a character and a generated world"), *BiomeId.ToString());
+		return;
+	}
+	const FMOWorldGenParamsRef Params = FMOWorldGenParamsProvider::Get();
+	const int32 Index = Params->FindBiomeIndex(BiomeId);
+	if (Index == INDEX_NONE)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOConsole] biome %s: no such biome"), *BiomeId.ToString());
+		Say(FText::Format(NSLOCTEXT("MOConsole", "BiomeUnknown", "No biome called {0}"), FText::FromName(BiomeId)));
+		return;
+	}
+	const double T0 = FPlatformTime::Seconds();
+	const FVector From = Traveller->GetActorLocation();
+	const FMOBiomeFinder Finder(Params, Seeds->GetActiveTerrainSeed());
+	FVector Spot;
+	int32 Samples = 0;
+	const double WorldCm = Params->Tuning.WorldHalfSizeCm * 2.0;
+	const bool bFound = Finder.FindNearest(FVector2D(From), Index, WorldCm, /*bRough=*/false, Spot, &Samples)
+		|| Finder.FindNearest(FVector2D(From), Index, WorldCm, /*bRough=*/true, Spot, &Samples);   // a biome that is never flat (scree, cliffs): any spot inside it
+	const double Ms = (FPlatformTime::Seconds() - T0) * 1000.0;
+	const FString Label = FName::NameToDisplayString(BiomeId.ToString(), false);
+	if (!bFound)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOConsole] biome %s: none in this world (%d samples, %.0f ms)"), *BiomeId.ToString(), Samples, Ms);
+		Say(FText::Format(NSLOCTEXT("MOConsole", "BiomeNone", "{0}: not in this world"), FText::FromString(Label)));
+		return;
+	}
+	const float DistKm = FVector2D::Distance(FVector2D(From), FVector2D(Spot)) / 100000.0f;
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOConsole] biome %s: x=%.0f y=%.0f ground=%.0f, %.1f km away (%d samples, %.0f ms) -- holding the pawn until the ground is there"),
+		*BiomeId.ToString(), Spot.X, Spot.Y, Spot.Z, DistKm, Samples, Ms);
+	Say(FText::Format(NSLOCTEXT("MOConsole", "BiomeGo", "{0}: {1} km away"), FText::FromString(Label), FText::AsNumber(FMath::RoundToInt(DistKm * 10.0f) / 10.0f)));
+
+	// Stand on the generator's ground and hold there (no gravity, no fall-through rescue) until the voxel collision under the pawn exists.
+	const MOSpawnClearance::FCapsule Capsule = MOSpawnClearance::CapsuleOf(Traveller);
+	Traveller->SetLoadHold(true);
+	Traveller->SetActorLocation(FVector(Spot.X, Spot.Y, Spot.Z + Capsule.HalfHeight + 10.0f), false, nullptr, ETeleportType::TeleportPhysics);
+	const FRotator Facing(-6.0f, FMath::FRand() * 360.0f, 0.0f);
+	SetControlRotation(Facing);
+	ClientSetRotation(Facing);
+	DevTeleportPawn = Traveller;
+	DevTeleportTarget = Spot;
+	DevTeleportStartSeconds = FPlatformTime::Seconds();
+	World->GetTimerManager().SetTimer(DevTeleportTimer, this, &AMOPlayerController::PollDevTeleportLanding, 0.25f, /*bLoop=*/true);
+#endif
+}
+
+void AMOPlayerController::PollDevTeleportLanding()
+{
+	AMOCharacter* Traveller = DevTeleportPawn.Get();
+	UWorld* World = GetWorld();
+	const double Waited = FPlatformTime::Seconds() - DevTeleportStartSeconds;
+	FHitResult Hit;
+	const bool bGround = Traveller && World && MOSpawnClearance::TraceVoxelGround(World, DevTeleportTarget.X, DevTeleportTarget.Y, DevTeleportTarget.Z + 3000.0f, DevTeleportTarget.Z - 3000.0f, Traveller, Hit)
+		&& FMath::Abs(Hit.ImpactPoint.Z - DevTeleportTarget.Z) <= 150.0f;   // the refined surface, not a coarse far-LOD one
+	if (!Traveller || bGround || Waited > 20.0)
+	{
+		if (World)
+		{
+			World->GetTimerManager().ClearTimer(DevTeleportTimer);
+		}
+		if (Traveller)
+		{
+			const float GroundZ = bGround ? Hit.ImpactPoint.Z : DevTeleportTarget.Z;
+			Traveller->SetActorLocation(FVector(DevTeleportTarget.X, DevTeleportTarget.Y, GroundZ + MOSpawnClearance::CapsuleOf(Traveller).HalfHeight + 6.0f), false, nullptr, ETeleportType::TeleportPhysics);
+			Traveller->SetLoadHold(false);
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOConsole] biome teleport landed after %.1f s on %s ground z=%.0f"), Waited, bGround ? TEXT("the voxel") : TEXT("the generator's (no collision yet)"), GroundZ);
+		}
+		DevTeleportPawn.Reset();
+	}
 }
 
 // ============================================================================

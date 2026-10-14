@@ -81,6 +81,9 @@ namespace
 
 	/** Live multiplier on the NEAR ground cover's density (grass, flowers, debris), on top of the authored per-hectare rates: the one knob for "thin out the grass". Takes effect on the next generation (pcg.RuntimeGeneration.Refresh). */
 	TAutoConsoleVariable<float> CVarGroundCoverScale(TEXT("mo.PCG.GroundCoverScale"), 1.0f, TEXT("Multiplier on near ground-cover species density (0..2)."), ECVF_Default);
+	// Perf / look experiments ("how dense can a forest be and what does it cost"): scales EVERY species' density before the per-point pick. Points are scatter
+	// slots (one instance each at most), so past the slot budget it saturates instead of growing. Needs pcg.RuntimeGeneration.Refresh (or a new world) to apply.
+	TAutoConsoleVariable<float> CVarSpeciesDensityScale(TEXT("mo.PCG.SpeciesDensityScale"), 1.0f, TEXT("Dev: multiplier on every biome species' density (0..4); refresh PCG to apply."), ECVF_Default);
 
 	/** Trees, rocks, bushes and shrubs are the LARGE species (placed on the larger hi-gen grid); grass, flowers and debris are ground cover. By HISMTag so a new species needs no flag. */
 	bool IsLargeSpecies(const FMOBiomeSpeciesEntry& Sp)
@@ -297,6 +300,7 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 	}
 	const bool bPlantsWaterEdge = PassesWaterEdgeFilter(Settings->SpeciesFilter);
 	const float GroundCoverScale = FMath::Clamp(CVarGroundCoverScale.GetValueOnGameThread(), 0.0f, 2.0f);
+	const float SpeciesDensityScale = FMath::Clamp(CVarSpeciesDensityScale.GetValueOnGameThread(), 0.0f, 4.0f);
 	// Highest priority first so the first band match wins.
 	Biomes.Sort([](const FBiomeEntry& A, const FBiomeEntry& B) { return A.Row->Priority > B.Row->Priority; });
 
@@ -570,7 +574,7 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 			for (int32 i = 0; i < Candidates.Num(); ++i)
 			{
 				const FMOBiomeSpeciesEntry& Sp = *Candidates[i].Species;
-				float P = (Candidates[i].Mesh ? Candidates[i].Scale * Sp.DensityPerHectare / Settings->InputPointsPerHectare : 0.0f);
+				float P = (Candidates[i].Mesh ? Candidates[i].Scale * Sp.DensityPerHectare * SpeciesDensityScale / Settings->InputPointsPerHectare : 0.0f);
 				if (P > 0.0f && Candidates[i].bGroundCoverScaled)
 				{
 					P *= GroundCoverScale;
