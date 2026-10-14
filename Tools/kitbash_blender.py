@@ -142,7 +142,9 @@ def attach(base, head, head_len, mode, embed):
     """Fit <head> onto the + end of <base>'s long axis and join them (base materials first, then the head's).
     mode tip:  the head continues the shaft, its thinner end outward, its flat facing up (spear point, arrowhead);
          axe:  the head crosses the shaft end: long axis up, width along the shaft, thinner end (the edge) up;
-         adze: as axe but the width across the shaft (edge square to the haft)."""
+         adze: as axe but the width across the shaft (edge square to the haft);
+         stand: the head upright on the base's top surface, <embed> of the base length in from its + end, its foot sunk a
+                little into the base (a hand-drill spindle in its fireboard notch)."""
     co = vertices(base)
     axis = long_axis(co)
     hi = co[:, axis].max()
@@ -171,13 +173,22 @@ def attach(base, head, head_len, mode, embed):
         target = np.column_stack([up, shaft, np.cross(up, shaft)])
     elif mode == "adze":
         target = np.column_stack([up, across, np.cross(up, across)])
+    elif mode == "stand":
+        target = np.column_stack([up, shaft, np.cross(up, shaft)])
     else:
-        raise SystemExit("attach mode must be tip, axe or adze")
+        raise SystemExit("attach mode must be tip, axe, adze or stand")
     rot = target @ src.T
     posed = ((hco - centre) @ rot.T) * scale
     if mode == "tip":
         along = posed @ shaft
         offset = anchor + shaft * (-along.min() - embed * head_len)   # the back embed fraction of the head sits in the shaft
+    elif mode == "stand":
+        # standing on the base's top surface at <embed> of its length in from the + end (a drill spindle in a fireboard notch)
+        v = int(np.argmax(np.abs(up)))                 # the vertical axis
+        top = co[:, v].max()
+        sink = 0.3 * (top - anchor[v])                 # foot sunk 30% of the base's half-thickness (into the notch)
+        offset = anchor - shaft * (embed * length)
+        offset[v] = top - sink - posed[:, v].min()
     else:
         # embed of the shaft length in from its end; the head lifted toward its edge so the blade stands out on one side of the
         # haft and only a short butt shows on the other (centred, it read as a disc skewered on a stick)
