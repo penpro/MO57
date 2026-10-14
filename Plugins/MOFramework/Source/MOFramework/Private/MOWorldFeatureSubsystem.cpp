@@ -11,13 +11,13 @@
 
 namespace
 {
-	TAutoConsoleVariable<int32> CVarEnabled(TEXT("mo.WorldFeatures.Enabled"), 1, TEXT("0 = place no world features (POIs)."), ECVF_Default);
-	TAutoConsoleVariable<int32> CVarSpawnsPerTick(TEXT("mo.WorldFeatures.SpawnsPerTick"), 1, TEXT("World feature actors spawned per update (0.5 s), nearest first: each one builds its whole composition."), ECVF_Default);
+	TAutoConsoleVariable<int32> CVarWorldFeaturesEnabled(TEXT("mo.WorldFeatures.Enabled"), 1, TEXT("0 = place no world features (POIs)."), ECVF_Default);
+	TAutoConsoleVariable<int32> CVarWorldFeaturesSpawnsPerTick(TEXT("mo.WorldFeatures.SpawnsPerTick"), 1, TEXT("World feature actors spawned per update (0.5 s), nearest first: each one builds its whole composition."), ECVF_Default);
 
-	constexpr float UpdateIntervalSeconds = 0.5f;
-	constexpr float DespawnFactor = 1.25f;
+	constexpr float WorldFeaturesUpdateSeconds = 0.5f;
+	constexpr float WorldFeaturesDespawnFactor = 1.25f;
 
-	FORCEINLINE uint64 Mix64(uint64 X)
+	FORCEINLINE uint64 WorldFeatureMix64(uint64 X)
 	{
 		X ^= X >> 30; X *= 0xbf58476d1ce4e5b9ULL;
 		X ^= X >> 27; X *= 0x94d049bb133111ebULL;
@@ -26,9 +26,9 @@ namespace
 	}
 
 	/** Uniform [0, 1) from a hash and a stream index: integer math only (the same bits on every machine). */
-	FORCEINLINE double U01(uint64 H, uint64 K)
+	FORCEINLINE double WorldFeatureU01(uint64 H, uint64 K)
 	{
-		return static_cast<double>(Mix64(H + K * 0x9E3779B97F4A7C15ULL) >> 11) * (1.0 / 9007199254740992.0);
+		return static_cast<double>(WorldFeatureMix64(H + K * 0x9E3779B97F4A7C15ULL) >> 11) * (1.0 / 9007199254740992.0);
 	}
 }
 
@@ -82,16 +82,16 @@ bool FMOWorldFeaturePlacer::Candidate(int32 FeatureIndex, const FIntPoint& Slot,
 	const FFeature& F = Features[FeatureIndex];
 	const FMOWorldFeatureDefinitionRow& R = F.Row;
 	const double Spacing = R.SpacingCm;
-	const uint64 H = Mix64(Mix64(Mix64((static_cast<uint64>(F.IdHash) << 32) ^ static_cast<uint32>(TerrainSeed)) ^ static_cast<uint32>(Slot.X)) ^ (static_cast<uint64>(static_cast<uint32>(Slot.Y)) << 1));
+	const uint64 H = WorldFeatureMix64(WorldFeatureMix64(WorldFeatureMix64((static_cast<uint64>(F.IdHash) << 32) ^ static_cast<uint32>(TerrainSeed)) ^ static_cast<uint32>(Slot.X)) ^ (static_cast<uint64>(static_cast<uint32>(Slot.Y)) << 1));
 
 	// At most one site per square; DensityPerKm2 x the square's area is its chance (a density above one per square saturates).
 	const double Chance = FMath::Min(1.0, static_cast<double>(R.DensityPerKm2) * FMath::Square(Spacing / 100000.0));
-	if (U01(H, 0) >= Chance)
+	if (WorldFeatureU01(H, 0) >= Chance)
 	{
 		return false;
 	}
-	const double X = (Slot.X + 0.25 + 0.5 * U01(H, 1)) * Spacing;
-	const double Y = (Slot.Y + 0.25 + 0.5 * U01(H, 2)) * Spacing;
+	const double X = (Slot.X + 0.25 + 0.5 * WorldFeatureU01(H, 1)) * Spacing;
+	const double Y = (Slot.Y + 0.25 + 0.5 * WorldFeatureU01(H, 2)) * Spacing;
 	const double Limit = Params->Tuning.WorldHalfSizeCm - R.FootprintRadiusCm - 50000.0;
 	if (FMath::Abs(X) > Limit || FMath::Abs(Y) > Limit)
 	{
@@ -121,10 +121,10 @@ bool FMOWorldFeaturePlacer::Candidate(int32 FeatureIndex, const FIntPoint& Slot,
 	Out.FeatureId = F.Id;
 	Out.Slot = Slot;
 	Out.Location = FVector(X, Y, Ground);
-	Out.YawDegrees = static_cast<float>(U01(H, 3) * 360.0);
-	Out.Scale = FMath::Lerp(R.MinScale, FMath::Max(R.MinScale, R.MaxScale), static_cast<float>(U01(H, 4)));
+	Out.YawDegrees = static_cast<float>(WorldFeatureU01(H, 3) * 360.0);
+	Out.Scale = FMath::Lerp(R.MinScale, FMath::Max(R.MinScale, R.MaxScale), static_cast<float>(WorldFeatureU01(H, 4)));
 	Out.FootprintRadiusCm = R.FootprintRadiusCm * Out.Scale;
-	Out.Seed = static_cast<int32>(Mix64(H ^ 0x5EEDULL) & 0x7fffffff);
+	Out.Seed = static_cast<int32>(WorldFeatureMix64(H ^ 0x5EEDULL) & 0x7fffffff);
 	return true;
 }
 
@@ -277,7 +277,7 @@ bool UMOWorldFeatureSubsystem::EnsurePlacer()
 
 bool UMOWorldFeatureSubsystem::IsReady()
 {
-	return CVarEnabled.GetValueOnGameThread() != 0 && EnsurePlacer();
+	return CVarWorldFeaturesEnabled.GetValueOnGameThread() != 0 && EnsurePlacer();
 }
 
 void UMOWorldFeatureSubsystem::GetSites(const FBox2D& Bounds, TArray<FMOWorldFeatureSite>& Out)
@@ -362,7 +362,7 @@ AActor* UMOWorldFeatureSubsystem::SpawnSite(const FMOWorldFeaturePlacer::FFeatur
 void UMOWorldFeatureSubsystem::Tick(float DeltaTime)
 {
 	TickAccumulator += DeltaTime;
-	if (TickAccumulator < UpdateIntervalSeconds)
+	if (TickAccumulator < WorldFeaturesUpdateSeconds)
 	{
 		return;
 	}
@@ -402,7 +402,7 @@ void UMOWorldFeatureSubsystem::Tick(float DeltaTime)
 			It.RemoveCurrent();
 			continue;
 		}
-		if (NearestViewerDist(FVector2D(Actor->GetActorLocation())) > Features[F].Row.SpawnDistanceCm * DespawnFactor)
+		if (NearestViewerDist(FVector2D(Actor->GetActorLocation())) > Features[F].Row.SpawnDistanceCm * WorldFeaturesDespawnFactor)
 		{
 			Actor->Destroy();
 			It.RemoveCurrent();
@@ -435,7 +435,7 @@ void UMOWorldFeatureSubsystem::Tick(float DeltaTime)
 		}
 	}
 	Wanted.Sort([](const FWanted& A, const FWanted& B) { return A.Dist < B.Dist; });
-	const int32 Budget = FMath::Max(1, CVarSpawnsPerTick.GetValueOnGameThread());
+	const int32 Budget = FMath::Max(1, CVarWorldFeaturesSpawnsPerTick.GetValueOnGameThread());
 	for (int32 I = 0; I < FMath::Min(Budget, Wanted.Num()); ++I)
 	{
 		const FWanted& W = Wanted[I];
