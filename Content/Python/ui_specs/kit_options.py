@@ -72,10 +72,17 @@ AUDIO = page("Audio", [("Volume", [
     slider_row("Ambient", "Ambient", "AmbientVolumeSlider", "AmbientVolumeText"),
     slider_row("Weather", "Weather", "WeatherVolumeSlider", "WeatherVolumeText")])])
 
-GAMEPLAY = page("Gameplay", [("Camera", [
-    slider_row("Sens", "Camera sensitivity", "CameraSensitivitySlider", "CameraSensitivityText", "1.0"),
-    K.row("InvertY", "Invert Y axis", toggle("InvertYCheckbox")),
-    K.row("Shake", "Camera shake", toggle("CameraShakeCheckbox"))])])
+GAMEPLAY = page("Gameplay", [
+    ("Camera", [
+        slider_row("Sens", "Camera sensitivity", "CameraSensitivitySlider", "CameraSensitivityText", "1.0"),
+        K.row("InvertY", "Invert Y axis", toggle("InvertYCheckbox")),
+        K.row("Shake", "Camera shake", toggle("CameraShakeCheckbox"))]),
+    # FMODevMode: the ~ console + the developer menu in a Shipping build (checked and locked in development builds, where it is always on).
+    ("Developer", [
+        K.row("DevMode", "Developer mode", toggle("DeveloperModeCheckbox")),
+        K.text("DeveloperModeNote", "caption", "~ opens the console; Run with nothing typed opens the command menu.", "color.text.secondary", wrap=True, var=True,
+               slot={"padding": [0, 4, 0, 8]})]),
+])
 
 CONTROLS = {"type": "VerticalBox", "name": "ControlsPage", "children": [
     {"type": "SizeBox", "name": "ControlsHeaderBox", "height": 48, "children": [{"type": "HorizontalBox", "name": "ControlsHeader", "children": [

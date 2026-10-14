@@ -117,6 +117,10 @@ void UMOQuickPickDialog::Configure(const FText& Title, const FText& Message, con
 			continue;
 		}
 		Button->SetButtonText(Options[I].Label);
+		if (!Options[I].Tooltip.IsEmpty())
+		{
+			Button->SetToolTipText(Options[I].Tooltip);
+		}
 		const FName Id = Options[I].Id;
 		Button->OnClicked().AddUObject(this, &UMOQuickPickDialog::HandleOptionClicked, Id);
 		if (UUniformGridSlot* GridSlot = OptionsGrid->AddChildToUniformGrid(Button, I / Columns, I % Columns))

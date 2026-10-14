@@ -752,14 +752,15 @@ protected:
 	// DEV CONSOLE POPUP (Tilde)
 	// ============================================================================
 	// A text box that pops up on the Tilde key and runs whatever you type as a console command. The key is HARD-CODED on
-	// purpose (requested): the InputKey override below, not an Input Action asset. Development builds only --
-	// compiled out of Shipping, because a typed-console is a cheat surface (see CLAUDE.md: no creative mode in shipped
-	// builds). Reuses the existing text-input modal (WBP_TextInputModal); results come back as a notification + the log.
+	// purpose (requested): the InputKey override below, not an Input Action asset. Available while developer mode is on
+	// (FMODevMode: always in development builds; in Shipping the Options toggle or -devmode -- Wes, Oct 14 2026: the console
+	// must work in the shipped game). Reuses the existing text-input modal (WBP_TextInputModal); results come back as a
+	// notification + the log (Shipping compiles UE_LOG out, so there a command shows only its own notifications).
 	// NOTE: the engine's own console was also bound to Tilde and consumed the key before this controller saw it, so Tilde
 	// is removed from [/Script/Engine.InputSettings] ConsoleKeys in DefaultInput.ini.
 
-	/** Tilde pressed: open the console popup (no-op in Shipping, or if one is already open). */
-	void HandleOpenDevConsole();
+	/** Tilde pressed: open the console popup, InitialText typed in (no-op without developer mode, or if one is already open). */
+	void HandleOpenDevConsole(const FString& InitialText = FString());
 
 public:
 	/** Sees every key before the action bindings do; this is where the hard-coded Tilde is caught. */
@@ -782,15 +783,21 @@ public:
 	 */
 	static FString SanitizeDevConsoleInput(const FString& Raw);
 
-	/** Run one console command line as this player and report what it printed (Run in the popup calls this; tests may too). */
+	/** Run one console command line as this player and report what it printed (Run in the popup calls this; tests may too). Empty: opens the command menu. */
 	void RunDevConsoleCommand(const FString& CommandLine);
+
+	/**
+	 * The developer menu: every registered MO.* console command as a button, by namespace (Group empty = the top level: type a command, the biome / POI /
+	 * weather / time pickers, the starter kit, then one button per namespace). A command whose help names an argument (<...>) opens the console with it typed in.
+	 */
+	void OpenDevCommandMenu(const FString& Group = FString());
 
 	// ------------------------------------------------------------------------
 	// DEV PICKERS: `weather` and `time` typed into the console popup open a small modal of choices
 	// ------------------------------------------------------------------------
 	// Both change the SERVER's world (weather and the game clock are server-authoritative; clients follow through the replicated sky and the world-sync
-	// subsystem), so the buttons call a Server RPC: from the host's own controller it runs locally, from a client it is sent. Development builds only --
-	// the RPCs exist in every build (the replication layout must match) but do nothing in Shipping, like the console popup itself.
+	// subsystem), so the buttons call a Server RPC: from the host's own controller it runs locally, from a client it is sent. The SERVER's developer mode
+	// decides whether it runs (ServerAllowsDevCheats): a client's Options toggle cannot turn cheats on in the host's world.
 
 	/** Open the weather picker (Clear, Partly Cloudy, Overcast, Fog, rain, snow ...). With a preset name it skips the popup and sets that weather. */
 	void OpenDevWeatherPicker(const FString& PresetName = FString());
@@ -834,6 +841,9 @@ protected:
 
 	/** The picker currently open, if any. */
 	TWeakObjectPtr<UMOQuickPickDialog> DevQuickPickDialog;
+
+	/** In a Server RPC: true if this machine's developer mode is on; otherwise logs and tells the player, and returns false. */
+	bool ServerAllowsDevCheats(const TCHAR* What);
 
 	/** Shared body of the pickers: push the modal, fill it, call OnChosen with the clicked option's Id. */
 	void OpenDevQuickPick(const FText& Title, const FText& Message, const TArray<FMOQuickPickOption>& Options, int32 Columns, TFunction<void(FName)> OnChosen);

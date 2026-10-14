@@ -1,5 +1,7 @@
 #include "MOPlayerController.h"
 #include "MOFramework.h"
+#include "MODevMode.h"
+#include "HAL/IConsoleManager.h"
 #include "MOUIDebugSubsystem.h"
 #include "MOControllableInterface.h"
 #include "MOSpectatorPawn.h"
@@ -1410,21 +1412,22 @@ namespace
 
 bool AMOPlayerController::InputKey(const FInputKeyEventArgs& Params)
 {
-#if !UE_BUILD_SHIPPING
 	// Dev console popup on the Tilde key. Hard-coded (requested) and deliberately NOT an Input Action: UEnhancedInputComponent deletes
 	// the legacy BindKey, and a mapping context would only add assets to forget. InputKey sees every key before action bindings.
-	if (Params.Key == EKeys::Tilde && Params.Event == IE_Pressed)
+	if (Params.Key == EKeys::Tilde && Params.Event == IE_Pressed && FMODevMode::IsEnabled())
 	{
 		HandleOpenDevConsole();
 		return true;
 	}
-#endif
 	return Super::InputKey(Params);
 }
 
-void AMOPlayerController::HandleOpenDevConsole()
+void AMOPlayerController::HandleOpenDevConsole(const FString& InitialText)
 {
-#if !UE_BUILD_SHIPPING
+	if (!FMODevMode::IsEnabled())
+	{
+		return;
+	}
 	if (DevConsoleDialog.IsValid())
 	{
 		return; // already open: do not stack a second popup
@@ -1452,9 +1455,9 @@ void AMOPlayerController::HandleOpenDevConsole()
 	}
 	Dialog->ConfigureWithText(
 		NSLOCTEXT("MOConsole", "Title", "Console"),
-		Recent.IsEmpty() ? NSLOCTEXT("MOConsole", "Message", "Type a console command (try: starter)")
-		                 : FText::Format(NSLOCTEXT("MOConsole", "MessageRecent", "Recent: {0}"), FText::FromString(Recent)),
-		FText::GetEmpty(),
+		Recent.IsEmpty() ? NSLOCTEXT("MOConsole", "Message", "Type a command. Run it empty: command menu.")
+		                 : FText::Format(NSLOCTEXT("MOConsole", "MessageRecent", "Recent: {0}\nRun it empty: command menu."), FText::FromString(Recent)),
+		FText::FromString(InitialText),
 		/*MaxLength=*/256,
 		NSLOCTEXT("MOConsole", "Hint", "command"),
 		NSLOCTEXT("MOConsole", "Run", "Run"),
@@ -1462,7 +1465,6 @@ void AMOPlayerController::HandleOpenDevConsole()
 	Dialog->OnTextConfirmed.AddDynamic(this, &AMOPlayerController::HandleDevConsoleConfirmed);
 	DevConsoleDialog = Dialog;
 	UE_LOG(LogMOFramework, Log, TEXT("[MOConsole] popup opened"));
-#endif
 }
 
 void AMOPlayerController::HandleDevConsoleConfirmed(const FText& EnteredText)
@@ -1485,10 +1487,14 @@ FString AMOPlayerController::SanitizeDevConsoleInput(const FString& Raw)
 
 void AMOPlayerController::RunDevConsoleCommand(const FString& RawCommandLine)
 {
-#if !UE_BUILD_SHIPPING
+	if (!FMODevMode::IsEnabled())
+	{
+		return;
+	}
 	const FString Command = SanitizeDevConsoleInput(RawCommandLine);
 	if (Command.IsEmpty())
 	{
+		OpenDevCommandMenu();   // Run with nothing typed: browse the commands instead
 		return;
 	}
 
@@ -1523,7 +1529,163 @@ void AMOPlayerController::RunDevConsoleCommand(const FString& RawCommandLine)
 			: FText::Format(NSLOCTEXT("MOConsole", "RanResult", "> {0}\n{1}"), FText::FromString(Command), FText::FromString(Result));
 		NotificationComponent->ShowInfoNotification(Shown, 6.0f);
 	}
-#endif
+}
+
+// ============================================================================
+// DEV COMMAND MENU: every MO.* console command as a button, grouped by namespace
+// ============================================================================
+
+namespace
+{
+	struct FMODevMenuCommand
+	{
+		FString Name;
+		FString Help;
+	};
+
+	/** Every registered MO.* console COMMAND (variables are not listed), by namespace: MO.Player.GiveItem is in "Player"; a namespace of one goes to "Other". */
+	TMap<FString, TArray<FMODevMenuCommand>> GatherDevMenuCommands()
+	{
+		TMap<FString, TArray<FMODevMenuCommand>> Groups;
+		IConsoleManager::Get().ForEachConsoleObjectThatStartsWith(FConsoleObjectVisitor::CreateLambda([&Groups](const TCHAR* Name, IConsoleObject* Object)
+		{
+			if (!Object || !Object->AsCommand())
+			{
+				return;
+			}
+			TArray<FString> Parts;
+			FString(Name).ParseIntoArray(Parts, TEXT("."));
+			Groups.FindOrAdd(Parts.Num() >= 3 ? Parts[1] : FString(TEXT("Other"))).Add({ FString(Name), FString(Object->GetHelp()) });
+		}), TEXT("MO."));
+
+		TArray<FString> Singles;
+		for (const TPair<FString, TArray<FMODevMenuCommand>>& Group : Groups)
+		{
+			if (Group.Value.Num() == 1 && Group.Key != TEXT("Other"))
+			{
+				Singles.Add(Group.Key);
+			}
+		}
+		for (const FString& Key : Singles)
+		{
+			Groups.FindOrAdd(TEXT("Other")).Append(Groups.FindAndRemoveChecked(Key));
+		}
+		for (TPair<FString, TArray<FMODevMenuCommand>>& Group : Groups)
+		{
+			Group.Value.Sort([](const FMODevMenuCommand& A, const FMODevMenuCommand& B) { return A.Name < B.Name; });
+		}
+		return Groups;
+	}
+
+	/** A command whose usage names a required argument (<...>) opens the console with its name typed in; any other runs on the click. */
+	bool DevMenuCommandTakesArguments(const FString& Help)
+	{
+		return Help.Contains(TEXT("<"));
+	}
+}
+
+void AMOPlayerController::OpenDevCommandMenu(const FString& Group)
+{
+	if (!FMODevMode::IsEnabled())
+	{
+		return;
+	}
+	const TMap<FString, TArray<FMODevMenuCommand>> Groups = GatherDevMenuCommands();
+	// The menus chain into each other (and into the console popup); each next one opens on the next tick, after the clicked one has closed.
+	auto Then = [this](TFunction<void()> Next)
+	{
+		GetWorldTimerManager().SetTimerForNextTick(FTimerDelegate::CreateWeakLambda(this, MoveTemp(Next)));
+	};
+
+	TArray<FMOQuickPickOption> Options;
+	if (Group.IsEmpty() || !Groups.Contains(Group))
+	{
+		Options.Add({ FName(TEXT("@type")), NSLOCTEXT("MOConsole", "MenuType", "Type a command..."), NSLOCTEXT("MOConsole", "MenuTypeTip", "The console popup (~).") });
+		Options.Add({ FName(TEXT("@biome")), NSLOCTEXT("MOConsole", "MenuBiome", "Go to a biome..."), NSLOCTEXT("MOConsole", "MenuBiomeTip", "biome: teleports you deep inside the biome you pick.") });
+		Options.Add({ FName(TEXT("@poi")), NSLOCTEXT("MOConsole", "MenuPoi", "Go to a POI..."), NSLOCTEXT("MOConsole", "MenuPoiTip", "poi: takes you to the nearest world feature you pick.") });
+		Options.Add({ FName(TEXT("@weather")), NSLOCTEXT("MOConsole", "MenuWeather", "Weather..."), NSLOCTEXT("MOConsole", "MenuWeatherTip", "weather: sets the server's weather.") });
+		Options.Add({ FName(TEXT("@time")), NSLOCTEXT("MOConsole", "MenuTime", "Time of day..."), NSLOCTEXT("MOConsole", "MenuTimeTip", "time: moves the server's clock forward.") });
+		Options.Add({ FName(TEXT("@starter")), NSLOCTEXT("MOConsole", "MenuStarter", "Starter kit"), NSLOCTEXT("MOConsole", "MenuStarterTip", "starter: 50 sticks and 20 stones.") });
+		TArray<FString> Names;
+		Groups.GetKeys(Names);
+		Names.Sort([](const FString& A, const FString& B) { return A == TEXT("Other") ? false : (B == TEXT("Other") ? true : A < B); });
+		for (const FString& Name : Names)
+		{
+			Options.Add({ FName(*Name), FText::Format(NSLOCTEXT("MOConsole", "MenuGroup", "{0} ({1})"), FText::FromString(Name), FText::AsNumber(Groups[Name].Num())) });
+		}
+		OpenDevQuickPick(NSLOCTEXT("MOConsole", "MenuTitle", "Developer menu"),
+			NSLOCTEXT("MOConsole", "MenuMessage", "Every MO console command, by group. Hover a button for its help."), Options, /*Columns=*/4,
+			[this, Then](FName Id)
+			{
+				const FString Pick = Id.ToString();
+				Then([this, Pick]()
+				{
+					if (Pick == TEXT("@type"))
+					{
+						HandleOpenDevConsole();
+					}
+					else if (Pick.StartsWith(TEXT("@")))
+					{
+						RunDevConsoleCommand(Pick.RightChop(1));   // biome / poi / weather / time / starter
+					}
+					else
+					{
+						OpenDevCommandMenu(Pick);
+					}
+				});
+			});
+		return;
+	}
+
+	const FString Prefix = FString::Printf(TEXT("MO.%s."), *Group);
+	Options.Add({ FName(TEXT("@back")), NSLOCTEXT("MOConsole", "MenuBack", "< Back") });
+	for (const FMODevMenuCommand& Command : Groups[Group])
+	{
+		FString Label = Command.Name.StartsWith(Prefix) ? Command.Name.RightChop(Prefix.Len()) : Command.Name.RightChop(3);
+		if (DevMenuCommandTakesArguments(Command.Help))
+		{
+			Label += TEXT("...");
+		}
+		Options.Add({ FName(*Command.Name), FText::FromString(Label), FText::FromString(Command.Help) });
+	}
+	OpenDevQuickPick(FText::Format(NSLOCTEXT("MOConsole", "MenuGroupTitle", "{0} commands"), FText::FromString(Group)),
+		NSLOCTEXT("MOConsole", "MenuGroupMessage", "A click runs the command; one ending in ... opens the console with it typed in, for its arguments."), Options, /*Columns=*/3,
+		[this, Then](FName Id)
+		{
+			const FString Pick = Id.ToString();
+			Then([this, Pick]()
+			{
+				if (Pick == TEXT("@back"))
+				{
+					OpenDevCommandMenu();
+					return;
+				}
+				const IConsoleObject* Object = IConsoleManager::Get().FindConsoleObject(*Pick);
+				if (Object && DevMenuCommandTakesArguments(Object->GetHelp()))
+				{
+					HandleOpenDevConsole(Pick + TEXT(" "));
+				}
+				else
+				{
+					RunDevConsoleCommand(Pick);
+				}
+			});
+		});
+}
+
+bool AMOPlayerController::ServerAllowsDevCheats(const TCHAR* What)
+{
+	// The server's own developer mode decides (a client's Options toggle cannot turn cheats on in the host's world).
+	if (FMODevMode::IsEnabled())
+	{
+		return true;
+	}
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOConsole] %s refused: developer mode is off on the server"), What);
+	if (NotificationComponent)
+	{
+		NotificationComponent->ShowInfoNotification(NSLOCTEXT("MOConsole", "ServerDevOff", "The host's developer mode is off."), 4.0f);
+	}
+	return false;
 }
 
 // ============================================================================
@@ -1532,7 +1694,10 @@ void AMOPlayerController::RunDevConsoleCommand(const FString& RawCommandLine)
 
 void AMOPlayerController::OpenDevQuickPick(const FText& Title, const FText& Message, const TArray<FMOQuickPickOption>& Options, int32 Columns, TFunction<void(FName)> OnChosen)
 {
-#if !UE_BUILD_SHIPPING
+	if (!FMODevMode::IsEnabled())
+	{
+		return;
+	}
 	if (DevQuickPickDialog.IsValid())
 	{
 		return; // already open
@@ -1550,15 +1715,18 @@ void AMOPlayerController::OpenDevQuickPick(const FText& Title, const FText& Mess
 		return;
 	}
 	Dialog->Configure(Title, Message, Options, Columns);
+	UE_LOG(LogMOFramework, Log, TEXT("[MOConsole] picker opened: %s (%d options)"), *Title.ToString(), Options.Num());
 	Dialog->OnChosen.AddWeakLambda(this, [this, OnChosen = MoveTemp(OnChosen)](FName Id) { DevQuickPickDialog.Reset(); OnChosen(Id); });
 	Dialog->OnCancelled.AddWeakLambda(this, [this]() { DevQuickPickDialog.Reset(); });
 	DevQuickPickDialog = Dialog;
-#endif
 }
 
 void AMOPlayerController::OpenDevWeatherPicker(const FString& PresetName)
 {
-#if !UE_BUILD_SHIPPING
+	if (!FMODevMode::IsEnabled())
+	{
+		return;
+	}
 	if (!PresetName.IsEmpty())
 	{
 		ServerDevSetWeather(FName(*PresetName));
@@ -1574,12 +1742,14 @@ void AMOPlayerController::OpenDevWeatherPicker(const FString& PresetName)
 	}
 	OpenDevQuickPick(NSLOCTEXT("MOConsole", "WeatherTitle", "Weather"), NSLOCTEXT("MOConsole", "WeatherMessage", "Sets the server's weather."), Options, /*Columns=*/3,
 		[this](FName Id) { ServerDevSetWeather(Id); });
-#endif
 }
 
 void AMOPlayerController::OpenDevTimePicker(int32 Hour)
 {
-#if !UE_BUILD_SHIPPING
+	if (!FMODevMode::IsEnabled())
+	{
+		return;
+	}
 	if (Hour >= 0)
 	{
 		ServerDevAdvanceToTime(FMath::Min(Hour, 23), 0);
@@ -1592,12 +1762,14 @@ void AMOPlayerController::OpenDevTimePicker(int32 Hour)
 		{ FName(TEXT("2")), NSLOCTEXT("MOConsole", "Time2am", "2 AM") } };
 	OpenDevQuickPick(NSLOCTEXT("MOConsole", "TimeTitle", "Time of day"), NSLOCTEXT("MOConsole", "TimeMessage", "Moves the server's clock forward to the next time."), Options, /*Columns=*/2,
 		[this](FName Id) { ServerDevAdvanceToTime(FCString::Atoi(*Id.ToString()), 0); });
-#endif
 }
 
 void AMOPlayerController::ServerDevSetWeather_Implementation(FName PresetName)
 {
-#if !UE_BUILD_SHIPPING
+	if (!ServerAllowsDevCheats(TEXT("weather")))
+	{
+		return;
+	}
 	UMOWeatherIntegrationSubsystem* Weather = GetWorld() ? GetWorld()->GetSubsystem<UMOWeatherIntegrationSubsystem>() : nullptr;
 	const bool bOk = Weather && Weather->SetWeatherPresetByName(PresetName.ToString());
 	UE_LOG(LogMOFramework, Warning, TEXT("[MOConsole] weather -> %s: %s"), *PresetName.ToString(), bOk ? TEXT("applied") : TEXT("FAILED (unknown preset or no weather provider)"));
@@ -1606,12 +1778,14 @@ void AMOPlayerController::ServerDevSetWeather_Implementation(FName PresetName)
 		NotificationComponent->ShowInfoNotification(FText::Format(NSLOCTEXT("MOConsole", "WeatherSet", "Weather: {0}{1}"), FText::FromName(PresetName),
 			bOk ? FText::GetEmpty() : NSLOCTEXT("MOConsole", "WeatherFailed", " (failed: see the log)")), 4.0f);
 	}
-#endif
 }
 
 void AMOPlayerController::ServerDevAdvanceToTime_Implementation(int32 Hour, int32 Minute)
 {
-#if !UE_BUILD_SHIPPING
+	if (!ServerAllowsDevCheats(TEXT("time")))
+	{
+		return;
+	}
 	UMOGameClockSubsystem* Clock = UMOGameClockSubsystem::Get(GetWorld());
 	if (!Clock)
 	{
@@ -1624,12 +1798,14 @@ void AMOPlayerController::ServerDevAdvanceToTime_Implementation(int32 Hour, int3
 	{
 		NotificationComponent->ShowInfoNotification(FText::Format(NSLOCTEXT("MOConsole", "TimeSet", "Time: {0}"), FText::FromString(Now.ToString(TEXT("%Y-%m-%d %H:%M")))), 4.0f);
 	}
-#endif
 }
 
 void AMOPlayerController::OpenDevBiomePicker(const FString& BiomeId)
 {
-#if !UE_BUILD_SHIPPING
+	if (!FMODevMode::IsEnabled())
+	{
+		return;
+	}
 	if (!BiomeId.IsEmpty())
 	{
 		ServerDevTeleportToBiome(FName(*BiomeId));
@@ -1648,12 +1824,14 @@ void AMOPlayerController::OpenDevBiomePicker(const FString& BiomeId)
 	Options.Sort([](const FMOQuickPickOption& A, const FMOQuickPickOption& B) { return A.Label.CompareTo(B.Label) < 0; });
 	OpenDevQuickPick(NSLOCTEXT("MOConsole", "BiomeTitle", "Biome"), NSLOCTEXT("MOConsole", "BiomeMessage", "Teleports you to the nearest place deep inside the biome."), Options, /*Columns=*/3,
 		[this](FName Id) { ServerDevTeleportToBiome(Id); });
-#endif
 }
 
 void AMOPlayerController::ServerDevTeleportToBiome_Implementation(FName BiomeId)
 {
-#if !UE_BUILD_SHIPPING
+	if (!ServerAllowsDevCheats(TEXT("biome")))
+	{
+		return;
+	}
 	UWorld* World = GetWorld();
 	AMOCharacter* Traveller = Cast<AMOCharacter>(GetPawn());
 	const UMOWorldSeedSubsystem* Seeds = UMOWorldSeedSubsystem::Get(World);
@@ -1699,7 +1877,6 @@ void AMOPlayerController::ServerDevTeleportToBiome_Implementation(FName BiomeId)
 	Say(FText::Format(NSLOCTEXT("MOConsole", "BiomeGo", "{0}: {1} km away"), FText::FromString(Label), FText::AsNumber(FMath::RoundToInt(DistKm * 10.0f) / 10.0f)));
 
 	BeginDevTeleportLanding(Traveller, Spot, FRotator(-6.0f, FMath::FRand() * 360.0f, 0.0f));
-#endif
 }
 
 void AMOPlayerController::BeginDevTeleportLanding(AMOCharacter* Traveller, const FVector& Spot, const FRotator& Facing)
@@ -1723,7 +1900,10 @@ void AMOPlayerController::BeginDevTeleportLanding(AMOCharacter* Traveller, const
 
 void AMOPlayerController::OpenDevFeaturePicker(const FString& FeatureId)
 {
-#if !UE_BUILD_SHIPPING
+	if (!FMODevMode::IsEnabled())
+	{
+		return;
+	}
 	if (!FeatureId.IsEmpty())
 	{
 		ServerDevTeleportToFeature(FName(*FeatureId));
@@ -1746,12 +1926,14 @@ void AMOPlayerController::OpenDevFeaturePicker(const FString& FeatureId)
 	});
 	OpenDevQuickPick(NSLOCTEXT("MOConsole", "PoiTitle", "Point of interest"), NSLOCTEXT("MOConsole", "PoiMessage", "Takes you to the nearest one, facing it."), Options, /*Columns=*/2,
 		[this](FName Id) { ServerDevTeleportToFeature(Id); });
-#endif
 }
 
 void AMOPlayerController::ServerDevTeleportToFeature_Implementation(FName FeatureId)
 {
-#if !UE_BUILD_SHIPPING
+	if (!ServerAllowsDevCheats(TEXT("poi")))
+	{
+		return;
+	}
 	AMOCharacter* Traveller = Cast<AMOCharacter>(GetPawn());
 	UMOWorldFeatureSubsystem* Features = UMOWorldFeatureSubsystem::Get(this);
 	FMOWorldFeatureSite Site;
@@ -1778,7 +1960,6 @@ void AMOPlayerController::ServerDevTeleportToFeature_Implementation(FName Featur
 	UE_LOG(LogMOFramework, Warning, TEXT("[MOConsole] poi %s: site at %s, %.1f km away"), *FeatureId.ToString(), *Site.Location.ToCompactString(),
 		FVector2D::Distance(FVector2D(Traveller->GetActorLocation()), FVector2D(Site.Location)) / 100000.0);
 	BeginDevTeleportLanding(Traveller, FVector(StandXY.X, StandXY.Y, Ground), Facing);
-#endif
 }
 
 void AMOPlayerController::PollDevTeleportLanding()

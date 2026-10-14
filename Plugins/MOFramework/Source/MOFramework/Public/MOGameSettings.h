@@ -75,6 +75,10 @@ public:
 	UPROPERTY(Config, BlueprintReadWrite, Category="Display")
 	bool bShowFrameTime = false;
 
+	/** Developer mode in a Shipping build: the ~ console, the command menu and the dev cheats (always on in development builds). Read it through FMODevMode. */
+	UPROPERTY(Config, BlueprintReadWrite, Category="Developer")
+	bool bDeveloperMode = false;
+
 	// ============================================================================
 	// GRAPHICS OPTIONS
 	// ============================================================================

@@ -1,4 +1,5 @@
 #include "MOOptionsPanel.h"
+#include "MODevMode.h"
 #include "MOAudioSubsystem.h"
 #include "MOGameSettings.h"
 #include "MOUIManagerComponent.h"
@@ -301,6 +302,17 @@ void UMOOptionsPanel::RefreshUIFromSettings()
 	{
 		CameraShakeCheckbox->SetIsChecked(Settings->bEnableCameraShake);
 	}
+	if (DeveloperModeCheckbox)
+	{
+		DeveloperModeCheckbox->SetIsChecked(FMODevMode::IsEnabled());
+		DeveloperModeCheckbox->SetIsEnabled(!FMODevMode::IsForcedByBuild());
+	}
+	if (DeveloperModeNote)
+	{
+		DeveloperModeNote->SetText(FMODevMode::IsForcedByBuild()
+			? NSLOCTEXT("MOOptions", "DevModeForced", "Always on in development builds. ~ opens the console; Run with nothing typed opens the command menu.")
+			: NSLOCTEXT("MOOptions", "DevModeHint", "Cheats. ~ opens the console; Run with nothing typed opens the command menu."));
+	}
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOOptionsPanel] Refreshed UI from settings"));
 }
@@ -402,6 +414,10 @@ void UMOOptionsPanel::ReadUIToSettings()
 	if (CameraShakeCheckbox)
 	{
 		Settings->bEnableCameraShake = CameraShakeCheckbox->IsChecked();
+	}
+	if (DeveloperModeCheckbox && !FMODevMode::IsForcedByBuild())
+	{
+		Settings->bDeveloperMode = DeveloperModeCheckbox->IsChecked();
 	}
 }
 

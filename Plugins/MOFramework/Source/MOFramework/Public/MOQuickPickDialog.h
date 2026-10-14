@@ -40,6 +40,10 @@ struct FMOQuickPickOption
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MO|UI|QuickPick")
 	FText Label;
+
+	/** Shown when the pointer rests on the button (optional). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MO|UI|QuickPick")
+	FText Tooltip;
 };
 
 DECLARE_MULTICAST_DELEGATE_OneParam(FMOQuickPickChosen, FName /*OptionId*/);

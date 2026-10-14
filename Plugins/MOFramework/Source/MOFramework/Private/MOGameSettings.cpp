@@ -70,6 +70,7 @@ void UMOGameSettings::SetToDefaults()
 	bInvertYAxis = false;
 	bEnableCameraShake = true;
 
+	// bDeveloperMode is kept, like the key bindings: Defaults must not take away the console the player is using.
 	// Key Bindings - Note: We don't clear custom bindings on SetToDefaults
 	// Use ClearAllCustomBindings() explicitly if needed
 }

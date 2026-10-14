@@ -266,6 +266,14 @@ private:
 	UPROPERTY(meta=(BindWidgetOptional))
 	TObjectPtr<UCheckBox> CameraShakeCheckbox;
 
+	/** Developer mode (the ~ console + the command menu) -- see FMODevMode. Checked and locked in development builds, where it is always on. */
+	UPROPERTY(meta=(BindWidgetOptional))
+	TObjectPtr<UCheckBox> DeveloperModeCheckbox;
+
+	/** One line under the toggle: what it does, or that this build forces it on. */
+	UPROPERTY(meta=(BindWidgetOptional))
+	TObjectPtr<UTextBlock> DeveloperModeNote;
+
 	// ============================================================
 	// KEY BINDINGS
 	// ============================================================
