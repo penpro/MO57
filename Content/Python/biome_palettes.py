@@ -263,6 +263,19 @@ for _s in RAINFOREST["species"]:
     if _s["ResourceNodeId"] == "None" and _s["HISMTag"] in ("MOBiomeCover_Grass", "MOBiomeCover_Flower", "MOBiomeCover_Shrub"):
         _s["DensityPerHectare"] = round(_s["DensityPerHectare"] * 0.7, 1)
 
+# Playtest 2026-10-14 #5 / #6 (Rainforest: "dense forest, grass still brightly lit, trees VERY dense"; frame rate halved there, 31-37 ms Shipping 1440p):
+# the canopy trees x0.65 (the emergent giants Forest_01/02 stay), saplings x0.75, the lush grass drifts x0.5 -- a closed canopy shades the floor out;
+# ferns take that floor instead (appended below, after fern() exists). The scatter graph's native LAWN grass no longer runs here either
+# (Content/Python/native_grass_biomes.py): that grass glowed under the canopy.
+for _s in RAINFOREST["species"]:
+    _m = _s["Mesh"]
+    if _s["HISMTag"] == "MOResource_Tree" and "_Forest_0" in _m and "_Forest_01" not in _m and "_Forest_02" not in _m:
+        _s["DensityPerHectare"] = round(_s["DensityPerHectare"] * 0.65, 1)
+    elif _s["HISMTag"] == "MOResource_Tree" and "Sapling" in _m:
+        _s["DensityPerHectare"] = round(_s["DensityPerHectare"] * 0.75, 1)
+    elif _s["HISMTag"] == "MOBiomeCover_Grass":
+        _s["DensityPerHectare"] = round(_s["DensityPerHectare"] * 0.5, 1)
+
 # Band / relief / ground changes for existing rows (merged onto the row: only these keys change). Priorities now: Rocky 20, Alpine 14, Shore 13, Rainforest 12, Locust 11, Forest 10, Dry 8, Meadow 1.
 ROW_EDITS = {
     "ShoreStrand": {"heightMin": -100000.0, "heightMax": 400.0, "priority": 13, "edgeBlendWidth": 4500.0,
@@ -404,8 +417,10 @@ def eld(n, density, group=6, core=0.3, cluster=2200.0):
                    collision="Solid")
 
 
-def fern(n, density, cluster=1800.0):
-    return undergrowth(FERN % (n, n), density, group=-1, core=0.0, smin=0.8, smax=1.4, cluster=cluster)
+def fern(n, density, cluster=1800.0, tag="MOBiomeCover_Shrub", smin=0.8, smax=1.4):
+    """tag MOBiomeCover_Fern puts a fern in the NEAR ground-cover tier (any tag outside the spawner's large list: trees / rocks / bushes / shrubs): the large
+    tier caps at ~1200 candidates/ha and a forest's trees, saplings and hazel already fill it, so floor ferns tagged as shrubs were realised at a fraction."""
+    return undergrowth(FERN % (n, n), density, group=-1, core=0.0, smin=smin, smax=smax, cluster=cluster, tag=tag)
 
 
 def leaves(n, density, cluster=1500.0, group=6, core=0.6):
@@ -582,6 +597,10 @@ for _name in list(PALETTES):
     PALETTES[_name] = thin_and_far(PALETTES[_name])
 ALPINE["species"] = thin_and_far(ALPINE["species"])
 ALPINE_ROCK["species"] = thin_and_far(ALPINE_ROCK["species"])
+# the shaded floor (#6): big fronds -- the near tier caps at ~2000 candidates/ha (~500 ferns/ha realised), so cover comes from size, not count
+RAINFOREST["species"] += [fern("01", 380, 1500.0, "MOBiomeCover_Fern", 1.3, 2.2), fern("02", 280, 1500.0, "MOBiomeCover_Fern", 1.3, 2.2),
+                          fern("03", 200, 1800.0, "MOBiomeCover_Fern", 1.2, 2.0), fern("04", 140, 1800.0, "MOBiomeCover_Fern", 1.2, 2.0),
+                          leaves("01", 70, group=4), leaves("05", 40, group=4), leaves("08", 30, group=4)]   # litter under the canopy stands (clump group 4)
 RAINFOREST["species"] = thin_and_far(RAINFOREST["species"])
 
 

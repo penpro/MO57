@@ -21,6 +21,7 @@
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
 #include "HAL/IConsoleManager.h"
+#include "UObject/UObjectIterator.h"
 #include "Engine/CollisionProfile.h"
 #include "ISMPartition/ISMComponentDescriptor.h"
 #include "Async/ParallelFor.h"
@@ -86,6 +87,35 @@ namespace
 	// Perf / look experiments ("how dense can a forest be and what does it cost"): scales EVERY species' density before the per-point pick. Points are scatter
 	// slots (one instance each at most), so past the slot budget it saturates instead of growing. Needs pcg.RuntimeGeneration.Refresh (or a new world) to apply.
 	TAutoConsoleVariable<float> CVarSpeciesDensityScale(TEXT("mo.PCG.SpeciesDensityScale"), 1.0f, TEXT("Dev: multiplier on every biome species' density (0..4); refresh PCG to apply."), ECVF_Default);
+
+	// Wind (WPO) on shadow-casting foliage re-renders its virtual shadow map pages EVERY frame: in the dense Rainforest that was 7 of the 19 GPU ms, and skipping
+	// those invalidations took the view from 20.1 to 14.3 ms (playtest 2026-10-14 #5, "frame rate dropped by half in this area"). Rigid: the trees still sway,
+	// their cached shadows do not follow the sway. 0 = Auto (animated shadows, the full cost). Applies to the components already in the world at once.
+	EShadowCacheInvalidationBehavior FoliageShadowCacheBehavior(int32 Value) { return Value != 0 ? EShadowCacheInvalidationBehavior::Rigid : EShadowCacheInvalidationBehavior::Auto; }
+	TAutoConsoleVariable<int32> CVarFoliageRigidShadows(
+		TEXT("mo.Foliage.RigidShadows"), 1,
+		TEXT("1 = biome-scatter shadow casters keep their cached virtual shadows while the wind sways them (Rigid; ~-30 % GPU in dense forest), 0 = shadows re-render with the wind (Auto)."),
+		FConsoleVariableDelegate::CreateLambda([](IConsoleVariable* Var)
+		{
+			const EShadowCacheInvalidationBehavior Behavior = FoliageShadowCacheBehavior(Var->GetInt());
+			int32 Changed = 0;
+			for (TObjectIterator<UInstancedStaticMeshComponent> It; It; ++It)
+			{
+				UInstancedStaticMeshComponent* Hism = *It;   // PCG builds plain ISM components from the HISM descriptor
+				if (!IsValid(Hism) || !Hism->GetWorld() || !Hism->CastShadow || !Hism->ComponentTags.ContainsByPredicate([](const FName& T) { return T.ToString().StartsWith(TEXT("MOBiome_")); }))
+				{
+					continue;
+				}
+				if (Hism->ShadowCacheInvalidationBehavior != Behavior)
+				{
+					Hism->ShadowCacheInvalidationBehavior = Behavior;
+					Hism->MarkRenderStateDirty();
+					++Changed;
+				}
+			}
+			UE_LOG(LogMOFramework, Log, TEXT("[MOBiomeSpawner] mo.Foliage.RigidShadows=%d: %d biome-scatter components updated"), Var->GetInt(), Changed);
+		}),
+		ECVF_Default);
 
 	/** Trees, rocks, bushes and shrubs are the LARGE species (placed on the larger hi-gen grid); grass, flowers and debris are ground cover. By HISMTag so a new species needs no flag. */
 	bool IsLargeSpecies(const FMOBiomeSpeciesEntry& Sp)
@@ -824,6 +854,10 @@ bool FMOPCGBiomeSpawnerElement::BuildSlice(FMOPCGBiomeSpawnerContext* Context) c
 			else if (Settings->WindDisableDistanceCm > 0)
 			{
 				Params.Descriptor.WorldPositionOffsetDisableDistance = Settings->WindDisableDistanceCm;   // swaying instances re-render their shadow pages every frame
+			}
+			if (!bFarTier)
+			{
+				Params.Descriptor.ShadowCacheInvalidationBehavior = FoliageShadowCacheBehavior(CVarFoliageRigidShadows.GetValueOnAnyThread());   // see mo.Foliage.RigidShadows
 			}
 			// The near floor is a per-frame DRAW distance: a far cell plants its whole area and the camera decides what is drawn, so a cell generated around one position still fills in when the
 			// player walks away (the generation-time cut it replaced left bald circles). See ApplyNearDrawFloor for the end distance the engine needs before it honours the floor at all.
