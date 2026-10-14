@@ -30,9 +30,18 @@ BASE_ARGS = "-NoSteam -NoQualityBenchmark -windowed -WinX=0 -WinY=0"
 CRASH_RE = re.compile(r"Fatal error|Unhandled Exception|Assertion failed|=== Critical error ===")
 
 
+# --shipdiag: the MO57ShipDiag target (Source/MO57ShipDiag.Target.cs) -- Shipping code, but MOFramework's UE_LOG reaches the log and -ExecCmds works.
+# Staged by copying a Shipping package (its cook must match the code) to Saved/StagedBuilds_ShipDiag and dropping the exe next to the game's.
+# Shipping keeps its saves, config and log under %LOCALAPPDATA%/MO57/Saved (the player's own settings: backed up and restored around the run).
+SHIPDIAG_EXE = os.path.join(ROOT, "Saved", "StagedBuilds_ShipDiag", "Windows", "MO57", "Binaries", "Win64", "MO57ShipDiag-Win64-Shipping.exe")
+SHIPDIAG_SAVED = os.path.join(os.environ.get("LOCALAPPDATA", ""), "MO57", "Saved")
+SHIPDIAG_LOG = os.path.join(SHIPDIAG_SAVED, "Logs", "MO57ShipDiag.log")
+IMAGE = "MO57.exe"
+
+
 def running_games():
-    out = subprocess.run(["tasklist", "/FI", "IMAGENAME eq MO57.exe", "/FO", "CSV", "/NH"], capture_output=True, text=True).stdout
-    return [ln for ln in out.splitlines() if ln.startswith('"MO57.exe"')]
+    out = subprocess.run(["tasklist", "/FI", f"IMAGENAME eq {IMAGE}", "/FO", "CSV", "/NH"], capture_output=True, text=True).stdout
+    return [ln for ln in out.splitlines() if ln.startswith(f'"{IMAGE}"')]
 
 
 def read_log():
@@ -77,8 +86,27 @@ def main():
     ap.add_argument("--res", default="960x540", help="window size WxH (perf runs: say which; the default suits functional probes)")
     ap.add_argument("--keep-log", default="", help="label: copy the log to Saved/Logs/pkg_probe/<label>.log")
     ap.add_argument("--package", action="store_true", help="re-package the Development build first (RunUAT BuildCookRun; the editor must be closed)")
+    ap.add_argument("--shipdiag", action="store_true", help="run the MO57ShipDiag Shipping executable instead of the Development package (see SHIPDIAG_EXE)")
     a = ap.parse_args()
 
+    global EXE, LOG, IMAGE
+    settings_backup = None
+    if a.shipdiag:
+        EXE, LOG, IMAGE = SHIPDIAG_EXE, SHIPDIAG_LOG, os.path.basename(SHIPDIAG_EXE)
+        a.extra = f'{a.extra} -abslog="{SHIPDIAG_LOG}"'
+        user_settings = os.path.join(SHIPDIAG_SAVED, "Config", "Windows", "GameUserSettings.ini")
+        if os.path.exists(user_settings):
+            settings_backup = (user_settings, open(user_settings, "rb").read())
+    try:
+        return run(a)
+    finally:
+        if settings_backup:
+            with open(settings_backup[0], "wb") as f:
+                f.write(settings_backup[1])
+            print("[pkg_probe] restored", settings_backup[0])
+
+
+def run(a):
     if a.package:
         sys.path.insert(0, HERE)
         import ue_inst   # the one packaging recipe (Saved/Logs/package.log)
@@ -99,8 +127,8 @@ def main():
     proc = subprocess.Popen(cmdline, creationflags=flags, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     until = re.compile(a.until)
     t0 = time.time()
-    child = None
-    for _ in range(20):   # the launcher starts the game within a second or two
+    child = proc.pid if a.shipdiag else None   # the diag exe IS the game (no launcher)
+    for _ in range(0 if a.shipdiag else 20):   # the launcher starts the game within a second or two
         kids = child_pids(proc.pid)
         if kids:
             child = kids[0]

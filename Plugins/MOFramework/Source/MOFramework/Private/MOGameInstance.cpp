@@ -48,6 +48,28 @@ void UMOGameInstance::Init()
 		GEngine->bEnableOnScreenDebugMessages = false;
 	}
 
+#if UE_BUILD_SHIPPING && defined(MO_SHIPPING_DIAG)
+	// The MO57ShipDiag target only (Source/MO57ShipDiag.Target.cs): Shipping compiles the engine's -ExecCmds handling out (UEngine::Start), so the
+	// harness commands (Tools/pkg_probe.py) are queued here instead. Never compiled into a real Shipping build.
+	{
+		FString ExecCmds;
+		if (GEngine && FParse::Value(FCommandLine::Get(), TEXT("ExecCmds="), ExecCmds, false))
+		{
+			TArray<FString> Commands;
+			ExecCmds.ParseIntoArray(Commands, TEXT(","), true);
+			for (FString& Command : Commands)
+			{
+				Command.TrimStartAndEndInline();
+				if (!Command.IsEmpty())
+				{
+					GEngine->DeferredCommands.Add(Command);
+				}
+			}
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOShipDiag] queued %d -ExecCmds command(s)"), Commands.Num());
+		}
+	}
+#endif
+
 	// Reset intro playback flag on fresh game launch
 	// This ensures the intro plays when the game starts, but not when
 	// returning to main menu from gameplay (which sets bPlayIntro = false)

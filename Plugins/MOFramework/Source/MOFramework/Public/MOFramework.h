@@ -36,6 +36,20 @@
 // Log category for the MOFramework plugin
 MOFRAMEWORK_API DECLARE_LOG_CATEGORY_EXTERN(LogMOFramework, Log, All);
 
+#if defined(MO_SHIPPING_DIAG) && NO_LOGGING
+// The MO57ShipDiag target only (Source/MO57ShipDiag.Target.cs, defined by MOFramework.Build.cs for that target): Shipping compiles UE_LOG out
+// AND the engine's log file device (NO_LOGGING), so there this module's UE_LOG / UE_CLOG (Log and above) go to MOShipDiagWrite, a plain file
+// (-abslog=<path>, else Saved/Logs/MO57ShipDiag.log) -- a Shipping executable that logs MO's own lines, for bugs only Shipping shows.
+// Never defined for the MO57 / MO57Editor targets.
+MOFRAMEWORK_API void MOShipDiagWrite(const TCHAR* Category, ELogVerbosity::Type Verbosity, const FString& Message);
+#undef UE_LOG
+#define UE_LOG(CategoryName, Verbosity, Format, ...) \
+	do { if (ELogVerbosity::Verbosity <= ELogVerbosity::Log) { MOShipDiagWrite(TEXT(#CategoryName), ELogVerbosity::Verbosity, FString::Printf(Format, ##__VA_ARGS__)); } } while (0)
+#undef UE_CLOG
+#define UE_CLOG(Condition, CategoryName, Verbosity, Format, ...) \
+	do { if (Condition) { UE_LOG(CategoryName, Verbosity, Format, ##__VA_ARGS__); } } while (0)
+#endif
+
 class FMOFrameworkModule : public IModuleInterface
 {
 public:

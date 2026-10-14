@@ -15,6 +15,85 @@
 // Define the log category
 DEFINE_LOG_CATEGORY(LogMOFramework);
 
+#if defined(MO_SHIPPING_DIAG) && NO_LOGGING
+#include "HAL/PlatformFileManager.h"
+#include "Misc/CommandLine.h"
+#include "Misc/Paths.h"
+#include "Misc/ScopeLock.h"
+
+// The MO57ShipDiag target's log sink (see MOFramework.h): one line per UE_LOG, UE's own line format, flushed per line so a crash keeps it.
+void MOShipDiagWrite(const TCHAR* Category, ELogVerbosity::Type Verbosity, const FString& Message)
+{
+	static FCriticalSection Lock;
+	static TUniquePtr<IFileHandle> File;
+	static bool bOpened = false;
+	FScopeLock ScopeLock(&Lock);
+	if (!bOpened)
+	{
+		bOpened = true;
+		FString Path;
+		if (!FParse::Value(FCommandLine::Get(), TEXT("ABSLOG="), Path, false))
+		{
+			Path = FPaths::ProjectLogDir() / TEXT("MO57ShipDiag.log");
+		}
+		IFileManager::Get().MakeDirectory(*FPaths::GetPath(Path), true);
+		File.Reset(FPlatformFileManager::Get().GetPlatformFile().OpenWrite(*Path, /*bAppend=*/false, /*bAllowRead=*/true));   // the harness tails it live
+	}
+	if (!File)
+	{
+		return;
+	}
+	const TCHAR* Level = Verbosity == ELogVerbosity::Fatal ? TEXT("Fatal: ") : Verbosity == ELogVerbosity::Error ? TEXT("Error: ")
+		: Verbosity == ELogVerbosity::Warning ? TEXT("Warning: ") : Verbosity == ELogVerbosity::Display ? TEXT("Display: ") : TEXT("");
+	const FString Line = FString::Printf(TEXT("[%s][%3d]%s: %s%s\r\n"), *FDateTime::UtcNow().ToString(TEXT("%Y.%m.%d-%H.%M.%S:%s")),
+		static_cast<int32>(GFrameCounter % 1000), Category, Level, *Message);
+	const FTCHARToUTF8 Utf8(*Line);
+	File->Write(reinterpret_cast<const uint8*>(Utf8.Get()), Utf8.Length());
+	File->Flush();
+}
+
+#include "Containers/Ticker.h"
+#include "Engine/Engine.h"
+#include "MOCheatSubsystem.h"
+
+// MO.Delay lives in MOPerfBench.cpp, which Shipping compiles out; the diag target gets the same command (same log line) so pkg_probe recipes carry over.
+static FAutoConsoleCommand GMOShipDiagDelayCmd(
+	TEXT("MO.Delay"),
+	TEXT("Diag: run a console command after N seconds. Usage: MO.Delay <seconds> <command ...>"),
+	FConsoleCommandWithArgsDelegate::CreateLambda([](const TArray<FString>& Args)
+	{
+		if (Args.Num() < 2 || !Args[0].IsNumeric())
+		{
+			return;
+		}
+		FString Command;
+		for (int32 I = 1; I < Args.Num(); ++I)
+		{
+			Command += (I > 1 ? TEXT(" ") : TEXT("")) + Args[I];
+		}
+		const double At = FPlatformTime::Seconds() + FMath::Clamp(FCString::Atof(*Args[0]), 0.0f, 36000.0f);
+		FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([At, Command](float)
+		{
+			if (FPlatformTime::Seconds() < At)
+			{
+				return true;
+			}
+			UWorld* World = nullptr;
+			for (const FWorldContext& Context : GEngine->GetWorldContexts())
+			{
+				if (Context.WorldType == EWorldType::Game && Context.World())
+				{
+					World = Context.World();
+				}
+			}
+			UMOCheatSubsystem::ExecAsLocalPlayer(World, Command);
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOPERF] MO.Delay ran: %s"), *Command);
+			return false;
+		}), 0.25f);
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOPERF] will run '%s' in %s s"), *Command, *Args[0]);
+	}));
+#endif
+
 #define LOCTEXT_NAMESPACE "FMOFrameworkModule"
 
 void FMOFrameworkModule::StartupModule()

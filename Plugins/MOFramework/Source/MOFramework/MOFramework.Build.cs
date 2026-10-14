@@ -10,6 +10,12 @@ public class MOFramework : ModuleRules
 	{
 		PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
 
+		// The diagnostic Shipping target (Source/MO57ShipDiag.Target.cs): this module logs and honours -ExecCmds there (see MOFramework.h).
+		if (Target.Name == "MO57ShipDiag")
+		{
+			PublicDefinitions.Add("MO_SHIPPING_DIAG=1");
+		}
+
 		// =====================================================================
 		// PreBuildStep: refresh MOBuildInfoGenerated.h with current git data
 		// so FMOBuildInfo / the main menu version label match the build.
