@@ -4,6 +4,7 @@
     python Tools/icon_studio.py --items Log01,Clay01      just these (must have a real mesh)
     python Tools/icon_studio.py --items Stick01 --replace re-render an item that already has an icon (overwrites <Id>Icon)
     python Tools/icon_studio.py --all --replace           rebuild every real-mesh item's icon, hand-made ones included
+    python Tools/icon_studio.py --all --render-only       render to Saved/IconStudio only (compare before replacing anything)
 
 Needs the editor running (bridge + MCP; PIE not running: saves are refused in PIE) and Blender 5.2. Work files go to
 Saved/IconStudio/<ItemId>/ (mesh.fbx, textures, icon.png). Icons land in /MOFramework/Items/<Id>/<Id>Icon and the item row's
@@ -41,6 +42,7 @@ def main():
     ap.add_argument("--missing", action="store_true", help="items with a real mesh and no icon (default)")
     ap.add_argument("--all", action="store_true", help="every item with a real mesh")
     ap.add_argument("--replace", action="store_true", help="overwrite existing <Id>Icon textures")
+    ap.add_argument("--render-only", action="store_true", help="export + render only; import and wire nothing")
     ap.add_argument("--size", type=int, default=512)
     a = ap.parse_args()
 
@@ -67,6 +69,9 @@ def main():
                              "--", OUT, ",".join(ids), str(a.size)], capture_output=True, text=True)
     print("\n".join("  " + l for l in render.stdout.splitlines() if l.startswith("ICONSTUDIO")))
 
+    if a.render_only:
+        print("render only: icons are in %s/<ItemId>/icon.png" % OUT)
+        return
     placed = ue_py("import importlib, icon_studio_import as m; importlib.reload(m); out(%r + m.import_icons(%r, %r, %s))"
                    % (MARK, OUT, ids, a.replace))
     patch = {i: {"uI": {"IconSmall": p, "IconLarge": p}} for i, p in placed.items()}
