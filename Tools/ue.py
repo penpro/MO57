@@ -518,7 +518,7 @@ def rows_set_bulk(table, rows, do_save=True):
             report.append(f"{n:<28} MISMATCH")
     report.append(f"bulk: {ok}/{len(names)} verified")
     if do_save and ok:
-        report.append("save_assets -> %s" % _mcp_call_file(AT, "save_assets", {"asset_paths": [table]}))
+        report.append("save_assets -> %s" % save_assets([table], via_file=True))
     return ok, report
 
 
@@ -581,9 +581,18 @@ def rows_set_safe(table, rows, do_save=True):
         report.append("%-28s %s%s%s" % (name, "OK" if good else "MISMATCH",
                                         (" " + ",".join(bad)) if bad else "", add_note))
     if do_save and ok:
-        saved = mcp_call(AT, "save_assets", {"asset_paths": [table]})
-        report.append("save_assets -> %s" % saved)
+        report.append("save_assets -> %s" % save_assets([table]))
     return ok, report
+
+
+def save_assets(paths, via_file=False):
+    """THE asset save (rows set / asset assign / ue.py save). Refuses while PIE runs: the editor drops package saves during
+    play while save_assets still answers True, so the edit lives only in memory (2026-10-14: WovenBasket01's mesh "saved" in
+    PIE never reached disk -- git showed no change). Returns the MCP answer, or a "REFUSED ..." string."""
+    if _in_pie():
+        return ("REFUSED -- PIE is running; the editor drops saves during play while still answering True. "
+                "End PIE (ue.py pie end), then: ue.py save " + " ".join(paths))
+    return (_mcp_call_file if via_file else mcp_call)(AT, "save_assets", {"asset_paths": list(paths)})
 
 
 # =============================================================================
@@ -846,9 +855,11 @@ def cmd_rows(a):
 
 
 def cmd_save(a):
-    out = mcp_call(AT, "save_assets", {"asset_paths": [a.asset]})
+    out = save_assets([a.asset])
     if out is None:
         _die(2, "MCP not responding")
+    if isinstance(out, str) and out.startswith("REFUSED"):
+        _die(1, out)
     print(out)
 
 
