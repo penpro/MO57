@@ -8,7 +8,8 @@ Why (2026-10-14): Fab's FBX/glTF imports come in with Nanite off and every mater
 instanced usage flags and cannot be edited in place, so the mesh renders default gray wherever it is drawn by Nanite or as an
 instance. Per mesh this:
   - enables Nanite when the mesh has more than NANITE_MIN_TRIS triangles (scans are 100k+);
-  - gives it one convex hull if it has no simple collision (dropped items simulate);
+  - gives it one convex hull if it has no simple collision, and turns off "use complex as simple" (dropped items simulate physics,
+    which complex-as-simple cannot: Megascans plants ship that way);
   - for each material slot whose material is an instance of a master OUTSIDE /Game, creates MI_<mesh>_MO next to the mesh on
     /Game/Materials/FabOverrides/M_MS_Base with the same base colour / normal / metallic-roughness textures (glTF and Megascans
     share those parameter names). glTF metallic-roughness has no AO in red, so AO Strength is set to 0.
@@ -75,7 +76,13 @@ def prepare(mesh_paths):
             nanite.enabled = True
             sm.set_nanite_settings(mesh, nanite, apply_changes=True)
             notes.append("nanite on (%d tris)" % mesh.get_num_triangles(0))
-        if sm.get_simple_collision_count(mesh) + sm.get_convex_collision_count(mesh) == 0:
+        body = mesh.get_editor_property("body_setup")
+        if body and body.get_editor_property("collision_trace_flag") == unreal.CollisionTraceFlag.CTF_USE_COMPLEX_AS_SIMPLE:
+            # Dropped items simulate physics, which complex-as-simple cannot (PIE warns "Trying to simulate physics ... ComplexAsSimple";
+            # Megascans plants ship that way). Back to default: the simple shapes below are the collision.
+            body.set_editor_property("collision_trace_flag", unreal.CollisionTraceFlag.CTF_USE_DEFAULT)
+            notes.append("complex-as-simple -> default")
+        if max(sm.get_simple_collision_count(mesh), 0) + max(sm.get_convex_collision_count(mesh), 0) == 0:   # -1 means none
             sm.set_convex_decomposition_collisions(mesh, 1, 16, 100000)
             notes.append("convex hull added")
         for i, slot in enumerate(mesh.static_materials):
