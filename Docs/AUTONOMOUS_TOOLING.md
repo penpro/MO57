@@ -180,6 +180,10 @@ Wes: "create some biome test levels that we can audit things inside of independe
   seedlings / saplings their own calmer child material instances (the tree's wind amplitudes are world-space: a 1 m plant shook like a 16 m crown).
 - Perf A/B in the editor: PIE is frame-capped near 58-60 fps, so compare `gpu=` / `draws=` of `MO.Perf.Bench`, never fps, and pin the view
   (`MO.Cam.LookAt` at the same point and target) -- the pawn's own facing differs run to run.
+- Scatter coverage: the biome spawner's near ground-cover tier caps at ~2000 candidates/ha and the large tier (trees / rocks / bushes /
+  `MOBiomeCover_Shrub`) at ~1200/ha, so palette densities above that are prorated; dense ground in open biomes is the scatter graph's native grass
+  chain, gated per biome by `Content/Python/native_grass_biomes.py` (explicit list). A tag outside the large list (`MOBiomeCover_Fern`) puts a
+  species in the near tier. Dense-forest GPU: `mo.Foliage.RigidShadows` (wind no longer re-renders cached shadow pages; -27 % in the Rainforest).
 - Live UI regression: `MO.UI.RunAllTests` (writes `Content/Python/test_output/ui_test_results.txt`, 86 tests, ~10 s); gameplay: `python Tools/ue.py test`
   (RunAll; run it in a FRESH game -- a full inventory fails DropPickup with "identity lost").
 
