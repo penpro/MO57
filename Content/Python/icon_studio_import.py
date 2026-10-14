@@ -17,6 +17,7 @@ import unreal
 eal = unreal.EditorAssetLibrary
 PLACEHOLDER = "/Game/Penumbra/Graybox/"
 ITEMS_TABLE = "/MOFramework/Data/DT_Items.DT_Items"
+SYNC_CVAR = "Interchange.FeatureFlags.Import.SyncToBrowser"   # AssetTools.cpp: overrides the import's bSyncToBrowser
 
 
 def items_needing_icons(include_existing=False):
@@ -68,7 +69,14 @@ def import_icons(root, item_ids, replace=False):
         task.save = False
         tasks.append((item_id, path, name, task))
     if tasks:
-        unreal.AssetToolsHelpers.get_asset_tools().import_asset_tasks([t[3] for t in tasks])
+        # Interchange syncs a Content Browser to what it imported, opening a maximized one if none is docked; it lands in front
+        # of whatever else is driving the editor (the Fab panel). The cvar overrides that for this import only.
+        was = unreal.SystemLibrary.get_console_variable_bool_value(SYNC_CVAR)
+        unreal.SystemLibrary.execute_console_command(None, "%s 0" % SYNC_CVAR)
+        try:
+            unreal.AssetToolsHelpers.get_asset_tools().import_asset_tasks([t[3] for t in tasks])
+        finally:
+            unreal.SystemLibrary.execute_console_command(None, "%s %d" % (SYNC_CVAR, int(was)))
     for item_id, path, name, _ in tasks:
         texture = unreal.load_asset(path)
         if not isinstance(texture, unreal.Texture2D):

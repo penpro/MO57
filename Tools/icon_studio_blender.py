@@ -72,6 +72,32 @@ def reset_scene(size):
     return scene
 
 
+def adjust_color(nodes, links, color, adjust):
+    """The material's colour controls (meta slots[i].adjust: saturation, contrast, brightness, tint), applied to the base colour
+    in that order. An approximation of the FabOverrides master (contrast as a power curve); identity when adjust is empty."""
+    if "saturation" in adjust:
+        hsv = nodes.new("ShaderNodeHueSaturation")
+        hsv.inputs["Saturation"].default_value = adjust["saturation"]
+        links.new(color, hsv.inputs["Color"])
+        color = hsv.outputs["Color"]
+    if "contrast" in adjust:
+        gamma = nodes.new("ShaderNodeGamma")
+        gamma.inputs["Gamma"].default_value = adjust["contrast"]
+        links.new(color, gamma.inputs["Color"])
+        color = gamma.outputs["Color"]
+    gain = [adjust.get("brightness", 1.0) * c for c in adjust.get("tint", [1.0, 1.0, 1.0])]
+    if any(abs(g - 1.0) > 1e-4 for g in gain):
+        mix = nodes.new("ShaderNodeMix")
+        mix.data_type = "RGBA"
+        mix.blend_type = "MULTIPLY"
+        mix.inputs["Factor"].default_value = 1.0
+        rgba = lambda sockets, name: next(s for s in sockets if s.name == name and s.type == "RGBA")   # indices move per version
+        links.new(color, rgba(mix.inputs, "A"))
+        rgba(mix.inputs, "B").default_value = (gain[0], gain[1], gain[2], 1.0)
+        color = rgba(mix.outputs, "Result")
+    return color
+
+
 def build_material(item_dir, info):
     material = bpy.data.materials.new(info.get("name") or "IconMat")
     material.use_nodes = True
@@ -87,7 +113,7 @@ def build_material(item_dir, info):
 
     if "base" in info:
         base = image("base", False)
-        links.new(base.outputs["Color"], bsdf.inputs["Base Color"])
+        links.new(adjust_color(nodes, links, base.outputs["Color"], info.get("adjust", {})), bsdf.inputs["Base Color"])
         if info["kind"] == "foliage" and "mask" not in info:
             links.new(base.outputs["Alpha"], bsdf.inputs["Alpha"])
     if "orm" in info:

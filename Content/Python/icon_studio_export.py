@@ -8,6 +8,9 @@ Per item, into <out>/<ItemId>/: mesh.fbx (LOD0, no collision) + slot<N>_<base|no
   scale    = the item row's WorldVisual Scale3D (UE axes), so the icon shows the item as the world does: a flatbread is a rye
              loaf at Z 0.4. Uniform scales change nothing in the framing.
   extent   = the mesh's bounding-box size (UE axes, cm); Blender matches it against the imported mesh to map scale onto its axes
+  slot 0 uses the row's WorldVisual.MaterialOverride when it has one (AMOWorldItem and the held mesh do the same), and a
+  slot's non-default colour controls (BaseColor Tint, Brightness, Contrast, Saturation of the FabOverrides masters) go into
+  slots[i].adjust, so a recoloured scan (IronBloom01 = a porous rock darkened) renders as the world shows it.
 Texture parameter names are the ones every project master shares (FabOverrides M_MS_Base / _Fuzz / _Foliage and the glTF
 masters): BaseColorTexture, NormalTexture, MetallicRoughnessTexture (Megascans ORM: R=AO, G=roughness, B=metal), Mask (foliage
 ORT: R=opacity, G=roughness). normal_opengl records the texture's flip-green flag: glTF sources are OpenGL (the import flips
@@ -25,16 +28,38 @@ ITEMS_TABLE = "/MOFramework/Data/DT_Items.DT_Items"
 SCALE_RE = re.compile(r"Scale3D=\(X=([-\d.e]+),Y=([-\d.e]+),Z=([-\d.e]+)\)")
 
 
-def _row_scales():
-    """{ItemId: [x, y, z]} from every item row's WorldVisual.RelativeTransform.Scale3D."""
+OVERRIDE_RE = re.compile(r'MaterialOverride="([^"]+)"')
+ADJUST = {"Brightness": 1.0, "Contrast": 1.0, "Saturation": 1.0}   # the masters' defaults (identity)
+
+
+def _row_visuals():
+    """{ItemId: (scale [x, y, z] or None, material override path or None)} from every item row's WorldVisual."""
     table = unreal.load_asset(ITEMS_TABLE)
     lib = unreal.DataTableFunctionLibrary
-    scales = {}
+    visuals = {}
     for name, visual in zip(lib.get_data_table_row_names(table), lib.get_data_table_column_as_string(table, "WorldVisual")):
-        found = SCALE_RE.search(visual)
-        if found:
-            scales[str(name)] = [float(v) for v in found.groups()]
-    return scales
+        scale = SCALE_RE.search(visual)
+        override = OVERRIDE_RE.search(visual)
+        visuals[str(name)] = ([float(v) for v in scale.groups()] if scale else None, override.group(1) if override else None)
+    return visuals
+
+
+def _adjust(material):
+    """The material's non-default colour controls, or {} when it is untinted."""
+    master = _master(material)
+    scalars = {str(n) for n in mel.get_scalar_parameter_names(master)}   # a missing parameter reads 0, not "absent"
+    vectors = {str(n) for n in mel.get_vector_parameter_names(master)}
+    adjust = {}
+    for name, default in ADJUST.items():
+        if name in scalars:
+            value = mel.get_material_instance_scalar_parameter_value(material, name)
+            if abs(value - default) > 1e-4:
+                adjust[name.lower()] = value
+    if "BaseColor Tint" in vectors:
+        tint = mel.get_material_instance_vector_parameter_value(material, "BaseColor Tint")
+        if any(abs(c - 1.0) > 1e-4 for c in (tint.r, tint.g, tint.b)):
+            adjust["tint"] = [tint.r, tint.g, tint.b]
+    return adjust
 
 
 def _export(obj, filename, exporter, options=None):
@@ -56,7 +81,7 @@ def _master(material):
     return material
 
 
-def export_item(item_id, mesh_path, out_root, scale=None):
+def export_item(item_id, mesh_path, out_root, scale=None, override=None):
     mesh = unreal.load_asset(mesh_path)
     if not isinstance(mesh, unreal.StaticMesh):
         return "SKIP %s: %s is not a static mesh" % (item_id, mesh_path)
@@ -70,6 +95,8 @@ def export_item(item_id, mesh_path, out_root, scale=None):
     slots = []
     for index, slot in enumerate(mesh.static_materials):
         material = slot.material_interface
+        if index == 0 and override:
+            material = unreal.load_asset(override) or material
         master = _master(material)
         info = {"slot": index, "name": str(slot.material_slot_name),
                 "kind": "foliage" if master and "Foliage" in master.get_name() else "opaque"}
@@ -83,6 +110,9 @@ def export_item(item_id, mesh_path, out_root, scale=None):
                     info[key] = os.path.basename(filename)
                     if key == "normal":
                         info["normal_opengl"] = bool(tex.get_editor_property("flip_green_channel"))
+            adjust = _adjust(material)
+            if adjust:
+                info["adjust"] = adjust
         slots.append(info)
     with open(folder + "/meta.json", "w") as f:
         box = mesh.get_bounding_box()
@@ -94,5 +124,5 @@ def export_item(item_id, mesh_path, out_root, scale=None):
 
 def run(items, out_root):
     """items: {ItemId: static mesh path}. Returns one report line per item."""
-    scales = _row_scales()
-    return "\n".join(export_item(item_id, path, out_root, scales.get(item_id)) for item_id, path in items.items())
+    visuals = _row_visuals()
+    return "\n".join(export_item(item_id, path, out_root, *visuals.get(item_id, (None, None))) for item_id, path in items.items())
