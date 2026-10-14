@@ -152,6 +152,12 @@ public:
 	/** Empty when the draft may be sent; otherwise one sentence saying what is missing. Pure. */
 	static FString ValidateDraft(const FMOBugReportDraft& Draft);
 
+	/**
+	 * The draft as it is sent: a title longer than MaxTitleChars keeps its first MaxTitleChars characters as the title and the WHOLE title moves to the top of the
+	 * description ("Title (full): ..."), so nothing the player typed is lost -- the title used to be clamped and the rest dropped. Pure.
+	 */
+	static FMOBugReportDraft NormalizeDraft(const FMOBugReportDraft& Draft);
+
 	/** BugReport.txt / the panel preview: the player's words, every collected row and the attachment list. One builder, so the preview cannot lie. */
 	FString BuildReportText(const FMOBugReportDraft& Draft, const FGuid& ReportId, bool bPreview) const;
 

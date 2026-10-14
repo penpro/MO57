@@ -992,6 +992,20 @@ bool FMOBugReport_ReportBuilder::RunTest(const FString& Parameters)
 	Draft.Title = TEXT("Pickaxe <breaks> & vanishes");
 	TestTrue(TEXT("a real title is sendable"), UMOBugReportSubsystem::ValidateDraft(Draft).IsEmpty());
 
+	// A title past MaxTitleChars is not cut off and lost: the whole title opens the description (5 of Wes's 29 reports, Oct 14 2026, lost their ends).
+	{
+		FMOBugReportDraft Long;
+		Long.Title = FString(TEXT("all the lakes seem to be the same size ")) + FString::ChrN(150, TEXT('x')) + TEXT(" END-OF-TITLE");
+		Long.Description = TEXT("more words");
+		const FMOBugReportDraft Sent = UMOBugReportSubsystem::NormalizeDraft(Long);
+		TestTrue(TEXT("long title: the description starts with the WHOLE title"), Sent.Description.StartsWith(TEXT("Title (full): all the lakes")) && Sent.Description.Contains(TEXT("END-OF-TITLE")));
+		TestTrue(TEXT("long title: ... and keeps the player's description after it"), Sent.Description.EndsWith(TEXT("more words")));
+		FMOBugReportDraft Short;
+		Short.Title = TEXT("short title");
+		Short.Description = TEXT("d");
+		TestEqual(TEXT("CONTROL: a short title leaves the description alone"), UMOBugReportSubsystem::NormalizeDraft(Short).Description, FString(TEXT("d")));
+	}
+
 	// Contributors: registered rows appear prefixed and scrubbed; re-registering replaces; unregistering removes.
 	Reports->RegisterContributor(TEXT("Fishing"), [](const UWorld*, FMOBugReportFields& Out)
 	{

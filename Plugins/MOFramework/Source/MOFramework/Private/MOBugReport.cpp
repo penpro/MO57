@@ -434,8 +434,20 @@ FString UMOBugReportSubsystem::ReadLogTail() const
 	return MOBugReportBundle::TailText(Scrubbed, MaxLogChars);
 }
 
-FString UMOBugReportSubsystem::BuildReportText(const FMOBugReportDraft& Draft, const FGuid& ReportId, bool bPreview) const
+FMOBugReportDraft UMOBugReportSubsystem::NormalizeDraft(const FMOBugReportDraft& Draft)
 {
+	FMOBugReportDraft Out = Draft;
+	const FString Title = Draft.Title.TrimStartAndEnd();
+	if (Title.Len() > MaxTitleChars)
+	{
+		Out.Description = FString::Printf(TEXT("Title (full): %s"), *Title) + (Draft.Description.TrimStartAndEnd().IsEmpty() ? FString() : TEXT("\n\n") + Draft.Description);
+	}
+	return Out;
+}
+
+FString UMOBugReportSubsystem::BuildReportText(const FMOBugReportDraft& InDraft, const FGuid& ReportId, bool bPreview) const
+{
+	const FMOBugReportDraft Draft = NormalizeDraft(InDraft);
 	FMOBugReportFields Fields;
 	CollectFields(Fields);
 
@@ -476,8 +488,9 @@ FString UMOBugReportSubsystem::BuildReportText(const FMOBugReportDraft& Draft, c
 	return Out;
 }
 
-bool UMOBugReportSubsystem::BuildBundle(const FMOBugReportDraft& Draft, const FGuid& ReportId, TArray<uint8>& OutBundle, FString& OutError, int32* OutUncompressedSize) const
+bool UMOBugReportSubsystem::BuildBundle(const FMOBugReportDraft& InDraft, const FGuid& ReportId, TArray<uint8>& OutBundle, FString& OutError, int32* OutUncompressedSize) const
 {
+	const FMOBugReportDraft Draft = NormalizeDraft(InDraft);
 	const FString Directory = MOBugReportBundle::MakeDirectoryName(ReportId);
 
 	FMOBugReportFields GameFields;
@@ -503,7 +516,7 @@ bool UMOBugReportSubsystem::BuildBundle(const FMOBugReportDraft& Draft, const FG
 	{
 		FMOBugReportDraft Effective = Draft;
 		Effective.bIncludeScreenshot = Variant.bScreenshot;
-		Effective.bIncludeLog = Draft.bIncludeLog && Variant.LogChars > 0;
+		Effective.bIncludeLog = Draft.bIncludeLog && Variant.LogChars > 0 && !LogTail.IsEmpty();   // Shipping writes no log: do not list one
 
 		FMOBugReportFields Properties;
 		Properties.Emplace(TEXT("CrashVersion"), TEXT("3"));
