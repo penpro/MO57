@@ -66,10 +66,12 @@ Scale to the real object size; non-uniform scale is fine (a flatbread is a rye l
   * `taper` sharpens one end (WoodenSpear01, PlantingStick01, BoneAwl01).
   * `cut` keeps one end and caps it. It is axis-aligned: a cut square to the local direction failed on a forked
     antler.
+  * `scale x,y,z` bakes a non-uniform scale into a mesh, so it can serve as a head (the whorl: a clay cup at Z 0.3).
   * `attach` puts a head on a shaft:
     * `tip`: FlintSpear01, the arrows, the dart, FishSpear01
     * `axe` / `adze`: the hafted axes, Adze01, the hoes
     * `stand`: FireDrill01, with the spindle upright in the fireboard
+    * `ring`: DropSpindle01, with the whorl threaded on the shaft
   * Shaft proportions are baked in, so wire with a uniform row scale. Materials are matched by slot name.
   * The re-import uses the legacy FBX path, so no stray materials are created (assets cannot be deleted safely from
     editor Python).
