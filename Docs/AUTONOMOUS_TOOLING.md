@@ -212,6 +212,7 @@ Wes: "create some biome test levels that we can audit things inside of independe
 | Asset/object props, `UDeveloperSettings`, soft refs | **MCP** `ObjectTools` | |
 | Level: place/remove/swap actors, lighting, camera | **MCP** `Scene/Actor/PrimitiveTools` | |
 | **Widget Blueprints (UMG layout, BindWidget wiring, class defaults)** | **`ue.py ui build <spec>`** (editor Python, `Content/Python/mo_ui.py`) | the MCP has no UMG toolset; this does the whole tree + Is Variable + compile + contract check — `Docs/UI_TOOLING.md` |
+| **Item art** — source a scan, recolour or kitbash it, wire the row, render the icon | **Fab panel + `fab_finalize_import.py` / `item_mesh_prepare.py` / `item_tint.py` / `Tools/kitbash.py` / `Tools/icon_studio.py`** | `Docs/Item_Art_Pipeline.md` (traps: Content Browser popups catch keystrokes, right-column cards ignore clicks, re-imports of existing assets) |
 | Blueprint graphs | **MCP** `BlueprintTools` | was a hard gap pre-5.8; verify scope per task |
 | Localization / string tables | **MCP** `StringTableTools` | |
 | `.ini` config | **Bash/Edit** | text file |

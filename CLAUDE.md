@@ -295,6 +295,7 @@ three questions in order:
 | `Docs/Voxel_Plugin_Reference.md` | Voxel Plugin 2.0 reference + MO57 voxel integration + caves/mining playbook | Any voxel-graph, terraforming, or PCG-voxel-sampling work |
 | `Docs/Terrain_Foundation_Plan.md` | VHG_Realistic recipe (multi-octave + ridged mountains + beach flattening) | Authoring or tuning base terrain generation |
 | `Docs/World_Features_Architecture.md` | Unifying abstraction for caves / rivers / POIs / landmarks / ore / player builds | Before designing any new "kind of thing" that lives in the world |
+| `Docs/Item_Art_Pipeline.md` | Fab scan → item mesh, recolour (tint MI) or kitbash, icon studio; Fab panel traps | Giving an item real art or an icon |
 | `Docs/Archive/` | Superseded docs (historical reference only) | Never — check git history if needed |
 
 ---
