@@ -121,6 +121,21 @@ The pre-existing native chains have the same cap (grass: 50 / m^2 on a 60 cm lat
 - [ ] **Sand variety (Wes, 2026-10-12)**: one bare sand material makes beaches and deserts repetitive. Wanted: a few sand materials (colour / grain / ripple / pebble / wet-dark near the waterline / dry-pale dunes / sand over rock) distributed by a low-frequency noise and by
   distance to water, blended with the same soft-threshold rule. Recipe for a voxel material from a texture set: `Content/Python/make_sand_material.py`; migrated candidates in `Docs/ElectricDreams_Migrated.md` (`DriedGrassOnDampSoil` for the damp edge, `BeachSandWithPebbles` meshes
   for pebble scatter); more sand sets may need a download (ask Wes first).
+- [ ] **Alpine / snow ground: far more variation, like real mountains (Wes, 2026-10-13 evening)**: the alpine / snow level reads too uniform. Wanted: much more
+  variation in the snow and rock, either (a) ASPECT-driven snow -- northern hemisphere, so south-facing slopes hold less snow (sun-warmed, bare rock and scree) and
+  north-facing slopes more -- or (b) at least much bigger, more dynamic random noise in the snow / rock mix; ideally both, on top of altitude and slope. Notes for whoever
+  builds it: it is a look rule, so the material is the layer (M_QuixelBase via `Content/Python/upgrade_terrain_material.py` FINISH_CODE: the pixel normal's horizontal
+  direction gives the aspect, cheap per pixel, no generator / checksum change); first pin which world axis is NORTH so the bare slopes face the sun's actual path
+  (check the Ultra Dynamic Sky sun azimuth at noon) and keep a slope term (cliffs stay rock). Mind the reverted Oct 13 attempt above: at range, grey rock under haze
+  read as pale blotches brighter than grass, so judge from packaged shots at 300 m / 1 km / 4 km, and keep the far snow / rock contrast dark-on-white.
+- [ ] **Caves: half the diameter, and more lateral (Wes, 2026-10-13 evening)**: caves are too big and dive too steeply. Wanted: about half the current diameter, and
+  passages that run sideways through the rock instead of heading straight down. Where it lives: `FMOWorldGenTuning` (`TunnelRadiusCm` 320 -> ~160,
+  `SinkholeRadiusCm` 550 and the cavern threshold / `CavernWavelengthCm` for the big rooms), and the tunnel path's vertical behaviour (`TunnelVerticalSquash` 1.6 and
+  the depth term of the spaghetti field in `MOWorldGenCaves.cpp`: flatten the field vertically -- higher Z frequency / a stronger squash / a depth that changes
+  slowly along the path -- so the iso-lines stay near one depth). Geometry change: bump `CurrentGeneratorVersion` to 8, re-pin `PinnedProbeCave` (`MO.WorldGen.Checksum`),
+  extend `MOFramework.WorldGen.Caves` with a diameter check and a "mean |dz| per metre along tunnel centre lines is low" check; mind the cave-field gradient limit
+  (the trap noted under v5) and the LOD skip sizes (smaller tunnels drop out of far LODs sooner, which is fine). Verify by walking one in the packaged game
+  (`MO.WorldGen.FindCave`).
 
 ## Update (2026-10-11, later): generator v6 -- mountain RANGES, not towers
 
