@@ -2,13 +2,16 @@
 
     python Tools/kitbash.py <source mesh> <new mesh> taper <fraction> [max|min]
     python Tools/kitbash.py <source mesh> <new mesh> cut <fraction> [max|min]
+    python Tools/kitbash.py <shaft mesh> <new mesh> attach <head mesh> <head cm> <tip|axe|adze> [embed] [shaft scale x,y,z]
       e.g. python Tools/kitbash.py /Game/Fab/Megascans/3D/X/Medium/x/StaticMeshes/x /Game/Kitbash/WoodenSpear/SM_WoodenSpear taper 0.12
+           python Tools/kitbash.py <stick> /Game/Kitbash/FlintSpear/SM_FlintSpear attach <flint point> 9 tip 0.25 1.5,0.45,0.45
 
-Needs the editor running (bridge; PIE not running) and Blender 5.2. Steps: Content/Python/kitbash.py exports the source to
-Saved/Kitbash/<name>/src.fbx; Tools/kitbash_blender.py applies the op (see there) and writes edit.fbx; kitbash.py imports it at
-<new mesh> with the source's material instances; item_mesh_prepare gives it Nanite / a convex hull. Wire it to an item with
-`ue.py rows set`, render the icon with icon_studio.py. Why (2026-10-14): several primitive items are a scanned object plus one
-cut (a sharpened stick, an antler tine) and Fab has no free scan of the finished thing.
+Needs the editor running (bridge; PIE not running) and Blender 5.2. Steps: Content/Python/kitbash.py exports the source (and an
+attached head) to Saved/Kitbash/<name>/; Tools/kitbash_blender.py applies the op (see there) and writes edit.fbx; kitbash.py
+imports it at <new mesh> on the sources' material instances; item_mesh_prepare gives it Nanite / a convex hull. Wire it to an
+item with `ue.py rows set` (an attach result already has the shaft scale baked: use a uniform row scale), render the icon with
+icon_studio.py. Why (2026-10-14): many primitive items are a scanned object plus one cut (a sharpened stick) or two scans put
+together (a flint point on a shaft), and Fab has no free scan of the finished thing.
 """
 import json
 import os
@@ -29,23 +32,42 @@ def ue_py(code):
     sys.exit("editor step failed:\n" + proc.stdout[-2000:] + proc.stderr[-2000:])
 
 
+def export(mesh, fbx):
+    return ue_py("import importlib, kitbash as k; importlib.reload(k); out(%r + k.export(%r, %r))" % (MARK, mesh, fbx))
+
+
 def main():
     if len(sys.argv) < 5:
         sys.exit(__doc__)
-    src, dest, op, fraction = sys.argv[1:5]
-    end = sys.argv[5] if len(sys.argv) > 5 else "max"
+    src, dest, op = sys.argv[1:4]
+    rest = sys.argv[4:]
     work = os.path.join(ROOT, "Saved", "Kitbash", dest.rsplit("/", 1)[1]).replace("\\", "/")
     os.makedirs(work, exist_ok=True)
     src_fbx, edit_fbx = work + "/src.fbx", work + "/edit.fbx"
-    print("export:", ue_py("import importlib, kitbash as k; importlib.reload(k); out(%r + k.export(%r, %r))" % (MARK, src, src_fbx)))
+    print("export:", export(src, src_fbx))
+    sources = [src]
+    if op == "attach":
+        if len(rest) < 3:
+            sys.exit(__doc__)
+        head, head_cm, mode = rest[0], rest[1], rest[2]
+        embed = rest[3] if len(rest) > 3 else "0.2"
+        shaft_scale = rest[4] if len(rest) > 4 else "1,1,1"
+        head_fbx = work + "/head.fbx"
+        print("export head:", export(head, head_fbx))
+        sources.append(head)
+        op_args = ["attach", head_fbx, head_cm, mode, embed, shaft_scale]
+    else:
+        op_args = [op, rest[0], rest[1] if len(rest) > 1 else "max"]
+    if os.path.exists(edit_fbx):
+        os.remove(edit_fbx)
     blender = subprocess.run([BLENDER, "-b", "--factory-startup", "--python", os.path.join(ROOT, "Tools", "kitbash_blender.py"),
-                              "--", src_fbx, edit_fbx, op, fraction, end], capture_output=True, text=True)
+                              "--", src_fbx, edit_fbx] + op_args, capture_output=True, text=True)
     lines = [l for l in blender.stdout.splitlines() if l.startswith("KITBASH")]
     print("\n".join(lines) or blender.stdout[-2000:] + blender.stderr[-2000:])
     if not os.path.isfile(edit_fbx):
         sys.exit("blender step wrote nothing")
     result = json.loads(ue_py("import importlib, kitbash as k; importlib.reload(k); out(%r + k.import_edit(%r, %r, %r))"
-                              % (MARK, edit_fbx, dest, src)))
+                              % (MARK, edit_fbx, dest, sources)))
     print("import:", result)
     if "error" in result:
         sys.exit(1)

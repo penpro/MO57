@@ -7,9 +7,10 @@ Why Blender and not the editor's thumbnail renderer: the old icons came from Con
 checker burnt in, removed afterwards by icon_fix_process.py), so long items (sticks, bark, cordage) filled a sliver of the
 square. Here every item gets the same studio:
   - Cycles (GPU), transparent film, sun-light key/fill/rim plus a soft gray world, so the look does not depend on item size;
-  - a pole-like item modelled standing up (a sword or a bark strip authored along Z) laid down first, so it is not a vertical
-    sliver: when the 3D principal axis is near-vertical and POLE_RATIO times the next one. It lies with its thinnest axis up, so
-    a blade shows its flat, not its edge;
+  - a long item modelled standing up (a sword or a bark strip authored along Z), or lying on an edge with a clear flat side
+    (a hafted axe with its head standing up), laid down on that side first, so it is not a sliver or seen edge-on: when the 3D
+    principal axis is POLE_RATIO times the next one and either near-vertical or lying with its flat side (FLAT_SIDE_RATIO)
+    on edge. It lies with its thinnest axis up, so a blade shows its flat, not its edge;
   - the item turned so its long axis runs up the diagonal (PCA of the vertices in plan view), seen from above-front: steeper for
     flat items, lower for tall ones (a jar keeps its profile);
   - the item row's non-uniform world scale applied (meta.json "scale"), so a squashed loaf renders as the flatbread it is;
@@ -31,6 +32,8 @@ from mathutils import Matrix, Vector
 MARGIN = 1.10          # silhouette fills ~91% of the frame's longer side
 POLE_RATIO = 5.0       # sqrt(eigenvalue ratio) above which a near-vertical item is laid down: sword 11.5 and bark strip 7.3
                        # lie down, the slender wheel-thrown vase (3.9) must stand
+FLAT_SIDE_RATIO = 1.5  # sqrt(middle / minor eigenvalue) above which a long item has a flat side to rest on (hafted axe 3+,
+                       # smoked fish 1.3 and round sticks ~1 keep their pose)
 SAMPLES = 128
 
 
@@ -199,15 +202,19 @@ def pose_and_frame(scene, obj):
     evals3, evecs3 = np.linalg.eigh(local.T @ local)
     order = np.argsort(evals3)[::-1]
     major3 = Vector(evecs3[:, order[0]])
+    minor3 = np.array(evecs3[:, order[2]])
     slender = math.sqrt(evals3[order[0]] / max(evals3[order[1]], 1e-12))
-    pole = slender > POLE_RATIO and abs(major3.z) > 0.7
-    if pole:   # lay it down: long axis to the horizontal direction it leans toward, thinnest axis up (a blade shows its flat)
+    flat_side = math.sqrt(evals3[order[1]] / max(evals3[order[2]], 1e-12)) > FLAT_SIDE_RATIO
+    # a long item stood on end (a sword authored along Z), or lying on its edge with a clear flat side (an axe whose head stands
+    # up from the haft: seen edge-on from above) is laid on that flat side, as it would rest on the ground
+    pole = slender > POLE_RATIO and (abs(major3.z) > 0.7 or (flat_side and abs(minor3[2]) < 0.7))
+    if pole:   # long axis to the horizontal direction it leans toward, thinnest axis up (a blade shows its flat)
         lean = Vector((major3.x, major3.y, 0.0))
         lean = lean.normalized() if lean.length > 1e-3 else Vector((1.0, 0.0, 0.0))
         up = Vector((0.0, 0.0, 1.0))
-        source = np.column_stack([evecs3[:, order[0]], evecs3[:, order[1]], evecs3[:, order[2]]])
-        if np.linalg.det(source) < 0:
-            source[:, 1] *= -1.0
+        major_v = np.array(major3) if np.dot(np.array(major3), np.array(lean)) >= 0 else -np.array(major3)
+        minor_v = minor3 if minor3[2] >= 0 else -minor3          # keep the side that faced up facing up (no flips)
+        source = np.column_stack([major_v, np.cross(minor_v, major_v), minor_v])   # right-handed by construction
         target = np.column_stack([np.array(lean), np.array(up.cross(lean)), np.array(up)])
         lay = Matrix((target @ source.T).tolist())
         local = local @ np.array(lay).T

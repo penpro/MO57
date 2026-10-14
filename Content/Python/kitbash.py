@@ -2,7 +2,8 @@
 
     Driven by Tools/kitbash.py. Helpers:
       export(mesh_path, fbx_path)                      LOD0, no collision
-      import_edit(fbx_path, dest_mesh_path, src_mesh)  -> JSON {mesh, size}; the new mesh gets src_mesh's material slots
+      import_edit(fbx_path, dest_mesh_path, src_mesh)  -> JSON {mesh, size, slots}; the new mesh gets the source materials,
+                                                          matched by slot name (src_mesh may be a list: shaft + head)
 
 Why the importer is switched for the import: the Interchange FBX pipeline creates materials and textures from the file, and
 assets cannot be deleted safely from editor Python (an ensure in the delete path brings up the crash reporter). The legacy FBX
@@ -65,12 +66,24 @@ def import_edit(fbx_path, dest_mesh_path, src_mesh_path):
     mesh = unreal.load_asset(dest_mesh_path)
     if not isinstance(mesh, unreal.StaticMesh):
         return json.dumps({"error": "import produced no static mesh at " + dest_mesh_path})
-    src = unreal.load_asset(src_mesh_path)
-    for i, slot in enumerate(src.static_materials):
-        if i < len(mesh.static_materials):
-            mesh.set_material(i, slot.material_interface)
+    # the FBX carries the source materials' names as slot names (Blender keeps them), so map by name; fall back to the order
+    # (base slots, then an attached head's slots)
+    by_name, ordered = {}, []
+    for path in src_mesh_path if isinstance(src_mesh_path, (list, tuple)) else [src_mesh_path]:
+        for slot in unreal.load_asset(path).static_materials:
+            material = slot.material_interface
+            ordered.append(material)
+            by_name[material.get_name()] = material
+            by_name[str(slot.material_slot_name)] = material
+    mapped = []
+    for i, slot in enumerate(mesh.static_materials):
+        name = str(slot.material_slot_name).split(".")[0]   # Blender may suffix duplicates (.001)
+        material = by_name.get(name) or (ordered[i] if i < len(ordered) else None)
+        if material:
+            mesh.set_material(i, material)
+            mapped.append("%s=%s" % (name, material.get_name()))
     eal.save_loaded_asset(mesh)
     box = mesh.get_bounding_box()
     size = box.max - box.min
     return json.dumps({"mesh": dest_mesh_path, "size": [round(size.x, 1), round(size.y, 1), round(size.z, 1)],
-                       "slots": len(mesh.static_materials)})
+                       "slots": mapped})

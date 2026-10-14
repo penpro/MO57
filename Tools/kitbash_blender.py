@@ -10,6 +10,10 @@ Ops, all along the mesh's longest axis (the scans here are sticks, branches and 
   cut <fraction> [end]     keep only the last <fraction> of the length at that end (an antler tine from a whole antler) and
                            cap the cut with a fill. The cut is square to the global long axis, so a curved piece gets an oval
                            cap; the fill has no UVs of its own (one texel colour). Works best on straight-ish pieces.
+  attach <head.fbx> <head cm> <tip|axe|adze> <embed> <base scale x,y,z>
+                           a second mesh (a flint point, a stone axe head) fitted to the shaft's + end, then joined: see
+                           attach(). The base scale is baked first (the joined mesh keeps a uniform scale in the item row,
+                           which a non-uniform row scale would squash the head with). Materials: base slots, then head slots.
 UVs are untouched, so the source material instance still maps (the taper squeezes the tip's texels, which reads as carving).
 Output lines start with KITBASH.
 """
@@ -21,17 +25,21 @@ import numpy as np
 from mathutils import Vector
 
 SLICES = 24
+CROSS_LIFT = 0.3   # axe / adze heads: centre this fraction of the head length off the haft, toward the edge
 
 
 def log(msg):
     print("KITBASH " + msg, flush=True)
 
 
-def load(path):
-    bpy.ops.wm.read_factory_settings(use_empty=True)
+def load(path, reset=True):
+    """Import an FBX and return its meshes joined into one object (reset=False adds to the current scene)."""
+    if reset:
+        bpy.ops.wm.read_factory_settings(use_empty=True)
+    before = set(bpy.data.objects)
     bpy.ops.import_scene.fbx(filepath=path)
-    meshes = [o for o in bpy.data.objects if o.type == "MESH"]
-    for other in [o for o in bpy.data.objects if o.type != "MESH"]:
+    meshes = [o for o in bpy.data.objects if o not in before and o.type == "MESH"]
+    for other in [o for o in bpy.data.objects if o not in before and o.type != "MESH"]:
         bpy.data.objects.remove(other, do_unlink=True)
     bpy.ops.object.select_all(action="DESELECT")
     for o in meshes:
@@ -105,14 +113,107 @@ def cut(obj, fraction, end):
     log("cut: axis %d, kept the last %.0f%% at the %s end, %d vertices left" % (axis, fraction * 100, end, len(me.vertices)))
 
 
+def vertices(obj):
+    co = np.empty(len(obj.data.vertices) * 3)
+    obj.data.vertices.foreach_get("co", co)
+    return co.reshape(-1, 3)
+
+
+def principal_axes(co):
+    """Unit axes (major, middle, minor) of a point cloud, as a right-handed 3x3 column basis."""
+    evals, evecs = np.linalg.eigh(np.cov((co - co.mean(0)).T))
+    basis = evecs[:, np.argsort(evals)[::-1]].copy()
+    if np.linalg.det(basis) < 0:
+        basis[:, 1] *= -1.0
+    return basis
+
+
+def end_spread(co, centre, axis_vec, minor_vec):
+    """Thickness (spread along minor_vec) of the last 20% at each end along axis_vec: (at the + end, at the - end)."""
+    t = (co - centre) @ axis_vec
+    lo, hi = t.min(), t.max()
+    thickness = np.abs((co - centre) @ minor_vec)
+    plus = thickness[t > hi - 0.2 * (hi - lo)].mean()
+    minus = thickness[t < lo + 0.2 * (hi - lo)].mean()
+    return plus, minus
+
+
+def attach(base, head, head_len, mode, embed):
+    """Fit <head> onto the + end of <base>'s long axis and join them (base materials first, then the head's).
+    mode tip:  the head continues the shaft, its thinner end outward, its flat facing up (spear point, arrowhead);
+         axe:  the head crosses the shaft end: long axis up, width along the shaft, thinner end (the edge) up;
+         adze: as axe but the width across the shaft (edge square to the haft)."""
+    co = vertices(base)
+    axis = long_axis(co)
+    hi = co[:, axis].max()
+    length = hi - co[:, axis].min()
+    tip_slab = co[co[:, axis] > hi - 0.03 * length]
+    anchor = tip_slab.mean(0)
+    anchor[axis] = hi
+    shaft = np.zeros(3)
+    shaft[axis] = 1.0
+    up = np.array([0.0, 0.0, 1.0]) if axis != 2 else np.array([0.0, 1.0, 0.0])
+    across = np.cross(up, shaft)
+
+    hco = vertices(head)
+    centre = hco.mean(0)
+    src = principal_axes(hco)                         # columns: major, middle, minor
+    major, minor = src[:, 0], src[:, 2]
+    plus, minus = end_spread(hco, centre, major, minor)
+    if plus > minus:                                  # make the thinner end the + end of major
+        src[:, 0] *= -1.0
+        src[:, 1] *= -1.0                             # keep it right-handed
+    extent = (hco - centre) @ src[:, 0]
+    scale = head_len / (extent.max() - extent.min())
+    if mode == "tip":
+        target = np.column_stack([shaft, across, up])
+    elif mode == "axe":
+        target = np.column_stack([up, shaft, np.cross(up, shaft)])
+    elif mode == "adze":
+        target = np.column_stack([up, across, np.cross(up, across)])
+    else:
+        raise SystemExit("attach mode must be tip, axe or adze")
+    rot = target @ src.T
+    posed = ((hco - centre) @ rot.T) * scale
+    if mode == "tip":
+        along = posed @ shaft
+        offset = anchor + shaft * (-along.min() - embed * head_len)   # the back embed fraction of the head sits in the shaft
+    else:
+        # embed of the shaft length in from its end; the head lifted toward its edge so the blade stands out on one side of the
+        # haft and only a short butt shows on the other (centred, it read as a disc skewered on a stick)
+        offset = anchor - shaft * (embed * length) + up * (CROSS_LIFT * head_len)
+    head.data.vertices.foreach_set("co", (posed + offset).ravel())
+    head.data.update()
+    bpy.ops.object.select_all(action="DESELECT")
+    head.select_set(True)
+    base.select_set(True)
+    bpy.context.view_layer.objects.active = base
+    bpy.ops.object.join()
+    log("attach %s: head %.1f cm (x%.3f), embed %.2f, shaft axis %d" % (mode, head_len * 100, scale, embed, axis))
+    return bpy.context.view_layer.objects.active
+
+
 def main():
     args = sys.argv[sys.argv.index("--") + 1:]
     src, dst, op = args[0], args[1], args[2]
     obj = load(src)
     bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
-    fraction = float(args[3])
-    end = args[4] if len(args) > 4 else "max"
-    {"taper": taper, "cut": cut}[op](obj, fraction, end)
+    if op == "attach":
+        # attach <head.fbx> <head length cm> <tip|axe|adze> <embed> <base scale x,y,z>
+        head_path, head_len, mode, embed = args[3], float(args[4]) / 100.0, args[5], float(args[6])
+        base_scale = [float(v) for v in args[7].split(",")]
+        obj.scale = base_scale                         # bake the shaft's proportions; the item row keeps a uniform scale
+        bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+        head = load(head_path, reset=False)
+        bpy.ops.object.select_all(action="DESELECT")
+        head.select_set(True)
+        bpy.context.view_layer.objects.active = head
+        bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+        obj = attach(obj, head, head_len, mode, embed)
+    else:
+        fraction = float(args[3])
+        end = args[4] if len(args) > 4 else "max"
+        {"taper": taper, "cut": cut}[op](obj, fraction, end)
     bpy.ops.object.select_all(action="DESELECT")
     obj.select_set(True)
     bpy.ops.export_scene.fbx(filepath=dst, use_selection=True, object_types={"MESH"}, mesh_smooth_type="FACE",
