@@ -21,8 +21,13 @@
  * KNOWN PITFALLS - UPDATE THIS WHEN ISSUES OCCUR
  * =============================================================================
  *
+ * [2026-10] KEEP THE MAPPING, CHANGE THE KEY (audit H54): ApplyBinding used UnmapKey +
+ *   MapKey, which re-added a bare {Action, Key} at the end of the list -- the movement keys
+ *   lost their Swizzle / Negate modifiers (a rebound S moved the pawn sideways) and every
+ *   later slot index shifted. SetMappingKey edits the mapping's key in place.
+ *
  * [2026-06] CONTEXT MODIFICATION: ApplyBinding edits the InputMappingContext in
- *   place (MapKey/UnmapKey). AMOPlayerController::EnsureRuntimeInputContexts()
+ *   place (SetMappingKey). AMOPlayerController::EnsureRuntimeInputContexts()
  *   duplicates the shared IMC assets into per-controller RF_Transient copies at
  *   BeginPlay, so these edits hit THIS controller's copy, never the shared asset.
  *   Persisted custom bindings live in MOGameSettings; the asset stays immutable.
@@ -67,9 +72,11 @@ public:
 	 */
 	static FKey GetDefaultBinding(const UInputAction* Action, const UInputMappingContext* Context, int32 SlotIndex = 0);
 
+	/** Set the key of an action's SlotIndex-th mapping IN PLACE (its modifiers, triggers and position stay). False if the action has no such slot. Pure: no player needed. */
+	static bool SetMappingKey(UInputMappingContext* Context, const UInputAction* Action, int32 SlotIndex, FKey NewKey, FKey& OutOldKey);
+
 	/**
-	 * Apply a key binding at runtime.
-	 * Modifies the mapping context and re-applies it to the subsystem.
+	 * Apply a key binding at runtime: SetMappingKey on the controller's own copy of the context, then rebuild the active mappings.
 	 */
 	static bool ApplyBinding(UInputAction* Action, FKey NewKey, UInputMappingContext* Context, APlayerController* PC, int32 SlotIndex = 0);
 

@@ -80,6 +80,35 @@ FKey FMOKeyBindingManager::GetCurrentBinding(const UInputAction* Action, const U
 	return GetDefaultBinding(Action, Context, SlotIndex);
 }
 
+bool FMOKeyBindingManager::SetMappingKey(UInputMappingContext* Context, const UInputAction* Action, int32 SlotIndex, FKey NewKey, FKey& OutOldKey)
+{
+	if (!Context || !Action)
+	{
+		return false;
+	}
+	// The SlotIndex-th mapping of this action, in the context's order
+	const TArray<FEnhancedActionKeyMapping>& Mappings = Context->GetMappings();
+	int32 CurrentSlot = 0;
+	for (int32 Index = 0; Index < Mappings.Num(); ++Index)
+	{
+		if (Mappings[Index].Action != Action)
+		{
+			continue;
+		}
+		if (CurrentSlot++ == SlotIndex)
+		{
+			// Change ONLY the key, in place (audit H54). It used to UnmapKey + MapKey a bare {Action, Key}: the new mapping lost its modifiers and
+			// triggers -- IMC_MODefault's W / S carry a Swizzle (S also a Negate) and A a Negate, so a rebound movement key moved the pawn sideways
+			// or backwards -- and landed at the END of the list, shifting every later slot index. Callers pass the controller's own transient copy
+			// (AMOPlayerController::EnsureRuntimeInputContexts), never the project asset.
+			OutOldKey = Mappings[Index].Key;
+			Context->GetMapping(Index).Key = NewKey;
+			return true;
+		}
+	}
+	return false;
+}
+
 bool FMOKeyBindingManager::ApplyBinding(UInputAction* Action, FKey NewKey, UInputMappingContext* Context, APlayerController* PC, int32 SlotIndex)
 {
 	if (!Action || !Context || !PC || !NewKey.IsValid())
@@ -103,45 +132,15 @@ bool FMOKeyBindingManager::ApplyBinding(UInputAction* Action, FKey NewKey, UInpu
 		return false;
 	}
 
-	// Find the current mapping for this action
-	const TArray<FEnhancedActionKeyMapping>& Mappings = Context->GetMappings();
-	int32 CurrentSlot = 0;
-	FKey OldKey = EKeys::Invalid;
-
-	for (const FEnhancedActionKeyMapping& Mapping : Mappings)
-	{
-		if (Mapping.Action == Action)
-		{
-			if (CurrentSlot == SlotIndex)
-			{
-				OldKey = Mapping.Key;
-				break;
-			}
-			CurrentSlot++;
-		}
-	}
-
-	if (!OldKey.IsValid())
+	FKey OldKey;
+	if (!SetMappingKey(Context, Action, SlotIndex, NewKey, OldKey))
 	{
 		UE_LOG(LogMOFramework, Warning, TEXT("[KeyBindingManager] ApplyBinding failed - action not found in context at slot %d"), SlotIndex);
 		return false;
 	}
 
-	// Unmap the old key and map the new one
-	Context->UnmapKey(Action, OldKey);
-
-	// Create a new mapping with the new key
-	FEnhancedActionKeyMapping NewMapping;
-	NewMapping.Action = Action;
-	NewMapping.Key = NewKey;
-	Context->MapKey(Action, NewKey);
-
-	// Re-apply the context to ensure changes take effect
-	int32 Priority = 0;
-
-	// Remove and re-add to refresh
-	Subsystem->RemoveMappingContext(Context);
-	Subsystem->AddMappingContext(Context, Priority);
+	// Rebuild the active mappings (keeps every context's priority; the remove + re-add at priority 0 that stood here demoted the building context).
+	Subsystem->RequestRebuildControlMappings();
 
 	UE_LOG(LogMOFramework, Log, TEXT("[KeyBindingManager] Applied binding: %s -> %s (was %s)"),
 		*Action->GetFName().ToString(), *NewKey.ToString(), *OldKey.ToString());
