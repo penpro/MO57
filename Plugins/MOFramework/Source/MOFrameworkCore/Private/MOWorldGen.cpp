@@ -699,10 +699,17 @@ int32 FMOWorldGen::SampleSurfaceBiomeWeights(const FMOWorldGenParams& Params, do
 	}
 	const FMOWorldGenTuning& T = Params.Tuning;
 	// One breakup sample per column, shared by every edge (a second, offset read for the climate edges so height and climate edges do not wander in lockstep).
+	// Three octaves: the first bends the edge at the scale of the band, the finer two fray it into fingers and islands (one octave left a smooth curve).
 	constexpr uint32 SaltSurfaceBreakup = 0x5A01u;
 	const double Inv = 1.0 / FMath::Max((double)T.SurfaceBreakupWavelengthCm, 100.0);
-	const float NoiseH = MOWorldGenNoise::GradientNoise2(X * Inv, Y * Inv, (uint32)HashSeed(Seed, SaltSurfaceBreakup)).Value;
-	const float NoiseC = MOWorldGenNoise::GradientNoise2(X * Inv * 0.7 + 13.7, Y * Inv * 0.7 - 5.3, (uint32)HashSeed(Seed, SaltSurfaceBreakup + 1u)).Value;
+	const auto Breakup = [Seed, Inv](double Px, double Py, uint32 Salt)
+	{
+		return 0.62f * MOWorldGenNoise::GradientNoise2(Px * Inv, Py * Inv, (uint32)HashSeed(Seed, Salt)).Value
+			+ 0.27f * MOWorldGenNoise::GradientNoise2(Px * Inv * 2.6 + 41.3, Py * Inv * 2.6 - 17.9, (uint32)HashSeed(Seed, Salt + 0x100u)).Value
+			+ 0.11f * MOWorldGenNoise::GradientNoise2(Px * Inv * 6.8 - 3.1, Py * Inv * 6.8 + 29.5, (uint32)HashSeed(Seed, Salt + 0x200u)).Value;
+	};
+	const float NoiseH = Breakup(X, Y, SaltSurfaceBreakup);
+	const float NoiseC = Breakup(X * 0.7 + 13.7 / Inv, Y * 0.7 - 5.3 / Inv, SaltSurfaceBreakup + 1u);
 	const float WC = T.SurfaceClimateBlend;
 	const float BreakC = NoiseC * T.SurfaceBreakup * 0.5f * WC;
 	// A height edge's band scales with how high above the sea it lies (see SurfaceHeightBlendFraction); its breakup scales with its band.

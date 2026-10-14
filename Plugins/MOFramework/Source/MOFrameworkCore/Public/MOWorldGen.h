@@ -301,17 +301,24 @@ struct MOFRAMEWORKCORE_API FMOWorldGenTuning
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Surfaces", meta=(ClampMin="0"))
 	float SurfaceHeightBlendCm = 4000.0f;
 
-	/** Width of the blend band on every MOISTURE / TEMPERATURE edge (those fields run 0..1). */
+	/**
+	 * Width of the blend band on every MOISTURE / TEMPERATURE edge (those fields run 0..1). 2026-10-14 (Wes: "the biomes should have a lot more blending"): 0.03 -> 0.12.
+	 * Moisture crosses 0..1 in under a kilometre (1.75 km patches), so 0.03 was a 25-50 m seam; 0.12 is a ~100-200 m ecotone and still leaves the narrowest climate
+	 * band (ElectricForest, moisture 0.24 wide) a pure core.
+	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Surfaces", meta=(ClampMin="0", ClampMax="0.3"))
-	float SurfaceClimateBlend = 0.03f;
+	float SurfaceClimateBlend = 0.12f;
 
-	/** How far the edge wanders, as a fraction of its band width on each side (deterministic gradient noise): the band never follows a contour line. */
+	/**
+	 * How far the edge wanders, as a fraction of its band width on each side (deterministic 3-octave gradient noise): the band never follows a contour line.
+	 * 0.6 -> 1.5 with the wider band: the edges interlock in fingers and leave islands of one biome inside its neighbour.
+	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Surfaces", meta=(ClampMin="0", ClampMax="2"))
-	float SurfaceBreakup = 0.6f;
+	float SurfaceBreakup = 1.5f;
 
-	/** Wavelength (cm) of the edge-breakup noise. */
+	/** Wavelength (cm) of the edge-breakup noise's first octave (two finer ones follow at 1/2.6 and 1/6.8 of it). 90 m -> 300 m with the wider band. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Surfaces", meta=(ClampMin="100"))
-	float SurfaceBreakupWavelengthCm = 9000.0f;
+	float SurfaceBreakupWavelengthCm = 30000.0f;
 
 	/**
 	 * A biome's hill scale below 1 also flattens the CONTINENT relief: the land above this height (metres, before VerticalScale) is pulled toward it by (1 - scale), so a prairie is a low
