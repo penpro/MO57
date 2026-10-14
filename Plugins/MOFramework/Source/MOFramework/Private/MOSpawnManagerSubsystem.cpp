@@ -25,6 +25,9 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "Kismet/GameplayStatics.h"
 
+static TAutoConsoleVariable<float> CVarSpawnFrameBudgetMs(TEXT("mo.Spawn.FrameBudgetMs"), 6.0f,
+	TEXT("Game-thread ms one spawn tick may spend spawning (at least one spawn per tick); the rest of a group finishes on the next ticks. 0 = no budget."), ECVF_Default);
+
 namespace
 {
 	// Common first and last names for random survivor generation.
@@ -192,6 +195,13 @@ void UMOSpawnManagerSubsystem::Tick(float DeltaTime)
 	if (const UWorld* World = GetWorld(); World && World->GetNetMode() == NM_Client)
 	{
 		return;
+	}
+
+	// One spawn budget per tick, shared by a carried-over group and this tick's spawn check (see PendingGroupSpawns).
+	BeginSpawnBudget();
+	if (PendingGroupSpawns.Num() > 0)
+	{
+		ProcessPendingGroupSpawns();
 	}
 
 	TimeSinceLastCheck += DeltaTime;
@@ -945,6 +955,36 @@ void UMOSpawnManagerSubsystem::ReloadSettings()
 // INTERNAL
 // ============================================================================
 
+void UMOSpawnManagerSubsystem::BeginSpawnBudget()
+{
+	SpawnBudgetStartSeconds = FPlatformTime::Seconds();
+	SpawnsThisTick = 0;
+}
+
+bool UMOSpawnManagerSubsystem::IsSpawnBudgetSpent() const
+{
+	const float BudgetMs = CVarSpawnFrameBudgetMs.GetValueOnGameThread();
+	return BudgetMs > 0.0f && SpawnsThisTick > 0 && (FPlatformTime::Seconds() - SpawnBudgetStartSeconds) * 1000.0 >= BudgetMs;
+}
+
+void UMOSpawnManagerSubsystem::ProcessPendingGroupSpawns()
+{
+	while (PendingGroupSpawns.Num() > 0 && !IsSpawnBudgetSpent())
+	{
+		TPair<EMOSpawnCategory, int32>& Next = PendingGroupSpawns[0];
+		if (Next.Value <= 0 || !TrySpawnForCategory(Next.Key))
+		{
+			PendingGroupSpawns.RemoveAt(0);   // done, or nowhere left to put them: drop the rest of this group
+			continue;
+		}
+		++SpawnsThisTick;
+		if (--Next.Value <= 0)
+		{
+			PendingGroupSpawns.RemoveAt(0);
+		}
+	}
+}
+
 void UMOSpawnManagerSubsystem::ProcessAllCategories()
 {
 	if (!CanSpawn())
@@ -964,6 +1004,10 @@ void UMOSpawnManagerSubsystem::ProcessAllCategories()
 
 	for (const FMOSpawnCategoryConfig& Config : CurrentConfigs)
 	{
+		if (IsSpawnBudgetSpent())
+		{
+			break;   // the rest stay due: their cooldowns have elapsed, the next check spawns them
+		}
 		if (Config.bEnabled)
 		{
 			// Get the full config with SpawnableClasses merged from project settings
@@ -1041,10 +1085,17 @@ void UMOSpawnManagerSubsystem::ProcessCategory(EMOSpawnCategory Category, const 
 
 	for (int32 i = 0; i < GroupSize; ++i)
 	{
+		if (IsSpawnBudgetSpent())
+		{
+			PendingGroupSpawns.Add(TPair<EMOSpawnCategory, int32>(Category, GroupSize - i));
+			UE_LOG(LogMOFramework, Log, TEXT("[SpawnManager] frame budget spent: %d more of category %d next tick"), GroupSize - i, (int32)Category);
+			break;
+		}
 		APawn* Spawned = TrySpawnForCategory(Category);
 		if (Spawned)
 		{
 			SpawnedCount++;
+			++SpawnsThisTick;
 		}
 		else
 		{

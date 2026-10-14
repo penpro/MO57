@@ -257,6 +257,19 @@ protected:
 	/** Once: async-load everything a spawn would otherwise LoadSynchronous on the game thread. */
 	void RequestSpawnAssetPreload();
 
+	/**
+	 * Spawn frame budget (mo.Spawn.FrameBudgetMs). One spawn check used to spawn every due group in a single frame -- a survivor (~11 ms: its face
+	 * rig) plus a deer herd = a 40 ms frame (Insights, Oct 13 2026). Each tick now spawns at least one entity, then stops once the budget is spent:
+	 * the rest of a group carries over here and finishes on the next ticks; categories not reached stay due for the next check.
+	 */
+	TArray<TPair<EMOSpawnCategory, int32>> PendingGroupSpawns;
+	double SpawnBudgetStartSeconds = 0.0;
+	int32 SpawnsThisTick = 0;
+	void BeginSpawnBudget();
+	/** True once this tick has spawned something AND spent the budget. */
+	bool IsSpawnBudgetSpent() const;
+	void ProcessPendingGroupSpawns();
+
 	// ============================================================================
 	// INTERNAL
 	// ============================================================================
