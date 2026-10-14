@@ -7,6 +7,9 @@ Why Blender and not the editor's thumbnail renderer: the old icons came from Con
 checker burnt in, removed afterwards by icon_fix_process.py), so long items (sticks, bark, cordage) filled a sliver of the
 square. Here every item gets the same studio:
   - Cycles (GPU), transparent film, sun-light key/fill/rim plus a soft gray world, so the look does not depend on item size;
+  - a pole-like item modelled standing up (a sword or a bark strip authored along Z) laid down first, so it is not a vertical
+    sliver: when the 3D principal axis is near-vertical and POLE_RATIO times the next one. It lies with its thinnest axis up, so
+    a blade shows its flat, not its edge;
   - the item turned so its long axis runs up the diagonal (PCA of the vertices in plan view), seen from above-front: steeper for
     flat items, lower for tall ones (a jar keeps its profile);
   - an orthographic camera fitted to the item's projected silhouette with a fixed margin, so every icon fills the frame alike.
@@ -24,6 +27,8 @@ import numpy as np
 from mathutils import Matrix, Vector
 
 MARGIN = 1.10          # silhouette fills ~91% of the frame's longer side
+POLE_RATIO = 5.0       # sqrt(eigenvalue ratio) above which a near-vertical item is laid down: sword 11.5 and bark strip 7.3
+                       # lie down, the slender wheel-thrown vase (3.9) must stand
 SAMPLES = 128
 
 
@@ -147,16 +152,33 @@ def vertices(obj, limit=60000):
 def pose_and_frame(scene, obj):
     pts = vertices(obj)
     center = pts.mean(0)
-    xy = pts[:, :2] - center[:2]
+    local = pts - center
+    lay = Matrix.Identity(3)
+    evals3, evecs3 = np.linalg.eigh(local.T @ local)
+    order = np.argsort(evals3)[::-1]
+    major3 = Vector(evecs3[:, order[0]])
+    slender = math.sqrt(evals3[order[0]] / max(evals3[order[1]], 1e-12))
+    pole = slender > POLE_RATIO and abs(major3.z) > 0.7
+    if pole:   # lay it down: long axis to the horizontal direction it leans toward, thinnest axis up (a blade shows its flat)
+        lean = Vector((major3.x, major3.y, 0.0))
+        lean = lean.normalized() if lean.length > 1e-3 else Vector((1.0, 0.0, 0.0))
+        up = Vector((0.0, 0.0, 1.0))
+        source = np.column_stack([evecs3[:, order[0]], evecs3[:, order[1]], evecs3[:, order[2]]])
+        if np.linalg.det(source) < 0:
+            source[:, 1] *= -1.0
+        target = np.column_stack([np.array(lean), np.array(up.cross(lean)), np.array(up)])
+        lay = Matrix((target @ source.T).tolist())
+        local = local @ np.array(lay).T
+    xy = local[:, :2]
     evals, evecs = np.linalg.eigh(xy.T @ xy)
     major = evecs[:, int(np.argmax(evals))]
-    extent = pts.max(0) - pts.min(0)
+    extent = local.max(0) - local.min(0)
     plan = max(extent[0], extent[1], 1e-6)
     elongated = math.sqrt(max(evals.max(), 1e-12) / max(evals.min(), 1e-12)) > 1.8
     flat = extent[2] < 0.6 * plan
     # long axis up the diagonal: in plan it lands at +38 deg from screen-horizontal (world X)
     turn = (math.radians(38) - math.atan2(major[1], major[0])) if elongated else math.radians(-20)
-    obj.matrix_world = Matrix.Rotation(turn, 4, "Z") @ Matrix.Translation(Vector((-center[0], -center[1], -center[2])))
+    obj.matrix_world = Matrix.Rotation(turn, 4, "Z") @ lay.to_4x4() @ Matrix.Translation(Vector((-center[0], -center[1], -center[2])))
     elevation = math.radians(52 if flat else 24)
 
     camera_data = bpy.data.cameras.new("IconCam")
@@ -193,7 +215,7 @@ def pose_and_frame(scene, obj):
     sun("Key", 3.2, (40, 0, -35), 8)      # upper left front
     sun("Fill", 0.9, (60, 0, 70), 25)     # right
     sun("Rim", 2.4, (-50, 0, 160), 6)     # behind, above
-    return "elongated" if elongated else ("flat" if flat else "upright")
+    return ("laid down, " if pole else "") + ("elongated" if elongated else ("flat" if flat else "upright")) + ", slender %.1f" % slender
 
 
 def main():
