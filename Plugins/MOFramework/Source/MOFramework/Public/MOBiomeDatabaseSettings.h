@@ -70,12 +70,20 @@ public:
 		int32 Seed, float MoistureNoisePeriod, float TemperatureNoisePeriod);
 
 	/**
-	 * Same question answered by the world generator: the climate the MO Terrain voxel node paints from, at Location (height = Location.Z), with the
-	 * caller's slope. TerrainSeed = UMOWorldSeedSubsystem::GetActiveTerrainSeed(). This is what the PCG biome spawner resolves, so tools/tests/AI can
-	 * ask "what biome is that spot" and get the spawner's own answer.
+	 * Same question answered by the world generator's HARD rule (FMOWorldGen::ResolveBiome): the climate the MO Terrain voxel node paints from, at
+	 * Location (height = Location.Z), with the caller's slope. TerrainSeed = UMOWorldSeedSubsystem::GetActiveTerrainSeed(). Crisp lines: across an
+	 * ecotone the ground and the PCG blend over a wide band this answer ignores -- for "what does that spot look like" use PickSurfaceBiomeAtWorld.
 	 */
 	UFUNCTION(BlueprintCallable, Category="MO|Biome Database")
 	static FName ResolveBiomeAtWorld(FVector Location, float SlopeDeg, int32 TerrainSeed);
+
+	/**
+	 * The biome the player SEES at Location: the PCG spawner's own pick (FMOWorldGen::PickSurfaceBiome, a deterministic per-position roll against the
+	 * ground's blend weights; cliff slope bands stay crisp). Inside an ecotone neighbouring spots answer differently in the proportion the ground mixes them,
+	 * so anything that should match the ground under it (footstep sounds) asks this, not ResolveBiomeAtWorld.
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Biome Database")
+	static FName PickSurfaceBiomeAtWorld(FVector Location, float SlopeDeg, int32 TerrainSeed);
 
 private:
 	/** Cached pointer to loaded DataTable to avoid repeated loading. */

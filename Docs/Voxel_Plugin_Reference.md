@@ -363,6 +363,18 @@ For caves, flip to **subtractive**:
 - Resize / rotate / overlap multiple subtractive mesh stamps to carve
   complex cave geometry.
 
+**Volume stamps cost every chunk their bounds touch (MO57, Oct 14 2026).** A chunk whose
+bounds meet ANY volume stamp is meshed by the cell generator's volume pass
+(`FVoxelCellGenerator::ForeachCell`: sparse distance samples at 4x the cell size, cells
+skipped by distance), not the height pass. On the coarse far chunks of steep mountains that
+pass left chunk-sized holes in a checker pattern (playtest #10, read as a "blue/white
+checkerboard": it is the sky through the holes -- prove it with `r.Nanite.Visualize
+Triangles` and `ShowFlag.Fog 0` + `ShowFlag.Atmosphere 0`, the holes go black). Our cave stamp
+(`VVG_MOCaves`) spans the whole world, so it is limited to the LODs where the generator still
+resolves a cave: `FVoxelStamp::LODRange = {0, FMOWorldGen::CaveMaxLOD}` (= 4 at 50 cm voxels),
+set by `UMOWorldSeedSubsystem` when it seeds the stamps. Rule for any new volume stamp: give
+it the tightest bounds AND the LOD range its features actually resolve at.
+
 ### Smoothness
 
 Mesh stamps and shape stamps both expose `Smoothness` (default 100). Higher

@@ -64,14 +64,20 @@ def rock(folder, code):
     return ROCK % (folder, code, code, code)
 
 
-def species(path, density, res="None", tag="", cluster=0.0, group=-1, core=0.6, align=False, tilt=8.0, sweep=False, smin=0.85, smax=1.25, collision="Auto", sink=-1.0, sink_cm=0.0):
+def species(path, density, res="None", tag="", cluster=0.0, group=-1, core=0.6, align=False, tilt=8.0, sweep=False, smin=0.85, smax=1.25, collision="Auto", sink=-1.0, sink_cm=0.0,
+            min_slope=0.0, max_slope=90.0):
     # Every Black Locust variant is a GROUND-LEVEL plant (0.5 - 1.5 m tall, up to 1.8 m wide) that the resource table calls a Tree, so by resource type it blocks the pawn like an oak: you walk
     # into a knee-high bush and stop. They are walk-through (found 2026-10-10 by Wes: "a small locust bush, or a collection of them"; I had first blamed the saplings and been wrong).
     if collision == "Auto" and "wdvhberja" in path:
         collision = "Passable"
+    if tag == "MOResource_Tree":
+        # Trees of one species stood as one even wall (playtest 2026-10-14 #14: "more variation in the sizes ... like 75% to 125%"): every tree spans at least
+        # 75 - 125 % of its mid size (a wider authored range is kept; far stand-ins derive from these and inherit it).
+        mid = 0.5 * (smin + smax)
+        smin, smax = round(min(smin, 0.75 * mid), 3), round(max(smax, 1.25 * mid), 3)
     return {"Mesh": path, "DensityPerHectare": density, "ClusterRadius": cluster, "ClusterGroup": group, "ClusterCore": core, "HISMTag": tag or "None",
             "ResourceNodeId": res, "bAlignToSurfaceNormal": align, "MaxRandomTiltDeg": tilt, "bAutoSweepOnTerraform": sweep, "MinScale": smin, "MaxScale": smax, "Collision": collision,
-            "SinkFraction": sink, "SinkMinCm": sink_cm}   # sink: fraction of the mesh height buried along its up axis (-1 = auto: 0.25 for aligned rocks / debris, 0 for plants); sink_cm: extra burial
+            "SinkFraction": sink, "SinkMinCm": sink_cm, "MinSlopeDeg": min_slope, "MaxSlopeDeg": max_slope}   # sink: fraction of the mesh height buried along its up axis (-1 = auto: 0.25 for aligned rocks / debris, 0 for plants); sink_cm: extra burial
 
 
 def tree(name, density, group=0, core=0.7, res="BlackAlder", smin=0.8, smax=1.3):
@@ -96,7 +102,10 @@ def drift(folder, code, density, cluster=2500.0, collision="Passable", smin=0.8,
 def undergrowth(path, density, group=0, core=0.45, smin=0.7, smax=1.1, tag="MOBiomeCover_Shrub", cluster=2500.0):
     """Decorative woody undergrowth (seedlings, hazel): clumps with the canopy, swept by digging. Walk-through, EXCEPT saplings: a 1.5-2 m sapling is a trunk you cannot walk through (2026-10-12: Wes
     found hazel saplings without collision; they are decorative, so by resource type they had none; their meshes carry convex collision shapes, so Solid is enough)."""
-    return species(path, density, tag=tag, cluster=cluster, group=group, core=core, sweep=True, smin=smin, smax=smax, collision="Solid" if "Sapling" in path else "Auto")
+    # A hazel "Forest" variant is a 4-5 m multi-stem small tree, not undergrowth you wade through (playtest 2026-10-14 #9: "these medium sized trees don't have
+    # collision"): Solid, and fix_mesh_collision.py gives it a CORE capsule (the stems stop you, the outer twigs do not).
+    solid = "Sapling" in path or "CommonHazel_Forest" in path
+    return species(path, density, tag=tag, cluster=cluster, group=group, core=core, sweep=True, smin=smin, smax=smax, collision="Solid" if solid else "Auto")
 
 
 def cover(path, density, cluster=0.0, tag="MOBiomeCover_Grass", smin=0.8, smax=1.2):
@@ -286,15 +295,18 @@ def ed_rock(folder, mesh, density, res="ForestBoulder", cluster=1800.0, smin=0.8
     return species(ed(folder, mesh), density, res=res, tag="MOResource_Rock", cluster=cluster, align=True, tilt=0.0, smin=smin, smax=smax, sink=sink, sink_cm=sink_cm, collision=collision)
 
 
-def ed_plate(folder, mesh, density, cluster=2600.0, smin=0.9, smax=1.7, sink_cm=14.0):
-    """A flat rock slab (open geometry, 0.2-0.4 m thick, 2-7 m wide): decorative, walk-through (the terrain under it is what you stand on), aligned to the slope and sunk by its thickness so
-    neither its edge nor its open underside shows."""
-    return species(ed(folder, mesh), density, tag="MOBiomeCover_Rock", cluster=cluster, align=True, tilt=0.0, sweep=True, smin=smin, smax=smax, sink=0.5, sink_cm=sink_cm, collision="Passable")
+def ed_plate(folder, mesh, density, cluster=2600.0, smin=0.9, smax=1.7, sink_cm=14.0, collision="Solid"):
+    """A flat rock slab (open geometry, 0.2-0.5 m thick, 2-7 m wide): decorative, aligned to the slope and sunk by half its thickness so neither its edge nor its open underside shows.
+    SOLID: half-sunk, a plate still stands 20-54 cm out of the ground, and a walk-through one swallowed the player's feet (playtest reports 2026-10-14 #2 / #3 / #18; the species gallery's
+    contact test measures it: MO.Gallery <Biome> + MO.Gallery.Test). Only plates thinner than ~20 cm above ground stay walk-through (collision="Passable" at the call)."""
+    return species(ed(folder, mesh), density, tag="MOBiomeCover_Rock", cluster=cluster, align=True, tilt=0.0, sweep=True, smin=smin, smax=smax, sink=0.5, sink_cm=sink_cm, collision=collision,
+                   max_slope=28.0)   # steeper and the aligned plate stands on its edge, hollow back showing (playtest 2026-10-14 #1 / #26)
 
 
 def ed_cliff(mesh, density, cluster=6000.0, smin=0.7, smax=1.3, folder="HugeSandstoneCliff"):
     """A 11-22 m cliff slab (sandstone by default, `folder` picks another): solid, aligned, buried a fifth of its height."""
-    return species(ed(folder, mesh), density, tag="MOBiomeCover_Rock", cluster=cluster, align=True, tilt=0.0, smin=smin, smax=smax, sink=0.2, collision="Solid")
+    return species(ed(folder, mesh), density, tag="MOBiomeCover_Rock", cluster=cluster, align=True, tilt=0.0, smin=smin, smax=smax, sink=0.2, collision="Solid",
+                   min_slope=25.0)   # a cliff on gentle ground is a monolith (playtest 2026-10-14 #26)
 
 
 def scree(density_each, smin=1.2, smax=2.8):
@@ -316,7 +328,7 @@ def mountain_rocks(k=1.0, big=1.0, plates=1.0):
         # (seen on the Alpine Rock / Heath slopes, 2026-10-12), so they are an accent, not the base. TundraMossyBoulder is the sample's dark moss-skinned slab boulder.
         ed_plate("ErodedRockyGround", "SM_ErodedRockyGround_01", 12.0 * plates), ed_plate("MossyRocks", "SM_MossyRocks_02", 10.0 * plates),
         ed_plate("ErodedRockyGround", "SM_ErodedRockyGround_03", 2.5 * plates), ed_plate("SmoothRockShelf", "SM_SmoothRockShelf_01", 2.0 * plates),
-        ed_plate("SandstoneRockyGround", "SM_SandstoneRockyGround_01", 2.5 * plates, sink_cm=8.0),
+        ed_plate("SandstoneRockyGround", "SM_SandstoneRockyGround_01", 2.5 * plates, sink_cm=8.0, collision="Passable"),   # 11 cm above ground: stepped over
         ed_rock("TundraMossyBoulder", "SM_TundraMossyBoulder_01", 3.0 * k, cluster=2800.0, smin=0.5, smax=1.1),
     ]
 
@@ -392,8 +404,11 @@ def fern(n, density, cluster=1800.0):
     return undergrowth(FERN % (n, n), density, group=-1, core=0.0, smin=0.8, smax=1.4, cluster=cluster)
 
 
-def leaves(n, density, cluster=1500.0):
-    return species(LEAVES % (n, n), density, tag="MOBiomeCover_Debris", cluster=cluster, align=True, tilt=0.0, sweep=True, smin=0.9, smax=1.6, collision="Passable", sink=0.0)
+def leaves(n, density, cluster=1500.0, group=6, core=0.6):
+    """Leaf litter lies UNDER trees: it shares the canopy's clump field (group 6 = the hornbeam stand) at its cores. Scattered on its own it made lone discs of
+    leaves on open ground (playtest 2026-10-14 #17: "be sure the pcg is centered around one larger asset")."""
+    return species(LEAVES % (n, n), density, tag="MOBiomeCover_Debris", cluster=cluster, group=group, core=core, align=True, tilt=0.0, sweep=True, smin=0.9, smax=1.6,
+                   collision="Passable", sink=0.0)
 
 
 ELECTRIC_FOREST = {
@@ -428,8 +443,8 @@ ELECTRIC_FOREST = {
         ed_plate("SmoothRockShelf", "SM_SmoothRockShelf_01", 3.0), ed_plate("MossyRocks", "SM_MossyRocks_01", 5.0), ed_plate("RockyForestPath", "SM_RockyForestPath_01", 2.0, sink_cm=6.0),
         ed_plate("ForestRockFormation", "SM_ForestRockFormation_05", 1.5, cluster=4000.0), ed_plate("ForestRockFormation", "SM_ForestRockFormation_06", 1.5, cluster=4000.0),
         # standing dead trees (decorative, but solid: a trunk you cannot walk through)
-        species(ed("DeadTree", "SM_DeadTree_01"), 1.2, tag="MOBiomeCover_Shrub", cluster=3000.0, sweep=True, smin=0.9, smax=1.3, tilt=3.0, collision="Solid"),
-        species(ed("DeadTree", "SM_DeadTree_02"), 1.2, tag="MOBiomeCover_Shrub", cluster=3000.0, sweep=True, smin=0.9, smax=1.3, tilt=3.0, collision="Solid"),
+        species(ed("DeadTree", "SM_DeadTree_01"), 1.2, tag="MOBiomeCover_Shrub", cluster=3000.0, sweep=True, smin=0.9, smax=1.3, tilt=3.0, collision="Solid", sink_cm=35.0),   # root flare floated (#20)
+        species(ed("DeadTree", "SM_DeadTree_02"), 1.2, tag="MOBiomeCover_Shrub", cluster=3000.0, sweep=True, smin=0.9, smax=1.3, tilt=3.0, collision="Solid", sink_cm=35.0),
     ],
 }
 
@@ -447,7 +462,7 @@ NORDIC_STRAND = {
         ed_plate("SmoothRockShelf", "SM_SmoothRockShelf_01", 5.0), ed_plate("MossyRocks", "SM_MossyRocks_01", 3.0), ed_plate("ErodedRockyGround", "SM_ErodedRockyGround_01", 5.0),
         # the sample's Nordic coast set (migrated 2026-10-12): house-sized wet boulders, rocky-ground slabs, one coastal cliff in a few hectares
         ed_rock("NordicBoulder", "SM_NordicBoulder_01", 1.4, res="BeachBoulder", cluster=3600.0, smin=0.45, smax=0.9), ed_rock("NordicBoulder", "SM_NordicBoulder_02", 1.4, res="BeachBoulder", cluster=3600.0, smin=0.45, smax=0.9),
-        ed_plate("NordicBeachRockyGround", "SM_NordicBeachRockyGround_01", 5.0), ed_plate("NordicBeachRockyGround", "SM_NordicBeachRockyGround_02", 7.0),
+        ed_plate("NordicBeachRockyGround", "SM_NordicBeachRockyGround_01", 5.0), ed_plate("NordicBeachRockyGround", "SM_NordicBeachRockyGround_02", 7.0, collision="Passable"),   # 16 cm: stepped over
         ed_cliff("SM_MassiveNordicCoastalCliff_01", 0.18, cluster=7000.0, smin=0.45, smax=0.8, folder="MassiveNordicCoastalCliff"),
     ] + scree(48.0, 1.0, 2.4) + [
         cover(dune_grass("A"), 150, 1000.0, smin=0.8, smax=1.2), cover(dune_grass("C"), 90, 1400.0), cover(wild_grass("A"), 40, 1400.0, smin=0.7, smax=1.1),

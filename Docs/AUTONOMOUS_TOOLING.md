@@ -153,6 +153,36 @@ Facts learned by running it (each was a silent failure before):
 - `bIsLANMatch` must be true on the Null OSS or the host never answers a search — now derived in ONE place,
   `UMOSessionSubsystem::IsLanMode()`.
 
+### Collision audit: species gallery, contact test, biome test worlds (2026-10-14)
+Wes: "create some biome test levels that we can audit things inside of independently and fine tune, and set up an asset gallery for each biome as well and a
+'drop' test for collision".
+- `MO.Gallery [BiomeId|all]` -- every species of the biome (DT_Biomes Species + WaterEdgeSpecies) on a 1 m grid floor 3 km over the ocean corner, labelled
+  (mesh, profile, expected contact). Placed by the SAME policy as the spawner (`FMOSpeciesPlacement`: collision profile, burial) but as a TEST: 2x scale
+  (`mo.Gallery.Scale`) and standable species lifted 50 cm off the floor (Wes: buried rocks make landing on them look like landing on the ground).
+- `MO.Gallery.Test` -- the real character on every entry: STANDABLE (rocks, plates, logs) dropped onto it, must stand on it (not the floor, not sunk > 30 cm
+  under the visible surface, "slid off" reported apart); BLOCKS-WALK (trees, saplings, solid bushes) walked into the centre (must stop) AND past it off-centre
+  (must pass: trunk / core only); WALK-THROUGH must pass. PASS/FAIL on the labels, `[MOGallery]` lines, `Saved/Logs/MOGallery_<biome>.tsv`. `MO.Gallery.Clear`.
+- `MO.BiomeTest <BiomeId|off> [seed]` -- a new game where every column is that biome (`mo.WorldGen.ForceBiome`: ground, scatter, biome under the player;
+  terrain shape is the seed's; part of the generator hash only when set). Tune a palette in isolation, run the gallery inside it.
+- In-world truth near the player: `python Tools/ue.py py -c "import audit_collision_here as a; a.audit(40)"` (capsule drop + walk per mesh around you;
+  buried pieces read as misses because the capsule meets the terrain first -- prefer the gallery for verdicts).
+- Fix side: `Content/Python/fix_mesh_collision.py` -- rocks: hulls (palette) or their real surface (compositions, Solid decorative plates / slabs);
+  trees: ONE trunk capsule (canopy hulls removed); saplings: 6-12 cm stem; bushes >= 1 m: core capsule; composition plants: no collision; the
+  compositions' spawners all BlockAll (the mesh decides). `FIXCOLL_FORCE=("Tree", "Sapling", "Bush")` rebuilds even "done" meshes: a shape list edited without
+  rebuilding the cooked physics keeps the OLD collision in game (BlackAlder trees walked through with a correct capsule in the asset). Composition meshes come from
+  `Content/Python/data/worldfeature_meshes.json` (`worldfeature_meshes.py` spawn/collect in PIE; the collect MERGES -- a seed never shows every mesh).
+- Policy source of truth: `Content/Python/biome_palettes.py` -> DT_Biomes (`MSYS_NO_PATHCONV=1 python Tools/ue.py rows set /MOFramework/Data/DT_Biomes.DT_Biomes
+  --file Saved/Logs/biome_palettes.json`; diff the plan against the live table first). Species slope band: `MinSlopeDeg` / `MaxSlopeDeg`.
+- Item meshes (`/Items/`, e.g. Bark01 = shore driftwood AND the bark pickup) keep convex hulls even when a palette marks them Solid: a dropped world item
+  simulates physics, and a complex-as-simple body cannot.
+- Rendering side of the palette: `Content/Python/enable_palette_nanite.py` (dry run by default; `NANITE_APPLY = True` in a `-c` prelude) turns Nanite on for
+  every DT_Biomes mesh still on classic LODs (foliage with Preserve Area). `Content/Python/calm_small_plant_wind.py` gives the SimpleWind hornbeam's
+  seedlings / saplings their own calmer child material instances (the tree's wind amplitudes are world-space: a 1 m plant shook like a 16 m crown).
+- Perf A/B in the editor: PIE is frame-capped near 58-60 fps, so compare `gpu=` / `draws=` of `MO.Perf.Bench`, never fps, and pin the view
+  (`MO.Cam.LookAt` at the same point and target) -- the pawn's own facing differs run to run.
+- Live UI regression: `MO.UI.RunAllTests` (writes `Content/Python/test_output/ui_test_results.txt`, 86 tests, ~10 s); gameplay: `python Tools/ue.py test`
+  (RunAll; run it in a FRESH game -- a full inventory fails DropPickup with "identity lost").
+
 ## The three layers
 
 | Layer | Reaches | Editor state |

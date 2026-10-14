@@ -81,6 +81,14 @@ FName UMOBiomeDatabaseSettings::ResolveBiomeAtWorld(FVector Location, float Slop
 	return Params->GetBiomeId(FMOWorldGen::ResolveBiome(*Params, (float)Location.Z, SlopeDeg, Climate.Moisture, Temperature));
 }
 
+FName UMOBiomeDatabaseSettings::PickSurfaceBiomeAtWorld(FVector Location, float SlopeDeg, int32 TerrainSeed)
+{
+	const FMOWorldGenParamsRef Params = FMOWorldGenParamsProvider::Get();
+	const FMOClimateSample Climate = FMOWorldGen::SampleClimate(*Params, Location.X, Location.Y, TerrainSeed);
+	const float Temperature = FMOWorldGen::TemperatureAtHeight(*Params, Climate.TemperatureSeaLevel, (float)Location.Z);
+	return Params->GetBiomeId(FMOWorldGen::PickSurfaceBiome(*Params, Location.X, Location.Y, TerrainSeed, (float)Location.Z, SlopeDeg, Climate.Moisture, Temperature));
+}
+
 FName UMOBiomeDatabaseSettings::ResolveBiomeAt(FVector Location, float Height, float SlopeDeg,
 	int32 Seed, float MoistureNoisePeriod, float TemperatureNoisePeriod)
 {

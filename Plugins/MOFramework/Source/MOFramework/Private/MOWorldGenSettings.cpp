@@ -3,6 +3,14 @@
 #include "MOBiomeDatabaseSettings.h"
 #include "MOBiomeDefinitionRow.h"
 #include "MOTerrainFunctionLibrary.h"
+#include "HAL/IConsoleManager.h"
+
+namespace
+{
+	// A biome test world (MO.BiomeTest): every column is this biome. Read when the params are built, i.e. at the next world start.
+	TAutoConsoleVariable<FString> CVarWorldGenForceBiome(TEXT("mo.WorldGen.ForceBiome"), TEXT(""),
+		TEXT("Dev: a biome test world -- every column is this biome (DT_Biomes row id); empty = off. Takes effect at the next world start (MO.BiomeTest does both)."), ECVF_Default);
+}
 
 FMOWorldGenParamsRef UMOWorldGenSettings::BuildParams()
 {
@@ -42,7 +50,14 @@ FMOWorldGenParamsRef UMOWorldGenSettings::BuildParams()
 		B.FootstepSet = Row->FootstepSet.IsNone() ? FName(TEXT("GrassTread")) : Row->FootstepSet;
 	}
 
+	const FString Forced = CVarWorldGenForceBiome.GetValueOnGameThread().TrimStartAndEnd();
+	Params->ForcedBiomeId = Forced.IsEmpty() ? NAME_None : FName(*Forced);
 	Params->Finalize();
+	if (!Params->ForcedBiomeId.IsNone())
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOWorldGen] BIOME TEST WORLD: every column is %s%s"), *Forced,
+			Params->ForcedBiomeIndex == INDEX_NONE ? TEXT(" -- NOT a biome of DT_Biomes, ignored") : TEXT(""));
+	}
 	return FMOWorldGenParamsRef(Params);
 }
 

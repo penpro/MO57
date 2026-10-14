@@ -110,6 +110,7 @@ void FMOWorldGenParams::Finalize()
 {
 	// Highest priority first so ResolveBiome's first match wins (same rule the spawner always used).
 	Biomes.StableSort([](const FMOWorldGenBiome& A, const FMOWorldGenBiome& B) { return A.Priority > B.Priority; });
+	ForcedBiomeIndex = ForcedBiomeId.IsNone() ? INDEX_NONE : FindBiomeIndex(ForcedBiomeId);
 
 	FMOWorldGenTuning& T = Tuning;
 	T.ContinentSplineM.Sort([](const FVector2D& A, const FVector2D& B) { return A.X < B.X; });
@@ -222,6 +223,10 @@ uint32 FMOWorldGenParams::ComputeHash() const
 		// The ground surface does not change the generated numbers but it does change what the Voxel adapter must rebuild (its surface table).
 		const FString Surface = B.GroundSurfaceType.ToString();
 		H = FnvAdd(H, *Surface, Surface.Len() * (int32)sizeof(TCHAR));
+	}
+	if (ForcedBiomeIndex != INDEX_NONE)
+	{
+		H = FnvAddInt(H, 0x0F0C0000 + ForcedBiomeIndex);   // a biome test world (only then: an ordinary world keeps its hash)
 	}
 	return H;
 }
@@ -671,6 +676,10 @@ float FMOWorldGen::TemperatureAtHeight(const FMOWorldGenParams& Params, float Te
 
 int32 FMOWorldGen::ResolveBiome(const FMOWorldGenParams& Params, float HeightCm, float SlopeDeg, float Moisture, float Temperature)
 {
+	if (Params.ForcedBiomeIndex != INDEX_NONE)
+	{
+		return Params.ForcedBiomeIndex;   // a biome test world (mo.WorldGen.ForceBiome)
+	}
 	for (int32 I = 0; I < Params.Biomes.Num(); ++I)
 	{
 		if (Params.Biomes[I].Contains(HeightCm, SlopeDeg, Moisture, Temperature))
@@ -696,6 +705,11 @@ int32 FMOWorldGen::SampleSurfaceBiomeWeights(const FMOWorldGenParams& Params, do
 	if (!Out || MaxOut <= 0 || Params.Biomes.Num() == 0)
 	{
 		return 0;
+	}
+	if (Params.ForcedBiomeIndex != INDEX_NONE)
+	{
+		Out[0] = { Params.ForcedBiomeIndex, 1.0f };   // a biome test world: one biome everywhere
+		return 1;
 	}
 	const FMOWorldGenTuning& T = Params.Tuning;
 	// One breakup sample per column, shared by every edge (a second, offset read for the climate edges so height and climate edges do not wander in lockstep).

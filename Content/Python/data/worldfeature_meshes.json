@@ -459,6 +459,9 @@
   "ED_EmbankmentAssembly",
   "ED_SmallAssembly"
  ],
+ "/Game/Megascans/3D_Plants/DragonTree/SM_DragonTree_02.SM_DragonTree_02": [
+  "ED_CliffAssembly"
+ ],
  "/Game/Megascans/3D_Plants/DragonTree/SM_DragonTree_03.SM_DragonTree_03": [
   "ED_CliffAssembly",
   "ED_EmbankmentAssembly"

@@ -24,6 +24,10 @@ namespace
 	constexpr float CavernGradient = 1.4f;
 	constexpr float CavernSquash = 1.9f;
 
+	// LOD culls: a feature is evaluated while the sample spacing is at most this fraction of its radius (caverns: up to FMOWorldGen::CavernMaxStepCm). CaveMaxLOD reads the same.
+	constexpr float SinkholeStepFraction = 0.9f;
+	constexpr float TunnelStepFraction = 0.6f;
+
 	struct FSinkholeBasics
 	{
 		double CenterX = 0.0, CenterY = 0.0;
@@ -155,7 +159,7 @@ float FMOWorldGen::SampleCaveDistanceAtGround(const FMOWorldGenParams& Params, d
 	const float HighGround = T.CaveMaxGroundCm > 0.0f ? Smooth01(T.CaveMaxGroundCm - T.CaveHighFadeCm, T.CaveMaxGroundCm, GroundCm) : 0.0f;
 
 	// Sinkholes: the only features that reach the ground. Skipped when the sample spacing cannot resolve a shaft.
-	if (StepCm <= T.SinkholeRadiusCm * 0.9f && HighGround < 1.0f)
+	if (StepCm <= T.SinkholeRadiusCm * SinkholeStepFraction && HighGround < 1.0f)
 	{
 		D = FMath::Min(D, SinkholeDistance(Params, X, Y, Z, Seed) + CaveFarCm * HighGround);
 	}
@@ -170,7 +174,7 @@ float FMOWorldGen::SampleCaveDistanceAtGround(const FMOWorldGenParams& Params, d
 		const float Gate = FMath::Max(FMath::Max3(Shallow, DeepFade, LowGround), HighGround);
 
 		// Tunnels: sqrt(A^2 + B^2) is small near the curve where two independent 3D noise fields are both zero.
-		if (StepCm <= T.TunnelRadiusCm * 0.6f)
+		if (StepCm <= T.TunnelRadiusCm * TunnelStepFraction)
 		{
 			const float Lambda = T.TunnelWavelengthCm;
 			const double Inv = 1.0 / (double)Lambda;
@@ -185,7 +189,7 @@ float FMOWorldGen::SampleCaveDistanceAtGround(const FMOWorldGenParams& Params, d
 		}
 
 		// Caverns: where a smooth 3D field rises above the threshold.
-		if (Depth > T.CavernMinDepthCm && StepCm <= 800.0f)
+		if (Depth > T.CavernMinDepthCm && StepCm <= CavernMaxStepCm)
 		{
 			const float Lambda = T.CavernWavelengthCm;
 			const double Inv = 1.0 / (double)Lambda;
@@ -200,6 +204,19 @@ float FMOWorldGen::SampleCaveDistanceAtGround(const FMOWorldGenParams& Params, d
 	}
 
 	return FMath::Clamp(D, -CaveFarCm, CaveFarCm);
+}
+
+int32 FMOWorldGen::CaveMaxLOD(const FMOWorldGenParams& Params)
+{
+	const FMOWorldGenTuning& T = Params.Tuning;
+	const float MaxStepCm = FMath::Max3(CavernMaxStepCm, T.SinkholeRadiusCm * SinkholeStepFraction, T.TunnelRadiusCm * TunnelStepFraction);
+	const float VoxelCm = FMath::Max(T.VoxelSizeCm, 1.0f);
+	int32 LOD = 0;
+	while (LOD < 24 && VoxelCm * (float)(1 << (LOD + 1)) <= MaxStepCm)
+	{
+		++LOD;
+	}
+	return LOD;
 }
 
 float FMOWorldGen::SampleCaveDistanceCm(const FMOWorldGenParams& Params, double X, double Y, double Z, int32 Seed, float StepCm)

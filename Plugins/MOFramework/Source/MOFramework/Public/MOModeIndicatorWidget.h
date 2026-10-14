@@ -53,7 +53,9 @@ class UTextBlock;
 
 /**
  * Simple HUD widget showing current gameplay mode.
- * Displays in bottom-right corner: "Explore", "Build", "Terraform", "Combat"
+ * Displays in bottom-right corner: "Explore", "Build", "Terraform", "Combat". In Explore it names the biome underfoot -- "EXPLORING MEADOW" -- refreshed once a
+ * second (playtest 2026-10-14 #16: "give me a 'exploring plains' and have it change with what biome we're in"): the biome whose GROUND the player stands on
+ * (the dominant surface weight of the world generator), by its DT_Biomes display name.
  *
  * Setup in Blueprint:
  * - Bind a TextBlock named "ModeText" for the mode display
@@ -94,8 +96,12 @@ public:
 	UPROPERTY(BlueprintAssignable, Category="MO|UI|Mode")
 	FMOModeChangedSignature OnModeChanged;
 
+	/** The biome the local player stands in (its display name), empty without a generated world. */
+	FText GetBiomeUnderfoot() const;
+
 protected:
 	virtual void NativeConstruct() override;
+	virtual void NativeDestruct() override;
 
 	/** Update the visual display. Called when mode changes. */
 	UFUNCTION(BlueprintNativeEvent, Category="MO|UI|Mode")
@@ -116,5 +122,9 @@ protected:
 	// Mode colours are design tokens (Explore = primary text, Build = accent, Terraform = notice, Combat = critical), resolved in GetModeColor.
 
 private:
+	void RefreshBiome();
+
 	EMOGameplayMode CurrentMode = EMOGameplayMode::Explore;
+	FText BiomeName;
+	FTimerHandle BiomeTimer;
 };

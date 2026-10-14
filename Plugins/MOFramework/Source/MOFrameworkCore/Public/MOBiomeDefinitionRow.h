@@ -123,6 +123,17 @@ struct MOFRAMEWORKCORE_API FMOBiomeSpeciesEntry
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Biome|Species", meta=(ClampMin="0.0", ClampMax="200.0"))
 	float SinkMinCm = 0.0f;
 
+	/**
+	 * The ground slope this species grows on (degrees), on top of its biome's band. Open-backed rock PLATES lie flush only on gentle ground -- on a steep slope the
+	 * aligned plate stands on its edge and shows its hollow back (playtest 2026-10-14 #1 / #26); cliff SLABS read as cliffs only on steep ground -- on a meadow they
+	 * are monoliths. Default 0..90 = anywhere.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Biome|Species", meta=(ClampMin="0.0", ClampMax="90.0"))
+	float MinSlopeDeg = 0.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Biome|Species", meta=(ClampMin="0.0", ClampMax="90.0"))
+	float MaxSlopeDeg = 90.0f;
+
 	/** Max random tilt from vertical in degrees (world-up species). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Biome|Species", meta=(ClampMin="0.0", ClampMax="45.0"))
 	float MaxRandomTiltDeg = 8.0f;

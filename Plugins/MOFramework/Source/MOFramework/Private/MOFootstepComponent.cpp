@@ -309,7 +309,9 @@ FName UMOFootstepComponent::ResolveSet(const FHitResult& FloorHit, const FVector
 	if (Seed != CachedSeed || Cell != CachedCell || CachedBiomeSet.IsNone())
 	{
 		const float SlopeDeg = FloorHit.bBlockingHit ? FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp((float)FloorHit.ImpactNormal.Z, -1.0f, 1.0f))) : 0.0f;
-		CachedBiomeId = UMOBiomeDatabaseSettings::ResolveBiomeAtWorld(Ground, SlopeDeg, Seed);
+		// The biome the ground under the foot SHOWS (the spawner's soft pick), not the hard climate line: across a wide ecotone the step must sound like the
+		// surface it lands on (playtest 2026-10-14 #4).
+		CachedBiomeId = UMOBiomeDatabaseSettings::PickSurfaceBiomeAtWorld(Ground, SlopeDeg, Seed);
 		const int32 Index = Params->FindBiomeIndex(CachedBiomeId);
 		CachedBiomeSet = Params->Biomes.IsValidIndex(Index) ? Params->Biomes[Index].FootstepSet : FallbackTerrainSet;
 		CachedSeed = Seed;

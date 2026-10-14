@@ -36,6 +36,7 @@
 #include "MOSkillDatabaseSettings.h"
 #include "MOSkillDefinitionRow.h"
 #include "MOBiomeDatabaseSettings.h"
+#include "MOBiomeDefinitionRow.h"
 #include "MOWorldGen.h"
 #include "Camera/CameraActor.h"
 #include "Engine/DirectionalLight.h"
@@ -5994,6 +5995,66 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 			}
 			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] NEWGAME starting (seed %s)"), Seed != 0 ? *FString::FromInt(Seed) : TEXT("from the panel"));
 			MenuPC->StartNewGame();
+		}),
+		ECVF_Default));
+
+	// ---------- MO.BiomeTest <BiomeId|off> [seed] ----------
+	// A biome test world (Wes, 2026-10-14: "create some biome test levels that we can audit things inside of independently and fine tune"): the generator's
+	// mo.WorldGen.ForceBiome makes every column that biome -- ground, scatter, the biome under the player; the terrain shape is the seed's -- and a NEW game
+	// starts in it (from the main menu, or by reopening the gameplay level). MO.Gallery and the palette tuning work inside it like anywhere else.
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.BiomeTest"),
+		TEXT("Dev: start a new game in a biome test world -- every column is this biome (off = back to normal worlds). Usage: MO.BiomeTest <BiomeId|off> [seed]  (standalone)"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			IConsoleVariable* ForceBiome = IConsoleManager::Get().FindConsoleVariable(TEXT("mo.WorldGen.ForceBiome"));
+			if (Args.Num() < 1 || !ForceBiome || !World)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOBiomeTest] Usage: MO.BiomeTest <BiomeId|off> [seed]"));
+				return;
+			}
+			const bool bOff = Args[0].Equals(TEXT("off"), ESearchCase::IgnoreCase);
+			if (!bOff)
+			{
+				const UMOBiomeDatabaseSettings* BiomeSettings = GetDefault<UMOBiomeDatabaseSettings>();
+				const UDataTable* Biomes = BiomeSettings ? BiomeSettings->GetBiomeDefinitionsDataTable() : nullptr;
+				if (!Biomes || !Biomes->FindRow<FMOBiomeDefinitionRow>(FName(*Args[0]), TEXT("MO.BiomeTest"), /*bWarnIfRowMissing=*/false))
+				{
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOBiomeTest] no biome '%s' in DT_Biomes (rows: %s)"), *Args[0],
+						Biomes ? *FString::JoinBy(Biomes->GetRowNames(), TEXT(", "), [](const FName& N) { return N.ToString(); }) : TEXT("no table"));
+					return;
+				}
+			}
+			ForceBiome->Set(bOff ? TEXT("") : *Args[0], ECVF_SetByConsole);
+			const int32 Seed = Args.Num() > 1 ? FCString::Atoi(*Args[1]) : UMOGameSettings::GetWorldSeed();
+			UMOGameSettings* Settings = UMOGameSettings::GetMOGameSettings();
+			if (AMOMainMenuPlayerController* MenuPC = Cast<AMOMainMenuPlayerController>(World->GetFirstPlayerController()))
+			{
+				if (Seed != 0)
+				{
+					Settings->PendingWorldSeed = Seed;
+					Settings->SaveSettings();
+				}
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOBiomeTest] %s: new game (seed %d)"), bOff ? TEXT("off") : *Args[0], Seed);
+				MenuPC->StartNewGame();
+				return;
+			}
+			if (World->GetNetMode() != NM_Standalone)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOBiomeTest] standalone only (every co-op machine would need the same override)"));
+				return;
+			}
+			// In game: the same new-game flags the main menu sets (AMOMainMenuPlayerController::StartNewGame), then the gameplay level again.
+			Settings->bPendingNewGame = true;
+			Settings->bIsLoadingIntoGameplay = true;
+			Settings->PendingNewGameSlot = FString::Printf(TEXT("BiomeTest_%s_%s"), bOff ? TEXT("off") : *Args[0], *FDateTime::Now().ToString(TEXT("%Y%m%d_%H%M%S")));
+			if (Seed != 0)
+			{
+				Settings->PendingWorldSeed = Seed;
+			}
+			Settings->SaveSettings();
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOBiomeTest] %s: reopening the gameplay level as a new game (seed %d)"), bOff ? TEXT("off") : *Args[0], Seed);
+			UGameplayStatics::OpenLevel(World, FName(*UWorld::RemovePIEPrefix(World->GetMapName())));
 		}),
 		ECVF_Default));
 

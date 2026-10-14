@@ -1,4 +1,5 @@
 #include "MOPCGBiomeSpawnerSettings.h"
+#include "MOSpeciesPlacement.h"
 #include "MOFramework.h"
 #include "MOBiomeDatabaseSettings.h"
 #include "MOWorldGen.h"
@@ -561,7 +562,11 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 			{
 				for (const int32 i : Chosen->FilteredSpecies)
 				{
-					Candidates.Add({ &Chosen->Row->Species[i], Chosen->LoadedMeshes[i], EdgeScale, Chosen->GroundCoverScaled[i] });
+					const FMOBiomeSpeciesEntry& Sp = Chosen->Row->Species[i];
+					if (SlopeDeg >= Sp.MinSlopeDeg && SlopeDeg <= Sp.MaxSlopeDeg)   // the species' own slope band (a plate on gentle ground, a cliff slab on steep)
+					{
+						Candidates.Add({ &Sp, Chosen->LoadedMeshes[i], EdgeScale, Chosen->GroundCoverScaled[i] });
+					}
 				}
 			}
 			if (bPlantsWaterEdge && Chosen->Row->WaterEdgeSpecies.Num() > 0 && EdgeMask.IsActive())
@@ -572,7 +577,11 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 					const int32 NumEdge = FMath::Min(Chosen->Row->WaterEdgeSpecies.Num(), 32);
 					for (int32 i = 0; i < NumEdge; ++i)
 					{
-						Candidates.Add({ &Chosen->Row->WaterEdgeSpecies[i], Chosen->LoadedEdgeMeshes[i], Shore, Chosen->EdgeGroundCoverScaled[i] });
+						const FMOBiomeSpeciesEntry& Sp = Chosen->Row->WaterEdgeSpecies[i];
+						if (SlopeDeg >= Sp.MinSlopeDeg && SlopeDeg <= Sp.MaxSlopeDeg)
+						{
+							Candidates.Add({ &Sp, Chosen->LoadedEdgeMeshes[i], Shore, Chosen->EdgeGroundCoverScaled[i] });
+						}
 					}
 				}
 			}
@@ -672,17 +681,9 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 				Xf.SetRotation(Tilt * FQuat(FVector::UpVector, Yaw));
 			}
 
-			// Burial: aligned species (rocks, debris) are first lifted so the mesh BOTTOM (whatever its pivot) touches the surface, then sunk SinkFraction of their height into it.
-			// Both along the instance's own up axis, so a rock on a slope goes into the slope, not into the air below it.
+			// Burial (FMOSpeciesPlacement: the gallery places the same way): along the instance's own up axis, so a rock on a slope goes into the slope, not into the air below it.
 			{
-				const FBoxSphereBounds MeshBounds = Mesh->GetBounds();
-				const float HeightCm = MeshBounds.BoxExtent.Z * 2.0f * Scale;
-				const float SinkFraction = Sp.SinkFraction >= 0.0f ? Sp.SinkFraction : (Sp.bAlignToSurfaceNormal ? 0.25f : 0.0f);
-				float Offset = -(SinkFraction * HeightCm + Sp.SinkMinCm);
-				if (Sp.bAlignToSurfaceNormal)
-				{
-					Offset -= (MeshBounds.Origin.Z - MeshBounds.BoxExtent.Z) * Scale;   // pivot to bottom: negative bottom (a centred pivot) lifts the mesh onto the surface
-				}
+				const float Offset = FMOSpeciesPlacement::BurialOffsetCm(Sp, Mesh->GetBounds(), Scale);
 				if (!FMath::IsNearlyZero(Offset))
 				{
 					Xf.AddToTranslation(Xf.GetRotation().GetUpVector() * Offset);
@@ -847,7 +848,6 @@ bool FMOPCGBiomeSpawnerElement::BuildSlice(FMOPCGBiomeSpawnerContext* Context) c
 			}
 			if (ResourceDef)
 			{
-				Params.Descriptor.BodyInstance.SetCollisionProfileName(ResourceDef->GetPlacementCollisionProfile());
 				for (const FName& Tag : ResourceDef->GetAllTags())
 				{
 					Params.Descriptor.ComponentTags.AddUnique(Tag);
@@ -871,15 +871,8 @@ bool FMOPCGBiomeSpawnerElement::BuildSlice(FMOPCGBiomeSpawnerContext* Context) c
 			{
 				Params.Descriptor.ComponentTags.Add(Bucket.HISMTag);
 			}
-			// The species' own say wins over the resource type's default (see EMOSpeciesCollision): saplings are harvestable trees you can still walk through.
-			if (Bucket.Collision == EMOSpeciesCollision::Passable)
-			{
-				Params.Descriptor.BodyInstance.SetCollisionProfileName(TEXT("OverlapAllDynamic"));
-			}
-			else if (Bucket.Collision == EMOSpeciesCollision::Solid)
-			{
-				Params.Descriptor.BodyInstance.SetCollisionProfileName(TEXT("BlockAll"));
-			}
+			// One policy (FMOSpeciesPlacement::CollisionProfile -- the gallery's drop test checks the same answer): resource type, decorative default, the species' own say.
+			Params.Descriptor.BodyInstance.SetCollisionProfileName(FMOSpeciesPlacement::CollisionProfile(Bucket.Collision, ResourceDef, Settings->DecorativeCollisionProfile.Name));
 			// Far tiers are draw-only, whatever the palette row says: no physics body per instance (there are a hundred thousand of them) and nothing for a trace to hit around the player, where
 			// they now stand undrawn under the near tiers.
 			if (bFarTier)

@@ -20,6 +20,7 @@
 #include "VoxelPinValue.h"
 #include "Graphs/VoxelHeightGraphStamp.h"
 #include "Graphs/VoxelVolumeGraphStamp.h"
+#include "Graphs/VoxelVolumeGraph.h"
 #include "EngineUtils.h"
 #include "Engine/World.h"
 #include "TimerManager.h"
@@ -161,6 +162,16 @@ int32 UMOWorldSeedSubsystem::ApplySeedToStamps(UWorld* World, int32 WorldSeed, F
 				{
 					StampOwner = static_cast<IVoxelParameterOverridesOwner*>(VGStamp);
 					StampKind = TEXT("VGStamp");
+
+					// The cave stamp only exists at the LODs where the generator still resolves a cave (FMOWorldGen::CaveMaxLOD). Its bounds are the whole world, and
+					// any volume stamp touching a chunk sends the chunk through the plugin's volume meshing pass, which holed the coarse far chunks of steep
+					// mountains in a checker pattern (playtest 2026-10-14 #10). Beyond CaveMaxLOD the field is "no cave" everywhere, so nothing is lost.
+					if (VGStamp->Graph && VGStamp->Graph->GetFName() == FName(TEXT("VVG_MOCaves")))
+					{
+						const int32 MaxLOD = FMOWorldGen::CaveMaxLOD(*FMOWorldGenParamsProvider::Get());
+						VGStamp->LODRange = FInt32Interval(0, MaxLOD);
+						UE_LOG(LogMOFramework, Log, TEXT("[MOWorldSeed] Cave stamp '%s': LOD range 0..%d (no cave is resolved past LOD %d)"), *Actor->GetName(), MaxLOD, MaxLOD);
+					}
 				}
 
 				if (StampOwner)

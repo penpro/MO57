@@ -70,8 +70,11 @@ def _summon(world, pc, class_path):
     return new[0] if new else None
 
 
+SEEDS = (1, 2, 3, 4)   # the compositions pick their meshes by seed: several copies see (nearly) every mesh a row can place
+
+
 def spawn():
-    """Spawn one actor per row (one per variant for MOWorldFeatureActor rows) far from the player and generate it."""
+    """Spawn len(SEEDS) actors per row (and per variant for MOWorldFeatureActor rows) far from the player, each with its own seed, and generate them."""
     world = _world()
     if world is None:
         print("WFMESH no game world (boot PIE first)")
@@ -81,7 +84,7 @@ def spawn():
         a.destroy_actor()
     slot = 0
     for row, cls, variants, props in _rows():
-        for v in (variants or [None]):
+        for v, seed in [(v, seed) for v in (variants or [None]) for seed in SEEDS]:
             a = _summon(world, pc, cls)
             if a is None:
                 print("WFMESH could not summon %s (%s)" % (cls, row))
@@ -90,6 +93,7 @@ def spawn():
             a.set_editor_property("tags", [TAG, row])
             _apply(a, props)
             for c in a.get_components_by_class(unreal.PCGComponent):
+                c.set_editor_property("seed", seed)
                 if v:
                     c.set_graph(unreal.load_asset(v.split(".")[0]))
                 c.generate_local(True)
@@ -116,6 +120,9 @@ def collect():
         print("WFMESH %s: %d mesh components" % (row, n))
         a.destroy_actor()
     os.makedirs(os.path.dirname(MANIFEST), exist_ok=True)
+    if os.path.exists(MANIFEST):   # a union: one spawn never sees every mesh a seed-driven composition can place
+        for path, rows in json.load(open(MANIFEST, encoding="utf-8")).items():
+            meshes.setdefault(path, set()).update(rows)
     with open(MANIFEST, "w", encoding="utf-8") as f:
         json.dump({k: sorted(v) for k, v in sorted(meshes.items())}, f, indent=1)
     print("WFMESH wrote %d meshes from %d actors -> %s" % (len(meshes), len(actors), MANIFEST))

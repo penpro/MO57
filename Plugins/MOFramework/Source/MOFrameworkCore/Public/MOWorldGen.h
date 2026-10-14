@@ -633,6 +633,15 @@ struct MOFRAMEWORKCORE_API FMOWorldGenParams
 
 	uint32 GeneratorVersion = CurrentGeneratorVersion;
 
+	/**
+	 * DEV: a biome test world -- every column is this biome (ground surface, scatter, the biome under the player); the terrain SHAPE is the seed's as always.
+	 * Set from the mo.WorldGen.ForceBiome cvar (MO.BiomeTest <BiomeId>); NAME_None = off. Finalize() resolves the index. Part of the hash only when set,
+	 * so an ordinary world's identity (and the golden checksum) does not change. Wes, 2026-10-14: "create some biome test levels that we can audit things
+	 * inside of independently and fine tune".
+	 */
+	FName ForcedBiomeId;
+	int32 ForcedBiomeIndex = INDEX_NONE;
+
 	/** ComputeHash() as of Finalize(). The hot path (one call per voxel batch) uses this instead of re-hashing. */
 	uint32 CachedHash = 0;
 	uint32 GetHash() const { return CachedHash; }
@@ -765,6 +774,17 @@ struct MOFRAMEWORKCORE_API FMOWorldGen
 	 * Larger than any chunk's half diagonal at the LODs that carry caves, so a chunk reading +CaveFarCm everywhere provably holds no cave surface.
 	 */
 	static constexpr float CaveFarCm = 3000.0f;
+
+	/** Coarsest sample spacing (cm) at which caverns, the widest cave feature, are evaluated. Tunnels and sinkholes stop at finer spacings (see CaveMaxLOD). */
+	static constexpr float CavernMaxStepCm = 800.0f;
+
+	/**
+	 * The coarsest voxel LOD (sample spacing VoxelSizeCm * 2^LOD, the MO Terrain Caves node's StepCm) at which any cave feature is still evaluated: above it the cave
+	 * field is +CaveFarCm everywhere. The cave stamp is limited to LODs 0..CaveMaxLOD (UMOWorldSeedSubsystem): a volume stamp whose bounds touch a chunk sends that whole
+	 * chunk through the Voxel plugin's volume meshing pass, and on the coarse far chunks of steep mountains that pass left chunk-sized holes in a checker pattern
+	 * (playtest 2026-10-14 #10, the "blue/white checkerboard" = sky through the holes). Past this LOD the stamp carved nothing anyway, so the range changes no shape.
+	 */
+	static int32 CaveMaxLOD(const FMOWorldGenParams& Params);
 
 	/**
 	 * Cave field: approximate signed distance (cm) to the nearest cave AIR, negative INSIDE a tunnel / cavern / sinkhole. Feed a Subtractive

@@ -277,6 +277,41 @@ bool FMOWorldGen_NoCavesOnHighGround::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOWorldGen_CaveMaxLOD,
+	"MOFramework.WorldGen.CaveMaxLOD",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOWorldGen_CaveMaxLOD::RunTest(const FString& Parameters)
+{
+	// The cave stamp is limited to LODs 0..CaveMaxLOD (playtest 2026-10-14 #10: the whole-world cave stamp routed far mountain chunks through the plugin's volume
+	// pass, which holed them). That is only free if the field past CaveMaxLOD carves nothing: assert it is +CaveFarCm at every sample in the cave band one LOD
+	// coarser, and that caves still exist AT CaveMaxLOD (the range is not cut one LOD too early).
+	const FMOWorldGenParamsRef P = MakeCaveParams();
+	const FMOWorldGenTuning& T = P->Tuning;
+	const int32 MaxLOD = FMOWorldGen::CaveMaxLOD(*P);
+	const float StepAt = T.VoxelSizeCm * (float)(1 << MaxLOD);
+	const float StepPast = T.VoxelSizeCm * (float)(1 << (MaxLOD + 1));
+	AddInfo(FString::Printf(TEXT("CaveMaxLOD = %d (spacing %.0f cm; voxel %.0f cm)"), MaxLOD, StepAt, T.VoxelSizeCm));
+	TestTrue(TEXT("the last LOD that carries caves is no coarser than the cavern limit"), StepAt <= FMOWorldGen::CavernMaxStepCm);
+	TestTrue(TEXT("one LOD coarser is past every cave feature's limit"), StepPast > FMOWorldGen::CavernMaxStepCm);
+
+	FRandomStream R(23);
+	int32 Samples = 0, CarvedPast = 0, CarvedAt = 0;
+	for (int32 I = 0; I < 30000; ++I)
+	{
+		const double X = R.FRandRange(-1.5e6f, 1.5e6f), Y = R.FRandRange(-1.5e6f, 1.5e6f);
+		const float Ground = FMOWorldGen::SampleHeightCm(*P, X, Y, CaveTestSeed);
+		const float Z = Ground - R.FRandRange(-100.0f, T.CaveMaxDepthCm + T.CaveFadeCm);
+		++Samples;
+		CarvedPast += FMOWorldGen::SampleCaveDistanceAtGround(*P, X, Y, Z, Ground, CaveTestSeed, StepPast) < FMOWorldGen::CaveFarCm ? 1 : 0;
+		CarvedAt += FMOWorldGen::SampleCaveDistanceAtGround(*P, X, Y, Z, Ground, CaveTestSeed, StepAt) < 0.0f ? 1 : 0;
+	}
+	AddInfo(FString::Printf(TEXT("%d samples in the cave band: %d below +CaveFarCm one LOD past, %d inside cave air at CaveMaxLOD"), Samples, CarvedPast, CarvedAt));
+	TestEqual(TEXT("past CaveMaxLOD the cave field is +CaveFarCm everywhere (the stamp would carve nothing)"), CarvedPast, 0);
+	TestTrue(TEXT("CONTROL: at CaveMaxLOD caves are still carved"), CarvedAt > 0);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOWorldGen_CaveGoldenChecksum,
 	"MOFramework.WorldGen.CaveGoldenChecksum",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
