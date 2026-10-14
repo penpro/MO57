@@ -2,7 +2,8 @@
 
     python Tools/kitbash.py <source mesh> <new mesh> taper <fraction> [max|min]
     python Tools/kitbash.py <source mesh> <new mesh> cut <fraction> [max|min]
-    python Tools/kitbash.py <shaft mesh> <new mesh> attach <head mesh> <head cm> <tip|axe|adze> [embed] [shaft scale x,y,z]
+    python Tools/kitbash.py <source mesh> <new mesh> scale <x,y,z>
+    python Tools/kitbash.py <shaft mesh> <new mesh> attach <head mesh> <head cm> <tip|axe|adze|stand|ring> [embed] [shaft scale x,y,z]
       e.g. python Tools/kitbash.py /Game/Fab/Megascans/3D/X/Medium/x/StaticMeshes/x /Game/Kitbash/WoodenSpear/SM_WoodenSpear taper 0.12
            python Tools/kitbash.py <stick> /Game/Kitbash/FlintSpear/SM_FlintSpear attach <flint point> 9 tip 0.25 1.5,0.45,0.45
 

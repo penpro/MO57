@@ -10,7 +10,8 @@ Ops, all along the mesh's longest axis (the scans here are sticks, branches and 
   cut <fraction> [end]     keep only the last <fraction> of the length at that end (an antler tine from a whole antler) and
                            cap the cut with a fill. The cut is square to the global long axis, so a curved piece gets an oval
                            cap; the fill has no UVs of its own (one texel colour). Works best on straight-ish pieces.
-  attach <head.fbx> <head cm> <tip|axe|adze> <embed> <base scale x,y,z>
+  scale <x,y,z>            bake a non-uniform scale into the mesh (so it can serve as an attach head)
+  attach <head.fbx> <head cm> <tip|axe|adze|stand|ring> <embed> <base scale x,y,z>
                            a second mesh (a flint point, a stone axe head) fitted to the shaft's + end, then joined: see
                            attach(). The base scale is baked first (the joined mesh keeps a uniform scale in the item row,
                            which a non-uniform row scale would squash the head with). Materials: base slots, then head slots.
@@ -144,7 +145,8 @@ def attach(base, head, head_len, mode, embed):
          axe:  the head crosses the shaft end: long axis up, width along the shaft, thinner end (the edge) up;
          adze: as axe but the width across the shaft (edge square to the haft);
          stand: the head upright on the base's top surface, <embed> of the base length in from its + end, its foot sunk a
-                little into the base (a hand-drill spindle in its fireboard notch)."""
+                little into the base (a hand-drill spindle in its fireboard notch);
+         ring: the head's thinnest axis along the shaft, centred on it <embed> of the length in (a spindle whorl)."""
     co = vertices(base)
     axis = long_axis(co)
     hi = co[:, axis].max()
@@ -175,13 +177,17 @@ def attach(base, head, head_len, mode, embed):
         target = np.column_stack([up, across, np.cross(up, across)])
     elif mode == "stand":
         target = np.column_stack([up, shaft, np.cross(up, shaft)])
+    elif mode == "ring":
+        target = np.column_stack([across, up, shaft])     # thinnest axis along the shaft: a disc threaded on it
     else:
-        raise SystemExit("attach mode must be tip, axe, adze or stand")
+        raise SystemExit("attach mode must be tip, axe, adze, stand or ring")
     rot = target @ src.T
     posed = ((hco - centre) @ rot.T) * scale
     if mode == "tip":
         along = posed @ shaft
         offset = anchor + shaft * (-along.min() - embed * head_len)   # the back embed fraction of the head sits in the shaft
+    elif mode == "ring":
+        offset = anchor - shaft * (embed * length)        # centred on the shaft, <embed> of its length in from the + end
     elif mode == "stand":
         # standing on the base's top surface at <embed> of its length in from the + end (a drill spindle in a fireboard notch)
         v = int(np.argmax(np.abs(up)))                 # the vertical axis
@@ -221,6 +227,11 @@ def main():
         bpy.context.view_layer.objects.active = head
         bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
         obj = attach(obj, head, head_len, mode, embed)
+    elif op == "scale":
+        # scale <x,y,z>: bake a non-uniform scale, so the result can be an attach head (a cup flattened into a whorl)
+        obj.scale = [float(v) for v in args[3].split(",")]
+        bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+        log("scale: baked %s" % args[3])
     else:
         fraction = float(args[3])
         end = args[4] if len(args) > 4 else "max"
