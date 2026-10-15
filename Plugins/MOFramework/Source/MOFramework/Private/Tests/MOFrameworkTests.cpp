@@ -577,6 +577,13 @@ bool FMOQuest_TutorialHint_FreshGameStartsWithMovement::RunTest(const FString& P
 		&& QuestId == TEXT("Tutorial_BuildComplete"));
 	Quests->ResetAllQuests();
 
+	// A player who places without ever rotating still gets told how to finish the build (it used to wait for the rotate lesson).
+	Quests->ApplyReportedEvent(EMOObjectiveType::Event, TEXT("OpenedBuildMenu"), 1);
+	Quests->ApplyReportedEvent(EMOObjectiveType::Event, TEXT("PlacedGhost"), 1);
+	TestTrue(TEXT("placing without rotating shows the finish-a-build hint"), Quests->GetActiveTutorialHint(QuestId, ObjectiveId, Title, Body)
+		&& QuestId == TEXT("Tutorial_BuildComplete") && ObjectiveId == TEXT("ExitBuild"));
+	Quests->ResetAllQuests();
+
 	// The possession menu is taught when there is a second pawn to possess: alone, its hint stays silent until a recruit.
 	if (!TestTrue(TEXT("Tutorial_Possession is active from the start"), Quests->IsQuestActive(TEXT("Tutorial_Possession"))))
 	{
