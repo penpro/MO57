@@ -1,5 +1,6 @@
 // Dev verbs for opening the in-game menus without a keyboard (packaged builds and unattended review runs: injected keys do not reach Enhanced Input).
 //
+//   MO.HUD.Mode [full|minimal|off]                                                       the HUD mode F1 cycles (no argument = the next); lists every registered HUD element and its alpha
 //   MO.UI.Open <Inventory|Crafting|Skills|Quest|Building|Possession|Status|InGame>    open (or toggle, for Status) that menu on the local player's UI manager
 //   MO.UI.Close                                                                          close the in-game menu and every other open menu
 //   MO.UI.Show <widget class path>                                                       add any Widget Blueprint class to the viewport (e.g. /MOFramework/UI/Kit/WBP_KitGallery.WBP_KitGallery_C); MO.UI.Hide removes it
@@ -35,6 +36,44 @@ namespace
 		APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
 		return PC ? PC->FindComponentByClass<UMOUIManagerComponent>() : nullptr;
 	}
+
+	FAutoConsoleCommandWithWorldAndArgs GHUDModeCmd(
+		TEXT("MO.HUD.Mode"),
+		TEXT("Set the HUD mode (what F1 cycles): full | minimal | off; no argument = the next one. Prints what each kind of element now does."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			UMOUIManagerComponent* UI = LocalUIManager(World);
+			if (!UI)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] HUDMODE no local UI manager"));
+				return;
+			}
+			EMOHUDMode Mode = FMOHUDModePolicy::Next(UI->GetHUDMode());
+			if (Args.Num() > 0 && !FMOHUDModePolicy::Parse(Args[0], Mode))
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] HUDMODE '%s' is not a mode (full | minimal | off)"), *Args[0]);
+				return;
+			}
+			if (Args.Num() > 0)
+			{
+				UI->SetHUDMode(Mode);
+			}
+			else
+			{
+				UI->CycleHUDMode();
+			}
+			const EMOHUDMode Now = UI->GetHUDMode();
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] HUDMODE %s: vital %d (%s), feedback %d (%s), info %d (%s)"), *FMOHUDModePolicy::DisplayName(Now).ToString(),
+				UI->GetNumHUDElements(EMOHUDElementKind::Vital), FMOHUDModePolicy::Shows(Now, EMOHUDElementKind::Vital) ? TEXT("shown") : TEXT("hidden"),
+				UI->GetNumHUDElements(EMOHUDElementKind::Feedback), FMOHUDModePolicy::Shows(Now, EMOHUDElementKind::Feedback) ? TEXT("shown") : TEXT("hidden"),
+				UI->GetNumHUDElements(EMOHUDElementKind::Info), FMOHUDModePolicy::Shows(Now, EMOHUDElementKind::Info) ? TEXT("shown") : TEXT("hidden"));
+			TArray<FString> Lines;
+			UI->DescribeHUDElements(Lines);
+			for (const FString& Line : Lines)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] HUDMODE   %s"), *Line);
+			}
+		}));
 
 	FAutoConsoleCommandWithWorldAndArgs GUIAuditClassesCmd(
 		TEXT("MO.UI.AuditClasses"),

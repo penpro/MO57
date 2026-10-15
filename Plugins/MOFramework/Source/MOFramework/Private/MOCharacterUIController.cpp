@@ -682,6 +682,7 @@ void UMOCharacterUIController::StartItemInspection(FName ItemDefinitionId, const
 		// Create new widget via layer stack
 		UCommonActivatableWidget* ActualWidget = PushWidgetToLayer(MOUILayerTags::Layer_GameOverlay, InspectionProgressWidgetClass);
 		InspectionWidget = Cast<UMOInspectionProgressWidget>(ActualWidget);
+		UMOUIManagerComponent::RegisterHUDElement(InspectionWidget, EMOHUDElementKind::Feedback);
 		bNeedsBindDelegates = true;
 	}
 

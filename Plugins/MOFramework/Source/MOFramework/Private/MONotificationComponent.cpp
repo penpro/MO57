@@ -1,4 +1,5 @@
 #include "MONotificationComponent.h"
+#include "MOUIManagerComponent.h"
 #include "MOFramework.h"
 
 #include "GameFramework/PlayerController.h"
@@ -334,6 +335,7 @@ void UMONotificationComponent::ProcessNextNotification()
 	if (!NotificationWidget->IsInViewport())
 	{
 		NotificationWidget->AddToViewport(NotificationZOrder);
+		UMOUIManagerComponent::RegisterHUDElement(NotificationWidget, EMOHUDElementKind::Feedback);
 	}
 
 	// Play show animation
@@ -473,6 +475,7 @@ void UMONotificationComponent::ShowSkillPopupInternal(FName SkillId, bool bIsKno
 
 	// Add to viewport
 	SkillWidget->AddToViewport(SkillPopupZOrder);
+	UMOUIManagerComponent::RegisterHUDElement(SkillWidget, EMOHUDElementKind::Info);
 
 	// Position the popup at a normalized viewport position (configurable —
 	// default 20% from left, 80% down = lower-left). SetPositionInViewport works

@@ -133,6 +133,7 @@ class UMOPossessionComponent;
 class UMONotificationComponent;
 class UMOTextInputDialog;
 class UMOQuickPickDialog;
+class UMOTimeOfDayDialog;
 struct FMOQuickPickOption;
 class UMOBuildingComponent;
 class UEnhancedInputLocalPlayerSubsystem;
@@ -789,8 +790,16 @@ protected:
 	void HandleOpenDevConsole(const FString& InitialText = FString());
 
 public:
-	/** Sees every key before the action bindings do; this is where the hard-coded Tilde is caught. */
+	/** Sees every key before the action bindings do; this is where the hard-coded Tilde and the HUD mode key are caught. */
 	virtual bool InputKey(const FInputKeyEventArgs& Params) override;
+
+	/**
+	 * Cycles the HUD: Full -> Minimal -> Off (UMOUIManagerComponent::CycleHUDMode). F1 by default, the key most games use to hide the HUD. Caught in
+	 * InputKey like Tilde, before the engine's dev-build debug binding on F1 (viewmode wireframe) could see it. Not in the rebind list yet (that list is
+	 * built from Input Action assets).
+	 */
+	UPROPERTY(EditDefaultsOnly, Category="MO|UI")
+	FKey HUDModeKey = EKeys::F1;
 
 protected:
 
@@ -828,8 +837,12 @@ public:
 	/** Open the weather picker (Clear, Partly Cloudy, Overcast, Fog, rain, snow ...). With a preset name it skips the popup and sets that weather. */
 	void OpenDevWeatherPicker(const FString& PresetName = FString());
 
-	/** Open the time picker (8 am, 2 pm, 8 pm, 2 am). With an hour (0-23) it skips the popup and moves the clock to that time. */
+	/** Open the time dialog (a 24-hour dial to drag, the sky previewing it; Dawn / Dusk = golden hour). With an hour (0-23) it skips the popup and moves the
+	 *  clock to that time. */
 	void OpenDevTimePicker(int32 Hour = -1);
+
+	/** Move the server's clock forward to golden hour after sunrise (morning) or before sunset (evening), as this machine's sky has them. */
+	void DevAdvanceToGoldenHour(bool bEvening);
 
 	/** Set the server's weather to the UDS preset of this name (see UMOWeatherIntegrationSubsystem::GetPresetChoices). */
 	UFUNCTION(Server, Reliable)
@@ -867,6 +880,13 @@ protected:
 
 	/** The picker currently open, if any. */
 	TWeakObjectPtr<UMOQuickPickDialog> DevQuickPickDialog;
+
+	/** The `time` dialog (Content/Python/ui_specs/kit_time_dialog.py builds it). */
+	UPROPERTY(EditDefaultsOnly, Category="MO|DevConsole")
+	TSoftClassPtr<UMOTimeOfDayDialog> DevTimeDialogClass = TSoftClassPtr<UMOTimeOfDayDialog>(
+		FSoftObjectPath(TEXT("/MOFramework/UI/WBP_TimeOfDayDialog.WBP_TimeOfDayDialog_C")));
+
+	TWeakObjectPtr<UMOTimeOfDayDialog> DevTimeDialog;
 
 	/** In a Server RPC: true if this machine's developer mode is on; otherwise logs and tells the player, and returns false. */
 	bool ServerAllowsDevCheats(const TCHAR* What);

@@ -610,6 +610,7 @@ void UMOCraftingUIController::StartHarvestOperation(FName ActionId)
 		// Create new widget via layer stack
 		UCommonActivatableWidget* ActualWidget = PushWidgetToLayer(MOUILayerTags::Layer_GameOverlay, HarvestProgressWidgetClass);
 		WidgetInst = Cast<UMOHarvestProgressWidget>(ActualWidget);
+		UMOUIManagerComponent::RegisterHUDElement(WidgetInst, EMOHUDElementKind::Feedback);
 		bNeedsBindDelegates = true;
 	}
 
@@ -921,6 +922,7 @@ void UMOCraftingUIController::StartCarcassButchering(AMOCarcassActor* Carcass, F
 		// Create new widget via layer stack
 		UCommonActivatableWidget* ActualWidget = PushWidgetToLayer(MOUILayerTags::Layer_GameOverlay, HarvestProgressWidgetClass);
 		WidgetInst = Cast<UMOHarvestProgressWidget>(ActualWidget);
+		UMOUIManagerComponent::RegisterHUDElement(WidgetInst, EMOHUDElementKind::Feedback);
 		bNeedsBindDelegates = true;
 	}
 

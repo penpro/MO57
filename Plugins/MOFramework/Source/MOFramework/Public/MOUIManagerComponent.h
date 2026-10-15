@@ -34,6 +34,7 @@
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "MOInteractorComponent.h"
+#include "MOHUDMode.h"
 #include "MOUIManagerComponent.generated.h"
 
 /**
@@ -269,6 +270,31 @@ public:
 	/** Get the reticle widget (may be null if not created yet). */
 	UFUNCTION(BlueprintPure, Category="MO|UI")
 	UMOReticleWidget* GetReticleWidget() const;
+
+	// --- HUD mode (F1: Full -> Minimal -> Off; MOHUDMode.h) ---
+
+	/** Draw only the HUD elements this mode shows (FMOHUDModePolicy). Off also hides the engine's on-screen debug messages. Local and per player. */
+	void SetHUDMode(EMOHUDMode NewMode);
+	EMOHUDMode GetHUDMode() const { return HUDMode; }
+
+	/** F1: the next mode, with a short note on entering Minimal (Off stays clean). */
+	void CycleHUDMode();
+
+	/**
+	 * Every HUD element registers ONCE, where it is created, with what it is for; the current mode applies to it at once and on every change. The mode
+	 * uses the widget's own ColorAndOpacity alpha -- a channel no HUD widget drives itself (they toggle Visibility and RenderOpacity), so the mode never
+	 * fights a widget's own show / hide logic. Resolves the manager from the widget's owning player; harmless when there is none.
+	 */
+	static void RegisterHUDElement(UUserWidget* Widget, EMOHUDElementKind Kind);
+
+	/** Whether the current mode draws this registered widget (tests). False if it is not registered. */
+	bool IsHUDElementShownByMode(const UUserWidget* Widget) const;
+
+	/** How many live HUD elements are registered, and of a kind (tests, the MO.HUD.Mode readout). */
+	int32 GetNumHUDElements(TOptional<EMOHUDElementKind> Kind = TOptional<EMOHUDElementKind>()) const;
+
+	/** One line per live registered element: its widget, kind and current alpha (MO.HUD.Mode, tests). */
+	void DescribeHUDElements(TArray<FString>& OutLines) const;
 
 	/** Refresh FPS counter visibility based on game settings. Call after changing bShowFPSCounter. */
 	UFUNCTION(BlueprintCallable, Category="MO|UI")
@@ -684,6 +710,21 @@ private:
 
 	/** Refresh FPS counter visibility based on current settings. */
 	void RefreshFPSCounterVisibility();
+
+	// --- HUD mode ---
+
+	struct FHUDElement
+	{
+		TWeakObjectPtr<UUserWidget> Widget;
+		EMOHUDElementKind Kind = EMOHUDElementKind::Info;
+		float AuthoredAlpha = 1.0f;   // the widget's own ColorAndOpacity alpha, restored when the mode shows it
+	};
+	TArray<FHUDElement> HUDElements;
+	EMOHUDMode HUDMode = EMOHUDMode::Full;
+	bool bOnScreenMessagesBeforeHUDOff = true;
+
+	void AddHUDElement(UUserWidget* Widget, EMOHUDElementKind Kind);
+	void ApplyHUDModeTo(const FHUDElement& Element) const;
 
 	// --- Helpers ---
 

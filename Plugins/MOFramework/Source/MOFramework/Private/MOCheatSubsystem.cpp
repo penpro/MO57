@@ -5168,7 +5168,7 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 
 	ConsoleCommands.Add(CM.RegisterConsoleCommand(
 		TEXT("time"),
-		TEXT("Dev: pop up a small time-of-day picker (8 AM / 2 PM / 8 PM / 2 AM) that moves the server's clock forward to it. Usage: time [8am|2pm|14|...]"),
+		TEXT("Dev: pop up the time-of-day dial (drag the hand, the sky follows; Dawn / Dusk = golden hour) that moves the server's clock forward to it. Usage: time [8am|2pm|14|dawn|dusk]"),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
 		{
 			AMOPlayerController* PC = World ? Cast<AMOPlayerController>(World->GetFirstPlayerController()) : nullptr;
@@ -5181,6 +5181,11 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 			if (Args.Num() > 0)
 			{
 				FString Text = Args[0].ToLower();
+				if (Text == TEXT("dawn") || Text == TEXT("dusk"))
+				{
+					PC->DevAdvanceToGoldenHour(Text == TEXT("dusk"));
+					return;
+				}
 				const bool bPm = Text.EndsWith(TEXT("pm")), bAm = Text.EndsWith(TEXT("am"));
 				if (bPm || bAm)
 				{
@@ -5188,7 +5193,7 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 				}
 				if (!Text.IsNumeric())
 				{
-					UE_LOG(LogMOFramework, Warning, TEXT("[MOConsole] time: '%s' is not an hour. Usage: time [8am|2pm|14]"), *Args[0]);
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOConsole] time: '%s' is not an hour. Usage: time [8am|2pm|14|dawn|dusk]"), *Args[0]);
 					return;
 				}
 				Hour = FMath::Clamp(FCString::Atoi(*Text), 0, 23);

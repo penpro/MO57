@@ -28,6 +28,7 @@
 #include "MOGameUIManagerSubsystem.h"
 #include "MOTextInputDialog.h"
 #include "MOQuickPickDialog.h"
+#include "MOTimeOfDayDialog.h"
 #include "MOWeatherIntegrationSubsystem.h"
 #include "MOGameClockSubsystem.h"
 #include "Misc/OutputDevice.h"
@@ -1501,6 +1502,15 @@ bool AMOPlayerController::InputKey(const FInputKeyEventArgs& Params)
 		HandleOpenDevConsole();
 		return true;
 	}
+	// The HUD mode key, unmodified (Shift+F1 is the editor's "release the mouse" in PIE).
+	if (Params.Key == HUDModeKey && UIManagerComponent && !(PlayerInput && (PlayerInput->IsShiftPressed() || PlayerInput->IsCtrlPressed() || PlayerInput->IsAltPressed())))
+	{
+		if (Params.Event == IE_Pressed)
+		{
+			UIManagerComponent->CycleHUDMode();
+		}
+		return true;   // the release too: nothing else may act on this key (dev builds bind F1 to wireframe)
+	}
 	return Super::InputKey(Params);
 }
 
@@ -1837,13 +1847,34 @@ void AMOPlayerController::OpenDevTimePicker(int32 Hour)
 		ServerDevAdvanceToTime(FMath::Min(Hour, 23), 0);
 		return;
 	}
-	const TArray<FMOQuickPickOption> Options = {
-		{ FName(TEXT("8")), NSLOCTEXT("MOConsole", "Time8am", "8 AM") },
-		{ FName(TEXT("14")), NSLOCTEXT("MOConsole", "Time2pm", "2 PM") },
-		{ FName(TEXT("20")), NSLOCTEXT("MOConsole", "Time8pm", "8 PM") },
-		{ FName(TEXT("2")), NSLOCTEXT("MOConsole", "Time2am", "2 AM") } };
-	OpenDevQuickPick(NSLOCTEXT("MOConsole", "TimeTitle", "Time of day"), NSLOCTEXT("MOConsole", "TimeMessage", "Moves the server's clock forward to the next time."), Options, /*Columns=*/2,
-		[this](FName Id) { ServerDevAdvanceToTime(FCString::Atoi(*Id.ToString()), 0); });
+	if (DevTimeDialog.IsValid() && DevTimeDialog->IsActivated())
+	{
+		return;   // already open
+	}
+	UClass* DialogClass = DevTimeDialogClass.LoadSynchronous();
+	UMOTimeOfDayDialog* Dialog = DialogClass ? Cast<UMOTimeOfDayDialog>(UMOGameUIManagerSubsystem::PushModalWidget(this, DialogClass)) : nullptr;
+	if (!Dialog)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOConsole] Cannot open the time dialog: %s did not load or push (build it: python Tools/ue.py ui build Content/Python/ui_specs/kit_time_dialog.py)"),
+			*DevTimeDialogClass.ToString());
+		return;
+	}
+	Dialog->Configure();
+	Dialog->OnChosen.AddWeakLambda(this, [this](int32 Minutes) { DevTimeDialog.Reset(); ServerDevAdvanceToTime(Minutes / 60, Minutes % 60); });
+	Dialog->OnCancelled.AddWeakLambda(this, [this]() { DevTimeDialog.Reset(); });
+	DevTimeDialog = Dialog;
+	UE_LOG(LogMOFramework, Log, TEXT("[MOConsole] time dialog opened"));
+}
+
+void AMOPlayerController::DevAdvanceToGoldenHour(bool bEvening)
+{
+	if (!FMODevMode::IsEnabled())
+	{
+		return;
+	}
+	const UMOWeatherIntegrationSubsystem* Weather = GetWorld() ? GetWorld()->GetSubsystem<UMOWeatherIntegrationSubsystem>() : nullptr;
+	const int32 Minutes = Weather ? Weather->GetGoldenHourMinutesOfDay(bEvening) : (bEvening ? 17 * 60 + 30 : 6 * 60 + 30);
+	ServerDevAdvanceToTime(Minutes / 60, Minutes % 60);
 }
 
 void AMOPlayerController::ServerDevSetWeather_Implementation(FName PresetName)

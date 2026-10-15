@@ -457,6 +457,37 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="MO|Weather|UDSSync", meta=(ClampMin="0.01"))
 	float UdsSyncPollIntervalSeconds = 0.25f;
 
+	// ----------------------------------------------------------------------------
+	// SKY PREVIEW (the dev time dialog: the sky follows the clock hand before the time is applied)
+	// ----------------------------------------------------------------------------
+
+	/**
+	 * Show THIS machine's sky at DateTime without touching the game clock: the time dialog calls it as the hand is dragged. While a preview is active the
+	 * clock-driven sync is held off (it would snap the sky back every poll); EndSkyPreview hands the sky back to the clock. Local and visual only.
+	 */
+	void PreviewSkyAt(const FDateTime& DateTime);
+
+	/** End a preview: the sky returns to the game clock at once. Harmless when none is active. */
+	void EndSkyPreview();
+
+	bool IsSkyPreviewActive() const { return bSkyPreviewActive; }
+
+	/**
+	 * When the sky's sun rises and sets (hours, fractional), read from Ultra Dynamic Sky (its Dawn / Dusk Time, or the simulated sunrise / sunset when it
+	 * simulates the real sun). False (and 6 / 18) when there is no sky to ask.
+	 */
+	bool GetSunriseSunsetHours(float& OutSunriseHour, float& OutSunsetHour) const;
+
+	/**
+	 * Golden hour: the time of day (minutes) a little after sunrise (morning) or before sunset (evening), when the sun is low and the light warm. THE one
+	 * definition: the time dialog's Dawn / Dusk buttons and `time dawn|dusk` both read it.
+	 */
+	int32 GetGoldenHourMinutesOfDay(bool bEvening) const;
+
+	/** How far from sunrise / sunset golden hour sits (minutes). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="MO|Weather|UDSSync", meta=(ClampMin="0", ClampMax="120"))
+	int32 GoldenHourOffsetMinutes = 30;
+
 	/**
 	 * Set weather preset by object reference.
 	 * @param PresetObject Weather preset object (UDS_Weather_Settings from UDW)
@@ -554,6 +585,12 @@ private:
 
 	/** Most recent GameDateTime we successfully pushed to UDS. */
 	FDateTime LastUdsSyncDateTime;
+
+	/** PreviewSkyAt is showing a time the clock is not at: clock syncs wait. */
+	bool bSkyPreviewActive = false;
+
+	/** The Ultra Dynamic Sky actor (found by class name: it is a Blueprint this module cannot name). */
+	mutable TWeakObjectPtr<AActor> CachedSkyActor;
 
 	/** Periodic safety-net poll timer (real-time). */
 	FTimerHandle UdsSyncPollHandle;

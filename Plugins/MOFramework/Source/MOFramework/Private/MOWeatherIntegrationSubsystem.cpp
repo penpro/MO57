@@ -9,6 +9,7 @@
 #include "MOFramework.h"
 #include "Engine/World.h"
 #include "TimerManager.h"
+#include "EngineUtils.h"
 
 void UMOWeatherIntegrationSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -163,7 +164,7 @@ void UMOWeatherIntegrationSubsystem::HandleUdsSyncPollTick()
 
 void UMOWeatherIntegrationSubsystem::RequestUdsSync()
 {
-	if (!HasWeatherProvider())
+	if (!HasWeatherProvider() || bSkyPreviewActive)
 	{
 		return;
 	}
@@ -204,6 +205,97 @@ void UMOWeatherIntegrationSubsystem::DoUdsSyncInternal(const FDateTime& Now)
 	UE_LOG(LogMOFramework, Log,
 		TEXT("[MOWeatherIntegration] UDS sync -> %s (next eligible in %.1fh)"),
 		*Now.ToString(), MinHoursBetweenUdsSyncs);
+}
+
+void UMOWeatherIntegrationSubsystem::PreviewSkyAt(const FDateTime& DateTime)
+{
+	if (!HasWeatherProvider())
+	{
+		return;
+	}
+	bSkyPreviewActive = true;
+	IMOWeatherProviderInterface::Execute_SetDateTime(WeatherProvider.GetObject(), DateTime);   // LastUdsSyncDateTime untouched: the clock never moved
+}
+
+void UMOWeatherIntegrationSubsystem::EndSkyPreview()
+{
+	if (!bSkyPreviewActive)
+	{
+		return;
+	}
+	bSkyPreviewActive = false;
+	const UMOGameClockSubsystem* Clock = UMOGameClockSubsystem::Get(this);
+	if (Clock && HasWeatherProvider())
+	{
+		DoUdsSyncInternal(Clock->GetGameDateTime());   // now, not after the throttle window: the previewed sky must not linger
+	}
+}
+
+namespace
+{
+	/** A number variable on a Blueprint object by its exact name (UDS names have spaces), whatever its numeric type. */
+	bool ReadSkyNumber(const UObject* Object, const TCHAR* Name, double& Out)
+	{
+		const FNumericProperty* Property = CastField<FNumericProperty>(Object->GetClass()->FindPropertyByName(FName(Name)));
+		if (!Property)
+		{
+			return false;
+		}
+		const void* Value = Property->ContainerPtrToValuePtr<void>(Object);
+		Out = Property->IsFloatingPoint() ? Property->GetFloatingPointPropertyValue(Value) : static_cast<double>(Property->GetSignedIntPropertyValue(Value));
+		return true;
+	}
+
+	/** UDS keeps times of day as hundredths of an hour (650 = 06:30). */
+	float SkyTimeToHours(double Value)
+	{
+		return static_cast<float>(Value > 24.0 ? Value / 100.0 : Value);
+	}
+}
+
+bool UMOWeatherIntegrationSubsystem::GetSunriseSunsetHours(float& OutSunriseHour, float& OutSunsetHour) const
+{
+	OutSunriseHour = 6.0f;
+	OutSunsetHour = 18.0f;
+	AActor* Sky = CachedSkyActor.Get();
+	if (!Sky && GetWorld())
+	{
+		for (TActorIterator<AActor> It(GetWorld()); It; ++It)
+		{
+			if (It->GetClass()->GetName().Contains(TEXT("Ultra_Dynamic_Sky")))
+			{
+				Sky = *It;
+				CachedSkyActor = Sky;
+				break;
+			}
+		}
+	}
+	if (!Sky)
+	{
+		return false;
+	}
+	const FBoolProperty* RealSun = CastField<FBoolProperty>(Sky->GetClass()->FindPropertyByName(FName(TEXT("Simulate Real Sun"))));
+	const bool bRealSun = RealSun && RealSun->GetPropertyValue_InContainer(Sky);
+	double Rise = 0.0, Set = 0.0;
+	const bool bRead = bRealSun
+		? (ReadSkyNumber(Sky, TEXT("Simulated Sunrise Time"), Rise) && ReadSkyNumber(Sky, TEXT("Simulated Sunset Time"), Set))
+		: (ReadSkyNumber(Sky, TEXT("Dawn Time"), Rise) && ReadSkyNumber(Sky, TEXT("Dusk Time"), Set));
+	const float RiseHours = SkyTimeToHours(Rise), SetHours = SkyTimeToHours(Set);
+	if (!bRead || RiseHours <= 0.0f || SetHours <= RiseHours || SetHours >= 24.0f)
+	{
+		return false;
+	}
+	OutSunriseHour = RiseHours;
+	OutSunsetHour = SetHours;
+	return true;
+}
+
+int32 UMOWeatherIntegrationSubsystem::GetGoldenHourMinutesOfDay(bool bEvening) const
+{
+	float Sunrise = 6.0f, Sunset = 18.0f;
+	GetSunriseSunsetHours(Sunrise, Sunset);
+	const int32 Minutes = bEvening ? FMath::RoundToInt(Sunset * 60.0f) - GoldenHourOffsetMinutes : FMath::RoundToInt(Sunrise * 60.0f) + GoldenHourOffsetMinutes;
+	return FMath::Clamp(FMath::RoundToInt(Minutes / 5.0f) * 5, 0, 24 * 60 - 1);
 }
 
 void UMOWeatherIntegrationSubsystem::Tick(float DeltaTime)

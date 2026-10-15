@@ -17,6 +17,8 @@
 #include "MOReticleWidget.h"
 #include "MOFPSCounterWidget.h"
 #include "MOBreathMeterWidget.h"
+#include "MOStatusEffectStripWidget.h"
+#include "MOWindDirectionWidget.h"
 #include "MOGameSettings.h"
 #include "MOInGameMenu.h"
 #include "MOItemContextMenu.h"
@@ -397,6 +399,8 @@ void UMOUIManagerComponent::CreateHUDRoot(UMOPrimaryGameLayout* Layout)
 	if (UMOHUDRootWidget* CastedRoot = ::Cast<UMOHUDRootWidget>(Created))
 	{
 		HUDRootWidget = CastedRoot;
+		RegisterHUDElement(CastedRoot->GetStatusStrip(), EMOHUDElementKind::Vital);
+		RegisterHUDElement(CastedRoot->GetWindIndicator(), EMOHUDElementKind::Info);
 		UE_LOG(LogMOFramework, Warning,
 			TEXT("[MOUI] HUD root '%s' pushed to Layer_HUD"),
 			*CastedRoot->GetName());
@@ -432,6 +436,7 @@ void UMOUIManagerComponent::CreateReticle()
 
 	ReticleWidget = NewReticle;
 	NewReticle->AddToViewport(ReticleZOrder);
+	RegisterHUDElement(NewReticle, EMOHUDElementKind::Feedback);
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Reticle widget created and added to viewport."));
 }
@@ -451,6 +456,7 @@ void UMOUIManagerComponent::CreateBreathMeter()
 	}
 	BreathMeterWidget = Meter;
 	Meter->AddToPlayerScreen(40);   // full screen; the widget places its own bar low and centred
+	RegisterHUDElement(Meter, EMOHUDElementKind::Vital);
 	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Breath meter created."));
 }
 
@@ -477,6 +483,7 @@ void UMOUIManagerComponent::CreateFPSCounter()
 
 	FPSCounterWidget = NewFPSCounter;
 	NewFPSCounter->AddToViewport(FPSCounterZOrder);
+	RegisterHUDElement(NewFPSCounter, EMOHUDElementKind::Info);
 
 	// Set initial visibility based on settings
 	RefreshFPSCounterVisibility();
@@ -578,6 +585,111 @@ bool UMOUIManagerComponent::IsReticleVisible() const
 UMOReticleWidget* UMOUIManagerComponent::GetReticleWidget() const
 {
 	return ReticleWidget.Get();
+}
+
+// =============================================================================
+// HUD mode (F1: Full -> Minimal -> Off)
+// =============================================================================
+
+void UMOUIManagerComponent::RegisterHUDElement(UUserWidget* Widget, EMOHUDElementKind Kind)
+{
+	const APlayerController* Owner = Widget ? Widget->GetOwningPlayer() : nullptr;
+	if (UMOUIManagerComponent* Manager = Owner ? Owner->FindComponentByClass<UMOUIManagerComponent>() : nullptr)
+	{
+		Manager->AddHUDElement(Widget, Kind);
+	}
+}
+
+void UMOUIManagerComponent::AddHUDElement(UUserWidget* Widget, EMOHUDElementKind Kind)
+{
+	HUDElements.RemoveAll([](const FHUDElement& E) { return !E.Widget.IsValid(); });
+	// Registering again (a pooled widget pushed again) keeps the alpha first seen: the current one may be the mode's 0.
+	FHUDElement* Element = HUDElements.FindByPredicate([Widget](const FHUDElement& E) { return E.Widget.Get() == Widget; });
+	if (!Element)
+	{
+		Element = &HUDElements.AddDefaulted_GetRef();
+		Element->Widget = Widget;
+		Element->AuthoredAlpha = Widget->GetColorAndOpacity().A;
+	}
+	Element->Kind = Kind;
+	ApplyHUDModeTo(*Element);
+}
+
+void UMOUIManagerComponent::ApplyHUDModeTo(const FHUDElement& Element) const
+{
+	if (UUserWidget* Widget = Element.Widget.Get())
+	{
+		FLinearColor Color = Widget->GetColorAndOpacity();
+		Color.A = FMOHUDModePolicy::Shows(HUDMode, Element.Kind) ? Element.AuthoredAlpha : 0.0f;
+		Widget->SetColorAndOpacity(Color);
+	}
+}
+
+void UMOUIManagerComponent::SetHUDMode(EMOHUDMode NewMode)
+{
+	const EMOHUDMode Old = HUDMode;
+	HUDMode = NewMode;
+	HUDElements.RemoveAll([](const FHUDElement& E) { return !E.Widget.IsValid(); });
+	for (const FHUDElement& Element : HUDElements)
+	{
+		ApplyHUDModeTo(Element);
+	}
+	// A clean frame also means no engine debug text (dev builds); restored as it was on the way out of Off.
+	if (GEngine && (Old == EMOHUDMode::Off) != (NewMode == EMOHUDMode::Off))
+	{
+		if (NewMode == EMOHUDMode::Off)
+		{
+			bOnScreenMessagesBeforeHUDOff = GEngine->bEnableOnScreenDebugMessagesDisplay;
+			GEngine->bEnableOnScreenDebugMessagesDisplay = false;
+		}
+		else
+		{
+			GEngine->bEnableOnScreenDebugMessagesDisplay = bOnScreenMessagesBeforeHUDOff;
+		}
+	}
+	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] HUD mode %s (%d element(s))"), *FMOHUDModePolicy::DisplayName(NewMode).ToString(), HUDElements.Num());
+}
+
+void UMOUIManagerComponent::CycleHUDMode()
+{
+	const EMOHUDMode NewMode = FMOHUDModePolicy::Next(HUDMode);
+	SetHUDMode(NewMode);
+	if (NewMode == EMOHUDMode::Minimal)
+	{
+		// Notifications are Feedback: shown in Minimal, so the player learns where the rest went; Off stays clean for the screenshot.
+		if (UMONotificationComponent* Notifications = GetOwner() ? GetOwner()->FindComponentByClass<UMONotificationComponent>() : nullptr)
+		{
+			Notifications->ShowInfoNotification(NSLOCTEXT("MOUI", "HUDMinimal", "HUD: minimal. F1 again hides it all."), 3.0f);
+		}
+	}
+}
+
+bool UMOUIManagerComponent::IsHUDElementShownByMode(const UUserWidget* Widget) const
+{
+	const FHUDElement* Element = HUDElements.FindByPredicate([Widget](const FHUDElement& E) { return E.Widget.Get() == Widget; });
+	return Element && FMOHUDModePolicy::Shows(HUDMode, Element->Kind);
+}
+
+void UMOUIManagerComponent::DescribeHUDElements(TArray<FString>& OutLines) const
+{
+	for (const FHUDElement& Element : HUDElements)
+	{
+		if (const UUserWidget* Widget = Element.Widget.Get())
+		{
+			OutLines.Add(FString::Printf(TEXT("%s [%s] alpha %.2f %s"), *Widget->GetClass()->GetName(), *UEnum::GetValueAsString(Element.Kind).RightChop(FCString::Strlen(TEXT("EMOHUDElementKind::"))),
+				Widget->GetColorAndOpacity().A, Widget->IsInViewport() || Widget->GetParent() ? TEXT("on screen") : TEXT("not added")));
+		}
+	}
+}
+
+int32 UMOUIManagerComponent::GetNumHUDElements(TOptional<EMOHUDElementKind> Kind) const
+{
+	int32 Count = 0;
+	for (const FHUDElement& Element : HUDElements)
+	{
+		Count += (Element.Widget.IsValid() && (!Kind.IsSet() || Element.Kind == Kind.GetValue())) ? 1 : 0;
+	}
+	return Count;
 }
 
 // =============================================================================
@@ -1949,6 +2061,7 @@ void UMOUIManagerComponent::CreateModeIndicator()
 
 	ModeIndicatorWidget = WidgetInst;
 	WidgetInst->AddToViewport(ModeIndicatorZOrder);
+	RegisterHUDElement(WidgetInst, EMOHUDElementKind::Info);
 
 	// Set initial mode
 	WidgetInst->SetMode(CurrentGameplayMode);
@@ -2027,6 +2140,7 @@ void UMOUIManagerComponent::CreateToolHint()
 
 	ToolHintWidget = WidgetInst;
 	WidgetInst->AddToViewport(ToolHintZOrder);
+	RegisterHUDElement(WidgetInst, EMOHUDElementKind::Feedback);   // also the focus hint: what E would act on
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Tool Hint created"));
 }

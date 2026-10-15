@@ -288,6 +288,7 @@ void UMOQuestUIController::CreateQuestHUD()
 
 	QuestHUDWidget = NewHUD;
 	NewHUD->AddToViewport(QuestHUDZOrder);
+	UMOUIManagerComponent::RegisterHUDElement(NewHUD, EMOHUDElementKind::Info);
 	bQuestHUDWantedVisible = true;
 	ApplyQuestHUDVisibility(); // HitTestInvisible, or Collapsed if a menu is already open
 
@@ -394,6 +395,7 @@ void UMOQuestUIController::CreateTutorialHintWidget()
 
 	TutorialHintWidget = NewHint;
 	NewHint->AddToViewport(TutorialHintZOrder);
+	UMOUIManagerComponent::RegisterHUDElement(NewHint, EMOHUDElementKind::Info);
 	NewHint->SetSuppressedByMenu(bHideTutorialHintWhileMenuOpen && bMenuOpenForHUD); // created while a menu is open: stays hidden until it closes
 	// CommonActivatableWidget controls its own visibility via Activate/Deactivate;
 	// we do NOT call SetVisibility here — the widget starts deactivated and
