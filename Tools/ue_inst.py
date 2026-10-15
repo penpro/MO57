@@ -1700,31 +1700,51 @@ def _count_buildables(host):
 def _trust_placement(rep, host, client):
     """Audit H19: ServerPlaceBuilding trusted the client's transform, so a hostile client could place buildings anywhere. The client
     sends the same RPC twice, near (what the placement UI sends) and 200 m away (what a hostile client sends). With the server reach check
-    switched OFF the far request must succeed (the control: the refusal below is the check's doing); with it on, only the near one does."""
-    base = _count_buildables(host)
-    if not rep.step("host: can count buildings", base is not None, str(base)):
+    switched OFF the far request must succeed (the control: the refusal below is the check's doing); with it on, only the near one does.
+    Every step counts the buildings at the REQUESTED SPOT (within 15 m), never the world's total: world features spawn around the players
+    while the test runs, and the total moved by itself in two runs (Oct 14: +2 for one placement, and a change across a refusal)."""
+    probe = ("p = unreal.GameplayStatics.get_player_pawn(world, 1); l = p.get_actor_location(); f = p.get_actor_forward_vector(); "
+             "out('SPOT x=%f y=%f fx=%f fy=%f' % (l.x, l.y, f.x, f.y))")
+    m = re.search(r"SPOT x=(-?[\d.]+) y=(-?[\d.]+) fx=(-?[\d.]+) fy=(-?[\d.]+)", _probe(host, probe))
+    if not rep.step("host: located the joiner for the placement test", bool(m), m.group(0) if m else "no SPOT line"):
         return
+    x, y, fx, fy = (float(v) for v in m.groups())
+    near_spot, far_spot = (x + fx * 300.0, y + fy * 300.0), (x + fx * 20000.0, y + fy * 20000.0)
+    at = lambda spot: _buildables_near(host, spot[0], spot[1], 1500.0)
 
     def send(forward_cm):
         off = log_size(host)
         console(client, f"MO.Test.PlaceBuildingRPC auto {forward_cm}")
         time.sleep(6)  # next tick + RPC + the host spawning it
-        return _count_buildables(host), read_log_from(host, off)
+        return read_log_from(host, off)
 
-    after, log = send(300)
-    rep.step("trust: a placement 3 m in front of the pawn (the UI's own request) IS accepted", after == base + 1 and "ServerPlaceBuilding rejected" not in log,
-             f"buildings {base} -> {after}")
-    base = after
+    before = at(near_spot)
+    log = send(300)
+    after = at(near_spot)
+    rep.step("trust: a placement 3 m in front of the pawn (the UI's own request) IS accepted", before is not None and after == before + 1 and "ServerPlaceBuilding rejected" not in log,
+             f"buildings at the spot {before} -> {after}")
 
     console(host, "MO.Building.ServerReach.Disable 1")
-    after, log = send(20000)
-    rep.step("CONTROL: with the server reach check disabled a placement 200 m away IS accepted (a hostile client could do this)", after == base + 1, f"buildings {base} -> {after}")
-    base = after
+    before = at(far_spot)
+    send(20000)
+    after = at(far_spot)
     console(host, "MO.Building.ServerReach.Disable 0")
+    rep.step("CONTROL: with the server reach check disabled a placement 200 m away IS accepted (a hostile client could do this)",
+             before is not None and after == before + 1, f"buildings at the far spot {before} -> {after}")
 
-    after, log = send(20000)
+    before = after
+    log = send(20000)
+    after = at(far_spot)
     refused = re.search(r"ServerPlaceBuilding rejected: [^\n]*", log)
-    rep.step("trust: a placement 200 m away is REFUSED by the server", after == base and bool(refused), refused.group(0)[:150] if refused else f"buildings {base} -> {after}")
+    rep.step("trust: a placement 200 m away is REFUSED by the server (and nothing new stands at the requested spot)", bool(refused) and after == before,
+             (refused.group(0)[:120] if refused else "no 'ServerPlaceBuilding rejected' line") + f"; buildings at the far spot {before} -> {after}")
+
+
+def _buildables_near(host, x, y, radius):
+    out = _probe(host, "c = [a for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOBuildableActor) "
+                       f"if ((a.get_actor_location().x - {x}) ** 2 + (a.get_actor_location().y - {y}) ** 2) ** 0.5 < {radius}]; out('NEAR=%d' % len(c))")
+    m = re.search(r"NEAR=(\d+)", out)
+    return int(m.group(1)) if m else None
 
 
 def _trust_pickup_far(rep, host, client):
@@ -1778,6 +1798,25 @@ def _trust_possess_other(rep, host, client):
              (refused.group(0)[:120] if refused else "no 'may not take' line") + f"; pawns {before.group(1)}/{before.group(2)} -> {after.group(1) if after else '?'}/{after.group(2) if after else '?'}")
 
 
+def _trust_dev_spawn(rep, host, client):
+    """C7: the possession component's dev spawn RPC carries a class the CLIENT chooses. The server honours it for its own player only:
+    the host's request spawns a TargetPoint (control), the joiner's is refused and spawns nothing."""
+    off = log_size(host)
+    console(host, "MO.Test.DevSpawnRPC")
+    time.sleep(4)
+    spawned = re.search(r"\[MOPossess\] Spawned Actor=\S+ Class=TargetPoint", read_log_from(host, off))
+    rep.step("control: the HOST's own dev spawn request spawns (single player / listen host keep the tool)", bool(spawned),
+             spawned.group(0) if spawned else "no 'Spawned ... Class=TargetPoint' line on the host")
+    off = log_size(host)
+    console(client, "MO.Test.DevSpawnRPC")
+    time.sleep(6)
+    log = read_log_from(host, off)
+    refused = re.search(r"\[MOPossession\] ServerSpawnActorNearController rejected: dev spawn RPCs are host-only[^\n]*", log)
+    leaked = re.search(r"\[MOPossess\] Spawned Actor=\S+ Class=TargetPoint", log)
+    rep.step("trust: a REMOTE client's dev spawn (client-chosen class) is REFUSED and nothing spawns", bool(refused) and not leaked,
+             (refused.group(0)[:140] if refused else "no 'host-only' refusal on the host") + ("; but it SPAWNED" if leaked else ""))
+
+
 def _trust_terraform(rep, host, client):
     """ServerApplyTerraform holds the client to 2500 cm and clamps FlattenHeight. Dig 3 m ahead must change the ground (control); Dig 100 m away must be refused."""
     probe = ("p = unreal.GameplayStatics.get_player_pawn(world, 1); l = p.get_actor_location(); f = p.get_actor_forward_vector(); "
@@ -1827,7 +1866,7 @@ def actions_test(uproject, editor_exe, keep=False, boot_timeout=300):
             start(n, uproject, editor_exe, pos=pos, nosteam=True)
         if not _host_and_join(rep, host, client, "ActionsTest", boot_timeout):
             return False
-        for fn in (_client_pickup, _client_craft, _client_forage, _client_build, _client_attack, _trust_placement, _trust_pickup_far, _trust_possess_other, _trust_terraform, _buried_pawns, _remote_pawn_stays_put):
+        for fn in (_client_pickup, _client_craft, _client_forage, _client_build, _client_attack, _trust_placement, _trust_pickup_far, _trust_possess_other, _trust_dev_spawn, _trust_terraform, _buried_pawns, _remote_pawn_stays_put):
             try:
                 fn(rep, host, client)
             except Exception as e:  # noqa: BLE001 - one verb's harness error must not hide the others
