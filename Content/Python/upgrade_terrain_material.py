@@ -97,7 +97,15 @@ c = lerp(c, FarColor * (1.0 + v * 0.55), far);
 // snow: altitude line broken up by noise, flat-ish faces only, steeper faces hold snow higher up
 // the snow line wanders on the LARGE scales (a mountain's snow is not polka dots); the 180 m term only frays its edge
 float n = ((m4 - 0.5) * 0.45 + (m3 - 0.5) * 0.35 + (m2 - 0.5) * 0.30) * 2.0;
-float h = P.z + n * SnowNoise + (m1 - 0.5) * SnowNoise * 0.6 * w1;
+// ASPECT (Wes, Oct 13 2026: "less snow on the southern facing slopes, as though it's in the northern hemisphere"). The noon sun stands at -X (Ultra Dynamic Sky
+// at 12:00 shines along +X, measured Oct 15), so a face that leans south has a normal pointing to -X. Sun melts the snow on it: the snow line rises on south
+// faces and drops on north faces by AspectLift x the face's horizontal lean (+-300 m on a 30 deg face, +-420 m on 45 deg -- the order of the real
+// north / south snow-line gap in the Alps). Flat ground is untouched. Faded to a third at range like the slope term (each coarse far triangle carries its own
+// normal and would checker), so the far ranges keep a hint of north-face snow.
+const float AspectLift = 60000.0;
+float south = -VN.x;
+float aspectW = lerp(1.0, 0.35, smoothstep(150000.0, 600000.0, d));
+float h = P.z + n * SnowNoise + (m1 - 0.5) * SnowNoise * 0.6 * w1 - south * AspectLift * aspectW;
 float snowH = smoothstep(SnowLine - SnowBand, SnowLine + SnowBand, h);
 float up = saturate(VN.z);
 float slopeMin = lerp(0.80, 0.42, saturate((h - SnowLine) / (SnowBand * 5.0)));
