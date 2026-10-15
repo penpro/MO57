@@ -846,6 +846,63 @@ void UMOInventoryComponent::RemoveGuidFromSlotsInternal(const FGuid& ItemGuid)
 	}
 }
 
+int32 UMOInventoryComponent::ReconcileSlots()
+{
+	EnsureSlotsInitialized();
+
+	bool bChanged = false;
+
+	// A slot may only hold an entry's GUID, and only once.
+	TSet<FGuid> Slotted;
+	for (FGuid& SlotGuid : SlotItemGuids)
+	{
+		if (!SlotGuid.IsValid())
+		{
+			continue;
+		}
+		bool bAlreadySlotted = false;
+		Slotted.Add(SlotGuid, &bAlreadySlotted);
+		if (bAlreadySlotted || FindEntryIndexByGuid(SlotGuid) == INDEX_NONE)
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOInventory] %s: slot held %s GUID %s -- cleared"), *GetNameSafe(GetOwner()),
+				bAlreadySlotted ? TEXT("a duplicate") : TEXT("a dangling"), *SlotGuid.ToString());
+			SlotGuid.Invalidate();
+			bChanged = true;
+		}
+	}
+
+	// Every entry sits in a slot while one is free.
+	int32 Unslotted = 0;
+	for (const FMOInventoryEntry& Entry : Inventory.Entries)
+	{
+		if (!Entry.ItemGuid.IsValid() || Slotted.Contains(Entry.ItemGuid))
+		{
+			continue;
+		}
+		if (TryAutoAssignGuidToEmptySlot(Entry.ItemGuid))
+		{
+			Slotted.Add(Entry.ItemGuid);
+			bChanged = true;
+		}
+		else
+		{
+			++Unslotted;
+		}
+	}
+
+	if (bChanged)
+	{
+		MarkSlotItemGuidsDirty();
+		OnSlotsChanged.Broadcast();
+	}
+	if (Unslotted > 0)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventory] %s: %d entr%s without a slot (no free slot, or auto-assign off) -- in the inventory but not shown"),
+			*GetNameSafe(GetOwner()), Unslotted, Unslotted == 1 ? TEXT("y") : TEXT("ies"));
+	}
+	return Unslotted;
+}
+
 bool UMOInventoryComponent::SetSlotGuid(int32 SlotIndex, const FGuid& ItemGuid)
 {
 	AActor* OwnerActor = GetOwner();
@@ -1137,6 +1194,9 @@ bool UMOInventoryComponent::ApplySaveDataAuthority(const FMOInventorySaveData& I
 	OnSlotsChanged.Broadcast();
 
 	bAutoAssignNewItemsToSlots = bPreviousAutoAssign;
+
+	// Saves written before the starting-kit fix carry an entry in no slot (invisible); a shrunk slot count can strand some too.
+	ReconcileSlots();
 	return true;
 }
 
@@ -1795,14 +1855,20 @@ void UMOInventoryComponent::ApplyStartingItems()
 			continue;
 		}
 
-		// Generate a unique GUID for this starting item
-		const FGuid NewItemGuid = FGuid::NewGuid();
+		// A row is not one entry carrying NewItemGuid: AddItemByGuid tops up existing stacks of the item first and splits the
+		// rest at MaxStackSize, so a row makes zero, one or several entries. Placing only NewItemGuid left a "Stick01 x20" kit
+		// (stack 10) with 10 sticks in no slot -- in the inventory, invisible in the UI (first-ten-minutes pass, Oct 15 2026).
+		TSet<FGuid> EntriesBefore;
+		for (const FMOInventoryEntry& Entry : Inventory.Entries)
+		{
+			EntriesBefore.Add(Entry.ItemGuid);
+		}
 
-		// Add to inventory (without auto-assign so we can control slot placement)
+		// Add without auto-assign so explicit SlotIndex rows are placed before ReconcileSlots fills the rest in order.
 		const bool bPreviousAutoAssign = bAutoAssignNewItemsToSlots;
 		bAutoAssignNewItemsToSlots = false;
 
-		const bool bAdded = AddItemByGuid(NewItemGuid, StartingItem.ItemDefinitionId, StartingItem.Quantity);
+		const bool bAdded = AddItemByGuid(FGuid::NewGuid(), StartingItem.ItemDefinitionId, StartingItem.Quantity);
 
 		bAutoAssignNewItemsToSlots = bPreviousAutoAssign;
 
@@ -1812,18 +1878,22 @@ void UMOInventoryComponent::ApplyStartingItems()
 			continue;
 		}
 
-		// Assign to specific slot or auto-assign
-		if (StartingItem.SlotIndex >= 0 && IsSlotIndexValid(StartingItem.SlotIndex))
+		// The requested slot gets the row's first new entry (if the slot is still free).
+		if (StartingItem.SlotIndex >= 0 && IsSlotIndexValid(StartingItem.SlotIndex) && !SlotItemGuids[StartingItem.SlotIndex].IsValid())
 		{
-			SlotItemGuids[StartingItem.SlotIndex] = NewItemGuid;
-			MarkSlotItemGuidsDirty();
-		}
-		else if (bAutoAssignNewItemsToSlots)
-		{
-			TryAutoAssignGuidToEmptySlot(NewItemGuid);
+			for (const FMOInventoryEntry& Entry : Inventory.Entries)
+			{
+				if (!EntriesBefore.Contains(Entry.ItemGuid))
+				{
+					SlotItemGuids[StartingItem.SlotIndex] = Entry.ItemGuid;
+					MarkSlotItemGuidsDirty();
+					break;
+				}
+			}
 		}
 	}
 
+	ReconcileSlots();
 	OnSlotsChanged.Broadcast();
 }
 

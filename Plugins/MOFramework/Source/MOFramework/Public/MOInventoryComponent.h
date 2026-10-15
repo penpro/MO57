@@ -520,6 +520,13 @@ private:
 	bool TryAutoAssignGuidToEmptySlot(const FGuid& ItemGuid);
 	void RemoveGuidFromSlotsInternal(const FGuid& ItemGuid);
 
+	/**
+	 * The slot invariant, enforced after batch adds that bypass auto-assign (starting kit, save load): a slot holds only the
+	 * GUID of an entry, at most once, and every entry sits in a slot while one is free (when bAutoAssignNewItemsToSlots).
+	 * An entry without a slot is in the inventory but invisible in the UI. Returns the entries still unslotted (no free slot).
+	 */
+	int32 ReconcileSlots();
+
 	void MarkSlotItemGuidsDirty();
 
 	UFUNCTION()
