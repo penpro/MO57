@@ -31,6 +31,20 @@ struct MOFRAMEWORK_API FMOItemSourceReport
 
 	/** Ground pickups found in PCG graphs (item ids) -- reported so a scatter change that drops one is visible. */
 	TArray<FName> PickupItems;
+
+	/** The progression ladder: the breadth-first round (0 = the bare world) in which each item became obtainable / each recipe performable.
+	 *  Roughly "crafting steps from bare hands". */
+	TMap<FName, int32> ItemTier;
+	TMap<FName, int32> RecipeTier;
+};
+
+/** What-if switches for FMOItemSourceAnalysis::Analyze (the progression map compares them with the real gates). */
+struct MOFRAMEWORK_API FMOItemSourceOptions
+{
+	/** Treat every recipe as discovered: what the materials, tools and stations alone allow ("attempt anything"). */
+	bool bIgnoreDiscovery = false;
+	/** Treat every required / harvest knowledge as known. */
+	bool bIgnoreKnowledge = false;
 };
 
 /**
@@ -55,5 +69,5 @@ struct MOFRAMEWORK_API FMOItemSourceReport
 struct MOFRAMEWORK_API FMOItemSourceAnalysis
 {
 	/** World is optional: with one, its UMOForagingSubsystem dig table counts as a source. */
-	static FMOItemSourceReport Analyze(UWorld* World);
+	static FMOItemSourceReport Analyze(UWorld* World, const FMOItemSourceOptions& Options = FMOItemSourceOptions());
 };

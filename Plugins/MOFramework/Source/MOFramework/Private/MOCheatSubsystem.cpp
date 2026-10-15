@@ -2333,6 +2333,45 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 		ECVF_Default));
 
 	// ---------- MO.Test.ValidateData ----------
+	// The progression ladder from bare hands (FMOItemSourceAnalysis with tiers), as the gates are today and as if every recipe could be attempted
+	// (discovery + knowledge ignored) -- the data behind Docs/Progression_*.md. Rerun after any recipe / item / resource change.
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Test.ProgressionMap"),
+		TEXT("Write Saved/Logs/progression_map.json: for the real gates ('today') and with discovery + knowledge ignored ('attempt_anything'), every obtainable item and performable recipe with its breadth-first tier (steps from bare hands) and source, and every blocked recipe with its first gate."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			auto Esc = [](const FString& In) { return In.Replace(TEXT("\\"), TEXT("\\\\")).Replace(TEXT("\""), TEXT("\\\"")); };
+			auto Mode = [&Esc, World](const TCHAR* Name, const FMOItemSourceOptions& Options) -> FString
+			{
+				const FMOItemSourceReport Report = FMOItemSourceAnalysis::Analyze(World, Options);
+				TArray<FString> ItemRows, RecipeRows, BlockedRows;
+				for (const TPair<FName, FString>& Item : Report.SourceOf)
+				{
+					ItemRows.Add(FString::Printf(TEXT("\"%s\": {\"tier\": %d, \"source\": \"%s\"}"), *Item.Key.ToString(), Report.ItemTier.FindRef(Item.Key), *Esc(Item.Value)));
+				}
+				for (const TPair<FName, int32>& Recipe : Report.RecipeTier)
+				{
+					RecipeRows.Add(FString::Printf(TEXT("\"%s\": %d"), *Recipe.Key.ToString(), Recipe.Value));
+				}
+				for (const FMOBlockedRecipe& Blocked : Report.BlockedRecipes)
+				{
+					BlockedRows.Add(FString::Printf(TEXT("\"%s\": \"%s\""), *Blocked.RecipeId.ToString(), *Esc(Blocked.Reason)));
+				}
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] ProgressionMap %s: %d items, %d of %d recipes performable"), Name, Report.SourceOf.Num(), Report.ReachableRecipeCount, Report.RecipeCount);
+				return FString::Printf(TEXT("\"%s\": {\"recipe_count\": %d, \"items\": {%s}, \"recipes\": {%s}, \"blocked\": {%s}, \"orphans\": [%s]}"), Name, Report.RecipeCount,
+					*FString::Join(ItemRows, TEXT(", ")), *FString::Join(RecipeRows, TEXT(", ")), *FString::Join(BlockedRows, TEXT(", ")),
+					*FString::JoinBy(Report.OrphanItems, TEXT(", "), [](const FName& N) { return FString::Printf(TEXT("\"%s\""), *N.ToString()); }));
+			};
+			FMOItemSourceOptions Attempt;
+			Attempt.bIgnoreDiscovery = true;
+			Attempt.bIgnoreKnowledge = true;
+			const FString Json = FString::Printf(TEXT("{%s, %s}"), *Mode(TEXT("today"), FMOItemSourceOptions()), *Mode(TEXT("attempt_anything"), Attempt));
+			const FString Path = FPaths::ProjectSavedDir() / TEXT("Logs/progression_map.json");
+			const bool bSaved = FFileHelper::SaveStringToFile(Json, *Path);
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] ProgressionMap -> %s (%s)"), *Path, bSaved ? TEXT("written") : TEXT("FAILED"));
+		}),
+		ECVF_Default));
+
 	// Content-integrity gate (#65). This subsystem only exists once a game
 	// GameInstance does (i.e. PIE running), but unlike the gameplay tests it
 	// needs NO possessed pawn -- it reads DataTables, so it runs fine sitting at

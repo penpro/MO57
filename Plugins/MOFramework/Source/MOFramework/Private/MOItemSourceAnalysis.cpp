@@ -159,7 +159,7 @@ namespace MOItemSources
 	}
 }
 
-FMOItemSourceReport FMOItemSourceAnalysis::Analyze(UWorld* World)
+FMOItemSourceReport FMOItemSourceAnalysis::Analyze(UWorld* World, const FMOItemSourceOptions& Options)
 {
 	using namespace MOItemSources;
 	FMOItemSourceReport Report;
@@ -316,9 +316,9 @@ FMOItemSourceReport FMOItemSourceAnalysis::Analyze(UWorld* World)
 	TSet<FName> ItemsApplied;                    // obtainable items whose grants / tool capabilities are already counted
 
 	auto IsSkill = [](FName Id) { return UMOSkillDatabaseSettings::GetSkillDefinition(Id) != nullptr; };
-	auto KnowledgeOk = [&KnowledgeLevel, &IsSkill](FName Id, int32 Level)
+	auto KnowledgeOk = [&KnowledgeLevel, &IsSkill, &Options](FName Id, int32 Level)
 	{
-		return Id.IsNone() || Level <= 0 || IsSkill(Id) || KnowledgeLevel.FindRef(Id) >= Level;
+		return Options.bIgnoreKnowledge || Id.IsNone() || Level <= 0 || IsSkill(Id) || KnowledgeLevel.FindRef(Id) >= Level;
 	};
 	auto Train = [&KnowledgeLevel, &IsSkill](FName Id, int32 Level) -> bool
 	{
@@ -348,7 +348,7 @@ FMOItemSourceReport FMOItemSourceAnalysis::Analyze(UWorld* World)
 	// Empty = performable with what is obtainable so far.
 	auto FirstBlockingGate = [&](const FMORecipeDefinitionRow& Recipe) -> FString
 	{
-		if (Recipe.bRequiresDiscovery)
+		if (Recipe.bRequiresDiscovery && !Options.bIgnoreDiscovery)
 		{
 			const bool bByKnowledge = !Recipe.DiscoveryKnowledgeId.IsNone() && KnowledgeOk(Recipe.DiscoveryKnowledgeId, Recipe.DiscoveryKnowledgeLevel);
 			const bool bBySkill = Recipe.DiscoverySkillLevel > 0 && !Recipe.RequiredSkillId.IsNone() && KnowledgeOk(Recipe.RequiredSkillId, Recipe.DiscoverySkillLevel);
@@ -420,9 +420,18 @@ FMOItemSourceReport FMOItemSourceAnalysis::Analyze(UWorld* World)
 		return false;
 	};
 
+	// Breadth-first rounds: a recipe whose gates are met in a round produces at the END of it, so a tier is a step count (the reachable
+	// set is the same fixpoint either way).
+	for (const TPair<FName, FString>& Item : Obtainable)
+	{
+		Report.ItemTier.Add(Item.Key, 0);
+	}
+	int32 Round = 0;
 	for (bool bChanged = true; bChanged; )
 	{
 		bChanged = false;
+		++Round;
+		TArray<TPair<FName, const FMORecipeDefinitionRow*>> MetThisRound;
 
 		// Obtainable items teach (inspection grants, up to each grant's MaxLevel) and work as tools.
 		for (const TPair<FName, FString>& Item : Obtainable)
@@ -494,16 +503,7 @@ FMOItemSourceReport FMOItemSourceAnalysis::Analyze(UWorld* World)
 				{
 					continue;
 				}
-				ReachableRecipes.Add(Pair.Key);
-				bChanged = true;
-				for (const FMORecipeOutput& Output : Recipe.Outputs)
-				{
-					Produce(Output.ItemDefinitionId, FString::Printf(TEXT("recipe %s"), *Pair.Key.ToString()));
-				}
-				if (Recipe.SkillXPReward > 0.0f)
-				{
-					Train(Recipe.RequiredSkillId, AnyLevel);
-				}
+				MetThisRound.Add(Pair);
 			}
 			// A built station works once it can be fuelled (fuel may become obtainable after the building does).
 			if (Recipe.bIsBuilding && Recipe.ProvidedStationType != EMOCraftingStation::None
@@ -511,6 +511,29 @@ FMOItemSourceReport FMOItemSourceAnalysis::Analyze(UWorld* World)
 			{
 				Stations.Add(Recipe.ProvidedStationType);
 				bChanged = true;
+			}
+		}
+		for (const TPair<FName, const FMORecipeDefinitionRow*>& Met : MetThisRound)
+		{
+			const FName RecipeId = Met.Key;
+			const FMORecipeDefinitionRow& Recipe = *Met.Value;
+			ReachableRecipes.Add(RecipeId);
+			Report.RecipeTier.Add(RecipeId, Round);
+			bChanged = true;
+			for (const FMORecipeOutput& Output : Recipe.Outputs)
+			{
+				Produce(Output.ItemDefinitionId, FString::Printf(TEXT("recipe %s"), *RecipeId.ToString()));
+			}
+			if (Recipe.SkillXPReward > 0.0f)
+			{
+				Train(Recipe.RequiredSkillId, AnyLevel);
+			}
+		}
+		for (const TPair<FName, FString>& Item : Obtainable)
+		{
+			if (!Report.ItemTier.Contains(Item.Key))
+			{
+				Report.ItemTier.Add(Item.Key, Round);
 			}
 		}
 	}
