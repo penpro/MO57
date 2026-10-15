@@ -1,4 +1,5 @@
 #include "MOGameMode.h"
+#include "MOPlayerController.h"
 #include "MOAudioSubsystem.h"
 #include "MOFramework.h"
 #include "MOVoxelReadinessSubsystem.h"
@@ -231,6 +232,9 @@ void AMOGameMode::HandlePendingNewGame()
 		Settings->bPendingNewGame = false;
 		Settings->PendingNewGameSlot.Empty();
 		Settings->SaveSettings();
+
+		// The first survivor is made while the world finishes loading (Wes, Oct 15 2026): see OnPawnLandedSafely.
+		bOpenCharacterCreatorOnLanding = !FParse::Param(FCommandLine::Get(), TEXT("NoCharacterCreator"));
 
 		// Wait for voxel world to be ready before spawning
 		WaitForVoxelWorldAndSpawn();
@@ -2154,8 +2158,21 @@ void AMOGameMode::OnPawnLandedSafely()
 	UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] Pawn landed safely at %s"),
 		Pawn ? *Pawn->GetActorLocation().ToString() : TEXT("NULL"));
 
+	// A new game's first survivor: the character creator replaces the rest of the loading screen -- the vegetation and streaming stages of the
+	// readiness cycle run behind it, so the first load-in is all but instant (its Begin holds the overlay only if the world is still not ready).
+	AMOPlayerController* CreatorPlayer = Pawn ? Cast<AMOPlayerController>(Pawn->GetController()) : nullptr;
+	if (bOpenCharacterCreatorOnLanding && CreatorPlayer && CreatorPlayer->IsLocalController())
+	{
+		bOpenCharacterCreatorOnLanding = false;
+		if (UMOGameInstance* MOGI = Cast<UMOGameInstance>(GetGameInstance()))
+		{
+			MOGI->HideLoadingOverlayImmediate();
+		}
+		CreatorPlayer->ClientOpenCharacterCreator();
+		UE_LOG(LogMOFramework, Log, TEXT("[MOGameMode] First survivor landed: character creator opened over the loading world"));
+	}
 	// 1. Dismiss loading screen
-	if (UGameInstance* GI = GetGameInstance())
+	else if (UGameInstance* GI = GetGameInstance())
 	{
 		if (UMOGameInstance* MOGI = Cast<UMOGameInstance>(GI))
 		{

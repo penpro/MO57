@@ -1,4 +1,5 @@
 #include "MOPersistenceSubsystem.h"
+#include "MOMetaHumanCharacter.h"
 #include "MOWorldGen.h"
 #include "MOFramework.h"
 #include "MOHarvestDebugSubsystem.h"
@@ -1232,6 +1233,12 @@ void UMOPersistenceSubsystem::CapturePersistedPawnsAndInventories(UWorld* World,
             PawnRecord.Gender = IdentityComponent->Gender;
         }
 
+        // Appearance (the character creator's colours, Oct 15 2026): the record's Appearance field existed but nothing ever filled it.
+        if (const AMOMetaHumanCharacter* MetaHuman = Cast<AMOMetaHumanCharacter>(Pawn))
+        {
+            PawnRecord.Appearance = MetaHuman->GetAppearance();
+        }
+
         // Capture component state data
         if (UMOVitalsComponent* VitalsComp = Pawn->FindComponentByClass<UMOVitalsComponent>())
         {
@@ -1610,6 +1617,12 @@ void UMOPersistenceSubsystem::RespawnPersistedPawns(UWorld* World, const TArray<
         if (!PawnRecord.Gender.IsEmpty() && PawnRecord.Gender != TEXT("Unknown"))
         {
             IdentityComponent->SetGender(PawnRecord.Gender);
+        }
+        // Only the colours over the pawn's own appearance: a record saved before appearances were captured holds the defaults (the look as
+        // shipped), and its empty mesh paths must not stand in for the pawn's.
+        if (AMOMetaHumanCharacter* MetaHuman = Cast<AMOMetaHumanCharacter>(DeferredPawn))
+        {
+            MetaHuman->SetAppearanceColors(PawnRecord.Appearance);
         }
 
         UGameplayStatics::FinishSpawningActor(DeferredPawn, PawnRecord.Transform);

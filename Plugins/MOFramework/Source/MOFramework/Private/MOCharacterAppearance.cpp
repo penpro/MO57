@@ -25,9 +25,10 @@ FMOCharacterAppearance FMOCharacterAppearance::GetDefaultMale()
 	Appearance.HipWidth = 0.95f;
 
 	// Colors - default Caucasian
-	Appearance.SkinTone = FLinearColor(0.8f, 0.65f, 0.55f, 1.0f);
-	Appearance.HairColor = FLinearColor(0.15f, 0.1f, 0.05f, 1.0f);  // Dark brown
-	Appearance.EyeColor = FLinearColor(0.2f, 0.35f, 0.25f, 1.0f);   // Hazel
+	Appearance.SkinTone = FMOCharacterAppearance::DefaultSkinTone;
+	Appearance.HairMelanin = 0.85f;  // Dark brown
+	Appearance.HairRedness = 0.2f;
+	Appearance.EyeColor = NAME_None;
 
 	// Default morphs can be added here if needed
 	// Appearance.SetMorphValue(TEXT("MuscleDefinition"), 0.5f);
@@ -57,9 +58,10 @@ FMOCharacterAppearance FMOCharacterAppearance::GetDefaultFemale()
 	Appearance.HipWidth = 1.05f;
 
 	// Colors
-	Appearance.SkinTone = FLinearColor(0.85f, 0.7f, 0.6f, 1.0f);
-	Appearance.HairColor = FLinearColor(0.25f, 0.15f, 0.1f, 1.0f);  // Brown
-	Appearance.EyeColor = FLinearColor(0.15f, 0.3f, 0.45f, 1.0f);   // Blue-green
+	Appearance.SkinTone = FMOCharacterAppearance::DefaultSkinTone;
+	Appearance.HairMelanin = 0.8f;   // Brown (the shipped MetaHuman)
+	Appearance.HairRedness = 0.25f;
+	Appearance.EyeColor = NAME_None;
 
 	return Appearance;
 }

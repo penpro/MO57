@@ -96,6 +96,7 @@ class UMOConfirmationDialog;
 class UMOSurvivorContextMenu;
 class UMOSurvivorTaskMenu;
 class UMODeathRecapWidget;
+class UMOCharacterCreatorPanel;
 class AMOCharacter;
 enum class EMOBodyPartType : uint8;
 
@@ -124,6 +125,12 @@ public:
 	// ==========================================================================
 	// IN-GAME MENU
 	// ==========================================================================
+
+	/**
+	 * A new game's character creator, over the world while it finishes loading (pushed on Layer_Menu; see MOCharacterCreatorPanel.h). Local player only.
+	 * AMOGameMode opens it through AMOPlayerController::ClientOpenCharacterCreator when the first survivor has landed.
+	 */
+	void ShowCharacterCreator();
 
 	/** Toggle in-game menu visibility. */
 	UFUNCTION(BlueprintCallable, Category="MO|System Menu")
@@ -379,6 +386,13 @@ private:
 
 	UPROPERTY(Transient)
 	TWeakObjectPtr<UMODeathRecapWidget> DeathRecapWidget;
+
+	/** Character creator class. OPTIONAL: left empty it is /MOFramework/UI/MainMenu_UI/WBP_CharacterCreatorPanel (ui_specs/kit_character_creator.py). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|System Menu|New Game", meta=(AllowPrivateAccess="true"))
+	TSubclassOf<UMOCharacterCreatorPanel> CharacterCreatorWidgetClass;
+
+	UPROPERTY(Transient)
+	TWeakObjectPtr<UMOCharacterCreatorPanel> CharacterCreatorWidget;
 
 	/** Last MOCharacter we subscribed OnPawnDied on — held weakly for safe unbind. */
 	UPROPERTY(Transient)

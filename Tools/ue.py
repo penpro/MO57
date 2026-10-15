@@ -1212,7 +1212,7 @@ def cmd_inst(a):
         pos = tuple(int(x) for x in a.pos.split(","))
         res = tuple(int(x) for x in a.res.lower().split("x"))
         pid = ui.start(name, UPROJECT, EDITOR_EXE, pos=pos, res=res, nosteam=a.nosteam,
-                       extra=a.extra.split() if a.extra else ())
+                       extra=a.extra.split() if a.extra else (), creator=a.creator)
         print(f"[inst] {name} launched (pid {pid}); waiting for bridge + world ...")
         ok = ui.wait_ready(name, a.timeout)
         print(f"[inst] {name} {'READY' if ok else 'NOT READY (see ' + ui.game_log(name) + ')'}")
@@ -1529,6 +1529,7 @@ def main():
     ip = isub.add_parser("start", help="launch an instance and wait for bridge + world")
     ip.add_argument("name", help="instance name (letters, digits, - _)")
     ip.add_argument("--nosteam", action="store_true", help="disable the Steam OSS (Null OSS / LAN beacon)")
+    ip.add_argument("--creator", action="store_true", help="keep the new-game character creator (harness instances skip it: -NoCharacterCreator)")
     ip.add_argument("--pos", default="0,0", help="window position X,Y")
     ip.add_argument("--res", default="640x360", help="window size WxH")
     ip.add_argument("--extra", default="", help="extra command-line args (one quoted string)")

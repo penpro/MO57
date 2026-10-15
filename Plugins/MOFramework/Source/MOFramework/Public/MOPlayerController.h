@@ -635,6 +635,10 @@ public:
 	UFUNCTION(Client, Reliable)
 	void ClientForageResult(uint8 Action, int32 ItemCount);
 
+	/** A new game's first survivor has landed: open the character creator over the world while it finishes loading (UMOCharacterCreatorPanel). */
+	UFUNCTION(Client, Reliable)
+	void ClientOpenCharacterCreator();
+
 	/**
 	 * Open the ground forage menu where the crosshair meets the world (20 m camera trace). What interact (E) and right-click do on anything
 	 * without an interaction of its own -- bare ground, grass, a bush no resource row describes -- so everything in the world has an action

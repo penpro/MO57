@@ -23,6 +23,10 @@ class LaunchArgsTests(unittest.TestCase):
         self.assertNotIn("-NoSteam", ui.build_launch_args("p", "l"))
         self.assertIn("-NoSteam", ui.build_launch_args("p", "l", nosteam=True))
 
+    def test_harness_skips_the_character_creator_unless_asked(self):
+        self.assertIn("-NoCharacterCreator", ui.build_launch_args("p", "l"))
+        self.assertNotIn("-NoCharacterCreator", ui.build_launch_args("p", "l", creator=True))
+
     def test_position_resolution_and_extra_args(self):
         a = ui.build_launch_args("p", "l", pos=(680, 20), res=(800, 450), extra=["-ExecCmds=x"])
         self.assertIn("-WinX=680", a)
@@ -269,7 +273,9 @@ class BugReportAnalyserTests(unittest.TestCase):
         title = title or self.TITLE
         fields = {"Build.Version": "0.0.0.1", "Build.Commit": "abc1234", "System.OS": "Windows 11", "System.GPU": "RTX", "Session.NetMode": "ListenServer",
                   "Session.Map": "Gameplay", "Session.WorldSeed": "12345", "Clock.GameTime": "2026-01-01T08:00:00", "Player.Pawn": "BP_Human",
-                  "Player.Location": "1, 2, 3", "Report.Category": category}
+                  "Player.Location": "1, 2, 3", "Report.Category": category,
+                  # what the player was looking at (FMOBugReportLookAt): the view, the command that rebuilds it, and the hit
+                  "LookAt.View": "1, 2, 160 / -10, 90, 0", "LookAt.Reproduce": "MO.Cam.LookAt 1 2 160 -10 90", "LookAt.Distance": "350"}
         rows = "".join(f'\t\t<Field name="{k}">{v}</Field>\n' for k, v in fields.items()) + extra_fields
         xml = ("<FGenericCrashContext>\n<RuntimeProperties>\n<CrashType>%s</CrashType>\n<ErrorMessage>%s</ErrorMessage>\n</RuntimeProperties>\n<GameData>\n%s</GameData>\n</FGenericCrashContext>\n"
                % (crash_type, title, rows))

@@ -2,6 +2,7 @@
 #include "MOFramework.h"
 #include "MOAppearanceSubsystem.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Net/UnrealNetwork.h"
 
 AMOMetaHumanCharacter::AMOMetaHumanCharacter(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -71,6 +72,29 @@ void AMOMetaHumanCharacter::SetAppearance(const FMOCharacterAppearance& NewAppea
 {
 	CurrentAppearance = NewAppearance;
 	ApplyCurrentAppearance();
+}
+
+void AMOMetaHumanCharacter::SetAppearanceColors(const FMOCharacterAppearance& Colors)
+{
+	CurrentAppearance.CopyColorsFrom(Colors);
+	UMOAppearanceSubsystem::ApplyColorsToActor(this, CurrentAppearance);
+}
+
+void AMOMetaHumanCharacter::OnRep_CurrentAppearance()
+{
+	ApplyCurrentAppearance();
+}
+
+void AMOMetaHumanCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(AMOMetaHumanCharacter, CurrentAppearance);
+}
+
+void AMOMetaHumanCharacter::ApplySkinLook()
+{
+	Super::ApplySkinLook();
+	UMOAppearanceSubsystem::ApplyColorsToActor(this, CurrentAppearance);
 }
 
 void AMOMetaHumanCharacter::ApplyCurrentAppearance()

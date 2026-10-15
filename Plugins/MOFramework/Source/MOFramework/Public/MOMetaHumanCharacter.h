@@ -104,6 +104,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Appearance")
 	void SetAppearance(const FMOCharacterAppearance& NewAppearance);
 
+	/** Take only the colours of Colors (skin tone, hair, eyes) and push them to the materials -- no mesh reload: the character creator's live
+	 *  sliders and every place that restores a look over the pawn's own meshes. */
+	UFUNCTION(BlueprintCallable, Category="MO|Appearance")
+	void SetAppearanceColors(const FMOCharacterAppearance& Colors);
+
 	/** Apply the current stored appearance (call after spawning or loading). */
 	UFUNCTION(BlueprintCallable, Category="MO|Appearance")
 	void ApplyCurrentAppearance();
@@ -142,7 +147,16 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|MetaHuman")
 	bool bAutoApplyAppearance = true;
 
-	/** Current character appearance data. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Appearance", SaveGame)
+	/** Current character appearance data. Replicated: a co-op partner sees the look this pawn's owner chose. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Appearance", SaveGame, ReplicatedUsing=OnRep_CurrentAppearance)
 	FMOCharacterAppearance CurrentAppearance;
+
+	UFUNCTION()
+	void OnRep_CurrentAppearance();
+
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
+	/** The skin look pass (AMOCharacter) + this character's colours (skin tone, hair, eyes): it runs at BeginPlay and again once the MetaHuman
+	 *  component has rebuilt its face materials, so the colours survive that rebuild. */
+	virtual void ApplySkinLook() override;
 };

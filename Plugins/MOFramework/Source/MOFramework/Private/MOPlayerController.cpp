@@ -617,6 +617,14 @@ void AMOPlayerController::ClientReportQuestEvent_Implementation(uint8 Type, FNam
 	}
 }
 
+void AMOPlayerController::ClientOpenCharacterCreator_Implementation()
+{
+	if (SystemMenuUIController)
+	{
+		SystemMenuUIController->ShowCharacterCreator();
+	}
+}
+
 void AMOPlayerController::ClientForageResult_Implementation(uint8 Action, int32 ItemCount)
 {
 	if (UMOInventoryUIController* UI = FindComponentByClass<UMOInventoryUIController>())

@@ -185,20 +185,37 @@ struct MOFRAMEWORK_API FMOCharacterAppearance
 	float HipWidth = 1.0f;
 
 	// ============================================================================
-	// COLORS
+	// COLORS -- the MetaHuman lookdev's own physical parameters (Oct 15 2026: the character creator), applied by
+	// UMOAppearanceSubsystem::ApplyColors to the skin, groom and eye materials. The defaults are the MetaHuman as shipped.
+	// (These replaced three RGB colours nothing ever applied: ApplyColors was a TODO.)
 	// ============================================================================
 
-	/** Skin tone color. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Appearance|Colors")
-	FLinearColor SkinTone = FLinearColor(0.8f, 0.6f, 0.5f, 1.0f);
+	/** Skin tone, light to dark: DefaultSkinTone is the skin as baked; below it a little lighter, above it darker (melanin). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Appearance|Colors", meta=(ClampMin="0.0", ClampMax="1.0"))
+	float SkinTone = DefaultSkinTone;
 
-	/** Hair color. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Appearance|Colors")
-	FLinearColor HairColor = FLinearColor(0.1f, 0.08f, 0.05f, 1.0f);
+	/** Hair melanin (the MetaHuman hair model): 0 = pale blond, 1 = black. Eyebrows follow the hair. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Appearance|Colors", meta=(ClampMin="0.0", ClampMax="1.0"))
+	float HairMelanin = 0.8f;
 
-	/** Eye color (iris). */
+	/** Hair redness (pheomelanin): 0 = ash, 1 = red. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Appearance|Colors", meta=(ClampMin="0.0", ClampMax="1.0"))
+	float HairRedness = 0.25f;
+
+	/** Iris colour: a preset id from UMOAppearanceSubsystem::GetEyeColorPresets (None = the iris as shipped). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Appearance|Colors")
-	FLinearColor EyeColor = FLinearColor(0.2f, 0.4f, 0.3f, 1.0f);
+	FName EyeColor;
+
+	static constexpr float DefaultSkinTone = 0.2f;
+
+	/** Take only the colours (skin, hair, eyes) of Other: the character creator edits colours over a pawn's own meshes. */
+	void CopyColorsFrom(const FMOCharacterAppearance& Other)
+	{
+		SkinTone = Other.SkinTone;
+		HairMelanin = Other.HairMelanin;
+		HairRedness = Other.HairRedness;
+		EyeColor = Other.EyeColor;
+	}
 
 	// ============================================================================
 	// MORPH TARGETS (Daz Genesis 8 / Custom Mesh Support)
@@ -356,4 +373,19 @@ enum class EMOAppearanceCategory : uint8
 	Beard,
 	Mustache,
 	Body
+};
+
+/**
+ * An iris colour of the character creator: values for the MetaHuman eye material's own iris parameters (M_eye_eyeball_unified). The shipped MetaHuman
+ * eye is Primary Hue 0.90 / Value 0.56, Secondary Hue 0.98 / Value 0.40, Saturation 1.70. UMOAppearanceSubsystem::GetEyeColorPresets lists them.
+ */
+struct FMOEyeColorPreset
+{
+	FName Id;
+	FText DisplayName;
+	float PrimaryHue = 0.9f;
+	float PrimaryValue = 0.56f;
+	float SecondaryHue = 0.98f;
+	float SecondaryValue = 0.4f;
+	float Saturation = 1.7f;
 };

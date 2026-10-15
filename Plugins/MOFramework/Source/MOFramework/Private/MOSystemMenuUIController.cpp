@@ -29,6 +29,7 @@
 #include "MOInventoryUIController.h"
 #include "EngineUtils.h"
 #include "MOPrimaryGameLayout.h"
+#include "MOCharacterCreatorPanel.h"
 
 UMOSystemMenuUIController::UMOSystemMenuUIController()
 {
@@ -1054,6 +1055,34 @@ void UMOSystemMenuUIController::UnbindDeathListener()
 		OldChar->OnPawnDied.RemoveDynamic(this, &UMOSystemMenuUIController::HandlePawnDied);
 	}
 	SubscribedDeathPawn.Reset();
+}
+
+void UMOSystemMenuUIController::ShowCharacterCreator()
+{
+	if (!IsLocalOwningPlayerController())
+	{
+		return;
+	}
+	TSubclassOf<UMOCharacterCreatorPanel> CreatorClass = CharacterCreatorWidgetClass;
+	if (!CreatorClass)
+	{
+		// /MOFramework is always cooked (DefaultGame.ini DirectoriesToAlwaysCook).
+		CreatorClass = LoadClass<UMOCharacterCreatorPanel>(nullptr, TEXT("/MOFramework/UI/MainMenu_UI/WBP_CharacterCreatorPanel.WBP_CharacterCreatorPanel_C"));
+	}
+	if (!CreatorClass)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOSysUI] No character creator widget (CharacterCreatorWidgetClass unset and the kit WBP missing): the new game starts without one"));
+		return;
+	}
+	CloseCachedMenu(CharacterCreatorWidget);
+	UMOCharacterCreatorPanel* Creator = Cast<UMOCharacterCreatorPanel>(PushWidgetToLayer(MOUILayerTags::Layer_Menu, CreatorClass));
+	if (!IsValid(Creator))
+	{
+		UE_LOG(LogMOFramework, Error, TEXT("[MOSysUI] Failed to push the character creator to Layer_Menu"));
+		return;
+	}
+	RegisterCachedMenu(Creator, CharacterCreatorWidget);
+	UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] Character creator opened over the loading world"));
 }
 
 TSubclassOf<UMODeathRecapWidget> UMOSystemMenuUIController::ResolveDeathRecapClass() const

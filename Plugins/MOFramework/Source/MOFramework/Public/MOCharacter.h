@@ -828,7 +828,7 @@ public:
 	float SkinSpecularMultiply = 0.7f;
 
 	/** Push SkinRoughnessOffset / SkinSpecularMultiply into every material of every skeletal mesh that has the MetaHuman post-bake parameters. */
-	void ApplySkinLook();
+	virtual void ApplySkinLook();
 
 	/** Walking speed (default movement). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Movement")

@@ -650,6 +650,10 @@ private:
 	/** Track the pawn we're waiting to land. */
 	TWeakObjectPtr<APawn> PendingLandingPawn;
 
+	/** Set by a NEW game (not a load, not a respawn): when its first survivor lands, the character creator opens over the world instead of the
+	 *  loading screen holding until the world is ready (OnPawnLandedSafely). -NoCharacterCreator (test harnesses) skips it. */
+	bool bOpenCharacterCreatorOnLanding = false;
+
 	/** Number of recovery attempts triggered for this spawn. */
 	int32 LandingRecoveryAttempts = 0;
 };

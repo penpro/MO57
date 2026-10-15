@@ -55,17 +55,21 @@ def env_for(name):
     return env
 
 
-def build_launch_args(uproject, log_path, pos=(0, 0), res=(640, 360), nosteam=False, extra=()):
+def build_launch_args(uproject, log_path, pos=(0, 0), res=(640, 360), nosteam=False, extra=(), creator=False):
     """Command line (after the exe) of a standalone game process. Pure: unit-tested offline.
 
     -forcelogflush so the log can be polled line by line; no -log (no console window to clutter the desktop);
     -NoSteam makes the Steam OSS refuse to start, so the Null OSS (LAN beacon) and the plain IP net driver
     take over -- exactly what the editor itself runs on.
+    -NoCharacterCreator (unless creator=True): a new game starts straight away instead of waiting in the character creator
+    for a Begin no harness presses (AMOGameMode::OnPawnLandedSafely).
     """
     args = [uproject, "-game", "-windowed", f"-ResX={res[0]}", f"-ResY={res[1]}", f"-WinX={pos[0]}",
             f"-WinY={pos[1]}", "-nosplash", "-nosound", "-forcelogflush", f"-abslog={log_path}", "-NoQualityBenchmark"]
     if nosteam:
         args.append("-NoSteam")
+    if not creator:
+        args.append("-NoCharacterCreator")
     return args + list(extra)
 
 
@@ -1349,11 +1353,12 @@ def _client_press_e(rep, host, client):
     setup = _probe(host,
         "import builtins; p = unreal.GameplayStatics.get_player_pawn(world, 1); "
         "inv = p.get_component_by_class(unreal.MOInventoryComponent); g = unreal.GuidLibrary.new_guid(); builtins.MO_E_GUID = g; "
-        "gave = inv.add_item_by_guid(g, 'Stick01', 1); "
+        # Bark: an item the joiner does not carry -- a stick merged into the stick stack _client_pickup leaves behind, and its GUID was gone
+        "gave = inv.add_item_by_guid(g, 'Bark01', 1); "
         "w = inv.drop_item_by_guid(g, p.get_actor_location() + unreal.Vector(150.0, 60.0, 10.0), unreal.Rotator(0.0, 0.0, 0.0)); "
         "out('E_SETUP gave=%s item=%s' % (gave, w.get_name() if w else 'none'))")
     m = re.search(r"E_SETUP gave=(\w+) item=(\S+)", setup)
-    if not rep.step("host: dropped a stick in front of the joiner's pawn", bool(m) and m.group(1) == "True" and m.group(2) != "none",
+    if not rep.step("host: dropped a piece of bark in front of the joiner's pawn", bool(m) and m.group(1) == "True" and m.group(2) != "none",
                     m.group(0) if m else setup.strip()[-160:]):
         return
     probe_have = ("import builtins; p = unreal.GameplayStatics.get_player_pawn(world, 1); "
@@ -1401,6 +1406,30 @@ def _client_press_e(rep, host, client):
             "out('pawn=%s cam=%s' % (p.get_actor_location(), pc.player_camera_manager.get_camera_location()))").strip()[-300:]
     rep.step("client E on a stick it aims at: the host picks it up for the joiner (no 'Reject')", got and not reject,
              ("picked up" if got else (reject.group(0) if reject else "no pickup and no Reject line on the host")) + diag)
+
+
+def _appearance_replicates(rep, host, client):
+    """A survivor's look (the character creator's colours: AMOMetaHumanCharacter::CurrentAppearance, replicated) set on the authority reaches a co-op
+    partner -- read on the CLIENT, values and the procedural eye material its OnRep put on. Control: the client's copy had the default look first."""
+    probe_looks = ("ps = unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOMetaHumanCharacter); "
+                   "out('LOOKS ' + ';'.join('%.2f/%.2f/%s/%s' % (x.get_appearance().skin_tone, x.get_appearance().hair_melanin, x.get_appearance().eye_color, "
+                   "[c for c in x.get_components_by_class(unreal.SkeletalMeshComponent) if c.get_name() == 'FaceMesh'][0].get_material(2).get_name()) for x in ps))")
+    before = _probe(client, probe_looks)
+    rep.step("CONTROL: before the host sets a look, no survivor on the client has it", "0.66/0.22/Blue" not in before, before.strip()[-200:])
+    setv = _probe(host,
+        "p = unreal.GameplayStatics.get_player_pawn(world, 0); a = p.get_appearance(); a.skin_tone = 0.66; a.hair_melanin = 0.22; a.eye_color = 'Blue'; "
+        "p.set_appearance_colors(a); out('LOOK_SET %s' % p.get_name())")
+    if not rep.step("host: set its survivor's look (skin 0.66, hair 0.22, blue eyes)", "LOOK_SET" in setv, setv.strip()[-160:]):
+        return
+    got = ""
+    for _ in range(8):
+        time.sleep(1.0)
+        got = _probe(client, probe_looks)
+        if "0.66/0.22/Blue" in got:
+            break
+    m = re.search(r"0\.66/0\.22/Blue/([^;\s]+)", got)
+    rep.step("client: the host's survivor has the look it chose", bool(m), got.strip()[-200:])
+    rep.step("client: ... with the procedural eye on (the colour is not just data)", bool(m) and "Procedural" in m.group(1), m.group(1) if m else "no matching survivor")
 
 
 def _client_craft(rep, host, client):
@@ -1951,7 +1980,7 @@ def actions_test(uproject, editor_exe, keep=False, boot_timeout=300):
         if not _host_and_join(rep, host, client, "ActionsTest", boot_timeout):
             return False
         only = {s.strip() for s in os.environ.get("MO_ACTIONS_ONLY", "").split(",") if s.strip()}  # quick rerun of named cases
-        for fn in (_client_pickup, _client_press_e, _client_craft, _client_forage, _client_build, _client_attack, _trust_placement, _trust_pickup_far, _trust_possess_other, _trust_dev_spawn, _client_rename, _trust_terraform, _buried_pawns, _remote_pawn_stays_put):
+        for fn in (_client_pickup, _client_press_e, _appearance_replicates, _client_craft, _client_forage, _client_build, _client_attack, _trust_placement, _trust_pickup_far, _trust_possess_other, _trust_dev_spawn, _client_rename, _trust_terraform, _buried_pawns, _remote_pawn_stays_put):
             if only and fn.__name__ not in only:
                 continue
             try:

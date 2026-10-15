@@ -119,10 +119,30 @@ public:
 	bool ApplyBodyParameters(AMOMetaHumanCharacter* Character, float BodyFat, float MuscleMass, float Height);
 
 	/**
-	 * Apply color parameters (skin, hair, eyes).
+	 * Apply color parameters (skin, hair, eyes): ApplyColorsToActor.
 	 */
 	UFUNCTION(BlueprintCallable, Category="MO|Appearance")
-	bool ApplyColors(AMOMetaHumanCharacter* Character, const FLinearColor& SkinTone, const FLinearColor& HairColor, const FLinearColor& EyeColor);
+	bool ApplyColors(AMOMetaHumanCharacter* Character, const FMOCharacterAppearance& Appearance);
+
+	/**
+	 * Push an appearance's colours into an actor's MetaHuman materials: every skin material (M_skin_unified_baked: body, face LODs -- the
+	 * post-bake basecolor value / saturation / multiply), the hair and eyebrow grooms (M_hair_v4: hairMelanin / hairRedness; eyelashes keep
+	 * their own) and the eyes (M_eye_eyeball_unified: the iris preset). Creates the dynamic instances it needs; a material without the
+	 * parameter is left alone. Static: the character creator's preview pawn and the gameplay pawns share it. No-op on a dedicated server.
+	 */
+	static void ApplyColorsToActor(AActor* Actor, const FMOCharacterAppearance& Appearance);
+
+	/** Skin tone -> the skin material's post-bake basecolor value (brightness multiplier), saturation offset and multiply tint. Pure: unit-tested. */
+	static void ComputeSkinParameters(float SkinTone, float& OutValue, float& OutSaturation, FLinearColor& OutMultiply);
+
+	/** The iris colours the creator offers, in display order. */
+	static const TArray<FMOEyeColorPreset>& GetEyeColorPresets();
+
+	/** A preset by id, or null (None and unknown ids leave the iris as shipped). */
+	static const FMOEyeColorPreset* FindEyeColorPreset(FName Id);
+
+	/** Random colours: any skin tone, natural hair (melanin, a little red), any eye preset. */
+	static void RandomizeColors(FMOCharacterAppearance& Appearance);
 
 	// ============================================================================
 	// RANDOM GENERATION
