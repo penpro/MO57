@@ -1817,6 +1817,28 @@ def _trust_dev_spawn(rep, host, client):
              (refused.group(0)[:140] if refused else "no 'host-only' refusal on the host") + ("; but it SPAWNED" if leaked else ""))
 
 
+def _client_rename(rep, host, client):
+    """The status panel's Change: AMOPlayerController::RequestSetPawnIdentity, sent by MO.Test.RenamePawnRPC (C++: editor Python would run the Server
+    RPC's body locally on the client). A joiner renames its OWN pawn and the host sees the new name on the identity (the one source a save copies);
+    renaming the HOST's pawn (another player's) is refused."""
+    name = "Joiner %d" % (int(time.time()) % 10000)
+    console(client, "MO.Test.RenamePawnRPC self " + name)
+    time.sleep(4)
+    seen = _probe(host, "idc = unreal.GameplayStatics.get_player_pawn(world, 1).get_component_by_class(unreal.MOIdentityComponent); "
+                        "out('NAME=%s' % idc.get_editor_property('display_name'))")
+    m = re.search(r"NAME=(.*)", seen)
+    rep.step("a joiner renames its own pawn: the host's identity has the new name", bool(m) and m.group(1).strip() == name,
+             m.group(1).strip() if m else "no NAME line from the host")
+    off = log_size(host)
+    console(client, "MO.Test.RenamePawnRPC other Hijacked")
+    time.sleep(4)
+    refused = re.search(r"refused identity change of \S+ \(another player's pawn\)", read_log_from(host, off))
+    hostname = _probe(host, "out('HOSTNAME=%s' % unreal.GameplayStatics.get_player_pawn(world, 0).get_component_by_class(unreal.MOIdentityComponent).get_editor_property('display_name'))")
+    shown = re.search(r"HOSTNAME=.*", hostname)
+    rep.step("trust: renaming the HOST's pawn (another player's) is refused", bool(refused) and "Hijacked" not in hostname,
+             (refused.group(0) if refused else "no refusal on the host") + "; " + (shown.group(0) if shown else ""))
+
+
 def _trust_terraform(rep, host, client):
     """ServerApplyTerraform holds the client to 2500 cm and clamps FlattenHeight. Dig 3 m ahead must change the ground (control); Dig 100 m away must be refused."""
     probe = ("p = unreal.GameplayStatics.get_player_pawn(world, 1); l = p.get_actor_location(); f = p.get_actor_forward_vector(); "
@@ -1866,7 +1888,7 @@ def actions_test(uproject, editor_exe, keep=False, boot_timeout=300):
             start(n, uproject, editor_exe, pos=pos, nosteam=True)
         if not _host_and_join(rep, host, client, "ActionsTest", boot_timeout):
             return False
-        for fn in (_client_pickup, _client_craft, _client_forage, _client_build, _client_attack, _trust_placement, _trust_pickup_far, _trust_possess_other, _trust_dev_spawn, _trust_terraform, _buried_pawns, _remote_pawn_stays_put):
+        for fn in (_client_pickup, _client_craft, _client_forage, _client_build, _client_attack, _trust_placement, _trust_pickup_far, _trust_possess_other, _trust_dev_spawn, _client_rename, _trust_terraform, _buried_pawns, _remote_pawn_stays_put):
             try:
                 fn(rep, host, client)
             except Exception as e:  # noqa: BLE001 - one verb's harness error must not hide the others

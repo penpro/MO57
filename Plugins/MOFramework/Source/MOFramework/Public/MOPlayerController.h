@@ -635,6 +635,21 @@ public:
 	UFUNCTION(Client, Reliable)
 	void ClientForageResult(uint8 Action, int32 ItemCount);
 
+	/**
+	 * Change a person's name or gender (Field = "CharacterName" / "Gender") -- the status panel's Change. The pawn's identity component is the one source
+	 * of both (saves copy it into the pawn record): the authority writes it and it replicates. From the host this applies locally, from a co-op client it
+	 * is sent. Allowed for this player's own pawn and for a recruited colonist no other human is playing; the value is trimmed and capped at MaxIdentityTextLength.
+	 * Before (Oct 15 2026) the panel wrote only the persistence record: it failed silently for a pawn with no record yet (every pawn of a new game
+	 * before its first save, every pawn on a co-op client), and a rename that did land was overwritten by the identity's name at the next save.
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Identity")
+	void RequestSetPawnIdentity(FGuid PawnGuid, FName Field, const FString& Value);
+
+	UFUNCTION(Server, Reliable)
+	void ServerSetPawnIdentity(FGuid PawnGuid, FName Field, const FString& Value);
+
+	static constexpr int32 MaxIdentityTextLength = 40;
+
 	/** A quest event this player's pawn caused on the server (UMOQuestSubsystem::ReportForActor): applied to THIS player's quests. Type = EMOObjectiveType as uint8. */
 	UFUNCTION(Client, Reliable)
 	void ClientReportQuestEvent(uint8 Type, FName TargetId, int32 Count);

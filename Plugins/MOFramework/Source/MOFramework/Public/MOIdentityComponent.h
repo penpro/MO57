@@ -89,8 +89,16 @@ class MOFRAMEWORK_API UMOIdentityComponent : public UActorComponent
 public:
 	UMOIdentityComponent();
 
+	/**
+	 * The person's name -- THE source for a live pawn: saves copy it into the pawn record, loading puts the record's back here,
+	 * UI reads it here and changes it through AMOPlayerController::RequestSetPawnIdentity (the authority writes, it replicates).
+	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Replicated, Category="MO|Identity", meta=(ExposeOnSpawn="true"))
 	FText DisplayName;
+
+	/** The gender the player gave this person (free text, empty = not set). Same single-source rule as DisplayName. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Replicated, Category="MO|Identity")
+	FString Gender;
 
 	/**
 	 * Stable GUID used as the canonical identity key across save/load.
@@ -116,6 +124,9 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category="MO|Identity")
 	void SetDisplayName(const FText& InDisplayName) { DisplayName = InDisplayName; }
+
+	UFUNCTION(BlueprintCallable, Category="MO|Identity")
+	void SetGender(const FString& InGender) { Gender = InGender; }
 
 	UFUNCTION(BlueprintCallable, Category="MO|Identity")
 	void SetGuid(const FGuid& InGuid);

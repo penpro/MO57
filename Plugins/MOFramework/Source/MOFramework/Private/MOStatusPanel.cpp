@@ -8,6 +8,7 @@
 #include "MOMentalStateComponent.h"
 #include "MOPersistenceSubsystem.h"
 #include "MOIdentityComponent.h"
+#include "MOPlayerController.h"
 #include "Components/WidgetSwitcher.h"
 #include "Components/ScrollBox.h"
 #include "Components/VerticalBox.h"
@@ -888,7 +889,8 @@ void UMOStatusPanel::PopulateInfoTab()
 	FMOPersistedPawnRecord Record;
 	if (!Persistence->GetPawnRecord(DisplayedPawnGuid, Record))
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOStatusPanel::PopulateInfoTab] No pawn record found for GUID %s - creating default"), *DisplayedPawnGuid.ToString());
+		// Normal before the first save (and always on a co-op client, whose machine keeps no records): name and gender come from the identity below.
+		UE_LOG(LogMOFramework, Log, TEXT("[MOStatusPanel::PopulateInfoTab] No pawn record for GUID %s yet - defaults + the live identity"), *DisplayedPawnGuid.ToString());
 		// Create a default record so we can still show something
 		Record.PawnGuid = DisplayedPawnGuid;
 		Record.CharacterName = TEXT("Unknown");
@@ -897,6 +899,15 @@ void UMOStatusPanel::PopulateInfoTab()
 		Record.HealthPercent = 1.0f;
 		Record.StatusText = TEXT("Healthy");
 		Record.Transform = CurrentPawn->GetActorTransform();
+	}
+	// The live identity is the source of name and gender (AMOPlayerController::RequestSetPawnIdentity); the record is what the last save captured.
+	if (!IdentityComp->DisplayName.IsEmpty())
+	{
+		Record.CharacterName = IdentityComp->DisplayName.ToString();
+	}
+	if (!IdentityComp->Gender.IsEmpty())
+	{
+		Record.Gender = IdentityComp->Gender;
 	}
 
 	UVerticalBox* Container = GetCategoryContainer(EMOStatusCategory::Info);
@@ -1013,50 +1024,11 @@ void UMOStatusPanel::HandleInfoEntryValueChanged(FName FieldId, const FString& N
 		return;
 	}
 
-	// Get persistence subsystem
-	UGameInstance* GameInstance = UGameplayStatics::GetGameInstance(this);
-	if (!GameInstance)
+	// The pawn's identity is the one source of name and gender; the authority writes it (from a co-op client the controller sends it) and a
+	// save copies it into the record. Writing the record here failed for a pawn with no record yet and was undone by the next save.
+	if (AMOPlayerController* MOPC = Cast<AMOPlayerController>(GetOwningPlayer()))
 	{
-		return;
-	}
-
-	UMOPersistenceSubsystem* Persistence = GameInstance->GetSubsystem<UMOPersistenceSubsystem>();
-	if (!Persistence)
-	{
-		return;
-	}
-
-	// Get current record
-	FMOPersistedPawnRecord Record;
-	if (!Persistence->GetPawnRecord(DisplayedPawnGuid, Record))
-	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOStatusPanel] Could not find pawn record to update"));
-		return;
-	}
-
-	// Update the appropriate field
-	if (FieldId == FName("CharacterName"))
-	{
-		Record.CharacterName = NewValue;
-	}
-	else if (FieldId == FName("Gender"))
-	{
-		Record.Gender = NewValue;
-	}
-	else
-	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOStatusPanel] Unknown editable field: %s"), *FieldId.ToString());
-		return;
-	}
-
-	// Save updated record
-	if (Persistence->UpdatePawnRecord(Record))
-	{
-		UE_LOG(LogMOFramework, Log, TEXT("[MOStatusPanel] Saved updated %s for pawn %s"), *FieldId.ToString(), *DisplayedPawnGuid.ToString());
-	}
-	else
-	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOStatusPanel] Failed to save updated %s"), *FieldId.ToString());
+		MOPC->RequestSetPawnIdentity(DisplayedPawnGuid, FieldId, NewValue);
 	}
 }
 

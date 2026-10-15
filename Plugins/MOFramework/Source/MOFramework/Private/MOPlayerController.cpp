@@ -23,6 +23,7 @@
 #include "MOCarcassActor.h"
 #include "MOInteractorComponent.h"
 #include "MOIdentityComponent.h"
+#include "MOIdentityRegistrySubsystem.h"
 #include "MOKeyBindingManager.h"
 #include "MOGameUIManagerSubsystem.h"
 #include "MOTextInputDialog.h"
@@ -622,6 +623,54 @@ void AMOPlayerController::ClientForageResult_Implementation(uint8 Action, int32 
 	{
 		UI->ShowForagingResult(Action, ItemCount);
 	}
+}
+
+void AMOPlayerController::RequestSetPawnIdentity(FGuid PawnGuid, FName Field, const FString& Value)
+{
+	if (HasAuthority())
+	{
+		ServerSetPawnIdentity_Implementation(PawnGuid, Field, Value);
+	}
+	else
+	{
+		ServerSetPawnIdentity(PawnGuid, Field, Value);
+	}
+}
+
+void AMOPlayerController::ServerSetPawnIdentity_Implementation(FGuid PawnGuid, FName Field, const FString& Value)
+{
+	if (!HasAuthority())
+	{
+		return;   // only the server changes an identity (editor Python runs a Server RPC's body locally on a client)
+	}
+	const UMOIdentityRegistrySubsystem* Registry = GetWorld() ? GetWorld()->GetSubsystem<UMOIdentityRegistrySubsystem>() : nullptr;
+	APawn* Target = Registry ? Cast<APawn>(Registry->ResolveActorOrNull(PawnGuid)) : nullptr;
+	UMOIdentityComponent* Identity = Target ? Target->FindComponentByClass<UMOIdentityComponent>() : nullptr;
+	const UMORecruitmentComponent* Recruit = Target ? Target->FindComponentByClass<UMORecruitmentComponent>() : nullptr;
+	// This player's own pawn, or a colonist nobody else is playing -- not a stranger, a creature, or another player's pawn by GUID guess.
+	const AController* Driver = Target ? Target->GetController() : nullptr;
+	const bool bOtherPlayersPawn = Driver && Driver != this && Driver->IsPlayerController();
+	if (!Identity || (Target != GetPawn() && (!(Recruit && Recruit->IsPossessable()) || bOtherPlayersPawn)))
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOPlayerController] %s: refused identity change of %s (%s)"), *GetName(), *PawnGuid.ToString(),
+			!Identity ? TEXT("no such pawn") : bOtherPlayersPawn ? TEXT("another player's pawn") : TEXT("not this player's pawn or a colonist"));
+		return;
+	}
+	const FString Clean = Value.TrimStartAndEnd().Left(MaxIdentityTextLength);
+	if (Field == TEXT("CharacterName") && !Clean.IsEmpty())
+	{
+		Identity->SetDisplayName(FText::FromString(Clean));
+	}
+	else if (Field == TEXT("Gender"))
+	{
+		Identity->SetGender(Clean);
+	}
+	else
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOPlayerController] %s: refused identity change '%s' = '%s'"), *GetName(), *Field.ToString(), *Clean);
+		return;
+	}
+	UE_LOG(LogMOFramework, Log, TEXT("[MOPlayerController] %s set %s of %s to '%s'"), *GetName(), *Field.ToString(), *Target->GetName(), *Clean);
 }
 
 void AMOPlayerController::PawnLeavingGame()

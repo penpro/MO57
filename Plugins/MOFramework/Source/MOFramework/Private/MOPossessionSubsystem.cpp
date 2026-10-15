@@ -182,6 +182,18 @@ void UMOPossessionSubsystem::BuildPossessionEntries(const APlayerController* Req
 		// Live recruited pawns that have no save record yet (e.g. just recruited).
 		if (KnownGuids.Contains(Guid))
 		{
+			// A live pawn's identity is the source of its name and gender; the record holds what the last save captured.
+			if (FMOPersistedPawnRecord* Known = Records.FindByPredicate([&Guid](const FMOPersistedPawnRecord& R) { return R.PawnGuid == Guid; }))
+			{
+				if (!Identity->DisplayName.IsEmpty())
+				{
+					Known->CharacterName = Identity->DisplayName.ToString();
+				}
+				if (!Identity->Gender.IsEmpty())
+				{
+					Known->Gender = Identity->Gender;
+				}
+			}
 			++AlreadyKnown;
 			continue;
 		}
@@ -201,6 +213,7 @@ void UMOPossessionSubsystem::BuildPossessionEntries(const APlayerController* Req
 		WorldPawnRecord.CharacterName = Identity->DisplayName.IsEmpty()
 			? FString::Printf(TEXT("Survivor_%s"), *Guid.ToString().Right(4))
 			: Identity->DisplayName.ToString();
+		WorldPawnRecord.Gender = Identity->Gender;
 		WorldPawnRecord.StatusText = TEXT("Recruited");
 		WorldPawnRecord.LastPlayedTime = FDateTime::Now();
 		Records.Add(WorldPawnRecord);

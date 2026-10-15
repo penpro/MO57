@@ -68,7 +68,13 @@ design forks are logged under "Forks", not built blind.
 - [ ] Weather per biome (rain / snow line at altitude) and the sound layers that go with it.
 
 ### P3 - game-wide quality
-- [ ] A naive-player first-ten-minutes pass (main menu -> new game -> tutorial -> first craft) with screenshots of every screen; fix every rough edge found.
+- [~] A naive-player first-ten-minutes pass (main menu -> new game -> tutorial -> first craft) with screenshots of every screen; fix every rough edge found. **Pass 1 (Oct 15, `Saved/FirstTen/`, -game
+  instance via `ue.py inst` + `MO.Test.PressKey` / `ClickWidget` / `shot showui`) -- FIXED:** seed shown as "15,204" started a different world (6e1e70ac); the first hint was "Possession Menu: press P" (now gated
+  on the first recruit; default quest SortOrder = last; 58bcd369); a starting stack of 10 sticks was in no slot, invisible (ReconcileSlots, e8c8d913); "[W]" / "[Mouse XY 2D-Axis]" hints -> "[WASD]" / "[Mouse]";
+  SKILL / STATION labels with no value; selecting an uncraftable recipe showed no selection (31cdf120); status panel "Name: Unknown" for a named pawn, and a rename was lost at the next save (identity = the
+  one source of name + gender; RequestSetPawnIdentity). **OPEN (logged for Wes):** spawn camera inside sapling / fern leaves (near-camera foliage fade, in progress); thirst + cold moodles red within a minute
+  (survival pacing fork); the starting kit (10 cobbles, 20 sticks) crafts nothing in the hand menu -- first craft is the campfire (B); build-menu names mix "Build Campfire" and "Stick Floor"; skill list has no
+  icons; gender has no source on the body (player-set only); the New Game input boxes render their typed text dim; Location row shows raw cm.
 - [ ] Audio pass: footsteps done for humans (see Done); open: creature footsteps (hooves / paws: the skeleton has no ball_l / ball_r), structure / prop surfaces (stone, rock, metal: needs physical materials or
   the interface on the actors; props on top of terrain read as wood today), rain / snow overlays on the steps, interior / exterior mix, UDW outdoor mix failing in `RecursiveApplyAdjuster` (silenced via LogAudio=Warning).
 - [x] HUD review of the packaged build (`Tools/win_input.ps1 -Action shot`, PrintWindow: works while another window covers the game, never moves the cursor): the tutorial banner was dark grey text with no panel

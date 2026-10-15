@@ -2248,6 +2248,40 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 		}),
 		ECVF_Default));
 
+	// The status panel's Change through the real C++ path (Python would run the Server RPC body locally on a client -- GAllowActorScriptExecutionInEditor):
+	// "self" renames this player's own pawn, "other" every other recruited pawn (another player's must be refused). nettest actions: _client_rename.
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Test.RenamePawnRPC"),
+		TEXT("AMOPlayerController::RequestSetPawnIdentity (client->server). Usage: MO.Test.RenamePawnRPC self|other <Name with spaces>"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			const bool bOther = Args.Num() > 0 && Args[0].Equals(TEXT("other"), ESearchCase::IgnoreCase);
+			const FString NewName = FString::Join(TArrayView<const FString>(Args).RightChop(1), TEXT(" "));
+			RunOnNextTick(World, [bOther, NewName](UWorld* W)
+			{
+				AMOPlayerController* PC = W ? Cast<AMOPlayerController>(W->GetFirstPlayerController()) : nullptr;
+				if (!PC || NewName.IsEmpty())
+				{
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] FAIL RenamePawnRPC: %s"), !PC ? TEXT("no local MO player controller") : TEXT("no name given"));
+					return;
+				}
+				int32 Sent = 0;
+				for (TActorIterator<APawn> It(W); It; ++It)
+				{
+					const UMOIdentityComponent* Identity = It->FindComponentByClass<UMOIdentityComponent>();
+					const UMORecruitmentComponent* Recruit = It->FindComponentByClass<UMORecruitmentComponent>();
+					const bool bMine = *It == PC->GetPawn();
+					if (Identity && (bOther ? (!bMine && Recruit && Recruit->IsPossessable()) : bMine))
+					{
+						PC->RequestSetPawnIdentity(Identity->GetGuid(), TEXT("CharacterName"), NewName);
+						++Sent;
+					}
+				}
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] RenamePawnRPC: sent %d request(s) (%s, '%s') from %s"), Sent, bOther ? TEXT("other") : TEXT("self"), *NewName, *PC->GetName());
+			});
+		}),
+		ECVF_Default));
+
 	// Same idea for ServerApplyTerraform (which already holds the client to a 2500 cm reach and clamps FlattenHeight).
 	ConsoleCommands.Add(CM.RegisterConsoleCommand(
 		TEXT("MO.Test.TerraformRPC"),

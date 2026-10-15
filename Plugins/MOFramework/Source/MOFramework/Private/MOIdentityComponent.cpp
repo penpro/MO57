@@ -206,5 +206,6 @@ void UMOIdentityComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>&
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
 	DOREPLIFETIME(UMOIdentityComponent, DisplayName);
+	DOREPLIFETIME(UMOIdentityComponent, Gender);
 	DOREPLIFETIME(UMOIdentityComponent, StableGuid);
 }

@@ -1226,6 +1226,12 @@ void UMOPersistenceSubsystem::CapturePersistedPawnsAndInventories(UWorld* World,
         }
         // else: keep the name from the existing record
 
+        // Gender: the identity is the source too (a record without one is a pawn nobody set it for yet).
+        if (!IdentityComponent->Gender.IsEmpty())
+        {
+            PawnRecord.Gender = IdentityComponent->Gender;
+        }
+
         // Capture component state data
         if (UMOVitalsComponent* VitalsComp = Pawn->FindComponentByClass<UMOVitalsComponent>())
         {
@@ -1599,6 +1605,11 @@ void UMOPersistenceSubsystem::RespawnPersistedPawns(UWorld* World, const TArray<
             IdentityComponent->SetDisplayName(FText::FromString(PawnRecord.CharacterName));
             UE_LOG(LogMOFramework, Log, TEXT("[MOPersist] Applied saved name '%s' to pawn GUID=%s"),
                 *PawnRecord.CharacterName, *PawnRecord.PawnGuid.ToString(EGuidFormats::Short));
+        }
+        // The legacy "Unknown" placeholder is not a gender anyone chose.
+        if (!PawnRecord.Gender.IsEmpty() && PawnRecord.Gender != TEXT("Unknown"))
+        {
+            IdentityComponent->SetGender(PawnRecord.Gender);
         }
 
         UGameplayStatics::FinishSpawningActor(DeferredPawn, PawnRecord.Transform);
