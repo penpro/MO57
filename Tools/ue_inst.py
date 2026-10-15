@@ -1361,6 +1361,16 @@ def _client_press_e(rep, host, client):
                   "out('HAVE=%s' % (r[0] if isinstance(r, tuple) else bool(r)))")
     time.sleep(6)  # the dropped item replicates to the client
     rep.step("CONTROL: before the client presses E, the stick is NOT in the joiner's inventory", "HAVE=True" not in _probe(host, probe_have), "")
+    # A stick that fell on the host (no ground collision yet under a far joiner) is a different failure from a refused E:
+    # one run had the server's copy 15 m from where the client saw it. Name it instead of blaming the interaction.
+    rest = _probe(host,
+        "p = unreal.GameplayStatics.get_player_pawn(world, 1); pl = p.get_actor_location(); "
+        "items = sorted(unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOWorldItem), key=lambda a: (a.get_actor_location() - pl).length()); "
+        "out('E_REST d=%.0f dz=%.0f' % (((items[0].get_actor_location() - pl).length(), items[0].get_actor_location().z - pl.z) if items else (-1, 0)))")
+    rm = re.search(r"E_REST d=(-?\d+) dz=(-?\d+)", rest)
+    if not rep.step("host: the dropped stick rests by the joiner (it did not fall through the ground)", bool(rm) and 0 <= int(rm.group(1)) < 400,
+                    rm.group(0) if rm else rest.strip()[-160:]):
+        return
     aim = _probe(client,
         "pc = unreal.GameplayStatics.get_player_controller(world, 0); p = pc.get_controlled_pawn(); pl = p.get_actor_location(); "
         "items = sorted(unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOWorldItem), key=lambda a: (a.get_actor_location() - pl).length()); "
