@@ -282,19 +282,41 @@ int32 UMOGameSettings::GenerateRandomSeed()
 
 int32 UMOGameSettings::SeedFromString(const FString& SeedString)
 {
-	if (SeedString.IsEmpty())
+	const FString Trimmed = SeedString.TrimStartAndEnd();
+	if (Trimmed.IsEmpty())
 	{
 		return 0;
 	}
 
-	// Try to parse as integer first
-	if (SeedString.IsNumeric())
+	// A number, possibly written with digit grouping (comma, period, space, no-break space, apostrophe, underscore) and a leading minus, is
+	// that number. Anything else is a word seed.
+	FString Digits;
+	bool bNumber = true;
+	for (int32 I = 0; I < Trimmed.Len(); ++I)
 	{
-		return FCString::Atoi(*SeedString);
+		const TCHAR C = Trimmed[I];
+		if (FChar::IsDigit(C) || (C == TEXT('-') && I == 0))
+		{
+			Digits.AppendChar(C);
+		}
+		else if (C != TEXT(',') && C != TEXT('.') && C != TEXT(' ') && C != 0x00A0 && C != 0x0027 && C != TEXT('_'))   // 0x00A0 = no-break space, 0x0027 = apostrophe
+		{
+			bNumber = false;
+			break;
+		}
+	}
+	if (bNumber && Digits.Len() > (Digits.StartsWith(TEXT("-")) ? 1 : 0))
+	{
+		return FCString::Atoi(*Digits);
 	}
 
 	// Otherwise hash the string
-	return GetTypeHash(SeedString);
+	return GetTypeHash(Trimmed);
+}
+
+FText UMOGameSettings::SeedToText(int32 Seed)
+{
+	return FText::AsNumber(Seed, &FNumberFormattingOptions::DefaultNoGrouping());
 }
 
 int32 UMOGameSettings::GetWorldSeed()

@@ -134,12 +134,12 @@ void UMONewGamePanel::GenerateRandomSeed()
 	// Update UI
 	if (SeedInputBox)
 	{
-		SeedInputBox->SetText(FText::AsNumber(NewSeed));
+		SeedInputBox->SetText(UMOGameSettings::SeedToText(NewSeed));
 	}
 
 	if (SeedPreviewText)
 	{
-		SeedPreviewText->SetText(FText::Format(NSLOCTEXT("MONewGame", "SeedPreview", "Seed: {0}"), FText::AsNumber(NewSeed)));
+		SeedPreviewText->SetText(FText::Format(NSLOCTEXT("MONewGame", "SeedPreview", "Seed: {0}"), UMOGameSettings::SeedToText(NewSeed)));
 	}
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MONewGamePanel] Generated random seed: %d"), NewSeed);
@@ -160,12 +160,12 @@ void UMONewGamePanel::SetSeed(int32 Seed)
 {
 	if (SeedInputBox)
 	{
-		SeedInputBox->SetText(FText::AsNumber(Seed));
+		SeedInputBox->SetText(UMOGameSettings::SeedToText(Seed));
 	}
 
 	if (SeedPreviewText)
 	{
-		SeedPreviewText->SetText(FText::Format(NSLOCTEXT("MONewGame", "SeedPreview", "Seed: {0}"), FText::AsNumber(Seed)));
+		SeedPreviewText->SetText(FText::Format(NSLOCTEXT("MONewGame", "SeedPreview", "Seed: {0}"), UMOGameSettings::SeedToText(Seed)));
 	}
 
 	// Update settings
@@ -255,7 +255,7 @@ void UMONewGamePanel::HandleSeedTextCommitted(const FText& Text, ETextCommit::Ty
 
 	if (SeedPreviewText)
 	{
-		SeedPreviewText->SetText(FText::Format(NSLOCTEXT("MONewGame", "SeedPreview", "Seed: {0}"), FText::AsNumber(Seed)));
+		SeedPreviewText->SetText(FText::Format(NSLOCTEXT("MONewGame", "SeedPreview", "Seed: {0}"), UMOGameSettings::SeedToText(Seed)));
 	}
 
 	// If committed via Enter, optionally start game

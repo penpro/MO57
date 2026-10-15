@@ -198,9 +198,15 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Settings")
 	int32 GenerateRandomSeed();
 
-	/** Convert a seed string to integer (hashes non-numeric strings). */
+	/** Convert a seed string to integer (hashes non-numeric strings). A number written with digit grouping ("15,204", "15 204", "15.204")
+	 *  is that number: until Oct 15 2026 the New Game panel displayed seeds grouped and then parsed its own text back, so "15,204" was
+	 *  hashed as a word and started a different world from the one shown. */
 	UFUNCTION(BlueprintCallable, Category="MO|Settings")
 	static int32 SeedFromString(const FString& SeedString);
+
+	/** THE way a seed is shown: plain digits, no grouping (a seed is an identifier players copy and share, not a quantity). */
+	UFUNCTION(BlueprintPure, Category="MO|Settings")
+	static FText SeedToText(int32 Seed);
 
 	/** Get the current world seed (for voxel graphs to read). Returns 0 if not set. */
 	UFUNCTION(BlueprintPure, Category="MO|Settings")
