@@ -218,6 +218,10 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO|Survival")
 	bool IsStatCritical(FName StatName) const;
 
+	/** Run every stat's regen / decay over GameSeconds of world-clock time. The timer calls it with the clock-scaled tick; tests and
+	 *  cheats call it to fast-forward. */
+	void AdvanceStats(float GameSeconds);
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;

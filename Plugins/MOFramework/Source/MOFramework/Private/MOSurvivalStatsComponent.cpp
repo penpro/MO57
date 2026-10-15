@@ -2,6 +2,7 @@
 #include "MOInventoryComponent.h"
 #include "MOItemDatabaseSettings.h"
 #include "MOMetabolismComponent.h"
+#include "MOGameClockSubsystem.h"
 #include "MOFramework.h"
 #include "Net/UnrealNetwork.h"
 #include "TimerManager.h"
@@ -22,15 +23,19 @@ UMOSurvivalStatsComponent::UMOSurvivalStatsComponent()
 	Stamina.RegenRate = 10.0f;  // Fast stamina regen
 	Stamina.DecayRate = 0.0f;
 
+	// Pacing (Wes, Oct 15 2026): a character starts fully fed, watered and rested, and needs only start to bother them after about
+	// half an hour -- the HUD's warning moodle shows below 50 %. Full -> warning in 30 game minutes for thirst, 45 for hunger, 60 for
+	// energy (full -> empty in twice that). Until then thirst decayed 0.8 per REAL second: "Dehydrated" about a minute into a new game.
+	// Rates are per GAME second (AdvanceStats takes clock-scaled time).
 	Hunger.Current = 100.0f;
 	Hunger.Max = 100.0f;
 	Hunger.RegenRate = 0.0f;
-	Hunger.DecayRate = 0.5f;  // Slow hunger decay
+	Hunger.DecayRate = 100.0f / (90.0f * 60.0f);
 
 	Thirst.Current = 100.0f;
 	Thirst.Max = 100.0f;
 	Thirst.RegenRate = 0.0f;
-	Thirst.DecayRate = 0.8f;  // Faster thirst decay
+	Thirst.DecayRate = 100.0f / (60.0f * 60.0f);
 
 	Temperature.Current = 37.0f;  // Body temperature in Celsius
 	Temperature.Max = 42.0f;
@@ -40,7 +45,7 @@ UMOSurvivalStatsComponent::UMOSurvivalStatsComponent()
 	Energy.Current = 100.0f;
 	Energy.Max = 100.0f;
 	Energy.RegenRate = 0.0f;  // Only recovers by sleeping
-	Energy.DecayRate = 0.2f;
+	Energy.DecayRate = 100.0f / (120.0f * 60.0f);
 }
 
 void UMOSurvivalStatsComponent::BeginPlay()
@@ -225,14 +230,26 @@ bool UMOSurvivalStatsComponent::IsStatCritical(FName StatName) const
 
 void UMOSurvivalStatsComponent::TickStats()
 {
-	ProcessStatTick(Health, FName("Health"), TickInterval);
-	ProcessStatTick(Stamina, FName("Stamina"), TickInterval);
-	ProcessStatTick(Hunger, FName("Hunger"), TickInterval);
-	ProcessStatTick(Thirst, FName("Thirst"), TickInterval);
-	ProcessStatTick(Temperature, FName("Temperature"), TickInterval);
-	ProcessStatTick(Energy, FName("Energy"), TickInterval);
+	// The body runs on the world clock like everything else in the simulation (TimeScale 1.0 = real time).
+	const UWorld* World = GetWorld();
+	const UMOGameClockSubsystem* Clock = World ? World->GetSubsystem<UMOGameClockSubsystem>() : nullptr;
+	AdvanceStats(Clock ? Clock->GetScaledDeltaTime(TickInterval) : TickInterval);
+}
 
-	DecayNutrition(TickInterval);
+void UMOSurvivalStatsComponent::AdvanceStats(float GameSeconds)
+{
+	if (GameSeconds <= 0.0f)
+	{
+		return;
+	}
+	ProcessStatTick(Health, FName("Health"), GameSeconds);
+	ProcessStatTick(Stamina, FName("Stamina"), GameSeconds);
+	ProcessStatTick(Hunger, FName("Hunger"), GameSeconds);
+	ProcessStatTick(Thirst, FName("Thirst"), GameSeconds);
+	ProcessStatTick(Temperature, FName("Temperature"), GameSeconds);
+	ProcessStatTick(Energy, FName("Energy"), GameSeconds);
+
+	DecayNutrition(GameSeconds);
 }
 
 void UMOSurvivalStatsComponent::ProcessStatTick(FMOSurvivalStat& Stat, FName StatName, float DeltaTime)

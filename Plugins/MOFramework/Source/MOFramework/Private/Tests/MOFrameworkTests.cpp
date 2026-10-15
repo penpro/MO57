@@ -351,6 +351,39 @@ bool FMOSurvivalStats_IsStatDepleted_ChecksZero::RunTest(const FString& Paramete
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOSurvivalStats_Pacing_HalfAnHourBeforeNeeds,
+	"MOFramework.Survival.Pacing.HalfAnHourBeforeNeeds",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOSurvivalStats_Pacing_HalfAnHourBeforeNeeds::RunTest(const FString& Parameters)
+{
+	// Wes, Oct 15 2026: a character starts fully fed and watered, and needs start to bother them after about 30 minutes (the HUD's
+	// warning moodle shows below 50 %). Before: thirst decayed 0.8 per real second -- "Dehydrated" about a minute into a new game.
+	UMOSurvivalStatsComponent* Survival = NewObject<UMOSurvivalStatsComponent>();
+	const float Warn = 0.5f;
+	TestEqual(TEXT("starts fully watered"), Survival->GetStatPercent(TEXT("Thirst")), 1.0f);
+	TestEqual(TEXT("starts fully fed"), Survival->GetStatPercent(TEXT("Hunger")), 1.0f);
+	TestEqual(TEXT("starts rested"), Survival->GetStatPercent(TEXT("Energy")), 1.0f);
+
+	for (int32 Second = 0; Second < 28 * 60; ++Second) { Survival->AdvanceStats(1.0f); }   // 28 game minutes, 1 s ticks like the timer
+	TestTrue(TEXT("28 min in: not thirsty yet"), Survival->GetStatPercent(TEXT("Thirst")) > Warn);
+	TestTrue(TEXT("28 min in: not hungry yet"), Survival->GetStatPercent(TEXT("Hunger")) > Warn);
+	TestTrue(TEXT("28 min in: not tired yet"), Survival->GetStatPercent(TEXT("Energy")) > Warn);
+
+	Survival->AdvanceStats(4.0f * 60.0f);   // 32 min
+	TestTrue(TEXT("32 min in: thirst is the first need to show"), Survival->GetStatPercent(TEXT("Thirst")) < Warn);
+	TestTrue(TEXT("32 min in: still not hungry"), Survival->GetStatPercent(TEXT("Hunger")) > Warn);
+
+	Survival->AdvanceStats(15.0f * 60.0f);   // 47 min
+	TestTrue(TEXT("47 min in: hungry"), Survival->GetStatPercent(TEXT("Hunger")) < Warn);
+	TestTrue(TEXT("47 min in: thirst has turned critical (25 %, at 45 min)"), Survival->GetStatPercent(TEXT("Thirst")) < 0.25f);
+	TestTrue(TEXT("47 min in: still not tired"), Survival->GetStatPercent(TEXT("Energy")) > Warn);
+
+	Survival->AdvanceStats(15.0f * 60.0f);   // 62 min
+	TestTrue(TEXT("62 min in: tired"), Survival->GetStatPercent(TEXT("Energy")) < Warn);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOSurvivalStats_IsStatCritical_ChecksThreshold,
 	"MOFramework.Survival.IsStatCritical.ChecksThreshold",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
