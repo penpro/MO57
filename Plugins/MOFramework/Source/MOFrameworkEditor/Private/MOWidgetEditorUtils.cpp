@@ -24,6 +24,7 @@
 
 #if WITH_EDITOR
 #include "Kismet2/BlueprintEditorUtils.h"
+#include "WidgetBlueprintOperationUtils.h"
 #endif
 
 // Anchor presets lookup
@@ -569,11 +570,22 @@ bool UMOWidgetEditorUtils::RenameWidget(UWidgetBlueprint* WidgetBlueprint, FName
 		return false;
 	}
 
-	Widget->Modify();
-	Widget->Rename(*NewName.ToString());
+	// The Designer's rename, not a bare UObject::Rename: it also moves the widget's entry in WidgetVariableNameToGuidMap and
+	// fixes graph variable nodes, property bindings and animation tracks. The bare rename left the map keyed by the old name,
+	// so the next compile hit two ensureAlways in WidgetBlueprintCompiler (Oct 15 2026, SurroundingsCheckbox ->
+	// SurroundingCheckbox) and the widget silently got a new GUID.
+	if (!FWidgetBlueprintOperationUtils::RenameWidget(WidgetBlueprint, Widget, NewName.ToString()))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("MOWidgetEditorUtils: Rename '%s' -> '%s' refused (name not valid or not unique)"), *OldName.ToString(), *NewName.ToString());
+		return false;
+	}
+	if (Widget->GetFName() != NewName)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("MOWidgetEditorUtils: '%s' was renamed to '%s', not '%s' (sanitized)"), *OldName.ToString(), *Widget->GetName(), *NewName.ToString());
+	}
 
 	FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(WidgetBlueprint);
-	UE_LOG(LogTemp, Log, TEXT("MOWidgetEditorUtils: Renamed '%s' to '%s'"), *OldName.ToString(), *NewName.ToString());
+	UE_LOG(LogTemp, Log, TEXT("MOWidgetEditorUtils: Renamed '%s' to '%s'"), *OldName.ToString(), *Widget->GetName());
 	return true;
 #else
 	return false;
