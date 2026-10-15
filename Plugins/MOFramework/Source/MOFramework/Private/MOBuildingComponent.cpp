@@ -56,6 +56,7 @@
  */
 
 #include "MOBuildingComponent.h"
+#include "MOUIManagerComponent.h"
 #include "MOBuildableActor.h"
 #include "MOBuildProgressComponent.h"
 #include "MOInventoryComponent.h"
@@ -180,10 +181,14 @@ bool UMOBuildingComponent::EnterPlacementMode(FName RecipeId)
 	// Enable tick
 	SetComponentTickEnabled(true);
 
-	// Switch input context to building mode
+	// Switch input context to building mode; the HUD mode follows the placement state
 	if (AMOPlayerController* PC = GetOwningPlayerController())
 	{
 		PC->SetInputContext(EMOInputContext::BaseBuilding, false);
+		if (UMOUIManagerComponent* UIManager = PC->FindComponentByClass<UMOUIManagerComponent>())
+		{
+			UIManager->RefreshGameplayMode();
+		}
 	}
 
 	OnPlacementModeEntered.Broadcast(RecipeId);
@@ -212,10 +217,14 @@ void UMOBuildingComponent::ExitPlacementMode(bool bCancel)
 	CurrentRecipeId = NAME_None;
 	bCurrentPlacementValid = false;
 
-	// Switch input context back to pawn control
+	// Switch input context back to pawn control; the HUD mode follows the placement state
 	if (AMOPlayerController* PC = GetOwningPlayerController())
 	{
 		PC->SetInputContext(EMOInputContext::PawnControl, true);
+		if (UMOUIManagerComponent* UIManager = PC->FindComponentByClass<UMOUIManagerComponent>())
+		{
+			UIManager->RefreshGameplayMode();
+		}
 	}
 
 	OnPlacementModeExited.Broadcast(!bCancel);

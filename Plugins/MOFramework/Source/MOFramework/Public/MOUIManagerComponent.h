@@ -812,9 +812,16 @@ public:
 
 	// --- Mode Indicator (bottom-right HUD showing current gameplay mode) ---
 
-	/** Set the current gameplay mode. Updates the mode indicator. */
+	/** Set the current gameplay mode. Updates the mode indicator. Gameplay code calls RefreshGameplayMode instead. */
 	UFUNCTION(BlueprintCallable, Category="MO|UI|Mode")
 	void SetGameplayMode(EMOGameplayMode NewMode);
+
+	/**
+	 * THE place the HUD mode is decided, from what the player is doing: the pawn's terraform mode on -> Terraform, a building ghost being
+	 * placed -> Build, else Explore. Systems call this whenever their state changes instead of pushing a mode: only terraforming used to
+	 * push one, so placing a building still read "Exploring", and two pushers would undo each other on exit.
+	 */
+	void RefreshGameplayMode();
 
 	/** Get the current gameplay mode. */
 	UFUNCTION(BlueprintPure, Category="MO|UI|Mode")

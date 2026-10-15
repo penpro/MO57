@@ -62,6 +62,7 @@
 #include "MOCraftingStationActor.h"
 #include "MOCraftingCapableInterface.h"
 #include "MOBuildingComponent.h"
+#include "MOCharacter.h"
 #include "MOBuildProgressComponent.h"
 #include "MOPlayerController.h"
 #include "MOUnifiedInventoryMenu.h"
@@ -1967,6 +1968,20 @@ void UMOUIManagerComponent::SetGameplayMode(EMOGameplayMode NewMode)
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOUI] Gameplay mode set to: %s"),
 		*UMOModeIndicatorWidget::GetModeDisplayName(NewMode).ToString());
+}
+
+void UMOUIManagerComponent::RefreshGameplayMode()
+{
+	const AController* Controller = Cast<AController>(GetOwner());
+	const AMOCharacter* Character = Controller ? Cast<AMOCharacter>(Controller->GetPawn()) : nullptr;
+	const UMOBuildingComponent* Building = GetOwner() ? GetOwner()->FindComponentByClass<UMOBuildingComponent>() : nullptr;
+	const EMOGameplayMode Mode = (Character && Character->IsTerraformingMode()) ? EMOGameplayMode::Terraform
+		: (Building && Building->IsInPlacementMode()) ? EMOGameplayMode::Build
+		: EMOGameplayMode::Explore;
+	if (Mode != CurrentGameplayMode)
+	{
+		SetGameplayMode(Mode);
+	}
 }
 
 EMOGameplayMode UMOUIManagerComponent::GetGameplayMode() const

@@ -762,8 +762,12 @@ const FMOQuestObjective* UMOQuestSubsystem::GetCurrentSequentialObjective(
 // TUTORIAL HINT API
 // ============================================================================
 
-bool UMOQuestSubsystem::TutorialHintPrecedes(int32 SortOrderA, FName QuestIdA, int32 SortOrderB, FName QuestIdB)
+bool UMOQuestSubsystem::TutorialHintPrecedes(bool bTriggeredA, int32 SortOrderA, FName QuestIdA, bool bTriggeredB, int32 SortOrderB, FName QuestIdB)
 {
+	if (bTriggeredA != bTriggeredB)
+	{
+		return bTriggeredA;
+	}
 	if (SortOrderA != SortOrderB)
 	{
 		return SortOrderA < SortOrderB;
@@ -794,6 +798,7 @@ bool UMOQuestSubsystem::GetActiveTutorialHint(FName& OutQuestId, FName& OutObjec
 	const FMOQuestObjective* BestObjective = nullptr;
 	FName BestQuestId;
 	int32 BestSortOrder = TNumericLimits<int32>::Max();
+	bool bBestTriggered = false;
 
 	for (const auto& Pair : ActiveQuests)
 	{
@@ -804,8 +809,10 @@ bool UMOQuestSubsystem::GetActiveTutorialHint(FName& OutQuestId, FName& OutObjec
 			continue;
 		}
 
+		// Triggered = the player did something this tutorial reacts to (an objective of it is complete, e.g. its silent gate).
+		const bool bTriggered = State.CompletedObjectives.Num() > 0;
 		const bool bBeatsBest = !BestObjective
-			|| TutorialHintPrecedes(Definition->SortOrder, Pair.Key, BestSortOrder, BestQuestId);
+			|| TutorialHintPrecedes(bTriggered, Definition->SortOrder, Pair.Key, bBestTriggered, BestSortOrder, BestQuestId);
 		if (!bBeatsBest)
 		{
 			continue;
@@ -840,6 +847,7 @@ bool UMOQuestSubsystem::GetActiveTutorialHint(FName& OutQuestId, FName& OutObjec
 			BestObjective = &Objective;
 			BestQuestId = Pair.Key;
 			BestSortOrder = Definition->SortOrder;
+			bBestTriggered = bTriggered;
 			break;  // first eligible objective of this quest; other quests may still win on SortOrder
 		}
 	}

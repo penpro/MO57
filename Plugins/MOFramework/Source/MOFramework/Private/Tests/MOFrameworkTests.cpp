@@ -529,13 +529,17 @@ bool FMOQuest_TutorialHintOrdering_BySortOrderNotIteration::RunTest(const FStrin
 
 	// The lower SortOrder comes first no matter which quest was activated first or how the data table happens to be
 	// ordered -- the old code returned whichever the TMap iterated first. (The real data: Quest.TutorialHint.FreshGameStartsWithMovement.)
-	TestTrue(TEXT("movement (1) precedes look (2)"), Q::TutorialHintPrecedes(1, TEXT("Tutorial_Movement"), 2, TEXT("Tutorial_Look")));
-	TestFalse(TEXT("look (2) does not precede movement (1)"), Q::TutorialHintPrecedes(2, TEXT("Tutorial_Look"), 1, TEXT("Tutorial_Movement")));
+	TestTrue(TEXT("movement (1) precedes look (2)"), Q::TutorialHintPrecedes(false, 1, TEXT("Tutorial_Movement"), false, 2, TEXT("Tutorial_Look")));
+	TestFalse(TEXT("look (2) does not precede movement (1)"), Q::TutorialHintPrecedes(false, 2, TEXT("Tutorial_Look"), false, 1, TEXT("Tutorial_Movement")));
+
+	// A tutorial the player triggered (its gate objective is done) beats a lower SortOrder that is merely pending.
+	TestTrue(TEXT("triggered build controls (8) precede pending movement (1)"), Q::TutorialHintPrecedes(true, 8, TEXT("Tutorial_BuildControls"), false, 1, TEXT("Tutorial_Movement")));
+	TestFalse(TEXT("pending movement (1) does not precede triggered build controls (8)"), Q::TutorialHintPrecedes(false, 1, TEXT("Tutorial_Movement"), true, 8, TEXT("Tutorial_BuildControls")));
 
 	// Equal SortOrder: deterministic by QuestId, and never "both precede each other".
-	TestTrue(TEXT("ties break by QuestId"), Q::TutorialHintPrecedes(5, TEXT("A_Quest"), 5, TEXT("B_Quest")));
-	TestFalse(TEXT("ties break by QuestId (reverse)"), Q::TutorialHintPrecedes(5, TEXT("B_Quest"), 5, TEXT("A_Quest")));
-	TestFalse(TEXT("a quest does not precede itself"), Q::TutorialHintPrecedes(5, TEXT("A_Quest"), 5, TEXT("A_Quest")));
+	TestTrue(TEXT("ties break by QuestId"), Q::TutorialHintPrecedes(false, 5, TEXT("A_Quest"), false, 5, TEXT("B_Quest")));
+	TestFalse(TEXT("ties break by QuestId (reverse)"), Q::TutorialHintPrecedes(false, 5, TEXT("B_Quest"), false, 5, TEXT("A_Quest")));
+	TestFalse(TEXT("a quest does not precede itself"), Q::TutorialHintPrecedes(false, 5, TEXT("A_Quest"), false, 5, TEXT("A_Quest")));
 	return true;
 }
 
@@ -560,6 +564,18 @@ bool FMOQuest_TutorialHint_FreshGameStartsWithMovement::RunTest(const FString& P
 	FText Title, Body;
 	TestTrue(TEXT("a fresh game shows a tutorial hint"), Quests->GetActiveTutorialHint(QuestId, ObjectiveId, Title, Body));
 	TestEqual(TEXT("the first hint is Find Your Feet"), QuestId, FName(TEXT("Tutorial_Movement")));
+
+	// Opening the build menu before the movement lessons are done: the placing hint shows now, not after seven movement lessons.
+	Quests->ApplyReportedEvent(EMOObjectiveType::Event, TEXT("OpenedBuildMenu"), 1);
+	TestTrue(TEXT("placing a ghost shows the build-controls hint"), Quests->GetActiveTutorialHint(QuestId, ObjectiveId, Title, Body)
+		&& QuestId == TEXT("Tutorial_BuildControls") && ObjectiveId == TEXT("Rotate"));
+	Quests->ApplyReportedEvent(EMOObjectiveType::Event, TEXT("RotatedGhost"), 1);
+	TestTrue(TEXT("after rotating, the hint goes back to the pending movement lesson"), Quests->GetActiveTutorialHint(QuestId, ObjectiveId, Title, Body)
+		&& QuestId == TEXT("Tutorial_Movement"));
+	Quests->ApplyReportedEvent(EMOObjectiveType::Event, TEXT("PlacedGhost"), 1);
+	TestTrue(TEXT("after placing a ghost, the finish-a-build hint shows"), Quests->GetActiveTutorialHint(QuestId, ObjectiveId, Title, Body)
+		&& QuestId == TEXT("Tutorial_BuildComplete"));
+	Quests->ResetAllQuests();
 
 	// The possession menu is taught when there is a second pawn to possess: alone, its hint stays silent until a recruit.
 	if (!TestTrue(TEXT("Tutorial_Possession is active from the start"), Quests->IsQuestActive(TEXT("Tutorial_Possession"))))

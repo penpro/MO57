@@ -339,9 +339,9 @@ public:
 	// =========================================================================
 
 	/**
-	 * Get the active tutorial hint, if any. Picks the tutorial quest
-	 * (bIsTutorial=true) with the LOWEST SortOrder (ties: QuestId) that has an
-	 * active objective with bShowAsTutorialPopup=true.
+	 * Get the active tutorial hint, if any: the tutorial quest with an active objective that has bShowAsTutorialPopup, chosen by
+	 * TutorialHintPrecedes -- a tutorial the PLAYER TRIGGERED (one of its objectives is complete, e.g. a silent "opened the build menu" gate)
+	 * first, then the lowest SortOrder, then QuestId.
 	 *
 	 * @return True if a tutorial hint should be displayed.
 	 */
@@ -349,9 +349,13 @@ public:
 	bool GetActiveTutorialHint(FName& OutQuestId, FName& OutObjectiveId,
 		FText& OutHintTitle, FText& OutHintBody) const;
 
-	/** True if tutorial quest A should be shown before quest B: lower SortOrder first, ties broken by QuestId so the
-	 *  answer never depends on map/hash iteration order. */
-	static bool TutorialHintPrecedes(int32 SortOrderA, FName QuestIdA, int32 SortOrderB, FName QuestIdB);
+	/**
+	 * True if tutorial quest A's hint should be shown before quest B's. A quest the player has triggered (bTriggered: an objective of it is
+	 * complete) comes first -- the hint about what you are doing right now beats the next general one: placing a building ghost while the
+	 * movement lessons were still pending showed "Move and Look" and nothing about placing (first-ten-minutes pass, Oct 15 2026). Then lower
+	 * SortOrder, ties broken by QuestId so the order never depends on map iteration.
+	 */
+	static bool TutorialHintPrecedes(bool bTriggeredA, int32 SortOrderA, FName QuestIdA, bool bTriggeredB, int32 SortOrderB, FName QuestIdB);
 
 	/**
 	 * Skip the current tutorial objective — marks it complete without firing

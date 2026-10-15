@@ -2013,10 +2013,9 @@ void AMOCharacter::ToggleTerraformMode()
 	{
 		if (UMOUIManagerComponent* UIManager = PC->FindComponentByClass<UMOUIManagerComponent>())
 		{
+			UIManager->RefreshGameplayMode();   // Terraform while the mode is on (the UI manager decides the HUD mode from state)
 			if (bTerraformingMode)
 			{
-				// Set gameplay mode to Terraform
-				UIManager->SetGameplayMode(EMOGameplayMode::Terraform);
 
 				// Show current tool hint PERSISTENTLY (duration < 0). The
 				// indicator reflects an ongoing state — "you are in terraform
@@ -2030,8 +2029,6 @@ void AMOCharacter::ToggleTerraformMode()
 			}
 			else
 			{
-				// Return to Explore mode
-				UIManager->SetGameplayMode(EMOGameplayMode::Explore);
 				UIManager->HideToolHint();
 			}
 		}
