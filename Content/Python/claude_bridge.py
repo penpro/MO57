@@ -71,11 +71,23 @@ def _standalone_game_world():
         return None
 
 
+# Editor-only script libraries that dereference GEditor. In a `-game` process (no GEditor) one call is an
+# access violation that takes the whole instance down -- a probe killed the first-ten-minutes pass on
+# Oct 15 2026 this way. Refuse the code instead of running it.
+_GEDITOR_ONLY = ("EditorLevelLibrary", "EditorUtilityLibrary", "EditorActorSubsystem", "LevelEditorSubsystem")
+
+
 def _execute(line):
     game, editor = _get_worlds()
     world = game if game else editor
     if line.startswith("py:"):
         code = line[3:]
+        if unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem) is None:
+            bad = [n for n in _GEDITOR_ONLY if n in code]
+            if bad:
+                _append(f"[py-err] {code[:120]}\nrefused: {', '.join(bad)} needs GEditor and would crash this -game "
+                        f"process; use the 'world' / 'game' variables the bridge passes in")
+                return
         env = {"unreal": unreal, "world": world, "game": game, "editor": editor, "out": _append}
         try:
             exec(code, env)
