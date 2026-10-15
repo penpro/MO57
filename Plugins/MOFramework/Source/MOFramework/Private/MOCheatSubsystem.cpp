@@ -4332,7 +4332,7 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 	// ---------- MO.Test.ClickWidget <NameSubstring> ----------
 	ConsoleCommands.Add(CM.RegisterConsoleCommand(
 		TEXT("MO.Test.ClickWidget"),
-		TEXT("Click a live widget by name: UMOCommonButton -> full guarded CommonUI click (SimulateClick); other widgets -> synthesized Slate pointer click at their screen center. Usage: MO.Test.ClickWidget <NameSubstring> (locate names via MO.Test.FindWidget)"),
+		TEXT("Click a live widget by name: UMOCommonButton -> full guarded CommonUI click (SimulateClick); other widgets -> synthesized Slate pointer click at their screen center. Usage: MO.Test.ClickWidget <NameSubstring> | text=<button label> (locate names via MO.Test.FindWidget)"),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
 		{
 			if (!World || Args.Num() < 1)
@@ -4341,6 +4341,14 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 				return;
 			}
 			const FString& Needle = Args[0];
+
+			// "text=<label>" (the rest of the line, spaces allowed): the MO button whose LABEL contains it. Runtime-built menus (a harvest
+			// menu's actions, recipe rows) name their buttons WBP_MOCommonButton_C_<n>; only the label tells them apart.
+			FString LabelNeedle;
+			if (Needle.StartsWith(TEXT("text="), ESearchCase::IgnoreCase))
+			{
+				LabelNeedle = FString::Join(Args, TEXT(" ")).RightChop(5);
+			}
 
 			// Pass 1: MO buttons -- deterministic, guard-respecting click.
 			UMOCommonButton* Exact = nullptr;
@@ -4352,8 +4360,20 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 				{
 					continue;
 				}
+				if (!LabelNeedle.IsEmpty())
+				{
+					const FString Label = Btn->GetButtonText().ToString();
+					if (Label.Equals(LabelNeedle, ESearchCase::IgnoreCase)) { Exact = Btn; break; }
+					if (!Partial && Label.Contains(LabelNeedle)) { Partial = Btn; }
+					continue;
+				}
 				if (Btn->GetName().Equals(Needle, ESearchCase::IgnoreCase)) { Exact = Btn; break; }
 				if (!Partial && Btn->GetName().Contains(Needle)) { Partial = Btn; }
+			}
+			if (!LabelNeedle.IsEmpty() && !Exact && !Partial)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] FAIL ClickWidget: no visible MO button labelled '%s'"), *LabelNeedle);
+				return;
 			}
 			if (UMOCommonButton* Btn = Exact ? Exact : Partial)
 			{

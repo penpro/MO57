@@ -109,7 +109,12 @@ def undergrowth(path, density, group=0, core=0.45, smin=0.7, smax=1.1, tag="MOBi
     # A hazel "Forest" variant is a 4-5 m multi-stem small tree, not undergrowth you wade through (playtest 2026-10-14 #9: "these medium sized trees don't have
     # collision"): Solid, and fix_mesh_collision.py gives it a CORE capsule (the stems stop you, the outer twigs do not).
     solid = "Sapling" in path or "CommonHazel_Forest" in path
-    return species(path, density, tag=tag, cluster=cluster, group=group, core=core, sweep=True, smin=smin, smax=smax, collision="Solid" if solid else "Auto")
+    # Common Hazel is a harvest source (DT_Resources CommonHazel: hazelnuts, green branches), not decoration: E on the commonest bush around a
+    # woodland spawn did nothing (Wes, Oct 15 2026: everything in the world gets an action; plain cover forages).
+    res = "CommonHazel" if "CommonHazel" in path else "None"
+    if res != "None":
+        tag = "MOResource_Bush"
+    return species(path, density, res=res, tag=tag, cluster=cluster, group=group, core=core, sweep=True, smin=smin, smax=smax, collision="Solid" if solid else "Auto")
 
 
 def cover(path, density, cluster=0.0, tag="MOBiomeCover_Grass", smin=0.8, smax=1.2):

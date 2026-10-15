@@ -2145,8 +2145,13 @@ void UMOUIManagerComponent::UpdateFocusHint()
 
 	if (bFoundTarget && Target.IsValid())
 	{
+		// World cover with no harvest data of its own: E forages there
+		if (Target.bIsForageTarget)
+		{
+			NewHintText = NSLOCTEXT("MO", "FocusForage", "Forage");
+		}
 		// For instanced meshes, look for "Name " prefixed tag for display name
-		if (Target.bIsInstancedMeshTarget)
+		else if (Target.bIsInstancedMeshTarget)
 		{
 			UInstancedStaticMeshComponent* ISMComp = Target.ISMComponent.Get();
 			if (ISMComp)

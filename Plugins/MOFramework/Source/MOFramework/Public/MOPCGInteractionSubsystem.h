@@ -142,7 +142,7 @@ public:
 	 * @return The item ID if a tag matches, NAME_None otherwise
 	 */
 	UFUNCTION(BlueprintPure, Category="MO|PCG")
-	FName GetItemIdForComponentTags(UActorComponent* Component) const;
+	FName GetItemIdForComponentTags(const UActorComponent* Component) const;
 
 	// ============================================================================
 	// CONFIGURATION

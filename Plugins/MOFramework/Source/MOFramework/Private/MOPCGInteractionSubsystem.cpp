@@ -416,7 +416,7 @@ void UMOPCGInteractionSubsystem::RegisterTagItemMapping(FName Tag, FName ItemId)
 		*Tag.ToString(), *ItemId.ToString());
 }
 
-FName UMOPCGInteractionSubsystem::GetItemIdForComponentTags(UActorComponent* Component) const
+FName UMOPCGInteractionSubsystem::GetItemIdForComponentTags(const UActorComponent* Component) const
 {
 	if (!IsValid(Component))
 	{

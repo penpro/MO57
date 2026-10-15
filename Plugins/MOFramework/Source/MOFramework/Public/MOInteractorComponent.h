@@ -166,6 +166,14 @@ struct MOFRAMEWORK_API FMOInteractionTarget
 	UPROPERTY(BlueprintReadOnly, Category="MO|Interaction")
 	bool bIsHISM = false;
 
+	/**
+	 * True when the hit is world cover with no harvest data of its own (biome grass, flowers, shrubs, debris that no resource row
+	 * describes): interacting forages the ground there (AMOPlayerController::TryOpenForageMenuAtCrosshair). Every thing in the world has
+	 * an action -- named harvests come from DT_Resources, everything else forages (Wes, Oct 15 2026).
+	 */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Interaction")
+	bool bIsForageTarget = false;
+
 	/** The hit result from the trace. */
 	FHitResult HitResult;
 
@@ -187,6 +195,7 @@ struct MOFRAMEWORK_API FMOInteractionTarget
 		HISMInteractable.Reset();
 		bIsInstancedMeshTarget = false;
 		bIsHISM = false;
+		bIsForageTarget = false;
 		HitResult = FHitResult();
 	}
 };
@@ -223,6 +232,15 @@ public:
 	/** Find an interaction target (actor or HISM instance). */
 	UFUNCTION(BlueprintCallable, Category="MO|Interaction")
 	bool FindInteractionTarget(FMOInteractionTarget& OutTarget) const;
+
+	/**
+	 * Whether instances of this component are a harvest source or an item pickup: KeepOnHarvest / Harvestable (component or owner) /
+	 * MOResource_* tags, or a PCG tag / mesh -> item mapping. The one rule E, right-click and the focus hint share (it was written out twice).
+	 */
+	static bool IsHarvestableInstanceComponent(const UInstancedStaticMeshComponent* ISMComp, const UWorld* World);
+
+	/** Whether instances of this component are decorative world cover (a biome palette's grass / flower / shrub / debris layer): they forage. */
+	static bool IsWorldCoverComponent(const UInstancedStaticMeshComponent* ISMComp);
 
 	/**
 	 * Legacy method - finds actor-based targets only.

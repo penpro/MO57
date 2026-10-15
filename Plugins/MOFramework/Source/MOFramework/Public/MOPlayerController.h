@@ -636,6 +636,13 @@ public:
 	void ClientForageResult(uint8 Action, int32 ItemCount);
 
 	/**
+	 * Open the ground forage menu where the crosshair meets the world (20 m camera trace). What interact (E) and right-click do on anything
+	 * without an interaction of its own -- bare ground, grass, a bush no resource row describes -- so everything in the world has an action
+	 * (Wes, Oct 15 2026: "things like grass just default to forage"). False when the trace hits nothing or the UI is missing.
+	 */
+	bool TryOpenForageMenuAtCrosshair();
+
+	/**
 	 * Change a person's name or gender (Field = "CharacterName" / "Gender") -- the status panel's Change. The pawn's identity component is the one source
 	 * of both (saves copy it into the pawn record): the authority writes it and it replicates. From the host this applies locally, from a co-op client it
 	 * is sent. Allowed for this player's own pawn and for a recruited colonist no other human is playing; the value is trimmed and capped at MaxIdentityTextLength.

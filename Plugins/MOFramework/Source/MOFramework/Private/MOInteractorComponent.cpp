@@ -124,6 +124,49 @@ bool UMOInteractorComponent::FindInteractTarget(AActor*& OutTargetActor, FHitRes
 	return true;
 }
 
+bool UMOInteractorComponent::IsHarvestableInstanceComponent(const UInstancedStaticMeshComponent* ISMComp, const UWorld* World)
+{
+	if (!ISMComp)
+	{
+		return false;
+	}
+	// KeepOnHarvest (trees / bushes that persist), Harvestable (generic), MOResource_* (typed: Rock, Ore, Tree, Bush, Plant) -- on the component
+	// or, for the first two, its owner.
+	const AActor* Owner = ISMComp->GetOwner();
+	if (ISMComp->ComponentHasTag(TEXT("KeepOnHarvest")) || ISMComp->ComponentHasTag(TEXT("Harvestable"))
+		|| (Owner && (Owner->ActorHasTag(TEXT("KeepOnHarvest")) || Owner->ActorHasTag(TEXT("Harvestable")))))
+	{
+		return true;
+	}
+	for (const FName& Tag : ISMComp->ComponentTags)
+	{
+		if (Tag.ToString().StartsWith(TEXT("MOResource_")))
+		{
+			return true;
+		}
+	}
+	// An item lying in the world as an instance (a stick, a stone): the PCG subsystem's tag / mesh -> item mapping.
+	const UMOPCGInteractionSubsystem* PCGSubsystem = World ? World->GetSubsystem<UMOPCGInteractionSubsystem>() : nullptr;
+	return PCGSubsystem && (!PCGSubsystem->GetItemIdForComponentTags(ISMComp).IsNone() || PCGSubsystem->IsMeshHarvestable(ISMComp->GetStaticMesh()));
+}
+
+bool UMOInteractorComponent::IsWorldCoverComponent(const UInstancedStaticMeshComponent* ISMComp)
+{
+	if (!ISMComp)
+	{
+		return false;
+	}
+	// biome_palettes.py tags every decorative layer MOBiomeCover_<Grass|Flower|Shrub|Debris>; the native grass spawner tags its own "grass".
+	for (const FName& Tag : ISMComp->ComponentTags)
+	{
+		if (Tag == TEXT("grass") || Tag.ToString().StartsWith(TEXT("MOBiomeCover_")))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
 bool UMOInteractorComponent::FindInteractionTarget(FMOInteractionTarget& OutTarget) const
 {
 	OutTarget.Reset();
@@ -188,39 +231,7 @@ bool UMOInteractorComponent::FindInteractionTarget(FMOInteractionTarget& OutTarg
 			}
 		}
 
-		// Check if this ISM/HISM is interactable via harvestable indicators:
-		// 1. KeepOnHarvest tag (trees/bushes that persist after harvest)
-		// 2. Harvestable tag (generic harvestable resources)
-		// 3. MOResource_* tag (typed resources like Rock, Ore, Tree)
-		// 4. PCG subsystem tag/mesh mapping
-		const bool bHasKeepOnHarvestTag = ISMComp->ComponentHasTag(TEXT("KeepOnHarvest")) ||
-			(HitActor && HitActor->ActorHasTag(TEXT("KeepOnHarvest")));
-		const bool bHasHarvestableTag = ISMComp->ComponentHasTag(TEXT("Harvestable")) ||
-			(HitActor && HitActor->ActorHasTag(TEXT("Harvestable")));
-
-		// Check for MOResource_* tags (Rock, Ore, Tree, Bush, Plant)
-		bool bHasResourceTypeTag = false;
-		for (const FName& Tag : ISMComp->ComponentTags)
-		{
-			if (Tag.ToString().StartsWith(TEXT("MOResource_")))
-			{
-				bHasResourceTypeTag = true;
-				break;
-			}
-		}
-
-		UWorld* World = GetWorld();
-		UMOPCGInteractionSubsystem* PCGSubsystem = World ? World->GetSubsystem<UMOPCGInteractionSubsystem>() : nullptr;
-		const bool bHasTagMapping = PCGSubsystem && !PCGSubsystem->GetItemIdForComponentTags(ISMComp).IsNone();
-		const bool bHasMeshMapping = PCGSubsystem && PCGSubsystem->IsMeshHarvestable(ISMComp->GetStaticMesh());
-
-		const bool bIsHarvestable = bHasKeepOnHarvestTag || bHasHarvestableTag || bHasResourceTypeTag || bHasTagMapping || bHasMeshMapping;
-
-		UE_LOG(LogMOFramework, Verbose, TEXT("[MOInteractor] ISM Target Check - KeepOnHarvest:%d Harvestable:%d ResourceType:%d TagMap:%d MeshMap:%d = %s"),
-			bHasKeepOnHarvestTag, bHasHarvestableTag, bHasResourceTypeTag, bHasTagMapping, bHasMeshMapping,
-			bIsHarvestable ? TEXT("HARVESTABLE") : TEXT("not harvestable"));
-
-		if (bIsHarvestable)
+		if (IsHarvestableInstanceComponent(ISMComp, GetWorld()))
 		{
 			OutTarget.bIsInstancedMeshTarget = true;
 			OutTarget.ISMComponent = ISMComp;
@@ -237,15 +248,16 @@ bool UMOInteractorComponent::FindInteractionTarget(FMOInteractionTarget& OutTarg
 			}
 			return true;
 		}
-		else
+
+		// World cover with no harvest data of its own (hazel, debris, a grass tuft with collision): it forages. Before, E on it did nothing
+		// at all -- Common Hazel, the commonest bush around a woodland spawn, while the tutorial said to inspect a plant (Oct 15 2026).
+		if (IsWorldCoverComponent(ISMComp))
 		{
-			// Log component tags for debugging
-			UE_LOG(LogMOFramework, Log, TEXT("[MOInteractor] ISM not harvestable. Tags on component:"));
-			for (const FName& Tag : ISMComp->ComponentTags)
-			{
-				UE_LOG(LogMOFramework, Log, TEXT("[MOInteractor]   - %s"), *Tag.ToString());
-			}
+			OutTarget.bIsForageTarget = true;
+			return true;
 		}
+		UE_LOG(LogMOFramework, Verbose, TEXT("[MOInteractor] ISM '%s' (%s) is neither a harvest source nor world cover"),
+			*ISMComp->GetName(), *GetNameSafe(ISMComp->GetStaticMesh()));
 	}
 
 	// Check for regular interactable component
@@ -265,6 +277,11 @@ FText UMOInteractorComponent::GetCurrentInteractionPrompt() const
 	if (!CurrentTarget.IsValid())
 	{
 		return FText::GetEmpty();
+	}
+
+	if (CurrentTarget.bIsForageTarget)
+	{
+		return NSLOCTEXT("MO", "InteractForage", "Forage");
 	}
 
 	if (CurrentTarget.bIsInstancedMeshTarget)
@@ -309,7 +326,8 @@ bool UMOInteractorComponent::TryInteract()
 	CurrentTarget = Target;
 	LastTracedActor = bFoundTarget ? Target.TargetActor.Get() : nullptr;
 
-	if (!bFoundTarget || !Target.IsValid())
+	// World cover forages: the player controller opens the forage menu at the crosshair (it owns the ground-forage path).
+	if (!bFoundTarget || !Target.IsValid() || Target.bIsForageTarget)
 	{
 		return false;
 	}
@@ -451,7 +469,8 @@ bool UMOInteractorComponent::TrySecondaryInteract()
 	CurrentTarget = Target;
 	LastTracedActor = bFoundTarget ? Target.TargetActor.Get() : nullptr;
 
-	if (!bFoundTarget || !Target.IsValid())
+	// World cover forages: the player controller opens the forage menu at the crosshair (it owns the ground-forage path).
+	if (!bFoundTarget || !Target.IsValid() || Target.bIsForageTarget)
 	{
 		return false;
 	}
@@ -460,43 +479,7 @@ bool UMOInteractorComponent::TrySecondaryInteract()
 	if (Target.bIsInstancedMeshTarget)
 	{
 		UInstancedStaticMeshComponent* ISMComp = Target.ISMComponent.Get();
-		if (!IsValid(ISMComp))
-		{
-			return false;
-		}
-
-		// Check if this is a harvestable resource (any of these conditions):
-		// 1. Has KeepOnHarvest tag (trees, bushes that persist after partial harvest)
-		// 2. Has Harvestable tag (generic harvestable resources)
-		// 3. Has MOResource_* tag (typed resources like Rock, Ore, Tree)
-		// 4. Has PCG subsystem tag/mesh mapping
-		AActor* ISMOwner = ISMComp->GetOwner();
-		const bool bHasKeepOnHarvestTag = ISMComp->ComponentHasTag(TEXT("KeepOnHarvest")) ||
-			(ISMOwner && ISMOwner->ActorHasTag(TEXT("KeepOnHarvest")));
-		const bool bHasHarvestableTag = ISMComp->ComponentHasTag(TEXT("Harvestable")) ||
-			(ISMOwner && ISMOwner->ActorHasTag(TEXT("Harvestable")));
-
-		// Check for MOResource_* tags (Rock, Ore, Tree, Bush, Plant)
-		bool bHasResourceTypeTag = false;
-		for (const FName& Tag : ISMComp->ComponentTags)
-		{
-			if (Tag.ToString().StartsWith(TEXT("MOResource_")))
-			{
-				bHasResourceTypeTag = true;
-				break;
-			}
-		}
-
-		// Also check PCG subsystem mappings
-		UWorld* World = GetWorld();
-		UMOPCGInteractionSubsystem* PCGSubsystem = World ? World->GetSubsystem<UMOPCGInteractionSubsystem>() : nullptr;
-		const bool bHasTagMapping = PCGSubsystem && !PCGSubsystem->GetItemIdForComponentTags(ISMComp).IsNone();
-		const bool bHasMeshMapping = PCGSubsystem && PCGSubsystem->IsMeshHarvestable(ISMComp->GetStaticMesh());
-
-		const bool bIsHarvestable = bHasKeepOnHarvestTag || bHasHarvestableTag ||
-			bHasResourceTypeTag || bHasTagMapping || bHasMeshMapping;
-
-		if (!bIsHarvestable)
+		if (!IsValid(ISMComp) || !IsHarvestableInstanceComponent(ISMComp, GetWorld()))
 		{
 			return false;
 		}

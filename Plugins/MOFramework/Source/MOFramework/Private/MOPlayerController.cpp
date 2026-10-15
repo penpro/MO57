@@ -1140,8 +1140,22 @@ void AMOPlayerController::HandleInteract(const FInputActionValue& Value)
 		return;
 	}
 
+	// While placing a building, E rotates the ghost (RotateBuildingCWAction shares the key): it must not also interact with whatever is
+	// behind the ghost.
+	if (BuildingComponent && BuildingComponent->IsInPlacementMode())
+	{
+		return;
+	}
+
 	if (APawn* ControllablePawn = CachedControllablePawn.Get())
 	{
+		// Nothing with an interaction of its own under the crosshair (bare ground, grass, world cover): forage there, as right-click does.
+		UMOInteractorComponent* Interactor = ControllablePawn->FindComponentByClass<UMOInteractorComponent>();
+		FMOInteractionTarget Target;
+		if (Interactor && (!Interactor->FindInteractionTarget(Target) || Target.bIsForageTarget) && TryOpenForageMenuAtCrosshair())
+		{
+			return;
+		}
 		IMOControllableInterface::Execute_RequestInteract(ControllablePawn);
 	}
 }
@@ -1189,9 +1203,9 @@ void AMOPlayerController::HandleSecondaryAction(const FInputActionValue& Value)
 		UMOInteractorComponent* Interactor = ControllablePawn->FindComponentByClass<UMOInteractorComponent>();
 		if (Interactor)
 		{
-			// Use unified target finding (supports ISM/HISM and actors)
+			// Use unified target finding (supports ISM/HISM and actors); world cover falls through to the forage menu below
 			FMOInteractionTarget Target;
-			if (Interactor->FindInteractionTarget(Target))
+			if (Interactor->FindInteractionTarget(Target) && !Target.bIsForageTarget)
 			{
 				// Check if the target is a recruited survivor - if so, show context menu instead
 				if (Target.TargetActor.IsValid())
@@ -1232,39 +1246,44 @@ void AMOPlayerController::HandleSecondaryAction(const FInputActionValue& Value)
 			}
 		}
 
-		// No interactable target - check for ground hit for foraging menu
-		// Use camera-based trace since cursor is hidden in FPS mode
-		FVector CameraLocation;
-		FRotator CameraRotation;
-		GetPlayerViewPoint(CameraLocation, CameraRotation);
-
-		const FVector TraceStart = CameraLocation;
-		const FVector TraceEnd = CameraLocation + (CameraRotation.Vector() * 2000.0f);
-
-		FHitResult GroundHit;
-		FCollisionQueryParams QueryParams;
-		QueryParams.AddIgnoredActor(ControllablePawn);
-
-		if (GetWorld()->LineTraceSingleByChannel(GroundHit, TraceStart, TraceEnd, ECC_WorldStatic, QueryParams))
+		// No interactable target (or world cover) - the ground forage menu where the crosshair meets the world
+		if (TryOpenForageMenuAtCrosshair())
 		{
-			if (GroundHit.bBlockingHit)
-			{
-				// Use viewport center for screen position
-				int32 ViewportSizeX, ViewportSizeY;
-				GetViewportSize(ViewportSizeX, ViewportSizeY);
-				FVector2D ScreenPosition(ViewportSizeX / 2.0f, ViewportSizeY / 2.0f);
-
-				if (InventoryUIController)
-				{
-					InventoryUIController->ShowGroundContextMenu(GroundHit.Location, ScreenPosition);
-					return;
-				}
-			}
+			return;
 		}
 
 		// No ground hit or no UI controller - fall back to regular secondary action (block/aim)
 		IMOControllableInterface::Execute_RequestSecondaryAction(ControllablePawn);
 	}
+}
+
+bool AMOPlayerController::TryOpenForageMenuAtCrosshair()
+{
+	APawn* ControllablePawn = CachedControllablePawn.Get();
+	UWorld* World = GetWorld();
+	if (!ControllablePawn || !World || !InventoryUIController)
+	{
+		return false;
+	}
+
+	// Camera-based trace: the cursor is hidden in gameplay
+	FVector CameraLocation;
+	FRotator CameraRotation;
+	GetPlayerViewPoint(CameraLocation, CameraRotation);
+
+	FHitResult GroundHit;
+	FCollisionQueryParams QueryParams;
+	QueryParams.AddIgnoredActor(ControllablePawn);
+	if (!World->LineTraceSingleByChannel(GroundHit, CameraLocation, CameraLocation + CameraRotation.Vector() * 2000.0f, ECC_WorldStatic, QueryParams)
+		|| !GroundHit.bBlockingHit)
+	{
+		return false;
+	}
+
+	int32 ViewportSizeX, ViewportSizeY;
+	GetViewportSize(ViewportSizeX, ViewportSizeY);
+	InventoryUIController->ShowGroundContextMenu(GroundHit.Location, FVector2D(ViewportSizeX / 2.0f, ViewportSizeY / 2.0f));
+	return true;
 }
 
 void AMOPlayerController::HandleSecondaryActionRelease(const FInputActionValue& Value)
