@@ -562,9 +562,10 @@ def rows_set_safe(table, rows, do_save=True):
         for k, v in fields.items():
             got = row_ci.get(k.lower())
             if isinstance(v, (str, int, float, bool)):
-                # FText fields wrap plain strings in NSLOCTEXT(...) — substring match
+                # FText fields wrap plain strings in NSLOCTEXT(...) — substring match. The export escapes an apostrophe as \'
+                # (humanity's reads back humanity\'s): compare unescaped, or every text with an apostrophe "mismatches" and is not saved.
                 if isinstance(got, str) and isinstance(v, str):
-                    if v not in got:
+                    if v.replace("\\'", "'") not in got.replace("\\'", "'"):
                         bad.append(k)
                 elif got is not None and str(got) != str(v) and not (
                         isinstance(v, (int, float)) and isinstance(got, (int, float))
