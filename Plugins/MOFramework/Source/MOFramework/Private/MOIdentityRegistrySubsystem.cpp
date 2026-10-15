@@ -268,4 +268,12 @@ int32 UMOIdentityRegistrySubsystem::GetRegisteredCount() const
 	return GuidToActor.Num();
 }
 
+void UMOIdentityRegistrySubsystem::AnnounceReintroduction(const FGuid& StableGuid)
+{
+	if (StableGuid.IsValid())
+	{
+		OnIdentityReintroduced.Broadcast(StableGuid);
+	}
+}
+
 

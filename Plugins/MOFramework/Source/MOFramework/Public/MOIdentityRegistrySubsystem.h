@@ -74,6 +74,7 @@
 class UMOIdentityComponent;
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOIdentityRegisteredSignature, const FGuid&, StableGuid, AActor*, Actor);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOIdentityUnregisteredSignature, const FGuid&, StableGuid, AActor*, Actor);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOIdentityReintroducedSignature, const FGuid&, StableGuid);
 
 UCLASS()
 class MOFRAMEWORK_API UMOIdentityRegistrySubsystem : public UWorldSubsystem
@@ -106,6 +107,19 @@ public:
 
 	UPROPERTY(BlueprintAssignable, Category="MO|Identity")
 	FMOIdentityUnregisteredSignature OnIdentityUnregistered;
+
+	/**
+	 * A GUID that left the world (an item picked up: its world actor destroyed and recorded so) is about to come back with a NEW actor
+	 * (dropped from an inventory, it keeps its GUID). Call it BEFORE spawning: listeners that remember departed GUIDs (persistence's
+	 * destroyed ledger, which destroys a registering actor whose GUID it holds) forget this one. The caller needs to know nothing about
+	 * who remembers what -- this replaced the inventory reaching into UMOPersistenceSubsystem (audit M11, the Persistence<->Inventory
+	 * circular dependency).
+	 */
+	UFUNCTION(BlueprintCallable, Category="MO|Identity")
+	void AnnounceReintroduction(const FGuid& StableGuid);
+
+	UPROPERTY(BlueprintAssignable, Category="MO|Identity")
+	FMOIdentityReintroducedSignature OnIdentityReintroduced;
 
 private:
 	// Registration lifecycle

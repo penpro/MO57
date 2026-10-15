@@ -319,6 +319,10 @@ private:
     UFUNCTION()
     void HandleIdentityDestroyed(const FGuid& StableGuid);
 
+    /** A departed GUID is coming back with a new actor (UMOIdentityRegistrySubsystem::AnnounceReintroduction): forget it was destroyed. */
+    UFUNCTION()
+    void HandleIdentityReintroduced(const FGuid& StableGuid);
+
 private:
     // Save helpers
     bool IsPersistedPawn(const APawn* Pawn) const;

@@ -196,7 +196,7 @@ See `PCG_Integration_Plan.md`. Hybrid ISM + Actor approach.
 | M8 | ECommonInputMode::All leaked WASD during menus. | (UMOMenuWidgetBase deleted) | **FIXED** (May-June menu rework) — class gone; all menu/modal bases return Menu mode; zero ::All constructions remain. Residual comments FIXED Oct 14 2026: the 7 controllers' debounce comments + MOProgressWidgetBase.h (claimed All, is Game / no preference over menus) + two UI test log strings now say what is true. |
 | M9 | IsAnyMenuOpen() checked one layer. | `MOGameUIManagerSubsystem.cpp:574-587` | **FIXED** — counts Game+GameOverlay+Menu+Modal, excludes input stubs; all wrapper paths delegate to the same count. |
 | M10 | No dedicated-server UI guards. | UI entry points | **FIXED** — 3 guard depths: IsRunningDedicatedServer in Push templates, IsLocalController root-layout gate, IsLocalOwningPlayerController across all controllers (documented as convention in MOUIControllerBase.h:56). |
-| M11 | Persistence↔Inventory circular dep (DropItemByGuid + SpawnWorldItem both touch destroyed-GUID ledger). | `MOInventoryComponent.cpp:1374-1378, 1453-1457` | **OPEN** — no IMOPersistenceProvider interface exists. |
+| M11 | Persistence↔Inventory circular dep (DropItemByGuid + SpawnWorldItem both touch destroyed-GUID ledger). | `MOInventoryComponent.cpp:1374-1378, 1453-1457` | **FIXED Oct 15 2026** without a provider interface: the inventory announces `UMOIdentityRegistrySubsystem::AnnounceReintroduction(Guid)` before spawning a dropped item, persistence listens (`OnIdentityReintroduced` -> forget the destroyed GUID); MOInventoryComponent no longer includes MOPersistenceSubsystem. RunAll DropPickup PASS (original GUID preserved). |
 
 ### LOW — Housekeeping
 

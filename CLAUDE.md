@@ -685,10 +685,10 @@ bool ApplySaveDataAuthority(const FMOVitalsSaveData& InSaveData);  // Server onl
 
 ### Known Coupling Issues (Technical Debt)
 
-**CRITICAL - Persistence↔Inventory Circular Dependency:**
-- `MOInventoryComponent.DropItemByGuid()` calls `MOPersistenceSubsystem.IsGuidDestroyed()`
-- Creates runtime mutual dependency during drop operations
-- **Mitigation**: Consider `IMOPersistenceProvider` interface to abstract
+**RESOLVED (Oct 15 2026) - Persistence↔Inventory Circular Dependency:**
+- `MOInventoryComponent` used to call `MOPersistenceSubsystem.IsGuidDestroyed/ClearDestroyedGuid` before spawning a dropped item
+- **Fixed**: it announces `UMOIdentityRegistrySubsystem::AnnounceReintroduction(Guid)`; persistence listens on `OnIdentityReintroduced`
+  and forgets the destroyed GUID. The inventory knows nothing about persistence (the registry is the seam both already used)
 
 **HIGH - Possession System Component Requirements:**
 - `MOPossessionSubsystem` requires `UMOIdentityComponent` + `UMOInventoryComponent`

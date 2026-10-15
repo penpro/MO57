@@ -1,4 +1,5 @@
 #include "MOInventoryComponent.h"
+#include "MOIdentityRegistrySubsystem.h"
 #include "MOFramework.h"
 
 #include "Net/UnrealNetwork.h"
@@ -11,7 +12,6 @@
 #include "MOWorldItem.h"
 #include "MOItemComponent.h"
 #include "MOIdentityComponent.h"
-#include "MOPersistenceSubsystem.h"
 #include "MOQuestSubsystem.h"
 #include "MOHarvestDebugSubsystem.h"
 #include "UObject/UnrealType.h"
@@ -1371,18 +1371,11 @@ AActor* UMOInventoryComponent::DropItemByGuid(const FGuid& ItemGuid, const FVect
 		return nullptr;
 	}
 
-	// CRITICAL: Clear this GUID from the destroyed list before spawning.
-	// When items are picked up, their world actor is destroyed and the GUID is added to SessionDestroyedGuids.
-	// If we don't clear it here, the newly spawned actor will be immediately destroyed by the persistence system.
-	if (UGameInstance* GameInstance = World->GetGameInstance())
+	// CRITICAL: the item keeps its GUID, which its pickup recorded as destroyed: announce that it is coming back BEFORE spawning, or the
+	// destroyed ledger destroys the new actor on registration. (Through the identity registry: the inventory needs no persistence.)
+	if (UMOIdentityRegistrySubsystem* Registry = World->GetSubsystem<UMOIdentityRegistrySubsystem>())
 	{
-		if (UMOPersistenceSubsystem* PersistenceSubsystem = GameInstance->GetSubsystem<UMOPersistenceSubsystem>())
-		{
-			if (PersistenceSubsystem->IsGuidDestroyed(Entry.ItemGuid))
-			{
-				PersistenceSubsystem->ClearDestroyedGuid(Entry.ItemGuid);
-			}
-		}
+		Registry->AnnounceReintroduction(Entry.ItemGuid);
 	}
 
 	FActorSpawnParameters SpawnParams;
@@ -1452,16 +1445,10 @@ AActor* UMOInventoryComponent::SpawnWorldItem(FName ItemDefinitionId, int32 Quan
 		return nullptr;
 	}
 
-	// Clear GUID from destroyed list if present
-	if (UGameInstance* GameInstance = World->GetGameInstance())
+	// The GUID comes back into the world: announce it before spawning (see the drop path above).
+	if (UMOIdentityRegistrySubsystem* Registry = World->GetSubsystem<UMOIdentityRegistrySubsystem>())
 	{
-		if (UMOPersistenceSubsystem* PersistenceSubsystem = GameInstance->GetSubsystem<UMOPersistenceSubsystem>())
-		{
-			if (PersistenceSubsystem->IsGuidDestroyed(ItemGuid))
-			{
-				PersistenceSubsystem->ClearDestroyedGuid(ItemGuid);
-			}
-		}
+		Registry->AnnounceReintroduction(ItemGuid);
 	}
 
 	FActorSpawnParameters SpawnParams;

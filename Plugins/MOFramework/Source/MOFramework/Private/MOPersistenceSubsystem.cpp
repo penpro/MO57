@@ -290,6 +290,7 @@ void UMOPersistenceSubsystem::BindToWorld(UWorld* World)
 
     BoundRegistry = RegistrySubsystem;
     RegistrySubsystem->OnIdentityRegistered.AddDynamic(this, &UMOPersistenceSubsystem::HandleIdentityRegistered);
+    RegistrySubsystem->OnIdentityReintroduced.AddDynamic(this, &UMOPersistenceSubsystem::HandleIdentityReintroduced);
 
     ApplyDestroyedGuidsToWorld(World);
 }
@@ -299,6 +300,7 @@ void UMOPersistenceSubsystem::UnbindFromWorld()
     if (UMOIdentityRegistrySubsystem* RegistrySubsystem = BoundRegistry.Get())
     {
         RegistrySubsystem->OnIdentityRegistered.RemoveDynamic(this, &UMOPersistenceSubsystem::HandleIdentityRegistered);
+        RegistrySubsystem->OnIdentityReintroduced.RemoveDynamic(this, &UMOPersistenceSubsystem::HandleIdentityReintroduced);
     }
 
     BoundRegistry.Reset();
@@ -1053,6 +1055,11 @@ void UMOPersistenceSubsystem::HandleIdentityDestroyed(const FGuid& StableGuid)
     }
 
     SessionDestroyedGuids.Add(StableGuid);
+}
+
+void UMOPersistenceSubsystem::HandleIdentityReintroduced(const FGuid& StableGuid)
+{
+    SessionDestroyedGuids.Remove(StableGuid);
 }
 
 /*
