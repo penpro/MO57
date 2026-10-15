@@ -122,57 +122,132 @@ bool FMOWorldFeaturePlacer::Candidate(int32 FeatureIndex, const FIntPoint& Slot,
 	}
 	const double X = (Slot.X + 0.25 + 0.5 * WorldFeatureU01(H, 1)) * Spacing;
 	const double Y = (Slot.Y + 0.25 + 0.5 * WorldFeatureU01(H, 2)) * Spacing;
-	// The site's scale first: every footprint check below covers the composition at the size it will stand (a 4x spire needs 4x the clear ground).
-	const float Scale = FMath::Lerp(R.MinScale, FMath::Max(R.MinScale, R.MaxScale), static_cast<float>(WorldFeatureU01(H, 4)));
-	const double Footprint = static_cast<double>(R.FootprintRadiusCm) * Scale;
-	const double Limit = Params->Tuning.WorldHalfSizeCm - Footprint - 50000.0;
+	const double Limit = Params->Tuning.WorldHalfSizeCm - R.GetMaxSiteRadiusCm() - 50000.0;
 	if (FMath::Abs(X) > Limit || FMath::Abs(Y) > Limit)
 	{
 		return false;
 	}
-	float Ground = 0.0f, Slope = 0.0f;
-	const int32 Biome = Finder.BiomeAt(X, Y, Ground, Slope);
-	const float AboveSea = Ground - Params->Tuning.SeaLevelCm;
-	const bool bAlign = R.bAlignToSlope && Footprint > 0.0;
-	FVector2D Gradient = FVector2D::ZeroVector;
-	float Deviation = 0.0f;
-	if (bAlign)
+
+	// The row's terrain rules at one composition's spot, for a footprint of FootprintCm (a 4x spire needs 4x the clear ground).
+	auto PassesRules = [this, &F, &R](double Px, double Py, double FootprintCm, float& OutGround, float& OutSlope) -> bool
 	{
-		// A hillside composition: the slope that matters is the footprint's, not the centre's.
-		if ((F.BiomeIndices.Num() > 0 && !F.BiomeIndices.Contains(Biome))
-			|| !MeasureFootprintPlane(*Params, TerrainSeed, Finder, X, Y, Footprint, Ground, Gradient, Deviation))
+		const int32 Biome = Finder.BiomeAt(Px, Py, OutGround, OutSlope);
+		const float AboveSea = OutGround - Params->Tuning.SeaLevelCm;
+		return !((F.BiomeIndices.Num() > 0 && !F.BiomeIndices.Contains(Biome)) || AboveSea < R.MinHeightAboveSeaCm || AboveSea > R.MaxHeightAboveSeaCm
+			|| Finder.IsInWater(Px, Py, OutGround) || FMOWorldGen::DistanceToSinkholeRimZone(*Params, Px, Py, TerrainSeed) < FootprintCm);
+	};
+	auto ReliefOk = [this, &R](double Px, double Py, double FootprintCm, float Ground) -> bool
+	{
+		if (R.MaxFootprintReliefCm <= 0.0f || FootprintCm <= 0.0)
 		{
-			return false;
+			return true;
 		}
-		Slope = static_cast<float>(FMath::RadiansToDegrees(FMath::Atan(Gradient.Size())));
-	}
-	if ((F.BiomeIndices.Num() > 0 && !F.BiomeIndices.Contains(Biome)) || Slope < R.SlopeMinDeg || Slope > R.SlopeMaxDeg
-		|| AboveSea < R.MinHeightAboveSeaCm || AboveSea > R.MaxHeightAboveSeaCm || Finder.IsInWater(X, Y, Ground)
-		|| FMOWorldGen::DistanceToSinkholeRimZone(*Params, X, Y, TerrainSeed) < Footprint)
-	{
-		return false;
-	}
-	if (bAlign)
-	{
-		if (R.MaxFootprintReliefCm > 0.0f && Deviation > R.MaxFootprintReliefCm)
-		{
-			return false;
-		}
-	}
-	else if (R.MaxFootprintReliefCm > 0.0f && Footprint > 0.0)
-	{
 		for (int32 K = 0; K < 8; ++K)
 		{
-			const double Ax = X + Footprint * FMath::Cos(K * UE_PI / 4.0), Ay = Y + Footprint * FMath::Sin(K * UE_PI / 4.0);
+			const double Ax = Px + FootprintCm * FMath::Cos(K * UE_PI / 4.0), Ay = Py + FootprintCm * FMath::Sin(K * UE_PI / 4.0);
 			const float Edge = FMOWorldGen::SampleHeightCm(*Params, Ax, Ay, TerrainSeed, Params->Tuning.VoxelSizeCm);
 			if (FMath::Abs(Edge - Ground) > R.MaxFootprintReliefCm || Finder.IsInWater(Ax, Ay, Edge))
 			{
 				return false;
 			}
 		}
-	}
+		return true;
+	};
+
 	Out.FeatureId = F.Id;
 	Out.Slot = Slot;
+	Out.Members.Reset();
+
+	if (R.IsCluster())
+	{
+		// The centre only has to be the right kind of land; every member is judged at its own spot.
+		float CentreGround = 0.0f, CentreSlope = 0.0f;
+		if (!PassesRules(X, Y, 0.0, CentreGround, CentreSlope))
+		{
+			return false;
+		}
+		const int32 CountMin = FMath::Max(1, R.ClusterCountMin);
+		const int32 CountMax = FMath::Max(CountMin, R.ClusterCountMax);
+		const int32 Count = CountMin + FMath::Min(CountMax - CountMin, static_cast<int32>(WorldFeatureU01(H, 5) * (CountMax - CountMin + 1)));
+		float Reach = 0.0f;
+		for (int32 I = 0; I < Count; ++I)
+		{
+			for (int32 Try = 0; Try < 6; ++Try)
+			{
+				const uint64 K = 16 + static_cast<uint64>(I * 6 + Try) * 5;
+				const double Radius = R.ClusterRadiusCm * FMath::Sqrt(WorldFeatureU01(H, K));   // even over the disc
+				const double Angle = 2.0 * UE_DOUBLE_PI * WorldFeatureU01(H, K + 1);
+				const float Scale = FMath::Lerp(R.MinScale, FMath::Max(R.MinScale, R.MaxScale), FMath::Pow(static_cast<float>(WorldFeatureU01(H, K + 2)), R.ClusterScaleBias));
+				const double Footprint = static_cast<double>(R.FootprintRadiusCm) * Scale;
+				const double Mx = X + Radius * FMath::Cos(Angle), My = Y + Radius * FMath::Sin(Angle);
+				// Members may touch, not stand inside each other.
+				const bool bCrowded = Out.Members.ContainsByPredicate([Mx, My, Footprint](const FMOWorldFeatureMember& M)
+				{
+					return FVector2D::Distance(FVector2D(M.Location), FVector2D(Mx, My)) < 0.6 * (Footprint + M.FootprintRadiusCm);
+				});
+				float Ground = 0.0f, Slope = 0.0f;
+				if (bCrowded || !PassesRules(Mx, My, Footprint, Ground, Slope) || Slope < R.SlopeMinDeg || Slope > R.SlopeMaxDeg || !ReliefOk(Mx, My, Footprint, Ground))
+				{
+					continue;
+				}
+				FMOWorldFeatureMember& Member = Out.Members.AddDefaulted_GetRef();
+				Member.Location = FVector(Mx, My, Ground);
+				Member.YawDegrees = static_cast<float>(WorldFeatureU01(H, K + 3) * 360.0);
+				Member.Scale = Scale;
+				Member.FootprintRadiusCm = static_cast<float>(Footprint);
+				Member.Seed = static_cast<int32>(WorldFeatureMix64(H ^ (0x5EEDULL + K)) & 0x7fffffff);
+				Reach = FMath::Max(Reach, static_cast<float>(Radius + Footprint));
+				break;
+			}
+		}
+		if (Out.Members.IsEmpty())
+		{
+			return false;
+		}
+		Out.Location = FVector(X, Y, CentreGround);
+		Out.YawDegrees = Out.Members[0].YawDegrees;
+		Out.Scale = 0.0f;
+		for (const FMOWorldFeatureMember& Member : Out.Members)
+		{
+			Out.Scale = FMath::Max(Out.Scale, Member.Scale);
+		}
+		Out.FootprintRadiusCm = Reach;
+		Out.Seed = Out.Members[0].Seed;
+		return true;
+	}
+
+	// A single composition. Its scale first: every footprint check covers it at the size it will stand.
+	const float Scale = FMath::Lerp(R.MinScale, FMath::Max(R.MinScale, R.MaxScale), static_cast<float>(WorldFeatureU01(H, 4)));
+	const double Footprint = static_cast<double>(R.FootprintRadiusCm) * Scale;
+	float Ground = 0.0f, Slope = 0.0f;
+	const bool bAlign = R.bAlignToSlope && Footprint > 0.0;
+	FVector2D Gradient = FVector2D::ZeroVector;
+	float Deviation = 0.0f;
+	if (!PassesRules(X, Y, Footprint, Ground, Slope))
+	{
+		return false;
+	}
+	if (bAlign)
+	{
+		// A hillside composition: the slope that matters is the footprint's, not the centre's.
+		if (!MeasureFootprintPlane(*Params, TerrainSeed, Finder, X, Y, Footprint, Ground, Gradient, Deviation))
+		{
+			return false;
+		}
+		Slope = static_cast<float>(FMath::RadiansToDegrees(FMath::Atan(Gradient.Size())));
+		if (R.MaxFootprintReliefCm > 0.0f && Deviation > R.MaxFootprintReliefCm)
+		{
+			return false;
+		}
+	}
+	else if (!ReliefOk(X, Y, Footprint, Ground))
+	{
+		return false;
+	}
+	if (Slope < R.SlopeMinDeg || Slope > R.SlopeMaxDeg)
+	{
+		return false;
+	}
 	Out.Location = FVector(X, Y, Ground);
 	if (bAlign)
 	{
@@ -187,6 +262,12 @@ bool FMOWorldFeaturePlacer::Candidate(int32 FeatureIndex, const FIntPoint& Slot,
 	Out.Scale = Scale;
 	Out.FootprintRadiusCm = static_cast<float>(Footprint);
 	Out.Seed = static_cast<int32>(WorldFeatureMix64(H ^ 0x5EEDULL) & 0x7fffffff);
+	FMOWorldFeatureMember& Member = Out.Members.AddDefaulted_GetRef();
+	Member.Location = Out.Location;
+	Member.YawDegrees = Out.YawDegrees;
+	Member.Scale = Out.Scale;
+	Member.FootprintRadiusCm = Out.FootprintRadiusCm;
+	Member.Seed = Out.Seed;
 	return true;
 }
 
@@ -207,7 +288,7 @@ bool FMOWorldFeaturePlacer::SiteAt(int32 FeatureIndex, const FIntPoint& Slot, FM
 	for (int32 G = 0; G < FeatureIndex && bOk; ++G)
 	{
 		const FMOWorldFeatureDefinitionRow& Other = Features[G].Row;
-		const double Reach = Site.FootprintRadiusCm + Other.FootprintRadiusCm * FMath::Max(Other.MinScale, Other.MaxScale);
+		const double Reach = Site.FootprintRadiusCm + Other.GetMaxSiteRadiusCm();
 		const int32 X0 = FMath::FloorToInt((Site.Location.X - Reach) / Other.SpacingCm), X1 = FMath::FloorToInt((Site.Location.X + Reach) / Other.SpacingCm);
 		const int32 Y0 = FMath::FloorToInt((Site.Location.Y - Reach) / Other.SpacingCm), Y1 = FMath::FloorToInt((Site.Location.Y + Reach) / Other.SpacingCm);
 		for (int32 Sx = X0; Sx <= X1 && bOk; ++Sx)
@@ -254,7 +335,7 @@ void FMOWorldFeaturePlacer::SitesTouching(const FBox2D& Bounds, TArray<FMOWorldF
 	for (int32 F = 0; F < Features.Num(); ++F)
 	{
 		const FMOWorldFeatureDefinitionRow& R = Features[F].Row;
-		const double Grow = R.FootprintRadiusCm * FMath::Max(R.MinScale, R.MaxScale);
+		const double Grow = R.GetMaxSiteRadiusCm();
 		TArray<FMOWorldFeatureSite> Sites;
 		SitesOfFeature(F, FBox2D(Bounds.Min - FVector2D(Grow), Bounds.Max + FVector2D(Grow)), Sites);
 		for (const FMOWorldFeatureSite& Site : Sites)
@@ -287,7 +368,7 @@ bool UMOWorldFeatureSubsystem::ShouldCreateSubsystem(UObject* Outer) const
 
 void UMOWorldFeatureSubsystem::Deinitialize()
 {
-	for (TPair<FIntVector, TWeakObjectPtr<AActor>>& Pair : Spawned)
+	for (TPair<FIntVector4, TWeakObjectPtr<AActor>>& Pair : Spawned)
 	{
 		if (AActor* Actor = Pair.Value.Get())
 		{
@@ -356,7 +437,10 @@ void UMOWorldFeatureSubsystem::GetFootprints(const FBox2D& Bounds, TArray<FVecto
 	GetSites(Bounds, Sites);
 	for (const FMOWorldFeatureSite& Site : Sites)
 	{
-		Out.Add(FVector3f(static_cast<float>(Site.Location.X), static_cast<float>(Site.Location.Y), FMath::Square(Site.FootprintRadiusCm)));
+		for (const FMOWorldFeatureMember& Member : Site.Members)
+		{
+			Out.Add(FVector3f(static_cast<float>(Member.Location.X), static_cast<float>(Member.Location.Y), FMath::Square(Member.FootprintRadiusCm)));
+		}
 	}
 }
 
@@ -386,17 +470,18 @@ bool UMOWorldFeatureSubsystem::FindNearestSite(FName FeatureId, const FVector2D&
 	return false;
 }
 
-AActor* UMOWorldFeatureSubsystem::SpawnSite(const FMOWorldFeaturePlacer::FFeature& Feature, const FMOWorldFeatureSite& Site)
+AActor* UMOWorldFeatureSubsystem::SpawnMember(const FMOWorldFeaturePlacer::FFeature& Feature, const FMOWorldFeatureSite& Site, int32 MemberIndex)
 {
 	UWorld* World = GetWorld();
 	UClass* Class = Feature.Row.ActorClass.LoadSynchronous();
-	if (!World || !Class)
+	if (!World || !Class || !Site.Members.IsValidIndex(MemberIndex))
 	{
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOWorldFeatures] %s: actor class %s did not load"), *Feature.Id.ToString(), *Feature.Row.ActorClass.ToString());
 		return nullptr;
 	}
+	const FMOWorldFeatureMember& Member = Site.Members[MemberIndex];
 	// The sink grows with the composition: a gap under a 4x outcrop is 4x the gap under the authored one.
-	const FTransform Transform(FRotator(0.0f, Site.YawDegrees, 0.0f), Site.Location - FVector(0.0, 0.0, Feature.Row.SinkCm * Site.Scale), FVector(Site.Scale));
+	const FTransform Transform(FRotator(0.0f, Member.YawDegrees, 0.0f), Member.Location - FVector(0.0, 0.0, Feature.Row.SinkCm * Member.Scale), FVector(Member.Scale));
 	AActor* Actor = World->SpawnActorDeferred<AActor>(Class, Transform, nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
 	if (!Actor)
 	{
@@ -416,10 +501,11 @@ AActor* UMOWorldFeatureSubsystem::SpawnSite(const FMOWorldFeaturePlacer::FFeatur
 	TInlineComponentArray<UPCGComponent*> PCGComponents(Actor);
 	for (UPCGComponent* PCG : PCGComponents)
 	{
-		PCG->Seed = Site.Seed;   // each site its own variation, the same on every machine
+		PCG->Seed = Member.Seed;   // each composition its own variation, the same on every machine
 	}
 	Actor->FinishSpawning(Transform);
-	UE_LOG(LogMOFramework, Log, TEXT("[MOWorldFeatures] spawned %s at %s (slot %d,%d seed %d)"), *Feature.Id.ToString(), *Site.Location.ToCompactString(), Site.Slot.X, Site.Slot.Y, Site.Seed);
+	UE_LOG(LogMOFramework, Log, TEXT("[MOWorldFeatures] spawned %s at %s (slot %d,%d member %d/%d scale %.2f seed %d)"), *Feature.Id.ToString(), *Member.Location.ToCompactString(),
+		Site.Slot.X, Site.Slot.Y, MemberIndex + 1, Site.Members.Num(), Member.Scale, Member.Seed);
 	return Actor;
 }
 
@@ -473,27 +559,34 @@ void UMOWorldFeatureSubsystem::Tick(float DeltaTime)
 		}
 	}
 
-	// Spawn the nearest missing sites, a few per update.
-	struct FWanted { int32 Feature; FMOWorldFeatureSite Site; double Dist; };
+	// Spawn the nearest missing compositions (a cluster's members one by one), a few per update.
+	struct FWanted { int32 Feature; FMOWorldFeatureSite Site; int32 Member; double Dist; };
 	TArray<FWanted> Wanted;
+	TSet<FIntVector4> WantedKeys;
 	for (int32 F = 0; F < Features.Num(); ++F)
 	{
-		if (Features[F].Row.ActorClass.IsNull())
+		const FMOWorldFeatureDefinitionRow& Row = Features[F].Row;
+		if (Row.ActorClass.IsNull())
 		{
 			continue;
 		}
-		const double Reach = Features[F].Row.SpawnDistanceCm;
+		const double Reach = Row.SpawnDistanceCm;
+		const double Grow = Reach + (Row.IsCluster() ? Row.ClusterRadiusCm : 0.0);   // a cluster's centre may be farther than its nearest member
 		for (const FVector2D& V : Viewers)
 		{
 			TArray<FMOWorldFeatureSite> Sites;
-			Placer->SitesOfFeature(F, FBox2D(V - FVector2D(Reach), V + FVector2D(Reach)), Sites);
+			Placer->SitesOfFeature(F, FBox2D(V - FVector2D(Grow), V + FVector2D(Grow)), Sites);
 			for (const FMOWorldFeatureSite& Site : Sites)
 			{
-				const FIntVector Key(F, Site.Slot.X, Site.Slot.Y);
-				const double D = NearestViewerDist(FVector2D(Site.Location));
-				if (D <= Reach && !Spawned.Contains(Key) && !Wanted.ContainsByPredicate([&Key](const FWanted& W) { return W.Feature == Key.X && W.Site.Slot == FIntPoint(Key.Y, Key.Z); }))
+				for (int32 M = 0; M < Site.Members.Num(); ++M)
 				{
-					Wanted.Add({ F, Site, D });
+					const FIntVector4 Key(F, Site.Slot.X, Site.Slot.Y, M);
+					const double D = NearestViewerDist(FVector2D(Site.Members[M].Location));
+					if (D <= Reach && !Spawned.Contains(Key) && !WantedKeys.Contains(Key))
+					{
+						WantedKeys.Add(Key);
+						Wanted.Add({ F, Site, M, D });
+					}
 				}
 			}
 		}
@@ -503,14 +596,8 @@ void UMOWorldFeatureSubsystem::Tick(float DeltaTime)
 	for (int32 I = 0; I < FMath::Min(Budget, Wanted.Num()); ++I)
 	{
 		const FWanted& W = Wanted[I];
-		if (AActor* Actor = SpawnSite(Features[W.Feature], W.Site))
-		{
-			Spawned.Add(FIntVector(W.Feature, W.Site.Slot.X, W.Site.Slot.Y), Actor);
-		}
-		else
-		{
-			Spawned.Add(FIntVector(W.Feature, W.Site.Slot.X, W.Site.Slot.Y), nullptr);   // do not retry every tick; the next pass clears it
-		}
+		// A failed spawn is recorded as null: no retry every tick; the next pass clears it.
+		Spawned.Add(FIntVector4(W.Feature, W.Site.Slot.X, W.Site.Slot.Y, W.Member), SpawnMember(Features[W.Feature], W.Site, W.Member));
 	}
 }
 
@@ -539,7 +626,12 @@ static FAutoConsoleCommandWithWorldAndArgs GMOWorldFeaturesDumpCmd(
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDFEATURES %d site(s) within %.0f m, %d actor(s) spawned"), Sites.Num(), R / 100.0, Features->GetNumSpawned());
 		for (const FMOWorldFeatureSite& Site : Sites)
 		{
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDFEATURES   %s at (%.0f, %.0f, %.0f) %.0f m footprint %.0f m seed %d"), *Site.FeatureId.ToString(), Site.Location.X, Site.Location.Y, Site.Location.Z,
-				FVector2D::Distance(FVector2D(Site.Location), C) / 100.0, Site.FootprintRadiusCm / 100.0, Site.Seed);
+			FString Scales;
+			for (const FMOWorldFeatureMember& Member : Site.Members)
+			{
+				Scales += FString::Printf(TEXT("%s%.2f"), Scales.IsEmpty() ? TEXT("") : TEXT(","), Member.Scale);
+			}
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDFEATURES   %s at (%.0f, %.0f, %.0f) %.0f m footprint %.0f m seed %d members %d scales %s"), *Site.FeatureId.ToString(), Site.Location.X, Site.Location.Y, Site.Location.Z,
+				FVector2D::Distance(FVector2D(Site.Location), C) / 100.0, Site.FootprintRadiusCm / 100.0, Site.Seed, Site.Members.Num(), *Scales);
 		}
 	}));

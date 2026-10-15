@@ -77,7 +77,8 @@ public:
 	/** A seed is active and the catalog loaded: sites can be computed. */
 	bool IsReady();
 
-	/** Footprints touching Bounds, as (X, Y, radius^2) -- the biome scatter's exclusion list. Game thread. Empty when not ready. */
+	/** Footprints touching Bounds, as (X, Y, radius^2), one per composition (a cluster's members each have their own, so the scatter grows
+	 *  between them) -- the biome scatter's exclusion list. Game thread. Empty when not ready. */
 	void GetFootprints(const FBox2D& Bounds, TArray<FVector3f>& Out);
 
 	/** Sites whose footprint touches Bounds. Game thread. */
@@ -101,9 +102,9 @@ private:
 	bool bCatalogFailed = false;
 	float TickAccumulator = 0.0f;
 
-	/** Spawned actors by (feature index, slot). */
-	TMap<FIntVector, TWeakObjectPtr<AActor>> Spawned;
+	/** Spawned actors by (feature index, slot x, slot y, member): each member of a cluster streams on its own distance. */
+	TMap<FIntVector4, TWeakObjectPtr<AActor>> Spawned;
 
 	bool EnsurePlacer();
-	AActor* SpawnSite(const FMOWorldFeaturePlacer::FFeature& Feature, const FMOWorldFeatureSite& Site);
+	AActor* SpawnMember(const FMOWorldFeaturePlacer::FFeature& Feature, const FMOWorldFeatureSite& Site, int32 MemberIndex);
 };

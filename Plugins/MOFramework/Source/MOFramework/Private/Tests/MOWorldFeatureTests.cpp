@@ -112,6 +112,106 @@ bool FMOWorldFeature_Placer::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOWorldFeature_Cluster,
+	"MOFramework.WorldFeatures.Cluster",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOWorldFeature_Cluster::RunTest(const FString& Parameters)
+{
+	// A cluster row (Wes, Oct 15: spires "a range from 1 to 10 in an area, ranging from 50% original size up to the 400% big towers"): every site
+	// holds Min..Max members within the radius, each at its own scale in [MinScale, MaxScale], on dry ground of the row's slope, none standing
+	// inside another; deterministic; and the scale bias makes giants rarer than small ones. A single row is the control (one member, the site).
+	const FMOWorldGenParamsRef P = FMOWorldGenParamsProvider::Get();
+	const int32 Seed = UMOWorldSeedSubsystem::TerrainSeedFromWorldSeed(-1675528670);
+	FMOWorldFeatureDefinitionRow Spires;
+	Spires.DensityPerKm2 = 50.0f;
+	Spires.SpacingCm = 60000.0f;
+	Spires.FootprintRadiusCm = 800.0f;
+	Spires.SlopeMaxDeg = 30.0f;
+	Spires.MinScale = 0.5f;
+	Spires.MaxScale = 4.0f;
+	Spires.ClusterCountMin = 1;
+	Spires.ClusterCountMax = 10;
+	Spires.ClusterRadiusCm = 15000.0f;
+	Spires.ClusterScaleBias = 1.6f;
+
+	const FBox2D Area(FVector2D(-1000000.0, -1000000.0), FVector2D(1000000.0, 1000000.0));
+	FMOWorldFeaturePlacer A(P, Seed, { { FName(TEXT("Spires")), Spires } }), B(P, Seed, { { FName(TEXT("Spires")), Spires } });
+	TArray<FMOWorldFeatureSite> Sites, SitesB;
+	A.SitesTouching(Area, Sites);
+	B.SitesTouching(Area, SitesB);
+	if (!TestTrue(FString::Printf(TEXT("cluster sites exist (%d)"), Sites.Num()), Sites.Num() >= 20))
+	{
+		return false;
+	}
+	bool bSame = Sites.Num() == SitesB.Num();
+	for (int32 I = 0; bSame && I < Sites.Num(); ++I)
+	{
+		bSame = Sites[I].Members.Num() == SitesB[I].Members.Num();
+		for (int32 M = 0; bSame && M < Sites[I].Members.Num(); ++M)
+		{
+			bSame = Sites[I].Members[M].Location == SitesB[I].Members[M].Location && Sites[I].Members[M].Scale == SitesB[I].Members[M].Scale && Sites[I].Members[M].Seed == SitesB[I].Members[M].Seed;
+		}
+	}
+	TestTrue(TEXT("deterministic: the same members on two placers"), bSame);
+
+	const FMOBiomeFinder Finder(P, Seed);
+	int32 Members = 0, BadCount = 0, Outside = 0, BadScale = 0, Wet = 0, Steep = 0, Inside = 0, Uncovered = 0, Small = 0, Giant = 0, MaxSeen = 0;
+	TSet<int32> Seeds;
+	for (const FMOWorldFeatureSite& S : Sites)
+	{
+		BadCount += (S.Members.Num() < 1 || S.Members.Num() > 10) ? 1 : 0;
+		MaxSeen = FMath::Max(MaxSeen, S.Members.Num());
+		for (int32 I = 0; I < S.Members.Num(); ++I)
+		{
+			const FMOWorldFeatureMember& M = S.Members[I];
+			++Members;
+			Seeds.Add(M.Seed);
+			const double FromCentre = FVector2D::Distance(FVector2D(M.Location), FVector2D(S.Location));
+			Outside += FromCentre > Spires.ClusterRadiusCm + 1.0 ? 1 : 0;
+			Uncovered += FromCentre + M.FootprintRadiusCm > S.FootprintRadiusCm + 1.0 ? 1 : 0;
+			BadScale += (M.Scale < Spires.MinScale - 1e-4f || M.Scale > Spires.MaxScale + 1e-4f || !FMath::IsNearlyEqual(M.FootprintRadiusCm, Spires.FootprintRadiusCm * M.Scale, 0.5f)) ? 1 : 0;
+			Small += M.Scale < 1.5f ? 1 : 0;
+			Giant += M.Scale > 3.0f ? 1 : 0;
+			float Ground = 0.0f, Slope = 0.0f;
+			Finder.BiomeAt(M.Location.X, M.Location.Y, Ground, Slope);
+			Wet += Finder.IsInWater(M.Location.X, M.Location.Y, Ground) ? 1 : 0;
+			Steep += Slope > Spires.SlopeMaxDeg ? 1 : 0;
+			for (int32 J = I + 1; J < S.Members.Num(); ++J)
+			{
+				Inside += FVector2D::Distance(FVector2D(M.Location), FVector2D(S.Members[J].Location)) < 0.6 * (M.FootprintRadiusCm + S.Members[J].FootprintRadiusCm) - 1.0 ? 1 : 0;
+			}
+		}
+	}
+	AddInfo(FString::Printf(TEXT("%d sites, %d members (largest cluster %d), %d under 1.5x, %d over 3x"), Sites.Num(), Members, MaxSeen, Small, Giant));
+	TestEqual(TEXT("every cluster holds 1..10 members"), BadCount, 0);
+	TestTrue(TEXT("clusters vary in size (some hold more than 5)"), MaxSeen > 5);
+	TestEqual(TEXT("every member stands within the cluster radius"), Outside, 0);
+	TestEqual(TEXT("the site's footprint covers every member's"), Uncovered, 0);
+	TestEqual(TEXT("every member's scale is in [0.5, 4] and its footprint scales with it"), BadScale, 0);
+	TestEqual(TEXT("no member stands in water"), Wet, 0);
+	TestEqual(TEXT("no member is steeper than the row allows"), Steep, 0);
+	TestEqual(TEXT("no member stands inside another"), Inside, 0);
+	TestTrue(TEXT("each member its own seed (its own variation)"), Seeds.Num() > Members * 9 / 10);
+	TestTrue(TEXT("the bias: small spires outnumber the giants, and giants exist"), Giant > 0 && Small > Giant);
+
+	// CONTROL: the same row without the cluster fields places one composition per site, the site itself.
+	FMOWorldFeatureDefinitionRow Single = Spires;
+	Single.ClusterCountMin = Single.ClusterCountMax = 1;
+	Single.ClusterRadiusCm = 0.0f;
+	FMOWorldFeaturePlacer C(P, Seed, { { FName(TEXT("Spires")), Single } });
+	TArray<FMOWorldFeatureSite> Singles;
+	C.SitesTouching(Area, Singles);
+	int32 NotSelf = 0;
+	for (const FMOWorldFeatureSite& S : Singles)
+	{
+		NotSelf += (S.Members.Num() != 1 || S.Members[0].Location != S.Location || S.Members[0].Scale != S.Scale || S.Members[0].Seed != S.Seed) ? 1 : 0;
+	}
+	TestTrue(TEXT("CONTROL: single sites exist"), Singles.Num() > 0);
+	TestEqual(TEXT("CONTROL: a single site's one member is the site itself"), NotSelf, 0);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOWorldFeature_ChooseVariant,
 	"MOFramework.WorldFeatures.ChooseVariant",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)

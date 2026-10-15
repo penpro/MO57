@@ -435,6 +435,91 @@ def _deep_merge(base, patch):
     return out
 
 
+def _flat_map(field, value):
+    """A TMap<FName, FString> as the MCP EXPORTS it: every value nested under the field's own name ({"k": {"ActorProperties": "v"}}).
+    Returns the flat {"k": "v"} the importer needs, or None if `value` is not that shape."""
+    if not isinstance(value, dict) or not value:
+        return None
+    flat = {}
+    for k, v in value.items():
+        if not (isinstance(v, dict) and len(v) == 1):
+            return None
+        (inner_key, inner_val), = v.items()
+        if str(inner_key).lower() != str(field).lower() or not isinstance(inner_val, str):
+            return None
+        flat[k] = inner_val
+    return flat
+
+
+def _map_key(field):
+    """Export keys are camelCase (actorProperties); the importer takes the property name (ActorProperties)."""
+    return field[:1].upper() + field[1:]
+
+
+def _map_snapshot(table):
+    """Every TMap<FName, FString> of EVERY row of the table, flattened: {row: {Field: {k: v}}}.
+
+    WHY: the engine's MCP set_rows / add_rows (EditorToolset data_table.py) re-import the WHOLE table from its own JSON export, and that
+    export nests a map's values ({"k": {"ActorProperties": "v"}}) in a form the import reads as EMPTY -- so ANY write to a table empties
+    every such map in every row. It wiped DT_WorldFeatures' Electric Dreams knobs (EnableCliff ...) and the spire / cliff Variants
+    (found 2026-10-15). Every write below re-sends this snapshot in the same call. Empty dict for a table without maps."""
+    names = rows_list(table)
+    if not isinstance(names, list) or not names:
+        return {}
+    cur = _mcp_call_file(DT, "get_rows", {"data_table": _table(table), "row_names": names})
+    snap = {}
+    for n, row in (cur.items() if isinstance(cur, dict) else []):
+        for k, v in (row.items() if isinstance(row, dict) else []):
+            flat = _flat_map(k, v)
+            if flat:
+                snap.setdefault(n, {})[_map_key(k)] = flat
+    return snap
+
+
+def _with_maps(snap, values):
+    """values (row -> fields) plus every snapshotted map the write does not set itself. A map the write DOES set (flat or in export
+    form) is flattened and becomes the snapshot's value for later writes."""
+    out = {n: dict(f) for n, f in values.items()}
+    for n, fields in out.items():
+        for k in list(fields):
+            flat = _flat_map(k, fields[k]) if isinstance(fields[k], dict) else None
+            if flat is not None:
+                fields[k] = flat
+    for n, maps in snap.items():
+        row = out.setdefault(n, {})
+        written = {str(k).lower() for k in row}
+        for k, flat in maps.items():
+            if k.lower() not in written:
+                row[k] = flat
+    return out
+
+
+def _note_written_maps(snap, name, cur_row, fields):
+    """A write that sets a map field (one that exports as a map, or as {} when empty) makes that the snapshot's value: the NEXT write
+    re-imports the table too and must carry it."""
+    cur_ci = {str(k).lower(): v for k, v in cur_row.items()} if isinstance(cur_row, dict) else {}
+    for k, v in fields.items():
+        base = cur_ci.get(str(k).lower())
+        if isinstance(v, dict) and (base == {} or _flat_map(k, base) is not None):
+            flat = _flat_map(k, v)
+            snap.setdefault(name, {})[_map_key(k)] = flat if flat is not None else v
+
+
+def _maps_lost(table, snap):
+    """Rows whose snapshotted maps did not survive the write (by name: 'Row.Field')."""
+    if not snap:
+        return []
+    back = _mcp_call_file(DT, "get_rows", {"data_table": _table(table), "row_names": list(snap)})
+    lost = []
+    for n, maps in snap.items():
+        row = back.get(n, {}) if isinstance(back, dict) else {}
+        row_ci = {str(k).lower(): v for k, v in row.items()} if isinstance(row, dict) else {}
+        for k, flat in maps.items():
+            if _flat_map(k, row_ci.get(k.lower())) != flat:
+                lost.append(f"{n}.{k}")
+    return lost
+
+
 def _mcp_call_file(toolset, tool, args, timeout=90):
     """mcp_call variant that passes the body via a temp file (curl -d @file).
     REQUIRED for large payloads — a 197-row set_rows blows Windows' command
@@ -481,6 +566,7 @@ def rows_set_bulk(table, rows, do_save=True):
     as rows_set_safe). Returns (ok_count, report)."""
     report = []
     names = list(rows.keys())
+    snap = _map_snapshot(table)   # every write re-imports the whole table: maps ride along (see _map_snapshot)
     current = _mcp_call_file(DT, "get_rows", {"data_table": _table(table), "row_names": names})
     if not isinstance(current, dict):
         return 0, [f"bulk read failed: {current!r:.120}"]
@@ -492,9 +578,10 @@ def rows_set_bulk(table, rows, do_save=True):
         for k, v in fields.items():
             cur_key = row_ci.get(k.lower())
             base = row.get(cur_key) if cur_key else None
-            merged[k] = _deep_merge(base, v) if (isinstance(v, dict) and isinstance(base, dict)) else v
+            merged[k] = v if _flat_map(k, base) is not None else (_deep_merge(base, v) if (isinstance(v, dict) and isinstance(base, dict)) else v)
         values[n] = merged
-    _mcp_call_file(DT, "set_rows", {"data_table": _table(table), "values": json.dumps(values)})
+        _note_written_maps(snap, n, row, merged)
+    _mcp_call_file(DT, "set_rows", {"data_table": _table(table), "values": json.dumps(_with_maps(snap, values))})
     back = _mcp_call_file(DT, "get_rows", {"data_table": _table(table), "row_names": names})
     ok = 0
     for n, fields in rows.items():
@@ -517,6 +604,10 @@ def rows_set_bulk(table, rows, do_save=True):
         if not good:
             report.append(f"{n:<28} MISMATCH")
     report.append(f"bulk: {ok}/{len(names)} verified")
+    lost = _maps_lost(table, snap)
+    if lost:
+        report.append("MAPS LOST (not saved): " + ", ".join(lost))
+        return 0, report
     if do_save and ok:
         report.append("save_assets -> %s" % save_assets([table], via_file=True))
     return ok, report
@@ -537,21 +628,23 @@ def rows_set_safe(table, rows, do_save=True):
     if len(rows) > 20:
         return rows_set_bulk(table, rows, do_save=do_save)
     report, ok = [], 0
+    snap = _map_snapshot(table)   # every write (add_rows too) re-imports the whole table: maps ride along (see _map_snapshot)
     for name, fields in rows.items():
         add = mcp_call(DT, "add_rows", {"data_table": _table(table), "row_names": [name]})
         add_note = "" if (isinstance(add, str) and "already exist" in add) else f" add={add}"
+        cur = rows_get(table, [name])
+        cur_row = cur.get(name, {}) if isinstance(cur, dict) else {}
         if any(isinstance(v, dict) for v in fields.values()):
-            cur = rows_get(table, [name])
-            cur_row = cur.get(name, {}) if isinstance(cur, dict) else {}
             cur_ci = {str(k).lower(): v for k, v in cur_row.items()} if isinstance(cur_row, dict) else {}
             merged = {}
             for k, v in fields.items():
                 base = cur_ci.get(k.lower())
-                merged[k] = _deep_merge(base, v) if (isinstance(v, dict) and isinstance(base, dict)) else v
+                merged[k] = v if _flat_map(k, base) is not None else (_deep_merge(base, v) if (isinstance(v, dict) and isinstance(base, dict)) else v)
             fields = merged
             rows[name] = fields   # verify against what we actually wrote
-        mcp_call(DT, "set_rows", {"data_table": _table(table),
-                                  "values": json.dumps({name: fields})})
+        _note_written_maps(snap, name, cur_row, fields)
+        _mcp_call_file(DT, "set_rows", {"data_table": _table(table),
+                                        "values": json.dumps(_with_maps(snap, {name: fields}))})
         back = rows_get(table, [name])
         row = back.get(name, {}) if isinstance(back, dict) else {}
         # Readback keys come back camelCase regardless of authored casing
@@ -581,6 +674,12 @@ def rows_set_safe(table, rows, do_save=True):
         ok += good
         report.append("%-28s %s%s%s" % (name, "OK" if good else "MISMATCH",
                                         (" " + ",".join(bad)) if bad else "", add_note))
+    lost = _maps_lost(table, snap)
+    if lost:
+        report.append("MAPS LOST (not saved): " + ", ".join(lost))
+        return 0, report
+    if snap:
+        report.append("maps kept: %d row(s)" % len(snap))
     if do_save and ok:
         report.append("save_assets -> %s" % save_assets([table]))
     return ok, report

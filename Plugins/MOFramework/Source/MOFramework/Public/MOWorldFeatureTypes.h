@@ -120,6 +120,56 @@ struct MOFRAMEWORK_API FMOWorldFeatureDefinitionRow : public FTableRowBase
 	/** Spawned while a player is within this distance (cm), removed past 1.25x of it. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Streaming", meta=(ClampMin="5000.0"))
 	float SpawnDistanceCm = 40000.0f;
+
+	/**
+	 * A CLUSTER of the composition instead of one (Wes, Oct 15 2026, of the rock spires: "a range from 1 to 10 in an area, ranging from 50% original
+	 * size up to the 400% big towers so there's a whole neat looking area"): each site places ClusterCountMin..ClusterCountMax copies scattered within
+	 * ClusterRadiusCm of its centre, each at its own scale in [MinScale, MaxScale], yaw and ground height, kept apart by their footprints; every member
+	 * passes the row's terrain rules on its own. 1 / 1 with no radius (the default) = one composition at the site, as before. Clusters ignore bAlignToSlope.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Cluster", meta=(ClampMin="1", ClampMax="32"))
+	int32 ClusterCountMin = 1;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Cluster", meta=(ClampMin="1", ClampMax="32"))
+	int32 ClusterCountMax = 1;
+
+	/** How far from the site's centre members may stand (cm). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Cluster", meta=(ClampMin="0.0"))
+	float ClusterRadiusCm = 0.0f;
+
+	/** How member scales spread over [MinScale, MaxScale]: 1 = evenly, above 1 = mostly small with a few giants. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Cluster", meta=(ClampMin="0.1"))
+	float ClusterScaleBias = 1.0f;
+
+	bool IsCluster() const { return ClusterCountMax > 1 || ClusterRadiusCm > 0.0f; }
+
+	/** The farthest any part of one of this row's sites can reach from its centre (cm): overlap and query margins. */
+	float GetMaxSiteRadiusCm() const { return (IsCluster() ? ClusterRadiusCm : 0.0f) + FootprintRadiusCm * FMath::Max(MinScale, MaxScale); }
+};
+
+/** One composition a site places: the site itself for a single feature, one of several for a cluster. */
+USTRUCT(BlueprintType)
+struct MOFRAMEWORK_API FMOWorldFeatureMember
+{
+	GENERATED_BODY()
+
+	/** XY on the generator's ground; Z = generator ground (before SinkCm). */
+	UPROPERTY(BlueprintReadOnly, Category="WorldFeature")
+	FVector Location = FVector::ZeroVector;
+
+	UPROPERTY(BlueprintReadOnly, Category="WorldFeature")
+	float YawDegrees = 0.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category="WorldFeature")
+	float Scale = 1.0f;
+
+	/** The row's footprint at this member's scale. */
+	UPROPERTY(BlueprintReadOnly, Category="WorldFeature")
+	float FootprintRadiusCm = 0.0f;
+
+	/** Seed for this member's own PCG variation. */
+	UPROPERTY(BlueprintReadOnly, Category="WorldFeature")
+	int32 Seed = 0;
 };
 
 /** One placed feature: a pure function of (world seed, row, slot). */
@@ -151,4 +201,9 @@ struct MOFRAMEWORK_API FMOWorldFeatureSite
 	/** Seed for the composition's own randomness (its PCG components get it), so each site looks different and every machine builds the same one. */
 	UPROPERTY(BlueprintReadOnly, Category="WorldFeature")
 	int32 Seed = 0;
+
+	/** What the site places: one entry (the site itself) for a single feature, ClusterCountMin..Max for a cluster. Location / Scale / Seed above
+	 *  are then the cluster's centre, its largest member's scale and its first member's seed; FootprintRadiusCm covers every member. */
+	UPROPERTY(BlueprintReadOnly, Category="WorldFeature")
+	TArray<FMOWorldFeatureMember> Members;
 };
