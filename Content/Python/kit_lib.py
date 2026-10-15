@@ -341,11 +341,13 @@ def combo(name, var=True, slot=None, **props):
 
 
 def spin(name, var=True, slot=None, **props):
-    """A SpinBox in the kit input look."""
+    """A SpinBox in the kit input look. Whole numbers by default (every spin box counts something: an amount, a frame-rate cap -- the
+    engine default showed "120.0"); pass min/max_fractional_digits for a decimal one."""
     clear = {"tint_color": {"specified_color": [0, 0, 0, 0]}}
     style = {"background_brush": baked_brush("T_Input_normal"), "hovered_background_brush": baked_brush("T_Input_normal"), "active_background_brush": baked_brush("T_Input_focused"),
              "active_fill_brush": clear, "hovered_fill_brush": clear, "inactive_fill_brush": clear, "text_padding": [12, 6, 12, 8]}
-    p = {"widget_style": style, "font": font("numeric"), "foreground_color": {"specified_color": color("color.text.primary")}}
+    p = {"widget_style": style, "font": font("numeric"), "foreground_color": {"specified_color": color("color.text.primary")},
+         "min_fractional_digits": 0, "max_fractional_digits": 0}
     p.update(props)
     node = {"type": "SpinBox", "name": name, "props": p}
     if var is not None:

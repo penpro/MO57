@@ -75,7 +75,7 @@ design forks are logged under "Forks", not built blind.
   one source of name + gender; RequestSetPawnIdentity, bece2ea7); camera inside sapling / fern leaves (leaves within ~1.6 m of the lens dither away, `foliage_camera_fade.py`, 8aeff17b);
   wildlife never used its ~18.5k PCG spawn points + co-op spawning anchored to the host (182bec33). **OPEN (logged for Wes):** thirst + cold moodles red within a minute
   (survival pacing fork); the starting kit (10 cobbles, 20 sticks) crafts nothing in the hand menu -- first craft is the campfire (B); build-menu names mix "Build Campfire" and "Stick Floor"; skill list has no
-  icons; gender has no source on the body (player-set only); the New Game input boxes render their typed text dim; Location row shows raw cm.
+  icons; gender has no source on the body (player-set only); Location row shows raw cm. (The New Game input boxes' dim text: FIXED abb8c4d2.)
 - [ ] Audio pass: footsteps done for humans (see Done); open: creature footsteps (hooves / paws: the skeleton has no ball_l / ball_r), structure / prop surfaces (stone, rock, metal: needs physical materials or
   the interface on the actors; props on top of terrain read as wood today), rain / snow overlays on the steps, interior / exterior mix, UDW outdoor mix failing in `RecursiveApplyAdjuster` (silenced via LogAudio=Warning).
 - [x] HUD review of the packaged build (`Tools/win_input.ps1 -Action shot`, PrintWindow: works while another window covers the game, never moves the cursor): the tutorial banner was dark grey text with no panel
@@ -93,8 +93,8 @@ design forks are logged under "Forks", not built blind.
   Landed meanwhile (screen-independent defects found in the packaged captures): recipe lists were one pink wall (the uncraftable / unbuildable default was a red tint; now neutral, dimmer), the recipe detail panel
   showed "Text Block" / a white square until a recipe was picked (now hidden until `DisplayRecipe`, starts empty), list selection colour muted. Still open there: the crafting list rows are 12 px text and a 0.5-scaled
   button, the amount spin box is a white native box, the "Characters" possession screen is unstyled, `FuelTimeText` / "Current:" placeholders.
-- [ ] UI polish pass over the CommonUI screens (consistent spacing / focus / controller). Known: the Options panel's dark-grey labels (0.28) on a 20 %-alpha panel are hard to read over a bright backdrop
-  (every section; the group titles are fainter still); "Graphics Quality" / "VSync" sit at the END of the Graphics section (no reorder API: rebuild the later rows to move them).
+- [ ] UI polish pass over the CommonUI screens (consistent spacing / focus / controller). The Options panel's faint labels and row order are gone with its design-kit rebuild
+  (checked Oct 15: readable labels, VSync under Display, Graphics quality under Quality); the frame-rate cap read "120.0" -- kit spin boxes are whole numbers by default now.
 
 ## Forks (need Wes)
 - **Survival stat pacing (found with the moodle strip)**: `UMOSurvivalStatsComponent` (the stats that drive the Hunger / Thirst / Energy moodles, and that eating / drinking restore) decays at 0.5 / 0.8 / 0.2 per REAL
