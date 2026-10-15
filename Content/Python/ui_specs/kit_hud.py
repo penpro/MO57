@@ -17,21 +17,29 @@ VC = {"vertical_alignment": "V_ALIGN_CENTER"}
 PLATE = lambda n: K.image9(n, "hud_plate", "color.hud.plate", slot=FILL)
 
 
-def box(name, w, h, slot, children, min_h=None):
-    """A fixed-width SizeBox holding an Overlay of the given children (the plate first)."""
-    node = {"type": "SizeBox", "name": name, "width": w, "slot": slot, "children": [{"type": "Overlay", "name": name + "Overlay", "children": children}]}
+def box(name, w, h, slot, children, min_h=None, min_w=None):
+    """A SizeBox holding an Overlay of the given children (the plate first): fixed width w, or -- w None -- as wide as its content,
+    at least min_w (the canvas slot must then auto-size too)."""
+    node = {"type": "SizeBox", "name": name, "slot": slot, "children": [{"type": "Overlay", "name": name + "Overlay", "children": children}]}
+    node["width"] = w   # None clears a fixed width an existing widget may still carry
     if h is not None:
         node["height"] = h
+    props = {}
     if min_h is not None:
-        node["props"] = {"min_desired_height": min_h}
+        props["min_desired_height"] = min_h
+    if min_w is not None:
+        props["min_desired_width"] = min_w
+    if props:
+        node["props"] = props
     return node
 
 
 # ---------------------------------------------------------------- mode indicator (40,164 220x36 TopLeft)
+# As wide as its label, at least 220: "EXPLORING LOCUST WOODLAND" ran past a fixed 220 px plate (Wes, Oct 15 2026), and biome names vary.
 MODE = {
     "asset": f"{UI}/WBP_ModeIndicator",
     "root": {"type": "CanvasPanel", "name": "RootCanvas", "children": [
-        box("ModeBox", 220, 36, K.place(40, 164, 220, 36, "TopLeft"), [
+        box("ModeBox", None, 36, K.place(40, 164, 220, 36, "TopLeft", auto_height=True), min_w=220, children=[
             PLATE("ModePlate"),
             K.text("ModeText", "label", "EXPLORE", "color.text.primary", var=True, slot={**VC, "padding": [14, 0, 14, 0]})])]},
 }

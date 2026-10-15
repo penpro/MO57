@@ -181,6 +181,11 @@ _SIZEBOX_OVERRIDES = {"width_override", "height_override", "min_desired_width", 
 def set_props(obj, props, what=""):
     for key, value in props.items():
         name = _snake(key)
+        # None on a SizeBox override = "not overridden": the clearer UFUNCTION (ClearWidthOverride ...) turns the flag off. Without it a spec that
+        # drops a fixed width left the old one in force on an existing widget (the HUD mode plate stayed 220 px, Oct 15 2026).
+        if value is None and isinstance(obj, unreal.SizeBox) and name in _SIZEBOX_OVERRIDES:
+            getattr(obj, "clear_" + name)()
+            continue
         try:
             cur = obj.get_editor_property(name)
         except Exception as exc:
