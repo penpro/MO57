@@ -558,8 +558,6 @@ void UMOSpawnManagerSubsystem::AdoptRestoredEntity(APawn* Pawn)
 
 bool UMOSpawnManagerSubsystem::DespawnOldest(EMOSpawnCategory Category)
 {
-	APawn* PlayerPawn = GetPlayerPawn();
-	FVector PlayerLocation = PlayerPawn ? PlayerPawn->GetActorLocation() : FVector::ZeroVector;
 
 	// Get minimum despawn distance from settings
 	FMOSpawnGlobalSettings GlobalSettings = AMOSpawnSettingsActor::GetGlobalSettings(this);
@@ -589,10 +587,11 @@ bool UMOSpawnManagerSubsystem::DespawnOldest(EMOSpawnCategory Category)
 			continue;
 		}
 
-		// Skip entities too close to player - don't despawn in front of them
-		if (PlayerPawn && Record.SpawnedPawn.IsValid())
+		// Skip entities too close to ANY player - don't despawn in front of them
+		if (Record.SpawnedPawn.IsValid())
 		{
-			float DistanceToPlayer = FVector::Dist(Record.SpawnedPawn->GetActorLocation(), PlayerLocation);
+			float DistanceToPlayer = 0.0f;
+			GetNearestPlayerPawn(Record.SpawnedPawn->GetActorLocation(), DistanceToPlayer);
 			if (DistanceToPlayer < MinDespawnDistance)
 			{
 				continue;
@@ -619,8 +618,9 @@ bool UMOSpawnManagerSubsystem::DespawnOldest(EMOSpawnCategory Category)
 
 	if (Pawn)
 	{
-		float DistanceToPlayer = PlayerPawn ? FVector::Dist(Pawn->GetActorLocation(), PlayerLocation) : 0.f;
-		UE_LOG(LogMOFramework, Log, TEXT("[SpawnManager] Despawning oldest: %s (%.0fm from player)"),
+		float DistanceToPlayer = 0.0f;
+		GetNearestPlayerPawn(Pawn->GetActorLocation(), DistanceToPlayer);
+		UE_LOG(LogMOFramework, Log, TEXT("[SpawnManager] Despawning oldest: %s (%.0fm from the nearest player)"),
 			*Pawn->GetName(), DistanceToPlayer / 100.f);
 		OnEntityDespawned.Broadcast(Pawn, Category);
 		Pawn->Destroy();
@@ -855,13 +855,11 @@ TArray<AMOSpawnPoint*> UMOSpawnManagerSubsystem::GetValidSpawnPoints(EMOSpawnCat
 {
 	TArray<AMOSpawnPoint*> Result;
 
-	APawn* PlayerPawn = GetPlayerPawn();
-	if (!PlayerPawn)
+	if (GetPlayerPawns().Num() == 0)
 	{
 		return Result;
 	}
 
-	const FVector PlayerLocation = PlayerPawn->GetActorLocation();
 	const FMOSpawnCategoryConfig Config = GetCategoryConfig(Category);
 
 	UWorld* World = GetWorld();
@@ -887,15 +885,17 @@ TArray<AMOSpawnPoint*> UMOSpawnManagerSubsystem::GetValidSpawnPoints(EMOSpawnCat
 			continue;
 		}
 
-		// Check distance from player
-		const float DistanceToPlayer = FVector::Dist(Point->GetActorLocation(), PlayerLocation);
-		if (DistanceToPlayer < Config.MinSpawnDistance || DistanceToPlayer > Config.MaxSpawnDistance)
+		// Inside the spawn ring of the nearest player (the ring is in METERS: compared as cm, a prey point counted only 0.8-4 m from the
+		// player, so the ~18k points the PCG graph places on the ground were never used and every spawn took the fallback, Oct 15 2026).
+		float DistanceToPlayer = 0.0f;
+		GetNearestPlayerPawn(Point->GetActorLocation(), DistanceToPlayer);
+		if (!IsInSpawnRing(DistanceToPlayer, Config))
 		{
 			continue;
 		}
 
-		// Check distance from structures
-		if (!IsLocationValidForSpawn(Point->GetActorLocation(), Config.MinDistanceFromStructure))
+		// Check distance from structures (MinDistanceFromStructure is METERS)
+		if (!IsLocationValidForSpawn(Point->GetActorLocation(), Config.MinDistanceFromStructure * 100.0f))
 		{
 			continue;
 		}
@@ -909,8 +909,7 @@ TArray<AMOSpawnPoint*> UMOSpawnManagerSubsystem::GetValidSpawnPoints(EMOSpawnCat
 bool UMOSpawnManagerSubsystem::CanSpawn() const
 {
 	// Must have a player
-	APawn* PlayerPawn = GetPlayerPawn();
-	if (!PlayerPawn)
+	if (GetPlayerPawns().Num() == 0)
 	{
 		return false;
 	}
@@ -1182,71 +1181,100 @@ void UMOSpawnManagerSubsystem::UpdatePersistence()
 
 APawn* UMOSpawnManagerSubsystem::SpawnAtPoint(AMOSpawnPoint* Point, const FMOSpawnCategoryConfig& Config)
 {
-	if (!Point || Config.SpawnableClasses.Num() == 0)
+	if (!Point)
 	{
 		return nullptr;
 	}
-
-	// Get spawn location
-	FVector SpawnLocation = Point->GetRandomSpawnLocation();
-
-	// Optional Z-range gate. Same band-restrict logic as the fallback path,
-	// applied to designed spawn points too. Doesn't re-trace ground here —
-	// trusts the spawn point's authored Z. If a designer drops a Survivor
-	// spawn point on a cliff, this gates it out.
-	if (Config.bRestrictSpawnZ && (SpawnLocation.Z < Config.MinSpawnZ || SpawnLocation.Z > Config.MaxSpawnZ))
-	{
-		UE_LOG(LogMOFramework, Verbose,
-			TEXT("[SpawnManager] SpawnAtPoint: rejected Z=%.1f for %s (allowed: %.1f..%.1f)"),
-			SpawnLocation.Z, *UEnum::GetValueAsString(Config.Category), Config.MinSpawnZ, Config.MaxSpawnZ);
-		return nullptr;
-	}
-
-	// Verify location is still valid (not too close to structures)
-	if (!IsLocationValidForSpawn(SpawnLocation, Config.MinDistanceFromStructure))
-	{
-		return nullptr;
-	}
-
-	// Verify location is not too close to other spawned entities
-	const float MinEntitySeparation = FMath::Max(200.0f, Config.MinSpawnDistance * 0.5f);
-	if (!IsLocationValidForSpawnNearEntities(SpawnLocation, MinEntitySeparation))
-	{
-		return nullptr;
-	}
-
-	// Select random class
-	const int32 ClassIndex = FMath::RandRange(0, Config.SpawnableClasses.Num() - 1);
-	TSubclassOf<APawn> PawnClass = Config.SpawnableClasses[ClassIndex];
-
-	// Random rotation
-	FRotator SpawnRotation = FRotator(0.0f, FMath::FRandRange(0.0f, 360.0f), 0.0f);
-
-	APawn* SpawnedPawn = SpawnPawnAtLocation(PawnClass, SpawnLocation, SpawnRotation);
+	APawn* SpawnedPawn = SpawnOnGround(Point->GetRandomSpawnLocation(), Config, FString::Printf(TEXT("spawn point %s"), *Point->GetName()));
 	if (SpawnedPawn)
 	{
 		Point->MarkUsed();
+	}
+	return SpawnedPawn;
+}
 
-		// Assign name for survivors
-		AssignSurvivorNameIfNeeded(SpawnedPawn, Config.Category);
-		GrantSurvivorStarterClothingIfNeeded(SpawnedPawn, Config.Category,
-			AMOSpawnSettingsActor::GetGlobalSettings(this).SurvivorStarterClothing);
-
-		// Add to tracking. Freeze before broadcasting so listeners observe the
-		// pawn's final spawn state, and so Last() is still our record.
-		SpawnedEntities.Add(FMOSpawnedEntityRecord(SpawnedPawn, Config.Category));
-		MaybeSpawnSurvivorBeacon(SpawnedEntities.Num() - 1);
-		if (ShouldFreezeCategory(Config.Category))
-		{
-			FreezeSpawnedPawn(SpawnedEntities.Last());
-		}
-		OnEntitySpawned.Broadcast(SpawnedPawn, Config.Category);
-		NotifyPlayerOfSpawn(SpawnedPawn);
-
-		UE_LOG(LogMOFramework, Log, TEXT("[SpawnManager] Spawned %s at spawn point %s"),
-			*SpawnedPawn->GetName(), *Point->GetName());
+APawn* UMOSpawnManagerSubsystem::SpawnOnGround(const FVector& Near, const FMOSpawnCategoryConfig& Config, const FString& Source)
+{
+	UWorld* World = GetWorld();
+	if (!World || Config.SpawnableClasses.Num() == 0)
+	{
+		return nullptr;
 	}
 
+	// Pick the class first: the standing-spot check needs its capsule.
+	const TSubclassOf<APawn> PawnClass = Config.SpawnableClasses[FMath::RandRange(0, Config.SpawnableClasses.Num() - 1)];
+	if (!PawnClass)
+	{
+		return nullptr;
+	}
+	float NearestPlayerCm = 0.0f;
+	APawn* NearestPlayer = GetNearestPlayerPawn(Near, NearestPlayerCm);
+
+	// Ground = the voxel terrain under the trees (MOSpawnClearance::TraceVoxelGround: an object-type trace -- a channel trace ends at the first
+	// tree / rock over the ground). No voxel collision on the line (not generated here) = unsafe.
+	FHitResult GroundHit;
+	if (!MOSpawnClearance::TraceVoxelGround(World, Near.X, Near.Y, Near.Z + 5000.0f, Near.Z - 10000.0f, NearestPlayer, GroundHit))
+	{
+		return nullptr;
+	}
+	const float GroundZ = GroundHit.ImpactPoint.Z;
+
+	// Land pawns: ground under the sea or a lake is the bed, not a place to stand (a deer spawned on the sea floor, Oct 13 2026).
+	if (MOSpawnClearance::IsUnderOpenWater(World, GroundHit.ImpactPoint))
+	{
+		return nullptr;
+	}
+
+	// The pawn must fit standing there (not inside a trunk or a boulder) -- the same rule as every other position-picking path.
+	if (!MOSpawnClearance::IsStandingSpotClear(World, GroundHit.ImpactPoint, MOSpawnClearance::CapsuleOf(PawnClass), NearestPlayer))
+	{
+		return nullptr;
+	}
+
+	// Optional Z-range gate. Categories like Survivor restrict spawns to a terrain band (shoreline) where trees don't grow, eliminating
+	// "found a survivor in the canopy" reports. The voxel-only trace above guarantees GroundZ is real terrain, not foliage.
+	if (Config.bRestrictSpawnZ && (GroundZ < Config.MinSpawnZ || GroundZ > Config.MaxSpawnZ))
+	{
+		UE_LOG(LogMOFramework, Verbose, TEXT("[SpawnManager] %s: rejected ground Z=%.1f for %s (allowed: %.1f..%.1f)"),
+			*Source, GroundZ, *UEnum::GetValueAsString(Config.Category), Config.MinSpawnZ, Config.MaxSpawnZ);
+		return nullptr;
+	}
+	const FVector SpawnLocation = GroundHit.ImpactPoint + FVector(0, 0, 100.0f);
+
+	// Structure avoidance and separation from other spawned entities (both authored in METERS): half of MinSpawnDistance, floor of 2 m.
+	const float MinStructureDistanceCm = Config.MinDistanceFromStructure * 100.0f;
+	if (MinStructureDistanceCm > 0.0f && !IsLocationValidForSpawn(SpawnLocation, MinStructureDistanceCm))
+	{
+		return nullptr;
+	}
+	const float MinEntitySeparationCm = FMath::Max(200.0f, (Config.MinSpawnDistance * 100.0f) * 0.5f);
+	if (!IsLocationValidForSpawnNearEntities(SpawnLocation, MinEntitySeparationCm))
+	{
+		return nullptr;
+	}
+
+	APawn* SpawnedPawn = SpawnPawnAtLocation(PawnClass, SpawnLocation, FRotator(0.0f, FMath::FRandRange(0.0f, 360.0f), 0.0f));
+	if (!SpawnedPawn)
+	{
+		return nullptr;
+	}
+
+	// Assign name for survivors
+	AssignSurvivorNameIfNeeded(SpawnedPawn, Config.Category);
+	GrantSurvivorStarterClothingIfNeeded(SpawnedPawn, Config.Category, AMOSpawnSettingsActor::GetGlobalSettings(this).SurvivorStarterClothing);
+
+	// Add to tracking. Freeze before broadcasting so listeners observe the pawn's final spawn state, and so Last() is still our record.
+	SpawnedEntities.Add(FMOSpawnedEntityRecord(SpawnedPawn, Config.Category));
+	MaybeSpawnSurvivorBeacon(SpawnedEntities.Num() - 1);
+	if (ShouldFreezeCategory(Config.Category))
+	{
+		FreezeSpawnedPawn(SpawnedEntities.Last());
+	}
+	OnEntitySpawned.Broadcast(SpawnedPawn, Config.Category);
+	NotifyPlayerOfSpawn(SpawnedPawn);
+
+	UE_LOG(LogMOFramework, Warning, TEXT("[SpawnManager] Spawned %s (%s) at %s, %.0f m from the nearest player"),
+		*SpawnedPawn->GetClass()->GetName(), *Source, *SpawnLocation.ToString(), NearestPlayerCm / 100.0f);
 	return SpawnedPawn;
 }
 
@@ -1272,136 +1300,36 @@ APawn* UMOSpawnManagerSubsystem::SpawnPawnAtLocation(TSubclassOf<APawn> PawnClas
 
 APawn* UMOSpawnManagerSubsystem::TryFallbackSpawn(EMOSpawnCategory Category, const FMOSpawnCategoryConfig& Config)
 {
-	// Fallback spawning when no spawn points exist - spawn in random direction from player
-	APawn* PlayerPawn = GetPlayerPawn();
-	if (!PlayerPawn)
+	// Fallback spawning when no spawn point is usable: a random spot in the spawn ring of a random player.
+	const TArray<APawn*> Players = GetPlayerPawns();
+	if (Players.Num() == 0)
 	{
 		UE_LOG(LogMOFramework, Warning, TEXT("[SpawnManager] Fallback spawn failed - no player pawn"));
 		return nullptr;
 	}
-
 	if (Config.SpawnableClasses.Num() == 0)
 	{
 		return nullptr;
 	}
 
-	UWorld* World = GetWorld();
-	if (!World)
-	{
-		return nullptr;
-	}
-
-	const FVector PlayerLocation = PlayerPawn->GetActorLocation();
-
-	// Try multiple times to find a valid spawn location
 	const int32 MaxAttempts = 10;
 	for (int32 Attempt = 0; Attempt < MaxAttempts; ++Attempt)
 	{
-		// Random distance within config range. MinSpawnDistance/MaxSpawnDistance are
-		// authored in METERS (per their UPROPERTY comments). Convert to UE world units
-		// (centimeters) for actual placement. Without this, MinSpawnDistance=50 produced
-		// spawns at 50cm (~half a meter) instead of 50m.
-		const float DistanceMeters = FMath::FRandRange(Config.MinSpawnDistance, Config.MaxSpawnDistance);
-		const float Distance = DistanceMeters * 100.0f;
+		// MinSpawnDistance/MaxSpawnDistance are authored in METERS (per their UPROPERTY comments): convert to cm for placement.
+		const FVector Anchor = Players[FMath::RandRange(0, Players.Num() - 1)]->GetActorLocation();
+		const float Distance = FMath::FRandRange(Config.MinSpawnDistance, Config.MaxSpawnDistance) * 100.0f;
+		const float Angle = FMath::DegreesToRadians(FMath::FRandRange(0.0f, 360.0f));
+		const FVector Near = Anchor + FVector(FMath::Cos(Angle) * Distance, FMath::Sin(Angle) * Distance, 0.0f);
 
-		// Random angle
-		const float Angle = FMath::FRandRange(0.0f, 360.0f);
-		const FVector Offset = FVector(
-			FMath::Cos(FMath::DegreesToRadians(Angle)) * Distance,
-			FMath::Sin(FMath::DegreesToRadians(Angle)) * Distance,
-			0.0f
-		);
-
-		FVector SpawnLocation = PlayerLocation + Offset;
-
-		// Pick the class first: the standing-spot check below needs its capsule.
-		const int32 ClassIndex = FMath::RandRange(0, Config.SpawnableClasses.Num() - 1);
-		TSubclassOf<APawn> PawnClass = Config.SpawnableClasses[ClassIndex];
-		if (!PawnClass)
+		// In this player's ring but not on top of another player.
+		float NearestPlayerCm = 0.0f;
+		GetNearestPlayerPawn(Near, NearestPlayerCm);
+		if (NearestPlayerCm < Config.MinSpawnDistance * 100.0f)
 		{
 			continue;
 		}
-
-		// Ground = the voxel terrain under the trees (MOSpawnClearance::TraceVoxelGround: an object-type trace -- the channel multi
-		// trace this used to do ended at the first tree / rock over the ground, so every forest attempt failed). No voxel collision on
-		// the line (not generated here) = this attempt is unsafe: try another angle.
-		FHitResult GroundHit;
-		if (!MOSpawnClearance::TraceVoxelGround(World, SpawnLocation.X, SpawnLocation.Y, SpawnLocation.Z + 5000.0f, SpawnLocation.Z - 10000.0f, PlayerPawn, GroundHit))
+		if (APawn* SpawnedPawn = SpawnOnGround(Near, Config, TEXT("fallback")))
 		{
-			continue;
-		}
-		const float GroundZ = GroundHit.ImpactPoint.Z;
-
-		// Land pawns: ground under the sea or a lake is the bed, not a place to stand (a deer spawned on the sea floor, Oct 13 2026).
-		if (MOSpawnClearance::IsUnderOpenWater(World, GroundHit.ImpactPoint))
-		{
-			continue;
-		}
-
-		// The pawn must fit standing there (not inside a trunk or a boulder) -- the same rule as every other position-picking path.
-		if (!MOSpawnClearance::IsStandingSpotClear(World, GroundHit.ImpactPoint, MOSpawnClearance::CapsuleOf(PawnClass), PlayerPawn))
-		{
-			continue;
-		}
-		SpawnLocation = GroundHit.ImpactPoint + FVector(0, 0, 100.0f);
-
-		// Optional Z-range gate. Categories like Survivor restrict spawns to
-		// a terrain band (shoreline) where trees don't grow, eliminating
-		// "found a survivor in the canopy" reports. The voxel-only trace
-		// above guarantees GroundZ is real terrain, not foliage.
-		if (Config.bRestrictSpawnZ && (GroundZ < Config.MinSpawnZ || GroundZ > Config.MaxSpawnZ))
-		{
-			UE_LOG(LogMOFramework, Verbose,
-				TEXT("[SpawnManager] Fallback: rejected ground Z=%.1f for %s (allowed: %.1f..%.1f)"),
-				GroundZ, *UEnum::GetValueAsString(Category), Config.MinSpawnZ, Config.MaxSpawnZ);
-			continue;
-		}
-
-		// Check structure avoidance (MinDistanceFromStructure is also in METERS — convert to cm).
-		const float MinStructureDistanceCm = Config.MinDistanceFromStructure * 100.0f;
-		if (MinStructureDistanceCm > 0.0f && !IsLocationValidForSpawn(SpawnLocation, MinStructureDistanceCm))
-		{
-			continue;
-		}
-
-		// Check distance from other spawned entities (prevent spawning on top of each other).
-		// Use half of MinSpawnDistance as the minimum separation, floor of 2 meters.
-		const float MinEntitySeparationCm = FMath::Max(200.0f, (Config.MinSpawnDistance * 100.0f) * 0.5f);
-		if (!IsLocationValidForSpawnNearEntities(SpawnLocation, MinEntitySeparationCm))
-		{
-			continue;
-		}
-
-		// Random rotation
-		FRotator SpawnRotation = FRotator(0.0f, FMath::FRandRange(0.0f, 360.0f), 0.0f);
-
-		APawn* SpawnedPawn = SpawnPawnAtLocation(PawnClass, SpawnLocation, SpawnRotation);
-		if (SpawnedPawn)
-		{
-			// Assign name for survivors
-			AssignSurvivorNameIfNeeded(SpawnedPawn, Category);
-			GrantSurvivorStarterClothingIfNeeded(SpawnedPawn, Category,
-				AMOSpawnSettingsActor::GetGlobalSettings(this).SurvivorStarterClothing);
-
-			// Add to tracking. Freeze before broadcasting so listeners observe
-			// the pawn's final spawn state, and so Last() is still our record.
-			FMOSpawnedEntityRecord Record(SpawnedPawn, Category);
-			SpawnedEntities.Add(Record);
-			MaybeSpawnSurvivorBeacon(SpawnedEntities.Num() - 1);
-			if (ShouldFreezeCategory(Category))
-			{
-				FreezeSpawnedPawn(SpawnedEntities.Last());
-			}
-
-			// Notify
-			OnEntitySpawned.Broadcast(SpawnedPawn, Category);
-			NotifyPlayerOfSpawn(SpawnedPawn);
-
-			UE_LOG(LogMOFramework, Warning, TEXT("[SpawnManager] Fallback spawned %s at %s (%.0fm from player)"),
-				*SpawnedPawn->GetClass()->GetName(),
-				*SpawnLocation.ToString(),
-				Distance / 100.0f);
-
 			return SpawnedPawn;
 		}
 	}
@@ -1521,16 +1449,14 @@ void UMOSpawnManagerSubsystem::WakeSpawnedPawn(FMOSpawnedEntityRecord& Record)
 
 void UMOSpawnManagerSubsystem::DumpFreezeState() const
 {
-	APawn* PlayerPawn = GetPlayerPawn();
-	const FVector PlayerLoc = PlayerPawn ? PlayerPawn->GetActorLocation() : FVector::ZeroVector;
+	const int32 PlayerCount = GetPlayerPawns().Num();
 	const float WakeDistanceSq = WakeDistanceCm * WakeDistanceCm;
 
 	const UEnum* CategoryEnum = StaticEnum<EMOSpawnCategory>();
 
 	UE_LOG(LogMOFramework, Warning,
-		TEXT("[MO.AI.DumpFreezeState] === %d tracked entities, WakeDistance=%.0fcm (%.1fm), Player=%s ==="),
-		SpawnedEntities.Num(), WakeDistanceCm, WakeDistanceCm / 100.0f,
-		PlayerPawn ? *PlayerPawn->GetName() : TEXT("NULL"));
+		TEXT("[MO.AI.DumpFreezeState] === %d tracked entities, WakeDistance=%.0fcm (%.1fm), Players=%d (distances = to the nearest) ==="),
+		SpawnedEntities.Num(), WakeDistanceCm, WakeDistanceCm / 100.0f, PlayerCount);
 
 	int32 RunningCount = 0;
 	int32 FrozenCount = 0;
@@ -1550,7 +1476,9 @@ void UMOSpawnManagerSubsystem::DumpFreezeState() const
 		UBrainComponent* Brain = AIController ? AIController->GetBrainComponent() : nullptr;
 
 		const bool bShouldFreeze = ShouldFreezeCategory(Record.Category);
-		const float DistanceSq = PlayerPawn ? FVector::DistSquared(PlayerLoc, Pawn->GetActorLocation()) : FLT_MAX;
+		float NearestPlayerCm = 0.0f;
+		GetNearestPlayerPawn(Pawn->GetActorLocation(), NearestPlayerCm);
+		const float DistanceSq = PlayerCount > 0 ? FMath::Square(NearestPlayerCm) : FLT_MAX;
 		const float DistanceM = FMath::Sqrt(DistanceSq) / 100.0f;
 		const bool bRunning = Brain && Brain->IsRunning();
 		const bool bInWakeRange = bShouldFreeze && DistanceSq <= WakeDistanceSq;
@@ -1652,10 +1580,9 @@ int32 UMOSpawnManagerSubsystem::ForceWakeAll()
 
 void UMOSpawnManagerSubsystem::UpdateFrozenPawnWakeCheck()
 {
-	APawn* PlayerPawn = GetPlayerPawn();
-	if (!PlayerPawn) return;
+	const TArray<APawn*> Players = GetPlayerPawns();
+	if (Players.Num() == 0) return;
 
-	const FVector PlayerLocation = PlayerPawn->GetActorLocation();
 	const float WakeDistanceSq = WakeDistanceCm * WakeDistanceCm;
 
 	for (FMOSpawnedEntityRecord& Record : SpawnedEntities)
@@ -1668,8 +1595,12 @@ void UMOSpawnManagerSubsystem::UpdateFrozenPawnWakeCheck()
 		APawn* Pawn = Record.SpawnedPawn.Get();
 		if (!Pawn) continue;
 
-		// In range? Full wake: brain + actor tick + movement tick + anim policy.
-		const float DistanceSq = FVector::DistSquared(PlayerLocation, Pawn->GetActorLocation());
+		// In range of ANY player? Full wake: brain + actor tick + movement tick + anim policy.
+		float DistanceSq = TNumericLimits<float>::Max();
+		for (const APawn* Player : Players)
+		{
+			DistanceSq = FMath::Min(DistanceSq, static_cast<float>(FVector::DistSquared(Player->GetActorLocation(), Pawn->GetActorLocation())));
+		}
 		if (DistanceSq <= WakeDistanceSq)
 		{
 			WakeSpawnedPawn(Record);
@@ -1710,21 +1641,41 @@ float UMOSpawnManagerSubsystem::RollNewCooldown(const FMOSpawnCategoryConfig& Co
 	return Cooldown;
 }
 
-APawn* UMOSpawnManagerSubsystem::GetPlayerPawn() const
+TArray<APawn*> UMOSpawnManagerSubsystem::GetPlayerPawns() const
 {
-	UWorld* World = GetWorld();
-	if (!World)
+	TArray<APawn*> Pawns;
+	if (UWorld* World = GetWorld())
 	{
-		return nullptr;
+		for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
+		{
+			if (APawn* Pawn = It->IsValid() ? (*It)->GetPawn() : nullptr)
+			{
+				Pawns.Add(Pawn);
+			}
+		}
 	}
+	return Pawns;
+}
 
-	APlayerController* PC = World->GetFirstPlayerController();
-	if (!PC)
+APawn* UMOSpawnManagerSubsystem::GetNearestPlayerPawn(const FVector& At, float& OutDistanceCm) const
+{
+	OutDistanceCm = TNumericLimits<float>::Max();
+	APawn* Nearest = nullptr;
+	for (APawn* Pawn : GetPlayerPawns())
 	{
-		return nullptr;
+		const float Distance = FVector::Dist(At, Pawn->GetActorLocation());
+		if (Distance < OutDistanceCm)
+		{
+			OutDistanceCm = Distance;
+			Nearest = Pawn;
+		}
 	}
+	return Nearest;
+}
 
-	return PC->GetPawn();
+bool UMOSpawnManagerSubsystem::IsInSpawnRing(float NearestPlayerCm, const FMOSpawnCategoryConfig& Config)
+{
+	return NearestPlayerCm >= Config.MinSpawnDistance * 100.0f && NearestPlayerCm <= Config.MaxSpawnDistance * 100.0f;
 }
 
 void UMOSpawnManagerSubsystem::NotifyPlayerOfSpawn(APawn* SpawnedPawn)
@@ -1734,13 +1685,14 @@ void UMOSpawnManagerSubsystem::NotifyPlayerOfSpawn(APawn* SpawnedPawn)
 		return;
 	}
 
-	APawn* PlayerPawn = GetPlayerPawn();
+	float NearestPlayerCm = 0.0f;
+	APawn* PlayerPawn = GetNearestPlayerPawn(SpawnedPawn->GetActorLocation(), NearestPlayerCm);
 	if (!PlayerPawn)
 	{
 		return;
 	}
 
-	// Check player's perception skill
+	// Check the nearest player's perception skill
 	UMOSkillsComponent* Skills = PlayerPawn->FindComponentByClass<UMOSkillsComponent>();
 	if (!Skills)
 	{

@@ -298,8 +298,31 @@ protected:
 	void DestroyBeaconForRecord(FMOSpawnedEntityRecord& Record);
 
 	float RollNewCooldown(const FMOSpawnCategoryConfig& Config) const;
-	APawn* GetPlayerPawn() const;
+
+	/**
+	 * Every human player's pawn (the server sees remote players' too). Spawning, despawning, waking and noticing are judged by the NEAREST
+	 * of them: the host's pawn alone used to anchor all of it, so a joiner far from the host got no wildlife, the animals sleeping near them
+	 * never woke, and "despawn the oldest one far from the player" could remove one in front of them (audit L2).
+	 */
+	TArray<APawn*> GetPlayerPawns() const;
+
+	/** The player pawn nearest At and its distance in cm (nullptr / the float max with no players). */
+	APawn* GetNearestPlayerPawn(const FVector& At, float& OutDistanceCm) const;
+
+	/**
+	 * Ground spawn shared by the spawn-point and fallback paths: the voxel ground under Near, not under open water, room for the pawn's
+	 * capsule, the category's Z band, its structure distance and entity separation; then spawn, track, freeze, broadcast, notice.
+	 * The spawn-point path used to skip the ground / water / clearance checks and read the meter-valued distances as cm.
+	 */
+	APawn* SpawnOnGround(const FVector& Near, const FMOSpawnCategoryConfig& Config, const FString& Source);
+
 	void NotifyPlayerOfSpawn(APawn* SpawnedPawn);
+
+public:
+	/** True when a spot NearestPlayerCm (cm) from the nearest player is inside the category's spawn ring (Min/MaxSpawnDistance are METERS). */
+	static bool IsInSpawnRing(float NearestPlayerCm, const FMOSpawnCategoryConfig& Config);
+
+protected:
 
 	void InitializeDefaultConfigs();
 

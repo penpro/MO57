@@ -5977,6 +5977,49 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 	//
 	// The natural spawn rate (handful of mobs across a huge world) doesn't move
 	// 'stat unit' enough to see the freeze pipeline working. This command dumps
+	// MO.Spawn.Try <Category> [Count=1] [clear] -- the spawn manager's REAL path (spawn point in the nearest player's ring, else the fallback),
+	// for tests: "clear" first despawns every live pawn of the category's classes so the category cap does not hide the result. Each spawn logs
+	// "[SpawnManager] Spawned ... m from the nearest player". (Python in a game process cannot reach a world subsystem.)
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Spawn.Try"),
+		TEXT("Run the spawn manager's own spawn path for a category. Usage: MO.Spawn.Try <Survivor|Prey|Predator|Ambient> [Count=1] [clear]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			UMOSpawnManagerSubsystem* Sys = World ? World->GetSubsystem<UMOSpawnManagerSubsystem>() : nullptr;
+			const int64 Value = Args.Num() > 0 ? StaticEnum<EMOSpawnCategory>()->GetValueByNameString(Args[0]) : INDEX_NONE;
+			if (!Sys || Value == INDEX_NONE)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] FAIL Spawn.Try: %s"), !Sys ? TEXT("no spawn manager") : TEXT("usage: MO.Spawn.Try <Survivor|Prey|Predator|Ambient> [Count] [clear]"));
+				return;
+			}
+			const EMOSpawnCategory Category = static_cast<EMOSpawnCategory>(Value);
+			const int32 Count = Args.Num() > 1 && Args[1].IsNumeric() ? FMath::Max(1, FCString::Atoi(*Args[1])) : 1;
+			if (Args.ContainsByPredicate([](const FString& A) { return A.Equals(TEXT("clear"), ESearchCase::IgnoreCase); }))
+			{
+				const FMOSpawnCategoryConfig Config = Sys->GetCategoryConfig(Category);
+				TArray<APawn*> Doomed;
+				for (TActorIterator<APawn> It(World); It; ++It)
+				{
+					if (!It->IsPlayerControlled() && Config.SpawnableClasses.Contains(It->GetClass()))
+					{
+						Doomed.Add(*It);
+					}
+				}
+				for (APawn* Pawn : Doomed)
+				{
+					Sys->DespawnEntity(Pawn);
+				}
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] Spawn.Try: cleared %d %s"), Doomed.Num(), *Args[0]);
+			}
+			int32 Spawned = 0;
+			for (int32 i = 0; i < Count; ++i)
+			{
+				Spawned += Sys->TrySpawnForCategory(Category) ? 1 : 0;
+			}
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] Spawn.Try %s: %d of %d spawned (now %d tracked)"), *Args[0], Spawned, Count, Sys->GetSpawnedCount(Category));
+		}),
+		ECVF_Default));
+
 	// N deer + N wolves in a ring around the player so their BTs all start
 	// ticking at once. Re-runnable — each invocation adds another batch on top.
 	// Spawns are placed via random angle + random radius between [MinR, MaxR];
