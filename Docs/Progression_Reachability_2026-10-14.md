@@ -5,7 +5,9 @@ but the world, it works out what a player can obtain (resource harvesting, harve
 ground pickups) and which recipes can ever pass their real gates (ingredients and build parts, station plus fuel,
 tools, discovery knowledge, required knowledge).
 
-**Result: 124 recipes, 36 reachable, 88 blocked, 25 orphan items.**
+**Result: 124 recipes, 36 reachable, 88 blocked, 25 orphan items.** After the duplicate-row merge the same evening
+(12 items that existed twice under two ids, e.g. Snare01/SnareWire01, folded into the id recipes use): **37 reachable,
+87 blocked, 24 orphan items** (the copper deposit now yields NativeCopper01).
 
 Two causes account for nearly all of it. Both are content/design problems, not code bugs.
 
@@ -16,9 +18,10 @@ Knowledge comes from inspecting items. For **49** of those knowledge ids the onl
 
 * **the recipe's own output (32)**. To learn to make a scraper you must inspect a scraper; same for the simple bow,
   crude pottery, cooking pot, storage jar, basket, microliths, every bronze/iron/steel item, and more.
-* **an item nobody can make or find (17)**, e.g. `ScraperUse` comes from `SimpleScraper01` (only `StoneScraper01` is
-  craftable), `HandDrill` from `HandDrillSpindle01`, `FireHardening` from `FireHardenedSpear01`, `SnareSetting` from
-  `SnareWire01`, `CopperWorking` from `NativeCopper01` (no source).
+* **an item nobody can make or find (17)**, e.g. `HandDrill` from `HandDrillSpindle01`, `FireHardening` from
+  `FireHardenedSpear01`. Before the merge `ScraperUse`, `BowDrill` and `SnareSetting` were granted only by unmakeable
+  twin rows (`SimpleScraper01`, `BowDrillKit01`, `SnareWire01`); the merge moved those grants onto the craftable ids,
+  so they are now own-output cases. `CopperWorking` now has a source: the copper deposit yields `NativeCopper01`.
 
 So unless a survivor teaches it, the player can never discover these recipes. The pillar in CLAUDE.md says the
 opposite: *"No hard locks; player has 'genetic memory' allowing attempts at any tech, but practical prerequisites
@@ -26,15 +29,15 @@ make skipping difficult."* The charter (`MO57_Fable5_Charter.md`) lists the disc
 
 | Knowledge | Granted only by | Unlocks | Kind |
 |---|---|---|---|
-| ScraperUse | SimpleScraper01 | ShapeScraper | item nobody can make |
+| ScraperUse | StoneScraper01 (was SimpleScraper01) | ShapeScraper | own output (since the merge) |
 | HandBuilding | CrudePottery01 | ShapeCrudePottery, MakeClayBowl | own output |
 | BowMaking | SimpleBow01 | CraftSimpleBow | own output |
 | HandDrill | HandDrillSpindle01 | MakeFireDrill | item nobody can make |
-| BowDrill | BowDrillKit01 | MakeBowDrill | item nobody can make |
+| BowDrill | BowDrill01 (was BowDrillKit01) | MakeBowDrill | own output (since the merge) |
 | FireHardening | FireHardenedSpear01 | HaftSpear | item nobody can make |
 | AxeHafting | HaftedAxe01 | HaftFlintSpear | item nobody can make |
 | MicrolithMaking | Microlith01 | KnapMicroliths | own output |
-| SnareSetting | SnareWire01 | MakeSnare | item nobody can make |
+| SnareSetting | Snare01 (was SnareWire01) | MakeSnare | own output (since the merge) |
 | BasketWeaving | WovenBasket01 | WeaveBasket | own output |
 | PotMaking / StorageVessels | CookingPot01 / StorageJar01 | MakeCookingPot / MakeStorageJar | own output |
 | …34 more (bronze, iron, steel, leather, loom, glass, armour) | | | 24 own output, 10 unmakeable |
