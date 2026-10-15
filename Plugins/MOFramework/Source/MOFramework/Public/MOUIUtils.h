@@ -241,4 +241,12 @@ public:
 
 	/** Color for disabled/unavailable items (grey). */
 	static const FLinearColor ColorDisabled;
+
+	/**
+	 * Runtime action buttons in a menu (an item's drink / fill / boil, a fire's add fuel / put out): one button per option, inserted into Panel right after After,
+	 * styled like StyleFrom; a disabled option shows its reason as the tooltip; a click calls OnClicked(ActionId). The previous set in InOutButtons is removed first.
+	 * Buttons are WBP_MOCommonButton instances (a Widget Blueprint: a native button class would be an empty, click-through spacer). Owner = the menu.
+	 */
+	static void RebuildActionButtons(UUserWidget* Owner, TArray<TObjectPtr<class UMOCommonButton>>& InOutButtons, class UPanelWidget* Panel, class UWidget* After,
+		const TArray<struct FMOItemActionOption>& Options, class UMOCommonButton* StyleFrom, TFunction<void(FName)> OnClicked);
 };

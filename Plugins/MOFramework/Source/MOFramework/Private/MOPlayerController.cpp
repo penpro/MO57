@@ -31,6 +31,8 @@
 #include "MOTimeOfDayDialog.h"
 #include "MOWaterActions.h"
 #include "MOItemActions.h"
+#include "MOFireActions.h"
+#include "MOCraftingStationActor.h"
 #include "MOWaterSourceSettings.h"
 #include "MOWaterSubsystem.h"
 #include "MOWeatherIntegrationSubsystem.h"
@@ -1351,6 +1353,14 @@ bool AMOPlayerController::TryDrinkAtCrosshair()
 	}
 	ServerDrinkWater(Point);
 	return true;
+}
+
+void AMOPlayerController::ServerStationAction_Implementation(AMOCraftingStationActor* Station, FName ActionId)
+{
+	if (!FMOFireActions::Perform(GetPawn(), Station, ActionId))
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOFire] %s: %s on %s refused"), *GetName(), *ActionId.ToString(), *GetNameSafe(Station));
+	}
 }
 
 void AMOPlayerController::ServerItemAction_Implementation(FGuid ItemGuid, FName ActionId)

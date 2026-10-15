@@ -1,5 +1,6 @@
 #include "MOItemContextMenu.h"
 #include "MOItemActions.h"
+#include "MOUIUtils.h"
 #include "Components/PanelWidget.h"
 #include "MOFramework.h"
 #include "MOUIDebugSubsystem.h"
@@ -151,7 +152,13 @@ void UMOItemContextMenu::SetMenuPosition(FVector2D ScreenPosition)
 	// GetMousePosition returns already-scaled coordinates, so we need to divide
 	if (DPIScale > 0.0f)
 	{
-		const FVector2D AdjustedPosition = (FVector2D(MouseX, MouseY) + FVector2D(OffsetX, OffsetY)) / DPIScale;
+		FVector2D AdjustedPosition = (FVector2D(MouseX, MouseY) + FVector2D(OffsetX, OffsetY)) / DPIScale;
+		// Keep it on screen (both in Slate units here): a menu opened at the edge, grown by its runtime action buttons, ran off it.
+		ForceLayoutPrepass();
+		const FVector2D Size = GetDesiredSize();
+		const FVector2D Viewport = UWidgetLayoutLibrary::GetViewportSize(PC) / DPIScale;
+		AdjustedPosition.X = FMath::Clamp(AdjustedPosition.X, 4.0, FMath::Max(4.0, Viewport.X - Size.X - 4.0));
+		AdjustedPosition.Y = FMath::Clamp(AdjustedPosition.Y, 4.0, FMath::Max(4.0, Viewport.Y - Size.Y - 4.0));
 		SetPositionInViewport(AdjustedPosition, false);
 	}
 	else
@@ -320,51 +327,14 @@ void UMOItemContextMenu::RefreshButtonVisibility_Implementation()
 
 void UMOItemContextMenu::RefreshExtraActions()
 {
-	for (UMOCommonButton* Button : ExtraActionButtons)
-	{
-		if (Button)
-		{
-			Button->OnClicked().RemoveAll(this);
-			Button->RemoveFromParent();
-		}
-	}
-	ExtraActionButtons.Reset();
-
 	// Only what this pawn carries has actions of its own (a world item is picked up first).
-	const APlayerController* PC = GetOwningPlayer();
-	if (SourceWorldItem.IsValid() || !IsValid(InventoryComponent) || !ButtonContainer || !PC)
-	{
-		return;
-	}
 	TArray<FMOItemActionOption> Options;
-	FMOItemActions::GetActions(PC->GetPawn(), InventoryComponent, ItemGuid, Options);
-	UClass* ButtonClass = Options.Num() > 0 ? ExtraActionButtonClass.LoadSynchronous() : nullptr;
-	if (!ButtonClass)
+	const APlayerController* PC = GetOwningPlayer();
+	if (!SourceWorldItem.IsValid() && IsValid(InventoryComponent) && PC)
 	{
-		return;
+		FMOItemActions::GetActions(PC->GetPawn(), InventoryComponent, ItemGuid, Options);
 	}
-	int32 InsertAt = UseButton ? ButtonContainer->GetChildIndex(UseButton) + 1 : 0;
-	for (const FMOItemActionOption& Option : Options)
-	{
-		UMOCommonButton* Button = CreateWidget<UMOCommonButton>(GetOwningPlayer(), ButtonClass);
-		if (!Button)
-		{
-			continue;
-		}
-		if (UseButton)
-		{
-			Button->SetStyle(UseButton->GetStyle() ? UseButton->GetStyle()->GetClass() : nullptr);   // the menu's own look
-		}
-		Button->SetButtonText(Option.Label);
-		Button->SetIsEnabled(Option.bEnabled);
-		if (!Option.bEnabled && !Option.DisabledReason.IsEmpty())
-		{
-			Button->SetToolTipText(Option.DisabledReason);
-		}
-		Button->OnClicked().AddUObject(this, &UMOItemContextMenu::HandleExtraActionClicked, Option.Id);
-		ButtonContainer->InsertChildAt(FMath::Clamp(InsertAt++, 0, ButtonContainer->GetChildrenCount()), Button);
-		ExtraActionButtons.Add(Button);
-	}
+	UMOUIUtils::RebuildActionButtons(this, ExtraActionButtons, ButtonContainer, UseButton, Options, UseButton, [this](FName Id) { HandleExtraActionClicked(Id); });
 }
 
 void UMOItemContextMenu::HandleExtraActionClicked(FName ActionId)

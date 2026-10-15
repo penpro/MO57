@@ -6,6 +6,8 @@
 #include "MOCraftingCapableInterface.h"
 #include "MOworldSaveGame.h"
 #include "Components/AudioComponent.h"
+#include "MOGameClockSubsystem.h"
+#include "Net/UnrealNetwork.h"
 #include "Components/PointLightComponent.h"
 #include "NiagaraComponent.h"
 #include "NiagaraSystem.h"
@@ -66,14 +68,27 @@ void AMOCraftingStationActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	Super::EndPlay(EndPlayReason);
 }
 
+void AMOCraftingStationActor::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(AMOCraftingStationActor, bIsActive);
+	DOREPLIFETIME(AMOCraftingStationActor, CurrentFuel);
+}
+
+void AMOCraftingStationActor::OnRep_IsActive()
+{
+	ApplyActiveVisuals();
+}
+
 void AMOCraftingStationActor::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-	// Consume fuel if active and requires fuel
-	if (bIsActive && bRequiresFuel && CurrentFuel > 0.0f)
+	// The server burns the fuel, on the world clock like everything else in the simulation (TimeScale 1 = real time); clients see the replicated level.
+	if (HasAuthority() && bIsActive && bRequiresFuel && CurrentFuel > 0.0f)
 	{
-		CurrentFuel = FMath::Max(0.0f, CurrentFuel - FuelConsumptionRate * DeltaTime);
+		const UMOGameClockSubsystem* Clock = UMOGameClockSubsystem::Get(this);
+		CurrentFuel = FMath::Max(0.0f, CurrentFuel - FuelConsumptionRate * (Clock ? Clock->GetScaledDeltaTime(DeltaTime) : DeltaTime));
 
 		if (CurrentFuel <= 0.0f)
 		{
@@ -315,6 +330,13 @@ void AMOCraftingStationActor::SetStationActive(bool bActive)
 	}
 
 	bIsActive = bActive;
+	ApplyActiveVisuals();
+
+	UE_LOG(LogMOFramework, Log, TEXT("[MOCraftingStationActor] Station %s"), bIsActive ? TEXT("activated") : TEXT("deactivated"));
+}
+
+void AMOCraftingStationActor::ApplyActiveVisuals()
+{
 	// Tick when active (for fuel consumption and light flicker)
 	SetActorTickEnabled(bIsActive);
 
@@ -332,8 +354,6 @@ void AMOCraftingStationActor::SetStationActive(bool bActive)
 		DeactivateParticles();
 		DeactivateLight();
 	}
-
-	UE_LOG(LogMOFramework, Log, TEXT("[MOCraftingStationActor] Station %s"), bIsActive ? TEXT("activated") : TEXT("deactivated"));
 }
 
 // ============================================================================

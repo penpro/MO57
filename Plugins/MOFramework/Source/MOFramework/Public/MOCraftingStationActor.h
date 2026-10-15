@@ -171,8 +171,8 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|CraftingStation|Fuel")
 	bool bRequiresFuel = false;
 
-	/** Current fuel amount (0-100). */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|CraftingStation|Fuel")
+	/** Current fuel amount (0-100). Replicated: every machine's menu shows the server's fire. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Replicated, Category="MO|CraftingStation|Fuel")
 	float CurrentFuel = 0.0f;
 
 	/** Maximum fuel capacity. */
@@ -343,9 +343,19 @@ protected:
 	/** Restore station inventory and fuel state. */
 	virtual void ApplySaveData(const FMOPersistedBuildingRecord& InRecord) override;
 
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
 private:
-	/** Whether the station is currently active. */
+	/** Whether the station is currently active (the fire burns). The server decides; every machine shows it (OnRep_IsActive: flames, light, sound). It used to be
+	 *  set on whichever machine pressed Light, so a co-op client's fire burned for that client only. */
+	UPROPERTY(ReplicatedUsing=OnRep_IsActive)
 	bool bIsActive = false;
+
+	UFUNCTION()
+	void OnRep_IsActive();
+
+	/** Flames, light and sound on or off -- what every machine does when the fire starts or dies. */
+	void ApplyActiveVisuals();
 
 	/** Accumulated time for flicker calculation. */
 	float FlickerTimeAccumulator = 0.0f;

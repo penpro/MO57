@@ -204,10 +204,6 @@ private:
 	/** Whether the menu has been initialized. */
 	bool bInitialized = false;
 
-	/** The widget class of the extra action buttons (a Widget Blueprint: a native button class would be an empty, click-through spacer). Styled like UseButton. */
-	UPROPERTY(EditDefaultsOnly, Category="MO|UI|ContextMenu")
-	TSoftClassPtr<UMOCommonButton> ExtraActionButtonClass = TSoftClassPtr<UMOCommonButton>(FSoftObjectPath(TEXT("/MOFramework/UI/WBP_MOCommonButton.WBP_MOCommonButton_C")));
-
 	UPROPERTY(Transient)
 	TArray<TObjectPtr<UMOCommonButton>> ExtraActionButtons;
 

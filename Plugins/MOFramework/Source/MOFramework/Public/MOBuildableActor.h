@@ -488,8 +488,11 @@ private:
 	UFUNCTION()
 	void OnRep_RecipeId();
 
+protected:
+	/** Protected (it was private): subclasses add their own replicated state (a fire's lit / fuel) and must call it. */
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
+private:
 	/** Dynamic material instance for ghost effect. */
 	UPROPERTY(Transient)
 	TObjectPtr<UMaterialInstanceDynamic> GhostMaterialInstance;

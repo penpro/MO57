@@ -1,4 +1,7 @@
 #include "MOStationContextMenu.h"
+#include "MONotificationWidget.h"
+#include "MOPlayerController.h"
+#include "MOFireActions.h"
 #include "MOCraftingStationActor.h"
 #include "MOCommonButton.h"
 #include "MOFramework.h"
@@ -100,91 +103,82 @@ void UMOStationContextMenu::OpenCraftingMenu()
 
 void UMOStationContextMenu::LightStation()
 {
-	AMOCraftingStationActor* Station = TargetStation.Get();
-	if (!Station)
-	{
-		return;
-	}
-
-	// Helper to show notification
-	auto ShowNotification = [this](const FText& Message)
-	{
-		if (APlayerController* PC = GetOwningPlayer())
-		{
-			if (UMONotificationComponent* NotifComp = PC->FindComponentByClass<UMONotificationComponent>())
-			{
-				NotifComp->ShowNotification(Message, 3.0f);
-			}
-		}
-	};
-
-	// Debug: Log accepted fuel items
-	UE_LOG(LogMOFramework, Log, TEXT("[MOStationContextMenu] Station requires fuel: %s"), Station->bRequiresFuel ? TEXT("Yes") : TEXT("No"));
-	UE_LOG(LogMOFramework, Log, TEXT("[MOStationContextMenu] Accepted fuel items (%d):"), Station->AcceptedFuelItems.Num());
-	for (const FName& FuelId : Station->AcceptedFuelItems)
-	{
-		UE_LOG(LogMOFramework, Log, TEXT("  - %s"), *FuelId.ToString());
-	}
-
-	// Debug: Log inventory contents
-	if (UMOInventoryComponent* Inv = Station->GetStationInventory())
-	{
-		TArray<FMOInventoryEntry> Entries;
-		Inv->GetInventoryEntries(Entries);
-		UE_LOG(LogMOFramework, Log, TEXT("[MOStationContextMenu] Station inventory (%d items):"), Entries.Num());
-		for (const FMOInventoryEntry& Entry : Entries)
-		{
-			UE_LOG(LogMOFramework, Log, TEXT("  - %s x%d"), *Entry.ItemDefinitionId.ToString(), Entry.Quantity);
-		}
-	}
-
-	if (!CanLightStation())
-	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOStationContextMenu] Cannot light station - no fuel"));
-		ShowNotification(FText::FromString(TEXT("No Compatible Fuel In Inventory")));
-		return;
-	}
-
-	// Consume fuel from inventory before activating
-	if (Station->bRequiresFuel && Station->CurrentFuel <= 0.0f)
-	{
-		float FuelAdded = Station->ConsumeFuelFromInventory();
-		if (FuelAdded <= 0.0f)
-		{
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOStationContextMenu] No fuel items in inventory to consume"));
-			ShowNotification(FText::FromString(TEXT("No Compatible Fuel In Inventory")));
-			return;
-		}
-		UE_LOG(LogMOFramework, Log, TEXT("[MOStationContextMenu] Consumed fuel, added %.1f fuel"), FuelAdded);
-	}
-
-	Station->SetStationActive(true);
-	OnLightClicked.Broadcast();
-	RefreshDisplay();
-
-	UE_LOG(LogMOFramework, Log, TEXT("[MOStationContextMenu] Station lit successfully"));
+	// A real attempt, made by the SERVER on the pawn's timed action (FMOFireActions): tinder and a friction drill, it can fail. It used to be an instant switch
+	// thrown on whichever machine clicked -- a co-op client's fire burned for that client only.
+	OnFireAction(FMOFireActions::Light);
 }
 
-// ============================================================================
-// STATE
-// ============================================================================
+void UMOStationContextMenu::OnFireAction(FName ActionId)
+{
+	AMOCraftingStationActor* Station = TargetStation.Get();
+	APlayerController* PC = GetOwningPlayer();
+	if (!Station || !PC)
+	{
+		return;
+	}
+	TArray<FMOItemActionOption> Options;
+	FMOFireActions::GetActions(PC->GetPawn(), Station, Options);
+	const FMOItemActionOption* Option = Options.FindByPredicate([ActionId](const FMOItemActionOption& O) { return O.Id == ActionId; });
+	if (!Option || !Option->bEnabled)
+	{
+		if (AMOPlayerController* MOPC = Cast<AMOPlayerController>(PC))
+		{
+			MOPC->ClientShowNotification(Option ? Option->DisabledReason : NSLOCTEXT("MOStation", "CannotNow", "You cannot do that now."), 3.0f, EMONotificationType::Warning);
+		}
+		return;
+	}
+	if (AMOPlayerController* MOPC = Cast<AMOPlayerController>(PC))
+	{
+		MOPC->ServerStationAction(Station, ActionId);
+	}
+	if (ActionId == FMOFireActions::Light)
+	{
+		OnLightClicked.Broadcast();
+	}
+	RequestClose();
+}
+
+void UMOStationContextMenu::RefreshFireActions()
+{
+	AMOCraftingStationActor* Station = TargetStation.Get();
+	const APlayerController* PC = GetOwningPlayer();
+	TArray<FMOItemActionOption> Options;
+	if (Station && PC)
+	{
+		FMOFireActions::GetActions(PC->GetPawn(), Station, Options);
+	}
+	// Light keeps its own button (its label and enabled state come from the same option); the rest are runtime buttons under it.
+	if (const FMOItemActionOption* LightOption = Options.FindByPredicate([](const FMOItemActionOption& O) { return O.Id == FMOFireActions::Light; }))
+	{
+		if (LightButton)
+		{
+			LightButton->SetButtonText(LightOption->Label);
+			LightButton->SetIsEnabled(LightOption->bEnabled);
+			LightButton->SetToolTipText(LightOption->bEnabled ? FText::GetEmpty() : LightOption->DisabledReason);
+			LightButton->SetVisibility(ESlateVisibility::Visible);
+		}
+	}
+	else if (LightButton)
+	{
+		LightButton->SetVisibility(ESlateVisibility::Collapsed);   // burning, or not a fire
+	}
+	Options.RemoveAll([](const FMOItemActionOption& O) { return O.Id == FMOFireActions::Light; });
+	// Styled like Open (secondary): only Light stands out.
+	UMOUIUtils::RebuildActionButtons(this, FireActionButtons, LightButton ? LightButton->GetParent() : nullptr, LightButton, Options, OpenButton ? OpenButton.Get() : LightButton.Get(),
+		[this](FName Id) { OnFireAction(Id); });
+}
 
 bool UMOStationContextMenu::CanLightStation() const
 {
 	AMOCraftingStationActor* Station = TargetStation.Get();
-	if (!Station)
+	const APlayerController* PC = GetOwningPlayer();
+	TArray<FMOItemActionOption> Options;
+	if (Station && PC)
 	{
-		return false;
+		FMOFireActions::GetActions(PC->GetPawn(), Station, Options);
 	}
-
-	// Can light if station doesn't require fuel
-	if (!Station->bRequiresFuel)
-	{
-		return true;
-	}
-
-	// Can light if has fuel OR has fuel items in inventory
-	return Station->CurrentFuel > 0.0f || Station->HasFuelInInventory();
+	const FMOItemActionOption* Light = Options.FindByPredicate([](const FMOItemActionOption& O) { return O.Id == FMOFireActions::Light; });
+	return Light && Light->bEnabled;
 }
 
 bool UMOStationContextMenu::IsStationActive() const
@@ -212,10 +206,16 @@ FText UMOStationContextMenu::GetFuelTimeText() const
 		return FText::FromString(TEXT("No fuel needed"));
 	}
 
-	return FText::Format(
-		NSLOCTEXT("MOStation", "FuelTimeRemaining", "{0} remaining"),
-		UMOUIUtils::FormatDurationAsTimeCode(TimeRemaining)
-	);
+	// The fire's state in words: burning (and for how long), laid but not lit, or cold and empty.
+	if (Station->IsStationActive())
+	{
+		return FText::Format(NSLOCTEXT("MOStation", "FuelTimeRemaining", "Burning: {0} left"), UMOUIUtils::FormatDurationAsTimeCode(TimeRemaining));
+	}
+	if (Station->CurrentFuel > 0.0f)
+	{
+		return FText::Format(NSLOCTEXT("MOStation", "FuelLaid", "Not lit: fuel for {0}"), UMOUIUtils::FormatDurationAsTimeCode(TimeRemaining));
+	}
+	return NSLOCTEXT("MOStation", "Cold", "Cold: no fuel");
 }
 
 FText UMOStationContextMenu::GetStationName() const
@@ -299,6 +299,18 @@ void UMOStationContextMenu::NativeTick(const FGeometry& MyGeometry, float InDelt
 		return;
 	}
 
+	// What can be done changes with what the pawn carries and the fire's state: refresh the actions twice a second.
+	FireActionRefreshTimer += InDeltaTime;
+	if (FireActionRefreshTimer >= 0.5f)
+	{
+		FireActionRefreshTimer = 0.0f;
+		if (FuelTimeText)
+		{
+			FuelTimeText->SetText(GetFuelTimeText());
+		}
+		UpdateButtonStates();
+	}
+
 	// Update fuel time display if station is active
 	if (IsStationActive())
 	{
@@ -345,11 +357,8 @@ void UMOStationContextMenu::UpdateButtonStates()
 	const bool bCanLight = CanLightStation();
 	const bool bStationIsActive = IsStationActive();
 
-	// Light button is disabled if already active or can't light
-	if (LightButton)
-	{
-		LightButton->SetIsEnabled(bCanLight && !bStationIsActive);
-	}
+	// The fire's actions (light / add fuel / put out) from the one registry the server runs.
+	RefreshFireActions();
 
 	// Blueprint callback
 	OnButtonStatesUpdated(bCanLight, bStationIsActive);

@@ -1,4 +1,5 @@
 #include "MOContextMenuBase.h"
+#include "Blueprint/WidgetLayoutLibrary.h"
 #include "MOFramework.h"
 #include "MOCommonButton.h"
 #include "MOGameUIManagerSubsystem.h"
@@ -150,6 +151,18 @@ void UMOContextMenuBase::SetPopupPosition(FVector2D ScreenPosition)
 	UE_LOG(LogMOFramework, Log, TEXT("[MOContextMenuBase] SetPopupPosition called: (%f, %f), IsInViewport: %s"),
 		ScreenPosition.X, ScreenPosition.Y, IsInViewport() ? TEXT("true") : TEXT("false"));
 
+	// Keep the whole menu on screen: a menu opened low or near an edge (the station menu at a fire's foot, grown by its runtime action buttons) ran off it. Measured
+	// after a layout pass so runtime-added buttons count; desired size is in Slate units, the position in pixels.
+	ForceLayoutPrepass();
+	const float Scale = UWidgetLayoutLibrary::GetViewportScale(this);
+	const FVector2D Size = GetDesiredSize() * Scale;
+	const FVector2D Viewport = UWidgetLayoutLibrary::GetViewportSize(this);
+	if (Viewport.X > 0.0 && Viewport.Y > 0.0)
+	{
+		constexpr double Margin = 8.0;
+		ScreenPosition.X = FMath::Clamp(ScreenPosition.X, Margin, FMath::Max(Margin, Viewport.X - Size.X - Margin));
+		ScreenPosition.Y = FMath::Clamp(ScreenPosition.Y, Margin, FMath::Max(Margin, Viewport.Y - Size.Y - Margin));
+	}
 	SetPositionInViewport(ScreenPosition, true);
 
 	// Warp the mouse cursor to a point just inside the menu's top-left so
@@ -261,3 +274,4 @@ void UMOContextMenuBase::HandleClickOutside()
 	MOUI_LOG(this, "ContextMenu", "%s: click-outside detected -> RequestClose", *GetName());
 	RequestClose();
 }
+

@@ -1,4 +1,8 @@
 #include "MOUIUtils.h"
+#include "MOItemActions.h"
+#include "MOCommonButton.h"
+#include "Components/PanelWidget.h"
+#include "Blueprint/UserWidget.h"
 #include "MOUITokens.h"
 #include "MOBiomeDatabaseSettings.h"
 #include "MOBiomeDefinitionRow.h"
@@ -291,4 +295,47 @@ UTexture2D* UMOUIUtils::LoadItemIconSmall(FName ItemDefId)
 		return UMOItemDatabaseSettings::ResolveItemIcon(ItemDef, /*bLarge=*/false).LoadSynchronous();
 	}
 	return nullptr;
+}
+
+void UMOUIUtils::RebuildActionButtons(UUserWidget* Owner, TArray<TObjectPtr<UMOCommonButton>>& InOutButtons, UPanelWidget* Panel, UWidget* After,
+	const TArray<FMOItemActionOption>& Options, UMOCommonButton* StyleFrom, TFunction<void(FName)> OnClicked)
+{
+	for (UMOCommonButton* Button : InOutButtons)
+	{
+		if (Button)
+		{
+			Button->OnClicked().Clear();
+			Button->RemoveFromParent();
+		}
+	}
+	InOutButtons.Reset();
+	static const TSoftClassPtr<UMOCommonButton> ButtonClassPath(FSoftObjectPath(TEXT("/MOFramework/UI/WBP_MOCommonButton.WBP_MOCommonButton_C")));
+	UClass* ButtonClass = Owner && Panel && Options.Num() > 0 ? ButtonClassPath.LoadSynchronous() : nullptr;
+	if (!ButtonClass)
+	{
+		return;
+	}
+	int32 InsertAt = After ? Panel->GetChildIndex(After) + 1 : Panel->GetChildrenCount();
+	for (const FMOItemActionOption& Option : Options)
+	{
+		UMOCommonButton* Button = CreateWidget<UMOCommonButton>(Owner->GetOwningPlayer(), ButtonClass);
+		if (!Button)
+		{
+			continue;
+		}
+		if (StyleFrom && StyleFrom->GetStyle())
+		{
+			Button->SetStyle(StyleFrom->GetStyle()->GetClass());   // the menu's own look
+		}
+		Button->SetButtonText(Option.Label);
+		Button->SetIsEnabled(Option.bEnabled);
+		if (!Option.bEnabled && !Option.DisabledReason.IsEmpty())
+		{
+			Button->SetToolTipText(Option.DisabledReason);
+		}
+		const FName Id = Option.Id;
+		Button->OnClicked().AddWeakLambda(Owner, [OnClicked, Id]() { OnClicked(Id); });
+		Panel->InsertChildAt(FMath::Clamp(InsertAt++, 0, Panel->GetChildrenCount()), Button);
+		InOutButtons.Add(Button);
+	}
 }

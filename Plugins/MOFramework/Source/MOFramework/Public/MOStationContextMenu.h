@@ -212,6 +212,18 @@ private:
 	UPROPERTY()
 	TWeakObjectPtr<AMOCraftingStationActor> TargetStation;
 
+	/** Runtime buttons for the fire's other actions (add fuel, put out) under the Light button. */
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UMOCommonButton>> FireActionButtons;
+
+	float FireActionRefreshTimer = 0.0f;
+
+	/** One of the fire's actions (FMOFireActions): asked of the server, or its reason shown if it is not on offer. */
+	void OnFireAction(FName ActionId);
+
+	/** The Light button and the runtime action buttons from FMOFireActions::GetActions. */
+	void RefreshFireActions();
+
 	/** Update button enabled/disabled states */
 	void UpdateButtonStates();
 };

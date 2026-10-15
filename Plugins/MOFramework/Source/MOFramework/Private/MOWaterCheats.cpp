@@ -16,6 +16,7 @@
 //   MO.Item.Actions <ItemId>             the item menu's extra actions for an item the pawn carries, and its contents
 //   MO.Item.Do <ItemId> <Action>         do one through the real server RPC
 //   MO.Item.Menu <ItemId>                open the item context menu for it (screenshots)
+//   MO.Fire.Actions / MO.Fire.Do <Action> the nearest fire's actions (add fuel, light, put out), through the real server RPC
 
 #include "CoreMinimal.h"
 
@@ -34,6 +35,8 @@
 #include "MOSurvivalStatsComponent.h"
 #include "MOVitalsComponent.h"
 #include "MOWaterSubsystem.h"
+#include "MOFireActions.h"
+#include "EngineUtils.h"
 #include "MOItemActions.h"
 #include "MOInventoryComponent.h"
 #include "MOUIManagerComponent.h"
@@ -450,7 +453,7 @@ namespace
 
 	FAutoConsoleCommandWithWorldAndArgs GFireSpawnLitCmd(
 		TEXT("MO.Fire.SpawnLit"),
-		TEXT("Dev (server): a finished, fuelled, burning campfire (the BuildCampfire recipe's actor) 1.5 m in front of the local pawn -- for testing what needs a fire (boiling). Usage: MO.Fire.SpawnLit"),
+		TEXT("Dev (server): a finished, fuelled, burning campfire (the BuildCampfire recipe's actor) 1.5 m in front of the local pawn -- for testing what needs a fire (boiling). Usage: MO.Fire.SpawnLit [unlit]"),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
 		{
 			AMOCharacter* Pawn = LocalMOPawn(World);
@@ -477,8 +480,12 @@ namespace
 				return;
 			}
 			static_cast<AMOBuildableActor*>(Fire)->InitializeBuilding(FName(TEXT("BuildCampfire")));   // public on the base, the station overrides it protected
-			Fire->CurrentFuel = Fire->MaxFuel;
-			Fire->SetStationActive(true);
+			// "unlit": an empty, cold campfire, to light the real way (MO.Fire.Do Light).
+			if (!(Args.Num() > 0 && Args[0].Equals(TEXT("unlit"), ESearchCase::IgnoreCase)))
+			{
+				Fire->CurrentFuel = Fire->MaxFuel;
+				Fire->SetStationActive(true);
+			}
 			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] FIRE SpawnLit: %s at (%.0f, %.0f, %.0f), fuel %.0f, active %d, heat %.1f C over %.0f cm"), *Fire->GetName(), Spot.X, Spot.Y, Spot.Z,
 				Fire->CurrentFuel, Fire->IsStationActive() ? 1 : 0, Fire->HeatOutputCelsius, Fire->HeatRadiusCm);
 		}));
@@ -565,6 +572,81 @@ namespace
 			PC->GetViewportSize(X, Y);
 			UI->ShowItemContextMenu(Pawn->FindComponentByClass<UMOInventoryComponent>(), Entry.ItemGuid, Slot, FVector2D(X * 0.5f, Y * 0.5f));
 			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] ITEM Menu %s slot %d: opened"), *Args[0], Slot);
+		}));
+
+
+	AMOCraftingStationActor* NearestFire(UWorld* World, const AActor* From)
+	{
+		AMOCraftingStationActor* Best = nullptr;
+		float BestD = 1000.0f;
+		for (TActorIterator<AMOCraftingStationActor> It(World); It; ++It)
+		{
+			const float D = FVector::Dist(It->GetActorLocation(), From->GetActorLocation());
+			if (It->bRequiresFuel && D < BestD)
+			{
+				Best = *It;
+				BestD = D;
+			}
+		}
+		return Best;
+	}
+
+	FAutoConsoleCommandWithWorldAndArgs GFireActionsCmd(
+		TEXT("MO.Fire.Actions"),
+		TEXT("Dev: the fire actions (FMOFireActions::GetActions) the local pawn has at the nearest fuelled station within 10 m, and its state."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			AMOCharacter* Pawn = LocalMOPawn(World);
+			AMOCraftingStationActor* Fire = Pawn ? NearestFire(World, Pawn) : nullptr;
+			if (!Fire)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] FIRE Actions FAILED: no fuelled station within 10 m"));
+				return;
+			}
+			TArray<FMOItemActionOption> Options;
+			FMOFireActions::GetActions(Pawn, Fire, Options);
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] FIRE Actions %s: fuel %.0f / %.0f, active %d, %.0f cm away, %d action(s)"), *Fire->GetName(), Fire->CurrentFuel, Fire->MaxFuel,
+				Fire->IsStationActive() ? 1 : 0, FVector::Dist(Fire->GetActorLocation(), Pawn->GetActorLocation()), Options.Num());
+			for (const FMOItemActionOption& O : Options)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] FIRE   %s '%s' %s%s"), *O.Id.ToString(), *O.Label.ToString(), O.bEnabled ? TEXT("enabled") : TEXT("DISABLED: "), O.bEnabled ? TEXT("") : *O.DisabledReason.ToString());
+			}
+		}));
+
+	FAutoConsoleCommandWithWorldAndArgs GFireDoCmd(
+		TEXT("MO.Fire.Do"),
+		TEXT("Dev: do a fire action at the nearest fuelled station through the real server RPC. Usage: MO.Fire.Do <AddFuel.<ItemId>|Light|PutOut>"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			AMOCharacter* Pawn = LocalMOPawn(World);
+			AMOPlayerController* PC = World ? Cast<AMOPlayerController>(World->GetFirstPlayerController()) : nullptr;
+			AMOCraftingStationActor* Fire = Pawn ? NearestFire(World, Pawn) : nullptr;
+			if (!Fire || !PC || Args.Num() == 0)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] FIRE Do FAILED: usage MO.Fire.Do <Action>, a fuelled station within 10 m"));
+				return;
+			}
+			PC->ServerStationAction(Fire, FName(*Args[0]));
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] FIRE Do %s: asked"), *Args[0]);
+		}));
+
+
+	FAutoConsoleCommandWithWorldAndArgs GFireMenuCmd(
+		TEXT("MO.Fire.Menu"),
+		TEXT("Dev: open the station menu (as E on it does) for the nearest fuelled station within 10 m."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			AMOCharacter* Pawn = LocalMOPawn(World);
+			APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
+			UMOUIManagerComponent* UI = PC ? PC->FindComponentByClass<UMOUIManagerComponent>() : nullptr;
+			AMOCraftingStationActor* Fire = Pawn ? NearestFire(World, Pawn) : nullptr;
+			if (!Fire || !UI)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] FIRE Menu FAILED: no fuelled station within 10 m or no UI manager"));
+				return;
+			}
+			UI->ShowStationContextMenu(Fire, Fire->GetActorLocation());
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] FIRE Menu %s: opened"), *Fire->GetName());
 		}));
 
 }

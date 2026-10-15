@@ -1,0 +1,213 @@
+#include "MOFireActions.h"
+#include "MOCraftingStationActor.h"
+#include "MOInventoryComponent.h"
+#include "MOTimedActionComponent.h"
+#include "MOSkillsComponent.h"
+#include "MOVitalsComponent.h"
+#include "MOWeatherIntegrationSubsystem.h"
+#include "MOItemDatabaseSettings.h"
+#include "MOPlayerController.h"
+#include "MONotificationWidget.h"
+#include "MOFramework.h"
+#include "GameFramework/Pawn.h"
+
+#define LOCTEXT_NAMESPACE "MOFireActions"
+
+const FName FMOFireActions::AddFuel(TEXT("AddFuel"));
+const FName FMOFireActions::Light(TEXT("Light"));
+const FName FMOFireActions::PutOut(TEXT("PutOut"));
+
+namespace
+{
+	const FName TinderId(TEXT("Tinder01"));
+	const FName BowDrillId(TEXT("FireDrill01"));
+	/** A hand drill: a straight DRY stick twirled between the palms on a second one -- deadfall (Branch01, "already seasoned"); a green branch (Stick01) is too
+	 *  wet to make an ember. */
+	const FName DrillStickId(TEXT("Branch01"));
+	const FName FiremakingSkill(TEXT("Firemaking"));
+	/** One attempt: a hand drill takes minutes of hard twirling; a bow drill is quicker. */
+	constexpr float HandDrillSeconds = 3.0f * 60.0f;
+	constexpr float BowDrillSeconds = 90.0f;
+	/** Laying fuel on: a few seconds a piece. */
+	constexpr float SecondsPerFuelItem = 2.0f;
+	constexpr float ReachCm = 300.0f;
+
+	UMOInventoryComponent* FireInventoryOf(const APawn* Pawn)
+	{
+		return Pawn ? Pawn->FindComponentByClass<UMOInventoryComponent>() : nullptr;
+	}
+
+	void Notify(APawn* Pawn, const FText& Message, EMONotificationType Type)
+	{
+		if (AMOPlayerController* PC = Pawn ? Cast<AMOPlayerController>(Pawn->GetController()) : nullptr)
+		{
+			PC->ClientShowNotification(Message, 4.0f, Type);
+		}
+	}
+}
+
+float FMOFireActions::LightChance(bool bBowDrill, int32 FiremakingLevel, bool bRaining, float Wetness01)
+{
+	float Chance = (bBowDrill ? 0.6f : 0.3f) + 0.06f * FMath::Max(0, FiremakingLevel);
+	if (bRaining)
+	{
+		Chance *= 0.3f;
+	}
+	if (Wetness01 > 0.5f)
+	{
+		Chance *= 0.6f;
+	}
+	return FMath::Clamp(Chance, 0.0f, 0.95f);
+}
+
+void FMOFireActions::GetActions(const APawn* Pawn, const AMOCraftingStationActor* Station, TArray<FMOItemActionOption>& Out)
+{
+	const UMOInventoryComponent* Inventory = FireInventoryOf(Pawn);
+	if (!Pawn || !Station || !Inventory || !Station->bRequiresFuel || FVector::Dist(Pawn->GetActorLocation(), Station->GetActorLocation()) > ReachCm + 200.0f)
+	{
+		return;
+	}
+	// One "add" per kind of fuel carried, so the player chooses what goes on (dry deadfall is worth keeping for the drill).
+	bool bAnyFuel = false;
+	const bool bFull = Station->CurrentFuel > Station->MaxFuel - Station->FuelPerItemUnit;
+	for (const FName& Id : Station->AcceptedFuelItems)
+	{
+		const int32 Carried = Inventory->GetItemCountByDefinitionId(Id);
+		if (Carried <= 0)
+		{
+			continue;
+		}
+		bAnyFuel = true;
+		const int32 Fits = AMOCraftingStationActor::ComputeAcceptedFuelItems(Station->CurrentFuel, Station->MaxFuel, Station->FuelPerItemUnit, Carried);
+		FMOItemActionOption& Fuel = Out.AddDefaulted_GetRef();
+		Fuel.Id = FName(*FString::Printf(TEXT("%s.%s"), *AddFuel.ToString(), *Id.ToString()));
+		Fuel.Label = FText::Format(LOCTEXT("AddN", "Add {0} ({1})"), UMOItemDatabaseSettings::GetItemDisplayName(Id), FText::AsNumber(FMath::Max(Fits, 1)));
+		Fuel.bEnabled = Fits > 0;
+		Fuel.DisabledReason = LOCTEXT("FullFuel", "It holds all the fuel it can.");
+	}
+	if (!bAnyFuel)
+	{
+		FMOItemActionOption& Fuel = Out.AddDefaulted_GetRef();
+		Fuel.Id = AddFuel;
+		Fuel.Label = LOCTEXT("AddFuel", "Add fuel");
+		Fuel.bEnabled = false;
+		Fuel.DisabledReason = bFull ? LOCTEXT("FullFuel", "It holds all the fuel it can.") : LOCTEXT("NoFuel", "You carry nothing it burns (branches, firewood, charcoal).");
+	}
+
+	if (Station->IsStationActive())
+	{
+		FMOItemActionOption& Out1 = Out.AddDefaulted_GetRef();
+		Out1.Id = PutOut;
+		Out1.Label = LOCTEXT("PutOut", "Put it out");
+		return;
+	}
+	const bool bBowDrill = Inventory->HasItem(BowDrillId);
+	const bool bHandDrill = Inventory->GetItemCountByDefinitionId(DrillStickId) >= 2;
+	const bool bTinder = Inventory->HasItem(TinderId);
+	FMOItemActionOption& LightOpt = Out.AddDefaulted_GetRef();
+	LightOpt.Id = Light;
+	LightOpt.Label = bBowDrill ? LOCTEXT("LightBow", "Light (bow drill)") : LOCTEXT("LightHand", "Light (hand drill)");
+	LightOpt.bEnabled = Station->CurrentFuel > 0.0f && bTinder && (bBowDrill || bHandDrill);
+	LightOpt.DisabledReason = Station->CurrentFuel <= 0.0f ? LOCTEXT("LayFuel", "Lay some fuel first.")
+		: !bTinder ? LOCTEXT("NeedTinder", "Needs tinder (dry fibre from dead shrubs or shredded bark).")
+		: LOCTEXT("NeedDrill", "Needs two dry branches (deadfall) for a hand drill: green wood is too wet to make an ember.");
+}
+
+bool FMOFireActions::Perform(APawn* Pawn, AMOCraftingStationActor* Station, FName ActionId)
+{
+	UMOInventoryComponent* Inventory = FireInventoryOf(Pawn);
+	UMOTimedActionComponent* Timed = Pawn ? Pawn->FindComponentByClass<UMOTimedActionComponent>() : nullptr;
+	if (!Pawn || !Pawn->HasAuthority() || !Station || !Inventory || !Timed)
+	{
+		return false;
+	}
+	TArray<FMOItemActionOption> Options;
+	GetActions(Pawn, Station, Options);
+	const FMOItemActionOption* Option = Options.FindByPredicate([ActionId](const FMOItemActionOption& O) { return O.Id == ActionId; });
+	if (!Option || !Option->bEnabled)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOFire] %s: %s refused (%s)"), *Pawn->GetName(), *ActionId.ToString(), Option ? *Option->DisabledReason.ToString() : TEXT("not on offer"));
+		return false;
+	}
+	TWeakObjectPtr<APawn> WeakPawn(Pawn);
+	TWeakObjectPtr<AMOCraftingStationActor> WeakStation(Station);
+
+	if (ActionId == PutOut)
+	{
+		// Smothered with earth or kicked apart: the fuel that was burning is spent.
+		Station->CurrentFuel = 0.0f;
+		Station->SetStationActive(false);
+		return true;
+	}
+
+	FString FuelItemText;
+	if (ActionId.ToString().Split(TEXT("."), nullptr, &FuelItemText) && ActionId.ToString().StartsWith(AddFuel.ToString()))
+	{
+		const FName FuelItem(*FuelItemText);
+		const int32 Fits = AMOCraftingStationActor::ComputeAcceptedFuelItems(Station->CurrentFuel, Station->MaxFuel, Station->FuelPerItemUnit, Inventory->GetItemCountByDefinitionId(FuelItem));
+		return Timed->Begin(AddFuel, FText::Format(LOCTEXT("AddingFuel", "Laying on {0}"), UMOItemDatabaseSettings::GetItemDisplayName(FuelItem)), SecondsPerFuelItem * Fits,
+			[WeakPawn, WeakStation, FuelItem]()
+			{
+				AMOCraftingStationActor* S = WeakStation.Get();
+				UMOInventoryComponent* Inv = FireInventoryOf(WeakPawn.Get());
+				if (!S || !Inv)
+				{
+					return;
+				}
+				// The station takes only what fits; only that leaves the pack (AddFuel is transactional).
+				const int32 Taken = S->AddFuel(FuelItem, Inv->GetItemCountByDefinitionId(FuelItem));
+				if (Taken > 0)
+				{
+					Inv->RemoveItemByDefinitionId(FuelItem, Taken);
+				}
+				UE_LOG(LogMOFramework, Log, TEXT("[MOFire] %s laid %d x %s on %s: fuel %.0f / %.0f"), *GetNameSafe(WeakPawn.Get()), Taken, *FuelItem.ToString(), *S->GetName(),
+					S->CurrentFuel, S->MaxFuel);
+			}, nullptr, ReachCm);
+	}
+
+	if (ActionId == Light)
+	{
+		const bool bBowDrill = Inventory->HasItem(BowDrillId);
+		return Timed->Begin(Light, bBowDrill ? LOCTEXT("Drilling", "Working the bow drill") : LOCTEXT("Twirling", "Twirling the hand drill"),
+			bBowDrill ? BowDrillSeconds : HandDrillSeconds,
+			[WeakPawn, WeakStation, bBowDrill]()
+			{
+				APawn* P = WeakPawn.Get();
+				AMOCraftingStationActor* S = WeakStation.Get();
+				UMOInventoryComponent* Inv = FireInventoryOf(P);
+				if (!P || !S || !Inv || !Inv->HasItem(TinderId))
+				{
+					return;
+				}
+				UMOSkillsComponent* Skills = P->FindComponentByClass<UMOSkillsComponent>();
+				const UMOVitalsComponent* Vitals = P->FindComponentByClass<UMOVitalsComponent>();
+				const UMOWeatherIntegrationSubsystem* Weather = P->GetWorld() ? P->GetWorld()->GetSubsystem<UMOWeatherIntegrationSubsystem>() : nullptr;
+				const float Chance = LightChance(bBowDrill, Skills ? Skills->GetSkillLevel(FiremakingSkill) : 0, Weather && Weather->IsRaining(), Vitals ? Vitals->GetWetnessLevel() : 0.0f);
+				const bool bCaught = FMath::FRand() < Chance;
+				// The tinder is spent either way; a hand drill wears its hearth stick through.
+				Inv->RemoveItemByDefinitionId(TinderId, 1);
+				if (!bBowDrill)
+				{
+					Inv->RemoveItemByDefinitionId(DrillStickId, 1);
+				}
+				if (Skills)
+				{
+					Skills->AddExperience(FiremakingSkill, bCaught ? 20.0f : 8.0f);   // a failed fire teaches too
+				}
+				if (bCaught && S->CurrentFuel > 0.0f)
+				{
+					S->SetStationActive(true);
+					Notify(P, LOCTEXT("Caught", "An ember -- the tinder catches and the fire takes."), EMONotificationType::Success);
+				}
+				else
+				{
+					Notify(P, LOCTEXT("Failed", "The ember dies in the tinder. Try again with fresh tinder."), EMONotificationType::Warning);
+				}
+				UE_LOG(LogMOFramework, Log, TEXT("[MOFire] %s lighting %s (%s): chance %.0f %% -> %s"), *P->GetName(), *S->GetName(), bBowDrill ? TEXT("bow drill") : TEXT("hand drill"),
+					Chance * 100.0f, bCaught ? TEXT("CAUGHT") : TEXT("failed"));
+			}, nullptr, 100.0f);
+	}
+	return false;
+}
+
+#undef LOCTEXT_NAMESPACE
