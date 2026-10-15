@@ -101,6 +101,19 @@ public:
 	static FText FormatDurationAsText(float Seconds);
 
 	/**
+	 * The display name of the biome the ground at Location shows -- the same soft pick the HUD's "Exploring ..." label, footsteps and the
+	 * scatter use (FMOWorldGen::SampleSurfaceBiomeWeights). Empty before the world generator has published its parameters.
+	 */
+	static FText GetBiomeDisplayNameAt(const UObject* WorldContext, const FVector& Location);
+
+	/**
+	 * A world position as a player reads it: distance from the world centre on the compass, "19.6 km S, 3.1 km E" (metres under 1 km).
+	 * North = +X, east = +Y (the sun's convention: the noon sun shines toward +X).
+	 */
+	UFUNCTION(BlueprintPure, Category="MO|UI|Utils")
+	static FText FormatWorldPosition(const FVector& Location);
+
+	/**
 	 * Format a duration as MM:SS or H:MM:SS.
 	 * Examples: "5:32", "1:05:32"
 	 * @param Seconds Duration in seconds

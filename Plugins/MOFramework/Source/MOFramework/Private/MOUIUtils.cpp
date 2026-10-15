@@ -1,5 +1,10 @@
 #include "MOUIUtils.h"
 #include "MOUITokens.h"
+#include "MOBiomeDatabaseSettings.h"
+#include "MOBiomeDefinitionRow.h"
+#include "MOWorldGen.h"
+#include "MOWorldSeedSubsystem.h"
+#include "Engine/DataTable.h"
 #include "MORecipeDefinitionRow.h"
 #include "MOItemDatabaseSettings.h"
 #include "Components/TextBlock.h"
@@ -64,6 +69,42 @@ void UMOUIUtils::ApplyReadableMultiLineTextInputStyle(UMultiLineEditableTextBox*
 	}
 	MakeStyleReadable(TextBox->WidgetStyle);
 	TextBox->SynchronizeProperties();
+}
+
+FText UMOUIUtils::GetBiomeDisplayNameAt(const UObject* WorldContext, const FVector& Location)
+{
+	const UMOWorldSeedSubsystem* Seeds = WorldContext ? UMOWorldSeedSubsystem::Get(WorldContext) : nullptr;
+	if (!Seeds || !Seeds->HasActiveSeed() || !FMOWorldGenParamsProvider::HasPublished())
+	{
+		return FText::GetEmpty();
+	}
+	const FMOWorldGenParamsRef P = FMOWorldGenParamsProvider::Get();
+	const int32 Seed = Seeds->GetActiveTerrainSeed();
+	const FMOTerrainSample S = FMOWorldGen::SampleColumn(*P, Location.X, Location.Y, Seed, P->Tuning.VoxelSizeCm);
+	FMOWorldGen::FBiomeWeight Weights[1];
+	const int32 Biome = FMOWorldGen::SampleSurfaceBiomeWeights(*P, Location.X, Location.Y, Seed, S.HeightCm, S.Moisture, S.Temperature, Weights, 1) > 0 ? Weights[0].Biome : S.BiomeIndex;
+	const FName Id = P->GetBiomeId(Biome);
+	if (Id.IsNone())
+	{
+		return FText::GetEmpty();
+	}
+	const UMOBiomeDatabaseSettings* Settings = GetDefault<UMOBiomeDatabaseSettings>();
+	const UDataTable* Table = Settings ? Settings->GetBiomeDefinitionsDataTable() : nullptr;
+	const FMOBiomeDefinitionRow* Row = Table ? Table->FindRow<FMOBiomeDefinitionRow>(Id, TEXT("MOUIUtils"), /*bWarnIfRowMissing=*/false) : nullptr;
+	return Row && !Row->DisplayName.IsEmpty() ? Row->DisplayName : FText::FromString(FName::NameToDisplayString(Id.ToString(), false));
+}
+
+FText UMOUIUtils::FormatWorldPosition(const FVector& Location)
+{
+	auto Axis = [](double Cm, const TCHAR* Positive, const TCHAR* Negative)
+	{
+		const double Abs = FMath::Abs(Cm);
+		const TCHAR* Dir = Cm >= 0.0 ? Positive : Negative;
+		return Abs < 100000.0
+			? FString::Printf(TEXT("%d m %s"), FMath::RoundToInt(Abs / 100.0), Dir)
+			: FString::Printf(TEXT("%.1f km %s"), Abs / 100000.0, Dir);
+	};
+	return FText::FromString(FString::Printf(TEXT("%s, %s"), *Axis(Location.X, TEXT("N"), TEXT("S")), *Axis(Location.Y, TEXT("E"), TEXT("W"))));
 }
 
 FText UMOUIUtils::FormatDurationAsText(float Seconds)

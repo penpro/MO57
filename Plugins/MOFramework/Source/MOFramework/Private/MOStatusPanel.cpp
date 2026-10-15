@@ -9,6 +9,7 @@
 #include "MOPersistenceSubsystem.h"
 #include "MOIdentityComponent.h"
 #include "MOPlayerController.h"
+#include "MOUIUtils.h"
 #include "Components/WidgetSwitcher.h"
 #include "Components/ScrollBox.h"
 #include "Components/VerticalBox.h"
@@ -976,12 +977,16 @@ void UMOStatusPanel::PopulateInfoTab()
 		false
 	);
 
-	// Location - not editable
+	// Location - not editable. Where the pawn stands NOW (the record's transform is the last save's): the biome the ground shows, and the
+	// compass position from the world centre. It used to print the record's raw centimetres ("-831521, 349982").
 	FString LocationStr = Record.LocationName;
 	if (LocationStr.IsEmpty())
 	{
-		FVector Pos = Record.Transform.GetLocation();
-		LocationStr = FString::Printf(TEXT("%.0f, %.0f"), Pos.X, Pos.Y);
+		const FVector Pos = CurrentPawn->GetActorLocation();
+		const FText Biome = UMOUIUtils::GetBiomeDisplayNameAt(CurrentPawn, Pos);
+		LocationStr = Biome.IsEmpty()
+			? UMOUIUtils::FormatWorldPosition(Pos).ToString()
+			: FString::Printf(TEXT("%s \u00B7 %s"), *Biome.ToString(), *UMOUIUtils::FormatWorldPosition(Pos).ToString());
 	}
 	CreateInfoEntry(
 		FName("Location"),

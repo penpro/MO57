@@ -10,6 +10,7 @@
 #include "Misc/AutomationTest.h"
 #include "InputCoreTypes.h"
 #include "MOInputHintFormatter.h"
+#include "MOUIUtils.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -38,6 +39,19 @@ bool FMOInputHint_Glyphs::RunTest(const FString& Parameters)
 	TestEqual(TEXT("an axis key stands alone (look = mouse, not mouse/stick)"), F::FormatKeysGlyph({ EKeys::Mouse2D, EKeys::Gamepad_Right2D }), FString(TEXT("[Mouse]")));
 	TestEqual(TEXT("a pad-first binding lists the pad"), F::FormatKeysGlyph({ EKeys::Gamepad_Right2D, EKeys::Mouse2D }), FString(TEXT("[Right Stick]")));
 	TestEqual(TEXT("nothing bound"), F::FormatKeysGlyph({}), FString(TEXT("[unbound]")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOUI_WorldPositionReadsAsCompass,
+	"MOFramework.UI.WorldPositionReadsAsCompass",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOUI_WorldPositionReadsAsCompass::RunTest(const FString& Parameters)
+{
+	// The status panel's Location used to print raw centimetres ("-831521, 349982"). North = +X, east = +Y.
+	TestEqual(TEXT("km from the centre on the compass"), UMOUIUtils::FormatWorldPosition(FVector(-1962105.0, 314919.0, 600.0)).ToString(), FString(TEXT("19.6 km S, 3.1 km E")));
+	TestEqual(TEXT("north-west"), UMOUIUtils::FormatWorldPosition(FVector(250000.0, -1200000.0, 0.0)).ToString(), FString(TEXT("2.5 km N, 12.0 km W")));
+	TestEqual(TEXT("metres under 1 km"), UMOUIUtils::FormatWorldPosition(FVector(45000.0, -9000.0, 0.0)).ToString(), FString(TEXT("450 m N, 90 m W")));
 	return true;
 }
 

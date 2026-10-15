@@ -1,5 +1,6 @@
 #include "MOModeIndicatorWidget.h"
 #include "MOUITokens.h"
+#include "MOUIUtils.h"
 #include "MOBiomeDatabaseSettings.h"
 #include "MOBiomeDefinitionRow.h"
 #include "MOWorldGen.h"
@@ -33,26 +34,7 @@ void UMOModeIndicatorWidget::NativeDestruct()
 FText UMOModeIndicatorWidget::GetBiomeUnderfoot() const
 {
 	const APawn* Pawn = GetOwningPlayerPawn();
-	const UMOWorldSeedSubsystem* Seeds = Pawn ? UMOWorldSeedSubsystem::Get(Pawn) : nullptr;
-	if (!Seeds || !Seeds->HasActiveSeed() || !FMOWorldGenParamsProvider::HasPublished())
-	{
-		return FText::GetEmpty();
-	}
-	const FMOWorldGenParamsRef P = FMOWorldGenParamsProvider::Get();
-	const FVector L = Pawn->GetActorLocation();
-	const int32 Seed = Seeds->GetActiveTerrainSeed();
-	const FMOTerrainSample S = FMOWorldGen::SampleColumn(*P, L.X, L.Y, Seed, P->Tuning.VoxelSizeCm);
-	FMOWorldGen::FBiomeWeight Weights[1];
-	const int32 Biome = FMOWorldGen::SampleSurfaceBiomeWeights(*P, L.X, L.Y, Seed, S.HeightCm, S.Moisture, S.Temperature, Weights, 1) > 0 ? Weights[0].Biome : S.BiomeIndex;
-	const FName Id = P->GetBiomeId(Biome);
-	if (Id.IsNone())
-	{
-		return FText::GetEmpty();
-	}
-	const UMOBiomeDatabaseSettings* Settings = GetDefault<UMOBiomeDatabaseSettings>();
-	const UDataTable* Table = Settings ? Settings->GetBiomeDefinitionsDataTable() : nullptr;
-	const FMOBiomeDefinitionRow* Row = Table ? Table->FindRow<FMOBiomeDefinitionRow>(Id, TEXT("MOModeIndicator"), /*bWarnIfRowMissing=*/false) : nullptr;
-	return Row && !Row->DisplayName.IsEmpty() ? Row->DisplayName : FText::FromString(FName::NameToDisplayString(Id.ToString(), false));
+	return Pawn ? UMOUIUtils::GetBiomeDisplayNameAt(Pawn, Pawn->GetActorLocation()) : FText::GetEmpty();
 }
 
 void UMOModeIndicatorWidget::RefreshBiome()
