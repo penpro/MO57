@@ -5,6 +5,7 @@
 #include "MOCheatSubsystem.h"
 #include "Containers/Ticker.h"
 #include "MOPossessionComponent.h"
+#include "Engine/TargetPoint.h"
 #include "MOWorldSeedSubsystem.h"
 #include "MOPlayerController.h"
 #include "MOForagingSubsystem.h"
@@ -2225,6 +2226,28 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 		ECVF_Default));
 
 	// ---------- MO.Test.TerraformRPC <Dig|Raise|Flatten|Smooth|RemoveFoliage> [forwardCm=300] ----------
+	// C7 trust test: the possession component's dev spawn RPC carries a client-chosen class. The server honours it only for its own player
+	// (nettest actions: the host's request spawns, a remote client's is refused). Spawns a harmless ATargetPoint 3 m ahead.
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Test.DevSpawnRPC"),
+		TEXT("Client->server ServerSpawnActorNearController with a TargetPoint (trust-boundary test: host-only). Usage: MO.Test.DevSpawnRPC"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			RunOnNextTick(World, [](UWorld* W)
+			{
+				APlayerController* PC = W ? W->GetFirstPlayerController() : nullptr;
+				UMOPossessionComponent* Possession = PC ? PC->FindComponentByClass<UMOPossessionComponent>() : nullptr;
+				if (!Possession)
+				{
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] FAIL DevSpawnRPC: %s"), !PC ? TEXT("no local player controller") : TEXT("no possession component on the controller"));
+					return;
+				}
+				Possession->TrySpawnActorNearController(ATargetPoint::StaticClass(), 300.0f, FVector::ZeroVector, true);   // the public wrapper a client UI would use -> the Server RPC
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] DevSpawnRPC: sent (TargetPoint, 3 m ahead) from %s"), *PC->GetName());
+			});
+		}),
+		ECVF_Default));
+
 	// Same idea for ServerApplyTerraform (which already holds the client to a 2500 cm reach and clamps FlattenHeight).
 	ConsoleCommands.Add(CM.RegisterConsoleCommand(
 		TEXT("MO.Test.TerraformRPC"),

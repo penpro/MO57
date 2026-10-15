@@ -1,4 +1,5 @@
 #include "MOPossessionComponent.h"
+#include "MOFramework.h"
 
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
@@ -104,6 +105,14 @@ void UMOPossessionComponent::ServerSpawnActorNearController_Implementation(TSubc
 	UMOPossessionSubsystem* PossessionSubsystem = World->GetSubsystem<UMOPossessionSubsystem>();
 	if (!PossessionSubsystem)
 	{
+		return;
+	}
+
+	// C7: the class arrives from the client unchecked, so only the server's OWN player may use this dev spawn (single player, the listen host).
+	// A remote co-op client is refused outright -- no class list to keep in sync, and no production flow sends it.
+	if (!PlayerController->IsLocalController())
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOPossession] %s rejected: dev spawn RPCs are host-only (remote %s)"), TEXT("ServerSpawnActorNearController"), *PlayerController->GetName());
 		return;
 	}
 
@@ -269,6 +278,14 @@ void UMOPossessionComponent::ServerSpawnAndPossessPawn_Implementation(TSubclassO
 	UMOPossessionSubsystem* PossessionSubsystem = World->GetSubsystem<UMOPossessionSubsystem>();
 	if (!PossessionSubsystem)
 	{
+		return;
+	}
+
+	// C7: the class arrives from the client unchecked, so only the server's OWN player may use this dev spawn (single player, the listen host).
+	// A remote co-op client is refused outright -- no class list to keep in sync, and no production flow sends it.
+	if (!PlayerController->IsLocalController())
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOPossession] %s rejected: dev spawn RPCs are host-only (remote %s)"), TEXT("ServerSpawnAndPossessPawn"), *PlayerController->GetName());
 		return;
 	}
 
