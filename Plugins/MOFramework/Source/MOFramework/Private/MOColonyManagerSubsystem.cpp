@@ -26,6 +26,7 @@
 #include "MOSurvivorJobQueueComponent.h"
 #include "MOSkillsComponent.h"
 #include "MOBuildProgressComponent.h"
+#include "MODesignationSubsystem.h"
 #include "EngineUtils.h"
 #include "TimerManager.h"
 
@@ -759,6 +760,10 @@ void UMOColonyManagerSubsystem::RunUpkeepTick()
 	// Hearths: keep settlement fires fed — firewood demand is real (F1/T3).
 	RunHearthPass(Roster);
 
+	// Excavation: idle hands that are left work the designated dig zones (terraform unit 3, stage 4). Last on purpose: food, warmth
+	// and fires come before moving earth.
+	RunExcavationPass(Roster);
+
 	for (APawn* Villager : Roster)
 	{
 		const FGuid PawnGuid = GetPawnGuid(Villager);
@@ -1425,3 +1430,193 @@ void UMOColonyManagerSubsystem::RunHearthPass(const TArray<APawn*>& Roster)
 	}
 }
 
+// ============================================================================
+// EXCAVATION (terraform unit 3, stage 4)
+// ============================================================================
+
+TArray<FMOExcavationAssignment> UMOColonyManagerSubsystem::DecideExcavationWork(const TArray<FMODesignationZone>& Zones,
+	const TSet<FGuid>& ClaimedDigZones, int32 IdleVillagers, bool bHaveContainer)
+{
+	TArray<FMOExcavationAssignment> Work;
+	const auto HasRoom = [](const FMODesignationZone& Z) { return Z.IsValidZone() && Z.Kind == EMODesignationKind::Dump && Z.RemainingVolumeM3 > 0.0f; };
+	for (const FMODesignationZone& Dig : Zones)
+	{
+		if (Work.Num() >= IdleVillagers)
+		{
+			break;
+		}
+		if (!Dig.IsValidZone() || Dig.Kind != EMODesignationKind::Dig || Dig.RemainingVolumeM3 <= 0.0f || ClaimedDigZones.Contains(Dig.ZoneId))
+		{
+			continue;   // not a dig zone, finished, or someone is already on it: one worker per zone
+		}
+		FMOExcavationAssignment A;
+		A.DigZoneId = Dig.ZoneId;
+
+		// 1. The zone's own default target, when it is a fill zone with room.
+		const FMODesignationZone* Fill = Dig.DefaultDumpTargetGuid.IsValid()
+			? Zones.FindByPredicate([&](const FMODesignationZone& Z) { return Z.ZoneId == Dig.DefaultDumpTargetGuid; }) : nullptr;
+		const bool bDefaultIsZone = Fill != nullptr;
+		if (Fill && !HasRoom(*Fill))
+		{
+			Fill = nullptr;
+		}
+		// 2. Else the nearest fill zone with room.
+		if (!Fill)
+		{
+			double BestD = TNumericLimits<double>::Max();
+			for (const FMODesignationZone& Z : Zones)
+			{
+				const double D = FVector::DistSquared(Z.Center, Dig.Center);
+				if (HasRoom(Z) && D < BestD)
+				{
+					BestD = D;
+					Fill = &Z;
+				}
+			}
+		}
+		if (Fill)
+		{
+			A.DumpMode = EMOExcavateDumpMode::FillZone;
+			A.DumpZoneId = Fill->ZoneId;
+		}
+		// 3. Else a container: the default target when it names one (resolved by the caller), else any settlement container.
+		else if (Dig.DefaultDumpTargetGuid.IsValid() && !bDefaultIsZone)
+		{
+			A.DumpMode = EMOExcavateDumpMode::Container;
+			A.DumpContainerGuid = Dig.DefaultDumpTargetGuid;
+		}
+		else if (bHaveContainer)
+		{
+			A.DumpMode = EMOExcavateDumpMode::Container;
+		}
+		else
+		{
+			continue;   // nowhere to put the earth: the zone waits
+		}
+		Work.Add(A);
+	}
+	return Work;
+}
+
+void UMOColonyManagerSubsystem::RunExcavationPass(const TArray<APawn*>& Roster)
+{
+	UWorld* World = GetWorld();
+	UMODesignationSubsystem* Desig = UMODesignationSubsystem::Get(this);
+	if (!World || !Desig || Desig->GetZoneCount() == 0)
+	{
+		return;
+	}
+	// Settlement-scoped (locked design): a zone outside the settlement is not colony work.
+	TArray<FMODesignationZone> Zones;
+	for (const FMODesignationZone& Z : Desig->GetZones())
+	{
+		if (IsInSettlement(Z.Center))
+		{
+			Zones.Add(Z);
+		}
+	}
+	if (!Zones.ContainsByPredicate([](const FMODesignationZone& Z) { return Z.Kind == EMODesignationKind::Dig && Z.RemainingVolumeM3 > 0.0f; }))
+	{
+		return;
+	}
+
+	// Idle AI villagers, and every dig zone a queued or running trip already holds (one worker per zone).
+	TArray<APawn*> Idle;
+	TSet<FGuid> Claimed;
+	for (APawn* Villager : Roster)
+	{
+		if (!Villager->GetController() || !Villager->GetController()->IsA<AMOSurvivorController>())
+		{
+			continue;
+		}
+		const UMOSurvivorJobQueueComponent* JobQueue = Villager->FindComponentByClass<UMOSurvivorJobQueueComponent>();
+		if (!JobQueue)
+		{
+			continue;
+		}
+		for (const FMOSurvivorJobEntry& Job : JobQueue->GetAllJobs())
+		{
+			if (Job.JobType == EMOSurvivorJobType::ExcavateAndHaul && Job.DigZoneId.IsValid() && !Job.IsComplete() && !Job.IsFailed())
+			{
+				Claimed.Add(Job.DigZoneId);
+			}
+		}
+		if (ShelteringVillagers.Contains(GetPawnGuid(Villager)))
+		{
+			continue;   // too cold to work: the shelter pass owns them
+		}
+		if (!JobQueue->GetCurrentJob().IsValid())
+		{
+			Idle.Add(Villager);
+		}
+	}
+	if (Idle.Num() == 0)
+	{
+		return;
+	}
+
+	TArray<AMOContainerActor*> Storages;
+	for (TActorIterator<AMOContainerActor> It(World); It; ++It)
+	{
+		if (IsValid(*It) && IsInSettlement(It->GetActorLocation()))
+		{
+			Storages.Add(*It);
+		}
+	}
+
+	const TArray<FMOExcavationAssignment> Work = DecideExcavationWork(Zones, Claimed, Idle.Num(), Storages.Num() > 0);
+	const UMOIdentityRegistrySubsystem* Registry = World->GetSubsystem<UMOIdentityRegistrySubsystem>();
+	for (const FMOExcavationAssignment& A : Work)
+	{
+		const FMODesignationZone* Dig = Zones.FindByPredicate([&](const FMODesignationZone& Z) { return Z.ZoneId == A.DigZoneId; });
+		if (!Dig || Idle.Num() == 0)
+		{
+			continue;
+		}
+		// The idle villager nearest the dig.
+		int32 Best = 0;
+		for (int32 I = 1; I < Idle.Num(); ++I)
+		{
+			if (FVector::DistSquared(Idle[I]->GetActorLocation(), Dig->Center) < FVector::DistSquared(Idle[Best]->GetActorLocation(), Dig->Center))
+			{
+				Best = I;
+			}
+		}
+		AActor* Container = nullptr;
+		if (A.DumpMode == EMOExcavateDumpMode::Container)
+		{
+			Container = (A.DumpContainerGuid.IsValid() && Registry) ? Registry->ResolveActorOrNull(A.DumpContainerGuid) : nullptr;
+			if (!Container)   // no default container (or it is gone): the settlement container nearest the dig
+			{
+				double BestD = TNumericLimits<double>::Max();
+				for (AMOContainerActor* S : Storages)
+				{
+					const double D = FVector::DistSquared(S->GetActorLocation(), Dig->Center);
+					if (D < BestD)
+					{
+						BestD = D;
+						Container = S;
+					}
+				}
+			}
+			if (!Container)
+			{
+				continue;   // the zone's container is gone and the settlement has none
+			}
+		}
+		APawn* Worker = Idle[Best];
+		UMOSurvivorJobQueueComponent* JobQueue = Worker->FindComponentByClass<UMOSurvivorJobQueueComponent>();
+		if (!JobQueue || !JobQueue->EnqueueExcavateJob(A.DigZoneId, A.DumpMode, A.DumpZoneId, Container, NAME_None).IsValid())
+		{
+			continue;
+		}
+		Idle.RemoveAtSwap(Best);
+		UE_LOG(LogMOFramework, Log, TEXT("[MOColony] Excavation: %s digs zone %s (%.2f m3 left) -> %s"), *Worker->GetName(),
+			*A.DigZoneId.ToString(EGuidFormats::Short), Dig->RemainingVolumeM3,
+			A.DumpMode == EMOExcavateDumpMode::FillZone ? *FString::Printf(TEXT("fill zone %s"), *A.DumpZoneId.ToString(EGuidFormats::Short)) : *GetNameSafe(Container));
+		if (UMOCharacterHistoryComponent* Hist = Worker->FindComponentByClass<UMOCharacterHistoryComponent>())
+		{
+			Hist->AddEntry(EHistoryEntryType::Activity, TEXT("Went to dig at the excavation site"));
+		}
+	}
+}

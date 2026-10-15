@@ -9,6 +9,7 @@
 #include "CoreMinimal.h"
 #include "Misc/AutomationTest.h"
 #include "MOColonyManagerSubsystem.h"
+#include "MODesignationTypes.h"
 #include "MOColonyTypes.h"
 #include "MOSkillsComponent.h"
 #include "MOCharacterHistoryComponent.h"
@@ -183,6 +184,111 @@ bool FMOColony_Quota_InFlightNotDoubled::RunTest(const FString& Parameters)
 	InFlight.Add(TEXT("Knap"));
 	const TArray<FName> Work = UMOColonyManagerSubsystem::DecideQuotaWork(Quotas, Stock, InFlight, 3);
 	TestEqual(TEXT("in-flight order not double-assigned"), Work.Num(), 0);
+	return true;
+}
+
+
+// ============================================================================
+// Excavation dispatch (terraform unit 3, stage 4): DecideExcavationWork
+// ============================================================================
+
+namespace MOExcavationTestData
+{
+	FMODesignationZone Zone(EMODesignationKind Kind, const FVector& Center, float RemainingM3, const FGuid& DefaultTarget = FGuid())
+	{
+		FMODesignationZone Z;
+		Z.ZoneId = FGuid::NewGuid();
+		Z.Kind = Kind;
+		Z.Center = Center;
+		Z.Radius = 250.0f;
+		Z.RemainingVolumeM3 = RemainingM3;
+		Z.DefaultDumpTargetGuid = DefaultTarget;
+		return Z;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOColony_Excavation_OneWorkerPerZone,
+	"MOFramework.Colony.Excavation.OneWorkerPerZone",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+bool FMOColony_Excavation_OneWorkerPerZone::RunTest(const FString& Parameters)
+{
+	using namespace MOExcavationTestData;
+	const TArray<FMODesignationZone> Zones = {
+		Zone(EMODesignationKind::Dig, FVector(0, 0, 0), 2.0f),
+		Zone(EMODesignationKind::Dig, FVector(3000, 0, 0), 2.0f),
+		Zone(EMODesignationKind::Dump, FVector(1000, 0, 0), 5.0f),
+	};
+	const TArray<FMOExcavationAssignment> Work = UMOColonyManagerSubsystem::DecideExcavationWork(Zones, {}, 5, false);
+	TestEqual(TEXT("five idle hands, two dig zones: two trips (one worker per zone, nobody doubles up)"), Work.Num(), 2);
+	TestTrue(TEXT("the two trips dig different zones"), Work.Num() == 2 && Work[0].DigZoneId != Work[1].DigZoneId);
+	for (const FMOExcavationAssignment& A : Work)
+	{
+		TestTrue(TEXT("both fill the designated dump zone"), A.DumpMode == EMOExcavateDumpMode::FillZone && A.DumpZoneId == Zones[2].ZoneId);
+	}
+	TestEqual(TEXT("one idle hand: one trip"), UMOColonyManagerSubsystem::DecideExcavationWork(Zones, {}, 1, false).Num(), 1);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOColony_Excavation_ClaimedAndExhaustedSkipped,
+	"MOFramework.Colony.Excavation.ClaimedAndExhaustedSkipped",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+bool FMOColony_Excavation_ClaimedAndExhaustedSkipped::RunTest(const FString& Parameters)
+{
+	using namespace MOExcavationTestData;
+	const TArray<FMODesignationZone> Zones = {
+		Zone(EMODesignationKind::Dig, FVector(0, 0, 0), 2.0f),        // claimed by a running trip
+		Zone(EMODesignationKind::Dig, FVector(500, 0, 0), 0.0f),      // finished
+		Zone(EMODesignationKind::Dig, FVector(900, 0, 0), 1.0f),      // the only one left
+		Zone(EMODesignationKind::Flatten, FVector(0, 900, 0), 3.0f),  // stage 5, never dug by this pass
+		Zone(EMODesignationKind::Dump, FVector(0, -900, 0), 5.0f),
+	};
+	TSet<FGuid> Claimed;
+	Claimed.Add(Zones[0].ZoneId);
+	const TArray<FMOExcavationAssignment> Work = UMOColonyManagerSubsystem::DecideExcavationWork(Zones, Claimed, 4, false);
+	TestEqual(TEXT("claimed, finished and flatten zones get no trip"), Work.Num(), 1);
+	TestTrue(TEXT("the open dig zone is the one worked"), Work.Num() == 1 && Work[0].DigZoneId == Zones[2].ZoneId);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOColony_Excavation_DumpTargetOrder,
+	"MOFramework.Colony.Excavation.DumpTargetOrder",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+bool FMOColony_Excavation_DumpTargetOrder::RunTest(const FString& Parameters)
+{
+	using namespace MOExcavationTestData;
+	const FMODesignationZone NearFill = Zone(EMODesignationKind::Dump, FVector(400, 0, 0), 5.0f);
+	const FMODesignationZone FarFill = Zone(EMODesignationKind::Dump, FVector(9000, 0, 0), 5.0f);
+	const FMODesignationZone FullFill = Zone(EMODesignationKind::Dump, FVector(100, 0, 0), 0.0f);
+
+	// The zone's own default target wins over a nearer fill zone.
+	{
+		const TArray<FMODesignationZone> Zones = { Zone(EMODesignationKind::Dig, FVector::ZeroVector, 1.0f, FarFill.ZoneId), NearFill, FarFill };
+		const TArray<FMOExcavationAssignment> W = UMOColonyManagerSubsystem::DecideExcavationWork(Zones, {}, 1, false);
+		TestTrue(TEXT("default target (a fill zone with room) is used"), W.Num() == 1 && W[0].DumpZoneId == FarFill.ZoneId);
+	}
+	// A full default target falls through to the nearest fill zone with room (the full one is nearer still and skipped).
+	{
+		const FMODesignationZone FullDefault = Zone(EMODesignationKind::Dump, FVector(50, 0, 0), 0.0f);
+		const TArray<FMODesignationZone> Zones = { Zone(EMODesignationKind::Dig, FVector::ZeroVector, 1.0f, FullDefault.ZoneId), FullDefault, FullFill, NearFill, FarFill };
+		const TArray<FMOExcavationAssignment> W = UMOColonyManagerSubsystem::DecideExcavationWork(Zones, {}, 1, false);
+		TestTrue(TEXT("full zones skipped, nearest fill zone with room chosen"), W.Num() == 1 && W[0].DumpMode == EMOExcavateDumpMode::FillZone && W[0].DumpZoneId == NearFill.ZoneId);
+	}
+	// No fill zone with room: a container if the settlement has one, else the zone waits.
+	{
+		const TArray<FMODesignationZone> Zones = { Zone(EMODesignationKind::Dig, FVector::ZeroVector, 1.0f), FullFill };
+		const TArray<FMOExcavationAssignment> WithBox = UMOColonyManagerSubsystem::DecideExcavationWork(Zones, {}, 1, true);
+		TestTrue(TEXT("no room anywhere + a settlement container: spoil goes to the container"),
+			WithBox.Num() == 1 && WithBox[0].DumpMode == EMOExcavateDumpMode::Container && !WithBox[0].DumpContainerGuid.IsValid());
+		TestEqual(TEXT("no room anywhere and no container: no trip (no heap on the ground)"),
+			UMOColonyManagerSubsystem::DecideExcavationWork(Zones, {}, 1, false).Num(), 0);
+	}
+	// A default target that is not a zone is a container GUID: passed through for the pass to resolve.
+	{
+		const FGuid Box = FGuid::NewGuid();
+		const TArray<FMODesignationZone> Zones = { Zone(EMODesignationKind::Dig, FVector::ZeroVector, 1.0f, Box) };
+		const TArray<FMOExcavationAssignment> W = UMOColonyManagerSubsystem::DecideExcavationWork(Zones, {}, 1, false);
+		TestTrue(TEXT("default container target is carried to the pass"), W.Num() == 1 && W[0].DumpMode == EMOExcavateDumpMode::Container && W[0].DumpContainerGuid == Box);
+	}
 	return true;
 }
 

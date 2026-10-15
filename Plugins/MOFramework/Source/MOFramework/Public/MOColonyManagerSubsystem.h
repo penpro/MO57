@@ -35,12 +35,25 @@
 #include "CoreMinimal.h"
 #include "Subsystems/WorldSubsystem.h"
 #include "MOColonyTypes.h"
+#include "MODesignationTypes.h"
+#include "MOSurvivorJobTypes.h"
 
 #include "MOSaveDomainInterface.h"
 #include "MOColonyManagerSubsystem.generated.h"
 
 class AMOContainerActor;
 class APawn;
+
+/** One excavation trip the colony should start now (terraform unit 3, stage 4): which dig zone, and where its spoil goes. */
+struct FMOExcavationAssignment
+{
+	FGuid DigZoneId;
+	EMOExcavateDumpMode DumpMode = EMOExcavateDumpMode::FillZone;
+	/** FillZone mode: the designated fill zone that takes the earth. */
+	FGuid DumpZoneId;
+	/** Container mode: the dig zone's own default container (by identity GUID), or invalid = the nearest settlement container. */
+	FGuid DumpContainerGuid;
+};
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOOnVillagerMoodChanged, const FGuid&, PawnGuid, float, NewMood);
 
@@ -134,6 +147,21 @@ public:
 	 */
 	static TArray<FName> DecideQuotaWork(const TArray<FMOColonyQuota>& InQuotas,
 		const TMap<FName, int32>& Stock, const TSet<FName>& RecipesInFlight, int32 IdleVillagers);
+
+	// =========================================================================
+	// EXCAVATION (terraform unit 3, stage 4: villagers work the designated dig zones)
+	// =========================================================================
+
+	/**
+	 * THE excavation dispatch decision -- pure math for headless tests. One worker per Dig zone that still has earth to move
+	 * (RemainingVolumeM3 > 0) and no trip queued or running (ClaimedDigZones), in the zones' order, capped at IdleVillagers.
+	 * Where the spoil goes, in order: the zone's DefaultDumpTargetGuid when it names a fill (Dump) zone with room; the nearest
+	 * fill zone with room; a container (the default target when it is not a zone, else any settlement container when
+	 * bHaveContainer); otherwise the zone WAITS -- with nowhere to put the earth the honest answer is no trip, not a heap.
+	 * Dump and Flatten zones are never dug here (Flatten is stage 5). Exhausted zones are skipped, not deleted (Wes's call).
+	 */
+	static TArray<FMOExcavationAssignment> DecideExcavationWork(const TArray<FMODesignationZone>& Zones,
+		const TSet<FGuid>& ClaimedDigZones, int32 IdleVillagers, bool bHaveContainer);
 
 	// =========================================================================
 	// SCHOOL / TEACHING (V2.2)
@@ -305,6 +333,7 @@ private:
 	AMOContainerActor* FindCommunalFood(FName& OutItemId) const;
 	void RunQuotaPass(const TArray<APawn*>& Roster);
 	void RunHearthPass(const TArray<APawn*>& Roster);
+	void RunExcavationPass(const TArray<APawn*>& Roster);
 	void RunSchoolPass(const TArray<APawn*>& Roster, float GameHoursElapsed);
 	void RunRelationshipPass(const TArray<APawn*>& Roster, float GameHoursElapsed);
 	void RunFamilyPass(const TArray<APawn*>& Roster, float GameHoursElapsed, double NowGameSeconds);
