@@ -314,7 +314,13 @@ void AMOBuildableActor::SetGhostVisual(const FLinearColor& Color)
 		return;
 	}
 
-	GhostMaterialInstance->SetVectorParameterValue(TEXT("Color"), Color);
+	// M_BuildPreview (the ghost material) is an inner glow + outer rim: "InnerColor" / "OuterColor". This set only "Color" / "Opacity",
+	// which it does not have -- the tint never changed and an invalid ghost stayed the preview's default green, so a player saw "fine
+	// here" and the click did nothing (first-ten-minutes pass, Oct 15 2026). The inner glow is HDR (the authored green is ~6.6).
+	constexpr float InnerGlow = 6.0f;
+	GhostMaterialInstance->SetVectorParameterValue(TEXT("InnerColor"), FLinearColor(Color.R * InnerGlow, Color.G * InnerGlow, Color.B * InnerGlow, 1.0f));
+	GhostMaterialInstance->SetVectorParameterValue(TEXT("OuterColor"), FLinearColor(Color.R, Color.G, Color.B, 1.0f));
+	GhostMaterialInstance->SetVectorParameterValue(TEXT("Color"), Color);   // a ghost material with a single tint
 	GhostMaterialInstance->SetScalarParameterValue(TEXT("Opacity"), Color.A);
 }
 

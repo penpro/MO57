@@ -272,6 +272,13 @@ void UMOBuildingComponent::UpdateGhostPosition()
 
 	FHitResult Hit;
 	bool bHit = World->LineTraceSingleByChannel(Hit, CameraLocation, TraceEnd, PlacementTraceChannel, QueryParams);
+	if (!bHit)
+	{
+		// The aim does not reach the ground within reach (the shoulder camera looks nearly level, so a new player's first ghost floated in
+		// the air, always invalid): stand the ghost on the ground under the end of the reach instead, as survival games do.
+		bHit = World->LineTraceSingleByChannel(Hit, TraceEnd + FVector(0.0, 0.0, 100.0), TraceEnd - FVector(0.0, 0.0, MaxPlacementDistance * 2.0),
+			PlacementTraceChannel, QueryParams);
+	}
 
 	if (bHit)
 	{
@@ -329,9 +336,11 @@ void UMOBuildingComponent::UpdateGhostPosition()
 		//   - If no snap, fall back to the surface-type validator (free
 		//     placement still requires hitting an appropriate surface).
 		bool bValidPlacement = bDidSnap || bValidSurface;
+		bool bBlocked = false;
 		if (CurrentPlacementData.bRequiresNoCollision && bValidPlacement)
 		{
-			bValidPlacement = !CheckGhostCollision();
+			bBlocked = CheckGhostCollision();
+			bValidPlacement = !bBlocked;
 		}
 
 		// Update validity and visual
@@ -339,6 +348,9 @@ void UMOBuildingComponent::UpdateGhostPosition()
 		{
 			bCurrentPlacementValid = bValidPlacement;
 			ApplyGhostMaterial(bValidPlacement);
+			UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingComponent] Placement %s (surface ok=%d normalZ=%.2f, snapped=%d, blocked=%d) on %s"),
+				bValidPlacement ? TEXT("VALID") : TEXT("INVALID"), bValidSurface ? 1 : 0, SurfaceNormal.Z, bDidSnap ? 1 : 0, bBlocked ? 1 : 0,
+				*GetNameSafe(Hit.GetComponent()));
 		}
 	}
 	else
@@ -351,6 +363,7 @@ void UMOBuildingComponent::UpdateGhostPosition()
 		{
 			bCurrentPlacementValid = false;
 			ApplyGhostMaterial(false);
+			UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingComponent] Placement INVALID (no ground within %.0f cm of the aim, nor under the end of the reach)"), MaxPlacementDistance);
 		}
 	}
 }
@@ -455,7 +468,9 @@ bool UMOBuildingComponent::TryPlaceGhost()
 
 	if (!bCurrentPlacementValid)
 	{
-		UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingComponent] Cannot place - invalid placement"));
+		UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingComponent] Cannot place - invalid placement (last aim: %s, surface ok=%d normalZ=%.2f, blocked=%d, requiresNoCollision=%d)"),
+			*GetNameSafe(LastPlacementHit.GetComponent()), ValidateSurfacePlacement(LastPlacementHit.ImpactNormal) ? 1 : 0, LastPlacementHit.ImpactNormal.Z,
+			CheckGhostCollision() ? 1 : 0, CurrentPlacementData.bRequiresNoCollision ? 1 : 0);
 		return false;
 	}
 
@@ -775,6 +790,7 @@ void UMOBuildingComponent::ApplyGhostMaterial(bool bValid)
 	}
 
 	CurrentGhost->SetGhostVisual(bValid ? ValidPlacementColor : InvalidPlacementColor);
+	UE_LOG(LogMOFramework, Verbose, TEXT("[MOBuildingComponent] Ghost tint -> %s"), bValid ? TEXT("valid") : TEXT("invalid"));
 }
 
 bool UMOBuildingComponent::CheckGhostCollision() const
