@@ -62,7 +62,7 @@ design forks are logged under "Forks", not built blind.
 - [ ] Far terrain LOD tear on the mountains (known, "not ours": voxel far LOD) - confirm or fix.
 - [ ] **Terrain material look (Wes, 2026-10-12; details in `Docs/Terrain_Generation_Exploration.md` To-do)**: (1) distant mountains: snow caps with dark rock, materials that switch with distance; (2) a fade + noise breakup on EVERY elevation / climate material split
   (no hard bands); (3) several sand materials so beaches and deserts stop repeating.
-- [~] **Alpine / snow variation (Wes, 2026-10-13; details in `Docs/Terrain_Generation_Exploration.md` To-do)** -- aspect-driven snow DONE Oct 15 (PIE-checked; packaged range check pending): much more variation in the snow / rock so it reads as
+- [~] **Alpine / snow variation (Wes, 2026-10-13; details in `Docs/Terrain_Generation_Exploration.md` To-do)** -- aspect-driven snow DONE Oct 15 (checked at 300 m / 1 km / 4 km; sunlit snow near-flat white at 1 km = albedo/exposure, open): much more variation in the snow / rock so it reads as
   real mountains -- aspect-driven snow (northern hemisphere: less snow on south-facing slopes) and / or bigger, more dynamic noise.
 - [ ] **Caves half the diameter and more lateral (Wes, 2026-10-13; same To-do)**: smaller passages that run sideways instead of straight down (generator v8).
 - [ ] Weather per biome (rain / snow line at altitude) and the sound layers that go with it.
