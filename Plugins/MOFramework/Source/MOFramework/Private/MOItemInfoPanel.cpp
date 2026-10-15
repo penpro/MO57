@@ -5,6 +5,7 @@
 #include "Components/PanelWidget.h"
 #include "MOInventoryComponent.h"
 #include "MOItemDatabaseSettings.h"
+#include "MOItemPreviewWidget.h"
 #include "MOFramework.h"
 
 void UMOItemInfoPanel::NativeConstruct()
@@ -71,6 +72,7 @@ void UMOItemInfoPanel::ClearAllFields()
 	if (TagsText) { TagsText->SetText(FText::GetEmpty()); }
 	if (PropertiesText) { PropertiesText->SetText(FText::GetEmpty()); }
 	if (ItemIconImage) { ItemIconImage->SetBrushFromTexture(nullptr); }
+	if (ItemPreview) { ItemPreview->ClearItem(); }
 
 	// Debug fields
 	if (DebugSelectedGuidText) { DebugSelectedGuidText->SetText(FText::FromString(TEXT("(none)"))); }
@@ -377,5 +379,11 @@ void UMOItemInfoPanel::DisplayItemDefinition(const FMOItemDefinitionRow& ItemDef
 		{
 			ItemIconImage->SetBrushFromTexture(nullptr);
 		}
+	}
+
+	// The turning 3D view of the item's world mesh (collapses itself for items without real art).
+	if (ItemPreview)
+	{
+		ItemPreview->SetItem(ItemDef.ItemId);
 	}
 }

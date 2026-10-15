@@ -17,7 +17,7 @@
  * DISPLAYED INFO:
  * - Name, Type, Rarity (with color coding)
  * - Description (short and full)
- * - Icon image
+ * - Icon image, and a turning 3D preview of the item's world mesh (ItemPreview, optional)
  * - Quantity, Max Stack, Weight, Value
  * - Item flags (bConsumable, bEquippable, etc.)
  * - Tags array
@@ -52,6 +52,7 @@
 class UTextBlock;
 class UImage;
 class UMOInventoryComponent;
+class UMOItemPreviewWidget;
 
 UCLASS()
 class MOFRAMEWORK_API UMOItemInfoPanel : public UUserWidget
@@ -108,6 +109,10 @@ private:
 	// Icon
 	UPROPERTY(meta=(BindWidgetOptional))
 	TObjectPtr<UImage> ItemIconImage;
+
+	// Turning 3D view of the item's world mesh (WBP_MOItemPreview); hides itself for items without a real mesh.
+	UPROPERTY(meta=(BindWidgetOptional))
+	TObjectPtr<UMOItemPreviewWidget> ItemPreview;
 
 	// Stats
 	UPROPERTY(meta=(BindWidgetOptional))
