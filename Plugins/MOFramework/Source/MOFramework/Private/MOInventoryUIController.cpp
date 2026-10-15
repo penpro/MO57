@@ -1,4 +1,6 @@
 #include "MOInventoryUIController.h"
+#include "MOPlayerController.h"
+#include "MOItemActions.h"
 #include "MOUIDebugSubsystem.h"
 #include "MOUIManagerComponent.h"
 #include "MOInventoryMenu.h"
@@ -710,27 +712,16 @@ void UMOInventoryUIController::HandleContextMenuAction(FName ActionId, const FGu
 
 	UMOUIManagerComponent* UIManager = GetUIManager();
 
-	if (ActionId == FName("Use"))
+	if (ActionId == FMOItemActions::Use || ActionId == FMOItemActions::Drink || ActionId == FMOItemActions::Fill || ActionId == FMOItemActions::PourOut
+		|| ActionId == FMOItemActions::BoilOverFire || ActionId == FMOItemActions::BoilWithStones)
 	{
 		// Close menu first for consistency with other actions
 		CloseItemContextMenu();
 
-		// Consume item - apply nutrition to survival stats (use cached component)
-		UMOSurvivalStatsComponent* SurvivalStats = GetCachedSurvivalStats();
-		if (IsValid(SurvivalStats))
+		// The SERVER does it (FMOItemActions::Perform): eating used to run right here, on a co-op client's own copy, and never reached the server.
+		if (AMOPlayerController* MOPC = Cast<AMOPlayerController>(ResolveOwningPlayerController()))
 		{
-			if (SurvivalStats->ConsumeItem(InventoryComponent, ItemGuid))
-			{
-				UE_LOG(LogMOFramework, Log, TEXT("[MOInventoryUI] Item consumed successfully"));
-			}
-			else
-			{
-				UE_LOG(LogMOFramework, Warning, TEXT("[MOInventoryUI] Failed to consume item"));
-			}
-		}
-		else
-		{
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOInventoryUI] No SurvivalStatsComponent cached for pawn"));
+			MOPC->ServerItemAction(ItemGuid, ActionId);
 		}
 	}
 	else if (ActionId == FName("Drop1"))

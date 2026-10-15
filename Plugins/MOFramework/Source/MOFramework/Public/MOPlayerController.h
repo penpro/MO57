@@ -662,6 +662,13 @@ public:
 	void ServerDrinkWater(FVector_NetQuantize Point);
 
 	/**
+	 * An item action on the server (FMOItemActions::Perform): the item menu's Use and its extra actions (drink from a container, fill, boil ...). The Use button
+	 * used to consume on the CLIENT's UI controller -- a co-op client's food never reached the server.
+	 */
+	UFUNCTION(Server, Reliable)
+	void ServerItemAction(FGuid ItemGuid, FName ActionId);
+
+	/**
 	 * Change a person's name or gender (Field = "CharacterName" / "Gender") -- the status panel's Change. The pawn's identity component is the one source
 	 * of both (saves copy it into the pawn record): the authority writes it and it replicates. From the host this applies locally, from a co-op client it
 	 * is sent. Allowed for this player's own pawn and for a recruited colonist no other human is playing; the value is trimmed and capped at MaxIdentityTextLength.

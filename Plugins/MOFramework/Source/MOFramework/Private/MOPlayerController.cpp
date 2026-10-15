@@ -30,6 +30,7 @@
 #include "MOQuickPickDialog.h"
 #include "MOTimeOfDayDialog.h"
 #include "MOWaterActions.h"
+#include "MOItemActions.h"
 #include "MOWaterSourceSettings.h"
 #include "MOWaterSubsystem.h"
 #include "MOWeatherIntegrationSubsystem.h"
@@ -1350,6 +1351,14 @@ bool AMOPlayerController::TryDrinkAtCrosshair()
 	}
 	ServerDrinkWater(Point);
 	return true;
+}
+
+void AMOPlayerController::ServerItemAction_Implementation(FGuid ItemGuid, FName ActionId)
+{
+	if (!FMOItemActions::Perform(GetPawn(), ItemGuid, ActionId))
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOItemActions] %s: %s on %s refused"), *GetName(), *ActionId.ToString(), *ItemGuid.ToString(EGuidFormats::Short));
+	}
 }
 
 void AMOPlayerController::ServerDrinkWater_Implementation(FVector_NetQuantize Point)

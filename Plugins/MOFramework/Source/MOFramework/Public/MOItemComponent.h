@@ -63,6 +63,7 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "MOItemInstanceState.h"
 #include "MOItemComponent.generated.h"
 
 class UMOIdentityComponent;
@@ -91,6 +92,10 @@ public:
 	// Current quantity represented by this world item instance.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Replicated, Category="MO|Item", meta=(ClampMin="1"))
 	int32 Quantity = 1;
+
+	/** What this particular item carries (durability, a container's contents): written by the drop, read back by the pickup and the save. Server-side state. */
+	UPROPERTY(SaveGame, BlueprintReadOnly, Category="MO|Item")
+	FMOItemInstanceState InstanceState;
 
 	// For stacking rules. If <= 1 then not stackable.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Item", meta=(ClampMin="1"))

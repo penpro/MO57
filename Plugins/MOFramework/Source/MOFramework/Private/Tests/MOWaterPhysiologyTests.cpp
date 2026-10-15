@@ -3,6 +3,7 @@
 #include "Misc/AutomationTest.h"
 #include "MOWaterPhysiology.h"
 #include "MOWaterSourceSettings.h"
+#include "MOItemInstanceState.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -72,6 +73,49 @@ bool FMOWaterPhysiology_Course::RunTest(const FString& Parameters)
 	}
 	TestTrue(TEXT("one rise, one fall"), bRiseThenFall);
 	TestTrue(TEXT("never above the peak"), Max <= Peak + 0.01f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOWaterPhysiology_Mix,
+	"MOFramework.Water.ContainerMix",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOWaterPhysiology_Mix::RunTest(const FString& Parameters)
+{
+	// A container's contents (FMOLiquidContents): topping up mixes by volume, and untreated water spoils "boiled" -- boiled water stays safe only on its own.
+	FMOLiquidContents Boiled;
+	Boiled.Millilitres = 500.0f;
+	Boiled.bBoiled = true;
+	FMOLiquidContents Lake;
+	Lake.Millilitres = 500.0f;
+	Lake.IllnessChancePerLitre = 0.01f;
+	Lake.Source = EMOWaterBodyKind::Lake;
+
+	FMOLiquidContents A = Boiled;
+	A.Mix(Lake);
+	TestEqual(TEXT("volumes add"), A.Millilitres, 1000.0f);
+	TestFalse(TEXT("untreated water spoils boiled"), A.bBoiled);
+	TestEqual(TEXT("illness chance mixes by volume"), A.IllnessChancePerLitre, 0.005f, 1e-6f);
+	TestEqual(TEXT("the source is the last one poured"), A.Source, EMOWaterBodyKind::Lake);
+
+	FMOLiquidContents Empty;
+	Empty.Mix(Boiled);
+	TestTrue(TEXT("boiled into an empty container stays boiled"), Empty.bBoiled);
+	FMOLiquidContents B = Boiled;
+	B.Mix(Boiled);
+	TestTrue(TEXT("boiled + boiled stays boiled"), B.bBoiled);
+
+	FMOLiquidContents Sea;
+	Sea.Millilitres = 250.0f;
+	Sea.SalinityGPerL = 35.0f;
+	FMOLiquidContents C = Lake;
+	C.Mix(Sea);
+	TestEqual(TEXT("salt dilutes by volume"), C.SalinityGPerL, 35.0f * 250.0f / 750.0f, 1e-4f);
+
+	FMOItemInstanceState Fresh;
+	TestTrue(TEXT("a fresh item carries nothing"), Fresh.IsDefault());
+	Fresh.Liquid = Lake;
+	TestFalse(TEXT("a container with water carries it"), Fresh.IsDefault());
 	return true;
 }
 

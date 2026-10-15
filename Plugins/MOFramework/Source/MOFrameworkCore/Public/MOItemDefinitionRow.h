@@ -501,6 +501,15 @@ struct MOFRAMEWORKCORE_API FMOItemDefinitionRow : public FTableRowBase
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Flags")
 	bool bConsumable = false;
 
+	/** A container for liquid (water): how much it holds (ml). 0 = not a container. Its contents travel with the item (FMOLiquidContents). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Container", meta=(ClampMin="0.0"))
+	float LiquidCapacityMl = 0.0f;
+
+	/** It can sit on (or hang over) a fire to boil what is in it: a fired pot, a bark container watched closely (the water keeps the bark below its ignition
+	 *  point). Without this, boiling needs heated stones dropped in (stone boiling). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Container", meta=(EditCondition="LiquidCapacityMl > 0"))
+	bool bHeatableOverFire = false;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Flags")
 	bool bEquippable = false;
 

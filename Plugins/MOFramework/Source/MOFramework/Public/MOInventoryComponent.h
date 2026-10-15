@@ -100,6 +100,7 @@
 #include "Net/Serialization/FastArraySerializer.h"
 #include "MOworldSaveGame.h"
 #include "MOItemDefinitionRow.h"
+#include "MOItemInstanceState.h"
 #include "MOInventoryComponent.generated.h"
 
 USTRUCT(BlueprintType)
@@ -119,6 +120,10 @@ struct FMOInventoryEntry : public FFastArraySerializerItem
 	/** Current durability for tools (-1 = not applicable/infinite). */
 	UPROPERTY(BlueprintReadOnly, Category="MO|Inventory")
 	int32 CurrentDurability = -1;
+
+	/** What is in it, if it is a container (FMOItemDefinitionRow::LiquidCapacityMl). Travels with the item (FMOItemInstanceState). */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Inventory")
+	FMOLiquidContents Liquid;
 };
 
 USTRUCT(BlueprintType)
@@ -296,6 +301,15 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Inventory")
 	bool GetItemDurability(const FGuid& ItemGuid, int32& OutDurability) const;
 
+	/** Everything per-item this entry carries (durability, contents): what a drop, a transfer or a save takes with it. Default state if the GUID is unknown. */
+	FMOItemInstanceState GetInstanceState(const FGuid& ItemGuid) const;
+
+	/** Put an item's carried state back on its entry (a pickup, a transfer, a load). Authority. False if the GUID is unknown. */
+	bool ApplyInstanceState(const FGuid& ItemGuid, const FMOItemInstanceState& State);
+
+	/** Replace a container's contents. Authority. False if the GUID is unknown. */
+	bool SetLiquid(const FGuid& ItemGuid, const FMOLiquidContents& Liquid);
+
 	// Slots API
 	UFUNCTION(BlueprintCallable, Category="MO|Inventory|Slots")
 	int32 GetSlotCount() const;
@@ -399,7 +413,7 @@ public:
 	 * @return The spawned actor, or nullptr on failure
 	 */
 	UFUNCTION(BlueprintCallable, Category="MO|Inventory|Drop")
-	AActor* SpawnWorldItem(FName ItemDefinitionId, int32 Quantity, const FGuid& ItemGuid, const FVector& DropLocation, const FRotator& DropRotation);
+	AActor* SpawnWorldItem(FName ItemDefinitionId, int32 Quantity, const FGuid& ItemGuid, const FVector& DropLocation, const FRotator& DropRotation, const FMOItemInstanceState& State = FMOItemInstanceState());
 
 	// ============================================================================
 	// TRANSFER OPERATIONS

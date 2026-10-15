@@ -65,6 +65,7 @@
 #include "MOResourceDepletionSubsystem.h" // (H37) FMOResourceNodeDepletionSaveEntry
 #include "MODesignationTypes.h"           // (unit 3) FMODesignationSaveData
 #include "MOWorldRemovalTypes.h"          // FMOWorldRemovalSaveData
+#include "MOItemInstanceState.h"
 #include "MOworldSaveGame.generated.h"
 
 USTRUCT(BlueprintType)
@@ -84,6 +85,10 @@ struct FMOInventoryItemSaveEntry
     /** Current durability for tools (-1 = infinite/not applicable). */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save")
     int32 CurrentDurability = -1;
+
+    /** A container's contents (an old save has none). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save")
+    FMOLiquidContents Liquid;
 };
 
 USTRUCT(BlueprintType)
@@ -229,6 +234,10 @@ struct FMOPersistedWorldItemRecord
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save")
     int32 Quantity = 1;
+
+    /** What the item carried when it was dropped (durability, contents). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Save")
+    FMOItemInstanceState InstanceState;
 };
 
 /**

@@ -1935,6 +1935,7 @@ void UMOPersistenceSubsystem::CaptureWorldItems(UWorld* World, UMOWorldSaveGame*
         ItemRecord.ItemClassPath = FSoftClassPath(Actor->GetClass()->GetPathName());
         ItemRecord.ItemDefinitionId = ItemComponent->ItemDefinitionId;
         ItemRecord.Quantity = FMath::Max(1, ItemComponent->Quantity);
+        ItemRecord.InstanceState = ItemComponent->InstanceState;
 
         UE_LOG(LogMOFramework, Warning, TEXT("[MOPersist] SAVE ITEMS: Capturing item '%s' GUID=%s Class=%s Location=%s"),
             *Actor->GetName(),
@@ -2071,6 +2072,7 @@ void UMOPersistenceSubsystem::RespawnWorldItems(UWorld* World, const TArray<FMOP
 
         ItemComponent->ItemDefinitionId = ItemRecord.ItemDefinitionId;
         ItemComponent->Quantity = FMath::Max(1, ItemRecord.Quantity);
+        ItemComponent->InstanceState = ItemRecord.InstanceState;
 
         UGameplayStatics::FinishSpawningActor(DeferredActor, ItemRecord.Transform);
 

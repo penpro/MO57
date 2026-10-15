@@ -147,6 +147,11 @@ bool UMOItemComponent::GiveToInteractorInventory(AController* InteractorControll
 	{
 		return false;
 	}
+	// Back in a pack: the item takes up what it carried on the ground (a worn tool stays worn, a container keeps its water).
+	if (!InstanceState.IsDefault())
+	{
+		InventoryComponent->ApplyInstanceState(ItemGuid, InstanceState);
+	}
 
 	// Do not destroy yet. We replicate "inactive" so everyone sees it gone.
 	SetWorldItemActive(false);

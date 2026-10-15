@@ -126,6 +126,12 @@ private:
 	UFUNCTION() void HandleTransferClicked();
 	UFUNCTION() void HandlePickupClicked();
 
+	/** One of the item's extra actions (FMOItemActions: drink, fill, boil ...): the menu broadcasts its id like any other action. */
+	void HandleExtraActionClicked(FName ActionId);
+
+	/** Rebuild the extra action buttons (FMOItemActions::GetActions) right under Use. */
+	void RefreshExtraActions();
+
 private:
 	// ============================================================
 	// BIND WIDGETS - Create these in your WBP_ItemContextMenu
@@ -197,6 +203,13 @@ private:
 
 	/** Whether the menu has been initialized. */
 	bool bInitialized = false;
+
+	/** The widget class of the extra action buttons (a Widget Blueprint: a native button class would be an empty, click-through spacer). Styled like UseButton. */
+	UPROPERTY(EditDefaultsOnly, Category="MO|UI|ContextMenu")
+	TSoftClassPtr<UMOCommonButton> ExtraActionButtonClass = TSoftClassPtr<UMOCommonButton>(FSoftObjectPath(TEXT("/MOFramework/UI/WBP_MOCommonButton.WBP_MOCommonButton_C")));
+
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UMOCommonButton>> ExtraActionButtons;
 
 	/** Timer handle for auto-close check. */
 	FTimerHandle MouseCheckTimerHandle;

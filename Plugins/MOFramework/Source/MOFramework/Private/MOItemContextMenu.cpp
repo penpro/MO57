@@ -1,4 +1,6 @@
 #include "MOItemContextMenu.h"
+#include "MOItemActions.h"
+#include "Components/PanelWidget.h"
 #include "MOFramework.h"
 #include "MOUIDebugSubsystem.h"
 #include "MOCommonButton.h"
@@ -312,6 +314,63 @@ void UMOItemContextMenu::RefreshButtonVisibility_Implementation()
 	{
 		DetailsButton->SetVisibility(ESlateVisibility::Visible);
 	}
+
+	RefreshExtraActions();
+}
+
+void UMOItemContextMenu::RefreshExtraActions()
+{
+	for (UMOCommonButton* Button : ExtraActionButtons)
+	{
+		if (Button)
+		{
+			Button->OnClicked().RemoveAll(this);
+			Button->RemoveFromParent();
+		}
+	}
+	ExtraActionButtons.Reset();
+
+	// Only what this pawn carries has actions of its own (a world item is picked up first).
+	const APlayerController* PC = GetOwningPlayer();
+	if (SourceWorldItem.IsValid() || !IsValid(InventoryComponent) || !ButtonContainer || !PC)
+	{
+		return;
+	}
+	TArray<FMOItemActionOption> Options;
+	FMOItemActions::GetActions(PC->GetPawn(), InventoryComponent, ItemGuid, Options);
+	UClass* ButtonClass = Options.Num() > 0 ? ExtraActionButtonClass.LoadSynchronous() : nullptr;
+	if (!ButtonClass)
+	{
+		return;
+	}
+	int32 InsertAt = UseButton ? ButtonContainer->GetChildIndex(UseButton) + 1 : 0;
+	for (const FMOItemActionOption& Option : Options)
+	{
+		UMOCommonButton* Button = CreateWidget<UMOCommonButton>(GetOwningPlayer(), ButtonClass);
+		if (!Button)
+		{
+			continue;
+		}
+		if (UseButton)
+		{
+			Button->SetStyle(UseButton->GetStyle() ? UseButton->GetStyle()->GetClass() : nullptr);   // the menu's own look
+		}
+		Button->SetButtonText(Option.Label);
+		Button->SetIsEnabled(Option.bEnabled);
+		if (!Option.bEnabled && !Option.DisabledReason.IsEmpty())
+		{
+			Button->SetToolTipText(Option.DisabledReason);
+		}
+		Button->OnClicked().AddUObject(this, &UMOItemContextMenu::HandleExtraActionClicked, Option.Id);
+		ButtonContainer->InsertChildAt(FMath::Clamp(InsertAt++, 0, ButtonContainer->GetChildrenCount()), Button);
+		ExtraActionButtons.Add(Button);
+	}
+}
+
+void UMOItemContextMenu::HandleExtraActionClicked(FName ActionId)
+{
+	OnActionSelected.Broadcast(ActionId, ItemGuid);
+	CloseMenu();
 }
 
 void UMOItemContextMenu::BindButtonEvents()

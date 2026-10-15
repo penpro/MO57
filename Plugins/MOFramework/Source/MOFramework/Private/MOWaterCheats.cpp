@@ -12,6 +12,10 @@
 //   MO.Medical.Contract <Type> [now]     give the local pawn a condition (with its course); now = skip the incubation
 //   MO.Medical.SkipIncubation [hours]    end every incubation now; hours = also fast-forward into the course
 //   MO.Survival.Advance <minutes>        run the needs (and illness effects on them) forward
+//   MO.Fire.SpawnLit                     a finished, fuelled, burning campfire in front of the pawn (to test boiling)
+//   MO.Item.Actions <ItemId>             the item menu's extra actions for an item the pawn carries, and its contents
+//   MO.Item.Do <ItemId> <Action>         do one through the real server RPC
+//   MO.Item.Menu <ItemId>                open the item context menu for it (screenshots)
 
 #include "CoreMinimal.h"
 
@@ -30,6 +34,11 @@
 #include "MOSurvivalStatsComponent.h"
 #include "MOVitalsComponent.h"
 #include "MOWaterSubsystem.h"
+#include "MOItemActions.h"
+#include "MOInventoryComponent.h"
+#include "MOUIManagerComponent.h"
+#include "MOCraftingStationActor.h"
+#include "MORecipeDatabaseSettings.h"
 #include "MOAnatomyComponent.h"
 #include "MOMetabolismComponent.h"
 #include "MOPlayerController.h"
@@ -436,6 +445,126 @@ namespace
 			PC->SetControlRotation(FRotator(-35.0f, FMath::RadiansToDegrees(FMath::Atan2(-Back.Y, -Back.X)), 0.0f));
 			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WATER GoToShore %s: water at (%.0f, %.0f) %s, standing at (%.0f, %.0f, %.0f), %.0f m from where the pawn was"),
 				bSea ? TEXT("sea") : TEXT("fresh"), Hit.X, Hit.Y, *UEnum::GetValueAsString(Water->ClassifyWaterAt(Hit.X, Hit.Y)), Stand.X, Stand.Y, Ground, FVector2D::Distance(FVector2D(P), Stand) / 100.0f);
+		}));
+
+
+	FAutoConsoleCommandWithWorldAndArgs GFireSpawnLitCmd(
+		TEXT("MO.Fire.SpawnLit"),
+		TEXT("Dev (server): a finished, fuelled, burning campfire (the BuildCampfire recipe's actor) 1.5 m in front of the local pawn -- for testing what needs a fire (boiling). Usage: MO.Fire.SpawnLit"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			AMOCharacter* Pawn = LocalMOPawn(World);
+			const FMORecipeDefinitionRow* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(FName(TEXT("BuildCampfire")));
+			UClass* FireClass = Recipe ? Recipe->PlacementData.BuildableActorClass.Get() : nullptr;
+			if (!Pawn || !FireClass || !Pawn->HasAuthority())
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] FIRE SpawnLit FAILED: needs a local pawn on the server and the BuildCampfire recipe's actor class"));
+				return;
+			}
+			FVector Spot = Pawn->GetActorLocation() + FRotator(0.0f, Pawn->GetActorRotation().Yaw, 0.0f).Vector() * 150.0f;
+			FHitResult Hit;
+			FCollisionQueryParams Params(SCENE_QUERY_STAT(MOFireSpawn), false, Pawn);
+			if (World->LineTraceSingleByChannel(Hit, Spot + FVector(0, 0, 300), Spot - FVector(0, 0, 600), ECC_WorldStatic, Params))
+			{
+				Spot = Hit.ImpactPoint;
+			}
+			FActorSpawnParameters SpawnParams;
+			SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+			AMOCraftingStationActor* Fire = World->SpawnActor<AMOCraftingStationActor>(FireClass, Spot, FRotator::ZeroRotator, SpawnParams);
+			if (!Fire)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] FIRE SpawnLit FAILED: %s is not a crafting station / did not spawn"), *FireClass->GetName());
+				return;
+			}
+			static_cast<AMOBuildableActor*>(Fire)->InitializeBuilding(FName(TEXT("BuildCampfire")));   // public on the base, the station overrides it protected
+			Fire->CurrentFuel = Fire->MaxFuel;
+			Fire->SetStationActive(true);
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] FIRE SpawnLit: %s at (%.0f, %.0f, %.0f), fuel %.0f, active %d, heat %.1f C over %.0f cm"), *Fire->GetName(), Spot.X, Spot.Y, Spot.Z,
+				Fire->CurrentFuel, Fire->IsStationActive() ? 1 : 0, Fire->HeatOutputCelsius, Fire->HeatRadiusCm);
+		}));
+
+
+	// ---- Item actions (FMOItemActions): what the item menu offers, done through the real server path ----
+
+	bool FirstEntryOf(AMOCharacter* Pawn, const FString& ItemId, FMOInventoryEntry& Out, int32& OutSlot)
+	{
+		UMOInventoryComponent* Inv = Pawn ? Pawn->FindComponentByClass<UMOInventoryComponent>() : nullptr;
+		if (!Inv)
+		{
+			return false;
+		}
+		for (int32 Slot = 0; Slot < Inv->GetSlotCount(); ++Slot)
+		{
+			if (Inv->TryGetSlotEntry(Slot, Out) && Out.ItemDefinitionId == FName(*ItemId))
+			{
+				OutSlot = Slot;
+				return true;
+			}
+		}
+		return false;
+	}
+
+	FAutoConsoleCommandWithWorldAndArgs GItemActionsCmd(
+		TEXT("MO.Item.Actions"),
+		TEXT("Dev: the extra actions the item menu offers for the first <ItemId> the local pawn carries (FMOItemActions::GetActions), and its contents. Usage: MO.Item.Actions <ItemId>"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			AMOCharacter* Pawn = LocalMOPawn(World);
+			FMOInventoryEntry Entry;
+			int32 Slot = INDEX_NONE;
+			if (Args.Num() == 0 || !FirstEntryOf(Pawn, Args[0], Entry, Slot))
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] ITEM Actions FAILED: no %s carried"), Args.Num() > 0 ? *Args[0] : TEXT("<ItemId>"));
+				return;
+			}
+			TArray<FMOItemActionOption> Options;
+			FMOItemActions::GetActions(Pawn, Pawn->FindComponentByClass<UMOInventoryComponent>(), Entry.ItemGuid, Options);
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] ITEM Actions %s slot %d: %.0f ml (salinity %.1f, illness %.2f %%/L, boiled %d, source %s), %d action(s)"), *Args[0], Slot,
+				Entry.Liquid.Millilitres, Entry.Liquid.SalinityGPerL, Entry.Liquid.IllnessChancePerLitre * 100.0f, Entry.Liquid.bBoiled ? 1 : 0, *UEnum::GetValueAsString(Entry.Liquid.Source), Options.Num());
+			for (const FMOItemActionOption& O : Options)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] ITEM   %s '%s' %s%s"), *O.Id.ToString(), *O.Label.ToString(), O.bEnabled ? TEXT("enabled") : TEXT("DISABLED: "),
+					O.bEnabled ? TEXT("") : *O.DisabledReason.ToString());
+			}
+		}));
+
+	FAutoConsoleCommandWithWorldAndArgs GItemDoCmd(
+		TEXT("MO.Item.Do"),
+		TEXT("Dev: do an item action on the first <ItemId> the local pawn carries through the real server RPC (as the menu button does). Usage: MO.Item.Do <ItemId> <Drink|Fill|PourOut|BoilOverFire|BoilWithStones|Use>"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			AMOCharacter* Pawn = LocalMOPawn(World);
+			AMOPlayerController* PC = World ? Cast<AMOPlayerController>(World->GetFirstPlayerController()) : nullptr;
+			FMOInventoryEntry Entry;
+			int32 Slot = INDEX_NONE;
+			if (Args.Num() < 2 || !PC || !FirstEntryOf(Pawn, Args[0], Entry, Slot))
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] ITEM Do FAILED: usage MO.Item.Do <ItemId> <Action>, and the item must be carried"));
+				return;
+			}
+			PC->ServerItemAction(Entry.ItemGuid, FName(*Args[1]));
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] ITEM Do %s %s: asked"), *Args[0], *Args[1]);
+		}));
+
+	FAutoConsoleCommandWithWorldAndArgs GItemMenuCmd(
+		TEXT("MO.Item.Menu"),
+		TEXT("Dev: open the item context menu (as a right-click in the inventory does) for the first <ItemId> the local pawn carries, at the screen centre. Usage: MO.Item.Menu <ItemId>"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			AMOCharacter* Pawn = LocalMOPawn(World);
+			APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
+			UMOUIManagerComponent* UI = PC ? PC->FindComponentByClass<UMOUIManagerComponent>() : nullptr;
+			FMOInventoryEntry Entry;
+			int32 Slot = INDEX_NONE;
+			if (Args.Num() == 0 || !UI || !FirstEntryOf(Pawn, Args[0], Entry, Slot))
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] ITEM Menu FAILED: no UI manager or no %s carried"), Args.Num() > 0 ? *Args[0] : TEXT("<ItemId>"));
+				return;
+			}
+			int32 X = 0, Y = 0;
+			PC->GetViewportSize(X, Y);
+			UI->ShowItemContextMenu(Pawn->FindComponentByClass<UMOInventoryComponent>(), Entry.ItemGuid, Slot, FVector2D(X * 0.5f, Y * 0.5f));
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] ITEM Menu %s slot %d: opened"), *Args[0], Slot);
 		}));
 
 }

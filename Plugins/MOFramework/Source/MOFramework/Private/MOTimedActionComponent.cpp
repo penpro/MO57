@@ -111,6 +111,13 @@ void UMOTimedActionComponent::NotifyInterrupt_Implementation(const FMOInterruptC
 	switch (Context.Reason)
 	{
 	case EMOInterruptReason::Movement:
+		// A stay-put action (kneeling to drink) ends at the first step; one that allows moving about (tending a fire) ends only when the pawn leaves its radius
+		// (the drift check in the tick).
+		if (MaxDrift <= 100.0f)
+		{
+			Cancel(TEXT("moved"));
+		}
+		break;
 	case EMOInterruptReason::Damage:
 	case EMOInterruptReason::Knockdown:
 	case EMOInterruptReason::Unconscious:

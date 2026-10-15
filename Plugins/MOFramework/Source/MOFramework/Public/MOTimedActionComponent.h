@@ -62,7 +62,8 @@ public:
 
 	/**
 	 * Start an action of GameSeconds on the game clock (server). Cancels one already running. OnComplete runs on the server when the time is up and the pawn is still
-	 * where it started (within MaxDriftCm) and undisturbed; OnCancelled (optional) if not. Returns false off the server.
+	 * where it started (within MaxDriftCm) and undisturbed; OnCancelled (optional) if not. MaxDriftCm <= 100 is a stay-put action (the first step ends it); a wider
+	 * one lets the pawn move about inside that radius (tending a fire). Returns false off the server.
 	 */
 	bool Begin(FName ActionId, const FText& Label, float GameSeconds, TFunction<void()> OnComplete, TFunction<void()> OnCancelled = nullptr, float MaxDriftCm = 75.0f);
 

@@ -1145,8 +1145,57 @@ void UMOInventoryComponent::BuildSaveData(FMOInventorySaveData& OutSaveData) con
 		SaveEntry.ItemDefinitionId = Entry.ItemDefinitionId;
 		SaveEntry.Quantity = Entry.Quantity;
 		SaveEntry.CurrentDurability = Entry.CurrentDurability;
+		SaveEntry.Liquid = Entry.Liquid;
 		OutSaveData.Items.Add(SaveEntry);
 	}
+}
+
+FMOItemInstanceState UMOInventoryComponent::GetInstanceState(const FGuid& ItemGuid) const
+{
+	FMOItemInstanceState State;
+	const int32 Index = FindEntryIndexByGuid(ItemGuid);
+	if (Inventory.Entries.IsValidIndex(Index))
+	{
+		State.Durability = Inventory.Entries[Index].CurrentDurability;
+		State.Liquid = Inventory.Entries[Index].Liquid;
+	}
+	return State;
+}
+
+bool UMOInventoryComponent::ApplyInstanceState(const FGuid& ItemGuid, const FMOItemInstanceState& State)
+{
+	const int32 Index = FindEntryIndexByGuid(ItemGuid);
+	if (!GetOwner() || !GetOwner()->HasAuthority() || !Inventory.Entries.IsValidIndex(Index))
+	{
+		return false;
+	}
+	FMOInventoryEntry& Entry = Inventory.Entries[Index];
+	if (State.Durability >= 0)
+	{
+		Entry.CurrentDurability = State.Durability;
+	}
+	Entry.Liquid = State.Liquid;
+	Inventory.MarkItemDirty(Entry);
+	BroadcastInventoryChanged();
+	return true;
+}
+
+bool UMOInventoryComponent::SetLiquid(const FGuid& ItemGuid, const FMOLiquidContents& Liquid)
+{
+	const int32 Index = FindEntryIndexByGuid(ItemGuid);
+	if (!GetOwner() || !GetOwner()->HasAuthority() || !Inventory.Entries.IsValidIndex(Index))
+	{
+		return false;
+	}
+	FMOInventoryEntry& Entry = Inventory.Entries[Index];
+	if (Entry.Liquid == Liquid)
+	{
+		return true;
+	}
+	Entry.Liquid = Liquid;
+	Inventory.MarkItemDirty(Entry);
+	BroadcastInventoryChanged();
+	return true;
 }
 
 bool UMOInventoryComponent::ApplySaveDataAuthority(const FMOInventorySaveData& InSaveData)
@@ -1179,6 +1228,7 @@ bool UMOInventoryComponent::ApplySaveDataAuthority(const FMOInventorySaveData& I
 		NewEntry.ItemDefinitionId = ItemSaveEntry.ItemDefinitionId;
 		NewEntry.Quantity = ItemSaveEntry.Quantity;
 		NewEntry.CurrentDurability = ItemSaveEntry.CurrentDurability;
+		NewEntry.Liquid = ItemSaveEntry.Liquid;
 		Inventory.Entries.Add(NewEntry);
 	}
 
@@ -1293,7 +1343,7 @@ namespace
 	}
 
 	// Configure the spawned actor with the item data via components or direct properties.
-	static void TryWriteDroppedItemPayload(AActor* SpawnedActor, const FGuid& ItemGuid, int32 Quantity, const FName& ItemDefinitionId)
+	static void TryWriteDroppedItemPayload(AActor* SpawnedActor, const FGuid& ItemGuid, int32 Quantity, const FName& ItemDefinitionId, const FMOItemInstanceState& State)
 	{
 		if (!IsValid(SpawnedActor))
 		{
@@ -1314,6 +1364,7 @@ namespace
 		{
 			ItemComp->ItemDefinitionId = ItemDefinitionId;
 			ItemComp->Quantity = Quantity;
+			ItemComp->InstanceState = State;   // durability and contents ride along: the pickup puts them back
 			UE_LOG(LogMOFramework, Log, TEXT("[MOInventory] Drop: Set ItemComponent ItemDefinitionId=%s, Quantity=%d"), *ItemDefinitionId.ToString(), Quantity);
 		}
 
@@ -1452,7 +1503,7 @@ AActor* UMOInventoryComponent::DropItemByGuid(const FGuid& ItemGuid, const FVect
 		return nullptr;
 	}
 
-	TryWriteDroppedItemPayload(SpawnedActor, Entry.ItemGuid, Entry.Quantity, Entry.ItemDefinitionId);
+	TryWriteDroppedItemPayload(SpawnedActor, Entry.ItemGuid, Entry.Quantity, Entry.ItemDefinitionId, GetInstanceState(ItemGuid));
 
 	// If this is an AMOWorldItem, trigger visual update from the item definition
 	// NOTE: ApplyItemDefinitionToWorldMesh sets RelativeTransform which can move the actor when ItemMesh is root
@@ -1477,7 +1528,7 @@ AActor* UMOInventoryComponent::DropItemByGuid(const FGuid& ItemGuid, const FVect
 	return SpawnedActor;
 }
 
-AActor* UMOInventoryComponent::SpawnWorldItem(FName ItemDefinitionId, int32 Quantity, const FGuid& ItemGuid, const FVector& DropLocation, const FRotator& DropRotation)
+AActor* UMOInventoryComponent::SpawnWorldItem(FName ItemDefinitionId, int32 Quantity, const FGuid& ItemGuid, const FVector& DropLocation, const FRotator& DropRotation, const FMOItemInstanceState& State)
 {
 	AActor* OwnerActor = GetOwner();
 	if (!IsValid(OwnerActor) || !OwnerActor->HasAuthority())
@@ -1524,7 +1575,7 @@ AActor* UMOInventoryComponent::SpawnWorldItem(FName ItemDefinitionId, int32 Quan
 		return nullptr;
 	}
 
-	TryWriteDroppedItemPayload(SpawnedActor, ItemGuid, Quantity, ItemDefinitionId);
+	TryWriteDroppedItemPayload(SpawnedActor, ItemGuid, Quantity, ItemDefinitionId, State);
 
 	if (AMOWorldItem* WorldItem = Cast<AMOWorldItem>(SpawnedActor))
 	{
@@ -1568,6 +1619,9 @@ bool UMOInventoryComponent::TransferItem(const FGuid& ItemGuid, UMOInventoryComp
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventory] TransferItem: Failed to add to target inventory (full?)"));
 		return false;
 	}
+
+	// ... and its contents (a container keeps its water).
+	TargetInventory->SetLiquid(NewGuid, Entry.Liquid);
 
 	// Remove from source
 	RemoveItemByGuid(ItemGuid, Entry.Quantity);
