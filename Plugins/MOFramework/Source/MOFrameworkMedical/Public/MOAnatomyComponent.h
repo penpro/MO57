@@ -190,6 +190,16 @@ struct MOFRAMEWORKMEDICAL_API FMOConditionSaveEntry
 
 	UPROPERTY()
 	bool bIsTreated = false;
+
+	/** A course's incubation left / length / progress (game seconds; FMOCondition). An old save has none: 0 = symptomatic, no course. */
+	UPROPERTY()
+	float IncubationRemaining = 0.0f;
+
+	UPROPERTY()
+	float CourseSeconds = 0.0f;
+
+	UPROPERTY()
+	float CourseElapsed = 0.0f;
 };
 
 USTRUCT(BlueprintType)
@@ -362,6 +372,21 @@ public:
 	 */
 	UFUNCTION(BlueprintPure, Category="MO|Anatomy|Conditions")
 	bool GetConditionByType(EMOConditionType ConditionType, FMOCondition& OutCondition) const;
+
+	/**
+	 * A chance of catching a condition (drinking untreated water: the source's illness chance for the volume). Rolls once; on a hit the condition is added -- with its
+	 * silent incubation if it follows a course, so the player feels nothing yet. Already having it is no second infection. Server only. True if caught.
+	 */
+	bool ExposeToCondition(EMOConditionType ConditionType, float Chance);
+
+	/** Tests and dev verbs: edit every condition in place (server), then replicate and notify. False off the server. */
+	bool ForEachConditionForDebug(TFunctionRef<void(FMOCondition&)> Edit);
+
+	/** Every active condition, symptomatic or still incubating (callers that show them filter on IsSymptomatic). */
+	const TArray<FMOCondition>& GetConditions() const { return Conditions.Conditions; }
+
+	/** Something about the conditions changed: one added or removed, symptoms started, or a severity moved by a point. Server and clients (replication). */
+	FSimpleMulticastDelegate OnConditionsChanged;
 
 	// ============================================================================
 	// QUERY API

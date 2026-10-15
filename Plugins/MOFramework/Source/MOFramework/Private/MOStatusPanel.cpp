@@ -1,4 +1,7 @@
 #include "MOStatusPanel.h"
+#include "TimerManager.h"
+#include "MOMedicalSubsystem.h"
+#include "MOAnatomyComponent.h"
 #include "MOFramework.h"
 #include "MOStatusField.h"
 #include "MOCharacterInfoEntry.h"
@@ -637,6 +640,18 @@ void UMOStatusPanel::BindToMedicalComponents(UMOVitalsComponent* Vitals, UMOMeta
 	// Unbind from any previous components first
 	UnbindFromMedicalComponents();
 
+	// The pawn's anatomy (found through the vitals' owner: the same body) lists its wounds and illnesses.
+	if (UMOAnatomyComponent* Anatomy = IsValid(Vitals) && Vitals->GetOwner() ? Vitals->GetOwner()->FindComponentByClass<UMOAnatomyComponent>() : nullptr)
+	{
+		BoundAnatomy = Anatomy;
+		AnatomyConditionsHandle = Anatomy->OnConditionsChanged.AddUObject(this, &UMOStatusPanel::RefreshAnatomyFields);
+		if (UWorld* World = GetWorld())
+		{
+			World->GetTimerManager().SetTimer(AnatomyRefreshTimer, this, &UMOStatusPanel::RefreshAnatomyFields, 1.0f, true);
+		}
+		RefreshAnatomyFields();
+	}
+
 	// Bind to vitals
 	if (IsValid(Vitals))
 	{
@@ -667,6 +682,17 @@ void UMOStatusPanel::BindToMedicalComponents(UMOVitalsComponent* Vitals, UMOMeta
 
 void UMOStatusPanel::UnbindFromMedicalComponents()
 {
+	if (UMOAnatomyComponent* Anatomy = BoundAnatomy.Get())
+	{
+		Anatomy->OnConditionsChanged.Remove(AnatomyConditionsHandle);
+	}
+	AnatomyConditionsHandle.Reset();
+	BoundAnatomy.Reset();
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(AnatomyRefreshTimer);
+	}
+
 	if (UMOVitalsComponent* Vitals = BoundVitals.Get())
 	{
 		Vitals->OnVitalsChanged.RemoveDynamic(this, &UMOStatusPanel::HandleVitalsChanged);
@@ -684,6 +710,78 @@ void UMOStatusPanel::UnbindFromMedicalComponents()
 		MentalState->OnMentalStateChanged.RemoveDynamic(this, &UMOStatusPanel::HandleMentalStateChanged);
 	}
 	BoundMentalState.Reset();
+}
+
+void UMOStatusPanel::RefreshAnatomyFields()
+{
+	const UMOAnatomyComponent* Anatomy = BoundAnatomy.Get();
+	const UMOMedicalSubsystem* Medical = GetWorld() && GetWorld()->GetGameInstance() ? GetWorld()->GetGameInstance()->GetSubsystem<UMOMedicalSubsystem>() : nullptr;
+	TSet<FName> Wanted;
+	auto Severity = [](float S)
+	{
+		return S >= 60.0f ? NSLOCTEXT("MOStatus", "Severe", "Severe") : S >= 30.0f ? NSLOCTEXT("MOStatus", "Moderate", "Moderate") : NSLOCTEXT("MOStatus", "Mild", "Mild");
+	};
+	auto Show = [this, &Wanted](FName Id, const FText& Title, EMOStatusCategory Category, const FText& Value, float Normalized, int32 SortOrder)
+	{
+		Wanted.Add(Id);
+		if (!FieldConfigMap.Contains(Id))
+		{
+			FMOStatusFieldConfig Config;
+			Config.FieldId = Id;
+			Config.Title = Title;
+			Config.Category = Category;
+			Config.bShowProgressBar = true;
+			Config.bInvertThresholds = true;   // high = bad
+			Config.WarningThreshold = 0.3f;
+			Config.CriticalThreshold = 0.6f;
+			Config.SortPriority = SortOrder;
+			AddField(Config);
+		}
+		UpdateFieldValue(Id, Value, Normalized);
+	};
+	if (Anatomy)
+	{
+		int32 WoundOrder = 0;
+		{
+			for (const FMOWound& Wound : Anatomy->GetAllWounds())
+			{
+				FString Notes;
+				if (Wound.BleedRate > 0.01f) { Notes += FString::Printf(TEXT("bleeding %.1f ml/s"), Wound.BleedRate); }
+				if (Wound.bIsBandaged) { Notes += Notes.IsEmpty() ? TEXT("bandaged") : TEXT(", bandaged"); }
+				if (Wound.bIsSutured) { Notes += Notes.IsEmpty() ? TEXT("sutured") : TEXT(", sutured"); }
+				if (Wound.bIsInfected) { Notes += Notes.IsEmpty() ? TEXT("infected") : TEXT(", infected"); }
+				const FText Value = Notes.IsEmpty() ? Severity(Wound.Severity) : FText::Format(NSLOCTEXT("MOStatus", "WoundValue", "{0} ({1})"), Severity(Wound.Severity), FText::FromString(Notes));
+				Show(FName(*FString::Printf(TEXT("Wound_%s"), *Wound.WoundId.ToString())), FText::Format(NSLOCTEXT("MOStatus", "WoundTitle", "{0}: {1}"),
+					UEnum::GetDisplayValueAsText(Wound.BodyPart), UEnum::GetDisplayValueAsText(Wound.WoundType)), EMOStatusCategory::Wounds, Value, Wound.Severity / 100.0f, WoundOrder++);
+			}
+		}
+		for (const FMOCondition& Condition : Anatomy->GetConditions())
+		{
+			// An illness still incubating is not felt: it has no row (the player cannot know yet).
+			if (!Condition.IsSymptomatic() || Condition.Severity < 1.0f)
+			{
+				continue;
+			}
+			FMOConditionDefinitionRow Def;
+			const bool bDef = Medical && Medical->GetConditionDefinition(Condition.ConditionType, Def);
+			Show(FName(*FString::Printf(TEXT("Condition_%d"), static_cast<int32>(Condition.ConditionType))), bDef && !Def.DisplayName.IsEmpty() ? Def.DisplayName : UEnum::GetDisplayValueAsText(Condition.ConditionType),
+				EMOStatusCategory::Conditions, Severity(Condition.Severity), Condition.Severity / 100.0f, static_cast<int32>(Condition.ConditionType));
+		}
+	}
+	TArray<FName> Stale;
+	for (const auto& Pair : FieldConfigMap)
+	{
+		const FString Id = Pair.Key.ToString();
+		if ((Id.StartsWith(TEXT("Wound_")) || Id.StartsWith(TEXT("Condition_"))) && !Wanted.Contains(Pair.Key))
+		{
+			Stale.Add(Pair.Key);
+		}
+	}
+	for (const FName& Id : Stale)
+	{
+		RemoveField(Id);
+	}
+	UpdateEmptyPlaceholders();
 }
 
 void UMOStatusPanel::HandleVitalsChanged()

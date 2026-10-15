@@ -199,4 +199,55 @@ bool FMOWorldGen_WaterLodGate::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOWorldGen_WaterBodyKind,
+	"MOFramework.WorldGen.WaterBodyKind",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOWorldGen_WaterBodyKind::RunTest(const FString& Parameters)
+{
+	// Drinking reads ClassifyWaterBody (salt or fresh, how risky): it must say "water" exactly where the terrain is under its water surface, and every kind
+	// must exist somewhere -- else a river would drink as sea (or nothing) and the illness odds would be wrong.
+	TSharedRef<FMOWorldGenParams, ESPMode::ThreadSafe> Built = MakeShared<FMOWorldGenParams, ESPMode::ThreadSafe>();
+	Built->Finalize();   // the shipping tuning, upland lakes on
+	const FMOWorldGenParamsRef P(Built);
+	const FMOWorldGenTuning& T = P->Tuning;
+	FRandomStream R(77);
+	int32 Count[6] = {}, Disagree = 0, Samples = 0;
+	for (int32 I = 0; I < 40000; ++I)
+	{
+		const double X = R.FRandRange(-3.0e6f, 3.0e6f), Y = R.FRandRange(-3.0e6f, 3.0e6f);
+		const EMOWaterBodyKind Kind = FMOWorldGen::ClassifyWaterBody(*P, X, Y, WaterTestSeed);
+		float Surface = 0.0f;
+		FMOWorldGen::GetWaterSurfaceCm(*P, X, Y, WaterTestSeed, Surface);
+		const float Ground = FMOWorldGen::SampleHeightCm(*P, X, Y, WaterTestSeed, T.VoxelSizeCm);
+		const bool bWet = Ground < Surface;
+		// An upland lake's ellipse is water by definition (its bed is under the plane except a sliver at the shore line): only the sea-plane kinds must match the ground.
+		if (Kind != EMOWaterBodyKind::UplandLake)
+		{
+			++Samples;
+			Disagree += (Kind != EMOWaterBodyKind::None) != bWet ? 1 : 0;
+		}
+		Count[static_cast<int32>(Kind)]++;
+	}
+	AddInfo(FString::Printf(TEXT("none %d, sea %d, river %d, pond %d, lake %d, upland lake %d"), Count[0], Count[1], Count[2], Count[3], Count[4], Count[5]));
+	TestTrue(FString::Printf(TEXT("water exactly where the ground is under the sea plane (%d of %d disagree)"), Disagree, Samples), Disagree <= Samples / 1000);
+	TestTrue(TEXT("there is sea"), Count[static_cast<int32>(EMOWaterBodyKind::Sea)] > 0);
+	TestTrue(TEXT("there are rivers"), Count[static_cast<int32>(EMOWaterBodyKind::River)] > 0);
+	TestTrue(TEXT("there are lakes or ponds"), Count[static_cast<int32>(EMOWaterBodyKind::Lake)] + Count[static_cast<int32>(EMOWaterBodyKind::Pond)] > 0);
+	TestTrue(TEXT("there are upland lakes"), Count[static_cast<int32>(EMOWaterBodyKind::UplandLake)] > 0);
+	TestTrue(TEXT("most of the world is dry land or sea"), Count[0] + Count[1] > 30000);
+
+	// CONTROL: with water off nothing is water.
+	TSharedRef<FMOWorldGenParams, ESPMode::ThreadSafe> Dry = MakeShared<FMOWorldGenParams, ESPMode::ThreadSafe>();
+	Dry->Tuning.bEnableWater = false;
+	Dry->Finalize();
+	int32 Wet = 0;
+	for (int32 I = 0; I < 2000; ++I)
+	{
+		Wet += FMOWorldGen::ClassifyWaterBody(*Dry, R.FRandRange(-3.0e6f, 3.0e6f), R.FRandRange(-3.0e6f, 3.0e6f), WaterTestSeed) != EMOWaterBodyKind::None ? 1 : 0;
+	}
+	TestEqual(TEXT("CONTROL: water off -> no water anywhere"), Wet, 0);
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

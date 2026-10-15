@@ -1,4 +1,8 @@
 #include "MOCharacterUIController.h"
+#include "MOHUDMode.h"
+#include "MOMedicalSubsystem.h"
+#include "MOAnatomyComponent.h"
+#include "MOTimedActionComponent.h"
 #include "MOUITokens.h"
 #include "MOFramework.h"
 
@@ -67,6 +71,8 @@ void UMOCharacterUIController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	// outlives us by a frame.
 	UnbindFromPawnVitalsForMoodles();
 	UnbindFromPawnSurvivalStatsForMoodles();
+	UnbindFromPawnTimedAction();
+	UnbindFromPawnConditionsForMoodles();
 
 	// Clean up skills panel widget - unbind delegates first
 	if (UMOSkillsPanel* SkillsWidget = SkillsPanelWidget.Get())
@@ -420,7 +426,194 @@ void UMOCharacterUIController::OnPawnChanged()
 	// Survival-stat-derived moodles (hunger / thirst / energy).
 	UnbindFromPawnSurvivalStatsForMoodles();
 	BindToPawnSurvivalStatsForMoodles();
+
+	// The new pawn's timed actions and illnesses.
+	UnbindFromPawnTimedAction();
+	BindToPawnTimedAction();
+	UnbindFromPawnConditionsForMoodles();
+	BindToPawnConditionsForMoodles();
 }
+
+// =============================================================================
+// Timed body actions (UMOTimedActionComponent)
+// =============================================================================
+
+void UMOCharacterUIController::BindToPawnTimedAction()
+{
+	APlayerController* PC = ResolveOwningPlayerController();
+	APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+	UMOTimedActionComponent* Action = Pawn ? Pawn->FindComponentByClass<UMOTimedActionComponent>() : nullptr;
+	if (!Action)
+	{
+		return;
+	}
+	TimedActionChangedHandle = Action->OnStateChanged.AddUObject(this, &UMOCharacterUIController::HandleTimedActionChanged);
+	BoundTimedAction = Action;
+	if (Action->IsActive())
+	{
+		HandleTimedActionChanged(Action->GetState());
+	}
+}
+
+void UMOCharacterUIController::UnbindFromPawnTimedAction()
+{
+	if (UMOTimedActionComponent* Action = BoundTimedAction.Get())
+	{
+		Action->OnStateChanged.Remove(TimedActionChangedHandle);
+	}
+	TimedActionChangedHandle.Reset();
+	BoundTimedAction.Reset();
+	TearDownTimedActionProgressWidget();
+}
+
+void UMOCharacterUIController::HandleTimedActionChanged(const FMOTimedActionState& State)
+{
+	if (!IsLocalOwningPlayerController())
+	{
+		return;
+	}
+	if (!State.bActive)
+	{
+		TearDownTimedActionProgressWidget();
+		return;
+	}
+	TSubclassOf<UMOProgressWidgetBase> WidgetClass = TimedActionProgressWidgetClass ? TimedActionProgressWidgetClass : TerraformProgressWidgetClass;
+	if (!WidgetClass)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOCharUI] No progress widget class for timed actions (TimedActionProgressWidgetClass / TerraformProgressWidgetClass): '%s' runs without a bar"),
+			*State.Label.ToString());
+		return;
+	}
+	TearDownTimedActionProgressWidget();
+	UMOProgressWidgetBase* Widget = Cast<UMOProgressWidgetBase>(PushWidgetToLayer(MOUILayerTags::Layer_GameOverlay, WidgetClass));
+	if (!Widget)
+	{
+		return;
+	}
+	TimedActionProgressWidget = Widget;
+	UMOUIManagerComponent::RegisterHUDElement(Widget, EMOHUDElementKind::Feedback);
+	Widget->OnCancelled.RemoveDynamic(this, &UMOCharacterUIController::HandleTimedActionWidgetCancelled);
+	Widget->OnCancelled.AddDynamic(this, &UMOCharacterUIController::HandleTimedActionWidgetCancelled);
+	// The label and length, then the component's own clock drives the values (SetProgress turns the widget's own timer off).
+	Widget->StartProgress(State.Label, State.RealSeconds);
+	UpdateTimedActionProgress();
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().SetTimer(TimedActionProgressTimer, this, &UMOCharacterUIController::UpdateTimedActionProgress, 0.05f, true);
+	}
+}
+
+void UMOCharacterUIController::UpdateTimedActionProgress()
+{
+	UMOProgressWidgetBase* Widget = TimedActionProgressWidget.Get();
+	const UMOTimedActionComponent* Action = BoundTimedAction.Get();
+	if (!Widget || !Action || !Action->IsActive())
+	{
+		return;
+	}
+	Widget->SetProgress(Action->GetProgress01(), Action->GetRemainingRealSeconds());
+}
+
+void UMOCharacterUIController::HandleTimedActionWidgetCancelled()
+{
+	if (UMOTimedActionComponent* Action = BoundTimedAction.Get())
+	{
+		Action->ServerCancel();
+	}
+}
+
+void UMOCharacterUIController::TearDownTimedActionProgressWidget()
+{
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(TimedActionProgressTimer);
+	}
+	UMOProgressWidgetBase* Widget = TimedActionProgressWidget.Get();
+	TimedActionProgressWidget.Reset();
+	if (!IsValid(Widget))
+	{
+		return;
+	}
+	Widget->OnCancelled.RemoveDynamic(this, &UMOCharacterUIController::HandleTimedActionWidgetCancelled);
+	Widget->DeactivateWidget();
+	if (Widget->IsInViewport())
+	{
+		Widget->RemoveFromParent();
+	}
+}
+
+// =============================================================================
+// Illness moodles (symptomatic conditions)
+// =============================================================================
+
+void UMOCharacterUIController::BindToPawnConditionsForMoodles()
+{
+	APlayerController* PC = ResolveOwningPlayerController();
+	APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+	UMOAnatomyComponent* Anatomy = Pawn ? Pawn->FindComponentByClass<UMOAnatomyComponent>() : nullptr;
+	if (!Anatomy)
+	{
+		return;
+	}
+	ConditionsChangedHandle = Anatomy->OnConditionsChanged.AddUObject(this, &UMOCharacterUIController::RefreshConditionMoodles);
+	BoundAnatomy = Anatomy;
+	RefreshConditionMoodles();
+}
+
+void UMOCharacterUIController::UnbindFromPawnConditionsForMoodles()
+{
+	if (UMOAnatomyComponent* Anatomy = BoundAnatomy.Get())
+	{
+		Anatomy->OnConditionsChanged.Remove(ConditionsChangedHandle);
+	}
+	ConditionsChangedHandle.Reset();
+	BoundAnatomy.Reset();
+	RefreshConditionMoodles();   // a new pawn starts with none of the old one's
+}
+
+void UMOCharacterUIController::RefreshConditionMoodles()
+{
+	UMOUIManagerComponent* UIManager = GetUIManager();
+	UMOHUDRootWidget* HUDRoot = UIManager ? UIManager->GetHUDRoot() : nullptr;
+	UMOStatusEffectStripWidget* Strip = HUDRoot ? HUDRoot->GetStatusStrip() : nullptr;
+	if (!Strip)
+	{
+		return;
+	}
+	const UMOAnatomyComponent* Anatomy = BoundAnatomy.Get();
+	const UMOMedicalSubsystem* Medical = GetWorld() && GetWorld()->GetGameInstance() ? GetWorld()->GetGameInstance()->GetSubsystem<UMOMedicalSubsystem>() : nullptr;
+	TSet<FName> Wanted;
+	if (Anatomy && Medical)
+	{
+		for (const FMOCondition& Condition : Anatomy->GetConditions())
+		{
+			FMOConditionDefinitionRow Def;
+			// Nothing shows while an illness incubates: the player has no way to know yet.
+			if (!Condition.IsSymptomatic() || Condition.Severity < 1.0f || !Medical->GetConditionDefinition(Condition.ConditionType, Def) || !Def.bShowsMoodle)
+			{
+				continue;
+			}
+			FMOStatusMoodle M;
+			M.Id = FName(*FString::Printf(TEXT("Condition_%s"), *UEnum::GetValueAsString(Condition.ConditionType).RightChop(FCString::Strlen(TEXT("EMOConditionType::")))));
+			M.Label = Def.MoodleLabel.IsEmpty() ? Def.DisplayName : Def.MoodleLabel;
+			M.Tooltip = Def.MoodleTooltip.IsEmpty() ? Def.Description : Def.MoodleTooltip;
+			M.Icon = Def.Icon.LoadSynchronous();   // the condition's own glyph when one is authored; none otherwise (never another moodle's)
+			M.Level = Condition.Severity >= 45.0f ? 1 : 0;
+			M.Severity = Condition.Severity >= 45.0f ? EMOStatusMoodleSeverity::Critical : EMOStatusMoodleSeverity::Warning;
+			Strip->AddOrUpdateMoodle(M);
+			Wanted.Add(M.Id);
+		}
+	}
+	for (const FName& Id : ShownConditionMoodles)
+	{
+		if (!Wanted.Contains(Id))
+		{
+			Strip->RemoveMoodle(Id);
+		}
+	}
+	ShownConditionMoodles = MoveTemp(Wanted);
+}
+
 
 // =============================================================================
 // Terraforming Progress Widget Lifecycle

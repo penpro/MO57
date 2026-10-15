@@ -121,22 +121,41 @@ bool UMOMetabolismComponent::ConsumeFood(const FMOItemNutrition& Nutrition, FNam
 
 void UMOMetabolismComponent::DrinkWater(float AmountML)
 {
-	if (GetOwnerRole() != ROLE_Authority || AmountML <= 0.0f)
+	if (AmountML > 0.0f)
+	{
+		ChangeBodyWater(AmountML);
+	}
+}
+
+void UMOMetabolismComponent::ChangeBodyWater(float DeltaML)
+{
+	if (GetOwnerRole() != ROLE_Authority || DeltaML == 0.0f)
 	{
 		return;
 	}
 
-	// Direct hydration (water absorbs quickly)
-	// Normal daily need is ~2500mL, so each mL is ~0.04% of daily need
+	// Hydration is body water against the daily need (~2500 mL = 100 %): each mL is ~0.04 %.
 	const float SafeWaterReq = FMath::Max(1.0f, DailyWaterRequirement);
-	float HydrationGain = (AmountML / SafeWaterReq) * 100.0f;
-
-	float OldHydration = Nutrients.HydrationLevel;
-	Nutrients.HydrationLevel = FMath::Clamp(Nutrients.HydrationLevel + HydrationGain, 0.0f, 100.0f);
+	const float OldHydration = Nutrients.HydrationLevel;
+	Nutrients.HydrationLevel = FMath::Clamp(Nutrients.HydrationLevel + DeltaML / SafeWaterReq * 100.0f, 0.0f, 100.0f);
 
 	if (FMath::Abs(Nutrients.HydrationLevel - OldHydration) >= 5.0f)
 	{
 		OnNutrientLevelChanged.Broadcast(FName("Hydration"), Nutrients.HydrationLevel);
+	}
+}
+
+void UMOMetabolismComponent::AddSodium(float PercentOfDailyNeed)
+{
+	if (GetOwnerRole() != ROLE_Authority || PercentOfDailyNeed <= 0.0f)
+	{
+		return;
+	}
+	const float Old = Nutrients.Sodium;
+	Nutrients.Sodium = FMath::Clamp(Nutrients.Sodium + PercentOfDailyNeed, 0.0f, 200.0f);
+	if (FMath::Abs(Nutrients.Sodium - Old) >= 5.0f)
+	{
+		OnNutrientLevelChanged.Broadcast(FName("Sodium"), Nutrients.Sodium);
 	}
 }
 

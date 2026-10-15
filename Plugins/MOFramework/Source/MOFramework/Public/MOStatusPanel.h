@@ -413,4 +413,12 @@ protected:
 
 	UPROPERTY()
 	TWeakObjectPtr<UMOMentalStateComponent> BoundMentalState;
+
+	/** The same pawn's anatomy: its wounds and illnesses fill the Wounds / Conditions tabs (they were documented as "dynamic" and never filled). */
+	TWeakObjectPtr<class UMOAnatomyComponent> BoundAnatomy;
+	FDelegateHandle AnatomyConditionsHandle;
+	FTimerHandle AnatomyRefreshTimer;
+
+	/** One row per wound and per symptomatic condition, diffed against what is shown (added / updated / removed). Bleed rates change every tick: refreshed at 1 Hz. */
+	void RefreshAnatomyFields();
 };

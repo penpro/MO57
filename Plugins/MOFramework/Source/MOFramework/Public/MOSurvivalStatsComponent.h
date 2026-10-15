@@ -200,6 +200,13 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Survival")
 	bool ConsumeItem(UMOInventoryComponent* InventoryComponent, const FGuid& ItemGuid);
 
+	/**
+	 * THE path drinkable liquid takes into the body (a lake, a river, the sea, a container): Millilitres of water carrying SalinityGPerL of salts. What is left once the
+	 * kidneys clear the salt (FMOWaterPhysiology::NetBodyWaterMl) fills -- or, for anything as salty as the sea, DRAINS -- the thirst counter and the metabolism's body
+	 * water; the salt's sodium goes to the metabolism. A negative volume is water lost (an illness's diarrhoea). Server only. Returns the net body water (ml).
+	 */
+	float IngestWater(float Millilitres, float SalinityGPerL);
+
 	UFUNCTION(BlueprintCallable, Category="MO|Survival")
 	void ModifyStat(FName StatName, float Delta);
 
@@ -217,6 +224,9 @@ public:
 
 	UFUNCTION(BlueprintPure, Category="MO|Survival")
 	bool IsStatCritical(FName StatName) const;
+
+	/** The needs side of every symptomatic illness (FMOConditionDefinitionRow body effects x severity): fluid loss through IngestWater, energy drain. Server. */
+	void ApplyConditionEffects(float GameSeconds);
 
 	/** Run every stat's regen / decay over GameSeconds of world-clock time. The timer calls it with the clock-scaled tick; tests and
 	 *  cheats call it to fast-forward. */

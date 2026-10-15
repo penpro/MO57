@@ -444,4 +444,43 @@ private:
 
 	/** Push/remove a moodle for the given stat based on its current percent. */
 	void RefreshSurvivalStatMoodle(FName StatName);
+
+	// =========================================================================
+	// TIMED BODY ACTIONS (UMOTimedActionComponent): a progress bar while the pawn drinks, fills, boils ...
+	// =========================================================================
+
+	/** The bar's widget class: any UMOProgressWidgetBase (only its label / progress / time API is used). Unset = the terraform progress widget's class. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Character|TimedAction", meta=(AllowPrivateAccess="true"))
+	TSubclassOf<UMOProgressWidgetBase> TimedActionProgressWidgetClass;
+
+	TWeakObjectPtr<class UMOTimedActionComponent> BoundTimedAction;
+	FDelegateHandle TimedActionChangedHandle;
+
+	UPROPERTY(Transient)
+	TWeakObjectPtr<UMOProgressWidgetBase> TimedActionProgressWidget;
+
+	FTimerHandle TimedActionProgressTimer;
+
+	void BindToPawnTimedAction();
+	void UnbindFromPawnTimedAction();
+	void HandleTimedActionChanged(const struct FMOTimedActionState& State);
+	void UpdateTimedActionProgress();
+	void TearDownTimedActionProgressWidget();
+
+	UFUNCTION()
+	void HandleTimedActionWidgetCancelled();
+
+	// =========================================================================
+	// ILLNESS MOODLES: every symptomatic condition whose definition shows one (FMOConditionDefinitionRow::bShowsMoodle) -- generic, no per-illness code
+	// =========================================================================
+
+	TWeakObjectPtr<class UMOAnatomyComponent> BoundAnatomy;
+	FDelegateHandle ConditionsChangedHandle;
+
+	/** Moodle ids this controller pushed for conditions (so a recovered illness's moodle is removed). */
+	TSet<FName> ShownConditionMoodles;
+
+	void BindToPawnConditionsForMoodles();
+	void UnbindFromPawnConditionsForMoodles();
+	void RefreshConditionMoodles();
 };

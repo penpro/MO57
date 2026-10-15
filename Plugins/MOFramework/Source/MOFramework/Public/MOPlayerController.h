@@ -134,6 +134,7 @@ class UMONotificationComponent;
 class UMOTextInputDialog;
 class UMOQuickPickDialog;
 class UMOTimeOfDayDialog;
+enum class EMOWaterBodyKind : uint8;
 struct FMOQuickPickOption;
 class UMOBuildingComponent;
 class UEnhancedInputLocalPlayerSubsystem;
@@ -646,6 +647,19 @@ public:
 	 * (Wes, Oct 15 2026: "things like grass just default to forage"). False when the trace hits nothing or the UI is missing.
 	 */
 	bool TryOpenForageMenuAtCrosshair();
+
+	/**
+	 * Open water under the crosshair: the first water surface along the view (UMOWaterSubsystem::FindWaterAlongRay, stopped by the first solid hit), its kind, and
+	 * whether this pawn can reach it to drink (UMOWaterSourceSettings::ReachCm). THE one definition E and the crosshair hint both use. False if no water is in view.
+	 */
+	bool FindWaterAtCrosshair(FVector& OutPoint, EMOWaterBodyKind& OutKind, bool& bOutWithinReach) const;
+
+	/** E on water within reach: drink a draught (ServerDrinkWater). Water in view but out of reach says so. False if there is no water under the crosshair. */
+	bool TryDrinkAtCrosshair();
+
+	/** Drink from the water at Point (FMOWaterActions::BeginDrink: the server reads the kind of water itself and times the draught on the pawn). */
+	UFUNCTION(Server, Reliable)
+	void ServerDrinkWater(FVector_NetQuantize Point);
 
 	/**
 	 * Change a person's name or gender (Field = "CharacterName" / "Gender") -- the status panel's Change. The pawn's identity component is the one source

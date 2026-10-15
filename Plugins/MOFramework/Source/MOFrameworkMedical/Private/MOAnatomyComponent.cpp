@@ -7,6 +7,7 @@
 #include "MOMedicalSubsystem.h"
 #include "MOMedicalProviderInterface.h"
 #include "MOGameClockSubsystem.h"
+#include "MOWaterPhysiology.h"
 #include "Net/UnrealNetwork.h"
 #include "Engine/DataTable.h"
 #include "Engine/GameInstance.h"
@@ -405,10 +406,48 @@ bool UMOAnatomyComponent::AddCondition(EMOConditionType ConditionType, EMOBodyPa
 	NewCondition.Duration = 0.0f;
 	NewCondition.bIsTreated = false;
 
+	// A condition that follows a course (an illness) starts silent: its incubation and its length are rolled now, from its definition.
+	FMOConditionDefinitionRow Def;
+	const UMOMedicalSubsystem* Medical = GetWorld() && GetWorld()->GetGameInstance() ? GetWorld()->GetGameInstance()->GetSubsystem<UMOMedicalSubsystem>() : nullptr;
+	if (Medical && Medical->GetConditionDefinition(ConditionType, Def) && Def.bFollowsCourse)
+	{
+		NewCondition.IncubationRemaining = FMath::FRandRange(Def.IncubationGameHoursMin, FMath::Max(Def.IncubationGameHoursMin, Def.IncubationGameHoursMax)) * 3600.0f;
+		NewCondition.CourseSeconds = FMath::Max(60.0f, FMath::FRandRange(Def.CourseGameHoursMin, FMath::Max(Def.CourseGameHoursMin, Def.CourseGameHoursMax)) * 3600.0f);
+		NewCondition.CourseElapsed = 0.0f;
+		NewCondition.Severity = 0.0f;
+		UE_LOG(LogMOFrameworkMedical, Log, TEXT("[MOAnatomy] %s contracted %s: symptoms in %.1f game h, lasting %.1f game h"), *GetNameSafe(GetOwner()),
+			*UEnum::GetValueAsString(ConditionType), NewCondition.IncubationRemaining / 3600.0f, NewCondition.CourseSeconds / 3600.0f);
+	}
+
 	Conditions.AddCondition(NewCondition);
 	OnConditionAdded.Broadcast(NewCondition.ConditionId, ConditionType);
+	OnConditionsChanged.Broadcast();
 
 	return true;
+}
+
+bool UMOAnatomyComponent::ForEachConditionForDebug(TFunctionRef<void(FMOCondition&)> Edit)
+{
+	if (GetOwnerRole() != ROLE_Authority)
+	{
+		return false;
+	}
+	for (FMOCondition& Condition : Conditions.Conditions)
+	{
+		Edit(Condition);
+		Conditions.MarkItemDirty(Condition);
+	}
+	OnConditionsChanged.Broadcast();
+	return true;
+}
+
+bool UMOAnatomyComponent::ExposeToCondition(EMOConditionType ConditionType, float Chance)
+{
+	if (GetOwnerRole() != ROLE_Authority || Chance <= 0.0f || HasCondition(ConditionType))
+	{
+		return false;
+	}
+	return FMath::FRand() < Chance && AddCondition(ConditionType);
 }
 
 bool UMOAnatomyComponent::RemoveCondition(const FGuid& ConditionId)
@@ -646,6 +685,9 @@ void UMOAnatomyComponent::BuildSaveData(FMOAnatomySaveData& OutSaveData) const
 		Entry.Severity = Condition.Severity;
 		Entry.Duration = Condition.Duration;
 		Entry.bIsTreated = Condition.bIsTreated;
+		Entry.IncubationRemaining = Condition.IncubationRemaining;
+		Entry.CourseSeconds = Condition.CourseSeconds;
+		Entry.CourseElapsed = Condition.CourseElapsed;
 		OutSaveData.Conditions.Add(Entry);
 	}
 }
@@ -709,6 +751,9 @@ bool UMOAnatomyComponent::ApplySaveDataAuthority(const FMOAnatomySaveData& InSav
 		Condition.Severity = Entry.Severity;
 		Condition.Duration = Entry.Duration;
 		Condition.bIsTreated = Entry.bIsTreated;
+		Condition.IncubationRemaining = Entry.IncubationRemaining;
+		Condition.CourseSeconds = Entry.CourseSeconds;
+		Condition.CourseElapsed = Entry.CourseElapsed;
 		Conditions.AddCondition(Condition);
 	}
 
@@ -739,16 +784,18 @@ void UMOAnatomyComponent::OnWoundReplicatedRemove(const FMOWound& Wound)
 void UMOAnatomyComponent::OnConditionReplicatedAdd(const FMOCondition& Condition)
 {
 	OnConditionAdded.Broadcast(Condition.ConditionId, Condition.ConditionType);
+	OnConditionsChanged.Broadcast();
 }
 
 void UMOAnatomyComponent::OnConditionReplicatedChange(const FMOCondition& Condition)
 {
-	// Optional: notify UI of condition updates
+	OnConditionsChanged.Broadcast();
 }
 
 void UMOAnatomyComponent::OnConditionReplicatedRemove(const FMOCondition& Condition)
 {
 	OnConditionRemoved.Broadcast(Condition.ConditionId, Condition.ConditionType);
+	OnConditionsChanged.Broadcast();
 }
 
 // ============================================================================
@@ -913,6 +960,44 @@ void UMOAnatomyComponent::ProcessCondition(FMOCondition& Condition, float DeltaT
 				bHasDefinition = MedicalSubsystem->GetConditionDefinition(Condition.ConditionType, ConditionDef);
 			}
 		}
+	}
+
+	// An illness with a course: silent incubation, then a severity that rises to the peak and fades; gone at the end. Its harm is in its body effects (fluid loss ...,
+	// applied by the survival stats), not in a severity that only climbs.
+	if (Condition.FollowsCourse())
+	{
+		const bool bWasSymptomatic = Condition.IsSymptomatic();
+		const float OldSeverity = Condition.Severity;
+		if (Condition.IncubationRemaining > 0.0f)
+		{
+			Condition.IncubationRemaining = FMath::Max(0.0f, Condition.IncubationRemaining - DeltaTime);
+		}
+		else
+		{
+			Condition.CourseElapsed += DeltaTime;
+			Condition.Severity = FMOWaterPhysiology::CourseSeverity(Condition.CourseElapsed, Condition.CourseSeconds, bHasDefinition ? ConditionDef.PeakSeverity : 60.0f);
+		}
+		if (Condition.IsSymptomatic() && Condition.CourseElapsed >= Condition.CourseSeconds)
+		{
+			const FGuid RemovedId = Condition.ConditionId;
+			const EMOConditionType RemovedType = Condition.ConditionType;
+			UE_LOG(LogMOFrameworkMedical, Log, TEXT("[MOAnatomy] %s recovered from %s"), *GetNameSafe(GetOwner()), *UEnum::GetValueAsString(RemovedType));
+			Conditions.RemoveCondition(RemovedId);
+			OnConditionRemoved.Broadcast(RemovedId, RemovedType);
+			OnConditionsChanged.Broadcast();
+			return;
+		}
+		if (bWasSymptomatic != Condition.IsSymptomatic())
+		{
+			UE_LOG(LogMOFrameworkMedical, Log, TEXT("[MOAnatomy] %s: %s symptoms start (%.1f game h course)"), *GetNameSafe(GetOwner()),
+				*UEnum::GetValueAsString(Condition.ConditionType), Condition.CourseSeconds / 3600.0f);
+		}
+		Conditions.MarkItemDirty(Condition);
+		if (bWasSymptomatic != Condition.IsSymptomatic() || FMath::Abs(Condition.Severity - OldSeverity) >= 1.0f)
+		{
+			OnConditionsChanged.Broadcast();
+		}
+		return;
 	}
 
 	// Use DataTable values if available, otherwise use defaults

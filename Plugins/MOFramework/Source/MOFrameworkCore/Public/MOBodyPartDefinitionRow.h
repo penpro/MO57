@@ -317,7 +317,53 @@ struct MOFRAMEWORKCORE_API FMOConditionDefinitionRow : public FTableRowBase
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Condition|Treatment", meta=(ClampMin="0"))
 	float NaturalRecoveryRate = 0.0f;
 
+	// ---- Course (a self-limiting illness: Docs/Water_And_Illness.md) ----
+
+	/**
+	 * The condition runs a COURSE instead of the linear Progression above: a silent incubation, then symptoms whose severity rises to PeakSeverity over the first third
+	 * and fades to nothing at the end, when it is gone. ProgressionRate / ProgressesTo / recovery rates are ignored; its harm comes from the effects below (an illness's
+	 * fluid loss is what makes it dangerous). Times are in GAME hours, compressed like the survival needs.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Condition|Course")
+	bool bFollowsCourse = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Condition|Course", meta=(EditCondition="bFollowsCourse", ClampMin="0"))
+	float IncubationGameHoursMin = 0.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Condition|Course", meta=(EditCondition="bFollowsCourse", ClampMin="0"))
+	float IncubationGameHoursMax = 0.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Condition|Course", meta=(EditCondition="bFollowsCourse", ClampMin="0.1"))
+	float CourseGameHoursMin = 8.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Condition|Course", meta=(EditCondition="bFollowsCourse", ClampMin="0.1"))
+	float CourseGameHoursMax = 24.0f;
+
+	/** Severity at the worst of the course (0-100). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Condition|Course", meta=(EditCondition="bFollowsCourse", ClampMin="1", ClampMax="100"))
+	float PeakSeverity = 60.0f;
+
+	// ---- Body effects (scaled by Severity / 100; applied by the survival stats component) ----
+
+	/** Body water lost (diarrhoea, vomiting) per game hour at severity 100 (ml). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Condition|BodyEffects", meta=(ClampMin="0"))
+	float FluidLossMlPerHourAtFullSeverity = 0.0f;
+
+	/** Energy (the survival stat, 0-100) drained per game hour at severity 100: being ill is exhausting. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Condition|BodyEffects", meta=(ClampMin="0"))
+	float EnergyDrainPerHourAtFullSeverity = 0.0f;
+
 	// ---- UI ----
+
+	/** Show a moodle while symptomatic (MoodleLabel, MoodleTooltip; severity from the condition's). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Condition|UI")
+	bool bShowsMoodle = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Condition|UI", meta=(EditCondition="bShowsMoodle"))
+	FText MoodleLabel;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Condition|UI", meta=(EditCondition="bShowsMoodle", MultiLine=true))
+	FText MoodleTooltip;
 
 	/** Color for condition indicator. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Condition|UI")

@@ -36,9 +36,16 @@ void UMOStatusMoodleWidget::ApplyMoodleToWidgets()
 
 	if (IconImage)
 	{
+		// A moodle without an icon shows none: the strip recycles its pills, and leaving the brush alone showed the PREVIOUS moodle's icon (a stomach bug
+		// wore the cold snowflake, Oct 15 2026).
 		if (CurrentMoodle.Icon)
 		{
 			IconImage->SetBrushFromTexture(CurrentMoodle.Icon, /*bMatchSize*/ false);
+			IconImage->SetVisibility(ESlateVisibility::HitTestInvisible);
+		}
+		else
+		{
+			IconImage->SetVisibility(ESlateVisibility::Collapsed);
 		}
 		IconImage->SetColorAndOpacity(Tint);
 	}

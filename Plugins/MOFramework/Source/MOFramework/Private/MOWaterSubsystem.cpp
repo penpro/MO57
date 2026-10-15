@@ -39,6 +39,47 @@ bool UMOWaterSubsystem::GetGroundZ(double X, double Y, float& OutGroundZ) const
 	return true;
 }
 
+EMOWaterBodyKind UMOWaterSubsystem::ClassifyWaterAt(double X, double Y) const
+{
+	const UMOWorldSeedSubsystem* Seeds = UMOWorldSeedSubsystem::Get(GetWorld());
+	if (!Seeds || !Seeds->HasActiveSeed() || !FMOWorldGenParamsProvider::HasPublished())
+	{
+		return EMOWaterBodyKind::None;
+	}
+	return FMOWorldGen::ClassifyWaterBody(*FMOWorldGenParamsProvider::Get(), X, Y, Seeds->GetActiveTerrainSeed());
+}
+
+bool UMOWaterSubsystem::FindWaterAlongRay(const FVector& Start, const FVector& Dir, float MaxCm, float BlockedAtCm, FVector& OutPoint, EMOWaterBodyKind& OutKind) const
+{
+	const FVector D = Dir.GetSafeNormal();
+	const float Limit = FMath::Min(MaxCm, BlockedAtCm);
+	constexpr float StepCm = 20.0f;
+	for (float T = 0.0f; T <= Limit; T += StepCm)
+	{
+		const FVector P = Start + D * T;
+		float Surface = 0.0f;
+		if (!GetSurfaceZ(P.X, P.Y, Surface))
+		{
+			return false;   // no generator: no generated water
+		}
+		if (P.Z > Surface)
+		{
+			continue;
+		}
+		// The ray crossed a water surface plane between the last step and this one; it is water only where the ground there is under it (the sea plane runs under
+		// the land everywhere).
+		const EMOWaterBodyKind Kind = ClassifyWaterAt(P.X, P.Y);
+		if (Kind != EMOWaterBodyKind::None)
+		{
+			OutPoint = FVector(P.X, P.Y, Surface);
+			OutKind = Kind;
+			return true;
+		}
+		return false;   // under the plane but over land: the land was in the way
+	}
+	return false;
+}
+
 APhysicsVolume* UMOWaterSubsystem::GetSwimVolume()
 {
 	if (!SwimVolume && GetWorld())

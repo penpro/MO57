@@ -401,6 +401,39 @@ float FMOWorldGen::ApplyWater(const FMOWorldGenParams& Params, double X, double 
 	return H;
 }
 
+EMOWaterBodyKind FMOWorldGen::ClassifyWaterBody(const FMOWorldGenParams& Params, double X, double Y, int32 Seed)
+{
+	const FMOWorldGenTuning& T = Params.Tuning;
+	if (!T.bEnableWater)
+	{
+		return EMOWaterBodyKind::None;
+	}
+	float UplandSurface = 0.0f;
+	if (GetWaterSurfaceCm(Params, X, Y, Seed, UplandSurface) && UplandSurface != T.SeaLevelCm)
+	{
+		return EMOWaterBodyKind::UplandLake;   // inside an upland lake's shore: its own surface (GetWaterSurfaceCm answers the sea plane everywhere else)
+	}
+	// Everything else is water only where the ground lies under the sea plane -- the same carving ApplyWater does, at the terrain's own resolution.
+	const float Base = SampleBaseHeightCm(Params, X, Y, Seed, T.VoxelSizeCm);
+	if (Base < T.SeaLevelCm)
+	{
+		return EMOWaterBodyKind::Sea;   // the land itself lies below sea level: the ocean basin
+	}
+	if (ApplyWater(Params, X, Y, Seed, Base, T.VoxelSizeCm) >= T.SeaLevelCm)
+	{
+		return EMOWaterBodyKind::None;
+	}
+	// Carved below the plane: whichever channel or basin reaches deepest here owns the water.
+	const float River = RiverHeight(Params, X, Y, Seed, Base);
+	const float Pond = BasinHeight(Params, 0, X, Y, Seed);
+	const float Lake = BasinHeight(Params, 1, X, Y, Seed);
+	if (River <= Pond && River <= Lake)
+	{
+		return EMOWaterBodyKind::River;
+	}
+	return Pond <= Lake ? EMOWaterBodyKind::Pond : EMOWaterBodyKind::Lake;
+}
+
 bool FMOWorldGen::GetLakeInCell(const FMOWorldGenParams& Params, int32 Tier, int64 CellX, int64 CellY, int32 Seed, FLake& Out)
 {
 	return Params.Tuning.bEnableWater && (Tier >= 0 && Tier <= 2) && ResolveBasin(Params, Tier, CellX, CellY, Seed, Out);

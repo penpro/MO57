@@ -227,6 +227,23 @@ struct MOFRAMEWORKCORE_API FMOCondition : public FFastArraySerializerItem
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Medical|Condition")
 	bool bIsTreated = false;
 
+	/** A condition that follows a course (FMOConditionDefinitionRow::bFollowsCourse): game seconds left before symptoms start. Nothing shows (no moodle, no effects) while > 0. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Medical|Condition")
+	float IncubationRemaining = 0.0f;
+
+	/** A course's symptomatic length (game seconds, rolled when contracted). 0 = no course (linear progression). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Medical|Condition")
+	float CourseSeconds = 0.0f;
+
+	/** Game seconds into the symptomatic course. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Medical|Condition")
+	float CourseElapsed = 0.0f;
+
+	bool FollowsCourse() const { return CourseSeconds > 0.0f; }
+
+	/** Past its incubation: the body (and the player) can feel it. */
+	bool IsSymptomatic() const { return IncubationRemaining <= 0.0f; }
+
 	FMOCondition()
 	{
 		ConditionId = FGuid::NewGuid();

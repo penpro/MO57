@@ -282,6 +282,15 @@ public:
 	void DrinkWater(float AmountML);
 
 	/**
+	 * Body water gained (+) or lost (-) directly, in mL: what is left of a draught after the kidneys clear its salt (sea water: a loss), or an illness's fluid loss.
+	 * Server only. DrinkWater is the positive case.
+	 */
+	void ChangeBodyWater(float DeltaML);
+
+	/** Sodium taken in outside digestion (a salty draught), in % of a day's need (the Sodium nutrient's unit; it saturates at 200). Server only. */
+	void AddSodium(float PercentOfDailyNeed);
+
+	/**
 	 * Get number of items currently being digested.
 	 */
 	UFUNCTION(BlueprintPure, Category="MO|Metabolism|Food")

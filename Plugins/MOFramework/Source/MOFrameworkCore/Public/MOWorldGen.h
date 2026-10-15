@@ -59,6 +59,23 @@
 #include "UObject/SoftObjectPath.h"
 #include "MOWorldGen.generated.h"
 
+/** What open water at a point is (FMOWorldGen::ClassifyWaterBody): its kind decides what drinking it does (salt, how likely to make you ill). */
+UENUM(BlueprintType)
+enum class EMOWaterBodyKind : uint8
+{
+	None,
+	/** The ocean: land whose own height is below sea level. Salt. */
+	Sea,
+	/** A river channel carved below the sea plane. Fresh, flowing. */
+	River,
+	/** A small sea-level basin (tier 0). Fresh, still, small. */
+	Pond,
+	/** A sea-level lake basin (tier 1). Fresh, still. */
+	Lake,
+	/** A lake above sea level with its own surface (tier 2). Fresh, still. */
+	UplandLake
+};
+
 /**
  * Designer-facing tuning. Lives in UMOWorldGenSettings (Project Settings) and is copied into the
  * immutable snapshot. All lengths are cm (UU) unless the name says otherwise.
@@ -876,6 +893,12 @@ struct MOFRAMEWORKCORE_API FMOWorldGen
 	 * float should treat as "the water here"; the visible water meshes are exactly these surfaces.
 	 */
 	static bool GetWaterSurfaceCm(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, float& OutSurfaceCm);
+
+	/**
+	 * Which body of water (X, Y) lies in, from the same carving the terrain is built with: an upland lake's shore ellipse, else the ocean basin (land below sea level), else
+	 * the deepest river channel / pond / lake basin that took the ground under the sea plane. None on dry land. Pure; ~3 base-height samples.
+	 */
+	static EMOWaterBodyKind ClassifyWaterBody(const FMOWorldGenParams& Params, double X, double Y, int32 Seed);
 
 	/**
 	 * How much of the ground at (X, Y) is an upland lake's BED: 1 inside the shore ellipse, falling to 0 over the first ~10% of a radius past the shore with a noise breakup (so the edge is a damp, ragged rim,

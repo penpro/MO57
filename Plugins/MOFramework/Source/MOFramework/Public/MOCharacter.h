@@ -741,6 +741,10 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO")
 	TObjectPtr<UMOTerraformingComponent> TerraformingComponent;
 
+	/** The pawn's timed body action (drink at a lake, fill, boil ...): server-timed, interruptible, its progress replicated to the owner. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO")
+	TObjectPtr<class UMOTimedActionComponent> TimedActionComponent;
+
 	/** Equipment component for body/hand slots. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO")
 	TObjectPtr<UMOEquipmentComponent> EquipmentComponent;

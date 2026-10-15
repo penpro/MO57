@@ -18,6 +18,7 @@
 #include "MOFPSCounterWidget.h"
 #include "MOBreathMeterWidget.h"
 #include "MOStatusEffectStripWidget.h"
+#include "MOWaterSourceSettings.h"
 #include "MOWindDirectionWidget.h"
 #include "MOGameSettings.h"
 #include "MOInGameMenu.h"
@@ -2321,31 +2322,40 @@ void UMOUIManagerComponent::UpdateFocusHint()
 		}
 	}
 
-	// Only update if the text changed
-	if (!NewHintText.EqualTo(CurrentFocusHintText))
+	// Water before forage (the same order E uses): what the crosshair meets first is the lake, not the grass on its bed.
+	if (!bFoundTarget || Target.bIsForageTarget)
 	{
-		CurrentFocusHintText = NewHintText;
+		FVector WaterPoint;
+		EMOWaterBodyKind WaterKind = EMOWaterBodyKind::None;
+		bool bWithinReach = false;
+		const AMOPlayerController* PC = Cast<AMOPlayerController>(ResolveOwningPlayerController());
+		if (PC && PC->FindWaterAtCrosshair(WaterPoint, WaterKind, bWithinReach))
+		{
+			const FText Name = UMOWaterSourceSettings::GetProfile(WaterKind).DisplayName;
+			NewHintText = bWithinReach ? FText::Format(NSLOCTEXT("MO", "FocusDrink", "Drink: {0}"), Name) : Name;
+		}
+	}
 
-		// Update the tool hint widget with what we're looking at.
-		//
-		// Tool-hint widget supports a persistent "background" hint set via
-		// ShowToolHint(..., -1.0f) — e.g. the terraform mode indicator.
-		// Focus hints are TRANSIENT overlays — they appear briefly when the
-		// player aims at something, but must NOT wipe the persistent text.
-		//
-		// On "looking at empty space", we therefore call EndTransientToolHint
-		// (which restores the persistent text if any) instead of HideToolHint
-		// (which would clear everything).
-		if (!CurrentFocusHintText.IsEmpty())
-		{
-			// Transient show — auto-hides after DefaultDuration. Per-frame
-			// re-trigger while still looking at the same target effectively
-			// keeps it visible.
-			ShowToolHint(CurrentFocusHintText, 0.0f);
-		}
-		else
-		{
-			EndTransientToolHint();
-		}
+	// Update the tool hint widget with what we're looking at.
+	//
+	// Tool-hint widget supports a persistent "background" hint set via
+	// ShowToolHint(..., -1.0f) — e.g. the terraform mode indicator.
+	// Focus hints are TRANSIENT overlays — they appear briefly when the
+	// player aims at something, but must NOT wipe the persistent text.
+	//
+	// On "looking at empty space", we therefore call EndTransientToolHint
+	// (which restores the persistent text if any) instead of HideToolHint
+	// (which would clear everything).
+	const bool bChanged = !NewHintText.EqualTo(CurrentFocusHintText);
+	CurrentFocusHintText = NewHintText;
+	if (!CurrentFocusHintText.IsEmpty())
+	{
+		// Transient show — auto-hides after DefaultDuration, so it is re-triggered on EVERY update while the player still looks at the target (it used to
+		// re-show only when the text changed: looking at the same lake for a few seconds let the hint fade while the target was still under the crosshair).
+		ShowToolHint(CurrentFocusHintText, 0.0f);
+	}
+	else if (bChanged)
+	{
+		EndTransientToolHint();
 	}
 }

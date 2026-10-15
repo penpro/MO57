@@ -29,6 +29,9 @@
 #include "MOTextInputDialog.h"
 #include "MOQuickPickDialog.h"
 #include "MOTimeOfDayDialog.h"
+#include "MOWaterActions.h"
+#include "MOWaterSourceSettings.h"
+#include "MOWaterSubsystem.h"
 #include "MOWeatherIntegrationSubsystem.h"
 #include "MOGameClockSubsystem.h"
 #include "Misc/OutputDevice.h"
@@ -1167,7 +1170,8 @@ void AMOPlayerController::HandleInteract(const FInputActionValue& Value)
 		// Nothing with an interaction of its own under the crosshair (bare ground, grass, world cover): forage there, as right-click does.
 		UMOInteractorComponent* Interactor = ControllablePawn->FindComponentByClass<UMOInteractorComponent>();
 		FMOInteractionTarget Target;
-		if (Interactor && (!Interactor->FindInteractionTarget(Target) || Target.bIsForageTarget) && TryOpenForageMenuAtCrosshair())
+		// Water before forage: a lake bed's grass is a forage target, but what the crosshair meets first is the water.
+		if (Interactor && (!Interactor->FindInteractionTarget(Target) || Target.bIsForageTarget) && (TryDrinkAtCrosshair() || TryOpenForageMenuAtCrosshair()))
 		{
 			return;
 		}
@@ -1299,6 +1303,71 @@ bool AMOPlayerController::TryOpenForageMenuAtCrosshair()
 	GetViewportSize(ViewportSizeX, ViewportSizeY);
 	InventoryUIController->ShowGroundContextMenu(GroundHit.Location, FVector2D(ViewportSizeX / 2.0f, ViewportSizeY / 2.0f));
 	return true;
+}
+
+bool AMOPlayerController::FindWaterAtCrosshair(FVector& OutPoint, EMOWaterBodyKind& OutKind, bool& bOutWithinReach) const
+{
+	const APawn* ControllablePawn = CachedControllablePawn.Get();
+	const UWorld* World = GetWorld();
+	const UMOWaterSubsystem* Water = World ? UMOWaterSubsystem::Get(World) : nullptr;
+	if (!ControllablePawn || !Water)
+	{
+		return false;
+	}
+	FVector CameraLocation;
+	FRotator CameraRotation;
+	GetPlayerViewPoint(CameraLocation, CameraRotation);
+	// The shoulder camera sits a few metres behind the pawn: look far enough to see past it to water at the pawn's feet.
+	constexpr float ViewCm = 1200.0f;
+	const FVector Dir = CameraRotation.Vector();
+	FHitResult Hit;
+	FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(MOWaterView), false, ControllablePawn);
+	const float BlockedAt = World->LineTraceSingleByChannel(Hit, CameraLocation, CameraLocation + Dir * ViewCm, ECC_WorldStatic, QueryParams) ? Hit.Distance : ViewCm;
+	if (!Water->FindWaterAlongRay(CameraLocation, Dir, ViewCm, BlockedAt, OutPoint, OutKind))
+	{
+		return false;
+	}
+	bOutWithinReach = FVector::Dist(ControllablePawn->GetActorLocation(), OutPoint) <= GetDefault<UMOWaterSourceSettings>()->ReachCm;
+	return true;
+}
+
+bool AMOPlayerController::TryDrinkAtCrosshair()
+{
+	FVector Point;
+	EMOWaterBodyKind Kind = EMOWaterBodyKind::None;
+	bool bWithinReach = false;
+	if (!FindWaterAtCrosshair(Point, Kind, bWithinReach))
+	{
+		return false;
+	}
+	if (!bWithinReach)
+	{
+		if (NotificationComponent)
+		{
+			NotificationComponent->ShowInfoNotification(NSLOCTEXT("MOWater", "TooFarToDrink", "Get closer to the water to drink."), 2.5f);
+		}
+		return true;
+	}
+	ServerDrinkWater(Point);
+	return true;
+}
+
+void AMOPlayerController::ServerDrinkWater_Implementation(FVector_NetQuantize Point)
+{
+	switch (FMOWaterActions::BeginDrink(GetPawn(), Point))
+	{
+	case EMODrinkRefusal::None:
+		break;
+	case EMODrinkRefusal::TooFar:
+		ClientShowNotification(NSLOCTEXT("MOWater", "TooFar", "Get closer to the water to drink."), 2.5f, EMONotificationType::Info);
+		break;
+	case EMODrinkRefusal::NoWater:
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOWater] %s: drink refused, no water at (%.0f, %.0f, %.0f) on the server"), *GetName(), Point.X, Point.Y, Point.Z);
+		break;
+	default:
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOWater] %s: drink refused (no pawn or no timed-action component)"), *GetName());
+		break;
+	}
 }
 
 void AMOPlayerController::HandleSecondaryActionRelease(const FInputActionValue& Value)

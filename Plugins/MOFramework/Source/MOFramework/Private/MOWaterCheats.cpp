@@ -5,6 +5,13 @@
 //   MO.Water.SetBreath <0..1>            set the local pawn's oxygen reserve (tests)
 //   MO.Water.Stroke [seconds=5] [up|down] hold a swimming stroke along the camera direction (or straight up / down) for a few seconds: the held keys, for tests
 //   MO.Water.Meter                       the breath meter widget's visibility, opacity and on-screen rectangle
+//   MO.Water.Here                        the water underfoot / under the crosshair (kind, reach), thirst, body water, sodium, conditions
+//   MO.Water.LookAtWater                 turn the camera onto the nearest water within 4 m
+//   MO.Water.GoToShore [sea|fresh] [m]   stand on the bank of the nearest sea / fresh water, a metre from the edge, facing it
+//   MO.Water.Drink                       drink at the crosshair exactly as E does
+//   MO.Medical.Contract <Type> [now]     give the local pawn a condition (with its course); now = skip the incubation
+//   MO.Medical.SkipIncubation [hours]    end every incubation now; hours = also fast-forward into the course
+//   MO.Survival.Advance <minutes>        run the needs (and illness effects on them) forward
 
 #include "CoreMinimal.h"
 
@@ -23,6 +30,9 @@
 #include "MOSurvivalStatsComponent.h"
 #include "MOVitalsComponent.h"
 #include "MOWaterSubsystem.h"
+#include "MOAnatomyComponent.h"
+#include "MOMetabolismComponent.h"
+#include "MOPlayerController.h"
 #include "MOWorldGen.h"
 #include "MOWorldSeedSubsystem.h"
 
@@ -207,6 +217,225 @@ namespace
 			{
 				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WATER Meter: no breath meter widget in this world"));
 			}
+		}));
+
+
+	// ---- Drinking and illness (Docs/Water_And_Illness.md) ----
+
+	FString ConditionsLine(const AMOCharacter* Pawn)
+	{
+		const UMOAnatomyComponent* Anatomy = Pawn ? Pawn->FindComponentByClass<UMOAnatomyComponent>() : nullptr;
+		FString Out;
+		for (const FMOCondition& C : Anatomy ? Anatomy->GetConditions() : TArray<FMOCondition>())
+		{
+			Out += FString::Printf(TEXT(" %s(sev=%.1f incubation=%.0fs course=%.0f/%.0fs)"), *UEnum::GetValueAsString(C.ConditionType).RightChop(18), C.Severity,
+				C.IncubationRemaining, C.CourseElapsed, C.CourseSeconds);
+		}
+		return Out.IsEmpty() ? FString(TEXT(" none")) : Out;
+	}
+
+	FAutoConsoleCommandWithWorldAndArgs GWaterHereCmd(
+		TEXT("MO.Water.Here"),
+		TEXT("Dev: what water the local pawn stands in / sees under the crosshair (kind, reach), its thirst, body water, sodium and conditions. Lines start with [MOQUERY] WATER Here."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			AMOCharacter* Pawn = LocalMOPawn(World);
+			AMOPlayerController* PC = World ? Cast<AMOPlayerController>(World->GetFirstPlayerController()) : nullptr;
+			const UMOWaterSubsystem* Water = UMOWaterSubsystem::Get(World);
+			if (!Pawn || !PC || !Water)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WATER Here FAILED: needs a local MO pawn and the water subsystem"));
+				return;
+			}
+			const FVector P = Pawn->GetActorLocation();
+			FVector Point = FVector::ZeroVector;
+			EMOWaterBodyKind Seen = EMOWaterBodyKind::None;
+			bool bReach = false;
+			const bool bSees = PC->FindWaterAtCrosshair(Point, Seen, bReach);
+			const UMOSurvivalStatsComponent* Stats = Pawn->GetSurvivalStatsComponent();
+			const UMOMetabolismComponent* Metabolism = Pawn->FindComponentByClass<UMOMetabolismComponent>();
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WATER Here underfoot=%s crosshair=%s%s at (%.0f, %.0f, %.0f) dist=%.0f | thirst=%.1f hydration=%.1f%% sodium=%.0f%% | conditions:%s"),
+				*UEnum::GetValueAsString(Water->ClassifyWaterAt(P.X, P.Y)), bSees ? *UEnum::GetValueAsString(Seen) : TEXT("none"), bSees ? (bReach ? TEXT(" (in reach)") : TEXT(" (too far)")) : TEXT(""),
+				Point.X, Point.Y, Point.Z, bSees ? FVector::Dist(P, Point) : -1.0f, Stats ? Stats->GetStatCurrent(TEXT("Thirst")) : -1.0f,
+				Metabolism ? Metabolism->GetNutrientLevels().HydrationLevel : -1.0f, Metabolism ? Metabolism->GetNutrientLevels().Sodium : -1.0f, *ConditionsLine(Pawn));
+		}));
+
+	FAutoConsoleCommandWithWorldAndArgs GWaterLookCmd(
+		TEXT("MO.Water.LookAtWater"),
+		TEXT("Dev: turn the local camera onto the nearest open water within 4 m of the pawn (so E / MO.Water.Drink can be tested from a bank)."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			AMOCharacter* Pawn = LocalMOPawn(World);
+			APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
+			const UMOWaterSubsystem* Water = UMOWaterSubsystem::Get(World);
+			if (!Pawn || !PC || !PC->PlayerCameraManager || !Water)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WATER LookAtWater FAILED: no pawn / camera / water subsystem"));
+				return;
+			}
+			const FVector P = Pawn->GetActorLocation();
+			FVector Best = FVector::ZeroVector;
+			float BestD = TNumericLimits<float>::Max();
+			for (int32 Ring = 1; Ring <= 8; ++Ring)
+			{
+				for (int32 K = 0; K < 24; ++K)
+				{
+					const float A = K * 2.0f * UE_PI / 24.0f, R = Ring * 50.0f;
+					const FVector Q(P.X + R * FMath::Cos(A), P.Y + R * FMath::Sin(A), 0.0);
+					float Surface = 0.0f;
+					if (Water->ClassifyWaterAt(Q.X, Q.Y) != EMOWaterBodyKind::None && Water->GetSurfaceZ(Q.X, Q.Y, Surface) && R < BestD)
+					{
+						Best = FVector(Q.X, Q.Y, Surface);
+						BestD = R;
+					}
+				}
+				if (BestD < TNumericLimits<float>::Max())
+				{
+					break;
+				}
+			}
+			if (BestD == TNumericLimits<float>::Max())
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WATER LookAtWater: no water within 4 m"));
+				return;
+			}
+			PC->SetControlRotation((Best - PC->PlayerCameraManager->GetCameraLocation()).Rotation());
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WATER LookAtWater: water %.0f cm away at (%.0f, %.0f, %.0f)"), BestD, Best.X, Best.Y, Best.Z);
+		}));
+
+	FAutoConsoleCommandWithWorldAndArgs GWaterDrinkCmd(
+		TEXT("MO.Water.Drink"),
+		TEXT("Dev: drink from the water under the crosshair, exactly as E does (through the server)."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			AMOPlayerController* PC = World ? Cast<AMOPlayerController>(World->GetFirstPlayerController()) : nullptr;
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WATER Drink %s"), PC && PC->TryDrinkAtCrosshair() ? TEXT("asked") : TEXT("FAILED: no water under the crosshair"));
+		}));
+
+	FAutoConsoleCommandWithWorldAndArgs GContractCmd(
+		TEXT("MO.Medical.Contract"),
+		TEXT("Dev (server): give the local pawn a condition, with its course if it has one. Usage: MO.Medical.Contract <WaterborneDisease|FoodPoisoning|...> [now] -- now skips the incubation."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			AMOCharacter* Pawn = LocalMOPawn(World);
+			UMOAnatomyComponent* Anatomy = Pawn ? Pawn->FindComponentByClass<UMOAnatomyComponent>() : nullptr;
+			const UEnum* Enum = StaticEnum<EMOConditionType>();
+			const int64 Value = Args.Num() > 0 && Enum ? Enum->GetValueByNameString(Args[0]) : INDEX_NONE;
+			if (!Anatomy || Value == INDEX_NONE)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] MEDICAL Contract FAILED: needs a local pawn (server) and a condition name"));
+				return;
+			}
+			const bool bAdded = Anatomy->AddCondition(static_cast<EMOConditionType>(Value));
+			if (bAdded && Args.Num() > 1 && Args[1].Equals(TEXT("now"), ESearchCase::IgnoreCase))
+			{
+				IConsoleManager::Get().ProcessUserConsoleInput(TEXT("MO.Medical.SkipIncubation"), *GLog, World);
+			}
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] MEDICAL Contract %s: %s |%s"), *Args[0], bAdded ? TEXT("added") : TEXT("not added (already has it?)"), *ConditionsLine(Pawn));
+		}));
+
+	FAutoConsoleCommandWithWorldAndArgs GSkipIncubationCmd(
+		TEXT("MO.Medical.SkipIncubation"),
+		TEXT("Dev (server): end every incubating illness's incubation now (symptoms start on the next medical tick). Optional: [hours] also fast-forwards that many game hours into the course."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			AMOCharacter* Pawn = LocalMOPawn(World);
+			UMOAnatomyComponent* Anatomy = Pawn ? Pawn->FindComponentByClass<UMOAnatomyComponent>() : nullptr;
+			if (!Anatomy || !Anatomy->ForEachConditionForDebug([&Args](FMOCondition& C)
+				{
+					C.IncubationRemaining = 0.0f;
+					if (Args.Num() > 0 && C.FollowsCourse())
+					{
+						C.CourseElapsed = FMath::Min(C.CourseSeconds * 0.999f, C.CourseElapsed + FCString::Atof(*Args[0]) * 3600.0f);
+					}
+				}))
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] MEDICAL SkipIncubation FAILED: no local pawn on the server"));
+				return;
+			}
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] MEDICAL SkipIncubation done |%s"), *ConditionsLine(Pawn));
+		}));
+
+	FAutoConsoleCommandWithWorldAndArgs GAdvanceBodyCmd(
+		TEXT("MO.Survival.Advance"),
+		TEXT("Dev (server): run the local pawn's survival needs (and every illness's effects on them) forward by N game minutes. Usage: MO.Survival.Advance <minutes>"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			AMOCharacter* Pawn = LocalMOPawn(World);
+			UMOSurvivalStatsComponent* Stats = Pawn ? Pawn->GetSurvivalStatsComponent() : nullptr;
+			if (!Stats || Args.Num() == 0)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] SURVIVAL Advance FAILED: needs a local pawn and minutes"));
+				return;
+			}
+			const float Minutes = FCString::Atof(*Args[0]);
+			for (float T = 0.0f; T < Minutes * 60.0f; T += 10.0f)
+			{
+				Stats->AdvanceStats(10.0f);
+			}
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] SURVIVAL Advance %.0f min: thirst=%.1f energy=%.1f |%s"), Minutes, Stats->GetStatCurrent(TEXT("Thirst")),
+				Stats->GetStatCurrent(TEXT("Energy")), *ConditionsLine(Pawn));
+		}));
+
+
+	FAutoConsoleCommandWithWorldAndArgs GGoToShoreCmd(
+		TEXT("MO.Water.GoToShore"),
+		TEXT("Dev: put the local pawn on the bank of the nearest water of a kind (sea | fresh = river, lake, pond, upland lake), a metre from the edge, facing it. Usage: MO.Water.GoToShore [sea|fresh] [maxMetres=400]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			AMOCharacter* Pawn = LocalMOPawn(World);
+			APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
+			const UMOWaterSubsystem* Water = UMOWaterSubsystem::Get(World);
+			if (!Pawn || !PC || !Water)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WATER GoToShore FAILED: no pawn / water subsystem"));
+				return;
+			}
+			const bool bSea = Args.Num() == 0 || !Args[0].Equals(TEXT("fresh"), ESearchCase::IgnoreCase);
+			const float MaxCm = (Args.Num() > 1 ? FCString::Atof(*Args[1]) : 400.0f) * 100.0f;
+			auto Wanted = [bSea](EMOWaterBodyKind K) { return bSea ? K == EMOWaterBodyKind::Sea : (K != EMOWaterBodyKind::None && K != EMOWaterBodyKind::Sea); };
+			const FVector P = Pawn->GetActorLocation();
+			FVector2D Hit = FVector2D::ZeroVector;
+			bool bFound = false;
+			for (float R = 200.0f; R <= MaxCm && !bFound; R += 200.0f)
+			{
+				const int32 N = FMath::Clamp(FMath::CeilToInt(2.0f * UE_PI * R / 300.0f), 16, 720);
+				for (int32 K = 0; K < N && !bFound; ++K)
+				{
+					const float A = K * 2.0f * UE_PI / N;
+					const FVector2D Q(P.X + R * FMath::Cos(A), P.Y + R * FMath::Sin(A));
+					if (Wanted(Water->ClassifyWaterAt(Q.X, Q.Y)))
+					{
+						Hit = Q;
+						bFound = true;
+					}
+				}
+			}
+			if (!bFound)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WATER GoToShore: no %s water within %.0f m"), bSea ? TEXT("sea") : TEXT("fresh"), MaxCm / 100.0f);
+				return;
+			}
+			// Walk back toward where the pawn stood until the ground is dry, then a metre further onto the bank.
+			const FVector2D Back = (FVector2D(P) - Hit).GetSafeNormal();
+			FVector2D Edge = Hit;
+			for (float T = 0.0f; T < 5000.0f; T += 25.0f)
+			{
+				const FVector2D Q = Hit + Back * T;
+				if (Water->ClassifyWaterAt(Q.X, Q.Y) == EMOWaterBodyKind::None)
+				{
+					Edge = Q;
+					break;
+				}
+			}
+			const FVector2D Stand = Edge + Back * 100.0f;
+			float Ground = 0.0f, Surface = 0.0f;
+			Water->GetGroundZ(Stand.X, Stand.Y, Ground);
+			Water->GetSurfaceZ(Hit.X, Hit.Y, Surface);
+			Pawn->SetActorLocation(FVector(Stand.X, Stand.Y, Ground + 120.0f), false, nullptr, ETeleportType::ResetPhysics);
+			PC->SetControlRotation(FRotator(-35.0f, FMath::RadiansToDegrees(FMath::Atan2(-Back.Y, -Back.X)), 0.0f));
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WATER GoToShore %s: water at (%.0f, %.0f) %s, standing at (%.0f, %.0f, %.0f), %.0f m from where the pawn was"),
+				bSea ? TEXT("sea") : TEXT("fresh"), Hit.X, Hit.Y, *UEnum::GetValueAsString(Water->ClassifyWaterAt(Hit.X, Hit.Y)), Stand.X, Stand.Y, Ground, FVector2D::Distance(FVector2D(P), Stand) / 100.0f);
 		}));
 
 }

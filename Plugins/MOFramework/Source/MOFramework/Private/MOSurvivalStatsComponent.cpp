@@ -3,6 +3,9 @@
 #include "MOItemDatabaseSettings.h"
 #include "MOMetabolismComponent.h"
 #include "MOGameClockSubsystem.h"
+#include "MOAnatomyComponent.h"
+#include "MOMedicalSubsystem.h"
+#include "MOWaterPhysiology.h"
 #include "MOFramework.h"
 #include "Net/UnrealNetwork.h"
 #include "TimerManager.h"
@@ -160,6 +163,64 @@ bool UMOSurvivalStatsComponent::ConsumeItem(UMOInventoryComponent* InventoryComp
 	return true;
 }
 
+float UMOSurvivalStatsComponent::IngestWater(float Millilitres, float SalinityGPerL)
+{
+	if (GetOwnerRole() != ROLE_Authority || Millilitres == 0.0f)
+	{
+		return 0.0f;
+	}
+	// A loss (negative volume) carries no salt; a draught pays for its salt in urine.
+	const float Net = Millilitres > 0.0f ? FMOWaterPhysiology::NetBodyWaterMl(Millilitres, SalinityGPerL) : Millilitres;
+	const float Sodium = Millilitres > 0.0f ? FMOWaterPhysiology::SodiumPercentOfDailyNeed(Millilitres, SalinityGPerL) : 0.0f;
+
+	// The thirst counter feels body water at the rate items always used (100 ml = 50 points); sea water makes you THIRSTIER.
+	ModifyStat(FName("Thirst"), Net * 0.5f);
+	NutritionStatus.Hydration += Net;
+	NutritionStatus.Sodium = FMath::Clamp(NutritionStatus.Sodium + Sodium, 0.0f, 200.0f);
+	if (UMOMetabolismComponent* Metabolism = GetOwner() ? GetOwner()->FindComponentByClass<UMOMetabolismComponent>() : nullptr)
+	{
+		Metabolism->ChangeBodyWater(Net);
+		Metabolism->AddSodium(Sodium);
+	}
+	return Net;
+}
+
+void UMOSurvivalStatsComponent::ApplyConditionEffects(float GameSeconds)
+{
+	if (GetOwnerRole() != ROLE_Authority)
+	{
+		return;
+	}
+	const UMOAnatomyComponent* Anatomy = GetOwner() ? GetOwner()->FindComponentByClass<UMOAnatomyComponent>() : nullptr;
+	const UMOMedicalSubsystem* Medical = GetWorld() && GetWorld()->GetGameInstance() ? GetWorld()->GetGameInstance()->GetSubsystem<UMOMedicalSubsystem>() : nullptr;
+	if (!Anatomy || !Medical)
+	{
+		return;
+	}
+	// What an illness does to the needs while it has symptoms: fluid lost (diarrhoea / vomiting -- the danger of a stomach bug is dehydration) and fatigue. The
+	// magnitudes are the condition's data at severity 100, scaled by its severity now.
+	float FluidLossMl = 0.0f, EnergyDrain = 0.0f;
+	for (const FMOCondition& Condition : Anatomy->GetConditions())
+	{
+		FMOConditionDefinitionRow Def;
+		if (!Condition.IsSymptomatic() || Condition.Severity <= 0.0f || !Medical->GetConditionDefinition(Condition.ConditionType, Def))
+		{
+			continue;
+		}
+		const float Scale = Condition.Severity / 100.0f * GameSeconds / 3600.0f;
+		FluidLossMl += Def.FluidLossMlPerHourAtFullSeverity * Scale;
+		EnergyDrain += Def.EnergyDrainPerHourAtFullSeverity * Scale;
+	}
+	if (FluidLossMl > 0.0f)
+	{
+		IngestWater(-FluidLossMl, 0.0f);
+	}
+	if (EnergyDrain > 0.0f)
+	{
+		ModifyStat(FName("Energy"), -EnergyDrain);
+	}
+}
+
 void UMOSurvivalStatsComponent::ModifyStat(FName StatName, float Delta)
 {
 	FMOSurvivalStat* Stat = GetStatByName(StatName);
@@ -250,6 +311,7 @@ void UMOSurvivalStatsComponent::AdvanceStats(float GameSeconds)
 	ProcessStatTick(Energy, FName("Energy"), GameSeconds);
 
 	DecayNutrition(GameSeconds);
+	ApplyConditionEffects(GameSeconds);
 }
 
 void UMOSurvivalStatsComponent::ProcessStatTick(FMOSurvivalStat& Stat, FName StatName, float DeltaTime)

@@ -44,6 +44,18 @@ MODE = {
             K.text("ModeText", "label", "EXPLORE", "color.text.primary", var=True, slot={**VC, "padding": [14, 0, 14, 0]})])]},
 }
 
+# ---------------------------------------------------------------- interaction prompt / tool hint (kit InteractionPrompt 760,572 400x44 Center)
+# What the crosshair is on ("Drink: River water", "Forage", a tree's name) and the terraform mode's standing hint. It was an unstyled text in the bottom-right
+# corner, on top of the wind dial's label (Oct 15 2026); the kit puts the prompt in the centre column just under the reticle, above the timed-action bar (628).
+# As wide as its text, at least 160. Built over the old tree: `python Tools/ue.py ui remove /MOFramework/UI/WBP_ToolNotif Border_0` first.
+TOOL_HINT = {
+    "asset": f"{UI}/WBP_ToolNotif",
+    "root": {"type": "CanvasPanel", "name": "RootCanvas", "children": [
+        box("PromptBox", None, 44, K.place(760, 572, 400, 44, "Center", auto_height=True), min_w=160, children=[
+            PLATE("PromptPlate"),
+            K.text("HintText", "hud", "Hint", "color.text.primary", justification="Center", var=True, slot={**VC, "horizontal_alignment": "H_ALIGN_CENTER", "padding": [16, 0, 16, 0]})])]},
+}
+
 # ---------------------------------------------------------------- tutorial banner (680,40 560x112 TopCenter)
 TUTORIAL = {
     "asset": f"{UI}/Quest/WBP_TutorialHint",
@@ -95,16 +107,17 @@ NOTIFICATION = {
 }
 
 
-# ---------------------------------------------------------------- timed action (760,628 400x76): harvest / inspection share one layout
+# ---------------------------------------------------------------- timed action (720,628 480x76): harvest / inspection / every pawn timed action (drinking ...) share one layout
+# 480 wide (was 400) with a 12 px gap: "Drinking sea water" + "16s remaining" ran together at 400 (Oct 15 2026).
 def timed_action(asset):
     return {
         "asset": f"{UI}/{asset}",
         "root": {"type": "CanvasPanel", "name": "RootCanvas", "children": [
-            box("ActionBox", 400, 76, K.place(760, 628, 400, 76, "Center"), [
+            box("ActionBox", 480, 76, K.place(720, 628, 480, 76, "Center"), [
                 PLATE("ActionPlate"),
                 {"type": "VerticalBox", "name": "ActionColumn", "slot": {"padding": [16, 10, 16, 8]}, "children": [
                     {"type": "HorizontalBox", "name": "ActionTop", "children": [
-                        K.text("ActionNameText", "hud", "Action", "color.text.primary", var=True, slot={**VC, "size": {"size_rule": "Fill", "value": 1.0}}),
+                        K.text("ActionNameText", "hud", "Action", "color.text.primary", var=True, slot={**VC, "padding": [0, 0, 12, 0], "size": {"size_rule": "Fill", "value": 1.0}}),
                         K.text("TimeRemainingText", "numeric", "0.0s", "color.text.primary", var=True, slot=VC)]},
                     {"type": "SizeBox", "name": "ActionBarBox", "height": 8, "slot": {"padding": [0, 6, 0, 4]}, "children": [K.progress_bar("ProgressBar")]},
                     K.text("InstructionText", "caption", "Move to cancel", "color.text.secondary", var=True)]}])]},
@@ -140,4 +153,4 @@ HUD_ROOT = {
     "attach": [{"parent": "CanvasPanel_58", "node": {"type": f"{UI}/HUDElements/WBP_WindDirection", "name": "WindIndicator", "var": True, "slot": K.place(1730, 912, 150, 128, "BottomRight", auto_height=True)}}],
 }
 
-SPECS = [MODE, TUTORIAL, QUEST_HUD, QUEST_ENTRY, NOTIFICATION, timed_action("WBP_HarvestProgress"), timed_action("WBP_InspectionProgress"), FPS, WIND, HUD_ROOT]
+SPECS = [MODE, TOOL_HINT, TUTORIAL, QUEST_HUD, QUEST_ENTRY, NOTIFICATION, timed_action("WBP_HarvestProgress"), timed_action("WBP_InspectionProgress"), FPS, WIND, HUD_ROOT]

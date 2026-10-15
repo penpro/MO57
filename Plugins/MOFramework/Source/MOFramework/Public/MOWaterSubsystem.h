@@ -10,6 +10,7 @@
 
 #include "CoreMinimal.h"
 #include "Subsystems/WorldSubsystem.h"
+#include "MOWorldGen.h"
 #include "MOWaterSubsystem.generated.h"
 
 class APhysicsVolume;
@@ -29,6 +30,16 @@ public:
 
 	/** The generator's ground height at (X, Y) (what the voxel terrain converges to). False without a seed / generator. */
 	bool GetGroundZ(double X, double Y, float& OutGroundZ) const;
+
+	/** Which body of water (X, Y) is in (FMOWorldGen::ClassifyWaterBody): what drinking there does. None on land or without a generator. */
+	EMOWaterBodyKind ClassifyWaterAt(double X, double Y) const;
+
+	/**
+	 * The first open water along a view ray (the crosshair): marches Start + Dir x t up to MaxCm (and no further than BlockedAtCm, where the caller's trace hit something
+	 * solid -- water surfaces do not block world traces, the lake bed does) and returns the point where the ray meets a real water surface, with its kind. False if the ray
+	 * reaches nothing but land first.
+	 */
+	bool FindWaterAlongRay(const FVector& Start, const FVector& Dir, float MaxCm, float BlockedAtCm, FVector& OutPoint, EMOWaterBodyKind& OutKind) const;
 
 	/** The world's one shared brushless water volume (bWaterVolume, a high fluid friction so a swimmer's motion damps like a swimmer's). Spawned on first use; null if it cannot be spawned. */
 	APhysicsVolume* GetSwimVolume();

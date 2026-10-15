@@ -41,6 +41,7 @@
 #include "MONotificationComponent.h"
 #include "MOCraftingTypes.h"
 #include "MOTerraformingComponent.h"
+#include "MOTimedActionComponent.h"
 #include "MOSurvivorController.h"
 #include "AIController.h"
 #include "MOUIManagerComponent.h"
@@ -136,6 +137,9 @@ AMOCharacter::AMOCharacter(const FObjectInitializer& ObjectInitializer)
 
 	// MO Components - Terraforming
 	TerraformingComponent = CreateDefaultSubobject<UMOTerraformingComponent>(TEXT("TerraformingComponent"));
+
+	// MO Components - timed body actions (drinking at water, ...)
+	TimedActionComponent = CreateDefaultSubobject<UMOTimedActionComponent>(TEXT("TimedActionComponent"));
 
 	// MO Components - Equipment
 	EquipmentComponent = CreateDefaultSubobject<UMOEquipmentComponent>(TEXT("EquipmentComponent"));
