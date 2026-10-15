@@ -269,6 +269,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Quest")
 	void ResetAllQuests();
 
+#if WITH_DEV_AUTOMATION_TESTS
+	/** Tests: load the project's quest table into a bare subsystem (no GameInstance), then ResetAllQuests starts a fresh game's quests. */
+	void LoadQuestDefinitionsForTest() { LoadQuestDefinitions(); }
+#endif
+
 	// =========================================================================
 	// DELEGATES
 	// =========================================================================

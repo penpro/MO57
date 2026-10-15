@@ -1,5 +1,6 @@
 #include "MORecruitmentComponent.h"
 #include "MOColonyManagerSubsystem.h"
+#include "MOQuestSubsystem.h"
 #include "MOFramework.h"
 #include "MOSpawnManagerSubsystem.h"
 #include "MOInventoryComponent.h"
@@ -71,6 +72,18 @@ bool UMORecruitmentComponent::BeginInteraction(APawn* InteractingPawn)
 }
 
 FMORecruitmentResult UMORecruitmentComponent::BeginInteractionDetailed(APawn* InteractingPawn)
+{
+	const FMORecruitmentResult Result = ResolveInteraction(InteractingPawn);
+	if (Result.Outcome == EMORecruitmentOutcome::Recruited)
+	{
+		// The recruiting player's quests: "SurvivorRecruited" is the silent gate of Tutorial_Possession -- the possession menu is
+		// taught when there is a second pawn to possess, not at spawn (it was the first hint a new player saw, Oct 15 2026).
+		UMOQuestSubsystem::ReportForActor(InteractingPawn, EMOObjectiveType::Event, FName(TEXT("SurvivorRecruited")), 1);
+	}
+	return Result;
+}
+
+FMORecruitmentResult UMORecruitmentComponent::ResolveInteraction(APawn* InteractingPawn)
 {
 	FMORecruitmentResult Result;   // NotRecruitable until something says otherwise
 	if (!InteractingPawn)

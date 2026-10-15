@@ -236,9 +236,15 @@ struct MOFRAMEWORK_API FMOQuestDefinitionRow : public FTableRowBase
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Quest")
 	TArray<FMOQuestObjective> Objectives;
 
-	/** Sort order for UI display (lower = appears first). */
+	/**
+	 * Sort order for UI display and for which tutorial hint shows first (lower = first). Defaults to LAST: a row that forgets
+	 * to set it must not jump the queue -- at 0, Tutorial_Possession ("press P") beat "Find Your Feet" (1) as a new player's
+	 * first hint (Oct 15 2026). Authored orders stay below DefaultSortOrder.
+	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Quest")
-	int32 SortOrder = 0;
+	int32 SortOrder = DefaultSortOrder;
+
+	static constexpr int32 DefaultSortOrder = 1000;
 
 	/** Category for grouping in quest log (e.g., "Tutorial", "Main", "Side"). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Quest")
@@ -256,7 +262,7 @@ struct MOFRAMEWORK_API FMOQuestDefinitionRow : public FTableRowBase
 	FMOQuestDefinitionRow()
 		: bIsTutorial(false)
 		, bAutoStart(false)
-		, SortOrder(0)
+		, SortOrder(DefaultSortOrder)
 	{
 	}
 };

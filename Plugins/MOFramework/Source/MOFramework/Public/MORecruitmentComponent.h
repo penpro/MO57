@@ -314,6 +314,9 @@ protected:
 	void OnRep_RecruitmentState();
 
 private:
+	/** BeginInteractionDetailed's decision; the caller reports a recruit to the recruiting player's quests once, whatever path recruited. */
+	FMORecruitmentResult ResolveInteraction(APawn* InteractingPawn);
+
 	void SetRecruitmentState(EMORecruitmentState NewState);
 	void RollRandomQuest();
 	void CheckQuestTimeout();

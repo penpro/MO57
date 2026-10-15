@@ -526,15 +526,57 @@ bool FMOQuest_TutorialHintOrdering_BySortOrderNotIteration::RunTest(const FStrin
 {
 	using Q = UMOQuestSubsystem;
 
-	// Tutorial_Possession (SortOrder 0) must come before Tutorial_Movement (1) no matter which was activated first or
-	// how the data table happens to be ordered -- the old code returned whichever the TMap iterated first.
-	TestTrue(TEXT("possession (0) precedes movement (1)"), Q::TutorialHintPrecedes(0, TEXT("Tutorial_Possession"), 1, TEXT("Tutorial_Movement")));
-	TestFalse(TEXT("movement (1) does not precede possession (0)"), Q::TutorialHintPrecedes(1, TEXT("Tutorial_Movement"), 0, TEXT("Tutorial_Possession")));
+	// The lower SortOrder comes first no matter which quest was activated first or how the data table happens to be
+	// ordered -- the old code returned whichever the TMap iterated first. (The real data: Quest.TutorialHint.FreshGameStartsWithMovement.)
+	TestTrue(TEXT("movement (1) precedes look (2)"), Q::TutorialHintPrecedes(1, TEXT("Tutorial_Movement"), 2, TEXT("Tutorial_Look")));
+	TestFalse(TEXT("look (2) does not precede movement (1)"), Q::TutorialHintPrecedes(2, TEXT("Tutorial_Look"), 1, TEXT("Tutorial_Movement")));
 
 	// Equal SortOrder: deterministic by QuestId, and never "both precede each other".
 	TestTrue(TEXT("ties break by QuestId"), Q::TutorialHintPrecedes(5, TEXT("A_Quest"), 5, TEXT("B_Quest")));
 	TestFalse(TEXT("ties break by QuestId (reverse)"), Q::TutorialHintPrecedes(5, TEXT("B_Quest"), 5, TEXT("A_Quest")));
 	TestFalse(TEXT("a quest does not precede itself"), Q::TutorialHintPrecedes(5, TEXT("A_Quest"), 5, TEXT("A_Quest")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOQuest_TutorialHint_FreshGameStartsWithMovement,
+	"MOFramework.Quest.TutorialHint.FreshGameStartsWithMovement",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOQuest_TutorialHint_FreshGameStartsWithMovement::RunTest(const FString& Parameters)
+{
+	// The project's DT_Quests, as a new game starts it. Found Oct 15 2026: a new player's first hint was "Possession Menu: press P"
+	// (Tutorial_Possession had SortOrder 0, the struct default) while the tracker said "Find Your Feet".
+	UGameInstance* Outer = NewObject<UGameInstance>(GetTransientPackage());   // a GameInstance subsystem must live in one (ClassWithin); never Init()ed
+	UMOQuestSubsystem* Quests = NewObject<UMOQuestSubsystem>(Outer);
+	Quests->LoadQuestDefinitionsForTest();
+	Quests->ResetAllQuests();
+	if (!TestTrue(TEXT("tutorials auto-start (MOQuestSettings)"), Quests->IsQuestActive(TEXT("Tutorial_Movement"))))
+	{
+		return false;
+	}
+
+	FName QuestId, ObjectiveId;
+	FText Title, Body;
+	TestTrue(TEXT("a fresh game shows a tutorial hint"), Quests->GetActiveTutorialHint(QuestId, ObjectiveId, Title, Body));
+	TestEqual(TEXT("the first hint is Find Your Feet"), QuestId, FName(TEXT("Tutorial_Movement")));
+
+	// The possession menu is taught when there is a second pawn to possess: alone, its hint stays silent until a recruit.
+	if (!TestTrue(TEXT("Tutorial_Possession is active from the start"), Quests->IsQuestActive(TEXT("Tutorial_Possession"))))
+	{
+		return false;
+	}
+	for (const FMOQuestState& State : Quests->GetActiveQuests())
+	{
+		if (State.QuestId != TEXT("Tutorial_Possession"))
+		{
+			Quests->AbandonQuest(State.QuestId);
+		}
+	}
+	TestFalse(TEXT("with only Tutorial_Possession active and nobody recruited, no hint shows"),
+		Quests->GetActiveTutorialHint(QuestId, ObjectiveId, Title, Body));
+	Quests->ApplyReportedEvent(EMOObjectiveType::Event, TEXT("SurvivorRecruited"), 1);
+	TestTrue(TEXT("after the first recruit the possession hint shows"), Quests->GetActiveTutorialHint(QuestId, ObjectiveId, Title, Body)
+		&& QuestId == TEXT("Tutorial_Possession") && ObjectiveId == TEXT("OpenPossessionMenu"));
 	return true;
 }
 
