@@ -21,7 +21,7 @@ import unreal
 
 GRAPH = "/Game/VoxelExamples/PCGScattering/MOPCG_StampScatter1"
 SPLIT_RATIO = 0.5       # RandomChoice_3: items vs the locust-cluster branch (authored value)
-ITEM_RATIO = 0.1        # the item thinning node
+ITEM_RATIO = 0.1 * 2000.0 / 6000.0   # the item thinning node: 0.1 of a 2000/ha sampler; VoxelSampler_0 went to 6000/ha on 2026-10-14 (ground cover tier, pcg_tier_caps.py), same items/ha
 THIN_SEED = 7331        # its own seed: not correlated with RandomChoice_3's pick
 WEIGHTS = {"Stick01": 0.3, "Bark01": 0.3}   # everything else keeps weight 1.0
 log = lambda m: unreal.log("ITEMCLUTTER " + m)

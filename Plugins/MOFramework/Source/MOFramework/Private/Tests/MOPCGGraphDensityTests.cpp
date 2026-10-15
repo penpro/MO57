@@ -185,7 +185,8 @@ namespace
 	}
 }
 
-// The ground ITEM clutter (sticks, bark, stones) is 5 % of the band's points: RandomChoice_3 (0.5) -> its own thinning Random Choice (0.1) -> RandomChoice_1 (the item spawners' split).
+// The ground ITEM clutter (sticks, bark, stones) is ~100 of VoxelSampler_0's points per hectare: RandomChoice_3 (0.5) -> its own thinning Random Choice (0.1 at 2000/ha, 0.0333 at 6000/ha)
+// -> RandomChoice_1 (the item spawners' split).
 // (RandomChoice_3's Discarded half once fed CopyPoints_1 -> ... -> StaticMeshSpawner_3, the native black-locust clusters. That spawner is DISABLED -- the biome tier places locusts -- so
 // the branch was pure wasted work; cut_pcg_dead_branches.py disconnects it and MOFramework.PCG.NoDeadBranches keeps it disconnected.)
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOPCG_ItemThinning,
@@ -221,8 +222,26 @@ bool FMOPCG_ItemThinning::RunTest(const FString& Parameters)
 	bool bThinFixed = true;
 	const float ThinRatio = RandomChoiceRatio(Thin, bThinFixed);
 	TestFalse(TEXT("the item thinning works by ratio"), bThinFixed);
-	const float Share = Ratio3 * ThinRatio;
-	TestTrue(*FString::Printf(TEXT("the items get 3-8 %% of the band's points (%.3f x %.3f = %.3f): about ten times fewer than the authored 0.5"), Ratio3, ThinRatio, Share), Share >= 0.03f && Share <= 0.08f);
+	// The invariant is items per HECTARE, not the share: VoxelSampler_0 also feeds the biome spawner's ground-cover tier, whose rate went 2000 -> 6000/ha (Oct 14 2026, more ground cover),
+	// and the thinning ratio went down by the same factor so the sticks and stones stayed where they were (~100 candidate points/ha before the elevation band and the item split).
+	const UPCGNode* Sampler = nullptr;
+	for (const UPCGNode* Node : Graph->GetNodes())
+	{
+		if (Node && Node->GetName() == TEXT("VoxelSampler_0"))
+		{
+			Sampler = Node;
+		}
+	}
+	const UPCGSettings* SamplerSettings = Sampler ? Sampler->GetSettings() : nullptr;
+	const FFloatProperty* RateProp = SamplerSettings ? FindFProperty<FFloatProperty>(SamplerSettings->GetClass(), TEXT("PointsPerSquaredMeter")) : nullptr;
+	if (!TestNotNull(TEXT("VoxelSampler_0 (the ground tier + item sampler) has a PointsPerSquaredMeter"), RateProp))
+	{
+		return false;
+	}
+	const float SamplerPerHectare = RateProp->GetPropertyValue_InContainer(SamplerSettings) * 10000.0f;
+	const float ItemPointsPerHectare = SamplerPerHectare * Ratio3 * ThinRatio;
+	TestTrue(*FString::Printf(TEXT("the items get 60-160 candidate points/ha (%.0f/ha x %.3f x %.4f = %.0f): about ten times fewer than the authored 1000"), SamplerPerHectare, Ratio3, ThinRatio, ItemPointsPerHectare),
+		ItemPointsPerHectare >= 60.0f && ItemPointsPerHectare <= 160.0f);
 	const TArray<const UPCGNode*> AfterThin = DownstreamOf(Thin, TEXT("Chosen"));
 	TestTrue(TEXT("the item thinning feeds RandomChoice_1 (the item spawners' split)"), AfterThin.Num() == 1 && AfterThin[0]->GetName() == TEXT("RandomChoice_1"));
 	TestEqual(TEXT("the item thinning's Discarded output goes nowhere"), DownstreamOf(Thin, TEXT("Discarded")).Num(), 0);

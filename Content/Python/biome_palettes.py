@@ -94,9 +94,13 @@ def lib_rock(folder, mesh, density, res="ForestBoulder", cluster=1500.0, smin=0.
     return species(LIB % (folder, mesh, mesh), density, res=res, tag="MOResource_Rock", cluster=cluster, align=True, tilt=0.0, smin=smin, smax=smax)
 
 
+# Scans that moved into an item's art folder when the item got that mesh (the old path is a redirector; the table stores the new one).
+MOVED = {"wjhiecy": "/MOFramework/Items/Bark01/Medium/wjhiecy_tier_2/StaticMeshes/wjhiecy_tier_2.wjhiecy_tier_2"}
+
+
 def drift(folder, code, density, cluster=2500.0, collision="Passable", smin=0.8, smax=1.3):
     """Fallen wood / driftwood: decorative (no resource node), swept away when the ground is dug."""
-    return species(DRIFT % (folder, code, code, code), density, tag="MOBiomeCover_Debris", cluster=cluster, align=True, tilt=4.0, sweep=True, smin=smin, smax=smax, collision=collision)
+    return species(MOVED.get(code, DRIFT % (folder, code, code, code)), density, tag="MOBiomeCover_Debris", cluster=cluster, align=True, tilt=4.0, sweep=True, smin=smin, smax=smax, collision=collision)
 
 
 def undergrowth(path, density, group=0, core=0.45, smin=0.7, smax=1.1, tag="MOBiomeCover_Shrub", cluster=2500.0):
@@ -597,7 +601,7 @@ for _name in list(PALETTES):
     PALETTES[_name] = thin_and_far(PALETTES[_name])
 ALPINE["species"] = thin_and_far(ALPINE["species"])
 ALPINE_ROCK["species"] = thin_and_far(ALPINE_ROCK["species"])
-# the shaded floor (#6): big fronds -- the near tier caps at ~2000 candidates/ha (~500 ferns/ha realised), so cover comes from size, not count
+# the shaded floor (#6): big fronds -- the near tier capped at ~2000 candidates/ha then (~500 ferns/ha realised; 6000/ha since Oct 14 eve), so cover comes from size, not count
 RAINFOREST["species"] += [fern("01", 380, 1500.0, "MOBiomeCover_Fern", 1.3, 2.2), fern("02", 280, 1500.0, "MOBiomeCover_Fern", 1.3, 2.2),
                           fern("03", 200, 1800.0, "MOBiomeCover_Fern", 1.2, 2.0), fern("04", 140, 1800.0, "MOBiomeCover_Fern", 1.2, 2.0),
                           leaves("01", 70, group=4), leaves("05", 40, group=4), leaves("08", 30, group=4)]   # litter under the canopy stands (clump group 4)
@@ -620,6 +624,23 @@ ELECTRIC_FOREST["species"] = thin_and_far(merge_same_mesh(ELECTRIC_FOREST["speci
 NORDIC_STRAND["species"] = thin_and_far(NORDIC_STRAND["species"])
 
 
+# --- COVERAGE (2026-10-14 eve, Wes: "more ground coverage in general too, more trees, more bushes") ------------------------------------------------------------------------------------------
+# Per-biome, per-tier factors on top of everything above (and wider tree clumps), in a plan file so the numbers stay reviewable: Docs/Ground_Coverage_2026-10-14.md has the census and the
+# model behind them. The factors are applied by Tools/pcg_stocking.py's apply_plan -- the same rule its model checks for clipping -- so this script and the live table cannot drift apart.
+COVERAGE_PLANS = ["D:/UEProjects/MO57/Docs/Ground_Coverage_2026-10-14.plan.json"]
+
+
+def apply_coverage_plans(out):
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("pcg_stocking", "D:/UEProjects/MO57/Tools/pcg_stocking.py")
+    stocking = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(stocking)
+    for path in COVERAGE_PLANS:
+        with open(path, encoding="utf-8") as f:
+            plan = json.load(f)
+        stocking.apply_plan([{"Name": name, "Species": row["species"]} for name, row in out.items() if "species" in row], plan)   # in place
+
+
 def write_plan():
     out = {name: {"species": sp} for name, sp in PALETTES.items()}
     for name, edit in ROW_EDITS.items():
@@ -629,6 +650,7 @@ def write_plan():
     out["Rainforest"] = RAINFOREST
     out["ElectricForest"] = ELECTRIC_FOREST
     out["NordicStrand"] = NORDIC_STRAND
+    apply_coverage_plans(out)
     with open("D:/UEProjects/MO57/Saved/Logs/biome_palettes.json", "w", encoding="utf-8") as f:
         json.dump(out, f, indent=1)
     for name, sp in list(PALETTES.items()) + [("AlpineHeath", ALPINE["species"]), ("AlpineRock", ALPINE_ROCK["species"]), ("Rainforest", RAINFOREST["species"]), ("ElectricForest", ELECTRIC_FOREST["species"]), ("NordicStrand", NORDIC_STRAND["species"])]:
