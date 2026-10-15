@@ -14,7 +14,13 @@ const FLinearColor UMOUIUtils::ColorTextInput = FLinearColor(0.03f, 0.03f, 0.03f
 
 namespace
 {
-	/** The typed-text colours of a box style, all set to the dark input colour (shared by the single-line and multi-line boxes). */
+	/** The engine's stock field: its brush is a core-style image with no resource object. A kit input well is a project texture. */
+	bool IsStockField(const FEditableTextBoxStyle& Style)
+	{
+		return Style.BackgroundImageNormal.GetResourceObject() == nullptr;
+	}
+
+	/** The typed-text colours of a STOCK box style, all set to the dark input colour (shared by the single-line and multi-line boxes). */
 	void MakeStyleReadable(FEditableTextBoxStyle& Style)
 	{
 		const FSlateColor Dark(UMOUIUtils::ColorTextInput);
@@ -37,6 +43,10 @@ void UMOUIUtils::ApplyReadableTextInputStyle(UEditableTextBox* TextBox)
 	// NOT UEditableTextBox::SetWidgetStyle(Style): in UE 5.8 it copies the style into the member but hands Slate a pointer to its PARAMETER
 	// (MyEditableTextBlock->SetStyle(&InStyle)), i.e. to the caller's local. The pointer dangles as soon as the caller returns and the next
 	// text layout reads freed stack -- the packaged game crashed in FCachedTypefaceData the first time the console popup opened.
+	if (!IsStockField(TextBox->WidgetStyle))
+	{
+		return;   // a kit input well: its light-on-dark colours are authored
+	}
 	MakeStyleReadable(TextBox->WidgetStyle);
 	TextBox->SynchronizeProperties(); // SetStyle(&WidgetStyle): a pointer to the member, which lives as long as the widget
 }
@@ -47,7 +57,11 @@ void UMOUIUtils::ApplyReadableMultiLineTextInputStyle(UMultiLineEditableTextBox*
 	{
 		return;
 	}
-	// Same in-place edit as above (UMultiLineEditableTextBox::SetTextStyle has the same pointer-to-parameter trap).
+	// Same rule and in-place edit as above (UMultiLineEditableTextBox::SetTextStyle has the same pointer-to-parameter trap).
+	if (!IsStockField(TextBox->WidgetStyle))
+	{
+		return;
+	}
 	MakeStyleReadable(TextBox->WidgetStyle);
 	TextBox->SynchronizeProperties();
 }

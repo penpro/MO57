@@ -32,6 +32,7 @@
 #include "Modules/ModuleManager.h"
 #include "Engine/DataTable.h"
 #include "Engine/GameInstance.h"
+#include "Engine/Texture2D.h"
 #include "Engine/HitResult.h"
 #include "MOBugReportLookAt.h"
 
@@ -815,6 +816,18 @@ bool FMOUI_TextInputStyleIsReadable::RunTest(const FString& Parameters)
 	TestTrue(TEXT("unfocused colour is dark"), Luminance(Box->WidgetStyle.ForegroundColor) < 0.1f);
 	TestTrue(TEXT("text style colour is dark (it overrides the plain foreground colour)"), Luminance(Box->WidgetStyle.TextStyle.ColorAndOpacity) < 0.1f);
 	TestTrue(TEXT("the Slate widget survives a layout pass with the new style (no dangling style pointer)"), Box->TakeWidget()->GetDesiredSize().X >= 0.f);
+
+	// A design-kit field (its well is a project texture) keeps its authored light text: forcing near-black put black text on the kit's dark
+	// wells (Oct 15 2026).
+	UEditableTextBox* Kit = NewObject<UEditableTextBox>(GetTransientPackage());
+	Kit->WidgetStyle.BackgroundImageNormal.SetResourceObject(NewObject<UTexture2D>(GetTransientPackage()));
+	const FSlateColor Light(FLinearColor(0.85f, 0.83f, 0.78f, 1.0f));
+	Kit->WidgetStyle.SetFocusedForegroundColor(Light);
+	Kit->WidgetStyle.TextStyle.SetColorAndOpacity(Light);
+	Kit->TakeWidget();
+	UMOUIUtils::ApplyReadableTextInputStyle(Kit);
+	TestTrue(TEXT("a kit field keeps its light focused colour"), Luminance(Kit->WidgetStyle.FocusedForegroundColor) > 0.5f);
+	TestTrue(TEXT("a kit field keeps its light text style colour"), Luminance(Kit->WidgetStyle.TextStyle.ColorAndOpacity) > 0.5f);
 
 	UMOUIUtils::ApplyReadableTextInputStyle(nullptr); // null-safe
 	return true;

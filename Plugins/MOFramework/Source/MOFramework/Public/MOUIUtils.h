@@ -199,10 +199,12 @@ public:
 	// ============================================================================
 
 	/**
-	 * The ONE definition of how a field the player types into reads: dark text on the field's light background. The engine's default UMG
-	 * style is mid-grey text on a light-grey field, which is barely legible. Call this from NativeConstruct of every widget that binds a
-	 * UEditableTextBox; it leaves the font, background and hint text alone and changes only the typed-text colours (normal, focused,
-	 * read-only), including the text style, which overrides the plain foreground colour.
+	 * The ONE definition of how a field the player types into reads. The engine's STOCK field is mid-grey text on a light-grey box, which is
+	 * barely legible: it gets dark typed text (normal, focused, read-only, and the text style, which overrides the plain foreground colour).
+	 * A field drawn with a project texture is the design kit's input well (`kit_lib._input_style`: dark surface, light text): its colours are
+	 * authored and are left alone -- forcing near-black everywhere put black text on the kit's dark wells (the New Game world name and seed
+	 * read as empty, Oct 15 2026). Call this from NativeConstruct of every widget that binds a UEditableTextBox; font, background and hint
+	 * text are never touched.
 	 */
 	UFUNCTION(BlueprintCallable, Category="MO|UI|Utils")
 	static void ApplyReadableTextInputStyle(UEditableTextBox* TextBox);
