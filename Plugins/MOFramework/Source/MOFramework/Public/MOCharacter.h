@@ -1271,6 +1271,8 @@ private:
 	UPROPERTY(Transient)
 	TSubclassOf<UAnimInstance> SavedAnimClass;
 	uint8 SavedAnimMode = 0;   // EAnimationMode::Type (0 = AnimationBlueprint), kept as a byte so the header needs no animation includes
+	/** The swim poses play as a slot montage in the locomotion blueprint (blended) rather than as a single-node swap. */
+	bool bSwimPoseViaSlot = false;
 	FVector SavedMeshRelativeLocation = FVector::ZeroVector;
 	float SwimMeshRaise = 0.0f;
 

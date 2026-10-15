@@ -1528,20 +1528,49 @@ void AMOCharacter::UpdateSwimAnimation(float DeltaTime, bool bSwimming)
 		return;
 	}
 
-	// Leaving the water (or dying): give the mesh back to the locomotion animation blueprint.
+	// Swim poses play as a looping montage in the locomotion blueprint's slot, so entering, changing pose and leaving the water
+	// cross-fade (bug #13: the old single-node PlayAnimation swap snapped the pose every time and re-initialised the blueprint on
+	// the way out). A blueprint without the slot falls back to the single-node swap.
+	static const FName SwimSlotName(TEXT("DefaultSlot"));
+	constexpr float SwimBlendInSeconds = 0.35f;
+	constexpr float SwimBlendOutSeconds = 0.45f;
+
+	// Leaving the water (or dying): hand the body back to locomotion.
 	if (!bSwimming)
 	{
 		if (CurrentSwimPose != ESwimPose::None)
 		{
 			CurrentSwimPose = ESwimPose::None;
 			PendingSwimPose = ESwimPose::None;
-			Body->SetAnimationMode((EAnimationMode::Type)SavedAnimMode);
-			if (SavedAnimClass)
+			if (bSwimPoseViaSlot)
 			{
-				Body->SetAnimInstanceClass(SavedAnimClass);
+				if (UAnimInstance* AnimInstance = Body->GetAnimInstance())
+				{
+					AnimInstance->StopSlotAnimation(SwimBlendOutSeconds, SwimSlotName);
+				}
+				bSwimPoseViaSlot = false;
 			}
-			Body->SetRelativeLocation(SavedMeshRelativeLocation);
+			else
+			{
+				Body->SetAnimationMode((EAnimationMode::Type)SavedAnimMode);
+				if (SavedAnimClass)
+				{
+					Body->SetAnimInstanceClass(SavedAnimClass);
+				}
+				SwimMeshRaise = 0.0f;
+				Body->SetRelativeLocation(SavedMeshRelativeLocation);
+			}
+		}
+		// Ease the surface-swimmer lift back down with the blend instead of dropping the mesh 70 cm in one frame.
+		if (SwimMeshRaise > 0.1f)
+		{
+			SwimMeshRaise = FMath::FInterpTo(SwimMeshRaise, 0.0f, DeltaTime, 6.0f);
+			Body->SetRelativeLocation(SavedMeshRelativeLocation + FVector(0.0f, 0.0f, SwimMeshRaise));
+		}
+		else if (SwimMeshRaise > 0.0f)
+		{
 			SwimMeshRaise = 0.0f;
+			Body->SetRelativeLocation(SavedMeshRelativeLocation);
 		}
 		return;
 	}
@@ -1574,13 +1603,29 @@ void AMOCharacter::UpdateSwimAnimation(float DeltaTime, bool bSwimming)
 			UAnimSequence* Anim = (Source && !Source->IsNull()) ? Source->LoadSynchronous() : nullptr;
 			if (Anim)
 			{
+				UAnimInstance* AnimInstance = Body->GetAnimInstance();
 				if (CurrentSwimPose == ESwimPose::None)
 				{
 					SavedAnimMode = (uint8)Body->GetAnimationMode();
 					SavedAnimClass = Body->GetAnimClass();
-					SavedMeshRelativeLocation = Body->GetRelativeLocation();
+					if (SwimMeshRaise <= 0.0f)
+					{
+						SavedMeshRelativeLocation = Body->GetRelativeLocation();   // not while still easing down from the last swim
+					}
+					// The slot node reports its weight every graph update whether or not a montage plays in it: > 0 = it exists and is live.
+					bSwimPoseViaSlot = AnimInstance && Body->GetAnimationMode() == EAnimationMode::AnimationBlueprint
+						&& AnimInstance->GetSlotNodeGlobalWeight(SwimSlotName) > 0.0f;
+					UE_LOG(LogMOFramework, Log, TEXT("[MOWater] swim poses via %s"), bSwimPoseViaSlot ? TEXT("the DefaultSlot montage (blended)") : TEXT("single-node swap (no slot in the blueprint)"));
 				}
-				Body->PlayAnimation(Anim, /*bLooping=*/true);
+				if (bSwimPoseViaSlot && AnimInstance)
+				{
+					// A new montage in the same slot cross-fades from the current pose. Dynamic montages cannot loop forever: 100k loops.
+					AnimInstance->PlaySlotAnimationAsDynamicMontage(Anim, SwimSlotName, SwimBlendInSeconds, SwimBlendOutSeconds, 1.0f, 100000);
+				}
+				else
+				{
+					Body->PlayAnimation(Anim, /*bLooping=*/true);
+				}
 				CurrentSwimPose = Wanted;
 			}
 			PendingSwimPose = ESwimPose::None;
