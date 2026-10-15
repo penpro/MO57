@@ -4354,13 +4354,18 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 			const FGeometry& Geo = W->GetCachedGeometry();
 			const FVector2D Center = FVector2D(Geo.GetAbsolutePosition()) + FVector2D(Geo.GetAbsoluteSize()) * 0.5f;
 			FSlateApplication& Slate = FSlateApplication::Get();
+			// Move the pointer there first, as a hand does: an SButton clicks on release only while HOVERED, and hover comes from a move
+			// event. Without it a synthesized down/up never pressed a button -- and still logged PASS (a recipe row "did nothing",
+			// first-ten-minutes pass, Oct 15 2026).
+			const FVector2D LastPos = Slate.GetCursorPos();
+			Slate.ProcessMouseMoveEvent(FPointerEvent(0, Center, LastPos, TSet<FKey>(), FKey(), 0.0f, FModifierKeysState()));
 			TSet<FKey> Pressed;
 			Pressed.Add(EKeys::LeftMouseButton);
 			const FPointerEvent DownEvent(0, Center, Center, Pressed, EKeys::LeftMouseButton, 0.0f, FModifierKeysState());
 			Slate.ProcessMouseButtonDownEvent(nullptr, DownEvent);
 			const FPointerEvent UpEvent(0, Center, Center, TSet<FKey>(), EKeys::LeftMouseButton, 0.0f, FModifierKeysState());
 			Slate.ProcessMouseButtonUpEvent(UpEvent);
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] PASS ClickWidget: '%s' via pointer click at (%.0f, %.0f)"),
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] SENT ClickWidget: '%s' via pointer click at (%.0f, %.0f) -- delivered, not verified: read the state it should change"),
 				*W->GetName(), Center.X, Center.Y);
 		}),
 		ECVF_Default));

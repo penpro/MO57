@@ -102,20 +102,22 @@ void UMOListEntryBase::UpdateVisuals_Implementation()
 
 FLinearColor UMOListEntryBase::ResolveRowColor(bool bSelected, bool bDimmed) const
 {
+	// Selection outranks dimming: the recipe you picked and cannot make yet still has to read as picked. Dimmed first used to
+	// win, so selecting an uncraftable recipe changed nothing in the list (first-ten-minutes pass, Oct 15 2026).
 	if (!bUseThemeColors)
 	{
-		return bDimmed ? DisabledColor : bSelected ? SelectedColor : NormalColor;
+		return bSelected ? SelectedColor : bDimmed ? DisabledColor : NormalColor;
 	}
-	const FLinearColor Row = UMOUITokens::Color("color.surface.2");
-	if (bDimmed)
-	{
-		return UMOUITokens::Color("color.surface.1");
-	}
+	const FLinearColor Row = UMOUITokens::Color(bDimmed ? "color.surface.1" : "color.surface.2");   // a dimmed row sits one surface lower
 	if (bSelected)
 	{
 		return FMath::Lerp(Row, UMOUITokens::Color("color.accent"), 0.18f);   // kit: accent muted over the row
 	}
-	return bIsHovered ? UMOUITokens::Color("color.surface.3") : Row;
+	if (bIsHovered)
+	{
+		return UMOUITokens::Color(bDimmed ? "color.surface.2" : "color.surface.3");   // one surface up, dimmed or not
+	}
+	return Row;
 }
 
 void UMOListEntryBase::NativeOnMouseEnter(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)

@@ -259,7 +259,7 @@ protected:
 	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
 	TObjectPtr<UPanelWidget> OutputsContainer;
 
-	/** Skill requirement text display. */
+	/** The SKILL row's value: "Skill: current/required" (UMOUIUtils::FormatSkillRequirement), or "None". */
 	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
 	TObjectPtr<UTextBlock> SkillRequirementText;
 

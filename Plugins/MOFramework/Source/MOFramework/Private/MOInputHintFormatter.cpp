@@ -122,13 +122,125 @@ FKey FMOInputHintFormatter::ResolveActionKey(const AMOPlayerController* MOPC,
 	return FKey();
 }
 
+TArray<FKey> FMOInputHintFormatter::ResolveActionKeys(const AMOPlayerController* MOPC, FName ActionPropertyName, FName ContextName)
+{
+	using namespace MOInputHintFormatterInternal;
+
+	TArray<FKey> Keys;
+	UInputAction* Action = IsValid(MOPC) ? ReadObjectProperty<UInputAction>(MOPC, ActionPropertyName) : nullptr;
+	if (!Action)
+	{
+		return Keys;
+	}
+	const FName ResolvedContextProp = ResolveContextPropertyName(ContextName);
+	const TArray<FName> ContextProps = !ResolvedContextProp.IsNone()
+		? TArray<FName>{ ResolvedContextProp }
+		: TArray<FName>{ TEXT("PawnControlContext"), TEXT("BaseBuildingContext"), TEXT("MenuContext") };
+	for (const FName& Prop : ContextProps)
+	{
+		UInputMappingContext* Ctx = ReadObjectProperty<UInputMappingContext>(MOPC, Prop);
+		if (!Ctx)
+		{
+			continue;
+		}
+		constexpr int32 MaxSlots = 16;
+		for (int32 Slot = 0; Slot < MaxSlots; ++Slot)
+		{
+			const FKey Key = FMOKeyBindingManager::GetCurrentBinding(Action, Ctx, Slot);
+			if (!Key.IsValid())
+			{
+				break;
+			}
+			Keys.AddUnique(Key);
+		}
+		if (Keys.Num() > 0)
+		{
+			break;
+		}
+	}
+	return Keys;
+}
+
 FString FMOInputHintFormatter::FormatKeyGlyph(const FKey& Key)
 {
 	if (!Key.IsValid())
 	{
 		return TEXT("[unbound]");
 	}
+	// Axis keys as a player names them; the engine's display names are editor labels ("Mouse XY 2D-Axis").
+	if (Key == EKeys::Mouse2D || Key == EKeys::MouseX || Key == EKeys::MouseY)
+	{
+		return TEXT("[Mouse]");
+	}
+	if (Key == EKeys::MouseWheelAxis)
+	{
+		return TEXT("[Mouse Wheel]");
+	}
+	if (Key == EKeys::Gamepad_Left2D || Key == EKeys::Gamepad_LeftX || Key == EKeys::Gamepad_LeftY)
+	{
+		return TEXT("[Left Stick]");
+	}
+	if (Key == EKeys::Gamepad_Right2D || Key == EKeys::Gamepad_RightX || Key == EKeys::Gamepad_RightY)
+	{
+		return TEXT("[Right Stick]");
+	}
 	return FString::Printf(TEXT("[%s]"), *Key.GetDisplayName().ToString());
+}
+
+FString FMOInputHintFormatter::FormatKeysGlyph(const TArray<FKey>& Keys)
+{
+	if (Keys.Num() == 0)
+	{
+		return FormatKeyGlyph(FKey());
+	}
+	// Only the first key's device: the hint names what the player is using, not every pad and keyboard key at once.
+	TArray<FKey> Same;
+	for (const FKey& Key : Keys)
+	{
+		if (Key.IsGamepadKey() == Keys[0].IsGamepadKey())
+		{
+			Same.Add(Key);
+		}
+	}
+	const bool bAnyAxis = Same.ContainsByPredicate([](const FKey& Key) { return Key.IsAxis1D() || Key.IsAxis2D() || Key.IsAxis3D(); });
+	if (Same.Num() == 1 || bAnyAxis)
+	{
+		return FormatKeyGlyph(Same[0]);
+	}
+
+	// A complete movement set is one glyph, and it is an ALTERNATIVE to any other set bound beside it (move = WASD and the
+	// arrows): name the first complete set in mapping order, not "[W/S/A/D/Up/Down/Right/Left]".
+	struct FKeySet { TArray<FKey> Keys; const TCHAR* Glyph; };
+	const FKeySet Sets[] = { { { EKeys::W, EKeys::A, EKeys::S, EKeys::D }, TEXT("[WASD]") },
+		{ { EKeys::Up, EKeys::Down, EKeys::Left, EKeys::Right }, TEXT("[Arrow Keys]") } };
+	int32 BestFirst = INDEX_NONE;
+	const TCHAR* BestGlyph = nullptr;
+	for (const FKeySet& Set : Sets)
+	{
+		int32 First = INDEX_NONE;
+		bool bComplete = true;
+		for (const FKey& Key : Set.Keys)
+		{
+			const int32 At = Same.IndexOfByKey(Key);
+			bComplete &= At != INDEX_NONE;
+			First = At == INDEX_NONE ? First : (First == INDEX_NONE ? At : FMath::Min(First, At));
+		}
+		if (bComplete && (BestFirst == INDEX_NONE || First < BestFirst))
+		{
+			BestFirst = First;
+			BestGlyph = Set.Glyph;
+		}
+	}
+	if (BestGlyph)
+	{
+		return BestGlyph;
+	}
+	TArray<FString> Names;
+	for (const FKey& Key : Same)
+	{
+		Names.Add(Key.GetDisplayName().ToString());
+	}
+	return FString::Printf(TEXT("[%s]"), *FString::Join(Names, TEXT("/")));
 }
 
 FText FMOInputHintFormatter::Format(const FText& Template, const APlayerController* PC)
@@ -164,6 +276,7 @@ FText FMOInputHintFormatter::Format(const FText& Template, const APlayerControll
 
 		FName ContextName = NAME_None;
 		int32 SlotIndex = 0;
+		bool bExplicitSlot = false;
 
 		if (!SecondCap.IsEmpty())
 		{
@@ -171,6 +284,7 @@ FText FMOInputHintFormatter::Format(const FText& Template, const APlayerControll
 			if (SecondCap.IsNumeric())
 			{
 				SlotIndex = FCString::Atoi(*SecondCap);
+				bExplicitSlot = true;
 			}
 			else
 			{
@@ -180,10 +294,19 @@ FText FMOInputHintFormatter::Format(const FText& Template, const APlayerControll
 		if (!ThirdCap.IsEmpty())
 		{
 			SlotIndex = FCString::Atoi(*ThirdCap);
+			bExplicitSlot = true;
 		}
 
-		const FKey Key = ResolveActionKey(MOPC, FName(*ActionName), ContextName, SlotIndex);
-		Result.Append(FormatKeyGlyph(Key));
+		// A button action is one key; an axis action (move = W, A, S, D) is all of its keys unless the token picks a slot.
+		const UInputAction* Action = MOInputHintFormatterInternal::ReadObjectProperty<UInputAction>(MOPC, FName(*ActionName));
+		if (!bExplicitSlot && Action && Action->ValueType != EInputActionValueType::Boolean)
+		{
+			Result.Append(FormatKeysGlyph(ResolveActionKeys(MOPC, FName(*ActionName), ContextName)));
+		}
+		else
+		{
+			Result.Append(FormatKeyGlyph(ResolveActionKey(MOPC, FName(*ActionName), ContextName, SlotIndex)));
+		}
 
 		LastEnd = MatchEnd;
 	}

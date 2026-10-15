@@ -96,7 +96,9 @@ void UMORecipeDetailPanelBase::DisplayRecipe(FName RecipeId)
 		}
 		else
 		{
-			SkillRequirementText->SetVisibility(ESlateVisibility::Collapsed);
+			// The kit labels this row (SKILL); collapsing the value left the label with nothing beside it.
+			SkillRequirementText->SetText(NSLOCTEXT("MOCrafting", "NoSkillRequired", "None"));
+			SkillRequirementText->SetVisibility(ESlateVisibility::Visible);
 		}
 	}
 

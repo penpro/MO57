@@ -155,23 +155,13 @@ FText UMORecipeDetailPanel::GetActionUnavailableReason() const
 
 void UMORecipeDetailPanel::OnDisplayRecipe(const FMORecipeDefinitionRow* Recipe)
 {
-	// Update required station text (crafting-specific)
+	// The value of the kit's labelled STATION row (ui kit_recipes.detail): always shown, so the label never stands alone.
 	if (RequiredStationText)
 	{
-		if (Recipe->RequiredStation != EMOCraftingStation::None)
-		{
-			// Get station name from enum
-			FString StationName = UEnum::GetDisplayValueAsText(Recipe->RequiredStation).ToString();
-			RequiredStationText->SetText(FText::Format(
-				NSLOCTEXT("MOCrafting", "RequiresStation", "Requires: {0}"),
-				FText::FromString(StationName)
-			));
-			RequiredStationText->SetVisibility(ESlateVisibility::Visible);
-		}
-		else
-		{
-			RequiredStationText->SetVisibility(ESlateVisibility::Collapsed);
-		}
+		RequiredStationText->SetText(Recipe->RequiredStation != EMOCraftingStation::None
+			? UEnum::GetDisplayValueAsText(Recipe->RequiredStation)
+			: NSLOCTEXT("MOCrafting", "StationByHand", "By hand"));
+		RequiredStationText->SetVisibility(ESlateVisibility::Visible);
 	}
 
 	// Build ingredient data

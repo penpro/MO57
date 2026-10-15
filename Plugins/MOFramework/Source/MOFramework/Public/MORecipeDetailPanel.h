@@ -31,8 +31,9 @@
  * [2024-02] CACHED DATA: CachedIngredients and CachedOutputs are rebuilt on
  *   each RefreshDisplay(). GetIngredients/GetOutputs return cached data.
  *
- * [2024-02] STATION TEXT: RequiredStationText shows "Requires: X" only if
- *   recipe.RequiredStation != Hand.
+ * [2026-10] STATION TEXT: RequiredStationText is the value of the kit's labelled
+ *   STATION row: the station's name, or "By hand". It used to collapse for a hand
+ *   recipe and leave the STATION label with nothing beside it.
  *
  * =============================================================================
  * RELATED FILES: MORecipeDetailPanelBase.h, MOCraftingUIController.h, MOUIDelegates.h
@@ -199,7 +200,7 @@ protected:
 
 	// --- Crafting-Specific Widget Bindings ---
 
-	/** Shows required crafting station (e.g., "Requires: Campfire"). */
+	/** The STATION row's value: the required station's name (e.g. "Campfire"), or "By hand". */
 	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
 	TObjectPtr<UTextBlock> RequiredStationText;
 

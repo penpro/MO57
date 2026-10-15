@@ -19,6 +19,10 @@
  * KEY GLYPHS:
  * Resolved keys are wrapped in square brackets, e.g. "[E]" or "[Mouse Wheel
  * Up]". If the action has no binding, the token resolves to "[unbound]".
+ * Axis keys read as a player says them ("[Mouse]", "[Left Stick]"), not the
+ * engine's "Mouse XY 2D-Axis". A token WITHOUT a slot on an axis action bound
+ * to several keys of one device shows them all: "[WASD]", "[Arrow Keys]",
+ * else "[Q/E]" -- a move hint that said only "[W]" read as "W walks".
  *
  * USAGE:
  *   FText Out = FMOInputHintFormatter::Format(
@@ -65,6 +69,15 @@ public:
 	 */
 	static FKey ResolveActionKey(const AMOPlayerController* MOPC, FName ActionPropertyName,
 		FName ContextName = NAME_None, int32 SlotIndex = 0);
+
+	/** Every key bound to the action (all slots, mapping order) in the first context that binds it. */
+	static TArray<FKey> ResolveActionKeys(const AMOPlayerController* MOPC, FName ActionPropertyName, FName ContextName = NAME_None);
+
+	/**
+	 * One glyph for a multi-key binding: keys of the first key's device only (a pad stick is not listed beside WASD), and a
+	 * single-key glyph when that leaves one key or any of them is itself an axis. "[WASD]", "[Arrow Keys]", else "[A/B]".
+	 */
+	static FString FormatKeysGlyph(const TArray<FKey>& Keys);
 
 	/**
 	 * Format a key as a bracketed glyph for display. "[E]", "[Space]",
