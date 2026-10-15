@@ -7,7 +7,8 @@ Whether a biome gets it is a statement about its floor:
     "mountainside is VERY sparse": the heath had been taken off on Oct 12 when mountains read "grass only"; it now has its own ED rocks and moss ground).
   - NO: Rainforest (playtest 2026-10-14 #6 "dense forest, grass still brightly lit": a closed canopy shades a lawn out, and that grass glowed under it;
     the floor is litter, ferns and seedlings from the palette). Also the heaviest layer in the biome where the frame rate halved (#5).
-  - NO: DryScrub, RockyHighland, AlpineRock, ElectricForest, NordicStrand (their own palettes carry their ground).
+  - NO: DryScrub, RockyHighland, AlpineRock, ElectricForest, NordicStrand (their own palettes carry their ground; DryScrub, RockyHighland
+    and NordicStrand also get the DRY bunchgrass branch of the same sampler, native_dry_grass_chain.py, since Oct 14 2026).
 
     python Tools/ue.py py --file Content/Python/native_grass_biomes.py      (editor open, not in PIE; sets the list exactly, idempotent)
 """
