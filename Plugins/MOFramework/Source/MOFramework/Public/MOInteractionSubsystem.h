@@ -29,10 +29,11 @@
  *    Client sends target actor -> Server validates distance, LOS, angle
  *    -> Server executes via IMOInteractionInterface if valid
  *
- * 2. Server Trace (FindServerInteractTarget):
- *    - Resolves controller viewpoint (spectator or pawn)
- *    - Sphere trace from eye position forward
- *    - Validates result against view cone and distance
+ * 2. Claimed-target check (ServerExecuteInteract): the client names the actor its focus sweep hit; the server checks
+ *    the claim -- interactable, in reach (IsWithinInteractReach: distance + view cone), line of sight. It does NOT
+ *    re-derive the target with a sweep of its own: a second, separately tuned sweep (12 cm vs the client's 30 cm, and
+ *    a lagged view for a remote client) refused E on low objects the crosshair covered (Oct 15 2026).
+ *    Server Trace (FindServerInteractTarget) only picks a target when the caller names none.
  *
  * 3. View Cone Check:
  *    - MaxInteractAngleDegrees (default 75°) from view forward
@@ -131,6 +132,15 @@ public:
 	// Optional: clamp suspicious viewpoint offsets (useful for 3P camera spoof scenarios).
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Interaction")
 	float MaxViewpointDistanceFromPawn = 250.0f;
+
+	/**
+	 * Whether a target with bounds (BoundsOrigin, BoundsExtent) is in interact reach of a viewpoint: within MaxDistance of
+	 * the view, measured to the bounds centre with the bounds' half-diagonal as tolerance (the client aims at the surface),
+	 * and -- when MaxAngleDegrees is in (0, 180) -- inside that cone around ViewForward. The one reach rule for primary and
+	 * secondary interact; pure, so it is unit-tested.
+	 */
+	static bool IsWithinInteractReach(const FVector& ViewLocation, const FVector& ViewForward, const FVector& BoundsOrigin,
+		const FVector& BoundsExtent, float MaxDistance, float MaxAngleDegrees);
 
 	// Helper utilities (non-UFUNCTION, server-side use).
 	bool FindServerInteractTarget(AController* InteractorController, AActor*& OutTargetActor, FHitResult& OutHit) const;

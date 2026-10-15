@@ -1341,6 +1341,58 @@ def _client_pickup(rep, host, client):
         rep.step("client pickup: ... and NOT on the host's", on_host is None, "nothing on the host" if on_host is None else on_host.group(0))
 
 
+def _client_press_e(rep, host, client):
+    """CLIENT presses E on a low object it aims at, through the real input path (TryInteract -> ServerRequestInteract -> the
+    server's check of the claimed target). Until Oct 15 2026 the server re-derived the target with its own 12 cm sweep while the
+    client aims with a 30 cm one, and refused E on low objects the crosshair covered (a built campfire, a stick on the ground).
+    _client_pickup cannot catch that: MO.Test.PickupNearest uses the separate distance-only pickup RPC."""
+    setup = _probe(host,
+        "import builtins; p = unreal.GameplayStatics.get_player_pawn(world, 1); "
+        "inv = p.get_component_by_class(unreal.MOInventoryComponent); g = unreal.GuidLibrary.new_guid(); builtins.MO_E_GUID = g; "
+        "gave = inv.add_item_by_guid(g, 'Stick01', 1); "
+        "w = inv.drop_item_by_guid(g, p.get_actor_location() + unreal.Vector(150.0, 60.0, 10.0), unreal.Rotator(0.0, 0.0, 0.0)); "
+        "out('E_SETUP gave=%s item=%s' % (gave, w.get_name() if w else 'none'))")
+    m = re.search(r"E_SETUP gave=(\w+) item=(\S+)", setup)
+    if not rep.step("host: dropped a stick in front of the joiner's pawn", bool(m) and m.group(1) == "True" and m.group(2) != "none",
+                    m.group(0) if m else setup.strip()[-160:]):
+        return
+    probe_have = ("import builtins; p = unreal.GameplayStatics.get_player_pawn(world, 1); "
+                  "inv = p.get_component_by_class(unreal.MOInventoryComponent); r = inv.try_get_entry_by_guid(builtins.MO_E_GUID); "
+                  "out('HAVE=%s' % (r[0] if isinstance(r, tuple) else bool(r)))")
+    time.sleep(6)  # the dropped item replicates to the client
+    rep.step("CONTROL: before the client presses E, the stick is NOT in the joiner's inventory", "HAVE=True" not in _probe(host, probe_have), "")
+    aim = _probe(client,
+        "pc = unreal.GameplayStatics.get_player_controller(world, 0); p = pc.get_controlled_pawn(); pl = p.get_actor_location(); "
+        "items = sorted(unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOWorldItem), key=lambda a: (a.get_actor_location() - pl).length()); "
+        "t = items[0].get_actor_location() if items else None; cam = pc.player_camera_manager.get_camera_location(); "
+        "pc.set_control_rotation(unreal.MathLibrary.find_look_at_rotation(cam, t)) if t else None; "
+        "out('E_AIM item=%s dist=%.0f' % (items[0].get_name() if items else 'none', (t - cam).length() if t else -1))")
+    am = re.search(r"E_AIM item=(\S+) dist=(-?\d+)", aim)
+    if not rep.step("client: aimed the camera at the nearest item on the ground", bool(am) and am.group(1) != "none", am.group(0) if am else aim.strip()[-160:]):
+        return
+    time.sleep(1.5)  # the new view reaches the server with the next moves
+    off = log_size(host)
+    console(client, "MO.Test.PressKey E")
+    got = False
+    for _ in range(8):
+        time.sleep(1.5)
+        if "HAVE=True" in _probe(host, probe_have):
+            got = True
+            break
+    reject = re.search(r"\[MOInteract\] Reject:[^\n]*", read_log_from(host, off))
+    diag = ""
+    if not got:  # where each side thinks the joiner, its view and the item are
+        diag = " | host: " + _probe(host,
+            "pc = unreal.GameplayStatics.get_player_controller(world, 1); p = pc.get_controlled_pawn(); v = pc.get_player_view_point(); "
+            "items = sorted(unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOWorldItem), key=lambda a: (a.get_actor_location() - p.get_actor_location()).length()); "
+            "out('pawn=%s view=%s item=%s' % (p.get_actor_location(), v[0] if isinstance(v, tuple) else v, items[0].get_actor_location() if items else None))").strip()[-400:]
+        diag += " | client: " + _probe(client,
+            "pc = unreal.GameplayStatics.get_player_controller(world, 0); p = pc.get_controlled_pawn(); "
+            "out('pawn=%s cam=%s' % (p.get_actor_location(), pc.player_camera_manager.get_camera_location()))").strip()[-300:]
+    rep.step("client E on a stick it aims at: the host picks it up for the joiner (no 'Reject')", got and not reject,
+             ("picked up" if got else (reject.group(0) if reject else "no pickup and no Reject line on the host")) + diag)
+
+
 def _client_craft(rep, host, client):
     """CLIENT crafting: authority-side setup on the joiner's pawn (ingredient + skill), then the CLIENT enqueues through MO.Test.Craft.
     The proof is the host-side queue of the joiner's pawn growing -- the client's own 'PASS' only says the RPC was sent."""
@@ -1888,7 +1940,10 @@ def actions_test(uproject, editor_exe, keep=False, boot_timeout=300):
             start(n, uproject, editor_exe, pos=pos, nosteam=True)
         if not _host_and_join(rep, host, client, "ActionsTest", boot_timeout):
             return False
-        for fn in (_client_pickup, _client_craft, _client_forage, _client_build, _client_attack, _trust_placement, _trust_pickup_far, _trust_possess_other, _trust_dev_spawn, _client_rename, _trust_terraform, _buried_pawns, _remote_pawn_stays_put):
+        only = {s.strip() for s in os.environ.get("MO_ACTIONS_ONLY", "").split(",") if s.strip()}  # quick rerun of named cases
+        for fn in (_client_pickup, _client_press_e, _client_craft, _client_forage, _client_build, _client_attack, _trust_placement, _trust_pickup_far, _trust_possess_other, _trust_dev_spawn, _client_rename, _trust_terraform, _buried_pawns, _remote_pawn_stays_put):
+            if only and fn.__name__ not in only:
+                continue
             try:
                 fn(rep, host, client)
             except Exception as e:  # noqa: BLE001 - one verb's harness error must not hide the others

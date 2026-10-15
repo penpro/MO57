@@ -82,6 +82,29 @@ bool UMOInteractionSubsystem::PassesViewCone(const FVector& ViewLocation, const 
 	return Dot >= CosThreshold;
 }
 
+bool UMOInteractionSubsystem::IsWithinInteractReach(const FVector& ViewLocation, const FVector& ViewForward, const FVector& BoundsOrigin,
+	const FVector& BoundsExtent, float MaxDistance, float MaxAngleDegrees)
+{
+	// The client's sweep stops at the target's surface; the centre may lie up to the half-diagonal further.
+	const float MaxRangeWithTolerance = MaxDistance + BoundsExtent.Size();
+	if (FVector::DistSquared(ViewLocation, BoundsOrigin) > FMath::Square(MaxRangeWithTolerance))
+	{
+		return false;
+	}
+
+	if (MaxAngleDegrees <= 0.0f || MaxAngleDegrees >= 180.0f)
+	{
+		return true;
+	}
+
+	const FVector ToTarget = (BoundsOrigin - ViewLocation).GetSafeNormal();
+	if (ToTarget.IsNearlyZero())
+	{
+		return true;
+	}
+	return FVector::DotProduct(ViewForward.GetSafeNormal(), ToTarget) >= FMath::Cos(FMath::DegreesToRadians(MaxAngleDegrees));
+}
+
 bool UMOInteractionSubsystem::FindServerInteractTarget(AController* InteractorController, AActor*& OutTargetActor, FHitResult& OutHit) const
 {
 	OutTargetActor = nullptr;
@@ -231,38 +254,23 @@ bool UMOInteractionSubsystem::ServerExecuteInteract(AController* InteractorContr
 	}
 	LastInteractTimeSeconds.Add(ControllerKey, CurrentTimeSeconds);
 
-	// Server-authoritative target selection.
-	AActor* ServerTargetActor = nullptr;
-	FHitResult ServerTargetHit;
-	if (!FindServerInteractTarget(InteractorController, ServerTargetActor, ServerTargetHit))
-	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOInteract] Reject: server trace found no target (client wanted '%s')"), *GetNameSafe(TargetActor));
-		return false;
-	}
-
+	// The client names the actor its focus sweep hit; the server checks that claim (reach, view cone, line of sight)
+	// instead of re-deriving the target with a sweep of its own. The second, separately tuned sweep (12 cm vs the
+	// client's 30 cm radius, and a lagged view for a remote client) refused E on low objects the crosshair covered --
+	// a freshly built campfire logged "server trace found no target". A spoofed claim still has to be in reach, in
+	// front of the player and in sight. With no claimed target (Blueprint callers) the server sweep picks one.
+	AActor* ServerTargetActor = TargetActor;
 	if (!IsValid(ServerTargetActor))
 	{
-		return false;
-	}
-
-	// If the client supplied a target actor, require it to match what the server found.
-	// This is the spoofing hardening: client cannot request arbitrary actors.
-	if (IsValid(TargetActor))
-	{
-		const bool bSameActor = (TargetActor == ServerTargetActor);
-		const bool bAttachmentMatch =
-			TargetActor->IsAttachedTo(ServerTargetActor) ||
-			ServerTargetActor->IsAttachedTo(TargetActor);
-
-		if (!bSameActor && !bAttachmentMatch)
+		FHitResult ServerTargetHit;
+		if (!FindServerInteractTarget(InteractorController, ServerTargetActor, ServerTargetHit) || !IsValid(ServerTargetActor))
 		{
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOInteract] Reject: client target mismatch (client=%s server=%s)"),
-				*GetNameSafe(TargetActor), *GetNameSafe(ServerTargetActor));
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOInteract] Reject: no target named and the server trace found none"));
 			return false;
 		}
 	}
 
-	// Resolve viewpoint again for distance and LOS defense-in-depth (cheap).
+	// Resolve viewpoint for the reach and LOS checks.
 	FVector ViewLocation = FVector::ZeroVector;
 	FRotator ViewRotation = FRotator::ZeroRotator;
 	if (!ResolveServerViewpoint(InteractorController, ViewLocation, ViewRotation))
@@ -280,10 +288,18 @@ bool UMOInteractionSubsystem::ServerExecuteInteract(AController* InteractorContr
 		}
 	}
 
-	const float DistanceSquared = FVector::DistSquared(ViewLocation, ServerTargetActor->GetActorLocation());
-	if (DistanceSquared > FMath::Square(MaximumInteractDistance))
+	FVector BoundsOrigin = FVector::ZeroVector;
+	FVector BoundsExtent = FVector::ZeroVector;
+	ServerTargetActor->GetActorBounds(true, BoundsOrigin, BoundsExtent);
+	if (BoundsExtent.IsNearlyZero())
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOInteract] Reject: out of range"));
+		BoundsOrigin = ServerTargetActor->GetActorLocation();
+	}
+	if (!IsWithinInteractReach(ViewLocation, ViewRotation.Vector(), BoundsOrigin, BoundsExtent, MaximumInteractDistance, MaxInteractAngleDegrees))
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInteract] Reject: '%s' out of reach (dist=%.1f, max=%.1f, or outside the %.0f deg view cone) view=%s pawn=%s target=%s"),
+			*ServerTargetActor->GetName(), FVector::Dist(ViewLocation, BoundsOrigin), MaximumInteractDistance + BoundsExtent.Size(), MaxInteractAngleDegrees,
+			*ViewLocation.ToCompactString(), *InteractorPawn->GetActorLocation().ToCompactString(), *BoundsOrigin.ToCompactString());
 		return false;
 	}
 
@@ -296,6 +312,7 @@ bool UMOInteractionSubsystem::ServerExecuteInteract(AController* InteractorContr
 	UMOInteractableComponent* InteractableComponent = ServerTargetActor->FindComponentByClass<UMOInteractableComponent>();
 	if (!IsValid(InteractableComponent))
 	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInteract] Reject: '%s' has no InteractableComponent"), *ServerTargetActor->GetName());
 		return false;
 	}
 
@@ -360,19 +377,15 @@ bool UMOInteractionSubsystem::ServerExecuteSecondaryInteract(AController* Intera
 		return false;
 	}
 
-	// Distance check - target must be within interact range
-	// Use bounds center instead of actor origin for more accurate distance (surface vs center)
-	// Also add tolerance since client traces to surface but server checks to center
+	// Distance check - the same reach rule as primary interact, without the view cone.
 	FVector BoundsOrigin;
 	FVector BoundsExtent;
 	TargetActor->GetActorBounds(true, BoundsOrigin, BoundsExtent);
 
-	const float DistanceSquared = FVector::DistSquared(ViewLocation, BoundsOrigin);
-	const float MaxRangeWithTolerance = MaximumInteractDistance + BoundsExtent.Size();
-	if (DistanceSquared > FMath::Square(MaxRangeWithTolerance))
+	if (!IsWithinInteractReach(ViewLocation, ViewRotation.Vector(), BoundsOrigin, BoundsExtent, MaximumInteractDistance, /*MaxAngleDegrees=*/0.0f))
 	{
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOInteract] ServerExecuteSecondaryInteract: Target out of range (dist=%.1f, max=%.1f)"),
-			FMath::Sqrt(DistanceSquared), MaxRangeWithTolerance);
+			FVector::Dist(ViewLocation, BoundsOrigin), MaximumInteractDistance + BoundsExtent.Size());
 		return false;
 	}
 
