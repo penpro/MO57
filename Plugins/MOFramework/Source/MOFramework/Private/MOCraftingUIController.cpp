@@ -118,7 +118,8 @@ void UMOCraftingUIController::ToggleCraftingMenu()
 		return;
 	}
 
-	// Frame-based debounce: prevent double-toggle from ECommonInputMode::All
+	// Frame-based debounce: one toggle per frame even if the key reaches this controller twice (added when menus ran in ECommonInputMode::All
+	// and both the game action and the menu fired; menus use Menu mode since the May-June rework -- kept as a cheap guard)
 	const uint64 CurrentFrame = GFrameCounter;
 	if (CurrentFrame == LastToggleFrame)
 	{

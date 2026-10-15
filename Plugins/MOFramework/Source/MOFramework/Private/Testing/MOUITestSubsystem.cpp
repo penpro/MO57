@@ -3071,7 +3071,7 @@ FMOUITestResult UMOUITestSubsystem::Test_CommonUI_LayerStackPop()
 
 FMOUITestResult UMOUITestSubsystem::Test_CommonUI_MenuInputModeAll()
 {
-	LogTest(TEXT("Testing: Menu widgets use ECommonInputMode::All"));
+	LogTest(TEXT("Testing: Menu widgets apply their menu input config (cursor shown; ECommonInputMode::Menu since the May-June rework -- the test id keeps its old name)"));
 
 	// Open inventory (a menu widget, not modal)
 	if (!OpenMenu(TEXT("Inventory")))
@@ -3186,7 +3186,7 @@ FMOUITestResult UMOUITestSubsystem::Test_CommonUI_ModalBlocksInput()
 
 FMOUITestResult UMOUITestSubsystem::Test_CommonUI_ToggleKeyPassthrough()
 {
-	LogTest(TEXT("Testing: Toggle keys work while menu is open (ECommonInputMode::All)"));
+	LogTest(TEXT("Testing: Toggle keys work while a menu is open"));
 
 	// Open inventory
 	if (!OpenMenu(TEXT("Inventory")))

@@ -131,4 +131,31 @@ Baseline (before):
 
 New game READY: 14.0 s.
 
-After: (filled in below)
+After (packaged, same protocol; `cover_final2.log`: fixed spawner, the plan, adaptive build batches, the dry bunchgrass chain):
+
+| Biome | fps | avg ms | p95 ms | GPU ms | draws | settle frames > 50 ms |
+|---|---|---|---|---|---|---|
+| TemperateForest | 90.0 -> 84.2 | 11.1 -> 11.9 | 12.1 -> 12.7 | 9.9 -> 10.7 | | 20 -> 30 |
+| Meadow | 94.9 -> 84.6 | 10.5 -> 11.8 | 11.4 -> 12.6 | 9.3 -> 10.7 | | 3 -> 10 |
+| RockyHighland | 92.8 -> 83.2 | 10.8 -> 12.0 | 11.7 -> 12.7 | 9.6 -> 10.9 | | 1 -> 1 |
+| ShoreStrand | 90.6 -> 87.7 | 11.0 -> 11.4 | 12.0 -> 12.2 | 9.9 -> 10.2 | | 3 -> 5 |
+| DryScrub | 85.8 -> 77.1 | 11.7 -> 13.0 | 12.5 -> 13.8 | 10.4 -> 11.8 | | 7 -> 13 |
+| LocustWoodland | 89.2 -> 85.7 | 11.2 -> 11.7 | 12.1 -> 12.5 | 10.0 -> 10.4 | | 3 -> 5 |
+| AlpineHeath | 93.7 -> 93.8 | 10.7 -> 10.7 | 11.6 -> 11.8 | 9.4 -> 9.3 | | 8 -> 13 |
+| Rainforest | 83.5 -> 76.9 | 12.0 -> 13.0 | 12.8 -> 13.9 | 10.8 -> 11.7 | | 4 -> 16 |
+| AlpineRock | 101.1 -> 100.2 | 9.9 -> 10.0 | 11.0 -> 11.1 | 8.4 -> 8.3 | | 8 -> 22 |
+| ElectricForest | 88.8 -> 83.0 | 11.3 -> 12.0 | 12.2 -> 12.9 | 10.0 -> 10.8 | | 5 -> 10 |
+| NordicStrand | 94.9 -> 90.4 | 10.5 -> 11.1 | 11.7 -> 12.1 | 9.2 -> 9.8 | | 5 -> 20 |
+
+New game READY: 14.0 -> 17.3 s. Arrival hitches (the tour teleports 1-3 km into unbuilt land, a worst case: nobody walks that
+fast) 67 -> 145 over the eleven arrivals. The game thread did not move (3.0-3.9 ms); the cost is GPU, +0.3 to +1.5 ms.
+
+Honest notes:
+- Run-to-run noise is ~0.7 ms of GPU: TemperateForest measured 10.0 and 10.7 ms in two runs with no change that touches it.
+- The first after-run (old spawner + the first plan) cost up to 12 fps and 262 hitches: the clump bug planted ~5x the trees
+  asked for, and 512-instance build batches of collidable trees blew frames. The adaptive batches now cap the worst single
+  build batch at ~9 ms (it was up to 140 ms of build per cell).
+- The DryScrub shot spot (`Saved/CoverShots/cmp_dry_chain2.png`): the palette's 3,100 dry tufts/ha measured right and still
+  read as bare; the dry bunchgrass chain (~8,500/ha there, taller and wider tufts) is what makes it read as grassland.
+- Shots: `Saved/CoverShots/before|final2/<Biome>_sheet.png`. The before sheets and the final ones start their spot search from
+  different places (the before run's first search raced the world start), so only some spots match exactly (DryScrub does).

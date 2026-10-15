@@ -143,9 +143,8 @@ public:
 
 protected:
 	/**
-	 * CommonUI input config.
-	 * Uses ECommonInputMode::All for game + UI input (allows ESC to cancel).
-	 * Shows mouse cursor for interactive elements.
+	 * CommonUI input config: ECommonInputMode::Game with the cursor hidden (a passive HUD overlay; ESC cancels through the back
+	 * handler), and NO preference while a menu is open so the router never takes input away from the menu.
 	 */
 	virtual TOptional<FUIInputConfig> GetDesiredInputConfig() const override;
 

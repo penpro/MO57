@@ -201,7 +201,7 @@ protected:
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 private:
-	/** Frame-based debounce to prevent double-toggle from ECommonInputMode::All */
+	/** Frame-based debounce: one toggle per frame even if the key arrives twice (a guard from the ECommonInputMode::All era; menus use Menu mode now) */
 	uint64 LastToggleFrame = 0;
 
 	// --- Crafting Menu ---
