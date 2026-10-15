@@ -33,6 +33,69 @@
 // SETTINGS
 // ============================================================================
 
+namespace MOPCGClump
+{
+	/** The clump field's statistics, measured once from the engine's own PerlinNoise2D (thread-safe static init: the spawner's workers share it). */
+	struct FStats
+	{
+		float Coverage[101];        // Coverage[i] = fraction of the ground where the field >= i / 100
+		float LegacyMean = 0.55f;   // mean of clamp(2 * noise + 0.5, 0, 2)
+
+		FStats()
+		{
+			// Random points (fixed seed) over one 256 x 256 period of the noise's permutation table: a regular grid would sample only a few fixed
+			// positions inside each lattice cell and bias the result.
+			constexpr int32 Samples = 1 << 18;
+			FRandomStream Stream(0x5EED);
+			int32 Hist[101] = { 0 };
+			double LegacySum = 0.0;
+			for (int32 I = 0; I < Samples; ++I)
+			{
+				const float Noise = FMath::PerlinNoise2D(FVector2D(Stream.FRandRange(0.0f, 256.0f), Stream.FRandRange(0.0f, 256.0f)));
+				++Hist[FMath::Clamp(FMath::FloorToInt(FMath::Clamp(Noise * 0.5f + 0.5f, 0.0f, 1.0f) * 100.0f), 0, 100)];
+				LegacySum += FMath::Clamp(Noise * 2.0f + 0.5f, 0.0f, 2.0f);
+			}
+			int32 Above = 0;
+			for (int32 I = 100; I >= 0; --I)
+			{
+				Above += Hist[I];
+				Coverage[I] = float(Above) / float(Samples);
+			}
+			LegacyMean = float(LegacySum / double(Samples));
+		}
+	};
+
+	const FStats& Stats()
+	{
+		static const FStats Measured;
+		return Measured;
+	}
+}
+
+float UMOPCGBiomeSpawnerSettings::ClumpField01(const FVector& Location, int32 ClusterGroup, float ClusterRadius)
+{
+	const float Period = FMath::Max(ClusterRadius * 4.0f, 1000.0f);
+	return FMath::Clamp(FMath::PerlinNoise2D(FVector2D(Location.X / Period + ClusterGroup * 53.7f, Location.Y / Period - ClusterGroup * 71.3f)) * 0.5f + 0.5f, 0.0f, 1.0f);
+}
+
+float UMOPCGBiomeSpawnerSettings::ClumpCoverage(float Core)
+{
+	const float X = FMath::Clamp(Core, 0.0f, 1.0f) * 100.0f;
+	const int32 Lo = FMath::Min(FMath::FloorToInt(X), 99);
+	const MOPCGClump::FStats& S = MOPCGClump::Stats();
+	return FMath::Lerp(S.Coverage[Lo], S.Coverage[Lo + 1], X - Lo);
+}
+
+float UMOPCGBiomeSpawnerSettings::ClumpCompensation(float Core)
+{
+	return FMath::Min(1.0f / FMath::Max(ClumpCoverage(Core), KINDA_SMALL_NUMBER), MaxClumpConcentration);
+}
+
+float UMOPCGBiomeSpawnerSettings::LegacyClumpMean()
+{
+	return MOPCGClump::Stats().LegacyMean;
+}
+
 UMOPCGBiomeSpawnerSettings::UMOPCGBiomeSpawnerSettings()
 {
 #if WITH_EDITOR
@@ -203,7 +266,8 @@ void MOPCGBiomeSpawner::ApplyNearDrawFloor(FISMComponentDescriptorBase& Descript
 namespace
 {
 	/** Instances added per AddInstances call while building: the unit of work between two frame-budget checks. */
-	TAutoConsoleVariable<int32> CVarBiomeSpawnerBatch(TEXT("mo.PCG.BiomeSpawnerBatch"), 512, TEXT("Instances per AddInstances call while a biome spawner builds (one batch, then the PCG frame budget is checked)."), ECVF_Default);
+	TAutoConsoleVariable<int32> CVarBiomeSpawnerBatch(TEXT("mo.PCG.BiomeSpawnerBatch"), 512, TEXT("Most instances per AddInstances call while a biome spawner builds (one batch, then the PCG frame budget is checked)."), ECVF_Default);
+	TAutoConsoleVariable<float> CVarBiomeSpawnerBatchMs(TEXT("mo.PCG.BiomeSpawnerBatchMs"), 3.0f, TEXT("Target game-thread ms per AddInstances batch: the batch size adapts per bucket (a tree with a physics body and a navigation update costs far more than a grass tuft), so one batch cannot blow the frame between two budget checks."), ECVF_Default);
 }
 
 /** One execution's state between its time slices: planted once, then built a batch at a time (see FMOPCGBiomeSpawnerElement). */
@@ -219,6 +283,8 @@ struct FMOPCGBiomeSpawnerContext : public FPCGContext
 	int32 Components = 0;
 	int32 Slices = 0;
 	double BuildMs = 0.0;
+	int32 BucketBatch = 0;          // the current bucket's adaptive batch size (set when its component is created)
+	double WorstBatchMs = 0.0;      // the longest single AddInstances batch (what a frame can lose between two budget checks)
 	// The planting's numbers, logged with the build time when the last instance is in.
 	int32 TotalIn = 0, TotalAccepted = 0, TotalSuppressed = 0, NumBiomes = 0;
 	double PlantMs = 0.0;
@@ -622,7 +688,7 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 			// clump field, spawning only where field >= their ClusterCore —
 			// canopy trees at clump cores, undergrowth in the wider ring
 			// around them (oasis/top-cap look). Acceptance is rescaled by the
-			// surviving area fraction so authored per-hectare rates hold.
+			// surviving area fraction (measured, not assumed uniform) so authored per-hectare rates hold.
 			TArray<float, TInlineAllocator<96>> Acceptance;
 			Acceptance.SetNumZeroed(Candidates.Num());
 			float TotalAcceptance = 0.0f;
@@ -636,21 +702,15 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 				}
 				if (P > 0.0f && Sp.ClusterGroup >= 0)
 				{
-					// Shared field per (biome, group): offsets depend on the
-					// GROUP, not the species, so group members co-locate.
-					const float Period = FMath::Max(Sp.ClusterRadius * 4.0f, 1000.0f);
-					const float Clump01 = FMath::Clamp(FMath::PerlinNoise2D(FVector2D(
-						Location.X / Period + Sp.ClusterGroup * 53.7f,
-						Location.Y / Period - Sp.ClusterGroup * 71.3f)) * 0.5f + 0.5f, 0.0f, 1.0f);
-					if (Clump01 < Sp.ClusterCore)
+					// Shared field per (biome, group): offsets depend on the GROUP, not the species, so group members co-locate. Compensated by the
+					// field's MEASURED coverage above the core (ClumpCompensation), so the authored per-hectare rate holds.
+					if (UMOPCGBiomeSpawnerSettings::ClumpField01(Location, Sp.ClusterGroup, Sp.ClusterRadius) < Sp.ClusterCore)
 					{
 						P = 0.0f;
 					}
 					else
 					{
-						// Compensate for the culled area (clamped: the clump
-						// cores shouldn't exceed 4x local concentration).
-						P *= FMath::Min(1.0f / FMath::Max(1.0f - Sp.ClusterCore, 0.25f), 4.0f);
+						P *= UMOPCGBiomeSpawnerSettings::ClumpCompensation(Sp.ClusterCore);
 					}
 				}
 				else if (P > 0.0f && Sp.ClusterRadius > 0.0f)
@@ -659,7 +719,7 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 					const float Clump = FMath::PerlinNoise2D(FVector2D(
 						Location.X / FMath::Max(Sp.ClusterRadius * 4.0f, 1.0f) + i * 17.3f,
 						Location.Y / FMath::Max(Sp.ClusterRadius * 4.0f, 1.0f) - i * 29.1f));
-					P *= FMath::Clamp(Clump * 2.0f + 0.5f, 0.0f, 2.0f);
+					P *= FMath::Clamp(Clump * 2.0f + 0.5f, 0.0f, 2.0f) / UMOPCGBiomeSpawnerSettings::LegacyClumpMean();   // patchy, but the average holds
 				}
 				Acceptance[i] = P;
 				TotalAcceptance += P;
@@ -952,12 +1012,25 @@ bool FMOPCGBiomeSpawnerElement::BuildSlice(FMOPCGBiomeSpawnerContext* Context) c
 			}
 			Context->CurrentISM = ISM;
 			++Context->Components;
+			// A collidable species (trees, rocks: one physics body + a navigation update per instance) starts with small batches; the
+			// measured time per batch then sizes the rest (below).
+			const bool bCollides = !(bFarTier || bGroundCover) && ISM->GetCollisionEnabled() != ECollisionEnabled::NoCollision;
+			Context->BucketBatch = bCollides ? FMath::Min(64, BatchSize) : BatchSize;
 		}
 
 		// Navigation: only what can block a walker matters to the nav mesh. Far stand-ins (draw-only) and ground cover (passable) skip the per-instance navigation update.
-		const int32 Count = FMath::Min(BatchSize, Bucket.Transforms.Num() - Context->NextTransform);
+		const int32 Count = FMath::Min(FMath::Max(Context->BucketBatch, 1), Bucket.Transforms.Num() - Context->NextTransform);
 		const TArray<FTransform> Batch(Bucket.Transforms.GetData() + Context->NextTransform, Count);
+		const double BatchStart = FPlatformTime::Seconds();
 		ISM->AddInstances(Batch, /*bShouldReturnIndices=*/false, /*bWorldSpace=*/true, /*bUpdateNavigation=*/!(bFarTier || bGroundCover));
+		const double BatchMs = (FPlatformTime::Seconds() - BatchStart) * 1000.0;
+		Context->WorstBatchMs = FMath::Max(Context->WorstBatchMs, BatchMs);
+		// Size the next batch of this bucket from what this one cost: about TargetMs each, between 8 and BatchSize instances.
+		const double TargetMs = FMath::Max(CVarBiomeSpawnerBatchMs.GetValueOnGameThread(), 0.25f);
+		if (BatchMs > 0.0)
+		{
+			Context->BucketBatch = FMath::Clamp(FMath::RoundToInt(Count * TargetMs / BatchMs), 8, BatchSize);
+		}
 		Context->NextTransform += Count;
 		if (Context->NextTransform >= Bucket.Transforms.Num())
 		{
@@ -976,8 +1049,8 @@ bool FMOPCGBiomeSpawnerElement::BuildSlice(FMOPCGBiomeSpawnerContext* Context) c
 
 	// Per-bucket breakdown so density tuning reads from the log, not guesses. ms = the planting slice; build = the game-thread time of every build slice (slices = frames it took).
 	UE_LOG(LogMOFramework, Warning,
-		TEXT("[MOBiomeSpawner] in=%d accepted=%d suppressed=%d components=%d biomes=%d ms=%.0f (build %.1f in %d slice(s); %s) inBounds=%s |%s"),
-		Context->TotalIn, Context->TotalAccepted, Context->TotalSuppressed, Context->Components, Context->NumBiomes, Context->PlantMs, Context->BuildMs, Context->Slices,
+		TEXT("[MOBiomeSpawner] in=%d accepted=%d suppressed=%d components=%d biomes=%d ms=%.0f (build %.1f in %d slice(s) worst batch %.1f; %s) inBounds=%s |%s"),
+		Context->TotalIn, Context->TotalAccepted, Context->TotalSuppressed, Context->Components, Context->NumBiomes, Context->PlantMs, Context->BuildMs, Context->Slices, Context->WorstBatchMs,
 		*Context->StageSummary, *Context->BoundsText, *Context->BucketSummary);
 	return true;
 }

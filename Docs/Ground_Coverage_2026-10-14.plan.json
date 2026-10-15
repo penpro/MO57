@@ -7,20 +7,22 @@
  "TemperateForest": {
   "ground": 2.2,
   "large": 2.0,
-  "trees": 1.85,
-  "trees_core_max": 0.3,
-  "large_core_max": 0.3,
-  "far_tree": 1.85,
-  "far_tree_core_max": 0.3,
+  "trees": 1.0,
+  "trees_core_max": 0.5,
+  "far_tree": 0.9,
+  "far_tree_core_max": 0.5,
   "far_canopy": 1.85,
   "far_grass": 2.2
  },
  "Meadow": {
   "ground": 1.25,
   "large": 4.0,
-  "trees": 3.0,
+  "trees": 1.5,
   "far_grass": 1.25,
-  "far_tree": 3.0
+  "far_tree": 1.5,
+  "trees_core_max": 0.65,
+  "large_core_max": 0.65,
+  "far_tree_core_max": 0.65
  },
  "RockyHighland": {
   "large": 2.0,
@@ -40,16 +42,16 @@
   "large": 1.6,
   "trees": 1.5,
   "far_grass": 1.5,
-  "large_core_max": 0.4,
   "ground:MOBiomeCover_Grass": 3,
   "ground:MOBiomeCover_Flower": 1.5,
-  "ground:MOBiomeCover_Debris": 1
+  "ground:MOBiomeCover_Debris": 1,
+  "large_core_max": 0.45
  },
  "LocustWoodland": {
   "ground": 2.4,
   "large": 2.4,
-  "trees": 1.8,
-  "trees_core_max": 0.45,
+  "trees": 1.0,
+  "trees_core_max": 0.5,
   "far_grass": 2.4
  },
  "AlpineHeath": {
@@ -62,9 +64,9 @@
  "Rainforest": {
   "ground": 1.0,
   "large": 1.35,
-  "trees": 1.3,
-  "far_tree": 1.3,
-  "far_canopy": 1.3,
+  "trees": 0.45,
+  "far_tree": 0.45,
+  "far_canopy": 1.0,
   "trees_core_max": 0.5,
   "far_tree_core_max": 0.5
  },
@@ -74,10 +76,10 @@
  },
  "ElectricForest": {
   "large": 1.15,
-  "trees": 1.8,
-  "trees_core_max": 0.4,
-  "far_tree": 1.8,
-  "far_tree_core_max": 0.4,
+  "trees": 1.1,
+  "trees_core_max": 0.5,
+  "far_tree": 0.8,
+  "far_tree_core_max": 0.5,
   "far_canopy": 1.8,
   "far_grass": 8,
   "ground:MOBiomeCover_Grass": 20,

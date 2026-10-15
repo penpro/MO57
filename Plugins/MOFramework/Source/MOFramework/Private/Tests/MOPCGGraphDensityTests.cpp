@@ -185,6 +185,53 @@ namespace
 	}
 }
 
+// The data contract (FMOBiomeSpeciesEntry::ClusterCore): "density is auto-compensated so the authored per-hectare rate is preserved". It was not:
+// the spawner divided by (1 - core), which assumes the clump field is uniform on 0..1, and PerlinNoise2D is not (it bunches around 0.5) -- a
+// forest's canopy at core 0.7 realised 23 % of its authored trees and undergrowth at 0.3 realised 133 % (found Oct 14 2026 while adding cover).
+// The field here is the spawner's own (ClumpField01), sampled over thousands of clump periods.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOPCG_ClumpRateHolds,
+	"MOFramework.PCG.ClumpRateHolds",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOPCG_ClumpRateHolds::RunTest(const FString& Parameters)
+{
+	const float Cov07 = UMOPCGBiomeSpawnerSettings::ClumpCoverage(0.7f);
+	TestTrue(*FString::Printf(TEXT("the clump field is not uniform: core 0.7 covers %.3f of the ground (uniform would be 0.30)"), Cov07), Cov07 > 0.03f && Cov07 < 0.12f);
+	TestTrue(TEXT("core 0 covers everything"), FMath::IsNearlyEqual(UMOPCGBiomeSpawnerSettings::ClumpCoverage(0.0f), 1.0f, 0.001f));
+
+	constexpr int32 Grid = 400;
+	constexpr float Step = 1777.0f;   // cm, not a multiple of the period: points land everywhere inside the clumps
+	for (const float Core : { 0.3f, 0.4f, 0.5f, 0.6f })
+	{
+		const float Comp = UMOPCGBiomeSpawnerSettings::ClumpCompensation(Core);
+		double Sum = 0.0;
+		for (int32 Y = 0; Y < Grid; ++Y)
+		{
+			for (int32 X = 0; X < Grid; ++X)
+			{
+				const FVector L(123457.0 + X * Step, -98765.0 + Y * Step, 0.0);
+				Sum += UMOPCGBiomeSpawnerSettings::ClumpField01(L, /*ClusterGroup=*/3, /*ClusterRadius=*/2500.0f) >= Core ? Comp : 0.0f;
+			}
+		}
+		const double Rate = Sum / (Grid * Grid);
+		TestTrue(*FString::Printf(TEXT("core %.2f: a grouped species realises %.3f of its authored rate (within 6 %%)"), Core, Rate), FMath::Abs(Rate - 1.0) < 0.06);
+	}
+	{
+		double Sum = 0.0;
+		for (int32 Y = 0; Y < Grid; ++Y)
+		{
+			for (int32 X = 0; X < Grid; ++X)
+			{
+				const float Noise = FMath::PerlinNoise2D(FVector2D((5000.0 + X * Step) / 7200.0, (-3000.0 + Y * Step) / 7200.0));
+				Sum += FMath::Clamp(Noise * 2.0f + 0.5f, 0.0f, 2.0f) / UMOPCGBiomeSpawnerSettings::LegacyClumpMean();
+			}
+		}
+		const double Rate = Sum / (Grid * Grid);
+		TestTrue(*FString::Printf(TEXT("ungrouped (legacy) clumping realises %.3f of the authored rate (within 6 %%; it was ~0.55)"), Rate), FMath::Abs(Rate - 1.0) < 0.06);
+	}
+	return true;
+}
+
 // The ground ITEM clutter (sticks, bark, stones) is ~100 of VoxelSampler_0's points per hectare: RandomChoice_3 (0.5) -> its own thinning Random Choice (0.1 at 2000/ha, 0.0333 at 6000/ha)
 // -> RandomChoice_1 (the item spawners' split).
 // (RandomChoice_3's Discarded half once fed CopyPoints_1 -> ... -> StaticMeshSpawner_3, the native black-locust clusters. That spawner is DISABLED -- the biome tier places locusts -- so

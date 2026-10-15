@@ -103,6 +103,21 @@ public:
 	virtual FPCGElementPtr CreateElement() const override;
 	virtual bool UseSeed() const override { return true; }
 
+	// ---- Clump fields (shared by the spawner, its tests and the stocking model in Tools/pcg_stocking.py) --------------------------------------
+	/** The clump field a grouped species samples: PerlinNoise2D at the group's offset (period 4 x ClusterRadius, at least 10 m), mapped to 0..1. */
+	static float ClumpField01(const FVector& Location, int32 ClusterGroup, float ClusterRadius);
+	/** Fraction of the ground where ClumpField01 >= Core, measured once from the engine's own PerlinNoise2D. That noise is NOT uniform (std ~0.26
+	 *  of its -1..1 range), so the field bunches around 0.5: a core of 0.7 covers ~7 % of the ground and 0.3 covers ~93 %, not 30 % and 70 %. */
+	static float ClumpCoverage(float Core);
+	/** Inside its clumps a grouped species' acceptance is multiplied by this so its authored per-hectare rate holds: 1 / ClumpCoverage(Core),
+	 *  capped at MaxClumpConcentration. (Until Oct 14 2026 it was 1 / (1 - Core), right only for uniform noise: core 0.7 realised 23 % of the
+	 *  authored rate, core 0.3 realised 133 %.) */
+	static float ClumpCompensation(float Core);
+	/** Mean of the ungrouped (legacy) clump multiplier clamp(2 * noise + 0.5, 0, 2): ~0.55, divided out so those species' rates hold too. */
+	static float LegacyClumpMean();
+	/** The most a clump may concentrate a species over its average density (a core so high that its clumps cover < 1/8 of the ground under-realises). */
+	static constexpr float MaxClumpConcentration = 8.0f;
+
 #if WITH_EDITOR
 	virtual FName GetDefaultNodeName() const override { return FName(TEXT("MO Biome Spawner")); }
 	virtual FText GetDefaultNodeTitle() const override { return NSLOCTEXT("MOFramework", "MOBiomeSpawnerTitle", "MO Biome Spawner"); }
