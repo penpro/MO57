@@ -97,6 +97,31 @@ public:
 	UFUNCTION(BlueprintCallable, Category="MO|Designation")
 	void GetZonesOfKind(EMODesignationKind Kind, TArray<FMODesignationZone>& OutZones) const;
 
+	/**
+	 * Where the next bite of earth goes, read from the LIVE ground (voxel-only traces on a grid over the zone's disc). bDig: the highest
+	 * ground (in a Flatten zone only ground more than LevelToleranceCm above TargetHeightZ). !bDig: the lowest ground more than
+	 * LevelToleranceCm below TargetHeightZ (Dump and Flatten zones; ToleranceCm >= 0 overrides). False when nothing qualifies; OutGroundSamples says why: > 0 = the
+	 * zone is done on that side (a fill zone at its target, a level flatten zone), 0 = no terrain collision under it yet (far from every pawn).
+	 * (Until stage 5 every bite went to the zone's centre: a pit in a dig zone, a mound in a fill zone that ignored its target height.)
+	 */
+	bool FindBitePoint(const FMODesignationZone& Zone, bool bDig, FVector& OutPoint, int32& OutGroundSamples, float ToleranceCm = -1.0f) const;
+
+	/**
+	 * A Flatten zone's work, from the live ground: bHasWork = some ground is more than LevelToleranceCm off its target (either side);
+	 * OutDig / OutFill = the highest ground above the target and the lowest below it (ANY amount: the earth inside the tolerance band
+	 * still finishes the other side). False when the zone is level, or when it is off target on one side only (it would need earth from
+	 * outside: it waits).
+	 */
+	bool FindFlattenWork(const FMODesignationZone& Zone, FVector& OutDig, FVector& OutFill) const;
+
+	/** FindBitePoint by zone id (tests / Blueprint). */
+	UFUNCTION(BlueprintCallable, Category="MO|Designation")
+	bool FindZoneBitePoint(const FGuid& ZoneId, bool bDig, FVector& OutPoint, int32& OutGroundSamples) const;
+
+	/** How close to TargetHeightZ a fill or flatten zone counts as done: one bite depth (15 cm), so the loop cannot ping-pong around the target. */
+	UPROPERTY(EditAnywhere, Category="MO|Designation")
+	float LevelToleranceCm = 15.0f;
+
 	// ============================================================================
 	// SAVE / LOAD (codebase pattern)
 	// ============================================================================

@@ -46,6 +46,9 @@ namespace MOVoxel
 
 	// --- height sculpting (Center is XY world space) --------------------------
 	void HeightSculpt(AActor* SculptActor, const FVector2D& Center, float Radius, float Strength, bool bAdd);
+	/** The earth (m3) one HeightSculpt moves: the plugin lowers/raises each column by Radius/10 x Strength x falloff(distance) cm (its
+	 *  SculptHeight rule, default brush falloff), integrated over the disc. THE brush-to-volume conversion -- see UMOTerraformingComponent. */
+	float HeightSculptMovedVolumeM3(float Radius, float Strength);
 	void HeightFlatten(AActor* SculptActor, const FVector2D& Center, float Radius, float Falloff, float TargetHeight);
 	void HeightSmooth(AActor* SculptActor, const FVector2D& Center, float Radius, float Strength);
 

@@ -1435,7 +1435,7 @@ void UMOColonyManagerSubsystem::RunHearthPass(const TArray<APawn*>& Roster)
 // ============================================================================
 
 TArray<FMOExcavationAssignment> UMOColonyManagerSubsystem::DecideExcavationWork(const TArray<FMODesignationZone>& Zones,
-	const TSet<FGuid>& ClaimedDigZones, int32 IdleVillagers, bool bHaveContainer)
+	const TSet<FGuid>& ClaimedDigZones, int32 IdleVillagers, bool bHaveContainer, const TSet<FGuid>& FlattenZonesWithWork)
 {
 	TArray<FMOExcavationAssignment> Work;
 	const auto HasRoom = [](const FMODesignationZone& Z) { return Z.IsValidZone() && Z.Kind == EMODesignationKind::Dump && Z.RemainingVolumeM3 > 0.0f; };
@@ -1444,6 +1444,19 @@ TArray<FMOExcavationAssignment> UMOColonyManagerSubsystem::DecideExcavationWork(
 		if (Work.Num() >= IdleVillagers)
 		{
 			break;
+		}
+		if (Dig.Kind == EMODesignationKind::Flatten)
+		{
+			// Its own source and sink: high ground to low ground inside the zone (conservation by construction).
+			if (Dig.IsValidZone() && Dig.RemainingVolumeM3 > 0.0f && FlattenZonesWithWork.Contains(Dig.ZoneId) && !ClaimedDigZones.Contains(Dig.ZoneId))
+			{
+				FMOExcavationAssignment A;
+				A.DigZoneId = Dig.ZoneId;
+				A.DumpMode = EMOExcavateDumpMode::FillZone;
+				A.DumpZoneId = Dig.ZoneId;
+				Work.Add(A);
+			}
+			continue;
 		}
 		if (!Dig.IsValidZone() || Dig.Kind != EMODesignationKind::Dig || Dig.RemainingVolumeM3 <= 0.0f || ClaimedDigZones.Contains(Dig.ZoneId))
 		{
@@ -1506,16 +1519,36 @@ void UMOColonyManagerSubsystem::RunExcavationPass(const TArray<APawn*>& Roster)
 	{
 		return;
 	}
-	// Settlement-scoped (locked design): a zone outside the settlement is not colony work.
+	// Settlement-scoped (locked design): a zone outside the settlement is not colony work. The live ground decides two things the zone
+	// records cannot: a fill zone already at its target height is full, and a flatten zone has work while some ground is off target by more
+	// than the tolerance AND there is ground on both sides of the target to move (excess or missing earth would need an outside source or
+	// sink: it waits).
 	TArray<FMODesignationZone> Zones;
+	TSet<FGuid> FlattenWithWork;
 	for (const FMODesignationZone& Z : Desig->GetZones())
 	{
-		if (IsInSettlement(Z.Center))
+		if (!IsInSettlement(Z.Center))
 		{
-			Zones.Add(Z);
+			continue;
 		}
+		FMODesignationZone Copy = Z;
+		FVector P;
+		int32 Samples = 0;
+		if (Z.Kind == EMODesignationKind::Dump && !Desig->FindBitePoint(Z, /*bDig=*/false, P, Samples) && Samples > 0)
+		{
+			Copy.RemainingVolumeM3 = 0.0f;   // at its target: no room, whatever its budget says
+		}
+		else if (Z.Kind == EMODesignationKind::Flatten)
+		{
+			FVector Fill;
+			if (Desig->FindFlattenWork(Z, P, Fill))
+			{
+				FlattenWithWork.Add(Z.ZoneId);
+			}
+		}
+		Zones.Add(Copy);
 	}
-	if (!Zones.ContainsByPredicate([](const FMODesignationZone& Z) { return Z.Kind == EMODesignationKind::Dig && Z.RemainingVolumeM3 > 0.0f; }))
+	if (FlattenWithWork.Num() == 0 && !Zones.ContainsByPredicate([](const FMODesignationZone& Z) { return Z.Kind == EMODesignationKind::Dig && Z.RemainingVolumeM3 > 0.0f; }))
 	{
 		return;
 	}
@@ -1564,7 +1597,7 @@ void UMOColonyManagerSubsystem::RunExcavationPass(const TArray<APawn*>& Roster)
 		}
 	}
 
-	const TArray<FMOExcavationAssignment> Work = DecideExcavationWork(Zones, Claimed, Idle.Num(), Storages.Num() > 0);
+	const TArray<FMOExcavationAssignment> Work = DecideExcavationWork(Zones, Claimed, Idle.Num(), Storages.Num() > 0, FlattenWithWork);
 	const UMOIdentityRegistrySubsystem* Registry = World->GetSubsystem<UMOIdentityRegistrySubsystem>();
 	for (const FMOExcavationAssignment& A : Work)
 	{

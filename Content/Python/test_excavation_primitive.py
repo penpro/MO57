@@ -9,7 +9,9 @@ VOLUME moved (m^3). This gate proves:
   (a) a Dig and a Raise each apply and return a positive moved volume,
   (b) CONSERVATION by construction — equal brushes move equal volume, so digging V
       at A and raising V at B balances the earth,
-  (c) the moved volume matches the footprint*depth formula,
+  (c) the moved volume is the earth the sculpt REALLY moves: an independent integral of the Voxel plugin's rule (Radius/10 x Strength cm
+      per column, smooth falloff 0.5) AND the ground measured before/after a dig (centre drop = Radius/10 x Strength). Until Oct 14 2026
+      this asserted pi r^2 x Strength x 1 m -- the books, not the terrain -- which was 7-15x the earth that moved,
   (d) the static ComputeMovedVolumeCubicMeters == the instance return (single source),
   (e) SpoilItemsForVolume == floor(volume * itemsPerCubicMeter) (the dig-produce /
       fill-consume mapping), and
@@ -68,35 +70,49 @@ def sequence(ctx):
 
     radius = 250.0
     strength = 0.1
-    depth_per = comp.get_editor_property("terraform_depth_per_strength_meters")
     items_per_m3 = comp.get_editor_property("excavation_items_per_cubic_meter")
 
     loc = player.get_actor_location()
-    loc_a = unreal.Vector(loc.x, loc.y, loc.z)
-    loc_b = unreal.Vector(loc.x + radius * 4.0, loc.y, loc.z)
+    loc_a = unreal.Vector(loc.x + 400.0, loc.y, loc.z)               # clear of the pawn's own capsule
+    loc_b = unreal.Vector(loc.x + 400.0 + radius * 4.0, loc.y, loc.z)
 
+    def ground(at):
+        hit = unreal.SystemLibrary.line_trace_single(world, unreal.Vector(at.x, at.y, at.z + 2000.0), unreal.Vector(at.x, at.y, at.z - 2000.0),
+                                                     unreal.TraceTypeQuery.TRACE_TYPE_QUERY1, False, [player], unreal.DrawDebugTrace.NONE, True)
+        return hit.to_tuple()[4].z if hit else None   # ImpactPoint.z
+
+    z_before = ground(loc_a)
     dig_vol = comp.terraform_at_location_ex(loc_a, unreal.MOTerraformMode.DIG, radius, strength)
     yield 2
     raise_vol = comp.terraform_at_location_ex(loc_b, unreal.MOTerraformMode.RAISE, radius, strength)
-    yield 2
+    yield 60   # the sculpt applies asynchronously; collision rebuilds after it
+    z_after = ground(loc_a)
 
-    r_m = radius * 0.01
-    expected_vol = math.pi * r_m * r_m * (strength * depth_per)
-    static_vol = unreal.MOTerraformingComponent.compute_moved_volume_cubic_meters(radius, strength, depth_per)
+    # Independent re-derivation of the plugin's SculptHeight rule: Delta(r) = R/10 * S * smoothstep falloff (full to R/2), integrated.
+    def falloff(d):
+        x = 1.0 if d <= radius * 0.5 else max(0.0, 1.0 - (d - radius * 0.5) / (radius * 0.5))
+        return x * x * (3 - 2 * x)
+    rings = 400
+    expected_vol = sum(radius / 10.0 * strength * falloff((i + 0.5) * radius / rings) * math.pi * (((i + 1) * radius / rings) ** 2 - (i * radius / rings) ** 2)
+                       for i in range(rings)) / 1.0e6
+    static_vol = unreal.MOTerraformingComponent.compute_moved_volume_cubic_meters(radius, strength)
     items_from_dig = unreal.MOTerraformingComponent.spoil_items_for_volume(dig_vol, items_per_m3)
     expected_items = int(math.floor(dig_vol * items_per_m3))
 
     flat_vol = comp.terraform_at_location_ex(loc_a, unreal.MOTerraformMode.FLATTEN, radius, strength)
 
-    ctx.out("dig_vol=%.4f raise_vol=%.4f expected=%.4f static=%.4f items=%d (per_m3=%.1f depth=%.3f) flat=%.4f"
-            % (dig_vol, raise_vol, expected_vol, static_vol, items_from_dig, items_per_m3, depth_per, flat_vol))
+    ctx.out("dig_vol=%.4f raise_vol=%.4f expected=%.4f static=%.4f items=%d (per_m3=%.1f) flat=%.4f ground %s -> %s"
+            % (dig_vol, raise_vol, expected_vol, static_vol, items_from_dig, items_per_m3, flat_vol, z_before, z_after))
 
     ctx.assert_true("Dig returns a positive moved volume (primitive applied end-to-end)", dig_vol > 0.0)
     ctx.assert_true("Raise returns a positive moved volume", raise_vol > 0.0)
     ctx.assert_true("CONSERVATION: equal brushes move equal volume (dig == raise)",
                     abs(dig_vol - raise_vol) < 1e-4)
-    ctx.assert_true("moved volume matches the footprint*depth formula",
-                    abs(dig_vol - expected_vol) < 1e-3)
+    ctx.assert_true("moved volume matches an independent integral of the plugin's sculpt rule (within 2 %)",
+                    abs(dig_vol - expected_vol) < 0.02 * expected_vol)
+    drop = (z_before - z_after) if (z_before is not None and z_after is not None) else None
+    ctx.assert_true("THE GROUND: the dig really lowered the centre by Radius/10 x Strength = %.1f cm (measured %s)" % (radius / 10.0 * strength, drop),
+                    drop is not None and abs(drop - radius / 10.0 * strength) < 0.35 * radius / 10.0 * strength)
     ctx.assert_true("static ComputeMovedVolumeCubicMeters == instance return (single source of truth)",
                     abs(static_vol - dig_vol) < 1e-4)
     ctx.assert_true("SpoilItemsForVolume == floor(volume * itemsPerCubicMeter), and > 0",

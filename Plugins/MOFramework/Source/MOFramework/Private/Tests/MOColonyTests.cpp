@@ -250,6 +250,27 @@ bool FMOColony_Excavation_ClaimedAndExhaustedSkipped::RunTest(const FString& Par
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOColony_Excavation_FlattenIsItsOwnSink,
+	"MOFramework.Colony.Excavation.FlattenIsItsOwnSink",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+bool FMOColony_Excavation_FlattenIsItsOwnSink::RunTest(const FString& Parameters)
+{
+	using namespace MOExcavationTestData;
+	const FMODesignationZone Flat = Zone(EMODesignationKind::Flatten, FVector::ZeroVector, 4.0f);
+	const FMODesignationZone Fill = Zone(EMODesignationKind::Dump, FVector(300, 0, 0), 5.0f);
+	const TArray<FMODesignationZone> Zones = { Flat, Fill };
+	TSet<FGuid> WithWork;
+	WithWork.Add(Flat.ZoneId);
+	const TArray<FMOExcavationAssignment> W = UMOColonyManagerSubsystem::DecideExcavationWork(Zones, {}, 3, true, WithWork);
+	TestTrue(TEXT("a flatten zone with ground above and below its target digs its own high ground into its own low ground (not the nearby fill zone)"),
+		W.Num() == 1 && W[0].DigZoneId == Flat.ZoneId && W[0].DumpMode == EMOExcavateDumpMode::FillZone && W[0].DumpZoneId == Flat.ZoneId);
+	TestEqual(TEXT("a level flatten zone (not in the with-work set) gets no trip"), UMOColonyManagerSubsystem::DecideExcavationWork(Zones, {}, 3, true).Num(), 0);
+	TSet<FGuid> Claimed;
+	Claimed.Add(Flat.ZoneId);
+	TestEqual(TEXT("a flatten zone already being worked gets no second worker"), UMOColonyManagerSubsystem::DecideExcavationWork(Zones, Claimed, 3, true, WithWork).Num(), 0);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOColony_Excavation_DumpTargetOrder,
 	"MOFramework.Colony.Excavation.DumpTargetOrder",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)

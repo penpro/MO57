@@ -751,16 +751,17 @@ float UMOTerraformingComponent::TerraformAtLocationEx(
 		TerrainMod->SweepModifiedZones();
 	}
 
-	return ComputeMovedVolumeCubicMeters(SafeRadius, SafeStrength, TerraformDepthPerStrengthMeters);
+	return ComputeMovedVolumeCubicMeters(SafeRadius, SafeStrength);
 }
 
-float UMOTerraformingComponent::ComputeMovedVolumeCubicMeters(
-	float RadiusUU, float Strength, float DepthPerStrengthMeters)
+float UMOTerraformingComponent::ComputeMovedVolumeCubicMeters(float RadiusUU, float Strength)
 {
-	const float RadiusMeters = FMath::Max(0.0f, RadiusUU) * 0.01f;   // UU (cm) -> m
-	const float FootprintM2 = PI * RadiusMeters * RadiusMeters;
-	const float DepthMeters = FMath::Clamp(Strength, 0.0f, 1.0f) * FMath::Max(0.0f, DepthPerStrengthMeters);
-	return FootprintM2 * DepthMeters;
+	return MOVoxel::HeightSculptMovedVolumeM3(FMath::Max(0.0f, RadiusUU), FMath::Clamp(Strength, 0.0f, 1.0f));
+}
+
+float UMOTerraformingComponent::ComputeDurationForVolumeSeconds(float VolumeM3, float SecondsPerCubicMeter, float MinSeconds)
+{
+	return FMath::Max(MinSeconds, FMath::Max(0.0f, VolumeM3) * FMath::Max(0.0f, SecondsPerCubicMeter));
 }
 
 int32 UMOTerraformingComponent::SpoilItemsForVolume(float VolumeM3, float ItemsPerCubicMeter)
@@ -798,12 +799,15 @@ bool UMOTerraformingComponent::BeginTerraform()
 	PendingAction.TargetLocation = HitLocation;
 	PendingAction.TargetNormal = HitNormal;
 	PendingAction.ElapsedTime = 0.0f;
-	// Volume-based duration: moving earth takes time proportional to how much
-	// earth this brush moves (footprint × displacement). Floored at the legacy
-	// duration so trivial ops aren't instant.
-	PendingAction.TotalTime = ComputeTerraformDurationSeconds(
-		Config.Radius, GetActionDepthMeters(CurrentMode),
-		TerraformSecondsPerCubicMeter, FMath::Max(0.1f, TerraformDurationSeconds));
+	// Volume-based duration: moving earth takes time proportional to how much earth this brush moves, floored at the legacy duration so
+	// trivial ops aren't instant. A height Dig/Raise moves exactly the sculpt's volume; Flatten/Smooth (and volume sculpting) keep the
+	// nominal footprint x depth estimate -- their earth depends on the ground under the brush.
+	const bool bHeightDigRaise = !bUseVolumeSculpting && (CurrentMode == EMOTerraformMode::Dig || CurrentMode == EMOTerraformMode::Raise);
+	PendingAction.TotalTime = bHeightDigRaise
+		? ComputeDurationForVolumeSeconds(ComputeMovedVolumeCubicMeters(Config.Radius, Config.RaiseLowerStrength),
+			TerraformSecondsPerCubicMeter, FMath::Max(0.1f, TerraformDurationSeconds))
+		: ComputeTerraformDurationSeconds(Config.Radius, GetActionDepthMeters(CurrentMode),
+			TerraformSecondsPerCubicMeter, FMath::Max(0.1f, TerraformDurationSeconds));
 
 	if (CurrentMode == EMOTerraformMode::Flatten)
 	{

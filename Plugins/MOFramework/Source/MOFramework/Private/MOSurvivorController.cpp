@@ -1554,6 +1554,25 @@ void AMOSurvivorController::StartExcavateJobExecution()
 		return;
 	}
 
+	// Where the bite comes from: the highest live ground of the zone (a flatten zone: only above its target). With no terrain collision
+	// under the zone yet (no samples) the centre, as before stage 5; a flatten zone with nothing left above its target is done.
+	FVector DigPoint = DigZone.Center;
+	int32 DigSamples = 0;
+	if (DigZone.Kind == EMODesignationKind::Flatten)
+	{
+		FVector FlattenFill;
+		if (!Desig->FindFlattenWork(DigZone, DigPoint, FlattenFill))
+		{
+			UE_LOG(LogMOFramework, Log, TEXT("[MOSurvivorController] Excavate job: flatten zone %s is level (or needs outside earth) - done"), *ExcavateDigZoneId.ToString(EGuidFormats::Short));
+			CompleteSimpleJob(false);
+			return;
+		}
+	}
+	else if (!Desig->FindBitePoint(DigZone, /*bDig=*/true, DigPoint, DigSamples))
+	{
+		DigPoint = DigZone.Center;   // no terrain collision sampled under the zone yet: the centre, as before stage 5
+	}
+
 	// Resolve where the spoil goes.
 	if (ExcavateDumpMode == EMOExcavateDumpMode::FillZone)
 	{
@@ -1564,7 +1583,20 @@ void AMOSurvivorController::StartExcavateJobExecution()
 			CompleteSimpleJob(false);
 			return;
 		}
-		ExcavateDumpLocation = DumpZone.Center;
+		// The lowest live ground below the target (a flatten zone: ANY amount below); a zone sampled at its target already takes no more
+		// earth (fail BEFORE digging).
+		int32 FillSamples = 0;
+		const float FillTolerance = DumpZone.Kind == EMODesignationKind::Flatten ? 0.0f : -1.0f;
+		if (!Desig->FindBitePoint(DumpZone, /*bDig=*/false, ExcavateDumpLocation, FillSamples, FillTolerance))
+		{
+			if (FillSamples > 0)
+			{
+				UE_LOG(LogMOFramework, Log, TEXT("[MOSurvivorController] Excavate job: fill zone %s is at its target height - nothing to dig for"), *ExcavateDumpZoneId.ToString(EGuidFormats::Short));
+				CompleteSimpleJob(false);
+				return;
+			}
+			ExcavateDumpLocation = DumpZone.Center;
+		}
 	}
 	else // Container
 	{
@@ -1582,13 +1614,10 @@ void AMOSurvivorController::StartExcavateJobExecution()
 	// time proportional to earth moved). Don't dig more than the zone has left.
 	const float BiteRadius = Terra->ExcavationDigRadius;
 	const float BiteStrength = Terra->ExcavationDigStrength;
-	const float DepthPer = Terra->TerraformDepthPerStrengthMeters;
-	ExcavateBiteVolumeM3 = FMath::Min(
-		UMOTerraformingComponent::ComputeMovedVolumeCubicMeters(BiteRadius, BiteStrength, DepthPer),
-		DigZone.RemainingVolumeM3);
-	const float BiteDepth = BiteStrength * DepthPer;
-	ExcavateBiteDuration = UMOTerraformingComponent::ComputeTerraformDurationSeconds(
-		BiteRadius, BiteDepth, Terra->TerraformSecondsPerCubicMeter, Terra->TerraformDurationSeconds);
+	const float RealBiteM3 = UMOTerraformingComponent::ComputeMovedVolumeCubicMeters(BiteRadius, BiteStrength);   // the sculpt's real earth
+	ExcavateBiteVolumeM3 = FMath::Min(RealBiteM3, DigZone.RemainingVolumeM3);
+	ExcavateBiteDuration = UMOTerraformingComponent::ComputeDurationForVolumeSeconds(
+		RealBiteM3, Terra->TerraformSecondsPerCubicMeter, Terra->TerraformDurationSeconds);
 	// The wedge watchdog must clear the (possibly hours-long) dig + deposit + travel.
 	ExcavateWatchdogSeconds = FMath::Max(120.0f, ExcavateBiteDuration * 2.5f + 60.0f);
 
@@ -1597,7 +1626,7 @@ void AMOSurvivorController::StartExcavateJobExecution()
 	SimpleJobTotalSeconds = 0.0f;
 	MoveLegBestDistance = FLT_MAX;
 	MoveLegNoProgressSeconds = 0.0f;
-	SimpleJobTargetLocation = DigZone.Center;
+	SimpleJobTargetLocation = DigPoint;
 	MoveToLocation(SimpleJobTargetLocation, 150.0f);
 
 	if (UMOSurvivorJobQueueComponent* JobQueue = GetJobQueue())
@@ -1606,8 +1635,8 @@ void AMOSurvivorController::StartExcavateJobExecution()
 	}
 
 	UE_LOG(LogMOFramework, Warning,
-		TEXT("[MOSurvivorController] Excavate job started: dig %s -> %s (bite %.3fm3, %.1fs/leg, watchdog %.0fs)"),
-		*ExcavateDigZoneId.ToString(EGuidFormats::Short),
+		TEXT("[MOSurvivorController] Excavate job started: dig %s at z=%.0f -> %s (bite %.3fm3, %.1fs/leg, watchdog %.0fs)"),
+		*ExcavateDigZoneId.ToString(EGuidFormats::Short), DigPoint.Z,
 		ExcavateDumpMode == EMOExcavateDumpMode::FillZone ? TEXT("fill zone") : TEXT("container"),
 		ExcavateBiteVolumeM3, ExcavateBiteDuration, ExcavateWatchdogSeconds);
 }
@@ -1717,14 +1746,25 @@ void AMOSurvivorController::UpdateExcavateJobExecution(float DeltaTime)
 
 				if (ExcavateDumpMode == EMOExcavateDumpMode::FillZone)
 				{
-					// Raise terrain at the fill zone, consuming the carried spoil (conservation).
+					// Raise terrain at the fill zone's lowest ground NOW (others may have filled since this trip began), consuming the carried
+					// spoil (conservation).
+					UMODesignationSubsystem* Desig = UMODesignationSubsystem::Get(this);
+					FMODesignationZone DumpZone;
+					FVector FillPoint;
+					int32 FillSamples = 0;
+					if (Desig && Desig->FindZone(ExcavateDumpZoneId, DumpZone)
+						&& Desig->FindBitePoint(DumpZone, /*bDig=*/false, FillPoint, FillSamples, DumpZone.Kind == EMODesignationKind::Flatten ? 0.0f : -1.0f))
+					{
+						ExcavateDumpLocation = FillPoint;
+					}
 					const float Raised = Terra->TerraformAtLocationEx(ExcavateDumpLocation,
 						EMOTerraformMode::Raise, Terra->ExcavationDigRadius, Terra->ExcavationDigStrength);
 					if (PawnInv && ExcavateCarried > 0)
 					{
 						PawnInv->RemoveItemByDefinitionId(ExcavateSpoilItemId, ExcavateCarried);
 					}
-					if (UMODesignationSubsystem* Desig = UMODesignationSubsystem::Get(this))
+					// A flatten zone is both ends of the trip: its budget caps the earth DUG, so the fill does not count it twice.
+					if (Desig && ExcavateDumpZoneId != ExcavateDigZoneId)
 					{
 						Desig->ConsumeZoneVolume(ExcavateDumpZoneId, Raised > 0.0f ? Raised : ExcavateBiteVolumeM3);
 					}

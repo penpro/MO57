@@ -7,6 +7,7 @@
 #include "MOPersistenceSubsystem.h"
 #include "MOworldSaveGame.h"
 #include "MOFramework.h"
+#include "MOSpawnClearance.h"
 #include "Engine/World.h"
 
 // ============================================================================
@@ -178,6 +179,69 @@ float UMODesignationSubsystem::ConsumeZoneVolume(const FGuid& ZoneId, float Delt
 // ============================================================================
 // QUERIES
 // ============================================================================
+
+bool UMODesignationSubsystem::FindBitePoint(const FMODesignationZone& Zone, bool bDig, FVector& OutPoint, int32& OutGroundSamples, float ToleranceCm) const
+{
+	const float Tolerance = ToleranceCm >= 0.0f ? ToleranceCm : LevelToleranceCm;
+	OutGroundSamples = 0;
+	const UWorld* World = GetWorld();
+	if (!World || !Zone.IsValidZone() || (bDig && Zone.Kind == EMODesignationKind::Dump) || (!bDig && Zone.Kind == EMODesignationKind::Dig))
+	{
+		return false;   // nothing is dug in a fill zone, nothing is filled in a dig zone
+	}
+	const bool bTargeted = Zone.Kind != EMODesignationKind::Dig;   // fill and flatten zones work toward TargetHeightZ; a dig zone just loses earth
+	const float Step = FMath::Max(Zone.Radius / 4.0f, 60.0f);
+	const int32 N = FMath::CeilToInt(Zone.Radius / Step);
+	bool bFound = false;
+	for (int32 Iy = -N; Iy <= N; ++Iy)
+	{
+		for (int32 Ix = -N; Ix <= N; ++Ix)
+		{
+			const float Dx = Ix * Step, Dy = Iy * Step;
+			if (Dx * Dx + Dy * Dy > Zone.Radius * Zone.Radius)
+			{
+				continue;
+			}
+			FHitResult Hit;
+			const float X = Zone.Center.X + Dx, Y = Zone.Center.Y + Dy;
+			if (!MOSpawnClearance::TraceVoxelGround(World, X, Y, Zone.Center.Z + 5000.0f, Zone.Center.Z - 5000.0f, nullptr, Hit))
+			{
+				continue;
+			}
+			++OutGroundSamples;
+			const float Z = Hit.ImpactPoint.Z;
+			if (bTargeted && (bDig ? Z <= Zone.TargetHeightZ + Tolerance : Z >= Zone.TargetHeightZ - Tolerance))
+			{
+				continue;   // already at the target on this side
+			}
+			if (!bFound || (bDig ? Z > OutPoint.Z : Z < OutPoint.Z))
+			{
+				bFound = true;
+				OutPoint = FVector(X, Y, Z);
+			}
+		}
+	}
+	return bFound;
+}
+
+bool UMODesignationSubsystem::FindFlattenWork(const FMODesignationZone& Zone, FVector& OutDig, FVector& OutFill) const
+{
+	if (Zone.Kind != EMODesignationKind::Flatten)
+	{
+		return false;
+	}
+	FVector Unused;
+	int32 Samples = 0;
+	const bool bOffTarget = FindBitePoint(Zone, /*bDig=*/true, Unused, Samples) || FindBitePoint(Zone, /*bDig=*/false, Unused, Samples);
+	return bOffTarget && FindBitePoint(Zone, /*bDig=*/true, OutDig, Samples, 0.0f) && FindBitePoint(Zone, /*bDig=*/false, OutFill, Samples, 0.0f);
+}
+
+bool UMODesignationSubsystem::FindZoneBitePoint(const FGuid& ZoneId, bool bDig, FVector& OutPoint, int32& OutGroundSamples) const
+{
+	OutGroundSamples = 0;
+	const int32 Idx = IndexOfZone(ZoneId);
+	return Idx != INDEX_NONE && FindBitePoint(Zones[Idx], bDig, OutPoint, OutGroundSamples);
+}
 
 bool UMODesignationSubsystem::FindZone(const FGuid& ZoneId, FMODesignationZone& OutZone) const
 {

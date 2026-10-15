@@ -158,10 +158,12 @@ public:
 	 * Where the spoil goes, in order: the zone's DefaultDumpTargetGuid when it names a fill (Dump) zone with room; the nearest
 	 * fill zone with room; a container (the default target when it is not a zone, else any settlement container when
 	 * bHaveContainer); otherwise the zone WAITS -- with nowhere to put the earth the honest answer is no trip, not a heap.
-	 * Dump and Flatten zones are never dug here (Flatten is stage 5). Exhausted zones are skipped, not deleted (Wes's call).
+	 * A Flatten zone in FlattenZonesWithWork (the caller read the live ground: it has spots above AND below its target) is its own
+	 * source and sink: dig its high ground, fill its low ground. Dump zones are never dug. (Exhausted zones are already gone: the
+	 * designation subsystem drops a zone whose budget reaches 0.)
 	 */
 	static TArray<FMOExcavationAssignment> DecideExcavationWork(const TArray<FMODesignationZone>& Zones,
-		const TSet<FGuid>& ClaimedDigZones, int32 IdleVillagers, bool bHaveContainer);
+		const TSet<FGuid>& ClaimedDigZones, int32 IdleVillagers, bool bHaveContainer, const TSet<FGuid>& FlattenZonesWithWork = TSet<FGuid>());
 
 	// =========================================================================
 	// SCHOOL / TEACHING (V2.2)

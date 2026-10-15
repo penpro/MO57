@@ -345,8 +345,8 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Terraforming|Duration", meta=(ClampMin="1.0"))
 	float TerraformSecondsPerCubicMeter = 30000.0f;
 
-	/** Metres of surface displacement a full-strength (1.0) Raise/Dig produces —
-	 *  used to convert brush Strength into an earth-volume estimate. */
+	/** Nominal metres of surface displacement for the Flatten / Smooth earth ESTIMATES (their earth depends on the ground). Dig and Raise
+	 *  no longer use it: their volume is the sculpt's real one (ComputeMovedVolumeCubicMeters). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Terraforming|Duration", meta=(ClampMin="0.001"))
 	float TerraformDepthPerStrengthMeters = 1.0f;
 
@@ -402,10 +402,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Terraforming|Excavation", meta=(ClampMin="10.0"))
 	float ExcavationDigRadius = 120.0f;
 
-	/** Brush strength (0-1) for one pawn excavation bite. Bite volume =
-	 *  π·radius² × (strength·TerraformDepthPerStrengthMeters); the trip duration
-	 *  is that volume × TerraformSecondsPerCubicMeter (realistically long — a real
-	 *  gate lowers the rate as config-for-test, it does not skip the sim). */
+	/** Brush strength (0-1) for one pawn excavation bite. Bite volume = ComputeMovedVolumeCubicMeters(radius, strength) -- the sculpt's
+	 *  real earth: 120 cm x 0.15 lowers the centre 1.8 cm and moves ~0.046 m3 (~75 kg, a basket or barrow load, 3 Dirt); the trip duration
+	 *  is that volume x TerraformSecondsPerCubicMeter (realistically long -- a gate lowers the rate as config-for-test, it does not skip the sim). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Terraforming|Excavation", meta=(ClampMin="0.0", ClampMax="1.0"))
 	float ExcavationDigStrength = 0.15f;
 
@@ -428,12 +427,16 @@ public:
 	float TerraformAtLocationEx(const FVector& WorldLocation, EMOTerraformMode Mode,
 		float RadiusUU, float Strength);
 
-	/** Estimated earth volume (m³) a single height Dig/Raise moves: footprint
-	 *  (π·radiusMeters²) × displacement (Strength·DepthPerStrengthMeters). Static +
-	 *  BlueprintCallable so the conservation/haul math is headless-testable. */
+	/** The earth (m³) a single height Dig/Raise REALLY moves: the Voxel plugin's sculpt rule (Radius/10 × Strength cm per column at the
+	 *  centre, the brush's smooth falloff to the rim) integrated over the disc (MOVoxel::HeightSculptMovedVolumeM3). Until Oct 14 2026 this
+	 *  was π·r² × Strength × 1 m (TerraformDepthPerStrengthMeters), 7-15x the earth that moved: player digs were charged for earth that
+	 *  never moved, and each excavation bite minted 54 Dirt from ~0.05 m³. Static + BlueprintCallable so conservation is testable. */
 	UFUNCTION(BlueprintCallable, Category="MO|Terraforming|Excavation")
-	static float ComputeMovedVolumeCubicMeters(float RadiusUU, float Strength,
-		float DepthPerStrengthMeters);
+	static float ComputeMovedVolumeCubicMeters(float RadiusUU, float Strength);
+
+	/** Real seconds to move VolumeM3 of earth at SecondsPerCubicMeter, floored at MinSeconds (the volume -> time rule of the design anchor). */
+	UFUNCTION(BlueprintCallable, Category="MO|Terraforming|Duration")
+	static float ComputeDurationForVolumeSeconds(float VolumeM3, float SecondsPerCubicMeter, float MinSeconds);
 
 	/** Spoil item count for a dug volume = floor(VolumeM3 × ItemsPerCubicMeter).
 	 *  The single volume→item mapping used at dig (produce) and fill (consume). */

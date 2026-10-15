@@ -9,6 +9,7 @@
 #include "Sculpt/VoxelSculptSave.h"                        // FVoxel*SculptSave (IsValid/Serialize)
 #include "Sculpt/Height/VoxelSculptHeight.h"               // AVoxelSculptHeight (was AVoxelHeightSculptActor)
 #include "Sculpt/Height/VoxelHeightSculptBlueprintLibrary.h"
+#include "VoxelFalloff.h"
 #include "Sculpt/Volume/VoxelSculptVolume.h"               // AVoxelSculptVolume (was AVoxelVolumeSculptActor)
 #include "Sculpt/Volume/VoxelVolumeSculptBlueprintLibrary.h"
 
@@ -68,6 +69,24 @@ namespace MOVoxel
 		if (!IsValid(A)) { return; }
 		UVoxelHeightSculptBlueprintLibrary::SculptHeight(
 			A, Center, Radius, Strength, bAdd ? EVoxelSculptMode::Add : EVoxelSculptMode::Remove);
+	}
+
+	float HeightSculptMovedVolumeM3(float Radius, float Strength)
+	{
+		// UVoxelHeightSculptBlueprintLibrary::SculptHeight (FVoxelSculptHeightModifierRuntime::Apply): Delta = Radius / 10 * Falloff * Strength
+		// per column, Falloff from the default brush (FVoxelFalloff: Smooth, Amount 0.5 -- full depth to half the radius, smoothstep to 0 at
+		// the rim). Integrated in rings; the rule is symmetric, so a Raise moves exactly what a Dig of the same brush moves.
+		const FVoxelFalloff Default;
+		constexpr int32 Rings = 128;
+		const double R = FMath::Max(0.0f, Radius);
+		double CubicCm = 0.0;
+		for (int32 I = 0; I < Rings; ++I)
+		{
+			const double R0 = R * I / Rings, R1 = R * (I + 1) / Rings;
+			const float Falloff = FVoxelFalloff::GetFalloff(Default.Type, float(0.5 * (R0 + R1)), float(R), Default.Amount);
+			CubicCm += R / 10.0 * FMath::Clamp(Strength, 0.0f, 1.0f) * Falloff * PI * (R1 * R1 - R0 * R0);
+		}
+		return float(CubicCm / 1.0e6);
 	}
 
 	void HeightFlatten(AActor* SculptActor, const FVector2D& Center, float Radius, float Falloff, float TargetHeight)
