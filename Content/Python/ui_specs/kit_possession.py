@@ -1,6 +1,6 @@
 """The possession menu ("Characters") in the Field Ledger kit: a modal-style panel on the Menu layer, a scrolling list of character cards, a create button.
 
-Contracts: MOPossessionMenu (REQ PawnListScrollBox; opt CreateCharacterButton, CloseButton, TitleText, EmptyListText), MOPawnEntryWidget (all optional: Name/Age/Gender/Status/Location/LastPlayed texts,
+Contracts: MOPossessionMenu (REQ PawnListScrollBox; opt CreateCharacterButton, CloseButton, TitleText, EmptyListText), MOPawnEntryWidget (all optional: Name/Occupant/Age/Gender/Status/Location/LastPlayed texts,
 HealthBar, PortraitImage, PossessButton; MOListEntryBase: EntryButton, BackgroundBorder).
 
 Apply:
@@ -43,15 +43,15 @@ MENU = {
 }
 
 
-def label_value(name, label, value_name, w_label=84):
+def label_value(name, label, value_name, w_label=84, **value_props):
     return {"type": "HorizontalBox", "name": name, "slot": {"padding": [0, 2, 0, 0]}, "children": [
         {"type": "SizeBox", "name": name + "LabelBox", "width": w_label, "children": [K.text(name + "Label", "caption", label, "color.text.secondary")]},
-        K.text(value_name, "body", "", "color.text.primary", var=True)]}
+        K.text(value_name, "body", "", "color.text.primary", var=True, slot={"size": {"size_rule": "Fill", "value": 1.0}}, **value_props)]}
 
 
 ENTRY = {
     "asset": f"{UI}/WBP_MOPawnEntryWidget",
-    "root": {"type": "SizeBox", "name": "EntrySize", "height": 104, "children": [
+    "root": {"type": "SizeBox", "name": "EntrySize", "height": 120, "children": [
         {"type": "Overlay", "name": "EntryOverlay", "children": [
             {"type": "Border", "name": "BackgroundBorder", "var": True, "props": {"background": K.baked_brush("T_Row_normal"), "brush_color": [1, 1, 1, 1], "padding": 0}, "slot": FILL},
             {"type": "HorizontalBox", "name": "EntryRow", "slot": {**FILL, "padding": [14, 10, 14, 10]}, "children": [
@@ -62,10 +62,14 @@ ENTRY = {
                         K.image9("PortraitFrame", "portrait_frame", "color.border.strong", slot=FILL)]}]},
                 {"type": "VerticalBox", "name": "IdentityColumn", "slot": {**VC, **FILL_SIZE, "padding": [18, 0, 12, 0]}, "children": [
                     K.text("NameText", "heading", "Name", "color.text.primary", var=True),
+                    # "Current survivor" / "Played by <Steam name>" (MOPawnEntryWidget::SetOccupancy; collapsed for a free survivor)
+                    K.text("OccupantText", "label", "", "color.accent", var=True, slot={"padding": [0, 2, 0, 2]}),
                     label_value("AgeRow", "Age", "AgeText"), label_value("GenderRow", "Gender", "GenderText"),
                     {"type": "SizeBox", "name": "HealthBox", "height": 8, "slot": {"padding": [0, 8, 0, 0]}, "children": [K.progress_bar("HealthBar")]}]},
-                {"type": "VerticalBox", "name": "StateColumn", "slot": {**VC, **FILL_SIZE, "padding": [0, 0, 12, 0]}, "children": [
-                    label_value("StatusRow", "Status", "StatusText"), label_value("LocationRow", "Location", "LocationText"), label_value("LastPlayedRow", "Last played", "LastPlayedText")]},
+                # clipped, the location ellipsized: "Locust Woodland · 4.3 km S, 2.2 km W" ran under the Possess button (Oct 15 2026)
+                {"type": "VerticalBox", "name": "StateColumn", "props": {"clipping": "ClipToBounds"}, "slot": {**VC, **FILL_SIZE, "padding": [0, 0, 12, 0]}, "children": [
+                    label_value("StatusRow", "Status", "StatusText"), label_value("LocationRow", "Location", "LocationText", text_overflow_policy="Ellipsis"),
+                    label_value("LastPlayedRow", "Last played", "LastPlayedText")]},
                 K.button("PossessButton", "Select", "Primary", slot=VC)]},
             K.button("EntryButton", "", "Bare", slot=FILL)]}]},
 }

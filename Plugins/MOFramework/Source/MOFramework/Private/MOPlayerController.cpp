@@ -556,6 +556,12 @@ void AMOPlayerController::ServerRequestPossessionList_Implementation()
 void AMOPlayerController::ClientReceivePossessionList_Implementation(const TArray<FMOPossessionListEntry>& Entries)
 {
 	UE_LOG(LogMOFramework, Log, TEXT("[MOPlayerController] received %d possession list entr(y/ies) from the server"), Entries.Num());
+	for (const FMOPossessionListEntry& Entry : Entries)
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOPlayerController]   possession row '%s' %s%s"), *Entry.CharacterName,
+			Entry.Occupancy == EMOPawnOccupancy::You ? TEXT("you") : Entry.Occupancy == EMOPawnOccupancy::OtherPlayer ? TEXT("player=") : TEXT("free"),
+			Entry.Occupancy == EMOPawnOccupancy::OtherPlayer ? *Entry.OccupantName : TEXT(""));
+	}
 	if (PossessionComponent)
 	{
 		PossessionComponent->NotifyPossessionListReceived(Entries);

@@ -52,6 +52,7 @@
 #include "CoreMinimal.h"
 #include "MOMenuWidgetBase.h"
 #include "MOworldSaveGame.h"
+#include "MOPossessionTypes.h"
 #include "MOPossessionMenu.generated.h"
 
 class UScrollBox;
@@ -77,9 +78,12 @@ class MOFRAMEWORK_API UMOPossessionMenu : public UMOMenuWidgetBase
 public:
 	UMOPossessionMenu(const FObjectInitializer& ObjectInitializer);
 
-	/** Populate the menu with pawn records. */
+	/** Populate the menu with pawn records (every row Free: records carry no live occupancy). */
 	UFUNCTION(BlueprintCallable, Category="MO|UI|Possession")
 	void PopulatePawnList(const TArray<FMOPersistedPawnRecord>& PawnRecords);
+
+	/** Populate the menu with the server's rows, which say who is in each survivor (you, another player -- by name -- or nobody). */
+	void PopulatePossessionList(const TArray<FMOPossessionListEntry>& Rows);
 
 	/** Clear all entries from the list. */
 	UFUNCTION(BlueprintCallable, Category="MO|UI|Possession")

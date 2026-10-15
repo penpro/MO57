@@ -75,6 +75,17 @@ void UMOPossessionMenu::EnsureButtonBindings()
 
 void UMOPossessionMenu::PopulatePawnList(const TArray<FMOPersistedPawnRecord>& PawnRecords)
 {
+	TArray<FMOPossessionListEntry> Entries;
+	Entries.Reserve(PawnRecords.Num());
+	for (const FMOPersistedPawnRecord& Record : PawnRecords)
+	{
+		Entries.Add(FMOPossessionListEntry::FromRecord(Record));
+	}
+	PopulatePossessionList(Entries);
+}
+
+void UMOPossessionMenu::PopulatePossessionList(const TArray<FMOPossessionListEntry>& Rows)
+{
 	ClearPawnList();
 
 	if (!PawnEntryWidgetClass)
@@ -89,73 +100,51 @@ void UMOPossessionMenu::PopulatePawnList(const TArray<FMOPersistedPawnRecord>& P
 		return;
 	}
 
-	// Separate living and deceased pawns
-	TArray<FMOPersistedPawnRecord> LivingPawns;
-	TArray<FMOPersistedPawnRecord> DeceasedPawns;
-
-	for (const FMOPersistedPawnRecord& Record : PawnRecords)
+	// Order: the survivor you are playing, then the free ones, then other players' (shown, not offered), the dead last; most recently played first within each.
+	auto Rank = [](const FMOPossessionListEntry& E)
 	{
-		if (Record.bIsDeceased)
+		if (E.bIsDeceased)
 		{
-			DeceasedPawns.Add(Record);
+			return 3;
 		}
-		else
-		{
-			LivingPawns.Add(Record);
-		}
-	}
-
-	LivingPawnCount = LivingPawns.Num();
-
-	// Sort living by last played (most recent first)
-	LivingPawns.Sort([](const FMOPersistedPawnRecord& A, const FMOPersistedPawnRecord& B)
+		return E.Occupancy == EMOPawnOccupancy::You ? 0 : E.Occupancy == EMOPawnOccupancy::Free ? 1 : 2;
+	};
+	TArray<FMOPossessionListEntry> Sorted = Rows;
+	Sorted.StableSort([&Rank](const FMOPossessionListEntry& A, const FMOPossessionListEntry& B)
 	{
-		return A.LastPlayedTime > B.LastPlayedTime;
+		const int32 RankA = Rank(A), RankB = Rank(B);
+		return RankA != RankB ? RankA < RankB : A.LastPlayedTicks > B.LastPlayedTicks;
 	});
 
-	// Sort deceased by last played as well
-	DeceasedPawns.Sort([](const FMOPersistedPawnRecord& A, const FMOPersistedPawnRecord& B)
+	int32 Deceased = 0, Others = 0;
+	for (const FMOPossessionListEntry& Row : Sorted)
 	{
-		return A.LastPlayedTime > B.LastPlayedTime;
-	});
-
-	// Add living pawns first
-	for (const FMOPersistedPawnRecord& Record : LivingPawns)
-	{
+		Deceased += Row.bIsDeceased ? 1 : 0;
+		Others += (!Row.bIsDeceased && Row.Occupancy == EMOPawnOccupancy::OtherPlayer) ? 1 : 0;
 		UMOPawnEntryWidget* Entry = CreateWidget<UMOPawnEntryWidget>(PC, PawnEntryWidgetClass);
 		if (Entry)
 		{
-			Entry->InitializeEntry(Record);
+			Entry->InitializeEntry(Row.ToDisplayRecord());
+			Entry->SetOccupancy(Row.Occupancy, Row.OccupantName);
 			Entry->OnPossessClicked.AddDynamic(this, &UMOPossessionMenu::HandlePawnEntryPossessClicked);
 			PawnListScrollBox->AddChild(Entry);
 			EntryWidgets.Add(Entry);
 		}
 	}
-
-	// Add deceased pawns at the end
-	for (const FMOPersistedPawnRecord& Record : DeceasedPawns)
-	{
-		UMOPawnEntryWidget* Entry = CreateWidget<UMOPawnEntryWidget>(PC, PawnEntryWidgetClass);
-		if (Entry)
-		{
-			Entry->InitializeEntry(Record);
-			Entry->OnPossessClicked.AddDynamic(this, &UMOPossessionMenu::HandlePawnEntryPossessClicked);
-			PawnListScrollBox->AddChild(Entry);
-			EntryWidgets.Add(Entry);
-		}
-	}
+	// Survivors this player can be (their own and the free ones): other players' do not count.
+	LivingPawnCount = Sorted.Num() - Deceased - Others;
 
 	// Show/hide empty list text
 	if (EmptyListText)
 	{
-		EmptyListText->SetVisibility(PawnRecords.Num() == 0 ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+		EmptyListText->SetVisibility(Rows.Num() == 0 ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
 	}
 
 	// Show "Create Character" if no living pawns
 	SetCreateCharacterVisible(LivingPawnCount == 0);
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOPossessionMenu] Populated with %d living, %d deceased pawns"),
-		LivingPawns.Num(), DeceasedPawns.Num());
+	UE_LOG(LogMOFramework, Log, TEXT("[MOPossessionMenu] Populated with %d of your / free living, %d other players', %d deceased"),
+		LivingPawnCount, Others, Deceased);
 }
 
 void UMOPossessionMenu::ClearPawnList()

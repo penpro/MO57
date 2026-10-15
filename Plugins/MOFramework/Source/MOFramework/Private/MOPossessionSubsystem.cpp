@@ -7,9 +7,11 @@
 #include "EngineUtils.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
+#include "GameFramework/PlayerState.h"
 #include "Kismet/GameplayStatics.h"
 
 #include "MOIdentityComponent.h"
+#include "MOUIUtils.h"
 #include "MOInventoryComponent.h"
 #include "MORecruitmentComponent.h"
 #include "MOIdentityRegistrySubsystem.h"
@@ -144,8 +146,31 @@ void UMOPossessionSubsystem::BuildPossessionEntries(const APlayerController* Req
 		}
 	}
 
-	TSet<FGuid> DrivenByOtherHumans;
+	// Who is in each survivor now, for the requester (live state, not saved): the requester's own survivor is "You"; one another human is
+	// driving is listed with that player's name and never offered (Wes, Oct 15 2026 -- before, it was left out of the list altogether).
+	TMap<FGuid, FString> DrivenByOtherHumans;
+	FGuid RequesterPawnGuid;
+	TMap<FGuid, FVector> LiveLocations;
 	int32 Scanned = 0, NoIdentity = 0, TakenByOther = 0, NotAvailable = 0, AlreadyKnown = 0, AddedFromWorld = 0;
+
+	auto AddWorldRecord = [&Records, &KnownGuids](const APawn* Pawn, const UMOIdentityComponent* Identity, const FGuid& Guid)
+	{
+		FMOPersistedPawnRecord WorldPawnRecord;
+		WorldPawnRecord.PawnGuid = Guid;
+		WorldPawnRecord.Transform = Pawn->GetActorTransform();
+		WorldPawnRecord.PawnClassPath = FSoftClassPath(Pawn->GetClass());
+		WorldPawnRecord.bIsPlayerControllable = true;
+		WorldPawnRecord.bIsDeceased = false;
+		WorldPawnRecord.CharacterName = Identity->DisplayName.IsEmpty()
+			? FString::Printf(TEXT("Survivor_%s"), *Guid.ToString().Right(4))
+			: Identity->DisplayName.ToString();
+		WorldPawnRecord.Gender = Identity->Gender;
+		WorldPawnRecord.StatusText = TEXT("Recruited");
+		WorldPawnRecord.LastPlayedTime = FDateTime::Now();
+		Records.Add(WorldPawnRecord);
+		KnownGuids.Add(Guid);
+	};
+
 	for (TActorIterator<APawn> It(World); It; ++It)
 	{
 		APawn* Pawn = *It;
@@ -168,14 +193,20 @@ void UMOPossessionSubsystem::BuildPossessionEntries(const APlayerController* Req
 			++NoIdentity;
 			continue;
 		}
+		LiveLocations.Add(Guid, Pawn->GetActorLocation());
 
+		bool bDrivenByOther = false;
 		if (const AController* Current = Pawn->GetController())
 		{
-			if (Current != Requester && Current->IsPlayerController())
+			if (Current == Requester)
 			{
-				DrivenByOtherHumans.Add(Guid);
+				RequesterPawnGuid = Guid;
+			}
+			else if (Current->IsPlayerController())
+			{
+				DrivenByOtherHumans.Add(Guid, Current->PlayerState ? Current->PlayerState->GetPlayerName() : FString());
+				bDrivenByOther = true;
 				++TakenByOther;
-				continue;
 			}
 		}
 
@@ -197,36 +228,43 @@ void UMOPossessionSubsystem::BuildPossessionEntries(const APlayerController* Req
 			++AlreadyKnown;
 			continue;
 		}
-		if (!IsPawnAvailableTo(Pawn, Requester))
+		// Another player's survivor gets a row (with their name) even though it is not available to take.
+		if (!bDrivenByOther && !IsPawnAvailableTo(Pawn, Requester))
 		{
 			++NotAvailable;
 			continue;
 		}
 		++AddedFromWorld;
-
-		FMOPersistedPawnRecord WorldPawnRecord;
-		WorldPawnRecord.PawnGuid = Guid;
-		WorldPawnRecord.Transform = Pawn->GetActorTransform();
-		WorldPawnRecord.PawnClassPath = FSoftClassPath(Pawn->GetClass());
-		WorldPawnRecord.bIsPlayerControllable = true;
-		WorldPawnRecord.bIsDeceased = false;
-		WorldPawnRecord.CharacterName = Identity->DisplayName.IsEmpty()
-			? FString::Printf(TEXT("Survivor_%s"), *Guid.ToString().Right(4))
-			: Identity->DisplayName.ToString();
-		WorldPawnRecord.Gender = Identity->Gender;
-		WorldPawnRecord.StatusText = TEXT("Recruited");
-		WorldPawnRecord.LastPlayedTime = FDateTime::Now();
-		Records.Add(WorldPawnRecord);
-		KnownGuids.Add(Guid);
+		AddWorldRecord(Pawn, Identity, Guid);
 	}
 
 	for (const FMOPersistedPawnRecord& Record : Records)
 	{
-		// Creatures/NPCs are not player-controllable; a pawn another human is driving is not on offer.
-		if (Record.bIsPlayerControllable && !DrivenByOtherHumans.Contains(Record.PawnGuid))
+		// Creatures/NPCs are not player-controllable.
+		if (!Record.bIsPlayerControllable)
 		{
-			OutEntries.Add(FMOPossessionListEntry::FromRecord(Record));
+			continue;
 		}
+		FMOPossessionListEntry Entry = FMOPossessionListEntry::FromRecord(Record);
+		// Where the survivor is, as the Status panel says it ("Locust Woodland \u00B7 19.6 km S, 3.1 km E"): the row carries no transform, so the
+		// entry widget's fallback printed "0, 0" for every survivor that had no saved location name.
+		if (Entry.LocationName.IsEmpty() && !Record.bIsDeceased)
+		{
+			const FVector Where = LiveLocations.Contains(Record.PawnGuid) ? LiveLocations[Record.PawnGuid] : Record.Transform.GetLocation();
+			const FText Biome = UMOUIUtils::GetBiomeDisplayNameAt(World, Where);
+			Entry.LocationName = Biome.IsEmpty() ? UMOUIUtils::FormatWorldPosition(Where).ToString()
+				: FString::Printf(TEXT("%s \u00B7 %s"), *Biome.ToString(), *UMOUIUtils::FormatWorldPosition(Where).ToString());
+		}
+		if (const FString* PlayerName = DrivenByOtherHumans.Find(Record.PawnGuid))
+		{
+			Entry.Occupancy = EMOPawnOccupancy::OtherPlayer;
+			Entry.OccupantName = *PlayerName;
+		}
+		else if (Record.PawnGuid == RequesterPawnGuid)
+		{
+			Entry.Occupancy = EMOPawnOccupancy::You;
+		}
+		OutEntries.Add(Entry);
 	}
 
 	UE_LOG(LogMOFramework, Log,

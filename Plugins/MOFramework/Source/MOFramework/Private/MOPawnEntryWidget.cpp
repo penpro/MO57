@@ -147,9 +147,42 @@ void UMOPawnEntryWidget::InitializeEntry(const FMOPersistedPawnRecord& PawnRecor
 	OnEntryInitialized(PawnRecord);
 }
 
+void UMOPawnEntryWidget::SetOccupancy(EMOPawnOccupancy InOccupancy, const FString& OccupantName)
+{
+	Occupancy = InOccupancy;
+	FText Line;
+	if (InOccupancy == EMOPawnOccupancy::You)
+	{
+		Line = NSLOCTEXT("MO", "PossessCurrent", "Current survivor");
+	}
+	else if (InOccupancy == EMOPawnOccupancy::OtherPlayer)
+	{
+		Line = OccupantName.IsEmpty()
+			? NSLOCTEXT("MO", "PossessOtherPlayer", "Played by another player")
+			: FText::Format(NSLOCTEXT("MO", "PossessPlayedBy", "Played by {0}"), FText::FromString(OccupantName));
+	}
+	if (OccupantText)
+	{
+		OccupantText->SetText(Line);
+		OccupantText->SetVisibility(Line.IsEmpty() ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible);
+	}
+	else if (StatusText && !Line.IsEmpty())
+	{
+		StatusText->SetText(Line);
+	}
+	if (PossessButton)
+	{
+		PossessButton->SetIsEnabled(InOccupancy == EMOPawnOccupancy::Free && !bIsDeceased);
+		if (InOccupancy != EMOPawnOccupancy::Free)
+		{
+			PossessButton->SetButtonText(InOccupancy == EMOPawnOccupancy::You ? NSLOCTEXT("MO", "PossessPlaying", "Playing") : NSLOCTEXT("MO", "PossessTaken", "Taken"));
+		}
+	}
+}
+
 void UMOPawnEntryWidget::HandlePossessClicked()
 {
-	if (CachedPawnGuid.IsValid() && !bIsDeceased)
+	if (CachedPawnGuid.IsValid() && !bIsDeceased && Occupancy == EMOPawnOccupancy::Free)
 	{
 		OnPossessClicked.Broadcast(CachedPawnGuid);
 	}

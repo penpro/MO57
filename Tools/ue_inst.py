@@ -1889,6 +1889,26 @@ def _trust_possess_other(rep, host, client):
              (refused.group(0)[:120] if refused else "no 'may not take' line") + f"; pawns {before.group(1)}/{before.group(2)} -> {after.group(1) if after else '?'}/{after.group(2) if after else '?'}")
 
 
+def _possession_rows_name_players(rep, host, client):
+    """The possession menu's rows say who is in each survivor (EMOPawnOccupancy, Oct 15 2026): the joiner's own is "you", and the host's is
+    LISTED with the host player's name (their Steam name on Steam) instead of being left out. Read from the rows the CLIENT received."""
+    names = _probe(host, "pcs = [unreal.GameplayStatics.get_player_controller(world, i) for i in range(2)]; "
+                         "out('NAMES ' + '|'.join(p.player_state.get_player_name() for p in pcs if p and p.player_state))")
+    m = re.search(r"NAMES ([^|\n]+)\|([^\n]+)", names)
+    if not rep.step("host: both players have a name", bool(m), names.strip()[-160:]):
+        return
+    host_name = m.group(1).strip()
+    off = log_size(client)
+    console(client, "MO.Possess.List")
+    wait_log(client, r"possession row", since=off, timeout=20)
+    time.sleep(1.5)
+    rows = re.findall(r"possession row '([^']*)' (you|free|player=)([^\n]*)", read_log_from(client, off))
+    you = [r for r in rows if r[1] == "you"]
+    others = [r[2].strip() for r in rows if r[1] == "player="]
+    rep.step("client: its own survivor is the one marked as current", len(you) == 1, f"{len(rows)} row(s): {rows}"[:220])
+    rep.step(f"client: the host's survivor is listed, played by '{host_name}'", host_name in others, f"other players' rows: {others}")
+
+
 def _trust_dev_spawn(rep, host, client):
     """C7: the possession component's dev spawn RPC carries a class the CLIENT chooses. The server honours it for its own player only:
     the host's request spawns a TargetPoint (control), the joiner's is refused and spawns nothing."""
@@ -1980,7 +2000,7 @@ def actions_test(uproject, editor_exe, keep=False, boot_timeout=300):
         if not _host_and_join(rep, host, client, "ActionsTest", boot_timeout):
             return False
         only = {s.strip() for s in os.environ.get("MO_ACTIONS_ONLY", "").split(",") if s.strip()}  # quick rerun of named cases
-        for fn in (_client_pickup, _client_press_e, _appearance_replicates, _client_craft, _client_forage, _client_build, _client_attack, _trust_placement, _trust_pickup_far, _trust_possess_other, _trust_dev_spawn, _client_rename, _trust_terraform, _buried_pawns, _remote_pawn_stays_put):
+        for fn in (_client_pickup, _client_press_e, _appearance_replicates, _client_craft, _client_forage, _client_build, _client_attack, _trust_placement, _trust_pickup_far, _trust_possess_other, _possession_rows_name_players, _trust_dev_spawn, _client_rename, _trust_terraform, _buried_pawns, _remote_pawn_stays_put):
             if only and fn.__name__ not in only:
                 continue
             try:

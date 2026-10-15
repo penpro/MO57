@@ -43,6 +43,7 @@
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
 #include "MOworldSaveGame.h"
+#include "MOPossessionTypes.h"
 #include "MOPawnEntryWidget.generated.h"
 
 class UTextBlock;
@@ -60,6 +61,12 @@ public:
 	/** Initialize this entry with pawn data. */
 	UFUNCTION(BlueprintCallable, Category="MO|UI|Possession")
 	void InitializeEntry(const FMOPersistedPawnRecord& PawnRecord);
+
+	/**
+	 * Who is in this survivor now (the server's possession row): "Current survivor" for the one you are playing, "Played by <name>" for another
+	 * player's (their Steam name on Steam). Either way the Possess button is off -- you cannot take your own or someone else's.
+	 */
+	void SetOccupancy(EMOPawnOccupancy InOccupancy, const FString& OccupantName);
 
 	/** Get the GUID of the pawn this entry represents. */
 	UFUNCTION(BlueprintPure, Category="MO|UI|Possession")
@@ -109,10 +116,15 @@ protected:
 	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
 	TObjectPtr<UMOCommonButton> PossessButton;
 
+	/** "Current survivor" / "Played by <name>" (SetOccupancy); without it the status line says so. */
+	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
+	TObjectPtr<UTextBlock> OccupantText;
+
 private:
 	UFUNCTION()
 	void HandlePossessClicked();
 
 	FGuid CachedPawnGuid;
 	bool bIsDeceased = false;
+	EMOPawnOccupancy Occupancy = EMOPawnOccupancy::Free;
 };

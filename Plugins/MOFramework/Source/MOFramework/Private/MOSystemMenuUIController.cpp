@@ -532,13 +532,7 @@ void UMOSystemMenuUIController::HandlePossessionListReady(const TArray<FMOPosses
 		return;  // closed while the answer was in flight
 	}
 
-	TArray<FMOPersistedPawnRecord> Records;
-	Records.Reserve(Entries.Num());
-	for (const FMOPossessionListEntry& Entry : Entries)
-	{
-		Records.Add(Entry.ToDisplayRecord());
-	}
-	MenuWidget->PopulatePawnList(Records);
+	MenuWidget->PopulatePossessionList(Entries);
 }
 
 UMOPossessionMenu* UMOSystemMenuUIController::GetPossessionMenu() const
