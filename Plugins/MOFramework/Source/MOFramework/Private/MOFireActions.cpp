@@ -6,6 +6,7 @@
 #include "MOVitalsComponent.h"
 #include "MOWeatherIntegrationSubsystem.h"
 #include "MOItemDatabaseSettings.h"
+#include "MOCraftingSubsystem.h"
 #include "MOPlayerController.h"
 #include "MONotificationWidget.h"
 #include "MOFramework.h"
@@ -20,14 +21,46 @@ const FName FMOFireActions::PutOut(TEXT("PutOut"));
 namespace
 {
 	const FName TinderId(TEXT("Tinder01"));
-	const FName BowDrillId(TEXT("FireDrill01"));
-	/** A hand drill: a straight DRY stick twirled between the palms on a second one -- deadfall (Branch01, "already seasoned"); a green branch (Stick01) is too
-	 *  wet to make an ember. */
+	/** The improvised hand drill: a straight DRY stick twirled between the palms on a second one -- deadfall (Branch01, "already seasoned"); a green branch
+	 *  (Stick01) is too wet to make an ember. */
 	const FName DrillStickId(TEXT("Branch01"));
 	const FName FiremakingSkill(TEXT("Firemaking"));
-	/** One attempt: a hand drill takes minutes of hard twirling; a bow drill is quicker. */
+	/** One attempt: a hand drill takes minutes of hard twirling; a good tool (a bow drill's mechanical advantage) about half that. */
 	constexpr float HandDrillSeconds = 3.0f * 60.0f;
 	constexpr float BowDrillSeconds = 90.0f;
+	constexpr float QuickToolEffectiveness = 0.6f;
+
+	/** How this pawn would light a fire now: its best Firestarter tool, else two dry branches, else nothing. */
+	struct FLightingMethod
+	{
+		FGuid ToolGuid;          // invalid = improvised (or none)
+		FName ToolItemId;
+		float Effectiveness = 0.0f;
+		bool IsAvailable() const { return Effectiveness > 0.0f; }
+		bool IsImprovised() const { return !ToolGuid.IsValid(); }
+		float Seconds() const { return Effectiveness >= QuickToolEffectiveness ? BowDrillSeconds : HandDrillSeconds; }
+	};
+
+	FLightingMethod FindLightingMethod(const APawn* Pawn, UMOInventoryComponent* Inventory)
+	{
+		FLightingMethod Method;
+		UMOCraftingSubsystem* Crafting = Pawn && Pawn->GetWorld() ? Pawn->GetWorld()->GetSubsystem<UMOCraftingSubsystem>() : nullptr;
+		FGuid Guid;
+		float Effectiveness = 0.0f;
+		if (Crafting && Inventory && Crafting->FindBestTool(Inventory, EMOToolType::Firestarter, 0.01f, Guid, Effectiveness)
+			&& Effectiveness > FMOFireActions::ImprovisedDrillEffectiveness)
+		{
+			FMOInventoryEntry Entry;
+			Method.ToolGuid = Guid;
+			Method.ToolItemId = Inventory->TryGetEntryByGuid(Guid, Entry) ? Entry.ItemDefinitionId : NAME_None;
+			Method.Effectiveness = Effectiveness;
+		}
+		else if (Inventory && Inventory->GetItemCountByDefinitionId(DrillStickId) >= 2)
+		{
+			Method.Effectiveness = FMOFireActions::ImprovisedDrillEffectiveness;
+		}
+		return Method;
+	}
 	/** Laying fuel on: a few seconds a piece. */
 	constexpr float SecondsPerFuelItem = 2.0f;
 	constexpr float ReachCm = 300.0f;
@@ -46,9 +79,13 @@ namespace
 	}
 }
 
-float FMOFireActions::LightChance(bool bBowDrill, int32 FiremakingLevel, bool bRaining, float Wetness01)
+float FMOFireActions::LightChance(float ToolEffectiveness, int32 FiremakingLevel, bool bRaining, float Wetness01)
 {
-	float Chance = (bBowDrill ? 0.6f : 0.3f) + 0.06f * FMath::Max(0, FiremakingLevel);
+	if (ToolEffectiveness <= 0.0f)
+	{
+		return 0.0f;
+	}
+	float Chance = ToolEffectiveness + 0.06f * FMath::Max(0, FiremakingLevel);
 	if (bRaining)
 	{
 		Chance *= 0.3f;
@@ -101,13 +138,14 @@ void FMOFireActions::GetActions(const APawn* Pawn, const AMOCraftingStationActor
 		Out1.Label = LOCTEXT("PutOut", "Put it out");
 		return;
 	}
-	const bool bBowDrill = Inventory->HasItem(BowDrillId);
-	const bool bHandDrill = Inventory->GetItemCountByDefinitionId(DrillStickId) >= 2;
+	const FLightingMethod Method = FindLightingMethod(Pawn, const_cast<UMOInventoryComponent*>(Inventory));
 	const bool bTinder = Inventory->HasItem(TinderId);
 	FMOItemActionOption& LightOpt = Out.AddDefaulted_GetRef();
 	LightOpt.Id = Light;
-	LightOpt.Label = bBowDrill ? LOCTEXT("LightBow", "Light (bow drill)") : LOCTEXT("LightHand", "Light (hand drill)");
-	LightOpt.bEnabled = Station->CurrentFuel > 0.0f && bTinder && (bBowDrill || bHandDrill);
+	LightOpt.Label = Method.IsAvailable() && !Method.IsImprovised()
+		? FText::Format(LOCTEXT("LightWith", "Light ({0})"), UMOItemDatabaseSettings::GetItemDisplayName(Method.ToolItemId))
+		: LOCTEXT("LightHand", "Light (hand drill)");
+	LightOpt.bEnabled = Station->CurrentFuel > 0.0f && bTinder && Method.IsAvailable();
 	LightOpt.DisabledReason = Station->CurrentFuel <= 0.0f ? LOCTEXT("LayFuel", "Lay some fuel first.")
 		: !bTinder ? LOCTEXT("NeedTinder", "Needs tinder (dry fibre from dead shrubs or shredded bark).")
 		: LOCTEXT("NeedDrill", "Needs two dry branches (deadfall) for a hand drill: green wood is too wet to make an ember.");
@@ -167,10 +205,11 @@ bool FMOFireActions::Perform(APawn* Pawn, AMOCraftingStationActor* Station, FNam
 
 	if (ActionId == Light)
 	{
-		const bool bBowDrill = Inventory->HasItem(BowDrillId);
-		return Timed->Begin(Light, bBowDrill ? LOCTEXT("Drilling", "Working the bow drill") : LOCTEXT("Twirling", "Twirling the hand drill"),
-			bBowDrill ? BowDrillSeconds : HandDrillSeconds,
-			[WeakPawn, WeakStation, bBowDrill]()
+		const FLightingMethod Method = FindLightingMethod(Pawn, Inventory);
+		return Timed->Begin(Light, Method.IsImprovised() ? LOCTEXT("Twirling", "Twirling the hand drill")
+				: FText::Format(LOCTEXT("Drilling", "Working the {0}"), UMOItemDatabaseSettings::GetItemDisplayName(Method.ToolItemId)),
+			Method.Seconds(),
+			[WeakPawn, WeakStation, Method]()
 			{
 				APawn* P = WeakPawn.Get();
 				AMOCraftingStationActor* S = WeakStation.Get();
@@ -182,13 +221,24 @@ bool FMOFireActions::Perform(APawn* Pawn, AMOCraftingStationActor* Station, FNam
 				UMOSkillsComponent* Skills = P->FindComponentByClass<UMOSkillsComponent>();
 				const UMOVitalsComponent* Vitals = P->FindComponentByClass<UMOVitalsComponent>();
 				const UMOWeatherIntegrationSubsystem* Weather = P->GetWorld() ? P->GetWorld()->GetSubsystem<UMOWeatherIntegrationSubsystem>() : nullptr;
-				const float Chance = LightChance(bBowDrill, Skills ? Skills->GetSkillLevel(FiremakingSkill) : 0, Weather && Weather->IsRaining(), Vitals ? Vitals->GetWetnessLevel() : 0.0f);
+				const float Chance = LightChance(Method.Effectiveness, Skills ? Skills->GetSkillLevel(FiremakingSkill) : 0, Weather && Weather->IsRaining(),
+					Vitals ? Vitals->GetWetnessLevel() : 0.0f);
 				const bool bCaught = FMath::FRand() < Chance;
-				// The tinder is spent either way; a hand drill wears its hearth stick through.
+				// The tinder is spent either way; each attempt burns a socket into the hearth: an improvised drill wears a branch through, a kit loses durability.
 				Inv->RemoveItemByDefinitionId(TinderId, 1);
-				if (!bBowDrill)
+				if (Method.IsImprovised())
 				{
 					Inv->RemoveItemByDefinitionId(DrillStickId, 1);
+				}
+				else
+				{
+					bool bWornOut = false;
+					Inv->ReduceDurability(Method.ToolGuid, 1, bWornOut);
+					if (bWornOut)
+					{
+						Notify(P, FText::Format(LOCTEXT("WornOut", "The {0} is worn through."), UMOItemDatabaseSettings::GetItemDisplayName(Method.ToolItemId)),
+							EMONotificationType::Warning);
+					}
 				}
 				if (Skills)
 				{
@@ -203,8 +253,9 @@ bool FMOFireActions::Perform(APawn* Pawn, AMOCraftingStationActor* Station, FNam
 				{
 					Notify(P, LOCTEXT("Failed", "The ember dies in the tinder. Try again with fresh tinder."), EMONotificationType::Warning);
 				}
-				UE_LOG(LogMOFramework, Log, TEXT("[MOFire] %s lighting %s (%s): chance %.0f %% -> %s"), *P->GetName(), *S->GetName(), bBowDrill ? TEXT("bow drill") : TEXT("hand drill"),
-					Chance * 100.0f, bCaught ? TEXT("CAUGHT") : TEXT("failed"));
+				UE_LOG(LogMOFramework, Log, TEXT("[MOFire] %s lighting %s (%s, effectiveness %.2f): chance %.0f %% -> %s"), *P->GetName(), *S->GetName(),
+					Method.IsImprovised() ? TEXT("improvised hand drill") : *Method.ToolItemId.ToString(), Method.Effectiveness, Chance * 100.0f,
+					bCaught ? TEXT("CAUGHT") : TEXT("failed"));
 			}, nullptr, 100.0f);
 	}
 	return false;

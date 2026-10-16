@@ -264,7 +264,7 @@ void UMOKeepOnHarvestContextMenu::PopulateButtons()
 
 		// Check requirements for logging
 		const bool bHasKnowledge = HasRequiredKnowledge(Action.RequiredKnowledgeId);
-		const bool bHasTool = !Action.RequiresTool() || !Action.bToolRequired || HasToolOfType(Action.RequiredToolType);
+		const bool bHasTool = UMOHarvestSubsystem::HasToolForAction(Action, CachedInventory.Get());
 		const bool bCanPerform = bHasKnowledge && bHasTool;
 
 		UE_LOG(LogMOFramework, Log, TEXT("[MOKeepOnHarvestContextMenu] Adding harvest button: %s (ActionId: %s, Knowledge=%s/%s, Tool=%s)"),
@@ -412,18 +412,6 @@ bool UMOKeepOnHarvestContextMenu::CanPerformAction(const FMOResourceHarvestActio
 		}
 	}
 
-	// If action doesn't require a tool, it can be performed
-	if (!Action.RequiresTool())
-	{
-		return true;
-	}
-
-	// If tool is optional (bToolRequired=false), action can be performed without it (with penalties)
-	if (!Action.bToolRequired)
-	{
-		return true;
-	}
-
-	// Tool is required - check if player has it
-	return HasToolOfType(Action.RequiredToolType);
+	// The one tool gate BeginHarvest also enforces: a required tool at its minimum quality (an optional one only slows the work).
+	return UMOHarvestSubsystem::HasToolForAction(Action, CachedInventory.Get());
 }

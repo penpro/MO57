@@ -32,6 +32,9 @@ struct MOFRAMEWORK_API FMOItemSourceReport
 	/** Ground pickups found in PCG graphs (item ids) -- reported so a scatter change that drops one is visible. */
 	TArray<FName> PickupItems;
 
+	/** DT_Resources rows nothing places (no biome species names them, no PCG resource spawner plants them): not counted as sources. */
+	TArray<FName> UnplacedResources;
+
 	/** The progression ladder: the breadth-first round (0 = the bare world) in which each item became obtainable / each recipe performable.
 	 *  Roughly "crafting steps from bare hands". */
 	TMap<FName, int32> ItemTier;
@@ -63,8 +66,9 @@ struct MOFRAMEWORK_API FMOItemSourceOptions
  * So chains resolve: inspect Bark01 -> BarkFiber -> StripBark + ShredBark -> PlantFiber01 -> inspect -> TwistCordage -> ...
  *
  * Deliberately modelled as the runtime enforces it TODAY, not as intended: carcass parts are not tool-gated (the tool check
- * in MOCarcassActor is commented out), DT_Skills levels are assumed trainable, every DT_Resources row is assumed placed
- * somewhere in the world, and the dev starter kit is not a source.
+ * in MOCarcassActor is commented out), DT_Skills levels are assumed trainable, and the dev starter kit is not a source. A
+ * DT_Resources row counts only where something places it -- a biome species' ResourceNodeId or an MO Resource Spawner node
+ * (with a mesh) in a project PCG graph; the rest are listed in UnplacedResources. Every biome is assumed to occur.
  */
 struct MOFRAMEWORK_API FMOItemSourceAnalysis
 {

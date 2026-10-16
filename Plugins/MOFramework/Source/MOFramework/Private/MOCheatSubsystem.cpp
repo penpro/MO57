@@ -588,6 +588,10 @@ namespace
 		{
 			UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST]   Orphan knowledge '%s': required, but no grant, recipe or harvest trains it"), *Knowledge.ToString());
 		}
+		for (const FName& Resource : Report.UnplacedResources)
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST]   Unplaced resource '%s': no biome species or PCG resource spawner places it, so it is not a source"), *Resource.ToString());
+		}
 		for (const FMOBlockedRecipe& Blocked : Report.BlockedRecipes)
 		{
 			UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST]   Blocked recipe '%s': %s"), *Blocked.RecipeId.ToString(), *Blocked.Reason);
@@ -2358,9 +2362,10 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 					BlockedRows.Add(FString::Printf(TEXT("\"%s\": \"%s\""), *Blocked.RecipeId.ToString(), *Esc(Blocked.Reason)));
 				}
 				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] ProgressionMap %s: %d items, %d of %d recipes performable"), Name, Report.SourceOf.Num(), Report.ReachableRecipeCount, Report.RecipeCount);
-				return FString::Printf(TEXT("\"%s\": {\"recipe_count\": %d, \"items\": {%s}, \"recipes\": {%s}, \"blocked\": {%s}, \"orphans\": [%s]}"), Name, Report.RecipeCount,
-					*FString::Join(ItemRows, TEXT(", ")), *FString::Join(RecipeRows, TEXT(", ")), *FString::Join(BlockedRows, TEXT(", ")),
-					*FString::JoinBy(Report.OrphanItems, TEXT(", "), [](const FName& N) { return FString::Printf(TEXT("\"%s\""), *N.ToString()); }));
+				auto Names = [](const TArray<FName>& List) { return FString::JoinBy(List, TEXT(", "), [](const FName& N) { return FString::Printf(TEXT("\"%s\""), *N.ToString()); }); };
+				return FString::Printf(TEXT("\"%s\": {\"recipe_count\": %d, \"items\": {%s}, \"recipes\": {%s}, \"blocked\": {%s}, \"orphans\": [%s], \"unplaced_resources\": [%s]}"),
+					Name, Report.RecipeCount, *FString::Join(ItemRows, TEXT(", ")), *FString::Join(RecipeRows, TEXT(", ")), *FString::Join(BlockedRows, TEXT(", ")),
+					*Names(Report.OrphanItems), *Names(Report.UnplacedResources));
 			};
 			FMOItemSourceOptions Attempt;
 			Attempt.bIgnoreDiscovery = true;

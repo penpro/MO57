@@ -7,6 +7,9 @@
 #include "MOSkillsComponent.h"
 #include "MOWorldItemFactory.h"
 #include "MOHISMHarvestHelper.h"
+#include "MOBiomeDatabaseSettings.h"
+#include "MOBiomeDefinitionRow.h"
+#include "MOWorldSeedSubsystem.h"
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Components/HierarchicalInstancedStaticMeshComponent.h"
 #include "Engine/World.h"
@@ -305,6 +308,30 @@ TArray<AMOWorldItem*> UMOForagingSubsystem::RevealHISMInstancesInRadius(FVector 
 // DIG FOR SUPPLIES
 // ============================================================================
 
+const TArray<FMODigDropEntry>& UMOForagingSubsystem::GetDigTableAt(const FVector& Location, FName* OutBiomeId) const
+{
+	if (OutBiomeId)
+	{
+		*OutBiomeId = NAME_None;
+	}
+	const UMOWorldSeedSubsystem* Seeds = UMOWorldSeedSubsystem::Get(GetWorld());
+	if (Seeds && Seeds->HasActiveSeed())
+	{
+		// The biome the ground SHOWS here (the surface pick the ground material and footsteps use): dig on a strand's sand and you get sand.
+		const FName BiomeId = UMOBiomeDatabaseSettings::PickSurfaceBiomeAtWorld(Location, 0.0f, Seeds->GetActiveTerrainSeed());
+		if (OutBiomeId)
+		{
+			*OutBiomeId = BiomeId;
+		}
+		const FMOBiomeDefinitionRow* Biome = BiomeId.IsNone() ? nullptr : UMOBiomeDatabaseSettings::GetBiomeDefinition(BiomeId);
+		if (Biome && Biome->DigYields.Num() > 0)
+		{
+			return Biome->DigYields;
+		}
+	}
+	return DigDropTable;
+}
+
 TArray<AMOWorldItem*> UMOForagingSubsystem::DigForSupplies(FVector Location, int32 ForagingLevel, APawn* ForagingPawn)
 {
 	if (GetWorld() && GetWorld()->GetNetMode() == NM_Client)
@@ -315,7 +342,9 @@ TArray<AMOWorldItem*> UMOForagingSubsystem::DigForSupplies(FVector Location, int
 	}
 	TArray<AMOWorldItem*> SpawnedItems;
 
-	if (DigDropTable.Num() == 0)
+	FName BiomeId;
+	const TArray<FMODigDropEntry>& DigTable = GetDigTableAt(Location, &BiomeId);
+	if (DigTable.Num() == 0)
 	{
 		UE_LOG(LogMOForaging, Warning, TEXT("[MOForagingSubsystem] Dig drop table is empty"));
 		return SpawnedItems;
@@ -334,7 +363,7 @@ TArray<AMOWorldItem*> UMOForagingSubsystem::DigForSupplies(FVector Location, int
 	FMODigSettings DigSettingsData = AMOGatheringSettingsActor::GetDigSettings(this);
 
 	// Roll each drop entry
-	for (const FMODigDropEntry& Entry : DigDropTable)
+	for (const FMODigDropEntry& Entry : DigTable)
 	{
 		// Check level requirement
 		if (ForagingLevel < Entry.MinForagingLevel)
@@ -376,8 +405,8 @@ TArray<AMOWorldItem*> UMOForagingSubsystem::DigForSupplies(FVector Location, int
 		AwardForagingXP(ForagingPawn, XPSettings.XPPerDugItem * SpawnedItems.Num());
 	}
 
-	UE_LOG(LogMOForaging, Log, TEXT("[MOForagingSubsystem] Dug up %d items at skill level %d"),
-		SpawnedItems.Num(), ForagingLevel);
+	UE_LOG(LogMOForaging, Log, TEXT("[MOForagingSubsystem] Dug up %d items at skill level %d (biome %s)"),
+		SpawnedItems.Num(), ForagingLevel, *BiomeId.ToString());
 
 	return SpawnedItems;
 }
@@ -403,7 +432,9 @@ int32 UMOForagingSubsystem::DigForSuppliesToInventory(FVector Location, int32 Fo
 		return 0;
 	}
 
-	if (DigDropTable.Num() == 0)
+	FName BiomeId;
+	const TArray<FMODigDropEntry>& DigTable = GetDigTableAt(Location, &BiomeId);
+	if (DigTable.Num() == 0)
 	{
 		UE_LOG(LogMOForaging, Warning, TEXT("[MOForagingSubsystem] Dig drop table is empty"));
 		return 0;
@@ -412,7 +443,7 @@ int32 UMOForagingSubsystem::DigForSuppliesToInventory(FVector Location, int32 Fo
 	int32 ItemsAdded = 0;
 
 	// Roll each drop entry
-	for (const FMODigDropEntry& Entry : DigDropTable)
+	for (const FMODigDropEntry& Entry : DigTable)
 	{
 		// Check level requirement
 		if (ForagingLevel < Entry.MinForagingLevel)

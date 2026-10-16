@@ -101,3 +101,65 @@ exist it is what keeps the whole tree open without a grind.
 Steps 2–5 are a data pass of about a day with `ue.py rows set`; step 1 is a few hours of code. Rerun
 `MO.Test.ProgressionMap` after each: the target is every recipe reachable in attempt-anything mode, with the tiers in the
 order above.
+
+## Pass 1 — done (Oct 15 2026, evening)
+
+Steps 1 and 5 landed with the water and fire work (drink / fill / boil, friction fire, chosen fuel). This pass did most of
+steps 2–4.
+
+**First, the metric was dishonest.** The analysis assumed every DT_Resources row is placed somewhere in the world. In fact
+only the rows a biome species names (`ResourceNodeId`) are ever planted: black alder (with the hornbeam meshes), black
+locust, hazel, dead shrub, raspberry, elderberry and the boulders. Common spruce, apple, tall grass and every deposit (clay,
+flint, copper, iron) existed on paper only. `FMOItemSourceAnalysis` now counts a row only when a biome species or an MO
+Resource Spawner node in a PCG graph places it, and lists the rest (`unplaced_resources` in `progression_map.json`;
+ValidateData logs them). The numbers below are on that honest basis.
+
+| | Recipes performable, today's gates | Attempt anything |
+|---|---|---|
+| Morning (as reported, rows assumed placed) | 37 of 124 | 45 of 124 |
+| Evening, honest placement | **44 of 129** | **79 of 129** |
+
+What was added, each a realistic producer that the world actually places:
+
+| Material | Producer |
+|---|---|
+| Hardwood (billets) | felling black locust (2) or apple; locust is a dense, rot-proof bow and handle wood |
+| Deadwood (`Branch01`) | **Gather Deadwood** on black alder and black locust (alder is everywhere) |
+| Straight rods | **Cut Straight Rods** on hazel (coppice shoots; a blade cuts them, by hand ×2.5 time) |
+| Large log | **Fell Whole Trunk** on black alder (Mesolithic dugouts were alder or lime) |
+| Planks | **Rive Planks**: log, split along the grain with wedges (axe + hammer) |
+| Firewood | **Split Firewood**: log, axe |
+| Bow stave / arrow shaft | **Carve Bow Stave** (hardwood billet); **Shave Arrow Shaft** (a rod, heat-straightened at a fire) |
+| Fire-drill kit | now a hazel rod + a dry branch (there are no conifers for "softwood"); a Firestarter tool at 0.4 |
+| Brain, bladder | deer carcass parts (brain tanning; a water skin) |
+| Resin | **Distill Bark Tar** at a campfire (Neanderthal birch-bark tar) — spruce resin was never in the world |
+| Sand | digging on a strand (ShoreStrand / NordicStrand); biome rows now carry their own **dig table** (`DigYields`) |
+| Clay | subsoil clay in lowland dig tables (meadow, temperate forest, rainforest, locust woodland, electric forest) |
+| Flint deposits | placed in meadow and dry scrub (chalk downland), 1 / ha authored |
+| Copper ore | **Grooved Stone Maul** (cobble + green handle + cordage; Pickaxe 0.5, Hammer 0.6) mines the copper deposits now placed in rocky highland and alpine heath (0.5 / ha authored, about 18 within 600 m) |
+
+Verified in a game instance (seed 4242): cut rods, gathered deadwood, made the fire-drill kit and lit with it
+("Light (Fire Drill)", 52 % with Firemaking 2, the kit 30 → 29 durability), dug sand on the strand and clay in a meadow,
+found and mined copper ore with the maul, rove 2 planks (400 s: hand axe 0.6, the maul as hammer 0.6 -- craft time is divided by the tools' average effectiveness). Dev verb for this: `MO.Harvest.Do <ActionId|list> [radius_m]`.
+
+**Found and fixed on the way:** a required harvest tool was enforced only by the harvest menu's button state.
+`UMOHarvestSubsystem::BeginHarvest` (the start every harvest goes through, a survivor's included) never refused, so ore was
+mined with no pick. One gate now: `UMOHarvestSubsystem::HasToolForAction` (required tool at `MinToolQuality`, via
+`UMOInventoryComponent::GetBestToolEffectiveness`), used by the menu and by `BeginHarvest`.
+
+**Still open, in order of leverage:**
+
+1. **Water as an ingredient.** Recipes take `Water01` / `CleanWater01` items, but water now lives in containers as liquid.
+   One inventory-level ingredient chokepoint (count / consume / refund, with "a measure of liquid" item rows) would unblock
+   the three medicine brews and let bark tanning take water. Crafting currently has four separate count/consume loops
+   (subsystem check, execute, queue consume, queue refund): they should all go through it.
+2. **Reeds and dry grass.** `ReedBed` and `TallGrass` rows exist but cannot be placed as they are: the reed and grass
+   species are ground cover at thousands per hectare, too many for collision bodies. Needs a "what foraging this cover
+   gives" table on the cover species (the Forage menu already opens on cover), not resource rows.
+3. **Discovery (step 6).** The gap between 44 and 79 is almost all discovery and knowledge gates.
+4. **Later ages, unchanged:** tin (bronze), iron ore (no pickaxe reaches quality 1.0; bog iron dug from wetlands would be
+   the realistic first iron), feathers (no birds), wool, flax / nettle, glass, glaze, outcrop stones, horn.
+5. **Art:** the stone maul uses the hammerstone's icon and mesh, and the copper and flint deposits use boulder meshes. They
+   need an ore look (malachite staining) and chalk-flint look to be found by eye rather than by the focus label.
+6. **Pattern to fix:** harvest timing is owned by a widget (`UMOHarvestProgressWidget::StartHarvest`), not the pawn, unlike
+   drinking, filling, boiling and fire lighting (`UMOTimedActionComponent`).

@@ -8,6 +8,7 @@
 #include "MOPCGHISMTaggerSettings.h"
 #include "MOPCGItemSpawnerSettings.h"
 #include "MOPCGMeshSpawnerSettings.h"
+#include "MOPCGResourceSpawnerSettings.h"
 #include "MORecipeDatabaseSettings.h"
 #include "MORecipeDefinitionRow.h"
 #include "MOResourceDatabaseSettings.h"
@@ -83,8 +84,9 @@ namespace MOItemSources
 	 * - a graph that runs the MO HISM Tagger tags the meshes its stock weighted spawners place with the item whose
 	 *   WorldVisual.StaticMesh it is, so those entries map through ItemByMesh.
 	 * Disabled nodes and zero-weight entries do not count; subgraphs are not followed.
+	 * Also collects the DT_Resources rows an MO Resource Spawner node places (OutPlacedResources): a row it names, with a mesh to place.
 	 */
-	void CollectPcgPickups(const TMap<FSoftObjectPath, FName>& ItemByMesh, TMap<FName, FString>& OutPickups)
+	void CollectPcgPickups(const TMap<FSoftObjectPath, FName>& ItemByMesh, TMap<FName, FString>& OutPickups, TSet<FName>& OutPlacedResources)
 	{
 		IAssetRegistry* Registry = IAssetRegistry::Get();
 		if (!Registry)
@@ -126,6 +128,18 @@ namespace MOItemSources
 				else if (const UMOPCGItemSpawnerSettings* ItemSpawner = Cast<UMOPCGItemSpawnerSettings>(Settings))
 				{
 					AddSpawnEntries(ItemSpawner->ItemsToSpawn, Source, OutPickups);
+				}
+				else if (const UMOPCGResourceSpawnerSettings* ResourceSpawner = Cast<UMOPCGResourceSpawnerSettings>(Settings))
+				{
+					for (const FMOPCGResourceEntry& Entry : ResourceSpawner->ResourcesToSpawn)
+					{
+						const FMOResourceNodeDefinitionRow* Row = ResourceSpawner->ResourceNodeDataTable && Entry.SpawnWeight > 0.0f
+							? ResourceSpawner->ResourceNodeDataTable->FindRow<FMOResourceNodeDefinitionRow>(Entry.ResourceRowName, TEXT("MOItemSources"), false) : nullptr;
+						if (Row && Row->MeshVariations.Num() > 0)
+						{
+							OutPlacedResources.Add(Entry.ResourceRowName);
+						}
+					}
 				}
 				else if (const UPCGStaticMeshSpawnerSettings* Spawner = Cast<UPCGStaticMeshSpawnerSettings>(Settings))
 				{
@@ -204,7 +218,9 @@ FMOItemSourceReport FMOItemSourceAnalysis::Analyze(UWorld* World, const FMOItemS
 	}
 	Report.RecipeCount = Recipes.Num();
 
-	// ---- Resources (every row assumed placed somewhere) + the tags harvest recipes target ----
+	// ---- Resources + the tags harvest recipes target. Only the rows something PLACES count (filtered below, once the biome palettes and the PCG
+	// graphs are read): a row on paper that no biome species and no resource spawner plants is in no world -- assuming every row placed credited clay,
+	// flint and ore deposits that were never there (Oct 15 2026). ----
 	TArray<TPair<FName, const FMOResourceNodeDefinitionRow*>> Resources;
 	TSet<FName> TargetTags;
 	if (const UMOResourceDatabaseSettings* ResourceSettings = GetDefault<UMOResourceDatabaseSettings>())
@@ -212,10 +228,9 @@ FMOItemSourceReport FMOItemSourceAnalysis::Analyze(UWorld* World, const FMOItemS
 		if (const UDataTable* Table = ResourceSettings->GetResourceDefinitionsDataTable())
 		{
 			Table->ForeachRow<FMOResourceNodeDefinitionRow>(TEXT("MOItemSources"),
-				[&Resources, &TargetTags](const FName& Key, const FMOResourceNodeDefinitionRow& Row)
+				[&Resources](const FName& Key, const FMOResourceNodeDefinitionRow& Row)
 				{
 					Resources.Emplace(Key, &Row);
-					TargetTags.Append(Row.GetAllTags());
 				});
 		}
 	}
@@ -259,9 +274,25 @@ FMOItemSourceReport FMOItemSourceAnalysis::Analyze(UWorld* World, const FMOItemS
 			}
 		}
 	}
+	{
+		// A biome's own dig table (UMOForagingSubsystem::GetDigTableAt): every biome is assumed to be somewhere in the world, as every resource row is.
+		TArray<FName> DigBiomeIds;
+		UMOBiomeDatabaseSettings::GetAllBiomeIds(DigBiomeIds);
+		for (const FName& BiomeId : DigBiomeIds)
+		{
+			if (const FMOBiomeDefinitionRow* Biome = UMOBiomeDatabaseSettings::GetBiomeDefinition(BiomeId))
+			{
+				for (const FMODigDropEntry& Entry : Biome->DigYields)
+				{
+					Produce(Entry.ItemId, FString::Printf(TEXT("digging in %s"), *BiomeId.ToString()));
+				}
+			}
+		}
+	}
 
 	TMap<FName, FString> Pickups;
-	CollectPcgPickups(ItemByMesh, Pickups);
+	TSet<FName> PlacedResources;
+	CollectPcgPickups(ItemByMesh, Pickups, PlacedResources);
 	TArray<FName> BiomeIds;
 	UMOBiomeDatabaseSettings::GetAllBiomeIds(BiomeIds);
 	for (const FName& BiomeId : BiomeIds)
@@ -276,6 +307,10 @@ FMOItemSourceReport FMOItemSourceAnalysis::Analyze(UWorld* World, const FMOItemS
 			for (const FMOBiomeSpeciesEntry& Species : *List)
 			{
 				TargetTags.Add(Species.HISMTag);   // decorative species carry their HISMTag
+				if (!Species.ResourceNodeId.IsNone())
+				{
+					PlacedResources.Add(Species.ResourceNodeId);
+				}
 				FString Tag = Species.HISMTag.ToString();
 				if (Tag.RemoveFromStart(TEXT("MOItem_")) && Items.Contains(FName(*Tag)))
 				{
@@ -290,6 +325,22 @@ FMOItemSourceReport FMOItemSourceAnalysis::Analyze(UWorld* World, const FMOItemS
 		Report.PickupItems.Add(Pickup.Key);
 	}
 	Report.PickupItems.Sort(FNameLexicalLess());
+
+	// The resources that are really in the world; the rest are reported, not counted.
+	Resources.RemoveAll([&PlacedResources, &Report](const TPair<FName, const FMOResourceNodeDefinitionRow*>& Resource)
+	{
+		if (PlacedResources.Contains(Resource.Key))
+		{
+			return false;
+		}
+		Report.UnplacedResources.Add(Resource.Key);
+		return true;
+	});
+	Report.UnplacedResources.Sort(FNameLexicalLess());
+	for (const TPair<FName, const FMOResourceNodeDefinitionRow*>& Resource : Resources)
+	{
+		TargetTags.Append(Resource.Value->GetAllTags());
+	}
 
 	// Producers that exist on paper whatever their gates -- for orphan detection only.
 	for (const TPair<FName, const FMOResourceNodeDefinitionRow*>& Resource : Resources)

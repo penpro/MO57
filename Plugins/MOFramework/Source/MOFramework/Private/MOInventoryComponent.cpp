@@ -1955,6 +1955,28 @@ void UMOInventoryComponent::ApplyStartingItems()
 // TOOL QUERIES
 // ============================================================================
 
+float UMOInventoryComponent::GetBestToolEffectiveness(EMOToolType ToolType) const
+{
+	float Best = 0.0f;
+	if (ToolType == EMOToolType::None)
+	{
+		return Best;
+	}
+	for (const FMOInventoryEntry& Entry : Inventory.Entries)
+	{
+		if (Entry.ItemDefinitionId.IsNone() || Entry.Quantity <= 0 || Entry.CurrentDurability == 0)
+		{
+			continue;   // a broken tool (durability 0; -1 = not tracked) does no work
+		}
+		FMOItemDefinitionRow ItemDef;
+		if (UMOItemDatabaseSettings::GetItemDefinition(Entry.ItemDefinitionId, ItemDef))
+		{
+			Best = FMath::Max(Best, ItemDef.GetToolEffectiveness(ToolType));
+		}
+	}
+	return Best;
+}
+
 bool UMOInventoryComponent::HasToolOfType(EMOToolType ToolType) const
 {
 	if (ToolType == EMOToolType::None)

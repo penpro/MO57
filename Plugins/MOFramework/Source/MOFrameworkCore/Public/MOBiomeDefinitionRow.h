@@ -30,6 +30,7 @@
 #include "CoreMinimal.h"
 #include "Engine/DataTable.h"
 
+#include "MODigDropEntry.h"
 #include "MOBiomeDefinitionRow.generated.h"
 
 class UStaticMesh;
@@ -253,6 +254,15 @@ struct MOFRAMEWORKCORE_API FMOBiomeDefinitionRow : public FTableRowBase
 	/** Height above the local water surface (cm) over which the water-edge species grow. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Biome|Species", meta=(ClampMin="0.0"))
 	float WaterEdgeBandCm = 250.0f;
+
+	// --- What the ground gives ---
+
+	/**
+	 * What digging this biome's ground turns up ("Dig for supplies"): one roll per entry. A strand gives sand (pottery temper); a woodland roots and stones.
+	 * Empty = the foraging subsystem's default table (UMOForagingSubsystem::DigDropTable). Chosen by UMOForagingSubsystem::GetDigTableAt.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Biome|Ground")
+	TArray<FMODigDropEntry> DigYields;
 
 	/** Band test shared by the spawner and the mask query — keep in ONE place. */
 	bool Contains(float Height, float SlopeDeg, float Moisture, float Temperature) const

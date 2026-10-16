@@ -388,6 +388,13 @@ public:
 	 * @return True if harvest was started successfully
 	 */
 	UFUNCTION(BlueprintCallable, Category="MO|Harvest")
+	/**
+	 * Whether Inventory carries what Action needs: a REQUIRED tool (bToolRequired) at MinToolQuality effectiveness or better; an optional tool only slows the
+	 * work (MissingToolTimeMultiplier). The one tool gate: the harvest menu enables its buttons by it and BeginHarvest refuses by it, so a survivor's harvest
+	 * and a direct request are held to the rule a click is (it used to live in the menu alone: ore was mined with no pick).
+	 */
+	static bool HasToolForAction(const FMOResourceHarvestAction& Action, const UMOInventoryComponent* Inventory);
+
 	bool BeginHarvest(
 		UInstancedStaticMeshComponent* ISMComponent,
 		int32 InstanceIndex,

@@ -47,6 +47,12 @@
 #include "MOPlayerController.h"
 #include "MOWorldGen.h"
 #include "MOWorldSeedSubsystem.h"
+#include "UObject/UObjectIterator.h"
+#include "Components/HierarchicalInstancedStaticMeshComponent.h"
+#include "MOInteractorComponent.h"
+#include "MOResourceNodeDefinitionRow.h"
+#include "MOResourceDatabaseSettings.h"
+#include "MOCraftingUIController.h"
 
 namespace
 {
@@ -647,6 +653,129 @@ namespace
 			}
 			UI->ShowStationContextMenu(Fire, Fire->GetActorLocation());
 			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] FIRE Menu %s: opened"), *Fire->GetName());
+		}));
+
+	/** The nearest live instance of a placed resource (a HISM tagged ResourceNode_<Id>) within RadiusCm that offers ActionId (None = any), of OnlyResource
+	 *  when that is set. */
+	bool NearestResourceInstance(UWorld* World, const FVector& From, float RadiusCm, FName ActionId, FMOInteractionTarget& OutTarget, FName& OutResourceId,
+		FName OnlyResource = NAME_None)
+	{
+		float BestDistSq = FMath::Square(RadiusCm);
+		bool bFound = false;
+		for (TObjectIterator<UInstancedStaticMeshComponent> It; It; ++It)
+		{
+			UInstancedStaticMeshComponent* Ism = *It;
+			if (!Ism || Ism->GetWorld() != World || Ism->GetInstanceCount() == 0)
+			{
+				continue;
+			}
+			FName ResourceId;
+			for (const FName& Tag : Ism->ComponentTags)
+			{
+				FString S = Tag.ToString();
+				if (S.RemoveFromStart(TEXT("ResourceNode_")))
+				{
+					ResourceId = FName(*S);
+					break;
+				}
+			}
+			const FMOResourceNodeDefinitionRow* Row = ResourceId.IsNone() ? nullptr : UMOResourceDatabaseSettings::GetResourceDefinition(ResourceId);
+			if (!Row || (!ActionId.IsNone() && !Row->FindAction(ActionId)) || (!OnlyResource.IsNone() && ResourceId != OnlyResource))
+			{
+				continue;
+			}
+			for (const int32 Index : Ism->GetInstancesOverlappingSphere(From, RadiusCm, /*bSphereInWorldSpace=*/true))
+			{
+				FTransform Xf;
+				if (!Ism->GetInstanceTransform(Index, Xf, /*bWorldSpace=*/true) || Xf.GetScale3D().IsNearlyZero())
+				{
+					continue;   // removed (felled / picked) instances are scaled to nothing
+				}
+				const float DistSq = FVector::DistSquared(From, Xf.GetLocation());
+				if (DistSq < BestDistSq)
+				{
+					BestDistSq = DistSq;
+					OutTarget = FMOInteractionTarget();
+					OutTarget.TargetActor = Ism->GetOwner();
+					OutTarget.bIsInstancedMeshTarget = true;
+					OutTarget.ISMComponent = Ism;
+					OutTarget.HISMComponent = Cast<UHierarchicalInstancedStaticMeshComponent>(Ism);
+					OutTarget.InstanceIndex = Index;
+					OutTarget.HitResult.Component = Ism;
+					OutTarget.HitResult.Item = Index;
+					OutTarget.HitResult.ImpactPoint = Xf.GetLocation();
+					OutTarget.HitResult.Location = Xf.GetLocation();
+					OutTarget.HitResult.bBlockingHit = true;
+					OutResourceId = ResourceId;
+					bFound = true;
+				}
+			}
+		}
+		return bFound;
+	}
+
+	FAutoConsoleCommandWithWorldAndArgs GHarvestDoCmd(
+		TEXT("MO.Harvest.Do"),
+		TEXT("Dev: harvest the nearest placed resource offering ActionId as the harvest menu does (the menu's target + StartHarvestOperation: timed, then the "
+			"server's yield). `list` = name the nearest instance of every resource within the radius and its actions. Usage: MO.Harvest.Do <ActionId|list> [radius_m=40]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			AMOCharacter* Pawn = LocalMOPawn(World);
+			APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
+			UMOCraftingUIController* CraftUI = PC ? PC->FindComponentByClass<UMOCraftingUIController>() : nullptr;
+			const float RadiusCm = (Args.Num() > 1 ? FCString::Atof(*Args[1]) : 40.0f) * 100.0f;
+			if (!Pawn || !CraftUI || Args.Num() < 1)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] HARVEST Do FAILED: no pawn / crafting UI controller, or no ActionId"));
+				return;
+			}
+			if (Args[0].Equals(TEXT("list"), ESearchCase::IgnoreCase))
+			{
+				TSet<FName> Seen;
+				for (TObjectIterator<UInstancedStaticMeshComponent> It; It; ++It)
+				{
+					for (const FName& Tag : (*It && (*It)->GetWorld() == World) ? (*It)->ComponentTags : TArray<FName>())
+					{
+						FString S = Tag.ToString();
+						if (S.RemoveFromStart(TEXT("ResourceNode_")))
+						{
+							Seen.Add(FName(*S));
+						}
+					}
+				}
+				for (const FName& Id : Seen)
+				{
+					FMOInteractionTarget OfKind;
+					FName KindId;
+					const FMOResourceNodeDefinitionRow* Row = UMOResourceDatabaseSettings::GetResourceDefinition(Id);
+					if (!Row || !NearestResourceInstance(World, Pawn->GetActorLocation(), RadiusCm, NAME_None, OfKind, KindId, Id))
+					{
+						continue;
+					}
+					FString Actions;
+					for (const FMOResourceHarvestAction& Action : Row->HarvestActions)
+					{
+						Actions += (Actions.IsEmpty() ? TEXT("") : TEXT(", ")) + Action.ActionId.ToString();
+					}
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] HARVEST list %s at %.0f m: %s"), *Id.ToString(),
+						FVector::Dist(Pawn->GetActorLocation(), OfKind.HitResult.ImpactPoint) / 100.0f, *Actions);
+				}
+				return;
+			}
+			const FName ActionId(*Args[0]);
+			FMOInteractionTarget Target;
+			FName ResourceId;
+			if (!NearestResourceInstance(World, Pawn->GetActorLocation(), RadiusCm, ActionId, Target, ResourceId))
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] HARVEST Do FAILED: no placed resource offering %s within %.0f m"), *ActionId.ToString(), RadiusCm / 100.0f);
+				return;
+			}
+			// As a click does: the menu is open on the target, the action starts (the progress widget takes the target), then the menu closes.
+			CraftUI->ShowKeepOnHarvestContextMenu(Target);
+			CraftUI->StartHarvestOperation(ActionId);
+			CraftUI->HideKeepOnHarvestContextMenu();
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] HARVEST Do %s on %s #%d at %.0f m: started"), *ActionId.ToString(), *ResourceId.ToString(), Target.InstanceIndex,
+				FVector::Dist(Pawn->GetActorLocation(), Target.HitResult.ImpactPoint) / 100.0f);
 		}));
 
 }

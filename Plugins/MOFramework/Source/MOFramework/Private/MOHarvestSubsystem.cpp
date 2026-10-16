@@ -476,6 +476,16 @@ bool UMOHarvestSubsystem::CanExecuteDestroyRecipe(FName RecipeId, UMOInventoryCo
 	return bHasTools;
 }
 
+bool UMOHarvestSubsystem::HasToolForAction(const FMOResourceHarvestAction& Action, const UMOInventoryComponent* Inventory)
+{
+	if (!Action.RequiresTool() || !Action.bToolRequired)
+	{
+		return true;
+	}
+	const float Best = Inventory ? Inventory->GetBestToolEffectiveness(Action.RequiredToolType) : 0.0f;
+	return Best > 0.0f && Best >= Action.MinToolQuality;
+}
+
 bool UMOHarvestSubsystem::BeginHarvest(
 	UInstancedStaticMeshComponent* ISMComponent,
 	int32 InstanceIndex,
@@ -545,6 +555,15 @@ bool UMOHarvestSubsystem::BeginHarvest(
 	{
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOHarvest] BeginHarvest: Action '%s' not found in resource '%s'"),
 			*ActionId.ToString(), *Ctx.ResourceNodeId.ToString());
+		ContextsByHarvester.Remove(Harvester);
+		return false;
+	}
+
+	if (!HasToolForAction(*HarvestAction, Inventory))
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOHarvest] BeginHarvest: '%s' on '%s' refused: needs a %s tool of quality %.2f (best carried %.2f)"),
+			*ActionId.ToString(), *Ctx.ResourceNodeId.ToString(), *UEnum::GetValueAsString(HarvestAction->RequiredToolType), HarvestAction->MinToolQuality,
+			Inventory ? Inventory->GetBestToolEffectiveness(HarvestAction->RequiredToolType) : 0.0f);
 		ContextsByHarvester.Remove(Harvester);
 		return false;
 	}

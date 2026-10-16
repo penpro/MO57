@@ -494,6 +494,10 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO|Inventory|Tools")
 	bool HasToolOfType(EMOToolType ToolType) const;
 
+	/** The best effectiveness (0-1) any carried, unbroken item has as ToolType (FMOItemDefinitionRow::GetToolEffectiveness); 0 = none carried. */
+	UFUNCTION(BlueprintPure, Category="MO|Inventory|Tools")
+	float GetBestToolEffectiveness(EMOToolType ToolType) const;
+
 	/**
 	 * Find the first tool of a specific type and return its GUID.
 	 * @param ToolType The tool type to search for

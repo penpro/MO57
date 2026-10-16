@@ -63,6 +63,7 @@
 
 #include "CoreMinimal.h"
 #include "Subsystems/WorldSubsystem.h"
+#include "MODigDropEntry.h"
 #include "MOForagingSubsystem.generated.h"
 
 class UInstancedStaticMeshComponent;
@@ -105,34 +106,7 @@ struct FMOHISMInstanceData
 	}
 };
 
-/**
- * Entry in the dig drop table - defines what items can be found when digging.
- */
-USTRUCT(BlueprintType)
-struct FMODigDropEntry
-{
-	GENERATED_BODY()
-
-	/** Item definition ID to spawn. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Foraging")
-	FName ItemId;
-
-	/** Minimum quantity to spawn. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Foraging")
-	int32 MinQuantity = 1;
-
-	/** Maximum quantity to spawn. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Foraging")
-	int32 MaxQuantity = 1;
-
-	/** Chance to find this item (0.0 - 1.0). */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Foraging", meta=(ClampMin="0.0", ClampMax="1.0"))
-	float DropChance = 0.1f;
-
-	/** Minimum foraging level required to find this item. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Foraging", meta=(ClampMin="0"))
-	int32 MinForagingLevel = 0;
-};
+// FMODigDropEntry lives in MOFrameworkCore (MODigDropEntry.h): a biome row carries its own dig table.
 
 /**
  * World subsystem for foraging operations.
@@ -202,6 +176,12 @@ public:
 	int32 DigForSuppliesToInventory(FVector Location, int32 ForagingLevel, APawn* TargetPawn);
 
 	/**
+	 * What digging at Location can turn up: the biome under it (its DigYields -- a beach gives sand, not roots) when it has its own table, else DigDropTable.
+	 * The one place both dig paths choose their table. OutBiomeId = the biome consulted (None without an active world seed).
+	 */
+	const TArray<FMODigDropEntry>& GetDigTableAt(const FVector& Location, FName* OutBiomeId = nullptr) const;
+
+	/**
 	 * Harvest ISM instances and add items directly to a pawn's inventory.
 	 * Used for NPC survivors doing forage jobs - avoids spawning world items.
 	 * @param Origin - Center point for the search
@@ -261,7 +241,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Foraging|Config")
 	float XPPerDugItem = 5.0f;
 
-	/** Dig drop table - items that can be found when digging. */
+	/** Default dig drop table - what digging turns up where the biome has no DigYields of its own (see GetDigTableAt). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Foraging|Config")
 	TArray<FMODigDropEntry> DigDropTable;
 

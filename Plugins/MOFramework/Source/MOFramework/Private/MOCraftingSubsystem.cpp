@@ -712,7 +712,7 @@ bool UMOCraftingSubsystem::FindBestTool(
 	const UEnum* ToolTypeEnum = StaticEnum<EMOToolType>();
 	FString ToolTypeName = ToolTypeEnum->GetNameStringByValue(static_cast<int64>(ToolType));
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOCrafting] FindBestTool: Looking for ToolType='%s', MinEffectiveness=%.2f"),
+	UE_LOG(LogMOFramework, Verbose, TEXT("[MOCrafting] FindBestTool: Looking for ToolType='%s', MinEffectiveness=%.2f"),
 		*ToolTypeName, MinEffectiveness);
 
 	if (!IsValid(Inventory) || ToolType == EMOToolType::None)
@@ -727,14 +727,14 @@ bool UMOCraftingSubsystem::FindBestTool(
 		FMOItemDefinitionRow ItemDef;
 		if (!UMOItemDatabaseSettings::GetItemDefinition(ItemDefinitionId, ItemDef))
 		{
-			UE_LOG(LogMOFramework, Log, TEXT("[MOCrafting] FindBestTool: [%s] Item '%s' not in database"), Source, *ItemDefinitionId.ToString());
+			UE_LOG(LogMOFramework, Verbose, TEXT("[MOCrafting] FindBestTool: [%s] Item '%s' not in database"), Source, *ItemDefinitionId.ToString());
 			return false;
 		}
 
 		// Check if this item has the required tool capability
 		float ItemEffectiveness = ItemDef.GetToolEffectiveness(ToolType);
 
-		UE_LOG(LogMOFramework, Log, TEXT("[MOCrafting] FindBestTool: [%s] Checking '%s' - bIsTool=%s, HasCapability=%s, Effectiveness=%.2f, Durability=%d"),
+		UE_LOG(LogMOFramework, Verbose, TEXT("[MOCrafting] FindBestTool: [%s] Checking '%s' - bIsTool=%s, HasCapability=%s, Effectiveness=%.2f, Durability=%d"),
 			Source,
 			*ItemDefinitionId.ToString(),
 			ItemDef.bIsTool ? TEXT("yes") : TEXT("no"),
@@ -745,7 +745,7 @@ bool UMOCraftingSubsystem::FindBestTool(
 		// Check if this item can function as the required tool type
 		if (!ItemDef.bIsTool || ItemEffectiveness <= 0.0f)
 		{
-			UE_LOG(LogMOFramework, Log, TEXT("[MOCrafting] FindBestTool: [%s] '%s' - no capability for '%s'"),
+			UE_LOG(LogMOFramework, Verbose, TEXT("[MOCrafting] FindBestTool: [%s] '%s' - no capability for '%s'"),
 				Source, *ItemDefinitionId.ToString(), *ToolTypeName);
 			return false;
 		}
@@ -753,7 +753,7 @@ bool UMOCraftingSubsystem::FindBestTool(
 		// Check effectiveness threshold
 		if (ItemEffectiveness < MinEffectiveness)
 		{
-			UE_LOG(LogMOFramework, Log, TEXT("[MOCrafting] FindBestTool: [%s] '%s' - effectiveness too low (%.2f < %.2f)"),
+			UE_LOG(LogMOFramework, Verbose, TEXT("[MOCrafting] FindBestTool: [%s] '%s' - effectiveness too low (%.2f < %.2f)"),
 				Source, *ItemDefinitionId.ToString(), ItemEffectiveness, MinEffectiveness);
 			return false;
 		}
@@ -761,7 +761,7 @@ bool UMOCraftingSubsystem::FindBestTool(
 		// Check if tool has durability remaining (if applicable)
 		if (CurrentDurability == 0)
 		{
-			UE_LOG(LogMOFramework, Log, TEXT("[MOCrafting] FindBestTool: [%s] '%s' - broken (durability=0)"), Source, *ItemDefinitionId.ToString());
+			UE_LOG(LogMOFramework, Verbose, TEXT("[MOCrafting] FindBestTool: [%s] '%s' - broken (durability=0)"), Source, *ItemDefinitionId.ToString());
 			return false; // Tool is broken
 		}
 
@@ -770,11 +770,11 @@ bool UMOCraftingSubsystem::FindBestTool(
 		{
 			OutItemGuid = ItemGuid;
 			OutEffectiveness = ItemEffectiveness;
-			UE_LOG(LogMOFramework, Log, TEXT("[MOCrafting] FindBestTool: [%s] '%s' - MATCHED! Effectiveness=%.2f"),
+			UE_LOG(LogMOFramework, Verbose, TEXT("[MOCrafting] FindBestTool: [%s] '%s' - MATCHED! Effectiveness=%.2f"),
 				Source, *ItemDefinitionId.ToString(), ItemEffectiveness);
 			return true;
 		}
-		UE_LOG(LogMOFramework, Log, TEXT("[MOCrafting] FindBestTool: [%s] '%s' - effectiveness not better than current (%.2f vs %.2f)"),
+		UE_LOG(LogMOFramework, Verbose, TEXT("[MOCrafting] FindBestTool: [%s] '%s' - effectiveness not better than current (%.2f vs %.2f)"),
 			Source, *ItemDefinitionId.ToString(), ItemEffectiveness, OutEffectiveness);
 		return false;
 	};
@@ -786,7 +786,7 @@ bool UMOCraftingSubsystem::FindBestTool(
 		UMOEquipmentComponent* EquipComp = Owner->FindComponentByClass<UMOEquipmentComponent>();
 		if (IsValid(EquipComp))
 		{
-			UE_LOG(LogMOFramework, Log, TEXT("[MOCrafting] FindBestTool: Found equipment component on '%s'"), *Owner->GetName());
+			UE_LOG(LogMOFramework, Verbose, TEXT("[MOCrafting] FindBestTool: Found equipment component on '%s'"), *Owner->GetName());
 
 			// Check left hand
 			FMOEquippedItem LeftHand = EquipComp->GetEquippedItem(EMOEquipmentSlot::LeftHand);
@@ -796,7 +796,7 @@ bool UMOCraftingSubsystem::FindBestTool(
 			}
 			else
 			{
-				UE_LOG(LogMOFramework, Log, TEXT("[MOCrafting] FindBestTool: LeftHand empty"));
+				UE_LOG(LogMOFramework, Verbose, TEXT("[MOCrafting] FindBestTool: LeftHand empty"));
 			}
 
 			// Check right hand
@@ -807,12 +807,12 @@ bool UMOCraftingSubsystem::FindBestTool(
 			}
 			else
 			{
-				UE_LOG(LogMOFramework, Log, TEXT("[MOCrafting] FindBestTool: RightHand empty"));
+				UE_LOG(LogMOFramework, Verbose, TEXT("[MOCrafting] FindBestTool: RightHand empty"));
 			}
 		}
 		else
 		{
-			UE_LOG(LogMOFramework, Log, TEXT("[MOCrafting] FindBestTool: No equipment component on '%s'"), *Owner->GetName());
+			UE_LOG(LogMOFramework, Verbose, TEXT("[MOCrafting] FindBestTool: No equipment component on '%s'"), *Owner->GetName());
 		}
 	}
 	else
@@ -824,14 +824,14 @@ bool UMOCraftingSubsystem::FindBestTool(
 	TArray<FMOInventoryEntry> Entries;
 	Inventory->GetInventoryEntries(Entries);
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOCrafting] FindBestTool: Checking %d inventory entries"), Entries.Num());
+	UE_LOG(LogMOFramework, Verbose, TEXT("[MOCrafting] FindBestTool: Checking %d inventory entries"), Entries.Num());
 
 	for (const FMOInventoryEntry& Entry : Entries)
 	{
 		CheckToolItem(Entry.ItemDefinitionId, Entry.ItemGuid, Entry.CurrentDurability, TEXT("Inventory"));
 	}
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOCrafting] FindBestTool: Result - Found=%s, BestEffectiveness=%.2f"),
+	UE_LOG(LogMOFramework, Verbose, TEXT("[MOCrafting] FindBestTool: Result - Found=%s, BestEffectiveness=%.2f"),
 		OutItemGuid.IsValid() ? TEXT("yes") : TEXT("no"), OutEffectiveness);
 
 	return OutItemGuid.IsValid();
