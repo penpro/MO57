@@ -96,7 +96,7 @@ from the matching engine tag).
 | `DepthOfFieldUseHairDepth` on the creator camera | No change; reverted. NB its tooltip is inverted vs the 5.8.3 code: ON writes the coverage-lerped hair/scene depth (`DOFDepthPS`), OFF writes the hair depth |
 | `r.HairStrands.ComposeAfterTranslucency` | Changes draw order only, not the depth write |
 | `r.HairStrands.DOFDepth 0` (forum advice) | Does not exist in 5.8 |
-| `r.Water.SingleLayer.DepthPrepass 0` | **Creator DOF case: FIXES it** (Oct 16, `0001-evidence-prepass-off-restores-hair-depth.png`: the buns appear in SceneDepth and stay sharp) — which also proves the cause is the prepass swap. Underwater case: did not help (Oct 11). Cost: read-only cvar (ini, restart), and the engine says the prepass is "necessary for proper Virtual Shadow Maps support" on water. Not adopted; Wes's call |
+| `r.Water.SingleLayer.DepthPrepass 0` | **Creator DOF case: FIXES it** (Oct 16, `0001-evidence-prepass-off-restores-hair-depth.png`: the buns appear in SceneDepth and stay sharp) — which also proves the cause is the prepass swap. Underwater case: did not help (Oct 11). Cost: read-only cvar (ini, restart), and the engine says the prepass is "necessary for proper Virtual Shadow Maps support" on water. **REJECTED (Wes, Oct 16): with it off the Oceanology water "looks horrible, it completely turns off the water motion"** — seen live on the main-menu flyover. The prepass stays on |
 | Groom custom depth, SceneDepthWithoutWater copy, hair cards, HW raster | Underwater case: did not help (Oct 11) |
 
 ### Upstream
