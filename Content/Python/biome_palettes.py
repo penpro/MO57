@@ -5,6 +5,10 @@ Apply with the editor open:
     python Tools/ue.py rows set /MOFramework/Data/DT_Biomes.DT_Biomes --file Saved/Logs/biome_palettes.json     (existing rows: species arrays are replaced wholesale)
 The new biome (AlpineHeath) is added by apply_biome_palettes() below through the in-editor DataTable API.
 
+WARNING (Oct 16 2026): this script has DRIFTED from the live DT_Biomes -- Meadow, RockyHighland, DryScrub and AlpineHeath each have one more species live, and the
+Rainforest hazel densities live are ~0.7x the values here (tuned in the table later). Applying the plan would REVERT those. Diff the plan against `ue.py rows get`
+first, or make targeted edits on the live rows (the Oct 16 alder burial was applied that way: 42 entries, nothing else touched).
+
 Why this exists (2026-10-10, "make the terrain feel more alive and full"): before this the forest was three tree meshes and one grass, the meadow two grasses, and the world had two
 flower meshes out of ~110 available. The packs ship far more: BlackAlder (9 forest + 5 field trees, 6 saplings, 2 seedlings), CommonHazel (a full shrub / sapling / seedling set),
 20 meadow-flower families, 8 wild-grass and 6 dune-grass variants, dead shrubs, raspberry and locust variants.
@@ -26,6 +30,9 @@ CH = GAME + "/CommonHazel/Geometry/PivotPainter/SM_CommonHazel_%s_PP.SM_CommonHa
 FL = GAME + "/PN_MeadowFlowers/Meshes/flowerMesh/flower_%s.flower_%s"
 MEGA = GAME + "/Fab/Megascans/Plants/%s/Medium/%s_tier_2/StaticMeshes/SM_%s_Var%s.SM_%s_Var%s"
 ROCK = GAME + "/Fab/Megascans/3D/%s/Medium/%s_tier_2/StaticMeshes/%s_tier_2.%s_tier_2"
+
+
+ALDER_TREE_EXTRA_SINK_CM = 25.0   # see species()
 
 
 def ba(name):
@@ -70,6 +77,11 @@ def species(path, density, res="None", tag="", cluster=0.0, group=-1, core=0.6, 
     # into a knee-high bush and stop. They are walk-through (found 2026-10-10 by Wes: "a small locust bush, or a collection of them"; I had first blamed the saplings and been wrong).
     if collision == "Auto" and "wdvhberja" in path:
         collision = "Passable"
+    if "/BlackAlder/" in path and ("_Forest_" in path or "_Field_" in path):
+        # Black Alder TREES floated (Wes, Oct 16 2026: "seated another 25cm or so into the ground"). The meshes are not the cause -- every base sits 0 - 44 cm
+        # under its pivot -- but trees are not tilted to the slope, so the downhill side of the wide root flare shows. Not the saplings / seedlings (0.4 - 4 m):
+        # 25 cm buries too much of them.
+        sink_cm += ALDER_TREE_EXTRA_SINK_CM
     if tag == "MOResource_Tree":
         # Trees of one species stood as one even wall (playtest 2026-10-14 #14: "more variation in the sizes ... like 75% to 125%"): every tree spans at least
         # 75 - 125 % of its mid size (a wider authored range is kept; far stand-ins derive from these and inherit it).
