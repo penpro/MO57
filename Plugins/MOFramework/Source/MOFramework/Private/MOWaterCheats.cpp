@@ -24,6 +24,7 @@
 
 #include "Containers/Ticker.h"
 #include "Engine/World.h"
+#include "TimerManager.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
 #include "HAL/IConsoleManager.h"
@@ -559,7 +560,17 @@ namespace
 				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] ITEM Do FAILED: usage MO.Item.Do <ItemId> <Action>, and the item must be carried"));
 				return;
 			}
-			PC->ServerItemAction(Entry.ItemGuid, FName(*Args[1]));
+			// Sent next tick: a server RPC sent inside the dev bridge's call runs LOCALLY on a joiner (its own copy refuses it) -- see coop-pawn-lifecycle.
+			const FGuid ItemGuid = Entry.ItemGuid;
+			const FName Action(*Args[1]);
+			TWeakObjectPtr<AMOPlayerController> WeakPC(PC);
+			World->GetTimerManager().SetTimerForNextTick([WeakPC, ItemGuid, Action]()
+			{
+				if (AMOPlayerController* Controller = WeakPC.Get())
+				{
+					Controller->ServerItemAction(ItemGuid, Action);
+				}
+			});
 			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] ITEM Do %s %s: asked"), *Args[0], *Args[1]);
 		}));
 

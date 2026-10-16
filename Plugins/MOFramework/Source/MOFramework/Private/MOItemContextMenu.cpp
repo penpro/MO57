@@ -181,6 +181,7 @@ void UMOItemContextMenu::RefreshButtonVisibility_Implementation()
 	int32 Quantity = 1;
 	bool bIsConsumable = false;
 	bool bHasMultiple = false;
+	float EatSeconds = 0.0f;
 
 	if (bIsWorldItemMode)
 	{
@@ -231,6 +232,7 @@ void UMOItemContextMenu::RefreshButtonVisibility_Implementation()
 		const bool bFoundDef = UMOItemDatabaseSettings::GetItemDefinition(ItemDefinitionId, ItemDef);
 		bIsConsumable = bFoundDef ? ItemDef.bConsumable : false;
 		bHasMultiple = Quantity > 1;
+		EatSeconds = bIsConsumable ? FMOItemActions::EatSeconds(ItemDef) : 0.0f;
 	}
 
 	// ==========================================
@@ -244,7 +246,8 @@ void UMOItemContextMenu::RefreshButtonVisibility_Implementation()
 		UseButton->SetVisibility(bShowUse ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
 		if (bShowUse)
 		{
-			UseButton->SetButtonText(NSLOCTEXT("MOContextMenu", "Consume", "Consume"));
+			// Eating is a timed action (FMOItemActions::EatSeconds): the button says how long one takes.
+			UseButton->SetButtonText(FText::Format(NSLOCTEXT("MOContextMenu", "EatFor", "Eat ({0})"), UMOUIUtils::FormatDurationAsText(EatSeconds)));
 		}
 	}
 

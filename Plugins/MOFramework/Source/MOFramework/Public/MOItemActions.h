@@ -8,6 +8,7 @@
 
 class APawn;
 class UMOInventoryComponent;
+struct FMOItemDefinitionRow;
 
 /** One action offered for an item: what the button says, and why it is greyed out if it is. */
 struct FMOItemActionOption
@@ -46,4 +47,10 @@ struct MOFRAMEWORK_API FMOItemActions
 
 	/** Whether ItemId is a stone that can be heated and dropped into water (stone boiling). */
 	static bool IsBoilingStone(FName ItemId);
+
+	/**
+	 * How long eating ONE unit of a consumable takes (game s): its mass at a hungry eater's pace, never under a few seconds. Eating is the pawn's timed action
+	 * (Wes, Oct 16 2026: "put eating on a timer") -- it used to happen on the click.
+	 */
+	static float EatSeconds(const FMOItemDefinitionRow& Def);
 };

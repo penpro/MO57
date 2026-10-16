@@ -592,6 +592,17 @@ private:
 	UPROPERTY(EditAnywhere, Category="MO|Combat|Config")
 	FMOAttackDamageProfile UnarmedAttackProfile;
 
+	/**
+	 * Melee aim assist for a PLAYER's swing: a creature or pawn in reach within this angle of the camera's aim (and in sight) is what the swing goes at.
+	 * 0 = the bare camera aim. (Wes, Oct 16 2026: aim assist, and pawns punch where the camera looks.)
+	 */
+	UPROPERTY(EditAnywhere, Category="MO|Combat|Config", meta=(ClampMin="0", ClampMax="60"))
+	float MeleeAimAssistDegrees = 20.0f;
+
+	/** How fast a player's pawn turns to face its swing (deg/s). The body used to keep facing wherever it last walked while the blow went at the camera's aim. */
+	UPROPERTY(EditAnywhere, Category="MO|Combat|Config", meta=(ClampMin="0"))
+	float FaceSwingTurnRateDegPerSec = 1080.0f;
+
 	// ============================================================================
 	// ANIMATION
 	// ============================================================================
@@ -687,11 +698,27 @@ private:
 	/** Execute the current attack (do the hit detection). */
 	void ExecuteAttack();
 
-	/** Process a hit result from the attack trace. */
-	void ProcessHit(const FHitResult& Hit, const FMOAttackDamageProfile& Profile);
+	/** Process a hit result from the attack trace. SwingDirection: where the blow went -- the attack arc is measured around it, not the body's facing
+	 *  (a player's swing goes where the camera aims; with the body still facing its last walk, every such hit fell "outside the arc" and did nothing). */
+	void ProcessHit(const FHitResult& Hit, const FMOAttackDamageProfile& Profile, const FVector& SwingDirection);
 
 	/** Get the attack origin point (weapon tip or hand socket). */
 	FVector GetAttackOrigin() const;
+
+	/** A player-controlled owner's swing: where it starts (chest height) and the camera's aim. False for AI owners. */
+	bool GetPlayerSwingAim(FVector& OutOrigin, FVector& OutAimDirection) const;
+
+	/** Where a player's swing goes: the camera's aim, turned onto the best target in reach within MeleeAimAssistDegrees that is in sight (else the aim). */
+	FVector ResolveSwingDirection(const FVector& Origin, const FVector& AimDirection, float Range) const;
+
+	/** Turn the pawn to face Direction (yaw) for the swing's length. Runs on the owning client (its own view) and on the server (what others see). */
+	void BeginFacingSwing(const FVector& Direction, float Seconds);
+
+	/** While a swing faces: yaw toward it at FaceSwingTurnRateDegPerSec. */
+	void UpdateFacingSwing(float DeltaTime);
+
+	float FacingSwingYaw = 0.0f;
+	double FacingSwingUntil = 0.0;
 
 	/** Apply hit to target. */
 	EMOAttackResult ApplyHitToTarget(AActor* Target, const FMOCombatHitInfo& HitInfo);

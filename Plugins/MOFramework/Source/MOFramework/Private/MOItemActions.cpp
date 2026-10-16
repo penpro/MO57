@@ -33,6 +33,10 @@ namespace
 	constexpr float StoneBoilSeconds = 20.0f * 60.0f;
 	/** A pot over the fire: about ten minutes to a rolling boil, plus the boil itself. */
 	constexpr float FireBoilSeconds = 12.0f * 60.0f;
+	/** Eating: a hungry adult's pace (people eat 40-80 g of a meal a minute at table; ~120 g/min is a fast, hungry eater) -- a 50 g handful of berries
+	 *  takes 25 s, a 450 g piece of cooked meat ~4 min. Floor: picking up, biting, swallowing even the smallest morsel. */
+	constexpr float EatGramsPerSecond = 2.0f;
+	constexpr float MinEatSeconds = 4.0f;
 	/** Tending a fire: the pawn may move about it, not walk off. */
 	constexpr float TendFireDriftCm = 300.0f;
 	constexpr int32 StonesForBoiling = 4;
@@ -81,6 +85,11 @@ int32 FMOItemActions::CountBoilingStones(const UMOInventoryComponent* Inventory)
 		Count += Inventory ? Inventory->GetItemCountByDefinitionId(Id) : 0;
 	}
 	return Count;
+}
+
+float FMOItemActions::EatSeconds(const FMOItemDefinitionRow& Def)
+{
+	return FMath::Max(MinEatSeconds, Def.Weight * 1000.0f / EatGramsPerSecond);   // Weight is kg per unit
 }
 
 bool FMOItemActions::IsFireWithinReach(const APawn* Pawn)
@@ -210,8 +219,30 @@ bool FMOItemActions::Perform(APawn* Pawn, const FGuid& ItemGuid, FName ActionId)
 
 	if (ActionId == Use)
 	{
-		UMOSurvivalStatsComponent* Stats = Pawn->FindComponentByClass<UMOSurvivalStatsComponent>();
-		return Stats && Stats->ConsumeItem(Inventory, ItemGuid);
+		// Eating takes the time the food takes (EatSeconds), on the pawn's timed action: the owner sees it run, moving or being hurt stops it, and only a meal
+		// finished is eaten. The bite is checked again at the end -- the item may have been dropped or traded meanwhile.
+		FMOInventoryEntry Food;
+		FMOItemDefinitionRow FoodDef;
+		UMOTimedActionComponent* Eating = Pawn->FindComponentByClass<UMOTimedActionComponent>();
+		if (!Pawn->FindComponentByClass<UMOSurvivalStatsComponent>() || !Inventory->TryGetEntryByGuid(ItemGuid, Food) || !GetDef(Food.ItemDefinitionId, FoodDef)
+			|| !FoodDef.bConsumable || !Eating)
+		{
+			return false;
+		}
+		TWeakObjectPtr<APawn> WeakEater(Pawn);
+		TWeakObjectPtr<UMOInventoryComponent> WeakFoodInventory(Inventory);
+		const FText Name = FoodDef.DisplayName.IsEmpty() ? FText::FromName(Food.ItemDefinitionId) : FoodDef.DisplayName;
+		return Eating->Begin(Use, FText::Format(LOCTEXT("Eating", "Eating {0}"), Name), EatSeconds(FoodDef),
+			[WeakEater, WeakFoodInventory, ItemGuid]()
+			{
+				APawn* P = WeakEater.Get();
+				UMOInventoryComponent* Inv = WeakFoodInventory.Get();
+				UMOSurvivalStatsComponent* Stats = P ? P->FindComponentByClass<UMOSurvivalStatsComponent>() : nullptr;
+				if (Stats && Inv && Stats->ConsumeItem(Inv, ItemGuid))
+				{
+					UE_LOG(LogMOFramework, Log, TEXT("[MOItemActions] %s finished eating"), *P->GetName());
+				}
+			});
 	}
 
 	// Everything else must be on offer right now (the same checks the menu showed).

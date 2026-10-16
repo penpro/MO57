@@ -1780,6 +1780,56 @@ def _client_attack(rep, host, client):
     rep.step("client attack: the host put the joiner's pawn in combat", "INCOMBAT=True" in seen,
              f"{_combat_line(seen)}; client said: {mm.group(0) if mm else 'nothing'}")
 
+    # The pawn punches where the camera looks (Wes, Oct 16 2026): the joiner's body faces 120 deg away from its view, it attacks, and the HOST's copy of the
+    # joiner turns to the swing (UMOCombatComponent::BeginFacingSwing on the server; the client turns its own copy at once). Before, the body kept facing
+    # its last walk, and a camera-aimed hit outside the body's arc was thrown away.
+    time.sleep(2.5)   # the previous swing's recovery
+    view = _probe(client, "pc = unreal.GameplayStatics.get_player_controller(world, 0); out('VIEWYAW=%.1f' % pc.get_control_rotation().yaw)")
+    vm = re.search(r"VIEWYAW=(-?[\d.]+)", view)
+    if not vm:
+        rep.step("client: read its view yaw", False, view.strip()[-160:])
+        return
+    vyaw = float(vm.group(1))
+    away = vyaw + 120.0
+    set_away = "p = unreal.GameplayStatics.get_player_pawn(world, %d); p.set_actor_rotation(unreal.Rotator(roll=0.0, pitch=0.0, yaw=%f), False); out('AWAY')"
+    _probe(host, set_away % (1, away))
+    _probe(client, set_away % (0, away))
+    time.sleep(1.0)
+    yaw_probe = "p = unreal.GameplayStatics.get_player_pawn(world, %d); out('BODYYAW=%%.1f' %% p.get_actor_rotation().yaw)"
+    def off_view(name, idx):
+        m = re.search(r"BODYYAW=(-?[\d.]+)", _probe(name, yaw_probe % idx))
+        return None if not m else (float(m.group(1)) - vyaw + 180.0) % 360.0 - 180.0
+    before_host = off_view(host, 1)
+    console(client, "MO.Test.Attack")
+    time.sleep(1.5)
+    after_host, after_client = off_view(host, 1), off_view(client, 0)
+    rep.step("client attack: the joiner's pawn turns to its camera's aim for the swing -- on the HOST (what others see) and on the joiner",
+             before_host is not None and abs(before_host) > 90 and after_host is not None and abs(after_host) < 25 and after_client is not None and abs(after_client) < 25,
+             f"body vs view yaw on the host: {before_host} -> {after_host}; on the joiner -> {after_client}")
+
+
+def _client_eat(rep, host, client):
+    """Eating is the pawn's timed action (Wes, Oct 16 2026: "put eating on a timer"): the joiner's Eat runs on the SERVER for the food's time
+    (FMOItemActions::EatSeconds: a 50 g handful of berries 25 s) and the berry is gone only at the end. Proof is read on the host."""
+    inv = "p = unreal.GameplayStatics.get_player_pawn(world, 1); inv = p.get_component_by_class(unreal.MOInventoryComponent); "
+    count = lambda: int((re.search(r"BERRIES=(-?\d+)", _probe(host, inv + "out('BERRIES=%d' % inv.get_item_count_by_definition_id('Berries01'))")) or re.search("(-1)", "-1")).group(1))
+    _probe(host, inv + "inv.add_item_by_guid(unreal.GuidLibrary.new_guid(), 'Berries01', 2); out('GAVE')")
+    time.sleep(2)
+    c0 = count()
+    off = log_size(host)
+    console(client, "MO.Item.Do Berries01 Use")
+    time.sleep(4)
+    c1 = count()
+    began = re.search(r"\[MOTimedAction\] \S+: Use \(([\d.]+) s\)", read_log_from(host, off))
+    rep.step("client eat: the HOST started the joiner's eating as a timed action, and after 4 s the berry is still there",
+             bool(began) and c1 == c0 and c0 > 0, f"{began.group(0) if began else 'no [MOTimedAction] Use line on the host'} | berries {c0} -> {c1}")
+    if not began:
+        return
+    done = wait_log(host, r"\[MOItemActions\] \S+ finished eating", since=off, timeout=float(began.group(1)) + 8)
+    time.sleep(1)
+    c2 = count()
+    rep.step("client eat: ... the berry is eaten when the time is up (one fewer, on the host)", bool(done) and c2 == c0 - 1, f"berries {c1} -> {c2}")
+
 
 def _client_gait(rep, host, client):
     """CLIENT jog / sprint (Steam playtest Oct 16 2026: "the second person can't jog or sprint"). The gait is movement input carried by the saved moves
@@ -2466,7 +2516,7 @@ def actions_test(uproject, editor_exe, keep=False, boot_timeout=300):
         if not _host_and_join(rep, host, client, "ActionsTest", boot_timeout):
             return False
         only = {s.strip() for s in os.environ.get("MO_ACTIONS_ONLY", "").split(",") if s.strip()}  # quick rerun of named cases
-        for fn in (_client_pickup, _client_press_e, _client_gait, _client_inventory_requests, _dropped_item_falls_on_client, _client_carcass, _client_building_look, _host_e_on_joiner, _far_remote_pawn_9km, _joiner_long_run, _appearance_replicates, _client_craft, _client_forage, _client_build, _client_build_from_ground, _client_attack, _trust_placement, _trust_pickup_far, _trust_possess_other, _possession_rows_name_players, _trust_dev_spawn, _client_rename, _trust_terraform, _buried_pawns, _remote_pawn_stays_put, _client_lake_clock, _host_takes_departed_pawn):
+        for fn in (_client_pickup, _client_press_e, _client_gait, _client_inventory_requests, _dropped_item_falls_on_client, _client_carcass, _client_building_look, _host_e_on_joiner, _far_remote_pawn_9km, _joiner_long_run, _appearance_replicates, _client_craft, _client_forage, _client_build, _client_build_from_ground, _client_attack, _client_eat, _trust_placement, _trust_pickup_far, _trust_possess_other, _possession_rows_name_players, _trust_dev_spawn, _client_rename, _trust_terraform, _buried_pawns, _remote_pawn_stays_put, _client_lake_clock, _host_takes_departed_pawn):
             if only and fn.__name__ not in only:
                 continue
             try:

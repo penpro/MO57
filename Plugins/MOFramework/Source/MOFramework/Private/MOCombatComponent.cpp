@@ -1,4 +1,11 @@
 #include "MOCombatComponent.h"
+#include "Engine/OverlapResult.h"
+
+namespace
+{
+	TAutoConsoleVariable<float> CVarMeleeAimAssist(TEXT("mo.Combat.MeleeAimAssist"), -1.0f,
+		TEXT("Melee aim assist angle (deg) for every player's swing: -1 = each pawn's own MeleeAimAssistDegrees, 0 = off (the bare camera aim)."), ECVF_Default);
+}
 #include "MOFramework.h"
 #include "MOAnatomyComponent.h"
 #include "MOVitalsComponent.h"
@@ -61,6 +68,9 @@ void UMOCombatComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 void UMOCombatComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+
+	// The swing's facing turns the pawn on the owning client (its own view) and on the server (everyone else's) alike.
+	UpdateFacingSwing(DeltaTime);
 
 	// Only process on authority
 	if (!GetOwner()->HasAuthority())
@@ -145,8 +155,18 @@ bool UMOCombatComponent::StartAttack(EMOAttackType AttackType)
 {
 	// Player-driven verb: a remote client forwards intent to the server, which runs the
 	// verb authoritatively; CombatState/CurrentAttackType replicate the result back (H18).
+	FVector SwingOrigin;
+	FVector SwingAim;
 	if (!GetOwner()->HasAuthority())
 	{
+		// The owner sees its pawn turn to the swing at once; the server turns it again for everyone else when it runs the attack.
+		const APawn* OwnerPawn = Cast<APawn>(GetOwner());
+		if (OwnerPawn && OwnerPawn->IsLocallyControlled() && GetPlayerSwingAim(SwingOrigin, SwingAim))
+		{
+			const FMOAttackDamageProfile* Guess = GetCurrentAttackProfile();
+			BeginFacingSwing(ResolveSwingDirection(SwingOrigin, SwingAim, Guess ? Guess->Range : 150.0f),
+				Guess ? Guess->WindUpTime + 0.1f + 0.5f * Guess->RecoveryTime : 0.6f);
+		}
 		ServerStartAttack(AttackType);
 		return true;
 	}
@@ -185,6 +205,12 @@ bool UMOCombatComponent::StartAttack(EMOAttackType AttackType)
 	TimeSinceLastAction = 0.0f;
 
 	OnAttackStarted.Broadcast(AttackType);
+
+	// A player's pawn turns to where the blow will go (the camera's aim, onto a target the aim assist picks): the animation and the hit agree.
+	if (GetPlayerSwingAim(SwingOrigin, SwingAim))
+	{
+		BeginFacingSwing(ResolveSwingDirection(SwingOrigin, SwingAim, Profile->Range), Profile->WindUpTime + 0.1f + 0.5f * Profile->RecoveryTime);
+	}
 
 	// Play attack animation montage
 	PlayAttackAnimation();
@@ -958,26 +984,16 @@ void UMOCombatComponent::ExecuteAttack()
 	FVector TraceStart;
 	FVector TraceDirection;
 
-	APawn* OwnerPawn = Cast<APawn>(Owner);
-	APlayerController* PC = OwnerPawn ? Cast<APlayerController>(OwnerPawn->GetController()) : nullptr;
-
-	if (PC && PC->PlayerCameraManager)
+	FVector SwingOrigin;
+	FVector SwingAim;
+	if (GetPlayerSwingAim(SwingOrigin, SwingAim))
 	{
-		// Player-controlled: trace from character position in camera aim direction
-		// This gives us the "where you're looking" targeting while keeping melee range sensible
-		FVector CameraLocation = PC->PlayerCameraManager->GetCameraLocation();
-		FVector CameraDirection = PC->PlayerCameraManager->GetCameraRotation().Vector();
+		// Player-controlled: from the chest, where the camera aims -- onto the target the aim assist picks, if any (ResolveSwingDirection).
+		TraceDirection = ResolveSwingDirection(SwingOrigin, SwingAim, Profile->Range);
+		TraceStart = SwingOrigin + TraceDirection * 30.f; // Start slightly in front
 
-		// Start from character's eye/chest height, slightly forward
-		FVector CharacterCenter = Owner->GetActorLocation();
-		CharacterCenter.Z += 50.f; // Raise to chest height
-
-		// Project forward from character in the camera's aim direction
-		TraceStart = CharacterCenter + CameraDirection * 30.f; // Start slightly in front
-		TraceDirection = CameraDirection;
-
-		UE_LOG(LogMOFramework, Log, TEXT("[MOCombat] Camera trace: Start=%s Dir=%s Range=%.0f"),
-			*TraceStart.ToString(), *TraceDirection.ToString(), Profile->Range);
+		UE_LOG(LogMOFramework, Log, TEXT("[MOCombat] Swing trace: Start=%s Dir=%s (camera aim %s) Range=%.0f"),
+			*TraceStart.ToString(), *TraceDirection.ToString(), *SwingAim.ToString(), Profile->Range);
 	}
 	else
 	{
@@ -1023,13 +1039,101 @@ void UMOCombatComponent::ExecuteAttack()
 #if ENABLE_DRAW_DEBUG
 			DrawDebugSphere(GetWorld(), Hit.ImpactPoint, 20.0f, 8, FColor::Blue, false, DebugDuration);
 #endif
-			ProcessHit(Hit, *Profile);
+			ProcessHit(Hit, *Profile, TraceDirection);
 		}
 	}
 	else
 	{
 		UE_LOG(LogMOFramework, Verbose, TEXT("[MOCombat] Attack missed - no targets in range"));
 	}
+}
+
+bool UMOCombatComponent::GetPlayerSwingAim(FVector& OutOrigin, FVector& OutAimDirection) const
+{
+	const APawn* OwnerPawn = Cast<APawn>(GetOwner());
+	const APlayerController* PC = OwnerPawn ? Cast<APlayerController>(OwnerPawn->GetController()) : nullptr;
+	if (!PC || !PC->PlayerCameraManager)
+	{
+		return false;
+	}
+	OutOrigin = OwnerPawn->GetActorLocation() + FVector(0.0f, 0.0f, 50.0f);   // chest height
+	OutAimDirection = PC->PlayerCameraManager->GetCameraRotation().Vector();
+	return true;
+}
+
+FVector UMOCombatComponent::ResolveSwingDirection(const FVector& Origin, const FVector& AimDirection, float Range) const
+{
+	UWorld* World = GetWorld();
+	const FVector Aim = AimDirection.GetSafeNormal();
+	const float AssistDegrees = CVarMeleeAimAssist.GetValueOnGameThread() >= 0.0f ? CVarMeleeAimAssist.GetValueOnGameThread() : MeleeAimAssistDegrees;
+	if (!World || AssistDegrees <= 0.0f || Aim.IsNearlyZero())
+	{
+		return Aim;
+	}
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(MOMeleeAimAssist), false);
+	Params.AddIgnoredActor(GetOwner());
+	TArray<FOverlapResult> Overlaps;
+	World->OverlapMultiByObjectType(Overlaps, Origin, FQuat::Identity, FCollisionObjectQueryParams(ECC_Pawn), FCollisionShape::MakeSphere(Range + 60.0f), Params);
+
+	const float MinDot = FMath::Cos(FMath::DegreesToRadians(AssistDegrees));
+	const AActor* Best = nullptr;
+	float BestDot = MinDot;
+	FVector BestDirection = Aim;
+	for (const FOverlapResult& Overlap : Overlaps)
+	{
+		const AActor* Target = Overlap.GetActor();
+		if (!Target || Target == GetOwner() || Target == Best
+			|| (!Target->FindComponentByClass<UMOCombatComponent>() && !Target->FindComponentByClass<UMOAnatomyComponent>()))
+		{
+			continue;
+		}
+		const FVector ToTarget = Target->GetActorLocation() - Origin;
+		const float Dot = FVector::DotProduct(ToTarget.GetSafeNormal(), Aim);
+		if (Dot <= BestDot)
+		{
+			continue;
+		}
+		// In sight: nothing solid between the chest and the target.
+		FHitResult Block;
+		FCollisionQueryParams SightParams(SCENE_QUERY_STAT(MOMeleeAimAssistSight), false);
+		SightParams.AddIgnoredActor(GetOwner());
+		if (World->LineTraceSingleByChannel(Block, Origin, Target->GetActorLocation(), ECC_Visibility, SightParams) && Block.GetActor() != Target)
+		{
+			continue;
+		}
+		Best = Target;
+		BestDot = Dot;
+		BestDirection = ToTarget.GetSafeNormal();
+	}
+	if (Best)
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOCombat] Aim assist: %s, %.0f deg off the camera's aim"), *Best->GetName(),
+			FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(BestDot, -1.0f, 1.0f))));
+	}
+	return BestDirection;
+}
+
+void UMOCombatComponent::BeginFacingSwing(const FVector& Direction, float Seconds)
+{
+	const UWorld* World = GetWorld();
+	if (!World || Direction.IsNearlyZero())
+	{
+		return;
+	}
+	FacingSwingYaw = Direction.Rotation().Yaw;
+	FacingSwingUntil = World->GetTimeSeconds() + FMath::Max(0.4f, Seconds);
+}
+
+void UMOCombatComponent::UpdateFacingSwing(float DeltaTime)
+{
+	const UWorld* World = GetWorld();
+	AActor* Owner = GetOwner();
+	if (!World || !Owner || World->GetTimeSeconds() >= FacingSwingUntil)
+	{
+		return;
+	}
+	const FRotator Now = Owner->GetActorRotation();
+	Owner->SetActorRotation(FRotator(Now.Pitch, FMath::FixedTurn(Now.Yaw, FacingSwingYaw, FaceSwingTurnRateDegPerSec * DeltaTime), Now.Roll));
 }
 
 EMOAttackResult UMOCombatComponent::ApplyHitToTarget(AActor* Target, const FMOCombatHitInfo& HitInfo)
@@ -1120,7 +1224,7 @@ void UMOCombatComponent::ApplyWeaponDurabilityLoss(int32 Amount)
 	}
 }
 
-void UMOCombatComponent::ProcessHit(const FHitResult& Hit, const FMOAttackDamageProfile& Profile)
+void UMOCombatComponent::ProcessHit(const FHitResult& Hit, const FMOAttackDamageProfile& Profile, const FVector& SwingDirection)
 {
 	AActor* HitActor = Hit.GetActor();
 	if (!HitActor)
@@ -1134,9 +1238,14 @@ void UMOCombatComponent::ProcessHit(const FHitResult& Hit, const FMOAttackDamage
 		return;
 	}
 
-	// Check if hit is within attack arc
-	const FVector ToTarget = (Hit.ImpactPoint - Owner->GetActorLocation()).GetSafeNormal();
-	const float DotProduct = FVector::DotProduct(Owner->GetActorForwardVector(), ToTarget);
+	// Check if hit is within attack arc -- around the swing (flat), not the body's facing
+	FVector ToTarget = Hit.ImpactPoint - Owner->GetActorLocation();
+	FVector SwingFlat = SwingDirection.IsNearlyZero() ? Owner->GetActorForwardVector() : SwingDirection;
+	ToTarget.Z = 0.0f;
+	SwingFlat.Z = 0.0f;
+	ToTarget.Normalize();
+	SwingFlat.Normalize();
+	const float DotProduct = FVector::DotProduct(SwingFlat, ToTarget);
 	const float AngleToTarget = FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(DotProduct, -1.0f, 1.0f)));
 
 	if (AngleToTarget > Profile.ArcAngle * 0.5f)
@@ -1169,6 +1278,8 @@ void UMOCombatComponent::ProcessHit(const FHitResult& Hit, const FMOAttackDamage
 		HitInfo.bCausesHeavyBleeding = Profile.bCausesHeavyBleeding;
 
 		EMOAttackResult Result = TargetCombat->ReceiveAttack(Owner, HitInfo);
+		UE_LOG(LogMOFramework, Log, TEXT("[MOCombat] %s hit %s (%s, %.1f damage): %s"), *Owner->GetName(), *HitActor->GetName(),
+			*UEnum::GetValueAsString(HitBodyPart), HitInfo.BaseDamage, *UEnum::GetValueAsString(Result));
 		OnAttackHit.Broadcast(HitActor, Result, HitInfo);
 	}
 	else
