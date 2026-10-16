@@ -71,13 +71,10 @@ bool UMOViewpointUtils::HasLineOfSight(UWorld* World, const FVector& ViewLocatio
 	}
 
 	FHitResult HitResult;
-	const bool bHit = World->LineTraceSingleByChannel(
-		HitResult,
-		ViewLocation,
-		TargetLocation,
-		Options.TraceChannel,
-		QueryParams
-	);
+	FHitResult SeeThroughHit;
+	const bool bHit = Options.SeeThrough
+		? TraceThroughSeeThrough(World, ViewLocation, TargetLocation, Options.TraceChannel, QueryParams, 0.0f, Options.SeeThrough, HitResult, SeeThroughHit)
+		: World->LineTraceSingleByChannel(HitResult, ViewLocation, TargetLocation, Options.TraceChannel, QueryParams);
 
 	// No hit means clear line of sight
 	if (!bHit)
@@ -103,6 +100,39 @@ bool UMOViewpointUtils::HasLineOfSight(UWorld* World, const FVector& ViewLocatio
 		return true;
 	}
 
+	return false;
+}
+
+bool UMOViewpointUtils::TraceThroughSeeThrough(UWorld* World, const FVector& Start, const FVector& End, ECollisionChannel Channel, FCollisionQueryParams Params, float SweepRadius,
+	const TFunction<bool(const UPrimitiveComponent*)>& SeeThrough, FHitResult& OutHit, FHitResult& OutFirstSeeThroughHit, int32 MaxLayers)
+{
+	OutFirstSeeThroughHit = FHitResult();
+	if (!World)
+	{
+		return false;
+	}
+	for (int32 Layer = 0; Layer <= MaxLayers; ++Layer)
+	{
+		FHitResult Hit;
+		const bool bHit = SweepRadius > 0.0f
+			? World->SweepSingleByChannel(Hit, Start, End, FQuat::Identity, Channel, FCollisionShape::MakeSphere(SweepRadius), Params)
+			: World->LineTraceSingleByChannel(Hit, Start, End, Channel, Params);
+		if (!bHit)
+		{
+			return false;
+		}
+		UPrimitiveComponent* Component = Hit.GetComponent();
+		if (!Component || !SeeThrough || !SeeThrough(Component) || Layer == MaxLayers)
+		{
+			OutHit = Hit;
+			return true;
+		}
+		if (!OutFirstSeeThroughHit.GetComponent())
+		{
+			OutFirstSeeThroughHit = Hit;
+		}
+		Params.AddIgnoredComponent(Component);   // look past this layer of grass
+	}
 	return false;
 }
 

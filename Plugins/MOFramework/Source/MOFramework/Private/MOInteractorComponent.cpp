@@ -12,6 +12,19 @@
 #include "MOUIManagerComponent.h"
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Components/HierarchicalInstancedStaticMeshComponent.h"
+#include "Engine/OverlapResult.h"
+
+namespace
+{
+	TAutoConsoleVariable<int32> CVarInteractDebug(TEXT("mo.Interact.Debug"), 0,
+		TEXT("1 = log every pass of the interaction targeting (line, sweep, near the aim point: candidates, reach, line of sight). It runs every frame for the focus hint: switch it on around one press."));
+
+	FString DescribeHit(bool bHit, const FHitResult& Hit)
+	{
+		return bHit ? FString::Printf(TEXT("%s/%s at %.0f cm (%s)"), *GetNameSafe(Hit.GetActor()), *GetNameSafe(Hit.GetComponent()), Hit.Distance, *Hit.ImpactPoint.ToCompactString())
+			: FString(TEXT("nothing"));
+	}
+}
 
 UMOInteractorComponent::UMOInteractorComponent()
 {
@@ -167,6 +180,12 @@ bool UMOInteractorComponent::IsWorldCoverComponent(const UInstancedStaticMeshCom
 	return false;
 }
 
+bool UMOInteractorComponent::IsSeeThroughForInteraction(const UPrimitiveComponent* Component)
+{
+	const UInstancedStaticMeshComponent* Ism = Cast<UInstancedStaticMeshComponent>(Component);
+	return Ism && IsWorldCoverComponent(Ism) && !IsHarvestableInstanceComponent(Ism, Ism->GetWorld());
+}
+
 bool UMOInteractorComponent::FindInteractionTarget(FMOInteractionTarget& OutTarget) const
 {
 	OutTarget.Reset();
@@ -183,18 +202,164 @@ bool UMOInteractorComponent::FindInteractionTarget(FMOInteractionTarget& OutTarg
 	FVector TraceEnd = FVector::ZeroVector;
 	BuildTrace(ViewLocation, ViewRotation, TraceStart, TraceEnd);
 
-	FHitResult HitResult;
-	if (!TraceForHit(TraceStart, TraceEnd, HitResult))
+	// Every pass looks through decorative cover (IsSeeThroughForInteraction): a stick lying in grass is the target, not the grass. The grass is
+	// the last resort -- it forages when nothing interactable lies behind it.
+	FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(MOInteractorTrace), TraceConfig.bTraceComplex);
+	QueryParams.bReturnPhysicalMaterial = false;
+	QueryParams.AddIgnoredActor(GetOwner());
+	const ECollisionChannel Channel = TraceConfig.TraceChannel.GetValue();
+	const bool bDebug = CVarInteractDebug.GetValueOnGameThread() > 0;
+	auto Found = [&OutTarget, bDebug](const TCHAR* Pass)
+	{
+		if (bDebug)
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOInteractor] target %s via %s"), *GetNameSafe(OutTarget.TargetActor.Get()), Pass);
+		}
+		return true;
+	};
+
+	// 1. Precise: what the crosshair is exactly on.
+	FHitResult LineHit;
+	FHitResult LineCover;
+	const bool bLineSolid = UMOViewpointUtils::TraceThroughSeeThrough(GetWorld(), TraceStart, TraceEnd, Channel, QueryParams, 0.0f,
+		&UMOInteractorComponent::IsSeeThroughForInteraction, LineHit, LineCover);
+	if (bLineSolid && EvaluateInteractionHit(LineHit, OutTarget))
+	{
+		return Found(TEXT("the line"));
+	}
+
+	// 2. Forgiving: the sweep -- a thin branch or a post the crosshair slipped past.
+	FHitResult SweepHit;
+	FHitResult SweepCover;
+	const bool bSweepSolid = UMOViewpointUtils::TraceThroughSeeThrough(GetWorld(), TraceStart, TraceEnd, Channel, QueryParams, TraceConfig.TraceRadius,
+		&UMOInteractorComponent::IsSeeThroughForInteraction, SweepHit, SweepCover);
+	if (bDebug)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInteractor] target passes: line -> %s (cover %s) | sweep %.0f -> %s (cover %s)"),
+			*DescribeHit(bLineSolid, LineHit), *GetNameSafe(LineCover.GetComponent()), TraceConfig.TraceRadius, *DescribeHit(bSweepSolid, SweepHit),
+			*GetNameSafe(SweepCover.GetComponent()));
+	}
+	if (bSweepSolid && EvaluateInteractionHit(SweepHit, OutTarget))
+	{
+		return Found(TEXT("the sweep"));
+	}
+
+	// 3. Near where the crosshair rests: something small lying on the ground there. The sweep meets the ground in front of it first, and the
+	// line can pass a few centimetres over it.
+	if (bLineSolid && FindInteractableNearAimPoint(ViewLocation, LineHit.ImpactPoint, OutTarget))
+	{
+		return Found(TEXT("near the aim point"));
+	}
+
+	// 4. Cover with nothing interactable behind it forages.
+	const FHitResult& CoverHit = LineCover.GetComponent() ? LineCover : SweepCover;
+	if (CoverHit.GetComponent())
+	{
+		OutTarget.Reset();
+		OutTarget.HitResult = CoverHit;
+		OutTarget.TargetActor = CoverHit.GetActor();
+		OutTarget.bIsForageTarget = true;
+		return Found(TEXT("cover (forage)"));
+	}
+	OutTarget.Reset();
+	if (bDebug)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInteractor] no target"));
+	}
+	return false;
+}
+
+bool UMOInteractorComponent::FindInteractableNearAimPoint(const FVector& ViewLocation, const FVector& AimPoint, FMOInteractionTarget& OutTarget) const
+{
+	UWorld* World = GetWorld();
+	if (!World || TraceConfig.AimAssistRadius <= 0.0f)
 	{
 		return false;
 	}
 
+	FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(MOInteractorAimAssist), false);
+	QueryParams.AddIgnoredActor(GetOwner());
+	TArray<FOverlapResult> Overlaps;
+	World->OverlapMultiByChannel(Overlaps, AimPoint, FQuat::Identity, TraceConfig.TraceChannel.GetValue(),
+		FCollisionShape::MakeSphere(TraceConfig.AimAssistRadius), QueryParams);
+
+	// Each interactable actor once, by its overlapping component nearest the aim point (0 inside the component's bounds).
+	struct FCandidate { AActor* Actor; UPrimitiveComponent* Component; float DistSq; FVector Point; };
+	TArray<FCandidate> Candidates;
+	for (const FOverlapResult& Overlap : Overlaps)
+	{
+		AActor* Actor = Overlap.GetActor();
+		UPrimitiveComponent* Component = Overlap.GetComponent();
+		if (!IsValid(Actor) || !Component || !Actor->FindComponentByClass<UMOInteractableComponent>())
+		{
+			continue;
+		}
+		const FBox Box = Component->Bounds.GetBox();
+		const FVector Point = Box.GetClosestPointTo(AimPoint);
+		const float DistSq = FVector::DistSquared(Point, AimPoint);
+		FCandidate* Existing = Candidates.FindByPredicate([Actor](const FCandidate& C) { return C.Actor == Actor; });
+		if (!Existing)
+		{
+			Candidates.Add({Actor, Component, DistSq, Point});
+		}
+		else if (DistSq < Existing->DistSq)
+		{
+			*Existing = {Actor, Component, DistSq, Point};
+		}
+	}
+	Candidates.Sort([](const FCandidate& A, const FCandidate& B) { return A.DistSq < B.DistSq; });
+	if (CVarInteractDebug.GetValueOnGameThread() > 0)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInteractor]   near the aim point %s (r %.0f): %d overlap(s), %d interactable"),
+			*AimPoint.ToCompactString(), TraceConfig.AimAssistRadius, Overlaps.Num(), Candidates.Num());
+	}
+
+	// The server checks the same reach and line of sight (UMOInteractionSubsystem::ServerExecuteInteract): a target it would refuse is no
+	// target here.
+	const UMOInteractionSubsystem* Interaction = World->GetSubsystem<UMOInteractionSubsystem>();
+	const float MaxReach = Interaction ? Interaction->MaximumInteractDistance : TraceConfig.TraceDistance;
+	UMOViewpointUtils::FLineOfSightOptions Options;
+	Options.TraceChannel = TraceConfig.TraceChannel.GetValue();
+	Options.bAllowAttachedHits = true;
+	Options.IgnoredActor = GetOwner();
+	Options.SeeThrough = &UMOInteractorComponent::IsSeeThroughForInteraction;
+	for (const FCandidate& Candidate : Candidates)
+	{
+		FVector BoundsOrigin;
+		FVector BoundsExtent;
+		Candidate.Actor->GetActorBounds(true, BoundsOrigin, BoundsExtent);
+		const bool bInReach = UMOInteractionSubsystem::IsWithinInteractReach(ViewLocation, FVector::ZeroVector, BoundsOrigin, BoundsExtent, MaxReach, 0.0f);
+		const bool bInSight = bInReach && UMOViewpointUtils::HasLineOfSight(World, ViewLocation, Candidate.Actor, Options);
+		if (CVarInteractDebug.GetValueOnGameThread() > 0)
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOInteractor]   near the aim point %s: %s/%s %.0f cm from it, reach %s, sight %s"),
+				*AimPoint.ToCompactString(), *Candidate.Actor->GetName(), *GetNameSafe(Candidate.Component), FMath::Sqrt(Candidate.DistSq),
+				bInReach ? TEXT("ok") : TEXT("NO"), bInReach ? (bInSight ? TEXT("ok") : TEXT("NO")) : TEXT("-"));
+		}
+		if (!bInSight)
+		{
+			continue;
+		}
+		OutTarget.Reset();
+		OutTarget.TargetActor = Candidate.Actor;
+		OutTarget.HitResult = FHitResult(Candidate.Actor, Candidate.Component, Candidate.Point, (ViewLocation - Candidate.Point).GetSafeNormal());
+		OutTarget.HitResult.bBlockingHit = true;
+		OutTarget.HitResult.TraceStart = ViewLocation;
+		OutTarget.HitResult.TraceEnd = Candidate.Point;
+		OutTarget.HitResult.Distance = FVector::Dist(ViewLocation, Candidate.Point);
+		return true;
+	}
+	return false;
+}
+
+bool UMOInteractorComponent::EvaluateInteractionHit(const FHitResult& HitResult, FMOInteractionTarget& OutTarget) const
+{
+	OutTarget.Reset();
 	OutTarget.HitResult = HitResult;
 
 	AActor* HitActor = HitResult.GetActor();
 	if (!IsValid(HitActor))
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOInteractor] FindInteractionTarget: Hit but no valid actor"));
 		return false;
 	}
 

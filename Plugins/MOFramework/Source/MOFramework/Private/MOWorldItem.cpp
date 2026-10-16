@@ -7,7 +7,7 @@
 #include "MOItemDefinitionRow.h"
 
 #include "Components/StaticMeshComponent.h"
-#include "Components/SphereComponent.h"
+#include "Engine/StaticMesh.h"
 #include "MOIdentityComponent.h"
 #include "MOInteractableComponent.h"
 #include "MOItemComponent.h"
@@ -29,16 +29,7 @@ AMOWorldItem::AMOWorldItem()
 	ItemMesh->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
 	ItemMesh->SetSimulatePhysics(false); // Disabled by default, enabled on drop
 
-	// Interaction collision sphere - attached to mesh so it moves with physics
-	InteractionSphere = CreateDefaultSubobject<USphereComponent>(TEXT("InteractionSphere"));
-	InteractionSphere->SetupAttachment(ItemMesh);
-	InteractionSphere->SetSphereRadius(InteractionSphereRadius);
-	InteractionSphere->SetRelativeLocation(FVector(0.0f, 0.0f, 75.0f)); // Raised high above mesh to avoid terrain occlusion on slopes
-	InteractionSphere->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
-	InteractionSphere->SetCollisionResponseToAllChannels(ECR_Ignore);
-	InteractionSphere->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
-	InteractionSphere->SetCollisionObjectType(ECC_WorldDynamic);
-	InteractionSphere->SetGenerateOverlapEvents(false);
+	// No interaction proxy shape: the mesh itself is the target (pitfall 3 in the header).
 
 	// Scene root kept for compatibility but not used as root
 	SceneRoot = CreateDefaultSubobject<USceneComponent>(TEXT("SceneRoot"));
@@ -182,6 +173,16 @@ void AMOWorldItem::HandleItemDefinitionIdChanged(FName NewItemDefinitionId)
 	ApplyItemDefinitionToWorldMesh();
 }
 
+void AMOWorldItem::EnsureMeshAnswersSimpleQueries(UStaticMesh* Mesh)
+{
+	UBodySetup* BodySetup = IsValid(Mesh) ? Mesh->GetBodySetup() : nullptr;
+	if (BodySetup && BodySetup->AggGeom.GetElementCount() == 0 && BodySetup->CollisionTraceFlag != CTF_UseComplexAsSimple)
+	{
+		BodySetup->CollisionTraceFlag = CTF_UseComplexAsSimple;
+		UE_LOG(LogMOFramework, Log, TEXT("[MOWorldItem] %s has no simple collision: its triangles answer simple queries"), *Mesh->GetName());
+	}
+}
+
 bool AMOWorldItem::ApplyItemDefinitionToWorldMesh()
 {
 	if (!IsValid(ItemComponent) || !IsValid(ItemMesh))
@@ -214,6 +215,7 @@ bool AMOWorldItem::ApplyItemDefinitionToWorldMesh()
 		UStaticMesh* LoadedMesh = ItemDefinitionRow->WorldVisual.StaticMesh.LoadSynchronous();
 		if (IsValid(LoadedMesh))
 		{
+			EnsureMeshAnswersSimpleQueries(LoadedMesh);
 			ItemMesh->SetStaticMesh(LoadedMesh);
 		}
 	}
@@ -320,22 +322,10 @@ void AMOWorldItem::EnableDropPhysics()
 		IsValid(CurrentMesh) ? *CurrentMesh->GetName() : TEXT("NULL"),
 		ItemMesh->IsSimulatingPhysics() ? TEXT("true") : TEXT("false"));
 
-	// Ensure the mesh has collision - use complex as simple if no simple collision exists
-	if (IsValid(CurrentMesh))
+	// A mesh without simple collision already uses its triangles (EnsureMeshAnswersSimpleQueries, on every mesh apply).
+	if (IsValid(CurrentMesh) && (!CurrentMesh->GetBodySetup() || CurrentMesh->GetBodySetup()->AggGeom.GetElementCount() == 0))
 	{
-		UBodySetup* BodySetup = CurrentMesh->GetBodySetup();
-		// Check if mesh has simple collision
-		if (!BodySetup || BodySetup->AggGeom.GetElementCount() == 0)
-		{
-			// No simple collision, use complex collision for physics
-			ItemMesh->SetCollisionProfileName(UCollisionProfile::BlockAllDynamic_ProfileName);
-			// In UE5, set complex as simple via the body setup collision type
-			if (BodySetup)
-			{
-				BodySetup->CollisionTraceFlag = CTF_UseComplexAsSimple;
-			}
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOWorldItem] EnableDropPhysics: Mesh has no simple collision, using complex as simple"));
-		}
+		ItemMesh->SetCollisionProfileName(UCollisionProfile::BlockAllDynamic_ProfileName);
 	}
 
 	// Ensure collision is enabled before physics

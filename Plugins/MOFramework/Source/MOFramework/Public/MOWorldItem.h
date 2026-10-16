@@ -19,7 +19,7 @@
  * 5. Implement IMOIdentifiableInterface for GUID-based persistence
  *
  * ARCHITECTURE NOTES:
- * - SceneRoot -> ItemMesh (StaticMesh) + InteractionSphere (collision)
+ * - ItemMesh (StaticMesh, root: the interaction target itself -- pitfall 3) + SceneRoot
  * - IdentityComponent provides GUID for save/load
  * - ItemComponent stores ItemDefinitionId, Quantity
  * - InteractableComponent handles interaction events
@@ -50,8 +50,11 @@
  *    the old settle traced down from the item's own (sunken) position and found nothing -- the item was lost under the world. The ground
  *    found at the drop is kept (DropGroundLocation): sinking well below it ends the fall, and the settle traces from above, not from the item.
  *
- * 3. INTERACTION SPHERE: InteractionSphereRadius (60u) affects pickup ease.
- *    Too small = frustrating, too large = picking up wrong items.
+ * 3. NO INTERACTION PROXY (Oct 16 2026): an item is targeted by its own mesh -- the crosshair's line, the interactor's sweep, then the
+ *    nearest interactable around where the crosshair rests (FMOInteractionTraceConfig::AimAssistRadius). The old proxy, a 60 cm sphere
+ *    floating 75 cm above every item, was mesh-local (a dropped item that tipped over carried it into the ground) and, kept upright, it
+ *    stole the aim: in a pile, the near items' spheres hid the far ones (aimed exactly at an item, the right one was picked 3 times in 8).
+ *    Things that look for dropped items by collision must include ECC_PhysicsBody (EnableDropPhysics sets it; see MOBuildProgressComponent).
  *
  * 4. DESTROY VS HIDE: bDestroyAfterPickup = true destroys actor.
  *    bHideOnPickup = true only hides. For respawning items, use hide.
@@ -91,7 +94,7 @@ class UMOIdentityComponent;
 class UMOItemComponent;
 class UMOInteractableComponent;
 class UStaticMeshComponent;
-class USphereComponent;
+class UStaticMesh;
 
 UCLASS()
 class MOFRAMEWORK_API AMOWorldItem : public AActor,
@@ -173,6 +176,13 @@ protected:
 	/** Called when drop physics completes - settles item on ground and disables physics. */
 	void SettleOnGround();
 
+	/**
+	 * A mesh imported without simple collision uses its triangles for simple queries. The item mesh IS the interaction target (pitfall 3), and the
+	 * interaction trace is a simple one: without this an item restored from a save (spawned without drop physics) could not be aimed at. It used to
+	 * run only on drop.
+	 */
+	static void EnsureMeshAnswersSimpleQueries(UStaticMesh* Mesh);
+
 #if WITH_EDITOR
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
 	virtual void PostEditChangeChainProperty(FPropertyChangedChainEvent& PropertyChangedEvent) override;
@@ -191,14 +201,6 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO")
 	TObjectPtr<UStaticMeshComponent> ItemMesh;
-
-	/** Collision sphere for interaction traces - easier to hit than the mesh. */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO")
-	TObjectPtr<USphereComponent> InteractionSphere;
-
-	/** Radius of the interaction collision sphere. Larger = easier to pick up. */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="MO|Interaction")
-	float InteractionSphereRadius = 60.0f;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO")
 	TObjectPtr<UMOIdentityComponent> IdentityComponent;

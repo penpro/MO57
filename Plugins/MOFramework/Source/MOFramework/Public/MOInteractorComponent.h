@@ -219,6 +219,14 @@ struct MOFRAMEWORK_API FMOInteractionTraceConfig
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Interaction")
 	float ViewStartForwardOffset = 15.0f;
+
+	/**
+	 * Around the point the crosshair rests on, an interactable actor this close (and in sight) counts as aimed at. A small thing lying on the
+	 * ground is never the first thing the sweep touches -- the ground in front of it is (Oct 16 2026: the joiner's E on a piece of bark opened
+	 * the forage menu). 0 disables.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Interaction")
+	float AimAssistRadius = 40.0f;
 };
 
 UCLASS(ClassGroup=(MO), meta=(BlueprintSpawnableComponent))
@@ -241,6 +249,22 @@ public:
 
 	/** Whether instances of this component are decorative world cover (a biome palette's grass / flower / shrub / debris layer): they forage. */
 	static bool IsWorldCoverComponent(const UInstancedStaticMeshComponent* ISMComp);
+
+	/**
+	 * What interaction looks THROUGH: decorative world cover with no harvest data of its own. A stick lying in grass is picked up, not the grass
+	 * foraged (Oct 16 2026: the joiner's E on an item in grass opened the forage menu); the grass still forages when nothing interactable lies
+	 * behind it. Shared by the client's targeting and the server's line-of-sight check, so the two agree.
+	 */
+	static bool IsSeeThroughForInteraction(const UPrimitiveComponent* Component);
+
+private:
+	/** One hit as an interaction target: a harvest / HISM instance, decorative cover (forage) or an actor with an interactable component. */
+	bool EvaluateInteractionHit(const FHitResult& HitResult, FMOInteractionTarget& OutTarget) const;
+
+	/** The nearest actor with an interactable component within AimAssistRadius of AimPoint that the viewer can see (the server's own LOS rule). */
+	bool FindInteractableNearAimPoint(const FVector& ViewLocation, const FVector& AimPoint, FMOInteractionTarget& OutTarget) const;
+
+public:
 
 	/**
 	 * Legacy method - finds actor-based targets only.

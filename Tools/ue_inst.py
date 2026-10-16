@@ -1053,9 +1053,14 @@ def _joiner_long_run(rep, host, client):
                  "j.set_actor_location(h.get_actor_location() + unreal.Vector(300.0, 0.0, 150.0), False, True)")
     time.sleep(5)
     far = float(rows[-1].split("m:")[0]) if rows else 0.0
+    # The two heights are read ~0.5 s apart: running up a steep slope at 7 m/s they differ by a metre or two without any disagreement. A fall-through
+    # is thousands of cm; at rest they must agree closely.
+    rest = rows[-1] if rows else ""
+    rm = re.search(r":(-?\d+)/(-?\d+)$", rest)
+    rest_gap = abs(int(rm.group(1)) - int(rm.group(2))) if rm else 9999
     rep.step("the joiner sprinted away for 150 s on ground the server has: server and client agree, no fall-through",
-             bool(rows) and far > 400.0 and worst <= 150.0 and rescued == 0,
-             f"distance/server z/client z: {', '.join(rows)}; worst disagreement {worst:.0f} cm; rescues on the host {rescued}")
+             bool(rows) and far > 400.0 and worst <= 500.0 and rest_gap <= 60 and rescued == 0,
+             f"distance/server z/client z: {', '.join(rows)}; worst gap while running {worst:.0f} cm, at rest {rest_gap} cm; rescues on the host {rescued}")
 
 
 def game_test(uproject, editor_exe, keep=False, boot_timeout=300, withhold_seed=False, skew_seed=False, withhold_sync=False):
@@ -1405,7 +1410,7 @@ def _client_pickup(rep, host, client):
     setup = _probe(host,
         "import builtins; p = unreal.GameplayStatics.get_player_pawn(world, 1); "
         "inv = p.get_component_by_class(unreal.MOInventoryComponent); g = unreal.GuidLibrary.new_guid(); builtins.MO_ACT_GUID = g; "
-        "gave = inv.add_item_by_guid(g, 'Stick01', 1); "
+        "gave = inv.add_item_by_guid_no_stack(g, 'Stick01', 1); "
         "w = inv.drop_item_by_guid(g, p.get_actor_location() + unreal.Vector(120.0, 0.0, 10.0), unreal.Rotator(0.0, 0.0, 0.0)); "
         "out('PICKUP_SETUP gave=%s item=%s' % (gave, w.get_name() if w else 'none'))")
     m = re.search(r"PICKUP_SETUP gave=(\w+) item=(\S+)", setup)
@@ -1452,7 +1457,7 @@ def _client_press_e(rep, host, client):
         "import builtins; p = unreal.GameplayStatics.get_player_pawn(world, 1); "
         "inv = p.get_component_by_class(unreal.MOInventoryComponent); g = unreal.GuidLibrary.new_guid(); builtins.MO_E_GUID = g; "
         # Bark: an item the joiner does not carry -- a stick merged into the stick stack _client_pickup leaves behind, and its GUID was gone
-        "gave = inv.add_item_by_guid(g, 'Bark01', 1); "
+        "gave = inv.add_item_by_guid_no_stack(g, 'Bark01', 1); "
         "w = inv.drop_item_by_guid(g, p.get_actor_location() + unreal.Vector(150.0, 60.0, 10.0), unreal.Rotator(0.0, 0.0, 0.0)); "
         "out('E_SETUP gave=%s item=%s' % (gave, w.get_name() if w else 'none'))")
     m = re.search(r"E_SETUP gave=(\w+) item=(\S+)", setup)
@@ -1468,23 +1473,43 @@ def _client_press_e(rep, host, client):
     # one run had the server's copy 15 m from where the client saw it. Name it instead of blaming the interaction.
     rest = _probe(host,
         "p = unreal.GameplayStatics.get_player_pawn(world, 1); pl = p.get_actor_location(); "
-        "items = sorted(unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOWorldItem), key=lambda a: (a.get_actor_location() - pl).length()); "
-        "out('E_REST d=%.0f dz=%.0f' % (((items[0].get_actor_location() - pl).length(), items[0].get_actor_location().z - pl.z) if items else (-1, 0)))")
-    rm = re.search(r"E_REST d=(-?\d+) dz=(-?\d+)", rest)
+        "items = sorted([a for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOWorldItem) if str(a.get_item_component().get_editor_property('item_definition_id')) == 'Bark01' and not a.get_editor_property('hidden')], "
+        "key=lambda a: (a.get_actor_location() - pl).length()); l = items[0].get_actor_location() if items else None; "
+        "out('E_REST d=%.0f dz=%.0f at=%.1f,%.1f,%.1f' % (((l - pl).length(), l.z - pl.z, l.x, l.y, l.z) if l else (-1, 0, 0, 0, 0)))")
+    rm = re.search(r"E_REST d=(-?\d+) dz=(-?\d+) at=(-?[\d.]+),(-?[\d.]+),(-?[\d.]+)", rest)
     if not rep.step("host: the dropped stick rests by the joiner (it did not fall through the ground)", bool(rm) and 0 <= int(rm.group(1)) < 400,
                     rm.group(0) if rm else rest.strip()[-160:]):
         return
-    aim = _probe(client,
-        "pc = unreal.GameplayStatics.get_player_controller(world, 0); p = pc.get_controlled_pawn(); pl = p.get_actor_location(); "
-        "items = sorted(unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOWorldItem), key=lambda a: (a.get_actor_location() - pl).length()); "
+    # On a slope the bark rolls on (3.6 m downhill, 545 cm from the camera: out of the 515 cm reach -- a run that tested nothing). Stand the
+    # joiner 170 cm from where it came to rest, on the side it came from; the move is the server's (it owns the pawn) and replicates.
+    # Put back afterwards (E_HOME): the next steps walk the joiner forward, and where the bark stopped rolling there is usually something it hit.
+    _probe(host, "import builtins; p = unreal.GameplayStatics.get_player_pawn(world, 1); builtins.MO_E_HOME = p.get_actor_location(); "
+                 "l = unreal.Vector(%s, %s, %s); d = p.get_actor_location() - l; d.z = 0.0; d.normalize(); " % rm.group(3, 4, 5) +
+                 "p.set_actor_location(l + d * 170.0 + unreal.Vector(0.0, 0.0, 110.0), False, True); out('E_STAND')")
+    time.sleep(3)
+    # Aim the way a player does: until the crosshair is ON the item. One look-at from the current camera is not enough -- turning swings the
+    # spring arm, and the new camera's ray missed by 86-378 cm (Oct 16 2026 probe), so "E failed" measured the harness, not the game.
+    # The item nearest where the HOST has the bark (actor names differ between machines; picked-up items linger hidden).
+    aim_code = ("pc = unreal.GameplayStatics.get_player_controller(world, 0); pl = unreal.Vector(%s, %s, %s); " % rm.group(3, 4, 5) +
+        "items = sorted([a for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOWorldItem) if not a.get_editor_property('hidden')], key=lambda a: (a.get_actor_location() - pl).length()); "
         "t = items[0].get_actor_location() if items else None; cam = pc.player_camera_manager.get_camera_location(); "
+        "fwd = pc.player_camera_manager.get_camera_rotation().get_forward_vector(); "
+        "miss = ((t - cam) - fwd * (t - cam).dot(fwd)).length() if t else -1; "
         "pc.set_control_rotation(unreal.MathLibrary.find_look_at_rotation(cam, t)) if t else None; "
-        "out('E_AIM item=%s dist=%.0f' % (items[0].get_name() if items else 'none', (t - cam).length() if t else -1))")
-    am = re.search(r"E_AIM item=(\S+) dist=(-?\d+)", aim)
-    if not rep.step("client: aimed the camera at the nearest item on the ground", bool(am) and am.group(1) != "none", am.group(0) if am else aim.strip()[-160:]):
+        "out('E_AIM item=%s dist=%.0f miss=%.1f' % (items[0].get_name() if items else 'none', (t - cam).length() if t else -1, miss))")
+    am = None
+    for _ in range(7):
+        aim = _probe(client, aim_code)
+        am = re.search(r"E_AIM item=(\S+) dist=(-?\d+) miss=(-?[\d.]+)", aim)
+        if not am or am.group(1) == "none" or float(am.group(3)) < 4.0:
+            break
+        time.sleep(0.4)
+    if not rep.step("client: the crosshair is on the nearest item on the ground (aim error < 10 cm)",
+                    bool(am) and am.group(1) != "none" and float(am.group(3)) < 10.0, am.group(0) if am else aim.strip()[-160:]):
         return
     time.sleep(1.5)  # the new view reaches the server with the next moves
-    off = log_size(host)
+    off, coff = log_size(host), log_size(client)
+    console(client, "mo.Interact.Debug 1")   # every targeting pass in the client log, for the diagnosis below
     console(client, "MO.Test.PressKey E")
     got = False
     for _ in range(8):
@@ -1499,9 +1524,15 @@ def _client_press_e(rep, host, client):
             "pc = unreal.GameplayStatics.get_player_controller(world, 1); p = pc.get_controlled_pawn(); v = pc.get_player_view_point(); "
             "items = sorted(unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOWorldItem), key=lambda a: (a.get_actor_location() - p.get_actor_location()).length()); "
             "out('pawn=%s view=%s item=%s' % (p.get_actor_location(), v[0] if isinstance(v, tuple) else v, items[0].get_actor_location() if items else None))").strip()[-400:]
+        passes = re.findall(r"\[MOInteractor\] (?:target passes|  near the aim point)[^\n]*", read_log_from(client, coff))
+        diag += " | client targeting (last press): " + " // ".join(passes[-4:])
         diag += " | client: " + _probe(client,
             "pc = unreal.GameplayStatics.get_player_controller(world, 0); p = pc.get_controlled_pawn(); "
             "out('pawn=%s cam=%s' % (p.get_actor_location(), pc.player_camera_manager.get_camera_location()))").strip()[-300:]
+    console(client, "mo.Interact.Debug 0")
+    _probe(host, "import builtins; p = unreal.GameplayStatics.get_player_pawn(world, 1); h = getattr(builtins, 'MO_E_HOME', None); "
+                 "h and p.set_actor_location(h + unreal.Vector(0.0, 0.0, 30.0), False, True); out('E_HOME')")
+    time.sleep(2)
     rep.step("client E on a stick it aims at: the host picks it up for the joiner (no 'Reject')", got and not reject,
              ("picked up" if got else (reject.group(0) if reject else "no pickup and no Reject line on the host")) + diag)
 
@@ -2133,8 +2164,19 @@ def _remote_pawn_stays_put(rep, host, client):
         nudge()
         time.sleep(7)
         fell = _remote_copy(client, hx + 1.0, hy) or _remote_copy(client, hx, hy)
+        under = ""
+        if not (bool(fell) and fell[0] < hz - 1500):   # with the voxels off, what still holds it up (a rock mesh, a building)?
+            u = _probe(client,
+                "me = unreal.GameplayStatics.get_player_pawn(world, 0); "
+                f"near = [c for c in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOCharacter) if (me is None or c.get_name() != me.get_name()) and abs(c.get_actor_location().x - {hx}) < 200 and abs(c.get_actor_location().y - {hy}) < 200]; "
+                "l = near[0].get_actor_location() if near else None; "
+                "h = unreal.SystemLibrary.line_trace_single_for_objects(world, l, l - unreal.Vector(0.0, 0.0, 400.0), [unreal.ObjectTypeQuery.OBJECT_TYPE_QUERY1, unreal.ObjectTypeQuery.OBJECT_TYPE_QUERY2, unreal.ObjectTypeQuery.OBJECT_TYPE_QUERY4], "
+                "False, near[:1], unreal.DrawDebugTrace.NONE, True) if l else None; t = h.to_tuple() if h is not None else None; "
+                "out('UNDER %s' % (('%s/%s %.0f cm below' % (t[9].get_name() if t[9] else None, t[10].get_name() if t[10] else None, t[3])) if t else 'nothing'))")
+            um = re.search(r"UNDER [^\n]*", u)
+            under = " | " + (um.group(0) if um else u.strip()[-160:])
         rep.step("CONTROL: with the stock engine behaviour and no floor under it, the client's copy of the host's pawn FALLS",
-                 bool(fell) and fell[0] < hz - 1500, f"host z={hz:.0f}; client's copy {fell}")
+                 bool(fell) and fell[0] < hz - 1500, f"host z={hz:.0f}; client's copy {fell}{under}")
         console(client, "MO.RemotePawn.SimGravity 0")
         _client_ground(client, True)
         nudge()  # the server's position snaps the copy back
@@ -2150,6 +2192,60 @@ def _remote_pawn_stays_put(rep, host, client):
     finally:
         console(client, "MO.RemotePawn.SimGravity 0")
         _client_ground(client, True)
+
+
+def _client_build_from_ground(rep, host, client):
+    """Add materials draws from LOOSE items on the ground (the Surrounding Area source), not just pockets. The building's source search
+    (UMOBuildProgressComponent::FindMaterialSources) is an object-type overlap; a dropped item's mesh is a PhysicsBody, and until Oct 16 2026 only
+    the item's floating interaction sphere (WorldDynamic, now removed -- MOWorldItem.h pitfall 3) made a dropped item findable. 10 cobbles are
+    dropped beside a joiner's campfire ghost from the joiner's own inventory (so none are left in the pockets); the joiner's Add materials must
+    take them off the ground. Proof is read on the host."""
+    inv = "p = unreal.GameplayStatics.get_player_pawn(world, 1); inv = p.get_component_by_class(unreal.MOInventoryComponent); "
+    have = lambda: int((re.search(r"COBBLES=(-?\d+)", _probe(host, inv + "out('COBBLES=%d' % inv.get_item_count_by_definition_id('RiverCobble01'))")) or re.search("(-1)", "-1")).group(1))
+    ground = ("items = [w for w in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOWorldItem) if str(w.get_item_component().get_editor_property('item_definition_id')) == 'RiverCobble01' "
+              "and not w.get_editor_property('hidden') and (w.get_actor_location() - unreal.GameplayStatics.get_player_pawn(world, 1).get_actor_location()).length() < 1500]; ")
+    # A fresh ghost nearer than any earlier building (MO.Test.Build acts on the nearest one).
+    base = _count_buildables(host)
+    console(client, "MO.Test.PlaceBuildingRPC BuildCampfire 120")
+    for _ in range(10):
+        time.sleep(1.0)
+        if (_count_buildables(host) or 0) > (base or 0):
+            break
+    time.sleep(3)
+    hs = _build_state(host)
+    if not rep.step("ground build: a fresh campfire ghost from the joiner, nothing deposited yet", bool(hs) and hs["state"] == 0 and hs["deposited"] == "-",
+                    hs and hs["line"] or "no build state on the host"):
+        return
+    pocket = have()
+    if pocket > 0:   # empty the pockets first: every cobble must come from the ground
+        _probe(host, inv + "[inv.remove_item_by_definition_id('RiverCobble01', %d)]; out('EMPTIED')" % pocket)
+    drop = _probe(host, inv +
+        "b = sorted(unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOBuildableActor), key=lambda a: (a.get_actor_location() - p.get_actor_location()).length())[0]; "
+        # one cobble per drop: an add is capped at the stack size (10 asked, 5 arrived)
+        "ws = [inv.drop_item_by_guid(g, b.get_actor_location() + unreal.Vector(70.0, 70.0, 20.0), unreal.Rotator(0.0, 0.0, 0.0)) "
+        "for g in [unreal.GuidLibrary.new_guid() for _ in range(10)] if inv.add_item_by_guid_no_stack(g, 'RiverCobble01', 1)]; "
+        "out('GDROP items=%d' % len([w for w in ws if w]))")
+    time.sleep(6)   # the drop falls and settles
+    seen = _probe(host, ground + "out('GROUND n=%d qty=%d types=%s' % (len(items), sum(w.get_item_component().get_editor_property('quantity') for w in items), "
+                                 "sorted(set(str(w.get_item_mesh().get_collision_object_type()) for w in items))))")
+    gm = re.search(r"GROUND n=(\d+) qty=(\d+) types=([^\n]*)", seen)
+    left = have()
+    if not rep.step("ground build: 10 cobbles lie on the ground by the ghost (a dropped item: PhysicsBody mesh) and none are in the joiner's pockets",
+                    bool(gm) and int(gm.group(2)) >= 10 and "PHYSICS_BODY" in gm.group(3).upper() and left == 0,
+                    (gm.group(0) if gm else " ".join(re.findall(r"GDROP[^\n]*", drop)) or drop.strip()[-200:]) + f" | pockets {left}"):
+        return
+    hoff = log_size(host)
+    console(client, "MO.Test.Build add")
+    got = wait_log(host, r"\[MOBuildProgressComponent\] GatherMissingMaterials: (\d+) unit[^\n]*", since=hoff, timeout=15)
+    time.sleep(2)
+    hs = _build_state(host)
+    after = _probe(host, ground + "out('GROUND n=%d qty=%d' % (len(items), sum(w.get_item_component().get_editor_property('quantity') for w in items)))")
+    am = re.search(r"GROUND n=(\d+) qty=(\d+)", after)
+    rep.step("ground build: the joiner's Add materials took the 10 cobbles OFF THE GROUND into the building (host ledger), the pockets stayed empty",
+             bool(got) and bool(hs) and "RiverCobble01:10" in hs["deposited"] and bool(am) and int(am.group(2)) <= int(gm.group(2)) - 10 and have() == 0,
+             f"{got.group(0)[:110] if got else 'no GatherMissingMaterials line on the host'} | ledger {hs and hs['deposited']} | ground {gm.group(2)} -> {am.group(2) if am else '?'}")
+    console(client, "MO.Test.Build cancel")   # leaves no ghost for later steps (the refund goes to the joiner)
+    time.sleep(2)
 
 
 def _count_buildables(host):
@@ -2213,8 +2309,8 @@ def _trust_pickup_far(rep, host, client):
     the reach); the client asks for the nearest world item at least 35 m away."""
     setup = _probe(host,
         "p = unreal.GameplayStatics.get_player_pawn(world, 1); inv = p.get_component_by_class(unreal.MOInventoryComponent); "
-        "g = unreal.GuidLibrary.new_guid(); gave = inv.add_item_by_guid(g, 'Stone01', 1); "
-        # a STONE, not a stick: a stick would merge into the joiner's existing stack, so its GUID would not exist to drop.
+        "g = unreal.GuidLibrary.new_guid(); gave = inv.add_item_by_guid_no_stack(g, 'Stone01', 1); "
+        # its OWN stack: an added item merges into one the joiner already holds (sticks, and stones since _client_inventory_requests), so its GUID would not exist to drop.
         # The drop itself is only accepted near the owner (a good thing): drop beside the pawn, then carry the world item 45 m away.
         "w = inv.drop_item_by_guid(g, p.get_actor_location() + unreal.Vector(120.0, 0.0, 10.0), unreal.Rotator(0.0, 0.0, 0.0)); "
         "w and w.set_actor_location(p.get_actor_location() + unreal.Vector(4500.0, 0.0, 10.0), False, True); "
@@ -2370,7 +2466,7 @@ def actions_test(uproject, editor_exe, keep=False, boot_timeout=300):
         if not _host_and_join(rep, host, client, "ActionsTest", boot_timeout):
             return False
         only = {s.strip() for s in os.environ.get("MO_ACTIONS_ONLY", "").split(",") if s.strip()}  # quick rerun of named cases
-        for fn in (_client_pickup, _client_press_e, _client_gait, _client_inventory_requests, _dropped_item_falls_on_client, _client_carcass, _client_building_look, _host_e_on_joiner, _far_remote_pawn_9km, _joiner_long_run, _appearance_replicates, _client_craft, _client_forage, _client_build, _client_attack, _trust_placement, _trust_pickup_far, _trust_possess_other, _possession_rows_name_players, _trust_dev_spawn, _client_rename, _trust_terraform, _buried_pawns, _remote_pawn_stays_put, _client_lake_clock, _host_takes_departed_pawn):
+        for fn in (_client_pickup, _client_press_e, _client_gait, _client_inventory_requests, _dropped_item_falls_on_client, _client_carcass, _client_building_look, _host_e_on_joiner, _far_remote_pawn_9km, _joiner_long_run, _appearance_replicates, _client_craft, _client_forage, _client_build, _client_build_from_ground, _client_attack, _trust_placement, _trust_pickup_far, _trust_possess_other, _possession_rows_name_players, _trust_dev_spawn, _client_rename, _trust_terraform, _buried_pawns, _remote_pawn_stays_put, _client_lake_clock, _host_takes_departed_pawn):
             if only and fn.__name__ not in only:
                 continue
             try:

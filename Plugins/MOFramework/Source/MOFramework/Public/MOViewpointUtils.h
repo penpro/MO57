@@ -144,6 +144,9 @@ public:
 		/** Actor to ignore in the trace (typically the interactor pawn). */
 		const AActor* IgnoredActor = nullptr;
 
+		/** Components the line looks THROUGH (decorative grass / flowers / debris: UMOInteractorComponent::IsSeeThroughForInteraction). Empty = none. */
+		TFunction<bool(const class UPrimitiveComponent*)> SeeThrough;
+
 		FLineOfSightOptions() = default;
 	};
 
@@ -157,6 +160,14 @@ public:
 	 * @return True if the target is visible from the view location
 	 */
 	static bool HasLineOfSight(UWorld* World, const FVector& ViewLocation, const AActor* TargetActor, const FLineOfSightOptions& Options = FLineOfSightOptions());
+
+	/**
+	 * A trace (or a sweep, SweepRadius > 0) that passes THROUGH the components SeeThrough accepts, up to MaxLayers of them: grass in front of a stick
+	 * lying in it. True with OutHit = the first hit that is not see-through; OutFirstSeeThroughHit = the first see-through hit, if any (valid
+	 * component) -- e.g. the grass to forage when nothing solid lies behind it.
+	 */
+	static bool TraceThroughSeeThrough(UWorld* World, const FVector& Start, const FVector& End, ECollisionChannel Channel, FCollisionQueryParams Params, float SweepRadius,
+		const TFunction<bool(const class UPrimitiveComponent*)>& SeeThrough, FHitResult& OutHit, FHitResult& OutFirstSeeThroughHit, int32 MaxLayers = 4);
 
 	/**
 	 * Simple line of sight check - returns true if nothing blocks the path.

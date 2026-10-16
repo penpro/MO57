@@ -1,4 +1,5 @@
 #include "MOInteractionSubsystem.h"
+#include "MOInteractorComponent.h"
 #include "MOFramework.h"
 #include "MOViewpointUtils.h"
 
@@ -30,6 +31,7 @@ bool UMOInteractionSubsystem::HasServerLineOfSight(const FVector& ViewLocation, 
 	Options.TraceChannel = ValidationTraceChannel.GetValue();
 	Options.bAllowAttachedHits = true;
 	Options.IgnoredActor = InteractorPawnActor;
+	Options.SeeThrough = &UMOInteractorComponent::IsSeeThroughForInteraction;   // grass between the eye and a stick lying in it does not hide the stick
 
 	return UMOViewpointUtils::HasLineOfSight(GetWorld(), ViewLocation, TargetActor, Options);
 }

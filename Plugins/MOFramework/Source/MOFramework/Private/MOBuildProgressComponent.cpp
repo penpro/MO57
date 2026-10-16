@@ -503,6 +503,9 @@ TArray<AActor*> UMOBuildProgressComponent::FindMaterialSources(float Range) cons
 	TArray<TEnumAsByte<EObjectTypeQuery>> ObjectTypes;
 	ObjectTypes.Add(UEngineTypes::ConvertToObjectType(ECC_WorldDynamic));
 	ObjectTypes.Add(UEngineTypes::ConvertToObjectType(ECC_WorldStatic));
+	// A DROPPED world item's mesh is a PhysicsBody (AMOWorldItem::EnableDropPhysics). Until Oct 16 2026 only the item's interaction sphere
+	// (WorldDynamic) made dropped materials findable here; that sphere is gone (MOWorldItem.h pitfall 3).
+	ObjectTypes.Add(UEngineTypes::ConvertToObjectType(ECC_PhysicsBody));
 
 	// Use a sphere overlap to find potential sources
 	UKismetSystemLibrary::SphereOverlapActors(
