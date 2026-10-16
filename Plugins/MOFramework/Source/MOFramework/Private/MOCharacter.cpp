@@ -273,8 +273,12 @@ void AMOCharacter::BeginPlay()
 		}
 	}
 
-	// Apply initial walk speed
-	if (GetCharacterMovement())
+	// The gait speeds live on the movement component, which picks one per move from the gait the move carries (see UMOCharacterMovementComponent::SetWantedGait)
+	if (UMOCharacterMovementComponent* MOMove = Cast<UMOCharacterMovementComponent>(GetCharacterMovement()))
+	{
+		MOMove->SetGaitSpeeds(WalkSpeed, JogSpeed, SprintSpeed);
+	}
+	else if (GetCharacterMovement())
 	{
 		GetCharacterMovement()->MaxWalkSpeed = WalkSpeed;
 	}
@@ -957,7 +961,7 @@ void AMOCharacter::SetMovementMode(EMOMovementMode NewMode)
 	float ActualSpeed = 0.0f;
 	if (GetCharacterMovement())
 	{
-		ActualSpeed = GetCharacterMovement()->MaxWalkSpeed;
+		ActualSpeed = GetCharacterMovement()->GetMaxSpeed();   // the gait's speed (MaxWalkSpeed is the walk only)
 	}
 
 	const FString ModeName = NewMode == EMOMovementMode::Walking ? TEXT("Walking") :
@@ -1044,11 +1048,17 @@ void AMOCharacter::StopSprint()
 
 void AMOCharacter::UpdateMovementSpeed()
 {
+	// The gait is MOVEMENT INPUT: the movement component carries it in every saved move, so the server simulates a joiner at the speed the joiner predicts.
+	// (It used to write MaxWalkSpeed on the pressing machine only: a joiner's jog / sprint was corrected back to a walk by the server.)
+	if (UMOCharacterMovementComponent* MOMove = Cast<UMOCharacterMovementComponent>(GetCharacterMovement()))
+	{
+		MOMove->SetWantedGait(CurrentMovementMode == EMOMovementMode::Jogging, CurrentMovementMode == EMOMovementMode::Sprinting);
+		return;
+	}
 	if (!GetCharacterMovement())
 	{
 		return;
 	}
-
 	switch (CurrentMovementMode)
 	{
 	case EMOMovementMode::Walking:
@@ -1061,6 +1071,19 @@ void AMOCharacter::UpdateMovementSpeed()
 		GetCharacterMovement()->MaxWalkSpeed = SprintSpeed;
 		break;
 	}
+}
+
+void AMOCharacter::ApplyGaitFromMovement(bool bJog, bool bSprint)
+{
+	const EMOMovementMode NewMode = bSprint ? EMOMovementMode::Sprinting : (bJog ? EMOMovementMode::Jogging : EMOMovementMode::Walking);
+	if (NewMode == CurrentMovementMode)
+	{
+		return;
+	}
+	CurrentMovementMode = NewMode;
+	bIsSprinting = bSprint;
+	bJogToggled = bJog;
+	UE_LOG(LogMOFramework, Verbose, TEXT("[MOCharacter] %s: gait from the moves -> %s"), *GetName(), bSprint ? TEXT("Sprinting") : (bJog ? TEXT("Jogging") : TEXT("Walking")));
 }
 
 float AMOCharacter::GetCurrentMET() const
@@ -2102,6 +2125,13 @@ bool AMOCharacter::HandleRecruitmentInteraction(AController* InteractorControlle
 {
 	if (!RecruitmentComponent)
 	{
+		return false;
+	}
+
+	// Another PLAYER's character is not a stranger to recruit (co-op): nothing to do, nothing to change.
+	if (IsPlayerControlled() && GetController() != InteractorController)
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOCharacter] %s is played by another player: no recruitment interaction"), *GetName());
 		return false;
 	}
 

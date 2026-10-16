@@ -1,4 +1,5 @@
 #include "MOEquipmentPanel.h"
+#include "MOInventoryRequest.h"
 #include "MOFramework.h"
 #include "MOEquipmentComponent.h"
 #include "MOInventoryComponent.h"
@@ -416,7 +417,9 @@ void UMOEquipmentPanel::HandleSlotClickedInternal(EMOEquipmentSlot EquipSlot)
 	// Clicking an equipped item unequips it to inventory
 	if (Item.IsValid())
 	{
-		EquipmentComponent->UnequipToInventory(EquipSlot, InventoryComponent.Get());
+		FMOInventoryRequest Request = FMOInventoryRequest::Make(EMOInventoryOp::Unequip, nullptr, InventoryComponent.Get());   // server-side on a joiner
+		Request.EquipSlot = static_cast<uint8>(EquipSlot);
+		FMOInventoryRequests::Submit(GetOwningPlayer(), Request);
 	}
 }
 
@@ -501,7 +504,8 @@ void UMOEquipmentPanel::HandleSlotDropReceivedInternal(EMOEquipmentSlot EquipSlo
 
 	// Try to equip
 	UE_LOG(LogMOFramework, Warning, TEXT("[MOEquipmentPanel] HandleSlotDropReceivedInternal: Calling EquipFromInventory"));
-	bool bEquipped = EquipmentComponent->EquipFromInventory(SourceInventory, ItemGuid, EquipSlot);
-	UE_LOG(LogMOFramework, Warning, TEXT("[MOEquipmentPanel] HandleSlotDropReceivedInternal: EquipFromInventory returned %s"),
-		bEquipped ? TEXT("true") : TEXT("false"));
+	FMOInventoryRequest Request = FMOInventoryRequest::Make(EMOInventoryOp::Equip, SourceInventory, nullptr, ItemGuid);   // server-side on a joiner
+	Request.EquipSlot = static_cast<uint8>(EquipSlot);
+	const bool bSubmitted = FMOInventoryRequests::Submit(GetOwningPlayer(), Request);
+	UE_LOG(LogMOFramework, Log, TEXT("[MOEquipmentPanel] HandleSlotDropReceivedInternal: equip request %s"), bSubmitted ? TEXT("submitted") : TEXT("NOT submitted"));
 }

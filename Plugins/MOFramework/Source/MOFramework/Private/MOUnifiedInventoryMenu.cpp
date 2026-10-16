@@ -1,4 +1,5 @@
 #include "MOUnifiedInventoryMenu.h"
+#include "MOInventoryRequest.h"
 #include "MOFramework.h"
 #include "MOInventoryGrid.h"
 #include "MOInventoryComponent.h"
@@ -508,8 +509,8 @@ void UMOUnifiedInventoryMenu::StoreAllToSecondary()
 		return;
 	}
 
-	int32 TransferredCount = PlayerInv->TransferAllTo(SecondaryInv);
-	UE_LOG(LogMOFramework, Log, TEXT("[UnifiedInventoryMenu] Stored %d items to secondary inventory"), TransferredCount);
+	FMOInventoryRequests::Submit(GetOwningPlayer(), FMOInventoryRequest::Make(EMOInventoryOp::TransferAll, PlayerInv, SecondaryInv));   // server-side on a joiner
+	UE_LOG(LogMOFramework, Log, TEXT("[UnifiedInventoryMenu] Store all to the secondary inventory requested"));
 }
 
 void UMOUnifiedInventoryMenu::TakeAllFromSecondary()
@@ -531,8 +532,8 @@ void UMOUnifiedInventoryMenu::TakeAllFromSecondary()
 		return;
 	}
 
-	int32 TransferredCount = SecondaryInv->TransferAllTo(PlayerInv);
-	UE_LOG(LogMOFramework, Log, TEXT("[UnifiedInventoryMenu] Took %d items from secondary inventory"), TransferredCount);
+	FMOInventoryRequests::Submit(GetOwningPlayer(), FMOInventoryRequest::Make(EMOInventoryOp::TransferAll, SecondaryInv, PlayerInv));   // server-side on a joiner
+	UE_LOG(LogMOFramework, Log, TEXT("[UnifiedInventoryMenu] Take all from the secondary inventory requested"));
 }
 
 void UMOUnifiedInventoryMenu::LootAllNearbyToPlayer()
@@ -575,28 +576,9 @@ void UMOUnifiedInventoryMenu::DropAllToWorld()
 		return;
 	}
 
-	// Get all item GUIDs before we start dropping (since dropping modifies the array)
-	TArray<FGuid> ItemGuids = PlayerInv->GetAllItemGuids();
-	int32 DroppedCount = 0;
-
-	// Drop location is in front of the player
-	const FVector PawnLocation = Pawn->GetActorLocation();
-	const FVector ForwardVector = Pawn->GetActorForwardVector();
-	const FVector BaseDropLocation = PawnLocation + ForwardVector * 150.0f; // 150cm in front
-
-	for (const FGuid& ItemGuid : ItemGuids)
-	{
-		// Random rotation for variety
-		const FRotator DropRotation(0.0f, FMath::RandRange(0.0f, 360.0f), 0.0f);
-
-		AActor* DroppedActor = PlayerInv->DropItemByGuid(ItemGuid, BaseDropLocation, DropRotation);
-		if (DroppedActor)
-		{
-			DroppedCount++;
-		}
-	}
-
-	UE_LOG(LogMOFramework, Log, TEXT("[UnifiedInventoryMenu] DropAllToWorld: Dropped %d items"), DroppedCount);
+	// Every item to the ground, placed by the server in front of the pawn (server-side on a joiner)
+	FMOInventoryRequests::Submit(PC, FMOInventoryRequest::Make(EMOInventoryOp::DropAll, PlayerInv));
+	UE_LOG(LogMOFramework, Log, TEXT("[UnifiedInventoryMenu] DropAllToWorld requested"));
 
 	// Refresh nearby panel to show dropped items
 	RefreshNearbyPanel();
@@ -634,8 +616,8 @@ void UMOUnifiedInventoryMenu::StackAndOrganize(UMOInventoryComponent* Inventory)
 {
 	if (Inventory)
 	{
-		Inventory->StackAndOrganize();
-		UE_LOG(LogMOFramework, Log, TEXT("[UnifiedInventoryMenu] Organized inventory"));
+		FMOInventoryRequests::Submit(GetOwningPlayer(), FMOInventoryRequest::Make(EMOInventoryOp::Organize, Inventory));   // server-side on a joiner
+		UE_LOG(LogMOFramework, Log, TEXT("[UnifiedInventoryMenu] Organize requested"));
 	}
 }
 
@@ -656,8 +638,8 @@ void UMOUnifiedInventoryMenu::FillStacksLeftToRight()
 
 	if (PlayerInv && SecondaryInv)
 	{
-		int32 Filled = PlayerInv->FillStacksFrom(SecondaryInv);
-		UE_LOG(LogMOFramework, Log, TEXT("[UnifiedInventoryMenu] Filled %d items into player stacks from secondary"), Filled);
+		FMOInventoryRequests::Submit(GetOwningPlayer(), FMOInventoryRequest::Make(EMOInventoryOp::FillStacks, SecondaryInv, PlayerInv));   // into the player's stacks
+		UE_LOG(LogMOFramework, Log, TEXT("[UnifiedInventoryMenu] Fill player stacks from secondary requested"));
 	}
 }
 
@@ -668,8 +650,8 @@ void UMOUnifiedInventoryMenu::FillStacksRightToLeft()
 
 	if (PlayerInv && SecondaryInv)
 	{
-		int32 Filled = SecondaryInv->FillStacksFrom(PlayerInv);
-		UE_LOG(LogMOFramework, Log, TEXT("[UnifiedInventoryMenu] Filled %d items into secondary stacks from player"), Filled);
+		FMOInventoryRequests::Submit(GetOwningPlayer(), FMOInventoryRequest::Make(EMOInventoryOp::FillStacks, PlayerInv, SecondaryInv));   // into the secondary's stacks
+		UE_LOG(LogMOFramework, Log, TEXT("[UnifiedInventoryMenu] Fill secondary stacks from player requested"));
 	}
 }
 
@@ -800,16 +782,8 @@ void UMOUnifiedInventoryMenu::HandlePlayerSlotShiftClicked(int32 SlotIndex, cons
 	if (CachedSecondaryInventory.IsValid())
 	{
 		UMOInventoryComponent* SecondaryInv = CachedSecondaryInventory.Get();
-		bool bTransferred = PlayerInv->TransferItem(ItemGuid, SecondaryInv);
-
-		if (bTransferred)
-		{
-			UE_LOG(LogMOFramework, Log, TEXT("[UnifiedInventoryMenu] Shift+Click: Transferred item from player to secondary"));
-		}
-		else
-		{
-			UE_LOG(LogMOFramework, Warning, TEXT("[UnifiedInventoryMenu] Shift+Click: Failed to transfer item (secondary full?)"));
-		}
+		FMOInventoryRequests::Submit(GetOwningPlayer(), FMOInventoryRequest::Make(EMOInventoryOp::Transfer, PlayerInv, SecondaryInv, ItemGuid));   // server-side on a joiner
+		UE_LOG(LogMOFramework, Log, TEXT("[UnifiedInventoryMenu] Shift+Click: transfer player -> secondary requested"));
 	}
 	else
 	{
@@ -834,16 +808,8 @@ void UMOUnifiedInventoryMenu::HandleSecondarySlotShiftClicked(int32 SlotIndex, c
 	}
 
 	// Transfer to player inventory
-	bool bTransferred = SecondaryInv->TransferItem(ItemGuid, PlayerInv);
-
-	if (bTransferred)
-	{
-		UE_LOG(LogMOFramework, Log, TEXT("[UnifiedInventoryMenu] Shift+Click: Transferred item from secondary to player"));
-	}
-	else
-	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[UnifiedInventoryMenu] Shift+Click: Failed to transfer item (player inventory full?)"));
-	}
+	FMOInventoryRequests::Submit(GetOwningPlayer(), FMOInventoryRequest::Make(EMOInventoryOp::Transfer, SecondaryInv, PlayerInv, ItemGuid));   // server-side on a joiner
+	UE_LOG(LogMOFramework, Log, TEXT("[UnifiedInventoryMenu] Shift+Click: transfer secondary -> player requested"));
 }
 
 void UMOUnifiedInventoryMenu::HandleNearbyItemsChanged()

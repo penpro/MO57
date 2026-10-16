@@ -113,6 +113,8 @@ private:
 	void Refresh(bool bAllowAsync);
 
 	AOceanologyLake* SpawnLake(const FMOWorldGen::FLake& Lake, UClass* Class);
+	/** After a lake is removed: every remaining lake re-runs its Oceanology wave init, so the shared wave clock comes from a lake that exists (see the .cpp). */
+	void ReelectWaveTimeSource();
 	void DestroyAll();
 
 	FLakeQuery LakeCache;

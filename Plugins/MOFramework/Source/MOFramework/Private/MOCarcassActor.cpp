@@ -6,6 +6,11 @@
 #include "MOInventoryComponent.h"
 #include "MOUIContractInterface.h"
 #include "MOCreature.h"
+#include "MOItemDatabaseSettings.h"
+#include "MOItemDefinitionRow.h"
+#include "MOPlayerController.h"
+#include "MOTimedActionComponent.h"
+#include "MOUIUtils.h"
 #include "Components/PoseableMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/SphereComponent.h"
@@ -20,7 +25,7 @@
 AMOCarcassActor::AMOCarcassActor()
 {
 	PrimaryActorTick.bCanEverTick = true;
-	PrimaryActorTick.TickInterval = 0.1f; // 10 Hz for harvest progress
+	PrimaryActorTick.TickInterval = 1.0f; // decay only: the cutting is timed on the butcher's pawn (UMOTimedActionComponent)
 	bReplicates = true;
 
 	// Root component - interaction sphere (handles interaction traces)
@@ -86,18 +91,13 @@ void AMOCarcassActor::Tick(float DeltaTime)
 	// Update decay
 	TimeSinceDeath += DeltaTime;
 	UpdateDecayStage();
-
-	// Update harvest if in progress
-	if (!CurrentHarvestPart.IsNone())
-	{
-		TickHarvest(DeltaTime);
-	}
 }
 
 void AMOCarcassActor::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
+	DOREPLIFETIME(AMOCarcassActor, CarcassDefinition);
 	DOREPLIFETIME(AMOCarcassActor, DecayStage);
 	DOREPLIFETIME(AMOCarcassActor, HarvestedParts);
 }
@@ -115,19 +115,6 @@ const FMOCarcassDefinitionRow* AMOCarcassActor::GetCarcassDefinitionRow() const
 
 	return CarcassDefinition.DataTable->FindRow<FMOCarcassDefinitionRow>(
 		CarcassDefinition.RowName, TEXT("GetCarcassDefinitionRow"));
-}
-
-// ============================================================================
-// STATE QUERIES
-// ============================================================================
-
-float AMOCarcassActor::GetHarvestProgress() const
-{
-	if (HarvestTotalTime <= 0.0f)
-	{
-		return 0.0f;
-	}
-	return FMath::Clamp(HarvestProgress / HarvestTotalTime, 0.0f, 1.0f);
 }
 
 bool AMOCarcassActor::IsPartHarvested(FName PartId) const
@@ -169,119 +156,224 @@ TArray<FMOCarcassPartEntry> AMOCarcassActor::GetAvailableParts() const
 	return Available;
 }
 
-bool AMOCarcassActor::CanHarvestPart(FName PartId, UMOInventoryComponent* Inventory, FString& OutReason) const
+const FName AMOCarcassActor::ButcherAllAction(TEXT("Carcass.ButcherAll"));
+
+bool AMOCarcassActor::CanPawnCutPart(const APawn* Pawn, FName PartId, FText& OutReason) const
 {
 	const FMOCarcassDefinitionRow* Def = GetCarcassDefinitionRow();
-	if (!Def)
+	const FMOCarcassPartEntry* Part = Def ? Def->FindPart(PartId) : nullptr;
+	if (!Part || !Pawn)
 	{
-		OutReason = TEXT("No carcass definition");
+		OutReason = NSLOCTEXT("MOCarcass", "NoPart", "There is no such part.");
 		return false;
 	}
-
-	const FMOCarcassPartEntry* Part = Def->FindPart(PartId);
-	if (!Part)
-	{
-		OutReason = TEXT("Part not found");
-		return false;
-	}
-
-	// Already harvested?
 	if (HarvestedParts.Contains(PartId))
 	{
-		OutReason = TEXT("Already harvested");
+		OutReason = NSLOCTEXT("MOCarcass", "Taken", "Already taken.");
 		return false;
 	}
-
-	// Available at decay stage?
 	if (!Part->IsAvailableAtStage(DecayStage))
 	{
-		OutReason = TEXT("Part has decayed");
+		OutReason = NSLOCTEXT("MOCarcass", "Decayed", "It has rotted away.");
 		return false;
 	}
-
-	// Currently harvesting something else?
-	if (!CurrentHarvestPart.IsNone())
+	if (const TWeakObjectPtr<APawn>* Cutter = PartsInHand.Find(PartId); Cutter && Cutter->IsValid() && Cutter->Get() != Pawn)
 	{
-		OutReason = TEXT("Already harvesting");
+		OutReason = NSLOCTEXT("MOCarcass", "InHand", "Someone else is cutting this.");
 		return false;
 	}
-
-	// Tool requirement?
-	if (!Part->RequiredToolType.IsNone() && Inventory)
+	const UMOInventoryComponent* Inventory = Pawn->FindComponentByClass<UMOInventoryComponent>();
+	if (!Part->RequiredToolType.IsNone())
 	{
-		// TODO: Check if player has tool of required type
-		// For now, allow without tool check
-		// if (!Inventory->HasToolOfType(Part->RequiredToolType))
-		// {
-		//     OutReason = FString::Printf(TEXT("Requires %s"), *Part->RequiredToolType.ToString());
-		//     return false;
-		// }
+		// The data names the tool (FName "Knife"); any carried item with that tool capability does (a flint flake cuts hide too).
+		const UEnum* ToolEnum = StaticEnum<EMOToolType>();
+		const int64 Tool = ToolEnum->GetValueByNameString(Part->RequiredToolType.ToString());
+		if (Tool != INDEX_NONE && Tool != static_cast<int64>(EMOToolType::None)
+			&& (!Inventory || Inventory->GetBestToolEffectiveness(static_cast<EMOToolType>(Tool)) <= 0.0f))
+		{
+			OutReason = FText::Format(NSLOCTEXT("MOCarcass", "NeedsTool", "Needs a tool: {0}."), ToolEnum->GetDisplayNameTextByValue(Tool));
+			return false;
+		}
 	}
-
-	// Container requirement?
-	if (Part->bRequiresContainer && Inventory)
+	if (Part->bRequiresContainer && !Part->ContainerItemId.IsNone() && (!Inventory || Inventory->CountIngredient(Part->ContainerItemId) <= 0))
 	{
-		// TODO: Check if player has empty container
-		// if (!Inventory->HasItem(Part->ContainerItemId))
-		// {
-		//     OutReason = TEXT("Requires container");
-		//     return false;
-		// }
+		OutReason = FText::Format(NSLOCTEXT("MOCarcass", "NeedsContainer", "Needs {0} to catch it."), UMOItemDatabaseSettings::GetItemDisplayName(Part->ContainerItemId));
+		return false;
 	}
-
 	return true;
 }
 
-bool AMOCarcassActor::StartHarvestPart(FName PartId, AController* Harvester)
+FText AMOCarcassActor::GetWorldActionTitle() const
 {
-	if (!Harvester)
-	{
-		return false;
-	}
-
-	// Get inventory for validation
-	UMOInventoryComponent* Inventory = nullptr;
-	if (APawn* Pawn = Harvester->GetPawn())
-	{
-		Inventory = Pawn->FindComponentByClass<UMOInventoryComponent>();
-	}
-
-	FString Reason;
-	if (!CanHarvestPart(PartId, Inventory, Reason))
-	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOCarcass] Cannot harvest %s: %s"), *PartId.ToString(), *Reason);
-		return false;
-	}
-
 	const FMOCarcassDefinitionRow* Def = GetCarcassDefinitionRow();
-	const FMOCarcassPartEntry* Part = Def->FindPart(PartId);
+	return Def ? Def->DisplayName : NSLOCTEXT("MOCarcass", "Carcass", "Carcass");
+}
 
-	// Start harvest
-	CurrentHarvestPart = PartId;
-	HarvestProgress = 0.0f;
-	HarvestTotalTime = Part->HarvestTime;
-	HarvesterController = Harvester;
+void AMOCarcassActor::GetWorldActions(const APawn* Pawn, TArray<FMOItemActionOption>& Out) const
+{
+	float AllSeconds = 0.0f;
+	int32 Cuttable = 0;
+	TArray<FMOItemActionOption> Parts;
+	for (const FMOCarcassPartEntry& Part : GetAvailableParts())
+	{
+		FMOItemActionOption Option;
+		Option.Id = Part.PartId;
+		Option.Label = FText::Format(NSLOCTEXT("MOCarcass", "CutPart", "{0} ({1})"), Part.DisplayName, UMOUIUtils::FormatDurationAsText(Part.HarvestTime));
+		Option.bEnabled = CanPawnCutPart(Pawn, Part.PartId, Option.DisabledReason);
+		if (Option.bEnabled)
+		{
+			AllSeconds += Part.HarvestTime;
+			++Cuttable;
+		}
+		Parts.Add(MoveTemp(Option));
+	}
+	// What can be cut now first (a deer lists 13 parts; the greyed ones -- no knife -- would push them below the fold), the data's order within each.
+	Parts.StableSort([](const FMOItemActionOption& A, const FMOItemActionOption& B) { return A.bEnabled && !B.bEnabled; });
+	if (Cuttable > 1)
+	{
+		// One gesture, the whole job: the cuts still take their full time, one after another (tedium is not simulation).
+		FMOItemActionOption All;
+		All.Id = ButcherAllAction;
+		All.Label = FText::Format(NSLOCTEXT("MOCarcass", "ButcherAll", "Butcher everything ({0})"), UMOUIUtils::FormatDurationAsText(AllSeconds));
+		Out.Add(MoveTemp(All));
+	}
+	Out.Append(MoveTemp(Parts));
+}
 
-	UE_LOG(LogMOFramework, Log, TEXT("[MOCarcass] Started harvesting %s (%.1fs)"), *PartId.ToString(), HarvestTotalTime);
+bool AMOCarcassActor::PerformWorldAction(APawn* Pawn, FName ActionId)
+{
+	if (!HasAuthority() || !IsValid(Pawn))
+	{
+		return false;
+	}
+	if (ActionId == ButcherAllAction)
+	{
+		const FName First = FirstCuttablePart(Pawn);
+		return !First.IsNone() && BeginCut(Pawn, First, /*bThenTheRest=*/true);
+	}
+	return BeginCut(Pawn, ActionId, /*bThenTheRest=*/false);
+}
 
+FName AMOCarcassActor::FirstCuttablePart(const APawn* Pawn) const
+{
+	for (const FMOCarcassPartEntry& Part : GetAvailableParts())
+	{
+		FText Reason;
+		if (CanPawnCutPart(Pawn, Part.PartId, Reason))
+		{
+			return Part.PartId;
+		}
+	}
+	return NAME_None;
+}
+
+bool AMOCarcassActor::BeginCut(APawn* Pawn, FName PartId, bool bThenTheRest)
+{
+	FText Reason;
+	if (!CanPawnCutPart(Pawn, PartId, Reason))
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOCarcass] %s cannot cut %s from %s: %s"), *GetNameSafe(Pawn), *PartId.ToString(), *GetName(), *Reason.ToString());
+		if (AMOPlayerController* PC = Pawn ? Cast<AMOPlayerController>(Pawn->GetController()) : nullptr)
+		{
+			PC->ClientShowNotification(Reason, 3.0f, EMONotificationType::Warning);
+		}
+		return false;
+	}
+	UMOTimedActionComponent* Timed = Pawn->FindComponentByClass<UMOTimedActionComponent>();
+	const FMOCarcassPartEntry* Part = GetCarcassDefinitionRow()->FindPart(PartId);   // CanPawnCutPart found it
+	if (!Timed)
+	{
+		return false;
+	}
+	// A pawn cuts one part at a time: whatever it held before is free again.
+	for (auto It = PartsInHand.CreateIterator(); It; ++It)
+	{
+		if (!It.Value().IsValid() || It.Value().Get() == Pawn)
+		{
+			It.RemoveCurrent();
+		}
+	}
+	PartsInHand.Add(PartId, Pawn);
+
+	TWeakObjectPtr<AMOCarcassActor> WeakThis(this);
+	TWeakObjectPtr<APawn> WeakPawn(Pawn);
+	const bool bBegun = Timed->Begin(FName(TEXT("Butcher")), FText::Format(NSLOCTEXT("MOCarcass", "Cutting", "Butchering: {0}"), Part->DisplayName), Part->HarvestTime,
+		[WeakThis, WeakPawn, PartId, bThenTheRest]()
+		{
+			AMOCarcassActor* Carcass = WeakThis.Get();
+			APawn* Butcher = WeakPawn.Get();
+			if (!Carcass || !Butcher)
+			{
+				return;
+			}
+			Carcass->FinishCut(Butcher, PartId);
+			if (bThenTheRest && IsValid(Carcass))
+			{
+				const FName Next = Carcass->FirstCuttablePart(Butcher);
+				if (!Next.IsNone())
+				{
+					Carcass->BeginCut(Butcher, Next, /*bThenTheRest=*/true);
+				}
+			}
+		},
+		[WeakThis, WeakPawn, PartId]()
+		{
+			if (AMOCarcassActor* Carcass = WeakThis.Get())
+			{
+				const TWeakObjectPtr<APawn>* Cutter = Carcass->PartsInHand.Find(PartId);
+				if (Cutter && *Cutter == WeakPawn)
+				{
+					Carcass->PartsInHand.Remove(PartId);
+				}
+			}
+		});
+	if (!bBegun)
+	{
+		PartsInHand.Remove(PartId);
+		return false;
+	}
+	UE_LOG(LogMOFramework, Log, TEXT("[MOCarcass] %s cuts %s from %s (%.1fs)%s"), *Pawn->GetName(), *PartId.ToString(), *GetName(), Part->HarvestTime,
+		bThenTheRest ? TEXT(", then the rest") : TEXT(""));
 	return true;
 }
 
-void AMOCarcassActor::CancelHarvest()
+void AMOCarcassActor::FinishCut(APawn* Pawn, FName PartId)
 {
-	if (CurrentHarvestPart.IsNone())
+	PartsInHand.Remove(PartId);
+	const FMOCarcassDefinitionRow* Def = GetCarcassDefinitionRow();
+	const FMOCarcassPartEntry* Part = Def ? Def->FindPart(PartId) : nullptr;
+	if (!Part || HarvestedParts.Contains(PartId) || !Part->IsAvailableAtStage(DecayStage))
 	{
-		return;
+		return;   // gone in the meantime (rotted)
 	}
-
-	UE_LOG(LogMOFramework, Log, TEXT("[MOCarcass] Harvest cancelled for %s"), *CurrentHarvestPart.ToString());
-
-	CurrentHarvestPart = NAME_None;
-	HarvestProgress = 0.0f;
-	HarvestTotalTime = 0.0f;
-	HarvesterController.Reset();
-
-	OnHarvestCancelled.Broadcast();
+	const FName ItemId = Part->GetItemForStage(DecayStage);
+	if (UMOInventoryComponent* Inventory = Pawn->FindComponentByClass<UMOInventoryComponent>())
+	{
+		if (Part->bRequiresContainer && !Part->ContainerItemId.IsNone())
+		{
+			Inventory->ConsumeIngredient(Part->ContainerItemId, 1);   // the container now holds it: it is the item given below
+		}
+		const FGuid Guid = FGuid::NewGuid();
+		if (!Inventory->AddItemByGuid(Guid, ItemId, Part->Quantity))
+		{
+			// Hands full: it goes on the ground beside the carcass, not into nothing.
+			const FVector Beside = GetActorLocation() + (Pawn->GetActorLocation() - GetActorLocation()).GetSafeNormal2D() * 60.0f + FVector(0.0f, 0.0f, 30.0f);
+			Inventory->SpawnWorldItem(ItemId, Part->Quantity, Guid, Beside, FRotator(0.0f, FMath::RandRange(0.0f, 360.0f), 0.0f));
+		}
+		if (AMOPlayerController* PC = Cast<AMOPlayerController>(Pawn->GetController()))
+		{
+			PC->ClientShowNotification(FText::Format(NSLOCTEXT("MOCarcass", "Got", "{0} x{1}"), UMOItemDatabaseSettings::GetItemDisplayName(ItemId), FText::AsNumber(Part->Quantity)),
+				2.5f, EMONotificationType::ItemPickup);
+		}
+	}
+	HarvestedParts.Add(PartId);
+	UE_LOG(LogMOFramework, Log, TEXT("[MOCarcass] %s cut %s from %s: %d x %s"), *Pawn->GetName(), *PartId.ToString(), *GetName(), Part->Quantity, *ItemId.ToString());
+	OnPartHarvested.Broadcast(PartId, true);
+	if (GetAvailableParts().Num() == 0)
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOCarcass] All parts harvested, destroying %s"), *GetName());
+		Destroy();
+	}
 }
 
 void AMOCarcassActor::InitializeFromCreature(AMOCreature* DeadCreature)
@@ -339,30 +431,30 @@ void AMOCarcassActor::InitializeFromCreature(AMOCreature* DeadCreature)
 
 bool AMOCarcassActor::HandleInteract(AController* InteractorController)
 {
-	// Get available parts
-	TArray<FMOCarcassPartEntry> Available = GetAvailableParts();
-	if (Available.Num() == 0)
+	APawn* Pawn = InteractorController ? InteractorController->GetPawn() : nullptr;
+	if (!Pawn || GetAvailableParts().Num() == 0)
 	{
 		UE_LOG(LogMOFramework, Log, TEXT("[MOCarcass] No parts available to harvest"));
 		return false;
 	}
-
-	// Route through UI system for progress bar and input lockout
-	if (InteractorController && InteractorController->Implements<UMOUIContractInterface>())
+	// E: get on with the next cut. When the pawn can cut nothing (no knife ...), the menu shows each part and why.
+	const FName Part = FirstCuttablePart(Pawn);
+	if (!Part.IsNone())
 	{
-		IMOUIContractInterface::Execute_RequestStartCarcassButchering(InteractorController, this, Available[0].PartId);
-		return true;
+		return BeginCut(Pawn, Part, /*bThenTheRest=*/false);
 	}
-
-	// Fallback: direct harvest (no UI, for AI or non-player controllers)
-	return StartHarvestPart(Available[0].PartId, InteractorController);
+	return HandleSecondaryInteract(InteractorController);
 }
 
 bool AMOCarcassActor::HandleSecondaryInteract(AController* InteractorController)
 {
-	// TODO: Show context menu with all available parts
-	// For now, same as primary (start harvesting first available part)
-	return HandleInteract(InteractorController);
+	// Right-click: the parts to choose from (Steam playtest Oct 16 2026: it used to start butchering straight away).
+	if (InteractorController && InteractorController->Implements<UMOUIContractInterface>())
+	{
+		IMOUIContractInterface::Execute_RequestShowWorldActionMenu(InteractorController, this, GetActorLocation());
+		return true;
+	}
+	return false;
 }
 
 // ============================================================================
@@ -457,113 +549,4 @@ void AMOCarcassActor::UpdateVisualForDecayStage()
 	default:
 		break;
 	}
-}
-
-// ============================================================================
-// HARVEST
-// ============================================================================
-
-void AMOCarcassActor::TickHarvest(float DeltaTime)
-{
-	if (CurrentHarvestPart.IsNone())
-	{
-		return;
-	}
-
-	// Check if harvester is still in range
-	if (!IsHarvesterInRange())
-	{
-		CancelHarvest();
-		return;
-	}
-
-	// Update progress
-	HarvestProgress += DeltaTime;
-
-	// Broadcast progress
-	OnHarvestProgress.Broadcast(HarvestProgress, HarvestTotalTime);
-
-	// Check completion
-	if (HarvestProgress >= HarvestTotalTime)
-	{
-		CompleteHarvest();
-	}
-}
-
-void AMOCarcassActor::CompleteHarvest()
-{
-	const FMOCarcassDefinitionRow* Def = GetCarcassDefinitionRow();
-	const FMOCarcassPartEntry* Part = Def ? Def->FindPart(CurrentHarvestPart) : nullptr;
-
-	if (!Part)
-	{
-		CancelHarvest();
-		return;
-	}
-
-	// Give items to harvester
-	if (HarvesterController.IsValid())
-	{
-		if (APawn* Pawn = HarvesterController->GetPawn())
-		{
-			if (UMOInventoryComponent* Inventory = Pawn->FindComponentByClass<UMOInventoryComponent>())
-			{
-				// Get correct item based on decay stage
-				FName ItemToGive = Part->GetItemForStage(DecayStage);
-				int32 Quantity = Part->Quantity;
-
-				// TODO: Consume container if required
-				// if (Part->bRequiresContainer)
-				// {
-				//     Inventory->RemoveItemByDefinition(Part->ContainerItemId, 1);
-				// }
-
-				// Add harvested item
-				FGuid NewItemGuid = FGuid::NewGuid();
-				bool bAdded = Inventory->AddItemByGuid(NewItemGuid, ItemToGive, Quantity);
-
-				UE_LOG(LogMOFramework, Log, TEXT("[MOCarcass] Harvested %s: gave %d x %s (success: %s)"),
-					*CurrentHarvestPart.ToString(), Quantity, *ItemToGive.ToString(),
-					bAdded ? TEXT("true") : TEXT("false"));
-			}
-		}
-	}
-
-	// Mark part as harvested
-	FName HarvestedPart = CurrentHarvestPart;
-	HarvestedParts.Add(HarvestedPart);
-
-	// Reset state
-	CurrentHarvestPart = NAME_None;
-	HarvestProgress = 0.0f;
-	HarvestTotalTime = 0.0f;
-	HarvesterController.Reset();
-
-	// Broadcast completion
-	OnPartHarvested.Broadcast(HarvestedPart, true);
-
-	// Check if all parts harvested
-	TArray<FMOCarcassPartEntry> Remaining = GetAvailableParts();
-	if (Remaining.Num() == 0)
-	{
-		UE_LOG(LogMOFramework, Log, TEXT("[MOCarcass] All parts harvested, destroying %s"), *GetName());
-		Destroy();
-	}
-}
-
-bool AMOCarcassActor::IsHarvesterInRange() const
-{
-	if (!HarvesterController.IsValid())
-	{
-		return false;
-	}
-
-	APawn* Pawn = HarvesterController->GetPawn();
-	if (!Pawn)
-	{
-		return false;
-	}
-
-	float Distance = FVector::Dist(GetActorLocation(), Pawn->GetActorLocation());
-	return Distance <= MaxHarvestRange;
 }

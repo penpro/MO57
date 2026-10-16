@@ -6,6 +6,7 @@
 #include "MOUIContractInterface.h"
 #include "MOPossessionTypes.h"
 #include "MONotificationWidget.h"   // EMONotificationType (ClientShowNotification)
+#include "MOInventoryRequest.h"      // FMOInventoryRequest (ServerInventoryRequest)
 #include "MOPlayerController.generated.h"
 
 /**
@@ -169,7 +170,7 @@ enum class EMOUIContractRequest : uint8
 	OpenCraftingMenu,
 	ShowGhostContextMenu,
 	ShowStationContextMenu,
-	StartCarcassButchering
+	ShowWorldActionMenu
 };
 
 /**
@@ -564,7 +565,7 @@ public:
 	virtual void RequestOpenCraftingMenu_Implementation(AActor* StationActor) override;
 	virtual void RequestShowGhostContextMenu_Implementation(AActor* GhostActor, FVector WorldPosition) override;
 	virtual void RequestShowStationContextMenu_Implementation(AActor* StationActor, FVector WorldPosition) override;
-	virtual void RequestStartCarcassButchering_Implementation(AActor* CarcassActor, FName PartId) override;
+	virtual void RequestShowWorldActionMenu_Implementation(AActor* TargetActor, FVector WorldPosition) override;
 
 	/**
 	 * The requests above usually come from SERVER-side interaction handlers (UMOInteractableComponent::ServerInteract -> the actor's handler ->
@@ -573,11 +574,11 @@ public:
 	 * controller is not local; the client runs the same implementation there.
 	 */
 	UFUNCTION(Client, Reliable)
-	void ClientUIContractRequest(EMOUIContractRequest Request, AActor* Target, FVector_NetQuantize WorldPosition, FName PartId);
+	void ClientUIContractRequest(EMOUIContractRequest Request, AActor* Target, FVector_NetQuantize WorldPosition);
 
 protected:
 	/** True when this controller is not local: the request went to the owning client (ClientUIContractRequest) and the caller must return. */
-	bool ForwardUIContractRequest(EMOUIContractRequest Request, AActor* Target, const FVector& WorldPosition = FVector::ZeroVector, FName PartId = NAME_None);
+	bool ForwardUIContractRequest(EMOUIContractRequest Request, AActor* Target, const FVector& WorldPosition = FVector::ZeroVector);
 
 	// ============================================================================
 	// OVERRIDES
@@ -668,9 +669,19 @@ public:
 	UFUNCTION(Server, Reliable)
 	void ServerItemAction(FGuid ItemGuid, FName ActionId);
 
+	/** A joiner's inventory UI change (transfer, drop, split, ...): FMOInventoryRequests::Execute on the server. The UI submits through
+	 *  FMOInventoryRequests::Submit, never a component mutator (authority-only: on a joiner they refused and nothing happened). */
+	UFUNCTION(Server, Reliable)
+	void ServerInventoryRequest(const FMOInventoryRequest& Request);
+
 	/** A fire's action on the server (FMOFireActions::Perform): add fuel, light it (a timed, chancy friction-fire attempt), put it out. */
 	UFUNCTION(Server, Reliable)
 	void ServerStationAction(class AMOCraftingStationActor* Station, FName ActionId);
+
+	/** A world-action target's action on the server (FMOWorldActions::Execute: reach, then IMOWorldActionProvider::PerformWorldAction): butcher a
+	 *  carcass part ... The world-action menu submits through FMOWorldActions::Submit. */
+	UFUNCTION(Server, Reliable)
+	void ServerWorldAction(AActor* Target, FName ActionId);
 
 	/** Gather the clump of ground cover of kind EntryIndex (UMOCoverForageSettings) nearest Location (UMOForagingSubsystem::BeginGatherCover: the server
 	 *  finds it itself, checks reach and tools, times it). EntryIndex INDEX_NONE = whatever is nearest. */
@@ -768,7 +779,9 @@ protected:
 	void HandlePrimaryActionRelease(const FInputActionValue& Value);
 
 	/** Handle secondary action pressed. */
+	/** The right mouse button: a recruited survivor's menu, else the target's secondary interaction, else the pawn's secondary action. (MO.Test.Input RightClick runs it.) */
 	void HandleSecondaryAction(const FInputActionValue& Value);
+	friend class UMOCheatSubsystem;
 
 	/** Handle secondary action released. */
 	void HandleSecondaryActionRelease(const FInputActionValue& Value);

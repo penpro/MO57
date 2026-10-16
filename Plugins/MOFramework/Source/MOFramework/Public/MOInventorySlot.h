@@ -240,6 +240,7 @@ public:
 	EMOEquipmentSlot GetSourceEquipmentSlot() const;
 
 protected:
+	virtual void NativeOnInitialized() override;
 	virtual void NativeConstruct() override;
 	virtual void NativePreConstruct() override;
 	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
@@ -360,7 +361,7 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<class UBorder> SlotTicksBorder;
 
-	/** Visibility the icon image had in the WBP; restored when the slot holds an item. */
+	/** Visibility the icon image had in the WBP (read ONCE, in NativeOnInitialized); restored when the slot holds an item. */
 	ESlateVisibility IconDefaultVisibility = ESlateVisibility::SelfHitTestInvisible;
 
 	/**

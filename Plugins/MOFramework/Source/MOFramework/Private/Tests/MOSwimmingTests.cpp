@@ -52,21 +52,46 @@ bool FMOSwim_Decisions::RunTest(const FString& Parameters)
 	TestEqual(TEXT("feet at -90 cm, surface at 0: half under"), UMOCharacterMovementComponent::ComputeImmersion(0.0f, -90.0f, 180.0f), 0.5f);
 	TestEqual(TEXT("a degenerate capsule is all-or-nothing"), UMOCharacterMovementComponent::ComputeImmersion(1.0f, 0.0f, 0.0f), 1.0f);
 
-	// Swim / wade with hysteresis (enter 0.7, exit 0.5).
-	TestFalse(TEXT("standing in knee-deep water does not swim"), UMOCharacterMovementComponent::ShouldSwim(false, 0.3f, 0.7f, 0.5f, true));
-	TestFalse(TEXT("... nor at 0.69"), UMOCharacterMovementComponent::ShouldSwim(false, 0.69f, 0.7f, 0.5f, true));
-	TestTrue(TEXT("chest-deep water starts a swim"), UMOCharacterMovementComponent::ShouldSwim(false, 0.7f, 0.7f, 0.5f, false));
-	TestTrue(TEXT("a swimmer does NOT stop at the enter line (hysteresis: no flicker at the chest)"), UMOCharacterMovementComponent::ShouldSwim(true, 0.6f, 0.7f, 0.5f, true));
-	TestFalse(TEXT("a swimmer stops once the feet can stand (below the exit fraction, walkable ground under them)"), UMOCharacterMovementComponent::ShouldSwim(true, 0.49f, 0.7f, 0.5f, true));
-	TestTrue(TEXT("a swimmer with NOTHING to stand on keeps swimming however little of the capsule is in the water (no popping out at the surface)"), UMOCharacterMovementComponent::ShouldSwim(true, 0.20f, 0.7f, 0.5f, false));
+	// Swim / wade on the depth of the water column, with hysteresis (enter 100 cm, exit 90 cm -- Wes, Oct 16 2026: about 1 m, not "until the capsule touches the bottom").
+	TestFalse(TEXT("knee-deep water (50 cm) does not swim"), UMOCharacterMovementComponent::ShouldSwim(false, 50.0f, 100.0f, 90.0f));
+	TestFalse(TEXT("... nor 99 cm"), UMOCharacterMovementComponent::ShouldSwim(false, 99.0f, 100.0f, 90.0f));
+	TestTrue(TEXT("1 m of water starts a swim"), UMOCharacterMovementComponent::ShouldSwim(false, 100.0f, 100.0f, 90.0f));
+	TestTrue(TEXT("a swimmer does NOT stop at the enter line (hysteresis: no flicker at 1 m)"), UMOCharacterMovementComponent::ShouldSwim(true, 95.0f, 100.0f, 90.0f));
+	TestFalse(TEXT("a swimmer stands up once the water is shallower than the exit depth (89 cm: waist deep)"), UMOCharacterMovementComponent::ShouldSwim(true, 89.0f, 100.0f, 90.0f));
+	TestTrue(TEXT("a swimmer over water with no reachable bottom keeps swimming (no popping out at the surface)"), UMOCharacterMovementComponent::ShouldSwim(true, TNumericLimits<float>::Max(), 100.0f, 90.0f));
+	TestFalse(TEXT("dry ground (depth 0) never swims"), UMOCharacterMovementComponent::ShouldSwim(true, 0.0f, 100.0f, 90.0f));
 
 	// The defaults are people-scale: slow swimming, a heavy wading drag, a floating body.
 	const UMOCharacterMovementComponent* Defaults = GetDefault<UMOCharacterMovementComponent>();
 	TestTrue(TEXT("a swimmer crawls about 1 m/s (not a game character's 3 m/s)"), Defaults->MaxSwimSpeed >= 80.0f && Defaults->MaxSwimSpeed <= 200.0f);
 	TestTrue(TEXT("buoyancy above 1: lungs full, the body floats with the head out"), Defaults->UnloadedBuoyancy > 1.0f && Defaults->UnloadedBuoyancy < 1.4f);
-	TestTrue(TEXT("... and it floats ABOVE the swim-exit line (a floating body must not drift into the stand-up state)"), 1.0f / Defaults->UnloadedBuoyancy > Defaults->SwimExitImmersion);
-	TestTrue(TEXT("the swim-exit line is below the swim-enter line"), Defaults->SwimExitImmersion < Defaults->SwimEnterImmersion);
+	TestTrue(TEXT("swimming starts at about 1 m of water (Wes)"), Defaults->SwimEnterDepthCm >= 90.0f && Defaults->SwimEnterDepthCm <= 110.0f);
+	TestTrue(TEXT("the swim-exit depth is below the swim-enter depth (hysteresis), by no more than 20 cm"), Defaults->SwimExitDepthCm < Defaults->SwimEnterDepthCm && Defaults->SwimEnterDepthCm - Defaults->SwimExitDepthCm <= 20.0f);
 	TestTrue(TEXT("wading in chest-deep water roughly halves the walking speed"), Defaults->WadeDragAtFullImmersion > 0.4f && Defaults->WadeDragAtFullImmersion < 0.7f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOMovement_GaitTravelsInMoves,
+	"MOFramework.Movement.GaitTravelsInMoves",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOMovement_GaitTravelsInMoves::RunTest(const FString& Parameters)
+{
+	// Co-op (Steam playtest Oct 16 2026: "the second person can't jog or sprint"): the gait is movement input carried by every saved move, so the server
+	// reads it from the move's flags (FLAG_Custom_0 = jog, FLAG_Custom_1 = sprint) and simulates the joiner at the speed the joiner predicts.
+	TestEqual(TEXT("walk"), UMOCharacterMovementComponent::GaitSpeed(false, false, 300.0f, 550.0f, 700.0f), 300.0f);
+	TestEqual(TEXT("jog"), UMOCharacterMovementComponent::GaitSpeed(true, false, 300.0f, 550.0f, 700.0f), 550.0f);
+	TestEqual(TEXT("sprint beats jog"), UMOCharacterMovementComponent::GaitSpeed(true, true, 300.0f, 550.0f, 700.0f), 700.0f);
+
+	UMOCharacterMovementComponent* Move = NewObject<UMOCharacterMovementComponent>(GetTransientPackage());   // no owner: the flags alone decide
+	Move->UpdateFromCompressedFlags(FSavedMove_Character::FLAG_Custom_0);
+	TestTrue(TEXT("server: FLAG_Custom_0 -> wants to jog"), Move->WantsToJog() && !Move->WantsToSprint());
+	Move->UpdateFromCompressedFlags(FSavedMove_Character::FLAG_Custom_1);
+	TestTrue(TEXT("server: FLAG_Custom_1 -> wants to sprint (and no longer to jog)"), Move->WantsToSprint() && !Move->WantsToJog());
+	Move->UpdateFromCompressedFlags(0);
+	TestTrue(TEXT("server: no gait flag -> walk"), !Move->WantsToSprint() && !Move->WantsToJog());
+	Move->SetWantedGait(true, false);
+	TestTrue(TEXT("the owning machine sets the wanted gait directly"), Move->WantsToJog() && !Move->WantsToSprint());
 	return true;
 }
 

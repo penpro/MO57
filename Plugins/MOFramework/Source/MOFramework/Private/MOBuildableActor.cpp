@@ -94,9 +94,6 @@ void AMOBuildableActor::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// Save original materials for restoration when exiting ghost mode
-	SaveOriginalMaterials();
-
 	// ==========================================================================
 	// DELEGATE BINDING: Interaction Routing
 	// ==========================================================================
@@ -136,6 +133,7 @@ void AMOBuildableActor::BeginPlay()
 	if (BuildProgressComponent)
 	{
 		BuildProgressComponent->OnConstructionCompleted.AddDynamic(this, &AMOBuildableActor::OnConstructionCompleted);
+		BuildProgressComponent->OnConstructionStateChanged.AddDynamic(this, &AMOBuildableActor::HandleBuildStateChanged);
 	}
 
 	// Apply the under-construction profile to MeshComponent + every static-mesh
@@ -233,13 +231,15 @@ void AMOBuildableActor::InitializeBuilding(FName InRecipeId)
 		InteractableComponent->SetCanInteract(true);
 	}
 
-	// Keep the ghost material - it will be restored when construction completes
-	// SetGhostMode(false) is NOT called here - we want to keep the translucent look
-
-	// On a client the replicated build state can arrive before the recipe (OnRep_RecipeId lands here): a finished building looks finished.
+	// A placed building wears the planned look until it is finished (RefreshBuildStateVisual). On a client the replicated build state can arrive
+	// before the recipe (OnRep_RecipeId lands here): a finished building looks finished.
 	if (!HasAuthority() && IsComplete() && HasActorBegunPlay())
 	{
 		EnterCompletedState();
+	}
+	else
+	{
+		RefreshBuildStateVisual();
 	}
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildableActor] Initialized building with recipe: %s (ghost visual maintained until built)"), *RecipeId.ToString());
@@ -256,8 +256,8 @@ void AMOBuildableActor::SetGhostMode(bool bGhost)
 
 	if (bGhost)
 	{
-		// Enter ghost mode
-		CreateGhostMaterial();
+		// Enter ghost mode: the whole preview in the ghost material (the tint follows in SetGhostVisual)
+		ApplyGhostMaterialToAllMeshes();
 
 		// Disable collision on EVERY primitive component on the actor — not
 		// just MeshComponent. BPs commonly add their own collision shapes
@@ -314,10 +314,18 @@ void AMOBuildableActor::SetGhostVisual(const FLinearColor& Color)
 		return;
 	}
 
+	TintGhost(Color);
+}
+
+void AMOBuildableActor::TintGhost(const FLinearColor& Color, float InnerGlow)
+{
+	if (!GhostMaterialInstance)
+	{
+		return;
+	}
 	// M_BuildPreview (the ghost material) is an inner glow + outer rim: "InnerColor" / "OuterColor". This set only "Color" / "Opacity",
 	// which it does not have -- the tint never changed and an invalid ghost stayed the preview's default green, so a player saw "fine
 	// here" and the click did nothing (first-ten-minutes pass, Oct 15 2026). The inner glow is HDR (the authored green is ~6.6).
-	constexpr float InnerGlow = 6.0f;
 	GhostMaterialInstance->SetVectorParameterValue(TEXT("InnerColor"), FLinearColor(Color.R * InnerGlow, Color.G * InnerGlow, Color.B * InnerGlow, 1.0f));
 	GhostMaterialInstance->SetVectorParameterValue(TEXT("OuterColor"), FLinearColor(Color.R, Color.G, Color.B, 1.0f));
 	GhostMaterialInstance->SetVectorParameterValue(TEXT("Color"), Color);   // a ghost material with a single tint
@@ -574,14 +582,13 @@ void AMOBuildableActor::ApplySaveData(const FMOPersistedBuildingRecord& InRecord
 	}
 	else if (State == EMOBuildState::Constructing)
 	{
+		RefreshBuildStateVisual();
 		SetConstructionVisual(InRecord.Progress.GetOverallProgress());
 	}
 	else if (State == EMOBuildState::Ghost || State == EMOBuildState::Paused)
 	{
-		// Restore ghost visual for incomplete buildings
-		// bIsGhost tracks placement preview mode, not build state
-		// We need ghost material but with collision/interaction enabled
-		CreateGhostMaterial();
+		// bIsGhost tracks placement preview mode, not build state: a loaded unfinished building wears the planned look, with interaction
+		RefreshBuildStateVisual();
 
 		// Enable collision and interaction for placed ghost
 		if (MeshComponent)
@@ -601,49 +608,68 @@ void AMOBuildableActor::ApplySaveData(const FMOPersistedBuildingRecord& InRecord
 // INTERNAL
 // ============================================================================
 
-void AMOBuildableActor::CreateGhostMaterial()
+void AMOBuildableActor::RefreshBuildStateVisual()
 {
-	if (!MeshComponent)
+	if (bIsGhost)
 	{
+		return;   // the placement preview: SetGhostMode / SetGhostVisual own its look
+	}
+	if (IsComplete())
+	{
+		RestoreOriginalMaterials();
 		return;
 	}
-
-	UMaterialInterface* BaseMaterial = GhostMaterialBase.LoadSynchronous();
-	if (!BaseMaterial)
+	if (ApplyGhostMaterialToAllMeshes())
 	{
-		// Create a simple translucent material if none specified
-		// In production, you'd want to set this in the Blueprint
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOBuildableActor] No GhostMaterialBase set, ghost will use original materials"));
-		return;
-	}
-
-	GhostMaterialInstance = UMaterialInstanceDynamic::Create(BaseMaterial, this);
-	if (!GhostMaterialInstance)
-	{
-		return;
-	}
-
-	// Apply to all material slots
-	int32 NumMaterials = MeshComponent->GetNumMaterials();
-	for (int32 i = 0; i < NumMaterials; ++i)
-	{
-		MeshComponent->SetMaterial(i, GhostMaterialInstance);
+		TintGhost(PlannedColor, PlannedGlow);
 	}
 }
 
-void AMOBuildableActor::SaveOriginalMaterials()
+void AMOBuildableActor::HandleBuildStateChanged(EMOBuildState NewState)
 {
-	if (!MeshComponent)
-	{
-		return;
-	}
+	RefreshBuildStateVisual();
+}
 
-	OriginalMaterials.Empty();
-	int32 NumMaterials = MeshComponent->GetNumMaterials();
-	for (int32 i = 0; i < NumMaterials; ++i)
+bool AMOBuildableActor::ApplyGhostMaterialToAllMeshes()
+{
+	if (!GhostMaterialInstance)
 	{
-		OriginalMaterials.Add(MeshComponent->GetMaterial(i));
+		UMaterialInterface* BaseMaterial = GhostMaterialBase.LoadSynchronous();
+		if (!BaseMaterial)
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOBuildableActor] %s: no GhostMaterialBase set, it keeps its own materials while unbuilt"), *GetName());
+			return false;
+		}
+		GhostMaterialInstance = UMaterialInstanceDynamic::Create(BaseMaterial, this);
+		if (!GhostMaterialInstance)
+		{
+			return false;
+		}
 	}
+	// EVERY mesh: a Blueprint's visible geometry is usually its own child components (the stick layers of a floor), not MeshComponent --
+	// ghosting MeshComponent alone left an unbuilt floor looking finished.
+	TArray<UMeshComponent*> Meshes;
+	GetComponents<UMeshComponent>(Meshes);
+	for (UMeshComponent* Mesh : Meshes)
+	{
+		if (!IsValid(Mesh) || Mesh->GetNumMaterials() == 0)
+		{
+			continue;
+		}
+		if (!SavedMaterials.Contains(Mesh))
+		{
+			FMOBuildableSavedMaterials& Saved = SavedMaterials.Add(Mesh);
+			for (int32 i = 0; i < Mesh->GetNumMaterials(); ++i)
+			{
+				Saved.Materials.Add(Mesh->GetMaterial(i));
+			}
+		}
+		for (int32 i = 0; i < Mesh->GetNumMaterials(); ++i)
+		{
+			Mesh->SetMaterial(i, GhostMaterialInstance);
+		}
+	}
+	return true;
 }
 
 void AMOBuildableActor::ApplyStructuralCollisionProfile(FName ProfileName)
@@ -678,20 +704,20 @@ void AMOBuildableActor::ApplyStructuralCollisionProfile(FName ProfileName)
 
 void AMOBuildableActor::RestoreOriginalMaterials()
 {
-	if (!MeshComponent || OriginalMaterials.Num() == 0)
+	for (TPair<TObjectPtr<UMeshComponent>, FMOBuildableSavedMaterials>& Pair : SavedMaterials)
 	{
-		return;
-	}
-
-	int32 NumMaterials = FMath::Min(MeshComponent->GetNumMaterials(), OriginalMaterials.Num());
-	for (int32 i = 0; i < NumMaterials; ++i)
-	{
-		if (OriginalMaterials[i])
+		UMeshComponent* Mesh = Pair.Key.Get();
+		if (!IsValid(Mesh))
 		{
-			MeshComponent->SetMaterial(i, OriginalMaterials[i]);
+			continue;
+		}
+		const int32 Num = FMath::Min(Mesh->GetNumMaterials(), Pair.Value.Materials.Num());
+		for (int32 i = 0; i < Num; ++i)
+		{
+			Mesh->SetMaterial(i, Pair.Value.Materials[i]);   // a null original clears the override: the mesh asset's own material again
 		}
 	}
-
+	SavedMaterials.Reset();
 	GhostMaterialInstance = nullptr;
 }
 

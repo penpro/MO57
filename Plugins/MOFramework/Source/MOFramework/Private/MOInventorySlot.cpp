@@ -1,4 +1,5 @@
 #include "MOInventorySlot.h"
+#include "MOInventoryRequest.h"
 #include "MOUIDebugSubsystem.h"
 #include "MOUITokens.h"
 #include "MOFramework.h"
@@ -49,6 +50,20 @@ void UMOInventorySlot::NativePreConstruct()
 	}
 }
 
+void UMOInventorySlot::NativeOnInitialized()
+{
+	Super::NativeOnInitialized();
+	// The icon's visibility as authored, read once. It used to be re-read on every NativeConstruct -- and a slot widget is constructed again whenever
+	// the grid re-adds it. A widget re-added while it showed an EMPTY slot (icon Collapsed) then took Collapsed as its "visible" state, and every item
+	// it showed afterwards had a count but no icon (Steam playtest Oct 16 2026: "after eating berries inventory icons disappear" -- the last berry
+	// emptied a slot, the grid was rebuilt, the reused widgets kept the collapsed icon).
+	if (IsValid(ItemIconImage))
+	{
+		const ESlateVisibility Authored = ItemIconImage->GetVisibility();
+		IconDefaultVisibility = (Authored == ESlateVisibility::Collapsed || Authored == ESlateVisibility::Hidden) ? ESlateVisibility::SelfHitTestInvisible : Authored;
+	}
+}
+
 void UMOInventorySlot::NativeConstruct()
 {
 	Super::NativeConstruct();
@@ -73,10 +88,6 @@ void UMOInventorySlot::NativeConstruct()
 
 	// The inner border of the slot chrome (not a BindWidget: looked up by name so older slot WBPs without it still work).
 	SlotTicksBorder = Cast<UBorder>(GetWidgetFromName(TEXT("SlotBorderBorder")));
-	if (IsValid(ItemIconImage))
-	{
-		IconDefaultVisibility = ItemIconImage->GetVisibility();
-	}
 
 	// If visual data was already set (e.g., via SetVisualData before NativeConstruct),
 	// just re-apply it now that the widget is fully constructed.
@@ -592,8 +603,10 @@ bool UMOInventorySlot::NativeOnDrop(const FGeometry& InGeometry, const FDragDrop
 			return true;
 		}
 
-		// Unequip the item to the target inventory
-		SourceEquipment->UnequipToInventory(EquipSlot, InventoryComponent);
+		// Unequip the item to the target inventory -- through the inventory request (server-side on a joiner)
+		FMOInventoryRequest Request = FMOInventoryRequest::Make(EMOInventoryOp::Unequip, nullptr, InventoryComponent);
+		Request.EquipSlot = static_cast<uint8>(EquipSlot);
+		FMOInventoryRequests::Submit(GetOwningPlayer(), Request);
 
 		// Refresh this slot
 		RefreshFromInventory();
@@ -621,18 +634,8 @@ bool UMOInventorySlot::NativeOnDrop(const FGeometry& InGeometry, const FDragDrop
 			return true;
 		}
 
-		// Get drop location from player
-		APlayerController* PC = GetOwningPlayer();
-		if (IsValid(PC))
-		{
-			APawn* Pawn = PC->GetPawn();
-			if (IsValid(Pawn))
-			{
-				FVector DropLocation = Pawn->GetActorLocation() + Pawn->GetActorForwardVector() * 100.0f;
-				FRotator DropRotation = FRotator(0, FMath::RandRange(0.0f, 360.0f), 0);
-				SourceInventory->DropItemByGuid(ItemGuid, DropLocation, DropRotation);
-			}
-		}
+		// Drop to the ground: the server places it in front of the pawn (FMOInventoryRequests::ComputeDropTransform)
+		FMOInventoryRequests::Submit(GetOwningPlayer(), FMOInventoryRequest::Make(EMOInventoryOp::Drop, SourceInventory, nullptr, ItemGuid));
 
 		OnSlotDropReceived.Broadcast(TargetSlot, SourceSlot, SourceInventory);
 		return true;
@@ -647,12 +650,15 @@ bool UMOInventorySlot::NativeOnDrop(const FGeometry& InGeometry, const FDragDrop
 	// Case 3: Same inventory - swap slots
 	if (SourceInventory == InventoryComponent)
 	{
-		InventoryComponent->SwapSlots(SourceSlot, TargetSlot);
+		FMOInventoryRequest Request = FMOInventoryRequest::Make(EMOInventoryOp::Swap, InventoryComponent);
+		Request.SlotA = SourceSlot;
+		Request.SlotB = TargetSlot;
+		FMOInventoryRequests::Submit(GetOwningPlayer(), Request);
 	}
 	// Case 4: Different inventories - transfer item
 	else
 	{
-		SourceInventory->TransferItem(ItemGuid, InventoryComponent);
+		FMOInventoryRequests::Submit(GetOwningPlayer(), FMOInventoryRequest::Make(EMOInventoryOp::Transfer, SourceInventory, InventoryComponent, ItemGuid));
 		OnSlotDropReceived.Broadcast(TargetSlot, SourceSlot, SourceInventory);
 	}
 

@@ -82,9 +82,10 @@ namespace
 			const UMORespirationComponent* Breath = Pawn->GetRespirationComponent();
 			const UMOVitalsComponent* Vitals = Pawn->GetVitalsComponent();
 			UE_LOG(LogMOFramework, Warning,
-				TEXT("[MOQUERY] WATER Swim pos=(%.0f, %.0f, %.0f) surface=%s%.0f immersion=%.2f depth=%.0fcm mode=%s swimming=%d headUnder=%d | airwayClosed=%d reserve=%.2f spo2=%.1f asphyxiating=%.1fs | stamina=%.1f speed=%.0f cm/s | bodyTemp=%.2fC vitalsImmersion=%.2f wet=%.2f"),
+				TEXT("[MOQUERY] WATER Swim pos=(%.0f, %.0f, %.0f) surface=%s%.0f immersion=%.2f depth=%.0fcm column=%.0fcm mode=%s swimming=%d headUnder=%d | airwayClosed=%d reserve=%.2f spo2=%.1f asphyxiating=%.1fs | stamina=%.1f speed=%.0f cm/s | bodyTemp=%.2fC vitalsImmersion=%.2f wet=%.2f"),
 				Pawn->GetActorLocation().X, Pawn->GetActorLocation().Y, Pawn->GetActorLocation().Z,
 				bHave ? TEXT("") : TEXT("(none) "), Surface, Move ? Move->GetImmersion() : 0.0f, Move ? Move->GetWaterDepthCm() : 0.0f,
+				(Move && Move->GetWaterColumnDepthCm() < 1.0e6f) ? Move->GetWaterColumnDepthCm() : -1.0f,   // the swim decision's depth (-1 = no bottom within the probe)
 				Move ? *UEnum::GetValueAsString(Move->MovementMode.GetValue()) : TEXT("?"), Pawn->IsSwimming() ? 1 : 0, (Move && Move->IsHeadUnderwater()) ? 1 : 0,
 				(Breath && Breath->IsAirwayClosed()) ? 1 : 0, Breath ? Breath->GetOxygenReserve() : -1.0f, Vitals ? Vitals->Vitals.SpO2 : -1.0f, Breath ? Breath->GetSecondsAsphyxiating() : 0.0f,
 				Pawn->GetSurvivalStatsComponent() ? Pawn->GetSurvivalStatsComponent()->GetStatCurrent(TEXT("Stamina")) : -1.0f, Pawn->GetVelocity().Size(),

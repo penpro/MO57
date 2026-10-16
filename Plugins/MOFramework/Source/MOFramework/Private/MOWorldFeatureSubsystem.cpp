@@ -8,6 +8,8 @@
 #include "HAL/IConsoleManager.h"
 #include "Misc/Crc.h"
 #include "PCGComponent.h"
+#include "Components/InstancedStaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
 
 namespace
 {
@@ -502,11 +504,40 @@ AActor* UMOWorldFeatureSubsystem::SpawnMember(const FMOWorldFeaturePlacer::FFeat
 	for (UPCGComponent* PCG : PCGComponents)
 	{
 		PCG->Seed = Member.Seed;   // each composition its own variation, the same on every machine
+		PCG->OnPCGGraphGeneratedDelegate.AddUObject(this, &UMOWorldFeatureSubsystem::HandleCompositionGenerated);
 	}
 	Actor->FinishSpawning(Transform);
 	UE_LOG(LogMOFramework, Log, TEXT("[MOWorldFeatures] spawned %s at %s (slot %d,%d member %d/%d scale %.2f seed %d)"), *Feature.Id.ToString(), *Member.Location.ToCompactString(),
 		Site.Slot.X, Site.Slot.Y, MemberIndex + 1, Site.Members.Num(), Member.Scale, Member.Seed);
 	return Actor;
+}
+
+void UMOWorldFeatureSubsystem::HandleCompositionGenerated(UPCGComponent* PCG)
+{
+	// Electric Dreams' assemblies are point data baked from Epic's source levels (PCGAsset elements), and those levels held editor markers: the
+	// embankment assembly (EmbankmentTree_PCG) bakes seven /Engine/BasicShapes spheres, and they stood in the world as white orbs (Steam playtest
+	// Oct 16 2026: "WHITE ORB"). An engine basic shape is never content: whatever a composition built from one is hidden and does not collide.
+	AActor* Owner = PCG ? PCG->GetOwner() : nullptr;
+	if (!Owner)
+	{
+		return;
+	}
+	int32 Hidden = 0;
+	TInlineComponentArray<UInstancedStaticMeshComponent*> Isms(Owner);
+	for (UInstancedStaticMeshComponent* Ism : Isms)
+	{
+		const UStaticMesh* Mesh = Ism ? Ism->GetStaticMesh() : nullptr;
+		if (Mesh && Ism->IsVisible() && Mesh->GetPathName().StartsWith(TEXT("/Engine/BasicShapes/")))
+		{
+			Hidden += Ism->GetInstanceCount();
+			Ism->SetVisibility(false);
+			Ism->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		}
+	}
+	if (Hidden > 0)
+	{
+		UE_LOG(LogMOFramework, Log, TEXT("[MOWorldFeatures] %s: hid %d engine basic-shape instance(s) (editor markers in the composition's data)"), *Owner->GetName(), Hidden);
+	}
 }
 
 void UMOWorldFeatureSubsystem::Tick(float DeltaTime)

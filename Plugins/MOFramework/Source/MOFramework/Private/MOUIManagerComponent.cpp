@@ -1045,6 +1045,11 @@ bool UMOUIManagerComponent::CloseActiveMenu()
 				CraftController->HideStationContextMenu();
 				bClosedMenu = true;
 			}
+			else if (CraftController->IsWorldActionMenuOpen())
+			{
+				CraftController->HideWorldActionMenu();
+				bClosedMenu = true;
+			}
 		}
 	}
 
@@ -1194,7 +1199,7 @@ void UMOUIManagerComponent::CloseAllMenus()
 		CraftController->HideStationContextMenu();
 		CraftController->HideKeepOnHarvestContextMenu();
 		CraftController->CancelHarvestOperation();
-		CraftController->CancelCarcassButchering();
+		CraftController->HideWorldActionMenu();
 	}
 
 	if (UMOBuildingUIController* BuildController = GetBuildingController())
@@ -2004,29 +2009,20 @@ bool UMOUIManagerComponent::IsHarvestInProgress() const
 	return false;
 }
 
-void UMOUIManagerComponent::StartCarcassButchering(AMOCarcassActor* Carcass, FName PartId)
+void UMOUIManagerComponent::ShowWorldActionMenu(AActor* Target, FVector WorldPosition)
 {
 	if (UMOCraftingUIController* CraftController = GetCraftingController())
 	{
-		CraftController->StartCarcassButchering(Carcass, PartId);
+		CraftController->ShowWorldActionMenu(Target, WorldPosition);
 	}
 }
 
-void UMOUIManagerComponent::CancelCarcassButchering()
+void UMOUIManagerComponent::HideWorldActionMenu()
 {
 	if (UMOCraftingUIController* CraftController = GetCraftingController())
 	{
-		CraftController->CancelCarcassButchering();
+		CraftController->HideWorldActionMenu();
 	}
-}
-
-bool UMOUIManagerComponent::IsCarcassButcheringInProgress() const
-{
-	if (UMOCraftingUIController* CraftController = GetCraftingController())
-	{
-		return CraftController->IsCarcassButcheringInProgress();
-	}
-	return false;
 }
 
 // =============================================================================

@@ -17,6 +17,9 @@ AMOWorldItem::AMOWorldItem()
 	PrimaryActorTick.bCanEverTick = true;
 	PrimaryActorTick.bStartWithTickEnabled = false; // Only enable when drop physics is active
 	bReplicates = true;
+	// The drop is simulated on the server (EnableDropPhysics lifts it 50-100 cm and lets it fall, SettleOnGround stops it): without movement replication a
+	// joiner only ever saw the lifted spawn point -- "dropped items don't show as dropping on client, they hang in the air" (Steam playtest, Oct 16 2026).
+	SetReplicatingMovement(true);
 
 	// Item mesh is the root - this allows physics to move the whole actor
 	ItemMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("ItemMesh"));
@@ -274,6 +277,15 @@ void AMOWorldItem::Tick(float DeltaTime)
 			(IsValid(ItemMesh) && ItemMesh->IsSimulatingPhysics()) ? TEXT("true") : TEXT("false"));
 	}
 
+	// Fell through the ground the drop found (its physics collision was not there yet): stop here and settle on it.
+	if (bHasDropGround && GetActorLocation().Z < DropGroundLocation.Z - 150.0f)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOWorldItem] %s fell through the ground at %s (now %.0f cm below it): settling back on it"),
+			*GetName(), *DropGroundLocation.ToString(), DropGroundLocation.Z - GetActorLocation().Z);
+		SettleOnGround();
+		return;
+	}
+
 	// Check if timeout has expired - always run physics for the full duration
 	if (ElapsedTime >= DropPhysicsTimeout)
 	{
@@ -355,8 +367,11 @@ void AMOWorldItem::EnableDropPhysics()
 	const FVector TraceStart = CurrentLocation + RandomOffset + FVector(0, 0, 150.0f);
 	const FVector TraceEnd = CurrentLocation + RandomOffset - FVector(0, 0, 500.0f);
 
+	bHasDropGround = false;
 	if (World->LineTraceSingleByChannel(GroundHit, TraceStart, TraceEnd, ECC_WorldStatic, QueryParams))
 	{
+		DropGroundLocation = GroundHit.Location;
+		bHasDropGround = true;
 		// Position the item at random height above the ground
 		FVector SafeLocation = GroundHit.Location + FVector(0, 0, RandomDropHeight);
 		SetActorLocation(SafeLocation);
@@ -432,14 +447,17 @@ void AMOWorldItem::SettleOnGround()
 		FCollisionQueryParams QueryParams;
 		QueryParams.AddIgnoredActor(this);
 
-		const FVector TraceStart = CurrentLocation;
-		const FVector TraceEnd = CurrentLocation - FVector(0.0f, 0.0f, 1000.0f);
+		// From ABOVE the item (and above the ground the drop found): an item that fell through the terrain is below it, and a trace from there
+		// down finds nothing (pitfall 2b).
+		const float TopZ = FMath::Max(CurrentLocation.Z, bHasDropGround ? DropGroundLocation.Z : CurrentLocation.Z) + 200.0f;
+		const FVector TraceStart(CurrentLocation.X, CurrentLocation.Y, TopZ);
+		const FVector TraceEnd = TraceStart - FVector(0.0f, 0.0f, 3000.0f);
 
-		if (World->LineTraceSingleByChannel(HitResult, TraceStart, TraceEnd, ECC_Visibility, QueryParams))
+		if (World->LineTraceSingleByChannel(HitResult, TraceStart, TraceEnd, ECC_WorldStatic, QueryParams))
 		{
-			// Check if we're already close to the ground (within 50cm)
+			// Check if we're already close to the ground (within 50cm above it); below it is never fine
 			const float DistanceToGround = FVector::Dist(CurrentLocation, HitResult.Location);
-			if (DistanceToGround > 50.0f)
+			if (DistanceToGround > 50.0f || CurrentLocation.Z < HitResult.Location.Z - 5.0f)
 			{
 				// Teleport to just above the ground
 				const FVector GroundLocation = HitResult.Location + FVector(0.0f, 0.0f, 10.0f);
@@ -451,6 +469,11 @@ void AMOWorldItem::SettleOnGround()
 			{
 				UE_LOG(LogMOFramework, Log, TEXT("[MOWorldItem] Already on ground (%.1fcm away)"), DistanceToGround);
 			}
+		}
+		else if (bHasDropGround)
+		{
+			SetActorLocation(DropGroundLocation + FVector(0.0f, 0.0f, 10.0f));
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOWorldItem] No ground found under %s now: back on the ground its drop found (%s)"), *CurrentLocation.ToString(), *DropGroundLocation.ToString());
 		}
 		else
 		{

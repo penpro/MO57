@@ -12,8 +12,8 @@
 #include "MOKeepOnHarvestContextMenu.h"
 #include "MOHarvestProgressWidget.h"
 #include "MOCraftingStationActor.h"
-#include "MOCarcassActor.h"
-#include "MOCarcassDefinitionRow.h"
+#include "MOWorldActionMenu.h"
+#include "MOPlayerController.h"
 #include "MOCraftingCapableInterface.h"
 #include "MOInventoryComponent.h"
 #include "MOInventoryHolderInterface.h"
@@ -96,13 +96,7 @@ void UMOCraftingUIController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	HarvestProgressWidget.Reset();
 	CurrentHarvestTarget.Reset();
 
-	// Clean up carcass butchering
-	if (bIsCarcassButchering)
-	{
-		CancelCarcassButchering();
-	}
-	CurrentCarcassTarget.Reset();
-	CurrentCarcassPartId = NAME_None;
+	HideWorldActionMenu();
 
 	Super::EndPlay(EndPlayReason);
 }
@@ -830,304 +824,77 @@ void UMOCraftingUIController::HandleHarvestCancelled()
 }
 
 // =============================================================================
-// Carcass Butchering
+// World Actions (IMOWorldActionProvider)
 // =============================================================================
 
-void UMOCraftingUIController::StartCarcassButchering(AMOCarcassActor* Carcass, FName PartId)
+void UMOCraftingUIController::ShowWorldActionMenu(AActor* Target, FVector WorldPosition)
 {
-	if (!IsValid(Carcass))
-	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOCraftUI] StartCarcassButchering: Invalid carcass"));
-		return;
-	}
-
-	if (PartId.IsNone())
-	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOCraftUI] StartCarcassButchering: No part specified"));
-		return;
-	}
-
 	APlayerController* PC = ResolveOwningPlayerController();
-	if (!PC)
+	UClass* MenuClass = WorldActionMenuClass.LoadSynchronous();
+	if (!PC || !IsValid(Target) || !MenuClass)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOCraftUI] ShowWorldActionMenu: no controller, no target or no menu class (%s)"), *WorldActionMenuClass.ToString());
+		return;
+	}
+	if (UMOUIManagerComponent* UIManager = GetUIManager())
+	{
+		UIManager->CloseAllSwitchableMenus();
+	}
+	HideStationContextMenu();
+	HideWorldActionMenu();
+
+	UMOWorldActionMenu* Menu = CreateWidget<UMOWorldActionMenu>(PC, MenuClass);
+	if (!Menu)
 	{
 		return;
 	}
-
-	// Cancel any existing butchering
-	if (bIsCarcassButchering)
+	if (!Menu->InitializeForTarget(Target))
 	{
-		CancelCarcassButchering();
-	}
-
-	// Get part definition for display name and time
-	const FMOCarcassDefinitionRow* CarcassDef = Carcass->GetCarcassDefinitionRow();
-	if (!CarcassDef)
-	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOCraftUI] StartCarcassButchering: No carcass definition"));
-		return;
-	}
-
-	const FMOCarcassPartEntry* Part = CarcassDef->FindPart(PartId);
-	if (!Part)
-	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOCraftUI] StartCarcassButchering: Part '%s' not found"), *PartId.ToString());
-		return;
-	}
-
-	// Start harvest on carcass actor
-	if (!Carcass->StartHarvestPart(PartId, PC))
-	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOCraftUI] StartCarcassButchering: Failed to start harvest"));
-		return;
-	}
-
-	// Store state
-	CurrentCarcassTarget = Carcass;
-	CurrentCarcassPartId = PartId;
-	bIsCarcassButchering = true;
-	CarcassButcherElapsed = 0.0f;
-	CarcassButcherTotal = Part->HarvestTime;
-
-	// Bind carcass delegates
-	Carcass->OnHarvestProgress.AddDynamic(this, &UMOCraftingUIController::HandleCarcassHarvestProgress);
-	Carcass->OnPartHarvested.AddDynamic(this, &UMOCraftingUIController::HandleCarcassPartHarvested);
-	Carcass->OnHarvestCancelled.AddDynamic(this, &UMOCraftingUIController::HandleCarcassHarvestCancelled);
-
-	// Create/show progress widget
-	if (!HarvestProgressWidgetClass)
-	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOCraftUI] StartCarcassButchering: No HarvestProgressWidgetClass set"));
-		CancelCarcassButchering();
-		return;
-	}
-
-	UMOHarvestProgressWidget* WidgetInst = HarvestProgressWidget.Get();
-	bool bNeedsBindDelegates = false;
-
-	if (IsValid(WidgetInst))
-	{
-		// Try to reuse existing widget - push it to the layer stack
-		UCommonActivatableWidget* ActualWidget = PushWidgetInstanceToLayer(MOUILayerTags::Layer_GameOverlay, WidgetInst);
-
-		// CommonUI may have created a new widget (can't add existing instances to stacks)
-		if (ActualWidget && ActualWidget != WidgetInst)
+		if (AMOPlayerController* MOPC = Cast<AMOPlayerController>(PC))
 		{
-			WidgetInst = Cast<UMOHarvestProgressWidget>(ActualWidget);
-			HarvestProgressWidget = WidgetInst;
-			bNeedsBindDelegates = true;
+			MOPC->ClientShowNotification(NSLOCTEXT("MOWorldAction", "Nothing", "There is nothing left to do here."), 2.5f, EMONotificationType::Info);
 		}
-	}
-	else
-	{
-		// Create new widget via layer stack
-		UCommonActivatableWidget* ActualWidget = PushWidgetToLayer(MOUILayerTags::Layer_GameOverlay, HarvestProgressWidgetClass);
-		WidgetInst = Cast<UMOHarvestProgressWidget>(ActualWidget);
-		UMOUIManagerComponent::RegisterHUDElement(WidgetInst, EMOHUDElementKind::Feedback);
-		bNeedsBindDelegates = true;
-	}
-
-	if (!IsValid(WidgetInst))
-	{
-		UE_LOG(LogMOFramework, Error, TEXT("[MOCraftUI] Failed to create Harvest Progress widget for carcass"));
-		CancelCarcassButchering();
 		return;
 	}
-
-	// Cache and bind delegates if this is a new widget
-	if (bNeedsBindDelegates)
-	{
-		HarvestProgressWidget = WidgetInst;
-		WidgetInst->OnHarvestCancelled.RemoveDynamic(this, &UMOCraftingUIController::HandleCarcassHarvestCancelled);
-		WidgetInst->OnHarvestCancelled.AddDynamic(this, &UMOCraftingUIController::HandleCarcassHarvestCancelled);
-	}
-
-	// Show modal background (widget handles input state via NativeOnActivated)
+	WorldActionMenuWidget = Menu;
+	Menu->OnCloseRequested.AddDynamic(this, &UMOCraftingUIController::HandleWorldActionMenuClosed);
 	ShowModalBackground();
-	UpdateReticleVisibility();
-
-	// Start timer for UI updates (carcass actor handles actual progress)
-	if (UWorld* World = GetWorld())
+	Menu->AddToViewport(WorldActionMenuZOrder);   // a context menu is a UCommonUserWidget, not a stack entry
+	FVector2D ScreenPosition;
+	if (PC->ProjectWorldLocationToScreen(WorldPosition, ScreenPosition))
 	{
-		World->GetTimerManager().ClearTimer(CarcassButcherTimerHandle);
-		World->GetTimerManager().SetTimer(
-			CarcassButcherTimerHandle,
-			this,
-			&UMOCraftingUIController::TickCarcassButchering,
-			0.05f,  // 20 Hz for smooth progress
-			true
-		);
+		Menu->SetPopupPosition(ScreenPosition);
 	}
-
-	UE_LOG(LogMOFramework, Log, TEXT("[MOCraftUI] Started carcass butchering: %s (%.1fs)"),
-		*PartId.ToString(), CarcassButcherTotal);
+	UpdateReticleVisibility();
+	UE_LOG(LogMOFramework, Log, TEXT("[MOCraftUI] Showing world action menu for %s"), *Target->GetName());
 }
 
-void UMOCraftingUIController::CancelCarcassButchering()
+void UMOCraftingUIController::HideWorldActionMenu()
 {
-	if (!bIsCarcassButchering)
+	UMOWorldActionMenu* Menu = WorldActionMenuWidget.Get();
+	WorldActionMenuWidget.Reset();
+	if (!Menu)
 	{
 		return;
 	}
-
-	// Clear timer
-	if (UWorld* World = GetWorld())
+	Menu->OnCloseRequested.RemoveAll(this);
+	if (Menu->IsInViewport())
 	{
-		World->GetTimerManager().ClearTimer(CarcassButcherTimerHandle);
+		Menu->RemoveFromParent();
 	}
-
-	// Cancel on carcass actor
-	if (AMOCarcassActor* Carcass = CurrentCarcassTarget.Get())
-	{
-		// Unbind delegates
-		Carcass->OnHarvestProgress.RemoveDynamic(this, &UMOCraftingUIController::HandleCarcassHarvestProgress);
-		Carcass->OnPartHarvested.RemoveDynamic(this, &UMOCraftingUIController::HandleCarcassPartHarvested);
-		Carcass->OnHarvestCancelled.RemoveDynamic(this, &UMOCraftingUIController::HandleCarcassHarvestCancelled);
-
-		Carcass->CancelHarvest();
-	}
-
-	// Deactivate progress widget (CommonUI pops from layer stack, restores input)
-	UMOHarvestProgressWidget* WidgetInst = HarvestProgressWidget.Get();
-	if (IsValid(WidgetInst))
-	{
-		WidgetInst->DeactivateWidget();
-	}
-
-	// Reset state
-	bIsCarcassButchering = false;
-	CurrentCarcassTarget.Reset();
-	CurrentCarcassPartId = NAME_None;
-
-	// Widget handles input state restoration via NativeOnDeactivated
-	// Just manage modal background visibility
 	if (!IsAnyMenuOpen())
 	{
 		HideModalBackground();
 	}
 	UpdateReticleVisibility();
-
-	UE_LOG(LogMOFramework, Log, TEXT("[MOCraftUI] Carcass butchering cancelled"));
 }
 
-bool UMOCraftingUIController::IsCarcassButcheringInProgress() const
+bool UMOCraftingUIController::IsWorldActionMenuOpen() const
 {
-	return bIsCarcassButchering;
+	return IsCachedMenuOpen(WorldActionMenuWidget);
 }
 
-void UMOCraftingUIController::TickCarcassButchering()
+void UMOCraftingUIController::HandleWorldActionMenuClosed()
 {
-	if (!bIsCarcassButchering)
-	{
-		return;
-	}
-
-	AMOCarcassActor* Carcass = CurrentCarcassTarget.Get();
-	if (!Carcass)
-	{
-		CancelCarcassButchering();
-		return;
-	}
-
-	// Get progress from carcass actor
-	float Progress = Carcass->GetHarvestProgress();
-	float TimeRemaining = CarcassButcherTotal * (1.0f - Progress);
-
-	// Update widget display
-	UMOHarvestProgressWidget* WidgetInst = HarvestProgressWidget.Get();
-	if (WidgetInst)
-	{
-		// Get part display name
-		FText ActionName = FText::FromName(CurrentCarcassPartId);
-		if (const FMOCarcassDefinitionRow* Def = Carcass->GetCarcassDefinitionRow())
-		{
-			if (const FMOCarcassPartEntry* Part = Def->FindPart(CurrentCarcassPartId))
-			{
-				ActionName = FText::Format(NSLOCTEXT("MO", "ButcheringFormat", "Butchering {0}..."), Part->DisplayName);
-			}
-		}
-
-		WidgetInst->UpdateHarvestDisplay(Progress, TimeRemaining, ActionName);
-	}
-}
-
-void UMOCraftingUIController::HandleCarcassHarvestProgress(float Progress, float TotalTime)
-{
-	// Progress is handled by TickCarcassButchering, this is just for logging
-	UE_LOG(LogMOFramework, Verbose, TEXT("[MOCraftUI] Carcass harvest progress: %.1f/%.1f"), Progress, TotalTime);
-}
-
-void UMOCraftingUIController::HandleCarcassPartHarvested(FName PartId, bool bSuccess)
-{
-	if (!bIsCarcassButchering || PartId != CurrentCarcassPartId)
-	{
-		return;
-	}
-
-	// Clear timer
-	if (UWorld* World = GetWorld())
-	{
-		World->GetTimerManager().ClearTimer(CarcassButcherTimerHandle);
-	}
-
-	// Unbind delegates from carcass
-	if (AMOCarcassActor* Carcass = CurrentCarcassTarget.Get())
-	{
-		Carcass->OnHarvestProgress.RemoveDynamic(this, &UMOCraftingUIController::HandleCarcassHarvestProgress);
-		Carcass->OnPartHarvested.RemoveDynamic(this, &UMOCraftingUIController::HandleCarcassPartHarvested);
-		Carcass->OnHarvestCancelled.RemoveDynamic(this, &UMOCraftingUIController::HandleCarcassHarvestCancelled);
-	}
-
-	// Deactivate progress widget (CommonUI pops from layer stack, restores input)
-	UMOHarvestProgressWidget* WidgetInst = HarvestProgressWidget.Get();
-	if (IsValid(WidgetInst))
-	{
-		WidgetInst->DeactivateWidget();
-	}
-
-	// Show success notification
-	if (bSuccess)
-	{
-		if (UMOUIManagerComponent* UIManager = GetUIManager())
-		{
-			UMONotificationComponent* NotifComp = UIManager->GetNotificationComponent();
-			if (NotifComp)
-			{
-				// Get part info for notification
-				if (AMOCarcassActor* Carcass = CurrentCarcassTarget.Get())
-				{
-					if (const FMOCarcassDefinitionRow* Def = Carcass->GetCarcassDefinitionRow())
-					{
-						if (const FMOCarcassPartEntry* Part = Def->FindPart(PartId))
-						{
-							FText ItemName = UMOItemDatabaseSettings::GetItemDisplayName(Part->GetItemForStage(Carcass->GetDecayStage()));
-							NotifComp->ShowItemPickupNotification(ItemName, Part->Quantity);
-						}
-					}
-				}
-			}
-		}
-	}
-
-	// Reset state
-	bIsCarcassButchering = false;
-	CurrentCarcassTarget.Reset();
-	CurrentCarcassPartId = NAME_None;
-
-	// Widget handles input state restoration via NativeOnDeactivated
-	// Just manage modal background visibility
-	if (!IsAnyMenuOpen())
-	{
-		HideModalBackground();
-	}
-	UpdateReticleVisibility();
-
-	UE_LOG(LogMOFramework, Log, TEXT("[MOCraftUI] Carcass part harvested: %s (success: %s)"),
-		*PartId.ToString(), bSuccess ? TEXT("true") : TEXT("false"));
-}
-
-void UMOCraftingUIController::HandleCarcassHarvestCancelled()
-{
-	// This is called when the carcass actor's harvest is cancelled
-	// (e.g., player moved out of range, or widget cancel button clicked)
-	CancelCarcassButchering();
+	HideWorldActionMenu();
 }

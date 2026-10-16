@@ -257,6 +257,14 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Recruitment")
 	void ForceRecruit();
 
+	/**
+	 * SERVER: the ONE place a survivor gets its AI controller (recruitment, a loaded save, the survivor menu). Returns the survivor controller the pawn
+	 * now has, or null. NEVER takes the pawn from a human: while a PlayerController drives it, nothing changes and null comes back -- the AI arrives when
+	 * the player leaves (AMOCharacter::UnPossessed). Three hand-copied versions of this unpossessed whatever drove the pawn, and the survivor menu's ran
+	 * when the HOST right-clicked a co-op player's character: the player was thrown out of it (Steam playtest Oct 16 2026).
+	 */
+	class AMOSurvivorController* EnsureSurvivorAIController();
+
 	/** Fail the current quest */
 	UFUNCTION(BlueprintCallable, Category = "Recruitment")
 	void FailQuest();
@@ -326,9 +334,4 @@ private:
 	bool HasRequiredItem(UMOInventoryComponent* Inventory) const;
 	bool HasRequiredSkill(UMOSkillsComponent* Skills) const;
 
-	/**
-	 * Ensure the pawn has a survivor AI controller if recruited.
-	 * Called after applying save data when the Recruited state is loaded.
-	 */
-	void EnsureSurvivorAIController();
 };

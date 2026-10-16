@@ -458,6 +458,10 @@ public:
 	virtual bool CanJump_Implementation() const override;
 	virtual bool CanSprint_Implementation() const override;
 
+	/** SERVER: the gait this character's moves carry (UMOCharacterMovementComponent::UpdateFromCompressedFlags), mirrored into the gait state (exertion,
+	 *  metabolism, sprint stamina) -- a joiner's gait used to exist on the joiner's machine only. Does not write back to the movement component. */
+	void ApplyGaitFromMovement(bool bJog, bool bSprint);
+
 	// ============================================================================
 	// IMOInventoryHolderInterface IMPLEMENTATION
 	// ============================================================================

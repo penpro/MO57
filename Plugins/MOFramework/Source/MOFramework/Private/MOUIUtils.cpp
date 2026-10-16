@@ -2,6 +2,8 @@
 #include "MOItemActions.h"
 #include "MOCommonButton.h"
 #include "Components/PanelWidget.h"
+#include "Components/ScrollBoxSlot.h"
+#include "Components/VerticalBoxSlot.h"
 #include "Blueprint/UserWidget.h"
 #include "MOUITokens.h"
 #include "MOBiomeDatabaseSettings.h"
@@ -335,7 +337,22 @@ void UMOUIUtils::RebuildActionButtons(UUserWidget* Owner, TArray<TObjectPtr<UMOC
 		}
 		const FName Id = Option.Id;
 		Button->OnClicked().AddWeakLambda(Owner, [OnClicked, Id]() { OnClicked(Id); });
-		Panel->InsertChildAt(FMath::Clamp(InsertAt++, 0, Panel->GetChildrenCount()), Button);
+		UPanelSlot* NewSlot = Panel->InsertChildAt(FMath::Clamp(InsertAt++, 0, Panel->GetChildrenCount()), Button);
+		// The menu's own spacing too (the kit buttons sit 6 px apart): runtime buttons used to stack flush against each other.
+		if (UVerticalBoxSlot* VSlot = Cast<UVerticalBoxSlot>(NewSlot))
+		{
+			if (const UVerticalBoxSlot* From = StyleFrom ? Cast<UVerticalBoxSlot>(StyleFrom->Slot) : nullptr)
+			{
+				VSlot->SetPadding(From->GetPadding());
+			}
+		}
+		else if (UScrollBoxSlot* SSlot = Cast<UScrollBoxSlot>(NewSlot))
+		{
+			if (const UScrollBoxSlot* From = StyleFrom ? Cast<UScrollBoxSlot>(StyleFrom->Slot) : nullptr)
+			{
+				SSlot->SetPadding(From->GetPadding());
+			}
+		}
 		InOutButtons.Add(Button);
 	}
 }

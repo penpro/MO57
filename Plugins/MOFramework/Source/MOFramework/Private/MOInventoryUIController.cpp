@@ -1,4 +1,5 @@
 #include "MOInventoryUIController.h"
+#include "MOInventoryRequest.h"
 #include "MOPlayerController.h"
 #include "MOItemActions.h"
 #include "MOUIDebugSubsystem.h"
@@ -551,11 +552,11 @@ void UMOInventoryUIController::HandleQuickTransfer(const FGuid& ItemGuid, UMOInv
 		return;
 	}
 
-	// Perform transfer
-	bool bSuccess = SourceInventory->TransferItem(ItemGuid, TargetInventory);
+	// Perform transfer (through the inventory request: server-side on a joiner)
+	const bool bSubmitted = FMOInventoryRequests::Submit(ResolveOwningPlayerController(), FMOInventoryRequest::Make(EMOInventoryOp::Transfer, SourceInventory, TargetInventory, ItemGuid));
 
 	UE_LOG(LogMOFramework, Log, TEXT("[MOInventoryUI] QuickTransfer %s: %s"),
-		bSuccess ? TEXT("succeeded") : TEXT("failed"),
+		bSubmitted ? TEXT("submitted") : TEXT("not submitted"),
 		*ItemGuid.ToString(EGuidFormats::DigitsWithHyphens));
 }
 
@@ -804,99 +805,16 @@ void UMOInventoryUIController::HandleContextMenuAction(FName ActionId, const FGu
 				return;
 			}
 
-			// Split in half
-			const int32 SplitAmount = ItemComp->Quantity / 2;
-			const int32 RemainingAmount = ItemComp->Quantity - SplitAmount;
-			const FName ItemDefId = ItemComp->ItemDefinitionId;
-
-			// Add split portion to player inventory
-			const FGuid NewGuid = FGuid::NewGuid();
-			bool bAdded = InventoryComponent->AddItemByGuidNoStack(NewGuid, ItemDefId, SplitAmount);
-
-			if (bAdded)
-			{
-				// Update world item quantity
-				ItemComp->Quantity = RemainingAmount;
-				UE_LOG(LogMOFramework, Log, TEXT("[MOInventoryUI] SplitStack (world) - picked up %d, left %d in world"),
-					SplitAmount, RemainingAmount);
-
-				// Refresh nearby panel to show updated quantity
-				UMOUnifiedInventoryMenu* MenuWidget = UnifiedInventoryWidget.Get();
-				if (IsValid(MenuWidget))
-				{
-					MenuWidget->RefreshNearbyPanel();
-				}
-			}
-			else
-			{
-				UE_LOG(LogMOFramework, Warning, TEXT("[MOInventoryUI] SplitStack (world) - failed to add to inventory (full?)"));
-				if (UIManager)
-				{
-					UIManager->ShowNotification(NSLOCTEXT("MO", "InventoryFull", "Inventory full"), 2.0f);
-				}
-			}
+			// Half of the stack on the ground into the inventory, on the server (the world item's quantity and the inventory are both authority state)
+			FMOInventoryRequest Request = FMOInventoryRequest::Make(EMOInventoryOp::TakeHalfOfWorldItem, nullptr, InventoryComponent);
+			Request.WorldItem = WorldItem;
+			FMOInventoryRequests::Submit(ResolveOwningPlayerController(), Request);
+			UE_LOG(LogMOFramework, Log, TEXT("[MOInventoryUI] SplitStack (world) - requested half of %d"), ItemComp->Quantity);
 		}
 		else
 		{
-			// Inventory item split (original logic)
-			FMOInventoryEntry Entry;
-			if (!InventoryComponent->TryGetEntryByGuid(ItemGuid, Entry))
-			{
-				UE_LOG(LogMOFramework, Warning, TEXT("[MOInventoryUI] SplitStack - item not found"));
-				return;
-			}
-
-			// Can't split single items
-			if (Entry.Quantity <= 1)
-			{
-				UE_LOG(LogMOFramework, Log, TEXT("[MOInventoryUI] SplitStack - nothing to split (quantity=%d)"), Entry.Quantity);
-				return;
-			}
-
-			// Split in half (floor division)
-			const int32 SplitAmount = Entry.Quantity / 2;
-			const FName ItemDefId = Entry.ItemDefinitionId;
-
-			// Remove split amount from original stack
-			if (!InventoryComponent->RemoveItemByGuid(ItemGuid, SplitAmount))
-			{
-				UE_LOG(LogMOFramework, Warning, TEXT("[MOInventoryUI] SplitStack - failed to remove from original stack"));
-				return;
-			}
-
-			// Generate new GUID for split portion
-			const FGuid NewGuid = FGuid::NewGuid();
-
-			// Check if there's room in inventory (an empty slot)
-			if (InventoryComponent->HasEmptySlot())
-			{
-				// Add split portion to inventory - use NoStack to prevent it from merging back
-				InventoryComponent->AddItemByGuidNoStack(NewGuid, ItemDefId, SplitAmount);
-				UE_LOG(LogMOFramework, Log, TEXT("[MOInventoryUI] SplitStack - split %d items into new stack"), SplitAmount);
-			}
-			else
-			{
-				// No room in inventory - drop to world
-				APlayerController* PC = ResolveOwningPlayerController();
-				APawn* PlayerPawn = PC ? PC->GetPawn() : nullptr;
-
-				if (IsValid(PlayerPawn))
-				{
-					// Calculate drop location in front of player
-					const FVector PlayerLocation = PlayerPawn->GetActorLocation();
-					const FVector ForwardVector = PlayerPawn->GetActorForwardVector();
-					const FVector DropLocation = PlayerLocation + ForwardVector * 100.0f;
-					const FRotator DropRotation(0.0f, FMath::RandRange(0.0f, 360.0f), 0.0f);
-
-					// Spawn world item for the split portion
-					InventoryComponent->SpawnWorldItem(ItemDefId, SplitAmount, NewGuid, DropLocation, DropRotation);
-					UE_LOG(LogMOFramework, Log, TEXT("[MOInventoryUI] SplitStack - dropped %d items to world (no room in inventory)"), SplitAmount);
-				}
-				else
-				{
-					UE_LOG(LogMOFramework, Warning, TEXT("[MOInventoryUI] SplitStack - no room and no pawn to drop items"));
-				}
-			}
+			// Inventory item split: halve the stack on the server (into a new stack, or onto the ground with no empty slot)
+			FMOInventoryRequests::Submit(ResolveOwningPlayerController(), FMOInventoryRequest::Make(EMOInventoryOp::Split, InventoryComponent, nullptr, ItemGuid));
 		}
 	}
 	else if (ActionId == FName("Craft"))
@@ -1037,78 +955,9 @@ void UMOInventoryUIController::DropItemToWorldByGuid(UMOInventoryComponent* Inve
 	{
 		return;
 	}
-
-	APlayerController* PC = ResolveOwningPlayerController();
-	if (!IsValid(PC))
-	{
-		return;
-	}
-
-	APawn* PlayerPawn = PC->GetPawn();
-	if (!IsValid(PlayerPawn))
-	{
-		return;
-	}
-
-	// Calculate drop location in front of player
-	FVector PlayerLocation = PlayerPawn->GetActorLocation();
-	FRotator PlayerRotation = PlayerPawn->GetActorRotation();
-	PlayerRotation.Pitch = 0.0f; // Flatten to horizontal
-
-	// Random offset in front of player
-	const float ForwardDistance = FMath::RandRange(150.0f, 250.0f);
-	const float SideOffset = FMath::RandRange(-50.0f, 50.0f);
-
-	FVector ForwardDir = PlayerRotation.Vector();
-	FVector RightDir = FRotationMatrix(PlayerRotation).GetScaledAxis(EAxis::Y);
-	FVector DropLocation = PlayerLocation + (ForwardDir * ForwardDistance) + (RightDir * SideOffset);
-
-	// Trace down to find ground - use WorldStatic channel for reliable floor detection
-	UWorld* World = GetWorld();
-	if (IsValid(World))
-	{
-		FHitResult HitResult;
-		FCollisionQueryParams QueryParams;
-		QueryParams.AddIgnoredActor(PlayerPawn);
-		QueryParams.bTraceComplex = false; // Use simple collision for speed
-
-		const FVector TraceStart = DropLocation + FVector(0.0f, 0.0f, 200.0f);
-		const FVector TraceEnd = DropLocation - FVector(0.0f, 0.0f, 500.0f);
-
-		// Try WorldStatic first (floors, terrain), then Visibility as fallback
-		bool bHitGround = World->LineTraceSingleByChannel(HitResult, TraceStart, TraceEnd, ECC_WorldStatic, QueryParams);
-		if (!bHitGround)
-		{
-			bHitGround = World->LineTraceSingleByChannel(HitResult, TraceStart, TraceEnd, ECC_Visibility, QueryParams);
-		}
-
-		if (bHitGround)
-		{
-			// Place 30cm above ground - high enough to not clip, low enough for reliable physics
-			DropLocation = HitResult.Location + FVector(0.0f, 0.0f, 30.0f);
-		}
-		else
-		{
-			// No ground found - place at player height as fallback
-			DropLocation.Z = PlayerLocation.Z;
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOInventoryUI] DropItem: No ground found at drop location, using player height"));
-		}
-	}
-
-	const FRotator DropRotation(0.0f, FMath::RandRange(0.0f, 360.0f), 0.0f);
-
-	// Drop the item by GUID
-	AActor* DroppedActor = InventoryComponent->DropItemByGuid(ItemGuid, DropLocation, DropRotation);
-	if (IsValid(DroppedActor))
-	{
-		UE_LOG(LogMOFramework, Log, TEXT("[MOInventoryUI] Dropped item at %s"), *DropLocation.ToString());
-
-		// Enable physics for dropped item
-		if (AMOWorldItem* WorldItem = Cast<AMOWorldItem>(DroppedActor))
-		{
-			WorldItem->EnableDropPhysics();
-		}
-	}
+	// The server places it (FMOInventoryRequests::ComputeDropTransform: in front of the pawn, on the ground) and switches its drop physics on.
+	// This used to call the authority-only DropItemByGuid from the UI: on a joiner nothing was dropped.
+	FMOInventoryRequests::Submit(ResolveOwningPlayerController(), FMOInventoryRequest::Make(EMOInventoryOp::Drop, InventoryComponent, nullptr, ItemGuid));
 }
 
 // =============================================================================

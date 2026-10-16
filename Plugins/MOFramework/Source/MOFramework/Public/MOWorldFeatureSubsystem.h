@@ -97,6 +97,9 @@ public:
 	virtual bool IsTickable() const override;
 
 private:
+	/** A feature's PCG composition finished: hide what it built from engine basic shapes (editor markers baked into Epic's assembly data). */
+	void HandleCompositionGenerated(class UPCGComponent* PCG);
+
 	TUniquePtr<FMOWorldFeaturePlacer> Placer;
 	int32 PlacerSeed = 0;
 	bool bCatalogFailed = false;

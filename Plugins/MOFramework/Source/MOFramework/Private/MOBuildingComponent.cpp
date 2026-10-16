@@ -474,62 +474,27 @@ bool UMOBuildingComponent::TryPlaceGhost()
 		return false;
 	}
 
-	// Client: the ghost is a client-only preview and cannot be promoted across the wire.
-	// Forward the resolved placement to the server (which spawns the real replicated
-	// building), then respawn a fresh local ghost so the player can chain placements (H19).
-	if (!GetOwner()->HasAuthority())
-	{
-		ServerPlaceBuilding(CurrentRecipeId, CurrentGhost->GetActorTransform());
-
-		const FMORecipeDefinitionRow* ChainRecipe = UMORecipeDatabaseSettings::GetRecipeDefinition(CurrentRecipeId);
-		CurrentGhost->Destroy();
-		CurrentGhost = nullptr;
-		if (ChainRecipe && SpawnGhostActor(*ChainRecipe))
-		{
-			bCurrentPlacementValid = false;
-		}
-		else
-		{
-			ExitPlacementMode(false);
-		}
-		return true;
-	}
-
-	// The ghost becomes the actual building - just finalize its placement.
-	AMOBuildableActor* PlacedBuilding = CurrentGhost;
-	PlacedBuilding->InitializeBuilding(CurrentRecipeId);
-
-	// Detach: the actor we just finalized is now a permanent building, not
-	// our ghost. Clear the reference so the spawn below creates a fresh ghost.
-	CurrentGhost = nullptr;
-
-	OnGhostPlaced.Broadcast(PlacedBuilding);
+	// ONE placement path, host and joiner alike (Steam playtest Oct 16 2026: "on host, roof tiles have a big ass green box"): the authority used to
+	// promote its own placement preview into the building, and the preview's graybox mesh and ghost material went with it for good (the materials
+	// were saved before the graybox was set, so nothing restored them on completion); a joiner's building was a fresh server spawn. Every
+	// placement is now ServerPlaceBuilding -- on the authority the RPC runs in place -- and the preview is only ever a preview: it is replaced by a
+	// fresh one so the player can chain placements (H19).
+	ServerPlaceBuilding(CurrentRecipeId, CurrentGhost->GetActorTransform());
 	MOBuildingComponentInternal::FireBuildingTutorialEvent(this, TEXT("PlacedGhost"));
-	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingComponent] Placed building: %s"), *PlacedBuilding->GetName());
+	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingComponent] Placement of %s sent (authority=%d)"), *CurrentRecipeId.ToString(), GetOwner()->HasAuthority() ? 1 : 0);
 
-	// Stay in placement mode and spawn a fresh ghost for the same recipe so
-	// the player can chain placements. CurrentRecipeId, CurrentPlacementData,
-	// and UserRotationOffset are deliberately preserved — players typically
-	// place a run of identical pieces (a wall of floors, a row of walls) and
-	// resetting rotation between placements would feel hostile.
-	//
-	// Player still has Escape / right-click to leave the mode explicitly
-	// (HandlePlacementSecondaryAction → ExitPlacementMode(true)).
-	const FMORecipeDefinitionRow* Recipe = UMORecipeDatabaseSettings::GetRecipeDefinition(CurrentRecipeId);
-	if (Recipe && SpawnGhostActor(*Recipe))
+	const FMORecipeDefinitionRow* ChainRecipe = UMORecipeDatabaseSettings::GetRecipeDefinition(CurrentRecipeId);
+	CurrentGhost->Destroy();
+	CurrentGhost = nullptr;
+	if (ChainRecipe && SpawnGhostActor(*ChainRecipe))
 	{
-		// New ghost not yet positioned — next Tick's UpdateGhostPosition
-		// will trace + place it. Mark invalid until then.
-		bCurrentPlacementValid = false;
+		bCurrentPlacementValid = false;   // the new preview is placed by the next tick's UpdateGhostPosition
 	}
 	else
 	{
-		UE_LOG(LogMOFramework, Warning,
-			TEXT("[MOBuildingComponent] Could not respawn ghost after placement (recipe=%s); exiting placement mode"),
-			*CurrentRecipeId.ToString());
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOBuildingComponent] Could not respawn ghost after placement (recipe=%s); exiting placement mode"), *CurrentRecipeId.ToString());
 		ExitPlacementMode(false);
 	}
-
 	return true;
 }
 
@@ -607,6 +572,7 @@ void UMOBuildingComponent::ServerPlaceBuilding_Implementation(FName InRecipeId, 
 
 	Placed->InitializeBuilding(InRecipeId);
 	UE_LOG(LogMOFramework, Log, TEXT("[MOBuildingComponent] ServerPlaceBuilding: spawned %s for recipe %s"), *Placed->GetName(), *InRecipeId.ToString());
+	OnGhostPlaced.Broadcast(Placed);
 }
 
 void UMOBuildingComponent::RequestBuildAction(AMOBuildableActor* Building, EMOBuildRequest Request, uint8 SourceFlags)
@@ -737,12 +703,17 @@ bool UMOBuildingComponent::SpawnGhostActor(const FMORecipeDefinitionRow& Recipe)
 	FActorSpawnParameters SpawnParams;
 	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 
+	// The preview is this player's alone: on a host it would otherwise replicate (a buildable is a replicated class) and stand at the origin on
+	// every joiner's screen. Replication is switched off before the actor exists as far as the network is concerned.
+	SpawnParams.bDeferConstruction = true;
 	CurrentGhost = World->SpawnActor<AMOBuildableActor>(ActorClass, FVector::ZeroVector, FRotator::ZeroRotator, SpawnParams);
 	if (!CurrentGhost)
 	{
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOBuildingComponent] Failed to spawn actor of class: %s"), *ActorClass->GetName());
 		return false;
 	}
+	CurrentGhost->SetReplicates(false);
+	CurrentGhost->FinishSpawning(FTransform::Identity);
 
 	// Apply preview mesh from recipe if specified
 	if (!Recipe.PlacementData.PreviewMesh.IsNull())

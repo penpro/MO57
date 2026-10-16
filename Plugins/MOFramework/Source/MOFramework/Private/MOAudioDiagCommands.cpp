@@ -10,6 +10,8 @@
 
 #include "MOFramework.h"
 #include "MOAudioSubsystem.h"
+#include "MOBugReport.h"
+#include "Misc/Crc.h"
 
 #include "AudioDevice.h"
 #include "AudioDeviceManager.h"
@@ -87,7 +89,6 @@ static FAutoConsoleCommandWithWorld GMOAudioDiag(TEXT("MO.Audio.Diag"), TEXT("Lo
 static FAutoConsoleCommandWithWorld GMOAudioTone(TEXT("MO.Audio.Tone"), TEXT("Play a 1 s 440 Hz tone straight through the 2D audio path (tests the device output)."),
 	FConsoleCommandWithWorldDelegate::CreateStatic(&PlayTone));
 
-#if !UE_BUILD_SHIPPING
 // =============================================================================
 // AUDIO HEARTBEAT -- for the intermittent "dddd" buzz / pops / then silence (Oct 16 2026). The engine logs nothing when it happens (no underrun, no device
 // swap, no error in 1,504 logs), so this samples the audio device once a second while a game world exists and logs ONLY what changed or looks wrong:
@@ -96,12 +97,16 @@ static FAutoConsoleCommandWithWorld GMOAudioTone(TEXT("MO.Audio.Tone"), TEXT("Pl
 //   - active sounds at the voice limit              -> voices starved (the silence after)
 //   - primary volume / mute / app volume changing   -> silence by a volume (the app volume drops when the window loses focus)
 // plus a one-line summary every 30 s. Prefix [MOAudio] HB. Off: mo.Audio.Heartbeat 0.
+// It runs in EVERY build (it was compiled out of Shipping -- the build players run, which writes no log): its state also feeds the bug report's
+// Audio.* fields (device, mixer, output level, alarms with their time), so a player's "it's buzzing" report carries what the device was doing.
 // =============================================================================
 #include "AudioMixerDevice.h"
 #include "ISubmixBufferListener.h"
 #include "Sound/SoundSubmix.h"
 #include "Containers/Ticker.h"
 #include "Misc/App.h"
+#include "Misc/ConfigCacheIni.h"
+#include "Engine/GameInstance.h"
 
 static TAutoConsoleVariable<int32> CVarAudioHeartbeat(TEXT("mo.Audio.Heartbeat"), 1,
 	TEXT("1 = sample the audio device once a second during play and log changes / restart storms / voice starvation ([MOAudio] HB). 0 = off."), ECVF_Default);
@@ -124,6 +129,7 @@ namespace MOAudioHeartbeat
 			int32 Buffers = 0;
 			int32 FlatBuffers = 0;
 			float FlatValue = 0.0f;
+			int32 RepeatedBuffers = 0;   // a non-silent buffer identical to the one before it: a stuck render re-submitting its last buffer is heard as a buzz
 			float Rms() const { return Samples > 0 ? (float)FMath::Sqrt(SumSquares / (double)Samples) : 0.0f; }
 		};
 
@@ -156,6 +162,13 @@ namespace MOAudioHeartbeat
 				Acc.FlatBuffers++;   // one constant, non-zero value for a whole buffer: a stuck signal (inaudible, but it pops when the gain steps)
 				Acc.FlatValue = High;
 			}
+			const uint32 Crc = NumSamples > 0 ? FCrc::MemCrc32(AudioData, NumSamples * sizeof(float)) : 0;
+			if (Peak > 0.01f && Crc == LastCrc && NumSamples == LastNumSamples)
+			{
+				Acc.RepeatedBuffers++;
+			}
+			LastCrc = Crc;
+			LastNumSamples = NumSamples;
 		}
 
 		virtual const FString& GetListenerName() const override
@@ -175,7 +188,36 @@ namespace MOAudioHeartbeat
 	private:
 		FCriticalSection Mutex;
 		FStats Acc;
+		uint32 LastCrc = 0;          // audio render thread only
+		int32 LastNumSamples = 0;
 	};
+
+	/** What the bug report's Audio.* fields say: written once a second on the audio thread, read on the game thread when a report is written. */
+	struct FReport
+	{
+		FString Device;
+		float Peak = 0.0f;
+		float Rms = 0.0f;
+		int32 ActiveSounds = 0;
+		int32 MaxChannels = 0;
+		FString TopSounds;
+		TArray<FString> RecentAlarms;   // the latest few, oldest first, each with the session time it happened at
+		int32 AlarmTotal = 0;
+	};
+	FCriticalSection GReportMutex;
+	FReport GReport;
+
+	void NoteAlarm(const FString& What)
+	{
+		const double Uptime = FPlatformTime::Seconds() - GStartTime;
+		FScopeLock Lock(&GReportMutex);
+		GReport.RecentAlarms.Add(FString::Printf(TEXT("[%02d:%02d] %s"), (int32)(Uptime / 60.0), (int32)FMath::Fmod(Uptime, 60.0), *What));
+		if (GReport.RecentAlarms.Num() > 6)
+		{
+			GReport.RecentAlarms.RemoveAt(0);
+		}
+		++GReport.AlarmTotal;
+	}
 
 	TSharedPtr<FOutputMeter, ESPMode::ThreadSafe> GMeter;   // game thread
 	uint32 GMeterDeviceId = INDEX_NONE;                       // the device it is registered on
@@ -209,6 +251,10 @@ namespace MOAudioHeartbeat
 		if (DeviceName != S.Device)
 		{
 			UE_LOG(LogMOFramework, Warning, TEXT("[MOAudio] HB output device %s -> %s"), S.Device.IsEmpty() ? TEXT("(start)") : *S.Device, *DeviceName);
+			if (!S.Device.IsEmpty())
+			{
+				NoteAlarm(FString::Printf(TEXT("device %s -> %s"), *S.Device, *DeviceName));
+			}
 			S.Device = DeviceName;
 		}
 
@@ -243,6 +289,7 @@ namespace MOAudioHeartbeat
 			if (Pair.Value >= 4)
 			{
 				UE_LOG(LogMOFramework, Warning, TEXT("[MOAudio] HB RESTART STORM: %s started %d times in the last second"), *Pair.Key, Pair.Value);
+				NoteAlarm(FString::Printf(TEXT("restart storm: %s x%d in 1 s"), *Pair.Key, Pair.Value));
 			}
 		}
 
@@ -257,6 +304,10 @@ namespace MOAudioHeartbeat
 			else if (Out.NonFinite > 0)
 			{
 				Alarm = FString::Printf(TEXT("OUTPUT BROKEN: %lld NaN / Inf sample(s) of %lld (a filter or reverb blew up; NaN spreads and silences the mix)"), Out.NonFinite, Out.Samples);
+			}
+			else if (Out.RepeatedBuffers > Out.Buffers / 4)
+			{
+				Alarm = FString::Printf(TEXT("OUTPUT REPEATING: %d of %d buffers identical to the one before (a stuck render, heard as a buzz)"), Out.RepeatedBuffers, Out.Buffers);
 			}
 			else if (Out.FlatBuffers > Out.Buffers / 2)
 			{
@@ -274,8 +325,42 @@ namespace MOAudioHeartbeat
 			if (!Alarm.IsEmpty() && Now - S.LastOutputWarnSeconds > 5.0)
 			{
 				UE_LOG(LogMOFramework, Warning, TEXT("[MOAudio] HB %s"), *Alarm);
+				NoteAlarm(Alarm);
 				S.LastOutputWarnSeconds = Now;
 			}
+		}
+
+		{
+			// The bug report's view of this second (Audio.* fields).
+			TMap<FString, int32> Names;
+			for (const FActiveSound* Sound : Active)
+			{
+				if (Sound && Sound->GetSound())
+				{
+					Names.FindOrAdd(Sound->GetSound()->GetName())++;
+				}
+			}
+			Names.ValueSort(TGreater<int32>());
+			FString Top;
+			int32 Shown = 0;
+			for (const TPair<FString, int32>& Pair : Names)
+			{
+				if (Shown++ == 6)
+				{
+					break;
+				}
+				Top += FString::Printf(TEXT("%s%s x%d"), Top.IsEmpty() ? TEXT("") : TEXT(", "), *Pair.Key, Pair.Value);
+			}
+			FScopeLock Lock(&GReportMutex);
+			GReport.Device = S.Device;
+			if (bMetered)
+			{
+				GReport.Peak = Out.Peak;
+				GReport.Rms = Out.Rms();
+			}
+			GReport.ActiveSounds = Active.Num();
+			GReport.MaxChannels = Device->GetMaxChannels();
+			GReport.TopSounds = Top;
 		}
 
 		const int32 MaxChannels = Device->GetMaxChannels();
@@ -333,6 +418,26 @@ namespace MOAudioHeartbeat
 					FApp::GetUnfocusedVolumeMultiplier());
 				GLastAppVolume = AppVolume;
 			}
+			static TWeakObjectPtr<UGameInstance> GReportedTo;
+			if (UGameInstance* GameInstance = World->GetGameInstance(); GameInstance && GReportedTo.Get() != GameInstance)
+			{
+				if (UMOBugReportSubsystem* Reports = UMOBugReportSubsystem::Get(World))
+				{
+					Reports->RegisterContributor(TEXT("Audio"), [](const UWorld*, FMOBugReportFields& Fields)
+					{
+						FString Mixer;
+						GConfig->GetString(TEXT("Audio"), TEXT("AudioMixerModuleName"), Mixer, GEngineIni);
+						FScopeLock Lock(&GReportMutex);
+						Fields.Emplace(TEXT("Device"), GReport.Device.IsEmpty() ? FString(TEXT("(not sampled yet)")) : GReport.Device);
+						Fields.Emplace(TEXT("Mixer"), Mixer.IsEmpty() ? FString(TEXT("(platform default)")) : Mixer);
+						Fields.Emplace(TEXT("Output"), FString::Printf(TEXT("peak %.3f rms %.4f (the last second)"), GReport.Peak, GReport.Rms));
+						Fields.Emplace(TEXT("Sounds"), FString::Printf(TEXT("%d active / %d voices: %s"), GReport.ActiveSounds, GReport.MaxChannels, GReport.TopSounds.IsEmpty() ? TEXT("(none)") : *GReport.TopSounds));
+						Fields.Emplace(TEXT("AppVolume"), FString::Printf(TEXT("%.2f (unfocused %.2f)"), FApp::GetVolumeMultiplier(), FApp::GetUnfocusedVolumeMultiplier()));
+						Fields.Emplace(TEXT("Alarms"), GReport.AlarmTotal == 0 ? FString(TEXT("none this session")) : FString::Printf(TEXT("%d this session; latest: %s"), GReport.AlarmTotal, *FString::Join(GReport.RecentAlarms, TEXT(" | "))));
+					});
+					GReportedTo = GameInstance;
+				}
+			}
 			const FAudioDeviceHandle Handle = World->GetAudioDevice();
 			if (Handle.IsValid())
 			{
@@ -379,4 +484,3 @@ namespace MOAudioHeartbeat
 	};
 	FRegistration GRegistration;
 }
-#endif // !UE_BUILD_SHIPPING

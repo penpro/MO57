@@ -7,6 +7,7 @@
 #include "MOFramework.h"
 #include "MOWorldSeedSubsystem.h"
 #include "Actors/OceanologyLakeActor.h"
+#include "Components/Wave/OceanologyWaveSolverComponent.h"
 #include "Engine/AssetManager.h"
 #include "Async/Async.h"
 #include "HAL/IConsoleManager.h"
@@ -140,11 +141,40 @@ AOceanologyLake* UMOUplandLakeSubsystem::SpawnLake(const FMOWorldGen::FLake& Lak
 	ParseLakeColor(CVarLakeAbsorption.GetValueOnGameThread(), Water->SurfaceScattering.Absorption);
 	ParseLakeColor(CVarLakeScattering.GetValueOnGameThread(), Water->SurfaceScattering.Scattering);
 	Water->FinishSpawning(Where);
+	// Oceanology makes the wave solver with NewObject in AOceanologyWaterParent::SetupWaveSolvers and never registers it. A lake placed in a level gets it
+	// registered on load (its solver was saved with it); a lake SPAWNED at runtime -- every upland lake -- kept an inactive, never-ticking solver, so the lake
+	// wave clock (MPC_Waves.GameTimeInSeconds_Lake) stayed 0 and every lake's water stood still, host and joiner alike (Steam playtest Oct 16 2026: "lake
+	// water frozen in place"; measured: 15 lakes, all solvers active=False tickEnabled=False, clock 0.000 at 50 s, the ocean's solver ticking). Register it.
+	if (UOceanologyWaveSolverComponent* Solver = Water->GetWaveSolver(); Solver && !Solver->IsRegistered())
+	{
+		Solver->RegisterComponent();
+		Solver->Activate(/*bReset=*/true);
+	}
 	Water->Tags.AddUnique(LakeActorTag);
 #if WITH_EDITOR
 	Water->SetActorLabel(FString::Printf(TEXT("MOUplandLake_%lld_%lld"), Lake.CellX, Lake.CellY));
 #endif
 	return Water;
+}
+
+void UMOUplandLakeSubsystem::ReelectWaveTimeSource()
+{
+	// Oceanology times every lake's waves from ONE lake's solver: each lake's InitWaves picks the first lake of its class it finds (FirstWaterInstance) and
+	// the other solvers copy that one's clock; only it writes the shared wave parameter. MO spawns and removes lakes as players move; once the elected lake
+	// is removed the reference is dead and no lake advances the clock again (the water would freeze for good). After a removal every remaining lake re-runs
+	// its wave init, so they elect a lake that still exists. (The frozen lakes of the Oct 16 playtest were the never-registered solvers, see SpawnLake.)
+	int32 Reinitialised = 0;
+	for (TPair<FIntPoint, FLakeBody>& Pair : Bodies)
+	{
+		AOceanologyLake* Body = Pair.Value.Body.Get();
+		UOceanologyWaveSolverComponent* Solver = IsValid(Body) ? Body->GetWaveSolver() : nullptr;
+		if (Solver)
+		{
+			Solver->InitWaves(Body, false);   // the arguments AOceanologyLake::Init passes
+			++Reinitialised;
+		}
+	}
+	UE_LOG(LogMOFramework, Log, TEXT("[MOLakes] a lake was removed: %d lake(s) re-elected their wave clock"), Reinitialised);
 }
 
 void UMOUplandLakeSubsystem::DestroyAll()
@@ -255,6 +285,7 @@ void UMOUplandLakeSubsystem::Refresh(bool bAllowAsync)
 	}
 
 	// Away: lakes no player is within DespawnRadius of.
+	bool bRemovedAny = false;
 	for (auto It = Bodies.CreateIterator(); It; ++It)
 	{
 		bool bNear = It.Value().Body.IsValid();
@@ -272,9 +303,14 @@ void UMOUplandLakeSubsystem::Refresh(bool bAllowAsync)
 			if (AOceanologyLake* Body = It.Value().Body.Get())
 			{
 				Body->Destroy();
+				bRemovedAny = true;
 			}
 			It.RemoveCurrent();
 		}
+	}
+	if (bRemovedAny)
+	{
+		ReelectWaveTimeSource();
 	}
 
 	// The lake query (the lake grid of an 8 km square: ~30 ms) is the expensive part and its answer barely changes while the players walk: take a finished worker-thread result, reuse the cached one while

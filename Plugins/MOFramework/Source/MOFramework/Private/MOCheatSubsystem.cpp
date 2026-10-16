@@ -3,6 +3,7 @@
  */
 
 #include "MOCheatSubsystem.h"
+#include "MOInventoryRequest.h"
 #include "Layout/WidgetPath.h"
 #include "Types/ReflectionMetadata.h"
 #include "Containers/Ticker.h"
@@ -10,6 +11,7 @@
 #include "Engine/TargetPoint.h"
 #include "MOWorldSeedSubsystem.h"
 #include "MOPlayerController.h"
+#include "InputActionValue.h"
 #include "MOForagingSubsystem.h"
 #include "MOGroundContextMenu.h"
 #include "Kismet/GameplayStatics.h"
@@ -134,6 +136,9 @@
 #include "Misc/Paths.h"
 #include "UObject/Class.h"
 #include "UObject/ConstructorHelpers.h"
+#include "MOWorldActionProvider.h"
+#include "MOCarcassDefinitionRow.h"
+#include "MOCarcassActor.h"
 
 namespace
 {
@@ -1166,6 +1171,34 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 			const bool bOk = Pawn->SetActorLocation(Dest, /*bSweep*/false, /*OutSweepHit*/nullptr, ETeleportType::TeleportPhysics);
 			UE_LOG(LogMOFramework, Warning, TEXT("[MOCheat] Teleport %s -> (%.0f, %.0f, %.0f) [%s]"),
 				*Pawn->GetName(), Dest.X, Dest.Y, Dest.Z, bOk ? TEXT("OK") : TEXT("FAILED"));
+		}),
+		ECVF_Default));
+
+	// ---------- MO.Player.Face X Y ----------
+	// Harness aid: MO.Test.MoveFor moves relative to the view, so a scripted walk needs a known heading (a lake centre, a building, a peak).
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Player.Face"),
+		TEXT("Dev: turn the local player's view toward a world point (level, unless Z is given: then the view also pitches at it, to aim an interaction), so MO.Test.MoveFor 0 1 walks at it. Usage: MO.Player.Face <X> <Y> [Z]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			APawn* Pawn = ResolveLocalPawn(World);
+			APlayerController* PC = Pawn ? Cast<APlayerController>(Pawn->GetController()) : nullptr;
+			if (!PC || Args.Num() < 2)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] FACE FAILED: needs a local player pawn. Usage: MO.Player.Face <X> <Y>"));
+				return;
+			}
+			const FVector To(FCString::Atof(*Args[0]) - Pawn->GetActorLocation().X, FCString::Atof(*Args[1]) - Pawn->GetActorLocation().Y, 0.0f);
+			FRotator View(0.0f, To.Rotation().Yaw, 0.0f);
+			if (Args.Num() > 2)
+			{
+				FVector Eye;
+				FRotator Unused;
+				PC->GetPlayerViewPoint(Eye, Unused);
+				View = (FVector(FCString::Atof(*Args[0]), FCString::Atof(*Args[1]), FCString::Atof(*Args[2])) - Eye).Rotation();
+			}
+			PC->SetControlRotation(View);
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] FACE yaw %.1f pitch %.1f toward (%s, %s), %.0f m away"), View.Yaw, View.Pitch, *Args[0], *Args[1], To.Size() / 100.0f);
 		}),
 		ECVF_Default));
 
@@ -3470,6 +3503,142 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 		}),
 		ECVF_Default));
 
+	// ---------- MO.Test.Inventory <Drop|Split|Organize|DropAll> [ItemDefId] ----------
+	// Co-op harness: the inventory UI's own door (FMOInventoryRequests::Submit -- the server RPC on a joiner), deferred to the next tick so it runs
+	// OUTSIDE the bridge's script call (inside it every RPC executes locally, see coop-pawn-lifecycle).
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Test.Inventory"),
+		TEXT("Dev: submit an inventory request for the local pawn's own inventory through FMOInventoryRequests::Submit (what the inventory UI does). Usage: MO.Test.Inventory <Drop|Split|Organize|DropAll> [ItemDefId]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			if (Args.Num() < 1)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] INVREQ FAILED: usage MO.Test.Inventory <Drop|Split|Organize|DropAll> [ItemDefId]"));
+				return;
+			}
+			const FString OpArg = Args[0];
+			const FName ItemId = Args.Num() > 1 ? FName(*Args[1]) : NAME_None;
+			RunOnNextTick(World, [OpArg, ItemId](UWorld* W)
+			{
+				APlayerController* PC = W->GetFirstPlayerController();
+				APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+				UMOInventoryComponent* Inv = Pawn ? Pawn->FindComponentByClass<UMOInventoryComponent>() : nullptr;
+				if (!Inv)
+				{
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] INVREQ FAILED: no local pawn inventory"));
+					return;
+				}
+				FGuid Item;
+				for (const FGuid& Guid : Inv->GetAllItemGuids())
+				{
+					FMOInventoryEntry Entry;
+					if (Inv->TryGetEntryByGuid(Guid, Entry) && (ItemId.IsNone() || Entry.ItemDefinitionId == ItemId))
+					{
+						Item = Guid;
+						break;
+					}
+				}
+				EMOInventoryOp Op = EMOInventoryOp::Drop;
+				if (OpArg.Equals(TEXT("Split"), ESearchCase::IgnoreCase)) { Op = EMOInventoryOp::Split; }
+				else if (OpArg.Equals(TEXT("Organize"), ESearchCase::IgnoreCase)) { Op = EMOInventoryOp::Organize; }
+				else if (OpArg.Equals(TEXT("DropAll"), ESearchCase::IgnoreCase)) { Op = EMOInventoryOp::DropAll; }
+				const bool bSubmitted = FMOInventoryRequests::Submit(PC, FMOInventoryRequest::Make(Op, Inv, nullptr, Item));
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] INVREQ op=%s item=%s submitted=%d authority=%d"), *OpArg, *Item.ToString(), bSubmitted ? 1 : 0, PC->HasAuthority() ? 1 : 0);
+			});
+		}),
+		ECVF_Default));
+
+	// ---------- MO.Test.Carcass [Row=Deer] [PlayerIndex=0] ----------
+	// Harness aid for the butchering menu (Steam playtest Oct 16 2026): a carcass on the ground in front of a player, without hunting one down.
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Test.Carcass"),
+		TEXT("Dev (server): lay a carcass of DT_Carcasses row Row on the ground 1.5 m in front of player PlayerIndex's pawn. Usage: MO.Test.Carcass [Row=Deer] [PlayerIndex=0]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			if (!World || World->GetNetMode() == NM_Client)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] CARCASS FAILED: server only"));
+				return;
+			}
+			const FName Row = Args.Num() > 0 ? FName(*Args[0]) : FName(TEXT("Deer"));
+			const int32 Index = Args.Num() > 1 ? FCString::Atoi(*Args[1]) : 0;
+			APawn* Pawn = UGameplayStatics::GetPlayerPawn(World, Index);
+			UDataTable* Table = LoadObject<UDataTable>(nullptr, TEXT("/MOFramework/Data/DT_Carcasses.DT_Carcasses"));
+			if (!Pawn || !Table || !Table->FindRow<FMOCarcassDefinitionRow>(Row, TEXT("MO.Test.Carcass")))
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] CARCASS FAILED: %s"), !Pawn ? TEXT("no such player pawn") : TEXT("no such DT_Carcasses row"));
+				return;
+			}
+			FVector At = Pawn->GetActorLocation() + Pawn->GetActorForwardVector().GetSafeNormal2D() * 150.0f;
+			FHitResult Hit;
+			FCollisionQueryParams Params(SCENE_QUERY_STAT(MOTestCarcass), false, Pawn);
+			if (World->LineTraceSingleByChannel(Hit, At + FVector(0.0f, 0.0f, 200.0f), At - FVector(0.0f, 0.0f, 500.0f), ECC_WorldStatic, Params))
+			{
+				At = Hit.Location + FVector(0.0f, 0.0f, 20.0f);
+			}
+			// Deferred: the definition is set before BeginPlay and the first replication, as AMOCreature::SpawnCarcass's carcass has it.
+			AMOCarcassActor* Carcass = World->SpawnActorDeferred<AMOCarcassActor>(AMOCarcassActor::StaticClass(), FTransform(At), nullptr, nullptr,
+				ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+			if (!Carcass)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] CARCASS FAILED: spawn"));
+				return;
+			}
+			Carcass->CarcassDefinition.DataTable = Table;
+			Carcass->CarcassDefinition.RowName = Row;
+			Carcass->FinishSpawning(FTransform(At));
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] CARCASS %s (%s) at (%.0f, %.0f, %.0f) for %s"), *Carcass->GetName(), *Row.ToString(), At.X, At.Y, At.Z, *Pawn->GetName());
+		}),
+		ECVF_Default));
+
+	// ---------- MO.Test.WorldAction <list | ActionId> ----------
+	// The world-action menu's own door (FMOWorldActions::Submit -- ServerWorldAction on a joiner) on the nearest IMOWorldActionProvider within 4 m, deferred to
+	// the next tick so it runs outside the bridge's script call. `list` logs the options as THIS machine sees them (a joiner: from replicated state).
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Test.WorldAction"),
+		TEXT("Dev: list (or submit) the actions of the nearest world-action target (a carcass ...) within 4 m of the local pawn. Usage: MO.Test.WorldAction <list|ActionId>"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			const FString Verb = Args.Num() > 0 ? Args[0] : FString(TEXT("list"));
+			RunOnNextTick(World, [Verb](UWorld* W)
+			{
+				APlayerController* PC = W->GetFirstPlayerController();
+				APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+				AActor* Best = nullptr;
+				float BestDist = 400.0f;
+				for (TActorIterator<AActor> It(W); It && Pawn; ++It)
+				{
+					const float Dist = FVector::Dist(It->GetActorLocation(), Pawn->GetActorLocation());
+					if (Dist < BestDist && Cast<IMOWorldActionProvider>(*It))
+					{
+						Best = *It;
+						BestDist = Dist;
+					}
+				}
+				IMOWorldActionProvider* Provider = Cast<IMOWorldActionProvider>(Best);
+				if (!Provider)
+				{
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDACTION FAILED: no world-action target within 4 m of the local pawn"));
+					return;
+				}
+				if (Verb.Equals(TEXT("list"), ESearchCase::IgnoreCase))
+				{
+					TArray<FMOItemActionOption> Options;
+					Provider->GetWorldActions(Pawn, Options);
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDACTION %s \"%s\" options=%d authority=%d"), *Best->GetName(), *Provider->GetWorldActionTitle().ToString(), Options.Num(), PC->HasAuthority() ? 1 : 0);
+					for (const FMOItemActionOption& O : Options)
+					{
+						UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDACTION   %s | %s | %s%s"), *O.Id.ToString(), *O.Label.ToString(), O.bEnabled ? TEXT("enabled") : TEXT("disabled: "),
+							O.bEnabled ? TEXT("") : *O.DisabledReason.ToString());
+					}
+					return;
+				}
+				const bool bSubmitted = FMOWorldActions::Submit(PC, Best, FName(*Verb));
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDACTION submit %s on %s submitted=%d authority=%d"), *Verb, *Best->GetName(), bSubmitted ? 1 : 0, PC->HasAuthority() ? 1 : 0);
+			});
+		}),
+		ECVF_Default));
+
 	// ---------- MO.Colony.PlaceBuilding <recipeId> [dist=400] ----------
 	ConsoleCommands.Add(CM.RegisterConsoleCommand(
 		TEXT("MO.Colony.PlaceBuilding"),
@@ -3922,52 +4091,79 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 	// ---------- MO.Test.Input <Action> [args] ----------
 	ConsoleCommands.Add(CM.RegisterConsoleCommand(
 		TEXT("MO.Test.Input"),
-		TEXT("Inject controllable-interface input on the local pawn. Usage: MO.Test.Input <Move X Y|Look X Y|JumpStart|JumpEnd|SprintStart|SprintEnd|ToggleJog|CrouchToggle|Interact|SecondaryInteract|PrimaryAction|PrimaryActionRelease|SecondaryAction|SecondaryActionRelease|TerraformToggle|TerraformCycleTool>. Move/Look are per-frame inputs (drive across frames via claude_seq)."),
+		TEXT("Inject controllable-interface input on the local pawn. Usage: MO.Test.Input <Move X Y|Look X Y|JumpStart|JumpEnd|SprintStart|SprintEnd|ToggleJog|CrouchToggle|Interact|SecondaryInteract|RightClick|PrimaryAction|PrimaryActionRelease|SecondaryAction|SecondaryActionRelease|TerraformToggle|TerraformCycleTool>. Move/Look are per-frame inputs (drive across frames via claude_seq)."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
 		{
-			APawn* Pawn = ResolveLocalPawn(World);
-			if (!Pawn || !Pawn->GetClass()->ImplementsInterface(UMOControllableInterface::StaticClass()))
+			// Everything but the per-frame Move / Look runs on the NEXT tick: those actions send RPCs (interact, secondary interact, primary action ...), and an RPC
+			// sent inside the bridge's script call executes locally -- a joiner's right-click "worked" on its own copy and never reached the server (Oct 16 2026).
+			auto Dispatch = [Args](UWorld* W)
 			{
-				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] FAIL Input: no controllable pawn (are you in-game?)"));
-				return;
-			}
-			if (Args.Num() < 1)
-			{
-				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] FAIL Input: no action given (see help)"));
-				return;
-			}
-			const FString& Action = Args[0];
-			auto Is = [&Action](const TCHAR* Name) { return Action.Equals(Name, ESearchCase::IgnoreCase); };
-			bool bDispatched = true;
-			if (Is(TEXT("Move")) && Args.Num() >= 3)
-			{
-				IMOControllableInterface::Execute_RequestMove(Pawn, FVector2D(FCString::Atof(*Args[1]), FCString::Atof(*Args[2])));
-			}
-			else if (Is(TEXT("Look")) && Args.Num() >= 3)
-			{
-				IMOControllableInterface::Execute_RequestLook(Pawn, FVector2D(FCString::Atof(*Args[1]), FCString::Atof(*Args[2])));
-			}
-			else if (Is(TEXT("JumpStart")))              { IMOControllableInterface::Execute_RequestJumpStart(Pawn); }
-			else if (Is(TEXT("JumpEnd")))                { IMOControllableInterface::Execute_RequestJumpEnd(Pawn); }
-			else if (Is(TEXT("SprintStart")))            { IMOControllableInterface::Execute_RequestSprintStart(Pawn); }
-			else if (Is(TEXT("SprintEnd")))              { IMOControllableInterface::Execute_RequestSprintEnd(Pawn); }
-			else if (Is(TEXT("ToggleJog")))              { IMOControllableInterface::Execute_RequestToggleJog(Pawn); }
-			else if (Is(TEXT("CrouchToggle")))           { IMOControllableInterface::Execute_RequestCrouchToggle(Pawn); }
-			else if (Is(TEXT("Interact")))               { IMOControllableInterface::Execute_RequestInteract(Pawn); }
-			else if (Is(TEXT("SecondaryInteract")))      { IMOControllableInterface::Execute_RequestSecondaryInteract(Pawn); }
-			else if (Is(TEXT("PrimaryAction")))          { IMOControllableInterface::Execute_RequestPrimaryAction(Pawn); }
-			else if (Is(TEXT("PrimaryActionRelease")))   { IMOControllableInterface::Execute_RequestPrimaryActionRelease(Pawn); }
-			else if (Is(TEXT("SecondaryAction")))        { IMOControllableInterface::Execute_RequestSecondaryAction(Pawn); }
-			else if (Is(TEXT("SecondaryActionRelease"))) { IMOControllableInterface::Execute_RequestSecondaryActionRelease(Pawn); }
-			else if (Is(TEXT("TerraformToggle")))        { IMOControllableInterface::Execute_RequestTerraformToggle(Pawn); }
-			else if (Is(TEXT("TerraformCycleTool")))     { IMOControllableInterface::Execute_RequestTerraformCycleTool(Pawn); }
-			else { bDispatched = false; }
+				APawn* Pawn = ResolveLocalPawn(W);
+				if (!Pawn || !Pawn->GetClass()->ImplementsInterface(UMOControllableInterface::StaticClass()))
+				{
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] FAIL Input: no controllable pawn (are you in-game?)"));
+					return;
+				}
+				if (Args.Num() < 1)
+				{
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] FAIL Input: no action given (see help)"));
+					return;
+				}
+				const FString& Action = Args[0];
+				auto Is = [&Action](const TCHAR* Name) { return Action.Equals(Name, ESearchCase::IgnoreCase); };
+				bool bDispatched = true;
+				if (Is(TEXT("Move")) && Args.Num() >= 3)
+				{
+					IMOControllableInterface::Execute_RequestMove(Pawn, FVector2D(FCString::Atof(*Args[1]), FCString::Atof(*Args[2])));
+				}
+				else if (Is(TEXT("Look")) && Args.Num() >= 3)
+				{
+					IMOControllableInterface::Execute_RequestLook(Pawn, FVector2D(FCString::Atof(*Args[1]), FCString::Atof(*Args[2])));
+				}
+				else if (Is(TEXT("JumpStart")))              { IMOControllableInterface::Execute_RequestJumpStart(Pawn); }
+				else if (Is(TEXT("JumpEnd")))                { IMOControllableInterface::Execute_RequestJumpEnd(Pawn); }
+				else if (Is(TEXT("SprintStart")))            { IMOControllableInterface::Execute_RequestSprintStart(Pawn); }
+				else if (Is(TEXT("SprintEnd")))              { IMOControllableInterface::Execute_RequestSprintEnd(Pawn); }
+				else if (Is(TEXT("ToggleJog")))              { IMOControllableInterface::Execute_RequestToggleJog(Pawn); }
+				else if (Is(TEXT("CrouchToggle")))           { IMOControllableInterface::Execute_RequestCrouchToggle(Pawn); }
+				else if (Is(TEXT("Interact")))               { IMOControllableInterface::Execute_RequestInteract(Pawn); }
+				else if (Is(TEXT("SecondaryInteract")))      { IMOControllableInterface::Execute_RequestSecondaryInteract(Pawn); }
+				else if (Is(TEXT("RightClick")))
+				{
+					// The controller's right-mouse handler itself (the survivor menu decision lives there, before the pawn's secondary interact).
+					if (AMOPlayerController* MOPC = Cast<AMOPlayerController>(Pawn->GetController()))
+					{
+						MOPC->HandleSecondaryAction(FInputActionValue(true));
+						MOPC->HandleSecondaryActionRelease(FInputActionValue(false));
+					}
+					else
+					{
+						bDispatched = false;
+					}
+				}
+				else if (Is(TEXT("PrimaryAction")))          { IMOControllableInterface::Execute_RequestPrimaryAction(Pawn); }
+				else if (Is(TEXT("PrimaryActionRelease")))   { IMOControllableInterface::Execute_RequestPrimaryActionRelease(Pawn); }
+				else if (Is(TEXT("SecondaryAction")))        { IMOControllableInterface::Execute_RequestSecondaryAction(Pawn); }
+				else if (Is(TEXT("SecondaryActionRelease"))) { IMOControllableInterface::Execute_RequestSecondaryActionRelease(Pawn); }
+				else if (Is(TEXT("TerraformToggle")))        { IMOControllableInterface::Execute_RequestTerraformToggle(Pawn); }
+				else if (Is(TEXT("TerraformCycleTool")))     { IMOControllableInterface::Execute_RequestTerraformCycleTool(Pawn); }
+				else { bDispatched = false; }
 
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] %s Input: '%s' (canMove=%s canJump=%s vel=%s)"),
-				bDispatched ? TEXT("PASS") : TEXT("FAIL"), *Action,
-				IMOControllableInterface::Execute_CanMove(Pawn) ? TEXT("Y") : TEXT("N"),
-				IMOControllableInterface::Execute_CanJump(Pawn) ? TEXT("Y") : TEXT("N"),
-				*Pawn->GetVelocity().ToCompactString());
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOTEST] %s Input: '%s' (canMove=%s canJump=%s vel=%s)"),
+					bDispatched ? TEXT("PASS") : TEXT("FAIL"), *Action,
+					IMOControllableInterface::Execute_CanMove(Pawn) ? TEXT("Y") : TEXT("N"),
+					IMOControllableInterface::Execute_CanJump(Pawn) ? TEXT("Y") : TEXT("N"),
+					*Pawn->GetVelocity().ToCompactString());
+			};
+			const bool bPerFrame = Args.Num() > 0 && (Args[0].Equals(TEXT("Move"), ESearchCase::IgnoreCase) || Args[0].Equals(TEXT("Look"), ESearchCase::IgnoreCase));
+			if (bPerFrame)
+			{
+				Dispatch(World);
+			}
+			else
+			{
+				RunOnNextTick(World, Dispatch);
+			}
 		}),
 		ECVF_Default));
 

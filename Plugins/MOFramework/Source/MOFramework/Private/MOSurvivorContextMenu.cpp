@@ -60,53 +60,12 @@ void UMOSurvivorContextMenu::InitializeForSurvivor(APawn* Survivor, FVector2D Sc
 		SurvivorController ? TEXT("Yes") : TEXT("No"),
 		bSurvivorIsDead ? TEXT("Yes") : TEXT("No"));
 
-	// If not dead and no survivor controller exists, spawn one on-demand for recruited survivors
+	// A recruited survivor without its AI yet gets one (the shared EnsureSurvivorAIController: never from a player who drives the pawn).
 	if (!bSurvivorIsDead && !SurvivorController && Survivor->HasAuthority())
 	{
-		UMORecruitmentComponent* RecruitComp = Survivor->FindComponentByClass<UMORecruitmentComponent>();
-		if (RecruitComp && RecruitComp->IsPossessable())
+		if (UMORecruitmentComponent* RecruitComp = Survivor->FindComponentByClass<UMORecruitmentComponent>(); RecruitComp && RecruitComp->IsPossessable())
 		{
-			UE_LOG(LogMOFramework, Log, TEXT("[MOSurvivorContextMenu] Spawning survivor controller on-demand for %s"), *Survivor->GetName());
-
-			// Unpossess from any existing controller
-			if (ExistingController)
-			{
-				ExistingController->UnPossess();
-			}
-
-			// Get the AI controller class from the pawn - must be a survivor controller or subclass
-			TSubclassOf<AController> AIControllerClass = Survivor->AIControllerClass;
-
-			// Log what class is set on the pawn
-			UE_LOG(LogMOFramework, Log, TEXT("[MOSurvivorContextMenu] Pawn AIControllerClass: %s"),
-				AIControllerClass ? *AIControllerClass->GetName() : TEXT("None"));
-
-			// Ensure we use a survivor controller class - fallback if not set or wrong type
-			if (!AIControllerClass || !AIControllerClass->IsChildOf(AMOSurvivorController::StaticClass()))
-			{
-				UE_LOG(LogMOFramework, Log, TEXT("[MOSurvivorContextMenu] Using default AMOSurvivorController (pawn class was not a survivor controller)"));
-				AIControllerClass = AMOSurvivorController::StaticClass();
-			}
-
-			// Spawn the new AI controller
-			UWorld* World = Survivor->GetWorld();
-			if (World)
-			{
-				FActorSpawnParameters SpawnParams;
-				SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-
-				AAIController* NewController = World->SpawnActor<AAIController>(AIControllerClass, Survivor->GetActorLocation(), Survivor->GetActorRotation(), SpawnParams);
-				if (NewController)
-				{
-					NewController->Possess(Survivor);
-					SurvivorController = Cast<AMOSurvivorController>(NewController);
-					UE_LOG(LogMOFramework, Log, TEXT("[MOSurvivorContextMenu] Successfully spawned controller: %s"), *NewController->GetName());
-				}
-				else
-				{
-					UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorContextMenu] Failed to spawn AI controller"));
-				}
-			}
+			SurvivorController = RecruitComp->EnsureSurvivorAIController();
 		}
 	}
 

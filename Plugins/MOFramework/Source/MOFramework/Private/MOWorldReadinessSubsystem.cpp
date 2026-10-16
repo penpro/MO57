@@ -7,6 +7,8 @@
 #include "Camera/PlayerCameraManager.h"
 #include "HAL/IConsoleManager.h"
 #include "MOFramework.h"
+#include "MOBugReport.h"
+#include "Grid/PCGPartitionActor.h"
 #include "MOVoxelReadinessSubsystem.h"
 #include "PCGComponent.h"
 #include "Subsystems/PCGSubsystem.h"
@@ -72,6 +74,54 @@ bool UMOWorldReadinessSubsystem::ShouldCreateSubsystem(UObject* Outer) const
 {
 	const UWorld* World = Cast<UWorld>(Outer);
 	return World && World->IsGameWorld() && World->GetNetMode() != NM_DedicatedServer && Super::ShouldCreateSubsystem(Outer);
+}
+
+void UMOWorldReadinessSubsystem::OnWorldBeginPlay(UWorld& InWorld)
+{
+	Super::OnWorldBeginPlay(InWorld);
+	if (UMOBugReportSubsystem* Reports = UMOBugReportSubsystem::Get(&InWorld))
+	{
+		Reports->RegisterContributor(TEXT("WorldBuild"), [](const UWorld* World, FMOBugReportFields& Out)
+		{
+			if (const UMOWorldReadinessSubsystem* Self = World ? World->GetSubsystem<UMOWorldReadinessSubsystem>() : nullptr)
+			{
+				Self->DescribeForBugReport(Out);
+			}
+		});
+	}
+}
+
+void UMOWorldReadinessSubsystem::DescribeForBugReport(TArray<TPair<FString, FString>>& Out) const
+{
+	Out.Emplace(TEXT("Stage"), UEnum::GetValueAsString(Stage));
+	Out.Emplace(TEXT("LastReady"), LastFinishReason.IsEmpty() ? FString(TEXT("(not this session)")) : FString::Printf(TEXT("%s after %.1f s"), *LastFinishReason, LastFinishAfterSeconds));
+	if (bLastVegetationCapped)
+	{
+		Out.Emplace(TEXT("VegetationCapped"), FString::Printf(TEXT("yes, %d instances near the camera then"), LastCappedNearCount));
+	}
+	Out.Emplace(TEXT("HeldGrids"), FString::FromInt(HeldRadii.Num()));   // more than 0 once ready = far grids never released
+	if (const IConsoleVariable* FrameTime = IConsoleManager::Get().FindConsoleVariable(TEXT("pcg.FrameTime")))
+	{
+		Out.Emplace(TEXT("PcgFrameTimeMs"), FString::Printf(TEXT("%.1f"), FrameTime->GetFloat()));
+	}
+	bool bHasPcg = false;
+	const bool bBusy = IsPcgBusy(bHasPcg);
+	Out.Emplace(TEXT("PcgExecuting"), !bHasPcg ? TEXT("(no PCG subsystem)") : bBusy ? TEXT("yes") : TEXT("no"));
+	int32 Components = 0, Generating = 0, Generated = 0, PartitionActors = 0;
+	for (TActorIterator<AActor> It(GetWorld()); It; ++It)
+	{
+		PartitionActors += It->IsA<APCGPartitionActor>() ? 1 : 0;
+		TInlineComponentArray<UPCGComponent*> Comps(*It);
+		for (const UPCGComponent* Comp : Comps)
+		{
+			++Components;
+			Generating += Comp->IsGenerating() ? 1 : 0;
+			Generated += Comp->bGenerated ? 1 : 0;
+		}
+	}
+	Out.Emplace(TEXT("PcgComponents"), FString::Printf(TEXT("%d (%d generated, %d generating) on %d partition actor(s)"), Components, Generated, Generating, PartitionActors));
+	NextNearCountSeconds = 0.0;   // a fresh count, not the cached one
+	Out.Emplace(TEXT("NearInstances"), FString::Printf(TEXT("%d within %.0f m"), CountNearPcgInstances(), CVarNearInstanceRadiusCm.GetValueOnGameThread() / 100.0f));
 }
 
 void UMOWorldReadinessSubsystem::Deinitialize()
@@ -281,6 +331,7 @@ void UMOWorldReadinessSubsystem::BeginTracking(bool bStartVoxelPolling)
 	Progress = 0.0f;
 	PcgQuietSeconds = 0.0;
 	bPcgSeenBusy = false;
+	bLastVegetationCapped = false;
 	CycleStartSeconds = FPlatformTime::Seconds();
 	LastPollSeconds = CycleStartSeconds;
 	NextTraceSeconds = 0.0;
@@ -377,6 +428,8 @@ void UMOWorldReadinessSubsystem::Finish(const TCHAR* Reason)
 		World->GetTimerManager().ClearTimer(PollTimerHandle);
 	}
 	UE_LOG(LogMOFramework, Warning, TEXT("[MOReadiness] READY after %.1fs (%s)"), FPlatformTime::Seconds() - CycleStartSeconds, Reason);
+	LastFinishReason = Reason;
+	LastFinishAfterSeconds = FPlatformTime::Seconds() - CycleStartSeconds;
 	ReleaseFarGrids();
 	RestorePcgBudget();
 	Stage = EMOWorldReadyStage::Ready;
@@ -481,6 +534,8 @@ void UMOWorldReadinessSubsystem::Poll()
 		{
 			if (bCapped && !bQuiet)
 			{
+				bLastVegetationCapped = true;
+				LastCappedNearCount = NearCount;
 				UE_LOG(LogMOFramework, Warning, TEXT("[MOReadiness] vegetation stage capped at %.0fs with PCG still working (%d spawned instances within %.0f m; far field keeps filling behind the reveal)"), StageElapsed, NearCount, CVarNearInstanceRadiusCm.GetValueOnGameThread() / 100.0f);
 			}
 			SetProgress(VegetationEnd);

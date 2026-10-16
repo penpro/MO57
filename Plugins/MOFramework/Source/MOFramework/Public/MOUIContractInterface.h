@@ -17,6 +17,7 @@
  * - RequestOpenCraftingMenu: Open crafting (hand or station)
  * - RequestShowGhostContextMenu: Show context menu for ghost
  * - RequestShowStationContextMenu: Show context menu for station
+ * - RequestShowWorldActionMenu: Show the action list of a world-action target (carcass)
  *
  * IMPLEMENTORS:
  * - AMOPlayerController: Primary implementor
@@ -99,11 +100,12 @@ public:
 	void RequestShowStationContextMenu(AActor* StationActor, FVector WorldPosition);
 
 	/**
-	 * Request to start butchering a carcass part.
-	 * Shows progress bar and locks input until complete or cancelled.
-	 * @param CarcassActor - The carcass actor
-	 * @param PartId - The part to butcher
+	 * Request the right-click action menu of a world-action target (IMOWorldActionProvider: a carcass ...).
+	 * The owning client lists the target's actions; a choice goes back to the server (FMOWorldActions). Replaces the old
+	 * RequestStartCarcassButchering, which ran butchering in the client's UI (nothing happened on a co-op joiner).
+	 * @param TargetActor - The target (must implement IMOWorldActionProvider)
+	 * @param WorldPosition - World position for menu placement
 	 */
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category="MO|UI")
-	void RequestStartCarcassButchering(AActor* CarcassActor, FName PartId);
+	void RequestShowWorldActionMenu(AActor* TargetActor, FVector WorldPosition);
 };

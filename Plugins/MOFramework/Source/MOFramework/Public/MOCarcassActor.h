@@ -17,20 +17,22 @@
  * - Tracks which parts have been harvested
  * - Persistence via IdentityComponent
  *
- * WORKFLOW:
- * 1. Creature dies -> SpawnCarcass() creates AMOCarcassActor
- * 2. Player interacts -> Shows available parts (context menu or UI)
- * 3. Player selects part -> StartHarvestPart() begins timed harvest
- * 4. Progress updates -> OnHarvestProgress broadcasts
- * 5. Complete -> Part added to inventory, part marked harvested
- * 6. Repeat until all parts harvested or carcass decays
+ * WORKFLOW (Oct 16 2026: server-driven, co-op safe -- it used to run in the client's UI, so a joiner's butchering never progressed):
+ * 1. Creature dies -> SpawnCarcass() creates AMOCarcassActor (CarcassDefinition replicates: clients list the parts too)
+ * 2. Right-click -> IMOUIContractInterface::RequestShowWorldActionMenu: the owning client lists GetWorldActions (every part
+ *    that can still be cut, "Butcher everything" first; a part needing a knife the pawn lacks is greyed with the reason)
+ *    E -> cuts the first part the pawn can cut (or opens the menu when it can cut none, so the reason shows)
+ * 3. A choice -> FMOWorldActions -> PerformWorldAction (server) -> the PAWN's UMOTimedActionComponent: replicated progress bar,
+ *    cancelled by moving or being hurt. "Butcher everything" chains the parts, one timed cut after another.
+ * 4. Complete -> the item goes to the pawn's inventory (on the ground by the carcass when it is full), part marked harvested
+ * 5. Repeat until all parts harvested (the carcass goes) or they decay. Two pawns may cut two different parts at once.
  *
  * RELATED FILES:
  * - MOCarcassTypes.h - FMOCarcassPartEntry, EMOCarcassDecayStage
  * - MOCarcassDefinitionRow.h - DataTable definition
  * - MOCreature.h - Spawns carcass on death
  *
- * LAST UPDATED: 2026-02-26
+ * LAST UPDATED: 2026-10-16
  * =============================================================================
  */
 
@@ -39,6 +41,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "MOCarcassTypes.h"
+#include "MOWorldActionProvider.h"
 #include "MOCarcassActor.generated.h"
 
 class UMOInteractableComponent;
@@ -50,17 +53,15 @@ class USphereComponent;
 struct FMOCarcassDefinitionRow;
 
 // Delegates
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOOnCarcassHarvestProgress, float, Progress, float, TotalTime);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMOOnCarcassPartHarvested, FName, PartId, bool, bSuccess);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FMOOnCarcassDecayChanged, EMOCarcassDecayStage, NewStage);
-DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOOnCarcassHarvestCancelled);
 
 /**
  * Actor representing a dead creature's remains.
  * Decays over time and can be butchered for parts.
  */
 UCLASS()
-class MOFRAMEWORK_API AMOCarcassActor : public AActor
+class MOFRAMEWORK_API AMOCarcassActor : public AActor, public IMOWorldActionProvider
 {
 	GENERATED_BODY()
 
@@ -95,8 +96,8 @@ public:
 	// CONFIGURATION
 	// ============================================================================
 
-	/** Carcass definition from DataTable. */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Carcass")
+	/** Carcass definition from DataTable. Replicated: a client's menu lists the parts from it (set at spawn, before the first replication). */
+	UPROPERTY(EditAnywhere, Replicated, BlueprintReadOnly, Category="MO|Carcass")
 	FDataTableRowHandle CarcassDefinition;
 
 	/** Get the carcass definition row. Returns nullptr if not found. C++ only. */
@@ -118,14 +119,6 @@ public:
 	UPROPERTY(BlueprintReadOnly, Category="MO|Carcass|State")
 	float TimeSinceDeath = 0.0f;
 
-	/** Check if carcass is being harvested. */
-	UFUNCTION(BlueprintPure, Category="MO|Carcass|State")
-	bool IsBeingHarvested() const { return !CurrentHarvestPart.IsNone(); }
-
-	/** Get current harvest progress (0-1). */
-	UFUNCTION(BlueprintPure, Category="MO|Carcass|State")
-	float GetHarvestProgress() const;
-
 	/** Get current decay stage. */
 	UFUNCTION(BlueprintPure, Category="MO|Carcass|State")
 	EMOCarcassDecayStage GetDecayStage() const { return DecayStage; }
@@ -142,29 +135,18 @@ public:
 	TArray<FMOCarcassPartEntry> GetAvailableParts() const;
 
 	/**
-	 * Check if a specific part can be harvested.
-	 * @param PartId The part to check
-	 * @param Inventory Player's inventory (for tool/container check)
-	 * @param OutReason Reason if cannot harvest
-	 * @return True if part can be harvested
+	 * Whether this pawn can cut PartId now (any machine): the part is there and fresh enough, nobody else is cutting it (known on the server only),
+	 * and the pawn carries the tool (RequiredToolType, any carried item with that tool capability) and container the part needs. OutReason says why not.
 	 */
-	UFUNCTION(BlueprintCallable, Category="MO|Carcass")
-	bool CanHarvestPart(FName PartId, UMOInventoryComponent* Inventory, FString& OutReason) const;
+	bool CanPawnCutPart(const APawn* Pawn, FName PartId, FText& OutReason) const;
 
-	/**
-	 * Start harvesting a part.
-	 * @param PartId The part to harvest
-	 * @param Harvester Controller of the player harvesting
-	 * @return True if harvest started successfully
-	 */
-	UFUNCTION(BlueprintCallable, Category="MO|Carcass")
-	bool StartHarvestPart(FName PartId, AController* Harvester);
+	/** The world-action id of "Butcher everything" (the part ids are the other actions). */
+	static const FName ButcherAllAction;
 
-	/**
-	 * Cancel current harvest operation.
-	 */
-	UFUNCTION(BlueprintCallable, Category="MO|Carcass")
-	void CancelHarvest();
+	// IMOWorldActionProvider
+	virtual FText GetWorldActionTitle() const override;
+	virtual void GetWorldActions(const APawn* Pawn, TArray<FMOItemActionOption>& Out) const override;
+	virtual bool PerformWorldAction(APawn* Pawn, FName ActionId) override;
 
 	/**
 	 * Check if a part has been harvested.
@@ -183,21 +165,13 @@ public:
 	// DELEGATES
 	// ============================================================================
 
-	/** Fired during harvest with progress info. */
-	UPROPERTY(BlueprintAssignable, Category="MO|Carcass|Events")
-	FMOOnCarcassHarvestProgress OnHarvestProgress;
-
-	/** Fired when a part is harvested. */
+	/** Fired on the server when a part is cut and given. */
 	UPROPERTY(BlueprintAssignable, Category="MO|Carcass|Events")
 	FMOOnCarcassPartHarvested OnPartHarvested;
 
 	/** Fired when decay stage changes. */
 	UPROPERTY(BlueprintAssignable, Category="MO|Carcass|Events")
 	FMOOnCarcassDecayChanged OnDecayChanged;
-
-	/** Fired when harvest is cancelled. */
-	UPROPERTY(BlueprintAssignable, Category="MO|Carcass|Events")
-	FMOOnCarcassHarvestCancelled OnHarvestCancelled;
 
 protected:
 	virtual void BeginPlay() override;
@@ -209,21 +183,21 @@ private:
 	// INTERNAL STATE
 	// ============================================================================
 
-	/** Part currently being harvested. */
-	FName CurrentHarvestPart;
-
-	/** Progress on current harvest (seconds). */
-	float HarvestProgress = 0.0f;
-
-	/** Total time for current harvest. */
-	float HarvestTotalTime = 0.0f;
-
-	/** Controller doing the harvesting. */
-	TWeakObjectPtr<AController> HarvesterController;
+	/** SERVER: the parts being cut right now, and by whom (one pawn per part; a pawn cuts one part at a time). */
+	TMap<FName, TWeakObjectPtr<APawn>> PartsInHand;
 
 	// ============================================================================
 	// INTERNAL METHODS
 	// ============================================================================
+
+	/** SERVER: start the pawn's timed cut of PartId; bThenTheRest chains the next cuttable part when it is done ("Butcher everything"). */
+	bool BeginCut(APawn* Pawn, FName PartId, bool bThenTheRest);
+
+	/** SERVER: the first part this pawn can cut, or NAME_None. */
+	FName FirstCuttablePart(const APawn* Pawn) const;
+
+	/** SERVER: the timed cut is done -- give the item, mark the part, go when nothing is left. */
+	void FinishCut(APawn* Pawn, FName PartId);
 
 	/** Handle primary interaction (butcher menu or start harvest). */
 	bool HandleInteract(AController* InteractorController);
@@ -237,15 +211,4 @@ private:
 	/** Update visual appearance for decay stage. */
 	void UpdateVisualForDecayStage();
 
-	/** Tick harvest progress. */
-	void TickHarvest(float DeltaTime);
-
-	/** Complete current harvest, give items. */
-	void CompleteHarvest();
-
-	/** Check if harvester is still in range. */
-	bool IsHarvesterInRange() const;
-
-	/** Max range from carcass while harvesting. */
-	static constexpr float MaxHarvestRange = 300.0f;
 };

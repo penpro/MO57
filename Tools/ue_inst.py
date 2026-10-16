@@ -18,6 +18,7 @@ SAFETY: only processes this module launched (pid recorded in inst_<name>/pid.txt
 stopped, gracefully first. It never matches processes by name.
 """
 import json
+import math
 import os
 import re
 import subprocess
@@ -964,6 +965,99 @@ def _far_remote_pawn(rep, host, client, distance_cm=15000.0):
              + f"; fall-through rescues on the host: {rescued}")
 
 
+def _far_remote_pawn_9km(rep, host, client):
+    """Steam playtest Oct 16 2026: "confirmed client character will fall through world if i get far enough away" -- 8.8 km from the host. Like
+    _far_remote_pawn (150 m), at 9 km, and dropped 15 m above the GENERATOR's ground there (the host's own height means nothing 9 km away)."""
+    hxy = _probe(host, PROBE_XY)
+    mx, my = (re.search(rf"{k}=(-?[\d.]+)", hxy) for k in "XY")
+    if not rep.step("host: located the host pawn", bool(mx and my), hxy.strip()[-80:]):
+        return
+    hx, hy = float(mx.group(1)), float(my.group(1))
+    target = None
+    # 8 directions x 9 / 10 / 11 km: a coastal host has sea on several sides (Oct 16: the four 9 km points were all sea).
+    candidates = [(r * math.cos(k * math.pi / 4.0), r * math.sin(k * math.pi / 4.0)) for r in (900000.0, 1000000.0, 1100000.0) for k in range(8)]
+    for dx, dy in candidates:
+        off = log_size(host)
+        console(host, f"MO.WorldGen.Sample {hx + dx:.0f} {hy + dy:.0f}")
+        m = wait_log(host, r"WORLDGEN Sample x=\S+ y=\S+ seed=\S+ z=(-?[\d.]+)", since=off, timeout=5)
+        if m and 200.0 < float(m.group(1)) < 80000.0:   # dry land, not the sea
+            target = (hx + dx, hy + dy, float(m.group(1)))
+            break
+    if not rep.step("found dry land 9 km from the host (generator ground)", target is not None, str(target)):
+        return
+    tx, ty, gz = target
+    who = _probe(host, "p = unreal.GameplayStatics.get_player_pawn(world, 1); out('PAWNNAME=' + (p.get_name() if p else 'none'))")
+    mname = re.search(r"PAWNNAME=(\S+)", who)
+    pawn_name = mname.group(1) if mname else "none"
+    off = log_size(host)
+    _probe(host, f"p = unreal.GameplayStatics.get_player_pawn(world, 1); p.set_actor_location(unreal.Vector({tx:.0f}, {ty:.0f}, {gz + 1500.0:.0f}), False, True)")
+    samples = []
+    for _ in range(8):
+        time.sleep(4)
+        samples.append((_num(_probe(host, PROBE_Z_PLAYER1), "Z"), _num(_probe(client, PROBE_Z), "Z")))
+    rescued = len(re.findall(rf"\[MOCharacter\] {re.escape(pawn_name)}: Fall-through detected!", read_log_from(host, off)))
+    last_s, last_c = samples[-1]
+    ok = (last_s is not None and last_c is not None and abs(last_s - last_c) <= 150.0 and gz - 300.0 < last_s < gz + 1000.0 and rescued == 0)
+    rep.step("a remote player 9 km from the host stands on ground the SERVER has (no fall-through, server and client agree)", ok,
+             f"generator ground {gz:.0f}; server/client z: " + ", ".join(f"{s:.0f}/{c:.0f}" for s, c in samples if s is not None and c is not None)
+             + f"; fall-through rescues on the host: {rescued}")
+
+
+def _joiner_long_run(rep, host, client):
+    """#9 as it was played (Steam playtest Oct 16 2026: "client character will fall through world if i get far enough away"): not a teleport -- the
+    joiner SPRINTS away from the host for 150 s over land, while the server's ground has to be built around it as it goes. Every 10 s: the joiner's
+    height on the server and on the client (they must agree), how far it got, and any fall-through rescue on the host."""
+    pxy = ("p = unreal.GameplayStatics.get_player_pawn(world, 1); l = p.get_actor_location() if p else unreal.Vector(0, 0, 0); "
+           "out('JX=%.0f JY=%.0f JZ=%.0f' % (l.x, l.y, l.z))")
+    m = re.search(r"JX=(-?\d+) JY=(-?\d+) JZ=(-?\d+)", _probe(host, pxy))
+    if not rep.step("host: located the joiner", bool(m)):
+        return
+    jx, jy = float(m.group(1)), float(m.group(2))
+    heading = None
+    for k in range(8):
+        a = k * math.pi / 4.0
+        ok = True
+        for r in (30000.0, 70000.0, 110000.0):
+            off = log_size(host)
+            console(host, f"MO.WorldGen.Sample {jx + r * math.cos(a):.0f} {jy + r * math.sin(a):.0f}")
+            s = wait_log(host, r"WORLDGEN Sample x=\S+ y=\S+ seed=\S+ z=(-?[\d.]+)", since=off, timeout=5)
+            if not s or not (200.0 < float(s.group(1)) < 80000.0):
+                ok = False
+                break
+        if ok:
+            heading = (jx + 150000.0 * math.cos(a), jy + 150000.0 * math.sin(a))
+            break
+    if not rep.step("a heading with 1.1 km of land ahead of the joiner", heading is not None, str(heading)):
+        return
+    pawn_name = (re.search(r"PAWNNAME=(\S+)", _probe(host, "p = unreal.GameplayStatics.get_player_pawn(world, 1); out('PAWNNAME=' + (p.get_name() if p else 'none'))")) or [None, "none"])[1]
+    console(client, f"MO.Player.Face {heading[0]:.0f} {heading[1]:.0f}")
+    console(client, "MO.Test.Input ToggleJog")
+    console(client, "MO.Test.Input SprintStart")
+    off = log_size(host)
+    console(client, "MO.Test.MoveFor 0 1 150")
+    rows, worst = [], 0.0
+    for _ in range(15):
+        time.sleep(10)
+        sm = re.search(r"JX=(-?\d+) JY=(-?\d+) JZ=(-?\d+)", _probe(host, pxy))
+        cz = _num(_probe(client, PROBE_Z), "Z")
+        if sm and cz is not None:
+            sz = float(sm.group(3))
+            dist = math.hypot(float(sm.group(1)) - jx, float(sm.group(2)) - jy) / 100.0
+            worst = max(worst, abs(sz - cz))
+            rows.append(f"{dist:.0f}m:{sz:.0f}/{cz:.0f}")
+    console(client, "MO.Test.Input SprintEnd")
+    console(client, "MO.Test.Input ToggleJog")
+    rescued = len(re.findall(rf"\[MOCharacter\] {re.escape(pawn_name)}: Fall-through detected!", read_log_from(host, off)))
+    # Back beside the host: the later steps assume the two players are within relevancy of each other (9 km away, neither sees the other's pawn).
+    _probe(host, "h = unreal.GameplayStatics.get_player_pawn(world, 0); j = unreal.GameplayStatics.get_player_pawn(world, 1); "
+                 "j.set_actor_location(h.get_actor_location() + unreal.Vector(300.0, 0.0, 150.0), False, True)")
+    time.sleep(5)
+    far = float(rows[-1].split("m:")[0]) if rows else 0.0
+    rep.step("the joiner sprinted away for 150 s on ground the server has: server and client agree, no fall-through",
+             bool(rows) and far > 400.0 and worst <= 150.0 and rescued == 0,
+             f"distance/server z/client z: {', '.join(rows)}; worst disagreement {worst:.0f} cm; rescues on the host {rescued}")
+
+
 def game_test(uproject, editor_exe, keep=False, boot_timeout=300, withhold_seed=False, skew_seed=False, withhold_sync=False):
     """The REAL gameplay map, the way a player hits it: the Host button's own path, a late join by a second process,
     pawn counts, the joiner's control setup, fall-through sampling, then leave and rejoin (pawn reuse).
@@ -1656,6 +1750,254 @@ def _client_attack(rep, host, client):
              f"{_combat_line(seen)}; client said: {mm.group(0) if mm else 'nothing'}")
 
 
+def _client_gait(rep, host, client):
+    """CLIENT jog / sprint (Steam playtest Oct 16 2026: "the second person can't jog or sprint"). The gait is movement input carried by the saved moves
+    (UMOCharacterMovementComponent, FLAG_Custom_0 / _1), so the HOST must see the joiner's pawn move at the gait's speed. It used to be set on the
+    pressing machine only: the server simulated a walk and corrected every faster step. Control: the walk first (walk 400 / jog 550 / sprint 700 cm/s)."""
+    def host_speed():
+        out = _probe(host, "p = unreal.GameplayStatics.get_player_pawn(world, 1); v = p.get_velocity(); out('HSPEED %.0f' % ((v.x * v.x + v.y * v.y) ** 0.5))")
+        m = re.search(r"HSPEED (\d+)", out)
+        return int(m.group(1)) if m else -1
+
+    def run_and_measure(setup):
+        for cmd in setup:
+            console(client, cmd)
+        console(client, "MO.Test.MoveFor 0 1 5.0")
+        time.sleep(1.5)
+        samples = []
+        for _ in range(4):
+            samples.append(host_speed())
+        time.sleep(3.0)  # the move input ends; the pawn stops before the next run
+        return max(samples), samples
+
+    walk, ws = run_and_measure([])
+    rep.step("CONTROL: the HOST sees the joiner walk at about the walk speed (400)", 250 <= walk <= 460, f"host samples {ws}")
+    jog, js = run_and_measure(["MO.Test.Input ToggleJog"])
+    rep.step("client jog: the HOST sees the joiner jogging (well above the walk)", jog >= walk + 90, f"host samples {js} (walk max {walk})")
+    sprint, ss = run_and_measure(["MO.Test.Input SprintStart"])
+    console(client, "MO.Test.Input SprintEnd")
+    console(client, "MO.Test.Input ToggleJog")
+    rep.step("client sprint: the HOST sees the joiner sprint (faster than the jog)", sprint >= jog + 70, f"host samples {ss} (jog max {jog})")
+
+
+def _client_inventory_requests(rep, host, client):
+    """CLIENT inventory UI (Steam playtest Oct 16 2026: "multiplayer inventory won't allow dropping or anything"). The UI's door is
+    FMOInventoryRequests::Submit: on a joiner it sends the change to the server (AMOPlayerController::ServerInventoryRequest). Proof on the HOST
+    (the joiner's inventory there). Control: a DIRECT component call from the client -- what the UI used to make -- changes nothing on the host."""
+    count = ("p = unreal.GameplayStatics.get_player_pawn(world, 1); inv = p.get_component_by_class(unreal.MOInventoryComponent); "
+             "rs = [inv.try_get_entry_by_guid(g) for g in inv.get_all_item_guids()]; "
+             "es = [(r[1] if isinstance(r, tuple) else r) for r in rs]; "   # the engine's Python returns the out entry alone (or a pair)
+             "st = [e for e in es if e is not None and str(e.item_definition_id) == 'Stone01']; "
+             "out('STONES n=%d stacks=%d' % (sum(e.quantity for e in st), len(st)))")
+
+    def stones():
+        m = re.search(r"STONES n=(\d+) stacks=(\d+)", _probe(host, count))
+        return (int(m.group(1)), int(m.group(2))) if m else (-1, -1)
+
+    setup = _probe(host, "p = unreal.GameplayStatics.get_player_pawn(world, 1); inv = p.get_component_by_class(unreal.MOInventoryComponent); "
+                         "g = unreal.GuidLibrary.new_guid(); out('INV_SETUP gave=%s' % inv.add_item_by_guid(g, 'Stone01', 6))")
+    if not rep.step("host: gave the joiner 6 stones", "gave=True" in setup, setup.strip()[-160:]):
+        return
+    time.sleep(3)  # the inventory replicates to the client
+    n0, s0 = stones()
+    direct = _probe(client, "pc = unreal.GameplayStatics.get_player_controller(world, 0); p = pc.get_controlled_pawn(); inv = p.get_component_by_class(unreal.MOInventoryComponent); "
+                            "en = lambda r: r[1] if isinstance(r, tuple) else r; "
+                            "gs = [g for g in inv.get_all_item_guids() if en(inv.try_get_entry_by_guid(g)) is not None and str(en(inv.try_get_entry_by_guid(g)).item_definition_id) == 'Stone01']; "
+                            "w = inv.drop_item_by_guid(gs[0], p.get_actor_location() + unreal.Vector(150.0, 0.0, 0.0), unreal.Rotator(0.0, 0.0, 0.0)) if gs else None; "
+                            "out('DIRECT dropped=%s' % (w is not None))")
+    time.sleep(2)
+    rep.step("CONTROL: a direct drop from the client (the old UI path) changes nothing on the host", stones() == (n0, s0), f"{direct.strip()[-80:]}; host stones {stones()} (before {n0}/{s0})")
+    console(client, "MO.Test.Inventory Split Stone01")
+    time.sleep(3)
+    n1, s1 = stones()
+    rep.step("client split (through the request): the host now has the stones in one more stack", n1 == n0 and s1 == s0 + 1, f"host stones {n1} in {s1} stacks (before {n0} in {s0})")
+    console(client, "MO.Test.Inventory Drop Stone01")
+    time.sleep(3)
+    n2, _ = stones()
+    near = _probe(host, "p = unreal.GameplayStatics.get_player_pawn(world, 1); pl = p.get_actor_location(); "
+                        "items = [a for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOWorldItem) if (a.get_actor_location() - pl).length() < 500]; "
+                        "out('NEAR %d' % len(items))")
+    rep.step("client drop (through the request): the host took stones out of the joiner's inventory and put them on the ground by the joiner",
+             0 <= n2 < n1 and "NEAR 0" not in near, f"host stones {n2} (before {n1}); {near.strip()[-40:]}")
+
+
+def _client_carcass(rep, host, client):
+    """Steam playtest Oct 16 2026: "right clicking deer starts butchering immediately instead of giving option to click". A carcass is a world-action
+    target (IMOWorldActionProvider): right-click lists its parts on the JOINER (CarcassDefinition replicates), a choice goes to the server
+    (AMOPlayerController::ServerWorldAction) and runs on the joiner's pawn's timed action there. Butchering used to run in the client's UI, so a
+    joiner's cut never progressed."""
+    hoff = log_size(host)
+    console(host, "MO.Test.Carcass Deer 1")
+    laid = wait_log(host, r"\[MOQUERY\] CARCASS (\S+) \(Deer\) at \((-?\d+), (-?\d+), (-?\d+)\)", since=hoff, timeout=10)
+    if not rep.step("host: laid a deer carcass in front of the joiner", bool(laid), laid.group(0) if laid else "no CARCASS line"):
+        return
+    time.sleep(3)  # replicates to the client
+    coff = log_size(client)
+    console(client, "MO.Test.WorldAction list")
+    head = wait_log(client, r"\[MOQUERY\] WORLDACTION \S+ \"([^\"]*)\" options=(\d+) authority=(\d)", since=coff, timeout=10)
+    rep.step("the joiner's copy of the carcass lists its parts (the definition replicated)",
+             bool(head) and int(head.group(2)) > 0 and head.group(3) == "0" and head.group(1) != "Carcass", head.group(0) if head else "no WORLDACTION line")
+    lines = read_log_from(client, coff)
+    bones = re.search(r"WORLDACTION   Bones \| [^|]+\| enabled", lines)
+    rep.step("the joiner may cut the bones (no tool needed) and is told why a knife part is greyed", bool(bones) and "disabled: Needs a tool: Knife." in lines,
+             (bones.group(0) if bones else "Bones not enabled") + (" + knife reason" if "Needs a tool: Knife." in lines else " -- no knife reason"))
+    count = ("p = unreal.GameplayStatics.get_player_pawn(world, 1); inv = p.get_component_by_class(unreal.MOInventoryComponent); "
+             "out('BONES %d' % inv.count_ingredient('Bone01'))")
+    m = re.search(r"BONES (\d+)", _probe(host, count))
+    before = int(m.group(1)) if m else -1
+    hoff = log_size(host)
+    console(client, "MO.Test.WorldAction Bones")
+    begun = wait_log(host, r"\[MOWorldAction\] Bones on \S+ by \S+: begun", since=hoff, timeout=10)
+    rep.step("the joiner's choice ran ON THE HOST (ServerWorldAction -> the joiner's pawn's timed action)", bool(begun), begun.group(0) if begun else "no begun line on the host")
+    time.sleep(12)  # Bones: 10 s
+    m = re.search(r"BONES (\d+)", _probe(host, count))
+    after = int(m.group(1)) if m else -1
+    rep.step("after the 10 s cut the joiner carries 6 more bones (host's view)", after == before + 6, f"bones {before} -> {after}")
+    # The right-click itself: the server handles the interaction, the menu must open on the joiner's screen.
+    x, y, z = laid.group(2), laid.group(3), laid.group(4)
+    console(client, f"MO.Player.Face {x} {y} {z}")
+    time.sleep(0.5)
+    coff = log_size(client)
+    console(client, "MO.Test.Input SecondaryInteract")
+    shown = wait_log(client, r"\[MOCraftUI\] Showing world action menu for [^\n]*", since=coff, timeout=10)
+    rep.step("the joiner's right-click opens the parts menu ON THE JOINER", bool(shown), shown.group(0) if shown else "no menu line on the client")
+    console(client, "MO.Test.PressKey Escape")
+    # Tidy: a carcass left by the joiner would catch the next steps' interaction traces (the host's E on the joiner hit it).
+    _probe(host, "[a.destroy_actor() for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOCarcassActor)]")
+
+
+def _client_building_look(rep, host, client):
+    """Steam playtest Oct 16 2026: a host saw "a big ass green box" over finished roofs, and an unbuilt stick floor looked finished (players fell
+    through it). One look per build state (AMOBuildableActor::RefreshBuildStateVisual): until Complete every mesh wears the planned tint and lets
+    pawns through; once built, the building's own materials and BlockAll -- on the JOINER too (replicated state)."""
+    hoff = log_size(host)
+    console(host, "MO.Test.PlaceBuildingRPC BuildStickFloor 300")
+    placed = wait_log(host, r"ServerPlaceBuilding: spawned (\S+) for recipe BuildStickFloor", since=hoff, timeout=10)
+    if not rep.step("host: placed a stick floor", bool(placed), placed.group(0) if placed else "no spawn line"):
+        return
+    name = placed.group(1)
+    time.sleep(3)
+    look = ("b = [x for x in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOBuildableActor) if x.get_class().get_name().startswith('BP_BuildableFloorBase')]; "
+            "b = sorted(b, key=lambda a: (a.get_actor_location() - unreal.GameplayStatics.get_player_pawn(world, 0).get_actor_location()).length() if unreal.GameplayStatics.get_player_pawn(world, 0) else 0)[0] if b else None; "
+            "ms = [c for c in b.get_components_by_class(unreal.StaticMeshComponent) if c.is_visible() and c.static_mesh] if b else []; "
+            "ghost = sum(1 for c in ms if any(m and 'BuildPreview' in m.get_name() for m in c.get_materials())); "
+            "cube = [c for c in b.get_components_by_class(unreal.StaticMeshComponent) if c.get_name() == 'Cube'] if b else []; "
+            "out('LOOK state=%s visible=%d ghosted=%d cube=%s' % (b.get_build_state() if b else None, len(ms), ghost, cube[0].get_collision_profile_name() if cube else '-'))")
+    h, c = _probe(host, look), _probe(client, look)
+    hm, cm = re.search(r"LOOK state=.*? visible=(\d+) ghosted=(\d+) cube=(\S+)", h), re.search(r"LOOK state=.*? visible=(\d+) ghosted=(\d+) cube=(\S+)", c)
+    rep.step("unbuilt: every visible mesh wears the planned look and pawns pass through, on host AND joiner",
+             bool(hm and cm) and hm.group(1) == hm.group(2) != "0" and cm.group(1) == cm.group(2) != "0" and hm.group(3) == cm.group(3) == "IgnoreOnlyPawn",
+             f"host {hm.groups() if hm else h.strip()[-80:]} | client {cm.groups() if cm else c.strip()[-80:]}")
+    _probe(host, "p = unreal.GameplayStatics.get_player_pawn(world, 0); inv = p.get_component_by_class(unreal.MOInventoryComponent); "
+                 "inv.add_item_by_guid(unreal.GuidLibrary.new_guid(), 'Stick01', 20)")
+    console(host, "MO.Test.Build add")
+    time.sleep(2)
+    console(host, "MO.Test.Build start")
+    time.sleep(9)  # 5 s build
+    h, c = _probe(host, look), _probe(client, look)
+    hm, cm = re.search(r"LOOK state=.*? visible=(\d+) ghosted=(\d+) cube=(\S+)", h), re.search(r"LOOK state=.*? visible=(\d+) ghosted=(\d+) cube=(\S+)", c)
+    rep.step("built: its own materials back and solid (BlockAll), on host AND joiner",
+             bool(hm and cm) and hm.group(2) == cm.group(2) == "0" and hm.group(3) == cm.group(3) == "BlockAll",
+             f"host {hm.groups() if hm else h.strip()[-80:]} | client {cm.groups() if cm else c.strip()[-80:]}")
+
+
+def _host_takes_departed_pawn(rep, host, client):
+    """Steam playtest Oct 16 2026 (#8): "can't select other pawn from possess menu" -- the host alone after the joiner left. The joiner's survivor
+    stays in the world (pawns survive their player); the host's possession list must offer it and taking it must work. ENDS THE CLIENT: run last."""
+    info = _probe(host, "p = unreal.GameplayStatics.get_player_pawn(world, 1); i = p.get_component_by_class(unreal.MOIdentityComponent) if p else None; "
+                        "out('JOINERPAWN %s %s' % (p.get_name(), unreal.GuidLibrary.conv_guid_to_string(i.get_guid())) if i else 'JOINERPAWN none none')")
+    m = re.search(r"JOINERPAWN (\S+) ([0-9A-Fa-f]{32})", info)
+    if not rep.step("host: the joiner's pawn and its GUID", bool(m), info.strip()[-120:]):
+        return
+    pawn_name, guid = m.group(1), m.group(2)
+    stop(client)
+    time.sleep(8)
+    state = _probe(host, f"ps = [a for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOCharacter) if a.get_name() == '{pawn_name}']; "
+                         "p = ps[0] if ps else None; c = p.get_controller() if p else None; r = p.get_component_by_class(unreal.MORecruitmentComponent) if p else None; "
+                         "out('LEFTPAWN exists=%s controller=%s possessable=%s' % (p is not None, c.get_class().get_name() if c else None, r.is_possessable() if r else None))")
+    rep.step("after the joiner left, its survivor stays in the world with no player in it",
+             "exists=True" in state and "PlayerController" not in state, state.strip()[-160:])
+    # The menu itself, as Wes opened it (P): its own count of the survivors this player can take.
+    hoff = log_size(host)
+    console(host, "MO.UI.Open Possession")   # what P does (UIManager TogglePossessionMenu); injected keys do not reach Enhanced Input here
+    pop = wait_log(host, r"\[MOPossessionMenu\] Populated with (\d+) of your / free living, (\d+) other players', (\d+) deceased", since=hoff, timeout=10)
+    rep.step("host's possession MENU lists the survivor left behind as one it can take (2 = its own + the left one)",
+             bool(pop) and int(pop.group(1)) >= 2 and pop.group(2) == "0", pop.group(0) if pop else "the menu did not populate")
+    console(host, "MO.Test.PressKey Escape")
+    time.sleep(1)
+    console(host, f"MO.Possess.Take {guid}")
+    time.sleep(5)
+    now = _probe(host, "p = unreal.GameplayStatics.get_player_pawn(world, 0); out('HOSTPAWN %s' % (p.get_name() if p else 'none'))")
+    rep.step("the host took the survivor the joiner left behind", f"HOSTPAWN {pawn_name}" in now, now.strip()[-80:] + f" (wanted {pawn_name})")
+
+
+def _dropped_item_falls_on_client(rep, host, client):
+    """Steam playtest Oct 16 2026: "dropped items don't show as dropping on client, they hang in the air". The host drops an item by the joiner with
+    the drop physics (lifted 50-100 cm, falls, settles -- server-side); the joiner's copy must rest where the host's does (movement replication)."""
+    drop = _probe(host, "p = unreal.GameplayStatics.get_player_pawn(world, 1); inv = p.get_component_by_class(unreal.MOInventoryComponent); "
+                        "g = unreal.GuidLibrary.new_guid(); inv.add_item_by_guid_no_stack(g, 'FlintKnife01', 1); "   # its own stack: a merged stone kept no guid of its own
+                        "w = inv.drop_item_by_guid(g, p.get_actor_location() + unreal.Vector(-170.0, 90.0, 0.0), unreal.Rotator(0.0, 0.0, 0.0)); "
+                        "w.enable_drop_physics() if w else None; out('DROPPED %s' % (w.get_name() if w else 'none'))")
+    m = re.search(r"DROPPED (\S+)", drop)
+    if not rep.step("host: dropped a stone by the joiner with the drop physics", bool(m) and m.group(1) != "none", drop.strip()[-120:]):
+        return
+    time.sleep(6)  # the fall and the settle
+    where = ("import builtins; items = sorted(unreal.GameplayStatics.get_all_actors_of_class(world, unreal.MOWorldItem), "
+             "key=lambda a: (a.get_actor_location() - %s.get_actor_location()).length()); l = items[0].get_actor_location() if items else None; "
+             "out('ITEMZ %%.0f %%.0f %%.0f' %% (l.x, l.y, l.z) if l else 'ITEMZ none')")
+    h = re.search(r"ITEMZ (-?\d+) (-?\d+) (-?\d+)", _probe(host, where % "unreal.GameplayStatics.get_player_pawn(world, 1)"))
+    c = re.search(r"ITEMZ (-?\d+) (-?\d+) (-?\d+)", _probe(client, where % "unreal.GameplayStatics.get_player_controller(world, 0).get_controlled_pawn()"))
+    ok = bool(h and c) and all(abs(int(h.group(i)) - int(c.group(i))) <= 25 for i in (1, 2, 3))
+    rep.step("the joiner sees the dropped stone where the host's came to rest (within 25 cm)", ok,
+             f"host {h.groups() if h else None} client {c.groups() if c else None}")
+
+
+def _host_e_on_joiner(rep, host, client):
+    """Steam playtest Oct 16 2026: "if the host interacts with another player's character it kicks the player out of the pawn and you can't possess it
+    back". The host stands by the joiner, looks at it and presses E. Proof: the joiner's controller still drives the same pawn, on BOTH machines."""
+    who = ("pc = unreal.GameplayStatics.get_player_controller(world, 1); p = pc.get_controlled_pawn() if pc else None; "
+           "out('JOINER pawn=%s' % (p.get_name() if p else 'none'))")
+    before = re.search(r"JOINER pawn=(\S+)", _probe(host, who))
+    if not rep.step("host: the joiner drives a pawn", bool(before) and before.group(1) != "none", before.group(0) if before else "no joiner controller"):
+        return
+    place = _probe(host, "j = unreal.GameplayStatics.get_player_pawn(world, 1); h = unreal.GameplayStatics.get_player_pawn(world, 0); pc = unreal.GameplayStatics.get_player_controller(world, 0); "
+                         "jl = j.get_actor_location(); h.set_actor_location(jl + unreal.Vector(160.0, 0.0, 30.0), False, True); "
+                         "pc.set_control_rotation(unreal.MathLibrary.find_look_at_rotation(pc.player_camera_manager.get_camera_location(), jl)); out('PLACED')")
+    rep.step("host: stands 1.6 m from the joiner, looking at it", "PLACED" in place, place.strip()[-120:])
+    time.sleep(1.5)
+    # What can E hit? The interactor traces the Visibility channel from the camera: if the joiner's character does not block it, E cannot target
+    # another player at all and the step below proves nothing -- say so instead of passing vacuously.
+    hit = _probe(host, "pc = unreal.GameplayStatics.get_player_controller(world, 0); cam = pc.player_camera_manager.get_camera_location(); "
+                       "j = unreal.GameplayStatics.get_player_pawn(world, 1); h = unreal.GameplayStatics.get_player_pawn(world, 0); "
+                       "r = unreal.SystemLibrary.line_trace_single(world, cam, j.get_actor_location(), unreal.TraceTypeQuery.TRACE_TYPE_QUERY1, False, [h], unreal.DrawDebugTrace.NONE, True); "
+                       "hr = r[1] if isinstance(r, tuple) else r; a = hr.to_tuple()[9] if hr else None; "
+                       "out('ETRACE hit=%s' % (a.get_name() if a else 'none'))")
+    mh = re.search(r"ETRACE hit=(\S+)", hit)
+    rep.step("diagnostic: what the host's Visibility trace toward the joiner hits", True, mh.group(0) if mh else hit.strip()[-160:])
+    off = log_size(host)
+    console(host, "MO.Test.Input Interact")
+    time.sleep(4)
+    after = re.search(r"JOINER pawn=(\S+)", _probe(host, who))
+    client_side = _probe(client, "pc = unreal.GameplayStatics.get_player_controller(world, 0); p = pc.get_controlled_pawn(); out('MINE pawn=%s' % (p.get_name() if p else 'none'))")
+    trail = " | ".join(re.findall(r"\[(?:MOInteract|MOInteractable|Recruitment|MOCharacter|MOPossess\w*)\][^\n]{0,140}", read_log_from(host, off))[:6])
+    rep.step("host E on the joiner: the joiner still drives the same pawn (host side)", bool(after) and after.group(1) == before.group(1),
+             f"before {before.group(1)}, after {after.group(1) if after else '?'}; host log: {trail or 'nothing'}")
+    rep.step("host E on the joiner: the client still controls a pawn", "MINE pawn=none" not in client_side and "MINE pawn=" in client_side, client_side.strip()[-80:])
+    # The right mouse button: on the HOST a recruited character's survivor menu used to be built for the joiner's character, which gave it a survivor
+    # AI and threw the joiner out (the actual #4). The controller's own handler, as the mouse runs it.
+    off = log_size(host)
+    console(host, "MO.Test.Input RightClick")
+    time.sleep(4)
+    console(host, "MO.Test.PressKey Escape")
+    after_rc = re.search(r"JOINER pawn=(\S+)", _probe(host, who))
+    client_rc = _probe(client, "pc = unreal.GameplayStatics.get_player_controller(world, 0); p = pc.get_controlled_pawn(); out('MINE pawn=%s' % (p.get_name() if p else 'none'))")
+    host_log = read_log_from(host, off)
+    menu = "Opening survivor context menu for" in host_log
+    rep.step("host RIGHT-CLICK on the joiner: no survivor menu, the joiner still drives the same pawn (both machines)",
+             not menu and bool(after_rc) and after_rc.group(1) == before.group(1) and "MINE pawn=none" not in client_rc and "MINE pawn=" in client_rc,
+             f"survivor menu opened: {menu}; host sees {after_rc.group(1) if after_rc else '?'}; client {client_rc.strip()[-40:]}")
+
+
 def _pawn_xyz(host, idx):
     out = _probe(host, f"p = unreal.GameplayStatics.get_player_pawn(world, {idx}); l = p.get_actor_location(); out('PAWNXYZ %f %f %f' % (l.x, l.y, l.z))")
     m = re.search(r"PAWNXYZ (-?[\d.]+) (-?[\d.]+) (-?[\d.]+)", out)
@@ -2004,7 +2346,7 @@ def actions_test(uproject, editor_exe, keep=False, boot_timeout=300):
         if not _host_and_join(rep, host, client, "ActionsTest", boot_timeout):
             return False
         only = {s.strip() for s in os.environ.get("MO_ACTIONS_ONLY", "").split(",") if s.strip()}  # quick rerun of named cases
-        for fn in (_client_pickup, _client_press_e, _appearance_replicates, _client_craft, _client_forage, _client_build, _client_attack, _trust_placement, _trust_pickup_far, _trust_possess_other, _possession_rows_name_players, _trust_dev_spawn, _client_rename, _trust_terraform, _buried_pawns, _remote_pawn_stays_put):
+        for fn in (_client_pickup, _client_press_e, _client_gait, _client_inventory_requests, _dropped_item_falls_on_client, _client_carcass, _client_building_look, _host_e_on_joiner, _far_remote_pawn_9km, _joiner_long_run, _appearance_replicates, _client_craft, _client_forage, _client_build, _client_attack, _trust_placement, _trust_pickup_far, _trust_possess_other, _possession_rows_name_players, _trust_dev_spawn, _client_rename, _trust_terraform, _buried_pawns, _remote_pawn_stays_put, _host_takes_departed_pawn):
             if only and fn.__name__ not in only:
                 continue
             try:

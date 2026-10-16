@@ -121,8 +121,17 @@ public:
 	static FPerQualityLevelFloat* GetMutableRadiusField(FPCGRuntimeGenerationRadii& Radii, int32 UnscaledGrid);
 	static const FPerQualityLevelFloat* GetRadiusField(const FPCGRuntimeGenerationRadii& Radii, int32 UnscaledGrid);
 
+	/**
+	 * The "WorldBuild.*" fields of a bug report (registered with UMOBugReportSubsystem on world begin play): the readiness stage, how the last load
+	 * ended (and whether the vegetation stage was capped), held grids, PCG busy, PCG components generated / generating, near instances. Shipping
+	 * writes no log, so a player's "the world never filled in" report (Steam playtest Oct 16 2026: one Electric Dreams spire and nothing else) can
+	 * only be diagnosed from these.
+	 */
+	void DescribeForBugReport(TArray<TPair<FString, FString>>& Out) const;
+
 protected:
 	virtual bool ShouldCreateSubsystem(UObject* Outer) const override;
+	virtual void OnWorldBeginPlay(UWorld& InWorld) override;
 	virtual void Deinitialize() override;
 
 private:
@@ -136,6 +145,12 @@ private:
 	double PcgQuietSeconds = 0.0;
 	double LastPollSeconds = 0.0;
 	bool bPcgSeenBusy = false;
+	/** How the last load ended (Finish's reason) and when, for the bug report. */
+	FString LastFinishReason;
+	double LastFinishAfterSeconds = 0.0;
+	/** The last load's vegetation stage hit its cap with PCG still working, and how much stood near the camera then. */
+	bool bLastVegetationCapped = false;
+	int32 LastCappedNearCount = 0;
 	double NextTraceSeconds = 0.0;
 
 	FTimerHandle PollTimerHandle;

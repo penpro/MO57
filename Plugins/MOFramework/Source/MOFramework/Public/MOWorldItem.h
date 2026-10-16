@@ -45,6 +45,11 @@
  * 2. PHYSICS TIMEOUT: DropPhysicsTimeout (3s default) may not be enough
  *    for items falling long distances. Adjust per use case.
  *
+ * 2b. FALLING THROUGH (Oct 16 2026): the voxel terrain's QUERY collision can be there while its PHYSICS body is not yet (being rebuilt as a
+ *    player moves -- seen on a host by a joiner): the drop trace finds the ground, the simulating body then falls straight through it, and
+ *    the old settle traced down from the item's own (sunken) position and found nothing -- the item was lost under the world. The ground
+ *    found at the drop is kept (DropGroundLocation): sinking well below it ends the fall, and the settle traces from above, not from the item.
+ *
  * 3. INTERACTION SPHERE: InteractionSphereRadius (60u) affects pickup ease.
  *    Too small = frustrating, too large = picking up wrong items.
  *
@@ -210,4 +215,8 @@ private:
 
 	/** Time when drop physics was enabled. */
 	float DropPhysicsStartTime = 0.0f;
+
+	/** The ground the drop trace found under the item (bHasDropGround): the floor it may not fall through (see pitfall 2b). */
+	FVector DropGroundLocation = FVector::ZeroVector;
+	bool bHasDropGround = false;
 };

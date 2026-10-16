@@ -39,10 +39,11 @@
  *     (e.g., crafting stations enable crafting queue here)
  *   Always call Super:: version to maintain base behavior.
  *
- * [2024-02] MATERIAL RESTORATION: SaveOriginalMaterials() caches mesh materials
- *   in OriginalMaterials array. RestoreOriginalMaterials() applies them back.
- *   Called automatically on SetGhostMode(false) and SetCompletedVisual().
- *   If original materials array empty, no restoration occurs (stays ghost).
+ * [2026-10] ONE LOOK PER BUILD STATE (Steam playtest Oct 16: a host's finished roof kept a "big ass green box"; an unbuilt stick floor looked
+ *   finished and players fell through it): RefreshBuildStateVisual() is the only place a placed building's look is decided -- not Complete =
+ *   EVERY mesh component in the ghost material tinted PlannedColor, Complete = their own materials back. It runs on every build-state change
+ *   (OnConstructionStateChanged, server and clients), on placement and on load. Each mesh's own materials are captured the first time it is
+ *   ghosted (SavedMaterials), so nothing set later is mistaken for an original. The placement preview (bIsGhost) keeps its own valid/invalid tint.
  *
  * [2024-02] STATE MACHINE TRANSITIONS: Only valid transitions are:
  *   Ghost -> Constructing (via StartConstruction on BuildProgressComponent)
@@ -193,6 +194,16 @@ class UMaterialInstanceDynamic;
  *
  * =============================================================================
  */
+/** One mesh component's own materials, kept while a building wears the ghost / planned look. */
+USTRUCT()
+struct FMOBuildableSavedMaterials
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	TArray<TObjectPtr<UMaterialInterface>> Materials;
+};
+
 UCLASS()
 class MOFRAMEWORK_API AMOBuildableActor : public AActor, public IMOIdentifiableInterface
 {
@@ -279,9 +290,16 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Building|Snapping")
 	bool bSnapAsRoof = false;
 
-	/** Original materials from the mesh (saved for restoration). */
-	UPROPERTY(Transient)
-	TArray<TObjectPtr<UMaterialInterface>> OriginalMaterials;
+	/** The tint a placed building wears until it is finished (the ghost material's inner glow / rim): a plan, not a structure -- it cannot be walked on. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="MO|Building|Visual")
+	FLinearColor PlannedColor = FLinearColor(0.55f, 0.75f, 1.0f, 0.45f);
+
+	/** The planned look's inner glow (the placement preview's is 6: bright, it is aimed; a plan left standing should not glare). */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="MO|Building|Visual")
+	float PlannedGlow = 1.5f;
+
+	/** Show the look of the current build state (see the file header): the planned tint until Complete, the building's own materials after. */
+	void RefreshBuildStateVisual();
 
 	// ============================================================================
 	// STATE
@@ -511,23 +529,29 @@ private:
 	// INTERNAL
 	// ============================================================================
 
-	/** Create the ghost material instance. */
-	void CreateGhostMaterial();
+	/** Put every mesh component of the actor in the ghost material (saving each one's own materials the first time). False without a ghost material. */
+	bool ApplyGhostMaterialToAllMeshes();
+
+	/** The ghost material's colours (M_BuildPreview: inner glow + outer rim). */
+	void TintGhost(const FLinearColor& Color, float InnerGlow = 6.0f);
+
+	UFUNCTION()
+	void HandleBuildStateChanged(EMOBuildState NewState);
+
+	/** Each mesh component's own materials while it wears the ghost material. */
+	UPROPERTY(Transient)
+	TMap<TObjectPtr<UMeshComponent>, FMOBuildableSavedMaterials> SavedMaterials;
 
 	/**
 	 * Restore each cached per-primitive collision state, then clear the cache.
-	 * Called by both SetGhostMode(false) and InitializeBuilding — the latter
-	 * promotes a placement-ghost into a placed building WITHOUT going through
-	 * SetGhostMode(false) (to keep the ghost material until construction
-	 * completes), but it still needs collision restored so the player can
-	 * hit-test the building for right-click interactions.
+	 * Called by SetGhostMode(false) and InitializeBuilding. Since Oct 16 2026 a
+	 * placed building is always a fresh spawn (UMOBuildingComponent::
+	 * ServerPlaceBuilding), never a promoted placement preview, so on that path
+	 * the cache is normally empty; the call stays as a safety net.
 	 */
 	void RestoreGhostCollisionCache();
 
-	/** Save original materials from mesh. */
-	void SaveOriginalMaterials();
-
-	/** Restore original materials to mesh. */
+	/** Give every ghosted mesh its own materials back. */
 	void RestoreOriginalMaterials();
 
 	/**

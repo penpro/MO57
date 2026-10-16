@@ -511,19 +511,12 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO|UI|Harvest")
 	bool IsHarvestInProgress() const;
 
-	// --- Carcass Butchering ---
+	// --- World actions (a carcass's parts ...: IMOWorldActionProvider) ---
 
-	/** Start butchering a carcass part. Shows progress and locks input. */
-	UFUNCTION(BlueprintCallable, Category="MO|UI|Carcass")
-	void StartCarcassButchering(class AMOCarcassActor* Carcass, FName PartId);
+	/** The right-click action list of a world-action target. The actions themselves run on the server on the pawn's timed action. */
+	void ShowWorldActionMenu(AActor* Target, FVector WorldPosition);
 
-	/** Cancel any active carcass butchering. */
-	UFUNCTION(BlueprintCallable, Category="MO|UI|Carcass")
-	void CancelCarcassButchering();
-
-	/** Check if carcass butchering is in progress. */
-	UFUNCTION(BlueprintPure, Category="MO|UI|Carcass")
-	bool IsCarcassButcheringInProgress() const;
+	void HideWorldActionMenu();
 
 	// --- Inspection ---
 

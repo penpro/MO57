@@ -32,6 +32,7 @@
 #include "MOWaterActions.h"
 #include "MOItemActions.h"
 #include "MOFireActions.h"
+#include "MOWorldActionProvider.h"
 #include "MOCraftingStationActor.h"
 #include "MOWaterSourceSettings.h"
 #include "MOWaterSubsystem.h"
@@ -1234,8 +1235,9 @@ void AMOPlayerController::HandleSecondaryAction(const FInputActionValue& Value)
 				{
 					if (APawn* TargetPawn = Cast<APawn>(Target.TargetActor.Get()))
 					{
-						// Don't show context menu for self
-						if (TargetPawn != ControllablePawn)
+						// Not for self, and not for another PLAYER's character (co-op): it is theirs, not a survivor to command -- building the menu on the
+						// host gave it a survivor AI and threw the player out of it (Steam playtest Oct 16 2026).
+						if (TargetPawn != ControllablePawn && !TargetPawn->IsPlayerControlled())
 						{
 							if (UMORecruitmentComponent* RecruitComp = TargetPawn->FindComponentByClass<UMORecruitmentComponent>())
 							{
@@ -1371,6 +1373,16 @@ void AMOPlayerController::ServerStationAction_Implementation(AMOCraftingStationA
 	{
 		UE_LOG(LogMOFramework, Warning, TEXT("[MOFire] %s: %s on %s refused"), *GetName(), *ActionId.ToString(), *GetNameSafe(Station));
 	}
+}
+
+void AMOPlayerController::ServerWorldAction_Implementation(AActor* Target, FName ActionId)
+{
+	FMOWorldActions::Execute(this, Target, ActionId);
+}
+
+void AMOPlayerController::ServerInventoryRequest_Implementation(const FMOInventoryRequest& Request)
+{
+	FMOInventoryRequests::Execute(this, Request);
 }
 
 void AMOPlayerController::ServerItemAction_Implementation(FGuid ItemGuid, FName ActionId)
@@ -2368,17 +2380,17 @@ void AMOPlayerController::RemoveMappingContext(UInputMappingContext* Context)
 // IMOUIContractInterface IMPLEMENTATION
 // ============================================================================
 
-bool AMOPlayerController::ForwardUIContractRequest(EMOUIContractRequest Request, AActor* Target, const FVector& WorldPosition, FName PartId)
+bool AMOPlayerController::ForwardUIContractRequest(EMOUIContractRequest Request, AActor* Target, const FVector& WorldPosition)
 {
 	if (IsLocalController())
 	{
 		return false;
 	}
-	ClientUIContractRequest(Request, Target, WorldPosition, PartId);
+	ClientUIContractRequest(Request, Target, WorldPosition);
 	return true;
 }
 
-void AMOPlayerController::ClientUIContractRequest_Implementation(EMOUIContractRequest Request, AActor* Target, FVector_NetQuantize WorldPosition, FName PartId)
+void AMOPlayerController::ClientUIContractRequest_Implementation(EMOUIContractRequest Request, AActor* Target, FVector_NetQuantize WorldPosition)
 {
 	UE_LOG(LogMOFramework, Log, TEXT("[MOUIContract] the server asked this client for UI request %d on %s"), static_cast<int32>(Request), *GetNameSafe(Target));
 	switch (Request)
@@ -2388,7 +2400,7 @@ void AMOPlayerController::ClientUIContractRequest_Implementation(EMOUIContractRe
 	case EMOUIContractRequest::OpenCraftingMenu:       RequestOpenCraftingMenu_Implementation(Target); break;
 	case EMOUIContractRequest::ShowGhostContextMenu:   RequestShowGhostContextMenu_Implementation(Target, WorldPosition); break;
 	case EMOUIContractRequest::ShowStationContextMenu: RequestShowStationContextMenu_Implementation(Target, WorldPosition); break;
-	case EMOUIContractRequest::StartCarcassButchering: RequestStartCarcassButchering_Implementation(Target, PartId); break;
+	case EMOUIContractRequest::ShowWorldActionMenu:    RequestShowWorldActionMenu_Implementation(Target, WorldPosition); break;
 	}
 }
 
@@ -2459,17 +2471,14 @@ void AMOPlayerController::RequestShowStationContextMenu_Implementation(AActor* S
 	}
 }
 
-void AMOPlayerController::RequestStartCarcassButchering_Implementation(AActor* CarcassActor, FName PartId)
+void AMOPlayerController::RequestShowWorldActionMenu_Implementation(AActor* TargetActor, FVector WorldPosition)
 {
-	if (ForwardUIContractRequest(EMOUIContractRequest::StartCarcassButchering, CarcassActor, FVector::ZeroVector, PartId))
+	if (ForwardUIContractRequest(EMOUIContractRequest::ShowWorldActionMenu, TargetActor, WorldPosition))
 	{
 		return;
 	}
 	if (UIManagerComponent)
 	{
-		if (AMOCarcassActor* Carcass = Cast<AMOCarcassActor>(CarcassActor))
-		{
-			UIManagerComponent->StartCarcassButchering(Carcass, PartId);
-		}
+		UIManagerComponent->ShowWorldActionMenu(TargetActor, WorldPosition);
 	}
 }

@@ -1,12 +1,135 @@
 #include "MOCharacterMovementComponent.h"
 #include "MOFramework.h"
 #include "MOWaterSubsystem.h"
+#include "MOCharacter.h"
 #include "GameFramework/Character.h"
 #include "Components/CapsuleComponent.h"
 #include "GameFramework/PhysicsVolume.h"
+#include "Engine/World.h"
+#include "CollisionQueryParams.h"
+
+// ---- gait in the saved moves (see SetWantedGait) ----
+
+class FSavedMove_MO : public FSavedMove_Character
+{
+public:
+	typedef FSavedMove_Character Super;
+
+	uint8 bSavedWantsToJog : 1;
+	uint8 bSavedWantsToSprint : 1;
+
+	FSavedMove_MO() : bSavedWantsToJog(0), bSavedWantsToSprint(0) {}
+
+	virtual void Clear() override
+	{
+		Super::Clear();
+		bSavedWantsToJog = 0;
+		bSavedWantsToSprint = 0;
+	}
+
+	virtual uint8 GetCompressedFlags() const override
+	{
+		uint8 Result = Super::GetCompressedFlags();
+		if (bSavedWantsToJog)
+		{
+			Result |= FLAG_Custom_0;
+		}
+		if (bSavedWantsToSprint)
+		{
+			Result |= FLAG_Custom_1;
+		}
+		return Result;
+	}
+
+	virtual bool CanCombineWith(const FSavedMovePtr& NewMove, ACharacter* InCharacter, float MaxDelta) const override
+	{
+		const FSavedMove_MO* Other = static_cast<const FSavedMove_MO*>(NewMove.Get());
+		if (bSavedWantsToJog != Other->bSavedWantsToJog || bSavedWantsToSprint != Other->bSavedWantsToSprint)
+		{
+			return false;   // a gait change is a move boundary: the server must see where it happened
+		}
+		return Super::CanCombineWith(NewMove, InCharacter, MaxDelta);
+	}
+
+	virtual void SetMoveFor(ACharacter* C, float InDeltaTime, FVector const& NewAccel, FNetworkPredictionData_Client_Character& ClientData) override
+	{
+		Super::SetMoveFor(C, InDeltaTime, NewAccel, ClientData);
+		if (const UMOCharacterMovementComponent* Move = Cast<UMOCharacterMovementComponent>(C->GetCharacterMovement()))
+		{
+			bSavedWantsToJog = Move->bWantsToJog;
+			bSavedWantsToSprint = Move->bWantsToSprint;
+		}
+	}
+
+	virtual void PrepMoveFor(ACharacter* C) override
+	{
+		Super::PrepMoveFor(C);
+		if (UMOCharacterMovementComponent* Move = Cast<UMOCharacterMovementComponent>(C->GetCharacterMovement()))
+		{
+			Move->bWantsToJog = bSavedWantsToJog;   // a replayed move runs at the gait it was made with
+			Move->bWantsToSprint = bSavedWantsToSprint;
+		}
+	}
+};
+
+class FNetworkPredictionData_Client_MO : public FNetworkPredictionData_Client_Character
+{
+public:
+	explicit FNetworkPredictionData_Client_MO(const UCharacterMovementComponent& ClientMovement) : FNetworkPredictionData_Client_Character(ClientMovement) {}
+
+	virtual FSavedMovePtr AllocateNewMove() override
+	{
+		return FSavedMovePtr(new FSavedMove_MO());
+	}
+};
+
+FNetworkPredictionData_Client* UMOCharacterMovementComponent::GetPredictionData_Client() const
+{
+	if (ClientPredictionData == nullptr)
+	{
+		UMOCharacterMovementComponent* MutableThis = const_cast<UMOCharacterMovementComponent*>(this);
+		MutableThis->ClientPredictionData = new FNetworkPredictionData_Client_MO(*this);
+	}
+	return ClientPredictionData;
+}
+
+void UMOCharacterMovementComponent::UpdateFromCompressedFlags(uint8 Flags)
+{
+	Super::UpdateFromCompressedFlags(Flags);
+	const bool bJog = (Flags & FSavedMove_Character::FLAG_Custom_0) != 0;
+	bool bSprint = (Flags & FSavedMove_Character::FLAG_Custom_1) != 0;
+	// The server judges what the body can do: a sprint the server's stamina refuses runs at the jog / walk speed (the joiner is corrected to it).
+	AMOCharacter* MOOwner = Cast<AMOCharacter>(CharacterOwner);
+	if (bSprint && MOOwner && !MOOwner->CanSprint_Implementation())
+	{
+		bSprint = false;
+	}
+	const bool bChanged = bJog != (bool)bWantsToJog || bSprint != (bool)bWantsToSprint;
+	bWantsToJog = bJog;
+	bWantsToSprint = bSprint;
+	if (bChanged && MOOwner && !MOOwner->IsLocallyControlled())
+	{
+		MOOwner->ApplyGaitFromMovement(bJog, bSprint);   // the server's copy of the character learns the gait (exertion, metabolism, what other players see)
+	}
+}
+
+void UMOCharacterMovementComponent::SetGaitSpeeds(float Walk, float Jog, float Sprint)
+{
+	MaxWalkSpeed = Walk;
+	GaitJogSpeed = Jog;
+	GaitSprintSpeed = Sprint;
+}
+
+void UMOCharacterMovementComponent::SetWantedGait(bool bJog, bool bSprint)
+{
+	bWantsToJog = bJog;
+	bWantsToSprint = bSprint;
+}
 
 UMOCharacterMovementComponent::UMOCharacterMovementComponent()
 {
+	bWantsToJog = 0;
+	bWantsToSprint = 0;
 	// Stock swimming defaults are for a game character; these are a person's (a steady crawl is about 1 m/s; fast front crawl 1.5-2 m/s).
 	MaxSwimSpeed = 110.0f;
 	BrakingDecelerationSwimming = 300.0f;
@@ -22,9 +145,9 @@ float UMOCharacterMovementComponent::ComputeImmersion(float SurfaceZ, float Feet
 	return FMath::Clamp((SurfaceZ - FeetZ) / CapsuleHeight, 0.0f, 1.0f);
 }
 
-bool UMOCharacterMovementComponent::ShouldSwim(bool bWasSwimming, float Immersion, float EnterFraction, float ExitFraction, bool bStandable)
+bool UMOCharacterMovementComponent::ShouldSwim(bool bWasSwimming, float WaterDepthCm, float EnterDepthCm, float ExitDepthCm)
 {
-	return bWasSwimming ? (Immersion >= ExitFraction || !bStandable) : Immersion >= EnterFraction;
+	return bWasSwimming ? WaterDepthCm >= ExitDepthCm : WaterDepthCm >= EnterDepthCm;
 }
 
 void UMOCharacterMovementComponent::RefreshWater()
@@ -32,6 +155,7 @@ void UMOCharacterMovementComponent::RefreshWater()
 	bWaterKnown = false;
 	bBuried = false;
 	Immersion = 0.0f;
+	WaterColumnDepthCm = 0.0f;
 	if (!UpdatedComponent || !CharacterOwner)
 	{
 		return;
@@ -62,11 +186,31 @@ void UMOCharacterMovementComponent::RefreshWater()
 	WaterSurfaceZ = Surface;
 	bWaterKnown = true;
 	Immersion = ComputeImmersion(Surface, FeetZ, 2.0f * HalfHeight);
+
+	// The depth of the water here (what the swim decision goes by): from the surface straight down to the first walkable thing this character could stand on. The trace uses the
+	// character's own collision channel and responses, so the water it swims through is not "ground", while the real floor (dug pits included), a submerged rock or a dock is.
+	// Probed only as deep as the decision needs: no bottom within reach counts as deep water. Deterministic in the position, like the rest of this refresh (client replays agree).
+	if (FeetZ < Surface)
+	{
+		WaterColumnDepthCm = TNumericLimits<float>::Max();
+		const float ProbeCm = FMath::Max(SwimEnterDepthCm, SwimExitDepthCm) + 50.0f;
+		FCollisionQueryParams Params(SCENE_QUERY_STAT(MOWaterColumnDepth), /*bTraceComplex=*/false, CharacterOwner);
+		FCollisionResponseParams Response;
+		InitCollisionParams(Params, Response);
+		FHitResult Hit;
+		const FVector Start(Location.X, Location.Y, Surface);
+		const FVector End(Location.X, Location.Y, Surface - ProbeCm);
+		if (GetWorld()->LineTraceSingleByChannel(Hit, Start, End, UpdatedComponent->GetCollisionObjectType(), Params, Response) && IsWalkable(Hit))
+		{
+			WaterColumnDepthCm = FMath::Max(0.0f, Surface - Hit.ImpactPoint.Z);
+		}
+	}
 }
 
 void UMOCharacterMovementComponent::UpdateCharacterStateBeforeMovement(float DeltaSeconds)
 {
 	RefreshWater();
+	bSwimmableWater = !bBuried && ShouldSwim(MovementMode == MOVE_Swimming, WaterColumnDepthCm, SwimEnterDepthCm, SwimExitDepthCm);
 
 	// Mode changes only from the ground / air / water modes: never override flying, a custom mode or the ragdoll's disabled movement.
 	if (CharacterOwner && CanEverSwim())
@@ -75,16 +219,9 @@ void UMOCharacterMovementComponent::UpdateCharacterStateBeforeMovement(float Del
 		const bool bSwimmable = bSwimming || MovementMode == MOVE_Walking || MovementMode == MOVE_NavWalking || MovementMode == MOVE_Falling;
 		if (bSwimmable)
 		{
-			// Only look for ground when it can matter (a swimmer whose water has dropped below the exit line): a floor sweep per frame would be wasted on every deep-water frame.
-			bool bStandable = false;
-			if (bSwimming && Immersion < SwimExitImmersion)
-			{
-				FFindFloorResult Floor;
-				FindFloor(UpdatedComponent->GetComponentLocation(), Floor, /*bCanUseCachedLocation=*/false);
-				bStandable = Floor.IsWalkableFloor() && Floor.FloorDist <= 20.0f;
-			}
-			// Buried in the terrain: never "swim", and leave the swimming mode even with no floor (the keep-swimming-without-ground rule is for deep water, not rock): the fall-through rescue takes over.
-			const bool bShouldSwim = !bBuried && ShouldSwim(bSwimming, Immersion, SwimEnterImmersion, SwimExitImmersion, bStandable);
+			// Buried in the terrain: never "swim", and leave the swimming mode (deep water's keep-swimming rule is for water, not rock): the fall-through rescue takes over.
+			const bool bShouldSwim = !bBuried && ShouldSwim(bSwimming, WaterColumnDepthCm, SwimEnterDepthCm, SwimExitDepthCm);
+			bSwimmableWater = bShouldSwim;   // what the engine's landing / teleport code asks through IsInWater()
 			if (bShouldSwim && !bSwimming)
 			{
 				SetMovementMode(MOVE_Swimming);
@@ -101,14 +238,21 @@ void UMOCharacterMovementComponent::UpdateCharacterStateBeforeMovement(float Del
 
 float UMOCharacterMovementComponent::GetMaxSpeed() const
 {
-	const float Base = Super::GetMaxSpeed();
+	float Base = Super::GetMaxSpeed();
 	if (MovementMode == MOVE_Swimming)
 	{
 		return Base * FMath::Max(SwimSpeedScale, 0.05f);
 	}
-	if ((MovementMode == MOVE_Walking || MovementMode == MOVE_NavWalking) && Immersion > 0.0f)
+	if (MovementMode == MOVE_Walking || MovementMode == MOVE_NavWalking)
 	{
-		return Base * (1.0f - WadeDragAtFullImmersion * Immersion);
+		if (!IsCrouching())   // crouched walking keeps its own speed (Super's MaxWalkSpeedCrouched)
+		{
+			Base = GaitSpeed(bWantsToJog, bWantsToSprint, Base, GaitJogSpeed, GaitSprintSpeed);
+		}
+		if (Immersion > 0.0f)
+		{
+			return Base * (1.0f - WadeDragAtFullImmersion * Immersion);
+		}
 	}
 	return Base;
 }
