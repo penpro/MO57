@@ -672,6 +672,10 @@ public:
 	UFUNCTION(Server, Reliable)
 	void ServerStationAction(class AMOCraftingStationActor* Station, FName ActionId);
 
+	/** Gather the clump of ground cover nearest Location (UMOForagingSubsystem::BeginGatherCover: the server finds it itself, checks reach, times it). */
+	UFUNCTION(Server, Reliable)
+	void ServerGatherCover(FVector_NetQuantize Location);
+
 	/**
 	 * Change a person's name or gender (Field = "CharacterName" / "Gender") -- the status panel's Change. The pawn's identity component is the one source
 	 * of both (saves copy it into the pawn record): the authority writes it and it replicates. From the host this applies locally, from a co-op client it

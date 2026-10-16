@@ -53,6 +53,8 @@
 #include "MOResourceNodeDefinitionRow.h"
 #include "MOResourceDatabaseSettings.h"
 #include "MOCraftingUIController.h"
+#include "MOForagingSubsystem.h"
+#include "MOPCGWaterMask.h"
 
 namespace
 {
@@ -776,6 +778,40 @@ namespace
 			CraftUI->HideKeepOnHarvestContextMenu();
 			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] HARVEST Do %s on %s #%d at %.0f m: started"), *ActionId.ToString(), *ResourceId.ToString(), Target.InstanceIndex,
 				FVector::Dist(Pawn->GetActorLocation(), Target.HitResult.ImpactPoint) / 100.0f);
+		}));
+
+	FAutoConsoleCommandWithWorldAndArgs GCoverCmd(
+		TEXT("MO.Cover.Gather"),
+		TEXT("Dev: find the nearest gatherable ground cover (UMOCoverForageSettings) within radius_m of the pawn; `go` gathers it through the real server RPC "
+			"(as the ground menu's button does). Usage: MO.Cover.Gather [radius_m=3] [go]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			AMOCharacter* Pawn = LocalMOPawn(World);
+			AMOPlayerController* PC = World ? Cast<AMOPlayerController>(World->GetFirstPlayerController()) : nullptr;
+			UMOForagingSubsystem* Foraging = World ? World->GetSubsystem<UMOForagingSubsystem>() : nullptr;
+			const float RadiusCm = (Args.Num() > 0 ? FCString::Atof(*Args[0]) : 3.0f) * 100.0f;
+			FMOGatherableCover Cover;
+			if (!Pawn || !PC || !Foraging || !Foraging->FindGatherableCover(Pawn->GetActorLocation(), RadiusCm, Cover))
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] COVER none within %.0f m"), RadiusCm / 100.0f);
+				return;
+			}
+			FString Yields;
+			for (const FMODigDropEntry& Entry : Cover.Yields())
+			{
+				Yields += FString::Printf(TEXT("%s%s %d-%d @%.0f%%"), Yields.IsEmpty() ? TEXT("") : TEXT(", "), *Entry.ItemId.ToString(), Entry.MinQuantity, Entry.MaxQuantity,
+					Entry.DropChance * 100.0f);
+			}
+			const FMOPCGWaterMask Mask = FMOPCGWaterMask::ForActor(Cover.Component->GetOwner());
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] COVER '%s' (%s #%d%s) at %.1f m, z %.0f (mask %s, in water %d, shore %.2f): %s"), *Cover.Label().ToString(),
+				*GetNameSafe(Cover.Component->GetStaticMesh()), Cover.InstanceIndex, Cover.bAtShore ? TEXT(", at the water's edge") : TEXT(""),
+				FVector::Dist(Pawn->GetActorLocation(), Cover.Location) / 100.0f, Cover.Location.Z, Mask.IsActive() ? TEXT("on") : TEXT("OFF"),
+				Mask.IsInWater(Cover.Location.X, Cover.Location.Y, Cover.Location.Z) ? 1 : 0, Mask.ShoreFactor(Cover.Location.X, Cover.Location.Y, Cover.Location.Z, 300.0f), *Yields);
+			if (Args.Contains(TEXT("go")))
+			{
+				PC->ServerGatherCover(Cover.Location);
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] COVER gather asked"));
+			}
 		}));
 
 }

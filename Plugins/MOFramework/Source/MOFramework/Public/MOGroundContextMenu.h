@@ -172,6 +172,13 @@ protected:
 	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
 	TObjectPtr<UTextBlock> RadiusText;
 
+	/** "Gather dry grass" / "Cut reeds" ...: a runtime button when the cover under the crosshair can be gathered (UMOCoverForageSettings). */
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UMOCommonButton>> GatherButtons;
+
+	/** Where the gatherable clump is (the server finds it again from here). */
+	FVector GatherLocation = FVector::ZeroVector;
+
 	/** Optional text showing the foraging skill level. */
 	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
 	TObjectPtr<UTextBlock> SkillLevelText;

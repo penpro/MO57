@@ -150,9 +150,7 @@ mined with no pick. One gate now: `UMOHarvestSubsystem::HasToolForAction` (requi
 **Still open, in order of leverage:**
 
 1. ~~Water as an ingredient~~ — **done (pass 2, below).**
-2. **Reeds and dry grass.** `ReedBed` and `TallGrass` rows exist but cannot be placed as they are: the reed and grass
-   species are ground cover at thousands per hectare, too many for collision bodies. Needs a "what foraging this cover
-   gives" table on the cover species (the Forage menu already opens on cover), not resource rows.
+2. ~~Reeds and dry grass~~ — **done (pass 3, below).**
 3. **Discovery (step 6).** The gap between 44 and 79 is almost all discovery and knowledge gates.
 4. **Later ages, unchanged:** tin (bronze), iron ore (no pickaxe reaches quality 1.0; bog iron dug from wetlands would be
    the realistic first iron), feathers (no birds), wool, flax / nettle, glass, glaze, outcrop stones, horn.
@@ -187,3 +185,35 @@ row's `RequiredItemIds` (clean water for cleaning a wound, rehydrating, cooling)
 treatments are wired, their supplies should be taken through `ConsumeIngredient`, so "clean water" means water in a pot.
 Survivor craft jobs still move ingredients from storage as items (`AMOSurvivorController` withdraw): a job that needs water
 will report the storage short until survivors carry containers.
+
+## Pass 3 — gathering ground cover (Oct 16 2026, early)
+
+Wes, Oct 15: "every world thing gets an action". Ground cover (grass, bracken, stone scatters, seedlings, hazel shoots) is
+planted as decorative instances with no collision, thousands per hectare: it cannot be a resource node. It is now
+**gatherable by its mesh**: `UMOCoverForageSettings` (Project Settings > MO57 > Cover Foraging; defaults in code) maps a
+mesh-name fragment to what one clump gives, with a shore variant.
+
+| Cover | Gives |
+|---|---|
+| Wild grass / grass tussocks (`vlkhcbxia`, `smdrailr`) | dry grass, some fibre; **reeds** where it stands in the water-edge band |
+| Bracken (`SM_Fern_`) | fibre |
+| Small stone scatters | 1-2 stones, rarely a flint pebble (Foraging 2) |
+| Hazel shoots (cover) | a straight rod |
+| Tree seedlings | a green stick |
+
+* `UMOForagingSubsystem::FindGatherableCover` finds the nearest clump by its instances (the same "world cover" the
+  interactor forages on: `MOBiomeCover_*` or the native grass spawner's `grass`), filtered to what the pawn can reach
+  (`GatherReachCm`, 3 m) so the menu never offers what the server refuses. `BeginGatherCover` is the server's timed action
+  (stand still, 4-6 s); the clump is taken through the removal ledger; a refusal says why ("too far" vs "nothing there").
+* The Forage menu (E on ground or cover) shows **Gather dry grass** / **Cut reeds** / ... under Dig; the menu is rebuilt in
+  the kit look (`kit_ground_menu.py`) — its header was unreadable grey on a 20 % black box.
+* Progression map: **54 / 90 of 130**. Dry grass, reeds and hazel rods are tier 0; Gather Tinder, Weave Basket and Weave
+  Fish Trap are reachable.
+* Verified in a game instance: the menu offers "Gather dry grass"; the click gathers 2 dried grass in 5 s and the clump is
+  gone. Dev verb `MO.Cover.Gather [radius_m] [go]` (prints the clump's height, water mask state and shore factor). Test
+  `MOFramework.Cover.Lookup`.
+
+**Found, not fixed:** `FMOPCGWaterMask::ShoreFactor` samples water on ONE ring 25 m out (8 points). A narrow river 4 m away
+is missed, so the spawner plants no water-edge species (reeds) along narrow rivers, and the gather lookup (same test)
+agrees: tall grass on a river bank is grass, not reed. Rings at 5 / 12 / 25 m would fix it at about 3x the shore-tier
+samples (PCG load time) and would visibly add reeds along rivers -- a look and load change for Wes to approve.

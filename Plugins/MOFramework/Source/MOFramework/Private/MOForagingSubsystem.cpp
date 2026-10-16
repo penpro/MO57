@@ -1,4 +1,12 @@
 #include "MOForagingSubsystem.h"
+#include "MOInteractorComponent.h"
+#include "UObject/UObjectIterator.h"
+#include "MOItemDatabaseSettings.h"
+#include "MONotificationWidget.h"
+#include "MOPlayerController.h"
+#include "MOTimedActionComponent.h"
+#include "MOPCGWaterMask.h"
+#include "MOCoverForageSettings.h"
 #include "MOPCGInteractionSubsystem.h"
 #include "MOGatheringSettingsActor.h"
 #include "MOWorldItem.h"
@@ -307,6 +315,172 @@ TArray<AMOWorldItem*> UMOForagingSubsystem::RevealHISMInstancesInRadius(FVector 
 // ============================================================================
 // DIG FOR SUPPLIES
 // ============================================================================
+
+// ============================================================================
+// GATHERING GROUND COVER (UMOCoverForageSettings)
+// ============================================================================
+
+const FName UMOForagingSubsystem::GatherCoverActionId(TEXT("GatherCover"));
+
+namespace
+{
+	/** The biome spawner's water-edge band (FMOBiomeDefinitionRow::WaterEdgeBandCm is 250 by default), a little generous: cover this close above the water
+	 *  is the shore variant. */
+	constexpr float CoverShoreBandCm = 300.0f;
+}
+
+FText FMOGatherableCover::Label() const
+{
+	return Entry ? Entry->LabelFor(bAtShore) : FText::GetEmpty();
+}
+
+const TArray<FMODigDropEntry>& FMOGatherableCover::Yields() const
+{
+	static const TArray<FMODigDropEntry> Nothing;
+	return Entry ? Entry->YieldsFor(bAtShore) : Nothing;
+}
+
+bool UMOForagingSubsystem::FindGatherableCover(const FVector& Location, float RadiusCm, FMOGatherableCover& Out, const APawn* ReachableBy) const
+{
+	Out = FMOGatherableCover();
+	const UWorld* World = GetWorld();
+	if (!World)
+	{
+		return false;
+	}
+	float BestDistSq = FMath::Square(RadiusCm);
+	for (TObjectIterator<UInstancedStaticMeshComponent> It; It; ++It)
+	{
+		UInstancedStaticMeshComponent* Ism = *It;
+		if (!Ism || Ism->GetWorld() != World || Ism->GetInstanceCount() == 0 || !UMOInteractorComponent::IsWorldCoverComponent(Ism)
+			|| FVector::DistSquared(Ism->Bounds.Origin, Location) > FMath::Square(Ism->Bounds.SphereRadius + RadiusCm))
+		{
+			continue;
+		}
+		const FMOCoverForage* Entry = UMOCoverForageSettings::FindForMesh(Ism->GetStaticMesh());
+		if (!Entry)
+		{
+			continue;
+		}
+		for (const int32 Index : Ism->GetInstancesOverlappingSphere(Location, RadiusCm, /*bSphereInWorldSpace=*/true))
+		{
+			FTransform Xf;
+			if (!Ism->GetInstanceTransform(Index, Xf, /*bWorldSpace=*/true) || Xf.GetScale3D().IsNearlyZero())
+			{
+				continue;
+			}
+			const float DistSq = FVector::DistSquared(Xf.GetLocation(), Location);
+			if (DistSq < BestDistSq && (!ReachableBy || FVector::Dist(ReachableBy->GetActorLocation(), Xf.GetLocation()) <= GatherReachCm))
+			{
+				BestDistSq = DistSq;
+				Out.Component = Ism;
+				Out.InstanceIndex = Index;
+				Out.Location = Xf.GetLocation();
+				Out.Entry = Entry;
+			}
+		}
+	}
+	if (!Out.IsValid())
+	{
+		return false;
+	}
+	if (Out.Entry->HasShoreVariant())
+	{
+		// The same test the spawner planted the water-edge species by.
+		const FMOPCGWaterMask Mask = FMOPCGWaterMask::ForActor(Out.Component->GetOwner());
+		Out.bAtShore = Mask.IsActive() && Mask.ShoreFactor(Out.Location.X, Out.Location.Y, Out.Location.Z, CoverShoreBandCm) > 0.0f;
+	}
+	return true;
+}
+
+bool UMOForagingSubsystem::BeginGatherCover(APawn* Pawn, const FVector& Location, FText* OutReason)
+{
+	UMOTimedActionComponent* Timed = Pawn ? Pawn->FindComponentByClass<UMOTimedActionComponent>() : nullptr;
+	if (!Pawn || !Pawn->HasAuthority() || !Timed)
+	{
+		return false;
+	}
+	FMOGatherableCover Cover;
+	if (!FindGatherableCover(Location, 150.0f, Cover, Pawn))
+	{
+		// Two different failures, told apart: the clump is there but out of reach, or there is nothing to gather.
+		const bool bOutOfReach = FindGatherableCover(Location, 150.0f, Cover);
+		if (OutReason)
+		{
+			*OutReason = bOutOfReach ? NSLOCTEXT("MOForaging", "GatherTooFar", "Too far away: step closer.") : NSLOCTEXT("MOForaging", "NothingToGather", "Nothing to gather there.");
+		}
+		UE_LOG(LogMOForaging, Warning, TEXT("[MOForagingSubsystem] %s: gather refused near (%.0f, %.0f, %.0f): %s"), *Pawn->GetName(), Location.X, Location.Y, Location.Z,
+			bOutOfReach ? *FString::Printf(TEXT("the clump is %.0f cm away (reach %.0f)"), FVector::Dist(Pawn->GetActorLocation(), Cover.Location), GatherReachCm) : TEXT("no cover"));
+		return false;
+	}
+	TWeakObjectPtr<APawn> WeakPawn(Pawn);
+	TWeakObjectPtr<UMOForagingSubsystem> WeakThis(this);
+	const FVector At = Cover.Location;
+	return Timed->Begin(GatherCoverActionId, Cover.Label(), Cover.Entry->Seconds, [WeakPawn, WeakThis, At]()
+		{
+			APawn* P = WeakPawn.Get();
+			UMOForagingSubsystem* Self = WeakThis.Get();
+			FMOGatherableCover Now;
+			if (!P || !Self || !Self->FindGatherableCover(At, 5.0f, Now))
+			{
+				UE_LOG(LogMOForaging, Warning, TEXT("[MOForagingSubsystem] gather: the clump at (%.0f, %.0f) is gone"), At.X, At.Y);   // someone else took it
+				return;
+			}
+			Self->CompleteGatherCover(P, Now);
+		}, nullptr, 100.0f);
+}
+
+void UMOForagingSubsystem::CompleteGatherCover(APawn* Pawn, const FMOGatherableCover& Cover)
+{
+	UWorld* World = GetWorld();
+	UMOInventoryComponent* Inventory = Pawn->FindComponentByClass<UMOInventoryComponent>();
+	UMOWorldItemFactory* Factory = World ? World->GetSubsystem<UMOWorldItemFactory>() : nullptr;
+	const int32 Level = GetForagingLevel(Pawn);
+	TArray<FString> Got;
+	int32 Pieces = 0;
+	for (const FMODigDropEntry& Entry : Cover.Yields())
+	{
+		if (Level < Entry.MinForagingLevel || FMath::FRand() > Entry.DropChance)
+		{
+			continue;
+		}
+		const int32 Quantity = FMath::RandRange(Entry.MinQuantity, Entry.MaxQuantity);
+		if (!(Inventory && Inventory->AddItemByGuid(FGuid::NewGuid(), Entry.ItemId, Quantity)) && Factory)
+		{
+			// The pack is full: it lands at the gatherer's feet.
+			if (AMOWorldItem* Dropped = Factory->SpawnWorldItemSimple(Entry.ItemId, Quantity, Pawn->GetActorLocation() + Pawn->GetActorForwardVector() * 60.0f, FRotator::ZeroRotator))
+			{
+				Dropped->EnableDropPhysics();
+			}
+		}
+		Got.Add(FString::Printf(TEXT("%d %s"), Quantity, *UMOItemDatabaseSettings::GetItemDisplayName(Entry.ItemId).ToString()));
+		Pieces += Quantity;
+	}
+	if (Cover.Entry->bRemovesInstance)
+	{
+		if (UHierarchicalInstancedStaticMeshComponent* Hism = Cast<UHierarchicalInstancedStaticMeshComponent>(Cover.Component.Get()))
+		{
+			FMOHISMHarvestHelper::RemoveInstance(Hism, Cover.InstanceIndex, /*bRespectKeepOnHarvest=*/false);
+		}
+		else
+		{
+			FMOHISMHarvestHelper::RemoveInstance(Cover.Component.Get(), Cover.InstanceIndex, /*bRespectKeepOnHarvest=*/false);
+		}
+	}
+	if (Pieces > 0)
+	{
+		FMOForageXPSettings XPSettings = AMOGatheringSettingsActor::GetForageXPSettings(this);
+		AwardForagingXP(Pawn, XPSettings.XPPerRevealedItem * Pieces);
+	}
+	if (AMOPlayerController* PC = Cast<AMOPlayerController>(Pawn->GetController()))
+	{
+		PC->ClientShowNotification(Got.Num() > 0
+			? FText::Format(NSLOCTEXT("MOForaging", "Gathered", "Gathered {0}"), FText::FromString(FString::Join(Got, TEXT(", "))))
+			: NSLOCTEXT("MOForaging", "GatheredNothing", "Nothing worth keeping."), 3.0f, EMONotificationType::Info);
+	}
+	UE_LOG(LogMOForaging, Log, TEXT("[MOForagingSubsystem] %s gathered %s at (%.0f, %.0f)%s: %s"), *Pawn->GetName(), *Cover.Label().ToString(), Cover.Location.X,
+		Cover.Location.Y, Cover.bAtShore ? TEXT(" (shore)") : TEXT(""), Got.Num() > 0 ? *FString::Join(Got, TEXT(", ")) : TEXT("nothing"));
+}
 
 const TArray<FMODigDropEntry>& UMOForagingSubsystem::GetDigTableAt(const FVector& Location, FName* OutBiomeId) const
 {

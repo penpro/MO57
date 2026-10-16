@@ -6,6 +6,7 @@
 #include "MOItemDatabaseSettings.h"
 #include "MOItemDefinitionRow.h"
 #include "MOItemActions.h"
+#include "MOCoverForageSettings.h"
 #include "MOPCGHISMTaggerSettings.h"
 #include "MOPCGItemSpawnerSettings.h"
 #include "MOPCGMeshSpawnerSettings.h"
@@ -308,6 +309,18 @@ FMOItemSourceReport FMOItemSourceAnalysis::Analyze(UWorld* World, const FMOItemS
 			for (const FMOBiomeSpeciesEntry& Species : *List)
 			{
 				TargetTags.Add(Species.HISMTag);   // decorative species carry their HISMTag
+				// Ground cover that can be gathered (UMOCoverForageSettings): the shore variant where it is a water's-edge species.
+				if (Species.HISMTag.ToString().StartsWith(TEXT("MOBiomeCover_")))
+				{
+					if (const FMOCoverForage* Cover = UMOCoverForageSettings::FindForMeshName(Species.Mesh.ToSoftObjectPath().GetAssetName()))
+					{
+						const bool bShore = List == &Biome->WaterEdgeSpecies;
+						for (const FMODigDropEntry& Yield : Cover->YieldsFor(bShore))
+						{
+							Pickups.FindOrAdd(Yield.ItemId, FString::Printf(TEXT("gathering cover (%s in %s)"), *Cover->LabelFor(bShore).ToString(), *BiomeId.ToString()));
+						}
+					}
+				}
 				if (!Species.ResourceNodeId.IsNone())
 				{
 					PlacedResources.Add(Species.ResourceNodeId);

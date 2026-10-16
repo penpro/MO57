@@ -108,6 +108,23 @@ struct FMOHISMInstanceData
 
 // FMODigDropEntry lives in MOFrameworkCore (MODigDropEntry.h): a biome row carries its own dig table.
 
+struct FMOCoverForage;
+
+/** A clump of ground cover someone could gather (UMOCoverForageSettings), as UMOForagingSubsystem::FindGatherableCover found it. */
+struct MOFRAMEWORK_API FMOGatherableCover
+{
+	TWeakObjectPtr<UInstancedStaticMeshComponent> Component;
+	int32 InstanceIndex = INDEX_NONE;
+	FVector Location = FVector::ZeroVector;
+	const FMOCoverForage* Entry = nullptr;
+	/** At the water's edge, where the cover's shore variant applies (tall grass there is reed). */
+	bool bAtShore = false;
+
+	bool IsValid() const { return Entry && Component.IsValid() && InstanceIndex != INDEX_NONE; }
+	FText Label() const;
+	const TArray<FMODigDropEntry>& Yields() const;
+};
+
 /**
  * World subsystem for foraging operations.
  * Handles HISM instance detection, conversion to world items, and dig mechanics.
@@ -174,6 +191,24 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category="MO|Foraging")
 	int32 DigForSuppliesToInventory(FVector Location, int32 ForagingLevel, APawn* TargetPawn);
+
+	/**
+	 * The nearest clump of gatherable ground cover within RadiusCm of Location: a MOBiomeCover_* instance whose mesh has a UMOCoverForageSettings entry
+	 * (the same "world cover" the interactor forages on -- MOBiomeCover_* or the native grass spawner's "grass"; decorative cover has no collision, so it is found by its instances, not by a trace). The ground menu offers it; the server gathers it.
+	 */
+	bool FindGatherableCover(const FVector& Location, float RadiusCm, FMOGatherableCover& Out, const APawn* ReachableBy = nullptr) const;
+
+	/** How far from a gatherer a clump can be worked. FindGatherableCover's ReachableBy filters by it, so the menu never offers what the server refuses. */
+	static constexpr float GatherReachCm = 300.0f;
+
+	/**
+	 * Server: Pawn gathers the cover clump nearest Location -- a timed action on the pawn (stand still), then the yields go into its pack (or at its feet when
+	 * the pack is full) and the clump is taken from the world through the removal ledger. The one path for a player and a survivor. False if refused.
+	 */
+	bool BeginGatherCover(APawn* Pawn, const FVector& Location, FText* OutReason = nullptr);
+
+	/** The pawn timed action's id for gathering cover. */
+	static const FName GatherCoverActionId;
 
 	/**
 	 * What digging at Location can turn up: the biome under it (its DigYields -- a beach gives sand, not roots) when it has its own table, else DigDropTable.
@@ -250,6 +285,9 @@ public:
 	float DigSpawnRadius = 50.0f;
 
 private:
+	/** The end of a gather: roll the yields, hand them over, take the clump, award XP, tell the player. */
+	void CompleteGatherCover(APawn* Pawn, const FMOGatherableCover& Cover);
+
 	/**
 	 * Award foraging XP to a pawn.
 	 * @param Pawn - Pawn to award XP to

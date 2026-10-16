@@ -1,5 +1,7 @@
 #include "MOGroundContextMenu.h"
 #include "MOForagingSubsystem.h"
+#include "MOItemActions.h"
+#include "MOUIUtils.h"
 #include "MOPlayerController.h"
 #include "MOCommonButton.h"
 #include "MOCharacter.h"
@@ -70,6 +72,25 @@ void UMOGroundContextMenu::InitializeForLocation(FVector WorldLocation, APawn* I
 
 	// Update display
 	UpdateDisplayText();
+
+	// Cover under the crosshair that can be gathered (a grass tussock, reeds, bracken ...): offer it, under Dig.
+	FMOGatherableCover Cover;
+	TArray<FMOItemActionOption> Options;
+	if (ForagingSubsystem->FindGatherableCover(WorldLocation, 200.0f, Cover, InForagingPawn))   // only what this pawn can reach
+	{
+		GatherLocation = Cover.Location;
+		FMOItemActionOption& Gather = Options.AddDefaulted_GetRef();
+		Gather.Id = UMOForagingSubsystem::GatherCoverActionId;
+		Gather.Label = Cover.Label();
+	}
+	UMOUIUtils::RebuildActionButtons(this, GatherButtons, ButtonContainer, DigForSuppliesButton, Options, DigForSuppliesButton, [this](FName)
+	{
+		if (AMOPlayerController* PC = Cast<AMOPlayerController>(GetOwningPlayer()))
+		{
+			PC->ServerGatherCover(GatherLocation);
+		}
+		RequestClose();
+	});
 
 	UE_LOG(LogMOGroundMenu, Log, TEXT("[MOGroundContextMenu] Initialized at %s with radius %.0f (skill %d)"),
 		*WorldLocation.ToString(), SearchRadius, ForagingLevel);
