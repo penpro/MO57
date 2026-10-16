@@ -1,0 +1,16 @@
+--- a/Engine/Source/Runtime/Renderer/Private/HairStrands/HairStrandsComposition.cpp	UE 5.8.3 (CL 58210709), sha256 19256ea08f06b7fdf8a1b81a9385e76dc7876ecaae36c65b8e79fbea1ed8cd82
++++ b/Engine/Source/Runtime/Renderer/Private/HairStrands/HairStrandsComposition.cpp	MO57 patch #1 (Oct 16 2026)
+@@ -346,7 +346,12 @@
+ 
+ 	// When bReadSLWDepth == true, the SLW copy pass has been executed, and thus the hair depth has already be written into the scene depth (no need to rewrite it again)
+ 	const bool bReadSLWDepth = SLWDepthTexture && SLWComposeType != EHairSLWCompositionType::All;
+-	const bool bWriteDepth = !bReadSLWDepth;
++	// MO57 PATCH (Oct 16 2026, Docs/Engine_Patches.md #1): always write hair depth. The comment above holds for the depth RenderHairCompositionForSLW
++	// wrote into, but FDeferredShadingSceneRenderer replaces SceneTextures.Depth with the SLW depth prepass texture right after RenderSingleLayerWater,
++	// and that texture was rendered before any hair: post-processing (depth of field, height fog) then finds no hair in the scene depth whenever single
++	// layer water is in view, so strands outside the head silhouette take the background's depth. Hair behind the water is still rejected: this pass
++	// discards samples behind the SLW depth (PERMUTATION_READ_SLW_DEPTH) and the depth test runs against the prepass depth, which holds the water.
++	const bool bWriteDepth = true; // was: !bReadSLWDepth
+ 
+ 	FHairVisibilityComposeSamplePS::FParameters* Parameters = GraphBuilder.AllocParameters<FHairVisibilityComposeSamplePS::FParameters>();
+ 	Parameters->bComposeDofDepth = bDOFEnable ? 1 : 0;

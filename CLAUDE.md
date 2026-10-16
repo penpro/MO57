@@ -296,6 +296,7 @@ three questions in order:
 | `Docs/Terrain_Foundation_Plan.md` | VHG_Realistic recipe (multi-octave + ridged mountains + beach flattening) | Authoring or tuning base terrain generation |
 | `Docs/World_Features_Architecture.md` | Unifying abstraction for caves / rivers / POIs / landmarks / ore / player builds | Before designing any new "kind of thing" that lives in the world |
 | `Docs/Item_Art_Pipeline.md` | Fab scan → item mesh, recolour (tint MI) or kitbash, icon studio; Fab panel traps | Giving an item real art or an icon |
+| `Docs/Engine_Patches.md` | Engine-side bugs we need patched: evidence, exact diffs, apply/verify/revert, upstream reports | Before touching engine source, or after any engine update |
 | `Docs/Archive/` | Superseded docs (historical reference only) | Never — check git history if needed |
 
 ---
@@ -369,7 +370,8 @@ If you find yourself wanting to add `SetGamePaused`, `SetPause(true)`, a "pause 
 
 ## Development Environment
 - IDE: Rider for C++
-- Engine: Unreal Engine 5.8 (source build)
+- Engine: Unreal Engine 5.8 — the **Epic Games Launcher installed build** (`Engine/Build/InstalledBuild.txt`), NOT a source build: engine
+  modules are precompiled and cannot be rebuilt, so engine fixes are staged in `Docs/Engine_Patches.md`, not applied (verified Oct 16 2026)
 - Engine Install Path: `D:\UnrealEngine\UE_5.8`
 - Engine User Data: `C:\Users\penum\AppData\Local\UnrealEngine\5.8`
 - Build Tool Logs: `C:\Users\penum\AppData\Local\UnrealBuildTool`

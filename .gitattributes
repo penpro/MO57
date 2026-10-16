@@ -12,3 +12,5 @@
 *.obj filter=lfs diff=lfs merge=lfs -text
 *.ucas filter=lfs diff=lfs merge=lfs -text
 *.png filter=lfs diff=lfs merge=lfs -text
+# Engine patches must keep their bytes (the engine sources they apply to are CRLF): no end-of-line conversion
+Docs/EnginePatches/*.patch -text
