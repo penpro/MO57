@@ -169,6 +169,13 @@ bool FMOWater_OceanologyAssetsAreCooked::RunTest(const FString& Parameters)
 	}
 	TestTrue(TEXT("the project's always-cook directories were read from DefaultGame.ini"), CookDirectories.Num() > 3);
 
+	// Settings whose assets are left out ON PURPOSE, each with its reason. A packaged build that does reach one gets a null asset from the setting's getter.
+	const TMap<FName, const TCHAR*> NotCooked = {
+		// Read only by AOceanologyWaterNiagaraWavesVolume, which no MO level places. Its GPU script takes ddx/ddy in a compute shader, which DirectX 11 (cs_5_0)
+		// refuses: cooking it put a dozen X3662 errors in every package for an effect the game never shows (Oct 16 2026). The volume tolerates the null asset.
+		{ TEXT("NiagaraGerstnerWavesEffect"), TEXT("Niagara waves volume is not used by MO") },
+	};
+
 	const UOceanologyRuntimeSettings* Settings = GetDefault<UOceanologyRuntimeSettings>();
 	int32 Checked = 0, Uncovered = 0;
 	for (TFieldIterator<FSoftObjectProperty> It(UOceanologyRuntimeSettings::StaticClass()); It; ++It)
@@ -177,6 +184,11 @@ bool FMOWater_OceanologyAssetsAreCooked::RunTest(const FString& Parameters)
 		const FString Package = Path.GetLongPackageName();
 		if (Path.IsNull() || !Package.StartsWith(TEXT("/Oceanology_Plugin/")))
 		{
+			continue;
+		}
+		if (const TCHAR* const* Reason = NotCooked.Find(It->GetFName()))
+		{
+			AddInfo(FString::Printf(TEXT("%s (setting %s) is not cooked on purpose: %s"), *Path.ToString(), *It->GetName(), *Reason));
 			continue;
 		}
 		++Checked;

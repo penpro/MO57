@@ -52,6 +52,10 @@ COLUMN = {"type": "VerticalBox", "name": "CreatorColumn", "children": [
 CREATOR = {
     "asset": f"{MM}/WBP_CharacterCreatorPanel",
     "parent": "/Script/MOFramework.MOCharacterCreatorPanel",
+    # f/2 at 2.6 m kept only a few cm behind the body's centre line sharp: the crown of the hair went soft (Wes, Oct 16 2026). f/3.2 keeps the face,
+    # fringe and crown sharp while the world loading behind stays soft (about 12 px of blur 5 m back at 1440p). NOT fixed by the aperture: the buns at
+    # the back blur as much as the far background (verified side by side, Oct 16) -- a separate depth problem, not depth of field width.
+    "class_defaults": {"preview_f_stop": 3.2},
     # left of the survivor the panel's camera frames at ~72 % across the screen
     "root": {"type": "CanvasPanel", "name": "CreatorCanvas", "children": [
         K.panel("CreatorPanel", 2, [COLUMN], w=600, padding=[28, 24, 28, 24], slot=K.place(120, 120, 600, 760, "Left", auto_height=True))]},
