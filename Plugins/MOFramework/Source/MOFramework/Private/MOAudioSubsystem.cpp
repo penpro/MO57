@@ -273,6 +273,11 @@ void UMOAudioSubsystem::HandleWorldAudioContext(UWorld* World)
 		return;
 	}
 
+	// The engine resets the device's transient primary volume to 1.0 on EVERY map load (UEngine::LoadMap: Flush, then SetTransientPrimaryVolume(1.0f)),
+	// so the player's master volume must be put back for each new world -- before this, everything after the first load (main menu -> game) played at
+	// full volume, whatever the Master slider said, until the slider was touched (found by the audio heartbeat, Oct 16 2026).
+	ApplyMasterVolumeToAudioDevice();
+
 	// Detect main menu via game mode CLASS. Clock subsystem exists in every
 	// world so it can't distinguish — game mode is the authoritative signal.
 	const AGameModeBase* GM = World->GetAuthGameMode();

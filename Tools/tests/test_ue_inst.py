@@ -23,6 +23,10 @@ class LaunchArgsTests(unittest.TestCase):
         self.assertNotIn("-NoSteam", ui.build_launch_args("p", "l"))
         self.assertIn("-NoSteam", ui.build_launch_args("p", "l", nosteam=True))
 
+    def test_silent_unless_sound_is_asked(self):
+        self.assertIn("-nosound", ui.build_launch_args("p", "l"))
+        self.assertNotIn("-nosound", ui.build_launch_args("p", "l", sound=True))
+
     def test_harness_skips_the_character_creator_unless_asked(self):
         self.assertIn("-NoCharacterCreator", ui.build_launch_args("p", "l"))
         self.assertNotIn("-NoCharacterCreator", ui.build_launch_args("p", "l", creator=True))

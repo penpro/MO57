@@ -55,7 +55,7 @@ def env_for(name):
     return env
 
 
-def build_launch_args(uproject, log_path, pos=(0, 0), res=(640, 360), nosteam=False, extra=(), creator=False):
+def build_launch_args(uproject, log_path, pos=(0, 0), res=(640, 360), nosteam=False, extra=(), creator=False, sound=False):
     """Command line (after the exe) of a standalone game process. Pure: unit-tested offline.
 
     -forcelogflush so the log can be polled line by line; no -log (no console window to clutter the desktop);
@@ -63,9 +63,13 @@ def build_launch_args(uproject, log_path, pos=(0, 0), res=(640, 360), nosteam=Fa
     take over -- exactly what the editor itself runs on.
     -NoCharacterCreator (unless creator=True): a new game starts straight away instead of waiting in the character creator
     for a Begin no harness presses (AMOGameMode::OnPawnLandedSafely).
+    -nosound unless sound=True: harness instances stay silent; audio investigations need the real device (MO.Audio.Diag, the
+    [MOAudio] HB heartbeat).
     """
     args = [uproject, "-game", "-windowed", f"-ResX={res[0]}", f"-ResY={res[1]}", f"-WinX={pos[0]}",
-            f"-WinY={pos[1]}", "-nosplash", "-nosound", "-forcelogflush", f"-abslog={log_path}", "-NoQualityBenchmark"]
+            f"-WinY={pos[1]}", "-nosplash", "-forcelogflush", f"-abslog={log_path}", "-NoQualityBenchmark"]
+    if not sound:
+        args.append("-nosound")
     if nosteam:
         args.append("-NoSteam")
     if not creator:

@@ -3,6 +3,8 @@
  */
 
 #include "MOCheatSubsystem.h"
+#include "Layout/WidgetPath.h"
+#include "Types/ReflectionMetadata.h"
 #include "Containers/Ticker.h"
 #include "MOPossessionComponent.h"
 #include "Engine/TargetPoint.h"
@@ -4705,6 +4707,62 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 				});
 			}
 			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] FindWidget('%s'): %d match(es)"), *Filter, Found);
+		}),
+		ECVF_Default));
+
+	// ---------- MO.Test.HitTest <NameSubstring> ----------
+	// MO.Test.ClickWidget calls a button's click directly, so it works even when a real mouse click could not reach the button (Oct 16 2026: the exit
+	// confirmation took programmatic clicks but not Wes's). This asks Slate's own hit test -- the one real clicks go through -- what a click at the
+	// widget's centre lands on.
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.Test.HitTest"),
+		TEXT("Where a REAL mouse click at the centre of the first live widget whose name contains the arg would land (Slate's hit test). Logs [MOQUERY] HITTEST: REACHES / BLOCKED and the top of the widget path. Usage: MO.Test.HitTest <NameSubstring>"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			if (Args.Num() < 1 || !FSlateApplication::IsInitialized())
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] HITTEST usage: MO.Test.HitTest <NameSubstring> (needs Slate)"));
+				return;
+			}
+			UWidget* Target = nullptr;
+			for (TObjectIterator<UUserWidget> It; It && !Target; ++It)
+			{
+				UUserWidget* UW = *It;
+				if (!IsValid(UW) || UW->GetWorld() != World || !UW->WidgetTree)
+				{
+					continue;
+				}
+				UW->WidgetTree->ForEachWidget([&Target, &Args](UWidget* Child)
+				{
+					if (!Target && Child && Child->GetName().Contains(Args[0]) && Child->GetCachedGeometry().GetLocalSize().X > 1.f)
+					{
+						Target = Child;
+					}
+				});
+			}
+			if (!Target)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] HITTEST no laid-out widget named like '%s'"), *Args[0]);
+				return;
+			}
+			const FGeometry& Geo = Target->GetCachedGeometry();
+			const FVector2D Center = Geo.LocalToAbsolute(Geo.GetLocalSize() * 0.5f);
+			FSlateApplication& App = FSlateApplication::Get();
+			const FWidgetPath Path = App.LocateWindowUnderMouse(FVector2f(Center), App.GetInteractiveTopLevelWindows(), /*bIgnoreEnabledStatus=*/false, /*UserIndex=*/0);
+			const TSharedPtr<SWidget> TargetSlate = Target->GetCachedWidget();
+			bool bReaches = false;
+			FString Top;
+			for (int32 I = 0; I < Path.Widgets.Num(); ++I)
+			{
+				const SWidget& W = Path.Widgets[I].Widget.Get();
+				bReaches |= TargetSlate.IsValid() && &W == TargetSlate.Get();
+				if (I >= Path.Widgets.Num() - 5)
+				{
+					Top += FString::Printf(TEXT("\n[MOQUERY] HITTEST   %d: %s"), I, *FReflectionMetaData::GetWidgetDebugInfo(&W));
+				}
+			}
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] HITTEST '%s' at (%.0f, %.0f): %s (path of %d)%s"), *Target->GetName(), Center.X, Center.Y,
+				bReaches ? TEXT("REACHES it") : TEXT("BLOCKED -- a real click lands on something else"), Path.Widgets.Num(), *Top);
 		}),
 		ECVF_Default));
 

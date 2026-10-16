@@ -14,8 +14,9 @@
  * widget bindings moved to the base under their exact (crafting-flavored,
  * deliberately shared) legacy names.
  *
- * LIVENESS NOTE (Stage-3 audit): this widget has NO live consumer — only the
- * deprecated UMOBuildWidget ever calls InitializeQueue; the live building
+ * LIVENESS NOTE (Stage-3 audit): this widget has NO live consumer — nothing
+ * calls InitializeQueue (the deprecated UMOBuildWidget that did was deleted
+ * Oct 16 2026); the live building
  * progress surface is UMOGhostContextMenu. It is kept behavior-correct behind
  * the compat contract; wiring the shared renderer into the live building UI is
  * an explicit separate decision (see Docs/agent/ui/SESSION_STATE.md).

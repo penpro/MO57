@@ -215,11 +215,13 @@ void UMOGameInstance::EndLoadingScreen(UWorld* InLoadedWorld)
 		// (creating it in BeginLoadingScreen would destroy it with the old level)
 		ShowLoadingOverlay();
 	}
-	else if (LoadingOverlayWidget)
+	else if (LoadingOverlayWidget && !GetTimerManager().IsTimerActive(OverlayHoldTimerHandle))
 	{
-		// Not waiting for manual dismiss, hide the overlay now
+		// Not waiting for manual dismiss and no world-ready hold owns it: hide it now, and release whoever waits on it. A HELD overlay (the main menu's,
+		// over the world being rebuilt behind it) is the hold's to lift when the world is ready -- yanking it here is what hid the main menu on return.
 		LoadingOverlayWidget->FadeOutAndRemove();
 		LoadingOverlayWidget = nullptr;
+		OnLoadingOverlayReleased.Broadcast();
 	}
 }
 
@@ -299,7 +301,9 @@ void UMOGameInstance::PollOverlayHold()
 	UMOWorldReadinessSubsystem* Readiness = OverlayHoldReadiness.Get();
 	if (!LoadingOverlayWidget)
 	{
+		// The overlay went away some other way: the hold ends, and whoever waited on its release must hear of it (or waits forever).
 		GetTimerManager().ClearTimer(OverlayHoldTimerHandle);
+		OnLoadingOverlayReleased.Broadcast();
 		return;
 	}
 	if (!Readiness || !Readiness->IsTracking())
@@ -332,4 +336,5 @@ void UMOGameInstance::HideLoadingOverlayImmediate()
 	}
 
 	bWaitingForManualDismiss = false;
+	OnLoadingOverlayReleased.Broadcast();   // every removal path releases the waiters (see the header)
 }

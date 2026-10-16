@@ -139,7 +139,11 @@ public:
 	 */
 	void ReleaseLoadingOverlayWhenWorldReady(float FadeSeconds);
 
-	/** Fired when a held overlay is released (the world became ready) and its fade-out starts: the main menu starts its own fade-in on this. */
+	/**
+	 * Fired whenever the overlay goes away: a held overlay released because the world became ready (its fade-out starts), or an overlay removed by any
+	 * other path (a level load, an error). The main menu reveals itself on this, so EVERY removal path must fire it -- a removal that did not (the level
+	 * load) left the menu waiting forever at render opacity 0 on every return to the main menu (Oct 16 2026).
+	 */
 	DECLARE_MULTICAST_DELEGATE(FMOOnLoadingOverlayReleased);
 	FMOOnLoadingOverlayReleased OnLoadingOverlayReleased;
 
