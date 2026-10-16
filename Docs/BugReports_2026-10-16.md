@@ -6,6 +6,11 @@ but two; seed 2048382384, save World_20261016_005738), one is left over from Oct
 Status: **DONE** (fixed + verified), **OPEN** (not started), **LOGGED** (design / larger piece of work), **INVESTIGATING**.
 Cause column: a diagnosis only once verified; until then it says "suspect" and why.
 
+**Packaged check (Oct 16 15:40, Development build of `6ad506ff`):** cook clean; `nettest packaged` 14/14 (two packaged copies: host + join, same
+seed, client follows the host's clock and weather, no crash / ensure / assertion in either log); `nettest packaged-suite` -- `MO.Test.RunAll` in the
+cooked game 7 of 8, the miss being `Data:Sources` (54 of 130 recipes reachable: the open progression work, failing by design until no recipe is
+blocked -- not new); no crash, ensure or assertion. Editor-binary runs: suite 254/254, `nettest actions` 113/115 then the two harness misses passing.
+
 ## Co-op (Steam session, host + 1 joiner)
 
 | # | id | Report | Cause / where | Status |
