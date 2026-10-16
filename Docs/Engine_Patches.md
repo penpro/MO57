@@ -76,6 +76,7 @@ Not build-tested (no source engine) — the diagnosis is verified by the SceneDe
 
 ### How to verify once applied
 
+0. Turn the creator's depth of field back on first: `bPreviewDepthOfField = true` (MOCharacterCreatorPanel.h default, or the WBP class default).
 1. `python Tools/ue.py inst start x --creator`, `MO.NewGame 26364`, wait for readiness Ready.
 2. Screenshot: the buns are as sharp as the crown (compare `0001-evidence-creator-probe.png` A).
 3. `ShowFlag.VisualizeBuffer 1` + `r.BufferVisualizationTarget SceneDepth`: the silhouette includes the hair.
@@ -92,7 +93,8 @@ from the matching engine tag).
 
 | Tried | Result |
 |-------|--------|
-| Creator aperture f/2 -> f/3.2 (`PreviewFStop`, kept) | Crown and fringe sharper; buns unchanged (they take the background's depth, not a near one) |
+| **Creator depth of field OFF (`UMOCharacterCreatorPanel::bPreviewDepthOfField = false`) — CURRENT STATE (Wes, Oct 16)** | Buns sharp (no blur at all); the world building behind the creator is visible, which Wes accepted. When Epic fixes the bug (or patch #1 is applied), set `bPreviewDepthOfField` true and check the buns |
+| Creator aperture f/2 -> f/3.2 (`PreviewFStop`, kept for when DOF returns) | Crown and fringe sharper; buns unchanged (they take the background's depth, not a near one) |
 | `DepthOfFieldUseHairDepth` on the creator camera | No change; reverted. NB its tooltip is inverted vs the 5.8.3 code: ON writes the coverage-lerped hair/scene depth (`DOFDepthPS`), OFF writes the hair depth |
 | `r.HairStrands.ComposeAfterTranslucency` | Changes draw order only, not the depth write |
 | `r.HairStrands.DOFDepth 0` (forum advice) | Does not exist in 5.8 |

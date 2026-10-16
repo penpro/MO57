@@ -146,11 +146,17 @@ void UMOCharacterCreatorPanel::FrameSurvivor()
 	UCameraComponent* Lens = Camera->GetCameraComponent();
 	Lens->SetFieldOfView(PreviewFieldOfView);
 	Lens->SetConstraintAspectRatio(false);
-	// A shallow depth of field on the survivor: the terrain and plants still streaming in behind them stay soft.
-	Lens->PostProcessSettings.bOverride_DepthOfFieldFocalDistance = true;
-	Lens->PostProcessSettings.DepthOfFieldFocalDistance = PreviewCameraDistanceCm;
-	Lens->PostProcessSettings.bOverride_DepthOfFieldFstop = true;
-	Lens->PostProcessSettings.DepthOfFieldFstop = PreviewFStop;
+	// Depth of field: explicitly off unless bPreviewDepthOfField (the engine drops hair from the scene depth near water -- see the header), so no level
+	// post-process volume can turn it back on behind the creator. On: a shallow focus on the survivor, the world still streaming in behind stays soft.
+	Lens->PostProcessSettings.bOverride_DepthOfFieldEnabled = true;
+	Lens->PostProcessSettings.DepthOfFieldEnabled = bPreviewDepthOfField;
+	if (bPreviewDepthOfField)
+	{
+		Lens->PostProcessSettings.bOverride_DepthOfFieldFocalDistance = true;
+		Lens->PostProcessSettings.DepthOfFieldFocalDistance = PreviewCameraDistanceCm;
+		Lens->PostProcessSettings.bOverride_DepthOfFieldFstop = true;
+		Lens->PostProcessSettings.DepthOfFieldFstop = PreviewFStop;
+	}
 	Lens->PostProcessBlendWeight = 1.0f;
 	PreviewCamera = Camera;
 	PC->SetViewTarget(Camera);

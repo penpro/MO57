@@ -58,6 +58,11 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category="MO|CharacterCreator", meta=(ClampMin="0.7"))
 	float PreviewFStop = 2.0f;
 
+	/** Depth of field on the preview camera (PreviewFStop sets its aperture). OFF (Wes, Oct 16 2026): with Single Layer Water in view UE 5.8 drops groom
+	 *  hair from the scene depth, so the blur ate the survivor's buns -- an engine bug (Docs/Engine_Patches.md #1). Turn back on once Epic fixes it. */
+	UPROPERTY(EditDefaultsOnly, Category="MO|CharacterCreator")
+	bool bPreviewDepthOfField = false;
+
 protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;

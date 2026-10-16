@@ -52,9 +52,9 @@ COLUMN = {"type": "VerticalBox", "name": "CreatorColumn", "children": [
 CREATOR = {
     "asset": f"{MM}/WBP_CharacterCreatorPanel",
     "parent": "/Script/MOFramework.MOCharacterCreatorPanel",
-    # f/2 at 2.6 m kept only a few cm behind the body's centre line sharp: the crown of the hair went soft (Wes, Oct 16 2026). f/3.2 keeps the face,
-    # fringe and crown sharp while the world loading behind stays soft (about 12 px of blur 5 m back at 1440p). NOT fixed by the aperture: the buns at
-    # the back blur as much as the far background (verified side by side, Oct 16) -- a separate depth problem, not depth of field width.
+    # The creator's depth of field is OFF (bPreviewDepthOfField, C++ default; Wes, Oct 16 2026): UE 5.8 drops groom hair from the scene depth whenever
+    # Single Layer Water is in view, so the blur took the buns with the background (Docs/Engine_Patches.md #1). This aperture applies when it is turned
+    # back on: f/3.2 kept the face, fringe and crown sharp with the world behind soft (about 12 px of blur 5 m back at 1440p).
     "class_defaults": {"preview_f_stop": 3.2},
     # left of the survivor the panel's camera frames at ~72 % across the screen
     "root": {"type": "CanvasPanel", "name": "CreatorCanvas", "children": [
