@@ -217,3 +217,23 @@ mesh-name fragment to what one clump gives, with a shore variant.
 is missed, so the spawner plants no water-edge species (reeds) along narrow rivers, and the gather lookup (same test)
 agrees: tall grass on a river bank is grass, not reed. Rings at 5 / 12 / 25 m would fix it at about 3x the shore-tier
 samples (PCG load time) and would visibly add reeds along rivers -- a look and load change for Wes to approve.
+
+## Pass 4 — deadwood, sandstone, bog iron; every kind within reach (Oct 16 2026)
+
+* **Cover that needs a tool**: an entry can name a tool (`RequiredTool`, `MinToolQuality`). Sandstone ground and outcrops give
+  a block of sandstone (the grinding stone) to someone with a hammer (20 s; the rock stays); without one the menu shows the
+  button disabled, "Needs a hammer.", and the server refuses with the same words. The analysis gates such cover in its
+  fixpoint (sandstone is tier 2, after the hammerstone).
+* **Deadwood**: an old fallen log breaks up into dry branches, firewood and, 40 % of the time, punk wood that takes an ember
+  (tinder); a standing dead tree gives dry branches and stays.
+* **Bog iron**: digging in the rainforest (the wettest lowland) turns up limonite nodules (iron ore, 12 %, Foraging 2) -- the
+  iron most early smiths in northern Europe smelted. With the bloomery chain it opens the iron age: wrought iron is tier 5.
+* **The menu offers every kind within reach**, not just the nearest clump: by a log among grass at a lake it reads "Cut
+  reeds / Gather dry grass / Break up the old log". The RPC names the kind (`ServerGatherCover(Location, EntryIndex)`), so
+  the server gathers what was clicked. Reach and nearness are measured to each clump's BOUNDS (a log's or an outcrop's pivot
+  can be metres from where one stands on it), and the completed action re-checks the exact instance.
+* Progression map: **54 / 106 of 130** (today / attempt anything). What is left in attempt-anything is bronze (tin), cloth
+  (flax, wool), arrows (feathers), glass and glaze, horn and greenstone.
+* Verified in a game instance: sandstone refused bare-handed ("Needs a hammer.") and broken off with a hammerstone; 12 digs in
+  the rainforest gave 3 iron ore; at a lake the menu listed reeds, dry grass and the old log; the log gave 2 branches + 2
+  firewood and was gone; reeds cut at a shore (shore factor 0.67) gave 4 reeds.

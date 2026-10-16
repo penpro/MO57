@@ -1,5 +1,6 @@
 #include "MOCoverForageSettings.h"
 #include "Engine/StaticMesh.h"
+#include "MOInventoryComponent.h"
 
 #define LOCTEXT_NAMESPACE "MOCoverForage"
 
@@ -48,22 +49,70 @@ UMOCoverForageSettings::UMOCoverForageSettings()
 		{ Yield(TEXT("StraightBranch01"), 1, 1), Yield(TEXT("Stick01"), 1, 1, 0.5f) }, 5.0f));
 	// A tree seedling, pulled up: a green stick.
 	Entries.Add(Cover(TEXT("Seedling"), LOCTEXT("PullSeedling", "Pull up the seedling"), { Yield(TEXT("Stick01"), 1, 1) }, 4.0f));
+	// An old fallen log: seasoned dead wood to burn and to drill, and the rotten "punk" wood inside that takes an ember. Broken up and carried off.
+	Entries.Add(Cover(TEXT("wcjgbc1"), LOCTEXT("BreakLog", "Break up the old log"),
+		{ Yield(TEXT("Branch01"), 2, 3), Yield(TEXT("Firewood01"), 1, 2), Yield(TEXT("Tinder01"), 1, 1, 0.4f) }, 12.0f));
+	// A standing dead tree: dry branches snapped off its lower trunk. The tree stays.
+	{
+		FMOCoverForage Snag = Cover(TEXT("SM_DeadTree"), LOCTEXT("SnapDeadBranches", "Snap off dead branches"), { Yield(TEXT("Branch01"), 1, 2) }, 8.0f);
+		Snag.bRemovesInstance = false;
+		Entries.Add(Snag);
+	}
+	// Sandstone ground and outcrops: a block broken off with a hammerstone (a grinding stone, a whetstone). The rock stays.
+	for (const TCHAR* Sandstone : { TEXT("SandstoneRockyGround"), TEXT("SandstoneCliff") })
+	{
+		FMOCoverForage Rock = Cover(Sandstone, LOCTEXT("BreakSandstone", "Break off sandstone"), { Yield(TEXT("Sandstone01"), 1, 1) }, 20.0f);
+		Rock.bRemovesInstance = false;
+		Rock.RequiredTool = EMOToolType::Hammer;
+		Rock.MinToolQuality = 0.3f;
+		Entries.Add(Rock);
+	}
+}
+
+bool FMOCoverForage::CanBeWorkedBy(const UMOInventoryComponent* Inventory, FText* OutReason) const
+{
+	if (RequiredTool == EMOToolType::None)
+	{
+		return true;
+	}
+	const float Best = Inventory ? Inventory->GetBestToolEffectiveness(RequiredTool) : 0.0f;
+	if (Best > 0.0f && Best >= MinToolQuality)
+	{
+		return true;
+	}
+	if (OutReason)
+	{
+		*OutReason = FText::Format(LOCTEXT("NeedsTool", "Needs a {0}."), UEnum::GetDisplayValueAsText(RequiredTool).ToLower());
+	}
+	return false;
+}
+
+int32 UMOCoverForageSettings::FindIndexForMeshName(const FString& MeshName)
+{
+	if (MeshName.IsEmpty())
+	{
+		return INDEX_NONE;
+	}
+	const TArray<FMOCoverForage>& All = GetDefault<UMOCoverForageSettings>()->Entries;
+	for (int32 Index = 0; Index < All.Num(); ++Index)
+	{
+		if (!All[Index].MeshNameContains.IsEmpty() && MeshName.Contains(All[Index].MeshNameContains))
+		{
+			return Index;
+		}
+	}
+	return INDEX_NONE;
+}
+
+const FMOCoverForage* UMOCoverForageSettings::GetEntry(int32 Index)
+{
+	const TArray<FMOCoverForage>& All = GetDefault<UMOCoverForageSettings>()->Entries;
+	return All.IsValidIndex(Index) ? &All[Index] : nullptr;
 }
 
 const FMOCoverForage* UMOCoverForageSettings::FindForMeshName(const FString& MeshName)
 {
-	if (MeshName.IsEmpty())
-	{
-		return nullptr;
-	}
-	for (const FMOCoverForage& Entry : GetDefault<UMOCoverForageSettings>()->Entries)
-	{
-		if (!Entry.MeshNameContains.IsEmpty() && MeshName.Contains(Entry.MeshNameContains))
-		{
-			return &Entry;
-		}
-	}
-	return nullptr;
+	return GetEntry(FindIndexForMeshName(MeshName));
 }
 
 const FMOCoverForage* UMOCoverForageSettings::FindForMesh(const UStaticMesh* Mesh)

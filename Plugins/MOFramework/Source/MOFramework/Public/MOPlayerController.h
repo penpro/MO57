@@ -672,9 +672,10 @@ public:
 	UFUNCTION(Server, Reliable)
 	void ServerStationAction(class AMOCraftingStationActor* Station, FName ActionId);
 
-	/** Gather the clump of ground cover nearest Location (UMOForagingSubsystem::BeginGatherCover: the server finds it itself, checks reach, times it). */
+	/** Gather the clump of ground cover of kind EntryIndex (UMOCoverForageSettings) nearest Location (UMOForagingSubsystem::BeginGatherCover: the server
+	 *  finds it itself, checks reach and tools, times it). EntryIndex INDEX_NONE = whatever is nearest. */
 	UFUNCTION(Server, Reliable)
-	void ServerGatherCover(FVector_NetQuantize Location);
+	void ServerGatherCover(FVector_NetQuantize Location, int32 EntryIndex);
 
 	/**
 	 * Change a person's name or gender (Field = "CharacterName" / "Gender") -- the status panel's Change. The pawn's identity component is the one source

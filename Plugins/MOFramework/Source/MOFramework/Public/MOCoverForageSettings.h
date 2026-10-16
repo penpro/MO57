@@ -11,9 +11,11 @@
 #include "CoreMinimal.h"
 #include "Engine/DeveloperSettings.h"
 #include "MODigDropEntry.h"
+#include "MOItemDefinitionRow.h"
 #include "MOCoverForageSettings.generated.h"
 
 class UStaticMesh;
+class UMOInventoryComponent;
 
 USTRUCT(BlueprintType)
 struct MOFRAMEWORK_API FMOCoverForage
@@ -44,9 +46,20 @@ struct MOFRAMEWORK_API FMOCoverForage
 	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category="Cover", meta=(ClampMin="0.5"))
 	float Seconds = 5.0f;
 
-	/** The clump is taken (pulled up, cut down): the instance goes, through the world removal ledger (it stays gone, in co-op and in saves). */
+	/** The clump is taken (pulled up, cut down): the instance goes, through the world removal ledger (it stays gone, in co-op and in saves). False for
+	 *  something worked but left standing: a dead tree's branches, an outcrop's stone. */
 	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category="Cover")
 	bool bRemovesInstance = true;
+
+	/** A tool the work needs (a hammer to break stone from an outcrop); None = bare hands. */
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category="Cover")
+	EMOToolType RequiredTool = EMOToolType::None;
+
+	UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category="Cover", meta=(ClampMin="0.0", ClampMax="1.0"))
+	float MinToolQuality = 0.0f;
+
+	/** Whether the bearer of Inventory can do it (carries the tool at its quality); OutReason says what is missing. */
+	bool CanBeWorkedBy(const UMOInventoryComponent* Inventory, FText* OutReason = nullptr) const;
 
 	bool HasShoreVariant() const { return ShoreYields.Num() > 0; }
 	const TArray<FMODigDropEntry>& YieldsFor(bool bAtShore) const { return bAtShore && HasShoreVariant() ? ShoreYields : Yields; }
@@ -68,6 +81,11 @@ public:
 	static const FMOCoverForage* FindForMeshName(const FString& MeshName);
 
 	static const FMOCoverForage* FindForMesh(const UStaticMesh* Mesh);
+
+	/** The index of that entry (the same on every machine: it is how a client names the kind of cover it asks the server to gather), or INDEX_NONE. */
+	static int32 FindIndexForMeshName(const FString& MeshName);
+
+	static const FMOCoverForage* GetEntry(int32 Index);
 
 	virtual FName GetCategoryName() const override { return TEXT("MO57"); }
 };

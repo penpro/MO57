@@ -293,6 +293,7 @@ FMOItemSourceReport FMOItemSourceAnalysis::Analyze(UWorld* World, const FMOItemS
 	}
 
 	TMap<FName, FString> Pickups;
+	TArray<TTuple<const FMOCoverForage*, bool, FString>> ToolGatedCover;
 	TSet<FName> PlacedResources;
 	CollectPcgPickups(ItemByMesh, Pickups, PlacedResources);
 	TArray<FName> BiomeIds;
@@ -315,9 +316,21 @@ FMOItemSourceReport FMOItemSourceAnalysis::Analyze(UWorld* World, const FMOItemS
 					if (const FMOCoverForage* Cover = UMOCoverForageSettings::FindForMeshName(Species.Mesh.ToSoftObjectPath().GetAssetName()))
 					{
 						const bool bShore = List == &Biome->WaterEdgeSpecies;
-						for (const FMODigDropEntry& Yield : Cover->YieldsFor(bShore))
+						const FString Source = FString::Printf(TEXT("gathering cover (%s in %s)"), *Cover->LabelFor(bShore).ToString(), *BiomeId.ToString());
+						if (Cover->RequiredTool != EMOToolType::None)
 						{
-							Pickups.FindOrAdd(Yield.ItemId, FString::Printf(TEXT("gathering cover (%s in %s)"), *Cover->LabelFor(bShore).ToString(), *BiomeId.ToString()));
+							ToolGatedCover.Emplace(Cover, bShore, Source);   // produced in the fixpoint once the tool is (sandstone needs a hammer)
+							for (const FMODigDropEntry& Yield : Cover->YieldsFor(bShore))
+							{
+								ProducedByAnything.Add(Yield.ItemId);   // a producer on paper, whatever the tool
+							}
+						}
+						else
+						{
+							for (const FMODigDropEntry& Yield : Cover->YieldsFor(bShore))
+							{
+								Pickups.FindOrAdd(Yield.ItemId, Source);
+							}
 						}
 					}
 				}
@@ -529,6 +542,19 @@ FMOItemSourceReport FMOItemSourceAnalysis::Analyze(UWorld* World, const FMOItemS
 						Best = Effectiveness;
 						bChanged = true;
 					}
+				}
+			}
+		}
+
+		// Ground cover that needs a tool (UMOCoverForageSettings: sandstone broken off with a hammer).
+		for (const TTuple<const FMOCoverForage*, bool, FString>& Gated : ToolGatedCover)
+		{
+			const FMOCoverForage* Cover = Gated.Get<0>();
+			if (ToolOk(Cover->RequiredTool, Cover->MinToolQuality))
+			{
+				for (const FMODigDropEntry& Yield : Cover->YieldsFor(Gated.Get<1>()))
+				{
+					bChanged |= Produce(Yield.ItemId, Gated.Get<2>());
 				}
 			}
 		}

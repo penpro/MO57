@@ -2,6 +2,8 @@
 #include "MOForagingSubsystem.h"
 #include "MOItemActions.h"
 #include "MOUIUtils.h"
+#include "MOInventoryComponent.h"
+#include "MOCoverForageSettings.h"
 #include "MOPlayerController.h"
 #include "MOCommonButton.h"
 #include "MOCharacter.h"
@@ -73,21 +75,35 @@ void UMOGroundContextMenu::InitializeForLocation(FVector WorldLocation, APawn* I
 	// Update display
 	UpdateDisplayText();
 
-	// Cover under the crosshair that can be gathered (a grass tussock, reeds, bracken ...): offer it, under Dig.
-	FMOGatherableCover Cover;
+	// Cover around the crosshair that can be gathered (a grass tussock, reeds, the old log, sandstone ...): each kind within reach, nearest first, under
+	// Dig -- standing by a log among grass offers both.
+	TArray<FMOGatherableCover> Kinds;
+	ForagingSubsystem->FindGatherableCoverKinds(WorldLocation, 250.0f, Kinds, InForagingPawn);
+	GatherKinds.Reset();
 	TArray<FMOItemActionOption> Options;
-	if (ForagingSubsystem->FindGatherableCover(WorldLocation, 200.0f, Cover, InForagingPawn))   // only what this pawn can reach
+	const UMOInventoryComponent* Inventory = InForagingPawn ? InForagingPawn->FindComponentByClass<UMOInventoryComponent>() : nullptr;
+	for (const FMOGatherableCover& Cover : Kinds)
 	{
-		GatherLocation = Cover.Location;
-		FMOItemActionOption& Gather = Options.AddDefaulted_GetRef();
-		Gather.Id = UMOForagingSubsystem::GatherCoverActionId;
-		Gather.Label = Cover.Label();
-	}
-	UMOUIUtils::RebuildActionButtons(this, GatherButtons, ButtonContainer, DigForSuppliesButton, Options, DigForSuppliesButton, [this](FName)
-	{
-		if (AMOPlayerController* PC = Cast<AMOPlayerController>(GetOwningPlayer()))
+		if (Options.Num() >= MaxGatherKinds)
 		{
-			PC->ServerGatherCover(GatherLocation);
+			break;
+		}
+		FMOItemActionOption& Gather = Options.AddDefaulted_GetRef();
+		Gather.Id = FName(*FString::Printf(TEXT("%s.%d"), *UMOForagingSubsystem::GatherCoverActionId.ToString(), GatherKinds.Num()));
+		Gather.Label = Cover.Label();
+		// A tool the work needs (a hammer for sandstone): shown, disabled, with what is missing.
+		Gather.bEnabled = Cover.Entry->CanBeWorkedBy(Inventory, &Gather.DisabledReason);
+		GatherKinds.Emplace(Cover.Location, Cover.EntryIndex);
+	}
+	UMOUIUtils::RebuildActionButtons(this, GatherButtons, ButtonContainer, DigForSuppliesButton, Options, DigForSuppliesButton, [this](FName Id)
+	{
+		FString Kind;
+		Id.ToString().Split(TEXT("."), nullptr, &Kind);
+		const int32 Which = FCString::Atoi(*Kind);
+		AMOPlayerController* PC = Cast<AMOPlayerController>(GetOwningPlayer());
+		if (PC && GatherKinds.IsValidIndex(Which))
+		{
+			PC->ServerGatherCover(GatherKinds[Which].Key, GatherKinds[Which].Value);
 		}
 		RequestClose();
 	});

@@ -31,6 +31,18 @@ bool FMOCoverForage_Lookup::RunTest(const FString& Parameters)
 	TestTrue(TEXT("an alder seedling gives a green stick"), Gives(UMOCoverForageSettings::FindForMeshName(TEXT("SM_BlackAlder_Seedling_02_PP")), false, TEXT("Stick01")));
 	TestTrue(TEXT("a stone scatter gives stones"), Gives(UMOCoverForageSettings::FindForMeshName(TEXT("SM_SmallStonesPack_11")), false, TEXT("Stone01")));
 
+	const FMOCoverForage* Log = UMOCoverForageSettings::FindForMeshName(TEXT("wcjgbc1_tier_2"));
+	TestTrue(TEXT("an old log gives dry deadwood"), Gives(Log, false, TEXT("Branch01")));
+	TestTrue(TEXT("... and is broken up (taken)"), Log && Log->bRemovesInstance);
+	const FMOCoverForage* Snag = UMOCoverForageSettings::FindForMeshName(TEXT("SM_DeadTree_02"));
+	TestTrue(TEXT("a dead tree gives branches and stays standing"), Gives(Snag, false, TEXT("Branch01")) && !Snag->bRemovesInstance);
+	const FMOCoverForage* Sandstone = UMOCoverForageSettings::FindForMeshName(TEXT("SM_SandstoneRockyGround_01"));
+	TestTrue(TEXT("sandstone ground gives sandstone"), Gives(Sandstone, false, TEXT("Sandstone01")));
+	FText Reason;
+	TestFalse(TEXT("... but not to bare hands"), Sandstone && Sandstone->CanBeWorkedBy(nullptr, &Reason));
+	TestFalse(TEXT("... and says what is missing"), Reason.IsEmpty());
+	TestTrue(TEXT("bracken needs no tool"), Fern && Fern->CanBeWorkedBy(nullptr));
+
 	TestNull(TEXT("a tree is a resource, not cover"), UMOCoverForageSettings::FindForMeshName(TEXT("SM_BlackAlder_Forest_01_PP")));
 	TestNull(TEXT("nothing for no name"), UMOCoverForageSettings::FindForMeshName(FString()));
 	return true;

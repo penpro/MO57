@@ -117,6 +117,8 @@ struct MOFRAMEWORK_API FMOGatherableCover
 	int32 InstanceIndex = INDEX_NONE;
 	FVector Location = FVector::ZeroVector;
 	const FMOCoverForage* Entry = nullptr;
+	/** The entry's index in UMOCoverForageSettings::Entries: how a client names the kind it wants gathered. */
+	int32 EntryIndex = INDEX_NONE;
 	/** At the water's edge, where the cover's shore variant applies (tall grass there is reed). */
 	bool bAtShore = false;
 
@@ -196,7 +198,14 @@ public:
 	 * The nearest clump of gatherable ground cover within RadiusCm of Location: a MOBiomeCover_* instance whose mesh has a UMOCoverForageSettings entry
 	 * (the same "world cover" the interactor forages on -- MOBiomeCover_* or the native grass spawner's "grass"; decorative cover has no collision, so it is found by its instances, not by a trace). The ground menu offers it; the server gathers it.
 	 */
-	bool FindGatherableCover(const FVector& Location, float RadiusCm, FMOGatherableCover& Out, const APawn* ReachableBy = nullptr) const;
+	bool FindGatherableCover(const FVector& Location, float RadiusCm, FMOGatherableCover& Out, const APawn* ReachableBy = nullptr, int32 OnlyEntryIndex = INDEX_NONE) const;
+
+	/**
+	 * Every KIND of gatherable cover within RadiusCm of Location (the nearest clump of each: dry grass, the old log, the sandstone ...), nearest first --
+	 * what the Forage menu offers, so standing by a log among grass offers both. Distance is to each clump's bounds. FindGatherableCover is the first.
+	 */
+	void FindGatherableCoverKinds(const FVector& Location, float RadiusCm, TArray<FMOGatherableCover>& Out, const APawn* ReachableBy = nullptr,
+		int32 OnlyEntryIndex = INDEX_NONE) const;
 
 	/** How far from a gatherer a clump can be worked. FindGatherableCover's ReachableBy filters by it, so the menu never offers what the server refuses. */
 	static constexpr float GatherReachCm = 300.0f;
@@ -205,7 +214,7 @@ public:
 	 * Server: Pawn gathers the cover clump nearest Location -- a timed action on the pawn (stand still), then the yields go into its pack (or at its feet when
 	 * the pack is full) and the clump is taken from the world through the removal ledger. The one path for a player and a survivor. False if refused.
 	 */
-	bool BeginGatherCover(APawn* Pawn, const FVector& Location, FText* OutReason = nullptr);
+	bool BeginGatherCover(APawn* Pawn, const FVector& Location, int32 EntryIndex = INDEX_NONE, FText* OutReason = nullptr);
 
 	/** The pawn timed action's id for gathering cover. */
 	static const FName GatherCoverActionId;

@@ -55,6 +55,7 @@
 #include "MOCraftingUIController.h"
 #include "MOForagingSubsystem.h"
 #include "MOPCGWaterMask.h"
+#include "MOCoverForageSettings.h"
 
 namespace
 {
@@ -782,35 +783,49 @@ namespace
 
 	FAutoConsoleCommandWithWorldAndArgs GCoverCmd(
 		TEXT("MO.Cover.Gather"),
-		TEXT("Dev: find the nearest gatherable ground cover (UMOCoverForageSettings) within radius_m of the pawn; `go` gathers it through the real server RPC "
-			"(as the ground menu's button does). Usage: MO.Cover.Gather [radius_m=3] [go]"),
+		TEXT("Dev: list every kind of gatherable ground cover (UMOCoverForageSettings) within radius_m of the pawn, as the Forage menu offers them; `go [n]` "
+			"gathers the n-th (default 0) through the real server RPC. Usage: MO.Cover.Gather [radius_m=3] [go [n]]"),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
 		{
 			AMOCharacter* Pawn = LocalMOPawn(World);
 			AMOPlayerController* PC = World ? Cast<AMOPlayerController>(World->GetFirstPlayerController()) : nullptr;
 			UMOForagingSubsystem* Foraging = World ? World->GetSubsystem<UMOForagingSubsystem>() : nullptr;
 			const float RadiusCm = (Args.Num() > 0 ? FCString::Atof(*Args[0]) : 3.0f) * 100.0f;
-			FMOGatherableCover Cover;
-			if (!Pawn || !PC || !Foraging || !Foraging->FindGatherableCover(Pawn->GetActorLocation(), RadiusCm, Cover))
+			TArray<FMOGatherableCover> Kinds;
+			if (Pawn && Foraging)
+			{
+				Foraging->FindGatherableCoverKinds(Pawn->GetActorLocation(), RadiusCm, Kinds, Pawn);
+			}
+			if (!PC || Kinds.Num() == 0)
 			{
 				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] COVER none within %.0f m"), RadiusCm / 100.0f);
 				return;
 			}
-			FString Yields;
-			for (const FMODigDropEntry& Entry : Cover.Yields())
+			for (int32 N = 0; N < Kinds.Num(); ++N)
 			{
-				Yields += FString::Printf(TEXT("%s%s %d-%d @%.0f%%"), Yields.IsEmpty() ? TEXT("") : TEXT(", "), *Entry.ItemId.ToString(), Entry.MinQuantity, Entry.MaxQuantity,
-					Entry.DropChance * 100.0f);
+				const FMOGatherableCover& Cover = Kinds[N];
+				FString Yields;
+				for (const FMODigDropEntry& Entry : Cover.Yields())
+				{
+					Yields += FString::Printf(TEXT("%s%s %d-%d @%.0f%%"), Yields.IsEmpty() ? TEXT("") : TEXT(", "), *Entry.ItemId.ToString(), Entry.MinQuantity, Entry.MaxQuantity,
+						Entry.DropChance * 100.0f);
+				}
+				const FMOPCGWaterMask Mask = FMOPCGWaterMask::ForActor(Cover.Component->GetOwner());
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] COVER %d '%s' (%s #%d%s) z %.0f (mask %s, in water %d, shore %.2f)%s: %s"), N, *Cover.Label().ToString(),
+					*GetNameSafe(Cover.Component->GetStaticMesh()), Cover.InstanceIndex, Cover.bAtShore ? TEXT(", at the water's edge") : TEXT(""), Cover.Location.Z,
+					Mask.IsActive() ? TEXT("on") : TEXT("OFF"), Mask.IsInWater(Cover.Location.X, Cover.Location.Y, Cover.Location.Z) ? 1 : 0,
+					Mask.ShoreFactor(Cover.Location.X, Cover.Location.Y, Cover.Location.Z, 300.0f),
+					Cover.Entry->CanBeWorkedBy(Pawn->FindComponentByClass<UMOInventoryComponent>()) ? TEXT("") : TEXT(" [needs a tool]"), *Yields);
 			}
-			const FMOPCGWaterMask Mask = FMOPCGWaterMask::ForActor(Cover.Component->GetOwner());
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] COVER '%s' (%s #%d%s) at %.1f m, z %.0f (mask %s, in water %d, shore %.2f): %s"), *Cover.Label().ToString(),
-				*GetNameSafe(Cover.Component->GetStaticMesh()), Cover.InstanceIndex, Cover.bAtShore ? TEXT(", at the water's edge") : TEXT(""),
-				FVector::Dist(Pawn->GetActorLocation(), Cover.Location) / 100.0f, Cover.Location.Z, Mask.IsActive() ? TEXT("on") : TEXT("OFF"),
-				Mask.IsInWater(Cover.Location.X, Cover.Location.Y, Cover.Location.Z) ? 1 : 0, Mask.ShoreFactor(Cover.Location.X, Cover.Location.Y, Cover.Location.Z, 300.0f), *Yields);
-			if (Args.Contains(TEXT("go")))
+			const int32 GoAt = Args.IndexOfByKey(TEXT("go"));
+			if (GoAt != INDEX_NONE)
 			{
-				PC->ServerGatherCover(Cover.Location);
-				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] COVER gather asked"));
+				const int32 Which = Args.IsValidIndex(GoAt + 1) ? FCString::Atoi(*Args[GoAt + 1]) : 0;
+				if (Kinds.IsValidIndex(Which))
+				{
+					PC->ServerGatherCover(Kinds[Which].Location, Kinds[Which].EntryIndex);
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] COVER gather %d asked"), Which);
+				}
 			}
 		}));
 

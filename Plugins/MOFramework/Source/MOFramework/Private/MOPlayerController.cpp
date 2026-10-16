@@ -1355,11 +1355,11 @@ bool AMOPlayerController::TryDrinkAtCrosshair()
 	return true;
 }
 
-void AMOPlayerController::ServerGatherCover_Implementation(FVector_NetQuantize Location)
+void AMOPlayerController::ServerGatherCover_Implementation(FVector_NetQuantize Location, int32 EntryIndex)
 {
 	UMOForagingSubsystem* Foraging = GetWorld() ? GetWorld()->GetSubsystem<UMOForagingSubsystem>() : nullptr;
 	FText Reason = NSLOCTEXT("MO", "NothingToGather", "Nothing to gather there.");
-	if (!Foraging || !Foraging->BeginGatherCover(GetPawn(), Location, &Reason))
+	if (!Foraging || !Foraging->BeginGatherCover(GetPawn(), Location, EntryIndex, &Reason))
 	{
 		ClientShowNotification(Reason, 2.0f, EMONotificationType::Warning);
 	}

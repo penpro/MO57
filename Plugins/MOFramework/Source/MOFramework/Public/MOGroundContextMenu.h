@@ -176,8 +176,11 @@ protected:
 	UPROPERTY(Transient)
 	TArray<TObjectPtr<UMOCommonButton>> GatherButtons;
 
-	/** Where the gatherable clump is (the server finds it again from here). */
-	FVector GatherLocation = FVector::ZeroVector;
+	/** The kinds offered (where each clump is, and which UMOCoverForageSettings entry): the server finds each again from these. */
+	TArray<TPair<FVector, int32>> GatherKinds;
+
+	/** At most this many "Gather ..." buttons. */
+	static constexpr int32 MaxGatherKinds = 3;
 
 	/** Optional text showing the foraging skill level. */
 	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))

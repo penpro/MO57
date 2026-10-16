@@ -1,4 +1,5 @@
 #include "MOForagingSubsystem.h"
+#include "Engine/StaticMesh.h"
 #include "MOInteractorComponent.h"
 #include "UObject/UObjectIterator.h"
 #include "MOItemDatabaseSettings.h"
@@ -340,15 +341,24 @@ const TArray<FMODigDropEntry>& FMOGatherableCover::Yields() const
 	return Entry ? Entry->YieldsFor(bAtShore) : Nothing;
 }
 
-bool UMOForagingSubsystem::FindGatherableCover(const FVector& Location, float RadiusCm, FMOGatherableCover& Out, const APawn* ReachableBy) const
+bool UMOForagingSubsystem::FindGatherableCover(const FVector& Location, float RadiusCm, FMOGatherableCover& Out, const APawn* ReachableBy, int32 OnlyEntryIndex) const
 {
-	Out = FMOGatherableCover();
+	TArray<FMOGatherableCover> Kinds;
+	FindGatherableCoverKinds(Location, RadiusCm, Kinds, ReachableBy, OnlyEntryIndex);
+	Out = Kinds.Num() > 0 ? Kinds[0] : FMOGatherableCover();
+	return Kinds.Num() > 0;
+}
+
+void UMOForagingSubsystem::FindGatherableCoverKinds(const FVector& Location, float RadiusCm, TArray<FMOGatherableCover>& Out, const APawn* ReachableBy,
+	int32 OnlyEntryIndex) const
+{
+	Out.Reset();
 	const UWorld* World = GetWorld();
 	if (!World)
 	{
-		return false;
+		return;
 	}
-	float BestDistSq = FMath::Square(RadiusCm);
+	TMap<int32, TPair<float, FMOGatherableCover>> NearestByKind;
 	for (TObjectIterator<UInstancedStaticMeshComponent> It; It; ++It)
 	{
 		UInstancedStaticMeshComponent* Ism = *It;
@@ -357,11 +367,14 @@ bool UMOForagingSubsystem::FindGatherableCover(const FVector& Location, float Ra
 		{
 			continue;
 		}
-		const FMOCoverForage* Entry = UMOCoverForageSettings::FindForMesh(Ism->GetStaticMesh());
-		if (!Entry)
+		const int32 EntryIndex = UMOCoverForageSettings::FindIndexForMeshName(Ism->GetStaticMesh() ? Ism->GetStaticMesh()->GetName() : FString());
+		if (EntryIndex == INDEX_NONE || (OnlyEntryIndex != INDEX_NONE && EntryIndex != OnlyEntryIndex))
 		{
 			continue;
 		}
+		// Measured to the instance's BOUNDS, not its origin: a sandstone ground patch or a fallen log is metres long and its pivot may be buried metres
+		// from where someone stands on it.
+		const FBox MeshBox = Ism->GetStaticMesh()->GetBoundingBox();
 		for (const int32 Index : Ism->GetInstancesOverlappingSphere(Location, RadiusCm, /*bSphereInWorldSpace=*/true))
 		{
 			FTransform Xf;
@@ -369,31 +382,43 @@ bool UMOForagingSubsystem::FindGatherableCover(const FVector& Location, float Ra
 			{
 				continue;
 			}
-			const float DistSq = FVector::DistSquared(Xf.GetLocation(), Location);
-			if (DistSq < BestDistSq && (!ReachableBy || FVector::Dist(ReachableBy->GetActorLocation(), Xf.GetLocation()) <= GatherReachCm))
+			const FBox Box = MeshBox.TransformBy(Xf);
+			const float DistSq = Box.ComputeSquaredDistanceToPoint(Location);
+			if (DistSq > FMath::Square(RadiusCm)
+				|| (ReachableBy && Box.ComputeSquaredDistanceToPoint(ReachableBy->GetActorLocation()) > FMath::Square(GatherReachCm)))
 			{
-				BestDistSq = DistSq;
-				Out.Component = Ism;
-				Out.InstanceIndex = Index;
-				Out.Location = Xf.GetLocation();
-				Out.Entry = Entry;
+				continue;
+			}
+			TPair<float, FMOGatherableCover>* Best = NearestByKind.Find(EntryIndex);
+			if (!Best || DistSq < Best->Key)
+			{
+				FMOGatherableCover Cover;
+				Cover.Component = Ism;
+				Cover.InstanceIndex = Index;
+				Cover.Location = Xf.GetLocation();
+				Cover.EntryIndex = EntryIndex;
+				Cover.Entry = UMOCoverForageSettings::GetEntry(EntryIndex);
+				NearestByKind.Add(EntryIndex, TPair<float, FMOGatherableCover>(DistSq, Cover));
 			}
 		}
 	}
-	if (!Out.IsValid())
+	TArray<TPair<float, FMOGatherableCover>> Sorted;
+	NearestByKind.GenerateValueArray(Sorted);
+	Sorted.Sort([](const TPair<float, FMOGatherableCover>& A, const TPair<float, FMOGatherableCover>& B) { return A.Key < B.Key; });
+	for (TPair<float, FMOGatherableCover>& Pair : Sorted)
 	{
-		return false;
+		FMOGatherableCover& Cover = Pair.Value;
+		if (Cover.Entry->HasShoreVariant())
+		{
+			// The same test the spawner planted the water-edge species by.
+			const FMOPCGWaterMask Mask = FMOPCGWaterMask::ForActor(Cover.Component->GetOwner());
+			Cover.bAtShore = Mask.IsActive() && Mask.ShoreFactor(Cover.Location.X, Cover.Location.Y, Cover.Location.Z, CoverShoreBandCm) > 0.0f;
+		}
+		Out.Add(Cover);
 	}
-	if (Out.Entry->HasShoreVariant())
-	{
-		// The same test the spawner planted the water-edge species by.
-		const FMOPCGWaterMask Mask = FMOPCGWaterMask::ForActor(Out.Component->GetOwner());
-		Out.bAtShore = Mask.IsActive() && Mask.ShoreFactor(Out.Location.X, Out.Location.Y, Out.Location.Z, CoverShoreBandCm) > 0.0f;
-	}
-	return true;
 }
 
-bool UMOForagingSubsystem::BeginGatherCover(APawn* Pawn, const FVector& Location, FText* OutReason)
+bool UMOForagingSubsystem::BeginGatherCover(APawn* Pawn, const FVector& Location, int32 EntryIndex, FText* OutReason)
 {
 	UMOTimedActionComponent* Timed = Pawn ? Pawn->FindComponentByClass<UMOTimedActionComponent>() : nullptr;
 	if (!Pawn || !Pawn->HasAuthority() || !Timed)
@@ -401,10 +426,10 @@ bool UMOForagingSubsystem::BeginGatherCover(APawn* Pawn, const FVector& Location
 		return false;
 	}
 	FMOGatherableCover Cover;
-	if (!FindGatherableCover(Location, 150.0f, Cover, Pawn))
+	if (!FindGatherableCover(Location, 150.0f, Cover, Pawn, EntryIndex))   // the kind that was asked for (the menu's button), not just the nearest
 	{
 		// Two different failures, told apart: the clump is there but out of reach, or there is nothing to gather.
-		const bool bOutOfReach = FindGatherableCover(Location, 150.0f, Cover);
+		const bool bOutOfReach = FindGatherableCover(Location, 150.0f, Cover, nullptr, EntryIndex);
 		if (OutReason)
 		{
 			*OutReason = bOutOfReach ? NSLOCTEXT("MOForaging", "GatherTooFar", "Too far away: step closer.") : NSLOCTEXT("MOForaging", "NothingToGather", "Nothing to gather there.");
@@ -413,20 +438,33 @@ bool UMOForagingSubsystem::BeginGatherCover(APawn* Pawn, const FVector& Location
 			bOutOfReach ? *FString::Printf(TEXT("the clump is %.0f cm away (reach %.0f)"), FVector::Dist(Pawn->GetActorLocation(), Cover.Location), GatherReachCm) : TEXT("no cover"));
 		return false;
 	}
+	FText ToolReason;
+	if (!Cover.Entry->CanBeWorkedBy(Pawn->FindComponentByClass<UMOInventoryComponent>(), &ToolReason))
+	{
+		if (OutReason)
+		{
+			*OutReason = ToolReason;
+		}
+		UE_LOG(LogMOForaging, Warning, TEXT("[MOForagingSubsystem] %s: %s refused: %s"), *Pawn->GetName(), *Cover.Label().ToString(), *ToolReason.ToString());
+		return false;
+	}
 	TWeakObjectPtr<APawn> WeakPawn(Pawn);
 	TWeakObjectPtr<UMOForagingSubsystem> WeakThis(this);
-	const FVector At = Cover.Location;
-	return Timed->Begin(GatherCoverActionId, Cover.Label(), Cover.Entry->Seconds, [WeakPawn, WeakThis, At]()
+	return Timed->Begin(GatherCoverActionId, Cover.Label(), Cover.Entry->Seconds, [WeakPawn, WeakThis, Cover]()
 		{
 			APawn* P = WeakPawn.Get();
 			UMOForagingSubsystem* Self = WeakThis.Get();
-			FMOGatherableCover Now;
-			if (!P || !Self || !Self->FindGatherableCover(At, 5.0f, Now))
+			// The SAME clump, still there: its component alive, its index still at that place (another gatherer's removal can take or shift it).
+			UInstancedStaticMeshComponent* Ism = Cover.Component.Get();
+			FTransform Xf;
+			const bool bStill = Ism && Ism->GetInstanceTransform(Cover.InstanceIndex, Xf, /*bWorldSpace=*/true) && !Xf.GetScale3D().IsNearlyZero()
+				&& FVector::DistSquared(Xf.GetLocation(), Cover.Location) < 1.0f;
+			if (!P || !Self || !bStill)
 			{
-				UE_LOG(LogMOForaging, Warning, TEXT("[MOForagingSubsystem] gather: the clump at (%.0f, %.0f) is gone"), At.X, At.Y);   // someone else took it
+				UE_LOG(LogMOForaging, Warning, TEXT("[MOForagingSubsystem] gather: the clump at (%.0f, %.0f) is gone"), Cover.Location.X, Cover.Location.Y);
 				return;
 			}
-			Self->CompleteGatherCover(P, Now);
+			Self->CompleteGatherCover(P, Cover);
 		}, nullptr, 100.0f);
 }
 
