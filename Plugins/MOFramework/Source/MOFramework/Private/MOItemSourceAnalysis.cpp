@@ -5,6 +5,7 @@
 #include "MOForagingSubsystem.h"
 #include "MOItemDatabaseSettings.h"
 #include "MOItemDefinitionRow.h"
+#include "MOItemActions.h"
 #include "MOPCGHISMTaggerSettings.h"
 #include "MOPCGItemSpawnerSettings.h"
 #include "MOPCGMeshSpawnerSettings.h"
@@ -541,6 +542,31 @@ FMOItemSourceReport FMOItemSourceAnalysis::Analyze(UWorld* World, const FMOItemS
 				{
 					bChanged |= Train(Action.SkillId, AnyLevel);
 				}
+			}
+		}
+
+		// Water as a recipe ingredient (a liquid measure, FMOItemDefinitionRow::LiquidMeasureMl; UMOInventoryComponent::CountIngredient): any container
+		// filled at water gives untreated water; safe water also needs boiling -- a vessel that goes over a fire, or stones heated in one (FMOItemActions).
+		for (const TPair<FName, FMOItemDefinitionRow>& Measure : Items)
+		{
+			if (Measure.Value.LiquidMeasureMl <= 0.0f || Obtainable.Contains(Measure.Key))
+			{
+				continue;
+			}
+			bool bContainer = false;
+			bool bHeatable = false;
+			bool bStones = false;
+			for (const TPair<FName, FString>& Item : Obtainable)
+			{
+				const FMOItemDefinitionRow* Def = Items.Find(Item.Key);
+				bContainer |= Def && Def->LiquidCapacityMl > 0.0f;
+				bHeatable |= Def && Def->LiquidCapacityMl > 0.0f && Def->bHeatableOverFire;
+				bStones |= FMOItemActions::IsBoilingStone(Item.Key);
+			}
+			const bool bFire = Stations.Contains(EMOCraftingStation::Campfire);
+			if (bContainer && (!Measure.Value.bMeasureNeedsSafeWater || (bFire && (bHeatable || bStones))))
+			{
+				bChanged |= Produce(Measure.Key, Measure.Value.bMeasureNeedsSafeWater ? TEXT("water boiled in a container") : TEXT("a container filled at water"));
 			}
 		}
 

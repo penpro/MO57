@@ -3365,8 +3365,7 @@ UMOCraftingQueueComponent* UMOUITestSubsystem::SetupCraftingQueueFixture(int32 D
 		{
 			if (!Ingredient.ItemDefinitionId.IsNone())
 			{
-				Inventory->AddItemByGuid(FGuid::NewGuid(), Ingredient.ItemDefinitionId,
-					Ingredient.Quantity * TotalRepeats);
+				Inventory->AddIngredient(Ingredient.ItemDefinitionId, Ingredient.Quantity * TotalRepeats);   // a liquid measure needs a container
 			}
 		}
 

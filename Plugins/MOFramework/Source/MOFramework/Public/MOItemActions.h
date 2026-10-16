@@ -43,4 +43,7 @@ struct MOFRAMEWORK_API FMOItemActions
 
 	/** Stones usable for stone boiling the pawn carries (Stone, River Cobble ...). */
 	static int32 CountBoilingStones(const UMOInventoryComponent* Inventory);
+
+	/** Whether ItemId is a stone that can be heated and dropped into water (stone boiling). */
+	static bool IsBoilingStone(FName ItemId);
 };

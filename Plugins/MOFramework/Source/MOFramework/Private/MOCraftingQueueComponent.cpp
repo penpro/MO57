@@ -907,24 +907,11 @@ bool UMOCraftingQueueComponent::ConsumeIngredientsForCraft(FName RecipeId, int32
 		return false;
 	}
 
-	// Cache inventory entries once - avoid repeated full copies
-	TArray<FMOInventoryEntry> CachedEntries;
-	Inventory->GetInventoryEntries(CachedEntries);
-
-	// First verify we have enough of all ingredients
+	// Verify, then take (UMOInventoryComponent::CountIngredient / ConsumeIngredient: items, or a liquid measure from containers)
 	for (const FMORecipeIngredient& Ingredient : Recipe->Ingredients)
 	{
-		int32 Required = Ingredient.Quantity * Count;
-		int32 Available = 0;
-
-		for (const FMOInventoryEntry& Entry : CachedEntries)
-		{
-			if (Entry.ItemDefinitionId == Ingredient.ItemDefinitionId)
-			{
-				Available += Entry.Quantity;
-			}
-		}
-
+		const int32 Required = Ingredient.Quantity * Count;
+		const int32 Available = Inventory->CountIngredient(Ingredient.ItemDefinitionId);
 		if (Available < Required)
 		{
 			UE_LOG(LogMOFramework, Warning, TEXT("[MOCraftingQueue] Not enough %s (have %d, need %d)"),
@@ -933,22 +920,9 @@ bool UMOCraftingQueueComponent::ConsumeIngredientsForCraft(FName RecipeId, int32
 		}
 	}
 
-	// Now consume the ingredients (re-fetch entries since validation passed and we need current GUIDs)
-	Inventory->GetInventoryEntries(CachedEntries);
-
 	for (const FMORecipeIngredient& Ingredient : Recipe->Ingredients)
 	{
-		int32 ToConsume = Ingredient.Quantity * Count;
-
-		for (const FMOInventoryEntry& Entry : CachedEntries)
-		{
-			if (Entry.ItemDefinitionId == Ingredient.ItemDefinitionId && ToConsume > 0)
-			{
-				int32 ConsumeFromThis = FMath::Min(Entry.Quantity, ToConsume);
-				Inventory->RemoveItemByGuid(Entry.ItemGuid, ConsumeFromThis);
-				ToConsume -= ConsumeFromThis;
-			}
-		}
+		Inventory->ConsumeIngredient(Ingredient.ItemDefinitionId, Ingredient.Quantity * Count);
 	}
 
 	return true;
@@ -970,9 +944,8 @@ void UMOCraftingQueueComponent::RefundIngredientsForCraft(FName RecipeId, int32 
 
 	for (const FMORecipeIngredient& Ingredient : Recipe->Ingredients)
 	{
-		int32 ToRefund = Ingredient.Quantity * Count;
-		FGuid NewItemGuid = FGuid::NewGuid();
-		Inventory->AddItemByGuid(NewItemGuid, Ingredient.ItemDefinitionId, ToRefund);
+		const int32 ToRefund = Ingredient.Quantity * Count;
+		Inventory->AddIngredient(Ingredient.ItemDefinitionId, ToRefund);   // a liquid measure pours back into a container
 
 		UE_LOG(LogMOFramework, Log, TEXT("[MOCraftingQueue] Refunded %dx %s"),
 			ToRefund, *Ingredient.ItemDefinitionId.ToString());

@@ -70,7 +70,7 @@ int32 UMORecipeDetailPanel::GetMaxPerformableAmount() const
 
 	for (const FMORecipeIngredient& Ingredient : Recipe->Ingredients)
 	{
-		int32 Available = Inventory->GetItemCountByDefinitionId(Ingredient.ItemDefinitionId);
+		int32 Available = Inventory->CountIngredient(Ingredient.ItemDefinitionId);
 		int32 CanMake = Available / Ingredient.Quantity;
 		MaxAmount = FMath::Min(MaxAmount, CanMake);
 	}
@@ -256,7 +256,7 @@ FMOIngredientDisplayData UMORecipeDetailPanel::BuildIngredientData(const FMOReci
 	// Get available count from inventory
 	if (UMOInventoryComponent* Inventory = InventoryComponent.Get())
 	{
-		Data.AvailableQuantity = Inventory->GetItemCountByDefinitionId(Ingredient.ItemDefinitionId);
+		Data.AvailableQuantity = Inventory->CountIngredient(Ingredient.ItemDefinitionId);   // a liquid measure counts the water in containers
 	}
 
 	Data.bHasEnough = Data.AvailableQuantity >= Data.RequiredQuantity;

@@ -1,4 +1,5 @@
 #include "MOInventoryComponent.h"
+#include "MOWaterSourceSettings.h"
 #include "MOIdentityRegistrySubsystem.h"
 #include "MOFramework.h"
 
@@ -1954,6 +1955,161 @@ void UMOInventoryComponent::ApplyStartingItems()
 // ============================================================================
 // TOOL QUERIES
 // ============================================================================
+
+namespace MOIngredients
+{
+	/** DefinitionId as a liquid measure: its millilitres and whether it must be safe water. False = an ordinary item. */
+	bool GetLiquidMeasure(FName DefinitionId, float& OutMl, bool& bOutSafe)
+	{
+		FMOItemDefinitionRow Def;
+		if (DefinitionId.IsNone() || !UMOItemDatabaseSettings::GetItemDefinition(DefinitionId, Def) || Def.LiquidMeasureMl <= 0.0f)
+		{
+			return false;
+		}
+		OutMl = Def.LiquidMeasureMl;
+		bOutSafe = Def.bMeasureNeedsSafeWater;
+		return true;
+	}
+
+	float CapacityOf(FName DefinitionId)
+	{
+		FMOItemDefinitionRow Def;
+		return UMOItemDatabaseSettings::GetItemDefinition(DefinitionId, Def) ? Def.LiquidCapacityMl : 0.0f;
+	}
+
+	/** Liquid that is a whole number of measures within half a millilitre counts as that many (float drift from mixing). */
+	constexpr float MeasureToleranceMl = 0.5f;
+}
+
+int32 UMOInventoryComponent::CountIngredient(FName DefinitionId) const
+{
+	const int32 Items = GetItemCountByDefinitionId(DefinitionId);
+	float MeasureMl = 0.0f;
+	bool bSafe = false;
+	if (!MOIngredients::GetLiquidMeasure(DefinitionId, MeasureMl, bSafe))
+	{
+		return Items;
+	}
+	float Ml = 0.0f;
+	for (const FMOInventoryEntry& Entry : Inventory.Entries)
+	{
+		if (Entry.Liquid.IsSuitableMeasure(bSafe))
+		{
+			Ml += Entry.Liquid.Millilitres;
+		}
+	}
+	return Items + FMath::FloorToInt((Ml + MOIngredients::MeasureToleranceMl) / MeasureMl);
+}
+
+bool UMOInventoryComponent::ConsumeIngredient(FName DefinitionId, int32 Quantity)
+{
+	if (Quantity <= 0)
+	{
+		return true;
+	}
+	if (!GetOwner() || !GetOwner()->HasAuthority() || CountIngredient(DefinitionId) < Quantity)
+	{
+		return false;
+	}
+	const int32 FromItems = FMath::Min(Quantity, GetItemCountByDefinitionId(DefinitionId));
+	if (FromItems > 0 && !RemoveItemByDefinitionId(DefinitionId, FromItems))
+	{
+		return false;
+	}
+	float MeasureMl = 0.0f;
+	bool bSafe = false;
+	if (FromItems == Quantity || !MOIngredients::GetLiquidMeasure(DefinitionId, MeasureMl, bSafe))
+	{
+		return FromItems == Quantity;
+	}
+	// The rest is liquid: draw it from the fullest suitable containers first (fewest containers touched).
+	TArray<TPair<FGuid, FMOLiquidContents>> Sources;
+	for (const FMOInventoryEntry& Entry : Inventory.Entries)
+	{
+		if (Entry.Liquid.IsSuitableMeasure(bSafe))
+		{
+			Sources.Emplace(Entry.ItemGuid, Entry.Liquid);
+		}
+	}
+	Sources.Sort([](const TPair<FGuid, FMOLiquidContents>& A, const TPair<FGuid, FMOLiquidContents>& B) { return A.Value.Millilitres > B.Value.Millilitres; });
+	float NeedMl = (Quantity - FromItems) * MeasureMl;
+	for (TPair<FGuid, FMOLiquidContents>& Source : Sources)
+	{
+		if (NeedMl <= MOIngredients::MeasureToleranceMl)
+		{
+			break;
+		}
+		const float Take = FMath::Min(NeedMl, Source.Value.Millilitres);
+		Source.Value.Millilitres -= Take;
+		NeedMl -= Take;
+		SetLiquid(Source.Key, Source.Value.IsEmpty() ? FMOLiquidContents() : Source.Value);
+	}
+	return NeedMl <= MOIngredients::MeasureToleranceMl;
+}
+
+int32 UMOInventoryComponent::AddIngredient(FName DefinitionId, int32 Quantity)
+{
+	if (Quantity <= 0 || !GetOwner() || !GetOwner()->HasAuthority())
+	{
+		return 0;
+	}
+	float MeasureMl = 0.0f;
+	bool bSafe = false;
+	if (!MOIngredients::GetLiquidMeasure(DefinitionId, MeasureMl, bSafe))
+	{
+		return AddItemByGuid(FGuid::NewGuid(), DefinitionId, Quantity) ? Quantity : 0;
+	}
+	// What is poured: safe water is boiled fresh water; any other measure is untreated water of unknown source (a pond's risk: assume the worst fresh).
+	FMOLiquidContents Pour;
+	if (bSafe)
+	{
+		Pour.bBoiled = true;
+	}
+	else
+	{
+		const FMOWaterSourceProfile Untreated = UMOWaterSourceSettings::GetProfile(EMOWaterBodyKind::Pond);
+		Pour.SalinityGPerL = Untreated.SalinityGPerL;
+		Pour.IllnessChancePerLitre = Untreated.IllnessChancePerLitre;
+		Pour.Source = EMOWaterBodyKind::Pond;
+	}
+	float LeftMl = Quantity * MeasureMl;
+	// Containers with room, those already holding the same kind first, then empty ones; never mix safe and unsafe water (it would spoil the safe).
+	TArray<TPair<FGuid, FMOLiquidContents>> Targets;
+	TArray<float> Room;
+	for (const FMOInventoryEntry& Entry : Inventory.Entries)
+	{
+		const float Capacity = MOIngredients::CapacityOf(Entry.ItemDefinitionId);
+		const bool bHeldSafe = Entry.Liquid.IsSuitableMeasure(true);
+		if (Capacity - Entry.Liquid.Millilitres < 1.0f || (!Entry.Liquid.IsEmpty() && bHeldSafe != bSafe))
+		{
+			continue;
+		}
+		Targets.Emplace(Entry.ItemGuid, Entry.Liquid);
+		Room.Add(Capacity - Entry.Liquid.Millilitres);
+	}
+	for (int32 Pass = 0; Pass < 2 && LeftMl > MOIngredients::MeasureToleranceMl; ++Pass)
+	{
+		for (int32 I = 0; I < Targets.Num() && LeftMl > MOIngredients::MeasureToleranceMl; ++I)
+		{
+			if (Targets[I].Value.IsEmpty() != (Pass == 1) || Room[I] < 1.0f)
+			{
+				continue;   // pass 0: containers already holding this kind; pass 1: empty ones
+			}
+			FMOLiquidContents Part = Pour;
+			Part.Millilitres = FMath::Min(Room[I], LeftMl);
+			Targets[I].Value.Mix(Part);
+			Room[I] -= Part.Millilitres;
+			LeftMl -= Part.Millilitres;
+			SetLiquid(Targets[I].Key, Targets[I].Value);
+		}
+	}
+	const int32 Placed = Quantity - FMath::CeilToInt((LeftMl - MOIngredients::MeasureToleranceMl) / MeasureMl);
+	if (LeftMl > MOIngredients::MeasureToleranceMl)
+	{
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOInventory] %s: %.0f ml of %s spilled -- no container with room"), *GetNameSafe(GetOwner()), LeftMl, *DefinitionId.ToString());
+	}
+	return FMath::Clamp(Placed, 0, Quantity);
+}
 
 float UMOInventoryComponent::GetBestToolEffectiveness(EMOToolType ToolType) const
 {

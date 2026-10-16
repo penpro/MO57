@@ -149,10 +149,7 @@ mined with no pick. One gate now: `UMOHarvestSubsystem::HasToolForAction` (requi
 
 **Still open, in order of leverage:**
 
-1. **Water as an ingredient.** Recipes take `Water01` / `CleanWater01` items, but water now lives in containers as liquid.
-   One inventory-level ingredient chokepoint (count / consume / refund, with "a measure of liquid" item rows) would unblock
-   the three medicine brews and let bark tanning take water. Crafting currently has four separate count/consume loops
-   (subsystem check, execute, queue consume, queue refund): they should all go through it.
+1. ~~Water as an ingredient~~ — **done (pass 2, below).**
 2. **Reeds and dry grass.** `ReedBed` and `TallGrass` rows exist but cannot be placed as they are: the reed and grass
    species are ground cover at thousands per hectare, too many for collision bodies. Needs a "what foraging this cover
    gives" table on the cover species (the Forage menu already opens on cover), not resource rows.
@@ -163,3 +160,30 @@ mined with no pick. One gate now: `UMOHarvestSubsystem::HasToolForAction` (requi
    need an ore look (malachite staining) and chalk-flint look to be found by eye rather than by the focus label.
 6. **Pattern to fix:** harvest timing is owned by a widget (`UMOHarvestProgressWidget::StartHarvest`), not the pawn, unlike
    drinking, filling, boiling and fire lighting (`UMOTimedActionComponent`).
+
+## Pass 2 — water as an ingredient (Oct 15 2026, night)
+
+Water lives in containers as liquid (a pot of boiled lake water, a bark container of river water), but recipes asked for
+`Water01` / `CleanWater01` *items* that nothing could make. They are now **measures of liquid**: an item row with
+`LiquidMeasureMl` (both 250 ml) is drawn from the containers the pawn carries; `bMeasureNeedsSafeWater` (CleanWater01) counts
+only boiled fresh water (boiled sea water is still salt water).
+
+* One chokepoint, `UMOInventoryComponent::CountIngredient / ConsumeIngredient / AddIngredient`. The crafting check and
+  execute, the craft queue's consume and refund, the recipe panel and the dev / UI-test grants all go through it; the four
+  separate count/consume loops are gone. A liquid output pours into a container that holds nothing it would spoil; what does
+  not fit is reported as `FMOCraftResult::SpilledLiquid`, not as "inventory full".
+* The **BoilWater** recipe is removed: it boiled water with no vessel and no stones. Boiling is the container actions'
+  job (a pot over the fire, 12 min; heated stones, 20 min).
+* **Bark-Tan Hide** (scraped hide + 6 bark + 1 L of water, 30 min) makes tanned leather; the three medicine brews now draw
+  clean water from a pot.
+* Progression map: **53 / 87 of 130** (today / attempt anything), up from 44 / 79.
+
+Verified in a game instance: a clay pot filled at a lake (1000 ml), boiled over a fire (920 ml, safe), a painkiller brewed
+through the real queue path -- the pot went 920 -> 670 ml and the bark was consumed; the recipe panel shows
+"Water (250 ml) (2/4)". Test: `MOFramework.Inventory.LiquidIngredient`.
+
+**Found, not fixed:** medical treatments are unwired. `UMOAnatomyComponent::ApplyTreatment` has no caller, and a treatment
+row's `RequiredItemIds` (clean water for cleaning a wound, rehydrating, cooling) are read only by the data validator. When
+treatments are wired, their supplies should be taken through `ConsumeIngredient`, so "clean water" means water in a pot.
+Survivor craft jobs still move ingredients from storage as items (`AMOSurvivorController` withdraw): a job that needs water
+will report the storage short until survivors carry containers.

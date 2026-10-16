@@ -331,10 +331,18 @@ namespace
 		{
 			for (const FMORecipeIngredient& Ing : Recipe->Ingredients)
 			{
-				if (!Ing.ItemDefinitionId.IsNone() && Inv->AddItemByGuid(FGuid::NewGuid(), Ing.ItemDefinitionId, Ing.Quantity))
+				if (Ing.ItemDefinitionId.IsNone())
 				{
-					Granted += Ing.Quantity;
+					continue;
 				}
+				int32 Placed = Inv->AddIngredient(Ing.ItemDefinitionId, Ing.Quantity);
+				if (Placed < Ing.Quantity && Inv->AddItemByGuid(FGuid::NewGuid(), TEXT("CrudePottery01"), 1))
+				{
+					// A liquid measure needs a container to be poured into: give a fired pot (it can go over a fire) and pour again.
+					Placed += Inv->AddIngredient(Ing.ItemDefinitionId, Ing.Quantity - Placed);
+					OutNote += TEXT(", gave a pot for the water");
+				}
+				Granted += Placed;
 			}
 		}
 		if (UMOSkillsComponent* Skills = Pawn->FindComponentByClass<UMOSkillsComponent>())

@@ -61,6 +61,18 @@ namespace
 	}
 }
 
+bool FMOItemActions::IsBoilingStone(FName ItemId)
+{
+	for (const FName& Id : BoilingStoneIds)
+	{
+		if (Id == ItemId)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
 int32 FMOItemActions::CountBoilingStones(const UMOInventoryComponent* Inventory)
 {
 	int32 Count = 0;

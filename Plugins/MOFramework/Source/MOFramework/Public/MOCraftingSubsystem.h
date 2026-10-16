@@ -251,6 +251,10 @@ struct MOFRAMEWORK_API FMOCraftResult
 	UPROPERTY(BlueprintReadOnly, Category="MO|Crafting")
 	TMap<FName, int32> FailedItems;
 
+	/** Liquid measures made but with no container to pour them into (spilled): not "inventory full", so kept apart from FailedItems. */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Crafting")
+	TMap<FName, int32> SpilledLiquid;
+
 	/**
 	 * Items that were skipped because the resource node is depleted (ItemDefId -> attempts).
 	 * Separate from FailedItems so the UI can distinguish "this rock has nothing left" from
@@ -464,6 +468,9 @@ public:
 	 * @param OutEffectiveness The effectiveness of the found tool for this type
 	 * @return True if a matching tool was found
 	 */
+	/** One recipe output into Inventory through UMOInventoryComponent::AddIngredient, accounted in Result (spilled liquid apart from a full inventory). */
+	static void AddOutput(UMOInventoryComponent* Inventory, const FMORecipeOutput& Output, FMOCraftResult& Result);
+
 	bool FindBestTool(
 		UMOInventoryComponent* Inventory,
 		EMOToolType ToolType,

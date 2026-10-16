@@ -295,6 +295,24 @@ FMOCraftingValidation UMOCraftingSubsystem::CanCraftRecipe(
 	return Result;
 }
 
+void UMOCraftingSubsystem::AddOutput(UMOInventoryComponent* Inventory, const FMORecipeOutput& Output, FMOCraftResult& Result)
+{
+	// Through the ingredient chokepoint: an item is a new stack; a liquid measure (clean water) pours into a container.
+	const int32 Placed = Inventory->AddIngredient(Output.ItemDefinitionId, Output.Quantity);
+	if (Placed > 0)
+	{
+		Result.ProducedItems.FindOrAdd(Output.ItemDefinitionId) += Placed;
+	}
+	if (Placed < Output.Quantity)
+	{
+		FMOItemDefinitionRow Def;
+		const bool bLiquid = UMOItemDatabaseSettings::GetItemDefinition(Output.ItemDefinitionId, Def) && Def.LiquidMeasureMl > 0.0f;
+		(bLiquid ? Result.SpilledLiquid : Result.FailedItems).FindOrAdd(Output.ItemDefinitionId) += Output.Quantity - Placed;
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOCraftingSubsystem] Output %d x '%s' not placed: %s"), Output.Quantity - Placed, *Output.ItemDefinitionId.ToString(),
+			bLiquid ? TEXT("no container with room (spilled)") : TEXT("inventory full"));
+	}
+}
+
 FMOCraftResult UMOCraftingSubsystem::ExecuteCraft(
 	FName RecipeId,
 	UMOInventoryComponent* InventoryComponent,
@@ -316,25 +334,10 @@ FMOCraftResult UMOCraftingSubsystem::ExecuteCraft(
 		return Result;
 	}
 
-	// Build a map of ItemDefId -> total quantity in inventory
-	TMap<FName, int32> InventoryTotals;
-	TMap<FName, TArray<FGuid>> InventoryGuidsByDefId;
-	{
-		TArray<FMOInventoryEntry> Entries;
-		InventoryComponent->GetInventoryEntries(Entries);
-		for (const FMOInventoryEntry& Entry : Entries)
-		{
-			InventoryTotals.FindOrAdd(Entry.ItemDefinitionId) += Entry.Quantity;
-			InventoryGuidsByDefId.FindOrAdd(Entry.ItemDefinitionId).Add(Entry.ItemGuid);
-		}
-	}
-
-	// Verify we have all ingredients
+	// Verify we have all ingredients (UMOInventoryComponent::CountIngredient: items, or a liquid measure from containers)
 	for (const FMORecipeIngredient& Ingredient : Recipe->Ingredients)
 	{
-		const int32* AvailablePtr = InventoryTotals.Find(Ingredient.ItemDefinitionId);
-		const int32 Available = AvailablePtr ? *AvailablePtr : 0;
-
+		const int32 Available = InventoryComponent->CountIngredient(Ingredient.ItemDefinitionId);
 		if (Available < Ingredient.Quantity)
 		{
 			UE_LOG(LogMOFramework, Warning, TEXT("[MOCraftingSubsystem] ExecuteCraft: Not enough '%s' (have %d, need %d)"),
@@ -346,19 +349,7 @@ FMOCraftResult UMOCraftingSubsystem::ExecuteCraft(
 	// Consume ingredients
 	for (const FMORecipeIngredient& Ingredient : Recipe->Ingredients)
 	{
-		int32 RemainingToConsume = Ingredient.Quantity;
-		TArray<FGuid>& Guids = InventoryGuidsByDefId.FindOrAdd(Ingredient.ItemDefinitionId);
-
-		for (int32 i = Guids.Num() - 1; i >= 0 && RemainingToConsume > 0; --i)
-		{
-			FMOInventoryEntry Entry;
-			if (InventoryComponent->TryGetEntryByGuid(Guids[i], Entry))
-			{
-				const int32 ToRemove = FMath::Min(Entry.Quantity, RemainingToConsume);
-				InventoryComponent->RemoveItemByGuid(Guids[i], ToRemove);
-				RemainingToConsume -= ToRemove;
-			}
-		}
+		InventoryComponent->ConsumeIngredient(Ingredient.ItemDefinitionId, Ingredient.Quantity);
 	}
 
 	// Produce outputs
@@ -374,12 +365,7 @@ FMOCraftResult UMOCraftingSubsystem::ExecuteCraft(
 			}
 		}
 
-		// Add to inventory
-		const FGuid NewGuid = FGuid::NewGuid();
-		if (InventoryComponent->AddItemByGuid(NewGuid, Output.ItemDefinitionId, Output.Quantity))
-		{
-			Result.ProducedItems.FindOrAdd(Output.ItemDefinitionId) += Output.Quantity;
-		}
+		AddOutput(InventoryComponent, Output, Result);
 	}
 
 	// Grant skill XP
@@ -440,19 +426,7 @@ FMOCraftResult UMOCraftingSubsystem::ProduceOutputsOnly(
 			}
 		}
 
-		// Add to inventory
-		const FGuid NewGuid = FGuid::NewGuid();
-		if (InventoryComponent->AddItemByGuid(NewGuid, Output.ItemDefinitionId, Output.Quantity))
-		{
-			Result.ProducedItems.FindOrAdd(Output.ItemDefinitionId) += Output.Quantity;
-		}
-		else
-		{
-			// Inventory full - track failed item
-			Result.FailedItems.FindOrAdd(Output.ItemDefinitionId) += Output.Quantity;
-			UE_LOG(LogMOFramework, Warning, TEXT("[MOCraftingSubsystem] ProduceOutputsOnly: Inventory full, couldn't add %d x '%s'"),
-				Output.Quantity, *Output.ItemDefinitionId.ToString());
-		}
+		AddOutput(InventoryComponent, Output, Result);
 	}
 
 	// Grant skill XP
@@ -600,17 +574,6 @@ bool UMOCraftingSubsystem::HasIngredients(
 		return false;
 	}
 
-	// Build inventory totals
-	TMap<FName, int32> InventoryTotals;
-	{
-		TArray<FMOInventoryEntry> Entries;
-		InventoryComponent->GetInventoryEntries(Entries);
-		for (const FMOInventoryEntry& Entry : Entries)
-		{
-			InventoryTotals.FindOrAdd(Entry.ItemDefinitionId) += Entry.Quantity;
-		}
-	}
-
 	bool bHasAll = true;
 	for (const FMORecipeIngredient& Ingredient : Recipe->Ingredients)
 	{
@@ -633,9 +596,7 @@ bool UMOCraftingSubsystem::HasIngredients(
 			}
 		}
 
-		const int32* AvailablePtr = InventoryTotals.Find(Ingredient.ItemDefinitionId);
-		const int32 Available = AvailablePtr ? *AvailablePtr : 0;
-
+		const int32 Available = InventoryComponent->CountIngredient(Ingredient.ItemDefinitionId);
 		if (Available < Ingredient.Quantity)
 		{
 			bHasAll = false;

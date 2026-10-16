@@ -510,6 +510,18 @@ struct MOFRAMEWORKCORE_API FMOItemDefinitionRow : public FTableRowBase
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Container", meta=(EditCondition="LiquidCapacityMl > 0"))
 	bool bHeatableOverFire = false;
 
+	/**
+	 * A MEASURE of liquid rather than a thing carried on its own: a recipe that lists this item takes that much liquid out of the bearer's containers
+	 * (Water01 = 250 ml of any water) and a recipe that makes it pours it into one. 0 = an ordinary item. The one place this is counted and taken:
+	 * UMOInventoryComponent::CountIngredient / ConsumeIngredient / AddIngredient.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Container", meta=(ClampMin="0.0"))
+	float LiquidMeasureMl = 0.0f;
+
+	/** The measure counts only SAFE water -- boiled, and fresh (FMOLiquidContents::IsSuitableMeasure): clean water for medicine and wound care. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Container", meta=(EditCondition="LiquidMeasureMl > 0"))
+	bool bMeasureNeedsSafeWater = false;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="MO|Item|Flags")
 	bool bEquippable = false;
 

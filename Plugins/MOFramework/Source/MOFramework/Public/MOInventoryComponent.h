@@ -494,6 +494,26 @@ public:
 	UFUNCTION(BlueprintPure, Category="MO|Inventory|Tools")
 	bool HasToolOfType(EMOToolType ToolType) const;
 
+	// ============================================================================
+	// RECIPE INGREDIENTS -- the one place a recipe's ingredient is counted, taken and given back (crafting check and execute, the craft queue, the
+	// recipe panel). An ordinary ingredient is the items carried; a liquid measure (FMOItemDefinitionRow::LiquidMeasureMl, e.g. Water01 = 250 ml) is
+	// also the suitable liquid in the bearer's containers.
+	// ============================================================================
+
+	/** How many of DefinitionId the bearer can put into a recipe: the items carried plus, for a liquid measure, the whole measures in its containers. */
+	UFUNCTION(BlueprintPure, Category="MO|Inventory|Ingredients")
+	int32 CountIngredient(FName DefinitionId) const;
+
+	/** Server: takes Quantity of DefinitionId as CountIngredient counts it -- carried items first, then liquid from the fullest suitable containers. All or
+	 *  nothing: false (and nothing taken) when there is not enough. */
+	bool ConsumeIngredient(FName DefinitionId, int32 Quantity);
+
+	/**
+	 * Server: gives Quantity of DefinitionId (a recipe's output, a cancelled craft's refund). An ordinary item is a new stack; a liquid measure is poured into
+	 * containers with room that hold nothing it would spoil or be spoiled by. Returns how many were placed; for a liquid measure the rest is spilled.
+	 */
+	int32 AddIngredient(FName DefinitionId, int32 Quantity);
+
 	/** The best effectiveness (0-1) any carried, unbroken item has as ToolType (FMOItemDefinitionRow::GetToolEffectiveness); 0 = none carried. */
 	UFUNCTION(BlueprintPure, Category="MO|Inventory|Tools")
 	float GetBestToolEffectiveness(EMOToolType ToolType) const;

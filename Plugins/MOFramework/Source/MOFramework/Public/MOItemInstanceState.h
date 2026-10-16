@@ -34,6 +34,15 @@ struct MOFRAMEWORK_API FMOLiquidContents
 
 	bool IsEmpty() const { return Millilitres < 1.0f; }
 
+	/** Fresh: below about 1 g/L of dissolved salts (rivers and lakes are well under; the sea is 35). */
+	static constexpr float FreshMaxSalinityGPerL = 1.0f;
+
+	/** Whether it can serve as a recipe's measure of water: any water, or (bNeedsSafe) only boiled, fresh water -- boiling does not take salt out. */
+	bool IsSuitableMeasure(bool bNeedsSafe) const
+	{
+		return !IsEmpty() && (!bNeedsSafe || (bBoiled && SalinityGPerL <= FreshMaxSalinityGPerL));
+	}
+
 	/** Pour Ml of another liquid in: volumes add, salts and illness chance mix by volume; untreated water spoils "boiled". */
 	void Mix(const FMOLiquidContents& Other)
 	{
