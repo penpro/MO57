@@ -1901,6 +1901,30 @@ def _client_building_look(rep, host, client):
              f"host {hm.groups() if hm else h.strip()[-80:]} | client {cm.groups() if cm else c.strip()[-80:]}")
 
 
+def _client_lake_clock(rep, host, client):
+    """Steam playtest Oct 16 2026 (#12): "(joiner) lake water frozen in place". Every machine spawns its own upland lakes, and Oceanology never
+    registered a spawned lake's wave solver, so the lake wave clock (MPC_Waves.GameTimeInSeconds_Lake) stood at 0. The host walks to a lake and
+    brings the joiner; the JOINER's clock must advance."""
+    off = log_size(host)
+    console(host, "MO.Water.GoToLake 0 dry")
+    lake = wait_log(host, r"GoToLake rank \d+: lake at \((-?\d+), (-?\d+)\)[^\n]*", since=off, timeout=10)
+    if not rep.step("host: went to the nearest upland lake", bool(lake), lake.group(0) if lake else "no lake within 6 km of the host"):
+        return
+    time.sleep(3)
+    _probe(host, "h = unreal.GameplayStatics.get_player_pawn(world, 0); j = unreal.GameplayStatics.get_player_pawn(world, 1); "
+                 "j.set_actor_location(h.get_actor_location() + unreal.Vector(250.0, 0.0, 100.0), False, True)")
+    time.sleep(25)   # the joiner's own lakes spawn around it
+    clock = ("mpc = unreal.load_asset('/Oceanology_Plugin/Design/Ocean/MaterialCollections/MPC_Waves'); "
+             "lakes = len(unreal.GameplayStatics.get_all_actors_of_class(world, unreal.OceanologyLake)); "
+             "out('LAKECLOCK %.3f lakes=%d' % (unreal.MaterialLibrary.get_scalar_parameter_value(world, mpc, 'GameTimeInSeconds_Lake'), lakes))")
+    a = re.search(r"LAKECLOCK (-?[\d.]+) lakes=(\d+)", _probe(client, clock))
+    time.sleep(3)
+    b = re.search(r"LAKECLOCK (-?[\d.]+) lakes=(\d+)", _probe(client, clock))
+    ok = bool(a and b) and int(b.group(2)) > 0 and float(b.group(1)) > float(a.group(1)) + 1.0
+    rep.step("the JOINER's lake wave clock advances (its own lakes' water moves)", ok,
+             f"client clock {a.group(1) if a else '?'} -> {b.group(1) if b else '?'} over 3 s, {b.group(2) if b else '?'} lake(s) on the client")
+
+
 def _host_takes_departed_pawn(rep, host, client):
     """Steam playtest Oct 16 2026 (#8): "can't select other pawn from possess menu" -- the host alone after the joiner left. The joiner's survivor
     stays in the world (pawns survive their player); the host's possession list must offer it and taking it must work. ENDS THE CLIENT: run last."""
@@ -2346,7 +2370,7 @@ def actions_test(uproject, editor_exe, keep=False, boot_timeout=300):
         if not _host_and_join(rep, host, client, "ActionsTest", boot_timeout):
             return False
         only = {s.strip() for s in os.environ.get("MO_ACTIONS_ONLY", "").split(",") if s.strip()}  # quick rerun of named cases
-        for fn in (_client_pickup, _client_press_e, _client_gait, _client_inventory_requests, _dropped_item_falls_on_client, _client_carcass, _client_building_look, _host_e_on_joiner, _far_remote_pawn_9km, _joiner_long_run, _appearance_replicates, _client_craft, _client_forage, _client_build, _client_attack, _trust_placement, _trust_pickup_far, _trust_possess_other, _possession_rows_name_players, _trust_dev_spawn, _client_rename, _trust_terraform, _buried_pawns, _remote_pawn_stays_put, _host_takes_departed_pawn):
+        for fn in (_client_pickup, _client_press_e, _client_gait, _client_inventory_requests, _dropped_item_falls_on_client, _client_carcass, _client_building_look, _host_e_on_joiner, _far_remote_pawn_9km, _joiner_long_run, _appearance_replicates, _client_craft, _client_forage, _client_build, _client_attack, _trust_placement, _trust_pickup_far, _trust_possess_other, _possession_rows_name_players, _trust_dev_spawn, _client_rename, _trust_terraform, _buried_pawns, _remote_pawn_stays_put, _client_lake_clock, _host_takes_departed_pawn):
             if only and fn.__name__ not in only:
                 continue
             try:
