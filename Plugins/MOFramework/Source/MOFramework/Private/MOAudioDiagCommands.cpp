@@ -11,6 +11,7 @@
 #include "MOFramework.h"
 #include "MOAudioSubsystem.h"
 #include "MOBugReport.h"
+#include "MOAudioNaNGuard.h"
 #include "Misc/Crc.h"
 
 #include "AudioDevice.h"
@@ -267,6 +268,23 @@ namespace MOAudioHeartbeat
 			S.bMuted = bMuted;
 		}
 
+		// The listener(s): a non-finite or absurd listener transform / velocity poisons the panning and spatialization of EVERY 3D sound at once (the menu's
+		// first ~20 s showed NaN from several sources together, Oct 16 2026). Velocity is the position delta per frame: a camera jump of kilometres reads
+		// as a supersonic listener (doppler).
+		for (int32 L = 0; L < Device->GetListeners().Num(); ++L)
+		{
+			const FListener& Listener = Device->GetListeners()[L];
+			const FVector Pos = Listener.Transform.GetLocation();
+			const bool bBad = Pos.ContainsNaN() || Listener.Transform.GetRotation().ContainsNaN() || Listener.Velocity.ContainsNaN() || !Listener.Transform.IsValid();
+			const double Speed = Listener.Velocity.Size();
+			if (bBad || Speed > 30000.0)   // 300 m/s: nothing a player rides; a camera cut
+			{
+				const FString What = FString::Printf(TEXT("LISTENER %d %s: position %s, speed %.0f cm/s"), L, bBad ? TEXT("INVALID") : TEXT("SUPERSONIC"), *Pos.ToCompactString(), Speed);
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOAudio] HB %s"), *What);
+				NoteAlarm(What);
+			}
+		}
+
 		// New active sounds this second, by sound: a sound that keeps being started is heard as its first milliseconds on repeat.
 		const TArray<FActiveSound*>& Active = Device->GetActiveSounds();
 		TMap<FString, int32> Started;
@@ -433,6 +451,8 @@ namespace MOAudioHeartbeat
 						Fields.Emplace(TEXT("Output"), FString::Printf(TEXT("peak %.3f rms %.4f (the last second)"), GReport.Peak, GReport.Rms));
 						Fields.Emplace(TEXT("Sounds"), FString::Printf(TEXT("%d active / %d voices: %s"), GReport.ActiveSounds, GReport.MaxChannels, GReport.TopSounds.IsEmpty() ? TEXT("(none)") : *GReport.TopSounds));
 						Fields.Emplace(TEXT("AppVolume"), FString::Printf(TEXT("%.2f (unfocused %.2f)"), FApp::GetVolumeMultiplier(), FApp::GetUnfocusedVolumeMultiplier()));
+						Fields.Emplace(TEXT("NaNGuard"), FString::Printf(TEXT("%lld non-finite sample(s) removed this session, %d recover(y/ies) (procedural sounds restarted)"),
+							FMOAudioNaNGuard::GetRemovedTotal(), FMOAudioNaNGuard::GetRecoveries()));
 						Fields.Emplace(TEXT("Alarms"), GReport.AlarmTotal == 0 ? FString(TEXT("none this session")) : FString::Printf(TEXT("%d this session; latest: %s"), GReport.AlarmTotal, *FString::Join(GReport.RecentAlarms, TEXT(" | "))));
 					});
 					GReportedTo = GameInstance;

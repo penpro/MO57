@@ -504,9 +504,23 @@ AActor* UMOWorldFeatureSubsystem::SpawnMember(const FMOWorldFeaturePlacer::FFeat
 	for (UPCGComponent* PCG : PCGComponents)
 	{
 		PCG->Seed = Member.Seed;   // each composition its own variation, the same on every machine
-		PCG->OnPCGGraphGeneratedDelegate.AddUObject(this, &UMOWorldFeatureSubsystem::HandleCompositionGenerated);
 	}
 	Actor->FinishSpawning(Transform);
+	// The composition's PCG component(s) as they exist NOW: a Blueprint composition (Electric Dreams' BP_PCG_*Assembly) gets its component from its
+	// construction script, which ran inside FinishSpawning -- binding before it found none and the basic-shape sweep never ran (measured: the
+	// embankment's 7 spheres still visible). A composition that generated already is swept at once.
+	TInlineComponentArray<UPCGComponent*> Compositions(Actor);
+	for (UPCGComponent* PCG : Compositions)
+	{
+		if (!PCG->OnPCGGraphGeneratedDelegate.IsBoundToObject(this))
+		{
+			PCG->OnPCGGraphGeneratedDelegate.AddUObject(this, &UMOWorldFeatureSubsystem::HandleCompositionGenerated);
+		}
+		if (PCG->bGenerated)
+		{
+			HandleCompositionGenerated(PCG);
+		}
+	}
 	UE_LOG(LogMOFramework, Log, TEXT("[MOWorldFeatures] spawned %s at %s (slot %d,%d member %d/%d scale %.2f seed %d)"), *Feature.Id.ToString(), *Member.Location.ToCompactString(),
 		Site.Slot.X, Site.Slot.Y, MemberIndex + 1, Site.Members.Num(), Member.Scale, Member.Seed);
 	return Actor;

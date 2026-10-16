@@ -3,6 +3,7 @@
  */
 
 #include "MOAudioSubsystem.h"
+#include "MOAudioNaNGuard.h"
 #include "MOAudioSettings.h"
 #include "MOFramework.h"
 #include "MOGameClockSubsystem.h"
@@ -272,6 +273,9 @@ void UMOAudioSubsystem::HandleWorldAudioContext(UWorld* World)
 	{
 		return;
 	}
+
+	// No stretch of a new world's audio unguarded (MOAudioNaNGuard.h: a poisoned weather MetaSound and the master reverb latching it).
+	FMOAudioNaNGuard::Install(World);
 
 	// The engine resets the device's transient primary volume to 1.0 on EVERY map load (UEngine::LoadMap: Flush, then SetTransientPrimaryVolume(1.0f)),
 	// so the player's master volume must be put back for each new world -- before this, everything after the first load (main menu -> game) played at
