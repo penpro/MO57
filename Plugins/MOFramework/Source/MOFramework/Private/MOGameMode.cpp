@@ -645,7 +645,40 @@ void AMOGameMode::RegroundAllPawns()
 		UE_LOG(LogMOFramework, Warning,
 			TEXT("[MOGameMode] No player pawn found for landing wait — finishing load handoff immediately"));
 		FinishLoadHandoff();
+
+		// Without a next step the player is left as a sky camera with nothing to control.
+		if (APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0))
+		{
+			if (!PC->GetPawn())
+			{
+				HandlePlayerWithoutPawnAfterLoad(PC);
+			}
+		}
 	}
+}
+
+void AMOGameMode::HandlePlayerWithoutPawnAfterLoad(APlayerController* PC)
+{
+	PendingRespawnOrigin.Reset();
+	FString LastPawnState = TEXT("none recorded");
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (UMOPersistenceSubsystem* Persistence = GI->GetSubsystem<UMOPersistenceSubsystem>())
+		{
+			const FGuid LastGuid = Persistence->GetLastLoadResult().LastPossessedPawnGuid;
+			FMOPersistedPawnRecord Record;
+			if (LastGuid.IsValid() && Persistence->GetPawnRecord(LastGuid, Record))
+			{
+				PendingRespawnOrigin = Record.Transform.GetLocation();
+				LastPawnState = Record.bIsDeceased ? TEXT("deceased") : TEXT("missing from the world");
+			}
+		}
+	}
+
+	UE_LOG(LogMOFramework, Warning,
+		TEXT("[MOGameMode] Load left %s without a pawn (last-played pawn: %s) -- running the next-life step (%d listener(s))"),
+		*PC->GetName(), *LastPawnState, OnPlayerNeedsNextLife.IsBound() ? 1 : 0);
+	OnPlayerNeedsNextLife.Broadcast(PC);
 }
 
 void AMOGameMode::BeginPlayerLandingPoll(APawn* PlayerPawn)
@@ -1597,8 +1630,11 @@ APawn* AMOGameMode::RespawnPlayerAfterDeath(APlayerController* PC)
 		return nullptr;
 	}
 
-	// Where the last pawn died: the controller's pawn (a corpse stays possessed), else where the camera is.
-	const FVector DeathLocation = PC->GetPawn() ? PC->GetPawn()->GetActorLocation() : PC->GetFocalLocation();
+	// Where the last pawn died: the controller's pawn (a corpse stays possessed), else the deceased record a load left behind
+	// (HandlePlayerWithoutPawnAfterLoad), else where the camera is.
+	const FVector DeathLocation = PC->GetPawn() ? PC->GetPawn()->GetActorLocation()
+		: PendingRespawnOrigin.IsSet() ? PendingRespawnOrigin.GetValue() : PC->GetFocalLocation();
+	PendingRespawnOrigin.Reset();
 	FRotator Facing = FRotator::ZeroRotator;
 	FVector SpawnLocation = FindRespawnLocation(DeathLocation, Facing);
 	if (SpawnLocation.IsZero())

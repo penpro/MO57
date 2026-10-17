@@ -7,6 +7,9 @@
 #include "Blueprint/UserWidget.h"
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetSystemLibrary.h"
+#include "Engine/GameInstance.h"
+#include "Engine/GameViewportClient.h"
+#include "MOGameMode.h"
 
 #include "MOUIManagerComponent.h"
 #include "MOInGameMenu.h"
@@ -39,10 +42,42 @@ UMOSystemMenuUIController::UMOSystemMenuUIController()
 void UMOSystemMenuUIController::BeginPlay()
 {
 	Super::BeginPlay();
+
+	// Closing the game window is a way out of the world too: save first (no save-scumming).
+	// PIE is skipped: closing a PIE window is ending a dev session, not a player leaving.
+	const APlayerController* PC = Cast<APlayerController>(GetOwner());
+	UWorld* World = GetWorld();
+	if (PC && PC->IsLocalController() && World && World->WorldType == EWorldType::Game)
+	{
+		if (UGameViewportClient* ViewportClient = World->GetGameViewport())
+		{
+			ViewportClient->OnCloseRequested().RemoveAll(this);
+			ViewportClient->OnCloseRequested().AddUObject(this, &UMOSystemMenuUIController::HandleViewportCloseRequested);
+			BoundViewportClient = ViewportClient;
+		}
+	}
+
+	// A load that leaves this player without a pawn (they left the world right after their last pawn died) gets the same
+	// next-life step as the live death path. Host / standalone only: that is where loads happen.
+	if (AMOGameMode* GameMode = World ? World->GetAuthGameMode<AMOGameMode>() : nullptr)
+	{
+		GameMode->OnPlayerNeedsNextLife.RemoveAll(this);
+		GameMode->OnPlayerNeedsNextLife.AddUObject(this, &UMOSystemMenuUIController::HandlePlayerNeedsNextLife);
+	}
 }
 
 void UMOSystemMenuUIController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	if (UGameViewportClient* ViewportClient = BoundViewportClient.Get())
+	{
+		ViewportClient->OnCloseRequested().RemoveAll(this);
+	}
+	BoundViewportClient.Reset();
+	if (AMOGameMode* GameMode = GetWorld() ? GetWorld()->GetAuthGameMode<AMOGameMode>() : nullptr)
+	{
+		GameMode->OnPlayerNeedsNextLife.RemoveAll(this);
+	}
+
 	// Clean up in-game menu widget - unbind delegates first to prevent callbacks during destruction
 	if (UMOInGameMenu* MenuWidget = InGameMenuWidget.Get())
 	{
@@ -273,26 +308,16 @@ void UMOSystemMenuUIController::HandleInGameMenuRequestClose()
 	CloseInGameMenu();
 }
 
+// No confirmation on either exit: leaving always saves (SaveWorldBeforeLeaving), so there is no
+// "unsaved progress" to warn about and no way to leave without saving (Wes 2026-10-17: no save-scumming).
 void UMOSystemMenuUIController::HandleInGameMenuExitToMainMenu()
 {
-	PendingConfirmationContext = TEXT("ExitToMainMenu");
-	ShowConfirmationDialog(
-		NSLOCTEXT("MO", "ExitToMainMenuTitle", "Exit to Main Menu"),
-		NSLOCTEXT("MO", "ExitToMainMenuMessage", "Are you sure you want to exit to the main menu? Unsaved progress will be lost."),
-		NSLOCTEXT("MO", "Exit", "Exit"),
-		NSLOCTEXT("MO", "Cancel", "Cancel")
-	);
+	ReturnToMainMenuImmediate();
 }
 
 void UMOSystemMenuUIController::HandleInGameMenuExitGame()
 {
-	PendingConfirmationContext = TEXT("ExitGame");
-	ShowConfirmationDialog(
-		NSLOCTEXT("MO", "ExitGameTitle", "Exit Game"),
-		NSLOCTEXT("MO", "ExitGameMessage", "Are you sure you want to quit the game? Unsaved progress will be lost."),
-		NSLOCTEXT("MO", "Quit", "Quit"),
-		NSLOCTEXT("MO", "Cancel", "Cancel")
-	);
+	QuitGameImmediate();
 }
 
 void UMOSystemMenuUIController::HandleSaveRequested(const FString& SlotName)
@@ -352,13 +377,45 @@ void UMOSystemMenuUIController::HandleSaveRequested(const FString& SlotName)
 
 void UMOSystemMenuUIController::HandleLoadRequested(const FString& SlotName)
 {
-	PendingConfirmationContext = FString::Printf(TEXT("Load:%s"), *SlotName);
-	ShowConfirmationDialog(
-		NSLOCTEXT("MO", "LoadGameTitle", "Load Game"),
-		NSLOCTEXT("MO", "LoadGameMessage", "Are you sure you want to load this save? Unsaved progress will be lost."),
-		NSLOCTEXT("MO", "Load", "Load"),
-		NSLOCTEXT("MO", "Cancel", "Cancel")
-	);
+	// Loading another save leaves this world: save it first like every other way out (no confirm, no save-scumming).
+	if (SaveWorldBeforeLeaving(TEXT("load another save")) == EMOLeaveSaveResult::Failed)
+	{
+		PendingConfirmationContext = FString::Printf(TEXT("LeaveUnsaved:Load:%s"), *SlotName);
+		ShowConfirmationDialog(
+			NSLOCTEXT("MO", "LeaveUnsavedTitle", "Could Not Save"),
+			NSLOCTEXT("MO", "LeaveUnsavedMessage", "The world could not be saved. Leaving now loses everything since the last save. Leave anyway?"),
+			NSLOCTEXT("MO", "LeaveAnyway", "Leave Anyway"),
+			NSLOCTEXT("MO", "Stay", "Stay"));
+		return;
+	}
+	LoadSlotNow(SlotName);
+}
+
+void UMOSystemMenuUIController::LoadSlotNow(const FString& SlotName)
+{
+	// Close all menus via UIManager
+	if (UMOUIManagerComponent* UIManager = GetUIManager())
+	{
+		UIManager->CloseAllMenus();
+	}
+
+	// Store the pending load slot in settings (same approach as main menu loading)
+	// This ensures a clean level reload with proper state reset
+	UMOGameSettings* Settings = UMOGameSettings::GetMOGameSettings();
+	if (Settings)
+	{
+		Settings->bPendingNewGame = false;  // Not a new game, it's a load
+		Settings->bIsLoadingIntoGameplay = true;  // Keep loading screen until pawn lands
+		Settings->PendingNewGameSlot = SlotName;  // Reuse field for load slot
+		Settings->SaveSettings();
+	}
+
+	// Reload the gameplay level to get a clean state
+	// The GameMode's BeginPlay will handle loading the save data
+	UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] Reloading level to load save: %s"), *SlotName);
+	// Net-mode-aware: keeps the listen-server role + connected clients when
+	// the host loads a save in co-op (plain OpenLevel dropped both).
+	UMOTravelUtils::TravelToGameplayLevel(GetOwner(), GameplayLevelPath);
 }
 
 // =============================================================================
@@ -662,14 +719,14 @@ void UMOSystemMenuUIController::HandleConfirmationConfirmed()
 		DialogWidget->DeactivateWidget();
 	}
 
-	if (PendingConfirmationContext == TEXT("ExitToMainMenu"))
+	// Only reached when the save on the way out FAILED and the player chose to leave anyway.
+	if (PendingConfirmationContext == TEXT("LeaveUnsaved:Menu"))
 	{
-		ReturnToMainMenuImmediate();
+		LeaveToMainMenuLevel();
 	}
-	else if (PendingConfirmationContext == TEXT("ExitGame"))
+	else if (PendingConfirmationContext == TEXT("LeaveUnsaved:Quit"))
 	{
-		UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] Exiting game"));
-		UKismetSystemLibrary::QuitGame(this, nullptr, EQuitPreference::Quit, false);
+		QuitToDesktop();
 	}
 	else if (PendingConfirmationContext.StartsWith(TEXT("Save:")))
 	{
@@ -696,33 +753,9 @@ void UMOSystemMenuUIController::HandleConfirmationConfirmed()
 			}
 		}
 	}
-	else if (PendingConfirmationContext.StartsWith(TEXT("Load:")))
+	else if (PendingConfirmationContext.StartsWith(TEXT("LeaveUnsaved:Load:")))
 	{
-		FString SlotName = PendingConfirmationContext.RightChop(5);
-
-		// Close all menus via UIManager
-		if (UMOUIManagerComponent* UIManager = GetUIManager())
-		{
-			UIManager->CloseAllMenus();
-		}
-
-		// Store the pending load slot in settings (same approach as main menu loading)
-		// This ensures a clean level reload with proper state reset
-		UMOGameSettings* Settings = UMOGameSettings::GetMOGameSettings();
-		if (Settings)
-		{
-			Settings->bPendingNewGame = false;  // Not a new game, it's a load
-			Settings->bIsLoadingIntoGameplay = true;  // Keep loading screen until pawn lands
-			Settings->PendingNewGameSlot = SlotName;  // Reuse field for load slot
-			Settings->SaveSettings();
-		}
-
-		// Reload the gameplay level to get a clean state
-		// The GameMode's BeginPlay will handle loading the save data
-		UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] Reloading level to load save: %s"), *SlotName);
-		// Net-mode-aware: keeps the listen-server role + connected clients when
-		// the host loads a save in co-op (plain OpenLevel dropped both).
-		UMOTravelUtils::TravelToGameplayLevel(GetOwner(), GameplayLevelPath);
+		LoadSlotNow(PendingConfirmationContext.RightChop(18));
 	}
 
 	PendingConfirmationContext.Empty();
@@ -1202,7 +1235,85 @@ void UMOSystemMenuUIController::ContinueAfterDeath(const AMOCharacter* DeadChara
 	PC->ServerRequestRespawn();
 }
 
+EMOLeaveSaveResult UMOSystemMenuUIController::SaveWorldBeforeLeaving(const TCHAR* Reason)
+{
+	UWorld* World = GetWorld();
+	if (World && World->GetNetMode() == NM_Client)
+	{
+		UE_LOG(LogMOFramework, Warning,
+			TEXT("[MOSysUI] Leaving the world (%s): client -- the host owns the world save, nothing written"), Reason);
+		return EMOLeaveSaveResult::NotHost;
+	}
+
+	UGameInstance* GameInstance = World ? World->GetGameInstance() : nullptr;
+	UMOPersistenceSubsystem* Persistence = GameInstance ? GameInstance->GetSubsystem<UMOPersistenceSubsystem>() : nullptr;
+	if (!Persistence)
+	{
+		UE_LOG(LogMOFramework, Error,
+			TEXT("[MOSysUI] Leaving the world (%s): no persistence subsystem -- NOT saved"), Reason);
+		return EMOLeaveSaveResult::Failed;
+	}
+
+	const bool bSaved = Persistence->SaveToCurrentSlot();
+	UE_LOG(LogMOFramework, Warning,
+		TEXT("[MOSysUI] Leaving the world (%s): save to slot '%s' ok=%d"),
+		Reason, *Persistence->GetCurrentSlotName(), bSaved ? 1 : 0);
+	return bSaved ? EMOLeaveSaveResult::Saved : EMOLeaveSaveResult::Failed;
+}
+
+void UMOSystemMenuUIController::HandlePlayerNeedsNextLife(APlayerController* PC)
+{
+	if (PC != GetOwner())
+	{
+		return;
+	}
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOSysUI] Loaded without a pawn -- next life (same step as the death recap's Continue)"));
+	ContinueAfterDeath(nullptr);
+}
+
+void UMOSystemMenuUIController::HandleViewportCloseRequested(FViewport* Viewport)
+{
+	// The window is closing either way: there is no dialog to offer, so a failed save is only logged.
+	SaveWorldBeforeLeaving(TEXT("window closed"));
+}
+
+void UMOSystemMenuUIController::QuitGameImmediate()
+{
+	if (SaveWorldBeforeLeaving(TEXT("exit game")) == EMOLeaveSaveResult::Failed)
+	{
+		PendingConfirmationContext = TEXT("LeaveUnsaved:Quit");
+		ShowConfirmationDialog(
+			NSLOCTEXT("MO", "LeaveUnsavedTitle", "Could Not Save"),
+			NSLOCTEXT("MO", "LeaveUnsavedMessage", "The world could not be saved. Leaving now loses everything since the last save. Leave anyway?"),
+			NSLOCTEXT("MO", "LeaveAnyway", "Leave Anyway"),
+			NSLOCTEXT("MO", "Stay", "Stay"));
+		return;
+	}
+	QuitToDesktop();
+}
+
+void UMOSystemMenuUIController::QuitToDesktop()
+{
+	UE_LOG(LogMOFramework, Log, TEXT("[MOSysUI] Exiting game"));
+	UKismetSystemLibrary::QuitGame(this, nullptr, EQuitPreference::Quit, false);
+}
+
 void UMOSystemMenuUIController::ReturnToMainMenuImmediate()
+{
+	if (SaveWorldBeforeLeaving(TEXT("exit to main menu")) == EMOLeaveSaveResult::Failed)
+	{
+		PendingConfirmationContext = TEXT("LeaveUnsaved:Menu");
+		ShowConfirmationDialog(
+			NSLOCTEXT("MO", "LeaveUnsavedTitle", "Could Not Save"),
+			NSLOCTEXT("MO", "LeaveUnsavedMessage", "The world could not be saved. Leaving now loses everything since the last save. Leave anyway?"),
+			NSLOCTEXT("MO", "LeaveAnyway", "Leave Anyway"),
+			NSLOCTEXT("MO", "Stay", "Stay"));
+		return;
+	}
+	LeaveToMainMenuLevel();
+}
+
+void UMOSystemMenuUIController::LeaveToMainMenuLevel()
 {
 	// Close all menus via UIManager so we don't carry stale modal state into
 	// the main menu level.

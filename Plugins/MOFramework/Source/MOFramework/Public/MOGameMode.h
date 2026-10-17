@@ -392,7 +392,23 @@ public:
 	 */
 	APawn* RespawnPlayerAfterDeath(APlayerController* PC);
 
+	DECLARE_MULTICAST_DELEGATE_OneParam(FMOOnPlayerNeedsNextLife, APlayerController* /*PC*/);
+	/**
+	 * A load finished with the player controlling no pawn: the last-played pawn died before the save (leaving a world always saves,
+	 * Docs/PAUSE_POLICY.md) or is missing. The player's local UI answers with the same next-life step as the live death path
+	 * (UMOSystemMenuUIController::ContinueAfterDeath: the possession menu if a colony pawn lives, else RespawnPlayerAfterDeath).
+	 * Server only, broadcast after the load handoff so the respawn overlay isn't dismissed by it.
+	 */
+	FMOOnPlayerNeedsNextLife OnPlayerNeedsNextLife;
+
 private:
+	/** After a load left PC without a pawn: remember where the last-played pawn died and broadcast OnPlayerNeedsNextLife. */
+	void HandlePlayerWithoutPawnAfterLoad(APlayerController* PC);
+
+	/** Where a dead pawn that is no longer in the world fell (from its deceased record), so a respawn is measured from there and not
+	 *  from the spectator camera. Consumed by the next RespawnPlayerAfterDeath. */
+	TOptional<FVector> PendingRespawnOrigin;
+
 	/** Give a joining remote player a pawn: an existing colonist nobody is driving if there is one (their own previous
 	 *  pawn first, else the nearest), otherwise spawn a new one. */
 	APawn* AssignPawnToJoiner(APlayerController* PC);

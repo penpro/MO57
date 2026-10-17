@@ -31,7 +31,7 @@ and UE_5.8.
 | `ui contract|scaffold|build|check|dump|remove|menu|click|find|shot` | Widget Blueprints from spec files (`Docs/UI_TOOLING.md`) |
 | `inst start|stop|do|list <name> [--sound] [--creator] [--res WxH] [--nosteam]` | extra `-game` processes with their own bridge + log |
 | `nettest lan|steam-host|game|hostsave|soak|actions|churn|features|packaged|packaged-suite|packaged-death|packaged-removal|bugreport` | real multi-process co-op / packaged gates (negative controls: `game --skew-seed / --withhold-seed / --withhold-sync`; `MO_ACTIONS_ONLY=_case,...` reruns named action cases) |
-| `logs`, `results`, `save`, `shot`, `config`, `mptest` | helpers (see `--help`) |
+| `logs`, `results`, `save`, `config`, `mptest` | helpers (see `--help`). There is no top-level `shot`: in an instance run `ue.py inst do NAME run "shot showui"` (PNG in `Saved/Screenshots/WindowsEditor/`); widget shots are `ui shot` |
 
 Older PowerShell helpers still work: `Tools\agent_boot_newgame.ps1 -Seed N` (one command to in-game), `Tools\agent_state.ps1` (editor + PIE
 stage), `Tools\win_input.ps1 -ProcessId <pid> -Action shot|key ...` (real input / window capture for instances and packaged windows).

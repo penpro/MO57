@@ -36,6 +36,7 @@
 | F21 | Bland distant mountains | after a measured negative shader result: mountain-scale relief that survives far LODs / a clearer Clear_Skies atmosphere / a lower or temperature-driven snow line / an artist's far texture; also the flat-white sunlit snow at 1 km (SnowColor vs exposure) | `Docs/Terrain_Generation_Exploration.md` To-do | Oct 12-15 |
 | F22 | Water track beyond drinking | W2 freshwater springs as world features, W3 rain collector, W4 pawn water hauling (W1 drinking built Oct 15) | `Docs/Archive/Fable5_Autonomous_Pipeline.md` | Jul 7 |
 | F23 | Rejected Steam art | `SteamArt/` (~15 MB LFS, pushed): delete only if Wes says so | `SteamArt/README.md` | Oct 13 |
+| F24 | Manual save slots vs "no save-scumming" | Every exit now saves (Oct 17), but the in-game Save panel can still write extra named slots and Load can reopen an older one (save before a fight, reload after). **A** one save per world (ironman): the in-game menu keeps Save (to the world's own slot) and drops Save As / Load of other slots; the main menu lists worlds, not snapshots. B keep manual slots (the scum route stays). C keep slots but only the newest per world is loadable | `Docs/Persistence.md` §1 | Oct 17 |
 
 ## Answered 2026-10-17 (knowledge consolidation; Wes's words)
 
@@ -54,6 +55,13 @@
 ## Decisions, newest first
 
 ### 2026-10-17
+- ~15:30: **"pause policy, no pause, ever... if they want to pause they can back out to the main menu"** and **"let's go ahead and get rid of the save confirm and just force the save... i don't want people to be able to 'save-scum'"** -> every way out of a world saves first, with no confirm and no opt-out: Exit to Main Menu, Exit Game, loading another save, the death recap's Return, and the window close (X / Alt+F4).
+  It is one step, `UMOSystemMenuUIController::SaveWorldBeforeLeaving` -> `UMOPersistenceSubsystem::SaveToCurrentSlot`. Only the host or a
+  standalone game saves; a client never writes the host's world. Only a FAILED save shows a dialog ("Could Not Save -- Leave Anyway / Stay")
+  so progress is never lost silently. Saving at the death recap keeps a death permanent (deceased pawns stay deceased on load).
+  `Docs/PAUSE_POLICY.md` now says "back out to the main menu". Testing it found a dead end: loading the save made at a death left a sky
+  camera with no pawn. The load now raises `AMOGameMode::OnPlayerNeedsNextLife`, and the UI runs the recap's own `ContinueAfterDeath`
+  (a respawn ~5 mi from the recorded death spot). Open follow-up: manual slots can still reopen an older save (F24).
 - ~04:00: **"discovery should be locked behind 'inspect' if nothing else opens up to it, somewhere in the clay tech line humans would discover
   leftover metals etc, just make it realistic"** -> 46 circular discovery knowledges got precursor inspect grants (level 1, XP 100); metal through
   the clay line (PaintPotteryMalachite -> CopperPrill01 35 % -> inspect = Smelting); MakeBellows needs Smelting; SmeltCopperOre gives a 10 %

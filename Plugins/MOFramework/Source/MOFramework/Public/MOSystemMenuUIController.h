@@ -98,16 +98,26 @@ class UMOSurvivorTaskMenu;
 class UMODeathRecapWidget;
 class UMOCharacterCreatorPanel;
 class AMOCharacter;
+class UGameViewportClient;
+class FViewport;
 enum class EMOBodyPartType : uint8;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOOnConfirmationConfirmedDelegate);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMOOnConfirmationCancelledDelegate);
 
+/** What the save on the way out of a world did. A client is not a failure: the host owns the world save. */
+enum class EMOLeaveSaveResult : uint8
+{
+	Saved,
+	NotHost,
+	Failed
+};
+
 /**
  * Specialized UI controller for system-related UI.
  *
  * Handles:
- * - In-game menu (pause, save, load, options, exit)
+ * - In-game menu (save, load, options, exit; the world never pauses: Docs/PAUSE_POLICY.md)
  * - Possession menu (pawn selection, character creation)
  * - Confirmation dialogs
  *
@@ -408,9 +418,42 @@ private:
 	void UnbindDeathListener();
 
 	/**
-	 * Centralized "open the main menu level" path — called by both the
-	 * in-game-menu exit confirmation flow and the death recap "Return"
-	 * button. Single source of truth for the exit sequence.
+	 * Centralized "open the main menu level" path — called by the in-game
+	 * menu's Exit to Main Menu button and the death recap "Return" button.
+	 * Single source of truth for the exit sequence. Saves the world first
+	 * (SaveWorldBeforeLeaving): leaving is how a player "pauses", and it can
+	 * never be used to discard progress (no save-scumming; Wes 2026-10-17).
 	 */
 	void ReturnToMainMenuImmediate();
+
+	/** The in-game menu's Exit Game: save the world, then quit to desktop. */
+	void QuitGameImmediate();
+
+	/** Open the main menu level (no save; callers save first or the player accepted a failed save). */
+	void LeaveToMainMenuLevel();
+
+	/** Quit to desktop (no save; same contract as LeaveToMainMenuLevel). */
+	void QuitToDesktop();
+
+	/** Travel to the gameplay level and load SlotName (no save; same contract as LeaveToMainMenuLevel). */
+	void LoadSlotNow(const FString& SlotName);
+
+	/**
+	 * The one save every way out of a world goes through (main menu, quit,
+	 * death recap, window close). No confirmation and no opt-out. The host /
+	 * standalone writes the world to its current slot (a new game gets an
+	 * AutoSave_ slot on first save); a client never saves (the host owns the
+	 * world save). Only Failed offers "leave anyway" (menu exits) so a broken
+	 * save never loses progress silently.
+	 */
+	EMOLeaveSaveResult SaveWorldBeforeLeaving(const TCHAR* Reason);
+
+	/** The game window's close button / Alt+F4 (UGameViewportClient::OnCloseRequested). */
+	void HandleViewportCloseRequested(FViewport* Viewport);
+
+	/** Viewport whose close request we listen to (unbound in EndPlay). */
+	TWeakObjectPtr<UGameViewportClient> BoundViewportClient;
+
+	/** AMOGameMode::OnPlayerNeedsNextLife: a load left this player with no pawn -> the same next-life step as a live death. */
+	void HandlePlayerNeedsNextLife(APlayerController* PC);
 };

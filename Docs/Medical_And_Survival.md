@@ -51,6 +51,11 @@ local heat (`IMOAmbientEnvironmentProvider`, `IMOLocalHeatSource`), clothing war
   persisted; held by the spawn settle with a 75 s cap). Permadeath per `Docs/VISION.md`. Test: `ue.py inst start ui --res 2880x1620`,
   `MO.NewGame 11`, wait for READY, `MO.Player.Kill`, `python Tools/ui_shoot.py <dir> x Click:ContinueButton`; or
   `python Tools/ue.py nettest packaged-death [--seed N]` (default seed 1029024224).
+- **Death then leaving** (Oct 17): the recap's Return to Main Menu saves the death (every exit saves: `Docs/PAUSE_POLICY.md`). Loading
+  that save raises `AMOGameMode::OnPlayerNeedsNextLife`, which runs the same `ContinueAfterDeath` as the recap's Continue. With no living
+  colony pawn, the respawn measures its 5 mi from the deceased record's location. Verified in a `-game` instance: the new survivor
+  landed 4.96 mi from the death spot. Before this it was a sky camera with no pawn. Gap: the dead pawn's body and gear don't survive the
+  reload (BACKLOG N-155).
 - Not verified: a remote client's respawn RPC; a death during another spawn settle (refused).
 
 ## 3. Food, water and the meters (two models today)

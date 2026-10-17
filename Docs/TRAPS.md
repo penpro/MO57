@@ -101,6 +101,10 @@
 
 ## 5. Harness: ue.py, instances, nettest, tests
 
+- **`MO.Test.HitTest` says BLOCKED by `WBP_LoadingOverlay` right after `MO.Test.State` reports `inGame=YES`** -> the overlay holds until
+  readiness is READY (tens of seconds after the pawn is possessed) -> wait for `[MOReadiness] READY` in the log before hit-tests and clicks. (Oct 17)
+- **`MO.Save.LoadFrom <slot>` typed at the main menu loads the save INTO the menu level** (it reloads in place, no travel) -> to load
+  into gameplay from the menu: `ke * LoadGame <slot>` (`AMOMainMenuPlayerController::LoadGame`, the menu's own path). (Oct 17)
 - **A `-game` instance near the spawn has no vegetation** -> the editor was open when it started -> `ue.py editor stop` before any visual / PCG / harvest instance test. (ue-multiprocess)
 - **`-game` of the editor binary crashes** -> no GEditor: `EditorLevelLibrary`, Voxel `WITH_EDITOR` code -> console verbs (`MO.Spawn.Try`); the Voxel GEditor guard covers the real map for `nettest game|hostsave|soak`. (ue-multiprocess, dev_status)
 - **Instance screenshots lie** -> the window defaults to 640x360 (minimum DPI scale) -> `r.setres 1920x1080w` first; HighResShot shows no UMG (use `ui shot`). (first-ten-minutes, ue-ui-toolset)

@@ -591,3 +591,24 @@ The consolidation is done and committed (docs, rules and comments only; no code 
 - Still waiting on your commit (BACKLOG N-001): after it lands I commit torch wear (N-002: MOCarriedLightComponent.h/.cpp + the Light_Sources wear text, which stays uncommitted in the working tree until then), and I archive Docs/Handoff_2026-10-13.md (N-004). Please point the comments in MOworldSaveGame.h and MOSurvivalStatsComponent.cpp at Docs/Archive/<same name> when you commit (or tell me and I will).
 - FYI: Docs/Deep_Dive_Top_10_Flaws_2026-10-16.md (yours, untracked) links Docs/Progression_FreshLook_2026-10-15.md, which is now Docs/Archive/Progression_FreshLook_2026-10-15.md. I did not touch the file.
 - Your untracked Docs/agent/audit/ and the source/test files from batches A-F are untouched and unstaged.
+
+### 2026-10-17 15:40 Pacific Daylight Time — CLAUDE — CL-0050
+Status: CLAIM
+References: CL-0049, Docs/PAUSE_POLICY.md
+Files claimed: Plugins/MOFramework/Source/MOFramework/Public/MOSystemMenuUIController.h, Plugins/MOFramework/Source/MOFramework/Private/MOSystemMenuUIController.cpp, Docs/PAUSE_POLICY.md, Docs/DECISIONS.md, Docs/Persistence.md, Docs/BACKLOG.md. Build window + -game instances (editor is down) for the next ~hour.
+
+Wes's call: "no pause, ever... if they want to pause they can back out to the main menu" and "get rid of the save confirm and just force the save... i don't want people to be able to save-scum". Every way out of a world now saves first, with no confirm: Exit to Main Menu, Exit Game, the death recap's Return, and the window close. Only the host / standalone saves; a client never writes the host's world. This uses the existing UMOPersistenceSubsystem::SaveToCurrentSlot(). I am NOT editing MOPersistenceSubsystem (you have uncommitted edits there). The build compiles your uncommitted batches as they are in the tree; I will report any failure in them here and not touch them.
+
+### 2026-10-17 15:58 Pacific Daylight Time — CLAUDE — CL-0051
+Status: CLAIM (extends CL-0050)
+References: CL-0050
+Files claimed: Plugins/MOFramework/Source/MOFramework/Public/MOGameMode.h, Plugins/MOFramework/Source/MOFramework/Private/MOGameMode.cpp
+
+Testing CL-0050 found a dead end: die, Return to Main Menu (now saved), load, and the player is a sky camera with no pawn and no menu. The cause is AMOGameMode's post-load auto-possess, which only logs "staying as spectator" when the last-played pawn is deceased. Fix: the load raises AMOGameMode::OnPlayerNeedsNextLife after the handoff, and the system-menu UI answers with the existing ContinueAfterDeath (possession menu or a respawn ~5 mi from the recorded death spot). FYI for your persistence work, not touched by me: a deceased record is skipped entirely on load, so the dead pawn's body and gear vanish after a reload (the design says the gear stays where it fell). Logged as BACKLOG N-155.
+
+### 2026-10-17 16:10 Pacific Daylight Time — CLAUDE — CL-0052
+Status: RELEASE
+References: CL-0050, CL-0051
+Files released: MOSystemMenuUIController.h/.cpp, MOGameMode.h/.cpp, the docs, the build window and the instances (ex1 stopped).
+
+Done and verified in a -game instance: Exit to Main Menu, Exit Game, the death recap's Return and the window close each save with no dialog. Loading a save made at a death respawns a new survivor ~5 mi from the recorded death spot; it used to leave a sky camera. The build compiled your uncommitted batches A-F without errors or warnings. Two items wait on your commit (both in your files): N-155 (deceased records skipped on load, so the corpse and gear vanish) and N-156 (the MOPlayerController.h comment says AGameMode::SetPause is caught; a direct AGameModeBase::SetPause bypasses the override).

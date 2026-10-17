@@ -4,7 +4,8 @@
 > catch-up, and the crash / bug-report pipeline (which carries diagnostics from Shipping builds that write no log).
 > **Current state (2026-10-17):** `UMOPersistenceSubsystem` no longer names any domain: systems register `IMOSaveDomain` (C2, July 6);
 > the persistence / permadeath audit cluster is closed except what BACKLOG lists; saves record the generator identity (old worlds are
-> not migrated: Wes, Oct 13); bug reports carry game state, a scrubbed log, a screenshot and what the player was looking at.
+> not migrated: Wes, Oct 13); bug reports carry game state, a scrubbed log, a screenshot and what the player was looking at. Every way
+> out of a world saves first with no confirm (Oct 17, no save-scumming: `Docs/PAUSE_POLICY.md` "Leaving a world").
 > **Entry points:** `UMOPersistenceSubsystem` (GameInstance; `RegisterSaveDomain`, slots, pawn records, destroyed-GUID tracking,
 > `RequestThumbnailForSave`), `IMOSaveDomain` (`MOSaveDomainInterface.h`, Core), `UMOWorldSaveGame` (`MOworldSaveGame.h`),
 > `UMOIdentityComponent`, `UMOIdentityRegistrySubsystem` (`AnnounceReintroduction`, `OnIdentityReintroduced`),
@@ -12,7 +13,7 @@
 > **Dev verbs:** `MO.Save.LoadFrom` (reloads IN PLACE, same UWorld), `MO.Session.HostSave <slot>`, `MO.BugReport.Preview`,
 > `MO.BugReport.EndpointOverride` (loopback only). **Tools:** `python -I Tools/crash_triage.py <crash-dumps dir>`,
 > `Tools/ue_crash_bundle.py`, `python Tools/ue.py nettest bugreport --package` (`Tools/bugreport_receiver.py`).
-> **Open items:** `Docs/BACKLOG.md` (no section of its own: N-001 under § In flight, N-111 under § Co-op). **Decisions:** DECISIONS 2026-10-13 (old saves), 2026-07-08 (offline cap).
+> **Open items:** `Docs/BACKLOG.md` (no section of its own: N-001 under § In flight, N-111 under § Co-op, N-155 and N-157 under § Medical and survival). **Decisions:** DECISIONS 2026-10-17 (leaving saves; F24 manual slots), 2026-10-13 (old saves), 2026-07-08 (offline cap).
 
 ## 1. Save domains (register, don't edit persistence)
 
@@ -24,6 +25,13 @@
   (H30); deceased pawns stay deceased (`MarkPawnDeceased` from `HandleInstantDeath`, H28). The legacy survival meters were NOT saved
   (Deep Dive #6; Codex batch D persists them, uncommitted 2026-10-17).
 - Component pattern: `BuildSaveData(FMO...SaveData&) const` (any caller) / `ApplySaveDataAuthority(const FMO...SaveData&)` (server only).
+- **When the world is saved:** on every way out of it (Exit to Main Menu, Exit Game, loading another save, the death recap's Return, the
+  window close), through `UMOSystemMenuUIController::SaveWorldBeforeLeaving` -> `SaveToCurrentSlot`; host / standalone only; no confirm.
+  Plus manual saves from the in-game Save panel. There is no timed autosave (N-157).
+- **A load that leaves the player without a pawn** (the last-played pawn died before the save) raises `AMOGameMode::OnPlayerNeedsNextLife`
+  after the load handoff; the UI runs the live death path's `ContinueAfterDeath` (possession menu, or a respawn ~5 mi from the deceased
+  record's location via `PendingRespawnOrigin`). Before Oct 17 this left a sky camera with nothing to control. Gap: a deceased record is
+  skipped entirely on load, so the dead pawn's body and gear vanish after a reload (N-155).
 - **Systemic pattern to check new code against:** live-path side effects must be replayed by restore paths (loaded buildings lost
   collision, woken mobs stayed throttled, possession spawns skipped component restoration): one shared "enter state X" routine called by
   both live and load paths (`code_health` pattern #1).
