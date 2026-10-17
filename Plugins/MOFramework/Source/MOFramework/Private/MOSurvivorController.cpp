@@ -1545,6 +1545,7 @@ void AMOSurvivorController::StartExcavateJobExecution()
 	ExcavateDumpMode = CurrentJob.ExcavateDumpMode;
 	ExcavateSpoilItemId = CurrentJob.SpoilItemId.IsNone() ? FName("Dirt01") : CurrentJob.SpoilItemId;
 	ExcavateCarried = 0;
+	ExcavateCarriedYields.Reset();
 
 	FMODesignationZone DigZone;
 	if (!Desig->FindZone(ExcavateDigZoneId, DigZone) || DigZone.RemainingVolumeM3 <= 0.0f)
@@ -1695,13 +1696,24 @@ void AMOSurvivorController::UpdateExcavateJobExecution(float DeltaTime)
 					return;
 				}
 				ExcavateBiteVolumeM3 = MovedVol;
-				const int32 SpoilCount = UMOTerraformingComponent::SpoilItemsForVolume(
-					MovedVol, Terra->ExcavationItemsPerCubicMeter);
+				// What the bite cut through, from the world's geology (Wes, Oct 17 2026): the soil (the job's spoil item), the bedrock's stone, any ore body.
+				ExcavateCarriedYields.Reset();
+				if (!FMOGeologyYield::ForDigInWorld(this, SimpleJobTargetLocation, Terra->ExcavationDigRadius, MovedVol, Terra->ExcavationItemsPerCubicMeter,
+					/*bSlab=*/true, ExcavateSpoilItemId, ExcavateCarriedYields))
+				{
+					ExcavateCarriedYields.Add({ ExcavateSpoilItemId, UMOTerraformingComponent::SpoilItemsForVolume(MovedVol, Terra->ExcavationItemsPerCubicMeter), true });   // no world seed (tests): plain earth
+				}
+				ExcavateCarried = 0;
+				for (const FMOItemYield& Y : ExcavateCarriedYields)
+				{
+					ExcavateCarried += Y.Count;
+				}
 				if (UMOInventoryComponent* PawnInv = ControlledPawn->FindComponentByClass<UMOInventoryComponent>())
 				{
-					if (SpoilCount > 0) { PawnInv->AddItemByGuid(FGuid::NewGuid(), ExcavateSpoilItemId, SpoilCount); }
+					const int32 Dropped = FMOGeologyYield::GiveOrDrop(PawnInv, ExcavateCarriedYields, SimpleJobTargetLocation);
+					UE_LOG(LogMOFramework, Warning, TEXT("[MOSurvivorController] Excavate bite %.3fm3 yielded %s%s"), MovedVol, *FMOGeologyYield::Describe(ExcavateCarriedYields),
+						Dropped > 0 ? *FString::Printf(TEXT(" (%d dropped: no room)"), Dropped) : TEXT(""));
 				}
-				ExcavateCarried = SpoilCount;
 
 				// Debit the dig zone's earth budget (drops the zone when exhausted).
 				if (UMODesignationSubsystem* Desig = UMODesignationSubsystem::Get(this))
@@ -1759,9 +1771,19 @@ void AMOSurvivorController::UpdateExcavateJobExecution(float DeltaTime)
 					}
 					const float Raised = Terra->TerraformAtLocationEx(ExcavateDumpLocation,
 						EMOTerraformMode::Raise, Terra->ExcavationDigRadius, Terra->ExcavationDigStrength);
-					if (PawnInv && ExcavateCarried > 0)
+					// The earth and stone become the fill (conservation); the ore stays in the pawn's pack.
+					int32 Filled = 0;
+					for (const FMOItemYield& Y : ExcavateCarriedYields)
 					{
-						PawnInv->RemoveItemByDefinitionId(ExcavateSpoilItemId, ExcavateCarried);
+						if (PawnInv && Y.bFill && Y.Count > 0)
+						{
+							const int32 Have = FMath::Min(Y.Count, PawnInv->GetItemCountByDefinitionId(Y.ItemId));
+							if (Have > 0)
+							{
+								PawnInv->RemoveItemByDefinitionId(Y.ItemId, Have);
+								Filled += Have;
+							}
+						}
 					}
 					// A flatten zone is both ends of the trip: its budget caps the earth DUG, so the fill does not count it twice.
 					if (Desig && ExcavateDumpZoneId != ExcavateDigZoneId)
@@ -1769,19 +1791,22 @@ void AMOSurvivorController::UpdateExcavateJobExecution(float DeltaTime)
 						Desig->ConsumeZoneVolume(ExcavateDumpZoneId, Raised > 0.0f ? Raised : ExcavateBiteVolumeM3);
 					}
 					UE_LOG(LogMOFramework, Warning,
-						TEXT("[MOSurvivorController] Excavate job done: filled %.3fm3, consumed %d spoil"),
-						Raised, ExcavateCarried);
+						TEXT("[MOSurvivorController] Excavate job done: filled %.3fm3, consumed %d spoil of %d carried (ore kept)"),
+						Raised, Filled, ExcavateCarried);
 				}
 				else // Container
 				{
 					UMOInventoryComponent* ContainerInv = GetActorInventory(CurrentJob.StorageActor.Get());
 					int32 Deposited = 0;
-					if (ContainerInv && PawnInv && ExcavateCarried > 0
-						&& ContainerInv->CanAddItemByDefinitionId(ExcavateSpoilItemId, ExcavateCarried))
+					for (const FMOItemYield& Y : ExcavateCarriedYields)
 					{
-						ContainerInv->AddItemByGuid(FGuid::NewGuid(), ExcavateSpoilItemId, ExcavateCarried);
-						PawnInv->RemoveItemByDefinitionId(ExcavateSpoilItemId, ExcavateCarried);
-						Deposited = ExcavateCarried;
+						const int32 Have = PawnInv ? FMath::Min(Y.Count, PawnInv->GetItemCountByDefinitionId(Y.ItemId)) : 0;
+						if (ContainerInv && Have > 0 && ContainerInv->CanAddItemByDefinitionId(Y.ItemId, Have))
+						{
+							ContainerInv->AddItemByGuid(FGuid::NewGuid(), Y.ItemId, Have);
+							PawnInv->RemoveItemByDefinitionId(Y.ItemId, Have);
+							Deposited += Have;
+						}
 					}
 					UE_LOG(LogMOFramework, Warning,
 						TEXT("[MOSurvivorController] Excavate job done: deposited %d/%d spoil into container (rest kept)"),
@@ -1789,6 +1814,7 @@ void AMOSurvivorController::UpdateExcavateJobExecution(float DeltaTime)
 				}
 
 				ExcavateCarried = 0;
+				ExcavateCarriedYields.Reset();
 				CompleteSimpleJob(true);
 			}
 			break;

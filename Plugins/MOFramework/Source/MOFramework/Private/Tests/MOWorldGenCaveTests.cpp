@@ -72,7 +72,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOWorldGen_Caves,
 
 bool FMOWorldGen_Caves::RunTest(const FString& Parameters)
 {
-	const FMOWorldGenParamsRef P = MakeCaveParams();
+	// The cave FIELD's own properties (purity, cover, air share, gradient, LOD, sinkholes) are measured with the karst rule off: since v11 caves exist only in
+	// limestone (41% of the land), which MOFramework.WorldGen.CavesStayDry checks; measured over every rock these numbers would only be diluted.
+	const FMOWorldGenParamsRef P = MakeCaveParams([](FMOWorldGenTuning& Tuning) { Tuning.bCavesOnlyInLimestone = false; });
 	const FMOWorldGenTuning& T = P->Tuning;
 	FRandomStream R(5);
 	auto RandomColumn = [&R](double& X, double& Y) { X = R.FRandRange(-1.5e6f, 1.5e6f); Y = R.FRandRange(-1.5e6f, 1.5e6f); };
@@ -204,7 +206,7 @@ bool FMOWorldGen_Caves::RunTest(const FString& Parameters)
 		TestEqual(TEXT("the default world has no sinkholes (v9)"), DefaultFound, 0);
 	}
 	{
-		const FMOWorldGenParamsRef Sink = MakeCaveParams([](FMOWorldGenTuning& Tuning) { Tuning.SinkholeChance = 0.6f; });
+		const FMOWorldGenParamsRef Sink = MakeCaveParams([](FMOWorldGenTuning& Tuning) { Tuning.SinkholeChance = 0.6f; Tuning.bCavesOnlyInLimestone = false; });
 		const FMOWorldGenTuning& ST = Sink->Tuning;
 		int32 Found = 0, RimOpen = 0, ShaftOpen = 0, ZoneOk = 0, FarClear = 0;
 		ForEachSinkholeCell(*Sink, CaveTestSeed, [&](const FMOSinkhole& S)
@@ -257,7 +259,8 @@ bool FMOWorldGen_GalleriesStayLevel::RunTest(const FString& Parameters)
 	// Wes, Oct 16 2026: "caves should be more or less horizontal so we don't just fall into them". From points well inside galleries (22-33 m deep:
 	// past where they fade in, above the caverns' 35 m), follow the passage 3 m sideways -- the horizontal direction where the field is deepest, at
 	// the best height within +-1.5 m. The height change along it is the passage's slope: 95% must stay under 15 deg.
-	const FMOWorldGenParamsRef P = MakeCaveParams();
+	// Passage geometry, measured with the karst rule off (v11 keeps caves to limestone; the random search for gallery air would only get slower).
+	const FMOWorldGenParamsRef P = MakeCaveParams([](FMOWorldGenTuning& Tuning) { Tuning.bCavesOnlyInLimestone = false; });
 	FRandomStream R(97);
 	int32 Measured = 0, Level = 0;
 	float Worst = 0.0f;
@@ -346,7 +349,7 @@ bool FMOWorldGen_CaveEntrances::RunTest(const FString& Parameters)
 		for (double Y = -1.0e6; Y < 1.0e6; Y += 5000.0)
 		{
 			const float Z = Ground(X, Y);
-			if (Z > CaveLow && Z < CaveHigh && SlopeTan(X, Y) >= HillTan)
+			if (Z > CaveLow && Z < CaveHigh && SlopeTan(X, Y) >= HillTan && FMOWorldGen::SampleBedrock(*P, X, Y, CaveTestSeed) == EMOBedrock::Limestone)
 			{
 				++SteepPerTile.FindOrAdd(FIntPoint(FMath::FloorToInt32(X / Tile), FMath::FloorToInt32(Y / Tile)));
 			}
@@ -374,11 +377,11 @@ bool FMOWorldGen_CaveEntrances::RunTest(const FString& Parameters)
 			const double X = X0 + (Ix + 0.5) * Step, Y = Y0 + (Iy + 0.5) * Step;
 			G[Iy * N + Ix] = Ground(X, Y);
 			S[Iy * N + Ix] = SlopeTan(X, Y);
-			Hilly += S[Iy * N + Ix] >= HillTan && G[Iy * N + Ix] > CaveLow && G[Iy * N + Ix] < CaveHigh ? 1 : 0;
+			Hilly += S[Iy * N + Ix] >= HillTan && G[Iy * N + Ix] > CaveLow && G[Iy * N + Ix] < CaveHigh && FMOWorldGen::SampleBedrock(*P, X, Y, CaveTestSeed) == EMOBedrock::Limestone ? 1 : 0;
 		}
 	}
 	const double TileKm2 = (Tile / 100000.0) * (Tile / 100000.0);
-	AddInfo(FString::Printf(TEXT("hilliest 2 km tile of cave country at (%.0f, %.0f): %.0f%% of it over 14 deg in the cave band"), X0, Y0, 100.0 * Hilly / (N * N)));
+	AddInfo(FString::Printf(TEXT("hilliest 2 km tile of karst cave country at (%.0f, %.0f): %.0f%% of it over 14 deg, limestone, in the cave band"), X0, Y0, 100.0 * Hilly / (N * N)));
 
 	auto CountMouths = [&](const FMOWorldGenParams& Q, int32& OutOpen)
 	{
@@ -421,9 +424,13 @@ bool FMOWorldGen_CaveEntrances::RunTest(const FString& Parameters)
 	int32 Open = 0;
 	const int32 Mouths = CountMouths(*P, Open);
 	const double PerKm2 = Mouths / TileKm2;
+	// v11: caves only in limestone, so the hilliest KARST tile has less hillside than the hilliest tile did (18% vs 38%): judge the mouths per km2 of hillside.
+	const double HillKm2 = TileKm2 * Hilly / (double)(N * N);
+	const double PerHillKm2 = HillKm2 > 0.0 ? Mouths / HillKm2 : 0.0;
 	AddInfo(FString::Printf(TEXT("default band %.0f-%.0f deg: %d mouth(s) in the hilliest 2 km tile (%.1f per km2), %d open column(s)"),
 		P->Tuning.CaveEntranceSlopeMinDeg, P->Tuning.CaveEntranceSlopeFullDeg, Mouths, PerKm2, Open));
-	TestTrue(FString::Printf(TEXT("hill country has caves to walk into: >= 3 mouths per km2 in the hilliest 2 km tile (got %.1f)"), PerKm2), PerKm2 >= 3.0);
+	AddInfo(FString::Printf(TEXT("%.2f km2 of karst hillside (>= 14 deg): %.1f mouths per km2 of it"), HillKm2, PerHillKm2));
+	TestTrue(FString::Printf(TEXT("karst hillsides have caves to walk into: >= 8 mouths per km2 of hillside in the hilliest karst tile (got %.1f)"), PerHillKm2), PerHillKm2 >= 8.0);
 	return true;
 }
 
@@ -440,7 +447,7 @@ bool FMOWorldGen_CavesStayDry::RunTest(const FString& Parameters)
 	const FMOWorldGenTuning& T = P->Tuning;
 	const float Voxel = T.VoxelSizeCm;
 	FRandomStream R(1017);
-	int32 Found = 0, BelowFloor = 0, NearWater = 0;
+	int32 Found = 0, BelowFloor = 0, NearWater = 0, NotKarst = 0;
 	float LowestZ = 1.0e9f;
 	FString FirstWet;
 	const float Floor = T.SeaLevelCm + T.CaveWaterClearanceCm;
@@ -454,6 +461,7 @@ bool FMOWorldGen_CavesStayDry::RunTest(const FString& Parameters)
 			continue;
 		}
 		++Found;
+		NotKarst += FMOWorldGen::SampleBedrock(*P, X, Y, CaveTestSeed) != EMOBedrock::Limestone ? 1 : 0;
 		LowestZ = FMath::Min(LowestZ, (float)Z);
 		BelowFloor += Z < Floor ? 1 : 0;
 		bool bWet = false;
@@ -478,6 +486,9 @@ bool FMOWorldGen_CavesStayDry::RunTest(const FString& Parameters)
 	TestTrue(TEXT("enough cave air found to judge (>= 200 samples)"), Found >= 200);
 	TestEqual(TEXT("no cave air below sea level + CaveWaterClearanceCm"), BelowFloor, 0);
 	TestEqual(TEXT("no cave air within 100 m of water"), NearWater, 0);
+	// v11 (Wes, Oct 17 2026: "caves only in limestone"): the gate reads the bedrock on a 16 m lattice, so a sample right at a contact may stand a few metres past it.
+	AddInfo(FString::Printf(TEXT("cave samples outside limestone: %d of %d"), NotKarst, Found));
+	TestTrue(TEXT("caves are in limestone (>= 99% of cave-air samples)"), Found > 0 && NotKarst <= Found / 100);
 	return true;
 }
 

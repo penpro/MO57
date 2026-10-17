@@ -110,6 +110,7 @@
 #include "CoreMinimal.h"
 #include "MOAIController.h"
 #include "MOSurvivorJobTypes.h"
+#include "MOGeologyYield.h"
 #include "MOSurvivorController.generated.h"
 
 class UMOSurvivorJobQueueComponent;
@@ -476,6 +477,9 @@ private:
 
 	/** Spoil items carried this trip (produced at dig, consumed/deposited at dump). */
 	int32 ExcavateCarried = 0;
+
+	/** What the current bite yielded (FMOGeologyYield: earth, the bedrock's stone, ore) -- carried to the dump target. Earth and stone fill; ore is kept. */
+	TArray<FMOItemYield> ExcavateCarriedYields;
 
 	/** Earth volume (m³) moved by one bite — the conserved quantity dug then filled. */
 	float ExcavateBiteVolumeM3 = 0.0f;

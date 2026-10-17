@@ -3441,8 +3441,10 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 			const FMOWorldGenParamsRef P = FMOWorldGenParamsProvider::Get();
 			const FVector C = Pawn->GetActorLocation();
 			TArray<FMOCaveSurfacePoint> Points;
-			FMOWorldGen::FindCaveSurfaces(*P, Seed, FBox2D(FVector2D(C.X - Radius, C.Y - Radius), FVector2D(C.X + Radius, C.Y + Radius)), 200.0f, Points);
-			struct FHit { float Dist; FVector Pos; FVector Normal; EMOOreKind Kind; EMOBedrock Rock; float Grade; };
+			const FBox2D Area(FVector2D(C.X - Radius, C.Y - Radius), FVector2D(C.X + Radius, C.Y + Radius));
+			FMOWorldGen::FindCaveSurfaces(*P, Seed, Area, 200.0f, Points);
+			FMOWorldGen::FindOutcrops(*P, Seed, Area, 400.0f, 30.0f, Points);   // bare rock on steep ground: where seams and veins show at the surface
+			struct FHit { float Dist; FVector Pos; FVector Normal; EMOOreKind Kind; EMOBedrock Rock; float Grade; bool bOutcrop; };
 			TArray<FHit> Hits;
 			for (const FMOCaveSurfacePoint& Pt : Points)
 			{
@@ -3451,7 +3453,7 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 				const FMOOreSample Ore = FMOWorldGen::SampleOreIn(*P, Rock, In.X, In.Y, In.Z, Seed);
 				if (Ore.Kind != EMOOreKind::None && Ore.Grade >= 0.2f && (WantValue < 0 || (int64)Ore.Kind == WantValue))
 				{
-					Hits.Add({ (float)FVector::Dist(Pt.Location, C), Pt.Location, Pt.AirNormal, Ore.Kind, Rock, Ore.Grade });
+					Hits.Add({ (float)FVector::Dist(Pt.Location, C), Pt.Location, Pt.AirNormal, Ore.Kind, Rock, Ore.Grade, Pt.Kind == EMOCaveSurfaceKind::Outcrop });
 				}
 			}
 			// Walls first (a seam or vein shows on a wall, and there is room in front of it to stand), then nearest.
@@ -3465,8 +3467,8 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 				for (const FVector& T : Taken) { bNear |= FVector::Dist(T, H.Pos) < 2000.f; }
 				if (bNear) { continue; }
 				Taken.Add(H.Pos);
-				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDGEN Ore #%d dist=%.0f x=%.0f y=%.0f z=%.0f nx=%.2f ny=%.2f nz=%.2f %s in %s (grade %.2f)"), Listed, H.Dist, H.Pos.X, H.Pos.Y, H.Pos.Z, H.Normal.X, H.Normal.Y, H.Normal.Z,
-					*UEnum::GetDisplayValueAsText(H.Kind).ToString(), *UEnum::GetDisplayValueAsText(H.Rock).ToString(), H.Grade);
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDGEN Ore #%d dist=%.0f x=%.0f y=%.0f z=%.0f nx=%.2f ny=%.2f nz=%.2f %s in %s (grade %.2f)%s"), Listed, H.Dist, H.Pos.X, H.Pos.Y, H.Pos.Z, H.Normal.X, H.Normal.Y, H.Normal.Z,
+					*UEnum::GetDisplayValueAsText(H.Kind).ToString(), *UEnum::GetDisplayValueAsText(H.Rock).ToString(), H.Grade, H.bOutcrop ? TEXT(" OUTCROP") : TEXT(""));
 				if (++Listed >= 8) { break; }
 			}
 		}),

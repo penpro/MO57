@@ -1,4 +1,6 @@
 #include "MOTerraformingComponent.h"
+#include "MOInventoryComponent.h"
+#include "MOGeologyYield.h"
 #include "MOFramework.h"
 #include "MOViewpointUtils.h"
 #include "MOCharacter.h"
@@ -64,6 +66,10 @@ void UMOTerraformingComponent::TickComponent(float DeltaTime, ELevelTick TickTyp
 		{
 			ApplyTerraformHeightIncrement(N);
 			PendingAction.AppliedSteps++;
+			if (PendingAction.Mode == EMOTerraformMode::Dig)
+			{
+				PendingAction.DugVolumeM3 += ComputeMovedVolumeCubicMeters(Config.Radius, Config.RaiseLowerStrength / (float)N);
+			}
 		}
 	}
 
@@ -81,8 +87,16 @@ void UMOTerraformingComponent::TickComponent(float DeltaTime, ELevelTick TickTyp
 			{
 				ApplyTerraformHeightIncrement(N);
 				PendingAction.AppliedSteps++;
+				if (PendingAction.Mode == EMOTerraformMode::Dig)
+				{
+					PendingAction.DugVolumeM3 += ComputeMovedVolumeCubicMeters(Config.Radius, Config.RaiseLowerStrength / (float)N);
+				}
 			}
 			RegisterTerraformZone();
+			if (PendingAction.Mode == EMOTerraformMode::Dig)
+			{
+				GrantDigYield(PendingAction.DugVolumeM3, /*bSlab=*/true);
+			}
 			bSuccess = true;
 		}
 		else
@@ -879,6 +893,10 @@ void UMOTerraformingComponent::CancelTerraform()
 	if (PendingAction.AppliedSteps > 0)
 	{
 		RegisterTerraformZone();
+		if (PendingAction.Mode == EMOTerraformMode::Dig)
+		{
+			GrantDigYield(PendingAction.DugVolumeM3, /*bSlab=*/true);   // the earth already moved is in the pile
+		}
 	}
 
 	PendingAction.Reset();
@@ -1001,9 +1019,43 @@ bool UMOTerraformingComponent::ApplyPendingTerraform()
 	if (bSuccess)
 	{
 		RegisterTerraformZone();
+		if (PendingAction.Mode == EMOTerraformMode::Dig)
+		{
+			// The atomic dig (a volume sphere into a wall, or a joiner's dig applied here): its whole volume at once. A sphere dug into a surface takes
+			// about the half of it behind the hit point.
+			const float R = FMath::Max(1.0f, Config.Radius);
+			const float VolumeM3 = bUseVolumeSculpting ? (float)(0.5 * (4.0 / 3.0) * UE_DOUBLE_PI * (double)R * R * R / 1.0e6)
+				: ComputeMovedVolumeCubicMeters(Config.Radius, Config.RaiseLowerStrength);
+			GrantDigYield(VolumeM3, /*bSlab=*/!bUseVolumeSculpting);
+		}
 	}
 
 	return bSuccess;
+}
+
+void UMOTerraformingComponent::GrantDigYield(float VolumeM3, bool bSlab)
+{
+	AActor* OwnerActor = GetOwner();
+	if (!bYieldFromGeology || VolumeM3 <= 0.0f || !OwnerActor || !OwnerActor->HasAuthority())
+	{
+		return;
+	}
+	TArray<FMOItemYield> Yields;
+	if (!FMOGeologyYield::ForDigInWorld(this, PendingAction.TargetLocation, Config.Radius, VolumeM3, ExcavationItemsPerCubicMeter, bSlab, ExcavationSpoilItemId, Yields))
+	{
+		Yields.Add({ ExcavationSpoilItemId, SpoilItemsForVolume(VolumeM3, ExcavationItemsPerCubicMeter), true });   // no world seed: plain earth
+	}
+	// The soil stays beside the hole as a spoil pile (earth is conserved, and a dig would otherwise fill the pack with dirt in a few strokes); stone and ore go to
+	// the pack, the rest on the pile too when it is full. (The excavation job hauls its earth to a fill instead -- see AMOSurvivorController.)
+	TArray<FMOItemYield> Soil, Kept;
+	for (const FMOItemYield& Y : Yields)
+	{
+		(Y.ItemId == ExcavationSpoilItemId ? Soil : Kept).Add(Y);
+	}
+	FMOGeologyYield::GiveOrDrop(nullptr, Soil, PendingAction.TargetLocation, this);
+	const int32 Dropped = FMOGeologyYield::GiveOrDrop(OwnerActor->FindComponentByClass<UMOInventoryComponent>(), Kept, PendingAction.TargetLocation);
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOTerraforming] %s dug %.3fm3 at %s: %s (soil left on the spoil pile)%s"), *OwnerActor->GetName(), VolumeM3,
+		*PendingAction.TargetLocation.ToString(), *FMOGeologyYield::Describe(Yields), Dropped > 0 ? *FString::Printf(TEXT(", %d more dropped: no room"), Dropped) : TEXT(""));
 }
 
 void UMOTerraformingComponent::RegisterTerraformZone()

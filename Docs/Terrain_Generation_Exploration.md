@@ -403,11 +403,18 @@ multiplies a scan's colour, the dark Nordic rock came out black), and the ore lu
 chert nodules on the flint scan). Cost: 5-14 ms of surface finding per 64 m cell with caves. Dev verbs: `MO.WorldGen.Bedrock`, `MO.WorldGen.FindOre
 <Coal|Hematite|Copper|Tin|Flint|Any> [radius]`, `mo.PCG.CaveDensityScale`.
 
-Open forks (Wes): (1) caves only in limestone (realistic; concentrates caves into karst country, fewer elsewhere); (2) the voxel walls are one rock
-material (`VST_Cliff`) -- per-bedrock and floor (clay/mud) surface types need the cave graph to output a surface type; (3) mining a cave wall with a
-pick should yield by the same `SampleOreIn` (the playbook's "yield from the dug-out volume", Voxel_Plugin_Reference.md 18a); (4) `IronOreDeposit` needs a
-pick of quality 1, which only metal picks reach -- cave hematite is out of reach of the stone maul (bog iron is the early iron); (5) Galena (lead, the
-classic limestone-cave ore) has no item yet.
+Wes's answers (Oct 17): **caves only in limestone** -- generator v11, `bCavesOnlyInLimestone` (default on): the 16 m cave-gate lattice that does the water
+keep-out also closes every node whose bedrock is not limestone, so a contact tapers over a few metres; `WorldGen.CavesStayDry` asserts >= 99% of cave
+air in limestone; entrances measured per km2 of karst hillside (~11). Coal, copper and tin no longer show in caves -- they are reached by DIGGING:
+**mining yields from the geology** -- `FMOWorldGen::SampleDig` (soil within `SoilDepthCm` -- 250 cm on the level to 40 cm on 35 deg slopes -- of the
+unworked ground, else the bedrock or the ore body there) and `FMOGeologyYield` (the one map to items: Dirt01 / Limestone01 / Sandstone01 / Granite01 /
+Basalt01 / Coal01 / IronOre01 / CopperOre01 / TinOre01 / FlintNodule01; skips points in air or cave air) feed BOTH dig paths -- the player's dig tool
+(`UMOTerraformingComponent::GrantDigYield`: incremental steps accumulate the volume, granted at completion or on an interrupt; the atomic path at
+once) and the survivors' ExcavateAndHaul job (earth and stone fill the fill zone; ore is kept). Test `WorldGen.DigYields`. And "they should be able to
+collect pretty much any ore, the actual hurdle with iron is having fire hot enough": `IronOreDeposit` takes a stone pick (0.5) like copper; the heat
+ladder (station temperature, fuel, bellows) is researched in `Docs/Technology_History.md` and waits on Wes + Codex's station-context work.
+Still open: per-bedrock / floor voxel surface types; galena (lead) item; cave lighting / exposure; geology-placed surface outcrops (coal at seam
+outcrops, malachite stains, tin placers) to replace the biome-placed copper / flint deposits.
 
 Sources: [coal and iron in sedimentary layers; copper and tin in igneous veins](https://dspmuranchi.ac.in/pdf/Blog/PROSPECTING%20CRITERIA%20OF%20VARIOUS%20MINERAL%20DEPOSITS.pdf),
 [hematite in limestone fissures and caverns (Ramsay 1878)](https://geology.19thcenturyscience.org/books/1878-Ramsay-Geology/PDFpages/1878-Ramsay-Geology-0596.pdf),

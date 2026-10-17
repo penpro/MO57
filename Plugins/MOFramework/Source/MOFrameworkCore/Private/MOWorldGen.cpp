@@ -204,6 +204,7 @@ uint32 FMOWorldGenParams::ComputeHash() const
 		H = FnvAddFloat(H, V);
 	}
 	H = FnvAddInt(H, T.bEnableCaves ? 1 : 0);
+	H = FnvAddInt(H, T.bCavesOnlyInLimestone ? 1 : 0);
 	for (const float V : { T.CaveCoverCm, T.CaveFadeCm, T.CaveMaxDepthCm, T.CaveMinGroundAboveSeaCm, T.TunnelWavelengthCm, T.TunnelRadiusCm, T.TunnelRadiusVariation,
 		T.TunnelVerticalSquash, T.CavernWavelengthCm, T.CavernThreshold, T.CavernMinDepthCm, T.SinkholeCellCm, T.SinkholeChance, T.SinkholeRadiusCm, T.SinkholeDepthCm,
 		T.GalleryLevelSpacingCm, T.GalleryLevelAmplitudeCm, T.GalleryLevelWavelengthCm, T.GalleryMaskThreshold, T.CaveEntranceSlopeMinDeg, T.CaveEntranceSlopeFullDeg,

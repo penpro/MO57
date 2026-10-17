@@ -111,6 +111,18 @@ enum class EMOOreKind : uint8
 	Flint
 };
 
+/** What a dig cuts through at a point (FMOWorldGen::SampleDig): what the dug volume yields. */
+UENUM(BlueprintType)
+enum class EMODigMaterial : uint8
+{
+	/** The soil and weathered regolith over the bedrock: earth (fills ground again). */
+	Soil,
+	/** The bedrock itself: its stone (rubble fills ground too). */
+	Rock,
+	/** An ore body in the bedrock (a coal seam, a hematite fissure, a vein): ore, kept. */
+	Ore
+};
+
 /** Which way a cave surface faces (FMOWorldGen::FindCaveSurfaces): what it can carry. */
 UENUM(BlueprintType)
 enum class EMOCaveSurfaceKind : uint8
@@ -120,7 +132,10 @@ enum class EMOCaveSurfaceKind : uint8
 	/** Faces sideways: a wall (where seams and veins show). */
 	Wall,
 	/** Faces down: the ceiling. */
-	Ceiling
+	Ceiling,
+	/** Not a cave: bare rock on steep ground, where the soil has washed off (FMOWorldGen::FindOutcrops) -- where a seam or vein shows at the surface, the green
+	 *  stain or black band a prospector follows. */
+	Outcrop
 };
 
 /**
@@ -486,6 +501,11 @@ struct MOFRAMEWORKCORE_API FMOWorldGenTuning
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Caves", meta=(EditCondition="bEnableCaves", ClampMin="0"))
 	float CaveShoreKeepOutCm = 25000.0f;
 
+	/** v11 (Wes, Oct 17 2026: "do caves only in limestone"): solution caves form where water dissolves limestone (karst), so the galleries, caverns and sinkholes
+	 *  exist only where FMOWorldGen::SampleBedrock is Limestone (read on the same 16 m lattice as the water keep-out, so a contact tapers over a few metres). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Caves", meta=(EditCondition="bEnableCaves"))
+	bool bCavesOnlyInLimestone = true;
+
 	/**
 	 * GALLERIES (v9; Wes, Oct 16 2026: "caves should be more or less horizontal so we don't just fall into them"): near-horizontal passages in stacked
 	 * levels. In plan a level's passages follow where a 2D noise field is zero (meanders, loops, forks); their height follows a gentle long-wavelength
@@ -718,7 +738,7 @@ struct MOFRAMEWORKCORE_API FMOWorldGenBiome
 struct MOFRAMEWORKCORE_API FMOWorldGenParams
 {
 	/** Bump when the generator math changes (see RULES in the header). Stored with world saves. */
-	static constexpr uint32 CurrentGeneratorVersion = 10;   // v10: caves keep out of the water -- no cave air below sea level + 5 m, none within 250 m of low ground (sea, rivers, basins) or an upland lake; v9: caves are near-horizontal galleries (half the radius) that open only into steep slopes, no sinkholes; v8: cliff bands are terraces whose drops face downhill (the v6 crag blobs had uphill-facing rims), gullies 25 -> 15 m; v7: no caves under ground above CaveMaxGroundCm (the summits tore); v6: mountain ranges (regional mask + regional biome relief + massif / peaks / gullies; v5: per-biome relief, taller ranges, half-size regional fields, island edge; v4: upland lakes + coastal ranges; v3: rivers + sea-level lake basins; v2: caves; v1: the base height terrain)
+	static constexpr uint32 CurrentGeneratorVersion = 11;   // v11: caves only in limestone (karst); v10: caves keep out of the water -- no cave air below sea level + 5 m, none within 250 m of low ground (sea, rivers, basins) or an upland lake; v9: caves are near-horizontal galleries (half the radius) that open only into steep slopes, no sinkholes; v8: cliff bands are terraces whose drops face downhill (the v6 crag blobs had uphill-facing rims), gullies 25 -> 15 m; v7: no caves under ground above CaveMaxGroundCm (the summits tore); v6: mountain ranges (regional mask + regional biome relief + massif / peaks / gullies; v5: per-biome relief, taller ranges, half-size regional fields, island edge; v4: upland lakes + coastal ranges; v3: rivers + sea-level lake basins; v2: caves; v1: the base height terrain)
 
 	FMOWorldGenTuning Tuning;
 
@@ -832,6 +852,15 @@ struct FMOOreSample
 	float Grade = 0.0f;
 };
 
+/** One point of a dig (FMOWorldGen::SampleDig). */
+struct FMODigSample
+{
+	EMODigMaterial Material = EMODigMaterial::Soil;
+	EMOBedrock Bedrock = EMOBedrock::Limestone;
+	EMOOreKind Ore = EMOOreKind::None;
+	float Grade = 0.0f;
+};
+
 /** A point on a cave's surface (FMOWorldGen::FindCaveSurfaces). */
 struct FMOCaveSurfacePoint
 {
@@ -893,7 +922,7 @@ struct MOFRAMEWORKCORE_API FMOWorldGen
 	static constexpr uint32 PinnedProbeHeight = 0x3343B4EBu;   // v8 (cliff bands face downhill, gullies 15 m); v6 (mountain ranges: regional mask + regional biome relief + massif/peaks/gullies; v5: biome relief, taller ranges, half-size regional fields, island edge; v4: upland lakes, coastal ranges, VerticalScale 2; v3: rivers + sea-level lake basins)
 	/** The probe with water, coastal ranges and VerticalScale all switched OFF (RunProbe(false)) must reproduce the v1 base terrain exactly: this is the value v1 shipped. It pins the BASE height math. */
 	static constexpr uint32 PinnedProbeHeightNoWater = 0x9C4AE2B3u;
-	static constexpr uint32 PinnedProbeCave = 0x794FC2ADu;     // v10 (caves keep out of the water: floor at sea level + 5 m, 250 m from low ground and upland lakes); v9 (near-horizontal galleries opening only into steep slopes, no sinkholes); v8 (the v8 ground); v7 (no caves under ground above CaveMaxGroundCm: the summits tore; v6: caves on the v6 ground; v5: caves on the v5 ground; v4: the lake-carved, doubled-relief ground, sinkholes keep out of lakes)
+	static constexpr uint32 PinnedProbeCave = 0x0FBFC116u;     // v11 (caves only in limestone); v10 (caves keep out of the water: floor at sea level + 5 m, 250 m from low ground and upland lakes); v9 (near-horizontal galleries opening only into steep slopes, no sinkholes); v8 (the v8 ground); v7 (no caves under ground above CaveMaxGroundCm: the summits tore; v6: caves on the v6 ground; v5: caves on the v5 ground; v4: the lake-carved, doubled-relief ground, sinkholes keep out of lakes)
 
 	/**
 	 * The cave distance saturates here (cm): "no cave within this far". Every gate in the cave field (cover, depth, low ground, sinkhole reach) is built so the
@@ -930,12 +959,24 @@ struct MOFRAMEWORKCORE_API FMOWorldGen
 	 */
 	static void FindCaveSurfaces(const FMOWorldGenParams& Params, int32 Seed, const FBox2D& Area, float SpacingCm, TArray<FMOCaveSurfacePoint>& Out);
 
+	/** Bare-rock points on the ground under Area: one column every SpacingCm (jittered), kept where the ground is at least MinSlopeDeg steep over 3 m (cliffs, scarps,
+	 *  stream cuts -- where rock shows through) and above the sea; Kind = Outcrop, AirNormal = the ground's normal. What geology-placed surface ore stands on. */
+	static void FindOutcrops(const FMOWorldGenParams& Params, int32 Seed, const FBox2D& Area, float SpacingCm, float MinSlopeDeg, TArray<FMOCaveSurfacePoint>& Out);
+
 	/** The bedrock of column (X, Y): regional provinces (volcanic, crystalline in the continental interiors, sedimentary elsewhere -- limestone or coal measures). */
 	static EMOBedrock SampleBedrock(const FMOWorldGenParams& Params, double X, double Y, int32 Seed);
 
 	/** What the rock at (X, Y, Z) holds, given its bedrock (see EMOOreKind for which ore lives in which rock and how). */
 	static FMOOreSample SampleOreIn(const FMOWorldGenParams& Params, EMOBedrock Bedrock, double X, double Y, double Z, int32 Seed);
 	static FMOOreSample SampleOre(const FMOWorldGenParams& Params, double X, double Y, double Z, int32 Seed) { return SampleOreIn(Params, SampleBedrock(Params, X, Y, Seed), X, Y, Z, Seed); }
+
+	/** How deep (cm) the soil and weathered regolith lie over the bedrock at column (X, Y): 40-250 cm, thinnest on steep ground (slope over a 12 m baseline), varying
+	 *  over ~60 m. Measured from the generator's own (unworked) ground. */
+	static float SoilDepthCm(const FMOWorldGenParams& Params, double X, double Y, int32 Seed);
+
+	/** What a dig cuts through at (X, Y, Z) (Wes, Oct 17 2026: "mining yields from the geology"): soil within SoilDepthCm of the unworked ground, below it the bedrock --
+	 *  or the ore body there when its grade is at least MinOreGrade. */
+	static FMODigSample SampleDig(const FMOWorldGenParams& Params, double X, double Y, double Z, int32 Seed, float MinOreGrade = 0.2f);
 
 	/** The sinkhole of grid cell (CellX, CellY) (cell edge = SinkholeCellCm), or false if the cell has none / caves are off / the ground there is too low. */
 	static bool GetSinkholeInCell(const FMOWorldGenParams& Params, int64 CellX, int64 CellY, int32 Seed, FMOSinkhole& Out);

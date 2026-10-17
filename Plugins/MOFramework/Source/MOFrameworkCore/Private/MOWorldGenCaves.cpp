@@ -181,7 +181,7 @@ namespace
 	}
 
 	/**
-	 * The water keep-out's shore half (v10), on a lattice of ShoreLatticeCm (bilinear between nodes, so the gate -- and the field -- stays smooth however sharp a coast
+	 * The cave gate's XY half -- the water keep-out (v10) and the karst rule (v11: caves only in limestone) -- on a lattice of ShoreLatticeCm (bilinear between nodes, so the gate -- and the field -- stays smooth however sharp a coast
 	 * is). Every sea-level water body (the sea, a river, a pond or lake basin) can only lie on LOW ground: rivers fade out above RiverMaxGroundAboveSeaCm + 6 m,
 	 * basin rims stop at BasinRimMaxAboveSeaCm. There the water table is the sea's, so a node is "wet" (1) where low ground (the pre-water base height, which
 	 * has no thin channels to slip between samples) lies within CaveShoreKeepOutCm -- at the node or on three rings (a quarter, half and the whole distance;
@@ -216,6 +216,16 @@ namespace
 		}
 		const FMOWorldGenTuning& T = P.Tuning;
 		const double X = (double)Ix * ShoreLatticeCm, Y = (double)Iy * ShoreLatticeCm;
+		if (T.bCavesOnlyInLimestone && FMOWorldGen::SampleBedrock(P, X, Y, Seed) != EMOBedrock::Limestone)
+		{
+			Slot.Ix = Ix;
+			Slot.Iy = Iy;
+			Slot.Seed = (uint32)Seed;
+			Slot.ParamsHash = Hash;
+			Slot.Value = 1.0f;   // not karst: no solution caves in this rock
+			Slot.bValid = true;
+			return 1.0f;
+		}
 		const float LowCeiling = T.SeaLevelCm + FMath::Max(T.RiverMaxGroundAboveSeaCm + 600.0f, T.BasinRimMaxAboveSeaCm);
 		auto WetAt = [&P, &T, Seed, LowCeiling](double Sx, double Sy)
 		{
@@ -254,7 +264,7 @@ namespace
 		const FMOWorldGenTuning& T = P.Tuning;
 		const float Floor = T.SeaLevelCm + T.CaveWaterClearanceCm;
 		const float Below = 1.0f - Smooth01(Floor, Floor + T.CaveWaterFadeCm, (float)Z);
-		if (Below >= 1.0f || T.CaveShoreKeepOutCm <= 0.0f)
+		if (Below >= 1.0f || (T.CaveShoreKeepOutCm <= 0.0f && !T.bCavesOnlyInLimestone))
 		{
 			return Below;
 		}

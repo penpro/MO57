@@ -94,11 +94,17 @@ bool FMOPCGCaveSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 		return false;
 	}
 	TArray<FMOCaveSurfacePoint> Points;
-	FMOWorldGen::FindCaveSurfaces(*GenParams, TerrainSeed, FBox2D(FVector2D(Cell.Min), FVector2D(Cell.Max)), Settings->ColumnSpacingCm, Points);
+	const FBox2D Area(FVector2D(Cell.Min), FVector2D(Cell.Max));
+	FMOWorldGen::FindCaveSurfaces(*GenParams, TerrainSeed, Area, Settings->ColumnSpacingCm, Points);
+	// Outcrops (bare rock on steep ground) only when a row places something there: the surface half of the geology (seam outcrops, malachite stains).
+	if (Rows.ContainsByPredicate([](const FRow& R) { return R.Row->Surface == EMOCaveSurfaceKind::Outcrop; }))
+	{
+		FMOWorldGen::FindOutcrops(*GenParams, TerrainSeed, Area, Settings->OutcropSpacingCm, Settings->OutcropMinSlopeDeg, Points);
+	}
 	const double FoundTime = FPlatformTime::Seconds();
 	if (Points.Num() == 0)
 	{
-		return false;   // no cave under this cell (the common case): nothing to build
+		return false;   // no cave and no bare rock under this cell (the common case): nothing to build
 	}
 
 	// What the rock is and holds at every point, in parallel: the bedrock of its column, the ore just behind the surface.
@@ -141,7 +147,7 @@ bool FMOPCGCaveSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 		B.Collision = Rows[R].Row->Collision;
 	}
 	int32 Accepted = 0, Suppressed = 0, OrePoints = 0;
-	int32 KindCount[3] = { 0, 0, 0 };
+	int32 KindCount[4] = { 0, 0, 0, 0 };
 	for (int32 I = 0; I < Points.Num(); ++I)
 	{
 		const FMOCaveSurfacePoint& P = Points[I];
@@ -183,8 +189,8 @@ bool FMOPCGCaveSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 			++Accepted;
 		}
 	}
-	FString Stage = FString::Printf(TEXT("caves %.0f geology %.0f plant %.0f; surfaces %d floor / %d wall / %d ceiling, %d on ore"),
-		(FoundTime - Start) * 1000.0, (GeologyTime - FoundTime) * 1000.0, (FPlatformTime::Seconds() - GeologyTime) * 1000.0, KindCount[0], KindCount[1], KindCount[2], OrePoints);
+	FString Stage = FString::Printf(TEXT("caves %.0f geology %.0f plant %.0f; surfaces %d floor / %d wall / %d ceiling / %d outcrop, %d on ore"),
+		(FoundTime - Start) * 1000.0, (GeologyTime - FoundTime) * 1000.0, (FPlatformTime::Seconds() - GeologyTime) * 1000.0, KindCount[0], KindCount[1], KindCount[2], KindCount[3], OrePoints);
 	FString BoundsText = FString::Printf(TEXT("cave cell (%.0f,%.0f)-(%.0f,%.0f)"), Cell.Min.X, Cell.Min.Y, Cell.Max.X, Cell.Max.Y);
 	return SubmitBuckets(Context, TargetActor, MoveTemp(Buckets), Points.Num(), Accepted, Suppressed, Rows.Num(), (FPlatformTime::Seconds() - Start) * 1000.0, MoveTemp(Stage), MoveTemp(BoundsText));
 }

@@ -206,6 +206,10 @@ struct MOFRAMEWORK_API FMOTerraformPendingAction
 	UPROPERTY(BlueprintReadOnly, Category="MO|Terraforming")
 	int32 AppliedSteps = 0;
 
+	/** Earth the incremental dig steps have moved so far (m3): what the dig yields when it ends -- completed, or interrupted with the partial work kept. */
+	UPROPERTY(BlueprintReadOnly, Category="MO|Terraforming")
+	float DugVolumeM3 = 0.0f;
+
 	void Reset()
 	{
 		bActive = false;
@@ -216,6 +220,7 @@ struct MOFRAMEWORK_API FMOTerraformPendingAction
 		ElapsedTime = 0.0f;
 		TotalTime = 5.0f;
 		AppliedSteps = 0;
+		DugVolumeM3 = 0.0f;
 	}
 
 	float GetProgress01() const
@@ -395,6 +400,11 @@ public:
 	/** Item definition id the dug earth becomes in a pawn's inventory / a container. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Terraforming|Excavation")
 	FName ExcavationSpoilItemId = FName("Dirt01");
+
+	/** A dig yields what it cut through, from the world's geology (Wes, Oct 17 2026: "mining yields from the geology"): soil as ExcavationSpoilItemId, the bedrock's
+	 *  stone, and any ore body (coal, hematite, copper, tin, chert), ExcavationItemsPerCubicMeter in all. Off = digging yields nothing (the old behaviour). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="MO|Terraforming|Excavation")
+	bool bYieldFromGeology = true;
 
 	/** Brush radius (UU) for ONE pawn excavation "bite" — the earth a survivor
 	 *  moves per dig/deposit leg of an ExcavateAndHaul job. Smaller than the
@@ -707,6 +717,9 @@ private:
 	 *  subsystem (persistence + foliage sweep). Called once at completion, or on
 	 *  an interrupt that already moved partial earth. */
 	void RegisterTerraformZone();
+
+	/** Server: what the dig cut through (FMOGeologyYield: earth, the bedrock's stone, ore) goes to the owner's inventory, the rest dropped at the dig. */
+	void GrantDigYield(float VolumeM3, bool bSlab);
 
 	/**
 	 * Compute the Z of the character's feet — i.e., the surface they're

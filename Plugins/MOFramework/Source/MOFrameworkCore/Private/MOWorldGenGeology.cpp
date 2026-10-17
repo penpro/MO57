@@ -28,7 +28,7 @@ namespace
 		SaltHematiteJoint = 0x9301u, SaltHematiteWidth = 0x9302u, SaltHematiteMask = 0x9303u,
 		SaltChertBed = 0x9401u, SaltChertNodule = 0x9402u,
 		SaltCopperVein = 0x9501u, SaltCopperMask = 0x9502u, SaltTinVein = 0x9503u, SaltTinMask = 0x9504u,
-		SaltCaveSurfaceJitter = 0x9601u
+		SaltCaveSurfaceJitter = 0x9601u, SaltSoilDepth = 0x9701u, SaltOutcropJitter = 0x9801u
 	};
 
 	/** Province size: the bedrock changes over kilometres. */
@@ -164,6 +164,102 @@ FMOOreSample FMOWorldGen::SampleOreIn(const FMOWorldGenParams& Params, EMOBedroc
 	}
 	}
 	return FMOOreSample();
+}
+
+float FMOWorldGen::SoilDepthCm(const FMOWorldGenParams& Params, double X, double Y, int32 Seed)
+{
+	// Soil and regolith pile up on flats and wash off steep ground: 250 cm on the level, 40 cm from 35 degrees on (a 12 m baseline, like the caves' slope).
+	const float Voxel = Params.Tuning.VoxelSizeCm;
+	constexpr double Step = 600.0;
+	const float Gx = (SampleHeightCm(Params, X + Step, Y, Seed, Voxel) - SampleHeightCm(Params, X - Step, Y, Seed, Voxel)) / (float)(2.0 * Step);
+	const float Gy = (SampleHeightCm(Params, X, Y + Step, Seed, Voxel) - SampleHeightCm(Params, X, Y - Step, Seed, Voxel)) / (float)(2.0 * Step);
+	const float Slope = FMath::Sqrt(Gx * Gx + Gy * Gy);
+	constexpr float Tan5 = 0.0874887f, Tan35 = 0.7002075f;
+	const float Base = 40.0f + 210.0f * (1.0f - Smooth01(Tan5, Tan35, Slope));
+	const float Vary = 0.75f + 0.5f * FMath::Clamp(0.5f + 0.7f * GradientNoise2(X * (1.0 / 6000.0), Y * (1.0 / 6000.0), (uint32)HashSeed(Seed, SaltSoilDepth)).Value, 0.0f, 1.0f);
+	return Base * Vary;
+}
+
+FMODigSample FMOWorldGen::SampleDig(const FMOWorldGenParams& Params, double X, double Y, double Z, int32 Seed, float MinOreGrade)
+{
+	FMODigSample Out;
+	const float Ground = SampleHeightCm(Params, X, Y, Seed, Params.Tuning.VoxelSizeCm);
+	if (Z >= (double)(Ground - SoilDepthCm(Params, X, Y, Seed)))
+	{
+		Out.Material = EMODigMaterial::Soil;
+		return Out;
+	}
+	Out.Bedrock = SampleBedrock(Params, X, Y, Seed);
+	const FMOOreSample Ore = SampleOreIn(Params, Out.Bedrock, X, Y, Z, Seed);
+	if (Ore.Kind != EMOOreKind::None && Ore.Grade >= MinOreGrade)
+	{
+		Out.Material = EMODigMaterial::Ore;
+		Out.Ore = Ore.Kind;
+		Out.Grade = Ore.Grade;
+	}
+	else
+	{
+		Out.Material = EMODigMaterial::Rock;
+	}
+	return Out;
+}
+
+void FMOWorldGen::FindOutcrops(const FMOWorldGenParams& Params, int32 Seed, const FBox2D& Area, float SpacingCm, float MinSlopeDeg, TArray<FMOCaveSurfacePoint>& Out)
+{
+	if (!Area.bIsValid || SpacingCm <= 1.0f)
+	{
+		return;
+	}
+	const double S = SpacingCm;
+	const int64 I0 = (int64)FMath::FloorToDouble(Area.Min.X / S), I1 = (int64)FMath::FloorToDouble(Area.Max.X / S);
+	const int64 J0 = (int64)FMath::FloorToDouble(Area.Min.Y / S), J1 = (int64)FMath::FloorToDouble(Area.Max.Y / S);
+	const int32 NumI = (int32)(I1 - I0 + 1), NumJ = (int32)(J1 - J0 + 1);
+	if (NumI <= 0 || NumJ <= 0 || (int64)NumI * NumJ > 4000000)
+	{
+		return;
+	}
+	const uint32 JitterSalt = (uint32)HashSeed(Seed, SaltOutcropJitter);
+	const float Voxel = Params.Tuning.VoxelSizeCm;
+	const float MinTan = FMath::Tan(FMath::DegreesToRadians(FMath::Clamp(MinSlopeDeg, 1.0f, 89.0f)));
+	TArray<TArray<FMOCaveSurfacePoint>> Rows;
+	Rows.SetNum(NumJ);
+	ParallelFor(NumJ, [&](int32 RowIndex)
+	{
+		const int64 J = J0 + RowIndex;
+		for (int64 I = I0; I <= I1; ++I)
+		{
+			const uint32 H = HashLattice2(I, J, JitterSalt);
+			const double X = ((double)I + 0.15 + 0.7 * (double)Unit16(H)) * S;
+			const double Y = ((double)J + 0.15 + 0.7 * (double)Unit16(H >> 16)) * S;
+			if (X < Area.Min.X || X >= Area.Max.X || Y < Area.Min.Y || Y >= Area.Max.Y)
+			{
+				continue;
+			}
+			const float Ground = SampleHeightCm(Params, X, Y, Seed, Voxel);
+			if (Ground <= Params.Tuning.SeaLevelCm + 100.0f)
+			{
+				continue;   // under or at the water
+			}
+			constexpr double D = 150.0;
+			const float Gx = (SampleHeightCm(Params, X + D, Y, Seed, Voxel) - SampleHeightCm(Params, X - D, Y, Seed, Voxel)) / (float)(2.0 * D);
+			const float Gy = (SampleHeightCm(Params, X, Y + D, Seed, Voxel) - SampleHeightCm(Params, X, Y - D, Seed, Voxel)) / (float)(2.0 * D);
+			const float Slope = FMath::Sqrt(Gx * Gx + Gy * Gy);
+			if (Slope < MinTan)
+			{
+				continue;
+			}
+			FMOCaveSurfacePoint& P = Rows[RowIndex].AddDefaulted_GetRef();
+			P.Location = FVector(X, Y, Ground);
+			P.AirNormal = FVector(-Gx, -Gy, 1.0).GetSafeNormal();
+			P.Kind = EMOCaveSurfaceKind::Outcrop;
+			P.AreaM2 = (float)(S * S / 10000.0) / FMath::Max((float)P.AirNormal.Z, 0.25f);
+			P.GroundCm = Ground;
+		}
+	});
+	for (TArray<FMOCaveSurfacePoint>& Row : Rows)
+	{
+		Out.Append(MoveTemp(Row));
+	}
 }
 
 void FMOWorldGen::FindCaveSurfaces(const FMOWorldGenParams& Params, int32 Seed, const FBox2D& Area, float SpacingCm, TArray<FMOCaveSurfacePoint>& Out)

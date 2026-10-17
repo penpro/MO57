@@ -3,6 +3,7 @@
 
 #include "Misc/AutomationTest.h"
 #include "MOWorldGen.h"
+#include "MOGeologyYield.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -144,8 +145,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOWorldGen_CaveSurfaces,
 
 bool FMOWorldGen_CaveSurfaces::RunTest(const FString& Parameters)
 {
-	// The points the cave spawner scatters on: ON the surface, their normal pointing into the air, their kind matching the normal. Find a 64 m cell with caves first.
-	const FMOWorldGenParamsRef P = MakeGeoParams();
+	// The points the cave spawner scatters on: ON the surface, their normal pointing into the air, their kind matching the normal. Find a 64 m cell with caves first
+	// (karst rule off: surface finding is the same in any rock, and the search stays short).
+	TSharedRef<FMOWorldGenParams, ESPMode::ThreadSafe> Any = MakeShared<FMOWorldGenParams, ESPMode::ThreadSafe>();
+	Any->Tuning.bCavesOnlyInLimestone = false;
+	Any->Finalize();
+	const FMOWorldGenParamsRef P = Any;
 	TArray<FMOCaveSurfacePoint> Points;
 	FBox2D Cell(ForceInit);
 	double Ms = 0.0;
@@ -184,6 +189,96 @@ bool FMOWorldGen_CaveSurfaces::RunTest(const FString& Parameters)
 		bSame = Again[I].Location == Points[I].Location && Again[I].Kind == Points[I].Kind;
 	}
 	TestTrue(TEXT("deterministic (same points, same order)"), bSame);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOWorldGen_DigYields,
+	"MOFramework.WorldGen.DigYields",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOWorldGen_DigYields::RunTest(const FString& Parameters)
+{
+	// Wes, Oct 17 2026: "mining yields from the geology ... they should be able to collect pretty much any ore". What a dig cuts through is what it yields.
+	const FMOWorldGenParamsRef P = MakeGeoParams();
+	const float Voxel = P->Tuning.VoxelSizeCm;
+	FRandomStream R(77);
+
+	// 1. Soil over the bedrock: 30..315 cm everywhere; the surface is soil, 4 m down never is.
+	float MinDepth = 1.0e9f, MaxDepth = 0.0f;
+	int32 SurfaceNotSoil = 0, DeepSoil = 0;
+	for (int32 I = 0; I < 2000; ++I)
+	{
+		const double X = R.FRandRange(-2.0e6f, 2.0e6f), Y = R.FRandRange(-2.0e6f, 2.0e6f);
+		const float Ground = FMOWorldGen::SampleHeightCm(*P, X, Y, GeoTestSeed, Voxel);
+		const float Depth = FMOWorldGen::SoilDepthCm(*P, X, Y, GeoTestSeed);
+		MinDepth = FMath::Min(MinDepth, Depth);
+		MaxDepth = FMath::Max(MaxDepth, Depth);
+		SurfaceNotSoil += FMOWorldGen::SampleDig(*P, X, Y, Ground - 10.0f, GeoTestSeed).Material != EMODigMaterial::Soil ? 1 : 0;
+		DeepSoil += FMOWorldGen::SampleDig(*P, X, Y, Ground - 400.0f, GeoTestSeed).Material == EMODigMaterial::Soil ? 1 : 0;
+	}
+	AddInfo(FString::Printf(TEXT("soil depth over 2000 columns: %.0f..%.0f cm"), MinDepth, MaxDepth));
+	TestTrue(TEXT("soil depth stays 30..315 cm"), MinDepth >= 30.0f && MaxDepth <= 315.0f);
+	TestEqual(TEXT("10 cm under the ground is soil everywhere"), SurfaceNotSoil, 0);
+	TestEqual(TEXT("4 m under the ground is rock or ore everywhere"), DeepSoil, 0);
+
+	// 2. A dig at the surface yields earth; its counts add up to floor(volume x items per m3).
+	{
+		double X = 0.0, Y = 0.0;
+		for (int32 Try = 0; Try < 1000; ++Try)
+		{
+			X = R.FRandRange(-2.0e6f, 2.0e6f); Y = R.FRandRange(-2.0e6f, 2.0e6f);
+			if (FMOWorldGen::SampleHeightCm(*P, X, Y, GeoTestSeed, Voxel) > P->Tuning.SeaLevelCm + 500.0f && FMOWorldGen::SoilDepthCm(*P, X, Y, GeoTestSeed) > 100.0f)
+			{
+				break;
+			}
+		}
+		const FVector Surface(X, Y, FMOWorldGen::SampleHeightCm(*P, X, Y, GeoTestSeed, Voxel));
+		TArray<FMOItemYield> Yields;
+		FMOGeologyYield::ForDig(*P, GeoTestSeed, Surface, 150.0f, 0.3f, 80.0f, /*bSlab=*/true, FName(TEXT("Dirt01")), Yields);
+		int32 Total = 0, Dirt = 0;
+		for (const FMOItemYield& Y2 : Yields) { Total += Y2.Count; Dirt += Y2.ItemId == FName(TEXT("Dirt01")) ? Y2.Count : 0; }
+		AddInfo(FString::Printf(TEXT("a 0.3 m3 dig at the surface: %s"), *FMOGeologyYield::Describe(Yields)));
+		TestEqual(TEXT("a dig's counts add up to floor(0.3 m3 x 80)"), Total, 24);
+		TestTrue(TEXT("a shallow dig on deep soil is earth"), Dirt == Total);
+	}
+
+	// 3. A pick into a coal seam yields coal; into plain limestone, limestone.
+	auto FindDeep = [&](EMOBedrock Want, TFunctionRef<bool(const FMODigSample&)> Pred, FVector& Out)
+	{
+		for (int32 Try = 0; Try < 4000000; ++Try)
+		{
+			const double X = R.FRandRange(-3.0e6f, 3.0e6f), Y = R.FRandRange(-3.0e6f, 3.0e6f);
+			if (FMOWorldGen::SampleBedrock(*P, X, Y, GeoTestSeed) != Want)
+			{
+				continue;
+			}
+			const float Ground = FMOWorldGen::SampleHeightCm(*P, X, Y, GeoTestSeed, Voxel);
+			const double Z = Ground - R.FRandRange(800.0f, 5000.0f);
+			if (FMOWorldGen::SampleCaveDistanceAtGround(*P, X, Y, Z, Ground, GeoTestSeed, 50.0f) > 200.0f && Pred(FMOWorldGen::SampleDig(*P, X, Y, Z, GeoTestSeed)))
+			{
+				Out = FVector(X, Y, Z);
+				return true;
+			}
+		}
+		return false;
+	};
+	FVector Coal, Lime;
+	if (TestTrue(TEXT("a coal point in the coal measures is found"), FindDeep(EMOBedrock::CoalMeasures, [](const FMODigSample& S) { return S.Ore == EMOOreKind::Coal && S.Grade > 0.6f; }, Coal)))
+	{
+		TArray<FMOItemYield> Yields;
+		FMOGeologyYield::ForDig(*P, GeoTestSeed, Coal, 40.0f, 0.1f, 80.0f, /*bSlab=*/false, NAME_None, Yields);
+		const FMOItemYield* Got = Yields.FindByPredicate([](const FMOItemYield& Y2) { return Y2.ItemId == FName(TEXT("Coal01")); });
+		AddInfo(FString::Printf(TEXT("a pick into a coal seam at (%.0f, %.0f, %.0f): %s"), Coal.X, Coal.Y, Coal.Z, *FMOGeologyYield::Describe(Yields)));
+		TestTrue(TEXT("a pick into a coal seam yields coal (not fill)"), Got && Got->Count > 0 && !Got->bFill);
+	}
+	if (TestTrue(TEXT("a plain limestone point is found"), FindDeep(EMOBedrock::Limestone, [](const FMODigSample& S) { return S.Material == EMODigMaterial::Rock; }, Lime)))
+	{
+		TArray<FMOItemYield> Yields;
+		FMOGeologyYield::ForDig(*P, GeoTestSeed, Lime, 40.0f, 0.1f, 80.0f, /*bSlab=*/false, NAME_None, Yields);
+		const FMOItemYield* Got = Yields.FindByPredicate([](const FMOItemYield& Y2) { return Y2.ItemId == FName(TEXT("Limestone01")); });
+		AddInfo(FString::Printf(TEXT("a pick into limestone: %s"), *FMOGeologyYield::Describe(Yields)));
+		TestTrue(TEXT("a pick into limestone yields limestone (fill)"), Got && Got->Count > 0 && Got->bFill);
+	}
 	return true;
 }
 

@@ -106,6 +106,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cave", meta = (PCG_Overridable, ClampMin = "25"))
 	float ColumnSpacingCm = 100.0f;
 
+	/** Outcrop rows: one ground column every this many cm is tested for bare rock. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cave", meta = (PCG_Overridable, ClampMin = "50"))
+	float OutcropSpacingCm = 200.0f;
+
+	/** Outcrop rows: ground at least this steep (over 3 m) is bare rock -- the soil has washed off. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cave", meta = (PCG_Overridable, ClampMin = "5", ClampMax = "85"))
+	float OutcropMinSlopeDeg = 30.0f;
+
 	/** Multiplies every row's PerSquareMetre (mo.PCG.CaveDensityScale multiplies again). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cave", meta = (PCG_Overridable, ClampMin = "0"))
 	float DensityScale = 1.0f;

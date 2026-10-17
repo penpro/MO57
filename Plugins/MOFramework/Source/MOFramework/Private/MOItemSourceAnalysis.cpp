@@ -12,6 +12,7 @@
 #include "MOPCGMeshSpawnerSettings.h"
 #include "MOPCGResourceSpawnerSettings.h"
 #include "MOPCGCaveSpawnerSettings.h"
+#include "MOGeologyYield.h"
 #include "MORecipeDatabaseSettings.h"
 #include "MORecipeDefinitionRow.h"
 #include "MOResourceDatabaseSettings.h"
@@ -304,6 +305,22 @@ FMOItemSourceReport FMOItemSourceAnalysis::Analyze(UWorld* World, const FMOItemS
 				{
 					Produce(Entry.ItemId, FString::Printf(TEXT("digging in %s"), *BiomeId.ToString()));
 				}
+			}
+		}
+	}
+	// Excavating (the dig tool, the survivors' excavation job) yields what the geology holds (FMOGeologyYield): the soil, every bedrock's stone, every ore.
+	for (const EMODigMaterial Material : { EMODigMaterial::Soil, EMODigMaterial::Rock, EMODigMaterial::Ore })
+	{
+		for (const EMOBedrock Rock : { EMOBedrock::Limestone, EMOBedrock::CoalMeasures, EMOBedrock::Granite, EMOBedrock::Basalt })
+		{
+			for (const EMOOreKind Ore : { EMOOreKind::Coal, EMOOreKind::Hematite, EMOOreKind::Copper, EMOOreKind::Tin, EMOOreKind::Flint })
+			{
+				FMODigSample Sample;
+				Sample.Material = Material;
+				Sample.Bedrock = Rock;
+				Sample.Ore = Ore;
+				bool bFill = true;
+				Produce(FMOGeologyYield::ItemFor(Sample, FName(TEXT("Dirt01")), bFill), TEXT("excavating (geology)"));
 			}
 		}
 	}
