@@ -4,6 +4,8 @@
 #include "Misc/AutomationTest.h"
 #include "MOWorldGen.h"
 #include "MOGeologyYield.h"
+#include "MOItemDatabaseSettings.h"
+#include "MOItemDefinitionRow.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -283,6 +285,117 @@ bool FMOWorldGen_DigYields::RunTest(const FString& Parameters)
 		AddInfo(FString::Printf(TEXT("a pick into limestone: %s"), *FMOGeologyYield::Describe(Yields)));
 		TestTrue(TEXT("a pick into limestone yields limestone (fill)"), Got && Got->Count > 0 && Got->bFill);
 	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOWorldGen_GeologyItemsExist,
+	"MOFramework.WorldGen.GeologyItemsExist",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOWorldGen_GeologyItemsExist::RunTest(const FString& Parameters)
+{
+	// Every item a dig can yield (FMOGeologyYield::ItemFor over every material x bedrock x ore) is a real DT_Items row: a new ore or rock with no row would
+	// hand the player a nameless, iconless entry (or nothing). Covers the spoil item too.
+	int32 Checked = 0;
+	TSet<FName> Seen;
+	for (const EMODigMaterial Material : { EMODigMaterial::Soil, EMODigMaterial::Rock, EMODigMaterial::Ore })
+	{
+		for (const EMOBedrock Rock : { EMOBedrock::Limestone, EMOBedrock::CoalMeasures, EMOBedrock::Granite, EMOBedrock::Basalt })
+		{
+			for (int32 Ore = 0; Ore <= (int32)EMOOreKind::Galena; ++Ore)
+			{
+				FMODigSample Sample;
+				Sample.Material = Material;
+				Sample.Bedrock = Rock;
+				Sample.Ore = (EMOOreKind)Ore;
+				bool bFill = false;
+				const FName Item = FMOGeologyYield::ItemFor(Sample, FName(TEXT("Dirt01")), bFill);
+				if (Item.IsNone() || Seen.Contains(Item))
+				{
+					continue;
+				}
+				Seen.Add(Item);
+				FMOItemDefinitionRow Def;
+				TestTrue(FString::Printf(TEXT("%s (from %s) is a DT_Items row"), *Item.ToString(), *UEnum::GetValueAsString(Material)),
+					UMOItemDatabaseSettings::GetItemDefinition(Item, Def));
+				++Checked;
+			}
+		}
+	}
+	AddInfo(FString::Printf(TEXT("%d distinct geology items: %s"), Checked, *FString::JoinBy(Seen, TEXT(", "), [](const FName& N) { return N.ToString(); })));
+	TestTrue(TEXT("the geology yields the expected range of things (soil, four rocks, six ores)"), Checked >= 11);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOWorldGen_DigHardness,
+	"MOFramework.WorldGen.DigHardness",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOWorldGen_DigHardness::RunTest(const FString& Parameters)
+{
+	// Wes, Oct 17 2026: "yes, different times for different rocks/minerals". Earth digs at the base rate; rock is slower by what it is.
+	auto H = [](EMODigMaterial Material, EMOBedrock Rock, EMOOreKind Ore = EMOOreKind::None)
+	{
+		FMODigSample S;
+		S.Material = Material;
+		S.Bedrock = Rock;
+		S.Ore = Ore;
+		return FMOGeologyYield::HardnessFor(S);
+	};
+	TestEqual(TEXT("earth is the base rate"), H(EMODigMaterial::Soil, EMOBedrock::Granite), 1.0f, 1e-5f);
+	TestTrue(TEXT("coal is soft (between earth and the coal measures)"),
+		H(EMODigMaterial::Ore, EMOBedrock::CoalMeasures, EMOOreKind::Coal) > 1.0f && H(EMODigMaterial::Ore, EMOBedrock::CoalMeasures, EMOOreKind::Coal) < H(EMODigMaterial::Rock, EMOBedrock::CoalMeasures));
+	TestTrue(TEXT("shale and sandstone dig faster than limestone"), H(EMODigMaterial::Rock, EMOBedrock::CoalMeasures) < H(EMODigMaterial::Rock, EMOBedrock::Limestone));
+	TestTrue(TEXT("limestone several times earth (Neolithic chalk mining ~6x)"), H(EMODigMaterial::Rock, EMOBedrock::Limestone) >= 3.0f && H(EMODigMaterial::Rock, EMOBedrock::Limestone) <= 8.0f);
+	TestTrue(TEXT("granite and basalt tens of times earth (fire-setting ~40-60x)"),
+		H(EMODigMaterial::Rock, EMOBedrock::Granite) >= 30.0f && H(EMODigMaterial::Rock, EMOBedrock::Basalt) >= 30.0f);
+	TestTrue(TEXT("a galena vein gives faster than its limestone"), H(EMODigMaterial::Ore, EMOBedrock::Limestone, EMOOreKind::Galena) < H(EMODigMaterial::Rock, EMOBedrock::Limestone));
+	TestTrue(TEXT("hematite and chert are harder than their limestone"),
+		H(EMODigMaterial::Ore, EMOBedrock::Limestone, EMOOreKind::Hematite) > H(EMODigMaterial::Rock, EMOBedrock::Limestone)
+		&& H(EMODigMaterial::Ore, EMOBedrock::Limestone, EMOOreKind::Flint) > H(EMODigMaterial::Rock, EMOBedrock::Limestone));
+	TestTrue(TEXT("a copper vein gives faster than its basalt"), H(EMODigMaterial::Ore, EMOBedrock::Basalt, EMOOreKind::Copper) < H(EMODigMaterial::Rock, EMOBedrock::Basalt));
+
+	// On real ground: a shallow scrape is earth; a pick into the rock 8 m down takes the rock's time.
+	const FMOWorldGenParamsRef P = MakeGeoParams();
+	const float Voxel = P->Tuning.VoxelSizeCm;
+	FRandomStream R(91);
+	double ShallowSum = 0.0;
+	int32 Shallow = 0;
+	double DeepSum[4] = { 0, 0, 0, 0 };
+	int32 Deep[4] = { 0, 0, 0, 0 };
+	for (int32 Try = 0; Try < 4000 && (Shallow < 40 || Deep[(int32)EMOBedrock::Limestone] < 15 || Deep[(int32)EMOBedrock::Granite] < 15); ++Try)
+	{
+		const double X = R.FRandRange(-2.0e6f, 2.0e6f), Y = R.FRandRange(-2.0e6f, 2.0e6f);
+		const float Ground = FMOWorldGen::SampleHeightCm(*P, X, Y, GeoTestSeed, Voxel);
+		if (Ground <= P->Tuning.SeaLevelCm + 300.0f)
+		{
+			continue;
+		}
+		if (Shallow < 40)
+		{
+			// 2 cm off a 1 m disc: well inside the soil everywhere (soil is 30..315 cm).
+			ShallowSum += FMOGeologyYield::DigTimeMultiplier(*P, GeoTestSeed, FVector(X, Y, Ground), 100.0f, (float)(UE_PI * 1.0 * 1.0 * 0.02), true);
+			++Shallow;
+		}
+		const FVector Below(X, Y, Ground - 800.0f);
+		if (FMOWorldGen::SampleCaveDistanceAtGround(*P, X, Y, Below.Z, Ground, GeoTestSeed, 50.0f) < 300.0f)
+		{
+			continue;   // in or near a cave: the pick would cut air
+		}
+		const EMOBedrock Rock = FMOWorldGen::SampleBedrock(*P, X, Y, GeoTestSeed);
+		DeepSum[(int32)Rock] += FMOGeologyYield::DigTimeMultiplier(*P, GeoTestSeed, Below, 60.0f, 0.4f, false);
+		++Deep[(int32)Rock];
+	}
+	const double ShallowMean = Shallow ? ShallowSum / Shallow : 0.0;
+	AddInfo(FString::Printf(TEXT("shallow scrapes: x%.2f over %d; 8 m down: limestone x%.1f (%d), coal measures x%.1f (%d), granite x%.1f (%d), basalt x%.1f (%d)"),
+		ShallowMean, Shallow, DeepSum[0] / FMath::Max(Deep[0], 1), Deep[0], DeepSum[1] / FMath::Max(Deep[1], 1), Deep[1], DeepSum[2] / FMath::Max(Deep[2], 1), Deep[2],
+		DeepSum[3] / FMath::Max(Deep[3], 1), Deep[3]));
+	TestTrue(TEXT("a shallow scrape is earth (x1)"), Shallow > 0 && FMath::Abs(ShallowMean - 1.0) < 0.05);
+	const double Lime = DeepSum[(int32)EMOBedrock::Limestone] / FMath::Max(Deep[(int32)EMOBedrock::Limestone], 1);
+	const double Gran = DeepSum[(int32)EMOBedrock::Granite] / FMath::Max(Deep[(int32)EMOBedrock::Granite], 1);
+	TestTrue(TEXT("deep limestone takes the limestone's time (~5x, a little more where a hard vein runs)"), Deep[(int32)EMOBedrock::Limestone] > 0 && Lime >= 4.5 && Lime <= 7.0);
+	TestTrue(TEXT("deep granite takes the granite's time (~40x)"), Deep[(int32)EMOBedrock::Granite] > 0 && Gran >= 35.0 && Gran <= 41.0);
+	TestEqual(TEXT("all air (raised or dug-out ground): earth"), FMOGeologyYield::DigTimeMultiplier(*P, GeoTestSeed, FVector(0.0, 0.0, 9.0e5), 100.0f, 0.5f, false), 1.0f, 1e-5f);
 	return true;
 }
 

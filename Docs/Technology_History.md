@@ -109,7 +109,17 @@ like copper). Harder rock should cost more TIME, not a tool gate -- fire-setting
 "achievable temperature" belongs; logged for Codex in `claude-codex-coop.md` (CL-0027). Nothing of the heat ladder is built yet -- it is a design
 step for Wes to approve.
 
-### Fork for Wes: digging time by what is dug (Oct 17; not built)
+### Digging time by what is dug (Oct 17; BUILT)
+
+Wes, Oct 17 morning: "yes, different times for different rocks/minerals". Built as proposed:
+- `FMOGeologyYield::HardnessFor` holds the table below. Ore veins are ranked by their own mineral: galena 3, hematite 8, chert 10, copper 15, cassiterite 40.
+- `DigTimeMultiplier` averages it over the dug region's points (the same points the yield is shared over).
+- The player's dig and the survivors' excavation bite both scale their duration by it.
+- Measured on the generator (`WorldGen.DigHardness`): a shallow scrape x1.00; 8 m down, limestone x5.0, coal measures x3.0, granite and basalt x40.
+- The slab of a height dig now follows the ground's shape (each point half the depth under its own column; a pit already dug at the centre carries
+  across). It used to sit at the hit point's height, so on a slope a shallow scrape counted rock under the uphill side.
+
+The original proposal:
 
 Today every dug cubic metre takes the same time: `TerraformSecondsPerCubicMeter` 30,000 s (8.3 h), for the player's dig tool and for the
 survivors' excavation job alike (`UMOTerraformingComponent::ComputeDurationForVolumeSeconds`). That is a fair rate for SOIL with a digging stick.

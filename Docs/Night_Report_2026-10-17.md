@@ -53,14 +53,15 @@ Test totals: 264/264 over every group except Codex's Crafting/Inventory/Equipmen
    - This is the Oct 14 fork (`Docs/Progression_Reachability_2026-10-14.md`; recommended: "attempt anything", as the genetic-memory pillar in
      CLAUDE.md says, plus precursor grants).
    - Your "the hurdle with iron is fire hot enough" reads as attempt-anything; the heat ladder can only be the gate once these are open.
-2. **Digging time by rock hardness** (`Docs/Technology_History.md`, "Fork for Wes"). Today a cubic metre of granite digs as fast as soil.
+2. **Digging time by rock hardness** -- ANSWERED ("yes, different times for different rocks/minerals") and BUILT (see Technology_History.md).
+   Before, a cubic metre of granite dug as fast as soil.
    - Evidence: Grimes Graves chalk ~6x soil with haulage; fire-set hard rock ~40-60x.
    - Proposed: limestone x5, granite and basalt x40, soil unchanged; ore nodes keep their own harvest times.
    - Choices: (a) as proposed, (b) gentler (limestone x2, granite x6), (c) leave it.
 3. **Heat ladder data**: station temperatures and per-recipe minimum temperatures are drafted from the physics in `Docs/Technology_History.md`
    (campfire 700 C, forge 1,300, bloomery 1,250; earthenware 600, copper 1,100, iron bloom 1,200 ...). Codex's fields exist; the values wait
    on their gate and on you.
-4. **Night look**: outdoors at night with no fire the exposure adapts to EV100 -10, so a moonless night reads as dusk. A darker night means
+4. **Night look** -- ANSWERED: leave it for now. outdoors at night with no fire the exposure adapts to EV100 -10, so a moonless night reads as dusk. A darker night means
    a higher night minimum or slower dark adaptation. By a fire the new eye floor already makes the dark beyond the firelight black.
 
 ## Still open (mine)

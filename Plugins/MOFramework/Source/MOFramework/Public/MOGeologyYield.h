@@ -7,6 +7,10 @@
  * job -- yields through ForDig, so the same ground gives the same things to whoever digs it.
  *
  * Fill: earth and rubble can raise ground again (the excavation design's conservation: dig here, fill there); ore is kept.
+ *
+ * Time: what is dug also decides how long it takes (Wes, Oct 17 2026: "yes, different times for different rocks/minerals"). HardnessFor gives each material
+ * its multiple of the earth rate; DigTimeMultiplier averages it over the same points ForDig shares its yield over, and both dig paths scale their duration
+ * by it. Evidence and the table: Docs/Technology_History.md, "Digging time by what is dug".
  */
 #pragma once
 
@@ -47,4 +51,22 @@ struct MOFRAMEWORK_API FMOGeologyYield
 
 	/** One line for a log: "12 Dirt01, 3 Limestone01, 1 IronOre01". */
 	static FString Describe(const TArray<FMOItemYield>& Yields);
+
+	/**
+	 * How many times longer than earth a cubic metre of this takes to dig with hand tools (soil 1): soft coal 1.5, the shales and sandstones of the coal
+	 * measures 3, limestone 5 (Neolithic chalk mining ran ~6x earth, hauling included), granite and basalt 40 (before iron they were worked by fire-setting,
+	 * ~40-60x). An ore vein by its own mineral: galena 3, hematite 8, chert 10, copper 15, cassiterite 40.
+	 */
+	static float HardnessFor(const FMODigSample& Sample);
+
+	/** The dug region's dig-time multiplier: the mean HardnessFor over the solid points ForDig would share its yield over (1 when every point is in the air --
+	 *  ground the player raised or already dug out is loose earth). */
+	static float DigTimeMultiplier(const FMOWorldGenParams& Params, int32 Seed, const FVector& Center, float RadiusCm, float VolumeM3, bool bSlab);
+
+	/** DigTimeMultiplier with the world's params and terrain seed; 1 when the world has no active seed. */
+	static float DigTimeMultiplierInWorld(const UObject* WorldContext, const FVector& Center, float RadiusCm, float VolumeM3, bool bSlab);
+
+private:
+	/** What the dug region holds: SampleDig at its deterministic points that are solid (not above the unworked ground, not in cave air). */
+	static void SampleDugRegion(const FMOWorldGenParams& Params, int32 Seed, const FVector& Center, float RadiusCm, float VolumeM3, bool bSlab, TArray<FMODigSample>& OutSolid);
 };

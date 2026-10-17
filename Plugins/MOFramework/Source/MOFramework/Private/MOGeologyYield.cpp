@@ -39,21 +39,21 @@ FName FMOGeologyYield::ItemFor(const FMODigSample& Sample, FName SoilItemId, boo
 	return FName(TEXT("Stone01"));
 }
 
-void FMOGeologyYield::ForDig(const FMOWorldGenParams& Params, int32 Seed, const FVector& Center, float RadiusCm, float VolumeM3, float ItemsPerCubicMeter, bool bSlab,
-	FName SoilItemId, TArray<FMOItemYield>& Out)
+void FMOGeologyYield::SampleDugRegion(const FMOWorldGenParams& Params, int32 Seed, const FVector& Center, float RadiusCm, float VolumeM3, bool bSlab,
+	TArray<FMODigSample>& OutSolid)
 {
-	const int32 Total = FMath::FloorToInt(FMath::Max(0.0f, VolumeM3) * FMath::Max(0.0f, ItemsPerCubicMeter));
-	if (Total <= 0)
-	{
-		return;
-	}
 	const float R = FMath::Max(RadiusCm, 10.0f);
 	// The dug region's sample points: a 5 x 5 grid over the disc (a slab as deep as the volume over the disc, sampled at its middle), or a 5 x 5 x 5 grid over
 	// the sphere (a pick into a wall: the points in the air in front of it -- above the ground, inside a cave -- are skipped below).
 	TArray<FVector, TInlineAllocator<128>> Points;
+	const float Voxel = Params.Tuning.VoxelSizeCm;
 	if (bSlab)
 	{
-		const float Depth = (float)(VolumeM3 * 1.0e6 / (UE_PI * (double)R * (double)R));
+		// A height dig lowers every column of the disc by the same amount, so the cut follows the ground's shape: each point sits half the depth under its own
+		// column's surface. The surface there is the generator's ground shifted by what the centre has already been worked (a pit, a raised mound) -- on a
+		// slope a point at the centre's height would be deep under the uphill side and count rock that a shallow scrape never reaches.
+		const float Depth = (float)(FMath::Max(0.0f, VolumeM3) * 1.0e6 / (UE_PI * (double)R * (double)R));
+		const float Worked = (float)Center.Z - FMOWorldGen::SampleHeightCm(Params, Center.X, Center.Y, Seed, Voxel);
 		for (int32 I = -2; I <= 2; ++I)
 		{
 			for (int32 J = -2; J <= 2; ++J)
@@ -61,7 +61,8 @@ void FMOGeologyYield::ForDig(const FMOWorldGenParams& Params, int32 Seed, const 
 				const FVector2D O(I * R / 2.5f, J * R / 2.5f);
 				if (O.SizeSquared() <= R * R)
 				{
-					Points.Add(Center + FVector(O.X, O.Y, -0.5f * Depth));
+					const double X = Center.X + O.X, Y = Center.Y + O.Y;
+					Points.Add(FVector(X, Y, FMOWorldGen::SampleHeightCm(Params, X, Y, Seed, Voxel) + Worked - 0.5f * Depth));
 				}
 			}
 		}
@@ -83,11 +84,6 @@ void FMOGeologyYield::ForDig(const FMOWorldGenParams& Params, int32 Seed, const 
 			}
 		}
 	}
-	// Tally by item, then share the total by largest remainder (counts add up exactly; a kind seen at one point of 25 still yields its share).
-	struct FTally { FName Item; bool bFill; int32 Points; };
-	TArray<FTally, TInlineAllocator<8>> Tally;
-	const float Voxel = Params.Tuning.VoxelSizeCm;
-	int32 Solid = 0;
 	for (const FVector& P : Points)
 	{
 		// Air holds nothing: above the unworked ground, or inside a cave (the generator's ground knows neither).
@@ -96,13 +92,31 @@ void FMOGeologyYield::ForDig(const FMOWorldGenParams& Params, int32 Seed, const 
 		{
 			continue;
 		}
-		++Solid;
+		OutSolid.Add(FMOWorldGen::SampleDig(Params, P.X, P.Y, P.Z, Seed));
+	}
+}
+
+void FMOGeologyYield::ForDig(const FMOWorldGenParams& Params, int32 Seed, const FVector& Center, float RadiusCm, float VolumeM3, float ItemsPerCubicMeter, bool bSlab,
+	FName SoilItemId, TArray<FMOItemYield>& Out)
+{
+	const int32 Total = FMath::FloorToInt(FMath::Max(0.0f, VolumeM3) * FMath::Max(0.0f, ItemsPerCubicMeter));
+	if (Total <= 0)
+	{
+		return;
+	}
+	TArray<FMODigSample> Solid;
+	SampleDugRegion(Params, Seed, Center, RadiusCm, VolumeM3, bSlab, Solid);
+	// Tally by item, then share the total by largest remainder (counts add up exactly; a kind seen at one point of 25 still yields its share).
+	struct FTally { FName Item; bool bFill; int32 Points; };
+	TArray<FTally, TInlineAllocator<8>> Tally;
+	for (const FMODigSample& Sample : Solid)
+	{
 		bool bFill = true;
-		const FName Item = ItemFor(FMOWorldGen::SampleDig(Params, P.X, P.Y, P.Z, Seed), SoilItemId, bFill);
+		const FName Item = ItemFor(Sample, SoilItemId, bFill);
 		FTally* Found = Tally.FindByPredicate([&Item](const FTally& T) { return T.Item == Item; });
 		if (Found) { ++Found->Points; } else { Tally.Add({ Item, bFill, 1 }); }
 	}
-	const int32 N = Solid;
+	const int32 N = Solid.Num();
 	if (N == 0)
 	{
 		bool bFill = true;
@@ -125,6 +139,68 @@ void FMOGeologyYield::ForDig(const FMOWorldGenParams& Params, int32 Seed, const 
 		++Out[Remainders[I].Value].Count;
 	}
 	Out.RemoveAll([](const FMOItemYield& Y) { return Y.Count <= 0; });
+}
+
+float FMOGeologyYield::HardnessFor(const FMODigSample& Sample)
+{
+	auto Rock = [](EMOBedrock Bedrock)
+	{
+		switch (Bedrock)
+		{
+		case EMOBedrock::Limestone: return 5.0f;
+		case EMOBedrock::CoalMeasures: return 3.0f;
+		case EMOBedrock::Granite: return 40.0f;
+		case EMOBedrock::Basalt: return 40.0f;
+		}
+		return 5.0f;
+	};
+	switch (Sample.Material)
+	{
+	case EMODigMaterial::Soil:
+		return 1.0f;
+	case EMODigMaterial::Rock:
+		return Rock(Sample.Bedrock);
+	case EMODigMaterial::Ore:
+		switch (Sample.Ore)
+		{
+		case EMOOreKind::Coal: return 1.5f;       // soft (Mohs 1-2.5), breaks along its bedding
+		case EMOOreKind::Galena: return 3.0f;     // soft (2.5): the vein gives faster than the limestone round it
+		case EMOOreKind::Hematite: return 8.0f;   // massive hematite is hard (5.5-6.5)
+		case EMOOreKind::Flint: return 10.0f;     // chert (7): very hard, worked by breaking it out
+		case EMOOreKind::Copper: return 15.0f;    // malachite and native copper are soft, but the vein sits in basalt
+		case EMOOreKind::Tin: return 40.0f;       // cassiterite (6-7) in quartz veins: as hard as the granite
+		case EMOOreKind::None: break;
+		}
+		return Rock(Sample.Bedrock);
+	}
+	return 1.0f;
+}
+
+float FMOGeologyYield::DigTimeMultiplier(const FMOWorldGenParams& Params, int32 Seed, const FVector& Center, float RadiusCm, float VolumeM3, bool bSlab)
+{
+	TArray<FMODigSample> Solid;
+	SampleDugRegion(Params, Seed, Center, RadiusCm, VolumeM3, bSlab, Solid);
+	if (Solid.Num() == 0)
+	{
+		return 1.0f;
+	}
+	// Time adds over the volume: the mean of the points' multipliers (each point stands for an equal share of the dug volume).
+	double Sum = 0.0;
+	for (const FMODigSample& Sample : Solid)
+	{
+		Sum += HardnessFor(Sample);
+	}
+	return (float)(Sum / Solid.Num());
+}
+
+float FMOGeologyYield::DigTimeMultiplierInWorld(const UObject* WorldContext, const FVector& Center, float RadiusCm, float VolumeM3, bool bSlab)
+{
+	const UMOWorldSeedSubsystem* Seeds = UMOWorldSeedSubsystem::Get(WorldContext);
+	if (!Seeds || !Seeds->HasActiveSeed())
+	{
+		return 1.0f;
+	}
+	return DigTimeMultiplier(*FMOWorldGenParamsProvider::Get(), Seeds->GetActiveTerrainSeed(), Center, RadiusCm, VolumeM3, bSlab);
 }
 
 bool FMOGeologyYield::ForDigInWorld(const UObject* WorldContext, const FVector& Center, float RadiusCm, float VolumeM3, float ItemsPerCubicMeter, bool bSlab, FName SoilItemId,

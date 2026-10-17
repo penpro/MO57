@@ -822,6 +822,17 @@ bool UMOTerraformingComponent::BeginTerraform()
 			TerraformSecondsPerCubicMeter, FMath::Max(0.1f, TerraformDurationSeconds))
 		: ComputeTerraformDurationSeconds(Config.Radius, GetActionDepthMeters(CurrentMode),
 			TerraformSecondsPerCubicMeter, FMath::Max(0.1f, TerraformDurationSeconds));
+	// What the brush cuts decides how long it takes (Wes, Oct 17 2026): earth at the base rate, limestone ~5x, granite ~40x -- the same points the yield is
+	// shared over (FMOGeologyYield). Raising places loose earth; flatten / smooth keep the earth rate.
+	float DigHardness = 1.0f;
+	if (CurrentMode == EMOTerraformMode::Dig)
+	{
+		const double R = FMath::Max(1.0f, Config.Radius);
+		const float CutM3 = bUseVolumeSculpting ? (float)(0.5 * (4.0 / 3.0) * UE_DOUBLE_PI * R * R * R / 1.0e6)
+			: ComputeMovedVolumeCubicMeters(Config.Radius, Config.RaiseLowerStrength);
+		DigHardness = FMOGeologyYield::DigTimeMultiplierInWorld(this, HitLocation, Config.Radius, CutM3, !bUseVolumeSculpting);
+		PendingAction.TotalTime *= DigHardness;
+	}
 
 	if (CurrentMode == EMOTerraformMode::Flatten)
 	{
@@ -849,8 +860,8 @@ bool UMOTerraformingComponent::BeginTerraform()
 	SetComponentTickEnabled(true);
 
 	UE_LOG(LogMOFramework, Log,
-		TEXT("[MOTerraforming] BeginTerraform mode=%s at %s, duration=%.1fs"),
-		*GetModeDisplayName().ToString(), *HitLocation.ToString(), PendingAction.TotalTime);
+		TEXT("[MOTerraforming] BeginTerraform mode=%s at %s, duration=%.1fs (ground x%.1f)"),
+		*GetModeDisplayName().ToString(), *HitLocation.ToString(), PendingAction.TotalTime, DigHardness);
 
 	OnTerraformStarted.Broadcast(CurrentMode, PendingAction.TotalTime);
 	return true;

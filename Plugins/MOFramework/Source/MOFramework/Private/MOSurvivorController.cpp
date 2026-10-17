@@ -1617,8 +1617,10 @@ void AMOSurvivorController::StartExcavateJobExecution()
 	const float BiteStrength = Terra->ExcavationDigStrength;
 	const float RealBiteM3 = UMOTerraformingComponent::ComputeMovedVolumeCubicMeters(BiteRadius, BiteStrength);   // the sculpt's real earth
 	ExcavateBiteVolumeM3 = FMath::Min(RealBiteM3, DigZone.RemainingVolumeM3);
+	// What the bite cuts decides how long it takes, as for the player's dig (FMOGeologyYield::DigTimeMultiplier: earth 1, limestone ~5, granite ~40).
+	const float BiteHardness = FMOGeologyYield::DigTimeMultiplierInWorld(this, DigPoint, BiteRadius, RealBiteM3, /*bSlab=*/true);
 	ExcavateBiteDuration = UMOTerraformingComponent::ComputeDurationForVolumeSeconds(
-		RealBiteM3, Terra->TerraformSecondsPerCubicMeter, Terra->TerraformDurationSeconds);
+		RealBiteM3, Terra->TerraformSecondsPerCubicMeter * BiteHardness, Terra->TerraformDurationSeconds);
 	// The wedge watchdog must clear the (possibly hours-long) dig + deposit + travel.
 	ExcavateWatchdogSeconds = FMath::Max(120.0f, ExcavateBiteDuration * 2.5f + 60.0f);
 
