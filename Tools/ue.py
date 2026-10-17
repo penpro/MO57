@@ -567,9 +567,19 @@ def rows_set_bulk(table, rows, do_save=True):
     report = []
     names = list(rows.keys())
     snap = _map_snapshot(table)   # every write re-imports the whole table: maps ride along (see _map_snapshot)
+    # New rows first, as rows_set_safe does: set_rows on a name the table lacks fails the WHOLE batch ("Rows do not exist") -- one new row
+    # in a bulk set used to leave every row unwritten (Oct 17 2026).
+    existing = _mcp_call_file(DT, "get_rows", {"data_table": _table(table), "row_names": names})
+    missing = [n for n in names if not (isinstance(existing, dict) and n in existing)]
+    if missing:
+        mcp_call(DT, "add_rows", {"data_table": _table(table), "row_names": missing})
+        report.append(f"bulk: added {len(missing)} new row(s): {', '.join(missing[:8])}{' ...' if len(missing) > 8 else ''}")
     current = _mcp_call_file(DT, "get_rows", {"data_table": _table(table), "row_names": names})
     if not isinstance(current, dict):
         return 0, [f"bulk read failed: {current!r:.120}"]
+    still = [n for n in names if n not in current]
+    if still:
+        return 0, report + [f"bulk: could not add {', '.join(still)}; nothing written"]
     values = {}
     for n, fields in rows.items():
         row = current.get(n, {})
@@ -583,23 +593,28 @@ def rows_set_bulk(table, rows, do_save=True):
         _note_written_maps(snap, n, row, merged)
     _mcp_call_file(DT, "set_rows", {"data_table": _table(table), "values": json.dumps(_with_maps(snap, values))})
     back = _mcp_call_file(DT, "get_rows", {"data_table": _table(table), "row_names": names})
+    def _matches(v, got):
+        """What was written is what reads back: strings by substring (FText wraps them; the export escapes apostrophes), numbers by value, struct
+        arrays by element count (as rows_set_safe), nested structs field by field. A field missing from the readback is a mismatch."""
+        if isinstance(v, str):
+            return isinstance(got, str) and v.replace("\\'", "'") in got.replace("\\'", "'")
+        if isinstance(v, bool) or isinstance(v, (int, float)):
+            try:
+                return got is not None and float(got) == float(v)
+            except (TypeError, ValueError):
+                return str(got) == str(v)
+        if isinstance(v, list):
+            return isinstance(got, list) and len(got) == len(v)
+        if isinstance(v, dict):
+            got_l = {str(gk).lower(): gv for gk, gv in got.items()} if isinstance(got, dict) else None
+            return got_l is not None and all(_matches(vv, got_l.get(str(vk).lower())) for vk, vv in v.items())
+        return True
+
     ok = 0
     for n, fields in rows.items():
         row = back.get(n, {}) if isinstance(back, dict) else {}
         row_ci = {str(k).lower(): v for k, v in row.items()} if isinstance(row, dict) else {}
-        good = True
-        for k, v in fields.items():
-            got = row_ci.get(k.lower())
-            if isinstance(v, (str, int, float, bool)):
-                if isinstance(got, str) and isinstance(v, str):
-                    good = good and (v in got)
-                elif got is not None and str(got) != str(v):
-                    good = False
-            elif isinstance(v, dict) and v:
-                got_l = {str(gk).lower(): gv for gk, gv in got.items()} if isinstance(got, dict) else {}
-                for vk, vv in v.items():
-                    if isinstance(vv, str) and vv not in str(got_l.get(vk.lower(), "")):
-                        good = False
+        good = bool(row_ci) and all(_matches(v, row_ci.get(k.lower())) for k, v in values[n].items())
         ok += good
         if not good:
             report.append(f"{n:<28} MISMATCH")

@@ -47,7 +47,7 @@ Test totals: 264/264 over every group except Codex's Crafting/Inventory/Equipmen
 
 ## Your calls (nothing built on these)
 
-1. **The metal path is blocked by discovery gates, not by heat.** `MO.Test.ValidateData`: 55 of 132 recipes reachable.
+1. **ANSWERED and BUILT (morning):** inspect-based discovery, with metal through the clay line. 126 of 136 recipes reachable (was 55); see `Docs/Progression_Reachability_2026-10-14.md`. Original note: **the metal path was blocked by discovery gates, not by heat.** `MO.Test.ValidateData`: 55 of 132 recipes reachable.
    - Smelting, IronSmelting, AnvilWork (and ~45 more) are knowledge levels nothing grants.
    - So Bellows01 can't be made, so no Forge or Bloomery can be built, so nothing smelts.
    - This is the Oct 14 fork (`Docs/Progression_Reachability_2026-10-14.md`; recommended: "attempt anything", as the genetic-memory pillar in

@@ -158,5 +158,63 @@ class DataTableSafetyTests(unittest.TestCase):
         self.assertEqual(current, {"nested": {"keep": True}})
 
 
+class BulkRowsTests(unittest.TestCase):
+    """rows_set_bulk (row sets > 20): a new row in the batch must be added first, and an array that did not change must not read as verified
+    (Oct 17 2026: one new row failed the whole set_rows, and 28 untouched rows reported 'verified' because arrays were never compared)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.ue = load_ue()
+
+    def _run(self, table_rows, write, apply_write=True):
+        state = {k: json.loads(json.dumps(v)) for k, v in table_rows.items()}
+        calls = []
+
+        def call_file(toolset, tool, args):
+            calls.append(tool)
+            if tool == "get_rows":
+                return {n: json.loads(json.dumps(state[n])) for n in args["row_names"] if n in state}
+            if tool == "set_rows":
+                values = json.loads(args["values"])
+                if any(n not in state for n in values):
+                    return "Rows do not exist in the data table"
+                if apply_write:
+                    for n, v in values.items():
+                        state[n].update(v)
+                return "ok"
+            return None
+
+        def call(toolset, tool, args):
+            calls.append(tool)
+            if tool == "add_rows":
+                for n in args["row_names"]:
+                    state.setdefault(n, {"inspection": {"Grants": []}})
+            return "ok"
+
+        with mock.patch.object(self.ue, "_mcp_call_file", side_effect=call_file), \
+                mock.patch.object(self.ue, "mcp_call", side_effect=call), \
+                mock.patch.object(self.ue, "_map_snapshot", return_value={}), \
+                mock.patch.object(self.ue, "_maps_lost", return_value=[]), \
+                mock.patch.object(self.ue, "_note_written_maps"), \
+                mock.patch.object(self.ue, "_with_maps", side_effect=lambda snap, values: values), \
+                mock.patch.object(self.ue, "save_assets", return_value=True):
+            ok, report = self.ue.rows_set_bulk("T", write)
+        return ok, report, state, calls
+
+    def test_new_row_is_added_before_the_write(self):
+        table = {"A": {"inspection": {"Grants": []}}}
+        write = {"A": {"inspection": {"Grants": [{"Id": "X"}]}}, "B": {"inspection": {"Grants": [{"Id": "Y"}]}}}
+        ok, report, state, calls = self._run(table, write)
+        self.assertIn("add_rows", calls)
+        self.assertEqual(ok, 2, report)
+        self.assertIn("B", state)
+
+    def test_unchanged_array_is_a_mismatch(self):
+        table = {"A": {"inspection": {"Grants": []}}}
+        ok, report, state, calls = self._run(table, {"A": {"inspection": {"Grants": [{"Id": "X"}]}}}, apply_write=False)
+        self.assertEqual(ok, 0, report)
+        self.assertTrue(any("MISMATCH" in line for line in report), report)
+
+
 if __name__ == "__main__":
     unittest.main()

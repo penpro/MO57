@@ -16,7 +16,78 @@ HideGlue01, Horn01, SodaAsh01, TinIngot01, WoolFleece01). Circular discovery is 
 Wes's Oct 17 framing ("the actual hurdle with iron is having fire hot enough") reads as option C below: anyone may attempt smelting, and
 heat (station temperature, fuel, bellows) is the real gate. The heat values are drafted in `Docs/Technology_History.md`.
 
-Two causes account for nearly all of it. Both are content/design problems, not code bugs.
+**Built Oct 17 morning** (Wes: "discovery should be locked behind 'inspect' if nothing else opens up to it; somewhere in the clay tech line humans
+would discover leftover metals etc, just make it realistic"). This is option A: precursor grants by inspection. Each circular knowledge (granted only by
+inspecting the recipe's own output) is also taught at level 1 by inspecting the material a person would really have learned it from; the finished
+product still teaches up to 3.
+
+**Metal through the clay line:**
+- PaintPotteryMalachite (Campfire, Pottery): a crude pot painted with ground malachite and fired in the embers sometimes leaves copper beads.
+- CopperPrill01 (35 %, 3 beads): inspecting the prills teaches **Smelting**.
+- MakeBellows now needs Smelting, not AnvilWork: bellows were developed for metallurgy.
+- SmeltCopperOre sometimes (10 %) leaves an iron bloom: copper ore's iron-rich gangue, how iron was first noticed. Inspecting the bloom teaches IronSmelting.
+
+New producers:
+- BurnPlantAsh -> SodaAsh01 (forest-glass ash)
+- BoilHideGlue -> HideGlue01
+- SmeltTinOre -> TinIngot01
+- MakePolishedAxe takes Basalt01 + Sandstone01 instead of the sourceless Greenstone01
+
+**Result (ValidateData): 136 recipes, 126 reachable, 10 blocked, 0 orphan knowledge.** The 10 lack fauna or flora: feathers, horn, flax, wool (and
+cloth from them), and the resin-tap target tag.
+
+Precursor table (authored with `ue.py rows set`):
+
+| Inspect | Teaches (level 1) | Why |
+|---|---|---|
+| Clay01 | HandBuilding | wet clay holds the shape it is pressed into and hardens in a fire |
+| CrudePottery01 | PotMaking | a pot that holds water can stand in the fire |
+| CrudePottery01 | StorageVessels | a bigger pot keeps grain and water |
+| CrudePottery01 | WheelThrowing | a pot turned as it is shaped comes out round |
+| MineralGlaze01 | Glazing | the powder melts into a glassy skin in a hot firing |
+| SodaAsh01 | GlassMaking | plant ash melted with sand runs into glass |
+| CopperPrill01 | Smelting | copper came out of the green stone where the fire was hottest and smothered |
+| CopperIngot01 | AnvilWork | metal is shaped by hammering it on a hard flat stone |
+| WroughtIron01 | IronForging | red-hot iron can be hammered into a blade |
+| WroughtIron01 | IronArmor | iron plates turn a blow |
+| WroughtIron01 | MailMaking | iron drawn into wire can be linked into rings |
+| WroughtIron01 | SteelMaking | iron left long in glowing charcoal comes out harder |
+| SteelIngot01 | SteelForging | steel takes and keeps an edge |
+| TinIngot01 | BronzeCasting | a little tin melted into copper makes a harder metal |
+| BronzeIngot01 | BronzeAxe | bronze casts into an axe head |
+| BronzeIngot01 | BronzeArmor | bronze beaten thin makes a helmet |
+| BronzeIngot01 | SwordFighting | bronze is tough enough for a long blade |
+| BronzeIngot01 | ScaleArmor | small bronze plates sewn in rows make armour |
+| FlintFlake01 | ScraperUse | a flake's edge scrapes a hide clean |
+| FlintFlake01 | MicrolithMaking | tiny flakes can be set in a row in a haft |
+| Microlith01 | SickleMaking | microliths set in a curved haft cut grain stalks |
+| HandAxe01 | AxeHafting | a stone point bound to a shaft reaches farther |
+| StraightBranch01 | FireHardening | a point charred in the embers and scraped is harder |
+| StraightBranch01 | BowMaking | a springy straight stave bends and throws back |
+| WoodenSpear01 | FishSpearing | a pronged spear holds a slippery fish |
+| WoodenSpear01 | AtlatlMaking | a hooked stick throws a spear farther |
+| Reeds01 | TrapFishing | woven reeds funnel fish into a trap |
+| Reeds01 | BasketWeaving | reeds woven over and under make a basket |
+| SimpleBow01 | Fletching | a light shaft with feathers flies straight from a bow |
+| SimpleBow01 | CompositeBow | horn, wood and sinew glued together cast harder |
+| FireDrill01 | BowDrill | a cord wrapped round the drill spins it faster |
+| Branch01 | HandDrill | a dry stick twirled hard in a notch smokes |
+| AnimalHide01 | BrainTanning | brains worked into a hide keep it soft |
+| TannedLeather01 | LeatherArmor | thick leather layers soften a blow |
+| TannedLeather01 | LeatherClothing | leather can be cut and sewn to fit |
+| Log01 | CanoeMaking | a log hollowed by fire and adze floats a person |
+| PottersWheel01 | ChariotBuilding | a wheel on an axle carries a load |
+| Stone01 | DeadfallMaking | a heavy stone propped on a trigger stick falls on what disturbs it |
+| Cordage01 | SnareSetting | a noose on a bent sapling catches small game |
+| Cordage01 | ThreadSpinning | fibre twisted finer makes thread |
+| Cordage01 | LoomWeaving | threads held taut on a frame can be woven |
+| Plank01 | ShieldUse | boards joined and held up stop a blow |
+| DiggingStick01 | HoeFarming | a blade set across a handle breaks soil faster |
+| Basalt01 | GrainGrinding | seeds rubbed between hard stones turn to flour |
+| Basalt01 | GroundStone | hard stone ground on sandstone takes a polished edge |
+| WoolFleece01 | WoolSpinning | fleece drawn out and twisted makes yarn |
+
+Two causes accounted for nearly all of the original blocking. Both are content/design problems, not code bugs.
 
 ## 1. Circular discovery (49 knowledge ids → most of the 88)
 
