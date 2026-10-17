@@ -1097,25 +1097,26 @@ def game_test(uproject, editor_exe, keep=False, boot_timeout=300, withhold_seed=
         if not rep.step("host: real map loaded and the host has a pawn", reached, str(st)):
             return False
 
-        # Tutorial: the possession hint must be the first popup. FindWidget matches TextBlock text, so look for the hint's
-        # body on screen, and make sure the Movement hint is not showing in its place.
-        hint_text, walk_text = None, None
+        # Tutorial: a new player's first popup is "Move and Look" (58bcd369, Oct 15 2026: the possession hint waits until a
+        # survivor has joined -- with one pawn there is nobody to switch to). FindWidget matches TextBlock text, so look for
+        # the hint's body on screen, and make sure the possession hint is not showing in its place.
+        hint_text, possess_text = None, None
         deadline = time.time() + 90
         while time.time() < deadline and not hint_text:
             off = log_size(host)
-            console(host, 'MO.Test.FindWidget "open the possession menu"')
-            m = wait_log(host, r"WIDGET '[^']*' \([^)]*\) text='([^']*open the possession menu[^']*)'", since=off, timeout=6)
+            console(host, 'MO.Test.FindWidget "to walk"')
+            m = wait_log(host, r"WIDGET '[^']*' \([^)]*\) text='([^']*to walk[^']*)'", since=off, timeout=6)
             hint_text = m.group(1) if m else None
             if not hint_text:
                 time.sleep(4)
         off = log_size(host)
-        console(host, 'MO.Test.FindWidget "to walk"')
-        wait_log(host, r"FindWidget\('to walk'\): (\d+) match", since=off, timeout=6)
-        m = re.search(r"FindWidget\('to walk'\): (\d+) match", read_log_from(host, off))
-        walk_text = int(m.group(1)) if m else None
-        rep.step("host: the first tutorial popup is 'press <key> to open the possession menu'",
-                 bool(hint_text) and walk_text == 0,
-                 f"popup: {hint_text!r}; Movement hint on screen at the same time: {walk_text}")
+        console(host, 'MO.Test.FindWidget "open the possession menu"')
+        wait_log(host, r"FindWidget\('open the possession menu'\): (\d+) match", since=off, timeout=6)
+        m = re.search(r"FindWidget\('open the possession menu'\): (\d+) match", read_log_from(host, off))
+        possess_text = int(m.group(1)) if m else None
+        rep.step("host: the first tutorial popup is 'Move and Look' (the possession hint waits for a survivor)",
+                 bool(hint_text) and possess_text == 0,
+                 f"popup: {hint_text!r}; possession hint on screen at the same time: {possess_text}")
 
         host_set_before_join = ("14:00", "Rain")
         if not (withhold_seed or skew_seed):
