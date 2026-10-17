@@ -9,6 +9,13 @@ tools, discovery knowledge, required knowledge).
 (12 items that existed twice under two ids, e.g. Snare01/SnareWire01, folded into the id recipes use): **37 reachable,
 87 blocked, 24 orphan items** (the copper deposit now yields NativeCopper01).
 
+**Re-check Oct 17 2026 (night): 132 recipes, 55 reachable, 77 blocked, 9 orphan items** (BirchBark01, Feathers01, FlaxFiber01, Greenstone01,
+HideGlue01, Horn01, SodaAsh01, TinIngot01, WoolFleece01). Circular discovery is now almost the whole story, and it blocks the entire metal path:
+- MakeBellows needs AnvilWork, so Bellows01 can't be made, so neither BuildForge nor BuildBloomery can be built.
+- SmeltCopperOre / SmeltIronOre / RefineIronBloom need Smelting / IronSmelting; AlloyBronze needs BronzeCasting. None of these is ever reached.
+Wes's Oct 17 framing ("the actual hurdle with iron is having fire hot enough") reads as option C below: anyone may attempt smelting, and
+heat (station temperature, fuel, bellows) is the real gate. The heat values are drafted in `Docs/Technology_History.md`.
+
 Two causes account for nearly all of it. Both are content/design problems, not code bugs.
 
 ## 1. Circular discovery (49 knowledge ids → most of the 88)
