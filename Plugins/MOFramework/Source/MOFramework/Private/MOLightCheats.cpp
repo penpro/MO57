@@ -108,12 +108,17 @@ namespace MOLightCheats
 			UMOCarriedLightComponent* Carried = Pawn ? Pawn->FindComponentByClass<UMOCarriedLightComponent>() : nullptr;
 			UMOEquipmentComponent* Equipment = Pawn ? Pawn->FindComponentByClass<UMOEquipmentComponent>() : nullptr;
 			UMOInventoryComponent* Inventory = Pawn ? Pawn->FindComponentByClass<UMOInventoryComponent>() : nullptr;
-			if (!Carried || !Equipment || !Inventory || !Pawn->HasAuthority())
+			if (!Carried || !Equipment || !Inventory)
 			{
-				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] LIGHT Carried FAILED: no local MO pawn with authority"));
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] LIGHT Carried FAILED: no local MO pawn"));
 				return;
 			}
 			const FString Verb = Args.Num() > 0 ? Args[0].ToLower() : FString();
+			if (!Verb.IsEmpty() && !Pawn->HasAuthority())
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] LIGHT Carried %s FAILED: server only (a client lights its torch at a fire: MO.Fire.Do LightCarried)"), *Verb);
+				return;
+			}
 			if (Verb == TEXT("give"))
 			{
 				const FName TorchId(TEXT("Torch01"));

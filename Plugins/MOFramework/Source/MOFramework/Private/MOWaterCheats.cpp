@@ -647,7 +647,17 @@ namespace
 				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] FIRE Do FAILED: usage MO.Fire.Do <Action>, a fuelled station within 10 m"));
 				return;
 			}
-			PC->ServerStationAction(Fire, FName(*Args[0]));
+			// Sent next tick: a server RPC sent inside the dev bridge's call runs LOCALLY on a joiner (its own copy refuses it) -- as MO.Item.Do.
+			TWeakObjectPtr<AMOPlayerController> WeakPC(PC);
+			TWeakObjectPtr<AMOCraftingStationActor> WeakFire(Fire);
+			const FName Action(*Args[0]);
+			World->GetTimerManager().SetTimerForNextTick([WeakPC, WeakFire, Action]()
+			{
+				if (AMOPlayerController* Controller = WeakPC.Get())
+				{
+					Controller->ServerStationAction(WeakFire.Get(), Action);
+				}
+			});
 			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] FIRE Do %s: asked"), *Args[0]);
 		}));
 
@@ -835,7 +845,17 @@ namespace
 				const int32 Which = Args.IsValidIndex(GoAt + 1) ? FCString::Atoi(*Args[GoAt + 1]) : 0;
 				if (Kinds.IsValidIndex(Which))
 				{
-					PC->ServerGatherCover(Kinds[Which].Location, Kinds[Which].EntryIndex);
+					// Next tick, as MO.Item.Do: inside the dev bridge's call the RPC would run locally on a joiner.
+					TWeakObjectPtr<AMOPlayerController> WeakPC(PC);
+					const FVector_NetQuantize At = Kinds[Which].Location;
+					const int32 EntryIndex = Kinds[Which].EntryIndex;
+					World->GetTimerManager().SetTimerForNextTick([WeakPC, At, EntryIndex]()
+					{
+						if (AMOPlayerController* Controller = WeakPC.Get())
+						{
+							Controller->ServerGatherCover(At, EntryIndex);
+						}
+					});
 					UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] COVER gather %d asked"), Which);
 				}
 			}
