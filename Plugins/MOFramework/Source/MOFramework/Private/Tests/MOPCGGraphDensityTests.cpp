@@ -9,6 +9,7 @@
 #include "PCGPin.h"
 #include "PCGEdge.h"
 #include "MOPCGBiomeSpawnerSettings.h"
+#include "MOPCGCaveSpawnerSettings.h"
 #include "PCGVoxelSampler.h"
 #include "ISMPartition/ISMComponentDescriptor.h"
 
@@ -71,9 +72,9 @@ bool FMOPCG_BiomeSamplerLattice::RunTest(const FString& Parameters)
 	for (const UPCGNode* Node : Graph->GetNodes())
 	{
 		const UMOPCGBiomeSpawnerSettings* Spawner = Node ? Cast<UMOPCGBiomeSpawnerSettings>(Node->GetSettings()) : nullptr;
-		if (!Spawner)
+		if (!Spawner || Spawner->IsA<UMOPCGCaveSpawnerSettings>())
 		{
-			continue;
+			continue;   // the cave spawner (a biome spawner subclass) finds its own points on the cave surfaces: no sampler, no input rate
 		}
 		++Spawners;
 		const UPCGVoxelSamplerSettings* Sampler = FindUpstreamSampler(Node);

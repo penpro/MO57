@@ -1,4 +1,4 @@
-// The world-removal ledger (MOWorldRemovalTypes.h): a removed instance is keyed by place (10 cm cells) + mesh, and found again when its PCG cell regenerates the
+// The world-removal ledger (MOWorldRemovalTypes.h): a removed instance is keyed by place (10 cm cells, 1 m heights) + mesh, and found again when its PCG cell regenerates the
 // same instance -- through the float round trip of the instance transform, so one cell of tolerance either way, and never for another mesh or a place 30 cm off.
 
 #include "Misc/AutomationTest.h"
@@ -24,7 +24,8 @@ bool FMOWorldRemoval_Ledger::RunTest(const FString& Parameters)
 
 	TestTrue(TEXT("the same place is removed"), Ledger.IsRemoved(Here, Stick));
 	TestTrue(TEXT("the transform round trip (a few mm) is the same place"), Ledger.IsRemoved(Here + FVector(0.4, -0.3, 0.0), Stick));
-	TestTrue(TEXT("a different height is the same place (the key is X / Y)"), Ledger.IsRemoved(Here + FVector(0.0, 0.0, 25.0), Stick));
+	TestTrue(TEXT("25 cm higher is the same place (1 m height cells, one cell of tolerance)"), Ledger.IsRemoved(Here + FVector(0.0, 0.0, 25.0), Stick));
+	TestFalse(TEXT("3 m higher in the same column is another place (a cave ceiling over its floor)"), Ledger.IsRemoved(Here + FVector(0.0, 0.0, 300.0), Stick));
 	TestTrue(TEXT("6 cm off -- across a cell boundary -- is still the same place"), Ledger.IsRemoved(Here + FVector(6.0, 0.0, 0.0), Stick));
 	TestFalse(TEXT("30 cm off is another place"), Ledger.IsRemoved(Here + FVector(30.0, 0.0, 0.0), Stick));
 	TestFalse(TEXT("another mesh at the same place is not removed"), Ledger.IsRemoved(Here, Tree));
@@ -33,8 +34,24 @@ bool FMOWorldRemoval_Ledger::RunTest(const FString& Parameters)
 	TestEqual(TEXT("cell X is X / 10 cm, rounded"), E.CellX, FMath::RoundToInt32(Here.X / 10.0));
 	TestEqual(TEXT("cell Y is Y / 10 cm, rounded"), E.CellY, FMath::RoundToInt32(Here.Y / 10.0));
 
+	TestEqual(TEXT("cell Z is Z / 1 m, rounded"), E.CellZ, FMath::RoundToInt32(Here.Z / 100.0));
+
+	// Two instances stacked in one column: removing the lower leaves the upper.
+	TestTrue(TEXT("the one 3 m above records as its own entry"), Ledger.Add(FMOWorldRemovalLedger::MakeEntry(Here + FVector(0.0, 0.0, 300.0), Stick)));
+	TestEqual(TEXT("two entries"), Ledger.Num(), 2);
+
+	// A save from before heights: its entry has AnyZ and matches at every height, as it always did.
+	FMOWorldRemovalLedger Legacy;
+	FMORemovedInstance Old = FMOWorldRemovalLedger::MakeEntry(Here, Tree);
+	Old.CellZ = FMORemovedInstance::AnyZ;
+	Legacy.Add(Old);
+	TestTrue(TEXT("a legacy entry matches at its height"), Legacy.IsRemoved(Here, Tree));
+	TestTrue(TEXT("a legacy entry matches 50 m higher too"), Legacy.IsRemoved(Here + FVector(0.0, 0.0, 5000.0), Tree));
+	TestEqual(TEXT("FMORemovedInstance defaults to AnyZ (what a pre-height save loads as)"), FMORemovedInstance().CellZ, FMORemovedInstance::AnyZ);
+
 	Ledger.Reset();
 	TestFalse(TEXT("reset clears the ledger"), Ledger.IsRemoved(Here, Stick));
+	TestEqual(TEXT("reset empties the count"), Ledger.Num(), 0);
 	return true;
 }
 

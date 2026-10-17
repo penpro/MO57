@@ -270,35 +270,6 @@ namespace
 	TAutoConsoleVariable<float> CVarBiomeSpawnerBatchMs(TEXT("mo.PCG.BiomeSpawnerBatchMs"), 3.0f, TEXT("Target game-thread ms per AddInstances batch: the batch size adapts per bucket (a tree with a physics body and a navigation update costs far more than a grass tuft), so one batch cannot blow the frame between two budget checks."), ECVF_Default);
 }
 
-/** One execution's state between its time slices: planted once, then built a batch at a time (see FMOPCGBiomeSpawnerElement). */
-struct FMOPCGBiomeSpawnerContext : public FPCGContext
-{
-	bool bPlanted = false;
-	TWeakObjectPtr<AActor> TargetActor;
-	TWeakObjectPtr<UPCGComponent> SourceComponent;
-	TArray<FMOPCGBiomeSpawnerElement::FSpeciesBucket> Buckets;   // build order = the planting's bucket order
-	int32 NextBucket = 0;
-	int32 NextTransform = 0;                                     // in Buckets[NextBucket]
-	TWeakObjectPtr<UInstancedStaticMeshComponent> CurrentISM;   // the component Buckets[NextBucket] is being added to
-	int32 Components = 0;
-	int32 Slices = 0;
-	double BuildMs = 0.0;
-	int32 BucketBatch = 0;          // the current bucket's adaptive batch size (set when its component is created)
-	double WorstBatchMs = 0.0;      // the longest single AddInstances batch (what a frame can lose between two budget checks)
-	// The planting's numbers, logged with the build time when the last instance is in.
-	int32 TotalIn = 0, TotalAccepted = 0, TotalSuppressed = 0, NumBiomes = 0;
-	double PlantMs = 0.0;
-	FString StageSummary, BoundsText, BucketSummary;
-
-	virtual void AddExtraStructReferencedObjects(FReferenceCollector& Collector) override
-	{
-		for (FMOPCGBiomeSpawnerElement::FSpeciesBucket& Bucket : Buckets)
-		{
-			Collector.AddReferencedObject(Bucket.Mesh);
-		}
-	}
-};
-
 FPCGContext* FMOPCGBiomeSpawnerElement::CreateContext()
 {
 	return new FMOPCGBiomeSpawnerContext();
@@ -838,6 +809,19 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 	}
 
 	// The build runs in BuildSlice, a batch at a time inside PCG's frame budget.
+	TArray<FSpeciesBucket> Ordered;
+	Ordered.Reserve(Buckets.Num());
+	for (auto& Pair : Buckets)
+	{
+		Ordered.Add(MoveTemp(Pair.Value));
+	}
+	return SubmitBuckets(Context, TargetActor, MoveTemp(Ordered), TotalIn, TotalAccepted, TotalSuppressed, Biomes.Num(), (FPlatformTime::Seconds() - ExecStartTime) * 1000.0,
+		MoveTemp(StageSummary), InputBounds.IsValid ? FString::Printf(TEXT("(%.0f,%.0f)-(%.0f,%.0f)"), InputBounds.Min.X, InputBounds.Min.Y, InputBounds.Max.X, InputBounds.Max.Y) : FString(TEXT("none")));
+}
+
+bool FMOPCGBiomeSpawnerElement::SubmitBuckets(FMOPCGBiomeSpawnerContext* Context, AActor* TargetActor, TArray<FSpeciesBucket>&& Buckets, int32 TotalIn, int32 TotalAccepted,
+	int32 TotalSuppressed, int32 NumBiomes, double PlantMs, FString&& StageSummary, FString&& BoundsText)
+{
 	UPCGComponent* SourceComponent = Cast<UPCGComponent>(Context->ExecutionSource.Get());
 	if (!SourceComponent)
 	{
@@ -847,21 +831,21 @@ bool FMOPCGBiomeSpawnerElement::Plant(FMOPCGBiomeSpawnerContext* Context) const
 	Context->TargetActor = TargetActor;
 	Context->SourceComponent = SourceComponent;
 	Context->Buckets.Reserve(Buckets.Num());
-	for (auto& Pair : Buckets)
+	for (FSpeciesBucket& Bucket : Buckets)
 	{
-		Context->BucketSummary += FString::Printf(TEXT(" %s/%s=%d"), *Pair.Value.BiomeId.ToString(), Pair.Value.Mesh ? *Pair.Value.Mesh->GetName() : TEXT("null"), Pair.Value.Transforms.Num());
-		if (Pair.Value.Mesh && Pair.Value.Transforms.Num() > 0)
+		Context->BucketSummary += FString::Printf(TEXT(" %s/%s=%d"), *Bucket.BiomeId.ToString(), Bucket.Mesh ? *Bucket.Mesh->GetName() : TEXT("null"), Bucket.Transforms.Num());
+		if (Bucket.Mesh && Bucket.Transforms.Num() > 0)
 		{
-			Context->Buckets.Add(MoveTemp(Pair.Value));
+			Context->Buckets.Add(MoveTemp(Bucket));
 		}
 	}
 	Context->TotalIn = TotalIn;
 	Context->TotalAccepted = TotalAccepted;
 	Context->TotalSuppressed = TotalSuppressed;
-	Context->NumBiomes = Biomes.Num();
-	Context->PlantMs = (FPlatformTime::Seconds() - ExecStartTime) * 1000.0;
+	Context->NumBiomes = NumBiomes;
+	Context->PlantMs = PlantMs;
 	Context->StageSummary = MoveTemp(StageSummary);
-	Context->BoundsText = InputBounds.IsValid ? FString::Printf(TEXT("(%.0f,%.0f)-(%.0f,%.0f)"), InputBounds.Min.X, InputBounds.Min.Y, InputBounds.Max.X, InputBounds.Max.Y) : TEXT("none");
+	Context->BoundsText = MoveTemp(BoundsText);
 	return true;
 }
 
@@ -891,6 +875,10 @@ bool FMOPCGBiomeSpawnerElement::BuildSlice(FMOPCGBiomeSpawnerContext* Context) c
 			// First batch of this bucket: the managed HISM per (mesh, biome).
 			FPCGISMComponentBuilderParams Params;
 			Params.Descriptor.StaticMesh = Bucket.Mesh;
+			if (Bucket.Material)
+			{
+				Params.Descriptor.OverrideMaterials.Init(Bucket.Material, FMath::Max(Bucket.Mesh->GetStaticMaterials().Num(), 1));
+			}
 			Params.Descriptor.ComponentClass = UHierarchicalInstancedStaticMeshComponent::StaticClass();
 			Params.Descriptor.BodyInstance.SetCollisionProfileName(Settings->DecorativeCollisionProfile.Name);   // overridden below for harvestable species
 			Params.Descriptor.bCastShadow = Settings->bCastShadows;
@@ -998,7 +986,7 @@ bool FMOPCGBiomeSpawnerElement::BuildSlice(FMOPCGBiomeSpawnerContext* Context) c
 			// per-(biome,species) id makes the descriptor untouchable by other
 			// chains; SettingsCrc additionally scopes reuse within this node.
 			// (HWRT grouping impact: none today; revisit in P5 Lumen/HWRT tuning.)
-			const uint32 BucketHash = (GetTypeHash(Bucket.BiomeId) ^ (GetTypeHash(Bucket.HISMTag) * 31) ^ 0x4D4F4249u) | 1u;
+			const uint32 BucketHash = (GetTypeHash(Bucket.BiomeId) ^ (GetTypeHash(Bucket.HISMTag) * 31) ^ (Bucket.Material ? GetTypeHash(Bucket.Material->GetFName()) * 131 : 0u) ^ 0x4D4F4249u) | 1u;
 			Params.Descriptor.RayTracingGroupId = (int32)(BucketHash & 0x7fffffffu);
 			Params.SettingsCrc = FPCGCrc(BucketHash);
 

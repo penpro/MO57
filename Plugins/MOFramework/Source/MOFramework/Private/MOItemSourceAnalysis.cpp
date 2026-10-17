@@ -11,6 +11,7 @@
 #include "MOPCGItemSpawnerSettings.h"
 #include "MOPCGMeshSpawnerSettings.h"
 #include "MOPCGResourceSpawnerSettings.h"
+#include "MOPCGCaveSpawnerSettings.h"
 #include "MORecipeDatabaseSettings.h"
 #include "MORecipeDefinitionRow.h"
 #include "MOResourceDatabaseSettings.h"
@@ -86,7 +87,8 @@ namespace MOItemSources
 	 * - a graph that runs the MO HISM Tagger tags the meshes its stock weighted spawners place with the item whose
 	 *   WorldVisual.StaticMesh it is, so those entries map through ItemByMesh.
 	 * Disabled nodes and zero-weight entries do not count; subgraphs are not followed.
-	 * Also collects the DT_Resources rows an MO Resource Spawner node places (OutPlacedResources): a row it names, with a mesh to place.
+	 * Also collects the DT_Resources rows an MO Resource Spawner node places (OutPlacedResources): a row it names, with a mesh to place -- and the
+	 * harvestable rows of an MO Cave Spawner's cave scatter table.
 	 */
 	void CollectPcgPickups(const TMap<FSoftObjectPath, FName>& ItemByMesh, TMap<FName, FString>& OutPickups, TSet<FName>& OutPlacedResources)
 	{
@@ -130,6 +132,20 @@ namespace MOItemSources
 				else if (const UMOPCGItemSpawnerSettings* ItemSpawner = Cast<UMOPCGItemSpawnerSettings>(Settings))
 				{
 					AddSpawnEntries(ItemSpawner->ItemsToSpawn, Source, OutPickups);
+				}
+				else if (const UMOPCGCaveSpawnerSettings* CaveSpawner = Cast<UMOPCGCaveSpawnerSettings>(Settings))
+				{
+					// The cave scatter places its harvestable rows (coal seams, ore veins) on cave surfaces: a row with a resource, a mesh and a density.
+					if (CaveSpawner->CaveScatterTable && CaveSpawner->CaveScatterTable->GetRowStruct() == FMOCaveScatterRow::StaticStruct())
+					{
+						CaveSpawner->CaveScatterTable->ForeachRow<FMOCaveScatterRow>(TEXT("MOItemSources"), [&OutPlacedResources](const FName&, const FMOCaveScatterRow& Row)
+						{
+							if (!Row.ResourceNodeId.IsNone() && Row.PerSquareMetre > 0.0f && !Row.Mesh.IsNull())
+							{
+								OutPlacedResources.Add(Row.ResourceNodeId);
+							}
+						});
+					}
 				}
 				else if (const UMOPCGResourceSpawnerSettings* ResourceSpawner = Cast<UMOPCGResourceSpawnerSettings>(Settings))
 				{

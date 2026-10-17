@@ -18,15 +18,21 @@ FMORemovedInstance FMOWorldRemovalLedger::MakeEntry(const FVector& WorldLocation
 	FMORemovedInstance E;
 	E.CellX = FMath::RoundToInt32(WorldLocation.X / CellCm);
 	E.CellY = FMath::RoundToInt32(WorldLocation.Y / CellCm);
+	E.CellZ = FMath::RoundToInt32(WorldLocation.Z / CellZCm);
 	E.Mesh = MeshName;
 	return E;
 }
 
 bool FMOWorldRemovalLedger::Add(const FMORemovedInstance& Entry)
 {
-	bool bAlready = false;
-	Keys.Add({ Entry.CellX, Entry.CellY, Entry.Mesh }, &bAlready);
-	return !bAlready;
+	TArray<int32, TInlineAllocator<2>>& Zs = Keys.FindOrAdd({ Entry.CellX, Entry.CellY, Entry.Mesh });
+	if (Zs.Contains(Entry.CellZ))
+	{
+		return false;
+	}
+	Zs.Add(Entry.CellZ);
+	++NumEntries;
+	return true;
 }
 
 bool FMOWorldRemovalLedger::IsRemoved(const FVector& WorldLocation, FName MeshName) const
@@ -37,13 +43,20 @@ bool FMOWorldRemovalLedger::IsRemoved(const FVector& WorldLocation, FName MeshNa
 	}
 	const int32 X = FMath::RoundToInt32(WorldLocation.X / CellCm);
 	const int32 Y = FMath::RoundToInt32(WorldLocation.Y / CellCm);
+	const int32 Z = FMath::RoundToInt32(WorldLocation.Z / CellZCm);
 	for (int32 DY = -1; DY <= 1; ++DY)
 	{
 		for (int32 DX = -1; DX <= 1; ++DX)
 		{
-			if (Keys.Contains({ X + DX, Y + DY, MeshName }))
+			if (const TArray<int32, TInlineAllocator<2>>* Zs = Keys.Find({ X + DX, Y + DY, MeshName }))
 			{
-				return true;
+				for (const int32 CellZ : *Zs)
+				{
+					if (CellZ == FMORemovedInstance::AnyZ || FMath::Abs(CellZ - Z) <= 1)
+					{
+						return true;
+					}
+				}
 			}
 		}
 	}

@@ -11,6 +11,7 @@
 #include "MOResourceDatabaseSettings.h"
 #include "MOBiomeDefinitionRow.h"
 #include "MOResourceNodeDefinitionRow.h"
+#include "MOPCGCaveSpawnerSettings.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -57,6 +58,20 @@ bool FMOData_SolidMeshCollision::RunTest(const FString& Parameters)
 		}
 	}
 
+	// The cave scatter: rows that block the pawn -- Solid (fallen blocks), or Auto with a solid-kind resource (ore lumps, coal seams).
+	if (const UDataTable* Cave = LoadObject<UDataTable>(nullptr, TEXT("/MOFramework/Data/DT_CaveScatter.DT_CaveScatter")); Cave && Cave->GetRowStruct() == FMOCaveScatterRow::StaticStruct())
+	{
+		Cave->ForeachRow<FMOCaveScatterRow>(TEXT("SolidMeshCollision"), [&Solid](const FName& Name, const FMOCaveScatterRow& Row)
+		{
+			const FMOResourceNodeDefinitionRow* Resource = Row.ResourceNodeId.IsNone() ? nullptr : UMOResourceDatabaseSettings::GetResourceDefinition(Row.ResourceNodeId);
+			const bool bBlocks = Row.Collision == EMOSpeciesCollision::Solid || (Row.Collision == EMOSpeciesCollision::Auto && Resource && IsSolidKind(Resource->ResourceType));
+			if (bBlocks && !Row.Mesh.IsNull())
+			{
+				Solid.Add(Row.Mesh.ToString(), FString::Printf(TEXT("cave scatter %s"), *Name.ToString()));
+			}
+		});
+	}
+
 	int32 Checked = 0, Missing = 0;
 	for (const TPair<FString, FString>& Pair : Solid)
 	{
@@ -74,7 +89,7 @@ bool FMOData_SolidMeshCollision::RunTest(const FString& Parameters)
 			++Missing;
 		}
 	}
-	AddInfo(FString::Printf(TEXT("%d solid-kind meshes placed by the biome table checked, %d without collision"), Checked, Missing));
+	AddInfo(FString::Printf(TEXT("%d solid-kind meshes placed by the biome and cave scatter tables checked, %d without collision"), Checked, Missing));
 	TestTrue(TEXT("the biome table places at least one solid-kind mesh (the check is not vacuous)"), Checked > 0);
 	return true;
 }

@@ -3391,6 +3391,87 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 		}),
 		ECVF_Default));
 
+	// ---------- MO.WorldGen.Bedrock / MO.WorldGen.FindOre <Kind> [radius] ----------
+	// The geology (FMOWorldGen::SampleBedrock / SampleOreIn): what rock the pawn stands on, and where caves near it expose an ore (what the cave spawner plants on).
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.WorldGen.Bedrock"),
+		TEXT("Dev: the bedrock under the local pawn and the ore (if any) in the rock 2 m below its feet."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
+			const APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+			const UMOWorldSeedSubsystem* Seeds = UMOWorldSeedSubsystem::Get(World);
+			if (!Pawn || !Seeds || !Seeds->HasActiveSeed())
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDGEN Bedrock FAILED: needs a local pawn and an active world seed"));
+				return;
+			}
+			const FMOWorldGenParamsRef P = FMOWorldGenParamsProvider::Get();
+			const FVector L = Pawn->GetActorLocation();
+			const EMOBedrock Rock = FMOWorldGen::SampleBedrock(*P, L.X, L.Y, Seeds->GetActiveTerrainSeed());
+			const FMOOreSample Ore = FMOWorldGen::SampleOreIn(*P, Rock, L.X, L.Y, L.Z - 200.0, Seeds->GetActiveTerrainSeed());
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDGEN Bedrock at (%.0f, %.0f, %.0f): %s; 2 m down: %s (grade %.2f)"), L.X, L.Y, L.Z,
+				*UEnum::GetDisplayValueAsText(Rock).ToString(), *UEnum::GetDisplayValueAsText(Ore.Kind).ToString(), Ore.Grade);
+		}),
+		ECVF_Default));
+
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.WorldGen.FindOre"),
+		TEXT("Dev: cave surfaces near the local pawn where the rock behind holds an ore (grade >= 0.2, the cave scatter's default), walls first, then nearest. Usage: MO.WorldGen.FindOre <Coal|Hematite|Copper|Tin|Flint|Any> [radius_cm=40000]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
+			const APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+			const UMOWorldSeedSubsystem* Seeds = UMOWorldSeedSubsystem::Get(World);
+			if (!Pawn || !Seeds || !Seeds->HasActiveSeed())
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDGEN FindOre FAILED: needs a local pawn and an active world seed"));
+				return;
+			}
+			const UEnum* OreEnum = StaticEnum<EMOOreKind>();
+			const FString Want = Args.Num() > 0 ? Args[0] : TEXT("Any");
+			const int64 WantValue = Want.Equals(TEXT("Any"), ESearchCase::IgnoreCase) ? -1 : OreEnum->GetValueByNameString(Want);
+			if (WantValue == INDEX_NONE)
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDGEN FindOre FAILED: unknown ore '%s'"), *Want);
+				return;
+			}
+			const float Radius = Args.Num() > 1 ? FMath::Clamp(FCString::Atof(*Args[1]), 2000.f, 150000.f) : 40000.f;
+			const int32 Seed = Seeds->GetActiveTerrainSeed();
+			const FMOWorldGenParamsRef P = FMOWorldGenParamsProvider::Get();
+			const FVector C = Pawn->GetActorLocation();
+			TArray<FMOCaveSurfacePoint> Points;
+			FMOWorldGen::FindCaveSurfaces(*P, Seed, FBox2D(FVector2D(C.X - Radius, C.Y - Radius), FVector2D(C.X + Radius, C.Y + Radius)), 200.0f, Points);
+			struct FHit { float Dist; FVector Pos; FVector Normal; EMOOreKind Kind; EMOBedrock Rock; float Grade; };
+			TArray<FHit> Hits;
+			for (const FMOCaveSurfacePoint& Pt : Points)
+			{
+				const EMOBedrock Rock = FMOWorldGen::SampleBedrock(*P, Pt.Location.X, Pt.Location.Y, Seed);
+				const FVector In = Pt.Location - Pt.AirNormal * 30.0;
+				const FMOOreSample Ore = FMOWorldGen::SampleOreIn(*P, Rock, In.X, In.Y, In.Z, Seed);
+				if (Ore.Kind != EMOOreKind::None && Ore.Grade >= 0.2f && (WantValue < 0 || (int64)Ore.Kind == WantValue))
+				{
+					Hits.Add({ (float)FVector::Dist(Pt.Location, C), Pt.Location, Pt.AirNormal, Ore.Kind, Rock, Ore.Grade });
+				}
+			}
+			// Walls first (a seam or vein shows on a wall, and there is room in front of it to stand), then nearest.
+			Hits.Sort([](const FHit& A, const FHit& B) { return (A.Dist + (FMath::Abs(A.Normal.Z) > 0.5 ? 1.0e6f : 0.0f)) < (B.Dist + (FMath::Abs(B.Normal.Z) > 0.5 ? 1.0e6f : 0.0f)); });
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDGEN FindOre %s radius=%.0f: %d cave surface point(s), %d on ore"), *Want, Radius, Points.Num(), Hits.Num());
+			TArray<FVector> Taken;
+			int32 Listed = 0;
+			for (const FHit& H : Hits)
+			{
+				bool bNear = false;
+				for (const FVector& T : Taken) { bNear |= FVector::Dist(T, H.Pos) < 2000.f; }
+				if (bNear) { continue; }
+				Taken.Add(H.Pos);
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDGEN Ore #%d dist=%.0f x=%.0f y=%.0f z=%.0f nx=%.2f ny=%.2f nz=%.2f %s in %s (grade %.2f)"), Listed, H.Dist, H.Pos.X, H.Pos.Y, H.Pos.Z, H.Normal.X, H.Normal.Y, H.Normal.Z,
+					*UEnum::GetDisplayValueAsText(H.Kind).ToString(), *UEnum::GetDisplayValueAsText(H.Rock).ToString(), H.Grade);
+				if (++Listed >= 8) { break; }
+			}
+		}),
+		ECVF_Default));
+
 	// ---------- MO.WorldGen.FindCaveEntrance [radius] ----------
 	// Generator v9 galleries reach the sky only where they run into a slope: find those mouths (cave air just under the ground) to look at one.
 	ConsoleCommands.Add(CM.RegisterConsoleCommand(

@@ -77,6 +77,53 @@ enum class EMOWaterBodyKind : uint8
 };
 
 /**
+ * GEOLOGY (Oct 17 2026; Wes: ores in caves, "check what is actually realistic in terms of where to find different ores"). The rock a column is made of
+ * (FMOWorldGen::SampleBedrock): it decides which ores can occur in it and what cave walls are. Regional provinces (kilometres), sharp contacts. Sources and
+ * the model: Docs/Terrain_Generation_Exploration.md ("Geology").
+ */
+UENUM(BlueprintType)
+enum class EMOBedrock : uint8
+{
+	/** Limestone / dolomite (karst): solution caves form in it; hematite fills its joints and fissures, chert (flint) nodules lie in thin beds. */
+	Limestone,
+	/** Sandstone and shale with coal seams (the "coal measures"): sedimentary basins and foothills. */
+	CoalMeasures,
+	/** Granite and the metamorphic rock around it: continental interiors and mountain cores; tin (cassiterite) veins, some copper. */
+	Granite,
+	/** Basalt and the other volcanic rocks: copper veins (native copper and malachite). */
+	Basalt
+};
+
+/** What a point of rock holds (FMOWorldGen::SampleOre). */
+UENUM(BlueprintType)
+enum class EMOOreKind : uint8
+{
+	None,
+	/** Coal seams: beds in the coal measures, laterally continuous for kilometres, pinching out. */
+	Coal,
+	/** Iron: hematite filling the joints of limestone (northern England's limestone hematite filled whole fissures and caverns). */
+	Hematite,
+	/** Copper: veins in basalt (native copper, malachite where weathered) and at granite margins. */
+	Copper,
+	/** Tin: cassiterite veins in granite. */
+	Tin,
+	/** Chert (flint) nodules in thin beds of limestone. */
+	Flint
+};
+
+/** Which way a cave surface faces (FMOWorldGen::FindCaveSurfaces): what it can carry. */
+UENUM(BlueprintType)
+enum class EMOCaveSurfaceKind : uint8
+{
+	/** Faces up: the cave floor (rubble, gravel, clay, dirt). */
+	Floor,
+	/** Faces sideways: a wall (where seams and veins show). */
+	Wall,
+	/** Faces down: the ceiling. */
+	Ceiling
+};
+
+/**
  * Designer-facing tuning. Lives in UMOWorldGenSettings (Project Settings) and is copied into the
  * immutable snapshot. All lengths are cm (UU) unless the name says otherwise.
  */
@@ -778,6 +825,23 @@ struct FMOWorldGenProbe
 };
 
 /** One sinkhole: a shaft from the ground down to a chamber. A grid cell holds at most one. */
+/** One point of rock (FMOWorldGen::SampleOre). Grade 0..1: 1 well inside the seam / vein, falling to 0 at its edges. */
+struct FMOOreSample
+{
+	EMOOreKind Kind = EMOOreKind::None;
+	float Grade = 0.0f;
+};
+
+/** A point on a cave's surface (FMOWorldGen::FindCaveSurfaces). */
+struct FMOCaveSurfacePoint
+{
+	FVector Location = FVector::ZeroVector;    // on the surface (the field's zero crossing)
+	FVector AirNormal = FVector::UpVector;      // unit, pointing out of the rock into the cave air
+	EMOCaveSurfaceKind Kind = EMOCaveSurfaceKind::Floor;
+	float AreaM2 = 1.0f;                        // the surface area this point stands for (its column's footprint over the surface's tilt, capped)
+	float GroundCm = 0.0f;                      // the terrain height above it
+};
+
 struct FMOSinkhole
 {
 	FVector2D Center = FVector2D::ZeroVector;   // world XY (cm)
@@ -858,6 +922,20 @@ struct MOFRAMEWORKCORE_API FMOWorldGen
 	 */
 	static float SampleCaveDistanceCm(const FMOWorldGenParams& Params, double X, double Y, double Z, int32 Seed, float StepCm = 50.0f);
 	static float SampleCaveDistanceAtGround(const FMOWorldGenParams& Params, double X, double Y, double Z, float GroundCm, int32 Seed, float StepCm = 50.0f);
+
+	/**
+	 * Points on the surfaces of the caves under Area: one column every SpacingCm (jittered inside its lattice cell, deterministically), traced up through the cave
+	 * band; every crossing of the cave field is refined to the surface and given its normal (the field's gradient) and kind (floor / wall / ceiling). What the
+	 * cave spawner scatters on. Deterministic order (rows of columns, bottom to top). Columns are traced in parallel.
+	 */
+	static void FindCaveSurfaces(const FMOWorldGenParams& Params, int32 Seed, const FBox2D& Area, float SpacingCm, TArray<FMOCaveSurfacePoint>& Out);
+
+	/** The bedrock of column (X, Y): regional provinces (volcanic, crystalline in the continental interiors, sedimentary elsewhere -- limestone or coal measures). */
+	static EMOBedrock SampleBedrock(const FMOWorldGenParams& Params, double X, double Y, int32 Seed);
+
+	/** What the rock at (X, Y, Z) holds, given its bedrock (see EMOOreKind for which ore lives in which rock and how). */
+	static FMOOreSample SampleOreIn(const FMOWorldGenParams& Params, EMOBedrock Bedrock, double X, double Y, double Z, int32 Seed);
+	static FMOOreSample SampleOre(const FMOWorldGenParams& Params, double X, double Y, double Z, int32 Seed) { return SampleOreIn(Params, SampleBedrock(Params, X, Y, Seed), X, Y, Z, Seed); }
 
 	/** The sinkhole of grid cell (CellX, CellY) (cell edge = SinkholeCellCm), or false if the cell has none / caves are off / the ground there is too low. */
 	static bool GetSinkholeInCell(const FMOWorldGenParams& Params, int64 CellX, int64 CellY, int32 Seed, FMOSinkhole& Out);

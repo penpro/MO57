@@ -76,6 +76,15 @@ def solid_meshes():
             kind = "Sapling" if "Sapling" in name or "Seedling" in name else worldfeature_kind(name)
             if kind in ("Composition", "Tree", "Sapling", "Bush"):
                 found.setdefault(m.group(1), (kind, "biome:" + r[0] + " (Collision=Solid)"))
+    # The cave scatter (DT_CaveScatter, the MO Cave Spawner): fallen blocks marked Solid and ore lumps (a solid-kind resource) block the pawn -- convex hulls like any rock.
+    if unreal.EditorAssetLibrary.does_asset_exist("/MOFramework/Data/DT_CaveScatter"):
+        rows = table_rows("/MOFramework/Data/DT_CaveScatter")
+        hdr = rows[0]
+        mi, ci, ri = hdr.index("Mesh"), hdr.index("Collision"), hdr.index("ResourceNodeId")
+        for r in rows[1:]:
+            kind = "Rock" if r[ci] == "Solid" else (rtype.get(r[ri]) if r[ci] == "Auto" else None)
+            if kind in SOLID and r[mi] not in ("", "None"):
+                found.setdefault(r[mi], (kind, "cave:" + r[0]))
     return found
 
 

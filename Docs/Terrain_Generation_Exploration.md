@@ -368,6 +368,53 @@ New data row `Ambient.Cave` in `DT_AmbientLayers` (calm hollow + drip loops; dri
 - Lakes are static levels (no flow, no seasons); rivers are sea-level channels only.
 - `VerticalScale` 2 doubles every slope: re-tune anything that assumed the old relief (biome bands are in real metres; `AlpineHeath` starts at 320 m).
 
+## Geology: bedrock, ores, and what lives in caves (2026-10-17)
+
+Wes: "I want there to be PCG inside caves, rocks, rocky materials on walls and ceilings, rock and dirt floors, different ores can also be found, coal,
+iron, copper, etc -- check what is actually realistic in terms of where to find different ores though, I still want realism."
+
+**Where ores really are** (checked Oct 17; sources at the end of this section):
+
+| Ore | Where it occurs in the real world | How MO57 models it (`MOWorldGenGeology.cpp`) |
+|---|---|---|
+| Coal | SEAMS: beds inside sedimentary rock (sandstone, shale -- the "coal measures") of basins and foothills; laterally continuous, 0.3-2 m thick, dipping gently, pinching out | a bed per 16 m of strata (each at its own height in its cycle), 40-220 cm thick, a ~1 degree regional dip, present where a 400 m field opens -- in `CoalMeasures` bedrock only |
+| Iron | hematite filling joints and fissures of LIMESTONE (northern England's filled whole fissures and caverns); bog iron (limonite) precipitating in wetlands; magnetite in igneous rock | hematite: vertical sheets along one joint set (~60 m apart, 30-120 cm wide), mineralised in patches -- in `Limestone`. Bog iron stays a SURFACE ore (the biomes' dig tables) |
+| Copper | veins in basic igneous rock (basalt, gabbro) and at granite margins; native copper and malachite where they weather; also red-bed sandstones | thin 3D vein sheets, sparse -- in `Basalt`, rarer in `Granite` |
+| Tin | cassiterite tied to GRANITE; placers in rivers draining it | 3D vein sheets in `Granite` (placers: future surface work) |
+| Flint | chert nodules in thin beds of limestone and chalk | a 25 cm bed per 6 m of strata with nodules in it -- in `Limestone` |
+| Caves | solution caves form in LIMESTONE (karst); clay / mud and breakdown rubble on their floors | galleries are not limited to limestone yet (open fork below); floors carry rubble and gravel |
+
+**Bedrock** (`FMOWorldGen::SampleBedrock`): regional provinces (~7 km fields), sharp contacts -- volcanic provinces are `Basalt`; the continental
+interiors (continentalness > 0.5) and one province band are `Granite`; the rest is sedimentary, `Limestone` or `CoalMeasures`. Measured
+(`MOFramework.WorldGen.Geology`, 60 x 60 km): limestone 41%, coal measures 24%, granite 19%, basalt 16% of the land; 97.9% of points 100 m apart share
+their rock. Ore share of each rock in the cave band: coal 5.9% of the coal measures; hematite 0.44% + flint 1.4% of limestone; tin 0.38% + copper 0.18%
+of granite; copper 0.62% of basalt. Coal is a bed: 98% of coal points continue 2 m sideways, 0% are still coal 3 m up. The test also asserts every ore
+sits in its host rock.
+
+**What lives in caves** (`MO Cave Spawner`, `UMOPCGCaveSpawnerSettings`, on the GRID16 tier of `MOPCG_StampScatter1`, fed by `WaitForVoxelWorld_0`):
+the node finds the cave surfaces under its 64 m cell itself (`FMOWorldGen::FindCaveSurfaces`: a column per metre, sphere-traced up through the cave
+band, crossings refined, normal from the field's gradient, floor / wall / ceiling by the normal; `MOFramework.WorldGen.CaveSurfaces`), asks the rock
+30 cm behind each point what it is and holds, and plants the rows of `DT_CaveScatter` (`FMOCaveScatterRow`: surface, bedrock, ore + minimum grade,
+density per m2, mesh, material, scale, align, sink, resource node, collision). It IS the biome spawner's build (subclass; only the planting differs), so
+ore rows are real harvest targets (DT_Resources: `CoalSeam` -> `Coal01`, `IronOreDeposit`, `CopperOreDeposit`, new `TinOreDeposit`, `FlintDeposit`) and
+removals persist (the removal ledger now keys a 1 m height, so a quarried floor stone no longer takes the ceiling rock above it). The rows: gravel /
+eroded-rock / sandstone floor skins, stones, fallen blocks (solid), rock lumps on walls and ceilings (pale limestone on the sand-rock scan -- a tint only
+multiplies a scan's colour, the dark Nordic rock came out black), and the ore lumps (coal black, hematite red, malachite green, cassiterite dark,
+chert nodules on the flint scan). Cost: 5-14 ms of surface finding per 64 m cell with caves. Dev verbs: `MO.WorldGen.Bedrock`, `MO.WorldGen.FindOre
+<Coal|Hematite|Copper|Tin|Flint|Any> [radius]`, `mo.PCG.CaveDensityScale`.
+
+Open forks (Wes): (1) caves only in limestone (realistic; concentrates caves into karst country, fewer elsewhere); (2) the voxel walls are one rock
+material (`VST_Cliff`) -- per-bedrock and floor (clay/mud) surface types need the cave graph to output a surface type; (3) mining a cave wall with a
+pick should yield by the same `SampleOreIn` (the playbook's "yield from the dug-out volume", Voxel_Plugin_Reference.md 18a); (4) `IronOreDeposit` needs a
+pick of quality 1, which only metal picks reach -- cave hematite is out of reach of the stone maul (bog iron is the early iron); (5) Galena (lead, the
+classic limestone-cave ore) has no item yet.
+
+Sources: [coal and iron in sedimentary layers; copper and tin in igneous veins](https://dspmuranchi.ac.in/pdf/Blog/PROSPECTING%20CRITERIA%20OF%20VARIOUS%20MINERAL%20DEPOSITS.pdf),
+[hematite in limestone fissures and caverns (Ramsay 1878)](https://geology.19thcenturyscience.org/books/1878-Ramsay-Geology/PDFpages/1878-Ramsay-Geology-0596.pdf),
+[USGS: copper in sedimentary and volcanogenic rocks](https://www.usgs.gov/publications/copper-deposits-sedimentary-and-volcanogenic-rocks),
+[bog iron formation (Britannica)](https://www.britannica.com:443/print/article/1365546), [galena in limestone (Britannica)](https://www.britannica.com/science/galena-mineral),
+[galena speleothems in Upper Mississippi Valley caves (NSS Bulletin)](https://legacy.caves.org/pub/journal/PDF/V41/v41n1-Peck.htm).
+
 ## Update (2026-10-10): the level runs on the generator; caves, water and below-world light
 
 **State: all of this is uncommitted work on top of commit `5b9461f6` (the rollback point).**

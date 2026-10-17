@@ -46,10 +46,12 @@
 
 #include "CoreMinimal.h"
 #include "PCGSettings.h"
+#include "PCGContext.h"
 #include "MOBiomeDefinitionRow.h"
 #include "MOPCGBiomeSpawnerSettings.generated.h"
 
 class UStaticMesh;
+class UMaterialInterface;
 class UInstancedStaticMeshComponent;
 class UDataTable;
 struct FISMComponentDescriptorBase;
@@ -245,15 +247,53 @@ public:
 		FName ResourceNodeId;
 		bool bAutoSweep = false;
 		EMOSpeciesCollision Collision = EMOSpeciesCollision::Auto;
+		/** Optional material for every slot (a recoloured scan: an ore on a rock mesh). Part of the component's identity. */
+		TObjectPtr<UMaterialInterface> Material = nullptr;
 		TArray<FTransform> Transforms;
 	};
 
 protected:
 	virtual bool ExecuteInternal(FPCGContext* Context) const override;
 
+	/** The planting: fills the context's buckets and log fields (through SubmitBuckets). False = nothing to build (no target actor, no biomes, a shore cell with
+	 *  no water near). A spawner with its own placement (the cave spawner) overrides this and shares the build. */
+	virtual bool Plant(FMOPCGBiomeSpawnerContext* Context) const;
+
+	/** Hands a planting to the build: the buckets (empty ones dropped) and the numbers the build's log line reports. False when there is no source component. */
+	static bool SubmitBuckets(FMOPCGBiomeSpawnerContext* Context, AActor* TargetActor, TArray<FSpeciesBucket>&& Buckets, int32 TotalIn, int32 TotalAccepted, int32 TotalSuppressed,
+		int32 NumBiomes, double PlantMs, FString&& StageSummary, FString&& BoundsText);
+
 private:
-	/** The planting: fills the context's buckets and log fields. False = nothing to build (no target actor, no biomes, a shore cell with no water near). */
-	bool Plant(FMOPCGBiomeSpawnerContext* Context) const;
 	/** Adds instances until the frame budget is spent (at least one batch). True when every bucket is in. */
 	bool BuildSlice(FMOPCGBiomeSpawnerContext* Context) const;
+};
+
+/** One execution's state between its time slices: planted once, then built a batch at a time (see FMOPCGBiomeSpawnerElement). */
+struct FMOPCGBiomeSpawnerContext : public FPCGContext
+{
+	bool bPlanted = false;
+	TWeakObjectPtr<AActor> TargetActor;
+	TWeakObjectPtr<UPCGComponent> SourceComponent;
+	TArray<FMOPCGBiomeSpawnerElement::FSpeciesBucket> Buckets;   // build order = the planting's bucket order
+	int32 NextBucket = 0;
+	int32 NextTransform = 0;                                     // in Buckets[NextBucket]
+	TWeakObjectPtr<UInstancedStaticMeshComponent> CurrentISM;   // the component Buckets[NextBucket] is being added to
+	int32 Components = 0;
+	int32 Slices = 0;
+	double BuildMs = 0.0;
+	int32 BucketBatch = 0;          // the current bucket's adaptive batch size (set when its component is created)
+	double WorstBatchMs = 0.0;      // the longest single AddInstances batch (what a frame can lose between two budget checks)
+	// The planting's numbers, logged with the build time when the last instance is in.
+	int32 TotalIn = 0, TotalAccepted = 0, TotalSuppressed = 0, NumBiomes = 0;
+	double PlantMs = 0.0;
+	FString StageSummary, BoundsText, BucketSummary;
+
+	virtual void AddExtraStructReferencedObjects(FReferenceCollector& Collector) override
+	{
+		for (FMOPCGBiomeSpawnerElement::FSpeciesBucket& Bucket : Buckets)
+		{
+			Collector.AddReferencedObject(Bucket.Mesh);
+			Collector.AddReferencedObject(Bucket.Material);
+		}
+	}
 };
