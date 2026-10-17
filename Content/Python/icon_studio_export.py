@@ -3,7 +3,7 @@
     Driven by Tools/icon_studio.py (python Tools/icon_studio.py --missing). By hand:
     python Tools/ue.py py -c "import icon_studio_export as e; out(e.run({'Mushroom01': '/Game/...'}, 'D:/UEProjects/MO57/Saved/IconStudio'))"
 
-Per item, into <out>/<ItemId>/: mesh.fbx (LOD0, no collision) + slot<N>_<base|normal|orm|mask>.png + meta.json:
+Per item, into <out>/<ItemId>/: mesh.fbx (LOD0, no collision) + slot<N>_<base|normal|orm|mask>.png (.exr for an HDR source) + meta.json:
   slots[i] = {slot, name, kind: opaque|foliage, base, normal, orm, mask, normal_opengl}
   scale    = the item row's WorldVisual Scale3D (UE axes), so the icon shows the item as the world does: a flatbread is a rye
              loaf at Z 0.4. Uniform scales change nothing in the framing.
@@ -69,10 +69,23 @@ def _export(obj, filename, exporter, options=None):
     task.automated = True
     task.prompt = False
     task.replace_identical = True
-    task.exporter = exporter
+    if exporter is not None:
+        task.exporter = exporter
     if options is not None:
         task.options = options
     return unreal.Exporter.run_asset_export_task(task)
+
+
+def _export_texture(tex, stem):
+    """Exports a texture's source as <stem>.png, or <stem>.exr when the source is HDR (float: the Nordic rock scans are RGBA16F). Returns the file written, or None.
+
+    No explicit exporter: UE then picks one by extension through SupportsObject, which checks the source format. Handing it TextureExporterPNG directly skips
+    that check, and an HDR source then asserts (check SupportsTexture, EditorFactories.cpp) and takes the editor down -- Oct 17 2026, twice."""
+    for ext in ("png", "exr"):
+        filename = "%s.%s" % (stem, ext)
+        if _export(tex, filename, None):
+            return filename
+    return None
 
 
 def _master(material):
@@ -105,8 +118,8 @@ def export_item(item_id, mesh_path, out_root, scale=None, override=None):
                 tex = mel.get_material_instance_texture_parameter_value(material, param)
                 if not tex or tex.get_path_name().startswith(("/Engine/", "/InterchangeAssets/")) or "/Textures/Standard/T_Default" in tex.get_path_name():
                     continue
-                filename = "%s/slot%d_%s.png" % (folder, index, key)
-                if _export(tex, filename, unreal.TextureExporterPNG()):
+                filename = _export_texture(tex, "%s/slot%d_%s" % (folder, index, key))
+                if filename:
                     info[key] = os.path.basename(filename)
                     if key == "normal":
                         info["normal_opengl"] = bool(tex.get_editor_property("flip_green_channel"))
