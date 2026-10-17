@@ -11,6 +11,8 @@
 //     sheets in 3D, sparse.
 //   * Tin: cassiterite veins tied to granite (and river placers downstream -- surface). Modelled like copper, in granite.
 //   * Flint: chert nodules in thin beds of limestone (and chalk).
+//   * Lead: galena in limestone (Mississippi Valley-type: the lead-zinc ores of the Pennines, Derbyshire, the Upper Mississippi), filling fractures and
+//     old solution cavities. Modelled as a second, more widely spaced joint set, mineralised in rarer patches than the hematite.
 //   * Solution caves form in limestone; the galleries are not restricted to it (yet) -- see the doc's open forks.
 
 #include "MOWorldGen.h"
@@ -26,6 +28,7 @@ namespace
 		SaltGeoProvince = 0x9101u, SaltGeoVolcanic = 0x9102u,
 		SaltCoalDip = 0x9201u, SaltCoalSeam = 0x9202u, SaltCoalThick = 0x9203u, SaltCoalPresent = 0x9204u,
 		SaltHematiteJoint = 0x9301u, SaltHematiteWidth = 0x9302u, SaltHematiteMask = 0x9303u,
+		SaltGalenaJoint = 0x9304u, SaltGalenaWidth = 0x9305u, SaltGalenaMask = 0x9306u,
 		SaltChertBed = 0x9401u, SaltChertNodule = 0x9402u,
 		SaltCopperVein = 0x9501u, SaltCopperMask = 0x9502u, SaltTinVein = 0x9503u, SaltTinMask = 0x9504u,
 		SaltCaveSurfaceJitter = 0x9601u, SaltSoilDepth = 0x9701u, SaltOutcropJitter = 0x9801u
@@ -88,6 +91,19 @@ namespace
 			if (Grade > 0.0f)
 			{
 				return FMOOreSample{ EMOOreKind::Hematite, Grade };
+			}
+		}
+		// Galena along a second joint set (~90 m apart, 20-70 cm wide), mineralised in rarer patches (a 3D field 200 m across, 80 m tall).
+		const FNoise2 GJoint = GradientNoise2(X * (1.0 / 9000.0) + 3.7, Y * (1.0 / 9000.0) - 8.1, (uint32)FMOWorldGen::HashSeed(Seed, SaltGalenaJoint));
+		const float GJointDist = FMath::Abs(GJoint.Value) * 9000.0f / FMath::Max(FMath::Sqrt(GJoint.Dx * GJoint.Dx + GJoint.Dy * GJoint.Dy), 0.35f);
+		const float GWidth = 20.0f + 50.0f * FMath::Clamp(0.5f + 0.7f * GradientNoise2(X * (1.0 / 1500.0), Y * (1.0 / 1500.0), (uint32)FMOWorldGen::HashSeed(Seed, SaltGalenaWidth)).Value, 0.0f, 1.0f);
+		if (GJointDist < 0.5f * GWidth)
+		{
+			const float Mask = GradientNoise3(X * (1.0 / 20000.0), Y * (1.0 / 20000.0), Z * (1.0 / 8000.0), (uint32)FMOWorldGen::HashSeed(Seed, SaltGalenaMask));
+			const float Grade = Smooth01(0.26f, 0.36f, Mask) * (1.0f - Smooth01(0.3f * GWidth, 0.5f * GWidth, GJointDist));
+			if (Grade > 0.0f)
+			{
+				return FMOOreSample{ EMOOreKind::Galena, Grade };
 			}
 		}
 		// Chert: a 25 cm bed per 6 m of strata (each at its own height in its cycle), nodules in it.

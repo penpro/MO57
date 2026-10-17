@@ -382,12 +382,13 @@ iron, copper, etc -- check what is actually realistic in terms of where to find 
 | Copper | veins in basic igneous rock (basalt, gabbro) and at granite margins; native copper and malachite where they weather; also red-bed sandstones | thin 3D vein sheets, sparse -- in `Basalt`, rarer in `Granite` |
 | Tin | cassiterite tied to GRANITE; placers in rivers draining it | 3D vein sheets in `Granite` (placers: future surface work) |
 | Flint | chert nodules in thin beds of limestone and chalk | a 25 cm bed per 6 m of strata with nodules in it -- in `Limestone` |
+| Lead | GALENA in limestone and dolostone (Mississippi Valley-type: the Pennines, Derbyshire, the Upper Mississippi), filling fractures, breccias and old solution cavities; galena speleothems in caves | a second joint set (~90 m apart, 20-70 cm wide), mineralised in rarer patches than the hematite -- in `Limestone` (Oct 17, not yet measured; the test asserts it is present and rarer than hematite) |
 | Caves | solution caves form in LIMESTONE (karst); clay / mud and breakdown rubble on their floors | galleries are not limited to limestone yet (open fork below); floors carry rubble and gravel |
 
 **Bedrock** (`FMOWorldGen::SampleBedrock`): regional provinces (~7 km fields), sharp contacts -- volcanic provinces are `Basalt`; the continental
 interiors (continentalness > 0.5) and one province band are `Granite`; the rest is sedimentary, `Limestone` or `CoalMeasures`. Measured
 (`MOFramework.WorldGen.Geology`, 60 x 60 km): limestone 41%, coal measures 24%, granite 19%, basalt 16% of the land; 97.9% of points 100 m apart share
-their rock. Ore share of each rock in the cave band: coal 5.9% of the coal measures; hematite 0.44% + flint 1.4% of limestone; tin 0.38% + copper 0.18%
+their rock. Ore share of each rock in the cave band: coal 5.9% of the coal measures; hematite 0.44% + flint 1.4% + galena 0.14% of limestone; tin 0.38% + copper 0.18%
 of granite; copper 0.62% of basalt. Coal is a bed: 98% of coal points continue 2 m sideways, 0% are still coal 3 m up. The test also asserts every ore
 sits in its host rock.
 
@@ -413,7 +414,10 @@ Basalt01 / Coal01 / IronOre01 / CopperOre01 / TinOre01 / FlintNodule01; skips po
 once) and the survivors' ExcavateAndHaul job (earth and stone fill the fill zone; ore is kept). Test `WorldGen.DigYields`. And "they should be able to
 collect pretty much any ore, the actual hurdle with iron is having fire hot enough": `IronOreDeposit` takes a stone pick (0.5) like copper; the heat
 ladder (station temperature, fuel, bellows) is researched in `Docs/Technology_History.md` and waits on Wes + Codex's station-context work.
-Still open: per-bedrock / floor voxel surface types; galena (lead) item; cave lighting / exposure; geology-placed surface outcrops (coal at seam
+Galena (Oct 17, after Wes went to bed): `EMOOreKind::Galena` -> `GalenaOre01`, which also gives the GlazePottery chain a producer: powdered galena
+is how medieval lead glazes were made (the `MineralGlaze01` it needs had none). Rows prepared, not yet authored (editor window). Carried light:
+`Docs/Light_Sources.md`.
+Still open: per-bedrock / floor voxel surface types; cave exposure (measure first); geology-placed surface outcrops (coal at seam
 outcrops, malachite stains, tin placers) to replace the biome-placed copper / flint deposits.
 
 Sources: [coal and iron in sedimentary layers; copper and tin in igneous veins](https://dspmuranchi.ac.in/pdf/Blog/PROSPECTING%20CRITERIA%20OF%20VARIOUS%20MINERAL%20DEPOSITS.pdf),

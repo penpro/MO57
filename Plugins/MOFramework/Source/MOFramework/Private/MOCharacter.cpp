@@ -42,6 +42,8 @@
 #include "MOCraftingTypes.h"
 #include "MOTerraformingComponent.h"
 #include "MOTimedActionComponent.h"
+#include "MOCarriedLightComponent.h"
+#include "MOEyeAdaptationComponent.h"
 #include "MOSurvivorController.h"
 #include "AIController.h"
 #include "MOUIManagerComponent.h"
@@ -140,6 +142,10 @@ AMOCharacter::AMOCharacter(const FObjectInitializer& ObjectInitializer)
 
 	// MO Components - timed body actions (drinking at water, ...)
 	TimedActionComponent = CreateDefaultSubobject<UMOTimedActionComponent>(TEXT("TimedActionComponent"));
+
+	// MO Components - a carried flame (torch, lamp)
+	CarriedLightComponent = CreateDefaultSubobject<UMOCarriedLightComponent>(TEXT("CarriedLightComponent"));
+	EyeAdaptationComponent = CreateDefaultSubobject<UMOEyeAdaptationComponent>(TEXT("EyeAdaptationComponent"));
 
 	// MO Components - Equipment
 	EquipmentComponent = CreateDefaultSubobject<UMOEquipmentComponent>(TEXT("EquipmentComponent"));

@@ -108,7 +108,9 @@ enum class EMOOreKind : uint8
 	/** Tin: cassiterite veins in granite. */
 	Tin,
 	/** Chert (flint) nodules in thin beds of limestone. */
-	Flint
+	Flint,
+	/** Lead: galena in limestone (Mississippi Valley-type), filling fractures and old solution cavities; rarer than the hematite. */
+	Galena
 };
 
 /** What a dig cuts through at a point (FMOWorldGen::SampleDig): what the dug volume yields. */

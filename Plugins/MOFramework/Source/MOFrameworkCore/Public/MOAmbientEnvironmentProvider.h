@@ -68,6 +68,22 @@ public:
 };
 
 /**
+ * A point source of visible light near the eye -- a flame: a carried torch, a campfire. Registered while it burns (on every machine that
+ * renders it); the eye's adaptation feels the aggregate (UMOEyeAdaptationComponent) without knowing what burns.
+ */
+class IMOLocalLightSource
+{
+public:
+	virtual ~IMOLocalLightSource() = default;
+
+	/** World position of the flame. */
+	virtual FVector GetLightLocation() const = 0;
+
+	/** Its luminous intensity now (cd): flicker and all. */
+	virtual float GetLuminousIntensityCd() const = 0;
+};
+
+/**
  * Core-level locator the provider registers into. Lives in Core so both the
  * provider (above) and the consumers (medical layer) can reach it without
  * knowing each other. Also aggregates registered point heat sources —
@@ -145,4 +161,35 @@ private:
 	/** Raw on purpose: sources unregister in EndPlay (always runs before the
 	 *  world tears the subsystem down). */
 	TArray<IMOLocalHeatSource*> HeatSources;
+
+	/** Raw on purpose, as HeatSources. */
+	TArray<IMOLocalLightSource*> LightSources;
+
+public:
+	void RegisterLightSource(IMOLocalLightSource* InSource) { LightSources.AddUnique(InSource); }
+	void UnregisterLightSource(const IMOLocalLightSource* InSource)
+	{
+		LightSources.RemoveAll([InSource](const IMOLocalLightSource* S) { return S == InSource; });
+	}
+	const TArray<IMOLocalLightSource*>& GetLightSources() const { return LightSources; }
+
+	/**
+	 * Illuminance at a location from the registered flames (lux): each source's intensity over the square of its distance in metres (the
+	 * inverse-square law), summed -- light adds up, unlike warmth. Distances under MinDistanceCm count as MinDistanceCm (a flame is not a point).
+	 * Occlusion is ignored: what the eye sees of a flame round a corner is small, and the caller only wants how light-adapted the eye is.
+	 */
+	float GetIlluminanceLuxAt(const FVector& Location, float MinDistanceCm = 50.0f) const
+	{
+		float Lux = 0.0f;
+		for (const IMOLocalLightSource* Source : LightSources)
+		{
+			if (!Source)
+			{
+				continue;
+			}
+			const float DistM = FMath::Max(FVector::Dist(Location, Source->GetLightLocation()), MinDistanceCm) / 100.0f;
+			Lux += FMath::Max(Source->GetLuminousIntensityCd(), 0.0f) / (DistM * DistM);
+		}
+		return Lux;
+	}
 };

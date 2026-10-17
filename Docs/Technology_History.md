@@ -109,6 +109,41 @@ like copper). Harder rock should cost more TIME, not a tool gate -- fire-setting
 "achievable temperature" belongs; logged for Codex in `claude-codex-coop.md` (CL-0027). Nothing of the heat ladder is built yet -- it is a design
 step for Wes to approve.
 
+### Draft data for the heat fields (Oct 17; not authored)
+
+Codex's crafting batch C adds the fields: a station building's `ProvidedProcessTemperatureCelsius` (recipe row, `bIsBuilding`), the runtime
+`AMOCraftingStationActor::AchievableProcessTemperatureCelsius` (fuel and air may lower it), and a recipe's `MinimumProcessTemperatureCelsius`
+(0 = no requirement). Values below follow the physics: what each process needs, not a balancing guess. The recipe list is from the Feb
+`recipes.db` export; check it against the live DT before authoring.
+
+| Station building | Provided deg C | Basis |
+|---|---|---|
+| BuildCampfire | 700 | open wood fire: sustained 600-800, peaks ~900 |
+| BuildForge | 1,300 | charcoal hearth with bellows (~1,260 forced air); a smith's hearth runs hotter at the tuyere |
+| BuildBloomery | 1,250 | clay shaft, charcoal, bellows: slag must run (~1,100-1,200) while the iron stays solid |
+
+| Recipe | Minimum deg C | Why |
+|---|---|---|
+| CookMeat | 150 | searing; any fire does it |
+| BrainTanHide | 0 | smoke and work, not heat |
+| ShapeCrudePottery, MakeCookingPot, MakeStorageJar, MakeClayBowl | 600 | clay becomes ceramic from ~550-600 (earthenware 600-900): a campfire can, unreliably -- a pit kiln is the step up |
+| GlazePottery | 950 | low-fire glazes mature ~900-1,000 |
+| SmeltCopperOre | 1,100 | malachite reduces from ~800, but the copper must melt (1,085) to collect it |
+| CastCopperAwl | 1,100 | pouring copper: its melting point plus superheat |
+| AlloyBronze | 1,100 | tin goes into molten copper (bronze itself melts ~950-1,000) |
+| ForgeBronze* (axe, sword, spearhead, knife, helmet, shield, greaves), MakeScaleArmor | 1,050 | bronze goods are cast, then cold-worked and annealed |
+| MakeGlass | 1,050 | early soda-lime glass: fritting ~850, melting ~1,050-1,100 |
+| ShapeGlassBeads | 900 | glass softens enough to wind beads |
+| SmeltIronOre | 1,200 | bloomery: the slag must run |
+| RefineIronBloom | 1,150 | forge welding heat to squeeze out slag and weld the bloom |
+| CarburizeSteel | 900 | carburizing in a charcoal bed (~900-950) |
+| ForgeIron*, ForgeSteelSword | 1,000 | forging heat for wrought iron and steel |
+
+With these, a campfire cooks and fires crude earthenware but melts no metal. The Forge, run on charcoal with bellows, does everything through the
+bloomery. The missing rungs are a pit kiln (900) and an updraft kiln (1,100, for lime and crucible copper). Fuel matters through the station's
+achievable temperature: wood in a forge should stay under ~1,000 (no iron), charcoal reaches the table's values. That is Codex's runtime field
+and needs a fuel-to-temperature rule they are designing (CX-0040: "agree the actual" values first).
+
 ## Sources
 
 - [Bloomery (Wikipedia)](https://en.wikipedia.org/wiki/Bloomery) -- solid-state reduction, tuyeres, consolidation by forging, regional dates.

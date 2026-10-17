@@ -749,6 +749,14 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO")
 	TObjectPtr<class UMOTimedActionComponent> TimedActionComponent;
 
+	/** A flame carried in the hand (a lit torch or lamp): its light, its burning down, putting it out. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO")
+	TObjectPtr<class UMOCarriedLightComponent> CarriedLightComponent;
+
+	/** How light-adapted the viewer's eyes are near a flame (local, cosmetic): the camera's exposure floor. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO")
+	TObjectPtr<class UMOEyeAdaptationComponent> EyeAdaptationComponent;
+
 	/** Equipment component for body/hand slots. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="MO")
 	TObjectPtr<UMOEquipmentComponent> EquipmentComponent;

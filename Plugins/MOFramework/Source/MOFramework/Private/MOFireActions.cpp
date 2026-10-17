@@ -1,4 +1,6 @@
 #include "MOFireActions.h"
+#include "MOCarriedLightComponent.h"
+#include "MOLightSourceSettings.h"
 #include "MOCraftingStationActor.h"
 #include "MOInventoryComponent.h"
 #include "MOTimedActionComponent.h"
@@ -17,6 +19,8 @@
 const FName FMOFireActions::AddFuel(TEXT("AddFuel"));
 const FName FMOFireActions::Light(TEXT("Light"));
 const FName FMOFireActions::PutOut(TEXT("PutOut"));
+const FName FMOFireActions::LightCarried(TEXT("LightCarried"));
+const FName FMOFireActions::LightFromCarried(TEXT("LightFromCarried"));
 
 namespace
 {
@@ -79,6 +83,11 @@ namespace
 	}
 }
 
+float FMOFireActions::LightFromFlameChance(bool bRaining)
+{
+	return bRaining ? 0.6f : 0.95f;
+}
+
 float FMOFireActions::LightChance(float ToolEffectiveness, int32 FiremakingLevel, bool bRaining, float Wetness01)
 {
 	if (ToolEffectiveness <= 0.0f)
@@ -133,10 +142,30 @@ void FMOFireActions::GetActions(const APawn* Pawn, const AMOCraftingStationActor
 
 	if (Station->IsStationActive())
 	{
+		// A torch or lamp in hand is lit from the flames.
+		const UMOCarriedLightComponent* Carried = Pawn->FindComponentByClass<UMOCarriedLightComponent>();
+		EMOEquipmentSlot HeldSlot = EMOEquipmentSlot::RightHand;
+		FMOEquippedItem Held;
+		if (Carried && Carried->FindUnlitHeld(HeldSlot, Held))
+		{
+			FMOItemActionOption& LightIt = Out.AddDefaulted_GetRef();
+			LightIt.Id = LightCarried;
+			LightIt.Label = FText::Format(LOCTEXT("LightCarried", "Light the {0} in the fire"), UMOItemDatabaseSettings::GetItemDisplayName(Held.ItemDefinitionId));
+		}
 		FMOItemActionOption& Out1 = Out.AddDefaulted_GetRef();
 		Out1.Id = PutOut;
 		Out1.Label = LOCTEXT("PutOut", "Put it out");
 		return;
+	}
+	// Fire carried from the last one: a lit torch in hand lights the laid fuel directly.
+	const UMOCarriedLightComponent* CarriedFlame = Pawn->FindComponentByClass<UMOCarriedLightComponent>();
+	if (CarriedFlame && CarriedFlame->IsLit())
+	{
+		FMOItemActionOption& FromFlame = Out.AddDefaulted_GetRef();
+		FromFlame.Id = LightFromCarried;
+		FromFlame.Label = FText::Format(LOCTEXT("LightFromCarried", "Light it from the {0}"), UMOItemDatabaseSettings::GetItemDisplayName(CarriedFlame->GetLitItemId()));
+		FromFlame.bEnabled = Station->CurrentFuel > 0.0f;
+		FromFlame.DisabledReason = LOCTEXT("LayFuelFlame", "Lay some fuel first.");
 	}
 	const FLightingMethod Method = FindLightingMethod(Pawn, const_cast<UMOInventoryComponent*>(Inventory));
 	const bool bTinder = Inventory->HasItem(TinderId);
@@ -169,6 +198,60 @@ bool FMOFireActions::Perform(APawn* Pawn, AMOCraftingStationActor* Station, FNam
 	}
 	TWeakObjectPtr<APawn> WeakPawn(Pawn);
 	TWeakObjectPtr<AMOCraftingStationActor> WeakStation(Station);
+
+	if (ActionId == LightCarried)
+	{
+		UMOCarriedLightComponent* Carried = Pawn->FindComponentByClass<UMOCarriedLightComponent>();
+		EMOEquipmentSlot HeldSlot = EMOEquipmentSlot::RightHand;
+		FMOEquippedItem Held;
+		const FMOLightSourceProfile* Profile = Carried && Carried->FindUnlitHeld(HeldSlot, Held) ? UMOLightSourceSettings::Find(Held.ItemDefinitionId) : nullptr;
+		if (!Profile)
+		{
+			return false;
+		}
+		TWeakObjectPtr<UMOCarriedLightComponent> WeakCarried(Carried);
+		return Timed->Begin(LightCarried, FText::Format(LOCTEXT("LightingCarried", "Holding the {0} in the flames"), UMOItemDatabaseSettings::GetItemDisplayName(Held.ItemDefinitionId)),
+			Profile->LightSeconds,
+			[WeakCarried, WeakStation]()
+			{
+				UMOCarriedLightComponent* C = WeakCarried.Get();
+				const AMOCraftingStationActor* S = WeakStation.Get();
+				if (C && S && S->IsStationActive())
+				{
+					C->LightHeld();   // re-finds the held light: if it was put away meanwhile there is nothing to light
+				}
+			}, nullptr, 100.0f);
+	}
+
+	if (ActionId == LightFromCarried)
+	{
+		TWeakObjectPtr<UMOCarriedLightComponent> WeakCarried(Pawn->FindComponentByClass<UMOCarriedLightComponent>());
+		return Timed->Begin(LightFromCarried, LOCTEXT("LightingFromFlame", "Holding the flame to the kindling"), LightFromFlameSeconds,
+			[WeakPawn, WeakStation, WeakCarried]()
+			{
+				APawn* P = WeakPawn.Get();
+				AMOCraftingStationActor* S = WeakStation.Get();
+				const UMOCarriedLightComponent* C = WeakCarried.Get();
+				if (!P || !S || !C || !C->IsLit() || S->CurrentFuel <= 0.0f)
+				{
+					return;   // the flame went out meanwhile, or the fuel is gone
+				}
+				const UMOWeatherIntegrationSubsystem* Weather = P->GetWorld() ? P->GetWorld()->GetSubsystem<UMOWeatherIntegrationSubsystem>() : nullptr;
+				const float Chance = LightFromFlameChance(Weather && Weather->IsRaining());
+				const bool bCaught = FMath::FRand() < Chance;
+				if (bCaught)
+				{
+					S->SetStationActive(true);
+					Notify(P, LOCTEXT("CaughtFromFlame", "The kindling catches from the flame."), EMONotificationType::Success);
+				}
+				else
+				{
+					Notify(P, LOCTEXT("FailedFromFlame", "The wet kindling smokes but will not take. Try again."), EMONotificationType::Warning);
+				}
+				UE_LOG(LogMOFramework, Log, TEXT("[MOFire] %s lighting %s from a carried %s: chance %.0f %% -> %s"), *P->GetName(), *S->GetName(), *C->GetLitItemId().ToString(),
+					Chance * 100.0f, bCaught ? TEXT("CAUGHT") : TEXT("failed"));
+			}, nullptr, 100.0f);
+	}
 
 	if (ActionId == PutOut)
 	{

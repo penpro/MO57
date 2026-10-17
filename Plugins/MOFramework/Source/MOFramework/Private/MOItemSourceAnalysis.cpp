@@ -313,7 +313,7 @@ FMOItemSourceReport FMOItemSourceAnalysis::Analyze(UWorld* World, const FMOItemS
 	{
 		for (const EMOBedrock Rock : { EMOBedrock::Limestone, EMOBedrock::CoalMeasures, EMOBedrock::Granite, EMOBedrock::Basalt })
 		{
-			for (const EMOOreKind Ore : { EMOOreKind::Coal, EMOOreKind::Hematite, EMOOreKind::Copper, EMOOreKind::Tin, EMOOreKind::Flint })
+			for (const EMOOreKind Ore : { EMOOreKind::Coal, EMOOreKind::Hematite, EMOOreKind::Copper, EMOOreKind::Tin, EMOOreKind::Flint, EMOOreKind::Galena })
 			{
 				FMODigSample Sample;
 				Sample.Material = Material;

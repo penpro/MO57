@@ -30,6 +30,7 @@ FName FMOGeologyYield::ItemFor(const FMODigSample& Sample, FName SoilItemId, boo
 		case EMOOreKind::Copper: return FName(TEXT("CopperOre01"));
 		case EMOOreKind::Tin: return FName(TEXT("TinOre01"));
 		case EMOOreKind::Flint: return FName(TEXT("FlintNodule01"));
+		case EMOOreKind::Galena: return FName(TEXT("GalenaOre01"));
 		case EMOOreKind::None: break;
 		}
 		break;

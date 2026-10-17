@@ -3417,7 +3417,7 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 
 	ConsoleCommands.Add(CM.RegisterConsoleCommand(
 		TEXT("MO.WorldGen.FindOre"),
-		TEXT("Dev: cave surfaces near the local pawn where the rock behind holds an ore (grade >= 0.2, the cave scatter's default), walls first, then nearest. Usage: MO.WorldGen.FindOre <Coal|Hematite|Copper|Tin|Flint|Any> [radius_cm=40000]"),
+		TEXT("Dev: cave surfaces near the local pawn where the rock behind holds an ore (grade >= 0.2, the cave scatter's default), walls first, then nearest. Usage: MO.WorldGen.FindOre <Coal|Hematite|Copper|Tin|Flint|Galena|Any> [radius_cm=40000]"),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
 		{
 			APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;

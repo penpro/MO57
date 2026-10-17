@@ -74,7 +74,7 @@ bool FMOWorldGen_Geology::RunTest(const FString& Parameters)
 	int32 Wrong = 0;
 	FString FirstWrong;
 	int32 Samples[4] = { 0, 0, 0, 0 };
-	int32 Ores[4][6] = {};
+	int32 Ores[4][7] = {};
 	for (int32 Try = 0; Try < 400000; ++Try)
 	{
 		const double X = R.FRandRange(-3.0e6f, 3.0e6f), Y = R.FRandRange(-3.0e6f, 3.0e6f);
@@ -85,7 +85,7 @@ bool FMOWorldGen_Geology::RunTest(const FString& Parameters)
 		++Ores[(int32)B][(int32)O.Kind];
 		const bool bAllowed = O.Kind == EMOOreKind::None
 			|| (O.Kind == EMOOreKind::Coal && B == EMOBedrock::CoalMeasures)
-			|| ((O.Kind == EMOOreKind::Hematite || O.Kind == EMOOreKind::Flint) && B == EMOBedrock::Limestone)
+			|| ((O.Kind == EMOOreKind::Hematite || O.Kind == EMOOreKind::Flint || O.Kind == EMOOreKind::Galena) && B == EMOBedrock::Limestone)
 			|| (O.Kind == EMOOreKind::Copper && (B == EMOBedrock::Basalt || B == EMOBedrock::Granite))
 			|| (O.Kind == EMOOreKind::Tin && B == EMOBedrock::Granite);
 		if (!bAllowed)
@@ -97,11 +97,11 @@ bool FMOWorldGen_Geology::RunTest(const FString& Parameters)
 			}
 		}
 	}
-	static const TCHAR* OreNames[6] = { TEXT("none"), TEXT("coal"), TEXT("hematite"), TEXT("copper"), TEXT("tin"), TEXT("flint") };
+	static const TCHAR* OreNames[7] = { TEXT("none"), TEXT("coal"), TEXT("hematite"), TEXT("copper"), TEXT("tin"), TEXT("flint"), TEXT("galena") };
 	for (int32 B = 0; B < 4; ++B)
 	{
 		FString Line;
-		for (int32 K = 1; K < 6; ++K)
+		for (int32 K = 1; K < 7; ++K)
 		{
 			if (Ores[B][K] > 0)
 			{
@@ -113,11 +113,15 @@ bool FMOWorldGen_Geology::RunTest(const FString& Parameters)
 	TestEqual(FString::Printf(TEXT("every ore sits in its host rock%s%s"), FirstWrong.IsEmpty() ? TEXT("") : TEXT(": first "), *FirstWrong), Wrong, 0);
 	TestTrue(TEXT("coal is common in the coal measures (>= 1% of the rock)"), Ores[(int32)EMOBedrock::CoalMeasures][(int32)EMOOreKind::Coal] >= 0.01 * Samples[(int32)EMOBedrock::CoalMeasures]);
 	for (const TPair<EMOBedrock, EMOOreKind>& Need : { TPair<EMOBedrock, EMOOreKind>(EMOBedrock::Limestone, EMOOreKind::Hematite), TPair<EMOBedrock, EMOOreKind>(EMOBedrock::Limestone, EMOOreKind::Flint),
+		TPair<EMOBedrock, EMOOreKind>(EMOBedrock::Limestone, EMOOreKind::Galena),
 		TPair<EMOBedrock, EMOOreKind>(EMOBedrock::Basalt, EMOOreKind::Copper), TPair<EMOBedrock, EMOOreKind>(EMOBedrock::Granite, EMOOreKind::Tin) })
 	{
 		TestTrue(FString::Printf(TEXT("%s holds %s (> 0.05%% of the rock)"), BedrockName(Need.Key), OreNames[(int32)Need.Value]),
 			Ores[(int32)Need.Key][(int32)Need.Value] > 0.0005 * Samples[(int32)Need.Key]);
 	}
+
+	TestTrue(TEXT("galena is rarer than hematite in the limestone"),
+		Ores[(int32)EMOBedrock::Limestone][(int32)EMOOreKind::Galena] < Ores[(int32)EMOBedrock::Limestone][(int32)EMOOreKind::Hematite]);
 
 	// 3. Coal lies in BEDS: from a coal point, 2 m sideways is mostly still coal, 3 m up mostly is not.
 	int32 CoalPoints = 0, Side = 0, Up = 0;

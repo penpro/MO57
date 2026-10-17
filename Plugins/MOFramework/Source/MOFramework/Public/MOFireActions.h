@@ -19,6 +19,16 @@ struct MOFRAMEWORK_API FMOFireActions
 	static const FName AddFuel;
 	static const FName Light;
 	static const FName PutOut;
+	/** Holding the torch (or lamp) in the pawn's hand into the burning fire until it catches (UMOCarriedLightComponent). */
+	static const FName LightCarried;
+	/** Lighting the laid fire from the flame the pawn carries: fire carried from the last camp -- no drill, no tinder, only rain gets in the way. */
+	static const FName LightFromCarried;
+
+	/** Lighting a laid fire from a carried flame: the chance it takes (a flame to dry kindling nearly always does; rain is the enemy). Pure, for the tests. */
+	static float LightFromFlameChance(bool bRaining);
+
+	/** Holding a flame to the laid fuel until the kindling catches (game s). */
+	static constexpr float LightFromFlameSeconds = 20.0f;
 
 	static void GetActions(const APawn* Pawn, const AMOCraftingStationActor* Station, TArray<FMOItemActionOption>& Out);
 
