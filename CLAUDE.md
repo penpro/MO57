@@ -297,6 +297,8 @@ three questions in order:
 | `Docs/World_Features_Architecture.md` | Unifying abstraction for caves / rivers / POIs / landmarks / ore / player builds | Before designing any new "kind of thing" that lives in the world |
 | `Docs/Item_Art_Pipeline.md` | Fab scan → item mesh, recolour (tint MI) or kitbash, icon studio; Fab panel traps | Giving an item real art or an icon |
 | `Docs/Engine_Patches.md` | Engine-side bugs we need patched: evidence, exact diffs, apply/verify/revert, upstream reports | Before touching engine source, or after any engine update |
+| `Docs/Technology_History.md` | How technology really advanced (heat ladder, materials, mining) + sources; heat-field draft; dig-hardness fork | Any progression, smelting, station-temperature or mining-time work |
+| `Docs/Light_Sources.md` | Carried flames (measured Paleolithic numbers), eye adaptation near flames, the UDS cave sky-light fix, light-unit trap | Any light source, exposure, night or cave-darkness work |
 | `Docs/Archive/` | Superseded docs (historical reference only) | Never — check git history if needed |
 
 ---
