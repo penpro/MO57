@@ -7,6 +7,8 @@
 #include "MOFireActions.h"
 #include "MOEyeAdaptationComponent.h"
 #include "MOAmbientEnvironmentProvider.h"
+#include "MOFlameLightComponent.h"
+#include "Engine/Scene.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -155,6 +157,21 @@ bool FMOCarriedLight_EyeAdaptation::RunTest(const FString& Parameters)
 	TestEqual(TEXT("the bias adds"), UMOEyeAdaptationComponent::AdaptationFloorEV100(2.5f, 0.3f, 1.5f), 0.935f + 1.5f, 0.01f);
 	TestTrue(TEXT("a torch-lit cave sits far above the sky's -10 floor"), UMOEyeAdaptationComponent::AdaptationFloorEV100(0.5f, 0.3f, 2.0f) > -3.0f);
 	TestTrue(TEXT("and far below daylight (EV100 ~14)"), UMOEyeAdaptationComponent::AdaptationFloorEV100(0.5f, 0.3f, 2.0f) < 6.0f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOCarriedLight_FlameUnits,
+	"MOFramework.Light.FlameUnits",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOCarriedLight_FlameUnits::RunTest(const FString& Parameters)
+{
+	// A station's fire light counts for the eye in candelas whatever units it was authored in (UMOFlameLightComponent).
+	TestEqual(TEXT("the campfire's unitless 5000 is 8 cd"), UMOFlameLightComponent::CandelasFromUnits(5000.0f, (uint8)ELightUnits::Unitless), 8.0f, 1e-4f);
+	TestEqual(TEXT("candelas are candelas"), UMOFlameLightComponent::CandelasFromUnits(10.0f, (uint8)ELightUnits::Candelas), 10.0f, 1e-5f);
+	TestEqual(TEXT("lumens over 4 pi"), UMOFlameLightComponent::CandelasFromUnits(4.0f * UE_PI * 3.0f, (uint8)ELightUnits::Lumens), 3.0f, 1e-4f);
+	TestEqual(TEXT("size-dependent units count as nothing"), UMOFlameLightComponent::CandelasFromUnits(10.0f, (uint8)ELightUnits::Nits), 0.0f, 1e-6f);
+	TestEqual(TEXT("no light, no candelas"), UMOFlameLightComponent::CandelasOf(nullptr), 0.0f, 1e-6f);
 	return true;
 }
 
