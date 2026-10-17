@@ -105,7 +105,13 @@ Close-ups at dusk set the side carry: `HeldVisual.RightHandTransform` gripped ne
   lights (units converted: the unitless 5000 is 8 cd). Any fire Blueprint (forge, kiln, brazier) gets it the same way, with no code change.
   Measured at 23:30 standing by a lit campfire: 0.58 lux at the camera, floor EV100 -2.1; the firelit ground reads and the sky beyond goes black.
 - Night outdoors without a fire looks like dusk: the exposure adapts to EV100 -10, so starlight reads as twilight. After a fire is put out,
-  its mesh's emissive embers glow white at that exposure. A darker night (a higher night minimum, or slower dark adaptation) is Wes's call.
+  its mesh's emissive embers glow white at that exposure. A darker night (a higher night minimum, or slower dark adaptation) is Wes's call. Numbers for it: starlight lights the ground to ~0.001 lux,
+  which at albedo 0.2 is ~6e-5 cd/m2, EV100 ~ -11; a full moon ~0.25 lux is EV100 ~ -3. With a -10 floor a starlit night renders about one
+  stop under mid-grey (dusk). With a night floor of about -6, moonlight still reads and a moonless night is properly dark: the dark-adapted
+  eye sees shapes under starlight, colourless and soft, not a dusk landscape.
+- Fire-fear: wolves avoid people and fire, so a torch or campfire could hold predators off (the light registry knows every flame). The
+  creature flee decision is computed twice today (`BTService_UpdateCreatureState` and `AMOCreatureController::ShouldFlee`); unify that
+  before adding a fear input. Suggestion only.
 - Adaptation speed: UDS uses UE's 3 EV/s up, 1 EV/s down. Real dark adaptation takes minutes (pupil in seconds, cones 5-10 min, rods 20-30 min),
   and light adaptation takes seconds. A slower speed down would be more faithful; that changes every shade transition, so it is Wes's call.
 
