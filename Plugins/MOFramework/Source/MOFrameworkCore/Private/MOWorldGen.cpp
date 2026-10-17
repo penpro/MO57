@@ -154,7 +154,8 @@ void FMOWorldGenParams::Finalize()
 
 	// Caves live between the deepest point under the lowest ground and a little above the highest ground (a flared sinkhole rim can poke above the surface).
 	CaveMaxZCm = MaxHeightCm + 500.0f;
-	CaveMinZCm = MinHeightCm - (T.CaveMaxDepthCm + T.CaveFadeCm);
+	// ... and never below the water floor (v10): the volume stamp's bounds start there, so nothing under the sea is even sampled.
+	CaveMinZCm = FMath::Max(MinHeightCm - (T.CaveMaxDepthCm + T.CaveFadeCm), T.SeaLevelCm + T.CaveWaterClearanceCm);
 	GeneratorVersion = CurrentGeneratorVersion;
 	CachedHash = ComputeHash();
 }
@@ -205,7 +206,8 @@ uint32 FMOWorldGenParams::ComputeHash() const
 	H = FnvAddInt(H, T.bEnableCaves ? 1 : 0);
 	for (const float V : { T.CaveCoverCm, T.CaveFadeCm, T.CaveMaxDepthCm, T.CaveMinGroundAboveSeaCm, T.TunnelWavelengthCm, T.TunnelRadiusCm, T.TunnelRadiusVariation,
 		T.TunnelVerticalSquash, T.CavernWavelengthCm, T.CavernThreshold, T.CavernMinDepthCm, T.SinkholeCellCm, T.SinkholeChance, T.SinkholeRadiusCm, T.SinkholeDepthCm,
-		T.GalleryLevelSpacingCm, T.GalleryLevelAmplitudeCm, T.GalleryLevelWavelengthCm, T.GalleryMaskThreshold, T.CaveEntranceSlopeMinDeg, T.CaveEntranceSlopeFullDeg })
+		T.GalleryLevelSpacingCm, T.GalleryLevelAmplitudeCm, T.GalleryLevelWavelengthCm, T.GalleryMaskThreshold, T.CaveEntranceSlopeMinDeg, T.CaveEntranceSlopeFullDeg,
+		T.CaveWaterClearanceCm, T.CaveWaterFadeCm, T.CaveShoreKeepOutCm })
 	{
 		H = FnvAddFloat(H, V);
 	}

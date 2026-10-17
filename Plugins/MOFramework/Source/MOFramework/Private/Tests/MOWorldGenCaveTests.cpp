@@ -427,6 +427,60 @@ bool FMOWorldGen_CaveEntrances::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOWorldGen_CavesStayDry,
+	"MOFramework.WorldGen.CavesStayDry",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOWorldGen_CavesStayDry::RunTest(const FString& Parameters)
+{
+	// Wes, Oct 17 2026: caves must not reach sea level (the ocean mesh fills every point under it: water and the underwater post process inside the cave),
+	// and none right by a shore -- "they'd immediately be below water table". Random cave air anywhere in the cave band of a 40 x 40 km region: every point
+	// above the water floor, and no water (ground at sea level: the sea, a river, a basin -- or an upland lake) within 100 m of it in 16 directions.
+	const FMOWorldGenParamsRef P = MakeCaveParams();
+	const FMOWorldGenTuning& T = P->Tuning;
+	const float Voxel = T.VoxelSizeCm;
+	FRandomStream R(1017);
+	int32 Found = 0, BelowFloor = 0, NearWater = 0;
+	float LowestZ = 1.0e9f;
+	FString FirstWet;
+	const float Floor = T.SeaLevelCm + T.CaveWaterClearanceCm;
+	for (int32 Try = 0; Try < 3000000 && Found < 300; ++Try)
+	{
+		const double X = R.FRandRange(-2.0e6f, 2.0e6f), Y = R.FRandRange(-2.0e6f, 2.0e6f);
+		const float Ground = FMOWorldGen::SampleHeightCm(*P, X, Y, CaveTestSeed, Voxel);
+		const double Z = Ground - R.FRandRange(150.0f, T.CaveMaxDepthCm);
+		if (FMOWorldGen::SampleCaveDistanceAtGround(*P, X, Y, Z, Ground, CaveTestSeed, 50.0f) >= 0.0f)
+		{
+			continue;
+		}
+		++Found;
+		LowestZ = FMath::Min(LowestZ, (float)Z);
+		BelowFloor += Z < Floor ? 1 : 0;
+		bool bWet = false;
+		for (int32 K = 0; K < 16 && !bWet; ++K)
+		{
+			const double A = K * UE_DOUBLE_PI / 8.0;
+			for (double Dist = 2500.0; Dist <= 10000.0 && !bWet; Dist += 2500.0)
+			{
+				const double Qx = X + Dist * FMath::Cos(A), Qy = Y + Dist * FMath::Sin(A);
+				const EMOWaterBodyKind Kind = FMOWorldGen::ClassifyWaterBody(*P, Qx, Qy, CaveTestSeed);   // the generator's own "is there water here"
+				bWet = Kind != EMOWaterBodyKind::None;
+				if (bWet && FirstWet.IsEmpty())
+				{
+					FirstWet = FString::Printf(TEXT("cave air at (%.0f, %.0f, %.0f) has water (%s) %.0f m away"), X, Y, Z, *UEnum::GetValueAsString(Kind), Dist / 100.0);
+				}
+			}
+		}
+		NearWater += bWet ? 1 : 0;
+	}
+	AddInfo(FString::Printf(TEXT("%d cave-air samples: lowest at z = %.0f cm (floor %.0f), %d below the floor, %d with water within 100 m%s%s"), Found, LowestZ, Floor,
+		BelowFloor, NearWater, FirstWet.IsEmpty() ? TEXT("") : TEXT("; first: "), *FirstWet));
+	TestTrue(TEXT("enough cave air found to judge (>= 200 samples)"), Found >= 200);
+	TestEqual(TEXT("no cave air below sea level + CaveWaterClearanceCm"), BelowFloor, 0);
+	TestEqual(TEXT("no cave air within 100 m of water"), NearWater, 0);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOWorldGen_NoCavesOnHighGround,
 	"MOFramework.WorldGen.NoCavesOnHighGround",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
@@ -615,7 +669,11 @@ bool FMOWorldGen_CaveNode::RunTest(const FString& Parameters)
 	TestEqual(TEXT("bounds max Y is the world footprint"), Bounds.Max.Y, (double)P->Tuning.WorldHalfSizeCm);
 	TestEqual(TEXT("bounds min Z is CaveMinZCm"), Bounds.Min.Z, (double)P->CaveMinZCm);
 	TestEqual(TEXT("bounds max Z is CaveMaxZCm"), Bounds.Max.Z, (double)P->CaveMaxZCm);
-	TestTrue(TEXT("bounds cover the deepest possible cave (minimum ground - max depth)"), Bounds.Min.Z <= (double)P->MinHeightCm - P->Tuning.CaveMaxDepthCm);
+	// v10: no cave air below the water floor, so the bounds start at the deeper of (minimum ground - max depth) and that floor -- never below the floor.
+	const double Floor = (double)(P->Tuning.SeaLevelCm + P->Tuning.CaveWaterClearanceCm);
+	TestTrue(TEXT("bounds cover every cave the water floor allows (min Z <= max(minimum ground - max depth, the floor))"),
+		Bounds.Min.Z <= FMath::Max((double)P->MinHeightCm - P->Tuning.CaveMaxDepthCm, Floor));
+	TestTrue(TEXT("bounds sample nothing below the water floor"), Bounds.Min.Z >= Floor);
 	return true;
 }
 

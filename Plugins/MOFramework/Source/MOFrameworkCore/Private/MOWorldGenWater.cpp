@@ -481,6 +481,23 @@ bool FMOWorldGen::IsInUplandLakeZone(const FMOWorldGenParams& Params, double X, 
 	return Lx * Lx + Ly * Ly <= ZoneRadii * ZoneRadii;
 }
 
+float FMOWorldGen::UplandLakeShoreDistanceCm(const FMOWorldGenParams& Params, double X, double Y, int32 Seed)
+{
+	const FMOWorldGenTuning& T = Params.Tuning;
+	if (!T.bEnableWater || !T.bEnableUplandLakes)
+	{
+		return 1.0e9f;
+	}
+	const double Cell = (double)T.UplandLakeCellCm;
+	FLake L;
+	if (!ResolveBasin(Params, 2, (int64)FMath::FloorToDouble(X / Cell), (int64)FMath::FloorToDouble(Y / Cell), Seed, L))
+	{
+		return 1.0e9f;
+	}
+	const float Dx = (float)(X - L.Center.X), Dy = (float)(Y - L.Center.Y);
+	return FMath::Sqrt(Dx * Dx + Dy * Dy) - L.RadiusCm;
+}
+
 bool FMOWorldGen::GetWaterSurfaceCm(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, float& OutSurfaceCm)
 {
 	const FMOWorldGenTuning& T = Params.Tuning;

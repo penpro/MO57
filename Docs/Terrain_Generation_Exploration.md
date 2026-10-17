@@ -136,7 +136,18 @@ The pre-existing native chains have the same cap (grass: 50 / m^2 on a 60 cm lat
   16..32 deg (12 m-baseline slope -- over a terrace edge a 3 m one let the gate jump), so caves are entered from hillsides, never fallen into; the
   `Caves` test checks the cover over every flatter column. Mouth density, measured Oct 17 by `MOFramework.WorldGen.CaveEntrances` (the hilliest 2 km of CAVE COUNTRY -- above the coast, below the 650 m high-ground taper -- scanned at 4 m, mouths grouped by 30 m): **4 per km2** at 16-32 deg (asserted >= 3); the test also prints what other bands would give (14-24: 8.5, 12-20: 13, 10-16: 18.5) -- kept at 16-32 because a 3 m tube meeting a gentle slope cuts a long open trench, the hole-in-flat-ground Wes ruled out. Flat lowland and the ranges have none, so a coastal spawn can be kilometres from the nearest mouth (world 31415926: ~9 km). In game: `MO.WorldGen.FindCaveEntrance [radius]` lists mouths with their slope; a mouth on a 31 deg hillside reads as a tunnel into the hill (Saved/Logs/cave_v9). Sinkholes default to chance 0
   (kept as a feature for a world that wants them; their tests run on such params). Found on the way: `DistanceToSinkholeRimZone` returned 30 m with no
-  sinkhole, rejecting world features with bigger footprints wherever there was none (see World_Features_Architecture.md). `PinnedProbeCave` 0xEA773801.
+  sinkhole, rejecting world features with bigger footprints wherever there was none (see World_Features_Architecture.md). (v9 pin 0xEA773801.)
+- [x] **DONE in generator v10 (2026-10-17, Wes: caves must not reach sea level and fill with the ocean / show the underwater post process, and "we don't
+  want them right near shore lines -- they'd immediately be below water table")**: one WATER gate in `SampleCaveDistanceAtGround`, folded into every cave
+  feature's gate. (1) A floor: no cave air below `SeaLevelCm + CaveWaterClearanceCm` (5 m), tapering shut over `CaveWaterFadeCm` (6 m) -- the ocean mesh
+  fills every point under sea level, so this alone keeps water and the underwater effect out of caves; `CaveMinZCm` starts there too (the volume stamp no
+  longer samples anything under the sea). (2) A shore keep-out: no cave within `CaveShoreKeepOutCm` (250 m) of LOW ground -- every sea-level water body
+  lies on base ground under the river headwater / basin rim ceiling (18 m), where the water table is the sea's; read on a 16 m lattice (bilinear, so the
+  field stays smooth on any coast) from the pre-water base height at the node + three rings (8 / 16 / 16 samples) -- and 120-180 m from an upland lake's
+  shore (`UplandLakeShoreDistanceCm`, conservative). First cut (rings on the carved ground, lake keep-out in the lake's radii) failed the new test: 6 of
+  300 cave samples had water within 100 m (an upland lake along its ellipse's short axis). `MOFramework.WorldGen.CavesStayDry`: 300 random cave-air
+  samples in 40 x 40 km -- none below the floor (lowest 12 m above sea level), none with water (`ClassifyWaterBody`) within 100 m in 16 directions.
+  Mouth density unchanged (4 per km2 in hill country); cave chunk 7 ms. `PinnedProbeCave` 0x794FC2AD.
 - [ ] ~~**Caves: half the diameter, and more lateral (Wes, 2026-10-13 evening)**~~ (the original note, kept): caves are too big and dive too steeply. Wanted: about half the current diameter, and
   passages that run sideways through the rock instead of heading straight down. Where it lives: `FMOWorldGenTuning` (`TunnelRadiusCm` 320 -> ~160,
   `SinkholeRadiusCm` 550 and the cavern threshold / `CavernWavelengthCm` for the big rooms), and the tunnel path's vertical behaviour (`TunnelVerticalSquash` 1.6 and

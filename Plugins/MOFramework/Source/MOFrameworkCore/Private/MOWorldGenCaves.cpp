@@ -95,9 +95,13 @@ namespace
 	}
 
 	/** Does this cell's sinkhole open at all: not on low ground (coast / basin), and never inside an upland lake or its bank (the lake bed would be a hole under the water). */
+	float WaterGate(const FMOWorldGenParams& P, double X, double Y, double Z, int32 Seed);   // below
+
+	/** A sinkhole exists only where its whole shaft stays dry: above the water floor and outside the water keep-out (v10; upland lakes included). Otherwise the
+	 *  gate would close it while GetSinkholeInCell / DistanceToSinkholeRimZone still reported it (the world features' keep-out, the dev verbs, PCG suppression). */
 	bool SinkholeAllowed(const FMOWorldGenParams& P, const FSinkholeBasics& B, float GroundCm, int32 Seed)
 	{
-		return GroundCm >= P.Tuning.SeaLevelCm + P.Tuning.CaveMinGroundAboveSeaCm && !FMOWorldGen::IsInUplandLakeZone(P, B.CenterX, B.CenterY, Seed, 1.8f);
+		return GroundCm >= P.Tuning.SeaLevelCm + P.Tuning.CaveMinGroundAboveSeaCm && WaterGate(P, B.CenterX, B.CenterY, GroundCm - B.Depth, Seed) <= 0.0f;
 	}
 
 	/** Shaft + chamber distance of the sinkhole in the sample's cell (cm, negative inside). */
@@ -174,6 +178,93 @@ namespace
 		Last.Gradient = FVector2D(Hx / (2.0 * GroundSlopeStepCm), Hy / (2.0 * GroundSlopeStepCm));
 		Last.bValid = true;
 		return Last.Gradient;
+	}
+
+	/**
+	 * The water keep-out's shore half (v10), on a lattice of ShoreLatticeCm (bilinear between nodes, so the gate -- and the field -- stays smooth however sharp a coast
+	 * is). Every sea-level water body (the sea, a river, a pond or lake basin) can only lie on LOW ground: rivers fade out above RiverMaxGroundAboveSeaCm + 6 m,
+	 * basin rims stop at BasinRimMaxAboveSeaCm. There the water table is the sea's, so a node is "wet" (1) where low ground (the pre-water base height, which
+	 * has no thin channels to slip between samples) lies within CaveShoreKeepOutCm -- at the node or on three rings (a quarter, half and the whole distance;
+	 * 8 / 16 / 16 samples) -- or the shore of the upland lake of the node's cell is within 120 m (easing out by 180 m; a lake's centre keeps 325 m from its cell's
+	 * edges, so its own cell's lake is the only one that can be that near). The wetness eases from 1 at the low-ground ceiling to 0 fifteen metres higher. A node is a pure function of (node, seed, params): the thread-local cache only saves work, never a value.
+	 * (First cut, Oct 17: water = carved ground at sea level on two 8-sample rings -- MOFramework.WorldGen.CavesStayDry found 6 of 300 cave samples with a river
+	 * within 100 m, slipped between the rays.)
+	 */
+	constexpr double ShoreLatticeCm = 1600.0;
+	// Unit directions every 22.5 deg (exact constants: no libm in the generator's math).
+	constexpr double ShoreRing[16][2] = { { 1.0, 0.0 }, { 0.92387953251128674, 0.38268343236508977 }, { 0.70710678118654752, 0.70710678118654752 },
+		{ 0.38268343236508977, 0.92387953251128674 }, { 0.0, 1.0 }, { -0.38268343236508977, 0.92387953251128674 }, { -0.70710678118654752, 0.70710678118654752 },
+		{ -0.92387953251128674, 0.38268343236508977 }, { -1.0, 0.0 }, { -0.92387953251128674, -0.38268343236508977 }, { -0.70710678118654752, -0.70710678118654752 },
+		{ -0.38268343236508977, -0.92387953251128674 }, { 0.0, -1.0 }, { 0.38268343236508977, -0.92387953251128674 }, { 0.70710678118654752, -0.70710678118654752 },
+		{ 0.92387953251128674, -0.38268343236508977 } };
+
+	float ShoreNodeWetness(const FMOWorldGenParams& P, int64 Ix, int64 Iy, int32 Seed)
+	{
+		struct FSlot
+		{
+			int64 Ix = 0, Iy = 0;
+			uint32 Seed = 0, ParamsHash = 0;
+			float Value = 0.0f;
+			bool bValid = false;
+		};
+		thread_local FSlot Cache[4096];
+		const uint32 Hash = P.GetHash();
+		FSlot& Slot = Cache[((uint32)Ix * 73856093u ^ (uint32)Iy * 19349663u) & 4095u];
+		if (Slot.bValid && Slot.Ix == Ix && Slot.Iy == Iy && Slot.Seed == (uint32)Seed && Slot.ParamsHash == Hash)
+		{
+			return Slot.Value;
+		}
+		const FMOWorldGenTuning& T = P.Tuning;
+		const double X = (double)Ix * ShoreLatticeCm, Y = (double)Iy * ShoreLatticeCm;
+		const float LowCeiling = T.SeaLevelCm + FMath::Max(T.RiverMaxGroundAboveSeaCm + 600.0f, T.BasinRimMaxAboveSeaCm);
+		auto WetAt = [&P, &T, Seed, LowCeiling](double Sx, double Sy)
+		{
+			return 1.0f - Smooth01(LowCeiling, LowCeiling + 1500.0f, FMOWorldGen::SampleBaseHeightCm(P, Sx, Sy, Seed, T.VoxelSizeCm));
+		};
+		float Wet = WetAt(X, Y);
+		const double R = (double)T.CaveShoreKeepOutCm;
+		for (int32 K = 0; K < 16 && Wet < 1.0f; K += 2)
+		{
+			Wet = FMath::Max(Wet, WetAt(X + 0.25 * R * ShoreRing[K][0], Y + 0.25 * R * ShoreRing[K][1]));
+		}
+		for (int32 K = 0; K < 16 && Wet < 1.0f; ++K)
+		{
+			Wet = FMath::Max(Wet, WetAt(X + 0.5 * R * ShoreRing[K][0], Y + 0.5 * R * ShoreRing[K][1]));
+		}
+		for (int32 K = 0; K < 16 && Wet < 1.0f; ++K)
+		{
+			Wet = FMath::Max(Wet, WetAt(X + R * ShoreRing[K][0], Y + R * ShoreRing[K][1]));
+		}
+		if (Wet < 1.0f)
+		{
+			Wet = FMath::Max(Wet, 1.0f - Smooth01(12000.0f, 18000.0f, FMOWorldGen::UplandLakeShoreDistanceCm(P, X, Y, Seed)));
+		}
+		Slot.Ix = Ix;
+		Slot.Iy = Iy;
+		Slot.Seed = (uint32)Seed;
+		Slot.ParamsHash = Hash;
+		Slot.Value = Wet;
+		Slot.bValid = true;
+		return Wet;
+	}
+
+	/** 0..1: how much the water keep-out closes caves at (X, Y, Z) -- the floor above the sea, then the shore lattice. One gate for every cave feature. */
+	float WaterGate(const FMOWorldGenParams& P, double X, double Y, double Z, int32 Seed)
+	{
+		const FMOWorldGenTuning& T = P.Tuning;
+		const float Floor = T.SeaLevelCm + T.CaveWaterClearanceCm;
+		const float Below = 1.0f - Smooth01(Floor, Floor + T.CaveWaterFadeCm, (float)Z);
+		if (Below >= 1.0f || T.CaveShoreKeepOutCm <= 0.0f)
+		{
+			return Below;
+		}
+		const double Fx = X / ShoreLatticeCm, Fy = Y / ShoreLatticeCm;
+		const double X0 = FMath::FloorToDouble(Fx), Y0 = FMath::FloorToDouble(Fy);
+		const int64 Ix = (int64)X0, Iy = (int64)Y0;
+		const float Tx = (float)(Fx - X0), Ty = (float)(Fy - Y0);
+		const float Shore = FMath::Lerp(FMath::Lerp(ShoreNodeWetness(P, Ix, Iy, Seed), ShoreNodeWetness(P, Ix + 1, Iy, Seed), Tx),
+			FMath::Lerp(ShoreNodeWetness(P, Ix, Iy + 1, Seed), ShoreNodeWetness(P, Ix + 1, Iy + 1, Seed), Tx), Ty);
+		return FMath::Max(Below, Shore);
 	}
 
 	/**
@@ -263,15 +354,18 @@ float FMOWorldGen::SampleCaveDistanceAtGround(const FMOWorldGenParams& Params, d
 	// No caves under the high ground (the mountain ranges): 0 below the taper band, 1 at / above the ceiling. A gate like the others: the penalty it adds keeps the field continuous.
 	const float HighGround = T.CaveMaxGroundCm > 0.0f ? Smooth01(T.CaveMaxGroundCm - T.CaveHighFadeCm, T.CaveMaxGroundCm, GroundCm) : 0.0f;
 
+	// No cave below the water floor or near water (v10): one gate for every feature below.
+	const float Wet = HighGround < 1.0f ? WaterGate(Params, X, Y, Z, Seed) : 1.0f;
+
 	// Sinkholes: the only features that reach the ground. Skipped when the sample spacing cannot resolve a shaft.
 	if (StepCm <= T.SinkholeRadiusCm * SinkholeStepFraction && HighGround < 1.0f)
 	{
-		D = FMath::Min(D, SinkholeDistance(Params, X, Y, Z, Seed) + CaveFarCm * HighGround);
+		D = FMath::Min(D, SinkholeDistance(Params, X, Y, Z, Seed) + CaveFarCm * FMath::Max(HighGround, Wet));
 	}
 
-	// Everything else stays off low ground (coasts / basins). Each gate is a 0..1 factor that adds a penalty of at least CaveFarCm when it is 1, so the
-	// field is continuous where a feature is skipped (skipped == saturated).
-	const float LowGround = 1.0f - Smooth01(T.SeaLevelCm + T.CaveMinGroundAboveSeaCm, T.SeaLevelCm + T.CaveMinGroundAboveSeaCm + 600.0f, GroundCm);
+	// Everything else stays off low ground (coasts / basins) and out of the water. Each gate is a 0..1 factor that adds a penalty of at least CaveFarCm when
+	// it is 1, so the field is continuous where a feature is skipped (skipped == saturated).
+	const float LowGround = FMath::Max(Wet, 1.0f - Smooth01(T.SeaLevelCm + T.CaveMinGroundAboveSeaCm, T.SeaLevelCm + T.CaveMinGroundAboveSeaCm + 600.0f, GroundCm));
 	if (LowGround < 1.0f && HighGround < 1.0f)
 	{
 		// Galleries: evaluated up to the surface too -- GalleryDistance keeps the cover except where a passage opens into a steep slope.

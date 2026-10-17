@@ -423,6 +423,23 @@ struct MOFRAMEWORKCORE_API FMOWorldGenTuning
 	float CaveMinGroundAboveSeaCm = 300.0f;
 
 	/**
+	 * WATER KEEP-OUT (v10; Wes, Oct 17 2026: caves must not reach sea level and fill with the ocean, and "we don't want them right near shore lines -- they'd
+	 * immediately be below water table"). The ocean mesh fills every point under SeaLevelCm, so any cave air below it showed water and the underwater post
+	 * process. No cave air below SeaLevelCm + this (cm) ...
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Caves", meta=(EditCondition="bEnableCaves", ClampMin="0"))
+	float CaveWaterClearanceCm = 500.0f;
+
+	/** ... the passages tapering shut over this many cm above that floor ... */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Caves", meta=(EditCondition="bEnableCaves", ClampMin="100"))
+	float CaveWaterFadeCm = 600.0f;
+
+	/** ... and no cave within this distance (cm) of LOW ground -- where the sea, rivers and sea-level basins lie (base height under the river headwater / basin rim ceiling,
+	 *  easing out 15 m higher): the water table there is the sea's. Upland lakes keep caves 120-180 m from their shores (fixed: their cells allow no more). 0 = off. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Caves", meta=(EditCondition="bEnableCaves", ClampMin="0"))
+	float CaveShoreKeepOutCm = 25000.0f;
+
+	/**
 	 * GALLERIES (v9; Wes, Oct 16 2026: "caves should be more or less horizontal so we don't just fall into them"): near-horizontal passages in stacked
 	 * levels. In plan a level's passages follow where a 2D noise field is zero (meanders, loops, forks); their height follows a gentle long-wavelength
 	 * field around the level's height, so a passage climbs or falls a few degrees at most. This is the meander's lattice cell (cm).
@@ -654,7 +671,7 @@ struct MOFRAMEWORKCORE_API FMOWorldGenBiome
 struct MOFRAMEWORKCORE_API FMOWorldGenParams
 {
 	/** Bump when the generator math changes (see RULES in the header). Stored with world saves. */
-	static constexpr uint32 CurrentGeneratorVersion = 9;   // v9: caves are near-horizontal galleries (half the radius) that open only into steep slopes, no sinkholes; v8: cliff bands are terraces whose drops face downhill (the v6 crag blobs had uphill-facing rims), gullies 25 -> 15 m; v7: no caves under ground above CaveMaxGroundCm (the summits tore); v6: mountain ranges (regional mask + regional biome relief + massif / peaks / gullies; v5: per-biome relief, taller ranges, half-size regional fields, island edge; v4: upland lakes + coastal ranges; v3: rivers + sea-level lake basins; v2: caves; v1: the base height terrain)
+	static constexpr uint32 CurrentGeneratorVersion = 10;   // v10: caves keep out of the water -- no cave air below sea level + 5 m, none within 250 m of low ground (sea, rivers, basins) or an upland lake; v9: caves are near-horizontal galleries (half the radius) that open only into steep slopes, no sinkholes; v8: cliff bands are terraces whose drops face downhill (the v6 crag blobs had uphill-facing rims), gullies 25 -> 15 m; v7: no caves under ground above CaveMaxGroundCm (the summits tore); v6: mountain ranges (regional mask + regional biome relief + massif / peaks / gullies; v5: per-biome relief, taller ranges, half-size regional fields, island edge; v4: upland lakes + coastal ranges; v3: rivers + sea-level lake basins; v2: caves; v1: the base height terrain)
 
 	FMOWorldGenTuning Tuning;
 
@@ -812,7 +829,7 @@ struct MOFRAMEWORKCORE_API FMOWorldGen
 	static constexpr uint32 PinnedProbeHeight = 0x3343B4EBu;   // v8 (cliff bands face downhill, gullies 15 m); v6 (mountain ranges: regional mask + regional biome relief + massif/peaks/gullies; v5: biome relief, taller ranges, half-size regional fields, island edge; v4: upland lakes, coastal ranges, VerticalScale 2; v3: rivers + sea-level lake basins)
 	/** The probe with water, coastal ranges and VerticalScale all switched OFF (RunProbe(false)) must reproduce the v1 base terrain exactly: this is the value v1 shipped. It pins the BASE height math. */
 	static constexpr uint32 PinnedProbeHeightNoWater = 0x9C4AE2B3u;
-	static constexpr uint32 PinnedProbeCave = 0xEA773801u;     // v9 (near-horizontal galleries opening only into steep slopes, no sinkholes); v8 (the v8 ground); v7 (no caves under ground above CaveMaxGroundCm: the summits tore; v6: caves on the v6 ground; v5: caves on the v5 ground; v4: the lake-carved, doubled-relief ground, sinkholes keep out of lakes)
+	static constexpr uint32 PinnedProbeCave = 0x794FC2ADu;     // v10 (caves keep out of the water: floor at sea level + 5 m, 250 m from low ground and upland lakes); v9 (near-horizontal galleries opening only into steep slopes, no sinkholes); v8 (the v8 ground); v7 (no caves under ground above CaveMaxGroundCm: the summits tore; v6: caves on the v6 ground; v5: caves on the v5 ground; v4: the lake-carved, doubled-relief ground, sinkholes keep out of lakes)
 
 	/**
 	 * The cave distance saturates here (cm): "no cave within this far". Every gate in the cave field (cover, depth, low ground, sinkhole reach) is built so the
@@ -919,6 +936,12 @@ struct MOFRAMEWORKCORE_API FMOWorldGen
 	 * out of the bowl. Cheap and cache-backed; false when upland lakes are off.
 	 */
 	static bool IsInUplandLakeZone(const FMOWorldGenParams& Params, double X, double Y, int32 Seed, float ZoneRadii = 1.0f);
+
+	/** How far (cm) (X, Y) is from the shore of the upland lake of its cell, at most: the distance to its centre minus its LONG radius (the shore is never farther out
+	 *  than that, so this never overstates the distance). 1e9 where the cell has none or upland lakes are off. A lake's centre keeps a quarter cell from the cell's
+	 *  edges, so up to UplandLakeCellCm / 4 - UplandLakeRadiusMaxCm past its shore the cell's own lake is the only one that can be near. The caves' water keep-out
+	 *  reads it. */
+	static float UplandLakeShoreDistanceCm(const FMOWorldGenParams& Params, double X, double Y, int32 Seed);
 
 	/**
 	 * The OPEN-WATER surface height at (X, Y): an upland lake's own surface where (X, Y) is inside its shore ellipse, otherwise the ocean plane (SeaLevelCm: the sea, rivers, ponds and sea-level lake
