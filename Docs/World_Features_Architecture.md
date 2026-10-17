@@ -30,6 +30,27 @@ Only the `Many` policy with composition actors exists. Everything else below is 
   moves the WHOLE composition by the median correction (the column stays on its foot) and settles each base piece the rest of its own way. Needed because
   Electric Dreams authored its assemblies' floor ~2.6 m above the root: a 4x outcrop floated 7-11 m. Row `SinkCm` now scales with the site scale, and the
   placer checks slope / relief / sinkholes over the SCALED footprint.
+- **The terrain under a composition (Oct 16 2026, #15 / #19):** a row's `AuthoredGround` (`FMOWorldFeatureGround`: a 1 m grid of heights + weights
+  in the composition's unscaled frame) makes our terrain RISE to the ground the composition was made for, never sink. `FMOFeatureTerrain::Apply` runs
+  where the height is made (the MO Terrain voxel node), so rendering, collision, every LOD and every co-op machine agree; sites come from a private
+  `FMOWorldFeaturePlacer` over the full catalog (same priorities as spawning), found per 1 km tile and kept (thread-safe, thread-local last tile).
+  Electric Dreams' cliff / embankment assembly (`BP_PCG_LargeAssembly`) turned out to be a ~4 m ROCK BLOCK (cliff walls, rock tops with plants, a
+  37 m tower), and the playtest's "holes" were gaps between the rocks into a hollow block: the grid fills the block's interior, inset 1.5 m from the
+  rim (an outward fade built mossy mounds over the walls -- tried, rejected), and its low scree apron fades 3 m outward so it never hovers on a
+  slope. Measured in game by `Content/Python/measure_feature_ground.py` (all ground-lying pieces, 25th percentile per cell, interior holes closed,
+  rim inset, root-relative low cutoff; wide flat ground cover on the lower ground -- scree spreads, ground skins -- counts over its whole footprint
+  at its underside, not only at its pivot: an apron measured at its pivots hovered at its edges on a slope). The per-site seed moves scree and
+  plants, so a row's grid is MERGED from several sites (`merge()`, offline, from each site's `<Id><tag>.known.json`: union of cells, the lower
+  ground at the 2/3 quantile across sites, the block's interior at the median) -- the Oct 16 grids come from 5 sites in 2 worlds. Tuned live with
+  `MO.WorldFeatures.GroundOverride <Id> <path.json|clear>` (rebuilds the terrain, no editor). Re-measure after an Electric Dreams migration
+  changes the assets. The site's PCG seed now reaches Blueprint compositions (set after
+  `FinishSpawning`; `CleanupLocal` before regenerating, `GenerateLocal(force)` alone ADDS instances).
+- **Per-instance grounding (`FMOCompositionGrounding`) is a census, not a fix:** `MO.WorldFeatures.Grounding [radius] [apply]` reports plants
+  floating / buried and rocks with a gap under them against the shaped ground; auto-apply (`mo.WorldFeatures.Ground`) is OFF -- moving pieces one by
+  one broke the compositions apart (measured, screenshots in the Oct 16 tracker).
+- **Sinkhole keep-out:** `FMOWorldGen::DistanceToSinkholeRimZone` returns `NoSinkholeDistanceCm` (1e9) where there is no sinkhole. It returned 30 m,
+  so every row with a footprint over 30 m (the cliff / embankment assemblies, 45 m) was rejected in every cell WITHOUT a sinkhole -- ~53% of their
+  nominal density survived; the rows' densities were halved (6 -> 3, 12 -> 6 /km2) to keep the look the playtests saw.
 - **Collision policy for compositions:** `Content/Python/fix_mesh_collision.py` covers every mesh the compositions spawn (manifest
   `Content/Python/data/worldfeature_meshes.json`, written in PIE by `worldfeature_meshes.py` because the meshes are PCG point attributes the asset registry
   cannot see): rocks / cliffs / logs = complex as simple (their real surface: hulls left 15-25 m drops on a 4x cliff), standing trees = trunk capsule,

@@ -104,6 +104,8 @@ public class MOFramework : ModuleRules
 			new string[]
 			{
 				"CoreUObject",
+				"Json",
+				"JsonUtilities",
 				"Engine",
 				"EngineSettings",  // UGeneralProjectSettings for build info / project version
 				"Slate",

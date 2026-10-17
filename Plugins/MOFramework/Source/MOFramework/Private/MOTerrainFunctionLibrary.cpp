@@ -1,4 +1,5 @@
 #include "MOTerrainFunctionLibrary.h"
+#include "MOFeatureTerrain.h"
 #include "MOFramework.h"
 #include "VoxelGraphQuery.h"
 #include "Surface/VoxelSurfaceTypeInterface.h"
@@ -226,7 +227,8 @@ void UMOTerrainFunctionLibrary::Compute(
 	for (int32 I = 0; I < Num; ++I)
 	{
 		const FMOTerrainSample S = FMOWorldGen::SampleColumn(P, WorldPosition.X[I], WorldPosition.Y[I], Seed, StepCm);
-		Height.Set(I, S.HeightCm);
+		// Raised to the authored ground of a composition placed here (a cliff assembly's plateau): the landform it was made for (FMOFeatureTerrain).
+		Height.Set(I, FMOFeatureTerrain::Apply(Params, Seed, WorldPosition.X[I], WorldPosition.Y[I], S.HeightCm));
 		BiomeIndex.Set(I, (float)S.BiomeIndex);
 		Moisture.Set(I, S.Moisture);
 		Temperature.Set(I, S.Temperature);

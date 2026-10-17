@@ -10,10 +10,16 @@
 #include "PCGComponent.h"
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
+#include "MOCompositionGrounding.h"
+#include "MOFeatureTerrain.h"
+#include "JsonObjectConverter.h"
+#include "Misc/FileHelper.h"
 
 namespace
 {
 	TAutoConsoleVariable<int32> CVarWorldFeaturesEnabled(TEXT("mo.WorldFeatures.Enabled"), 1, TEXT("0 = place no world features (POIs)."), ECVF_Default);
+	TAutoConsoleVariable<int32> CVarWorldFeaturesGround(TEXT("mo.WorldFeatures.Ground"), 0,
+		TEXT("1 = ground every composition on the terrain it landed on when it finishes generating (FMOCompositionGrounding); 0 = leave the authored heights."), ECVF_Default);
 	TAutoConsoleVariable<int32> CVarWorldFeaturesSpawnsPerTick(TEXT("mo.WorldFeatures.SpawnsPerTick"), 1, TEXT("World feature actors spawned per update (0.5 s), nearest first: each one builds its whole composition."), ECVF_Default);
 
 	constexpr float WorldFeaturesUpdateSeconds = 0.5f;
@@ -273,6 +279,11 @@ bool FMOWorldFeaturePlacer::Candidate(int32 FeatureIndex, const FIntPoint& Slot,
 	return true;
 }
 
+float FMOWorldFeaturePlacer::GroundHeightAt(double X, double Y) const
+{
+	return FMOWorldGen::SampleHeightCm(*Params, X, Y, TerrainSeed, Params->Tuning.VoxelSizeCm);
+}
+
 bool FMOWorldFeaturePlacer::SiteAt(int32 FeatureIndex, const FIntPoint& Slot, FMOWorldFeatureSite& Out)
 {
 	const FIntVector Key(FeatureIndex, Slot.X, Slot.Y);
@@ -368,6 +379,35 @@ bool UMOWorldFeatureSubsystem::ShouldCreateSubsystem(UObject* Outer) const
 	return World && World->IsGameWorld() && Super::ShouldCreateSubsystem(Outer);
 }
 
+void UMOWorldFeatureSubsystem::Initialize(FSubsystemCollectionBase& Collection)
+{
+	Super::Initialize(Collection);
+	// The terrain rises to the compositions' authored ground (FMOFeatureTerrain) wherever the voxel terrain is made: it needs the catalog before the
+	// voxel runtime generates its first chunk, which follows the world seed -- after this.
+	TArray<TPair<FName, FMOWorldFeatureDefinitionRow>> Rows;
+	if (LoadCatalog(Rows))
+	{
+		FMOFeatureTerrain::SetCatalog(Rows);
+	}
+}
+
+bool UMOWorldFeatureSubsystem::LoadCatalog(TArray<TPair<FName, FMOWorldFeatureDefinitionRow>>& OutRows)
+{
+	const UMOWorldFeatureSettings* Settings = GetDefault<UMOWorldFeatureSettings>();
+	UDataTable* Table = Settings ? Settings->FeatureTable.LoadSynchronous() : nullptr;
+	if (!Table || Table->GetRowStruct() != FMOWorldFeatureDefinitionRow::StaticStruct())
+	{
+		if (!bCatalogFailed)
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOWorldFeatures] no feature catalog (%s): no POIs will be placed"), Settings ? *Settings->FeatureTable.ToString() : TEXT("no settings"));
+		}
+		bCatalogFailed = true;
+		return false;
+	}
+	Table->ForeachRow<FMOWorldFeatureDefinitionRow>(TEXT("MOWorldFeatures"), [&OutRows](const FName& Name, const FMOWorldFeatureDefinitionRow& Row) { OutRows.Emplace(Name, Row); });
+	return true;
+}
+
 void UMOWorldFeatureSubsystem::Deinitialize()
 {
 	for (TPair<FIntVector4, TWeakObjectPtr<AActor>>& Pair : Spawned)
@@ -404,16 +444,11 @@ bool UMOWorldFeatureSubsystem::EnsurePlacer()
 	{
 		return true;
 	}
-	const UMOWorldFeatureSettings* Settings = GetDefault<UMOWorldFeatureSettings>();
-	UDataTable* Table = Settings ? Settings->FeatureTable.LoadSynchronous() : nullptr;
-	if (!Table || Table->GetRowStruct() != FMOWorldFeatureDefinitionRow::StaticStruct())
+	TArray<TPair<FName, FMOWorldFeatureDefinitionRow>> Rows;
+	if (!LoadCatalog(Rows))
 	{
-		UE_LOG(LogMOFramework, Warning, TEXT("[MOWorldFeatures] no feature catalog (%s): no POIs will be placed"), Settings ? *Settings->FeatureTable.ToString() : TEXT("no settings"));
-		bCatalogFailed = true;
 		return false;
 	}
-	TArray<TPair<FName, FMOWorldFeatureDefinitionRow>> Rows;
-	Table->ForeachRow<FMOWorldFeatureDefinitionRow>(TEXT("MOWorldFeatures"), [&Rows](const FName& Name, const FMOWorldFeatureDefinitionRow& Row) { Rows.Emplace(Name, Row); });
 	Placer = MakeUnique<FMOWorldFeaturePlacer>(FMOWorldGenParamsProvider::Get(), TerrainSeed, Rows);
 	PlacerSeed = TerrainSeed;
 	UE_LOG(LogMOFramework, Warning, TEXT("[MOWorldFeatures] catalog: %d row(s), %d placeable, terrain seed %d"), Rows.Num(), Placer->GetFeatures().Num(), TerrainSeed);
@@ -482,8 +517,8 @@ AActor* UMOWorldFeatureSubsystem::SpawnMember(const FMOWorldFeaturePlacer::FFeat
 		return nullptr;
 	}
 	const FMOWorldFeatureMember& Member = Site.Members[MemberIndex];
-	// The sink grows with the composition: a gap under a 4x outcrop is 4x the gap under the authored one.
-	const FTransform Transform(FRotator(0.0f, Member.YawDegrees, 0.0f), Member.Location - FVector(0.0, 0.0, Feature.Row.SinkCm * Member.Scale), FVector(Member.Scale));
+	// The same frame FMOFeatureTerrain raises the ground in (the composition's authored ground is relative to it).
+	const FTransform Transform = FMOFeatureTerrain::MemberRootTransform(Feature.Row, Member);
 	AActor* Actor = World->SpawnActorDeferred<AActor>(Class, Transform, nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
 	if (!Actor)
 	{
@@ -512,6 +547,19 @@ AActor* UMOWorldFeatureSubsystem::SpawnMember(const FMOWorldFeaturePlacer::FFeat
 	TInlineComponentArray<UPCGComponent*> Compositions(Actor);
 	for (UPCGComponent* PCG : Compositions)
 	{
+		// The site's seed reaches a Blueprint composition only now: set above, it found no component, and every Electric Dreams assembly in a world was
+		// the same arrangement. One that already started generating with the default seed starts again with its own.
+		if (PCG->Seed != Member.Seed)
+		{
+			PCG->Seed = Member.Seed;
+			if (PCG->IsGenerating() || PCG->bGenerated)
+			{
+				// Clean up first: GenerateLocal(force) alone ADDS to what was generated (measured: the piece count doubled per regeneration).
+				PCG->CancelGeneration();
+				PCG->CleanupLocal(/*bRemoveComponents=*/true);
+				PCG->GenerateLocal(/*bForce=*/true);
+			}
+		}
 		if (!PCG->OnPCGGraphGeneratedDelegate.IsBoundToObject(this))
 		{
 			PCG->OnPCGGraphGeneratedDelegate.AddUObject(this, &UMOWorldFeatureSubsystem::HandleCompositionGenerated);
@@ -551,6 +599,86 @@ void UMOWorldFeatureSubsystem::HandleCompositionGenerated(UPCGComponent* PCG)
 	if (Hidden > 0)
 	{
 		UE_LOG(LogMOFramework, Log, TEXT("[MOWorldFeatures] %s: hid %d engine basic-shape instance(s) (editor markers in the composition's data)"), *Owner->GetName(), Hidden);
+	}
+
+	if (CVarWorldFeaturesGround.GetValueOnGameThread() != 0 && Placer)
+	{
+		const double Start = FPlatformTime::Seconds();
+		const FMOCompositionGroundingStats Stats = GroundComposition(Owner, true);
+		UE_LOG(LogMOFramework, Log, TEXT("[MOWorldFeatures] %s grounded in %.1f ms: %s"), *Owner->GetName(), (FPlatformTime::Seconds() - Start) * 1000.0, *Stats.Describe());
+	}
+}
+
+FMOCompositionGroundingStats UMOWorldFeatureSubsystem::GroundComposition(AActor* Composition, bool bApply) const
+{
+	if (!Placer || !Composition)
+	{
+		return FMOCompositionGroundingStats();
+	}
+	// The ground as the voxel terrain makes it: the generator's, raised to the authored ground of the compositions placed over it.
+	const FMOWorldFeaturePlacer& P = *Placer;
+	const FMOWorldGenParamsRef Params = FMOWorldGenParamsProvider::Get();
+	const int32 Seed = PlacerSeed;
+	return FMOCompositionGrounding::Ground(Composition, [&P, &Params, Seed](double X, double Y)
+	{
+		return FMOFeatureTerrain::Apply(Params, Seed, X, Y, P.GroundHeightAt(X, Y));
+	}, bApply);
+}
+
+bool UMOWorldFeatureSubsystem::DevOverrideAuthoredGround(FName FeatureId, const FString& JsonPath)
+{
+	if (JsonPath.IsEmpty())
+	{
+		DevGroundOverrides.Remove(FeatureId);
+	}
+	else
+	{
+		FString Text;
+		FMOWorldFeatureGround Ground;
+		if (!FFileHelper::LoadFileToString(Text, *JsonPath) || !FJsonObjectConverter::JsonObjectStringToUStruct(Text, &Ground) || !Ground.IsSet())
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOWorldFeatures] ground override: %s is not a usable FMOWorldFeatureGround"), *JsonPath);
+			return false;
+		}
+		DevGroundOverrides.Add(FeatureId, MoveTemp(Ground));
+	}
+	TArray<TPair<FName, FMOWorldFeatureDefinitionRow>> Rows;
+	if (!LoadCatalog(Rows))
+	{
+		return false;
+	}
+	for (TPair<FName, FMOWorldFeatureDefinitionRow>& Row : Rows)
+	{
+		if (const FMOWorldFeatureGround* Override = DevGroundOverrides.Find(Row.Key))
+		{
+			Row.Value.AuthoredGround = *Override;
+		}
+		else if (Row.Key == FeatureId)
+		{
+			Row.Value.AuthoredGround = FMOWorldFeatureGround();   // cleared
+		}
+	}
+	FMOFeatureTerrain::SetCatalog(Rows);
+	const UMOWorldSeedSubsystem* Seeds = UMOWorldSeedSubsystem::Get(GetWorld());
+	const bool bRebuilt = Seeds && Seeds->HasActiveSeed() && UMOWorldSeedSubsystem::RegenerateVoxelWorld(GetWorld(), Seeds->GetActiveSeed(), Seeds->GetActiveParameterName(), this);
+	UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] GROUNDOVERRIDE %s %s; terrain rebuilt: %d"), *FeatureId.ToString(), JsonPath.IsEmpty() ? TEXT("cleared") : *JsonPath, bRebuilt ? 1 : 0);
+	return true;
+}
+
+void UMOWorldFeatureSubsystem::GetSpawnedNear(const FVector& Center, double RadiusCm, TArray<TPair<FName, AActor*>>& Out) const
+{
+	if (!Placer)
+	{
+		return;
+	}
+	const TArray<FMOWorldFeaturePlacer::FFeature>& Features = Placer->GetFeatures();
+	for (const TPair<FIntVector4, TWeakObjectPtr<AActor>>& It : Spawned)
+	{
+		AActor* Actor = It.Value.Get();
+		if (Actor && Features.IsValidIndex(It.Key.X) && FVector::Dist2D(Actor->GetActorLocation(), Center) <= RadiusCm)
+		{
+			Out.Emplace(Features[It.Key.X].Id, Actor);
+		}
 	}
 }
 
@@ -649,6 +777,51 @@ void UMOWorldFeatureSubsystem::Tick(float DeltaTime)
 // ============================================================================
 // Commands
 // ============================================================================
+
+static FAutoConsoleCommandWithWorldAndArgs GMOWorldFeaturesGroundOverrideCmd(
+	TEXT("MO.WorldFeatures.GroundOverride"),
+	TEXT("Dev: a feature's authored ground (the terrain it raises) from a JSON file, or 'clear', for this session; rebuilds the terrain. Usage: MO.WorldFeatures.GroundOverride <FeatureId> <path.json|clear>"),
+	FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+	{
+		UMOWorldFeatureSubsystem* Features = UMOWorldFeatureSubsystem::Get(World);
+		if (!Features || Args.Num() < 2)
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] GROUNDOVERRIDE usage: MO.WorldFeatures.GroundOverride <FeatureId> <path.json|clear>"));
+			return;
+		}
+		Features->DevOverrideAuthoredGround(FName(*Args[0]), Args[1].Equals(TEXT("clear"), ESearchCase::IgnoreCase) ? FString() : Args[1]);
+	}));
+
+static FAutoConsoleCommandWithWorldAndArgs GMOWorldFeaturesGroundingCmd(
+	TEXT("MO.WorldFeatures.Grounding"),
+	TEXT("Dev: the grounding census of every spawned composition near the local pawn -- plants floating / buried, rocks with a gap under them. 'apply' grounds them too. Usage: MO.WorldFeatures.Grounding [radius_m=600] [apply]"),
+	FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+	{
+		UMOWorldFeatureSubsystem* Features = UMOWorldFeatureSubsystem::Get(World);
+		const APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
+		const APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+		if (!Features || !Pawn)
+		{
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] GROUNDING not ready (needs a pawn and the world features)"));
+			return;
+		}
+		const double R = (Args.Num() > 0 && Args[0].IsNumeric() ? FCString::Atof(*Args[0]) : 600.0) * 100.0;
+		const bool bApply = Args.ContainsByPredicate([](const FString& A) { return A.Equals(TEXT("apply"), ESearchCase::IgnoreCase); });
+		TArray<TPair<FName, AActor*>> Near;
+		Features->GetSpawnedNear(Pawn->GetActorLocation(), R, Near);
+		FMOCompositionGroundingStats Total;
+		for (const TPair<FName, AActor*>& It : Near)
+		{
+			const FMOCompositionGroundingStats S = Features->GroundComposition(It.Value, bApply);
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] GROUNDING   %s %s at %.0f m: %s"), *It.Key.ToString(), *It.Value->GetName(),
+				FVector::Dist2D(It.Value->GetActorLocation(), Pawn->GetActorLocation()) / 100.0, *S.Describe());
+			Total.Foliage += S.Foliage; Total.FoliageFloating += S.FoliageFloating; Total.FoliageBuried += S.FoliageBuried;
+			Total.MaxFoliageFloatCm = FMath::Max(Total.MaxFoliageFloatCm, S.MaxFoliageFloatCm); Total.MaxFoliageBuryCm = FMath::Max(Total.MaxFoliageBuryCm, S.MaxFoliageBuryCm);
+			Total.Rocks += S.Rocks; Total.RocksFloating += S.RocksFloating; Total.MaxRockGapCm = FMath::Max(Total.MaxRockGapCm, S.MaxRockGapCm);
+			Total.Clinging += S.Clinging; Total.Moved += S.Moved;
+		}
+		UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] GROUNDING %d composition(s) within %.0f m%s: %s"), Near.Num(), R / 100.0, bApply ? TEXT(" (applied)") : TEXT(""), *Total.Describe());
+	}));
 
 static FAutoConsoleCommandWithWorldAndArgs GMOWorldFeaturesDumpCmd(
 	TEXT("MO.WorldFeatures.Dump"),

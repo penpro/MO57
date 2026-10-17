@@ -103,6 +103,9 @@ public:
 	/** The seed this machine's terrain was generated from. Only meaningful if HasActiveSeed(). */
 	int32 GetActiveSeed() const { return ActiveSeed; }
 
+	/** The voxel graph parameter the seed went into (what RegenerateVoxelWorld needs to rebuild the terrain). */
+	FName GetActiveParameterName() const { return ActiveParameterName; }
+
 	/** TerrainSeedFromWorldSeed(GetActiveSeed()). Only meaningful if HasActiveSeed(). */
 	int32 GetActiveTerrainSeed() const { return TerrainSeedFromWorldSeed(ActiveSeed); }
 

@@ -21,6 +21,7 @@
 #include "Subsystems/WorldSubsystem.h"
 #include "MOWorldFeatureTypes.h"
 #include "MOWorldGen.h"
+#include "MOCompositionGrounding.h"
 #include "MOBiomeFinder.h"
 #include "MOWorldFeatureSubsystem.generated.h"
 
@@ -49,6 +50,9 @@ struct MOFRAMEWORK_API FMOWorldFeaturePlacer
 	void SitesTouching(const FBox2D& Bounds, TArray<FMOWorldFeatureSite>& Out);
 
 	int32 GetFeatureIndex(FName FeatureId) const;
+
+	/** The terrain height (cm) at (X, Y): the world generator's, the same on every machine and known where no terrain collision exists yet. */
+	float GroundHeightAt(double X, double Y) const;
 
 	/** The plane through 8 generator heights on a circle of RadiusCm around (X, Y): OutGradient = height change per cm (downhill = -gradient),
 	 *  OutMaxDeviationCm = the farthest of those points and the centre (CentreGroundCm) from that plane. False if an edge point is in water. */
@@ -91,14 +95,31 @@ public:
 
 	// UTickableWorldSubsystem
 	virtual bool ShouldCreateSubsystem(UObject* Outer) const override;
+	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 	virtual void Deinitialize() override;
 	virtual void Tick(float DeltaTime) override;
 	virtual TStatId GetStatId() const override;
 	virtual bool IsTickable() const override;
 
 private:
-	/** A feature's PCG composition finished: hide what it built from engine basic shapes (editor markers baked into Epic's assembly data). */
+	/** A feature's PCG composition finished: hide what it built from engine basic shapes (editor markers baked into Epic's assembly data), then ground it
+	 *  on the terrain it landed on (FMOCompositionGrounding: authored heights from Epic's hillsides left plants floating and rocks hovering). */
 	void HandleCompositionGenerated(class UPCGComponent* PCG);
+
+public:
+	/** Measure (bApply: and ground) one spawned composition; the census verb MO.WorldFeatures.Grounding and HandleCompositionGenerated share it. */
+	FMOCompositionGroundingStats GroundComposition(AActor* Composition, bool bApply) const;
+
+	/**
+	 * Dev: replace one feature's authored ground (the terrain it raises, FMOFeatureTerrain) with a JSON file's (FMOWorldFeatureGround fields), or clear it
+	 * (empty path), for this session only, and rebuild the voxel terrain -- tuning Content/Python/measure_feature_ground.py without saving the catalog.
+	 */
+	bool DevOverrideAuthoredGround(FName FeatureId, const FString& JsonPath);
+
+	/** The spawned composition actors (any feature) within RadiusCm of Center, with their feature id. */
+	void GetSpawnedNear(const FVector& Center, double RadiusCm, TArray<TPair<FName, AActor*>>& Out) const;
+
+private:
 
 	TUniquePtr<FMOWorldFeaturePlacer> Placer;
 	int32 PlacerSeed = 0;
@@ -109,5 +130,11 @@ private:
 	TMap<FIntVector4, TWeakObjectPtr<AActor>> Spawned;
 
 	bool EnsurePlacer();
+
+	/** Dev overrides of rows' authored ground (DevOverrideAuthoredGround): applied over the catalog for the terrain. */
+	TMap<FName, FMOWorldFeatureGround> DevGroundOverrides;
+
+	/** DT_WorldFeatures' rows (the settings' table). False (logged once) if there is none. */
+	bool LoadCatalog(TArray<TPair<FName, FMOWorldFeatureDefinitionRow>>& OutRows);
 	AActor* SpawnMember(const FMOWorldFeaturePlacer::FFeature& Feature, const FMOWorldFeatureSite& Site, int32 MemberIndex);
 };

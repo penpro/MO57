@@ -30,6 +30,67 @@ enum class EMOWorldFeaturePolicy : uint8
 	Many UMETA(DisplayName="Many (scattered by density)")
 };
 
+/**
+ * The ground a composition was AUTHORED on, in its own frame (cm at scale 1, relative to the actor root): the terrain RISES to it under every site
+ * (FMOFeatureTerrain), never sinks. Electric Dreams' hillside sets carry their own landform -- the cliff assembly is a 4 m plateau behind a cliff face;
+ * on our flat ground the plateau was a slab floating over voids (Steam playtest Oct 16 2026, #15 / #19). Measured in game from the composition's
+ * ground-lying pieces by Content/Python/measure_feature_ground.py. Unset = the composition stands on our terrain as it is.
+ */
+USTRUCT(BlueprintType)
+struct MOFRAMEWORK_API FMOWorldFeatureGround
+{
+	GENERATED_BODY()
+
+	/** The grid's first cell centre (min X, min Y) in the composition's frame (cm). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Ground")
+	FVector2D OriginCm = FVector2D::ZeroVector;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Ground", meta=(ClampMin="10.0"))
+	float CellCm = 100.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Ground", meta=(ClampMin="0"))
+	int32 NumX = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Ground", meta=(ClampMin="0"))
+	int32 NumY = 0;
+
+	/** NumX * NumY authored ground heights (cm, composition frame), X fastest. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Ground")
+	TArray<float> HeightsCm;
+
+	/** NumX * NumY: how much the raise counts there (1 on the authored ground, fading to 0 over a margin around it). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Ground")
+	TArray<float> Weights;
+
+	bool IsSet() const { return NumX > 1 && NumY > 1 && HeightsCm.Num() == NumX * NumY && Weights.Num() == NumX * NumY; }
+
+	/** The grid's extent in the composition's frame (cm). */
+	FBox2D GetBounds() const
+	{
+		return FBox2D(OriginCm, OriginCm + FVector2D((NumX - 1) * CellCm, (NumY - 1) * CellCm));
+	}
+
+	/** Bilinear authored height and weight at a point of the composition's frame. False outside the grid. */
+	bool Sample(double X, double Y, float& OutHeightCm, float& OutWeight) const
+	{
+		const double Gx = (X - OriginCm.X) / CellCm, Gy = (Y - OriginCm.Y) / CellCm;
+		if (!IsSet() || Gx < 0.0 || Gy < 0.0 || Gx > NumX - 1 || Gy > NumY - 1)
+		{
+			return false;
+		}
+		const int32 X0 = FMath::Min(static_cast<int32>(Gx), NumX - 2), Y0 = FMath::Min(static_cast<int32>(Gy), NumY - 2);
+		const float Fx = static_cast<float>(Gx - X0), Fy = static_cast<float>(Gy - Y0);
+		auto At = [this](const TArray<float>& A, int32 Ix, int32 Iy) { return A[Iy * NumX + Ix]; };
+		auto Bi = [&](const TArray<float>& A)
+		{
+			return FMath::Lerp(FMath::Lerp(At(A, X0, Y0), At(A, X0 + 1, Y0), Fx), FMath::Lerp(At(A, X0, Y0 + 1), At(A, X0 + 1, Y0 + 1), Fx), Fy);
+		};
+		OutHeightCm = Bi(HeightsCm);
+		OutWeight = Bi(Weights);
+		return true;
+	}
+};
+
 USTRUCT(BlueprintType)
 struct MOFRAMEWORK_API FMOWorldFeatureDefinitionRow : public FTableRowBase
 {
@@ -110,6 +171,10 @@ struct MOFRAMEWORK_API FMOWorldFeatureDefinitionRow : public FTableRowBase
 	/** Buried this deep (cm at scale 1; it grows with the site's scale): a composition authored on a flat floor shows no gap on uneven ground. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Placement", meta=(ClampMin="0.0"))
 	float SinkCm = 30.0f;
+
+	/** The ground the composition was authored on: the terrain rises to it under the site (FMOFeatureTerrain). Unset = stands on our terrain as it is. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Placement")
+	FMOWorldFeatureGround AuthoredGround;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Placement", meta=(ClampMin="0.1"))
 	float MinScale = 1.0f;
