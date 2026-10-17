@@ -109,6 +109,34 @@ like copper). Harder rock should cost more TIME, not a tool gate -- fire-setting
 "achievable temperature" belongs; logged for Codex in `claude-codex-coop.md` (CL-0027). Nothing of the heat ladder is built yet -- it is a design
 step for Wes to approve.
 
+### Fork for Wes: digging time by what is dug (Oct 17; not built)
+
+Today every dug cubic metre takes the same time: `TerraformSecondsPerCubicMeter` 30,000 s (8.3 h), for the player's dig tool and for the
+survivors' excavation job alike (`UMOTerraformingComponent::ComputeDurationForVolumeSeconds`). That is a fair rate for SOIL with a digging stick.
+Rock is much slower, and digging now knows what it cuts through (`FMOWorldGen::SampleDig`, the same points that decide the yield). Evidence:
+
+- Grimes Graves (chalk, red-deer antler picks; British Museum estimate): a 13 m shaft plus 34 m of galleries took 20 people about 93 working days
+  (~1,860 person-days), hauling included. That is roughly 0.2 m3 per person-day, ~50 h per m3: about 6x the soil rate, haulage included.
+- Hard rock before iron was worked by fire-setting: heat the face, quench it, prise off the cracked shell. One account (a Roman-era mine, weak
+  source) gives ~4 cm of advance per fire, about one fire a day per face. On a 1.5 m2 face that is ~0.06 m3 per day for a small crew: ~300-500 h per
+  m3, 40-60x soil.
+
+Proposed multipliers on the soil rate, volume-weighted over the dug points (one function beside `FMOGeologyYield::ItemFor`, used by both paths):
+
+| Material | x soil | Why |
+|---|---|---|
+| Soil / regolith | 1 | the current rate |
+| Coal (seam) | 1.5 | soft, breaks along its bedding |
+| Coal measures (shale, sandstone) | 3 | bedded, splits along partings |
+| Limestone (and chert, hematite, galena in it) | 5 | Grimes Graves chalk ~6x with haulage; compact limestone is harder |
+| Granite, basalt (and tin, copper in them) | 40 | stone tools barely bite; fire-setting is the realistic way |
+
+What it means: a player still digs soil at today's pace. A granite dig of 10 litres would take over 3 hours, so bulk rock work goes to pawns and
+later tools. Ore nodes (cave walls, outcrops) keep their own harvest times (40-60 s), so collecting ore stays possible; tunnelling through rock does
+not. Later, fire-setting as an action (fuel + water, then a fast bite) and iron picks (x0.5 or so) would be the progression. This changes the feel
+of pillar 3 ("dig anything"), so it is Wes's call: (a) build as proposed; (b) build with gentler multipliers (e.g. limestone 2, granite 6);
+(c) leave the single rate.
+
 ### Draft data for the heat fields (Oct 17; not authored)
 
 Codex's crafting batch C adds the fields: a station building's `ProvidedProcessTemperatureCelsius` (recipe row, `bIsBuilding`), the runtime
