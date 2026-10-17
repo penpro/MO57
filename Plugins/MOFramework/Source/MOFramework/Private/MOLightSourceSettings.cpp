@@ -15,6 +15,7 @@ UMOLightSourceSettings::UMOLightSourceSettings()
 	Torch.LightSeconds = 6.0f;
 	Torch.BurnSecondsPerDurability = 30.0f;
 	Torch.FlameEffect = FSoftObjectPath(TEXT("/Game/M5VFXVOL2/Niagara/Fire_for_BP/NTorchfire_BP.NTorchfire_BP"));
+	Torch.FlameEffectScale = 0.5f;   // the pack's flame is a wall torch's, ~70 cm tall; a hand torch's flame is 20-40 cm
 
 	// A lamp burns steadily whether it is moved or not, and dazzles more than it shows: a small low flame, light thrown sideways.
 	FMOLightSourceProfile& Lamp = Profiles.Add(TEXT("OilLamp01"));
