@@ -26,7 +26,8 @@ complement each other. A candle is ~1 cd (~12.6 lm). Wood and fat flames burn at
 - **Lighting:** from a burning fire. The fire's menu offers "Light the <torch> in the fire" (`FMOFireActions::LightCarried`) when the pawn
   holds an unlit light source: a timed action of the profile's `LightSeconds`, holding it in the flames.
 - **Burning down:** one durability point per `BurnSecondsPerDurability` of game time, on the server clock. A torch is 90 points × 30 s =
-  45 min, inside the measured 21-61. Durability lives on the item, so a half-burnt torch that is put out and relit carries on where it was.
+  45 min, inside the measured 21-61. Meant to live on the item, so a half-burnt torch put out and relit carries on where it was. **Pending:** nothing can
+  wear an equipped item yet (Codex is adding `ReduceEquippedDurability`), so for now the burn is counted on the component and a relit torch starts full.
 - **Going out:**
   - it leaves the hand (put away, dropped, swapped): nobody pockets a burning torch;
   - the flame goes under the water surface, or the pawn swims (wading with it held up is fine);

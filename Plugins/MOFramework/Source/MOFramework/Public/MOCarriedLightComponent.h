@@ -2,8 +2,9 @@
 // fire is the only light a primitive survivor has, and it has to be carried, fed and kept dry.
 //
 // What burns is the item in the hand (UMOLightSourceSettings has a profile for it). It is lit from a burning fire (FMOFireActions::LightCarried, a timed
-// action) and goes out when it leaves the hand, goes under water, or burns down: one point of the item's durability per BurnSecondsPerDurability of game time,
-// so a half-burnt torch put away and taken out again carries on from where it was. The light itself is a point light in candelas at the far end of the held
+// action) and goes out when it leaves the hand, goes under water, or burns down: one point of the item's durability per BurnSecondsPerDurability of game time.
+// PENDING (CL-0034): until UMOEquipmentComponent::ReduceEquippedDurability exists the burn is counted on this component, not worn into the item, so a relit
+// torch starts full again; with it, a half-burnt torch carries on from where it was. The light itself is a point light in candelas at the far end of the held
 // mesh, warm (~1900 K), flickering, brighter while moving (a torch starves of air held still). Docs/Light_Sources.md.
 //
 // Server-authoritative: the lit item (its GUID) and the hand replicate; every machine with a renderer makes its own light from them.
