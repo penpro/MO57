@@ -3391,6 +3391,67 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 		}),
 		ECVF_Default));
 
+	// ---------- MO.WorldGen.FindCaveEntrance [radius] ----------
+	// Generator v9 galleries reach the sky only where they run into a slope: find those mouths (cave air just under the ground) to look at one.
+	ConsoleCommands.Add(CM.RegisterConsoleCommand(
+		TEXT("MO.WorldGen.FindCaveEntrance"),
+		TEXT("Dev: scan around the local pawn for cave mouths (cave air 2 m under the ground) and log the nearest, with the ground's slope. Usage: MO.WorldGen.FindCaveEntrance [radius_cm=60000]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
+			const APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+			const UMOWorldSeedSubsystem* Seeds = UMOWorldSeedSubsystem::Get(World);
+			if (!Pawn || !Seeds || !Seeds->HasActiveSeed())
+			{
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDGEN FindCaveEntrance FAILED: needs a local pawn and an active world seed"));
+				return;
+			}
+			const float Radius = Args.Num() > 0 ? FMath::Clamp(FCString::Atof(*Args[0]), 2000.f, 200000.f) : 60000.f;
+			const int32 TerrainSeed = Seeds->GetActiveTerrainSeed();
+			const FMOWorldGenParamsRef P = FMOWorldGenParamsProvider::Get();
+			const float Voxel = P->Tuning.VoxelSizeCm;
+			const FVector C = Pawn->GetActorLocation();
+			const float Step = 400.f;
+			auto Ground = [&](double X, double Y) { return FMOWorldGen::SampleHeightCm(*P, X, Y, TerrainSeed, Voxel); };
+
+			struct FMouth { float Dist; FVector Pos; float SlopeDeg; float D; };
+			TArray<FMouth> Mouths;
+			const int32 N = FMath::FloorToInt(Radius / Step);
+			for (int32 Iy = -N; Iy <= N; ++Iy)
+			{
+				for (int32 Ix = -N; Ix <= N; ++Ix)
+				{
+					const double X = C.X + Ix * Step, Y = C.Y + Iy * Step;
+					const float Dist = (float)FVector2D(X - C.X, Y - C.Y).Size();
+					if (Dist > Radius)
+					{
+						continue;
+					}
+					const float G = Ground(X, Y);
+					const float D = FMOWorldGen::SampleCaveDistanceAtGround(*P, X, Y, G - 200.f, G, TerrainSeed, Voxel);
+					if (D < -50.f)
+					{
+						const float Gx = (Ground(X + 600.0, Y) - Ground(X - 600.0, Y)) / 1200.f, Gy = (Ground(X, Y + 600.0) - Ground(X, Y - 600.0)) / 1200.f;
+						Mouths.Add({ Dist, FVector(X, Y, G), FMath::RadiansToDegrees(FMath::Atan(FMath::Sqrt(Gx * Gx + Gy * Gy))), D });
+					}
+				}
+			}
+			Mouths.Sort([](const FMouth& A, const FMouth& B) { return A.Dist < B.Dist; });
+			UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDGEN FindCaveEntrance radius=%.0f columns=%d"), Radius, Mouths.Num());
+			int32 Listed = 0;
+			TArray<FVector> Taken;
+			for (const FMouth& M : Mouths)
+			{
+				bool bNear = false;
+				for (const FVector& T : Taken) { bNear |= FVector::Dist2D(T, M.Pos) < 3000.f; }
+				if (bNear) { continue; }
+				Taken.Add(M.Pos);
+				UE_LOG(LogMOFramework, Warning, TEXT("[MOQUERY] WORLDGEN Entrance #%d dist=%.0f x=%.0f y=%.0f z=%.0f slope=%.0f d=%.0f"), Listed, M.Dist, M.Pos.X, M.Pos.Y, M.Pos.Z, M.SlopeDeg, M.D);
+				if (++Listed >= 8) { break; }
+			}
+		}),
+		ECVF_Default));
+
 	// ---------- MO.WorldGen.Sinkholes [radius] / MO.WorldGen.CaveSample x y z ----------
 	// Find caves without wandering: the nearest sinkholes of this world (paste a position into MO.Player.Teleport), and the cave field at a point.
 	ConsoleCommands.Add(CM.RegisterConsoleCommand(

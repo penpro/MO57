@@ -313,34 +313,117 @@ bool FMOWorldGen_GalleriesStayLevel::RunTest(const FString& Parameters)
 	TestTrue(TEXT("enough gallery air found to measure (>= 100 passages)"), Measured >= 100);
 	TestTrue(FString::Printf(TEXT("95%% of passages run within 15 deg of level (%d of %d)"), Level, Measured), Measured > 0 && Level >= FMath::CeilToInt(0.95f * Measured));
 
-	// Entrances: a scan of a 20 x 20 km region at 25 m spacing -- columns on ground steep enough for an entrance with cave air within 2 m of the
-	// surface. They exist (a cave you can walk into), and only on the steep columns (the flat-ground cover is tested in MOFramework.WorldGen.Caves).
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOWorldGen_CaveEntrances,
+	"MOFramework.WorldGen.CaveEntrances",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+bool FMOWorldGen_CaveEntrances::RunTest(const FString& Parameters)
+{
+	// Caves you can walk into: a gallery opens where it runs into a hillside. The first v9 test asked only that one exists -- it found 3 open columns
+	// in 20 x 20 km at 25 m, and a fresh world had no mouth within 2 km of an inland spot (Oct 17 2026): the caves were unreachable. Measured here:
+	// the hilliest 2 x 2 km of a 20 x 20 km region, scanned at 4 m (a mouth is a few metres wide), mouths = open columns grouped by 30 m cell.
+	const FMOWorldGenParamsRef P = MakeCaveParams();
+	const float Voxel = P->Tuning.VoxelSizeCm;
+	auto Ground = [&P, Voxel](double X, double Y) { return FMOWorldGen::SampleHeightCm(*P, X, Y, CaveTestSeed, Voxel); };
+	// The generator's slope: 12 m central differences (GroundGradient in MOWorldGenCaves.cpp).
+	auto SlopeTan = [&Ground](double X, double Y)
 	{
-		const float MinTan = FMath::Tan(FMath::DegreesToRadians(P->Tuning.CaveEntranceSlopeMinDeg));
-		int32 Steep = 0, Entrances = 0;
-		for (double X = -1.0e6; X < 1.0e6; X += 2500.0)
+		const float Gx = (Ground(X + 600.0, Y) - Ground(X - 600.0, Y)) / 1200.0f, Gy = (Ground(X, Y + 600.0) - Ground(X, Y - 600.0)) / 1200.0f;
+		return FMath::Sqrt(Gx * Gx + Gy * Gy);
+	};
+
+	// The hilliest 2 km tile of cave country (most columns over 14 deg on ground where caves exist: above the coast, below the high-ground taper --
+	// the mountain ranges have none by design) of the region, at 50 m.
+	const double Tile = 200000.0;
+	const float HillTan = FMath::Tan(FMath::DegreesToRadians(14.0f));
+	const float CaveLow = P->Tuning.SeaLevelCm + P->Tuning.CaveMinGroundAboveSeaCm + 600.0f, CaveHigh = P->Tuning.CaveMaxGroundCm - P->Tuning.CaveHighFadeCm;
+	TMap<FIntPoint, int32> SteepPerTile;
+	for (double X = -1.0e6; X < 1.0e6; X += 5000.0)
+	{
+		for (double Y = -1.0e6; Y < 1.0e6; Y += 5000.0)
 		{
-			for (double Y = -1.0e6; Y < 1.0e6; Y += 2500.0)
+			const float Z = Ground(X, Y);
+			if (Z > CaveLow && Z < CaveHigh && SlopeTan(X, Y) >= HillTan)
 			{
-				const float Ground = FMOWorldGen::SampleHeightCm(*P, X, Y, CaveTestSeed);
-				const float Gx = (FMOWorldGen::SampleHeightCm(*P, X + 300.0, Y, CaveTestSeed) - Ground) / 300.0f;
-				const float Gy = (FMOWorldGen::SampleHeightCm(*P, X, Y + 300.0, CaveTestSeed) - Ground) / 300.0f;
-				if (FMath::Sqrt(Gx * Gx + Gy * Gy) < MinTan)
+				++SteepPerTile.FindOrAdd(FIntPoint(FMath::FloorToInt32(X / Tile), FMath::FloorToInt32(Y / Tile)));
+			}
+		}
+	}
+	FIntPoint Best(0, 0);
+	int32 BestCount = -1;
+	for (const TPair<FIntPoint, int32>& It : SteepPerTile)
+	{
+		if (It.Value > BestCount) { BestCount = It.Value; Best = It.Key; }
+	}
+	const double X0 = Best.X * Tile, Y0 = Best.Y * Tile;
+	const double Step = 400.0;
+	const int32 N = FMath::RoundToInt32(Tile / Step);
+
+	// Ground and slope once (the cave tuning does not move the ground), then each candidate entrance band.
+	TArray<float> G, S;
+	G.SetNumUninitialized(N * N);
+	S.SetNumUninitialized(N * N);
+	int32 Hilly = 0;
+	for (int32 Iy = 0; Iy < N; ++Iy)
+	{
+		for (int32 Ix = 0; Ix < N; ++Ix)
+		{
+			const double X = X0 + (Ix + 0.5) * Step, Y = Y0 + (Iy + 0.5) * Step;
+			G[Iy * N + Ix] = Ground(X, Y);
+			S[Iy * N + Ix] = SlopeTan(X, Y);
+			Hilly += S[Iy * N + Ix] >= HillTan && G[Iy * N + Ix] > CaveLow && G[Iy * N + Ix] < CaveHigh ? 1 : 0;
+		}
+	}
+	const double TileKm2 = (Tile / 100000.0) * (Tile / 100000.0);
+	AddInfo(FString::Printf(TEXT("hilliest 2 km tile of cave country at (%.0f, %.0f): %.0f%% of it over 14 deg in the cave band"), X0, Y0, 100.0 * Hilly / (N * N)));
+
+	auto CountMouths = [&](const FMOWorldGenParams& Q, int32& OutOpen)
+	{
+		const float MinTan = FMath::Tan(FMath::DegreesToRadians(Q.Tuning.CaveEntranceSlopeMinDeg));
+		TSet<FIntPoint> Mouths;
+		OutOpen = 0;
+		for (int32 Iy = 0; Iy < N; ++Iy)
+		{
+			for (int32 Ix = 0; Ix < N; ++Ix)
+			{
+				if (S[Iy * N + Ix] < MinTan)
 				{
 					continue;
 				}
-				++Steep;
+				const double X = X0 + (Ix + 0.5) * Step, Y = Y0 + (Iy + 0.5) * Step;
 				bool bOpen = false;
-				for (float Depth = 50.0f; Depth <= 200.0f && !bOpen; Depth += 50.0f)
+				for (float Depth = 50.0f; Depth <= 250.0f && !bOpen; Depth += 50.0f)
 				{
-					bOpen = FMOWorldGen::SampleCaveDistanceAtGround(*P, X, Y, Ground - Depth, Ground, CaveTestSeed, 50.0f) < 0.0f;
+					bOpen = FMOWorldGen::SampleCaveDistanceAtGround(Q, X, Y, G[Iy * N + Ix] - Depth, G[Iy * N + Ix], CaveTestSeed, 50.0f) < 0.0f;
 				}
-				Entrances += bOpen ? 1 : 0;
+				if (bOpen)
+				{
+					++OutOpen;
+					Mouths.Add(FIntPoint(FMath::FloorToInt32(X / 3000.0), FMath::FloorToInt32(Y / 3000.0)));
+				}
 			}
 		}
-		AddInfo(FString::Printf(TEXT("entrance scan, 20 x 20 km at 25 m: %d steep column(s), %d with cave air within 2 m of the surface"), Steep, Entrances));
-		TestTrue(TEXT("hillside entrances exist (a cave you walk into)"), Entrances > 0);
+		return Mouths.Num();
+	};
+
+	// The candidates (information: what the band does to the density), then the default -- the assertion.
+	const FVector2f Bands[] = { FVector2f(16.0f, 32.0f), FVector2f(14.0f, 24.0f), FVector2f(12.0f, 20.0f), FVector2f(10.0f, 16.0f) };
+	for (const FVector2f& Band : Bands)
+	{
+		const FMOWorldGenParamsRef Q = MakeCaveParams([&Band](FMOWorldGenTuning& T) { T.CaveEntranceSlopeMinDeg = Band.X; T.CaveEntranceSlopeFullDeg = Band.Y; });
+		int32 Open = 0;
+		const int32 Mouths = CountMouths(*Q, Open);
+		AddInfo(FString::Printf(TEXT("  band %.0f-%.0f deg: %d mouth(s) (%.1f per km2), %d open column(s)"), Band.X, Band.Y, Mouths, Mouths / TileKm2, Open));
 	}
+	int32 Open = 0;
+	const int32 Mouths = CountMouths(*P, Open);
+	const double PerKm2 = Mouths / TileKm2;
+	AddInfo(FString::Printf(TEXT("default band %.0f-%.0f deg: %d mouth(s) in the hilliest 2 km tile (%.1f per km2), %d open column(s)"),
+		P->Tuning.CaveEntranceSlopeMinDeg, P->Tuning.CaveEntranceSlopeFullDeg, Mouths, PerKm2, Open));
+	TestTrue(FString::Printf(TEXT("hill country has caves to walk into: >= 3 mouths per km2 in the hilliest 2 km tile (got %.1f)"), PerKm2), PerKm2 >= 3.0);
 	return true;
 }
 
