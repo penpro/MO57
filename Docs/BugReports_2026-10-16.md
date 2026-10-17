@@ -11,6 +11,12 @@ seed, client follows the host's clock and weather, no crash / ensure / assertion
 cooked game 7 of 8, the miss being `Data:Sources` (54 of 130 recipes reachable: the open progression work, failing by design until no recipe is
 blocked -- not new); no crash, ensure or assertion. Editor-binary runs: suite 254/254, `nettest actions` 113/115 then the two harness misses passing.
 
+**Second pass (Oct 16 evening -> Oct 17, `917d73d0`: eating timer, punch-to-camera, Electric Dreams terrain, caves v9):** suite 255/255
+(WorldGen 38/38, cave golden re-pinned); `nettest game` 42/42 (host / joiner terrain identical over the shaped ground, 121/121 at 0.0 cm; the
+tutorial step updated to the Oct 15 "Move and Look first" order -- it had failed on a correct build); `nettest actions` 118/118 (the joiner eats
+on a timer, punches toward its camera); repackaged Development build: `nettest packaged` 14/14, both copies build the feature-terrain index from
+the same terrain seed.
+
 ## Co-op (Steam session, host + 1 joiner)
 
 | # | id | Report | Cause / where | Status |

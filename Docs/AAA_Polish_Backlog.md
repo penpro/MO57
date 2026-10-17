@@ -64,7 +64,7 @@ design forks are logged under "Forks", not built blind.
   (no hard bands); (3) several sand materials so beaches and deserts stop repeating.
 - [~] **Alpine / snow variation (Wes, 2026-10-13; details in `Docs/Terrain_Generation_Exploration.md` To-do)** -- aspect-driven snow DONE Oct 15 (checked at 300 m / 1 km / 4 km; sunlit snow near-flat white at 1 km = albedo/exposure, open): much more variation in the snow / rock so it reads as
   real mountains -- aspect-driven snow (northern hemisphere: less snow on south-facing slopes) and / or bigger, more dynamic noise.
-- [ ] **Caves half the diameter and more lateral (Wes, 2026-10-13; same To-do)**: smaller passages that run sideways instead of straight down (generator v8).
+- [x] **Caves half the diameter and more lateral (Wes, 2026-10-13; same To-do)**: DONE Oct 16 2026 as generator v9 (1b4e7d94): level galleries, radius 160 cm, openings only on 16-32 deg slopes.
 - [ ] Weather per biome (rain / snow line at altitude) and the sound layers that go with it.
 
 ### P3 - game-wide quality
