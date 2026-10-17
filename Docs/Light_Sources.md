@@ -87,6 +87,17 @@ occlusion properties, and renderer defaults.
     ~2.5 m read clearly, warm; past that it is black. That matches the study's 2.5 m working radius.
   - Bias sweep: +2 too dark, 0 / -0.5 / -1 close, -1 kept. With no flame near, nothing is written and the sky's range applies.
 
+**Verified end to end in game (Oct 17, `flow_check.py` against an instance):**
+
+1. MakeTorch crafted a Torch01.
+2. Equipped, at a burning campfire the fire menu offered "Light the Torch in the fire" (the real server RPC); after 6 s it was lit at 6.1 cd,
+   exposure floor -0.54.
+3. At a laid, unlit fire "Light it from the Torch": caught (the 95 % roll).
+4. Walking into a lake: "Torch01 went out (doused)".
+
+Close-ups at dusk set the side carry: `HeldVisual.RightHandTransform` gripped near the butt, 15 deg forward and 35 deg outward, flame effect at
+0.5. A torch-raising arm pose (animation) would improve it further.
+
 **Still open:**
 
 - The campfire (`AMOCraftingStationActor`) is not yet a registered light source: its file is in Codex's batch C. A campfire at night will blow

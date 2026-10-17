@@ -415,7 +415,7 @@ once) and the survivors' ExcavateAndHaul job (earth and stone fill the fill zone
 collect pretty much any ore, the actual hurdle with iron is having fire hot enough": `IronOreDeposit` takes a stone pick (0.5) like copper; the heat
 ladder (station temperature, fuel, bellows) is researched in `Docs/Technology_History.md` and waits on Wes + Codex's station-context work.
 Galena (Oct 17, after Wes went to bed): `EMOOreKind::Galena` -> `GalenaOre01`, which also gives the GlazePottery chain a producer: powdered galena
-is how medieval lead glazes were made (the `MineralGlaze01` it needs had none). Rows prepared, not yet authored (editor window). Carried light:
+is how medieval lead glazes were made (the `MineralGlaze01` it needs had none). Rows authored (4b1e1265). In game: GalenaOutcrop / GalenaWall nodes plant in limestone; mining one ("GalenaDeposit: MineOre", stone maul) gave 2 GalenaOre01, and GrindGalenaGlaze made 2 MineralGlaze01. Carried light:
 `Docs/Light_Sources.md`.
 Still open: per-bedrock / floor voxel surface types; cave exposure (measure first); geology-placed surface outcrops (coal at seam
 outcrops, malachite stains, tin placers) to replace the biome-placed copper / flint deposits.
