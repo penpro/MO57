@@ -130,5 +130,5 @@ MOInventoryComponent.cpp    1,076 lines  (acceptable)
 ## File Locations
 
 - Status Reports: `Plugins/MOFramework/Content/Data/StatusReport_*.md`
-- Tech Progression: `Plugins/MOFramework/Content/Data/TechProgression.txt`
+- Tech Progression: `Docs/Archive/TechProgression.txt`
 - Data CSVs: `Plugins/MOFramework/Content/Data/*.csv`

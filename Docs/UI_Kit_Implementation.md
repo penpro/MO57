@@ -1,6 +1,6 @@
 # UI kit ("Field Ledger") implementation
 
-Source of truth: `DesignKit/MO57_UI_Kit/MO57_UI_Kit/` (made by Claude Design from `Docs/UI_Design_Brief_Prompt.md`): `tokens.json`, `nineslice/` (white-mask 9-slices + manifest), `icons/`, `screens/*.md|json` (11 per-screen
+Source of truth: `DesignKit/MO57_UI_Kit/MO57_UI_Kit/` (made by Claude Design from `Docs/Archive/UI_Design_Brief_Prompt.md`): `tokens.json`, `nineslice/` (white-mask 9-slices + manifest), `icons/`, `screens/*.md|json` (11 per-screen
 specs at 1920x1080), `_source/mo57_web_mirror.css` (the exact state table for buttons / rows / tabs / inputs / slots / HUD pills: read it before building a component). This doc is how the kit lives in the game.
 
 ## Architecture (one chokepoint per concern)

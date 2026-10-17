@@ -1,5 +1,18 @@
 # Light Sources: carried flames and seeing in the dark
 
+> **Covers:** carried flames (torch, oil lamp), campfires as light, eye adaptation / exposure near flames, cave and night
+> darkness, the light from a sun or moon below the horizon.
+> **Current state (2026-10-17):** Torch01 craftable, lit at a fire, burns down (per-item wear waits on Codex's equipment commit, BACKLOG N-002; the co-op case of a
+> client lighting its own torch is to be retested, N-054), goes out in water; campfires register
+> as flames; UDS interior adjustments keep caves black; the eye-adaptation floor keeps a torch-lit cave readable.
+> **Entry points:** `UMOCarriedLightComponent`, `UMOLightSourceSettings`, `UMOEyeAdaptationComponent`, `UMOFlameLightComponent`,
+> `UMOSubterraneanLightingSubsystem`, `FMOFireActions::LightCarried` / `LightFromCarried`, `IMOLocalLightSource` on
+> `UMOAmbientEnvironmentRegistry`. **Dev verbs:** `MO.Light.Carried [give|light|out]`, `MO.Light.Exposure`, `MO.Light.Test`,
+> `MO.Light.Cube`, `MO.Light.Off`, `MO.Light.BlockFromBelow 0|1`. **Tests:** `MOFramework.Light.*`.
+> **Open items:** `Docs/BACKLOG.md` § Water, light, weather. **Decisions:** DECISIONS 2026-10-17 ("leave night brightness alone for now").
+> **How to extend:** a new carried light = one `UMOLightSourceSettings` profile + an equippable Held tool row with MaxDurability;
+> a new flame (forge, kiln, brazier) = `UMOFlameLightComponent` on its Blueprint (or implement `IMOLocalLightSource` and register).
+
 Caves are dark. No sky light reaches a gallery, and noon in a tunnel is black (correct: see `MOSubterraneanLightingSubsystem`). The night is dark too.
 A primitive survivor has one light, fire, and has to carry it, feed it and keep it dry. This doc covers the measured numbers, how MO models a
 carried flame, and what the camera has to do for a torch-lit cave to read.
@@ -114,6 +127,16 @@ Close-ups at dusk set the side carry: `HeldVisual.RightHandTransform` gripped ne
   before adding a fear input. Suggestion only.
 - Adaptation speed: UDS uses UE's 3 EV/s up, 1 EV/s down. Real dark adaptation takes minutes (pupil in seconds, cones 5-10 min, rods 20-30 min),
   and light adaptation takes seconds. A slower speed down would be more faithful; that changes every shade transition, so it is Wes's call.
+
+## Sun and moon below the horizon (cave walls lit from below)
+
+Measured Oct 10 with `MO.Light.Test <pitch> <yaw> <lux>` in a sinkhole chamber: a light from ABOVE leaves enclosed tunnels pitch black
+at noon (terrain blocks sun and sky correctly); a light from BELOW (pitch +40) lit cave walls like direct sun, shadows on or off. Not fixed by
+the mega material's `bGenerateTwoSidedMaterial`, `bCastShadowAsTwoSided`, non-Nanite voxel meshes, VSM off, or a 180 km shadow quad under
+the caves (Nanite's shadow raster takes two-sidedness only from the material; the one-sided voxel surface has no face for a light below).
+**Fix:** `UMOSubterraneanLightingSubsystem` attenuates every directional light's intensity by how far below the horizon it points (1 at the
+horizon, 0 at 5 deg below), keeping the intensity Ultra Dynamic Sky writes. A/B: `MO.Light.BlockFromBelow 0|1`. `ULightComponent::bAffectsWorld`
+cannot change at runtime and `SetVisibility` is overwritten by the sky blueprint, which is why it drives intensity.
 
 ## Not modelled yet
 

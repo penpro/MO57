@@ -1,0 +1,264 @@
+# Traps: things that cost a debugging round
+
+> **What this is:** the cross-cutting gotchas of MO57 on this machine, one line each: **symptom** -> cause -> what to do (source).
+> Collected on 2026-10-17 from agent memory, CLAUDE.md, the dated handoffs / overnight logs and the system docs. A system doc keeps the
+> full story; this file is for the moment something behaves strangely. Add a line when a trap costs you a round; mark a line
+> **[SUPERSEDED date: why]** instead of deleting it.
+> **Read when:** before touching a subsystem for the first time in a session, and whenever a result makes no sense.
+> **Layer-1 subset:** the ten that bite every session are repeated in `CLAUDE.md` § Traps.
+
+## 1. Git, shell and Windows
+
+- **A commit is missing files the build needs / the remote doesn't compile** -> `git add` fails SILENTLY here: the worktree is case-insensitive
+  but the index is case-sensitive, and one bad pathspec in `git add a b c` stages NOTHING -> before EVERY commit run `git status --short` and
+  check the staged column; never pipe `git add` stderr to /dev/null; copy paths from `git status`; after a push `git show HEAD --stat`. (memory git-staging-verification)
+- **Codex's work lands in your commit** -> `git add -A` in the shared tree -> stage your exact paths only. (multi-agent-coop)
+- **Stray assets / MegaMaterialCache in the staged list** -> the editor's source control auto-stages every asset it saves and rewrites
+  `Content/Developers/penum/MegaMaterialCache.uasset` -> `git rm --cached` strays; never stage MegaMaterialCache or `.claude/settings.local.json`. (animation-retarget)
+- **"2 insertions" on a binary asset** -> that is the git-lfs POINTER (oid + size) -> `git lfs status`, not a red flag. (dev_status)
+- **`/MOFramework/...` or `/Game/...` arrives as `C:/Program Files/Git/...`** -> Git Bash path conversion -> `MSYS_NO_PATHCONV=1` (ue.py repairs its own args). (many)
+- **Quotes vanish from native args** -> PowerShell 5.1 -> run `ue.py` from bash; PowerShell recipes are the fallback (`Docs/TOOLING.md`). (ue-unified-cli; Wes N3)
+- **UTF-8 mojibake in a file** -> content round-tripped through PowerShell `Get-Content` / `Set-Content` -> never write file content through
+  PowerShell; Write/Edit tools, Git Bash or sed. Reading a log tail is fine. (global rules)
+- **A script with apostrophes, `'''`, backslashes or `\U...` paths breaks in a bash heredoc** -> the tool's shell quoting -> write the file
+  with the Write tool, then run it. (cs399, swimming, UI_Kit; confirmed 2026-10-17)
+- **Windows-Store python can't read `AppData\Roaming` / writes `/tmp` to `C:\tmp`** -> use explicit Windows paths. (cs399)
+- **`-ExecCmds="a;b"` runs nothing after `;`; `Quit` doesn't exit an editor-cmd** -> commands split on COMMAS: `py x.py,QUIT_EDITOR`; cvar values
+  with spaces can't go through -ExecCmds. (overnight-polish, swimming, oceanology)
+- **WinError 206 from ue.py** -> request bodies over ~30 KB overran the command line -> fixed (`_curl` sends the body on stdin). (overnight-polish)
+- **A background probe keeps running and teleports the shared instance** -> launched with `&` inside the Bash tool -> use `run_in_background`. (oct16)
+
+## 2. Engine, build and C++ (UE 5.8.3)
+
+- **An engine `.cpp` edit changes nothing** -> `D:\UnrealEngine\UE_5.8` is the LAUNCHER install (`Engine/Build/InstalledBuild.txt`) -> engine fixes
+  are staged in `Docs/Engine_Patches.md` + `Docs/EnginePatches/`; check InstalledBuild.txt before proposing one. (engine-installed-build-patches)
+- **Build fails in ~5 s: `CS0117 ... V7` / RulesError** -> the UE_5.7 UBT -> use the UE_5.8 UBT (`Docs/TOOLING.md` § Build) or `ue.py build` / `cycle`. (build_engine_path)
+- **"Unable to build while Live Coding is active" / LNK1104** -> the editor (or a crashed editor's CrashReportClientEditor window) holds the
+  DLL -> `ue.py editor stop` (graceful: QUIT_EDITOR, refuses with unsaved packages); close a crash reporter by PID. Check the DLL mtime: Live
+  Coding sometimes hot-patched instead. (user_preferences, Handoff_2026-10-13)
+- **A one-off build or shader-compile failure** -> may be the downclocked 14900K -> retry once before debugging. (user_preferences)
+- **Build breaks right after committing new files** -> adaptive unity moves committed files into unity blobs and exposes duplicate
+  anonymous-namespace names -> `python Tools/check_unity_collisions.py` before committing C++. (swimming, world-features)
+- **Tables are rowless / gates collapse after an editor restart** -> a module carve moved DT-row / enum / class types without CoreRedirects
+  (class paths drop the U prefix) -> add redirects BEFORE the commit, restart, run a table-touching gate. (dev_status)
+- **Your `SetBase` override is never called** -> 5.8 changed it to `FMovementBaseInterfaceData*` -> override the new signature. (CLAUDE 5.8 notes)
+- **Packaging dies on a fatal ensure** -> a subsystem `Initialize()` called `GetSubsystem()` for a sibling absent in the cook world -> bind in `OnWorldBeginPlay`. (CLAUDE 5.8 notes)
+- **Delegates declared in a header aren't found elsewhere** -> the header has no USTRUCT/UCLASS/UENUM, so UHT skips it -> add one. (CLAUDE)
+- **Template compile errors on a forward-declared type** -> templates need the full include. (CLAUDE)
+- **A downcast of a plain C++ interface pointer fails** -> no RTTI in UE -> iterate the concrete actor type. (dev_status)
+- **A default-constructed `FMOWorldGenParamsRef` kills the editor at first use** -> a TSharedRef default is FATAL -> `FMOWorldGenParamsProvider::MakeDefault()`. (world-features)
+- **Editor and packaged builds disagree on `MO.WorldGen.Checksum`** -> Editor targets compile /fp:precise, Game /fp:fast -> `FPSemantics = Precise`
+  in `MOFrameworkCore.Build.cs`; rerun the checksum in BOTH after any build-rule or toolchain change. (caves-and-lighting)
+- 5.8 API changes met: `GAverageFPS` is gone; `LexToString(EBuildConfiguration)` replaced `EBuildConfigurations::ToString`; `UEditableTextBox::SetWidgetStyle`
+  keeps a pointer to the caller's local (`Docs/UI.md` §4); `UGameInstanceSubsystem` is ClassWithin UGameInstance (tests need that outer). (crash-endpoint, ue58)
+
+## 3. Editor, Python bridge and MCP
+
+- **A "Server" RPC called in a test runs on the client** -> editor Python (and any console command it dispatches synchronously) runs EVERY RPC
+  LOCAL (`GAllowActorScriptExecutionInEditor`) -> test verbs that send RPCs defer a tick (RunOnNextTick); assert on the logs the GAME writes. (coop-pawn-lifecycle, dev_status)
+- **Editor stops answering after an asset delete / rename from Python** -> `ForceDeleteObjects` ensure -> CrashReportClientEditor -> never
+  delete or rename assets in editor Python; delete files on disk with the editor CLOSED. (animation-retarget, swimming)
+- **The bridge never comes up after a crash** -> the editor sits on the package-restore dialog -> `ue.py editor stop`, move `Saved/Autosaves`
+  aside, start again. (far-trees, Handoff)
+- **"bridge not responding"** -> (a) the editor is building Nanite / textures (15-30 min after new ED assets), (b) a Python exception inside
+  `ue.py py --file` (no result file) -> small steps with `unreal.log("TAG")`, or try/except, (c) first launch after a rebuild -> `ue.py editor wait` then `boot`. (overnight-polish, animation-retarget, ue-ui-toolset)
+- **A call hangs while the bridge still answers** -> a modal dialog (reload_packages on a dirty asset, `fill_data_table_from_json_string` with a
+  missing field) -> pass every field; Windows Security (pickerhost) blocking clicks: post Enter to the dialog's HWND. (dev_status, world-features)
+- **Asset saves silently don't happen** -> the editor refuses saves during PIE (save_assets still answers True); a running `inst` locks the
+  .uasset files it loaded -> `ue.py` refuses saves while PIE runs; save after `pie end`; stop the instance first. (AUTONOMOUS_TOOLING, overnight-polish)
+- **`save_loaded_asset` skips your change** -> it skips clean packages and a CDO change doesn't dirty them -> `only_if_is_dirty=False`; `importlib.reload(mo_ui)` after editing it. (UI_Kit)
+- **GUID / key matching silently finds nobody** -> `str()` of a wrapped unreal struct is the wrapper ADDRESS -> `to_string()` / `export_text()`. (dev_status)
+- **Python names don't match C++** -> Python strips the E prefix of enums and the b prefix of bools; `unreal.MaterialLibrary`; a b-UPROPERTY shadows a
+  same-named method; a bool UFUNCTION with an out param returns None when false; no `actor.is_hidden()` (use `get_editor_property('hidden')`);
+  `unreal.Rotator(a,b,c)` is (roll, pitch, yaw); `line_trace_single` returns None on a miss. (dev_status, oct16, world-features, Handoff)
+- **Python can't read a property** -> `EditDefaultsOnly` / BindWidget-only / BlueprintReadOnly C++ props, UDS BP variables with spaces ->
+  call UFUNCTIONs, attribute access or a C++ accessor; `get_editor_property('Apply Interior Adjustments')` with the exact name; UDS "Time of Day" via `MO.Weather.SkyTime`. (ue-multiprocess, carried-light)
+- **Struct-array edits don't stick** -> elements read from `get_editor_property` are COPIES -> rebuild the structs and set the whole array. (Handoff)
+- **`MaterialEditingLibrary.delete_material_expression` asserts `!IsRooted`; `StaticMeshDescription().create_polygon_group()` null-derefs** -> don't;
+  import meshes as OBJ via AssetImportTask; structural material changes go through the pristine-graph revert (`Docs/Terrain_Generation_Exploration.md` header). (far-trees)
+- **Editor Python has no PIL**; env vars don't reach `ue.py py` scripts; `inst do NAME py` returns only `out(...)`, never `print`. (terrain-v5, pcg-load, oct16)
+- **The MCP "died"** -> almost always external (editor closed for a build) -> `ue.py status` re-starts it through the bridge; drive it with curl
+  when the harness client is disconnected (Python urllib gets an EMPTY body for `tools/call`). (ue-editor-mcp)
+- **PIE wedges (can't begin_play)** -> unroot-caused flake after back-to-back sequences -> restart the editor. (dev_status)
+- **Two editors / a stray UE 5.7 window appear** -> computer-use `open_application "Unreal Editor"` -> never use it; `request_access(["UnrealEditor.exe"])`, foreground with SetForegroundWindow. (ue_pie_computer_testing)
+- **Clicks on editor UI leak keystrokes into the game** -> PIE holds CapturePermanently + LockOnCapture -> Shift+F1 first; stop PIE with Shift+F1 + Stop, never Escape. (ue_pie_computer_testing)
+- **Injected keys don't trigger Enhanced Input actions in PIE** -> computer-use / AHK keys miss Enhanced Input -> drive in-process (`MO.Test.PressKey` / `MO.Test.Input`). (ue_pie_computer_testing)
+
+## 4. DataTables
+
+- **Authored rows overwrite someone's live data** -> written from the stale `*_JSON.json` / CSV mirrors -> `ue.py rows get` the LIVE table
+  first, add only what is missing; for shared data post the rows in the coop log first (M21 lost Codex's in-editor lore). (multi-agent-coop)
+- **A row write empties TMap columns in EVERY row** -> the MCP re-imports the whole table and the export nests `TMap<FName,FString>` values ->
+  `ue.py rows set` snapshots and re-sends maps and fails if one comes back empty; recover from the HEAD LFS blob (`git show HEAD:<asset> | git lfs smudge`). (ue-unified-cli, world-features)
+- **`add_rows` adds nothing** -> batch add is ALL-OR-NOTHING (one existing name rejects it); a large multi-row `set_rows` fails SILENTLY ->
+  one row at a time + readback; `ue.py rows set` bulk (> 20 rows) silently wrote nothing with a new row in the batch (fixed Oct 17): verify nested arrays by readback anyway. (ue-editor-mcp, wes-calls-oct17)
+- **Omitted fields reset to defaults** -> MCP `set_rows` REPLACES whole nested structs -> `rows_set_safe` deep-merges; never call raw set_rows with a partial struct. (CLAUDE)
+- **A retried MCP call reports "Rows do not exist"** -> the first attempt (empty response) already applied -> read back. (AUTONOMOUS_TOOLING)
+- **The game doesn't see new rows** -> static caches -> `ue.py refresh-data`. (ue-editor-mcp)
+- **A new row-struct field won't write** -> only after the C++ rebuild; JSON keys lowerCamel for row fields, PascalCase inside nested entries. (biome-aware)
+- **A material "exists" in analysis but not in the world** -> only species- or spawner-placed resource rows exist -> read `unplaced_resources` first. (progression-pass1)
+- **CSV round-trips crash UE on reimport** -> UE exports the row-name column unquoted, the utility quotes all -> `Docs/TOOLING.md` § 4 (DataTables), `Tools/UE_CSV_FORMAT.md`. (CLAUDE)
+
+## 5. Harness: ue.py, instances, nettest, tests
+
+- **A `-game` instance near the spawn has no vegetation** -> the editor was open when it started -> `ue.py editor stop` before any visual / PCG / harvest instance test. (ue-multiprocess)
+- **`-game` of the editor binary crashes** -> no GEditor: `EditorLevelLibrary`, Voxel `WITH_EDITOR` code -> console verbs (`MO.Spawn.Try`); the Voxel GEditor guard covers the real map for `nettest game|hostsave|soak`. (ue-multiprocess, dev_status)
+- **Instance screenshots lie** -> the window defaults to 640x360 (minimum DPI scale) -> `r.setres 1920x1080w` first; HighResShot shows no UMG (use `ui shot`). (first-ten-minutes, ue-ui-toolset)
+- **"PASS" from `MO.Test.ClickWidget` / a simulated click** -> SimulateClick ignores hit-testing; for non-MO widgets it logs SENT -> read the state it should change; do one real click (`MO.Test.HitTest`). (first-ten-minutes, ue-ui-toolset)
+- **Wait for the world in an instance** -> the SECOND `[MOReadiness] READY` line after Start (the first is the menu world). (first-ten-minutes)
+- **A "LAN" test ran on Steam** -> argparse REMAINDER swallowed a sibling's options -> real subparsers; never reuse `p` in main(). (ue-multiprocess)
+- **A crashed host's log is gone** -> the next start overwrites game.log -> `Saved/Crashes/UECC-*/game.log`. (ue-multiprocess)
+- **`ue.py seq` says FAILED with no reason** -> read `inst_<name>/ue_out.txt`; bridge probe echo lines `[py-ok]/[py-err]` contain your marker: exclude them. (ue-multiprocess, ue_pie)
+- **Log-delta verbs read the wrong log** -> a restarted editor writes `MO57_2.log` -> ue.py follows the freshest `MO57*.log`. (ue-multiprocess)
+- **Long chains die** -> the background timeout (> 10 min) -> check for orphaned `UnrealEditor.exe`, `ue.py inst stop <name>`; stop only what you launched (pid file). (ue-multiprocess)
+- **A test kit can't take items ("cannot hold")** -> the kit fills the inventory -> trim stacks; RunAll's DropPickup needs a fresh game. (progression-pass1, playtest-oct14)
+- **Fast jobs are never seen as "current"** -> they start and finish between polls -> assert on evidence (stock deltas). (dev_status)
+- **A teleported test pawn is shoved away** -> it landed inside a building's hull -> stand 2.5 m out. (dev_status)
+- **A job + its quota slot wedge forever** -> `SetStayAtLocation` suspends job processing -> `AbortCurrentJob()` first. Un-recruited survivors don't run job move-legs -> FOUND + RECRUIT first. (dev_status, terraform)
+- **Crafting gates can't be sped up with TimeScale** -> the queue ticks on real UtcNow -> read state immediately after resume. (dev_status)
+- **Frame-dependent UI test fails synchronously** -> CommonUI reconciles next tick (F21) -> frame-stepped tests. (dev_status)
+- **An intermittent failure moves with the seed** -> a world-dependent bug -> replay the seed (`MO.NewGame <seed>`). After movement / spawn / water changes run ALL nettest gates. (death-recap)
+- **The harness instance is silent** -> instances are `-nosound` and `-NoCharacterCreator` by default -> `--sound`, `--creator`. (oct16)
+- **`ue.py status` says editor DOWN while Codex is using it** -> sandboxed status can't see the protected process -> the coop log decides who holds the editor. (multi-agent-coop)
+
+## 6. Co-op and RPC
+
+- Full list: `Docs/Coop_And_Networking.md` §6. The ones that bite: editor-Python RPCs run local (§3 above); **PIE can't test sessions** (use
+  `ue.py inst` / `nettest`); **Steam is off in editor / PIE by design**; one Steam account can't join its own lobby; **the FIRST
+  `NetDriverDefinitions` entry wins and a missing driver class falls back to IpNetDriver silently** (assert the driver class); the Null OSS
+  answers only `bIsLANMatch=true`; **sessions outlive worlds** (`ReleaseStaleSession`); **a multi trace BY CHANNEL stops at the first blocking
+  hit** (trees hid the terrain: use object-type traces); **a client predicts gravity for a simulated proxy with no floor** (never apply it);
+  **vacuous checks** ("client z == server z" with no client terrain) need a negative control (`--skew-seed`); a UI request on the server's copy of
+  a joiner's controller opens nowhere (`ForwardUIContractRequest`); dropped items need ECC_PhysicsBody in object queries.
+
+## 7. Packaging, cook and Shipping
+
+- Full list: `Docs/Packaging.md` §2. In short: cook-world `GetSubsystem` fatal; non-`ECVF_Scalability` cvars in DefaultScalability.ini are
+  fatal; Substrate legacy shading-model pins (`fix_substrate_shading_model_pin.py` after every ED / Megascans migration); soft-referenced plugin
+  content not cooked (`DirectoriesToAlwaysCook`) but too-wide dirs cook DX11-incompatible Niagara (X3662); SLW materials need the legacy output
+  node; the MCP listener in the cook child (`bAutoStartServer=False`); the Update-BuildInfo two-writer race; `DefaultGameTarget=MO57`.
+- **Shipping writes no log** -> package Development for diagnosis; `MO57ShipDiag`; bug-report fields. Shipping reads Wes's REAL
+  `%LOCALAPPDATA%/MO57/Saved` settings -> back up byte for byte, restore + compare. The staged `MO57.exe` is a launcher (stop the tree);
+  packaged CSV profiles are wiped by the next `--package`; `-log` opens a console over the game.
+
+## 8. Voxel and world generator
+
+- **"Cannot query positions here"** -> `OutputHeight.Bounds` / `.HeightRange` are evaluated with no position -> feed them from the no-input `MO Terrain Bounds`. (terrain-gen-exploration)
+- **Terrain misaligned** -> stamp transform not identity / parameter not named exactly `Seed`. Editing an MO node's pins orphans links in saved graphs (break + re-add). (terrain-gen-exploration)
+- **Whole terrain is the grey WorldGrid checker** -> the graph's SurfaceType pin is unwired. **A new surface type never paints** -> it isn't in the mega material's `surface_types`. (caves-and-lighting, terrain-v5)
+- **Far mountains show a checkerboard / a 12 km tear** -> chunk HOLES from a world-spanning volume stamp -> every volume stamp gets tight bounds AND a LOD range (cave stamp `LODRange {0, CaveMaxLOD}`). (volume-stamp-holes)
+- **Caves don't match the ground** -> only the height stamp was seeded -> seed both (`ApplySeedToStamps`). **Meshing artefacts in caves** -> a hard gate in the field -> continuous penalties; test max |gradient|. (caves-and-lighting)
+- **"INVALID STAMP"** -> a stray VoxelStampActor with no stamp in the level. (caves-and-lighting)
+- **Skinny-tower mountains / walls at patch borders** -> every wavelength in `FMOWorldGenTuning` is in CENTIMETRES -> check units first. (terrain-v6)
+- **A coarse LOD is slow** -> a per-cell search cheap at LOD 0 runs per sample at coarse LODs -> LOD-cull every generator feature by its sample step. (pcg-load)
+- **A new default breaks the v1 golden anchor** -> `RunProbe(false)` must restore it. Any geometry change bumps `CurrentGeneratorVersion` + re-pins. (worldgen doc)
+- **Flatness / relief tests measure borders** -> keep a test inside one climate class; a biome hill scale < 1 must also flatten the continent spline. (terrain-v5)
+- **No cave mouths found** -> a mouth is a few metres wide -> scan at 4 m; field tests run with karst OFF. (caves-and-lighting, geology)
+- **The camera sees "water in a cave"** -> it is inside the rock, seeing the ocean plane under all terrain -> probe air with `MO.WorldGen.CaveSample`. After a terrain change place cameras from the pawn's REAL z. (geology, playtest-oct14)
+- **A pawn swims inside terrain below sea level** -> the ocean plane fills everything under z = 0 -> `BuriedMarginCm` + `GetGroundZ`. (death-recap)
+- **Lakes 80,000x too big / "invalid Role" on clients** -> SpawnActor with a level actor as Template composes its transform and copies its Role -> spawn a plain actor of the class. (worldgen v4)
+
+## 9. PCG
+
+- Full rules: `Docs/PCG.md` §2-§7. The traps: biome-blind native chains make every biome look the same; the Voxel Sampler places at most one
+  point per CellSize cell (`CellSize <= ~70/sqrt(rho)`); radius fields are named by the UNSCALED grid and are PROTECTED (reflection +
+  `ComputeHash()`); the clump field isn't uniform (pre-be6506f7 palette numbers are wrong); `biome_palettes.py` has drifted from the live
+  DT_Biomes; the scheduler builds the LARGEST grid first; FName lookups per point cost 13-161 us; a disabled node passes its input through;
+  a HiGenGridSize node with no edges stops ALL generation; `InstanceMinDrawDistance` needs `InstanceEndCullDistance > 0`; raising PCG throttles
+  makes loading slower; change detection skips cells for a still camera; item clutter shares `VoxelSampler_0` with the ground tier (thin the
+  ratio, never the sampler); PCG builds plain ISM components (iterate `UInstancedStaticMeshComponent`); a raw `ISM->RemoveInstance` regrows
+  (`FMOHISMHarvestHelper::RemoveInstance` only); `MO.Save.LoadFrom` reloads in place; PCG graph assets can't be edited during PIE.
+- **A far-field artefact** -> find what it is made of with `MO.PCG.MeshSurvey` / `HideMesh` / `HideTag` BEFORE theorising (an hour was lost
+  blaming the biome tiers for 90k native Field_05 trees). Census by radius (`MO.PCG.Census`), never component bounds. (far-trees, biome-aware)
+- **"Zero PCG in game"** -> the coastal spawn on bare sand -> LOOK at the player's view first. (shipping-diag)
+
+## 10. World features and content import
+
+- **A Blueprint composition ignores its seed / sweep** -> its PCG component exists only after FinishSpawning -> bind and set after it;
+  `CleanupLocal` before regenerating (GenerateLocal(force) ADDS instances). Editor-world PCG doesn't generate compositions: measure in PIE. (oct16, world-features)
+- **A white orb in a POI** -> ED PCGAsset elements bake editor markers (/Engine/BasicShapes) -> the feature subsystem hides them. (oct16)
+- **Players fall through rocks** -> migrated ED meshes have no collision / few hulls at 4x -> `fix_mesh_collision.py` (composition rocks
+  complex-as-simple; re-run after `ede_migrate`: ED content is gitignored). Collision counts read -1 during PIE: audit outside PIE. (world-features, overnight-polish)
+- **New ED folders get committed** -> `ede_migrate` only prints them -> add them to .gitignore BY HAND. (overnight-polish)
+- **ED ForestGround / ForestTerrain look wrong as ground** -> they are mesh-UV atlases, not tileable surfaces. (overnight-polish)
+- **Megascans MIs have no parent** -> library exports point at `/Game/MSPresets/M_MS_Default_Material` -> `fix_megascans_import.py` (reparent onto M_MS_Base). (terrain-v5)
+- **A dark scan tinted pale comes out black** -> a tint MULTIPLIES -> start from a pale scan; a tint can't make metal (metallic lives in the ORM). (geology, fab-sourcing)
+- **Fab panel imports eat keystrokes / re-import existing assets** -> check the front window first; right-column cards ignore clicks; check the folder id before wiring. (fab-sourcing)
+- **A hull on a plant mesh blocks the player** -> check it isn't world foliage (referencers) before `item_mesh_prepare`. (fab-sourcing)
+- **Icon studio crashes on HDR textures** -> an explicit exporter skips SupportsObject -> let UE pick by extension. (geology)
+- **Retargeted clips move only the root / slide** -> a 5.8 IKRetargeter is an op stack (add_default_ops + auto_map_chains); root motion folds into the pelvis (zero the root on copies). `get_raw_track_data` is empty in 5.8. (animation-retarget)
+- **New MO content disappears from git** -> `Plugins/MOFramework/Content/Characters/MetaHumans/` and `Content/PCG/` are gitignored. (swimming, package-cook-errors)
+- **A case-only rename returns False** -> FName is case-insensitive -> go through a temporary name. (footsteps, animation-retarget)
+
+## 11. Water
+
+- Full list: `Docs/Water.md` §2. Oceanology's infinite-ocean box has no physics state (underwater look never applies) -> query-only body;
+  lake planes are world-axis-aligned quad trees (never rotate, never scale big); Oceanology actors replicate by default (SetReplicates(false)
+  for per-machine lakes); runtime-spawned lakes never register their wave solver (register + activate); presets overwrite the distortion cap
+  every load (re-enforce on a tick); absorption = how far light CARRIES (bigger = clearer).
+
+## 12. Light, rendering, materials
+
+- **A test light renders dark** -> UE point-light default units are UNITLESS -> `SetIntensityUnits(Candelas)` BEFORE `SetIntensity`; changing
+  `intensity_units` on a live light doesn't refresh the proxy. (carried-light)
+- **Caves glow** -> UDS Captured Scene Sky Light casts no shadow -> UDS interior adjustments. **A torch blows out white** -> the histogram meters
+  the black majority -> the eye-adaptation floor. (carried-light)
+- **Cave walls lit from below** -> a light below the horizon lights one-sided voxel surfaces; two-sided materials don't help Nanite shadows ->
+  the intensity gate; `bAffectsWorld` can't change at runtime and UDS overwrites `SetVisibility`. (caves-and-lighting)
+- **Rows of snow patches / a far checker on slopes** -> one axis-aligned noise read repeating; detail normal maps at range -> rotated reads,
+  fade detail normals with distance; run the shadows-off control before blaming shadows. ddx / ddy return 0 in the Nanite custom node. (terrain-material-far-tiling)
+- **Beach sand over the whole coastal plain** -> a fixed 40 m height band -> band = 8 % of the edge's height above sea. (terrain-material-far-tiling)
+- **Clouds blocky in a 4K shot** -> `r.VolumetricRenderTarget 0`; the sky only moves FORWARD in game time; `MO.Weather.Director 0` + `SetPreset Clear_Skies` for stable shots. (steam-store-art)
+- **"STREAMING POOL OVER BUDGET"** -> Epic texture pool 1000 MB -> 4000 (Cine 6000) + LimitPoolSizeToVRAM. (overnight-polish)
+
+## 13. UI (CommonUI / UMG)
+
+- Full list with fixes: `Docs/UI.md` §2-§5. The ones that bite: `ECommonInputMode::All` leaks WASD (Menu mode everywhere); a pushed widget is
+  pending until its transition ends (`LayerTransitionSeconds` 0; never `RemoveWidget` a pending entry); a direct `SetInputMode` desyncs the
+  router (`ApplyGameplayInput`); the router adopts a root only once PAINTED (`AssertInputConfig`); a native UserWidget class used as a NODE is
+  click-through; `SetPositionInViewport` resets anchors; `NativeConstruct` re-runs on every re-add (read authored state in
+  `NativeOnInitialized`); `SetIsSelected(false)` does nothing on a non-toggleable button; the HUD learns about a menu on activation
+  (`NativeOnActivated` refresh); queries need a PAINTED PIE viewport; hex colours are sRGB but UMG wants linear; fonts only through `UFont`;
+  BindWidget name mismatches show as `absent` in `ui check`; the engine console owns Tilde and Enhanced Input removed `BindKey` (`InputKey`).
+
+## 14. Audio
+
+- **Audio faults leave no log** -> `LogAudio=Warning` hides Display lines and the engine reports nothing -> the `[MOAudio] HB` heartbeat.
+  **Muting doesn't fix a NaN mix** (NaN x 0 = NaN) -> bypass submix effects / stop components to bisect. **Full volume after a map load** ->
+  `UEngine::LoadMap` resets the device volume -> re-apply. **A debug file logger costs ms** -> default off, gated, compiled out in Shipping. (audio-heartbeat, post-reveal)
+
+## 15. Performance measurement
+
+- **Hitch counters look normal** -> game / render / GPU counters lag the frame-time measurement by one frame -> log a ring of frames;
+  `-hitchdetection` is compiled out. **Benchmarks swing** -> an editor is running (shared GPU) or stale far cells are loaded -> no editor,
+  compare within one session, three runs. **PIE fps comparisons** -> PIE is frame-capped (~58) -> compare `gpu=` / `draws=`. **A `-game`
+  instance runs the hardware benchmark** -> GIsEditor false -> `-NoQualityBenchmark`. **A low-tier cvar leaks into Epic** -> scalability writes
+  only the applied level's cvars -> pin at all four levels. **`UMOGameSettings` never applied engine settings** -> it skipped
+  `Super::ApplySettings` -> `ApplyNonResolutionSettings`. (hitch-hunt, far-trees, playtest-oct14, footsteps)
+- **Periodic code costs a constant hitch** -> it searches the world (`TObjectIterator`, `GetAllActorsOfClass`) or recomputes a pure function each
+  tick -> keep a registry; cache; throttle by movement; move pure work to a worker. (TECHNICAL_REFERENCE "Periodic work")
+
+## 16. AI and gameplay
+
+- **Creatures are blind** -> a perception component with no senses at OnRegister is never registered -> `RequestStimuliListenerUpdate()` before
+  `ConfigureSense`. **"IsInAttackRange does not exist"** -> blackboard values pushed before the BT bound the blackboard -> prime in Tick. (post-reveal, caves-and-lighting)
+- **A spawn hitches on soft assets** -> `LoadSynchronous` at spawn -> declare in `GatherRuntimeAssets`. **Fallback deer under the sea** -> `MOSpawnClearance`. (post-reveal)
+- **Survivor behaviour trees don't exist** -> survivors are `AMOSurvivorController`'s C++ state machine. (dev_status)
+- **Ore mined with no pick** -> the tool gate lived only in the menu -> `HasToolForAction` in `BeginHarvest` (one gate). (progression-pass1)
+- **A "stuck" craft queue** -> craft time = base / average tool effectiveness (a hammerstone makes 300 s into 1000 s). (progression-pass1)
+
+## 17. Verification habits (the lessons behind many lines above)
+
+`Docs/ENGINEERING_PRINCIPLES.md` "Verification lessons": LOOK before theorising; a control must be able to fail; rerun the probe on the fixed
+build and read both machines; audit your own fixes; re-verify stale tracker claims; measure before redesigning; identify the exact asset first.
+
+## Superseded (kept for search)
+
+- **[SUPERSEDED 2026-10-11: fixed in EditorSettings.ini]** "PIE runs at ~3 fps when the editor window isn't foreground" -> `bThrottleCPUWhenNotForeground=False`,
+  `bAllowSlateThrottling=False` in `%LOCALAPPDATA%\UnrealEngine\5.8\Saved\Config\WindowsEditor\EditorSettings.ini` (verified 2026-10-17).
+- **[SUPERSEDED 2026-10-14: ue.py now quits gracefully]** "`ue.py editor stop` kills by image name -> leave with QUIT_EDITOR": `editor_stop` runs QUIT_EDITOR
+  through the bridge, never force-kills, and refuses while packages are unsaved.
+- **[SUPERSEDED 2026-10-11: Oceanology replaced Epic Water]** "The Water plugin's underwater post process only runs on a BLOCKING hit on its trace channel" (dedicated
+  `WaterTrace` channel): dead config now.
+- **[SUPERSEDED 2026-10-05: ue.py ui]** "Python cannot set Is Variable / rename widgets": `MOWidgetEditorUtils` exposes both.
+- **[SUPERSEDED 2026-07-04]** "Cook failed with a clean log" from the MCP port: fixed by `bAutoStartServer=False` (kept in §7 as the cause to remember).

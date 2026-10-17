@@ -1,5 +1,10 @@
 # MO57 Autonomous Tooling — Operating Manual
 
+> **Covers:** the deep manual for the autonomous build / verify loop: `ue.py` transport, the three layers (bridge, MCP, C++ harness), the
+> decision table, multi-process and packaged testing, and the dated hit / miss records that explain why the tools work the way they do.
+> **Start with** `Docs/TOOLING.md` (the one-page catalog of every entry point); come here for the detail. Traps are collected in
+> `Docs/TRAPS.md`. Status 2026-10-17: current; the dated "Hit / miss" sections are history, kept on purpose.
+
 Goal: a toolset that can build *and verify* the game with minimal human input.
 There are three "hands" (write) and one "eyes" (verify). The whole game of
 autonomy is closing the loop between them.

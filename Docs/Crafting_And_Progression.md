@@ -1,0 +1,118 @@
+# Crafting, harvesting, items and progression (how the code does it)
+
+> **Covers:** recipes and the crafting queue, stations, tool gates and craft time, harvesting and foraging, item instance state
+> and liquids, the item / fire / world action registries, discovery, and how progression is measured. WHAT the progression should
+> be is decided in `Docs/PROGRESSION_ROADMAP.md` (design authority); this doc is the implementation.
+> **Current state (2026-10-17):** 126 of 136 recipes reachable from bare hands; one tool gate; water is an ingredient measured in
+> carried containers; discovery is taught by inspecting precursors; heat fields exist but carry no values yet. Codex's audit
+> batches A-F (inventory capacity, stack replication, equipment slots, server-derived station context, ingredient reservation,
+> cancel RPCs, survivor ingredient transfer, survival meters persistence, timed wound treatment) are built + tested but
+> **uncommitted** as of 2026-10-17 13:39 (`Docs/agent/audit/SESSION_STATE.md`).
+> **Entry points:** `UMOCraftingSubsystem` (validation, execution), `UMOCraftingQueueComponent` (queue; ticks on real `UtcNow`),
+> `AMOCraftingStationActor`, `UMOHarvestSubsystem` (`HasToolForAction`, per-harvester context), `UMOForagingSubsystem`
+> (`GetDigTableAt`, `FindGatherableCover(Kinds)`, `BeginGatherCover`), `UMOInventoryComponent` (`CountIngredient` /
+> `ConsumeIngredient` / `AddIngredient`, `GetBestToolEffectiveness`), `FMOItemInstanceState` + `FMOLiquidContents`,
+> `FMOItemActions`, `FMOFireActions`, `IMOWorldActionProvider`, `UMOTimedActionComponent`, `FMOItemSourceAnalysis`.
+> **DataTables:** DT_Items, Recipes (`FMORecipeDefinitionRow`), DT_Resources, DT_Carcasses, DT_Skills, DT_Biomes (`DigYields`,
+> species `ResourceNodeId`), DT_CaveScatter. **Dev verbs:** `MO.Test.Craft <Recipe>`, `MO.Test.GrantRecipe [PlayerIndex] [Recipe]`,
+> `MO.Harvest.Do <ActionId|list> [r]`, `MO.Harvest.Enable 1`, `MO.Test.Forage dig`, `MO.Cover.Gather [r] [go]`, `MO.Item.*`,
+> `MO.Fire.SpawnLit|Actions|Do|Menu`, `MO.Test.ValidateData`, `MO.Test.ProgressionMap`, `MO.Test.WorldAction list|<Id>`.
+> **Open items:** `Docs/BACKLOG.md` § Crafting, progression, content. **Decisions:** DECISIONS (Oct 15 every world thing gets an action,
+> starting kit; Oct 17 inspect discovery; F10 heat values).
+
+## 1. Recipes, validation, queue
+
+```cpp
+CanCraftRecipe(RecipeId, Inventory, Skills, Knowledge)  // returns bool + reasons
+  → ExecuteCraft(RecipeId, Inventory)                    // only after CanCraft passes
+```
+Tool system uses `EMOToolType`; multi-tool items via effectiveness ratings. (Pattern verbatim from TECHNICAL_REFERENCE, May 2026.)
+
+- **Craft time = CraftTime / average effectiveness of the tools used** (`GetAdjustedCraftTime`): a hammerstone (0.3) makes a 300 s
+  recipe 1000 s. Compute before declaring a queue stuck.
+- **The queue ticks on real `UtcNow`, NOT the game clock.** Gates can't speed it with TimeScale; read state IMMEDIATELY after a
+  resume, before the craft completes and empties the queue. Partial progress survives pause/resume and save/load (H25: the anchor is
+  back-dated by Progress x Duration, d8331172). Offline catch-up is capped at 4 h, the clock's cap (`Docs/Weather_And_Time.md`).
+- Results distinguish failure kinds at the data layer (`FMOCraftResult`: `FailedItems` vs `DepletedItems`, `SpilledLiquid`).
+- Recipe queuing and workshop batches are the approved QoL: N items at N x their real duration (`Docs/ENGINEERING_PRINCIPLES.md` tedium).
+- **In flight (Codex, uncommitted):** server-derived station / harvest context per queue entry (the client's station enum is not
+  trusted), ingredient lots reserved with their physical / liquid state and refunded exactly, cancel intents through owning server
+  RPCs, survivor jobs moving ingredients through the same reservation service, completion receipts across reload.
+
+## 2. Stations and heat
+
+- Stations are buildings (`bIsBuilding` recipe rows) that provide a station type; `AMOCraftingStationActor` holds fuel and active
+  state (replicated; fuel burns on the server clock).
+- Heat fields (Codex batch C): station building `ProvidedProcessTemperatureCelsius`, runtime
+  `AMOCraftingStationActor::AchievableProcessTemperatureCelsius`, recipe `MinimumProcessTemperatureCelsius`. **No values are authored**:
+  the proposed ladder is in `Docs/PROGRESSION_ROADMAP.md` §4 and waits on Wes (F10) and Codex's fuel-to-temperature rule.
+- Fire: `FMOFireActions` = AddFuel.<ItemId> / Light / PutOut. Light needs fuel + Tinder01 + FireDrill01 or Branch01 x2 (DRY
+  deadfall; Stick01 = green, refused); 3 min by hand / 90 s bow; `LightChance` 30 / 60 % + 6 % per level, rain x0.3, wet x0.6, cap
+  95 %. Light a torch in the fire / a fire from a torch: `Docs/Light_Sources.md`. Station menu = `kit_station_menu.py`;
+  `UMOUIUtils::RebuildActionButtons` builds runtime buttons for both menus.
+
+## 3. Harvesting, foraging, digging
+
+- **One tool gate:** `UMOHarvestSubsystem::HasToolForAction` (required tool at `MinToolQuality` via
+  `UMOInventoryComponent::GetBestToolEffectiveness`) is used by the menu AND by `BeginHarvest` (before Oct 15 it was enforced only by
+  the menu's button state: ore was mined with no pick).
+- **Per-harvester context** (H23, 9c7178c6): `TMap<TWeakObjectPtr<AActor>, FMOHarvestContext>` keyed by the harvester; player and N
+  survivors harvest concurrently; `BeginHarvest` cancels only the caller's own prior harvest; interrupts route per harvester.
+- **Pattern still to fix:** the player's harvest timing is owned by a widget (`UMOHarvestProgressWidget::StartHarvest`, the
+  subsystem vetoes early completion), unlike drinking, filling, boiling, fire lighting and eating, which run on the pawn's
+  `UMOTimedActionComponent`.
+- **E on a resource node** (KeepOnHarvest / ResourceNode_* / MOResource_*) opens the harvest menu (it used to take the item-pickup
+  RPC and log "No item mapping").
+- **Ground cover is gatherable by mesh** (`UMOCoverForageSettings`, Project Settings > MO57 > Cover Foraging): grass -> dry grass
+  (reeds in the water-edge band), bracken -> fibre, stone scatters, hazel shoots -> straight rods, seedlings -> sticks, old logs ->
+  deadwood / firewood / punk-wood tinder; entries may need a tool (sandstone + hammer). `FindGatherableCoverKinds` offers every kind
+  within reach (3 m, measured to instance BOUNDS); the RPC carries the entry index; the server re-checks the exact instance and takes
+  it through the removal ledger.
+- **Digging** yields from the biome's dig table (`FMOBiomeDefinitionRow::DigYields`: sand on strands, subsoil clay in lowland, bog
+  iron in the Rainforest) and, for terraforming, from the geology (`Docs/Caves_And_Geology.md` §4).
+- Plain cover / bare ground with no mapping -> Forage menu on E (`UMOInteractorComponent::IsWorldCoverComponent`,
+  `AMOPlayerController::TryOpenForageMenuAtCrosshair`): Wes, Oct 15, "every world thing gets an action".
+
+## 4. Items: instance state, liquids, actions
+
+- `FMOItemInstanceState` (durability + `FMOLiquidContents`) travels through inventory, transfer, save, drop and pickup.
+- **Water is an ingredient measured in containers:** Water01 / CleanWater01 are liquid MEASURES (`LiquidMeasureMl` 250;
+  `bMeasureNeedsSafeWater` counts only boiled fresh water). Every recipe count / consume / refund goes through
+  `UMOInventoryComponent::CountIngredient / ConsumeIngredient / AddIngredient`; a liquid output pours into a container that holds
+  nothing it would spoil; what does not fit is `FMOCraftResult::SpilledLiquid`, not "inventory full". Test
+  `MOFramework.Inventory.LiquidIngredient`.
+- **Registries, not per-widget buttons:** `FMOItemActions` (Drink / Fill / PourOut / BoilWithStones 20 min, 4 stones, 95 % kept /
+  BoilOverFire 12 min / Eat on a timer), `FMOFireActions`, world actions (`IMOWorldActionProvider` + `UMOWorldActionMenu` +
+  `AMOPlayerController::ServerWorldAction`, e.g. carcass butchering on the pawn's timed action). Menus, server RPCs and AI pawns read
+  the same registries. A new target type = implement the interface.
+- Item icons: `UMOItemDatabaseSettings::ResolveItemIcon` (+ `DefaultItemIcon`) is the one icon rule for every UI. Art pipeline:
+  `Docs/Item_Art_Pipeline.md`.
+
+## 5. Discovery and knowledge
+
+- A recipe with `bRequiresDiscovery` is hidden until the player has its `DiscoveryKnowledgeId` at the required level; knowledge comes
+  from inspecting items (`Inspection` field: `(Grants=((Id=...,bIsKnowledge=True,XPAmount=...,MaxLevel=...)))`).
+- Since d6a3af69 every circular discovery knowledge has a precursor inspection grant (level 1, XP 100); the table is in
+  `Docs/PROGRESSION_ROADMAP.md` §6.
+- Learning methods in the vision (direct action, being taught 2x, schools prevent decay): `Docs/VISION.md`, `Docs/AI_And_Colony.md`.
+
+## 6. Measuring progression
+
+- `FMOItemSourceAnalysis` (run by `MO.Test.ValidateData` -> Data:Sources, and `MO.Test.ProgressionMap` -> `Saved/Logs/progression_map.json`):
+  a fixpoint over resources (only rows a biome species or an MO Resource Spawner places), harvest recipes, carcass parts, digging,
+  cover gathering, PCG pickups and recipe gates (ingredients, build parts, station + fuel, tools, discovery, knowledge). Reports
+  orphan items, orphan knowledge, `unplaced_resources`, blocked recipes with their first gate, and a tier per item / recipe in two
+  modes (today vs attempt-anything). Needs PIE. Rerun after any data change and read `unplaced_resources` first.
+- **Edit content live**, never the mirrors: `python Tools/ue.py rows set <table> --file rows.json` (readback-verified; `rows get` each
+  row first and add only what is missing). The `*_JSON.json` / CSV files in `Plugins/MOFramework/Content/Data` have not tracked the
+  live tables since early checkpoints. `ue.py mcp dt remove_rows` deletes; Git Bash needs `MSYS_NO_PATHCONV=1`. After MCP edits:
+  `ue.py refresh-data` (item + recipe static caches). `Docs/TOOLING.md` § 4 (DataTables).
+- Before deleting an item id: scan all DataTables as JSON (`export_data_table_to_json_string`) + a binary .uasset grep.
+
+## 7. Superseded
+
+- "Flint01 / RawHide01 / DryTinder01" and 12 twin rows (Snare01/SnareWire01 ...) were merged into the referenced ids on Oct 14
+  (b0753b0a, ee2fe069); the orphan rows are deleted so `ValidateData` catches anyone re-adding them.
+- "Medical treatments are unwired" (Oct 15): Codex's timed treatment service (Oct 17, uncommitted) wires them through
+  `ConsumeIngredient`; see `Docs/Medical_And_Survival.md` §7.
+- The Feb 2026 progression (`TechProgression.txt` generated from Items.csv / Recipes.csv / Skills.csv) is archived: the live DTs replaced it.

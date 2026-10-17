@@ -2,7 +2,7 @@
 
 Goal: make the co-op + packaged build trustworthy, in an order where every step is verifiable without Wes. Each item has a **done-when**
 and a **control** (a check I have seen fail, so a PASS means something). Small clear bugs get fixed; anything bigger is logged with a
-diagnosis, not patched blind. Progress goes to `Docs/OVERNIGHT_LOG.md` under "## Overnight 2026-10-09".
+diagnosis, not patched blind. Progress goes to `Docs/Archive/OVERNIGHT_LOG.md` under "## Overnight 2026-10-09".
 
 ## The list (in this order)
 

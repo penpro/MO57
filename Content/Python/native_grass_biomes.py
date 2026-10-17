@@ -1,7 +1,7 @@
 """Which biomes get the scatter graph's dense NATIVE grass chain (the smdrailr / vlkhcbxia lawn grass at ~1.4 points/m2, gated by `MO Elevation Bands_3`).
 
 The biome spawner's near ground-cover tier capped at ~2000 candidates per hectare, so a palette of tufts could not COVER open ground; the native chain does.
-(Since 2026-10-14 eve the tier takes 6000/ha and the biomes below that are OFF this chain carry their own grass at 1500-2800/ha: Docs/Ground_Coverage_2026-10-14.md.)
+(Since 2026-10-14 eve the tier takes 6000/ha and the biomes below that are OFF this chain carry their own grass at 1500-2800/ha: Docs/PCG.md, history Docs/Archive/Ground_Coverage_2026-10-14.md.)
 Whether a biome gets it is a statement about its floor:
   - YES: the open / lightly wooded biomes -- TemperateForest, Meadow, LocustWoodland, ShoreStrand, and AlpineHeath (playtest 2026-10-14 #25
     "mountainside is VERY sparse": the heath had been taken off on Oct 12 when mountains read "grass only"; it now has its own ED rocks and moss ground).

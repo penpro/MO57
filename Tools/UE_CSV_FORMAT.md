@@ -1,5 +1,11 @@
 # UE DataTable CSV Format Reference
 
+> **Status 2026-10-17:** `Items.csv` and `Recipes.csv` are no longer live. They were moved to
+> `Plugins/MOFramework/Content/Data/archive/`, and the item and recipe tables are now edited live with
+> `python Tools/ue.py rows set` (see `Docs/TOOLING.md`). The `Items.csv` / `Recipes.csv` examples below are
+> historical. The CSV workflow still applies to the CSVs that remain in `Content/Data`: Skills, BodyParts,
+> Conditions, Quests, Treatments and Wounds.
+
 ## Schema Changes Warning
 
 **When you modify a DataTable row struct in C++ (e.g., `FMOItemDefinitionRow`):**

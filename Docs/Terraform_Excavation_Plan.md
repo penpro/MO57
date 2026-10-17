@@ -1,5 +1,23 @@
 # Terraform Unit 3 — Designation-Based Pawn Excavation
 
+> **Covers:** player terraforming (dig / raise / flatten with the dig tool) and designation-based pawn excavation (dig zones, fill
+> zones, haul jobs, conservation of earth). The system doc for terraform; this file keeps its original plan and stage record below.
+> **Current state (2026-10-17):** stages 1-5 LANDED (primitive with honest moved-volume, earth materials, `UMODesignationSubsystem`,
+> `ExcavateAndHaul` job, colony `RunExcavationPass`, flatten decomposition with live bite points). **Stage 6 (designation tool UI +
+> dump-destination popup) is not built and needs Wes's checkpoint** -- he said on Oct 15 he did not understand the question, so
+> re-ask it plainly (DECISIONS F8). Recommended default flatten target: the zone's MEAN height (the only target reachable with its own earth).
+> **Time and yield:** duration = moved volume x `TerraformSecondsPerCubicMeter` (30,000 s per m3 for soil; Wes, July 8: house-flatten
+> takes hours, a mine days) x the rock-hardness multiplier (`FMOGeologyYield::HardnessFor`, Oct 17); what is dug yields from the
+> geology (`Docs/Caves_And_Geology.md` §4). Earth volume = `MOVoxel::HeightSculptMovedVolumeM3` (integrates the plugin's falloff).
+> **Entry points:** `UMOTerraformingComponent` (`TerraformAtLocationEx`, `GrantDigYield`, component-owned interruptible timer),
+> `UMOTerrainModificationSubsystem`, `UMODesignationSubsystem` (save domain "Designation" pri 80), `UMOColonyManagerSubsystem::RunExcavationPass`
+> + `DecideExcavationWork`, `AMOSurvivorController` (`ExcavateAndHaul`, band 30-33). **Tests:** `MOFramework.Colony.Excavation.*`,
+> `Content/Python/test_excavation_primitive.py`, `test_designation_persist.py`, `test_excavation_job.py`, `test_excavation_dispatch.py`,
+> `test_excavation_flatten.py`. **Open items:** `Docs/BACKLOG.md` § Building and terraform. **Traps:** un-recruited survivors don't run job
+> move-legs (gates FOUND + RECRUIT first); the carry window is brief (poll at frame resolution); `rows get` each earth-material row
+> before writing (a `rows set` once overwrote Codex's Dirt01 stub). One live run crashed in the Voxel plugin's Nanite material
+> selection 2 s after two simultaneous digs (not reproduced; suspect concurrent sculpts during world load if it recurs).
+
 **Status (refreshed 2026-10-09 against current master):** forks LOCKED (sphere zones, settlement-scoped dispatch, 80 items/m3, solo player digs manually).
 **Stages 1, 1b, 2, 3 are LANDED and in the code** (`TerraformAtLocationEx`, `Dirt01` + earth materials, `UMODesignationSubsystem` + `MODesignationTypes.h`,
 `ExcavateAndHaul` job in `MOSurvivorController` / `MOSurvivorJobQueueComponent`); **Stage 4 LANDED Oct 14 2026** (`UMOColonyManagerSubsystem::RunExcavationPass` + pure `DecideExcavationWork`; headless `MOFramework.Colony.Excavation.*`, live gate `Content/Python/test_excavation_dispatch.py` 10/10); **Stage 5 LANDED Oct 14 2026** (live bite points + flatten; `Content/Python/test_excavation_flatten.py` 6/6); **Stages 6-7 are not started**.

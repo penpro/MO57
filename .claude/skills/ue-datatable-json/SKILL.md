@@ -1,6 +1,6 @@
 ---
 name: ue-datatable-json
-description: Read or modify Unreal Engine DataTable JSON exports (Recipes, Items, Skills, etc.) using the project's Tools/ue_json_utils.py utility. Use whenever you need to add a row to a DataTable, update a field, or look up an existing row.
+description: Edit a FRESHLY EXPORTED Unreal DataTable JSON file with Tools/ue_json_utils.py. The committed *_JSON.json files in Content/Data are stale (checked 2026-10-17); to add or change rows in the live tables, use `python Tools/ue.py rows get|set` (Docs/TOOLING.md section 4), not this skill.
 allowed-tools:
   - Bash
   - Read
@@ -9,9 +9,20 @@ allowed-tools:
 
 # UE DataTable JSON edits
 
+> **Read first (checked 2026-10-17): the `*_JSON.json` files are stale copies.**
+> `Recipes_JSON.json` has 110 rows (last changed 2026-05-23); the live recipe
+> table has 136. `Items_JSON.json` was last changed 2026-03-01 and is UTF-16.
+> The `.uasset` DataTables are the source of truth. To change rows, use
+> `python Tools/ue.py rows set <refPath> --file x.json`: it edits the live
+> editor table and reads the change back to confirm it (see
+> `Docs/TOOLING.md`). To read a row, use `ue.py rows get`, or export fresh
+> JSON from the DataTable Editor first. What content should exist (eras,
+> materials, recipe chains) is set by `Docs/PROGRESSION_ROADMAP.md`. This
+> skill is only for working on a freshly exported JSON file.
+
 This project's DataTables (Recipes, Items, Skills, Resources, etc.) are
-authored as `.uasset` files but maintained via **JSON exports** sitting
-beside them in `Plugins/MOFramework/Content/Data/`.
+authored as `.uasset` files. The JSON exports beside them in
+`Plugins/MOFramework/Content/Data/` are not kept current.
 
 ## When to use this skill
 
@@ -77,7 +88,7 @@ python Tools/ue_json_utils.py <command> <file> [...]
 | `Items_JSON.json` | FMOItemDefinitionRow | All inventory items |
 | `Skills.csv` (no JSON) | FMOSkillDefinitionRow | CSV path; use `Tools/ue_csv_utils.py` instead |
 | `Resources_JSON.json` | FMOResourceNodeDefinitionRow | Harvestable nodes (trees, rocks, etc.) |
-| `Weapons_JSON.json` | FMOWeaponDefinitionRow | Weapon profiles |
+| `Weapons_JSON.json` | FMOWeaponDamageProfileRow (`MOWeaponTypes.h`) | Weapon damage profiles |
 | `Carcasses_JSON.json` | (specific) | Animal carcass definitions |
 
 ## Examples

@@ -21,7 +21,7 @@
  * must be min<=max. Keep it green.
  *
  * =============================================================================
- * RELATED FILES: MOBiomeDatabaseSettings.h, Docs/Fable5_PCG_Path.md
+ * RELATED FILES: MOBiomeDatabaseSettings.h, Docs/PCG.md (history: Docs/Archive/Fable5_PCG_Path.md)
  * =============================================================================
  */
 

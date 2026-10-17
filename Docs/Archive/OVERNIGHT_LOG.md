@@ -293,7 +293,7 @@ Not building: colonist ground far from players (design fork for Wes).
   PIE rects confirm both tile variants; packaged real-window check: the name now reads "ThisIsAnExtremelyLongSaveGameNameThat..." (was "...Lon..."), clear of Delete/Rename.
   The thumbnail's stored PNG is 43 KB at 128 px (was ~20 KB at 80 px). Test saves deleted again; Harper_Wright-01 / Test158 / v1gate untouched. Still uncommitted.
 
-## Overnight 2026-10-09 (approved by Wes; commit + push approved; plan: Docs/OVERNIGHT_PLAN_2026-10-09.md)
+## Overnight 2026-10-09 (approved by Wes; commit + push approved; plan: Docs/Archive/OVERNIGHT_PLAN_2026-10-09.md)
 - **Item 0 done:** today's UI work pushed in two commits -- `d9b3494e` (thumbnail capture, readable text fields, tile clip + tests) and `7162de34` (bigger thumbnail + text layout asset/spec, plan, log).
   Hourly resume job `c440dad6` (:41) scheduled; keep-awake held.
 - **Client trust boundary (pushed, `076e81ed`).** `nettest actions` now has a hostile-client section, each case with a control: `ServerPlaceBuilding` far from the pawn was accepted

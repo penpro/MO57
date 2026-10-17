@@ -8,7 +8,7 @@ Patch files and evidence live in `Docs/EnginePatches/`.
 That install is the **Epic Games Launcher build** (an *installed* engine): `Engine/Build/InstalledBuild.txt` exists and the root has no
 `Setup.bat` / `GenerateProjectFiles.bat`. It ships engine `.cpp` files for reference, but UnrealBuildTool treats installed engine modules as
 precompiled and read-only: editing them changes nothing, because `UnrealEditor-Renderer.dll` (and the libraries a packaged game links) are never
-rebuilt. (CLAUDE.md calls it a "source build" — it is not, as of Oct 16 2026.) Launcher updates (e.g. 5.8.1 -> 5.8.3 on Oct 16) also replace files.
+rebuilt. (CLAUDE.md called it a "source build" until the 2026-10-17 consolidation fixed it; it is not, as of Oct 16 2026.) Launcher updates (e.g. 5.8.1 -> 5.8.3 on Oct 16) also replace files.
 
 So every patch below is **staged, not applied**. Applying one needs a real source engine:
 

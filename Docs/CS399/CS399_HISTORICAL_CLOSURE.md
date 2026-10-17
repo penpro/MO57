@@ -34,7 +34,7 @@ Dispositions follow the practicum closure policy: **CLOSED**, **CARRIED FORWARD*
 | Fall 2025 plan | `Metaverse_Origins_Project_Plan_By_Template (1).pdf` (dated 2025-09-27) and the instructor template `Project Plan Template.docx` | `C:\Users\penum\Downloads` | n/a | 2025-09-27 | V |
 | Fall 2025 development | **MO56**, 509 commits | `D:\UEProjects\MO56` (local `.git`) | 5.6 | 2025-10-25 to 2025-11-10 | V |
 | Transition | **MO_1**, 7 commits ("working on multiplayer pawn possession", "game menu and loading level working") | `D:\UEProjects\MO_1` | 5.x | 2025-11-10 to 2025-11-12 | V |
-| Winter 2026 to present | **MO57**, 261 commits | `D:\UEProjects\MO57`; GitHub `penpro/MO57` (public) | 5.7 at creation (inferred from the name and `PATCH_NOTES.md`), **5.8** now | 2026-01-12 to 2026-09-22 | V |
+| Winter 2026 to present | **MO57**, 261 commits | `D:\UEProjects\MO57`; GitHub `penpro/MO57` (public) | 5.7 at creation (inferred from the name and `PATCH_NOTES.md`, now `Docs/Archive/PATCH_NOTES.md`), **5.8** now | 2026-01-12 to 2026-09-22 | V |
 
 ### Provenance caveats (read before citing any historical repo)
 
@@ -100,7 +100,7 @@ All 261 are authored as `penpro`. **245 of 261 (94%) carry a `Co-Authored-By: Cl
 | F25-W6 | Inventory v1 and SaveGame persistence | **CLOSED** | MO56 `MOInventory` plugin (29 files, 8,119 LOC), `Save/` (7 files). Work began 2025-10-25, about 10 days before the planned Week 6 start. Equip/consume/stack rules were not re-tested in this audit | V/P |
 | F25-W7 | UI v1 with CommonUI and **gamepad focus** | **CARRIED FORWARD (verification)** | MO56 UI (33 files + 8 menu files) existed **without CommonUI**; CommonUI landed in MO57 (see S4). **No gamepad verification evidence**; only 2 source files mention gamepad | X |
 | F25-W8 | Profiling and stability (`stat unit`, `stat gpu`), remove top three hitches | **CARRIED FORWARD** | **Not delivered.** MO56 history has 0 commits mentioning profiling/fps/perf; no captures found. MO57 has an FPS counter widget but no benchmark harness and no recorded baseline | X |
-| F25-W9 | Content pass, lighting, **packaging scripts**, reproducible RC build | **CARRIED FORWARD (partial)** | A staged build exists: `MO56/Saved/StagedBuilds/Windows/MO56.exe`, 2025-11-02, 509 MB. MO57 packaged builds exist (2026-06-30 documented in `PATCH_NOTES.md`; `Packaged/Windows/MO57.exe` 2026-09-20, 3.0 GB). **No scripted packaging command exists in either repo**; packaging is manual UAT (`Docs/AUTONOMOUS_TOOLING.md`) | V |
+| F25-W9 | Content pass, lighting, **packaging scripts**, reproducible RC build | **CARRIED FORWARD (partial)** | A staged build exists: `MO56/Saved/StagedBuilds/Windows/MO56.exe`, 2025-11-02, 509 MB. MO57 packaged builds exist (2026-06-30 documented in `Docs/Archive/PATCH_NOTES.md`; `Packaged/Windows/MO57.exe` 2026-09-20, 3.0 GB). **No scripted packaging command exists in either repo**; packaging is manual UAT (`Docs/AUTONOMOUS_TOOLING.md`) | V |
 | F25-W10 | Technical report (8-12 pp), 3-5 min video, tag **v0.1** | **CLOSED, evidence incomplete** | No report or video found under Documents, Desktop, Downloads, or ClaudeMaster. **No git tag exists** in MO56, MO_1, or MO57, so `v0.1` was never tagged. Whether the report and video were submitted is a student/instructor record, not a repo fact. Tagging intent is carried into the Fall 2026 milestones | U/X |
 
 ### D. Definition of success (Fall 2025)

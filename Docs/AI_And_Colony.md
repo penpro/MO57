@@ -1,0 +1,179 @@
+# AI, survivors and the colony
+
+> **Covers:** creature AI (prey and predators), survivor pawns (recruitment, jobs, the village loop), the colony manager's upkeep
+> passes, possession of any pawn, and the planned colony management UI.
+> **Current state (2026-10-17):** creatures are deer (prey) and wolf (predator) on behavior trees; survivors run a C++ simple-job
+> state machine in `AMOSurvivorController` (NO behavior-tree assets for survivors); the July village slice is live (craft jobs,
+> quotas, skill decay / schools, relationships, seasons, courtship, real children, winter shelter, fire heat and refuel hauling);
+> the colony UI is partly built (history, personality, colony manager, overview, portrait exist; colony bar, task assignment UI and
+> alert tiers do not).
+> **Entry points:** `AMOCreature` / `AMOPreyCreature` / `AMOPredatorCreature`, `AMOCreatureController`, `AMOSurvivorController`,
+> `UMOSurvivorJobQueueComponent`, `UMORecruitmentComponent`, `UMOColonyManagerSubsystem` (`RunQuotaPass`, `RunHearthPass`,
+> `RunExcavationPass`, `CanRecruitByStanding`), `UMOPersonalityComponent`, `UMOCharacterHistoryComponent`, `UMOPossessionSubsystem`,
+> `UMOSpawnManagerSubsystem`. **Dev verbs:** `MO.Colony.Found|SpawnSurvivor|Recruit|PlaceBuilding|Stock|SetSkill|AssignJob|UI|SendTo|Status`,
+> `MO.AI.DumpBlackboard <pawn>`, `MO.AI.SetKey`, `MO.AI.StressSpawn`, `MO.Spawn.Try`, `MO.Possess.List|Take`.
+> **Tests:** `MOFramework.Colony.*` (incl. `Colony.Recruit.GateMath`, `Colony.Excavation.*`), live gates `Content/Python/test_village_*.py`,
+> `test_fire_heat.py`. **Open items:** `Docs/BACKLOG.md` § AI, colony, combat. **North star:** `Docs/MedievalDynasty_Village_Reference.md`;
+> colony design: `Docs/MO57_Colony_Management_Design.docx`.
+
+## 1. Creatures
+
+### Creature AI architecture (TECHNICAL_REFERENCE, May 2026, verbatim)
+
+### Class Hierarchy
+
+```
+AMOCharacter → AMOCreature → AMOPreyCreature (deer: flee-first)
+                           → AMOPredatorCreature (wolf: hunt, flee when wounded)
+```
+
+Single controller: `AMOCreatureController` with `UAIPerceptionComponent` (sight + hearing).
+
+### Behavior Trees
+
+- **BT_Prey**: Death → Flee (ShouldFlee AND HasTarget) → Threatened (fight if cornered) → Idle (wander/graze)
+- **BT_Predator**: Death → Flee (wounded) → Combat (chase/attack) → Hunt (lost target) → Idle/Patrol
+
+### AI Known Issues
+
+- Hardcoded blackboard key strings (M1) — use `FBlackboardKeySelector`
+- Magic numbers for thresholds (M2) — extract to creature definition or config
+- `IsCornered()` is placeholder (M3) — should use `EnvQueryTest_EscapeRoute`
+- `FindPackMembers()` uses `GetAllActorsOfClass` (H6) — needs spatial registry
+- Activity types not unified between player/creature (M6)
+
+### BT Tasks (11) and Services (3)
+
+Tasks: CreatureAttack, CreatureRest, CreatureWander, FleeFromThreat, ChaseTarget, SurvivorForage, SurvivorGather, SurvivorGoHome + 3 more
+Services: CreatureActivity, UpdateCreatureState, SurvivorJobProcessor
+
+**As built since (Oct 2026):**
+- **Perception was never registered** until Oct 13: a `UAIPerceptionComponent` with no senses at OnRegister is never registered by the
+  engine; call `RequestStimuliListenerUpdate()` before `ConfigureSense`. `AMOCreatureController` also primes blackboard values in Tick the
+  first frame the asset exists (pushing them in OnPossess, before the BT bound the blackboard, logged bogus errors). Verify with
+  `MO.AI.StressSpawn 3 1200 2000` + `MO.AI.DumpBlackboard Deer|Wolf`.
+- **Runtime assets preload:** `AMOCharacter/AMOAIController::GatherRuntimeAssets` (virtual, CDO-callable); the spawn manager async-loads
+  them at the first spawn check. Pattern for any soft asset resolved at spawn / possession / death: declare it there, never
+  `LoadSynchronous` at the spawn.
+- **Fallback spawns** use `MOSpawnClearance::TraceVoxelGround` + `IsUnderOpenWater` + `IsStandingSpotClear` (no sea-floor deer).
+- **Sleep is real-clock:** frozen mobs stay asleep until the recheck timer fires (`Docs/ENGINEERING_PRINCIPLES.md` #11 example).
+- The flee decision is computed twice (`BTService_UpdateCreatureState` and `AMOCreatureController::ShouldFlee`); unify before adding
+  inputs such as fire-fear (`Docs/Light_Sources.md`).
+- Creature ABP state machines (locomotion / rest / sleep / death) and EQS query assets (`EQ_FindHarvestableItems`,
+  `EQ_FindHarvestTargets`, `EQ_FindEscapeRoute`) still need Blueprint setup (C++ complete).
+- Only deer and wolf exist; the animal pack has fox / pig / crow assets but new fauna needs ABP work. Creature footsteps need foot
+  bones (`ball_l` / `ball_r`) the skeletons lack.
+
+## 2. Survivors and the village loop
+
+- **Survivor AI = `AMOSurvivorController`'s C++ simple-job state machine** (bands: craft 10-15, refuel 20-23, excavate 30-33).
+  There are NO behavior-tree assets for survivors in Content: don't look for them.
+- Jobs: `UMOSurvivorJobQueueComponent` guards every mutator (a model implementation to clone). The haul pattern (fetch into pack ->
+  deliver -> station-specific handling) is `RefuelStation`; `ExcavateAndHaul` mirrors it (`Docs/Terraform_Excavation_Plan.md`).
+- **Village slice (July 4-7, all gated green):** V0 one villager one real job; V1 settlement loop (feeding, mood, housing); V2 quotas
+  -> skill decay / schools -> relationships -> seasons -> dynasty courtship / marriage / REAL children -> winter shelter; F1 fire
+  units 1-4: fire is warmth (`IMOLocalHeatSource`), dries clothes (~11x), cold villagers seek lit hearths, the hearth pass issues
+  RefuelStation jobs (firewood demand joined food demand). Station AddFuel is transactional (returns the accepted count).
+- **Recruitment** (Oct 10): `CanRecruitByStanding` judges trust built by shared game time (2 % per hour within 12 m) only for a colony
+  of >= `RecruitGateMinRoster` (3); the first survivors just join. `BeginInteractionDetailed` returns an `EMORecruitmentOutcome` with
+  the numbers, and `AMOPlayerController::ClientShowNotification` tells the player why. No quest appears because no survivor has
+  `PossibleQuests` configured (a data task). MO.Colony survivors persist (recruited -> captured).
+- **Delegate tedium to pawns** is the killer feature (`Docs/ENGINEERING_PRINCIPLES.md`): every system the player can do should be
+  plumbed to be pawn-assignable.
+
+### Job Assignment (UMOSurvivorJobQueueComponent)
+
+```cpp
+FGuid EnqueueJob(EMOSurvivorJobType, int32 RepeatCount = 1);
+FGuid EnqueueJobAtLocation(EMOSurvivorJobType, FVector, int32 RepeatCount = 1);
+FGuid EnqueueJobWithTarget(EMOSurvivorJobType, AActor*, int32 RepeatCount = 1);
+bool CancelJob(const FGuid& JobId);
+void CancelAllJobs();
+```
+
+### Colony Membership (UMORecruitmentComponent)
+
+`EMORecruitmentState::Recruited` = colony member. `IsPossessable()` returns true for recruited pawns.
+
+## 3. Possession
+
+- Player can possess any pawn they control (`IsPossessable()` = recruited); idle pawns run on AI. The possession menu never calls
+  `Possess()` (authority-only): `UMOPossessionComponent::Request*` -> controller RPCs -> `UMOPossessionSubsystem`
+  (`IsPawnAvailableTo` is the one definition of "available"). The menu shows occupancy ("Current survivor" / "Played by <Steam name>",
+  `EMOPawnOccupancy`; Wes, Oct 15). Co-op details: `Docs/Coop_And_Networking.md` §2.
+- Known coupling: `MOPossessionSubsystem` requires `UMOIdentityComponent` + `UMOInventoryComponent` (TECHNICAL_REFERENCE, coupling HIGH).
+
+## 4. Colony management (planned, partly built)
+
+PROJECT_STATUS (Oct 13 freshness note): `UMOCharacterHistoryComponent`, `UMOPersonalityComponent`, `UMOColonyManagerSubsystem`,
+`UMOColonyOverviewWidget`, `UMOColonyPortrait` exist; the colony bar (4B), task assignment without possession UI (6B) and the alert
+tier system (7B) do not. `UMOCharacterCardWidget` and `UMOTaskAssignmentWidget` below are planned names, not classes.
+
+### Colony Management System (Planned) (CLAUDE.md until 2026-10-17, verbatim)
+
+*Full design in `Docs/MO57_Colony_Management_Design.docx`, implementation in `Docs/Archive/MO57_Master_Plan.md`*
+
+**Core Components**:
+| Component | Purpose |
+|-----------|---------|
+| `UMOColonyManagerSubsystem` | Alert queue, character enumeration, task delegation |
+| `UMOPersonalityComponent` | Character personality traits (Conscientiousness, Sociability, Stability) |
+| `UMOCharacterHistoryComponent` | Event log, relationship tracking, mood/activity summaries |
+| `UMORecruitmentComponent` | Tracks recruitment state (existing - determines colony membership) |
+| `UMOSurvivorJobQueueComponent` | Job queue management (existing - task assignment API) |
+
+**Colony UI Widgets**:
+| Widget | Layer | Purpose |
+|--------|-------|---------|
+| `UMOColonyBarWidget` | HUD | Persistent character strip with portraits |
+| `UMOColonyOverviewWidget` | Menu | Full colony management screen (replaces/extends possession menu) |
+| `UMOCharacterCardWidget` | - | Character detail view (mood, history, relationships, skills) |
+| `UMOColonyPortrait` | - | Reusable portrait with mood expression, activity, alert state |
+| `UMOTaskAssignmentWidget` | - | Task picker and job stack management |
+
+**Alert Tiers**:
+| Tier | Name | Examples | Display |
+|------|------|----------|---------|
+| 1 | Critical | Health <15%, combat while away | Pulsing red border, sound, cannot dismiss |
+| 2 | Urgent | Health <40%, idle >30min | Orange dot on portrait |
+| 3 | Notable | Task complete, skill gained | Colony log only |
+| 4 | Log | Routine activities | Character history only |
+
+**Personality System (UMOPersonalityComponent)**:
+- **Conscientiousness**: Diligent (methodical, slower, higher quality) vs Adaptable (quick, shortcuts, variable)
+- **Sociability**: Social (performs better near others) vs Reserved (performs better alone)
+- **Stability**: Stable (consistent mood) vs Volatile (strong mood swings, high ceiling/floor)
+
+**Key Design Principles**:
+1. Colony overview is a "window into community" not just a "management interface"
+2. Characters should feel like people with opinions, not interchangeable labor
+3. Trust is earned through demonstrated reliability
+4. Alert tiering prevents notification fatigue while surfacing critical issues
+5. Task assignment works without possession via `UMOSurvivorJobQueueComponent`
+
+### Colony management design (TECHNICAL_REFERENCE, May 2026, verbatim)
+
+### Personality System (UMOPersonalityComponent)
+
+Three axes, float -1.0 to 1.0:
+- **Conscientiousness**: Diligent ↔ Adaptable
+- **Sociability**: Social ↔ Reserved
+- **Stability**: Stable ↔ Volatile
+
+### Alert Tiers
+
+| Tier | Name | Examples | Display |
+|------|------|----------|---------|
+| 1 | Critical | Health <15%, combat while away | Pulsing red, sound, cannot dismiss |
+| 2 | Urgent | Health <40%, idle >30min | Persistent orange dot |
+| 3 | Notable | Task complete, skill gained | Colony log only |
+| 4 | Log | Routine activities | History only |
+
+## 5. Gotchas that bit (keep)
+
+- `SetStayAtLocation` SUSPENDS job processing: call `AbortCurrentJob()` FIRST, or the in-flight job and its quota slot wedge forever.
+- Teleporting a pawn to ~1 m of a building lands INSIDE its collision hull; depenetration shoves it out past e.g. a fire's heat radius.
+  Gates stand 2.5 m out; AI nav projection is immune.
+- Fast jobs start AND finish between gate polls: assert on evidence (stock deltas), not "current job" sampling.
+- Un-recruited survivors don't run job move-legs: gates FOUND + RECRUIT first.
+- Plain C++ interface bases can't be downcast under UE no-RTTI: iterate the concrete actor type.

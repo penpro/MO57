@@ -2381,7 +2381,7 @@ void UMOCheatSubsystem::RegisterConsoleCommands()
 
 	// ---------- MO.Test.ValidateData ----------
 	// The progression ladder from bare hands (FMOItemSourceAnalysis with tiers), as the gates are today and as if every recipe could be attempted
-	// (discovery + knowledge ignored) -- the data behind Docs/Progression_*.md. Rerun after any recipe / item / resource change.
+	// (discovery + knowledge ignored) -- the data behind Docs/PROGRESSION_ROADMAP.md (history: Docs/Archive/Progression_*.md). Rerun after any recipe / item / resource change.
 	ConsoleCommands.Add(CM.RegisterConsoleCommand(
 		TEXT("MO.Test.ProgressionMap"),
 		TEXT("Write Saved/Logs/progression_map.json: for the real gates ('today') and with discovery + knowledge ignored ('attempt_anything'), every obtainable item and performable recipe with its breadth-first tier (steps from bare hands) and source, and every blocked recipe with its first gate."),

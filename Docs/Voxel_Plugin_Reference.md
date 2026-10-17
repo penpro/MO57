@@ -4,7 +4,7 @@
 > capabilities / pitfalls. Reference both for MO57 contributors and for
 > any future modders building custom terrain.
 
-> Companion to `Docs/Terrain_Foundation_Plan.md` (the actionable recipes).
+> Companion to `Docs/Archive/Terrain_Foundation_Plan.md` (the actionable recipes).
 
 ## TOC
 

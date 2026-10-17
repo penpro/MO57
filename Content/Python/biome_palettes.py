@@ -642,7 +642,7 @@ NORDIC_STRAND["species"] = thin_and_far(NORDIC_STRAND["species"])
 
 
 # --- COVERAGE (2026-10-14 eve, Wes: "more ground coverage in general too, more trees, more bushes") ------------------------------------------------------------------------------------------
-# Per-biome, per-tier factors on top of everything above (and wider tree clumps), in a plan file so the numbers stay reviewable: Docs/Ground_Coverage_2026-10-14.md has the census and the
+# Per-biome, per-tier factors on top of everything above (and wider tree clumps), in a plan file so the numbers stay reviewable: Docs/Archive/Ground_Coverage_2026-10-14.md has the census and the
 # model behind them. The factors are applied by Tools/pcg_stocking.py's apply_plan -- the same rule its model checks for clipping -- so this script and the live table cannot drift apart.
 COVERAGE_PLANS = ["D:/UEProjects/MO57/Docs/Ground_Coverage_2026-10-14.plan.json"]
 

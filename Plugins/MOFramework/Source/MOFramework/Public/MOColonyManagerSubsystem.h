@@ -26,7 +26,7 @@
  *
  * =============================================================================
  * RELATED FILES: MOColonyTypes.h, MOCharacterHistoryComponent.h,
- *   MOMetabolismComponent.h, MOPersonalityComponent.h, Docs/MO57_Master_Plan.md
+ *   MOMetabolismComponent.h, MOPersonalityComponent.h, Docs/AI_And_Colony.md (history: Docs/Archive/MO57_Master_Plan.md)
  * =============================================================================
  */
 

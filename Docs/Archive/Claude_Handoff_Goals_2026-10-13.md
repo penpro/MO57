@@ -41,7 +41,7 @@ This document records recommendations and known state. It does not grant new per
 1. Root `AGENTS.md` / `CLAUDE.md`, including Engineering Principles and current session authorization.
 2. This document and `Docs/Handoff_2026-10-13.md`.
 3. Recent commits/diffs, current Claude validation results, and relevant packaged logs.
-4. `Docs/Overnight_Polish_2026-10-12.md` and `Docs/AAA_Polish_Backlog.md` for recent evidence and remaining work.
+4. `Docs/Archive/Overnight_Polish_2026-10-12.md` and `Docs/Archive/AAA_Polish_Backlog.md` for recent evidence and remaining work.
 5. `Docs/TECHNICAL_REFERENCE.md`, `Docs/AUTONOMOUS_TOOLING.md`, and subsystem-specific docs before changing a system.
 6. `Docs/PROJECT_STATUS.md` for historical audit candidates. Its June metrics and many status tables are stale; source code and dated verification take precedence.
 

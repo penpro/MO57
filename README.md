@@ -2,7 +2,7 @@
 
 MO57 is an ultra-realistic procedural open-world survival game built with Unreal Engine 5.8. Its core pillars are real-world simulation, emergent settlement growth, mutable voxel terrain, small-group cooperative play, and a framework designed for extension and modding.
 
-The project is under active development. Start with [Project Status](Docs/PROJECT_STATUS.md) for the current implementation state and known-issue tracker rather than treating this README as a feature-completeness claim.
+The project is under active development. Start with [Project Status](Docs/PROJECT_STATUS.md) for the current implementation state and [Backlog](Docs/BACKLOG.md) for known issues rather than treating this README as a feature-completeness claim.
 
 ## Requirements
 
@@ -117,22 +117,26 @@ Raw MCP `set_rows` replaces nested structs. Omitting fields can reset them to de
 - UI uses CommonUI and `UMOCommonButton`.
 - The game never pauses. Read [Pause Policy](Docs/PAUSE_POLICY.md) before touching pause or input-mode behavior.
 
-The complete mandatory engineering rules live in `AGENTS.md`.
+The mandatory rules for every contributor and agent live in `CLAUDE.md` (full text of the engineering principles: [Docs/ENGINEERING_PRINCIPLES.md](Docs/ENGINEERING_PRINCIPLES.md)).
 
 ## Documentation map
 
+Every live document is listed in [Docs/INDEX.md](Docs/INDEX.md). The ones to start with:
+
 | Document | Use it for |
 |---|---|
-| [Project Status](Docs/PROJECT_STATUS.md) | Current progress, audit tracker, recent work, and known issues |
-| [Technical Reference](Docs/TECHNICAL_REFERENCE.md) | Architecture patterns, APIs, networking, performance, and subsystem guidance |
-| [Master Plan](Docs/MO57_Master_Plan.md) | Staged implementation plans |
-| [Autonomous Tooling](Docs/AUTONOMOUS_TOOLING.md) | MCP, editor bridge, build, PIE, and validation workflow |
-| [UI Overhaul Architecture](Docs/UI_Overhaul_Architecture.md) | CommonUI work and known pitfalls |
-| [World Features Architecture](Docs/World_Features_Architecture.md) | Caves, rivers, POIs, resources, and player-built world features |
-| [Voxel Plugin Reference](Docs/Voxel_Plugin_Reference.md) | Voxel integration, sculpting, caves, and mining |
-| [Audit Session State](Docs/agent/SESSION_STATE.md) | Current repository/MCP audit state and exact continuation point |
+| [Docs Index](Docs/INDEX.md) | One line per live doc: what it answers and when to read it |
+| [Project Status](Docs/PROJECT_STATUS.md) | Where each track stands, key numbers, strengths to preserve |
+| [Backlog](Docs/BACKLOG.md) | All open work (bugs, audit findings, polish, playtest reports) with ids and owners |
+| [Decisions](Docs/DECISIONS.md) | Binding design decisions and the open design forks |
+| [Vision](Docs/VISION.md) | Pillars, pawn system, progression, lore, development phases |
+| [Engineering Principles](Docs/ENGINEERING_PRINCIPLES.md) | How bugs are fixed and systems are built here |
+| [Technical Reference](Docs/TECHNICAL_REFERENCE.md) | Architecture patterns, conventions, networking, performance guidelines |
+| [Tooling](Docs/TOOLING.md) | Build, test, DataTable authoring, art and packaging tools |
+| [Traps](Docs/TRAPS.md) | Known gotchas: symptom, cause, fix |
+| [Progression Roadmap](Docs/PROGRESSION_ROADMAP.md) | The technology progression that content follows |
 
-Documentation under `Docs/Archive` is historical and should not guide new implementation.
+Documentation under `Docs/Archive` is historical (see [Docs/Archive/INDEX.md](Docs/Archive/INDEX.md)) and should not guide new implementation.
 
 ## Current phase
 

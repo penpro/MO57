@@ -1,0 +1,266 @@
+# Tooling: every dev entry point
+
+> **What this is:** the catalog of how to build, run, test, author data, inspect and ship MO57, one line per tool with a pointer. The deep
+> manual (transport details, hit/miss history, recipes) is `Docs/AUTONOMOUS_TOOLING.md`; UI authoring is `Docs/UI_TOOLING.md`; the older
+> bridge playbook is `Docs/Agent_PIE_Testing.md`. Built 2026-10-17 from CLAUDE.md (CLI, CSV, graphify sections, verbatim below), the
+> memories ue-unified-cli / ue-multiprocess-testing / ue-editor-mcp / overnight-runner, and the Tools/ folder.
+> **Rules:** bash / `ue.py` first; PowerShell recipes are the fallback (Wes, 2026-10-17: "powershell as backup since the tools aren't
+> bulletproof, whatever keeps work moving along") but never WRITE file content through PowerShell. Close the editor when a build needs it
+> (`ue.py editor stop`, graceful) unless Wes says otherwise; announce build / editor windows in `claude-codex-coop.md`.
+
+## 1. `python Tools/ue.py` (start here)
+
+Run from bash / git-bash at the repo root. Exit codes: 0 ok, 1 operation failed, 2 environment down. Paths are hard-coded to the main tree
+and UE_5.8.
+
+| Verb | Does |
+|---|---|
+| `status` | editor / bridge / MCP / PIE in one shot (also re-starts the MCP through the bridge for a hand-launched editor) |
+| `run "<console cmd>" [--grep TAG]` | a console command, correlated (begin / end markers) + the MO57.log delta |
+| `py -c '...'` / `py --file x.py` | editor Python (multi-line via --file) |
+| `build [--target MO57Editor]` / `cycle [--boot --seed N] [--test]` | UBT 5.8 build / the whole loop: stop editor -> build -> relaunch -> wait bridge -> boot -> RunAll |
+| `auto [--filter MOFramework]` | headless automation via UnrealEditor-Cmd -nullrhi (editor must be CLOSED); parses the report JSON |
+| `test [--suite RunAll|ValidateData]` | in-editor runtime suites, exit code = pass / fail |
+| `editor start|stop|wait` | `stop` = QUIT_EDITOR through the bridge, never a force-kill, refuses with unsaved packages |
+| `boot [--seed N]`, `pie begin|end` | to in-game / PIE control |
+| `seq file.py` | tick-driven multi-frame sequences (claude_seq); read `inst_<name>/ue_out.txt` for tracebacks |
+| `rows get|set|list <table> [--file rows.json]` | DataTable authoring with readback verify, TMap guard, per-row add+set (section 4) |
+| `refresh-data` | invalidate the item + recipe static caches after MCP edits |
+| `mcp ...` | raw MCP toolsets (e.g. `mcp dt remove_rows`) |
+| `asset assign|import|shot` | art assignment, file import, visual-QA shots |
+| `ui contract|scaffold|build|check|dump|remove|menu|click|find|shot` | Widget Blueprints from spec files (`Docs/UI_TOOLING.md`) |
+| `inst start|stop|do|list <name> [--sound] [--creator] [--res WxH] [--nosteam]` | extra `-game` processes with their own bridge + log |
+| `nettest lan|steam-host|game|hostsave|soak|actions|churn|features|packaged|packaged-suite|packaged-death|packaged-removal|bugreport` | real multi-process co-op / packaged gates (negative controls: `game --skew-seed / --withhold-seed / --withhold-sync`; `MO_ACTIONS_ONLY=_case,...` reruns named action cases) |
+| `logs`, `results`, `save`, `shot`, `config`, `mptest` | helpers (see `--help`) |
+
+Older PowerShell helpers still work: `Tools\agent_boot_newgame.ps1 -Seed N` (one command to in-game), `Tools\agent_state.ps1` (editor + PIE
+stage), `Tools\win_input.ps1 -ProcessId <pid> -Action shot|key ...` (real input / window capture for instances and packaged windows).
+
+## 2. Build
+
+`python Tools/ue.py build` (or `cycle`). The engine is the UE 5.8.3 LAUNCHER install: engine modules are precompiled; engine fixes are staged
+in `Docs/Engine_Patches.md`. Before a build: the editor must be closed (Live Coding blocks UBT) -- `ue.py editor stop`; check the module DLL
+mtime if a change seems not to apply (Live Coding may have hot-patched). Run `python Tools/check_unity_collisions.py` before committing new
+.cpp files. After code changes: `python -m graphify update .`.
+
+PowerShell fallback (CLAUDE.md until 2026-10-17, verbatim):
+
+Build commands (PowerShell):
+```powershell
+# Build Editor (Development)
+powershell.exe -Command "& 'D:\UnrealEngine\UE_5.8\Engine\Binaries\DotNET\UnrealBuildTool\UnrealBuildTool.exe' MO57Editor Win64 Development '-Project=D:\ueprojects\mo57\mo57.uproject'"
+
+# Build Game (Development)
+powershell.exe -Command "& 'D:\UnrealEngine\UE_5.8\Engine\Binaries\DotNET\UnrealBuildTool\UnrealBuildTool.exe' MO57 Win64 Development '-Project=D:\ueprojects\mo57\mo57.uproject'"
+
+# View build logs
+powershell.exe -Command "Get-Content 'C:\Users\penum\AppData\Local\UnrealBuildTool\Log.txt' -Tail 50"
+```
+
+File operations (PowerShell; prefer the Glob / Read tools):
+```powershell
+# List directory contents
+powershell.exe -Command "Get-ChildItem 'D:\ueprojects\mo57' -Directory"
+
+# Find files recursively
+powershell.exe -Command "Get-ChildItem 'D:\ueprojects\mo57' -Recurse -Filter '*.cpp'"
+```
+
+Git operations (**[SUPERSEDED 2026-10-17: never `git add -A` in the shared tree; stage explicit paths and check the staged column -- Wes N1]**):
+```bash
+git status
+git add -A && git commit -m "message" && git push
+git log --oneline -10
+```
+
+Equivalent UBT call from bash: `"/d/UnrealEngine/UE_5.8/Engine/Binaries/DotNET/UnrealBuildTool/UnrealBuildTool.exe" MO57Editor Win64 Development
+-Project="D:/UEProjects/MO57/MO57.uproject" -NoHotReload` (~20-40 s for one .cpp). A clean `UE_5.7` path fails in ~5 s (`CS0117 ... V7`).
+
+## 3. Tests
+
+- Headless automation: `ue.py auto --filter MOFramework` (editor closed). Groups: `MOFramework.WorldGen.*`, `.PCG.*`, `.Water.*`, `.Medical.*`,
+  `.Colony.*`, `.UI.*`, `.Audio.*`, `.Footsteps.*`, `.Light.*`, `.Graphics.*`, `.Inventory.*`, `.Crafting.*`, `.Survival.*`, `.BugReport.*` ...
+- Runtime harness verbs (in PIE / an instance): `MO.Test.*` (38: State, FindWidget, ClickWidget, HitTest, PressKey, Input, Craft, GrantRecipe,
+  Forage, DropPickup, Attack, Build, ValidateData, ProgressionMap, RemovalPersists, DeathFlow, SystemicDeath, RescueTrace, EmbedPawn,
+  AfterReady ...); `MO.Delay` sequences commands after READY. `MO.UI.RunTest <name>` / `MO.UI.RunAllTests` for frame-stepped UI tests.
+- Offline Python tests: `Tools/tests/` (test_ue_inst.py, test_ui_tooling.py ...).
+- Co-op and packaged gates: `ue.py nettest <mode>` (section 1); `Docs/Coop_And_Networking.md` §6 for the rules.
+- Naive-player passes: an instance driven by console verbs + `shot showui` (`r.setres 1920x1080w` first; wait for the SECOND READY line).
+
+## 4. DataTables
+
+- **Live tables are the truth.** Edit them with `python Tools/ue.py rows set <table> --file rows.json` (per-row add + set, readback-verified,
+  TMap snapshot guard; `rows get` each row first and add only what is missing). Never call the raw MCP `set_rows` with a partial struct
+  (it REPLACES nested structs; `rows_set_safe` deep-merges). After MCP edits: `ue.py refresh-data`. Save after `pie end` (no saves in PIE).
+- The `*_JSON.json` / CSV mirrors in `Plugins/MOFramework/Content/Data` have NOT tracked the live tables since early checkpoints (Items.csv is
+  in `Data/archive/`). The `.claude/skills/ue-datatable-json` skill edits those JSON mirrors: use it only for a table whose JSON is known current.
+- Progression content follows `Docs/PROGRESSION_ROADMAP.md` (the design authority; Wes N6). Verify with `MO.Test.ValidateData` + `MO.Test.ProgressionMap`.
+- The CSV + sqlite utility (still valid for tables with a live CSV, e.g. Quests.csv, Skills.csv); verbatim from CLAUDE.md, with the stale
+  paths marked:
+
+
+
+**ALWAYS use `Tools/ue_csv_utils.py` when modifying CSV files!**
+
+See `Tools/UE_CSV_FORMAT.md` for full documentation.
+
+#### IMPORTANT: Schema Changes
+
+**When modifying DataTable row structs (e.g., `FMOItemDefinitionRow`, `FMORecipeDefinitionRow`):**
+
+**ADDING new fields to struct:**
+```bash
+# 1. Add columns to database with defaults
+python Tools/ue_csv_utils.py add-column Tools/recipes.db recipes bIsBuilding False
+
+# 2. Export back to CSV
+python Tools/ue_csv_utils.py export Tools/recipes.db Plugins/MOFramework/Content/Data/Recipes.csv [STALE PATH 2026-10-17: Items.csv is in Data/archive/, recipes live in Recipes.uasset] recipes
+
+# 3. Reimport in UE
+```
+
+**REMOVING or RENAMING fields:**
+```bash
+# 1. Use import-safe to preserve manual data (Icon, UI, WorldVisual)
+python Tools/ue_csv_utils.py import-safe Items.csv Tools/items.db items
+
+# 2. Export with new schema
+python Tools/ue_csv_utils.py export Tools/items.db Items.csv items
+```
+
+**Check for drift:**
+```bash
+python Tools/ue_csv_utils.py check <csv> <db> [table]
+```
+
+**Protected fields (preserved automatically by import-safe):**
+- `UI` - IconSmall, IconLarge, Tint
+- `WorldVisual` - StaticMesh, MaterialOverride, WorldActorClass
+- `Icon` - Recipe icons
+
+**Row struct files to watch:**
+- `MOItemDefinitionRow.h` → Items.csv → Tools/items.db
+- `MORecipeDefinitionRow.h` → Recipes.csv → Tools/recipes.db
+- `MOSkillDefinitionRow.h` → Skills.csv
+
+#### Quick Reference
+
+```bash
+# Import CSV to SQLite database
+python Tools/ue_csv_utils.py import Plugins/MOFramework/Content/Data/Items.csv [STALE PATH 2026-10-17: Items.csv is in Data/archive/, recipes live in Recipes.uasset] items.db
+
+# Query items
+python Tools/ue_csv_utils.py query items.db "SELECT ItemId, DisplayName FROM items WHERE Rarity='Rare'"
+
+# Update items
+python Tools/ue_csv_utils.py update items.db "UPDATE items SET MaxStackSize=50 WHERE ItemType='Resource'"
+
+# Export back to CSV
+python Tools/ue_csv_utils.py export items.db Plugins/MOFramework/Content/Data/Items.csv [STALE PATH 2026-10-17: Items.csv is in Data/archive/, recipes live in Recipes.uasset]
+```
+
+#### Critical CSV Rules
+1. **Encoding**: Usually `utf-8-sig`, always detect first
+2. **Field Size**: Set `csv.field_size_limit(sys.maxsize)`
+3. **Quoting**: UE uses `QUOTE_ALL` - every field is quoted
+4. **Quote Escaping**: Quotes inside quoted fields are doubled (`""`)
+   - Write single quotes in Python → CSV writer doubles them → UE reads as single
+   - NEVER manually double quotes or you get `""""` (broken)
+5. **Row Name Column**: UE exports the first column (row name / `---`) WITHOUT quotes, but our utility quotes all fields. This can cause crashes when UE reimports.
+   - **Workaround**: After modifying data via the utility, make edits in DataTable editor and re-export from UE
+   - Complex struct arrays (like `TArray<FMOToolRequirement>`) should be set manually in the DataTable editor, not via CSV
+
+#### Struct Array Format (TArray<FStructType>)
+- Empty array: `""` (empty string) or `()`
+- Single item: `((Field1=Value1,Field2=Value2))`
+- Multiple items: `((Field1=A,Field2=B),(Field1=C,Field2=D))`
+- All struct fields should be included with full precision floats (e.g., `1.000000`)
+- Example working format for `TArray<FMOToolRequirement>`:
+  ```
+  ((ToolType="Axe",MinQuality=1.000000,DurabilityConsumed=1,bIsRequired=True,MissingToolTimeMultiplier=1.000000,MissingToolQualityMultiplier=1.000000))
+  ```
+
+#### Inspection Field Format (Current)
+```
+(Grants=((Id="SkillName",bIsKnowledge=False,XPAmount=5.0,MaxLevel=3),(Id="KnowledgeName",bIsKnowledge=True,XPAmount=100.0,MaxLevel=3)))
+```
+
+- Data pipeline as written in TECHNICAL_REFERENCE (May 2026): `C++ Row Struct → DataTable (UE Editor) → CSV Export → SQLite DB → Query/Update →
+  CSV → Reimport` (`Tools/ue_csv_utils.py`). **[SUPERSEDED 2026-10-17 for Items / Recipes / Biomes / Resources: live `ue.py rows set`; see above.]**
+- Format reference: `Tools/UE_CSV_FORMAT.md`.
+
+## 5. Graphify (the code graph)
+
+From CLAUDE.md (verbatim):
+
+This project has a graphify knowledge graph at `graphify-out/` (17k nodes / 26k edges after the 2026-10-17 update; was 11k nodes,
+741 code files; AST-extracted, fully local). Rules:
+- For architecture / "what connects to what" questions, try the graph before
+  grepping: `python -m graphify query "..."`, `explain "Symbol"`,
+  `path "A" "B"`, `affected "X"` (run from repo root).
+- After a session that modifies code, run `python -m graphify update .` to
+  keep it current (AST-only, no LLM, ~1 min).
+- `graphify-out/` is gitignored — regenerable, never commit it.
+- The CLI has no PATH shim on this machine: use `python -m graphify`.
+
+Codex resolves `python` to anaconda, where graphify is not installed: use the Windows-Store Python
+(`C:\Users\penum\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\python.exe -m graphify ...`) or
+`pip install -e D:\UEProjects\graphify` into anaconda once (coop CL-0001). Graph size on 2026-10-17: ~16.7k nodes / 25.6k edges.
+
+## 6. Content and art tools
+
+| Tool | Does |
+|---|---|
+| `Tools/icon_studio.py` (+ `icon_studio_blender.py`), `Tools/icon_fix_process.py` | item icons from meshes; de-checker icons |
+| `Tools/kitbash.py` (+ blender), `Content/Python/item_tint.py`, `item_mesh_prepare` | item meshes from scans (`Docs/Item_Art_Pipeline.md`) |
+| `Tools/ede_migrate.py` | migrate Electric Dreams groups (gitignored content; prints .gitignore lines; never overwrites repaired files) |
+| `Content/Python/fix_mesh_collision.py`, `prep_rock_meshes.py`, `prep_tree_collision.py`, `worldfeature_meshes.py` | collision for scatter / composition meshes |
+| `Content/Python/fix_substrate_shading_model_pin.py`, `fix_hornbeam_masters.py` | repair migrated masters so the cook works (re-run after every migration) |
+| `Content/Python/fix_megascans_import.py` | reparent Megascans exports onto M_MS_Base |
+| `Content/Python/upgrade_terrain_material.py` | build / update M_QuixelBase (pristine-graph revert for structure changes) |
+| `Content/Python/biome_palettes.py` + `Docs/Ground_Coverage_2026-10-14.plan.json`, `native_grass_biomes.py`, `Tools/pcg_stocking.py`, `Tools/shore_dressing.py` | DT_Biomes palettes and experiments (`Docs/PCG.md` §5) |
+| `Content/Python/cut_pcg_dead_branches.py`, `set_game_radii.py`, `thin_item_clutter.py`, `pcg_tier_caps.py`, `add_tree_tier_chain.py`, `add_far_tree_chain.py`, `tune_native_grass.py` | PCG graph edits from editor Python |
+| `Content/Python/measure_feature_ground.py` | measure a composition's authored ground |
+| `Content/Python/make_sand_material.py`, `make_alpine_material.py`, `dark_pebbles.py`, `Tools/gen_sand_textures.py`, `Tools/ed_surfaces_prep.py` | voxel surface types |
+| `Content/Python/kit_import.py`, `kit_styles.py`, `Tools/kit_bake.py`, `ui_specs/kit_*.py` | the UI kit (`Docs/UI_Kit_Implementation.md`) |
+| `Tools/gen_moodle_icons.py`, `Content/Python/import_moodle_icons.py` | placeholder moodle icons |
+| `Tools/steam_scout.py`, `steam_art_build.py`, `steam_wordmark.py`, `Tools/look_sheet.py`, `Tools/biome_eye.py`, `Tools/biome_tour.py` | screenshots and Steam art (`SteamArt/README.md`) |
+| `Tools/terrain_lab/` | numpy replica of the world generator (iterate shapes in seconds) |
+| Animation retarget (editor Python recipe) | `Docs/Water.md` §3 + `Docs/TRAPS.md` §10 (op-stack retargeters, root motion) |
+
+## 7. Packaging, probing, profiling
+
+`RunUAT BuildCookRun` recipe: `Docs/AUTONOMOUS_TOOLING.md` "Packaging a Development build"; system view and cook traps: `Docs/Packaging.md`.
+`Tools/pkg_probe.py [--package] [--shipdiag] --cmds ... [--until <regex>] [--keep-log label]` (packaged runs, logs in `Saved/Logs/pkg_probe`);
+`Tools/csv_frames.py`, `Tools/insights_export.py` (headless Insights), `Tools/perf_experiments.sh`; `MO.Perf.Tour`, `MO.Perf.Bench`, `MO.Perf.Csv`
+(`Docs/Performance.md`). One-package cook: `Docs/Packaging.md` §2.
+
+## 8. Crash and bug reports
+
+`python -I Tools/crash_triage.py <crash-dumps dir> [--since DATE]`, `Tools/ue_crash_bundle.py`, `Tools/bugreport_receiver.py`,
+`ue.py nettest bugreport --package`; diagnostics `Tools/pawnvis_probe.py`, `Tools/rescue_probe.py [--hunt N]`, `Tools/weather_probe.py`
+(`Docs/Persistence.md` §4).
+
+## 9. Unattended runs (Tools/ov.bat)
+
+Wes (2026-10-09): "there's not much point in doing overnight sessions if I have to click accept every 20 seconds". Rewrite `Tools/ov_task.sh`
+(bash, runs from the repo root) with the Write tool, then run exactly `Tools/ov.bat` (never edited; `run_in_background` for long jobs).
+`Tools/ov_run.sh` snapshots each task into `Saved/Logs/ov_history/<stamp>.sh` + `.log`. Approving the runner approves whatever the task holds:
+keep to the standing rules (`Docs/DECISIONS.md` "Earlier": never Wes's saves, own PIDs only, local / free only).
+
+## 10. Steam patch notes (Wes N9, 2026-10-17)
+
+The old PATCH_NOTES.md is archived (`Docs/Archive/PATCH_NOTES.md`). When Wes asks for Steam patch notes: read the last entry of `Docs/STEAM_RELEASES.md` (date / time / commit of the
+last Steam patch), generate the notes from `git log <that commit>..HEAD` (player-facing `feat` / `fix` commits, grouped by system; skip
+`docs` / tooling), then append the new patch's date / time / commit to `Docs/STEAM_RELEASES.md` in the same commit.
+
+## 11. Console verbs (289 registered `MO.*` / `mo.*` names on 2026-10-17)
+
+The live, searchable list is the in-game developer menu (`devmenu [Group]`, tooltips = help text; dev mode in Shipping: Options > Gameplay >
+Developer or `-devmode`). Namespaces (count): MO.Test (38), MO.UI (23), MO.WorldGen (19), MO.Colony (14), MO.Audio (13), MO.Water (12),
+MO.Player (10), MO.Weather (8), MO.AI (7), MO.Mod (7), MO.PCG (7), MO.Clock (6), MO.Light (6), MO.Session (6), MO.BugReport (5),
+MO.Footstep (5), MO.Save (5), MO.Fire (4), MO.HUD (4), MO.Medical (4), MO.Harvest (3), MO.Item (3), MO.Perf (3), MO.Readiness (3),
+MO.Voxel (3), MO.WorldFeatures (3), MO.Gallery (3), MO.Cam (2), MO.Possess (2), MO.WorldSeed (2), and singles (MO.NewGame, MO.Delay,
+MO.Cover, MO.Spawn, MO.Survival, MO.Console, MO.Help ...); cvars `mo.Readiness.*` (13), `mo.PCG.*` (8), `mo.Audio.*`, `mo.Lakes.*`,
+`mo.Medical.*`, `mo.WorldFeatures.*`, `mo.Combat.MeleeAimAssist`, `mo.Foliage.RigidShadows`, `mo.Interact.Debug`. Each system doc lists its own
+verbs in its header. Regenerate the list: `grep -rhoE 'TEXT\("(MO|mo)\.[A-Za-z0-9_.]+"\)' Plugins/MOFramework/Source | sort -u`.

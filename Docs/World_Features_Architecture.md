@@ -1,5 +1,20 @@
 # World Features Architecture
 
+> **Covers:** points of interest and other "kinds of things" placed in the world as self-contained compositions (Electric Dreams
+> assemblies, rock spires), the deterministic placer, the terrain that rises to meet a composition, and the unifying design for caves /
+> rivers / POIs / landmarks / ore / player builds (mostly still a plan).
+> **Current state (2026-10-17):** only the `Many` policy with composition actors exists (see "As built" below); the per-site seed reaches
+> Blueprint compositions (Wes, Oct 16: "fix it, I don't care what it changes"); the cliff / embankment assemblies are being iterated until
+> they work every time (Wes, Oct 16); real cliff WALLS are an open design fork (DECISIONS F9).
+> **Entry points:** `DT_WorldFeatures` (`FMOWorldFeatureDefinitionRow`, `MOWorldFeatureTypes.h`), `FMOWorldFeaturePlacer`,
+> `UMOWorldFeatureSubsystem`, `AMOWorldFeatureActor`, `FMOFeatureTerrain`, PCG node `MO Conform To Ground`. **Dev verbs:**
+> `MO.WorldFeatures.Dump`, `.Grounding`, `.GroundOverride <Id> <path.json|clear>`, console words `poi` / `biome`. **Tests:**
+> `WorldFeatures.Placer`, `.SlopeAlign`, `.ChooseVariant`. **Open items:** `Docs/BACKLOG.md` § PCG and world features.
+> **Rule (Wes, Oct 14):** "build entire pcg POIs that have all these things self contained so they're very fine tuned and then spawn the larger
+> POIs ... rather than just spawning a bunch of one off instances": new world content = one composition (graph or BP) + one row; never hero
+> content as scatter species. Measure a composition before placing it. Traps: `Docs/TRAPS.md` § 10 (World features and content import) (DT JSON round-trip empties
+> TMaps, `FMOWorldGenParamsRef` default is fatal, collision counts read -1 in PIE, `unreal.Rotator(roll, pitch, yaw)`).
+
 **Status:** design plan, partly built -- see "As built" just below. This is the
 target abstraction so we don't ship cave-system, river-system,
 POI-system, landmark-system as four piecemeal codebases.
@@ -620,8 +635,8 @@ a world that is salt by default.
 
 - `Docs/Voxel_Plugin_Reference.md` §17 + §18 — the voxel-side stamp
   primitives this builds on
-- `Docs/Terrain_Foundation_Plan.md` — base terrain generation (the
+- `Docs/Archive/Terrain_Foundation_Plan.md` — base terrain generation (the
   canvas features get placed on)
-- `Docs/PCG_Integration_Plan.md` — the PCG node patterns we already use
+- `Docs/Archive/PCG_Integration_Plan.md` — the PCG node patterns we already use
 - CLAUDE.md Engineering Principle #2 + #9 — the design rationale this
   doc serves

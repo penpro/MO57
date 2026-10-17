@@ -1,5 +1,10 @@
 # Agent PIE Testing Playbook
 
+> **Status (2026-10-17):** the June / July bridge playbook. The file-I/O bridge (`Content/Python/claude_bridge.py`, loaded by
+> `init_unreal.py`) is still the transport under `python Tools/ue.py`, so these recipes work, but **start with `ue.py`**
+> (`Docs/TOOLING.md`, `Docs/AUTONOMOUS_TOOLING.md`). Stale here: notes written for UE 5.7, and "the editor throttles PIE when unfocused"
+> (fixed in EditorSettings.ini on Oct 11). Traps from this playbook are collected in `Docs/TRAPS.md` §3 and §5.
+
 *How Claude (or any automation agent) runs MO57 in the Unreal Editor autonomously. Every recipe here was proven live on June 12, 2026. Companion tooling: `Content/Python/claude_bridge.py` (auto-loaded by `init_unreal.py`).*
 
 ---
