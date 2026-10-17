@@ -90,24 +90,39 @@ bool FMOWorldGen_Caves::RunTest(const FString& Parameters)
 		TestTrue(TEXT("the same (params, seed, position) is bit-identical every call"), bIdentical);
 	}
 
-	// 2. Air above the ground needs no carving; 3. rock under it stays intact down to the cover (except inside a sinkhole's rim zone).
+	// 2. Air above the ground needs no carving; 3. rock under FLAT ground stays intact down to the cover (v9: a gallery opens only into a steep slope,
+	//    an entrance -- never a hole in flat ground to fall into; Wes, Oct 16 2026).
 	{
-		int32 AboveWrong = 0, CoverWrong = 0, CoverChecked = 0;
+		int32 AboveWrong = 0, CoverWrong = 0, CoverChecked = 0, SteepColumns = 0, SteepOpen = 0;
+		const float FlatTan = FMath::Tan(FMath::DegreesToRadians(T.CaveEntranceSlopeMinDeg - 2.0f));
 		for (int32 I = 0; I < 6000; ++I)
 		{
 			double X, Y;
 			RandomColumn(X, Y);
 			const float Ground = FMOWorldGen::SampleHeightCm(*P, X, Y, CaveTestSeed);
 			AboveWrong += (FMOWorldGen::SampleCaveDistanceAtGround(*P, X, Y, Ground + R.FRandRange(150.0f, 1500.0f), Ground, CaveTestSeed) != FMOWorldGen::CaveFarCm) ? 1 : 0;
-			if (FMOWorldGen::DistanceToSinkholeRimZone(*P, X, Y, CaveTestSeed) > 300.0f)
+			// The same slope the field uses: forward differences over 3 m, both ways (a column on a slope's edge counts as steep if either side is).
+			const float Gx = (FMOWorldGen::SampleHeightCm(*P, X + 300.0, Y, CaveTestSeed) - Ground) / 300.0f;
+			const float Gy = (FMOWorldGen::SampleHeightCm(*P, X, Y + 300.0, CaveTestSeed) - Ground) / 300.0f;
+			const float Gx2 = (Ground - FMOWorldGen::SampleHeightCm(*P, X - 300.0, Y, CaveTestSeed)) / 300.0f;
+			const float Gy2 = (Ground - FMOWorldGen::SampleHeightCm(*P, X, Y - 300.0, CaveTestSeed)) / 300.0f;
+			const float Depth = R.FRandRange(0.0f, T.CaveCoverCm - 50.0f);
+			const bool bOpen = FMOWorldGen::SampleCaveDistanceAtGround(*P, X, Y, Ground - Depth, Ground, CaveTestSeed) <= 0.0f;
+			if (FMath::Max(FMath::Sqrt(Gx * Gx + Gy * Gy), FMath::Sqrt(Gx2 * Gx2 + Gy2 * Gy2)) < FlatTan)
 			{
 				++CoverChecked;
-				const float Depth = R.FRandRange(0.0f, T.CaveCoverCm - 50.0f);
-				CoverWrong += (FMOWorldGen::SampleCaveDistanceAtGround(*P, X, Y, Ground - Depth, Ground, CaveTestSeed) <= 0.0f) ? 1 : 0;
+				CoverWrong += bOpen ? 1 : 0;
+			}
+			else
+			{
+				++SteepColumns;
+				SteepOpen += bOpen ? 1 : 0;
 			}
 		}
+		AddInfo(FString::Printf(TEXT("steep columns: %d, of which open inside the cover (a gallery entrance): %d"), SteepColumns, SteepOpen));
 		TestEqual(TEXT("no cave above the ground (6000 columns)"), AboveWrong, 0);
-		TestEqual(*FString::Printf(TEXT("no tunnel/cavern inside the %.0f cm cover outside sinkholes (%d columns)"), T.CaveCoverCm, CoverChecked), CoverWrong, 0);
+		TestEqual(*FString::Printf(TEXT("under ground flatter than %.0f deg no gallery / cavern breaks the %.0f cm cover (%d columns): no hole to fall into"),
+			T.CaveEntranceSlopeMinDeg - 2.0f, T.CaveCoverCm, CoverChecked), CoverWrong, 0);
 	}
 
 	// 4. The rock really is carved, but not swiss cheese.
@@ -132,7 +147,7 @@ bool FMOWorldGen_Caves::RunTest(const FString& Parameters)
 		FString WorstText;
 		double GradientSum = 0.0;
 		int32 WallCount = 0;
-		for (int32 I = 0; I < 120000; ++I)
+		for (int32 I = 0; I < 200000; ++I)   // v9's galleries are half the radius: more samples to find their walls
 		{
 			double X, Y;
 			RandomColumn(X, Y);
@@ -181,27 +196,35 @@ bool FMOWorldGen_Caves::RunTest(const FString& Parameters)
 		TestEqual(TEXT("a 32 m sample spacing sees no caves"), CoarseInside, 0);
 	}
 
-	// 7. Sinkholes: found, open to the sky at the rim, a shaft down the middle, keep-out zone around them.
+	// 7. Sinkholes: off by default since v9 (a shaft in flat ground is a hole to fall into); still a working feature for a world that turns them on --
+	//    found, open to the sky at the rim, a shaft down the middle, keep-out zone around them.
 	{
+		int32 DefaultFound = 0;
+		ForEachSinkholeCell(*P, CaveTestSeed, [&DefaultFound](const FMOSinkhole&) { ++DefaultFound; });
+		TestEqual(TEXT("the default world has no sinkholes (v9)"), DefaultFound, 0);
+	}
+	{
+		const FMOWorldGenParamsRef Sink = MakeCaveParams([](FMOWorldGenTuning& Tuning) { Tuning.SinkholeChance = 0.6f; });
+		const FMOWorldGenTuning& ST = Sink->Tuning;
 		int32 Found = 0, RimOpen = 0, ShaftOpen = 0, ZoneOk = 0, FarClear = 0;
-		ForEachSinkholeCell(*P, CaveTestSeed, [&](const FMOSinkhole& S)
+		ForEachSinkholeCell(*Sink, CaveTestSeed, [&](const FMOSinkhole& S)
 		{
 			++Found;
 			const double Cx = S.Center.X, Cy = S.Center.Y;
-			ShaftOpen += (FMOWorldGen::SampleCaveDistanceCm(*P, Cx, Cy, S.GroundCm - 500.0f, CaveTestSeed) < 0.0f) ? 1 : 0;
+			ShaftOpen += (FMOWorldGen::SampleCaveDistanceCm(*Sink, Cx, Cy, S.GroundCm - 500.0f, CaveTestSeed) < 0.0f) ? 1 : 0;
 			// Half a radius from the axis, 40 cm below the ground THERE: inside the cut, i.e. the shaft reaches the surface. (The ground at the offset, not at the axis: on a slope -- the v6 ranges
 			// have gentle ones everywhere -- the two differ by radius x slope, and a point 40 cm under the AXIS ground is in the air on the downhill side.)
-			const float LocalGroundCm = FMOWorldGen::SampleHeightCm(*P, Cx + S.RadiusCm * 0.5, Cy, CaveTestSeed);
-			RimOpen += (FMOWorldGen::SampleCaveDistanceCm(*P, Cx + S.RadiusCm * 0.5, Cy, LocalGroundCm - 40.0f, CaveTestSeed) < 0.0f) ? 1 : 0;
-			ZoneOk += (FMOWorldGen::DistanceToSinkholeRimZone(*P, Cx, Cy, CaveTestSeed) < 0.0f) ? 1 : 0;
+			const float LocalGroundCm = FMOWorldGen::SampleHeightCm(*Sink, Cx + S.RadiusCm * 0.5, Cy, CaveTestSeed);
+			RimOpen += (FMOWorldGen::SampleCaveDistanceCm(*Sink, Cx + S.RadiusCm * 0.5, Cy, LocalGroundCm - 40.0f, CaveTestSeed) < 0.0f) ? 1 : 0;
+			ZoneOk += (FMOWorldGen::DistanceToSinkholeRimZone(*Sink, Cx, Cy, CaveTestSeed) < 0.0f) ? 1 : 0;
 			// Well away from the sinkhole (but the same cell) the shaft is not there: 3 radii out, just under the ground, no cave.
-			FarClear += (FMOWorldGen::SampleCaveDistanceCm(*P, Cx + S.RadiusCm * 4.0, Cy, S.GroundCm - 400.0f, CaveTestSeed) > 0.0f) ? 1 : 0;
+			FarClear += (FMOWorldGen::SampleCaveDistanceCm(*Sink, Cx + S.RadiusCm * 4.0, Cy, S.GroundCm - 400.0f, CaveTestSeed) > 0.0f) ? 1 : 0;
 		});
-		AddInfo(FString::Printf(TEXT("%d sinkholes in 16 x 16 cells (%.0f m cells)"), Found, T.SinkholeCellCm / 100.0f));
+		AddInfo(FString::Printf(TEXT("%d sinkholes in 16 x 16 cells (%.0f m cells)"), Found, ST.SinkholeCellCm / 100.0f));
 		// A sinkhole is evaluated only in its own cell, so its reach (2.4x the largest radius + the saturation distance) must fit the 18% jitter margin.
 		TestTrue(TEXT("a sinkhole's reach fits inside its cell's jitter margin"),
-			T.SinkholeRadiusCm * 1.3f * 2.4f + FMOWorldGen::CaveFarCm + 300.0f < 0.18f * T.SinkholeCellCm);
-		TestTrue(FString::Printf(TEXT("a plausible number of sinkholes in 256 cells at chance %.2f (got %d)"), T.SinkholeChance, Found), Found > 80 && Found < 220);
+			ST.SinkholeRadiusCm * 1.3f * 2.4f + FMOWorldGen::CaveFarCm + 300.0f < 0.18f * ST.SinkholeCellCm);
+		TestTrue(FString::Printf(TEXT("a plausible number of sinkholes in 256 cells at chance %.2f (got %d)"), ST.SinkholeChance, Found), Found > 80 && Found < 220);
 		TestEqual(TEXT("the shaft is open 5 m below the ground at every sinkhole"), ShaftOpen, Found);
 		TestEqual(TEXT("the shaft reaches the surface at every sinkhole"), RimOpen, Found);
 		TestEqual(TEXT("DistanceToSinkholeRimZone is negative at every sinkhole centre"), ZoneOk, Found);
@@ -221,6 +244,102 @@ bool FMOWorldGen_Caves::RunTest(const FString& Parameters)
 		}
 		TestEqual(TEXT("bEnableCaves = false: no cave anywhere"), Inside, 0);
 		TestNotEqual(TEXT("the cave settings are part of the params hash (host/client handshake)"), Off->GetHash(), P->GetHash());
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMOWorldGen_GalleriesStayLevel,
+	"MOFramework.WorldGen.GalleriesStayLevel",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FMOWorldGen_GalleriesStayLevel::RunTest(const FString& Parameters)
+{
+	// Wes, Oct 16 2026: "caves should be more or less horizontal so we don't just fall into them". From points well inside galleries (22-33 m deep:
+	// past where they fade in, above the caverns' 35 m), follow the passage 3 m sideways -- the horizontal direction where the field is deepest, at
+	// the best height within +-1.5 m. The height change along it is the passage's slope: 95% must stay under 15 deg.
+	const FMOWorldGenParamsRef P = MakeCaveParams();
+	FRandomStream R(97);
+	int32 Measured = 0, Level = 0;
+	float Worst = 0.0f;
+	const float MaxTan = FMath::Tan(FMath::DegreesToRadians(15.0f));
+	for (int32 Try = 0; Try < 2000000 && Measured < 250; ++Try)
+	{
+		const double X = R.FRandRange(-2.0e6f, 2.0e6f), Y = R.FRandRange(-2.0e6f, 2.0e6f);
+		const float Ground = FMOWorldGen::SampleHeightCm(*P, X, Y, CaveTestSeed);
+		const double Z = Ground - R.FRandRange(2200.0f, 3300.0f);
+		if (FMOWorldGen::SampleCaveDistanceAtGround(*P, X, Y, Z, Ground, CaveTestSeed, 50.0f) > -60.0f)
+		{
+			continue;
+		}
+		// The passage's centre at this column first (the deepest point within +-1.5 m): starting from a point near the tube's roof or floor would
+		// count the offset to the next column's centre as slope.
+		double Z0 = Z;
+		float CentreD = FMOWorldGen::CaveFarCm;
+		for (float Dz = -150.0f; Dz <= 150.0f; Dz += 10.0f)
+		{
+			const float D = FMOWorldGen::SampleCaveDistanceAtGround(*P, X, Y, Z + Dz, Ground, CaveTestSeed, 50.0f);
+			if (D < CentreD)
+			{
+				CentreD = D;
+				Z0 = Z + Dz;
+			}
+		}
+		float BestD = FMOWorldGen::CaveFarCm, BestDz = 0.0f;
+		for (int32 K = 0; K < 24; ++K)
+		{
+			const double A = K * 2.0 * UE_DOUBLE_PI / 24.0;
+			const double Qx = X + 300.0 * FMath::Cos(A), Qy = Y + 300.0 * FMath::Sin(A);
+			const float QGround = FMOWorldGen::SampleHeightCm(*P, Qx, Qy, CaveTestSeed);
+			for (float Dz = -150.0f; Dz <= 150.0f; Dz += 10.0f)
+			{
+				const float D = FMOWorldGen::SampleCaveDistanceAtGround(*P, Qx, Qy, Z0 + Dz, QGround, CaveTestSeed, 50.0f);
+				if (D < BestD)
+				{
+					BestD = D;
+					BestDz = Dz;
+				}
+			}
+		}
+		if (BestD >= 0.0f)
+		{
+			continue;   // a gallery's tapered end: nowhere to follow it
+		}
+		++Measured;
+		const float Tan = FMath::Abs(BestDz) / 300.0f;
+		Level += Tan <= MaxTan ? 1 : 0;
+		Worst = FMath::Max(Worst, Tan);
+	}
+	AddInfo(FString::Printf(TEXT("%d passages followed, %d within 15 deg, steepest %.0f deg"), Measured, Level, FMath::RadiansToDegrees(FMath::Atan(Worst))));
+	TestTrue(TEXT("enough gallery air found to measure (>= 100 passages)"), Measured >= 100);
+	TestTrue(FString::Printf(TEXT("95%% of passages run within 15 deg of level (%d of %d)"), Level, Measured), Measured > 0 && Level >= FMath::CeilToInt(0.95f * Measured));
+
+	// Entrances: a scan of a 20 x 20 km region at 25 m spacing -- columns on ground steep enough for an entrance with cave air within 2 m of the
+	// surface. They exist (a cave you can walk into), and only on the steep columns (the flat-ground cover is tested in MOFramework.WorldGen.Caves).
+	{
+		const float MinTan = FMath::Tan(FMath::DegreesToRadians(P->Tuning.CaveEntranceSlopeMinDeg));
+		int32 Steep = 0, Entrances = 0;
+		for (double X = -1.0e6; X < 1.0e6; X += 2500.0)
+		{
+			for (double Y = -1.0e6; Y < 1.0e6; Y += 2500.0)
+			{
+				const float Ground = FMOWorldGen::SampleHeightCm(*P, X, Y, CaveTestSeed);
+				const float Gx = (FMOWorldGen::SampleHeightCm(*P, X + 300.0, Y, CaveTestSeed) - Ground) / 300.0f;
+				const float Gy = (FMOWorldGen::SampleHeightCm(*P, X, Y + 300.0, CaveTestSeed) - Ground) / 300.0f;
+				if (FMath::Sqrt(Gx * Gx + Gy * Gy) < MinTan)
+				{
+					continue;
+				}
+				++Steep;
+				bool bOpen = false;
+				for (float Depth = 50.0f; Depth <= 200.0f && !bOpen; Depth += 50.0f)
+				{
+					bOpen = FMOWorldGen::SampleCaveDistanceAtGround(*P, X, Y, Ground - Depth, Ground, CaveTestSeed, 50.0f) < 0.0f;
+				}
+				Entrances += bOpen ? 1 : 0;
+			}
+		}
+		AddInfo(FString::Printf(TEXT("entrance scan, 20 x 20 km at 25 m: %d steep column(s), %d with cave air within 2 m of the surface"), Steep, Entrances));
+		TestTrue(TEXT("hillside entrances exist (a cave you walk into)"), Entrances > 0);
 	}
 	return true;
 }

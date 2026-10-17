@@ -394,7 +394,8 @@ struct MOFRAMEWORKCORE_API FMOWorldGenTuning
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Caves")
 	bool bEnableCaves = true;
 
-	/** Solid rock kept above tunnels and caverns (cm). Only sinkholes breach the ground. */
+	/** Solid rock kept above galleries and caverns (cm). A gallery breaches the ground only where it runs into a steep slope (an entrance, see
+	 *  CaveEntranceSlopeMinDeg); sinkholes (off by default since v9) are the only vertical openings. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Caves", meta=(EditCondition="bEnableCaves", ClampMin="0"))
 	float CaveCoverCm = 900.0f;
 
@@ -421,21 +422,49 @@ struct MOFRAMEWORKCORE_API FMOWorldGenTuning
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Caves", meta=(EditCondition="bEnableCaves"))
 	float CaveMinGroundAboveSeaCm = 300.0f;
 
-	/** Spaghetti tunnels: the network follows the curve where two 3D noise fields are both zero. Lattice cell size (cm). */
+	/**
+	 * GALLERIES (v9; Wes, Oct 16 2026: "caves should be more or less horizontal so we don't just fall into them"): near-horizontal passages in stacked
+	 * levels. In plan a level's passages follow where a 2D noise field is zero (meanders, loops, forks); their height follows a gentle long-wavelength
+	 * field around the level's height, so a passage climbs or falls a few degrees at most. This is the meander's lattice cell (cm).
+	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Caves", meta=(EditCondition="bEnableCaves", ClampMin="2000"))
-	float TunnelWavelengthCm = 18000.0f;
+	float TunnelWavelengthCm = 22000.0f;
 
-	/** Mean tunnel radius (cm). */
+	/** Mean gallery radius (cm). v9 halved it (3.2 m wide, ~2.8 m high with the default flattening): a passage, not a hall. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Caves", meta=(EditCondition="bEnableCaves", ClampMin="0"))
-	float TunnelRadiusCm = 320.0f;
+	float TunnelRadiusCm = 160.0f;
 
-	/** Radius wobble along a tunnel, 0..1 (0.35 = +-35%). */
+	/** Radius wobble along a gallery, 0..1 (0.25 = +-25%: never lower than a pawn can walk upright with the default flattening). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Caves", meta=(EditCondition="bEnableCaves", ClampMin="0", ClampMax="0.8"))
-	float TunnelRadiusVariation = 0.35f;
+	float TunnelRadiusVariation = 0.25f;
 
-	/** >1 makes tunnels run flatter (noise varies faster vertically, so the network prefers horizontal passages). */
+	/** Cross-section flattening: a gallery is TunnelRadiusCm wide and TunnelRadiusCm / this high (both halves). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Caves", meta=(EditCondition="bEnableCaves", ClampMin="1", ClampMax="4"))
-	float TunnelVerticalSquash = 1.6f;
+	float TunnelVerticalSquash = 1.15f;
+
+	/** Vertical distance between gallery levels (cm). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Caves", meta=(EditCondition="bEnableCaves", ClampMin="1000"))
+	float GalleryLevelSpacingCm = 3000.0f;
+
+	/** How far a level's height wanders up and down (cm, peak). Keep under half the spacing: levels never cross. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Caves", meta=(EditCondition="bEnableCaves", ClampMin="0"))
+	float GalleryLevelAmplitudeCm = 1100.0f;
+
+	/** Over what distance a level's height wanders (cm): with the amplitude, the steepest a gallery gets (MOFramework.WorldGen.GalleriesStayLevel). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Caves", meta=(EditCondition="bEnableCaves", ClampMin="5000"))
+	float GalleryLevelWavelengthCm = 40000.0f;
+
+	/** Galleries exist where a mask field exceeds this (-1..1; lower = more of the meander network is open, its ends taper shut). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Caves", meta=(EditCondition="bEnableCaves", ClampMin="-1", ClampMax="1"))
+	float GalleryMaskThreshold = -0.2f;
+
+	/** Galleries open to the surface only where the ground is at least this steep and the passage runs into the slope (a hillside entrance)... */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Caves", meta=(EditCondition="bEnableCaves", ClampMin="0", ClampMax="89"))
+	float CaveEntranceSlopeMinDeg = 16.0f;
+
+	/** ... fully from this slope on. Flatter ground keeps CaveCoverCm of rock over every passage: no hole to fall into. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Caves", meta=(EditCondition="bEnableCaves", ClampMin="0", ClampMax="89"))
+	float CaveEntranceSlopeFullDeg = 32.0f;
 
 	/** Caverns: big chambers where a smooth 3D field exceeds CavernThreshold. Lattice cell size (cm). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Caves", meta=(EditCondition="bEnableCaves", ClampMin="4000"))
@@ -453,9 +482,9 @@ struct MOFRAMEWORKCORE_API FMOWorldGenTuning
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Caves", meta=(EditCondition="bEnableCaves", ClampMin="10000"))
 	float SinkholeCellCm = 30000.0f;
 
-	/** Chance (0..1) that a cell holds a sinkhole. */
+	/** Chance (0..1) that a cell holds a sinkhole. 0 since v9: a vertical shaft in flat ground is a hole to fall into (Wes, Oct 16 2026). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Caves", meta=(EditCondition="bEnableCaves", ClampMin="0", ClampMax="1"))
-	float SinkholeChance = 0.6f;
+	float SinkholeChance = 0.0f;
 
 	/** Mean shaft radius (cm); each sinkhole varies +-30% and flares to ~1.8x at the rim. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Caves", meta=(EditCondition="bEnableCaves", ClampMin="100"))
@@ -625,7 +654,7 @@ struct MOFRAMEWORKCORE_API FMOWorldGenBiome
 struct MOFRAMEWORKCORE_API FMOWorldGenParams
 {
 	/** Bump when the generator math changes (see RULES in the header). Stored with world saves. */
-	static constexpr uint32 CurrentGeneratorVersion = 8;   // v8: cliff bands are terraces whose drops face downhill (the v6 crag blobs had uphill-facing rims), gullies 25 -> 15 m; v7: no caves under ground above CaveMaxGroundCm (the summits tore); v6: mountain ranges (regional mask + regional biome relief + massif / peaks / gullies; v5: per-biome relief, taller ranges, half-size regional fields, island edge; v4: upland lakes + coastal ranges; v3: rivers + sea-level lake basins; v2: caves; v1: the base height terrain)
+	static constexpr uint32 CurrentGeneratorVersion = 9;   // v9: caves are near-horizontal galleries (half the radius) that open only into steep slopes, no sinkholes; v8: cliff bands are terraces whose drops face downhill (the v6 crag blobs had uphill-facing rims), gullies 25 -> 15 m; v7: no caves under ground above CaveMaxGroundCm (the summits tore); v6: mountain ranges (regional mask + regional biome relief + massif / peaks / gullies; v5: per-biome relief, taller ranges, half-size regional fields, island edge; v4: upland lakes + coastal ranges; v3: rivers + sea-level lake basins; v2: caves; v1: the base height terrain)
 
 	FMOWorldGenTuning Tuning;
 
@@ -783,7 +812,7 @@ struct MOFRAMEWORKCORE_API FMOWorldGen
 	static constexpr uint32 PinnedProbeHeight = 0x3343B4EBu;   // v8 (cliff bands face downhill, gullies 15 m); v6 (mountain ranges: regional mask + regional biome relief + massif/peaks/gullies; v5: biome relief, taller ranges, half-size regional fields, island edge; v4: upland lakes, coastal ranges, VerticalScale 2; v3: rivers + sea-level lake basins)
 	/** The probe with water, coastal ranges and VerticalScale all switched OFF (RunProbe(false)) must reproduce the v1 base terrain exactly: this is the value v1 shipped. It pins the BASE height math. */
 	static constexpr uint32 PinnedProbeHeightNoWater = 0x9C4AE2B3u;
-	static constexpr uint32 PinnedProbeCave = 0xBD3BD520u;     // v8 (the v8 ground); v7 (no caves under ground above CaveMaxGroundCm: the summits tore; v6: caves on the v6 ground; v5: caves on the v5 ground; v4: the lake-carved, doubled-relief ground, sinkholes keep out of lakes)
+	static constexpr uint32 PinnedProbeCave = 0xEA773801u;     // v9 (near-horizontal galleries opening only into steep slopes, no sinkholes); v8 (the v8 ground); v7 (no caves under ground above CaveMaxGroundCm: the summits tore; v6: caves on the v6 ground; v5: caves on the v5 ground; v4: the lake-carved, doubled-relief ground, sinkholes keep out of lakes)
 
 	/**
 	 * The cave distance saturates here (cm): "no cave within this far". Every gate in the cave field (cover, depth, low ground, sinkhole reach) is built so the
@@ -821,10 +850,14 @@ struct MOFRAMEWORKCORE_API FMOWorldGen
 
 	/**
 	 * Horizontal distance (cm) from (X,Y) to the rim zone of the sinkhole in its cell (negative = inside the zone where the shaft or its flared rim can
-	 * reach), +CaveFarCm if the cell has none. Vegetation / buildings keep out of the zone; the jitter margin guarantees a sinkhole never reaches
-	 * across its own cell border, so one cell is enough.
+	 * reach), NoSinkholeDistanceCm if the cell has none. Vegetation / buildings keep out of the zone; the jitter margin guarantees a sinkhole never
+	 * reaches across its own cell border, so one cell is enough.
 	 */
 	static float DistanceToSinkholeRimZone(const FMOWorldGenParams& Params, double X, double Y, int32 Seed);
+
+	/** DistanceToSinkholeRimZone where there is no sinkhole: farther than any footprint. It used to be CaveFarCm (30 m) -- a world feature with a footprint
+	 *  over 30 m was rejected in every cell WITHOUT a sinkhole (found Oct 16 2026 when v9 turned sinkholes off and every cliff assembly vanished). */
+	static constexpr float NoSinkholeDistanceCm = 1.0e9f;
 
 	/** Climate fields at world X/Y (cm). Cheap: no height. */
 	static FMOClimateSample SampleClimate(const FMOWorldGenParams& Params, double X, double Y, int32 Seed);

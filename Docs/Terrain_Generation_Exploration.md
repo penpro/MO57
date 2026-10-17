@@ -128,7 +128,16 @@ The pre-existing native chains have the same cap (grass: 50 / m^2 on a 60 cm lat
   direction gives the aspect, cheap per pixel, no generator / checksum change); first pin which world axis is NORTH so the bare slopes face the sun's actual path
   (check the Ultra Dynamic Sky sun azimuth at noon) and keep a slope term (cliffs stay rock). Mind the reverted Oct 13 attempt above: at range, grey rock under haze
   read as pale blotches brighter than grass, so judge from packaged shots at 300 m / 1 km / 4 km, and keep the far snow / rock contrast dark-on-white.
-- [ ] **Caves: half the diameter, and more lateral (Wes, 2026-10-13 evening)**: caves are too big and dive too steeply. Wanted: about half the current diameter, and
+- [x] **DONE in generator v9 (2026-10-16, Wes: "I don't care about old saves")**: the spaghetti tunnels are replaced by GALLERIES -- stacked levels every
+  `GalleryLevelSpacingCm` (30 m) whose passages follow the zero set of a 2D field in plan (distance and direction from its analytic gradient) at a height
+  that wanders `GalleryLevelAmplitudeCm` (11 m) over `GalleryLevelWavelengthCm` (400 m): `MOFramework.WorldGen.GalleriesStayLevel` follows 250 passages
+  centre to centre, all within 15 deg (steepest 4 deg). `TunnelRadiusCm` 320 -> 160 (3.2 m wide, ~2.8 m high), a mask tapers stretches of the meander
+  shut (smoothly: skipping the level put a cliff in the field). Openings: the cover holds everywhere except where a passage runs INTO a slope of
+  16..32 deg (12 m-baseline slope -- over a terrace edge a 3 m one let the gate jump), so caves are entered from hillsides, never fallen into; the
+  `Caves` test checks the cover over every flatter column and the entrance scan finds them (rare: ~1 per km2 of hills). Sinkholes default to chance 0
+  (kept as a feature for a world that wants them; their tests run on such params). Found on the way: `DistanceToSinkholeRimZone` returned 30 m with no
+  sinkhole, rejecting world features with bigger footprints wherever there was none (see World_Features_Architecture.md). `PinnedProbeCave` 0xEA773801.
+- [ ] ~~**Caves: half the diameter, and more lateral (Wes, 2026-10-13 evening)**~~ (the original note, kept): caves are too big and dive too steeply. Wanted: about half the current diameter, and
   passages that run sideways through the rock instead of heading straight down. Where it lives: `FMOWorldGenTuning` (`TunnelRadiusCm` 320 -> ~160,
   `SinkholeRadiusCm` 550 and the cavern threshold / `CavernWavelengthCm` for the big rooms), and the tunnel path's vertical behaviour (`TunnelVerticalSquash` 1.6 and
   the depth term of the spaghetti field in `MOWorldGenCaves.cpp`: flatten the field vertically -- higher Z frequency / a stronger squash / a depth that changes

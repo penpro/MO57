@@ -1,4 +1,4 @@
-// Cave generator half of FMOWorldGen (tunnels, caverns, sinkholes). Same rules as MOWorldGen.h: pure, deterministic, thread-safe, IEEE-exact ops only.
+// Cave generator half of FMOWorldGen (galleries, caverns, sinkholes). Same rules as MOWorldGen.h: pure, deterministic, thread-safe, IEEE-exact ops only.
 //
 // Design + the measured constants: Docs/Terrain_Generation_Exploration.md ("Caves"). The field is a SIGNED DISTANCE (cm, negative inside cave air) that a
 // Subtractive volume stamp carves out of the height terrain. It is only approximately a distance (noise based, gradient ~1 on average): marching cubes needs
@@ -13,20 +13,25 @@ namespace
 {
 	enum : uint32
 	{
-		SaltTunnelA = 0x7101u, SaltTunnelB = 0x7102u, SaltTunnelRadius = 0x7103u, SaltCavernA = 0x7201u, SaltCavernB = 0x7202u,
-		SaltSinkhole = 0x7401u, SaltSinkholeWall = 0x7402u
+		SaltCavernA = 0x7201u, SaltCavernB = 0x7202u,
+		SaltSinkhole = 0x7401u, SaltSinkholeWall = 0x7402u,
+		SaltGallery = 0x7501u, SaltGalleryPath = 0x7502u, SaltGalleryLevel = 0x7503u, SaltGalleryMask = 0x7504u, SaltGalleryRadius = 0x7505u
 	};
 
-	// Distance scaling: a noise field with ~1.2 gradient per lattice cell turns into cm as f * (CellCm / Gradient). The tunnel field is sqrt(A^2 + B^2)
-	// (gradient ~1.2, x ~1.2 for the vertical squash); the cavern field mixes two octaves (~1.1, x ~1.3 for its squash). MOFramework.WorldGen.Caves checks
-	// that the tunnels really come out about TunnelRadiusCm wide.
-	constexpr float TunnelGradient = 1.45f;
+	/** Floor on a gallery meander's gradient (per lattice cell) in its distance estimate: |value| / |gradient| blows up at the noise's saddles. */
+	constexpr float GalleryPathGradientFloor = 0.35f;
+	/** The ground's slope at a column: central differences this far each way (cm). A 12 m baseline: over a terrace's edge the slope (and with it
+	 *  the entrance gate) would otherwise jump within a few metres, and the gate's penalty puts a cliff in the field (MOFramework.WorldGen.Caves). */
+	constexpr double GroundSlopeStepCm = 600.0;
+
+	// Distance scaling: a noise field with ~1.2 gradient per lattice cell turns into cm as f * (CellCm / Gradient). The cavern field mixes two octaves
+	// (~1.1, x ~1.3 for its squash). The galleries divide by their 2D field's own analytic gradient instead (GalleryDistance).
 	constexpr float CavernGradient = 1.4f;
 	constexpr float CavernSquash = 1.9f;
 
 	// LOD culls: a feature is evaluated while the sample spacing is at most this fraction of its radius (caverns: up to FMOWorldGen::CavernMaxStepCm). CaveMaxLOD reads the same.
 	constexpr float SinkholeStepFraction = 0.9f;
-	constexpr float TunnelStepFraction = 0.6f;
+	constexpr float TunnelStepFraction = 0.65f;   // v9: 0.65 x 160 cm keeps LOD1 (100 cm samples) carving the galleries
 
 	struct FSinkholeBasics
 	{
@@ -138,6 +143,106 @@ namespace
 	}
 }
 
+namespace
+{
+	/** The ground's gradient (cm per cm) at a column, central differences; memoised per thread for the column's run of Z samples (a height sample ~0.5 us). */
+	FVector2D GroundGradient(const FMOWorldGenParams& P, double X, double Y, float GroundCm, int32 Seed)
+	{
+		struct FEntry
+		{
+			uint64 BitsX = 0, BitsY = 0;
+			uint32 Seed = 0, ParamsHash = 0;
+			FVector2D Gradient = FVector2D::ZeroVector;
+			bool bValid = false;
+		};
+		thread_local FEntry Last;
+		uint64 BitsX, BitsY;
+		FMemory::Memcpy(&BitsX, &X, sizeof(BitsX));
+		FMemory::Memcpy(&BitsY, &Y, sizeof(BitsY));
+		if (Last.bValid && Last.BitsX == BitsX && Last.BitsY == BitsY && Last.Seed == (uint32)Seed && Last.ParamsHash == P.GetHash())
+		{
+			return Last.Gradient;
+		}
+		const float Hx = FMOWorldGen::SampleHeightCm(P, X + GroundSlopeStepCm, Y, Seed, P.Tuning.VoxelSizeCm)
+			- FMOWorldGen::SampleHeightCm(P, X - GroundSlopeStepCm, Y, Seed, P.Tuning.VoxelSizeCm);
+		const float Hy = FMOWorldGen::SampleHeightCm(P, X, Y + GroundSlopeStepCm, Seed, P.Tuning.VoxelSizeCm)
+			- FMOWorldGen::SampleHeightCm(P, X, Y - GroundSlopeStepCm, Seed, P.Tuning.VoxelSizeCm);
+		Last.BitsX = BitsX;
+		Last.BitsY = BitsY;
+		Last.Seed = (uint32)Seed;
+		Last.ParamsHash = P.GetHash();
+		Last.Gradient = FVector2D(Hx / (2.0 * GroundSlopeStepCm), Hy / (2.0 * GroundSlopeStepCm));
+		Last.bValid = true;
+		return Last.Gradient;
+	}
+
+	/**
+	 * Galleries: distance (cm, negative inside) to the nearest gallery air, every gate applied. Levels sit every GalleryLevelSpacingCm at their own
+	 * gently wandering height; in plan a level's passages follow the zero set of a 2D field (its gradient gives the distance and the passage's
+	 * direction). The cover holds everywhere except where a passage runs INTO a steep slope: there it opens out of the hillside -- an entrance you
+	 * walk into, never a hole in flat ground to fall into.
+	 */
+	float GalleryDistance(const FMOWorldGenParams& P, double X, double Y, double Z, float GroundCm, float Depth, int32 Seed, float LowGround, float HighGround)
+	{
+		const FMOWorldGenTuning& T = P.Tuning;
+		const double Spacing = FMath::Max(T.GalleryLevelSpacingCm, 1000.0f);
+		const int64 K0 = (int64)FMath::FloorToDouble(Z / Spacing);
+		const float RMax = T.TunnelRadiusCm * (1.0f + T.TunnelRadiusVariation);
+		const double InvPath = 1.0 / (double)T.TunnelWavelengthCm;
+		const double InvLevel = 1.0 / (double)T.GalleryLevelWavelengthCm;
+		const double InvMask = 0.5 / (double)T.TunnelWavelengthCm;
+		const float DeepFade = Smooth01(T.CaveMaxDepthCm, T.CaveMaxDepthCm + T.CaveFadeCm, Depth);
+		const uint32 Base = (uint32)FMOWorldGen::HashSeed(Seed, SaltGallery);
+		float Best = FMOWorldGen::CaveFarCm;
+		for (int64 K = K0 - 1; K <= K0 + 1; ++K)
+		{
+			const uint32 Salt = Base ^ (uint32)((uint64)K * 0x9E3779B97F4A7C15ull >> 32);
+			const FNoise2 Level = GradientNoise2(X * InvLevel, Y * InvLevel, Salt ^ SaltGalleryLevel);
+			const double Zc = ((double)K + 0.5) * Spacing + (double)(T.GalleryLevelAmplitudeCm * Level.Value);
+			const float Dz = (float)(Z - Zc) * T.TunnelVerticalSquash;
+			if (FMath::Abs(Dz) > RMax + FMOWorldGen::CaveFarCm)
+			{
+				continue;
+			}
+			const FNoise2 Path = GradientNoise2(X * InvPath, Y * InvPath, Salt ^ SaltGalleryPath);
+			const float PathGrad = FMath::Sqrt(Path.Dx * Path.Dx + Path.Dy * Path.Dy);
+			const float Dxy = FMath::Abs(Path.Value) * T.TunnelWavelengthCm / FMath::Max(PathGrad, GalleryPathGradientFloor);
+			if (Dxy > RMax + FMOWorldGen::CaveFarCm)
+			{
+				continue;
+			}
+			const FNoise2 Mask = GradientNoise2(X * InvMask + 3.7, Y * InvMask - 1.9, Salt ^ SaltGalleryMask);
+			// Where the mask closes, the passage tapers shut: its radius shrinks AND a penalty saturates the term (skipping the level there instead put a
+			// cliff in the field -- MOFramework.WorldGen.Caves measured a gradient of 86).
+			const float Open = Smooth01(T.GalleryMaskThreshold - 0.15f, T.GalleryMaskThreshold + 0.05f, Mask.Value);
+			const FNoise2 Wob = GradientNoise2(X * InvPath * 2.3 + 7.1, Y * InvPath * 2.3 - 4.4, Salt ^ SaltGalleryRadius);
+			const float Radius = T.TunnelRadiusCm * (1.0f + T.TunnelRadiusVariation * FMath::Clamp(1.6f * Wob.Value, -1.0f, 1.0f)) * Open;
+
+			float Cover = T.CaveCoverCm, Fade = T.CaveFadeCm;
+			if (Depth < T.CaveCoverCm + T.CaveFadeCm && PathGrad > 1e-4f)
+			{
+				const FVector2D G = GroundGradient(P, X, Y, GroundCm, Seed);
+				const float Slope = (float)G.Size();
+				const float Steep = Smooth01(FMath::Tan(FMath::DegreesToRadians(T.CaveEntranceSlopeMinDeg)), FMath::Tan(FMath::DegreesToRadians(T.CaveEntranceSlopeFullDeg)), Slope);
+				if (Steep > 0.0f)
+				{
+					// The passage's direction is along the meander (perpendicular to its gradient); it opens where it heads into or out of the slope.
+					const float Along = FMath::Abs((float)((-Path.Dy * G.X + Path.Dx * G.Y) / ((double)PathGrad * (double)Slope)));
+					const float Entrance = Steep * Smooth01(0.25f, 0.6f, Along);
+					Cover = FMath::Lerp(Cover, -200.0f, Entrance);
+					Fade = FMath::Lerp(Fade, 1.0f, Entrance);
+				}
+			}
+			const float Shallow = 1.0f - Smooth01(Cover, Cover + Fade, Depth);
+			const float Gate = FMath::Max(FMath::Max3(Shallow, DeepFade, LowGround), HighGround);
+			const float Dg = FMath::Sqrt(Dxy * Dxy + Dz * Dz) - Radius;
+			// The penalty cancels the deepest possible interior and adds CaveFarCm: with a gate closed the term is saturated; in between it tapers.
+			Best = FMath::Min(Best, Dg + (Radius + FMOWorldGen::CaveFarCm) * Gate + (1.0f - Open) * FMOWorldGen::CaveFarCm);
+		}
+		return Best;
+	}
+}
+
 float FMOWorldGen::SampleCaveDistanceAtGround(const FMOWorldGenParams& Params, double X, double Y, double Z, float GroundCm, int32 Seed, float StepCm)
 {
 	const FMOWorldGenTuning& T = Params.Tuning;
@@ -164,29 +269,20 @@ float FMOWorldGen::SampleCaveDistanceAtGround(const FMOWorldGenParams& Params, d
 		D = FMath::Min(D, SinkholeDistance(Params, X, Y, Z, Seed) + CaveFarCm * HighGround);
 	}
 
-	// Everything else stays under the cover, and not on low ground (coasts / basins). Each gate is a 0..1 factor that adds a penalty of at least CaveFarCm when
-	// it is 1, so the field is continuous where a feature is skipped (skipped == saturated).
+	// Everything else stays off low ground (coasts / basins). Each gate is a 0..1 factor that adds a penalty of at least CaveFarCm when it is 1, so the
+	// field is continuous where a feature is skipped (skipped == saturated).
 	const float LowGround = 1.0f - Smooth01(T.SeaLevelCm + T.CaveMinGroundAboveSeaCm, T.SeaLevelCm + T.CaveMinGroundAboveSeaCm + 600.0f, GroundCm);
-	if (Depth > T.CaveCoverCm && LowGround < 1.0f && HighGround < 1.0f)
+	if (LowGround < 1.0f && HighGround < 1.0f)
 	{
-		const float Shallow = 1.0f - Smooth01(T.CaveCoverCm, T.CaveCoverCm + T.CaveFadeCm, Depth);
-		const float DeepFade = Smooth01(T.CaveMaxDepthCm, T.CaveMaxDepthCm + T.CaveFadeCm, Depth);
-		const float Gate = FMath::Max(FMath::Max3(Shallow, DeepFade, LowGround), HighGround);
-
-		// Tunnels: sqrt(A^2 + B^2) is small near the curve where two independent 3D noise fields are both zero.
+		// Galleries: evaluated up to the surface too -- GalleryDistance keeps the cover except where a passage opens into a steep slope.
 		if (StepCm <= T.TunnelRadiusCm * TunnelStepFraction)
 		{
-			const float Lambda = T.TunnelWavelengthCm;
-			const double Inv = 1.0 / (double)Lambda;
-			const double Px = X * Inv, Py = Y * Inv, Pz = Z * Inv * (double)T.TunnelVerticalSquash;
-			const float A = GradientNoise3(Px, Py, Pz, (uint32)HashSeed(Seed, SaltTunnelA));
-			const float B = GradientNoise3(Px + 31.7, Py - 12.3, Pz + 7.9, (uint32)HashSeed(Seed, SaltTunnelB));
-			const float Wobble = GradientNoise3(Px * 0.6 + 5.1, Py * 0.6 - 8.3, Pz * 0.6 + 2.2, (uint32)HashSeed(Seed, SaltTunnelRadius));
-			const float Radius = T.TunnelRadiusCm * (1.0f + T.TunnelRadiusVariation * FMath::Clamp(1.6f * Wobble, -1.0f, 1.0f));
-			const float Dt = FMath::Sqrt(A * A + B * B) * (Lambda / TunnelGradient) - Radius;
-			// The penalty cancels the deepest possible interior (-Radius) and adds CaveFarCm, so with the gate closed the term is saturated; in between it tapers.
-			D = FMath::Min(D, Dt + (Radius + CaveFarCm) * Gate);
+			D = FMath::Min(D, GalleryDistance(Params, X, Y, Z, GroundCm, Depth, Seed, LowGround, HighGround));
 		}
+	}
+	if (Depth > T.CaveCoverCm && LowGround < 1.0f && HighGround < 1.0f)
+	{
+		const float DeepFade = Smooth01(T.CaveMaxDepthCm, T.CaveMaxDepthCm + T.CaveFadeCm, Depth);
 
 		// Caverns: where a smooth 3D field rises above the threshold.
 		if (Depth > T.CavernMinDepthCm && StepCm <= CavernMaxStepCm)
@@ -259,7 +355,7 @@ float FMOWorldGen::DistanceToSinkholeRimZone(const FMOWorldGenParams& Params, do
 	FMOSinkhole S;
 	if (!FindSinkholeAt(Params, X, Y, Seed, S))
 	{
-		return CaveFarCm;
+		return NoSinkholeDistanceCm;
 	}
 	// The flared rim (1.8x) with its +25% wall wobble reaches ~2.3x the mean radius; plant nothing inside that.
 	const float Dist = (float)FVector2D::Distance(FVector2D(X, Y), S.Center);
