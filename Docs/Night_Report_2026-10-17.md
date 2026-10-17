@@ -64,6 +64,14 @@ Test totals: 264/264 over every group except Codex's Crafting/Inventory/Equipmen
 4. **Night look** -- ANSWERED: leave it for now. outdoors at night with no fire the exposure adapts to EV100 -10, so a moonless night reads as dusk. A darker night means
    a higher night minimum or slower dark adaptation. By a fire the new eye floor already makes the dark beyond the firelight black.
 
+## Waiting on a commit
+
+- **Torch wear** is built and verified: the item's own durability burns down, burn-out notifies and empties the hand, and co-op passes 5/5.
+- It is UNCOMMITTED on purpose: it calls Codex's `UMOEquipmentComponent::ReduceEquippedDurability`, which is in Codex's uncommitted equipment
+  files, so committed alone it would not build.
+- Codex commits only when you authorize it. Once their equipment work is committed, commit mine (MOCarriedLightComponent.h/.cpp +
+  Docs/Light_Sources.md) right after.
+
 ## Still open (mine)
 
 - Co-op: a client lighting its own torch at a fire. The first try hit the dev-verb RPC bug fixed in a9a4de5d; the retest runs after Codex's
